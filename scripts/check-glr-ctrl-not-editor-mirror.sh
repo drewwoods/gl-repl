@@ -6,12 +6,12 @@
 # per-frame snapshots. It does NOT accumulate one wrapper per
 # editor operation:
 #
-#     imrepl_ctrl_editor_search_next();        // NO
-#     imrepl_ctrl_editor_scroll(int delta);    // NO
-#     imrepl_ctrl_editor_move_cursor(...);     // NO
-#     imrepl_ctrl_editor_accept_autocomplete();// NO
-#     imrepl_ctrl_editor_cut();                // NO
-#     imrepl_ctrl_editor_paste();              // NO
+#     glr_ctrl_editor_search_next();        // NO
+#     glr_ctrl_editor_scroll(int delta);    // NO
+#     glr_ctrl_editor_move_cursor(...);     // NO
+#     glr_ctrl_editor_accept_autocomplete();// NO
+#     glr_ctrl_editor_cut();                // NO
+#     glr_ctrl_editor_paste();              // NO
 #
 # Editor behavior lives behind the editor's coarse API
 # (editor_handle_key / editor_handle_mouse / editor_handle_scroll /
@@ -20,9 +20,9 @@
 # imrepl_ctrl wrapper.
 #
 # This guard catches symbols that look like per-field editor
-# mirrors. The pattern is `imrepl_ctrl_editor_*` — anything matching
+# mirrors. The pattern is `glr_ctrl_editor_*` — anything matching
 # that name shape is considered a violation. Coarse routing
-# helpers (`imrepl_ctrl_keyboard` / `_special` / `_mouse` etc.)
+# helpers (`glr_ctrl_keyboard` / `_special` / `_mouse` etc.)
 # pass because they are GLUT-callback-name-shaped, not editor-API-
 # shaped.
 
@@ -30,7 +30,7 @@ set -euo pipefail
 
 violations=$(grep -RInE \
     --include='*.c' --include='*.h' \
-    'imrepl_ctrl_editor_' \
+    'glr_ctrl_editor_' \
     . 2>/dev/null \
     | grep -vE '\./\.claude/worktrees/' || true)
 

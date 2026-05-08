@@ -11,9 +11,9 @@ from pathlib import Path
 
 strict = sys.argv[1] == "1"
 
-ctrl_path = Path("imrepl_ctrl.c")
+ctrl_path = Path("glr_ctrl.c")
 if not ctrl_path.exists():
-    print("ERROR: imrepl_ctrl.c missing", file=sys.stderr)
+    print("ERROR: glr_ctrl.c missing", file=sys.stderr)
     sys.exit(1)
 ctrl = ctrl_path.read_text(encoding="utf-8")
 

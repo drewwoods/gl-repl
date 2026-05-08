@@ -4,7 +4,7 @@ Convert cflow output to Mermaid flowchart format.
 
 Usage:
     cflow *.c | ./scripts/cflow_to_mermaid.py > callgraph.mmd
-    cflow -m imrepl_ctrl_display_frame *.c | ./scripts/cflow_to_mermaid.py > callgraph.mmd
+    cflow -m glr_ctrl_display_frame *.c | ./scripts/cflow_to_mermaid.py > callgraph.mmd
 """
 
 import sys

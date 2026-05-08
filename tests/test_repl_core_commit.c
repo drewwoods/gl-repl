@@ -1,5 +1,5 @@
 #include "editor/input.h"
-#include "imrepl_ctrl.h"
+#include "glr_ctrl.h"
 #include "repl_core.h"
 #include "repl_core_internal.h"
 #include "repl_executor.h"
@@ -446,24 +446,24 @@ int main(void) {
     /* J2.2: code-panel mouse press / drag dispatch through the
      * controller's UiHit router. Press resolves the click via
      * ui_panels_hit_test and dispatches via
-     * imrepl_ctrl_router_handle_code_panel_hit; subsequent motion
-     * calls imrepl_ctrl_router_handle_code_panel_drag with the new
+     * glr_ctrl_router_handle_code_panel_hit; subsequent motion
+     * calls glr_ctrl_router_handle_code_panel_drag with the new
      * coords. */
     {
         UiHit hit = ui_panels_hit_test(CODE_MARGIN_X + 1,
                                        code_panel_mouse_y_for_cmd(0));
-        imrepl_ctrl_router_handle_code_panel_hit(hit, CODE_MARGIN_X + 1,
+        glr_ctrl_router_handle_code_panel_hit(hit, CODE_MARGIN_X + 1,
                                                  code_panel_mouse_y_for_cmd(0));
     }
     ASSERT_TRUE("mouse press selects current line for edit", repl_state_edit_line() == 0);
     ASSERT_TRUE("mouse press starts with no selection", !editor_clipboard_sel_active());
-    imrepl_ctrl_router_handle_code_panel_drag(CODE_MARGIN_X + 1,
+    glr_ctrl_router_handle_code_panel_drag(CODE_MARGIN_X + 1,
                                               code_panel_mouse_y_for_cmd(2));
     ASSERT_TRUE("mouse drag activates selection", editor_clipboard_sel_active());
     ASSERT_TRUE("mouse drag selection low", editor_clipboard_sel_lo() == 0);
     ASSERT_TRUE("mouse drag selection high", editor_clipboard_sel_hi() == 2);
     ASSERT_TRUE("mouse drag navigates to drag end", repl_state_edit_line() == 2);
-    imrepl_ctrl_router_reset_code_panel_drag();
+    glr_ctrl_router_reset_code_panel_drag();
     editor_handle_key(8, 0, 0);
     ASSERT_TRUE("backspace deletes selected lines", repl_state_document_count() == 0);
     ASSERT_TRUE("backspace clears selection after delete", !editor_clipboard_sel_active());
@@ -481,7 +481,7 @@ int main(void) {
         int mx = text_x + indent * FONT_W + 1;
         int my = code_panel_mouse_y_for_cmd(1);
         UiHit hit = ui_panels_hit_test(mx, my);
-        imrepl_ctrl_router_handle_code_panel_hit(hit, mx, my);
+        glr_ctrl_router_handle_code_panel_hit(hit, mx, my);
         ASSERT_TRUE("clicking indented active line keeps cursor at first char",
                     editor_cursor_pos() == 0);
         ASSERT_TRUE("clicking indented active line selects correct line",
@@ -498,7 +498,7 @@ int main(void) {
     ASSERT_TRUE("ctrl-e moves to line end", editor_cursor_pos() == editor_input_len());
     {
         int before = repl_state_presentation().code_panel_layout;
-        imrepl_ctrl_router_handle_cfg_shortcut_key(2);
+        glr_ctrl_router_handle_cfg_shortcut_key(2);
         ASSERT_TRUE("ctrl-b toggles code panel layout", repl_state_presentation().code_panel_layout != before);
     }
 

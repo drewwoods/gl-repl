@@ -1,4 +1,4 @@
 # domain allowed_files_csv
 #
 # Stage-0: no domains are enforced yet. Add entries as domains migrate:
-# code_panel repl_code_panel.c,imrepl_ctrl.c,repl_actions.c
+# code_panel repl_code_panel.c,glr_ctrl.c,repl_actions.c

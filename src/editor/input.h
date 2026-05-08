@@ -16,7 +16,7 @@
 #include "repl_core_internal.h"  /* ReplModifierProvider (test seam) */
 
 /* Side-effects accumulated by editor input dispatch and replayed by
- * imrepl_ctrl_apply_input_effects (request_redraw → glutPostRedisplay,
+ * glr_ctrl_apply_input_effects (request_redraw → glutPostRedisplay,
  * set_cursor → glutSetCursor, schedule_timer → glutTimerFunc). */
 typedef struct ReplInputDispatchEffects {
     int request_redraw;
@@ -56,7 +56,7 @@ int                      editor_get_modifiers(void);
 void editor_input_set_modifier_provider_for_test(ReplModifierProvider provider);
 int  editor_input_active_modifiers(void);
 
-/* Production hook: imrepl_ctrl calls this from imrepl_ctrl_init_gl
+/* Production hook: imrepl_ctrl calls this from glr_ctrl_init_gl
  * after glutInit so editor_get_modifiers() may safely call
  * glutGetModifiers(). Tests that don't install a modifier provider
  * skip this hook; modifier reads return 0 instead of aborting
@@ -103,7 +103,7 @@ void navigate_to_line(int target);
 
 /* Rename-capture predicate. The inline rename overlay is a hard modal:
  * when active, every keystroke must land in the rename buffer ahead of
- * the controller-side router. imrepl_ctrl_keyboard / _special invoke
+ * the controller-side router. glr_ctrl_keyboard / _special invoke
  * these BEFORE any other dispatch so backtick / Ctrl+G / F1 / F12 etc.
  * cannot leak out of the rename buffer. */
 int editor_input_rename_capture_key(unsigned char key);

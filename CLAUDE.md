@@ -143,7 +143,7 @@ ownership / contract guards. Highlights:
   migrated every `bench/` + `tests/` site onto `replay_state_view` /
   `replay_state_mut` / `replay_handle_*`, and Phase J7 deleted the
   legacy `repl_state_replay` / `_mut` / `_reset` forwarders.
-- `check-imrepl-not-editor-mirror` — `imrepl_ctrl_editor_*` per-field
+- `check-glr-ctrl-not-editor-mirror` — `glr_ctrl_editor_*` per-field
   wrappers are forbidden.
 - `check-editor-ownership-budget` — UI-slice forwarder + facade
   include counts only shrink.
@@ -152,10 +152,10 @@ ownership / contract guards. Highlights:
 
 | File | Responsibility |
 |------|----------------|
-| `sample.c` | GLUT callback registration, `main()`, window setup, buffer swap; forwards directly to `imrepl_ctrl_*` |
+| `sample.c` | GLUT callback registration, `main()`, window setup, buffer swap; forwards directly to `glr_ctrl_*` |
 | `sample.h` | Shared types (`GLCmd`, `CmdType`, `SceneLight`), defaults, stateless helpers, compatibility includes |
-| `imrepl_ctrl.c` | App-frame controller: `imrepl_ctrl_display_frame`, `imrepl_ctrl_reshape`, `imrepl_ctrl_init_gl`; builds `SceneRenderConfig`, calls scene/UI renderers |
-| `imrepl_ctrl.h` | Controller public surface: display, reshape, init-GL entrypoints |
+| `glr_ctrl.c` | App-frame controller: `glr_ctrl_display_frame`, `glr_ctrl_reshape`, `glr_ctrl_init_gl`; builds `SceneRenderConfig`, calls scene/UI renderers |
+| `glr_ctrl.h` | Controller public surface: display, reshape, init-GL entrypoints |
 | `repl_config.c` | Config key implementation and descriptor table helpers |
 | `repl_config.h` | `ReplConfigKey` / `ReplConfigItem` descriptor API for keyed config access |
 | `repl_core.c` | Normalization pipeline (`repl_parse_and_normalize*`), reformatter, startup helpers; being dissolved into natural owners (R10) |
@@ -167,7 +167,7 @@ ownership / contract guards. Highlights:
 | `repl_command_spec.h` | Command spec query API |
 | `repl_command_store.c` | Source-command array mutations: insert, delete, replace, bulk-load |
 | `repl_command_store.h` | Command-store public API (`repl_command_store_insert_one`, etc.) |
-| `repl_core.h` | Public API (parse, flatten, user scene + workspace); GLUT input-dispatch declarations (`repl_keyboard_func` etc.) are live — called from `imrepl_ctrl.c` — pending R10-phase1 re-evaluation |
+| `repl_core.h` | Public API (parse, flatten, user scene + workspace); GLUT input-dispatch declarations (`repl_keyboard_func` etc.) are live — called from `glr_ctrl.c` — pending R10-phase1 re-evaluation |
 | `repl_core_internal.h` | Test-visible internals (normalize/commit pipeline, `feed_line`, `load_line_to_input`, `repl_promote_example_if_needed`) |
 | `repl_state.c` | Owns `g_repl_state`, lifecycle, snapshot assembly (`repl_state_capture` / `repl_state_restore`) |
 | `repl_state.h` | Typed runtime-state facade, reset helpers, and focused accessors over the live REPL state |
@@ -206,7 +206,7 @@ ownership / contract guards. Highlights:
 | `repl_debug.h` | Debug dump public API |
 | `repl_replay_annotations.c` | Replay-time source annotations, variable substitution, evaluated command display text |
 | `repl_replay_annotations.h` | Code-panel replay annotation API |
-| `src/ui/snapshot.h` | `UiRenderSnapshot` — frame-frozen bundle built once per frame by `imrepl_ctrl_build_ui_snapshot()` |
+| `src/ui/snapshot.h` | `UiRenderSnapshot` — frame-frozen bundle built once per frame by `glr_ctrl_build_ui_snapshot()` |
 | `src/ui/editor.h` | Per-frame editor-overlay snapshots (swatches, sliders, highlights) pushed by the controller |
 | `replay_ui_hud.c` | 2D replay status HUD (feature-UI under the `replay_ui_*` prefix; reads replay peer snapshot) |
 | `replay_ui_hud.h` | Replay HUD render entrypoint |
@@ -261,7 +261,7 @@ ownership / contract guards. Highlights:
 | `src/scene/backdrop.h` | Backdrop render entrypoint |
 | `src/scene/lights.c` | Ambient init, light setup/reset, and visible light indicator overlay |
 | `src/scene/lights.h` | Scene light setup/render entrypoints |
-| `src/scene/overlays.c` | Tiny per-vertex GL primitives the controller calls (vertex-number labels, normal arrows). Outline / vertex-point passes moved to `imrepl_ctrl.c` |
+| `src/scene/overlays.c` | Tiny per-vertex GL primitives the controller calls (vertex-number labels, normal arrows). Outline / vertex-point passes moved to `glr_ctrl.c` |
 | `src/scene/overlays.h` | Scene overlay primitive API |
 | `src/ui/panels.c` | Code-panel row rendering (incl. inline ghost/hint text), scene status banner, top-level panel hit routing |
 | `src/ui/panels.h` | Code-panel geometry, render, hit-test, and panel input bridge declarations |
@@ -281,7 +281,7 @@ ownership / contract guards. Highlights:
   facade in `repl_state.h` (e.g., `repl_state_render()`, `repl_state_search()`).
 - Static helpers are file-scoped; public API goes through `repl_core.h`
 - Prefixes express ownership. Use `repl_*` for REPL language/editor/source/
-  replay model modules, `imrepl_*` for app shell/controller/app-service code,
+  replay model modules, `glr_*` for app shell/controller/app-service code,
   `scene_*` for 3D rendering, `ui_*` for 2D editor/view rendering, and neutral
   names such as `prof` for generic utilities. `repl_audio` is legacy-named and
   should be revisited with the deferred app-shell namespace work rather than
@@ -301,11 +301,11 @@ ownership / contract guards. Highlights:
 - Keyboard bindings: `editor_handle_key()` for ASCII keys (Ctrl+X
   produces ASCII X & 0x1F via standard GLUT), `editor_handle_special()`
   for F-keys/arrows. Cross-subsystem routing (replay / save / config /
-  audio / camera) lives in `imrepl_ctrl.c::imrepl_ctrl_router_*`
-  helpers, called from `imrepl_ctrl_keyboard` before delegating to
+  audio / camera) lives in `glr_ctrl.c::glr_ctrl_router_*`
+  helpers, called from `glr_ctrl_keyboard` before delegating to
   `editor_handle_key`. macOS Cmd+letter is normalized to its
   control-character form by `editor_input_normalize_super_to_ctrl`,
-  called at the top of `imrepl_ctrl_keyboard` so every downstream
+  called at the top of `glr_ctrl_keyboard` so every downstream
   dispatcher sees Cmd+B identically to Ctrl+B.
 - Expression variables: `ExprVar` struct in `repl_eval.h`, predefined set
   accessible via `repl_state_variables()` and managed by `declare_predef_var()`
@@ -369,7 +369,7 @@ To add a **new top-level menu**: extend the `MENU_*` enum (before
 
 To add a **pinned right-side button**: extend `PIN_*` enum, append a label
 to `g_pin_btn_labels[]` in `src/ui/menu_bar.c`. Activation routing lives in
-`imrepl_ctrl.c::route_pin_button_hit()` — add the new pin id to its
+`glr_ctrl.c::route_pin_button_hit()` — add the new pin id to its
 switch.
 
 ## User Scene System
@@ -516,7 +516,7 @@ sibling to `repl_config_set`.
 
 ### Rendering Pipeline
 
-`imrepl_ctrl_display_frame()` in `imrepl_ctrl.c` drives each frame.
+`glr_ctrl_display_frame()` in `glr_ctrl.c` drives each frame.
 `sample.c` registers the GLUT display callback and forwards directly — there
 is no shim layer.
 1. Rebuild autonormals and flat program if dirty; save predef var values;

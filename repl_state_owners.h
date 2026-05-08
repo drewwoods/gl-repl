@@ -114,7 +114,7 @@ void repl_state_reset_all(void);
 
 /* Mirror chrome-relevant presentation fields into ui_state.code_panel
  * (layout_mode, show_vertex_indices). The controller calls this once
- * per frame in imrepl_ctrl_build_ui_snapshot; tests call it after
+ * per frame in glr_ctrl_build_ui_snapshot; tests call it after
  * tweaking repl_state_presentation_mut() so subsequent
  * ui_layout_* / ui_panels_hit_test calls see the new chrome state. */
 void repl_state_sync_ui_chrome(void);

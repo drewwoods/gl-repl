@@ -5,7 +5,7 @@
       "label": "1. REPL command pipeline",
       "files": [
         "repl_core.c",
-        "imrepl_ctrl.c",
+        "glr_ctrl.c",
         "repl_command_spec.c",
         "repl_parser.c",
         "repl_source_scope.c",

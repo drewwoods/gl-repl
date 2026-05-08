@@ -38,7 +38,7 @@ REPL = validator/compiler for committed source.
     Does not own editor state. Does not own UI state. Does not write editor text.
     Does not call set_status.
 
-imrepl_ctrl = thin router + frame/snapshot coordinator.
+glr_ctrl = thin router + frame/snapshot coordinator.
     Receives raw GLUT events, determines focus/region, asks UI for hit-test
     results, routes events to the owning subsystem, builds snapshots, and relays
     diagnostics/status messages. It does not implement editor behavior and does
@@ -50,7 +50,7 @@ The key distinction:
 ```text
 The editor drives text-document UI behavior.
 The editor uses UI as its view.
-imrepl_ctrl routes the event.
+glr_ctrl routes the event.
 UI draws, measures, and hit-tests.
 ```
 
@@ -67,7 +67,7 @@ EditorState
 
 Mouse/pointer input
   -> UI hit-tests visual geometry and returns UiHit
-  -> imrepl_ctrl routes the event + UiHit to the editor
+  -> glr_ctrl routes the event + UiHit to the editor
   -> editor interprets the hit in terms of text-document behavior
 ```
 
@@ -84,7 +84,7 @@ editor policy.
 ```text
 Editor model/controller:  what the text document is and how editing behaves
 UI view:                  how that document appears and where the user clicked
-imrepl_ctrl router:       which subsystem receives this event
+glr_ctrl router:       which subsystem receives this event
 REPL compiler:             whether committed source text is valid
 ```
 
@@ -93,7 +93,7 @@ Consequences:
 - **State has three owners.** `ReplState` is the program. `EditorState`
   is the text-document session. `UiState` is transient UI/session
   chrome. Their storage lives in their owner modules (`repl_state.c`,
-  `src/editor/state.c`, `src/ui/state.c`). `imrepl_ctrl` orchestrates them; it
+  `src/editor/state.c`, `src/ui/state.c`). `glr_ctrl` orchestrates them; it
   does not become a dumping ground for their bytes.
 - **REPL compiles; it does not edit.** The editor calls
   `repl_compile(text, ctx) -> ReplCompiledChange | error`. On success,
@@ -105,7 +105,7 @@ Consequences:
   neither. Undo restores both sides together.
 - **UI is view + hit-test, not a controller.** Renderers consume
   `UiRenderSnapshot`. Input handlers compute a `UiHit` and return.
-  `imrepl_ctrl` dispatches based on `UiHit.kind`. There is no central
+  `glr_ctrl` dispatches based on `UiHit.kind`. There is no central
   dispatch enum; the editor and the peer subsystems are each their
   own controller.
 - **Variable panel and replay are peer subsystems**, not slices of the
@@ -166,8 +166,8 @@ source-backed module.
 | `repl_*` | Program model and compiler pipeline: parser, eval, command spec, source scope, compile, command store, flatten, executor, autonormal, examples, export. **No editor or UI state. No replay runtime state (that lives on the `replay` peer).** |
 | `editor_*` | Text-document model + controller: line text, active input, cursor, scroll, selection, navigation, undo/redo, clipboard, search, autocomplete, cursor blink, commit orchestration. Includes read-only document sessions (e.g. help) backed by a content provider |
 | `ui_*` | Screen-space rendering and hit-test/measurement services. Renderers consume snapshots; input handlers compute neutral `UiHit` results and return them. **Does not own state. Does not dispatch.** |
-| `scene_*` | 3D rendering, camera/view transforms, world decorators, scene overlays. Camera input routes through `imrepl_ctrl` to scene/viewport controller |
-| `imrepl_*` | Application router: GLUT callback registration, frame ordering, snapshot builders, raw-input → owning-subsystem dispatch (based on `UiHit.kind` / focus), diagnostic relay from REPL to editor + status |
+| `scene_*` | 3D rendering, camera/view transforms, world decorators, scene overlays. Camera input routes through `glr_ctrl` to scene/viewport controller |
+| `glr_*` | Application router: GLUT callback registration, frame ordering, snapshot builders, raw-input → owning-subsystem dispatch (based on `UiHit.kind` / focus), diagnostic relay from REPL to editor + status |
 | `variable_panel_*` | Peer subsystem: variable-slider visibility + drag transaction + writeback policy. Owns its own state |
 | `replay_*` | Peer subsystem: replay state machine, PC, mode, fade batches |
 | `prof`, `cmd_format` | Generic utilities with no ownership of REPL/editor/UI state |
@@ -193,10 +193,10 @@ and gets revisited in the namespace audit.
 ## Intended Frame Shape
 
 ```text
-sample.c (future imrepl.c) GLUT callback
-  -> imrepl_ctrl_* callback wrapper                  (routing role)
+sample.c (future glr_ctrl.c) GLUT callback
+  -> glr_ctrl_* callback wrapper                  (routing role)
   -> UI hit-test:  ui_panels_hit_test(snap, mx, my) -> UiHit
-  -> imrepl_ctrl dispatches on UiHit.kind to the OWNING subsystem:
+  -> glr_ctrl dispatches on UiHit.kind to the OWNING subsystem:
 
        UI_HIT_CODE_TEXT     -> editor_handle_*(editor, raw_event, hit)
                                 (cursor / scroll / selection / search /
@@ -211,7 +211,7 @@ sample.c (future imrepl.c) GLUT callback
                                 (peer subsystem — drag transaction)
        UI_HIT_REPLAY_BUTTON -> replay_handle_*(...)
                                 (peer subsystem — toggle / step)
-       UI_HIT_MENU_ITEM     -> imrepl_menu_route(...)
+       UI_HIT_MENU_ITEM     -> glr_menu_route(...)
        UI_HIT_NONE          -> camera/viewport drag if over scene
                                 -> scene_camera_handle_*(...)
 
@@ -219,7 +219,7 @@ Editor commit path (the only thing that crosses into REPL):
   ReplCompiledChange change;
   if (repl_compile(text, ctx, &change, err) != REPL_COMPILE_OK) {
       editor_record_diagnostic(err);
-      imrepl_ctrl_set_status(err);    /* controller writes status */
+      glr_ctrl_set_status(err);    /* controller writes status */
       /* nothing else mutates */
   } else {
       editor_undo_begin_transaction();
@@ -227,7 +227,7 @@ Editor commit path (the only thing that crosses into REPL):
         repl_apply_compiled_change(&change);   /* cmds[]  only */
       editor_undo_commit_transaction();        /* atomic boundary */
       if (change.commit_message[0])
-          imrepl_ctrl_set_status(change.commit_message);
+          glr_ctrl_set_status(change.commit_message);
   }
 
 Display frame:
@@ -242,7 +242,7 @@ Display frame:
   -> restore transient replay/predef state
 ```
 
-`imrepl_ctrl` routes raw input to the right subsystem. The editor and
+`glr_ctrl` routes raw input to the right subsystem. The editor and
 the peer subsystems are each their own controller — there is no
 central dispatch enum and no "UI emits actions" layer.
 
@@ -256,7 +256,7 @@ commands.
 
 | Module | Role |
 |--------|------|
-| `imrepl_ctrl` | Application controller and input router. Owns frame order, snapshot construction, action dispatch, timer tick, and non-editor input routing (`imrepl_ctrl_router_*` helpers route replay, audio, config, save, camera, variable panel, scene press, scroll-wheel zoom to their owning subsystems). It is the only input-event mutation gate |
+| `glr_ctrl` | Application controller and input router. Owns frame order, snapshot construction, action dispatch, timer tick, and non-editor input routing (`glr_ctrl_router_*` helpers route replay, audio, config, save, camera, variable panel, scene press, scroll-wheel zoom to their owning subsystems). It is the only input-event mutation gate |
 | `repl_command_spec` | Declarative command descriptors for fixed-arity GL-like commands |
 | `repl_parser` | Parses one source line into `ReplParsedLine { GLCmd cmd; char text[] }`; no storage ownership |
 | `repl_source_scope` | Computes source depth, indentation, and block context used by compile/format paths |
@@ -277,7 +277,7 @@ text edit into a committed program change.
 
 | Module | Role |
 |--------|------|
-| `editor_input` | Editor's pure text-document controller. Receives key/mouse events from `imrepl_ctrl` only after the controller has already filtered out non-editor concerns (replay, audio, config, save, camera, variable panel, scene press, scroll-wheel zoom). Mutates `EditorState` directly: cursor, selection, scroll, search, autocomplete navigation, clipboard, undo. Also exposes hit-test predicates (`editor_input_point_in_code_panel`, etc.) and the `ReplInputDispatchEffects` accumulation API that the controller consumes. `repl_editor.{c,h}` is deleted; this module is the sole dispatch boundary |
+| `editor_input` | Editor's pure text-document controller. Receives key/mouse events from `glr_ctrl` only after the controller has already filtered out non-editor concerns (replay, audio, config, save, camera, variable panel, scene press, scroll-wheel zoom). Mutates `EditorState` directly: cursor, selection, scroll, search, autocomplete navigation, clipboard, undo. Also exposes hit-test predicates (`editor_input_point_in_code_panel`, etc.) and the `ReplInputDispatchEffects` accumulation API that the controller consumes. `repl_editor.{c,h}` is deleted; this module is the sole dispatch boundary |
 | `editor_commit` | Transaction boundary for commits: compile, undo snapshot, text-buffer write, REPL apply, dirty-state updates |
 | `editor_buffer` *(new)* | Sole writer for canonical per-line text: insert, replace, delete, load, clear |
 | `editor_document` *(new)* | Active input buffer, cursor position, edit line, insert mode, pending newline, and navigation primitives |
@@ -298,7 +298,7 @@ in the editor layer.
 Variable panel and replay are *not* part of the editor and *not* part
 of UI. They are independent subsystems with their own state +
 controllers; UI may render them; their input routes to them through
-`imrepl_ctrl`.
+`glr_ctrl`.
 
 | Module | Role |
 |--------|------|
@@ -347,11 +347,11 @@ never read `ReplState`, `EditorState`, or `UiState` directly.
 | `src/scene/axes` | Axis rendering and axis themes |
 | `src/scene/backdrop` | Backdrop/environment rendering |
 | `src/scene/lights` | Baseline lighting and light indicators |
-| `src/scene/overlays` | Tiny per-vertex GL primitives (vertex-number labels, normal arrows). REPL-walking overlays moved out to `imrepl_ctrl.c`. |
+| `src/scene/overlays` | Tiny per-vertex GL primitives (vertex-number labels, normal arrows). REPL-walking overlays moved out to `glr_ctrl.c`. |
 | `geometry_guides` | Vertex/primitive guide rendering from snapshots. Lives at root (REPL-aware: knows about cursor input) |
 | `transform_guides` | Transform-guide rendering from snapshots. Lives at root (REPL-aware) |
-| `repl_camera_controls` *(rename to `scene_camera_controls` deferred — blocked on the scene/viewport split)* | Camera/view transform helpers — orbit/pan/zoom drag state machine. `imrepl_ctrl_router_handle_camera_mouse` drives input; scene consumes final camera state through `SceneRenderConfig` |
-| `transform_utils` | Small GL matrix helpers used by `imrepl_ctrl.c` and `transform_guides.c` (root: no `src/scene/*.c` consumes it) |
+| `repl_camera_controls` *(rename to `scene_camera_controls` deferred — blocked on the scene/viewport split)* | Camera/view transform helpers — orbit/pan/zoom drag state machine. `glr_ctrl_router_handle_camera_mouse` drives input; scene consumes final camera state through `SceneRenderConfig` |
+| `transform_utils` | Small GL matrix helpers used by `glr_ctrl.c` and `transform_guides.c` (root: no `src/scene/*.c` consumes it) |
 | `guides_shared` | Shared guide snapshot/planning types for REPL-aware 3D overlays (root, paired with the guides modules) |
 
 Scene code renders. It does not parse, edit, save, or dispatch UI actions.
@@ -360,7 +360,7 @@ Scene code renders. It does not parse, edit, save, or dispatch UI actions.
 
 Generic `ui_*` modules are reusable screen-space view/hit-test
 services. They render from snapshots and return neutral `UiHit`
-results to `imrepl_ctrl`, which dispatches to the owning subsystem.
+results to `glr_ctrl`, which dispatches to the owning subsystem.
 UI does **not** own state and does **not** dispatch.
 
 Feature-owned UI may live under the feature prefix instead — for
@@ -378,7 +378,7 @@ allowlists. The contract is enforced by a per-feature lighter guard:
 | `ui_state` | Owns `UiState`: viewport, pointer, status text TTL, panel visibility, panel-divider geometry, camera viewport pose. *Not* cursor blink (that's editor) |
 | `ui_snapshot` | Defines `UiRenderSnapshot`, the read-only bundle passed to every UI renderer |
 | `ui_editor` | Editor-overlay snapshot types: transformers, highlights, virtual lines |
-| `ui_hit` *(new — replaces `ui_action`)* | Defines `UiHitKind` + `UiHit`, the passive UI → controller contract. UI hit-test functions return `UiHit`; `imrepl_ctrl` dispatches on it |
+| `ui_hit` *(new — replaces `ui_action`)* | Defines `UiHitKind` + `UiHit`, the passive UI → controller contract. UI hit-test functions return `UiHit`; `glr_ctrl` dispatches on it |
 | `ui_panels` | Code-panel and status-banner rendering; input hit-tests return `UiHit` |
 | `ui_layout` | Pure scene/code-panel rectangle geometry |
 | `ui_code_panel_layout` | Pure text wrapping and visual-line iteration |
@@ -419,14 +419,14 @@ state.
 | `repl_export` | Save/load, typed export scaffold, workspace headers, code-panel dumps. Takes `EditorBufferView` for source text |
 | `repl_audio` | Legacy-named app-level playlist engine and persisted audio config |
 | `prof` | Project-wide CPU timing instrumentation |
-| `sample` *(future `imrepl`)* | Current `main()`, GLUT callback registration, buffer swap |
+| `sample` *(future `glr`)* | Current `main()`, GLUT callback registration, buffer swap |
 | `gl_stub_counts` | `USE_GL_STUBS` symbol tracking for `tests/gl-stubs` headers |
 
 ## Ownership / Coordination Diagram
 
 The coordination diagram shows the post-cleanup target under the
 M/V/C+compiler+router contract. UI returns neutral `UiHit` results;
-`imrepl_ctrl` dispatches to the owning subsystem; the editor and the
+`glr_ctrl` dispatches to the owning subsystem; the editor and the
 peer subsystems are each their own controller. There is no central
 `UiAction` dispatch enum.
 
@@ -449,7 +449,7 @@ flowchart LR
     sample["sample.c<br/>GLUT callback wiring · buffer swap"]
 
     subgraph app["0. App router"]
-        ctrl["imrepl_ctrl.c<br/>raw input router · frame/snapshot coordinator<br/>non-editor router helpers · timer tick<br/>does NOT drive editor behavior"]
+        ctrl["glr_ctrl.c<br/>raw input router · frame/snapshot coordinator<br/>non-editor router helpers · timer tick<br/>does NOT drive editor behavior"]
     end
 
     subgraph repl_pipeline["1. REPL compiler/program pipeline"]
@@ -535,7 +535,7 @@ flowchart LR
     %% Controller routes raw events to the owning subsystem based on
     %% UiHit.kind (or focus). Non-editor concerns (replay, audio,
     %% config, save, camera, variable panel, scene press, scroll-wheel
-    %% zoom) are routed by imrepl_ctrl_router_* helpers BEFORE the
+    %% zoom) are routed by glr_ctrl_router_* helpers BEFORE the
     %% editor dispatch entry points run. These are routing edges, not
     %% mutation delegations — the editor and peers are each their own
     %% controller.
@@ -562,7 +562,7 @@ flowchart LR
     ecommit e8@==> store
 
     %% Editor uses UI as its view: ctrl builds the per-frame snapshot
-    %% inline (imrepl_ctrl_build_ui_snapshot) and pushes it to UI
+    %% inline (glr_ctrl_build_ui_snapshot) and pushes it to UI
     %% renderers via the ctrl→ui edges below. UI does not own editor
     %% state; it draws what the editor publishes through ctrl.
 
@@ -640,7 +640,7 @@ flowchart LR
 
 Reading the diagram:
 
-- Input flows in one direction: GLUT → `imrepl_ctrl` → owning
+- Input flows in one direction: GLUT → `glr_ctrl` → owning
   subsystem. UI computes a passive `UiHit` along the way; it never
   mutates state. There is no central dispatch enum.
 - The editor and the peer subsystems (variable_panel, replay) are
@@ -666,7 +666,7 @@ Allowed:
 scene_*.c
 ui_*.c render paths
 repl_executor.c
-sample.c        future imrepl.c
+sample.c        future glr_ctrl.c
 ```
 
 Parser/spec/export/example modules may emit GL command names as text.
@@ -687,7 +687,7 @@ check-ui-returns-hits-only             (Phase 4 — replaces the planned
     ui_*.c input handlers do not call glr_action_*, repl_command_store_*,
     editor_*_mut*, repl_state_*_mut*, or peer-subsystem mutators
     directly. They compute a UiHit and return it. The corrected
-    contract has imrepl_ctrl dispatch on UiHit.kind to the owning
+    contract has glr_ctrl dispatch on UiHit.kind to the owning
     subsystem; UI does not own dispatch. Baseline 5 (lowered from
     8 in Phase J2.2 once the controller took over code-panel press,
     drag, menu activation, and color-picker open/close/press/motion/
@@ -698,7 +698,7 @@ check-ui-panels-no-mutators            (Phase J2.2 hard guard)
     drag / release / scene-press / motion / mouse-release / escape
     forwarders + color-picker open/close/press/motion/release + replay
     pin + search + menu open/close/activate calls are all routed by
-    imrepl_ctrl. Any reappearance fails the build with no allowlist.
+    glr_ctrl. Any reappearance fails the build with no allowlist.
 
 check-replay-ui-isolation              (feature-UI prefix discipline)
     replay_ui_*.c is feature-owned UI: it may render the replay HUD,
@@ -708,10 +708,10 @@ check-replay-ui-isolation              (feature-UI prefix discipline)
     A separate lighter guard for feature UI keeps the generic ui_*
     allowlists clean of feature-specific exemptions.
 
-check-imrepl-not-editor-mirror         (Phase 4)
-    imrepl_ctrl must not accumulate one wrapper per editor operation.
+check-glr-ctrl-not-editor-mirror         (Phase 4)
+    glr_ctrl must not accumulate one wrapper per editor operation.
     New editor behavior belongs behind editor_handle_* or editor_*
-    APIs. imrepl_ctrl routes raw input to the owning subsystem and
+    APIs. glr_ctrl routes raw input to the owning subsystem and
     builds frame snapshots; it does not implement editor behavior or
     duplicate the editor's API surface.
 
@@ -719,7 +719,7 @@ check-no-repl-editor-input-shim        (Phase J1)
     src/editor/input.c must not include the deleted repl_editor.h or call
     legacy repl_*_func dispatch bodies. The input dispatch boundary
     is closed: src/editor/input.c handles editor-text-model concerns only;
-    non-editor routing lives in imrepl_ctrl_router_* helpers.
+    non-editor routing lives in glr_ctrl_router_* helpers.
 
 check-editor-ownership-budget          (landed commit 11)
     Ratchets the transitional ui-forwarder line count in repl_state.c
@@ -749,9 +749,9 @@ render-neutral types belong in explicit shared headers such as
 | New 3D REPL-aware overlay | `scene_*`, consuming snapshots/configs from `SceneRenderConfig` |
 | New 2D UI render | `ui_*` render path, snapshot-only |
 | New 2D UI input behavior | `ui_*` hit-test that returns a `UiHit`; if a new region needs distinguishing, add a `UiHitKind` value |
-| New owning subsystem (variable panel, replay, etc.) | Its own `subsystem_*` files plus a route from `imrepl_ctrl` based on `UiHit.kind` |
-| New cross-owner frame wiring | `imrepl_ctrl` |
-| New app lifecycle/window wiring | `sample` now, future `imrepl` |
+| New owning subsystem (variable panel, replay, etc.) | Its own `subsystem_*` files plus a route from `glr_ctrl` based on `UiHit.kind` |
+| New cross-owner frame wiring | `glr_ctrl` |
+| New app lifecycle/window wiring | `sample` now, future `glr` |
 | New text-buffer mutation | `editor_buffer_*` |
 | New editor cursor/navigation behavior | `editor_document` / `editor_input` |
 | New commit behavior | `editor_commit` + pure `repl_compile` validator |
@@ -790,21 +790,21 @@ side-effect routing. As of that branch landing:
   gone. Color-picker writeback routes through
   `editor_commit_apply_external_change`; the cursor-pixel publish
   routes through the per-frame `UiCodePanelOutput` struct that
-  `ui_panels_render_code_panel` fills and `imrepl_ctrl` actualizes
+  `ui_panels_render_code_panel` fills and `glr_ctrl` actualizes
   by passing the coords directly to `ui_autocomplete_panel_render`.
   The `cursor_px` / `cursor_py` fields on
   `ReplCodePanelRuntimeState`, the `glr_action_set_cursor_pixel`
   setter, and the `check-cursor-px-encapsulated` guard were deleted
   along with the data — it was rendering ephemera, not state.
 - **Code-panel press side effects: routed (Phase J2).**
-  `imrepl_ctrl_router_handle_code_panel_hit(UiHit, x, y)` dispatches
+  `glr_ctrl_router_handle_code_panel_hit(UiHit, x, y)` dispatches
   every code-panel press / drag / release / menu activation /
   pin-button / inline-color-swatch / floating-picker control / panel-
   divider hit by `UiHit.kind`. `src/ui/panels.c` is hit-test only —
   the press / click / drag / release / scene-press / motion / mouse-
   release / escape forwarders are deleted. Hard-guarded by
   `check-ui-panels-no-mutators`. Drag-anchor state moved into
-  `imrepl_ctrl.c`; `route_menu_button_hit` / `route_menu_item_hit`
+  `glr_ctrl.c`; `route_menu_button_hit` / `route_menu_item_hit`
   use `UI_HIT_MENU_BUTTON` vs `UI_HIT_MENU_ITEM` to disambiguate
   top-level button clicks from open-dropdown row clicks via the
   payload's `cmd_idx` / `item_idx` rather than reading menu state
@@ -812,10 +812,10 @@ side-effect routing. As of that branch landing:
 - **Input dispatch boundary: closed (Phase J1).** `repl_editor.{c,h}`
   is deleted. All keyboard, special-key, mouse, motion, and
   mousewheel dispatch migrated into `src/editor/input.c` (editor-text
-  concerns only) and `imrepl_ctrl.c` (non-editor routing via
-  `imrepl_ctrl_router_*` helpers: replay, audio, config, save,
+  concerns only) and `glr_ctrl.c` (non-editor routing via
+  `glr_ctrl_router_*` helpers: replay, audio, config, save,
   camera, variable panel, scene press, scroll-wheel zoom). Timer
-  dispatch inlined into `imrepl_ctrl_timer` / `imrepl_ctrl_tick`.
+  dispatch inlined into `glr_ctrl_timer` / `glr_ctrl_tick`.
   Hard-guarded by `check-no-repl-editor-input-shim`.
 - **Peer subsystems: done.** `variable_panel`, `replay`, and
   `editor_help_session` each own their state separately from
@@ -843,7 +843,7 @@ side-effect routing. As of that branch landing:
   `repl_code_panel_layout` → `ui_code_panel_layout`,
   `repl_code_panel_document` → `editor_code_panel_document`,
   `repl_editor` → deleted (dispatch split between `editor_input`
-  and `imrepl_ctrl`). Two files (`repl_camera_controls`,
+  and `glr_ctrl`). Two files (`repl_camera_controls`,
   `repl_actions`) remain on the legacy prefix with explicit
   blockers documented in the plan.
 - **Hard guards: 33 in place.** `make check-state-ownership` runs
@@ -857,7 +857,7 @@ side-effect routing. As of that branch landing:
   state reads / mutations / parser / commit) and
   `check-replay-ui-isolation` (Phase J3.1, the feature-UI prefix
   discipline). `check-output-actualization` actively scans
-  `UiCodePanelOutput` and verifies `imrepl_ctrl.c` reads every
+  `UiCodePanelOutput` and verifies `glr_ctrl.c` reads every
   field.
 - **Migration ratchets: all at 0/0.** `check-ui-returns-hits-only`,
   `check-no-set-status-in-repl-parser`, `check-replay-forwarders`,
@@ -908,7 +908,7 @@ R10-phase1                    reassess "stale" GLUT decls in repl_core.h
 R10-ph2-5                     dissolve repl_core.c into natural owners
 R11 (tail)                    shrink remaining allowlists (bench_repl.c)
 R12                           consolidate public REPL APIs into one repl.h
-R8                            sample -> imrepl rename (mechanical, last)
+R8                            sample -> glr rename (mechanical, last)
 R9                            optional: split repl_export.c
 Color scheme + syntax         deferred sub-task of editor-owns-text Step 6
 ```

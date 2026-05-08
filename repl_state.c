@@ -547,7 +547,7 @@ int repl_state_parse_workspace_header_line(const char *line) {
 }
 
 /* Mirror chrome-relevant presentation fields into ui_state.code_panel.
- * Called once per frame by imrepl_ctrl_build_ui_snapshot so ui_*.c
+ * Called once per frame by glr_ctrl_build_ui_snapshot so ui_*.c
  * renderers and hit-tests can read them via ui_state_*() without
  * crossing the repl_state_*() boundary. Also called from tests after
  * they tweak repl_state_presentation_mut() so subsequent ui_layout_* /
