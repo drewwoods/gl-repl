@@ -12,13 +12,13 @@
  * variable mutation) and stays here.
  */
 #include "variable_panel.h"
-#include "state.h"
-#include "layout.h"
-#include "variable_panel_state.h"
-#include "replay_state.h"
 #include "./include/gl_2d.h"
+#include "layout.h"
 #include "metrics.h"
+#include "replay_state.h"
 #include "replay_ui_hud.h"
+#include "state.h"
+#include "variable_panel_state.h"
 
 /* Local copy of the layout-mode clamp.  Duplicated by repl_editor.c and
  * ui_panels.c; promoting to a shared header is a separate cleanup. */

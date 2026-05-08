@@ -13,7 +13,6 @@
 #include "ui/code_panel_layout.h"
 #include "ui/layout.h"
 #include "ui/metrics.h"
-#include "ui/state.h"
 
 #define IMPORT_EXPORT_STATE (repl_state_import_export_mut())
 #define g_workspace_header_lines (IMPORT_EXPORT_STATE->workspace_header_lines)

@@ -6,12 +6,14 @@
  * performs the actual clipboard mutation. Phase 2 keeps selection and
  * clipboard storage in repl_state.c while this module owns the behavior.
  */
+
 #include "clipboard.h"
+#include "undo.h"
+
 #include "repl_command_store.h"
+#include "repl_core.h"
 #include "repl_core_internal.h"
 #include "repl_source_scope.h"
-#include "undo.h"
-#include "repl_core.h"
 #include "repl_state_owners.h"
 
 void editor_clipboard_clear_selection(void) {

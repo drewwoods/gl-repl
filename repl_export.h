@@ -40,7 +40,6 @@
 
 #include "editor/state.h"  /* EditorBufferView */
 #include "repl_eval.h"     /* REPL_SCRATCH_ARRAY_LEN */
-#include "repl_export_state.h"
 
 /* Boilerplate C file segments for export. g_header_pre is the initial includes
  * and setup; g_header_post follows the metadata comments; g_footer_pre_init is

@@ -2,7 +2,6 @@
  * repl_executor.c -- Flat command execution, GLUtesselator resource lifetimes,
  * and execution-time state helpers.
  */
-#include "glr_camera.h"
 #include "repl_executor.h"
 #include "repl_core.h"
 #include "repl_core_internal.h"
