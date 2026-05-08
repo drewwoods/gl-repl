@@ -46,7 +46,7 @@ grep -RInE \
   || true
 
 # 4. UI files calling state mutators directly. Phase 4 (commits 12-14)
-#    routes these through UiAction + imrepl_ctrl_dispatch_action.
+#    routes these through UiAction + glr_ctrl_dispatch_action.
 print_section "UI files with live mutation calls"
 grep -RInE \
   'repl_(action|command_store|clipboard|undo|search|var_drag|autocomplete)_[a-z_]+\(|repl_state_.*_mut\(' \

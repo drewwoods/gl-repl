@@ -7,7 +7,7 @@
 #include "editor/search.h"
 #include "editor/state.h"
 #include "editor/undo.h"
-#include "imrepl_ctrl.h"
+#include "glr_ctrl.h"
 #include "prof.h"
 #include "glr_actions.h"
 #include "repl_camera_controls.h"
@@ -206,7 +206,7 @@ static void assert_float_decl_rejected_atomic(const char *label,
 int main() {
     repl_eval_init_predef_vars();
     editor_input_set_modifier_provider_for_test(mock_get_modifiers);
-    /* Tests skip imrepl_ctrl_init_gl (no GLUT context); register the
+    /* Tests skip glr_ctrl_init_gl (no GLUT context); register the
      * comment-toggle prefix explicitly so Ctrl+/ test paths exercise the
      * full toggle path. */
     editor_set_line_comment_prefix("// ");
@@ -524,7 +524,7 @@ int main() {
         repl_reset_state();
         if (repl_example_count() > 1) {
             repl_load_example(0);
-            imrepl_ctrl_router_handle_scene_cycle_special(GLUT_KEY_F12);
+            glr_ctrl_router_handle_scene_cycle_special(GLUT_KEY_F12);
             ASSERT_INT("f12 special route advances example",
                     repl_state_scenes().active_example_idx, 1);
         }
@@ -1986,7 +1986,7 @@ int main() {
 
         repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_HIDDEN; repl_state_sync_ui_chrome();
         replay_state = REPLAY_PLAYING;
-        imrepl_ctrl_router_handle_active_replay_key(' ');
+        glr_ctrl_router_handle_active_replay_key(' ');
         ASSERT_INT("replay space keeps hidden code panel",
                    repl_state_presentation().code_panel_layout, CODE_PANEL_LAYOUT_HIDDEN);
         ASSERT_INT("replay space still pauses through router",
@@ -1994,7 +1994,7 @@ int main() {
 
         replay_state = REPLAY_PAUSED;
         replay_pc = 0;
-        imrepl_ctrl_router_handle_replay_special(GLUT_KEY_RIGHT);
+        glr_ctrl_router_handle_replay_special(GLUT_KEY_RIGHT);
         ASSERT_INT("replay right keeps hidden code panel",
                    repl_state_presentation().code_panel_layout, CODE_PANEL_LAYOUT_HIDDEN);
         ASSERT_INT("replay right still advances through router",
@@ -2382,7 +2382,7 @@ int main() {
             int mx = CODE_MARGIN_X + 1;
             int my = code_panel_mouse_y_for_cmd(2);
             UiHit hit = ui_panels_hit_test(mx, my);
-            imrepl_ctrl_router_handle_code_panel_hit(hit, mx, my);
+            glr_ctrl_router_handle_code_panel_hit(hit, mx, my);
         }
 
         ASSERT_INT("mouse auto-commit valid edit: cursor moved", repl_state_edit_line(), 2);
@@ -2531,23 +2531,23 @@ int main() {
         g_mock_modifiers = GLUT_ACTIVE_CTRL;
 
         /* Increment */
-        imrepl_ctrl_router_handle_accum_samples_key('+');
+        glr_ctrl_router_handle_accum_samples_key('+');
         ASSERT_INT("accum toggle +: samples increased to 4", rs->accum_samples, 4);
 
-        imrepl_ctrl_router_handle_accum_samples_key('='); /* some keyboards use = for + without shift */
+        glr_ctrl_router_handle_accum_samples_key('='); /* some keyboards use = for + without shift */
         ASSERT_INT("accum toggle =: samples increased to 8", rs->accum_samples, 8);
 
         /* Decrement */
-        imrepl_ctrl_router_handle_accum_samples_key('-');
+        glr_ctrl_router_handle_accum_samples_key('-');
         ASSERT_INT("accum toggle -: samples decreased to 4", rs->accum_samples, 4);
 
         /* Test limits */
         rs->accum_samples = 16;
-        imrepl_ctrl_router_handle_accum_samples_key('+');
+        glr_ctrl_router_handle_accum_samples_key('+');
         ASSERT_INT("accum toggle +: samples capped at 16", rs->accum_samples, 16);
 
         rs->accum_samples = 1;
-        imrepl_ctrl_router_handle_accum_samples_key('-');
+        glr_ctrl_router_handle_accum_samples_key('-');
         ASSERT_INT("accum toggle -: samples floored at 1", rs->accum_samples, 1);
 
         g_mock_modifiers = saved_mods;
@@ -2580,13 +2580,13 @@ int main() {
             ASSERT_TRUE("F12 test: promoted example to slot", slot >= 0);
 
             /* Cycle from user scene 0 -> should go to example 0 */
-            imrepl_ctrl_router_handle_scene_cycle_special(GLUT_KEY_F12);
+            glr_ctrl_router_handle_scene_cycle_special(GLUT_KEY_F12);
             ASSERT_INT("F12: user scene 0 -> example 0", repl_state_scenes().active_example_idx, 0);
             ASSERT_INT("F12: active user scene now -1", repl_active_user_scene(), -1);
 
             /* Cycle through all examples to reach user scenes again */
             for (int i = 0; i < example_count; i++) {
-                 imrepl_ctrl_router_handle_scene_cycle_special(GLUT_KEY_F12);
+                 glr_ctrl_router_handle_scene_cycle_special(GLUT_KEY_F12);
             }
             /* After all examples, it should hit the first used user scene slot */
             ASSERT_INT("F12: cycled back to user scene 0", repl_active_user_scene(), 0);
@@ -2634,8 +2634,8 @@ int main() {
 
         /* Just trigger the routes to ensure they are covered.
          * Actual track change depends on audio assets. */
-        imrepl_ctrl_router_handle_horizontal_audio_special(GLUT_KEY_LEFT);
-        imrepl_ctrl_router_handle_horizontal_audio_special(GLUT_KEY_RIGHT);
+        glr_ctrl_router_handle_horizontal_audio_special(GLUT_KEY_LEFT);
+        glr_ctrl_router_handle_horizontal_audio_special(GLUT_KEY_RIGHT);
 
         g_mock_modifiers = saved_mods;
     }
@@ -2646,22 +2646,22 @@ int main() {
         editor_help_session_set_scroll(0);
         editor_help_session_set_tab(0);
 
-        imrepl_ctrl_router_handle_help_scroll_special(GLUT_KEY_DOWN);
+        glr_ctrl_router_handle_help_scroll_special(GLUT_KEY_DOWN);
         ASSERT_INT("help scroll down", editor_help_session_scroll(), 1);
 
-        imrepl_ctrl_router_handle_help_scroll_special(GLUT_KEY_UP);
+        glr_ctrl_router_handle_help_scroll_special(GLUT_KEY_UP);
         ASSERT_INT("help scroll up", editor_help_session_scroll(), 0);
 
-        imrepl_ctrl_router_handle_help_tab_special(GLUT_KEY_RIGHT);
+        glr_ctrl_router_handle_help_tab_special(GLUT_KEY_RIGHT);
         ASSERT_INT("help tab right", editor_help_session_tab_idx(), 1);
 
-        imrepl_ctrl_router_handle_help_tab_special(GLUT_KEY_LEFT);
+        glr_ctrl_router_handle_help_tab_special(GLUT_KEY_LEFT);
         ASSERT_INT("help tab left", editor_help_session_tab_idx(), 0);
 
-        imrepl_ctrl_router_handle_help_scroll_special(GLUT_KEY_PAGE_DOWN);
+        glr_ctrl_router_handle_help_scroll_special(GLUT_KEY_PAGE_DOWN);
         ASSERT_INT("help page down", editor_help_session_scroll(), 5);
 
-        imrepl_ctrl_router_handle_help_scroll_special(GLUT_KEY_PAGE_UP);
+        glr_ctrl_router_handle_help_scroll_special(GLUT_KEY_PAGE_UP);
         ASSERT_INT("help page up", editor_help_session_scroll(), 0);
 
         ui_state_help_mut()->visible = 0;
@@ -2699,13 +2699,13 @@ int main() {
 
         /* 1. Status TTL decrement */
         ui_state_status_mut()->ttl = 10;
-        imrepl_ctrl_tick();
+        glr_ctrl_tick();
         ASSERT_INT("timer: status ttl decremented", ui_state_status().ttl, 9);
 
         /* 2. Cursor blink */
         ui_state_code_panel_mut()->blink_tick = 29;
         ui_state_code_panel_mut()->cursor_visible = 1;
-        imrepl_ctrl_tick();
+        glr_ctrl_tick();
         ASSERT_INT("timer: blink tick reset", ui_state_code_panel().blink_tick, 0);
         ASSERT_TRUE("timer: cursor visibility toggled", !ui_state_code_panel().cursor_visible);
 
@@ -2715,7 +2715,7 @@ int main() {
         replay_state_mut()->speed = 1.0f;
         replay_state_mut()->accum = 0.99f;
         /* This should trigger at least one repl_replay_advance */
-        imrepl_ctrl_tick();
+        glr_ctrl_tick();
         ASSERT_TRUE("timer: replay accum advanced", replay_state_view().accum < 0.5f);
 
         replay_state_mut()->active = 0;
@@ -2744,13 +2744,13 @@ int main() {
         int click_x = px + pw / 2;
         int click_y = 1000 - (py + ph - VAR_PANEL_PAD_INTERNAL - VAR_TITLE_H_INTERNAL / 2);
 
-        imrepl_ctrl_router_handle_variable_panel_drag_begin(GLUT_LEFT_BUTTON, GLUT_DOWN, click_x, click_y);
+        glr_ctrl_router_handle_variable_panel_drag_begin(GLUT_LEFT_BUTTON, GLUT_DOWN, click_x, click_y);
         ASSERT_TRUE("mouse: variable drag active", variable_panel_drag_active());
 
-        imrepl_ctrl_router_handle_variable_panel_motion(click_x + 100, click_y);
+        glr_ctrl_router_handle_variable_panel_motion(click_x + 100, click_y);
         /* drag motion should have changed the variable value. */
 
-        imrepl_ctrl_router_handle_variable_panel_drag_release(GLUT_UP);
+        glr_ctrl_router_handle_variable_panel_drag_release(GLUT_UP);
         ASSERT_TRUE("mouse: variable drag inactive after release", !variable_panel_drag_active());
     }
 
@@ -2863,7 +2863,7 @@ int main() {
 
         /* Ctrl+P (Dump) */
         /* We can't easily check stdout, but we trigger the branch. */
-        imrepl_ctrl_router_handle_debug_dump_key(16);
+        glr_ctrl_router_handle_debug_dump_key(16);
         assert_status_contains("Ctrl+P dump", "Dumped");
 
         /* Ctrl+S (Save) */
@@ -2881,7 +2881,7 @@ int main() {
                 int cd_ok = chdir(made_dir);
                 ASSERT_INT("chdir default output dir", cd_ok, 0);
                 if (cd_ok == 0) {
-                    imrepl_ctrl_router_handle_save_key(19);
+                    glr_ctrl_router_handle_save_key(19);
                     assert_status_contains("Ctrl+S save", "Saved");
                     ASSERT_INT("default output saved in temp dir",
                                access("output.c", F_OK), 0);
@@ -3098,9 +3098,9 @@ int main() {
         int click_x = px + pw / 2;
         int click_y = 1000 - (py + ph - VAR_PANEL_PAD_INTERNAL - VAR_TITLE_H_INTERNAL / 2);
 
-        imrepl_ctrl_router_handle_variable_panel_drag_begin(GLUT_RIGHT_BUTTON, GLUT_DOWN, click_x, click_y);
+        glr_ctrl_router_handle_variable_panel_drag_begin(GLUT_RIGHT_BUTTON, GLUT_DOWN, click_x, click_y);
         ASSERT_TRUE("mouse: right-click variable drag active", variable_panel_drag_active());
-        imrepl_ctrl_router_handle_variable_panel_drag_release(GLUT_UP);
+        glr_ctrl_router_handle_variable_panel_drag_release(GLUT_UP);
     }
 
     printf("\n%d / %d tests passed\n", g_harness.passed, g_harness.run);

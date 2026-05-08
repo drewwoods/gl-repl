@@ -18,7 +18,7 @@
  * `variable_panel_state_capture` / `_restore` alongside the editor /
  * ui captures.
  *
- * Render path: imrepl_ctrl_build_ui_snapshot fills
+ * Render path: glr_ctrl_build_ui_snapshot fills
  * `UiRenderSnapshot.variable_panel` from `variable_panel_view()` and
  * `UiRenderSnapshot.variable_drag` from `variable_panel_drag()`
  * directly. ui_variable_panel.c reads visibility through

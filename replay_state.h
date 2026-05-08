@@ -32,7 +32,7 @@ void                     replay_state_reset(void);
 /* Snapshot-build accessor: returns the full ReplReplayRuntimeState by
  * value. Use the narrow accessors below for individual fields;
  * replay_state_view exists primarily for the per-frame UiRenderSnapshot
- * fill in imrepl_ctrl_build_ui_snapshot, where the controller copies
+ * fill in glr_ctrl_build_ui_snapshot, where the controller copies
  * the entire struct into the snapshot exactly once. */
 ReplReplayRuntimeState   replay_state_view(void);
 

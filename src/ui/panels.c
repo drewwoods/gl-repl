@@ -1307,7 +1307,7 @@ UiHit ui_panels_hit_test(int mx, int my) {
  * J2.2: ui_panels_handle_code_panel_press / _click / _drag /
  * _release / _scene_press / _motion / _mouse_release / _escape were
  * deleted. The controller dispatches code-panel clicks via
- * imrepl_ctrl_router_handle_code_panel_hit on the UiHit returned by
+ * glr_ctrl_router_handle_code_panel_hit on the UiHit returned by
  * ui_panels_hit_test; drag tracking + release / picker press / motion
  * / release / escape live on the controller side. UI input files
  * report hit-test data only. */

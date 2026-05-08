@@ -1,4 +1,4 @@
-#include "imrepl_ctrl.h"
+#include "glr_ctrl.h"
 #include "glr_actions.h"
 #include "repl_debug.h"
 #include "repl_executor.h"
@@ -94,42 +94,42 @@ static void print_usage(const char *prog) {
 }
 
 static void display_func(void) {
-    imrepl_ctrl_display_frame();
+    glr_ctrl_display_frame();
     glutSwapBuffers();
 }
 
 static void reshape_func(int w, int h) {
-    imrepl_ctrl_reshape(w, h);
+    glr_ctrl_reshape(w, h);
 }
 
 static void keyboard_func(unsigned char key, int x, int y) {
-    imrepl_ctrl_keyboard(key, x, y);
+    glr_ctrl_keyboard(key, x, y);
 }
 
 static void special_func(int key, int x, int y) {
-    imrepl_ctrl_special(key, x, y);
+    glr_ctrl_special(key, x, y);
 }
 
 static void mouse_func(int button, int state, int x, int y) {
-    imrepl_ctrl_mouse(button, state, x, y);
+    glr_ctrl_mouse(button, state, x, y);
 }
 
 static void motion_func(int x, int y) {
-    imrepl_ctrl_motion(x, y);
+    glr_ctrl_motion(x, y);
 }
 
 static void passive_motion_func(int x, int y) {
-    imrepl_ctrl_passive_motion(x, y);
+    glr_ctrl_passive_motion(x, y);
 }
 
 #ifndef USE_GLUT
 static void mousewheel_func(int wheel, int direction, int x, int y) {
-    imrepl_ctrl_mousewheel(wheel, direction, x, y);
+    glr_ctrl_mousewheel(wheel, direction, x, y);
 }
 #endif
 
 static void timer_func(int value) {
-    imrepl_ctrl_timer(value);
+    glr_ctrl_timer(value);
 }
 
 int main(int argc, char **argv) {
@@ -161,7 +161,7 @@ int main(int argc, char **argv) {
 
     if (dump_code || dump_flat || dump_state_layout) {
         if (dump_code || dump_flat)
-            imrepl_ctrl_bootstrap_repl(input_file);
+            glr_ctrl_bootstrap_repl(input_file);
         if (dump_code)
             repl_debug_dump_editor(stdout, editor_buffer_view());
         if (dump_flat)
@@ -177,10 +177,10 @@ int main(int argc, char **argv) {
     glutInitWindowSize(window_w, window_h);
     glutCreateWindow("OpenGL REPL - Display List Dynamic Rendering");
 
-    imrepl_ctrl_init_gl();
+    glr_ctrl_init_gl();
     atexit(repl_executor_destroy_resources);
-    imrepl_ctrl_bootstrap_repl(input_file);
-    imrepl_ctrl_set_accum(use_accum);
+    glr_ctrl_bootstrap_repl(input_file);
+    glr_ctrl_set_accum(use_accum);
 
     /* Audio: init once, scan assets/ *.mp3 for a playlist, play the
      * first track, shutdown on exit. Failures here are non-fatal: the
