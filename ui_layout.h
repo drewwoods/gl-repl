@@ -17,7 +17,7 @@ typedef enum {
 
 #define CFG_DEFAULT_PANEL_FRAC 0.45f
 
-void repl_layout_code_panel_rect(int *x, int *y, int *w, int *h);
-void repl_layout_scene_rect(int *x, int *y, int *w, int *h);
+void ui_layout_code_panel_rect(int *x, int *y, int *w, int *h);
+void ui_layout_scene_rect(int *x, int *y, int *w, int *h);
 
 #endif /* UI_LAYOUT_H */

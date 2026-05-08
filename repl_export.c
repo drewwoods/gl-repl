@@ -2607,7 +2607,7 @@ static void emit_export_display_tail(FILE *f, const ExportNeeds *needs) {
      * viewport's aspect ratio and geometry is never clipped. Fall back to
      * 800x600 when dimensions aren't available (e.g. headless export). */
     int sx, sy, sw, sh;
-    repl_layout_scene_rect(&sx, &sy, &sw, &sh);
+    ui_layout_scene_rect(&sx, &sy, &sw, &sh);
     if (sw <= 0) sw = 800;
     if (sh <= 0) sh = 600;
     emit_footer_post_init(f, sw, sh);
@@ -3067,7 +3067,7 @@ void repl_dump_code_panel_visual_text(FILE *out, EditorBufferView text) {
 
     s_export_text_view = text;
 
-    repl_layout_code_panel_rect(NULL, NULL, &panel_w, NULL);
+    ui_layout_code_panel_rect(NULL, NULL, &panel_w, NULL);
     update_render_state_strings();
     update_cam_lines();
 

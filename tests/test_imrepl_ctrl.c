@@ -457,7 +457,7 @@ static void test_variable_panel_motion_routes_through_compile_and_coalesces_undo
                    1);
     }
 
-    repl_undo_ring_state_capture(&undo_state);
+    editor_undo_ring_state_capture(&undo_state);
     ASSERT_INT("drag motions coalesce to one undo snapshot",
                undo_state.undo_count, 1);
     ASSERT_STR("drag rewrites declaration source through compiler",
@@ -471,7 +471,7 @@ static void test_variable_panel_motion_routes_through_compile_and_coalesces_undo
     ASSERT_INT("undo flag cleared after release",
                variable_panel_drag_undo_snapshot_pushed(), 0);
 
-    repl_undo_pop_snapshot();
+    editor_undo_pop_snapshot();
     ASSERT_STR("undo restores declaration source",
                editor_buffer_line(0), "  float testvar = 1;");
     ASSERT_FLOAT("undo restores live predef value", g_predef_vars[var_idx].value, 1.0f);
@@ -526,7 +526,7 @@ static void test_variable_panel_motion_initializes_uninitialized_declaration(voi
                    1);
     }
 
-    repl_undo_ring_state_capture(&undo_state);
+    editor_undo_ring_state_capture(&undo_state);
     ASSERT_INT("uninitialized drag motions coalesce to one undo snapshot",
                undo_state.undo_count, 1);
     ASSERT_STR("uninitialized drag adds explicit initializer",
@@ -542,7 +542,7 @@ static void test_variable_panel_motion_initializes_uninitialized_declaration(voi
     ASSERT_INT("uninitialized undo flag cleared after release",
                variable_panel_drag_undo_snapshot_pushed(), 0);
 
-    repl_undo_pop_snapshot();
+    editor_undo_pop_snapshot();
     ASSERT_STR("undo restores bare declaration",
                editor_buffer_line(0), "  float testvar;");
     ASSERT_FLOAT("undo restores live value to zero",

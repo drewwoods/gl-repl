@@ -639,8 +639,8 @@ Completed (Phase 1 + most of Phase 2):
     spec entry now auto-populates F1.
   - All `ui_*.c` files have zero `_mut()` calls
     (`check-ui-returns-hits-only` baseline 0/0).
-- ✅ **R3** — `repl_layout.c` / `repl_layout.h` own `repl_layout_scene_rect` /
-  `repl_layout_code_panel_rect`; non-UI callers include `repl_layout.h`.
+- ✅ **R3** — `repl_layout.c` / `repl_layout.h` own `ui_layout_scene_rect` /
+  `ui_layout_code_panel_rect`; non-UI callers include `repl_layout.h`.
 - ✅ **R4** — `imrepl_ctrl.c` no longer includes `repl_core_internal.h`;
   `repl_pipeline.h` exists; `repl_eval_predef_view()` hides
   `g_predef_vars`. R4d (public-API audit) landed; only `bench_repl.c`

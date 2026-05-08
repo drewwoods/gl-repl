@@ -199,7 +199,7 @@ ownership / contract guards. Highlights:
 | `editor_search.h` | Search query helpers and input routing API |
 | `editor_autocomplete.c` | Completion model: symbol matching, ghost text, parameter hints |
 | `ui_layout.c` | Pure window layout geometry: scene rect and code-panel rect derivation |
-| `ui_layout.h` | Layout geometry API (`repl_layout_scene_rect`, `repl_layout_code_panel_rect`) |
+| `ui_layout.h` | Layout geometry API (`ui_layout_scene_rect`, `ui_layout_code_panel_rect`) |
 | `repl_scenes.c` | User-scene slots, LRU eviction, workspace save/load, workspace dir binding |
 | `repl_example_loader.c` | Built-in example loading and active-example tracking |
 | `repl_debug.c` | Diagnostic dumps for CLI flags and tests |
@@ -382,7 +382,7 @@ variable values + a scene `name` + `last_touch` tick for LRU.
 
 - `g_active_user_scene` (`-1` means an example or a fresh empty workspace is
   loaded instead of a user scene).
-- `repl_undo_push_snapshot()` (in `editor_undo.c`, called from
+- `editor_undo_push_snapshot()` (in `editor_undo.c`, called from
   `editor_input.c` and `editor_commit.c` before mutations) calls
   `repl_promote_example_if_needed()` before every mutation. If the user is
   editing an example, that call allocates a fresh slot, copies the current
@@ -401,8 +401,8 @@ message (user has to save workspace first to unlock eviction).
 
 ### Inline rename
 
-- `repl_inline_rename_begin(slot)` / `repl_inline_rename_handle_key(...)` /
-  `repl_inline_rename_cancel()` in `editor_inline_rename.c`.
+- `editor_inline_rename_begin(slot)` / `editor_inline_rename_handle_key(...)` /
+  `editor_inline_rename_cancel()` in `editor_inline_rename.c`.
 - Triggered by the Scene → "Rename active scene" menu item; typing updates a
   status-bar prompt; Enter commits via `repl_user_scene_rename` (which trims,
   de-duplicates, and guards against an empty name), Esc cancels.
@@ -703,8 +703,8 @@ Circular snapshot buffers in `editor_undo.c`:
 - `ReplUndoSnapshot` captures the full editor state: source commands,
   command count, cursor position, predefined variable values
 - Undo and redo rings (32 slots each) with head/count tracking
-- `repl_undo_push_snapshot()` called before any mutation (delete, paste,
-  reformat, etc.); `repl_undo_pop_snapshot()` on Ctrl+Z; `repl_undo_do_redo()` on
+- `editor_undo_push_snapshot()` called before any mutation (delete, paste,
+  reformat, etc.); `editor_undo_pop_snapshot()` on Ctrl+Z; `editor_undo_do_redo()` on
   Ctrl+Y. Also the hook where `repl_promote_example_if_needed()` fires
   so editing an example auto-creates a user scene.
 - Pushing clears the redo stack; undo moves current state to redo

@@ -333,7 +333,7 @@ int repl_action_menu_item_activate(int menu_id, int item_idx) {
                 set_status("No active scene to rename");
                 return 1;
             }
-            repl_inline_rename_begin(slot);
+            editor_inline_rename_begin(slot);
             return 1;
         }
 

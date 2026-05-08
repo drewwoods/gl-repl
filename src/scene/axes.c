@@ -1,7 +1,7 @@
 /*
  * scene_axes.c - axes theme rendering
  */
-#include "scene_axes.h"
+#include "axes.h"
 #include "./include/gl_2d.h"
 
 enum {

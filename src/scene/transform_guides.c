@@ -1,8 +1,8 @@
 /*
  * scene_transform_guides.c - transform edit-guide planning/rendering.
  */
-#include "scene_transform_guides.h"
-#include "scene_transform_utils.h"
+#include "transform_guides.h"
+#include "transform_utils.h"
 
 static void scene_transform_guides_push_state(void) {
     glPushAttrib(GL_ALL_ATTRIB_BITS);

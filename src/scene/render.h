@@ -32,7 +32,7 @@
 #ifndef SCENE_RENDER_H
 #define SCENE_RENDER_H
 
-#include "scene_render_types.h"
+#include "render_types.h"
 
 /* Accumulation-buffer AA supports 1, 2, 4, 8, and 16-sample passes. The
  * controller cycles across that fixed ladder, and the scene renderer keeps a

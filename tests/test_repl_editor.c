@@ -132,7 +132,7 @@ static int code_panel_header_row_count(void) {
     int text_x = CODE_MARGIN_X + linenum_w + FONT_W + idx_col_w;
     int rows = 0;
 
-    repl_layout_code_panel_rect(NULL, NULL, &panel_w, NULL);
+    ui_layout_code_panel_rect(NULL, NULL, &panel_w, NULL);
     refresh_workspace_header_lines();
     for (int i = 0; i < g_workspace_header_line_count; i++)
         rows += test_code_panel_row_count_for_text(g_workspace_header_lines[i],
@@ -156,7 +156,7 @@ static int code_panel_mouse_y_for_cmd(int cmd_idx) {
     int text_x = CODE_MARGIN_X + linenum_w + FONT_W + idx_col_w;
     int doc_line = code_panel_header_row_count();
 
-    repl_layout_code_panel_rect(NULL, &cp_y, &panel_w, &cp_h);
+    ui_layout_code_panel_rect(NULL, &cp_y, &panel_w, &cp_h);
     for (int i = 0; i < cmd_idx && i < repl_state_document_count(); i++) {
         const char *line_text = editor_buffer_line(i);
         doc_line += test_code_panel_row_count_for_text(line_text ? line_text : "",
@@ -228,48 +228,48 @@ int main() {
         g_panel_frac = 0.25f;
 
         repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
-        repl_layout_code_panel_rect(&x, &y, &w, &h);
+        ui_layout_code_panel_rect(&x, &y, &w, &h);
         ASSERT_INT("left code x", x, 0);
         ASSERT_INT("left code y", y, 0);
         ASSERT_INT("left code w", w, 250);
         ASSERT_INT("left code h", h, 800);
-        repl_layout_scene_rect(&x, &y, &w, &h);
+        ui_layout_scene_rect(&x, &y, &w, &h);
         ASSERT_INT("left scene x", x, 250);
         ASSERT_INT("left scene y", y, 0);
         ASSERT_INT("left scene w", w, 750);
         ASSERT_INT("left scene h", h, 800);
 
         repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_TOP;
-        repl_layout_code_panel_rect(&x, &y, &w, &h);
+        ui_layout_code_panel_rect(&x, &y, &w, &h);
         ASSERT_INT("top code x", x, 0);
         ASSERT_INT("top code y", y, 600);
         ASSERT_INT("top code w", w, 1000);
         ASSERT_INT("top code h", h, 200);
-        repl_layout_scene_rect(&x, &y, &w, &h);
+        ui_layout_scene_rect(&x, &y, &w, &h);
         ASSERT_INT("top scene x", x, 0);
         ASSERT_INT("top scene y", y, 0);
         ASSERT_INT("top scene w", w, 1000);
         ASSERT_INT("top scene h", h, 600);
 
         repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_BOTTOM;
-        repl_layout_code_panel_rect(&x, &y, &w, &h);
+        ui_layout_code_panel_rect(&x, &y, &w, &h);
         ASSERT_INT("bottom code x", x, 0);
         ASSERT_INT("bottom code y", y, 0);
         ASSERT_INT("bottom code w", w, 1000);
         ASSERT_INT("bottom code h", h, 200);
-        repl_layout_scene_rect(&x, &y, &w, &h);
+        ui_layout_scene_rect(&x, &y, &w, &h);
         ASSERT_INT("bottom scene x", x, 0);
         ASSERT_INT("bottom scene y", y, 200);
         ASSERT_INT("bottom scene w", w, 1000);
         ASSERT_INT("bottom scene h", h, 600);
 
         repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_HIDDEN;
-        repl_layout_code_panel_rect(&x, &y, &w, &h);
+        ui_layout_code_panel_rect(&x, &y, &w, &h);
         ASSERT_INT("hidden code x", x, 0);
         ASSERT_INT("hidden code y", y, 0);
         ASSERT_INT("hidden code w", w, 0);
         ASSERT_INT("hidden code h", h, 0);
-        repl_layout_scene_rect(&x, &y, &w, &h);
+        ui_layout_scene_rect(&x, &y, &w, &h);
         ASSERT_INT("hidden scene x", x, 0);
         ASSERT_INT("hidden scene y", y, 0);
         ASSERT_INT("hidden scene w", w, 1000);
@@ -396,14 +396,14 @@ int main() {
         repl_load_example(0);
         int slot = repl_promote_example_if_needed();
         ASSERT_TRUE("rename route setup slot", slot >= 0);
-        ASSERT_INT("rename route begin", repl_inline_rename_begin(slot), 1);
+        ASSERT_INT("rename route begin", editor_inline_rename_begin(slot), 1);
 
         repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_HIDDEN;
         editor_handle_key('`', 0, 0);
         ASSERT_INT("rename swallows config hidden restore",
                    repl_state_presentation().code_panel_layout, CODE_PANEL_LAYOUT_HIDDEN);
         ASSERT_INT("rename remains active after config key",
-                   repl_inline_rename_active(), 1);
+                   editor_inline_rename_active(), 1);
 
         editor_handle_key(KEY_CTRL_R, 0, 0);
         ASSERT_INT("rename swallows replay toggle", replay_active, 0);
@@ -411,7 +411,7 @@ int main() {
         editor_handle_key(KEY_CTRL_F, 0, 0);
         ASSERT_INT("rename swallows search open", g_search_active, 0);
 
-        repl_inline_rename_cancel();
+        editor_inline_rename_cancel();
         repl_state_presentation_mut()->code_panel_layout = CFG_DEFAULT_CODE_PANEL_LAYOUT;
     }
 
@@ -453,7 +453,7 @@ int main() {
         repl_load_example(0);
         int slot = repl_promote_example_if_needed();
         ASSERT_TRUE("rename special route setup slot", slot >= 0);
-        ASSERT_INT("rename special route begin", repl_inline_rename_begin(slot), 1);
+        ASSERT_INT("rename special route begin", editor_inline_rename_begin(slot), 1);
 
         set_editor_input("abc");
         editor_cursor_pos_set(2);
@@ -477,9 +477,9 @@ int main() {
         editor_handle_special(GLUT_KEY_F1, 0, 0);
         ASSERT_INT("rename special swallows help toggle", g_show_help, 0);
         ASSERT_INT("rename still active after special keys",
-                   repl_inline_rename_active(), 1);
+                   editor_inline_rename_active(), 1);
 
-        repl_inline_rename_cancel();
+        editor_inline_rename_cancel();
         search_clear_all();
         replay_active = 0;
         repl_state_presentation_mut()->code_panel_layout = CFG_DEFAULT_CODE_PANEL_LAYOUT;
@@ -578,7 +578,7 @@ int main() {
         /* g_undo_count starts at 0 (global zero-init); repl_reset_state() does
          * NOT clear the undo buffer, so run this before touching undo at all. */
         repl_reset_state();
-        repl_undo_pop_snapshot();
+        editor_undo_pop_snapshot();
         /* Should survive without crashing; state unchanged */
         ASSERT_INT("undo-nothing: num_cmds still 0", repl_state_document_count(), 0);
     }
@@ -586,7 +586,7 @@ int main() {
     /* 2. Redo when nothing to redo - similarly must be before any undo activity */
     {
         repl_reset_state();
-        repl_undo_do_redo();
+        editor_undo_do_redo();
         ASSERT_INT("redo-nothing: num_cmds still 0", repl_state_document_count(), 0);
     }
 
@@ -599,20 +599,20 @@ int main() {
         ASSERT_TRUE("scratch set before undo snapshot",
                     repl_eval_scratch_get(0, 0, &scratch) && fabsf(scratch - 3.0f) < 1e-6f);
 
-        repl_undo_push_snapshot();
+        editor_undo_push_snapshot();
         repl_feed_line_public("A[0] = 7;");
         repl_feed_line_public("glVertex3f(2,2,2)");
         ASSERT_INT("num_cmds 3", repl_state_document_count(), 3);
         ASSERT_TRUE("scratch changed after redo mutation",
                     repl_eval_scratch_get(0, 0, &scratch) && fabsf(scratch - 7.0f) < 1e-6f);
 
-        repl_undo_pop_snapshot();
+        editor_undo_pop_snapshot();
         ASSERT_INT("num_cmds after undo", repl_state_document_count(), 1);
         ASSERT_STR("cmd 0 source", editor_buffer_line(0), "  A[0] = 3;");
         ASSERT_TRUE("undo restores scratch value",
                     repl_eval_scratch_get(0, 0, &scratch) && fabsf(scratch - 3.0f) < 1e-6f);
 
-        repl_undo_do_redo();
+        editor_undo_do_redo();
         ASSERT_INT("num_cmds after redo", repl_state_document_count(), 3);
         ASSERT_STR("cmd 2 source", editor_buffer_line(2), "  glVertex3f(2, 2, 2);");
         ASSERT_TRUE("redo restores scratch value",
@@ -688,7 +688,7 @@ int main() {
         ASSERT_STR("delete block: last survives", editor_buffer_line(1), "  glVertex3f(4, 4, 4);");
         ASSERT_INT("delete block: edit_line at deletion start", repl_state_edit_line(), 1);
         ASSERT_STR("delete block: input reloaded", editor_state_input().input, "glVertex3f(4, 4, 4)");
-        ASSERT_TRUE("delete block: selection cleared", !repl_clipboard_sel_active());
+        ASSERT_TRUE("delete block: selection cleared", !editor_clipboard_sel_active());
         assert_status_contains("delete block: status line count", "Deleted 3 lines");
     }
 
@@ -709,7 +709,7 @@ int main() {
         ASSERT_STR("backspace reversed selection: first survives", editor_buffer_line(0), "  glVertex3f(0, 0, 0);");
         ASSERT_STR("backspace reversed selection: second survives", editor_buffer_line(1), "  glVertex3f(1, 1, 1);");
         ASSERT_INT("backspace reversed selection: edit_line", repl_state_edit_line(), 2);
-        ASSERT_TRUE("backspace reversed selection: selection cleared", !repl_clipboard_sel_active());
+        ASSERT_TRUE("backspace reversed selection: selection cleared", !editor_clipboard_sel_active());
     }
 
     /* 8b2. Ctrl+D deletes a selected range through its own key path */
@@ -729,7 +729,7 @@ int main() {
         ASSERT_STR("ctrl-d selection: first survives", editor_buffer_line(0), "  glVertex3f(0, 0, 0);");
         ASSERT_STR("ctrl-d selection: last survives", editor_buffer_line(1), "  glVertex3f(4, 4, 4);");
         ASSERT_INT("ctrl-d selection: edit_line", repl_state_edit_line(), 1);
-        ASSERT_TRUE("ctrl-d selection: selection cleared", !repl_clipboard_sel_active());
+        ASSERT_TRUE("ctrl-d selection: selection cleared", !editor_clipboard_sel_active());
         assert_status_contains("ctrl-d selection: status", "Deleted 3 lines");
     }
 
@@ -745,11 +745,11 @@ int main() {
         delete_cmd_range(1, 3, "Deleted");
         ASSERT_INT("delete undo setup: leaves 2 cmds", repl_state_document_count(), 2);
 
-        repl_undo_pop_snapshot();
+        editor_undo_pop_snapshot();
         ASSERT_INT("delete undo: restores 5 cmds", repl_state_document_count(), 5);
         ASSERT_STR("delete undo: middle restored", editor_buffer_line(2), "  glVertex3f(2, 2, 2);");
 
-        repl_undo_do_redo();
+        editor_undo_do_redo();
         ASSERT_INT("delete redo: leaves 2 cmds", repl_state_document_count(), 2);
         ASSERT_STR("delete redo: last survives", editor_buffer_line(1), "  glVertex3f(4, 4, 4);");
     }
@@ -770,7 +770,7 @@ int main() {
         ASSERT_INT("copy block: clipboard count", editor_state_clipboard_count(), 2);
         ASSERT_STR("copy block: first copied", editor_state_clipboard_mut()->lines[0], "    glVertex3f(0, 0, 0);");
         ASSERT_STR("copy block: second copied", editor_state_clipboard_mut()->lines[1], "    glVertex3f(1, 1, 1);");
-        ASSERT_TRUE("copy block: selection cleared", !repl_clipboard_sel_active());
+        ASSERT_TRUE("copy block: selection cleared", !editor_clipboard_sel_active());
 
         repl_state_edit_line_set(5);
         editor_insert_mode_set(0);
@@ -785,12 +785,12 @@ int main() {
         ASSERT_STR("paste block: input reloaded after paste", editor_state_input().input, "glColor3f(1, 0, 0)");
         assert_status_contains("paste block: status", "Pasted 2 lines");
 
-        repl_undo_pop_snapshot();
+        editor_undo_pop_snapshot();
         ASSERT_INT("paste undo: restores original count", repl_state_document_count(), 7);
         ASSERT_STR("paste undo: original body restored", editor_buffer_line(5), "    glColor3f(1, 0, 0);");
         ASSERT_STR("paste undo: close brace restored", editor_buffer_line(6), "  }");
 
-        repl_undo_do_redo();
+        editor_undo_do_redo();
         ASSERT_INT("paste redo: restores pasted count", repl_state_document_count(), 9);
         ASSERT_STR("paste redo: first pasted line", editor_buffer_line(5), "    glVertex3f(0, 0, 0);");
         ASSERT_STR("paste redo: original body shifted again", editor_buffer_line(7), "    glColor3f(1, 0, 0);");
@@ -812,13 +812,13 @@ int main() {
         ASSERT_INT("cut block: leaves 2 cmds", repl_state_document_count(), 2);
         ASSERT_STR("cut block: first survivor", editor_buffer_line(0), "  glVertex3f(0, 0, 0);");
         ASSERT_STR("cut block: second survivor", editor_buffer_line(1), "  glVertex3f(3, 3, 3);");
-        ASSERT_TRUE("cut block: selection cleared", !repl_clipboard_sel_active());
+        ASSERT_TRUE("cut block: selection cleared", !editor_clipboard_sel_active());
 
-        repl_undo_pop_snapshot();
+        editor_undo_pop_snapshot();
         ASSERT_INT("cut undo: restores 4 cmds", repl_state_document_count(), 4);
         ASSERT_STR("cut undo: first cut line restored", editor_buffer_line(1), "  glVertex3f(1, 1, 1);");
 
-        repl_undo_do_redo();
+        editor_undo_do_redo();
         ASSERT_INT("cut redo: leaves 2 cmds", repl_state_document_count(), 2);
         ASSERT_STR("cut redo: second survivor", editor_buffer_line(1), "  glVertex3f(3, 3, 3);");
     }
@@ -927,7 +927,7 @@ int main() {
         ASSERT_INT("copy insert mode: cmd count unchanged", repl_state_document_count(), 2);
         ASSERT_INT("copy insert mode: clipboard unchanged", editor_state_clipboard_count(), 1);
         ASSERT_STR("copy insert mode: clipboard source unchanged", editor_state_clipboard_mut()->lines[0], "  glVertex3f(2, 2, 2);");
-        ASSERT_TRUE("copy insert mode: selection cleared", !repl_clipboard_sel_active());
+        ASSERT_TRUE("copy insert mode: selection cleared", !editor_clipboard_sel_active());
 
         editor_state_selection_set(0, 1);
         editor_insert_mode_set(1);
@@ -935,7 +935,7 @@ int main() {
         ASSERT_INT("cut insert mode: cmd count unchanged", repl_state_document_count(), 2);
         ASSERT_INT("cut insert mode: clipboard unchanged", editor_state_clipboard_count(), 1);
         ASSERT_STR("cut insert mode: clipboard source unchanged", editor_state_clipboard_mut()->lines[0], "  glVertex3f(2, 2, 2);");
-        ASSERT_TRUE("cut insert mode: selection cleared", !repl_clipboard_sel_active());
+        ASSERT_TRUE("cut insert mode: selection cleared", !editor_clipboard_sel_active());
     }
 
     /* 8k. Backspace in insert mode edits input instead of selected source lines */
@@ -2754,7 +2754,7 @@ int main() {
     {
         int saved_mods = g_mock_modifiers;
         repl_reset_state();
-        repl_undo_push_snapshot();
+        editor_undo_push_snapshot();
         repl_feed_line_public("glVertex3f(1,1,1)");
         ASSERT_INT("undo setup: 1 cmd", repl_state_document_count(), 1);
 
@@ -2807,8 +2807,8 @@ int main() {
             editor_scroll_set(0);
             repl_state_presentation_mut()->code_panel_layout = layout;
 
-            repl_layout_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
-            repl_layout_scene_rect(&scene_x, &scene_y, &scene_w, &scene_h);
+            ui_layout_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
+            ui_layout_scene_rect(&scene_x, &scene_y, &scene_w, &scene_h);
 
             code_x = cp_x + cp_w / 2;
             code_y = ui_state_viewport().window_h - (cp_y + cp_h / 2);

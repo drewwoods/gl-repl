@@ -44,7 +44,7 @@ static void profile_panel_rect_for_height(const UiRenderSnapshot *snap, int pane
     int scene_x, scene_y, scene_w, scene_h;
     int panel_x, panel_y;
 
-    repl_layout_scene_rect(&scene_x, &scene_y, &scene_w, &scene_h);
+    ui_layout_scene_rect(&scene_x, &scene_y, &scene_w, &scene_h);
 
     if (snap->variable_panel.visible) {
         panel_x = scene_x + scene_w - PROF_PANEL_W - PROF_PANEL_MARGIN;

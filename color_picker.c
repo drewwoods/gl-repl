@@ -192,7 +192,7 @@ void color_picker_open(int cmd_idx, int my) {
     if (g_cp_line != cmd_idx)
         g_cp_undo_captured = 0;
 
-    repl_layout_code_panel_rect(&cp_x, NULL, &cp_w, NULL);
+    ui_layout_code_panel_rect(&cp_x, NULL, &cp_w, NULL);
     g_cp_line = cmd_idx;
     cmd = cp_cmd_at(cmd_idx);
     if (!cmd)

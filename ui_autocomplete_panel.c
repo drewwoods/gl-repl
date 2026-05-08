@@ -40,7 +40,7 @@ void ui_autocomplete_panel_render(const UiRenderSnapshot *snap,
 
     /* Clamp to code panel width */
     int cp_x, cp_y, cp_w, cp_h;
-    repl_layout_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
+    ui_layout_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
     if (popup_x + popup_w > cp_x + cp_w - 4)
         popup_x = cp_x + cp_w - popup_w - 4;
     if (popup_x < cp_x + 4) popup_x = cp_x + 4;

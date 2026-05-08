@@ -30,7 +30,7 @@
 #ifndef SCENE_GEOMETRY_GUIDES_H
 #define SCENE_GEOMETRY_GUIDES_H
 
-#include "scene_guides_shared.h"
+#include "guides_shared.h"
 
 /* Render geometry guides for the cursor's current context. Shows the immediate
  * geometry that the cursor line(s) will produce: bounding box, vertex positions,

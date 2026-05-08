@@ -30,7 +30,7 @@
 #ifndef SCENE_GRID_H
 #define SCENE_GRID_H
 
-#include "scene_render_types.h"
+#include "render_types.h"
 
 /* Render the grid floor. Draws a reference grid on the Z=0 plane with the
  * currently selected theme and configuration. frame_ctx provides render context
