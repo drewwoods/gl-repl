@@ -275,16 +275,16 @@ static void render_active_input_rows(const UiRenderSnapshot *snap,
     }
 }
 
-int ui_panels_code_panel_apply_scroll_follow_for_test(int *out_follow_doc_line,
+int ui_panels_code_panel_apply_scroll_follow_for_test(int show_vertex_indices,
+                                            int *out_follow_doc_line,
                                             int *out_visible_lines) {
     CodePanelDocumentLayout layout;
     int cp_x, cp_y, cp_w, cp_h;
     int linenum_w = 4 * FONT_W;
-    int idx_col_w = repl_state_presentation().show_vertex_indices ? (6 * FONT_W) : 0;
+    int idx_col_w = show_vertex_indices ? (6 * FONT_W) : 0;
     int idx_x = CODE_MARGIN_X + linenum_w + FONT_W;
     int text_x = idx_x + idx_col_w;
 
-    repl_state_refresh_workspace_header_lines();
     ui_layout_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
     (void)cp_x;
     (void)cp_y;
@@ -1274,7 +1274,7 @@ UiHit ui_panels_hit_test(int mx, int my) {
          * reference even when the insert row is virtual. */
         if (row_resolved) {
             h.kind = on_insert_line ? UI_HIT_CODE_INSERT_LINE : UI_HIT_CODE_TEXT;
-            h.line_idx = on_insert_line ? repl_state_edit_line() : target;
+            h.line_idx = on_insert_line ? editor_state_input().edit_line_idx : target;
             h.visual_row = row_offset;
             h.char_idx = ui_panels_input_cursor_for_click(mx, row_offset, cp_w);
         } else {

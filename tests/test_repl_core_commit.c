@@ -72,7 +72,7 @@ static int code_panel_mouse_y_for_cmd(int cmd_idx) {
 
     /* Mirror the frame path: scroll-follow is applied before the code panel is
      * rendered or hit-tested, so synthetic mouse targets need the same step. */
-    (void)ui_panels_code_panel_apply_scroll_follow_for_test(NULL, NULL);
+    (void)ui_panels_code_panel_apply_scroll_follow_for_test(repl_state_presentation().show_vertex_indices, NULL, NULL);
 
     ui_layout_code_panel_rect(NULL, &cp_y, &panel_w, &cp_h);
     repl_code_panel_document_build(&layout, panel_w, text_x, cp_h);

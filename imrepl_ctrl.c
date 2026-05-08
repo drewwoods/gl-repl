@@ -1342,7 +1342,7 @@ int imrepl_ctrl_router_handle_config_menu_key(unsigned char key) {
         if (replay_active())
             repl_replay_stop();
         editor_input_restore_hidden_code_panel();
-        ui_menu_bar_open_config();
+        ui_menu_bar_open_config(repl_state_variables().anim_time);
         return 1;
     }
     return 0;
@@ -1760,7 +1760,7 @@ static int route_pin_button_hit(const UiHit *hit) {
         break;
     case REPL_MENU_BAR_PIN_SEARCH:
         handle_search_key(KEY_CTRL_F);
-        ui_menu_bar_note_search_opened();
+        ui_menu_bar_note_search_opened(repl_state_variables().anim_time);
         break;
     default:
         break;
@@ -1780,7 +1780,7 @@ static int route_menu_button_hit(const UiHit *hit) {
     if (open_menu == menu_id)
         ui_menu_bar_close();
     else
-        ui_menu_bar_set_open_menu(menu_id);
+        ui_menu_bar_set_open_menu(menu_id, repl_state_variables().anim_time);
     editor_request_redraw();
     return 1;
 }

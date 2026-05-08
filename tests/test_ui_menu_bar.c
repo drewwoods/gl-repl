@@ -65,7 +65,7 @@ static int find_dropdown_item_point(int menu_id, int target_item,
     int win_w = ui_state_viewport().window_w;
     int win_h = ui_state_viewport().window_h;
 
-    ui_menu_bar_set_open_menu(menu_id);
+    ui_menu_bar_set_open_menu(menu_id, 0.0f);
     for (int my = 0; my < win_h; my++) {
         for (int mx = 0; mx < win_w; mx++) {
             if (ui_menu_bar_dropdown_item_hit(mx, my) == target_item) {
@@ -85,7 +85,7 @@ static int find_first_config_action_point(int *out_row, int *out_mx, int *out_my
     int win_w = ui_state_viewport().window_w;
     int win_h = ui_state_viewport().window_h;
 
-    ui_menu_bar_set_open_menu(REPL_MENU_CONFIG);
+    ui_menu_bar_set_open_menu(REPL_MENU_CONFIG, 0.0f);
     for (int my = 0; my < win_h; my++) {
         for (int mx = 0; mx < win_w; mx++) {
             int row = ui_menu_bar_dropdown_item_hit(mx, my);
@@ -116,25 +116,25 @@ static void test_open_close_state(void) {
     ASSERT_INT_EQ("init: no menu open", ui_menu_bar_open_menu_id(), -1);
     ASSERT_TRUE("init: dropdown not open", !ui_menu_bar_menu_dropdown_is_open());
 
-    ui_menu_bar_set_open_menu(REPL_MENU_FILE);
+    ui_menu_bar_set_open_menu(REPL_MENU_FILE, 0.0f);
     ASSERT_INT_EQ("open File menu", ui_menu_bar_open_menu_id(), REPL_MENU_FILE);
     ASSERT_TRUE("File dropdown open", ui_menu_bar_menu_dropdown_is_open());
     ASSERT_TRUE("example dropdown mirrors open menu", ui_menu_bar_example_dropdown_is_open());
 
-    ui_menu_bar_set_open_menu(REPL_MENU_SCENE);
+    ui_menu_bar_set_open_menu(REPL_MENU_SCENE, 0.0f);
     ASSERT_INT_EQ("switch to Scene menu", ui_menu_bar_open_menu_id(), REPL_MENU_SCENE);
 
-    ui_menu_bar_open_config();
+    ui_menu_bar_open_config(0.0f);
     ASSERT_INT_EQ("open Config menu via helper", ui_menu_bar_open_menu_id(), REPL_MENU_CONFIG);
 
-    ui_menu_bar_open_config();
+    ui_menu_bar_open_config(0.0f);
     ASSERT_INT_EQ("open Config again closes it", ui_menu_bar_open_menu_id(), -1);
 
-    ui_menu_bar_set_open_menu(999);
+    ui_menu_bar_set_open_menu(999, 0.0f);
     ASSERT_INT_EQ("invalid menu ID closes", ui_menu_bar_open_menu_id(), -1);
 
     repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_HIDDEN;
-    ui_menu_bar_set_open_menu(REPL_MENU_FILE);
+    ui_menu_bar_set_open_menu(REPL_MENU_FILE, 0.0f);
     ASSERT_TRUE("hidden code panel suppresses dropdown", !ui_menu_bar_menu_dropdown_is_open());
     ASSERT_TRUE("hidden code panel suppresses example dropdown", !ui_menu_bar_example_dropdown_is_open());
 }
@@ -269,18 +269,18 @@ static void test_render_paths_with_stubs(void) {
     ui_menu_bar_render_example_dropdown(&snap);
     ASSERT_TRUE("file dropdown renders text", gl_stub_counts[GL_STUB_glRasterPos2f] > 0);
 
-    ui_menu_bar_set_open_menu(REPL_MENU_SCENE);
+    ui_menu_bar_set_open_menu(REPL_MENU_SCENE, 0.0f);
     snap.scenes.active_example_idx = 0;
     gl_stub_counts_reset();
     ui_menu_bar_render_example_dropdown(&snap);
     ASSERT_TRUE("scene dropdown renders rows", gl_stub_counts[GL_STUB_glRasterPos2f] > 0);
 
-    ui_menu_bar_set_open_menu(REPL_MENU_CONFIG);
+    ui_menu_bar_set_open_menu(REPL_MENU_CONFIG, 0.0f);
     gl_stub_counts_reset();
     ui_menu_bar_render_example_dropdown(&snap);
     ASSERT_TRUE("config dropdown renders rows", gl_stub_counts[GL_STUB_glRasterPos2f] > 0);
 
-    ui_menu_bar_note_search_opened();
+    ui_menu_bar_note_search_opened(0.0f);
     snap.search.active = 1;
     gl_stub_counts_reset();
     ui_menu_bar_render_search_overlay(&snap, 0, 400, 20);
