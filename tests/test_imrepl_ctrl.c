@@ -234,8 +234,13 @@ static void test_display_frame_builds_config_and_restores_live_state(void) {
                g_replay_fade_plan.batch_count, 0);
     ASSERT_FLOAT("replay baseline scratch copied",
                  g_replay_fade_plan.baseline_scratch_arrays[0][0], 4.0f);
-    ASSERT_TRUE("post_fill_fn unset when no active fades",
-                g_last_scene_config.post_fill_fn == NULL);
+    /* The fixture has replay_mode == VERTEX, which gates the tess-preview
+     * wireframe overlay — so post_fill_fn is wired even though no fade
+     * batches are active. */
+    ASSERT_TRUE("post_fill_fn wired when a replay overlay is active",
+                g_last_scene_config.post_fill_fn != NULL);
+    ASSERT_INT("tess preview marked active for VERTEX replay mode",
+               g_replay_tess_preview_active, 1);
     ASSERT_FLOAT("alpha scale boosted for black background", g_last_scene_config.alpha_scale, 3.0f);
     ASSERT_INT("cursor block begin cleared by refresh", g_last_scene_config.cursor_block_begin_idx, -1);
     ASSERT_INT("cursor block end cleared by refresh", g_last_scene_config.cursor_block_end_idx, -1);

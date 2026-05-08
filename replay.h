@@ -118,6 +118,27 @@ float repl_replay_batch_alpha(const ReplayFadeBatch *batch);
  * captures geometry snapshots for new fades. Called each frame. */
 int  repl_replay_prepare_frame(int full_flat_count);
 
+/* --- Tess-preview walk (replay polygon-mode wireframe overlay) ----------
+ *
+ * Walks the flat program, applies the user's CMD_TRANSLATE/SCALE/ROTATE/
+ * PUSH/POP transforms via GL, and dispatches the supplied callbacks at
+ * CMD_TESS_BEGIN_CONTOUR / CMD_TESS_VERTEX / CMD_TESS_END so the visual
+ * layer can emit line-strip primitives at the right transformed
+ * positions. Lets the scene module stay free of GLCmd iteration: the
+ * scene controller installs callbacks that just call glBegin / glVertex /
+ * glEnd, with no knowledge of the REPL flat program.
+ *
+ * Modelview state on entry is the caller's; the walker pushes/pops to
+ * cover its own transform tracking and leaves the caller's state intact. */
+typedef struct ReplTessPreviewCallbacks {
+    void (*begin_contour)(void *user_data);
+    void (*vertex)(float x, float y, float z, void *user_data);
+    void (*end_contour)(void *user_data);
+} ReplTessPreviewCallbacks;
+
+void repl_replay_walk_tess_preview(const ReplTessPreviewCallbacks *cb,
+                                   void *user_data);
+
 /* --- Variable state for step-back --------------------------------------- */
 
 void repl_replay_restore_baseline_predef_values(void);

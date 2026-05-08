@@ -192,8 +192,31 @@ static void imrepl_ctrl_replay_restore_baseline(const ReplayFadePlan *fade_plan)
  * fill (to clamp the flat-cmd count to the pre-fade base limit) and by
  * the post_fill_fn hook (to render the fading-batch overlay). */
 static ReplayFadePlan g_replay_fade_plan;
-static int            g_replay_fade_plan_active;     /* 1 = post_fill_fn should run */
+static int            g_replay_fade_plan_active;     /* 1 = post_fill_fn should render fades */
 static int            g_replay_fade_plan_base_limit; /* clamp for the main fill */
+
+/* Whether the current frame should render the tess-preview wireframe
+ * (replay's polygon-mode overlay). Set by build_scene_config; read by
+ * the post_fill_fn body. */
+static int            g_replay_tess_preview_active;
+
+/* Tiny GL primitives the REPL tess-preview walker calls back into. They
+ * exist as static functions here because the walker takes a callback
+ * struct rather than driving GL itself — that keeps the walker (REPL
+ * data traversal) and the rendering (GL primitives) on the right sides
+ * of the layering boundary. */
+static void tess_preview_begin_contour(void *ud) { (void)ud; glBegin(GL_LINE_STRIP); }
+static void tess_preview_vertex(float x, float y, float z, void *ud) {
+    (void)ud;
+    glVertex3f(x, y, z);
+}
+static void tess_preview_end_contour(void *ud) { (void)ud; glEnd(); }
+
+static const ReplTessPreviewCallbacks g_tess_preview_cb = {
+    .begin_contour = tess_preview_begin_contour,
+    .vertex        = tess_preview_vertex,
+    .end_contour   = tess_preview_end_contour,
+};
 
 static void imrepl_ctrl_build_replay_fade_plan(int replaying) {
     ReplayFadeBatchView fade_batches;
@@ -230,16 +253,8 @@ static void imrepl_ctrl_build_replay_fade_plan(int replaying) {
     g_replay_fade_plan_active = 1;
 }
 
-/* Replay-fade overlay pass, installed on SceneRenderConfig.post_fill_fn
- * when fades are active. Runs between the scene's main user-geometry
- * fill and its grid/axes/backdrop helpers — the GL state set up by
- * render_3d_scene_pass (camera modelview, projection, lights, quality
- * flags, materials) is still live, so this body just layers blended
- * fade overlays on top. */
-static void imrepl_ctrl_post_fill_replay_fade(void *user_data) {
-    (void)user_data;
-    if (!g_replay_fade_plan_active) return;
-
+/* Render the fading-batch overlays prepared in g_replay_fade_plan. */
+static void imrepl_ctrl_render_replay_fade_batches(void) {
     const ReplayFadePlan *plan = &g_replay_fade_plan;
     int batch_count = plan->batch_count;
     if (batch_count <= 0) return;
@@ -288,6 +303,38 @@ static void imrepl_ctrl_post_fill_replay_fade(void *user_data) {
     prof_accum_end(PROF_SCENE_3D_FADE_BATCH_POST);
 
     prof_accum_end(PROF_SCENE_3D_FADE);
+}
+
+/* Render the polygon-mode tess-preview wireframe by walking the flat
+ * program through repl_replay_walk_tess_preview() and emitting line
+ * strips at each transformed contour. The walker handles iteration and
+ * matrix tracking; we own the visual GL state. */
+static void imrepl_ctrl_render_replay_tess_preview(void) {
+    glPushAttrib(GL_ALL_ATTRIB_BITS);
+    glDisable(GL_LIGHTING);
+    glDisable(GL_DEPTH_TEST);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glColor4f(0.30f, 0.95f, 0.75f, 0.80f);
+    glLineWidth(2.0f);
+
+    repl_replay_walk_tess_preview(&g_tess_preview_cb, NULL);
+
+    glLineWidth(1.0f);
+    glPopAttrib();
+}
+
+/* Replay overlays installed on SceneRenderConfig.post_fill_fn — runs
+ * between the scene's user-geometry fill and its grid/axes/backdrop
+ * helpers. Composes the fading-batch overlay and the polygon-mode
+ * tess-preview wireframe; both are pure REPL-state visualizations so
+ * the scene module never sees them. */
+static void imrepl_ctrl_post_fill_replay_overlay(void *user_data) {
+    (void)user_data;
+    if (g_replay_fade_plan_active)
+        imrepl_ctrl_render_replay_fade_batches();
+    if (g_replay_tess_preview_active)
+        imrepl_ctrl_render_replay_tess_preview();
 }
 
 static void imrepl_ctrl_push_highlights(void) {
@@ -481,6 +528,11 @@ static void imrepl_ctrl_build_scene_config(SceneRenderConfig *config) {
     config->replay_tess_preview = config->replaying &&
                                   config->replay_mode == REPLAY_MODE_VERTEX;
     config->replay_vertex_points = config->replay_tess_preview;
+    /* Mirror the same condition for the controller-side tess-preview
+     * post_fill render. The flag stays on SceneRenderConfig because
+     * scene_overlays_render_outlines also consults it to gate normal
+     * outline rendering on tess contours. */
+    g_replay_tess_preview_active = config->replay_tess_preview;
     config->show_current_poly = presentation.highlight_current_poly && !config->replaying;
 
     /* --- Cursor / editor block overlay --- */
@@ -504,14 +556,15 @@ static void imrepl_ctrl_build_scene_config(SceneRenderConfig *config) {
 
     config->guide_snapshot = imrepl_ctrl_build_guide_snapshot(config);
 
-    /* --- Replay ---
+    /* --- Replay overlays ---
      * Build the controller-private fade plan from REPL replay state, and
-     * if there's anything to overlay on the main fill, install our
-     * post_fill_fn so the scene calls it between the user-geometry fill
-     * and the grid/axes/backdrop helpers. */
+     * if there's anything to overlay on the main fill (fading batches or
+     * the polygon-mode tess-preview wireframe) install our post_fill_fn
+     * so the scene calls back between the user-geometry fill and the
+     * grid/axes/backdrop helpers. */
     imrepl_ctrl_build_replay_fade_plan(config->replaying);
-    if (g_replay_fade_plan_active) {
-        config->post_fill_fn        = imrepl_ctrl_post_fill_replay_fade;
+    if (g_replay_fade_plan_active || g_replay_tess_preview_active) {
+        config->post_fill_fn        = imrepl_ctrl_post_fill_replay_overlay;
         config->post_fill_user_data = NULL;
     }
 }

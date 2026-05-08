@@ -10,7 +10,6 @@
 #include "overlays.h"
 #include "render_types.h"
 #include "render.h"
-#include "transform_utils.h"
 #include "prof.h"
 
 #include <errno.h>
@@ -144,67 +143,12 @@ static void scene_prepare_frame_context(FrameRenderContext *ctx,
 /* 3D scene render (viewport offset to the right of the code panel)           */
 /* ========================================================================= */
 
-static void draw_replay_tess_preview(const SceneRenderConfig *config) {
-    if (!config->replay_tess_preview)
-        return;
-
-    scene_render_push_state();
-    glDisable(GL_LIGHTING);
-    glDisable(GL_DEPTH_TEST);
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    glColor4f(0.30f, 0.95f, 0.75f, 0.80f);
-    glLineWidth(2.0f);
-
-    glPushMatrix();
-    {
-        const GLCmd *flat_cmds = config->flat_program.cmds;
-        int flat_cmd_count = config->flat_program.cmd_count;
-        int in_contour = 0;
-        int matrix_depth = 0;
-        for (int i = 0; i < flat_cmd_count; i++) {
-            if (!flat_cmds[i].valid) continue;
-
-            if (repl_cmd_is_transform(flat_cmds[i].type)) {
-                if (!in_contour)
-                    scene_apply_tracked_transform(&flat_cmds[i], &matrix_depth);
-                continue;
-            }
-
-            switch (flat_cmds[i].type) {
-            case CMD_TESS_BEGIN_CONTOUR:
-                if (in_contour)
-                    glEnd();
-                glBegin(GL_LINE_STRIP);
-                in_contour = 1;
-                break;
-            case CMD_TESS_VERTEX:
-                if (in_contour)
-                    glVertex3f(flat_cmds[i].args[0], flat_cmds[i].args[1],
-                               flat_cmds[i].args[2]);
-                break;
-            case CMD_TESS_END:
-                if (in_contour) {
-                    glEnd();
-                    in_contour = 0;
-                }
-                break;
-            default:
-                break;
-            }
-        }
-        if (in_contour)
-            glEnd();
-        scene_unwind_transform_stack(&matrix_depth);
-    }
-    glPopMatrix();
-
-    glLineWidth(1.0f);
-    glDisable(GL_BLEND);
-    glEnable(GL_DEPTH_TEST);
-    if (config->user_lighting_enabled) glEnable(GL_LIGHTING);
-    scene_render_pop_state();
-}
+/* The replay-mode tess-preview wireframe overlay used to live here, but it
+ * iterated the user's flat program and applied REPL-side transforms —
+ * both REPL concerns. The walk now lives behind a callback API in the
+ * REPL replay module; the visual rendering lives in the controller's
+ * post_fill_fn body, which installs glBegin / glVertex / glEnd
+ * callbacks. */
 
 /* Ground-plane crosshair gizmo at the orbit target. Visible only while the
  * camera is moving (during drag or while momentum carries it); fades out.
@@ -361,8 +305,6 @@ static void render_3d_scene_pass(const SceneRenderConfig *config,
     prof_accum_end(PROF_SCENE_3D_OVERLAYS);
 
     prof_begin(PROF_SCENE_3D_HUD);
-    if (config->replay_tess_preview)
-        draw_replay_tess_preview(config);
 
     scene_lights_render(&frame_ctx);
 
