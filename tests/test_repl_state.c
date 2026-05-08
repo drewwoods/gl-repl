@@ -8,7 +8,7 @@
 #include "replay.h"               /* REPLAY_PAUSED, REPLAY_MODE_* enums */
 #include "replay_state.h"
 #include "editor/help_session.h"
-#include "repl_presentation.h"    /* CFG_DEFAULT_* macros */
+#include "glr_defaults.h"    /* CFG_DEFAULT_* macros */
 
 #include "support/test_harness.h"
 #include <stdio.h>

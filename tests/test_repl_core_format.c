@@ -3,7 +3,7 @@
 #include "repl_core.h"
 #include "ui/state.h"
 #include "ui/layout.h"            /* CODE_PANEL_LAYOUT_* */
-#include "repl_presentation.h"    /* CFG_DEFAULT_* */
+#include "glr_defaults.h"    /* CFG_DEFAULT_* */
 #include "support/test_harness.h"
 
 #define g_panel_frac (ui_state_code_panel_mut()->panel_frac)

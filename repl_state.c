@@ -2,7 +2,7 @@
 #include "glr_camera.h"
 #include "repl_state.h"
 #include "glr_camera.h"
-#include "repl_presentation.h"  /* CFG_DEFAULT_* macros for state defaults */
+#include "glr_defaults.h"  /* CFG_DEFAULT_* macros for state defaults */
 
 #include "glr_camera.h"
 #include "editor/state.h"

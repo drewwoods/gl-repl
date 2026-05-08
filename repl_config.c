@@ -1,12 +1,8 @@
-#include "glr_camera.h"
 #include "repl_config.h"
-
-#include "glr_camera.h"
 #include "audio.h"
 #include "glr_camera.h"
-#include "ui/state_types.h"
-#include "glr_camera.h"
 #include "repl_state_owners.h"
+#include "ui/state_types.h"
 
 /* Camera, profile_panel slices live on UiState; variable_panel
  * visibility lives on the variable_panel peer; replay state lives
