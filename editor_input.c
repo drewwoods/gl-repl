@@ -40,7 +40,7 @@
 #include "repl_command_store.h"
 #include "repl_core.h"
 #include "repl_core_internal.h"
-#include "repl_keys.h"
+#include "keys.h"
 #include "repl_parser.h"
 #include "repl_state_owners.h"
 #include "repl_source_scope.h"

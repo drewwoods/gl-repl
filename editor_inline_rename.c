@@ -10,7 +10,7 @@
  * here ahead of its own routing while rename is active.
  */
 #include "repl_core.h"
-#include "repl_keys.h"
+#include "keys.h"
 #include "editor_inline_rename.h"
 
 static int  g_rename_slot = -1;
