@@ -15,7 +15,7 @@ between the REPL model/controller and the rendering views. The goal is not to
 turn `scene_*` into a plugin host.
 
 Current code already routes frame wiring through `imrepl_ctrl.c`. `repl_core.c`
-now keeps the REPL model/pipeline wrappers, while `scene_render.c` consumes
+now keeps the REPL model/pipeline wrappers, while `src/scene/render.c` consumes
 explicit per-frame config. Phase 2 is still in progress; remaining work is
 mostly about shrinking transitional state/config surfaces and removing
 allowlisted view-layer state mutations.
@@ -133,7 +133,7 @@ scene_render_3d_scene(&scene_cfg)
        -> apply camera and quality flags
        -> set up baseline lighting/material state
        -> execute user geometry through the narrow execution boundary
-       -> render replay fades/highlights while they remain in scene_render.c
+       -> invoke optional `post_fill_fn` (controller's replay-fade overlay)
        -> render backdrop, grid, axes, orbit target
        -> render REPL-aware 3D overlays from frame snapshots
        -> render light indicators and other scene foreground helpers
@@ -300,10 +300,11 @@ Responsibilities:
 * REPL-aware 3D overlays while they remain under `scene_*`
 * replay fade rendering until the replay simplification follow-up moves it
 
-Neutral scene modules such as `scene_grid.c`, `scene_axes.c`,
-`scene_backdrop.c`, and `scene_lights.c` should remain free of REPL state
-access. Transitional REPL-aware scene files must consume snapshots rather than
-pulling globals directly.
+Neutral scene modules such as `src/scene/grid.c`, `src/scene/axes.c`,
+`src/scene/backdrop.c`, and `src/scene/lights.c` should remain free of REPL
+state access. REPL-aware overlays now live with the controller
+(`geometry_guides.c` / `transform_guides.c` at the repo root) and consume
+the explicit `SceneGuideSnapshot` rather than pulling globals directly.
 
 ## UI Layer
 
@@ -416,7 +417,7 @@ After controller extraction, ordinary `repl_*` model files should not include
 `scene_*.h`. `imrepl_ctrl.c` is the scene/UI frame-rendering exception.
 `check-controller-boundaries` enforces this; cross-layer constants used by
 both layers (e.g. `CFG_DEFAULT_MULTISAMPLE`, `REPL_OUTLINE_POLYGON_OFFSET_*`)
-live in neutral headers (`repl_presentation.h`, `scene_render_types.h`)
+live in neutral headers (`repl_presentation.h`, `src/scene/render_types.h`)
 that both sides include via existing transitive paths.
 
 Remaining `ui_*` include exceptions: `repl_actions.c` and `repl_export.c`.

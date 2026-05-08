@@ -4,11 +4,11 @@
 #include "transform_guides.h"
 #include "transform_utils.h"
 
-static void scene_transform_guides_push_state(void) {
+static void transform_guides_push_state(void) {
     glPushAttrib(GL_ALL_ATTRIB_BITS);
 }
 
-static void scene_transform_guides_pop_state(void) {
+static void transform_guides_pop_state(void) {
     glPopAttrib();
 }
 
@@ -194,7 +194,7 @@ static void draw_translate_guide(const SceneGuideSnapshot *snapshot,
         rgb[2] * 0.6f + 0.4f
     };
 
-    scene_transform_guides_push_state();
+    transform_guides_push_state();
     glDisable(GL_LIGHTING);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -236,7 +236,7 @@ static void draw_translate_guide(const SceneGuideSnapshot *snapshot,
 
     glDisable(GL_BLEND);
     if (snapshot->user_lighting_enabled) glEnable(GL_LIGHTING);
-    scene_transform_guides_pop_state();
+    transform_guides_pop_state();
 }
 
 /* Arc from p_start swept by glRotatef(angle, ax,ay,az) about local origin. */
@@ -283,7 +283,7 @@ static void draw_scale_guide(const SceneGuideSnapshot *snapshot,
     float p0[3] = { p_start[0], p_start[1], p_start[2] };
     float plen = sqrtf(p0[0]*p0[0] + p0[1]*p0[1] + p0[2]*p0[2]);
 
-    scene_transform_guides_push_state();
+    transform_guides_push_state();
     glDisable(GL_LIGHTING);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -418,7 +418,7 @@ static void draw_scale_guide(const SceneGuideSnapshot *snapshot,
 
     glDisable(GL_BLEND);
     if (snapshot->user_lighting_enabled) glEnable(GL_LIGHTING);
-    scene_transform_guides_pop_state();
+    transform_guides_pop_state();
 }
 
 static void draw_rotate_guide(const SceneGuideSnapshot *snapshot,
@@ -446,7 +446,7 @@ static void draw_rotate_guide(const SceneGuideSnapshot *snapshot,
     float plen = sqrtf(p_start[0]*p_start[0] + p_start[1]*p_start[1] +
                        p_start[2]*p_start[2]);
 
-    scene_transform_guides_push_state();
+    transform_guides_push_state();
     glDisable(GL_LIGHTING);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -574,7 +574,7 @@ static void draw_rotate_guide(const SceneGuideSnapshot *snapshot,
 
     glDisable(GL_BLEND);
     if (snapshot->user_lighting_enabled) glEnable(GL_LIGHTING);
-    scene_transform_guides_pop_state();
+    transform_guides_pop_state();
 }
 
 static int transform_source_unmodified(const SceneGuideSnapshot *snapshot,
@@ -596,7 +596,7 @@ static int transform_source_unmodified(const SceneGuideSnapshot *snapshot,
             snapshot->input_len == 0);
 }
 
-int scene_transform_guides_prepare(const SceneGuideSnapshot *snapshot,
+int transform_guides_prepare(const SceneGuideSnapshot *snapshot,
                                    SceneTransformGuidePlan *plan) {
     if (!snapshot || !plan)
         return 0;
@@ -654,7 +654,7 @@ int scene_transform_guides_prepare(const SceneGuideSnapshot *snapshot,
     return 1;
 }
 
-void scene_transform_guides_render_if_due(const SceneGuideSnapshot *snapshot,
+void transform_guides_render_if_due(const SceneGuideSnapshot *snapshot,
                                           SceneTransformGuidePlan *plan,
                                           int flat_cmd_idx,
                                           const float cam_view[16]) {
