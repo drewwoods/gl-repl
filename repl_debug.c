@@ -7,7 +7,6 @@
 #include "repl_command_spec.h"
 #include "repl_pipeline.h"
 #include "repl_state_owners.h"
-#include "ui/state.h"
 #include "repl_state.h"
 
 #include <stddef.h>

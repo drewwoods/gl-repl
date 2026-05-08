@@ -1,6 +1,6 @@
 #include "state.h"
 #include "profile_panel.h"
-#include "repl_presentation.h"    /* CFG_DEFAULT_CAMERA_ROTATE */
+#include "layout.h"  /* CFG_DEFAULT_PANEL_FRAC */
 
 #include <stddef.h>
 #include <string.h>

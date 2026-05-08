@@ -15,7 +15,7 @@
 #include "glr_camera.h"
 #include "ui/layout.h"           /* CODE_PANEL_LAYOUT_* */
 #include "glr_camera.h"
-#include "repl_presentation.h"   /* CFG_DEFAULT_* */
+#include "glr_defaults.h"   /* CFG_DEFAULT_* */
 #include "glr_camera.h"
 #include "support/test_harness.h"
 #include "glr_camera.h"
