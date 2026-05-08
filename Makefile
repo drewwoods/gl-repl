@@ -389,7 +389,7 @@ check-domain-owner-encapsulation: ## Enforce per-domain mutator encapsulation ru
 check-ui-no-repl-state-read: ## Verify UI renderers consume the UiRenderSnapshot, not live repl_state_*().
 	@echo "Checking UI render entry points consume UiRenderSnapshot..."
 	@bad=$$(grep -nE 'repl_state_[A-Za-z0-9_]+\s*\(' $(UI_SRCS) 2>/dev/null \
-		| grep -v -E 'src/ui/(autocomplete_panel|panels|profile_panel|variable_panel|layout|code_panel_layout)\.c:' \
+		| grep -v -E 'src/ui/(autocomplete_panel|profile_panel|code_panel_layout)\.c:' \
 		|| true); \
 	if [ -n "$$bad" ]; then \
 		echo "$(RED)ERROR: ui_*.c files outside the input-bridge allowlist read live repl_state_*():$(NC)"; \

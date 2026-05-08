@@ -422,7 +422,7 @@ int main() {
         repl_state_presentation_mut()->axes_theme = AXES_THEME_NEON;
         repl_state_presentation_mut()->show_vertex_labels = 1;
         repl_state_presentation_mut()->show_normal_vectors = 1;
-        repl_state_presentation_mut()->show_vertex_indices = 1;
+        repl_state_presentation_mut()->show_vertex_indices = 1; repl_state_sync_ui_chrome();
         repl_state_presentation_mut()->show_vertex_outlines = 1;
         repl_state_presentation_mut()->show_vertex_points = 1;
         repl_state_presentation_mut()->show_vertex_guides = 1;
@@ -434,7 +434,7 @@ int main() {
         repl_state_presentation_mut()->highlight_current_poly = 0;
         repl_state_presentation_mut()->ortho_mode = 1;
         repl_state_presentation_mut()->wrap_at_comma = 0;
-        repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_BOTTOM;
+        repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_BOTTOM; repl_state_sync_ui_chrome();
         presentation->focus_vertex[0] = 2.0f;
         presentation->focus_vertex[1] = -1.0f;
         presentation->focus_vertex[2] = 0.5f;

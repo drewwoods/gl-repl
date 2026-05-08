@@ -2,20 +2,21 @@
  * ui_layout.c - pure window layout geometry.
  */
 #include "layout.h"
-#include "repl_state.h"
+#include "repl_state_views.h"
 
 /* ui_state_viewport / ui_state_code_panel are forward-declared here
  * because repl_*.c is not allowed to include ui_state.h per
- * check-controller-boundaries. Layout reads viewport size and panel
- * fraction; both slices are UiState chrome. */
+ * check-controller-boundaries. Layout reads viewport size, panel
+ * fraction, and the controller-mirrored layout_mode; all are UiState
+ * chrome. */
 ReplViewportState         ui_state_viewport(void);
 ReplCodePanelRuntimeState ui_state_code_panel(void);
 
 static int ui_layout_code_panel_layout_mode(void) {
-    if (repl_state_presentation().code_panel_layout < 0 ||
-        repl_state_presentation().code_panel_layout >= CODE_PANEL_LAYOUT_COUNT)
+    int layout = ui_state_code_panel().layout_mode;
+    if (layout < 0 || layout >= CODE_PANEL_LAYOUT_COUNT)
         return CODE_PANEL_LAYOUT_LEFT;
-    return repl_state_presentation().code_panel_layout;
+    return layout;
 }
 
 static int ui_layout_panel_span_px(int total_px) {

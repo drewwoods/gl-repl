@@ -188,6 +188,7 @@ void repl_cfg_cycle_row(int row, int delta) {
         repl_replay_stop();
 
     int new_value = repl_config_cycle(item->key, delta);
+    repl_state_sync_ui_chrome();  /* refresh ui_state.code_panel mirrors */
 
     if (item->key == REPL_CONFIG_CODE_PANEL_LAYOUT) {
         ui_state_code_panel_mut()->panel_frac = 0.3f;
