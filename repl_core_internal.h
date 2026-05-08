@@ -21,7 +21,7 @@
  *    rendering logic without running the full UI.
  *
  * 4. Autocomplete: Update and accept logic for symbol completion and parameter
- *    hints. Integrates with editor_autocomplete.c model.
+ *    hints. Integrates with repl_autocomplete.c model.
  *
  * 5. Source-scope: Block depth, indentation, and scope queries (documented in
  *    repl_source_scope.h). Prefixes cached to avoid re-traversal.
@@ -182,7 +182,7 @@ void repl_dump_code_panel_visual_text(FILE *out, EditorBufferView text);
 /* ---- Autocomplete ----------------------------------------------------- */
 
 /* update_autocomplete / update_selected_autocomplete_preview are
- * file-static inside editor_autocomplete.c — production code reaches
+ * file-static inside repl_autocomplete.c — production code reaches
  * them through the EditorCompletionProvider seam in
  * editor_completion.h. accept_autocomplete is exposed because the
  * editor input dispatcher invokes it directly when the user presses

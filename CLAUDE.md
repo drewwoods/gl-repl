@@ -197,7 +197,7 @@ ownership / contract guards. Highlights:
 | `replay.h` | Replay public API (`repl_replay_start`, `repl_replay_toggle_play_pause`, etc.) |
 | `editor_search.c` | Case-insensitive substring search state and match navigation |
 | `editor_search.h` | Search query helpers and input routing API |
-| `editor_autocomplete.c` | Completion model: symbol matching, ghost text, parameter hints |
+| `repl_autocomplete.c` | REPL-side completion provider: walks command spec / predef vars / `CMD_FUNC_DEF` for matches, ghost text, parameter hints. Registered via `EditorCompletionProvider`. |
 | `src/ui/layout.c` | Pure window layout geometry: scene rect and code-panel rect derivation |
 | `src/ui/layout.h` | Layout geometry API (`ui_layout_scene_rect`, `ui_layout_code_panel_rect`) |
 | `repl_scenes.c` | User-scene slots, LRU eviction, workspace save/load, workspace dir binding |
@@ -224,7 +224,7 @@ ownership / contract guards. Highlights:
 | `repl_help_text.h` | Help-content public API |
 | `src/ui/variable_panel.c` | Floating variable slider panel rendering, geometry, and hit-test |
 | `src/ui/variable_panel.h` | Variable panel render/rect/hit API |
-| `src/ui/autocomplete_panel.c` | Floating autocomplete popup renderer (reads `editor_autocomplete.c` model) |
+| `src/ui/autocomplete_panel.c` | Floating autocomplete popup renderer (reads autocomplete state populated by `repl_autocomplete.c`) |
 | `src/ui/autocomplete_panel.h` | Autocomplete popup render entrypoint |
 | `editor_inline_rename.c` | Inline scene-rename input buffer and key handling (status-bar overlay) |
 | `editor_inline_rename.h` | Rename begin/active/cancel/key/special API |
@@ -718,7 +718,7 @@ Circular snapshot buffers in `editor_undo.c`:
 
 ### Autocomplete
 
-Symbol matching and function parameter hints in `editor_autocomplete.c`:
+Symbol matching and function parameter hints in `repl_autocomplete.c` (registered as the editor's `EditorCompletionProvider`):
 - `repl_state_autocomplete()->matches` — matched completions from GL command/constant tables
 - `repl_state_autocomplete()->ghost` — suffix to append to input on Tab accept
 - `repl_state_autocomplete()->hint` — parameter list hint shown below cursor
