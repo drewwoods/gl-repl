@@ -1,4 +1,4 @@
-#include "repl_actions.h"
+#include "glr_actions.h"
 #include "repl_state.h"
 #include "replay_state.h"
 #include "ui/state.h"
@@ -53,7 +53,7 @@ static void run_menu_action_in_temp_dir(const char *label,
     if (cd_ok == 0) {
         repl_set_workspace_dir(NULL);
         ASSERT_INT(label,
-                   repl_action_menu_item_activate(menu_id, item_idx),
+                   glr_action_menu_item_activate(menu_id, item_idx),
                    1);
         if (expect_output_file) {
             ASSERT_INT("menu action wrote temp output.c",
@@ -62,8 +62,8 @@ static void run_menu_action_in_temp_dir(const char *label,
         }
         if (expect_workspace_dir) {
             ASSERT_INT("menu action wrote temp workspace dir",
-                       access(REPL_DEFAULT_WORKSPACE_DIR, F_OK), 0);
-            rmdir(REPL_DEFAULT_WORKSPACE_DIR);
+                       access(GLR_DEFAULT_WORKSPACE_DIR, F_OK), 0);
+            rmdir(GLR_DEFAULT_WORKSPACE_DIR);
         }
         repl_set_workspace_dir(workspace_dir);
         ASSERT_INT("restore cwd after menu action", chdir(cwd), 0);
@@ -86,7 +86,7 @@ static void test_cursor_actions(void) {
     cp->cursor_visible = 0;
     cp->blink_tick = 100;
 
-    repl_action_cursor_blink_reset();
+    glr_action_cursor_blink_reset();
     ASSERT_INT("cursor visible after reset", cp->cursor_visible, 1);
     ASSERT_INT("blink tick reset", cp->blink_tick, 0);
 }
@@ -96,20 +96,20 @@ static void test_help_tab_actions(void) {
     editor_help_session_set_tab(0);
     editor_help_session_set_scroll(50);
 
-    repl_action_help_tab_next();
+    glr_action_help_tab_next();
     ASSERT_INT("help tab next moves to 1", editor_help_session_tab_idx(), 1);
     ASSERT_INT("help tab next resets scroll", editor_help_session_scroll(), 0);
 
     editor_help_session_set_scroll(30);
-    repl_action_help_tab_next();
+    glr_action_help_tab_next();
     ASSERT_INT("help tab next stays at 1 (max)", editor_help_session_tab_idx(), 1);
 
-    repl_action_help_tab_prev();
+    glr_action_help_tab_prev();
     ASSERT_INT("help tab prev moves to 0", editor_help_session_tab_idx(), 0);
     ASSERT_INT("help tab prev resets scroll", editor_help_session_scroll(), 0);
 
     editor_help_session_set_scroll(20);
-    repl_action_help_tab_prev();
+    glr_action_help_tab_prev();
     ASSERT_INT("help tab prev stays at 0", editor_help_session_tab_idx(), 0);
 }
 
@@ -141,7 +141,7 @@ static void test_cfg_cycling(void) {
 
     /* Test generic cycle (Wireframe) */
     repl_state_presentation_mut()->wireframe = 0;
-    repl_cfg_cycle_row(wireframe_row, 1);
+    glr_cfg_cycle_row(wireframe_row, 1);
     ASSERT_INT("wireframe toggled to 1", repl_state_presentation().wireframe, 1);
     ASSERT_STR("wireframe status ON", g_last_status, "Wireframe: ON");
 
@@ -149,64 +149,64 @@ static void test_cfg_cycling(void) {
     replay_state_mut()->active = 0;
     repl_config_set(REPL_CONFIG_REPLAY, 0);
     /* When no commands present, replay toggles but stays inactive with "nothing to play" */
-    repl_cfg_cycle_row(replay_row, 1);
+    glr_cfg_cycle_row(replay_row, 1);
     ASSERT_STR("replay status nothing to play", g_last_status, "Replay: nothing to play");
 
     /* Test Auto-time toggle without shift */
     repl_state_variables_mut()->anim_time = 5.0f;
-    repl_cfg_cycle_row(auto_time_row, 1);
+    glr_cfg_cycle_row(auto_time_row, 1);
     /* Time toggle would handle the animation, test just verifies it can be cycled */
     ASSERT_TRUE("auto time cycled", 1);
 
     /* Test Code Panel Layout */
     repl_state_presentation_mut()->code_panel_layout = 0; repl_state_sync_ui_chrome(); // Left
-    repl_cfg_cycle_row(code_panel_row, 1); // -> Top
+    glr_cfg_cycle_row(code_panel_row, 1); // -> Top
     ASSERT_INT("code panel layout top", repl_state_presentation().code_panel_layout, 1);
     ASSERT_STR("status top", g_last_status, "Layout: top code panel");
 
-    repl_cfg_cycle_row(code_panel_row, 1); // -> Bottom
+    glr_cfg_cycle_row(code_panel_row, 1); // -> Bottom
     ASSERT_INT("code panel layout bottom", repl_state_presentation().code_panel_layout, 2);
     ASSERT_STR("status bottom", g_last_status, "Layout: bottom code panel");
 
-    repl_cfg_cycle_row(code_panel_row, 1); // -> Hidden
+    glr_cfg_cycle_row(code_panel_row, 1); // -> Hidden
     ASSERT_INT("code panel layout hidden", repl_state_presentation().code_panel_layout, 3);
     ASSERT_STR("status hidden", g_last_status, "Layout: code panel hidden");
 
-    repl_cfg_cycle_row(code_panel_row, 1); // -> Left
+    glr_cfg_cycle_row(code_panel_row, 1); // -> Left
     ASSERT_INT("code panel layout left", repl_state_presentation().code_panel_layout, 0);
     ASSERT_STR("status left", g_last_status, "Layout: left code panel");
 
     /* Test Auto-normals */
     repl_state_presentation_mut()->autonormal = 0;
-    repl_cfg_cycle_row(auto_normals_row, 1);
+    glr_cfg_cycle_row(auto_normals_row, 1);
     ASSERT_INT("autonormal ON", repl_state_presentation().autonormal, 1);
     ASSERT_STR("status autonormal ON", g_last_status, "Auto-normals: ON");
 
     /* Test Point Attenuation */
     repl_config_set(REPL_CONFIG_POINT_ATTENUATION, 0);
-    repl_cfg_cycle_row(point_attenuation_row, 1);
+    glr_cfg_cycle_row(point_attenuation_row, 1);
     ASSERT_INT("point attenuation ON", repl_config_get(REPL_CONFIG_POINT_ATTENUATION), 1);
     ASSERT_STR("status point attenuation ON", g_last_status, "Point attenuation: ON");
 
     /* Test Audio modes */
     repl_config_set(REPL_CONFIG_AUDIO_MODE, 0); // Pause
-    repl_cfg_cycle_row(audio_row, 1); // -> Once
+    glr_cfg_cycle_row(audio_row, 1); // -> Once
     ASSERT_INT("audio mode Once", repl_config_get(REPL_CONFIG_AUDIO_MODE), 1);
     ASSERT_STR("status audio Once", g_last_status, "Audio: play once");
     ASSERT_INT("audio engine not paused", audio_is_paused(), 0);
     ASSERT_INT("audio engine loop mode OFF", audio_get_loop_mode(), AUDIO_LOOP_OFF);
 
-    repl_cfg_cycle_row(audio_row, 1); // -> Song
+    glr_cfg_cycle_row(audio_row, 1); // -> Song
     ASSERT_INT("audio mode Song", repl_config_get(REPL_CONFIG_AUDIO_MODE), 2);
     ASSERT_STR("status audio Song", g_last_status, "Audio: loop song");
     ASSERT_INT("audio engine loop mode SONG", audio_get_loop_mode(), AUDIO_LOOP_SONG);
 
-    repl_cfg_cycle_row(audio_row, 1); // -> All
+    glr_cfg_cycle_row(audio_row, 1); // -> All
     ASSERT_INT("audio mode All", repl_config_get(REPL_CONFIG_AUDIO_MODE), 3);
     ASSERT_STR("status audio All", g_last_status, "Audio: loop all");
     ASSERT_INT("audio engine loop mode ALL", audio_get_loop_mode(), AUDIO_LOOP_ALL);
 
-    repl_cfg_cycle_row(audio_row, 1); // -> Pause
+    glr_cfg_cycle_row(audio_row, 1); // -> Pause
     ASSERT_INT("audio mode Pause", repl_config_get(REPL_CONFIG_AUDIO_MODE), 0);
     ASSERT_STR("status audio Pause", g_last_status, "Audio: paused");
     ASSERT_INT("audio engine paused", audio_is_paused(), 1);
@@ -217,19 +217,19 @@ static void test_menu_actions(void) {
 
     /* File menu */
     run_menu_action_in_temp_dir("File Export",
-                                REPL_MENU_FILE,
+                                GLR_MENU_FILE,
                                 REPL_FILE_ITEM_EXPORT,
                                 1,
                                 0);
-    ASSERT_INT("File Import", repl_action_menu_item_activate(REPL_MENU_FILE, REPL_FILE_ITEM_IMPORT), 1);
+    ASSERT_INT("File Import", glr_action_menu_item_activate(GLR_MENU_FILE, REPL_FILE_ITEM_IMPORT), 1);
     ASSERT_STR("Import status", g_last_status, "Import not implemented yet");
     run_menu_action_in_temp_dir("File Save Workspace",
-                                REPL_MENU_FILE,
+                                GLR_MENU_FILE,
                                 REPL_FILE_ITEM_SAVE_WORKSPACE,
                                 0,
                                 1);
     run_menu_action_in_temp_dir("File Load Workspace",
-                                REPL_MENU_FILE,
+                                GLR_MENU_FILE,
                                 REPL_FILE_ITEM_LOAD_WORKSPACE,
                                 0,
                                 0);
@@ -237,23 +237,23 @@ static void test_menu_actions(void) {
     /* Scene menu - Examples */
     int example_count = repl_example_count();
     if (example_count > 0) {
-        ASSERT_INT("Load Example 0", repl_action_menu_item_activate(REPL_MENU_SCENE, 1), 1);
+        ASSERT_INT("Load Example 0", glr_action_menu_item_activate(GLR_MENU_SCENE, 1), 1);
         ASSERT_INT("active example is 0", repl_state_scenes().active_example_idx, 0);
     }
 
     /* Scene menu - Fixed items */
-    ASSERT_INT("Scene New", repl_action_menu_item_activate(REPL_MENU_SCENE, example_count + REPL_SCENE_OFF_NEW), 1);
+    ASSERT_INT("Scene New", glr_action_menu_item_activate(GLR_MENU_SCENE, example_count + GLR_SCENE_OFF_NEW), 1);
     ASSERT_INT("active example cleared", repl_state_scenes().active_example_idx, -1);
 
     run_menu_action_in_temp_dir("Scene Save",
-                                REPL_MENU_SCENE,
-                                example_count + REPL_SCENE_OFF_SAVE,
+                                GLR_MENU_SCENE,
+                                example_count + GLR_SCENE_OFF_SAVE,
                                 1,
                                 0);
 
     /* Scene Rename - need an active user scene */
     /* For now, just call it and expect "No active scene to rename" if none active */
-    ASSERT_INT("Scene Rename (none)", repl_action_menu_item_activate(REPL_MENU_SCENE, example_count + REPL_SCENE_OFF_RENAME), 1);
+    ASSERT_INT("Scene Rename (none)", glr_action_menu_item_activate(GLR_MENU_SCENE, example_count + GLR_SCENE_OFF_RENAME), 1);
     ASSERT_STR("Rename status", g_last_status, "No active scene to rename");
 
     /* User scenes */
@@ -263,19 +263,19 @@ static void test_menu_actions(void) {
 
     ASSERT_INT("Slot 0 used", repl_user_scene_slot_used(0), 1);
     ASSERT_INT("Dense index 0 is slot 0", repl_scene_menu_slot_for_dense_index(0), 0);
-    ASSERT_INT("Load user scene 0", repl_action_menu_item_activate(REPL_MENU_SCENE, example_count + REPL_SCENE_OFF_SCENES), 1);
+    ASSERT_INT("Load user scene 0", glr_action_menu_item_activate(GLR_MENU_SCENE, example_count + GLR_SCENE_OFF_SCENES), 1);
     ASSERT_INT("active user scene slot", repl_active_user_scene(), 0);
 
     /* Config menu */
-    ASSERT_INT("Config row 1", repl_action_menu_item_activate(REPL_MENU_CONFIG, 1), 0); // 0 because toggles keep menu open
+    ASSERT_INT("Config row 1", glr_action_menu_item_activate(GLR_MENU_CONFIG, 1), 0); // 0 because toggles keep menu open
 }
 
 static void test_shortcuts(void) {
     repl_reset_state();
 
     /* Test handling of unknown keys - these should return 0 */
-    ASSERT_INT("Unknown ASCII", repl_cfg_handle_ascii_shortcut('X'), 0);
-    ASSERT_INT("Unknown special", repl_cfg_handle_special_shortcut(999), 0);
+    ASSERT_INT("Unknown ASCII", glr_cfg_handle_ascii_shortcut('X'), 0);
+    ASSERT_INT("Unknown special", glr_cfg_handle_special_shortcut(999), 0);
 
     /* Test that specific shortcut handlers are callable
      * Note: testing actual shortcut effects requires GL context initialization,

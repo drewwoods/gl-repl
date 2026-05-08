@@ -44,7 +44,7 @@ int imrepl_ctrl_router_handle_quit_key(unsigned char key);             /* Ctrl+Q
 int imrepl_ctrl_router_handle_config_menu_key(unsigned char key);      /* backtick → config menu */
 int imrepl_ctrl_router_handle_active_replay_key(unsigned char key);    /* replay forwarding when active */
 int imrepl_ctrl_router_handle_replay_toggle_key(unsigned char key);    /* Ctrl+G + replay shortcuts */
-int imrepl_ctrl_router_handle_cfg_shortcut_key(unsigned char key);     /* repl_cfg_handle_ascii_shortcut */
+int imrepl_ctrl_router_handle_cfg_shortcut_key(unsigned char key);     /* glr_cfg_handle_ascii_shortcut */
 int imrepl_ctrl_router_handle_accum_samples_key(unsigned char key);    /* Ctrl+= / Ctrl+- */
 int imrepl_ctrl_router_handle_replay_special(int key);                 /* replay-active forwarding */
 int imrepl_ctrl_router_handle_cfg_special_shortcut(int key);           /* cfg shortcut on F-keys */
