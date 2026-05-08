@@ -4,7 +4,8 @@
 #include "repl_core.h"
 #include "repl_core_internal.h"
 #include "repl_parser.h"
-#include "repl_state.h"
+#include "repl_state_owners.h"
+#include "config.h"        /* REPL_STATUS_TEXT_MAX */
 
 #define MAX_FLATTEN_CALL_DEPTH 64
 #define MAX_FLATTEN_VISIT_BUDGET 200000

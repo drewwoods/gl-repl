@@ -23,6 +23,7 @@
 #include "repl_state.h"
 #include "repl_core_internal.h"
 #include "keys.h"
+#include "ui/state_types.h"
 
 /* ui_state_help_mut is forward-declared here because repl_*.c is not
  * allowed to include ui_state.h per check-controller-boundaries. The

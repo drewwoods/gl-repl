@@ -11,7 +11,7 @@
 #include "repl_parser.h"
 #include "repl_source_scope.h"
 #include "repl_core.h"
-#include "repl_state.h"
+#include "repl_state_owners.h"
 #include "ui/layout.h"
 #include "ui/state.h"
 

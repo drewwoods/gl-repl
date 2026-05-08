@@ -9,8 +9,9 @@
  */
 #include "replay_ui_hud.h"
 #include "./include/gl_2d.h"
-#include "replay_state.h"
-#include "ui/layout.h"           /* CODE_PANEL_LAYOUT_TOP enum value */
+#include "replay.h"
+#include "ui/layout.h" /* CODE_PANEL_LAYOUT_TOP enum value */
+#include "ui/metrics.h"
 
 #include <stdio.h>
 #include <string.h>

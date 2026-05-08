@@ -22,7 +22,6 @@
 #ifndef REPLAY_STATE_H
 #define REPLAY_STATE_H
 
-#include "replay.h"
 #include "repl_state_views.h"
 
 void                     replay_state_capture(ReplReplayRuntimeState *snapshot);

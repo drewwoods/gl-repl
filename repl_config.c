@@ -1,7 +1,8 @@
 #include "repl_config.h"
 
 #include "audio.h"
-#include "repl_state.h"
+#include "ui/state_types.h"
+#include "repl_state_owners.h"
 
 /* Camera, profile_panel slices live on UiState; variable_panel
  * visibility lives on the variable_panel peer; replay state lives
