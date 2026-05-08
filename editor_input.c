@@ -656,18 +656,15 @@ static CommitResult commit_current_input(int enter_mode) {
         int can_advance = 1;
 
         if (editor_state_input().input_len > 0) {
-            if (repl_state_document_cmds_mut()[repl_state_edit_line()].type == CMD_FOR_BEGIN) {
-                if (try_commit_for_loop())
-                    return commit_progressed_since(before) ? COMMIT_OK : COMMIT_REJECTED;
-                can_advance = 0;
-            }
-            if (repl_state_document_cmds_mut()[repl_state_edit_line()].type == CMD_FUNC_DEF) {
-                if (try_commit_func_def())
-                    return commit_progressed_since(before) ? COMMIT_OK : COMMIT_REJECTED;
-                can_advance = 0;
-            }
-            if (repl_state_document_cmds_mut()[repl_state_edit_line()].type == CMD_IF_BEGIN) {
-                if (try_commit_if_block())
+            /* Sticky-edit semantics on a structured-block head: try
+             * the block-shaped commit chain first; if no block-shaped
+             * commit succeeds, hold the cursor on this line so the
+             * user keeps editing the header rather than auto-advancing
+             * past a half-edited block. The CmdType-specific dispatch
+             * collapses into one chain because each try_commit_*
+             * already validates input shape internally. */
+            if (repl_line_is_block_head(repl_state_edit_line())) {
+                if (try_commit_block_structs())
                     return commit_progressed_since(before) ? COMMIT_OK : COMMIT_REJECTED;
                 can_advance = 0;
             }
