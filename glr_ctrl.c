@@ -14,7 +14,7 @@
 #include "editor/search.h"
 #include "glr_actions.h"
 #include "audio.h"
-#include "repl_camera_controls.h"
+#include "glr_camera.h"
 #include "repl_core.h"
 #include "repl_help_text.h"
 #include "repl_debug.h"
@@ -911,7 +911,7 @@ static void scene_execute_adapter(const SceneExecuteContext *ctx,
 static void glr_ctrl_build_scene_config(SceneRenderConfig *config) {
     ReplRenderState render = repl_state_render();
     ReplPresentationState presentation = repl_state_presentation();
-    ReplCameraState cam = ui_state_camera();
+    ReplCameraState cam = glr_camera();
     const float *grid_major_steps = repl_state_grid_major_steps();
     const float *grid_extents = repl_state_grid_extents();
     float bg_lum;
@@ -1209,7 +1209,7 @@ void glr_ctrl_display_frame(void) {
         prof_accum_reset(section_idx);
     prof_begin(PROF_SCENE_3D);
     {
-        ReplCameraState cam = ui_state_camera();
+        ReplCameraState cam = glr_camera();
         scene_apply_camera(cam.rx, cam.ry, cam.dist, cam.tx, cam.ty, cam.tz);
     }
     if (scene_render_3d_scene(&scene_config) != 0) {
@@ -1599,7 +1599,7 @@ int glr_ctrl_router_handle_scene_press(int button, int state, int x, int y) {
 }
 
 int glr_ctrl_router_handle_camera_mouse(int button, int state, int x, int y) {
-    repl_camera_mouse_event(button, state, x, y, editor_input_active_modifiers());
+    glr_camera_mouse_event(button, state, x, y, editor_input_active_modifiers());
     return 1;
 }
 
@@ -1658,12 +1658,12 @@ int glr_ctrl_router_handle_variable_panel_motion(int x, int y) {
 }
 
 int glr_ctrl_router_handle_camera_motion(int x, int y) {
-    repl_camera_drag_motion(x, y);
+    glr_camera_drag_motion(x, y);
     return 1;
 }
 
 int glr_ctrl_router_handle_camera_pointer_set(int x, int y) {
-    repl_camera_pointer_set(x, y);
+    glr_camera_pointer_set(x, y);
     return 1;
 }
 
@@ -1677,7 +1677,7 @@ int glr_ctrl_router_handle_glut_scroll_wheel_button(int button, int state, int x
     } else if (editor_input_point_in_code_panel(x, y)) {
         editor_input_code_panel_scroll(direction);
     } else {
-        repl_camera_add_zoom_velocity(direction == -1 ? -0.3f : 0.3f);
+        glr_camera_add_zoom_velocity(direction == -1 ? -0.3f : 0.3f);
     }
     editor_request_redraw();
     return 1;
@@ -2147,10 +2147,10 @@ void glr_ctrl_mouse(int button, int state, int x, int y) {
  * tracking and code-panel selection drag are editor's.
  *
  * Pointer-state tracking: each non-camera handler updates
- * ui_state_pointer via repl_camera_pointer_set(x, y) AFTER its own
+ * ui_state_pointer via glr_camera_pointer_set(x, y) AFTER its own
  * work so the camera's view of the pointer stays current. The camera
  * branch deliberately does NOT pre-set the pointer because
- * repl_camera_drag_motion reads the previous (px, py) to compute
+ * glr_camera_drag_motion reads the previous (px, py) to compute
  * delta and updates the pointer to (x, y) at the end. Pre-setting
  * here would zero the delta and freeze orbit/pan/zoom drag. */
 void glr_ctrl_motion(int x, int y) {
@@ -2222,7 +2222,7 @@ void glr_ctrl_mousewheel(int wheel, int direction, int x, int y) {
         glr_ctrl_apply_input_effects(editor_handle_mousewheel(wheel, direction, x, y));
         return;
     }
-    repl_camera_add_zoom_velocity(-(float)direction * 0.1f);
+    glr_camera_add_zoom_velocity(-(float)direction * 0.1f);
     editor_request_redraw();
     glr_ctrl_apply_input_effects(editor_take_input_effects());
 #else
@@ -2284,7 +2284,7 @@ void glr_ctrl_tick(void) {
         }
     }
 
-    repl_camera_tick();
+    glr_camera_tick();
 
     {
         ReplCodePanelRuntimeState *code_panel_state = ui_state_code_panel_mut();

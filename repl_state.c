@@ -1,17 +1,30 @@
 #define REPL_STATE_IMPLEMENTATION
+#include "glr_camera.h"
 #include "repl_state.h"
+#include "glr_camera.h"
 #include "repl_presentation.h"  /* CFG_DEFAULT_* macros for state defaults */
 
+#include "glr_camera.h"
 #include "editor/state.h"
+#include "glr_camera.h"
 #include "editor/help_session.h"
+#include "glr_camera.h"
 #include "variable_panel_state.h"
+#include "glr_camera.h"
 #include "replay_state.h"
+#include "glr_camera.h"
 #include "repl_command_store.h"
+#include "glr_camera.h"
 #include "repl_core.h"
+#include "glr_camera.h"
 #include "repl_core_internal.h"
+#include "glr_camera.h"
 #include "repl_pipeline.h"
+#include "glr_camera.h"
 #include "repl_eval.h"
+#include "glr_camera.h"
 #include "repl_source_scope.h"
+#include "glr_camera.h"
 #include "repl_state_owners.h"
 #undef REPL_STATE_IMPLEMENTATION
 
@@ -28,7 +41,7 @@ void update_cam_lines(void);
  * canonical `ui_state_*` API is in ui_state.h; check-controller-
  * boundaries forbids repl_*.c from including it. */
 void ui_state_reset(void);
-ReplCameraState *ui_state_camera_mut(void);
+ReplCameraState *glr_camera_mut(void);
 ReplCodePanelRuntimeState *ui_state_code_panel_mut(void);
 
 static const float g_grid_major_steps[GRID_MAJOR_COUNT] = {
@@ -43,6 +56,7 @@ static const float g_grid_extents[GRID_EXTENT_COUNT] = {
     [GRID_EXTENT_FAR]   = 100.0f,
 };
 static const ReplRuntimeState g_repl_state_defaults = {
+#include "glr_camera.h"
 #include "repl_state_defaults.inc"
 };
 
@@ -444,7 +458,7 @@ const float *repl_state_grid_extents(void) {
 
 void repl_state_presentation_reset_defaults(void) {
     g_repl_state.presentation = g_repl_state_defaults.presentation;
-    ui_state_camera_mut()->auto_rotate = CFG_DEFAULT_CAMERA_ROTATE;
+    glr_camera_mut()->auto_rotate = CFG_DEFAULT_CAMERA_ROTATE;
 }
 
 void repl_state_presentation_reset_example_defaults(void) {
@@ -462,7 +476,7 @@ void repl_state_presentation_reset_example_defaults(void) {
     g_xform_guide_mode = CFG_DEFAULT_XFORM_GUIDE_MODE;
     g_show_lights = CFG_DEFAULT_LIGHT_INDICATORS;
     g_backdrop_mode = CFG_DEFAULT_BACKDROP_MODE;
-    ui_state_camera_mut()->auto_rotate = CFG_DEFAULT_CAMERA_ROTATE;
+    glr_camera_mut()->auto_rotate = CFG_DEFAULT_CAMERA_ROTATE;
 }
 
 ReplRenderState repl_state_render(void) {
