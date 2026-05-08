@@ -83,7 +83,7 @@ void ui_menu_bar_close(void);
 
 /* Open a specific top-level menu by ID (REPL_MENU_FILE, etc.). Called by menu
  * button click or keyboard dispatch. `now` is the current animation clock
- * (variables.anim_time), used to seed dropdown fade-in animation. */
+ * (anim_time), used to seed dropdown fade-in animation. */
 void ui_menu_bar_set_open_menu(int menu_id, float now);
 
 /* Open the Config dropdown specifically (convenience for keyboard shortcut). */

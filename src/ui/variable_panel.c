@@ -87,8 +87,8 @@ static float var_panel_replay_target_lift_px(void) {
 }
 
 /* Advance the easing toward the current target. Called from
- * ui_variable_panel_render once per frame, with the snapshot's
- * variables.anim_time as the clock — keeps the per-frame anim_time
+ * ui_variable_panel_render once per frame, with the snapshot's anim_time
+ * as the clock — keeps the per-frame anim_time
  * read out of the hit-test path. */
 static void var_panel_replay_lift_tick(float anim_time) {
     float target = 0.0f;
@@ -195,7 +195,7 @@ void ui_variable_panel_render(const UiRenderSnapshot *snap) {
     const UiVariableList *vars = &snap->variable_panel_vars;
     int var_count = ui_variable_count(vars);
 
-    var_panel_replay_lift_tick(snap->variables.anim_time);
+    var_panel_replay_lift_tick(snap->anim_time);
 
     int px, py, pw, ph;
     ui_variable_panel_rect_for_count(var_count, &px, &py, &pw, &ph);

@@ -1063,7 +1063,6 @@ static void imrepl_ctrl_build_ui_snapshot(UiRenderSnapshot *snap) {
     snap->scroll         = editor_state_scroll();
     snap->color_picker   = color_picker_view();
 
-    snap->variables      = repl_state_variables();
     snap->editor_input   = editor_state_input();
     snap->import_export  = repl_state_import_export();
     snap->flat_program   = repl_state_flat_program_view();
@@ -1081,6 +1080,7 @@ static void imrepl_ctrl_build_ui_snapshot(UiRenderSnapshot *snap) {
     snap->input_len           = snap->editor_input.input_len;
     snap->pending_newline_len = snap->editor_input.pending_newline_len;
     snap->flat_program_count  = snap->flat_program.cmd_count;
+    snap->anim_time           = repl_state_variables().anim_time;
 
     snap->grid_major_steps    = repl_state_grid_major_steps();
     snap->grid_extents        = repl_state_grid_extents();
