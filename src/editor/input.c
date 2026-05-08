@@ -36,7 +36,7 @@
 #include "search.h"
 #include "undo.h"
 
-#include "repl_camera_controls.h"
+#include "glr_camera.h"
 #include "repl_command_store.h"
 #include "repl_core.h"
 #include "repl_core_internal.h"
@@ -287,7 +287,7 @@ static void save_newline_buf(void) {
 
 void repl_editor_reset_transients(void) {
     editor_commit_reset_transients();
-    repl_camera_controls_reset();
+    glr_camera_controls_reset();
     ui_menu_bar_close();
     color_picker_close();
     glr_ctrl_router_reset_code_panel_drag();

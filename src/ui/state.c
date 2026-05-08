@@ -27,16 +27,6 @@
             .cursor_visible = 1,                                      \
             .blink_tick     = 0,                                      \
         },                                                            \
-        .camera = {                                                   \
-            .rx          = 20.0f,                                     \
-            .ry          = 30.0f,                                     \
-            .dist        = 5.0f,                                      \
-            .tx          = 0.0f,                                      \
-            .ty          = 0.0f,                                      \
-            .tz          = 0.0f,                                      \
-            .motion_glow = 0.0f,                                      \
-            .auto_rotate = CFG_DEFAULT_CAMERA_ROTATE,                 \
-        },                                                            \
     }
 
 static UiState g_ui_state = UI_STATE_INITIAL;
@@ -157,48 +147,8 @@ void ui_state_code_panel_reset(void) {
     g_ui_state.code_panel = g_ui_state_defaults.code_panel;
 }
 
-ReplCameraState ui_state_camera(void) {
-    return g_ui_state.camera;
-}
-
-ReplCameraState *ui_state_camera_mut(void) {
-    return &g_ui_state.camera;
-}
-
-void ui_state_camera_set(float rx, float ry, float dist,
-                         float tx, float ty, float tz,
-                         float motion_glow) {
-    g_ui_state.camera.rx = rx;
-    g_ui_state.camera.ry = ry;
-    g_ui_state.camera.dist = dist;
-    g_ui_state.camera.tx = tx;
-    g_ui_state.camera.ty = ty;
-    g_ui_state.camera.tz = tz;
-    g_ui_state.camera.motion_glow = motion_glow;
-}
-
-void ui_state_camera_set_orbit(float rx, float ry) {
-    g_ui_state.camera.rx = rx;
-    g_ui_state.camera.ry = ry;
-}
-
-void ui_state_camera_set_pan(float tx, float ty, float tz) {
-    g_ui_state.camera.tx = tx;
-    g_ui_state.camera.ty = ty;
-    g_ui_state.camera.tz = tz;
-}
-
-void ui_state_camera_set_distance(float dist) {
-    g_ui_state.camera.dist = dist;
-}
-
-void ui_state_camera_set_motion_glow(float motion_glow) {
-    g_ui_state.camera.motion_glow = motion_glow;
-}
-
-void ui_state_camera_reset_default(void) {
-    g_ui_state.camera = g_ui_state_defaults.camera;
-}
+/* Camera accessors moved to glr_camera.c. Storage lives there too;
+ * the UiState.camera field is gone (see src/ui/state.h). */
 
 /* Legacy `repl_state_*` forwarders for the slices migrated in Phase 1
  * commit 8 (and the code_panel slice migrated in Phase A commit 12)

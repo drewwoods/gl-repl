@@ -59,16 +59,9 @@ typedef struct {
     int  ttl;
 } ReplStatusState;
 
-typedef struct {
-    float rx;
-    float ry;
-    float dist;
-    float tx;
-    float ty;
-    float tz;
-    float motion_glow;
-    int   auto_rotate;
-} ReplCameraState;
+/* ReplCameraState moved to glr_camera.h alongside its accessors and
+ * the orbit/pan/zoom controls (see also UiState — the .camera field
+ * is gone; consumers use glr_camera() / glr_camera_mut() directly). */
 
 typedef struct {
     int mouse_x;

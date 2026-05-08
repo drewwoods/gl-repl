@@ -10,7 +10,7 @@
 #include "glr_ctrl.h"
 #include "prof.h"
 #include "glr_actions.h"
-#include "repl_camera_controls.h"
+#include "glr_camera.h"
 #include "repl_config.h"
 #include "repl_core.h"
 #include "repl_core_internal.h"
@@ -550,37 +550,37 @@ int main() {
     /* 0e. Camera control module owns scene drag and momentum behavior. */
     {
         repl_reset_state();
-        ui_state_camera_set_orbit(0.0f, 0.0f);
-        ui_state_camera_set_distance(10.0f);
-        repl_camera_mouse_event(GLUT_LEFT_BUTTON, GLUT_DOWN, 10, 10, 0);
-        repl_camera_drag_motion(20, 14);
+        glr_camera_set_orbit(0.0f, 0.0f);
+        glr_camera_set_distance(10.0f);
+        glr_camera_mouse_event(GLUT_LEFT_BUTTON, GLUT_DOWN, 10, 10, 0);
+        glr_camera_drag_motion(20, 14);
         ASSERT_TRUE("camera left drag yaws",
-                    fabsf(ui_state_camera().ry - 5.0f) < 1e-6f);
+                    fabsf(glr_camera().ry - 5.0f) < 1e-6f);
         ASSERT_TRUE("camera left drag pitches",
-                    fabsf(ui_state_camera().rx - 2.0f) < 1e-6f);
-        repl_camera_mouse_event(GLUT_LEFT_BUTTON, GLUT_UP, 20, 14, 0);
-        repl_camera_tick();
+                    fabsf(glr_camera().rx - 2.0f) < 1e-6f);
+        glr_camera_mouse_event(GLUT_LEFT_BUTTON, GLUT_UP, 20, 14, 0);
+        glr_camera_tick();
         ASSERT_TRUE("camera release keeps yaw momentum",
-                    fabsf(ui_state_camera().ry - 7.5f) < 1e-6f);
+                    fabsf(glr_camera().ry - 7.5f) < 1e-6f);
 
-        repl_camera_controls_reset();
-        ui_state_camera_set_orbit(0.0f, 0.0f);
-        ui_state_camera_set_pan(0.0f, 0.0f, 0.0f);
-        ui_state_camera_set_distance(10.0f);
-        repl_camera_mouse_event(GLUT_RIGHT_BUTTON, GLUT_DOWN, 0, 0,
+        glr_camera_controls_reset();
+        glr_camera_set_orbit(0.0f, 0.0f);
+        glr_camera_set_pan(0.0f, 0.0f, 0.0f);
+        glr_camera_set_distance(10.0f);
+        glr_camera_mouse_event(GLUT_RIGHT_BUTTON, GLUT_DOWN, 0, 0,
                                 GLUT_ACTIVE_SHIFT);
-        repl_camera_drag_motion(0, 20);
+        glr_camera_drag_motion(0, 20);
         ASSERT_TRUE("camera shift-right drag pans y",
-                    fabsf(ui_state_camera().ty - 1.0f) < 1e-6f);
+                    fabsf(glr_camera().ty - 1.0f) < 1e-6f);
         ASSERT_TRUE("camera y pan lights motion glow",
-                    fabsf(ui_state_camera().motion_glow - 1.0f) < 1e-6f);
+                    fabsf(glr_camera().motion_glow - 1.0f) < 1e-6f);
 
-        repl_camera_controls_reset();
-        ui_state_camera_set_distance(0.6f);
-        repl_camera_mouse_event(GLUT_MIDDLE_BUTTON, GLUT_DOWN, 0, 0, 0);
-        repl_camera_drag_motion(0, -100);
+        glr_camera_controls_reset();
+        glr_camera_set_distance(0.6f);
+        glr_camera_mouse_event(GLUT_MIDDLE_BUTTON, GLUT_DOWN, 0, 0, 0);
+        glr_camera_drag_motion(0, -100);
         ASSERT_TRUE("camera middle drag clamps near zoom",
-                    fabsf(ui_state_camera().dist - 0.5f) < 1e-6f);
+                    fabsf(glr_camera().dist - 0.5f) < 1e-6f);
     }
 
     /* 1. Undo when nothing to undo - must run before any undo push */

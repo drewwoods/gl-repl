@@ -36,7 +36,8 @@ typedef struct {
     ReplViewportState         viewport;
     ReplPointerState          pointer;
     ReplCodePanelRuntimeState code_panel;
-    ReplCameraState           camera;
+    /* Camera storage moved to glr_camera.c; consumers use
+     * glr_camera() / glr_camera_mut() directly. */
 } UiState;
 
 void ui_state_capture(UiState *snapshot);
@@ -78,18 +79,7 @@ ReplCodePanelRuntimeState  ui_state_code_panel(void);
 ReplCodePanelRuntimeState *ui_state_code_panel_mut(void);
 void                       ui_state_code_panel_reset(void);
 
-/* Camera viewport pose. The auto_rotate config field sits on the same
- * struct since it is naturally paired with the pose; presentation
- * "reset" paths still write through ui_state_camera_mut(). */
-ReplCameraState  ui_state_camera(void);
-ReplCameraState *ui_state_camera_mut(void);
-void             ui_state_camera_set(float rx, float ry, float dist,
-                                     float tx, float ty, float tz,
-                                     float motion_glow);
-void             ui_state_camera_set_orbit(float rx, float ry);
-void             ui_state_camera_set_pan(float tx, float ty, float tz);
-void             ui_state_camera_set_distance(float dist);
-void             ui_state_camera_set_motion_glow(float motion_glow);
-void             ui_state_camera_reset_default(void);
+/* Camera state + accessors moved to glr_camera.{c,h}. Use
+ * glr_camera() / glr_camera_mut() / glr_camera_set() etc. directly. */
 
 #endif /* UI_STATE_H */
