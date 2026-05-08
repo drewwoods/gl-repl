@@ -1,4 +1,4 @@
-#include "scene/transform_guides.h"
+#include "transform_guides.h"
 
 #include "support/test_harness.h"
 #include <stdio.h>

@@ -3,6 +3,8 @@
  */
 #include "lights.h"
 #include "./include/gl_2d.h"
+#include <math.h>
+#include <stdio.h>
 
 static void scene_lights_push_state(void) {
     glPushAttrib(GL_ALL_ATTRIB_BITS);

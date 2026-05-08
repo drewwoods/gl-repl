@@ -4,9 +4,8 @@
 #ifndef SCENE_RENDER_TYPES_H
 #define SCENE_RENDER_TYPES_H
 
-#include "repl_flatten.h"
 #include "themes.h"
-#include "guides_shared.h"
+#include <gl_includes.h>     /* GLenum for SceneLight.id */
 
 #define MAX_LIGHTS 4
 
@@ -79,8 +78,11 @@ typedef struct SceneRenderConfig {
     void (*post_overlays_fn)(void *user_data);
     void  *post_overlays_user_data;
 
-    /* --- Flat program --- */
-    FlatProgramView flat_program;
+    /* --- Background clear color (RGBA) ---
+     * Populated by the controller from the user's CMD_CLEAR_COLOR (or a
+     * default if none was set). The scene module no longer scans the
+     * flat program for this; it's a pre-resolved float[4]. */
+    float clear_color[4];
 
     /* --- Animation --- */
     float anim_time;
@@ -131,39 +133,10 @@ typedef struct SceneRenderConfig {
     float grid_major_steps[GRID_MAJOR_COUNT];
     float grid_extents[GRID_EXTENT_COUNT];
 
-    /* --- 3D overlay flags ---
-     * Overlay rendering for vertex_numbers / normal_vectors moved to the
-     * controller's post_overlays_fn (it owns the REPL-program walk and
-     * just calls scene_draw_*_label / scene_draw_*_arrow primitives).
-     * The remaining flags gate scene-side overlay code that still walks
-     * user data; they migrate out as those overlays move out too. */
-    int show_guides;
-    int show_vpoints;
-    int show_vertex_outlines;
-    int show_current_poly;
-
-    /* --- Cursor / editor block overlay --- */
-    int          cursor_block_begin_idx;  /* -1 = no active block */
-    int          cursor_block_end_idx;
-    int          cursor_block_source_line;
-    int          edit_line_idx;
-    unsigned int cursor_func_scope_mask;
-    int          cursor_call_src_cmd_idx; /* -1 = cursor not on a CMD_CALL */
-
-    /* --- Focus and guide snapshots --- */
+    /* --- Focus marker (consumed by the focus grid theme) --- */
     SceneFocusVertex focus;
-    SceneGuideSnapshot guide_snapshot;
 
-    /* --- Replay-aware overlay flags ---
-     * The fade-replay pass itself lives outside the scene module (it is
-     * the controller's post_fill_fn). These flags drive scene-side
-     * overlays that change visual treatment while replay is active
-     * (tess preview, vertex-point dimming, alpha boost). They will
-     * eventually move out too. */
-    int   replaying;
-    int   replay_mode;
-    int   replay_tess_preview;
-    int   replay_vertex_points;
+    /* --- Visual scaling --- */
     float alpha_scale; /* alpha boost to counter dark-bg crush; 1.0 = no change */
 } SceneRenderConfig;
 
