@@ -11,22 +11,22 @@
 ReplViewportState         ui_state_viewport(void);
 ReplCodePanelRuntimeState ui_state_code_panel(void);
 
-static int repl_layout_code_panel_layout_mode(void) {
+static int ui_layout_code_panel_layout_mode(void) {
     if (repl_state_presentation().code_panel_layout < 0 ||
         repl_state_presentation().code_panel_layout >= CODE_PANEL_LAYOUT_COUNT)
         return CODE_PANEL_LAYOUT_LEFT;
     return repl_state_presentation().code_panel_layout;
 }
 
-static int repl_layout_panel_span_px(int total_px) {
+static int ui_layout_panel_span_px(int total_px) {
     int span = (int)((float)total_px * ui_state_code_panel().panel_frac);
     if (span < 1) span = 1;
     if (span > total_px) span = total_px;
     return span;
 }
 
-void repl_layout_code_panel_rect(int *x, int *y, int *w, int *h) {
-    int layout = repl_layout_code_panel_layout_mode();
+void ui_layout_code_panel_rect(int *x, int *y, int *w, int *h) {
+    int layout = ui_layout_code_panel_layout_mode();
     int win_w = ui_state_viewport().window_w;
     int win_h = ui_state_viewport().window_h;
 
@@ -36,19 +36,19 @@ void repl_layout_code_panel_rect(int *x, int *y, int *w, int *h) {
         if (w) *w = 0;
         if (h) *h = 0;
     } else if (layout == CODE_PANEL_LAYOUT_TOP) {
-        int panel_h = repl_layout_panel_span_px(win_h);
+        int panel_h = ui_layout_panel_span_px(win_h);
         if (x) *x = 0;
         if (y) *y = win_h - panel_h;
         if (w) *w = win_w;
         if (h) *h = panel_h;
     } else if (layout == CODE_PANEL_LAYOUT_BOTTOM) {
-        int panel_h = repl_layout_panel_span_px(win_h);
+        int panel_h = ui_layout_panel_span_px(win_h);
         if (x) *x = 0;
         if (y) *y = 0;
         if (w) *w = win_w;
         if (h) *h = panel_h;
     } else {
-        int panel_w = repl_layout_panel_span_px(win_w);
+        int panel_w = ui_layout_panel_span_px(win_w);
         if (x) *x = 0;
         if (y) *y = 0;
         if (w) *w = panel_w;
@@ -56,8 +56,8 @@ void repl_layout_code_panel_rect(int *x, int *y, int *w, int *h) {
     }
 }
 
-void repl_layout_scene_rect(int *x, int *y, int *w, int *h) {
-    int layout = repl_layout_code_panel_layout_mode();
+void ui_layout_scene_rect(int *x, int *y, int *w, int *h) {
+    int layout = ui_layout_code_panel_layout_mode();
     int win_w = ui_state_viewport().window_w;
     int win_h = ui_state_viewport().window_h;
 
@@ -67,19 +67,19 @@ void repl_layout_scene_rect(int *x, int *y, int *w, int *h) {
         if (w) *w = win_w;
         if (h) *h = win_h;
     } else if (layout == CODE_PANEL_LAYOUT_TOP) {
-        int panel_h = repl_layout_panel_span_px(win_h);
+        int panel_h = ui_layout_panel_span_px(win_h);
         if (x) *x = 0;
         if (y) *y = 0;
         if (w) *w = win_w;
         if (h) *h = win_h - panel_h;
     } else if (layout == CODE_PANEL_LAYOUT_BOTTOM) {
-        int panel_h = repl_layout_panel_span_px(win_h);
+        int panel_h = ui_layout_panel_span_px(win_h);
         if (x) *x = 0;
         if (y) *y = panel_h;
         if (w) *w = win_w;
         if (h) *h = win_h - panel_h;
     } else {
-        int panel_w = repl_layout_panel_span_px(win_w);
+        int panel_w = ui_layout_panel_span_px(win_w);
         if (x) *x = panel_w;
         if (y) *y = 0;
         if (w) *w = win_w - panel_w;

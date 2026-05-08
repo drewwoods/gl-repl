@@ -29,7 +29,7 @@
 #ifndef SCENE_AXES_H
 #define SCENE_AXES_H
 
-#include "scene_render_types.h"
+#include "render_types.h"
 
 /* Render the coordinate axes at the origin. Displays X (red), Y (green), and
  * Z (blue) axes with the currently selected theme. frame_ctx provides render

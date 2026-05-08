@@ -1,11 +1,11 @@
 /*
  * scene_overlays.c - scene geometry overlay passes shared by render frame code.
  */
-#include "scene_geometry_guides.h"
-#include "scene_overlays.h"
-#include "scene_render_types.h"
-#include "scene_transform_guides.h"
-#include "scene_transform_utils.h"
+#include "geometry_guides.h"
+#include "overlays.h"
+#include "render_types.h"
+#include "transform_guides.h"
+#include "transform_utils.h"
 #include "./include/gl_2d.h"
 
 static int begin_mode_has_outline_overlay(GLenum mode) {

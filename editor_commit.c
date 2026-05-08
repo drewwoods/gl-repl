@@ -24,7 +24,7 @@
  * transaction shape exists to prevent.
  *
  * The undo capture for migrated handlers still rides on
- * repl_undo_push_snapshot() pushed at the dispatch sites
+ * editor_undo_push_snapshot() pushed at the dispatch sites
  * (;-key, Enter, feed_line) in repl_editor.c. Phase D commit 25
  * replaces that with a per-commit transaction wrapping this
  * helper.
@@ -101,7 +101,7 @@ EditorCommitResult editor_commit_current_input(const struct EditorServices_s *se
 
     /* Transaction boundary: compile + preflight succeeded, no
      * mutation has run yet. Capture undo here. */
-    repl_undo_push_snapshot();
+    editor_undo_push_snapshot();
 
     /* Past the preflight every apply call below succeeds. */
     services->apply_predef_ops(&change, services->user);
@@ -126,7 +126,7 @@ int editor_commit_apply_external_change(const struct ReplCompiledChange_s *chang
         return 0;
 
     if (capture_undo)
-        repl_undo_push_snapshot();
+        editor_undo_push_snapshot();
 
     svc = editor_services_default();
     svc.apply_predef_ops(change, svc.user);

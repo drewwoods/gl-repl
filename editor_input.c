@@ -209,7 +209,7 @@ static void remove_cmd_range_unchecked(int start, int count, const char *what) {
         }
     }
 
-    repl_undo_push_snapshot();
+    editor_undo_push_snapshot();
     ReplCommandStore store = repl_command_store_live();
     repl_command_store_delete_range(&store, start, count);
     editor_buffer_delete_range(start, count);
@@ -230,14 +230,14 @@ static void remove_cmd_range_unchecked(int start, int count, const char *what) {
         repl_state_edit_line_set(repl_state_document_count());
     load_line_to_input(repl_state_edit_line());
     mark_normals_dirty();
-    repl_clipboard_clear_selection();
+    editor_clipboard_clear_selection();
     snprintf(msg, sizeof(msg), "%s %d line%s",
              what, count, count > 1 ? "s" : "");
     set_status(msg);
 }
 
 void delete_cmd_range(int start, int count, const char *what) {
-    if (!repl_selection_normalize_cmd_range(start, count, &start, &count))
+    if (!editor_selection_normalize_cmd_range(start, count, &start, &count))
         return;
     if (!delete_cmd_range_allowed(start, count))
         return;
@@ -245,7 +245,7 @@ void delete_cmd_range(int start, int count, const char *what) {
 }
 
 void repl_clear_all_cmds(void) {
-    repl_undo_push_snapshot();
+    editor_undo_push_snapshot();
     ReplCommandStore store = repl_command_store_live();
     repl_command_store_clear(&store);
     repl_state_edit_line_set(0);
@@ -486,7 +486,7 @@ static CommitAttemptState g_navigation_commit_before;
 
 static void capture_commit_attempt_state(CommitAttemptState *s) {
     ReplEditorInputView inp = editor_state_input();
-    repl_undo_snapshot_save(&s->undo);
+    editor_undo_snapshot_save(&s->undo);
     memcpy(s->input, inp.input, sizeof(s->input));
     s->input_len = inp.input_len;
     s->cursor_pos = editor_cursor_pos();
@@ -502,7 +502,7 @@ static void restore_commit_attempt_committed_state(const CommitAttemptState *s) 
     ReplEditorInputState *inp = editor_state_input_mut();
     memcpy(inp->pending_newline, s->newline_buf, sizeof(s->newline_buf));
     inp->pending_newline_len = s->newline_len;
-    repl_undo_snapshot_restore(&s->undo);
+    editor_undo_snapshot_restore(&s->undo);
 }
 
 static int input_matches_committed_line(int line) {
@@ -585,7 +585,7 @@ static CommitResult commit_current_input(int enter_mode) {
     if (editor_state_input().input_len > 0 ||
         (enter_mode && editor_insert_mode()) ||
         (enter_mode && repl_state_edit_line() >= repl_state_document_count()))
-        repl_undo_push_snapshot();
+        editor_undo_push_snapshot();
 
     CommitAttemptState *before = &g_commit_attempt_before;
     capture_commit_attempt_state(before);
@@ -819,7 +819,7 @@ static CommitResult commit_before_navigation(void) {
         return COMMIT_UNCHANGED;
 
     capture_commit_attempt_state(before);
-    repl_undo_ring_state_capture(&undo_before);
+    editor_undo_ring_state_capture(&undo_before);
     CommitResult result = commit_current_input(0);
     if (result != COMMIT_REJECTED)
         return result;
@@ -829,7 +829,7 @@ static CommitResult commit_before_navigation(void) {
         memcpy(rejected_status, status->text, sizeof(rejected_status));
         rejected_ttl = status->ttl;
         restore_commit_attempt_committed_state(before);
-        repl_undo_ring_state_restore(&undo_before);
+        editor_undo_ring_state_restore(&undo_before);
         memcpy(status->text, rejected_status, sizeof(rejected_status));
         status->text[REPL_STATUS_TEXT_MAX - 1] = '\0';
         status->ttl = rejected_ttl;
@@ -893,7 +893,7 @@ static void keyboard_begin_key(unsigned char key) {
      * selection; everything else clears it before processing the key. */
     if (key != KEY_CTRL_C && key != KEY_CTRL_D && key != KEY_BACKSPACE &&
         key != KEY_CTRL_X && key != KEY_DELETE)
-        repl_clipboard_clear_selection();
+        editor_clipboard_clear_selection();
 
     editor_scroll_follow_cursor_set(1);
 }
@@ -903,7 +903,7 @@ int editor_input_rename_capture_key(unsigned char key) {
      * the backtick/config, replay, and search branches - otherwise
      * typing `, or keys bound to replay would leak out of the rename
      * buffer and trigger unrelated UI. */
-    return repl_inline_rename_handle_key(key);
+    return editor_inline_rename_handle_key(key);
 }
 
 static void restore_hidden_code_panel_for_key(unsigned char key) {
@@ -966,14 +966,14 @@ static int handle_cursor_endpoint_key_route(unsigned char key) {
 static int handle_undo_redo_key_route(unsigned char key) {
     if (key == KEY_CTRL_Z) {
         if (editor_get_modifiers() & GLUT_ACTIVE_SHIFT)
-            repl_undo_do_redo();
+            editor_undo_do_redo();
         else
-            repl_undo_pop_snapshot();
+            editor_undo_pop_snapshot();
         return 1;
     }
 
     if (key == KEY_CTRL_Y) {
-        repl_undo_do_redo();
+        editor_undo_do_redo();
         return 1;
     }
     return 0;
@@ -986,9 +986,9 @@ static int handle_line_delete_key_route(unsigned char key) {
             if (repl_state_edit_line() <= repl_state_document_count())
                 load_line_to_input(repl_state_edit_line());
             set_status("Insert mode exited");
-        } else if (repl_clipboard_sel_active()) {
-            int start = repl_clipboard_sel_lo();
-            int hi = repl_clipboard_sel_hi();
+        } else if (editor_clipboard_sel_active()) {
+            int start = editor_clipboard_sel_lo();
+            int hi = editor_clipboard_sel_hi();
             if (hi >= repl_state_document_count())
                 hi = repl_state_document_count() - 1;
             delete_cmd_range(start, hi - start + 1, "Deleted");
@@ -1011,7 +1011,7 @@ static int handle_buffer_command_key_route(unsigned char key) {
 
     if (key == KEY_CTRL_BACKSLASH) {
         if (repl_state_document_count() > 0) {
-            repl_undo_push_snapshot();
+            editor_undo_push_snapshot();
             repl_reformat_commands();
             set_status("Reformatted command buffer");
         } else {
@@ -1024,7 +1024,7 @@ static int handle_buffer_command_key_route(unsigned char key) {
 
 static int handle_copy_key_route(unsigned char key) {
     if (key == KEY_CTRL_C) {
-        repl_clipboard_copy_current();
+        editor_clipboard_copy_current();
         return 1;
     }
     return 0;
@@ -1032,7 +1032,7 @@ static int handle_copy_key_route(unsigned char key) {
 
 static int handle_cut_key_route(unsigned char key) {
     if (key == KEY_CTRL_X) {
-        repl_clipboard_cut_current();
+        editor_clipboard_cut_current();
         return 1;
     }
     return 0;
@@ -1040,7 +1040,7 @@ static int handle_cut_key_route(unsigned char key) {
 
 static int handle_paste_key_route(unsigned char key) {
     if (key == KEY_CTRL_V) {
-        repl_clipboard_paste_current();
+        editor_clipboard_paste_current();
         return 1;
     }
     return 0;
@@ -1049,7 +1049,7 @@ static int handle_paste_key_route(unsigned char key) {
 static int handle_comment_toggle_key_route(unsigned char key) {
     if (key == '/' && (editor_get_modifiers() & GLUT_ACTIVE_CTRL)) {
         if (repl_state_edit_line() < repl_state_document_count() && !editor_insert_mode()) {
-            repl_undo_push_snapshot();
+            editor_undo_push_snapshot();
             {
                 GLCmd *cur = &repl_state_document_cmds_mut()[repl_state_edit_line()];
                 if (cur->type == CMD_COMMENT) {
@@ -1201,9 +1201,9 @@ static int handle_comment_toggle_key_route(unsigned char key) {
 
 static int handle_text_delete_key_route(unsigned char key) {
     if (key == KEY_BACKSPACE || key == KEY_DELETE) {
-        if (repl_clipboard_sel_active() && !editor_insert_mode()) {
-            int start = repl_clipboard_sel_lo();
-            int hi = repl_clipboard_sel_hi();
+        if (editor_clipboard_sel_active() && !editor_insert_mode()) {
+            int start = editor_clipboard_sel_lo();
+            int hi = editor_clipboard_sel_hi();
             if (hi >= repl_state_document_count())
                 hi = repl_state_document_count() - 1;
             delete_cmd_range(start, hi - start + 1, "Deleted");
@@ -1255,7 +1255,7 @@ static int handle_enter_key_route(unsigned char key) {
 static int handle_semicolon_commit_key_route(unsigned char key) {
     if (key == ';') {
         if (editor_state_input().input_len > 0) {
-            repl_undo_push_snapshot();
+            editor_undo_push_snapshot();
             if (try_commit_any()) {
                 editor_completion_clear();
                 return 1;
@@ -1494,7 +1494,7 @@ static void special_begin_key(int key) {
 int editor_input_rename_capture_special(int key) {
     /* Rename captures arrows and F-keys ahead of replay/search/navigation so
      * modal text entry cannot leak actions into the editor. */
-    return repl_inline_rename_handle_special(key);
+    return editor_inline_rename_handle_special(key);
 }
 
 static int editor_special_restores_hidden_code_panel(int key, int mods) {
@@ -1562,16 +1562,16 @@ static int handle_vertical_special_key_route(int key) {
             ac->selected_idx = (ac->selected_idx - 1 + ac->match_count) % ac->match_count;
             editor_completion_update_selected_preview();
         } else if (editor_get_modifiers() & GLUT_ACTIVE_SHIFT) {
-            if (!repl_clipboard_sel_active()) {
-                repl_selection_start(repl_state_edit_line());
+            if (!editor_clipboard_sel_active()) {
+                editor_selection_start(repl_state_edit_line());
             }
-            int selection_end = repl_selection_end();
+            int selection_end = editor_selection_end();
             if (selection_end > 0)
                 selection_end--;
-            repl_selection_set_end(selection_end);
+            editor_selection_set_end(selection_end);
             navigate_to_line(selection_end);
         } else {
-            repl_clipboard_clear_selection();
+            editor_clipboard_clear_selection();
             navigate_to_line(repl_state_edit_line() - 1);
         }
         return 1;
@@ -1580,16 +1580,16 @@ static int handle_vertical_special_key_route(int key) {
             ac->selected_idx = (ac->selected_idx + 1) % ac->match_count;
             editor_completion_update_selected_preview();
         } else if (editor_get_modifiers() & GLUT_ACTIVE_SHIFT) {
-            if (!repl_clipboard_sel_active()) {
-                repl_selection_start(repl_state_edit_line());
+            if (!editor_clipboard_sel_active()) {
+                editor_selection_start(repl_state_edit_line());
             }
-            int selection_end = repl_selection_end();
+            int selection_end = editor_selection_end();
             if (selection_end < repl_state_document_count())
                 selection_end++;
-            repl_selection_set_end(selection_end);
+            editor_selection_set_end(selection_end);
             navigate_to_line(selection_end);
         } else {
-            repl_clipboard_clear_selection();
+            editor_clipboard_clear_selection();
             navigate_to_line(repl_state_edit_line() + 1);
         }
         return 1;
@@ -1659,7 +1659,7 @@ int editor_input_point_in_code_panel(int x, int y) {
     int cp_x, cp_y, cp_w, cp_h;
     int gl_y = ui_state_viewport().window_h - y;
 
-    repl_layout_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
+    ui_layout_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
     return x >= cp_x && x < cp_x + cp_w &&
            gl_y >= cp_y && gl_y < cp_y + cp_h;
 }
@@ -1671,7 +1671,7 @@ int editor_input_point_on_code_panel_divider(int x, int y) {
 
     if (layout == CODE_PANEL_LAYOUT_HIDDEN)
         return 0;
-    repl_layout_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
+    ui_layout_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
     if (layout == CODE_PANEL_LAYOUT_TOP)
         return abs(gl_y - cp_y) < 10;
     if (layout == CODE_PANEL_LAYOUT_BOTTOM)

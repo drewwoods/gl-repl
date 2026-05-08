@@ -24,11 +24,11 @@ static void rename_refresh_status(void) {
     set_status(msg);
 }
 
-int repl_inline_rename_active(void) {
+int editor_inline_rename_active(void) {
     return g_rename_slot >= 0;
 }
 
-int repl_inline_rename_begin(int slot) {
+int editor_inline_rename_begin(int slot) {
     if (slot < 0 || slot >= MAX_USER_SCENES) return 0;
     if (!repl_user_scene_slot_used(slot))    return 0;
     g_rename_slot = slot;
@@ -39,7 +39,7 @@ int repl_inline_rename_begin(int slot) {
     return 1;
 }
 
-void repl_inline_rename_cancel(void) {
+void editor_inline_rename_cancel(void) {
     g_rename_slot = -1;
     g_rename_buf[0] = '\0';
     g_rename_len = 0;
@@ -53,11 +53,11 @@ static int rename_char_ok(unsigned char c) {
     return 1;
 }
 
-int repl_inline_rename_handle_key(unsigned char key) {
+int editor_inline_rename_handle_key(unsigned char key) {
     if (g_rename_slot < 0) return 0;
 
     if (key == KEY_ESC) {
-        repl_inline_rename_cancel();
+        editor_inline_rename_cancel();
         return 1;
     }
     if (key == '\r' || key == '\n') {
@@ -72,7 +72,7 @@ int repl_inline_rename_handle_key(unsigned char key) {
         snprintf(msg, sizeof(msg), "Renamed to: %s",
                  repl_user_scene_name(g_rename_slot));
         set_status(msg);
-        repl_inline_rename_cancel();
+        editor_inline_rename_cancel();
         return 1;
     }
     if (key == KEY_BACKSPACE || key == KEY_DELETE) {
@@ -92,7 +92,7 @@ int repl_inline_rename_handle_key(unsigned char key) {
     return 1;
 }
 
-int repl_inline_rename_handle_special(int key) {
+int editor_inline_rename_handle_special(int key) {
     if (g_rename_slot < 0) return 0;
     (void)key;
     return 1;  /* swallow all specials while renaming */

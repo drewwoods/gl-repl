@@ -1,7 +1,7 @@
 /*
  * scene_lights.c - scene light setup and visible light indicators.
  */
-#include "scene_lights.h"
+#include "lights.h"
 #include "./include/gl_2d.h"
 
 static void scene_lights_push_state(void) {

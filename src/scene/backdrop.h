@@ -29,7 +29,7 @@
 #ifndef SCENE_BACKDROP_H
 #define SCENE_BACKDROP_H
 
-#include "scene_render_types.h"
+#include "render_types.h"
 
 /* Render the backdrop environment once per frame. Draws either a procedural
  * cityscape or solid color in the background (behind grid, geometry, overlays).

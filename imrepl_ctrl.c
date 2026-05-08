@@ -272,7 +272,7 @@ static void imrepl_ctrl_build_scene_config(SceneRenderConfig *config) {
     /* --- Viewport and scene rectangle --- */
     config->viewport_w = ui_state_viewport().window_w;
     config->viewport_h = ui_state_viewport().window_h;
-    repl_layout_scene_rect(&config->scene_x, &config->scene_y,
+    ui_layout_scene_rect(&config->scene_x, &config->scene_y,
                            &config->scene_w, &config->scene_h);
     if (config->scene_w < 1) config->scene_w = 1;
     if (config->scene_h < 1) config->scene_h = 1;
@@ -415,9 +415,9 @@ static void imrepl_ctrl_build_ui_snapshot(UiRenderSnapshot *snap) {
     snap->editor_virtual_lines = editor_state_virtual_lines();
 
     /* Selection range materialized once for the per-row code-panel branch. */
-    snap->selection_active = repl_clipboard_sel_active();
-    snap->selection_lo     = snap->selection_active ? repl_clipboard_sel_lo() : -1;
-    snap->selection_hi     = snap->selection_active ? repl_clipboard_sel_hi() : -1;
+    snap->selection_active = editor_clipboard_sel_active();
+    snap->selection_lo     = snap->selection_active ? editor_clipboard_sel_lo() : -1;
+    snap->selection_hi     = snap->selection_active ? editor_clipboard_sel_hi() : -1;
 
     /* Indent + statusbar metadata so the render path does not call back
      * into repl_source_scope_* / repl_code_panel_document_* per row. */
@@ -996,7 +996,7 @@ void imrepl_ctrl_router_reset_code_panel_drag(void) {
 static void route_code_click_epilog(void) {
     repl_action_cursor_blink_reset();
     editor_completion_clear();
-    repl_clipboard_clear_selection();
+    editor_clipboard_clear_selection();
     editor_request_redraw();
 }
 
@@ -1235,7 +1235,7 @@ int imrepl_ctrl_router_handle_code_panel_drag(int x, int y) {
          * extends to the nearest visible row. Matches legacy
          * code_panel_drag_target's [0, visible_lines-1] vis clamp. */
         int cp_x, cp_y, cp_w, cp_h;
-        repl_layout_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
+        ui_layout_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
         int win_h = ui_state_viewport().window_h;
         if (cp_w > 0 && cp_h > 0 && win_h > 0) {
             int gl_y = win_h - y;
@@ -1254,8 +1254,8 @@ int imrepl_ctrl_router_handle_code_panel_drag(int x, int y) {
 
     if (target != g_code_panel_drag_anchor || g_code_panel_drag_moved) {
         g_code_panel_drag_moved = 1;
-        repl_selection_start(g_code_panel_drag_anchor);
-        repl_selection_set_end(target);
+        editor_selection_start(g_code_panel_drag_anchor);
+        editor_selection_set_end(target);
         navigate_to_line(target);
         repl_action_cursor_blink_reset();
         editor_request_redraw();

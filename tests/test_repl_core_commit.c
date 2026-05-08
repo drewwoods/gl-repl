@@ -74,7 +74,7 @@ static int code_panel_mouse_y_for_cmd(int cmd_idx) {
      * rendered or hit-tested, so synthetic mouse targets need the same step. */
     (void)ui_panels_code_panel_apply_scroll_follow_for_test(NULL, NULL);
 
-    repl_layout_code_panel_rect(NULL, &cp_y, &panel_w, &cp_h);
+    ui_layout_code_panel_rect(NULL, &cp_y, &panel_w, &cp_h);
     repl_code_panel_document_build(&layout, panel_w, text_x, cp_h);
 
     doc_line = layout.header_rows;
@@ -455,17 +455,17 @@ int main(void) {
                                                  code_panel_mouse_y_for_cmd(0));
     }
     ASSERT_TRUE("mouse press selects current line for edit", repl_state_edit_line() == 0);
-    ASSERT_TRUE("mouse press starts with no selection", !repl_clipboard_sel_active());
+    ASSERT_TRUE("mouse press starts with no selection", !editor_clipboard_sel_active());
     imrepl_ctrl_router_handle_code_panel_drag(CODE_MARGIN_X + 1,
                                               code_panel_mouse_y_for_cmd(2));
-    ASSERT_TRUE("mouse drag activates selection", repl_clipboard_sel_active());
-    ASSERT_TRUE("mouse drag selection low", repl_clipboard_sel_lo() == 0);
-    ASSERT_TRUE("mouse drag selection high", repl_clipboard_sel_hi() == 2);
+    ASSERT_TRUE("mouse drag activates selection", editor_clipboard_sel_active());
+    ASSERT_TRUE("mouse drag selection low", editor_clipboard_sel_lo() == 0);
+    ASSERT_TRUE("mouse drag selection high", editor_clipboard_sel_hi() == 2);
     ASSERT_TRUE("mouse drag navigates to drag end", repl_state_edit_line() == 2);
     imrepl_ctrl_router_reset_code_panel_drag();
     editor_handle_key(8, 0, 0);
     ASSERT_TRUE("backspace deletes selected lines", repl_state_document_count() == 0);
-    ASSERT_TRUE("backspace clears selection after delete", !repl_clipboard_sel_active());
+    ASSERT_TRUE("backspace clears selection after delete", !editor_clipboard_sel_active());
     ASSERT_TRUE("backspace keeps edit line at start after delete", repl_state_edit_line() == 0);
 
     repl_reset_state(); declare_test_vars();

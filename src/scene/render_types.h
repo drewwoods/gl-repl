@@ -7,7 +7,7 @@
 #include "repl_flatten.h"
 #include "repl_presentation.h"
 #include "replay.h"
-#include "scene_guides_shared.h"
+#include "guides_shared.h"
 
 #define MAX_LIGHTS 4
 

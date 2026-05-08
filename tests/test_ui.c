@@ -612,7 +612,7 @@ static void test_ui_panels_hit_test_panel_divider(void) {
     /* LEFT layout: divider sits at x = panel_w. */
     repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
     int cp_x, cp_y, cp_w, cp_h;
-    repl_layout_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
+    ui_layout_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
     UiHit h_left = ui_panels_hit_test(cp_x + cp_w, cp_y + 20);
     ASSERT_TRUE("LEFT divider hit kind",
                 h_left.kind == UI_HIT_PANEL_DIVIDER);
@@ -620,7 +620,7 @@ static void test_ui_panels_hit_test_panel_divider(void) {
     /* TOP layout: divider sits at gl_y = cp_y. The hit is at
      * my == window_h - cp_y. */
     repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_TOP;
-    repl_layout_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
+    ui_layout_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
     int my_top = ui_state_viewport().window_h - cp_y;
     UiHit h_top = ui_panels_hit_test(cp_x + 100, my_top);
     ASSERT_TRUE("TOP divider hit kind",
@@ -628,7 +628,7 @@ static void test_ui_panels_hit_test_panel_divider(void) {
 
     /* BOTTOM layout: divider sits at gl_y = cp_y + cp_h. */
     repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_BOTTOM;
-    repl_layout_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
+    ui_layout_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
     int my_bot = ui_state_viewport().window_h - (cp_y + cp_h);
     UiHit h_bot = ui_panels_hit_test(cp_x + 100, my_bot);
     ASSERT_TRUE("BOTTOM divider hit kind",
@@ -664,7 +664,7 @@ static void test_ui_panels_hit_test_panel_divider(void) {
  * if it cares (the per-test repl_reset_state() calls do this). */
 static void code_panel_first_row_text_click(int *out_mx, int *out_my) {
     int cp_x, cp_y, cp_w, cp_h;
-    repl_layout_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
+    ui_layout_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
 
     int linenum_w = 4 * FONT_W;
     int idx_col_w = repl_state_presentation().show_vertex_indices ? (6 * FONT_W) : 0;
