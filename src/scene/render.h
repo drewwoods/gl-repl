@@ -65,13 +65,9 @@ void scene_apply_camera(float rx, float ry, float dist,
  * when accumulation AA is on. */
 int scene_render_3d_scene(const SceneRenderConfig *config);
 
-/* Render the replay fade-batch pass: walk config->replay_fade_plan and replay
- * each active batch through config->execute_fn with its per-batch alpha.
- * Normally invoked internally by scene_render_3d_scene; exposed publicly so
- * benchmarks can isolate the fade-pass workload.
- *
- * Returns 0 on success, -1 with errno = EINVAL on bad input (same checks
- * as scene_render_3d_scene). */
-int scene_render_replay_fade_pass(const FrameRenderContext *frame_ctx);
+/* The replay-fade overlay pass used to live in src/scene/render.c and was
+ * exposed here for benchmark use. It moved out to the REPL controller
+ * (imrepl_ctrl.c) and now runs through SceneRenderConfig.post_fill_fn —
+ * the scene module no longer has a notion of replay batches. */
 
 #endif /* SCENE_RENDER_H */

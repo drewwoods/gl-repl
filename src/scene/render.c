@@ -272,78 +272,12 @@ static void scene_apply_clear_color(FlatProgramView flat_program) {
     glClearColor(cr, cg, cb, ca);
 }
 
-/* Replay baseline restore is now driven by the controller via
- * config->replay_restore_baseline_fn — the scene module no longer touches
- * REPL eval state directly. See SceneReplayRestoreBaselineFn in
- * render_types.h. */
-static void scene_replay_restore_baseline(const SceneRenderConfig *config) {
-    if (config->replay_restore_baseline_fn)
-        config->replay_restore_baseline_fn(&config->replay_fade_plan);
-}
-
-int scene_render_replay_fade_pass(const FrameRenderContext *frame_ctx) {
-    if (!frame_ctx || validate_render_config(&frame_ctx->config) < 0)
-        return -1;
-    const SceneRenderConfig *config = &frame_ctx->config;
-    if (!config->replay_has_fades || !config->execute_fn)
-        return 0;
-
-    prof_begin(PROF_SCENE_3D_FADE);
-    {
-        const ReplayFadePlan *fade_plan = &config->replay_fade_plan;
-        int batch_count;
-
-        prof_begin(PROF_SCENE_3D_FADE_PROLOGUE);
-        batch_count = fade_plan->batch_count;
-        prof_accum_end(PROF_SCENE_3D_FADE_PROLOGUE);
-
-        if (batch_count > 0) {
-            glPushAttrib(GL_ALL_ATTRIB_BITS);
-            scene_lights_setup(frame_ctx);
-            glDisable(GL_LIGHTING);
-            glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
-            GLfloat mspec[] = { 0.4f, 0.4f, 0.4f, 1.0f };
-            GLfloat mshin[] = { 30.0f };
-            glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, mspec);
-            glMaterialfv(GL_FRONT_AND_BACK, GL_SHININESS, mshin);
-            scene_apply_quality_config(config);
-            glEnable(GL_BLEND);
-            glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-            glColor4f(0.70f, 0.70f, 0.80f, 1.0f);
-            if (config->wireframe) glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-            else glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
-
-            for (int batch_idx = 0; batch_idx < batch_count; batch_idx++) {
-                const ReplayFadeBatch *batch = &fade_plan->batches[batch_idx];
-                float alpha = fade_plan->batch_alpha[batch_idx];
-
-                if (alpha <= 0.0f)
-                    continue;
-
-                prof_begin(PROF_SCENE_3D_FADE_BATCH_PREP);
-                scene_replay_restore_baseline(config);
-                glColor4f(0.70f, 0.70f, 0.80f, alpha);
-                glPushMatrix();
-                prof_accum_end(PROF_SCENE_3D_FADE_BATCH_PREP);
-
-                prof_begin(PROF_SCENE_3D_FADE_BATCH_EXEC);
-                config->execute_fn(alpha, fade_plan->skip_limits[batch_idx], batch->new_pc,
-                                config->flat_program, config->execute_user_data);
-                prof_accum_end(PROF_SCENE_3D_FADE_BATCH_EXEC);
-
-                glPopMatrix();
-            }
-
-            prof_begin(PROF_SCENE_3D_FADE_BATCH_POST);
-            if (config->execute_reset_fn)
-                config->execute_reset_fn(config->execute_user_data);
-            glPopAttrib();
-            prof_accum_end(PROF_SCENE_3D_FADE_BATCH_POST);
-        }
-    }
-    prof_accum_end(PROF_SCENE_3D_FADE);
-    return 0;
-}
+/* The replay-fade overlay pass used to live here; it has been moved out
+ * to the REPL controller (imrepl_ctrl.c) and is invoked through the
+ * generic post_fill_fn hook on SceneRenderConfig. The scene module no
+ * longer knows what's being drawn between the main fill and the
+ * grid/axes/backdrop helpers — only that some caller-supplied function
+ * may want a turn at GL state when post_fill_fn != NULL. */
 
 static void render_3d_scene_pass(const SceneRenderConfig *config,
                                  float accum_jitter_x,
@@ -379,19 +313,17 @@ static void render_3d_scene_pass(const SceneRenderConfig *config,
     prof_accum_end(PROF_SCENE_3D_SETUP);
 
     {
-        int flat_cmd_count = config->flat_program.cmd_count;
-        if (config->replay_has_fades)
-            flat_cmd_count = config->replay_base_limit;
-
         prof_begin(PROF_SCENE_3D_FILL);
         glPushMatrix();
-        if (config->execute_fn)
-            config->execute_fn(1.0f, 0, flat_cmd_count, config->flat_program,
-                            config->execute_user_data);
+        if (config->execute_fn) {
+            SceneExecuteContext ctx = { 0 };
+            config->execute_fn(&ctx, config->execute_user_data);
+        }
         glPopMatrix();
         prof_accum_end(PROF_SCENE_3D_FILL);
 
-        scene_render_replay_fade_pass(&frame_ctx);
+        if (config->post_fill_fn)
+            config->post_fill_fn(config->post_fill_user_data);
     }
 
     if (config->wireframe) glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
@@ -454,8 +386,6 @@ int scene_render_3d_scene(const SceneRenderConfig *config) {
         float weight = 1.0f / (float)accum_samples;
         for (int sample_idx = 0; sample_idx < accum_samples; sample_idx++) {
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-            if (config->replaying)
-                scene_replay_restore_baseline(config);
             render_3d_scene_pass(config,
                                  g_jitter_table[sample_idx % MAX_ACCUM_SAMPLES][0],
                                  g_jitter_table[sample_idx % MAX_ACCUM_SAMPLES][1]);
@@ -464,8 +394,6 @@ int scene_render_3d_scene(const SceneRenderConfig *config) {
         glAccum(GL_RETURN, 1.0f);
     } else {
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        if (config->replaying)
-            scene_replay_restore_baseline(config);
         render_3d_scene_pass(config, 0.0f, 0.0f);
     }
     return 0;
