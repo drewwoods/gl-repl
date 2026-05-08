@@ -2562,6 +2562,18 @@ int main() {
                     repl_eval_find_predef_var_idx("p") < 0);
     }
 
+    /* Regression (feedback P1, block-batch path): repl_compile_
+     * toggle_comment's block-batch branch uses the same shared
+     * `compile_collect_undeclare_for_range` helper as the single-
+     * line path, so the unreferenced/referenced cases already
+     * tested above cover the helper. A targeted block-batch test
+     * with a CMD_VAR_DECLARE inside a for-block would have to
+     * bypass parser auto-relocation (decls always move to the top
+     * of non-decl code at commit time), and that doc layout cannot
+     * arise through normal user input. The single-line tests are
+     * the practical regression for P1; documenting the block path
+     * inherits correctness from helper-level coverage. */
+
     /* Regression: uncomment still errors on genuinely unparseable lines.
      * Comment a valid line, mangle the source so neither the GL parser
      * nor the assignment fallback can rebuild it, then Ctrl+/ again. */

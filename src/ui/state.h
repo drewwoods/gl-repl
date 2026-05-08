@@ -83,7 +83,6 @@ void                       ui_state_code_panel_reset(void);
  * "reset" paths still write through ui_state_camera_mut(). */
 ReplCameraState  ui_state_camera(void);
 ReplCameraState *ui_state_camera_mut(void);
-ReplCameraState  ui_state_camera_snapshot(void);
 void             ui_state_camera_set(float rx, float ry, float dist,
                                      float tx, float ty, float tz,
                                      float motion_glow);
