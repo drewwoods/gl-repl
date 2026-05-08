@@ -1,8 +1,8 @@
 #include "./include/gl_2d.h"
 
 #include "repl_export.h"
-#include "ui_metrics.h"
-#include "ui_code_panel_layout.h"
+#include "ui/metrics.h"
+#include "ui/code_panel_layout.h"
 #include "repl_core_internal.h"
 #include "repl_command_store.h"
 #include "repl_config.h"
@@ -10,8 +10,8 @@
 #include "repl_parser.h"
 #include "repl_source_scope.h"
 #include "repl_state.h"
-#include "ui_layout.h"
-#include "ui_state.h"
+#include "ui/layout.h"
+#include "ui/state.h"
 
 #define IMPORT_EXPORT_STATE (repl_state_import_export_mut())
 #define g_workspace_header_lines (IMPORT_EXPORT_STATE->workspace_header_lines)

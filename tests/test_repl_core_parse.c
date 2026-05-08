@@ -1,7 +1,7 @@
 #include "repl_core_internal.h"
 #include "repl_parser.h"
 #include "repl_state.h"
-#include "ui_state.h"
+#include "ui/state.h"
 #include "support/repl_test_support.h"
 #include "support/test_harness.h"
 

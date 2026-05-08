@@ -27,7 +27,7 @@
 #include "repl_eval.h"
 #include "repl_core.h"
 #include "repl_flatten.h"
-#include "ui_editor.h"
+#include "editor.h"
 #include "color_picker.h"
 
 /* Forward decl: snapshot only carries a pointer; the full type lives

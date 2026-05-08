@@ -3,7 +3,7 @@
 #include "repl_executor.h"
 #include "repl_source_scope.h"
 #include "repl_state.h"
-#include "ui_state.h"
+#include "ui/state.h"
 #include "support/test_harness.h"
 #include "scene/render.h"
 

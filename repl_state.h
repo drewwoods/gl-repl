@@ -4,7 +4,7 @@
 #include "editor_state.h"  /* ReplEditorBuffer typedef + EditorState API */
 #include "repl_state_views.h"
 #include "repl_state_owners.h"
-#include "ui_editor.h"
+#include "ui/editor.h"
 
 typedef struct {
     ReplDocumentState         document;

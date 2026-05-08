@@ -10,15 +10,15 @@
  * The replay-lift easing state is panel-local animation (not
  * variable mutation) and stays here.
  */
-#include "ui_variable_panel.h"
-#include "repl_state_views.h"
-#include "ui_state.h"
-#include "variable_panel_drag.h"
-#include "ui_layout.h"
 #include "variable_panel.h"
+#include "repl_state_views.h"
+#include "state.h"
+#include "variable_panel_drag.h"
+#include "layout.h"
+#include "variable_panel_state.h"
 #include "replay_state.h"
 #include "./include/gl_2d.h"
-#include "ui_metrics.h"
+#include "metrics.h"
 #include "replay_ui_hud.h"
 
 /* Local copy of the layout-mode clamp.  Duplicated by repl_editor.c and

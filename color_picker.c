@@ -10,8 +10,8 @@
 #include "repl_core.h"             /* set_status, MAX_LINE_LEN */
 #include "repl_parser.h"
 #include "repl_state.h"
-#include "ui_layout.h"
-#include "ui_state.h"
+#include "ui/layout.h"
+#include "ui/state.h"
 
 #include <math.h>
 #include <stdio.h>

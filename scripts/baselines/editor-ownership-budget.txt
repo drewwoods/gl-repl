@@ -12,7 +12,7 @@
 # The forwarder block in repl_state.c was deleted in Phase A commit
 # 14. All UI-slice callers now talk to `ui_state_*` directly: ui_*.c
 # and the allowlisted controller / repl_actions / repl_editor /
-# repl_export include ui_state.h, while a handful of non-allowlisted
+# repl_export include src/ui/state.h, while a handful of non-allowlisted
 # repl_*.c files forward-declare the few accessors they need.
 #
 # The ratchet's grep still counts 3 lines because repl_state.c

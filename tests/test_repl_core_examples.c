@@ -4,7 +4,7 @@
 #include "repl_core_internal.h"
 #include "repl_examples.h"
 #include "repl_state.h"
-#include "ui_state.h"
+#include "ui/state.h"
 #include "scene/render.h"
 
 #define g_accum_aa_enabled    (repl_state_render_mut()->accum_aa_enabled)

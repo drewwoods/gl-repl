@@ -6,10 +6,10 @@
 #include "repl_config.h"
 #include "repl_keys.h"
 #include "repl_state_views.h"
-#include "ui_state.h"
-#include "ui_menu_bar.h"
-#include "ui_metrics.h"
-#include "ui_layout.h"
+#include "state.h"
+#include "menu_bar.h"
+#include "metrics.h"
+#include "layout.h"
 #include "./include/gl_2d.h"
 
 /* Menu bar - styled after Header Wireframes v2.

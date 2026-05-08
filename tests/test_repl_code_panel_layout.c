@@ -1,4 +1,4 @@
-#include "ui_code_panel_layout.h"
+#include "ui/code_panel_layout.h"
 #include "support/test_harness.h"
 
 #include <stdio.h>

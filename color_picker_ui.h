@@ -16,8 +16,8 @@
 #define COLOR_PICKER_UI_H
 
 #include "color_picker.h"
-#include "ui_editor.h"
-#include "ui_hit.h"
+#include "ui/editor.h"
+#include "ui/hit.h"
 
 /* Width of inline color-swatch boxes (shown in code panel). */
 #define UI_COLOR_SWATCH_W 12

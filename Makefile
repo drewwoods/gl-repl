@@ -112,15 +112,15 @@ all: sample
 # Used to force rebuild if you list as a prerequisite, e.g. `test_eval: FORCE $(test_eval_OBJS)`.
 FORCE:
 
-SRCS = sample.c imrepl_ctrl.c repl_core.c repl_debug.c repl_state.c editor_state.c editor_commit.c editor_services.c editor_input.c editor_help_session.c editor_completion.c ui_state.c variable_panel.c replay_state.c repl_config.c repl_command_spec.c repl_parser.c repl_source_scope.c repl_command_store.c repl_compile.c repl_apply.c editor_clipboard.c editor_undo.c repl_camera_controls.c repl_actions.c ui_layout.c ui_code_panel_layout.c editor_code_panel_document.c repl_flatten.c repl_executor.c editor_autocomplete.c ui_autocomplete_panel.c repl_autonormal.c repl_scenes.c repl_example_loader.c replay.c repl_replay_annotations.c editor_search.c repl_export.c repl_examples.c src/scene/render.c src/scene/geometry_guides.c src/scene/transform_guides.c src/scene/grid.c src/scene/axes.c src/scene/backdrop.c src/scene/lights.c src/scene/overlays.c ui_panels.c ui_menu_bar.c color_picker_ui.c color_picker.c ui_tabbed_overlay.c repl_help_text.c ui_variable_panel.c replay_ui_hud.c variable_panel_drag.c editor_inline_rename.c repl_eval.c cmd_format.c repl_audio.c ui_profile_panel.c prof.c tests/gl-stubs/gl_stub_counts.c
-HDRS = sample.h editor_search.h imrepl_ctrl.h repl_state.h editor_state.h editor_commit.h editor_services.h editor_input.h editor_help_session.h editor_completion.h ui_state.h variable_panel.h replay_state.h repl_config.h repl_core.h repl_core_internal.h repl_debug.h repl_command_spec.h repl_parser.h repl_source_scope.h repl_command_store.h repl_compile.h repl_apply.h ui_layout.h repl_pipeline.h editor_clipboard.h editor_undo.h repl_camera_controls.h repl_actions.h ui_code_panel_layout.h editor_code_panel_document.h replay.h repl_replay_annotations.h repl_examples.h src/scene/render_types.h src/scene/guides_shared.h src/scene/geometry_guides.h src/scene/transform_guides.h src/scene/transform_utils.h src/scene/grid.h src/scene/axes.h src/scene/render.h src/scene/backdrop.h src/scene/lights.h src/scene/overlays.h ui_panels.h ui_menu_bar.h color_picker_ui.h color_picker.h ui_tabbed_overlay.h repl_help_text.h ui_variable_panel.h replay_ui_hud.h variable_panel_drag.h ui_autocomplete_panel.h editor_inline_rename.h repl_eval.h cmd_format.h repl_audio.h ui_profile_panel.h prof.h
-CORE_TEST_SRCS = repl_core.c imrepl_ctrl.c repl_debug.c repl_state.c editor_state.c editor_commit.c editor_services.c editor_input.c editor_help_session.c editor_completion.c ui_state.c variable_panel.c replay_state.c repl_config.c repl_command_spec.c repl_parser.c repl_source_scope.c repl_command_store.c repl_compile.c repl_apply.c editor_clipboard.c editor_undo.c repl_camera_controls.c repl_actions.c ui_layout.c ui_code_panel_layout.c editor_code_panel_document.c repl_flatten.c repl_executor.c editor_autocomplete.c ui_autocomplete_panel.c repl_autonormal.c repl_scenes.c repl_example_loader.c replay.c repl_replay_annotations.c editor_search.c repl_export.c repl_examples.c src/scene/render.c src/scene/geometry_guides.c src/scene/transform_guides.c src/scene/grid.c src/scene/axes.c src/scene/backdrop.c src/scene/lights.c src/scene/overlays.c ui_panels.c ui_menu_bar.c color_picker_ui.c color_picker.c ui_tabbed_overlay.c repl_help_text.c ui_variable_panel.c replay_ui_hud.c variable_panel_drag.c editor_inline_rename.c repl_eval.c cmd_format.c repl_audio.c ui_profile_panel.c prof.c tests/gl-stubs/gl_stub_counts.c
+SRCS = sample.c imrepl_ctrl.c repl_core.c repl_debug.c repl_state.c editor_state.c editor_commit.c editor_services.c editor_input.c editor_help_session.c editor_completion.c src/ui/state.c variable_panel_state.c replay_state.c repl_config.c repl_command_spec.c repl_parser.c repl_source_scope.c repl_command_store.c repl_compile.c repl_apply.c editor_clipboard.c editor_undo.c repl_camera_controls.c repl_actions.c src/ui/layout.c src/ui/code_panel_layout.c editor_code_panel_document.c repl_flatten.c repl_executor.c editor_autocomplete.c src/ui/autocomplete_panel.c repl_autonormal.c repl_scenes.c repl_example_loader.c replay.c repl_replay_annotations.c editor_search.c repl_export.c repl_examples.c src/scene/render.c src/scene/geometry_guides.c src/scene/transform_guides.c src/scene/grid.c src/scene/axes.c src/scene/backdrop.c src/scene/lights.c src/scene/overlays.c src/ui/panels.c src/ui/menu_bar.c color_picker_ui.c color_picker.c src/ui/tabbed_overlay.c repl_help_text.c src/ui/variable_panel.c replay_ui_hud.c variable_panel_drag.c editor_inline_rename.c repl_eval.c cmd_format.c repl_audio.c src/ui/profile_panel.c prof.c tests/gl-stubs/gl_stub_counts.c
+HDRS = sample.h editor_search.h imrepl_ctrl.h repl_state.h editor_state.h editor_commit.h editor_services.h editor_input.h editor_help_session.h editor_completion.h src/ui/state.h variable_panel_state.h replay_state.h repl_config.h repl_core.h repl_core_internal.h repl_debug.h repl_command_spec.h repl_parser.h repl_source_scope.h repl_command_store.h repl_compile.h repl_apply.h src/ui/layout.h repl_pipeline.h editor_clipboard.h editor_undo.h repl_camera_controls.h repl_actions.h src/ui/code_panel_layout.h editor_code_panel_document.h replay.h repl_replay_annotations.h repl_examples.h src/scene/render_types.h src/scene/guides_shared.h src/scene/geometry_guides.h src/scene/transform_guides.h src/scene/transform_utils.h src/scene/grid.h src/scene/axes.h src/scene/render.h src/scene/backdrop.h src/scene/lights.h src/scene/overlays.h src/ui/panels.h src/ui/menu_bar.h color_picker_ui.h color_picker.h src/ui/tabbed_overlay.h repl_help_text.h src/ui/variable_panel.h replay_ui_hud.h variable_panel_drag.h src/ui/autocomplete_panel.h editor_inline_rename.h repl_eval.h cmd_format.h repl_audio.h src/ui/profile_panel.h prof.h
+CORE_TEST_SRCS = repl_core.c imrepl_ctrl.c repl_debug.c repl_state.c editor_state.c editor_commit.c editor_services.c editor_input.c editor_help_session.c editor_completion.c src/ui/state.c variable_panel_state.c replay_state.c repl_config.c repl_command_spec.c repl_parser.c repl_source_scope.c repl_command_store.c repl_compile.c repl_apply.c editor_clipboard.c editor_undo.c repl_camera_controls.c repl_actions.c src/ui/layout.c src/ui/code_panel_layout.c editor_code_panel_document.c repl_flatten.c repl_executor.c editor_autocomplete.c src/ui/autocomplete_panel.c repl_autonormal.c repl_scenes.c repl_example_loader.c replay.c repl_replay_annotations.c editor_search.c repl_export.c repl_examples.c src/scene/render.c src/scene/geometry_guides.c src/scene/transform_guides.c src/scene/grid.c src/scene/axes.c src/scene/backdrop.c src/scene/lights.c src/scene/overlays.c src/ui/panels.c src/ui/menu_bar.c color_picker_ui.c color_picker.c src/ui/tabbed_overlay.c repl_help_text.c src/ui/variable_panel.c replay_ui_hud.c variable_panel_drag.c editor_inline_rename.c repl_eval.c cmd_format.c repl_audio.c src/ui/profile_panel.c prof.c tests/gl-stubs/gl_stub_counts.c
 
 REPL_SRCS = $(filter repl_%.c,$(SRCS))
 SCENE_SRCS = $(filter src/scene/%.c,$(SRCS))
-UI_SRCS = $(filter ui_%.c,$(SRCS))
+UI_SRCS = $(filter src/ui/%.c,$(SRCS))
 SCENE_HDRS = $(filter src/scene/%.h,$(HDRS))
-UI_HDRS = $(filter ui_%.h,$(HDRS))
+UI_HDRS = $(filter src/ui/%.h,$(HDRS))
 STATE_NEUTRAL_SRCS = cmd_format.c prof.c tests/gl-stubs/gl_stub_counts.c
 
 # Object lists used to build the standalone teapot_demo without dragging in
@@ -202,7 +202,7 @@ test_format_OBJS = $(OBJDIR)/$(TEST_DIR)/test_format.o $(OBJDIR)/cmd_format.o
 test_format_LDLIBS = -lm
 test_format_RUN ?= ./test_format
 
-test_repl_code_panel_layout_OBJS = $(OBJDIR)/$(TEST_DIR)/test_repl_code_panel_layout.o $(OBJDIR)/ui_code_panel_layout.o
+test_repl_code_panel_layout_OBJS = $(OBJDIR)/$(TEST_DIR)/test_repl_code_panel_layout.o $(OBJDIR)/src/ui/code_panel_layout.o
 test_repl_code_panel_layout_LDLIBS =
 test_repl_code_panel_layout_RUN ?= ./test_repl_code_panel_layout
 
@@ -267,7 +267,7 @@ check-gl-boundaries: ## Verify GL/GLUT calls are isolated to allowed files.
 check-layer-coupling: ## Verify UI and scene layers don't include each other's headers.
 	@echo "    Checking UI/scene layer coupling..."
 	@! grep -nE '#include\s+"scene/' $(UI_SRCS) $(UI_HDRS) || (echo "    $(RED)ERROR: UI files must not include scene headers$(NC)" && exit 1)
-	@! grep -nE '#include\s+"ui_' $(SCENE_SRCS) $(SCENE_HDRS) || (echo "    $(RED)ERROR: scene files must not include UI headers$(NC)" && exit 1)
+	@! grep -nE '#include\s+"ui/' $(SCENE_SRCS) $(SCENE_HDRS) || (echo "    $(RED)ERROR: scene files must not include UI headers$(NC)" && exit 1)
 	@echo "    Layer coupling $(GREEN)OK$(NC)"
 
 
@@ -279,7 +279,7 @@ check-controller-boundaries: ## Verify controller owns the scene/UI wiring bound
 		echo "$(RED)ERROR: scene headers included outside imrepl_ctrl.c:$(NC)"; \
 		echo "$$bad"; exit 1; \
 	fi
-	@bad=$$(grep -lE '#[[:space:]]*include[[:space:]]+"ui_' $(REPL_SRCS) imrepl_ctrl.c \
+	@bad=$$(grep -lE '#[[:space:]]*include[[:space:]]+"ui/' $(REPL_SRCS) imrepl_ctrl.c \
 		| grep -vE '^(imrepl_ctrl|repl_(actions|editor|export))\.c$$' || true); \
 	if [ -n "$$bad" ]; then \
 		echo "$(RED)ERROR: new ui headers included outside approved exceptions:$(NC)"; \
@@ -387,7 +387,7 @@ check-domain-owner-encapsulation: ## Enforce per-domain mutator encapsulation ru
 check-ui-no-repl-state-read: ## Verify UI renderers consume the UiRenderSnapshot, not live repl_state_*().
 	@echo "Checking UI render entry points consume UiRenderSnapshot..."
 	@bad=$$(grep -nE 'repl_state_[A-Za-z0-9_]+\s*\(' $(UI_SRCS) 2>/dev/null \
-		| grep -v -E 'ui_(autocomplete_panel|color_picker|help_overlay|menu_bar|panels|profile_panel|variable_panel|replay_hud|layout|code_panel_layout)\.c:' \
+		| grep -v -E 'src/ui/(autocomplete_panel|menu_bar|panels|profile_panel|variable_panel|layout|code_panel_layout)\.c:' \
 		|| true); \
 	if [ -n "$$bad" ]; then \
 		echo "$(RED)ERROR: ui_*.c files outside the input-bridge allowlist read live repl_state_*():$(NC)"; \
@@ -456,7 +456,7 @@ check-imrepl-not-editor-mirror: ## Verify imrepl_ctrl does not grow per-field ed
 check-ui-returns-hits-only: ## Verify ui_*.c input helpers do not call REPL/editor mutators (ratchet down only).
 	@bash scripts/check-ui-returns-hits-only.sh scripts/baselines/ui-returns-hits-only.txt
 
-check-ui-panels-no-mutators: ## Hard guard: ui_panels.c references no input-dispatch mutators (Phase J2.2).
+check-ui-panels-no-mutators: ## Hard guard: src/ui/panels.c references no input-dispatch mutators (Phase J2.2).
 	@bash scripts/check-ui-panels-no-mutators.sh
 
 check-replay-ui-isolation: ## Hard guard: replay_ui_*.c is feature-UI — no editor / REPL mutators or parser/compile/apply calls.

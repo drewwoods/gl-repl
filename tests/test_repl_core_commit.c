@@ -6,12 +6,12 @@
 #include "editor_commit.h"
 #include "repl_state.h"
 #include "replay_state.h"
-#include "ui_state.h"
+#include "ui/state.h"
 #include "repl_replay_annotations.h"
 #include "editor_code_panel_document.h"
-#include "ui_panels.h"
-#include "ui_layout.h"
-#include "ui_metrics.h"
+#include "ui/panels.h"
+#include "ui/layout.h"
+#include "ui/metrics.h"
 #include "./include/gl_2d.h"
 
 #define g_status  (ui_state_status_mut()->text)

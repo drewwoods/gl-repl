@@ -20,7 +20,7 @@
 #
 # Allowed: GL / gl2d_* drawing, ColorPickerView field access,
 # EditorTransformer field access, color_picker_hsv_to_rgb, ui_hit_*,
-# ui_metrics.h / ui_layout.h constants, math / string helpers.
+# src/ui/metrics.h / src/ui/layout.h constants, math / string helpers.
 
 set -euo pipefail
 

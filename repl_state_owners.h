@@ -5,7 +5,7 @@
 #define REPL_STATE_OWNERS_H
 
 #include "repl_state_views.h"
-#include "ui_editor.h"
+#include "ui/editor.h"
 
 ReplDocumentState       *repl_state_document_mut(void);
 const GLCmd *repl_state_document_cmds(void);
