@@ -290,7 +290,7 @@ int main() {
     /* 11. editor input/selection/clipboard state facade */
     {
         ReplEditorInputState *input;
-        GLCmd *clipboard;
+        ReplClipboardState *clipboard;
 
         repl_reset_state(); declare_test_vars();
 
@@ -324,9 +324,8 @@ int main() {
         ASSERT_INT("state selection clear anchor", editor_state_selection_anchor(), -1);
         ASSERT_INT("state selection clear end", editor_state_selection_end_idx(), -1);
 
-        clipboard = editor_state_clipboard_cmds_mut();
-        clipboard[0].type = CMD_COLOR3F;
-        clipboard[0].valid = 1;
+        clipboard = editor_state_clipboard_mut();
+        snprintf(clipboard->lines[0], MAX_LINE_LEN, "glColor3f(1, 0, 0);");
         editor_state_clipboard_count_set(1);
         ASSERT_INT("state clipboard count", editor_state_clipboard_count(), 1);
         ASSERT_INT("state clipboard count accessor",

@@ -843,8 +843,10 @@ int main() {
 
         editor_handle_key(3, 0, 0);
         ASSERT_INT("copy for block: clipboard count", editor_state_clipboard_count(), 3);
-        ASSERT_INT("copy for block: first type", editor_state_clipboard_cmds_mut()[0].type, CMD_FOR_BEGIN);
-        ASSERT_INT("copy for block: last type", editor_state_clipboard_cmds_mut()[2].type, CMD_FOR_END);
+        ASSERT_TRUE("copy for block: first line is for-header",
+                    strstr(editor_state_clipboard_mut()->lines[0], "for(") != NULL);
+        ASSERT_TRUE("copy for block: last line closes block",
+                    strstr(editor_state_clipboard_mut()->lines[2], "}") != NULL);
         ASSERT_INT("copy for block: source unchanged", repl_state_document_count(), 3);
 
         repl_reset_state(); declare_test_vars();
@@ -855,8 +857,10 @@ int main() {
 
         editor_handle_key(24, 0, 0);
         ASSERT_INT("cut for block: clipboard count", editor_state_clipboard_count(), 3);
-        ASSERT_INT("cut for block: first type", editor_state_clipboard_cmds_mut()[0].type, CMD_FOR_BEGIN);
-        ASSERT_INT("cut for block: last type", editor_state_clipboard_cmds_mut()[2].type, CMD_FOR_END);
+        ASSERT_TRUE("cut for block: first line is for-header",
+                    strstr(editor_state_clipboard_mut()->lines[0], "for(") != NULL);
+        ASSERT_TRUE("cut for block: last line closes block",
+                    strstr(editor_state_clipboard_mut()->lines[2], "}") != NULL);
         ASSERT_INT("cut for block: buffer empty", repl_state_document_count(), 0);
         ASSERT_INT("cut for block: edit line at start", repl_state_edit_line(), 0);
     }
@@ -878,7 +882,8 @@ int main() {
     {
         repl_reset_state();
         repl_feed_line_public("glVertex3f(1,1,1)");
-        editor_state_clipboard_cmds_mut()[0] = repl_state_document_cmds()[0];
+        repl_copy_string_fits(editor_state_clipboard_mut()->lines[0], MAX_LINE_LEN,
+                              editor_buffer_line(0));
         editor_state_clipboard_count_set(1);
         repl_state_document_count_set(MAX_COMMANDS);
 
@@ -889,12 +894,16 @@ int main() {
         assert_status_contains("paste full: status", "Command buffer full");
     }
 
-    /* 8i. Clipboard operations reject float declarations */
+    /* 8i. Copy refuses to capture a range that contains a float
+     * declaration. (Paste-time decl guard is gone in Phase B —
+     * copy-time guard prevents decls from entering the clipboard
+     * in the first place; pasting a decl that somehow ended up in
+     * the clipboard now goes through the standard commit chain
+     * and surfaces a parser-level diagnostic if it conflicts.) */
     {
         repl_reset_state();
         repl_feed_line_public("float n;");
         repl_feed_line_public("n = 5;");
-        editor_state_clipboard_cmds_mut()[0] = repl_state_document_cmds()[1];
         repl_copy_string_fits(editor_state_clipboard_mut()->lines[0], MAX_LINE_LEN,
                               editor_buffer_line(1));
         editor_state_clipboard_count_set(1);
@@ -906,18 +915,6 @@ int main() {
         ASSERT_INT("copy decl line: clipboard count preserved", editor_state_clipboard_count(), 1);
         ASSERT_STR("copy decl line: clipboard source preserved", editor_state_clipboard_mut()->lines[0], "  n = 5;");
         assert_status_contains("copy decl line: status", "Cannot copy float declarations");
-
-        editor_state_clipboard_cmds_mut()[0] = repl_state_document_cmds()[0];
-        editor_state_clipboard_count_set(1);
-        repl_state_edit_line_set(repl_state_document_count());
-
-        editor_handle_key(22, 0, 0);
-
-        ASSERT_INT("paste decl line: cmd count unchanged", repl_state_document_count(), 2);
-        ASSERT_INT("paste decl line: clipboard count preserved", editor_state_clipboard_count(), 1);
-        ASSERT_INT("paste decl line: first still decl", repl_state_document_cmds_mut()[0].type, CMD_VAR_DECLARE);
-        ASSERT_INT("paste decl line: second still assign", repl_state_document_cmds_mut()[1].type, CMD_VAR_ASSIGN);
-        assert_status_contains("paste decl line: status", "Cannot paste float declarations");
     }
 
     /* 8j. Copy/cut in insert mode clear selection without touching clipboard */
@@ -925,7 +922,6 @@ int main() {
         repl_reset_state();
         repl_feed_line_public("glVertex3f(1,1,1)");
         repl_feed_line_public("glVertex3f(2,2,2)");
-        editor_state_clipboard_cmds_mut()[0] = repl_state_document_cmds()[1];
         repl_copy_string_fits(editor_state_clipboard_mut()->lines[0], MAX_LINE_LEN,
                               editor_buffer_line(1));
         editor_state_clipboard_count_set(1);
@@ -1696,7 +1692,6 @@ int main() {
         repl_reset_state();
         repl_feed_line_public("float n;");
         repl_feed_line_public("n = 5;");
-        editor_state_clipboard_cmds_mut()[0] = repl_state_document_cmds()[1];
         repl_copy_string_fits(editor_state_clipboard_mut()->lines[0], MAX_LINE_LEN,
                               editor_buffer_line(1));
         editor_state_clipboard_count_set(1);
@@ -1721,7 +1716,6 @@ int main() {
         repl_feed_line_public("n = 5;");
         ASSERT_TRUE("cut decl block setup: n registered",
                     repl_eval_find_predef_var_idx("n") >= 0);
-        editor_state_clipboard_cmds_mut()[0] = repl_state_document_cmds()[1];
         repl_copy_string_fits(editor_state_clipboard_mut()->lines[0], MAX_LINE_LEN,
                               editor_buffer_line(1));
         editor_state_clipboard_count_set(1);

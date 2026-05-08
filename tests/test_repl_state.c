@@ -73,8 +73,8 @@ static void populate_runtime_snapshot_fixture(const char *scene_hint) {
 
     editor_state_selection_set(4, 7);
     clipboard = editor_state_clipboard_mut();
-    clipboard->cmd_count = 1;
-    clipboard->cmds[0].type = CMD_COLOR3F;
+    clipboard->line_count = 1;
+    snprintf(clipboard->lines[0], MAX_LINE_LEN, "glColor3f(1, 0, 0);");
 
     ui_state_help_mut()->visible = 1;
     editor_help_session_set_tab(1);
@@ -251,8 +251,9 @@ static void test_capture_restore_round_trip(void) {
                repl_state_flat_program_user_lighting_enabled(), 1);
     ASSERT_INT("selection anchor restored", editor_state_selection().anchor_idx, 4);
     ASSERT_INT("selection end restored", editor_state_selection().end_idx, 7);
-    ASSERT_INT("clipboard count restored", editor_state_clipboard().cmd_count, 1);
-    ASSERT_INT("clipboard cmd restored", editor_state_clipboard().cmds[0].type, CMD_COLOR3F);
+    ASSERT_INT("clipboard count restored", editor_state_clipboard().line_count, 1);
+    ASSERT_TRUE("clipboard line restored",
+                strcmp(editor_state_clipboard().lines[0], "glColor3f(1, 0, 0);") == 0);
     ASSERT_INT("help restored", ui_state_help().visible, 1);
     ASSERT_INT("help tab restored", editor_help_session_tab_idx(), 1);
     ASSERT_INT("help scroll restored", editor_help_session_scroll(), 3);

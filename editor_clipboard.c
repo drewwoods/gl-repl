@@ -59,14 +59,12 @@ void editor_selection_set_var_decl_action_status(const char *action) {
 
 static void clipboard_copy_range(int start, int count) {
     ReplClipboardState *clipboard = editor_state_clipboard_mut();
-    GLCmd *cb = editor_state_clipboard_cmds_mut();
-    const GLCmd *cmds = repl_state_document_cmds();
     EditorBufferView text = editor_buffer_view();
     int n = 0;
     for (int i = start; i < start + count && n < MAX_COMMANDS; i++) {
-        cb[n++] = cmds[i];
-        repl_copy_string_fits(clipboard->lines[n - 1], MAX_LINE_LEN,
+        repl_copy_string_fits(clipboard->lines[n], MAX_LINE_LEN,
                               editor_buffer_view_line(text, i));
+        n++;
     }
     editor_state_clipboard_count_set(n);
 }
@@ -209,52 +207,54 @@ void editor_clipboard_cut_current(void) {
 }
 
 void editor_clipboard_paste_current(void) {
-    if (editor_state_clipboard_count() > 0) {
-        if (repl_array_contains_var_decl(editor_state_clipboard_cmds_mut(),
-                                         editor_state_clipboard_count())) {
-            editor_selection_set_var_decl_action_status("paste");
+    int count = editor_state_clipboard_count();
+    if (count <= 0) {
+        set_status("Clipboard empty");
+        return;
+    }
+
+    {
+        ReplCommandStore store = repl_command_store_live();
+        if (!repl_command_store_can_insert(&store, count)) {
+            set_status("Command buffer full!");
             return;
         }
+    }
 
-        {
-            ReplCommandStore store = repl_command_store_live();
-            if (!repl_command_store_can_insert(&store, editor_state_clipboard_count())) {
-                set_status("Command buffer full!");
-                return;
-            }
-        }
+    /* Single undo for the whole paste; feed_line() runs the commit
+     * chain per line but does not push undo itself, so structured
+     * blocks (for / func / if / `}`) re-parse correctly as the
+     * partial document grows. */
+    editor_undo_push_snapshot();
 
-        editor_undo_push_snapshot();
-        {
-            ReplCommandStore store = repl_command_store_live();
-            int edit = repl_state_edit_line();
-            int n = repl_state_document_count();
-            int pos = editor_insert_mode() ? edit :
-                      (edit < n ? edit : n);
-            const char *lines[MAX_COMMANDS];
+    int n = repl_state_document_count();
+    int edit = repl_state_edit_line();
+    int pos = editor_insert_mode() ? edit : (edit < n ? edit : n);
+    int saved_insert = editor_insert_mode();
 
-            for (int i = 0; i < editor_state_clipboard_count(); i++)
-                lines[i] = editor_state_clipboard_mut()->lines[i];
-            if (!repl_command_store_insert_many(&store, pos, editor_state_clipboard_cmds_mut(),
-                                                editor_state_clipboard_count(), 0)) {
-                set_status("Command buffer full!");
-                return;
-            }
-            editor_buffer_insert_lines(pos, lines, editor_state_clipboard_count());
-            repl_state_edit_line_set(pos + editor_state_clipboard_count());
-            editor_insert_mode_set(0);
-            load_line_to_input(repl_state_edit_line());
-            mark_normals_dirty();
-        }
+    repl_state_edit_line_set(pos);
+    editor_insert_mode_set(1);
 
-        {
-            char msg[64];
-            snprintf(msg, sizeof(msg), "Pasted %d line%s",
-                     editor_state_clipboard_count(),
-                     editor_state_clipboard_count() > 1 ? "s" : "");
-            set_status(msg);
-        }
-    } else {
-        set_status("Clipboard empty");
+    /* Snapshot the clipboard text before feeding — defensive against
+     * any path that could mutate the clipboard mid-loop. */
+    char buf[MAX_COMMANDS][MAX_LINE_LEN];
+    {
+        const ReplClipboardState *cb = editor_state_clipboard_mut();
+        for (int i = 0; i < count; i++)
+            repl_copy_string_fits(buf[i], MAX_LINE_LEN, cb->lines[i]);
+    }
+
+    for (int i = 0; i < count; i++)
+        feed_line(buf[i]);
+
+    editor_insert_mode_set(saved_insert);
+    load_line_to_input(repl_state_edit_line());
+    mark_normals_dirty();
+
+    {
+        char msg[64];
+        snprintf(msg, sizeof(msg), "Pasted %d line%s",
+                 count, count > 1 ? "s" : "");
+        set_status(msg);
     }
 }
