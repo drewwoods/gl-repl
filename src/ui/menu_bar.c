@@ -404,22 +404,22 @@ void ui_menu_bar_close(void) {
     g_menu_item_hover = -1;
 }
 
-void ui_menu_bar_set_open_menu(int menu_id) {
+void ui_menu_bar_set_open_menu(int menu_id, float now) {
     if (menu_id < 0 || menu_id >= NUM_MENUS) {
         ui_menu_bar_close();
         return;
     }
     g_open_menu = menu_id;
-    g_menu_open_time = repl_state_variables().anim_time;
+    g_menu_open_time = now;
     g_menu_item_hover = -1;
 }
 
-void ui_menu_bar_open_config(void) {
+void ui_menu_bar_open_config(float now) {
     if (g_open_menu == MENU_CONFIG) {
         ui_menu_bar_close();
         return;
     }
-    ui_menu_bar_set_open_menu(MENU_CONFIG);
+    ui_menu_bar_set_open_menu(MENU_CONFIG, now);
 }
 
 int ui_menu_bar_handle_config_right_press(int mx, int my) {
@@ -430,8 +430,8 @@ int ui_menu_bar_handle_config_right_press(int mx, int my) {
     return 1;
 }
 
-void ui_menu_bar_note_search_opened(void) {
-    g_search_open_time = repl_state_variables().anim_time;
+void ui_menu_bar_note_search_opened(float now) {
+    g_search_open_time = now;
 }
 
 static void code_panel_format_search_query(ReplSearchState srch,
