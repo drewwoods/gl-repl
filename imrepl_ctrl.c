@@ -33,6 +33,7 @@
 #include "scene/overlays.h"          /* scene_draw_vertex_number_label / _arrow primitives */
 #include "scene/geometry_guides.h"   /* scene_geometry_guides_render_for_cursor */
 #include "scene/transform_guides.h"  /* scene_transform_guides_prepare / _render_if_due */
+#include "scene/transform_utils.h"   /* scene_apply_tracked_transform / _unwind_transform_stack */
 #include "ui/autocomplete_panel.h"
 #include "color_picker_ui.h"
 #include "ui/editor.h"
@@ -411,111 +412,259 @@ static void imrepl_ctrl_render_normal_vectors(void) {
     glPopAttrib();
 }
 
-/* --- Outline + vertex-point overlays via glPolygonMode --------------------
+/* --- Outline + vertex-point overlays (walking-based) --------------------
  *
- * Same pattern repl_export uses in its outline / point passes (see
- * emit_export_outline_pass_setup): re-execute the user's program with
- * glPolygonMode flipped to GL_LINE or GL_POINT. The gluTess edge-flag
- * callback registered in repl_executor.c keeps internal triangulation
- * edges suppressed in GL_LINE mode, so outlines only show real polygon
- * edges. No GLCmd iteration is needed here.
+ * Lifted from the old scene/overlays.c so the visual matches commit-
+ * before-the-polygon-mode-experiment exactly. The polygon-mode-based
+ * approach (re-execute the program with glPolygonMode flipped) was
+ * tried first but didn't reproduce the cursor-poly highlight cleanly,
+ * so the walking implementation is back. The scene module still
+ * doesn't iterate GLCmd — the walking lives entirely in the
+ * controller now.
  *
- * The visual style (currently black material with lighting on, matching
- * the export's pass) lives entirely in the *_pass_setup helpers. A
- * future stencil-based highlight (cursor-block, replay current poly,
- * etc.) replaces these helpers without touching the program-execution
- * scaffolding. */
+ * The pass uses scene_apply_tracked_transform / scene_unwind_transform_stack
+ * (inline helpers in scene/transform_utils.h) — they're a tiny GLCmd→GL
+ * translator, currently parked under scene/. Pending follow-up: relocate
+ * them to a REPL-side header so this dependency goes away. */
 
-static void imrepl_ctrl_execute_user_geometry_for_overlay(void) {
-    repl_execute_set_fade_context(1.0f, 0);
-    repl_execute_program(&(ReplExecutionOptions){
-        .flat_cmd_count = repl_state_flat_program_count(),
-        .program        = repl_state_flat_program_view(),
-        .text           = editor_buffer_view(),
-    });
+static int outline_begin_mode_has_overlay(GLenum mode) {
+    switch (mode) {
+    case GL_POINTS:
+    case GL_LINES:
+    case GL_LINE_STRIP:
+    case GL_LINE_LOOP:
+        return 0;
+    default:
+        return 1;
+    }
 }
 
-static void overlay_outline_pass_setup(void) {
-    glEnable(GL_COLOR_MATERIAL);
-    glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
-    glColor3f(0.0f, 0.0f, 0.0f);
-    glDisable(GL_COLOR_MATERIAL);
-    glEnable(GL_POLYGON_OFFSET_LINE);
-    glPolygonOffset(REPL_OUTLINE_POLYGON_OFFSET_FACTOR,
-                    REPL_OUTLINE_POLYGON_OFFSET_UNITS);
-    glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-    glLineWidth(1.2f);
-    glEnable(GL_LIGHTING);
+/* Cursor-block match predicates. Reads cursor-block + edit-line state
+ * from the SceneRenderConfig that the controller pushed earlier in the
+ * frame; identical to the predicates that used to live in
+ * scene/overlays.c. */
+static int outline_cmd_matches_cursor(int flat_idx,
+                                      const SceneRenderConfig *cfg) {
+    if (flat_idx < 0 || flat_idx >= cfg->flat_program.cmd_count) return 0;
+    const GLCmd *cmd = &cfg->flat_program.cmds[flat_idx];
+    if (!cmd->valid) return 0;
+    if (cfg->edit_line_idx < 0) return 0;
+
+    if (cmd->call_src_cmd_idx == cfg->edit_line_idx ||
+        cmd->root_call_src_cmd_idx == cfg->edit_line_idx)
+        return 1;
+    if (cfg->cursor_func_scope_mask != 0 &&
+        (cmd->func_scope_mask & cfg->cursor_func_scope_mask) != 0)
+        return 1;
+    if (cfg->cursor_block_begin_idx >= 0 &&
+        flat_idx >= cfg->cursor_block_begin_idx &&
+        flat_idx <= cfg->cursor_block_end_idx)
+        return 1;
+    return cmd->src_cmd_idx == cfg->edit_line_idx;
 }
 
-static void overlay_vertex_point_pass_setup(void) {
-    glEnable(GL_COLOR_MATERIAL);
-    glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
-    glColor3f(0.0f, 0.0f, 0.0f);
-    glDisable(GL_COLOR_MATERIAL);
-    glPointSize(8.0f);
-    glPolygonMode(GL_FRONT_AND_BACK, GL_POINT);
-    glEnable(GL_LIGHTING);
+static int outline_block_matches_cursor(int begin_idx, int is_tess,
+                                        const SceneRenderConfig *cfg) {
+    const GLCmd *cmds = cfg->flat_program.cmds;
+    int cmd_count = cfg->flat_program.cmd_count;
+    int depth = is_tess ? 1 : 0;
+
+    for (int i = begin_idx; i < cmd_count; i++) {
+        if (!cmds[i].valid) continue;
+        if (outline_cmd_matches_cursor(i, cfg)) return 1;
+        if (!is_tess && i > begin_idx && cmds[i].type == CMD_END) break;
+        if (is_tess && i > begin_idx) {
+            if (cmds[i].type == CMD_TESS_BEGIN_POLYGON) depth++;
+            else if (cmds[i].type == CMD_TESS_END) {
+                depth--;
+                if (depth == 0) break;
+            }
+        }
+    }
+    return 0;
 }
 
-static void imrepl_ctrl_render_outlines_overlay(void) {
-    glPushAttrib(GL_ALL_ATTRIB_BITS);
-    overlay_outline_pass_setup();
-    glPushMatrix();
-    imrepl_ctrl_execute_user_geometry_for_overlay();
-    glPopMatrix();
-    glPopAttrib();
-}
+static void imrepl_ctrl_render_outlines(const SceneRenderConfig *cfg,
+                                        int show_current_poly,
+                                        int replay_tess_preview) {
+    const GLCmd *cmds = cfg->flat_program.cmds;
+    int cmd_count = cfg->flat_program.cmd_count;
 
-static void imrepl_ctrl_render_vertex_points_overlay(void) {
-    glPushAttrib(GL_ALL_ATTRIB_BITS);
-    overlay_vertex_point_pass_setup();
-    glPushMatrix();
-    imrepl_ctrl_execute_user_geometry_for_overlay();
-    glPopMatrix();
-    glPopAttrib();
-}
-
-/* Cyan-line highlight on the cursor's polygon block (F8 / "highlight
- * current poly"). Same polygon-mode trick as the outlines pass, but
- * scoped to the cursor's flat PC range:
- *
- *   - flat_cmd_count = end + 1 caps the executor at the block's end.
- *   - repl_execute_set_fade_context(1.0, begin) makes the executor
- *     APPLY transforms for everything before `begin` but emit no
- *     geometry, so the highlight lands at the right modelview without
- *     any pre-cursor polygons showing through.
- *
- * Pending follow-up: a stencil-based mask is the cleaner long-term fix
- * (the user has flagged this), but the polygon-mode + skip-prefix
- * approach matches what the deleted GLCmd-walking version did
- * visually. */
-static void imrepl_ctrl_render_cursor_poly_highlight_overlay(void) {
-    int begin = repl_state_flat_program_current_block_begin();
-    int end   = repl_state_flat_program_current_block_end();
-    if (begin < 0 || end < 0 || begin > end) return;
-
-    glPushAttrib(GL_ALL_ATTRIB_BITS);
     glDisable(GL_LIGHTING);
     glEnable(GL_DEPTH_TEST);
     glDepthMask(GL_FALSE);
+    if (cfg->multisample_enabled) glEnable(GL_MULTISAMPLE);
+    else glDisable(GL_MULTISAMPLE);
+    if (cfg->line_smooth_enabled) glEnable(GL_LINE_SMOOTH);
+    else glDisable(GL_LINE_SMOOTH);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     glEnable(GL_POLYGON_OFFSET_LINE);
     glPolygonOffset(REPL_OUTLINE_POLYGON_OFFSET_FACTOR,
                     REPL_OUTLINE_POLYGON_OFFSET_UNITS);
     glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-    glLineWidth(3.0f);
-    glColor3f(0.0f, 0.9f, 0.9f);
+
+    if (cfg->show_vertex_outlines || show_current_poly) {
+        glPushMatrix();
+        int in_begin = 0;
+        int matrix_depth = 0;
+        int block_is_current = 0;
+        int tess_in_contour = 0;
+        int tess_poly_is_current = 0;
+
+        for (int i = 0; i < cmd_count; i++) {
+            if (!cmds[i].valid) continue;
+
+            if (repl_cmd_is_transform(cmds[i].type)) {
+                if (!in_begin && !tess_in_contour)
+                    scene_apply_tracked_transform(&cmds[i], &matrix_depth);
+                continue;
+            }
+
+            switch (cmds[i].type) {
+            case CMD_TESS_BEGIN_CONTOUR:
+                if (replay_tess_preview) break;
+                if (tess_in_contour) {
+                    glEnd();
+                    glLineWidth(1.0f);
+                }
+                if (cfg->show_vertex_outlines || tess_poly_is_current) {
+                    glLineWidth(1.5f);
+                    if (tess_poly_is_current)
+                        glColor3f(0.0f, 0.9f, 0.9f);
+                    else
+                        glColor3f(0.55f, 0.20f, 0.70f);
+                    glBegin(GL_LINE_LOOP);
+                    tess_in_contour = 1;
+                }
+                break;
+            case CMD_TESS_VERTEX:
+                if (replay_tess_preview) break;
+                if (tess_in_contour)
+                    glVertex3f(cmds[i].args[0], cmds[i].args[1], cmds[i].args[2]);
+                break;
+            case CMD_TESS_END:
+                if (replay_tess_preview) {
+                    tess_poly_is_current = 0;
+                    break;
+                }
+                if (tess_in_contour) {
+                    glEnd();
+                    glLineWidth(1.0f);
+                    tess_in_contour = 0;
+                }
+                if (!tess_in_contour) tess_poly_is_current = 0;
+                break;
+            case CMD_BEGIN: {
+                int draw_outline = outline_begin_mode_has_overlay(cmds[i].mode);
+                if (in_begin) glEnd();
+                block_is_current = show_current_poly &&
+                                   outline_block_matches_cursor(i, 0, cfg);
+                if (block_is_current) {
+                    glLineWidth(3.0f);
+                    glColor3f(0.0f, 0.9f, 0.9f);
+                } else if (cfg->show_vertex_outlines && draw_outline) {
+                    glLineWidth(1.2f);
+                    glColor3f(0.0f, 0.0f, 0.0f);
+                } else {
+                    in_begin = 0;
+                    break;
+                }
+                glBegin(cmds[i].mode);
+                in_begin = 1;
+                break;
+            }
+            case CMD_END:
+                if (in_begin) {
+                    glEnd();
+                    in_begin = 0;
+                    glLineWidth(1.0f);
+                    glColor3f(0.0f, 0.0f, 0.0f);
+                }
+                block_is_current = 0;
+                break;
+            case CMD_VERTEX3F:
+                if (in_begin && (block_is_current || cfg->show_vertex_outlines))
+                    glVertex3f(cmds[i].args[0], cmds[i].args[1], cmds[i].args[2]);
+                break;
+            case CMD_VERTEX2F:
+                if (in_begin && (block_is_current || cfg->show_vertex_outlines))
+                    glVertex2f(cmds[i].args[0], cmds[i].args[1]);
+                break;
+            case CMD_TESS_BEGIN_POLYGON:
+                tess_poly_is_current = show_current_poly &&
+                                       outline_block_matches_cursor(i, 1, cfg);
+                break;
+            default:
+                break;
+            }
+        }
+
+        if (in_begin) {
+            glEnd();
+            glLineWidth(1.0f);
+        }
+        if (tess_in_contour) {
+            glEnd();
+            glLineWidth(1.0f);
+        }
+        scene_unwind_transform_stack(&matrix_depth);
+        glPopMatrix();
+    }
+
+    glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+    glDisable(GL_POLYGON_OFFSET_LINE);
+    glDepthMask(GL_TRUE);
+    glDisable(GL_BLEND);
+}
+
+static void imrepl_ctrl_render_vertex_points(const SceneRenderConfig *cfg,
+                                             int replay_vertex_points) {
+    if (!cfg->show_vpoints && !replay_vertex_points) return;
+
+    glPushAttrib(GL_ALL_ATTRIB_BITS);
+    glDisable(GL_LIGHTING);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glEnable(GL_POINT_SMOOTH);
+    glHint(GL_POINT_SMOOTH_HINT, GL_NICEST);
+
+    if (replay_vertex_points)
+        glColor4f(1.0f, 0.88f, 0.20f, 0.75f);
+    else
+        glColor4f(0.05f, 0.05f, 0.10f, 0.80f);
 
     glPushMatrix();
-    repl_execute_set_fade_context(1.0f, begin);
-    repl_execute_program(&(ReplExecutionOptions){
-        .flat_cmd_count = end + 1,
-        .program        = repl_state_flat_program_view(),
-        .text           = editor_buffer_view(),
-    });
-    repl_execute_set_fade_context(1.0f, 0);
+    {
+        const GLCmd *flat_cmds = cfg->flat_program.cmds;
+        int flat_cmd_count = cfg->flat_program.cmd_count;
+        int matrix_depth = 0;
+        GLenum primitive_mode = 0;
+
+        for (int i = 0; i < flat_cmd_count; i++) {
+            if (!flat_cmds[i].valid) continue;
+            if (repl_cmd_is_transform(flat_cmds[i].type)) {
+                scene_apply_tracked_transform(&flat_cmds[i], &matrix_depth);
+            } else if (flat_cmds[i].type == CMD_BEGIN) {
+                primitive_mode = flat_cmds[i].mode;
+            } else if (flat_cmds[i].type == CMD_END) {
+                primitive_mode = 0;
+            } else if (flat_cmds[i].type == CMD_VERTEX3F ||
+                       flat_cmds[i].type == CMD_VERTEX2F ||
+                       flat_cmds[i].type == CMD_TESS_VERTEX) {
+                int is_line = (primitive_mode == GL_LINES ||
+                               primitive_mode == GL_LINE_STRIP ||
+                               primitive_mode == GL_LINE_LOOP);
+                glPointSize(is_line ? 2.0f : 7.0f);
+                glBegin(GL_POINTS);
+                glVertex3f(flat_cmds[i].args[0], flat_cmds[i].args[1],
+                           flat_cmds[i].args[2]);
+                glEnd();
+            }
+        }
+        glPointSize(1.0f);
+        scene_unwind_transform_stack(&matrix_depth);
+    }
     glPopMatrix();
 
     glPopAttrib();
@@ -575,14 +724,16 @@ static void imrepl_ctrl_render_cursor_guides(const SceneGuideSnapshot *snapshot)
 static void imrepl_ctrl_post_overlays(void *user_data) {
     const SceneRenderConfig *cfg = (const SceneRenderConfig *)user_data;
     ReplPresentationState presentation = repl_state_presentation();
-    int replaying = replay_active();
 
-    if (presentation.show_vertex_outlines)
-        imrepl_ctrl_render_outlines_overlay();
-    if (presentation.show_vertex_points)
-        imrepl_ctrl_render_vertex_points_overlay();
-    if (presentation.highlight_current_poly && !replaying)
-        imrepl_ctrl_render_cursor_poly_highlight_overlay();
+    /* outlines + vertex_points read flat_program / cursor fields off
+     * the per-frame config the controller already pushed; cursor-poly
+     * cyan highlight is folded into outlines (block_is_current branch
+     * inside that pass). */
+    if (cfg)
+        imrepl_ctrl_render_outlines(cfg, cfg->show_current_poly,
+                                    cfg->replay_tess_preview);
+    if (cfg)
+        imrepl_ctrl_render_vertex_points(cfg, cfg->replay_vertex_points);
     if (cfg)
         imrepl_ctrl_render_cursor_guides(&cfg->guide_snapshot);
     if (presentation.show_vertex_labels)
