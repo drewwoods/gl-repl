@@ -30,7 +30,7 @@
  * `layout_mode` and `show_vertex_indices` are per-frame mirrors of
  * ReplPresentationState fields so ui_*.c renderers and hit-tests can
  * read them without crossing the repl_state_*() boundary; the controller
- * refreshes them in imrepl_ctrl_build_ui_snapshot. The source of truth
+ * refreshes them in glr_ctrl_build_ui_snapshot. The source of truth
  * still lives on ReplPresentationState. */
 typedef struct {
     float panel_frac;

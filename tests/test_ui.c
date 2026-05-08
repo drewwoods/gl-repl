@@ -42,7 +42,7 @@ static TestHarness g_harness = TEST_HARNESS_INIT;
 } while (0)
 
 /* Build a UiRenderSnapshot from the current REPL state for renderer tests.
- * Mirrors imrepl_ctrl_build_ui_snapshot(); the test harness can't link the
+ * Mirrors glr_ctrl_build_ui_snapshot(); the test harness can't link the
  * controller TU, so we duplicate the relevant slice population here. */
 static void make_test_ui_snapshot(UiRenderSnapshot *snap) {
     FlatProgramView flat_program;

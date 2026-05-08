@@ -160,7 +160,7 @@ static void draw_normal_guides(const SceneGuideSnapshot *snapshot) {
         return;
     }
 
-    /* Pre-parsed by the controller (see imrepl_ctrl_build_guide_snapshot). */
+    /* Pre-parsed by the controller (see glr_ctrl_build_guide_snapshot). */
     if (snapshot->normal_n_filled < 3 || snapshot->cursor_pos < paren_pos)
         return;
     float vals[3] = { snapshot->normal_args[0], snapshot->normal_args[1],

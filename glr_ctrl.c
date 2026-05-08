@@ -1,4 +1,4 @@
-#include "imrepl_ctrl.h"
+#include "glr_ctrl.h"
 
 #include <errno.h>
 #include <gl_includes.h>
@@ -51,24 +51,24 @@
 #include "editor/code_panel_document.h"
 #include "prof.h"
 
-static int imrepl_ctrl_cmd_is_focus_vertex(const GLCmd *cmd) {
+static int glr_ctrl_cmd_is_focus_vertex(const GLCmd *cmd) {
     return cmd->valid &&
            (cmd->type == CMD_VERTEX3F || cmd->type == CMD_TESS_VERTEX);
 }
 
-static SceneFocusVertex imrepl_ctrl_build_focus_vertex(void) {
+static SceneFocusVertex glr_ctrl_build_focus_vertex(void) {
     SceneFocusVertex focus = { .valid = 0 };
     int edit_line = repl_state_edit_line();
 
     if (edit_line >= 0 && edit_line < repl_state_document_count() &&
-        imrepl_ctrl_cmd_is_focus_vertex(&repl_state_document_cmds_mut()[edit_line])) {
+        glr_ctrl_cmd_is_focus_vertex(&repl_state_document_cmds_mut()[edit_line])) {
         focus.pos[0] = repl_state_document_cmds_mut()[edit_line].args[0];
         focus.pos[1] = repl_state_document_cmds_mut()[edit_line].args[1];
         focus.pos[2] = repl_state_document_cmds_mut()[edit_line].args[2];
         focus.valid = 1;
     } else {
         for (int i = edit_line - 1; i >= 0; i--) {
-            if (imrepl_ctrl_cmd_is_focus_vertex(&repl_state_document_cmds_mut()[i])) {
+            if (glr_ctrl_cmd_is_focus_vertex(&repl_state_document_cmds_mut()[i])) {
                 focus.pos[0] = repl_state_document_cmds_mut()[i].args[0];
                 focus.pos[1] = repl_state_document_cmds_mut()[i].args[1];
                 focus.pos[2] = repl_state_document_cmds_mut()[i].args[2];
@@ -162,7 +162,7 @@ static void fill_guide_arg_slots(SceneGuideSnapshot *snapshot,
  * controller already supplies (alpha_scale, user_lighting_enabled);
  * everything else comes from REPL/editor accessors so this can run
  * without a per-frame config pointer if needed. */
-static SceneGuideSnapshot imrepl_ctrl_build_guide_snapshot(const SceneRenderConfig *config) {
+static SceneGuideSnapshot glr_ctrl_build_guide_snapshot(const SceneRenderConfig *config) {
     ReplPresentationState presentation = repl_state_presentation();
     ReplVariableView vars = repl_state_variables();
     ReplEditorInputView input = editor_state_input();
@@ -191,7 +191,7 @@ static SceneGuideSnapshot imrepl_ctrl_build_guide_snapshot(const SceneRenderConf
 
 /* Re-establish the REPL's predef-var / scratch-array baseline before
  * each fade-batch render so each batch starts from the same world state. */
-static void imrepl_ctrl_replay_restore_baseline(const ReplayFadePlan *fade_plan) {
+static void glr_ctrl_replay_restore_baseline(const ReplayFadePlan *fade_plan) {
     if (!fade_plan) return;
     repl_restore_predef_values(fade_plan->baseline_predef_vals, MAX_PREDEF_VARS);
     repl_eval_restore_scratch_arrays(fade_plan->baseline_scratch_arrays);
@@ -227,7 +227,7 @@ static const ReplTessPreviewCallbacks g_tess_preview_cb = {
     .end_contour   = tess_preview_end_contour,
 };
 
-static void imrepl_ctrl_build_replay_fade_plan(int replaying) {
+static void glr_ctrl_build_replay_fade_plan(int replaying) {
     ReplayFadeBatchView fade_batches;
     int batch_count;
 
@@ -263,7 +263,7 @@ static void imrepl_ctrl_build_replay_fade_plan(int replaying) {
 }
 
 /* Render the fading-batch overlays prepared in g_replay_fade_plan. */
-static void imrepl_ctrl_render_replay_fade_batches(void) {
+static void glr_ctrl_render_replay_fade_batches(void) {
     const ReplayFadePlan *plan = &g_replay_fade_plan;
     int batch_count = plan->batch_count;
     if (batch_count <= 0) return;
@@ -289,7 +289,7 @@ static void imrepl_ctrl_render_replay_fade_batches(void) {
         if (alpha <= 0.0f) continue;
 
         prof_begin(PROF_SCENE_3D_FADE_BATCH_PREP);
-        imrepl_ctrl_replay_restore_baseline(plan);
+        glr_ctrl_replay_restore_baseline(plan);
         glColor4f(0.70f, 0.70f, 0.80f, alpha);
         glPushMatrix();
         prof_accum_end(PROF_SCENE_3D_FADE_BATCH_PREP);
@@ -318,7 +318,7 @@ static void imrepl_ctrl_render_replay_fade_batches(void) {
  * program through repl_replay_walk_tess_preview() and emitting line
  * strips at each transformed contour. The walker handles iteration and
  * matrix tracking; we own the visual GL state. */
-static void imrepl_ctrl_render_replay_tess_preview(void) {
+static void glr_ctrl_render_replay_tess_preview(void) {
     glPushAttrib(GL_ALL_ATTRIB_BITS);
     glDisable(GL_LIGHTING);
     glDisable(GL_DEPTH_TEST);
@@ -338,12 +338,12 @@ static void imrepl_ctrl_render_replay_tess_preview(void) {
  * helpers. Composes the fading-batch overlay and the polygon-mode
  * tess-preview wireframe; both are pure REPL-state visualizations so
  * the scene module never sees them. */
-static void imrepl_ctrl_post_fill_replay_overlay(void *user_data) {
+static void glr_ctrl_post_fill_replay_overlay(void *user_data) {
     (void)user_data;
     if (g_replay_fade_plan_active)
-        imrepl_ctrl_render_replay_fade_batches();
+        glr_ctrl_render_replay_fade_batches();
     if (g_replay_tess_preview_active)
-        imrepl_ctrl_render_replay_tess_preview();
+        glr_ctrl_render_replay_tess_preview();
 }
 
 /* --- post_overlays_fn body: vertex_numbers + normal_vectors ------------
@@ -371,7 +371,7 @@ static void on_normal_vector_arrow(const ReplVertexWalkState *state,
                                    scale);
 }
 
-static ReplVertexWalkContext imrepl_ctrl_build_vertex_walk_context(int selected_block_only) {
+static ReplVertexWalkContext glr_ctrl_build_vertex_walk_context(int selected_block_only) {
     ReplPresentationState presentation = repl_state_presentation();
     (void)presentation;  /* might be useful for future overlay variants */
 
@@ -386,7 +386,7 @@ static ReplVertexWalkContext imrepl_ctrl_build_vertex_walk_context(int selected_
     return ctx;
 }
 
-static void imrepl_ctrl_render_vertex_numbers(void) {
+static void glr_ctrl_render_vertex_numbers(void) {
     glPushAttrib(GL_ALL_ATTRIB_BITS);
     glDisable(GL_LIGHTING);
     glDisable(GL_DEPTH_TEST);
@@ -395,13 +395,13 @@ static void imrepl_ctrl_render_vertex_numbers(void) {
     static const ReplVertexWalkCallbacks cb = {
         .on_vertex = on_vertex_number_label,
     };
-    ReplVertexWalkContext ctx = imrepl_ctrl_build_vertex_walk_context(1);
+    ReplVertexWalkContext ctx = glr_ctrl_build_vertex_walk_context(1);
     repl_walk_user_vertices(&ctx, &cb, NULL);
 
     glPopAttrib();
 }
 
-static void imrepl_ctrl_render_normal_vectors(void) {
+static void glr_ctrl_render_normal_vectors(void) {
     glPushAttrib(GL_ALL_ATTRIB_BITS);
     glDisable(GL_LIGHTING);
     glDisable(GL_DEPTH_TEST);
@@ -411,7 +411,7 @@ static void imrepl_ctrl_render_normal_vectors(void) {
         .on_vertex = on_normal_vector_arrow,
     };
     float scale = 0.35f;
-    ReplVertexWalkContext ctx = imrepl_ctrl_build_vertex_walk_context(0);
+    ReplVertexWalkContext ctx = glr_ctrl_build_vertex_walk_context(0);
     repl_walk_user_vertices(&ctx, &cb, &scale);
 
     glPopAttrib();
@@ -502,7 +502,7 @@ static int outline_block_matches_cursor(int begin_idx, int is_tess,
     return 0;
 }
 
-static void imrepl_ctrl_render_outlines(const OverlayWalkCtx *ctx,
+static void glr_ctrl_render_outlines(const OverlayWalkCtx *ctx,
                                         int multisample_enabled,
                                         int line_smooth_enabled) {
     const GLCmd *cmds = ctx->program.cmds;
@@ -636,7 +636,7 @@ static void imrepl_ctrl_render_outlines(const OverlayWalkCtx *ctx,
     glDisable(GL_BLEND);
 }
 
-static void imrepl_ctrl_render_vertex_points(const OverlayWalkCtx *ctx) {
+static void glr_ctrl_render_vertex_points(const OverlayWalkCtx *ctx) {
     if (!ctx->show_vpoints && !ctx->replay_vertex_points) return;
 
     glPushAttrib(GL_ALL_ATTRIB_BITS);
@@ -713,7 +713,7 @@ static void on_cmd_render_cursor_guides(const ReplVertexWalkState *state,
                                          state->flat_cmd_idx, ctx->cam_view);
 }
 
-static void imrepl_ctrl_render_cursor_guides(const SceneGuideSnapshot *snapshot) {
+static void glr_ctrl_render_cursor_guides(const SceneGuideSnapshot *snapshot) {
     if (!snapshot || !snapshot->show_guides) return;
 
     CursorGuideRenderCtx ctx;
@@ -731,14 +731,14 @@ static void imrepl_ctrl_render_cursor_guides(const SceneGuideSnapshot *snapshot)
     static const ReplVertexWalkCallbacks cb = {
         .on_each_cmd = on_cmd_render_cursor_guides,
     };
-    ReplVertexWalkContext walk = imrepl_ctrl_build_vertex_walk_context(0);
+    ReplVertexWalkContext walk = glr_ctrl_build_vertex_walk_context(0);
     repl_walk_user_vertices(&walk, &cb, &ctx);
 
     glPopMatrix();
     glPopAttrib();
 }
 
-static void imrepl_ctrl_post_overlays(void *user_data) {
+static void glr_ctrl_post_overlays(void *user_data) {
     const SceneRenderConfig *cfg = (const SceneRenderConfig *)user_data;
     ReplPresentationState presentation = repl_state_presentation();
     int replaying = replay_active();
@@ -759,21 +759,21 @@ static void imrepl_ctrl_post_overlays(void *user_data) {
 
     int multisample = cfg ? cfg->multisample_enabled : 0;
     int line_smooth = cfg ? cfg->line_smooth_enabled : 0;
-    imrepl_ctrl_render_outlines(&walk, multisample, line_smooth);
-    imrepl_ctrl_render_vertex_points(&walk);
+    glr_ctrl_render_outlines(&walk, multisample, line_smooth);
+    glr_ctrl_render_vertex_points(&walk);
 
     /* Cursor edit guides need the full snapshot (input string, predef
      * vars, source cmds). Build it once here and feed the walker. */
-    SceneGuideSnapshot snapshot = imrepl_ctrl_build_guide_snapshot(cfg);
-    imrepl_ctrl_render_cursor_guides(&snapshot);
+    SceneGuideSnapshot snapshot = glr_ctrl_build_guide_snapshot(cfg);
+    glr_ctrl_render_cursor_guides(&snapshot);
 
     if (presentation.show_vertex_labels)
-        imrepl_ctrl_render_vertex_numbers();
+        glr_ctrl_render_vertex_numbers();
     if (presentation.show_normal_vectors)
-        imrepl_ctrl_render_normal_vectors();
+        glr_ctrl_render_normal_vectors();
 }
 
-static void imrepl_ctrl_push_highlights(void) {
+static void glr_ctrl_push_highlights(void) {
     editor_state_highlights_clear();
 
     int doc_count = repl_state_document_count();
@@ -806,7 +806,7 @@ static void imrepl_ctrl_push_highlights(void) {
  * with the evaluated form appended). The list stays empty outside
  * active replay, and is sparse during it (only has_vars cmds of the
  * applicable kinds get entries). */
-static void imrepl_ctrl_push_line_overrides(void) {
+static void glr_ctrl_push_line_overrides(void) {
     editor_state_line_overrides_clear();
     ReplReplayRuntimeState replay = replay_state_view();
     if (!replay.active || !replay.expand_args)
@@ -826,7 +826,7 @@ static void imrepl_ctrl_push_line_overrides(void) {
     }
 }
 
-static void imrepl_ctrl_push_color_transformers(void) {
+static void glr_ctrl_push_color_transformers(void) {
     editor_state_transformers_clear();
     int doc_count = repl_state_document_count();
     for (int i = 0; i < doc_count; i++) {
@@ -863,19 +863,19 @@ static void imrepl_ctrl_push_color_transformers(void) {
  * no-op. Phase J1 commit 48a relocated this from editor_input.c. */
 static int g_audio_gesture_sent = 0;
 
-static void imrepl_ctrl_notify_audio_gesture_once(void) {
+static void glr_ctrl_notify_audio_gesture_once(void) {
     if (g_audio_gesture_sent) return;
     g_audio_gesture_sent = 1;
     audio_on_user_gesture();
 }
 
-static void imrepl_ctrl_apply_input_effects(ReplInputDispatchEffects effects) {
+static void glr_ctrl_apply_input_effects(ReplInputDispatchEffects effects) {
     if (effects.set_cursor)
         glutSetCursor(effects.cursor);
     if (effects.request_redraw)
         glutPostRedisplay();
     if (effects.schedule_timer)
-        glutTimerFunc(effects.timer_millis, imrepl_ctrl_timer, effects.timer_value);
+        glutTimerFunc(effects.timer_millis, glr_ctrl_timer, effects.timer_value);
 }
 
 /* ========================================================================= */
@@ -906,7 +906,7 @@ static void scene_execute_adapter(const SceneExecuteContext *ctx,
     glPopAttrib();
 }
 
-static void imrepl_ctrl_build_scene_config(SceneRenderConfig *config) {
+static void glr_ctrl_build_scene_config(SceneRenderConfig *config) {
     ReplRenderState render = repl_state_render();
     ReplPresentationState presentation = repl_state_presentation();
     ReplCameraState cam = ui_state_camera();
@@ -932,7 +932,7 @@ static void imrepl_ctrl_build_scene_config(SceneRenderConfig *config) {
      * Always wired; the body short-circuits per-overlay based on REPL
      * presentation flags. user_data carries the per-frame config so the
      * hook can read guide_snapshot for the cursor edit guides. */
-    config->post_overlays_fn        = imrepl_ctrl_post_overlays;
+    config->post_overlays_fn        = glr_ctrl_post_overlays;
     config->post_overlays_user_data = config;
 
     /* --- Background clear color ---
@@ -1012,7 +1012,7 @@ static void imrepl_ctrl_build_scene_config(SceneRenderConfig *config) {
                                    replay_mode() == REPLAY_MODE_VERTEX;
 
     /* --- Focus marker --- */
-    config->focus = imrepl_ctrl_build_focus_vertex();
+    config->focus = glr_ctrl_build_focus_vertex();
 
     /* Alpha scale boost for dark backgrounds */
         bg_lum = 0.2126f * render.clear_color[0]
@@ -1027,9 +1027,9 @@ static void imrepl_ctrl_build_scene_config(SceneRenderConfig *config) {
      * the polygon-mode tess-preview wireframe) install our post_fill_fn
      * so the scene calls back between the user-geometry fill and the
      * grid/axes/backdrop helpers. */
-    imrepl_ctrl_build_replay_fade_plan(replaying);
+    glr_ctrl_build_replay_fade_plan(replaying);
     if (g_replay_fade_plan_active || g_replay_tess_preview_active) {
-        config->post_fill_fn        = imrepl_ctrl_post_fill_replay_overlay;
+        config->post_fill_fn        = glr_ctrl_post_fill_replay_overlay;
         config->post_fill_user_data = NULL;
     }
 }
@@ -1038,7 +1038,7 @@ static void imrepl_ctrl_build_scene_config(SceneRenderConfig *config) {
 /* UI snapshot builder (push model)                                           */
 /* ========================================================================= */
 
-static void imrepl_ctrl_fill_ui_variable_panel_vars(UiRenderSnapshot *snap,
+static void glr_ctrl_fill_ui_variable_panel_vars(UiRenderSnapshot *snap,
                                                     ReplPredefView predef) {
     int count = predef.count;
 
@@ -1057,7 +1057,7 @@ static void imrepl_ctrl_fill_ui_variable_panel_vars(UiRenderSnapshot *snap,
     }
 }
 
-static void imrepl_ctrl_build_ui_snapshot(UiRenderSnapshot *snap) {
+static void glr_ctrl_build_ui_snapshot(UiRenderSnapshot *snap) {
     FlatProgramView flat_program;
     ReplPredefView predef;
     memset(snap, 0, sizeof(*snap));
@@ -1091,7 +1091,7 @@ static void imrepl_ctrl_build_ui_snapshot(UiRenderSnapshot *snap) {
     snap->import_export  = repl_state_import_export();
     flat_program         = repl_state_flat_program_view();
     predef = repl_eval_predef_view();
-    imrepl_ctrl_fill_ui_variable_panel_vars(snap, predef);
+    glr_ctrl_fill_ui_variable_panel_vars(snap, predef);
 
     snap->document_cmds       = repl_state_document_cmds();
     snap->document_count      = repl_state_document_count();
@@ -1120,7 +1120,7 @@ static void imrepl_ctrl_build_ui_snapshot(UiRenderSnapshot *snap) {
     snap->current_begin_mode    = current_begin_mode();
 }
 
-void imrepl_ctrl_display_frame(void) {
+void glr_ctrl_display_frame(void) {
     int saved_flat_count;
     float live_predef_vals[MAX_PREDEF_VARS] = { 0 };
     float live_scratch_arrays[REPL_SCRATCH_ARRAY_COUNT][REPL_SCRATCH_ARRAY_LEN] = { { 0.0f } };
@@ -1159,11 +1159,11 @@ void imrepl_ctrl_display_frame(void) {
     prof_begin(PROF_SNAPSHOT);
 
     prof_begin(PROF_SNAPSHOT_TRANSFORMERS);
-    imrepl_ctrl_push_color_transformers();
+    glr_ctrl_push_color_transformers();
     prof_end(PROF_SNAPSHOT_TRANSFORMERS);
 
     prof_begin(PROF_SNAPSHOT_HIGHLIGHTS);
-    imrepl_ctrl_push_highlights();
+    glr_ctrl_push_highlights();
     prof_end(PROF_SNAPSHOT_HIGHLIGHTS);
 
     /* Prepare replay annotations + push the virtual-line list and
@@ -1171,7 +1171,7 @@ void imrepl_ctrl_display_frame(void) {
      * data; the editor is agnostic to which feature pushed them. */
     prof_begin(PROF_SNAPSHOT_VIRTUAL_LINES);
     repl_replay_annotations_prepare(editor_buffer_view());
-    imrepl_ctrl_push_line_overrides();
+    glr_ctrl_push_line_overrides();
     prof_end(PROF_SNAPSHOT_VIRTUAL_LINES);
 
     /* Per-frame prep that sits between virtual-line refresh and
@@ -1191,11 +1191,11 @@ void imrepl_ctrl_display_frame(void) {
     prof_end(PROF_SNAPSHOT_PREP);
 
     prof_begin(PROF_SNAPSHOT_SCENE_CONFIG);
-    imrepl_ctrl_build_scene_config(&scene_config);
+    glr_ctrl_build_scene_config(&scene_config);
     prof_end(PROF_SNAPSHOT_SCENE_CONFIG);
 
     prof_begin(PROF_SNAPSHOT_UI);
-    imrepl_ctrl_build_ui_snapshot(&ui_snap);
+    glr_ctrl_build_ui_snapshot(&ui_snap);
     prof_end(PROF_SNAPSHOT_UI);
 
     prof_end(PROF_SNAPSHOT);
@@ -1292,18 +1292,18 @@ void imrepl_ctrl_display_frame(void) {
     prof_end(PROF_FRAME_TOTAL);
 }
 
-void imrepl_ctrl_reshape(int w, int h) {
+void glr_ctrl_reshape(int w, int h) {
     if (h < 1) h = 1;
     ui_state_viewport_set_size(w, h);
 }
 
-void imrepl_ctrl_init_gl(void) {
+void glr_ctrl_init_gl(void) {
     repl_state_init_defaults();
     ensure_init_bootstrap_ready();
     scene_render_init_gl();
     repl_executor_init_resources();
     apply_init_bootstrap();
-    /* glutInit has run by the time imrepl_ctrl_init_gl is called.
+    /* glutInit has run by the time glr_ctrl_init_gl is called.
      * Unlock glutGetModifiers() reads in editor_input so Cmd / Ctrl /
      * Shift modifier checks land. Tests skip this hook so modifier
      * reads default to "no modifiers held" instead of aborting
@@ -1315,7 +1315,7 @@ void imrepl_ctrl_init_gl(void) {
     editor_set_line_comment_prefix("// ");
 }
 
-void imrepl_ctrl_bootstrap_repl(const char *input_file) {
+void glr_ctrl_bootstrap_repl(const char *input_file) {
     repl_eval_init_predef_vars();
     for (int i = 0; i < g_num_predef_vars; i++) {
         if (strcmp(g_predef_vars[i].name, "t") == 0) {
@@ -1326,7 +1326,7 @@ void imrepl_ctrl_bootstrap_repl(const char *input_file) {
     repl_load_initial_commands(input_file);
 }
 
-void imrepl_ctrl_set_accum(int enabled) {
+void glr_ctrl_set_accum(int enabled) {
     repl_state_render_mut()->use_accum = enabled ? 1 : 0;
 }
 
@@ -1344,7 +1344,7 @@ void imrepl_ctrl_set_accum(int enabled) {
  * can drive a single routing concern without applying GLUT effects.
  * Helpers fill the editor_input ReplInputDispatchEffects via
  * editor_request_redraw etc.; glutPostRedisplay / glutSetCursor /
- * glutTimerFunc fire only from imrepl_ctrl_apply_input_effects, which
+ * glutTimerFunc fire only from glr_ctrl_apply_input_effects, which
  * the dispatch entry points call after the helpers. Test fixtures
  * bypass apply_input_effects entirely.
  * ===========================================================================
@@ -1352,7 +1352,7 @@ void imrepl_ctrl_set_accum(int enabled) {
 
 /* ---- Keyboard router helpers ------------------------------------------ */
 
-int imrepl_ctrl_router_handle_save_key(unsigned char key) {
+int glr_ctrl_router_handle_save_key(unsigned char key) {
     if (key == KEY_CTRL_S) {
         repl_save_default_output();
         return 1;
@@ -1360,7 +1360,7 @@ int imrepl_ctrl_router_handle_save_key(unsigned char key) {
     return 0;
 }
 
-int imrepl_ctrl_router_handle_debug_dump_key(unsigned char key) {
+int glr_ctrl_router_handle_debug_dump_key(unsigned char key) {
     if (key == KEY_CTRL_P) {
         repl_debug_dump_editor(stdout, editor_buffer_view());
         repl_debug_dump_flat_commands(stdout, editor_buffer_view());
@@ -1370,7 +1370,7 @@ int imrepl_ctrl_router_handle_debug_dump_key(unsigned char key) {
     return 0;
 }
 
-int imrepl_ctrl_router_handle_quit_key(unsigned char key) {
+int glr_ctrl_router_handle_quit_key(unsigned char key) {
     if (key == KEY_CTRL_Q) {
         repl_export_save_output("/tmp/temp-output.c", editor_buffer_view());
         printf("Saved to %s\n", "/tmp/temp-output.c");
@@ -1379,7 +1379,7 @@ int imrepl_ctrl_router_handle_quit_key(unsigned char key) {
     return 0;
 }
 
-int imrepl_ctrl_router_handle_config_menu_key(unsigned char key) {
+int glr_ctrl_router_handle_config_menu_key(unsigned char key) {
     if (!editor_state_search().active && key == '`') {
         if (replay_active())
             repl_replay_stop();
@@ -1390,19 +1390,19 @@ int imrepl_ctrl_router_handle_config_menu_key(unsigned char key) {
     return 0;
 }
 
-int imrepl_ctrl_router_handle_active_replay_key(unsigned char key) {
+int glr_ctrl_router_handle_active_replay_key(unsigned char key) {
     return replay_active() && replay_handle_key(key);
 }
 
-int imrepl_ctrl_router_handle_replay_toggle_key(unsigned char key) {
+int glr_ctrl_router_handle_replay_toggle_key(unsigned char key) {
     return replay_handle_key(key);
 }
 
-int imrepl_ctrl_router_handle_cfg_shortcut_key(unsigned char key) {
+int glr_ctrl_router_handle_cfg_shortcut_key(unsigned char key) {
     return glr_cfg_handle_ascii_shortcut(key);
 }
 
-int imrepl_ctrl_router_handle_accum_samples_key(unsigned char key) {
+int glr_ctrl_router_handle_accum_samples_key(unsigned char key) {
     static const int g_accum_steps[] = { 1, 2, 4, 8, 16 };
     ReplRenderState *rs = repl_state_render_mut();
     if (key == '=' || key == '+') {
@@ -1442,15 +1442,15 @@ int imrepl_ctrl_router_handle_accum_samples_key(unsigned char key) {
 
 /* ---- Special-key router helpers --------------------------------------- */
 
-int imrepl_ctrl_router_handle_replay_special(int key) {
+int glr_ctrl_router_handle_replay_special(int key) {
     return replay_handle_special(key);
 }
 
-int imrepl_ctrl_router_handle_cfg_special_shortcut(int key) {
+int glr_ctrl_router_handle_cfg_special_shortcut(int key) {
     return glr_cfg_handle_special_shortcut(key);
 }
 
-int imrepl_ctrl_router_handle_horizontal_audio_special(int key) {
+int glr_ctrl_router_handle_horizontal_audio_special(int key) {
     if (key != GLUT_KEY_LEFT && key != GLUT_KEY_RIGHT)
         return 0;
     if (!(editor_input_active_modifiers() & GLUT_ACTIVE_CTRL))
@@ -1462,7 +1462,7 @@ int imrepl_ctrl_router_handle_horizontal_audio_special(int key) {
     return 1;
 }
 
-int imrepl_ctrl_router_handle_help_tab_special(int key) {
+int glr_ctrl_router_handle_help_tab_special(int key) {
     if (!ui_state_help().visible)
         return 0;
     if (key == GLUT_KEY_LEFT) {
@@ -1476,7 +1476,7 @@ int imrepl_ctrl_router_handle_help_tab_special(int key) {
     return 0;
 }
 
-int imrepl_ctrl_router_handle_help_scroll_special(int key) {
+int glr_ctrl_router_handle_help_scroll_special(int key) {
     if (!ui_state_help().visible)
         return 0;
     switch (key) {
@@ -1488,7 +1488,7 @@ int imrepl_ctrl_router_handle_help_scroll_special(int key) {
     }
 }
 
-int imrepl_ctrl_router_handle_help_toggle_special(int key) {
+int glr_ctrl_router_handle_help_toggle_special(int key) {
     if (key == GLUT_KEY_F1) {
         ReplHelpState *help = ui_state_help_mut();
         help->visible = !help->visible;
@@ -1536,7 +1536,7 @@ static void cycle_example_or_user_scene(void) {
         repl_load_example(0);
 }
 
-int imrepl_ctrl_router_handle_scene_cycle_special(int key) {
+int glr_ctrl_router_handle_scene_cycle_special(int key) {
     if (key == GLUT_KEY_F12) {
         cycle_example_or_user_scene();
         return 1;
@@ -1546,7 +1546,7 @@ int imrepl_ctrl_router_handle_scene_cycle_special(int key) {
 
 /* ---- Mouse / motion router helpers ------------------------------------ */
 
-int imrepl_ctrl_router_handle_variable_panel_drag_begin(int button, int state, int x, int y) {
+int glr_ctrl_router_handle_variable_panel_drag_begin(int button, int state, int x, int y) {
     if (state != GLUT_DOWN) return 0;
     if (!variable_panel_visible()) return 0;
     if (button != GLUT_LEFT_BUTTON && button != GLUT_RIGHT_BUTTON)
@@ -1562,7 +1562,7 @@ int imrepl_ctrl_router_handle_variable_panel_drag_begin(int button, int state, i
     return 1;
 }
 
-int imrepl_ctrl_router_handle_variable_panel_drag_release(int state) {
+int glr_ctrl_router_handle_variable_panel_drag_release(int state) {
     if (state != GLUT_UP) return 0;
     if (!variable_panel_drag_active()) return 0;
     variable_panel_handle_drag_reset();
@@ -1570,7 +1570,7 @@ int imrepl_ctrl_router_handle_variable_panel_drag_release(int state) {
     return 1;
 }
 
-int imrepl_ctrl_router_handle_right_config_press(int button, int state, int x, int y) {
+int glr_ctrl_router_handle_right_config_press(int button, int state, int x, int y) {
     if (state != GLUT_DOWN || button != GLUT_RIGHT_BUTTON)
         return 0;
     if (ui_panels_handle_right_press(x, y)) {
@@ -1580,7 +1580,7 @@ int imrepl_ctrl_router_handle_right_config_press(int button, int state, int x, i
     return 0;
 }
 
-int imrepl_ctrl_router_handle_scene_press(int button, int state, int x, int y) {
+int glr_ctrl_router_handle_scene_press(int button, int state, int x, int y) {
     if (state != GLUT_DOWN || button != GLUT_LEFT_BUTTON)
         return 0;
     /* The scene region is owned by the camera, but the floating color
@@ -1596,12 +1596,12 @@ int imrepl_ctrl_router_handle_scene_press(int button, int state, int x, int y) {
     return 0;
 }
 
-int imrepl_ctrl_router_handle_camera_mouse(int button, int state, int x, int y) {
+int glr_ctrl_router_handle_camera_mouse(int button, int state, int x, int y) {
     repl_camera_mouse_event(button, state, x, y, editor_input_active_modifiers());
     return 1;
 }
 
-static int imrepl_ctrl_apply_variable_panel_value_change(
+static int glr_ctrl_apply_variable_panel_value_change(
         const VariablePanelValueChange *value_change) {
     ReplCompiledChange compiled;
     ReplCompileContext ctx;
@@ -1643,29 +1643,29 @@ static int imrepl_ctrl_apply_variable_panel_value_change(
     return 1;
 }
 
-int imrepl_ctrl_router_handle_variable_panel_motion(int x, int y) {
+int glr_ctrl_router_handle_variable_panel_motion(int x, int y) {
     VariablePanelValueChange value_change;
 
     (void)y;
     if (!variable_panel_drag_active())
         return 0;
     if (variable_panel_handle_drag_motion(x, &value_change))
-        imrepl_ctrl_apply_variable_panel_value_change(&value_change);
+        glr_ctrl_apply_variable_panel_value_change(&value_change);
     editor_request_redraw();
     return 1;
 }
 
-int imrepl_ctrl_router_handle_camera_motion(int x, int y) {
+int glr_ctrl_router_handle_camera_motion(int x, int y) {
     repl_camera_drag_motion(x, y);
     return 1;
 }
 
-int imrepl_ctrl_router_handle_camera_pointer_set(int x, int y) {
+int glr_ctrl_router_handle_camera_pointer_set(int x, int y) {
     repl_camera_pointer_set(x, y);
     return 1;
 }
 
-int imrepl_ctrl_router_handle_glut_scroll_wheel_button(int button, int state, int x, int y) {
+int glr_ctrl_router_handle_glut_scroll_wheel_button(int button, int state, int x, int y) {
 #ifdef USE_GLUT
     if ((button != 3 && button != 4) || state != GLUT_DOWN)
         return 0;
@@ -1696,7 +1696,7 @@ static int g_code_panel_drag_active = 0;
 static int g_code_panel_drag_anchor = -1;
 static int g_code_panel_drag_moved  = 0;
 
-void imrepl_ctrl_router_reset_code_panel_drag(void) {
+void glr_ctrl_router_reset_code_panel_drag(void) {
     g_code_panel_drag_active = 0;
     g_code_panel_drag_anchor = -1;
     g_code_panel_drag_moved  = 0;
@@ -1731,7 +1731,7 @@ static int route_code_text_hit(const UiHit *hit) {
         g_code_panel_drag_anchor = hit->line_idx;
         g_code_panel_drag_moved  = 0;
     } else {
-        imrepl_ctrl_router_reset_code_panel_drag();
+        glr_ctrl_router_reset_code_panel_drag();
     }
     return 1;
 }
@@ -1744,7 +1744,7 @@ static int route_code_insert_line_hit(const UiHit *hit) {
     if (hit->char_idx >= 0)
         editor_cursor_pos_set(hit->char_idx);
     route_code_click_epilog();
-    imrepl_ctrl_router_reset_code_panel_drag();
+    glr_ctrl_router_reset_code_panel_drag();
     return 1;
 }
 
@@ -1760,7 +1760,7 @@ static int route_code_gutter_hit(const UiHit *hit) {
         g_code_panel_drag_anchor = hit->line_idx;
         g_code_panel_drag_moved  = 0;
     } else {
-        imrepl_ctrl_router_reset_code_panel_drag();
+        glr_ctrl_router_reset_code_panel_drag();
     }
     return 1;
 }
@@ -1854,7 +1854,7 @@ static int route_panel_divider_hit(const UiHit *hit) {
 /* UI_HIT_VARIABLE_SLIDER: variable-panel left-click drag begin. The
  * J1 helper handles replay-stop + drag start. */
 static int route_variable_slider_hit(int x, int y) {
-    return imrepl_ctrl_router_handle_variable_panel_drag_begin(GLUT_LEFT_BUTTON,
+    return glr_ctrl_router_handle_variable_panel_drag_begin(GLUT_LEFT_BUTTON,
                                                                GLUT_DOWN, x, y);
 }
 
@@ -1881,7 +1881,7 @@ static int code_panel_target_from_hit(UiHit hit) {
     }
 }
 
-int imrepl_ctrl_router_handle_code_panel_hit(UiHit hit, int x, int y) {
+int glr_ctrl_router_handle_code_panel_hit(UiHit hit, int x, int y) {
     /* A click outside the menu bar (anywhere that isn't UI_HIT_MENU_BUTTON
      * / UI_HIT_MENU_ITEM) dismisses an open dropdown — matches the legacy
      * "click outside dropdown closes it" behaviour from
@@ -1935,7 +1935,7 @@ int imrepl_ctrl_router_handle_code_panel_hit(UiHit hit, int x, int y) {
     return consumed;
 }
 
-int imrepl_ctrl_router_handle_code_panel_drag(int x, int y) {
+int glr_ctrl_router_handle_code_panel_drag(int x, int y) {
     if (!g_code_panel_drag_active || g_code_panel_drag_anchor < 0)
         return 0;
 
@@ -1994,8 +1994,8 @@ int imrepl_ctrl_router_handle_code_panel_drag(int x, int y) {
  * ===========================================================================
  */
 
-void imrepl_ctrl_keyboard(unsigned char key, int x, int y) {
-    imrepl_ctrl_notify_audio_gesture_once();
+void glr_ctrl_keyboard(unsigned char key, int x, int y) {
+    glr_ctrl_notify_audio_gesture_once();
 
     /* macOS Cmd+letter normalization happens before any dispatch so
      * the controller-owned cfg-shortcut chain (Cmd+B / Cmd+S / Cmd+T
@@ -2008,7 +2008,7 @@ void imrepl_ctrl_keyboard(unsigned char key, int x, int y) {
     /* Rename capture: hard modal. */
     if (editor_input_rename_capture_key(key)) {
         editor_reset_input_effects();
-        imrepl_ctrl_apply_input_effects(editor_take_input_effects());
+        glr_ctrl_apply_input_effects(editor_take_input_effects());
         return;
     }
 
@@ -2018,44 +2018,44 @@ void imrepl_ctrl_keyboard(unsigned char key, int x, int y) {
      * so backtick / cfg shortcut / replay forwarding / Ctrl+G replay
      * toggle / Ctrl+= accum / Ctrl+S save / Ctrl+P debug / Ctrl+Q quit
      * fire exactly where they did before. */
-    if (imrepl_ctrl_router_handle_config_menu_key(key) ||
-        imrepl_ctrl_router_handle_active_replay_key(key) ||
-        imrepl_ctrl_router_handle_cfg_shortcut_key(key) ||
-        imrepl_ctrl_router_handle_replay_toggle_key(key) ||
-        imrepl_ctrl_router_handle_save_key(key) ||
-        imrepl_ctrl_router_handle_debug_dump_key(key) ||
-        imrepl_ctrl_router_handle_accum_samples_key(key) ||
-        imrepl_ctrl_router_handle_quit_key(key)) {
-        imrepl_ctrl_apply_input_effects(editor_take_input_effects());
+    if (glr_ctrl_router_handle_config_menu_key(key) ||
+        glr_ctrl_router_handle_active_replay_key(key) ||
+        glr_ctrl_router_handle_cfg_shortcut_key(key) ||
+        glr_ctrl_router_handle_replay_toggle_key(key) ||
+        glr_ctrl_router_handle_save_key(key) ||
+        glr_ctrl_router_handle_debug_dump_key(key) ||
+        glr_ctrl_router_handle_accum_samples_key(key) ||
+        glr_ctrl_router_handle_quit_key(key)) {
+        glr_ctrl_apply_input_effects(editor_take_input_effects());
         return;
     }
 
-    imrepl_ctrl_apply_input_effects(editor_handle_key(key, x, y));
+    glr_ctrl_apply_input_effects(editor_handle_key(key, x, y));
 }
 
-void imrepl_ctrl_special(int key, int x, int y) {
-    imrepl_ctrl_notify_audio_gesture_once();
+void glr_ctrl_special(int key, int x, int y) {
+    glr_ctrl_notify_audio_gesture_once();
 
     if (editor_input_rename_capture_special(key)) {
         editor_reset_input_effects();
-        imrepl_ctrl_apply_input_effects(editor_take_input_effects());
+        glr_ctrl_apply_input_effects(editor_take_input_effects());
         return;
     }
 
     editor_reset_input_effects();
 
-    if (imrepl_ctrl_router_handle_replay_special(key) ||
-        imrepl_ctrl_router_handle_cfg_special_shortcut(key) ||
-        imrepl_ctrl_router_handle_horizontal_audio_special(key) ||
-        imrepl_ctrl_router_handle_help_tab_special(key) ||
-        imrepl_ctrl_router_handle_help_scroll_special(key) ||
-        imrepl_ctrl_router_handle_help_toggle_special(key) ||
-        imrepl_ctrl_router_handle_scene_cycle_special(key)) {
-        imrepl_ctrl_apply_input_effects(editor_take_input_effects());
+    if (glr_ctrl_router_handle_replay_special(key) ||
+        glr_ctrl_router_handle_cfg_special_shortcut(key) ||
+        glr_ctrl_router_handle_horizontal_audio_special(key) ||
+        glr_ctrl_router_handle_help_tab_special(key) ||
+        glr_ctrl_router_handle_help_scroll_special(key) ||
+        glr_ctrl_router_handle_help_toggle_special(key) ||
+        glr_ctrl_router_handle_scene_cycle_special(key)) {
+        glr_ctrl_apply_input_effects(editor_take_input_effects());
         return;
     }
 
-    imrepl_ctrl_apply_input_effects(editor_handle_special(key, x, y));
+    glr_ctrl_apply_input_effects(editor_handle_special(key, x, y));
 }
 
 /* Mouse routing: hit-test to decide owner before dispatching.
@@ -2072,8 +2072,8 @@ void imrepl_ctrl_special(int key, int x, int y) {
  * camera. The freeglut scroll-wheel emulation (buttons 3/4) routes
  * to help-overlay scroll, code-panel scroll (editor), or camera zoom
  * velocity. */
-void imrepl_ctrl_mouse(int button, int state, int x, int y) {
-    imrepl_ctrl_notify_audio_gesture_once();
+void glr_ctrl_mouse(int button, int state, int x, int y) {
+    glr_ctrl_notify_audio_gesture_once();
 
     editor_reset_input_effects();
 
@@ -2083,15 +2083,15 @@ void imrepl_ctrl_mouse(int button, int state, int x, int y) {
          * (panel resize end), then variable-panel release, then
          * camera UP so the orbit/pan/zoom interaction releases. */
         color_picker_handle_release();
-        imrepl_ctrl_router_reset_code_panel_drag();
-        imrepl_ctrl_apply_input_effects(editor_handle_mouse(button, state, x, y));
+        glr_ctrl_router_reset_code_panel_drag();
+        glr_ctrl_apply_input_effects(editor_handle_mouse(button, state, x, y));
         editor_reset_input_effects();
-        if (imrepl_ctrl_router_handle_variable_panel_drag_release(state)) {
-            imrepl_ctrl_apply_input_effects(editor_take_input_effects());
+        if (glr_ctrl_router_handle_variable_panel_drag_release(state)) {
+            glr_ctrl_apply_input_effects(editor_take_input_effects());
             return;
         }
-        imrepl_ctrl_router_handle_camera_mouse(button, state, x, y);
-        imrepl_ctrl_apply_input_effects(editor_take_input_effects());
+        glr_ctrl_router_handle_camera_mouse(button, state, x, y);
+        glr_ctrl_apply_input_effects(editor_take_input_effects());
         return;
     }
 
@@ -2104,40 +2104,40 @@ void imrepl_ctrl_mouse(int button, int state, int x, int y) {
          * UI_HIT_NONE, UI_HIT_HELP_PANEL) fall through to scene
          * press / camera. */
         UiHit hit = ui_panels_hit_test(x, y);
-        if (imrepl_ctrl_router_handle_code_panel_hit(hit, x, y)) {
-            imrepl_ctrl_apply_input_effects(editor_take_input_effects());
+        if (glr_ctrl_router_handle_code_panel_hit(hit, x, y)) {
+            glr_ctrl_apply_input_effects(editor_take_input_effects());
             return;
         }
-        if (imrepl_ctrl_router_handle_scene_press(button, state, x, y)) {
-            imrepl_ctrl_apply_input_effects(editor_take_input_effects());
+        if (glr_ctrl_router_handle_scene_press(button, state, x, y)) {
+            glr_ctrl_apply_input_effects(editor_take_input_effects());
             return;
         }
-        imrepl_ctrl_router_handle_camera_mouse(button, state, x, y);
-        imrepl_ctrl_apply_input_effects(editor_take_input_effects());
+        glr_ctrl_router_handle_camera_mouse(button, state, x, y);
+        glr_ctrl_apply_input_effects(editor_take_input_effects());
         return;
     }
 
     if (button == GLUT_RIGHT_BUTTON) {
-        if (imrepl_ctrl_router_handle_right_config_press(button, state, x, y)) {
-            imrepl_ctrl_apply_input_effects(editor_take_input_effects());
+        if (glr_ctrl_router_handle_right_config_press(button, state, x, y)) {
+            glr_ctrl_apply_input_effects(editor_take_input_effects());
             return;
         }
-        if (imrepl_ctrl_router_handle_variable_panel_drag_begin(button, state, x, y)) {
-            imrepl_ctrl_apply_input_effects(editor_take_input_effects());
+        if (glr_ctrl_router_handle_variable_panel_drag_begin(button, state, x, y)) {
+            glr_ctrl_apply_input_effects(editor_take_input_effects());
             return;
         }
-        imrepl_ctrl_router_handle_camera_mouse(button, state, x, y);
-        imrepl_ctrl_apply_input_effects(editor_take_input_effects());
+        glr_ctrl_router_handle_camera_mouse(button, state, x, y);
+        glr_ctrl_apply_input_effects(editor_take_input_effects());
         return;
     }
 
-    if (imrepl_ctrl_router_handle_glut_scroll_wheel_button(button, state, x, y)) {
-        imrepl_ctrl_apply_input_effects(editor_take_input_effects());
+    if (glr_ctrl_router_handle_glut_scroll_wheel_button(button, state, x, y)) {
+        glr_ctrl_apply_input_effects(editor_take_input_effects());
         return;
     }
 
-    imrepl_ctrl_router_handle_camera_mouse(button, state, x, y);
-    imrepl_ctrl_apply_input_effects(editor_take_input_effects());
+    glr_ctrl_router_handle_camera_mouse(button, state, x, y);
+    glr_ctrl_apply_input_effects(editor_take_input_effects());
 }
 
 /* Motion routing: UI overlay (color picker drag), variable-panel drag
@@ -2151,30 +2151,30 @@ void imrepl_ctrl_mouse(int button, int state, int x, int y) {
  * repl_camera_drag_motion reads the previous (px, py) to compute
  * delta and updates the pointer to (x, y) at the end. Pre-setting
  * here would zero the delta and freeze orbit/pan/zoom drag. */
-void imrepl_ctrl_motion(int x, int y) {
+void glr_ctrl_motion(int x, int y) {
     editor_reset_input_effects();
 
     /* Floating color picker drag tracking (SV / hue / alpha sliders). */
     {
         ColorPickerInputResult r = color_picker_handle_motion(x, y);
         if (r.consumed) {
-            imrepl_ctrl_router_handle_camera_pointer_set(x, y);
+            glr_ctrl_router_handle_camera_pointer_set(x, y);
             editor_request_redraw();
-            imrepl_ctrl_apply_input_effects(editor_take_input_effects());
+            glr_ctrl_apply_input_effects(editor_take_input_effects());
             return;
         }
     }
 
-    if (imrepl_ctrl_router_handle_variable_panel_motion(x, y)) {
-        imrepl_ctrl_router_handle_camera_pointer_set(x, y);
-        imrepl_ctrl_apply_input_effects(editor_take_input_effects());
+    if (glr_ctrl_router_handle_variable_panel_motion(x, y)) {
+        glr_ctrl_router_handle_camera_pointer_set(x, y);
+        glr_ctrl_apply_input_effects(editor_take_input_effects());
         return;
     }
 
     /* Code-panel selection drag (controller-owned state). */
-    if (imrepl_ctrl_router_handle_code_panel_drag(x, y)) {
-        imrepl_ctrl_router_handle_camera_pointer_set(x, y);
-        imrepl_ctrl_apply_input_effects(editor_take_input_effects());
+    if (glr_ctrl_router_handle_code_panel_drag(x, y)) {
+        glr_ctrl_router_handle_camera_pointer_set(x, y);
+        glr_ctrl_apply_input_effects(editor_take_input_effects());
         return;
     }
 
@@ -2182,29 +2182,29 @@ void imrepl_ctrl_motion(int x, int y) {
      * a no-op when resizing_panel is clear. */
     if (ui_state_code_panel().resizing_panel) {
         ReplInputDispatchEffects pre_editor = editor_take_input_effects();
-        imrepl_ctrl_apply_input_effects(editor_handle_motion(x, y));
-        imrepl_ctrl_router_handle_camera_pointer_set(x, y);
-        imrepl_ctrl_apply_input_effects(pre_editor);
+        glr_ctrl_apply_input_effects(editor_handle_motion(x, y));
+        glr_ctrl_router_handle_camera_pointer_set(x, y);
+        glr_ctrl_apply_input_effects(pre_editor);
         return;
     }
 
     /* Camera drag motion reads pointer = (px, py), computes delta,
      * then calls pointer_set(x, y) itself. */
-    imrepl_ctrl_router_handle_camera_motion(x, y);
-    imrepl_ctrl_apply_input_effects(editor_take_input_effects());
+    glr_ctrl_router_handle_camera_motion(x, y);
+    glr_ctrl_apply_input_effects(editor_take_input_effects());
 }
 
-void imrepl_ctrl_passive_motion(int x, int y) {
+void glr_ctrl_passive_motion(int x, int y) {
     editor_reset_input_effects();
     /* Passive motion (no button held) just updates the pointer
      * position — there's no drag delta to preserve. */
-    imrepl_ctrl_router_handle_camera_pointer_set(x, y);
+    glr_ctrl_router_handle_camera_pointer_set(x, y);
     ReplInputDispatchEffects editor_effects = editor_handle_passive_motion(x, y);
-    imrepl_ctrl_apply_input_effects(editor_take_input_effects());
-    imrepl_ctrl_apply_input_effects(editor_effects);
+    glr_ctrl_apply_input_effects(editor_take_input_effects());
+    glr_ctrl_apply_input_effects(editor_effects);
 }
 
-void imrepl_ctrl_mousewheel(int wheel, int direction, int x, int y) {
+void glr_ctrl_mousewheel(int wheel, int direction, int x, int y) {
 #ifndef USE_GLUT
     /* freeglut wheel callback: route to help scroll, code-panel scroll
      * (editor), or camera zoom velocity. */
@@ -2213,16 +2213,16 @@ void imrepl_ctrl_mousewheel(int wheel, int direction, int x, int y) {
     if (ui_state_help().visible) {
         editor_help_session_scroll_by(-direction);
         editor_request_redraw();
-        imrepl_ctrl_apply_input_effects(editor_take_input_effects());
+        glr_ctrl_apply_input_effects(editor_take_input_effects());
         return;
     }
     if (editor_input_point_in_code_panel(x, y)) {
-        imrepl_ctrl_apply_input_effects(editor_handle_mousewheel(wheel, direction, x, y));
+        glr_ctrl_apply_input_effects(editor_handle_mousewheel(wheel, direction, x, y));
         return;
     }
     repl_camera_add_zoom_velocity(-(float)direction * 0.1f);
     editor_request_redraw();
-    imrepl_ctrl_apply_input_effects(editor_take_input_effects());
+    glr_ctrl_apply_input_effects(editor_take_input_effects());
 #else
     (void)wheel; (void)direction; (void)x; (void)y;
 #endif
@@ -2237,9 +2237,9 @@ void imrepl_ctrl_mousewheel(int wheel, int direction, int x, int y) {
  *
  * The work is split from the GLUT scheduling so test fixtures (which
  * don't initialize GLUT) can drive a single tick by calling
- * imrepl_ctrl_tick directly. The public timer entry adds
+ * glr_ctrl_tick directly. The public timer entry adds
  * glutPostRedisplay + glutTimerFunc reschedule on top. */
-void imrepl_ctrl_tick(void) {
+void glr_ctrl_tick(void) {
     /* Advance the audio playlist if the current song reached its end
      * (no-op under loop=Song; see audio_tick). */
     audio_tick();
@@ -2300,9 +2300,9 @@ void imrepl_ctrl_tick(void) {
     }
 }
 
-void imrepl_ctrl_timer(int value) {
+void glr_ctrl_timer(int value) {
     (void)value;
-    imrepl_ctrl_tick();
+    glr_ctrl_tick();
     glutPostRedisplay();
-    glutTimerFunc(16, imrepl_ctrl_timer, 0);
+    glutTimerFunc(16, glr_ctrl_timer, 0);
 }

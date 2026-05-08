@@ -4,7 +4,7 @@ Convert cflow output to Graphviz DOT format (more efficient for large graphs).
 
 Usage:
     cflow *.c | ./scripts/cflow_to_graphviz.py > callgraph.dot
-    cflow -m imrepl_ctrl_display_frame *.c | ./scripts/cflow_to_graphviz.py > callgraph.dot
+    cflow -m glr_ctrl_display_frame *.c | ./scripts/cflow_to_graphviz.py > callgraph.dot
 
     # Render to SVG/PNG:
     dot -Tsvg callgraph.dot -o callgraph.svg

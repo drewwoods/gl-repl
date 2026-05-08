@@ -45,7 +45,7 @@
 #include "repl_state_owners.h"
 #include "repl_source_scope.h"
 
-#include "imrepl_ctrl.h"
+#include "glr_ctrl.h"
 
 #include "ui/layout.h"
 #include "ui/menu_bar.h"
@@ -290,7 +290,7 @@ void repl_editor_reset_transients(void) {
     repl_camera_controls_reset();
     ui_menu_bar_close();
     color_picker_close();
-    imrepl_ctrl_router_reset_code_panel_drag();
+    glr_ctrl_router_reset_code_panel_drag();
 }
 
 static int normalize_navigation_target(int target) {
@@ -1201,7 +1201,7 @@ static void keyboard_func(unsigned char key, int x, int y) {
     (void)x;
     (void)y;
 
-    /* Defensive translation. The controller's imrepl_ctrl_keyboard
+    /* Defensive translation. The controller's glr_ctrl_keyboard
      * already normalizes Cmd+letter → control-character before this
      * runs, but tests call editor_handle_key (and thence keyboard_func)
      * directly without going through the controller chain. The
@@ -1392,7 +1392,7 @@ static int handle_horizontal_special_key_route(int key) {
 
 /* Up/Down: autocomplete cycle, shift-extend selection, or move cursor
  * line. Help-overlay scroll on Up/Down is router-side
- * (imrepl_ctrl_router_handle_help_scroll_special) and never reaches
+ * (glr_ctrl_router_handle_help_scroll_special) and never reaches
  * this dispatcher when help is visible. */
 static int handle_vertical_special_key_route(int key) {
     ReplAutocompleteState *ac = editor_state_autocomplete_mut();
@@ -1557,9 +1557,9 @@ static void editor_update_panel_frac_from_mouse(int x, int y) {
 
 /* Editor-side mouse dispatch reduces to UP-only panel-resize end.
  *
- * The controller (imrepl_ctrl_mouse) handles every DOWN event by
+ * The controller (glr_ctrl_mouse) handles every DOWN event by
  * routing the UiHit returned by ui_panels_hit_test through
- * imrepl_ctrl_router_handle_code_panel_hit. Picker / variable panel
+ * glr_ctrl_router_handle_code_panel_hit. Picker / variable panel
  * / menu / scene / camera / scroll wheel all dispatch from there.
  * The editor only sees UP events, where it clears the resizing flag
  * the controller set on UI_HIT_PANEL_DIVIDER. */
@@ -1599,7 +1599,7 @@ static void passive_motion_func(int x, int y) {
 /* Editor-side drag-motion only handles panel-resize tracking. The
  * controller dispatches UI overlay motion (color picker), variable-
  * panel drag motion, code-panel selection drag motion (via
- * imrepl_ctrl_router_handle_code_panel_drag), and camera drag motion
+ * glr_ctrl_router_handle_code_panel_drag), and camera drag motion
  * before this runs. */
 static void motion_func(int x, int y) {
     if (ui_state_code_panel().resizing_panel) {

@@ -10,7 +10,7 @@
 # Tests that need to verify save behavior must call
 # repl_export_save_output() directly with an explicit /tmp/ path.
 #
-# The only safe exception is imrepl_ctrl_router_handle_save_key in the
+# The only safe exception is glr_ctrl_router_handle_save_key in the
 # Ctrl+S integration test (tests/test_repl_editor.c), which uses a mkdtemp +
 # chdir redirect before invoking the save-key router.
 
@@ -28,7 +28,7 @@ menu_hits=$(grep -RInE \
 
 save_key_hits=$(grep -RIn \
     --include='*.c' \
-    'imrepl_ctrl_router_handle_save_key' \
+    'glr_ctrl_router_handle_save_key' \
     tests/ 2>/dev/null | grep -vE '^tests/test_repl_editor\.c:' | grep -vE '^\./\.claude/worktrees/' || true)
 
 violations=$(printf '%s\n%s\n%s\n' \

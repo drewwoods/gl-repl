@@ -32,7 +32,7 @@ static TestHarness g_harness = TEST_HARNESS_INIT;
 #define ui_tabbed_overlay_render           test_ui_tabbed_overlay_render
 #define ui_profile_panel_render            test_ui_profile_panel_render
 
-#include "imrepl_ctrl.c"
+#include "glr_ctrl.c"
 
 #undef scene_render_3d_scene
 #undef scene_apply_camera
@@ -211,7 +211,7 @@ static void test_display_frame_builds_config_and_restores_live_state(void) {
     saved_flat_count = repl_state_flat_program_count();
     saved_t_value = g_predef_vars[g_t_idx].value;
 
-    imrepl_ctrl_display_frame();
+    glr_ctrl_display_frame();
 
     ASSERT_INT("scene render called once", g_scene_render_calls, 1);
     ASSERT_INT("replay HUD called once", g_replay_hud_calls, 1);
@@ -285,7 +285,7 @@ static void test_reshape_clamps_height(void) {
     printf("--- imrepl_ctrl reshape ---\n");
 
     ui_state_viewport_set_size(320, 240);
-    imrepl_ctrl_reshape(640, 0);
+    glr_ctrl_reshape(640, 0);
 
     ASSERT_INT("reshape forwards width", ui_state_viewport().window_w, 640);
     ASSERT_INT("reshape clamps height", ui_state_viewport().window_h, 1);
@@ -295,7 +295,7 @@ static void test_reshape_clamps_height(void) {
  * profile samples in every major section, and the sum of major
  * sections should approximate PROF_FRAME_TOTAL (no section big
  * enough to matter goes unprofiled). The test runs one
- * imrepl_ctrl_display_frame() and inspects the profile state.
+ * glr_ctrl_display_frame() and inspects the profile state.
  *
  * The "all major sections non-stale" half is deterministic. The
  * "sum approximately equals total" half uses a generous lower bound
@@ -313,7 +313,7 @@ static void test_display_frame_profile_coverage(void) {
      * active so PROF_REPLAY_HUD lands. */
     mark_normals_dirty();
     repl_state_mark_flat_dirty();
-    imrepl_ctrl_display_frame();
+    glr_ctrl_display_frame();
 
     /* Sections that should have landed a sample this frame. */
     ProfSection major[] = {
@@ -428,14 +428,14 @@ static void test_variable_panel_motion_routes_through_compile_and_coalesces_undo
     ASSERT_TRUE("found click target for testvar row", click_y >= 0);
 
     ASSERT_INT("drag begin handled",
-               imrepl_ctrl_router_handle_variable_panel_drag_begin(
+               glr_ctrl_router_handle_variable_panel_drag_begin(
                    GLUT_LEFT_BUTTON, GLUT_DOWN, click_x, click_y),
                1);
     ASSERT_TRUE("drag active after begin", variable_panel_drag_active());
 
     for (int step = 1; step <= 10; step++) {
         ASSERT_INT("drag motion handled",
-                   imrepl_ctrl_router_handle_variable_panel_motion(
+                   glr_ctrl_router_handle_variable_panel_motion(
                        click_x + step * 10, click_y),
                    1);
     }
@@ -448,7 +448,7 @@ static void test_variable_panel_motion_routes_through_compile_and_coalesces_undo
     ASSERT_FLOAT("drag updates live predef value", g_predef_vars[var_idx].value, 6.0f);
 
     ASSERT_INT("drag release handled",
-               imrepl_ctrl_router_handle_variable_panel_drag_release(GLUT_UP),
+               glr_ctrl_router_handle_variable_panel_drag_release(GLUT_UP),
                1);
     ASSERT_TRUE("drag inactive after release", !variable_panel_drag_active());
     ASSERT_INT("undo flag cleared after release",
@@ -496,7 +496,7 @@ static void test_variable_panel_motion_initializes_uninitialized_declaration(voi
     ASSERT_TRUE("found click target for uninitialized testvar row", click_y >= 0);
 
     ASSERT_INT("uninitialized drag begin handled",
-               imrepl_ctrl_router_handle_variable_panel_drag_begin(
+               glr_ctrl_router_handle_variable_panel_drag_begin(
                    GLUT_LEFT_BUTTON, GLUT_DOWN, click_x, click_y),
                1);
     ASSERT_TRUE("uninitialized drag active after begin",
@@ -504,7 +504,7 @@ static void test_variable_panel_motion_initializes_uninitialized_declaration(voi
 
     for (int step = 1; step <= 10; step++) {
         ASSERT_INT("uninitialized drag motion handled",
-                   imrepl_ctrl_router_handle_variable_panel_motion(
+                   glr_ctrl_router_handle_variable_panel_motion(
                        click_x + step * 10, click_y),
                    1);
     }
@@ -518,7 +518,7 @@ static void test_variable_panel_motion_initializes_uninitialized_declaration(voi
                  g_predef_vars[var_idx].value, 5.0f);
 
     ASSERT_INT("uninitialized drag release handled",
-               imrepl_ctrl_router_handle_variable_panel_drag_release(GLUT_UP),
+               glr_ctrl_router_handle_variable_panel_drag_release(GLUT_UP),
                1);
     ASSERT_TRUE("uninitialized drag inactive after release",
                 !variable_panel_drag_active());

@@ -4,7 +4,7 @@ Convert cflow output to a file-level Mermaid flowchart.
 
 Usage:
     cflow *.c | ./scripts/cflow_to_file_mermaid.py > callgraph-files.mmd
-    cflow -m imrepl_ctrl_display_frame *.c | ./scripts/cflow_to_file_mermaid.py > callgraph-files.mmd
+    cflow -m glr_ctrl_display_frame *.c | ./scripts/cflow_to_file_mermaid.py > callgraph-files.mmd
 """
 
 import argparse
