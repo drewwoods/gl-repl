@@ -12,10 +12,7 @@
 
 #include <stddef.h>
 
-/* Camera lives on UiState; repl_*.c is not allowed to include
- * ui_state.h per check-controller-boundaries. The diagnostic dump
- * just reads pose for display. */
-ReplCameraState ui_state_camera(void);
+#include "glr_camera.h"          /* ReplCameraState + glr_camera() */
 
 void repl_debug_dump_editor(FILE *out, EditorBufferView text) {
     FILE *dst = out ? out : stdout;
@@ -46,7 +43,7 @@ void repl_debug_dump_editor(FILE *out, EditorBufferView text) {
     }
     fprintf(dst, "--- camera ---\n");
     {
-        ReplCameraState cam = ui_state_camera();
+        ReplCameraState cam = glr_camera();
         fprintf(dst, "rx=%g ry=%g dist=%g tx=%g ty=%g tz=%g\n",
                 (double)cam.rx, (double)cam.ry, (double)cam.dist,
                 (double)cam.tx, (double)cam.ty, (double)cam.tz);

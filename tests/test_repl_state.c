@@ -1,6 +1,7 @@
 #include "repl_state.h"
 #include "editor/state.h"
 #include "ui/state.h"
+#include "glr_camera.h"
 #include "ui/profile_panel.h"
 #include "ui/layout.h"            /* CODE_PANEL_LAYOUT_* enum values */
 #include "variable_panel_state.h"
@@ -131,8 +132,8 @@ static void populate_runtime_snapshot_fixture(const char *scene_hint) {
     if (foo_idx >= 0)
         g_predef_vars[foo_idx].value = 42.0f;
 
-    ui_state_camera_set(11.0f, 22.0f, 7.5f, 0.5f, -0.25f, 1.75f, 0.9f);
-    ui_state_camera_mut()->auto_rotate = 1;
+    glr_camera_set(11.0f, 22.0f, 7.5f, 0.5f, -0.25f, 1.75f, 0.9f);
+    glr_camera_mut()->auto_rotate = 1;
     ui_state_pointer_set(321, 654, 2);
     ui_state_viewport_set_size(1440, 900);
 
@@ -300,14 +301,14 @@ static void test_capture_restore_round_trip(void) {
     }
     ASSERT_INT("time playing restored", repl_state_variables().time_playing, 0);
     ASSERT_TRUE("anim time restored", repl_state_variables().anim_time == 1.25f);
-    ASSERT_TRUE("camera rx restored", ui_state_camera().rx == 11.0f);
-    ASSERT_TRUE("camera ry restored", ui_state_camera().ry == 22.0f);
-    ASSERT_TRUE("camera dist restored", ui_state_camera().dist == 7.5f);
-    ASSERT_TRUE("camera tx restored", ui_state_camera().tx == 0.5f);
-    ASSERT_TRUE("camera ty restored", ui_state_camera().ty == -0.25f);
-    ASSERT_TRUE("camera tz restored", ui_state_camera().tz == 1.75f);
-    ASSERT_TRUE("camera glow restored", ui_state_camera().motion_glow == 0.9f);
-    ASSERT_INT("camera rotate restored", ui_state_camera().auto_rotate, 1);
+    ASSERT_TRUE("camera rx restored", glr_camera().rx == 11.0f);
+    ASSERT_TRUE("camera ry restored", glr_camera().ry == 22.0f);
+    ASSERT_TRUE("camera dist restored", glr_camera().dist == 7.5f);
+    ASSERT_TRUE("camera tx restored", glr_camera().tx == 0.5f);
+    ASSERT_TRUE("camera ty restored", glr_camera().ty == -0.25f);
+    ASSERT_TRUE("camera tz restored", glr_camera().tz == 1.75f);
+    ASSERT_TRUE("camera glow restored", glr_camera().motion_glow == 0.9f);
+    ASSERT_INT("camera rotate restored", glr_camera().auto_rotate, 1);
     ASSERT_INT("pointer x restored", ui_state_pointer().mouse_x, 321);
     ASSERT_INT("pointer y restored", ui_state_pointer().mouse_y, 654);
     ASSERT_INT("pointer button restored", ui_state_pointer().mouse_button, 2);

@@ -12,9 +12,9 @@
  * ui_state.h per check-controller-boundaries. Example loading
  * applies an explicit camera pose when a `// camera` block precedes
  * the example body. */
-void ui_state_camera_set_orbit(float rx, float ry);
-void ui_state_camera_set_pan(float tx, float ty, float tz);
-void ui_state_camera_set_distance(float dist);
+void glr_camera_set_orbit(float rx, float ry);
+void glr_camera_set_pan(float tx, float ty, float tz);
+void glr_camera_set_distance(float dist);
 
 static const char *example_cam_skip_ws(const char *text) {
     while (*text && isspace((unsigned char)*text))
@@ -122,9 +122,9 @@ static int try_apply_example_camera_header(const char *const *lines) {
         !example_cam_parse_translate(lines[4], &tx, &ty, &tz))
         return 0;
 
-    ui_state_camera_set_orbit(rx, ry);
-    ui_state_camera_set_distance(-dist_z);
-    ui_state_camera_set_pan(-tx, -ty, -tz);
+    glr_camera_set_orbit(rx, ry);
+    glr_camera_set_distance(-dist_z);
+    glr_camera_set_pan(-tx, -ty, -tz);
     return 1;
 }
 

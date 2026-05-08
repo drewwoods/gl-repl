@@ -1,18 +1,33 @@
+#include "glr_camera.h"
 #include "./include/gl_2d.h"
 
+#include "glr_camera.h"
 #include "repl_export.h"
+#include "glr_camera.h"
 #include "outline_offset.h"
+#include "glr_camera.h"
 #include "ui/metrics.h"
+#include "glr_camera.h"
 #include "ui/code_panel_layout.h"
+#include "glr_camera.h"
 #include "repl_core_internal.h"
+#include "glr_camera.h"
 #include "repl_command_store.h"
+#include "glr_camera.h"
 #include "repl_config.h"
+#include "glr_camera.h"
 #include "repl_pipeline.h"
+#include "glr_camera.h"
 #include "repl_parser.h"
+#include "glr_camera.h"
 #include "repl_source_scope.h"
+#include "glr_camera.h"
 #include "repl_core.h"
+#include "glr_camera.h"
 #include "repl_state_owners.h"
+#include "glr_camera.h"
 #include "ui/layout.h"
+#include "glr_camera.h"
 #include "ui/state.h"
 
 #define IMPORT_EXPORT_STATE (repl_state_import_export_mut())
@@ -604,7 +619,7 @@ static void emit_export_header_pre(FILE *f) {
     char angle_line[64];
 
     snprintf(angle_line, sizeof(angle_line),
-             "static float g_angle = %.4ff;", ui_state_camera().ry);
+             "static float g_angle = %.4ff;", glr_camera().ry);
 
     for (int line_idx = 0; g_header_pre[line_idx]; line_idx++) {
         if (strcmp(g_header_pre[line_idx], "void display() {") == 0)
@@ -618,7 +633,7 @@ static void emit_export_header_pre(FILE *f) {
 }
 
 static void emit_export_cam_lines(FILE *f) {
-    ReplCameraState cam = ui_state_camera();
+    ReplCameraState cam = glr_camera();
     fprintf(f, "  glTranslatef(0.0000f, 0.0000f, %.4ff);\n", -cam.dist);
     fprintf(f, "  glRotatef(%.4ff, 1.0f, 0.0f, 0.0f);\n", cam.rx);
     fprintf(f, "  glRotatef(g_angle, 0.0f, 1.0f, 0.0f);\n");
@@ -687,7 +702,7 @@ static int import_parse_export_angle_init(const char *text) {
     if (end == eq)
         return 0;
 
-    ui_state_camera_set_orbit(ui_state_camera().rx, v);
+    glr_camera_set_orbit(glr_camera().rx, v);
     return 1;
 }
 
@@ -706,7 +721,7 @@ int import_parse_cam_line(const char *text) {
         p++;
         float v[3];
         if (!cam_line_read_floats(p, v, 3)) return 0;
-        ui_state_camera_set_distance(-v[2]);
+        glr_camera_set_distance(-v[2]);
         g_cam_parse_state = 1;
         return 1;
     }
@@ -718,7 +733,7 @@ int import_parse_cam_line(const char *text) {
         float v[4];
         if (!cam_line_read_floats(p, v, 4)) return 0;
         if (v[1] != 1.0f || v[2] != 0.0f || v[3] != 0.0f) return 0;
-        ui_state_camera_set_orbit(v[0], ui_state_camera().ry);
+        glr_camera_set_orbit(v[0], glr_camera().ry);
         g_cam_parse_state = 2;
         return 1;
     }
@@ -736,7 +751,7 @@ int import_parse_cam_line(const char *text) {
         float v[4];
         if (!cam_line_read_floats(p, v, 4)) return 0;
         if (v[1] != 0.0f || v[2] != 1.0f || v[3] != 0.0f) return 0;
-        ui_state_camera_set_orbit(ui_state_camera().rx, v[0]);
+        glr_camera_set_orbit(glr_camera().rx, v[0]);
         g_cam_parse_state = 3;
         return 1;
     }
@@ -760,7 +775,7 @@ int import_parse_cam_line(const char *text) {
         p++;
         float v[3];
         if (!cam_line_read_floats(p, v, 3)) return 0;
-        ui_state_camera_set_pan(-v[0], -v[1], -v[2]);
+        glr_camera_set_pan(-v[0], -v[1], -v[2]);
         g_cam_parse_state = 5;
         return 1;
     }
@@ -769,7 +784,7 @@ int import_parse_cam_line(const char *text) {
 }
 
 void update_cam_lines(void) {
-    ReplCameraState cam = ui_state_camera();
+    ReplCameraState cam = glr_camera();
     snprintf(g_cam_lines[0], sizeof(g_cam_lines[0]),
              "  glTranslatef(0.0000f, 0.0000f, %.4ff);", -cam.dist);
     snprintf(g_cam_lines[1], sizeof(g_cam_lines[1]),

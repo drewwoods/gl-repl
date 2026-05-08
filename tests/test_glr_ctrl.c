@@ -137,7 +137,7 @@ static void prepare_display_fixture(void) {
     repl_eval_init_predef_vars();
 
     ui_state_viewport_set_size(800, 600);
-    ui_state_camera_set(11.0f, 22.0f, 7.5f, 0.5f, -0.25f, 1.75f, 0.9f);
+    glr_camera_set(11.0f, 22.0f, 7.5f, 0.5f, -0.25f, 1.75f, 0.9f);
     repl_state_render_mut()->use_accum = 0;
     repl_state_render_mut()->accum_aa_enabled = 0;
     repl_state_render_mut()->accum_samples = 1;
