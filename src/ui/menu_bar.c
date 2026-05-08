@@ -6,6 +6,7 @@
 #include "repl_config.h"
 #include "repl_keys.h"
 #include "repl_state_views.h"
+#include "replay.h"   /* ReplayState (PLAYING / PAUSED / DONE) enum values */
 #include "state.h"
 #include "menu_bar.h"
 #include "metrics.h"
