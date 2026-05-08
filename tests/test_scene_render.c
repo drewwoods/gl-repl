@@ -218,23 +218,16 @@ static void test_scene_overlays(void) {
 
     FrameRenderContext ctx = make_test_frame_ctx();
 
-    /* Vertex-number / normal-vector primitives are pure GL — no walking,
-     * no GLCmd. The controller drives them via repl_walk_user_vertices,
-     * but the unit tests just exercise the primitive surface. */
+    /* All overlay rendering moved out of scene; the scene module now
+     * exposes only per-vertex / per-cmd primitives. Outlines + vertex
+     * points became controller polygon-mode passes (see imrepl_ctrl.c)
+     * and aren't tested here. */
+    (void)ctx;
     scene_draw_vertex_number_label(0, 0.0f, 0.0f, 0.0f);
     ASSERT_TRUE("scene_draw_vertex_number_label did not crash", 1);
     scene_draw_normal_vector_arrow(0.0f, 0.0f, 0.0f,
                                    0.0f, 1.0f, 0.0f, 0.5f);
     ASSERT_TRUE("scene_draw_normal_vector_arrow did not crash", 1);
-
-    /* Polygon outlines still walk GLCmd inside scene/overlays.c — pending
-     * follow-up to extract the same way. */
-    scene_overlays_render_outlines(&ctx, 0, 0);
-    ASSERT_TRUE("scene_overlays_render_outlines did not crash", 1);
-
-    ctx.config.show_vertex_outlines = 1;
-    scene_overlays_render_outlines(&ctx, 1, 0);
-    ASSERT_TRUE("scene_overlays_render_outlines with flags did not crash", 1);
 }
 
 /* --- Tests for animation time propagation ----------------------- */
@@ -405,11 +398,9 @@ static void test_vertex2f_overlay_parity(void) {
     scene_draw_vertex_number_label(0, 1.0f, 2.0f, 0.0f);
     ASSERT_TRUE("vertex2f: vertex number label calls glRasterPos3f",
                 gl_stub_counts[GL_STUB_glRasterPos3f] > 0);
-    ctx.config.show_vertex_outlines = 1;
-    gl_stub_counts_reset();
-    scene_overlays_render_outlines(&ctx, 0, 0);
-    ASSERT_TRUE("vertex2f: outline pass calls glVertex2f",
-                gl_stub_counts[GL_STUB_glVertex2f] > 0);
+    /* Outline pass moved to controller (polygon-mode trick); tested via
+     * the integration suite, not as a scene-module unit test. */
+    (void)ctx;
 #else
     ASSERT_TRUE("vertex2f overlay parity (GL stubs only)", 1);
 #endif
