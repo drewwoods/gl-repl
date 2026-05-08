@@ -11,12 +11,10 @@
  * the controller through `Ui*Output` structs; renderers never call
  * `_mut()` accessors directly.
  *
- * The snapshot embeds existing by-value `Repl*State` slices verbatim plus a
- * handful of pointer-style views (`FlatProgramView`, `ReplPredefView`,
- * `ReplEditorInputView`, `ReplImportExportView`) whose
- * stable storage is owned by `repl_state.c`. Embedded pointers are valid
- * for the duration of the frame; the snapshot itself is `const` to the
- * renderer.
+ * The snapshot embeds existing by-value `Repl*State` slices verbatim plus
+ * pointer-style views (`ReplEditorInputView`, `ReplImportExportView`) whose
+ * stable storage is owned by `repl_state.c`. Embedded pointers are valid for
+ * the duration of the frame; the snapshot itself is `const` to the renderer.
  */
 #ifndef UI_SNAPSHOT_H
 #define UI_SNAPSHOT_H
@@ -25,8 +23,6 @@
 #include "editor_help_session.h"
 #include "repl_state_views.h"
 #include "repl_eval.h"
-#include "repl_core.h"
-#include "repl_flatten.h"
 #include "editor.h"
 #include "color_picker.h"
 
@@ -50,7 +46,6 @@ typedef struct {
 typedef struct UiRenderSnapshot {
     /* By-value state slices */
     ReplViewportState           viewport;
-    ReplPresentationState       presentation;
     ReplCodePanelRuntimeState   code_panel;
     ReplHelpState               help;
     EditorHelpSession           help_session;
@@ -59,21 +54,16 @@ typedef struct UiRenderSnapshot {
     ReplStatusState             status;
     ReplSearchState             search;
     ReplAutocompleteState       autocomplete;
-    ReplCameraState             camera;
     ReplPointerState            pointer;
     ReplRenderState             render;
     ReplReplayRuntimeState      replay;
     ReplSceneRuntimeState       scenes;
-    ReplVariableDragState       variable_drag;
-    ReplSelectionState          selection;
     EditorScrollState           scroll;
     ColorPickerView             color_picker;
 
     /* Pointer-shaped read-only views (storage owned by repl_state.c) */
     ReplEditorInputView         editor_input;
     ReplImportExportView        import_export;
-    FlatProgramView             flat_program;
-    ReplPredefView              predef;
 
     /* UI-facing variable rows. Names are copied into the snapshot; values
      * point at the live source values for this frame. */
@@ -84,28 +74,15 @@ typedef struct UiRenderSnapshot {
     const GLCmd                *document_cmds;
     int                         document_count;
     int                         edit_line;
-    int                         normals_dirty;
 
     /* Convenience scalars (mirror editor_input/code_panel for terse access) */
     int                         insert_mode;
     int                         cursor_pos;
-    int                         input_len;
-    int                         pending_newline_len;
     int                         flat_program_count;
     float                       anim_time;
 
-    /* Grid arrays */
-    const float                *grid_major_steps;
-    const float                *grid_extents;
-
     /* User scenes */
-    int                         user_scene_count;
     int                         user_scene_active_idx;
-    int                         user_scene_slot_used[MAX_USER_SCENES];
-    const char                 *user_scene_names[MAX_USER_SCENES];
-
-    /* Workspace dir convenience */
-    const char                 *workspace_dir;
 
     /* F1 help overlay text content (REPL-built; the renderer is
      * tabbed-overlay-shaped and feature-agnostic). */

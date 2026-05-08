@@ -45,10 +45,10 @@ static TestHarness g_harness = TEST_HARNESS_INIT;
  * Mirrors imrepl_ctrl_build_ui_snapshot(); the test harness can't link the
  * controller TU, so we duplicate the relevant slice population here. */
 static void make_test_ui_snapshot(UiRenderSnapshot *snap) {
+    FlatProgramView flat_program;
     ReplPredefView predef;
     memset(snap, 0, sizeof(*snap));
     snap->viewport       = ui_state_viewport();
-    snap->presentation   = repl_state_presentation();
     snap->code_panel     = ui_state_code_panel();
     snap->help           = ui_state_help();
     snap->help_session   = editor_help_session_view();
@@ -57,20 +57,16 @@ static void make_test_ui_snapshot(UiRenderSnapshot *snap) {
     snap->status         = ui_state_status();
     snap->search         = editor_state_search();
     snap->autocomplete   = editor_state_autocomplete();
-    snap->camera         = ui_state_camera();
     snap->pointer        = ui_state_pointer();
     snap->render         = repl_state_render();
     snap->replay         = replay_state_view();
     snap->scenes         = repl_state_scenes();
-    snap->variable_drag  = variable_panel_drag();
-    snap->selection      = editor_state_selection();
     snap->scroll         = editor_state_scroll();
     snap->color_picker   = color_picker_view();
     snap->editor_input   = editor_state_input();
     snap->import_export  = repl_state_import_export();
-    snap->flat_program   = repl_state_flat_program_view();
+    flat_program         = repl_state_flat_program_view();
     predef = repl_eval_predef_view();
-    snap->predef         = predef;
     snap->variable_panel_vars.vars = snap->variable_panel_var_storage;
     snap->variable_panel_vars.count = predef.count;
     if (snap->variable_panel_vars.count < 0 || !predef.vars)
@@ -88,8 +84,7 @@ static void make_test_ui_snapshot(UiRenderSnapshot *snap) {
     snap->edit_line      = repl_state_edit_line();
     snap->insert_mode    = snap->editor_input.insert_mode;
     snap->cursor_pos     = snap->editor_input.cursor_pos;
-    snap->input_len      = snap->editor_input.input_len;
-    snap->flat_program_count = snap->flat_program.cmd_count;
+    snap->flat_program_count = flat_program.cmd_count;
     snap->anim_time      = repl_state_variables().anim_time;
     snap->user_scene_active_idx = -1;
 }
