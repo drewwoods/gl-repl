@@ -1004,156 +1004,48 @@ static int handle_paste_key_route(unsigned char key) {
 }
 
 static int handle_comment_toggle_key_route(unsigned char key) {
-    if (key == '/' && (editor_get_modifiers() & GLUT_ACTIVE_CTRL)) {
-        if (repl_state_edit_line() < repl_state_document_count() && !editor_insert_mode()) {
-            editor_undo_push_snapshot();
-            {
-                GLCmd *cur = &repl_state_document_cmds_mut()[repl_state_edit_line()];
-                if (cur->type == CMD_COMMENT) {
-                    const char *s = editor_buffer_line(repl_state_edit_line());
-                    if (!s) s = "";
-                    while (*s && isspace((unsigned char)*s))
-                        s++;
-                    if (s[0] == '/' && s[1] == '/') {
-                        s += 2;
-                        if (*s == ' ')
-                            s++;
-                    }
-                    {
-                        GLCmd new_cmd;
-                        char new_cmd_text[MAX_LINE_LEN] = "";
-                        /* Uncomment-line path: the parser's diagnostic is
-                         * deliberately dropped — the friendly "Cannot
-                         * uncomment" fallback below is more actionable for
-                         * this key. The err_buf catches the message away
-                         * from the status bar. */
-                        char uncomment_parse_err[REPL_STATUS_TEXT_MAX]; /* deliberately unread */
-                        uncomment_parse_err[0] = '\0';
-                        ReplParseContext parse_ctx = {
-                            .source_line_idx = repl_state_edit_line(),
-                            .err_buf = uncomment_parse_err,
-                            .err_sz  = (int)sizeof(uncomment_parse_err),
-                        };
-                        memset(&new_cmd, 0, sizeof(new_cmd));
-                        int built = 0;
-                        int fallback_set_status = 0;
+    const char *prefix;
+    int line;
+    ReplCompileContext ctx;
+    ReplCompiledChange change;
+    char err[REPL_STATUS_TEXT_MAX];
 
-                        /* Clear any prior status (e.g. "Commented out" from the
-                         * previous key press) so we can tell whether the
-                         * fallback produced an actionable error of its own. */
-                        ui_state_status_mut()->text[0] = '\0';
+    if (key != '/' || !(editor_get_modifiers() & GLUT_ACTIVE_CTRL))
+        return 0;
 
-                        {
-                            ReplParsedLine pl;
-                            if (repl_parser_parse_command_ctx(s, &pl, &parse_ctx)) {
-                                new_cmd = pl.cmd;
-                                repl_copy_string_fits(new_cmd_text, sizeof(new_cmd_text),
-                                                      pl.text);
-                                built = 1;
-                            }
-                        }
-                        if (!built) {
-                            /* Parser may have written into uncomment_parse_err -
-                             * drop it; the friendly "Cannot uncomment" message
-                             * below is clearer for this key path. */
+    prefix = editor_line_comment_prefix();
+    if (!prefix || !prefix[0])
+        return 1;
+    if (editor_insert_mode())
+        return 1;
 
-                            /* Fallback: variable assignments (`x = expr;`) live
-                             * in the commit chain, not the GL-command parser.
-                             * Build a CMD_VAR_ASSIGN in place so uncommenting
-                             * an assignment line works. */
-                            char name[16];
-                            char rhs[MAX_LINE_LEN];
-                            if (repl_extract_assignment_parts(s, name, sizeof(name),
-                                                              rhs, sizeof(rhs))) {
-                                int var_idx = repl_eval_find_predef_var_idx(name);
-                                ExprVar vis[MAX_EXPR_VARS];
-                                int vis_n = collect_visible_vars(repl_state_edit_line(),
-                                                                 vis, MAX_EXPR_VARS, NULL);
-                                char verr[128];
-                                if (var_idx < 0) {
-                                    char buf[128];
-                                    snprintf(buf, sizeof(buf),
-                                             "undeclared variable '%s' - use 'float %s;' first",
-                                             name, name);
-                                    set_status(buf);
-                                    fallback_set_status = 1;
-                                } else if (!repl_eval_validate_expression_idents(
-                                        rhs, vis_n > 0 ? vis : NULL, vis_n,
-                                        verr, sizeof(verr))) {
-                                    set_status(verr);
-                                    fallback_set_status = 1;
-                                } else {
-                                    ExprCtx ectx = { rhs, g_predef_vars, g_num_predef_vars };
-                                    float val = repl_eval_expr(&ectx);
-                                    int indent_len = (repl_source_scope_in_begin_block_at(repl_state_edit_line()) ? 4 : 2)
-                                                     + repl_source_scope_block_depth_at(repl_state_edit_line()) * 2;
-                                    char indent[32];
-                                    if (indent_len > (int)sizeof(indent) - 1)
-                                        indent_len = (int)sizeof(indent) - 1;
-                                    memset(indent, ' ', (size_t)indent_len);
-                                    indent[indent_len] = '\0';
-                                    memset(&new_cmd, 0, sizeof(new_cmd));
-                                    new_cmd.type     = CMD_VAR_ASSIGN;
-                                    new_cmd.valid    = 1;
-                                    new_cmd.args[0]  = val;
-                                    new_cmd.num_args = var_idx;
-                                    new_cmd.has_vars = repl_eval_input_has_predef_vars(rhs);
-                                    new_cmd_text[0] = '\0';
-                                    if (repl_format_fits(new_cmd_text,
-                                                         sizeof(new_cmd_text),
-                                                         "%s%s = %s;",
-                                                         indent, name, rhs)) {
-                                        g_predef_vars[var_idx].value = val;
-                                        built = 1;
-                                    } else {
-                                        set_status("Command too long");
-                                        fallback_set_status = 1;
-                                    }
-                                }
-                            }
-                        }
-                        if (built) {
-                            ReplCommandStore store = repl_command_store_live();
-                            int replace_idx = repl_state_edit_line();
-                            if (repl_command_store_replace_one(&store, replace_idx,
-                                                               &new_cmd))
-                                editor_buffer_replace_line(replace_idx,
-                                                           new_cmd_text);
-                            load_line_to_input(repl_state_edit_line());
-                            mark_normals_dirty();
-                            set_status("Uncommented");
-                        } else if (!fallback_set_status) {
-                            set_status("Cannot uncomment: not a valid command");
-                        }
-                    }
-                } else if (cur->type != CMD_FOR_BEGIN &&
-                           cur->type != CMD_FOR_END) {
-                    char new_src[MAX_LINE_LEN];
-                    GLCmd commented = *cur;
-                    const char *s = editor_buffer_line(repl_state_edit_line());
-                    if (!s) s = "";
-                    int leading_ws_len = 0;
-                    while (s[leading_ws_len] && isspace((unsigned char)s[leading_ws_len]))
-                        leading_ws_len++;
-                    snprintf(new_src, sizeof(new_src), "%.*s// %s", leading_ws_len, s, s + leading_ws_len);
-                    commented.type = CMD_COMMENT;
-                    commented.valid = 1;
-                    {
-                        ReplCommandStore store = repl_command_store_live();
-                        int replace_idx = repl_state_edit_line();
-                        if (repl_command_store_replace_one(&store, replace_idx,
-                                                           &commented))
-                            editor_buffer_replace_line(replace_idx, new_src);
-                    }
-                    load_line_to_input(repl_state_edit_line());
-                    mark_normals_dirty();
-                    set_status("Commented out");
-                }
-            }
-        }
+    line = repl_state_edit_line();
+    if (line < 0 || line >= repl_state_document_count())
+        return 1;
+
+    ctx = repl_compile_context_from_live();
+    err[0] = '\0';
+
+    if (repl_compile_toggle_comment(line, prefix, &ctx, &change,
+                                    err, sizeof(err)) != REPL_COMPILE_OK) {
+        char msg[REPL_STATUS_TEXT_MAX];
+        snprintf(msg, sizeof(msg), "Toggle failed: %s",
+                 err[0] ? err : "not a valid command");
+        set_status(msg);
         return 1;
     }
-    return 0;
+    if (change.kind == REPL_COMPILED_NO_CHANGE)
+        return 1;
+
+    if (!editor_commit_apply_external_change(&change, /*capture_undo=*/1)) {
+        set_status("Command buffer error");
+        return 1;
+    }
+
+    load_line_to_input(repl_state_edit_line());
+    mark_normals_dirty();
+    set_status(change.commit_message);
+    return 1;
 }
 
 static int handle_text_delete_key_route(unsigned char key) {
