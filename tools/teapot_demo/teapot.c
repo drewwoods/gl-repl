@@ -148,9 +148,23 @@ static void build_config(SceneRenderConfig *cfg) {
     cfg->wireframe     = g_wireframe;
 
     cfg->grid_theme       = g_grid_theme;
-    cfg->grid_extent_idx  = 0;
-    cfg->grid_major_idx   = 0;
+    cfg->grid_extent_idx  = GRID_EXTENT_MID;
+    cfg->grid_major_idx   = GRID_MAJOR_1;
     cfg->axes_theme       = g_axes_theme;
+
+    /* The grid renderer iterates `for (v = -extent; v <= extent; v += step)`
+     * with step = grid_major_steps[major_idx] * 0.2. If the tables are zero
+     * (the memset default) step is 0 and the loop never terminates, blocking
+     * GLUT from ever calling idle. The REPL pulls these tables from
+     * repl_state; we hard-code them here so the scene module's only runtime
+     * deps remain GL / GLUT. */
+    cfg->grid_major_steps[GRID_MAJOR_1]  = 1.0f;
+    cfg->grid_major_steps[GRID_MAJOR_2]  = 2.0f;
+    cfg->grid_major_steps[GRID_MAJOR_5]  = 5.0f;
+    cfg->grid_major_steps[GRID_MAJOR_10] = 10.0f;
+    cfg->grid_extents[GRID_EXTENT_CLOSE] = 5.0f;
+    cfg->grid_extents[GRID_EXTENT_MID]   = 25.0f;
+    cfg->grid_extents[GRID_EXTENT_FAR]   = 100.0f;
 
     cfg->cursor_block_begin_idx   = -1;
     cfg->cursor_block_end_idx     = -1;
