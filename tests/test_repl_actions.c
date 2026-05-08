@@ -159,7 +159,7 @@ static void test_cfg_cycling(void) {
     ASSERT_TRUE("auto time cycled", 1);
 
     /* Test Code Panel Layout */
-    repl_state_presentation_mut()->code_panel_layout = 0; // Left
+    repl_state_presentation_mut()->code_panel_layout = 0; repl_state_sync_ui_chrome(); // Left
     repl_cfg_cycle_row(code_panel_row, 1); // -> Top
     ASSERT_INT("code panel layout top", repl_state_presentation().code_panel_layout, 1);
     ASSERT_STR("status top", g_last_status, "Layout: top code panel");

@@ -28,6 +28,7 @@ void update_cam_lines(void);
  * boundaries forbids repl_*.c from including it. */
 void ui_state_reset(void);
 ReplCameraState *ui_state_camera_mut(void);
+ReplCodePanelRuntimeState *ui_state_code_panel_mut(void);
 
 static const float g_grid_major_steps[GRID_MAJOR_COUNT] = {
     [GRID_MAJOR_1]  = 1.0f,
@@ -545,6 +546,19 @@ int repl_state_parse_workspace_header_line(const char *line) {
     return parse_workspace_header_line(line);
 }
 
+/* Mirror chrome-relevant presentation fields into ui_state.code_panel.
+ * Called once per frame by imrepl_ctrl_build_ui_snapshot so ui_*.c
+ * renderers and hit-tests can read them via ui_state_*() without
+ * crossing the repl_state_*() boundary. Also called from tests after
+ * they tweak repl_state_presentation_mut() so subsequent ui_layout_* /
+ * ui_panels_hit_test calls see the new layout / show_vertex_indices. */
+void repl_state_sync_ui_chrome(void) {
+    ReplPresentationState p = g_repl_state.presentation;
+    ReplCodePanelRuntimeState *cp = ui_state_code_panel_mut();
+    cp->layout_mode         = p.code_panel_layout;
+    cp->show_vertex_indices = p.show_vertex_indices;
+}
+
 void repl_state_init_defaults(void) {
     repl_state_reset_all();
     /* Register the default editor completion provider (Phase G commit
@@ -576,6 +590,7 @@ void repl_state_reset_all(void) {
     repl_state_mark_flat_dirty();
     repl_state_mark_normals_dirty();
     repl_autocomplete_register_provider();
+    repl_state_sync_ui_chrome();
 }
 
 /* The legacy `repl_state_*` UI-slice forwarder block was removed in

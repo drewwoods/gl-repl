@@ -110,7 +110,7 @@ static void pin_code_panel_state(void) {
     repl_state_presentation_mut()->backdrop_mode = CFG_DEFAULT_BACKDROP_MODE;
     repl_state_presentation_mut()->show_vertex_outlines = CFG_DEFAULT_VERTEX_OUTLINES;
     g_accum_aa_enabled = 1;
-    repl_state_presentation_mut()->code_panel_layout = CFG_DEFAULT_CODE_PANEL_LAYOUT;
+    repl_state_presentation_mut()->code_panel_layout = CFG_DEFAULT_CODE_PANEL_LAYOUT; repl_state_sync_ui_chrome();
     g_multisample_enabled = CFG_DEFAULT_MULTISAMPLE;
     g_line_smooth_enabled = CFG_DEFAULT_LINE_SMOOTH;
 }
@@ -125,7 +125,7 @@ static void seed_nondefault_example_presentation_state(void) {
     repl_state_presentation_mut()->grid_extent_idx = GRID_EXTENT_CLOSE;
     repl_state_presentation_mut()->axes_theme = 5;
     repl_state_presentation_mut()->show_vertex_labels = 0;
-    repl_state_presentation_mut()->show_vertex_indices = 0;
+    repl_state_presentation_mut()->show_vertex_indices = 0; repl_state_sync_ui_chrome();
     repl_state_presentation_mut()->show_normal_vectors = 1;
     repl_state_presentation_mut()->show_vertex_outlines = 0;
     repl_state_presentation_mut()->show_vertex_points = 0;

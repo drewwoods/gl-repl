@@ -23,9 +23,10 @@
 /* Local copy of the layout-mode clamp.  Duplicated by repl_editor.c and
  * ui_panels.c; promoting to a shared header is a separate cleanup. */
 static int rvp_code_panel_layout_mode(void) {
-    if (repl_state_presentation().code_panel_layout < 0 || repl_state_presentation().code_panel_layout >= CODE_PANEL_LAYOUT_COUNT)
+    int layout = ui_state_code_panel().layout_mode;
+    if (layout < 0 || layout >= CODE_PANEL_LAYOUT_COUNT)
         return CODE_PANEL_LAYOUT_LEFT;
-    return repl_state_presentation().code_panel_layout;
+    return layout;
 }
 
 /* Compute a shared logarithmic display scale from all variable absolute values.
@@ -71,15 +72,18 @@ static float var_panel_replay_target_lift_px(void) {
     return target;
 }
 
-static float var_panel_replay_lift(void) {
+/* Advance the easing toward the current target. Called from
+ * ui_variable_panel_render once per frame, with the snapshot's
+ * variables.anim_time as the clock — keeps the per-frame anim_time
+ * read out of the hit-test path. */
+static void var_panel_replay_lift_tick(float anim_time) {
     float target = 0.0f;
     if (replay_active())
         target = var_panel_replay_target_lift_px();
 
-    float anim_time = repl_state_variables().anim_time;
     if (g_var_panel_lift_update_time == anim_time &&
         g_var_panel_lift_update_target == target)
-        return g_var_panel_replay_lift_px;
+        return;
     g_var_panel_lift_update_time = anim_time;
     g_var_panel_lift_update_target = target;
 
@@ -87,7 +91,13 @@ static float var_panel_replay_lift(void) {
     g_var_panel_replay_lift_px += (target - g_var_panel_replay_lift_px) * 0.22f;
     if (fabsf(target - g_var_panel_replay_lift_px) < 0.25f)
         g_var_panel_replay_lift_px = target;
+}
 
+/* Read-only lift, used by both render and hit-test geometry. The
+ * cached value is the last value the render path's tick set; hit-test
+ * intentionally does NOT tick (no anim_time available, and the panel
+ * position should match what was last rendered anyway). */
+static float var_panel_replay_lift(void) {
     return g_var_panel_replay_lift_px;
 }
 
@@ -156,6 +166,8 @@ UiHit ui_variable_panel_hit_test(int mx, int my) {
 
 void ui_variable_panel_render(const UiRenderSnapshot *snap) {
     if (!snap->variable_panel.visible) return;
+
+    var_panel_replay_lift_tick(snap->variables.anim_time);
 
     int px, py, pw, ph;
     ui_variable_panel_rect(&px, &py, &pw, &ph);

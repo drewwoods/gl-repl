@@ -1101,7 +1101,7 @@ int ui_panels_handle_right_press(int mx, int my) {
 static int ui_panels_point_on_panel_divider(int mx, int gl_y,
                                             int cp_x, int cp_y,
                                             int cp_w, int cp_h) {
-    int layout = (int)repl_state_presentation().code_panel_layout;
+    int layout = ui_state_code_panel().layout_mode;
     if (layout < 0 || layout >= CODE_PANEL_LAYOUT_COUNT)
         layout = CODE_PANEL_LAYOUT_LEFT;
     if (layout == CODE_PANEL_LAYOUT_HIDDEN)
@@ -1122,7 +1122,7 @@ static int ui_panels_point_on_panel_divider(int mx, int gl_y,
 static int ui_panels_input_cursor_for_click(int mx, int row_offset,
                                             int cp_w) {
     int linenum_w = 4 * FONT_W;
-    int idx_col_w = repl_state_presentation().show_vertex_indices ? (6 * FONT_W) : 0;
+    int idx_col_w = ui_state_code_panel().show_vertex_indices ? (6 * FONT_W) : 0;
     int text_x = CODE_MARGIN_X + linenum_w + FONT_W + idx_col_w;
     int indent_chars = repl_code_panel_document_active_indent_chars();
     int seg_start = editor_state_input().input_len;
@@ -1224,7 +1224,7 @@ UiHit ui_panels_hit_test(int mx, int my) {
         int row_resolved = 0;
         if (vis >= 0 &&
             vis < repl_code_panel_document_visible_lines_for_height(cp_h)) {
-            int idx_col_w = repl_state_presentation().show_vertex_indices ? (6 * FONT_W) : 0;
+            int idx_col_w = ui_state_code_panel().show_vertex_indices ? (6 * FONT_W) : 0;
             int text_x = CODE_MARGIN_X + linenum_w + FONT_W + idx_col_w;
             int doc_line = editor_scroll() + vis;
             CodePanelDocumentLayout layout;
