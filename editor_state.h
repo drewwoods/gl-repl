@@ -87,14 +87,12 @@ typedef struct {
     int end_idx;
 } ReplSelectionState;
 
-/* Editor clipboard. Holds a parsed-cmd snapshot plus the parallel
- * per-line text the cmds were copied from. The text sidecar is large
- * (1.88 MB) — moving it off ReplState removes that mass from every
- * ReplRuntimeState snapshot. */
+/* Editor clipboard. Text-only — paste re-parses each line through the
+ * standard commit chain, so the clipboard never holds REPL-shaped
+ * data. Same model as file load. */
 typedef struct {
-    GLCmd cmds[MAX_COMMANDS];
     char  lines[MAX_COMMANDS][MAX_LINE_LEN];
-    int   cmd_count;
+    int   line_count;
 } ReplClipboardState;
 
 /* Search session state: the find-text query plus the current match
@@ -287,9 +285,8 @@ void                editor_state_selection_set(int anchor_idx, int end_idx);
 ReplClipboardState  editor_state_clipboard(void);
 ReplClipboardState *editor_state_clipboard_mut(void);
 void                editor_state_clipboard_clear(void);
-GLCmd              *editor_state_clipboard_cmds_mut(void);
 int                 editor_state_clipboard_count(void);
-void                editor_state_clipboard_count_set(int cmd_count);
+void                editor_state_clipboard_count_set(int line_count);
 
 /* Search slice API. _clear restores the slice to the post-init
  * default (no active query, hits invalidated). */

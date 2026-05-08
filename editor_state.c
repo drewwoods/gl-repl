@@ -16,7 +16,7 @@
             .end_idx = -1,                            \
         },                                            \
         .clipboard = {                                \
-            .cmd_count = 0,                           \
+            .line_count = 0,                          \
         },                                            \
         .search = {                                   \
             .active = 0,                              \
@@ -404,23 +404,19 @@ ReplClipboardState *editor_state_clipboard_mut(void) {
 }
 
 void editor_state_clipboard_clear(void) {
-    g_editor_state.clipboard.cmd_count = 0;
-}
-
-GLCmd *editor_state_clipboard_cmds_mut(void) {
-    return g_editor_state.clipboard.cmds;
+    g_editor_state.clipboard.line_count = 0;
 }
 
 int editor_state_clipboard_count(void) {
-    return g_editor_state.clipboard.cmd_count;
+    return g_editor_state.clipboard.line_count;
 }
 
-void editor_state_clipboard_count_set(int cmd_count) {
-    if (cmd_count < 0)
-        cmd_count = 0;
-    if (cmd_count > MAX_COMMANDS)
-        cmd_count = MAX_COMMANDS;
-    g_editor_state.clipboard.cmd_count = cmd_count;
+void editor_state_clipboard_count_set(int line_count) {
+    if (line_count < 0)
+        line_count = 0;
+    if (line_count > MAX_COMMANDS)
+        line_count = MAX_COMMANDS;
+    g_editor_state.clipboard.line_count = line_count;
 }
 
 ReplSearchState editor_state_search(void) {
