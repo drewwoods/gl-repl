@@ -7,6 +7,7 @@
  * item actions that touch scenes, files, replay, audio, or presentation state.
  */
 #include "repl_actions.h"
+#include "ui/layout.h"           /* CODE_PANEL_LAYOUT_* enum values */
 #include "color_picker.h"
 #include "repl_audio.h"
 #include "repl_core.h"
