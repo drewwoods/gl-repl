@@ -355,8 +355,15 @@ static void render_3d_scene_pass(const SceneRenderConfig *config,
     glPushAttrib(GL_ALL_ATTRIB_BITS);
 
     scene_apply_projection(config, accum_jitter_x, accum_jitter_y);
-    /* Caller is responsible for the modelview camera transform; see
-     * scene_apply_camera() in scene/render.h. */
+    /* scene_apply_projection leaves matrix mode set to GL_PROJECTION; the
+     * old scene_apply_camera_view() helper used to switch back to
+     * GL_MODELVIEW as a side effect. With camera apply now done by the
+     * caller before scene_render_3d_scene, the switch must happen here
+     * — otherwise the user's glTranslatef / glRotatef inside execute_fn
+     * would modify the projection matrix and objects would render in
+     * unrelated locations. The caller's prior scene_apply_camera() left
+     * the modelview correctly populated; we just need the mode set. */
+    glMatrixMode(GL_MODELVIEW);
 
     scene_lights_setup(&frame_ctx);
     glDisable(GL_LIGHTING); /* baseline: disabled; execute_commands() enables if user typed it */
