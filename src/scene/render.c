@@ -308,8 +308,9 @@ static void render_3d_scene_pass(const SceneRenderConfig *config,
 
     scene_lights_render(&frame_ctx);
 
-    if (config->show_vnums)   scene_overlays_render_vertex_numbers(&frame_ctx);
-    if (config->show_normals) scene_overlays_render_normal_vectors(&frame_ctx);
+    if (config->post_overlays_fn)
+        config->post_overlays_fn(config->post_overlays_user_data);
+
     glPopAttrib();
     prof_accum_end(PROF_SCENE_3D_HUD);
 }

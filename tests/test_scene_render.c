@@ -91,8 +91,6 @@ static SceneRenderConfig make_test_config(void) {
     cfg.axes_theme = 0;
     cfg.show_guides = 1;
     cfg.show_vpoints = 0;
-    cfg.show_vnums = 0;
-    cfg.show_normals = 0;
     cfg.replaying = 0;
     cfg.replay_mode = 0;
     cfg.replay_tess_preview = 0;
@@ -216,30 +214,27 @@ static void test_scene_lights(void) {
 /* --- Tests for scene_overlay functions (minimal) ------------------ */
 
 static void test_scene_overlays(void) {
-    printf("--- scene_overlays (vertex_numbers, normals, outlines) ---\n");
+    printf("--- scene_overlays primitives + outlines ---\n");
 
     FrameRenderContext ctx = make_test_frame_ctx();
 
-    /* Vertex numbers. */
-    scene_overlays_render_vertex_numbers(&ctx);
-    ASSERT_TRUE("scene_overlays_render_vertex_numbers did not crash", 1);
+    /* Vertex-number / normal-vector primitives are pure GL — no walking,
+     * no GLCmd. The controller drives them via repl_walk_user_vertices,
+     * but the unit tests just exercise the primitive surface. */
+    scene_draw_vertex_number_label(0, 0.0f, 0.0f, 0.0f);
+    ASSERT_TRUE("scene_draw_vertex_number_label did not crash", 1);
+    scene_draw_normal_vector_arrow(0.0f, 0.0f, 0.0f,
+                                   0.0f, 1.0f, 0.0f, 0.5f);
+    ASSERT_TRUE("scene_draw_normal_vector_arrow did not crash", 1);
 
-    /* Normal vectors. */
-    scene_overlays_render_normal_vectors(&ctx);
-    ASSERT_TRUE("scene_overlays_render_normal_vectors did not crash", 1);
-
-    /* Polygon outlines. */
+    /* Polygon outlines still walk GLCmd inside scene/overlays.c — pending
+     * follow-up to extract the same way. */
     scene_overlays_render_outlines(&ctx, 0, 0);
     ASSERT_TRUE("scene_overlays_render_outlines did not crash", 1);
 
-    /* With config flags set. */
-    ctx.config.show_vnums = 1;
-    ctx.config.show_normals = 1;
     ctx.config.show_vertex_outlines = 1;
-    scene_overlays_render_vertex_numbers(&ctx);
-    scene_overlays_render_normal_vectors(&ctx);
     scene_overlays_render_outlines(&ctx, 1, 0);
-    ASSERT_TRUE("scene_overlays with flags set did not crash", 1);
+    ASSERT_TRUE("scene_overlays_render_outlines with flags did not crash", 1);
 }
 
 /* --- Tests for animation time propagation ----------------------- */
@@ -402,21 +397,14 @@ static void test_vertex2f_overlay_parity(void) {
     FrameRenderContext ctx = make_test_frame_ctx();
     ctx.config.flat_program.cmds      = flat_cmds;
     ctx.config.flat_program.cmd_count = 3;
-    /* scene_overlays_render_vertex_numbers uses selected_block_only=1 so it
-     * only labels vertices whose block matches the cursor.  Set edit_line_idx
-     * to the VERTEX2F source line and supply the block range so the overlay
-     * walker considers the block selected. */
-    ctx.config.edit_line_idx             = 1;
-    ctx.config.cursor_block_begin_idx    = 0;
-    ctx.config.cursor_block_end_idx      = 2;
-    ctx.config.show_vnums = 1;
 
+    /* The vertex-number overlay moved to the controller. The scene-side
+     * primitive scene_draw_vertex_number_label calls glRasterPos3f
+     * directly — that's enough to pin the parity check here. */
     gl_stub_counts_reset();
-    scene_overlays_render_vertex_numbers(&ctx);
+    scene_draw_vertex_number_label(0, 1.0f, 2.0f, 0.0f);
     ASSERT_TRUE("vertex2f: vertex number label calls glRasterPos3f",
                 gl_stub_counts[GL_STUB_glRasterPos3f] > 0);
-
-    ctx.config.show_vnums = 0;
     ctx.config.show_vertex_outlines = 1;
     gl_stub_counts_reset();
     scene_overlays_render_outlines(&ctx, 0, 0);
