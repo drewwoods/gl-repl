@@ -6,7 +6,7 @@
  * vendored at include/miniaudio.h (same convention as stb_image.h).
  */
 
-#include "repl_audio.h"
+#include "audio.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -36,8 +36,8 @@
 /* Module state                                                        */
 /* ------------------------------------------------------------------ */
 
-#define REPL_AUDIO_MAX_TRACKS 64
-#define REPL_AUDIO_MAX_PATH   512
+#define AUDIO_MAX_TRACKS 64
+#define AUDIO_MAX_PATH   512
 
 static ma_engine g_engine;
 static ma_sound  g_music;
@@ -49,20 +49,20 @@ static int g_paused       = 0;  /* paused: track loaded but stopped, cursor held
 static int g_gesture_done = 0;  /* have we satisfied browser autoplay policy? */
 
 /* Playlist: caller-registered tracks, in play order. */
-static char g_playlist[REPL_AUDIO_MAX_TRACKS][REPL_AUDIO_MAX_PATH];
+static char g_playlist[AUDIO_MAX_TRACKS][AUDIO_MAX_PATH];
 static int  g_playlist_count = 0;
 static int  g_playlist_pos   = 0;  /* index of the currently-loaded track */
 
-/* Default to REPL_AUDIO_LOOP_ALL so a folder of tracks just plays
+/* Default to AUDIO_LOOP_ALL so a folder of tracks just plays
  * through and repeats - the friendliest default, and it collapses to
  * "repeat forever" when there's only one file. */
-static int g_loop_mode = REPL_AUDIO_LOOP_ALL;
+static int g_loop_mode = AUDIO_LOOP_ALL;
 
 /* Native builds don't need a gesture. Emscripten does. */
 #if defined(__EMSCRIPTEN__)
-#  define REPL_AUDIO_NEEDS_GESTURE 1
+#  define AUDIO_NEEDS_GESTURE 1
 #else
-#  define REPL_AUDIO_NEEDS_GESTURE 0
+#  define AUDIO_NEEDS_GESTURE 0
 #endif
 
 /* Deferred-start flag: if play_playlist() / play_music() is called
@@ -80,16 +80,16 @@ static unsigned int g_track_generation = 0;
 /* ------------------------------------------------------------------ */
 
 /* Path of the INI file, or empty string when disabled. */
-static char  g_state_file[REPL_AUDIO_MAX_PATH] = "";
+static char  g_state_file[AUDIO_MAX_PATH] = "";
 
 /* Opaque integer owned by repl_actions.c (maps to AUDIO_CFG_* enum).
  * Stored in the INI as cfg_mode= and handed back through
- * repl_audio_get_cfg_mode() so repl_actions_apply_defaults() can map it
+ * audio_get_cfg_mode() so repl_actions_apply_defaults() can map it
  * to paused/loop state. -1 means "not yet loaded / not set". */
 static int g_cfg_mode = -1;
 
 /* When >= 0, apply this seek (seconds) inside the next start_track_now()
- * call.  Set by repl_audio_play_playlist() after finding a saved state;
+ * call.  Set by audio_play_playlist() after finding a saved state;
  * cleared immediately once the seek is issued. */
 static float g_pending_seek_secs = -1.0f;
 
@@ -117,7 +117,7 @@ static void save_state(void) {
      * rename() is a single atomic syscall on POSIX: the destination
      * always contains either the old content or the new content, never
      * a partial write - safe even if interrupted during shutdown. */
-    char tmp[REPL_AUDIO_MAX_PATH];
+    char tmp[AUDIO_MAX_PATH];
     if (snprintf(tmp, sizeof(tmp), ".%s.tmp", g_state_file) >= (int)sizeof(tmp))
         return;
 
@@ -134,15 +134,15 @@ static void save_state(void) {
          * not clobber a valid resume position. */
         FILE *existing = fopen(g_state_file, "r");
         if (existing) {
-            char line[REPL_AUDIO_MAX_PATH + 16];
-            char saved_track[REPL_AUDIO_MAX_PATH] = "";
+            char line[AUDIO_MAX_PATH + 16];
+            char saved_track[AUDIO_MAX_PATH] = "";
             float saved_offset = 0.0f;
             while (fgets(line, (int)sizeof(line), existing)) {
                 if (strncmp(line, "track=", 6) == 0) {
                     char *p = line + 6;
                     size_t len = strlen(p);
                     while (len > 0 && (p[len-1] == '\n' || p[len-1] == '\r')) len--;
-                    if (len >= REPL_AUDIO_MAX_PATH) len = REPL_AUDIO_MAX_PATH - 1;
+                    if (len >= AUDIO_MAX_PATH) len = AUDIO_MAX_PATH - 1;
                     memcpy(saved_track, p, len);
                     saved_track[len] = '\0';
                 } else if (strncmp(line, "offset=", 7) == 0) {
@@ -173,7 +173,7 @@ static void save_state(void) {
 
 /* Loads persisted playback position and audio cfg from the state file.
  * cfg_mode is stored in g_cfg_mode for repl_actions.c to pick up via
- * repl_audio_get_cfg_mode() and apply via repl_actions_apply_defaults().
+ * audio_get_cfg_mode() and apply via repl_actions_apply_defaults().
  * Returns the playlist index of the saved track, or -1 on failure.
  * Sets *out_offset to the saved cursor in seconds (0 on failure). */
 static int load_state(float *out_offset) {
@@ -182,17 +182,17 @@ static int load_state(float *out_offset) {
     FILE *f = fopen(g_state_file, "r");
     if (!f) return -1;
 
-    char saved_track[REPL_AUDIO_MAX_PATH] = "";
+    char saved_track[AUDIO_MAX_PATH] = "";
     float offset  = 0.0f;
     int cfg_mode  = -1;   /* -1 = not found in file */
-    char line[REPL_AUDIO_MAX_PATH + 16];
+    char line[AUDIO_MAX_PATH + 16];
 
     while (fgets(line, (int)sizeof(line), f)) {
         if (strncmp(line, "track=", 6) == 0) {
             char *p = line + 6;
             size_t len = strlen(p);
             while (len > 0 && (p[len-1] == '\n' || p[len-1] == '\r')) len--;
-            if (len >= REPL_AUDIO_MAX_PATH) len = REPL_AUDIO_MAX_PATH - 1;
+            if (len >= AUDIO_MAX_PATH) len = AUDIO_MAX_PATH - 1;
             memcpy(saved_track, p, len);
             saved_track[len] = '\0';
         } else if (strncmp(line, "offset=", 7) == 0) {
@@ -253,10 +253,10 @@ static int start_track_now(int idx) {
     }
 
     /* Only SONG mode hands looping off to miniaudio. OFF and ALL both
-     * auto-advance from repl_audio_tick() when the sound reaches end. */
+     * auto-advance from audio_tick() when the sound reaches end. */
     ma_sound_set_looping(
         &g_music,
-        (g_loop_mode == REPL_AUDIO_LOOP_SONG) ? MA_TRUE : MA_FALSE);
+        (g_loop_mode == AUDIO_LOOP_SONG) ? MA_TRUE : MA_FALSE);
 
     r = ma_sound_start(&g_music);
     if (r != MA_SUCCESS) {
@@ -271,7 +271,7 @@ static int start_track_now(int idx) {
     g_track_generation++;
 
     /* Apply a saved cursor position if one was staged (e.g. by
-     * repl_audio_play_playlist() restoring persisted state).
+     * audio_play_playlist() restoring persisted state).
      * miniaudio queues seek operations for ASYNC stream sounds, so
      * issuing it immediately is safe - it will be processed once the
      * background init job completes. */
@@ -285,7 +285,7 @@ static int start_track_now(int idx) {
     }
 
     /* Honour the paused state: stop without moving the cursor so that
-     * repl_audio_set_paused(0) / ma_sound_start() resumes from here. */
+     * audio_set_paused(0) / ma_sound_start() resumes from here. */
     if (g_paused)
         ma_sound_stop(&g_music);
 
@@ -310,7 +310,7 @@ static int start_track(int idx) {
 /* Public API                                                          */
 /* ------------------------------------------------------------------ */
 
-int repl_audio_init(void) {
+int audio_init(void) {
     if (g_inited) return 0;
 
     ma_result r = ma_engine_init(NULL, &g_engine);
@@ -321,7 +321,7 @@ int repl_audio_init(void) {
 
     g_inited = 1;
 
-#if REPL_AUDIO_NEEDS_GESTURE
+#if AUDIO_NEEDS_GESTURE
     /* On the web, ma_engine_init starts the engine automatically but the
      * browser's AudioContext will be in a "suspended" state until a user
      * gesture resumes it. We'll call ma_engine_start() again on the
@@ -334,7 +334,7 @@ int repl_audio_init(void) {
     return 0;
 }
 
-void repl_audio_shutdown(void) {
+void audio_shutdown(void) {
     if (!g_inited) return;
     save_state();
     uninit_music();
@@ -342,7 +342,7 @@ void repl_audio_shutdown(void) {
     g_inited = 0;
 }
 
-int repl_audio_set_playlist(const char *const *paths, int count) {
+int audio_set_playlist(const char *const *paths, int count) {
     if (!paths || count < 0) return -1;
 
     uninit_music();
@@ -351,17 +351,17 @@ int repl_audio_set_playlist(const char *const *paths, int count) {
     g_pending_start  = 0;
 
     int n = count;
-    if (n > REPL_AUDIO_MAX_TRACKS) {
+    if (n > AUDIO_MAX_TRACKS) {
         fprintf(stderr,
                 "repl_audio: playlist has %d tracks; truncating to %d\n",
-                count, REPL_AUDIO_MAX_TRACKS);
-        n = REPL_AUDIO_MAX_TRACKS;
+                count, AUDIO_MAX_TRACKS);
+        n = AUDIO_MAX_TRACKS;
     }
 
     for (int i = 0; i < n; i++) {
         const char *p = paths[i] ? paths[i] : "";
         size_t len = strlen(p);
-        if (len >= REPL_AUDIO_MAX_PATH) len = REPL_AUDIO_MAX_PATH - 1;
+        if (len >= AUDIO_MAX_PATH) len = AUDIO_MAX_PATH - 1;
         memcpy(g_playlist[i], p, len);
         g_playlist[i][len] = '\0';
     }
@@ -369,7 +369,7 @@ int repl_audio_set_playlist(const char *const *paths, int count) {
     return n;
 }
 
-int repl_audio_play_playlist(void) {
+int audio_play_playlist(void) {
     if (!g_inited || g_playlist_count == 0) return -1;
 
     /* Try to resume from a persisted state.  If the saved track is in the
@@ -385,33 +385,33 @@ int repl_audio_play_playlist(void) {
     return start_track(0);
 }
 
-int repl_audio_play_music(const char *path) {
+int audio_play_music(const char *path) {
     if (!path || !*path) return -1;
     const char *arr[1] = { path };
-    if (repl_audio_set_playlist(arr, 1) < 0) return -1;
-    return repl_audio_play_playlist();
+    if (audio_set_playlist(arr, 1) < 0) return -1;
+    return audio_play_playlist();
 }
 
-void repl_audio_stop_music(void) {
+void audio_stop_music(void) {
     if (!g_music_loaded) return;
     ma_sound_stop(&g_music);
 }
 
-int repl_audio_next_track(void) {
+int audio_next_track(void) {
     if (!g_inited || g_playlist_count == 0) return -1;
     int next = g_playlist_pos + 1;
     if (next >= g_playlist_count) next = 0;
     return start_track(next);
 }
 
-int repl_audio_prev_track(void) {
+int audio_prev_track(void) {
     if (!g_inited || g_playlist_count == 0) return -1;
     int prev = g_playlist_pos - 1;
     if (prev < 0) prev = g_playlist_count - 1;
     return start_track(prev);
 }
 
-void repl_audio_tick(void) {
+void audio_tick(void) {
     if (!g_inited || !g_music_loaded) return;
 
     /* Periodically persist track + offset so a crash or forced quit
@@ -424,7 +424,7 @@ void repl_audio_tick(void) {
 
     /* In SONG mode miniaudio handles looping internally; there is no
      * end to detect so tick() is a no-op. */
-    if (g_loop_mode == REPL_AUDIO_LOOP_SONG) return;
+    if (g_loop_mode == AUDIO_LOOP_SONG) return;
 
     if (!ma_sound_at_end(&g_music)) return;
 
@@ -435,7 +435,7 @@ void repl_audio_tick(void) {
     while (attempts < g_playlist_count) {
         int next = g_playlist_pos + 1;
         if (next >= g_playlist_count) {
-            if (g_loop_mode == REPL_AUDIO_LOOP_ALL) {
+            if (g_loop_mode == AUDIO_LOOP_ALL) {
                 next = 0;
             } else {
                 /* OFF: end of playlist, stop cleanly. */
@@ -452,23 +452,23 @@ void repl_audio_tick(void) {
     uninit_music();
 }
 
-void repl_audio_set_loop_mode(int mode) {
-    if (mode < REPL_AUDIO_LOOP_OFF)  mode = REPL_AUDIO_LOOP_OFF;
-    if (mode > REPL_AUDIO_LOOP_ALL)  mode = REPL_AUDIO_LOOP_ALL;
+void audio_set_loop_mode(int mode) {
+    if (mode < AUDIO_LOOP_OFF)  mode = AUDIO_LOOP_OFF;
+    if (mode > AUDIO_LOOP_ALL)  mode = AUDIO_LOOP_ALL;
     g_loop_mode = mode;
 
     if (g_music_loaded) {
         ma_sound_set_looping(
             &g_music,
-            (g_loop_mode == REPL_AUDIO_LOOP_SONG) ? MA_TRUE : MA_FALSE);
+            (g_loop_mode == AUDIO_LOOP_SONG) ? MA_TRUE : MA_FALSE);
     }
 }
 
-int repl_audio_get_loop_mode(void) {
+int audio_get_loop_mode(void) {
     return g_loop_mode;
 }
 
-void repl_audio_set_paused(int paused) {
+void audio_set_paused(int paused) {
     int was_paused = g_paused;
     g_paused = paused ? 1 : 0;
     if (!g_inited || !g_music_loaded) return;
@@ -478,40 +478,40 @@ void repl_audio_set_paused(int paused) {
         ma_sound_start(&g_music);
 }
 
-int repl_audio_is_paused(void) {
+int audio_is_paused(void) {
     return g_paused;
 }
 
-void repl_audio_set_muted(int muted) {
+void audio_set_muted(int muted) {
     g_muted = muted ? 1 : 0;
     if (!g_inited) return;
     ma_engine_set_volume(&g_engine, g_muted ? 0.0f : 1.0f);
 }
 
-int repl_audio_is_muted(void) {
+int audio_is_muted(void) {
     return g_muted;
 }
 
-const char *repl_audio_get_current_track(void) {
+const char *audio_get_current_track(void) {
     if (!g_music_loaded) return NULL;
     if (g_playlist_pos < 0 || g_playlist_pos >= g_playlist_count) return NULL;
     return g_playlist[g_playlist_pos];
 }
 
-unsigned int repl_audio_track_generation(void) {
+unsigned int audio_track_generation(void) {
     return g_track_generation;
 }
 
-void repl_audio_set_state_file(const char *path) {
+void audio_set_state_file(const char *path) {
     if (!path) { g_state_file[0] = '\0'; return; }
     size_t len = strlen(path);
-    if (len >= REPL_AUDIO_MAX_PATH) len = REPL_AUDIO_MAX_PATH - 1;
+    if (len >= AUDIO_MAX_PATH) len = AUDIO_MAX_PATH - 1;
     memcpy(g_state_file, path, len);
     g_state_file[len] = '\0';
     g_last_save_time = 0;  /* force a write on the next tick after first play */
 }
 
-void repl_audio_on_user_gesture(void) {
+void audio_on_user_gesture(void) {
     if (!g_inited || g_gesture_done) return;
     g_gesture_done = 1;
 
@@ -526,10 +526,10 @@ void repl_audio_on_user_gesture(void) {
     }
 }
 
-void repl_audio_set_cfg_mode(int mode) {
+void audio_set_cfg_mode(int mode) {
     g_cfg_mode = mode;
 }
 
-int repl_audio_get_cfg_mode(void) {
+int audio_get_cfg_mode(void) {
     return g_cfg_mode;
 }

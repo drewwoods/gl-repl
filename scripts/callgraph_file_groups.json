@@ -82,7 +82,7 @@
       "label": "6. Persistence, audio, instrumentation, lifecycle",
       "files": [
         "repl_export.c",
-        "repl_audio.c",
+        "audio.c",
         "prof.c",
         "sample.c",
         "tests/gl-stubs/gl_stub_counts.c"

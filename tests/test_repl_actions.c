@@ -4,7 +4,7 @@
 #include "ui/state.h"
 #include "editor/help_session.h"
 #include "repl_config.h"
-#include "repl_audio.h"
+#include "audio.h"
 #include "repl_core.h"
 #include "support/test_harness.h"
 #include <stdlib.h>
@@ -74,7 +74,7 @@ static void run_menu_action_in_temp_dir(const char *label,
 
 static void test_apply_defaults(void) {
     repl_reset_state();
-    /* repl_actions_apply_defaults pulls from repl_audio_get_cfg_mode()
+    /* repl_actions_apply_defaults pulls from audio_get_cfg_mode()
      * which defaults to AUDIO_CFG_ALL (3) if invalid. */
     repl_actions_apply_defaults();
     ASSERT_INT("default audio mode is ALL", repl_config_get(REPL_CONFIG_AUDIO_MODE), 3);
@@ -193,23 +193,23 @@ static void test_cfg_cycling(void) {
     repl_cfg_cycle_row(audio_row, 1); // -> Once
     ASSERT_INT("audio mode Once", repl_config_get(REPL_CONFIG_AUDIO_MODE), 1);
     ASSERT_STR("status audio Once", g_last_status, "Audio: play once");
-    ASSERT_INT("audio engine not paused", repl_audio_is_paused(), 0);
-    ASSERT_INT("audio engine loop mode OFF", repl_audio_get_loop_mode(), REPL_AUDIO_LOOP_OFF);
+    ASSERT_INT("audio engine not paused", audio_is_paused(), 0);
+    ASSERT_INT("audio engine loop mode OFF", audio_get_loop_mode(), AUDIO_LOOP_OFF);
 
     repl_cfg_cycle_row(audio_row, 1); // -> Song
     ASSERT_INT("audio mode Song", repl_config_get(REPL_CONFIG_AUDIO_MODE), 2);
     ASSERT_STR("status audio Song", g_last_status, "Audio: loop song");
-    ASSERT_INT("audio engine loop mode SONG", repl_audio_get_loop_mode(), REPL_AUDIO_LOOP_SONG);
+    ASSERT_INT("audio engine loop mode SONG", audio_get_loop_mode(), AUDIO_LOOP_SONG);
 
     repl_cfg_cycle_row(audio_row, 1); // -> All
     ASSERT_INT("audio mode All", repl_config_get(REPL_CONFIG_AUDIO_MODE), 3);
     ASSERT_STR("status audio All", g_last_status, "Audio: loop all");
-    ASSERT_INT("audio engine loop mode ALL", repl_audio_get_loop_mode(), REPL_AUDIO_LOOP_ALL);
+    ASSERT_INT("audio engine loop mode ALL", audio_get_loop_mode(), AUDIO_LOOP_ALL);
 
     repl_cfg_cycle_row(audio_row, 1); // -> Pause
     ASSERT_INT("audio mode Pause", repl_config_get(REPL_CONFIG_AUDIO_MODE), 0);
     ASSERT_STR("status audio Pause", g_last_status, "Audio: paused");
-    ASSERT_INT("audio engine paused", repl_audio_is_paused(), 1);
+    ASSERT_INT("audio engine paused", audio_is_paused(), 1);
 }
 
 static void test_menu_actions(void) {
