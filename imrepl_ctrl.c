@@ -28,7 +28,7 @@
 #include "repl_state.h"
 #include "replay.h"
 #include "replay_state.h"
-#include "scene_render.h"
+#include "scene/render.h"
 #include "ui_autocomplete_panel.h"
 #include "color_picker_ui.h"
 #include "ui_editor.h"

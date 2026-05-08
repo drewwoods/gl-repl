@@ -1,6 +1,7 @@
 CC = gcc
 PROJECT_ROOT := $(abspath .)
 LOCAL_INCLUDE := $(abspath include)
+SRC_DIR := $(abspath src)
 GL_STUB_INCLUDE := $(abspath tests/gl-stubs/include)
 TEST_DIR := tests
 BENCH_DIR := bench
@@ -31,6 +32,7 @@ COMMON_CFLAGS = \
 	-std=c2x -DGL_SILENCE_DEPRECATION \
 	$(GL_HEADER_CFLAGS) \
 	-I$(PROJECT_ROOT) \
+	-I$(SRC_DIR) \
 	-I$(LOCAL_INCLUDE)
 
 RELEASE_CFLAGS = \
@@ -110,14 +112,14 @@ all: sample
 # Used to force rebuild if you list as a prerequisite, e.g. `test_eval: FORCE $(test_eval_OBJS)`.
 FORCE:
 
-SRCS = sample.c imrepl_ctrl.c repl_core.c repl_debug.c repl_state.c editor_state.c editor_commit.c editor_services.c editor_input.c editor_help_session.c editor_completion.c ui_state.c variable_panel.c replay_state.c repl_config.c repl_command_spec.c repl_parser.c repl_source_scope.c repl_command_store.c repl_compile.c repl_apply.c editor_clipboard.c editor_undo.c repl_camera_controls.c repl_actions.c ui_layout.c ui_code_panel_layout.c editor_code_panel_document.c repl_flatten.c repl_executor.c editor_autocomplete.c ui_autocomplete_panel.c repl_autonormal.c repl_scenes.c repl_example_loader.c replay.c repl_replay_annotations.c editor_search.c repl_export.c repl_examples.c scene_render.c scene_geometry_guides.c scene_transform_guides.c scene_grid.c scene_axes.c scene_backdrop.c scene_lights.c scene_overlays.c ui_panels.c ui_menu_bar.c color_picker_ui.c color_picker.c ui_tabbed_overlay.c repl_help_text.c ui_variable_panel.c replay_ui_hud.c variable_panel_drag.c editor_inline_rename.c repl_eval.c cmd_format.c repl_audio.c ui_profile_panel.c prof.c tests/gl-stubs/gl_stub_counts.c
-HDRS = sample.h editor_search.h imrepl_ctrl.h repl_state.h editor_state.h editor_commit.h editor_services.h editor_input.h editor_help_session.h editor_completion.h ui_state.h variable_panel.h replay_state.h repl_config.h repl_core.h repl_core_internal.h repl_debug.h repl_command_spec.h repl_parser.h repl_source_scope.h repl_command_store.h repl_compile.h repl_apply.h ui_layout.h repl_pipeline.h editor_clipboard.h editor_undo.h repl_camera_controls.h repl_actions.h ui_code_panel_layout.h editor_code_panel_document.h replay.h repl_replay_annotations.h repl_examples.h scene_render_types.h scene_guides_shared.h scene_geometry_guides.h scene_transform_guides.h scene_transform_utils.h scene_grid.h scene_axes.h scene_render.h scene_backdrop.h scene_lights.h scene_overlays.h ui_panels.h ui_menu_bar.h color_picker_ui.h color_picker.h ui_tabbed_overlay.h repl_help_text.h ui_variable_panel.h replay_ui_hud.h variable_panel_drag.h ui_autocomplete_panel.h editor_inline_rename.h repl_eval.h cmd_format.h repl_audio.h ui_profile_panel.h prof.h
-CORE_TEST_SRCS = repl_core.c imrepl_ctrl.c repl_debug.c repl_state.c editor_state.c editor_commit.c editor_services.c editor_input.c editor_help_session.c editor_completion.c ui_state.c variable_panel.c replay_state.c repl_config.c repl_command_spec.c repl_parser.c repl_source_scope.c repl_command_store.c repl_compile.c repl_apply.c editor_clipboard.c editor_undo.c repl_camera_controls.c repl_actions.c ui_layout.c ui_code_panel_layout.c editor_code_panel_document.c repl_flatten.c repl_executor.c editor_autocomplete.c ui_autocomplete_panel.c repl_autonormal.c repl_scenes.c repl_example_loader.c replay.c repl_replay_annotations.c editor_search.c repl_export.c repl_examples.c scene_render.c scene_geometry_guides.c scene_transform_guides.c scene_grid.c scene_axes.c scene_backdrop.c scene_lights.c scene_overlays.c ui_panels.c ui_menu_bar.c color_picker_ui.c color_picker.c ui_tabbed_overlay.c repl_help_text.c ui_variable_panel.c replay_ui_hud.c variable_panel_drag.c editor_inline_rename.c repl_eval.c cmd_format.c repl_audio.c ui_profile_panel.c prof.c tests/gl-stubs/gl_stub_counts.c
+SRCS = sample.c imrepl_ctrl.c repl_core.c repl_debug.c repl_state.c editor_state.c editor_commit.c editor_services.c editor_input.c editor_help_session.c editor_completion.c ui_state.c variable_panel.c replay_state.c repl_config.c repl_command_spec.c repl_parser.c repl_source_scope.c repl_command_store.c repl_compile.c repl_apply.c editor_clipboard.c editor_undo.c repl_camera_controls.c repl_actions.c ui_layout.c ui_code_panel_layout.c editor_code_panel_document.c repl_flatten.c repl_executor.c editor_autocomplete.c ui_autocomplete_panel.c repl_autonormal.c repl_scenes.c repl_example_loader.c replay.c repl_replay_annotations.c editor_search.c repl_export.c repl_examples.c src/scene/render.c src/scene/geometry_guides.c src/scene/transform_guides.c src/scene/grid.c src/scene/axes.c src/scene/backdrop.c src/scene/lights.c src/scene/overlays.c ui_panels.c ui_menu_bar.c color_picker_ui.c color_picker.c ui_tabbed_overlay.c repl_help_text.c ui_variable_panel.c replay_ui_hud.c variable_panel_drag.c editor_inline_rename.c repl_eval.c cmd_format.c repl_audio.c ui_profile_panel.c prof.c tests/gl-stubs/gl_stub_counts.c
+HDRS = sample.h editor_search.h imrepl_ctrl.h repl_state.h editor_state.h editor_commit.h editor_services.h editor_input.h editor_help_session.h editor_completion.h ui_state.h variable_panel.h replay_state.h repl_config.h repl_core.h repl_core_internal.h repl_debug.h repl_command_spec.h repl_parser.h repl_source_scope.h repl_command_store.h repl_compile.h repl_apply.h ui_layout.h repl_pipeline.h editor_clipboard.h editor_undo.h repl_camera_controls.h repl_actions.h ui_code_panel_layout.h editor_code_panel_document.h replay.h repl_replay_annotations.h repl_examples.h src/scene/render_types.h src/scene/guides_shared.h src/scene/geometry_guides.h src/scene/transform_guides.h src/scene/transform_utils.h src/scene/grid.h src/scene/axes.h src/scene/render.h src/scene/backdrop.h src/scene/lights.h src/scene/overlays.h ui_panels.h ui_menu_bar.h color_picker_ui.h color_picker.h ui_tabbed_overlay.h repl_help_text.h ui_variable_panel.h replay_ui_hud.h variable_panel_drag.h ui_autocomplete_panel.h editor_inline_rename.h repl_eval.h cmd_format.h repl_audio.h ui_profile_panel.h prof.h
+CORE_TEST_SRCS = repl_core.c imrepl_ctrl.c repl_debug.c repl_state.c editor_state.c editor_commit.c editor_services.c editor_input.c editor_help_session.c editor_completion.c ui_state.c variable_panel.c replay_state.c repl_config.c repl_command_spec.c repl_parser.c repl_source_scope.c repl_command_store.c repl_compile.c repl_apply.c editor_clipboard.c editor_undo.c repl_camera_controls.c repl_actions.c ui_layout.c ui_code_panel_layout.c editor_code_panel_document.c repl_flatten.c repl_executor.c editor_autocomplete.c ui_autocomplete_panel.c repl_autonormal.c repl_scenes.c repl_example_loader.c replay.c repl_replay_annotations.c editor_search.c repl_export.c repl_examples.c src/scene/render.c src/scene/geometry_guides.c src/scene/transform_guides.c src/scene/grid.c src/scene/axes.c src/scene/backdrop.c src/scene/lights.c src/scene/overlays.c ui_panels.c ui_menu_bar.c color_picker_ui.c color_picker.c ui_tabbed_overlay.c repl_help_text.c ui_variable_panel.c replay_ui_hud.c variable_panel_drag.c editor_inline_rename.c repl_eval.c cmd_format.c repl_audio.c ui_profile_panel.c prof.c tests/gl-stubs/gl_stub_counts.c
 
 REPL_SRCS = $(filter repl_%.c,$(SRCS))
-SCENE_SRCS = $(filter scene_%.c,$(SRCS))
+SCENE_SRCS = $(filter src/scene/%.c,$(SRCS))
 UI_SRCS = $(filter ui_%.c,$(SRCS))
-SCENE_HDRS = $(filter scene_%.h,$(HDRS))
+SCENE_HDRS = $(filter src/scene/%.h,$(HDRS))
 UI_HDRS = $(filter ui_%.h,$(HDRS))
 STATE_NEUTRAL_SRCS = cmd_format.c prof.c tests/gl-stubs/gl_stub_counts.c
 
@@ -251,14 +253,14 @@ check-gl-boundaries: ## Verify GL/GLUT calls are isolated to allowed files.
 
 check-layer-coupling: ## Verify UI and scene layers don't include each other's headers.
 	@echo "    Checking UI/scene layer coupling..."
-	@! grep -nE '#include\s+"scene_' $(UI_SRCS) $(UI_HDRS) || (echo "    $(RED)ERROR: UI files must not include scene headers$(NC)" && exit 1)
+	@! grep -nE '#include\s+"scene/' $(UI_SRCS) $(UI_HDRS) || (echo "    $(RED)ERROR: UI files must not include scene headers$(NC)" && exit 1)
 	@! grep -nE '#include\s+"ui_' $(SCENE_SRCS) $(SCENE_HDRS) || (echo "    $(RED)ERROR: scene files must not include UI headers$(NC)" && exit 1)
 	@echo "    Layer coupling $(GREEN)OK$(NC)"
 
 
 check-controller-boundaries: ## Verify controller owns the scene/UI wiring boundary.
 	@echo "Checking controller boundaries..."
-	@bad=$$(grep -lE '#[[:space:]]*include[[:space:]]+"scene_' $(REPL_SRCS) imrepl_ctrl.c \
+	@bad=$$(grep -lE '#[[:space:]]*include[[:space:]]+"scene/' $(REPL_SRCS) imrepl_ctrl.c \
 		| grep -v '^imrepl_ctrl\.c$$' || true); \
 	if [ -n "$$bad" ]; then \
 		echo "$(RED)ERROR: scene headers included outside imrepl_ctrl.c:$(NC)"; \
