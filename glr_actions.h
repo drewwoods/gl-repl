@@ -14,7 +14,7 @@
  * config toggles/cycles via glr_cfg_handle_ascii_shortcut() and
  * glr_cfg_handle_special_shortcut(). These map key codes to config item indices
  * and call glr_cfg_cycle_row() to apply the change. The mapping is stable via
- * ReplConfigKey (repl_config.h), allowing the help overlay to display current
+ * GlrConfigKey (repl_config.h), allowing the help overlay to display current
  * bindings.
  *
  * Default values: repl_actions_apply_defaults() applies initial config state

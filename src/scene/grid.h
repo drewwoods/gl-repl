@@ -18,9 +18,9 @@
  * extent options (10x10 cells, 100x100 cells, etc.).
  *
  * Configuration: Grid appearance is controlled by config items:
- *   - REPL_CONFIG_GRID_THEME: which theme (grid style)
- *   - REPL_CONFIG_GRID_MAJOR: major line spacing
- *   - REPL_CONFIG_GRID_EXTENT: grid size/extent
+ *   - GLR_CONFIG_GRID_THEME: which theme (grid style)
+ *   - GLR_CONFIG_GRID_MAJOR: major line spacing
+ *   - GLR_CONFIG_GRID_EXTENT: grid size/extent
  *
  * Rendering: Drawn in the scene's background layer (behind user geometry but
  * in front of backdrop). Uses orthogonal projection for lines so spacing is

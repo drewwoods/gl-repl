@@ -1,6 +1,6 @@
 #include "glr_ctrl.h"
 #include "glr_actions.h"
-#include "repl_debug.h"
+#include "glr_debug.h"
 #include "repl_executor.h"
 #include "audio.h"
 
@@ -163,11 +163,11 @@ int main(int argc, char **argv) {
         if (dump_code || dump_flat)
             glr_ctrl_bootstrap_repl(input_file);
         if (dump_code)
-            repl_debug_dump_editor(stdout, editor_buffer_view());
+            glr_debug_dump_editor(stdout, editor_buffer_view());
         if (dump_flat)
-            repl_debug_dump_flat_commands(stdout, editor_buffer_view());
+            glr_debug_dump_flat_commands(stdout, editor_buffer_view());
         if (dump_state_layout)
-            repl_debug_dump_runtime_state_layout(stdout);
+            glr_debug_dump_runtime_state_layout(stdout);
         return 0;
     }
 

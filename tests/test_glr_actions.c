@@ -3,7 +3,7 @@
 #include "replay_state.h"
 #include "ui/state.h"
 #include "editor/help_session.h"
-#include "repl_config.h"
+#include "glr_config.h"
 #include "audio.h"
 #include "repl_core.h"
 #include "support/test_harness.h"
@@ -77,7 +77,7 @@ static void test_apply_defaults(void) {
     /* repl_actions_apply_defaults pulls from audio_get_cfg_mode()
      * which defaults to AUDIO_CFG_ALL (3) if invalid. */
     repl_actions_apply_defaults();
-    ASSERT_INT("default audio mode is ALL", repl_config_get(REPL_CONFIG_AUDIO_MODE), 3);
+    ASSERT_INT("default audio mode is ALL", glr_config_get(GLR_CONFIG_AUDIO_MODE), 3);
 }
 
 static void test_cursor_actions(void) {
@@ -128,15 +128,15 @@ static void test_cfg_cycling(void) {
     int point_attenuation_row = -1;
 
     for (int i = 0; i < CFG_ITEM_COUNT; i++) {
-        const ReplConfigItem *item = repl_config_item_at(i);
+        const GlrConfigItem *item = glr_config_item_at(i);
         if (!item) continue;
-        if (item->key == REPL_CONFIG_WIREFRAME) wireframe_row = i;
-        if (item->key == REPL_CONFIG_AUTO_TIME) auto_time_row = i;
-        if (item->key == REPL_CONFIG_AUDIO_MODE) audio_row = i;
-        if (item->key == REPL_CONFIG_CODE_PANEL_LAYOUT) code_panel_row = i;
-        if (item->key == REPL_CONFIG_AUTO_NORMALS) auto_normals_row = i;
-        if (item->key == REPL_CONFIG_REPLAY) replay_row = i;
-        if (item->key == REPL_CONFIG_POINT_ATTENUATION) point_attenuation_row = i;
+        if (item->key == GLR_CONFIG_WIREFRAME) wireframe_row = i;
+        if (item->key == GLR_CONFIG_AUTO_TIME) auto_time_row = i;
+        if (item->key == GLR_CONFIG_AUDIO_MODE) audio_row = i;
+        if (item->key == GLR_CONFIG_CODE_PANEL_LAYOUT) code_panel_row = i;
+        if (item->key == GLR_CONFIG_AUTO_NORMALS) auto_normals_row = i;
+        if (item->key == GLR_CONFIG_REPLAY) replay_row = i;
+        if (item->key == GLR_CONFIG_POINT_ATTENUATION) point_attenuation_row = i;
     }
 
     /* Test generic cycle (Wireframe) */
@@ -147,7 +147,7 @@ static void test_cfg_cycling(void) {
 
     /* Test Replay special case - only starts if there are commands to replay */
     replay_state_mut()->active = 0;
-    repl_config_set(REPL_CONFIG_REPLAY, 0);
+    glr_config_set(GLR_CONFIG_REPLAY, 0);
     /* When no commands present, replay toggles but stays inactive with "nothing to play" */
     glr_cfg_cycle_row(replay_row, 1);
     ASSERT_STR("replay status nothing to play", g_last_status, "Replay: nothing to play");
@@ -183,31 +183,31 @@ static void test_cfg_cycling(void) {
     ASSERT_STR("status autonormal ON", g_last_status, "Auto-normals: ON");
 
     /* Test Point Attenuation */
-    repl_config_set(REPL_CONFIG_POINT_ATTENUATION, 0);
+    glr_config_set(GLR_CONFIG_POINT_ATTENUATION, 0);
     glr_cfg_cycle_row(point_attenuation_row, 1);
-    ASSERT_INT("point attenuation ON", repl_config_get(REPL_CONFIG_POINT_ATTENUATION), 1);
+    ASSERT_INT("point attenuation ON", glr_config_get(GLR_CONFIG_POINT_ATTENUATION), 1);
     ASSERT_STR("status point attenuation ON", g_last_status, "Point attenuation: ON");
 
     /* Test Audio modes */
-    repl_config_set(REPL_CONFIG_AUDIO_MODE, 0); // Pause
+    glr_config_set(GLR_CONFIG_AUDIO_MODE, 0); // Pause
     glr_cfg_cycle_row(audio_row, 1); // -> Once
-    ASSERT_INT("audio mode Once", repl_config_get(REPL_CONFIG_AUDIO_MODE), 1);
+    ASSERT_INT("audio mode Once", glr_config_get(GLR_CONFIG_AUDIO_MODE), 1);
     ASSERT_STR("status audio Once", g_last_status, "Audio: play once");
     ASSERT_INT("audio engine not paused", audio_is_paused(), 0);
     ASSERT_INT("audio engine loop mode OFF", audio_get_loop_mode(), AUDIO_LOOP_OFF);
 
     glr_cfg_cycle_row(audio_row, 1); // -> Song
-    ASSERT_INT("audio mode Song", repl_config_get(REPL_CONFIG_AUDIO_MODE), 2);
+    ASSERT_INT("audio mode Song", glr_config_get(GLR_CONFIG_AUDIO_MODE), 2);
     ASSERT_STR("status audio Song", g_last_status, "Audio: loop song");
     ASSERT_INT("audio engine loop mode SONG", audio_get_loop_mode(), AUDIO_LOOP_SONG);
 
     glr_cfg_cycle_row(audio_row, 1); // -> All
-    ASSERT_INT("audio mode All", repl_config_get(REPL_CONFIG_AUDIO_MODE), 3);
+    ASSERT_INT("audio mode All", glr_config_get(GLR_CONFIG_AUDIO_MODE), 3);
     ASSERT_STR("status audio All", g_last_status, "Audio: loop all");
     ASSERT_INT("audio engine loop mode ALL", audio_get_loop_mode(), AUDIO_LOOP_ALL);
 
     glr_cfg_cycle_row(audio_row, 1); // -> Pause
-    ASSERT_INT("audio mode Pause", repl_config_get(REPL_CONFIG_AUDIO_MODE), 0);
+    ASSERT_INT("audio mode Pause", glr_config_get(GLR_CONFIG_AUDIO_MODE), 0);
     ASSERT_STR("status audio Pause", g_last_status, "Audio: paused");
     ASSERT_INT("audio engine paused", audio_is_paused(), 1);
 }

@@ -29,7 +29,7 @@
  * implements drag transactions and repl_editor.c forwards mouse events
  * — those will collapse into the variable_panel peer in Phase F.
  *
- * Visibility: Panel can be toggled on/off via the REPL_CONFIG_VARIABLE_PANEL
+ * Visibility: Panel can be toggled on/off via the GLR_CONFIG_VARIABLE_PANEL
  * config item (F-key shortcut). When off, rendering and hit-testing
  * are no-ops.
  */
