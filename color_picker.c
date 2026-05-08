@@ -4,7 +4,7 @@
 #include "color_picker.h"
 
 #include "config.h"               /* CP_CLEAR_MAX_V */
-#include "editor_commit.h"
+#include "editor/commit.h"
 #include "repl_command.h"
 #include "repl_compile.h"
 #include "repl_core.h"             /* set_status, MAX_LINE_LEN */

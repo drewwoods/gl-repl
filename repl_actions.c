@@ -13,17 +13,17 @@
 #include "repl_core.h"
 #include "repl_core_internal.h"
 #include "repl_config.h"
-#include "editor_input.h"
-#include "editor_completion.h"
+#include "editor/input.h"
+#include "editor/completion.h"
 #include "keys.h"
 #include "replay_state.h"
-#include "editor_help_session.h"
+#include "editor/help_session.h"
 #include "repl_pipeline.h"
 #include "repl_state_owners.h"
 #include "ui/menu_bar.h"
 #include "ui/profile_panel.h"
 #include "ui/state.h"
-#include "editor_inline_rename.h"
+#include "editor/inline_rename.h"
 
 static const char *replay_mode_names[] = { "Polygon", "Vertex" };
 static const char *backdrop_mode_names[] = { "Off", "Cityscape", "Stars", "City+Stars" };

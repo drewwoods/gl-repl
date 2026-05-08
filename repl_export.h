@@ -38,7 +38,7 @@
 #ifndef REPL_EXPORT_H
 #define REPL_EXPORT_H
 
-#include "editor_state.h"  /* EditorBufferView */
+#include "editor/state.h"  /* EditorBufferView */
 #include "repl_eval.h"     /* REPL_SCRATCH_ARRAY_LEN */
 #include "repl_export_state.h"
 

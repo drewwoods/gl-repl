@@ -16,7 +16,7 @@ set -euo pipefail
 
 violations=$(grep -nE \
     '#include[[:space:]]+"repl_editor|repl_keyboard_func|repl_special_func|repl_mouse_func|repl_motion_func|repl_passive_motion_func|repl_mousewheel_func|repl_timer_func' \
-    editor_input.c 2>/dev/null \
+    src/editor/input.c 2>/dev/null \
     | grep -vE '^[0-9]+:[[:space:]]*(/\*|\*|//)' \
     || true)
 

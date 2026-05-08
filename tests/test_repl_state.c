@@ -1,11 +1,11 @@
 #include "repl_state.h"
-#include "editor_state.h"
+#include "editor/state.h"
 #include "ui/state.h"
 #include "ui/profile_panel.h"
 #include "ui/layout.h"            /* CODE_PANEL_LAYOUT_* enum values */
 #include "variable_panel_state.h"
 #include "replay_state.h"
-#include "editor_help_session.h"
+#include "editor/help_session.h"
 #include "repl_presentation.h"    /* CFG_DEFAULT_* macros */
 
 #include "support/test_harness.h"

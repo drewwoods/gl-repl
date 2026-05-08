@@ -30,7 +30,7 @@
 #ifndef REPL_EXECUTOR_H
 #define REPL_EXECUTOR_H
 
-#include "editor_state.h"  /* EditorBufferView */
+#include "editor/state.h"  /* EditorBufferView */
 #include "repl_flatten.h"
 
 #define TESS_VERT_BUF_SIZE 256

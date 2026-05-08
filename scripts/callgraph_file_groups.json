@@ -23,11 +23,11 @@
         "repl_editor.c",
         "repl_actions.c",
         "repl_camera_controls.c",
-        "editor_clipboard.c",
-        "editor_undo.c",
-        "editor_search.c",
+        "src/editor/clipboard.c",
+        "src/editor/undo.c",
+        "src/editor/search.c",
         "variable_panel_drag.c",
-        "editor_inline_rename.c"
+        "src/editor/inline_rename.c"
       ]
     },
     {
@@ -74,7 +74,7 @@
         "src/ui/autocomplete_panel.c",
         "src/ui/profile_panel.c",
         "src/ui/code_panel_layout.c",
-        "editor_code_panel_document.c"
+        "src/editor/code_panel_document.c"
       ]
     },
     {

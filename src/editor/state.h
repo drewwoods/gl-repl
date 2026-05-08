@@ -1,7 +1,7 @@
 #ifndef EDITOR_STATE_H
 #define EDITOR_STATE_H
 
-#include "editor_limits.h"
+#include "limits.h"
 #include "repl_command.h"
 #include "ui/editor.h"  /* EditorTransformerList, EditorHighlightList,
                          * EditorVirtualLineList typedefs (live state) */

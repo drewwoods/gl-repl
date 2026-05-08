@@ -1,8 +1,8 @@
 /*
  * editor_completion.c - Editor completion provider registry.
  */
-#include "editor_completion.h"
-#include "editor_state.h"
+#include "completion.h"
+#include "state.h"
 
 #include <stddef.h>
 

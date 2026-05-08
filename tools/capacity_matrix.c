@@ -18,8 +18,8 @@
  * their definitions aren't visible from a tool TU. Notes call out
  * those cases.
  */
-#include "editor_limits.h"
-#include "editor_undo.h"
+#include "editor/limits.h"
+#include "editor/undo.h"
 #include "repl_command.h"
 #include "repl_command_spec.h"
 #include "repl_compile.h"

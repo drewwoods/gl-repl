@@ -17,9 +17,9 @@
  * The module owns search behavior; storage lives in repl_state.c and is
  * accessed through the typed search facade.
  */
-#include "editor_input.h"
-#include "editor_completion.h"
-#include "editor_search.h"
+#include "input.h"
+#include "completion.h"
+#include "search.h"
 #include "repl_state.h"
 #include "repl_core_internal.h"
 #include "keys.h"
@@ -30,7 +30,7 @@
  * visibility flag lives on UiState while the session-state fields
  * (tab_idx, scroll) live on the editor_help_session peer. */
 ReplHelpState *ui_state_help_mut(void);
-#include "editor_help_session.h"
+#include "help_session.h"
 
 static int search_row_is_live_input(int row_idx) {
     if (row_idx < 0 || row_idx >= repl_search_row_count())

@@ -24,7 +24,7 @@
 #ifndef REPL_REPLAY_ANNOTATIONS_H
 #define REPL_REPLAY_ANNOTATIONS_H
 
-#include "editor_state.h"  /* EditorBufferView */
+#include "editor/state.h"  /* EditorBufferView */
 
 /* Prepare annotation lookups for the current frame. Refreshes the per-PC
  * cache and refills editor_state_virtual_lines(). Idempotent within

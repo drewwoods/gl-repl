@@ -1,6 +1,6 @@
 #include "repl_command_store.h"
 #include "repl_state_owners.h"
-#include "editor_state.h"  /* ReplEditorBuffer + editor_buffer_* / editor_state_buffer_mut */
+#include "editor/state.h"  /* ReplEditorBuffer + editor_buffer_* / editor_state_buffer_mut */
 
 ReplCommandStore repl_command_store_live(void) {
     ReplDocumentState *document = repl_state_document_mut();

@@ -6,7 +6,7 @@
 
 #include <stdio.h>
 
-#include "editor_state.h"  /* EditorBufferView */
+#include "editor/state.h"  /* EditorBufferView */
 
 void repl_debug_dump_editor(FILE *out, EditorBufferView text);
 void repl_debug_dump_flat_commands(FILE *out, EditorBufferView text);
