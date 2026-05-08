@@ -3,6 +3,8 @@
  */
 #include "backdrop.h"
 
+#include <math.h>
+
 #define CITY_BLDG_COUNT   300
 #define CITY_RADIUS       72.0f
 #define CITY_RING_SPREAD   7.0f

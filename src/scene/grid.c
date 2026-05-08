@@ -3,6 +3,7 @@
  */
 #include "grid.h"
 #include "./include/gl_2d.h"
+#include <math.h>
 
 /* Returns non-zero when v is close enough to a multiple of `major`
  * to be treated as a major line. `tol` is derived from the minor

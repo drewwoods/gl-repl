@@ -11,6 +11,8 @@
 #include "overlays.h"
 #include "./include/gl_2d.h"
 
+#include <stdio.h>
+
 void scene_draw_vertex_number_label(int vertex_idx,
                                     float vx, float vy, float vz) {
     char label[16];

@@ -13,6 +13,7 @@
 #include "prof.h"
 
 #include <errno.h>
+#include <math.h>
 
 /* Sub-pixel jitter offsets (units: fraction of one pixel).
  * Table is ordered so the first N entries form a good N-sample set.
@@ -202,18 +203,9 @@ static void draw_orbit_target(const FrameRenderContext *frame_ctx) {
     scene_render_pop_state();
 }
 
-static void scene_apply_clear_color(FlatProgramView flat_program) {
-    float cr = 0.10f, cg = 0.10f, cb = 0.13f, ca = 1.0f;
-    for (int ci = 0; ci < flat_program.cmd_count; ci++) {
-        if (flat_program.cmds[ci].valid &&
-            flat_program.cmds[ci].type == CMD_CLEAR_COLOR) {
-            cr = flat_program.cmds[ci].args[0];
-            cg = flat_program.cmds[ci].args[1];
-            cb = flat_program.cmds[ci].args[2];
-            ca = flat_program.cmds[ci].args[3];
-        }
-    }
-    glClearColor(cr, cg, cb, ca);
+static void scene_apply_clear_color(const float clear_color[4]) {
+    glClearColor(clear_color[0], clear_color[1],
+                 clear_color[2], clear_color[3]);
 }
 
 /* The replay-fade overlay pass used to live here; it has been moved out
@@ -296,7 +288,7 @@ static void render_3d_scene_pass(const SceneRenderConfig *config,
      * any more (see imrepl_ctrl.c for the bodies). post_overlays_fn
      * fires after lights_render so its output sits on top of the
      * scene's helpers. */
-    prof_begin(PROF_SCENE_3D_HUD);
+    prof_begin(PROF_SCENE_3D_OVERLAYS);
 
     scene_lights_render(&frame_ctx);
 
@@ -304,7 +296,7 @@ static void render_3d_scene_pass(const SceneRenderConfig *config,
         config->post_overlays_fn(config->post_overlays_user_data);
 
     glPopAttrib();
-    prof_accum_end(PROF_SCENE_3D_HUD);
+    prof_accum_end(PROF_SCENE_3D_OVERLAYS);
 }
 
 int scene_render_3d_scene(const SceneRenderConfig *config) {
@@ -314,7 +306,7 @@ int scene_render_3d_scene(const SceneRenderConfig *config) {
     int accum_samples = config->accum_samples;
     glViewport(config->scene_x, config->scene_y,
                config->scene_w, config->scene_h);
-    scene_apply_clear_color(config->flat_program);
+    scene_apply_clear_color(config->clear_color);
 
     if (config->use_accum && config->accum_aa_enabled && accum_samples > 1) {
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_ACCUM_BUFFER_BIT);

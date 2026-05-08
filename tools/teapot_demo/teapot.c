@@ -163,11 +163,10 @@ static void build_config(SceneRenderConfig *cfg) {
     cfg->grid_extents[GRID_EXTENT_MID]   = 25.0f;
     cfg->grid_extents[GRID_EXTENT_FAR]   = 100.0f;
 
-    cfg->cursor_block_begin_idx   = -1;
-    cfg->cursor_block_end_idx     = -1;
-    cfg->cursor_block_source_line = -1;
-    cfg->cursor_call_src_cmd_idx  = -1;
-    cfg->edit_line_idx            = -1;
+    cfg->clear_color[0] = 0.10f;
+    cfg->clear_color[1] = 0.10f;
+    cfg->clear_color[2] = 0.13f;
+    cfg->clear_color[3] = 1.0f;
 
     cfg->multisample_enabled = 1;
     cfg->line_smooth_enabled = 1;
