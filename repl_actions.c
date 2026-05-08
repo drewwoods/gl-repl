@@ -15,7 +15,7 @@
 #include "repl_config.h"
 #include "editor_input.h"
 #include "editor_completion.h"
-#include "repl_keys.h"
+#include "keys.h"
 #include "replay_state.h"
 #include "editor_help_session.h"
 #include "repl_pipeline.h"

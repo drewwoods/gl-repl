@@ -20,7 +20,7 @@
 #include "repl_eval.h"
 #include "repl_executor.h"
 #include "repl_export.h"
-#include "repl_keys.h"
+#include "keys.h"
 #include "repl_pipeline.h"
 #include "repl_replay_annotations.h"
 #include "repl_source_scope.h"
