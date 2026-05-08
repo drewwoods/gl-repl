@@ -3,7 +3,7 @@
  */
 #include "glr_actions.h"
 #include "repl_core.h"
-#include "repl_config.h"
+#include "glr_config.h"
 #include "keys.h"
 #include "repl_state_views.h"
 #include "replay.h"   /* ReplayState (PLAYING / PAUSED / DONE) enum values */
@@ -92,7 +92,7 @@ static int menu_item_count(int menu_id) {
                              + repl_user_scene_count();
     case MENU_CONFIG: {
         int count = 0;
-        repl_config_items(&count);
+        glr_config_items(&count);
         return count;
     }
     }
@@ -124,7 +124,7 @@ static const char *menu_item_label(int menu_id, int i) {
         return NULL;
     }
     if (menu_id == MENU_CONFIG) {
-        const ReplConfigItem *item = repl_config_item_at(i);
+        const GlrConfigItem *item = glr_config_item_at(i);
         if (item) return item->label;
         return NULL;
     }
@@ -139,8 +139,8 @@ static const char *menu_item_shortcut(int menu_id, int i) {
         return NULL;
     }
     if (menu_id == MENU_CONFIG) {
-        const ReplConfigItem *item = repl_config_item_at(i);
-        if (!item || item->section_header || item->key == REPL_CONFIG_NONE)
+        const GlrConfigItem *item = glr_config_item_at(i);
+        if (!item || item->section_header || item->key == GLR_CONFIG_NONE)
             return NULL;
         static char buf[16];
         if (item->key_code == 0) return NULL;
@@ -182,9 +182,9 @@ static int menu_max_shortcut_px(int menu_id) {
  * (with a trailing ellipsis). Returns `out`. */
 static const char *cfg_state_str(int i, char *out, int out_size) {
     const char *s = "";
-    const ReplConfigItem *item = repl_config_item_at(i);
-    if (item && !item->section_header && item->key != REPL_CONFIG_NONE) {
-        s = repl_config_state_name(item->key, repl_config_get(item->key));
+    const GlrConfigItem *item = glr_config_item_at(i);
+    if (item && !item->section_header && item->key != GLR_CONFIG_NONE) {
+        s = glr_config_state_name(item->key, glr_config_get(item->key));
         if (!s)
             s = "";
     }
@@ -211,10 +211,10 @@ static const char *cfg_state_str(int i, char *out, int out_size) {
 static int cfg_max_state_chars(void) {
     int max_chars = 3;  /* "OFF" */
     int count = 0;
-    const ReplConfigItem *items = repl_config_items(&count);
+    const GlrConfigItem *items = glr_config_items(&count);
     for (int i = 0; i < count; i++) {
-        const ReplConfigItem *item = &items[i];
-        if (item->section_header || item->key == REPL_CONFIG_NONE)
+        const GlrConfigItem *item = &items[i];
+        if (item->section_header || item->key == GLR_CONFIG_NONE)
             continue;
         const char **names = item->state_names;
         if (!names) continue;
@@ -839,13 +839,13 @@ void ui_menu_bar_render_example_dropdown(const UiRenderSnapshot *snap) {
         }
 
         if (menu_id == MENU_CONFIG) {
-            const ReplConfigItem *item = repl_config_item_at(i);
-            if (!item || item->section_header || item->key == REPL_CONFIG_NONE)
+            const GlrConfigItem *item = glr_config_item_at(i);
+            if (!item || item->section_header || item->key == GLR_CONFIG_NONE)
                 continue;
             char st_buf[CFG_STATE_MAX_CHARS + 1];
             const char *st = cfg_state_str(i, st_buf, sizeof(st_buf));
             int st_px = (int)strlen(st) * FONT_SMALL_W;
-            int val = repl_config_get(item->key);
+            int val = glr_config_get(item->key);
             if (val)
                 glColor4f(UI_ACCENT_GREEN_R, UI_ACCENT_GREEN_G, UI_ACCENT_GREEN_B, alpha);
             else

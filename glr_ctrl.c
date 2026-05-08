@@ -17,7 +17,7 @@
 #include "glr_camera.h"
 #include "repl_core.h"
 #include "repl_help_text.h"
-#include "repl_debug.h"
+#include "glr_debug.h"
 #include "repl_eval.h"
 #include "repl_executor.h"
 #include "repl_export.h"
@@ -1364,8 +1364,8 @@ int glr_ctrl_router_handle_save_key(unsigned char key) {
 
 int glr_ctrl_router_handle_debug_dump_key(unsigned char key) {
     if (key == KEY_CTRL_P) {
-        repl_debug_dump_editor(stdout, editor_buffer_view());
-        repl_debug_dump_flat_commands(stdout, editor_buffer_view());
+        glr_debug_dump_editor(stdout, editor_buffer_view());
+        glr_debug_dump_flat_commands(stdout, editor_buffer_view());
         set_status("Dumped editor + flat commands to stdout");
         return 1;
     }

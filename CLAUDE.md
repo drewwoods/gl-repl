@@ -156,8 +156,8 @@ ownership / contract guards. Highlights:
 | `sample.h` | Shared types (`GLCmd`, `CmdType`, `SceneLight`), defaults, stateless helpers, compatibility includes |
 | `glr_ctrl.c` | App-frame controller: `glr_ctrl_display_frame`, `glr_ctrl_reshape`, `glr_ctrl_init_gl`; builds `SceneRenderConfig`, calls scene/UI renderers |
 | `glr_ctrl.h` | Controller public surface: display, reshape, init-GL entrypoints |
-| `repl_config.c` | Config key implementation and descriptor table helpers |
-| `repl_config.h` | `ReplConfigKey` / `ReplConfigItem` descriptor API for keyed config access |
+| `glr_config.c` | Config key implementation and descriptor table helpers |
+| `glr_config.h` | `ReplConfigKey` / `ReplConfigItem` descriptor API for keyed config access |
 | `repl_core.c` | Normalization pipeline (`repl_parse_and_normalize*`), reformatter, startup helpers; being dissolved into natural owners (R10) |
 | `repl_parser.c` | REPL source-line parser, expression validation, canonical `GLCmd.source[]` generation |
 | `repl_parser.h` | Parser entrypoints (`repl_parser_parse_command*`, `repl_parser_parse_command_ctx`) and `ReplParseContext` |
@@ -202,8 +202,8 @@ ownership / contract guards. Highlights:
 | `src/ui/layout.h` | Layout geometry API (`ui_layout_scene_rect`, `ui_layout_code_panel_rect`) |
 | `repl_scenes.c` | User-scene slots, LRU eviction, workspace save/load, workspace dir binding |
 | `repl_example_loader.c` | Built-in example loading and active-example tracking |
-| `repl_debug.c` | Diagnostic dumps for CLI flags and tests |
-| `repl_debug.h` | Debug dump public API |
+| `glr_debug.c` | Diagnostic dumps for CLI flags and tests |
+| `glr_debug.h` | Debug dump public API |
 | `repl_replay_annotations.c` | Replay-time source annotations, variable substitution, evaluated command display text |
 | `repl_replay_annotations.h` | Code-panel replay annotation API |
 | `src/ui/snapshot.h` | `UiRenderSnapshot` — frame-frozen bundle built once per frame by `glr_ctrl_build_ui_snapshot()` |

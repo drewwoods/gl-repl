@@ -19,7 +19,7 @@
  * arrowheads, etc.
  *
  * Configuration: Axes appearance is controlled by config:
- *   - REPL_CONFIG_AXES_THEME: which theme (axes style)
+ *   - GLR_CONFIG_AXES_THEME: which theme (axes style)
  *
  * Rendering: Axes are drawn at the origin (0, 0, 0) and extend along X, Y, Z
  * directions. Rendered after grid but before user geometry (or optionally after,

@@ -8,7 +8,7 @@
  */
 #include "repl_help_text.h"
 #include "repl_command_spec.h"   /* MAX_FUNC_HINT_PARAMS */
-#include "repl_config.h"
+#include "glr_config.h"
 #include "repl_eval.h"           /* REPL_SCRATCH_ARRAY_LEN */
 
 #include <stdarg.h>
@@ -289,10 +289,10 @@ const UiOverlayContent *repl_help_text_build(void) {
     int di = 1;
     for (int fn = 2; fn <= 11 && di < HELP_FKEY_MAX - 1; fn++) {
         int cfg_count = 0;
-        const ReplConfigItem *items = repl_config_items(&cfg_count);
+        const GlrConfigItem *items = glr_config_items(&cfg_count);
         for (int ci = 0; ci < cfg_count; ci++) {
-            const ReplConfigItem *item = &items[ci];
-            if (item->section_header || item->key == REPL_CONFIG_NONE)
+            const GlrConfigItem *item = &items[ci];
+            if (item->section_header || item->key == GLR_CONFIG_NONE)
                 continue;
             if (item->is_special && item->key_code == fn) {
                 snprintf(g_fkey_strbuf[di], sizeof(g_fkey_strbuf[di]),
