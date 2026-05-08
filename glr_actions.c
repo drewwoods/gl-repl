@@ -8,7 +8,7 @@
  */
 #include "glr_actions.h"
 #include "ui/layout.h"           /* CODE_PANEL_LAYOUT_* enum values */
-#include "color_picker.h"
+#include "color_picker_state.h"
 #include "audio.h"
 #include "repl_core.h"
 #include "repl_core_internal.h"

@@ -1,12 +1,12 @@
 /*
- * color_picker.h - Floating color-picker peer (state + lifecycle + writeback).
+ * color_picker_state.h - Floating color-picker peer (state + lifecycle + writeback).
  *
  * The picker is a peer subsystem owned by the editor commit pipeline:
  * it holds the currently-edited line, slider state (HSV + alpha),
  * anchor geometry, and routes writebacks through
  * editor_commit_apply_external_change. The renderer + hit-test
- * (ui_color_picker.c today, color_picker_ui.c after the next phase)
- * read state through `ColorPickerView` and never mutate.
+ * (`src/ui/color_picker.c`) reads state through `ColorPickerView`
+ * and never mutates.
  *
  * Public API:
  *   - color_picker_open / _close / _active_line / _can_edit_cmd
@@ -21,8 +21,8 @@
  *     by the SV square, hue strip, alpha preview, and inline swatch
  *     drawers; RGB->HSV stays peer-private since only open/sync needs it.
  */
-#ifndef COLOR_PICKER_H
-#define COLOR_PICKER_H
+#ifndef COLOR_PICKER_STATE_H
+#define COLOR_PICKER_STATE_H
 
 /* Hit-rect bundle in y-up OpenGL coords. Materialized into the view so
  * UI hit-test and render don't recompute peer geometry. */

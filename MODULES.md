@@ -125,7 +125,7 @@ Consequences:
 | `variable_panel` peer | Variable-panel visibility flag + slider drag transaction (var_idx, log_mode, start_value, start_x). Storage in `variable_panel_state.c`. | Editor text behavior, REPL grammar |
 | `replay` peer | Replay state machine: PC, mode, speed, accum, fade speed, src_line_idx, total_flat_cmds, expand_args. Storage in `replay_state.c`. | Editor text behavior, REPL grammar |
 | `editor_help_session` peer | Help-overlay session state: tab_idx, scroll. Storage in `src/editor/help_session.c`. Visibility flag stays on `UiState.help` as chrome. | Help content (provided by content provider) |
-| `color_picker` peer | Floating color-picker state, lifecycle, slider input handlers, source-line writeback through editor commit. Storage in `color_picker.c`; peer view + `ColorPickerInputResult` in `color_picker.h`. | Picker rendering / hit-test (lives on `color_picker_ui.c`) |
+| `color_picker` peer | Floating color-picker state, lifecycle, slider input handlers, source-line writeback through editor commit. Storage in `color_picker_state.c`; peer view + `ColorPickerInputResult` in `color_picker_state.h`. | Picker rendering / hit-test (lives on `src/ui/color_picker.c`) |
 
 > The legacy forwarders (`ui_state_variable_panel*`, `editor_state_variable_drag*`,
 > `repl_state_replay*`) were retired in Phases J5–J7. Production callers and
@@ -307,7 +307,7 @@ controllers; UI may render them; their input routes to them through
 | `replay_state` | Peer subsystem: owns `ReplReplayRuntimeState` storage in `replay_state.c`. Narrow accessors (`replay_active`, `replay_pc`, `replay_mode`, …) plus `replay_state_view()` for the per-frame snapshot fill |
 | `replay` | Replay state machine implementation behind `replay_state`: PC stepping, mode toggling, fade batches. Routes via `replay_handle_pin_clicked` / `replay_handle_key` / `replay_handle_special` |
 | `editor_help_session` | Peer subsystem: read-only editor session for the help overlay (tab_idx, scroll). Visibility flag stays on `UiState.help` as chrome |
-| `color_picker` | Peer subsystem: floating HSV/alpha picker. Owns `g_cp_*` state, lifecycle (`color_picker_open` / `_close` / `_active_line` / `_can_edit_cmd`), input handlers (`color_picker_handle_press` / `_motion` / `_release` returning `ColorPickerInputResult`), and source-line writeback through `editor_commit_apply_external_change`. Exposes `color_picker_view()` for renderers and `color_picker_hsv_to_rgb` as a shared color-math helper. Renderer lives separately in `color_picker_ui.c` |
+| `color_picker` | Peer subsystem: floating HSV/alpha picker. Owns `g_cp_*` state, lifecycle (`color_picker_open` / `_close` / `_active_line` / `_can_edit_cmd`), input handlers (`color_picker_handle_press` / `_motion` / `_release` returning `ColorPickerInputResult`), and source-line writeback through `editor_commit_apply_external_change`. Exposes `color_picker_view()` for renderers and `color_picker_hsv_to_rgb` as a shared color-math helper. Storage lives in `color_picker_state.c`; renderer lives separately in `src/ui/color_picker.c` |
 | `repl_help_text` | REPL-side producer of the F1 help-overlay content. Walks `k_func_completions[]`, groups by `ReplHelpGroup`, emits per-command rows with header sections; appends hand-written language-level sections (Math operators, Variables, For-Loops, …) verbatim. Renderer (`src/ui/tabbed_overlay.c`) is feature-agnostic |
 
 Peer subsystems may *produce* overlays consumed by the editor (replay
@@ -383,7 +383,7 @@ allowlists. The contract is enforced by a per-feature lighter guard:
 | `ui_layout` | Pure scene/code-panel rectangle geometry |
 | `ui_code_panel_layout` | Pure text wrapping and visual-line iteration |
 | `ui_menu_bar` | Menu bar, dropdowns, pinned buttons, search entry, and menu hit-testing |
-| `color_picker_ui` | **Feature-UI** (color-picker peer): pure renderer + hit-test over `ColorPickerView`. State, lifecycle, and source-line writeback live on the `color_picker.c` peer; the UI side is mutator- and live-state-free, audited by `check-color-picker-ui-isolation` |
+| `src/ui/color_picker.c` | **Feature-UI** (color-picker peer): pure renderer + hit-test over `ColorPickerView`. State, lifecycle, and source-line writeback live on the `color_picker_state.c` peer; the UI side is mutator- and live-state-free, audited by `check-color-picker-ui-isolation` |
 | `ui_tabbed_overlay` | Generic modal tabbed text overlay renderer. Takes a `UiOverlayState` (visible / tab_idx / scroll / viewport / `UiOverlayContent`) and draws a titled, paged reference card. Knows nothing about REPL semantics. Currently consumed by the F1 help; available for future modal text panels |
 | `ui_variable_panel` | Renderer for the variable-slider panel (the panel chrome — the *peer subsystem* owns drag/visibility state). Input returns `UI_HIT_VARIABLE_SLIDER` |
 | `ui_autocomplete_panel` | Completion popup renderer; reads `EditorState.autocomplete` |
@@ -398,8 +398,8 @@ Files no longer in this layer:
   content is built REPL-side by `repl_help_text.c` from
   `k_func_completions[]` so adding a new GL command auto-populates
   the F1 overlay.
-- `ui_color_picker` → split into `color_picker.c` (peer state +
-  lifecycle + writeback) and `color_picker_ui.c` (renderer +
+- `ui_color_picker` → split into `color_picker_state.c` (peer state +
+  lifecycle + writeback) and `src/ui/color_picker.c` (renderer +
   hit-test). The picker UI is a pure renderer over `ColorPickerView`;
   the peer is the only mutator. Locked in by
   `check-color-picker-ui-isolation` (stricter than the replay-UI
@@ -478,7 +478,7 @@ flowchart LR
     subgraph peers["2b. Peer subsystems (own state + controller)"]
         vpanel["variable_panel_state.c + variable_panel_drag.c<br/>(was repl_var_drag)<br/>visibility + drag transaction"]
         replay_sys["replay.c + replay_state.c<br/>(was repl_replay)<br/>state machine · fades"]
-        cpicker["color_picker.c<br/>(was inside ui_color_picker)<br/>HSV/alpha state · lifecycle · writeback"]
+        cpicker["color_picker_state.c<br/>(was inside ui_color_picker)<br/>HSV/alpha state · lifecycle · writeback"]
         camera["repl_camera_controls.c<br/>orbit/pan/zoom transform<br/>(rename deferred — scene/viewport split)"]
     end
 
@@ -500,7 +500,7 @@ flowchart LR
         uihit["src/ui/hit.h<br/>UiHit · UiHitKind"]
         uipanels["src/ui/panels.c<br/>code panel · statusbar<br/>(returns UiHit)"]
         uimenu["src/ui/menu_bar.c<br/>menubar + dropdowns<br/>(returns UiHit)"]
-        uicolor["color_picker_ui.c<br/>color picker render + hit-test<br/>(feature-UI · reads ColorPickerView)"]
+        uicolor["src/ui/color_picker.c<br/>color picker render + hit-test<br/>(feature-UI · reads ColorPickerView)"]
         uitabbed["src/ui/tabbed_overlay.c<br/>generic modal tabbed text<br/>(content from repl_help_text.c)"]
         uivpanel["src/ui/variable_panel.c<br/>variable panel chrome"]
         uiac["src/ui/autocomplete_panel.c<br/>completion popup"]
@@ -785,6 +785,7 @@ side-effect routing. As of that branch landing:
   transitional readers.
 - **Input routing: done.** `ui_panels_hit_test`, `ui_menu_bar_hit_test`,
   `ui_color_picker_hit_test`, `ui_variable_panel_hit_test` produce
+
   passive `UiHit` results; `check-ui-returns-hits-only` is now at
   **0/0** — every legacy mid-input/mid-render mutator in `ui_*.c` is
   gone. Color-picker writeback routes through
@@ -853,7 +854,7 @@ side-effect routing. As of that branch landing:
   `check-layer-coupling` for 33 hard guards total.
   `check-public-api-usage` is informational. The most recent
   additions are `check-color-picker-ui-isolation` (the picker peer
-  split — `color_picker_ui*.c` is renderer + hit-test only, no
+  split — `src/ui/color_picker.c` is renderer + hit-test only, no
   state reads / mutations / parser / commit) and
   `check-replay-ui-isolation` (Phase J3.1, the feature-UI prefix
   discipline). `check-output-actualization` actively scans

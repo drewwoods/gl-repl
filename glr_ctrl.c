@@ -6,7 +6,7 @@
 #include <stdlib.h>
 
 #include "audio.h"
-#include "color_picker.h"
+#include "color_picker_state.h"
 #include "editor/clipboard.h"
 #include "editor/code_panel_document.h"
 #include "editor/commit.h"

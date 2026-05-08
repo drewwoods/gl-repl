@@ -1,22 +1,22 @@
 /*
- * color_picker_ui.c -- Floating color picker renderer + hit-test.
+ * src/ui/color_picker.c -- Floating color picker renderer + hit-test.
  *
- * Pure UI layer over the `color_picker.h` peer. Reads a frame-shaped
- * `ColorPickerView` for popup geometry/state and a couple of viewport
- * scalars; never mutates peer state, never reads live REPL/editor
- * state, and never calls the parser/commit pipeline.
+ * Pure UI layer over the `color_picker_state.h` peer. Reads a
+ * frame-shaped `ColorPickerView` for popup geometry/state and a
+ * couple of viewport scalars; never mutates peer state, never reads
+ * live REPL/editor state, and never calls the parser/commit pipeline.
  *
  * The companion guard `check-color-picker-ui-isolation.sh` enforces
  * that surface — anything mutating must live on the peer
- * (color_picker.c) or another module the controller routes to.
+ * (color_picker_state.c) or another module the controller routes to.
  */
-#include "color_picker_ui.h"
+#include "color_picker.h"
 
 #include "./include/gl_2d.h"
 
 #include <math.h>
 
-void color_picker_ui_render(const ColorPickerView *view,
+void ui_color_picker_render(const ColorPickerView *view,
                             int viewport_w, int viewport_h) {
     if (!view || !view->open) return;
 
@@ -174,7 +174,7 @@ void color_picker_ui_render(const ColorPickerView *view,
     gl2d_end();
 }
 
-UiHit color_picker_ui_hit_test(const ColorPickerView *view,
+UiHit ui_color_picker_hit_test(const ColorPickerView *view,
                                int mx, int my, int viewport_h) {
     UiHit h = ui_hit_none();
     if (!view || !view->open) return h;
@@ -203,7 +203,7 @@ UiHit color_picker_ui_hit_test(const ColorPickerView *view,
     return h;
 }
 
-void color_picker_ui_render_swatch(const EditorTransformer *t,
+void ui_color_picker_render_swatch(const EditorTransformer *t,
                                    int sx, int sy,
                                    int active_line) {
     if (!t || t->kind != TRANSFORMER_COLOR_PICKER)
