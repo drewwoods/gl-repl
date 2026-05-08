@@ -38,6 +38,6 @@
  * (geometry snapshot, cursor position). Called during guide rendering phase
  * if geometry guides are enabled. Provides real-time visual feedback for code
  * editing. */
-void scene_geometry_guides_render_for_cursor(const SceneGuideSnapshot *snapshot);
+void geometry_guides_render_for_cursor(const SceneGuideSnapshot *snapshot);
 
 #endif /* SCENE_GEOMETRY_GUIDES_H */

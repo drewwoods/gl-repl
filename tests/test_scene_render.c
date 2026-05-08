@@ -375,7 +375,7 @@ static void test_vertex2f_guide_cursor_dot(void) {
     snap.vertex_filled[0] = snap.vertex_filled[1] = snap.vertex_filled[2] = 1;
     snap.vertex_n_filled = 3;
     gl_stub_counts_reset();
-    scene_geometry_guides_render_for_cursor(&snap);
+    geometry_guides_render_for_cursor(&snap);
     unsigned long long points3f = gl_stub_counts[GL_STUB_glBegin];
     ASSERT_TRUE("vertex3f(1,2,3): guide draws GL_POINTS", points3f > 0);
 
@@ -387,7 +387,7 @@ static void test_vertex2f_guide_cursor_dot(void) {
     snap.vertex_filled[2] = 0;
     snap.vertex_n_filled = 2;
     gl_stub_counts_reset();
-    scene_geometry_guides_render_for_cursor(&snap);
+    geometry_guides_render_for_cursor(&snap);
     ASSERT_TRUE("vertex2f(1,2): guide draws GL_POINTS (same as vertex3f)",
                 gl_stub_counts[GL_STUB_glBegin] > 0);
 
@@ -400,7 +400,7 @@ static void test_vertex2f_guide_cursor_dot(void) {
     snap.vertex_filled[1] = snap.vertex_filled[2] = 0;
     snap.vertex_n_filled = 1;
     gl_stub_counts_reset();
-    scene_geometry_guides_render_for_cursor(&snap);
+    geometry_guides_render_for_cursor(&snap);
     ASSERT_TRUE("vertex2f(1,): partial entry still draws a guide",
                 gl_stub_counts[GL_STUB_glBegin] > 0);
 #else
