@@ -26,6 +26,8 @@
 #include "editor.h"
 #include "color_picker.h"
 
+#include "state_types.h"
+
 /* Forward decl: snapshot only carries a pointer; the full type lives
  * in ui_tabbed_overlay.h and is included by the controller (which
  * builds the value) and the renderer (which reads it). */

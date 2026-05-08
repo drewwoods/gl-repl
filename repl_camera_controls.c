@@ -8,6 +8,7 @@
  */
 #include "repl_camera_controls.h"
 #include "repl_state.h"
+#include "ui/state_types.h"
 
 /* Camera and pointer slices live on UiState. repl_*.c is not allowed
  * to include ui_state.h per check-controller-boundaries, so the

@@ -5,10 +5,9 @@
 #define REPL_STATE_VIEWS_H
 
 #include "repl_export_state.h"
+#include "config.h"          /* REPL_STATUS_TEXT_MAX */
 #include "scene/render_types.h"
 #include "repl_flatten.h"
-#include "ui/editor.h"
-#include "ui/state_types.h"  /* UI-chrome typedefs (CodePanel/Camera/Help/etc.) */
 
 #ifndef REPL_WORKSPACE_DIR_MAX
 #define REPL_WORKSPACE_DIR_MAX 1024

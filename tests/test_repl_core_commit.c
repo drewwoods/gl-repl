@@ -6,6 +6,7 @@
 #include "editor/clipboard.h"
 #include "editor/commit.h"
 #include "repl_state.h"
+#include "replay.h"
 #include "replay_state.h"
 #include "ui/state.h"
 #include "repl_replay_annotations.h"

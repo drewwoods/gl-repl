@@ -28,8 +28,8 @@
 #ifndef VARIABLE_PANEL_H
 #define VARIABLE_PANEL_H
 
-#include "repl_state_views.h"
 #include "editor/state.h"
+#include "ui/state_types.h"  /* UI-chrome typedefs (CodePanel/Camera/Help/etc.) */
 
 /* Composite peer state. The two slices are kept as their existing
  * typedefs so legacy accessors can return them by value without
