@@ -60,13 +60,22 @@ void scene_apply_camera(float rx, float ry, float dist,
  * Orchestrates projection setup, camera transforms, user geometry execution,
  * grid/axes, overlays, and edit guides.
  * Called once per frame (or multiple times per frame for accumulation-buffer
- * AA). The controller builds the config once and passes it in. */
-void scene_render_3d_scene(const SceneRenderConfig *config);
+ * AA). The controller builds the config once and passes it in.
+ *
+ * Returns 0 on success, -1 with errno = EINVAL if the config is rejected
+ * by validate_render_config: NULL config, non-positive scene_w / scene_h,
+ * out-of-range grid_theme / axes_theme, grid index out of range or grid
+ * extent/step <= 0 when grid is enabled, or accum_samples out of range
+ * when accumulation AA is on. */
+int scene_render_3d_scene(const SceneRenderConfig *config);
 
 /* Render the replay fade-batch pass: walk config->replay_fade_plan and replay
  * each active batch through config->execute_fn with its per-batch alpha.
  * Normally invoked internally by scene_render_3d_scene; exposed publicly so
- * benchmarks can isolate the fade-pass workload. */
-void scene_render_replay_fade_pass(const FrameRenderContext *frame_ctx);
+ * benchmarks can isolate the fade-pass workload.
+ *
+ * Returns 0 on success, -1 with errno = EINVAL on bad input (same checks
+ * as scene_render_3d_scene). */
+int scene_render_replay_fade_pass(const FrameRenderContext *frame_ctx);
 
 #endif /* SCENE_RENDER_H */
