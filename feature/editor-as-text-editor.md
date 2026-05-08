@@ -253,11 +253,21 @@ Read `editor_code_panel_document.c`. If it calls
 If it already does, drop the `#include "repl_replay_annotations.h"`
 if unused.
 
-### Phase 6 — Inline rename audit (~1 hr)
+### Phase 6 — Inline rename audit (~1 hr)  [LANDED 2026-05-08]
 
 Read `editor_inline_rename.c`. If it touches anything beyond
 user-scene rename APIs (text + status + scene name change), document
 and queue.
+
+**Audit result: clean, no code changes needed.** The file's only
+REPL calls are coarse scene-management ops on the user-scene API
+(`repl_user_scene_slot_used`, `repl_user_scene_name`,
+`repl_user_scene_rename`). Zero grammar reads (no `CMD_*`, `GLCmd`,
+parser/eval/compile/store-mutator touches). Status messages are
+editor-framed for the input session (`"Renamed to: %s"`,
+`"Scene name cannot be empty"`). Scene rename mutates metadata not
+the command store, so the compile/apply seam doesn't apply here —
+the direct user-scene API call is the right shape.
 
 ### Phase 7 — Search line-count source (~30 min)
 
