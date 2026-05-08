@@ -5,7 +5,7 @@
 #define REPL_STATE_VIEWS_H
 
 #include "repl_export_state.h"
-#include "scene_render_types.h"
+#include "scene/render_types.h"
 #include "repl_flatten.h"
 #include "ui_editor.h"
 

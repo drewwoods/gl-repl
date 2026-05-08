@@ -28,7 +28,7 @@
 #include "repl_export_state.h"
 #include "repl_state_views.h"
 #include "replay.h"
-#include "scene_render_types.h"
+#include "scene/render_types.h"
 
 #include <stddef.h>
 #include <stdio.h>

@@ -50,14 +50,14 @@
       "id": "scene_rendering",
       "label": "4. 3D scene rendering",
       "files": [
-        "scene_render.c",
-        "scene_geometry_guides.c",
-        "scene_transform_guides.c",
-        "scene_grid.c",
-        "scene_axes.c",
-        "scene_backdrop.c",
-        "scene_lights.c",
-        "scene_overlays.c",
+        "src/scene/render.c",
+        "src/scene/geometry_guides.c",
+        "src/scene/transform_guides.c",
+        "src/scene/grid.c",
+        "src/scene/axes.c",
+        "src/scene/backdrop.c",
+        "src/scene/lights.c",
+        "src/scene/overlays.c",
         "ui_replay_hud.c"
       ]
     },

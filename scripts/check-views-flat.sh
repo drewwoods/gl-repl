@@ -14,8 +14,8 @@ baseline_path = Path(sys.argv[1])
 patterns = [
     "repl_state_views.h",
     "ui_*.h",
-    "scene_render_types.h",
-    "scene_guides_shared.h",
+    "src/scene/render_types.h",
+    "src/scene/guides_shared.h",
 ]
 
 files = []

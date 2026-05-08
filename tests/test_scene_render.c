@@ -3,13 +3,13 @@
  * Tests operate independently of repl_state. Stub builds exercise the GL call
  * paths through no-op counters; real-GL builds avoid opening a GUI window.
  */
-#include "scene_grid.h"
-#include "scene_axes.h"
-#include "scene_backdrop.h"
-#include "scene_lights.h"
-#include "scene_overlays.h"
-#include "scene_geometry_guides.h"
-#include "scene_render_types.h"
+#include "scene/grid.h"
+#include "scene/axes.h"
+#include "scene/backdrop.h"
+#include "scene/lights.h"
+#include "scene/overlays.h"
+#include "scene/geometry_guides.h"
+#include "scene/render_types.h"
 #include "repl_flatten.h"
 
 #include "support/test_harness.h"
