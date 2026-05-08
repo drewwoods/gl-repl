@@ -29,9 +29,12 @@
 # count cannot grow past 3, so any new transitional forwarder fails
 # the check. Tightening the grep itself is a future refinement.
 #
-# The ui_state_includes_repl_views coupling stays at 1 until the
-# Repl*State typedefs relocate to a ui-owned header (Phase 5 typedef
-# migration); the corrected contract still drives that target to 0.
+# The Phase 5 typedef migration landed: the UI-chrome typedefs
+# (ReplCodePanelRuntimeState / ReplHelpState / ReplVariablePanelState /
+# ReplProfilePanelState / ReplStatusState / ReplCameraState /
+# ReplPointerState / ReplViewportState) moved from repl_state_views.h
+# to src/ui/state_types.h, and src/ui/state.h includes the ui-owned
+# header directly. The ratchet target reached 0.
 
 ui_forwarder_count: 3
-ui_state_includes_repl_views: 1
+ui_state_includes_repl_views: 0
