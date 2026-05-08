@@ -56,19 +56,19 @@ int main(void) {
         snapshot.edit_line_committed_text = "glTranslatef(1,2,3);";
         snapshot.replaying = 1;
         ASSERT_INT("prepare disabled while replaying",
-                   scene_transform_guides_prepare(&snapshot, &plan), 0);
+                   transform_guides_prepare(&snapshot, &plan), 0);
         ASSERT_INT("plan inactive while replaying", plan.active, 0);
 
         snapshot.replaying = 0;
         snapshot.show_guides = 0;
         ASSERT_INT("prepare disabled when guides hidden",
-                   scene_transform_guides_prepare(&snapshot, &plan), 0);
+                   transform_guides_prepare(&snapshot, &plan), 0);
         ASSERT_INT("plan inactive when guides hidden", plan.active, 0);
 
         snapshot.show_guides = 1;
         snapshot.edit_line_idx = -1;
         ASSERT_INT("prepare disabled for invalid edit line",
-                   scene_transform_guides_prepare(&snapshot, &plan), 0);
+                   transform_guides_prepare(&snapshot, &plan), 0);
         ASSERT_INT("plan inactive for invalid edit line", plan.active, 0);
     }
 
@@ -88,7 +88,7 @@ int main(void) {
                           "glTranslatef(1,2,3)");
         snapshot.edit_line_committed_text = "glTranslatef(1,2,3);";
         ASSERT_INT("prepare rejects invalid source cmd",
-                   scene_transform_guides_prepare(&snapshot, &plan), 0);
+                   transform_guides_prepare(&snapshot, &plan), 0);
 
         source_cmds[0].valid = 1;
         source_cmds[0].type = CMD_VERTEX3F;
@@ -96,14 +96,14 @@ int main(void) {
         snapshot.input_len = (int)strlen(snapshot.input);
         snapshot.edit_line_committed_text = "glVertex3f(1,2,3);";
         ASSERT_INT("prepare rejects non-transform source cmd",
-                   scene_transform_guides_prepare(&snapshot, &plan), 0);
+                   transform_guides_prepare(&snapshot, &plan), 0);
 
         source_cmds[0].type = CMD_SCALEF;
         snapshot.input = "glScalef(2,2,3)";
         snapshot.input_len = (int)strlen(snapshot.input);
         snapshot.edit_line_committed_text = "glScalef(2,2,2);";
         ASSERT_INT("prepare rejects modified source text",
-                   scene_transform_guides_prepare(&snapshot, &plan), 0);
+                   transform_guides_prepare(&snapshot, &plan), 0);
 
         source_cmds[0].type = CMD_TRANSLATE3F;
         flat_cmds[0].type = CMD_TRANSLATE3F;
@@ -111,7 +111,7 @@ int main(void) {
         snapshot.input_len = (int)strlen(snapshot.input);
         snapshot.edit_line_committed_text = "glTranslatef(1,2,3);";
         ASSERT_INT("prepare accepts translate",
-                   scene_transform_guides_prepare(&snapshot, &plan), 1);
+                   transform_guides_prepare(&snapshot, &plan), 1);
         ASSERT_INT("plan active for translate", plan.active, 1);
 
         source_cmds[0].type = CMD_SCALEF;
@@ -120,7 +120,7 @@ int main(void) {
         snapshot.input_len = (int)strlen(snapshot.input);
         snapshot.edit_line_committed_text = "glScalef(2,2,2);";
         ASSERT_INT("prepare accepts scale",
-                   scene_transform_guides_prepare(&snapshot, &plan), 1);
+                   transform_guides_prepare(&snapshot, &plan), 1);
 
         source_cmds[0].type = CMD_ROTATEF;
         flat_cmds[0].type = CMD_ROTATEF;
@@ -128,7 +128,7 @@ int main(void) {
         snapshot.input_len = (int)strlen(snapshot.input);
         snapshot.edit_line_committed_text = "glRotatef(45,0,1,0);";
         ASSERT_INT("prepare accepts rotate",
-                   scene_transform_guides_prepare(&snapshot, &plan), 1);
+                   transform_guides_prepare(&snapshot, &plan), 1);
     }
 
     {
@@ -157,7 +157,7 @@ int main(void) {
                           "glTranslatef(1,2,3)");
         snapshot.edit_line_committed_text = "glTranslatef(1,2,3);";
         ASSERT_INT("prepare activates for indexed flat stream",
-                   scene_transform_guides_prepare(&snapshot, &plan), 1);
+                   transform_guides_prepare(&snapshot, &plan), 1);
         ASSERT_INT("cursor flat idx picks first matching src cmd",
                    plan.cursor_flat_idx, 1);
         ASSERT_INT("after flat idx picks first different source",
@@ -185,7 +185,7 @@ int main(void) {
                           "glScalef(2,2,2)");
         snapshot.edit_line_committed_text = "glScalef(2,2,2);";
         ASSERT_INT("prepare activates when only cursor-source cmds remain",
-                   scene_transform_guides_prepare(&snapshot, &plan), 1);
+                   transform_guides_prepare(&snapshot, &plan), 1);
         ASSERT_INT("after index falls back to flat count",
                    plan.after_flat_idx, 2);
     }

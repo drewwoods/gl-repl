@@ -341,18 +341,18 @@ never read `ReplState`, `EditorState`, or `UiState` directly.
 
 | Module | Role |
 |--------|------|
-| `scene_render` | 3D frame setup: viewport, clear, projection, camera, accumulation loop, user-geometry execution hook |
-| `scene_render_types` | Scene config/context types and narrow callback interfaces |
-| `scene_grid` | Grid rendering and grid themes |
-| `scene_axes` | Axis rendering and axis themes |
-| `scene_backdrop` | Backdrop/environment rendering |
-| `scene_lights` | Baseline lighting and light indicators |
-| `scene_overlays` | REPL-aware outlines, vertex labels, normal vectors, and selection-like overlays |
-| `scene_geometry_guides` | Vertex/primitive guide rendering from snapshots |
-| `scene_transform_guides` | Transform-guide rendering from snapshots |
+| `src/scene/render` | 3D frame setup: viewport, clear, projection, camera, accumulation loop, user-geometry execution hook |
+| `src/scene/render_types` | Scene config/context types and narrow callback interfaces |
+| `src/scene/grid` | Grid rendering and grid themes |
+| `src/scene/axes` | Axis rendering and axis themes |
+| `src/scene/backdrop` | Backdrop/environment rendering |
+| `src/scene/lights` | Baseline lighting and light indicators |
+| `src/scene/overlays` | Tiny per-vertex GL primitives (vertex-number labels, normal arrows). REPL-walking overlays moved out to `imrepl_ctrl.c`. |
+| `geometry_guides` | Vertex/primitive guide rendering from snapshots. Lives at root (REPL-aware: knows about cursor input) |
+| `transform_guides` | Transform-guide rendering from snapshots. Lives at root (REPL-aware) |
 | `repl_camera_controls` *(rename to `scene_camera_controls` deferred — blocked on the scene/viewport split)* | Camera/view transform helpers — orbit/pan/zoom drag state machine. `imrepl_ctrl_router_handle_camera_mouse` drives input; scene consumes final camera state through `SceneRenderConfig` |
-| `scene_transform_utils` | Small GL matrix helpers used by renderers |
-| `scene_guides_shared` | Shared guide snapshot/planning types for REPL-aware 3D overlays |
+| `transform_utils` | Small GL matrix helpers used by `imrepl_ctrl.c` and `transform_guides.c` (root: no `src/scene/*.c` consumes it) |
+| `guides_shared` | Shared guide snapshot/planning types for REPL-aware 3D overlays (root, paired with the guides modules) |
 
 Scene code renders. It does not parse, edit, save, or dispatch UI actions.
 
@@ -502,7 +502,7 @@ flowchart LR
         uimenu["src/ui/menu_bar.c<br/>menubar + dropdowns<br/>(returns UiHit)"]
         uicolor["color_picker_ui.c<br/>color picker render + hit-test<br/>(feature-UI · reads ColorPickerView)"]
         uitabbed["src/ui/tabbed_overlay.c<br/>generic modal tabbed text<br/>(content from repl_help_text.c)"]
-        uivpanel["src/ui/variable_panel_state.c<br/>variable panel chrome"]
+        uivpanel["src/ui/variable_panel.c<br/>variable panel chrome"]
         uiac["src/ui/autocomplete_panel.c<br/>completion popup"]
         uiprof["src/ui/profile_panel.c<br/>timing HUD"]
         uirhud["replay_ui_hud.c<br/>replay HUD (feature-UI)"]
@@ -512,14 +512,14 @@ flowchart LR
     end
 
     subgraph scene_layer["4. 3D scene rendering"]
-        sceneR["scene_render.c<br/>3D frame"]
-        sgeomg["scene_geometry_guides.c<br/>geometry guides"]
-        sxformg["scene_transform_guides.c<br/>transform guides"]
-        sgrid["scene_grid.c<br/>grid"]
-        saxes["scene_axes.c<br/>axes"]
-        sbackdrop["scene_backdrop.c<br/>backdrop"]
-        slights["scene_lights.c<br/>lights"]
-        soverlays["scene_overlays.c<br/>overlays"]
+        sceneR["src/scene/render.c<br/>3D frame"]
+        sgeomg["geometry_guides.c<br/>geometry guides<br/>(REPL-aware, root)"]
+        sxformg["transform_guides.c<br/>transform guides<br/>(REPL-aware, root)"]
+        sgrid["src/scene/grid.c<br/>grid"]
+        saxes["src/scene/axes.c<br/>axes"]
+        sbackdrop["src/scene/backdrop.c<br/>backdrop"]
+        slights["src/scene/lights.c<br/>lights"]
+        soverlays["src/scene/overlays.c<br/>overlay primitives"]
     end
 
     %% sample.c hands raw GLUT events to the controller
@@ -737,7 +737,7 @@ state.
 
 `ui_*` and `scene_*` should not include each other's headers. Shared
 render-neutral types belong in explicit shared headers such as
-`scene_render_types.h` or `src/ui/snapshot.h`.
+`src/scene/render_types.h` or `src/ui/snapshot.h`.
 
 ## Where To Put New Code
 

@@ -31,8 +31,8 @@
 #include "replay_state.h"
 #include "scene/render.h"
 #include "scene/overlays.h"          /* scene_draw_vertex_number_label / _arrow primitives */
-#include "geometry_guides.h"   /* scene_geometry_guides_render_for_cursor */
-#include "transform_guides.h"  /* scene_transform_guides_prepare / _render_if_due */
+#include "geometry_guides.h"   /* geometry_guides_render_for_cursor */
+#include "transform_guides.h"  /* transform_guides_prepare / _render_if_due */
 #include "transform_utils.h"   /* apply_tracked_transform / unwind_transform_stack */
 #include "ui/autocomplete_panel.h"
 #include "color_picker_ui.h"
@@ -708,9 +708,9 @@ static void on_cmd_render_cursor_guides(const ReplVertexWalkState *state,
     int is_cursor = (state->src_cmd_idx == ctx->snapshot->edit_line_idx);
 
     if (is_cursor && !ctx->snapshot->replaying)
-        scene_geometry_guides_render_for_cursor(ctx->snapshot);
+        geometry_guides_render_for_cursor(ctx->snapshot);
 
-    scene_transform_guides_render_if_due(ctx->snapshot, &ctx->xform_plan,
+    transform_guides_render_if_due(ctx->snapshot, &ctx->xform_plan,
                                          state->flat_cmd_idx, ctx->cam_view);
 }
 
@@ -719,7 +719,7 @@ static void imrepl_ctrl_render_cursor_guides(const SceneGuideSnapshot *snapshot)
 
     CursorGuideRenderCtx ctx;
     ctx.snapshot = snapshot;
-    scene_transform_guides_prepare(snapshot, &ctx.xform_plan);
+    transform_guides_prepare(snapshot, &ctx.xform_plan);
 
     glPushAttrib(GL_ALL_ATTRIB_BITS);
     glDisable(GL_LIGHTING);

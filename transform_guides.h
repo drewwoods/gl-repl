@@ -13,13 +13,13 @@
  *   - Scale factors: Labeled indicators showing scale amounts
  *   - Matrix stack visualization: Indentation/nesting indicators for Push/Pop
  *
- * Planning: scene_transform_guides_prepare() analyzes the current snapshot of
+ * Planning: transform_guides_prepare() analyzes the current snapshot of
  * geometry and matrix stack state to determine which guides to render.
  * SceneTransformGuidePlan caches the guide data so render_if_due() can
  * efficiently draw it. This separation allows preparation to happen once and
  * rendering to happen conditionally (only when guides are visible or changed).
  *
- * Rendering: scene_transform_guides_render_if_due() draws guides for a specific
+ * Rendering: transform_guides_render_if_due() draws guides for a specific
  * flat command (if it's a transform command). Guides are drawn in the camera
  * view coordinate system so they appear stable in the viewport even as the
  * scene rotates/pans. Rendered with transparency so they don't fully occlude
@@ -39,7 +39,7 @@
  * plan. Called once per frame before rendering guides. Returns 1 if guides
  * were prepared, 0 if no guides are needed. snapshot describes the current
  * scene state; plan is filled with guide rendering data. */
-int scene_transform_guides_prepare(const SceneGuideSnapshot *snapshot,
+int transform_guides_prepare(const SceneGuideSnapshot *snapshot,
                                    SceneTransformGuidePlan *plan);
 
 /* Render transform guides for a specific flat command (if it's a transform).
@@ -48,7 +48,7 @@ int scene_transform_guides_prepare(const SceneGuideSnapshot *snapshot,
  * plan describe the scene state (from prepare()). flat_cmd_idx is the command
  * being rendered. cam_view is the camera view matrix for viewport-aligned
  * rendering. Called during guide rendering phase for each command. */
-void scene_transform_guides_render_if_due(const SceneGuideSnapshot *snapshot,
+void transform_guides_render_if_due(const SceneGuideSnapshot *snapshot,
                                           SceneTransformGuidePlan *plan,
                                           int flat_cmd_idx,
                                           const float cam_view[16]);

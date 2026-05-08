@@ -218,10 +218,12 @@ ownership / contract guards. Highlights:
 | `color_picker.h` | Peer API (`ColorPickerView`, `ColorPickerInputResult`, `color_picker_open/close/handle_*`, `color_picker_hsv_to_rgb`) |
 | `color_picker_ui.c` | Floating color picker renderer + hit-test (pure, takes `ColorPickerView *`) |
 | `color_picker_ui.h` | Picker UI render/hit-test API + `UI_COLOR_SWATCH_W` |
-| `ui_help_overlay.c` | Modal F1 help overlay (Commands / Keys tabs, dynamic F-key bindings) |
-| `ui_help_overlay.h` | Help overlay render entrypoint |
-| `src/ui/variable_panel_state.c` | Floating variable slider panel rendering, geometry, and hit-test |
-| `src/ui/variable_panel_state.h` | Variable panel render/rect/hit API |
+| `src/ui/tabbed_overlay.c` | Generic modal tabbed text overlay renderer (the F1 help overlay's UI shell) |
+| `src/ui/tabbed_overlay.h` | Tabbed-overlay render API (`UiOverlayState`, `UiOverlayContent`) |
+| `repl_help_text.c` | Builds the F1 help overlay's content table (commands, key bindings) consumed by `tabbed_overlay` |
+| `repl_help_text.h` | Help-content public API |
+| `src/ui/variable_panel.c` | Floating variable slider panel rendering, geometry, and hit-test |
+| `src/ui/variable_panel.h` | Variable panel render/rect/hit API |
 | `src/ui/autocomplete_panel.c` | Floating autocomplete popup renderer (reads `editor_autocomplete.c` model) |
 | `src/ui/autocomplete_panel.h` | Autocomplete popup render entrypoint |
 | `editor_inline_rename.c` | Inline scene-rename input buffer and key handling (status-bar overlay) |
@@ -242,25 +244,25 @@ ownership / contract guards. Highlights:
 | `repl_export.h` | Export/import public API and workspace-header pending-state types |
 | `prof.c` | CPU wall-time profiling instrumentation (per-section accumulators, frame tick) |
 | `prof.h` | Profiling API (`prof_begin`, `prof_end`, `prof_frame_tick`, etc.); no UI dependency |
-| `scene_render_types.h` | Shared `SceneRgba` / `SceneRenderConfig` / `FrameRenderContext` types for scene helpers |
-| `scene_guides_shared.h` | Shared guide snapshot and planning types for REPL-aware 3D overlay passes |
-| `scene_geometry_guides.c` | Vertex/primitive guide rendering (input context at cursor) from `SceneGuideSnapshot` |
-| `scene_geometry_guides.h` | Geometry guides render entrypoint |
-| `scene_transform_guides.c` | Transform guide rendering (pending matrix ops during replay) |
-| `scene_transform_guides.h` | Transform guides render entrypoint |
-| `scene_transform_utils.h` | Header-only GL matrix helpers mirroring executor transforms without requiring `repl_executor.h` |
-| `scene_render.c` | 3D scene frame orchestration, one-shot init, scene config/frame prep, edit guides, orbit target, replay fade pass orchestration |
-| `scene_grid.c` | Grid theme rendering and custom focus/ocean/ruler/planes passes |
-| `scene_grid.h` | Grid render entrypoint |
-| `scene_axes.c` | Axes theme rendering |
-| `scene_axes.h` | Axes render entrypoint |
-| `scene_render.h` | Declares `scene_render_3d_scene(const SceneRenderConfig *)` |
-| `scene_backdrop.c` | Backdrop mode dispatch and deterministic cityscape renderer |
-| `scene_backdrop.h` | Backdrop render entrypoint |
-| `scene_lights.c` | Ambient init, light setup/reset, and visible light indicator overlay |
-| `scene_lights.h` | Scene light setup/render entrypoints |
-| `scene_overlays.c` | Polygon outline/current-block, vertex-number, and normal-vector overlays |
-| `scene_overlays.h` | Scene overlay render/helper API |
+| `src/scene/render_types.h` | Shared `SceneRgba` / `SceneRenderConfig` / `FrameRenderContext` types for scene helpers |
+| `guides_shared.h` | Shared guide snapshot and planning types for REPL-aware 3D overlay passes (lives at root because no `src/scene/*.c` consumes it; see also `transform_utils.h`) |
+| `geometry_guides.c` | Vertex/primitive guide rendering (input context at cursor) from `SceneGuideSnapshot` |
+| `geometry_guides.h` | Geometry guides render entrypoint |
+| `transform_guides.c` | Transform guide rendering (pending matrix ops during replay) |
+| `transform_guides.h` | Transform guides render entrypoint |
+| `transform_utils.h` | Header-only GL matrix helpers (`apply_tracked_transform`, `unwind_transform_stack`) mirroring executor transforms without requiring `repl_executor.h` |
+| `src/scene/render.c` | 3D scene frame orchestration, one-shot init, scene config/frame prep, edit guides, orbit target, replay fade pass orchestration |
+| `src/scene/grid.c` | Grid theme rendering and custom focus/ocean/ruler/planes passes |
+| `src/scene/grid.h` | Grid render entrypoint |
+| `src/scene/axes.c` | Axes theme rendering |
+| `src/scene/axes.h` | Axes render entrypoint |
+| `src/scene/render.h` | Declares `scene_render_3d_scene(const SceneRenderConfig *)` and `scene_apply_camera(...)` |
+| `src/scene/backdrop.c` | Backdrop mode dispatch and deterministic cityscape renderer |
+| `src/scene/backdrop.h` | Backdrop render entrypoint |
+| `src/scene/lights.c` | Ambient init, light setup/reset, and visible light indicator overlay |
+| `src/scene/lights.h` | Scene light setup/render entrypoints |
+| `src/scene/overlays.c` | Tiny per-vertex GL primitives the controller calls (vertex-number labels, normal arrows). Outline / vertex-point passes moved to `imrepl_ctrl.c` |
+| `src/scene/overlays.h` | Scene overlay primitive API |
 | `src/ui/panels.c` | Code-panel row rendering (incl. inline ghost/hint text), scene status banner, top-level panel hit routing |
 | `src/ui/panels.h` | Code-panel geometry, render, hit-test, and panel input bridge declarations |
 | `repl_eval.c` | Expression evaluator (recursive descent), REPL<->C translators, for-loop parsers |
@@ -328,17 +330,17 @@ When a module starts owning mutable REPL state, follow the Stage-1 template:
 
 ## Adding Grid/Axes Themes
 
-Grids and axes are themeable through small specs in `scene_grid.c` and
-`scene_axes.c`:
+Grids and axes are themeable through small specs in `src/scene/grid.c` and
+`src/scene/axes.c`:
 1. Add a new entry to the `GridTheme` (or `AxesTheme`) enum in `sample.h`
    before the trailing `_COUNT` sentinel
 2. Add the name string at that enum's index in `g_grid_names[]`
    (or `g_axes_names[]`) in `repl_core.c` — both arrays use designated
    initializers keyed on the enum, so order is validated at compile time
-3. Add a matching `GridThemeSpec` entry in `scene_grid.c` for standard grid
-   line/color themes and an `AxesThemeSpec` entry in `scene_axes.c` for
+3. Add a matching `GridThemeSpec` entry in `src/scene/grid.c` for standard grid
+   line/color themes and an `AxesThemeSpec` entry in `src/scene/axes.c` for
    standard axes themes. Keep custom geometry-heavy grid cases in
-   `scene_grid.c`.
+   `src/scene/grid.c`.
 4. The theme cycles via F3 (grid) / F4 (axes); the special-key route
    in `editor_input.c` calls `repl_cfg_handle_special_shortcut`, which
    walks `g_cfg_items[]` in `repl_actions.c` and cycles the matching

@@ -3,11 +3,11 @@
  */
 #include "geometry_guides.h"
 
-static void scene_geometry_guides_push_state(void) {
+static void geometry_guides_push_state(void) {
     glPushAttrib(GL_ALL_ATTRIB_BITS);
 }
 
-static void scene_geometry_guides_pop_state(void) {
+static void geometry_guides_pop_state(void) {
     glPopAttrib();
 }
 
@@ -86,7 +86,7 @@ static void draw_vertex_guides(const SceneGuideSnapshot *snapshot) {
     float sz = 3.0f;
     float as = snapshot->alpha_scale;
 
-    scene_geometry_guides_push_state();
+    geometry_guides_push_state();
     glDisable(GL_LIGHTING);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -142,7 +142,7 @@ static void draw_vertex_guides(const SceneGuideSnapshot *snapshot) {
 
     glDisable(GL_BLEND);
     if (snapshot->user_lighting_enabled) glEnable(GL_LIGHTING);
-    scene_geometry_guides_pop_state();
+    geometry_guides_pop_state();
 }
 
 static void draw_normal_guides(const SceneGuideSnapshot *snapshot) {
@@ -232,7 +232,7 @@ static void draw_normal_guides(const SceneGuideSnapshot *snapshot) {
 
     float scale = 0.45f;
 
-    scene_geometry_guides_push_state();
+    geometry_guides_push_state();
     glDisable(GL_LIGHTING);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -283,10 +283,10 @@ static void draw_normal_guides(const SceneGuideSnapshot *snapshot) {
 
     glDisable(GL_BLEND);
     if (snapshot->user_lighting_enabled) glEnable(GL_LIGHTING);
-    scene_geometry_guides_pop_state();
+    geometry_guides_pop_state();
 }
 
-void scene_geometry_guides_render_for_cursor(const SceneGuideSnapshot *snapshot) {
+void geometry_guides_render_for_cursor(const SceneGuideSnapshot *snapshot) {
     if (!snapshot)
         return;
     draw_vertex_guides(snapshot);
