@@ -112,9 +112,9 @@ all: sample
 # Used to force rebuild if you list as a prerequisite, e.g. `test_eval: FORCE $(test_eval_OBJS)`.
 FORCE:
 
-SRCS = sample.c imrepl_ctrl.c repl_core.c repl_debug.c repl_state.c src/editor/state.c src/editor/commit.c src/editor/services.c src/editor/input.c src/editor/help_session.c src/editor/completion.c src/ui/state.c variable_panel_state.c replay_state.c repl_config.c repl_command_spec.c repl_parser.c repl_source_scope.c repl_command_store.c repl_compile.c repl_apply.c src/editor/clipboard.c src/editor/undo.c repl_camera_controls.c repl_actions.c src/ui/layout.c src/ui/code_panel_layout.c src/editor/code_panel_document.c repl_flatten.c repl_executor.c repl_autocomplete.c src/ui/autocomplete_panel.c repl_autonormal.c repl_scenes.c repl_example_loader.c replay.c repl_replay_annotations.c src/editor/search.c repl_export.c repl_examples.c src/scene/render.c geometry_guides.c transform_guides.c src/scene/grid.c src/scene/axes.c src/scene/backdrop.c src/scene/lights.c src/scene/overlays.c src/ui/panels.c src/ui/menu_bar.c color_picker_ui.c color_picker.c src/ui/tabbed_overlay.c repl_help_text.c src/ui/variable_panel.c replay_ui_hud.c variable_panel_drag.c src/editor/inline_rename.c repl_eval.c cmd_format.c repl_audio.c src/ui/profile_panel.c prof.c tests/gl-stubs/gl_stub_counts.c
-HDRS = sample.h src/editor/search.h imrepl_ctrl.h repl_state.h src/editor/state.h src/editor/commit.h src/editor/services.h src/editor/input.h src/editor/help_session.h src/editor/completion.h src/ui/state.h src/ui/state_types.h variable_panel_state.h replay_state.h repl_config.h repl_core.h repl_core_internal.h repl_debug.h repl_command_spec.h repl_parser.h repl_source_scope.h repl_command_store.h repl_compile.h repl_apply.h src/ui/layout.h repl_pipeline.h src/editor/clipboard.h src/editor/undo.h repl_camera_controls.h repl_actions.h src/ui/code_panel_layout.h src/editor/code_panel_document.h replay.h repl_replay_annotations.h repl_examples.h src/scene/render_types.h guides_shared.h geometry_guides.h transform_guides.h transform_utils.h outline_offset.h src/scene/grid.h src/scene/axes.h src/scene/render.h src/scene/backdrop.h src/scene/lights.h src/scene/overlays.h src/ui/panels.h src/ui/menu_bar.h color_picker_ui.h color_picker.h src/ui/tabbed_overlay.h repl_help_text.h src/ui/variable_panel.h replay_ui_hud.h variable_panel_drag.h src/ui/autocomplete_panel.h src/editor/inline_rename.h repl_eval.h cmd_format.h repl_audio.h src/ui/profile_panel.h prof.h
-CORE_TEST_SRCS = repl_core.c imrepl_ctrl.c repl_debug.c repl_state.c src/editor/state.c src/editor/commit.c src/editor/services.c src/editor/input.c src/editor/help_session.c src/editor/completion.c src/ui/state.c variable_panel_state.c replay_state.c repl_config.c repl_command_spec.c repl_parser.c repl_source_scope.c repl_command_store.c repl_compile.c repl_apply.c src/editor/clipboard.c src/editor/undo.c repl_camera_controls.c repl_actions.c src/ui/layout.c src/ui/code_panel_layout.c src/editor/code_panel_document.c repl_flatten.c repl_executor.c repl_autocomplete.c src/ui/autocomplete_panel.c repl_autonormal.c repl_scenes.c repl_example_loader.c replay.c repl_replay_annotations.c src/editor/search.c repl_export.c repl_examples.c src/scene/render.c geometry_guides.c transform_guides.c src/scene/grid.c src/scene/axes.c src/scene/backdrop.c src/scene/lights.c src/scene/overlays.c src/ui/panels.c src/ui/menu_bar.c color_picker_ui.c color_picker.c src/ui/tabbed_overlay.c repl_help_text.c src/ui/variable_panel.c replay_ui_hud.c variable_panel_drag.c src/editor/inline_rename.c repl_eval.c cmd_format.c repl_audio.c src/ui/profile_panel.c prof.c tests/gl-stubs/gl_stub_counts.c
+SRCS = sample.c imrepl_ctrl.c repl_core.c repl_debug.c repl_state.c src/editor/state.c src/editor/commit.c src/editor/services.c src/editor/input.c src/editor/help_session.c src/editor/completion.c src/ui/state.c variable_panel_state.c replay_state.c repl_config.c repl_command_spec.c repl_parser.c repl_source_scope.c repl_command_store.c repl_compile.c repl_apply.c src/editor/clipboard.c src/editor/undo.c repl_camera_controls.c repl_actions.c src/ui/layout.c src/ui/code_panel_layout.c src/editor/code_panel_document.c repl_flatten.c repl_executor.c repl_autocomplete.c src/ui/autocomplete_panel.c repl_autonormal.c repl_scenes.c repl_example_loader.c replay.c repl_replay_annotations.c src/editor/search.c repl_export.c repl_examples.c src/scene/render.c geometry_guides.c transform_guides.c src/scene/grid.c src/scene/axes.c src/scene/backdrop.c src/scene/lights.c src/scene/overlays.c src/ui/panels.c src/ui/menu_bar.c color_picker_ui.c color_picker.c src/ui/tabbed_overlay.c repl_help_text.c src/ui/variable_panel.c replay_ui_hud.c variable_panel_drag.c src/editor/inline_rename.c repl_eval.c cmd_format.c audio.c src/ui/profile_panel.c prof.c tests/gl-stubs/gl_stub_counts.c
+HDRS = sample.h src/editor/search.h imrepl_ctrl.h repl_state.h src/editor/state.h src/editor/commit.h src/editor/services.h src/editor/input.h src/editor/help_session.h src/editor/completion.h src/ui/state.h src/ui/state_types.h variable_panel_state.h replay_state.h repl_config.h repl_core.h repl_core_internal.h repl_debug.h repl_command_spec.h repl_parser.h repl_source_scope.h repl_command_store.h repl_compile.h repl_apply.h src/ui/layout.h repl_pipeline.h src/editor/clipboard.h src/editor/undo.h repl_camera_controls.h repl_actions.h src/ui/code_panel_layout.h src/editor/code_panel_document.h replay.h repl_replay_annotations.h repl_examples.h src/scene/render_types.h guides_shared.h geometry_guides.h transform_guides.h transform_utils.h outline_offset.h src/scene/grid.h src/scene/axes.h src/scene/render.h src/scene/backdrop.h src/scene/lights.h src/scene/overlays.h src/ui/panels.h src/ui/menu_bar.h color_picker_ui.h color_picker.h src/ui/tabbed_overlay.h repl_help_text.h src/ui/variable_panel.h replay_ui_hud.h variable_panel_drag.h src/ui/autocomplete_panel.h src/editor/inline_rename.h repl_eval.h cmd_format.h audio.h src/ui/profile_panel.h prof.h
+CORE_TEST_SRCS = repl_core.c imrepl_ctrl.c repl_debug.c repl_state.c src/editor/state.c src/editor/commit.c src/editor/services.c src/editor/input.c src/editor/help_session.c src/editor/completion.c src/ui/state.c variable_panel_state.c replay_state.c repl_config.c repl_command_spec.c repl_parser.c repl_source_scope.c repl_command_store.c repl_compile.c repl_apply.c src/editor/clipboard.c src/editor/undo.c repl_camera_controls.c repl_actions.c src/ui/layout.c src/ui/code_panel_layout.c src/editor/code_panel_document.c repl_flatten.c repl_executor.c repl_autocomplete.c src/ui/autocomplete_panel.c repl_autonormal.c repl_scenes.c repl_example_loader.c replay.c repl_replay_annotations.c src/editor/search.c repl_export.c repl_examples.c src/scene/render.c geometry_guides.c transform_guides.c src/scene/grid.c src/scene/axes.c src/scene/backdrop.c src/scene/lights.c src/scene/overlays.c src/ui/panels.c src/ui/menu_bar.c color_picker_ui.c color_picker.c src/ui/tabbed_overlay.c repl_help_text.c src/ui/variable_panel.c replay_ui_hud.c variable_panel_drag.c src/editor/inline_rename.c repl_eval.c cmd_format.c audio.c src/ui/profile_panel.c prof.c tests/gl-stubs/gl_stub_counts.c
 
 REPL_SRCS = $(filter repl_%.c,$(SRCS))
 SCENE_SRCS = $(filter src/scene/%.c,$(SRCS))
@@ -153,7 +153,7 @@ TEST_BINS = \
 	test_repl_core_search_extra \
 	test_editor_completion \
 	test_ui_menu_bar \
-	test_repl_audio \
+	test_audio \
 	test_repl_core_internal \
 	test_repl_autocomplete \
 	test_repl_command_store \
@@ -173,7 +173,7 @@ TEST_BINS += test_repl_actions
 TEST_BINS += test_repl_executor
 endif
 
-CORE_TEST_BINS = $(filter-out test_eval test_format test_repl_code_panel_layout test_repl_audio,$(TEST_BINS))
+CORE_TEST_BINS = $(filter-out test_eval test_format test_repl_code_panel_layout test_audio,$(TEST_BINS))
 
 # Benchmark binaries follow the same linking pattern as core test binaries
 # (they reuse CORE_TEST_OBJS so they work in both real-GL and stubs builds),
@@ -208,9 +208,9 @@ test_repl_code_panel_layout_OBJS = $(OBJDIR)/$(TEST_DIR)/test_repl_code_panel_la
 test_repl_code_panel_layout_LDLIBS =
 test_repl_code_panel_layout_RUN ?= ./test_repl_code_panel_layout
 
-test_repl_audio_OBJS = $(OBJDIR)/$(TEST_DIR)/test_repl_audio.o $(OBJDIR)/repl_audio.o
-test_repl_audio_LDLIBS = $(GL_LDFLAGS)
-test_repl_audio_RUN ?= ./test_repl_audio
+test_audio_OBJS = $(OBJDIR)/$(TEST_DIR)/test_audio.o $(OBJDIR)/audio.o
+test_audio_LDLIBS = $(GL_LDFLAGS)
+test_audio_RUN ?= ./test_audio
 
 # For tests using the "include-as-unit" pattern (e.g., `#include "file.c"` to test
 # internal static functions), we must filter out the original object file from
@@ -573,7 +573,7 @@ coverage: ## Clean, rebuild tests with coverage, run suite, generate HTML report
 
 SANITIZER_CHECKERS ?= core,deadcode,unix,cplusplus,osx
 # Files to exclude from static analysis (e.g., third-party library includes)
-ANALYZE_EXCLUDE ?= repl_audio.c
+ANALYZE_EXCLUDE ?= audio.c
 ANALYZE_SRCS = $(filter-out $(ANALYZE_EXCLUDE),$(SRCS))
 
 analyze: ## Run static analyzer (clang on macOS, gcc on Linux).
