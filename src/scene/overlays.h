@@ -59,17 +59,18 @@ void scene_overlays_render_outlines(const FrameRenderContext *frame_ctx,
                                     int show_current_poly,
                                     int replay_tess_preview);
 
-/* Render vertex numbers (small text labels at each vertex showing index).
- * Useful for debugging index order, primitive winding, and vertex positioning.
- * Called during the overlay rendering phase if vertex number overlay is enabled
- * (F6). */
-void scene_overlays_render_vertex_numbers(const FrameRenderContext *frame_ctx);
-
-/* Render normal vectors (colored lines extending from each vertex showing
- * surface normal direction). Color-coded by matrix depth for visual clarity.
- * Called during the overlay rendering phase if normal vector overlay is enabled
- * (F7). Helps users understand surface orientation and normals computation. */
-void scene_overlays_render_normal_vectors(const FrameRenderContext *frame_ctx);
+/* Per-vertex primitive renderers exposed for the controller's overlay
+ * orchestration. Each draws ONE label / arrow at a transformed position;
+ * iteration of the user's program and applying transforms is the
+ * controller's responsibility (it walks the program via
+ * repl_walk_user_vertices and calls these primitives at each visit).
+ * The controller is also responsible for setting up the surrounding GL
+ * state (color, depth disable, push/pop attribs). */
+void scene_draw_vertex_number_label(int vertex_idx,
+                                    float vx, float vy, float vz);
+void scene_draw_normal_vector_arrow(float vx, float vy, float vz,
+                                    float nx, float ny, float nz,
+                                    float scale);
 
 /* Render semi-transparent vertex point dots at each vertex position.
  * Points are alpha-blended so they don't obscure underlying geometry.
