@@ -26,11 +26,20 @@
 #include "repl_compile.h"
 
 #include "repl_core_internal.h"  /* repl_format_fits, repl_extract_assignment_parts, collect_visible_vars */
-#include "repl_source_scope.h"   /* repl_source_scope_cmd_indent */
+#include "repl_parser.h"         /* repl_parser_parse_command_ctx (uncomment fallback) */
+#include "repl_source_scope.h"   /* repl_source_scope_cmd_indent, _find_block_end */
 
 #include <ctype.h>
 #include <stdio.h>
 #include <string.h>
+
+/* Forward decl. Body lives in editor_services.c. The dispatch
+ * function is grammar-side; its current location is a historical
+ * artifact and should migrate to repl_compile.c in a follow-up. */
+ReplCompileResult repl_compile_dispatch(const char *text,
+                                        const ReplCompileContext *ctx,
+                                        ReplCompiledChange *out,
+                                        char *err, int err_size);
 
 void repl_compiled_change_init(ReplCompiledChange *out) {
     if (!out) return;
@@ -900,4 +909,218 @@ ReplCompileResult repl_compile_delete_range(int start, int count,
              "Removed %d line%s", count, count > 1 ? "s" : "");
 
     return REPL_COMPILE_OK;
+}
+
+/* Build "<leading_ws><prefix><rest_of_line>" into `dst`. Returns the
+ * number of bytes written (excluding the NUL). Truncates safely if
+ * the source overflows `cap`. */
+static int compile_prepend_prefix(const char *orig, const char *prefix,
+                                  char *dst, int cap) {
+    int off = 0;
+    int ws = 0;
+    int prefix_len;
+
+    if (cap <= 0) return 0;
+    if (!orig) orig = "";
+    if (!prefix) prefix = "";
+    prefix_len = (int)strlen(prefix);
+
+    while (orig[ws] && isspace((unsigned char)orig[ws]))
+        ws++;
+    for (int k = 0; k < ws && off < cap - 1; k++)
+        dst[off++] = orig[k];
+    for (int k = 0; k < prefix_len && off < cap - 1; k++)
+        dst[off++] = prefix[k];
+    for (int k = ws; orig[k] && off < cap - 1; k++)
+        dst[off++] = orig[k];
+    dst[off] = '\0';
+    return off;
+}
+
+/* Strip the configured prefix from `orig`. Returns 1 if the line
+ * begins with `prefix` after leading whitespace and the stripped
+ * result was written to `dst`; 0 otherwise (line doesn't carry the
+ * configured prefix). */
+static int compile_strip_prefix(const char *orig, const char *prefix,
+                                char *dst, int cap) {
+    int ws = 0;
+    int prefix_len;
+    int off = 0;
+
+    if (cap <= 0) return 0;
+    if (!orig) orig = "";
+    if (!prefix || !prefix[0]) return 0;
+    prefix_len = (int)strlen(prefix);
+
+    while (orig[ws] && isspace((unsigned char)orig[ws]))
+        ws++;
+    if (strncmp(orig + ws, prefix, (size_t)prefix_len) != 0)
+        return 0;
+
+    for (int k = 0; k < ws && off < cap - 1; k++)
+        dst[off++] = orig[k];
+    for (int k = ws + prefix_len; orig[k] && off < cap - 1; k++)
+        dst[off++] = orig[k];
+    dst[off] = '\0';
+    return 1;
+}
+
+/* Scan backward from `end_idx` (a CMD_FOR_END / CMD_FUNC_END /
+ * CMD_IF_END row) to find the matching block-head row. Returns the
+ * head index or -1 if unmatched. */
+static int compile_find_block_head(const ReplCompileContext *ctx,
+                                   int end_idx) {
+    int depth = 1;
+    for (int j = end_idx - 1; j >= 0; j--) {
+        CmdType t = ctx->document_cmds[j].type;
+        if (t == CMD_FOR_END || t == CMD_FUNC_END || t == CMD_IF_END) {
+            depth++;
+        } else if (t == CMD_FOR_BEGIN || t == CMD_FUNC_DEF || t == CMD_IF_BEGIN) {
+            depth--;
+            if (depth == 0) return j;
+        }
+    }
+    return -1;
+}
+
+ReplCompileResult repl_compile_toggle_comment(int line_idx,
+                                              const char *prefix,
+                                              const ReplCompileContext *ctx,
+                                              ReplCompiledChange *out,
+                                              char *err, int err_size) {
+    CmdType type;
+    int is_block_head;
+    int is_block_end;
+
+    if (!ctx || !out)
+        return REPL_COMPILE_ERROR;
+
+    repl_compiled_change_init(out);
+    if (err && err_size > 0)
+        err[0] = '\0';
+
+    if (!prefix || !prefix[0])
+        return REPL_COMPILE_OK;
+    if (line_idx < 0 || line_idx >= ctx->document_count)
+        return REPL_COMPILE_OK;
+
+    type = ctx->document_cmds[line_idx].type;
+    is_block_head = (type == CMD_FOR_BEGIN || type == CMD_FUNC_DEF ||
+                     type == CMD_IF_BEGIN);
+    is_block_end  = (type == CMD_FOR_END || type == CMD_FUNC_END ||
+                     type == CMD_IF_END);
+
+    /* Block head/end: batch-comment the whole [head..end] range. */
+    if (is_block_head || is_block_end) {
+        int head;
+        int end;
+        int n;
+
+        if (is_block_head) {
+            head = line_idx;
+            end = repl_source_scope_find_block_end(line_idx);
+            if (end >= ctx->document_count)
+                return compile_set_err(err, err_size, "Unmatched block start");
+        } else {
+            end = line_idx;
+            head = compile_find_block_head(ctx, line_idx);
+            if (head < 0)
+                return compile_set_err(err, err_size, "Unmatched block end");
+        }
+
+        n = end - head + 1;
+        if (n > MAX_COMMIT_CMDS)
+            return compile_set_err(err, err_size,
+                                   "Block too large to toggle (max %d lines)",
+                                   MAX_COMMIT_CMDS);
+
+        for (int i = 0; i < n; i++) {
+            const char *orig = editor_buffer_view_line(ctx->text, head + i);
+            compile_prepend_prefix(orig, prefix,
+                                   out->text[i], (int)sizeof(out->text[i]));
+            memset(&out->cmds[i], 0, sizeof(out->cmds[i]));
+            out->cmds[i].type = CMD_COMMENT;
+            out->cmds[i].valid = 1;
+        }
+
+        out->kind = REPL_COMPILED_INSERT_MANY;
+        out->pos = head;
+        out->count = n;
+        out->delete_pos = head;
+        out->delete_count = n;
+        out->adjust_edit_line = 0;
+        snprintf(out->commit_message, sizeof(out->commit_message),
+                 "Commented out %d line%s", n, n > 1 ? "s" : "");
+        return REPL_COMPILE_OK;
+    }
+
+    /* CMD_COMMENT: strip prefix and re-parse. */
+    if (type == CMD_COMMENT) {
+        const char *orig = editor_buffer_view_line(ctx->text, line_idx);
+        char stripped[MAX_LINE_LEN];
+        ReplCompileResult r;
+
+        if (!compile_strip_prefix(orig, prefix, stripped, sizeof(stripped)))
+            return compile_set_err(err, err_size,
+                                   "Line not commented with the configured prefix");
+
+        /* Run the float-decl + var-assign dispatch chain. */
+        r = repl_compile_dispatch(stripped, ctx, out, err, err_size);
+        if (r != REPL_COMPILE_OK)
+            return r;
+
+        if (out->kind == REPL_COMPILED_NO_CHANGE) {
+            /* Dispatch didn't recognize. Try the GL-command parser. */
+            ReplParsedLine pl;
+            char parser_err[REPL_STATUS_TEXT_MAX];
+            ReplParseContext parse_ctx = {
+                .source_line_idx = line_idx,
+                .vars            = NULL,
+                .num_vars        = 0,
+                .strict_refs     = 0,
+                .err_buf         = parser_err,
+                .err_sz          = (int)sizeof(parser_err),
+            };
+            parser_err[0] = '\0';
+            if (!repl_parser_parse_command_ctx(stripped, &pl, &parse_ctx))
+                return compile_set_err(err, err_size,
+                                       "Cannot uncomment: not a valid command");
+            repl_compiled_change_init(out);
+            out->cmds[0] = pl.cmd;
+            repl_copy_string_fits(out->text[0], sizeof(out->text[0]), pl.text);
+        }
+
+        /* Coerce dispatch / parser result to REPLACE_ONE at line_idx. */
+        if (out->kind == REPL_COMPILED_INSERT_MANY ||
+            out->kind == REPL_COMPILED_DELETE_RANGE ||
+            out->kind == REPL_COMPILED_LOAD_ALL)
+            return compile_set_err(err, err_size,
+                                   "Cannot uncomment into multi-line construct");
+        out->kind = REPL_COMPILED_REPLACE_ONE;
+        out->pos = line_idx;
+        out->count = 1;
+        out->adjust_edit_line = 0;
+        out->delete_pos = -1;
+        out->delete_count = 0;
+        snprintf(out->commit_message, sizeof(out->commit_message),
+                 "Uncommented 1 line");
+        return REPL_COMPILE_OK;
+    }
+
+    /* Plain non-comment, non-structural: prepend prefix → CMD_COMMENT. */
+    {
+        const char *orig = editor_buffer_view_line(ctx->text, line_idx);
+        compile_prepend_prefix(orig, prefix,
+                               out->text[0], (int)sizeof(out->text[0]));
+        memset(&out->cmds[0], 0, sizeof(out->cmds[0]));
+        out->cmds[0].type = CMD_COMMENT;
+        out->cmds[0].valid = 1;
+        out->kind = REPL_COMPILED_REPLACE_ONE;
+        out->pos = line_idx;
+        out->count = 1;
+        out->adjust_edit_line = 0;
+        snprintf(out->commit_message, sizeof(out->commit_message),
+                 "Commented out 1 line");
+        return REPL_COMPILE_OK;
+    }
 }
