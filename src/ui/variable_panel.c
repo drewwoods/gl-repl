@@ -12,7 +12,6 @@
  * variable mutation) and stays here.
  */
 #include "variable_panel.h"
-#include "repl_state_views.h"
 #include "state.h"
 #include "layout.h"
 #include "variable_panel_state.h"

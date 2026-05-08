@@ -1,18 +1,13 @@
 #ifndef UI_STATE_H
 #define UI_STATE_H
 
-/* EDITOR_OWNERSHIP_TODO: break this include. ui_state.h shouldn't
- * depend on repl_state's view header — it inverts the ownership
- * relationship the M/V/C+compiler+router contract is trying to
- * establish. The dependency exists today because ReplStatusState /
- * ReplHelpState / ReplVariablePanelState / ReplProfilePanelState /
- * ReplViewportState / ReplPointerState typedefs still live in
- * repl_state_views.h. The Phase H typedef relocation moves the
- * typedefs to a ui-owned header (likely a new ui_state_types.h) and
- * this include goes away. The ratchet at
- * scripts/check-editor-ownership-budget.sh forbids the include count
- * from growing in the meantime. */
-#include "repl_state_views.h"  /* ReplStatusState, ReplHelpState, etc. */
+/* UI-chrome typedefs (Status / Help / VariablePanel / ProfilePanel /
+ * Viewport / Pointer / CodePanel / Camera) used to live in
+ * repl_state_views.h, which inverted ownership: every UI file pulled
+ * in a REPL header just to reach a chrome typedef. They moved to
+ * src/ui/state_types.h (Phase H typedef relocation), and ui_state.h
+ * now includes the ui-owned header directly. */
+#include "state_types.h"
 
 /* UiState owns transient chrome, viewport, pointer, status text,
  * code-panel render chrome, and camera viewport pose.
