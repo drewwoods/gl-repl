@@ -83,6 +83,12 @@ CmdType repl_source_scope_nearest_open_block_at(int pos);
 int repl_source_scope_block_extent(int line_idx,
                                    int *out_start, int *out_count);
 
+/* Returns 1 if the line at `line_idx` is a structured-block head
+ * (FOR_BEGIN, FUNC_DEF, or IF_BEGIN). Used by the editor's Enter-key
+ * dispatch to apply sticky-edit semantics on block headers without
+ * reading CmdType directly. */
+int repl_line_is_block_head(int line_idx);
+
 /* Range/array predicates: does the given command range / array contain any
  * CMD_VAR_DECLARE row? Used by clipboard, delete, and other guards that
  * need to refuse operations that would orphan declared variables, while
