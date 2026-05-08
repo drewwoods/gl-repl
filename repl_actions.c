@@ -20,10 +20,10 @@
 #include "repl_pipeline.h"
 #include "repl_state.h"
 #include "color_picker_ui.h"
-#include "ui_menu_bar.h"
-#include "ui_panels.h"
-#include "ui_profile_panel.h"
-#include "ui_state.h"
+#include "ui/menu_bar.h"
+#include "ui/panels.h"
+#include "ui/profile_panel.h"
+#include "ui/state.h"
 #include "editor_inline_rename.h"
 
 static const char *replay_mode_names[] = { "Polygon", "Vertex" };

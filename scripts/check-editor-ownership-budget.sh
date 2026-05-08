@@ -16,7 +16,7 @@
 #                            directly, eliminating the callers that
 #                            need the legacy names.
 #
-#   ui_state_includes_repl_views  Whether ui_state.h still includes
+#   ui_state_includes_repl_views  Whether src/ui/state.h still includes
 #                                 repl_state_views.h to import the
 #                                 Repl*State typedefs. Phase 5's
 #                                 typedef migration breaks this
@@ -44,7 +44,7 @@ baseline_includes=$(awk -F: '/^ui_state_includes_repl_views/{gsub(/[ \t]/,"",$2)
 forwarders=$(grep -cE '^[[:space:]]*return[[:space:]]+ui_state_|^[[:space:]]*ui_state_[a-z_]+\(' \
                   repl_state.c 2>/dev/null || true)
 includes=$(grep -cE '^[[:space:]]*#[[:space:]]*include[[:space:]]+"repl_state_views\.h"' \
-                ui_state.h 2>/dev/null || true)
+                src/ui/state.h 2>/dev/null || true)
 
 # Default to 0 when grep finds nothing (-c with no match prints "0" on
 # macOS / GNU grep, but be defensive).
@@ -59,8 +59,8 @@ if [ "$forwarders" -gt "$baseline_forwarders" ]; then
     ok=0
 fi
 if [ "$includes" -gt "$baseline_includes" ]; then
-    echo "ERROR: ui_state.h #include \"repl_state_views.h\" count grew (${baseline_includes} -> ${includes})." >&2
-    echo "ui_state.h depending on repl_state's view header inverts ownership; the" >&2
+    echo "ERROR: src/ui/state.h #include \"repl_state_views.h\" count grew (${baseline_includes} -> ${includes})." >&2
+    echo "src/ui/state.h depending on repl_state's view header inverts ownership; the" >&2
     echo "coupling exists transitionally to import Repl*State typedefs and goes" >&2
     echo "away when those typedefs migrate to a ui-owned home." >&2
     ok=0

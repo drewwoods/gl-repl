@@ -5,7 +5,7 @@
  * renderer, hit-testing, search/cursor positioning, tests, and visual text
  * dumps. Keep wrapping math here so those paths do not grow separate copies.
  */
-#include "ui_code_panel_layout.h"
+#include "code_panel_layout.h"
 
 #include <ctype.h>
 #include <string.h>

@@ -15,7 +15,7 @@
 #ifndef REPLAY_UI_HUD_H
 #define REPLAY_UI_HUD_H
 
-#include "ui_metrics.h"
+#include "ui/metrics.h"
 
 /* Replay HUD layout shared by replay_ui_hud.c and other UI helpers that need
  * to position themselves relative to the HUD footprint. */

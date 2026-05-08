@@ -12,7 +12,7 @@
 #include "repl_state.h"
 #include "replay_state.h"
 #include "./include/gl_2d.h"
-#include "ui_metrics.h"
+#include "ui/metrics.h"
 
 #define g_workspace_header_lines (repl_state_import_export().workspace_header_lines)
 #define g_workspace_header_line_count (repl_state_import_export().workspace_header_line_count)

@@ -23,7 +23,7 @@
 #include "repl_core_internal.h"  /* try_commit_*, editor_commit_func_decl_resume_peek */
 #include "repl_eval.h"
 #include "repl_state.h"
-#include "ui_state.h"
+#include "ui/state.h"
 #include "support/test_harness.h"
 
 #include <stdio.h>

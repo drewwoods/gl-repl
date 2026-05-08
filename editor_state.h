@@ -3,7 +3,7 @@
 
 #include "editor_limits.h"
 #include "repl_command.h"
-#include "ui_editor.h"  /* EditorTransformerList, EditorHighlightList,
+#include "ui/editor.h"  /* EditorTransformerList, EditorHighlightList,
                          * EditorVirtualLineList typedefs (live state) */
 
 /* EditorState owns editable text, cursor, selection, navigation, undo

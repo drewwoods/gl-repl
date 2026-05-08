@@ -195,7 +195,7 @@ maps a flat command to its source-buffer line via `src_cmd_idx`.
 
 The controller treats per-frame UI overlay data as snapshots it builds
 once and the UI consumes read-only. The snapshot family lives in
-`ui_editor.h`:
+`src/ui/editor.h`:
 
 | List | Push helper | What it carries |
 |---|---|---|
@@ -322,7 +322,7 @@ Responsibilities:
 * status banners and other screen-space overlays
 
 UI renderers draw from a single per-frame `UiRenderSnapshot` (defined in
-`ui_snapshot.h`) that the controller builds once via
+`src/ui/snapshot.h`) that the controller builds once via
 `imrepl_ctrl_build_ui_snapshot()` and passes to every `ui_*_render*()`
 entry point. Render code does not call `repl_state_*()` directly. The
 `check-ui-no-repl-state-read` Makefile guard enforces the snapshot-shaped
@@ -624,7 +624,7 @@ Completed (Phase 1 + most of Phase 2):
   iterates it; 2D HUD lives in `replay_ui_hud.c`. Scene files contain zero
   `repl_replay_*` and `repl_state_*` calls.
 - ✅ **R2** — UI → REPL mutation holes closed end-to-end:
-  - `ui_panels.c` is hit-test only (`check-ui-panels-no-mutators`).
+  - `src/ui/panels.c` is hit-test only (`check-ui-panels-no-mutators`).
   - The color picker now lives across `color_picker.c` (peer state +
     lifecycle + writeback through `editor_commit_apply_external_change`)
     and `color_picker_ui.c` (pure renderer + hit-test over a
@@ -632,7 +632,7 @@ Completed (Phase 1 + most of Phase 2):
     parser/compile/apply, no `set_status`. Locked in by
     `check-color-picker-ui-isolation`.
   - The legacy `ui_help_overlay` is gone — split into the generic
-    `ui_tabbed_overlay.c` renderer (knows nothing about REPL) and the
+    `src/ui/tabbed_overlay.c` renderer (knows nothing about REPL) and the
     REPL-side `repl_help_text.c` producer that walks
     `k_func_completions[]` to assemble the F1 overlay's per-command
     rows. Adding a new GL command + `help_desc` + `help_group` to the

@@ -3,7 +3,7 @@
 
 #include "editor_state.h"
 #include "editor_help_session.h"
-#include "variable_panel.h"
+#include "variable_panel_state.h"
 #include "replay_state.h"
 #include "repl_command_store.h"
 #include "repl_core.h"

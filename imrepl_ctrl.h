@@ -2,7 +2,7 @@
 #define IMREPL_CTRL_H
 
 #include "editor_input.h"  /* ReplInputDispatchEffects */
-#include "ui_hit.h"        /* UiHit (code-panel hit dispatch) */
+#include "ui/hit.h"        /* UiHit (code-panel hit dispatch) */
 
 void imrepl_ctrl_init_gl(void);
 void imrepl_ctrl_bootstrap_repl(const char *input_file);
