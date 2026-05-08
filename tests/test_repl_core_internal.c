@@ -5,7 +5,7 @@
 #include "repl_state.h"
 #include "ui_state.h"
 #include "support/test_harness.h"
-#include "scene_render.h"
+#include "scene/render.h"
 
 #ifdef OPENGL_VIBE_USE_GL_STUBS
 #include <GL/gl_stub_counts.h>

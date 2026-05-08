@@ -44,8 +44,8 @@
 #include "repl_executor.h"
 #include "repl_parser.h"
 #include "replay.h"
-#include "scene_render.h"
-#include "scene_render_types.h"
+#include "scene/render.h"
+#include "scene/render_types.h"
 #include "repl_state.h"
 
 #include <stdio.h>

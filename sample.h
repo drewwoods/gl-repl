@@ -29,7 +29,7 @@
 #include "repl_executor.h"
 #include "repl_export.h"
 #include "repl_pipeline.h"
-#include "scene_render.h"
+#include "scene/render.h"
 #include "ui_layout.h"
 #include "ui_metrics.h"
 #include "replay_ui_hud.h"
