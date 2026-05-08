@@ -829,3 +829,75 @@ ReplCompileResult repl_compile_set_predef_value(const char *name,
 
     return REPL_COMPILE_OK;
 }
+
+ReplCompileResult repl_compile_delete_range(int start, int count,
+                                            const ReplCompileContext *ctx,
+                                            ReplCompiledChange *out,
+                                            char *err, int err_size) {
+    int n;
+    int end;
+    int op_count;
+
+    if (!ctx || !out)
+        return REPL_COMPILE_ERROR;
+
+    repl_compiled_change_init(out);
+    if (err && err_size > 0)
+        err[0] = '\0';
+
+    n = ctx->document_count;
+    if (start < 0)
+        start = 0;
+    if (count <= 0 || start >= n)
+        return REPL_COMPILE_OK;
+    if (start + count > n)
+        count = n - start;
+    end = start + count;
+
+    /* Reference check: any CMD_VAR_DECLARE in the range whose name is
+     * still referenced outside the range blocks the delete. */
+    for (int i = start; i < end; i++) {
+        const GLCmd *cmd = &ctx->document_cmds[i];
+        if (cmd->type != CMD_VAR_DECLARE) continue;
+        for (int d = 0; d < cmd->var_decl_count; d++) {
+            const char *nm = cmd->var_names[d];
+            for (int j = 0; j < n; j++) {
+                if (j >= start && j < end) continue;
+                const char *line = editor_buffer_view_line(ctx->text, j);
+                if (line && repl_eval_source_uses_ident(line, nm)) {
+                    return compile_set_err(err, err_size,
+                                           "Cannot remove '%s': still referenced",
+                                           nm);
+                }
+            }
+        }
+    }
+
+    /* Populate UNDECLARE predef ops for every variable declared in
+     * the range. Apply cascades the CMD_VAR_ASSIGN.num_args
+     * compaction. */
+    op_count = 0;
+    for (int i = start; i < end; i++) {
+        const GLCmd *cmd = &ctx->document_cmds[i];
+        if (cmd->type != CMD_VAR_DECLARE) continue;
+        for (int d = 0; d < cmd->var_decl_count; d++) {
+            if (op_count >= MAX_PREDEF_OPS_PER_COMMIT)
+                return compile_set_err(err, err_size,
+                                       "Too many declarations in range");
+            out->predef_ops[op_count].kind = REPL_PREDEF_OP_UNDECLARE;
+            repl_copy_string_fits(out->predef_ops[op_count].name,
+                                  sizeof(out->predef_ops[op_count].name),
+                                  cmd->var_names[d]);
+            op_count++;
+        }
+    }
+    out->predef_op_count = op_count;
+
+    out->kind = REPL_COMPILED_DELETE_RANGE;
+    out->pos = start;
+    out->count = count;
+    snprintf(out->commit_message, sizeof(out->commit_message),
+             "Removed %d line%s", count, count > 1 ? "s" : "");
+
+    return REPL_COMPILE_OK;
+}
