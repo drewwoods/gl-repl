@@ -1,6 +1,6 @@
 #include "repl_config.h"
 
-#include "repl_audio.h"
+#include "audio.h"
 #include "repl_state.h"
 
 /* Camera, profile_panel slices live on UiState; variable_panel
@@ -71,7 +71,7 @@ static int *config_value_ptr(ReplConfigKey key) {
 
 int repl_config_get(ReplConfigKey key) {
     if (key == REPL_CONFIG_AUDIO_MODE)
-        return repl_audio_get_cfg_mode();
+        return audio_get_cfg_mode();
 
     int *value = config_value_ptr(key);
     return value ? *value : 0;
@@ -114,7 +114,7 @@ void repl_config_set(ReplConfigKey key, int value) {
         value = clamp_int(value, 0, state_count - 1);
 
     if (key == REPL_CONFIG_AUDIO_MODE) {
-        repl_audio_set_cfg_mode(value);
+        audio_set_cfg_mode(value);
         return;
     }
 

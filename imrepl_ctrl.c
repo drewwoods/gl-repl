@@ -13,7 +13,7 @@
 #include "editor/commit.h"
 #include "editor/search.h"
 #include "repl_actions.h"
-#include "repl_audio.h"
+#include "audio.h"
 #include "repl_camera_controls.h"
 #include "repl_core.h"
 #include "repl_help_text.h"
@@ -859,14 +859,14 @@ static void imrepl_ctrl_push_color_transformers(void) {
 
 /* Browser autoplay policy: the Web Audio context stays suspended until
  * a user gesture. The very first key / mouse / special event after
- * startup fires repl_audio_on_user_gesture; native builds make this a
+ * startup fires audio_on_user_gesture; native builds make this a
  * no-op. Phase J1 commit 48a relocated this from editor_input.c. */
 static int g_audio_gesture_sent = 0;
 
 static void imrepl_ctrl_notify_audio_gesture_once(void) {
     if (g_audio_gesture_sent) return;
     g_audio_gesture_sent = 1;
-    repl_audio_on_user_gesture();
+    audio_on_user_gesture();
 }
 
 static void imrepl_ctrl_apply_input_effects(ReplInputDispatchEffects effects) {
@@ -1456,9 +1456,9 @@ int imrepl_ctrl_router_handle_horizontal_audio_special(int key) {
     if (!(editor_input_active_modifiers() & GLUT_ACTIVE_CTRL))
         return 0;
     if (key == GLUT_KEY_LEFT)
-        repl_audio_prev_track();
+        audio_prev_track();
     else
-        repl_audio_next_track();
+        audio_next_track();
     return 1;
 }
 
@@ -2241,8 +2241,8 @@ void imrepl_ctrl_mousewheel(int wheel, int direction, int x, int y) {
  * glutPostRedisplay + glutTimerFunc reschedule on top. */
 void imrepl_ctrl_tick(void) {
     /* Advance the audio playlist if the current song reached its end
-     * (no-op under loop=Song; see repl_audio_tick). */
-    repl_audio_tick();
+     * (no-op under loop=Song; see audio_tick). */
+    audio_tick();
 
     /* When the playing track changes (either auto-advance from tick
      * or manual next/prev), surface the song name in the status bar.
@@ -2250,10 +2250,10 @@ void imrepl_ctrl_tick(void) {
      * the audio module. */
     {
         static unsigned int last_track_gen = 0;
-        unsigned int gen = repl_audio_track_generation();
+        unsigned int gen = audio_track_generation();
         if (gen != last_track_gen) {
             last_track_gen = gen;
-            const char *path = repl_audio_get_current_track();
+            const char *path = audio_get_current_track();
             if (path && *path) {
                 const char *base = strrchr(path, '/');
                 base = base ? base + 1 : path;

@@ -490,7 +490,7 @@ flowchart LR
     end
 
     subgraph services["6. Services + lifecycle"]
-        audio["repl_audio.c<br/>playlist"]
+        audio["audio.c<br/>playlist"]
         prof["prof.c<br/>instrumentation"]
         export["repl_export.c<br/>save/load · takes EditorBufferView"]
     end

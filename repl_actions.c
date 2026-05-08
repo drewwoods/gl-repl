@@ -9,7 +9,7 @@
 #include "repl_actions.h"
 #include "ui/layout.h"           /* CODE_PANEL_LAYOUT_* enum values */
 #include "color_picker.h"
-#include "repl_audio.h"
+#include "audio.h"
 #include "repl_core.h"
 #include "repl_core_internal.h"
 #include "repl_config.h"
@@ -126,20 +126,20 @@ const int CFG_ITEM_COUNT = (int)(sizeof(g_cfg_items) / sizeof(g_cfg_items[0]));
 static void apply_audio_cfg_mode(int mode) {
     switch (mode) {
     case AUDIO_CFG_PAUSE:
-        repl_audio_set_paused(1);
+        audio_set_paused(1);
         break;
     case AUDIO_CFG_ONCE:
-        repl_audio_set_paused(0);
-        repl_audio_set_loop_mode(REPL_AUDIO_LOOP_OFF);
+        audio_set_paused(0);
+        audio_set_loop_mode(AUDIO_LOOP_OFF);
         break;
     case AUDIO_CFG_SONG:
-        repl_audio_set_paused(0);
-        repl_audio_set_loop_mode(REPL_AUDIO_LOOP_SONG);
+        audio_set_paused(0);
+        audio_set_loop_mode(AUDIO_LOOP_SONG);
         break;
     case AUDIO_CFG_ALL:
     default:
-        repl_audio_set_paused(0);
-        repl_audio_set_loop_mode(REPL_AUDIO_LOOP_ALL);
+        audio_set_paused(0);
+        audio_set_loop_mode(AUDIO_LOOP_ALL);
         break;
     }
 }
@@ -359,12 +359,12 @@ int repl_action_menu_item_activate(int menu_id, int item_idx) {
 
 void repl_actions_apply_defaults(void) {
     /* Restore the audio mode persisted from the previous session.
-     * repl_audio_play_playlist() calls load_state() which stores the cfg_mode
+     * audio_play_playlist() calls load_state() which stores the cfg_mode
      * in the audio module; pull it here so the UI config and the actual audio
      * engine agree before the first frame. */
-    int saved_mode = repl_audio_get_cfg_mode();
+    int saved_mode = audio_get_cfg_mode();
     if (saved_mode < AUDIO_CFG_PAUSE || saved_mode > AUDIO_CFG_ALL)
         saved_mode = AUDIO_CFG_ALL;
     apply_audio_cfg_mode(saved_mode);
-    repl_audio_set_cfg_mode(saved_mode);
+    audio_set_cfg_mode(saved_mode);
 }
