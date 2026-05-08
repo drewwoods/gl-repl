@@ -284,7 +284,7 @@ text edit into a committed program change.
 | `editor_undo` | Undo/redo transaction rings that restore editor text and REPL command state together |
 | `editor_clipboard` | Selection anchors plus copy/cut/paste payloads, including parallel text sidecars |
 | `editor_search` | Search query, match tracking, row/char hits, next/previous navigation |
-| `editor_autocomplete` | Completion popup state, ghost text, hints. Asks a registered `EditorCompletionProvider` for candidates — does *not* know about variables or GL command names directly |
+| `repl_autocomplete` | REPL-side completion provider. Walks command spec, predef-var table, and source `CMD_FUNC_DEF` entries; produces matches, ghost text, parameter hints. Registers itself with `editor_completion` at startup; the editor only invokes the provider, it does not know about variables or GL command names directly |
 | `editor_inline_rename` | Inline scene-name edit buffer and validation |
 | `editor_help_session` | Read-only editor session backed by a help-text content provider. Uses the same scroll/search/cursor model as code editing; no commit path. Help visibility flag stays on `UiState` |
 | `editor_code_panel_document` | Code-panel document row model, scroll state, hit-test mapping, and editor-visible line metadata |
@@ -469,7 +469,7 @@ flowchart LR
         eundo["editor_undo.c<br/>transaction snapshots"]
         eclip["editor_clipboard.c<br/>cut/copy/paste"]
         esearch["editor_search.c<br/>query · hit tracking"]
-        eac["editor_autocomplete.c<br/>matches · ghost · hint<br/>(reads from editor_completion)"]
+        eac["repl_autocomplete.c<br/>REPL-side provider<br/>(registers with editor_completion)"]
         ecompl["editor_completion.c<br/>completion-provider registry"]
         ehelpsess["editor_help_session.c<br/>read-only editor session<br/>(carved from ui_help_overlay state)"]
         erename["editor_inline_rename.c<br/>rename buffer"]
@@ -837,8 +837,7 @@ side-effect routing. As of that branch landing:
   (baseline 1 → 0).
 - **File renames: done.** `repl_undo` → `editor_undo`,
   `repl_clipboard` → `editor_clipboard`, `repl_search` →
-  `editor_search`, `repl_autocomplete` → `editor_autocomplete`,
-  `repl_inline_rename` → `editor_inline_rename`,
+  `editor_search`, `repl_inline_rename` → `editor_inline_rename`,
   `repl_var_drag` → `variable_panel_drag`,
   `repl_replay` → `replay`, `repl_layout` → `ui_layout`,
   `repl_code_panel_layout` → `ui_code_panel_layout`,
