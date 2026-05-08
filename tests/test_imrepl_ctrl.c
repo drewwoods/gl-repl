@@ -71,7 +71,7 @@ static void set_cmd3(GLCmd *cmd, CmdType type, int src_idx,
     (void)source;
 }
 
-void test_scene_render_3d_scene(const SceneRenderConfig *config) {
+int test_scene_render_3d_scene(const SceneRenderConfig *config) {
     g_scene_render_calls++;
     g_last_scene_config = *config;
 
@@ -83,6 +83,7 @@ void test_scene_render_3d_scene(const SceneRenderConfig *config) {
     repl_eval_scratch_set(0, 0, g_mutated_scratch_value);
 
     repl_state_flat_program_set_count(g_mutated_flat_count);
+    return 0;
 }
 
 void test_replay_ui_hud_render(const UiReplayHudState *state) {

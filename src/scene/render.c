@@ -14,6 +14,8 @@
 #include "transform_utils.h"
 #include "prof.h"
 
+#include <errno.h>
+
 /* Sub-pixel jitter offsets (units: fraction of one pixel).
  * Table is ordered so the first N entries form a good N-sample set.
  * Supports 1, 2, 4, 8, or 16 samples. */
@@ -38,6 +40,40 @@ static const float g_jitter_table[MAX_ACCUM_SAMPLES][2] = {
 
 void scene_render_init_gl(void) {
     scene_lights_init_global_ambient();
+}
+
+/* Reject SceneRenderConfig values that would cause undefined behavior or
+ * never-terminating loops downstream. Returns 0 on valid, sets errno and
+ * returns -1 on failure. The grid renderer's `for (v = -extent; v <= extent;
+ * v += step)` is the most consequential — step <= 0 hangs the GLUT main
+ * loop, so a zeroed config (the natural memset default) is a hard error
+ * the moment the grid is enabled. */
+static int validate_render_config(const SceneRenderConfig *config) {
+    if (!config)                                       goto bad;
+    if (config->scene_w <= 0 || config->scene_h <= 0)  goto bad;
+    if (config->grid_theme < 0
+        || config->grid_theme >= GRID_THEME_COUNT)     goto bad;
+    if (config->axes_theme < 0
+        || config->axes_theme >= AXES_THEME_COUNT)     goto bad;
+    if (config->grid_theme != GRID_THEME_OFF) {
+        if (config->grid_extent_idx < 0
+            || config->grid_extent_idx >= GRID_EXTENT_COUNT)  goto bad;
+        if (config->grid_major_idx < 0
+            || config->grid_major_idx >= GRID_MAJOR_COUNT)    goto bad;
+        if (!(config->grid_extents[config->grid_extent_idx] > 0.0f))
+                                                              goto bad;
+        if (!(config->grid_major_steps[config->grid_major_idx] > 0.0f))
+                                                              goto bad;
+    }
+    if (config->use_accum && config->accum_aa_enabled) {
+        if (config->accum_samples < 1
+            || config->accum_samples > MAX_ACCUM_SAMPLES)     goto bad;
+    }
+    return 0;
+
+bad:
+    errno = EINVAL;
+    return -1;
 }
 
 /* ========================================================================= */
@@ -254,10 +290,12 @@ static void scene_restore_runtime_state(const ReplayFadePlan *fade_plan) {
     repl_eval_restore_scratch_arrays(fade_plan->baseline_scratch_arrays);
 }
 
-void scene_render_replay_fade_pass(const FrameRenderContext *frame_ctx) {
+int scene_render_replay_fade_pass(const FrameRenderContext *frame_ctx) {
+    if (!frame_ctx || validate_render_config(&frame_ctx->config) < 0)
+        return -1;
     const SceneRenderConfig *config = &frame_ctx->config;
     if (!config->replay_has_fades || !config->execute_fn)
-        return;
+        return 0;
 
     prof_begin(PROF_SCENE_3D_FADE);
     {
@@ -313,6 +351,7 @@ void scene_render_replay_fade_pass(const FrameRenderContext *frame_ctx) {
         }
     }
     prof_accum_end(PROF_SCENE_3D_FADE);
+    return 0;
 }
 
 static void render_3d_scene_pass(const SceneRenderConfig *config,
@@ -403,7 +442,10 @@ static void render_3d_scene_pass(const SceneRenderConfig *config,
     prof_accum_end(PROF_SCENE_3D_HUD);
 }
 
-void scene_render_3d_scene(const SceneRenderConfig *config) {
+int scene_render_3d_scene(const SceneRenderConfig *config) {
+    if (validate_render_config(config) < 0)
+        return -1;
+
     int accum_samples = config->accum_samples;
     glViewport(config->scene_x, config->scene_y,
                config->scene_w, config->scene_h);
@@ -428,4 +470,5 @@ void scene_render_3d_scene(const SceneRenderConfig *config) {
             scene_restore_runtime_state(&config->replay_fade_plan);
         render_3d_scene_pass(config, 0.0f, 0.0f);
     }
+    return 0;
 }

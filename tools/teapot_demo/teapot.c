@@ -19,6 +19,7 @@
 #include "scene/render.h"
 #include "scene/render_types.h"
 
+#include <errno.h>
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -292,7 +293,12 @@ static void display_func(void) {
 
     scene_apply_camera(cfg.cam_rx, cfg.cam_ry, cfg.cam_dist,
                        cfg.cam_tx, cfg.cam_ty, cfg.cam_tz);
-    scene_render_3d_scene(&cfg);
+    if (scene_render_3d_scene(&cfg) != 0) {
+        fprintf(stderr,
+                "teapot_demo: scene_render_3d_scene rejected config (errno=%d)\n",
+                errno);
+        exit(1);
+    }
 
     if (g_show_hud) render_hud();
 
