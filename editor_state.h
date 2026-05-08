@@ -297,9 +297,10 @@ ReplSearchState *editor_state_search_mut(void);
 void             editor_state_search_clear(void);
 
 /* Autocomplete slice API. The slice is editor-owned; production code
- * outside editor_autocomplete.c should clear it via the
- * EditorCompletionProvider seam (editor_completion_clear), not by
- * calling editor_state_autocomplete_clear directly. */
+ * outside the registered EditorCompletionProvider (today
+ * repl_autocomplete.c) should clear it via the provider seam
+ * (editor_completion_clear), not by calling
+ * editor_state_autocomplete_clear directly. */
 ReplAutocompleteState  editor_state_autocomplete(void);
 ReplAutocompleteState *editor_state_autocomplete_mut(void);
 void                   editor_state_autocomplete_clear(void);

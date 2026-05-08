@@ -1,8 +1,14 @@
 /*
- * editor_autocomplete.c -- Input completion and parameter hints.
+ * repl_autocomplete.c -- REPL-side completion provider.
  *
- * Runtime storage lives in repl_state.c and is accessed through the typed
- * autocomplete facade.
+ * Implements the EditorCompletionProvider seam: walks the REPL command
+ * spec, predefined-variable table, and source CMD_FUNC_DEF entries to
+ * produce matches, ghost text, and parameter hints. Registers itself
+ * via repl_autocomplete_register_provider() at startup; the editor
+ * calls it through editor_completion_update / _clear / etc.
+ *
+ * Runtime storage (matches, ghost, hint) lives on EditorState and is
+ * accessed through the typed autocomplete facade.
  */
 #include "repl_state_owners.h"
 #include "repl_core_internal.h"

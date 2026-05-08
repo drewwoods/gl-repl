@@ -34,7 +34,7 @@
  *   repl_source_scope.c - source block/depth queries and indent cache
  *   repl_flatten.c - repl_flatten_program() / flatten_commands()
  *   repl_executor.c- repl_execute_program() / execute_commands()
- *   editor_autocomplete.c - completions and parameter hints
+ *   repl_autocomplete.c - completions and parameter hints (provider)
  *   repl_autonormal.c - auto-generated normals and feeding-state lookup
  *   repl_example_loader.c - built-in example loading and metadata
  *   replay.c  - replay state machine and fade-batch rendering
