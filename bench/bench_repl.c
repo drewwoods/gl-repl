@@ -10,7 +10,7 @@
  * per-function counter (see tests/gl-stubs/include/GL/gl_stub_counts.h), so timings
  * measure pure C-level cost. In the real-GL build we create a real GL
  * context up front (via GLUT) so sub-benchmarks that drive actual draw
- * calls - notably `fade_batches` via `scene_render_replay_fade_pass()` -
+ * calls - notably `fade_batches` via `repl_execute_program() per fade batch` -
  * have somewhere to emit to; without a current context those calls are
  * undefined behaviour rather than measurable work.
  *
@@ -21,7 +21,7 @@
  *   flatten_examples  - load each example then call repl_flatten_commands
  *   replay_examples   - start a replay and step it to completion
  *   replay_long       - feed a synthetic large scene and step replay to end
- *   fade_batches      - drive scene_render_replay_fade_pass() with a packed
+ *   fade_batches      - drive repl_execute_program() per fade batch with a packed
  *                       batch buffer whose old_pcs sit deep in a long flat
  *                       command stream (exercises the per-batch prefix
  *                       walk that dominates late-replay fade-in cost).
@@ -566,56 +566,49 @@ static int populate_late_batches(int flat_cmds, int *old_pcs, int *new_pcs,
     return count;
 }
 
-/* Execute callbacks used by the bench's synthetic SceneRenderConfig — mirror
- * the production scene_execute_adapter in imrepl_ctrl.c. We can't reuse those
- * directly because they're static; this duplicate is small and keeps
- * bench_repl.c independent of controller-frame plumbing. */
-static void bench_execute_fn(float alpha_scale,
-                             int skip_geom_before_pc,
-                             int flat_cmd_count,
-                             FlatProgramView program,
-                             void *user_data) {
-    (void)user_data;
-    repl_execute_set_fade_context(alpha_scale, skip_geom_before_pc);
+/* The fade-render workload moved out of the scene module (it's now the
+ * REPL controller's post_fill_fn). This bench drives the same per-batch
+ * cost — repl_execute_program with a skip-prefix and per-batch alpha —
+ * directly, without going through the scene API. The numbers are
+ * comparable to the pre-move benchmark since the heavy lifting was
+ * always repl_execute_program. */
+static void bench_render_one_fade_batch(int new_pc, int skip_pc, float alpha,
+                                        FlatProgramView program) {
+    repl_execute_set_fade_context(alpha, skip_pc);
     repl_execute_program(&(ReplExecutionOptions){
-        .flat_cmd_count = flat_cmd_count,
-        .program = program
+        .flat_cmd_count = new_pc,
+        .program        = program,
     });
 }
 
-static void bench_execute_reset_fn(void *user_data) {
-    (void)user_data;
-    repl_execute_set_fade_context(1.0f, 0);
-}
+/* Refresh the fade plan from the live replay state — bench reinstalls
+ * fade batches every iteration, so the plan it walks must be rebuilt
+ * each time. */
+static int bench_refresh_fade_plan(ReplayFadePlan *plan, int *base_limit_out) {
+    memset(plan, 0, sizeof(*plan));
+    *base_limit_out = 0;
 
-/* Refresh the fade plan inside `cfg` from the live replay state. The bench
- * reinstalls fade batches each iteration, so the plan must be rebuilt to
- * match — this mirrors imrepl_ctrl.c's scene-config builder for the fade
- * fields only. */
-static void bench_refresh_fade_plan(SceneRenderConfig *cfg) {
-    memset(&cfg->replay_fade_plan, 0, sizeof(cfg->replay_fade_plan));
-
-    repl_replay_copy_baseline_predef_values(cfg->replay_fade_plan.baseline_predef_vals,
+    repl_replay_copy_baseline_predef_values(plan->baseline_predef_vals,
                                             MAX_PREDEF_VARS);
 
-    cfg->replay_has_fades = repl_replay_has_active_fades();
-    if (!cfg->replay_has_fades)
-        return;
+    if (!repl_replay_has_active_fades())
+        return 0;
 
-    cfg->replay_base_limit = repl_replay_fill_base_limit();
+    *base_limit_out = repl_replay_fill_base_limit();
 
     ReplayFadeBatchView fade_batches = repl_replay_fade_batches_view();
-    int batch_count = repl_replay_compute_fade_skip_limits(cfg->replay_fade_plan.skip_limits,
+    int batch_count = repl_replay_compute_fade_skip_limits(plan->skip_limits,
                                                            REPLAY_FADE_BATCH_MAX);
     if (batch_count > REPLAY_FADE_BATCH_MAX)
         batch_count = REPLAY_FADE_BATCH_MAX;
 
-    cfg->replay_fade_plan.batch_count = batch_count;
+    plan->batch_count = batch_count;
     for (int i = 0; i < batch_count; i++) {
         const ReplayFadeBatch *batch = &fade_batches.batches[i];
-        cfg->replay_fade_plan.batches[i] = *batch;
-        cfg->replay_fade_plan.batch_alpha[i] = repl_replay_batch_alpha(batch);
+        plan->batches[i] = *batch;
+        plan->batch_alpha[i] = repl_replay_batch_alpha(batch);
     }
+    return batch_count;
 }
 
 static BenchResult bench_fade_batches(int iters) {
@@ -654,25 +647,14 @@ static BenchResult bench_fade_batches(int iters) {
      * timer resolution even in stubbed / very fast builds. */
     int inner = 200;
 
-    /* Build a synthetic SceneRenderConfig + FrameRenderContext just for the
-     * fade pass. Most fields can stay zeroed; the fade-pass only touches
-     * execute callbacks, flat_program, replay_fade_plan, replay_has_fades,
-     * and a few cosmetic quality/wireframe flags. */
-    SceneRenderConfig cfg = {0};
-    cfg.execute_fn = bench_execute_fn;
-    cfg.execute_reset_fn = bench_execute_reset_fn;
-    cfg.execute_user_data = NULL;
-    cfg.flat_program = repl_state_flat_program_view();
-
-    FrameRenderContext frame_ctx = {0};
-    frame_ctx.config = cfg;
+    ReplayFadePlan plan;
+    int base_limit;
+    FlatProgramView program = repl_state_flat_program_view();
 
 #ifdef OPENGL_VIBE_USE_GL_STUBS
     /* Reset right before the timed region so the counter dump below
-     * reflects only the work driven by scene_render_replay_fade_pass()
-     * across the full iters×inner call count. repl_bench_fade_install
-     * doesn't invoke any GL stubs, so including it in the counted
-     * region is fine. */
+     * reflects only the per-batch repl_execute_program work across the
+     * full iters×inner call count. */
     gl_stub_counts_reset();
 #endif
 
@@ -681,14 +663,17 @@ static BenchResult bench_fade_batches(int iters) {
         for (int k = 0; k < inner; k++) {
             /* Reinstall on every call so a fade batch that ticks its
              * age past REPLAY_FADE_DURATION doesn't silently reduce
-             * the measured workload (repl_replay_tick_fade_batches isn't
-             * called here, but keeping the install call in-loop also
-             * amortizes a tiny fraction of the setup cost into each
-             * measurement - intentional, since a real replay frame
-             * also re-registers batches as new steps arrive). */
+             * the measured workload. */
             repl_bench_fade_install(old_pcs, new_pcs, installed_count, age);
-            bench_refresh_fade_plan(&frame_ctx.config);
-            scene_render_replay_fade_pass(&frame_ctx);
+            int batch_count = bench_refresh_fade_plan(&plan, &base_limit);
+            for (int b = 0; b < batch_count; b++) {
+                float alpha = plan.batch_alpha[b];
+                if (alpha <= 0.0f) continue;
+                bench_render_one_fade_batch(plan.batches[b].new_pc,
+                                            plan.skip_limits[b],
+                                            alpha, program);
+            }
+            repl_execute_set_fade_context(1.0f, 0);
         }
         double dt = now_seconds() - t0;
         if (dt < r.min_sec) r.min_sec = dt;
@@ -703,10 +688,11 @@ static BenchResult bench_fade_batches(int iters) {
         fprintf(stderr, "  (fade_batches: flat_cmds=%d, batches=%d, age=%.3f)\n",
                 flat_cmds, installed_count, age);
 #ifdef OPENGL_VIBE_USE_GL_STUBS
-        fprintf(stderr, "  (GL stub calls per scene_render_replay_fade_pass():)\n");
+        fprintf(stderr, "  (GL stub calls per fade-batch frame:)\n");
         gl_stub_counts_dump(stderr, "    ", r.ops);
 #endif
     }
+    (void)base_limit;  /* not used by the bench but useful to track */
     return r;
 }
 

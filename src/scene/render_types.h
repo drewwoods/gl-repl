@@ -6,7 +6,6 @@
 
 #include "repl_flatten.h"
 #include "themes.h"
-#include "replay_types.h"
 #include "guides_shared.h"
 
 #define MAX_LIGHTS 4
@@ -33,42 +32,28 @@ typedef struct SceneRgba {
     float r, g, b, a;
 } SceneRgba;
 
+/* Per-call context the scene passes back to the user's geometry callback.
+ * Currently a placeholder — kept as a struct so future scene-to-callback
+ * metadata (e.g. an enum describing why the callback is being invoked:
+ * main fill, fade-replay overlay, picking pass, etc.) can be added
+ * without changing the function-pointer signature again. */
+typedef struct SceneExecuteContext {
+    int unused_;
+} SceneExecuteContext;
+
 /* Called by scene_render.c to emit user geometry. May be NULL (geometry
  * is silently skipped; scene background/grid/axes/lights still render).
- *
- * alpha_scale:          1.0 for normal pass; 0.0-1.0 for replay fade batches
- * skip_geom_before_pc:  first flat cmd index to emit geometry for (0 = all;
- *                       used by fade passes to suppress already-faded prefix)
- * flat_cmd_count:       number of commands to execute from program.cmds[]
- * program:              the flat command buffer + local vars
- * user_data:            opaque pointer supplied at config build time
- */
-typedef void (*SceneExecuteProgramFn)(float alpha_scale,
-                                     int skip_geom_before_pc,
-                                     int flat_cmd_count,
-                                     FlatProgramView program,
-                                     void *user_data);
+ * The callback gets only a scene-supplied opaque context plus the user_data
+ * the caller stashed when building the config — any REPL state (flat
+ * program, current PC, alpha overrides for fade passes, etc.) is the
+ * caller's responsibility, carried through user_data. */
+typedef void (*SceneExecuteProgramFn)(const SceneExecuteContext *ctx,
+                                      void *user_data);
 
 typedef struct SceneFocusVertex {
     float pos[3];
     int valid;
 } SceneFocusVertex;
-
-/* Snapshot of replay fade orchestration for the current frame. */
-typedef struct ReplayFadePlan {
-    int batch_count;
-    ReplayFadeBatch batches[REPLAY_FADE_BATCH_MAX];
-    int skip_limits[REPLAY_FADE_BATCH_MAX];
-    float batch_alpha[REPLAY_FADE_BATCH_MAX];
-    float baseline_predef_vals[MAX_PREDEF_VARS];
-    float baseline_scratch_arrays[REPL_SCRATCH_ARRAY_COUNT][REPL_SCRATCH_ARRAY_LEN];
-} ReplayFadePlan;
-
-/* Hook the controller installs so the scene can re-establish the REPL's
- * predef-var / scratch-array baseline before each replay fade pass without
- * the scene module needing to touch repl_eval globals. May be NULL when
- * the caller doesn't drive replay (e.g. the standalone teapot demo). */
-typedef void (*SceneReplayRestoreBaselineFn)(const ReplayFadePlan *fade_plan);
 
 /* Snapshot of all per-frame inputs that helper renderers need to read
  * without sampling globals again.  scene_render.c fills this once at frame
@@ -77,7 +62,14 @@ typedef struct SceneRenderConfig {
     /* --- Execute hook --- */
     SceneExecuteProgramFn execute_fn;          /* NULL = no geometry */
     void                 *execute_user_data;
-    void (*execute_reset_fn)(void *user_data);
+
+    /* --- Optional post-fill hook ---
+     * Invoked once per pass between the main user-geometry fill and the
+     * scene helpers (grid / axes / backdrop / overlays). The REPL
+     * controller installs this to overlay fading-replay geometry on top
+     * of the main fill; non-REPL callers leave it NULL. */
+    void (*post_fill_fn)(void *user_data);
+    void  *post_fill_user_data;
 
     /* --- Flat program --- */
     FlatProgramView flat_program;
@@ -151,16 +143,17 @@ typedef struct SceneRenderConfig {
     SceneFocusVertex focus;
     SceneGuideSnapshot guide_snapshot;
 
-    /* --- Replay --- */
-    int            replaying;
-    int            replay_mode;
-    int            replay_tess_preview;
-    int            replay_vertex_points;
-    int            replay_has_fades;
-    int            replay_base_limit;
-    float          alpha_scale; /* alpha boost to counter dark-bg crush; 1.0 = no change */
-    ReplayFadePlan replay_fade_plan;
-    SceneReplayRestoreBaselineFn replay_restore_baseline_fn;
+    /* --- Replay-aware overlay flags ---
+     * The fade-replay pass itself lives outside the scene module (it is
+     * the controller's post_fill_fn). These flags drive scene-side
+     * overlays that change visual treatment while replay is active
+     * (tess preview, vertex-point dimming, alpha boost). They will
+     * eventually move out too. */
+    int   replaying;
+    int   replay_mode;
+    int   replay_tess_preview;
+    int   replay_vertex_points;
+    float alpha_scale; /* alpha boost to counter dark-bg crush; 1.0 = no change */
 } SceneRenderConfig;
 
 /* Derived state that helper renderers should consume instead of recomputing

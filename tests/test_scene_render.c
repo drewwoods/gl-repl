@@ -32,17 +32,8 @@ static TestHarness g_harness = TEST_HARNESS_INIT;
 } while (0)
 
 /* Minimal execute callback for testing. */
-static void test_execute_noop(float alpha_scale, int skip_geom_before_pc,
-                              int flat_cmd_count, FlatProgramView program,
-                              void *user_data) {
-    (void)alpha_scale;
-    (void)skip_geom_before_pc;
-    (void)flat_cmd_count;
-    (void)program;
-    (void)user_data;
-}
-
-static void test_execute_reset_noop(void *user_data) {
+static void test_execute_noop(const SceneExecuteContext *ctx, void *user_data) {
+    (void)ctx;
     (void)user_data;
 }
 
@@ -50,7 +41,6 @@ static void test_execute_reset_noop(void *user_data) {
 static SceneRenderConfig make_test_config(void) {
     SceneRenderConfig cfg = {0};
     cfg.execute_fn = test_execute_noop;
-    cfg.execute_reset_fn = test_execute_reset_noop;
     cfg.execute_user_data = NULL;
 
     cfg.anim_time = 0.0f;
@@ -107,8 +97,6 @@ static SceneRenderConfig make_test_config(void) {
     cfg.replay_mode = 0;
     cfg.replay_tess_preview = 0;
     cfg.replay_vertex_points = 0;
-    cfg.replay_has_fades = 0;
-    cfg.replay_base_limit = 0;
     cfg.show_current_poly = 0;
     cfg.alpha_scale = 1.0f;
 
@@ -131,7 +119,7 @@ static void test_config_defaults(void) {
     SceneRenderConfig cfg = make_test_config();
 
     ASSERT_INT("execute_fn set", cfg.execute_fn != NULL, 1);
-    ASSERT_INT("execute_reset_fn set", cfg.execute_reset_fn != NULL, 1);
+    ASSERT_INT("post_fill_fn unset by default", cfg.post_fill_fn == NULL, 1);
     ASSERT_FLOAT("viewport_w matches", cfg.viewport_w, 800);
     ASSERT_FLOAT("viewport_h matches", cfg.viewport_h, 600);
     ASSERT_INT("use_accum default", cfg.use_accum, 1);

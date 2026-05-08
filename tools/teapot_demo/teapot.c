@@ -60,15 +60,8 @@ static int g_show_help       = 0;
 
 /* --- Scene callback ---------------------------------------------------- */
 
-static void my_scene_execute(float alpha,
-                             int   skip_geom_before_pc,
-                             int   flat_cmd_count,
-                             FlatProgramView program,
-                             void *user_data) {
-    (void)alpha;
-    (void)skip_geom_before_pc;
-    (void)flat_cmd_count;
-    (void)program;
+static void my_scene_execute(const SceneExecuteContext *ctx, void *user_data) {
+    (void)ctx;
     (void)user_data;
 
     /* scene_lights_setup has set per-light properties but glDisable'd them.
@@ -79,8 +72,11 @@ static void my_scene_execute(float alpha,
             if (g_lights_on[i]) glEnable(GL_LIGHT0 + i);
     }
 
+    glPushMatrix();
+    glTranslatef(0.0f, 0.75f, 0.0f);
     glColor3f(0.85f, 0.70f, 0.40f);
     glutSolidTeapot(1.0f);
+    glPopMatrix();
 }
 
 /* --- Light table ------------------------------------------------------- */

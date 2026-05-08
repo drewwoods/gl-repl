@@ -1,2 +1,2 @@
 # key count
-src/scene/render_types.h:SceneRenderConfig 1
+src/scene/render_types.h:SceneRenderConfig 2

@@ -209,7 +209,6 @@ static void test_display_frame_builds_config_and_restores_live_state(void) {
     ASSERT_INT("replay HUD called once", g_replay_hud_calls, 1);
 
     ASSERT_TRUE("scene execute fn wired", g_last_scene_config.execute_fn != NULL);
-    ASSERT_TRUE("scene execute reset fn wired", g_last_scene_config.execute_reset_fn != NULL);
     ASSERT_TRUE("scene execute user data null", g_last_scene_config.execute_user_data == NULL);
     ASSERT_INT("viewport width forwarded", g_last_scene_config.viewport_w, 800);
     ASSERT_INT("viewport height forwarded", g_last_scene_config.viewport_h, 600);
@@ -224,11 +223,19 @@ static void test_display_frame_builds_config_and_restores_live_state(void) {
     ASSERT_INT("replay mode copied", g_last_scene_config.replay_mode, REPLAY_MODE_VERTEX);
     ASSERT_INT("replay tess preview enabled", g_last_scene_config.replay_tess_preview, 1);
     ASSERT_INT("replay vertex points enabled", g_last_scene_config.replay_vertex_points, 1);
-    ASSERT_INT("replay fades absent", g_last_scene_config.replay_has_fades, 0);
-    ASSERT_INT("replay base limit zero without fades", g_last_scene_config.replay_base_limit, 0);
-    ASSERT_INT("replay fade batches empty", g_last_scene_config.replay_fade_plan.batch_count, 0);
+    /* The replay-fade plan moved out of SceneRenderConfig and is now a
+     * controller-private static (g_replay_fade_plan). Inspect it directly
+     * since this TU includes imrepl_ctrl.c as a compilation unit. */
+    ASSERT_INT("replay fade plan inactive without active fades",
+               g_replay_fade_plan_active, 0);
+    ASSERT_INT("replay fade base limit zero without fades",
+               g_replay_fade_plan_base_limit, 0);
+    ASSERT_INT("replay fade batches empty",
+               g_replay_fade_plan.batch_count, 0);
     ASSERT_FLOAT("replay baseline scratch copied",
-                 g_last_scene_config.replay_fade_plan.baseline_scratch_arrays[0][0], 4.0f);
+                 g_replay_fade_plan.baseline_scratch_arrays[0][0], 4.0f);
+    ASSERT_TRUE("post_fill_fn unset when no active fades",
+                g_last_scene_config.post_fill_fn == NULL);
     ASSERT_FLOAT("alpha scale boosted for black background", g_last_scene_config.alpha_scale, 3.0f);
     ASSERT_INT("cursor block begin cleared by refresh", g_last_scene_config.cursor_block_begin_idx, -1);
     ASSERT_INT("cursor block end cleared by refresh", g_last_scene_config.cursor_block_end_idx, -1);
