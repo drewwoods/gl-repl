@@ -1,4 +1,4 @@
-#include "editor_completion.h"
+#include "editor/completion.h"
 #include "support/test_harness.h"
 #include <stddef.h>
 #include <string.h>

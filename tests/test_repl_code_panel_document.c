@@ -1,10 +1,10 @@
 #include "./include/gl_2d.h"
-#include "editor_input.h"
+#include "editor/input.h"
 #include <stdio.h>
 #include <string.h>
 
 #include "ui/state.h"
-#include "editor_code_panel_document.h"
+#include "editor/code_panel_document.h"
 #include "repl_core.h"
 #include "repl_state.h"
 #include "ui/layout.h"

@@ -6,12 +6,12 @@
 #include <stdlib.h>
 
 #include "color_picker.h"
-#include "editor_input.h"
-#include "editor_completion.h"
-#include "editor_state.h"
-#include "editor_help_session.h"
-#include "editor_commit.h"
-#include "editor_search.h"
+#include "editor/input.h"
+#include "editor/completion.h"
+#include "editor/state.h"
+#include "editor/help_session.h"
+#include "editor/commit.h"
+#include "editor/search.h"
 #include "repl_actions.h"
 #include "repl_audio.h"
 #include "repl_camera_controls.h"
@@ -47,8 +47,8 @@
 #include "ui/variable_panel.h"
 #include "variable_panel_state.h"
 #include "variable_panel_drag.h"
-#include "editor_clipboard.h"
-#include "editor_code_panel_document.h"
+#include "editor/clipboard.h"
+#include "editor/code_panel_document.h"
 #include "prof.h"
 
 static int imrepl_ctrl_cmd_is_focus_vertex(const GLCmd *cmd) {

@@ -1,7 +1,7 @@
 #include "repl_core_internal.h"
 #include "repl_state.h"
 #include "repl_core.h"
-#include "editor_completion.h"
+#include "editor/completion.h"
 #include "support/test_harness.h"
 
 #define g_ac_count          (editor_state_autocomplete_mut()->match_count)

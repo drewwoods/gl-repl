@@ -2,7 +2,7 @@
 #include "repl_state.h"
 #include "replay_state.h"
 #include "ui/state.h"
-#include "editor_help_session.h"
+#include "editor/help_session.h"
 #include "repl_config.h"
 #include "repl_audio.h"
 #include "repl_core.h"

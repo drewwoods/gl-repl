@@ -13,9 +13,9 @@
  *     compile-function boundary itself.
  */
 
-#include "editor_commit.h"
-#include "editor_services.h"
-#include "editor_state.h"
+#include "editor/commit.h"
+#include "editor/services.h"
+#include "editor/state.h"
 #include "repl_apply.h"
 #include "repl_command_store.h"
 #include "repl_compile.h"

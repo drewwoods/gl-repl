@@ -93,7 +93,7 @@ Consequences:
 - **State has three owners.** `ReplState` is the program. `EditorState`
   is the text-document session. `UiState` is transient UI/session
   chrome. Their storage lives in their owner modules (`repl_state.c`,
-  `editor_state.c`, `src/ui/state.c`). `imrepl_ctrl` orchestrates them; it
+  `src/editor/state.c`, `src/ui/state.c`). `imrepl_ctrl` orchestrates them; it
   does not become a dumping ground for their bytes.
 - **REPL compiles; it does not edit.** The editor calls
   `repl_compile(text, ctx) -> ReplCompiledChange | error`. On success,
@@ -124,7 +124,7 @@ Consequences:
 | `UiState` | Viewport, pointer, status text TTL, help-overlay visibility (chrome flag), profile-panel visibility, panel-divider geometry (panel_frac + resizing_panel), camera viewport pose | Help-session tab/scroll (peer), variable-panel state (peer), program model, editable text, command validation, cursor blink (editor owns), per-frame render-output (uses `Ui*Output`) |
 | `variable_panel` peer | Variable-panel visibility flag + slider drag transaction (var_idx, log_mode, start_value, start_x). Storage in `variable_panel_state.c`. | Editor text behavior, REPL grammar |
 | `replay` peer | Replay state machine: PC, mode, speed, accum, fade speed, src_line_idx, total_flat_cmds, expand_args. Storage in `replay_state.c`. | Editor text behavior, REPL grammar |
-| `editor_help_session` peer | Help-overlay session state: tab_idx, scroll. Storage in `editor_help_session.c`. Visibility flag stays on `UiState.help` as chrome. | Help content (provided by content provider) |
+| `editor_help_session` peer | Help-overlay session state: tab_idx, scroll. Storage in `src/editor/help_session.c`. Visibility flag stays on `UiState.help` as chrome. | Help content (provided by content provider) |
 | `color_picker` peer | Floating color-picker state, lifecycle, slider input handlers, source-line writeback through editor commit. Storage in `color_picker.c`; peer view + `ColorPickerInputResult` in `color_picker.h`. | Picker rendering / hit-test (lives on `color_picker_ui.c`) |
 
 > The legacy forwarders (`ui_state_variable_panel*`, `editor_state_variable_drag*`,
@@ -393,7 +393,7 @@ allowlists. The contract is enforced by a per-feature lighter guard:
 Files no longer in this layer:
 
 - `ui_help_overlay` → split. The session state (`tab_idx`, `scroll`)
-  moved to `editor_help_session.c` (Layer 2). The renderer became the
+  moved to `src/editor/help_session.c` (Layer 2). The renderer became the
   generic, REPL-agnostic `src/ui/tabbed_overlay.c`; the per-row text
   content is built REPL-side by `repl_help_text.c` from
   `k_func_completions[]` so adding a new GL command auto-populates
@@ -462,17 +462,17 @@ flowchart LR
     end
 
     subgraph editor["2. Editor (text model + controller)"]
-        einput["editor_input.c<br/>text-doc input dispatch<br/>(cursor / scroll / select / search)<br/>(repl_editor.{c,h} deleted in J1)"]
-        ecommit["editor_commit.c<br/>commit transaction<br/>(compile + undo + buffer + apply)"]
-        estate["editor_state.c<br/>EditorState storage<br/>(buffer · cursor · scroll · selection ·<br/>autocomplete · search · transformers)"]
-        eservices["editor_services.c<br/>commit-services dispatch table"]
-        eundo["editor_undo.c<br/>transaction snapshots"]
-        eclip["editor_clipboard.c<br/>cut/copy/paste"]
-        esearch["editor_search.c<br/>query · hit tracking"]
+        einput["src/editor/input.c<br/>text-doc input dispatch<br/>(cursor / scroll / select / search)<br/>(repl_editor.{c,h} deleted in J1)"]
+        ecommit["src/editor/commit.c<br/>commit transaction<br/>(compile + undo + buffer + apply)"]
+        estate["src/editor/state.c<br/>EditorState storage<br/>(buffer · cursor · scroll · selection ·<br/>autocomplete · search · transformers)"]
+        eservices["src/editor/services.c<br/>commit-services dispatch table"]
+        eundo["src/editor/undo.c<br/>transaction snapshots"]
+        eclip["src/editor/clipboard.c<br/>cut/copy/paste"]
+        esearch["src/editor/search.c<br/>query · hit tracking"]
         eac["repl_autocomplete.c<br/>REPL-side provider<br/>(registers with editor_completion)"]
-        ecompl["editor_completion.c<br/>completion-provider registry"]
-        ehelpsess["editor_help_session.c<br/>read-only editor session<br/>(carved from ui_help_overlay state)"]
-        erename["editor_inline_rename.c<br/>rename buffer"]
+        ecompl["src/editor/completion.c<br/>completion-provider registry"]
+        ehelpsess["src/editor/help_session.c<br/>read-only editor session<br/>(carved from ui_help_overlay state)"]
+        erename["src/editor/inline_rename.c<br/>rename buffer"]
     end
 
     subgraph peers["2b. Peer subsystems (own state + controller)"]
@@ -507,7 +507,7 @@ flowchart LR
         uiprof["src/ui/profile_panel.c<br/>timing HUD"]
         uirhud["replay_ui_hud.c<br/>replay HUD (feature-UI)"]
         uilayout["src/ui/layout.c<br/>rect geometry"]
-        uicpdoc["editor_code_panel_document.c<br/>document row model"]
+        uicpdoc["src/editor/code_panel_document.c<br/>document row model"]
         uicplay["src/ui/code_panel_layout.c<br/>wrap iterator"]
     end
 
@@ -716,9 +716,9 @@ check-imrepl-not-editor-mirror         (Phase 4)
     duplicate the editor's API surface.
 
 check-no-repl-editor-input-shim        (Phase J1)
-    editor_input.c must not include the deleted repl_editor.h or call
+    src/editor/input.c must not include the deleted repl_editor.h or call
     legacy repl_*_func dispatch bodies. The input dispatch boundary
-    is closed: editor_input.c handles editor-text-model concerns only;
+    is closed: src/editor/input.c handles editor-text-model concerns only;
     non-editor routing lives in imrepl_ctrl_router_* helpers.
 
 check-editor-ownership-budget          (landed commit 11)
@@ -811,7 +811,7 @@ side-effect routing. As of that branch landing:
   back through `ui_menu_bar`.
 - **Input dispatch boundary: closed (Phase J1).** `repl_editor.{c,h}`
   is deleted. All keyboard, special-key, mouse, motion, and
-  mousewheel dispatch migrated into `editor_input.c` (editor-text
+  mousewheel dispatch migrated into `src/editor/input.c` (editor-text
   concerns only) and `imrepl_ctrl.c` (non-editor routing via
   `imrepl_ctrl_router_*` helpers: replay, audio, config, save,
   camera, variable panel, scene press, scroll-wheel zoom). Timer
@@ -825,7 +825,7 @@ side-effect routing. As of that branch landing:
   `EditorCompletionProvider` registry decouples editor input
   dispatch from REPL grammar (Phase G).
 - **Commit dispatch is editor-side: done.** `try_commit_*`
-  dispatchers live in `editor_commit.c`. `repl_commit.c` is deleted
+  dispatchers live in `src/editor/commit.c`. `repl_commit.c` is deleted
   and hard-guarded against return (Phase H.5). `try_commit_float_decl`
   and `try_assign_variable` now route through
   `editor_commit_apply_plan`.

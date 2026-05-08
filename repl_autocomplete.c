@@ -13,7 +13,7 @@
 #include "repl_state_owners.h"
 #include "repl_core_internal.h"
 #include "repl_command_spec.h"
-#include "editor_completion.h"
+#include "editor/completion.h"
 static const ReplFuncCompletion *g_ac_func_matches[MAX_AC_MATCHES];
 
 typedef enum {

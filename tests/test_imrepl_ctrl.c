@@ -1,6 +1,6 @@
 #include <stdio.h>
 #include <string.h>
-#include "editor_undo.h"
+#include "editor/undo.h"
 #include "repl_core.h"
 #include "ui/layout.h"   /* CODE_PANEL_LAYOUT_* */
 #include "support/test_harness.h"

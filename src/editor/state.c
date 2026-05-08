@@ -1,4 +1,4 @@
-#include "editor_state.h"
+#include "state.h"
 
 #include "repl_compile.h"   /* ReplCompiledChange struct definition */
 
