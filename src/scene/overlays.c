@@ -6,6 +6,7 @@
 #include "render_types.h"
 #include "transform_guides.h"
 #include "transform_utils.h"
+#include "replay.h"             /* repl_walk_user_vertices walker API */
 #include "./include/gl_2d.h"
 
 static int begin_mode_has_outline_overlay(GLenum mode) {
@@ -78,19 +79,6 @@ int scene_overlay_flat_block_matches_cursor(int begin_idx, int is_tess,
     return 0;
 }
 
-typedef struct VertexOverlayState {
-    int flat_cmd_idx;
-    int vertex_idx;
-    int in_block;
-    int block_selected;
-    int tess_depth;
-    float normal[3];
-} VertexOverlayState;
-
-typedef void (*VertexOverlayVisitFn)(const GLCmd *cmd,
-                                     const VertexOverlayState *state,
-                                     void *user);
-
 static void scene_overlay_push_state(void) {
     glPushAttrib(GL_ALL_ATTRIB_BITS);
 }
@@ -99,120 +87,21 @@ static void scene_overlay_pop_state(void) {
     glPopAttrib();
 }
 
-/* Replays transform commands once while visiting vertex-emitting flat commands.
- * Callers choose whether visits should be restricted to the cursor-selected
- * block; the matrix tracking stays centralized so overlay features cannot
- * drift from each other as flatten/execution rules evolve. */
-static void walk_vertex_overlay(int selected_block_only,
-                                VertexOverlayVisitFn on_vertex,
-                                void *user,
-                                const SceneRenderConfig *cfg) {
-    const GLCmd *cmds = cfg->flat_program.cmds;
-    int cmd_count = cfg->flat_program.cmd_count;
-    VertexOverlayState state = {
-        .flat_cmd_idx = -1,
-        .vertex_idx = 0,
-        .in_block = 0,
-        .block_selected = selected_block_only ? 0 : 1,
-        .tess_depth = 0,
-        .normal = {0, 0, 1},
-    };
-    int matrix_depth = 0;
-
-    glPushMatrix();
-    for (int i = 0; i < cmd_count; i++) {
-        if (!cmds[i].valid) continue;
-
-        const GLCmd *cmd = &cmds[i];
-        if (!state.in_block && repl_cmd_is_transform(cmd->type)) {
-            scene_apply_tracked_transform(cmd, &matrix_depth);
-            continue;
-        }
-
-        switch (cmd->type) {
-        case CMD_BEGIN:
-            state.in_block = 1;
-            state.block_selected = selected_block_only
-                                 ? scene_overlay_flat_block_matches_cursor(i, 0, cfg)
-                                 : 1;
-            state.vertex_idx = 0;
-            state.tess_depth = 0;
-            state.normal[0] = 0.0f;
-            state.normal[1] = 0.0f;
-            state.normal[2] = 1.0f;
-            break;
-        case CMD_END:
-            state.in_block = 0;
-            state.block_selected = selected_block_only ? 0 : 1;
-            state.tess_depth = 0;
-            break;
-        case CMD_TESS_BEGIN_POLYGON:
-            state.in_block = 1;
-            state.block_selected = selected_block_only
-                                 ? scene_overlay_flat_block_matches_cursor(i, 1, cfg)
-                                 : 1;
-            state.vertex_idx = 0;
-            state.tess_depth = 1;
-            state.normal[0] = 0.0f;
-            state.normal[1] = 0.0f;
-            state.normal[2] = 1.0f;
-            break;
-        case CMD_TESS_BEGIN_CONTOUR:
-            if (state.tess_depth > 0)
-                state.tess_depth++;
-            break;
-        case CMD_TESS_END:
-            if (state.tess_depth > 0) {
-                state.tess_depth--;
-                if (state.tess_depth == 0) {
-                    state.in_block = 0;
-                    state.block_selected = selected_block_only ? 0 : 1;
-                }
-            }
-            break;
-        case CMD_NORMAL3F:
-        case CMD_TESS_NORMAL:
-            state.normal[0] = cmd->args[0];
-            state.normal[1] = cmd->args[1];
-            state.normal[2] = cmd->args[2];
-            break;
-        case CMD_VERTEX3F:
-        case CMD_VERTEX2F:
-        case CMD_TESS_VERTEX: {
-            int visit = selected_block_only
-                      ? (state.in_block && state.block_selected)
-                      : 1;
-            if (visit && on_vertex) {
-                state.flat_cmd_idx = i;
-                on_vertex(cmd, &state, user);
-            }
-            state.vertex_idx++;
-            break;
-        }
-        default:
-            break;
-        }
-    }
-    scene_unwind_transform_stack(&matrix_depth);
-    glPopMatrix();
-}
-
-static void draw_vertex_number_label(const GLCmd *cmd,
-                                     const VertexOverlayState *state,
+static void draw_vertex_number_label(const ReplVertexWalkState *state,
+                                     float vx, float vy, float vz,
                                      void *user) {
     (void)user;
     char label[16];
-    snprintf(label, sizeof(label), " v%d", state->vertex_idx);
-    glRasterPos3f(cmd->args[0], cmd->args[1], cmd->args[2]);
+    snprintf(label, sizeof(label), " v%d", state->vertex_idx_in_block);
+    glRasterPos3f(vx, vy, vz);
     for (const char *c = label; *c; c++)
         glutBitmapCharacter(FONT_MONO, (unsigned char)*c);
 }
 
-static void draw_normal_vector_at_vertex(const GLCmd *cmd,
-                                         const VertexOverlayState *state,
+static void draw_normal_vector_at_vertex(const ReplVertexWalkState *state,
+                                         float vx, float vy, float vz,
                                          void *user) {
     float scale = *(const float *)user;
-    float vx = cmd->args[0], vy = cmd->args[1], vz = cmd->args[2];
     float nx = state->normal[0], ny = state->normal[1], nz = state->normal[2];
 
     glBegin(GL_LINES);
@@ -226,13 +115,33 @@ static void draw_normal_vector_at_vertex(const GLCmd *cmd,
     glPointSize(1.0f);
 }
 
+/* Build a ReplVertexWalkContext from the per-frame SceneRenderConfig.
+ * The walker's pure interface keeps it test-friendly; this helper is
+ * the only place the scene module bridges config -> walker. */
+static ReplVertexWalkContext walk_ctx_from_config(const SceneRenderConfig *cfg,
+                                                  int selected_block_only) {
+    ReplVertexWalkContext walk_ctx = {
+        .program                = cfg->flat_program,
+        .edit_line_idx          = cfg->edit_line_idx,
+        .cursor_block_begin     = cfg->cursor_block_begin_idx,
+        .cursor_block_end       = cfg->cursor_block_end_idx,
+        .cursor_func_scope_mask = cfg->cursor_func_scope_mask,
+        .selected_block_only    = selected_block_only,
+    };
+    return walk_ctx;
+}
+
 void scene_overlays_render_vertex_numbers(const FrameRenderContext *frame_ctx) {
     scene_overlay_push_state();
     glDisable(GL_LIGHTING);
     glDisable(GL_DEPTH_TEST);
     glColor3f(1.0f, 1.0f, 0.30f);
 
-    walk_vertex_overlay(1, draw_vertex_number_label, NULL, &frame_ctx->config);
+    static const ReplVertexWalkCallbacks cb = {
+        .on_vertex = draw_vertex_number_label,
+    };
+    ReplVertexWalkContext walk_ctx = walk_ctx_from_config(&frame_ctx->config, 1);
+    repl_walk_user_vertices(&walk_ctx, &cb, NULL);
 
     glEnable(GL_DEPTH_TEST);
     if (frame_ctx->config.user_lighting_enabled) glEnable(GL_LIGHTING);
@@ -246,7 +155,11 @@ void scene_overlays_render_normal_vectors(const FrameRenderContext *frame_ctx) {
     glColor3f(0.80f, 0.80f, 0.30f);
     float scale = 0.35f;
 
-    walk_vertex_overlay(0, draw_normal_vector_at_vertex, &scale, &frame_ctx->config);
+    static const ReplVertexWalkCallbacks cb = {
+        .on_vertex = draw_normal_vector_at_vertex,
+    };
+    ReplVertexWalkContext walk_ctx = walk_ctx_from_config(&frame_ctx->config, 0);
+    repl_walk_user_vertices(&walk_ctx, &cb, &scale);
 
     glEnable(GL_DEPTH_TEST);
     if (frame_ctx->config.user_lighting_enabled) glEnable(GL_LIGHTING);

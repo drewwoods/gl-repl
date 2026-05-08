@@ -372,6 +372,183 @@ void repl_replay_walk_tess_preview(const ReplTessPreviewCallbacks *cb,
     glPopMatrix();
 }
 
+/* Cursor-block-match logic: does a flat cmd belong to the user's currently
+ * focused source line / block / function call? Lifted out of scene/overlays.c
+ * — these checks read REPL flatten metadata (call_src_cmd_idx, src_cmd_idx,
+ * func_scope_mask, current-block bounds), so they're squarely REPL state. */
+static int replay_walk_flat_cmd_matches_cursor(int flat_idx,
+                                               int edit_line_idx,
+                                               int cursor_block_begin,
+                                               int cursor_block_end,
+                                               unsigned int cursor_func_scope_mask,
+                                               FlatProgramView program) {
+    if (edit_line_idx < 0)
+        return 0;
+    if (flat_idx < 0 || flat_idx >= program.cmd_count)
+        return 0;
+
+    const GLCmd *cmd = &program.cmds[flat_idx];
+    if (!cmd->valid)
+        return 0;
+
+    if (cmd->call_src_cmd_idx == edit_line_idx ||
+        cmd->root_call_src_cmd_idx == edit_line_idx)
+        return 1;
+    if (cursor_func_scope_mask != 0 &&
+        (cmd->func_scope_mask & cursor_func_scope_mask) != 0)
+        return 1;
+    if (cursor_block_begin >= 0 &&
+        flat_idx >= cursor_block_begin &&
+        flat_idx <= cursor_block_end)
+        return 1;
+    return cmd->src_cmd_idx == edit_line_idx;
+}
+
+static int replay_walk_block_matches_cursor(int begin_idx, int is_tess,
+                                            int edit_line_idx,
+                                            int cursor_block_begin,
+                                            int cursor_block_end,
+                                            unsigned int cursor_func_scope_mask,
+                                            FlatProgramView program) {
+    int depth = is_tess ? 1 : 0;
+
+    for (int i = begin_idx; i < program.cmd_count; i++) {
+        if (!program.cmds[i].valid) continue;
+        if (replay_walk_flat_cmd_matches_cursor(i, edit_line_idx,
+                                                cursor_block_begin,
+                                                cursor_block_end,
+                                                cursor_func_scope_mask,
+                                                program))
+            return 1;
+        if (!is_tess && i > begin_idx && program.cmds[i].type == CMD_END)
+            break;
+        if (is_tess && i > begin_idx) {
+            if (program.cmds[i].type == CMD_TESS_BEGIN_POLYGON) depth++;
+            else if (program.cmds[i].type == CMD_TESS_END) {
+                depth--;
+                if (depth == 0) break;
+            }
+        }
+    }
+
+    return 0;
+}
+
+void repl_walk_user_vertices(const ReplVertexWalkContext *ctx,
+                             const ReplVertexWalkCallbacks *cb,
+                             void *user_data) {
+    if (!ctx || !cb) return;
+
+    FlatProgramView program          = ctx->program;
+    int          edit_line_idx       = ctx->edit_line_idx;
+    int          cursor_block_begin  = ctx->cursor_block_begin;
+    int          cursor_block_end    = ctx->cursor_block_end;
+    unsigned int cursor_func_scope_mask = ctx->cursor_func_scope_mask;
+    int          selected_block_only = ctx->selected_block_only;
+
+    ReplVertexWalkState state = {
+        .flat_cmd_idx        = -1,
+        .src_cmd_idx         = -1,
+        .primitive_mode      = 0,
+        .in_block            = 0,
+        .block_selected      = selected_block_only ? 0 : 1,
+        .vertex_idx_in_block = 0,
+        .normal              = { 0.0f, 0.0f, 1.0f },
+    };
+    int matrix_depth = 0;
+    int tess_depth   = 0;
+
+    glPushMatrix();
+    for (int i = 0; i < program.cmd_count; i++) {
+        const GLCmd *cmd = &program.cmds[i];
+        if (!cmd->valid) continue;
+
+        state.flat_cmd_idx = i;
+        state.src_cmd_idx  = cmd->src_cmd_idx;
+
+        if (cb->on_each_cmd)
+            cb->on_each_cmd(&state, user_data);
+
+        if (!state.in_block && repl_cmd_is_transform(cmd->type)) {
+            replay_walk_apply_transform(cmd, &matrix_depth);
+            continue;
+        }
+
+        switch (cmd->type) {
+        case CMD_BEGIN:
+            state.in_block = 1;
+            state.primitive_mode = cmd->mode;
+            state.block_selected = selected_block_only
+                ? replay_walk_block_matches_cursor(i, 0, edit_line_idx,
+                                                   cursor_block_begin,
+                                                   cursor_block_end,
+                                                   cursor_func_scope_mask,
+                                                   program)
+                : 1;
+            state.vertex_idx_in_block = 0;
+            tess_depth = 0;
+            state.normal[0] = 0.0f; state.normal[1] = 0.0f; state.normal[2] = 1.0f;
+            break;
+        case CMD_END:
+            state.in_block = 0;
+            state.primitive_mode = 0;
+            state.block_selected = selected_block_only ? 0 : 1;
+            tess_depth = 0;
+            break;
+        case CMD_TESS_BEGIN_POLYGON:
+            state.in_block = 1;
+            state.primitive_mode = 0;
+            state.block_selected = selected_block_only
+                ? replay_walk_block_matches_cursor(i, 1, edit_line_idx,
+                                                   cursor_block_begin,
+                                                   cursor_block_end,
+                                                   cursor_func_scope_mask,
+                                                   program)
+                : 1;
+            state.vertex_idx_in_block = 0;
+            tess_depth = 1;
+            state.normal[0] = 0.0f; state.normal[1] = 0.0f; state.normal[2] = 1.0f;
+            break;
+        case CMD_TESS_BEGIN_CONTOUR:
+            if (tess_depth > 0) tess_depth++;
+            break;
+        case CMD_TESS_END:
+            if (tess_depth > 0) {
+                tess_depth--;
+                if (tess_depth == 0) {
+                    state.in_block = 0;
+                    state.block_selected = selected_block_only ? 0 : 1;
+                }
+            }
+            break;
+        case CMD_NORMAL3F:
+        case CMD_TESS_NORMAL:
+            state.normal[0] = cmd->args[0];
+            state.normal[1] = cmd->args[1];
+            state.normal[2] = cmd->args[2];
+            break;
+        case CMD_VERTEX2F:
+        case CMD_VERTEX3F:
+        case CMD_TESS_VERTEX: {
+            int visit = selected_block_only
+                ? (state.in_block && state.block_selected)
+                : 1;
+            if (visit && cb->on_vertex) {
+                cb->on_vertex(&state,
+                              cmd->args[0], cmd->args[1], cmd->args[2],
+                              user_data);
+            }
+            state.vertex_idx_in_block++;
+            break;
+        }
+        default:
+            break;
+        }
+    }
+    while (matrix_depth > 0) { glPopMatrix(); matrix_depth--; }
+    glPopMatrix();
+}
+
 static int replay_next_polygon_limit(int start, int *fade_begin, int *fade_end) {
     int saw_meaningful = 0;
     REPLAY_FLAT_STATE;
