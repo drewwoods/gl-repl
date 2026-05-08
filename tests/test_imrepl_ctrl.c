@@ -195,11 +195,9 @@ static void prepare_display_fixture(void) {
 static void test_display_frame_builds_config_and_restores_live_state(void) {
     int saved_flat_count;
     float saved_t_value;
-    ReplPredefView predef_view;
 
     printf("--- imrepl_ctrl display_frame ---\n");
     prepare_display_fixture();
-    predef_view = repl_eval_predef_view();
 
     saved_flat_count = repl_state_flat_program_count();
     saved_t_value = g_predef_vars[g_t_idx].value;
@@ -258,10 +256,14 @@ static void test_display_frame_builds_config_and_restores_live_state(void) {
     ASSERT_TRUE("guide flat program forwarded",
                 g_last_scene_config.guide_snapshot.flat_program.cmds == repl_state_flat_program_cmds_mut());
     ASSERT_INT("guide flat count copied", g_last_scene_config.guide_snapshot.flat_program.cmd_count, 1);
-    ASSERT_TRUE("guide predef vars forwarded",
-                g_last_scene_config.guide_snapshot.predef_vars == predef_view.vars);
-    ASSERT_INT("guide predef count copied", g_last_scene_config.guide_snapshot.predef_var_count,
-               predef_view.count);
+    /* The predef_vars/predef_var_count fields were dropped from the snapshot
+     * — the controller now resolves vertex/normal cursor args into floats
+     * before handing the snapshot to the scene. With no glVertex/glNormal
+     * input here, the pre-parsed fields stay zeroed. */
+    ASSERT_INT("guide vertex args parsed-empty",
+               g_last_scene_config.guide_snapshot.vertex_n_filled, 0);
+    ASSERT_INT("guide normal args parsed-empty",
+               g_last_scene_config.guide_snapshot.normal_n_filled, 0);
     ASSERT_FLOAT("guide anim time copied", g_last_scene_config.guide_snapshot.anim_time, 4.25f);
     ASSERT_INT("guide xform mode copied", g_last_scene_config.guide_snapshot.xform_guide_mode, 2);
     ASSERT_INT("guide replaying copied", g_last_scene_config.guide_snapshot.replaying, 1);
