@@ -1,5 +1,6 @@
 #include "imrepl_ctrl.h"
 
+#include <errno.h>
 #include <gl_includes.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -517,7 +518,15 @@ void imrepl_ctrl_display_frame(void) {
         ReplCameraState cam = ui_state_camera();
         scene_apply_camera(cam.rx, cam.ry, cam.dist, cam.tx, cam.ty, cam.tz);
     }
-    scene_render_3d_scene(&scene_config);
+    if (scene_render_3d_scene(&scene_config) != 0) {
+        static int warned = 0;
+        if (!warned) {
+            fprintf(stderr,
+                    "imrepl_ctrl: scene_render_3d_scene rejected config (errno=%d)\n",
+                    errno);
+            warned = 1;
+        }
+    }
     prof_end(PROF_SCENE_3D);
 
     if (scene_config.replaying) {
