@@ -34,6 +34,7 @@
 #include "geometry_guides.h"   /* geometry_guides_render_for_cursor */
 #include "transform_guides.h"  /* transform_guides_prepare / _render_if_due */
 #include "transform_utils.h"   /* apply_tracked_transform / unwind_transform_stack */
+#include "outline_offset.h"    /* REPL_OUTLINE_POLYGON_OFFSET_{FACTOR,UNITS} */
 #include "ui/autocomplete_panel.h"
 #include "color_picker_ui.h"
 #include "ui/editor.h"

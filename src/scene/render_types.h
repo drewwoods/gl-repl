@@ -9,15 +9,6 @@
 
 #define MAX_LIGHTS 4
 
-/* Polygon-outline depth-bias constants. Shared by live overlays
- * (scene_overlays.c) and exported-output writeback (repl_export.c)
- * so both paths use exactly the same offset values. Living here
- * lets repl_export.c access them transitively (via repl_state_views.h)
- * without including a `scene_*` header directly, which would
- * violate check-controller-boundaries. */
-#define REPL_OUTLINE_POLYGON_OFFSET_FACTOR (-0.01f)
-#define REPL_OUTLINE_POLYGON_OFFSET_UNITS  (-100.0f)
-
 typedef struct {
     GLenum   id;         /* GL_LIGHT0 .. GL_LIGHT3 */
     int      enabled;

@@ -37,11 +37,6 @@
 
 #include "render_types.h"
 
-/* REPL_OUTLINE_POLYGON_OFFSET_{FACTOR,UNITS} live in scene_render_types.h
- * so repl_export.c can write the same depth-bias constants into the
- * exported output.c without having to include a `scene_*` header
- * (which would trip check-controller-boundaries). */
-
 /* Per-vertex primitive renderers exposed for the controller's overlay
  * orchestration. Each draws ONE label / arrow at a transformed position;
  * iteration of the user's program and applying transforms is the
