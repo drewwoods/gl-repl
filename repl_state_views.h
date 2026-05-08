@@ -6,11 +6,8 @@
 
 #include "glr_camera.h"
 #include "repl_export_state.h"
-#include "glr_camera.h"
 #include "config.h"          /* REPL_STATUS_TEXT_MAX */
-#include "glr_camera.h"
 #include "scene/render_types.h"
-#include "glr_camera.h"
 #include "repl_flatten.h"
 
 #ifndef REPL_WORKSPACE_DIR_MAX

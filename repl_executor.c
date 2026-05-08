@@ -4,15 +4,10 @@
  */
 #include "glr_camera.h"
 #include "repl_executor.h"
-#include "glr_camera.h"
 #include "repl_core.h"
-#include "glr_camera.h"
 #include "repl_core_internal.h"
-#include "glr_camera.h"
 #include "repl_state_owners.h"
-#include "glr_camera.h"
 #include "replay.h"
-#include "glr_camera.h"
 #include "replay_state.h"
 
 /* Camera lives on UiState; repl_*.c is not allowed to include
