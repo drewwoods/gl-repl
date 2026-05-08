@@ -162,82 +162,42 @@ int editor_input_active_modifiers(void) {
 }
 
 
-static int delete_cmd_range_allowed(int start, int count) {
-    int end = start + count;
-    int n = repl_state_document_count();
-    if (end > n) end = n;
-    const GLCmd *cmds = repl_state_document_cmds();
-    EditorBufferView text = editor_buffer_view();
-    for (int i = start; i < end; i++) {
-        if (cmds[i].type != CMD_VAR_DECLARE) continue;
-        for (int d = 0; d < cmds[i].var_decl_count; d++) {
-            const char *nm = cmds[i].var_names[d];
-            for (int j = 0; j < n; j++) {
-                if (j >= start && j < end) continue;
-                const char *line = editor_buffer_view_line(text, j);
-                if (line && repl_eval_source_uses_ident(line, nm)) {
-                    char msg[96];
-                    snprintf(msg, sizeof(msg),
-                             "Cannot remove '%s': still referenced", nm);
-                    set_status(msg);
-                    return 0;
-                }
-            }
-        }
+void delete_cmd_range(int start, int count, const char *what) {
+    ReplCompileContext ctx;
+    ReplCompiledChange change;
+    char err[REPL_STATUS_TEXT_MAX];
+
+    if (!editor_selection_normalize_cmd_range(start, count, &start, &count))
+        return;
+
+    ctx = repl_compile_context_from_live();
+    err[0] = '\0';
+
+    if (repl_compile_delete_range(start, count, &ctx, &change,
+                                  err, sizeof(err)) != REPL_COMPILE_OK) {
+        if (err[0]) set_status(err);
+        return;
     }
-    return 1;
-}
+    if (change.kind == REPL_COMPILED_NO_CHANGE)
+        return;
 
-static void remove_cmd_range_unchecked(int start, int count, const char *what) {
-    char msg[128];
-    int end = start + count;
+    /* Editor framing: verb chosen by caller, not by compile. */
+    snprintf(change.commit_message, sizeof(change.commit_message),
+             "%s %d line%s",
+             what, change.count, change.count > 1 ? "s" : "");
 
-    /* Snapshot names to undeclare after the memmove */
-    char removed_names[MAX_PREDEF_VARS][16] = {{0}};
-    int n_removed = 0;
-    for (int i = start; i < end; i++) {
-        if (repl_state_document_cmds_mut()[i].type != CMD_VAR_DECLARE) continue;
-        for (int n = 0; n < repl_state_document_cmds_mut()[i].var_decl_count && n_removed < MAX_PREDEF_VARS; n++) {
-            repl_copy_string_fits(removed_names[n_removed],
-                                  sizeof(removed_names[n_removed]),
-                                  repl_state_document_cmds_mut()[i].var_names[n]);
-            n_removed++;
-        }
+    if (!editor_commit_apply_external_change(&change, /*capture_undo=*/1)) {
+        set_status("Command buffer error");
+        return;
     }
 
-    editor_undo_push_snapshot();
-    ReplCommandStore store = repl_command_store_live();
-    repl_command_store_delete_range(&store, start, count);
-    editor_buffer_delete_range(start, count);
-
-    /* Compact g_predef_vars and shift CMD_VAR_ASSIGN indices */
-    for (int r = 0; r < n_removed; r++) {
-        int slot = repl_eval_find_predef_var_idx(removed_names[r]);
-        if (slot < 0) continue;
-        repl_eval_undeclare_predef_var(removed_names[r]);
-        for (int j = 0; j < repl_state_document_count(); j++) {
-            if (repl_state_document_cmds_mut()[j].type == CMD_VAR_ASSIGN && repl_state_document_cmds_mut()[j].num_args > slot)
-                repl_state_document_cmds_mut()[j].num_args--;
-        }
-    }
-
-    repl_state_edit_line_set(start);
+    repl_state_edit_line_set(change.pos);
     if (repl_state_edit_line() > repl_state_document_count())
         repl_state_edit_line_set(repl_state_document_count());
     load_line_to_input(repl_state_edit_line());
     mark_normals_dirty();
     editor_clipboard_clear_selection();
-    snprintf(msg, sizeof(msg), "%s %d line%s",
-             what, count, count > 1 ? "s" : "");
-    set_status(msg);
-}
-
-void delete_cmd_range(int start, int count, const char *what) {
-    if (!editor_selection_normalize_cmd_range(start, count, &start, &count))
-        return;
-    if (!delete_cmd_range_allowed(start, count))
-        return;
-    remove_cmd_range_unchecked(start, count, what);
+    set_status(change.commit_message);
 }
 
 void repl_clear_all_cmds(void) {
