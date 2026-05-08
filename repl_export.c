@@ -1,6 +1,7 @@
 #include "./include/gl_2d.h"
 
 #include "repl_export.h"
+#include "outline_offset.h"
 #include "ui/metrics.h"
 #include "ui/code_panel_layout.h"
 #include "repl_core_internal.h"
