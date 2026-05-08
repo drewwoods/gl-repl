@@ -1,8 +1,9 @@
 /*
  * ui_variable_panel.c -- Floating slider panel for declared variables.
  *
- * Pure renderer + hit-test. Reads g_predef_vars, scene rect, and
- * the variable_panel peer's drag accessors, and draws. The actual
+ * Pure renderer + hit-test. Render reads UI-facing variable rows from the
+ * frame snapshot, scene rect, and the variable_panel peer's drag accessors.
+ * The actual
  * value mutation lives in variable_panel_drag.c (the peer's drag
  * implementation); the editor's mouse handler invokes the peer via
  * variable_panel_handle_drag_*.
@@ -32,10 +33,23 @@ static int rvp_code_panel_layout_mode(void) {
 /* Compute a shared logarithmic display scale from all variable absolute values.
  * All sliders use the same scale so their handles are normalized relative to
  * each other (a var at 100 shows near the extreme, one at 0.01 still visible). */
-static float var_panel_log_scale(void) {
+static int ui_variable_count(const UiVariableList *vars) {
+    if (!vars || !vars->vars || vars->count <= 0)
+        return 0;
+    if (vars->count > MAX_PREDEF_VARS)
+        return MAX_PREDEF_VARS;
+    return vars->count;
+}
+
+static float ui_variable_value(const UiVariable *var) {
+    return (var && var->value) ? *var->value : 0.0f;
+}
+
+static float var_panel_log_scale(const UiVariableList *vars) {
     float max_abs = 0.1f;   /* minimum display range */
-    for (int i = 0; i < g_num_predef_vars; i++) {
-        float av = fabsf(g_predef_vars[i].value);
+    int count = ui_variable_count(vars);
+    for (int i = 0; i < count; i++) {
+        float av = fabsf(ui_variable_value(&vars->vars[i]));
         if (av > max_abs) max_abs = av;
     }
     return max_abs * 1.25f; /* 25% headroom so handle doesn't hug the edge */
@@ -101,15 +115,22 @@ static float var_panel_replay_lift(void) {
     return g_var_panel_replay_lift_px;
 }
 
+static int ui_variable_panel_clamp_count(int var_count) {
+    return var_count > 0 ? var_count : 0;
+}
+
 /* Geometry in render coords (y=0 at bottom). */
-void ui_variable_panel_rect(int *px, int *py, int *pw, int *ph) {
+static void ui_variable_panel_rect_for_count(int var_count,
+                                             int *px, int *py,
+                                             int *pw, int *ph) {
     int sc_x, sc_y, sc_w, sc_h;
     int panel_w, panel_h, panel_x, panel_y;
     int min_y, max_y;
 
+    var_count = ui_variable_panel_clamp_count(var_count);
     ui_layout_scene_rect(&sc_x, &sc_y, &sc_w, &sc_h);
     panel_w = VAR_PANEL_W;
-    panel_h = VAR_TITLE_H + g_num_predef_vars * VAR_ROW_H + 2 * VAR_PANEL_PAD;
+    panel_h = VAR_TITLE_H + var_count * VAR_ROW_H + 2 * VAR_PANEL_PAD;
     panel_x = sc_x + sc_w - panel_w - 8;
     if (panel_x < sc_x + 4) panel_x = sc_x + 4;
 
@@ -130,6 +151,10 @@ void ui_variable_panel_rect(int *px, int *py, int *pw, int *ph) {
     if (py) *py = panel_y;
     if (pw) *pw = panel_w;
     if (ph) *ph = panel_h;
+}
+
+void ui_variable_panel_rect(int *px, int *py, int *pw, int *ph) {
+    ui_variable_panel_rect_for_count(g_num_predef_vars, px, py, pw, ph);
 }
 
 /* Return 1 if GLUT screen coord (gx, gy) is in the panel; sets *out_row. */
@@ -167,10 +192,13 @@ UiHit ui_variable_panel_hit_test(int mx, int my) {
 void ui_variable_panel_render(const UiRenderSnapshot *snap) {
     if (!snap->variable_panel.visible) return;
 
+    const UiVariableList *vars = &snap->variable_panel_vars;
+    int var_count = ui_variable_count(vars);
+
     var_panel_replay_lift_tick(snap->variables.anim_time);
 
     int px, py, pw, ph;
-    ui_variable_panel_rect(&px, &py, &pw, &ph);
+    ui_variable_panel_rect_for_count(var_count, &px, &py, &pw, &ph);
 
     gl2d_begin(snap->viewport.window_w, snap->viewport.window_h);
     glEnable(GL_BLEND);
@@ -197,8 +225,8 @@ void ui_variable_panel_render(const UiRenderSnapshot *snap) {
 
     /* Column offsets within the panel - sized for multi-char var names */
     int max_name_len = 1;
-    for (int i = 0; i < g_num_predef_vars; i++) {
-        int len = (int)strlen(g_predef_vars[i].name);
+    for (int i = 0; i < var_count; i++) {
+        int len = (int)strlen(vars->vars[i].name);
         if (len > max_name_len) max_name_len = len;
     }
     int label_w  = max_name_len * FONT_SMALL_W + FONT_SMALL_W;
@@ -211,14 +239,15 @@ void ui_variable_panel_render(const UiRenderSnapshot *snap) {
     if (track_w < handle_w + 4) track_w = handle_w + 4;
 
     /* Shared logarithmic scale: all handles normalized relative to each other. */
-    float log_scale = var_panel_log_scale();
+    float log_scale = var_panel_log_scale(vars);
 
     int inner_top = py + ph - VAR_PANEL_PAD - VAR_TITLE_H;
 
-    for (int i = 0; i < g_num_predef_vars; i++) {
+    for (int i = 0; i < var_count; i++) {
+        const UiVariable *var = &vars->vars[i];
         int row_y  = inner_top - (i + 1) * VAR_ROW_H;
         int text_y = row_y + 4;
-        float val  = g_predef_vars[i].value;
+        float val  = ui_variable_value(var);
 
         /* Drag highlight - amber tint for log mode, blue for linear */
         if (variable_panel_drag_active_var() == i) {
@@ -232,7 +261,7 @@ void ui_variable_panel_render(const UiRenderSnapshot *snap) {
         /* Label */
         glColor3f(0.70f, 0.85f, 0.70f);
         gl2d_draw_string((float)label_x, (float)text_y,
-                    g_predef_vars[i].name, FONT_SMALL);
+                    var->name, FONT_SMALL);
 
         /* Value */
         char valstr[16]; snprintf(valstr, sizeof(valstr), "%7.3f", (double)val);
