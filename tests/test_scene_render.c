@@ -8,9 +8,8 @@
 #include "scene/backdrop.h"
 #include "scene/lights.h"
 #include "scene/overlays.h"
-#include "scene/geometry_guides.h"
+#include "geometry_guides.h"
 #include "scene/render_types.h"
-#include "repl_flatten.h"
 
 #include "support/test_harness.h"
 #include <stdio.h>
@@ -55,7 +54,6 @@ static SceneRenderConfig make_test_config(void) {
     cfg.user_lighting_enabled = 0;
     cfg.show_light_indicators = 0;
     cfg.backdrop_mode = 0;
-    cfg.show_vertex_outlines = 0;
 
     /* Grid defaults. */
     for (int i = 0; i < GRID_MAJOR_COUNT; i++)
@@ -63,14 +61,6 @@ static SceneRenderConfig make_test_config(void) {
     for (int i = 0; i < GRID_EXTENT_COUNT; i++)
         cfg.grid_extents[i] = 10.0f;
 
-    cfg.cursor_block_begin_idx = -1;
-    cfg.cursor_block_end_idx = -1;
-    cfg.cursor_block_source_line = -1;
-    cfg.edit_line_idx = -1;
-    cfg.cursor_func_scope_mask = 0;
-    cfg.cursor_call_src_cmd_idx = -1;
-
-    /* Legacy fields. */
     cfg.scene_x = 0;
     cfg.scene_y = 0;
     cfg.scene_w = 800;
@@ -89,13 +79,6 @@ static SceneRenderConfig make_test_config(void) {
     cfg.grid_extent_idx = 0;
     cfg.grid_major_idx = 0;
     cfg.axes_theme = 0;
-    cfg.show_guides = 1;
-    cfg.show_vpoints = 0;
-    cfg.replaying = 0;
-    cfg.replay_mode = 0;
-    cfg.replay_tess_preview = 0;
-    cfg.replay_vertex_points = 0;
-    cfg.show_current_poly = 0;
     cfg.alpha_scale = 1.0f;
 
     return cfg;
@@ -125,7 +108,6 @@ static void test_config_defaults(void) {
     ASSERT_INT("accum samples default", cfg.accum_samples, 2);
     ASSERT_INT("user_lighting_enabled default", cfg.user_lighting_enabled, 0);
     ASSERT_FLOAT("anim_time default", cfg.anim_time, 0.0f);
-    ASSERT_INT("cursor block invalid by default", cfg.cursor_block_begin_idx, -1);
 }
 
 /* --- Tests for FrameRenderContext ---------------------------------- */
@@ -352,18 +334,6 @@ static void test_render_mode_toggles(void) {
     ASSERT_INT("wireframe set", ctx.config.wireframe, 1);
     ctx.config.wireframe = 0;
 
-    /* Replaying. */
-    ctx.config.replaying = 1;
-    scene_grid_render(&ctx);
-    ASSERT_INT("replaying set", ctx.config.replaying, 1);
-    ctx.config.replaying = 0;
-
-    /* Show guides. */
-    ctx.config.show_guides = 0;
-    scene_grid_render(&ctx);
-    ASSERT_INT("show_guides disabled", ctx.config.show_guides, 0);
-    ctx.config.show_guides = 1;
-
     ASSERT_TRUE("all toggles tested", 1);
 }
 
@@ -373,34 +343,15 @@ static void test_vertex2f_overlay_parity(void) {
     printf("--- vertex2f overlay parity (vertex numbers + outlines) ---\n");
 
 #ifdef OPENGL_VIBE_USE_GL_STUBS
-    GLCmd flat_cmds[3] = {0};
-    flat_cmds[0].type = CMD_BEGIN;
-    flat_cmds[0].valid = 1;
-    flat_cmds[0].mode = GL_TRIANGLES;
-    flat_cmds[0].src_cmd_idx = 0;
-    flat_cmds[1].type = CMD_VERTEX2F;
-    flat_cmds[1].valid = 1;
-    flat_cmds[1].args[0] = 1.0f;
-    flat_cmds[1].args[1] = 2.0f;
-    flat_cmds[1].src_cmd_idx = 1;
-    flat_cmds[2].type = CMD_END;
-    flat_cmds[2].valid = 1;
-    flat_cmds[2].src_cmd_idx = 2;
-
-    FrameRenderContext ctx = make_test_frame_ctx();
-    ctx.config.flat_program.cmds      = flat_cmds;
-    ctx.config.flat_program.cmd_count = 3;
-
     /* The vertex-number overlay moved to the controller. The scene-side
      * primitive scene_draw_vertex_number_label calls glRasterPos3f
-     * directly — that's enough to pin the parity check here. */
+     * directly — that's enough to pin the parity check here.
+     * Outline pass moved to controller (polygon-mode trick); tested via
+     * the integration suite, not as a scene-module unit test. */
     gl_stub_counts_reset();
     scene_draw_vertex_number_label(0, 1.0f, 2.0f, 0.0f);
     ASSERT_TRUE("vertex2f: vertex number label calls glRasterPos3f",
                 gl_stub_counts[GL_STUB_glRasterPos3f] > 0);
-    /* Outline pass moved to controller (polygon-mode trick); tested via
-     * the integration suite, not as a scene-module unit test. */
-    (void)ctx;
 #else
     ASSERT_TRUE("vertex2f overlay parity (GL stubs only)", 1);
 #endif

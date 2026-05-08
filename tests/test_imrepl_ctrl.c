@@ -217,12 +217,6 @@ static void test_display_frame_builds_config_and_restores_live_state(void) {
     ASSERT_FLOAT("camera glow forwarded", g_last_scene_config.cam_motion_glow, 0.9f);
     ASSERT_INT("user lighting copied", g_last_scene_config.user_lighting_enabled, 1);
     ASSERT_INT("light indicators copied", g_last_scene_config.show_light_indicators, 1);
-    ASSERT_INT("show guides copied", g_last_scene_config.show_guides, 1);
-    ASSERT_INT("current poly hidden while replaying", g_last_scene_config.show_current_poly, 0);
-    ASSERT_INT("replaying copied", g_last_scene_config.replaying, 1);
-    ASSERT_INT("replay mode copied", g_last_scene_config.replay_mode, REPLAY_MODE_VERTEX);
-    ASSERT_INT("replay tess preview enabled", g_last_scene_config.replay_tess_preview, 1);
-    ASSERT_INT("replay vertex points enabled", g_last_scene_config.replay_vertex_points, 1);
     /* The replay-fade plan moved out of SceneRenderConfig and is now a
      * controller-private static (g_replay_fade_plan). Inspect it directly
      * since this TU includes imrepl_ctrl.c as a compilation unit. */
@@ -239,50 +233,15 @@ static void test_display_frame_builds_config_and_restores_live_state(void) {
      * batches are active. */
     ASSERT_TRUE("post_fill_fn wired when a replay overlay is active",
                 g_last_scene_config.post_fill_fn != NULL);
+    ASSERT_TRUE("post_overlays_fn wired",
+                g_last_scene_config.post_overlays_fn != NULL);
     ASSERT_INT("tess preview marked active for VERTEX replay mode",
                g_replay_tess_preview_active, 1);
     ASSERT_FLOAT("alpha scale boosted for black background", g_last_scene_config.alpha_scale, 3.0f);
-    ASSERT_INT("cursor block begin cleared by refresh", g_last_scene_config.cursor_block_begin_idx, -1);
-    ASSERT_INT("cursor block end cleared by refresh", g_last_scene_config.cursor_block_end_idx, -1);
-    ASSERT_INT("cursor block source tracks edit line", g_last_scene_config.cursor_block_source_line, 2);
-    ASSERT_INT("edit line copied", g_last_scene_config.edit_line_idx, 2);
-    ASSERT_INT("cursor func scope mask empty", g_last_scene_config.cursor_func_scope_mask, 0);
-    ASSERT_INT("cursor call src idx invalid", g_last_scene_config.cursor_call_src_cmd_idx, -1);
     ASSERT_INT("focus vertex valid", g_last_scene_config.focus.valid, 1);
     ASSERT_FLOAT("focus vertex x", g_last_scene_config.focus.pos[0], 1.0f);
     ASSERT_FLOAT("focus vertex y", g_last_scene_config.focus.pos[1], 2.0f);
     ASSERT_FLOAT("focus vertex z", g_last_scene_config.focus.pos[2], 3.0f);
-    ASSERT_INT("flat program clamped for replay", g_last_scene_config.flat_program.cmd_count, 1);
-    ASSERT_TRUE("flat program pointer forwarded",
-                g_last_scene_config.flat_program.cmds == repl_state_flat_program_cmds_mut());
-
-    ASSERT_TRUE("guide input pointer forwarded",
-                g_last_scene_config.guide_snapshot.input == editor_input_text());
-    ASSERT_INT("guide input length copied", g_last_scene_config.guide_snapshot.input_len,
-               (int)strlen(editor_input_text()));
-    ASSERT_INT("guide cursor copied", g_last_scene_config.guide_snapshot.cursor_pos, 7);
-    ASSERT_INT("guide edit line copied", g_last_scene_config.guide_snapshot.edit_line_idx, 2);
-    ASSERT_INT("guide insert mode copied", g_last_scene_config.guide_snapshot.inserting, 1);
-    ASSERT_TRUE("guide source cmds forwarded",
-                g_last_scene_config.guide_snapshot.source_cmds == repl_state_document_cmds_mut());
-    ASSERT_INT("guide source count copied", g_last_scene_config.guide_snapshot.source_cmd_count, 2);
-    ASSERT_TRUE("guide flat program forwarded",
-                g_last_scene_config.guide_snapshot.flat_program.cmds == repl_state_flat_program_cmds_mut());
-    ASSERT_INT("guide flat count copied", g_last_scene_config.guide_snapshot.flat_program.cmd_count, 1);
-    /* The predef_vars/predef_var_count fields were dropped from the snapshot
-     * — the controller now resolves vertex/normal cursor args into floats
-     * before handing the snapshot to the scene. With no glVertex/glNormal
-     * input here, the pre-parsed fields stay zeroed. */
-    ASSERT_INT("guide vertex args parsed-empty",
-               g_last_scene_config.guide_snapshot.vertex_n_filled, 0);
-    ASSERT_INT("guide normal args parsed-empty",
-               g_last_scene_config.guide_snapshot.normal_n_filled, 0);
-    ASSERT_FLOAT("guide anim time copied", g_last_scene_config.guide_snapshot.anim_time, 4.25f);
-    ASSERT_INT("guide xform mode copied", g_last_scene_config.guide_snapshot.xform_guide_mode, 2);
-    ASSERT_INT("guide replaying copied", g_last_scene_config.guide_snapshot.replaying, 1);
-    ASSERT_INT("guide show guides copied", g_last_scene_config.guide_snapshot.show_guides, 1);
-    ASSERT_INT("guide user lighting copied", g_last_scene_config.guide_snapshot.user_lighting_enabled, 1);
-    ASSERT_FLOAT("guide alpha scale copied", g_last_scene_config.guide_snapshot.alpha_scale, 3.0f);
 
     ASSERT_INT("HUD scene x matches config", g_last_replay_hud_state.scene_x, g_last_scene_config.scene_x);
     ASSERT_INT("HUD scene y matches config", g_last_replay_hud_state.scene_y, g_last_scene_config.scene_y);

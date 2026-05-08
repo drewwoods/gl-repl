@@ -3,6 +3,7 @@
  */
 #include "axes.h"
 #include "./include/gl_2d.h"
+#include <math.h>
 
 enum {
     SCENE_AXIS_X = 0,

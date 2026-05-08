@@ -71,7 +71,7 @@ int imrepl_ctrl_router_handle_glut_scroll_wheel_button(int button, int state, in
  * slider / floating color picker control. Returns 1 if the hit was
  * consumed (i.e. dispatched to an owner). The (x, y) screen coords
  * are passed through for helpers that need raw mouse coordinates
- * (e.g. ui_color_picker_open expects screen-space my). */
+ * (e.g. color_picker_open expects screen-space my). */
 int imrepl_ctrl_router_handle_code_panel_hit(UiHit hit, int x, int y);
 
 /* J2: motion handler for an in-progress code-panel selection drag.
