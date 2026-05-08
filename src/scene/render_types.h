@@ -64,6 +64,12 @@ typedef struct ReplayFadePlan {
     float baseline_scratch_arrays[REPL_SCRATCH_ARRAY_COUNT][REPL_SCRATCH_ARRAY_LEN];
 } ReplayFadePlan;
 
+/* Hook the controller installs so the scene can re-establish the REPL's
+ * predef-var / scratch-array baseline before each replay fade pass without
+ * the scene module needing to touch repl_eval globals. May be NULL when
+ * the caller doesn't drive replay (e.g. the standalone teapot demo). */
+typedef void (*SceneReplayRestoreBaselineFn)(const ReplayFadePlan *fade_plan);
+
 /* Snapshot of all per-frame inputs that helper renderers need to read
  * without sampling globals again.  scene_render.c fills this once at frame
  * start, then passes it to grid/axes/overlay helpers. */
@@ -154,6 +160,7 @@ typedef struct SceneRenderConfig {
     int            replay_base_limit;
     float          alpha_scale; /* alpha boost to counter dark-bg crush; 1.0 = no change */
     ReplayFadePlan replay_fade_plan;
+    SceneReplayRestoreBaselineFn replay_restore_baseline_fn;
 } SceneRenderConfig;
 
 /* Derived state that helper renderers should consume instead of recomputing
