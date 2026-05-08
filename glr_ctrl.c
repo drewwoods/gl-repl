@@ -1553,7 +1553,8 @@ int glr_ctrl_router_handle_variable_panel_drag_begin(int button, int state, int 
     if (button != GLUT_LEFT_BUTTON && button != GLUT_RIGHT_BUTTON)
         return 0;
     int row_idx;
-    if (!ui_variable_panel_hit(x, y, &row_idx))
+    if (!ui_variable_panel_hit_for_count(x, y, repl_eval_predef_view().count,
+                                         &row_idx))
         return 0;
     if (replay_active())
         repl_replay_stop();
@@ -1940,7 +1941,7 @@ int glr_ctrl_router_handle_code_panel_drag(int x, int y) {
     if (!g_code_panel_drag_active || g_code_panel_drag_anchor < 0)
         return 0;
 
-    UiHit hit = ui_panels_hit_test(x, y);
+    UiHit hit = ui_panels_hit_test(x, y, repl_eval_predef_view().count);
     int target = code_panel_target_from_hit(hit);
     if (target < 0) {
         /* Drag wandered off the code-panel kinds — clamp the pointer
@@ -1958,7 +1959,8 @@ int glr_ctrl_router_handle_code_panel_drag(int x, int y) {
             if (cx > cp_x + cp_w - 1) cx = cp_x + cp_w - 1;
             if (gl_y < cp_y + 1) cy = win_h - (cp_y + 1);
             if (gl_y > cp_y + cp_h - 1) cy = win_h - (cp_y + cp_h - 1);
-            UiHit clamped = ui_panels_hit_test(cx, cy);
+            UiHit clamped = ui_panels_hit_test(cx, cy,
+                                               repl_eval_predef_view().count);
             target = code_panel_target_from_hit(clamped);
         }
     }
@@ -2104,7 +2106,7 @@ void glr_ctrl_mouse(int button, int state, int x, int y) {
          * buttons. Only kinds that don't apply (UI_HIT_SCENE,
          * UI_HIT_NONE, UI_HIT_HELP_PANEL) fall through to scene
          * press / camera. */
-        UiHit hit = ui_panels_hit_test(x, y);
+        UiHit hit = ui_panels_hit_test(x, y, repl_eval_predef_view().count);
         if (glr_ctrl_router_handle_code_panel_hit(hit, x, y)) {
             glr_ctrl_apply_input_effects(editor_take_input_effects());
             return;

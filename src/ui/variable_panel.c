@@ -115,21 +115,25 @@ static float var_panel_replay_lift(void) {
 }
 
 static int ui_variable_panel_clamp_count(int var_count) {
-    return var_count > 0 ? var_count : 0;
+    if (var_count < 0)
+        return 0;
+    if (var_count > MAX_PREDEF_VARS)
+        return MAX_PREDEF_VARS;
+    return var_count;
 }
 
 /* Geometry in render coords (y=0 at bottom). */
-static void ui_variable_panel_rect_for_count(int var_count,
-                                             int *px, int *py,
-                                             int *pw, int *ph) {
+void ui_variable_panel_rect_for_count(int variable_count,
+                                      int *px, int *py,
+                                      int *pw, int *ph) {
     int sc_x, sc_y, sc_w, sc_h;
     int panel_w, panel_h, panel_x, panel_y;
     int min_y, max_y;
 
-    var_count = ui_variable_panel_clamp_count(var_count);
+    variable_count = ui_variable_panel_clamp_count(variable_count);
     ui_layout_scene_rect(&sc_x, &sc_y, &sc_w, &sc_h);
     panel_w = VAR_PANEL_W;
-    panel_h = VAR_TITLE_H + var_count * VAR_ROW_H + 2 * VAR_PANEL_PAD;
+    panel_h = VAR_TITLE_H + variable_count * VAR_ROW_H + 2 * VAR_PANEL_PAD;
     panel_x = sc_x + sc_w - panel_w - 8;
     if (panel_x < sc_x + 4) panel_x = sc_x + 4;
 
@@ -152,33 +156,31 @@ static void ui_variable_panel_rect_for_count(int var_count,
     if (ph) *ph = panel_h;
 }
 
-void ui_variable_panel_rect(int *px, int *py, int *pw, int *ph) {
-    ui_variable_panel_rect_for_count(g_num_predef_vars, px, py, pw, ph);
-}
-
 /* Return 1 if GLUT screen coord (gx, gy) is in the panel; sets *out_row. */
-int ui_variable_panel_hit(int gx, int gy, int *out_row) {
+int ui_variable_panel_hit_for_count(int gx, int gy, int variable_count,
+                                    int *out_row) {
     int px, py, pw, ph;
-    ui_variable_panel_rect(&px, &py, &pw, &ph);
+    variable_count = ui_variable_panel_clamp_count(variable_count);
+    ui_variable_panel_rect_for_count(variable_count, &px, &py, &pw, &ph);
     int ry = ui_state_viewport().window_h - gy;
     if (gx < px || gx >= px + pw || ry < py || ry >= py + ph) return 0;
     int inner_top = py + ph - VAR_PANEL_PAD - VAR_TITLE_H;
     int row = (inner_top - ry) / VAR_ROW_H;
-    if (row < 0 || row >= g_num_predef_vars) return 0;
+    if (row < 0 || row >= variable_count) return 0;
     if (out_row) *out_row = row;
     return 1;
 }
 
-UiHit ui_variable_panel_hit_test(int mx, int my) {
+UiHit ui_variable_panel_hit_test(int mx, int my, int variable_count) {
     UiHit h = ui_hit_none();
     if (!variable_panel_visible()) return h;
     int win_h = ui_state_viewport().window_h;
     if (win_h <= 0) return h;
     int row = -1;
-    if (!ui_variable_panel_hit(mx, my, &row)) return h;
+    if (!ui_variable_panel_hit_for_count(mx, my, variable_count, &row)) return h;
 
     int px, py, pw, ph;
-    ui_variable_panel_rect(&px, &py, &pw, &ph);
+    ui_variable_panel_rect_for_count(variable_count, &px, &py, &pw, &ph);
     int gl_y = win_h - my;
 
     h.kind = UI_HIT_VARIABLE_SLIDER;
