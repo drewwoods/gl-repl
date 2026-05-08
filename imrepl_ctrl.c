@@ -1011,7 +1011,27 @@ static void imrepl_ctrl_build_scene_config(SceneRenderConfig *config) {
 /* UI snapshot builder (push model)                                           */
 /* ========================================================================= */
 
+static void imrepl_ctrl_fill_ui_variable_panel_vars(UiRenderSnapshot *snap,
+                                                    ReplPredefView predef) {
+    int count = predef.count;
+
+    if (count < 0 || !predef.vars)
+        count = 0;
+    if (count > MAX_PREDEF_VARS)
+        count = MAX_PREDEF_VARS;
+
+    snap->variable_panel_vars.vars = snap->variable_panel_var_storage;
+    snap->variable_panel_vars.count = count;
+    for (int i = 0; i < count; i++) {
+        snprintf(snap->variable_panel_var_storage[i].name,
+                 sizeof(snap->variable_panel_var_storage[i].name),
+                 "%s", predef.vars[i].name);
+        snap->variable_panel_var_storage[i].value = &predef.vars[i].value;
+    }
+}
+
 static void imrepl_ctrl_build_ui_snapshot(UiRenderSnapshot *snap) {
+    ReplPredefView predef;
     memset(snap, 0, sizeof(*snap));
 
     /* Refresh derived workspace header lines so the import/export view
@@ -1047,7 +1067,9 @@ static void imrepl_ctrl_build_ui_snapshot(UiRenderSnapshot *snap) {
     snap->editor_input   = editor_state_input();
     snap->import_export  = repl_state_import_export();
     snap->flat_program   = repl_state_flat_program_view();
-    snap->predef         = repl_eval_predef_view();
+    predef = repl_eval_predef_view();
+    snap->predef         = predef;
+    imrepl_ctrl_fill_ui_variable_panel_vars(snap, predef);
 
     snap->document_cmds       = repl_state_document_cmds();
     snap->document_count      = repl_state_document_count();
