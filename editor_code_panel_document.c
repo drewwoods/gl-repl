@@ -7,7 +7,9 @@
  */
 #include "repl_export.h"
 #include "editor_code_panel_document.h"
-#include "repl_replay_annotations.h"
+#include "repl_replay_annotations.h"  /* repl_replay_code_panel_get_command_display_text;
+                                       * full editor decoupling needs a per-line display-text
+                                       * snapshot slice — tracked as Phase 5b followup */
 #include "repl_source_scope.h"
 #include "replay_state.h"
 #include "./include/gl_2d.h"
@@ -165,7 +167,7 @@ static void code_panel_precompute_layout_rows(int panel_w, int text_x,
             main_rows[cmd_idx] = code_panel_command_main_rows(cmd_idx, panel_w, text_x);
         if (replay_extra_rows)
             replay_extra_rows[cmd_idx] =
-                repl_replay_annotation_extra_rows_for_line(cmd_idx);
+                editor_state_virtual_lines_count_for(cmd_idx);
     }
 }
 
@@ -266,8 +268,6 @@ void repl_code_panel_document_build(CodePanelDocumentLayout *layout,
     layout->cp_h = cp_h;
     layout->visible_lines =
         repl_code_panel_document_visible_lines_for_height(cp_h);
-
-    repl_replay_annotations_prepare(editor_buffer_view());
 
     layout->header_rows = code_panel_header_row_count(panel_w, text_x);
     layout->footer_rows = code_panel_footer_row_count(panel_w, text_x);

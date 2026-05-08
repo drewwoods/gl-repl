@@ -1204,17 +1204,3 @@ void repl_replay_annotations_prepare(EditorBufferView text) {
 
     repl_replay_annotations_refresh_virtual_lines();
 }
-
-int repl_replay_annotation_extra_rows_for_line(int cmd_idx) {
-    /* Source of truth is the controller-pushed virtual-line list. Layout
-     * runs after the push, so the count here matches what render draws. */
-    const EditorVirtualLineList *list = editor_state_virtual_lines();
-    if (!list || cmd_idx < 0)
-        return 0;
-    int count = 0;
-    for (int i = 0; i < list->count; i++) {
-        if (list->items[i].after_line_idx == cmd_idx)
-            count++;
-    }
-    return count;
-}
