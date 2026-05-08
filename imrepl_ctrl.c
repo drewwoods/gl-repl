@@ -476,6 +476,51 @@ static void imrepl_ctrl_render_vertex_points_overlay(void) {
     glPopAttrib();
 }
 
+/* Cyan-line highlight on the cursor's polygon block (F8 / "highlight
+ * current poly"). Same polygon-mode trick as the outlines pass, but
+ * scoped to the cursor's flat PC range:
+ *
+ *   - flat_cmd_count = end + 1 caps the executor at the block's end.
+ *   - repl_execute_set_fade_context(1.0, begin) makes the executor
+ *     APPLY transforms for everything before `begin` but emit no
+ *     geometry, so the highlight lands at the right modelview without
+ *     any pre-cursor polygons showing through.
+ *
+ * Pending follow-up: a stencil-based mask is the cleaner long-term fix
+ * (the user has flagged this), but the polygon-mode + skip-prefix
+ * approach matches what the deleted GLCmd-walking version did
+ * visually. */
+static void imrepl_ctrl_render_cursor_poly_highlight_overlay(void) {
+    int begin = repl_state_flat_program_current_block_begin();
+    int end   = repl_state_flat_program_current_block_end();
+    if (begin < 0 || end < 0 || begin > end) return;
+
+    glPushAttrib(GL_ALL_ATTRIB_BITS);
+    glDisable(GL_LIGHTING);
+    glEnable(GL_DEPTH_TEST);
+    glDepthMask(GL_FALSE);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glEnable(GL_POLYGON_OFFSET_LINE);
+    glPolygonOffset(REPL_OUTLINE_POLYGON_OFFSET_FACTOR,
+                    REPL_OUTLINE_POLYGON_OFFSET_UNITS);
+    glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+    glLineWidth(3.0f);
+    glColor3f(0.0f, 0.9f, 0.9f);
+
+    glPushMatrix();
+    repl_execute_set_fade_context(1.0f, begin);
+    repl_execute_program(&(ReplExecutionOptions){
+        .flat_cmd_count = end + 1,
+        .program        = repl_state_flat_program_view(),
+        .text           = editor_buffer_view(),
+    });
+    repl_execute_set_fade_context(1.0f, 0);
+    glPopMatrix();
+
+    glPopAttrib();
+}
+
 /* --- Cursor edit-guide walker --------------------------------------------
  *
  * The geometry-guide planes / crosshairs and transform-guide arrows need
@@ -530,11 +575,14 @@ static void imrepl_ctrl_render_cursor_guides(const SceneGuideSnapshot *snapshot)
 static void imrepl_ctrl_post_overlays(void *user_data) {
     const SceneRenderConfig *cfg = (const SceneRenderConfig *)user_data;
     ReplPresentationState presentation = repl_state_presentation();
+    int replaying = replay_active();
 
     if (presentation.show_vertex_outlines)
         imrepl_ctrl_render_outlines_overlay();
     if (presentation.show_vertex_points)
         imrepl_ctrl_render_vertex_points_overlay();
+    if (presentation.highlight_current_poly && !replaying)
+        imrepl_ctrl_render_cursor_poly_highlight_overlay();
     if (cfg)
         imrepl_ctrl_render_cursor_guides(&cfg->guide_snapshot);
     if (presentation.show_vertex_labels)
