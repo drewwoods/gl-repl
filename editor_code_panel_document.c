@@ -5,13 +5,11 @@
  * Rendering and mouse hit-testing consume the same layout so scrolling,
  * selection, replay annotations, and visual dumps do not drift apart.
  */
-#include "repl_export.h"
 #include "editor_code_panel_document.h"
-#include "repl_replay_annotations.h"  /* repl_replay_code_panel_get_command_display_text;
-                                       * full editor decoupling needs a per-line display-text
-                                       * snapshot slice — tracked as Phase 5b followup */
+#include "repl_export.h"          /* g_header_pre/post, RENDER_STATE_LINE_COUNT, CAM_LINE_COUNT */
 #include "repl_source_scope.h"
-#include "replay_state.h"
+#include "repl_state_views.h"     /* repl_state_edit_line, repl_state_document_count, etc. */
+#include "replay_state.h"         /* replay_active, replay_src_line */
 #include "./include/gl_2d.h"
 #include "ui/metrics.h"
 
@@ -148,11 +146,11 @@ static int code_panel_command_main_rows(int cmd_idx, int panel_w, int text_x) {
     }
 
     {
-        char display_text[MAX_INPUT_LEN];
-        if (!repl_replay_code_panel_get_command_display_text(editor_buffer_view(),
-                                                             cmd_idx, display_text,
-                                                             sizeof(display_text)))
-            return 1;
+        const char *display_text = editor_state_line_override_for(cmd_idx);
+        if (!display_text)
+            display_text = editor_buffer_line(cmd_idx);
+        if (!display_text)
+            display_text = "";
         return repl_code_panel_document_row_count_for_text(display_text,
                                                            text_x, panel_w);
     }
