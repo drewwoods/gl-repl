@@ -48,6 +48,14 @@
  * tessellator, set up default light state. Called once on startup. */
 void scene_render_init_gl(void);
 
+/* Apply the caller's camera as the modelview transform. The caller is
+ * responsible for invoking this once per frame before scene_render_3d_scene;
+ * the scene module no longer manages camera state. Mirrors the legacy
+ * orbit transform: glTranslatef(0,0,-dist); glRotatef(rx,1,0,0);
+ * glRotatef(ry,0,1,0); glTranslatef(-tx,-ty,-tz). */
+void scene_apply_camera(float rx, float ry, float dist,
+                        float tx, float ty, float tz);
+
 /* Render the full 3D scene for one frame using an explicit config snapshot.
  * Orchestrates projection setup, camera transforms, user geometry execution,
  * grid/axes, overlays, and edit guides.
