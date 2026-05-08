@@ -18,9 +18,7 @@
 #ifndef UI_STATE_TYPES_H
 #define UI_STATE_TYPES_H
 
-#ifndef REPL_STATUS_TEXT_MAX
-#define REPL_STATUS_TEXT_MAX 256
-#endif
+#include "config.h"          /* REPL_STATUS_TEXT_MAX */
 
 /* Code-panel UI chrome: panel divider, cursor blink + pixel position
  * the renderer uses. The scroll fields used to live here too; Phase 1

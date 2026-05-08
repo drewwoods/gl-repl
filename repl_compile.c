@@ -28,6 +28,7 @@
 #include "repl_core_internal.h"  /* repl_format_fits, repl_extract_assignment_parts, collect_visible_vars */
 #include "repl_parser.h"         /* repl_parser_parse_command_ctx (uncomment fallback) */
 #include "repl_source_scope.h"   /* repl_source_scope_cmd_indent, _find_block_end */
+#include "repl_state_owners.h"
 
 #include <ctype.h>
 #include <stdio.h>

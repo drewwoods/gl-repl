@@ -1,13 +1,13 @@
 /*
  * repl_replay_annotations.c -- Code-panel replay variable annotations.
  */
-#include "repl_core.h"
 #include "repl_core_internal.h"
 #include "repl_parser.h"
 #include "replay.h"
-#include "repl_state.h"
+#include "repl_state_owners.h"
 #include "replay_state.h"
 #include "repl_replay_annotations.h"
+#include "config.h"        /* REPL_STATUS_TEXT_MAX */
 
 /* ========================================================================= */
 /* Replay variable display helpers                                            */

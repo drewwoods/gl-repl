@@ -50,6 +50,8 @@
 #include "editor/clipboard.h"
 #include "editor/code_panel_document.h"
 #include "prof.h"
+#include "ui/editor.h"
+#include "ui/state_types.h"  /* UI-chrome typedefs (CodePanel/Camera/Help/etc.) */
 
 static int glr_ctrl_cmd_is_focus_vertex(const GLCmd *cmd) {
     return cmd->valid &&

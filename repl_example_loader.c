@@ -6,7 +6,7 @@
 #include "repl_core_internal.h"
 #include "repl_examples.h"
 #include "repl_core.h"
-#include "repl_state.h"
+#include "repl_state_owners.h"
 
 /* Camera lives on UiState; repl_*.c is not allowed to include
  * ui_state.h per check-controller-boundaries. Example loading

@@ -8,10 +8,9 @@
 #include "repl_parser.h"
 
 #include "repl_command_spec.h"
-#include "repl_command_store.h"
 #include "repl_core_internal.h"
 #include "repl_source_scope.h"
-#include "repl_state.h"
+#include "repl_state_owners.h"
 
 #include "config.h" /* CP_CLEAR_MAX_V */
 

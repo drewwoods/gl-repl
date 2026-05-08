@@ -1,4 +1,5 @@
 #include "repl_core.h"
+#include "replay.h"
 #include "repl_state.h"
 #include "replay.c"
 #include "keys.h"

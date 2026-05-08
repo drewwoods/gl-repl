@@ -51,18 +51,19 @@
  *   repl_examples.c- predefined example scene data
  */
 
-#include "repl_export.h"
 #include "repl_core.h"
-#include "repl_core_internal.h"
-#include "repl_pipeline.h"
+#include "cmd_format.h"
+#include "config.h" /* REPL_STATUS_TEXT_MAX */
+#include "prof.h"
 #include "repl_command_spec.h"
 #include "repl_command_store.h"
-#include "repl_parser.h"
-#include "repl_source_scope.h"
+#include "repl_core_internal.h"
+#include "repl_export.h"
 #include "repl_flatten.h"
-#include "cmd_format.h"
-#include "prof.h"
-#include "repl_state.h"
+#include "repl_parser.h"
+#include "repl_pipeline.h"
+#include "repl_source_scope.h"
+#include "repl_state_owners.h"
 
 #include <sys/stat.h>
 #include <sys/types.h>
