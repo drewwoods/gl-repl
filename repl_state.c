@@ -1,31 +1,18 @@
 #define REPL_STATE_IMPLEMENTATION
-#include "glr_camera.h"
 #include "repl_state.h"
-#include "glr_camera.h"
-#include "glr_defaults.h"  /* CFG_DEFAULT_* macros for state defaults */
-
-#include "glr_camera.h"
+#include "editor/help_session.h"
 #include "editor/state.h"
 #include "glr_camera.h"
-#include "editor/help_session.h"
-#include "glr_camera.h"
-#include "variable_panel_state.h"
-#include "glr_camera.h"
-#include "replay_state.h"
-#include "glr_camera.h"
+#include "glr_defaults.h" /* CFG_DEFAULT_* macros for state defaults */
 #include "repl_command_store.h"
-#include "glr_camera.h"
 #include "repl_core.h"
-#include "glr_camera.h"
 #include "repl_core_internal.h"
-#include "glr_camera.h"
-#include "repl_pipeline.h"
-#include "glr_camera.h"
 #include "repl_eval.h"
-#include "glr_camera.h"
+#include "repl_pipeline.h"
 #include "repl_source_scope.h"
-#include "glr_camera.h"
 #include "repl_state_owners.h"
+#include "replay_state.h"
+#include "variable_panel_state.h"
 #undef REPL_STATE_IMPLEMENTATION
 
 /* Import/export helpers stay in repl_export.c for now; state exposes them. */
@@ -56,7 +43,6 @@ static const float g_grid_extents[GRID_EXTENT_COUNT] = {
     [GRID_EXTENT_FAR]   = 100.0f,
 };
 static const ReplRuntimeState g_repl_state_defaults = {
-#include "glr_camera.h"
 #include "repl_state_defaults.inc"
 };
 

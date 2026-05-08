@@ -1,28 +1,17 @@
 #include "glr_camera.h"
 #include "repl_core_internal.h"
-#include "glr_camera.h"
 #include "repl_command_store.h"
-#include "glr_camera.h"
 #include "repl_executor.h"
-#include "glr_camera.h"
 #include "repl_source_scope.h"
-#include "glr_camera.h"
 #include "repl_state.h"
-#include "glr_camera.h"
 #include "repl_core.h"
-#include "glr_camera.h"
 #include "ui/state.h"
-#include "glr_camera.h"
 #include "ui/layout.h"           /* CODE_PANEL_LAYOUT_* */
-#include "glr_camera.h"
 #include "glr_defaults.h"   /* CFG_DEFAULT_* */
-#include "glr_camera.h"
 #include "support/test_harness.h"
-#include "glr_camera.h"
 #include "scene/render.h"
 
 #ifdef OPENGL_VIBE_USE_GL_STUBS
-#include "glr_camera.h"
 #include <GL/gl_stub_counts.h>
 #endif
 
@@ -37,9 +26,7 @@
 #define g_lights               (repl_state_render_mut()->lights)
 #define g_clear_color          (repl_state_render_mut()->clear_color)
 
-#include "glr_camera.h"
 #include <stdio.h>
-#include "glr_camera.h"
 #include <string.h>
 
 static TestHarness g_harness = TEST_HARNESS_INIT;
