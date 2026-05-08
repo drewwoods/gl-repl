@@ -29,7 +29,7 @@
 #define VARIABLE_PANEL_H
 
 #include "repl_state_views.h"
-#include "editor_state.h"
+#include "editor/state.h"
 
 /* Composite peer state. The two slices are kept as their existing
  * typedefs so legacy accessors can return them by value without

@@ -20,7 +20,7 @@
 #define REPL_FLATTEN_H
 
 #include "repl_command.h"
-#include "editor_state.h"  /* EditorBufferView */
+#include "editor/state.h"  /* EditorBufferView */
 #include "repl_eval.h"
 
 /* Local variable snapshot for a single flat command. Captured when the

@@ -30,11 +30,11 @@
  * helper.
  */
 
-#include "editor_commit.h"
-#include "editor_completion.h"
+#include "commit.h"
+#include "completion.h"
 
-#include "editor_services.h"
-#include "editor_state.h"
+#include "services.h"
+#include "state.h"
 #include "repl_apply.h"
 #include "repl_compile.h"
 #include "repl_core_internal.h"
@@ -42,7 +42,7 @@
 #include "repl_core.h"
 #include "repl_state_owners.h"
 #include "repl_source_scope.h"
-#include "editor_undo.h"
+#include "undo.h"
 
 #include <ctype.h>
 #include <stdio.h>

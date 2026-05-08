@@ -13,7 +13,7 @@
  * dispatcher inherits it.
  */
 
-#include "editor_services.h"
+#include "services.h"
 
 #include "repl_apply.h"
 #include "repl_compile.h"

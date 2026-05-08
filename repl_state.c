@@ -2,8 +2,8 @@
 #include "repl_state.h"
 #include "repl_presentation.h"  /* CFG_DEFAULT_* macros for state defaults */
 
-#include "editor_state.h"
-#include "editor_help_session.h"
+#include "editor/state.h"
+#include "editor/help_session.h"
 #include "variable_panel_state.h"
 #include "replay_state.h"
 #include "repl_command_store.h"

@@ -27,14 +27,14 @@
  */
 #include "color_picker.h"
 
-#include "editor_clipboard.h"
-#include "editor_commit.h"
-#include "editor_completion.h"
-#include "editor_help_session.h"
-#include "editor_inline_rename.h"
-#include "editor_input.h"
-#include "editor_search.h"
-#include "editor_undo.h"
+#include "clipboard.h"
+#include "commit.h"
+#include "completion.h"
+#include "help_session.h"
+#include "inline_rename.h"
+#include "input.h"
+#include "search.h"
+#include "undo.h"
 
 #include "repl_camera_controls.h"
 #include "repl_command_store.h"

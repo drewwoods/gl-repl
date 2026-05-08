@@ -11,7 +11,7 @@
  */
 #include "repl_core.h"
 #include "keys.h"
-#include "editor_inline_rename.h"
+#include "inline_rename.h"
 
 static int  g_rename_slot = -1;
 static char g_rename_buf[USER_SCENE_NAME_MAX];

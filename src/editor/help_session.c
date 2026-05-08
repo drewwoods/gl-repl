@@ -1,7 +1,7 @@
 /*
  * editor_help_session.c - Read-only editor session for the help overlay.
  */
-#include "editor_help_session.h"
+#include "help_session.h"
 
 #define EDITOR_HELP_SESSION_INITIAL { .tab_idx = 0, .scroll = 0 }
 
