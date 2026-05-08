@@ -12,7 +12,7 @@
  * so glr_camera stays free of UI dependencies.
  */
 #include "glr_camera.h"
-#include "repl_presentation.h"  /* CFG_DEFAULT_CAMERA_ROTATE */
+#include "glr_defaults.h"  /* CFG_DEFAULT_CAMERA_ROTATE */
 
 #include <gl_includes.h>      /* GLUT_*BUTTON constants */
 #include <math.h>

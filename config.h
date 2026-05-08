@@ -6,6 +6,12 @@
  * needs to be visible to multiple subsystems without dragging in
  * domain-specific headers.
  *
+ * Stays dependency-free on purpose: REPL-pipeline files (parse,
+ * compile, apply, flatten, export) include this just for
+ * REPL_STATUS_TEXT_MAX and shouldn't transitively pull in scene or
+ * UI types. Defaults that REFERENCE scene/UI enums live in
+ * `glr_defaults.h`; only callers of those defaults pay the include.
+ *
  * NOTE: This file is for *compile-time* configuration. User-toggleable
  * runtime settings (wireframe / grid theme / etc.) live on
  * `repl_config.h` and the `g_cfg_items[]` descriptor table in

@@ -7,7 +7,7 @@
 #include "repl_core.h"
 #include "ui/state.h"
 #include "scene/render.h"
-#include "repl_presentation.h"   /* CFG_DEFAULT_* */
+#include "glr_defaults.h"   /* CFG_DEFAULT_* */
 
 #define g_accum_aa_enabled    (repl_state_render_mut()->accum_aa_enabled)
 #define g_multisample_enabled (repl_state_render_mut()->multisample_enabled)
