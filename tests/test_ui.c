@@ -45,6 +45,7 @@ static TestHarness g_harness = TEST_HARNESS_INIT;
  * Mirrors imrepl_ctrl_build_ui_snapshot(); the test harness can't link the
  * controller TU, so we duplicate the relevant slice population here. */
 static void make_test_ui_snapshot(UiRenderSnapshot *snap) {
+    ReplPredefView predef;
     memset(snap, 0, sizeof(*snap));
     snap->viewport       = ui_state_viewport();
     snap->presentation   = repl_state_presentation();
@@ -69,7 +70,20 @@ static void make_test_ui_snapshot(UiRenderSnapshot *snap) {
     snap->editor_input   = editor_state_input();
     snap->import_export  = repl_state_import_export();
     snap->flat_program   = repl_state_flat_program_view();
-    snap->predef         = repl_eval_predef_view();
+    predef = repl_eval_predef_view();
+    snap->predef         = predef;
+    snap->variable_panel_vars.vars = snap->variable_panel_var_storage;
+    snap->variable_panel_vars.count = predef.count;
+    if (snap->variable_panel_vars.count < 0 || !predef.vars)
+        snap->variable_panel_vars.count = 0;
+    if (snap->variable_panel_vars.count > MAX_PREDEF_VARS)
+        snap->variable_panel_vars.count = MAX_PREDEF_VARS;
+    for (int i = 0; i < snap->variable_panel_vars.count; i++) {
+        snprintf(snap->variable_panel_var_storage[i].name,
+                 sizeof(snap->variable_panel_var_storage[i].name),
+                 "%s", predef.vars[i].name);
+        snap->variable_panel_var_storage[i].value = &predef.vars[i].value;
+    }
     snap->document_cmds  = repl_state_document_cmds();
     snap->document_count = repl_state_document_count();
     snap->edit_line      = repl_state_edit_line();

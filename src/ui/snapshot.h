@@ -35,6 +35,18 @@
  * builds the value) and the renderer (which reads it). */
 struct UiOverlayContent;
 
+enum { UI_VARIABLE_NAME_MAX = 16 };
+
+typedef struct {
+    char         name[UI_VARIABLE_NAME_MAX];
+    const float *value;
+} UiVariable;
+
+typedef struct {
+    const UiVariable *vars;
+    int               count;
+} UiVariableList;
+
 typedef struct UiRenderSnapshot {
     /* By-value state slices */
     ReplViewportState           viewport;
@@ -63,6 +75,11 @@ typedef struct UiRenderSnapshot {
     ReplImportExportView        import_export;
     FlatProgramView             flat_program;
     ReplPredefView              predef;
+
+    /* UI-facing variable rows. Names are copied into the snapshot; values
+     * point at the live source values for this frame. */
+    UiVariable                  variable_panel_var_storage[MAX_PREDEF_VARS];
+    UiVariableList              variable_panel_vars;
 
     /* Document */
     const GLCmd                *document_cmds;
