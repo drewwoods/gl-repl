@@ -74,4 +74,27 @@ int  repl_source_scope_cmd_indent_chars(int pos);
 int     repl_source_scope_find_block_end(int begin_idx);
 CmdType repl_source_scope_nearest_open_block_at(int pos);
 
+/* Return the inclusive [head..end] extent of a structured block whose head
+ * sits at `line_idx`. Returns 1 and fills *out_start / *out_count when
+ * line_idx is a CMD_FOR_BEGIN / CMD_FUNC_DEF / CMD_IF_BEGIN row; returns 0
+ * otherwise (and leaves outputs untouched). Used by clipboard and other
+ * editor features to expand a single-line operation to whole-block scope
+ * without reading CmdType themselves. */
+int repl_source_scope_block_extent(int line_idx,
+                                   int *out_start, int *out_count);
+
+/* Range/array predicates: does the given command range / array contain any
+ * CMD_VAR_DECLARE row? Used by clipboard, delete, and other guards that
+ * need to refuse operations that would orphan declared variables, while
+ * keeping the editor side free of CmdType reads.
+ *
+ * - _range walks the live document over [start, start+count).
+ * - _array walks an external GLCmd[] of the supplied count (e.g., the
+ *   clipboard buffer), so paste-time guards don't need to reach into
+ *   the document.
+ *
+ * Both are bounds-checked and return 0 for empty / invalid ranges. */
+int repl_range_contains_var_decl(int start, int count);
+int repl_array_contains_var_decl(const GLCmd *cmds, int count);
+
 #endif

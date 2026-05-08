@@ -160,3 +160,34 @@ CmdType repl_source_scope_nearest_open_block_at(int pos) {
     }
     return depth > 0 ? stack[depth - 1] : CMD_TYPE_COUNT;
 }
+
+int repl_source_scope_block_extent(int line_idx,
+                                   int *out_start, int *out_count) {
+    int n = repl_state_document_count();
+    if (line_idx < 0 || line_idx >= n) return 0;
+    CmdType t = repl_state_document_cmds()[line_idx].type;
+    if (t != CMD_FOR_BEGIN && t != CMD_FUNC_DEF && t != CMD_IF_BEGIN)
+        return 0;
+    int end = repl_source_scope_find_block_end(line_idx);
+    if (end >= n) end = n - 1;
+    if (end < line_idx) return 0;
+    if (out_start) *out_start = line_idx;
+    if (out_count) *out_count = end - line_idx + 1;
+    return 1;
+}
+
+int repl_array_contains_var_decl(const GLCmd *cmds, int count) {
+    if (!cmds || count <= 0) return 0;
+    for (int i = 0; i < count; i++) {
+        if (cmds[i].type == CMD_VAR_DECLARE) return 1;
+    }
+    return 0;
+}
+
+int repl_range_contains_var_decl(int start, int count) {
+    int n = repl_state_document_count();
+    if (start < 0 || count <= 0 || start >= n) return 0;
+    if (start + count > n) count = n - start;
+    return repl_array_contains_var_decl(
+        repl_state_document_cmds() + start, count);
+}

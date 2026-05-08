@@ -25,8 +25,6 @@
 #ifndef EDITOR_CLIPBOARD_H
 #define EDITOR_CLIPBOARD_H
 
-#include "repl_command.h"
-
 /* --- Selection state --------------------------------------------------- */
 
 void editor_clipboard_clear_selection(void);
@@ -44,11 +42,6 @@ void editor_selection_set_end(int line_idx); /* extend/contract selection */
  * (out_start, out_count). Returns 1 if non-empty, 0 if empty after clamping. */
 int  editor_selection_normalize_cmd_range(int start, int count,
                                         int *out_start, int *out_count);
-
-/* Query whether a command range contains any variable declarations. Used to
- * guard delete operations (removing a declaration orphans its references). */
-int  editor_selection_cmds_contain_var_decl(const GLCmd *cmds, int count);
-int  editor_selection_cmd_range_contains_var_decl(int start, int count);
 
 /* Format a user-facing status message for a guarded operation (e.g.,
  * "remove 3 variable declarations?"). */
