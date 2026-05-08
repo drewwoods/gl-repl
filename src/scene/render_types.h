@@ -71,6 +71,14 @@ typedef struct SceneRenderConfig {
     void (*post_fill_fn)(void *user_data);
     void  *post_fill_user_data;
 
+    /* --- Optional post-overlays hook ---
+     * Invoked at the end of the pass (after lights_render, before the
+     * outermost glPopAttrib). The REPL controller uses this for
+     * vertex-number / normal-vector overlays that walk the user's
+     * program; non-REPL callers leave it NULL. */
+    void (*post_overlays_fn)(void *user_data);
+    void  *post_overlays_user_data;
+
     /* --- Flat program --- */
     FlatProgramView flat_program;
 
@@ -123,11 +131,14 @@ typedef struct SceneRenderConfig {
     float grid_major_steps[GRID_MAJOR_COUNT];
     float grid_extents[GRID_EXTENT_COUNT];
 
-    /* --- 3D overlay flags --- */
+    /* --- 3D overlay flags ---
+     * Overlay rendering for vertex_numbers / normal_vectors moved to the
+     * controller's post_overlays_fn (it owns the REPL-program walk and
+     * just calls scene_draw_*_label / scene_draw_*_arrow primitives).
+     * The remaining flags gate scene-side overlay code that still walks
+     * user data; they migrate out as those overlays move out too. */
     int show_guides;
     int show_vpoints;
-    int show_vnums;
-    int show_normals;
     int show_vertex_outlines;
     int show_current_poly;
 

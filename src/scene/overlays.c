@@ -87,23 +87,18 @@ static void scene_overlay_pop_state(void) {
     glPopAttrib();
 }
 
-static void draw_vertex_number_label(const ReplVertexWalkState *state,
-                                     float vx, float vy, float vz,
-                                     void *user) {
-    (void)user;
+void scene_draw_vertex_number_label(int vertex_idx,
+                                    float vx, float vy, float vz) {
     char label[16];
-    snprintf(label, sizeof(label), " v%d", state->vertex_idx_in_block);
+    snprintf(label, sizeof(label), " v%d", vertex_idx);
     glRasterPos3f(vx, vy, vz);
     for (const char *c = label; *c; c++)
         glutBitmapCharacter(FONT_MONO, (unsigned char)*c);
 }
 
-static void draw_normal_vector_at_vertex(const ReplVertexWalkState *state,
-                                         float vx, float vy, float vz,
-                                         void *user) {
-    float scale = *(const float *)user;
-    float nx = state->normal[0], ny = state->normal[1], nz = state->normal[2];
-
+void scene_draw_normal_vector_arrow(float vx, float vy, float vz,
+                                    float nx, float ny, float nz,
+                                    float scale) {
     glBegin(GL_LINES);
     glVertex3f(vx, vy, vz);
     glVertex3f(vx + nx * scale, vy + ny * scale, vz + nz * scale);
@@ -113,57 +108,6 @@ static void draw_normal_vector_at_vertex(const ReplVertexWalkState *state,
     glVertex3f(vx + nx * scale, vy + ny * scale, vz + nz * scale);
     glEnd();
     glPointSize(1.0f);
-}
-
-/* Build a ReplVertexWalkContext from the per-frame SceneRenderConfig.
- * The walker's pure interface keeps it test-friendly; this helper is
- * the only place the scene module bridges config -> walker. */
-static ReplVertexWalkContext walk_ctx_from_config(const SceneRenderConfig *cfg,
-                                                  int selected_block_only) {
-    ReplVertexWalkContext walk_ctx = {
-        .program                = cfg->flat_program,
-        .edit_line_idx          = cfg->edit_line_idx,
-        .cursor_block_begin     = cfg->cursor_block_begin_idx,
-        .cursor_block_end       = cfg->cursor_block_end_idx,
-        .cursor_func_scope_mask = cfg->cursor_func_scope_mask,
-        .selected_block_only    = selected_block_only,
-    };
-    return walk_ctx;
-}
-
-void scene_overlays_render_vertex_numbers(const FrameRenderContext *frame_ctx) {
-    scene_overlay_push_state();
-    glDisable(GL_LIGHTING);
-    glDisable(GL_DEPTH_TEST);
-    glColor3f(1.0f, 1.0f, 0.30f);
-
-    static const ReplVertexWalkCallbacks cb = {
-        .on_vertex = draw_vertex_number_label,
-    };
-    ReplVertexWalkContext walk_ctx = walk_ctx_from_config(&frame_ctx->config, 1);
-    repl_walk_user_vertices(&walk_ctx, &cb, NULL);
-
-    glEnable(GL_DEPTH_TEST);
-    if (frame_ctx->config.user_lighting_enabled) glEnable(GL_LIGHTING);
-    scene_overlay_pop_state();
-}
-
-void scene_overlays_render_normal_vectors(const FrameRenderContext *frame_ctx) {
-    scene_overlay_push_state();
-    glDisable(GL_LIGHTING);
-    glDisable(GL_DEPTH_TEST);
-    glColor3f(0.80f, 0.80f, 0.30f);
-    float scale = 0.35f;
-
-    static const ReplVertexWalkCallbacks cb = {
-        .on_vertex = draw_normal_vector_at_vertex,
-    };
-    ReplVertexWalkContext walk_ctx = walk_ctx_from_config(&frame_ctx->config, 0);
-    repl_walk_user_vertices(&walk_ctx, &cb, &scale);
-
-    glEnable(GL_DEPTH_TEST);
-    if (frame_ctx->config.user_lighting_enabled) glEnable(GL_LIGHTING);
-    scene_overlay_pop_state();
 }
 
 void scene_overlays_render_outlines(const FrameRenderContext *frame_ctx,

@@ -30,6 +30,7 @@
 #include "replay.h"
 #include "replay_state.h"
 #include "scene/render.h"
+#include "scene/overlays.h"     /* scene_draw_vertex_number_label / _arrow primitives */
 #include "ui/autocomplete_panel.h"
 #include "color_picker_ui.h"
 #include "ui/editor.h"
@@ -337,6 +338,86 @@ static void imrepl_ctrl_post_fill_replay_overlay(void *user_data) {
         imrepl_ctrl_render_replay_tess_preview();
 }
 
+/* --- post_overlays_fn body: vertex_numbers + normal_vectors ------------
+ *
+ * Both overlays walk the user's flat program through the REPL walker and
+ * emit one scene primitive per visited vertex. The orchestration lives
+ * here in the controller — scene/overlays.c just exposes
+ * scene_draw_vertex_number_label / scene_draw_normal_vector_arrow. */
+
+static void on_vertex_number_label(const ReplVertexWalkState *state,
+                                   float vx, float vy, float vz,
+                                   void *user) {
+    (void)user;
+    scene_draw_vertex_number_label(state->vertex_idx_in_block, vx, vy, vz);
+}
+
+static void on_normal_vector_arrow(const ReplVertexWalkState *state,
+                                   float vx, float vy, float vz,
+                                   void *user) {
+    float scale = *(const float *)user;
+    scene_draw_normal_vector_arrow(vx, vy, vz,
+                                   state->normal[0],
+                                   state->normal[1],
+                                   state->normal[2],
+                                   scale);
+}
+
+static ReplVertexWalkContext imrepl_ctrl_build_vertex_walk_context(int selected_block_only) {
+    ReplPresentationState presentation = repl_state_presentation();
+    (void)presentation;  /* might be useful for future overlay variants */
+
+    ReplVertexWalkContext ctx = {
+        .program                = repl_state_flat_program_view(),
+        .edit_line_idx          = repl_state_edit_line(),
+        .cursor_block_begin     = repl_state_flat_program_current_block_begin(),
+        .cursor_block_end       = repl_state_flat_program_current_block_end(),
+        .cursor_func_scope_mask = 0,  /* not currently exposed via repl_state */
+        .selected_block_only    = selected_block_only,
+    };
+    return ctx;
+}
+
+static void imrepl_ctrl_render_vertex_numbers(void) {
+    glPushAttrib(GL_ALL_ATTRIB_BITS);
+    glDisable(GL_LIGHTING);
+    glDisable(GL_DEPTH_TEST);
+    glColor3f(1.0f, 1.0f, 0.30f);
+
+    static const ReplVertexWalkCallbacks cb = {
+        .on_vertex = on_vertex_number_label,
+    };
+    ReplVertexWalkContext ctx = imrepl_ctrl_build_vertex_walk_context(1);
+    repl_walk_user_vertices(&ctx, &cb, NULL);
+
+    glPopAttrib();
+}
+
+static void imrepl_ctrl_render_normal_vectors(void) {
+    glPushAttrib(GL_ALL_ATTRIB_BITS);
+    glDisable(GL_LIGHTING);
+    glDisable(GL_DEPTH_TEST);
+    glColor3f(0.80f, 0.80f, 0.30f);
+
+    static const ReplVertexWalkCallbacks cb = {
+        .on_vertex = on_normal_vector_arrow,
+    };
+    float scale = 0.35f;
+    ReplVertexWalkContext ctx = imrepl_ctrl_build_vertex_walk_context(0);
+    repl_walk_user_vertices(&ctx, &cb, &scale);
+
+    glPopAttrib();
+}
+
+static void imrepl_ctrl_post_overlays(void *user_data) {
+    (void)user_data;
+    ReplPresentationState presentation = repl_state_presentation();
+    if (presentation.show_vertex_labels)
+        imrepl_ctrl_render_vertex_numbers();
+    if (presentation.show_normal_vectors)
+        imrepl_ctrl_render_normal_vectors();
+}
+
 static void imrepl_ctrl_push_highlights(void) {
     editor_state_highlights_clear();
 
@@ -466,6 +547,12 @@ static void imrepl_ctrl_build_scene_config(SceneRenderConfig *config) {
     config->post_fill_fn = NULL;
     config->post_fill_user_data = NULL;
 
+    /* --- Post-overlays hook (vertex_numbers / normal_vectors) ---
+     * Always wired; the body itself short-circuits when the relevant
+     * presentation flags are off. */
+    config->post_overlays_fn        = imrepl_ctrl_post_overlays;
+    config->post_overlays_user_data = NULL;
+
     /* --- Flat program --- */
     config->flat_program = repl_state_flat_program_view();
 
@@ -517,11 +604,12 @@ static void imrepl_ctrl_build_scene_config(SceneRenderConfig *config) {
     memcpy(config->grid_extents, grid_extents,
            sizeof(config->grid_extents));
 
-    /* --- 3D overlay flags --- */
+    /* --- 3D overlay flags ---
+     * show_vertex_labels / show_normal_vectors no longer go on the scene
+     * config — the controller's post_overlays_fn reads them from REPL
+     * presentation directly. */
     config->show_guides = presentation.show_vertex_guides;
     config->show_vpoints = presentation.show_vertex_points;
-    config->show_vnums = presentation.show_vertex_labels;
-    config->show_normals = presentation.show_normal_vectors;
     config->show_vertex_outlines = presentation.show_vertex_outlines;
     config->replaying = replay_active();
     config->replay_mode = replay_mode();
