@@ -110,11 +110,14 @@ typedef struct {
     float value;
 } ReplScratchOp;
 
-/* Bound: a single float decl can declare up to MAX_NAMES_PER_DECL
- * names; an assignment writes one. Float-decl overwrite needs DECLARE
- * and UNDECLARE for each delta name. We size for the worst case. */
+/* Bound: covers the two worst cases.
+ *   - Float-decl overwrite emits DECLARE + UNDECLARE per delta name
+ *     (MAX_NAMES_PER_DECL * 2 + 1).
+ *   - Delete-range can UNDECLARE every live predef in one transaction
+ *     (MAX_PREDEF_VARS).
+ * MAX_PREDEF_VARS dominates today (24 vs. 17), so we pick that. */
 #ifndef MAX_PREDEF_OPS_PER_COMMIT
-#define MAX_PREDEF_OPS_PER_COMMIT (MAX_NAMES_PER_DECL * 2 + 1)
+#define MAX_PREDEF_OPS_PER_COMMIT MAX_PREDEF_VARS
 #endif
 
 #ifndef MAX_SCRATCH_OPS_PER_COMMIT
@@ -234,5 +237,30 @@ ReplCompileResult repl_compile_set_predef_value(const char *name,
                                                 const ReplCompileContext *ctx,
                                                 ReplCompiledChange *out,
                                                 char *err, int err_size);
+
+/* Compile a delete-range operation: clamp `start`/`count` to the
+ * document, validate that no CMD_VAR_DECLARE in the range owns a name
+ * still referenced outside the range, and populate UNDECLARE predef
+ * ops for every variable declared inside the range. The apply step
+ * cascades the predef compaction (CMD_VAR_ASSIGN.num_args adjustment)
+ * automatically.
+ *
+ * Pure: never mutates state, never calls set_status.
+ *
+ * Returns:
+ *   REPL_COMPILE_OK + REPL_COMPILED_DELETE_RANGE  delete plan ready
+ *   REPL_COMPILE_OK + REPL_COMPILED_NO_CHANGE     range was empty after
+ *                                                 clamping (count<=0)
+ *   REPL_COMPILE_ERROR                            still-referenced name
+ *                                                 or predef-op overflow;
+ *                                                 `err` filled.
+ *
+ * `commit_message` is set to a neutral default ("Removed N lines");
+ * the editor caller may overwrite it with a verb-specific phrasing
+ * ("Cut N lines"). */
+ReplCompileResult repl_compile_delete_range(int start, int count,
+                                            const ReplCompileContext *ctx,
+                                            ReplCompiledChange *out,
+                                            char *err, int err_size);
 
 #endif /* REPL_COMPILE_H */
