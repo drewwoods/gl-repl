@@ -21,7 +21,7 @@
       "label": "2. Editor and input controllers",
       "files": [
         "repl_editor.c",
-        "repl_actions.c",
+        "glr_actions.c",
         "repl_camera_controls.c",
         "src/editor/clipboard.c",
         "src/editor/undo.c",

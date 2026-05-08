@@ -35,7 +35,7 @@ int  editor_inline_rename_active(void);
 /* Enter rename mode on a user scene slot. Initializes the rename buffer with the
  * slot's current name and returns 1 on success. Returns 0 if the slot is invalid
  * (not in use or out of bounds). Triggered by the Scene menu "Rename active scene"
- * item (via repl_action_menu_item_activate in repl_actions.c). */
+ * item (via glr_action_menu_item_activate in repl_actions.c). */
 int  editor_inline_rename_begin(int slot);
 
 /* Handle an ASCII keystroke while rename mode is active. Returns 1 if the key was

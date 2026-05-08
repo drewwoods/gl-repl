@@ -12,7 +12,7 @@
 #include "editor/help_session.h"
 #include "editor/commit.h"
 #include "editor/search.h"
-#include "repl_actions.h"
+#include "glr_actions.h"
 #include "audio.h"
 #include "repl_camera_controls.h"
 #include "repl_core.h"
@@ -1399,7 +1399,7 @@ int imrepl_ctrl_router_handle_replay_toggle_key(unsigned char key) {
 }
 
 int imrepl_ctrl_router_handle_cfg_shortcut_key(unsigned char key) {
-    return repl_cfg_handle_ascii_shortcut(key);
+    return glr_cfg_handle_ascii_shortcut(key);
 }
 
 int imrepl_ctrl_router_handle_accum_samples_key(unsigned char key) {
@@ -1447,7 +1447,7 @@ int imrepl_ctrl_router_handle_replay_special(int key) {
 }
 
 int imrepl_ctrl_router_handle_cfg_special_shortcut(int key) {
-    return repl_cfg_handle_special_shortcut(key);
+    return glr_cfg_handle_special_shortcut(key);
 }
 
 int imrepl_ctrl_router_handle_horizontal_audio_special(int key) {
@@ -1466,11 +1466,11 @@ int imrepl_ctrl_router_handle_help_tab_special(int key) {
     if (!ui_state_help().visible)
         return 0;
     if (key == GLUT_KEY_LEFT) {
-        repl_action_help_tab_prev();
+        glr_action_help_tab_prev();
         return 1;
     }
     if (key == GLUT_KEY_RIGHT) {
-        repl_action_help_tab_next();
+        glr_action_help_tab_next();
         return 1;
     }
     return 0;
@@ -1706,7 +1706,7 @@ void imrepl_ctrl_router_reset_code_panel_drag(void) {
  * autocomplete clear, selection clear, redraw. Mirrors the legacy
  * ui_panels_handle_code_panel_click tail. */
 static void route_code_click_epilog(void) {
-    repl_action_cursor_blink_reset();
+    glr_action_cursor_blink_reset();
     editor_completion_clear();
     editor_clipboard_clear_selection();
     editor_request_redraw();
@@ -1828,13 +1828,13 @@ static int route_menu_button_hit(const UiHit *hit) {
 }
 
 /* UI_HIT_MENU_ITEM: open dropdown row click. Activates the action
- * via repl_action_menu_item_activate using both menu_id (cmd_idx)
+ * via glr_action_menu_item_activate using both menu_id (cmd_idx)
  * and item_idx from the hit payload. The action returns 1 if the
  * dropdown should close after activation (most action items) or 0 to
  * leave it open (cycle / toggle items). */
 static int route_menu_item_hit(const UiHit *hit) {
     if (hit->cmd_idx < 0 || hit->item_idx < 0) return 0;
-    int close = repl_action_menu_item_activate(hit->cmd_idx, hit->item_idx);
+    int close = glr_action_menu_item_activate(hit->cmd_idx, hit->item_idx);
     if (close)
         ui_menu_bar_close();
     editor_request_redraw();
@@ -1969,7 +1969,7 @@ int imrepl_ctrl_router_handle_code_panel_drag(int x, int y) {
         editor_selection_start(g_code_panel_drag_anchor);
         editor_selection_set_end(target);
         navigate_to_line(target);
-        repl_action_cursor_blink_reset();
+        glr_action_cursor_blink_reset();
         editor_request_redraw();
     }
     return 1;

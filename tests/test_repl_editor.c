@@ -9,7 +9,7 @@
 #include "editor/undo.h"
 #include "imrepl_ctrl.h"
 #include "prof.h"
-#include "repl_actions.h"
+#include "glr_actions.h"
 #include "repl_camera_controls.h"
 #include "repl_config.h"
 #include "repl_core.h"
@@ -296,24 +296,24 @@ int main() {
         ASSERT_TRUE("code panel cfg row exists", row >= 0);
         if (row >= 0) {
             repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT; repl_state_sync_ui_chrome();
-            repl_cfg_cycle_row(row, +1);
+            glr_cfg_cycle_row(row, +1);
             ASSERT_INT("code panel cfg cycles to top",
                        repl_state_presentation().code_panel_layout, CODE_PANEL_LAYOUT_TOP);
-            repl_cfg_cycle_row(row, +1);
+            glr_cfg_cycle_row(row, +1);
             ASSERT_INT("code panel cfg cycles to bottom",
                        repl_state_presentation().code_panel_layout, CODE_PANEL_LAYOUT_BOTTOM);
             g_ac_count = 2;
             g_ac_sel = 1;
             strcpy(g_ac_ghost, "glVertex3f");
             strcpy(g_ac_hint, "vertex");
-            repl_cfg_cycle_row(row, +1);
+            glr_cfg_cycle_row(row, +1);
             ASSERT_INT("code panel cfg cycles to hidden",
                        repl_state_presentation().code_panel_layout, CODE_PANEL_LAYOUT_HIDDEN);
             ASSERT_INT("hide clears autocomplete count", g_ac_count, 0);
             ASSERT_INT("hide clears autocomplete selection", g_ac_sel, 0);
             ASSERT_STR("hide clears autocomplete ghost", g_ac_ghost, "");
             ASSERT_STR("hide clears autocomplete hint", g_ac_hint, "");
-            repl_cfg_cycle_row(row, +1);
+            glr_cfg_cycle_row(row, +1);
             ASSERT_INT("code panel cfg wraps to left",
                        repl_state_presentation().code_panel_layout, CODE_PANEL_LAYOUT_LEFT);
         }
@@ -361,13 +361,13 @@ int main() {
 
         repl_state_presentation_mut()->wireframe = 0;
         ASSERT_INT("config special shortcut consumed",
-                   repl_cfg_handle_special_shortcut(GLUT_KEY_F2), 1);
+                   glr_cfg_handle_special_shortcut(GLUT_KEY_F2), 1);
         ASSERT_INT("config special shortcut toggles wireframe",
                    repl_state_presentation().wireframe, 1);
 
         repl_state_presentation_mut()->grid_major_idx = 0;
         ASSERT_INT("config ascii shortcut consumed",
-                   repl_cfg_handle_ascii_shortcut(KEY_CTRL_O), 1);
+                   glr_cfg_handle_ascii_shortcut(KEY_CTRL_O), 1);
         ASSERT_INT("config ascii shortcut cycles grid major",
                    repl_state_presentation().grid_major_idx, 1);
 
@@ -375,7 +375,7 @@ int main() {
         ASSERT_TRUE("config menu action row exists", row >= 0);
         if (row >= 0) {
             repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT; repl_state_sync_ui_chrome();
-            int close_menu = repl_action_menu_item_activate(REPL_MENU_CONFIG, row);
+            int close_menu = glr_action_menu_item_activate(GLR_MENU_CONFIG, row);
             ASSERT_INT("config menu action keeps menu open", close_menu, 0);
             ASSERT_INT("config menu action cycles code panel",
                        repl_state_presentation().code_panel_layout, CODE_PANEL_LAYOUT_TOP);

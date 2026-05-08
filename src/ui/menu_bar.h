@@ -72,8 +72,8 @@ void ui_menu_bar_render_example_dropdown(const UiRenderSnapshot *snap);
 
 /* --- Menu state --- */
 
-/* Query the currently open top-level menu ID (REPL_MENU_FILE, REPL_MENU_SCENE,
- * REPL_MENU_CONFIG from repl_actions.h), or -1 if no menu is open. Used by
+/* Query the currently open top-level menu ID (GLR_MENU_FILE, GLR_MENU_SCENE,
+ * GLR_MENU_CONFIG from repl_actions.h), or -1 if no menu is open. Used by
  * ui_panels.c to prioritize input routing. */
 int  ui_menu_bar_open_menu_id(void);
 
@@ -81,7 +81,7 @@ int  ui_menu_bar_open_menu_id(void);
  * clicks outside menus. */
 void ui_menu_bar_close(void);
 
-/* Open a specific top-level menu by ID (REPL_MENU_FILE, etc.). Called by menu
+/* Open a specific top-level menu by ID (GLR_MENU_FILE, etc.). Called by menu
  * button click or keyboard dispatch. `now` is the current animation clock
  * (anim_time), used to seed dropdown fade-in animation. */
 void ui_menu_bar_set_open_menu(int menu_id, float now);
