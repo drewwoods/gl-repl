@@ -8,13 +8,10 @@
 #include "scene/render_types.h"
 #include "repl_flatten.h"
 #include "ui/editor.h"
+#include "ui/state_types.h"  /* UI-chrome typedefs (CodePanel/Camera/Help/etc.) */
 
 #ifndef REPL_WORKSPACE_DIR_MAX
 #define REPL_WORKSPACE_DIR_MAX 1024
-#endif
-
-#ifndef REPL_STATUS_TEXT_MAX
-#define REPL_STATUS_TEXT_MAX 256
 #endif
 
 #ifndef USER_SCENE_NAME_MAX
@@ -75,70 +72,15 @@ typedef struct {
  * editor_state.h alongside the EditorState struct that owns them
  * (Phase 1 commit 6). */
 
-/* Code-panel UI chrome: panel divider, cursor blink + pixel position
- * the renderer uses. The scroll fields used to live here too; Phase 1
- * commit 11 split them out into EditorState.scroll because scroll is
- * an editing-session concern, not a render-chrome one.
+/* UI-chrome typedefs (ReplCodePanelRuntimeState / ReplHelpState /
+ * ReplVariablePanelState / ReplProfilePanelState / ReplStatusState /
+ * ReplCameraState / ReplPointerState / ReplViewportState) moved to
+ * src/ui/state_types.h; this header now pulls them via the include
+ * above so existing transitive consumers keep working.
  *
- * `layout_mode` and `show_vertex_indices` are per-frame mirrors of
- * ReplPresentationState fields so ui_*.c renderers and hit-tests can
- * read them without crossing the repl_state_*() boundary; the controller
- * refreshes them in imrepl_ctrl_build_ui_snapshot. The source of truth
- * still lives on ReplPresentationState. */
-typedef struct {
-    float panel_frac;
-    int   resizing_panel;
-    int   cursor_visible;
-    int   blink_tick;
-    int   layout_mode;          /* mirror of presentation.code_panel_layout */
-    int   show_vertex_indices;  /* mirror of presentation.show_vertex_indices */
-} ReplCodePanelRuntimeState;
-
-/* Help-overlay chrome flag. The session-state fields (tab_idx, scroll)
- * moved to editor_help_session.c (Phase G commit 35); the renderer
- * reads them from a separate UiRenderSnapshot.help_session slot. */
-typedef struct {
-    int visible;
-} ReplHelpState;
-
-typedef struct {
-    int visible;
-} ReplVariablePanelState;
-
-typedef struct {
-    int mode;
-} ReplProfilePanelState;
-
-typedef struct {
-    char text[REPL_STATUS_TEXT_MAX];
-    int  ttl;
-} ReplStatusState;
-
-/* ReplSearchState / ReplAutocompleteState typedefs moved to
+ * ReplSearchState / ReplAutocompleteState typedefs moved to
  * editor_state.h alongside the EditorState struct that owns them
  * (Phase 1 commit 7). */
-
-typedef struct {
-    float rx;
-    float ry;
-    float dist;
-    float tx;
-    float ty;
-    float tz;
-    float motion_glow;
-    int   auto_rotate;
-} ReplCameraState;
-
-typedef struct {
-    int mouse_x;
-    int mouse_y;
-    int mouse_button;
-} ReplPointerState;
-
-typedef struct {
-    int window_w;
-    int window_h;
-} ReplViewportState;
 
 typedef struct {
     int   wireframe;
