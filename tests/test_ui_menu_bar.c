@@ -233,7 +233,7 @@ static void test_unified_hit_test(void) {
 static void make_test_ui_snapshot(UiRenderSnapshot *snap) {
     memset(snap, 0, sizeof(*snap));
     snap->viewport = ui_state_viewport();
-    snap->variables.anim_time = 1.0f;
+    snap->anim_time = 1.0f;
     snap->user_scene_active_idx = repl_active_user_scene();
 }
 
@@ -291,7 +291,7 @@ static void test_render_paths_with_stubs(void) {
     snap.search.query_len = (int)strlen(snap.search.query);
     snap.search.cursor_pos = snap.search.query_len;
     snap.search.match_count = 0;
-    snap.variables.anim_time = 2.0f;
+    snap.anim_time = 2.0f;
     gl_stub_counts_reset();
     ui_menu_bar_render_search_overlay(&snap, 0, 180, 20);
     ASSERT_TRUE("search overlay renders zero matches", gl_stub_counts[GL_STUB_glRasterPos2f] > 0);
