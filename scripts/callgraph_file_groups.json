@@ -10,6 +10,8 @@
         "repl_parser.c",
         "repl_source_scope.c",
         "repl_command_store.c",
+        "repl_compile.c",
+        "repl_apply.c",
         "repl_flatten.c",
         "repl_executor.c",
         "repl_eval.c",
@@ -20,14 +22,20 @@
       "id": "editor_input_controllers",
       "label": "2. Editor and input controllers",
       "files": [
-        "repl_editor.c",
-        "glr_actions.c",
-        "repl_camera_controls.c",
+        "src/editor/state.c",
+        "src/editor/input.c",
+        "src/editor/commit.c",
+        "src/editor/services.c",
+        "src/editor/completion.c",
+        "src/editor/help_session.c",
         "src/editor/clipboard.c",
         "src/editor/undo.c",
         "src/editor/search.c",
+        "src/editor/inline_rename.c",
         "variable_panel_drag.c",
-        "src/editor/inline_rename.c"
+        "color_picker_state.c",
+        "glr_actions.c",
+        "glr_camera.c"
       ]
     },
     {
@@ -35,15 +43,18 @@
       "label": "3. REPL domain models",
       "files": [
         "glr_config.c",
+        "glr_debug.c",
         "repl_state.c",
         "repl_scenes.c",
         "repl_example_loader.c",
         "repl_examples.c",
-        "editor_autocomplete.c",
+        "repl_autocomplete.c",
         "repl_autonormal.c",
         "replay.c",
+        "replay_state.c",
         "repl_replay_annotations.c",
-        "glr_debug.c"
+        "variable_panel_state.c",
+        "repl_help_text.c"
       ]
     },
     {
@@ -51,20 +62,21 @@
       "label": "4. 3D scene rendering",
       "files": [
         "src/scene/render.c",
-        "src/scene/geometry_guides.c",
-        "src/scene/transform_guides.c",
         "src/scene/grid.c",
         "src/scene/axes.c",
         "src/scene/backdrop.c",
         "src/scene/lights.c",
         "src/scene/overlays.c",
-        "ui_replay_hud.c"
+        "geometry_guides.c",
+        "transform_guides.c",
+        "replay_ui_hud.c"
       ]
     },
     {
       "id": "ui_rendering",
       "label": "5. 2D UI rendering",
       "files": [
+        "src/ui/state.c",
         "src/ui/panels.c",
         "src/ui/layout.c",
         "src/ui/menu_bar.c",
@@ -73,6 +85,7 @@
         "src/ui/autocomplete_panel.c",
         "src/ui/profile_panel.c",
         "src/ui/code_panel_layout.c",
+        "src/ui/tabbed_overlay.c",
         "src/editor/code_panel_document.c"
       ]
     },
