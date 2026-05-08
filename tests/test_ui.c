@@ -344,9 +344,13 @@ static void test_variable_panel(void) {
     int row = -1;
     ui_state_viewport_set_size(800, 600);
     int px, py, pw, ph;
-    ui_variable_panel_rect(&px, &py, &pw, &ph);
-    ASSERT_TRUE("hit test in panel", ui_variable_panel_hit(px + 10, ui_state_viewport().window_h - (py + 10), &row));
-    ASSERT_TRUE("hit test outside panel", !ui_variable_panel_hit(0, 0, &row));
+    ui_variable_panel_rect_for_count(1, &px, &py, &pw, &ph);
+    ASSERT_TRUE("hit test in panel",
+                ui_variable_panel_hit_for_count(
+                    px + 10, ui_state_viewport().window_h - (py + 10),
+                    1, &row));
+    ASSERT_TRUE("hit test outside panel",
+                !ui_variable_panel_hit_for_count(0, 0, 1, &row));
 }
 
 static void test_menu_bar(void) {
@@ -405,23 +409,23 @@ static void test_ui_panels_hit_test(void) {
     ui_state_viewport_set_size(800, 600);
 
     /* Click in the scene region (below the panel, my > 270). */
-    UiHit h_scene = ui_panels_hit_test(400, 400);
+    UiHit h_scene = ui_panels_hit_test(400, 400, 0);
     ASSERT_TRUE("scene hit kind", h_scene.kind == UI_HIT_SCENE);
 
     /* Click inside the code panel's text area. mx > gutter end
      * (CODE_MARGIN_X + 4*FONT_W = ~40) and my within the panel. */
-    UiHit h_text = ui_panels_hit_test(150, 100);
+    UiHit h_text = ui_panels_hit_test(150, 100, 0);
     ASSERT_TRUE("code-panel text hit kind",
                 h_text.kind == UI_HIT_CODE_TEXT);
 
     /* Click in the gutter (line numbers, mx < ~40). */
-    UiHit h_gutter = ui_panels_hit_test(20, 100);
+    UiHit h_gutter = ui_panels_hit_test(20, 100, 0);
     ASSERT_TRUE("code-panel gutter hit kind",
                 h_gutter.kind == UI_HIT_CODE_GUTTER);
 
     /* Help overlay takes priority over everything. */
     ui_state_help_mut()->visible = 1;
-    UiHit h_help = ui_panels_hit_test(150, 100);
+    UiHit h_help = ui_panels_hit_test(150, 100, 0);
     ASSERT_TRUE("help overlay takes priority",
                 h_help.kind == UI_HIT_HELP_PANEL);
     ui_state_help_mut()->visible = 0;
@@ -528,7 +532,7 @@ static void test_ui_variable_panel_hit_test(void) {
 
     /* Panel hidden -> always miss. */
     variable_panel_view_mut()->visible = 0;
-    UiHit h_off = ui_variable_panel_hit_test(700, 100);
+    UiHit h_off = ui_variable_panel_hit_test(700, 100, 0);
     ASSERT_TRUE("hidden panel -> NONE", h_off.kind == UI_HIT_NONE);
 
     /* Visible panel with one declared variable. */
@@ -538,16 +542,16 @@ static void test_ui_variable_panel_hit_test(void) {
     g_predef_vars[0].value = 1.0f;
 
     int px, py, pw, ph;
-    ui_variable_panel_rect(&px, &py, &pw, &ph);
+    ui_variable_panel_rect_for_count(1, &px, &py, &pw, &ph);
     int my = ui_state_viewport().window_h - (py + 10);
 
-    UiHit h_row = ui_variable_panel_hit_test(px + 10, my);
+    UiHit h_row = ui_variable_panel_hit_test(px + 10, my, 1);
     ASSERT_TRUE("row hit kind", h_row.kind == UI_HIT_VARIABLE_SLIDER);
     ASSERT_TRUE("row item_idx populated",
                 h_row.item_idx >= 0 && h_row.item_idx < g_num_predef_vars);
 
     /* Click outside the panel rect -> NONE. */
-    UiHit h_out = ui_variable_panel_hit_test(0, 0);
+    UiHit h_out = ui_variable_panel_hit_test(0, 0, 1);
     ASSERT_TRUE("outside panel -> NONE", h_out.kind == UI_HIT_NONE);
 }
 
@@ -567,16 +571,16 @@ static void test_ui_panels_hit_test_dispatch(void) {
     strcpy(g_predef_vars[0].name, "x");
     g_predef_vars[0].value = 1.0f;
     int px, py, pw, ph;
-    ui_variable_panel_rect(&px, &py, &pw, &ph);
+    ui_variable_panel_rect_for_count(1, &px, &py, &pw, &ph);
     int my_var = ui_state_viewport().window_h - (py + 10);
-    UiHit h_var = ui_panels_hit_test(px + 10, my_var);
+    UiHit h_var = ui_panels_hit_test(px + 10, my_var, 1);
     ASSERT_TRUE("var panel routed via panels_hit_test",
                 h_var.kind == UI_HIT_VARIABLE_SLIDER);
     variable_panel_view_mut()->visible = 0;
 
     /* Menu pin button click should resolve as UI_HIT_PIN_BUTTON. */
     ui_menu_bar_close();
-    UiHit h_pin = ui_panels_hit_test(380, 10);
+    UiHit h_pin = ui_panels_hit_test(380, 10, 0);
     ASSERT_TRUE("pin routed via panels_hit_test",
                 h_pin.kind == UI_HIT_PIN_BUTTON);
 
@@ -603,7 +607,7 @@ static void test_ui_panels_hit_test_dispatch(void) {
         }
     }
     ASSERT_TRUE("dispatch SV rect probed", sv_mx >= 0);
-    UiHit h_pick = ui_panels_hit_test(sv_mx, sv_my);
+    UiHit h_pick = ui_panels_hit_test(sv_mx, sv_my, 0);
     ASSERT_TRUE("picker routed via panels_hit_test",
                 h_pick.kind == UI_HIT_COLOR_SWATCH);
     color_picker_close();
@@ -620,7 +624,7 @@ static void test_ui_panels_hit_test_panel_divider(void) {
     repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT; repl_state_sync_ui_chrome();
     int cp_x, cp_y, cp_w, cp_h;
     ui_layout_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
-    UiHit h_left = ui_panels_hit_test(cp_x + cp_w, cp_y + 20);
+    UiHit h_left = ui_panels_hit_test(cp_x + cp_w, cp_y + 20, 0);
     ASSERT_TRUE("LEFT divider hit kind",
                 h_left.kind == UI_HIT_PANEL_DIVIDER);
 
@@ -629,7 +633,7 @@ static void test_ui_panels_hit_test_panel_divider(void) {
     repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_TOP; repl_state_sync_ui_chrome();
     ui_layout_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
     int my_top = ui_state_viewport().window_h - cp_y;
-    UiHit h_top = ui_panels_hit_test(cp_x + 100, my_top);
+    UiHit h_top = ui_panels_hit_test(cp_x + 100, my_top, 0);
     ASSERT_TRUE("TOP divider hit kind",
                 h_top.kind == UI_HIT_PANEL_DIVIDER);
 
@@ -637,13 +641,13 @@ static void test_ui_panels_hit_test_panel_divider(void) {
     repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_BOTTOM; repl_state_sync_ui_chrome();
     ui_layout_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
     int my_bot = ui_state_viewport().window_h - (cp_y + cp_h);
-    UiHit h_bot = ui_panels_hit_test(cp_x + 100, my_bot);
+    UiHit h_bot = ui_panels_hit_test(cp_x + 100, my_bot, 0);
     ASSERT_TRUE("BOTTOM divider hit kind",
                 h_bot.kind == UI_HIT_PANEL_DIVIDER);
 
     /* HIDDEN layout: no divider. */
     repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_HIDDEN; repl_state_sync_ui_chrome();
-    UiHit h_hidden = ui_panels_hit_test(400, 300);
+    UiHit h_hidden = ui_panels_hit_test(400, 300, 0);
     ASSERT_TRUE("HIDDEN layout has no divider hit",
                 h_hidden.kind != UI_HIT_PANEL_DIVIDER);
 
@@ -712,7 +716,7 @@ static void test_ui_panels_hit_test_code_text_cursor(void) {
         inp->input[0] = '\0';
         inp->input_len = 0;
     }
-    UiHit h_empty = ui_panels_hit_test(mx, my);
+    UiHit h_empty = ui_panels_hit_test(mx, my, 0);
     ASSERT_TRUE("empty input code-text kind",
                 h_empty.kind == UI_HIT_CODE_TEXT ||
                 h_empty.kind == UI_HIT_CODE_INSERT_LINE);
@@ -727,7 +731,7 @@ static void test_ui_panels_hit_test_code_text_cursor(void) {
         strcpy(inp->input, "abcdef");
         inp->input_len = 6;
     }
-    UiHit h_mid = ui_panels_hit_test(mx + 4 * FONT_W, my);
+    UiHit h_mid = ui_panels_hit_test(mx + 4 * FONT_W, my, 0);
     ASSERT_TRUE("mid-input code-text kind",
                 h_mid.kind == UI_HIT_CODE_TEXT ||
                 h_mid.kind == UI_HIT_CODE_INSERT_LINE);
@@ -757,7 +761,7 @@ static void test_ui_panels_hit_test_insert_line(void) {
     int mx, my;
     code_panel_first_row_text_click(&mx, &my);
 
-    UiHit h = ui_panels_hit_test(mx, my);
+    UiHit h = ui_panels_hit_test(mx, my, 0);
     ASSERT_TRUE("insert-mode ghost row hit kind",
                 h.kind == UI_HIT_CODE_INSERT_LINE);
     ASSERT_INT("insert-line line_idx == edit_line",

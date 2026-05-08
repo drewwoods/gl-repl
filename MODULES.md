@@ -195,7 +195,7 @@ and gets revisited in the namespace audit.
 ```text
 sample.c (future glr_ctrl.c) GLUT callback
   -> glr_ctrl_* callback wrapper                  (routing role)
-  -> UI hit-test:  ui_panels_hit_test(snap, mx, my) -> UiHit
+  -> UI hit-test:  ui_panels_hit_test(mx, my, variable_count) -> UiHit
   -> glr_ctrl dispatches on UiHit.kind to the OWNING subsystem:
 
        UI_HIT_CODE_TEXT     -> editor_handle_*(editor, raw_event, hit)

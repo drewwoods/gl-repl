@@ -538,7 +538,7 @@ int main() {
         repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT; repl_state_sync_ui_chrome();
         replay_active = 0;
 
-        ui_variable_panel_rect(&x, &y, &w, &h);
+        ui_variable_panel_rect_for_count(g_num_predef_vars, &x, &y, &w, &h);
         ASSERT_INT("cramped var panel clears status strip",
                    y, STATUSBAR_H + 4);
 
@@ -2381,7 +2381,7 @@ int main() {
         {
             int mx = CODE_MARGIN_X + 1;
             int my = code_panel_mouse_y_for_cmd(2);
-            UiHit hit = ui_panels_hit_test(mx, my);
+            UiHit hit = ui_panels_hit_test(mx, my, g_num_predef_vars);
             glr_ctrl_router_handle_code_panel_hit(hit, mx, my);
         }
 
@@ -2844,7 +2844,7 @@ int main() {
         /* Attempt to hit the variable row. */
         /* ui_variable_panel_rect will place it at the right edge of the scene. */
         int px, py, pw, ph;
-        ui_variable_panel_rect(&px, &py, &pw, &ph);
+        ui_variable_panel_rect_for_count(g_num_predef_vars, &px, &py, &pw, &ph);
 
         /* Click in the middle of the first row. */
         int click_x = px + pw / 2;
@@ -3200,7 +3200,7 @@ int main() {
         repl_feed_line_public("float testvar = 5.0;");
 
         int px, py, pw, ph;
-        ui_variable_panel_rect(&px, &py, &pw, &ph);
+        ui_variable_panel_rect_for_count(g_num_predef_vars, &px, &py, &pw, &ph);
         int click_x = px + pw / 2;
         int click_y = 1000 - (py + ph - VAR_PANEL_PAD_INTERNAL - VAR_TITLE_H_INTERNAL / 2);
 

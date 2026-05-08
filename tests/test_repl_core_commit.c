@@ -452,7 +452,8 @@ int main(void) {
      * coords. */
     {
         UiHit hit = ui_panels_hit_test(CODE_MARGIN_X + 1,
-                                       code_panel_mouse_y_for_cmd(0));
+                                       code_panel_mouse_y_for_cmd(0),
+                                       g_num_predef_vars);
         glr_ctrl_router_handle_code_panel_hit(hit, CODE_MARGIN_X + 1,
                                                  code_panel_mouse_y_for_cmd(0));
     }
@@ -481,7 +482,7 @@ int main(void) {
         int indent = test_leading_ws_chars(editor_buffer_line(1) ? editor_buffer_line(1) : "");
         int mx = text_x + indent * FONT_W + 1;
         int my = code_panel_mouse_y_for_cmd(1);
-        UiHit hit = ui_panels_hit_test(mx, my);
+        UiHit hit = ui_panels_hit_test(mx, my, g_num_predef_vars);
         glr_ctrl_router_handle_code_panel_hit(hit, mx, my);
         ASSERT_TRUE("clicking indented active line keeps cursor at first char",
                     editor_cursor_pos() == 0);
