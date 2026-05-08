@@ -11,7 +11,7 @@
 #include "prof.h"
 #include "glr_actions.h"
 #include "glr_camera.h"
-#include "repl_config.h"
+#include "glr_config.h"
 #include "repl_core.h"
 #include "repl_core_internal.h"
 #include "repl_export.h"
@@ -116,7 +116,7 @@ static void assert_status_contains(const char *label, const char *needle) {
     ASSERT_TRUE(label, strstr(g_status, needle) != NULL);
 }
 
-static int cfg_row_for_key(ReplConfigKey key) {
+static int cfg_row_for_key(GlrConfigKey key) {
     for (int i = 0; i < CFG_ITEM_COUNT; i++) {
         if (g_cfg_items[i].key == key)
             return i;
@@ -292,7 +292,7 @@ int main() {
 
     /* 0b. Code panel config cycles Left -> Top -> Bottom -> Hidden and imports legacy top layout */
     {
-        int row = cfg_row_for_key(REPL_CONFIG_CODE_PANEL_LAYOUT);
+        int row = cfg_row_for_key(GLR_CONFIG_CODE_PANEL_LAYOUT);
         ASSERT_TRUE("code panel cfg row exists", row >= 0);
         if (row >= 0) {
             repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT; repl_state_sync_ui_chrome();
@@ -371,7 +371,7 @@ int main() {
         ASSERT_INT("config ascii shortcut cycles grid major",
                    repl_state_presentation().grid_major_idx, 1);
 
-        int row = cfg_row_for_key(REPL_CONFIG_CODE_PANEL_LAYOUT);
+        int row = cfg_row_for_key(GLR_CONFIG_CODE_PANEL_LAYOUT);
         ASSERT_TRUE("config menu action row exists", row >= 0);
         if (row >= 0) {
             repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT; repl_state_sync_ui_chrome();

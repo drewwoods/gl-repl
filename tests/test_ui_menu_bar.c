@@ -1,6 +1,6 @@
 #include "ui/menu_bar.h"
 #include "glr_actions.h"
-#include "repl_config.h"
+#include "glr_config.h"
 #include "repl_core.h"
 #include "repl_state_owners.h"
 #include "replay.h"
@@ -89,12 +89,12 @@ static int find_first_config_action_point(int *out_row, int *out_mx, int *out_my
     for (int my = 0; my < win_h; my++) {
         for (int mx = 0; mx < win_w; mx++) {
             int row = ui_menu_bar_dropdown_item_hit(mx, my);
-            const ReplConfigItem *item;
+            const GlrConfigItem *item;
 
             if (row < 0)
                 continue;
-            item = repl_config_item_at(row);
-            if (!item || item->section_header || item->key == REPL_CONFIG_NONE)
+            item = glr_config_item_at(row);
+            if (!item || item->section_header || item->key == GLR_CONFIG_NONE)
                 continue;
 
             if (out_row)
@@ -163,7 +163,7 @@ static void test_dropdown_and_config_press(void) {
     int cfg_my = -1;
     int before;
     int expected;
-    const ReplConfigItem *item;
+    const GlrConfigItem *item;
 
     reset_menu_bar_fixture(1000, 600);
 
@@ -179,8 +179,8 @@ static void test_dropdown_and_config_press(void) {
 
     ASSERT_TRUE("found config action point",
                 find_first_config_action_point(&cfg_row, &cfg_mx, &cfg_my));
-    item = repl_config_item_at(cfg_row);
-    before = repl_config_get(item->key);
+    item = glr_config_item_at(cfg_row);
+    before = glr_config_get(item->key);
     expected = before - 1;
     if (expected < 0)
         expected = item->state_count - 1;
@@ -188,7 +188,7 @@ static void test_dropdown_and_config_press(void) {
     ASSERT_INT_EQ("handled config right-press",
                   ui_menu_bar_handle_config_right_press(cfg_mx, cfg_my), 1);
     ASSERT_INT_EQ("config right-press cycles backward",
-                  repl_config_get(item->key), expected);
+                  glr_config_get(item->key), expected);
     ASSERT_INT_EQ("right-press miss while open", ui_menu_bar_handle_config_right_press(0, 0), 0);
 
     ui_menu_bar_close();

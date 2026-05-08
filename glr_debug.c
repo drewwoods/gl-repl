@@ -1,7 +1,7 @@
 /*
  * repl_debug.c - Diagnostic dumps for CLI flags and tests.
  */
-#include "repl_debug.h"
+#include "glr_debug.h"
 
 #include "repl_export.h"
 #include "repl_command_spec.h"
@@ -13,7 +13,7 @@
 
 #include "glr_camera.h"          /* ReplCameraState + glr_camera() */
 
-void repl_debug_dump_editor(FILE *out, EditorBufferView text) {
+void glr_debug_dump_editor(FILE *out, EditorBufferView text) {
     FILE *dst = out ? out : stdout;
 
     fprintf(dst, "=== REPL Editor Dump ===\n");
@@ -63,7 +63,7 @@ void repl_debug_dump_editor(FILE *out, EditorBufferView text) {
     fflush(dst);
 }
 
-void repl_debug_dump_flat_commands(FILE *out, EditorBufferView text) {
+void glr_debug_dump_flat_commands(FILE *out, EditorBufferView text) {
     FILE *dst = out ? out : stdout;
     FlatProgramView flat_program = repl_state_flat_program_view();
     const GLCmd *g_flat_cmds = flat_program.cmds;
@@ -93,7 +93,7 @@ void repl_debug_dump_flat_commands(FILE *out, EditorBufferView text) {
     fflush(dst);
 }
 
-void repl_debug_dump_runtime_state_layout(FILE *out) {
+void glr_debug_dump_runtime_state_layout(FILE *out) {
     FILE *dst = out ? out : stdout;
 
 /* ReplReplayRuntimeState moved to replay_state.c (Phase F commit 33);

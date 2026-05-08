@@ -22,7 +22,7 @@
  * according to current state.
  *
  * Light indicators: Optional visual overlay showing light positions as small
- * glowing spheres. Enabled via config toggle (REPL_CONFIG_LIGHT_INDICATORS).
+ * glowing spheres. Enabled via config toggle (GLR_CONFIG_LIGHT_INDICATORS).
  * Useful for understanding how geometry is lit and debugging lighting issues.
  * Rendered after main geometry so it appears on top.
  */
@@ -44,7 +44,7 @@ void scene_lights_setup(const FrameRenderContext *frame_ctx);
 /* Render light indicator overlays (small spheres at light positions). Visualizes
  * where lights are located in the scene for debugging and understanding
  * geometry lighting. Called during overlay rendering phase if light indicators
- * are enabled (REPL_CONFIG_LIGHT_INDICATORS toggle). */
+ * are enabled (GLR_CONFIG_LIGHT_INDICATORS toggle). */
 void scene_lights_render(const FrameRenderContext *frame_ctx);
 
 #endif /* SCENE_LIGHTS_H */

@@ -14,7 +14,7 @@
 #include "glr_camera.h"
 #include "repl_command_store.h"
 #include "glr_camera.h"
-#include "repl_config.h"
+#include "glr_config.h"
 #include "glr_camera.h"
 #include "repl_pipeline.h"
 #include "glr_camera.h"
@@ -282,20 +282,20 @@ static int parse_cfg(const char *args) {
     while (*p && isspace((unsigned char)*p)) p++;
     int val = (int)strtol(p, NULL, 10);
     if (strcmp(slug, "top_code_panel") == 0) {
-        repl_config_set(REPL_CONFIG_CODE_PANEL_LAYOUT,
+        glr_config_set(GLR_CONFIG_CODE_PANEL_LAYOUT,
                         val ? CODE_PANEL_LAYOUT_TOP : CODE_PANEL_LAYOUT_LEFT);
         return 1;
     }
     int cfg_count = 0;
-    const ReplConfigItem *items = repl_config_items(&cfg_count);
+    const GlrConfigItem *items = glr_config_items(&cfg_count);
     for (int item_idx = 0; item_idx < cfg_count; item_idx++) {
-        const ReplConfigItem *item = &items[item_idx];
-        if (item->section_header || item->key == REPL_CONFIG_NONE)
+        const GlrConfigItem *item = &items[item_idx];
+        if (item->section_header || item->key == GLR_CONFIG_NONE)
             continue;
         char item_slug[32];
         workspace_slug_from_name(item->label, item_slug, sizeof(item_slug));
         if (strcmp(item_slug, slug) == 0) {
-            repl_config_set(item->key, val);
+            glr_config_set(item->key, val);
             return 1;
         }
     }
@@ -305,15 +305,15 @@ static int parse_cfg(const char *args) {
 
 static void emit_cfgs(int *n) {
     int cfg_count = 0;
-    const ReplConfigItem *items = repl_config_items(&cfg_count);
+    const GlrConfigItem *items = glr_config_items(&cfg_count);
     for (int item_idx = 0; item_idx < cfg_count && *n < MAX_WORKSPACE_HEADER_LINES; item_idx++) {
-        const ReplConfigItem *item = &items[item_idx];
-        if (item->section_header || item->key == REPL_CONFIG_NONE)
+        const GlrConfigItem *item = &items[item_idx];
+        if (item->section_header || item->key == GLR_CONFIG_NONE)
             continue;
         char slug[32];
         workspace_slug_from_name(item->label, slug, sizeof(slug));
         snprintf(g_workspace_header_lines[(*n)++], WORKSPACE_HEADER_LINE_LEN,
-                 "// @cfg %s = %d", slug, repl_config_get(item->key));
+                 "// @cfg %s = %d", slug, glr_config_get(item->key));
     }
 }
 
@@ -379,17 +379,17 @@ const char *g_header_post[] = {
 
 typedef struct {
     const char *repl_line;
-    ReplConfigKey toggle_key;
+    GlrConfigKey toggle_key;
 } InitBootstrapEntry;
 
 static const InitBootstrapEntry g_init_bootstrap_repl[] = {
-    { "glEnable(GL_COLOR_MATERIAL);", REPL_CONFIG_NONE },
-    { "glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);", REPL_CONFIG_NONE },
-    { "glEnable(GL_BLEND);", REPL_CONFIG_NONE },
-    { "glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);", REPL_CONFIG_NONE },
+    { "glEnable(GL_COLOR_MATERIAL);", GLR_CONFIG_NONE },
+    { "glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);", GLR_CONFIG_NONE },
+    { "glEnable(GL_BLEND);", GLR_CONFIG_NONE },
+    { "glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);", GLR_CONFIG_NONE },
 #ifndef NO_POINT_PARAMETER
     { "glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION, 1.0, 0.0, 0.02);",
-      REPL_CONFIG_POINT_ATTENUATION },
+      GLR_CONFIG_POINT_ATTENUATION },
 #endif
 };
 #define NUM_INIT_BOOTSTRAP \
@@ -529,8 +529,8 @@ void apply_init_bootstrap(void) {
     ensure_init_bootstrap_ready();
 
     for (int bootstrap_idx = 0; bootstrap_idx < NUM_INIT_BOOTSTRAP; bootstrap_idx++) {
-        if (g_init_bootstrap_repl[bootstrap_idx].toggle_key != REPL_CONFIG_NONE &&
-            !repl_config_get(g_init_bootstrap_repl[bootstrap_idx].toggle_key)) {
+        if (g_init_bootstrap_repl[bootstrap_idx].toggle_key != GLR_CONFIG_NONE &&
+            !glr_config_get(g_init_bootstrap_repl[bootstrap_idx].toggle_key)) {
             if (g_init_bootstrap_cmds[bootstrap_idx].cmd.type == CMD_POINT_PARAMETER_FV &&
                 g_init_bootstrap_cmds[bootstrap_idx].cmd.mode == GL_POINT_DISTANCE_ATTENUATION) {
                 GLCmd disabled = g_init_bootstrap_cmds[bootstrap_idx].cmd;
@@ -550,8 +550,8 @@ int init_section_line_count(void) {
 
     ensure_init_bootstrap_ready();
     for (int bootstrap_idx = 0; bootstrap_idx < NUM_INIT_BOOTSTRAP; bootstrap_idx++) {
-        if (g_init_bootstrap_repl[bootstrap_idx].toggle_key != REPL_CONFIG_NONE &&
-            !repl_config_get(g_init_bootstrap_repl[bootstrap_idx].toggle_key))
+        if (g_init_bootstrap_repl[bootstrap_idx].toggle_key != GLR_CONFIG_NONE &&
+            !glr_config_get(g_init_bootstrap_repl[bootstrap_idx].toggle_key))
             continue;
         count++;
     }
@@ -579,8 +579,8 @@ void init_section_line(int i, char *buf, size_t n) {
 
     i -= host_count;
     for (int bootstrap_idx = 0; bootstrap_idx < NUM_INIT_BOOTSTRAP; bootstrap_idx++) {
-        if (g_init_bootstrap_repl[bootstrap_idx].toggle_key != REPL_CONFIG_NONE &&
-            !repl_config_get(g_init_bootstrap_repl[bootstrap_idx].toggle_key))
+        if (g_init_bootstrap_repl[bootstrap_idx].toggle_key != GLR_CONFIG_NONE &&
+            !glr_config_get(g_init_bootstrap_repl[bootstrap_idx].toggle_key))
             continue;
         if (enabled_idx == i) {
             format_cmd_source_as_c(buf, n,
@@ -605,8 +605,8 @@ static void emit_export_init_section_to_file(FILE *f, int include_tess) {
 
     ensure_init_bootstrap_ready();
     for (int bootstrap_idx = 0; bootstrap_idx < NUM_INIT_BOOTSTRAP; bootstrap_idx++) {
-        if (g_init_bootstrap_repl[bootstrap_idx].toggle_key != REPL_CONFIG_NONE &&
-            !repl_config_get(g_init_bootstrap_repl[bootstrap_idx].toggle_key))
+        if (g_init_bootstrap_repl[bootstrap_idx].toggle_key != GLR_CONFIG_NONE &&
+            !glr_config_get(g_init_bootstrap_repl[bootstrap_idx].toggle_key))
             continue;
         format_cmd_source_as_c(line, sizeof(line),
                                g_init_bootstrap_cmds[bootstrap_idx].text,

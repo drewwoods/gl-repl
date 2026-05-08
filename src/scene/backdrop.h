@@ -7,7 +7,7 @@
  * doesn't move with camera. Provides visual context and prevents an empty
  * black void behind the geometry.
  *
- * Backdrop modes (toggled via config REPL_CONFIG_BACKDROP):
+ * Backdrop modes (toggled via config GLR_CONFIG_BACKDROP):
  *   - Off: No backdrop, transparent/black background
  *   - Cityscape: Procedural buildings with skyline and horizon
  *   - Solid color: Simple colored plane (e.g., light gray, white)
@@ -34,7 +34,7 @@
 /* Render the backdrop environment once per frame. Draws either a procedural
  * cityscape or solid color in the background (behind grid, geometry, overlays).
  * Uses orthogonal projection so backdrop doesn't move with camera pan/zoom.
- * Backdrop mode is controlled by config (REPL_CONFIG_BACKDROP toggle). Called
+ * Backdrop mode is controlled by config (GLR_CONFIG_BACKDROP toggle). Called
  * early in frame rendering (deepest background layer). */
 void scene_backdrop_render(const FrameRenderContext *frame_ctx);
 

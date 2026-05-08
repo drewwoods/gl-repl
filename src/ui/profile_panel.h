@@ -13,7 +13,7 @@
  * configurable).
  *
  * Visibility: Panel can be toggled on/off via Ctrl+W or the config menu
- * (REPL_CONFIG_CPU_PROFILE). When off, rendering is a no-op. When on, the
+ * (GLR_CONFIG_CPU_PROFILE). When off, rendering is a no-op. When on, the
  * overlay appears alongside other floating panels (variable slider, color
  * picker, etc.) without blocking interaction.
  *

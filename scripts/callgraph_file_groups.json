@@ -34,7 +34,7 @@
       "id": "repl_domain_models",
       "label": "3. REPL domain models",
       "files": [
-        "repl_config.c",
+        "glr_config.c",
         "repl_state.c",
         "repl_scenes.c",
         "repl_example_loader.c",
@@ -43,7 +43,7 @@
         "repl_autonormal.c",
         "replay.c",
         "repl_replay_annotations.c",
-        "repl_debug.c"
+        "glr_debug.c"
       ]
     },
     {

@@ -2,7 +2,7 @@
  * repl_scenes.c -- User scene slots, promotion, and workspace save/load.
  */
 #include "repl_command_store.h"
-#include "repl_config.h"
+#include "glr_config.h"
 #include "repl_core_internal.h"
 #include "repl_examples.h"
 #include "repl_core.h"
@@ -25,16 +25,16 @@
  * Mirrors the set that repl_state_presentation_reset_example_defaults() resets
  * so that switching between scenes and examples never bleeds cfg across. */
 #define N_SCENE_CFG_KEYS 14
-static const ReplConfigKey k_scene_cfg_keys[N_SCENE_CFG_KEYS] = {
-    REPL_CONFIG_WIREFRAME,
-    REPL_CONFIG_GRID_THEME,    REPL_CONFIG_GRID_MAJOR,  REPL_CONFIG_GRID_EXTENT,
-    REPL_CONFIG_AXES_THEME,
-    REPL_CONFIG_VERTEX_LABELS, REPL_CONFIG_NORMAL_VECTORS,
-    REPL_CONFIG_VERTEX_OUTLINES, REPL_CONFIG_VERTEX_POINTS, REPL_CONFIG_VERTEX_GUIDES,
-    REPL_CONFIG_XFORM_GUIDE_MODE,
-    REPL_CONFIG_LIGHT_INDICATORS,
-    REPL_CONFIG_BACKDROP,
-    REPL_CONFIG_CAMERA_ROTATE,
+static const GlrConfigKey k_scene_cfg_keys[N_SCENE_CFG_KEYS] = {
+    GLR_CONFIG_WIREFRAME,
+    GLR_CONFIG_GRID_THEME,    GLR_CONFIG_GRID_MAJOR,  GLR_CONFIG_GRID_EXTENT,
+    GLR_CONFIG_AXES_THEME,
+    GLR_CONFIG_VERTEX_LABELS, GLR_CONFIG_NORMAL_VECTORS,
+    GLR_CONFIG_VERTEX_OUTLINES, GLR_CONFIG_VERTEX_POINTS, GLR_CONFIG_VERTEX_GUIDES,
+    GLR_CONFIG_XFORM_GUIDE_MODE,
+    GLR_CONFIG_LIGHT_INDICATORS,
+    GLR_CONFIG_BACKDROP,
+    GLR_CONFIG_CAMERA_ROTATE,
 };
 
 /* User scene slots for the workspace / example-promotion system.
@@ -100,14 +100,14 @@ static uint32_t next_user_scene_tick(void) {
 
 static void capture_pre_example_cfg(void) {
     for (int i = 0; i < N_SCENE_CFG_KEYS; i++)
-        g_pre_example_cfg[i] = repl_config_get(k_scene_cfg_keys[i]);
+        g_pre_example_cfg[i] = glr_config_get(k_scene_cfg_keys[i]);
     g_pre_example_valid = 1;
 }
 
 static void restore_pre_example_cfg_if_valid(void) {
     if (!g_pre_example_valid) return;
     for (int i = 0; i < N_SCENE_CFG_KEYS; i++)
-        repl_config_set(k_scene_cfg_keys[i], g_pre_example_cfg[i]);
+        glr_config_set(k_scene_cfg_keys[i], g_pre_example_cfg[i]);
     g_pre_example_valid = 0;
 }
 
@@ -168,7 +168,7 @@ static void save_scene_to_slot(int idx, const char *name) {
             s->func_aliases[slot][0] = '\0';
     }
     for (int i = 0; i < N_SCENE_CFG_KEYS; i++)
-        s->scene_cfg[i] = repl_config_get(k_scene_cfg_keys[i]);
+        s->scene_cfg[i] = glr_config_get(k_scene_cfg_keys[i]);
     if (name && *name)
         snprintf(s->name, sizeof(s->name), "%s", name);
     else if (s->name[0] == '\0')
@@ -227,7 +227,7 @@ static void load_scene_from_slot(int idx) {
      * future change makes scene_cfg sparse / inherited-aware. */
     restore_pre_example_cfg_if_valid();
     for (int i = 0; i < N_SCENE_CFG_KEYS; i++)
-        repl_config_set(k_scene_cfg_keys[i], s->scene_cfg[i]);
+        glr_config_set(k_scene_cfg_keys[i], s->scene_cfg[i]);
     editor_insert_mode_set(0);
     load_line_to_input(repl_state_edit_line());
     mark_normals_dirty();

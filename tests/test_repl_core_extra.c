@@ -1,8 +1,8 @@
 #define _DEFAULT_SOURCE
-#include "repl_config.h"
+#include "glr_config.h"
 #include "repl_core.h"
 #include "repl_core_internal.h"
-#include "repl_debug.h"
+#include "glr_debug.h"
 #include "replay.h"
 #include "repl_executor.h"
 #include "repl_state.h"
@@ -53,7 +53,7 @@ GLenum current_begin_mode(void);
 int count_vertices(void);
 extern int repl_state_flat_program_count();
 
-/* Capture the output of repl_debug_dump_flat_commands(, editor_buffer_view()) into a malloc'd string.
+/* Capture the output of glr_debug_dump_flat_commands(, editor_buffer_view()) into a malloc'd string.
  * Returns NULL on failure; caller frees the buffer. */
 static char *capture_flat_dump(void) {
     FILE *tmp = tmpfile();
@@ -63,7 +63,7 @@ static char *capture_flat_dump(void) {
 
     if (!tmp)
         return NULL;
-    repl_debug_dump_flat_commands(tmp, editor_buffer_view());
+    glr_debug_dump_flat_commands(tmp, editor_buffer_view());
     fflush(tmp);
     if (fseek(tmp, 0, SEEK_END) != 0) goto done;
     len = ftell(tmp);
@@ -112,7 +112,7 @@ void test_utils() {
     /* debug dump */
     FILE *devnull = fopen("/dev/null", "w");
     if (devnull) {
-        repl_debug_dump_editor(devnull, editor_buffer_view());
+        glr_debug_dump_editor(devnull, editor_buffer_view());
         fclose(devnull);
     }
 }
@@ -610,26 +610,26 @@ void test_scene_cfg_persists_across_example_switch() {
     repl_scenes_activate_home_slot();
 
     /* Record the default backdrop value, then set a different one. */
-    int default_backdrop = repl_config_get(REPL_CONFIG_BACKDROP);
-    int custom_backdrop  = (default_backdrop + 1) % repl_config_state_count(REPL_CONFIG_BACKDROP);
-    repl_config_set(REPL_CONFIG_BACKDROP, custom_backdrop);
+    int default_backdrop = glr_config_get(GLR_CONFIG_BACKDROP);
+    int custom_backdrop  = (default_backdrop + 1) % glr_config_state_count(GLR_CONFIG_BACKDROP);
+    glr_config_set(GLR_CONFIG_BACKDROP, custom_backdrop);
 
-    int default_grid = repl_config_get(REPL_CONFIG_GRID_THEME);
-    int custom_grid  = (default_grid + 1) % repl_config_state_count(REPL_CONFIG_GRID_THEME);
-    repl_config_set(REPL_CONFIG_GRID_THEME, custom_grid);
+    int default_grid = glr_config_get(GLR_CONFIG_GRID_THEME);
+    int custom_grid  = (default_grid + 1) % glr_config_state_count(GLR_CONFIG_GRID_THEME);
+    glr_config_set(GLR_CONFIG_GRID_THEME, custom_grid);
 
     /* Switch to an example -- example load resets cfg to defaults, then
      * applies its own @cfg.  The user scene should be saved first. */
     repl_load_example(0);
     ASSERT_INT("example load resets backdrop to default",
-               repl_config_get(REPL_CONFIG_BACKDROP), default_backdrop);
+               glr_config_get(GLR_CONFIG_BACKDROP), default_backdrop);
 
     /* Return to Your Scene -- our custom cfg must be restored. */
     repl_load_user_scene_idx(0);
     ASSERT_INT("backdrop restored from Your Scene",
-               repl_config_get(REPL_CONFIG_BACKDROP), custom_backdrop);
+               glr_config_get(GLR_CONFIG_BACKDROP), custom_backdrop);
     ASSERT_INT("grid theme restored from Your Scene",
-               repl_config_get(REPL_CONFIG_GRID_THEME), custom_grid);
+               glr_config_get(GLR_CONFIG_GRID_THEME), custom_grid);
 }
 
 void test_scene_cfg_not_inherited_from_example() {
@@ -640,20 +640,20 @@ void test_scene_cfg_not_inherited_from_example() {
     /* Build a user scene with default cfg (no custom overrides). */
     repl_load_example(0);
     repl_scenes_activate_home_slot();
-    int scene_backdrop = repl_config_get(REPL_CONFIG_BACKDROP);
+    int scene_backdrop = glr_config_get(GLR_CONFIG_BACKDROP);
 
     /* View an example that has a different backdrop. */
     repl_load_example(0);
     int example_backdrop = (scene_backdrop + 1) %
-                           repl_config_state_count(REPL_CONFIG_BACKDROP);
-    repl_config_set(REPL_CONFIG_BACKDROP, example_backdrop);
+                           glr_config_state_count(GLR_CONFIG_BACKDROP);
+    glr_config_set(GLR_CONFIG_BACKDROP, example_backdrop);
     ASSERT_INT("example backdrop different from scene backdrop",
-               repl_config_get(REPL_CONFIG_BACKDROP), example_backdrop);
+               glr_config_get(GLR_CONFIG_BACKDROP), example_backdrop);
 
     /* Return to Your Scene -- must NOT inherit the example's backdrop. */
     repl_load_user_scene_idx(0);
     ASSERT_INT("Your Scene backdrop not overwritten by example",
-               repl_config_get(REPL_CONFIG_BACKDROP), scene_backdrop);
+               glr_config_get(GLR_CONFIG_BACKDROP), scene_backdrop);
 }
 
 /* Option A sandbox: in-example cfg toggles must not leak across an
@@ -668,20 +668,20 @@ void test_in_example_toggles_dont_leak_to_user_scene() {
 
     /* Establish home (slot 0) with a known backdrop. */
     repl_scenes_activate_home_slot();
-    int home_backdrop = repl_config_get(REPL_CONFIG_BACKDROP);
+    int home_backdrop = glr_config_get(GLR_CONFIG_BACKDROP);
 
     /* Enter an example, then toggle the backdrop while inside. */
     repl_load_example(0);
     int example_toggled = (home_backdrop + 1) %
-                          repl_config_state_count(REPL_CONFIG_BACKDROP);
-    repl_config_set(REPL_CONFIG_BACKDROP, example_toggled);
+                          glr_config_state_count(GLR_CONFIG_BACKDROP);
+    glr_config_set(GLR_CONFIG_BACKDROP, example_toggled);
     ASSERT_INT("in-example toggle visible in live cfg",
-               repl_config_get(REPL_CONFIG_BACKDROP), example_toggled);
+               glr_config_get(GLR_CONFIG_BACKDROP), example_toggled);
 
     /* Return to home: the in-example toggle must be gone. */
     repl_load_user_scene_idx(0);
     ASSERT_INT("home backdrop after example trip",
-               repl_config_get(REPL_CONFIG_BACKDROP), home_backdrop);
+               glr_config_get(GLR_CONFIG_BACKDROP), home_backdrop);
 }
 
 void test_debug_dump_flat_commands() {
@@ -716,7 +716,7 @@ void test_debug_dump_flat_commands() {
             close(devnull_fd);
         }
     }
-    repl_debug_dump_flat_commands(NULL, editor_buffer_view());
+    glr_debug_dump_flat_commands(NULL, editor_buffer_view());
     fflush(stdout);
     if (stdout_redirected) {
         if (dup2(saved_stdout, STDOUT_FILENO) >= 0) {
@@ -861,13 +861,13 @@ void test_debug_dump_flat_commands() {
     repl_state_flat_program_set_count(0);
     FILE *dn = fopen("/dev/null", "w");
     if (dn) {
-        repl_debug_dump_flat_commands(dn, editor_buffer_view());
+        glr_debug_dump_flat_commands(dn, editor_buffer_view());
         fclose(dn);
     }
     ASSERT_TRUE("dump re-flattens commands", repl_state_flat_program_count() >= 1);
 }
 
-/* Capture the output of repl_debug_dump_editor(, editor_buffer_view()) into a malloc'd string. */
+/* Capture the output of glr_debug_dump_editor(, editor_buffer_view()) into a malloc'd string. */
 static char *capture_editor_dump(void) {
     FILE *tmp = tmpfile();
     char *buf = NULL;
@@ -876,7 +876,7 @@ static char *capture_editor_dump(void) {
 
     if (!tmp)
         return NULL;
-    repl_debug_dump_editor(tmp, editor_buffer_view());
+    glr_debug_dump_editor(tmp, editor_buffer_view());
     fflush(tmp);
     if (fseek(tmp, 0, SEEK_END) != 0) goto done;
     len = ftell(tmp);
