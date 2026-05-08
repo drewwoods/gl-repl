@@ -809,7 +809,7 @@ static void write_light_setup(FILE *f) {
                 l->ambient[0], l->ambient[1], l->ambient[2]);
         fprintf(f, "    GLfloat spec[] = { %.2ff, %.2ff, %.2ff, 1.0f };\n",
                 l->specular[0], l->specular[1], l->specular[2]);
-        fprintf(f, "    glEnable(%s);\n", ln);
+        fprintf(f, "    glDisable(%s);\n", ln); // lights are disabled by default, each scene enables them as needed
         fprintf(f, "    glLightfv(%s, GL_POSITION, pos);\n", ln);
         fprintf(f, "    glLightfv(%s, GL_DIFFUSE,  dif);\n", ln);
         fprintf(f, "    glLightfv(%s, GL_AMBIENT,  amb);\n", ln);
