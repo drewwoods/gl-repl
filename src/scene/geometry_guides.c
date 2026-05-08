@@ -53,65 +53,35 @@ static void draw_guide_xy_plane(float v, float sz, float as) {
     glEnd();
 }
 
-/* Parse up to 3 comma-separated glVertex argument slots, recording which
- * positions are actually present. repl_eval_parse_exprs() skips leading commas so
- * ",1," and "1," look identical to it; this version tracks slot indices.
- * Empty slots (e.g. x in ",1,") leave filled[i]=0, out[i] unchanged. */
-static int parse_vertex_slots(const SceneGuideSnapshot *snapshot,
-                              const char *src, float out[3], int filled[3]) {
-    const char *s = src;
-    int n_filled = 0;
-    filled[0] = filled[1] = filled[2] = 0;
-
-    for (int slot = 0; slot < 3; slot++) {
-        while (*s == ' ' || *s == '\t') s++;
-        const char *start = s;
-        while (*s && *s != ',' && *s != ')') s++;
-        const char *end = s;
-        const char *c = start;
-        while (c < end && (*c == ' ' || *c == '\t')) c++;
-        if (c < end) {
-            ExprCtx ctx = { start, snapshot->predef_vars,
-                            snapshot->predef_var_count };
-            float val = repl_eval_expr(&ctx);
-            if (ctx.p > start) {
-                out[slot] = val;
-                filled[slot] = 1;
-                n_filled++;
-            }
-        }
-        if (*s == ',') s++;
-        else break;
-    }
-
-    return n_filled;
-}
-
 static void draw_vertex_guides(const SceneGuideSnapshot *snapshot) {
     if (!snapshot->show_guides)
         return;
 
-    const char *args_str = NULL;
+    /* Whether the input is glVertex2f vs the 3-arg variants matters for the
+     * "two slots filled = complete 2D vertex at z=0" branch below. The
+     * argument values themselves arrive pre-parsed in snapshot->vertex_args
+     * so the scene module no longer needs to evaluate REPL expressions. */
     int is_vertex2f = 0;
+    int is_vertex_kind = 0;
     if (strncmp(snapshot->input, "glVertex3f(", 11) == 0 &&
         snapshot->input_len > 11) {
-        args_str = snapshot->input + 11;
+        is_vertex_kind = 1;
     } else if (strncmp(snapshot->input, "glVertex2f(", 11) == 0 &&
                snapshot->input_len > 11) {
-        args_str = snapshot->input + 11;
+        is_vertex_kind = 1;
         is_vertex2f = 1;
     } else if (strncmp(snapshot->input, "gluVertex(", 10) == 0 &&
                snapshot->input_len > 10) {
-        args_str = snapshot->input + 10;
+        is_vertex_kind = 1;
     }
-    if (!args_str)
+    if (!is_vertex_kind || snapshot->vertex_n_filled < 1)
         return;
 
-    float vals[3] = {0};
-    int filled[3];
-    int n = parse_vertex_slots(snapshot, args_str, vals, filled);
-    if (n < 1)
-        return;
+    int n = snapshot->vertex_n_filled;
+    float vals[3] = { snapshot->vertex_args[0], snapshot->vertex_args[1],
+                      snapshot->vertex_args[2] };
+    int   filled[3] = { snapshot->vertex_filled[0], snapshot->vertex_filled[1],
+                        snapshot->vertex_filled[2] };
 
     float sz = 3.0f;
     float as = snapshot->alpha_scale;
@@ -179,24 +149,22 @@ static void draw_normal_guides(const SceneGuideSnapshot *snapshot) {
     if (!snapshot->show_guides)
         return;
 
-    const char *args_str = NULL;
     int paren_pos = 0;
     if (strncmp(snapshot->input, "glNormal3f(", 11) == 0 &&
         snapshot->input_len > 11) {
-        args_str = snapshot->input + 11;
         paren_pos = 11;
     } else if (strncmp(snapshot->input, "gluNormal(", 10) == 0 &&
                snapshot->input_len > 10) {
-        args_str = snapshot->input + 10;
         paren_pos = 10;
+    } else {
+        return;
     }
-    if (!args_str)
-        return;
 
-    float vals[3];
-    int n = repl_eval_parse_exprs(args_str, vals, 3, NULL, 0);
-    if (n < 3 || snapshot->cursor_pos < paren_pos)
+    /* Pre-parsed by the controller (see imrepl_ctrl_build_guide_snapshot). */
+    if (snapshot->normal_n_filled < 3 || snapshot->cursor_pos < paren_pos)
         return;
+    float vals[3] = { snapshot->normal_args[0], snapshot->normal_args[1],
+                      snapshot->normal_args[2] };
 
     int close = snapshot->input_len;
     for (int ci = paren_pos; ci < snapshot->input_len; ci++) {

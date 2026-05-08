@@ -78,11 +78,86 @@ static SceneFocusVertex imrepl_ctrl_build_focus_vertex(void) {
     return focus;
 }
 
+/* Parse up to 3 comma-separated arg slots out of `src`, recording which
+ * positions are actually present. repl_eval_parse_exprs() skips leading
+ * commas so ",1," and "1," look identical to it; this version tracks slot
+ * indices. Empty slots leave filled[i]=0, out[i] unchanged. */
+static int parse_vertex_arg_slots(const char *src,
+                                  const ExprVar *predef_vars, int predef_var_count,
+                                  float out[3], int filled[3]) {
+    const char *s = src;
+    int n_filled = 0;
+    filled[0] = filled[1] = filled[2] = 0;
+
+    for (int slot = 0; slot < 3; slot++) {
+        while (*s == ' ' || *s == '\t') s++;
+        const char *start = s;
+        while (*s && *s != ',' && *s != ')') s++;
+        const char *end = s;
+        const char *c = start;
+        while (c < end && (*c == ' ' || *c == '\t')) c++;
+        if (c < end) {
+            ExprCtx ctx = { .p = start, .vars = predef_vars,
+                            .num_vars = predef_var_count,
+                            .err = NULL, .err_sz = 0 };
+            float val = repl_eval_expr(&ctx);
+            if (ctx.p > start) {
+                out[slot] = val;
+                filled[slot] = 1;
+                n_filled++;
+            }
+        }
+        if (*s == ',') s++;
+        else break;
+    }
+
+    return n_filled;
+}
+
+/* Resolve the cursor-line vertex / normal args into floats so the scene
+ * module can render its guides without depending on repl_eval. Sets the
+ * pre-parsed fields on `snapshot` based on `input`. */
+static void fill_guide_arg_slots(SceneGuideSnapshot *snapshot,
+                                 const char *input, int input_len) {
+    snapshot->vertex_n_filled = 0;
+    snapshot->normal_n_filled = 0;
+    snapshot->vertex_filled[0] = snapshot->vertex_filled[1] =
+        snapshot->vertex_filled[2] = 0;
+
+    if (!input) return;
+
+    ReplPredefView predef = repl_eval_predef_view();
+
+    const char *vertex_args = NULL;
+    if (strncmp(input, "glVertex3f(", 11) == 0 && input_len > 11) {
+        vertex_args = input + 11;
+    } else if (strncmp(input, "glVertex2f(", 11) == 0 && input_len > 11) {
+        vertex_args = input + 11;
+    } else if (strncmp(input, "gluVertex(", 10) == 0 && input_len > 10) {
+        vertex_args = input + 10;
+    }
+    if (vertex_args) {
+        snapshot->vertex_n_filled = parse_vertex_arg_slots(
+            vertex_args, predef.vars, predef.count,
+            snapshot->vertex_args, snapshot->vertex_filled);
+    }
+
+    const char *normal_args = NULL;
+    if (strncmp(input, "glNormal3f(", 11) == 0 && input_len > 11) {
+        normal_args = input + 11;
+    } else if (strncmp(input, "gluNormal(", 10) == 0 && input_len > 10) {
+        normal_args = input + 10;
+    }
+    if (normal_args) {
+        snapshot->normal_n_filled = repl_eval_parse_exprs(
+            normal_args, snapshot->normal_args, 3, NULL, 0);
+    }
+}
+
 static SceneGuideSnapshot imrepl_ctrl_build_guide_snapshot(const SceneRenderConfig *config) {
     ReplPresentationState presentation = repl_state_presentation();
     ReplVariableView vars = repl_state_variables();
     ReplEditorInputView input = editor_state_input();
-    ReplPredefView predef = repl_eval_predef_view();
 
     SceneGuideSnapshot snapshot = {
         .show_guides = config->show_guides,
@@ -99,10 +174,9 @@ static SceneGuideSnapshot imrepl_ctrl_build_guide_snapshot(const SceneRenderConf
         .source_cmds = repl_state_document_cmds_mut(),
         .source_cmd_count = repl_state_document_count(),
         .flat_program = config->flat_program,
-        .predef_vars = predef.vars,
-        .predef_var_count = predef.count,
         .alpha_scale = config->alpha_scale,
     };
+    fill_guide_arg_slots(&snapshot, input.input, input.input_len);
     return snapshot;
 }
 
