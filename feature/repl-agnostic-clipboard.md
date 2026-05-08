@@ -2,7 +2,17 @@
 
 ## Status
 
-Not started. Branch: `feature/source-tree-reorg`.
+Phase A landed 2026-05-08 on `feature/source-tree-reorg`. Block-aware
+copy and the decl-guard predicate now route through REPL-side queries
+(`repl_source_scope_block_extent`, `repl_range_contains_var_decl`,
+`repl_array_contains_var_decl`); `editor_clipboard.{c,h}` carry zero
+`CMD_*` source references. The block-aware copy/cut behavior extends
+from FOR-only to all structured-block heads (FOR / FUNC / IF) — same
+UX upgrade as the comment-toggle migration; status text now reads
+"Copied block (N lines)" instead of "Copied for-loop (N lines)".
+
+Phase B (drop `GLCmd[]` storage from `ReplClipboardState`) **not
+started**; remains optional per the plan.
 
 ## Load-Bearing Contract
 

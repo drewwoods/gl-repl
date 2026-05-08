@@ -51,23 +51,6 @@ int editor_selection_normalize_cmd_range(int start, int count,
                                              out_start, out_count);
 }
 
-int editor_selection_cmds_contain_var_decl(const GLCmd *cmds, int count) {
-    for (int idx = 0; idx < count; idx++) {
-        if (cmds[idx].type == CMD_VAR_DECLARE)
-            return 1;
-    }
-    return 0;
-}
-
-int editor_selection_cmd_range_contains_var_decl(int start, int count) {
-    int n = repl_state_document_count();
-    if (start < 0 || count <= 0 || start >= n)
-        return 0;
-    if (start + count > n)
-        count = n - start;
-    return editor_selection_cmds_contain_var_decl(repl_state_document_cmds() + start, count);
-}
-
 void editor_selection_set_var_decl_action_status(const char *action) {
     char msg[96];
     snprintf(msg, sizeof(msg), "Cannot %s float declarations", action);
@@ -101,45 +84,46 @@ static int selected_cmd_range(int *out_start, int *out_count) {
 }
 
 static int current_copy_range(int *out_start, int *out_count,
-                              int *out_is_for_block) {
+                              int *out_is_block) {
     int start;
     int count = 1;
-    int copying_for;
-    int n = repl_state_document_count();
+    int is_block = 0;
+    int block_start;
+    int block_count;
 
-    if (repl_state_edit_line() >= n)
+    if (repl_state_edit_line() >= repl_state_document_count())
         return 0;
 
     start = repl_state_edit_line();
-    copying_for = (repl_state_document_cmds()[start].type == CMD_FOR_BEGIN);
-    if (copying_for) {
-        int block_end_idx = repl_source_scope_find_block_end(start);
-        int end_idx = (block_end_idx < n) ? block_end_idx + 1 : n;
-        count = end_idx - start;
+    if (repl_source_scope_block_extent(start, &block_start, &block_count)) {
+        start = block_start;
+        count = block_count;
+        is_block = 1;
     }
 
     if (!editor_selection_normalize_cmd_range(start, count, out_start, out_count))
         return 0;
-    if (out_is_for_block)
-        *out_is_for_block = copying_for;
+    if (out_is_block)
+        *out_is_block = is_block;
     return 1;
 }
 
 static int current_cut_range(int *out_start, int *out_count) {
     int start;
     int count;
-    int n = repl_state_document_count();
+    int block_start;
+    int block_count;
 
     if (editor_clipboard_sel_active())
         return selected_cmd_range(out_start, out_count);
 
-    if (repl_state_edit_line() >= n)
+    if (repl_state_edit_line() >= repl_state_document_count())
         return 0;
 
     start = repl_state_edit_line();
-    if (repl_state_document_cmds()[start].type == CMD_FOR_BEGIN) {
-        int block_end_idx = repl_source_scope_find_block_end(start);
-        count = ((block_end_idx < n) ? block_end_idx + 1 : n) - start;
+    if (repl_source_scope_block_extent(start, &block_start, &block_count)) {
+        start = block_start;
+        count = block_count;
     } else {
         count = 1;
     }
@@ -159,7 +143,7 @@ void editor_clipboard_copy_current(void) {
 
         if (!selected_cmd_range(&start, &count))
             return;
-        if (editor_selection_cmd_range_contains_var_decl(start, count)) {
+        if (repl_range_contains_var_decl(start, count)) {
             editor_selection_set_var_decl_action_status("copy");
             return;
         }
@@ -175,19 +159,19 @@ void editor_clipboard_copy_current(void) {
     } else if (repl_state_edit_line() < repl_state_document_count()) {
         int start;
         int count;
-        int copying_for = 0;
+        int copying_block = 0;
 
-        if (!current_copy_range(&start, &count, &copying_for))
+        if (!current_copy_range(&start, &count, &copying_block))
             return;
-        if (editor_selection_cmd_range_contains_var_decl(start, count)) {
+        if (repl_range_contains_var_decl(start, count)) {
             editor_selection_set_var_decl_action_status("copy");
             return;
         }
 
         clipboard_copy_range(start, count);
-        if (copying_for) {
+        if (copying_block) {
             char msg[64];
-            snprintf(msg, sizeof(msg), "Copied for-loop (%d lines)",
+            snprintf(msg, sizeof(msg), "Copied block (%d lines)",
                      editor_state_clipboard_count());
             set_status(msg);
         } else {
@@ -215,7 +199,7 @@ void editor_clipboard_cut_current(void) {
         return;
     }
 
-    if (editor_selection_cmd_range_contains_var_decl(start, count)) {
+    if (repl_range_contains_var_decl(start, count)) {
         editor_selection_set_var_decl_action_status("remove");
         return;
     }
@@ -226,8 +210,8 @@ void editor_clipboard_cut_current(void) {
 
 void editor_clipboard_paste_current(void) {
     if (editor_state_clipboard_count() > 0) {
-        if (editor_selection_cmds_contain_var_decl(editor_state_clipboard_cmds_mut(),
-                                                 editor_state_clipboard_count())) {
+        if (repl_array_contains_var_decl(editor_state_clipboard_cmds_mut(),
+                                         editor_state_clipboard_count())) {
             editor_selection_set_var_decl_action_status("paste");
             return;
         }
