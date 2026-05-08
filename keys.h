@@ -1,27 +1,25 @@
 /*
- * repl_keys.h - ASCII and control key code constants.
+ * keys.h - ASCII and control key code constants.
  *
- * Symbolic names for keyboard shortcuts used throughout the REPL. GLUT delivers
- * Ctrl+<letter> as a single byte (Ctrl+A = 1, Ctrl+B = 2, ..., Ctrl+Z = 26),
- * backspace and delete as special codes, and Escape as 27. These #defines make
- * keyboard dispatch readable and provide a single place to check for conflicts
- * when adding new bindings.
+ * Pure portability header. GLUT delivers Ctrl+<letter> as a single byte
+ * (Ctrl+A = 1, Ctrl+B = 2, ..., Ctrl+Z = 26), backspace and delete as
+ * special codes, and Escape as 27. These #defines make keyboard dispatch
+ * readable and provide a single place to check for conflicts when adding
+ * new bindings.
  *
- * Shared by repl_editor.c (main input dispatcher), editor_search.c (search
- * overlay input), and other modules that need to recognize key codes. Comments
- * describe the action each key triggers (e.g., KEY_CTRL_S = save to output.c).
- *
- * Adding a binding: Define the key code, add the action to the appropriate
- * handler in repl_editor.c, and update the help overlay (ui_help_overlay.c)
- * and F-key table if applicable.
+ * Lives at the repo root with no REPL/UI semantic content so any layer
+ * (editor input, ui_*, controller) can include it without crossing
+ * boundaries. Comments below describe what each key triggers in the
+ * current app (e.g., KEY_CTRL_S = save to output.c) but the constants
+ * themselves are app-neutral.
  *
  * Platform notes: Some platforms (Apple GLUT, terminal emulators) deliver
  * backspace or delete in unexpected codes. KEY_BACKSPACE (8) and KEY_DELETE (127)
  * are defined for portability. Ctrl+Dash (31) is an Apple GLUT quirk for
  * keyboard zoom control.
  */
-#ifndef REPL_KEYS_H
-#define REPL_KEYS_H
+#ifndef KEYS_H
+#define KEYS_H
 
 /* Navigation and editing */
 #define KEY_CTRL_A    1    /* jump to line start */
@@ -66,4 +64,4 @@
 /* Other */
 #define KEY_ESC       27   /* escape key (cancel overlays, etc.) */
 
-#endif /* REPL_KEYS_H */
+#endif /* KEYS_H */

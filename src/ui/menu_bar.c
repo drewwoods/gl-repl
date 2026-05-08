@@ -4,7 +4,7 @@
 #include "repl_actions.h"
 #include "repl_core.h"
 #include "repl_config.h"
-#include "repl_keys.h"
+#include "keys.h"
 #include "repl_state_views.h"
 #include "replay.h"   /* ReplayState (PLAYING / PAUSED / DONE) enum values */
 #include "state.h"
