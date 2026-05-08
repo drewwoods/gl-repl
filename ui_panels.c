@@ -290,7 +290,7 @@ int ui_panels_code_panel_apply_scroll_follow_for_test(int *out_follow_doc_line,
     int text_x = idx_x + idx_col_w;
 
     repl_state_refresh_workspace_header_lines();
-    repl_layout_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
+    ui_layout_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
     (void)cp_x;
     (void)cp_y;
 
@@ -749,7 +749,7 @@ void ui_panels_render_code_panel(const UiRenderSnapshot *snap,
     prof_begin(PROF_CODE_PANEL_LAYOUT_GEOM_SETUP);
 
     int cp_x, cp_y, cp_w, cp_h;
-    repl_layout_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
+    ui_layout_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
     if (cp_w <= 0 || cp_h <= 0) {
         prof_end(PROF_CODE_PANEL_LAYOUT_GEOM_SETUP);
         prof_end(PROF_CODE_PANEL_LAYOUT_GEOM);
@@ -1031,7 +1031,7 @@ void ui_panels_render_scene_status(const UiRenderSnapshot *snap) {
     if (status.ttl <= 0 || !status.text[0]) return;
 
     int sc_x, sc_y, sc_w, sc_h;
-    repl_layout_scene_rect(&sc_x, &sc_y, &sc_w, &sc_h);
+    ui_layout_scene_rect(&sc_x, &sc_y, &sc_w, &sc_h);
     if (sc_w <= 0 || sc_h <= 0) return;
 
     int bar_h = STATUSBAR_H;
@@ -1195,7 +1195,7 @@ UiHit ui_panels_hit_test(int mx, int my) {
 
     /* Code-panel region. */
     int cp_x, cp_y, cp_w, cp_h;
-    repl_layout_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
+    ui_layout_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
 
     /* Panel divider drag handle has priority over the code-panel
      * interior so dragging the divider doesn't accidentally hit a

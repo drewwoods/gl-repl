@@ -1,7 +1,7 @@
 /*
  * scene_geometry_guides.c - vertex/normal edit-guide rendering.
  */
-#include "scene_geometry_guides.h"
+#include "geometry_guides.h"
 
 static void scene_geometry_guides_push_state(void) {
     glPushAttrib(GL_ALL_ATTRIB_BITS);

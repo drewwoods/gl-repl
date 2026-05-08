@@ -35,7 +35,7 @@
 #ifndef SCENE_OVERLAYS_H
 #define SCENE_OVERLAYS_H
 
-#include "scene_render_types.h"
+#include "render_types.h"
 
 /* REPL_OUTLINE_POLYGON_OFFSET_{FACTOR,UNITS} live in scene_render_types.h
  * so repl_export.c can write the same depth-bias constants into the

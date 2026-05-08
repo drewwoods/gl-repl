@@ -98,7 +98,7 @@ void ui_variable_panel_rect(int *px, int *py, int *pw, int *ph) {
     int panel_w, panel_h, panel_x, panel_y;
     int min_y, max_y;
 
-    repl_layout_scene_rect(&sc_x, &sc_y, &sc_w, &sc_h);
+    ui_layout_scene_rect(&sc_x, &sc_y, &sc_w, &sc_h);
     panel_w = VAR_PANEL_W;
     panel_h = VAR_TITLE_H + g_num_predef_vars * VAR_ROW_H + 2 * VAR_PANEL_PAD;
     panel_x = sc_x + sc_w - panel_w - 8;

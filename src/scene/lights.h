@@ -29,7 +29,7 @@
 #ifndef SCENE_LIGHTS_H
 #define SCENE_LIGHTS_H
 
-#include "scene_render_types.h"
+#include "render_types.h"
 
 /* Initialize global ambient light color. Sets the default ambient light that
  * illuminates all surfaces (even those not directly lit). Called once at

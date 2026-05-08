@@ -36,7 +36,7 @@ static int menu_bar_center_my(void) {
     int cp_x, cp_y, cp_w, cp_h;
     int row_mid_y;
 
-    repl_layout_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
+    ui_layout_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
     row_mid_y = cp_y + cp_h - CODE_MARGIN_Y - LINE_H + LINE_H / 2;
     return ui_state_viewport().window_h - row_mid_y;
 }
@@ -46,7 +46,7 @@ static int file_menu_mx(void) {
     (void)cp_y;
     (void)cp_w;
     (void)cp_h;
-    repl_layout_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
+    ui_layout_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
     return cp_x + CODE_MARGIN_X + FONT_SMALL_W;
 }
 
@@ -55,7 +55,7 @@ static int replay_pin_mx(void) {
     int right_edge;
 
     (void)cp_y;
-    repl_layout_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
+    ui_layout_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
     right_edge = cp_x + cp_w - CODE_MARGIN_X;
     return right_edge - 10;
 }

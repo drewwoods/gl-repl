@@ -1,7 +1,7 @@
 /*
  * scene_grid.c - grid theme rendering
  */
-#include "scene_grid.h"
+#include "grid.h"
 #include "./include/gl_2d.h"
 
 /* Returns non-zero when v is close enough to a multiple of `major`

@@ -32,7 +32,7 @@
 #ifndef SCENE_TRANSFORM_GUIDES_H
 #define SCENE_TRANSFORM_GUIDES_H
 
-#include "scene_guides_shared.h"
+#include "guides_shared.h"
 
 /* Prepare transform guides for rendering. Analyzes the geometry snapshot and
  * matrix state to determine which guides are needed. Caches guide data in the

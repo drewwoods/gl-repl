@@ -230,7 +230,7 @@ static void menubar_rects(int menu_x[NUM_MENUS], int menu_w[NUM_MENUS],
                           int pin_x[NUM_PIN_BTNS], int pin_w[NUM_PIN_BTNS],
                           int *row_y, int *row_h) {
     int cp_x, cp_y, cp_w, cp_h;
-    repl_layout_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
+    ui_layout_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
     int panel_top = cp_y + cp_h;
     int by = panel_top - CODE_MARGIN_Y - LINE_H;
     int bh = LINE_H;
@@ -390,7 +390,7 @@ UiHit ui_menu_bar_hit_test(int mx, int my) {
 
 static int ui_menu_bar_panel_visible(void) {
     int cp_w, cp_h;
-    repl_layout_code_panel_rect(NULL, NULL, &cp_w, &cp_h);
+    ui_layout_code_panel_rect(NULL, NULL, &cp_w, &cp_h);
     return cp_w > 0 && cp_h > 0;
 }
 
@@ -604,7 +604,7 @@ void ui_menu_bar_render_search_overlay(const UiRenderSnapshot *snap,
 void ui_menu_bar_render(const UiRenderSnapshot *snap) {
     ReplReplayRuntimeState replay = snap->replay;
     int cp_x, cp_y, cp_w, cp_h;
-    repl_layout_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
+    ui_layout_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
     (void)cp_y;
     if (cp_w <= 0 || cp_h <= 0) return;
     /* Menu bar - design ref: Header Wireframes v2 (now at the very top of

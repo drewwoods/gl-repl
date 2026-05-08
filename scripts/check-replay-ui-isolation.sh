@@ -17,7 +17,7 @@
 # Forbidden in `replay_ui_*.c`:
 #   - editor_state_*_mut(            owns no editor state
 #   - editor_buffer_(replace_line|insert_line|delete_range|set_input|apply_compiled_change)(
-#   - repl_undo_(push_snapshot|pop_snapshot|do_redo)(
+#   - editor_undo_(push_snapshot|pop_snapshot|do_redo)(
 #   - repl_command_store_(insert|delete|replace|load|move)[a-zA-Z_]*(
 #                                    no direct command-store mutation
 #   - repl_compile_*(                 no parser/compile/apply
@@ -39,7 +39,7 @@ violations=""
 for f in replay_ui_*.c; do
     [ -e "$f" ] || continue
     hits=$(grep -nE \
-        'editor_state_[a-zA-Z_]+_mut\(|editor_buffer_(replace_line|insert_line|delete_range|set_input|apply_compiled_change)\(|repl_undo_(push_snapshot|pop_snapshot|do_redo)\(|repl_command_store_(insert|delete|replace|load|move)[a-zA-Z_]*\(|repl_compile_[a-zA-Z_]+\(|repl_apply_[a-zA-Z_]+\(|repl_parser_[a-zA-Z_]+\(|editor_commit_[a-zA-Z_]+\(|repl_state_[a-zA-Z_]+_mut\(' \
+        'editor_state_[a-zA-Z_]+_mut\(|editor_buffer_(replace_line|insert_line|delete_range|set_input|apply_compiled_change)\(|editor_undo_(push_snapshot|pop_snapshot|do_redo)\(|repl_command_store_(insert|delete|replace|load|move)[a-zA-Z_]*\(|repl_compile_[a-zA-Z_]+\(|repl_apply_[a-zA-Z_]+\(|repl_parser_[a-zA-Z_]+\(|editor_commit_[a-zA-Z_]+\(|repl_state_[a-zA-Z_]+_mut\(' \
         "$f" 2>/dev/null \
         | grep -vE '^[0-9]+:[[:space:]]*(/\*|\*|//)' \
         || true)

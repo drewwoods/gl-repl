@@ -29,7 +29,7 @@ static const char *const *undo_snapshot_line_ptrs(const ReplUndoSnapshot *snapsh
     return lines;
 }
 
-void repl_undo_snapshot_save(ReplUndoSnapshot *snapshot) {
+void editor_undo_snapshot_save(ReplUndoSnapshot *snapshot) {
     EditorBufferView text = editor_buffer_view();
     memcpy(snapshot->cmds, repl_state_document_cmds_mut(), (size_t)repl_state_document_count() * sizeof(GLCmd));
     for (int i = 0; i < repl_state_document_count(); i++)
@@ -54,7 +54,7 @@ void repl_undo_snapshot_save(ReplUndoSnapshot *snapshot) {
     }
 }
 
-void repl_undo_snapshot_restore(const ReplUndoSnapshot *snapshot) {
+void editor_undo_snapshot_restore(const ReplUndoSnapshot *snapshot) {
     ReplCommandStore store = repl_command_store_live();
     if (!repl_command_store_load(&store, snapshot->cmds,
                                  snapshot->num_cmds,
@@ -78,28 +78,28 @@ void repl_undo_snapshot_restore(const ReplUndoSnapshot *snapshot) {
     mark_normals_dirty();
 }
 
-void repl_undo_ring_state_capture(ReplUndoRingState *state) {
+void editor_undo_ring_state_capture(ReplUndoRingState *state) {
     state->undo_head = g_undo_head;
     state->undo_count = g_undo_count;
     state->redo_head = g_redo_head;
     state->redo_count = g_redo_count;
 }
 
-void repl_undo_ring_state_restore(const ReplUndoRingState *state) {
+void editor_undo_ring_state_restore(const ReplUndoRingState *state) {
     g_undo_head = state->undo_head;
     g_undo_count = state->undo_count;
     g_redo_head = state->redo_head;
     g_redo_count = state->redo_count;
 }
 
-void repl_undo_push_snapshot(void) {
+void editor_undo_push_snapshot(void) {
     /* First mutation on a loaded example auto-promotes to a user scene,
      * inheriting the example's name. The snapshot captures the post-promotion
      * state so Undo rewinds to the unedited example reference still visible in
      * the Scene menu. */
     repl_promote_example_if_needed();
 
-    repl_undo_snapshot_save(&g_undo_buf[g_undo_head]);
+    editor_undo_snapshot_save(&g_undo_buf[g_undo_head]);
     g_undo_head = (g_undo_head + 1) % REPL_UNDO_DEPTH;
     if (g_undo_count < REPL_UNDO_DEPTH)
         g_undo_count++;
@@ -107,18 +107,18 @@ void repl_undo_push_snapshot(void) {
     g_redo_head = 0;
 }
 
-void repl_undo_pop_snapshot(void) {
+void editor_undo_pop_snapshot(void) {
     if (g_undo_count == 0) {
         set_status("Nothing to undo");
         return;
     }
-    repl_undo_snapshot_save(&g_redo_buf[g_redo_head]);
+    editor_undo_snapshot_save(&g_redo_buf[g_redo_head]);
     g_redo_head = (g_redo_head + 1) % REPL_UNDO_DEPTH;
     if (g_redo_count < REPL_UNDO_DEPTH)
         g_redo_count++;
     g_undo_head = (g_undo_head + REPL_UNDO_DEPTH - 1) % REPL_UNDO_DEPTH;
     g_undo_count--;
-    repl_undo_snapshot_restore(&g_undo_buf[g_undo_head]);
+    editor_undo_snapshot_restore(&g_undo_buf[g_undo_head]);
     {
         char msg[64];
         snprintf(msg, sizeof(msg), "Undo (%d more)", g_undo_count);
@@ -126,18 +126,18 @@ void repl_undo_pop_snapshot(void) {
     }
 }
 
-void repl_undo_do_redo(void) {
+void editor_undo_do_redo(void) {
     if (g_redo_count == 0) {
         set_status("Nothing to redo");
         return;
     }
-    repl_undo_snapshot_save(&g_undo_buf[g_undo_head]);
+    editor_undo_snapshot_save(&g_undo_buf[g_undo_head]);
     g_undo_head = (g_undo_head + 1) % REPL_UNDO_DEPTH;
     if (g_undo_count < REPL_UNDO_DEPTH)
         g_undo_count++;
     g_redo_head = (g_redo_head + REPL_UNDO_DEPTH - 1) % REPL_UNDO_DEPTH;
     g_redo_count--;
-    repl_undo_snapshot_restore(&g_redo_buf[g_redo_head]);
+    editor_undo_snapshot_restore(&g_redo_buf[g_redo_head]);
     {
         char msg[64];
         snprintf(msg, sizeof(msg), "Redo (%d more)", g_redo_count);

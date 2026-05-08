@@ -10,21 +10,21 @@
  * floats). This allows reverting to any prior point with full state recovery,
  * including animations (t value) and user variables (x, y, z, etc.).
  *
- * Lifecycle: repl_undo_push_snapshot() called before any mutation (delete,
+ * Lifecycle: editor_undo_push_snapshot() called before any mutation (delete,
  * paste, reformat, etc.) saves current state to the undo ring and clears the
- * redo ring. Ctrl+Z calls repl_undo_pop_snapshot() to restore the previous
- * snapshot and move current state to redo. Ctrl+Y calls repl_undo_do_redo()
+ * redo ring. Ctrl+Z calls editor_undo_pop_snapshot() to restore the previous
+ * snapshot and move current state to redo. Ctrl+Y calls editor_undo_do_redo()
  * to restore a redo snapshot and move current state back to undo.
  *
- * Example auto-promotion hook: repl_undo_push_snapshot() is the entrypoint
+ * Example auto-promotion hook: editor_undo_push_snapshot() is the entrypoint
  * where repl_promote_example_if_needed() fires. If the user is editing a
  * built-in example, a fresh user scene slot is allocated, the current state
  * is copied into it, the slot is named (derived from the example name, with
  * de-duplication), and control flow returns — the user continues editing
  * without interruption. Subsequent mutations accumulate into the user scene.
  *
- * Ring state capture: repl_undo_ring_state_capture() and
- * repl_undo_ring_state_restore() allow tests and tools to query/restore the
+ * Ring state capture: editor_undo_ring_state_capture() and
+ * editor_undo_ring_state_restore() allow tests and tools to query/restore the
  * internal head/count pointers without exposing the full snapshot arrays.
  * Snapshot capture/restore helpers allow external callers (tests, import/export)
  * to manually snapshot and restore state without using the history rings.
@@ -64,24 +64,24 @@ typedef struct {
 
 /* Save/restore helpers for manual snapshot capture and restore. Used by
  * import/export code to preserve full state without involving the history
- * rings. repl_undo_snapshot_save() captures current editor state;
- * repl_undo_snapshot_restore() reverts to a prior snapshot. */
-void repl_undo_snapshot_save(ReplUndoSnapshot *snapshot);
-void repl_undo_snapshot_restore(const ReplUndoSnapshot *snapshot);
+ * rings. editor_undo_snapshot_save() captures current editor state;
+ * editor_undo_snapshot_restore() reverts to a prior snapshot. */
+void editor_undo_snapshot_save(ReplUndoSnapshot *snapshot);
+void editor_undo_snapshot_restore(const ReplUndoSnapshot *snapshot);
 
 /* Ring state inspection: capture and restore the internal undo/redo head/count
  * pointers. Used by tests to verify ring state without exposing the history
  * buffers themselves. */
-void repl_undo_ring_state_capture(ReplUndoRingState *state);
-void repl_undo_ring_state_restore(const ReplUndoRingState *state);
+void editor_undo_ring_state_capture(ReplUndoRingState *state);
+void editor_undo_ring_state_restore(const ReplUndoRingState *state);
 
-/* Undo/redo operations. repl_undo_push_snapshot() saves current editor state
+/* Undo/redo operations. editor_undo_push_snapshot() saves current editor state
  * to the undo ring and clears the redo ring; called before any mutation.
- * repl_undo_pop_snapshot() restores the most recent undo snapshot (Ctrl+Z),
- * moving current state to redo. repl_undo_do_redo() restores the most recent
+ * editor_undo_pop_snapshot() restores the most recent undo snapshot (Ctrl+Z),
+ * moving current state to redo. editor_undo_do_redo() restores the most recent
  * redo snapshot (Ctrl+Y), moving current state back to undo. */
-void repl_undo_push_snapshot(void);
-void repl_undo_pop_snapshot(void);
-void repl_undo_do_redo(void);
+void editor_undo_push_snapshot(void);
+void editor_undo_pop_snapshot(void);
+void editor_undo_do_redo(void);
 
 #endif /* EDITOR_UNDO_H */

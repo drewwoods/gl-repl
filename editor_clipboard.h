@@ -19,7 +19,7 @@
  *
  * Selection is visual: the code panel highlights selected lines while editing.
  * The selection persists until the user starts a new operation or explicitly
- * calls repl_clipboard_clear_selection().
+ * calls editor_clipboard_clear_selection().
  */
 
 #ifndef EDITOR_CLIPBOARD_H
@@ -29,35 +29,35 @@
 
 /* --- Selection state --------------------------------------------------- */
 
-void repl_clipboard_clear_selection(void);
-int  repl_clipboard_sel_active(void);      /* 1 if anchor and end both set */
-int  repl_clipboard_sel_lo(void);          /* min(anchor, end) */
-int  repl_clipboard_sel_hi(void);          /* max(anchor, end) */
+void editor_clipboard_clear_selection(void);
+int  editor_clipboard_sel_active(void);      /* 1 if anchor and end both set */
+int  editor_clipboard_sel_lo(void);          /* min(anchor, end) */
+int  editor_clipboard_sel_hi(void);          /* max(anchor, end) */
 
-void repl_selection_start(int line_idx);   /* set anchor, clear end */
-int  repl_selection_end(void);             /* current end index, -1 if not set */
-void repl_selection_set_end(int line_idx); /* extend/contract selection */
+void editor_selection_start(int line_idx);   /* set anchor, clear end */
+int  editor_selection_end(void);             /* current end index, -1 if not set */
+void editor_selection_set_end(int line_idx); /* extend/contract selection */
 
 /* --- Range validation -------------------------------------------------- */
 
 /* Normalize a (start, count) range into valid bounds and return adjusted
  * (out_start, out_count). Returns 1 if non-empty, 0 if empty after clamping. */
-int  repl_selection_normalize_cmd_range(int start, int count,
+int  editor_selection_normalize_cmd_range(int start, int count,
                                         int *out_start, int *out_count);
 
 /* Query whether a command range contains any variable declarations. Used to
  * guard delete operations (removing a declaration orphans its references). */
-int  repl_selection_cmds_contain_var_decl(const GLCmd *cmds, int count);
-int  repl_selection_cmd_range_contains_var_decl(int start, int count);
+int  editor_selection_cmds_contain_var_decl(const GLCmd *cmds, int count);
+int  editor_selection_cmd_range_contains_var_decl(int start, int count);
 
 /* Format a user-facing status message for a guarded operation (e.g.,
  * "remove 3 variable declarations?"). */
-void repl_selection_set_var_decl_action_status(const char *action);
+void editor_selection_set_var_decl_action_status(const char *action);
 
 /* --- Copy / cut / paste ------------------------------------------------ */
 
-void repl_clipboard_copy_current(void);    /* copy selection to buffer, or current line */
-void repl_clipboard_cut_current(void);     /* cut to buffer and delete, guarded */
-void repl_clipboard_paste_current(void);   /* paste buffer at edit line */
+void editor_clipboard_copy_current(void);    /* copy selection to buffer, or current line */
+void editor_clipboard_cut_current(void);     /* cut to buffer and delete, guarded */
+void editor_clipboard_paste_current(void);   /* paste buffer at edit line */
 
 #endif /* EDITOR_CLIPBOARD_H */

@@ -3,15 +3,15 @@
  *
  * Extracted from sample.c for maintainability.
  */
-#include "scene_axes.h"
-#include "scene_backdrop.h"
-#include "scene_grid.h"
-#include "scene_lights.h"
-#include "scene_overlays.h"
+#include "axes.h"
+#include "backdrop.h"
+#include "grid.h"
+#include "lights.h"
+#include "overlays.h"
 #include "repl_eval.h"
-#include "scene_render_types.h"
-#include "scene_render.h"
-#include "scene_transform_utils.h"
+#include "render_types.h"
+#include "render.h"
+#include "transform_utils.h"
 #include "prof.h"
 
 /* Sub-pixel jitter offsets (units: fraction of one pixel).

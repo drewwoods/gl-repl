@@ -1,7 +1,7 @@
 /*
  * scene_backdrop.c - optional 3D backdrop renderers for the REPL scene.
  */
-#include "scene_backdrop.h"
+#include "backdrop.h"
 
 #define CITY_BLDG_COUNT   300
 #define CITY_RADIUS       72.0f

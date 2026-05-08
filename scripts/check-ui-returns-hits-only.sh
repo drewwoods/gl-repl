@@ -22,9 +22,9 @@
 #   - `editor_buffer_delete_range(`
 #   - `editor_buffer_set_input(`
 #   - `editor_buffer_apply_compiled_change(`
-#   - `repl_undo_push_snapshot(`     — undo ring writes
-#   - `repl_undo_pop_snapshot(`
-#   - `repl_undo_do_redo(`
+#   - `editor_undo_push_snapshot(`     — undo ring writes
+#   - `editor_undo_pop_snapshot(`
+#   - `editor_undo_do_redo(`
 #
 # The check counts violations and fails if the count rises past the
 # baseline in `scripts/baselines/ui-returns-hits-only.txt`. Reductions
@@ -52,7 +52,7 @@ violations=$(grep -REn \
     --include='ui_*.c' \
     --exclude='ui_state.c' \
     --exclude-dir='.claude' \
-    'repl_action_[a-zA-Z_]+\(|repl_command_store_[a-zA-Z_]+\(|repl_state_[a-zA-Z_]+_mut\(|editor_state_[a-zA-Z_]+_mut\(|editor_buffer_(replace_line|insert_line|delete_range|set_input|apply_compiled_change)\(|repl_undo_(push_snapshot|pop_snapshot|do_redo)\(' \
+    'repl_action_[a-zA-Z_]+\(|repl_command_store_[a-zA-Z_]+\(|repl_state_[a-zA-Z_]+_mut\(|editor_state_[a-zA-Z_]+_mut\(|editor_buffer_(replace_line|insert_line|delete_range|set_input|apply_compiled_change)\(|editor_undo_(push_snapshot|pop_snapshot|do_redo)\(' \
     . 2>/dev/null || true)
 
 if [ -z "$violations" ]; then
