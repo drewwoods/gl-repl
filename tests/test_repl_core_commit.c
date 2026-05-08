@@ -1,5 +1,6 @@
 #include "editor_input.h"
 #include "imrepl_ctrl.h"
+#include "repl_core.h"
 #include "repl_core_internal.h"
 #include "repl_executor.h"
 #include "editor_clipboard.h"

@@ -364,7 +364,7 @@ static void code_panel_draw_chrome(const UiRenderSnapshot *snap,
     glColor4f(0.30f, 0.30f, 0.50f, 0.80f);
     glBegin(GL_LINES);
     {
-        int layout = snap->presentation.code_panel_layout;
+        int layout = snap->code_panel.layout_mode;
         if (layout < 0 || layout >= CODE_PANEL_LAYOUT_COUNT)
             layout = CODE_PANEL_LAYOUT_LEFT;
         if (layout == CODE_PANEL_LAYOUT_TOP) {
@@ -456,7 +456,7 @@ static void code_panel_draw_row_gutter(const CodePanelRowCtx *ctx, int i,
                                        int primitive_vnums_exact) {
     code_panel_draw_gutter_lineno(ctx->line_y, ctx->file_line);
 
-    if (ctx->snap->presentation.show_vertex_indices && is_vertex) {
+    if (ctx->snap->code_panel.show_vertex_indices && is_vertex) {
         char idx_s[16];
         snprintf(idx_s, sizeof(idx_s),
                  primitive_vnums_exact ? "v%d" : "vn", vnum);
@@ -755,7 +755,7 @@ void ui_panels_render_code_panel(const UiRenderSnapshot *snap,
     int panel_w   = cp_w;
     int panel_top = cp_y + cp_h;            /* OpenGL-y of panel top edge */
     int linenum_w = 4 * FONT_W;
-    int idx_col_w = snap->presentation.show_vertex_indices ? (6 * FONT_W) : 0;
+    int idx_col_w = snap->code_panel.show_vertex_indices ? (6 * FONT_W) : 0;
     int idx_x     = CODE_MARGIN_X + linenum_w + FONT_W;
     int text_x    = idx_x + idx_col_w;
 
@@ -919,7 +919,7 @@ void ui_panels_render_code_panel(const UiRenderSnapshot *snap,
              * correctly with current keystroke state. */
             char idx_s[16];
             const char *idx_text = NULL;
-            if (snap->presentation.show_vertex_indices && is_vertex) {
+            if (snap->code_panel.show_vertex_indices && is_vertex) {
                 snprintf(idx_s, sizeof(idx_s),
                          primitive_vnums_exact ? "v%d" : "vn", vnum);
                 idx_text = idx_s;
