@@ -1327,6 +1327,13 @@ void glr_app_reset_all(void) {
      * does not install a sink, so set_status is a no-op there
      * (clearing the ui_state_status_set stub). */
     repl_set_status_sink(ui_state_status_set);
+    /* Install the export-config bridge so repl_export.c can emit/parse
+     * @cfg headers and repl_scenes.c can snapshot per-scene cfg
+     * without referencing glr_config_* directly. The demo does not
+     * install a bridge, so the @cfg path is a no-op there (clearing
+     * g_cfg_items / CFG_ITEM_COUNT / audio_* / ui_state_profile_panel_mut
+     * / variable_panel_view_mut stubs). */
+    glr_actions_install_export_cfg_bridge();
     /* Refresh derived export/camera text caches AFTER peer resets
      * so the cached strings reflect post-reset state, not whatever
      * was on the peers before this call. These read app-side cfg /

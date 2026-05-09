@@ -124,6 +124,120 @@ const GlrConfigItem g_cfg_items[] = {
 
 const int CFG_ITEM_COUNT = (int)(sizeof(g_cfg_items) / sizeof(g_cfg_items[0]));
 
+/* ---- Export-config bridge (step 4 of the decouple plan) ---------------- */
+
+#include "repl_export.h"
+
+static void cfg_slug_from_label(const char *label, char *out, size_t out_sz) {
+    size_t out_idx = 0;
+    for (size_t i = 0; label[i] && out_idx + 1 < out_sz; i++) {
+        unsigned char c = (unsigned char)label[i];
+        if (c == ' ' || c == '\t' || c == '-' || c == '/') out[out_idx++] = '_';
+        else if (isalnum(c))                               out[out_idx++] = (char)tolower(c);
+        else if (c == '_')                                 out[out_idx++] = '_';
+    }
+    if (out_sz > 0) out[out_idx] = '\0';
+}
+
+/* Subset of cfg keys saved per-scene (mirrors what the pre-step-4
+ * k_scene_cfg_keys list covered, including camera_rotate). The
+ * subset includes presentation toggles plus camera_rotate; the
+ * controller owns this knowledge so repl_scenes.c stays neutral. */
+static int cfg_key_in_scene_subset(GlrConfigKey key) {
+    switch (key) {
+    case GLR_CONFIG_WIREFRAME:
+    case GLR_CONFIG_GRID_THEME:
+    case GLR_CONFIG_GRID_MAJOR:
+    case GLR_CONFIG_GRID_EXTENT:
+    case GLR_CONFIG_AXES_THEME:
+    case GLR_CONFIG_VERTEX_LABELS:
+    case GLR_CONFIG_NORMAL_VECTORS:
+    case GLR_CONFIG_VERTEX_OUTLINES:
+    case GLR_CONFIG_VERTEX_POINTS:
+    case GLR_CONFIG_VERTEX_GUIDES:
+    case GLR_CONFIG_XFORM_GUIDE_MODE:
+    case GLR_CONFIG_LIGHT_INDICATORS:
+    case GLR_CONFIG_BACKDROP:
+    case GLR_CONFIG_CAMERA_ROTATE:
+        return 1;
+    default:
+        return 0;
+    }
+}
+
+static void glr_export_cfg_fill_all(ReplExportConfig *cfg) {
+    int n = 0;
+    const GlrConfigItem *items = glr_config_items(&n);
+    for (int i = 0; i < n; i++) {
+        const GlrConfigItem *item = &items[i];
+        if (item->section_header || item->key == GLR_CONFIG_NONE) continue;
+        char slug[REPL_EXPORT_CFG_KEY_MAX];
+        cfg_slug_from_label(item->label, slug, sizeof(slug));
+        repl_export_config_set_int(cfg, slug, glr_config_get(item->key));
+    }
+}
+
+static void glr_export_cfg_fill_scene_subset(ReplExportConfig *cfg) {
+    int n = 0;
+    const GlrConfigItem *items = glr_config_items(&n);
+    for (int i = 0; i < n; i++) {
+        const GlrConfigItem *item = &items[i];
+        if (item->section_header || item->key == GLR_CONFIG_NONE) continue;
+        if (!cfg_key_in_scene_subset(item->key))                  continue;
+        char slug[REPL_EXPORT_CFG_KEY_MAX];
+        cfg_slug_from_label(item->label, slug, sizeof(slug));
+        repl_export_config_set_int(cfg, slug, glr_config_get(item->key));
+    }
+}
+
+static void glr_export_cfg_apply(const ReplExportConfig *cfg) {
+    if (!cfg) return;
+    int n = 0;
+    const GlrConfigItem *items = glr_config_items(&n);
+    for (int idx = 0; idx < cfg->count; idx++) {
+        const char *slug = cfg->items[idx].key;
+        int val = (int)strtol(cfg->items[idx].value, NULL, 10);
+        for (int i = 0; i < n; i++) {
+            const GlrConfigItem *item = &items[i];
+            if (item->section_header || item->key == GLR_CONFIG_NONE) continue;
+            char item_slug[REPL_EXPORT_CFG_KEY_MAX];
+            cfg_slug_from_label(item->label, item_slug, sizeof(item_slug));
+            if (strcmp(item_slug, slug) == 0) {
+                glr_config_set(item->key, val);
+                break;
+            }
+        }
+        /* Unknown slugs silently ignored — same behaviour as the pre-bridge
+         * parse_cfg path: drop unrecognised cfg keys. */
+    }
+}
+
+static int glr_export_cfg_get_int(const char *slug, int fallback) {
+    if (!slug) return fallback;
+    int n = 0;
+    const GlrConfigItem *items = glr_config_items(&n);
+    for (int i = 0; i < n; i++) {
+        const GlrConfigItem *item = &items[i];
+        if (item->section_header || item->key == GLR_CONFIG_NONE) continue;
+        char item_slug[REPL_EXPORT_CFG_KEY_MAX];
+        cfg_slug_from_label(item->label, item_slug, sizeof(item_slug));
+        if (strcmp(item_slug, slug) == 0)
+            return glr_config_get(item->key);
+    }
+    return fallback;
+}
+
+const ReplExportConfigBridge g_glr_export_cfg_bridge = {
+    .fill_all          = glr_export_cfg_fill_all,
+    .fill_scene_subset = glr_export_cfg_fill_scene_subset,
+    .apply             = glr_export_cfg_apply,
+    .get_int           = glr_export_cfg_get_int,
+};
+
+void glr_actions_install_export_cfg_bridge(void) {
+    repl_export_install_config_bridge(&g_glr_export_cfg_bridge);
+}
+
 static void apply_audio_cfg_mode(int mode) {
     switch (mode) {
     case AUDIO_CFG_PAUSE:

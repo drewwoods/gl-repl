@@ -41,6 +41,81 @@
 #include "editor/state.h"  /* EditorBufferView */
 #include "repl_eval.h"     /* REPL_SCRATCH_ARRAY_LEN */
 
+/* Neutral header-config bag (step 4 of feature/decouple-repl-from-gl-repl-alt.md).
+ *
+ * The REPL pipeline historically called glr_config_get/set/items directly to
+ * emit and parse `// @cfg slug = value` header lines. That dragged glr_config.c
+ * (and transitively audio, camera, profile, variable_panel) into the demo
+ * link set. The neutral bag inverts the dependency: owners (controller-side)
+ * fill a ReplExportConfig before save and read one after load; repl_export.c
+ * iterates the bag without knowing what the slugs mean.
+ *
+ * Step 4 is the temporary catalog split: presentation/render slugs land in
+ * the bag because their backing storage is still in g_repl_state. Step 7
+ * relocates that storage to glr_state.c and reassigns slugs.
+ *
+ * Why a flat key/value bag and not a callback registry: the cfg payload is
+ * ~30 slugs, all int 0..N, decimal-encoded. A registered-callback dispatch
+ * would add init-order coupling, indirection on a 5-line operation, and
+ * loss of inspectability. A flat collection round-trips trivially in tests
+ * (feed bag in, read bag out, compare) and lets future migrations to per-TU
+ * shapes happen without breaking call shapes. */
+#define REPL_EXPORT_CFG_KEY_MAX     24
+#define REPL_EXPORT_CFG_VALUE_MAX   16
+#define REPL_EXPORT_CFG_MAX_ITEMS   32
+
+typedef struct {
+    char key[REPL_EXPORT_CFG_KEY_MAX];      /* opaque slug */
+    char value[REPL_EXPORT_CFG_VALUE_MAX];  /* decimal-encoded; opaque to repl_export */
+} ReplExportConfigItem;
+
+typedef struct {
+    ReplExportConfigItem items[REPL_EXPORT_CFG_MAX_ITEMS];
+    int count;
+} ReplExportConfig;
+
+void        repl_export_config_clear(ReplExportConfig *cfg);
+int         repl_export_config_set(ReplExportConfig *cfg,
+                                   const char *key, const char *value);
+int         repl_export_config_set_int(ReplExportConfig *cfg,
+                                       const char *key, int value);
+const char *repl_export_config_get(const ReplExportConfig *cfg, const char *key);
+int         repl_export_config_get_int(const ReplExportConfig *cfg,
+                                       const char *key, int fallback);
+int         repl_export_config_count(const ReplExportConfig *cfg);
+int         repl_export_config_at(const ReplExportConfig *cfg, int idx,
+                                  const char **key_out, const char **value_out);
+
+/* Bridge installed by the controller. The bridge knows how to project app/REPL
+ * cfg state into a bag and apply a bag back. repl_export.c uses it for @cfg
+ * emission (save) and apply (load); repl_scenes.c uses it for per-scene
+ * snapshots. The demo deliberately leaves the bridge unset so repl_export.c
+ * doesn't reach for cfg-bound state, which is what keeps glr_config.c out of
+ * the demo link set. */
+typedef struct {
+    /* Fill bag with all current cfg values for save-file emission. */
+    void (*fill_all)(ReplExportConfig *cfg);
+    /* Fill bag with the per-scene-snapshot subset for repl_scenes. */
+    void (*fill_scene_subset)(ReplExportConfig *cfg);
+    /* Apply bag values to live state. The same apply works for both
+     * full-set and scene-subset bags (it iterates whatever's there). */
+    void (*apply)(const ReplExportConfig *cfg);
+    /* Single-slug live read. Used by repl_export.c's bootstrap path
+     * to gate emission of init commands (e.g. glPointParameterfv only
+     * if "point_attenuation" toggle is on). Returns `fallback` when
+     * the slug is unknown or the bridge isn't installed. */
+    int  (*get_int)(const char *slug, int fallback);
+} ReplExportConfigBridge;
+
+void                          repl_export_install_config_bridge(const ReplExportConfigBridge *bridge);
+const ReplExportConfigBridge *repl_export_config_bridge(void);
+
+/* Drain the pending-import-cfg accumulator (populated by header-line parsing).
+ * Used by import paths after they finish handing all `// @cfg` lines to
+ * `repl_state_parse_workspace_header_line`. The drain calls the installed
+ * bridge's apply() with the accumulated bag and resets the accumulator. */
+void repl_export_apply_pending_cfg(void);
+
 /* Boilerplate C file segments for export. g_header_pre is the initial includes
  * and setup; g_header_post follows the metadata comments; g_footer_pre_init is
  * before the display() function; g_footer_post_init follows the function body.

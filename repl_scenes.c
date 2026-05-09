@@ -2,10 +2,10 @@
  * repl_scenes.c -- User scene slots, promotion, and workspace save/load.
  */
 #include "repl_command_store.h"
-#include "glr_config.h"
 #include "repl_core_internal.h"
 #include "repl_examples.h"
 #include "repl_core.h"
+#include "repl_export.h"   /* ReplExportConfig + bridge for per-scene cfg */
 #include "repl_state_owners.h"
 
 #include <dirent.h>
@@ -21,21 +21,16 @@
 #define g_pending_scene_name (IMPORT_EXPORT_STATE->pending_scene_name)
 #define g_pending_workspace_dir (IMPORT_EXPORT_STATE->pending_workspace_dir)
 
-/* Keys whose values are saved per-scene and restored on scene switch.
- * Mirrors the set that repl_state_presentation_reset_example_defaults() resets
- * so that switching between scenes and examples never bleeds cfg across. */
-#define N_SCENE_CFG_KEYS 14
-static const GlrConfigKey k_scene_cfg_keys[N_SCENE_CFG_KEYS] = {
-    GLR_CONFIG_WIREFRAME,
-    GLR_CONFIG_GRID_THEME,    GLR_CONFIG_GRID_MAJOR,  GLR_CONFIG_GRID_EXTENT,
-    GLR_CONFIG_AXES_THEME,
-    GLR_CONFIG_VERTEX_LABELS, GLR_CONFIG_NORMAL_VECTORS,
-    GLR_CONFIG_VERTEX_OUTLINES, GLR_CONFIG_VERTEX_POINTS, GLR_CONFIG_VERTEX_GUIDES,
-    GLR_CONFIG_XFORM_GUIDE_MODE,
-    GLR_CONFIG_LIGHT_INDICATORS,
-    GLR_CONFIG_BACKDROP,
-    GLR_CONFIG_CAMERA_ROTATE,
-};
+/* Step 4 of feature/decouple-repl-from-gl-repl-alt.md replaced the
+ * static N_SCENE_CFG_KEYS subset list with a controller-installed
+ * bridge (ReplExportConfigBridge.fill_scene_subset / .apply). The
+ * controller knows which slugs belong in the per-scene snapshot
+ * because it owns glr_config_*; repl_scenes.c just stores the bag
+ * and round-trips it through the bridge.
+ *
+ * camera_rotate footgun: the slug is included in the bridge's
+ * scene-subset fill, so per-scene snapshots still capture/restore it
+ * without repl_scenes.c having to call glr_config_*. */
 
 /* User scene slots for the workspace / example-promotion system.
  *
@@ -62,22 +57,19 @@ typedef struct {
     char     predef_names[MAX_PREDEF_VARS][16];
     int      num_predef_vars;
     char     func_aliases[REPL_FUNC_SLOT_COUNT][REPL_FUNC_NAME_MAX];
-    int      scene_cfg[N_SCENE_CFG_KEYS];
+    /* Per-scene cfg snapshot. The bridge (controller-side) owns which
+     * slugs belong here; repl_scenes.c just stores and round-trips. */
+    ReplExportConfig scene_cfg;
 } UserScene;
 
 static UserScene g_user_scenes[MAX_USER_SCENES];
 static int       g_active_user_scene = -1;
 static uint32_t  g_user_scene_tick = 0;
 
-/* Example sandbox: snapshot of the 14 presentation keys taken at the
- * moment we enter an example from non-example state. Conceptually the
- * user's "desired" baseline, captured before example @cfg overlays
- * stomp it. Restored on the next transition out of example state
- * (load_scene_from_slot or activate_home_slot) before the destination
- * applies its own scene_cfg. With full scene_cfg coverage today the
- * restore-then-apply is observably a no-op, but the explicit data
- * model makes the sandbox intent clear and is the seam where a future
- * Option B (continuous desired-cfg mirror) would attach.
+/* Example sandbox: snapshot of the per-scene cfg taken at the moment
+ * we enter an example from non-example state. Restored on the next
+ * transition out of example state. Same shape as scene_cfg above: the
+ * controller-installed bridge fills/applies the bag.
  *
  * Lifecycle:
  *   - clear at startup (repl_scenes_reset).
@@ -85,9 +77,9 @@ static uint32_t  g_user_scene_tick = 0;
  *   - restore on the next user-scene / home load.
  *   - cleared by restore. Entering another example without an
  *     intervening user-scene load leaves the original snapshot
- *     untouched (toggles inside example A are sandboxed across A->B). */
-static int g_pre_example_cfg[N_SCENE_CFG_KEYS];
-static int g_pre_example_valid = 0;
+ *     untouched. */
+static ReplExportConfig g_pre_example_cfg;
+static int              g_pre_example_valid = 0;
 
 #define WORKSPACE_DIR_MAX REPL_WORKSPACE_DIR_MAX
 
@@ -99,15 +91,18 @@ static uint32_t next_user_scene_tick(void) {
 }
 
 static void capture_pre_example_cfg(void) {
-    for (int i = 0; i < N_SCENE_CFG_KEYS; i++)
-        g_pre_example_cfg[i] = glr_config_get(k_scene_cfg_keys[i]);
+    repl_export_config_clear(&g_pre_example_cfg);
+    const ReplExportConfigBridge *bridge = repl_export_config_bridge();
+    if (bridge && bridge->fill_scene_subset)
+        bridge->fill_scene_subset(&g_pre_example_cfg);
     g_pre_example_valid = 1;
 }
 
 static void restore_pre_example_cfg_if_valid(void) {
     if (!g_pre_example_valid) return;
-    for (int i = 0; i < N_SCENE_CFG_KEYS; i++)
-        glr_config_set(k_scene_cfg_keys[i], g_pre_example_cfg[i]);
+    const ReplExportConfigBridge *bridge = repl_export_config_bridge();
+    if (bridge && bridge->apply)
+        bridge->apply(&g_pre_example_cfg);
     g_pre_example_valid = 0;
 }
 
@@ -167,8 +162,12 @@ static void save_scene_to_slot(int idx, const char *name) {
         else
             s->func_aliases[slot][0] = '\0';
     }
-    for (int i = 0; i < N_SCENE_CFG_KEYS; i++)
-        s->scene_cfg[i] = glr_config_get(k_scene_cfg_keys[i]);
+    repl_export_config_clear(&s->scene_cfg);
+    {
+        const ReplExportConfigBridge *bridge = repl_export_config_bridge();
+        if (bridge && bridge->fill_scene_subset)
+            bridge->fill_scene_subset(&s->scene_cfg);
+    }
     if (name && *name)
         snprintf(s->name, sizeof(s->name), "%s", name);
     else if (s->name[0] == '\0')
@@ -222,12 +221,15 @@ static void load_scene_from_slot(int idx) {
             repl_func_alias_set(slot, s->func_aliases[slot]);
     }
     /* Roll back any example sandbox before stamping in the user
-     * scene's saved cfg. Observably overwritten by the loop below
+     * scene's saved cfg. Observably overwritten by the apply below
      * today (scene_cfg covers all keys); becomes load-bearing if a
      * future change makes scene_cfg sparse / inherited-aware. */
     restore_pre_example_cfg_if_valid();
-    for (int i = 0; i < N_SCENE_CFG_KEYS; i++)
-        glr_config_set(k_scene_cfg_keys[i], s->scene_cfg[i]);
+    {
+        const ReplExportConfigBridge *bridge = repl_export_config_bridge();
+        if (bridge && bridge->apply)
+            bridge->apply(&s->scene_cfg);
+    }
     editor_insert_mode_set(0);
     load_line_to_input(repl_state_edit_line());
     mark_normals_dirty();
