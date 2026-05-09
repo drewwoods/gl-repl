@@ -5,17 +5,21 @@
  *
  * This file is the visible record of "what does the REPL pipeline pull
  * in beyond pure pipeline code?" Each stub is a 2-3 line no-op or
- * trivial getter. If this list grows past ~15 entries, the chokepoint
- * (repl_state_reset_all() + set_status thunk) deserves a structural
- * split rather than more stubs.
+ * trivial getter. The list is now large enough to be treated as a
+ * cleanup ledger rather than a success condition; see ARCHITECTURE.md's
+ * "Standalone REPL Demo Coupling" section for the dependency table and
+ * removal path.
  *
  * The list is discovered empirically: start with what we know from
  * walking repl_state.c, then build, then add more stubs for whatever
  * the linker reports unresolved. The starting set covers:
  *
- *   - repl_state_reset_all() reset entry points (7)
+ *   - repl_state_reset_all() reset entry points
  *   - status setter thunk
  *   - ui_state code-panel accessor used by repl_state.c
+ *   - compile-dispatch, config, import, and layout symbols that are
+ *     hard references in broad REPL helper objects but are not exercised
+ *     by the current demo samples
  */
 
 #include "src/ui/state_types.h"   /* ReplCodePanelRuntimeState */
