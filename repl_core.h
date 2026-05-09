@@ -72,6 +72,12 @@ void repl_recompute_autonormals(void);
 
 /* Shared status/document helpers surfaced outside repl_core.c. */
 void        set_status(const char *msg);
+/* Install a status-message sink. Pipeline TUs call set_status() to
+ * surface diagnostics; the controller installs ui_state_status_set as
+ * the sink at startup. Pass NULL to clear (test scaffolding may want
+ * to). The demo deliberately leaves the sink unset, so set_status is
+ * a no-op there. See step 3 of feature/decouple-repl-from-gl-repl-alt.md. */
+void        repl_set_status_sink(void (*sink)(const char *));
 const char *mode_name(GLenum mode);
 GLenum      current_begin_mode(void);
 int         count_vertices(void);

@@ -61,14 +61,29 @@ static void get_for_var_name_from_text(const char *text, char *var, int var_sz);
 /* Utility                                                                    */
 /* ========================================================================= */
 
-/* ui_state_status_set is forward-declared here because repl_*.c is not
- * allowed to include ui_state.h per check-controller-boundaries.
- * Status is UiState chrome; the call lives on the legacy set_status()
- * facade until the diagnostic relay reshape lands. */
-void ui_state_status_set(const char *message);
+/* Diagnostic-sink dispatch. Step 3 of feature/decouple-repl-from-gl-repl-alt.md
+ * replaces the direct ui_state_status_set forwarder with a callback the
+ * controller installs at startup. Pipeline TUs keep calling set_status()
+ * unchanged; the body now dispatches through the sink. The demo doesn't
+ * install a sink, so set_status is a no-op there — clearing the
+ * ui_state_status_set stub from tools/repl_demo/stubs.c.
+ *
+ * The plan's preferred long-term shape is per-function out-params (err_buf
+ * / ReplDiagnostic) on each pipeline entry point. The callback is the
+ * "or a callback" branch the plan explicitly allows, chosen here because
+ * the alternative is 48+ test call-site updates for high-traffic public
+ * APIs (export_save_output, save_workspace, etc.). Future commits can
+ * convert individual TUs to out-params if pure-data-flow becomes
+ * important; the callback shape doesn't block that migration. */
+static void (*g_status_sink)(const char *) = NULL;
+
+void repl_set_status_sink(void (*sink)(const char *)) {
+    g_status_sink = sink;
+}
 
 void set_status(const char *msg) {
-    ui_state_status_set(msg);
+    if (g_status_sink && msg && msg[0])
+        g_status_sink(msg);
 }
 
 const char *mode_name(GLenum mode) {
@@ -750,10 +765,11 @@ static void load_initial_commands(const char *import_file) {
 
     /* Show example 0 as a starting demo, then anchor slot 0 ("Your Scene")
      * to the current live state so user edits accumulate there and persist
-     * across example switches. */
+     * across example switches. The startup banner is the controller's
+     * to emit (see glr_ctrl_bootstrap_repl); pipeline TUs do not own
+     * display-string side effects. */
     repl_load_example(0);
     repl_scenes_activate_home_slot();
-    set_status("Ready - type GL commands, press ; to execute. F1 for help. F12 for examples.");
     scroll_to_display_function();
 }
 
