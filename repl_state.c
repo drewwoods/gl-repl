@@ -553,9 +553,19 @@ void repl_state_init_defaults(void) {
 }
 
 /* Reset REPL-owned slices to defaults. Peer/editor/UI/autocomplete
- * registration / chrome sync are NOT included here — they live on
- * glr_app_reset_all in glr_ctrl.c (see step 2 of
- * feature/decouple-repl-from-gl-repl-alt.md).
+ * registration / chrome sync / derived export+camera text caches are
+ * NOT included here — they live on glr_app_reset_all in glr_ctrl.c
+ * (see step 2 of feature/decouple-repl-from-gl-repl-alt.md).
+ *
+ * The derived-text refreshes (refresh_workspace_header_lines /
+ * update_render_state_strings / update_cam_lines) read app-side state
+ * through glr_config_get and the camera. They cannot run here without
+ * pulling app/UI/peer state into the demo link set, AND if they ran
+ * here they would pre-fire before glr_app_reset_all has finished
+ * resetting peers — the cached strings would briefly reflect
+ * pre-reset peer state. The frame loop refreshes them every frame
+ * anyway; tests that need them populated immediately go through
+ * glr_app_reset_all.
  *
  * Do NOT call any non-REPL reset entry from this function. The
  * separation is what lets tools/repl_demo build without stubbing
@@ -565,9 +575,6 @@ void repl_state_reset_program(void) {
     repl_state_bind_eval_predef_storage();
     repl_scenes_reset();
     reset_time_state();
-    refresh_workspace_header_lines();
-    update_render_state_strings();
-    update_cam_lines();
     repl_source_scope_depth_cache_invalidate();
     repl_state_mark_flat_dirty();
     repl_state_mark_normals_dirty();

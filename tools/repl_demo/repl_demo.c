@@ -20,9 +20,11 @@
  *     repl_state.c) and src/editor/state.c (the editor *buffer* that holds
  *     per-line canonical text -- by design, not editor input dispatch).
  *   - GL stub-ready scene/peer surface for whatever repl_state.c reaches.
- *   - tools/repl_demo/stubs.c: no-op replacements for the editor / UI /
- *     controller entry points that repl_state_reset_all() and the executor
- *     reach for.
+ *   - tools/repl_demo/stubs.c: no-op replacements for editor input
+ *     dispatch (feed_line / load_line_to_input), the set_status thunk,
+ *     and the glr_config / layout / app-storage symbols the REPL
+ *     pipeline still reaches for. The dependency ledger and removal
+ *     plan live in feature/decouple-repl-from-gl-repl-alt.md.
  *
  * Run:
  *   make repl_demo USE_GL_STUBS=1
