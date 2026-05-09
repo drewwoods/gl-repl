@@ -346,6 +346,7 @@ static const ReplCommandTypeSpec g_command_type_specs[CMD_TYPE_COUNT] = {
     CMD_TYPE_SPEC(CMD_BLEND_FUNC,           1, 1, CMD_CAT_STATE),
     CMD_TYPE_SPEC(CMD_CLEAR_COLOR,          1, 1, CMD_CAT_COLOR),
     CMD_TYPE_SPEC(CMD_DEPTH_MASK,           1, 1, CMD_CAT_STATE),
+    CMD_TYPE_SPEC(CMD_GLUT_BITMAP_STRING,   1, 1, CMD_CAT_GLUT_SHAPE),
 };
 
 const ReplCommandTypeSpec *repl_command_type_spec(CmdType type) {

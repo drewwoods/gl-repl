@@ -402,6 +402,126 @@ static int parse_command(const char *line, GLCmd *cmd,
         }
     }
 
+    /* glutBitmapString(x, y, z, "fmt", a, b, c, d)
+     *
+     * Custom branch (not table-driven) because:
+     *   - Variable arg count (3 + 0..4 substitution args).
+     *   - One arg is a string literal, which the std-table parsers
+     *     don't tokenize.
+     *
+     * Forbidden inside the format string: '/' followed by '/',
+     * '(', ')', ',', and any backslash. These constraints keep the
+     * surrounding (string-unaware) parser scaffolding honest.
+     * See repl_glut_bitmap_split_args() for the split helper used
+     * by both this branch and the executor's has_vars re-eval. */
+    if (strcmp(func, "glutBitmapString") == 0) {
+        char pre_args[MAX_LINE_LEN] = "";
+        char fmt_str[GLUT_BITMAP_FMT_MAX] = "";
+        char post_args[MAX_LINE_LEN] = "";
+        char split_err[128] = "";
+
+        if (!repl_glut_bitmap_split_args(args,
+                                         pre_args, (int)sizeof(pre_args),
+                                         fmt_str, (int)sizeof(fmt_str),
+                                         post_args, (int)sizeof(post_args),
+                                         split_err, (int)sizeof(split_err))) {
+            parser_emit_error_static(ctx, split_err);
+            return 0;
+        }
+
+        /* Position args: exactly 3 floats. */
+        char verr[128];
+        if (!repl_eval_validate_expression_idents(pre_args, vars, num_vars,
+                                                   verr, sizeof(verr))) {
+            parser_emit_error_static(ctx, verr); return 0;
+        }
+        float pos[3] = {0};
+        int pos_count = repl_eval_parse_exprs(pre_args, pos, 3,
+                                              vars, num_vars);
+        if (pos_count != 3) {
+            parser_emit_error_static(ctx,
+                "Usage: glutBitmapString(x, y, z, \"fmt\", arg, ...)");
+            return 0;
+        }
+
+        /* Substitution args: 0..GLUT_BITMAP_MAX_SUB_ARGS floats.
+         * Parse into an oversized buffer so we can distinguish "user
+         * supplied 4 args" from "user supplied 5+ args" — passing
+         * GLUT_BITMAP_MAX_SUB_ARGS to repl_eval_parse_exprs would
+         * silently truncate. */
+        float subs[GLUT_BITMAP_MAX_SUB_ARGS] = {0};
+        int sub_count = 0;
+        if (post_args[0]) {
+            if (!repl_eval_validate_expression_idents(post_args, vars, num_vars,
+                                                       verr, sizeof(verr))) {
+                parser_emit_error_static(ctx, verr); return 0;
+            }
+            float subs_full[GLUT_BITMAP_MAX_SUB_ARGS + 4];
+            int parsed = repl_eval_parse_exprs(
+                post_args, subs_full,
+                (int)(sizeof(subs_full) / sizeof(subs_full[0])),
+                vars, num_vars);
+            if (parsed > GLUT_BITMAP_MAX_SUB_ARGS) {
+                char buf[128];
+                snprintf(buf, sizeof(buf),
+                         "glutBitmapString: too many args (max %d)",
+                         GLUT_BITMAP_MAX_SUB_ARGS);
+                parser_emit_error_static(ctx, buf);
+                return 0;
+            }
+            if (parsed < 0) parsed = 0;
+            sub_count = parsed;
+            for (int i = 0; i < sub_count; i++) subs[i] = subs_full[i];
+        }
+
+        /* %f count must match supplied sub args. %% is a literal '%'.
+         * Anything else after '%' is rejected. */
+        int pct_count = 0;
+        for (int i = 0; fmt_str[i]; i++) {
+            if (fmt_str[i] != '%') continue;
+            char nx = fmt_str[i + 1];
+            if (nx == 'f') { pct_count++; i++; }
+            else if (nx == '%') { i++; }
+            else {
+                parser_emit_error_static(ctx,
+                    "glutBitmapString: only %f and %% allowed in format");
+                return 0;
+            }
+        }
+        if (pct_count != sub_count) {
+            char buf[128];
+            snprintf(buf, sizeof(buf),
+                     "glutBitmapString: format expects %d arg%s, got %d",
+                     pct_count, pct_count == 1 ? "" : "s", sub_count);
+            parser_emit_error_static(ctx, buf);
+            return 0;
+        }
+
+        cmd->type = CMD_GLUT_BITMAP_STRING;
+        cmd->valid = 1;
+        cmd->args[0] = pos[0];
+        cmd->args[1] = pos[1];
+        cmd->args[2] = pos[2];
+        for (int i = 0; i < sub_count; i++)
+            cmd->args[3 + i] = subs[i];
+        cmd->num_args = 3 + sub_count;
+        cmd->has_vars = input_has_any_visible_vars(pre_args, vars, num_vars) ||
+                        input_has_any_visible_vars(post_args, vars, num_vars);
+        repl_copy_string_fits(cmd->text, sizeof(cmd->text), fmt_str);
+
+        if (text_out && text_sz > 0) {
+            int off = snprintf(text_out, (size_t)text_sz,
+                               "%sglutBitmapString(%g, %g, %g, \"%s\"",
+                               indent, pos[0], pos[1], pos[2], fmt_str);
+            for (int i = 0; i < sub_count && off < (int)text_sz - 6; i++) {
+                off += snprintf(text_out + off, (size_t)(text_sz - off),
+                                ", %g", subs[i]);
+            }
+            snprintf(text_out + off, (size_t)(text_sz - off), ");");
+        }
+        return 1;
+    }
+
     /* glMaterialf(face, pname, param) */
     if (strcmp(func, "glMaterialf") == 0) {
         char a1[64] = "", a2[64] = "", a3[MAX_LINE_LEN] = "";
@@ -802,4 +922,118 @@ int repl_parser_parse_command_ctx(const char *line, ReplParsedLine *out,
     if (!out) return 0;
     memset(out, 0, sizeof(*out));
     return parse_command(line, &out->cmd, out->text, sizeof(out->text), ctx);
+}
+
+int repl_glut_bitmap_split_args(const char *args,
+                                char *pre, int pre_sz,
+                                char *fmt, int fmt_sz,
+                                char *post, int post_sz,
+                                char *err, int err_sz) {
+    if (!args || !pre || !fmt || !post ||
+        pre_sz <= 0 || fmt_sz <= 0 || post_sz <= 0) {
+        if (err && err_sz > 0)
+            snprintf(err, (size_t)err_sz, "internal: bad split-args buffers");
+        return 0;
+    }
+    pre[0] = fmt[0] = post[0] = '\0';
+
+    /* Locate first quote at paren-depth 0. Anything inside parens is
+     * an expression (e.g., min(a,b) for the position args) and must
+     * be skipped. We do not track quote-inside-paren — none of our
+     * supported expressions contain string literals. */
+    int depth = 0;
+    const char *quote_open = NULL;
+    for (const char *p = args; *p; p++) {
+        if (*p == '(') depth++;
+        else if (*p == ')') { if (depth > 0) depth--; }
+        else if (depth == 0 && *p == '"') { quote_open = p; break; }
+    }
+    if (!quote_open) {
+        snprintf(err, (size_t)err_sz,
+                 "Usage: glutBitmapString(x, y, z, \"fmt\", arg, ...)");
+        return 0;
+    }
+
+    /* Closing quote — string contents allow no escapes by design,
+     * so the next bare '"' ends the literal. */
+    const char *quote_close = NULL;
+    for (const char *p = quote_open + 1; *p; p++) {
+        if (*p == '"') { quote_close = p; break; }
+    }
+    if (!quote_close) {
+        snprintf(err, (size_t)err_sz,
+                 "glutBitmapString: missing closing '\"'");
+        return 0;
+    }
+
+    /* Validate format-string body. Forbidden chars protect the rest
+     * of the codebase from having to be string-aware. */
+    for (const char *p = quote_open + 1; p < quote_close; p++) {
+        if (*p == '\\') {
+            snprintf(err, (size_t)err_sz,
+                     "glutBitmapString: backslash escapes not allowed");
+            return 0;
+        }
+        if (p[0] == '/' && p + 1 < quote_close && p[1] == '/') {
+            snprintf(err, (size_t)err_sz,
+                     "glutBitmapString: '//' not allowed in format string");
+            return 0;
+        }
+        if (*p == '(' || *p == ')' || *p == ',') {
+            snprintf(err, (size_t)err_sz,
+                     "glutBitmapString: '%c' not allowed in format string",
+                     *p);
+            return 0;
+        }
+    }
+
+    int fmt_len = (int)(quote_close - (quote_open + 1));
+    if (fmt_len >= fmt_sz) {
+        snprintf(err, (size_t)err_sz,
+                 "glutBitmapString: format too long (max %d)", fmt_sz - 1);
+        return 0;
+    }
+    memcpy(fmt, quote_open + 1, (size_t)fmt_len);
+    fmt[fmt_len] = '\0';
+
+    /* Pre-string segment must end with ',' (separating x,y,z from
+     * the format string). */
+    int pre_len = (int)(quote_open - args);
+    if (pre_len >= pre_sz) {
+        snprintf(err, (size_t)err_sz, "glutBitmapString: args too long");
+        return 0;
+    }
+    memcpy(pre, args, (size_t)pre_len);
+    pre[pre_len] = '\0';
+    while (pre_len > 0 && isspace((unsigned char)pre[pre_len - 1]))
+        pre[--pre_len] = '\0';
+    if (pre_len == 0 || pre[pre_len - 1] != ',') {
+        snprintf(err, (size_t)err_sz,
+                 "Usage: glutBitmapString(x, y, z, \"fmt\", arg, ...)");
+        return 0;
+    }
+    pre[--pre_len] = '\0';
+
+    /* Post-string segment: optional. If present, leading ',' is
+     * required (separating "fmt" from the substitution args). */
+    const char *after = quote_close + 1;
+    while (*after && isspace((unsigned char)*after)) after++;
+    if (*after) {
+        if (*after != ',') {
+            snprintf(err, (size_t)err_sz,
+                     "Usage: glutBitmapString(x, y, z, \"fmt\", arg, ...)");
+            return 0;
+        }
+        after++;
+        while (*after && isspace((unsigned char)*after)) after++;
+        int post_len = (int)strlen(after);
+        if (post_len >= post_sz) {
+            snprintf(err, (size_t)err_sz,
+                     "glutBitmapString: args too long");
+            return 0;
+        }
+        memcpy(post, after, (size_t)post_len);
+        post[post_len] = '\0';
+    }
+    return 1;
 }

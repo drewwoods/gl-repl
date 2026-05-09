@@ -123,7 +123,7 @@ static inline void glutSwapBuffers(void) {}
 static inline int glutGet(GLenum type) { static int elapsed; (void)type; elapsed += 16; return elapsed; }
 static inline int glutGetModifiers(void) { return 0; }
 static inline void glutSetCursor(int cursor) { (void)cursor; }
-static inline void glutBitmapCharacter(void *font, int character) { (void)font; (void)character; }
+static inline void glutBitmapCharacter(void *font, int character) { gl_stub_tick(GL_STUB_glutBitmapCharacter); (void)font; (void)character; }
 static inline int glutBitmapWidth(void *font, int character) { (void)font; (void)character; return 8; }
 static inline void glutSolidSphere(double radius, int slices, int stacks) { gl_stub_tick(GL_STUB_glutSolidSphere); (void)radius; (void)slices; (void)stacks; }
 static inline void glutWireSphere(double radius, int slices, int stacks) { gl_stub_tick(GL_STUB_glutWireSphere); (void)radius; (void)slices; (void)stacks; }
