@@ -480,10 +480,59 @@ or project-wide `include/` only when broadly reusable.
 
 ## Adding A New Command
 
-This is the canonical checklist for adding a new GL/GLU/GLUT command to the
-REPL. Every bullet is required unless the note says otherwise. The GLUT solid
-shapes (`glutSolidCube`, `glutSolidSphere`, `glutSolidTeapot`, `glutSolidCone`)
-are a recent worked example.
+This is the canonical checklist for adding a new GL/GLU/GLUT command, REPL
+primitive (e.g. `label`), or math/expression function (e.g. `rand2`) to the
+REPL. **Every numbered step is required** unless the note marks it optional.
+Skipping any step ships a half-wired feature: a command that parses but has no
+F1 help, no autocomplete, no replay annotation, or — worst — diverges between
+the live REPL and exported `output.c`. The GLUT solid shapes
+(`glutSolidCube`, `glutSolidSphere`, `glutSolidTeapot`, `glutSolidCone`) are
+the canonical worked example for a GL command; `label` (REPL primitive) and
+`rand2` (math function) are the worked examples for the two off-the-main-path
+shapes that the recent commits tripped on.
+
+> **What kind of thing am I adding?** The path branches at step 0.
+>
+> - **Bound GL/GLU/GLUT command** (most common — `glutSolidCube`,
+>   `glRasterPos3f`, `glColor3f`, etc.) → steps 1–8 in order.
+> - **REPL primitive** that compiles down to a custom helper at export time
+>   (`label` is the only example today) → steps 1–4, 5 (with extra emphasis on
+>   semantic parity), 6, 7, 8. Step 7 must include a hand-written export
+>   helper because the line is not a real GL symbol.
+> - **Math / expression function** (`rand`, `rand2`, `sin`, etc.) — these are
+>   evaluated inline by `repl_eval.c`, never become a `CmdType`, and skip
+>   steps 1, 2bc, 3, 4. They still need step 2a (autocomplete + F1 help) and
+>   step 7 (export round-trip helper if non-trivial). See **Step 0b** below.
+
+### 0a. Update CLAUDE.md's `## Supported Commands` block
+
+The user-facing language reference at the bottom of `CLAUDE.md` is the
+authoritative list of REPL-recognised commands. Add the new signature there
+in the same style as the surrounding entries. Out-of-sync CLAUDE.md is a
+common review-time finding.
+
+### 0b. Math / expression functions take a different path
+
+Functions evaluated inside expressions (e.g. `rand2(seed, iter)` inside
+`glVertex3f(rand2(t, 0), …)`) do **not** become a `CmdType` and do **not**
+go through `repl_executor.c`. They live entirely inside `repl_eval.c`:
+
+1. Add the name to `k_reserved_idents[]` so the user can't shadow it with a
+   `float` declaration.
+2. Add a dispatch arm in `eval_primary` (string-compare on the function
+   name) calling your evaluator helper.
+3. Add an entry to the REPL→C identifier map (`{ "rand2", "repl_rand2f", 1 }`)
+   and the inverse C→REPL map. The exporter uses these to translate
+   call-site syntax in both directions.
+4. Step 2a still applies — add a `k_func_completions[]` entry with
+   `REPL_HELP_GROUP_MATH` so it shows up in F1 help and autocomplete.
+5. Step 7 still applies — emit a standalone helper function from
+   `repl_export.c` (gated on a `needs_*` flag detected via
+   `export_text_uses_token("rand2(", …)`) so the exported file compiles
+   without dragging the whole REPL runtime.
+
+After step 0b, skip to step 2a, then jump to step 7. Steps 1, 2bc, 3, 4, 5,
+and 6 do not apply to math functions.
 
 ### 1. `repl_command.h` — declare the type
 
@@ -498,21 +547,35 @@ CMD_GLUT_CUBE, CMD_GLUT_SPHERE, CMD_GLUT_TEAPOT, CMD_GLUT_CONE,
 
 ### 2. `repl_command_spec.c` — three additions
 
+> **Required, not optional.** All three sub-tables feed different consumers.
+> Without 2a the command is invisible in F1 help and Tab-completion; without
+> 2b the parser has nothing to match against; without 2c the code-panel
+> highlight color and indentation are wrong.
+
 **a. `k_func_completions[]`** — autocomplete prefix/hint entry **and** the
-F1 help row. The prefix string (including the opening `(`) must match
-exactly what the user types. The hint string is displayed inline; param
-names drive Tab-cycle hints. The trailing two fields drive the help
-overlay: `help_desc` is the right-column description (empty string ""
-to render the signature row alone, `NULL` to skip the entry from help
-entirely — used for language-level entries like `func0() {` or `x =`),
-and `help_group` (`REPL_HELP_GROUP_TOP` / `LIGHTING` / `GLUT_SHAPES` /
-`GLU_TESS` / `NONE`) selects the section header. Multi-line help
+F1 help row. **This is the single source of truth for both surfaces** —
+`repl_autocomplete.c` and `repl_help_text.c` both read this table. If the
+new command isn't here, F1 will silently omit it and Tab won't complete
+it, even if everything else works. The recent `rand2` / `glRasterPos3f` /
+`label` commits all skipped this step and shipped half-visible features.
+
+The prefix string (including the opening `(`) must match exactly what the
+user types. The hint string is displayed inline; param names drive
+Tab-cycle hints. The trailing two fields drive the help overlay:
+`help_desc` is the right-column description (empty string `""` to render
+the signature row alone, `NULL` to skip the entry from help entirely —
+used for language-level entries like `func0() {` or `x =`), and
+`help_group` (`REPL_HELP_GROUP_TOP` / `LIGHTING` / `GLUT_SHAPES` /
+`GLU_TESS` / `MATH` / `NONE`) selects the section header. Multi-line help
 descriptions use embedded `\n`; the renderer emits each segment as an
 indented continuation row.
 
 ```c
 { "glutSolidCube(", "glutSolidCube(size)", 1, { "size" },
     "", REPL_HELP_GROUP_GLUT_SHAPES },
+{ "rand2(",          "rand2(seed[, iter])", 2, { "seed", "iter" },
+    "Deterministic pseudo-random float in [-1, 1] (signed variant of rand).",
+    REPL_HELP_GROUP_MATH },
 ```
 
 **b. `k_std_command_specs[]`** — parse spec used by `repl_parser.c` and the
@@ -564,15 +627,21 @@ for the replay annotation overlay.
 case CMD_GLUT_CUBE: *nargs_out = 1; return "glutSolidCube(%g);";
 ```
 
-### 5. F1 help text — already wired
+### 5. F1 help text — already wired (if step 2a is done)
 
-Help is generated from `k_func_completions[]` (step 2a). The
-`help_desc` + `help_group` fields you set there feed the F1 overlay's
-Commands tab automatically — `repl_help_text.c` walks the spec table,
-groups by section, and emits one row per command. No separate edit
-needed unless your command lives in a *new* group (in which case add
-both an enum value to `ReplHelpGroup` in `repl_command_spec.h` and a
-`help_group_header` case in `repl_help_text.c`).
+Help is generated from `k_func_completions[]` (step 2a). The `help_desc`
++ `help_group` fields you set there feed the F1 overlay's Commands tab
+automatically — `repl_help_text.c` walks the spec table, groups by
+section, and emits one row per command. **Step 5 is a no-op only if step
+2a is filled in correctly.** If F1 doesn't show the new command, you
+forgot 2a; if it shows the signature with no description, your
+`help_desc` is `NULL` instead of `""`; if it lands in the wrong section
+header, your `help_group` is wrong.
+
+A new help group (beyond `TOP` / `LIGHTING` / `GLUT_SHAPES` / `GLU_TESS`
+/ `MATH` / `NONE`) requires:
+- a new enum value in `ReplHelpGroup` in `repl_command_spec.h`
+- a `help_group_header` case in `repl_help_text.c`
 
 The hand-written language-level sections in `repl_help_text.c`
 (`Math Expressions`, `Variables`, `For-Loops`, `Functions`, etc.)
@@ -600,21 +669,68 @@ static inline void glutSolidTeapot(double size) {
 Keep stubs minimal: model the signature, call `gl_stub_tick`, suppress
 unused-parameter warnings with `(void)`, no real rendering.
 
-### 7. Save/load round-trip
+### 7. Save/load round-trip — verify byte-for-byte and behavior parity
 
-Most commands round-trip automatically: `repl_export.c` writes
-`GLCmd.source[]` verbatim into the exported `display()` body, and
-`repl_export_load_from_file` feeds those lines back through the commit
-pipeline. You only need to touch `repl_export.c` for commands with
-non-source-text encoding — declarations (`@declare`), tess blocks, etc.
+Most commands round-trip automatically: `repl_export.c` writes the
+editor-buffer line text (`editor_buffer_view_line(view, cmd_idx)` —
+`GLCmd.source[]` was removed in the editor-owns-text refactor) verbatim
+into the exported `display()` body, and `repl_export_load_from_file`
+feeds those lines back through the commit pipeline. You only need to
+touch `repl_export.c` for commands with non-source-text encoding —
+declarations (`@declare`), tess blocks, REPL primitives that need a
+standalone helper, etc.
+
+**Behavior parity is required, not just syntactic round-trip.** When the
+exporter emits a helper function (`write_label_helper`, `write_rand_helper`,
+etc.), the helper's behavior **must match the REPL executor case** to the
+nearest visible bit. Examples of the kind of divergence that has shipped
+and had to be patched:
+
+- `label("%f", x)` rendering `1.000000` in exported output but `1` in the
+  REPL because the REPL's CMD_LABEL case substitutes `%f` with `%g`
+  formatting while the exported helper uses real `vsnprintf("%f", …)`.
+  Fix: either match formatting in the helper, or change REPL semantics —
+  but they must agree.
+- A REPL primitive whose live executor relies on the per-frame state
+  reset in `src/scene/render.c` (e.g. `glDisable(GL_LIGHTING)` baseline,
+  default specular `{0.4,0.4,0.4,1}` and shininess `30`) but whose
+  exported helper assumes the OpenGL defaults. Either replicate the
+  per-frame reset in the exporter's `display()` (see
+  `g_render_state_lines` and `emit_export_geometry_pass`), or make the
+  REPL executor stop relying on an implicit baseline.
+
 Add a focused round-trip case to `tests/test_repl_export_all_commands.c`
-to keep coverage tight.
+to keep coverage tight. The mega test compiles the exported `output.c`
+standalone against vanilla freeglut — if your helper has wrong
+assumptions about includes, missing symbols, or printf-format mismatches,
+this test catches it. Adding the test is part of the step, not optional.
 
-### Verify
+When emitting a custom helper (`label`, `rand2`, scratch arrays, tess):
+
+1. Add a `needs_<name>` flag to `ExportNeeds` in `repl_export.c`.
+2. Detect usage during the per-line scan with
+   `export_text_uses_token("name(", source)`.
+3. Emit the helper in the file prologue from a `write_<name>_helper`
+   function, gated on the flag. Scope helper-only `#include`s
+   (`<stdarg.h>`, `<stdio.h>`, etc.) to that helper section so non-using
+   exports stay byte-identical to the pre-helper baseline.
+4. Hook the helper section into the `g_export_scaffold_sections[]`
+   table with an `enabled` predicate that reads the flag.
+
+### 8. Verify
 
 ```bash
-make sample          # must be clean (no new warnings)
-make test-stubs      # all tests must pass
+make sample           # must be clean (no new warnings)
+make test-stubs       # all tests must pass
+make sample USE_GL_STUBS=1   # verify stub build still links if step 6 changed
+
+# Spot-check the new command end-to-end:
+# - F1 overlay shows it with description in the expected group
+# - Type the prefix; Tab fills the rest and the parameter hint shows
+# - Replay (Ctrl+G) shows the command annotated correctly
+# - Save (Ctrl+S) → reload (./sample output.c) → command appears identical
+# - For commands with a custom export helper: gcc -c output.c against
+#   vanilla freeglut succeeds, and on-screen output matches the REPL
 ```
 
 ## Open Refactor Edges

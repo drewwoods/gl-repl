@@ -1735,25 +1735,46 @@ static void write_rand_helper(FILE *f) {
         "}\n");
 }
 
-/* Wrapper for the REPL `label("fmt", ...)` primitive. Composes the
- * formatted string with vsnprintf, then emits each char via real
- * freeglut's glutBitmapCharacter at the current raster position
- * (the user must call glRasterPos3f beforehand). Float args are
- * promoted to double through the variadic call, so the user's
+/* Wrapper for the REPL `label("fmt", ...)` primitive. Walks the format
+ * string and substitutes each `%f` with `%g`-formatted output (matching
+ * the REPL's CMD_LABEL executor case in repl_executor.c) so the live
+ * REPL and exported binary render identical text. Using vsnprintf with
+ * the raw format would print `1.000000` for `%f` while the REPL prints
+ * `1` — that divergence breaks visual round-trips.
+ *
+ * Float args promote to double through the variadic call, so user
  * expressions don't need explicit casts at the call site.
  *
  * The two extra includes (<stdarg.h>, <stdio.h>) are emitted here
  * rather than in the global header so non-label exports stay
  * byte-identical to their pre-label form. */
 static void write_label_helper(FILE *f) {
+    /* fprintf format escaping: every literal `%` in the emitted C source
+     * must be doubled (`%%`) so fprintf doesn't treat it as a conversion
+     * specifier. The `%%g` below emits literal `%g` into the C output. */
     fprintf(f,
         "\n#include <stdarg.h>\n"
         "#include <stdio.h>\n"
         "\nstatic void label(const char *fmt, ...) {\n"
         "  char __b[128];\n"
+        "  int __off = 0;\n"
         "  va_list __ap;\n"
         "  va_start(__ap, fmt);\n"
-        "  vsnprintf(__b, sizeof(__b), fmt, __ap);\n"
+        "  while (*fmt && __off < (int)sizeof(__b) - 1) {\n"
+        "    if (fmt[0] == '%%' && fmt[1] == 'f') {\n"
+        "      double __v = va_arg(__ap, double);\n"
+        "      __off += snprintf(__b + __off, sizeof(__b) - (size_t)__off,\n"
+        "                        \"%%g\", __v);\n"
+        "      if (__off >= (int)sizeof(__b)) __off = (int)sizeof(__b) - 1;\n"
+        "      fmt += 2;\n"
+        "    } else if (fmt[0] == '%%' && fmt[1] == '%%') {\n"
+        "      __b[__off++] = '%%';\n"
+        "      fmt += 2;\n"
+        "    } else {\n"
+        "      __b[__off++] = *fmt++;\n"
+        "    }\n"
+        "  }\n"
+        "  __b[__off] = '\\0';\n"
         "  va_end(__ap);\n"
         "  for (const char *__p = __b; *__p; __p++)\n"
         "    glutBitmapCharacter(GLUT_BITMAP_9_BY_15, (unsigned char)*__p);\n"
@@ -2722,6 +2743,22 @@ static void emit_export_display_begin(FILE *f) {
     for (int line_idx = 0; g_header_post[line_idx]; line_idx++)
         fprintf(f, "%s\n", g_header_post[line_idx]);
     write_light_setup(f);
+    /* Per-frame baseline reset to mirror src/scene/render.c:237-244. The
+     * REPL forces GL_LIGHTING off every frame so user-typed glEnable
+     * lasts only one frame, and resets specular/shininess to its
+     * default values so lit geometry uses the same material parameters
+     * the live REPL applies. Without this, exported scenes that enable
+     * lighting compute lit colors with GL defaults (specular {0,0,0,1},
+     * shininess 0) and render visibly different from the REPL — most
+     * obviously, glRasterPos3f-driven label() text computed via
+     * lighting comes out darker. */
+    fprintf(f, "  glDisable(GL_LIGHTING);\n");
+    fprintf(f, "  {\n");
+    fprintf(f, "    GLfloat _mspec[] = { 0.4f, 0.4f, 0.4f, 1.0f };\n");
+    fprintf(f, "    GLfloat _mshin[] = { 30.0f };\n");
+    fprintf(f, "    glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, _mspec);\n");
+    fprintf(f, "    glMaterialfv(GL_FRONT_AND_BACK, GL_SHININESS, _mshin);\n");
+    fprintf(f, "  }\n");
 }
 
 static void emit_export_display_geometry(FILE *f) {
