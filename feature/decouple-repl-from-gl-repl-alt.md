@@ -427,6 +427,22 @@ Stubs cleared:
 Steps 1-6 remove all but the layout stubs. Step 7 finishes the ownership split
 and removes the last environment reads from `repl_export.c`.
 
+### Current slice ownership
+
+`ReplRuntimeState` in `repl_state.h` has seven slices:
+
+| Slice | Genuinely REPL? | Contents |
+|---|---|---|
+| `document` | ✅ REPL | parsed source command array |
+| `flat_program` | ✅ REPL | flattened executable command stream |
+| `variables` | ✅ REPL | predef vars, scratch arrays A/B/C, func aliases, `time_playing` |
+| `scenes` | ✅ REPL (mostly) | user-scene slots; per-slot cfg snapshot is app-state |
+| `import_export` | mixed | scene-name hint (REPL), workspace_dir (app), pending workspace-header state |
+| `presentation` | ❌ APP | wireframe, grid_theme, grid_major_idx, grid_extent_idx, axes_theme, backdrop_mode, show_vertex_{labels,normal_vectors,indices,outlines,points,guides}, show_light_indicators, highlight_current_poly, autonormal, code_panel_layout, wrap_at_comma |
+| `render` | ❌ APP | multisample_enabled, line_smooth_enabled, accum_aa_enabled, point_attenuation_enabled |
+
+Step 7 moves the two APP slices and splits the two mixed slices.
+
 ### 7a. Move app-state slices
 
 `ReplRuntimeState` still contains slices that are app-frame state:
@@ -474,6 +490,32 @@ Stubs cleared:
 After Step 7, `repl_demo` no longer needs `tools/repl_demo/stubs.c` for current
 pipeline behavior.
 
+### What does *not* move
+
+Step 7 does not touch:
+
+- `EditorState` (cursor, selection, search, autocomplete, undo, editor buffer,
+  transformers/highlights/virtual lines) — already in `src/editor/state.c`.
+- `UiState` (viewport, pointer, status TTL, panel divider) — already in
+  `src/ui/state.c`.
+- Peer subsystems (`replay_state`, `variable_panel_state`, `color_picker_state`,
+  `editor_help_session`) — already in their own files.
+- `glr_camera` — already in `glr_camera.c`.
+- `glr_config` (slug list adjusted in 7a; module itself stays put).
+
+### Endpoint after Step 7
+
+The four-owner contract from `MODULES.md` actually holds at the file layout,
+not just the description:
+
+```text
+ReplState     -> repl_state.c       (REPL language state)
+EditorState   -> src/editor/state.c (text-document model)
+UiState       -> src/ui/state.c     (UI chrome)
+GlrState      -> glr_state.c        (app-frame presentation/render)  <- NEW
++ peers       -> their own files    (replay, variable_panel, color_picker, ...)
+```
+
 ## Save-file Compatibility
 
 The line format remains unchanged:
@@ -502,6 +544,35 @@ Required tests:
 - Round-trip every existing exported example/workspace fixture.
 
 ## Guard Work
+
+### Existing guards relevant to the plan
+
+`make check-state-ownership` runs 31 sub-targets. The ones that bear on the
+boundary this plan defends:
+
+| Guard | What it forbids |
+|---|---|
+| `check-controller-boundaries` | Only `glr_ctrl.c` (+ small allowlist) may include `src/scene/` or `src/ui/` headers |
+| `check-pure-scene-no-repl-state` | `src/scene/*.c` may not reference any `repl_(state\|replay)_*` symbol |
+| `check-scene-no-repl-state-mut` | `src/scene/*.c` may not call `repl_state_*_mut*()` |
+| `check-state-boundaries` | Scene + state-neutral cannot include `repl_state.h`; UI cannot mutate REPL state outside an allowlist |
+| `check-views-no-owners` | `src/scene/*.c` and `src/ui/*.c` cannot include `repl_state_owners.h` |
+| `check-ui-no-repl-state-mut` / `-read` | UI files cannot mutate or read live REPL state (snapshot only) |
+| `check-no-set-status-in-compile-apply` | `repl_compile.c` and `repl_apply.c` cannot call `set_status` |
+| `check-no-set-status-in-repl-parser` | Ratchet on `repl_parser.c` set_status calls (target 0) |
+| `check-state-c-shrinking` | `repl_state.c` line count ratchets down only |
+| `check-editor-ownership-budget` | Ratchet on `repl_state.c` calls into `ui_state_*` (target 0) |
+| `check-glr-ctrl-not-editor-mirror` | `glr_ctrl.c` cannot grow per-field editor wrappers |
+| `check-no-repl-editor-input-shim` | `src/editor/input.c` cannot delegate to legacy `repl_*_func` entry points |
+| `check-repl-no-direct-buffer-read` | `repl_*.c` readers must go through `EditorBufferView` |
+
+The destination layers (scene, UI) are already well-fenced: scene cannot
+read or mutate REPL state, UI consumes snapshots only, neither can include
+the owner-mutation header. The new guards below close the asymmetry on the
+source side — REPL pipeline TUs keeping backward edges into editor input
+dispatch, app shell, or UI state.
+
+### New guards to land alongside the plan
 
 Land guards with the step that makes the invariant true:
 
