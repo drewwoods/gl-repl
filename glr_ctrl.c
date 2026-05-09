@@ -1322,6 +1322,11 @@ void glr_app_reset_all(void) {
      * repl_autocomplete; the registration here installs the
      * REPL-aware backing. */
     repl_autocomplete_register_provider();
+    /* Install the status-message sink. Pipeline TUs call set_status()
+     * to surface diagnostics; this routes them to UiState. The demo
+     * does not install a sink, so set_status is a no-op there
+     * (clearing the ui_state_status_set stub). */
+    repl_set_status_sink(ui_state_status_set);
     /* Refresh derived export/camera text caches AFTER peer resets
      * so the cached strings reflect post-reset state, not whatever
      * was on the peers before this call. These read app-side cfg /
@@ -1371,6 +1376,10 @@ void glr_ctrl_bootstrap_repl(const char *input_file) {
         }
     }
     repl_load_initial_commands(input_file);
+    /* Startup banner. Step 3 of feature/decouple-repl-from-gl-repl-alt.md
+     * moved this out of repl_core.c so pipeline TUs don't own
+     * display-string side effects. */
+    set_status("Ready - type GL commands, press ; to execute. F1 for help. F12 for examples.");
 }
 
 void glr_ctrl_set_accum(int enabled) {

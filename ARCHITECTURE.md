@@ -485,7 +485,7 @@ Treat `tools/repl_demo/stubs.c` as a dependency ledger. The execution
 plan in `feature/decouple-repl-from-gl-repl-alt.md` ratchets this
 ledger from 17 stubs to 0 across seven steps. The current count
 (verified via `nm` on `build/release-gl-stubs/tools/repl_demo/stubs.o`)
-is **11**: steps 1 and 2 have landed.
+is **10**: steps 1, 2, and 3 have landed.
 
 ### Stubbed Couplings
 
@@ -494,7 +494,7 @@ is **11**: steps 1 and 2 have landed.
 | Global lifecycle reset | `ui_state_reset`, `variable_panel_state_reset`, `editor_help_session_reset`, `repl_editor_reset_transients` | (Historically) `repl_state_init_defaults()` called `repl_state_reset_all()`, which reset every app singleton / peer, not just `ReplState`. | Yes, every sample reset entered this path. | Split into pure `repl_state_reset_program()` and app-level `glr_app_reset_all()`. | ✅ **Cleared (step 2, commit `310eca0`).** Reset renamed; full-world reset moved to `glr_ctrl.c`. |
 | UI chrome mirror | `ui_state_code_panel_mut` | `repl_state_sync_ui_chrome()` mirrored presentation fields into `UiState.code_panel`; `repl_state_reset_all()` called it. | Yes, via reset. | Move chrome mirroring to the controller. | ✅ **Cleared (step 2, commit `310eca0`).** Body moved to `glr_ctrl_sync_ui_chrome()` in `glr_ctrl.c`. |
 | Compile dispatcher location | `repl_compile_dispatch` | `repl_compile_toggle_comment()` needed the float-decl / var-assign dispatcher, but the implementation lived in `src/editor/services.c`. | No; the demo does not toggle comments. The reference was still hard at link time. | Move the dispatcher into `repl_compile.c`. | ✅ **Cleared (step 1, commit `ef3fc09`).** Moved into `repl_compile.c`; declared in `repl_compile.h`. |
-| Status relay | `ui_state_status_set` | Legacy `repl_core.c::set_status()` forwards diagnostics to UI status text. | Only on errors or helper paths that report status. | Replace `set_status()` in REPL helpers with returned diagnostics or an injectable status sink owned by the app. | Pending (step 3). |
+| Status relay | `ui_state_status_set` | Legacy `repl_core.c::set_status()` forwarded diagnostics to UI status text. | Only on errors or helper paths that report status. | Replace `set_status()` body with a callback dispatch (`repl_set_status_sink`); controller installs `ui_state_status_set` as the sink at app startup. Demo doesn't install one, so set_status is a no-op there. | ✅ **Cleared (step 3, commit `<TBD>`).** Callback branch chosen over per-function out-params; ~15 pipeline-side set_status call sites remain as future per-TU cleanup but no longer drag the stub. |
 | Programmatic editor input | `feed_line`, `load_line_to_input` | `repl_export.c` imports exported files by feeding lines through the editor commit path; `repl_core.c` and scene activation paths also have legacy line-loading references. | No for the current static samples. | Extract pure structured-block validators (5a) and add a non-editor source-loader API (5b); move reformatter and scene cursor-restore out of REPL pipeline TUs (6). | Pending (steps 5a/5b/6). |
 | Config descriptor table | `g_cfg_items`, `CFG_ITEM_COUNT` | `glr_config.c` iterates menu/action descriptors while parsing or applying config keys, but the table is defined in `glr_actions.c`. | Not for the current samples; relevant to `@cfg` metadata and export/import helpers. | Make `repl_export.c` opaque to header content via `ReplExportConfig` + per-owner fill/apply helpers (4); split config catalog vs live mutation by owner. | Pending (step 4). |
 | App-owned config storage | `audio_get_cfg_mode`, `audio_set_cfg_mode`, `ui_state_profile_panel_mut`, `variable_panel_view_mut` | `glr_config.c` maps config keys directly to storage owned by audio, UI profile panel, and the variable-panel peer. | Not for the current samples. | Same as the descriptor table above — `repl_export.c` becomes opaque to header content, and the cfg pipeline stops reaching app-owned storage from REPL TUs. | Pending (step 4). |
@@ -520,9 +520,11 @@ The full plan lives in `feature/decouple-repl-from-gl-repl-alt.md`
 2. ✅ **Step 2 — Split `repl_state_reset_all()` into program-only reset
    and app-wide reset; move autocomplete registration and UI chrome
    sync to the app side** (commit `310eca0`).
-3. Step 3 — Replace pipeline `set_status()` calls with diagnostic
-   sinks across executor / flatten / export / scenes / example loader
-   / core (~16 sites in 6 TUs).
+3. ✅ **Step 3 — Route pipeline `set_status()` through a controller-
+   installed callback sink; move startup banner to the controller**
+   (commit `<TBD>`). Callback branch chosen over per-function
+   out-params for cost reasons; per-TU conversion remains a future
+   opportunity.
 4. Step 4 — Make `repl_export.c` opaque to header content via
    `ReplExportConfig` (key/value bag) and `ReplExportCameraBlock`;
    owners fill/apply via per-owner helpers; split `glr_config` into

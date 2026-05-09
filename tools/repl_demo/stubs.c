@@ -11,23 +11,26 @@
  * `variable_panel_state_reset`, `editor_help_session_reset`,
  * `repl_editor_reset_transients`, `ui_state_code_panel_mut`).
  *
+ * Step 3 cleared the `ui_state_status_set` stub by routing pipeline
+ * diagnostics through a `repl_set_status_sink` callback that the
+ * controller installs.
+ *
  * The remaining stubs cluster as:
- *   - status setter thunk (cleared in step 3)
  *   - feed_line / load_line_to_input editor input dispatch (steps 5b/6)
  *   - glr_config table + audio + peer accessors (step 4)
  *   - ui_state_viewport / ui_state_code_panel layout reads (step 7)
  */
 
-/* --- set_status thunk ------------------------------------------------- */
-
-/* repl_core.c::set_status() forwards to ui_state_status_set. The demo
- * surfaces messages on stderr so a parse error or flatten failure is
- * visible without dragging in src/ui/state.c. */
-#include <stdio.h>
-void ui_state_status_set(const char *message) {
-    if (message && message[0])
-        fprintf(stderr, "[status] %s\n", message);
-}
+/* --- set_status thunk -------------------------------------------------
+ *
+ * Step 3 of feature/decouple-repl-from-gl-repl-alt.md cleared the
+ * ui_state_status_set stub. set_status() is now a callback dispatch
+ * (repl_core.c); the controller installs ui_state_status_set as the
+ * sink. The demo does not call glr_app_reset_all and so does not
+ * install a sink, making set_status a no-op here. Pipeline diagnostics
+ * are silently dropped in the demo, which is acceptable for the
+ * static-text samples. If demo runs ever need to surface diagnostics,
+ * install a stderr forwarder via repl_set_status_sink(). */
 
 /* --- src/editor/input.c entry points (only as hard references) -------- */
 
