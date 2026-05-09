@@ -161,12 +161,11 @@ int main(int argc, char **argv) {
 
     if (dump_code || dump_flat || dump_state_layout) {
         /* Dump-only paths skip glr_ctrl_init_gl (no GL context, no
-         * window). That means glr_app_reset_all hasn't installed the
-         * status sink, so any set_status() calls during bootstrap
-         * (example-load banner, import diagnostics, etc.) are
-         * silently dropped. That's intentional for the dump CLI; if
-         * a future dump path needs diagnostics, install a stderr
-         * sink here via repl_set_status_sink(). */
+         * window). glr_ctrl_bootstrap_repl now installs the app
+         * services (status sink + export-config bridge) at its top so
+         * @cfg in imported files is applied even on the dump path.
+         * Status messages still surface to UiState, but UiState is
+         * never rendered here, so they're effectively silent. */
         if (dump_code || dump_flat)
             glr_ctrl_bootstrap_repl(input_file);
         if (dump_code)

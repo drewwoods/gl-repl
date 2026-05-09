@@ -275,6 +275,16 @@ static void install_scene_into_live(int slot) {
         memcpy(g_predef_vars[i].name, s->predef_names[i], 16);
     }
     repl_eval_restore_scratch_arrays(s->scratch_arrays);
+    /* Apply the slot's saved per-scene cfg to live state. Without
+     * this, repl_save_workspace / evict_scene_to_workspace would
+     * export the scene with whichever cfg happened to be live when
+     * the iteration started — see the [P1] regression test in
+     * test_repl_core_io.c. The user-facing scene switch
+     * (load_scene_from_slot) already does this; this matches the
+     * behaviour. */
+    const ReplExportConfigBridge *bridge = repl_export_config_bridge();
+    if (bridge && bridge->apply)
+        bridge->apply(&s->scene_cfg);
 }
 
 static void stash_live_state(UserScene *dst) {
@@ -292,6 +302,13 @@ static void stash_live_state(UserScene *dst) {
         memcpy(dst->predef_names[i], g_predef_vars[i].name, 16);
     }
     repl_eval_copy_scratch_arrays(dst->scratch_arrays);
+    /* Capture live per-scene cfg too so restore_live_from_stash can
+     * roll it back. Symmetric with install_scene_into_live now
+     * applying s->scene_cfg. */
+    repl_export_config_clear(&dst->scene_cfg);
+    const ReplExportConfigBridge *bridge = repl_export_config_bridge();
+    if (bridge && bridge->fill_scene_subset)
+        bridge->fill_scene_subset(&dst->scene_cfg);
 }
 
 static void restore_live_from_stash(const UserScene *src) {
@@ -304,6 +321,11 @@ static void restore_live_from_stash(const UserScene *src) {
         memcpy(g_predef_vars[i].name, src->predef_names[i], 16);
     }
     repl_eval_restore_scratch_arrays(src->scratch_arrays);
+    /* Restore live cfg so the user's pre-stash settings survive any
+     * intervening install_scene_into_live calls. */
+    const ReplExportConfigBridge *bridge = repl_export_config_bridge();
+    if (bridge && bridge->apply)
+        bridge->apply(&src->scene_cfg);
 }
 
 static void scene_filename_slug(const char *name, char *out, size_t out_sz) {

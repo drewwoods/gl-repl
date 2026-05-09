@@ -5,9 +5,12 @@
 #include "ui/state.h"
 
 #include "support/test_harness.h"
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
+#include <sys/types.h>
 
 #define g_render_state_lines    (repl_state_import_export().render_state_lines)
 #define g_multisample_enabled   (repl_state_render_mut()->multisample_enabled)
@@ -640,6 +643,119 @@ int main(void) {
                     strstr(buf, "render_repl_outline_") == NULL);
         ASSERT_TRUE("saved tess no vpoint helper variants",
                     strstr(buf, "render_repl_vpoints_") == NULL);
+    }
+
+    /* --- Step 4 [P1] regression: workspace save preserves per-scene cfg ---
+     *
+     * Pre-fix: repl_save_workspace iterated user-scene slots, called
+     * install_scene_into_live(s) for each (which restored cmds/vars but
+     * NOT s->scene_cfg), then called repl_export_save_output, which
+     * emitted @cfg from currently-live cfg via the bridge. Result:
+     * inactive scenes were written with whichever cfg happened to be
+     * live when the loop started, not their own saved per-scene cfg.
+     *
+     * Test: build a workspace with two scene files that have different
+     * @cfg wireframe values, load it, force live cfg to a third value,
+     * save the workspace to a new dir, and verify each output file
+     * still contains its slot's saved cfg (not the live value).
+     */
+    {
+        const char *workspace_in  = "/tmp/repl_core_p1_workspace_in";
+        const char *workspace_out = "/tmp/repl_core_p1_workspace_out";
+
+        /* Best-effort cleanup of any prior run. */
+        int rm_rc = system("rm -rf /tmp/repl_core_p1_workspace_in /tmp/repl_core_p1_workspace_out");
+        (void)rm_rc;
+        errno = 0;
+        int mk_rc = mkdir(workspace_in, 0755);
+        ASSERT_TRUE("p1 workspace_in mkdir",
+                    mk_rc == 0 || errno == EEXIST);
+        if (mk_rc != 0 && errno != EEXIST) {
+            fprintf(stderr, "[p1] mkdir %s failed: errno=%d (%s)\n",
+                    workspace_in, errno, strerror(errno));
+        }
+
+        /* Scene A — wireframe = 1.  Scene B — wireframe = 0.
+         * Body lines must sit inside // Snippet start / end markers
+         * (that's how repl_export_load_from_file detects the geometry
+         * snippet — see import_try_snippet_start in repl_export.c). */
+        {
+            FILE *f = fopen("/tmp/repl_core_p1_workspace_in/scene_a.c", "w");
+            ASSERT_TRUE("p1 scene_a fopen", f != NULL);
+            if (f) {
+                fprintf(f,
+                    "// @scene-name P1 Scene A\n"
+                    "// @cfg wireframe = 1\n"
+                    "static void render_repl_geometry(void) {\n"
+                    "  // Snippet start\n"
+                    "  glColor3f(1.0000f, 0.0000f, 0.0000f);\n"
+                    "  glBegin(GL_TRIANGLES);\n"
+                    "  glVertex3f(0.0000f, 0.0000f, 0.0000f);\n"
+                    "  glVertex3f(1.0000f, 0.0000f, 0.0000f);\n"
+                    "  glVertex3f(0.0000f, 1.0000f, 0.0000f);\n"
+                    "  glEnd();\n"
+                    "  // Snippet end\n"
+                    "}\n");
+                fclose(f);
+            }
+        }
+        {
+            FILE *f = fopen("/tmp/repl_core_p1_workspace_in/scene_b.c", "w");
+            ASSERT_TRUE("p1 scene_b fopen", f != NULL);
+            if (f) {
+                fprintf(f,
+                    "// @scene-name P1 Scene B\n"
+                    "// @cfg wireframe = 0\n"
+                    "static void render_repl_geometry(void) {\n"
+                    "  // Snippet start\n"
+                    "  glColor3f(0.0000f, 1.0000f, 0.0000f);\n"
+                    "  glBegin(GL_TRIANGLES);\n"
+                    "  glVertex3f(0.0000f, 0.0000f, 0.0000f);\n"
+                    "  glVertex3f(1.0000f, 0.0000f, 0.0000f);\n"
+                    "  glVertex3f(0.0000f, 1.0000f, 0.0000f);\n"
+                    "  glEnd();\n"
+                    "  // Snippet end\n"
+                    "}\n");
+                fclose(f);
+            }
+        }
+
+        glr_app_reset_all(); declare_test_vars();
+
+        int loaded = repl_load_workspace(workspace_in);
+        ASSERT_TRUE("p1 load_workspace returned 2", loaded == 2);
+
+        /* Force a distinctive live cfg between load and save: pick a
+         * value that differs from BOTH scenes' saved values for
+         * wireframe (e.g. 0 here — only matches scene B).  Pre-fix,
+         * scene A would also be exported with wireframe=0. */
+        int *wireframe_live = &repl_state_presentation_mut()->wireframe;
+        *wireframe_live = 0;
+
+        int saved = repl_save_workspace(workspace_out);
+        ASSERT_TRUE("p1 save_workspace wrote 2 files", saved == 2);
+
+        /* Read each saved file and confirm the @cfg matches the
+         * scene's own saved cfg, not the live value at save time. */
+        char buf_a[8192], buf_b[8192];
+        size_t na = read_text_file("/tmp/repl_core_p1_workspace_out/p1_scene_a.c",
+                                   buf_a, sizeof(buf_a));
+        size_t nb = read_text_file("/tmp/repl_core_p1_workspace_out/p1_scene_b.c",
+                                   buf_b, sizeof(buf_b));
+        ASSERT_TRUE("p1 saved scene_a opens", na > 0);
+        ASSERT_TRUE("p1 saved scene_b opens", nb > 0);
+        ASSERT_TRUE("p1 scene A keeps wireframe=1 across workspace save",
+                    strstr(buf_a, "// @cfg wireframe = 1") != NULL);
+        ASSERT_TRUE("p1 scene B keeps wireframe=0 across workspace save",
+                    strstr(buf_b, "// @cfg wireframe = 0") != NULL);
+        ASSERT_TRUE("p1 scene A export does NOT leak the live wireframe=0",
+                    strstr(buf_a, "// @cfg wireframe = 0") == NULL);
+
+        /* The post-save live cfg should also match what was set before
+         * the save (the loop's restore_live_from_stash now includes
+         * cfg). */
+        ASSERT_TRUE("p1 live wireframe survives the save",
+                    repl_state_presentation().wireframe == 0);
     }
 
     printf("repl_core_io: %d/%d passed\n", g_harness.passed, g_harness.run);
