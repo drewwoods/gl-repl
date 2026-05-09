@@ -4,6 +4,9 @@
 #include "backdrop.h"
 
 #include <math.h>
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
 
 #define CITY_BLDG_COUNT   300
 #define CITY_RADIUS       72.0f
