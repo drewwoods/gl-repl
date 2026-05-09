@@ -129,10 +129,10 @@ Stubs cleared:
 `editor_help_session_reset`, `repl_editor_reset_transients`,
 `ui_state_code_panel_mut`.
 
-## Step 3 - Replace Pipeline `set_status()`
+## Step 3 - Decouple Pipeline Diagnostics from `ui_state_status_set`
 
-`repl_core.c` defines `set_status()` as a UI status forwarder. Linked pipeline
-TUs call it from roughly 16 sites:
+`repl_core.c` defined `set_status()` as a direct forwarder to
+`ui_state_status_set`. Linked pipeline TUs call it from roughly 16 sites:
 
 - `repl_core.c`: normalize parse error, startup banner
 - `repl_executor.c`: goto loop limit reached
@@ -141,28 +141,52 @@ TUs call it from roughly 16 sites:
 - `repl_scenes.c`: scene/workspace status messages
 - `repl_example_loader.c`: example-load status message
 
-Fix:
+**Acceptance criterion:** the demo no longer needs to stub
+`ui_state_status_set`. There must be no hard
+`set_status() → ui_state_status_set()` link-time dependency from
+the REPL pipeline.
 
-- `repl_execute_program()` writes diagnostics to an optional buffer/callback in
-  `ReplExecutionOptions`.
-- Flattening returns diagnostics in `ReplFlattenResult` / an out param instead
-  of calling `set_status()`.
-- Export/import APIs return diagnostics through a `ReplDiagnostic` or caller
-  buffer.
-- Scene and example APIs return status text to their caller; the controller
-  decides whether to surface it.
-- Move the startup banner to app startup.
-- Delete `set_status()` from `repl_core.c` once no linked pipeline TU calls it.
+Two implementation shapes are acceptable:
+
+**(a) Per-function out-params.** Each pipeline entry point grows a
+`char *err / int err_sz` parameter (or attaches diagnostics to its
+result struct). Pipeline TUs stop calling `set_status()` entirely;
+controllers forward the returned diagnostic to UiState. This is the
+architecturally cleanest shape — pipeline functions become pure
+data producers — and removes the `set_status` symbol from the pipeline
+TU set entirely.
+
+**(b) Callback sink.** `set_status()` body becomes a callback
+dispatch (`repl_set_status_sink`); the controller installs
+`ui_state_status_set` as the sink at startup. Pipeline TUs keep
+calling `set_status()` unchanged. Demo doesn't install a sink → no-op
+→ no `ui_state_status_set` reference. Cheaper migration (no test
+churn) but keeps the `set_status` call sites in pipeline code; per-TU
+out-param conversion remains a future opportunity.
+
+The plan accepts either shape. The acceptance criterion is the
+link-level decoupling, not the architectural purity of pure-data
+return values.
+
+**Required regardless of shape:** move the startup banner ("Ready -
+type GL commands…") out of `repl_core.c::load_initial_commands` to
+the controller's bootstrap path. Pipeline TUs must not own
+display-string side effects.
 
 Stubs cleared:
 
 `ui_state_status_set`.
 
-Guard work:
+Guard work (variant per shape):
 
-- Add `check-no-set-status-in-pipeline` covering `repl_core.c`,
-  `repl_executor.c`, `repl_flatten.c`, `repl_export.c`, `repl_scenes.c`, and
-  `repl_example_loader.c`.
+- **(a)** Hard guard `check-no-set-status-in-pipeline` covering
+  `repl_core.c`, `repl_executor.c`, `repl_flatten.c`, `repl_export.c`,
+  `repl_scenes.c`, and `repl_example_loader.c`. Achievable once all
+  pipeline entry points return diagnostics by data.
+- **(b)** Either skip or land as a ratchet at the current call-site
+  count (~15) with target 0, decrementing as individual TUs convert
+  to out-params over time. Useful as documentation / progress
+  tracker; not load-bearing for the stub clearance itself.
 
 ## Step 4 - Make Header State Opaque to `repl_export`
 
