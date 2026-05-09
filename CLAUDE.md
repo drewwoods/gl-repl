@@ -87,66 +87,8 @@ Test sources live under `tests/` and shared test-only helpers live under
 
 ### Boundary Checks
 
-`make check-state-ownership` runs the full inventory of
-ownership / contract guards. Highlights:
-
-- `check-no-repl-commit` — `repl_commit.c/h` cannot reappear
-  (commit dispatch lives in `src/editor/commit.c`).
-- `check-no-repl-editor-input-shim` — `src/editor/input.c` cannot include
-  the deleted `repl_editor.h` or call legacy `repl_*_func` dispatch
-  bodies (Phase J1 closed the input boundary; `repl_editor.{c,h}`
-  is gone).
-- `check-no-set-status-in-repl-parser` — parser core never calls
-  `set_status` (baseline **0/0** after Phase J5 retired the legacy
-  no-ctx wrappers `repl_parser_parse_command` / `_with_vars` and the
-  `parser_legacy_surface_to_status` bridge; tests now own status
-  surfacing locally via their own `parse_for_test` helper).
-- `check-no-set-status-in-compile-apply` — `repl_compile.c` and
-  `repl_apply.c` are status-free (Phase C purity).
-- `check-no-test-default-output` — hard guard. Tests may not call
-  `repl_save_default_output()`, which writes to the hardcoded relative
-  path `./output.c` (the repo root when tests run). Tests that need to
-  verify save behavior must call `repl_export_save_output()` with an
-  explicit `/tmp/` path instead.
-- `check-no-store-text-api` — `repl_command_store_*_with_line[s]`
-  text-aware overloads stay deleted.
-- `check-repl-no-direct-buffer-read` — REPL files read text via
-  `EditorBufferView`, not directly into editor buffer.
-- `check-ui-returns-hits-only` — `ui_*.c` is mutator-free in input
-  + render paths. Baseline reached **0/0** (Phase J4 routed the
-  cursor-pixel publish through `UiCodePanelOutput` and deleted the
-  `cursor_px/cursor_py` state slice along with the
-  `check-cursor-px-encapsulated` migration guard). Any new mutator
-  fails the build.
-- `check-ui-panels-no-mutators` — Phase J2.2 hard guard. `src/ui/panels.c`
-  is hit-test only: zero matches for code-panel press / click / drag /
-  release / scene-press / motion / mouse-release / escape forwarders
-  and color-picker open/close/press/motion/release / replay-pin /
-  search / menu open-close-activate calls. No allowlist.
-- `check-replay-ui-isolation` — feature-UI prefix discipline.
-  `replay_ui_*.c` may render replay HUD/buttons, hit-test replay
-  controls, route hits via `replay_handle_*`, and read replay
-  snapshots, but must not mutate editor/REPL state, call
-  parser/compile/apply, or grow generic `ui_*` responsibilities.
-- `check-color-picker-ui-isolation` — stricter feature-UI guard.
-  `src/ui/color_picker.c` is a pure renderer + hit-test over
-  `ColorPickerView`; no mutators, no live REPL/editor state reads,
-  no parser/compile/apply, no `set_status`. Lifecycle and writeback
-  belong on the peer (`color_picker_state.c`).
-- `check-variable-panel-forwarders` — baseline **0/0** after Phase
-  J6 migrated every fixture site onto `variable_panel_drag` /
-  `variable_panel_view` / `variable_panel_handle_drag_*`, and Phase
-  J7 deleted the legacy `editor_state_variable_drag*` /
-  `ui_state_variable_panel*` / `repl_var_drag_*` shims. The
-  canonical peer accessors are the only entry points.
-- `check-replay-forwarders` — baseline **0/0** after Phase J5
-  migrated every `bench/` + `tests/` site onto `replay_state_view` /
-  `replay_state_mut` / `replay_handle_*`, and Phase J7 deleted the
-  legacy `repl_state_replay` / `_mut` / `_reset` forwarders.
-- `check-glr-ctrl-not-editor-mirror` — `glr_ctrl_editor_*` per-field
-  wrappers are forbidden.
-- `check-editor-ownership-budget` — UI-slice forwarder + facade
-  include counts only shrink.
+`make check-state-ownership` runs the full inventory of ownership / contract guards
+(e.g., input/REPL isolation, mutator placement, UI purity). See the Makefile for the full list.
 
 ## File Layout
 
@@ -158,7 +100,7 @@ ownership / contract guards. Highlights:
 | `glr_ctrl.h` | Controller public surface: display, reshape, init-GL entrypoints |
 | `glr_config.c` | Config key implementation and descriptor table helpers |
 | `glr_config.h` | `ReplConfigKey` / `ReplConfigItem` descriptor API for keyed config access |
-| `repl_core.c` | Normalization pipeline (`repl_parse_and_normalize*`), reformatter, startup helpers; being dissolved into natural owners (R10) |
+| `repl_core.c` | Normalization pipeline (`repl_parse_and_normalize*`), reformatter, startup helpers |
 | `repl_parser.c` | REPL source-line parser, expression validation, canonical `GLCmd.source[]` generation |
 | `repl_parser.h` | Parser entrypoints (`repl_parser_parse_command*`, `repl_parser_parse_command_ctx`) and `ReplParseContext` |
 | `repl_source_scope.c` | Source prefix-depth cache, indentation helpers, block lookup |
@@ -167,7 +109,7 @@ ownership / contract guards. Highlights:
 | `repl_command_spec.h` | Command spec query API |
 | `repl_command_store.c` | Source-command array mutations: insert, delete, replace, bulk-load |
 | `repl_command_store.h` | Command-store public API (`repl_command_store_insert_one`, etc.) |
-| `repl_core.h` | Public API (parse, flatten, user scene + workspace); GLUT input-dispatch declarations (`repl_keyboard_func` etc.) are live — called from `glr_ctrl.c` — pending R10-phase1 re-evaluation |
+| `repl_core.h` | Public API (parse, flatten, user scene + workspace); GLUT input-dispatch declarations |
 | `repl_core_internal.h` | Test-visible internals (normalize/commit pipeline, `feed_line`, `load_line_to_input`, `repl_promote_example_if_needed`) |
 | `repl_state.c` | Owns `g_repl_state`, lifecycle, snapshot assembly (`repl_state_capture` / `repl_state_restore`) |
 | `repl_state.h` | Typed runtime-state facade, reset helpers, and focused accessors over the live REPL state |
@@ -230,13 +172,13 @@ ownership / contract guards. Highlights:
 | `src/editor/inline_rename.h` | Rename begin/active/cancel/key/special API |
 | `variable_panel_drag.c` | Variable slider drag transaction: begin/motion/reset, linear/log value writeback |
 | `variable_panel_drag.h` | Drag state accessors + begin/motion/reset API |
-| `variable_panel_state.c` | Variable-panel peer subsystem: owns visibility flag + drag-state storage (Phase F) |
+| `variable_panel_state.c` | Variable-panel peer subsystem: owns visibility flag + drag-state storage |
 | `variable_panel_state.h` | Peer-subsystem facade (`VariablePanelState`, capture/restore/reset, view/drag accessors) |
-| `replay_state.c` | Replay peer subsystem: owns `ReplReplayRuntimeState` storage (Phase F commit 33) |
+| `replay_state.c` | Replay peer subsystem: owns `ReplReplayRuntimeState` storage |
 | `replay_state.h` | Peer-subsystem facade (`replay_state_capture/restore/reset/view/mut`) |
-| `src/editor/help_session.c` | Read-only editor session for the help overlay (tab_idx + scroll; Phase G commit 35) |
+| `src/editor/help_session.c` | Read-only editor session for the help overlay (tab_idx + scroll) |
 | `src/editor/help_session.h` | `EditorHelpSession` API (capture/restore/reset, narrow accessors) |
-| `src/editor/completion.c` | Completion-provider registry: editor input invokes registered provider for autocomplete (Phase G commit 36) |
+| `src/editor/completion.c` | Completion-provider registry: editor input invokes registered provider for autocomplete |
 | `src/editor/completion.h` | `EditorCompletionProvider` struct + `editor_completion_register/update/clear` API |
 | `repl_examples.c` | Predefined example data (`g_examples[]`, `g_example_names[]`) |
 | `repl_examples.h` | Example query API (`repl_examples_count/name/lines`) |
@@ -310,208 +252,6 @@ ownership / contract guards. Highlights:
 - Expression variables: `ExprVar` struct in `repl_eval.h`, predefined set
   accessible via `repl_state_variables()` and managed by `declare_predef_var()`
 
-## Adding Or Migrating An Owner Module
-
-When a module starts owning mutable REPL state, follow the Stage-1 template:
-
-1. Put the live bytes in `ReplRuntimeState` unless the state is intentionally a
-   sidecar such as undo rings or user-scene slots. If it is a sidecar, call
-   that out explicitly instead of describing it as runtime-state migration.
-2. Add a named runtime slice in `repl_state.h`, wire it into
-   `static ReplRuntimeState g_repl_state;`, and say whether the read path is
-   currently `facade-backed`, `direct-runtime`, or `value-getter`.
-3. Keep mutations on the owner side. Scene/UI renderers read snapshots only;
-   render-time discoveries return through output structs that the controller
-   actualizes back into state.
-4. Extend the ownership tests in the same change: keep
-   `repl_state_capture()`, `repl_state_restore()`, and `repl_state_reset_all()`
-   current for runtime slices, and add focused behavior coverage in the
-   module's own tests.
-
-## Adding Grid/Axes Themes
-
-Grids and axes are themeable through small specs in `src/scene/grid.c` and
-`src/scene/axes.c`:
-1. Add a new entry to the `GridTheme` (or `AxesTheme`) enum in `sample.h`
-   before the trailing `_COUNT` sentinel
-2. Add the name string at that enum's index in `g_grid_names[]`
-   (or `g_axes_names[]`) in `repl_core.c` — both arrays use designated
-   initializers keyed on the enum, so order is validated at compile time
-3. Add a matching `GridThemeSpec` entry in `src/scene/grid.c` for standard grid
-   line/color themes and an `AxesThemeSpec` entry in `src/scene/axes.c` for
-   standard axes themes. Keep custom geometry-heavy grid cases in
-   `src/scene/grid.c`.
-4. The theme cycles via F3 (grid) / F4 (axes); the special-key route
-   in `src/editor/input.c` calls `glr_cfg_handle_special_shortcut`, which
-   walks `g_cfg_items[]` in `glr_actions.c` and cycles the matching
-   config row.
-
-## Adding Menu Bar Items
-
-The top row is a menu bar in `src/ui/menu_bar.c` styled after the Header
-Wireframes v2 mock. Left side has top-level menus (File / Scene / Config);
-right side has pinned buttons (Search / Replay).
-
-To add an **item** to an existing top-level menu:
-1. Extend the per-menu enum (e.g. `FILE_ITEM_*` or the `SCENE_OFF_*` block) and
-   bump the trailing `*_COUNT`
-2. Add the label in `menu_item_label()` and shortcut (if any) in
-   `menu_item_shortcut()` in `src/ui/menu_bar.c`
-3. Add the action branch in `glr_action_menu_item_activate()` in
-   `glr_actions.c`; return `1` for action items (menu closes), `0` for
-   cycle/toggle items (menu stays open; click-outside dismisses)
-
-To add a **new top-level menu**: extend the `MENU_*` enum (before
-`NUM_MENUS`), add a label in `g_menu_labels[]`, and handle the new id in
-`menu_item_count` / `menu_item_label` / `menu_item_shortcut` in
-`src/ui/menu_bar.c`, plus `glr_action_menu_item_activate()` in
-`glr_actions.c` for side effects.
-
-To add a **pinned right-side button**: extend `PIN_*` enum, append a label
-to `g_pin_btn_labels[]` in `src/ui/menu_bar.c`. Activation routing lives in
-`glr_ctrl.c::route_pin_button_hit()` — add the new pin id to its
-switch.
-
-## User Scene System
-
-The REPL keeps up to `MAX_USER_SCENES` (= 8) independent scenes in
-`g_user_scenes[]` (in `repl_core.c`). Slot 0 is the pinned "home" scene — the
-pre-example editor state captured on first example load, never auto-evicted.
-Each `UserScene` stores `GLCmd` array + `num_cmds` + `edit_line` + predefined
-variable values + a scene `name` + `last_touch` tick for LRU.
-
-### Active slot and auto-promotion
-
-- `g_active_user_scene` (`-1` means an example or a fresh empty workspace is
-  loaded instead of a user scene).
-- `editor_undo_push_snapshot()` (in `src/editor/undo.c`, called from
-  `src/editor/input.c` and `src/editor/commit.c` before mutations) calls
-  `repl_promote_example_if_needed()` before every mutation. If the user is
-  editing an example, that call allocates a fresh slot, copies the current
-  state into it, inherits the example's name (de-duplicated via
-  `derive_unique_scene_name`), and sets `g_active_user_scene`. The editor
-  keeps going — the user never sees the promotion directly, but subsequent
-  edits now accumulate into a user scene.
-
-### LRU eviction
-
-When every non-home slot is full *and* a workspace directory is bound, a 9th
-promotion picks the LRU non-pinned, non-active slot, flushes it to
-`<workspace_dir>/<slug>.c` via `evict_scene_to_workspace()`, and reuses the
-freed index. With no workspace bound the promotion is rejected with a status
-message (user has to save workspace first to unlock eviction).
-
-### Inline rename
-
-- `editor_inline_rename_begin(slot)` / `editor_inline_rename_handle_key(...)` /
-  `editor_inline_rename_cancel()` in `src/editor/inline_rename.c`.
-- Triggered by the Scene → "Rename active scene" menu item; typing updates a
-  status-bar prompt; Enter commits via `repl_user_scene_rename` (which trims,
-  de-duplicates, and guards against an empty name), Esc cancels.
-- Path-unsafe chars (`/`, `\`, `:`) and non-printables are filtered at input
-  time since names become filesystem slugs on workspace export.
-- The key dispatcher in `src/editor/input.c::keyboard_func` forwards keys
-  to `editor_input_rename_capture_key` at the very top, so rename mode
-  swallows input even when other overlays aren't open.
-
-### Workspace I/O
-
-- `repl_save_workspace(dir)` mkdirs `dir` (idempotent), flushes the active
-  slot, then iterates every occupied slot: `install_scene_into_live` + a
-  stash/restore pattern wraps each slot so `repl_export_save_output()` sees that scene's
-  live state. The export scene-name hint is set per-slot so the exported
-  header's `// @scene-name` reflects the correct name. The bound dir is
-  remembered in import/export state and stamped into every single-file export
-  as `// @workspace-dir <path>`.
-- `repl_load_workspace(dir)` opens `dir`, loads each `*.c` into a fresh slot
-  via `load_scene_file_into_slot`, and restores live editor state around the
-  iteration. Names come from `@scene-name` headers (or the filename stem as
-  fallback).
-- Single-file save/load still works unchanged. Files round-trip between
-  workspace and single-file modes because the header encodes both
-  `@scene-name` and `@workspace-dir`.
-
-### Scene menu layout
-
-`SCENE_OFF_*` offsets in `src/ui/menu_bar.c` place fixed rows above the user-scene
-list (`New empty scene`, `Save to output.c`, `Rename active scene`). User
-scenes follow at `SCENE_OFF_SCENES`; rows are dense (unused slots skipped via
-`repl_scene_menu_slot_for_dense_index`). The active scene row is drawn with
-accent color.
-
-### Public API touch points (in `repl_core.h`)
-
-`repl_user_scene_count`, `repl_user_scene_slot_used`, `repl_user_scene_name`,
-`repl_user_scene_rename`, `repl_load_user_scene_idx`, `repl_active_user_scene`,
-`repl_save_workspace`, `repl_load_workspace`, `repl_workspace_dir`,
-`repl_set_workspace_dir`. Back-compat helpers: `repl_user_scene_valid()` still
-reports "any slot occupied?", `repl_load_user_scene()` still loads slot 0.
-
-### F12 cycle
-
-`examples → user scenes (in slot order) → back to first example`. Handles both
-"active example" and "active scene" starting states.
-
-## Example Metadata
-
-Built-in examples in `repl_examples.c` can prefix their command list with:
-1. Contiguous `// @cfg <slug> = <value>` lines.
-2. An optional 5-line `// camera` preset block.
-
-`repl_core.c` consumes leading metadata before feeding remaining lines through
-the commit pipeline, so metadata stays hidden from the code panel. `@cfg`
-parsing reuses `parse_workspace_header_line()` from `repl_export.c`, restricted
-to these scene-presentation slugs:
-
-`wireframe`, `grid`, `grid_major`, `grid_extent`, `axes`, `vertex_labels`,
-`normal_vectors`, `vertex_outlines`, `vertex_points`, `vertex_guides`,
-`light_indicators`, `backdrop`, `camera_rotate`.
-
-Non-leading `@cfg` lines are not metadata — they stay as ordinary comments.
-
-### Reset and restore rules
-
-- Every example load resets the allowed non-camera scene-presentation settings
-  to built-in defaults *before* applying the example's leading `@cfg`
-  metadata. This prevents stale grid/axes/overlay/backdrop state from leaking
-  across examples.
-- Camera is intentionally excluded from that reset. Examples inherit the
-  current `g_cam_*` state unless they supply the explicit leading `// camera`
-  header.
-- `restore_user_scene()` restores commands and predefined variables only.
-  Leaving an example does not restore camera or other presentation state.
-
-### Shared defaults
-
-Keep the single source of truth for example-owned presentation defaults in
-the `CFG_DEFAULT_*` macro block in `sample.h`. `repl_core.c` initializers,
-example reset helpers, and focused example tests should reuse those macros
-instead of duplicating literals.
-
-When changing example-metadata behavior, inspect `repl_core.c`,
-`repl_export.c`, `repl_examples.c`, `sample.h`, and
-`test_repl_core_examples.c` together. `make test_repl_core_examples` is the
-focused regression suite for this area; `make test` for broader REPL state.
-
-### Open: desired vs. inherited @cfg
-
-The "inherited (scene-set) is ephemeral" half of this is now in place via
-the example sandbox in `repl_scenes.c`: entering an example from
-non-example state captures the 14 presentation keys into
-`g_pre_example_cfg[]`, and the next user-scene / home transition restores
-them before applying the destination's saved `scene_cfg[]`. Today the
-restore is observably overwritten by full `scene_cfg` coverage, but the
-sandbox is now the canonical seam where any sparse-`scene_cfg` /
-inherited-aware future change attaches.
-
-Still open: a continuous "desired" mirror that survives toggles BETWEEN
-example F12 cycles (Option B in the plan). Today, toggling cfg while
-inside example A and then F12-cycling to example B drops A's toggles
-on the floor — which matches the "ephemeral" intent for in-example
-toggles. A future Option B would let users distinguish "I'm tweaking
-A" from "this is my new preference" via a `repl_config_apply_inherited`
-sibling to `repl_config_set`.
-
 ## Architecture
 
 ### Rendering Pipeline
@@ -521,23 +261,14 @@ sibling to `repl_config_set`.
 is no shim layer.
 1. Rebuild autonormals and flat program if dirty; save predef var values;
    prepare replay frame if active; update export/camera strings
-2. Build `SceneRenderConfig` from REPL state; if accumulation-buffer AA is
-   enabled (currently read from `repl_state_render()`; R1a moves this to
-   config fields), call `scene_apply_camera(...)` then
-   `scene_render_3d_scene(&cfg)` once per jitter sample.
-   The camera modelview transform is the controller's responsibility —
-   `scene/render.c` no longer touches the modelview except for sub-renderer
-   push/pop bracketing. Jitter is applied as a scene-local frustum shift
-   inside the scene function — it is no longer a config field. The
-   standalone `teapot_demo` binary in `tools/teapot_demo/` exercises this
-   contract with a non-REPL geometry callback.
+2. Build `SceneRenderConfig` from REPL state and call `scene_apply_camera(...)` then
+   `scene_render_3d_scene(&cfg)` once per jitter sample (if accumulation-buffer AA is enabled).
+   Jitter is applied as a scene-local frustum shift inside the scene function.
 3. `scene_render_3d_scene(&cfg)` in `src/scene/render.c`: viewport/clear setup
    → projection → execute user geometry via `SceneExecuteProgramFn`
-   callback → replay fade batches (transitional; R1b replaces with
-   `ReplayFadePlan` snapshot iteration) → grid/axes/backdrop/orbit-target →
+   callback → replay fade batches → grid/axes/backdrop/orbit-target →
    polygon-outline, vertex, normal, and guide overlays → 2D replay HUD
-   (renders via `replay_ui_hud_render` from `replay_ui_hud.c` —
-   feature-UI under the `replay_ui_*` prefix)
+   (renders via `replay_ui_hud_render` from `replay_ui_hud.c`)
 4. 2D overlays: code panel, autocomplete popup, example dropdown,
    variable slider panel, config menu, help overlay, search overlay
 
@@ -584,8 +315,7 @@ The core data flow is **source commands → flat commands → GL calls**:
    assignment. Each handler returns 1 if it consumed the input
    (success or error with status message), 0 if it didn't match.
    If all handlers return 0, `parse_command()` in `repl_parser.c`
-   sets the per-context error buffer (no `set_status` from the parser
-   core — the bridge was retired in Phase J5).
+   sets the per-context error buffer.
 3. **Parse** — `parse_command()` in `repl_parser.c` matches the line to a
    `CmdType`, evaluates argument expressions via `eval_expr()`, stores
    result in `GLCmd.args[]` and normalized text in `GLCmd.source[]`.
