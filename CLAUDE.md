@@ -101,7 +101,7 @@ Test sources live under `tests/` and shared test-only helpers live under
 | `glr_config.c` | Config key implementation and descriptor table helpers |
 | `glr_config.h` | `ReplConfigKey` / `ReplConfigItem` descriptor API for keyed config access |
 | `repl_core.c` | Normalization pipeline (`repl_parse_and_normalize*`), reformatter, startup helpers |
-| `repl_parser.c` | REPL source-line parser, expression validation, canonical `GLCmd.source[]` generation |
+| `repl_parser.c` | REPL source-line parser, expression validation, canonical line text emission via `ReplParsedLine.text` (the per-line text lives in `ReplEditorBuffer.lines[]`, not on `GLCmd`) |
 | `repl_parser.h` | Parser entrypoints (`repl_parser_parse_command*`, `repl_parser_parse_command_ctx`) and `ReplParseContext` |
 | `repl_source_scope.c` | Source prefix-depth cache, indentation helpers, block lookup |
 | `repl_source_scope.h` | Source-scope query API (`repl_source_scope_block_depth_at`, `repl_source_scope_find_block_end`, indent helpers) |
@@ -122,7 +122,8 @@ Test sources live under `tests/` and shared test-only helpers live under
 | `src/editor/clipboard.h` | Clipboard public API |
 | `src/editor/undo.c` | Undo/redo snapshots, history rings, example auto-promote hook before mutation |
 | `src/editor/undo.h` | Undo public API (`editor_undo_push_snapshot`, `editor_undo_pop_snapshot`, `editor_undo_do_redo`) |
-| `repl_camera_controls.c` | Scene camera pointer state, orbit/pan/zoom drags, wheel zoom velocity, momentum tick |
+| `glr_camera.c` | Scene camera pointer state, orbit/pan/zoom drags, wheel zoom velocity, momentum tick |
+| `glr_camera.h` | Camera state + setters (`glr_camera`, `glr_camera_set_*`, `glr_camera_controls_reset`) |
 | `glr_actions.c` | Config descriptor table, config shortcuts, menu actions, startup config defaults |
 | `glr_actions.h` | Actions public API (`glr_action_menu_item_activate`, cursor-pixel setter, etc.) |
 | `src/ui/code_panel_layout.c` | Pure code-panel wrapping, row counts, segment lookup, cursor-row mapping |
@@ -225,9 +226,9 @@ Test sources live under `tests/` and shared test-only helpers live under
 - Prefixes express ownership. Use `repl_*` for REPL language/editor/source/
   replay model modules, `glr_*` for app shell/controller/app-service code,
   `scene_*` for 3D rendering, `ui_*` for 2D editor/view rendering, and neutral
-  names such as `prof` for generic utilities. `repl_audio` is legacy-named and
-  should be revisited with the deferred app-shell namespace work rather than
-  copied as a pattern.
+  names such as `prof` for generic utilities. `audio.c` is the neutrally-named
+  app-level service; whether it gets a `glr_audio` rename is part of the open
+  namespace audit. Don't introduce new top-level prefixes without a plan.
 - Config toggles use the `ReplConfigItem` / `ReplConfigKey` pattern: add a
   descriptor entry to `g_cfg_items[]` in `glr_actions.c`; `CFG_ITEM_COUNT`
   auto-computes via `sizeof`
@@ -263,7 +264,10 @@ is no shim layer.
    prepare replay frame if active; update export/camera strings
 2. Build `SceneRenderConfig` from REPL state and call `scene_apply_camera(...)` then
    `scene_render_3d_scene(&cfg)` once per jitter sample (if accumulation-buffer AA is enabled).
-   Jitter is applied as a scene-local frustum shift inside the scene function.
+   The camera modelview transform is the controller's responsibility —
+   `src/scene/render.c` does not touch the modelview except for sub-renderer
+   push/pop bracketing. Jitter is applied as a scene-local frustum shift
+   inside the scene function.
 3. `scene_render_3d_scene(&cfg)` in `src/scene/render.c`: viewport/clear setup
    → projection → execute user geometry via `SceneExecuteProgramFn`
    callback → replay fade batches → grid/axes/backdrop/orbit-target →
@@ -272,14 +276,20 @@ is no shim layer.
 4. 2D overlays: code panel, autocomplete popup, example dropdown,
    variable slider panel, config menu, help overlay, search overlay
 
+The standalone `make teapot_demo` binary (sources in `tools/teapot_demo/`)
+exercises the scene contract with a non-REPL geometry callback — it builds
+without dragging in the REPL editor / controller, which is the load-bearing
+proof that `src/scene/` has no hard dependency on REPL code.
+
 ### Two-Level Command Model
 
 The core data flow is **source commands → flat commands → GL calls**:
 
 - **Source array** (`repl_state_document_cmds()`, count via
-  `repl_state_document_count()`) — each `GLCmd` holds parsed type/args,
-  normalized `source[]` text, and flags (`has_vars`, `valid`, `is_auto`).
-  Edited directly by the user via the code panel.
+  `repl_state_document_count()`) — each `GLCmd` holds parsed type/args
+  and flags (`has_vars`, `valid`, `is_auto`). Per-line canonical text is
+  *not* on `GLCmd`; it lives in `ReplEditorBuffer.lines[][]` and is the
+  editor's writable model. Edited directly by the user via the code panel.
 - **Flat array** (`repl_state_flat_cmds()`) — expanded copy. For-loops are
   unrolled, function calls are inlined, if-blocks are resolved.
   Each flat cmd records `src_cmd_idx` (owning source line),
@@ -360,11 +370,11 @@ call sites. Ordering inside each helper is load-bearing:
 
 ### Editing Existing Lines
 
-When the user navigates to an existing line, `load_line_to_input()`
-strips the trailing `;` and whitespace from `cmd.source` before
-loading into the input buffer. This means re-committing the line goes
-through the no-semicolon path. Commit handlers that check for `;`
-must also accept end-of-string as a valid terminator.
+When the user navigates to an existing line, `load_line_to_input()` reads
+the line text from the editor buffer view, strips the trailing `;` and
+whitespace, and loads it into the input buffer. This means re-committing
+the line goes through the no-semicolon path. Commit handlers that check
+for `;` must also accept end-of-string as a valid terminator.
 
 ### Float Variable Declarations (`CMD_VAR_DECLARE`)
 
@@ -404,6 +414,82 @@ Key details:
   `undeclare_predef_var()`, `find_predef_var_idx()`,
   `is_reserved_ident()`, `source_uses_ident()`,
   `validate_expression_idents()`
+
+### User Scenes & Auto-Promotion
+
+The REPL keeps up to `MAX_USER_SCENES = 8` independent scenes in
+`g_user_scenes[]` (`repl_scenes.c`). Slot 0 is the pinned "home" scene —
+the pre-example editor state captured on first example load, never
+auto-evicted. Each `UserScene` stores command array + count + edit_line
++ predef variable values + scene `name` + `last_touch` tick.
+
+- **Active slot.** `repl_active_user_scene()` returns the current slot
+  index, or `-1` when an example or fresh empty workspace is loaded.
+- **Auto-promote on first edit.** `editor_undo_push_snapshot()` calls
+  `repl_promote_example_if_needed()` before every mutation. When the
+  user is editing an example, that allocates a fresh slot, copies state
+  into it, inherits the example's name (de-duplicated by
+  `derive_unique_scene_name`), and sets the active slot. The user never
+  sees the promotion directly — subsequent edits accumulate into the
+  new user scene.
+- **LRU eviction.** When every non-home slot is full *and* a workspace
+  directory is bound, the next promotion evicts the LRU non-pinned,
+  non-active slot to `<workspace_dir>/<slug>.c` and reuses the index.
+  With no workspace bound, promotion is rejected with a status message
+  (the user must save a workspace first).
+- **F12 cycle.** `examples → user scenes (in slot order) → back to first
+  example`. Handles both "active example" and "active scene" starting
+  states.
+- **Inline rename.** `editor_inline_rename_*` in
+  `src/editor/inline_rename.c`; triggered by Scene → "Rename active
+  scene"; commits via `repl_user_scene_rename` (Enter), Esc cancels.
+  Path-unsafe chars (`/`, `\`, `:`) and non-printables are filtered at
+  input time since names become filesystem slugs on workspace export.
+- **Workspace I/O.** `repl_save_workspace(dir)` mkdirs `dir` and
+  iterates every occupied slot, setting the export scene-name hint per
+  slot. `repl_load_workspace(dir)` loads each `*.c` into a fresh slot;
+  scene names come from `@scene-name` headers (filename stem as
+  fallback). Single-file save/load still works — files round-trip
+  between modes via the `@scene-name` / `@workspace-dir` headers.
+
+### Example Metadata
+
+Built-in examples in `repl_examples.c` can prefix their command list
+with:
+
+1. Contiguous `// @cfg <slug> = <value>` lines.
+2. An optional 5-line `// camera` preset block.
+
+Leading metadata is consumed before lines feed through the commit
+pipeline, so it stays hidden from the code panel. `@cfg` parsing reuses
+`parse_workspace_header_line()` from `repl_export.c`, restricted to
+these scene-presentation slugs:
+
+`wireframe`, `grid`, `grid_major`, `grid_extent`, `axes`,
+`vertex_labels`, `normal_vectors`, `vertex_outlines`, `vertex_points`,
+`vertex_guides`, `light_indicators`, `backdrop`, `camera_rotate`.
+
+Non-leading `@cfg` lines are not metadata — they stay as ordinary
+comments.
+
+**Reset and restore rules:**
+
+- Every example load resets the allowed non-camera scene-presentation
+  settings to built-in defaults *before* applying the example's leading
+  `@cfg` metadata. Prevents stale state leaking across examples.
+- Camera is intentionally excluded from that reset. Examples inherit
+  the current camera unless they supply an explicit `// camera` header.
+- `restore_user_scene()` restores commands and predefined variables
+  only. Leaving an example does not restore camera or other
+  presentation state.
+
+The single source of truth for example-owned presentation defaults is
+the `CFG_DEFAULT_*` macro block in `sample.h`. Initializers, example
+reset helpers, and tests reuse those macros instead of duplicating
+literals. `make test_repl_core_examples` is the focused regression
+suite; touch `repl_core.c`, `repl_export.c`, `repl_examples.c`,
+`sample.h`, and `tests/test_repl_core_examples.c` together when
+changing example-metadata behavior.
 
 ### Save/Load (output.c)
 
