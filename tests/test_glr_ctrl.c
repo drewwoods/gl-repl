@@ -1,3 +1,4 @@
+#include "glr_ctrl.h"
 #include <stdio.h>
 #include <string.h>
 #include "editor/undo.h"
@@ -133,7 +134,7 @@ static void prepare_display_fixture(void) {
     g_scratch_value_seen_in_scene = 0.0f;
     g_t_idx = -1;
 
-    repl_reset_state();
+    glr_app_reset_all();
     repl_eval_init_predef_vars();
 
     ui_state_viewport_set_size(800, 600);
@@ -403,7 +404,7 @@ static void test_variable_panel_motion_routes_through_compile_and_coalesces_undo
 
     printf("--- imrepl_ctrl variable panel drag route ---\n");
 
-    repl_reset_state();
+    glr_app_reset_all();
     ui_state_viewport_set_size(1000, 1000);
     variable_panel_set_visible(1);
     repl_feed_line_public("float testvar = 1.0;");
@@ -471,7 +472,7 @@ static void test_variable_panel_motion_initializes_uninitialized_declaration(voi
 
     printf("--- imrepl_ctrl variable panel initializes decl ---\n");
 
-    repl_reset_state();
+    glr_app_reset_all();
     ui_state_viewport_set_size(1000, 1000);
     variable_panel_set_visible(1);
     repl_feed_line_public("float testvar;");

@@ -108,14 +108,15 @@ void                         repl_state_import_export_reset(void);
 void                         repl_state_refresh_workspace_header_lines(void);
 int                          repl_state_parse_workspace_header_line(const char *line);
 
+/* Initialise REPL-owned program state to defaults. Does NOT reset
+ * peer/editor/UI state — that's glr_app_reset_all in glr_ctrl.h.
+ * The demo and any pure-REPL test fixture call this; production
+ * startup and tests that need full-world reset call
+ * glr_app_reset_all instead. */
 void repl_state_init_defaults(void);
-void repl_state_reset_all(void);
 
-/* Mirror chrome-relevant presentation fields into ui_state.code_panel
- * (layout_mode, show_vertex_indices). The controller calls this once
- * per frame in glr_ctrl_build_ui_snapshot; tests call it after
- * tweaking repl_state_presentation_mut() so subsequent
- * ui_layout_* / ui_panels_hit_test calls see the new chrome state. */
-void repl_state_sync_ui_chrome(void);
+/* Lower-level synonym of repl_state_init_defaults — resets just the
+ * REPL slices. Either entry is fine for REPL-only callers. */
+void repl_state_reset_program(void);
 
 #endif /* REPL_STATE_OWNERS_H */

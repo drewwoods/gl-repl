@@ -1,3 +1,4 @@
+#include "glr_ctrl.h"
 #include "repl_core_internal.h"
 #include "repl_state.h"
 #include "repl_core.h"
@@ -32,7 +33,7 @@ int main(void) {
     const char *tmp_dump_path = "/tmp/repl_core_format_dump.txt";
 
     repl_eval_init_predef_vars();
-    repl_reset_state();
+    glr_app_reset_all();
     declare_test_vars();
 
     GLCmd interactive_cmd;
@@ -42,7 +43,7 @@ int main(void) {
                 repl_parse_and_normalize(line, 0, NULL, 0, 1, &interactive_cmd,
                                          interactive_text, sizeof(interactive_text)) == 1);
 
-    repl_reset_state();
+    glr_app_reset_all();
     declare_test_vars();
     repl_feed_line_public(line);
     ASSERT_TRUE("feed inserted one", repl_state_document_count() == 1);
@@ -60,7 +61,7 @@ int main(void) {
         }
     }
 
-    repl_reset_state();
+    glr_app_reset_all();
     declare_test_vars();
     ASSERT_TRUE("load from file", repl_export_load_from_file(tmp_path) == 1);
     ASSERT_TRUE("load inserted one", repl_state_document_count() == 1);
@@ -90,7 +91,7 @@ int main(void) {
         }
     }
 
-    repl_reset_state();
+    glr_app_reset_all();
     declare_test_vars();
     ASSERT_TRUE("load loop file", repl_export_load_from_file(tmp_loop_path) == 1);
     ASSERT_TRUE("loop imported 3 cmds", repl_state_document_count() == 3);
@@ -112,7 +113,7 @@ int main(void) {
         ASSERT_TRUE("reformat close brace indent", buf2 && strcmp(buf2, "  }") == 0);
     }
 
-    repl_reset_state();
+    glr_app_reset_all();
     declare_test_vars();
     repl_feed_line_public("for(i, 0, 3) {");
     repl_feed_line_public("x = i + 1;");
@@ -182,7 +183,7 @@ int main(void) {
         }
     }
 
-    repl_reset_state();
+    glr_app_reset_all();
     repl_feed_line_public("float a = 2, b, c = 3;");
     ASSERT_TRUE("decl cmd count", repl_state_document_count() == 1);
     ASSERT_TRUE("decl cmd type", repl_state_document_cmds_mut()[0].type == CMD_VAR_DECLARE);
@@ -200,11 +201,11 @@ int main(void) {
         char visual_buf[8192];
         FILE *dump_f = fopen(tmp_dump_path, "w");
 
-        repl_reset_state();
+        glr_app_reset_all();
         declare_test_vars();
         repl_state_presentation_mut()->wrap_at_comma = 1;
-        repl_state_presentation_mut()->show_vertex_indices = 0; repl_state_sync_ui_chrome();
-        repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT; repl_state_sync_ui_chrome();
+        repl_state_presentation_mut()->show_vertex_indices = 0; glr_ctrl_sync_ui_chrome();
+        repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT; glr_ctrl_sync_ui_chrome();
         ui_state_viewport_set_size(360, ui_state_viewport().window_h);
         g_panel_frac = 0.75f;
 
@@ -240,11 +241,11 @@ int main(void) {
         char visual_buf[8192];
         FILE *dump_f = fopen(tmp_dump_path, "w");
 
-        repl_reset_state();
+        glr_app_reset_all();
         declare_test_vars();
         repl_state_presentation_mut()->wrap_at_comma = 1;
-        repl_state_presentation_mut()->show_vertex_indices = 0; repl_state_sync_ui_chrome();
-        repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT; repl_state_sync_ui_chrome();
+        repl_state_presentation_mut()->show_vertex_indices = 0; glr_ctrl_sync_ui_chrome();
+        repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT; glr_ctrl_sync_ui_chrome();
         ui_state_viewport_set_size(360, ui_state_viewport().window_h);
         g_panel_frac = 0.75f;
 
@@ -283,11 +284,11 @@ int main(void) {
         char visual_buf[8192];
         FILE *dump_f = fopen(tmp_dump_path, "w");
 
-        repl_reset_state();
+        glr_app_reset_all();
         declare_test_vars();
         repl_state_presentation_mut()->wrap_at_comma = 1;
-        repl_state_presentation_mut()->show_vertex_indices = 0; repl_state_sync_ui_chrome();
-        repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT; repl_state_sync_ui_chrome();
+        repl_state_presentation_mut()->show_vertex_indices = 0; glr_ctrl_sync_ui_chrome();
+        repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT; glr_ctrl_sync_ui_chrome();
         ui_state_viewport_set_size(360, ui_state_viewport().window_h);
         g_panel_frac = 0.75f;
 
@@ -325,10 +326,10 @@ int main(void) {
         char visual_buf[8192];
         FILE *dump_f = fopen(tmp_dump_path, "w");
 
-        repl_reset_state();
+        glr_app_reset_all();
         declare_test_vars();
         repl_state_presentation_mut()->wrap_at_comma = 1;
-        repl_state_presentation_mut()->show_vertex_indices = 0; repl_state_sync_ui_chrome();
+        repl_state_presentation_mut()->show_vertex_indices = 0; glr_ctrl_sync_ui_chrome();
         ui_state_viewport_set_size(260, ui_state_viewport().window_h);
         g_panel_frac = 0.75f;
 
@@ -374,13 +375,13 @@ int main(void) {
         for (int layout_idx = 0; layout_idx < 3; layout_idx++) {
             FILE *dump_f = fopen(tmp_dump_path, "w");
 
-            repl_reset_state();
+            glr_app_reset_all();
             declare_test_vars();
             repl_state_presentation_mut()->wrap_at_comma = 1;
-            repl_state_presentation_mut()->show_vertex_indices = 0; repl_state_sync_ui_chrome();
+            repl_state_presentation_mut()->show_vertex_indices = 0; glr_ctrl_sync_ui_chrome();
             ui_state_viewport_set_size(360, 800);
             g_panel_frac = 0.5f;
-            repl_state_presentation_mut()->code_panel_layout = layouts[layout_idx]; repl_state_sync_ui_chrome();
+            repl_state_presentation_mut()->code_panel_layout = layouts[layout_idx]; glr_ctrl_sync_ui_chrome();
 
             memset(&repl_state_document_cmds_mut()[0], 0, sizeof(repl_state_document_cmds_mut()[0]));
             repl_state_document_cmds_mut()[0].type = CMD_VERTEX3F;
@@ -415,7 +416,7 @@ int main(void) {
                 }
             }
         }
-        repl_state_presentation_mut()->code_panel_layout = CFG_DEFAULT_CODE_PANEL_LAYOUT; repl_state_sync_ui_chrome();
+        repl_state_presentation_mut()->code_panel_layout = CFG_DEFAULT_CODE_PANEL_LAYOUT; glr_ctrl_sync_ui_chrome();
         g_panel_frac = CFG_DEFAULT_PANEL_FRAC;
     }
 

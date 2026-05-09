@@ -1,3 +1,4 @@
+#include "glr_ctrl.h"
 #include "repl_core.h"
 #include "repl_state.h"
 #include "support/test_harness.h"
@@ -33,7 +34,7 @@ static void declare_test_vars(void) {
 static void test_degenerate_normal(void) {
     printf("test_degenerate_normal\n");
 
-    repl_reset_state(); declare_test_vars();
+    glr_app_reset_all(); declare_test_vars();
     repl_state_presentation_mut()->autonormal = 1;
     /* All three vertices collinear along x - cross product is zero */
     repl_feed_line_public("glBegin(GL_TRIANGLES);");
@@ -60,7 +61,7 @@ static void test_degenerate_normal(void) {
 static void test_triangle_strip(void) {
     printf("test_triangle_strip\n");
 
-    repl_reset_state(); declare_test_vars();
+    glr_app_reset_all(); declare_test_vars();
     repl_state_presentation_mut()->autonormal = 1;
     repl_feed_line_public("glBegin(GL_TRIANGLE_STRIP);");
     repl_feed_line_public("glVertex3f(0, 0, 0);");
@@ -88,7 +89,7 @@ static void test_triangle_strip(void) {
 static void test_triangle_fan(void) {
     printf("test_triangle_fan\n");
 
-    repl_reset_state(); declare_test_vars();
+    glr_app_reset_all(); declare_test_vars();
     repl_state_presentation_mut()->autonormal = 1;
     repl_feed_line_public("glBegin(GL_TRIANGLE_FAN);");
     repl_feed_line_public("glVertex3f(0, 0, 0);");
@@ -114,7 +115,7 @@ static void test_triangle_fan(void) {
 static void test_quads(void) {
     printf("test_quads\n");
 
-    repl_reset_state(); declare_test_vars();
+    glr_app_reset_all(); declare_test_vars();
     repl_state_presentation_mut()->autonormal = 1;
     repl_feed_line_public("glBegin(GL_QUADS);");
     repl_feed_line_public("glVertex3f(0, 0, 0);");
@@ -140,7 +141,7 @@ static void test_quads(void) {
 static void test_quad_strip(void) {
     printf("test_quad_strip\n");
 
-    repl_reset_state(); declare_test_vars();
+    glr_app_reset_all(); declare_test_vars();
     repl_state_presentation_mut()->autonormal = 1;
     repl_feed_line_public("glBegin(GL_QUAD_STRIP);");
     repl_feed_line_public("glVertex3f(0, 0, 0);");
@@ -166,7 +167,7 @@ static void test_quad_strip(void) {
 static void test_polygon(void) {
     printf("test_polygon\n");
 
-    repl_reset_state(); declare_test_vars();
+    glr_app_reset_all(); declare_test_vars();
     repl_state_presentation_mut()->autonormal = 1;
     repl_feed_line_public("glBegin(GL_POLYGON);");
     repl_feed_line_public("glVertex3f(0, 0, 0);");
@@ -191,7 +192,7 @@ static void test_polygon(void) {
 static void test_unsupported_mode(void) {
     printf("test_unsupported_mode\n");
 
-    repl_reset_state(); declare_test_vars();
+    glr_app_reset_all(); declare_test_vars();
     repl_state_presentation_mut()->autonormal = 1;
     /* GL_LINES is valid for glBegin but not handled in compute_block_normals */
     repl_feed_line_public("glBegin(GL_LINES);");
@@ -218,7 +219,7 @@ static void test_block_skipping(void) {
     printf("test_block_skipping\n");
 
     /* for-loop block before glBegin */
-    repl_reset_state(); declare_test_vars();
+    glr_app_reset_all(); declare_test_vars();
     repl_state_presentation_mut()->autonormal = 1;
     repl_feed_line_public("for(n, 0, 2) {");
     repl_feed_line_public("glVertex3f(n, 0, 0);");
@@ -236,7 +237,7 @@ static void test_block_skipping(void) {
     repl_state_presentation_mut()->autonormal = 0;
 
     /* func-def block before glBegin */
-    repl_reset_state(); declare_test_vars();
+    glr_app_reset_all(); declare_test_vars();
     repl_state_presentation_mut()->autonormal = 1;
     repl_feed_line_public("func0(n) {");
     repl_feed_line_public("glVertex3f(n, 0, 0);");
@@ -253,7 +254,7 @@ static void test_block_skipping(void) {
     repl_state_presentation_mut()->autonormal = 0;
 
     /* if-block before glBegin */
-    repl_reset_state(); declare_test_vars();
+    glr_app_reset_all(); declare_test_vars();
     repl_state_presentation_mut()->autonormal = 1;
     repl_feed_line_public("if(n > 0) {");
     repl_feed_line_public("glVertex3f(0, 0, 0);");
@@ -277,7 +278,7 @@ static void test_block_skipping(void) {
 static void test_autonormal_disabled(void) {
     printf("test_autonormal_disabled\n");
 
-    repl_reset_state(); declare_test_vars();
+    glr_app_reset_all(); declare_test_vars();
     repl_state_presentation_mut()->autonormal = 0;
     repl_feed_line_public("glBegin(GL_TRIANGLES);");
     repl_feed_line_public("glVertex3f(0, 0, 0);");
@@ -295,7 +296,7 @@ static void test_autonormal_disabled(void) {
 static void test_gl_triangles(void) {
     printf("test_gl_triangles\n");
 
-    repl_reset_state(); declare_test_vars();
+    glr_app_reset_all(); declare_test_vars();
     repl_state_presentation_mut()->autonormal = 1;
     repl_feed_line_public("glBegin(GL_TRIANGLES);");
     repl_feed_line_public("glVertex3f(0, 0, 0);");
@@ -308,7 +309,7 @@ static void test_gl_triangles(void) {
     ASSERT_TRUE("autonormal default front-face first cmd auto", repl_state_document_cmds_mut()[1].is_auto == 1);
     ASSERT_TRUE("autonormal default front-face keeps +z", fabsf(repl_state_document_cmds_mut()[1].args[2] - 1.0f) < 1e-6f);
 
-    repl_reset_state(); declare_test_vars();
+    glr_app_reset_all(); declare_test_vars();
     repl_state_presentation_mut()->autonormal = 1;
     repl_feed_line_public("glFrontFace(GL_CW);");
     repl_feed_line_public("glBegin(GL_TRIANGLES);");

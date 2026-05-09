@@ -1,3 +1,4 @@
+#include "glr_ctrl.h"
 #include "glr_camera.h"
 #include "repl_core_internal.h"
 #include "repl_command_store.h"
@@ -135,7 +136,7 @@ int main() {
 
     /* 6. Block helpers */
     {
-        repl_reset_state(); declare_test_vars();
+        glr_app_reset_all(); declare_test_vars();
         repl_feed_line_public("for(i, 0, 1) {");     /* 0 */
         repl_feed_line_public("  glVertex3f(0,0,0);"); /* 1 */
         repl_feed_line_public("}");                    /* 2 */
@@ -148,7 +149,7 @@ int main() {
 
     /* 7. collect_visible_vars */
     {
-        repl_reset_state(); declare_test_vars();
+        glr_app_reset_all(); declare_test_vars();
         repl_feed_line_public("for(i, 0, 1) {");
         repl_feed_line_public("  for(j, 0, 1) {");
 
@@ -170,7 +171,7 @@ int main() {
         GLCmd live_first;
         FlatProgramView live_view;
 
-        repl_reset_state(); declare_test_vars();
+        glr_app_reset_all(); declare_test_vars();
         repl_feed_line_public("glEnable(GL_LIGHTING);");
         repl_feed_line_public("func0(r) {");
         repl_feed_line_public("  glVertex3f(r, 0, 0);");
@@ -235,7 +236,7 @@ int main() {
         GLCmd loaded[2];
         ReplCommandStore store;
 
-        repl_reset_state(); declare_test_vars();
+        glr_app_reset_all(); declare_test_vars();
         repl_feed_line_public("for(i, 0, 1) {");
         repl_feed_line_public("}");
         ASSERT_INT("command_store_load pre-cache depth", repl_source_scope_block_depth_at(1), 1);
@@ -293,7 +294,7 @@ int main() {
         ReplEditorInputState *input;
         ReplClipboardState *clipboard;
 
-        repl_reset_state(); declare_test_vars();
+        glr_app_reset_all(); declare_test_vars();
 
         input = editor_state_input_mut();
         ASSERT_TRUE("editor input facade uses input buffer",
@@ -422,7 +423,7 @@ int main() {
         repl_state_presentation_mut()->axes_theme = AXES_THEME_NEON;
         repl_state_presentation_mut()->show_vertex_labels = 1;
         repl_state_presentation_mut()->show_normal_vectors = 1;
-        repl_state_presentation_mut()->show_vertex_indices = 1; repl_state_sync_ui_chrome();
+        repl_state_presentation_mut()->show_vertex_indices = 1; glr_ctrl_sync_ui_chrome();
         repl_state_presentation_mut()->show_vertex_outlines = 1;
         repl_state_presentation_mut()->show_vertex_points = 1;
         repl_state_presentation_mut()->show_vertex_guides = 1;
@@ -434,7 +435,7 @@ int main() {
         repl_state_presentation_mut()->highlight_current_poly = 0;
         repl_state_presentation_mut()->ortho_mode = 1;
         repl_state_presentation_mut()->wrap_at_comma = 0;
-        repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_BOTTOM; repl_state_sync_ui_chrome();
+        repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_BOTTOM; glr_ctrl_sync_ui_chrome();
         presentation->focus_vertex[0] = 2.0f;
         presentation->focus_vertex[1] = -1.0f;
         presentation->focus_vertex[2] = 0.5f;
@@ -553,7 +554,7 @@ int main() {
     {
         /* Test A: verify collect_visible_vars returns correct total when not truncated */
         {
-            repl_reset_state(); declare_test_vars();
+            glr_app_reset_all(); declare_test_vars();
             repl_feed_line_public("for(i, 0, 1) {");
             repl_feed_line_public("  for(j, 0, 1) {");
 
@@ -567,7 +568,7 @@ int main() {
 
         /* Test B: verify collect_visible_vars returns total > max_vars when truncated */
         {
-            repl_reset_state(); declare_test_vars();
+            glr_app_reset_all(); declare_test_vars();
             /* Manually verify the logic: if we can have 32 visible vars,
                and we ask for only 8, we should see total > 8 if we had more scope */
             ExprVar vars[8];
@@ -582,7 +583,7 @@ int main() {
         /* Test C: verify total is well below MAX_EXPR_VARS for shallow
          * nesting (the truncation guard should never fire here). */
         {
-            repl_reset_state();
+            glr_app_reset_all();
             repl_feed_line_public("for(i, 0, 1) {");
             repl_feed_line_public("  for(j, 0, 1) {");
             repl_feed_line_public("    for(k, 0, 1) {");
@@ -602,7 +603,7 @@ int main() {
             int total = 0;
 
             /* Simulate 5 nested scopes */
-            repl_reset_state();
+            glr_app_reset_all();
             repl_feed_line_public("for(a, 0, 1) {");
             repl_feed_line_public("  for(b, 0, 1) {");
             repl_feed_line_public("    for(c, 0, 1) {");

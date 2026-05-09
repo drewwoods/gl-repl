@@ -1,3 +1,4 @@
+#include "glr_ctrl.h"
 #include "repl_core.h"
 #include "repl_state.h"
 #include "repl_export.h"
@@ -98,7 +99,7 @@ int main(void) {
     const char *tess_path = "/tmp/repl_core_tess_output.c";
 
     repl_eval_init_predef_vars();
-    repl_reset_state(); declare_test_vars();
+    glr_app_reset_all(); declare_test_vars();
 
     repl_feed_line_public("x = 1.25;");
     repl_feed_line_public("glBegin(GL_LINE_STRIP);");
@@ -221,7 +222,7 @@ int main(void) {
     g_init_attenuate_points = 1;
 #endif
 
-    repl_reset_state(); declare_test_vars();
+    glr_app_reset_all(); declare_test_vars();
     ASSERT_TRUE("load saved output", repl_export_load_from_file(path) == 1);
     ASSERT_TRUE("roundtrip cmd count", repl_state_document_count() == before_n);
     for (int i = 0; i < before_n; i++) {
@@ -237,7 +238,7 @@ int main(void) {
     repl_flatten_commands();
     ASSERT_TRUE("flatten produced cmds", repl_state_flat_program_count() > 0);
 
-    repl_reset_state(); declare_test_vars();
+    glr_app_reset_all(); declare_test_vars();
     repl_feed_line_public("A[0] = 0;");
     repl_feed_line_public("A[1] = 1;");
     repl_feed_line_public("A[0] = A[0] + (A[1] - A[0])*0.25;");
@@ -265,7 +266,7 @@ int main(void) {
      * omitted. Pins the per-letter detection. */
     {
         const char *cross_path = "/tmp/repl_core_scratch_cross.c";
-        repl_reset_state(); declare_test_vars();
+        glr_app_reset_all(); declare_test_vars();
         repl_feed_line_public("A[0] = 1;");
         repl_feed_line_public("B[0] = 2;");
         repl_feed_line_public("glVertex3f(A[0], B[0], 0);");
@@ -281,7 +282,7 @@ int main(void) {
         remove(cross_path);
     }
 
-    repl_reset_state(); declare_test_vars();
+    glr_app_reset_all(); declare_test_vars();
     ASSERT_TRUE("load scratch output", repl_export_load_from_file(scratch_path) == 1);
     ASSERT_TRUE("scratch roundtrip command count", repl_state_document_count() == 4);
     ASSERT_TRUE("scratch roundtrip keeps assign type",
@@ -297,7 +298,7 @@ int main(void) {
      * the source resolve to the same slot. */
     {
         const char *alias_path = "/tmp/repl_core_func_alias_roundtrip.c";
-        repl_reset_state(); declare_test_vars();
+        glr_app_reset_all(); declare_test_vars();
         repl_feed_line_public("drawCube {");
         repl_feed_line_public("  glVertex3f(0, 0, 0);");
         repl_feed_line_public("}");
@@ -316,7 +317,7 @@ int main(void) {
             ASSERT_TRUE("alias canonical text preserved in display",
                         strstr(buf, "drawCube") != NULL);
         }
-        repl_reset_state(); declare_test_vars();
+        glr_app_reset_all(); declare_test_vars();
         ASSERT_TRUE("alias cleared after reset",
                     repl_func_alias_lookup_slot("drawCube") == -1);
         ASSERT_TRUE("load alias output",
@@ -333,14 +334,14 @@ int main(void) {
      * shares the func-decl shape `IDENT(...) {`. The control-flow
      * keyword must fall through to try_commit_if_block. */
     {
-        repl_reset_state(); declare_test_vars();
+        glr_app_reset_all(); declare_test_vars();
         repl_feed_line_public("if(1) {");
         ASSERT_TRUE("'if' did not register as alias",
                     repl_func_alias_lookup_slot("if") == -1);
     }
 
     /* Camera state round-trip: non-default eye/center must survive save+load. */
-    repl_reset_state(); declare_test_vars();
+    glr_app_reset_all(); declare_test_vars();
     repl_feed_line_public("glBegin(GL_POINTS);");
     repl_feed_line_public("glVertex3f(0, 0, 0);");
     repl_feed_line_public("glEnd();");
@@ -368,7 +369,7 @@ int main(void) {
         glr_camera_set_orbit(20.0f, 30.0f);
         glr_camera_set_distance(5.0f);
         glr_camera_set_pan(0.0f, 0.0f, 0.0f);
-        repl_reset_state(); declare_test_vars();
+        glr_app_reset_all(); declare_test_vars();
         ASSERT_TRUE("load camera output", repl_export_load_from_file(path) == 1);
         ASSERT_TRUE("camera rx restored",   fabsf(glr_camera().rx   - saved_rx)   < 1e-2f);
         ASSERT_TRUE("camera ry restored",   fabsf(glr_camera().ry   - saved_ry)   < 1e-2f);
@@ -378,7 +379,7 @@ int main(void) {
         ASSERT_TRUE("camera tz restored",   fabsf(glr_camera().tz   - saved_tz)   < 1e-2f);
     }
 
-    repl_reset_state(); declare_test_vars();
+    glr_app_reset_all(); declare_test_vars();
     repl_feed_line_public("x = 1;");
     repl_feed_line_public("func0(radius, yoff) {");
     repl_feed_line_public("glVertex3f(radius, yoff, 0);");
@@ -419,7 +420,7 @@ int main(void) {
                     strstr(buf, "glDisable(GL_COLOR_MATERIAL);") != NULL);
     }
 
-    repl_reset_state(); declare_test_vars();
+    glr_app_reset_all(); declare_test_vars();
     ASSERT_TRUE("load saved param func output", repl_export_load_from_file(func_path) == 1);
     ASSERT_TRUE("param func roundtrip cmd count", repl_state_document_count() == func_n);
     {
@@ -446,7 +447,7 @@ int main(void) {
     ASSERT_TRUE("param func flatten y",
                 fabsf(repl_state_flat_program_cmds_mut()[repl_state_flat_program_count() - 1].args[1] - 3.0f) < 1e-6f);
 
-    repl_reset_state();
+    glr_app_reset_all();
     repl_feed_line_public("func0(radius, sides, phase) {");
     repl_feed_line_public("for(i, 0, sides + 1) {");
     repl_feed_line_public("glVertex3f(cos(i*TAU/sides + phase)*radius, sin(i*TAU/sides + phase)*radius, 0);");
@@ -461,7 +462,7 @@ int main(void) {
                     strstr(buf, "for (float i = 0; i < sides + 1; i += 1.0f)") != NULL);
     }
 
-    repl_reset_state();
+    glr_app_reset_all();
     ASSERT_TRUE("load saved param loop output", repl_export_load_from_file(param_loop_path) == 1);
     {
         int have_bound = 0;
@@ -484,7 +485,7 @@ int main(void) {
                     vertex_count == 7);
     }
 
-    repl_reset_state(); declare_test_vars();
+    glr_app_reset_all(); declare_test_vars();
     repl_feed_line_public("float r;");
     repl_feed_line_public("glClearColor(0.1, 0.1, 0.1, 1);");
     repl_feed_line_public("func0 {");
@@ -494,7 +495,7 @@ int main(void) {
     repl_feed_line_public("func0();");
     repl_export_save_output(decl_func_path, editor_buffer_view());
 
-    repl_reset_state(); declare_test_vars();
+    glr_app_reset_all(); declare_test_vars();
     ASSERT_TRUE("load decl plus promoted func output",
                 repl_export_load_from_file(decl_func_path) == 1);
     ASSERT_TRUE("decl plus func cmd count", repl_state_document_count() == 7);
@@ -506,7 +507,7 @@ int main(void) {
     ASSERT_TRUE("imported var assign follows prior command", repl_state_document_cmds_mut()[5].type == CMD_VAR_ASSIGN);
     ASSERT_TRUE("imported call follows assign", repl_state_document_cmds_mut()[6].type == CMD_CALL);
 
-    repl_reset_state(); declare_test_vars();
+    glr_app_reset_all(); declare_test_vars();
     repl_feed_line_public("float r;");
     repl_feed_line_public("");
     repl_feed_line_public("// func prelude");
@@ -516,7 +517,7 @@ int main(void) {
     repl_feed_line_public("func0(2);");
     repl_export_save_output(decl_func_blank_path, editor_buffer_view());
 
-    repl_reset_state(); declare_test_vars();
+    glr_app_reset_all(); declare_test_vars();
     ASSERT_TRUE("load decl blank plus func output",
                 repl_export_load_from_file(decl_func_blank_path) == 1);
     ASSERT_TRUE("decl blank plus func cmd count", repl_state_document_count() == 7);
@@ -540,7 +541,7 @@ int main(void) {
                 strstr(editor_buffer_line(2) ? editor_buffer_line(2) : "",
                        "func prelude") != NULL);
 
-    repl_reset_state(); declare_test_vars();
+    glr_app_reset_all(); declare_test_vars();
     repl_feed_line_public("x = 0.25;");
     repl_feed_line_public("glutSolidSphere(x, 16, 12);");
     repl_feed_line_public("glutSolidCone(0.15, 1.5, 8, 1);");
@@ -567,7 +568,7 @@ int main(void) {
                     strstr(buf, "g_quadric") == NULL);
     }
 
-    repl_reset_state(); declare_test_vars();
+    glr_app_reset_all(); declare_test_vars();
     ASSERT_TRUE("load saved shape output", repl_export_load_from_file(shape_path) == 1);
     ASSERT_TRUE("shape roundtrip cmd count", repl_state_document_count() == 6);
     ASSERT_TRUE("loaded shape assign first",  repl_state_document_cmds_mut()[0].type == CMD_VAR_ASSIGN);
@@ -598,7 +599,7 @@ int main(void) {
                     strstr(editor_buffer_line(i) ? editor_buffer_line(i) : "",
                            "g_quadric") == NULL);
 
-    repl_reset_state(); declare_test_vars();
+    glr_app_reset_all(); declare_test_vars();
     repl_feed_line_public("func0(radius) {");
     repl_feed_line_public("gluBegin(GLU_POLYGON);");
     repl_feed_line_public("gluBegin(GLU_CONTOUR);");

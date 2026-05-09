@@ -1,3 +1,4 @@
+#include "glr_ctrl.h"
 #include "glr_actions.h"
 #include "repl_state.h"
 #include "replay_state.h"
@@ -73,7 +74,7 @@ static void run_menu_action_in_temp_dir(const char *label,
 }
 
 static void test_apply_defaults(void) {
-    repl_reset_state();
+    glr_app_reset_all();
     /* repl_actions_apply_defaults pulls from audio_get_cfg_mode()
      * which defaults to AUDIO_CFG_ALL (3) if invalid. */
     repl_actions_apply_defaults();
@@ -81,7 +82,7 @@ static void test_apply_defaults(void) {
 }
 
 static void test_cursor_actions(void) {
-    repl_reset_state();
+    glr_app_reset_all();
     ReplCodePanelRuntimeState *cp = ui_state_code_panel_mut();
     cp->cursor_visible = 0;
     cp->blink_tick = 100;
@@ -92,7 +93,7 @@ static void test_cursor_actions(void) {
 }
 
 static void test_help_tab_actions(void) {
-    repl_reset_state();
+    glr_app_reset_all();
     editor_help_session_set_tab(0);
     editor_help_session_set_scroll(50);
 
@@ -116,7 +117,7 @@ static void test_help_tab_actions(void) {
 int g_stub_modifiers = 0;
 
 static void test_cfg_cycling(void) {
-    repl_reset_state();
+    glr_app_reset_all();
 
     /* Find some row indices */
     int wireframe_row = -1;
@@ -159,7 +160,7 @@ static void test_cfg_cycling(void) {
     ASSERT_TRUE("auto time cycled", 1);
 
     /* Test Code Panel Layout */
-    repl_state_presentation_mut()->code_panel_layout = 0; repl_state_sync_ui_chrome(); // Left
+    repl_state_presentation_mut()->code_panel_layout = 0; glr_ctrl_sync_ui_chrome(); // Left
     glr_cfg_cycle_row(code_panel_row, 1); // -> Top
     ASSERT_INT("code panel layout top", repl_state_presentation().code_panel_layout, 1);
     ASSERT_STR("status top", g_last_status, "Layout: top code panel");
@@ -213,7 +214,7 @@ static void test_cfg_cycling(void) {
 }
 
 static void test_menu_actions(void) {
-    repl_reset_state();
+    glr_app_reset_all();
 
     /* File menu */
     run_menu_action_in_temp_dir("File Export",
@@ -271,7 +272,7 @@ static void test_menu_actions(void) {
 }
 
 static void test_shortcuts(void) {
-    repl_reset_state();
+    glr_app_reset_all();
 
     /* Test handling of unknown keys - these should return 0 */
     ASSERT_INT("Unknown ASCII", glr_cfg_handle_ascii_shortcut('X'), 0);

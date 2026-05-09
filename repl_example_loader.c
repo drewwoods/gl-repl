@@ -227,7 +227,11 @@ static void load_example_lines(const char *const *lines) {
         inp->pending_newline[0] = '\0';
         inp->pending_newline_len = 0;
     }
-    repl_editor_reset_transients();
+    /* Editor-side transient reset (camera drag / menu / picker /
+     * code-panel-drag) is the controller's responsibility — see
+     * cycle_example_or_user_scene in glr_ctrl.c and the
+     * example-load menu handler in glr_actions.c. Step 2 of the
+     * decouple plan moved the call out of this REPL-side loader. */
     repl_eval_init_predef_vars();
     /* Examples use bare funcN; clear any user-aliased names from the
      * outgoing scene so funcN free-slot allocation starts fresh. */

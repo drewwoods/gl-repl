@@ -1,3 +1,4 @@
+#include "glr_ctrl.h"
 /*
  * test_repl_export_all_commands.c - Comprehensive roundtrip test for all supported GL commands
  *
@@ -171,7 +172,7 @@ int main(void) {
     int diff_line = 0;
 
     repl_eval_init_predef_vars();
-    repl_reset_state();
+    glr_app_reset_all();
     declare_test_vars();
 
     /* Add one example of every supported GL command to verify roundtrip */
@@ -258,7 +259,7 @@ int main(void) {
     repl_export_save_output(path1, editor_buffer_view());
 
     /* Reimport from file */
-    repl_reset_state();
+    glr_app_reset_all();
     declare_test_vars();
     ASSERT_TRUE("import succeeded", repl_export_load_from_file(path1) == 1);
 
@@ -291,7 +292,7 @@ int main(void) {
 
     /* Verify stability: re-export should produce the same output */
     repl_export_save_output(path2, editor_buffer_view());
-    repl_reset_state();
+    glr_app_reset_all();
     declare_test_vars();
     ASSERT_TRUE("re-import succeeded", repl_export_load_from_file(path2) == 1);
 

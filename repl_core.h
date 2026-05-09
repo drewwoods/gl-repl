@@ -132,10 +132,11 @@ int  repl_find_feeding_color_cmd(int line_idx);
 
 /* --- Test helpers ------------------------------------------------------ */
 
-/* Reset global REPL state (cmds, input, cursor, camera, predef vars, undo/redo,
- * examples, user scenes, etc.) to the same configuration the real binary starts
- * in. Used by every test fixture before each test case. */
-void repl_reset_state(void);
+/* repl_reset_state was removed in step 2 of
+ * feature/decouple-repl-from-gl-repl-alt.md. Tests and callers that
+ * want full-world reset call `glr_app_reset_all()` from glr_ctrl.h.
+ * REPL-only callers use `repl_state_init_defaults()` /
+ * `repl_state_reset_program()` from repl_state_owners.h. */
 
 /* Public wrapper over the internal feed_line() so test code outside
  * repl_core_internal.h users can drive command commitment end-to-end.

@@ -52,6 +52,13 @@
 #include "variable_panel_drag.h"
 #include "variable_panel_state.h"
 
+/* Forward decl: repl_editor_reset_transients lives in
+ * src/editor/input.c. The check-state-boundaries guard forbids
+ * glr_ctrl.c from including repl_core_internal.h, so we forward-
+ * declare the one symbol we need (also called by glr_app_reset_all
+ * and the F12 cycle handler). */
+void repl_editor_reset_transients(void);
+
 static int glr_ctrl_cmd_is_focus_vertex(const GLCmd *cmd) {
     return cmd->valid &&
            (cmd->type == CMD_VERTEX3F || cmd->type == CMD_TESS_VERTEX);
@@ -1070,7 +1077,7 @@ static void glr_ctrl_build_ui_snapshot(UiRenderSnapshot *snap) {
     /* Mirror chrome-relevant presentation fields into ui_state.code_panel
      * so ui_*.c renderers and hit-tests can read them via ui_state_*()
      * without crossing the repl_state_*() boundary. */
-    repl_state_sync_ui_chrome();
+    glr_ctrl_sync_ui_chrome();
 
     snap->viewport       = ui_state_viewport();
     snap->code_panel     = ui_state_code_panel();
@@ -1298,8 +1305,35 @@ void glr_ctrl_reshape(int w, int h) {
     ui_state_viewport_set_size(w, h);
 }
 
+/* Full-world reset entry point. Step 2 of
+ * feature/decouple-repl-from-gl-repl-alt.md split this out of
+ * repl_state.c so the REPL pipeline (and tools/repl_demo) does not
+ * have to link / stub the peer / editor / UI reset symbols. */
+void glr_app_reset_all(void) {
+    repl_state_reset_program();
+    editor_state_reset();
+    ui_state_reset();
+    variable_panel_state_reset();
+    replay_state_reset();
+    editor_help_session_reset();
+    repl_editor_reset_transients();
+    /* Register the default editor completion provider. Editor input
+     * dispatch calls editor_completion_* without knowing about
+     * repl_autocomplete; the registration here installs the
+     * REPL-aware backing. */
+    repl_autocomplete_register_provider();
+    glr_ctrl_sync_ui_chrome();
+}
+
+void glr_ctrl_sync_ui_chrome(void) {
+    ReplPresentationState p = repl_state_presentation();
+    ReplCodePanelRuntimeState *cp = ui_state_code_panel_mut();
+    cp->layout_mode         = p.code_panel_layout;
+    cp->show_vertex_indices = p.show_vertex_indices;
+}
+
 void glr_ctrl_init_gl(void) {
-    repl_state_init_defaults();
+    glr_app_reset_all();
     ensure_init_bootstrap_ready();
     scene_render_init_gl();
     repl_executor_init_resources();
@@ -1504,6 +1538,10 @@ static void cycle_example_or_user_scene(void) {
     /* F12 cycles: examples[0..N-1] -> user scenes (in slot order) -> back.
      * Active example moves to the next example, then first user scene.
      * Active user scene moves to the next occupied user slot, then example 0. */
+    /* Clear editor / camera / menu / picker / code-panel-drag transients
+     * so the new scene starts from a clean controller state. Step 2 of
+     * the decouple plan moved this out of repl_example_loader.c. */
+    repl_editor_reset_transients();
     int count = repl_example_count();
     int active_scene = repl_active_user_scene();
 
