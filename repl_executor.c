@@ -464,18 +464,26 @@ void repl_execute_program(const ReplExecutionOptions *options) {
                           (int)flat_cmds[pc].args[2],
                           (int)flat_cmds[pc].args[3]);
             break;
+        case CMD_RASTER_POS3F:
+            if (in_begin) { glEnd(); in_begin = 0; }
+            glRasterPos3f(flat_cmds[pc].args[0],
+                          flat_cmds[pc].args[1],
+                          flat_cmds[pc].args[2]);
+            break;
         case CMD_GLUT_BITMAP_STRING: {
-            /* Format substitution: walk the cached format string in
-             * cmd.text, expanding %f and %% verbatim, copying other
-             * chars through. The flatten pass keeps args[3..6] in
-             * sync with current variable values for has_vars commands,
-             * so we use them directly without re-parsing source.
+            /* `label("fmt", a, b, c, d)` — printf-style text emission
+             * at the current raster position. Position is set by a
+             * preceding glRasterPos3f; this command does not touch
+             * it, so the call composes cleanly with whatever
+             * modelview/raster state the user has set up.
              *
-             * Render at args[0..2] using the current modelview —
-             * glRasterPos3f naturally honors it. */
+             * Format substitution walks cmd.text, expanding %f from
+             * args[0..3] and %% to a literal '%'. The flatten pass
+             * keeps args[] in sync with current variable values for
+             * has_vars commands, so we use them directly. */
             if (in_begin) { glEnd(); in_begin = 0; }
             char buf[128];
-            int sub_count = flat_cmds[pc].num_args - 3;
+            int sub_count = flat_cmds[pc].num_args;
             if (sub_count < 0) sub_count = 0;
             int sub_idx = 0;
             int off = 0;
@@ -483,7 +491,7 @@ void repl_execute_program(const ReplExecutionOptions *options) {
             while (*fmt && off < (int)sizeof(buf) - 1) {
                 if (fmt[0] == '%' && fmt[1] == 'f' && sub_idx < sub_count) {
                     off += snprintf(buf + off, sizeof(buf) - (size_t)off,
-                                    "%g", (double)flat_cmds[pc].args[3 + sub_idx]);
+                                    "%g", (double)flat_cmds[pc].args[sub_idx]);
                     if (off >= (int)sizeof(buf)) off = (int)sizeof(buf) - 1;
                     sub_idx++;
                     fmt += 2;
@@ -495,9 +503,6 @@ void repl_execute_program(const ReplExecutionOptions *options) {
                 }
             }
             buf[off] = '\0';
-            glRasterPos3f(flat_cmds[pc].args[0],
-                          flat_cmds[pc].args[1],
-                          flat_cmds[pc].args[2]);
             for (const char *c = buf; *c; c++)
                 glutBitmapCharacter(GLUT_BITMAP_9_BY_15, (unsigned char)*c);
             break;

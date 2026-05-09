@@ -69,6 +69,7 @@ typedef enum {
     CMD_BLEND_FUNC,
     CMD_CLEAR_COLOR,
     CMD_DEPTH_MASK,
+    CMD_RASTER_POS3F,
     CMD_GLUT_BITMAP_STRING,
     CMD_TYPE_COUNT
 } CmdType;

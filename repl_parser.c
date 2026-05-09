@@ -402,45 +402,28 @@ static int parse_command(const char *line, GLCmd *cmd,
         }
     }
 
-    /* label(x, y, z, "fmt", a, b, c, d)
+    /* label("fmt", a, b, c, d)
      *
-     * Custom branch (not table-driven) because:
-     *   - Variable arg count (3 + 0..4 substitution args).
-     *   - One arg is a string literal, which the std-table parsers
-     *     don't tokenize.
+     * printf-style text emission at the current raster position
+     * (set by a preceding glRasterPos3f). Custom branch — not
+     * table-driven — because one arg is a string literal that the
+     * std-table parsers don't tokenize, and the substitution-arg
+     * count is variable.
      *
      * Forbidden inside the format string: '/' followed by '/',
      * '(', ')', ',', and any backslash. These constraints keep the
      * surrounding (string-unaware) parser scaffolding honest.
-     * See repl_glut_bitmap_split_args() for the split helper used
-     * by both this branch and the executor's has_vars re-eval. */
+     * See repl_label_split_args() for the split helper. */
     if (strcmp(func, "label") == 0) {
-        char pre_args[MAX_LINE_LEN] = "";
         char fmt_str[GLUT_BITMAP_FMT_MAX] = "";
         char post_args[MAX_LINE_LEN] = "";
         char split_err[128] = "";
 
-        if (!repl_glut_bitmap_split_args(args,
-                                         pre_args, (int)sizeof(pre_args),
-                                         fmt_str, (int)sizeof(fmt_str),
-                                         post_args, (int)sizeof(post_args),
-                                         split_err, (int)sizeof(split_err))) {
+        if (!repl_label_split_args(args,
+                                   fmt_str, (int)sizeof(fmt_str),
+                                   post_args, (int)sizeof(post_args),
+                                   split_err, (int)sizeof(split_err))) {
             parser_emit_error_static(ctx, split_err);
-            return 0;
-        }
-
-        /* Position args: exactly 3 floats. */
-        char verr[128];
-        if (!repl_eval_validate_expression_idents(pre_args, vars, num_vars,
-                                                   verr, sizeof(verr))) {
-            parser_emit_error_static(ctx, verr); return 0;
-        }
-        float pos[3] = {0};
-        int pos_count = repl_eval_parse_exprs(pre_args, pos, 3,
-                                              vars, num_vars);
-        if (pos_count != 3) {
-            parser_emit_error_static(ctx,
-                "Usage: label(x, y, z, \"fmt\", arg, ...)");
             return 0;
         }
 
@@ -452,6 +435,7 @@ static int parse_command(const char *line, GLCmd *cmd,
         float subs[GLUT_BITMAP_MAX_SUB_ARGS] = {0};
         int sub_count = 0;
         if (post_args[0]) {
+            char verr[128];
             if (!repl_eval_validate_expression_idents(post_args, vars, num_vars,
                                                        verr, sizeof(verr))) {
                 parser_emit_error_static(ctx, verr); return 0;
@@ -499,20 +483,14 @@ static int parse_command(const char *line, GLCmd *cmd,
 
         cmd->type = CMD_GLUT_BITMAP_STRING;
         cmd->valid = 1;
-        cmd->args[0] = pos[0];
-        cmd->args[1] = pos[1];
-        cmd->args[2] = pos[2];
-        for (int i = 0; i < sub_count; i++)
-            cmd->args[3 + i] = subs[i];
-        cmd->num_args = 3 + sub_count;
-        cmd->has_vars = input_has_any_visible_vars(pre_args, vars, num_vars) ||
-                        input_has_any_visible_vars(post_args, vars, num_vars);
+        for (int i = 0; i < sub_count; i++) cmd->args[i] = subs[i];
+        cmd->num_args = sub_count;
+        cmd->has_vars = input_has_any_visible_vars(post_args, vars, num_vars);
         repl_copy_string_fits(cmd->text, sizeof(cmd->text), fmt_str);
 
         if (text_out && text_sz > 0) {
             int off = snprintf(text_out, (size_t)text_sz,
-                               "%slabel(%g, %g, %g, \"%s\"",
-                               indent, pos[0], pos[1], pos[2], fmt_str);
+                               "%slabel(\"%s\"", indent, fmt_str);
             for (int i = 0; i < sub_count && off < (int)text_sz - 6; i++) {
                 off += snprintf(text_out + off, (size_t)(text_sz - off),
                                 ", %g", subs[i]);
@@ -924,41 +902,33 @@ int repl_parser_parse_command_ctx(const char *line, ReplParsedLine *out,
     return parse_command(line, &out->cmd, out->text, sizeof(out->text), ctx);
 }
 
-int repl_glut_bitmap_split_args(const char *args,
-                                char *pre, int pre_sz,
-                                char *fmt, int fmt_sz,
-                                char *post, int post_sz,
-                                char *err, int err_sz) {
-    if (!args || !pre || !fmt || !post ||
-        pre_sz <= 0 || fmt_sz <= 0 || post_sz <= 0) {
+int repl_label_split_args(const char *args,
+                          char *fmt, int fmt_sz,
+                          char *post, int post_sz,
+                          char *err, int err_sz) {
+    if (!args || !fmt || !post || fmt_sz <= 0 || post_sz <= 0) {
         if (err && err_sz > 0)
             snprintf(err, (size_t)err_sz, "internal: bad split-args buffers");
         return 0;
     }
-    pre[0] = fmt[0] = post[0] = '\0';
+    fmt[0] = post[0] = '\0';
 
-    /* Locate first quote at paren-depth 0. Anything inside parens is
-     * an expression (e.g., min(a,b) for the position args) and must
-     * be skipped. We do not track quote-inside-paren — none of our
-     * supported expressions contain string literals. */
-    int depth = 0;
-    const char *quote_open = NULL;
-    for (const char *p = args; *p; p++) {
-        if (*p == '(') depth++;
-        else if (*p == ')') { if (depth > 0) depth--; }
-        else if (depth == 0 && *p == '"') { quote_open = p; break; }
-    }
-    if (!quote_open) {
+    /* The format string must be the first arg. Skip leading
+     * whitespace and require '"' as the first non-space char. */
+    const char *p = args;
+    while (*p && isspace((unsigned char)*p)) p++;
+    if (*p != '"') {
         snprintf(err, (size_t)err_sz,
-                 "Usage: label(x, y, z, \"fmt\", arg, ...)");
+                 "Usage: label(\"fmt\", arg, ...)");
         return 0;
     }
+    const char *quote_open = p;
 
     /* Closing quote — string contents allow no escapes by design,
      * so the next bare '"' ends the literal. */
     const char *quote_close = NULL;
-    for (const char *p = quote_open + 1; *p; p++) {
-        if (*p == '"') { quote_close = p; break; }
+    for (const char *q = quote_open + 1; *q; q++) {
+        if (*q == '"') { quote_close = q; break; }
     }
     if (!quote_close) {
         snprintf(err, (size_t)err_sz,
@@ -968,21 +938,21 @@ int repl_glut_bitmap_split_args(const char *args,
 
     /* Validate format-string body. Forbidden chars protect the rest
      * of the codebase from having to be string-aware. */
-    for (const char *p = quote_open + 1; p < quote_close; p++) {
-        if (*p == '\\') {
+    for (const char *q = quote_open + 1; q < quote_close; q++) {
+        if (*q == '\\') {
             snprintf(err, (size_t)err_sz,
                      "label: backslash escapes not allowed");
             return 0;
         }
-        if (p[0] == '/' && p + 1 < quote_close && p[1] == '/') {
+        if (q[0] == '/' && q + 1 < quote_close && q[1] == '/') {
             snprintf(err, (size_t)err_sz,
                      "label: '//' not allowed in format string");
             return 0;
         }
-        if (*p == '(' || *p == ')' || *p == ',') {
+        if (*q == '(' || *q == ')' || *q == ',') {
             snprintf(err, (size_t)err_sz,
                      "label: '%c' not allowed in format string",
-                     *p);
+                     *q);
             return 0;
         }
     }
@@ -996,24 +966,6 @@ int repl_glut_bitmap_split_args(const char *args,
     memcpy(fmt, quote_open + 1, (size_t)fmt_len);
     fmt[fmt_len] = '\0';
 
-    /* Pre-string segment must end with ',' (separating x,y,z from
-     * the format string). */
-    int pre_len = (int)(quote_open - args);
-    if (pre_len >= pre_sz) {
-        snprintf(err, (size_t)err_sz, "label: args too long");
-        return 0;
-    }
-    memcpy(pre, args, (size_t)pre_len);
-    pre[pre_len] = '\0';
-    while (pre_len > 0 && isspace((unsigned char)pre[pre_len - 1]))
-        pre[--pre_len] = '\0';
-    if (pre_len == 0 || pre[pre_len - 1] != ',') {
-        snprintf(err, (size_t)err_sz,
-                 "Usage: label(x, y, z, \"fmt\", arg, ...)");
-        return 0;
-    }
-    pre[--pre_len] = '\0';
-
     /* Post-string segment: optional. If present, leading ',' is
      * required (separating "fmt" from the substitution args). */
     const char *after = quote_close + 1;
@@ -1021,7 +973,7 @@ int repl_glut_bitmap_split_args(const char *args,
     if (*after) {
         if (*after != ',') {
             snprintf(err, (size_t)err_sz,
-                     "Usage: label(x, y, z, \"fmt\", arg, ...)");
+                     "Usage: label(\"fmt\", arg, ...)");
             return 0;
         }
         after++;

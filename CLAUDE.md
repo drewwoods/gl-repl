@@ -791,19 +791,25 @@ GLUT Solid Shapes:
   glutSolidSphere(radius, slices, stacks)
   glutSolidTeapot(size)
   glutSolidCone(base, height, slices, stacks)
+glRasterPos3f(x, y, z)
+  - Sets the current raster position; transforms (x, y, z) through
+    the active modelview/projection. Pair with `label(...)` to draw
+    bitmap text.
 Bitmap Text:
-  label(x, y, z, "fmt", a, b, c, d)
-    - Renders text at (x, y, z) using the current modelview
-      (via glRasterPos3f). Font is fixed to GLUT_BITMAP_9_BY_15.
+  label("fmt", a, b, c, d)
+    - Renders text at the current raster position (set by a
+      preceding glRasterPos3f). Does not modify GL state itself.
+      Font is fixed to GLUT_BITMAP_9_BY_15.
     - "fmt" supports %f (substitution from a/b/c/d) and %% (literal '%').
     - Up to 4 substitution args; format-string limit is 64 chars.
     - Forbidden inside the string: '//', '(', ')', ',' and any
       backslash. The parser rejects with a status error if any
       appear (graceful — line is not committed).
-    - REPL-specific primitive; not a real GL/GLUT symbol. Exported
-      files emit `label(...)` literally, so standalone-C compilation
-      requires providing a wrapper. Round-trip through the REPL via
-      export+import is supported.
+    - REPL-specific primitive; not a real GL/GLUT symbol. The
+      exporter emits a self-contained static `label(...)` helper
+      in the file's prologue (gated on `needs_label`) using
+      vsnprintf + glutBitmapCharacter, so exported files compile
+      standalone against vanilla freeglut.
 
     Distinct from the goto-label syntax `:name` / `name:` — those use
     a colon and live on CMD_LABEL. `label(...)` is a function call.

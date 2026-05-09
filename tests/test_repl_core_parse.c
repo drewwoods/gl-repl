@@ -344,20 +344,29 @@ int main(void) {
     }
 
     /* label: success cases. */
+    /* glRasterPos3f is table-driven, but worth one parse smoke
+     * test now that label() depends on a preceding raster pos. */
+    {
+        repl_reset_state();
+        GLCmd cmd;
+        memset(&cmd, 0, sizeof(cmd));
+        int ok = parse_for_test("glRasterPos3f(0, 1.5, 0)", &cmd);
+        ASSERT_TRUE("glRasterPos3f parse ok", ok == 1);
+        ASSERT_TRUE("glRasterPos3f type", cmd.type == CMD_RASTER_POS3F);
+        ASSERT_TRUE("glRasterPos3f args[1]", cmd.args[1] == 1.5f);
+    }
+
     {
         repl_reset_state();
         GLCmd cmd;
         char text[MAX_LINE_LEN] = "";
         memset(&cmd, 0, sizeof(cmd));
         int ok = parse_cmd_with_text(
-            "label(1, 2, 3, \"hello\")", &cmd, text, sizeof(text));
+            "label(\"hello\")", &cmd, text, sizeof(text));
         ASSERT_TRUE("label no-args parse ok", ok == 1);
         ASSERT_TRUE("label type",
                     cmd.type == CMD_GLUT_BITMAP_STRING);
-        ASSERT_TRUE("label position[0]", cmd.args[0] == 1.0f);
-        ASSERT_TRUE("label position[1]", cmd.args[1] == 2.0f);
-        ASSERT_TRUE("label position[2]", cmd.args[2] == 3.0f);
-        ASSERT_TRUE("label num_args", cmd.num_args == 3);
+        ASSERT_TRUE("label num_args", cmd.num_args == 0);
         ASSERT_TRUE("label fmt stored",
                     strcmp(cmd.text, "hello") == 0);
         ASSERT_TRUE("label canonical text",
@@ -368,11 +377,10 @@ int main(void) {
         repl_reset_state();
         GLCmd cmd;
         memset(&cmd, 0, sizeof(cmd));
-        int ok = parse_for_test(
-            "label(0, 0, 0, \"v=%f\", 3.5)", &cmd);
+        int ok = parse_for_test("label(\"v=%f\", 3.5)", &cmd);
         ASSERT_TRUE("label one %f parse ok", ok == 1);
-        ASSERT_TRUE("label one %f num_args", cmd.num_args == 4);
-        ASSERT_TRUE("label one %f sub arg", cmd.args[3] == 3.5f);
+        ASSERT_TRUE("label one %f num_args", cmd.num_args == 1);
+        ASSERT_TRUE("label one %f sub arg", cmd.args[0] == 3.5f);
         ASSERT_TRUE("label one %f fmt stored",
                     strcmp(cmd.text, "v=%f") == 0);
     }
@@ -382,22 +390,19 @@ int main(void) {
         GLCmd cmd;
         memset(&cmd, 0, sizeof(cmd));
         int ok = parse_for_test(
-            "label(0, 0, 0, \"a=%f b=%f c=%f d=%f\", 1, 2, 3, 4)",
-            &cmd);
+            "label(\"a=%f b=%f c=%f d=%f\", 1, 2, 3, 4)", &cmd);
         ASSERT_TRUE("label four %f parse ok", ok == 1);
-        ASSERT_TRUE("label four %f num_args", cmd.num_args == 7);
-        ASSERT_TRUE("label four %f arg[6]", cmd.args[6] == 4.0f);
+        ASSERT_TRUE("label four %f num_args", cmd.num_args == 4);
+        ASSERT_TRUE("label four %f arg[3]", cmd.args[3] == 4.0f);
     }
 
     {
         repl_reset_state();
         GLCmd cmd;
         memset(&cmd, 0, sizeof(cmd));
-        int ok = parse_for_test(
-            "label(0, 0, 0, \"100%% done\")", &cmd);
+        int ok = parse_for_test("label(\"100%% done\")", &cmd);
         ASSERT_TRUE("label %% literal parse ok", ok == 1);
-        ASSERT_TRUE("label %% literal num_args",
-                    cmd.num_args == 3);
+        ASSERT_TRUE("label %% literal num_args", cmd.num_args == 0);
         ASSERT_TRUE("label %% literal fmt stored",
                     strcmp(cmd.text, "100%% done") == 0);
     }
@@ -408,8 +413,7 @@ int main(void) {
         repl_reset_state();
         GLCmd cmd;
         memset(&cmd, 0, sizeof(cmd));
-        int ok = parse_for_test(
-            "label(0, 0, 0, \"a // b\")", &cmd);
+        int ok = parse_for_test("label(\"a // b\")", &cmd);
         ASSERT_TRUE("label // forbidden", ok == 0);
         ASSERT_TRUE("label // forbidden status",
                     strstr(g_status, "'//'") != NULL);
@@ -418,8 +422,7 @@ int main(void) {
         repl_reset_state();
         GLCmd cmd;
         memset(&cmd, 0, sizeof(cmd));
-        int ok = parse_for_test(
-            "label(0, 0, 0, \"a , b\")", &cmd);
+        int ok = parse_for_test("label(\"a , b\")", &cmd);
         ASSERT_TRUE("label , forbidden", ok == 0);
         ASSERT_TRUE("label , forbidden status",
                     strstr(g_status, "','") != NULL);
@@ -428,8 +431,7 @@ int main(void) {
         repl_reset_state();
         GLCmd cmd;
         memset(&cmd, 0, sizeof(cmd));
-        int ok = parse_for_test(
-            "label(0, 0, 0, \"hi\\nworld\")", &cmd);
+        int ok = parse_for_test("label(\"hi\\nworld\")", &cmd);
         ASSERT_TRUE("label backslash forbidden", ok == 0);
         ASSERT_TRUE("label backslash forbidden status",
                     strstr(g_status, "backslash") != NULL);
@@ -441,8 +443,7 @@ int main(void) {
         repl_reset_state();
         GLCmd cmd;
         memset(&cmd, 0, sizeof(cmd));
-        int ok = parse_for_test(
-            "label(0, 0, 0, \"unterminated)", &cmd);
+        int ok = parse_for_test("label(\"unterminated)", &cmd);
         ASSERT_TRUE("label missing close quote", ok == 0);
         ASSERT_TRUE("label missing close quote status",
                     strstr(g_status, "closing") != NULL);
@@ -451,8 +452,7 @@ int main(void) {
         repl_reset_state();
         GLCmd cmd;
         memset(&cmd, 0, sizeof(cmd));
-        int ok = parse_for_test(
-            "label(0, 0, 0, \"%f\", 1, 2)", &cmd);
+        int ok = parse_for_test("label(\"%f\", 1, 2)", &cmd);
         ASSERT_TRUE("label arg-count mismatch", ok == 0);
         ASSERT_TRUE("label arg-count status",
                     strstr(g_status, "format expects") != NULL);
@@ -461,8 +461,7 @@ int main(void) {
         repl_reset_state();
         GLCmd cmd;
         memset(&cmd, 0, sizeof(cmd));
-        int ok = parse_for_test(
-            "label(0, 0, 0, \"%d\", 1)", &cmd);
+        int ok = parse_for_test("label(\"%d\", 1)", &cmd);
         ASSERT_TRUE("label %d rejected", ok == 0);
         ASSERT_TRUE("label %d status",
                     strstr(g_status, "only %f") != NULL);
@@ -472,8 +471,7 @@ int main(void) {
         GLCmd cmd;
         memset(&cmd, 0, sizeof(cmd));
         int ok = parse_for_test(
-            "label(0, 0, 0, \"%f %f %f %f %f\", 1, 2, 3, 4, 5)",
-            &cmd);
+            "label(\"%f %f %f %f %f\", 1, 2, 3, 4, 5)", &cmd);
         ASSERT_TRUE("label >4 sub args rejected", ok == 0);
         ASSERT_TRUE("label >4 sub args status",
                     strstr(g_status, "max 4") != NULL);

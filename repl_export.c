@@ -1610,17 +1610,17 @@ static void write_canonical_cmd_as_c(FILE *f, const GLCmd *cmd, int cmd_idx,
         }
         break;
     case CMD_GLUT_BITMAP_STRING: {
-        /* Split into pre-args / format / post-args, translate the
-         * args halves through repl_eval_expr_to_c, and re-emit with
-         * the string literal preserved byte-exact. The default
-         * branch can't be used because repl_eval_expr_to_c walks the
-         * whole line (including string contents) and would rewrite
-         * substrings like "sin" or "PI" appearing inside the format.
+        /* Split format / post-args, translate the post-args
+         * through repl_eval_expr_to_c, and re-emit with the
+         * format string preserved byte-exact. The default branch
+         * can't be used: repl_eval_expr_to_c walks the whole line
+         * (including string contents) and would rewrite substrings
+         * like "sin" or "PI" appearing inside the format string.
          *
-         * Emits `label(...)` — a REPL-specific primitive, not a real
-         * GL/GLUT symbol. Standalone-C compilation requires
-         * providing a wrapper; round-trip through the REPL works
-         * because the import path recognizes the same syntax. */
+         * Emits `label(...)`, a REPL-specific primitive whose
+         * standalone-C definition is provided by a static wrapper
+         * emitted in the file's prologue when needs_label is set.
+         * See write_label_helper. */
         const char *open_p = strchr(source_text, '(');
         const char *close_p = open_p ? strrchr(source_text, ')') : NULL;
         if (open_p && close_p && close_p > open_p) {
@@ -1633,24 +1633,19 @@ static void write_canonical_cmd_as_c(FILE *f, const GLCmd *cmd, int cmd_idx,
             memcpy(args_str, open_p + 1, (size_t)args_len);
             args_str[args_len] = '\0';
 
-            char pre[MAX_LINE_LEN] = "";
             char fmt[GLUT_BITMAP_FMT_MAX] = "";
             char post[MAX_LINE_LEN] = "";
             char split_err[128] = "";
-            if (repl_glut_bitmap_split_args(args_str,
-                                            pre, (int)sizeof(pre),
-                                            fmt, (int)sizeof(fmt),
-                                            post, (int)sizeof(post),
-                                            split_err, (int)sizeof(split_err))) {
-                char pre_c[MAX_LINE_LEN] = "";
+            if (repl_label_split_args(args_str,
+                                      fmt, (int)sizeof(fmt),
+                                      post, (int)sizeof(post),
+                                      split_err, (int)sizeof(split_err))) {
                 char post_c[MAX_LINE_LEN] = "";
-                repl_eval_expr_to_c(pre, pre_c, sizeof(pre_c));
                 if (post[0])
                     repl_eval_expr_to_c(post, post_c, sizeof(post_c));
                 fwrite(source_text, 1, (size_t)prefix_len, f);
-                fprintf(f, "%s, \"%s\"%s%s);\n",
-                        pre_c, fmt,
-                        post_c[0] ? ", " : "", post_c);
+                fprintf(f, "\"%s\"%s%s);\n",
+                        fmt, post_c[0] ? ", " : "", post_c);
                 break;
             }
         }
@@ -1734,6 +1729,31 @@ static void write_rand_helper(FILE *f) {
         "  float frac = h - floorf(h);\n"
         "  if (frac < 0.0f) frac += 1.0f;\n"
         "  return frac;\n"
+        "}\n");
+}
+
+/* Wrapper for the REPL `label("fmt", ...)` primitive. Composes the
+ * formatted string with vsnprintf, then emits each char via real
+ * freeglut's glutBitmapCharacter at the current raster position
+ * (the user must call glRasterPos3f beforehand). Float args are
+ * promoted to double through the variadic call, so the user's
+ * expressions don't need explicit casts at the call site.
+ *
+ * The two extra includes (<stdarg.h>, <stdio.h>) are emitted here
+ * rather than in the global header so non-label exports stay
+ * byte-identical to their pre-label form. */
+static void write_label_helper(FILE *f) {
+    fprintf(f,
+        "\n#include <stdarg.h>\n"
+        "#include <stdio.h>\n"
+        "\nstatic void label(const char *fmt, ...) {\n"
+        "  char __b[128];\n"
+        "  va_list __ap;\n"
+        "  va_start(__ap, fmt);\n"
+        "  vsnprintf(__b, sizeof(__b), fmt, __ap);\n"
+        "  va_end(__ap);\n"
+        "  for (const char *__p = __b; *__p; __p++)\n"
+        "    glutBitmapCharacter(GLUT_BITMAP_9_BY_15, (unsigned char)*__p);\n"
         "}\n");
 }
 
@@ -2530,27 +2550,22 @@ static int import_make_repl_glut_bitmap_string(const char *line,
     memcpy(args_str, open_p + 1, (size_t)args_len);
     args_str[args_len] = '\0';
 
-    char pre[MAX_LINE_LEN] = "";
     char fmt[GLUT_BITMAP_FMT_MAX] = "";
     char post[MAX_LINE_LEN] = "";
     char split_err[128] = "";
-    if (!repl_glut_bitmap_split_args(args_str,
-                                     pre, (int)sizeof(pre),
-                                     fmt, (int)sizeof(fmt),
-                                     post, (int)sizeof(post),
-                                     split_err, (int)sizeof(split_err)))
+    if (!repl_label_split_args(args_str,
+                               fmt, (int)sizeof(fmt),
+                               post, (int)sizeof(post),
+                               split_err, (int)sizeof(split_err)))
         return 0;
 
-    char pre_repl[MAX_LINE_LEN] = "";
     char post_repl[MAX_LINE_LEN] = "";
-    repl_eval_c_expr_to_repl(pre, pre_repl, sizeof(pre_repl));
     if (post[0])
         repl_eval_c_expr_to_repl(post, post_repl, sizeof(post_repl));
 
     return repl_format_fits(out, (size_t)out_sz,
-                            "label(%s, \"%s\"%s%s);",
-                            pre_repl, fmt,
-                            post_repl[0] ? ", " : "", post_repl);
+                            "label(\"%s\"%s%s);",
+                            fmt, post_repl[0] ? ", " : "", post_repl);
 }
 
 static void import_feed_one_line(const char *line, int *loaded, int *warnings) {
@@ -2585,6 +2600,7 @@ static void import_feed_one_line(const char *line, int *loaded, int *warnings) {
 typedef struct {
     int needs_tess;
     int needs_rand;
+    int needs_label;
     int needs_scratch_a;
     int needs_scratch_b;
     int needs_scratch_c;
@@ -2623,18 +2639,23 @@ static ExportNeeds export_collect_needs(void) {
     ExportNeeds needs = {
         .needs_tess = export_uses_tess_commands(),
         .needs_rand = 0,
+        .needs_label = 0,
         .needs_scratch_a = 0,
         .needs_scratch_b = 0,
         .needs_scratch_c = 0,
     };
 
-    /* Check each command for rand() and scratch-array references. The
-     * scratch detection is intentionally a textual scan over source
-     * lines (not a CmdType check) so that reads inside argument
+    /* Check each command for rand() / scratch-array / label
+     * references. Detection is intentionally a textual scan over
+     * source lines (not a CmdType check) so that reads inside arg
      * expressions — e.g. `glVertex3f(A[i], B[i], C[i])` — count
-     * alongside writes (`A[0] = ...`). */
+     * alongside writes (`A[0] = ...`). The label wrapper is keyed
+     * off the command type rather than text in case a future
+     * codegen path emits `label(...)` indirectly. */
     for (int cmd_idx = 0; cmd_idx < repl_state_document_count(); cmd_idx++) {
-        if (!repl_state_document_cmds_mut()[cmd_idx].valid) continue;
+        const GLCmd *cmd = &repl_state_document_cmds_mut()[cmd_idx];
+        if (!cmd->valid) continue;
+        if (cmd->type == CMD_GLUT_BITMAP_STRING) needs.needs_label = 1;
         const char *src = export_document_text(cmd_idx);
         if (export_text_uses_token(src, "rand(")) needs.needs_rand = 1;
         if (export_text_uses_token(src, "A["))    needs.needs_scratch_a = 1;
@@ -2806,6 +2827,16 @@ static void emit_export_rand_helper_section(FILE *f,
     write_rand_helper(f);
 }
 
+static int export_section_needs_label(const ExportScaffoldContext *ctx) {
+    return ctx && ctx->needs.needs_label;
+}
+
+static void emit_export_label_helper_section(FILE *f,
+                                             const ExportScaffoldContext *ctx) {
+    (void)ctx;
+    write_label_helper(f);
+}
+
 static void emit_export_tess_preamble_section(FILE *f,
                                               const ExportScaffoldContext *ctx) {
     (void)ctx;
@@ -2842,6 +2873,7 @@ static const ExportScaffoldSectionSpec EXPORT_SCAFFOLD_SECTIONS[] = {
     { "predef globals",     emit_export_predef_globals_section,     export_section_always },
     { "scratch globals",    emit_export_scratch_globals_section,    export_section_needs_scratch },
     { "rand helper",        emit_export_rand_helper_section,        export_section_needs_rand },
+    { "label helper",       emit_export_label_helper_section,       export_section_needs_label },
     { "tess preamble",      emit_export_tess_preamble_section,      export_section_needs_tess },
     { "reset vars",         emit_export_reset_vars_section,         export_section_always },
     { "functions",          emit_export_functions_section,          export_section_always },
