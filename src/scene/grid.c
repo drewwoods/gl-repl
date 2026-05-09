@@ -4,6 +4,9 @@
 #include "grid.h"
 #include "./include/gl_2d.h"
 #include <math.h>
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
 
 /* Returns non-zero when v is close enough to a multiple of `major`
  * to be treated as a major line. `tol` is derived from the minor

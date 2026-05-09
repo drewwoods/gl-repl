@@ -4,6 +4,9 @@
 #include "axes.h"
 #include "./include/gl_2d.h"
 #include <math.h>
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
 
 enum {
     SCENE_AXIS_X = 0,
