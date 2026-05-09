@@ -464,6 +464,72 @@ audit the feature-UI prefixes.
 other's headers. Shared render-neutral helpers belong in local shared headers
 or project-wide `include/` only when broadly reusable.
 
+## Standalone REPL Demo Coupling
+
+`tools/repl_demo/repl_demo.c` is a negative boundary proof, not a packaged
+REPL library. It proves that the core path it drives directly
+
+```text
+parse -> command store -> flatten -> execute
+```
+
+can run without `glr_ctrl.c`, `src/editor/input.c`, `src/ui/*.c` renderers,
+or `replay_ui_hud.c`. It does **not** yet prove that the REPL pipeline has a
+stub-free link boundary. The current `REPL_DEMO_DEP_SRCS` object list still
+pulls in several app/editor/UI-adjacent translation units, and
+`tools/repl_demo/stubs.c` supplies the missing symbols when those owners are
+intentionally left out.
+
+Treat `tools/repl_demo/stubs.c` as a dependency ledger. It currently contains
+roughly 17 symbol/table definitions, so it has crossed from "small shim" into
+"known coupling inventory". The stubs are acceptable for keeping the demo
+useful, but they should not hide that a truly standalone REPL library would
+need structural splits.
+
+### Stubbed Couplings
+
+| Coupling root | Stubbed symbols | Why the link reaches it | Demo exercises it? | Removal path | Feasibility / effort |
+|---|---|---|---|---|---|
+| Global lifecycle reset | `ui_state_reset`, `variable_panel_state_reset`, `editor_help_session_reset`, `repl_editor_reset_transients` | `repl_state_init_defaults()` calls `repl_state_reset_all()`, and that function resets every app singleton / peer, not just `ReplState`. | Yes, every sample reset enters this path. | Split reset into a pure `repl_state_reset_program()` and an app-level `glr_app_reset_all()` (or equivalent) that resets editor/UI/peers. Tests and the full sample call the app reset; the demo calls the program reset. | High feasibility, medium effort. Main risk is updating tests that currently rely on one reset clearing everything. |
+| UI chrome mirror | `ui_state_code_panel_mut` | `repl_state_sync_ui_chrome()` mirrors presentation fields into `UiState.code_panel`; `repl_state_reset_all()` calls it. | Yes, via reset, although the demo does not render code-panel chrome. | Move chrome mirroring to the controller/app reset path or make it an explicit optional sync outside `repl_state_reset_all()`. | High feasibility, low to medium effort. |
+| Status relay | `ui_state_status_set` | Legacy `repl_core.c::set_status()` forwards diagnostics to UI status text. | Only on errors or helper paths that report status. | Replace `set_status()` in REPL helpers with returned diagnostics or an injectable status sink owned by the app. | High feasibility, low to medium effort; broad search/replace plus call-site cleanup. |
+| Compile dispatcher location | `repl_compile_dispatch` | `repl_compile_toggle_comment()` needs the float-decl / var-assign dispatcher, but the implementation currently lives in `src/editor/services.c`. | No; the demo does not toggle comments. The reference is still hard at link time. | Move the dispatcher implementation into `repl_compile.c` or a tiny `repl_compile_dispatch.c`; let editor services call it instead of owning it. | High feasibility, low effort. |
+| Programmatic editor input | `feed_line`, `load_line_to_input` | `repl_export.c` imports exported files by feeding lines through the editor commit path; `repl_core.c` and scene activation paths also have legacy line-loading references. | No for the current static samples. | Split import from export generation and add a pure source-loader API that compiles/applies lines without editor cursor/input effects. Move `load_line_to_input()` calls behind editor/controller callbacks. | Feasible, medium to high effort because import, examples, scenes, undo expectations, and tests share this path. |
+| Config descriptor table | `g_cfg_items`, `CFG_ITEM_COUNT` | `glr_config.c` iterates menu/action descriptors while parsing or applying config keys, but the table is defined in `glr_actions.c`. | Not for the current samples; relevant to `@cfg` metadata and export/import helpers. | Split immutable config metadata from action/menu wiring. Put descriptors in a neutral catalog, and keep shortcut/action behavior in `glr_actions.c`. | Feasible, medium effort. |
+| App-owned config storage | `audio_get_cfg_mode`, `audio_set_cfg_mode`, `ui_state_profile_panel_mut`, `variable_panel_view_mut` | `glr_config.c` maps config keys directly to storage owned by audio, UI profile panel, and the variable-panel peer. | Not for the current samples. | Make `glr_config` operate on a passed config/store interface, or keep only pure key parsing in the REPL-side import/export path and leave live storage mutation to the app. | Feasible, medium effort. |
+| UI layout state | `ui_state_viewport`, `ui_state_code_panel` | `src/ui/layout.c` reads live `UiState`; `repl_export.c` uses layout helpers for export viewport sizing and code-panel visual dumps. | Not for the current samples. | Move code-panel visual dumps to UI/debug code, and pass an explicit export layout/viewport context to export generation. | High feasibility, low to medium effort. |
+
+### Non-stubbed But Still Non-pipeline Link Dependencies
+
+These objects are linked into `repl_demo` rather than stubbed:
+
+| Object(s) | Why present | Removal path |
+|---|---|---|
+| `src/editor/state.c`, `src/editor/completion.c` | Per-line canonical text currently lives in `EditorState`; `repl_state_init_defaults()` also registers the REPL autocomplete provider with the editor completion registry. | Keeping editor-owned text makes this dependency intentional. Removing it means introducing a neutral source-document/text store owned by the REPL command document, then making the editor a controller/view over that store. That is feasible but large, because it cuts across commit, undo, scenes, clipboard, export, and tests. Autocomplete registration is easier: move it to app/editor startup instead of REPL state reset. |
+| `replay.c`, `replay_state.c`, `repl_replay_annotations.c` | Replay is a peer subsystem, but reset and annotation helpers are still in the demo link set through broad REPL object selection. | Split app reset from REPL reset and keep annotation preparation out of the minimal demo object list unless the demo explicitly exercises replay. Medium effort. |
+| `repl_export.c`, `repl_example_loader.c`, `repl_scenes.c`, `glr_camera.c`, `glr_config.c`, `src/ui/layout.c` | `repl_core.c` is still a residual helper bucket, and export/import/workspace/camera helpers sit behind it. The demo uses only a small subset (`repl_parse_and_normalize`, `cmd_type_name`), but the whole translation unit graph comes along. | Continue dissolving `repl_core.c`: move normalization into parser/format code, move startup/workspace helpers to scene/export owners, and split export generation from import and code-panel dump helpers. Medium effort, with high payoff for a clean demo link boundary. |
+| `repl_autocomplete.c`, `repl_help_text.c` | REPL state initialization registers the completion provider, and help text is part of the broad demo object list. | Treat completion/help as optional app/editor services. Low to medium effort if reset is split first. |
+
+### Practical Decoupling Sequence
+
+The coupling is removable, but not by deleting `stubs.c` alone. The lowest-risk
+sequence is:
+
+1. Move `repl_compile_dispatch()` out of `src/editor/services.c`.
+2. Split `repl_state_reset_all()` into program-only reset and app-wide reset;
+   move autocomplete registration and UI chrome sync to the app/editor side.
+3. Split `repl_core.c` so `repl_demo` can link only normalization/type-name
+   helpers and not export/import/workspace helpers.
+4. Split `repl_export.c` into export generation, import/load, and code-panel
+   visual dump modules; make export accept explicit viewport/layout context.
+5. Split `glr_config` into pure config-key parsing/catalog lookup and live app
+   storage mutation.
+6. Decide whether editor-owned text remains an explicit dependency. If the
+   goal is a reusable standalone REPL library, create a neutral source-document
+   owner and adapt the editor around it. If this remains a one-frontend sample,
+   keeping `src/editor/state.c` in the demo link set is a defensible tradeoff
+   as long as it is documented as intentional.
+
 ## Where To Put New Code
 
 * New REPL syntax: `repl_parser.c`, `repl_command_spec.c`, `repl_compile.c`,
