@@ -68,7 +68,7 @@ typedef struct {
 int repl_parser_parse_command_ctx(const char *line, ReplParsedLine *out,
                                   const ReplParseContext *ctx);
 
-/* Split a `glutBitmapString(...)` arg payload into pre-string args
+/* Split a `glutBitmapStringf(...)` arg payload into pre-string args
  * (x, y, z), the format string body (no quotes), and post-string
  * args (substitution exprs).
  *
