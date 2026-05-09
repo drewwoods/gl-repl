@@ -1,14 +1,24 @@
 # Decoupling repl_demo from gl-repl — execution plan
 
-> Supersedes the chokepoint-numbered draft. Same six original
-> chokepoints reordered as an execution sequence, with maintainer
-> corrections applied (stub count, reset rename, non-editor commit
-> API as the target, config split by owner as the endpoint), plus a
-> seventh step that takes the config split all the way to storage —
-> the misnamed slices in `repl_state.c` move to a new `glr_state.c`.
-> Steps 1–6 reduce the stub count to zero against the current
-> structure; step 7 is what makes the REPL/editor/scene/UI ownership
-> split actually correct rather than catalog-deep.
+> Supersedes the chokepoint-numbered draft. Reordered as an execution
+> sequence with maintainer corrections applied across two review
+> rounds: stub count (17 not 12); reset rename
+> (`repl_state_reset_program` + `glr_app_reset_all`); non-editor
+> commit API as the target; config split by owner *as a temporary
+> intermediate* — presentation/render slugs land in `repl_config`
+> initially and migrate to `glr_config` in step 7 once `glr_state.c`
+> exists; `repl_export.c` stays whole and opaque to header content
+> (`ReplExportProperties` + `ReplExportCameraBlock`). Round-2 review
+> caught: step 4 was overcounting (`ui_state_viewport` /
+> `ui_state_code_panel` survive past step 4 — they're pulled by
+> `repl_export.c`'s layout calls, not by config); step 3 was missing
+> the `set_status` sites in `repl_scenes.c` (8) and
+> `repl_example_loader.c` (1); step 5 assumed pure structured-block
+> validators that don't yet exist (extraction is a prerequisite,
+> now step 5a); autocomplete provider registration was leaking into
+> the program-only reset; step 7's summary row still said "split
+> `repl_export.c`" while its body had switched to "keep whole."
+> All addressed below.
 
 ## Baseline
 
@@ -33,14 +43,17 @@ step 4 only takes to the catalog layer.
 | Step | Chokepoint | Stubs cleared | Effort | Feasibility |
 |---|---|---|---|---|
 | 1 | `repl_compile_dispatch` location | 1 | Low | High — known TODO in source comment |
-| 2 | UI chrome sync + full-world reset out of `repl_state.c` | 5 | Low | High — pure layering inversion |
-| 3 | Pipeline `set_status()` → diagnostic sinks | 1 | Medium | High — pattern already proven in `repl_parser.c` |
-| 4 | Split config catalog vs live-app mutation by owner | 8 | Medium | Medium — needs a real ownership decision |
-| 5 | Non-editor source-load / commit API for examples + imports | 1 (`feed_line`) | Medium-High | Medium — must support multi-line block structures |
-| 6 | Split `repl_core.c` / `repl_export.c` to remove last editor-shaped helpers | 1 (`load_line_to_input`) | Medium | Medium — overlaps with R10-phase2..5 in ARCHITECTURE.md |
-| 7 | Move `presentation` + `render` slices from `repl_state.c` to a new `glr_state.c`; split `repl_export.c` and `repl_scenes.c` along the same line | 0 (storage cleanup) | High | Medium — large, but matches the existing `glr_*` ownership convention |
+| 2 | UI chrome sync + full-world reset out of `repl_state.c` (also evicts autocomplete-provider registration from the program-only reset) | 5 | Low | High — pure layering inversion |
+| 3 | Pipeline `set_status()` → diagnostic sinks across **6 TUs** (~16 sites) | 1 | Medium | High — pattern proven in `repl_parser.c`; site list is broader than the round-1 draft claimed |
+| 4 | **Temporary** catalog split (`repl_config` vs `glr_config`); presentation/render slugs land in `repl_config` for now and migrate to `glr_config` in step 7 | 6 | Medium | Medium — intermediate ownership is acknowledged, not the endpoint |
+| 5a | Extract pure structured-block validators (`repl_compile_close_brace` / `_if_block` / `_func_def` / `_for_loop`) from the editor-side `editor_compile_*` wrappers | 0 | Medium | Medium — separates pure validation from cursor/insert-mode side effects |
+| 5b | Build the non-editor source-load / commit API on top of the extracted validators; convert example loader + importer to use it | 1 (`feed_line`) | Medium | Medium — supports multi-line block structures because 5a already extracted them |
+| 6 | Move reformatter + scene cursor restore out of pipeline TUs into the editor / controller | 1 (`load_line_to_input`) | Medium | Medium — overlaps with R10-phase2..5 in ARCHITECTURE.md |
+| 7 | Move `presentation` + `render` slices to a new `glr_state.c`; migrate slugs from `repl_config` to `glr_config`; make `repl_export.c` fully opaque to its environment via `ReplExportProperties` + `ReplExportCameraBlock` + caller-passed layout hints; split `repl_scenes.c` slot snapshots into REPL programs + glr cfg-property bags | 2 (`ui_state_viewport`, `ui_state_code_panel`) | High | Medium — large, but matches the existing `glr_*` ownership convention |
 
-Totals reconcile: 1 + 5 + 1 + 8 + 1 + 1 = **17 stubs** by end of step 6. Step 7 is structural follow-on, not stub clearance.
+Totals reconcile: 1 + 5 + 1 + 6 + 0 + 1 + 1 + 2 = **17 stubs**.
+
+Trajectory: 17 → 16 (step 1) → 11 (step 2) → 10 (step 3) → 4 (step 4) → 4 (step 5a, no stub change) → 3 (step 5b) → 2 (step 6) → **0** (step 7).
 
 ---
 
@@ -86,17 +99,30 @@ of those itself reaches into five subsystems (`editor_commit_reset_transients`
 + `glr_camera_controls_reset` + `ui_menu_bar_close` +
 `color_picker_close` + `glr_ctrl_router_reset_code_panel_drag`).
 
-**Fix — rename, do not preserve the misleading name.**
+**Fix — rename, do not preserve the misleading name; evict the
+autocomplete-registration leak at the same time.**
 
 - Rename `repl_state.c::repl_state_reset_all` →
   `repl_state_reset_program`. New scope: REPL slices only (program,
   predef vars, scenes, autonormal, source scope, eval predef storage,
-  flat dirty flag, autocomplete provider registration). No peer / UI /
-  editor calls remain.
+  flat dirty flag). No peer / UI / editor calls remain.
 - Introduce `glr_app_reset_all` (in `glr_ctrl.c` or a new
   `glr_app.c` if a top-level shell module is wanted) that calls
   `repl_state_reset_program()` *and* the four peer/UI/editor resets.
   This is the function the live sample calls; the demo never calls it.
+- **Move `repl_autocomplete_register_provider()` out of the reset.**
+  It currently runs inside `repl_state_init_defaults` /
+  `repl_state_reset_all` (`repl_state.c:569` and `:593`), which means
+  every program reset re-registers a provider that calls
+  `editor_completion_register` (`src/editor/completion.c:11`). That's
+  editor-side coupling masquerading as REPL initialization. Today it
+  doesn't show up in `stubs.c` because `src/editor/completion.c` is
+  in the demo link set, but it violates the program-only-reset
+  boundary. Move the registration to one-shot app/editor startup
+  (called from `glr_app_reset_all` or once during `glr_ctrl_init`).
+  Tests that exercise REPL state in isolation should not need a
+  completion provider; tests that exercise autocomplete should
+  install one explicitly.
 - Update every call site of `repl_state_reset_all` accordingly. Most
   are in tests; the production `repl_state_init_defaults` switches to
   `glr_app_reset_all` (or stays calling `repl_state_reset_program` if
@@ -133,14 +159,24 @@ nothing. After it, `set_status` itself can move out of `repl_core.c`
 entirely, which clears the path to the bigger split in step 6.
 
 **Current state.** `repl_core.c:64-72` defines `set_status()` as a
-forwarder to `ui_state_status_set`. Pipeline modules call it from 9
-sites:
+forwarder to `ui_state_status_set`. Pipeline modules call it from
+**~16 sites across 6 TUs**:
 
-- `repl_core.c:364` — normalize parse error
-- `repl_core.c:756` — startup banner ("Ready - type GL commands…")
-- `repl_executor.c:559` — `goto: loop limit reached`
-- `repl_flatten.c:639` — flatten error
-- `repl_export.c:2937, 2957, 3188` — export I/O errors
+- `repl_core.c` (2): normalize parse error (`:364`), startup banner (`:756`)
+- `repl_executor.c` (1): goto loop limit reached (`:559`)
+- `repl_flatten.c` (1): flatten error (`:639`)
+- `repl_export.c` (3): export I/O errors (`:2937`, `:2957`, `:3188`)
+- `repl_scenes.c` (8): rename / save-default / save-workspace /
+  load-default / load-workspace / promote-rejected / restore-rejected
+  status messages (`:239`, `:335`, `:342`, `:378`, `:425`, `:457`,
+  `:519`, `:534`)
+- `repl_example_loader.c` (1): example-load status (`:285`)
+
+The round-1 plan listed 9 sites and missed `repl_scenes.c` and
+`repl_example_loader.c` entirely. Both are in the demo link set and
+both keep the `set_status` thunk reachable; if step 3 only patches
+core/executor/flatten/export it doesn't actually clear the
+`ui_state_status_set` stub.
 
 The architecture already documents the cleaner pattern
 (`ARCHITECTURE.md` lines 866-868): `repl_parser.c` writes diagnostics
@@ -148,7 +184,7 @@ into `ReplParseContext.err_buf`, the parser core has zero `set_status`
 calls, and `check-no-set-status-in-repl-parser` enforces that at
 **0/0**.
 
-**Fix.** Apply the same pattern to executor, flatten, and export:
+**Fix.** Apply the same pattern to all six TUs:
 
 - `repl_execute_program`: extend `ReplExecutionOptions` with an
   optional `char *err_buf` / `int err_sz` (or a callback). The runtime
@@ -158,6 +194,16 @@ calls, and `check-no-set-status-in-repl-parser` enforces that at
   delete the inline `set_status(result.status)`.
 - `repl_export_save_output` / `repl_export_load_from_file`: return
   / out-param the diagnostic message instead of writing it directly.
+- `repl_scenes.c`: the scene-management entry points
+  (`repl_user_scene_rename`, `repl_save_default_output`,
+  `repl_save_workspace`, `repl_load_default_output`,
+  `repl_load_workspace`, etc.) already return status; thread an
+  out-param diagnostic for the cases that currently call `set_status`
+  inline. The controller writes the status text after the call
+  returns.
+- `repl_example_loader.c`: the example-load path returns to the
+  controller anyway; pass the status message back as an out-param
+  instead of writing it inline.
 - `repl_core.c::set_status` startup banner moves to whatever calls
   `repl_state_init_defaults` (likely the controller); remove it from
   the pipeline TU.
@@ -170,11 +216,23 @@ calls, and `check-no-set-status-in-repl-parser` enforces that at
 
 ---
 
-## Step 4 — Split config catalog from live-app mutation, by owner
+## Step 4 — Temporary catalog split to unblock demo
+
+**Why "temporary."** The honest endpoint for app/REPL ownership is
+in step 7 (presentation/render slices move to `glr_state.c`).
+Step 4's job is narrower: clear *config-owned* stubs from the demo
+link set without waiting on the storage relocation. Presentation/
+render slugs land in the **`repl_config`** catalog initially because
+their backing storage is still in `g_repl_state`; in step 7 those
+slugs migrate to `glr_config` once the storage moves and the neutral
+export-property bag carries them across the file format. Calling
+step 4 "split by owner" would mis-frame the temporary placement —
+the slug ownership in step 4 reflects current storage, not target
+ownership.
 
 **Why now.** Steps 1–3 don't touch `glr_config.c` or its callers, so
-this can land independently. It is also the one with the largest
-single stub-count payoff.
+this can land independently. It is also the largest single
+stub-count payoff that's available without the step 7 storage work.
 
 **Current state.** `glr_config.c` is in the demo link set because
 `repl_export.c` (`@cfg` save/load) and `repl_scenes.c` (per-scene cfg
@@ -182,65 +240,131 @@ snapshots) call `glr_config_get/set/items`. `glr_config.c::config_value_ptr`
 is one big switch over every cfg key, so it transitively forces every
 config-target module into the link set:
 
-| Stub | Pulled in by |
-|---|---|
-| `g_cfg_items[]` / `CFG_ITEM_COUNT` | Defined in `glr_actions.c` (not linked) |
-| `audio_get_cfg_mode` / `audio_set_cfg_mode` | `GLR_CONFIG_AUDIO_MODE` arm calls `audio.c` |
-| `variable_panel_view_mut` | `GLR_CONFIG_VARIABLE_PANEL` arm reaches into peer state |
-| `ui_state_profile_panel_mut` | `GLR_CONFIG_CPU_PROFILE` arm reaches into UiState |
-| `ui_state_viewport`, `ui_state_code_panel` | `src/ui/layout.c` reads UiState (in link set) |
+| Stub | Pulled in by | Cleared in step? |
+|---|---|---|
+| `g_cfg_items[]` / `CFG_ITEM_COUNT` | Defined in `glr_actions.c` (not linked) | **4** |
+| `audio_get_cfg_mode` / `audio_set_cfg_mode` | `GLR_CONFIG_AUDIO_MODE` arm calls `audio.c` | **4** |
+| `variable_panel_view_mut` | `GLR_CONFIG_VARIABLE_PANEL` arm reaches into peer state | **4** |
+| `ui_state_profile_panel_mut` | `GLR_CONFIG_CPU_PROFILE` arm reaches into UiState | **4** |
+| `ui_state_viewport`, `ui_state_code_panel` | **NOT pulled by config — pulled by `repl_export.c` calling `ui_layout_scene_rect` (`:2786`) and `ui_layout_code_panel_rect` (`:3257`) for the code-panel dump path** | **7** (layout decoupling) |
 
-**Fix — split by owner; do not stop at a `*_value_ptr` cosmetic split.**
+The round-1 plan attributed all six surviving stubs to config and
+claimed step 4 cleared 8. It actually clears 6: the two
+`ui_state_*` viewport/panel stubs survive past step 4 because
+`src/ui/layout.c` is in the demo link set transitively from
+`repl_export.c`'s layout calls, not from `glr_config.c`. They get
+cleared in step 7 alongside the cfg-opacity rework (see step 7
+on `repl_export.c` opacity to its environment).
 
-The cheap intermediate (split `config_value_ptr` into a REPL-only and
-glr-only variant) is acceptable as a stepping stone but **must not be
-the endpoint** because it preserves one mixed-owner config module.
+**Fix — temporary catalog split.**
 
-The endpoint is two descriptor catalogs:
+Two descriptor catalogs:
 
-1. **`repl_config` catalog.** Owns the keys backed by `ReplState`
-   slices: presentation flags (wireframe, grid theme, axes theme,
-   backdrop, vertex labels/normals/outlines/points/guides, autonormal,
-   highlight current poly, show light indicators, code-panel layout,
-   wrap at comma) and the auto-time / replay flags that already live
-   on REPL-owned subsystems. Lives next to `repl_state` /
-   `repl_presentation`. The pipeline (`repl_export.c`, `repl_scenes.c`)
-   iterates *only* this catalog when reading/writing `@cfg` directives.
-2. **`glr_config` catalog.** Owns app-frame keys: camera auto-rotate,
-   audio mode, CPU profile mode, variable-panel visibility, MSAA /
-   line smooth / accum AA / point attenuation render flags, replay-UI
-   chrome. Lives next to `glr_ctrl.c`. The pipeline does not include
-   this catalog at all.
+1. **`repl_config` catalog.** Owns every cfg key whose backing
+   storage is currently in `g_repl_state` (presentation flags,
+   render flags, scene/replay toggles, code-panel chrome). Lives
+   next to `repl_state.c`. The pipeline (`repl_export.c`,
+   `repl_scenes.c`) iterates *only* this catalog when reading/writing
+   `@cfg` directives. **The slug list in this catalog will shrink in
+   step 7** as presentation/render slugs migrate to `glr_config`.
+2. **`glr_config` catalog.** Owns app-frame keys whose backing
+   storage is *not* in `g_repl_state`: camera auto-rotate, audio
+   mode, CPU profile mode, variable-panel visibility. Lives next to
+   `glr_ctrl.c`. The pipeline does not include this catalog at all.
+
+The cheap intermediate (split `config_value_ptr` into a REPL-only
+and glr-only variant) is acceptable as a stepping stone within
+step 4 if it shortens the diff, but the endpoint here is two
+descriptor tables.
 
 Save format compatibility: a single `@cfg <slug> = <int>` directive
 already round-trips per slug, not per catalog. The importer can try
 the REPL catalog first (which is all the pipeline knows about) and
 ignore unknown slugs; the live sample's load path also asks the glr
 catalog. So existing saved files keep working without a header bump.
+Step 7 preserves the same compatibility while migrating slugs across
+catalogs.
 
 After the split:
 
 - `repl_export.c` and `repl_scenes.c` link only `repl_config.c`.
   Neither calls into `glr_config.c`.
-- `glr_config.c` falls out of the demo link set entirely. With it goes
-  every `audio_*` / `ui_state_profile_panel_mut` /
-  `variable_panel_view_mut` / `ui_state_viewport` / `ui_state_code_panel`
-  reference.
+- `glr_config.c` falls out of the demo link set. With it goes
+  `audio_*`, `ui_state_profile_panel_mut`, `variable_panel_view_mut`.
+- `ui_state_viewport` and `ui_state_code_panel` **remain** in
+  the link set — they'll clear in step 7.
 
 **Stubs cleared:** `g_cfg_items`, `CFG_ITEM_COUNT`,
 `audio_get_cfg_mode`, `audio_set_cfg_mode`, `variable_panel_view_mut`,
-`ui_state_profile_panel_mut`, `ui_state_viewport`, `ui_state_code_panel`.
-(Eight.)
+`ui_state_profile_panel_mut`. (Six.)
 
 ---
 
 ## Step 5 — Extract a non-editor source-load / commit API
 
-**Why now.** Steps 1–4 land independently of this one, but step 5
-*does* depend on step 3 (so the new commit entry returns diagnostics
-through a sink rather than calling `set_status`). It also feeds step 6
-by making the editor-free path the canonical loader for examples and
-imports.
+Step 5 splits into a prerequisite extraction phase (5a) and the
+loader build (5b). The round-1 plan assumed the structured-block
+validators were already pure and lived in `repl_compile.c`; they
+are not — the only existing entry points for `close_brace`,
+`if_block`, `func_def`, and `for_loop` are
+`editor_compile_close_brace` / `_if_block` / `_func_def` /
+`_for_loop` in `src/editor/commit.c` (declared in
+`src/editor/commit.h:219..266`). Those mix pure validation with
+`EditorCommitPlan` side effects (cursor target, insert-mode toggle,
+clear-input, load-line-after-apply). The lean loader cannot call
+them as-is without re-introducing the editor coupling we're trying
+to remove.
+
+### 5a. Extract pure structured-block validators
+
+Land four new functions in `repl_compile.c`:
+
+```c
+ReplCompileResult repl_compile_close_brace(const char *input,
+                                           const ReplCompileContext *ctx,
+                                           ReplCompiledChange *out,
+                                           char *err, int err_size);
+
+ReplCompileResult repl_compile_if_block   (const char *input, ...);
+ReplCompileResult repl_compile_func_def   (const char *input, ...);
+ReplCompileResult repl_compile_for_loop   (const char *input, ...);
+```
+
+Each returns a `ReplCompiledChange` describing the source-array
+mutation. No cursor, no insert mode, no input buffer, no
+`set_status` (forbidden by the existing
+`check-no-set-status-in-compile-apply` guard).
+
+`editor_compile_*` becomes a thin wrapper that calls the
+corresponding `repl_compile_*` and then attaches the editor side
+effects (cursor target, insert-mode toggle, etc.) into an
+`EditorCommitPlan`. The `try_commit_*` chain in `editor_commit.c`
+already drives the plan — it doesn't change.
+
+The extraction is mechanical but real: each `editor_compile_*` body
+is a few hundred lines mixing parsing, source-scope queries, and
+editor mechanics. The split is clean — parsing and source-scope
+queries stay (they're the validation half); cursor/insert-mode
+fields move to the wrapper.
+
+**Why this is its own phase.** The extraction can land independently
+of 5b — it has no observable behavior change, every existing caller
+keeps working through the wrappers, and it adds the four pure
+entry points the lean loader will need. Doing 5a as a separate PR
+means 5b's review can focus on the loader semantics rather than
+the extraction mechanics.
+
+**5a stub change:** none directly. The pure validators are not yet
+called from the demo, so no `feed_line` reference is removed.
+`feed_line` clears in 5b.
+
+### 5b. Build the lean loader on top
+
+**Why 5b depends on 5a and 3.** Step 3 makes the new commit entry
+return diagnostics through a sink rather than calling `set_status`.
+Step 5a provides the pure validators that the lean loader calls
+without touching editor state. With both in place, 5b is the small
+piece that wires it together.
 
 **Current state.** `feed_line` is the editor's programmatic commit
 entry: it copies a line into the editor's input buffer and runs the
@@ -277,21 +401,18 @@ Semantics: same compile + apply + buffer-write transaction that
 (cursor target, insert-mode toggle, clear-input,
 load-line-after-apply) suppressed. Internally this means:
 
-- Reuse `repl_compile_*` (already pure) and `repl_apply_*` (already
-  pure) to handle the source-array mutation.
+- Reuse `repl_compile_float_decl` / `repl_compile_var_assign`
+  (already pure) and `repl_apply_*` (already pure) to handle the
+  source-array mutation.
+- Reuse the validators extracted in 5a
+  (`repl_compile_close_brace` / `_if_block` / `_func_def` /
+  `_for_loop`) for multi-line block structures. The lean entry
+  calls them directly — no `editor_compile_*` wrapper, no
+  `EditorCommitPlan` cursor/insert-mode side effects.
 - Reuse `editor_buffer_set_line` / `editor_buffer_apply_compiled_change`
   for text-buffer writes — the editor *buffer* is in the demo link
   set by design (it's where canonical line text lives); the editor
   *input dispatch* is what we're avoiding.
-- For multi-line block structures, the underlying
-  `repl_compile_close_brace` / `repl_compile_for_loop` /
-  `repl_compile_func_def` / `repl_compile_if_block` validators
-  already exist; the lean entry calls them directly without the
-  `editor_compile_*` wrappers (which add `EditorCommitPlan`'s
-  cursor/insert-mode side effects).
-- For float-decl and var-assign, ditto — the
-  `repl_compile_*` half is independent of the editor commit-plan
-  half.
 - Diagnostics flow through the new sink type (lines up with step 3).
 
 The editor's `try_commit_*` chain becomes a thin wrapper: it builds
@@ -458,6 +579,17 @@ headers carry.
 - What `wireframe` / `grid_theme` / `auto_rotate` / etc. mean
 - `glr_config_*` (forbidden by symbol guard, see guard audit)
 - Any cfg slug semantics — only the `// @cfg <key> = <value>` line shape
+- **Live viewport / panel geometry** — currently `repl_export.c:2786`
+  calls `ui_layout_scene_rect` and `:3257` calls
+  `ui_layout_code_panel_rect` from the code-panel dump path. Those
+  pull `ui_state_viewport` and `ui_state_code_panel` into the demo
+  link set transitively through `src/ui/layout.c`. Step 7 makes
+  layout-as-environment opaque to `repl_export.c` the same way cfg
+  is: the caller computes the rects (or the `int` values it cares
+  about — typically just panel width) and passes them in as fields
+  on the export-options struct. `repl_export.c` does not call
+  `ui_layout_*` after step 7. This clears `ui_state_viewport` and
+  `ui_state_code_panel` from the demo stubs.
 
 New neutral abstraction in `repl_export.h`:
 
@@ -601,15 +733,21 @@ GlrState      → glr_state.c        (app-frame presentation/render)  ← NEW
 ### Effort and risk
 
 - **Effort:** ~2–3 weeks. The file moves are mechanical; the
-  `repl_export.c` and `repl_scenes.c` splits are the work.
+  `repl_export.c` opacity rework (cfg + camera + layout) and the
+  `repl_scenes.c` per-slot snapshot rework are the work.
 - **Risk:** medium. `@cfg` save-file compatibility is a footgun —
   any importer that loses an `@cfg` line silently drops a setting.
   Round-trip the entire `tests/test_repl_export_all_commands.c`
   corpus + every workspace in `examples/` before merging. Because
   the format is line-tagged, a missed slug surfaces as a missing
-  state mutation, not corruption.
-- **Net stub change:** 0 — by step 6 the count is already zero. Step
-  7's payoff is structural correctness, not stub clearance.
+  state mutation, not corruption. The neutral property bag makes
+  this test trivial: feed the bag in, read it out, compare.
+- **Net stub change: 2.** `ui_state_viewport` and
+  `ui_state_code_panel` clear because `repl_export.c` no longer
+  calls `ui_layout_*`. (Round-1 plan claimed step 7 was structural-
+  only with no stub change; this was wrong because it overlooked
+  the layout pull-in that step 4 doesn't address.) After step 7
+  the demo stub count is **0**.
 
 ---
 
@@ -685,7 +823,7 @@ on this plan:
 
 Coverage: high. The compile-purity guard already forbids the worst regression. The risk of a leftover wrapper in `editor_services.c` is mitigated by the fact that the demo build itself fails if both definitions exist (multiple-definition link error).
 
-#### Step 2 — Reset rename + `sync_ui_chrome` move
+#### Step 2 — Reset rename + `sync_ui_chrome` move + autocomplete-registration eviction
 
 | Risk | Existing coverage | Gap |
 |---|---|---|
@@ -693,8 +831,9 @@ Coverage: high. The compile-purity guard already forbids the worst regression. T
 | `glr_app_reset_all` lives in the wrong file (e.g., grows back into `repl_state.c`) | ✅ `check-state-c-shrinking` would fire on growth | — |
 | New `repl_state.c` helper writes UI state through a different forward decl | ✅ `check-editor-ownership-budget` for `ui_state_*` calls (ratchet) | **GAP** — no guard for non-`ui_state_*` peer mutators called from REPL TUs |
 | Controller's new `repl_state_sync_ui_chrome` body re-introduces the wrong-direction read in `repl_state.c` | ✅ `check-state-c-shrinking` | — |
+| `repl_state_reset_program` keeps calling `repl_autocomplete_register_provider` (or any other editor-side registration) | — | **GAP** — symbol guard "`repl_state_reset_program` body cannot call `*_register_provider*` / `editor_completion_*`" — the program-only reset must touch only REPL slices |
 
-Coverage: medium. The line-count ratchet catches growth in `repl_state.c`; the ownership budget catches `ui_state_*` regression specifically. A symbol-level guard ("`repl_state.c` cannot reference `variable_panel_state_*`, `editor_help_session_*`, `replay_state_reset`, or `repl_editor_reset_transients`") would be the right complement and is already implied by the architecture's ownership rules.
+Coverage: medium. The line-count ratchet catches growth in `repl_state.c`; the ownership budget catches `ui_state_*` regression specifically. A symbol-level guard ("`repl_state.c` cannot reference `variable_panel_state_*`, `editor_help_session_*`, `replay_state_reset`, `repl_editor_reset_transients`, or `editor_completion_*`") would be the right complement and is already implied by the architecture's ownership rules.
 
 #### Step 3 — Pipeline `set_status` → diagnostic sinks
 
@@ -703,11 +842,20 @@ Coverage: medium. The line-count ratchet catches growth in `repl_state.c`; the o
 | `repl_executor.c` keeps calling `set_status` | — | **GAP** — extend `check-no-set-status-in-compile-apply` to executor |
 | `repl_flatten.c` keeps calling `set_status` | — | **GAP** — same, extend to flatten |
 | `repl_export.c` keeps calling `set_status` | — | **GAP** — same, extend to export |
+| `repl_scenes.c` keeps calling `set_status` (8 sites) | — | **GAP** — same, extend to scenes |
+| `repl_example_loader.c` keeps calling `set_status` | — | **GAP** — same, extend to example loader |
 | `repl_core.c` keeps the `set_status` thunk after callers leave | ✅ `check-state-c-shrinking` (line ratchet) | An explicit "`set_status` symbol gone from `repl_core.c`" check would be cleaner |
 
-Coverage: low. The plan calls out the missing guard explicitly: extend the existing pattern (`check-no-set-status-in-compile-apply` is the template) to `repl_executor.c`, `repl_flatten.c`, `repl_export.c`, and eventually `repl_core.c`. Land the guard *with* step 3 — the script is a 5-line edit of the existing one.
+Coverage: low. The guard `check-no-set-status-in-pipeline` must
+cover **all six TUs** (`repl_executor.c`, `repl_flatten.c`,
+`repl_export.c`, `repl_scenes.c`, `repl_example_loader.c`, and
+eventually `repl_core.c` itself). The round-1 plan listed only the
+first three; the omission was caught in round-2 review by checking
+the live `set_status` call sites and finding 7 additional ones in
+scenes + example loader. Land the guard *with* step 3 — the script
+is a small extension of `check-no-set-status-in-compile-apply`.
 
-#### Step 4 — Config split by owner
+#### Step 4 — Temporary catalog split
 
 | Risk | Existing coverage | Gap |
 |---|---|---|
@@ -716,9 +864,32 @@ Coverage: low. The plan calls out the missing guard explicitly: extend the exist
 | `glr_config.c` regrows REPL-only keys | — | **GAP** — needs a guard or convention |
 | `repl_export.c` / `repl_scenes.c` silently start calling `glr_config_*` again | — | **GAP** — currently allowed; would defeat the split |
 
-Coverage: low. Step 4 is the largest stub-count clear (8 stubs) and has the least existing protection — none of these modules exist yet. The right time to land guards is *as part of step 4*: add `check-repl-config-no-glr-config` (the new TU's include list is restricted) and `check-repl-export-no-glr-config` (the pipeline TUs cannot call `glr_config_*`).
+Coverage: low. Step 4 clears **6 stubs** (not 8 — the
+round-1 plan overcounted by attributing `ui_state_viewport` and
+`ui_state_code_panel` to the cfg-table coupling; those two are
+actually pulled in by `repl_export.c`'s `ui_layout_*` calls and
+clear in step 7). None of the affected modules exist yet, so the
+right time to land guards is *as part of step 4*: add
+`check-repl-config-no-glr-config` (the new TU's include list is
+restricted) and `check-repl-export-no-glr-config` (the pipeline
+TUs cannot call `glr_config_*`).
 
-#### Step 5 — Non-editor commit API
+#### Step 5a — Pure structured-block validator extraction
+
+| Risk | Existing coverage | Gap |
+|---|---|---|
+| New `repl_compile_close_brace` / `_if_block` / `_func_def` / `_for_loop` call `set_status` | ✅ `check-no-set-status-in-compile-apply` (hard guard on `repl_compile.c`) catches this on the destination side | — |
+| New `repl_compile_*` body retains editor side effects (cursor target, insert-mode toggle) | — | **GAP** — symbol guard "`repl_compile.c` cannot reference `EditorCommitPlan` / `editor_*_mut*` / `repl_state_edit_line_*` / `editor_insert_mode*`" — the new validators must produce `ReplCompiledChange` only |
+| `editor_compile_*` wrapper duplicates parsing logic instead of calling through to the new pure validator | ✅ `check-state-c-shrinking` would catch sustained growth in `src/editor/commit.c` | — |
+| Wrapper drops the cursor / insert-mode side-effect attachment after extraction | — | **TEST GAP** — round-trip test that `try_commit_for_loop` still moves the cursor inside the new block, etc.; existing test coverage is reasonable but the extraction is the right time to verify |
+
+Coverage: medium. The compile-purity guard already protects the
+destination. The editor-side-effect-leak risk is the new one and
+needs an explicit symbol guard. The extraction itself has no
+observable behavior change, so the existing test suite will flag
+behavioral regressions if any side-effect attachment is dropped.
+
+#### Step 5b — Non-editor commit API
 
 | Risk | Existing coverage | Gap |
 |---|---|---|
@@ -726,7 +897,7 @@ Coverage: low. Step 4 is the largest stub-count clear (8 stubs) and has the leas
 | New entry point includes `src/editor/input.h` (the dispatch boundary) | — | **GAP** — no guard against `repl_*.c` including `src/editor/input.h` |
 | `repl_example_loader.c` and `repl_export.c` keep calling `feed_line` | ✅ `check-no-repl-editor-input-shim` covers `src/editor/input.c` only, not the call sites | **GAP** — symbol-level guard needed |
 
-Coverage: low. Land two guards with step 5: (a) `check-repl-no-editor-input-include` — REPL TUs cannot `#include "src/editor/input.h"`; and (b) `check-no-feed-line-in-pipeline` — symbol-level guard against `feed_line(` calls in `repl_*.c` after the migration completes.
+Coverage: low. Land two guards with step 5b: (a) `check-repl-no-editor-input-include` — REPL TUs cannot `#include "src/editor/input.h"`; and (b) `check-no-feed-line-in-pipeline` — symbol-level guard against `feed_line(` calls in `repl_*.c` after the migration completes.
 
 #### Step 6 — Reformatter + scene cursor restore extraction
 
@@ -748,6 +919,7 @@ Coverage: low. Same shape as step 5 — needs two new guards.
 | New `glr_state.h` accidentally gets included by `src/scene/*.c` or `src/ui/*.c` | — | **GAP** — extend `check-views-no-owners` to also forbid `glr_state_owners.h` (or whatever the mutator header becomes named); presentation/render were *already* legitimately read by views via the snapshot, so the read header should remain includable |
 | `repl_export.c` keeps reading `repl_state_presentation_*()` or `glr_state_*` after the relocation | — | **GAP** — symbol guard "`repl_export.c` cannot reference `glr_state_*`, `glr_config_*`, `glr_camera_*`, peer state, audio" — forces all cfg flow through `ReplExportProperties` and the camera block through `ReplExportCameraBlock` |
 | `repl_export.c` reads cfg slugs by name (e.g. `strcmp(key, "wireframe")`) | — | **GAP** — symbol/literal guard rejecting known slug strings inside `repl_export.c`; if the file has to know "wireframe" exists, the abstraction has leaked |
+| `repl_export.c` keeps calling `ui_layout_scene_rect` / `ui_layout_code_panel_rect` (the layout pull-in that step 4 *doesn't* address) | — | **GAP** — symbol guard "`repl_export.c` cannot reference `ui_layout_*`"; layout values must enter via the export-options struct, mirroring the cfg/camera opacity rule |
 | `repl_scenes.c` keeps reading presentation/render after the per-slot snapshots become `ReplExportProperties` | — | **GAP** — symbol guard, same shape as the export guard |
 | Owner fill/apply helpers grow inside `repl_export.c` instead of in their owners (e.g. someone adds `repl_export_props_fill_glr_state()`) | — | **GAP** — fill/apply helpers must live in their owners' TUs (`glr_state_fill_export_props`, `camera_fill_export_block`, etc.); a guard "`repl_export.c` defines no `*_fill_export_*` / `*_apply_export_*` symbols" keeps the rule one-way |
 | `@cfg` save-file format silently drops a slug because the property bag wasn't filled by some owner | — | **TEST GAP** — round-trip every `glr_config_items()` slug through `glr_state_fill_export_props` → `repl_export_save` → `repl_export_load` → `glr_state_apply_export_props` and assert the value preserved. The neutral abstraction makes this test trivial: feed the bag in, read it out, compare |
@@ -780,10 +952,12 @@ counts the externally-visible symbols in
 fails if the count exceeds a baseline that ratchets downward only.
 
 Today's baseline: **17**. After step 1 (target): 16. After step 2: 11.
-After step 3: 10. After step 4: 2. After step 5: 1. After step 6: 0.
-Step 7 doesn't move the count — it's structural follow-on after the
-stubs are gone — but the ratchet stays at 0/0 to prevent regression
-during the slice relocation.
+After step 3: 10. After step 4: 4 (clears 6 — config-owned only;
+`ui_state_viewport` and `ui_state_code_panel` survive past step 4).
+After step 5a: 4 (no stub change; pure extraction). After step 5b:
+3. After step 6: 2. After step 7: **0** (clears `ui_state_viewport`
+and `ui_state_code_panel` via the layout-opacity rework alongside
+the cfg-opacity rework). The ratchet stays at 0/0 thereafter.
 
 This guard catches at the symbol layer what include-based guards miss
 at the header layer. It also matches the architectural commitment
@@ -802,14 +976,16 @@ batch.
 
 | New / extended guard | Step that needs it | Effort |
 |---|---|---|
-| `check-no-set-status-in-pipeline` (extend the compile-apply guard to executor/flatten/export/core) | 3 | 30 min — clone the existing script |
-| `check-repl-no-editor-input-symbols` (`feed_line`, `load_line_to_input`, `repl_editor_reset_transients` not callable from `repl_*.c`) | 2, 5, 6 | 1 hr — symbol-level grep over REPL_SRCS |
+| `check-no-set-status-in-pipeline` (extend the compile-apply guard to **6 TUs**: executor, flatten, export, scenes, example_loader, core) | 3 | 30 min — clone the existing script |
+| `check-repl-no-editor-input-symbols` (`feed_line`, `load_line_to_input`, `repl_editor_reset_transients` not callable from `repl_*.c`) | 2, 5b, 6 | 1 hr — symbol-level grep over REPL_SRCS |
+| `check-repl-state-no-editor-completion` (`repl_state.c` cannot reference `editor_completion_*` or `*_register_provider*` — the program-only reset must not register editor-side providers) | 2 | 15 min |
 | `check-repl-no-glr-config` (`repl_*.c` cannot reference `glr_config_*` after split) and reciprocal | 4 | 30 min |
 | `check-repl-state-c-no-peer-resets` (extend `check-editor-ownership-budget` to peer/editor reset symbols) | 2 | 30 min — add new ratchet keys |
-| `check-repl-core-c-shrinking` (clone of the `repl_state.c` ratchet for `repl_core.c`) | 3, 5, 6 | 15 min |
+| `check-repl-compile-no-editor-side-effects` (the new structured-block validators in `repl_compile.c` cannot reference `EditorCommitPlan`, `editor_*_mut*`, `editor_insert_mode*`, or `repl_state_edit_line_*`) | 5a | 30 min |
+| `check-repl-core-c-shrinking` (clone of the `repl_state.c` ratchet for `repl_core.c`) | 3, 5b, 6 | 15 min |
 | `check-repl-state-no-glr-state` (symbol guard: `repl_state.c` cannot reference `glr_state_*`) and reciprocal | 7 | 30 min |
 | `check-glr-state-no-repl-mutators` (clone of `check-views-no-owners` shape, applied to the new owner) | 7 | 30 min — extend allowlist of files allowed to write `repl_state` |
-| `check-repl-export-opaque-to-cfg` (`repl_export.c` cannot reference `glr_state_*`, `glr_config_*`, `glr_camera_*`, peer state, or `audio_*`; cannot string-match known cfg slugs; cannot define `*_fill_export_*` / `*_apply_export_*` helpers — those live in owner TUs) | 7 | 1 hr — three orthogonal greps, one allowlist for the bag iterators |
+| `check-repl-export-opaque-to-environment` (`repl_export.c` cannot reference `glr_state_*`, `glr_config_*`, `glr_camera_*`, peer state, `audio_*`, **or `ui_layout_*`**; cannot string-match known cfg slugs; cannot define `*_fill_export_*` / `*_apply_export_*` helpers — those live in owner TUs) | 7 | 1 hr — four orthogonal greps, one allowlist for the bag iterators |
 | `check-repl-scenes-no-glr-state` (`repl_scenes.c` cannot reference `glr_state_*` after the per-slot snapshot becomes a `ReplExportProperties`) | 7 | 30 min |
 | `check-repl-demo-stubs-shrinking` (the umbrella ratchet) | all | 1 hr — count externally-visible symbols, ratchet down only |
 
