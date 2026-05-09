@@ -175,9 +175,12 @@ to make the layer boundaries observable:
   text canonically lives on `src/editor/state.c`'s `ReplEditorBuffer`,
   so that one editor TU is in the link set by design. The
   `tools/repl_demo/stubs.c` file is the visible record of what the
-  REPL pipeline pulls in beyond pure pipeline code; if it grows past
-  ~15 entries the chokepoint deserves a structural split rather than
-  more stubs.
+  REPL pipeline pulls in beyond pure pipeline code. That list is now
+  large enough to treat as a cleanup ledger, not a success condition:
+  reset fan-out, status, config, import, and layout helpers still cross
+  into app/editor/UI owners at link time. See
+  [`ARCHITECTURE.md`](ARCHITECTURE.md#standalone-repl-demo-coupling) for
+  the detailed dependency table and removal plan.
 
 Both demos default to `USE_GL_STUBS=1`-friendly object lists. Run
 `./repl_demo` for a parse/flatten summary of the built-in samples;
