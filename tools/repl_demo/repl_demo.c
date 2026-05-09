@@ -100,6 +100,8 @@ static void seed_for_loop_program(void) {
      * matching GLCmds. The flattener reads expressions from the editor
      * buffer, so the text and cmds must agree. */
     static const char *const lines[] = {
+        "glPointSize(8)",
+        "glColor3f(0.95, 0.85, 0.20)",
         "glBegin(GL_POINTS)",
         "for(i, 0, 4)",
         "  glVertex3f(i, 0, 0)",
@@ -112,41 +114,50 @@ static void seed_for_loop_program(void) {
     for (int i = 0; i < LINE_COUNT; i++)
         editor_buffer_set_line(i, lines[i]);
 
-    GLCmd cmds[5];
+    GLCmd cmds[LINE_COUNT];
     memset(cmds, 0, sizeof(cmds));
 
-    /* CMD_BEGIN: GL_POINTS so the executor sets in_begin=1. */
-    cmds[0].type = CMD_BEGIN;
+    cmds[0].type = CMD_POINT_SIZE;
     cmds[0].valid = 1;
-    cmds[0].mode = GL_POINTS;
+    cmds[0].args[0] = 8.0f;
+    cmds[0].num_args = 1;
+
+    cmds[1].type = CMD_COLOR3F;
+    cmds[1].valid = 1;
+    cmds[1].args[0] = 0.95f;
+    cmds[1].args[1] = 0.85f;
+    cmds[1].args[2] = 0.20f;
+    cmds[1].num_args = 3;
+
+    cmds[2].type = CMD_BEGIN;
+    cmds[2].valid = 1;
+    cmds[2].mode = GL_POINTS;
 
     /* CMD_FOR_BEGIN: var name 'i', start 0, end 4, step 1 (default). */
-    cmds[1].type = CMD_FOR_BEGIN;
-    cmds[1].valid = 1;
-    cmds[1].args[0] = 0.0f;     /* start */
-    cmds[1].args[1] = 4.0f;     /* end (exclusive in the canonical form) */
-    cmds[1].args[2] = 1.0f;     /* step */
-    cmds[1].num_args = 3;
+    cmds[3].type = CMD_FOR_BEGIN;
+    cmds[3].valid = 1;
+    cmds[3].args[0] = 0.0f;     /* start */
+    cmds[3].args[1] = 4.0f;     /* end (exclusive in the canonical form) */
+    cmds[3].args[2] = 1.0f;     /* step */
+    cmds[3].num_args = 3;
     /* Body command: glVertex3f with `i` as an expression. has_vars=1 so
      * the flattener re-evaluates the expression with the loop's local i
      * for each iteration. */
-    cmds[2].type = CMD_VERTEX3F;
-    cmds[2].valid = 1;
-    cmds[2].has_vars = 1;
-    cmds[2].args[0] = 0.0f;     /* placeholder; flatten reparses from text */
-    cmds[2].args[1] = 0.0f;
-    cmds[2].args[2] = 0.0f;
-    cmds[2].num_args = 3;
-    cmds[3].type = CMD_FOR_END;
-    cmds[3].valid = 1;
-
-    /* CMD_END: closes the glBegin. */
-    cmds[4].type = CMD_END;
+    cmds[4].type = CMD_VERTEX3F;
     cmds[4].valid = 1;
+    cmds[4].has_vars = 1;
+    cmds[4].args[0] = 0.0f;     /* placeholder; flatten reparses from text */
+    cmds[4].args[1] = 0.0f;
+    cmds[4].args[2] = 0.0f;
+    cmds[4].num_args = 3;
+    cmds[5].type = CMD_FOR_END;
+    cmds[5].valid = 1;
+
+    cmds[6].type = CMD_END;
+    cmds[6].valid = 1;
 
     ReplCommandStore store = repl_command_store_live();
-    /* Bulk-load the five commands so count/edit_line is set in one shot. */
-    repl_command_store_load(&store, cmds, 5, 0);
+    repl_command_store_load(&store, cmds, LINE_COUNT, 0);
 }
 
 /* --- Program loaders -------------------------------------------------- */
@@ -218,16 +229,19 @@ static void seed_variable_driven_program(void) {
      * `repl_parser_parse_command_ctx` path bakes the literal values
      * in -- correct for static commands, wrong for var-driven ones. */
     static const char *const lines[] = {
+        "glPointSize(8)",
+        "glColor3f(0.95, 0.85, 0.20)",
         "glBegin(GL_POINTS)",
         "glVertex3f(r * sin(t), r * cos(t), 0)",
         "glEnd()",
     };
+    enum { N_LINES = sizeof(lines) / sizeof(lines[0]) };
     int pos = 0;
-    for (int i = 0; i < 3; i++) {
+    for (int i = 0; i < N_LINES; i++) {
         GLCmd cmd;
         memset(&cmd, 0, sizeof(cmd));
         char text[MAX_LINE_LEN] = "";
-        int preserve = (i == 1) ? 1 : 0;
+        int preserve = (i == 3) ? 1 : 0;
         if (!repl_parse_and_normalize(lines[i], 0, NULL, 0,
                                       preserve,
                                       &cmd, text, (int)sizeof(text))) {
@@ -353,12 +367,6 @@ static void render_display_func(void) {
     glClearColor(0.10f, 0.10f, 0.13f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     render_apply_camera();
-
-    /* Samples 2 and 3 use GL_POINTS -- set point size before execute. */
-    if (g_render_sample != 1) {
-        glPointSize(8.0f);
-        glColor3f(0.95f, 0.85f, 0.20f);
-    }
 
     /* For sample 3, push the live `t` into the predef table so the
      * has_vars re-evaluation sees the animated value. */
