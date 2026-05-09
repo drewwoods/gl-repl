@@ -2070,7 +2070,7 @@ static int import_extract_c_for_exprs(const char *line,
         return import_copy_expr_until(&p, ')', step_expr, step_sz);
     }
     if (*p == '-' && p[1] == '=') {
-        char raw_step[128];
+        char raw_step[120]; /* leave room for the "-(...)" wrapper below */
         p += 2;
         while (*p && isspace((unsigned char)*p)) p++;
         if (!import_copy_expr_until(&p, ')', raw_step, sizeof(raw_step)))
@@ -2103,23 +2103,29 @@ static int import_make_repl_for_header(const char *line, char *out, int out_sz) 
          import_expr_has_symbolic_ident(step_expr))) {
         int symbolic_step = import_expr_has_symbolic_ident(step_expr);
         if (include_end) {
-            char adjusted[128];
-            snprintf(adjusted, sizeof(adjusted), "(%s) %c 1",
-                     end_expr, is_greater ? '-' : '+');
-            strncpy(end_expr, adjusted, sizeof(end_expr) - 1);
-            end_expr[sizeof(end_expr) - 1] = '\0';
+            char adjusted[sizeof(end_expr) + 8];
+            int an = snprintf(adjusted, sizeof(adjusted), "(%s) %c 1",
+                              end_expr, is_greater ? '-' : '+');
+            if (an < 0 || (size_t)an >= sizeof(adjusted))
+                return 0;
+            int en = snprintf(end_expr, sizeof(end_expr), "%s", adjusted);
+            if (en < 0 || en >= (int)sizeof(end_expr))
+                return 0;
         }
 
+        int n;
         if (symbolic_step) {
-            snprintf(out, out_sz, "for(%s, %s, %s, %s) {",
-                     var, start_expr, end_expr, step_expr);
+            n = snprintf(out, (size_t)out_sz, "for(%s, %s, %s, %s) {",
+                         var, start_expr, end_expr, step_expr);
         } else if (step_v != 1.0f) {
-            snprintf(out, out_sz, "for(%s, %s, %s, %g) {",
-                     var, start_expr, end_expr, step_v);
+            n = snprintf(out, (size_t)out_sz, "for(%s, %s, %s, %g) {",
+                         var, start_expr, end_expr, step_v);
         } else {
-            snprintf(out, out_sz, "for(%s, %s, %s) {",
-                     var, start_expr, end_expr);
+            n = snprintf(out, (size_t)out_sz, "for(%s, %s, %s) {",
+                         var, start_expr, end_expr);
         }
+        if (n < 0 || n >= out_sz)
+            return 0;
         return 1;
     }
 
@@ -2277,8 +2283,10 @@ static int import_make_repl_tess_line(const char *line, char *out, int out_sz) {
             }
         }
         if (have_exprs) {
-            snprintf(out, out_sz, "gluNormal(%s, %s, %s);",
-                     exprs[0], exprs[1], exprs[2]);
+            int n = snprintf(out, (size_t)out_sz, "gluNormal(%s, %s, %s);",
+                             exprs[0], exprs[1], exprs[2]);
+            if (n < 0 || n >= out_sz)
+                return 0;
             return 1;
         }
 
@@ -2310,13 +2318,16 @@ static int import_make_repl_tess_line(const char *line, char *out, int out_sz) {
             }
         }
         if (have_exprs) {
+            int n;
             if (strcmp(exprs[3], "1") == 0 || strcmp(exprs[3], "1.0") == 0) {
-                snprintf(out, out_sz, "gluColor(%s, %s, %s);",
-                         exprs[0], exprs[1], exprs[2]);
+                n = snprintf(out, (size_t)out_sz, "gluColor(%s, %s, %s);",
+                             exprs[0], exprs[1], exprs[2]);
             } else {
-                snprintf(out, out_sz, "gluColor(%s, %s, %s, %s);",
-                         exprs[0], exprs[1], exprs[2], exprs[3]);
+                n = snprintf(out, (size_t)out_sz, "gluColor(%s, %s, %s, %s);",
+                             exprs[0], exprs[1], exprs[2], exprs[3]);
             }
+            if (n < 0 || n >= out_sz)
+                return 0;
             return 1;
         }
 
@@ -2349,8 +2360,10 @@ static int import_make_repl_tess_line(const char *line, char *out, int out_sz) {
             }
         }
         if (have_exprs) {
-            snprintf(out, out_sz, "gluVertex(%s, %s, %s);",
-                     exprs[0], exprs[1], exprs[2]);
+            int n = snprintf(out, (size_t)out_sz, "gluVertex(%s, %s, %s);",
+                             exprs[0], exprs[1], exprs[2]);
+            if (n < 0 || n >= out_sz)
+                return 0;
             return 1;
         }
 
