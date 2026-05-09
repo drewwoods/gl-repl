@@ -222,7 +222,7 @@ int repl_eval_find_predef_var_idx(const char *name) {
 static const char *s_reserved_idents[] = {
     "t", "PI", "TAU", "float", "var",
     "sin", "cos", "tan", "sqrt", "abs", "pow",
-    "min", "max", "floor", "ceil", "fmod", "rem", "rand",
+    "min", "max", "floor", "ceil", "fmod", "rem", "rand", "rand2",
     "A", "B", "C",
     NULL
 };
@@ -744,6 +744,14 @@ static float expr_rand01(float seed, float iter) {
     return frac;
 }
 
+/* Like expr_rand01 but maps to [-1, 1]. Same hash so identical
+ * (seed, iter) pairs produce correlated values across the two
+ * functions, which keeps `rand` and `rand2` deterministic together
+ * inside a single expression. */
+static float expr_rand_signed(float seed, float iter) {
+    return expr_rand01(seed, iter) * 2.0f - 1.0f;
+}
+
 static float eval_primary(ExprCtx *ctx) {
     expr_skip_ws(ctx);
 
@@ -870,6 +878,9 @@ static float eval_primary(ExprCtx *ctx) {
             if (strcmp(name, "rand") == 0)
                 return arg_count >= 2 ? expr_rand01(args[0], args[1])
                                       : (arg_count == 1 ? expr_rand01(args[0], 0.0f) : 0.0f);
+            if (strcmp(name, "rand2") == 0)
+                return arg_count >= 2 ? expr_rand_signed(args[0], args[1])
+                                      : (arg_count == 1 ? expr_rand_signed(args[0], 0.0f) : 0.0f);
         }
 
         return 0.0f;   /* unknown identifier */
@@ -982,6 +993,7 @@ void repl_eval_expr_to_c(const char *in, char *out, int out_sz) {
         { "fmod",  "fmodf",  1 },
         { "rem",   "remainderf", 1 },
         { "rand",  "repl_randf", 1 },
+        { "rand2", "repl_rand2f", 1 },
         { "TAU",   "(2*M_PI)", 0 },
         { "PI",    "M_PI",     0 },
     };
@@ -1150,6 +1162,7 @@ void repl_eval_c_expr_to_repl(const char *in, char *out, int out_sz) {
         { "ceilf",  "ceil"  },
         { "fmodf",  "fmod"  },
         { "remainderf", "rem" },
+        { "repl_rand2f", "rand2" },
         { "repl_randf", "rand" },
         { "M_PI",   "PI"    },
     };

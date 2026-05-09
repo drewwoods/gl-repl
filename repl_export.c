@@ -1729,6 +1729,9 @@ static void write_rand_helper(FILE *f) {
         "  float frac = h - floorf(h);\n"
         "  if (frac < 0.0f) frac += 1.0f;\n"
         "  return frac;\n"
+        "}\n"
+        "\nstatic float repl_rand2f(float seed, float iter) {\n"
+        "  return repl_randf(seed, iter) * 2.0f - 1.0f;\n"
         "}\n");
 }
 
@@ -2658,6 +2661,7 @@ static ExportNeeds export_collect_needs(void) {
         if (cmd->type == CMD_GLUT_BITMAP_STRING) needs.needs_label = 1;
         const char *src = export_document_text(cmd_idx);
         if (export_text_uses_token(src, "rand(")) needs.needs_rand = 1;
+        if (export_text_uses_token(src, "rand2(")) needs.needs_rand = 1;
         if (export_text_uses_token(src, "A["))    needs.needs_scratch_a = 1;
         if (export_text_uses_token(src, "B["))    needs.needs_scratch_b = 1;
         if (export_text_uses_token(src, "C["))    needs.needs_scratch_c = 1;
