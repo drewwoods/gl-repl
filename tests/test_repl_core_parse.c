@@ -343,24 +343,24 @@ int main(void) {
         ASSERT_TRUE("glutSolidTeapot type", cmd.type == CMD_GLUT_TEAPOT);
     }
 
-    /* glutBitmapString: success cases. */
+    /* glutBitmapStringf: success cases. */
     {
         repl_reset_state();
         GLCmd cmd;
         char text[MAX_LINE_LEN] = "";
         memset(&cmd, 0, sizeof(cmd));
         int ok = parse_cmd_with_text(
-            "glutBitmapString(1, 2, 3, \"hello\")", &cmd, text, sizeof(text));
-        ASSERT_TRUE("glutBitmapString no-args parse ok", ok == 1);
-        ASSERT_TRUE("glutBitmapString type",
+            "glutBitmapStringf(1, 2, 3, \"hello\")", &cmd, text, sizeof(text));
+        ASSERT_TRUE("glutBitmapStringf no-args parse ok", ok == 1);
+        ASSERT_TRUE("glutBitmapStringf type",
                     cmd.type == CMD_GLUT_BITMAP_STRING);
-        ASSERT_TRUE("glutBitmapString position[0]", cmd.args[0] == 1.0f);
-        ASSERT_TRUE("glutBitmapString position[1]", cmd.args[1] == 2.0f);
-        ASSERT_TRUE("glutBitmapString position[2]", cmd.args[2] == 3.0f);
-        ASSERT_TRUE("glutBitmapString num_args", cmd.num_args == 3);
-        ASSERT_TRUE("glutBitmapString fmt stored",
+        ASSERT_TRUE("glutBitmapStringf position[0]", cmd.args[0] == 1.0f);
+        ASSERT_TRUE("glutBitmapStringf position[1]", cmd.args[1] == 2.0f);
+        ASSERT_TRUE("glutBitmapStringf position[2]", cmd.args[2] == 3.0f);
+        ASSERT_TRUE("glutBitmapStringf num_args", cmd.num_args == 3);
+        ASSERT_TRUE("glutBitmapStringf fmt stored",
                     strcmp(cmd.text, "hello") == 0);
-        ASSERT_TRUE("glutBitmapString canonical text",
+        ASSERT_TRUE("glutBitmapStringf canonical text",
                     strstr(text, "\"hello\"") != NULL);
     }
 
@@ -369,11 +369,11 @@ int main(void) {
         GLCmd cmd;
         memset(&cmd, 0, sizeof(cmd));
         int ok = parse_for_test(
-            "glutBitmapString(0, 0, 0, \"v=%f\", 3.5)", &cmd);
-        ASSERT_TRUE("glutBitmapString one %f parse ok", ok == 1);
-        ASSERT_TRUE("glutBitmapString one %f num_args", cmd.num_args == 4);
-        ASSERT_TRUE("glutBitmapString one %f sub arg", cmd.args[3] == 3.5f);
-        ASSERT_TRUE("glutBitmapString one %f fmt stored",
+            "glutBitmapStringf(0, 0, 0, \"v=%f\", 3.5)", &cmd);
+        ASSERT_TRUE("glutBitmapStringf one %f parse ok", ok == 1);
+        ASSERT_TRUE("glutBitmapStringf one %f num_args", cmd.num_args == 4);
+        ASSERT_TRUE("glutBitmapStringf one %f sub arg", cmd.args[3] == 3.5f);
+        ASSERT_TRUE("glutBitmapStringf one %f fmt stored",
                     strcmp(cmd.text, "v=%f") == 0);
     }
 
@@ -382,11 +382,11 @@ int main(void) {
         GLCmd cmd;
         memset(&cmd, 0, sizeof(cmd));
         int ok = parse_for_test(
-            "glutBitmapString(0, 0, 0, \"a=%f b=%f c=%f d=%f\", 1, 2, 3, 4)",
+            "glutBitmapStringf(0, 0, 0, \"a=%f b=%f c=%f d=%f\", 1, 2, 3, 4)",
             &cmd);
-        ASSERT_TRUE("glutBitmapString four %f parse ok", ok == 1);
-        ASSERT_TRUE("glutBitmapString four %f num_args", cmd.num_args == 7);
-        ASSERT_TRUE("glutBitmapString four %f arg[6]", cmd.args[6] == 4.0f);
+        ASSERT_TRUE("glutBitmapStringf four %f parse ok", ok == 1);
+        ASSERT_TRUE("glutBitmapStringf four %f num_args", cmd.num_args == 7);
+        ASSERT_TRUE("glutBitmapStringf four %f arg[6]", cmd.args[6] == 4.0f);
     }
 
     {
@@ -394,24 +394,24 @@ int main(void) {
         GLCmd cmd;
         memset(&cmd, 0, sizeof(cmd));
         int ok = parse_for_test(
-            "glutBitmapString(0, 0, 0, \"100%% done\")", &cmd);
-        ASSERT_TRUE("glutBitmapString %% literal parse ok", ok == 1);
-        ASSERT_TRUE("glutBitmapString %% literal num_args",
+            "glutBitmapStringf(0, 0, 0, \"100%% done\")", &cmd);
+        ASSERT_TRUE("glutBitmapStringf %% literal parse ok", ok == 1);
+        ASSERT_TRUE("glutBitmapStringf %% literal num_args",
                     cmd.num_args == 3);
-        ASSERT_TRUE("glutBitmapString %% literal fmt stored",
+        ASSERT_TRUE("glutBitmapStringf %% literal fmt stored",
                     strcmp(cmd.text, "100%% done") == 0);
     }
 
-    /* glutBitmapString: error cases. Each must surface a graceful
+    /* glutBitmapStringf: error cases. Each must surface a graceful
      * status message and reject the line (no GLCmd committed). */
     {
         repl_reset_state();
         GLCmd cmd;
         memset(&cmd, 0, sizeof(cmd));
         int ok = parse_for_test(
-            "glutBitmapString(0, 0, 0, \"a // b\")", &cmd);
-        ASSERT_TRUE("glutBitmapString // forbidden", ok == 0);
-        ASSERT_TRUE("glutBitmapString // forbidden status",
+            "glutBitmapStringf(0, 0, 0, \"a // b\")", &cmd);
+        ASSERT_TRUE("glutBitmapStringf // forbidden", ok == 0);
+        ASSERT_TRUE("glutBitmapStringf // forbidden status",
                     strstr(g_status, "'//'") != NULL);
     }
     {
@@ -419,9 +419,9 @@ int main(void) {
         GLCmd cmd;
         memset(&cmd, 0, sizeof(cmd));
         int ok = parse_for_test(
-            "glutBitmapString(0, 0, 0, \"a , b\")", &cmd);
-        ASSERT_TRUE("glutBitmapString , forbidden", ok == 0);
-        ASSERT_TRUE("glutBitmapString , forbidden status",
+            "glutBitmapStringf(0, 0, 0, \"a , b\")", &cmd);
+        ASSERT_TRUE("glutBitmapStringf , forbidden", ok == 0);
+        ASSERT_TRUE("glutBitmapStringf , forbidden status",
                     strstr(g_status, "','") != NULL);
     }
     {
@@ -429,9 +429,9 @@ int main(void) {
         GLCmd cmd;
         memset(&cmd, 0, sizeof(cmd));
         int ok = parse_for_test(
-            "glutBitmapString(0, 0, 0, \"hi\\nworld\")", &cmd);
-        ASSERT_TRUE("glutBitmapString backslash forbidden", ok == 0);
-        ASSERT_TRUE("glutBitmapString backslash forbidden status",
+            "glutBitmapStringf(0, 0, 0, \"hi\\nworld\")", &cmd);
+        ASSERT_TRUE("glutBitmapStringf backslash forbidden", ok == 0);
+        ASSERT_TRUE("glutBitmapStringf backslash forbidden status",
                     strstr(g_status, "backslash") != NULL);
     }
     {
@@ -442,9 +442,9 @@ int main(void) {
         GLCmd cmd;
         memset(&cmd, 0, sizeof(cmd));
         int ok = parse_for_test(
-            "glutBitmapString(0, 0, 0, \"unterminated)", &cmd);
-        ASSERT_TRUE("glutBitmapString missing close quote", ok == 0);
-        ASSERT_TRUE("glutBitmapString missing close quote status",
+            "glutBitmapStringf(0, 0, 0, \"unterminated)", &cmd);
+        ASSERT_TRUE("glutBitmapStringf missing close quote", ok == 0);
+        ASSERT_TRUE("glutBitmapStringf missing close quote status",
                     strstr(g_status, "closing") != NULL);
     }
     {
@@ -452,9 +452,9 @@ int main(void) {
         GLCmd cmd;
         memset(&cmd, 0, sizeof(cmd));
         int ok = parse_for_test(
-            "glutBitmapString(0, 0, 0, \"%f\", 1, 2)", &cmd);
-        ASSERT_TRUE("glutBitmapString arg-count mismatch", ok == 0);
-        ASSERT_TRUE("glutBitmapString arg-count status",
+            "glutBitmapStringf(0, 0, 0, \"%f\", 1, 2)", &cmd);
+        ASSERT_TRUE("glutBitmapStringf arg-count mismatch", ok == 0);
+        ASSERT_TRUE("glutBitmapStringf arg-count status",
                     strstr(g_status, "format expects") != NULL);
     }
     {
@@ -462,9 +462,9 @@ int main(void) {
         GLCmd cmd;
         memset(&cmd, 0, sizeof(cmd));
         int ok = parse_for_test(
-            "glutBitmapString(0, 0, 0, \"%d\", 1)", &cmd);
-        ASSERT_TRUE("glutBitmapString %d rejected", ok == 0);
-        ASSERT_TRUE("glutBitmapString %d status",
+            "glutBitmapStringf(0, 0, 0, \"%d\", 1)", &cmd);
+        ASSERT_TRUE("glutBitmapStringf %d rejected", ok == 0);
+        ASSERT_TRUE("glutBitmapStringf %d status",
                     strstr(g_status, "only %f") != NULL);
     }
     {
@@ -472,10 +472,10 @@ int main(void) {
         GLCmd cmd;
         memset(&cmd, 0, sizeof(cmd));
         int ok = parse_for_test(
-            "glutBitmapString(0, 0, 0, \"%f %f %f %f %f\", 1, 2, 3, 4, 5)",
+            "glutBitmapStringf(0, 0, 0, \"%f %f %f %f %f\", 1, 2, 3, 4, 5)",
             &cmd);
-        ASSERT_TRUE("glutBitmapString >4 sub args rejected", ok == 0);
-        ASSERT_TRUE("glutBitmapString >4 sub args status",
+        ASSERT_TRUE("glutBitmapStringf >4 sub args rejected", ok == 0);
+        ASSERT_TRUE("glutBitmapStringf >4 sub args status",
                     strstr(g_status, "max 4") != NULL);
     }
 

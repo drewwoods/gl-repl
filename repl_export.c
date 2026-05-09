@@ -1617,11 +1617,12 @@ static void write_canonical_cmd_as_c(FILE *f, const GLCmd *cmd, int cmd_idx,
          * whole line (including string contents) and would rewrite
          * substrings like "sin" or "PI" appearing inside the format.
          *
-         * The exported line is REPL syntax — `glutBitmapString(x, y,
-         * z, "fmt", a, b)` doesn't match real freeglut's signature.
-         * Files containing this command will not compile against
-         * vanilla freeglut; round-trip through the REPL still works
-         * because the import path recognizes the same syntax. */
+         * Emits `glutBitmapStringf(...)` — a REPL-specific name (the
+         * `f` suffix mirrors printf-family naming) so there's no
+         * collision with real freeglut's two-arg `glutBitmapString`.
+         * Standalone-C compilation requires providing a wrapper;
+         * round-trip through the REPL works because the import path
+         * recognizes the same syntax. */
         const char *open_p = strchr(source_text, '(');
         const char *close_p = open_p ? strrchr(source_text, ')') : NULL;
         if (open_p && close_p && close_p > open_p) {
@@ -2507,12 +2508,12 @@ static int import_make_repl_point_parameter_line(const char *line, char *out, in
 
 static int import_make_repl_glut_bitmap_string(const char *line,
                                                 char *out, int out_sz) {
-    /* Match the glutBitmapString prefix (allow leading whitespace).
+    /* Match the glutBitmapStringf prefix (allow leading whitespace).
      * Run the args halves through the C-to-REPL converter while
      * preserving the format string verbatim. */
     const char *p = line ? line : "";
     while (*p && isspace((unsigned char)*p)) p++;
-    static const char kPrefix[] = "glutBitmapString";
+    static const char kPrefix[] = "glutBitmapStringf";
     int kPrefixLen = (int)(sizeof(kPrefix) - 1);
     if (strncmp(p, kPrefix, (size_t)kPrefixLen) != 0)
         return 0;
@@ -2549,7 +2550,7 @@ static int import_make_repl_glut_bitmap_string(const char *line,
         repl_eval_c_expr_to_repl(post, post_repl, sizeof(post_repl));
 
     return repl_format_fits(out, (size_t)out_sz,
-                            "glutBitmapString(%s, \"%s\"%s%s);",
+                            "glutBitmapStringf(%s, \"%s\"%s%s);",
                             pre_repl, fmt,
                             post_repl[0] ? ", " : "", post_repl);
 }
