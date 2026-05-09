@@ -21,10 +21,12 @@
  *     per-line canonical text -- by design, not editor input dispatch).
  *   - GL stub-ready scene/peer surface for whatever repl_state.c reaches.
  *   - tools/repl_demo/stubs.c: no-op replacements for editor input
- *     dispatch (feed_line / load_line_to_input), the set_status thunk,
- *     and the glr_config / layout / app-storage symbols the REPL
- *     pipeline still reaches for. The dependency ledger and removal
- *     plan live in feature/decouple-repl-from-gl-repl-alt.md.
+ *     dispatch (feed_line / load_line_to_input) and the glr_config /
+ *     layout / app-storage symbols the REPL pipeline still reaches
+ *     for. Pipeline diagnostics flow through repl_set_status_sink;
+ *     the demo deliberately leaves the sink unset so set_status is a
+ *     silent no-op. The dependency ledger and removal plan live in
+ *     feature/decouple-repl-from-gl-repl-alt.md.
  *
  * Run:
  *   make repl_demo USE_GL_STUBS=1
