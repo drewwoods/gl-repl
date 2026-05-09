@@ -144,13 +144,18 @@ REPL_DEMO_DEP_SRCS = repl_core.c repl_state.c repl_parser.c \
                      repl_executor.c repl_eval.c repl_source_scope.c \
                      repl_autonormal.c repl_scenes.c \
                      repl_example_loader.c repl_examples.c \
-                     repl_export.c repl_autocomplete.c repl_help_text.c \
+                     repl_export.c repl_autocomplete.c \
                      repl_replay_annotations.c replay.c replay_state.c \
-                     glr_camera.c glr_config.c \
+                     glr_camera.c \
                      src/editor/state.c src/editor/completion.c \
                      src/ui/layout.c src/ui/code_panel_layout.c \
                      cmd_format.c prof.c \
                      tests/gl-stubs/gl_stub_counts.c
+# glr_config.c removed in step 4 of the decouple plan: pipeline TUs
+# (repl_export.c, repl_scenes.c, repl_example_loader.c) no longer call
+# glr_config_*; the controller-installed ReplExportConfigBridge is the
+# only path that touches cfg state, and that lives in glr_actions.c
+# (not in the demo link set).
 
 OBJDIR = build/$(BUILD)$(if $(filter 1,$(USE_GL_STUBS)),-gl-stubs,)
 OBJ_CFLAGS = $(BUILD_CFLAGS) $(CFLAGS)

@@ -240,6 +240,11 @@ static void load_example_lines(const char *const *lines) {
 
     if (body)
         body += consume_example_cfg_header(body);
+    /* Drain the @cfg accumulator: the leading example metadata is
+     * parsed into the bag by parse_workspace_header_line; the bridge
+     * applies it to live state. Step 4 of the decouple plan moved
+     * this out of an inline glr_config_set chain. */
+    repl_export_apply_pending_cfg();
 
     if (body && body[0] && strcmp(body[0], "// camera") == 0) {
         try_apply_example_camera_header(body);

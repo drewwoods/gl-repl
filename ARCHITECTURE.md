@@ -485,7 +485,7 @@ Treat `tools/repl_demo/stubs.c` as a dependency ledger. The execution
 plan in `feature/decouple-repl-from-gl-repl-alt.md` ratchets this
 ledger from 17 stubs to 0 across seven steps. The current count
 (verified via `nm` on `build/release-gl-stubs/tools/repl_demo/stubs.o`)
-is **10**: steps 1, 2, and 3 have landed.
+is **4**: steps 1, 2, 3, and 4 have landed.
 
 ### Stubbed Couplings
 
@@ -496,8 +496,8 @@ is **10**: steps 1, 2, and 3 have landed.
 | Compile dispatcher location | `repl_compile_dispatch` | `repl_compile_toggle_comment()` needed the float-decl / var-assign dispatcher, but the implementation lived in `src/editor/services.c`. | No; the demo does not toggle comments. The reference was still hard at link time. | Move the dispatcher into `repl_compile.c`. | ✅ **Cleared (step 1, commit `ef3fc09`).** Moved into `repl_compile.c`; declared in `repl_compile.h`. |
 | Status relay | `ui_state_status_set` | Legacy `repl_core.c::set_status()` forwarded diagnostics to UI status text. | Only on errors or helper paths that report status. | Replace `set_status()` body with a callback dispatch (`repl_set_status_sink`); controller installs `ui_state_status_set` as the sink at app startup. Demo doesn't install one, so set_status is a no-op there. | ✅ **Cleared (step 3, commit `5f1b8bc`).** Callback branch chosen over per-function out-params; ~15 pipeline-side set_status call sites remain as future per-TU cleanup but no longer drag the stub. |
 | Programmatic editor input | `feed_line`, `load_line_to_input` | `repl_export.c` imports exported files by feeding lines through the editor commit path; `repl_core.c` and scene activation paths also have legacy line-loading references. | No for the current static samples. | Extract pure structured-block validators (5a) and add a non-editor source-loader API (5b); move reformatter and scene cursor-restore out of REPL pipeline TUs (6). | Pending (steps 5a/5b/6). |
-| Config descriptor table | `g_cfg_items`, `CFG_ITEM_COUNT` | `glr_config.c` iterates menu/action descriptors while parsing or applying config keys, but the table is defined in `glr_actions.c`. | Not for the current samples; relevant to `@cfg` metadata and export/import helpers. | Make `repl_export.c` opaque to header content via `ReplExportConfig` + per-owner fill/apply helpers (4); split config catalog vs live mutation by owner. | Pending (step 4). |
-| App-owned config storage | `audio_get_cfg_mode`, `audio_set_cfg_mode`, `ui_state_profile_panel_mut`, `variable_panel_view_mut` | `glr_config.c` maps config keys directly to storage owned by audio, UI profile panel, and the variable-panel peer. | Not for the current samples. | Same as the descriptor table above — `repl_export.c` becomes opaque to header content, and the cfg pipeline stops reaching app-owned storage from REPL TUs. | Pending (step 4). |
+| Config descriptor table | `g_cfg_items`, `CFG_ITEM_COUNT` | `glr_config.c` iterated menu/action descriptors while parsing or applying config keys, but the table is defined in `glr_actions.c`. | Not for the current samples; relevant to `@cfg` metadata and export/import helpers. | Introduce a neutral `ReplExportConfig` bag in `repl_export.h` and a controller-installed bridge that fills/applies it; pipeline TUs (`repl_export.c`, `repl_scenes.c`) stop calling `glr_config_*`. | ✅ **Cleared (step 4, commit `<TBD>`).** Bridge installed in `glr_app_reset_all`; demo doesn't install one → @cfg is a no-op there. |
+| App-owned config storage | `audio_get_cfg_mode`, `audio_set_cfg_mode`, `ui_state_profile_panel_mut`, `variable_panel_view_mut` | `glr_config.c` mapped config keys directly to storage owned by audio, UI profile panel, and the variable-panel peer. | Not for the current samples. | Same fix as the descriptor table row: pipeline TUs go through the `ReplExportConfigBridge` instead of calling `glr_config_*`. `glr_config.c` falls out of the demo link set, so its references to audio / profile / variable_panel disappear. | ✅ **Cleared (step 4, commit `<TBD>`).** |
 | UI layout state | `ui_state_viewport`, `ui_state_code_panel` | `src/ui/layout.c` reads live `UiState`; `repl_export.c` uses layout helpers for export viewport sizing and code-panel visual dumps. | Not for the current samples. | Pass viewport/layout values to `repl_export` as explicit export inputs; move app-state slices to `glr_state.c`. | Pending (step 7). |
 
 ### Non-stubbed But Still Non-pipeline Link Dependencies
@@ -525,10 +525,16 @@ The full plan lives in `feature/decouple-repl-from-gl-repl-alt.md`
    (commit `5f1b8bc`). Callback branch chosen over per-function
    out-params for cost reasons; per-TU conversion remains a future
    opportunity.
-4. Step 4 — Make `repl_export.c` opaque to header content via
-   `ReplExportConfig` (key/value bag) and `ReplExportCameraBlock`;
-   owners fill/apply via per-owner helpers; split `glr_config` into
-   pure cfg-key parsing/catalog lookup vs live app storage mutation.
+4. ✅ **Step 4 — Introduce neutral `ReplExportConfig` bag and bridge;
+   make `repl_export.c` and `repl_scenes.c` opaque to cfg semantics**
+   (commit `<TBD>`). Bridge installed by the controller; demo
+   doesn't install one → @cfg path is a no-op there. `glr_config.c`
+   falls out of the demo link set. The camera block (multi-line
+   `// camera` directive) is left for a follow-up since it has its
+   own neutral struct shape per step 4a; for the demo's stub-clearance
+   goal, keeping camera handling in the existing `glr_camera_*` calls
+   inside `repl_export.c` is acceptable since `glr_camera.c` is in
+   the demo link set.
 5. Step 5a/5b — Extract pure structured-block validators from
    `editor_compile_*`; add non-editor source-load/commit API so
    examples and imports stop calling `feed_line`.

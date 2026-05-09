@@ -1,7 +1,9 @@
 #include "repl_export.h"
 #include "./include/gl_2d.h"
 #include "glr_camera.h"
-#include "glr_config.h"
+/* glr_config.h removed in step 4: the export pipeline no longer
+ * references GlrConfig* symbols. Cfg state flows through the
+ * controller-installed ReplExportConfigBridge (see repl_export.h). */
 #include "outline_offset.h"
 #include "repl_command_store.h"
 #include "repl_core.h"
@@ -22,6 +24,96 @@
 #define g_export_scene_name_hint (IMPORT_EXPORT_STATE->export_scene_name_hint)
 #define g_pending_scene_name (IMPORT_EXPORT_STATE->pending_scene_name)
 #define g_pending_workspace_dir (IMPORT_EXPORT_STATE->pending_workspace_dir)
+
+/* ----- Neutral header-config bag (step 4 decouple) ------------------------ */
+
+void repl_export_config_clear(ReplExportConfig *cfg) {
+    if (!cfg) return;
+    cfg->count = 0;
+}
+
+int repl_export_config_set(ReplExportConfig *cfg,
+                           const char *key, const char *value) {
+    if (!cfg || !key || !value) return 0;
+    /* Replace if present. */
+    for (int i = 0; i < cfg->count; i++) {
+        if (strcmp(cfg->items[i].key, key) == 0) {
+            snprintf(cfg->items[i].value, REPL_EXPORT_CFG_VALUE_MAX, "%s", value);
+            return 1;
+        }
+    }
+    if (cfg->count >= REPL_EXPORT_CFG_MAX_ITEMS) return 0;
+    snprintf(cfg->items[cfg->count].key,   REPL_EXPORT_CFG_KEY_MAX,   "%s", key);
+    snprintf(cfg->items[cfg->count].value, REPL_EXPORT_CFG_VALUE_MAX, "%s", value);
+    cfg->count++;
+    return 1;
+}
+
+int repl_export_config_set_int(ReplExportConfig *cfg, const char *key, int value) {
+    char buf[REPL_EXPORT_CFG_VALUE_MAX];
+    snprintf(buf, sizeof(buf), "%d", value);
+    return repl_export_config_set(cfg, key, buf);
+}
+
+const char *repl_export_config_get(const ReplExportConfig *cfg, const char *key) {
+    if (!cfg || !key) return NULL;
+    for (int i = 0; i < cfg->count; i++) {
+        if (strcmp(cfg->items[i].key, key) == 0)
+            return cfg->items[i].value;
+    }
+    return NULL;
+}
+
+int repl_export_config_get_int(const ReplExportConfig *cfg,
+                               const char *key, int fallback) {
+    const char *s = repl_export_config_get(cfg, key);
+    if (!s) return fallback;
+    return (int)strtol(s, NULL, 10);
+}
+
+int repl_export_config_count(const ReplExportConfig *cfg) {
+    return cfg ? cfg->count : 0;
+}
+
+int repl_export_config_at(const ReplExportConfig *cfg, int idx,
+                          const char **key_out, const char **value_out) {
+    if (!cfg || idx < 0 || idx >= cfg->count) return 0;
+    if (key_out)   *key_out   = cfg->items[idx].key;
+    if (value_out) *value_out = cfg->items[idx].value;
+    return 1;
+}
+
+/* Bridge installation: file-static pointer the controller installs at startup.
+ * NULL bridge = no @cfg emission/parsing, which is what the demo wants. */
+static const ReplExportConfigBridge *g_export_cfg_bridge = NULL;
+
+void repl_export_install_config_bridge(const ReplExportConfigBridge *bridge) {
+    g_export_cfg_bridge = bridge;
+}
+
+const ReplExportConfigBridge *repl_export_config_bridge(void) {
+    return g_export_cfg_bridge;
+}
+
+/* Pending @cfg accumulator: parse_cfg() during import populates this; the
+ * import driver drains it via the bridge after parse completes. */
+static ReplExportConfig g_import_cfg_accumulator;
+
+static void import_cfg_accumulator_reset(void) {
+    repl_export_config_clear(&g_import_cfg_accumulator);
+}
+
+static void import_cfg_accumulator_apply_and_reset(void) {
+    if (g_export_cfg_bridge && g_export_cfg_bridge->apply &&
+        g_import_cfg_accumulator.count > 0) {
+        g_export_cfg_bridge->apply(&g_import_cfg_accumulator);
+    }
+    import_cfg_accumulator_reset();
+}
+
+void repl_export_apply_pending_cfg(void) {
+    import_cfg_accumulator_apply_and_reset();
+}
 
 const char *g_header_pre[] = {
     "#define y0 _y0",
@@ -57,16 +149,10 @@ typedef struct { char name[16]; float value; } DeferredVar;
 static DeferredVar g_deferred_var_values[MAX_DEFERRED_VAR_VALUES];
 static int         g_deferred_var_count = 0;
 
-static void workspace_slug_from_name(const char *name, char *out, size_t out_sz) {
-    size_t out_idx = 0;
-    for (size_t name_idx = 0; name[name_idx] && out_idx + 1 < out_sz; name_idx++) {
-        unsigned char c = (unsigned char)name[name_idx];
-        if (isspace(c) || c == '-' || c == '/') out[out_idx++] = '_';
-        else if (isalnum(c))                    out[out_idx++] = (char)tolower(c);
-        else if (c == '_')                      out[out_idx++] = '_';
-    }
-    out[out_idx] = '\0';
-}
+/* Step 4 of the decouple plan moved workspace_slug_from_name out of
+ * repl_export.c. The bridge implementation in glr_export.c owns slug
+ * derivation now; repl_export.c just emits/parses the (slug, value)
+ * pairs the bridge produces. */
 
 static void workspace_format_float(char *buf, size_t n, float v) {
     snprintf(buf, n, "%g", (double)v);
@@ -265,39 +351,43 @@ static int parse_cfg(const char *args) {
     p++;
     while (*p && isspace((unsigned char)*p)) p++;
     int val = (int)strtol(p, NULL, 10);
+    /* Legacy slug alias: `top_code_panel = 1` translates to
+     * `code_panel = TOP`. CODE_PANEL_LAYOUT_TOP / _LEFT enum values
+     * are stable across builds (defined in ui/layout.h). */
+    const char *out_slug = slug;
+    int         out_val  = val;
     if (strcmp(slug, "top_code_panel") == 0) {
-        glr_config_set(GLR_CONFIG_CODE_PANEL_LAYOUT,
-                        val ? CODE_PANEL_LAYOUT_TOP : CODE_PANEL_LAYOUT_LEFT);
-        return 1;
+        out_slug = "code_panel";
+        out_val  = val ? CODE_PANEL_LAYOUT_TOP : CODE_PANEL_LAYOUT_LEFT;
     }
-    int cfg_count = 0;
-    const GlrConfigItem *items = glr_config_items(&cfg_count);
-    for (int item_idx = 0; item_idx < cfg_count; item_idx++) {
-        const GlrConfigItem *item = &items[item_idx];
-        if (item->section_header || item->key == GLR_CONFIG_NONE)
-            continue;
-        char item_slug[32];
-        workspace_slug_from_name(item->label, item_slug, sizeof(item_slug));
-        if (strcmp(item_slug, slug) == 0) {
-            glr_config_set(item->key, val);
-            return 1;
-        }
+    /* Apply immediately via the bridge: callers (tests, the importer,
+     * the example loader) expect line-by-line @cfg parsing to update
+     * live state synchronously. We also accumulate so callers that
+     * want to drain at the end of a batch (repl_export_apply_pending_cfg)
+     * see the same set of (slug, val) pairs — but the live state has
+     * already been updated by the per-line apply. */
+    if (g_export_cfg_bridge && g_export_cfg_bridge->apply) {
+        ReplExportConfig single;
+        repl_export_config_clear(&single);
+        repl_export_config_set_int(&single, out_slug, out_val);
+        g_export_cfg_bridge->apply(&single);
     }
-    /* Unknown slug: still consume so unrelated directives don't claim it. */
+    repl_export_config_set_int(&g_import_cfg_accumulator, out_slug, out_val);
     return 1;
 }
 
 static void emit_cfgs(int *n) {
-    int cfg_count = 0;
-    const GlrConfigItem *items = glr_config_items(&cfg_count);
-    for (int item_idx = 0; item_idx < cfg_count && *n < MAX_WORKSPACE_HEADER_LINES; item_idx++) {
-        const GlrConfigItem *item = &items[item_idx];
-        if (item->section_header || item->key == GLR_CONFIG_NONE)
-            continue;
-        char slug[32];
-        workspace_slug_from_name(item->label, slug, sizeof(slug));
+    /* The bridge populates the bag with (slug, value) pairs. If no
+     * bridge is installed (the demo case), the bag stays empty and
+     * no @cfg lines are emitted. */
+    if (!g_export_cfg_bridge || !g_export_cfg_bridge->fill_all)
+        return;
+    ReplExportConfig cfg;
+    repl_export_config_clear(&cfg);
+    g_export_cfg_bridge->fill_all(&cfg);
+    for (int i = 0; i < cfg.count && *n < MAX_WORKSPACE_HEADER_LINES; i++) {
         snprintf(g_workspace_header_lines[(*n)++], WORKSPACE_HEADER_LINE_LEN,
-                 "// @cfg %s = %d", slug, glr_config_get(item->key));
+                 "// @cfg %s = %s", cfg.items[i].key, cfg.items[i].value);
     }
 }
 
@@ -363,19 +453,32 @@ const char *g_header_post[] = {
 
 typedef struct {
     const char *repl_line;
-    GlrConfigKey toggle_key;
+    /* Slug name of the cfg toggle that gates this line, or NULL if
+     * unconditional. Looked up via the export config bridge —
+     * repl_export.c does not call glr_config_get directly. */
+    const char *toggle_slug;
 } InitBootstrapEntry;
 
 static const InitBootstrapEntry g_init_bootstrap_repl[] = {
-    { "glEnable(GL_COLOR_MATERIAL);", GLR_CONFIG_NONE },
-    { "glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);", GLR_CONFIG_NONE },
-    { "glEnable(GL_BLEND);", GLR_CONFIG_NONE },
-    { "glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);", GLR_CONFIG_NONE },
+    { "glEnable(GL_COLOR_MATERIAL);", NULL },
+    { "glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);", NULL },
+    { "glEnable(GL_BLEND);", NULL },
+    { "glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);", NULL },
 #ifndef NO_POINT_PARAMETER
     { "glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION, 1.0, 0.0, 0.02);",
-      GLR_CONFIG_POINT_ATTENUATION },
+      "point_attenuation" },
 #endif
 };
+
+/* Helper: look up a cfg toggle via the installed bridge. Returns the
+ * fallback when no bridge is installed (the demo case) or the slug is
+ * unknown. */
+static int init_bootstrap_toggle_get(const char *slug, int fallback) {
+    if (!slug) return 1;  /* unconditional entries are always "on" */
+    if (!g_export_cfg_bridge || !g_export_cfg_bridge->get_int)
+        return fallback;
+    return g_export_cfg_bridge->get_int(slug, fallback);
+}
 #define NUM_INIT_BOOTSTRAP \
     ((int)(sizeof(g_init_bootstrap_repl) / sizeof(g_init_bootstrap_repl[0])))
 
@@ -513,8 +616,8 @@ void apply_init_bootstrap(void) {
     ensure_init_bootstrap_ready();
 
     for (int bootstrap_idx = 0; bootstrap_idx < NUM_INIT_BOOTSTRAP; bootstrap_idx++) {
-        if (g_init_bootstrap_repl[bootstrap_idx].toggle_key != GLR_CONFIG_NONE &&
-            !glr_config_get(g_init_bootstrap_repl[bootstrap_idx].toggle_key)) {
+        const InitBootstrapEntry *entry = &g_init_bootstrap_repl[bootstrap_idx];
+        if (entry->toggle_slug && !init_bootstrap_toggle_get(entry->toggle_slug, 1)) {
             if (g_init_bootstrap_cmds[bootstrap_idx].cmd.type == CMD_POINT_PARAMETER_FV &&
                 g_init_bootstrap_cmds[bootstrap_idx].cmd.mode == GL_POINT_DISTANCE_ATTENUATION) {
                 GLCmd disabled = g_init_bootstrap_cmds[bootstrap_idx].cmd;
@@ -534,8 +637,8 @@ int init_section_line_count(void) {
 
     ensure_init_bootstrap_ready();
     for (int bootstrap_idx = 0; bootstrap_idx < NUM_INIT_BOOTSTRAP; bootstrap_idx++) {
-        if (g_init_bootstrap_repl[bootstrap_idx].toggle_key != GLR_CONFIG_NONE &&
-            !glr_config_get(g_init_bootstrap_repl[bootstrap_idx].toggle_key))
+        const InitBootstrapEntry *entry = &g_init_bootstrap_repl[bootstrap_idx];
+        if (entry->toggle_slug && !init_bootstrap_toggle_get(entry->toggle_slug, 1))
             continue;
         count++;
     }
@@ -563,8 +666,8 @@ void init_section_line(int i, char *buf, size_t n) {
 
     i -= host_count;
     for (int bootstrap_idx = 0; bootstrap_idx < NUM_INIT_BOOTSTRAP; bootstrap_idx++) {
-        if (g_init_bootstrap_repl[bootstrap_idx].toggle_key != GLR_CONFIG_NONE &&
-            !glr_config_get(g_init_bootstrap_repl[bootstrap_idx].toggle_key))
+        const InitBootstrapEntry *entry = &g_init_bootstrap_repl[bootstrap_idx];
+        if (entry->toggle_slug && !init_bootstrap_toggle_get(entry->toggle_slug, 1))
             continue;
         if (enabled_idx == i) {
             format_cmd_source_as_c(buf, n,
@@ -589,8 +692,8 @@ static void emit_export_init_section_to_file(FILE *f, int include_tess) {
 
     ensure_init_bootstrap_ready();
     for (int bootstrap_idx = 0; bootstrap_idx < NUM_INIT_BOOTSTRAP; bootstrap_idx++) {
-        if (g_init_bootstrap_repl[bootstrap_idx].toggle_key != GLR_CONFIG_NONE &&
-            !glr_config_get(g_init_bootstrap_repl[bootstrap_idx].toggle_key))
+        const InitBootstrapEntry *entry = &g_init_bootstrap_repl[bootstrap_idx];
+        if (entry->toggle_slug && !init_bootstrap_toggle_get(entry->toggle_slug, 1))
             continue;
         format_cmd_source_as_c(line, sizeof(line),
                                g_init_bootstrap_cmds[bootstrap_idx].text,
@@ -3146,6 +3249,9 @@ int repl_export_load_from_file(const char *filename) {
     g_deferred_var_count       = 0;
     g_pending_scene_name[0]    = '\0';
     g_pending_workspace_dir[0] = '\0';
+    /* @cfg accumulator: parse_cfg() populates it during import; we drain
+     * it via the bridge after parsing completes. */
+    import_cfg_accumulator_reset();
 
     ImportState state;
     import_state_init(&state);
@@ -3173,6 +3279,13 @@ int repl_export_load_from_file(const char *filename) {
             g_predef_vars[idx].value = g_deferred_var_values[di].value;
     }
     g_deferred_var_count = 0;
+
+    /* Drain @cfg accumulator: hand the parsed (slug, val) bag to the
+     * controller-installed bridge, which knows how to apply each slug
+     * to its owner's state. Without a bridge (the demo case), the
+     * accumulator is dropped silently — that's the architectural goal
+     * (no glr_config dependency from repl_export.c). */
+    import_cfg_accumulator_apply_and_reset();
 
     if (state.loaded > 0) {
         repl_source_scope_depth_cache_invalidate();
