@@ -34,22 +34,25 @@ The plan follows the established snapshot pattern from `ARCHITECTURE.md`:
 
 **Buffer shape**: Contains committed editor-line text: no leading indentation, no trailing semicolon/whitespace, plus a few explicit raw forms such as `:label` when that is the editable document shape. This is the text moved by store/undo/clipboard/scene APIs and used by editor/reparse flows. Consumers that need visible canonical source text (notably replay/export/code-panel display helpers) may still prefer `cmd->source` until Step 3 replaces those paths.
 
-## Current Progress (after Step 3a)
+## Current Progress (all steps landed)
 
 | Item | Status |
 |---|---|
 | `ReplEditorBuffer` in `ReplRuntimeState` | ✅ |
 | `repl_state_editor_buffer_line(idx)` / `_set_line()` API | ✅ |
-| `spike_text_for()` in repl_flatten.c (buffer+fallback) | ✅ |
 | Targeted Step 2 document-text read migration | ✅ |
 | Text-aware store APIs with compatibility wrappers | ✅ |
 | Clipboard / scene / undo text sidecars | ✅ |
 | `ReplParsedLine` struct + `repl_parser_parse_command_ctx` returns text | ✅ |
 | All `_ctx` call sites migrated to `ReplParsedLine *out` | ✅ |
-| Full regression validation (`make test`, `make test-stubs`) | ✅ (27/27 binaries, 3094/3094 tests) |
-| `cmd->source` still present for canonical visible-text helpers | Yes for now (removed in Step 3b) |
+| `GLCmd.source[]` removed from struct | ✅ (Steps 3b-3d) |
+| `EditorTransformer` + color picker migration | ✅ (Step 4) |
+| `EditorHighlight` + controller-pushed highlights | ✅ (Step 5) |
+| `EditorVirtualLine` + replay annotations | ✅ (Step 6, virtual-lines portion) |
+| Color scheme extraction | Deferred (no configurable consumer yet) |
+| Full regression validation (`make test`, `make test-stubs`) | ✅ (31/31 binaries, 3668/3668 tests) |
 
-Progress through Step 3a is landed and regression-clean. Parser now returns both `cmd` and `text` via `ReplParsedLine` output param. All `repl_parser_parse_command_ctx` call sites updated. `cmd->source` still present for remaining consumers; removed in Step 3b.
+All steps through Step 6 are landed and regression-clean. `GLCmd` is now a pure parse-result struct (type, args[], flags only) with no `source[]` field. Text ownership lives in `ReplEditorBuffer`. Color picker, highlights, and replay annotations all operate through the controller-pushed snapshot pattern.
 
 ---
 

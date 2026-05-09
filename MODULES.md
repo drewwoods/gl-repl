@@ -309,8 +309,8 @@ text edit into a committed program change.
 |--------|------|
 | `editor_input` | Editor's pure text-document controller. Receives key/mouse events from `glr_ctrl` only after the controller has already filtered out non-editor concerns (replay, audio, config, save, camera, variable panel, scene press, scroll-wheel zoom). Mutates `EditorState` directly: cursor, selection, scroll, search, autocomplete navigation, clipboard, undo. Also exposes hit-test predicates (`editor_input_point_in_code_panel`, etc.) and the `ReplInputDispatchEffects` accumulation API that the controller consumes. `repl_editor.{c,h}` is deleted; this module is the sole dispatch boundary |
 | `editor_commit` | Transaction boundary for commits: compile, undo snapshot, text-buffer write, REPL apply, dirty-state updates |
-| `editor_buffer` *(new)* | Sole writer for canonical per-line text: insert, replace, delete, load, clear |
-| `editor_document` *(new)* | Active input buffer, cursor position, edit line, insert mode, pending newline, and navigation primitives |
+| `editor_state` | Owns `EditorState`: canonical per-line text buffer, active input, cursor, edit line, insert mode, selection, search, autocomplete, scroll, undo/redo, transformers, highlights, virtual lines. Single writer for editor buffer text |
+| `editor_services` | Default `EditorServices` dispatch table binding commit code to live REPL compile/apply |
 | `editor_undo` | Undo/redo transaction rings that restore editor text and REPL command state together |
 | `editor_clipboard` | Selection anchors plus copy/cut/paste payloads, including parallel text sidecars |
 | `editor_search` | Search query, match tracking, row/char hits, next/previous navigation |
@@ -408,7 +408,7 @@ allowlists. The contract is enforced by a per-feature lighter guard:
 | `ui_state` | Owns `UiState`: viewport, pointer, status text TTL, panel visibility, panel-divider geometry, camera viewport pose. *Not* cursor blink (that's editor) |
 | `ui_snapshot` | Defines `UiRenderSnapshot`, the read-only bundle passed to every UI renderer |
 | `ui_editor` | Editor-overlay snapshot types: transformers, highlights, virtual lines |
-| `ui_hit` *(new — replaces `ui_action`)* | Defines `UiHitKind` + `UiHit`, the passive UI → controller contract. UI hit-test functions return `UiHit`; `glr_ctrl` dispatches on it |
+| `ui_hit` | Defines `UiHitKind` + `UiHit`, the passive UI → controller contract. UI hit-test functions return `UiHit`; `glr_ctrl` dispatches on it |
 | `ui_panels` | Code-panel and status-banner rendering; input hit-tests return `UiHit` |
 | `ui_layout` | Pure scene/code-panel rectangle geometry |
 | `ui_code_panel_layout` | Pure text wrapping and visual-line iteration |
