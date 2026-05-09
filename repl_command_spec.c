@@ -129,6 +129,16 @@ static const ReplFuncCompletion k_func_completions[] = {
         "Rasterized point diameter", REPL_HELP_GROUP_TOP },
     { "glLineWidth(",        "glLineWidth(width)",                                       1, { "width" },
         "Rasterized line width", REPL_HELP_GROUP_TOP },
+    { "glRasterPos3f(",      "glRasterPos3f(x, y, z)",                                   3, { "x", "y", "z" },
+        "Set the current raster position (transformed through modelview/projection).\n"
+        "Pair with label(...) to draw bitmap text at that point.",
+        REPL_HELP_GROUP_TOP },
+    { "label(",              "label(\"fmt\", a, b, c, d)",                               5, { "fmt", "a", "b", "c", "d" },
+        "Render bitmap text at the current raster position (set via glRasterPos3f).\n"
+        "Format supports %f (substituted from a/b/c/d as %g) and %% (literal '%').\n"
+        "Up to 4 substitution args; format string limited to 64 chars.\n"
+        "Forbidden in fmt: '//', '(', ')', ',', and any backslash.",
+        REPL_HELP_GROUP_TOP },
     { "glPointParameterfv(", "glPointParameterfv(pname, a, b, c)",                       4, { "pname", "a", "b", "c" },
         "Distance attenuation: size *= 1/sqrt(const + linear*d + quadratic*d*d)",
         REPL_HELP_GROUP_TOP },
@@ -248,6 +258,11 @@ static const ReplFuncCompletion k_func_completions[] = {
     { "rand(",               "rand(seed[, iter])",                                       2, { "seed", "iter" },
         "Deterministic pseudo-random float in [0, 1). "
         "Same (seed, iter) -> same value across frames.",
+        REPL_HELP_GROUP_MATH },
+    { "rand2(",              "rand2(seed[, iter])",                                      2, { "seed", "iter" },
+        "Deterministic pseudo-random float in [-1, 1] (signed variant of rand).\n"
+        "Shares the same hash, so rand and rand2 are correlated for the same\n"
+        "(seed, iter) pair — useful for centred jitter and signed offsets.",
         REPL_HELP_GROUP_MATH },
     { "PI",                  "PI",                                                       0, { NULL },
         "3.14159265... (half turn in radians)", REPL_HELP_GROUP_MATH },
