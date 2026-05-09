@@ -211,6 +211,66 @@ static void test_execute_all_commands(void) {
     repl_executor_destroy_resources();
 }
 
+static void test_glut_bitmap_string(void) {
+    /* Static format ("hi") with no substitution: each char emits one
+     * glutBitmapCharacter; glRasterPos3f fires once. */
+    repl_executor_init_resources();
+    gl_stub_counts_reset();
+
+    GLCmd cmds[1];
+    memset(cmds, 0, sizeof(cmds));
+    cmds[0].type = CMD_GLUT_BITMAP_STRING;
+    cmds[0].valid = 1;
+    cmds[0].args[0] = 0.5f;
+    cmds[0].args[1] = 1.5f;
+    cmds[0].args[2] = 2.5f;
+    cmds[0].num_args = 3;
+    strcpy(cmds[0].text, "hi");
+
+    ReplExecutionOptions opts = {0};
+    opts.flat_cmd_count = 1;
+    opts.program.cmds = cmds;
+    opts.program.cmd_count = 1;
+    repl_execute_program(&opts);
+
+    ASSERT_TRUE("bitmap-string raster pos fired once",
+                gl_stub_counts[GL_STUB_glRasterPos3f] == 1);
+    ASSERT_TRUE("bitmap-string emits 2 chars",
+                gl_stub_counts[GL_STUB_glutBitmapCharacter] == 2);
+
+    /* Format with %f: substitution is applied at execute time. The
+     * expanded text "v=1.25" is 6 chars, all emitted via
+     * glutBitmapCharacter. */
+    gl_stub_counts_reset();
+    memset(cmds, 0, sizeof(cmds));
+    cmds[0].type = CMD_GLUT_BITMAP_STRING;
+    cmds[0].valid = 1;
+    cmds[0].args[0] = 0; cmds[0].args[1] = 0; cmds[0].args[2] = 0;
+    cmds[0].args[3] = 1.25f;
+    cmds[0].num_args = 4;
+    strcpy(cmds[0].text, "v=%f");
+
+    repl_execute_program(&opts);
+
+    ASSERT_TRUE("bitmap-string %f substitution emits expanded length",
+                gl_stub_counts[GL_STUB_glutBitmapCharacter] == 6);
+
+    /* %% renders as a single literal '%'. */
+    gl_stub_counts_reset();
+    memset(cmds, 0, sizeof(cmds));
+    cmds[0].type = CMD_GLUT_BITMAP_STRING;
+    cmds[0].valid = 1;
+    cmds[0].num_args = 3;
+    strcpy(cmds[0].text, "100%% done");
+
+    repl_execute_program(&opts);
+
+    ASSERT_TRUE("bitmap-string %% literal collapses to single '%'",
+                gl_stub_counts[GL_STUB_glutBitmapCharacter] == 9);
+
+    repl_executor_destroy_resources();
+}
+
 int main(void) {
     test_tess_callbacks();
     test_fade_context();
@@ -219,6 +279,7 @@ int main(void) {
     test_apply_state_cmd_edge_cases();
     test_execute_edge_cases();
     test_execute_all_commands();
+    test_glut_bitmap_string();
     printf("repl_executor: %d/%d passed\n", g_harness.passed, g_harness.run);
     return (g_harness.passed == g_harness.run) ? 0 : 1;
 }

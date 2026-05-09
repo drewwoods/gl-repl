@@ -1609,6 +1609,57 @@ static void write_canonical_cmd_as_c(FILE *f, const GLCmd *cmd, int cmd_idx,
                     cmd->args[0], cmd->args[1], cmd->args[2]);
         }
         break;
+    case CMD_GLUT_BITMAP_STRING: {
+        /* Split into pre-args / format / post-args, translate the
+         * args halves through repl_eval_expr_to_c, and re-emit with
+         * the string literal preserved byte-exact. The default
+         * branch can't be used because repl_eval_expr_to_c walks the
+         * whole line (including string contents) and would rewrite
+         * substrings like "sin" or "PI" appearing inside the format.
+         *
+         * The exported line is REPL syntax — `glutBitmapString(x, y,
+         * z, "fmt", a, b)` doesn't match real freeglut's signature.
+         * Files containing this command will not compile against
+         * vanilla freeglut; round-trip through the REPL still works
+         * because the import path recognizes the same syntax. */
+        const char *open_p = strchr(source_text, '(');
+        const char *close_p = open_p ? strrchr(source_text, ')') : NULL;
+        if (open_p && close_p && close_p > open_p) {
+            int prefix_len = (int)(open_p - source_text) + 1;
+            int args_len = (int)(close_p - (open_p + 1));
+            char args_str[MAX_LINE_LEN];
+            if (args_len < 0) args_len = 0;
+            if (args_len >= (int)sizeof(args_str))
+                args_len = (int)sizeof(args_str) - 1;
+            memcpy(args_str, open_p + 1, (size_t)args_len);
+            args_str[args_len] = '\0';
+
+            char pre[MAX_LINE_LEN] = "";
+            char fmt[GLUT_BITMAP_FMT_MAX] = "";
+            char post[MAX_LINE_LEN] = "";
+            char split_err[128] = "";
+            if (repl_glut_bitmap_split_args(args_str,
+                                            pre, (int)sizeof(pre),
+                                            fmt, (int)sizeof(fmt),
+                                            post, (int)sizeof(post),
+                                            split_err, (int)sizeof(split_err))) {
+                char pre_c[MAX_LINE_LEN] = "";
+                char post_c[MAX_LINE_LEN] = "";
+                repl_eval_expr_to_c(pre, pre_c, sizeof(pre_c));
+                if (post[0])
+                    repl_eval_expr_to_c(post, post_c, sizeof(post_c));
+                fwrite(source_text, 1, (size_t)prefix_len, f);
+                fprintf(f, "%s, \"%s\"%s%s);\n",
+                        pre_c, fmt,
+                        post_c[0] ? ", " : "", post_c);
+                break;
+            }
+        }
+        /* Fallback: emit raw text — the importer handles it via the
+         * default repl_eval_c_expr_to_repl path. */
+        fprintf(f, "%s\n", source_text);
+        break;
+    }
     default:
         write_cmd_source_as_c(f, source_text, for_depth > 0 || cmd->has_vars);
         break;
@@ -2454,6 +2505,55 @@ static int import_make_repl_point_parameter_line(const char *line, char *out, in
                             pname, repl_args[0], repl_args[1], repl_args[2]);
 }
 
+static int import_make_repl_glut_bitmap_string(const char *line,
+                                                char *out, int out_sz) {
+    /* Match the glutBitmapString prefix (allow leading whitespace).
+     * Run the args halves through the C-to-REPL converter while
+     * preserving the format string verbatim. */
+    const char *p = line ? line : "";
+    while (*p && isspace((unsigned char)*p)) p++;
+    static const char kPrefix[] = "glutBitmapString";
+    int kPrefixLen = (int)(sizeof(kPrefix) - 1);
+    if (strncmp(p, kPrefix, (size_t)kPrefixLen) != 0)
+        return 0;
+    p += kPrefixLen;
+    while (*p && isspace((unsigned char)*p)) p++;
+    if (*p != '(') return 0;
+    const char *open_p = p;
+    const char *close_p = strrchr(p, ')');
+    if (!close_p || close_p <= open_p) return 0;
+
+    int args_len = (int)(close_p - (open_p + 1));
+    char args_str[MAX_LINE_LEN];
+    if (args_len < 0) args_len = 0;
+    if (args_len >= (int)sizeof(args_str))
+        args_len = (int)sizeof(args_str) - 1;
+    memcpy(args_str, open_p + 1, (size_t)args_len);
+    args_str[args_len] = '\0';
+
+    char pre[MAX_LINE_LEN] = "";
+    char fmt[GLUT_BITMAP_FMT_MAX] = "";
+    char post[MAX_LINE_LEN] = "";
+    char split_err[128] = "";
+    if (!repl_glut_bitmap_split_args(args_str,
+                                     pre, (int)sizeof(pre),
+                                     fmt, (int)sizeof(fmt),
+                                     post, (int)sizeof(post),
+                                     split_err, (int)sizeof(split_err)))
+        return 0;
+
+    char pre_repl[MAX_LINE_LEN] = "";
+    char post_repl[MAX_LINE_LEN] = "";
+    repl_eval_c_expr_to_repl(pre, pre_repl, sizeof(pre_repl));
+    if (post[0])
+        repl_eval_c_expr_to_repl(post, post_repl, sizeof(post_repl));
+
+    return repl_format_fits(out, (size_t)out_sz,
+                            "glutBitmapString(%s, \"%s\"%s%s);",
+                            pre_repl, fmt,
+                            post_repl[0] ? ", " : "", post_repl);
+}
+
 static void import_feed_one_line(const char *line, int *loaded, int *warnings) {
     char repl_line[MAX_LINE_LEN];
     int before = repl_state_document_count();
@@ -2468,7 +2568,8 @@ static void import_feed_one_line(const char *line, int *loaded, int *warnings) {
         handled = feed_line(repl_line);
     } else if (import_make_repl_tess_line(line, repl_line, sizeof(repl_line)) ||
                import_make_repl_point_parameter_line(line, repl_line, sizeof(repl_line)) ||
-               import_make_repl_label(line, repl_line, sizeof(repl_line))) {
+               import_make_repl_label(line, repl_line, sizeof(repl_line)) ||
+               import_make_repl_glut_bitmap_string(line, repl_line, sizeof(repl_line))) {
         handled = feed_line(repl_line);
     } else {
         repl_eval_c_expr_to_repl(line, repl_line, sizeof(repl_line));

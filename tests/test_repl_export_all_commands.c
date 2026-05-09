@@ -87,6 +87,7 @@ static const CmdType expected_commands[] = {
     CMD_TESS_COLOR,
     CMD_TESS_VERTEX,
     CMD_TESS_END,
+    CMD_GLUT_BITMAP_STRING,
 };
 
 static int verify_all_commands_present(void) {
@@ -217,6 +218,11 @@ int main(void) {
     repl_feed_line_public("glutSolidCone(0.5, 1, 8, 1);");
     repl_feed_line_public("glutSolidTorus(0.1, 0.5, 8, 4);");
     repl_feed_line_public("glutSolidTeapot(0.5);");
+
+    /* GLUT bitmap string with %f substitution. Exercises the
+     * round-trip for the format-string field plus the position +
+     * substitution arg list. */
+    repl_feed_line_public("glutBitmapString(0, 1.5, 0, \"x = %f\", x);");
 
     /* GLU tessellation commands - polygon */
     repl_feed_line_public("gluBegin(GLU_POLYGON);");

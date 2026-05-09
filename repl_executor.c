@@ -464,6 +464,44 @@ void repl_execute_program(const ReplExecutionOptions *options) {
                           (int)flat_cmds[pc].args[2],
                           (int)flat_cmds[pc].args[3]);
             break;
+        case CMD_GLUT_BITMAP_STRING: {
+            /* Format substitution: walk the cached format string in
+             * cmd.text, expanding %f and %% verbatim, copying other
+             * chars through. The flatten pass keeps args[3..6] in
+             * sync with current variable values for has_vars commands,
+             * so we use them directly without re-parsing source.
+             *
+             * Render at args[0..2] using the current modelview —
+             * glRasterPos3f naturally honors it. */
+            if (in_begin) { glEnd(); in_begin = 0; }
+            char buf[128];
+            int sub_count = flat_cmds[pc].num_args - 3;
+            if (sub_count < 0) sub_count = 0;
+            int sub_idx = 0;
+            int off = 0;
+            const char *fmt = flat_cmds[pc].text;
+            while (*fmt && off < (int)sizeof(buf) - 1) {
+                if (fmt[0] == '%' && fmt[1] == 'f' && sub_idx < sub_count) {
+                    off += snprintf(buf + off, sizeof(buf) - (size_t)off,
+                                    "%g", (double)flat_cmds[pc].args[3 + sub_idx]);
+                    if (off >= (int)sizeof(buf)) off = (int)sizeof(buf) - 1;
+                    sub_idx++;
+                    fmt += 2;
+                } else if (fmt[0] == '%' && fmt[1] == '%') {
+                    buf[off++] = '%';
+                    fmt += 2;
+                } else {
+                    buf[off++] = *fmt++;
+                }
+            }
+            buf[off] = '\0';
+            glRasterPos3f(flat_cmds[pc].args[0],
+                          flat_cmds[pc].args[1],
+                          flat_cmds[pc].args[2]);
+            for (const char *c = buf; *c; c++)
+                glutBitmapCharacter(GLUT_BITMAP_9_BY_15, (unsigned char)*c);
+            break;
+        }
         case CMD_TESS_BEGIN_POLYGON:
             if (in_begin) { glEnd(); in_begin = 0; }
             if (g_tess) { g_tess_vert_count = 0; gluTessBeginPolygon(g_tess, NULL); tess_depth = 1; }

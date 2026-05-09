@@ -110,7 +110,8 @@ extern "C" {
     X(glutSolidCube)                   \
     X(glutWireCube)                    \
     X(glutSolidTeapot)                 \
-    X(glutSolidCone)
+    X(glutSolidCone)                   \
+    X(glutBitmapCharacter)
 
 enum {
 #define GL_STUB_COUNT_ENUM_ENTRY(name) GL_STUB_##name,

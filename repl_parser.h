@@ -68,4 +68,26 @@ typedef struct {
 int repl_parser_parse_command_ctx(const char *line, ReplParsedLine *out,
                                   const ReplParseContext *ctx);
 
+/* Split a `glutBitmapString(...)` arg payload into pre-string args
+ * (x, y, z), the format string body (no quotes), and post-string
+ * args (substitution exprs).
+ *
+ * `args` is the raw text between the outer parens — caller is
+ * responsible for paren stripping.
+ *
+ * On success: writes pre / fmt / post (each NUL-terminated) and
+ * returns 1. On a syntax error (no opening quote, unterminated
+ * string, forbidden char inside string, or oversize buffers):
+ * writes a description into `err` and returns 0. The function never
+ * mutates global state.
+ *
+ * Forbidden inside the format-string body: backslash, '/'+'/', '(',
+ * ')', ','. These keep string-unaware scanners elsewhere in the
+ * codebase honest. */
+int repl_glut_bitmap_split_args(const char *args,
+                                char *pre, int pre_sz,
+                                char *fmt, int fmt_sz,
+                                char *post, int post_sz,
+                                char *err, int err_sz);
+
 #endif
