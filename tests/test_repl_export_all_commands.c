@@ -87,6 +87,7 @@ static const CmdType expected_commands[] = {
     CMD_TESS_COLOR,
     CMD_TESS_VERTEX,
     CMD_TESS_END,
+    CMD_RASTER_POS3F,
     CMD_GLUT_BITMAP_STRING,
 };
 
@@ -219,10 +220,12 @@ int main(void) {
     repl_feed_line_public("glutSolidTorus(0.1, 0.5, 8, 4);");
     repl_feed_line_public("glutSolidTeapot(0.5);");
 
-    /* GLUT bitmap string with %f substitution. Exercises the
-     * round-trip for the format-string field plus the position +
-     * substitution arg list. */
-    repl_feed_line_public("label(0, 1.5, 0, \"x = %f\", x);");
+    /* glRasterPos3f sets the raster position; label emits text at
+     * that position. Together they exercise the round-trip for both
+     * the new state primitive and the format-string + substitution
+     * arg list. */
+    repl_feed_line_public("glRasterPos3f(0, 1.5, 0);");
+    repl_feed_line_public("label(\"x = %f\", x);");
 
     /* GLU tessellation commands - polygon */
     repl_feed_line_public("gluBegin(GLU_POLYGON);");

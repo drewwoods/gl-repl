@@ -212,19 +212,17 @@ static void test_execute_all_commands(void) {
 }
 
 static void test_glut_bitmap_string(void) {
-    /* Static format ("hi") with no substitution: each char emits one
-     * glutBitmapCharacter; glRasterPos3f fires once. */
+    /* `label("hi")` with no substitution: 2 chars emitted; the
+     * primitive itself does NOT call glRasterPos3f — that's the
+     * user's responsibility via a preceding glRasterPos3f command. */
     repl_executor_init_resources();
     gl_stub_counts_reset();
 
-    GLCmd cmds[1];
+    GLCmd cmds[2];
     memset(cmds, 0, sizeof(cmds));
     cmds[0].type = CMD_GLUT_BITMAP_STRING;
     cmds[0].valid = 1;
-    cmds[0].args[0] = 0.5f;
-    cmds[0].args[1] = 1.5f;
-    cmds[0].args[2] = 2.5f;
-    cmds[0].num_args = 3;
+    cmds[0].num_args = 0;
     strcpy(cmds[0].text, "hi");
 
     ReplExecutionOptions opts = {0};
@@ -233,26 +231,49 @@ static void test_glut_bitmap_string(void) {
     opts.program.cmd_count = 1;
     repl_execute_program(&opts);
 
-    ASSERT_TRUE("bitmap-string raster pos fired once",
+    ASSERT_TRUE("label does NOT touch raster pos",
+                gl_stub_counts[GL_STUB_glRasterPos3f] == 0);
+    ASSERT_TRUE("label emits 2 chars",
+                gl_stub_counts[GL_STUB_glutBitmapCharacter] == 2);
+
+    /* CMD_RASTER_POS3F followed by label: raster pos is set by the
+     * separate primitive, label emits chars at that position. */
+    gl_stub_counts_reset();
+    memset(cmds, 0, sizeof(cmds));
+    cmds[0].type = CMD_RASTER_POS3F;
+    cmds[0].valid = 1;
+    cmds[0].args[0] = 0.5f;
+    cmds[0].args[1] = 1.5f;
+    cmds[0].args[2] = 2.5f;
+    cmds[0].num_args = 3;
+    cmds[1].type = CMD_GLUT_BITMAP_STRING;
+    cmds[1].valid = 1;
+    cmds[1].num_args = 0;
+    strcpy(cmds[1].text, "hi");
+    opts.flat_cmd_count = 2;
+    opts.program.cmd_count = 2;
+    repl_execute_program(&opts);
+
+    ASSERT_TRUE("glRasterPos3f primitive fires once",
                 gl_stub_counts[GL_STUB_glRasterPos3f] == 1);
-    ASSERT_TRUE("bitmap-string emits 2 chars",
+    ASSERT_TRUE("label after raster-pos still emits 2 chars",
                 gl_stub_counts[GL_STUB_glutBitmapCharacter] == 2);
 
     /* Format with %f: substitution is applied at execute time. The
-     * expanded text "v=1.25" is 6 chars, all emitted via
-     * glutBitmapCharacter. */
+     * expanded text "v=1.25" is 6 chars. args[0..3] hold the
+     * substitution values. */
     gl_stub_counts_reset();
     memset(cmds, 0, sizeof(cmds));
     cmds[0].type = CMD_GLUT_BITMAP_STRING;
     cmds[0].valid = 1;
-    cmds[0].args[0] = 0; cmds[0].args[1] = 0; cmds[0].args[2] = 0;
-    cmds[0].args[3] = 1.25f;
-    cmds[0].num_args = 4;
+    cmds[0].args[0] = 1.25f;
+    cmds[0].num_args = 1;
     strcpy(cmds[0].text, "v=%f");
-
+    opts.flat_cmd_count = 1;
+    opts.program.cmd_count = 1;
     repl_execute_program(&opts);
 
-    ASSERT_TRUE("bitmap-string %f substitution emits expanded length",
+    ASSERT_TRUE("label %f substitution emits expanded length",
                 gl_stub_counts[GL_STUB_glutBitmapCharacter] == 6);
 
     /* %% renders as a single literal '%'. */
@@ -260,12 +281,12 @@ static void test_glut_bitmap_string(void) {
     memset(cmds, 0, sizeof(cmds));
     cmds[0].type = CMD_GLUT_BITMAP_STRING;
     cmds[0].valid = 1;
-    cmds[0].num_args = 3;
+    cmds[0].num_args = 0;
     strcpy(cmds[0].text, "100%% done");
 
     repl_execute_program(&opts);
 
-    ASSERT_TRUE("bitmap-string %% literal collapses to single '%'",
+    ASSERT_TRUE("label %% literal collapses to single '%'",
                 gl_stub_counts[GL_STUB_glutBitmapCharacter] == 9);
 
     repl_executor_destroy_resources();
