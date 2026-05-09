@@ -363,8 +363,7 @@ static int repl_core_format_var_decl_text(const char *orig_text,
 
     if (!out || out_sz <= 0)
         return 0;
-    strncpy(out, buf, (size_t)out_sz - 1);
-    out[out_sz - 1] = '\0';
+    snprintf(out, (size_t)out_sz, "%s", buf);
     return 1;
 }
 

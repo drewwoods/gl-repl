@@ -50,16 +50,14 @@
 
 static void result_set_diagnostic(EditorCommitResult *result, const char *msg) {
     if (!result || !msg) return;
-    strncpy(result->diagnostic, msg, sizeof(result->diagnostic) - 1);
-    result->diagnostic[sizeof(result->diagnostic) - 1] = '\0';
+    snprintf(result->diagnostic, sizeof(result->diagnostic), "%s", msg);
     result->diagnostic_valid = 1;
 }
 
 static void result_set_commit_message(EditorCommitResult *result,
                                       const char *msg) {
     if (!result || !msg) return;
-    strncpy(result->commit_message, msg, sizeof(result->commit_message) - 1);
-    result->commit_message[sizeof(result->commit_message) - 1] = '\0';
+    snprintf(result->commit_message, sizeof(result->commit_message), "%s", msg);
     result->commit_message_valid = 1;
 }
 
