@@ -825,7 +825,11 @@ A[index] = expr;           (fixed scratch arrays: A/B/C, index 0..7)
 
 ## Math
 
-Functions: `sin`, `cos`, `tan`, `sqrt`, `abs`, `pow`, `min`, `max`, `floor`, `ceil`, `fmod`, `rem`, `rand(seed[, iter])`
+Functions: `sin`, `cos`, `tan`, `sqrt`, `abs`, `pow`, `min`, `max`, `floor`, `ceil`, `fmod`, `rem`, `rand(seed[, iter])`, `rand2(seed[, iter])`
+
+`rand` returns a value in `[0, 1]`. `rand2` is the same hash mapped
+to `[-1, 1]` — useful for centered jitter, signed offsets, etc. Both
+are deterministic for a given (seed, iter) pair.
 Constants: `PI`, `TAU`
 Variables: declared via `float name;` — only `t` is predefined (Ctrl+T toggles animation).
 Scratch arrays: `A[8]`, `B[8]`, `C[8]` are fixed global runtime arrays for recursive/loop algorithms.
