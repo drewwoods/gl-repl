@@ -85,7 +85,7 @@ ReplCompileContext repl_compile_context_from_live(void) {
     return ctx;
 }
 
-/* Compile-time analog of repl_commit.c's static fill_scope_indent. */
+/* Compile-time analog of editor_commit.c's static fill_scope_indent. */
 static void compile_scope_indent(int pos, char *buf, int buf_sz) {
     repl_source_scope_cmd_indent(pos, buf, buf_sz);
 }

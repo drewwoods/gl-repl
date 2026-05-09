@@ -1,54 +1,22 @@
 /*
- * repl_core.c - Core state, normalization, and display infrastructure.
+ * repl_core.c - Residual REPL helpers awaiting redistribution.
  *
- * Division of labor
- * -----------------
- * This file owns everything that transforms text into renderable GL state:
+ * This translation unit is being dissolved into its natural owners (see the
+ * R10 plan in ARCHITECTURE.md). What still lives here:
  *
- *   - Control-flow state that is not pure command metadata
- *   - Global state: command arrays (repl_state_document_cmds_mut() / g_flat_cmds), camera, toggles,
- *     accumulation-buffer settings, etc.
- *   - Normalization - repl_parse_and_normalize(), repl_reformat_commands()
- *   - GLUT callback wrappers
- *   - Public API wrappers forwarded from sample.c
+ *   - repl_parse_and_normalize() / parse_and_normalize_impl() — until the
+ *     parser absorbs them.
+ *   - repl_reformat_commands() — pending extraction to repl_reformat.c.
+ *   - load_initial_commands() and a handful of startup helpers — pending move
+ *     to repl_scenes.c.
+ *   - current_begin_mode() / count_vertices() — pending move to
+ *     repl_executor.c.
+ *   - Diagnostic dumps — pending move to repl_state.c or a repl_debug owner.
  *
- * repl_editor.c owns the interactive editing layer:
- *   - Editor state (g_input, cursor)
- *   - Commit handlers that decide *where* a parsed command goes in repl_state_document_cmds_mut()[]
- *   - GLUT keyboard / special / mouse / motion / timer dispatch
- *   - Panel resizing and routing to variable-drag ownership
- *   - feed_line() - the programmatic commit entry point used by file loading
- *     and test harnesses
- *
- * Other translation units:
- *   repl_eval.c    - expression evaluator, for-loop header parsers
- *   repl_export.c  - save / load  (output.c round-tripping)
- *   editor_undo.c    - undo/redo snapshots and history rings
- *   repl_camera_controls.c - viewport camera drag and momentum controls
- *   repl_actions.c - config shortcuts, menu actions, startup config defaults
- *   ui_code_panel_layout.c - pure code-panel wrapping and row lookup
- *   editor_code_panel_document.c - code-panel document rows and hit targets
- *   editor_search.c  - incremental search overlay
- *   cmd_format.c   - source-text formatting helpers
- *   repl_parser.c  - parse_command(): text → GLCmd
- *   repl_source_scope.c - source block/depth queries and indent cache
- *   repl_flatten.c - repl_flatten_program() / flatten_commands()
- *   repl_executor.c- repl_execute_program() / execute_commands()
- *   repl_autocomplete.c - completions and parameter hints (provider)
- *   repl_autonormal.c - auto-generated normals and feeding-state lookup
- *   repl_example_loader.c - built-in example loading and metadata
- *   replay.c  - replay state machine and fade-batch rendering
- *   repl_replay_annotations.c - code-panel replay variable annotations
- *   scene_render.c - 3D scene setup, grid / axes / overlay drawing
- *   ui_menu_bar.c - code-panel menus, dropdowns, and search slot
- *   ui_color_picker.c - floating literal-color editor
- *   ui_autocomplete_panel.c - floating autocomplete popup renderer
- *   ui_help_overlay.c - modal F1 help overlay
- *   ui_variable_panel.c - floating variable panel renderer
- *   editor_inline_rename.c - scene-rename input buffer
- *   variable_panel_drag.c - variable slider drag state/writeback
- *   ui_panels.c    - code rows, scene status, hit routing
- *   repl_examples.c- predefined example scene data
+ * For the live module map see MODULES.md. Editor input dispatch lives in
+ * src/editor/input.c; cross-subsystem routing lives in glr_ctrl.c; commit
+ * handlers live in src/editor/commit.c. The deleted repl_editor.{c,h} and
+ * repl_commit.{c,h} are hard-guarded against return.
  */
 
 #include "repl_core.h"

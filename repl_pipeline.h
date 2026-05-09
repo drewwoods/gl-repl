@@ -1,7 +1,7 @@
 /*
  * repl_pipeline.h - REPL pipeline and lifecycle operations for the controller.
  *
- * These entry points are driven from imrepl_ctrl.c and other frame-level
+ * These entry points are driven from glr_ctrl.c and other frame-level
  * orchestration code. They are not test internals.
  */
 #ifndef REPL_PIPELINE_H

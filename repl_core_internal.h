@@ -1,11 +1,12 @@
 /*
  * repl_core_internal.h - Implementation internals shared across REPL modules.
  *
- * Collects internal APIs used by repl_core.c, repl_editor.c, repl_executor.c,
- * repl_export.c, repl_parser.c, editor_search.c, and the unit test suites. These
- * are NOT part of the public API (repl_core.h); they are domain-specific helpers
- * that tests and sibling modules need. When an internal API stabilizes and
- * becomes broadly useful, graduate it to repl_core.h.
+ * Collects internal APIs used by repl_core.c, src/editor/input.c,
+ * repl_executor.c, repl_export.c, repl_parser.c, src/editor/search.c, and the
+ * unit test suites. These are NOT part of the public API (repl_core.h); they
+ * are domain-specific helpers that tests and sibling modules need. When an
+ * internal API stabilizes and becomes broadly useful, graduate it to
+ * repl_core.h.
  *
  * Organization by subsystem (see function declarations below):
  *
@@ -40,7 +41,8 @@
  *
  * 10. Timekeeping: Advance and reset the animated 't' variable.
  *
- * 11. Search dispatch: Keyboard routing for the search overlay (repl_search.c).
+ * 11. Search dispatch: Keyboard routing for the search overlay
+ *     (src/editor/search.c).
  *
  * 12. Editor input test hooks: Modifier provider for simulating Ctrl/Shift/Alt
  *     in tests.
@@ -227,6 +229,10 @@ void repl_bench_fade_clear(void);
 /* Programmatic entry point equivalent to typing `line` and pressing ';'.
  * Used by file loading, example loading, and every test harness. */
 int  feed_line(const char *line);
+/* Defined in src/editor/input.c. Drops camera/menu/picker/code-panel-drag
+ * transient state in addition to the editor commit transients; called from
+ * repl_state_reset_all() and the example loader so a state reset returns the
+ * editor to a clean idle posture. */
 void repl_editor_reset_transients(void);
 void repl_load_example_lines_for_test(const char *const *lines);
 

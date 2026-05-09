@@ -1,13 +1,13 @@
 # REPL Module Guide — North Star
 
 > **This document is the target ownership map.** The
-> `editor-ownership-gap-cleanup` branch landed Phases A–J2 and the
-> tree now matches the contract described here. Two filename
-> deferrals remain (`repl_camera_controls`, `repl_actions` —
-> waiting on the scene/viewport split and the app-shell namespace
-> work; `repl_commit` and `repl_editor` are both deleted entirely)
-> and a small number of ratchets continue to drive transitional
-> uses toward zero. New code follows this contract directly.
+> `editor-ownership-gap-cleanup` branch landed Phases A–J9 and the
+> tree now matches the contract described here. The historical
+> filename deferrals (`repl_camera_controls` → `glr_camera`,
+> `repl_actions` → `glr_actions`) landed; `repl_commit` and
+> `repl_editor` are deleted entirely. A small number of ratchets
+> continue to drive transitional uses toward zero. New code follows
+> this contract directly.
 
 For per-module detail and frame-pipeline narrative read
 [`ARCHITECTURE.md`](ARCHITECTURE.md). For the staged cleanup plan see
@@ -173,8 +173,9 @@ source-backed module.
 | `prof`, `cmd_format` | Generic utilities with no ownership of REPL/editor/UI state |
 
 Treat prefixes as ownership boundaries, not naming aesthetics. A file
-that crosses a boundary either splits or moves. `repl_audio` is legacy
-and gets revisited in the namespace audit.
+that crosses a boundary either splits or moves. `audio` is the
+neutrally-named app-level service (formerly `repl_audio`); whether it
+gets a `glr_audio` rename is part of the open namespace audit.
 
 ## Adding Or Migrating An Owner Module
 
@@ -350,7 +351,7 @@ never read `ReplState`, `EditorState`, or `UiState` directly.
 | `src/scene/overlays` | Tiny per-vertex GL primitives (vertex-number labels, normal arrows). REPL-walking overlays moved out to `glr_ctrl.c`. |
 | `geometry_guides` | Vertex/primitive guide rendering from snapshots. Lives at root (REPL-aware: knows about cursor input) |
 | `transform_guides` | Transform-guide rendering from snapshots. Lives at root (REPL-aware) |
-| `repl_camera_controls` *(rename to `scene_camera_controls` deferred — blocked on the scene/viewport split)* | Camera/view transform helpers — orbit/pan/zoom drag state machine. `glr_ctrl_router_handle_camera_mouse` drives input; scene consumes final camera state through `SceneRenderConfig` |
+| `glr_camera` | Camera/view transform helpers — orbit/pan/zoom drag state machine. `glr_ctrl_router_handle_camera_mouse` drives input; scene consumes final camera state through `SceneRenderConfig`. (Future `scene_camera_controls` move is still possible if the scene/viewport split lands.) |
 | `transform_utils` | Small GL matrix helpers used by `glr_ctrl.c` and `transform_guides.c` (root: no `src/scene/*.c` consumes it) |
 | `guides_shared` | Shared guide snapshot/planning types for REPL-aware 3D overlays (root, paired with the guides modules) |
 
@@ -417,7 +418,7 @@ state.
 | Module | Role |
 |--------|------|
 | `repl_export` | Save/load, typed export scaffold, workspace headers, code-panel dumps. Takes `EditorBufferView` for source text |
-| `repl_audio` | Legacy-named app-level playlist engine and persisted audio config |
+| `audio` | App-level playlist engine and persisted audio config (neutral name; `glr_audio` rename is open) |
 | `prof` | Project-wide CPU timing instrumentation |
 | `sample` *(future `glr`)* | Current `main()`, GLUT callback registration, buffer swap |
 | `gl_stub_counts` | `USE_GL_STUBS` symbol tracking for `tests/gl-stubs` headers |
@@ -479,7 +480,7 @@ flowchart LR
         vpanel["variable_panel_state.c + variable_panel_drag.c<br/>(was repl_var_drag)<br/>visibility + drag transaction"]
         replay_sys["replay.c + replay_state.c<br/>(was repl_replay)<br/>state machine · fades"]
         cpicker["color_picker_state.c<br/>(was inside ui_color_picker)<br/>HSV/alpha state · lifecycle · writeback"]
-        camera["repl_camera_controls.c<br/>orbit/pan/zoom transform<br/>(rename deferred — scene/viewport split)"]
+        camera["glr_camera.c<br/>orbit/pan/zoom transform"]
     end
 
     subgraph models["3. REPL domain models"]
@@ -844,9 +845,10 @@ side-effect routing. As of that branch landing:
   `repl_code_panel_layout` → `ui_code_panel_layout`,
   `repl_code_panel_document` → `editor_code_panel_document`,
   `repl_editor` → deleted (dispatch split between `editor_input`
-  and `glr_ctrl`). Two files (`repl_camera_controls`,
-  `repl_actions`) remain on the legacy prefix with explicit
-  blockers documented in the plan.
+  and `glr_ctrl`), `repl_camera_controls` → `glr_camera`,
+  `repl_actions` → `glr_actions`. The `glr_*` namespace covers the
+  app-shell (router + camera + menu/config actions); the previously
+  noted deferrals have landed.
 - **Hard guards: 33 in place.** `make check-state-ownership` runs
   31 sub-targets (the `check-cursor-px-encapsulated` migration
   guard was retired alongside the `cursor_px/cursor_py` state in
@@ -870,11 +872,24 @@ side-effect routing. As of that branch landing:
 
 The deferred items still on the books:
 
-- `repl_camera_controls` rename (waiting on scene/viewport split).
-- `repl_actions` rename (waiting on app-shell namespace work).
 - `ui_layout` / `ui_code_panel_layout` parameterization so geometry
   helpers stop reading `repl_state_presentation()` (currently
   allowlisted under `check-no-facade-include-in-views`).
+- `ui_code_panel_layout` symbol rename: the file lives at
+  `src/ui/code_panel_layout.c` but its public functions are still
+  prefixed `repl_code_panel_layout_*` / `repl_code_panel_wrap_iter_*`.
+  The function names should follow the `ui_*` filename in a follow-up.
+- `audio` namespace audit (neutrally-named app service; revisit
+  when the namespace audit happens — likely future `glr_audio`).
+- `repl_editor_reset_transients` symbol rename: the function lives in
+  `src/editor/input.c` and resets editor + camera + menu + picker +
+  code-panel-drag transients; the `repl_editor_*` prefix is leftover from
+  the deleted `repl_editor.{c,h}`. Follow-up should rename to
+  `editor_input_reset_transients` (or split the cross-subsystem reset).
+
+REPL pipeline corner cases that deserve focused regression tests are
+listed in [`ARCHITECTURE.md`](ARCHITECTURE.md) under
+*Known REPL Corner Cases & Coverage Gaps*.
 
 See `feature/done/editor-ownership-gap-cleanup.md` for the audit script and
 baseline counts; `feature/editor-owns-text-completion.md` for the

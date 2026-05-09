@@ -318,13 +318,16 @@ The core data flow is **source commands → flat commands → GL calls**:
    sets the per-context error buffer.
 3. **Parse** — `parse_command()` in `repl_parser.c` matches the line to a
    `CmdType`, evaluates argument expressions via `eval_expr()`, stores
-   result in `GLCmd.args[]` and normalized text in `GLCmd.source[]`.
-   Internal call sites pass `ReplParseContext.source_line_idx` instead of
-   temporarily changing the edit-line cursor.
+   result in `GLCmd.args[]`. Per-line canonical text lives in
+   `ReplEditorBuffer.lines[]` (not on `GLCmd`); the parser returns it as
+   `ReplParsedLine.text` for the commit path to write into the editor
+   buffer. Internal call sites pass `ReplParseContext.source_line_idx`
+   instead of temporarily changing the edit-line cursor.
 4. **Flatten** — `flatten_range()` recursively expands the source array:
-   for-loops iterate (capped at 100k visits), function calls inline the
-   body with actual args, if-blocks evaluate conditions. Recursion
-   depth limited to `MAX_FLATTEN_CALL_DEPTH=32`
+   for-loops iterate (capped at `MAX_FLATTEN_VISIT_BUDGET = 200000`
+   visits), function calls inline the body with actual args, if-blocks
+   evaluate conditions. Recursion depth limited to
+   `MAX_FLATTEN_CALL_DEPTH = 64`.
 5. **Execute** — `repl_execute_program()` walks the flat command array emitting GL
    calls. Re-evaluates expressions with `has_vars` flag each frame
    (for animated `t`, etc.)
@@ -565,7 +568,9 @@ Variables: declared via `float name;` — only `t` is predefined (Ctrl+T toggles
 Scratch arrays: `A[8]`, `B[8]`, `C[8]` are fixed global runtime arrays for recursive/loop algorithms.
 Reads and writes use normal expression syntax; indices are truncated with `(int)` and must stay in `0..7`.
 Other names (`x`, `y`, `z`, etc.) must be declared before use.
-`MAX_PREDEF_VARS` = 16 (1 reserved for `t`, 15 user-declarable slots).
+`MAX_PREDEF_VARS` = 24 (1 reserved for `t`, 23 user-declarable slots). The
+float-decl handler rejects new declarations once the table is full with
+`"variable table full (max 24)"`.
 
 Example:
 
