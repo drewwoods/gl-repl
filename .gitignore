@@ -39,6 +39,7 @@ test_ui
 test_ui_help_overlay
 bench_repl
 /teapot_demo
+/repl_demo
 .cache/
 compile_commands.json
 coverage.lcov

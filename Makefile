@@ -130,6 +130,27 @@ STATE_NEUTRAL_SRCS = cmd_format.c prof.c tests/gl-stubs/gl_stub_counts.c
 # done in the controller before snapshot is built).
 TEAPOT_DEMO_DEP_SRCS = $(SCENE_SRCS) prof.c
 
+# Object list for the standalone repl_demo (the inverse of teapot_demo:
+# proves the REPL pipeline links without editor input dispatch
+# (src/editor/input.c), the controller (glr_ctrl.c + glr_ctrl_router_*),
+# or the UI (src/ui/*, replay_ui_hud.c)). Per-line text canonically lives
+# on src/editor/state.c's ReplEditorBuffer, so that TU stays in the link
+# set by design. Stubs for the editor/UI/peer reset entry points
+# repl_state_reset_all() reaches for live in tools/repl_demo/stubs.c.
+REPL_DEMO_DEP_SRCS = repl_core.c repl_state.c repl_parser.c \
+                     repl_command_spec.c repl_command_store.c \
+                     repl_compile.c repl_apply.c repl_flatten.c \
+                     repl_executor.c repl_eval.c repl_source_scope.c \
+                     repl_autonormal.c repl_scenes.c \
+                     repl_example_loader.c repl_examples.c \
+                     repl_export.c repl_autocomplete.c repl_help_text.c \
+                     repl_replay_annotations.c replay.c replay_state.c \
+                     glr_camera.c glr_config.c \
+                     src/editor/state.c src/editor/completion.c \
+                     src/ui/layout.c src/ui/code_panel_layout.c \
+                     cmd_format.c prof.c \
+                     tests/gl-stubs/gl_stub_counts.c
+
 OBJDIR = build/$(BUILD)$(if $(filter 1,$(USE_GL_STUBS)),-gl-stubs,)
 OBJ_CFLAGS = $(BUILD_CFLAGS) $(CFLAGS)
 DEPFLAGS = -MMD -MP
@@ -245,6 +266,15 @@ TEAPOT_DEMO_OBJS = $(OBJDIR)/tools/teapot_demo/teapot.o \
 
 teapot_demo: $(TEAPOT_DEMO_OBJS) ## Build the standalone teapot demo.
 	$(CC) $(OBJ_CFLAGS) -o $@ $(TEAPOT_DEMO_OBJS) $(GL_LDFLAGS)
+
+# Standalone REPL pipeline demo. Inverse of teapot_demo: proves the
+# REPL pipeline links without editor input dispatch / controller / UI.
+REPL_DEMO_OBJS = $(OBJDIR)/tools/repl_demo/repl_demo.o \
+                 $(OBJDIR)/tools/repl_demo/stubs.o \
+                 $(addprefix $(OBJDIR)/,$(REPL_DEMO_DEP_SRCS:.c=.o))
+
+repl_demo: $(REPL_DEMO_OBJS) ## Build the standalone REPL pipeline demo.
+	$(CC) $(OBJ_CFLAGS) -o $@ $(REPL_DEMO_OBJS) $(GL_LDFLAGS)
 
 .SECONDEXPANSION:
 
