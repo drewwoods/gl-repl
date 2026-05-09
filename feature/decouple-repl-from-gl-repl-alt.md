@@ -1,9 +1,14 @@
 # Decoupling repl_demo from gl-repl — execution plan
 
-> Supersedes the chokepoint-numbered draft. Same six chokepoints, but
-> reordered as an execution sequence and with maintainer corrections
-> applied (stub count, reset rename, non-editor commit API as the
-> target, config split by owner as the endpoint).
+> Supersedes the chokepoint-numbered draft. Same six original
+> chokepoints reordered as an execution sequence, with maintainer
+> corrections applied (stub count, reset rename, non-editor commit
+> API as the target, config split by owner as the endpoint), plus a
+> seventh step that takes the config split all the way to storage —
+> the misnamed slices in `repl_state.c` move to a new `glr_state.c`.
+> Steps 1–6 reduce the stub count to zero against the current
+> structure; step 7 is what makes the REPL/editor/scene/UI ownership
+> split actually correct rather than catalog-deep.
 
 ## Baseline
 
@@ -18,9 +23,12 @@ verified via `nm build/release-gl-stubs/tools/repl_demo/stubs.o`. The
 commit message's "12 no-op shims" undercounted; the real number is 17.
 
 The 17 stubs cluster into six chokepoints. Each chokepoint is one
-concrete misplacement or unfinished refactor in the existing code, not
-a structural problem with the pipeline itself. The ordering below is
-chosen so each step lands without depending on the next.
+concrete misplacement or unfinished refactor in the existing code,
+not a structural problem with the pipeline itself. The ordering
+below is chosen so each step lands without depending on the next.
+Step 7 is a follow-on that does not clear stubs — by step 6 the
+count is already zero — but it finishes the ownership split that
+step 4 only takes to the catalog layer.
 
 | Step | Chokepoint | Stubs cleared | Effort | Feasibility |
 |---|---|---|---|---|
@@ -30,8 +38,9 @@ chosen so each step lands without depending on the next.
 | 4 | Split config catalog vs live-app mutation by owner | 8 | Medium | Medium — needs a real ownership decision |
 | 5 | Non-editor source-load / commit API for examples + imports | 1 (`feed_line`) | Medium-High | Medium — must support multi-line block structures |
 | 6 | Split `repl_core.c` / `repl_export.c` to remove last editor-shaped helpers | 1 (`load_line_to_input`) | Medium | Medium — overlaps with R10-phase2..5 in ARCHITECTURE.md |
+| 7 | Move `presentation` + `render` slices from `repl_state.c` to a new `glr_state.c`; split `repl_export.c` and `repl_scenes.c` along the same line | 0 (storage cleanup) | High | Medium — large, but matches the existing `glr_*` ownership convention |
 
-Totals reconcile: 1 + 5 + 1 + 8 + 1 + 1 = **17 stubs**.
+Totals reconcile: 1 + 5 + 1 + 8 + 1 + 1 = **17 stubs** by end of step 6. Step 7 is structural follow-on, not stub clearance.
 
 ---
 
@@ -355,6 +364,154 @@ reformatter / scene editor effects are no longer in the pipeline TUs
 
 ---
 
+## Step 7 — Move misnamed app-state slices to `glr_state.c`
+
+**Why a separate step.** Steps 1–6 reduce the stub count to zero
+against the *current* file layout. Step 7 fixes a deeper naming
+problem that the catalog split in step 4 only patches at the
+descriptor layer: `repl_state.c` owns `g_repl_state`, but four of its
+seven slices have nothing to do with the REPL language. They're
+app-frame chrome that ended up there because `repl_state.c` was the
+original (and for a while only) state owner; everything else
+(`EditorState`, `UiState`, peer subsystems) was carved out around
+them and the original misnomer was never undone. Step 4 splits the
+*catalog* (`repl_config_set(WIREFRAME, …)` vs. `glr_config_set(…)`);
+it does *not* split the *storage* — both still write into
+`g_repl_state.presentation`. Step 7 finishes that split.
+
+**Why last.** Step 7 propagates into `repl_export.c` and `repl_scenes.c`,
+both of which steps 4 and 6 have already touched. Doing step 7 before
+those is rework. Doing step 7 *after* them is mostly mechanical
+because the catalog-side fence is already in place.
+
+### Current state — slice ownership audit
+
+`ReplRuntimeState` in `repl_state.h` has seven slices:
+
+| Slice | Genuinely REPL? | What's in it |
+|---|---|---|
+| `document` | ✅ REPL | parsed source command array |
+| `flat_program` | ✅ REPL | flattened executable command stream |
+| `variables` | ✅ REPL | predef vars, scratch arrays A/B/C, func aliases, `time_playing` |
+| `scenes` | ✅ REPL (mostly) | user-scene slots — but each slot bundles a per-scene cfg snapshot that is app-state |
+| `import_export` | mixed | scene-name hint (REPL), workspace_dir (app), pending workspace-header state (mixed) |
+| `presentation` | ❌ **APP** | wireframe, grid_theme, grid_major_idx, grid_extent_idx, axes_theme, backdrop_mode, show_vertex_{labels,normal_vectors,indices,outlines,points,guides}, show_light_indicators, highlight_current_poly, autonormal, code_panel_layout, wrap_at_comma |
+| `render` | ❌ **APP** | multisample_enabled, line_smooth_enabled, accum_aa_enabled, point_attenuation_enabled |
+
+Plus the controller-pushed editor-overlay lists (`editor_transformers`,
+`editor_highlights`, `editor_virtual_lines`) that landed on
+`ReplRuntimeState` because that was the only owner big enough to hold
+them. They are editor concerns and should move to `EditorState` along
+the way.
+
+### Fix — three new owners, three split TUs
+
+**1. New `glr_state.c` / `glr_state.h`.** Owner sibling to
+`repl_state.c`, `src/editor/state.c`, `src/ui/state.c`. Holds:
+
+- `presentation` slice (verbatim relocation, no field changes)
+- `render` slice (verbatim relocation)
+
+`code_panel_layout` and `wrap_at_comma` are editor *chrome*, not
+render config — those two move to `EditorState` (or `UiState`, if
+that's where the existing chrome already lives). The rest of
+`presentation` is genuinely scene-presentation cfg and belongs on
+`glr_state`.
+
+**2. `repl_state.c` shrinks.** What remains: `document`,
+`flat_program`, `variables`, `scenes` (programs only), and the REPL
+half of `import_export`. The file genuinely is REPL-language state
+after step 7 — the name becomes correct without renaming. Don't
+rename the file: it is two breaking changes for one cleanup, and
+existing call sites churn for no semantic reason.
+
+**3. `scenes` split into REPL programs + app cfg snapshots.** Two
+parallel slot arrays:
+
+- `repl_scenes.c` — owns the program half: per-scene
+  `document_cmds[]`, `predef_vars[]`, `name`, `last_touch`.
+- `glr_scenes.c` (new) — owns the app-cfg half: per-scene snapshot
+  of the presentation/render values.
+
+The controller bundles the two halves at save/load time. F12 cycle
+and the workspace iterator each call both halves under one
+transaction. This split mirrors the catalog split from step 4: the
+REPL pipeline only sees the program half.
+
+**4. `repl_export.c` splits.** The `@cfg` block is app concern; the
+program body is REPL concern:
+
+- `repl_export.c` keeps the program writer/reader: `display()` body,
+  REPL functions, predef vars, `@var` markers, `@scene-name` hint,
+  `@declare` markers, the per-line REPL → C translation. Reads
+  `EditorBufferView` only (already does).
+- `glr_export.c` (new, or the controller) emits the `@cfg` /
+  `@workspace-dir` / camera-preset block by reading `glr_state` and
+  the camera. The controller threads the two halves together when
+  writing the file; the importer dispatches header lines to the
+  matching reader.
+
+The save-file format is unchanged. Existing `output.c` files
+round-trip without a header bump.
+
+**5. `import_export` slice split.** The mixed slice splits the same
+way:
+
+- `repl_state.c` keeps scene-name hint and any pending REPL-side
+  parser state.
+- `glr_state.c` keeps `workspace_dir` and pending app-cfg directives.
+
+### Demo link-set impact
+
+After step 7 the demo links `repl_state.c` and skips `glr_state.c`.
+That's one fewer TU than after step 4 alone, *and* it eliminates a
+class of future stub regressions: any cfg-key addition that targets
+an app slice can no longer accidentally surface in the pipeline TUs.
+
+The naming is also informative for new contributors: a file named
+`repl_state.c` now actually contains REPL state, and a file named
+`glr_state.c` actually contains app-frame state. The previous layout
+required reading the slice names to know which was which.
+
+### What does *not* move
+
+- `EditorState` (cursor, selection, search, autocomplete, undo,
+  editor buffer, transformers/highlights/virtual lines after
+  step 7) — already in `src/editor/state.c`.
+- `UiState` (viewport, pointer, status TTL, panel divider) — already
+  in `src/ui/state.c`.
+- Peer subsystems (`replay_state`, `variable_panel_state`,
+  `color_picker_state`, `editor_help_session`) — already in their
+  own files.
+- `glr_camera` — already in `glr_camera.c`.
+- `glr_config` (the catalog from step 4) — already in `glr_config.c`.
+
+After step 7, the four-owner contract from `MODULES.md` actually
+holds at the file layout, not just the description:
+
+```
+ReplState     → repl_state.c       (REPL language state)
+EditorState   → src/editor/state.c (text-document model)
+UiState       → src/ui/state.c     (UI chrome)
+GlrState      → glr_state.c        (app-frame presentation/render)  ← NEW
++ peers       → their own files
+```
+
+### Effort and risk
+
+- **Effort:** ~2–3 weeks. The file moves are mechanical; the
+  `repl_export.c` and `repl_scenes.c` splits are the work.
+- **Risk:** medium. `@cfg` save-file compatibility is a footgun —
+  any importer that loses an `@cfg` line silently drops a setting.
+  Round-trip the entire `tests/test_repl_export_all_commands.c`
+  corpus + every workspace in `examples/` before merging. Because
+  the format is line-tagged, a missed slug surfaces as a missing
+  state mutation, not corruption.
+- **Net stub change:** 0 — by step 6 the count is already zero. Step
+  7's payoff is structural correctness, not stub clearance.
+
+---
+
 ## Out of scope
 
 Things the maintainer review correctly flagged as *not* the path
@@ -480,6 +637,25 @@ Coverage: low. Land two guards with step 5: (a) `check-repl-no-editor-input-incl
 
 Coverage: low. Same shape as step 5 — needs two new guards.
 
+#### Step 7 — Slice relocation to `glr_state.c`
+
+| Risk | Existing coverage | Gap |
+|---|---|---|
+| Some `presentation` / `render` field stays behind in `repl_state.c` (not all moved) | ✅ `check-state-c-shrinking` (line ratchet on `repl_state.c`) catches incomplete moves; the move only counts when both the field and its accessor leave | — |
+| `repl_state.c` re-introduces a presentation/render reference after the move | — | **GAP** — symbol-level guard "`repl_state.c` cannot reference `glr_state_*`" closes this |
+| `glr_state.c` calls into REPL pipeline mutators (e.g., to read predef vars) | ✅ `check-views-no-owners` analog needed for the new owner; otherwise none | **GAP** — extend `check-state-boundaries` to forbid `repl_state_*_mut*` calls from `glr_state.c` |
+| New `glr_state.h` accidentally gets included by `src/scene/*.c` or `src/ui/*.c` | — | **GAP** — extend `check-views-no-owners` to also forbid `glr_state_owners.h` (or whatever the mutator header becomes named); presentation/render were *already* legitimately read by views via the snapshot, so the read header should remain includable |
+| `repl_export.c` keeps reading `repl_state_presentation_*()` after the slice moves | ✅ `check-state-c-shrinking` (analog) — `repl_export.c` shrinks when the cfg writer leaves | **GAP** — explicit symbol guard "`repl_export.c` cannot reference `glr_state_*`" forces the export split |
+| `repl_scenes.c` keeps reading presentation/render after the slot-snapshot moves | — | **GAP** — same shape as the export guard, applied to `repl_scenes.c` |
+| `@cfg` save-file format silently drops a slug because the routing missed a field | — | **TEST GAP** — the existing round-trip tests cover commands but not the cfg headers; a focused round-trip over every `g_cfg_items[]` slug should land with step 7 |
+
+Coverage: low. Step 7 is the largest single restructure, and most of
+the existing guards are scoped to `repl_*.c` files — they don't
+automatically extend to a new `glr_state.c`. The fence has to be
+duplicated for the new owner. The shape is identical (read-only
+views header + mutator-only header + scene/UI can include views,
+not owners), so the work is template-driven, not novel.
+
 ### The umbrella guard: stub-count ratchet
 
 The cleanest meta-guard is a ratchet on `tools/repl_demo/stubs.c`
@@ -492,6 +668,9 @@ fails if the count exceeds a baseline that ratchets downward only.
 
 Today's baseline: **17**. After step 1 (target): 16. After step 2: 11.
 After step 3: 10. After step 4: 2. After step 5: 1. After step 6: 0.
+Step 7 doesn't move the count — it's structural follow-on after the
+stubs are gone — but the ratchet stays at 0/0 to prevent regression
+during the slice relocation.
 
 This guard catches at the symbol layer what include-based guards miss
 at the header layer. It also matches the architectural commitment
@@ -515,6 +694,9 @@ batch.
 | `check-repl-no-glr-config` (`repl_*.c` cannot reference `glr_config_*` after split) and reciprocal | 4 | 30 min |
 | `check-repl-state-c-no-peer-resets` (extend `check-editor-ownership-budget` to peer/editor reset symbols) | 2 | 30 min — add new ratchet keys |
 | `check-repl-core-c-shrinking` (clone of the `repl_state.c` ratchet for `repl_core.c`) | 3, 5, 6 | 15 min |
+| `check-repl-state-no-glr-state` (symbol guard: `repl_state.c` cannot reference `glr_state_*`) and reciprocal | 7 | 30 min |
+| `check-glr-state-no-repl-mutators` (clone of `check-views-no-owners` shape, applied to the new owner) | 7 | 30 min — extend allowlist of files allowed to write `repl_state` |
+| `check-repl-export-no-glr-state` and `check-repl-scenes-no-glr-state` (symbol guards forcing the export/scenes splits to actually happen) | 7 | 30 min |
 | `check-repl-demo-stubs-shrinking` (the umbrella ratchet) | all | 1 hr — count externally-visible symbols, ratchet down only |
 
 None of these are large; each is a clone/extension of an existing
