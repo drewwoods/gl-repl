@@ -46,13 +46,15 @@
  *
  *  - Storage: g_predef_vars[MAX_PREDEF_VARS] (in repl_eval.c).
  *  - One slot is reserved for the built-in t (animation time).
- *  - 15 slots remain for user float name; declarations.
- *  - The try_commit_float_decl handler rejects new declarations once full with "variable table full (max 16)".
+ *  - MAX_PREDEF_VARS - 1 slots remain for user float name; declarations.
+ *  - The float-decl compile path rejects new declarations once full with
+ *    "variable table full (max <MAX_PREDEF_VARS>)" — the macro value is
+ *    formatted into the message.
  *  The REPL UI shows all declared variables in the "Predefined Variables" section of the code panel, and they are available for use in expressions.
  *  Used in:
  *  - repl_eval.c — the table itself.
- *  - editor_undo.h — undo snapshots capture all 16 slots' names + values.
- *  - replay.c / imrepl_ctrl.c — replay baselines copy/restore all 16 values across mode transitions.
+ *  - editor_undo.h — undo snapshots capture all MAX_PREDEF_VARS slots' names + values.
+ *  - replay.c / glr_ctrl.c — replay baselines copy/restore all MAX_PREDEF_VARS values across mode transitions.
  *  - repl_state_views.h — the by-value snapshot the UI reads from.
  *
  *

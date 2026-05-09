@@ -14,7 +14,7 @@ superseded. This is a one-frontend REPL sample, so the useful boundary is
 between the REPL model/controller and the rendering views. The goal is not to
 turn `scene_*` into a plugin host.
 
-Current code already routes frame wiring through `imrepl_ctrl.c`. `repl_core.c`
+Current code already routes frame wiring through `glr_ctrl.c`. `repl_core.c`
 now keeps the REPL model/pipeline wrappers, while `src/scene/render.c` consumes
 explicit per-frame config. Phase 2 is still in progress; remaining work is
 mostly about shrinking transitional state/config surfaces and removing
@@ -24,19 +24,21 @@ allowlisted view-layer state mutations.
 
 ```text
 repl_*        = language, source model, flat program, replay model, input/model controllers
-imrepl_ctrl   = app-frame controller between REPL state and scene/UI rendering
+glr_*         = app-shell namespace: app router (glr_ctrl), camera (glr_camera),
+                menu/config actions (glr_actions, glr_config), CLI debug dumps (glr_debug)
+editor_*      = text-document model + controller (under src/editor/)
 scene_*       = 3D stage: camera, projection, frame setup, decorators, 3D overlays
 ui_*          = 2D editor chrome: code panel, menus, overlays, popups, HUDs
-sample.c/h    = current GLUT app shell and legacy shared header
-imrepl.c/h    = future app shell/shared header name, replacing sample.c/h
+sample.c/h    = current GLUT entry point and legacy shared header
+                (rename to a `glr_*`-namespaced shell is on the open list)
 ```
 
 The prefix is an ownership signal, not a generic sample prefix. New `repl_*`
 modules should own REPL language, editor, source, workspace, replay, or command
-model behavior. App-shell services belong under `imrepl_*` after the deferred
-rename, and generic infrastructure should keep neutral names such as `prof`.
-`repl_audio` is a legacy name to revisit during the namespace audit rather
-than a precedent for unrelated app services.
+model behavior. App-shell services belong under `glr_*`. Generic infrastructure
+keeps neutral names such as `prof`. `audio` (formerly `repl_audio`) and
+`sample` are the remaining names that fall outside this scheme; both are slated
+for the namespace audit rather than serving as precedents.
 
 The main design rule:
 
@@ -86,7 +88,7 @@ When a module starts owning mutable REPL state, follow the Stage-1 template:
    and route mutations through REPL-owned actions or stores.
 5. **The controller is the mixed layer.** The frame controller builds scene and
    UI inputs from REPL state, calls the scene renderer, then calls UI renderers.
-   This role belongs in `imrepl_ctrl.c`.
+   This role belongs in `glr_ctrl.c`.
 6. **Replay is REPL policy.** Replay state machine, PC, mode, baseline values,
    and fade/highlight decisions belong in `repl_replay.c` or follow-up replay
    planning code. Any scene use of replay data should be via snapshots or
@@ -97,8 +99,8 @@ When a module starts owning mutable REPL state, follow the Stage-1 template:
 Top-level frame orchestration belongs in the controller:
 
 ```text
-sample.c GLUT display callback (future: imrepl.c)
-  -> imrepl_ctrl_display_frame          (sample.c calls controller directly; no shim)
+sample.c GLUT display callback (future `glr` shell)
+  -> glr_ctrl_display_frame          (sample.c calls controller directly; no shim)
         -> tick profiling
         -> rebuild autonormals if dirty
         -> rebuild flat program if dirty                          [PROF_FLATTEN]
@@ -199,8 +201,8 @@ once and the UI consumes read-only. The snapshot family lives in
 
 | List | Push helper | What it carries |
 |---|---|---|
-| `EditorTransformerList editor_transformers` | `imrepl_ctrl_push_color_transformers()` | One entry per editable color command (line idx + r/g/b/a/has_alpha/is_clear). Drives inline swatch render and color-picker hit-test. Future kinds: numeric slider. |
-| `EditorHighlightList editor_highlights` | `imrepl_ctrl_push_highlights()` | Feeding-normal cmd, feeding-color cmd, replay PC, search match, selection. Rendered as gutter accents and row backgrounds. |
+| `EditorTransformerList editor_transformers` | `glr_ctrl_push_color_transformers()` | One entry per editable color command (line idx + r/g/b/a/has_alpha/is_clear). Drives inline swatch render and color-picker hit-test. Future kinds: numeric slider. |
+| `EditorHighlightList editor_highlights` | `glr_ctrl_push_highlights()` | Feeding-normal cmd, feeding-color cmd, replay PC, search match, selection. Rendered as gutter accents and row backgrounds. |
 | `EditorVirtualLineList editor_virtual_lines` | `repl_replay_annotations_prepare()` (via `_refresh_virtual_lines()`) | Replay-time annotation rows (substitution + evaluation) attached to the current source line. Layout, scroll, hit-test, and render all read from this list, so virtual-row counts have one source of truth (`repl_replay_annotation_extra_rows_for_line()` counts the list). |
 
 All three lists are stored on `ReplRuntimeState` as named slices and
@@ -227,7 +229,7 @@ Owned stages:
 
 | Stage | Owner |
 |-------|-------|
-| GLUT input dispatch (cross-subsystem routing) | `imrepl_ctrl.c` |
+| GLUT input dispatch (cross-subsystem routing) | `glr_ctrl.c` |
 | Editor text-document input + commit orchestration | `editor_input.c` + `editor_commit.c` |
 | Parsing | `repl_parser.c` |
 | Validation / compilation (pure, returns `ReplCompiledChange`) | `repl_compile.c` |
@@ -260,13 +262,14 @@ Responsibilities:
 * call UI renderers in the correct order
 * keep profiling section boundaries around scene and UI rendering
 
-`imrepl_ctrl.c` may include both REPL headers and scene/UI headers. Ordinary REPL
+`glr_ctrl.c` may include both REPL headers and scene/UI headers. Ordinary REPL
 model modules should not.
 
 `sample.c` and `sample.h` still carry the app entry point and shared legacy
-types/constants. Renaming them to `imrepl.c` and `imrepl.h` is intentionally a
-separate mechanical cleanup after controller extraction, because `sample.h` is
-included broadly.
+types/constants. A future `glr_*`-namespaced rename of the shell is open work
+(see R8 in *Open Refactor Edges* below); it is intentionally a separate
+mechanical cleanup after controller extraction, because `sample.h` is included
+broadly.
 
 ## Scene Render Config
 
@@ -324,7 +327,7 @@ Responsibilities:
 
 UI renderers draw from a single per-frame `UiRenderSnapshot` (defined in
 `src/ui/snapshot.h`) that the controller builds once via
-`imrepl_ctrl_build_ui_snapshot()` and passes to every `ui_*_render*()`
+`glr_ctrl_build_ui_snapshot()` and passes to every `ui_*_render*()`
 entry point. Render code does not call `repl_state_*()` directly. The
 `check-ui-no-repl-state-read` Makefile guard enforces the snapshot-shaped
 signature for audited renderers.
@@ -352,7 +355,7 @@ snapshot — the per-row selection band reads `selection_lo/_hi` instead.
 Mutations route through `repl_actions`, `repl_command_store`,
 `variable_panel_drag`, or another REPL-owned mutation path. UI input
 hit-tests (`*_hit_test`, `*_rect`) compute neutral `UiHit` values and
-return — `imrepl_ctrl_router_handle_code_panel_hit` dispatches by
+return — `glr_ctrl_router_handle_code_panel_hit` dispatches by
 `UiHit.kind` to the owning subsystem (Phase J2). Render-side
 discoveries (e.g. the editor cursor pixel computed during
 `render_active_input_rows`) flow back through per-frame
@@ -391,7 +394,7 @@ Allowed:
 scene_*.c
 ui_*.c
 repl_executor.c
-sample.c        GLUT/window lifecycle and buffer swap; future `imrepl.c`
+sample.c        GLUT/window lifecycle and buffer swap; future `glr` shell
 ```
 
 Avoid live GL calls in all other `repl_*` files. Text emission of GL command
@@ -403,8 +406,8 @@ Allowed:
 
 ```text
 sample.c        GLUT callback registration, glutInit, buffer swap
-imrepl.c        after the sample.c rename lands
-imrepl_ctrl.c   GLUT modifier reads + cross-layer input routing
+                (the future `glr` shell takes over after the R8 rename)
+glr_ctrl.c      GLUT modifier reads + cross-layer input routing
                 (took over from the deleted repl_editor.c in Phase J1)
 editor_input.c  glutGetModifiers via editor_get_modifiers (gated behind
                 editor_input_enable_glut_modifier_reads so tests stay safe)
@@ -414,7 +417,7 @@ repl_executor.c tessellator callback setup only
 ### Controller-only scene wiring
 
 After controller extraction, ordinary `repl_*` model files should not include
-`scene_*.h`. `imrepl_ctrl.c` is the scene/UI frame-rendering exception.
+`scene_*.h`. `glr_ctrl.c` is the scene/UI frame-rendering exception.
 `check-controller-boundaries` enforces this; cross-layer constants used by
 both layers (e.g. `CFG_DEFAULT_MULTISAMPLE`, `REPL_OUTLINE_POLYGON_OFFSET_*`)
 live in neutral headers (`repl_presentation.h`, `src/scene/render_types.h`)
@@ -470,9 +473,9 @@ or project-wide `include/` only when broadly reusable.
   `FlatProgramView` or a snapshot from `SceneRenderConfig`.
 * New 2D UI: `ui_*` renderer plus `repl_*` model/action code if mutation is
   required.
-* New per-frame scene/UI wiring: `imrepl_ctrl.c`.
-* New app lifecycle/window wiring: `sample.c` for now, `imrepl.c` after the
-  deferred rename.
+* New per-frame scene/UI wiring: `glr_ctrl.c`.
+* New app lifecycle/window wiring: `sample.c` for now, future `glr` shell
+  after the R8 rename.
 * New command mutation: `repl_command_store_*`.
 
 ## Adding A New Command
@@ -620,7 +623,7 @@ Completed (Phase 1 + most of Phase 2):
 
 - ✅ Controller extraction, explicit `SceneRenderConfig` handoff,
   focus/guide snapshot construction, scene-local accumulation jitter, and
-  app-shell shim removal (`sample.c` calls `imrepl_ctrl_*` directly).
+  app-shell shim removal (`sample.c` calls `glr_ctrl_*` directly).
 - ✅ **R1** — Replay/HUD migration: controller builds `ReplayFadePlan`; scene
   iterates it; 2D HUD lives in `replay_ui_hud.c`. Scene files contain zero
   `repl_replay_*` and `repl_state_*` calls.
@@ -642,7 +645,7 @@ Completed (Phase 1 + most of Phase 2):
     (`check-ui-returns-hits-only` baseline 0/0).
 - ✅ **R3** — `repl_layout.c` / `repl_layout.h` own `ui_layout_scene_rect` /
   `ui_layout_code_panel_rect`; non-UI callers include `repl_layout.h`.
-- ✅ **R4** — `imrepl_ctrl.c` no longer includes `repl_core_internal.h`;
+- ✅ **R4** — `glr_ctrl.c` no longer includes `repl_core_internal.h`;
   `repl_pipeline.h` exists; `repl_eval_predef_view()` hides
   `g_predef_vars`. R4d (public-API audit) landed; only `bench_repl.c`
   retains a `repl_core_internal.h` include outside the test/REPL set.
@@ -661,10 +664,10 @@ Still open:
 - ⚠️ **R10-phase1** — Phase J1 obsoleted the original framing of this
   task: `repl_editor.c/h` is deleted. The remaining GLUT-flavored
   declarations in `repl_core.h` should be reviewed against the actual
-  callers in `imrepl_ctrl.c` and `editor_input.c`; anything that's
+  callers in `glr_ctrl.c` and `editor_input.c`; anything that's
   no longer reachable can be removed, and anything still in use can
   move to a more specific home (`editor_input.h` for editor input,
-  `imrepl_ctrl.h` for controller routing).
+  `glr_ctrl.h` for controller routing).
 - ❌ **R10-phase2..phase5** — Dissolve `repl_core.c` (~663 lines): move
   `repl_parse_and_normalize*` / `normalize_with_indent` /
   `parse_and_normalize_impl` to `repl_parser.c`; move `collect_visible_vars`
@@ -676,8 +679,9 @@ Still open:
   `bench_repl.c` exception for `repl_core_internal.h`.
 - ❌ **R12** — Consolidate truly public REPL APIs into one concise public
   header, grouped by implementation owner; keep internals out.
-- ❌ **R8** — Rename `sample.c` / `sample.h` to `imrepl.c` / `imrepl.h`
-  (mechanical; last).
+- ❌ **R8** — Rename `sample.c` / `sample.h` into the `glr_*` shell
+  namespace (mechanical; last). The exact target name (`glr.c/h`,
+  `glr_shell.c/h`, etc.) is open.
 - ❌ **R9** — Optional: split `repl_export.c`.
 
 A parallel state-ownership track lives in
@@ -685,7 +689,7 @@ A parallel state-ownership track lives in
 (by-value getters) is broadly applied with a few view-struct slices
 remaining; Stage 7 (UI snapshot purity) is done at the render boundary —
 every `ui_*_render*()` entry point consumes `const UiRenderSnapshot *snap`
-built once per frame by `imrepl_ctrl_build_ui_snapshot()` (Phase B in
+built once per frame by `glr_ctrl_build_ui_snapshot()` (Phase B in
 `feature/done/push-architecture-ui.md`); input-bridge helpers in `ui_*.c`
 remain on live state pending Phase C. Stages 4 (cursor-pixel `Ui*Output`
 actualization) and 6 (`repl_undo.c` consumes `repl_state_capture()`) are
@@ -706,6 +710,64 @@ The `feature/editor-owns-text.md` track (Steps 2–6) is complete:
 
 The deferred sub-task is the color-scheme + syntax-keyword extraction
 (also Step 6); revisit when a configurable theme has a real consumer.
+
+## Known REPL Corner Cases & Coverage Gaps
+
+The REPL pipeline has a handful of corner cases that deserve focused
+regression tests. Each item below points at the load-bearing code so future
+work can either close the gap or document the intentional behaviour.
+
+### Documented but uncovered
+
+- **Func alias slot exhaustion.** `try_commit_func_def` (in
+  `src/editor/commit.c`) calls `repl_func_alias_first_free_slot()`; when all
+  10 slots are taken it returns the diagnostic
+  `"no free function slots (max %d)"`. No test fires this path — adding the
+  10 distinct user-named func defs and asserting the 11th is rejected with
+  this status would close the gap.
+- **Func alias name collision.** `repl_func_alias_set` rejects assigning the
+  same alias to two different slots (`existing >= 0 && existing != slot`).
+  The path is exercised indirectly through workspace round-trips, but no
+  focused test asserts the `"name '%s' already used"` diagnostic for the
+  collision.
+- **`label()` format-string boundaries.** `repl_label_split_args`
+  (`repl_parser.c`) hard-rejects `(`, `)`, `\`, `,`, and `//` in the format
+  string, plus formats longer than `GLUT_BITMAP_FMT_MAX - 1` characters and
+  formats whose `%f` count diverges from the supplied substitution-arg count.
+  `tests/test_repl_core_parse.c` covers `//`, `,`, `\`, missing close quote,
+  arg-count mismatch, `%d` rejection, and >4 sub args; the `(`/`)` rejection
+  and the 64-char length boundary are not tested.
+- **Visit-budget vs depth-limit guards.** `repl_flatten.c` enforces
+  `MAX_FLATTEN_CALL_DEPTH = 64` and `MAX_FLATTEN_VISIT_BUDGET = 200000`
+  independently. The "runaway recursion" assertion in
+  `tests/test_repl_core_commit.c` accepts either `"depth limit"` or
+  `"visit budget"` in the status string, so a regression that loses one
+  guard without the other would still pass. A non-recursive but heavily
+  unrolled `for(i, 0, 1000000)` body would specifically hit the visit
+  budget; a single deeply nested mutual-recursion would specifically hit the
+  depth limit.
+
+### Known TODO with no regression test yet
+
+- **SET_VALUE drop on decl-row overwrite (different name).**
+  `repl_compile_var_assign` in `repl_compile.c` documents (line ~889) that
+  when an assignment overwrites a `CMD_VAR_DECLARE` whose dropped names
+  include a name *other* than the assigned identifier, the salvage block
+  reorders the `predef_op` list in a way that turns the SET_VALUE into a
+  duplicate UNDECLARE. The behaviour is benign because `repl_apply_predef_ops`
+  is idempotent, but the SET_VALUE for the assigned name is silently
+  dropped on this path. The TODO calls for a focused test before fixing.
+
+### Resolved — keep tests around
+
+- Float-decl overwrite cascade (`tests/test_repl_editor.c`'s
+  `overwrite shared` / `expand decl` cases).
+- Predef-table full (`MAX_PREDEF_VARS`) — same file.
+- LRU eviction when every non-home slot is occupied
+  (`tests/test_repl_core_extra.c::test_user_scene_promote_*`).
+- Func alias roundtrip and `if`/`for`/`goto` not hijacked
+  (`tests/test_repl_core_io.c`).
+- Replay state machine + fade batches (`tests/test_repl_replay.c`).
 
 ## Building Historical Checkouts
 
