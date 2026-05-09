@@ -34,6 +34,7 @@
 #include "repl_command_store.h"
 #include "repl_core.h"
 #include "repl_core_internal.h"   /* cmd_type_name */
+#include "repl_eval.h"            /* repl_eval_declare_predef_var, g_predef_vars */
 #include "repl_executor.h"
 #include "repl_parser.h"
 #include "repl_state_owners.h"
@@ -172,6 +173,71 @@ static int load_text_lines(const char *const *lines) {
     return loaded;
 }
 
+/* Sample 3: variable-driven re-evaluation.
+ *
+ * Variables are REPL-owned, not editor-owned. The text syntax `float x;`
+ * (and `x = expr;`, `A[0] = ...`) is editor-level sugar that calls
+ * repl_eval_declare_predef_var() / sets g_predef_vars[idx].value. The
+ * model itself is REPL: g_predef_vars[MAX_PREDEF_VARS] holds (name,
+ * value) pairs, the parser validates expressions against the table, the
+ * executor re-evaluates expressions with `has_vars` each call.
+ *
+ * The demo registers `r` directly via the eval API, parses an expression
+ * that references `r` and `t` (`t` already exists -- repl_eval_init_predef_vars
+ * creates it), then "ticks the frame" by bumping `t` and re-executing.
+ * No editor commit path involved. */
+static void seed_variable_driven_program(void) {
+    /* `t` is created by repl_state_init_defaults() -> ... ->
+     * repl_eval_init_predef_vars(). Add `r`. */
+    char err[64] = "";
+    if (repl_eval_declare_predef_var("r", err, sizeof(err)) < 0) {
+        fprintf(stderr, "  declare_predef_var(r) failed: %s\n", err);
+        return;
+    }
+    int r_idx = repl_eval_find_predef_var_idx("r");
+    g_predef_vars[r_idx].value = 1.5f;
+
+    /* Parse with preserve_expr=1 so the canonical text keeps the
+     * original `r * sin(t)` form rather than the evaluated literal.
+     * Flatten re-reads this text every tick and re-evaluates the
+     * expressions against current g_predef_vars values. The plain
+     * `repl_parser_parse_command_ctx` path bakes the literal values
+     * in -- correct for static commands, wrong for var-driven ones. */
+    static const char *line =
+        "glVertex3f(r * sin(t), r * cos(t), 0)";
+    GLCmd cmd;
+    memset(&cmd, 0, sizeof(cmd));
+    char text[MAX_LINE_LEN] = "";
+    if (!repl_parse_and_normalize(line, 0, NULL, 0,
+                                  /*preserve_expr=*/1,
+                                  &cmd, text, (int)sizeof(text))) {
+        fprintf(stderr, "  parse_and_normalize failed\n");
+        return;
+    }
+
+    ReplCommandStore store = repl_command_store_live();
+    repl_command_store_insert_one(&store, 0, &cmd,
+                                  REPL_COMMAND_STORE_ADJUST_EDIT_LINE);
+    editor_buffer_set_line(0, text);
+}
+
+static void tick_and_execute(float t_value) {
+    int t_idx = repl_eval_find_predef_var_idx("t");
+    g_predef_vars[t_idx].value = t_value;
+    repl_state_mark_flat_dirty();
+    repl_flatten_commands();
+    ReplExecutionOptions opts = {
+        .flat_cmd_count = repl_state_flat_program_count(),
+        .program        = repl_state_flat_program_view(),
+        .text           = editor_buffer_view(),
+    };
+    repl_execute_program(&opts);
+    const GLCmd *flat = opts.program.cmds;
+    if (opts.flat_cmd_count > 0)
+        printf("  t=%4.2f -> glVertex3f(%.3f, %.3f, %.3f)\n", t_value,
+               flat[0].args[0], flat[0].args[1], flat[0].args[2]);
+}
+
 /* --- Reporters -------------------------------------------------------- */
 
 static void print_source_summary(const char *label, int loaded) {
@@ -227,6 +293,21 @@ int main(int argc, char **argv) {
     print_flat_summary();
     if (run_execute)
         execute_against_stubs();
+
+    /* Sample 3 always runs against the executor: the point is to show
+     * has_vars expressions re-evaluating with REPL-owned variables, and
+     * the only way to observe that is to execute and read back args[]. */
+    printf("\n=== sample 3: variable-driven re-evaluation ===\n");
+    repl_state_init_defaults();
+    seed_variable_driven_program();
+    print_source_summary("var-driven", repl_state_document_count());
+    /* Set r once via the eval API; bump t and re-execute four times to
+     * watch the args change. No editor commit path involved -- variables
+     * are REPL state. */
+    tick_and_execute(0.00f);
+    tick_and_execute(0.50f);
+    tick_and_execute(1.00f);
+    tick_and_execute(1.57f);  /* ~pi/2 */
 
     return 0;
 }
