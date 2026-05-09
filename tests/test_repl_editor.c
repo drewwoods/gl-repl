@@ -215,7 +215,7 @@ int main() {
     /* Commit chain ordering: float declarations must run before assignment
      * parsing, otherwise `float name` is misclassified as an assignment. */
     {
-        repl_reset_state();
+        glr_app_reset_all();
         set_editor_input("float chain_order;");
         repl_state_edit_line_set(0);
         editor_insert_mode_set(0);
@@ -237,7 +237,7 @@ int main() {
         ui_state_viewport_set_size(1000, 800);
         g_panel_frac = 0.25f;
 
-        repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT; repl_state_sync_ui_chrome();
+        repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT; glr_ctrl_sync_ui_chrome();
         ui_layout_code_panel_rect(&x, &y, &w, &h);
         ASSERT_INT("left code x", x, 0);
         ASSERT_INT("left code y", y, 0);
@@ -249,7 +249,7 @@ int main() {
         ASSERT_INT("left scene w", w, 750);
         ASSERT_INT("left scene h", h, 800);
 
-        repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_TOP; repl_state_sync_ui_chrome();
+        repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_TOP; glr_ctrl_sync_ui_chrome();
         ui_layout_code_panel_rect(&x, &y, &w, &h);
         ASSERT_INT("top code x", x, 0);
         ASSERT_INT("top code y", y, 600);
@@ -261,7 +261,7 @@ int main() {
         ASSERT_INT("top scene w", w, 1000);
         ASSERT_INT("top scene h", h, 600);
 
-        repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_BOTTOM; repl_state_sync_ui_chrome();
+        repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_BOTTOM; glr_ctrl_sync_ui_chrome();
         ui_layout_code_panel_rect(&x, &y, &w, &h);
         ASSERT_INT("bottom code x", x, 0);
         ASSERT_INT("bottom code y", y, 0);
@@ -273,7 +273,7 @@ int main() {
         ASSERT_INT("bottom scene w", w, 1000);
         ASSERT_INT("bottom scene h", h, 600);
 
-        repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_HIDDEN; repl_state_sync_ui_chrome();
+        repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_HIDDEN; glr_ctrl_sync_ui_chrome();
         ui_layout_code_panel_rect(&x, &y, &w, &h);
         ASSERT_INT("hidden code x", x, 0);
         ASSERT_INT("hidden code y", y, 0);
@@ -287,7 +287,7 @@ int main() {
 
         ui_state_viewport_set_size(1200, 800);
         g_panel_frac = CFG_DEFAULT_PANEL_FRAC;
-        repl_state_presentation_mut()->code_panel_layout = CFG_DEFAULT_CODE_PANEL_LAYOUT; repl_state_sync_ui_chrome();
+        repl_state_presentation_mut()->code_panel_layout = CFG_DEFAULT_CODE_PANEL_LAYOUT; glr_ctrl_sync_ui_chrome();
     }
 
     /* 0b. Code panel config cycles Left -> Top -> Bottom -> Hidden and imports legacy top layout */
@@ -295,7 +295,7 @@ int main() {
         int row = cfg_row_for_key(GLR_CONFIG_CODE_PANEL_LAYOUT);
         ASSERT_TRUE("code panel cfg row exists", row >= 0);
         if (row >= 0) {
-            repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT; repl_state_sync_ui_chrome();
+            repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT; glr_ctrl_sync_ui_chrome();
             glr_cfg_cycle_row(row, +1);
             ASSERT_INT("code panel cfg cycles to top",
                        repl_state_presentation().code_panel_layout, CODE_PANEL_LAYOUT_TOP);
@@ -318,7 +318,7 @@ int main() {
                        repl_state_presentation().code_panel_layout, CODE_PANEL_LAYOUT_LEFT);
         }
 
-        repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT; repl_state_sync_ui_chrome();
+        repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT; glr_ctrl_sync_ui_chrome();
         ASSERT_INT("parse code_panel cfg",
                    parse_workspace_header_line("// @cfg code_panel = 2"), 1);
         ASSERT_INT("parse code_panel bottom",
@@ -352,12 +352,12 @@ int main() {
                    repl_state_presentation().code_panel_layout, CODE_PANEL_LAYOUT_LEFT);
 
         g_panel_frac = CFG_DEFAULT_PANEL_FRAC;
-        repl_state_presentation_mut()->code_panel_layout = CFG_DEFAULT_CODE_PANEL_LAYOUT; repl_state_sync_ui_chrome();
+        repl_state_presentation_mut()->code_panel_layout = CFG_DEFAULT_CODE_PANEL_LAYOUT; glr_ctrl_sync_ui_chrome();
     }
 
     /* 0b2. Config/action module owns shortcut and menu row dispatch. */
     {
-        repl_reset_state();
+        glr_app_reset_all();
 
         repl_state_presentation_mut()->wireframe = 0;
         ASSERT_INT("config special shortcut consumed",
@@ -374,7 +374,7 @@ int main() {
         int row = cfg_row_for_key(GLR_CONFIG_CODE_PANEL_LAYOUT);
         ASSERT_TRUE("config menu action row exists", row >= 0);
         if (row >= 0) {
-            repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT; repl_state_sync_ui_chrome();
+            repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT; glr_ctrl_sync_ui_chrome();
             int close_menu = glr_action_menu_item_activate(GLR_MENU_CONFIG, row);
             ASSERT_INT("config menu action keeps menu open", close_menu, 0);
             ASSERT_INT("config menu action cycles code panel",
@@ -384,31 +384,31 @@ int main() {
 
     /* 0c. Hidden code panel returns to the editor on ordinary input */
     {
-        repl_reset_state();
-        repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_HIDDEN; repl_state_sync_ui_chrome();
+        glr_app_reset_all();
+        repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_HIDDEN; glr_ctrl_sync_ui_chrome();
         editor_handle_key('v', 0, 0);
         ASSERT_INT("typing restores hidden code panel",
                    repl_state_presentation().code_panel_layout, CODE_PANEL_LAYOUT_LEFT);
         ASSERT_STR("typing after restore still reaches input", editor_state_input().input, "v");
 
-        repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_HIDDEN; repl_state_sync_ui_chrome();
+        repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_HIDDEN; glr_ctrl_sync_ui_chrome();
         editor_handle_key('`', 0, 0);
         ASSERT_INT("config shortcut restores hidden code panel",
                    repl_state_presentation().code_panel_layout, CODE_PANEL_LAYOUT_LEFT);
         editor_handle_key('`', 0, 0);
 
-        repl_state_presentation_mut()->code_panel_layout = CFG_DEFAULT_CODE_PANEL_LAYOUT; repl_state_sync_ui_chrome();
+        repl_state_presentation_mut()->code_panel_layout = CFG_DEFAULT_CODE_PANEL_LAYOUT; glr_ctrl_sync_ui_chrome();
     }
 
     /* 0c2. Keyboard mode routing keeps rename ahead of config, replay, and search. */
     {
-        repl_reset_state();
+        glr_app_reset_all();
         repl_load_example(0);
         int slot = repl_promote_example_if_needed();
         ASSERT_TRUE("rename route setup slot", slot >= 0);
         ASSERT_INT("rename route begin", editor_inline_rename_begin(slot), 1);
 
-        repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_HIDDEN; repl_state_sync_ui_chrome();
+        repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_HIDDEN; glr_ctrl_sync_ui_chrome();
         editor_handle_key('`', 0, 0);
         ASSERT_INT("rename swallows config hidden restore",
                    repl_state_presentation().code_panel_layout, CODE_PANEL_LAYOUT_HIDDEN);
@@ -422,12 +422,12 @@ int main() {
         ASSERT_INT("rename swallows search open", g_search_active, 0);
 
         editor_inline_rename_cancel();
-        repl_state_presentation_mut()->code_panel_layout = CFG_DEFAULT_CODE_PANEL_LAYOUT; repl_state_sync_ui_chrome();
+        repl_state_presentation_mut()->code_panel_layout = CFG_DEFAULT_CODE_PANEL_LAYOUT; glr_ctrl_sync_ui_chrome();
     }
 
     /* 0c3. Search mode captures printable editing keys before text editing. */
     {
-        repl_reset_state();
+        glr_app_reset_all();
         repl_feed_line_public("glVertex3f(0,0,0)");
         set_editor_input("");
 
@@ -445,7 +445,7 @@ int main() {
 
     /* 0c4. Semicolon keyboard route still enters the commit handler chain. */
     {
-        repl_reset_state();
+        glr_app_reset_all();
         set_editor_input("float keyboard_route");
 
         editor_handle_key(';', 0, 0);
@@ -459,7 +459,7 @@ int main() {
 
     /* 0c5. Special-key routing keeps rename ahead of replay/search/navigation. */
     {
-        repl_reset_state();
+        glr_app_reset_all();
         repl_load_example(0);
         int slot = repl_promote_example_if_needed();
         ASSERT_TRUE("rename special route setup slot", slot >= 0);
@@ -467,7 +467,7 @@ int main() {
 
         set_editor_input("abc");
         editor_cursor_pos_set(2);
-        repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_HIDDEN; repl_state_sync_ui_chrome();
+        repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_HIDDEN; glr_ctrl_sync_ui_chrome();
         g_show_help = 0;
         replay_active = 1;
         replay_state = REPLAY_PAUSED;
@@ -492,12 +492,12 @@ int main() {
         editor_inline_rename_cancel();
         search_clear_all();
         replay_active = 0;
-        repl_state_presentation_mut()->code_panel_layout = CFG_DEFAULT_CODE_PANEL_LAYOUT; repl_state_sync_ui_chrome();
+        repl_state_presentation_mut()->code_panel_layout = CFG_DEFAULT_CODE_PANEL_LAYOUT; glr_ctrl_sync_ui_chrome();
     }
 
     /* 0c6. Search mode captures special arrows before editor/help navigation. */
     {
-        repl_reset_state();
+        glr_app_reset_all();
         repl_feed_line_public("glVertex3f(0,0,0)");
         navigate_to_line(0);
         set_editor_input("abc");
@@ -521,7 +521,7 @@ int main() {
 
     /* 0c7. F12 special route still cycles built-in examples. */
     {
-        repl_reset_state();
+        glr_app_reset_all();
         if (repl_example_count() > 1) {
             repl_load_example(0);
             glr_ctrl_router_handle_scene_cycle_special(GLUT_KEY_F12);
@@ -535,7 +535,7 @@ int main() {
         int x, y, w, h;
         ui_state_viewport_set_size(320, 80);
         g_panel_frac = 0.25f;
-        repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT; repl_state_sync_ui_chrome();
+        repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT; glr_ctrl_sync_ui_chrome();
         replay_active = 0;
 
         ui_variable_panel_rect_for_count(g_num_predef_vars, &x, &y, &w, &h);
@@ -544,12 +544,12 @@ int main() {
 
         ui_state_viewport_set_size(1200, 800);
         g_panel_frac = CFG_DEFAULT_PANEL_FRAC;
-        repl_state_presentation_mut()->code_panel_layout = CFG_DEFAULT_CODE_PANEL_LAYOUT; repl_state_sync_ui_chrome();
+        repl_state_presentation_mut()->code_panel_layout = CFG_DEFAULT_CODE_PANEL_LAYOUT; glr_ctrl_sync_ui_chrome();
     }
 
     /* 0e. Camera control module owns scene drag and momentum behavior. */
     {
-        repl_reset_state();
+        glr_app_reset_all();
         glr_camera_set_orbit(0.0f, 0.0f);
         glr_camera_set_distance(10.0f);
         glr_camera_mouse_event(GLUT_LEFT_BUTTON, GLUT_DOWN, 10, 10, 0);
@@ -585,9 +585,9 @@ int main() {
 
     /* 1. Undo when nothing to undo - must run before any undo push */
     {
-        /* g_undo_count starts at 0 (global zero-init); repl_reset_state() does
+        /* g_undo_count starts at 0 (global zero-init); glr_app_reset_all() does
          * NOT clear the undo buffer, so run this before touching undo at all. */
-        repl_reset_state();
+        glr_app_reset_all();
         editor_undo_pop_snapshot();
         /* Should survive without crashing; state unchanged */
         ASSERT_INT("undo-nothing: num_cmds still 0", repl_state_document_count(), 0);
@@ -595,7 +595,7 @@ int main() {
 
     /* 2. Redo when nothing to redo - similarly must be before any undo activity */
     {
-        repl_reset_state();
+        glr_app_reset_all();
         editor_undo_do_redo();
         ASSERT_INT("redo-nothing: num_cmds still 0", repl_state_document_count(), 0);
     }
@@ -603,7 +603,7 @@ int main() {
     /* 3. Undo/Redo basic */
     {
         float scratch = 0.0f;
-        repl_reset_state(); declare_test_vars();
+        glr_app_reset_all(); declare_test_vars();
         repl_feed_line_public("A[0] = 3;");
         ASSERT_INT("num_cmds 1", repl_state_document_count(), 1);
         ASSERT_TRUE("scratch set before undo snapshot",
@@ -631,7 +631,7 @@ int main() {
 
     /* 4. Deleting commands - basic */
     {
-        repl_reset_state(); declare_test_vars();
+        glr_app_reset_all(); declare_test_vars();
         repl_feed_line_public("glVertex3f(0,0,0)");
         repl_feed_line_public("glVertex3f(1,1,1)");
         repl_feed_line_public("glVertex3f(2,2,2)");
@@ -645,7 +645,7 @@ int main() {
 
     /* 5. delete_cmd_range - count=0 (no-op) */
     {
-        repl_reset_state();
+        glr_app_reset_all();
         repl_feed_line_public("glVertex3f(1,1,1)");
         delete_cmd_range(0, 0, "noop");
         ASSERT_INT("delete count=0: no change", repl_state_document_count(), 1);
@@ -653,7 +653,7 @@ int main() {
 
     /* 6. delete_cmd_range - start=repl_state_document_count() (out of bounds, no-op) */
     {
-        repl_reset_state();
+        glr_app_reset_all();
         repl_feed_line_public("glVertex3f(1,1,1)");
         delete_cmd_range(1, 1, "oob");  /* start == repl_state_document_count() (1) */
         ASSERT_INT("delete oob start: no change", repl_state_document_count(), 1);
@@ -661,7 +661,7 @@ int main() {
 
     /* 7. delete_cmd_range - count clamped when over-count */
     {
-        repl_reset_state();
+        glr_app_reset_all();
         repl_feed_line_public("glVertex3f(0,0,0)");
         repl_feed_line_public("glVertex3f(1,1,1)");
         /* ask to delete 5 but only 1 remains at start=1 */
@@ -672,7 +672,7 @@ int main() {
 
     /* 8. delete_cmd_range - edit_line clamped when it would exceed repl_state_document_count() */
     {
-        repl_reset_state();
+        glr_app_reset_all();
         repl_feed_line_public("glVertex3f(0,0,0)");
         repl_feed_line_public("glVertex3f(1,1,1)");
         repl_state_edit_line_set(2);  /* beyond last cmd */
@@ -683,7 +683,7 @@ int main() {
 
     /* 8a. delete_cmd_range - interior multi-line block */
     {
-        repl_reset_state();
+        glr_app_reset_all();
         repl_feed_line_public("glVertex3f(0,0,0)");
         repl_feed_line_public("glVertex3f(1,1,1)");
         repl_feed_line_public("glVertex3f(2,2,2)");
@@ -704,7 +704,7 @@ int main() {
 
     /* 8b. Backspace deletes a reversed selection */
     {
-        repl_reset_state();
+        glr_app_reset_all();
         repl_feed_line_public("glVertex3f(0,0,0)");
         repl_feed_line_public("glVertex3f(1,1,1)");
         repl_feed_line_public("glVertex3f(2,2,2)");
@@ -724,7 +724,7 @@ int main() {
 
     /* 8b2. Ctrl+D deletes a selected range through its own key path */
     {
-        repl_reset_state();
+        glr_app_reset_all();
         repl_feed_line_public("glVertex3f(0,0,0)");
         repl_feed_line_public("glVertex3f(1,1,1)");
         repl_feed_line_public("glVertex3f(2,2,2)");
@@ -745,7 +745,7 @@ int main() {
 
     /* 8c. Undo/redo after a multi-line delete */
     {
-        repl_reset_state();
+        glr_app_reset_all();
         repl_feed_line_public("glVertex3f(0,0,0)");
         repl_feed_line_public("glVertex3f(1,1,1)");
         repl_feed_line_public("glVertex3f(2,2,2)");
@@ -766,7 +766,7 @@ int main() {
 
     /* 8d. Copy selected block and paste inside a later block */
     {
-        repl_reset_state(); declare_test_vars();
+        glr_app_reset_all(); declare_test_vars();
         repl_feed_line_public("glBegin(GL_POINTS);");
         repl_feed_line_public("glVertex3f(0,0,0);");
         repl_feed_line_public("glVertex3f(1,1,1);");
@@ -808,7 +808,7 @@ int main() {
 
     /* 8e. Cut selected block, then undo/redo */
     {
-        repl_reset_state();
+        glr_app_reset_all();
         repl_feed_line_public("glVertex3f(0,0,0)");
         repl_feed_line_public("glVertex3f(1,1,1)");
         repl_feed_line_public("glVertex3f(2,2,2)");
@@ -835,7 +835,7 @@ int main() {
 
     /* 8f. Copy/cut from a for-begin line captures the whole block */
     {
-        repl_reset_state(); declare_test_vars();
+        glr_app_reset_all(); declare_test_vars();
         repl_feed_line_public("for(i, 0, 2) {");
         repl_feed_line_public("glVertex3f(i,0,0);");
         repl_feed_line_public("}");
@@ -849,7 +849,7 @@ int main() {
                     strstr(editor_state_clipboard_mut()->lines[2], "}") != NULL);
         ASSERT_INT("copy for block: source unchanged", repl_state_document_count(), 3);
 
-        repl_reset_state(); declare_test_vars();
+        glr_app_reset_all(); declare_test_vars();
         repl_feed_line_public("for(i, 0, 2) {");
         repl_feed_line_public("glVertex3f(i,0,0);");
         repl_feed_line_public("}");
@@ -867,7 +867,7 @@ int main() {
 
     /* 8g. Paste with empty clipboard */
     {
-        repl_reset_state();
+        glr_app_reset_all();
         repl_feed_line_public("glVertex3f(1,1,1)");
         editor_state_clipboard_count_set(0);
 
@@ -880,7 +880,7 @@ int main() {
 
     /* 8h. Paste refuses to overflow the command buffer */
     {
-        repl_reset_state();
+        glr_app_reset_all();
         repl_feed_line_public("glVertex3f(1,1,1)");
         repl_copy_string_fits(editor_state_clipboard_mut()->lines[0], MAX_LINE_LEN,
                               editor_buffer_line(0));
@@ -901,7 +901,7 @@ int main() {
      * the clipboard now goes through the standard commit chain
      * and surfaces a parser-level diagnostic if it conflicts.) */
     {
-        repl_reset_state();
+        glr_app_reset_all();
         repl_feed_line_public("float n;");
         repl_feed_line_public("n = 5;");
         repl_copy_string_fits(editor_state_clipboard_mut()->lines[0], MAX_LINE_LEN,
@@ -919,7 +919,7 @@ int main() {
 
     /* 8j. Copy/cut in insert mode clear selection without touching clipboard */
     {
-        repl_reset_state();
+        glr_app_reset_all();
         repl_feed_line_public("glVertex3f(1,1,1)");
         repl_feed_line_public("glVertex3f(2,2,2)");
         repl_copy_string_fits(editor_state_clipboard_mut()->lines[0], MAX_LINE_LEN,
@@ -946,7 +946,7 @@ int main() {
 
     /* 8k. Backspace in insert mode edits input instead of selected source lines */
     {
-        repl_reset_state();
+        glr_app_reset_all();
         repl_feed_line_public("glVertex3f(1,1,1)");
         repl_feed_line_public("glVertex3f(2,2,2)");
         editor_state_selection_set(0, 1);
@@ -965,7 +965,7 @@ int main() {
 
     /* 8k. Committing incomplete commands reports incomplete, not unknown */
     {
-        repl_reset_state();
+        glr_app_reset_all();
         set_editor_input("glColor3f(1, 1");
 
         editor_handle_key(';', 0, 0);
@@ -978,7 +978,7 @@ int main() {
     }
 
     {
-        repl_reset_state();
+        glr_app_reset_all();
         set_editor_input("glTotallyUnknown(1, 2, 3)");
 
         editor_handle_key(';', 0, 0);
@@ -989,7 +989,7 @@ int main() {
 
     /* 9. load_line_to_input - CMD_GOTO_LABEL path */
     {
-        repl_reset_state();
+        glr_app_reset_all();
         /* Feed a label command to create a CMD_GOTO_LABEL entry */
         repl_feed_line_public(":myloop");
         ASSERT_INT("label cmd created", repl_state_document_count(), 1);
@@ -1004,7 +1004,7 @@ int main() {
 
     /* 10. navigate_to_line - clamp target < 0 */
     {
-        repl_reset_state();
+        glr_app_reset_all();
         repl_feed_line_public("glVertex3f(1,1,1)");
         navigate_to_line(-5);
         ASSERT_INT("navigate_to_line neg: edit_line=0", repl_state_edit_line(), 0);
@@ -1012,7 +1012,7 @@ int main() {
 
     /* 11. navigate_to_line - clamp target > repl_state_document_count() */
     {
-        repl_reset_state();
+        glr_app_reset_all();
         repl_feed_line_public("glVertex3f(1,1,1)");
         navigate_to_line(999);
         ASSERT_INT("navigate_to_line over: edit_line=repl_state_document_count()", repl_state_edit_line(), repl_state_document_count());
@@ -1020,7 +1020,7 @@ int main() {
 
     /* 12. try_assign_variable - append to end (existing tests cover this) */
     {
-        repl_reset_state(); declare_test_vars();
+        glr_app_reset_all(); declare_test_vars();
         {
             ReplEditorInputState *inp = editor_state_input_mut();
             strcpy(inp->input, "n = 10.5");
@@ -1035,7 +1035,7 @@ int main() {
 
     /* 12b. Enter on an empty insert row creates a persistent blank line. */
     {
-        repl_reset_state();
+        glr_app_reset_all();
         repl_feed_line_public("glBegin(GL_POINTS);");
         repl_feed_line_public("glColor3f(1,0,0);");
         repl_feed_line_public("glEnd();");
@@ -1058,7 +1058,7 @@ int main() {
 
     /* 13. try_assign_variable - inserting mode (inserts before cursor) */
     {
-        repl_reset_state(); declare_test_vars();
+        glr_app_reset_all(); declare_test_vars();
         repl_feed_line_public("glVertex3f(1,1,1)");
         repl_feed_line_public("glVertex3f(2,2,2)");
         /* Put cursor at line 1, inserting mode */
@@ -1079,7 +1079,7 @@ int main() {
 
     /* 14. try_assign_variable - overwrite existing cmd */
     {
-        repl_reset_state(); declare_test_vars();
+        glr_app_reset_all(); declare_test_vars();
         repl_feed_line_public("n = 1.0");
         repl_feed_line_public("glVertex3f(1,1,1)");
         /* Navigate to the assignment line and overwrite */
@@ -1099,7 +1099,7 @@ int main() {
 
     /* 15. Committing for loops - basic open brace form */
     {
-        repl_reset_state(); declare_test_vars();
+        glr_app_reset_all(); declare_test_vars();
         {
             ReplEditorInputState *inp = editor_state_input_mut();
             strcpy(inp->input, "for(i, 0, 5) {");
@@ -1115,7 +1115,7 @@ int main() {
 
     /* 16. try_commit_for_loop - with explicit step */
     {
-        repl_reset_state();
+        glr_app_reset_all();
         {
             ReplEditorInputState *inp = editor_state_input_mut();
             strcpy(inp->input, "for(i, 0, 10, 2) {");
@@ -1132,7 +1132,7 @@ int main() {
 
     /* 17. try_commit_for_loop - update existing for-begin header */
     {
-        repl_reset_state();
+        glr_app_reset_all();
         /* Create an existing for-loop */
         {
             ReplEditorInputState *inp = editor_state_input_mut();
@@ -1161,7 +1161,7 @@ int main() {
 
     /* 18. try_commit_for_loop - inline form (for with body on same line) */
     {
-        repl_reset_state();
+        glr_app_reset_all();
         {
             ReplEditorInputState *inp = editor_state_input_mut();
             strcpy(inp->input, "for(i, 0, 3) glVertex3f(i,0,0);");
@@ -1178,7 +1178,7 @@ int main() {
 
     /* 19. Committing func defs - basic */
     {
-        repl_reset_state(); declare_test_vars();
+        glr_app_reset_all(); declare_test_vars();
         {
             ReplEditorInputState *inp = editor_state_input_mut();
             strcpy(inp->input, "func0(x, y) {");
@@ -1194,7 +1194,7 @@ int main() {
 
     /* 20. try_commit_func_def - update existing func-def header */
     {
-        repl_reset_state();
+        glr_app_reset_all();
         {
             ReplEditorInputState *inp = editor_state_input_mut();
             strcpy(inp->input, "func1(a) {");
@@ -1221,7 +1221,7 @@ int main() {
 
     /* 21. Committing if blocks - basic */
     {
-        repl_reset_state(); declare_test_vars();
+        glr_app_reset_all(); declare_test_vars();
         {
             ReplEditorInputState *inp = editor_state_input_mut();
             strcpy(inp->input, "if(x > 0) {");
@@ -1237,7 +1237,7 @@ int main() {
 
     /* 22. try_commit_if_block - update existing if-begin */
     {
-        repl_reset_state(); declare_test_vars();
+        glr_app_reset_all(); declare_test_vars();
         {
             ReplEditorInputState *inp = editor_state_input_mut();
             strcpy(inp->input, "if(x > 0) {");
@@ -1262,7 +1262,7 @@ int main() {
 
     /* 23. Committing close brace - for-loop */
     {
-        repl_reset_state(); declare_test_vars();
+        glr_app_reset_all(); declare_test_vars();
         repl_feed_line_public("for(i, 0, 1) {");
         {
             ReplEditorInputState *inp = editor_state_input_mut();
@@ -1279,7 +1279,7 @@ int main() {
 
     /* 26. Committing close brace - while in inserting mode closes existing end */
     {
-        repl_reset_state();
+        glr_app_reset_all();
         /* Set up: for-loop with begin+end, enter inserting mode inside */
         {
             ReplEditorInputState *inp = editor_state_input_mut();
@@ -1304,7 +1304,7 @@ int main() {
 
     /* 27. Committing close brace - func-def */
     {
-        repl_reset_state();
+        glr_app_reset_all();
         {
             ReplEditorInputState *inp = editor_state_input_mut();
             strcpy(inp->input, "func2() {");
@@ -1325,7 +1325,7 @@ int main() {
 
     /* 28. Committing close brace - if-block */
     {
-        repl_reset_state(); declare_test_vars();
+        glr_app_reset_all(); declare_test_vars();
         {
             ReplEditorInputState *inp = editor_state_input_mut();
             strcpy(inp->input, "if(x > 0) {");
@@ -1346,7 +1346,7 @@ int main() {
 
     /* 29. try_commit_for_loop - empty body emits error */
     {
-        repl_reset_state();
+        glr_app_reset_all();
         {
             ReplEditorInputState *inp = editor_state_input_mut();
             strcpy(inp->input, "for(i, 0, 3) ;");
@@ -1361,7 +1361,7 @@ int main() {
 
     /* 30. try_commit_func_def - func with no params */
     {
-        repl_reset_state();
+        glr_app_reset_all();
         {
             ReplEditorInputState *inp = editor_state_input_mut();
             strcpy(inp->input, "func3() {");
@@ -1391,7 +1391,7 @@ int main() {
 
     /* 26. float decl without trailing semicolon (interactive ';' key path) */
     {
-        repl_reset_state();
+        glr_app_reset_all();
 
         /* Simulate the interactive ';' key handler: editor_state_input().input has no ';' */
         {
@@ -1416,7 +1416,7 @@ int main() {
 
     /* 27. float decl WITH trailing semicolon (feed_line path) */
     {
-        repl_reset_state();
+        glr_app_reset_all();
         repl_feed_line_public("float abc;");
         ASSERT_INT("float_decl with-semi: cmd added", repl_state_document_count(), 1);
         ASSERT_INT("float_decl with-semi: type", repl_state_document_cmds_mut()[0].type, CMD_VAR_DECLARE);
@@ -1427,7 +1427,7 @@ int main() {
 
     /* 28. float decl with initializer, no trailing semicolon */
     {
-        repl_reset_state();
+        glr_app_reset_all();
 
         {
             ReplEditorInputState *inp = editor_state_input_mut();
@@ -1453,7 +1453,7 @@ int main() {
 
     /* 29. float decl with initializer expression */
     {
-        repl_reset_state();
+        glr_app_reset_all();
         repl_feed_line_public("float radius = 2.5;");
         ASSERT_INT("float_decl init expr: cmd added", repl_state_document_count(), 1);
         ASSERT_INT("float_decl init expr: type", repl_state_document_cmds_mut()[0].type, CMD_VAR_DECLARE);
@@ -1467,7 +1467,7 @@ int main() {
 
     /* 30. multi-name float decl without semicolon */
     {
-        repl_reset_state();
+        glr_app_reset_all();
 
         {
             ReplEditorInputState *inp = editor_state_input_mut();
@@ -1494,7 +1494,7 @@ int main() {
 
     /* 31. multi-name float decl with initializers */
     {
-        repl_reset_state();
+        glr_app_reset_all();
         repl_feed_line_public("float x = 1, y = 2;");
         ASSERT_INT("float_decl multi init: cmd added", repl_state_document_count(), 1);
         ASSERT_INT("float_decl multi init: var_decl_count",
@@ -1519,7 +1519,7 @@ int main() {
      * which is semantically wrong. New behavior pushes decls to
      * the top of non-decl code. */
     {
-        repl_reset_state();
+        glr_app_reset_all();
         repl_feed_line_public("float n;");
         repl_feed_line_public("n = 5;");
         repl_feed_line_public("glBegin(GL_POINTS);");
@@ -1538,7 +1538,7 @@ int main() {
     /* 33. float decl from edit position in middle of code still
      * lands at the top (not at the cursor). */
     {
-        repl_reset_state();
+        glr_app_reset_all();
         repl_feed_line_public("glBegin(GL_LINES);");
         repl_feed_line_public("glEnd();");
         ASSERT_INT("decl-top mid: 2 cmds", repl_state_document_count(), 2);
@@ -1573,7 +1573,7 @@ int main() {
      * `declare_predef_var` ran before `undeclare_predef_var`, so shared
      * names (still registered from the old decl) collided. */
     {
-        repl_reset_state();
+        glr_app_reset_all();
         repl_feed_line_public("float a, b;");
         ASSERT_INT("overwrite shared: baseline cmd count", repl_state_document_count(), 1);
         ASSERT_TRUE("overwrite shared: a registered",
@@ -1610,7 +1610,7 @@ int main() {
      * referenced). Regression: previously the check iterated ALL old
      * names and errored on `n is in use` even though `n` is being kept. */
     {
-        repl_reset_state();
+        glr_app_reset_all();
         repl_feed_line_public("float n, b;");
         repl_feed_line_public("n = 5;");
         ASSERT_INT("drop b: baseline cmd count", repl_state_document_count(), 2);
@@ -1639,7 +1639,7 @@ int main() {
      * fail, and the error must name the dropped variable (not a
      * different name in the same decl). */
     {
-        repl_reset_state();
+        glr_app_reset_all();
         repl_feed_line_public("float n, b;");
         repl_feed_line_public("b = 7;");
         ASSERT_INT("drop referenced b: baseline", repl_state_document_count(), 2);
@@ -1670,7 +1670,7 @@ int main() {
     /* 37. Deleting a declaration line is rejected when the var is still
      * referenced outside the deleted range. */
     {
-        repl_reset_state();
+        glr_app_reset_all();
         repl_feed_line_public("float n;");
         repl_feed_line_public("n = 5;");
         ASSERT_TRUE("delete referenced decl setup: n registered",
@@ -1689,7 +1689,7 @@ int main() {
 
     /* 37a. Ctrl+X rejects cutting declaration lines */
     {
-        repl_reset_state();
+        glr_app_reset_all();
         repl_feed_line_public("float n;");
         repl_feed_line_public("n = 5;");
         repl_copy_string_fits(editor_state_clipboard_mut()->lines[0], MAX_LINE_LEN,
@@ -1711,7 +1711,7 @@ int main() {
 
     /* 37b. Ctrl+X rejects blocks that include a declaration and all uses */
     {
-        repl_reset_state();
+        glr_app_reset_all();
         repl_feed_line_public("float n;");
         repl_feed_line_public("n = 5;");
         ASSERT_TRUE("cut decl block setup: n registered",
@@ -1734,7 +1734,7 @@ int main() {
     /* 38. Deleting a declaration together with all its uses succeeds:
      * no remaining references means the variable can be cleanly removed. */
     {
-        repl_reset_state();
+        glr_app_reset_all();
         repl_feed_line_public("float n;");
         repl_feed_line_public("n = 5;");
         ASSERT_TRUE("delete decl block setup: n registered",
@@ -1749,7 +1749,7 @@ int main() {
 
     /* 38a. Deleting an unreferenced decl line on its own succeeds. */
     {
-        repl_reset_state();
+        glr_app_reset_all();
         repl_feed_line_public("float n;");
         ASSERT_TRUE("delete unref decl setup: n registered",
                     repl_eval_find_predef_var_idx("n") >= 0);
@@ -1763,7 +1763,7 @@ int main() {
 
     /* 39. Per-declaration name limit rejects atomically */
     {
-        repl_reset_state();
+        glr_app_reset_all();
         set_editor_input("float v0, v1, v2, v3, v4, v5, v6, v7, v8");
         repl_state_edit_line_set(repl_state_document_count());
         editor_insert_mode_set(0);
@@ -1786,7 +1786,7 @@ int main() {
 
     /* 40. Total variable table limit rejects atomically */
     {
-        repl_reset_state();
+        glr_app_reset_all();
         /* Fill all user-declarable slots (MAX_PREDEF_VARS - 1; slot 0 is
          * reserved for t which is re-declared on every reset). Feed in
          * batches of 8 — the per-line name limit. */
@@ -1834,7 +1834,7 @@ int main() {
 
     /* 41. Declaration validation failures are atomic */
     {
-        repl_reset_state();
+        glr_app_reset_all();
         repl_feed_line_public("float anchor;");
         ASSERT_INT("decl atomic setup: one decl", repl_state_document_count(), 1);
         ASSERT_TRUE("decl atomic setup: anchor registered",
@@ -1860,7 +1860,7 @@ int main() {
      * overwrite path undeclared ALL names then re-declared them with
      * value 0.0f, silently zeroing a, b, and c. */
     {
-        repl_reset_state();
+        glr_app_reset_all();
         repl_feed_line_public("float a, b, c;");
         repl_feed_line_public("a = 1;");
         repl_feed_line_public("b = 2;");
@@ -1928,7 +1928,7 @@ int main() {
     /* try_assign_variable - overlong formatted source is rejected with
      * "Command too long" and does not mutate repl_state_document_cmds_mut() / repl_state_document_count(). */
     {
-        repl_reset_state(); declare_test_vars();
+        glr_app_reset_all(); declare_test_vars();
         int old_num_cmds = repl_state_document_count();
         g_status[0] = '\0';
 
@@ -1956,7 +1956,7 @@ int main() {
 
     /* Replay keyboard dispatch is owned by repl_replay.c, not the editor. */
     {
-        repl_reset_state(); declare_test_vars();
+        glr_app_reset_all(); declare_test_vars();
         repl_feed_line_public("glVertex3f(0, 0, 0);");
         repl_feed_line_public("glVertex3f(1, 0, 0);");
         repl_flatten_commands();
@@ -1984,7 +1984,7 @@ int main() {
         ASSERT_INT("replay left steps back",
                    replay_pc, 0);
 
-        repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_HIDDEN; repl_state_sync_ui_chrome();
+        repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_HIDDEN; glr_ctrl_sync_ui_chrome();
         replay_state = REPLAY_PLAYING;
         glr_ctrl_router_handle_active_replay_key(' ');
         ASSERT_INT("replay space keeps hidden code panel",
@@ -1999,7 +1999,7 @@ int main() {
                    repl_state_presentation().code_panel_layout, CODE_PANEL_LAYOUT_HIDDEN);
         ASSERT_INT("replay right still advances through router",
                    replay_pc, 1);
-        repl_state_presentation_mut()->code_panel_layout = CFG_DEFAULT_CODE_PANEL_LAYOUT; repl_state_sync_ui_chrome();
+        repl_state_presentation_mut()->code_panel_layout = CFG_DEFAULT_CODE_PANEL_LAYOUT; glr_ctrl_sync_ui_chrome();
 
         ASSERT_INT("replay unknown key unconsumed",
                    repl_replay_handle_key('x'), 0);
@@ -2013,7 +2013,7 @@ int main() {
         int follow_doc_line = -1;
         int visible_lines = -1;
 
-        repl_reset_state(); declare_test_vars();
+        glr_app_reset_all(); declare_test_vars();
         for (int i = 0; i < 30; i++) {
             char line[64];
             snprintf(line, sizeof(line), "glVertex3f(%d, 0, 0);", i);
@@ -2024,8 +2024,8 @@ int main() {
 
         ui_state_viewport_set_size(800, 230);
         g_panel_frac = 0.5f;
-        repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT; repl_state_sync_ui_chrome();
-        repl_state_presentation_mut()->show_vertex_indices = 0; repl_state_sync_ui_chrome();
+        repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT; glr_ctrl_sync_ui_chrome();
+        repl_state_presentation_mut()->show_vertex_indices = 0; glr_ctrl_sync_ui_chrome();
         navigate_to_line(0);
 
         replay_active = 1;
@@ -2065,7 +2065,7 @@ int main() {
     /* Replay source focus should follow GLU tessellation vertices, not the
      * structural gluBegin/gluEnd commands that wrap them. */
     {
-        repl_reset_state(); declare_test_vars();
+        glr_app_reset_all(); declare_test_vars();
         repl_feed_line_public("gluBegin(GLU_POLYGON);");
         repl_feed_line_public("gluBegin(GLU_CONTOUR);");
         repl_feed_line_public("gluVertex(0, 0, 0);");
@@ -2101,7 +2101,7 @@ int main() {
         int expanded_follow = -1;
         int visible_lines = -1;
 
-        repl_reset_state(); declare_test_vars();
+        glr_app_reset_all(); declare_test_vars();
         repl_feed_line_public("glVertex3f(0, 0, 0);");
         repl_feed_line_public("glVertex3f(x, y, z);");
         repl_feed_line_public("glVertex3f(2, 0, 0);");
@@ -2110,8 +2110,8 @@ int main() {
 
         ui_state_viewport_set_size(800, 230);
         g_panel_frac = 0.5f;
-        repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT; repl_state_sync_ui_chrome();
-        repl_state_presentation_mut()->show_vertex_indices = 0; repl_state_sync_ui_chrome();
+        repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT; glr_ctrl_sync_ui_chrome();
+        repl_state_presentation_mut()->show_vertex_indices = 0; glr_ctrl_sync_ui_chrome();
         navigate_to_line(0);
 
         replay_active = 1;
@@ -2153,7 +2153,7 @@ int main() {
      * row with !editor_insert_mode(), so the slot drew a dimmed placeholder instead
      * of the cursor. */
     {
-        repl_reset_state();
+        glr_app_reset_all();
         repl_feed_line_public("glVertex3f(0,0,0)");
         repl_feed_line_public("glVertex3f(1,1,1)");
         repl_feed_line_public("glVertex3f(2,2,2)");
@@ -2175,7 +2175,7 @@ int main() {
         int follow_insert = -1, follow_overwrite = -1;
         int visible_lines = -1;
 
-        repl_reset_state();
+        glr_app_reset_all();
         for (int i = 0; i < 20; i++) {
             char line[64];
             snprintf(line, sizeof(line), "glVertex3f(%d, 0, 0);", i);
@@ -2185,8 +2185,8 @@ int main() {
 
         ui_state_viewport_set_size(800, 230);
         g_panel_frac = 0.5f;
-        repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT; repl_state_sync_ui_chrome();
-        repl_state_presentation_mut()->show_vertex_indices = 0; repl_state_sync_ui_chrome();
+        repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT; glr_ctrl_sync_ui_chrome();
+        repl_state_presentation_mut()->show_vertex_indices = 0; glr_ctrl_sync_ui_chrome();
         replay_active = 0;
 
         repl_state_edit_line_set(repl_state_document_count());
@@ -2218,7 +2218,7 @@ int main() {
      * so the viewport tracks cursor movement on each keypress.  Before the
      * fix only keyboard_func set the flag, so Up/Down left the view stale. */
     {
-        repl_reset_state();
+        glr_app_reset_all();
         repl_feed_line_public("glVertex3f(0,0,0)");
         navigate_to_line(0);
 
@@ -2248,7 +2248,7 @@ int main() {
         int follow_doc_line = -1;
         int visible_lines = -1;
 
-        repl_reset_state();
+        glr_app_reset_all();
         for (int i = 0; i < 20; i++) {
             char line[64];
             snprintf(line, sizeof(line), "glVertex3f(%d, 0, 0);", i);
@@ -2258,8 +2258,8 @@ int main() {
 
         ui_state_viewport_set_size(800, 230);
         g_panel_frac = 0.5f;
-        repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT; repl_state_sync_ui_chrome();
-        repl_state_presentation_mut()->show_vertex_indices = 0; repl_state_sync_ui_chrome();
+        repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT; glr_ctrl_sync_ui_chrome();
+        repl_state_presentation_mut()->show_vertex_indices = 0; glr_ctrl_sync_ui_chrome();
         replay_active = 0;
 
         navigate_to_line(repl_state_document_count() - 1);
@@ -2276,7 +2276,7 @@ int main() {
 
     /* Auto-commit modified lines before keyboard navigation. */
     {
-        repl_reset_state();
+        glr_app_reset_all();
         repl_feed_line_public("glVertex3f(0,0,0)");
         repl_feed_line_public("glVertex3f(1,1,1)");
         navigate_to_line(0);
@@ -2297,7 +2297,7 @@ int main() {
         char old_source[MAX_LINE_LEN];
         int old_num_cmds;
 
-        repl_reset_state();
+        glr_app_reset_all();
         repl_feed_line_public("glColor3f(1,0,0)");
         repl_feed_line_public("glVertex3f(1,1,1)");
         navigate_to_line(0);
@@ -2320,7 +2320,7 @@ int main() {
 
     /* Auto-commit new end-of-buffer input before moving away. */
     {
-        repl_reset_state();
+        glr_app_reset_all();
         repl_feed_line_public("glVertex3f(0,0,0)");
         repl_feed_line_public("glVertex3f(1,1,1)");
         navigate_to_line(repl_state_document_count());
@@ -2340,7 +2340,7 @@ int main() {
     {
         int old_num_cmds;
 
-        repl_reset_state();
+        glr_app_reset_all();
         repl_feed_line_public("glVertex3f(0,0,0)");
         repl_feed_line_public("glVertex3f(1,1,1)");
         old_num_cmds = repl_state_document_count();
@@ -2365,15 +2365,15 @@ int main() {
 
     /* Code-panel clicks use the same auto-commit path. */
     {
-        repl_reset_state();
+        glr_app_reset_all();
         repl_feed_line_public("glVertex3f(0,0,0)");
         repl_feed_line_public("glVertex3f(1,1,1)");
         repl_feed_line_public("glVertex3f(2,2,2)");
 
         ui_state_viewport_set_size(800, 600);
         g_panel_frac = 0.5f;
-        repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT; repl_state_sync_ui_chrome();
-        repl_state_presentation_mut()->show_vertex_indices = 0; repl_state_sync_ui_chrome();
+        repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT; glr_ctrl_sync_ui_chrome();
+        repl_state_presentation_mut()->show_vertex_indices = 0; glr_ctrl_sync_ui_chrome();
         g_scroll = code_panel_header_row_count();
         navigate_to_line(0);
         set_editor_input("glVertex3f(8, 0, 0)");
@@ -2393,7 +2393,7 @@ int main() {
 
     /* Autocomplete Up/Down keeps selection behavior and does not navigate. */
     {
-        repl_reset_state();
+        glr_app_reset_all();
         repl_feed_line_public("glVertex3f(0,0,0)");
         repl_feed_line_public("glVertex3f(1,1,1)");
         navigate_to_line(0);
@@ -2416,7 +2416,7 @@ int main() {
         int found_tmp_before_clear = 0;
         int found_tmp_after_clear = 0;
 
-        repl_reset_state();
+        glr_app_reset_all();
         base_num_predef_vars = g_num_predef_vars;
         repl_feed_line_public("float tmp;");
         repl_feed_line_public("glVertex3f(1, 0, 0)");
@@ -2455,7 +2455,7 @@ int main() {
     {
         int saved_mods = g_mock_modifiers;
 
-        repl_reset_state();
+        glr_app_reset_all();
         repl_feed_line_public("float x;");
         repl_feed_line_public("x = 1;");
         ASSERT_INT("uncomment setup: two cmds", repl_state_document_count(), 2);
@@ -2498,7 +2498,7 @@ int main() {
     {
         int saved_mods = g_mock_modifiers;
 
-        repl_reset_state();
+        glr_app_reset_all();
         repl_feed_line_public("float comment_x;");
         ASSERT_TRUE("comment-decl setup: x declared",
                     repl_eval_find_predef_var_idx("comment_x") >= 0);
@@ -2524,7 +2524,7 @@ int main() {
     {
         int saved_mods = g_mock_modifiers;
 
-        repl_reset_state();
+        glr_app_reset_all();
         repl_feed_line_public("float refed_y;");
         repl_feed_line_public("refed_y = 5;");
 
@@ -2548,7 +2548,7 @@ int main() {
      * skip CMD_COMMENT lines. A comment like `// p axis` is not a
      * real use of `p`; deleting `float p;` should succeed. */
     {
-        repl_reset_state();
+        glr_app_reset_all();
         repl_feed_line_public("float p;");
         repl_feed_line_public("// p axis");
         ASSERT_TRUE("delete-with-comment-mention setup: p declared",
@@ -2569,7 +2569,7 @@ int main() {
      * repl_eval_source_uses_ident walked the full text including
      * the trailing comment. */
     {
-        repl_reset_state();
+        glr_app_reset_all();
         repl_feed_line_public("float p;");
         repl_feed_line_public("glVertex3f(0,0,0); // p axis");
         ASSERT_TRUE("delete-with-inline-comment setup: p declared",
@@ -2603,7 +2603,7 @@ int main() {
     {
         int saved_mods = g_mock_modifiers;
 
-        repl_reset_state();
+        glr_app_reset_all();
         repl_feed_line_public("glVertex3f(0, 0, 0);");
         repl_state_edit_line_set(0);
         editor_insert_mode_set(0);
@@ -2630,7 +2630,7 @@ int main() {
         int saved_mods = g_mock_modifiers;
         ReplRenderState *rs = repl_state_render_mut();
 
-        repl_reset_state();
+        glr_app_reset_all();
         rs->use_accum = 1;
         rs->accum_samples = 2;
 
@@ -2662,7 +2662,7 @@ int main() {
     /* Extra coverage: Ctrl+L (Clear All) */
     {
         int saved_mods = g_mock_modifiers;
-        repl_reset_state();
+        glr_app_reset_all();
         repl_feed_line_public("glVertex3f(1,1,1)");
         ASSERT_INT("Ctrl+L setup: 1 cmd", repl_state_document_count(), 1);
 
@@ -2675,7 +2675,7 @@ int main() {
 
     /* Extra coverage: F12 cycling with user scenes */
     {
-        repl_reset_state();
+        glr_app_reset_all();
         int example_count = repl_example_count();
         if (example_count > 0) {
             /* Load example 0 */
@@ -2701,15 +2701,15 @@ int main() {
 
     /* Extra coverage: panel resizing via mouse motion */
     {
-        repl_reset_state();
+        glr_app_reset_all();
         ui_state_viewport_set_size(1000, 1000);
-        repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT; repl_state_sync_ui_chrome();
+        repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT; glr_ctrl_sync_ui_chrome();
         ui_state_code_panel_mut()->resizing_panel = 1;
 
         editor_handle_motion(300, 500);
         ASSERT_TRUE("panel resize left: frac updated", fabsf(ui_state_code_panel().panel_frac - 0.3f) < 1e-6f);
 
-        repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_TOP; repl_state_sync_ui_chrome();
+        repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_TOP; glr_ctrl_sync_ui_chrome();
         editor_handle_motion(500, 400);
         ASSERT_TRUE("panel resize top: frac updated", fabsf(ui_state_code_panel().panel_frac - 0.4f) < 1e-6f);
 
@@ -2718,9 +2718,9 @@ int main() {
 
     /* Extra coverage: editor_point_on_code_panel_divider */
     {
-        repl_reset_state();
+        glr_app_reset_all();
         ui_state_viewport_set_size(1000, 1000);
-        repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT; repl_state_sync_ui_chrome();
+        repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT; glr_ctrl_sync_ui_chrome();
         ui_state_code_panel_mut()->panel_frac = 0.3f;
 
         /* Divider should be at x = 300. Test hit at 305. */
@@ -2728,7 +2728,7 @@ int main() {
         /* We can't easily assert the cursor change without more mocking,
          * but we are hitting the branch. */
 
-        repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_TOP; repl_state_sync_ui_chrome();
+        repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_TOP; glr_ctrl_sync_ui_chrome();
         /* Divider should be at gl_y = 300. window_h = 1000, so y = 700. Test hit at 705. */
         editor_handle_passive_motion(500, 705);
     }
@@ -2798,7 +2798,7 @@ int main() {
 
     /* Extra coverage: timer_func logic */
     {
-        repl_reset_state();
+        glr_app_reset_all();
         repl_feed_line_public("glVertex3f(0,0,0);");
         repl_feed_line_public("glVertex3f(1,1,1);");
         repl_flatten_commands();
@@ -2829,7 +2829,7 @@ int main() {
 
     /* Extra coverage: variable dragging via mouse */
     {
-        repl_reset_state();
+        glr_app_reset_all();
         ui_state_viewport_set_size(1000, 1000);
         variable_panel_view_mut()->visible = 1;
         repl_feed_line_public("float testvar = 5.0;");
@@ -2863,7 +2863,7 @@ int main() {
     /* Extra coverage: Undo/Redo keys */
     {
         int saved_mods = g_mock_modifiers;
-        repl_reset_state();
+        glr_app_reset_all();
         editor_undo_push_snapshot();
         repl_feed_line_public("glVertex3f(1,1,1)");
         ASSERT_INT("undo setup: 1 cmd", repl_state_document_count(), 1);
@@ -2912,10 +2912,10 @@ int main() {
             int layout = layouts[layout_idx];
             char label[128];
 
-            repl_reset_state();
+            glr_app_reset_all();
             ui_state_viewport_set_size(1000, 1000);
             editor_scroll_set(0);
-            repl_state_presentation_mut()->code_panel_layout = layout; repl_state_sync_ui_chrome();
+            repl_state_presentation_mut()->code_panel_layout = layout; glr_ctrl_sync_ui_chrome();
 
             ui_layout_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
             ui_layout_scene_rect(&scene_x, &scene_y, &scene_w, &scene_h);
@@ -2944,10 +2944,10 @@ int main() {
             ASSERT_INT(label, editor_scroll(), 0);
         }
 
-        repl_reset_state();
+        glr_app_reset_all();
         ui_state_viewport_set_size(1000, 1000);
         editor_scroll_set(0);
-        repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_HIDDEN; repl_state_sync_ui_chrome();
+        repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_HIDDEN; glr_ctrl_sync_ui_chrome();
 
         editor_handle_mousewheel(0, 1, 500, 500);
         ASSERT_INT("mousewheel: hidden layout leaves code scroll unchanged",
@@ -2958,7 +2958,7 @@ int main() {
     /* Extra coverage: handle_buffer_command_key_route remaining keys */
     {
         int saved_mods = g_mock_modifiers;
-        repl_reset_state();
+        glr_app_reset_all();
         repl_feed_line_public("glVertex3f(1,1,1)");
 
         g_mock_modifiers = GLUT_ACTIVE_CTRL;
@@ -3004,8 +3004,8 @@ int main() {
 
     /* Extra coverage: editor_restore_hidden_code_panel from keys */
     {
-        repl_reset_state();
-        repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_HIDDEN; repl_state_sync_ui_chrome();
+        glr_app_reset_all();
+        repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_HIDDEN; glr_ctrl_sync_ui_chrome();
 
         /* Pressing a printable key should restore it. */
         editor_handle_key('a', 0, 0);
@@ -3013,7 +3013,7 @@ int main() {
                    repl_state_presentation().code_panel_layout,
                    CODE_PANEL_LAYOUT_LEFT);
 
-        repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_HIDDEN; repl_state_sync_ui_chrome();
+        repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_HIDDEN; glr_ctrl_sync_ui_chrome();
         /* Pressing a special key should restore it. */
         editor_handle_special(GLUT_KEY_UP, 0, 0);
         ASSERT_INT("special key restores hidden panel",
@@ -3023,7 +3023,7 @@ int main() {
 
     /* Extra coverage: Commenting Func/If blocks */
     {
-        repl_reset_state();
+        glr_app_reset_all();
         repl_feed_line_public("if(1) {");
         repl_feed_line_public("  glVertex3f(0,0,0);");
         repl_feed_line_public("}");
@@ -3046,7 +3046,7 @@ int main() {
     /* Block-batch toggle: Ctrl+/ on a FOR_BEGIN comments out the whole
      * for-loop in one stroke. */
     {
-        repl_reset_state();
+        glr_app_reset_all();
         repl_feed_line_public("for(i, 0, 3) {");
         repl_feed_line_public("  glVertex2f(i, 0);");
         repl_feed_line_public("}");
@@ -3079,7 +3079,7 @@ int main() {
     /* Block-batch toggle from the END side: Ctrl+/ on FOR_END walks
      * back to the matching FOR_BEGIN and comments the whole block. */
     {
-        repl_reset_state();
+        glr_app_reset_all();
         repl_feed_line_public("for(i, 0, 3) {");
         repl_feed_line_public("  glVertex2f(i, 0);");
         repl_feed_line_public("}");
@@ -3104,7 +3104,7 @@ int main() {
     /* Block-batch toggle on FUNC_DEF: same shape as FOR but with
      * different head/end cmd kinds. */
     {
-        repl_reset_state();
+        glr_app_reset_all();
         repl_feed_line_public("func0() {");
         repl_feed_line_public("  glVertex3f(0,0,0);");
         repl_feed_line_public("}");
@@ -3131,7 +3131,7 @@ int main() {
     {
         int saved_mods = g_mock_modifiers;
 
-        repl_reset_state();
+        glr_app_reset_all();
         repl_feed_line_public("glVertex3f(0, 0, 0);");
         repl_state_edit_line_set(0);
         editor_insert_mode_set(0);
@@ -3158,7 +3158,7 @@ int main() {
         const char *saved_prefix = editor_line_comment_prefix();
         int saved_mods = g_mock_modifiers;
 
-        repl_reset_state();
+        glr_app_reset_all();
         repl_feed_line_public("glVertex3f(0, 0, 0);");
         editor_set_line_comment_prefix(NULL);
 
@@ -3178,9 +3178,9 @@ int main() {
 
     /* Extra coverage: BOTTOM layout resizing */
     {
-        repl_reset_state();
+        glr_app_reset_all();
         ui_state_viewport_set_size(1000, 1000);
-        repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_BOTTOM; repl_state_sync_ui_chrome();
+        repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_BOTTOM; glr_ctrl_sync_ui_chrome();
         ui_state_code_panel_mut()->panel_frac = 0.3f;
 
         /* Divider should be at gl_y = 300 (y = 700). */
@@ -3194,7 +3194,7 @@ int main() {
 
     /* Extra coverage: Right-click variable drag */
     {
-        repl_reset_state();
+        glr_app_reset_all();
         ui_state_viewport_set_size(1000, 1000);
         variable_panel_view_mut()->visible = 1;
         repl_feed_line_public("float testvar = 5.0;");

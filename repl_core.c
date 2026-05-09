@@ -777,6 +777,8 @@ void repl_reset_time_to_zero(void) {
     repl_state_time_reset_to_zero();
 }
 
-void repl_reset_state(void) {
-    repl_state_reset_all();
-}
+/* repl_reset_state was removed in step 2 of
+ * feature/decouple-repl-from-gl-repl-alt.md. Tests and callers that
+ * want full-world reset call glr_app_reset_all() (declared in
+ * glr_ctrl.h). REPL-only callers can use repl_state_init_defaults() /
+ * repl_state_reset_program(). */

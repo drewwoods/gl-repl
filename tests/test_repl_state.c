@@ -1,3 +1,4 @@
+#include "glr_ctrl.h"
 #include "repl_state.h"
 #include "editor/state.h"
 #include "ui/state.h"
@@ -213,7 +214,7 @@ static void test_capture_restore_round_trip(void) {
     static const char *scene_hint = "Captured Scene";
     int foo_idx;
 
-    repl_state_init_defaults();
+    glr_app_reset_all();
     populate_runtime_snapshot_fixture(scene_hint);
     repl_state_capture(&snapshot);
     editor_state_capture(&editor_snap);
@@ -221,7 +222,7 @@ static void test_capture_restore_round_trip(void) {
     variable_panel_state_capture(&varpanel_snap);
     replay_state_capture(&replay_snap);
     editor_help_session_capture(&help_snap);
-    repl_state_reset_all();
+    glr_app_reset_all();
     repl_state_restore(&snapshot);
     editor_state_restore(&editor_snap);
     ui_state_restore(&ui_snap);
@@ -377,11 +378,11 @@ static void test_reset_all_restores_default_runtime(void) {
     static ReplRuntimeState defaults;
     static ReplRuntimeState reset_state;
 
-    repl_state_init_defaults();
+    glr_app_reset_all();
     repl_state_capture(&defaults);
 
     populate_runtime_snapshot_fixture("Reset Scene");
-    repl_state_reset_all();
+    glr_app_reset_all();
     repl_state_capture(&reset_state);
 
     ASSERT_TRUE("reset_all restores default snapshot",

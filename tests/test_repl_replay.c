@@ -1,3 +1,4 @@
+#include "glr_ctrl.h"
 #include "repl_core.h"
 #include "replay.h"
 #include "repl_state.h"
@@ -40,7 +41,7 @@ static void add_mock_cmd(int idx, CmdType type) {
 }
 
 static void test_replay_basic_controls(void) {
-    repl_reset_state();
+    glr_app_reset_all();
     add_mock_cmd(0, CMD_COLOR3F);
     add_mock_cmd(1, CMD_VERTEX3F);
     repl_state_mark_flat_dirty();
@@ -71,7 +72,7 @@ static void test_replay_basic_controls(void) {
 }
 
 static void test_replay_stepping(void) {
-    repl_reset_state();
+    glr_app_reset_all();
     add_mock_cmd(0, CMD_BEGIN);
     add_mock_cmd(1, CMD_VERTEX3F);
     add_mock_cmd(2, CMD_VERTEX3F);
@@ -100,7 +101,7 @@ static void test_replay_stepping(void) {
 }
 
 static void test_replay_tessellation_stepping(void) {
-    repl_reset_state();
+    glr_app_reset_all();
     add_mock_cmd(0, CMD_TESS_BEGIN_POLYGON);
     add_mock_cmd(1, CMD_TESS_BEGIN_CONTOUR);
     add_mock_cmd(2, CMD_TESS_VERTEX);
@@ -124,7 +125,7 @@ static void test_replay_tessellation_stepping(void) {
 }
 
 static void test_replay_fade_batches(void) {
-    repl_reset_state();
+    glr_app_reset_all();
     add_mock_cmd(0, CMD_VERTEX3F);
     repl_state_mark_flat_dirty();
     flatten_commands();
@@ -149,7 +150,7 @@ static void test_replay_fade_batches(void) {
 }
 
 static void test_replay_input(void) {
-    repl_reset_state();
+    glr_app_reset_all();
     add_mock_cmd(0, CMD_VERTEX3F);
     repl_state_mark_flat_dirty();
     flatten_commands();
@@ -182,7 +183,7 @@ static void test_replay_input(void) {
 }
 
 static void test_replay_modifiers(void) {
-    repl_reset_state();
+    glr_app_reset_all();
     add_mock_cmd(0, CMD_VERTEX3F);
     repl_state_mark_flat_dirty();
     flatten_commands();
@@ -201,7 +202,7 @@ static void test_replay_modifiers(void) {
 }
 
 static void test_bench_helpers(void) {
-    repl_reset_state();
+    glr_app_reset_all();
     add_mock_cmd(0, CMD_VERTEX3F);
     add_mock_cmd(1, CMD_VERTEX3F);
     add_mock_cmd(2, CMD_VERTEX3F);
@@ -218,7 +219,7 @@ static void test_bench_helpers(void) {
 }
 
 static void test_misc_helpers(void) {
-    repl_reset_state();
+    glr_app_reset_all();
     add_mock_cmd(0, CMD_VERTEX3F);
     repl_state_mark_flat_dirty();
     flatten_commands();

@@ -7,6 +7,7 @@
  * item actions that touch scenes, files, replay, audio, or presentation state.
  */
 #include "glr_actions.h"
+#include "glr_ctrl.h"            /* glr_ctrl_sync_ui_chrome */
 #include "ui/layout.h"           /* CODE_PANEL_LAYOUT_* enum values */
 #include "color_picker_state.h"
 #include "audio.h"
@@ -188,7 +189,7 @@ void glr_cfg_cycle_row(int row, int delta) {
         repl_replay_stop();
 
     int new_value = glr_config_cycle(item->key, delta);
-    repl_state_sync_ui_chrome();  /* refresh ui_state.code_panel mirrors */
+    glr_ctrl_sync_ui_chrome();  /* refresh ui_state.code_panel mirrors */
 
     if (item->key == GLR_CONFIG_CODE_PANEL_LAYOUT) {
         ui_state_code_panel_mut()->panel_frac = 0.3f;
@@ -313,6 +314,11 @@ int glr_action_menu_item_activate(int menu_id, int item_idx) {
     } else if (menu_id == GLR_MENU_SCENE) {
         int example_count = repl_example_count();
         if (item_idx >= 1 && item_idx <= example_count) {
+            /* Clear editor / camera / menu / picker / code-panel-drag
+             * transients so the new scene starts from a clean controller
+             * state. Step 2 of the decouple plan moved this out of
+             * repl_example_loader.c. */
+            repl_editor_reset_transients();
             repl_load_example(item_idx - 1);
             return 1;
         }

@@ -1,3 +1,4 @@
+#include "glr_ctrl.h"
 #include "editor/input.h"
 #include "editor/search.h"
 #include "repl_core.h"
@@ -73,7 +74,7 @@ int main(void) {
                     repl_search_find_prev_in_text("abc", "zzz", 2) == -1);
     }
 
-    repl_reset_state(); declare_test_vars();
+    glr_app_reset_all(); declare_test_vars();
     set_live_input("NeedleLine");
     open_search();
     type_search_text("needle");
@@ -91,7 +92,7 @@ int main(void) {
     ASSERT_TRUE("search clear resets hit ordinal", g_search_hit_ordinal == 0);
     ASSERT_TRUE("search clear resets match count", g_search_match_count == 0);
 
-    repl_reset_state(); declare_test_vars();
+    glr_app_reset_all(); declare_test_vars();
     repl_feed_line_public("glBegin(GL_POINTS);");
     repl_feed_line_public("glEnd();");
     open_search();

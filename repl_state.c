@@ -21,15 +21,11 @@ int  parse_workspace_header_line(const char *line);
 void update_render_state_strings(void);
 void update_cam_lines(void);
 
-/* Forward decl for the one ui_state_* entry point this translation
- * unit needs after the Phase A commit 14 forwarder removal:
- * ui_state_reset is called from repl_state_reset_all so test resets
- * still drain UiState alongside ReplState and EditorState. The full
- * canonical `ui_state_*` API is in ui_state.h; check-controller-
- * boundaries forbids repl_*.c from including it. */
-void ui_state_reset(void);
+/* Step 2 of feature/decouple-repl-from-gl-repl-alt.md moved the
+ * peer/UI/editor reset calls out of repl_state.c. The remaining
+ * forward-declared symbols are camera (read by update_cam_lines via
+ * the import_export string buffer; see repl_export.c). */
 ReplCameraState *glr_camera_mut(void);
-ReplCodePanelRuntimeState *ui_state_code_panel_mut(void);
 
 static const float g_grid_major_steps[GRID_MAJOR_COUNT] = {
     [GRID_MAJOR_1]  = 1.0f,
@@ -547,55 +543,32 @@ int repl_state_parse_workspace_header_line(const char *line) {
     return parse_workspace_header_line(line);
 }
 
-/* Mirror chrome-relevant presentation fields into ui_state.code_panel.
- * Called once per frame by glr_ctrl_build_ui_snapshot so ui_*.c
- * renderers and hit-tests can read them via ui_state_*() without
- * crossing the repl_state_*() boundary. Also called from tests after
- * they tweak repl_state_presentation_mut() so subsequent ui_layout_* /
- * ui_panels_hit_test calls see the new layout / show_vertex_indices. */
-void repl_state_sync_ui_chrome(void) {
-    ReplPresentationState p = g_repl_state.presentation;
-    ReplCodePanelRuntimeState *cp = ui_state_code_panel_mut();
-    cp->layout_mode         = p.code_panel_layout;
-    cp->show_vertex_indices = p.show_vertex_indices;
-}
-
+/* repl_state_init_defaults is the program-only (REPL-state) entry
+ * point. It does NOT reset peer/editor/UI state — that is the
+ * controller's responsibility via glr_app_reset_all() in glr_ctrl.c.
+ * The demo deliberately calls only this entry to keep
+ * tools/repl_demo/stubs.c free of peer/editor/UI reset stubs. */
 void repl_state_init_defaults(void) {
-    repl_state_reset_all();
-    /* Register the default editor completion provider (Phase G commit
-     * 36). Editor input dispatch calls editor_completion_* without
-     * knowing about repl_autocomplete; the registration here installs
-     * the REPL-aware backing. */
-    repl_autocomplete_register_provider();
+    repl_state_reset_program();
 }
 
-void repl_state_reset_all(void) {
+/* Reset REPL-owned slices to defaults. Peer/editor/UI/autocomplete
+ * registration / chrome sync are NOT included here — they live on
+ * glr_app_reset_all in glr_ctrl.c (see step 2 of
+ * feature/decouple-repl-from-gl-repl-alt.md).
+ *
+ * Do NOT call any non-REPL reset entry from this function. The
+ * separation is what lets tools/repl_demo build without stubbing
+ * editor / UI / peer reset symbols. */
+void repl_state_reset_program(void) {
     g_repl_state = g_repl_state_defaults;
-    /* Phase 1 scaffold (commit 3): drain the new EditorState and UiState
-     * singletons too so every test reset clears all three structs. The
-     * structs are placeholders until commits 4-7 move slices in. Phase F
-     * commit 31 added the variable_panel peer; reset it alongside. */
-    editor_state_reset();
-    ui_state_reset();
-    variable_panel_state_reset();
-    replay_state_reset();
-    editor_help_session_reset();
     repl_state_bind_eval_predef_storage();
     repl_scenes_reset();
     reset_time_state();
-    repl_editor_reset_transients();
     refresh_workspace_header_lines();
     update_render_state_strings();
     update_cam_lines();
     repl_source_scope_depth_cache_invalidate();
     repl_state_mark_flat_dirty();
     repl_state_mark_normals_dirty();
-    repl_autocomplete_register_provider();
-    repl_state_sync_ui_chrome();
 }
-
-/* The legacy `repl_state_*` UI-slice forwarder block was removed in
- * Phase A commit 14. All callers now talk to `ui_state_*` directly
- * (allowlisted ui_*.c and the controller include ui_state.h; the
- * remaining repl_*.c callers forward-declare the few accessors they
- * need). The `ui_forwarder_count` ratchet is now zero. */

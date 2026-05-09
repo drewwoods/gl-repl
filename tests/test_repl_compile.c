@@ -1,3 +1,4 @@
+#include "glr_ctrl.h"
 /*
  * test_repl_compile.c - Phase C invariant tests.
  *
@@ -96,7 +97,7 @@ static int fingerprint_equal(const ComputeFingerprint *a,
 
 /* repl_compile_float_decl is pure on the failure path. */
 static void test_compile_float_decl_failure_is_pure(void) {
-    repl_reset_state();
+    glr_app_reset_all();
 
     /* Establish a non-trivial pre-state: declare a variable, set
      * status, push a buffer line. */
@@ -127,7 +128,7 @@ static void test_compile_float_decl_failure_is_pure(void) {
 
 /* repl_compile_var_assign is pure on the failure path. */
 static void test_compile_var_assign_failure_is_pure(void) {
-    repl_reset_state();
+    glr_app_reset_all();
 
     set_input("float a;");
     ReplCompileContext ctx = repl_compile_context_from_live();
@@ -155,7 +156,7 @@ static void test_compile_var_assign_failure_is_pure(void) {
 /* Compile NO_CHANGE (input that doesn't match the handler) leaves
  * everything untouched and never fills err. */
 static void test_compile_no_change_leaves_state(void) {
-    repl_reset_state();
+    glr_app_reset_all();
     ui_state_status_set("baseline status");
     ComputeFingerprint before = capture_fingerprint();
 
@@ -183,7 +184,7 @@ static void test_compile_no_change_leaves_state(void) {
 /* Successful compile + apply updates editor buffer and command store
  * atomically. */
 static void test_compile_apply_updates_both(void) {
-    repl_reset_state();
+    glr_app_reset_all();
 
     set_input("float energy;");
     ReplCompileContext ctx = repl_compile_context_from_live();
@@ -220,7 +221,7 @@ static void test_compile_apply_updates_both(void) {
 /* Var-assign compile + apply updates the predef value alongside the
  * source command. */
 static void test_compile_apply_var_assign_updates_value(void) {
-    repl_reset_state();
+    glr_app_reset_all();
 
     /* Set up a declared variable. */
     set_input("float k;");
@@ -255,7 +256,7 @@ static void test_compile_apply_var_assign_updates_value(void) {
  * mechanism: without it the predef-op cascade would mutate while
  * the cmd-store insert silently fails. */
 static void test_capacity_failure_is_atomic(void) {
-    repl_reset_state();
+    glr_app_reset_all();
 
     ReplCompiledChange change;
     ReplCompileContext ctx;
@@ -360,7 +361,7 @@ static void test_capacity_failure_is_atomic(void) {
  * every line. Verify that after a reformat (run via the existing
  * try_commit dispatcher path), buffer + store remain in sync. */
 static void test_reformat_keeps_buffer_and_store_aligned(void) {
-    repl_reset_state();
+    glr_app_reset_all();
 
     /* Build a small program. */
     set_input("float a;");
@@ -393,7 +394,7 @@ static void test_reformat_keeps_buffer_and_store_aligned(void) {
 }
 
 static void test_set_predef_value_prefers_last_literal_assign(void) {
-    repl_reset_state();
+    glr_app_reset_all();
 
     repl_feed_line_public("float x = 1, y;");
     repl_feed_line_public("x = 2;");
@@ -428,7 +429,7 @@ static void test_set_predef_value_prefers_last_literal_assign(void) {
 }
 
 static void test_set_predef_value_rewrites_declaration_initializer(void) {
-    repl_reset_state();
+    glr_app_reset_all();
 
     repl_feed_line_public("float a = 1, x = 2, y; // vars");
 
@@ -457,7 +458,7 @@ static void test_set_predef_value_rewrites_declaration_initializer(void) {
 }
 
 static void test_set_predef_value_adds_declaration_initializer(void) {
-    repl_reset_state();
+    glr_app_reset_all();
 
     repl_feed_line_public("float x;");
 
@@ -479,7 +480,7 @@ static void test_set_predef_value_adds_declaration_initializer(void) {
 }
 
 static void test_set_predef_value_keeps_expression_sources(void) {
-    repl_reset_state();
+    glr_app_reset_all();
 
     repl_feed_line_public("float x;");
     repl_feed_line_public("float y;");
@@ -510,7 +511,7 @@ static void test_set_predef_value_keeps_expression_sources(void) {
 }
 
 static void test_set_predef_value_live_only_without_source(void) {
-    repl_reset_state();
+    glr_app_reset_all();
 
     ReplCompileContext ctx = repl_compile_context_from_live();
     ReplCompiledChange change;
@@ -539,7 +540,7 @@ static void test_set_predef_value_live_only_without_source(void) {
  * diagnostic via the result; no buffer/store/predef/status/undo
  * mutation. */
 static void test_orchestration_compile_failure_returns_diagnostic(void) {
-    repl_reset_state();
+    glr_app_reset_all();
 
     /* Establish a non-trivial pre-state. */
     editor_input_set_text("float anchor;");
@@ -570,7 +571,7 @@ static void test_orchestration_compile_failure_returns_diagnostic(void) {
 /* editor_commit_current_input NO_CHANGE path: input the dispatcher
  * doesn't recognize. consumed=0, no mutation. */
 static void test_orchestration_no_change_falls_through(void) {
-    repl_reset_state();
+    glr_app_reset_all();
     editor_input_set_text("glVertex3f(0,0,0)");
     ui_state_status_set("baseline");
     ComputeFingerprint before = capture_fingerprint();
@@ -589,7 +590,7 @@ static void test_orchestration_no_change_falls_through(void) {
 /* editor_commit_current_input success path: buffer + store + predef
  * mutate together, commit_message valid. */
 static void test_orchestration_success_returns_message(void) {
-    repl_reset_state();
+    glr_app_reset_all();
     editor_input_set_text("float energy;");
 
     EditorServices svc = editor_services_default();
@@ -611,7 +612,7 @@ static void test_orchestration_success_returns_message(void) {
  * get moved alongside the new func def block (delete + insert in
  * one transaction). */
 static void test_func_def_comment_relocation(void) {
-    repl_reset_state();
+    glr_app_reset_all();
 
     /* Build doc:
      *   line 0: glVertex3f(1, 0, 0);    (geometry above future func)
@@ -683,7 +684,7 @@ static void test_func_def_comment_relocation(void) {
 }
 
 static void test_func_def_blank_line_relocation(void) {
-    repl_reset_state();
+    glr_app_reset_all();
 
     repl_feed_line_public("  glVertex3f(1, 0, 0);");
     repl_feed_line_public("");
@@ -725,7 +726,7 @@ static void test_func_def_blank_line_relocation(void) {
  * publishes the delta so the matching close-brace's compile
  * advances edit_line by that delta. */
 static void test_func_def_resume_publish_consumed_by_close_brace(void) {
-    repl_reset_state();
+    glr_app_reset_all();
 
     /* Build a doc where leading comments precede the cursor:
      *   [0] // comment
@@ -767,7 +768,7 @@ static void test_func_def_resume_publish_consumed_by_close_brace(void) {
      * (header, pre-vertex stepped over, vertex stops). resume_pos
      * = 4 - 1 = 3. resume_delta = 3 - 2 = 1.
      */
-    repl_reset_state();
+    glr_app_reset_all();
     repl_feed_line_public("// header");
     repl_feed_line_public("// pre-vertex");
     repl_feed_line_public("  glVertex3f(1, 0, 0);");

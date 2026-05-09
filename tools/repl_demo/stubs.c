@@ -1,45 +1,22 @@
 /*
  * tools/repl_demo/stubs.c -- No-op shims for editor/UI/controller entry
- * points that repl_state_reset_all() and a handful of REPL pipeline
- * helpers reach for.
+ * points that the REPL pipeline still reaches for.
  *
  * This file is the visible record of "what does the REPL pipeline pull
  * in beyond pure pipeline code?" Each stub is a 2-3 line no-op or
- * trivial getter. The list is now large enough to be treated as a
- * cleanup ledger rather than a success condition; see ARCHITECTURE.md's
- * "Standalone REPL Demo Coupling" section for the dependency table and
- * removal path.
+ * trivial getter. See feature/decouple-repl-from-gl-repl-alt.md for
+ * the dependency table and the step-by-step removal path. Step 1
+ * cleared `repl_compile_dispatch`. Step 2 cleared the
+ * `repl_state_reset_all()` chokepoint stubs (`ui_state_reset`,
+ * `variable_panel_state_reset`, `editor_help_session_reset`,
+ * `repl_editor_reset_transients`, `ui_state_code_panel_mut`).
  *
- * The list is discovered empirically: start with what we know from
- * walking repl_state.c, then build, then add more stubs for whatever
- * the linker reports unresolved. The starting set covers:
- *
- *   - repl_state_reset_all() reset entry points
- *   - status setter thunk
- *   - ui_state code-panel accessor used by repl_state.c
- *   - compile-dispatch, config, import, and layout symbols that are
- *     hard references in broad REPL helper objects but are not exercised
- *     by the current demo samples
+ * The remaining stubs cluster as:
+ *   - status setter thunk (cleared in step 3)
+ *   - feed_line / load_line_to_input editor input dispatch (steps 5b/6)
+ *   - glr_config table + audio + peer accessors (step 4)
+ *   - ui_state_viewport / ui_state_code_panel layout reads (step 7)
  */
-
-#include "src/ui/state_types.h"   /* ReplCodePanelRuntimeState */
-
-/* --- repl_state_reset_all() chokepoint --------------------------------
- * editor_state_reset, replay_state_reset come from the real TUs in the
- * link set (src/editor/state.c, replay_state.c). The remaining peers
- * are not linked, so we provide no-op stubs for them. */
-void ui_state_reset(void) {}
-void variable_panel_state_reset(void) {}
-void editor_help_session_reset(void) {}
-
-/* Lives in src/editor/input.c in the real build. Resets camera /
- * menu / picker / code-panel-drag transients alongside editor commit
- * transients. The demo doesn't have any of those transients, so a
- * no-op suffices. */
-void repl_editor_reset_transients(void) {}
-
-/* repl_state_sync_ui_chrome is defined in repl_state.c (real impl).
- * Don't stub. */
 
 /* --- set_status thunk ------------------------------------------------- */
 
@@ -50,16 +27,6 @@ void repl_editor_reset_transients(void) {}
 void ui_state_status_set(const char *message) {
     if (message && message[0])
         fprintf(stderr, "[status] %s\n", message);
-}
-
-/* --- ui_state code-panel mut accessor --------------------------------- */
-
-/* repl_state.c forward-declares this and may dereference it in the
- * presentation-cfg copy path. Provide a file-scope dummy so the call
- * succeeds without linking src/ui/state.c. */
-static ReplCodePanelRuntimeState g_dummy_code_panel;
-ReplCodePanelRuntimeState *ui_state_code_panel_mut(void) {
-    return &g_dummy_code_panel;
 }
 
 /* --- src/editor/input.c entry points (only as hard references) -------- */
@@ -110,6 +77,7 @@ void audio_set_cfg_mode(int mode) { (void)mode; }
 static ReplViewportState g_dummy_viewport;
 ReplViewportState ui_state_viewport(void) { return g_dummy_viewport; }
 
+static ReplCodePanelRuntimeState g_dummy_code_panel;
 ReplCodePanelRuntimeState ui_state_code_panel(void) {
     return g_dummy_code_panel;
 }

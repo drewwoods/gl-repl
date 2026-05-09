@@ -1,3 +1,4 @@
+#include "glr_ctrl.h"
 // For linux mkdtemp
 #define _DEFAULT_SOURCE
 
@@ -110,7 +111,7 @@ static void pin_code_panel_state(void) {
     repl_state_presentation_mut()->backdrop_mode = CFG_DEFAULT_BACKDROP_MODE;
     repl_state_presentation_mut()->show_vertex_outlines = CFG_DEFAULT_VERTEX_OUTLINES;
     g_accum_aa_enabled = 1;
-    repl_state_presentation_mut()->code_panel_layout = CFG_DEFAULT_CODE_PANEL_LAYOUT; repl_state_sync_ui_chrome();
+    repl_state_presentation_mut()->code_panel_layout = CFG_DEFAULT_CODE_PANEL_LAYOUT; glr_ctrl_sync_ui_chrome();
     g_multisample_enabled = CFG_DEFAULT_MULTISAMPLE;
     g_line_smooth_enabled = CFG_DEFAULT_LINE_SMOOTH;
 }
@@ -125,7 +126,7 @@ static void seed_nondefault_example_presentation_state(void) {
     repl_state_presentation_mut()->grid_extent_idx = GRID_EXTENT_CLOSE;
     repl_state_presentation_mut()->axes_theme = 5;
     repl_state_presentation_mut()->show_vertex_labels = 0;
-    repl_state_presentation_mut()->show_vertex_indices = 0; repl_state_sync_ui_chrome();
+    repl_state_presentation_mut()->show_vertex_indices = 0; glr_ctrl_sync_ui_chrome();
     repl_state_presentation_mut()->show_normal_vectors = 1;
     repl_state_presentation_mut()->show_vertex_outlines = 0;
     repl_state_presentation_mut()->show_vertex_points = 0;
@@ -478,13 +479,13 @@ static int find_example_index_by_name(const char *name) {
 }
 
 static void load_example_for_test(int idx) {
-    repl_reset_state(); declare_test_vars();
+    glr_app_reset_all(); declare_test_vars();
     pin_code_panel_state();
     repl_load_example(idx);
 }
 
 static void load_custom_example_lines_for_test(const char *const *lines) {
-    repl_reset_state(); declare_test_vars();
+    glr_app_reset_all(); declare_test_vars();
     pin_code_panel_state();
     repl_load_example_lines_for_test(lines);
 }
@@ -585,7 +586,7 @@ int main(int argc, char **argv) {
             NULL
         };
 
-        repl_reset_state(); declare_test_vars();
+        glr_app_reset_all(); declare_test_vars();
         seed_nondefault_example_presentation_state();
         repl_load_example_lines_for_test(no_cfg_reset_example);
 
@@ -642,7 +643,7 @@ int main(int argc, char **argv) {
             NULL
         };
 
-        repl_reset_state(); declare_test_vars();
+        glr_app_reset_all(); declare_test_vars();
         seed_nondefault_example_presentation_state();
         repl_load_example_lines_for_test(partial_cfg_reset_example);
 
@@ -955,7 +956,7 @@ int main(int argc, char **argv) {
         snprintf(label, sizeof(label), "example %02d export compiles", idx);
         ASSERT_TRUE(label, compiled);
 
-        repl_reset_state();
+        glr_app_reset_all();
         pin_code_panel_state();
         roundtrip_loaded = repl_export_load_from_file(export_path);
         snprintf(label, sizeof(label), "example %02d export imports", idx);

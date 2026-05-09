@@ -1,3 +1,4 @@
+#include "glr_ctrl.h"
 #include "ui/menu_bar.h"
 #include "glr_actions.h"
 #include "glr_config.h"
@@ -24,11 +25,11 @@ static TestHarness g_harness = TEST_HARNESS_INIT;
     TEST_ASSERT_INT(&g_harness, label, got, exp)
 
 static void reset_menu_bar_fixture(int window_w, int window_h) {
-    repl_reset_state();
+    glr_app_reset_all();
     ui_state_reset();
     ui_menu_bar_close();
     ui_state_viewport_set_size(window_w, window_h);
-    repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT; repl_state_sync_ui_chrome();
+    repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT; glr_ctrl_sync_ui_chrome();
     ui_state_code_panel_mut()->panel_frac = 1.0f;
 }
 
@@ -133,7 +134,7 @@ static void test_open_close_state(void) {
     ui_menu_bar_set_open_menu(999, 0.0f);
     ASSERT_INT_EQ("invalid menu ID closes", ui_menu_bar_open_menu_id(), -1);
 
-    repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_HIDDEN; repl_state_sync_ui_chrome();
+    repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_HIDDEN; glr_ctrl_sync_ui_chrome();
     ui_menu_bar_set_open_menu(GLR_MENU_FILE, 0.0f);
     ASSERT_TRUE("hidden code panel suppresses dropdown", !ui_menu_bar_menu_dropdown_is_open());
     ASSERT_TRUE("hidden code panel suppresses example dropdown", !ui_menu_bar_example_dropdown_is_open());

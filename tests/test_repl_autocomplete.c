@@ -1,3 +1,4 @@
+#include "glr_ctrl.h"
 #include "repl_core_internal.h"
 #include "repl_state.h"
 #include "repl_core.h"
@@ -57,7 +58,7 @@ int main() {
 
     /* 1. Basic function completion */
     {
-        repl_reset_state(); declare_test_vars();
+        glr_app_reset_all(); declare_test_vars();
         set_input_text("glVer");
 
         editor_completion_update();
@@ -74,7 +75,7 @@ int main() {
      * The matcher should treat the RHS as the completion prefix so
      * `x = glVer` finishes the same way as a bare `glVer`. */
     {
-        repl_reset_state(); declare_test_vars();
+        glr_app_reset_all(); declare_test_vars();
         set_input_text("x = glVer");
 
         editor_completion_update();
@@ -91,12 +92,12 @@ int main() {
     /* 1c. Assignment via array index (A[0] = ...) and multi-token
      * declaration prefix (float x = ...). */
     {
-        repl_reset_state(); declare_test_vars();
+        glr_app_reset_all(); declare_test_vars();
         set_input_text("A[0] = sin");
         editor_completion_update();
         ASSERT_TRUE("array-assign matches", g_ac_count > 0);
 
-        repl_reset_state(); declare_test_vars();
+        glr_app_reset_all(); declare_test_vars();
         set_input_text("float n = cos");
         editor_completion_update();
         ASSERT_TRUE("float-decl-assign matches", g_ac_count > 0);
@@ -106,7 +107,7 @@ int main() {
      * must not skip past their `=` and treat the RHS as a completion
      * prefix (which would surface bogus matches mid-comparison). */
     {
-        repl_reset_state(); declare_test_vars();
+        glr_app_reset_all(); declare_test_vars();
         set_input_text("if(x == glVer");
         editor_completion_update();
         /* `glVer` should not match here — the leading `if(x == ` is
@@ -117,7 +118,7 @@ int main() {
 
     /* 2. Enum completion - glBegin */
     {
-        repl_reset_state(); declare_test_vars();
+        glr_app_reset_all(); declare_test_vars();
         set_input_text("glBegin(GL_TRI");
 
         editor_completion_update();
@@ -131,7 +132,7 @@ int main() {
 
     /* 3. Multi-argument enum completion - glColorMaterial */
     {
-        repl_reset_state(); declare_test_vars();
+        glr_app_reset_all(); declare_test_vars();
         set_input_text("glColorMaterial(GL_FR");
 
         editor_completion_update();
@@ -154,7 +155,7 @@ int main() {
 
     /* 4. glPointParameterfv custom completion */
     {
-        repl_reset_state(); declare_test_vars();
+        glr_app_reset_all(); declare_test_vars();
         set_input_text("glPointParameterfv(GL_POINT_DIST");
 
         editor_completion_update();
@@ -166,7 +167,7 @@ int main() {
 
     /* 5. User-defined function completion */
     {
-        repl_reset_state(); declare_test_vars();
+        glr_app_reset_all(); declare_test_vars();
         repl_feed_line_public("func0(radius, height) {");
         repl_feed_line_public("}");
 
@@ -182,7 +183,7 @@ int main() {
 
     /* 6. Statement keyword completion - float declarations */
     {
-        repl_reset_state(); declare_test_vars();
+        glr_app_reset_all(); declare_test_vars();
         set_input_text("flo");
 
         editor_completion_update();
@@ -202,7 +203,7 @@ int main() {
             char call_text[16];
             char label[64];
 
-            repl_reset_state(); declare_test_vars();
+            glr_app_reset_all(); declare_test_vars();
             snprintf(prefix, sizeof(prefix), "func%d", fn);
             snprintf(def_text, sizeof(def_text), "func%d() {", fn);
             snprintf(call_text, sizeof(call_text), "func%d()", fn);
@@ -219,7 +220,7 @@ int main() {
 
     /* 8. Scratch-array completions */
     {
-        repl_reset_state(); declare_test_vars();
+        glr_app_reset_all(); declare_test_vars();
         set_input_text("A");
 
         editor_completion_update();
