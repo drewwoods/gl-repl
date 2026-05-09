@@ -135,8 +135,9 @@ TEAPOT_DEMO_DEP_SRCS = $(SCENE_SRCS) prof.c
 # (src/editor/input.c), the controller (glr_ctrl.c + glr_ctrl_router_*),
 # or the UI (src/ui/*, replay_ui_hud.c)). Per-line text canonically lives
 # on src/editor/state.c's ReplEditorBuffer, so that TU stays in the link
-# set by design. Stubs for the editor/UI/peer reset entry points
-# repl_state_reset_all() reaches for live in tools/repl_demo/stubs.c.
+# set by design. The remaining REPL pipeline → editor/UI/peer/glr_config
+# couplings are still resolved via tools/repl_demo/stubs.c; the dependency
+# ledger and removal plan live in feature/decouple-repl-from-gl-repl-alt.md.
 REPL_DEMO_DEP_SRCS = repl_core.c repl_state.c repl_parser.c \
                      repl_command_spec.c repl_command_store.c \
                      repl_compile.c repl_apply.c repl_flatten.c \

@@ -231,8 +231,11 @@ void repl_bench_fade_clear(void);
 int  feed_line(const char *line);
 /* Defined in src/editor/input.c. Drops camera/menu/picker/code-panel-drag
  * transient state in addition to the editor commit transients; called from
- * repl_state_reset_all() and the example loader so a state reset returns the
- * editor to a clean idle posture. */
+ * glr_app_reset_all() and from controller paths that switch examples /
+ * scenes (cycle_example_or_user_scene in glr_ctrl.c, the GLR_MENU_SCENE
+ * activation in glr_actions.c) so the editor returns to a clean idle
+ * posture. Step 2 of feature/decouple-repl-from-gl-repl-alt.md moved
+ * the call out of repl_example_loader.c. */
 void repl_editor_reset_transients(void);
 void repl_load_example_lines_for_test(const char *const *lines);
 

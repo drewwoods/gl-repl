@@ -1322,6 +1322,18 @@ void glr_app_reset_all(void) {
      * repl_autocomplete; the registration here installs the
      * REPL-aware backing. */
     repl_autocomplete_register_provider();
+    /* Refresh derived export/camera text caches AFTER peer resets
+     * so the cached strings reflect post-reset state, not whatever
+     * was on the peers before this call. These read app-side cfg /
+     * camera state, so they cannot live on the REPL-side reset
+     * (would pull glr_config / glr_camera into the demo link set
+     * AND would pre-fire before peers were reset).
+     * The frame loop refreshes them every frame in build_ui_snapshot
+     * + display, so tests that go through glr_app_reset_all see
+     * coherent caches without waiting for a frame. */
+    repl_state_refresh_workspace_header_lines();
+    update_render_state_strings();
+    update_cam_lines();
     glr_ctrl_sync_ui_chrome();
 }
 
