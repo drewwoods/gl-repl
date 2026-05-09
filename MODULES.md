@@ -159,6 +159,30 @@ under `tests/support/`, no-op GL headers under
 `prof.c` is utility-like but compiled, so it stays as a root-level
 source-backed module.
 
+## Standalone Demo Binaries (Layer Independence Proofs)
+
+Two binaries under `tools/` build with deliberately slim object lists
+to make the layer boundaries observable:
+
+- **`make teapot_demo`** (`tools/teapot_demo/teapot.c`) — drives
+  `src/scene/` with a non-REPL geometry callback. Proves `scene_*`
+  has no hard dependency on the REPL editor / controller / UI.
+- **`make repl_demo`** (`tools/repl_demo/repl_demo.c`) — drives the
+  REPL pipeline (parse → command store → flatten → execute) from
+  static text. Proves the REPL pipeline has no hard dependency on
+  editor input dispatch (`src/editor/input.c`), the controller
+  (`glr_ctrl.c`), or the UI (`src/ui/`, `replay_ui_hud.c`). Per-line
+  text canonically lives on `src/editor/state.c`'s `ReplEditorBuffer`,
+  so that one editor TU is in the link set by design. The
+  `tools/repl_demo/stubs.c` file is the visible record of what the
+  REPL pipeline pulls in beyond pure pipeline code; if it grows past
+  ~15 entries the chokepoint deserves a structural split rather than
+  more stubs.
+
+Both demos default to `USE_GL_STUBS=1`-friendly object lists. Run
+`./repl_demo` for a parse/flatten summary of the built-in samples;
+`./repl_demo --execute` also runs the flat program against GL stubs.
+
 ## Naming Conventions
 
 | Prefix | Owns |
