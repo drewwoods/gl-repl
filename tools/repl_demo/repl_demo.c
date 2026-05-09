@@ -40,6 +40,8 @@
 #include "repl_state_owners.h"
 #include "editor/state.h"         /* editor_buffer_view, editor_buffer_set_line */
 
+#include <gl_includes.h>          /* GLUT bootstrap for --render mode */
+
 #include <stdio.h>
 #include <string.h>
 
@@ -268,14 +270,179 @@ static void execute_against_stubs(void) {
     printf("  executed %d flat cmd(s) against GL stubs\n", opts.flat_cmd_count);
 }
 
+/* --- Render mode (--render flag) -------------------------------------- *
+ *
+ * Drives the REPL pipeline against a real GL context. Same parse +
+ * flatten + execute path as the headless mode; the only added surface
+ * is the GLUT bootstrap (window, callbacks) and a fixed orbit camera.
+ * The negative-isolation contract still holds: `nm repl_demo` shows
+ * zero editor / glr_ctrl / ui_* / replay_ui_ symbols.
+ *
+ * Keys:  1 / 2 / 3  switch sample
+ *        space      pause/resume animation (sample 3)
+ *        Esc / q    quit
+ *
+ * Build:  make repl_demo                  (real GL, --render works)
+ *         make repl_demo USE_GL_STUBS=1   (headless, --render is a no-op)
+ */
+
+#ifndef OPENGL_VIBE_USE_GL_STUBS
+
+#define DEMO_WINDOW_W 800
+#define DEMO_WINDOW_H 600
+
+static int   g_render_sample = 1;     /* 1, 2, 3 */
+static float g_render_t      = 0.0f;
+static int   g_render_paused = 0;
+
+/* Load whichever sample is currently selected into REPL state. */
+static void render_load_current_sample(void) {
+    repl_state_init_defaults();
+    switch (g_render_sample) {
+    case 1:
+        load_text_lines(SAMPLE_TRIANGLE);
+        break;
+    case 2:
+        seed_for_loop_program();
+        break;
+    case 3:
+        seed_variable_driven_program();
+        break;
+    default:
+        break;
+    }
+    repl_state_mark_flat_dirty();
+}
+
+static void render_apply_camera(void) {
+    glMatrixMode(GL_PROJECTION);
+    glLoadIdentity();
+    gluPerspective(45.0, (double)DEMO_WINDOW_W / (double)DEMO_WINDOW_H, 0.1, 50.0);
+    glMatrixMode(GL_MODELVIEW);
+    glLoadIdentity();
+    /* Fixed orbit camera: eye 4 units back and 3 up, looking at origin. */
+    gluLookAt(0.0, 3.0, 4.0,   /* eye */
+              0.0, 0.0, 0.0,   /* center */
+              0.0, 1.0, 0.0);  /* up */
+}
+
+static void render_display_func(void) {
+    glClearColor(0.10f, 0.10f, 0.13f, 1.0f);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    render_apply_camera();
+
+    /* Sample 2 / 3 emit isolated vertices (no glBegin/glEnd in the
+     * source). Wrap them so the points actually rasterize. Sample 1
+     * has its own glBegin/glEnd. */
+    if (g_render_sample != 1) {
+        glPointSize(8.0f);
+        glColor3f(0.95f, 0.85f, 0.20f);
+        glBegin(GL_POINTS);
+    }
+
+    /* For sample 3, push the live `t` into the predef table so the
+     * has_vars re-evaluation sees the animated value. */
+    if (g_render_sample == 3) {
+        int t_idx = repl_eval_find_predef_var_idx("t");
+        if (t_idx >= 0)
+            g_predef_vars[t_idx].value = g_render_t;
+        repl_state_mark_flat_dirty();
+    }
+    repl_flatten_commands();
+
+    ReplExecutionOptions opts = {
+        .flat_cmd_count = repl_state_flat_program_count(),
+        .program        = repl_state_flat_program_view(),
+        .text           = editor_buffer_view(),
+    };
+    repl_execute_program(&opts);
+
+    if (g_render_sample != 1)
+        glEnd();
+
+    glutSwapBuffers();
+}
+
+static void render_reshape_func(int w, int h) {
+    glViewport(0, 0, w, h);
+    /* Keep the perspective math simple: ignore the new size and use the
+     * compile-time aspect. The minimal demo doesn't need responsive
+     * layout. */
+    glutPostRedisplay();
+}
+
+static void render_idle_func(void) {
+    if (!g_render_paused && g_render_sample == 3)
+        g_render_t += 0.016f;
+    glutPostRedisplay();
+}
+
+static void render_keyboard_func(unsigned char key, int x, int y) {
+    (void)x; (void)y;
+    switch (key) {
+    case 27: case 'q': case 'Q':
+        exit(0);
+    case '1': case '2': case '3':
+        g_render_sample = key - '0';
+        render_load_current_sample();
+        printf("[render] sample = %d\n", g_render_sample);
+        break;
+    case ' ':
+        g_render_paused = !g_render_paused;
+        printf("[render] %s\n", g_render_paused ? "paused" : "resumed");
+        break;
+    default:
+        return;
+    }
+    glutPostRedisplay();
+}
+
+static int run_render_mode(int argc, char **argv) {
+    glutInit(&argc, argv);
+    glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGB | GLUT_DEPTH);
+    glutInitWindowSize(DEMO_WINDOW_W, DEMO_WINDOW_H);
+    glutCreateWindow("repl_demo (real GL)");
+
+    glEnable(GL_DEPTH_TEST);
+
+    render_load_current_sample();
+
+    glutDisplayFunc(render_display_func);
+    glutReshapeFunc(render_reshape_func);
+    glutIdleFunc(render_idle_func);
+    glutKeyboardFunc(render_keyboard_func);
+
+    printf("[render] keys: 1/2/3 switch sample, space pause, q/Esc quit\n");
+    glutMainLoop();
+    return 0;
+}
+
+#else  /* OPENGL_VIBE_USE_GL_STUBS */
+
+static int run_render_mode(int argc, char **argv) {
+    (void)argc; (void)argv;
+    fprintf(stderr,
+        "repl_demo: --render needs a real GL build. Rebuild without\n"
+        "  USE_GL_STUBS=1 (i.e. `make repl_demo`) and try again.\n");
+    return 1;
+}
+
+#endif /* OPENGL_VIBE_USE_GL_STUBS */
+
 /* --- Main ------------------------------------------------------------- */
 
 int main(int argc, char **argv) {
     int run_execute = 0;
+    int run_render  = 0;
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "--execute") == 0)
             run_execute = 1;
+        else if (strcmp(argv[i], "--render") == 0)
+            run_render = 1;
     }
+
+    if (run_render)
+        return run_render_mode(argc, argv);
 
     printf("=== sample 1: plain commands ===\n");
     int loaded = load_text_lines(SAMPLE_TRIANGLE);

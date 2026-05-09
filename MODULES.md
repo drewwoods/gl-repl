@@ -182,6 +182,11 @@ to make the layer boundaries observable:
 Both demos default to `USE_GL_STUBS=1`-friendly object lists. Run
 `./repl_demo` for a parse/flatten summary of the built-in samples;
 `./repl_demo --execute` also runs the flat program against GL stubs.
+Build with real GL (`make repl_demo`) and run `./repl_demo --render`
+for an actual GLUT window — `1`/`2`/`3` cycle samples, space pauses
+the sample-3 animation, `q`/Esc quits. Render mode shares the
+parse/flatten/execute path with the headless mode; the only added
+surface is GLUT bootstrap and a fixed orbit camera.
 
 ## Naming Conventions
 
