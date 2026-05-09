@@ -40,9 +40,9 @@
  *                                   single rows; UNDECLAREs decl
  *                                   rows being commented out
  *
- * Cross-file helper: repl_compile_dispatch() lives in
- * editor_services.c and runs the float-decl + var-assign chain;
- * the uncomment path calls it as a fallback.
+ * Dispatcher: repl_compile_dispatch() walks the float-decl +
+ * var-assign chain and is callable from outside the editor. The
+ * uncomment path calls it as a fallback.
  */
 
 #include "repl_compile.h"
@@ -56,13 +56,34 @@
 #include <stdio.h>
 #include <string.h>
 
-/* Forward decl. Body lives in editor_services.c. The dispatch
- * function is grammar-side; its current location is a historical
- * artifact and should migrate to repl_compile.c in a follow-up. */
 ReplCompileResult repl_compile_dispatch(const char *text,
                                         const ReplCompileContext *ctx,
                                         ReplCompiledChange *out,
-                                        char *err, int err_size);
+                                        char *err, int err_size) {
+    if (!out || !ctx) return REPL_COMPILE_ERROR;
+
+    /* Float decl first: `float x;` would otherwise parse as an
+     * assignment to identifier `float`. */
+    ReplCompileResult r = repl_compile_float_decl(text, ctx, out,
+                                                  err, err_size);
+    if (r == REPL_COMPILE_ERROR) return r;
+    if (out->kind != REPL_COMPILED_NO_CHANGE) return REPL_COMPILE_OK;
+
+    /* Var assignment: `x = expr;`. */
+    r = repl_compile_var_assign(text, ctx, out, err, err_size);
+    if (r == REPL_COMPILE_ERROR) return r;
+    if (out->kind != REPL_COMPILED_NO_CHANGE) return REPL_COMPILE_OK;
+
+    /* Structured-block syntax (close_brace / if_block / func_def /
+     * for_loop) is currently routed through the editor-side
+     * `editor_compile_*` chain. Step 5a of the decouple plan extracts
+     * pure variants into this module; until then this dispatcher
+     * returns NO_CHANGE for those inputs and the caller falls
+     * through. */
+
+    out->kind = REPL_COMPILED_NO_CHANGE;
+    return REPL_COMPILE_OK;
+}
 
 void repl_compiled_change_init(ReplCompiledChange *out) {
     if (!out) return;
