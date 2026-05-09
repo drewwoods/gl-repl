@@ -95,19 +95,24 @@ Test sources live under `tests/` and shared test-only helpers live under
 | File | Responsibility |
 |------|----------------|
 | `sample.c` | GLUT callback registration, `main()`, window setup, buffer swap; forwards directly to `glr_ctrl_*` |
-| `sample.h` | Shared types (`GLCmd`, `CmdType`, `SceneLight`), defaults, stateless helpers, compatibility includes |
+| `sample.h` | Minimal legacy header: standard includes and `M_PI`; types/defaults moved out to dedicated headers |
 | `glr_ctrl.c` | App-frame controller: `glr_ctrl_display_frame`, `glr_ctrl_reshape`, `glr_ctrl_init_gl`; builds `SceneRenderConfig`, calls scene/UI renderers |
 | `glr_ctrl.h` | Controller public surface: display, reshape, init-GL entrypoints |
 | `glr_config.c` | Config key implementation and descriptor table helpers |
 | `glr_config.h` | `ReplConfigKey` / `ReplConfigItem` descriptor API for keyed config access |
+| `repl_command.h` | Core command model types: `CmdType` enum, `GLCmd` struct (pure parse-result: type, args, flags, provenance — no `source[]` field) |
+| `repl_compile.c` | Pure source-text validators that produce `ReplCompiledChange` descriptors; never mutates state |
+| `repl_compile.h` | `ReplCompiledChange`, `ReplCompileResult`, `ReplCompileContext`, compile entry points |
+| `repl_apply.c` | Applies a `ReplCompiledChange` to `ReplState` command arrays |
+| `repl_apply.h` | Apply public API (`repl_apply_compiled_change`, `repl_apply_predef_ops`) |
 | `repl_core.c` | Normalization pipeline (`repl_parse_and_normalize*`), reformatter, startup helpers |
-| `repl_parser.c` | REPL source-line parser, expression validation, canonical line text emission via `ReplParsedLine.text` (the per-line text lives in `ReplEditorBuffer.lines[]`, not on `GLCmd`) |
-| `repl_parser.h` | Parser entrypoints (`repl_parser_parse_command*`, `repl_parser_parse_command_ctx`) and `ReplParseContext` |
+| `repl_parser.c` | REPL source-line parser, expression validation, canonical line text emission via `ReplParsedLine.text` (the per-line text lives in `EditorState`'s editor buffer, not on `GLCmd`) |
+| `repl_parser.h` | Parser entrypoints (`repl_parser_parse_command*`, `repl_parser_parse_command_ctx`), `ReplParseContext`, `ReplParsedLine` |
 | `repl_source_scope.c` | Source prefix-depth cache, indentation helpers, block lookup |
 | `repl_source_scope.h` | Source-scope query API (`repl_source_scope_block_depth_at`, `repl_source_scope_find_block_end`, indent helpers) |
 | `repl_command_spec.c` | Command type metadata and specifications (parsing, formatting, completion requirements) |
 | `repl_command_spec.h` | Command spec query API |
-| `repl_command_store.c` | Source-command array mutations: insert, delete, replace, bulk-load |
+| `repl_command_store.c` | Low-level `GLCmd` array mechanics: insert, delete, replace, bulk-load (no text-buffer writes) |
 | `repl_command_store.h` | Command-store public API (`repl_command_store_insert_one`, etc.) |
 | `repl_core.h` | Public API (parse, flatten, user scene + workspace); GLUT input-dispatch declarations |
 | `repl_core_internal.h` | Test-visible internals (normalize/commit pipeline, `feed_line`, `load_line_to_input`, `repl_promote_example_if_needed`) |
@@ -115,17 +120,27 @@ Test sources live under `tests/` and shared test-only helpers live under
 | `repl_state.h` | Typed runtime-state facade, reset helpers, and focused accessors over the live REPL state |
 | `repl_state_views.h` | Read-only (by-value) state getters; safe to include from `scene_*` and `ui_*` |
 | `repl_state_owners.h` | Mutable `_mut()` accessors; owner modules and controller only |
-| `src/editor/input.c` | GLUT-callback dispatch (`editor_handle_key/special/mouse/motion/passive_motion/mousewheel`), 19 keyboard route helpers + 9 special route helpers, router stubs for non-editor concerns, commit orchestration, `feed_line` |
-| `src/editor/input.h` | Editor input dispatch entry points + `editor_input_router_*` router stubs + `ReplInputDispatchEffects` typedef + `editor_input_active_modifiers` test seam |
-| `repl_keys.h` | ASCII and control-key code constants (Ctrl+A=1 … Ctrl+Z=26, F-key names) |
+| `src/editor/input.c` | Editor's text-document controller: keyboard/mouse dispatch, cursor/scroll/selection/search/autocomplete navigation, clipboard, undo, commit orchestration, `feed_line`. Non-editor routing (replay, audio, config, save, camera) lives in `glr_ctrl.c` |
+| `src/editor/input.h` | Editor input dispatch entry points + `ReplInputDispatchEffects` typedef + `editor_input_active_modifiers` test seam |
+| `src/editor/commit.c` | Editor-side commit transaction boundary: compile via `repl_compile`, undo snapshot, text-buffer write, REPL apply, dirty-state updates |
+| `src/editor/commit.h` | Commit orchestration API (`editor_commit_apply_external_change`, `try_commit_*` helpers) |
+| `src/editor/state.c` | Owns `EditorState`: editor buffer, cursor, selection, search, autocomplete, scroll, undo/redo, transformers, highlights, virtual lines |
+| `src/editor/state.h` | `EditorState` typed facade, `EditorBufferView`, `editor_state_input/search/autocomplete` accessors |
+| `src/editor/services.c` | Default `EditorServices` bound to live REPL (compile/apply seam used by commit code) |
+| `src/editor/services.h` | `EditorServices` dispatch table for REPL semantics |
+| `src/editor/limits.h` | Shared editor input and autocomplete capacity constants |
+| `keys.h` | ASCII and control-key code constants (Ctrl+A=1 … Ctrl+Z=26, F-key names) |
 | `src/editor/clipboard.c` | Line selection anchors, command clipboard buffer, copy/cut/paste behavior |
 | `src/editor/clipboard.h` | Clipboard public API |
 | `src/editor/undo.c` | Undo/redo snapshots, history rings, example auto-promote hook before mutation |
 | `src/editor/undo.h` | Undo public API (`editor_undo_push_snapshot`, `editor_undo_pop_snapshot`, `editor_undo_do_redo`) |
 | `glr_camera.c` | Scene camera pointer state, orbit/pan/zoom drags, wheel zoom velocity, momentum tick |
 | `glr_camera.h` | Camera state + setters (`glr_camera`, `glr_camera_set_*`, `glr_camera_controls_reset`) |
-| `glr_actions.c` | Config descriptor table, config shortcuts, menu actions, startup config defaults |
-| `glr_actions.h` | Actions public API (`glr_action_menu_item_activate`, cursor-pixel setter, etc.) |
+| `glr_actions.c` | Config descriptor table, config shortcuts, menu actions |
+| `glr_actions.h` | Actions public API (`glr_action_menu_item_activate`, etc.) |
+| `config.h` | Project-wide compile-time configuration constants |
+| `glr_defaults.h` | Controller-side scene/presentation defaults (`CFG_DEFAULT_*` macros) |
+| `outline_offset.h` | Polygon-offset depth-bias constants for the outline-pass rendering |
 | `src/ui/code_panel_layout.c` | Pure code-panel wrapping, row counts, segment lookup, cursor-row mapping |
 | `src/ui/code_panel_layout.h` | `CodePanelTextLayout` / `CodePanelWrapIter` API shared by UI, export dumps, tests |
 | `src/editor/code_panel_document.c` | Code-panel document row model, scroll-follow calculation, hit-test targets |
@@ -185,6 +200,9 @@ Test sources live under `tests/` and shared test-only helpers live under
 | `repl_examples.h` | Example query API (`repl_examples_count/name/lines`) |
 | `repl_export.c` | `repl_export_save_output` / `repl_export_load_from_file`, workspace header directives, `@scene-name` / `@workspace-dir` markers |
 | `repl_export.h` | Export/import public API and workspace-header pending-state types |
+| `repl_export_state.h` | Shared dimensions for import/export state text |
+| `audio.c` | App-level playlist engine and persisted audio config |
+| `audio.h` | Audio playback API |
 | `prof.c` | CPU wall-time profiling instrumentation (per-section accumulators, frame tick) |
 | `prof.h` | Profiling API (`prof_begin`, `prof_end`, `prof_frame_tick`, etc.); no UI dependency |
 | `src/scene/render_types.h` | Shared `SceneRgba` / `SceneRenderConfig` / `FrameRenderContext` types for scene helpers |
@@ -206,8 +224,10 @@ Test sources live under `tests/` and shared test-only helpers live under
 | `src/scene/lights.h` | Scene light setup/render entrypoints |
 | `src/scene/overlays.c` | Tiny per-vertex GL primitives the controller calls (vertex-number labels, normal arrows). Outline / vertex-point passes moved to `glr_ctrl.c` |
 | `src/scene/overlays.h` | Scene overlay primitive API |
-| `src/ui/panels.c` | Code-panel row rendering (incl. inline ghost/hint text), scene status banner, top-level panel hit routing |
-| `src/ui/panels.h` | Code-panel geometry, render, hit-test, and panel input bridge declarations |
+| `src/ui/state.c` | Owns `UiState`: viewport, pointer, status text TTL, panel visibility, panel-divider geometry |
+| `src/ui/hit.h` | `UiHitKind` + `UiHit` — neutral hit-test result returned by UI input handlers to `glr_ctrl` |
+| `src/ui/panels.c` | Code-panel row rendering (incl. inline ghost/hint text), scene status banner, hit-test (returns `UiHit`) |
+| `src/ui/panels.h` | Code-panel geometry, render, and hit-test declarations |
 | `repl_eval.c` | Expression evaluator (recursive descent), REPL<->C translators, for-loop parsers |
 | `repl_eval.h` | Evaluator types (`ExprVar`, `ExprCtx`), function declarations |
 | `cmd_format.c` | Pure indentation/depth computation (no GL dependency) |
@@ -220,12 +240,17 @@ Test sources live under `tests/` and shared test-only helpers live under
 ## Conventions
 
 - File-private statics use `g_` prefix (e.g., `g_cfg_items[]`, `g_user_scenes[]`).
-  Runtime state that crosses module boundaries is accessed through the typed
-  facade in `repl_state.h` (e.g., `repl_state_render()`, `repl_state_search()`).
-- Static helpers are file-scoped; public API goes through `repl_core.h`
-- Prefixes express ownership. Use `repl_*` for REPL language/editor/source/
-  replay model modules, `glr_*` for app shell/controller/app-service code,
-  `scene_*` for 3D rendering, `ui_*` for 2D editor/view rendering, and neutral
+  Runtime state that crosses module boundaries is accessed through typed
+  facades: `repl_state.h` for REPL program state (e.g., `repl_state_render()`,
+  `repl_state_variables()`), `src/editor/state.h` for editor session state
+  (e.g., `editor_state_input()`, `editor_state_search()`), and peer-subsystem
+  accessors for replay (`replay_state_view()`) and variable panel
+  (`variable_panel_state_view()`).
+- Static helpers are file-scoped; public API goes through module headers
+- Prefixes express ownership. Use `repl_*` for REPL language/source/program
+  model modules, `editor_*` for text-document model/controller (under
+  `src/editor/`), `glr_*` for app shell/controller/app-service code,
+  `scene_*` for 3D rendering, `ui_*` for 2D view rendering, and neutral
   names such as `prof` for generic utilities. `audio.c` is the neutrally-named
   app-level service; whether it gets a `glr_audio` rename is part of the open
   namespace audit. Don't introduce new top-level prefixes without a plan.
@@ -251,7 +276,7 @@ Test sources live under `tests/` and shared test-only helpers live under
   called at the top of `glr_ctrl_keyboard` so every downstream
   dispatcher sees Cmd+B identically to Ctrl+B.
 - Expression variables: `ExprVar` struct in `repl_eval.h`, predefined set
-  accessible via `repl_state_variables()` and managed by `declare_predef_var()`
+  accessible via `repl_state_variables()` and managed by `repl_eval_declare_predef_var()`
 
 ## Architecture
 
@@ -288,8 +313,8 @@ The core data flow is **source commands → flat commands → GL calls**:
 - **Source array** (`repl_state_document_cmds()`, count via
   `repl_state_document_count()`) — each `GLCmd` holds parsed type/args
   and flags (`has_vars`, `valid`, `is_auto`). Per-line canonical text is
-  *not* on `GLCmd`; it lives in `ReplEditorBuffer.lines[][]` and is the
-  editor's writable model. Edited directly by the user via the code panel.
+  *not* on `GLCmd`; it lives in `EditorState`'s editor buffer (accessed via
+  `editor_buffer_view_line()`) and is the editor's writable model.
 - **Flat array** (`repl_state_flat_cmds()`) — expanded copy. For-loops are
   unrolled, function calls are inlined, if-blocks are resolved.
   Each flat cmd records `src_cmd_idx` (owning source line),
@@ -300,10 +325,10 @@ The core data flow is **source commands → flat commands → GL calls**:
 
 ### Command Lifecycle
 
-1. **Input** — user types into the input buffer (`repl_state_editor_input()->input`,
+1. **Input** — user types into the input buffer (`editor_state_input().input`,
    max 1024 chars)
 2. **Commit** — pressing `;` calls the commit dispatch chain in
-   `keyboard_func()` in `src/editor/input.c`. There are TWO distinct paths:
+   `editor_handle_key()` in `src/editor/input.c`. There are TWO distinct paths:
    - **Interactive `;` key** (`src/editor/input.c`, `key == ';'` block):
      the input buffer does NOT include the `;` — the keystroke triggers the
      commit but is not appended. Commit handlers must accept input
@@ -329,7 +354,7 @@ The core data flow is **source commands → flat commands → GL calls**:
 3. **Parse** — `parse_command()` in `repl_parser.c` matches the line to a
    `CmdType`, evaluates argument expressions via `eval_expr()`, stores
    result in `GLCmd.args[]`. Per-line canonical text lives in
-   `ReplEditorBuffer.lines[]` (not on `GLCmd`); the parser returns it as
+   `EditorState`'s editor buffer (not on `GLCmd`); the parser returns it as
    `ReplParsedLine.text` for the commit path to write into the editor
    buffer. Internal call sites pass `ReplParseContext.source_line_idx`
    instead of temporarily changing the edit-line cursor.
@@ -353,7 +378,7 @@ The `try_commit_*` handler chain is consolidated into four helpers in
   overwrite-mode Enter key, which must flip to insert mode on success
 
 Dispatch sites then call these helpers instead of open-coding the chain:
-1. **`;` key handler** — `key == ';'` block in `keyboard_func()` calls
+1. **`;` key handler** — `key == ';'` block in `editor_handle_key()` calls
    `try_commit_any()`
 2. **Enter key, insert mode** — calls `try_commit_var_statements()` and
    `try_commit_block_structs()` to maintain the insert-mode behavior
@@ -393,27 +418,27 @@ Key details:
   locals are visible at block depth 0.
 - `CMD_VAR_DECLARE` is a no-op in `repl_execute_program()` and
   `flatten_range()` — registration into the predefined-variable table happens at
-  commit time via `declare_predef_var()`
+  commit time via `repl_eval_declare_predef_var()`
 - `GLCmd` fields: `var_names[MAX_NAMES_PER_DECL][16]`, `var_decl_count`
 - Editing an existing `CMD_VAR_DECLARE` line works: the overwrite
   detection runs before the "already declared" validation loop, and
   names carried over from the old decl are exempted from the duplicate
   check (they get undeclared before the new registration runs).
-- `delete_cmd_range()` guards against deleting a declaration whose
-  variable is still referenced outside the deleted range (uses
-  `repl_eval_source_uses_ident()` against every line not in the range).
-  Deleting a decl together with all its uses is allowed; deleting an
-  unreferenced decl by itself is allowed. Cut/copy/paste of decl rows
-  remain blocked outright (clipboard semantics — see commit 72be1dd).
+- Deleting a declaration range goes through `repl_compile_delete_range()`,
+  which validates that no variable in the range is still referenced
+  outside it (uses `repl_eval_source_uses_ident()`). Deleting a decl
+  together with all its uses is allowed; deleting an unreferenced decl
+  by itself is allowed. Cut/copy/paste of decl rows remain blocked
+  outright (clipboard semantics — see commit 72be1dd).
 - C export writes `// @declare name` markers; import via
   `import_parse_declare_marker()` in `repl_export.c` reconstructs
   the `CMD_VAR_DECLARE` commands, bypassing `try_commit_float_decl`
 - `repl_examples.c` has multi-name declarations (e.g. `"float n, x, y, z, j, k;"`)
   — if simplifying to single-name, these must be split into separate lines
-- Related helpers in `repl_eval.c`: `declare_predef_var()`,
-  `undeclare_predef_var()`, `find_predef_var_idx()`,
-  `is_reserved_ident()`, `source_uses_ident()`,
-  `validate_expression_idents()`
+- Related helpers in `repl_eval.c`: `repl_eval_declare_predef_var()`,
+  `repl_eval_undeclare_predef_var()`, `repl_eval_find_predef_var_idx()`,
+  `repl_eval_is_reserved_ident()`, `repl_eval_source_uses_ident()`,
+  `repl_eval_validate_expression_idents()`
 
 ### User Scenes & Auto-Promotion
 
@@ -484,11 +509,11 @@ comments.
   presentation state.
 
 The single source of truth for example-owned presentation defaults is
-the `CFG_DEFAULT_*` macro block in `sample.h`. Initializers, example
+the `CFG_DEFAULT_*` macro block in `glr_defaults.h`. Initializers, example
 reset helpers, and tests reuse those macros instead of duplicating
 literals. `make test_repl_core_examples` is the focused regression
 suite; touch `repl_core.c`, `repl_export.c`, `repl_examples.c`,
-`sample.h`, and `tests/test_repl_core_examples.c` together when
+`glr_defaults.h`, and `tests/test_repl_core_examples.c` together when
 changing example-metadata behavior.
 
 ### Save/Load (output.c)
@@ -514,7 +539,7 @@ changing example-metadata behavior.
 ### Replay System
 
 Step-by-step execution visualization in `replay.c`:
-- `ReplReplayRuntimeState` (via `repl_state_replay()`) tracks state
+- `ReplReplayRuntimeState` (via `replay_state_view()`) tracks state
   (OFF/PLAYING/PAUSED/DONE), program counter, and speed multiplier
 - During playback, the flat command count is clamped to `replay_exec_limit()`
   so only commands up to the PC render
@@ -538,9 +563,9 @@ Circular snapshot buffers in `src/editor/undo.c`:
 ### Autocomplete
 
 Symbol matching and function parameter hints in `repl_autocomplete.c` (registered as the editor's `EditorCompletionProvider`):
-- `repl_state_autocomplete()->matches` — matched completions from GL command/constant tables
-- `repl_state_autocomplete()->ghost` — suffix to append to input on Tab accept
-- `repl_state_autocomplete()->hint` — parameter list hint shown below cursor
+- `editor_state_autocomplete()->matches` — matched completions from GL command/constant tables
+- `editor_state_autocomplete()->ghost` — suffix to append to input on Tab accept
+- `editor_state_autocomplete()->hint` — parameter list hint shown below cursor
 - Modes: `AC_MODE_FUNC_PREFIX` (after `foo(` → param hints),
   `AC_MODE_ENUM_ARG1/2` (GL constant completion),
   `AC_MODE_POINT_PARAM` (3D point coordinates)
@@ -548,7 +573,7 @@ Symbol matching and function parameter hints in `repl_autocomplete.c` (registere
 ### Search
 
 Case-insensitive text search in `src/editor/search.c`:
-- Activated by Ctrl+F; query and state accessed via `repl_state_search()`
+- Activated by Ctrl+F; query and state accessed via `editor_state_search()`
 - `repl_search_find_next_in_text()` finds substring matches across
   all visible lines (header, user code, footer)
 - `hit_line_idx`/`hit_char_idx` in `ReplSearchState` track current match position

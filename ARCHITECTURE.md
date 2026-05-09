@@ -420,8 +420,9 @@ After controller extraction, ordinary `repl_*` model files should not include
 `scene_*.h`. `glr_ctrl.c` is the scene/UI frame-rendering exception.
 `check-controller-boundaries` enforces this; cross-layer constants used by
 both layers (e.g. `CFG_DEFAULT_MULTISAMPLE`, `REPL_OUTLINE_POLYGON_OFFSET_*`)
-live in neutral headers (`repl_presentation.h`, `src/scene/render_types.h`)
-that both sides include via existing transitive paths.
+live in neutral headers (`glr_defaults.h`, `outline_offset.h`,
+`src/scene/render_types.h`) that both sides include via existing transitive
+paths.
 
 Remaining `ui_*` include exceptions: `repl_actions.c` and `repl_export.c`.
 The `repl_editor.c` exception is gone — that file is deleted (Phase J1).
@@ -465,8 +466,8 @@ or project-wide `include/` only when broadly reusable.
 
 ## Where To Put New Code
 
-* New REPL syntax: `repl_parser.c`, `repl_command_spec.c`, `repl_commit.c`,
-  `repl_flatten.c`, and `repl_executor.c` as needed.
+* New REPL syntax: `repl_parser.c`, `repl_command_spec.c`, `repl_compile.c`,
+  `src/editor/commit.c`, `repl_flatten.c`, and `repl_executor.c` as needed.
 * New user-geometry execution behavior: `repl_executor.c`.
 * New 3D world decorator: `scene_*`.
 * New 3D REPL-aware overlay: current home is still `scene_*`, consuming
