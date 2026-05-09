@@ -987,13 +987,13 @@ int main() {
         assert_status_contains("commit unknown command: status", "Unknown cmd");
     }
 
-    /* 9. load_line_to_input - CMD_LABEL path */
+    /* 9. load_line_to_input - CMD_GOTO_LABEL path */
     {
         repl_reset_state();
-        /* Feed a label command to create a CMD_LABEL entry */
+        /* Feed a label command to create a CMD_GOTO_LABEL entry */
         repl_feed_line_public(":myloop");
         ASSERT_INT("label cmd created", repl_state_document_count(), 1);
-        ASSERT_INT("label cmd type", repl_state_document_cmds_mut()[0].type, CMD_LABEL);
+        ASSERT_INT("label cmd type", repl_state_document_cmds_mut()[0].type, CMD_GOTO_LABEL);
 
         /* Now load it back into input */
         load_line_to_input(0);

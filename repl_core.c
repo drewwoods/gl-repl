@@ -601,7 +601,7 @@ void repl_reformat_commands(void) {
             repl_core_replace_formatted_cmd(&store, cmd_idx, &fmt, fmt_text);
             break;
         }
-        case CMD_LABEL: {
+        case CMD_GOTO_LABEL: {
             char label[64] = "";
             if (repl_extract_label_name(orig_text, label, sizeof(label)))
                 snprintf(fmt_text, sizeof(fmt_text), "%s:", label);

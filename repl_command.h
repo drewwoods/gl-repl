@@ -14,7 +14,7 @@
 #define MAX_LINE_LEN 256
 #endif
 
-/* Maximum format-string length for CMD_GLUT_BITMAP_STRING (excluding
+/* Maximum format-string length for CMD_LABEL (excluding
  * the surrounding quotes and trailing NUL). 64 fits ~5 short %f
  * substitutions plus surrounding text and stays well within the
  * MAX_LINE_LEN budget when the canonical line is rebuilt. */
@@ -22,7 +22,7 @@
 #define GLUT_BITMAP_FMT_MAX 64
 #endif
 
-/* Maximum number of %f substitution args for CMD_GLUT_BITMAP_STRING.
+/* Maximum number of %f substitution args for CMD_LABEL.
  * Position takes args[0..2], substitutions live in args[3..6]; the
  * 8-slot args[] cap is enforced both here and in the parser. */
 #ifndef GLUT_BITMAP_MAX_SUB_ARGS
@@ -54,7 +54,7 @@ typedef enum {
     CMD_VAR_ASSIGN,
     CMD_SCRATCH_ASSIGN,
     CMD_VAR_DECLARE,
-    CMD_LABEL, CMD_GOTO,
+    CMD_GOTO_LABEL, CMD_GOTO,
     CMD_GLUT_TORUS, CMD_GLUT_CUBE, CMD_GLUT_SPHERE, CMD_GLUT_TEAPOT, CMD_GLUT_CONE,
     CMD_TESS_BEGIN_POLYGON,
     CMD_TESS_BEGIN_CONTOUR,
@@ -70,7 +70,7 @@ typedef enum {
     CMD_CLEAR_COLOR,
     CMD_DEPTH_MASK,
     CMD_RASTER_POS3F,
-    CMD_GLUT_BITMAP_STRING,
+    CMD_LABEL,
     CMD_TYPE_COUNT
 } CmdType;
 
@@ -84,7 +84,7 @@ typedef struct {
     int      has_vars;              /* Source must be preserved/re-evaluated from text */
     char     var_names[MAX_NAMES_PER_DECL][16];
     int      var_decl_count;        /* Number of names in a CMD_VAR_DECLARE line */
-    char     text[GLUT_BITMAP_FMT_MAX]; /* Format string for CMD_GLUT_BITMAP_STRING (no quotes) */
+    char     text[GLUT_BITMAP_FMT_MAX]; /* Format string for CMD_LABEL (no quotes) */
     int      src_cmd_idx;           /* Owning source command for flat->source mapping */
     int      call_src_cmd_idx;      /* Immediate call site that expanded this command */
     int      root_call_src_cmd_idx; /* Outermost call site in nested expansion */

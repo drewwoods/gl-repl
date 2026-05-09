@@ -481,7 +481,7 @@ static int parse_command(const char *line, GLCmd *cmd,
             return 0;
         }
 
-        cmd->type = CMD_GLUT_BITMAP_STRING;
+        cmd->type = CMD_LABEL;
         cmd->valid = 1;
         for (int i = 0; i < sub_count; i++) cmd->args[i] = subs[i];
         cmd->num_args = sub_count;
@@ -848,7 +848,7 @@ static int parse_command(const char *line, GLCmd *cmd,
     /* :label or label: - define a label */
     if ((p[0] == ':' && p[1] && !isspace((unsigned char)p[1])) ||
         (len > 1 && p[len - 1] == ':' && !isspace((unsigned char)p[0]))) {
-        cmd->type = CMD_LABEL;
+        cmd->type = CMD_GOTO_LABEL;
         cmd->valid = 1;
         /* labels go at column 0 in C */
         if (p[0] == ':') {

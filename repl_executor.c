@@ -470,7 +470,7 @@ void repl_execute_program(const ReplExecutionOptions *options) {
                           flat_cmds[pc].args[1],
                           flat_cmds[pc].args[2]);
             break;
-        case CMD_GLUT_BITMAP_STRING: {
+        case CMD_LABEL: {
             /* `label("fmt", a, b, c, d)` — printf-style text emission
              * at the current raster position. Position is set by a
              * preceding glRasterPos3f; this command does not touch
@@ -542,7 +542,7 @@ void repl_execute_program(const ReplExecutionOptions *options) {
                 gluTessVertex(g_tess, v->pos, v);
             }
             break;
-        case CMD_LABEL:
+        case CMD_GOTO_LABEL:
             break; /* no-op marker */
         case CMD_GOTO: {
             /* Experimental top-level control-flow only.
@@ -561,7 +561,7 @@ void repl_execute_program(const ReplExecutionOptions *options) {
             }
             for (int label_idx = 0; label_idx < flat_cmd_count; label_idx++) {
                 if (flat_cmds[label_idx].valid &&
-                    flat_cmds[label_idx].type == CMD_LABEL) {
+                    flat_cmds[label_idx].type == CMD_GOTO_LABEL) {
                     char target_label[64];
                     if (repl_extract_label_name(execution_flat_text(text, &flat_cmds[label_idx]),
                                                 target_label,

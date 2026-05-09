@@ -195,7 +195,7 @@ static void run_flat_control_flow_only(void) {
             for (int li = 0; li < repl_state_flat_program_count(); li++) {
                 char target_label[64];
                 if (repl_state_flat_program_cmds_mut()[li].valid &&
-                    repl_state_flat_program_cmds_mut()[li].type == CMD_LABEL &&
+                    repl_state_flat_program_cmds_mut()[li].type == CMD_GOTO_LABEL &&
                     repl_extract_label_name(flat_cmd_text(li),
                                             target_label,
                                             sizeof(target_label)) &&
@@ -400,7 +400,7 @@ int main(void) {
     ASSERT_TRUE("label loads back into editor as repl syntax",
                 strcmp(editor_state_input().input, ":walk") == 0);
     editor_handle_key(';', 0, 0);
-    ASSERT_TRUE("recommitting loaded label keeps label type", repl_state_document_cmds_mut()[0].type == CMD_LABEL);
+    ASSERT_TRUE("recommitting loaded label keeps label type", repl_state_document_cmds_mut()[0].type == CMD_GOTO_LABEL);
     ASSERT_TRUE("recommitting loaded label keeps source", strcmp(editor_buffer_line(0) ? editor_buffer_line(0) : "", "walk:") == 0);
 
     repl_reset_state(); declare_test_vars();

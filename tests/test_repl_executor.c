@@ -115,7 +115,7 @@ static void test_transform_stack_edge_cases(void) {
 static void test_apply_state_cmd_edge_cases(void) {
     apply_state_cmd(NULL, 1.0f);
 
-    GLCmd cmd = { .type = CMD_LABEL }; // not a state cmd
+    GLCmd cmd = { .type = CMD_GOTO_LABEL }; // not a state cmd
     int ret = apply_state_cmd(&cmd, 1.0f);
     ASSERT_TRUE("Non-state cmd returns 0", ret == 0);
 
@@ -197,7 +197,7 @@ static void test_execute_all_commands(void) {
     cmds[count].type = CMD_GOTO; cmds[count].valid = 1;
     cmds[count].src_cmd_idx = 2; count++;
     cmds[count].type = CMD_VERTEX3F; cmds[count].valid = 1; count++; // skipped
-    cmds[count].type = CMD_LABEL; cmds[count].valid = 1;
+    cmds[count].type = CMD_GOTO_LABEL; cmds[count].valid = 1;
     cmds[count].src_cmd_idx = 3; count++;
 
     ReplExecutionOptions opts = {0};
@@ -220,7 +220,7 @@ static void test_glut_bitmap_string(void) {
 
     GLCmd cmds[2];
     memset(cmds, 0, sizeof(cmds));
-    cmds[0].type = CMD_GLUT_BITMAP_STRING;
+    cmds[0].type = CMD_LABEL;
     cmds[0].valid = 1;
     cmds[0].num_args = 0;
     strcpy(cmds[0].text, "hi");
@@ -246,7 +246,7 @@ static void test_glut_bitmap_string(void) {
     cmds[0].args[1] = 1.5f;
     cmds[0].args[2] = 2.5f;
     cmds[0].num_args = 3;
-    cmds[1].type = CMD_GLUT_BITMAP_STRING;
+    cmds[1].type = CMD_LABEL;
     cmds[1].valid = 1;
     cmds[1].num_args = 0;
     strcpy(cmds[1].text, "hi");
@@ -264,7 +264,7 @@ static void test_glut_bitmap_string(void) {
      * substitution values. */
     gl_stub_counts_reset();
     memset(cmds, 0, sizeof(cmds));
-    cmds[0].type = CMD_GLUT_BITMAP_STRING;
+    cmds[0].type = CMD_LABEL;
     cmds[0].valid = 1;
     cmds[0].args[0] = 1.25f;
     cmds[0].num_args = 1;
@@ -279,7 +279,7 @@ static void test_glut_bitmap_string(void) {
     /* %% renders as a single literal '%'. */
     gl_stub_counts_reset();
     memset(cmds, 0, sizeof(cmds));
-    cmds[0].type = CMD_GLUT_BITMAP_STRING;
+    cmds[0].type = CMD_LABEL;
     cmds[0].valid = 1;
     cmds[0].num_args = 0;
     strcpy(cmds[0].text, "100%% done");
