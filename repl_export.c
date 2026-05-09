@@ -1609,7 +1609,7 @@ static void write_canonical_cmd_as_c(FILE *f, const GLCmd *cmd, int cmd_idx,
                     cmd->args[0], cmd->args[1], cmd->args[2]);
         }
         break;
-    case CMD_GLUT_BITMAP_STRING: {
+    case CMD_LABEL: {
         /* Split format / post-args, translate the post-args
          * through repl_eval_expr_to_c, and re-emit with the
          * format string preserved byte-exact. The default branch
@@ -2658,7 +2658,7 @@ static ExportNeeds export_collect_needs(void) {
     for (int cmd_idx = 0; cmd_idx < repl_state_document_count(); cmd_idx++) {
         const GLCmd *cmd = &repl_state_document_cmds_mut()[cmd_idx];
         if (!cmd->valid) continue;
-        if (cmd->type == CMD_GLUT_BITMAP_STRING) needs.needs_label = 1;
+        if (cmd->type == CMD_LABEL) needs.needs_label = 1;
         const char *src = export_document_text(cmd_idx);
         if (export_text_uses_token(src, "rand(")) needs.needs_rand = 1;
         if (export_text_uses_token(src, "rand2(")) needs.needs_rand = 1;

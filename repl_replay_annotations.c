@@ -643,7 +643,7 @@ static int replay_copy_runtime_state_before_flat_cmd(
             for (int li = 0; li < repl_state_flat_program_count(); li++) {
                 char target_label[64];
                 if (repl_state_flat_program_cmds_mut()[li].valid &&
-                    repl_state_flat_program_cmds_mut()[li].type == CMD_LABEL &&
+                    repl_state_flat_program_cmds_mut()[li].type == CMD_GOTO_LABEL &&
                     repl_extract_label_name(replay_flat_text(li),
                                             target_label,
                                             sizeof(target_label)) &&
@@ -786,7 +786,7 @@ static void replay_build_predef_snapshots(void) {
             for (int li = 0; li < repl_state_flat_program_count(); li++) {
                 char target_label[64];
                 if (repl_state_flat_program_cmds_mut()[li].valid &&
-                    repl_state_flat_program_cmds_mut()[li].type == CMD_LABEL &&
+                    repl_state_flat_program_cmds_mut()[li].type == CMD_GOTO_LABEL &&
                     repl_extract_label_name(replay_flat_text(li),
                                             target_label,
                                             sizeof(target_label)) &&

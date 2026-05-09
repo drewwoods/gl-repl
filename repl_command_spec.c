@@ -327,7 +327,7 @@ static const ReplCommandTypeSpec g_command_type_specs[CMD_TYPE_COUNT] = {
     CMD_TYPE_SPEC(CMD_VAR_ASSIGN,           1, 0, CMD_CAT_VARIABLE),
     CMD_TYPE_SPEC(CMD_SCRATCH_ASSIGN,       1, 0, CMD_CAT_VARIABLE),
     CMD_TYPE_SPEC(CMD_VAR_DECLARE,          0, 0, CMD_CAT_VARIABLE),
-    CMD_TYPE_SPEC(CMD_LABEL,                0, 0, CMD_CAT_LABEL),
+    CMD_TYPE_SPEC(CMD_GOTO_LABEL,                0, 0, CMD_CAT_LABEL),
     CMD_TYPE_SPEC(CMD_GOTO,                 1, 0, CMD_CAT_LABEL),
     CMD_TYPE_SPEC(CMD_GLUT_TORUS,           1, 1, CMD_CAT_GLUT_SHAPE),
     CMD_TYPE_SPEC(CMD_GLUT_CUBE,            1, 1, CMD_CAT_GLUT_SHAPE),
@@ -348,7 +348,7 @@ static const ReplCommandTypeSpec g_command_type_specs[CMD_TYPE_COUNT] = {
     CMD_TYPE_SPEC(CMD_CLEAR_COLOR,          1, 1, CMD_CAT_COLOR),
     CMD_TYPE_SPEC(CMD_DEPTH_MASK,           1, 1, CMD_CAT_STATE),
     CMD_TYPE_SPEC(CMD_RASTER_POS3F,         1, 1, CMD_CAT_STATE),
-    CMD_TYPE_SPEC(CMD_GLUT_BITMAP_STRING,   1, 1, CMD_CAT_GLUT_SHAPE),
+    CMD_TYPE_SPEC(CMD_LABEL,   1, 1, CMD_CAT_GLUT_SHAPE),
 };
 
 const ReplCommandTypeSpec *repl_command_type_spec(CmdType type) {

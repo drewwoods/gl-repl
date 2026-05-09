@@ -365,7 +365,7 @@ int main(void) {
             "label(\"hello\")", &cmd, text, sizeof(text));
         ASSERT_TRUE("label no-args parse ok", ok == 1);
         ASSERT_TRUE("label type",
-                    cmd.type == CMD_GLUT_BITMAP_STRING);
+                    cmd.type == CMD_LABEL);
         ASSERT_TRUE("label num_args", cmd.num_args == 0);
         ASSERT_TRUE("label fmt stored",
                     strcmp(cmd.text, "hello") == 0);

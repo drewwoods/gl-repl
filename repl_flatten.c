@@ -381,7 +381,7 @@ static void flatten_range(FlattenContext *ctx,
             continue;
         }
 
-        if ((src_cmd->type == CMD_LABEL || src_cmd->type == CMD_GOTO) &&
+        if ((src_cmd->type == CMD_GOTO_LABEL || src_cmd->type == CMD_GOTO) &&
             func_scope_mask != 0) {
             flatten_fail(ctx, "goto and labels are not supported inside functions");
             return;

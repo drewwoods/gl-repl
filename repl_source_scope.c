@@ -182,7 +182,7 @@ int repl_line_is_block_head(int line_idx) {
 
 int repl_line_is_label(int line_idx) {
     if (line_idx < 0 || line_idx >= repl_state_document_count()) return 0;
-    return repl_state_document_cmds()[line_idx].type == CMD_LABEL;
+    return repl_state_document_cmds()[line_idx].type == CMD_GOTO_LABEL;
 }
 
 int repl_array_contains_var_decl(const GLCmd *cmds, int count) {

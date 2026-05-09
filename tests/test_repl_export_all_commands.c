@@ -88,7 +88,7 @@ static const CmdType expected_commands[] = {
     CMD_TESS_VERTEX,
     CMD_TESS_END,
     CMD_RASTER_POS3F,
-    CMD_GLUT_BITMAP_STRING,
+    CMD_LABEL,
 };
 
 static int verify_all_commands_present(void) {
