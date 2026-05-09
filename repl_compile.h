@@ -216,6 +216,20 @@ ReplCompileResult repl_compile_var_assign(const char *input,
                                           ReplCompiledChange *out,
                                           char *err, int err_size);
 
+/* Compile dispatcher: walks the registered compile handlers in
+ * canonical order and returns the first one that produces a
+ * non-NO_CHANGE result. NO_CHANGE means the input didn't match any
+ * handler — the caller decides whether that is "fall through to the
+ * next dispatcher" or "no commit happened".
+ *
+ * Handler order is load-bearing: `repl_compile_float_decl` must run
+ * before `repl_compile_var_assign`, otherwise `float x;` would parse
+ * as an assignment to an identifier named `float`. */
+ReplCompileResult repl_compile_dispatch(const char *text,
+                                        const ReplCompileContext *ctx,
+                                        ReplCompiledChange *out,
+                                        char *err, int err_size);
+
 /* Compile an external live-value update for an existing predefined
  * variable.
  *

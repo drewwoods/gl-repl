@@ -62,23 +62,6 @@ ReplCodePanelRuntimeState *ui_state_code_panel_mut(void) {
     return &g_dummy_code_panel;
 }
 
-/* --- editor_commit dispatcher (only as a hard reference) -------------- */
-
-/* repl_compile_toggle_comment in repl_compile.c calls this as the
- * fall-through path. The demo doesn't trigger toggle-comment, but the
- * symbol reference is hard. Returning NO_CHANGE matches the
- * "nothing happened" contract; if the demo grows to call
- * toggle_comment we'd need the real impl. */
-#include "repl_compile.h"
-ReplCompileResult repl_compile_dispatch(const char *text,
-                                        const ReplCompileContext *ctx,
-                                        ReplCompiledChange *out,
-                                        char *err, int err_size) {
-    (void)text; (void)ctx; (void)err; (void)err_size;
-    if (out) out->kind = REPL_COMPILED_NO_CHANGE;
-    return REPL_COMPILE_OK;
-}
-
 /* --- src/editor/input.c entry points (only as hard references) -------- */
 
 /* feed_line is the programmatic commit entry used by file loading and
