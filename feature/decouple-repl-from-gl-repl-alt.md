@@ -404,7 +404,7 @@ Plus the controller-pushed editor-overlay lists (`editor_transformers`,
 them. They are editor concerns and should move to `EditorState` along
 the way.
 
-### Fix — three new owners, three split TUs
+### Fix — new owner, neutral export bag, owner-fills/applies
 
 **1. New `glr_state.c` / `glr_state.h`.** Owner sibling to
 `repl_state.c`, `src/editor/state.c`, `src/ui/state.c`. Holds:
@@ -431,28 +431,126 @@ parallel slot arrays:
 - `repl_scenes.c` — owns the program half: per-scene
   `document_cmds[]`, `predef_vars[]`, `name`, `last_touch`.
 - `glr_scenes.c` (new) — owns the app-cfg half: per-scene snapshot
-  of the presentation/render values.
+  of the presentation/render values, stored as a
+  `ReplExportProperties` (see #4) per slot.
 
 The controller bundles the two halves at save/load time. F12 cycle
 and the workspace iterator each call both halves under one
 transaction. This split mirrors the catalog split from step 4: the
 REPL pipeline only sees the program half.
 
-**4. `repl_export.c` splits.** The `@cfg` block is app concern; the
-program body is REPL concern:
+**4. `repl_export.c` stays whole; gains a neutral header bag.** The
+exported file is one cohesive document with a single line-tagged
+grammar — splitting the writer/reader along app/REPL lines means
+coordinating two file streams, which is awkward. The right inversion
+is to keep `repl_export.c` whole and make it opaque to *what* the
+headers carry.
 
-- `repl_export.c` keeps the program writer/reader: `display()` body,
-  REPL functions, predef vars, `@var` markers, `@scene-name` hint,
-  `@declare` markers, the per-line REPL → C translation. Reads
-  `EditorBufferView` only (already does).
-- `glr_export.c` (new, or the controller) emits the `@cfg` /
-  `@workspace-dir` / camera-preset block by reading `glr_state` and
-  the camera. The controller threads the two halves together when
-  writing the file; the importer dispatches header lines to the
-  matching reader.
+`repl_export.c` keeps:
+- `display()` body, REPL functions, predef-var globals, the per-line
+  REPL → C translation (already file-format ownership)
+- `@var <name> = <float>`, `@func N = name`, `@declare <name>`,
+  `@scene-name <name>` directives — these are REPL language
+  concepts, legitimately the file-format owner's business
+- File-grammar parsing, line dispatch, format compatibility
 
-The save-file format is unchanged. Existing `output.c` files
-round-trip without a header bump.
+`repl_export.c` *no longer* knows about:
+- What `wireframe` / `grid_theme` / `auto_rotate` / etc. mean
+- `glr_config_*` (forbidden by symbol guard, see guard audit)
+- Any cfg slug semantics — only the `// @cfg <key> = <value>` line shape
+
+New neutral abstraction in `repl_export.h`:
+
+```c
+typedef struct {
+    char key  [REPL_EXPORT_KEY_MAX];      /* opaque slug */
+    char value[REPL_EXPORT_VALUE_MAX];    /* decimal-encoded; opaque to repl_export */
+} ReplExportProperty;
+
+typedef struct {
+    ReplExportProperty items[REPL_EXPORT_MAX_PROPS];
+    int count;
+} ReplExportProperties;
+
+void        repl_export_props_clear(ReplExportProperties *p);
+int         repl_export_props_set  (ReplExportProperties *p,
+                                    const char *key, const char *value);
+const char *repl_export_props_get  (const ReplExportProperties *p,
+                                    const char *key);
+int         repl_export_props_count(const ReplExportProperties *p);
+int         repl_export_props_at   (const ReplExportProperties *p, int idx,
+                                    const char **key_out,
+                                    const char **value_out);
+```
+
+**Why a flat key/value bag, not a callback registry.** The cfg payload
+is genuinely simple: ~25 slugs, all `int` 0..N, encoded as decimal
+strings. A registered-callback dispatch through `repl_export` adds
+init-order coupling (registry must be populated before any export),
+indirection on a 5-line operation (callback ends up calling
+`glr_state_apply(...)` anyway), and loss of inspectability (a flat
+collection is trivially round-trippable in tests). The callback
+approach pays off for non-trivial per-slug logic — nested structures,
+versioned encoding, computed values. None of those apply here.
+
+Export and import flow:
+
+```c
+/* Export — controller (or a small glr_export.c wrapper): */
+ReplExportProperties props;
+repl_export_props_clear(&props);
+glr_state_fill_export_props(&props);   /* writes wireframe, grid_theme, … */
+/* … each owner that wants header presence fills its own slugs … */
+repl_export_save_output(path, &props, &camera_block, /* + REPL state */);
+
+/* Inside repl_export.c — pure iteration, no slug knowledge: */
+for (int i = 0; i < repl_export_props_count(&props); i++) {
+    const char *k, *v;
+    repl_export_props_at(&props, i, &k, &v);
+    fprintf(f, "// @cfg %s = %s\n", k, v);
+}
+
+/* Import — controller: */
+ReplExportProperties props_out;
+ReplExportCameraBlock cam_out;
+repl_export_load_from_file(path, &props_out, &cam_out, /* + REPL state out */);
+glr_state_apply_export_props(&props_out);   /* reads its own slugs, ignores rest */
+camera_apply_export_block(&cam_out);
+```
+
+Each owner only knows its own slugs. `repl_export.c` only knows the
+line format.
+
+**4a. Camera block — its own neutral struct.** The `// camera` block
+is multi-line (5 raw `glTranslatef`/`glRotatef` strings) and doesn't
+fit the flat key/value model cleanly. Keep it as a separate directive
+type alongside the property bag, but apply the same opacity rule:
+`repl_export.h` defines a neutral `ReplExportCameraBlock` (5 string
+slots), the camera owner fills/reads it, `repl_export.c` writes/parses
+the lines without interpreting them. Two abstractions instead of one,
+but each stays clean.
+
+```c
+#define REPL_EXPORT_CAMERA_LINE_MAX 96
+#define REPL_EXPORT_CAMERA_LINES    5
+
+typedef struct {
+    char lines[REPL_EXPORT_CAMERA_LINES][REPL_EXPORT_CAMERA_LINE_MAX];
+    int  present;   /* 0 = no camera block in this file */
+} ReplExportCameraBlock;
+```
+
+The camera owner provides:
+
+```c
+void camera_fill_export_block (ReplExportCameraBlock *out);
+void camera_apply_export_block(const ReplExportCameraBlock *in);
+```
+
+`repl_export.c`'s writer emits the block verbatim if `present`;
+the reader populates `lines[]` and sets `present` if a `// camera`
+header is encountered. It does not parse the GL syntax inside the
+lines — that is the camera owner's business.
 
 **5. `import_export` slice split.** The mixed slice splits the same
 way:
@@ -460,6 +558,9 @@ way:
 - `repl_state.c` keeps scene-name hint and any pending REPL-side
   parser state.
 - `glr_state.c` keeps `workspace_dir` and pending app-cfg directives.
+
+The save-file format is unchanged through all of step 7. Existing
+`output.c` files round-trip without a header bump.
 
 ### Demo link-set impact
 
@@ -637,7 +738,7 @@ Coverage: low. Land two guards with step 5: (a) `check-repl-no-editor-input-incl
 
 Coverage: low. Same shape as step 5 — needs two new guards.
 
-#### Step 7 — Slice relocation to `glr_state.c`
+#### Step 7 — Slice relocation to `glr_state.c` + neutral export bag
 
 | Risk | Existing coverage | Gap |
 |---|---|---|
@@ -645,9 +746,12 @@ Coverage: low. Same shape as step 5 — needs two new guards.
 | `repl_state.c` re-introduces a presentation/render reference after the move | — | **GAP** — symbol-level guard "`repl_state.c` cannot reference `glr_state_*`" closes this |
 | `glr_state.c` calls into REPL pipeline mutators (e.g., to read predef vars) | ✅ `check-views-no-owners` analog needed for the new owner; otherwise none | **GAP** — extend `check-state-boundaries` to forbid `repl_state_*_mut*` calls from `glr_state.c` |
 | New `glr_state.h` accidentally gets included by `src/scene/*.c` or `src/ui/*.c` | — | **GAP** — extend `check-views-no-owners` to also forbid `glr_state_owners.h` (or whatever the mutator header becomes named); presentation/render were *already* legitimately read by views via the snapshot, so the read header should remain includable |
-| `repl_export.c` keeps reading `repl_state_presentation_*()` after the slice moves | ✅ `check-state-c-shrinking` (analog) — `repl_export.c` shrinks when the cfg writer leaves | **GAP** — explicit symbol guard "`repl_export.c` cannot reference `glr_state_*`" forces the export split |
-| `repl_scenes.c` keeps reading presentation/render after the slot-snapshot moves | — | **GAP** — same shape as the export guard, applied to `repl_scenes.c` |
-| `@cfg` save-file format silently drops a slug because the routing missed a field | — | **TEST GAP** — the existing round-trip tests cover commands but not the cfg headers; a focused round-trip over every `g_cfg_items[]` slug should land with step 7 |
+| `repl_export.c` keeps reading `repl_state_presentation_*()` or `glr_state_*` after the relocation | — | **GAP** — symbol guard "`repl_export.c` cannot reference `glr_state_*`, `glr_config_*`, `glr_camera_*`, peer state, audio" — forces all cfg flow through `ReplExportProperties` and the camera block through `ReplExportCameraBlock` |
+| `repl_export.c` reads cfg slugs by name (e.g. `strcmp(key, "wireframe")`) | — | **GAP** — symbol/literal guard rejecting known slug strings inside `repl_export.c`; if the file has to know "wireframe" exists, the abstraction has leaked |
+| `repl_scenes.c` keeps reading presentation/render after the per-slot snapshots become `ReplExportProperties` | — | **GAP** — symbol guard, same shape as the export guard |
+| Owner fill/apply helpers grow inside `repl_export.c` instead of in their owners (e.g. someone adds `repl_export_props_fill_glr_state()`) | — | **GAP** — fill/apply helpers must live in their owners' TUs (`glr_state_fill_export_props`, `camera_fill_export_block`, etc.); a guard "`repl_export.c` defines no `*_fill_export_*` / `*_apply_export_*` symbols" keeps the rule one-way |
+| `@cfg` save-file format silently drops a slug because the property bag wasn't filled by some owner | — | **TEST GAP** — round-trip every `glr_config_items()` slug through `glr_state_fill_export_props` → `repl_export_save` → `repl_export_load` → `glr_state_apply_export_props` and assert the value preserved. The neutral abstraction makes this test trivial: feed the bag in, read it out, compare |
+| Camera block silently drops because someone forgot to pass `&cam_block` to the new save/load entry points | ✅ The new function signature requires it — the compiler catches a NULL/missing argument | — |
 
 Coverage: low. Step 7 is the largest single restructure, and most of
 the existing guards are scoped to `repl_*.c` files — they don't
@@ -655,6 +759,15 @@ automatically extend to a new `glr_state.c`. The fence has to be
 duplicated for the new owner. The shape is identical (read-only
 views header + mutator-only header + scene/UI can include views,
 not owners), so the work is template-driven, not novel.
+
+The most-leveraged guard for this step is the `repl_export.c` symbol
+guard listed above: once `repl_export.c` cannot reference *any*
+`glr_*` / peer / audio symbol, the compiler refuses to let the
+property-bag abstraction be circumvented. Combined with the
+fill/apply-helper-location guard (helpers live in the owner's TU,
+not in `repl_export.c`), the abstraction stays one-way: owners
+*push* to / *pull* from a neutral bag; `repl_export.c` is opaque to
+slug semantics.
 
 ### The umbrella guard: stub-count ratchet
 
@@ -696,7 +809,8 @@ batch.
 | `check-repl-core-c-shrinking` (clone of the `repl_state.c` ratchet for `repl_core.c`) | 3, 5, 6 | 15 min |
 | `check-repl-state-no-glr-state` (symbol guard: `repl_state.c` cannot reference `glr_state_*`) and reciprocal | 7 | 30 min |
 | `check-glr-state-no-repl-mutators` (clone of `check-views-no-owners` shape, applied to the new owner) | 7 | 30 min — extend allowlist of files allowed to write `repl_state` |
-| `check-repl-export-no-glr-state` and `check-repl-scenes-no-glr-state` (symbol guards forcing the export/scenes splits to actually happen) | 7 | 30 min |
+| `check-repl-export-opaque-to-cfg` (`repl_export.c` cannot reference `glr_state_*`, `glr_config_*`, `glr_camera_*`, peer state, or `audio_*`; cannot string-match known cfg slugs; cannot define `*_fill_export_*` / `*_apply_export_*` helpers — those live in owner TUs) | 7 | 1 hr — three orthogonal greps, one allowlist for the bag iterators |
+| `check-repl-scenes-no-glr-state` (`repl_scenes.c` cannot reference `glr_state_*` after the per-slot snapshot becomes a `ReplExportProperties`) | 7 | 30 min |
 | `check-repl-demo-stubs-shrinking` (the umbrella ratchet) | all | 1 hr — count externally-visible symbols, ratchet down only |
 
 None of these are large; each is a clone/extension of an existing
