@@ -530,7 +530,7 @@ The full plan lives in `feature/decouple-repl-from-gl-repl-alt.md`
    (commit `b58cdef`). Bridge installed by the controller; demo
    doesn't install one → @cfg path is a no-op there. `glr_config.c`
    falls out of the demo link set.
-4a. ✅ **Step 4a — Camera-block neutralization** (commit `<TBD>`).
+4a. ✅ **Step 4a — Camera-block neutralization** (commit `f23d866`).
    Same shape as the cfg bridge: `ReplExportCameraBlock` (4-line
    block) + `ReplExportCameraBridge` (fill_save_block /
    fill_display_block / fill_save_preamble / try_consume_import_line /
