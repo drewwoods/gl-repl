@@ -100,9 +100,11 @@ static void seed_for_loop_program(void) {
      * matching GLCmds. The flattener reads expressions from the editor
      * buffer, so the text and cmds must agree. */
     static const char *const lines[] = {
+        "glBegin(GL_POINTS)",
         "for(i, 0, 4)",
         "  glVertex3f(i, 0, 0)",
         "}",
+        "glEnd()",
     };
     enum { LINE_COUNT = sizeof(lines) / sizeof(lines[0]) };
 
@@ -110,31 +112,41 @@ static void seed_for_loop_program(void) {
     for (int i = 0; i < LINE_COUNT; i++)
         editor_buffer_set_line(i, lines[i]);
 
-    /* CMD_FOR_BEGIN: var name 'i', start 0, end 4, step 1 (default). */
-    GLCmd cmds[3];
+    GLCmd cmds[5];
     memset(cmds, 0, sizeof(cmds));
-    cmds[0].type = CMD_FOR_BEGIN;
+
+    /* CMD_BEGIN: GL_POINTS so the executor sets in_begin=1. */
+    cmds[0].type = CMD_BEGIN;
     cmds[0].valid = 1;
-    cmds[0].args[0] = 0.0f;     /* start */
-    cmds[0].args[1] = 4.0f;     /* end (exclusive in the canonical form) */
-    cmds[0].args[2] = 1.0f;     /* step */
-    cmds[0].num_args = 3;
+    cmds[0].mode = GL_POINTS;
+
+    /* CMD_FOR_BEGIN: var name 'i', start 0, end 4, step 1 (default). */
+    cmds[1].type = CMD_FOR_BEGIN;
+    cmds[1].valid = 1;
+    cmds[1].args[0] = 0.0f;     /* start */
+    cmds[1].args[1] = 4.0f;     /* end (exclusive in the canonical form) */
+    cmds[1].args[2] = 1.0f;     /* step */
+    cmds[1].num_args = 3;
     /* Body command: glVertex3f with `i` as an expression. has_vars=1 so
      * the flattener re-evaluates the expression with the loop's local i
      * for each iteration. */
-    cmds[1].type = CMD_VERTEX3F;
-    cmds[1].valid = 1;
-    cmds[1].has_vars = 1;
-    cmds[1].args[0] = 0.0f;     /* placeholder; flatten reparses from text */
-    cmds[1].args[1] = 0.0f;
-    cmds[1].args[2] = 0.0f;
-    cmds[1].num_args = 3;
-    cmds[2].type = CMD_FOR_END;
+    cmds[2].type = CMD_VERTEX3F;
     cmds[2].valid = 1;
+    cmds[2].has_vars = 1;
+    cmds[2].args[0] = 0.0f;     /* placeholder; flatten reparses from text */
+    cmds[2].args[1] = 0.0f;
+    cmds[2].args[2] = 0.0f;
+    cmds[2].num_args = 3;
+    cmds[3].type = CMD_FOR_END;
+    cmds[3].valid = 1;
+
+    /* CMD_END: closes the glBegin. */
+    cmds[4].type = CMD_END;
+    cmds[4].valid = 1;
 
     ReplCommandStore store = repl_command_store_live();
-    /* Bulk-load the three commands so count/edit_line is set in one shot. */
-    repl_command_store_load(&store, cmds, 3, 0);
+    /* Bulk-load the five commands so count/edit_line is set in one shot. */
+    repl_command_store_load(&store, cmds, 5, 0);
 }
 
 /* --- Program loaders -------------------------------------------------- */
@@ -205,22 +217,29 @@ static void seed_variable_driven_program(void) {
      * expressions against current g_predef_vars values. The plain
      * `repl_parser_parse_command_ctx` path bakes the literal values
      * in -- correct for static commands, wrong for var-driven ones. */
-    static const char *line =
-        "glVertex3f(r * sin(t), r * cos(t), 0)";
-    GLCmd cmd;
-    memset(&cmd, 0, sizeof(cmd));
-    char text[MAX_LINE_LEN] = "";
-    if (!repl_parse_and_normalize(line, 0, NULL, 0,
-                                  /*preserve_expr=*/1,
-                                  &cmd, text, (int)sizeof(text))) {
-        fprintf(stderr, "  parse_and_normalize failed\n");
-        return;
+    static const char *const lines[] = {
+        "glBegin(GL_POINTS)",
+        "glVertex3f(r * sin(t), r * cos(t), 0)",
+        "glEnd()",
+    };
+    int pos = 0;
+    for (int i = 0; i < 3; i++) {
+        GLCmd cmd;
+        memset(&cmd, 0, sizeof(cmd));
+        char text[MAX_LINE_LEN] = "";
+        int preserve = (i == 1) ? 1 : 0;
+        if (!repl_parse_and_normalize(lines[i], 0, NULL, 0,
+                                      preserve,
+                                      &cmd, text, (int)sizeof(text))) {
+            fprintf(stderr, "  parse_and_normalize failed: %s\n", lines[i]);
+            return;
+        }
+        ReplCommandStore store = repl_command_store_live();
+        repl_command_store_insert_one(&store, pos, &cmd,
+                                      REPL_COMMAND_STORE_ADJUST_EDIT_LINE);
+        editor_buffer_set_line(pos, text);
+        pos++;
     }
-
-    ReplCommandStore store = repl_command_store_live();
-    repl_command_store_insert_one(&store, 0, &cmd,
-                                  REPL_COMMAND_STORE_ADJUST_EDIT_LINE);
-    editor_buffer_set_line(0, text);
 }
 
 static void tick_and_execute(float t_value) {
@@ -235,9 +254,13 @@ static void tick_and_execute(float t_value) {
     };
     repl_execute_program(&opts);
     const GLCmd *flat = opts.program.cmds;
-    if (opts.flat_cmd_count > 0)
-        printf("  t=%4.2f -> glVertex3f(%.3f, %.3f, %.3f)\n", t_value,
-               flat[0].args[0], flat[0].args[1], flat[0].args[2]);
+    for (int i = 0; i < opts.flat_cmd_count; i++) {
+        if (flat[i].type == CMD_VERTEX3F) {
+            printf("  t=%4.2f -> glVertex3f(%.3f, %.3f, %.3f)\n", t_value,
+                   flat[i].args[0], flat[i].args[1], flat[i].args[2]);
+            break;
+        }
+    }
 }
 
 /* --- Reporters -------------------------------------------------------- */
@@ -331,13 +354,10 @@ static void render_display_func(void) {
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     render_apply_camera();
 
-    /* Sample 2 / 3 emit isolated vertices (no glBegin/glEnd in the
-     * source). Wrap them so the points actually rasterize. Sample 1
-     * has its own glBegin/glEnd. */
+    /* Samples 2 and 3 use GL_POINTS -- set point size before execute. */
     if (g_render_sample != 1) {
         glPointSize(8.0f);
         glColor3f(0.95f, 0.85f, 0.20f);
-        glBegin(GL_POINTS);
     }
 
     /* For sample 3, push the live `t` into the predef table so the
@@ -356,9 +376,6 @@ static void render_display_func(void) {
         .text           = editor_buffer_view(),
     };
     repl_execute_program(&opts);
-
-    if (g_render_sample != 1)
-        glEnd();
 
     glutSwapBuffers();
 }
