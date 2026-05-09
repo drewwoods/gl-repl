@@ -116,6 +116,46 @@ const ReplExportConfigBridge *repl_export_config_bridge(void);
  * bridge's apply() with the accumulated bag and resets the accumulator. */
 void repl_export_apply_pending_cfg(void);
 
+/* Neutral camera-block shape (step 4a of the decouple plan).
+ *
+ * The exported `// camera` block is 4 raw GL lines (translate /
+ * rotate-rx / rotate-g_angle / translate-target). repl_export.c
+ * produces and consumes those lines as opaque strings via the
+ * camera bridge; the bridge implementation (in glr_camera_export.c)
+ * owns the format and the call to glr_camera_set_*. */
+#define REPL_EXPORT_CAMERA_LINES        4
+#define REPL_EXPORT_CAMERA_LINE_MAX     96
+#define REPL_EXPORT_CAMERA_PREAMBLE_MAX 64
+
+typedef struct {
+    char lines[REPL_EXPORT_CAMERA_LINES][REPL_EXPORT_CAMERA_LINE_MAX];
+    int  present;
+} ReplExportCameraBlock;
+
+typedef struct {
+    /* Fill block for saved-file emission. Line 3 uses the literal
+     * "glRotatef(g_angle, 0,1,0)" so the saved file animates via
+     * the file-scope g_angle variable. */
+    void (*fill_save_block)(ReplExportCameraBlock *block);
+    /* Fill block for the in-app code-panel preview. Line 3 uses the
+     * numeric ry value (no g_angle placeholder — the preview shows
+     * the current state, not the animation hook). */
+    void (*fill_display_block)(ReplExportCameraBlock *block);
+    /* Build the "static float g_angle = N.NNNNf;" preamble line for
+     * the saved file's header. */
+    void (*fill_save_preamble)(char *out, int out_sz);
+    /* Try to consume a single import line as part of the camera
+     * block (or its g_angle preamble). Returns 1 if consumed
+     * (applied to camera state), 0 otherwise. The bridge owns the
+     * stateful per-line parser. */
+    int  (*try_consume_import_line)(const char *line);
+    /* Reset import-side parser state at the start of each load. */
+    void (*reset_import)(void);
+} ReplExportCameraBridge;
+
+void                          repl_export_install_camera_bridge(const ReplExportCameraBridge *bridge);
+const ReplExportCameraBridge *repl_export_camera_bridge(void);
+
 /* Boilerplate C file segments for export. g_header_pre is the initial includes
  * and setup; g_header_post follows the metadata comments; g_footer_pre_init is
  * before the display() function; g_footer_post_init follows the function body.

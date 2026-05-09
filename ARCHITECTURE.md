@@ -529,12 +529,18 @@ The full plan lives in `feature/decouple-repl-from-gl-repl-alt.md`
    make `repl_export.c` and `repl_scenes.c` opaque to cfg semantics**
    (commit `b58cdef`). Bridge installed by the controller; demo
    doesn't install one → @cfg path is a no-op there. `glr_config.c`
-   falls out of the demo link set. The camera block (multi-line
-   `// camera` directive) is left for a follow-up since it has its
-   own neutral struct shape per step 4a; for the demo's stub-clearance
-   goal, keeping camera handling in the existing `glr_camera_*` calls
-   inside `repl_export.c` is acceptable since `glr_camera.c` is in
-   the demo link set.
+   falls out of the demo link set.
+4a. ✅ **Step 4a — Camera-block neutralization** (commit `<TBD>`).
+   Same shape as the cfg bridge: `ReplExportCameraBlock` (4-line
+   block) + `ReplExportCameraBridge` (fill_save_block /
+   fill_display_block / fill_save_preamble / try_consume_import_line /
+   reset_import). Bridge implementation lives in `glr_camera_export.c`.
+   `repl_export.c` no longer references `glr_camera_*` — verified via
+   `nm build/release-gl-stubs/repl_export.o`. Architectural cleanup
+   only; no stub change. `glr_camera.c` stays in the demo link set
+   until step 7 closes the last two doors (auto_rotate reset in
+   `repl_state.c` + example camera presets in
+   `repl_example_loader.c`).
 5. Step 5a/5b — Extract pure structured-block validators from
    `editor_compile_*`; add non-editor source-load/commit API so
    examples and imports stop calling `feed_line`.

@@ -1,9 +1,9 @@
 #include "repl_export.h"
 #include "./include/gl_2d.h"
-#include "glr_camera.h"
-/* glr_config.h removed in step 4: the export pipeline no longer
- * references GlrConfig* symbols. Cfg state flows through the
- * controller-installed ReplExportConfigBridge (see repl_export.h). */
+/* glr_camera.h removed in step 4a: the export pipeline no longer
+ * references glr_camera_*. Camera state flows through the
+ * controller-installed ReplExportCameraBridge (see repl_export.h).
+ * glr_config.h was already dropped in step 4 for the same reason. */
 #include "outline_offset.h"
 #include "repl_command_store.h"
 #include "repl_core.h"
@@ -93,6 +93,20 @@ void repl_export_install_config_bridge(const ReplExportConfigBridge *bridge) {
 
 const ReplExportConfigBridge *repl_export_config_bridge(void) {
     return g_export_cfg_bridge;
+}
+
+/* Camera bridge — same shape as the cfg bridge. Step 4a moved camera-block
+ * emission and parsing through this interface so repl_export.c no longer
+ * references glr_camera_*. The default bridge is installed by
+ * glr_app_install_app_services. */
+static const ReplExportCameraBridge *g_export_camera_bridge = NULL;
+
+void repl_export_install_camera_bridge(const ReplExportCameraBridge *bridge) {
+    g_export_camera_bridge = bridge;
+}
+
+const ReplExportCameraBridge *repl_export_camera_bridge(void) {
+    return g_export_camera_bridge;
 }
 
 /* Pending @cfg accumulator: parse_cfg() during import populates this; the
@@ -703,16 +717,22 @@ static void emit_export_init_section_to_file(FILE *f, int include_tess) {
 }
 
 static void emit_export_header_pre(FILE *f) {
-    char angle_line[64];
-
-    snprintf(angle_line, sizeof(angle_line),
-             "static float g_angle = %.4ff;", glr_camera().ry);
+    /* Step 4a: ask the camera bridge for the g_angle preamble line.
+     * Without a bridge installed (the demo case) we emit the
+     * placeholder unchanged so the file is still valid C. */
+    char angle_line[REPL_EXPORT_CAMERA_PREAMBLE_MAX];
+    angle_line[0] = '\0';
+    if (g_export_camera_bridge && g_export_camera_bridge->fill_save_preamble)
+        g_export_camera_bridge->fill_save_preamble(angle_line, (int)sizeof(angle_line));
 
     for (int line_idx = 0; g_header_pre[line_idx]; line_idx++) {
         if (strcmp(g_header_pre[line_idx], "void display() {") == 0)
             break;
         if (strcmp(g_header_pre[line_idx], "static float g_angle = 0.0f;") == 0) {
-            fprintf(f, "%s\n", angle_line);
+            if (angle_line[0])
+                fprintf(f, "%s\n", angle_line);
+            else
+                fprintf(f, "%s\n", g_header_pre[line_idx]);
             continue;
         }
         fprintf(f, "%s\n", g_header_pre[line_idx]);
@@ -720,12 +740,19 @@ static void emit_export_header_pre(FILE *f) {
 }
 
 static void emit_export_cam_lines(FILE *f) {
-    ReplCameraState cam = glr_camera();
-    fprintf(f, "  glTranslatef(0.0000f, 0.0000f, %.4ff);\n", -cam.dist);
-    fprintf(f, "  glRotatef(%.4ff, 1.0f, 0.0f, 0.0f);\n", cam.rx);
-    fprintf(f, "  glRotatef(g_angle, 0.0f, 1.0f, 0.0f);\n");
-    fprintf(f, "  glTranslatef(%.4ff, %.4ff, %.4ff);\n",
-            -cam.tx, -cam.ty, -cam.tz);
+    /* Step 4a: the bridge owns the camera-line format. Without a
+     * bridge (demo case) the // camera block is omitted from the
+     * exported file — that's fine, the demo doesn't export. */
+    if (!g_export_camera_bridge || !g_export_camera_bridge->fill_save_block)
+        return;
+    ReplExportCameraBlock block;
+    memset(&block, 0, sizeof(block));
+    g_export_camera_bridge->fill_save_block(&block);
+    if (!block.present) return;
+    for (int i = 0; i < REPL_EXPORT_CAMERA_LINES; i++) {
+        if (block.lines[i][0])
+            fprintf(f, "%s\n", block.lines[i]);
+    }
 }
 
 void update_render_state_strings(void) {
@@ -739,148 +766,38 @@ void update_render_state_strings(void) {
              "  glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);");
 }
 
-/* Skip whitespace, commas, and trailing 'f' / 'F' float suffixes so strtof
- * can march through a call like `glTranslatef(0.0f, 0.0f, -5.0f);`. */
-static const char *cam_line_skip_sep(const char *p) {
-    while (*p == 'f' || *p == 'F' || *p == ',' || *p == ' ' || *p == '\t')
-        p++;
-    return p;
-}
-
-static int cam_line_read_floats(const char *p, float *out, int n) {
-    for (int float_idx = 0; float_idx < n; float_idx++) {
-        p = cam_line_skip_sep(p);
-        char *end = NULL;
-        out[float_idx] = strtof(p, &end);
-        if (end == p) return 0;
-        p = end;
-    }
-    return 1;
-}
-
-/* Camera-block parser state: exported camera lines appear contiguously inside
- * display(). Older exports use translate(dist), rotate(rx), rotate(ry),
- * rotate(g_angle), translate(target); newer exports fold ry into the initial
- * g_angle value and omit the literal rotate(ry) line. We walk a tiny state
- * machine so the parser only consumes lines during the expected sequence,
- * and never bites into user code elsewhere in the file. Reset at load. */
-static int g_cam_parse_state = 0;    /* 0..5, stops consuming at 5 */
-
+/* Step 4a: the camera-block parser state machine moved to the bridge
+ * implementation (glr_camera_export.c). repl_export.c just delegates
+ * import-side line consumption and reset to the bridge. */
 void import_cam_parser_reset(void) {
-    g_cam_parse_state = 0;
+    if (g_export_camera_bridge && g_export_camera_bridge->reset_import)
+        g_export_camera_bridge->reset_import();
 }
 
-static int import_parse_export_angle_init(const char *text) {
-    const char *p = text;
-    const char *eq;
-    char *end = NULL;
-    float v;
-
-    while (*p == ' ' || *p == '\t') p++;
-    if (strncmp(p, "static float g_angle", 20) != 0)
-        return 0;
-
-    eq = strchr(p, '=');
-    if (!eq)
-        return 0;
-    eq++;
-
-    v = strtof(eq, &end);
-    if (end == eq)
-        return 0;
-
-    glr_camera_set_orbit(glr_camera().rx, v);
-    return 1;
-}
-
-/* Per-line sniffer for the new 4-line camera block emitted into output.c.
- * Each call updates at most one camera scalar; the caller invokes this for
- * every line in the loaded file. Returns 1 if a camera line was consumed. */
 int import_parse_cam_line(const char *text) {
-    if (g_cam_parse_state >= 5) return 0;
-
-    const char *p = text;
-    while (*p == ' ' || *p == '\t') p++;
-
-    if (g_cam_parse_state == 0 && strncmp(p, "glTranslatef", 12) == 0) {
-        p = strchr(p, '(');
-        if (!p) return 0;
-        p++;
-        float v[3];
-        if (!cam_line_read_floats(p, v, 3)) return 0;
-        glr_camera_set_distance(-v[2]);
-        g_cam_parse_state = 1;
-        return 1;
-    }
-
-    if (g_cam_parse_state == 1 && strncmp(p, "glRotatef", 9) == 0) {
-        p = strchr(p, '(');
-        if (!p) return 0;
-        p++;
-        float v[4];
-        if (!cam_line_read_floats(p, v, 4)) return 0;
-        if (v[1] != 1.0f || v[2] != 0.0f || v[3] != 0.0f) return 0;
-        glr_camera_set_orbit(v[0], glr_camera().ry);
-        g_cam_parse_state = 2;
-        return 1;
-    }
-
-    if (g_cam_parse_state == 2 && strncmp(p, "glRotatef", 9) == 0) {
-        const char *q = strchr(p, '(');
-        if (q && strstr(q, "g_angle")) {
-            g_cam_parse_state = 4;
-            return 1;
-        }
-
-        p = strchr(p, '(');
-        if (!p) return 0;
-        p++;
-        float v[4];
-        if (!cam_line_read_floats(p, v, 4)) return 0;
-        if (v[1] != 0.0f || v[2] != 1.0f || v[3] != 0.0f) return 0;
-        glr_camera_set_orbit(glr_camera().rx, v[0]);
-        g_cam_parse_state = 3;
-        return 1;
-    }
-
-    if (g_cam_parse_state == 3 && strncmp(p, "glRotatef", 9) == 0) {
-        /* Literal `glRotatef(g_angle, 0,1,0)` animation hook - no scalars
-         * to extract, just advance past it. We also tolerate its absence
-         * (fall through to state 4) for files saved before it existed. */
-        const char *q = strchr(p, '(');
-        if (q && strstr(q, "g_angle")) {
-            g_cam_parse_state = 4;
-            return 1;
-        }
-        g_cam_parse_state = 4;
-        /* fall through to try target translate on the same line */
-    }
-
-    if (g_cam_parse_state == 4 && strncmp(p, "glTranslatef", 12) == 0) {
-        p = strchr(p, '(');
-        if (!p) return 0;
-        p++;
-        float v[3];
-        if (!cam_line_read_floats(p, v, 3)) return 0;
-        glr_camera_set_pan(-v[0], -v[1], -v[2]);
-        g_cam_parse_state = 5;
-        return 1;
-    }
-
-    return 0;
+    if (!g_export_camera_bridge || !g_export_camera_bridge->try_consume_import_line)
+        return 0;
+    return g_export_camera_bridge->try_consume_import_line(text);
 }
 
 void update_cam_lines(void) {
-    ReplCameraState cam = glr_camera();
-    snprintf(g_cam_lines[0], sizeof(g_cam_lines[0]),
-             "  glTranslatef(0.0000f, 0.0000f, %.4ff);", -cam.dist);
-    snprintf(g_cam_lines[1], sizeof(g_cam_lines[1]),
-             "  glRotatef(%.4ff, 1.0f, 0.0f, 0.0f);", cam.rx);
-    snprintf(g_cam_lines[2], sizeof(g_cam_lines[2]),
-             "  glRotatef(%.4ff, 0.0f, 1.0f, 0.0f);", cam.ry);
-    snprintf(g_cam_lines[3], sizeof(g_cam_lines[3]),
-             "  glTranslatef(%.4ff, %.4ff, %.4ff);",
-            -cam.tx, -cam.ty, -cam.tz);
+    /* Bridge-driven preview: the bridge formats the 4-line block from
+     * current camera state with numeric ry (no g_angle placeholder).
+     * Without a bridge installed (the demo case), g_cam_lines stays
+     * empty — the demo doesn't render a code panel. */
+    if (!g_export_camera_bridge || !g_export_camera_bridge->fill_display_block) {
+        for (int i = 0; i < REPL_EXPORT_CAMERA_LINES &&
+                        i < (int)(sizeof(g_cam_lines) / sizeof(g_cam_lines[0])); i++)
+            g_cam_lines[i][0] = '\0';
+        return;
+    }
+    ReplExportCameraBlock block;
+    memset(&block, 0, sizeof(block));
+    g_export_camera_bridge->fill_display_block(&block);
+    for (int i = 0; i < REPL_EXPORT_CAMERA_LINES &&
+                    i < (int)(sizeof(g_cam_lines) / sizeof(g_cam_lines[0])); i++) {
+        snprintf(g_cam_lines[i], sizeof(g_cam_lines[i]), "%s", block.lines[i]);
+    }
 }
 
 static void write_light_setup(FILE *f) {
@@ -3126,9 +3043,11 @@ static void import_flush_pending_blank_run(ImportState *s) {
 /* --- pre-snippet handlers (camera, workspace header, function bodies) ----- */
 
 static int import_try_camera(const char *p) {
-    if (import_parse_export_angle_init(p)) return 1;
-    if (import_parse_cam_line(p))          return 1;
-    return 0;
+    /* Step 4a: both the g_angle preamble and the body lines flow
+     * through a single bridge entry point. The bridge's stateful
+     * parser dispatches internally based on which line shape it
+     * sees. */
+    return import_parse_cam_line(p);
 }
 
 static int import_try_function_body(ImportState *s, const char *p) {
