@@ -402,7 +402,7 @@ static int parse_command(const char *line, GLCmd *cmd,
         }
     }
 
-    /* glutBitmapStringf(x, y, z, "fmt", a, b, c, d)
+    /* label(x, y, z, "fmt", a, b, c, d)
      *
      * Custom branch (not table-driven) because:
      *   - Variable arg count (3 + 0..4 substitution args).
@@ -414,7 +414,7 @@ static int parse_command(const char *line, GLCmd *cmd,
      * surrounding (string-unaware) parser scaffolding honest.
      * See repl_glut_bitmap_split_args() for the split helper used
      * by both this branch and the executor's has_vars re-eval. */
-    if (strcmp(func, "glutBitmapStringf") == 0) {
+    if (strcmp(func, "label") == 0) {
         char pre_args[MAX_LINE_LEN] = "";
         char fmt_str[GLUT_BITMAP_FMT_MAX] = "";
         char post_args[MAX_LINE_LEN] = "";
@@ -440,7 +440,7 @@ static int parse_command(const char *line, GLCmd *cmd,
                                               vars, num_vars);
         if (pos_count != 3) {
             parser_emit_error_static(ctx,
-                "Usage: glutBitmapStringf(x, y, z, \"fmt\", arg, ...)");
+                "Usage: label(x, y, z, \"fmt\", arg, ...)");
             return 0;
         }
 
@@ -464,7 +464,7 @@ static int parse_command(const char *line, GLCmd *cmd,
             if (parsed > GLUT_BITMAP_MAX_SUB_ARGS) {
                 char buf[128];
                 snprintf(buf, sizeof(buf),
-                         "glutBitmapStringf: too many args (max %d)",
+                         "label: too many args (max %d)",
                          GLUT_BITMAP_MAX_SUB_ARGS);
                 parser_emit_error_static(ctx, buf);
                 return 0;
@@ -484,14 +484,14 @@ static int parse_command(const char *line, GLCmd *cmd,
             else if (nx == '%') { i++; }
             else {
                 parser_emit_error_static(ctx,
-                    "glutBitmapStringf: only %f and %% allowed in format");
+                    "label: only %f and %% allowed in format");
                 return 0;
             }
         }
         if (pct_count != sub_count) {
             char buf[128];
             snprintf(buf, sizeof(buf),
-                     "glutBitmapStringf: format expects %d arg%s, got %d",
+                     "label: format expects %d arg%s, got %d",
                      pct_count, pct_count == 1 ? "" : "s", sub_count);
             parser_emit_error_static(ctx, buf);
             return 0;
@@ -511,7 +511,7 @@ static int parse_command(const char *line, GLCmd *cmd,
 
         if (text_out && text_sz > 0) {
             int off = snprintf(text_out, (size_t)text_sz,
-                               "%sglutBitmapStringf(%g, %g, %g, \"%s\"",
+                               "%slabel(%g, %g, %g, \"%s\"",
                                indent, pos[0], pos[1], pos[2], fmt_str);
             for (int i = 0; i < sub_count && off < (int)text_sz - 6; i++) {
                 off += snprintf(text_out + off, (size_t)(text_sz - off),
@@ -950,7 +950,7 @@ int repl_glut_bitmap_split_args(const char *args,
     }
     if (!quote_open) {
         snprintf(err, (size_t)err_sz,
-                 "Usage: glutBitmapStringf(x, y, z, \"fmt\", arg, ...)");
+                 "Usage: label(x, y, z, \"fmt\", arg, ...)");
         return 0;
     }
 
@@ -962,7 +962,7 @@ int repl_glut_bitmap_split_args(const char *args,
     }
     if (!quote_close) {
         snprintf(err, (size_t)err_sz,
-                 "glutBitmapStringf: missing closing '\"'");
+                 "label: missing closing '\"'");
         return 0;
     }
 
@@ -971,17 +971,17 @@ int repl_glut_bitmap_split_args(const char *args,
     for (const char *p = quote_open + 1; p < quote_close; p++) {
         if (*p == '\\') {
             snprintf(err, (size_t)err_sz,
-                     "glutBitmapStringf: backslash escapes not allowed");
+                     "label: backslash escapes not allowed");
             return 0;
         }
         if (p[0] == '/' && p + 1 < quote_close && p[1] == '/') {
             snprintf(err, (size_t)err_sz,
-                     "glutBitmapStringf: '//' not allowed in format string");
+                     "label: '//' not allowed in format string");
             return 0;
         }
         if (*p == '(' || *p == ')' || *p == ',') {
             snprintf(err, (size_t)err_sz,
-                     "glutBitmapStringf: '%c' not allowed in format string",
+                     "label: '%c' not allowed in format string",
                      *p);
             return 0;
         }
@@ -990,7 +990,7 @@ int repl_glut_bitmap_split_args(const char *args,
     int fmt_len = (int)(quote_close - (quote_open + 1));
     if (fmt_len >= fmt_sz) {
         snprintf(err, (size_t)err_sz,
-                 "glutBitmapStringf: format too long (max %d)", fmt_sz - 1);
+                 "label: format too long (max %d)", fmt_sz - 1);
         return 0;
     }
     memcpy(fmt, quote_open + 1, (size_t)fmt_len);
@@ -1000,7 +1000,7 @@ int repl_glut_bitmap_split_args(const char *args,
      * the format string). */
     int pre_len = (int)(quote_open - args);
     if (pre_len >= pre_sz) {
-        snprintf(err, (size_t)err_sz, "glutBitmapStringf: args too long");
+        snprintf(err, (size_t)err_sz, "label: args too long");
         return 0;
     }
     memcpy(pre, args, (size_t)pre_len);
@@ -1009,7 +1009,7 @@ int repl_glut_bitmap_split_args(const char *args,
         pre[--pre_len] = '\0';
     if (pre_len == 0 || pre[pre_len - 1] != ',') {
         snprintf(err, (size_t)err_sz,
-                 "Usage: glutBitmapStringf(x, y, z, \"fmt\", arg, ...)");
+                 "Usage: label(x, y, z, \"fmt\", arg, ...)");
         return 0;
     }
     pre[--pre_len] = '\0';
@@ -1021,7 +1021,7 @@ int repl_glut_bitmap_split_args(const char *args,
     if (*after) {
         if (*after != ',') {
             snprintf(err, (size_t)err_sz,
-                     "Usage: glutBitmapStringf(x, y, z, \"fmt\", arg, ...)");
+                     "Usage: label(x, y, z, \"fmt\", arg, ...)");
             return 0;
         }
         after++;
@@ -1029,7 +1029,7 @@ int repl_glut_bitmap_split_args(const char *args,
         int post_len = (int)strlen(after);
         if (post_len >= post_sz) {
             snprintf(err, (size_t)err_sz,
-                     "glutBitmapStringf: args too long");
+                     "label: args too long");
             return 0;
         }
         memcpy(post, after, (size_t)post_len);

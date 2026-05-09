@@ -222,7 +222,7 @@ int main(void) {
     /* GLUT bitmap string with %f substitution. Exercises the
      * round-trip for the format-string field plus the position +
      * substitution arg list. */
-    repl_feed_line_public("glutBitmapStringf(0, 1.5, 0, \"x = %f\", x);");
+    repl_feed_line_public("label(0, 1.5, 0, \"x = %f\", x);");
 
     /* GLU tessellation commands - polygon */
     repl_feed_line_public("gluBegin(GLU_POLYGON);");
