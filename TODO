@@ -2,6 +2,7 @@ TODO:
    - when glEnable(GL_LIGHTING) is commented I expected the lighting to be disabled, since that is the default state. 
    - complete bezier example
    - make solar system example
+   - add glLoadIdentity to REPL
    - add sunset grid example
    - allow cmd-<key> to alias to ctrl-key on macOS
    - Have a 2d Mode, that swings the camera so looking down the z axis and engages the Adaptive plans grid.  Also the mouse click and drag turns to a translation along the z=0 plane instead of camera orbit.  Maybe swing the camera and implement some of the grids in OpenGL-Vibe/src/grid-animation. See constellation of gemini-3.0-pro-ai-studio/grid-animation-4.c or field-study of claude4.7-opus-thinking/grid-animation-2.c
