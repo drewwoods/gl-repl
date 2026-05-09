@@ -791,11 +791,8 @@ GLUT Solid Shapes:
   glutSolidSphere(radius, slices, stacks)
   glutSolidTeapot(size)
   glutSolidCone(base, height, slices, stacks)
-GLUT Bitmap Text:
-  glutBitmapStringf(x, y, z, "fmt", a, b, c, d)
-    - REPL-specific extension; the `f` suffix mirrors printf-family
-      naming. Distinct from real freeglut's `glutBitmapString(font,
-      str)` so there's no signature confusion.
+Bitmap Text:
+  label(x, y, z, "fmt", a, b, c, d)
     - Renders text at (x, y, z) using the current modelview
       (via glRasterPos3f). Font is fixed to GLUT_BITMAP_9_BY_15.
     - "fmt" supports %f (substitution from a/b/c/d) and %% (literal '%').
@@ -803,10 +800,13 @@ GLUT Bitmap Text:
     - Forbidden inside the string: '//', '(', ')', ',' and any
       backslash. The parser rejects with a status error if any
       appear (graceful — line is not committed).
-    - Exported files emit `glutBitmapStringf(...)` literally, which
-      isn't a real freeglut symbol; standalone-C compilation requires
-      providing a wrapper. Round-trip through the REPL via
+    - REPL-specific primitive; not a real GL/GLUT symbol. Exported
+      files emit `label(...)` literally, so standalone-C compilation
+      requires providing a wrapper. Round-trip through the REPL via
       export+import is supported.
+
+    Distinct from the goto-label syntax `:name` / `name:` — those use
+    a colon and live on CMD_LABEL. `label(...)` is a function call.
 for(var, start, end[, step]) { body }
 func0..func9(params) { body }   (parens always required, even for zero args)
 NAME(params) { body }     (alias: NAME -> next free funcN slot, 10 max)
