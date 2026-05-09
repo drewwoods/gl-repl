@@ -1305,6 +1305,28 @@ void glr_ctrl_reshape(int w, int h) {
     ui_state_viewport_set_size(w, h);
 }
 
+/* App-service installers that must be present for any code path that
+ * loads/exports REPL state — including the dump-only CLI paths
+ * (--dump-code / --dump-flat) that bypass glr_ctrl_init_gl. Idempotent;
+ * called from glr_app_reset_all and from glr_ctrl_bootstrap_repl.
+ * Step 4 [P2] fix: previously these two installs lived only in
+ * glr_app_reset_all, so the dump CLI ran without them and dropped
+ * @cfg from imported files. */
+static void glr_app_install_app_services(void) {
+    /* Install the status-message sink. Pipeline TUs call set_status()
+     * to surface diagnostics; this routes them to UiState. The demo
+     * does not install a sink, so set_status is a no-op there
+     * (clearing the ui_state_status_set stub). */
+    repl_set_status_sink(ui_state_status_set);
+    /* Install the export-config bridge so repl_export.c can emit/parse
+     * @cfg headers and repl_scenes.c can snapshot per-scene cfg
+     * without referencing glr_config_* directly. The demo does not
+     * install a bridge, so the @cfg path is a no-op there (clearing
+     * g_cfg_items / CFG_ITEM_COUNT / audio_* / ui_state_profile_panel_mut
+     * / variable_panel_view_mut stubs). */
+    glr_actions_install_export_cfg_bridge();
+}
+
 /* Full-world reset entry point. Step 2 of
  * feature/decouple-repl-from-gl-repl-alt.md split this out of
  * repl_state.c so the REPL pipeline (and tools/repl_demo) does not
@@ -1322,18 +1344,7 @@ void glr_app_reset_all(void) {
      * repl_autocomplete; the registration here installs the
      * REPL-aware backing. */
     repl_autocomplete_register_provider();
-    /* Install the status-message sink. Pipeline TUs call set_status()
-     * to surface diagnostics; this routes them to UiState. The demo
-     * does not install a sink, so set_status is a no-op there
-     * (clearing the ui_state_status_set stub). */
-    repl_set_status_sink(ui_state_status_set);
-    /* Install the export-config bridge so repl_export.c can emit/parse
-     * @cfg headers and repl_scenes.c can snapshot per-scene cfg
-     * without referencing glr_config_* directly. The demo does not
-     * install a bridge, so the @cfg path is a no-op there (clearing
-     * g_cfg_items / CFG_ITEM_COUNT / audio_* / ui_state_profile_panel_mut
-     * / variable_panel_view_mut stubs). */
-    glr_actions_install_export_cfg_bridge();
+    glr_app_install_app_services();
     /* Refresh derived export/camera text caches AFTER peer resets
      * so the cached strings reflect post-reset state, not whatever
      * was on the peers before this call. These read app-side cfg /
@@ -1375,6 +1386,13 @@ void glr_ctrl_init_gl(void) {
 }
 
 void glr_ctrl_bootstrap_repl(const char *input_file) {
+    /* Step 4 [P2] fix: dump-only CLI paths (--dump-code / --dump-flat)
+     * call this without going through glr_ctrl_init_gl, so the status
+     * sink and export-config bridge would otherwise be missing here
+     * and any @cfg in imported files would be silently dropped.
+     * glr_app_install_app_services is idempotent so the windowed path
+     * (which already installed via glr_app_reset_all) is unaffected. */
+    glr_app_install_app_services();
     repl_eval_init_predef_vars();
     for (int i = 0; i < g_num_predef_vars; i++) {
         if (strcmp(g_predef_vars[i].name, "t") == 0) {
