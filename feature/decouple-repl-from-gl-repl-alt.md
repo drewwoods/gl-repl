@@ -344,9 +344,14 @@ Fix:
 
 - Add pure `repl_compile_*` functions for close-brace, if-block, func-def, and
   for-loop syntax.
-- Each returns `ReplCompiledChange` plus diagnostics only.
-- `editor_compile_*` wrappers call the pure validator and attach
-  `EditorCommitPlan` side effects.
+- Each returns `ReplCompiledChange`, diagnostics, and source-load effects. These
+  effects are not editor UI effects; they describe loader placement only: next
+  edit line, insert/overwrite mode, function-definition resume bookkeeping, and
+  any "body lines follow" state currently encoded by editor cursor movement.
+- `editor_compile_*` wrappers call the pure validator, translate the source-load
+  effects into `EditorCommitPlan` post-effects, and add editor-only behavior
+  such as input clearing, autocomplete clearing, status text, undo integration,
+  and `load_line_to_input`.
 - Existing editor behavior remains unchanged.
 
 No stub count change.
@@ -354,28 +359,42 @@ No stub count change.
 Guard work:
 
 - Extend compile guards so `repl_compile.c` cannot reference
-  `EditorCommitPlan`, `editor_state_*_mut`, `editor_insert_mode*`, or
-  editor input APIs.
+  `EditorCommitPlan`, `editor_state_*_mut`, or editor input APIs. The new
+  `ReplLoadEffects` type is allowed because it belongs to source loading, not
+  editor UI state.
 
 ## Step 5b - Add a Non-editor Source-load API
 
 `feed_line()` is editor input dispatch. It copies text into the input buffer and
 runs the `try_commit_*` chain, including cursor and insert-mode effects.
-Examples and import should not need editor input dispatch.
+Examples and import should not need editor input dispatch, but they still need
+the same source-loading state machine.
 
-Introduce two layers:
+Introduce an explicit load session plus compile/apply helpers:
 
 ```c
+typedef struct {
+    int edit_line;
+    int insert_mode;
+    int func_decl_resume_delta;
+} ReplLoadSession;
+
+typedef struct {
+    ReplCompiledChange change;
+    ReplLoadEffects    effects;
+} ReplLoadPlan;
+
 ReplLoadResult repl_load_compile_line(const char *text,
-                                      const ReplLoadContext *ctx,
-                                      ReplCompiledChange *out,
+                                      const ReplLoadSession *session,
+                                      ReplLoadPlan *out,
                                       ReplDiagnostic *diag);
 
-int repl_load_apply_change(const ReplCompiledChange *change,
-                           ReplDiagnostic *diag);
+int repl_load_apply_plan(ReplLoadSession *session,
+                         const ReplLoadPlan *plan,
+                         ReplDiagnostic *diag);
 
-ReplLoadResult repl_load_apply_line(const char *text,
-                                    const ReplLoadContext *ctx,
+ReplLoadResult repl_load_apply_line(ReplLoadSession *session,
+                                    const char *text,
                                     ReplDiagnostic *diag);
 ```
 
@@ -383,9 +402,18 @@ Semantics:
 
 - `repl_load_compile_line()` dispatches through float-decl, assignment,
   structured-block validators from Step 5a, and normal GL command parsing.
-- `repl_load_apply_change()` preflights, writes the editor buffer text, applies
-  predef/scratch operations, and applies the REPL command-store mutation.
+- `repl_load_apply_plan()` preflights, writes the editor buffer text, applies
+  predef/scratch operations, applies the REPL command-store mutation, and then
+  updates only `ReplLoadSession` placement state.
 - `repl_load_apply_line()` is the convenience path for examples/imports.
+
+The loader is intentionally incremental, not a "batch until close brace" parser.
+This matches the current `feed_line()` behavior: `for(i, 0, 4) {` inserts a
+`CMD_FOR_BEGIN` plus placeholder `CMD_FOR_END`, then advances the load session
+inside the block so subsequent body lines are inserted between them. Close-brace
+and function-resume paths update loader placement state, but they do not
+retroactively commit the whole block. Callers pass one `ReplLoadSession` through
+the whole example/import stream.
 
 The editor does not need to call the apply-line convenience. It can keep using
 `EditorCommitPlan` and `editor_commit_apply_plan()` so undo and post-effects
