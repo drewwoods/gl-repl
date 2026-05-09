@@ -431,6 +431,47 @@ static int run_render_mode(int argc, char **argv) {
 
 /* --- Main ------------------------------------------------------------- */
 
+static void print_help(const char *prog) {
+    printf(
+"Usage: %s [--execute | --render] [-h|--help]\n"
+"\n"
+"Standalone REPL pipeline demo. Drives parse -> command store -> flatten\n"
+"-> execute on hard-coded static-text samples, without linking the editor\n"
+"input dispatch, the controller, or the UI.\n"
+"\n"
+"Modes:\n"
+"  (no flag)   Print parse/flatten summaries for all three samples and\n"
+"              show the variable-driven re-evaluation table for sample 3.\n"
+"  --execute   Same as above, plus run repl_execute_program() against the\n"
+"              GL stubs after each sample's flatten.\n"
+"  --render    Real GL: open a GLUT window and render the active sample.\n"
+"              Requires a non-stubs build (see Build below).\n"
+"  -h, --help  Print this help and exit.\n"
+"\n"
+"Render-mode keys:\n"
+"  1 / 2 / 3   Switch sample (1 = triangle, 2 = for-loop, 3 = animated)\n"
+"  space       Pause/resume sample-3 animation\n"
+"  q, Esc      Quit\n"
+"\n"
+"Samples:\n"
+"  1  Plain commands: parses a hand-typed glBegin/glColor/glVertex/glEnd\n"
+"     triangle through repl_parser_parse_command_ctx + the command store.\n"
+"  2  Hand-built for-loop: constructs a CMD_FOR_BEGIN/body/CMD_FOR_END\n"
+"     triplet directly so flatten unrolls 4 vertices without going\n"
+"     through src/editor/commit.c's try_commit_for_loop.\n"
+"  3  Variable-driven re-evaluation: declares `r` via\n"
+"     repl_eval_declare_predef_var(), parses an expression that\n"
+"     references `r` and `t` with preserve_expr=1, then bumps `t` and\n"
+"     re-flattens to show has_vars expressions re-evaluating against\n"
+"     the live g_predef_vars table.\n"
+"\n"
+"Build:\n"
+"  make repl_demo                  Real GL; --render works.\n"
+"  make repl_demo USE_GL_STUBS=1   Headless; --render prints a helpful\n"
+"                                  error and exits.\n",
+        prog);
+}
+
 int main(int argc, char **argv) {
     int run_execute = 0;
     int run_render  = 0;
@@ -439,6 +480,15 @@ int main(int argc, char **argv) {
             run_execute = 1;
         else if (strcmp(argv[i], "--render") == 0)
             run_render = 1;
+        else if (strcmp(argv[i], "-h") == 0
+              || strcmp(argv[i], "--help") == 0) {
+            print_help(argv[0]);
+            return 0;
+        } else {
+            fprintf(stderr, "%s: unknown flag '%s' (try -h)\n",
+                    argv[0], argv[i]);
+            return 2;
+        }
     }
 
     if (run_render)
