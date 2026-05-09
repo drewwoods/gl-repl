@@ -1325,6 +1325,13 @@ static void glr_app_install_app_services(void) {
      * g_cfg_items / CFG_ITEM_COUNT / audio_* / ui_state_profile_panel_mut
      * / variable_panel_view_mut stubs). */
     glr_actions_install_export_cfg_bridge();
+    /* Install the export-camera bridge (step 4a) so repl_export.c can
+     * emit/parse the `// camera` block + g_angle preamble without
+     * referencing glr_camera_*. Camera state still pulls glr_camera.c
+     * into the demo link set via repl_state.c (auto_rotate reset) and
+     * repl_example_loader.c (example camera presets); step 7 closes
+     * those last two doors. */
+    glr_camera_export_install_bridge();
 }
 
 /* Full-world reset entry point. Step 2 of
