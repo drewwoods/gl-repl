@@ -1,6 +1,7 @@
 /*
  * repl_scenes.c -- User scene slots, promotion, and workspace save/load.
  */
+#include "glr_scenes.h"    /* per-slot cfg snapshot storage (step 7b) */
 #include "repl_command_store.h"
 #include "repl_core_internal.h"
 #include "repl_examples.h"
@@ -43,7 +44,18 @@
  *
  *   last_touch is bumped from the monotonic g_user_scene_tick counter
  *   on every access (load/save/rename) so LRU eviction can pick the
- *   coldest slot when the 9th scene is needed. */
+ *   coldest slot when the 9th scene is needed.
+ *
+ * Step 7b of feature/decouple-repl-from-gl-repl-alt.md split the
+ * per-scene cfg snapshot out of UserScene into a parallel storage in
+ * glr_scenes.c, indexed by the same slot. The cfg bag is opaque
+ * app-state (the controller-installed bridge fills/applies it) so
+ * keeping it on a REPL pipeline TU was a layering violation. The
+ * lifecycle stays driven from here: every site that flips
+ * g_user_scenes[X].used = 0 also calls glr_scenes_scene_cfg_clear(X)
+ * to keep the parallel array in sync. The example-sandbox pre-load
+ * cfg snapshot moved alongside, accessed via
+ * glr_scenes_pre_example_cfg_*. */
 typedef struct {
     int      used;
     char     name[USER_SCENE_NAME_MAX];
@@ -57,29 +69,11 @@ typedef struct {
     char     predef_names[MAX_PREDEF_VARS][16];
     int      num_predef_vars;
     char     func_aliases[REPL_FUNC_SLOT_COUNT][REPL_FUNC_NAME_MAX];
-    /* Per-scene cfg snapshot. The bridge (controller-side) owns which
-     * slugs belong here; repl_scenes.c just stores and round-trips. */
-    ReplExportConfig scene_cfg;
 } UserScene;
 
 static UserScene g_user_scenes[MAX_USER_SCENES];
 static int       g_active_user_scene = -1;
 static uint32_t  g_user_scene_tick = 0;
-
-/* Example sandbox: snapshot of the per-scene cfg taken at the moment
- * we enter an example from non-example state. Restored on the next
- * transition out of example state. Same shape as scene_cfg above: the
- * controller-installed bridge fills/applies the bag.
- *
- * Lifecycle:
- *   - clear at startup (repl_scenes_reset).
- *   - capture on first load_example after non-example state.
- *   - restore on the next user-scene / home load.
- *   - cleared by restore. Entering another example without an
- *     intervening user-scene load leaves the original snapshot
- *     untouched. */
-static ReplExportConfig g_pre_example_cfg;
-static int              g_pre_example_valid = 0;
 
 #define WORKSPACE_DIR_MAX REPL_WORKSPACE_DIR_MAX
 
@@ -91,19 +85,20 @@ static uint32_t next_user_scene_tick(void) {
 }
 
 static void capture_pre_example_cfg(void) {
-    repl_export_config_clear(&g_pre_example_cfg);
+    ReplExportConfig *cfg = glr_scenes_pre_example_cfg_mut();
+    repl_export_config_clear(cfg);
     const ReplExportConfigBridge *bridge = repl_export_config_bridge();
     if (bridge && bridge->fill_scene_subset)
-        bridge->fill_scene_subset(&g_pre_example_cfg);
-    g_pre_example_valid = 1;
+        bridge->fill_scene_subset(cfg);
+    glr_scenes_pre_example_cfg_set_valid(1);
 }
 
 static void restore_pre_example_cfg_if_valid(void) {
-    if (!g_pre_example_valid) return;
+    if (!glr_scenes_pre_example_cfg_valid()) return;
     const ReplExportConfigBridge *bridge = repl_export_config_bridge();
     if (bridge && bridge->apply)
-        bridge->apply(&g_pre_example_cfg);
-    g_pre_example_valid = 0;
+        bridge->apply(glr_scenes_pre_example_cfg());
+    glr_scenes_pre_example_cfg_clear();
 }
 
 static int user_scene_slot_count(void) {
@@ -162,11 +157,12 @@ static void save_scene_to_slot(int idx, const char *name) {
         else
             s->func_aliases[slot][0] = '\0';
     }
-    repl_export_config_clear(&s->scene_cfg);
     {
+        ReplExportConfig *cfg = glr_scenes_scene_cfg_mut(idx);
+        repl_export_config_clear(cfg);
         const ReplExportConfigBridge *bridge = repl_export_config_bridge();
         if (bridge && bridge->fill_scene_subset)
-            bridge->fill_scene_subset(&s->scene_cfg);
+            bridge->fill_scene_subset(cfg);
     }
     /* Callers re-saving an existing slot pass `g_user_scenes[idx].name`,
      * which aliases s->name. snprintf with overlapping src/dst is UB
@@ -236,7 +232,7 @@ static void load_scene_from_slot(int idx) {
     {
         const ReplExportConfigBridge *bridge = repl_export_config_bridge();
         if (bridge && bridge->apply)
-            bridge->apply(&s->scene_cfg);
+            bridge->apply(glr_scenes_scene_cfg(idx));
     }
     editor_insert_mode_set(0);
     /* Editor input buffer refresh is the controller's responsibility:
@@ -295,10 +291,14 @@ static void install_scene_into_live(int slot) {
      * behaviour. */
     const ReplExportConfigBridge *bridge = repl_export_config_bridge();
     if (bridge && bridge->apply)
-        bridge->apply(&s->scene_cfg);
+        bridge->apply(glr_scenes_scene_cfg(slot));
 }
 
-static void stash_live_state(UserScene *dst) {
+/* Step 7b paired stash with a sibling ReplExportConfig parameter — the
+ * cfg snapshot moved off UserScene into glr_scenes.c, but the stash
+ * still needs to capture / restore live cfg so install_scene_into_live
+ * can be undone. Callers allocate both on the stack. */
+static void stash_live_state(UserScene *dst, ReplExportConfig *cfg_out) {
     EditorBufferView text = editor_buffer_view();
     memset(dst, 0, sizeof(*dst));
     memcpy(dst->cmds, repl_state_document_cmds_mut(), (size_t)repl_state_document_count() * sizeof(GLCmd));
@@ -313,16 +313,16 @@ static void stash_live_state(UserScene *dst) {
         memcpy(dst->predef_names[i], g_predef_vars[i].name, 16);
     }
     repl_eval_copy_scratch_arrays(dst->scratch_arrays);
-    /* Capture live per-scene cfg too so restore_live_from_stash can
-     * roll it back. Symmetric with install_scene_into_live now
-     * applying s->scene_cfg. */
-    repl_export_config_clear(&dst->scene_cfg);
-    const ReplExportConfigBridge *bridge = repl_export_config_bridge();
-    if (bridge && bridge->fill_scene_subset)
-        bridge->fill_scene_subset(&dst->scene_cfg);
+    if (cfg_out) {
+        repl_export_config_clear(cfg_out);
+        const ReplExportConfigBridge *bridge = repl_export_config_bridge();
+        if (bridge && bridge->fill_scene_subset)
+            bridge->fill_scene_subset(cfg_out);
+    }
 }
 
-static void restore_live_from_stash(const UserScene *src) {
+static void restore_live_from_stash(const UserScene *src,
+                                    const ReplExportConfig *cfg) {
     if (!load_commands_into_live(src->cmds, src->lines, src->num_cmds,
                                  src->edit_line))
         return;
@@ -332,11 +332,11 @@ static void restore_live_from_stash(const UserScene *src) {
         memcpy(g_predef_vars[i].name, src->predef_names[i], 16);
     }
     repl_eval_restore_scratch_arrays(src->scratch_arrays);
-    /* Restore live cfg so the user's pre-stash settings survive any
-     * intervening install_scene_into_live calls. */
-    const ReplExportConfigBridge *bridge = repl_export_config_bridge();
-    if (bridge && bridge->apply)
-        bridge->apply(&src->scene_cfg);
+    if (cfg) {
+        const ReplExportConfigBridge *bridge = repl_export_config_bridge();
+        if (bridge && bridge->apply)
+            bridge->apply(cfg);
+    }
 }
 
 static void scene_filename_slug(const char *name, char *out, size_t out_sz) {
@@ -386,7 +386,8 @@ int repl_save_workspace(const char *dir) {
     snprintf(g_workspace_dir, WORKSPACE_DIR_MAX, "%s", dir);
 
     UserScene stash;
-    stash_live_state(&stash);
+    ReplExportConfig stash_cfg;
+    stash_live_state(&stash, &stash_cfg);
 
     int written = 0;
     for (int s = 0; s < MAX_USER_SCENES; s++) {
@@ -405,7 +406,7 @@ int repl_save_workspace(const char *dir) {
         written++;
     }
 
-    restore_live_from_stash(&stash);
+    restore_live_from_stash(&stash, &stash_cfg);
 
     char msg[256];
     snprintf(msg, sizeof(msg), "Saved %d scene%s to %s",
@@ -462,7 +463,8 @@ int repl_load_workspace(const char *dir) {
     }
 
     UserScene stash;
-    stash_live_state(&stash);
+    ReplExportConfig stash_cfg;
+    stash_live_state(&stash, &stash_cfg);
     int stash_example = g_example_idx;
     int stash_active  = g_active_user_scene;
 
@@ -480,7 +482,7 @@ int repl_load_workspace(const char *dir) {
     }
     closedir(d);
 
-    restore_live_from_stash(&stash);
+    restore_live_from_stash(&stash, &stash_cfg);
     g_example_idx       = stash_example;
     g_active_user_scene = stash_active;
 
@@ -513,6 +515,7 @@ static int evict_scene_to_workspace(int slot) {
     g_export_scene_name_hint = NULL;
 
     g_user_scenes[slot].used = 0;
+    glr_scenes_scene_cfg_clear(slot);
     return 1;
 }
 
@@ -543,9 +546,10 @@ int repl_promote_example_if_needed(void) {
             int victim = pick_lru_user_scene_slot();
             if (victim >= 0) {
                 UserScene stash;
-                stash_live_state(&stash);
+                ReplExportConfig stash_cfg;
+                stash_live_state(&stash, &stash_cfg);
                 int ok = evict_scene_to_workspace(victim);
-                restore_live_from_stash(&stash);
+                restore_live_from_stash(&stash, &stash_cfg);
                 if (ok)
                     slot = victim;
             }
@@ -645,7 +649,7 @@ void repl_scenes_capture_pre_example_cfg_if_entering(void) {
      * Subsequent example->example F12 cycles leave the snapshot
      * untouched so the pre-example baseline survives across them. */
     if (g_example_idx >= 0) return;
-    if (g_pre_example_valid) return;
+    if (glr_scenes_pre_example_cfg_valid()) return;
     capture_pre_example_cfg();
 }
 
@@ -670,5 +674,8 @@ void repl_scenes_reset(void) {
     memset(g_user_scenes, 0, sizeof(g_user_scenes));
     g_active_user_scene = -1;
     g_user_scene_tick = 0;
-    g_pre_example_valid = 0;
+    /* Step 7b: per-slot cfg snapshots + the example sandbox cfg live
+     * on glr_scenes.c. Resetting the slot lifecycle drives the cfg
+     * reset alongside. */
+    glr_scenes_reset_all();
 }
