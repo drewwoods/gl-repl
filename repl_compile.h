@@ -160,13 +160,17 @@ typedef struct ReplCompiledChange_s {
      * pre-step (see repl_compile_func_def / editor_compile_func_def).
      * Compile mutates the global alias table so parse_repl_func_signature
      * can map the name -> slot; if a downstream step (preflight, apply)
-     * fails, the caller must roll the registration back via
-     * repl_func_alias_clear(slot). -1 means compile registered nothing.
+     * fails, the caller must roll the registration back. -1 means
+     * compile registered nothing.
      *
-     * On success the slot stays registered; the alias matches the
-     * just-inserted CMD_FUNC_DEF and persists for the document's
+     * If had_previous_alias is set, rollback restores previous_alias;
+     * otherwise rollback clears the touched slot. On success the slot
+     * stays registered; the alias matches the just-inserted /
+     * just-updated CMD_FUNC_DEF and persists for the document's
      * lifetime. */
     int                    newly_aliased_slot;
+    int                    had_previous_alias;
+    char                   previous_alias[REPL_FUNC_NAME_MAX];
 
     /* Success message (used by callers; not mutated by compile). */
     char                   commit_message[REPL_STATUS_TEXT_MAX];
@@ -196,6 +200,10 @@ typedef enum {
 
 /* Initialize a ReplCompiledChange to its zero state. */
 void repl_compiled_change_init(ReplCompiledChange *out);
+
+/* Restore the alias table entry captured in ReplCompiledChange's
+ * speculative alias rollback fields. No-op if no alias was touched. */
+void repl_compiled_change_rollback_alias(const ReplCompiledChange *change);
 
 /* Build a compile context from the live REPL state. Convenience
  * helper for callers in transition; once the editor commit

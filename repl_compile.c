@@ -94,6 +94,19 @@ void repl_compiled_change_init(ReplCompiledChange *out) {
     out->delete_pos = -1;
     out->delete_count = 0;
     out->newly_aliased_slot = -1;
+    out->had_previous_alias = 0;
+    out->previous_alias[0] = '\0';
+}
+
+void repl_compiled_change_rollback_alias(const ReplCompiledChange *change) {
+    if (!change || change->newly_aliased_slot < 0)
+        return;
+    if (change->had_previous_alias) {
+        repl_func_alias_set(change->newly_aliased_slot,
+                            change->previous_alias);
+    } else {
+        repl_func_alias_clear(change->newly_aliased_slot);
+    }
 }
 
 ReplCompileContext repl_compile_context_from_live(void) {
@@ -1584,15 +1597,16 @@ ReplCompileResult repl_compile_func_def(const char *input,
      * we have to register the alias before calling the parser. That
      * mutates global state during what's nominally a pure compile, so:
      *
-     *   - record the slot we registered (newly_aliased_slot)
+     *   - record the slot we registered and its previous contents
      *   - if the parse / duplicate-check / format steps below fail,
-     *     UNREGISTER it before returning so the global table doesn't
-     *     leak a name with no matching CMD_FUNC_DEF.
+     *     restore the previous alias state before returning so the
+     *     global table doesn't leak a name with no matching CMD_FUNC_DEF
+     *     or lose an existing alias during a failed rewrite.
      *
      * [P1] regression: previously the alias_set call could leak on
      * parse failure (or apply failure further upstream); the rollback
-     * below covers parse-side failures. The editor wrapper has the
-     * same shape and will gain the same rollback in a follow-up. */
+     * below covers parse-side failures and the published rollback
+     * fields cover downstream preflight/apply failures. */
     int newly_aliased_slot = -1;
     {
         const char *p = trimmed;
@@ -1622,12 +1636,23 @@ ReplCompileResult repl_compile_func_def(const char *input,
                                      REPL_FUNC_SLOT_COUNT);
                             return REPL_COMPILE_ERROR;
                         }
+                        char prev_alias[REPL_FUNC_NAME_MAX] = "";
+                        const char *prev_alias_live = repl_func_alias_get(target_slot);
+                        if (prev_alias_live)
+                            snprintf(prev_alias, sizeof(prev_alias),
+                                     "%s", prev_alias_live);
                         if (!repl_func_alias_set(target_slot, ident)) {
                             snprintf(err, (size_t)err_size,
                                      "name '%s' already used", ident);
                             return REPL_COMPILE_ERROR;
                         }
                         newly_aliased_slot = target_slot;
+                        out->newly_aliased_slot = target_slot;
+                        out->had_previous_alias = prev_alias[0] ? 1 : 0;
+                        if (out->had_previous_alias)
+                            snprintf(out->previous_alias,
+                                     sizeof(out->previous_alias),
+                                     "%s", prev_alias);
                     }
                 }
             }
@@ -1639,8 +1664,7 @@ ReplCompileResult repl_compile_func_def(const char *input,
     char param_names[MAX_EXPR_VARS][16];
     if (!parse_repl_func_signature(input ? input : "", &fn,
                                    param_names, MAX_EXPR_VARS, &param_count)) {
-        if (newly_aliased_slot >= 0)
-            repl_func_alias_clear(newly_aliased_slot);
+        repl_compiled_change_rollback_alias(out);
         out->kind = REPL_COMPILED_NO_CHANGE;
         return REPL_COMPILE_OK;
     }
@@ -1662,8 +1686,7 @@ ReplCompileResult repl_compile_func_def(const char *input,
         if ((int)c->args[0] != fn) continue;
         snprintf(err, (size_t)err_size,
                  "func%d already defined (line %d)", fn, ei + 1);
-        if (newly_aliased_slot >= 0)
-            repl_func_alias_clear(newly_aliased_slot);
+        repl_compiled_change_rollback_alias(out);
         return REPL_COMPILE_ERROR;
     }
 

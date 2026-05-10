@@ -111,8 +111,7 @@ int repl_load_apply_line(const char *line, char *err, int err_size) {
              * speculatively. Predef/scratch/editor-buffer ops haven't
              * run yet (preflight gates them), so nothing else to
              * undo. */
-            if (change.newly_aliased_slot >= 0)
-                repl_func_alias_clear(change.newly_aliased_slot);
+            repl_compiled_change_rollback_alias(&change);
             if (err && err_size > 0 && err[0] == '\0')
                 snprintf(err, (size_t)err_size,
                          "command store at capacity (max %d)",
