@@ -1364,3 +1364,409 @@ ReplCompileResult repl_compile_toggle_comment(int line_idx,
         return REPL_COMPILE_OK;
     }
 }
+
+/* ===== Pure structured-block validators (step 5a of the decouple plan) =====
+ *
+ * These are the REPL-pipeline-side counterparts to the editor's
+ * editor_compile_close_brace / _if_block / _func_def / _for_loop in
+ * src/editor/commit.c. The editor versions handle edit-time semantics
+ * (cursor target, insert mode, header-replace branch, oneliner body,
+ * matched-existing-end close-brace). These pure versions cover only
+ * the line-by-line load case the lean source loader (step 5b) needs:
+ * single line of input → single CMD_* command appended.
+ *
+ * For the lean loader, ctx->edit_line == ctx->document_count and
+ * ctx->insert_mode == 0; the new command lands at the end of the
+ * document. The editor's edit-time branches don't arise here.
+ *
+ * Some parsing logic duplicates the editor versions. Step 5c (deferred)
+ * can refactor the editor wrappers to call these pure versions and
+ * attach editor effects on top.
+ */
+
+/* Compute the dedented (one-block-out) indent for a close-brace.
+ * Mirror of close_brace_indent in src/editor/commit.c. */
+static void compile_close_brace_indent(int pos, char *buf, int buf_sz) {
+    repl_source_scope_cmd_indent(pos, buf, buf_sz);
+    int len = (int)strlen(buf);
+    if (len >= 2)
+        len -= 2;
+    else
+        len = 0;
+    if (len > buf_sz - 1)
+        len = buf_sz - 1;
+    memset(buf, ' ', (size_t)len);
+    buf[len] = '\0';
+}
+
+ReplCompileResult repl_compile_close_brace(const char *input,
+                                           const ReplCompileContext *ctx,
+                                           ReplCompiledChange *out,
+                                           char *err, int err_size) {
+    (void)err; (void)err_size;
+    if (!ctx || !out) return REPL_COMPILE_ERROR;
+    repl_compiled_change_init(out);
+
+    const char *p = input ? input : "";
+    while (*p && isspace((unsigned char)*p)) p++;
+    if (*p != '}') {
+        out->kind = REPL_COMPILED_NO_CHANGE;
+        return REPL_COMPILE_OK;
+    }
+
+    int pos = ctx->insert_mode ? ctx->edit_line :
+              (ctx->edit_line < ctx->document_count
+                   ? ctx->edit_line : ctx->document_count);
+
+    CmdType open_type = repl_source_scope_nearest_open_block_at(pos);
+    CmdType end_type;
+    if (open_type == CMD_FOR_BEGIN)      end_type = CMD_FOR_END;
+    else if (open_type == CMD_FUNC_DEF)  end_type = CMD_FUNC_END;
+    else if (open_type == CMD_IF_BEGIN)  end_type = CMD_IF_END;
+    else { out->kind = REPL_COMPILED_NO_CHANGE; return REPL_COMPILE_OK; }
+
+    /* Matched-existing-end branch: close-brace lands on a row that's
+     * already the right end marker. No source mutation. (Editor cursor
+     * effects live on the editor wrapper.) */
+    if (pos < ctx->document_count &&
+        ctx->document_cmds[pos].type == end_type) {
+        out->kind = REPL_COMPILED_NO_CHANGE;
+        return REPL_COMPILE_OK;
+    }
+
+    /* Insert-new-end-marker branch. */
+    char indent[32];
+    compile_close_brace_indent(pos, indent, sizeof(indent));
+
+    GLCmd fe;
+    memset(&fe, 0, sizeof(fe));
+    fe.type = end_type;
+    fe.valid = 1;
+
+    out->kind  = REPL_COMPILED_INSERT_ONE;
+    out->pos   = pos;
+    out->count = 1;
+    out->adjust_edit_line = 1;
+    out->cmds[0] = fe;
+    snprintf(out->text[0], sizeof(out->text[0]), "%s}", indent);
+    return REPL_COMPILE_OK;
+}
+
+ReplCompileResult repl_compile_if_block(const char *input,
+                                        const ReplCompileContext *ctx,
+                                        ReplCompiledChange *out,
+                                        char *err, int err_size) {
+    if (!ctx || !out) return REPL_COMPILE_ERROR;
+    repl_compiled_change_init(out);
+
+    const char *p = input ? input : "";
+    while (*p && isspace((unsigned char)*p)) p++;
+    if (strncmp(p, "if(", 3) != 0 && strncmp(p, "if (", 4) != 0) {
+        out->kind = REPL_COMPILED_NO_CHANGE;
+        return REPL_COMPILE_OK;
+    }
+
+    int pos = ctx->insert_mode ? ctx->edit_line :
+              (ctx->edit_line < ctx->document_count
+                   ? ctx->edit_line : ctx->document_count);
+
+    ExprVar visible_vars[MAX_EXPR_VARS];
+    int visible_nv = collect_visible_vars(pos, visible_vars, MAX_EXPR_VARS, NULL);
+
+    /* Skip past `if` to the opening `(`. */
+    while (*p && *p != '(') p++;
+    if (!*p) {
+        snprintf(err, (size_t)err_size, "if syntax: if(expr) {");
+        return REPL_COMPILE_ERROR;
+    }
+    p++;
+
+    char cond_text[MAX_LINE_LEN];
+    int  paren = 1;
+    const char *expr_start = p;
+    while (*p && paren > 0) {
+        if (*p == '(')      paren++;
+        else if (*p == ')') paren--;
+        if (paren > 0) p++;
+    }
+    if (paren != 0) {
+        snprintf(err, (size_t)err_size, "if syntax: if(expr) {");
+        return REPL_COMPILE_ERROR;
+    }
+    int clen = (int)(p - expr_start);
+    if (clen > (int)sizeof(cond_text) - 1)
+        clen = (int)sizeof(cond_text) - 1;
+    memcpy(cond_text, expr_start, (size_t)clen);
+    cond_text[clen] = '\0';
+
+    {
+        char verr[128];
+        if (!repl_eval_validate_expression_idents(cond_text,
+                                                  visible_nv > 0 ? visible_vars : NULL,
+                                                  visible_nv,
+                                                  verr, sizeof(verr))) {
+            snprintf(err, (size_t)err_size, "%s", verr);
+            return REPL_COMPILE_ERROR;
+        }
+    }
+
+    float cond_val = 0.0f;
+    {
+        float cond_args[1];
+        int neval = repl_eval_parse_exprs(cond_text, cond_args, 1,
+                                          visible_nv > 0 ? visible_vars : NULL,
+                                          visible_nv);
+        cond_val = (neval >= 1) ? cond_args[0] : 0.0f;
+    }
+
+    /* Skip `)`; trailing `{` is optional for the lean loader. */
+    p++;
+    while (*p && isspace((unsigned char)*p)) p++;
+    if (*p != '{' && *p != '\0') {
+        snprintf(err, (size_t)err_size, "if syntax: if(expr) {");
+        return REPL_COMPILE_ERROR;
+    }
+
+    char indent[32];
+    repl_source_scope_cmd_indent(pos, indent, sizeof(indent));
+
+    GLCmd ib;
+    memset(&ib, 0, sizeof(ib));
+    ib.type = CMD_IF_BEGIN;
+    ib.args[0] = cond_val;
+    ib.valid = 1;
+    ib.has_vars = input_has_any_visible_vars(cond_text, visible_vars, visible_nv);
+
+    /* Trim cond_text in place for canonical formatting. */
+    char *ct = cond_text;
+    int ctlen;
+    while (*ct && isspace((unsigned char)*ct)) ct++;
+    ctlen = (int)strlen(ct);
+    while (ctlen > 0 && isspace((unsigned char)ct[ctlen - 1]))
+        ct[--ctlen] = '\0';
+
+    char ib_text[MAX_LINE_LEN];
+    if (!repl_format_fits(ib_text, sizeof(ib_text), "%sif(%s) {", indent, ct)) {
+        snprintf(err, (size_t)err_size, "Command too long");
+        return REPL_COMPILE_ERROR;
+    }
+
+    out->kind  = REPL_COMPILED_INSERT_ONE;
+    out->pos   = pos;
+    out->count = 1;
+    out->adjust_edit_line = 1;
+    out->cmds[0] = ib;
+    snprintf(out->text[0], sizeof(out->text[0]), "%s", ib_text);
+    return REPL_COMPILE_OK;
+}
+
+ReplCompileResult repl_compile_func_def(const char *input,
+                                        const ReplCompileContext *ctx,
+                                        ReplCompiledChange *out,
+                                        char *err, int err_size) {
+    if (!ctx || !out) return REPL_COMPILE_ERROR;
+    repl_compiled_change_init(out);
+
+    /* Quick-reject inputs that look like function calls (have `(` and
+     * no `{`). They go through the normal command parser. */
+    const char *trimmed = input ? input : "";
+    while (*trimmed && isspace((unsigned char)*trimmed)) trimmed++;
+    if (strchr(trimmed, '(') != NULL && strchr(trimmed, '{') == NULL) {
+        out->kind = REPL_COMPILED_NO_CHANGE;
+        return REPL_COMPILE_OK;
+    }
+
+    /* Alias pre-registration for new user names (e.g. `drawCube { ... }`).
+     * This mirrors editor_compile_func_def's pre-step but in the
+     * line-by-line load context (no overwrite branch). */
+    {
+        const char *p = trimmed;
+        if (!(strncmp(p, "func", 4) == 0 && p[4] >= '0' && p[4] <= '9' &&
+              !isalnum((unsigned char)p[5]) && p[5] != '_') &&
+            (isalpha((unsigned char)*p) || *p == '_')) {
+            char ident[REPL_FUNC_NAME_MAX];
+            int len = 0;
+            while (*p && (isalnum((unsigned char)*p) || *p == '_')) {
+                if (len >= REPL_FUNC_NAME_MAX - 1) { ident[0] = '\0'; break; }
+                ident[len++] = *p++;
+            }
+            if (len > 0) {
+                ident[len] = '\0';
+                while (*p && isspace((unsigned char)*p)) p++;
+                if (*p == '{' || *p == '(') {
+                    int existing = repl_func_alias_lookup_slot(ident);
+                    if (existing < 0) {
+                        if (!repl_func_alias_name_is_valid(ident)) {
+                            out->kind = REPL_COMPILED_NO_CHANGE;
+                            return REPL_COMPILE_OK;
+                        }
+                        int target_slot = repl_func_alias_first_free_slot();
+                        if (target_slot < 0) {
+                            snprintf(err, (size_t)err_size,
+                                     "no free function slots (max %d)",
+                                     REPL_FUNC_SLOT_COUNT);
+                            return REPL_COMPILE_ERROR;
+                        }
+                        if (!repl_func_alias_set(target_slot, ident)) {
+                            snprintf(err, (size_t)err_size,
+                                     "name '%s' already used", ident);
+                            return REPL_COMPILE_ERROR;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    int fn = -1;
+    int param_count = 0;
+    char param_names[MAX_EXPR_VARS][16];
+    if (!parse_repl_func_signature(input ? input : "", &fn,
+                                   param_names, MAX_EXPR_VARS, &param_count)) {
+        out->kind = REPL_COMPILED_NO_CHANGE;
+        return REPL_COMPILE_OK;
+    }
+
+    int pos = ctx->insert_mode ? ctx->edit_line :
+              (ctx->edit_line < ctx->document_count
+                   ? ctx->edit_line : ctx->document_count);
+
+    char indent[32];
+    repl_source_scope_cmd_indent(pos, indent, sizeof(indent));
+
+    GLCmd fd;
+    memset(&fd, 0, sizeof(fd));
+    fd.type = CMD_FUNC_DEF;
+    fd.args[0] = (float)fn;
+    fd.num_args = param_count;
+    fd.valid = 1;
+
+    char fd_text[MAX_LINE_LEN];
+    format_func_header(fd_text, (int)sizeof(fd_text),
+                       indent, fn, param_names, param_count);
+
+    out->kind  = REPL_COMPILED_INSERT_ONE;
+    out->pos   = pos;
+    out->count = 1;
+    out->adjust_edit_line = 1;
+    out->cmds[0] = fd;
+    snprintf(out->text[0], sizeof(out->text[0]), "%s", fd_text);
+    return REPL_COMPILE_OK;
+}
+
+ReplCompileResult repl_compile_for_loop(const char *input,
+                                        const ReplCompileContext *ctx,
+                                        ReplCompiledChange *out,
+                                        char *err, int err_size) {
+    if (!ctx || !out) return REPL_COMPILE_ERROR;
+    repl_compiled_change_init(out);
+
+    const char *p = input ? input : "";
+    while (*p && isspace((unsigned char)*p)) p++;
+    if (strncmp(p, "for(", 4) != 0 && strncmp(p, "for (", 5) != 0) {
+        out->kind = REPL_COMPILED_NO_CHANGE;
+        return REPL_COMPILE_OK;
+    }
+
+    int pos = ctx->insert_mode ? ctx->edit_line :
+              (ctx->edit_line < ctx->document_count
+                   ? ctx->edit_line : ctx->document_count);
+
+    ExprVar visible_vars[MAX_EXPR_VARS];
+    int visible_nv = collect_visible_vars(pos, visible_vars, MAX_EXPR_VARS, NULL);
+
+    char var_name[16];
+    float start, end, step;
+    const char *body_start = NULL;
+    if (!repl_eval_parse_for_header_with_vars(p, var_name, sizeof(var_name),
+                                              &start, &end, &step,
+                                              visible_vars, visible_nv,
+                                              &body_start)) {
+        snprintf(err, (size_t)err_size,
+                 "for syntax: for(var, start, end[, step]) body;");
+        return REPL_COMPILE_ERROR;
+    }
+
+    char indent[32];
+    repl_source_scope_cmd_indent(pos, indent, sizeof(indent));
+
+    GLCmd fb;
+    memset(&fb, 0, sizeof(fb));
+    fb.type = CMD_FOR_BEGIN;
+    fb.args[0] = start;
+    fb.args[1] = end;
+    fb.args[2] = step;
+    fb.valid = 1;
+
+    /* Re-walk the input to extract the args expression text so the
+     * formatted line preserves the user's symbolic form when args
+     * reference visible vars. Same approach as editor_compile_for_loop. */
+    char fb_text[MAX_LINE_LEN];
+    {
+        const char *raw = p;
+        while (*raw && *raw != '(') raw++;
+        if (*raw) raw++;
+        while (*raw && isspace((unsigned char)*raw)) raw++;
+        while (*raw && (isalnum((unsigned char)*raw) || *raw == '_')) raw++;
+        while (*raw && isspace((unsigned char)*raw)) raw++;
+        if (*raw == ',') raw++;
+
+        const char *args_start = raw;
+        int paren = 1;
+        const char *ap = args_start;
+        while (*ap && paren > 0) {
+            if (*ap == '(')      paren++;
+            else if (*ap == ')') paren--;
+            if (paren > 0) ap++;
+        }
+        int rlen = (int)(ap - args_start);
+        char raw_args[MAX_LINE_LEN];
+        if (rlen > (int)sizeof(raw_args) - 1)
+            rlen = (int)sizeof(raw_args) - 1;
+        memcpy(raw_args, args_start, (size_t)rlen);
+        raw_args[rlen] = '\0';
+        while (rlen > 0 && isspace((unsigned char)raw_args[rlen - 1]))
+            raw_args[--rlen] = '\0';
+
+        char *ra = raw_args;
+        while (*ra && isspace((unsigned char)*ra)) ra++;
+
+        char verr[128];
+        if (!repl_eval_validate_expression_idents(ra, visible_vars, visible_nv,
+                                                  verr, sizeof(verr))) {
+            snprintf(err, (size_t)err_size, "%s", verr);
+            return REPL_COMPILE_ERROR;
+        }
+
+        if (input_has_any_visible_vars(ra, visible_vars, visible_nv)) {
+            fb.has_vars = 1;
+            if (!repl_format_fits(fb_text, sizeof(fb_text),
+                                  "%sfor(%s, %s) {", indent, var_name, ra)) {
+                snprintf(err, (size_t)err_size, "Command too long");
+                return REPL_COMPILE_ERROR;
+            }
+        } else if (step != 1.0f) {
+            if (!repl_format_fits(fb_text, sizeof(fb_text),
+                                  "%sfor(%s, %g, %g, %g) {",
+                                  indent, var_name, start, end, step)) {
+                snprintf(err, (size_t)err_size, "Command too long");
+                return REPL_COMPILE_ERROR;
+            }
+        } else {
+            if (!repl_format_fits(fb_text, sizeof(fb_text),
+                                  "%sfor(%s, %g, %g) {",
+                                  indent, var_name, start, end)) {
+                snprintf(err, (size_t)err_size, "Command too long");
+                return REPL_COMPILE_ERROR;
+            }
+        }
+    }
+
+    out->kind  = REPL_COMPILED_INSERT_ONE;
+    out->pos   = pos;
+    out->count = 1;
+    out->adjust_edit_line = 1;
+    out->cmds[0] = fb;
+    snprintf(out->text[0], sizeof(out->text[0]), "%s", fb_text);
+    return REPL_COMPILE_OK;
+}
