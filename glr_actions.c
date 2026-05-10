@@ -461,7 +461,8 @@ int glr_action_menu_item_activate(int menu_id, int item_idx) {
         if (scene_idx >= 0 && scene_idx < repl_user_scene_count()) {
             int slot = repl_scene_menu_slot_for_dense_index(scene_idx);
             if (slot >= 0) {
-                repl_load_user_scene_idx(slot);
+                if (repl_load_user_scene_idx(slot))
+                    load_line_to_input(repl_state_edit_line());
                 return 1;
             }
         }

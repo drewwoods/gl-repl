@@ -50,7 +50,7 @@ typedef enum {
     PROF_SNAPSHOT_SCENE_CONFIG,    /* build_scene_config */
     PROF_SNAPSHOT_UI,              /* build_ui_snapshot */
     PROF_FLATTEN,       /* flatten_commands() (only when dirty) */
-    PROF_REFORMAT,      /* repl_reformat_commands() (on demand) */
+    PROF_REFORMAT,      /* repl_reformat_program() (on demand) */
     PROF_AUTONORMAL,    /* recompute_autonormals() (only when dirty) */
     PROF_REPLAY_HUD,    /* replay_ui_hud_render() (only when replaying) */
     PROF_PROFILE_PANEL, /* ui_profile_panel_render() (the panel itself) */
