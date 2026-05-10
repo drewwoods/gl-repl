@@ -1446,6 +1446,27 @@ void glr_ctrl_set_accum(int enabled) {
     glr_state_render_mut()->use_accum = enabled ? 1 : 0;
 }
 
+void glr_ctrl_fill_export_layout(ReplExportLayout *out) {
+    if (!out) return;
+    int sx = 0, sy = 0, sw = 0, sh = 0;
+    int cx = 0, cy = 0, cw = 0, ch = 0;
+    ui_layout_scene_rect(&sx, &sy, &sw, &sh);
+    ui_layout_code_panel_rect(&cx, &cy, &cw, &ch);
+    GlrPresentationState p = glr_state_presentation();
+    ReplViewportState    v = ui_state_viewport();
+    *out = (ReplExportLayout){
+        .viewport_w          = v.window_w,
+        .viewport_h          = v.window_h,
+        .scene_x             = sx,
+        .scene_y             = sy,
+        .scene_w             = sw,
+        .scene_h             = sh,
+        .code_panel_w        = cw,
+        .wrap_at_comma       = p.wrap_at_comma,
+        .show_vertex_indices = p.show_vertex_indices,
+    };
+}
+
 /* ===========================================================================
  * Router helpers: non-editor input concerns
  *
@@ -1470,7 +1491,9 @@ void glr_ctrl_set_accum(int enabled) {
 
 int glr_ctrl_router_handle_save_key(unsigned char key) {
     if (key == KEY_CTRL_S) {
-        repl_save_default_output();
+        ReplExportLayout layout;
+        glr_ctrl_fill_export_layout(&layout);
+        repl_save_default_output(&layout);
         return 1;
     }
     return 0;
@@ -1488,7 +1511,10 @@ int glr_ctrl_router_handle_debug_dump_key(unsigned char key) {
 
 int glr_ctrl_router_handle_quit_key(unsigned char key) {
     if (key == KEY_CTRL_Q) {
-        repl_export_save_output("/tmp/temp-output.c", editor_buffer_view());
+        ReplExportLayout layout;
+        glr_ctrl_fill_export_layout(&layout);
+        repl_export_save_output("/tmp/temp-output.c", editor_buffer_view(),
+                                &layout);
         printf("Saved to %s\n", "/tmp/temp-output.c");
         exit(0);
     }

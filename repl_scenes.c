@@ -365,7 +365,7 @@ static void scene_name_from_filename(const char *path,
     if (out_sz > 0) out[n] = '\0';
 }
 
-int repl_save_workspace(const char *dir) {
+int repl_save_workspace(const char *dir, const ReplExportLayout *layout) {
     if (!dir || !*dir) {
         set_status("Workspace save: no folder provided");
         return -1;
@@ -401,7 +401,7 @@ int repl_save_workspace(const char *dir) {
         snprintf(path, sizeof(path), "%s/%s.c", dir, slug);
 
         g_export_scene_name_hint = g_user_scenes[s].name;
-        repl_export_save_output(path, editor_buffer_view());
+        repl_export_save_output(path, editor_buffer_view(), layout);
         g_export_scene_name_hint = NULL;
         written++;
     }
@@ -511,7 +511,11 @@ static int evict_scene_to_workspace(int slot) {
     snprintf(path, sizeof(path), "%s/%s.c", g_workspace_dir, slug);
 
     g_export_scene_name_hint = g_user_scenes[slot].name;
-    repl_export_save_output(path, editor_buffer_view());
+    /* LRU eviction runs as a side effect of repl_promote_example_if_needed
+     * (called from editor_undo_push_snapshot). The user isn't actively
+     * saving here, so the layout struct is unavailable — pass NULL and
+     * accept the 800x600 fallback in the exported display(). */
+    repl_export_save_output(path, editor_buffer_view(), NULL);
     g_export_scene_name_hint = NULL;
 
     g_user_scenes[slot].used = 0;

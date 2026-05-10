@@ -168,7 +168,7 @@ void test_io() {
     repl_feed_line_public("glVertex3f(1,2,3);");
 
     const char *tmpf = "/tmp/test_repl_core_extra_io.c";
-    repl_export_save_output(tmpf, editor_buffer_view());
+    repl_export_save_output(tmpf, editor_buffer_view(), NULL);
 
     glr_app_reset_all(); declare_test_vars();
     ASSERT_INT("num_cmds after reset", count_vertices(), 0);
@@ -182,7 +182,7 @@ void test_io() {
 
     repl_load_initial_commands(NULL);
     const char *save_path = "/tmp/test_repl_core_extra_default_output.c";
-    repl_export_save_output(save_path, editor_buffer_view());
+    repl_export_save_output(save_path, editor_buffer_view(), NULL);
     ASSERT_INT("default-path save creates file",
                access(save_path, F_OK), 0);
     unlink(save_path);
@@ -340,7 +340,7 @@ void test_workspace_round_trip() {
     /* Save to a unique scratch directory. */
     char dir[256];
     snprintf(dir, sizeof(dir), "/tmp/repl_workspace_test.%d", (int)getpid());
-    int written = repl_save_workspace(dir);
+    int written = repl_save_workspace(dir, NULL);
     ASSERT_INT("save_workspace wrote all slots", written, slots_before);
     ASSERT_STR("workspace dir remembered", repl_workspace_dir(), dir);
 

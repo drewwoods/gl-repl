@@ -54,6 +54,14 @@ void glr_ctrl_tick(void);
  */
 int glr_ctrl_router_handle_save_key(unsigned char key);             /* Ctrl+S */
 int glr_ctrl_router_handle_debug_dump_key(unsigned char key);       /* Ctrl+P */
+
+/* Fill a ReplExportLayout from current ui_layout_* / glr_state_*
+ * values. The export pipeline reads layout as opaque integers
+ * (step 7c of feature/decouple-repl-from-gl-repl-alt.md). Controllers
+ * + tests building the export call site fill the struct via this
+ * helper instead of inlining the reads. */
+#include "repl_export.h"   /* ReplExportLayout */
+void glr_ctrl_fill_export_layout(ReplExportLayout *out);
 int glr_ctrl_router_handle_quit_key(unsigned char key);             /* Ctrl+Q */
 int glr_ctrl_router_handle_config_menu_key(unsigned char key);      /* backtick → config menu */
 int glr_ctrl_router_handle_active_replay_key(unsigned char key);    /* replay forwarding when active */

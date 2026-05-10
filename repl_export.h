@@ -179,6 +179,24 @@ extern const char  *g_footer_post_init[];
     "B[" REPL_EXPORT_STRINGIFY(REPL_SCRATCH_ARRAY_LEN) "], " \
     "C[" REPL_EXPORT_STRINGIFY(REPL_SCRATCH_ARRAY_LEN) "];"
 
+/* Layout values the export pipeline reads as opaque integers (step 7c
+ * of feature/decouple-repl-from-gl-repl-alt.md). The controller
+ * computes these from `ui_layout_*` / `glr_state_presentation()`
+ * before calling export; `repl_export.c` does not call ui_state_*
+ * / ui_layout_* / glr_state_*. The demo passes a zero-filled struct
+ * because it does not export. */
+typedef struct {
+    int viewport_w;          /* ui_state_viewport().window_w */
+    int viewport_h;          /* ui_state_viewport().window_h */
+    int scene_x;             /* ui_layout_scene_rect — geometry preserved in export */
+    int scene_y;
+    int scene_w;
+    int scene_h;
+    int code_panel_w;        /* ui_layout_code_panel_rect width — used by dump wrap */
+    int wrap_at_comma;       /* glr_state_presentation().wrap_at_comma */
+    int show_vertex_indices; /* glr_state_presentation().show_vertex_indices */
+} ReplExportLayout;
+
 /* Export current REPL state to a C source file. Writes header metadata (@var, @cfg,
  * @scene-name, @workspace-dir), global variable declarations, camera state, function
  * definitions, and geometry commands to filename. The file is a complete, standalone
@@ -187,8 +205,11 @@ extern const char  *g_footer_post_init[];
  *
  * `text` is the editor buffer view the caller built; the export
  * pipeline reads source text exclusively through that view rather
- * than reaching into editor globals. */
-void repl_export_save_output(const char *filename, EditorBufferView text);
+ * than reaching into editor globals. `layout` carries the viewport /
+ * scene rect / code-panel width / wrap toggle the controller built;
+ * `repl_export.c` consumes it as opaque integers. */
+void repl_export_save_output(const char *filename, EditorBufferView text,
+                             const ReplExportLayout *layout);
 
 /* Import a C source file saved by save_output(). Parses workspace header directives,
  * camera state, function definitions, and geometry commands. Feeds geometry lines

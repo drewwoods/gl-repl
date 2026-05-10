@@ -219,7 +219,11 @@ int main(void) {
 
         ASSERT_TRUE("open visual dump file", dump_f != NULL);
         if (dump_f) {
-            repl_dump_code_panel_visual_text(dump_f, editor_buffer_view());
+            {
+                ReplExportLayout layout;
+                glr_ctrl_fill_export_layout(&layout);
+                repl_dump_code_panel_visual_text(dump_f, editor_buffer_view(), &layout);
+            }
             fclose(dump_f);
         }
 
@@ -259,7 +263,11 @@ int main(void) {
 
         ASSERT_TRUE("open overflow visual dump file", dump_f != NULL);
         if (dump_f) {
-            repl_dump_code_panel_visual_text(dump_f, editor_buffer_view());
+            {
+                ReplExportLayout layout;
+                glr_ctrl_fill_export_layout(&layout);
+                repl_dump_code_panel_visual_text(dump_f, editor_buffer_view(), &layout);
+            }
             fclose(dump_f);
         }
 
@@ -302,7 +310,11 @@ int main(void) {
 
         ASSERT_TRUE("open point-parameter visual dump file", dump_f != NULL);
         if (dump_f) {
-            repl_dump_code_panel_visual_text(dump_f, editor_buffer_view());
+            {
+                ReplExportLayout layout;
+                glr_ctrl_fill_export_layout(&layout);
+                repl_dump_code_panel_visual_text(dump_f, editor_buffer_view(), &layout);
+            }
             fclose(dump_f);
         }
 
@@ -343,7 +355,11 @@ int main(void) {
 
         ASSERT_TRUE("open narrow point-parameter visual dump file", dump_f != NULL);
         if (dump_f) {
-            repl_dump_code_panel_visual_text(dump_f, editor_buffer_view());
+            {
+                ReplExportLayout layout;
+                glr_ctrl_fill_export_layout(&layout);
+                repl_dump_code_panel_visual_text(dump_f, editor_buffer_view(), &layout);
+            }
             fclose(dump_f);
         }
 
@@ -393,7 +409,11 @@ int main(void) {
 
             ASSERT_TRUE("open layout visual dump file", dump_f != NULL);
             if (dump_f) {
-                repl_dump_code_panel_visual_text(dump_f, editor_buffer_view());
+                {
+                ReplExportLayout layout;
+                glr_ctrl_fill_export_layout(&layout);
+                repl_dump_code_panel_visual_text(dump_f, editor_buffer_view(), &layout);
+            }
                 fclose(dump_f);
             }
 
@@ -419,6 +439,87 @@ int main(void) {
             }
         }
         glr_state_presentation_mut()->code_panel_layout = CFG_DEFAULT_CODE_PANEL_LAYOUT; glr_ctrl_sync_ui_chrome();
+        g_panel_frac = CFG_DEFAULT_PANEL_FRAC;
+    }
+
+    /* Regression test for step 7c: ReplExportLayout must propagate
+     * `show_vertex_indices` and `wrap_at_comma` from the controller
+     * into `repl_dump_code_panel_visual_text`. The 7a bridge-based
+     * read used a non-existent slug and silently fell back; this test
+     * pins the fix by toggling the flag and asserting the wrap column
+     * shifts by exactly the index-column width. */
+    {
+        const char *wrapped = "  glColor4f(0.125, 0.250, 0.500, 1.000);";
+        char dump_off_buf[8192];
+        char dump_on_buf[8192];
+        FILE *dump_f;
+
+        glr_app_reset_all();
+        declare_test_vars();
+        glr_state_presentation_mut()->wrap_at_comma = 1;
+        glr_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
+        glr_ctrl_sync_ui_chrome();
+        ui_state_viewport_set_size(360, ui_state_viewport().window_h);
+        g_panel_frac = 0.75f;
+
+        memset(&repl_state_document_cmds_mut()[0], 0, sizeof(repl_state_document_cmds_mut()[0]));
+        repl_state_document_cmds_mut()[0].type = CMD_COLOR4F;
+        repl_state_document_cmds_mut()[0].valid = 1;
+        editor_buffer_set_line(0, wrapped);
+        repl_state_document_count_set(1);
+
+        glr_state_presentation_mut()->show_vertex_indices = 0;
+        glr_ctrl_sync_ui_chrome();
+        dump_f = fopen(tmp_dump_path, "w");
+        ASSERT_TRUE("open layout-passthrough off dump", dump_f != NULL);
+        if (dump_f) {
+            ReplExportLayout layout;
+            glr_ctrl_fill_export_layout(&layout);
+            ASSERT_TRUE("layout struct picks up show_vertex_indices=0",
+                        layout.show_vertex_indices == 0);
+            repl_dump_code_panel_visual_text(dump_f, editor_buffer_view(), &layout);
+            fclose(dump_f);
+        }
+        dump_f = fopen(tmp_dump_path, "r");
+        if (dump_f) {
+            size_t n = fread(dump_off_buf, 1, sizeof(dump_off_buf) - 1, dump_f);
+            dump_off_buf[n] = '\0';
+            fclose(dump_f);
+        }
+
+        glr_state_presentation_mut()->show_vertex_indices = 1;
+        glr_ctrl_sync_ui_chrome();
+        dump_f = fopen(tmp_dump_path, "w");
+        ASSERT_TRUE("open layout-passthrough on dump", dump_f != NULL);
+        if (dump_f) {
+            ReplExportLayout layout;
+            glr_ctrl_fill_export_layout(&layout);
+            ASSERT_TRUE("layout struct picks up show_vertex_indices=1",
+                        layout.show_vertex_indices == 1);
+            repl_dump_code_panel_visual_text(dump_f, editor_buffer_view(), &layout);
+            fclose(dump_f);
+        }
+        dump_f = fopen(tmp_dump_path, "r");
+        if (dump_f) {
+            size_t n = fread(dump_on_buf, 1, sizeof(dump_on_buf) - 1, dump_f);
+            dump_on_buf[n] = '\0';
+            fclose(dump_f);
+        }
+
+        /* The two dumps must DIFFER. The 7a bridge bug caused both
+         * dumps to be byte-identical because the lookup
+         * `bridge->get_int("vertex_indices", ...)` returned the
+         * fallback (no cfg item has that slug), so the index
+         * column's text_x shift was lost regardless of the live
+         * presentation flag. With the 7c layout struct the value
+         * propagates and the wrap budget differs between the two
+         * runs. */
+        ASSERT_TRUE("layout passthrough: show_vertex_indices=0 vs 1 produce different dumps",
+                    strcmp(dump_off_buf, dump_on_buf) != 0);
+
+        glr_state_presentation_mut()->show_vertex_indices = CFG_DEFAULT_VERTEX_INDICES;
+        glr_state_presentation_mut()->code_panel_layout = CFG_DEFAULT_CODE_PANEL_LAYOUT;
+        glr_ctrl_sync_ui_chrome();
         g_panel_frac = CFG_DEFAULT_PANEL_FRAC;
     }
 
