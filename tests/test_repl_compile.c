@@ -23,6 +23,7 @@
 #include "repl_core.h"
 #include "repl_core_internal.h"  /* try_commit_*, editor_commit_func_decl_resume_peek */
 #include "repl_eval.h"
+#include "repl_load.h"           /* repl_load_apply_line for [P2] dup-check test */
 #include "repl_state.h"
 #include "ui/state.h"
 #include "support/test_harness.h"
@@ -814,6 +815,205 @@ int main(void) {
     test_func_def_comment_relocation();
     test_func_def_blank_line_relocation();
     test_func_def_resume_publish_consumed_by_close_brace();
+
+    /* [P1] regression: alias registration must roll back on parse
+     * failure. Pre-fix, repl_compile_func_def called
+     * repl_func_alias_set BEFORE parse_repl_func_signature, so a
+     * malformed `name(args` (no `{`, no closing `)`) would leave
+     * `name` registered as a func alias even though no CMD_FUNC_DEF
+     * was created. Subsequent `name()` calls would erroneously
+     * resolve. */
+    {
+        glr_app_reset_all();
+        repl_func_alias_clear_all();
+
+        /* Call repl_compile_func_def directly with a header that
+         * passes the quick-reject (both `(` and `{`) and whose alias
+         * pre-step succeeds, but where parse_repl_func_signature
+         * fails on the param list (`123` is not a valid identifier).
+         * Pre-fix, the alias `badRoll` would leak to the global
+         * alias table even though no CMD_FUNC_DEF was created. */
+        ReplCompileContext ctx = repl_compile_context_from_live();
+        ReplCompiledChange change;
+        char err[128] = "";
+        ReplCompileResult r = repl_compile_func_def(
+            "badRoll(123) {",
+            &ctx, &change, err, sizeof(err));
+
+        ASSERT_TRUE("[P1] func_def parse failure returns OK + NO_CHANGE",
+                    r == REPL_COMPILE_OK &&
+                    change.kind == REPL_COMPILED_NO_CHANGE);
+
+        /* The fix: alias must NOT be registered after parse failure. */
+        int slot = repl_func_alias_lookup_slot("badRoll");
+        ASSERT_TRUE("[P1] failed func_def parse does not leak alias",
+                    slot < 0);
+    }
+
+    /* [P2] regression: repl_compile_func_def must reject duplicate
+     * funcN definitions. The editor's editor_compile_func_def has
+     * this check (src/editor/commit.c lines 670-681); the lean
+     * validator was missing it, so an imported file with two
+     * `func0() { ... }` blocks would have been accepted silently
+     * where feed_line() would have rejected the second. */
+    {
+        glr_app_reset_all();
+        repl_func_alias_clear_all();
+
+        /* Establish slot 0: feed a first func0 def via the lean
+         * loader so it lands as a real CMD_FUNC_DEF in the
+         * document. */
+        char err[128] = "";
+        ASSERT_TRUE("[P2] first func0 def loads cleanly",
+                    repl_load_apply_line("func0() {", err, sizeof(err)));
+        ASSERT_TRUE("[P2] first func0 def populated err is empty",
+                    err[0] == '\0');
+
+        /* Verify slot 0 is a CMD_FUNC_DEF for fn=0. */
+        int found_first = 0;
+        for (int i = 0; i < repl_state_document_count(); i++) {
+            const GLCmd *c = &repl_state_document_cmds_mut()[i];
+            if (c->valid && c->type == CMD_FUNC_DEF && (int)c->args[0] == 0) {
+                found_first = 1;
+                break;
+            }
+        }
+        ASSERT_TRUE("[P2] first func0 def visible in document",
+                    found_first);
+
+        /* Now try a second func0 def. repl_compile_func_def directly
+         * (not through the loader, since the loader's append-at-end
+         * semantics would still produce the duplicate). */
+        ReplCompileContext ctx = repl_compile_context_from_live();
+        ReplCompiledChange change;
+        err[0] = '\0';
+        ReplCompileResult r = repl_compile_func_def(
+            "func0() {", &ctx, &change, err, sizeof(err));
+
+        ASSERT_TRUE("[P2] duplicate func0 def returns ERROR",
+                    r == REPL_COMPILE_ERROR);
+        ASSERT_TRUE("[P2] duplicate func0 def diagnostic mentions func0",
+                    strstr(err, "func0") != NULL &&
+                    strstr(err, "already defined") != NULL);
+    }
+
+    /* [P2 editor] regression: editor_compile_func_def must roll back
+     * alias registration on parse failure. The editor wrapper
+     * (src/editor/commit.c ~line 645) registers a new alias before
+     * parse_repl_func_signature runs, mirroring the
+     * repl_compile_func_def pre-step. The corresponding parse-fail
+     * branch (line ~659) returns NO_CHANGE without rolling back, so
+     * a malformed `name(args` line in the user-facing path still
+     * leaves the alias registered. */
+    {
+        glr_app_reset_all();
+        repl_func_alias_clear_all();
+
+        ReplCompileContext ctx = repl_compile_context_from_live();
+        EditorCommitPlan plan;
+        editor_commit_plan_init(&plan);
+        char err[128] = "";
+        ReplCompileResult r = editor_compile_func_def(
+            "edBadRoll(123) {",
+            &ctx, &plan, err, sizeof(err));
+
+        ASSERT_TRUE("[P2 editor] parse fail returns OK + NO_CHANGE",
+                    r == REPL_COMPILE_OK &&
+                    plan.change.kind == REPL_COMPILED_NO_CHANGE);
+        ASSERT_TRUE("[P2 editor] parse fail does not leak alias",
+                    repl_func_alias_lookup_slot("edBadRoll") < 0);
+    }
+
+    /* [P2 editor] regression: editor_compile_func_def must roll back
+     * alias registration on duplicate-funcN failure. The dup-check
+     * branch (src/editor/commit.c ~line 678) returns ERROR without
+     * rolling back, so a NEW alias whose pre-step assigns to slot N
+     * — where slot N already has a CMD_FUNC_DEF — leaks the alias
+     * registration. */
+    {
+        glr_app_reset_all();
+        repl_func_alias_clear_all();
+
+        /* Insert a bare func0 (no alias registered) so slot 0 is
+         * "free" by repl_func_alias_first_free_slot's definition
+         * but already occupied at the document level. */
+        char err[128] = "";
+        ASSERT_TRUE("[P2 editor] bare func0 loads cleanly",
+                    repl_load_apply_line("func0() {", err, sizeof(err)));
+
+        /* Compile a NEW alias whose pre-step would target slot 0
+         * (first free) but whose dup check fails because fn=0
+         * already has a CMD_FUNC_DEF in the document. */
+        ReplCompileContext ctx = repl_compile_context_from_live();
+        EditorCommitPlan plan;
+        editor_commit_plan_init(&plan);
+        err[0] = '\0';
+        ReplCompileResult r = editor_compile_func_def(
+            "edDupAlias() {",
+            &ctx, &plan, err, sizeof(err));
+
+        ASSERT_TRUE("[P2 editor] dup fail returns ERROR",
+                    r == REPL_COMPILE_ERROR);
+        ASSERT_TRUE("[P2 editor] dup fail diagnostic mentions func0",
+                    strstr(err, "func0") != NULL &&
+                    strstr(err, "already defined") != NULL);
+        ASSERT_TRUE("[P2 editor] dup fail does not leak alias",
+                    repl_func_alias_lookup_slot("edDupAlias") < 0);
+    }
+
+    /* [P1 loader] regression: repl_load_apply_line must preflight
+     * via repl_apply_can_apply_compiled_change before mutating
+     * predef vars / scratch ops / editor buffer. Pre-fix, a
+     * capacity overflow at apply time would leave the predef var
+     * already declared but no source CMD_VAR_DECLARE to back it. */
+    {
+        glr_app_reset_all();
+        repl_func_alias_clear_all();
+
+        /* Force the cmd-store to capacity so any insert fails. */
+        ReplCommandStore store = repl_command_store_live();
+        int capacity = repl_command_store_capacity(&store);
+        int saved_count = *store.count;
+        *store.count = capacity;
+
+        char err[128] = "";
+        int ok = repl_load_apply_line("float fooLeak;", err, sizeof(err));
+
+        /* Restore count BEFORE asserting so the asserts can clean up
+         * gracefully and subsequent tests inherit a clean slate. */
+        *store.count = saved_count;
+
+        ASSERT_TRUE("[P1 loader] capacity-fail returns 0", !ok);
+        ASSERT_TRUE("[P1 loader] capacity-fail does not register predef var",
+                    repl_eval_find_predef_var_idx("fooLeak") < 0);
+    }
+
+    /* [P1 loader] regression: alias registered during compile must
+     * be rolled back when the loader's apply step fails. Pre-fix,
+     * compile_func_def's pre-step would register the alias, then
+     * repl_apply_compiled_change would fail at capacity, but the
+     * alias would remain in the global table with no matching
+     * CMD_FUNC_DEF. */
+    {
+        glr_app_reset_all();
+        repl_func_alias_clear_all();
+
+        ReplCommandStore store = repl_command_store_live();
+        int capacity = repl_command_store_capacity(&store);
+        int saved_count = *store.count;
+        *store.count = capacity;
+
+        char err[128] = "";
+        int ok = repl_load_apply_line("leakOnFail() {",
+                                      err, sizeof(err));
+        int slot = repl_func_alias_lookup_slot("leakOnFail");
+
+        *store.count = saved_count;
+
+        ASSERT_TRUE("[P1 loader] func capacity-fail returns 0", !ok);
+        ASSERT_TRUE("[P1 loader] func capacity-fail does not leak alias",
+                    slot < 0);
+    }
 
     return test_harness_report(&g_harness, "test_repl_compile");
 }

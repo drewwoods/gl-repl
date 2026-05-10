@@ -92,6 +92,14 @@ EditorCommitResult editor_commit_current_input(const struct EditorServices_s *se
 
     /* Preflight before mutation. */
     if (!repl_apply_can_apply_compiled_change(&change)) {
+        /* Roll back the speculative alias registration that compile
+         * may have performed during its pre-step. Without this, a
+         * capacity-failed func def leaves the alias name pointing at
+         * a slot with no matching CMD_FUNC_DEF, and subsequent
+         * `name()` calls would resolve but execute nothing. [P1]
+         * regression. */
+        if (change.newly_aliased_slot >= 0)
+            repl_func_alias_clear(change.newly_aliased_slot);
         result.consumed = 1;
         result.capacity_failed = 1;
         return result;
@@ -120,8 +128,13 @@ int editor_commit_apply_external_change(const struct ReplCompiledChange_s *chang
 
     if (!change)
         return 0;
-    if (!repl_apply_can_apply_compiled_change(change))
+    if (!repl_apply_can_apply_compiled_change(change)) {
+        /* Mirror editor_commit_apply_plan: roll back any speculative
+         * alias registration when preflight fails. [P1] regression. */
+        if (change->newly_aliased_slot >= 0)
+            repl_func_alias_clear(change->newly_aliased_slot);
         return 0;
+    }
 
     if (capture_undo)
         editor_undo_push_snapshot();
@@ -207,8 +220,13 @@ int editor_commit_apply_plan(const EditorCommitPlan *plan) {
     if (!plan) return 0;
 
     /* Preflight before any mutation. */
-    if (!repl_apply_can_apply_compiled_change(&plan->change))
+    if (!repl_apply_can_apply_compiled_change(&plan->change)) {
+        /* Roll back any speculative alias registration. [P1]
+         * regression: see editor_commit_apply_compiled_change. */
+        if (plan->change.newly_aliased_slot >= 0)
+            repl_func_alias_clear(plan->change.newly_aliased_slot);
         return 0;
+    }
 
     /* NOTE: undo capture is the caller's responsibility during the
      * Phase D transition. The legacy ;-key / Enter / feed_line
@@ -597,7 +615,14 @@ ReplCompileResult editor_compile_func_def(const char *input,
      * Slot picking: if the cursor is on an existing CMD_FUNC_DEF and
      * we're not in insert mode, the rename targets that line's slot
      * (so `drawCube` -> `drawSphere` reuses slot N). Otherwise pick
-     * the next free slot. The bare-funcN branch is a no-op fast path. */
+     * the next free slot. The bare-funcN branch is a no-op fast path.
+     *
+     * The pre-step mutates the global alias table; the rollback at
+     * each downstream failure path (parse, dup, format) makes that
+     * speculative. The success path publishes the slot via
+     * out->change.newly_aliased_slot so editor_commit_apply_plan can
+     * roll it back if its own preflight fails. [P2 editor] regression. */
+    int newly_aliased_slot = -1;
     {
         const char *p = trimmed;
         if (!(strncmp(p, "func", 4) == 0 && p[4] >= '0' && p[4] <= '9' &&
@@ -647,6 +672,7 @@ ReplCompileResult editor_compile_func_def(const char *input,
                                      "name '%s' already used", ident);
                             return REPL_COMPILE_ERROR;
                         }
+                        newly_aliased_slot = target_slot;
                     }
                 }
             }
@@ -656,6 +682,8 @@ ReplCompileResult editor_compile_func_def(const char *input,
     if (!parse_repl_func_signature(input ? input : "", &fn,
                                    param_names, MAX_EXPR_VARS,
                                    &param_count)) {
+        if (newly_aliased_slot >= 0)
+            repl_func_alias_clear(newly_aliased_slot);
         out->change.kind = REPL_COMPILED_NO_CHANGE;
         return REPL_COMPILE_OK;
     }
@@ -677,6 +705,8 @@ ReplCompileResult editor_compile_func_def(const char *input,
         if (overwriting_func && ei == edit_pos) continue;
         snprintf(err, (size_t)err_size,
                  "func%d already defined (line %d)", fn, ei + 1);
+        if (newly_aliased_slot >= 0)
+            repl_func_alias_clear(newly_aliased_slot);
         return REPL_COMPILE_ERROR;
     }
 
@@ -708,6 +738,7 @@ ReplCompileResult editor_compile_func_def(const char *input,
         snprintf(out->commit_message, sizeof(out->commit_message),
                  "func def header updated");
         out->commit_message_valid = 1;
+        out->change.newly_aliased_slot = newly_aliased_slot;
         return REPL_COMPILE_OK;
     }
 
@@ -814,6 +845,7 @@ ReplCompileResult editor_compile_func_def(const char *input,
     snprintf(out->commit_message, sizeof(out->commit_message),
              "func def: type body lines, press Esc when done");
     out->commit_message_valid = 1;
+    out->change.newly_aliased_slot = newly_aliased_slot;
 
     return REPL_COMPILE_OK;
 }
