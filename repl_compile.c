@@ -47,8 +47,6 @@
 
 #include "repl_compile.h"
 
-#include "repl_apply.h"          /* repl_apply_compiled_change for repl_load_apply_line */
-#include "repl_command_store.h"  /* repl_command_store_insert_one for plain-command path */
 #include "repl_core_internal.h"  /* repl_format_fits, repl_extract_assignment_parts, collect_visible_vars */
 #include "repl_parser.h"         /* repl_parser_parse_command_ctx (uncomment fallback) */
 #include "repl_source_scope.h"   /* repl_source_scope_cmd_indent, _find_block_end */
@@ -95,6 +93,7 @@ void repl_compiled_change_init(ReplCompiledChange *out) {
     out->count = 0;
     out->delete_pos = -1;
     out->delete_count = 0;
+    out->newly_aliased_slot = -1;
 }
 
 ReplCompileContext repl_compile_context_from_live(void) {
@@ -1579,8 +1578,22 @@ ReplCompileResult repl_compile_func_def(const char *input,
     }
 
     /* Alias pre-registration for new user names (e.g. `drawCube { ... }`).
-     * This mirrors editor_compile_func_def's pre-step but in the
-     * line-by-line load context (no overwrite branch). */
+     *
+     * parse_repl_func_signature recognises the bare `funcN` form plus
+     * already-registered aliases, so to parse a brand-new identifier
+     * we have to register the alias before calling the parser. That
+     * mutates global state during what's nominally a pure compile, so:
+     *
+     *   - record the slot we registered (newly_aliased_slot)
+     *   - if the parse / duplicate-check / format steps below fail,
+     *     UNREGISTER it before returning so the global table doesn't
+     *     leak a name with no matching CMD_FUNC_DEF.
+     *
+     * [P1] regression: previously the alias_set call could leak on
+     * parse failure (or apply failure further upstream); the rollback
+     * below covers parse-side failures. The editor wrapper has the
+     * same shape and will gain the same rollback in a follow-up. */
+    int newly_aliased_slot = -1;
     {
         const char *p = trimmed;
         if (!(strncmp(p, "func", 4) == 0 && p[4] >= '0' && p[4] <= '9' &&
@@ -1614,6 +1627,7 @@ ReplCompileResult repl_compile_func_def(const char *input,
                                      "name '%s' already used", ident);
                             return REPL_COMPILE_ERROR;
                         }
+                        newly_aliased_slot = target_slot;
                     }
                 }
             }
@@ -1625,8 +1639,32 @@ ReplCompileResult repl_compile_func_def(const char *input,
     char param_names[MAX_EXPR_VARS][16];
     if (!parse_repl_func_signature(input ? input : "", &fn,
                                    param_names, MAX_EXPR_VARS, &param_count)) {
+        if (newly_aliased_slot >= 0)
+            repl_func_alias_clear(newly_aliased_slot);
         out->kind = REPL_COMPILED_NO_CHANGE;
         return REPL_COMPILE_OK;
+    }
+
+    /* Reject duplicate funcN definitions: an existing CMD_FUNC_DEF for
+     * the same fn anywhere in the document means the new line is a
+     * second definition that would shadow the first. The editor's
+     * editor_compile_func_def has the same check (src/editor/commit.c
+     * lines 670-681) so feed_line rejects this; the lean loader path
+     * needs to match.
+     *
+     * Note: this validator is the line-by-line load case, so we don't
+     * have an "overwriting an existing func line" branch (the editor
+     * does, for in-place renames). [P2] regression. */
+    for (int ei = 0; ei < ctx->document_count; ei++) {
+        const GLCmd *c = &ctx->document_cmds[ei];
+        if (!c->valid) continue;
+        if (c->type != CMD_FUNC_DEF) continue;
+        if ((int)c->args[0] != fn) continue;
+        snprintf(err, (size_t)err_size,
+                 "func%d already defined (line %d)", fn, ei + 1);
+        if (newly_aliased_slot >= 0)
+            repl_func_alias_clear(newly_aliased_slot);
+        return REPL_COMPILE_ERROR;
     }
 
     int pos = ctx->insert_mode ? ctx->edit_line :
@@ -1653,6 +1691,9 @@ ReplCompileResult repl_compile_func_def(const char *input,
     out->adjust_edit_line = 1;
     out->cmds[0] = fd;
     snprintf(out->text[0], sizeof(out->text[0]), "%s", fd_text);
+    /* Publish the alias slot (if any) so callers can roll back the
+     * registration on preflight/apply failure downstream. */
+    out->newly_aliased_slot = newly_aliased_slot;
     return REPL_COMPILE_OK;
 }
 
@@ -1773,127 +1814,7 @@ ReplCompileResult repl_compile_for_loop(const char *input,
     return REPL_COMPILE_OK;
 }
 
-/* ===== Non-editor source-load entry (step 5b of the decouple plan) ====== */
-
-/* Try one of the structured-block validators. Returns 1 if the line
- * was consumed (kind != NO_CHANGE) or if the validator returned an
- * error. Returns 0 if the line wasn't this block's shape (caller
- * should fall through to the next handler). */
-static int load_try_block(ReplCompileResult (*compile)(const char *,
-                                                       const ReplCompileContext *,
-                                                       ReplCompiledChange *,
-                                                       char *, int),
-                          const char *line,
-                          const ReplCompileContext *ctx,
-                          ReplCompiledChange *out,
-                          char *err, int err_size,
-                          int *failed_out) {
-    ReplCompileResult r = compile(line, ctx, out, err, err_size);
-    if (r == REPL_COMPILE_ERROR) {
-        if (failed_out) *failed_out = 1;
-        return 1;  /* claimed but failed */
-    }
-    return out->kind != REPL_COMPILED_NO_CHANGE;
-}
-
-int repl_load_apply_line(const char *line, char *err, int err_size) {
-    if (!line) return 0;
-    if (err && err_size > 0) err[0] = '\0';
-
-    /* Don't pre-skip empty/comment lines: feed_line preserves them as
-     * CMD_EMPTY / CMD_COMMENT so flatten can pass them through and
-     * roundtrip preserves the line count. The parser handles them
-     * correctly. */
-
-    ReplCompileContext ctx = repl_compile_context_from_live();
-    ReplCompiledChange change;
-    repl_compiled_change_init(&change);
-    int failed = 0;
-
-    /* (1) float decl + var assign via dispatcher. */
-    {
-        ReplCompileResult r = repl_compile_dispatch(line, &ctx, &change,
-                                                    err, err_size);
-        if (r == REPL_COMPILE_ERROR) return 0;
-    }
-
-    /* (2) structured-block validators in canonical try_commit order:
-     * close_brace → for_loop → func_def → if_block. */
-    if (change.kind == REPL_COMPILED_NO_CHANGE &&
-        load_try_block(repl_compile_close_brace, line, &ctx, &change,
-                       err, err_size, &failed)) {
-        if (failed) return 0;
-    }
-    if (change.kind == REPL_COMPILED_NO_CHANGE &&
-        load_try_block(repl_compile_for_loop, line, &ctx, &change,
-                       err, err_size, &failed)) {
-        if (failed) return 0;
-    }
-    if (change.kind == REPL_COMPILED_NO_CHANGE &&
-        load_try_block(repl_compile_func_def, line, &ctx, &change,
-                       err, err_size, &failed)) {
-        if (failed) return 0;
-    }
-    if (change.kind == REPL_COMPILED_NO_CHANGE &&
-        load_try_block(repl_compile_if_block, line, &ctx, &change,
-                       err, err_size, &failed)) {
-        if (failed) return 0;
-    }
-
-    /* (3) Apply the structured/decl/assign change if any was produced.
-     * Order matches editor_commit_apply_plan's REPL halves:
-     * predef ops → editor-buffer text → REPL cmd-store.
-     *
-     * Force adjust_edit_line=1 so insert ops auto-advance edit_line.
-     * The compile validators leave it 0 because the editor wrapper
-     * controls cursor target via EditorCommitPlan; for the lean
-     * loader's append-at-end semantics, edit_line must auto-advance
-     * line-by-line so the next call sees insert_idx = document_count. */
-    if (change.kind != REPL_COMPILED_NO_CHANGE) {
-        change.adjust_edit_line = 1;
-        repl_apply_predef_ops(&change);
-        repl_apply_scratch_ops(&change);
-        if (!editor_buffer_apply_compiled_change(&change))
-            return 0;
-        return repl_apply_compiled_change(&change) ? 1 : 0;
-    }
-
-    /* (4) Plain GL command path — parse + insert via command store.
-     * Mirrors feed_line's plain-command tail but without writing the
-     * editor input buffer. */
-    int insert_idx = ctx.edit_line < ctx.document_count
-                         ? ctx.edit_line : ctx.document_count;
-
-    ExprVar vis_vars[MAX_EXPR_VARS];
-    int vis_total = 0;
-    int num_vis_vars = collect_visible_vars(insert_idx, vis_vars,
-                                            MAX_EXPR_VARS, &vis_total);
-
-    GLCmd cmd;
-    char cmd_text[MAX_LINE_LEN] = "";
-    memset(&cmd, 0, sizeof(cmd));
-    int parsed;
-    if (num_vis_vars > 0) {
-        parsed = repl_parse_and_normalize_strict(line, insert_idx,
-                                                 vis_vars, num_vis_vars,
-                                                 input_has_any_visible_vars(line, vis_vars, num_vis_vars),
-                                                 &cmd, cmd_text, sizeof(cmd_text));
-    } else {
-        parsed = repl_parse_and_normalize_strict(line, insert_idx,
-                                                 NULL, 0,
-                                                 repl_eval_input_has_predef_vars(line),
-                                                 &cmd, cmd_text, sizeof(cmd_text));
-    }
-    if (!parsed) {
-        if (err && err_size > 0 && err[0] == '\0')
-            snprintf(err, (size_t)err_size, "could not parse line: %s", line);
-        return 0;
-    }
-
-    ReplCommandStore store = repl_command_store_live();
-    if (!repl_command_store_insert_one(&store, insert_idx, &cmd,
-                                       REPL_COMMAND_STORE_ADJUST_EDIT_LINE))
-        return 0;
-    editor_buffer_insert_line(insert_idx, cmd_text);
-    return 1;
-}
+/* repl_load_apply_line moved to repl_load.c after a [P2] review
+ * finding: this file is the pure-validator module per the contract
+ * at the top, and apply orchestration (writing the command store /
+ * editor buffer / predef-var registrations) belongs elsewhere. */

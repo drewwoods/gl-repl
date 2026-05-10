@@ -156,6 +156,18 @@ typedef struct ReplCompiledChange_s {
     ReplScratchOp          scratch_ops[MAX_SCRATCH_OPS_PER_COMMIT];
     int                    scratch_op_count;
 
+    /* Func-alias registration that compile performed during its
+     * pre-step (see repl_compile_func_def / editor_compile_func_def).
+     * Compile mutates the global alias table so parse_repl_func_signature
+     * can map the name -> slot; if a downstream step (preflight, apply)
+     * fails, the caller must roll the registration back via
+     * repl_func_alias_clear(slot). -1 means compile registered nothing.
+     *
+     * On success the slot stays registered; the alias matches the
+     * just-inserted CMD_FUNC_DEF and persists for the document's
+     * lifetime. */
+    int                    newly_aliased_slot;
+
     /* Success message (used by callers; not mutated by compile). */
     char                   commit_message[REPL_STATUS_TEXT_MAX];
 } ReplCompiledChange;
@@ -271,31 +283,8 @@ ReplCompileResult repl_compile_for_loop(const char *input,
                                         ReplCompiledChange *out,
                                         char *err, int err_size);
 
-/* Non-editor source-load entry point (step 5b of
- * feature/decouple-repl-from-gl-repl-alt.md).
- *
- * Compile + apply a single source line at the end of the document.
- * Replaces the editor's feed_line() for callers that don't want
- * editor input dispatch (cursor mutations, insert mode toggle, input
- * buffer writes). Used by repl_example_loader and repl_export's
- * importer after step 5b lands.
- *
- * Dispatch order matches feed_line / try_commit_*:
- *   float decl → var assign (via repl_compile_dispatch)
- *   close_brace → for_loop → func_def → if_block (block validators)
- *   plain GL command (via repl_parse_and_normalize_strict)
- *
- * Returns 1 if the line was consumed (committed or recognized as a
- * comment / structured fragment), 0 if nothing matched. On parse
- * error, fills `err` with a diagnostic and returns 0.
- *
- * Caller responsibilities:
- *   - Set repl_state_edit_line to repl_state_document_count() before
- *     the load loop.
- *   - Clear editor_insert_mode (the loader assumes append-at-end).
- *   - Call repl_state_mark_flat_dirty / repl_state_mark_normals_dirty
- *     after the load loop completes. */
-int repl_load_apply_line(const char *line, char *err, int err_size);
+/* repl_load_apply_line moved to repl_load.h to keep this header pure
+ * (compile descriptors only; no apply orchestration). */
 
 /* Compile an external live-value update for an existing predefined
  * variable.
