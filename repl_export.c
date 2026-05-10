@@ -3322,7 +3322,13 @@ void repl_dump_code_panel_visual_text(FILE *out, EditorBufferView text,
     /* Step 7c: panel width + presentation flags come in opaquely
      * through the layout struct. The controller computes them via
      * `ui_layout_*` / `glr_state_presentation()` before calling.
-     * NULL is treated as a zero-filled struct (the demo case). */
+     *
+     * NULL falls back to defensive defaults skewed toward a typical
+     * interactive layout (so dumps remain readable when re-loaded
+     * with the editor running): code_panel_w = 0 (which disables
+     * wrap), show_vertex_indices = 1, wrap_at_comma = 1. The full
+     * fallback contract lives on `ReplExportLayout`'s declaration
+     * in repl_export.h. */
     int panel_w       = layout ? layout->code_panel_w        : 0;
     int show_indices  = layout ? layout->show_vertex_indices : 1;
     int wrap_at_comma = layout ? layout->wrap_at_comma       : 1;
