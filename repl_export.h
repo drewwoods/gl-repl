@@ -224,9 +224,10 @@ void repl_export_save_output(const char *filename, EditorBufferView text,
 
 /* Import a C source file saved by save_output(). Parses workspace header directives,
  * camera state, function definitions, and geometry commands. Feeds geometry lines
- * through feed_line() for normal parsing. Returns 1 on success, 0 on error (parse
- * failure, open failure). Pending scene-name and workspace-dir directives remain
- * in import/export state for the caller to consume after return. */
+ * through repl_load_apply_line() (the lean non-editor source-load path from step
+ * 5b) for normal parsing. Returns 1 on success, 0 on error (parse failure, open
+ * failure). Pending scene-name and workspace-dir directives remain in import/export
+ * state for the caller to consume after return. */
 int  repl_export_load_from_file(const char *filename);
 
 /* Refresh the export header text from current state. Pre-builds the header metadata

@@ -1325,6 +1325,14 @@ static void glr_app_reset_example_chrome(void) {
     glr_camera_mut()->auto_rotate = CFG_DEFAULT_CAMERA_ROTATE;
 }
 
+/* Adapter for repl_executor_install_camera_distance_source. The
+ * source is unconditionally installed; only the NO_POINT_PARAMETER
+ * code path consumes it, so this is a small zero-cost shim on
+ * default builds. */
+static float glr_app_camera_distance(void) {
+    return glr_camera().dist;
+}
+
 static void glr_app_install_app_services(void) {
     /* Install the status-message sink. Pipeline TUs call set_status()
      * to surface diagnostics; this routes them to UiState. The demo
@@ -1352,6 +1360,14 @@ static void glr_app_install_app_services(void) {
      * repl_example_loader.c (example camera presets); step 7 closes
      * those last two doors. */
     glr_camera_export_install_bridge();
+    /* Step 7e: install the executor's camera-distance source. The
+     * legacy point-size fallback (compiled in via NO_POINT_PARAMETER=1
+     * on platforms missing glPointParameterfv) needs the current
+     * camera distance to scale glPointSize calls; routing it through
+     * a controller-installed callback keeps glr_camera.c out of the
+     * REPL pipeline. The demo doesn't install — the fallback then
+     * passes glPointSize through unscaled. */
+    repl_executor_install_camera_distance_source(glr_app_camera_distance);
 }
 
 /* Full-world reset entry point. Step 2 of
