@@ -15,6 +15,7 @@
  */
 
 #include "editor/commit.h"
+#include "editor/reformat.h"
 #include "editor/services.h"
 #include "editor/state.h"
 #include "repl_apply.h"
@@ -381,8 +382,8 @@ static void test_reformat_keeps_buffer_and_store_aligned(void) {
     ASSERT_INT("post-build doc + buffer agree on count",
                doc_count, buf_count);
 
-    /* Trigger reformat via repl_reformat_commands(). */
-    repl_reformat_commands();
+    /* Trigger reformat via editor_reformat_commands(). */
+    editor_reformat_commands();
 
     ASSERT_INT("post-reformat doc count", repl_state_document_count(), doc_count);
     ASSERT_INT("post-reformat buffer count", editor_buffer_count(), buf_count);

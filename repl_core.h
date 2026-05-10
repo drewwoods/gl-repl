@@ -123,7 +123,11 @@ void repl_replay_stop(void);
 /* --- Editor / navigation helpers called from outside repl_core.c ------- */
 void repl_navigate_to_line(int target);
 void repl_load_initial_commands(const char *import_file);
-void repl_reformat_commands(void);
+/* Pure REPL pass: walks every command and rewrites the canonical
+ * line text + GLCmd in place. Does not save/restore editor input;
+ * the editor's Ctrl+\ wrapper (`editor_reformat_commands`) layers
+ * that on top. */
+void repl_reformat_program(void);
 
 /* --- Cursor / feed queries --------------------------------------------- */
 int  repl_flat_cmd_matches_cursor(int flat_idx);

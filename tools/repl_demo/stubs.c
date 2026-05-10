@@ -18,6 +18,12 @@
  *           `ReplExportConfigBridge` so repl_export.c / repl_scenes.c
  *           no longer call glr_config_*. glr_config.c is no longer in
  *           the demo link set.
+ *   Step 6 cleared `load_line_to_input` by splitting the reformat pass
+ *           into a pure REPL helper (`repl_reformat_program`) and an
+ *           editor wrapper (`editor_reformat_commands`) and lifting
+ *           the post-scene-load editor-input refresh to the
+ *           controller. check-no-load-line-to-input-in-pipeline
+ *           locks the boundary in.
  *
  * Pipeline diagnostics flow through repl_set_status_sink. The demo
  * deliberately leaves the sink unset → set_status is a silent no-op.
@@ -47,12 +53,15 @@ int feed_line(const char *line) {
     return 0;
 }
 
-/* load_line_to_input is the editor's "navigate to line N" helper.
- * Reachable from repl_reformat_commands and repl_scenes::load_scene_from_slot.
- * Step 6 will clear this. */
-void load_line_to_input(int idx) {
-    (void)idx;
-}
+/* load_line_to_input was previously stubbed because repl_reformat_commands
+ * (in repl_core.c) and load_scene_from_slot (in repl_scenes.c) called it
+ * directly from REPL pipeline TUs. Step 6 of the decoupling plan removed
+ * those calls: the editor wrapper editor_reformat_commands lives in
+ * src/editor/reformat.c (outside the demo link set) while pipeline-side
+ * normalization uses the pure repl_reformat_program; scene loading
+ * leaves the input-buffer refresh to the controller after the API
+ * returns. The check-no-load-line-to-input-in-pipeline guard locks the
+ * stub-free state in. */
 
 /* --- src/ui/state.c read accessors (used by ui/layout.c geometry) ----- */
 

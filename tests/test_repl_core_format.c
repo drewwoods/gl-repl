@@ -2,6 +2,7 @@
 #include "repl_core_internal.h"
 #include "repl_state.h"
 #include "repl_core.h"
+#include "src/editor/reformat.h"
 #include "ui/state.h"
 #include "ui/layout.h"            /* CODE_PANEL_LAYOUT_* */
 #include "glr_defaults.h"    /* CFG_DEFAULT_* */
@@ -104,7 +105,7 @@ int main(void) {
     {
         editor_buffer_set_line(1, "glVertex3f(i+x,0,0)");
         editor_buffer_set_line(2, "}");
-        repl_reformat_commands();
+        editor_reformat_commands();
         const char *buf1 = editor_buffer_line(1);
         const char *buf2 = editor_buffer_line(2);
         ASSERT_TRUE("reformat body semicolon", buf1 && buf1[strlen(buf1) - 1] == ';');
@@ -124,7 +125,7 @@ int main(void) {
     ASSERT_TRUE("assign in loop keeps expression", strstr(editor_buffer_line(1), "i + 1") != NULL);
     {
         editor_buffer_set_line(1, "x=i+1");
-        repl_reformat_commands();
+        editor_reformat_commands();
         const char *buf1 = editor_buffer_line(1);
         ASSERT_TRUE("reformat assign in loop indent", buf1 && strncmp(buf1, "    ", 4) == 0);
         ASSERT_TRUE("reformat assign in loop semicolon",
@@ -188,7 +189,7 @@ int main(void) {
     ASSERT_TRUE("decl cmd count", repl_state_document_count() == 1);
     ASSERT_TRUE("decl cmd type", repl_state_document_cmds_mut()[0].type == CMD_VAR_DECLARE);
     editor_buffer_set_line(0, "float a=max(1, 2),b,c=abs(-3)// vars");
-    repl_reformat_commands();
+    editor_reformat_commands();
     {
         const char *buf0 = editor_buffer_line(0);
         ASSERT_TRUE("reformat decl keeps initializer text and comment",

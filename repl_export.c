@@ -3214,7 +3214,7 @@ int repl_export_load_from_file(const char *filename) {
 
     if (state.loaded > 0) {
         repl_source_scope_depth_cache_invalidate();
-        repl_reformat_commands();
+        repl_reformat_program();
         char msg[256];
         if (state.warnings > 0)
             snprintf(msg, sizeof(msg),
