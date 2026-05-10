@@ -24,6 +24,10 @@
  *           the post-scene-load editor-input refresh to the
  *           controller. check-no-load-line-to-input-in-pipeline
  *           locks the boundary in.
+ *   Step 7c cleared `ui_state_viewport` / `ui_state_code_panel` by
+ *           routing layout values through `ReplExportLayout`; the
+ *           follow-up dropped `src/ui/layout.c` from REPL_DEMO_DEP_SRCS
+ *           since no demo TU calls `ui_layout_*` anymore.
  *
  * Pipeline diagnostics flow through repl_set_status_sink. The demo
  * deliberately leaves the sink unset → set_status is a silent no-op.
@@ -33,9 +37,10 @@
  * → no glr_config / audio / peer / profile reach-in. This is the
  * architectural goal of step 4.
  *
- * The remaining stubs cluster as:
- *   - feed_line / load_line_to_input editor input dispatch (steps 5b/6)
- *   - ui_state_viewport / ui_state_code_panel layout reads (step 7)
+ * Only `feed_line` remains: the example loader still uses it because
+ * the editor's `try_commit_func_def` reorder + comment-relocation
+ * behavior the lean loader (`repl_load_apply_line`) doesn't replicate.
+ * Convergence is queued for a future step.
  */
 
 /* --- src/editor/input.c entry points (only as hard references) -------- *
@@ -63,20 +68,8 @@ int feed_line(const char *line) {
  * returns. The check-no-load-line-to-input-in-pipeline guard locks the
  * stub-free state in. */
 
-/* --- src/ui/state.c read accessors (used by ui/layout.c geometry) ----- */
-
-/* src/ui/layout.c reads viewport + code-panel geometry through ui_state
- * accessors. The demo doesn't render anything, but the geometry helpers
- * are reachable from repl_export.c's code-panel dump path. Provide
- * file-scope dummies so the math returns zero-sized rectangles. Step 7
- * of the decouple plan removes these by passing layout values to
- * repl_export as explicit options. */
-#include "src/ui/state_types.h"
-
-static ReplViewportState g_dummy_viewport;
-ReplViewportState ui_state_viewport(void) { return g_dummy_viewport; }
-
-static ReplCodePanelRuntimeState g_dummy_code_panel;
-ReplCodePanelRuntimeState ui_state_code_panel(void) {
-    return g_dummy_code_panel;
-}
+/* Step 7c routed viewport / code-panel geometry through the opaque
+ * `ReplExportLayout` struct (controller fills before calling export);
+ * `repl_export.c` no longer calls `ui_layout_*`, and `src/ui/layout.c`
+ * left REPL_DEMO_DEP_SRCS along with its `ui_state_viewport` /
+ * `ui_state_code_panel` reads. Both stubs cleared. */

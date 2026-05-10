@@ -148,7 +148,7 @@ REPL_DEMO_DEP_SRCS = repl_core.c repl_state.c repl_parser.c \
                      repl_replay_annotations.c replay.c replay_state.c \
                      glr_camera.c \
                      src/editor/state.c src/editor/completion.c \
-                     src/ui/layout.c src/ui/code_panel_layout.c \
+                     src/ui/code_panel_layout.c \
                      cmd_format.c prof.c \
                      tests/gl-stubs/gl_stub_counts.c
 # glr_config.c removed in step 4 of the decouple plan: pipeline TUs
