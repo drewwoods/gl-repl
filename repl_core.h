@@ -66,9 +66,15 @@ int  repl_flatten_program(const ReplFlattenOptions *options,
  * once per frame before execution if the source array changed. */
 void repl_flatten_commands(void);
 
-/* Recompute auto-normals for every glBegin/glEnd batch in the source array.
- * Called automatically when source commands are modified. */
-void repl_recompute_autonormals(void);
+/* Recompute auto-normals for every glBegin/glEnd batch in the source
+ * array. Called automatically when source commands are modified.
+ *
+ * `autonormal_enabled` gates the recompute. The toggle lives on
+ * `GlrState.presentation` (step 7a of
+ * feature/decouple-repl-from-gl-repl-alt.md); callers pass the value
+ * explicitly because `repl_autonormal.c` is a REPL pipeline TU and
+ * cannot reach into glr_state. Pass 0 for an unconditional no-op. */
+void repl_recompute_autonormals(int autonormal_enabled);
 
 /* Shared status/document helpers surfaced outside repl_core.c. */
 void        set_status(const char *msg);
@@ -78,6 +84,18 @@ void        set_status(const char *msg);
  * to). The demo deliberately leaves the sink unset, so set_status is
  * a no-op there. See step 3 of feature/decouple-repl-from-gl-repl-alt.md. */
 void        repl_set_status_sink(void (*sink)(const char *));
+
+/* Install a presentation-reset sink for the example loader. The
+ * `presentation` slice moved to glr_state.c (step 7a of
+ * feature/decouple-repl-from-gl-repl-alt.md), so the example loader
+ * (REPL pipeline TU) can no longer reach into those fields. The
+ * controller installs `glr_state_presentation_reset_example_defaults`
+ * as the sink at startup; the demo leaves it unset so the per-load
+ * reset is a no-op (the demo doesn't load examples). */
+void        repl_install_example_presentation_reset_sink(void (*fn)(void));
+/* Pipeline-side dispatch — invoked by repl_example_loader.c on every
+ * example load. No-op when the sink is unset. */
+void        repl_dispatch_example_presentation_reset(void);
 const char *mode_name(GLenum mode);
 GLenum      current_begin_mode(void);
 int         count_vertices(void);

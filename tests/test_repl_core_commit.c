@@ -1,3 +1,4 @@
+#include "glr_state.h"
 #include "editor/input.h"
 #include "glr_ctrl.h"
 #include "repl_core.h"
@@ -68,13 +69,13 @@ static int code_panel_mouse_y_for_cmd(int cmd_idx) {
     CodePanelDocumentLayout layout;
     int cp_y, cp_h, panel_w;
     int linenum_w = 4 * FONT_W;
-    int idx_col_w = repl_state_presentation().show_vertex_indices ? (6 * FONT_W) : 0;
+    int idx_col_w = glr_state_presentation().show_vertex_indices ? (6 * FONT_W) : 0;
     int text_x = CODE_MARGIN_X + linenum_w + FONT_W + idx_col_w;
     int doc_line;
 
     /* Mirror the frame path: scroll-follow is applied before the code panel is
      * rendered or hit-tested, so synthetic mouse targets need the same step. */
-    (void)ui_panels_code_panel_apply_scroll_follow_for_test(repl_state_presentation().show_vertex_indices, NULL, NULL);
+    (void)ui_panels_code_panel_apply_scroll_follow_for_test(glr_state_presentation().show_vertex_indices, NULL, NULL);
 
     ui_layout_code_panel_rect(NULL, &cp_y, &panel_w, &cp_h);
     repl_code_panel_document_build(&layout, panel_w, text_x, cp_h);
@@ -477,7 +478,7 @@ int main(void) {
     repl_feed_line_public("}");
     {
         int linenum_w = 4 * FONT_W;
-        int idx_col_w = repl_state_presentation().show_vertex_indices ? (6 * FONT_W) : 0;
+        int idx_col_w = glr_state_presentation().show_vertex_indices ? (6 * FONT_W) : 0;
         int text_x = CODE_MARGIN_X + linenum_w + FONT_W + idx_col_w;
         int indent = test_leading_ws_chars(editor_buffer_line(1) ? editor_buffer_line(1) : "");
         int mx = text_x + indent * FONT_W + 1;
@@ -499,9 +500,9 @@ int main(void) {
     editor_handle_key(5, 0, 0);
     ASSERT_TRUE("ctrl-e moves to line end", editor_cursor_pos() == editor_input_len());
     {
-        int before = repl_state_presentation().code_panel_layout;
+        int before = glr_state_presentation().code_panel_layout;
         glr_ctrl_router_handle_cfg_shortcut_key(2);
-        ASSERT_TRUE("ctrl-b toggles code panel layout", repl_state_presentation().code_panel_layout != before);
+        ASSERT_TRUE("ctrl-b toggles code panel layout", glr_state_presentation().code_panel_layout != before);
     }
 
     glr_app_reset_all(); declare_test_vars();

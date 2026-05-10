@@ -155,8 +155,13 @@ static void compute_block_normals(GLenum mode, GLenum front_face,
     }
 }
 
-void recompute_autonormals(void) {
-    if (!repl_state_presentation().autonormal) return;
+/* Step 7a of feature/decouple-repl-from-gl-repl-alt.md: the
+ * `autonormal` toggle moved out of REPL state onto `glr_state`. The
+ * autonormal pass is a REPL pipeline TU and cannot include
+ * `glr_state.h`, so the caller (controller / tests) gates the call
+ * by passing the toggle explicitly. */
+void recompute_autonormals(int autonormal_enabled) {
+    if (!autonormal_enabled) return;
 
     int i = 0;
     GLenum front_face = GL_CCW;
@@ -254,6 +259,6 @@ int repl_find_feeding_color_cmd(int line_idx) {
     return find_feeding_state_cmd(line_idx, 0);
 }
 
-void repl_recompute_autonormals(void) {
-    recompute_autonormals();
+void repl_recompute_autonormals(int autonormal_enabled) {
+    recompute_autonormals(autonormal_enabled);
 }

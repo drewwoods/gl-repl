@@ -130,7 +130,12 @@ static int try_apply_example_camera_header(const char *const *lines) {
 }
 
 static void reset_example_presentation_defaults(void) {
-    repl_state_presentation_reset_example_defaults();
+    /* presentation slice moved to glr_state.c in step 7a; the
+     * controller-installed sink does the actual reset. The demo
+     * leaves the sink unset and ships without example presentation
+     * resets, which is fine because the demo doesn't load examples
+     * via this loader. */
+    repl_dispatch_example_presentation_reset();
 }
 
 static int example_cfg_extract_slug(const char *text,

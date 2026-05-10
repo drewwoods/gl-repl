@@ -659,7 +659,7 @@ static void code_panel_statusbar_sep(int *tx, int sy, int sh) {
 static void code_panel_draw_statusbar(const UiRenderSnapshot *snap,
                                       int cp_x, int cp_y, int cp_w,
                                       int edit_line, int insert_mode) {
-    ReplRenderState rs = snap->render;
+    GlrRenderState rs = snap->render;
     int sy = cp_y;
     int sh = STATUSBAR_H;
 

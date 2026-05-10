@@ -21,6 +21,7 @@
 
 #include "editor/state.h"  /* ReplEditorInputView (Phase 1 commit 5) */
 #include "editor/help_session.h"
+#include "glr_state.h"     /* GlrRenderState (step 7a) */
 #include "repl_state_views.h"
 #include "repl_eval.h"
 #include "editor.h"
@@ -57,7 +58,7 @@ typedef struct UiRenderSnapshot {
     ReplSearchState             search;
     ReplAutocompleteState       autocomplete;
     ReplPointerState            pointer;
-    ReplRenderState             render;
+    GlrRenderState              render;
     ReplReplayRuntimeState      replay;
     ReplSceneRuntimeState       scenes;
     EditorScrollState           scroll;

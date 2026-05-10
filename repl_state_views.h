@@ -4,7 +4,6 @@
 #ifndef REPL_STATE_VIEWS_H
 #define REPL_STATE_VIEWS_H
 
-#include "glr_camera.h"
 #include "repl_export_state.h"
 #include "config.h"          /* REPL_STATUS_TEXT_MAX */
 #include "scene/render_types.h"
@@ -82,39 +81,21 @@ typedef struct {
  * editor_state.h alongside the EditorState struct that owns them
  * (Phase 1 commit 7). */
 
+/* `ReplPresentationState` typedef moved to `glr_state.h` (step 7a of
+ * feature/decouple-repl-from-gl-repl-alt.md). The dead
+ * `focus_vertex[3]` / `focus_vertex_valid` fields were dropped along
+ * with the move; `glr_ctrl_build_focus_vertex` recomputes the focus
+ * vertex from the document each frame into a `SceneFocusVertex`
+ * snapshot and the persistent storage was unused.
+ *
+ * The render-config toggles (msaa, line_smooth, accum_aa,
+ * point_attenuation, accum_*) moved to `GlrRenderState` in
+ * `glr_state.h`. The runtime-mutated halves of the slice
+ * (`lights[]`, `clear_color[]`) stay here because `repl_executor.c`
+ * writes them in response to user `glEnable(GL_LIGHTn)` /
+ * `glClearColor` commands, and the executor cannot include
+ * `glr_state.h`. */
 typedef struct {
-    int   wireframe;
-    int   grid_theme;
-    int   grid_major_idx;
-    int   grid_extent_idx;
-    int   axes_theme;
-    int   show_vertex_labels;
-    int   show_normal_vectors;
-    int   show_vertex_indices;
-    int   show_vertex_outlines;
-    int   show_vertex_points;
-    int   show_vertex_guides;
-    int   xform_guide_mode;
-    int   autonormal;
-    int   show_light_indicators;
-    int   backdrop_mode;
-    int   highlight_current_poly;
-    int   ortho_mode;
-    int   wrap_at_comma;
-    int   code_panel_layout;
-    float focus_vertex[3];
-    int   focus_vertex_valid;
-} ReplPresentationState;
-
-typedef struct {
-    int        use_accum;
-    int        accum_aa_enabled;
-    int        accum_samples;
-    float      accum_jitter_x;
-    float      accum_jitter_y;
-    int        multisample_enabled;
-    int        line_smooth_enabled;
-    int        point_attenuation_enabled;
     SceneLight lights[MAX_LIGHTS];
     float      clear_color[4];
 } ReplRenderState;
@@ -179,6 +160,12 @@ FlatProgramView   repl_state_flat_program_view(void);
 
 ReplVariableView repl_state_variables(void);
 
+/* `repl_state_presentation` / `_render` accessors moved to
+ * `glr_state.h` (step 7a). Use `glr_state_presentation` /
+ * `glr_state_render` instead. The `repl_state_grid_major_steps` /
+ * `_grid_extents` helpers moved alongside them as
+ * `glr_state_grid_major_steps` / `_grid_extents`. */
+
 /* Editor-input + editor-buffer accessors moved to editor_state.h
  * (Phase 1 commits 4-5). Use `editor_state_input` for the input view,
  * `editor_state_buffer` for the buffer view, and the slice-level
@@ -202,12 +189,6 @@ ReplVariableView repl_state_variables(void);
  * `repl_state_*` forwarders were removed in Phase A commit 14.
  * Search + autocomplete view accessors moved to editor_state.h
  * (Phase 1 commit 7). Use editor_state_search / _autocomplete. */
-
-ReplPresentationState repl_state_presentation(void);
-const float *repl_state_grid_major_steps(void);
-const float *repl_state_grid_extents(void);
-
-ReplRenderState          repl_state_render(void);
 
 ReplSceneRuntimeState     repl_state_scenes(void);
 const char *repl_state_workspace_dir(void);

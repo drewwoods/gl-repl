@@ -86,6 +86,22 @@ void set_status(const char *msg) {
         g_status_sink(msg);
 }
 
+/* Step 7a: example-presentation-reset sink. Mirrors the status sink
+ * shape — the controller installs
+ * `glr_state_presentation_reset_example_defaults` from
+ * `glr_app_install_app_services`; the demo leaves it unset so the
+ * loader's per-load reset is a no-op. */
+static void (*g_example_presentation_reset_sink)(void) = NULL;
+
+void repl_install_example_presentation_reset_sink(void (*fn)(void)) {
+    g_example_presentation_reset_sink = fn;
+}
+
+void repl_dispatch_example_presentation_reset(void) {
+    if (g_example_presentation_reset_sink)
+        g_example_presentation_reset_sink();
+}
+
 const char *mode_name(GLenum mode) {
     return repl_begin_mode_name(mode);
 }

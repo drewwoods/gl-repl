@@ -1,3 +1,5 @@
+#include "glr_camera.h"
+#include "glr_state.h"
 #include "glr_ctrl.h"
 #include <stdio.h>
 #include <string.h>
@@ -122,7 +124,7 @@ void test_ui_profile_panel_render(const UiRenderSnapshot *snap) { (void)snap; }
 static void prepare_display_fixture(void) {
     GLCmd *doc_cmds;
     GLCmd *flat_cmds;
-    ReplPresentationState *presentation;
+    GlrPresentationState *presentation;
 
     memset(&g_last_scene_config, 0, sizeof(g_last_scene_config));
     memset(&g_last_replay_hud_state, 0, sizeof(g_last_replay_hud_state));
@@ -139,11 +141,11 @@ static void prepare_display_fixture(void) {
 
     ui_state_viewport_set_size(800, 600);
     glr_camera_set(11.0f, 22.0f, 7.5f, 0.5f, -0.25f, 1.75f, 0.9f);
-    repl_state_render_mut()->use_accum = 0;
-    repl_state_render_mut()->accum_aa_enabled = 0;
-    repl_state_render_mut()->accum_samples = 1;
-    repl_state_render_mut()->multisample_enabled = 0;
-    repl_state_render_mut()->line_smooth_enabled = 1;
+    glr_state_render_mut()->use_accum = 0;
+    glr_state_render_mut()->accum_aa_enabled = 0;
+    glr_state_render_mut()->accum_samples = 1;
+    glr_state_render_mut()->multisample_enabled = 0;
+    glr_state_render_mut()->line_smooth_enabled = 1;
     repl_state_render_mut()->clear_color[0] = 0.0f;
     repl_state_render_mut()->clear_color[1] = 0.0f;
     repl_state_render_mut()->clear_color[2] = 0.0f;
@@ -151,7 +153,7 @@ static void prepare_display_fixture(void) {
 
     repl_state_flat_program_set_user_lighting_enabled(1);
 
-    presentation = repl_state_presentation_mut();
+    presentation = glr_state_presentation_mut();
     presentation->show_vertex_guides = 1;
     presentation->show_vertex_points = 1;
     presentation->show_light_indicators = 1;

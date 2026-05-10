@@ -8,6 +8,8 @@
 #include "audio.h"
 #include "color_picker_state.h"
 #include "editor/clipboard.h"
+#include "glr_defaults.h"        /* CFG_DEFAULT_* */
+#include "glr_state.h"
 #include "editor/code_panel_document.h"
 #include "editor/commit.h"
 #include "editor/completion.h"
@@ -171,7 +173,7 @@ static void fill_guide_arg_slots(SceneGuideSnapshot *snapshot,
  * everything else comes from REPL/editor accessors so this can run
  * without a per-frame config pointer if needed. */
 static SceneGuideSnapshot glr_ctrl_build_guide_snapshot(const SceneRenderConfig *config) {
-    ReplPresentationState presentation = repl_state_presentation();
+    GlrPresentationState presentation = glr_state_presentation();
     ReplVariableView vars = repl_state_variables();
     ReplEditorInputView input = editor_state_input();
     int edit_line = repl_state_edit_line();
@@ -380,7 +382,7 @@ static void on_normal_vector_arrow(const ReplVertexWalkState *state,
 }
 
 static ReplVertexWalkContext glr_ctrl_build_vertex_walk_context(int selected_block_only) {
-    ReplPresentationState presentation = repl_state_presentation();
+    GlrPresentationState presentation = glr_state_presentation();
     (void)presentation;  /* might be useful for future overlay variants */
 
     ReplVertexWalkContext ctx = {
@@ -748,7 +750,7 @@ static void glr_ctrl_render_cursor_guides(const SceneGuideSnapshot *snapshot) {
 
 static void glr_ctrl_post_overlays(void *user_data) {
     const SceneRenderConfig *cfg = (const SceneRenderConfig *)user_data;
-    ReplPresentationState presentation = repl_state_presentation();
+    GlrPresentationState presentation = glr_state_presentation();
     int replaying = replay_active();
     int replay_mode_vertex = replaying && (replay_mode() == REPLAY_MODE_VERTEX);
 
@@ -915,11 +917,12 @@ static void scene_execute_adapter(const SceneExecuteContext *ctx,
 }
 
 static void glr_ctrl_build_scene_config(SceneRenderConfig *config) {
-    ReplRenderState render = repl_state_render();
-    ReplPresentationState presentation = repl_state_presentation();
+    GlrRenderState render = glr_state_render();
+    ReplRenderState repl_render = repl_state_render();
+    GlrPresentationState presentation = glr_state_presentation();
     ReplCameraState cam = glr_camera();
-    const float *grid_major_steps = repl_state_grid_major_steps();
-    const float *grid_extents = repl_state_grid_extents();
+    const float *grid_major_steps = glr_state_grid_major_steps();
+    const float *grid_extents = glr_state_grid_extents();
     float bg_lum;
     float as_val;
 
@@ -995,7 +998,7 @@ static void glr_ctrl_build_scene_config(SceneRenderConfig *config) {
 
     /* --- Lighting --- */
     config->user_lighting_enabled = repl_state_flat_program_user_lighting_enabled();
-    memcpy(config->lights, render.lights, sizeof(config->lights));
+    memcpy(config->lights, repl_render.lights, sizeof(config->lights));
     config->show_light_indicators = presentation.show_light_indicators;
 
     /* --- Environment --- */
@@ -1023,9 +1026,9 @@ static void glr_ctrl_build_scene_config(SceneRenderConfig *config) {
     config->focus = glr_ctrl_build_focus_vertex();
 
     /* Alpha scale boost for dark backgrounds */
-        bg_lum = 0.2126f * render.clear_color[0]
-            + 0.7152f * render.clear_color[1]
-            + 0.0722f * render.clear_color[2];
+        bg_lum = 0.2126f * repl_render.clear_color[0]
+            + 0.7152f * repl_render.clear_color[1]
+            + 0.0722f * repl_render.clear_color[2];
     as_val = (0.10f + 0.02f) / fmaxf(bg_lum + 0.02f, 1e-4f);
     config->alpha_scale = as_val < 1.0f ? 1.0f : (as_val > 3.0f ? 3.0f : as_val);
 
@@ -1089,7 +1092,7 @@ static void glr_ctrl_build_ui_snapshot(UiRenderSnapshot *snap) {
     snap->search         = editor_state_search();
     snap->autocomplete   = editor_state_autocomplete();
     snap->pointer        = ui_state_pointer();
-    snap->render         = repl_state_render();
+    snap->render         = glr_state_render();
     snap->replay         = replay_state_view();
     snap->scenes         = repl_state_scenes();
     snap->scroll         = editor_state_scroll();
@@ -1147,7 +1150,7 @@ void glr_ctrl_display_frame(void) {
 
     if (repl_state_normals_dirty()) {
         prof_begin(PROF_AUTONORMAL);
-        recompute_autonormals();
+        recompute_autonormals(glr_state_presentation().autonormal);
         repl_state_normals_dirty_clear();
         prof_end(PROF_AUTONORMAL);
     }
@@ -1232,7 +1235,7 @@ void glr_ctrl_display_frame(void) {
     int frame_replaying = replay_active();
     if (frame_replaying) {
         prof_begin(PROF_REPLAY_HUD);
-        ReplPresentationState presentation = repl_state_presentation();
+        GlrPresentationState presentation = glr_state_presentation();
         UiReplayHudState replay_hud_state = {
             .scene_x = scene_config.scene_x,
             .scene_y = scene_config.scene_y,
@@ -1312,12 +1315,29 @@ void glr_ctrl_reshape(int w, int h) {
  * Step 4 [P2] fix: previously these two installs lived only in
  * glr_app_reset_all, so the dump CLI ran without them and dropped
  * @cfg from imported files. */
+/* Bundles the example-defaults reset for presentation chrome plus the
+ * camera auto-rotate toggle. The cfg bridge handles per-scene cfg in
+ * the scene_cfg snapshot, but the example loader's pre-cfg baseline
+ * reset still wants both flipped to defaults. Step 7a wired this
+ * through a sink because the example loader is a REPL pipeline TU. */
+static void glr_app_reset_example_chrome(void) {
+    glr_state_presentation_reset_example_defaults();
+    glr_camera_mut()->auto_rotate = CFG_DEFAULT_CAMERA_ROTATE;
+}
+
 static void glr_app_install_app_services(void) {
     /* Install the status-message sink. Pipeline TUs call set_status()
      * to surface diagnostics; this routes them to UiState. The demo
      * does not install a sink, so set_status is a no-op there
      * (clearing the ui_state_status_set stub). */
     repl_set_status_sink(ui_state_status_set);
+    /* Step 7a: install the example-presentation-reset sink so the
+     * example loader can refresh scene-bound presentation defaults
+     * (wireframe, grid, axes, vertex overlays, backdrop) without
+     * pulling glr_state into the REPL pipeline. The demo doesn't
+     * install this sink, so the loader's per-load reset is a no-op
+     * — the demo doesn't load examples through this path anyway. */
+    repl_install_example_presentation_reset_sink(glr_app_reset_example_chrome);
     /* Install the export-config bridge so repl_export.c can emit/parse
      * @cfg headers and repl_scenes.c can snapshot per-scene cfg
      * without referencing glr_config_* directly. The demo does not
@@ -1340,6 +1360,14 @@ static void glr_app_install_app_services(void) {
  * have to link / stub the peer / editor / UI reset symbols. */
 void glr_app_reset_all(void) {
     repl_state_reset_program();
+    /* Step 7a: GlrState owns presentation + render-config toggles.
+     * Reset them alongside the REPL halves so callers see a coherent
+     * post-reset world. The camera reset moved off the REPL-side
+     * presentation reset (was wiring `glr_camera_mut()->auto_rotate
+     * = CFG_DEFAULT_CAMERA_ROTATE`); the camera resets itself here. */
+    glr_state_presentation_reset_defaults();
+    glr_state_render_reset_defaults();
+    glr_camera_reset_default();
     editor_state_reset();
     ui_state_reset();
     variable_panel_state_reset();
@@ -1368,7 +1396,7 @@ void glr_app_reset_all(void) {
 }
 
 void glr_ctrl_sync_ui_chrome(void) {
-    ReplPresentationState p = repl_state_presentation();
+    GlrPresentationState p = glr_state_presentation();
     ReplCodePanelRuntimeState *cp = ui_state_code_panel_mut();
     cp->layout_mode         = p.code_panel_layout;
     cp->show_vertex_indices = p.show_vertex_indices;
@@ -1415,7 +1443,7 @@ void glr_ctrl_bootstrap_repl(const char *input_file) {
 }
 
 void glr_ctrl_set_accum(int enabled) {
-    repl_state_render_mut()->use_accum = enabled ? 1 : 0;
+    glr_state_render_mut()->use_accum = enabled ? 1 : 0;
 }
 
 /* ===========================================================================
@@ -1492,7 +1520,7 @@ int glr_ctrl_router_handle_cfg_shortcut_key(unsigned char key) {
 
 int glr_ctrl_router_handle_accum_samples_key(unsigned char key) {
     static const int g_accum_steps[] = { 1, 2, 4, 8, 16 };
-    ReplRenderState *rs = repl_state_render_mut();
+    GlrRenderState *rs = glr_state_render_mut();
     if (key == '=' || key == '+') {
         if (!(editor_input_active_modifiers() & GLUT_ACTIVE_CTRL))
             return 0;

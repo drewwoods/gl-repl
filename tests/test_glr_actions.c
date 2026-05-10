@@ -1,4 +1,5 @@
 #define _DEFAULT_SOURCE  /* mkdtemp() */
+#include "glr_state.h"
 #include "glr_ctrl.h"
 #include "glr_actions.h"
 #include "repl_state.h"
@@ -142,9 +143,9 @@ static void test_cfg_cycling(void) {
     }
 
     /* Test generic cycle (Wireframe) */
-    repl_state_presentation_mut()->wireframe = 0;
+    glr_state_presentation_mut()->wireframe = 0;
     glr_cfg_cycle_row(wireframe_row, 1);
-    ASSERT_INT("wireframe toggled to 1", repl_state_presentation().wireframe, 1);
+    ASSERT_INT("wireframe toggled to 1", glr_state_presentation().wireframe, 1);
     ASSERT_STR("wireframe status ON", g_last_status, "Wireframe: ON");
 
     /* Test Replay special case - only starts if there are commands to replay */
@@ -161,27 +162,27 @@ static void test_cfg_cycling(void) {
     ASSERT_TRUE("auto time cycled", 1);
 
     /* Test Code Panel Layout */
-    repl_state_presentation_mut()->code_panel_layout = 0; glr_ctrl_sync_ui_chrome(); // Left
+    glr_state_presentation_mut()->code_panel_layout = 0; glr_ctrl_sync_ui_chrome(); // Left
     glr_cfg_cycle_row(code_panel_row, 1); // -> Top
-    ASSERT_INT("code panel layout top", repl_state_presentation().code_panel_layout, 1);
+    ASSERT_INT("code panel layout top", glr_state_presentation().code_panel_layout, 1);
     ASSERT_STR("status top", g_last_status, "Layout: top code panel");
 
     glr_cfg_cycle_row(code_panel_row, 1); // -> Bottom
-    ASSERT_INT("code panel layout bottom", repl_state_presentation().code_panel_layout, 2);
+    ASSERT_INT("code panel layout bottom", glr_state_presentation().code_panel_layout, 2);
     ASSERT_STR("status bottom", g_last_status, "Layout: bottom code panel");
 
     glr_cfg_cycle_row(code_panel_row, 1); // -> Hidden
-    ASSERT_INT("code panel layout hidden", repl_state_presentation().code_panel_layout, 3);
+    ASSERT_INT("code panel layout hidden", glr_state_presentation().code_panel_layout, 3);
     ASSERT_STR("status hidden", g_last_status, "Layout: code panel hidden");
 
     glr_cfg_cycle_row(code_panel_row, 1); // -> Left
-    ASSERT_INT("code panel layout left", repl_state_presentation().code_panel_layout, 0);
+    ASSERT_INT("code panel layout left", glr_state_presentation().code_panel_layout, 0);
     ASSERT_STR("status left", g_last_status, "Layout: left code panel");
 
     /* Test Auto-normals */
-    repl_state_presentation_mut()->autonormal = 0;
+    glr_state_presentation_mut()->autonormal = 0;
     glr_cfg_cycle_row(auto_normals_row, 1);
-    ASSERT_INT("autonormal ON", repl_state_presentation().autonormal, 1);
+    ASSERT_INT("autonormal ON", glr_state_presentation().autonormal, 1);
     ASSERT_STR("status autonormal ON", g_last_status, "Auto-normals: ON");
 
     /* Test Point Attenuation */

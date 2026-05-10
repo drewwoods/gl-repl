@@ -1,3 +1,4 @@
+#include "glr_state.h"
 #include "glr_ctrl.h"
 #include "repl_state.h"
 #include "editor/state.h"
@@ -42,7 +43,8 @@ static void populate_runtime_snapshot_fixture(const char *scene_hint) {
     ReplVariableDragState *drag;
     ReplImportExportState *io;
     ReplSceneRuntimeState *scenes;
-    ReplPresentationState *presentation;
+    GlrPresentationState *presentation;
+    GlrRenderState *glr_render;
     ReplRenderState *render;
     ReplReplayRuntimeState *replay;
     ReplFlatProgramState *flat_program;
@@ -138,7 +140,7 @@ static void populate_runtime_snapshot_fixture(const char *scene_hint) {
     ui_state_pointer_set(321, 654, 2);
     ui_state_viewport_set_size(1440, 900);
 
-    presentation = repl_state_presentation_mut();
+    presentation = glr_state_presentation_mut();
     presentation->wireframe = 1;
     presentation->grid_theme = GRID_THEME_TRON;
     presentation->grid_major_idx = GRID_MAJOR_10;
@@ -154,20 +156,21 @@ static void populate_runtime_snapshot_fixture(const char *scene_hint) {
     presentation->ortho_mode = 1;
     presentation->wrap_at_comma = 0;
     presentation->code_panel_layout = CODE_PANEL_LAYOUT_BOTTOM;
-    presentation->focus_vertex[0] = 1.5f;
-    presentation->focus_vertex[1] = -2.0f;
-    presentation->focus_vertex[2] = 0.25f;
-    presentation->focus_vertex_valid = 1;
+    /* focus_vertex storage was deleted in step 7a — no live readers
+     * existed; the per-frame snapshot is computed from the document
+     * inside glr_ctrl. */
+
+    glr_render = glr_state_render_mut();
+    glr_render->use_accum = 0;
+    glr_render->accum_aa_enabled = 0;
+    glr_render->accum_samples = 8;
+    glr_render->accum_jitter_x = 0.25f;
+    glr_render->accum_jitter_y = -0.125f;
+    glr_render->multisample_enabled = 0;
+    glr_render->line_smooth_enabled = 1;
+    glr_render->point_attenuation_enabled = 0;
 
     render = repl_state_render_mut();
-    render->use_accum = 0;
-    render->accum_aa_enabled = 0;
-    render->accum_samples = 8;
-    render->accum_jitter_x = 0.25f;
-    render->accum_jitter_y = -0.125f;
-    render->multisample_enabled = 0;
-    render->line_smooth_enabled = 1;
-    render->point_attenuation_enabled = 0;
     render->lights[1].enabled = 0;
     render->lights[2].pos[0] = 7.5f;
     render->clear_color[0] = 0.20f;
@@ -201,6 +204,10 @@ static void populate_runtime_snapshot_fixture(const char *scene_hint) {
 static void test_capture_restore_round_trip(void) {
     static ReplRuntimeState snapshot;
     static ReplRuntimeState round_trip;
+    static GlrState glr_snap;
+    static GlrState glr_round_trip;
+    static ReplCameraState camera_snap;
+    static ReplCameraState camera_round_trip;
     static EditorState editor_snap;
     static EditorState editor_round_trip;
     static UiState ui_snap;
@@ -217,6 +224,8 @@ static void test_capture_restore_round_trip(void) {
     glr_app_reset_all();
     populate_runtime_snapshot_fixture(scene_hint);
     repl_state_capture(&snapshot);
+    glr_state_capture(&glr_snap);
+    glr_camera_capture(&camera_snap);
     editor_state_capture(&editor_snap);
     ui_state_capture(&ui_snap);
     variable_panel_state_capture(&varpanel_snap);
@@ -224,12 +233,16 @@ static void test_capture_restore_round_trip(void) {
     editor_help_session_capture(&help_snap);
     glr_app_reset_all();
     repl_state_restore(&snapshot);
+    glr_state_restore(&glr_snap);
+    glr_camera_restore(&camera_snap);
     editor_state_restore(&editor_snap);
     ui_state_restore(&ui_snap);
     variable_panel_state_restore(&varpanel_snap);
     replay_state_restore(&replay_snap);
     editor_help_session_restore(&help_snap);
     repl_state_capture(&round_trip);
+    glr_state_capture(&glr_round_trip);
+    glr_camera_capture(&camera_round_trip);
     editor_state_capture(&editor_round_trip);
     ui_state_capture(&ui_round_trip);
     variable_panel_state_capture(&varpanel_round_trip);
@@ -315,18 +328,16 @@ static void test_capture_restore_round_trip(void) {
     ASSERT_INT("pointer button restored", ui_state_pointer().mouse_button, 2);
     ASSERT_INT("viewport width restored", ui_state_viewport().window_w, 1440);
     ASSERT_INT("viewport height restored", ui_state_viewport().window_h, 900);
-    ASSERT_INT("presentation wireframe restored", repl_state_presentation().wireframe, 1);
-    ASSERT_INT("presentation grid restored", repl_state_presentation().grid_theme, GRID_THEME_TRON);
+    ASSERT_INT("presentation wireframe restored", glr_state_presentation().wireframe, 1);
+    ASSERT_INT("presentation grid restored", glr_state_presentation().grid_theme, GRID_THEME_TRON);
     ASSERT_INT("presentation layout restored",
-               repl_state_presentation().code_panel_layout, CODE_PANEL_LAYOUT_BOTTOM);
-    ASSERT_INT("presentation focus valid restored",
-               repl_state_presentation().focus_vertex_valid, 1);
-    ASSERT_TRUE("presentation focus x restored",
-                repl_state_presentation().focus_vertex[0] == 1.5f);
-    ASSERT_INT("render use accum restored", repl_state_render().use_accum, 0);
-    ASSERT_INT("render accum aa restored", repl_state_render().accum_aa_enabled, 0);
-    ASSERT_INT("render samples restored", repl_state_render().accum_samples, 8);
-    ASSERT_TRUE("render jitter restored", repl_state_render().accum_jitter_x == 0.25f);
+               glr_state_presentation().code_panel_layout, CODE_PANEL_LAYOUT_BOTTOM);
+    /* focus_vertex storage was deleted in step 7a; per-frame compute
+     * lives on glr_ctrl. */
+    ASSERT_INT("render use accum restored", glr_state_render().use_accum, 0);
+    ASSERT_INT("render accum aa restored", glr_state_render().accum_aa_enabled, 0);
+    ASSERT_INT("render samples restored", glr_state_render().accum_samples, 8);
+    ASSERT_TRUE("render jitter restored", glr_state_render().accum_jitter_x == 0.25f);
     ASSERT_INT("render light enabled restored", repl_state_render().lights[1].enabled, 0);
     ASSERT_TRUE("render clear color restored",
                 repl_state_render().clear_color[2] == 0.30f);
@@ -368,6 +379,10 @@ static void test_capture_restore_round_trip(void) {
         ASSERT_TRUE("foo value restored", g_predef_vars[foo_idx].value == 42.0f);
     ASSERT_TRUE("runtime snapshot round trip",
                 memcmp(&snapshot, &round_trip, sizeof(snapshot)) == 0);
+    ASSERT_TRUE("glr snapshot round trip",
+                memcmp(&glr_snap, &glr_round_trip, sizeof(glr_snap)) == 0);
+    ASSERT_TRUE("camera snapshot round trip",
+                memcmp(&camera_snap, &camera_round_trip, sizeof(camera_snap)) == 0);
     ASSERT_TRUE("editor snapshot round trip",
                 memcmp(&editor_snap, &editor_round_trip, sizeof(editor_snap)) == 0);
     ASSERT_TRUE("ui snapshot round trip",

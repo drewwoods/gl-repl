@@ -757,12 +757,23 @@ static void emit_export_cam_lines(FILE *f) {
 }
 
 void update_render_state_strings(void) {
+    /* Step 7a: render-config toggles moved to glr_state. Read them
+     * via the bridge's slug-keyed get_int — same opaque path the rest
+     * of the export pipeline uses for cfg state. The demo doesn't
+     * install a bridge, so the toggles fall back to "Enable" /
+     * "Disable" defaults below; the demo never exports anyway. */
+    int msaa_on        = g_export_cfg_bridge && g_export_cfg_bridge->get_int
+                         ? g_export_cfg_bridge->get_int("msaa", 1)
+                         : 1;
+    int line_smooth_on = g_export_cfg_bridge && g_export_cfg_bridge->get_int
+                         ? g_export_cfg_bridge->get_int("line_smooth", 0)
+                         : 0;
     snprintf(g_render_state_lines[0], sizeof(g_render_state_lines[0]),
              "  gl%s(GL_MULTISAMPLE);",
-             repl_state_render().multisample_enabled ? "Enable" : "Disable");
+             msaa_on ? "Enable" : "Disable");
     snprintf(g_render_state_lines[1], sizeof(g_render_state_lines[1]),
              "  gl%s(GL_LINE_SMOOTH);",
-             repl_state_render().line_smooth_enabled ? "Enable" : "Disable");
+             line_smooth_on ? "Enable" : "Disable");
     snprintf(g_render_state_lines[2], sizeof(g_render_state_lines[2]),
              "  glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);");
 }
@@ -2787,10 +2798,20 @@ static void emit_export_display_begin(FILE *f) {
 }
 
 static void emit_export_display_geometry(FILE *f) {
+    /* Step 7a: presentation toggles moved to glr_state. Read them via
+     * the bridge — same opaque path as the rest of the export
+     * pipeline. Demo case (no bridge installed) falls back to "off",
+     * which is fine because the demo doesn't export. */
+    int outlines_on = g_export_cfg_bridge && g_export_cfg_bridge->get_int
+                      ? g_export_cfg_bridge->get_int("vertex_outlines", 0)
+                      : 0;
+    int vpoints_on  = g_export_cfg_bridge && g_export_cfg_bridge->get_int
+                      ? g_export_cfg_bridge->get_int("vertex_points", 0)
+                      : 0;
     const ExportDisplayPassSpec passes[] = {
         { "Vertex Fill Pass",    1,               NULL },
-        { "Vertex Outline Pass", repl_state_presentation().show_vertex_outlines, emit_export_outline_pass_setup },
-        { "Vertex Point Pass",   repl_state_presentation().show_vertex_points,  emit_export_point_pass_setup },
+        { "Vertex Outline Pass", outlines_on, emit_export_outline_pass_setup },
+        { "Vertex Point Pass",   vpoints_on,  emit_export_point_pass_setup },
     };
 
     for (size_t i = 0; i < sizeof(passes) / sizeof(passes[0]); i++)
@@ -3231,9 +3252,17 @@ int repl_export_load_from_file(const char *filename) {
 
 static void dump_code_panel_wrapped_line(FILE *dst, const char *text,
                                          int first_x, int panel_w) {
+    /* Step 7a: wrap_at_comma moved to glr_state.presentation. The
+     * dump path is reachable from REPL pipeline TUs but the toggle
+     * is app-side, so route through bridge.get_int. Step 7c will
+     * thread an explicit ReplExportLayout struct through these
+     * dump helpers, replacing the bridge lookup. */
+    int wrap_on = g_export_cfg_bridge && g_export_cfg_bridge->get_int
+                  ? g_export_cfg_bridge->get_int("wrap_at_commas", 1)
+                  : 1;
     const char *src = text ? text : "";
     CodePanelTextLayout layout =
-        repl_code_panel_layout_make(panel_w, first_x, FONT_W, repl_state_presentation().wrap_at_comma);
+        repl_code_panel_layout_make(panel_w, first_x, FONT_W, wrap_on);
     CodePanelWrapIter it;
     int start, len, x;
 
@@ -3286,7 +3315,12 @@ void repl_dump_code_panel_visual_text(FILE *out, EditorBufferView text) {
     FILE *dst = out ? out : stdout;
     int panel_w;
     int linenum_w = 4 * FONT_W;
-    int idx_col_w = repl_state_presentation().show_vertex_indices ? (6 * FONT_W) : 0;
+    /* Step 7a: show_vertex_indices moved to glr_state. Bridge lookup
+     * for now; step 7c threads this through ReplExportLayout. */
+    int show_indices = g_export_cfg_bridge && g_export_cfg_bridge->get_int
+                       ? g_export_cfg_bridge->get_int("vertex_indices", 1)
+                       : 1;
+    int idx_col_w = show_indices ? (6 * FONT_W) : 0;
     int idx_x = CODE_MARGIN_X + linenum_w + FONT_W;
     int text_x = idx_x + idx_col_w;
 

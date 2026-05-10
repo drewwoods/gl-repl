@@ -97,12 +97,13 @@ void glr_debug_dump_runtime_state_layout(FILE *out) {
     FILE *dst = out ? out : stdout;
 
 /* ReplReplayRuntimeState moved to replay_state.c (Phase F commit 33);
- * the runtime-state layout dump no longer includes a replay row. */
+ * presentation slice + render-config toggles moved to glr_state.c
+ * (step 7a of feature/decouple-repl-from-gl-repl-alt.md); the runtime
+ * state layout dump no longer includes those rows. */
 #define REPL_RUNTIME_STATE_FIELDS(X)                                                               \
     X(ReplDocumentState, document)                                                                 \
     X(ReplFlatProgramState, flat_program)                                                          \
     X(ReplVariableState, variables)                                                                \
-    X(ReplPresentationState, presentation)                                                         \
     X(ReplRenderState, render)                                                                     \
     X(ReplSceneRuntimeState, scenes)                                                               \
     X(ReplImportExportState, import_export)

@@ -1,3 +1,4 @@
+#include "glr_state.h"
 #include "glr_ctrl.h"
 #include "glr_camera.h"
 #include "repl_core_internal.h"
@@ -16,14 +17,17 @@
 #include <GL/gl_stub_counts.h>
 #endif
 
-#define g_use_accum            (repl_state_render_mut()->use_accum)
-#define g_accum_aa_enabled     (repl_state_render_mut()->accum_aa_enabled)
-#define g_accum_samples        (repl_state_render_mut()->accum_samples)
-#define g_accum_jitter_x       (repl_state_render_mut()->accum_jitter_x)
-#define g_accum_jitter_y       (repl_state_render_mut()->accum_jitter_y)
-#define g_multisample_enabled  (repl_state_render_mut()->multisample_enabled)
-#define g_line_smooth_enabled  (repl_state_render_mut()->line_smooth_enabled)
-#define g_init_attenuate_points (repl_state_render_mut()->point_attenuation_enabled)
+/* Render-config toggles (msaa, line_smooth, accum_*, point_attenuation)
+ * moved to glr_state.render in step 7a. lights[] / clear_color[] stay
+ * on repl_state.render because the executor mutates them. */
+#define g_use_accum            (glr_state_render_mut()->use_accum)
+#define g_accum_aa_enabled     (glr_state_render_mut()->accum_aa_enabled)
+#define g_accum_samples        (glr_state_render_mut()->accum_samples)
+#define g_accum_jitter_x       (glr_state_render_mut()->accum_jitter_x)
+#define g_accum_jitter_y       (glr_state_render_mut()->accum_jitter_y)
+#define g_multisample_enabled  (glr_state_render_mut()->multisample_enabled)
+#define g_line_smooth_enabled  (glr_state_render_mut()->line_smooth_enabled)
+#define g_init_attenuate_points (glr_state_render_mut()->point_attenuation_enabled)
 #define g_lights               (repl_state_render_mut()->lights)
 #define g_clear_color          (repl_state_render_mut()->clear_color)
 
@@ -410,82 +414,74 @@ int main() {
 
     /* 13. presentation state facade */
     {
-        ReplPresentationState *presentation;
+        GlrPresentationState *presentation;
 
-        presentation = repl_state_presentation_mut();
+        presentation = glr_state_presentation_mut();
         ASSERT_TRUE("presentation mut is live state",
-                    presentation == repl_state_presentation_mut());
+                    presentation == glr_state_presentation_mut());
 
-        repl_state_presentation_mut()->wireframe = 1;
-        repl_state_presentation_mut()->grid_theme = GRID_THEME_TRON;
-        repl_state_presentation_mut()->grid_major_idx = GRID_MAJOR_10;
-        repl_state_presentation_mut()->grid_extent_idx = GRID_EXTENT_CLOSE;
-        repl_state_presentation_mut()->axes_theme = AXES_THEME_NEON;
-        repl_state_presentation_mut()->show_vertex_labels = 1;
-        repl_state_presentation_mut()->show_normal_vectors = 1;
-        repl_state_presentation_mut()->show_vertex_indices = 1; glr_ctrl_sync_ui_chrome();
-        repl_state_presentation_mut()->show_vertex_outlines = 1;
-        repl_state_presentation_mut()->show_vertex_points = 1;
-        repl_state_presentation_mut()->show_vertex_guides = 1;
-        repl_state_presentation_mut()->xform_guide_mode = 1;
-        repl_state_presentation_mut()->autonormal = 1;
-        repl_state_presentation_mut()->show_light_indicators = 0;
-        repl_state_presentation_mut()->backdrop_mode = 0;
+        glr_state_presentation_mut()->wireframe = 1;
+        glr_state_presentation_mut()->grid_theme = GRID_THEME_TRON;
+        glr_state_presentation_mut()->grid_major_idx = GRID_MAJOR_10;
+        glr_state_presentation_mut()->grid_extent_idx = GRID_EXTENT_CLOSE;
+        glr_state_presentation_mut()->axes_theme = AXES_THEME_NEON;
+        glr_state_presentation_mut()->show_vertex_labels = 1;
+        glr_state_presentation_mut()->show_normal_vectors = 1;
+        glr_state_presentation_mut()->show_vertex_indices = 1; glr_ctrl_sync_ui_chrome();
+        glr_state_presentation_mut()->show_vertex_outlines = 1;
+        glr_state_presentation_mut()->show_vertex_points = 1;
+        glr_state_presentation_mut()->show_vertex_guides = 1;
+        glr_state_presentation_mut()->xform_guide_mode = 1;
+        glr_state_presentation_mut()->autonormal = 1;
+        glr_state_presentation_mut()->show_light_indicators = 0;
+        glr_state_presentation_mut()->backdrop_mode = 0;
         glr_camera_mut()->auto_rotate = 1;
-        repl_state_presentation_mut()->highlight_current_poly = 0;
-        repl_state_presentation_mut()->ortho_mode = 1;
-        repl_state_presentation_mut()->wrap_at_comma = 0;
-        repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_BOTTOM; glr_ctrl_sync_ui_chrome();
-        presentation->focus_vertex[0] = 2.0f;
-        presentation->focus_vertex[1] = -1.0f;
-        presentation->focus_vertex[2] = 0.5f;
-        presentation->focus_vertex_valid = 1;
+        glr_state_presentation_mut()->highlight_current_poly = 0;
+        glr_state_presentation_mut()->ortho_mode = 1;
+        glr_state_presentation_mut()->wrap_at_comma = 0;
+        glr_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_BOTTOM; glr_ctrl_sync_ui_chrome();
+        /* focus_vertex storage was deleted in step 7a — no live
+         * readers; per-frame compute lives in glr_ctrl. */
 
-        repl_state_presentation_reset_defaults();
+        glr_state_presentation_reset_defaults();
         ASSERT_INT("presentation reset wireframe",
-                   repl_state_presentation().wireframe, CFG_DEFAULT_WIREFRAME);
+                   glr_state_presentation().wireframe, CFG_DEFAULT_WIREFRAME);
         ASSERT_INT("presentation reset grid",
-                   repl_state_presentation().grid_theme, CFG_DEFAULT_GRID_THEME);
+                   glr_state_presentation().grid_theme, CFG_DEFAULT_GRID_THEME);
         ASSERT_INT("presentation reset grid major",
-                   repl_state_presentation().grid_major_idx, CFG_DEFAULT_GRID_MAJOR_IDX);
+                   glr_state_presentation().grid_major_idx, CFG_DEFAULT_GRID_MAJOR_IDX);
         ASSERT_INT("presentation reset grid extent",
-                   repl_state_presentation().grid_extent_idx, CFG_DEFAULT_GRID_EXTENT_IDX);
+                   glr_state_presentation().grid_extent_idx, CFG_DEFAULT_GRID_EXTENT_IDX);
         ASSERT_INT("presentation reset axes",
-                   repl_state_presentation().axes_theme, CFG_DEFAULT_AXES_THEME);
+                   glr_state_presentation().axes_theme, CFG_DEFAULT_AXES_THEME);
         ASSERT_INT("presentation reset labels",
-                   repl_state_presentation().show_vertex_labels, CFG_DEFAULT_VERTEX_LABELS);
+                   glr_state_presentation().show_vertex_labels, CFG_DEFAULT_VERTEX_LABELS);
         ASSERT_INT("presentation reset normals",
-                   repl_state_presentation().show_normal_vectors, CFG_DEFAULT_NORMAL_VECTORS);
+                   glr_state_presentation().show_normal_vectors, CFG_DEFAULT_NORMAL_VECTORS);
         ASSERT_INT("presentation reset indices",
-                   repl_state_presentation().show_vertex_indices, CFG_DEFAULT_VERTEX_INDICES);
+                   glr_state_presentation().show_vertex_indices, CFG_DEFAULT_VERTEX_INDICES);
         ASSERT_INT("presentation reset outlines",
-                   repl_state_presentation().show_vertex_outlines, CFG_DEFAULT_VERTEX_OUTLINES);
+                   glr_state_presentation().show_vertex_outlines, CFG_DEFAULT_VERTEX_OUTLINES);
         ASSERT_INT("presentation reset points",
-                   repl_state_presentation().show_vertex_points, CFG_DEFAULT_VERTEX_POINTS);
+                   glr_state_presentation().show_vertex_points, CFG_DEFAULT_VERTEX_POINTS);
         ASSERT_INT("presentation reset guides",
-                   repl_state_presentation().show_vertex_guides, CFG_DEFAULT_VERTEX_GUIDES);
+                   glr_state_presentation().show_vertex_guides, CFG_DEFAULT_VERTEX_GUIDES);
         ASSERT_INT("presentation reset xform guide",
-                   repl_state_presentation().xform_guide_mode, CFG_DEFAULT_XFORM_GUIDE_MODE);
+                   glr_state_presentation().xform_guide_mode, CFG_DEFAULT_XFORM_GUIDE_MODE);
         ASSERT_INT("presentation reset lights",
-                   repl_state_presentation().show_light_indicators, CFG_DEFAULT_LIGHT_INDICATORS);
+                   glr_state_presentation().show_light_indicators, CFG_DEFAULT_LIGHT_INDICATORS);
         ASSERT_INT("presentation reset backdrop",
-                   repl_state_presentation().backdrop_mode, CFG_DEFAULT_BACKDROP_MODE);
-        ASSERT_INT("presentation reset camera rotate",
-               glr_camera().auto_rotate, CFG_DEFAULT_CAMERA_ROTATE);
-        ASSERT_INT("presentation reset highlight", repl_state_presentation().highlight_current_poly, 1);
-        ASSERT_INT("presentation reset ortho", repl_state_presentation().ortho_mode, 0);
+                   glr_state_presentation().backdrop_mode, CFG_DEFAULT_BACKDROP_MODE);
+        /* Step 7a removed the camera reset from
+         * glr_state_presentation_reset_defaults — the camera resets
+         * itself via glr_camera_reset_default in glr_app_reset_all. */
+        ASSERT_INT("presentation reset highlight", glr_state_presentation().highlight_current_poly, 1);
+        ASSERT_INT("presentation reset ortho", glr_state_presentation().ortho_mode, 0);
         ASSERT_INT("presentation reset wrap",
-                   repl_state_presentation().wrap_at_comma, CFG_DEFAULT_WRAP_AT_COMMA);
+                   glr_state_presentation().wrap_at_comma, CFG_DEFAULT_WRAP_AT_COMMA);
         ASSERT_INT("presentation reset layout",
-                   repl_state_presentation().code_panel_layout, CFG_DEFAULT_CODE_PANEL_LAYOUT);
-        ASSERT_TRUE("presentation reset focus x",
-                    repl_state_presentation().focus_vertex[0] == 0.0f);
-        ASSERT_TRUE("presentation reset focus y",
-                    repl_state_presentation().focus_vertex[1] == 0.0f);
-        ASSERT_TRUE("presentation reset focus z",
-                    repl_state_presentation().focus_vertex[2] == 0.0f);
-        ASSERT_INT("presentation reset focus valid",
-                   repl_state_presentation().focus_vertex_valid, 0);
+                   glr_state_presentation().code_panel_layout, CFG_DEFAULT_CODE_PANEL_LAYOUT);
+        /* focus_vertex storage deleted in step 7a — no asserts. */
     }
 
     /* 14. render state facade */
@@ -510,6 +506,7 @@ int main() {
         g_clear_color[2] = 0.0f;
         g_clear_color[3] = 0.0f;
 
+        glr_state_render_reset_defaults();
         repl_state_render_reset_defaults();
         ASSERT_INT("render reset use accum", g_use_accum, 1);
         ASSERT_INT("render reset accum aa", g_accum_aa_enabled, 1);

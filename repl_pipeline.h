@@ -8,7 +8,7 @@
 #define REPL_PIPELINE_H
 
 void flatten_commands(void);
-void recompute_autonormals(void);
+void recompute_autonormals(int autonormal_enabled);
 void update_cam_lines(void);
 void update_render_state_strings(void);
 void ensure_init_bootstrap_ready(void);
