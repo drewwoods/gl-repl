@@ -1,6 +1,7 @@
 /*
  * repl_example_loader.c -- Built-in example loading and metadata handling.
  */
+#include "repl_compile.h"        /* repl_load_apply_line — step 5b */
 #include "repl_export.h"
 #include "repl_command_store.h"
 #include "repl_core_internal.h"
@@ -252,6 +253,15 @@ static void load_example_lines(const char *const *lines) {
             body++;
     }
 
+    /* Examples keep using the editor's feed_line: the editor's
+     * try_commit_func_def has reorder + comment-relocation behavior
+     * that the lean repl_load_apply_line doesn't replicate (yet).
+     * Without it, examples authored with `glClearColor; func0() {`
+     * order would load with func_def in source order rather than at
+     * the top of the document, breaking fixtures and saved-file
+     * roundtrip. Step 5b's repl_load_apply_line is used by the
+     * import path (repl_export.c) where saved files already have
+     * func defs at the canonical position. */
     for (; body && *body; body++)
         feed_line(*body);
 
