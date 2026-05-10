@@ -4,13 +4,16 @@
 #include "repl_state_views.h"
 #include "repl_state_owners.h"
 
+// presentation slice moved to glr_state.{c,h} (step 7a of
+// feature/decouple-repl-from-gl-repl-alt.md). Storage lives on the
+// app-side GlrState; capture/restore use glr_state_capture /
+// _restore in lockstep with the REPL halves below.
+// replay moved to replay_state.c (Phase F commit 33); peer-owned.
 typedef struct {
     ReplDocumentState         document;
     ReplFlatProgramState      flat_program;
     ReplVariableState         variables;
-    ReplPresentationState     presentation;
     ReplRenderState           render;
-    /* replay moved to replay_state.c (Phase F commit 33); peer-owned. */
     ReplSceneRuntimeState     scenes;
     ReplImportExportState     import_export;
 } ReplRuntimeState;

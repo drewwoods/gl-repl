@@ -1,3 +1,4 @@
+#include "glr_state.h"
 #include "glr_ctrl.h"
 #include "repl_core_internal.h"
 #include "repl_state.h"
@@ -204,9 +205,9 @@ int main(void) {
 
         glr_app_reset_all();
         declare_test_vars();
-        repl_state_presentation_mut()->wrap_at_comma = 1;
-        repl_state_presentation_mut()->show_vertex_indices = 0; glr_ctrl_sync_ui_chrome();
-        repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT; glr_ctrl_sync_ui_chrome();
+        glr_state_presentation_mut()->wrap_at_comma = 1;
+        glr_state_presentation_mut()->show_vertex_indices = 0; glr_ctrl_sync_ui_chrome();
+        glr_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT; glr_ctrl_sync_ui_chrome();
         ui_state_viewport_set_size(360, ui_state_viewport().window_h);
         g_panel_frac = 0.75f;
 
@@ -244,9 +245,9 @@ int main(void) {
 
         glr_app_reset_all();
         declare_test_vars();
-        repl_state_presentation_mut()->wrap_at_comma = 1;
-        repl_state_presentation_mut()->show_vertex_indices = 0; glr_ctrl_sync_ui_chrome();
-        repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT; glr_ctrl_sync_ui_chrome();
+        glr_state_presentation_mut()->wrap_at_comma = 1;
+        glr_state_presentation_mut()->show_vertex_indices = 0; glr_ctrl_sync_ui_chrome();
+        glr_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT; glr_ctrl_sync_ui_chrome();
         ui_state_viewport_set_size(360, ui_state_viewport().window_h);
         g_panel_frac = 0.75f;
 
@@ -287,9 +288,9 @@ int main(void) {
 
         glr_app_reset_all();
         declare_test_vars();
-        repl_state_presentation_mut()->wrap_at_comma = 1;
-        repl_state_presentation_mut()->show_vertex_indices = 0; glr_ctrl_sync_ui_chrome();
-        repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT; glr_ctrl_sync_ui_chrome();
+        glr_state_presentation_mut()->wrap_at_comma = 1;
+        glr_state_presentation_mut()->show_vertex_indices = 0; glr_ctrl_sync_ui_chrome();
+        glr_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT; glr_ctrl_sync_ui_chrome();
         ui_state_viewport_set_size(360, ui_state_viewport().window_h);
         g_panel_frac = 0.75f;
 
@@ -329,8 +330,8 @@ int main(void) {
 
         glr_app_reset_all();
         declare_test_vars();
-        repl_state_presentation_mut()->wrap_at_comma = 1;
-        repl_state_presentation_mut()->show_vertex_indices = 0; glr_ctrl_sync_ui_chrome();
+        glr_state_presentation_mut()->wrap_at_comma = 1;
+        glr_state_presentation_mut()->show_vertex_indices = 0; glr_ctrl_sync_ui_chrome();
         ui_state_viewport_set_size(260, ui_state_viewport().window_h);
         g_panel_frac = 0.75f;
 
@@ -378,11 +379,11 @@ int main(void) {
 
             glr_app_reset_all();
             declare_test_vars();
-            repl_state_presentation_mut()->wrap_at_comma = 1;
-            repl_state_presentation_mut()->show_vertex_indices = 0; glr_ctrl_sync_ui_chrome();
+            glr_state_presentation_mut()->wrap_at_comma = 1;
+            glr_state_presentation_mut()->show_vertex_indices = 0; glr_ctrl_sync_ui_chrome();
             ui_state_viewport_set_size(360, 800);
             g_panel_frac = 0.5f;
-            repl_state_presentation_mut()->code_panel_layout = layouts[layout_idx]; glr_ctrl_sync_ui_chrome();
+            glr_state_presentation_mut()->code_panel_layout = layouts[layout_idx]; glr_ctrl_sync_ui_chrome();
 
             memset(&repl_state_document_cmds_mut()[0], 0, sizeof(repl_state_document_cmds_mut()[0]));
             repl_state_document_cmds_mut()[0].type = CMD_VERTEX3F;
@@ -417,7 +418,7 @@ int main(void) {
                 }
             }
         }
-        repl_state_presentation_mut()->code_panel_layout = CFG_DEFAULT_CODE_PANEL_LAYOUT; glr_ctrl_sync_ui_chrome();
+        glr_state_presentation_mut()->code_panel_layout = CFG_DEFAULT_CODE_PANEL_LAYOUT; glr_ctrl_sync_ui_chrome();
         g_panel_frac = CFG_DEFAULT_PANEL_FRAC;
     }
 

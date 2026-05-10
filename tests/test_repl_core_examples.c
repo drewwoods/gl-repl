@@ -1,3 +1,5 @@
+#include "glr_camera.h"
+#include "glr_state.h"
 #include "glr_ctrl.h"
 // For linux mkdtemp
 #define _DEFAULT_SOURCE
@@ -10,9 +12,9 @@
 #include "scene/render.h"
 #include "glr_defaults.h"   /* CFG_DEFAULT_* */
 
-#define g_accum_aa_enabled    (repl_state_render_mut()->accum_aa_enabled)
-#define g_multisample_enabled (repl_state_render_mut()->multisample_enabled)
-#define g_line_smooth_enabled (repl_state_render_mut()->line_smooth_enabled)
+#define g_accum_aa_enabled    (glr_state_render_mut()->accum_aa_enabled)
+#define g_multisample_enabled (glr_state_render_mut()->multisample_enabled)
+#define g_line_smooth_enabled (glr_state_render_mut()->line_smooth_enabled)
 
 #include "support/test_harness.h"
 #include <stdio.h>
@@ -107,11 +109,11 @@ static void pin_code_panel_state(void) {
     glr_camera_set_orbit(18.0f, 32.0f);
     glr_camera_set_distance(5.5f);
     glr_camera_set_pan(0.0f, 0.0f, 0.0f);
-    repl_state_presentation_mut()->axes_theme = CFG_DEFAULT_AXES_THEME;
-    repl_state_presentation_mut()->backdrop_mode = CFG_DEFAULT_BACKDROP_MODE;
-    repl_state_presentation_mut()->show_vertex_outlines = CFG_DEFAULT_VERTEX_OUTLINES;
+    glr_state_presentation_mut()->axes_theme = CFG_DEFAULT_AXES_THEME;
+    glr_state_presentation_mut()->backdrop_mode = CFG_DEFAULT_BACKDROP_MODE;
+    glr_state_presentation_mut()->show_vertex_outlines = CFG_DEFAULT_VERTEX_OUTLINES;
     g_accum_aa_enabled = 1;
-    repl_state_presentation_mut()->code_panel_layout = CFG_DEFAULT_CODE_PANEL_LAYOUT; glr_ctrl_sync_ui_chrome();
+    glr_state_presentation_mut()->code_panel_layout = CFG_DEFAULT_CODE_PANEL_LAYOUT; glr_ctrl_sync_ui_chrome();
     g_multisample_enabled = CFG_DEFAULT_MULTISAMPLE;
     g_line_smooth_enabled = CFG_DEFAULT_LINE_SMOOTH;
 }
@@ -120,19 +122,19 @@ static void seed_nondefault_example_presentation_state(void) {
     glr_camera_set_orbit(-41.0f, 73.0f);
     glr_camera_set_distance(12.0f);
     glr_camera_set_pan(1.5f, -2.0f, 0.75f);
-    repl_state_presentation_mut()->wireframe = 1;
-    repl_state_presentation_mut()->grid_theme = 1;
-    repl_state_presentation_mut()->grid_major_idx = GRID_MAJOR_10;
-    repl_state_presentation_mut()->grid_extent_idx = GRID_EXTENT_CLOSE;
-    repl_state_presentation_mut()->axes_theme = 5;
-    repl_state_presentation_mut()->show_vertex_labels = 0;
-    repl_state_presentation_mut()->show_vertex_indices = 0; glr_ctrl_sync_ui_chrome();
-    repl_state_presentation_mut()->show_normal_vectors = 1;
-    repl_state_presentation_mut()->show_vertex_outlines = 0;
-    repl_state_presentation_mut()->show_vertex_points = 0;
-    repl_state_presentation_mut()->show_vertex_guides = 0;
-    repl_state_presentation_mut()->show_light_indicators = 0;
-    repl_state_presentation_mut()->backdrop_mode = 1;
+    glr_state_presentation_mut()->wireframe = 1;
+    glr_state_presentation_mut()->grid_theme = 1;
+    glr_state_presentation_mut()->grid_major_idx = GRID_MAJOR_10;
+    glr_state_presentation_mut()->grid_extent_idx = GRID_EXTENT_CLOSE;
+    glr_state_presentation_mut()->axes_theme = 5;
+    glr_state_presentation_mut()->show_vertex_labels = 0;
+    glr_state_presentation_mut()->show_vertex_indices = 0; glr_ctrl_sync_ui_chrome();
+    glr_state_presentation_mut()->show_normal_vectors = 1;
+    glr_state_presentation_mut()->show_vertex_outlines = 0;
+    glr_state_presentation_mut()->show_vertex_points = 0;
+    glr_state_presentation_mut()->show_vertex_guides = 0;
+    glr_state_presentation_mut()->show_light_indicators = 0;
+    glr_state_presentation_mut()->backdrop_mode = 1;
     glr_camera_mut()->auto_rotate = 1;
 }
 
@@ -591,31 +593,31 @@ int main(int argc, char **argv) {
         repl_load_example_lines_for_test(no_cfg_reset_example);
 
         ASSERT_TRUE("no cfg reset wireframe default",
-                    repl_state_presentation().wireframe == CFG_DEFAULT_WIREFRAME);
+                    glr_state_presentation().wireframe == CFG_DEFAULT_WIREFRAME);
         ASSERT_TRUE("no cfg reset grid default",
-                    repl_state_presentation().grid_theme == CFG_DEFAULT_GRID_THEME);
+                    glr_state_presentation().grid_theme == CFG_DEFAULT_GRID_THEME);
         ASSERT_TRUE("no cfg reset grid major default",
-                    repl_state_presentation().grid_major_idx == CFG_DEFAULT_GRID_MAJOR_IDX);
+                    glr_state_presentation().grid_major_idx == CFG_DEFAULT_GRID_MAJOR_IDX);
         ASSERT_TRUE("no cfg reset grid extent default",
-                    repl_state_presentation().grid_extent_idx == CFG_DEFAULT_GRID_EXTENT_IDX);
+                    glr_state_presentation().grid_extent_idx == CFG_DEFAULT_GRID_EXTENT_IDX);
         ASSERT_TRUE("no cfg reset axes default",
-                    repl_state_presentation().axes_theme == CFG_DEFAULT_AXES_THEME);
+                    glr_state_presentation().axes_theme == CFG_DEFAULT_AXES_THEME);
         ASSERT_TRUE("no cfg reset labels default",
-                    repl_state_presentation().show_vertex_labels == CFG_DEFAULT_VERTEX_LABELS);
+                    glr_state_presentation().show_vertex_labels == CFG_DEFAULT_VERTEX_LABELS);
         ASSERT_TRUE("no cfg reset indices default",
-                    repl_state_presentation().show_vertex_indices == CFG_DEFAULT_VERTEX_INDICES);
+                    glr_state_presentation().show_vertex_indices == CFG_DEFAULT_VERTEX_INDICES);
         ASSERT_TRUE("no cfg reset normals default",
-                    repl_state_presentation().show_normal_vectors == CFG_DEFAULT_NORMAL_VECTORS);
+                    glr_state_presentation().show_normal_vectors == CFG_DEFAULT_NORMAL_VECTORS);
         ASSERT_TRUE("no cfg reset outlines default",
-                    repl_state_presentation().show_vertex_outlines == CFG_DEFAULT_VERTEX_OUTLINES);
+                    glr_state_presentation().show_vertex_outlines == CFG_DEFAULT_VERTEX_OUTLINES);
         ASSERT_TRUE("no cfg reset points default",
-                    repl_state_presentation().show_vertex_points == CFG_DEFAULT_VERTEX_POINTS);
+                    glr_state_presentation().show_vertex_points == CFG_DEFAULT_VERTEX_POINTS);
         ASSERT_TRUE("no cfg reset guides default",
-                    repl_state_presentation().show_vertex_guides == CFG_DEFAULT_VERTEX_GUIDES);
+                    glr_state_presentation().show_vertex_guides == CFG_DEFAULT_VERTEX_GUIDES);
         ASSERT_TRUE("no cfg reset lights default",
-                    repl_state_presentation().show_light_indicators == CFG_DEFAULT_LIGHT_INDICATORS);
+                    glr_state_presentation().show_light_indicators == CFG_DEFAULT_LIGHT_INDICATORS);
         ASSERT_TRUE("no cfg reset backdrop default",
-                    repl_state_presentation().backdrop_mode == CFG_DEFAULT_BACKDROP_MODE);
+                    glr_state_presentation().backdrop_mode == CFG_DEFAULT_BACKDROP_MODE);
         ASSERT_TRUE("no cfg reset camera rotate default",
                     glr_camera().auto_rotate == CFG_DEFAULT_CAMERA_ROTATE);
         ASSERT_TRUE("no cfg keeps camera rx",
@@ -648,29 +650,29 @@ int main(int argc, char **argv) {
         repl_load_example_lines_for_test(partial_cfg_reset_example);
 
         ASSERT_TRUE("partial cfg wireframe applied",
-                    repl_state_presentation().wireframe == 1);
+                    glr_state_presentation().wireframe == 1);
         ASSERT_TRUE("partial cfg labels applied",
-                    repl_state_presentation().show_vertex_labels == 0);
+                    glr_state_presentation().show_vertex_labels == 0);
         ASSERT_TRUE("partial cfg backdrop applied",
-                    repl_state_presentation().backdrop_mode == 1);
+                    glr_state_presentation().backdrop_mode == 1);
         ASSERT_TRUE("partial cfg grid reset default",
-                    repl_state_presentation().grid_theme == CFG_DEFAULT_GRID_THEME);
+                    glr_state_presentation().grid_theme == CFG_DEFAULT_GRID_THEME);
         ASSERT_TRUE("partial cfg grid major reset default",
-                    repl_state_presentation().grid_major_idx == CFG_DEFAULT_GRID_MAJOR_IDX);
+                    glr_state_presentation().grid_major_idx == CFG_DEFAULT_GRID_MAJOR_IDX);
         ASSERT_TRUE("partial cfg grid extent reset default",
-                    repl_state_presentation().grid_extent_idx == CFG_DEFAULT_GRID_EXTENT_IDX);
+                    glr_state_presentation().grid_extent_idx == CFG_DEFAULT_GRID_EXTENT_IDX);
         ASSERT_TRUE("partial cfg axes reset default",
-                    repl_state_presentation().axes_theme == CFG_DEFAULT_AXES_THEME);
+                    glr_state_presentation().axes_theme == CFG_DEFAULT_AXES_THEME);
         ASSERT_TRUE("partial cfg normals reset default",
-                    repl_state_presentation().show_normal_vectors == CFG_DEFAULT_NORMAL_VECTORS);
+                    glr_state_presentation().show_normal_vectors == CFG_DEFAULT_NORMAL_VECTORS);
         ASSERT_TRUE("partial cfg outlines reset default",
-                    repl_state_presentation().show_vertex_outlines == CFG_DEFAULT_VERTEX_OUTLINES);
+                    glr_state_presentation().show_vertex_outlines == CFG_DEFAULT_VERTEX_OUTLINES);
         ASSERT_TRUE("partial cfg points reset default",
-                    repl_state_presentation().show_vertex_points == CFG_DEFAULT_VERTEX_POINTS);
+                    glr_state_presentation().show_vertex_points == CFG_DEFAULT_VERTEX_POINTS);
         ASSERT_TRUE("partial cfg guides reset default",
-                    repl_state_presentation().show_vertex_guides == CFG_DEFAULT_VERTEX_GUIDES);
+                    glr_state_presentation().show_vertex_guides == CFG_DEFAULT_VERTEX_GUIDES);
         ASSERT_TRUE("partial cfg lights reset default",
-                    repl_state_presentation().show_light_indicators == CFG_DEFAULT_LIGHT_INDICATORS);
+                    glr_state_presentation().show_light_indicators == CFG_DEFAULT_LIGHT_INDICATORS);
         ASSERT_TRUE("partial cfg camera rotate reset default",
                     glr_camera().auto_rotate == CFG_DEFAULT_CAMERA_ROTATE);
         ASSERT_TRUE("partial cfg keeps camera rx",
@@ -685,11 +687,11 @@ int main(int argc, char **argv) {
         if (idx >= 0) {
             load_example_for_test(idx);
             ASSERT_TRUE("stress example axes preset",
-                        repl_state_presentation().axes_theme == 4);
+                        glr_state_presentation().axes_theme == 4);
             ASSERT_TRUE("stress example outlines preset",
-                        repl_state_presentation().show_vertex_outlines == 0);
+                        glr_state_presentation().show_vertex_outlines == 0);
             ASSERT_TRUE("stress example backdrop preset",
-                        repl_state_presentation().backdrop_mode == 1);
+                        glr_state_presentation().backdrop_mode == 1);
             ASSERT_TRUE("stress example camera rx preset",
                         fabsf(glr_camera().rx - 27.5f) < 1e-4f);
             ASSERT_TRUE("stress example camera ry preset",
@@ -743,11 +745,11 @@ int main(int argc, char **argv) {
 
         load_custom_example_lines_for_test(mixed_cfg_camera_example);
         ASSERT_TRUE("mixed cfg camera allowed axes applied",
-                    repl_state_presentation().axes_theme == 5);
+                    glr_state_presentation().axes_theme == 5);
         ASSERT_TRUE("mixed cfg camera disallowed accum aa ignored",
                     g_accum_aa_enabled == 1);
         ASSERT_TRUE("mixed cfg camera disallowed layout ignored",
-                    repl_state_presentation().code_panel_layout == CFG_DEFAULT_CODE_PANEL_LAYOUT);
+                    glr_state_presentation().code_panel_layout == CFG_DEFAULT_CODE_PANEL_LAYOUT);
         ASSERT_TRUE("mixed cfg camera rx preset",
                     fabsf(glr_camera().rx - 11.0f) < 1e-4f);
         ASSERT_TRUE("mixed cfg camera ry preset",
@@ -792,7 +794,7 @@ int main(int argc, char **argv) {
 
         load_custom_example_lines_for_test(nonleading_cfg_example);
         ASSERT_TRUE("nonleading cfg leaves axes unchanged",
-                    repl_state_presentation().axes_theme == CFG_DEFAULT_AXES_THEME);
+                    glr_state_presentation().axes_theme == CFG_DEFAULT_AXES_THEME);
         ASSERT_TRUE("nonleading cfg comments preserved",
                 repl_state_document_count() == 5);
 

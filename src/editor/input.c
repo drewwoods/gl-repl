@@ -37,6 +37,7 @@
 #include "undo.h"
 
 #include "color_picker_state.h"
+#include "glr_state.h"
 #include "glr_camera.h"
 #include "glr_ctrl.h"
 #include "keys.h"
@@ -801,9 +802,9 @@ void navigate_to_line(int target) {
  * Until the special dispatch migrates (commit 45) these are exposed via
  * editor_input_code_panel_* declarations consumed by repl_editor.c. */
 int editor_input_code_panel_layout(void) {
-    if (repl_state_presentation().code_panel_layout < 0 || repl_state_presentation().code_panel_layout >= CODE_PANEL_LAYOUT_COUNT)
+    if (glr_state_presentation().code_panel_layout < 0 || glr_state_presentation().code_panel_layout >= CODE_PANEL_LAYOUT_COUNT)
         return CODE_PANEL_LAYOUT_LEFT;
-    return repl_state_presentation().code_panel_layout;
+    return glr_state_presentation().code_panel_layout;
 }
 
 int editor_input_code_panel_hidden(void) {
@@ -813,7 +814,7 @@ int editor_input_code_panel_hidden(void) {
 int editor_input_restore_hidden_code_panel(void) {
     if (!editor_input_code_panel_hidden())
         return 0;
-    repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
+    glr_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
     glr_ctrl_sync_ui_chrome();
     ui_menu_bar_close();
     color_picker_close();

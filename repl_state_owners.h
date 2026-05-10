@@ -86,15 +86,24 @@ void                     repl_state_time_reset_to_zero(void);
  * (variable_panel.h). Use `variable_panel_drag` /
  * `variable_panel_handle_drag_*` directly. */
 
-ReplPresentationState           repl_state_presentation(void);
-ReplPresentationState       *repl_state_presentation_mut(void);
-const float                  *repl_state_grid_major_steps(void);
-const float                  *repl_state_grid_extents(void);
-void                         repl_state_presentation_reset_defaults(void);
-void                         repl_state_presentation_reset_example_defaults(void);
+/* `repl_state_presentation*` accessors and reset helpers moved to
+ * `glr_state.h` (step 7a of feature/decouple-repl-from-gl-repl-alt.md).
+ * REPL pipeline TUs MUST NOT include `glr_state.h`; controller /
+ * editor / UI / scene callers use it directly. The grid-step /
+ * grid-extent tables moved alongside as
+ * `glr_state_grid_major_steps` / `_grid_extents`.
+ *
+ * The render-config toggles (msaa, line_smooth, accum_aa, etc.) moved
+ * to `glr_state.h` as `GlrRenderState`. The runtime-mutated halves
+ * (`lights[]`, `clear_color[]`) keep these accessors because the
+ * executor still writes them in response to user GL commands. */
 
 ReplRenderState        repl_state_render(void);
 ReplRenderState       *repl_state_render_mut(void);
+/* Reset the runtime-mutated render halves (`lights[]`, `clear_color[]`)
+ * to defaults. The render-config toggles (msaa, line_smooth, accum_*)
+ * moved to glr_state — call `glr_state_render_reset_defaults()` for
+ * those. Both reset paths fire from `glr_app_reset_all`. */
 void                   repl_state_render_reset_defaults(void);
 
 ReplSceneRuntimeState    repl_state_scenes(void);

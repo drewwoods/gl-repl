@@ -31,39 +31,14 @@
      * variable_drag defaults moved to editor_state.c (Phase 1 commit 9).
      * search + autocomplete defaults moved to editor_state.c
      * (Phase 1 commit 7). */
-    /* camera defaults moved to ui_state.c (Phase A commit 13). */
-    .presentation = {
-        .wireframe = CFG_DEFAULT_WIREFRAME,
-        .grid_theme = CFG_DEFAULT_GRID_THEME,
-        .grid_major_idx = CFG_DEFAULT_GRID_MAJOR_IDX,
-        .grid_extent_idx = CFG_DEFAULT_GRID_EXTENT_IDX,
-        .axes_theme = CFG_DEFAULT_AXES_THEME,
-        .show_vertex_labels = CFG_DEFAULT_VERTEX_LABELS,
-        .show_normal_vectors = CFG_DEFAULT_NORMAL_VECTORS,
-        .show_vertex_indices = CFG_DEFAULT_VERTEX_INDICES,
-        .show_vertex_outlines = CFG_DEFAULT_VERTEX_OUTLINES,
-        .show_vertex_points = CFG_DEFAULT_VERTEX_POINTS,
-        .show_vertex_guides = CFG_DEFAULT_VERTEX_GUIDES,
-        .xform_guide_mode = CFG_DEFAULT_XFORM_GUIDE_MODE,
-        .autonormal = 0,
-        .show_light_indicators = CFG_DEFAULT_LIGHT_INDICATORS,
-        .backdrop_mode = CFG_DEFAULT_BACKDROP_MODE,
-        .highlight_current_poly = 1,
-        .ortho_mode = 0,
-        .wrap_at_comma = CFG_DEFAULT_WRAP_AT_COMMA,
-        .code_panel_layout = CFG_DEFAULT_CODE_PANEL_LAYOUT,
-        .focus_vertex = { 0.0f, 0.0f, 0.0f },
-        .focus_vertex_valid = 0,
-    },
+    /* camera defaults moved to ui_state.c (Phase A commit 13).
+     * presentation defaults + render-config toggles moved to
+     * glr_state.c (step 7a of feature/decouple-repl-from-gl-repl-alt.md).
+     * The dead `focus_vertex` / `_valid` fields were dropped with the
+     * move. The runtime-mutated halves of render (lights, clear_color)
+     * stay here because the executor writes them.
+     * .replay defaults moved to replay_state.c (Phase F commit 33). */
     .render = {
-        .use_accum = 1,
-        .accum_aa_enabled = 1,
-        .accum_samples = 2,
-        .accum_jitter_x = 0.0f,
-        .accum_jitter_y = 0.0f,
-        .multisample_enabled = CFG_DEFAULT_MULTISAMPLE,
-        .line_smooth_enabled = CFG_DEFAULT_LINE_SMOOTH,
-        .point_attenuation_enabled = CFG_DEFAULT_ATTENUATE_POINTS,
         .lights = {
             { GL_LIGHT0, 1,
               { 2.0f, 4.0f, 5.0f, 0.0f },
@@ -88,7 +63,6 @@
         },
         .clear_color = { 0.10f, 0.10f, 0.13f, 1.0f },
     },
-    /* .replay defaults moved to replay_state.c (Phase F commit 33). */
     .scenes = {
         .active_example_idx = -1,
         .workspace_dir = "",

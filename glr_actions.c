@@ -8,6 +8,7 @@
  */
 #include "glr_actions.h"
 #include "glr_ctrl.h"            /* glr_ctrl_sync_ui_chrome */
+#include "glr_state.h"           /* presentation/render storage (step 7a) */
 #include "ui/layout.h"           /* CODE_PANEL_LAYOUT_* enum values */
 #include "color_picker_state.h"
 #include "audio.h"
@@ -307,11 +308,11 @@ void glr_cfg_cycle_row(int row, int delta) {
 
     if (item->key == GLR_CONFIG_CODE_PANEL_LAYOUT) {
         ui_state_code_panel_mut()->panel_frac = 0.3f;
-        if (repl_state_presentation().code_panel_layout == CODE_PANEL_LAYOUT_TOP) {
+        if (glr_state_presentation().code_panel_layout == CODE_PANEL_LAYOUT_TOP) {
             set_status("Layout: top code panel");
-        } else if (repl_state_presentation().code_panel_layout == CODE_PANEL_LAYOUT_BOTTOM) {
+        } else if (glr_state_presentation().code_panel_layout == CODE_PANEL_LAYOUT_BOTTOM) {
             set_status("Layout: bottom code panel");
-        } else if (repl_state_presentation().code_panel_layout == CODE_PANEL_LAYOUT_HIDDEN) {
+        } else if (glr_state_presentation().code_panel_layout == CODE_PANEL_LAYOUT_HIDDEN) {
             ui_menu_bar_close();
             color_picker_close();
             editor_completion_clear();
@@ -320,7 +321,7 @@ void glr_cfg_cycle_row(int row, int delta) {
             set_status("Layout: left code panel");
         }
     } else if (item->key == GLR_CONFIG_AUTO_NORMALS) {
-        if (repl_state_presentation().autonormal) {
+        if (glr_state_presentation().autonormal) {
             mark_normals_dirty();
             set_status("Auto-normals: ON");
         } else {

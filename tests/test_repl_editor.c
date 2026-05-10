@@ -1,4 +1,5 @@
 #define _DEFAULT_SOURCE  /* mkdtemp() */
+#include "glr_state.h"
 #include "./include/gl_2d.h"
 #include "editor/clipboard.h"
 #include "editor/commit.h"
@@ -128,14 +129,14 @@ static int cfg_row_for_key(GlrConfigKey key) {
 static int test_code_panel_row_count_for_text(const char *text, int first_x,
                                               int panel_w) {
     CodePanelTextLayout layout =
-        repl_code_panel_layout_make(panel_w, first_x, FONT_W, repl_state_presentation().wrap_at_comma);
+        repl_code_panel_layout_make(panel_w, first_x, FONT_W, glr_state_presentation().wrap_at_comma);
     return repl_code_panel_row_count_for_text(text, &layout);
 }
 
 static int code_panel_header_row_count(void) {
     int panel_w;
     int linenum_w = 4 * FONT_W;
-    int idx_col_w = repl_state_presentation().show_vertex_indices ? (6 * FONT_W) : 0;
+    int idx_col_w = glr_state_presentation().show_vertex_indices ? (6 * FONT_W) : 0;
     int text_x = CODE_MARGIN_X + linenum_w + FONT_W + idx_col_w;
     int rows = 0;
 
@@ -159,7 +160,7 @@ static int code_panel_header_row_count(void) {
 static int code_panel_mouse_y_for_cmd(int cmd_idx) {
     int cp_y, cp_h, panel_w;
     int linenum_w = 4 * FONT_W;
-    int idx_col_w = repl_state_presentation().show_vertex_indices ? (6 * FONT_W) : 0;
+    int idx_col_w = glr_state_presentation().show_vertex_indices ? (6 * FONT_W) : 0;
     int text_x = CODE_MARGIN_X + linenum_w + FONT_W + idx_col_w;
     int doc_line = code_panel_header_row_count();
 
@@ -238,7 +239,7 @@ int main() {
         ui_state_viewport_set_size(1000, 800);
         g_panel_frac = 0.25f;
 
-        repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT; glr_ctrl_sync_ui_chrome();
+        glr_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT; glr_ctrl_sync_ui_chrome();
         ui_layout_code_panel_rect(&x, &y, &w, &h);
         ASSERT_INT("left code x", x, 0);
         ASSERT_INT("left code y", y, 0);
@@ -250,7 +251,7 @@ int main() {
         ASSERT_INT("left scene w", w, 750);
         ASSERT_INT("left scene h", h, 800);
 
-        repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_TOP; glr_ctrl_sync_ui_chrome();
+        glr_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_TOP; glr_ctrl_sync_ui_chrome();
         ui_layout_code_panel_rect(&x, &y, &w, &h);
         ASSERT_INT("top code x", x, 0);
         ASSERT_INT("top code y", y, 600);
@@ -262,7 +263,7 @@ int main() {
         ASSERT_INT("top scene w", w, 1000);
         ASSERT_INT("top scene h", h, 600);
 
-        repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_BOTTOM; glr_ctrl_sync_ui_chrome();
+        glr_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_BOTTOM; glr_ctrl_sync_ui_chrome();
         ui_layout_code_panel_rect(&x, &y, &w, &h);
         ASSERT_INT("bottom code x", x, 0);
         ASSERT_INT("bottom code y", y, 0);
@@ -274,7 +275,7 @@ int main() {
         ASSERT_INT("bottom scene w", w, 1000);
         ASSERT_INT("bottom scene h", h, 600);
 
-        repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_HIDDEN; glr_ctrl_sync_ui_chrome();
+        glr_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_HIDDEN; glr_ctrl_sync_ui_chrome();
         ui_layout_code_panel_rect(&x, &y, &w, &h);
         ASSERT_INT("hidden code x", x, 0);
         ASSERT_INT("hidden code y", y, 0);
@@ -288,7 +289,7 @@ int main() {
 
         ui_state_viewport_set_size(1200, 800);
         g_panel_frac = CFG_DEFAULT_PANEL_FRAC;
-        repl_state_presentation_mut()->code_panel_layout = CFG_DEFAULT_CODE_PANEL_LAYOUT; glr_ctrl_sync_ui_chrome();
+        glr_state_presentation_mut()->code_panel_layout = CFG_DEFAULT_CODE_PANEL_LAYOUT; glr_ctrl_sync_ui_chrome();
     }
 
     /* 0b. Code panel config cycles Left -> Top -> Bottom -> Hidden and imports legacy top layout */
@@ -296,39 +297,39 @@ int main() {
         int row = cfg_row_for_key(GLR_CONFIG_CODE_PANEL_LAYOUT);
         ASSERT_TRUE("code panel cfg row exists", row >= 0);
         if (row >= 0) {
-            repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT; glr_ctrl_sync_ui_chrome();
+            glr_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT; glr_ctrl_sync_ui_chrome();
             glr_cfg_cycle_row(row, +1);
             ASSERT_INT("code panel cfg cycles to top",
-                       repl_state_presentation().code_panel_layout, CODE_PANEL_LAYOUT_TOP);
+                       glr_state_presentation().code_panel_layout, CODE_PANEL_LAYOUT_TOP);
             glr_cfg_cycle_row(row, +1);
             ASSERT_INT("code panel cfg cycles to bottom",
-                       repl_state_presentation().code_panel_layout, CODE_PANEL_LAYOUT_BOTTOM);
+                       glr_state_presentation().code_panel_layout, CODE_PANEL_LAYOUT_BOTTOM);
             g_ac_count = 2;
             g_ac_sel = 1;
             strcpy(g_ac_ghost, "glVertex3f");
             strcpy(g_ac_hint, "vertex");
             glr_cfg_cycle_row(row, +1);
             ASSERT_INT("code panel cfg cycles to hidden",
-                       repl_state_presentation().code_panel_layout, CODE_PANEL_LAYOUT_HIDDEN);
+                       glr_state_presentation().code_panel_layout, CODE_PANEL_LAYOUT_HIDDEN);
             ASSERT_INT("hide clears autocomplete count", g_ac_count, 0);
             ASSERT_INT("hide clears autocomplete selection", g_ac_sel, 0);
             ASSERT_STR("hide clears autocomplete ghost", g_ac_ghost, "");
             ASSERT_STR("hide clears autocomplete hint", g_ac_hint, "");
             glr_cfg_cycle_row(row, +1);
             ASSERT_INT("code panel cfg wraps to left",
-                       repl_state_presentation().code_panel_layout, CODE_PANEL_LAYOUT_LEFT);
+                       glr_state_presentation().code_panel_layout, CODE_PANEL_LAYOUT_LEFT);
         }
 
-        repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT; glr_ctrl_sync_ui_chrome();
+        glr_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT; glr_ctrl_sync_ui_chrome();
         ASSERT_INT("parse code_panel cfg",
                    parse_workspace_header_line("// @cfg code_panel = 2"), 1);
         ASSERT_INT("parse code_panel bottom",
-                   repl_state_presentation().code_panel_layout, CODE_PANEL_LAYOUT_BOTTOM);
+                   glr_state_presentation().code_panel_layout, CODE_PANEL_LAYOUT_BOTTOM);
 
         ASSERT_INT("parse code_panel hidden cfg",
                    parse_workspace_header_line("// @cfg code_panel = 3"), 1);
         ASSERT_INT("parse code_panel hidden",
-                   repl_state_presentation().code_panel_layout, CODE_PANEL_LAYOUT_HIDDEN);
+                   glr_state_presentation().code_panel_layout, CODE_PANEL_LAYOUT_HIDDEN);
 
         {
             int found_hidden_export = 0;
@@ -345,60 +346,60 @@ int main() {
         ASSERT_INT("parse legacy top_code_panel cfg",
                    parse_workspace_header_line("// @cfg top_code_panel = 1"), 1);
         ASSERT_INT("legacy top_code_panel maps to top",
-                   repl_state_presentation().code_panel_layout, CODE_PANEL_LAYOUT_TOP);
+                   glr_state_presentation().code_panel_layout, CODE_PANEL_LAYOUT_TOP);
 
         ASSERT_INT("parse legacy top_code_panel off cfg",
                    parse_workspace_header_line("// @cfg top_code_panel = 0"), 1);
         ASSERT_INT("legacy top_code_panel off maps to left",
-                   repl_state_presentation().code_panel_layout, CODE_PANEL_LAYOUT_LEFT);
+                   glr_state_presentation().code_panel_layout, CODE_PANEL_LAYOUT_LEFT);
 
         g_panel_frac = CFG_DEFAULT_PANEL_FRAC;
-        repl_state_presentation_mut()->code_panel_layout = CFG_DEFAULT_CODE_PANEL_LAYOUT; glr_ctrl_sync_ui_chrome();
+        glr_state_presentation_mut()->code_panel_layout = CFG_DEFAULT_CODE_PANEL_LAYOUT; glr_ctrl_sync_ui_chrome();
     }
 
     /* 0b2. Config/action module owns shortcut and menu row dispatch. */
     {
         glr_app_reset_all();
 
-        repl_state_presentation_mut()->wireframe = 0;
+        glr_state_presentation_mut()->wireframe = 0;
         ASSERT_INT("config special shortcut consumed",
                    glr_cfg_handle_special_shortcut(GLUT_KEY_F2), 1);
         ASSERT_INT("config special shortcut toggles wireframe",
-                   repl_state_presentation().wireframe, 1);
+                   glr_state_presentation().wireframe, 1);
 
-        repl_state_presentation_mut()->grid_major_idx = 0;
+        glr_state_presentation_mut()->grid_major_idx = 0;
         ASSERT_INT("config ascii shortcut consumed",
                    glr_cfg_handle_ascii_shortcut(KEY_CTRL_O), 1);
         ASSERT_INT("config ascii shortcut cycles grid major",
-                   repl_state_presentation().grid_major_idx, 1);
+                   glr_state_presentation().grid_major_idx, 1);
 
         int row = cfg_row_for_key(GLR_CONFIG_CODE_PANEL_LAYOUT);
         ASSERT_TRUE("config menu action row exists", row >= 0);
         if (row >= 0) {
-            repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT; glr_ctrl_sync_ui_chrome();
+            glr_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT; glr_ctrl_sync_ui_chrome();
             int close_menu = glr_action_menu_item_activate(GLR_MENU_CONFIG, row);
             ASSERT_INT("config menu action keeps menu open", close_menu, 0);
             ASSERT_INT("config menu action cycles code panel",
-                       repl_state_presentation().code_panel_layout, CODE_PANEL_LAYOUT_TOP);
+                       glr_state_presentation().code_panel_layout, CODE_PANEL_LAYOUT_TOP);
         }
     }
 
     /* 0c. Hidden code panel returns to the editor on ordinary input */
     {
         glr_app_reset_all();
-        repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_HIDDEN; glr_ctrl_sync_ui_chrome();
+        glr_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_HIDDEN; glr_ctrl_sync_ui_chrome();
         editor_handle_key('v', 0, 0);
         ASSERT_INT("typing restores hidden code panel",
-                   repl_state_presentation().code_panel_layout, CODE_PANEL_LAYOUT_LEFT);
+                   glr_state_presentation().code_panel_layout, CODE_PANEL_LAYOUT_LEFT);
         ASSERT_STR("typing after restore still reaches input", editor_state_input().input, "v");
 
-        repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_HIDDEN; glr_ctrl_sync_ui_chrome();
+        glr_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_HIDDEN; glr_ctrl_sync_ui_chrome();
         editor_handle_key('`', 0, 0);
         ASSERT_INT("config shortcut restores hidden code panel",
-                   repl_state_presentation().code_panel_layout, CODE_PANEL_LAYOUT_LEFT);
+                   glr_state_presentation().code_panel_layout, CODE_PANEL_LAYOUT_LEFT);
         editor_handle_key('`', 0, 0);
 
-        repl_state_presentation_mut()->code_panel_layout = CFG_DEFAULT_CODE_PANEL_LAYOUT; glr_ctrl_sync_ui_chrome();
+        glr_state_presentation_mut()->code_panel_layout = CFG_DEFAULT_CODE_PANEL_LAYOUT; glr_ctrl_sync_ui_chrome();
     }
 
     /* 0c2. Keyboard mode routing keeps rename ahead of config, replay, and search. */
@@ -409,10 +410,10 @@ int main() {
         ASSERT_TRUE("rename route setup slot", slot >= 0);
         ASSERT_INT("rename route begin", editor_inline_rename_begin(slot), 1);
 
-        repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_HIDDEN; glr_ctrl_sync_ui_chrome();
+        glr_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_HIDDEN; glr_ctrl_sync_ui_chrome();
         editor_handle_key('`', 0, 0);
         ASSERT_INT("rename swallows config hidden restore",
-                   repl_state_presentation().code_panel_layout, CODE_PANEL_LAYOUT_HIDDEN);
+                   glr_state_presentation().code_panel_layout, CODE_PANEL_LAYOUT_HIDDEN);
         ASSERT_INT("rename remains active after config key",
                    editor_inline_rename_active(), 1);
 
@@ -423,7 +424,7 @@ int main() {
         ASSERT_INT("rename swallows search open", g_search_active, 0);
 
         editor_inline_rename_cancel();
-        repl_state_presentation_mut()->code_panel_layout = CFG_DEFAULT_CODE_PANEL_LAYOUT; glr_ctrl_sync_ui_chrome();
+        glr_state_presentation_mut()->code_panel_layout = CFG_DEFAULT_CODE_PANEL_LAYOUT; glr_ctrl_sync_ui_chrome();
     }
 
     /* 0c3. Search mode captures printable editing keys before text editing. */
@@ -468,7 +469,7 @@ int main() {
 
         set_editor_input("abc");
         editor_cursor_pos_set(2);
-        repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_HIDDEN; glr_ctrl_sync_ui_chrome();
+        glr_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_HIDDEN; glr_ctrl_sync_ui_chrome();
         g_show_help = 0;
         replay_active = 1;
         replay_state = REPLAY_PAUSED;
@@ -480,7 +481,7 @@ int main() {
 
         editor_handle_special(GLUT_KEY_LEFT, 0, 0);
         ASSERT_INT("rename special swallows hidden restore",
-                   repl_state_presentation().code_panel_layout, CODE_PANEL_LAYOUT_HIDDEN);
+                   glr_state_presentation().code_panel_layout, CODE_PANEL_LAYOUT_HIDDEN);
         ASSERT_INT("rename special keeps editor cursor", editor_cursor_pos(), 2);
         ASSERT_INT("rename special keeps search cursor", g_search_cursor_pos, 2);
         ASSERT_INT("rename special keeps replay pc", replay_pc, 0);
@@ -493,7 +494,7 @@ int main() {
         editor_inline_rename_cancel();
         search_clear_all();
         replay_active = 0;
-        repl_state_presentation_mut()->code_panel_layout = CFG_DEFAULT_CODE_PANEL_LAYOUT; glr_ctrl_sync_ui_chrome();
+        glr_state_presentation_mut()->code_panel_layout = CFG_DEFAULT_CODE_PANEL_LAYOUT; glr_ctrl_sync_ui_chrome();
     }
 
     /* 0c6. Search mode captures special arrows before editor/help navigation. */
@@ -536,7 +537,7 @@ int main() {
         int x, y, w, h;
         ui_state_viewport_set_size(320, 80);
         g_panel_frac = 0.25f;
-        repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT; glr_ctrl_sync_ui_chrome();
+        glr_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT; glr_ctrl_sync_ui_chrome();
         replay_active = 0;
 
         ui_variable_panel_rect_for_count(g_num_predef_vars, &x, &y, &w, &h);
@@ -545,7 +546,7 @@ int main() {
 
         ui_state_viewport_set_size(1200, 800);
         g_panel_frac = CFG_DEFAULT_PANEL_FRAC;
-        repl_state_presentation_mut()->code_panel_layout = CFG_DEFAULT_CODE_PANEL_LAYOUT; glr_ctrl_sync_ui_chrome();
+        glr_state_presentation_mut()->code_panel_layout = CFG_DEFAULT_CODE_PANEL_LAYOUT; glr_ctrl_sync_ui_chrome();
     }
 
     /* 0e. Camera control module owns scene drag and momentum behavior. */
@@ -1985,11 +1986,11 @@ int main() {
         ASSERT_INT("replay left steps back",
                    replay_pc, 0);
 
-        repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_HIDDEN; glr_ctrl_sync_ui_chrome();
+        glr_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_HIDDEN; glr_ctrl_sync_ui_chrome();
         replay_state = REPLAY_PLAYING;
         glr_ctrl_router_handle_active_replay_key(' ');
         ASSERT_INT("replay space keeps hidden code panel",
-                   repl_state_presentation().code_panel_layout, CODE_PANEL_LAYOUT_HIDDEN);
+                   glr_state_presentation().code_panel_layout, CODE_PANEL_LAYOUT_HIDDEN);
         ASSERT_INT("replay space still pauses through router",
                    replay_state, REPLAY_PAUSED);
 
@@ -1997,10 +1998,10 @@ int main() {
         replay_pc = 0;
         glr_ctrl_router_handle_replay_special(GLUT_KEY_RIGHT);
         ASSERT_INT("replay right keeps hidden code panel",
-                   repl_state_presentation().code_panel_layout, CODE_PANEL_LAYOUT_HIDDEN);
+                   glr_state_presentation().code_panel_layout, CODE_PANEL_LAYOUT_HIDDEN);
         ASSERT_INT("replay right still advances through router",
                    replay_pc, 1);
-        repl_state_presentation_mut()->code_panel_layout = CFG_DEFAULT_CODE_PANEL_LAYOUT; glr_ctrl_sync_ui_chrome();
+        glr_state_presentation_mut()->code_panel_layout = CFG_DEFAULT_CODE_PANEL_LAYOUT; glr_ctrl_sync_ui_chrome();
 
         ASSERT_INT("replay unknown key unconsumed",
                    repl_replay_handle_key('x'), 0);
@@ -2025,8 +2026,8 @@ int main() {
 
         ui_state_viewport_set_size(800, 230);
         g_panel_frac = 0.5f;
-        repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT; glr_ctrl_sync_ui_chrome();
-        repl_state_presentation_mut()->show_vertex_indices = 0; glr_ctrl_sync_ui_chrome();
+        glr_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT; glr_ctrl_sync_ui_chrome();
+        glr_state_presentation_mut()->show_vertex_indices = 0; glr_ctrl_sync_ui_chrome();
         navigate_to_line(0);
 
         replay_active = 1;
@@ -2036,7 +2037,7 @@ int main() {
         g_scroll = 0;
         g_scroll_follow_cursor = 0;
 
-        (void)ui_panels_code_panel_apply_scroll_follow_for_test(repl_state_presentation().show_vertex_indices, &follow_doc_line,
+        (void)ui_panels_code_panel_apply_scroll_follow_for_test(glr_state_presentation().show_vertex_indices, &follow_doc_line,
                                                       &visible_lines);
         ASSERT_TRUE("replay follow helper computes target",
                     follow_doc_line >= 0);
@@ -2047,7 +2048,7 @@ int main() {
         g_scroll_follow_cursor = 1;
 
         ASSERT_TRUE("replay follow helper reports visible",
-                    ui_panels_code_panel_apply_scroll_follow_for_test(repl_state_presentation().show_vertex_indices, &follow_doc_line,
+                    ui_panels_code_panel_apply_scroll_follow_for_test(glr_state_presentation().show_vertex_indices, &follow_doc_line,
                                                             &visible_lines));
         ASSERT_INT("replay follow scrolls row above status bar",
                    g_scroll, follow_doc_line - visible_lines + 1);
@@ -2111,8 +2112,8 @@ int main() {
 
         ui_state_viewport_set_size(800, 230);
         g_panel_frac = 0.5f;
-        repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT; glr_ctrl_sync_ui_chrome();
-        repl_state_presentation_mut()->show_vertex_indices = 0; glr_ctrl_sync_ui_chrome();
+        glr_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT; glr_ctrl_sync_ui_chrome();
+        glr_state_presentation_mut()->show_vertex_indices = 0; glr_ctrl_sync_ui_chrome();
         navigate_to_line(0);
 
         replay_active = 1;
@@ -2123,20 +2124,20 @@ int main() {
         g_scroll_follow_cursor = 0;
 
         replay_expand_args = 0;
-        (void)ui_panels_code_panel_apply_scroll_follow_for_test(repl_state_presentation().show_vertex_indices, &collapsed_follow,
+        (void)ui_panels_code_panel_apply_scroll_follow_for_test(glr_state_presentation().show_vertex_indices, &collapsed_follow,
                                                       &visible_lines);
         ASSERT_TRUE("collapsed replay follow resolves command row",
                     collapsed_follow >= 0);
 
         replay_expand_args = 1;
-        (void)ui_panels_code_panel_apply_scroll_follow_for_test(repl_state_presentation().show_vertex_indices, &expanded_follow,
+        (void)ui_panels_code_panel_apply_scroll_follow_for_test(glr_state_presentation().show_vertex_indices, &expanded_follow,
                                                       &visible_lines);
         ASSERT_INT("expanded replay follows final annotation row",
                    expanded_follow, collapsed_follow + 2);
 
         replay_expand_args = 0;
         expanded_follow = -1;
-        (void)ui_panels_code_panel_apply_scroll_follow_for_test(repl_state_presentation().show_vertex_indices, &expanded_follow,
+        (void)ui_panels_code_panel_apply_scroll_follow_for_test(glr_state_presentation().show_vertex_indices, &expanded_follow,
                                                       &visible_lines);
         ASSERT_INT("collapsed replay removes annotation rows from follow",
                    expanded_follow, collapsed_follow);
@@ -2186,8 +2187,8 @@ int main() {
 
         ui_state_viewport_set_size(800, 230);
         g_panel_frac = 0.5f;
-        repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT; glr_ctrl_sync_ui_chrome();
-        repl_state_presentation_mut()->show_vertex_indices = 0; glr_ctrl_sync_ui_chrome();
+        glr_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT; glr_ctrl_sync_ui_chrome();
+        glr_state_presentation_mut()->show_vertex_indices = 0; glr_ctrl_sync_ui_chrome();
         replay_active = 0;
 
         repl_state_edit_line_set(repl_state_document_count());
@@ -2200,7 +2201,7 @@ int main() {
         editor_cursor_pos_set(0);
         g_scroll = 0;
         g_scroll_follow_cursor = 1;
-        ui_panels_code_panel_apply_scroll_follow_for_test(repl_state_presentation().show_vertex_indices, &follow_insert, &visible_lines);
+        ui_panels_code_panel_apply_scroll_follow_for_test(glr_state_presentation().show_vertex_indices, &follow_insert, &visible_lines);
         ASSERT_TRUE("insert-at-end cursor in visible region",
                     follow_insert >= g_scroll &&
                     follow_insert < g_scroll + visible_lines);
@@ -2209,7 +2210,7 @@ int main() {
         editor_insert_mode_set(0);
         g_scroll = 0;
         g_scroll_follow_cursor = 1;
-        ui_panels_code_panel_apply_scroll_follow_for_test(repl_state_presentation().show_vertex_indices, &follow_overwrite, &visible_lines);
+        ui_panels_code_panel_apply_scroll_follow_for_test(glr_state_presentation().show_vertex_indices, &follow_overwrite, &visible_lines);
 
         ASSERT_INT("insert-at-end follow matches overwrite-at-end follow",
                    follow_insert, follow_overwrite);
@@ -2259,8 +2260,8 @@ int main() {
 
         ui_state_viewport_set_size(800, 230);
         g_panel_frac = 0.5f;
-        repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT; glr_ctrl_sync_ui_chrome();
-        repl_state_presentation_mut()->show_vertex_indices = 0; glr_ctrl_sync_ui_chrome();
+        glr_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT; glr_ctrl_sync_ui_chrome();
+        glr_state_presentation_mut()->show_vertex_indices = 0; glr_ctrl_sync_ui_chrome();
         replay_active = 0;
 
         navigate_to_line(repl_state_document_count() - 1);
@@ -2271,7 +2272,7 @@ int main() {
         ASSERT_INT("up nav: scroll_follow_cursor set", g_scroll_follow_cursor, 1);
 
         ASSERT_TRUE("up nav: cursor visible after follow",
-                    ui_panels_code_panel_apply_scroll_follow_for_test(repl_state_presentation().show_vertex_indices, &follow_doc_line,
+                    ui_panels_code_panel_apply_scroll_follow_for_test(glr_state_presentation().show_vertex_indices, &follow_doc_line,
                                                             &visible_lines));
     }
 
@@ -2373,8 +2374,8 @@ int main() {
 
         ui_state_viewport_set_size(800, 600);
         g_panel_frac = 0.5f;
-        repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT; glr_ctrl_sync_ui_chrome();
-        repl_state_presentation_mut()->show_vertex_indices = 0; glr_ctrl_sync_ui_chrome();
+        glr_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT; glr_ctrl_sync_ui_chrome();
+        glr_state_presentation_mut()->show_vertex_indices = 0; glr_ctrl_sync_ui_chrome();
         g_scroll = code_panel_header_row_count();
         navigate_to_line(0);
         set_editor_input("glVertex3f(8, 0, 0)");
@@ -2629,7 +2630,7 @@ int main() {
     /* Extra coverage: accumulation samples toggle (Ctrl++ / Ctrl+-) */
     {
         int saved_mods = g_mock_modifiers;
-        ReplRenderState *rs = repl_state_render_mut();
+        GlrRenderState *rs = glr_state_render_mut();
 
         glr_app_reset_all();
         rs->use_accum = 1;
@@ -2704,13 +2705,13 @@ int main() {
     {
         glr_app_reset_all();
         ui_state_viewport_set_size(1000, 1000);
-        repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT; glr_ctrl_sync_ui_chrome();
+        glr_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT; glr_ctrl_sync_ui_chrome();
         ui_state_code_panel_mut()->resizing_panel = 1;
 
         editor_handle_motion(300, 500);
         ASSERT_TRUE("panel resize left: frac updated", fabsf(ui_state_code_panel().panel_frac - 0.3f) < 1e-6f);
 
-        repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_TOP; glr_ctrl_sync_ui_chrome();
+        glr_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_TOP; glr_ctrl_sync_ui_chrome();
         editor_handle_motion(500, 400);
         ASSERT_TRUE("panel resize top: frac updated", fabsf(ui_state_code_panel().panel_frac - 0.4f) < 1e-6f);
 
@@ -2721,7 +2722,7 @@ int main() {
     {
         glr_app_reset_all();
         ui_state_viewport_set_size(1000, 1000);
-        repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT; glr_ctrl_sync_ui_chrome();
+        glr_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT; glr_ctrl_sync_ui_chrome();
         ui_state_code_panel_mut()->panel_frac = 0.3f;
 
         /* Divider should be at x = 300. Test hit at 305. */
@@ -2729,7 +2730,7 @@ int main() {
         /* We can't easily assert the cursor change without more mocking,
          * but we are hitting the branch. */
 
-        repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_TOP; glr_ctrl_sync_ui_chrome();
+        glr_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_TOP; glr_ctrl_sync_ui_chrome();
         /* Divider should be at gl_y = 300. window_h = 1000, so y = 700. Test hit at 705. */
         editor_handle_passive_motion(500, 705);
     }
@@ -2916,7 +2917,7 @@ int main() {
             glr_app_reset_all();
             ui_state_viewport_set_size(1000, 1000);
             editor_scroll_set(0);
-            repl_state_presentation_mut()->code_panel_layout = layout; glr_ctrl_sync_ui_chrome();
+            glr_state_presentation_mut()->code_panel_layout = layout; glr_ctrl_sync_ui_chrome();
 
             ui_layout_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
             ui_layout_scene_rect(&scene_x, &scene_y, &scene_w, &scene_h);
@@ -2948,7 +2949,7 @@ int main() {
         glr_app_reset_all();
         ui_state_viewport_set_size(1000, 1000);
         editor_scroll_set(0);
-        repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_HIDDEN; glr_ctrl_sync_ui_chrome();
+        glr_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_HIDDEN; glr_ctrl_sync_ui_chrome();
 
         editor_handle_mousewheel(0, 1, 500, 500);
         ASSERT_INT("mousewheel: hidden layout leaves code scroll unchanged",
@@ -3006,19 +3007,19 @@ int main() {
     /* Extra coverage: editor_restore_hidden_code_panel from keys */
     {
         glr_app_reset_all();
-        repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_HIDDEN; glr_ctrl_sync_ui_chrome();
+        glr_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_HIDDEN; glr_ctrl_sync_ui_chrome();
 
         /* Pressing a printable key should restore it. */
         editor_handle_key('a', 0, 0);
         ASSERT_INT("key restores hidden panel",
-                   repl_state_presentation().code_panel_layout,
+                   glr_state_presentation().code_panel_layout,
                    CODE_PANEL_LAYOUT_LEFT);
 
-        repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_HIDDEN; glr_ctrl_sync_ui_chrome();
+        glr_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_HIDDEN; glr_ctrl_sync_ui_chrome();
         /* Pressing a special key should restore it. */
         editor_handle_special(GLUT_KEY_UP, 0, 0);
         ASSERT_INT("special key restores hidden panel",
-                   repl_state_presentation().code_panel_layout,
+                   glr_state_presentation().code_panel_layout,
                    CODE_PANEL_LAYOUT_LEFT);
     }
 
@@ -3181,7 +3182,7 @@ int main() {
     {
         glr_app_reset_all();
         ui_state_viewport_set_size(1000, 1000);
-        repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_BOTTOM; glr_ctrl_sync_ui_chrome();
+        glr_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_BOTTOM; glr_ctrl_sync_ui_chrome();
         ui_state_code_panel_mut()->panel_frac = 0.3f;
 
         /* Divider should be at gl_y = 300 (y = 700). */

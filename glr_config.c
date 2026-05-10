@@ -1,6 +1,7 @@
 #include "glr_config.h"
 #include "audio.h"
 #include "glr_camera.h"
+#include "glr_state.h"           /* presentation + render storage (step 7a) */
 #include "repl_state_owners.h"
 #include "ui/state_types.h"
 
@@ -34,34 +35,34 @@ const GlrConfigItem *glr_config_item_at(int idx) {
 
 static int *config_value_ptr(GlrConfigKey key) {
     switch (key) {
-    case GLR_CONFIG_MSAA:                return &repl_state_render_mut()->multisample_enabled;
-    case GLR_CONFIG_LINE_SMOOTH:         return &repl_state_render_mut()->line_smooth_enabled;
-    case GLR_CONFIG_ACCUM_AA:            return &repl_state_render_mut()->accum_aa_enabled;
-    case GLR_CONFIG_WIREFRAME:           return &repl_state_presentation_mut()->wireframe;
-    case GLR_CONFIG_POINT_ATTENUATION:   return &repl_state_render_mut()->point_attenuation_enabled;
+    case GLR_CONFIG_MSAA:                return &glr_state_render_mut()->multisample_enabled;
+    case GLR_CONFIG_LINE_SMOOTH:         return &glr_state_render_mut()->line_smooth_enabled;
+    case GLR_CONFIG_ACCUM_AA:            return &glr_state_render_mut()->accum_aa_enabled;
+    case GLR_CONFIG_WIREFRAME:           return &glr_state_presentation_mut()->wireframe;
+    case GLR_CONFIG_POINT_ATTENUATION:   return &glr_state_render_mut()->point_attenuation_enabled;
     case GLR_CONFIG_AUTO_TIME:           return &repl_state_variables_mut()->time_playing;
     case GLR_CONFIG_REPLAY:              return &replay_state_mut()->active;
     case GLR_CONFIG_REPLAY_MODE:         return &replay_state_mut()->mode;
     case GLR_CONFIG_REPLAY_EXPAND:       return &replay_state_mut()->expand_args;
-    case GLR_CONFIG_GRID_THEME:          return &repl_state_presentation_mut()->grid_theme;
-    case GLR_CONFIG_GRID_MAJOR:          return &repl_state_presentation_mut()->grid_major_idx;
-    case GLR_CONFIG_GRID_EXTENT:         return &repl_state_presentation_mut()->grid_extent_idx;
-    case GLR_CONFIG_AXES_THEME:          return &repl_state_presentation_mut()->axes_theme;
-    case GLR_CONFIG_VERTEX_GUIDES:       return &repl_state_presentation_mut()->show_vertex_guides;
-    case GLR_CONFIG_XFORM_GUIDE_MODE:    return &repl_state_presentation_mut()->xform_guide_mode;
-    case GLR_CONFIG_LIGHT_INDICATORS:    return &repl_state_presentation_mut()->show_light_indicators;
-    case GLR_CONFIG_POLY_HIGHLIGHT:      return &repl_state_presentation_mut()->highlight_current_poly;
-    case GLR_CONFIG_BACKDROP:            return &repl_state_presentation_mut()->backdrop_mode;
+    case GLR_CONFIG_GRID_THEME:          return &glr_state_presentation_mut()->grid_theme;
+    case GLR_CONFIG_GRID_MAJOR:          return &glr_state_presentation_mut()->grid_major_idx;
+    case GLR_CONFIG_GRID_EXTENT:         return &glr_state_presentation_mut()->grid_extent_idx;
+    case GLR_CONFIG_AXES_THEME:          return &glr_state_presentation_mut()->axes_theme;
+    case GLR_CONFIG_VERTEX_GUIDES:       return &glr_state_presentation_mut()->show_vertex_guides;
+    case GLR_CONFIG_XFORM_GUIDE_MODE:    return &glr_state_presentation_mut()->xform_guide_mode;
+    case GLR_CONFIG_LIGHT_INDICATORS:    return &glr_state_presentation_mut()->show_light_indicators;
+    case GLR_CONFIG_POLY_HIGHLIGHT:      return &glr_state_presentation_mut()->highlight_current_poly;
+    case GLR_CONFIG_BACKDROP:            return &glr_state_presentation_mut()->backdrop_mode;
     case GLR_CONFIG_CAMERA_ROTATE:       return &glr_camera_mut()->auto_rotate;
-    case GLR_CONFIG_AUTO_NORMALS:        return &repl_state_presentation_mut()->autonormal;
-    case GLR_CONFIG_VERTEX_LABELS:       return &repl_state_presentation_mut()->show_vertex_labels;
-    case GLR_CONFIG_NORMAL_VECTORS:      return &repl_state_presentation_mut()->show_normal_vectors;
-    case GLR_CONFIG_VERTEX_OUTLINES:     return &repl_state_presentation_mut()->show_vertex_outlines;
-    case GLR_CONFIG_VERTEX_POINTS:       return &repl_state_presentation_mut()->show_vertex_points;
+    case GLR_CONFIG_AUTO_NORMALS:        return &glr_state_presentation_mut()->autonormal;
+    case GLR_CONFIG_VERTEX_LABELS:       return &glr_state_presentation_mut()->show_vertex_labels;
+    case GLR_CONFIG_NORMAL_VECTORS:      return &glr_state_presentation_mut()->show_normal_vectors;
+    case GLR_CONFIG_VERTEX_OUTLINES:     return &glr_state_presentation_mut()->show_vertex_outlines;
+    case GLR_CONFIG_VERTEX_POINTS:       return &glr_state_presentation_mut()->show_vertex_points;
     case GLR_CONFIG_VARIABLE_PANEL:      return &variable_panel_view_mut()->visible;
     case GLR_CONFIG_CPU_PROFILE:         return &ui_state_profile_panel_mut()->mode;
-    case GLR_CONFIG_CODE_PANEL_LAYOUT:   return &repl_state_presentation_mut()->code_panel_layout;
-    case GLR_CONFIG_WRAP_AT_COMMA:       return &repl_state_presentation_mut()->wrap_at_comma;
+    case GLR_CONFIG_CODE_PANEL_LAYOUT:   return &glr_state_presentation_mut()->code_panel_layout;
+    case GLR_CONFIG_WRAP_AT_COMMA:       return &glr_state_presentation_mut()->wrap_at_comma;
     case GLR_CONFIG_AUDIO_MODE:          return NULL; /* audio module owns this one */
     case GLR_CONFIG_NONE:
     case GLR_CONFIG_COUNT:

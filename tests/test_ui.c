@@ -1,3 +1,4 @@
+#include "glr_state.h"
 #include "glr_ctrl.h"
 #include "ui/metrics.h"
 #include "ui/state.h"
@@ -59,7 +60,7 @@ static void make_test_ui_snapshot(UiRenderSnapshot *snap) {
     snap->search         = editor_state_search();
     snap->autocomplete   = editor_state_autocomplete();
     snap->pointer        = ui_state_pointer();
-    snap->render         = repl_state_render();
+    snap->render         = glr_state_render();
     snap->replay         = replay_state_view();
     snap->scenes         = repl_state_scenes();
     snap->scroll         = editor_state_scroll();
@@ -359,7 +360,7 @@ static void test_menu_bar(void) {
     gl_stub_counts_reset();
 
     ui_state_viewport_set_size(800, 600);
-    repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT; glr_ctrl_sync_ui_chrome();
+    glr_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT; glr_ctrl_sync_ui_chrome();
     ui_state_code_panel_mut()->panel_frac = 0.5f;
 
     gl_stub_counts_reset();
@@ -439,7 +440,7 @@ static void test_ui_panels_hit_test(void) {
 static void test_ui_menu_bar_hit_test(void) {
     glr_app_reset_all();
     ui_state_viewport_set_size(800, 600);
-    repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT; glr_ctrl_sync_ui_chrome();
+    glr_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT; glr_ctrl_sync_ui_chrome();
     ui_state_code_panel_mut()->panel_frac = 0.5f;
 
     /* Outside menu bar entirely (well below it). */
@@ -562,7 +563,7 @@ static void test_ui_variable_panel_hit_test(void) {
 static void test_ui_panels_hit_test_dispatch(void) {
     glr_app_reset_all();
     ui_state_viewport_set_size(800, 600);
-    repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT; glr_ctrl_sync_ui_chrome();
+    glr_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT; glr_ctrl_sync_ui_chrome();
     ui_state_code_panel_mut()->panel_frac = 0.5f;
 
     /* Variable panel should win over the scene-region fallback when
@@ -622,7 +623,7 @@ static void test_ui_panels_hit_test_panel_divider(void) {
     ui_state_code_panel_mut()->panel_frac = 0.5f;
 
     /* LEFT layout: divider sits at x = panel_w. */
-    repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT; glr_ctrl_sync_ui_chrome();
+    glr_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT; glr_ctrl_sync_ui_chrome();
     int cp_x, cp_y, cp_w, cp_h;
     ui_layout_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
     UiHit h_left = ui_panels_hit_test(cp_x + cp_w, cp_y + 20, 0);
@@ -631,7 +632,7 @@ static void test_ui_panels_hit_test_panel_divider(void) {
 
     /* TOP layout: divider sits at gl_y = cp_y. The hit is at
      * my == window_h - cp_y. */
-    repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_TOP; glr_ctrl_sync_ui_chrome();
+    glr_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_TOP; glr_ctrl_sync_ui_chrome();
     ui_layout_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
     int my_top = ui_state_viewport().window_h - cp_y;
     UiHit h_top = ui_panels_hit_test(cp_x + 100, my_top, 0);
@@ -639,7 +640,7 @@ static void test_ui_panels_hit_test_panel_divider(void) {
                 h_top.kind == UI_HIT_PANEL_DIVIDER);
 
     /* BOTTOM layout: divider sits at gl_y = cp_y + cp_h. */
-    repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_BOTTOM; glr_ctrl_sync_ui_chrome();
+    glr_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_BOTTOM; glr_ctrl_sync_ui_chrome();
     ui_layout_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
     int my_bot = ui_state_viewport().window_h - (cp_y + cp_h);
     UiHit h_bot = ui_panels_hit_test(cp_x + 100, my_bot, 0);
@@ -647,12 +648,12 @@ static void test_ui_panels_hit_test_panel_divider(void) {
                 h_bot.kind == UI_HIT_PANEL_DIVIDER);
 
     /* HIDDEN layout: no divider. */
-    repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_HIDDEN; glr_ctrl_sync_ui_chrome();
+    glr_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_HIDDEN; glr_ctrl_sync_ui_chrome();
     UiHit h_hidden = ui_panels_hit_test(400, 300, 0);
     ASSERT_TRUE("HIDDEN layout has no divider hit",
                 h_hidden.kind != UI_HIT_PANEL_DIVIDER);
 
-    repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT; glr_ctrl_sync_ui_chrome();
+    glr_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT; glr_ctrl_sync_ui_chrome();
 }
 
 /* Compute the GLUT-space (mx, my) for the first code-panel text row
@@ -679,7 +680,7 @@ static void code_panel_first_row_text_click(int *out_mx, int *out_my) {
     ui_layout_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
 
     int linenum_w = 4 * FONT_W;
-    int idx_col_w = repl_state_presentation().show_vertex_indices ? (6 * FONT_W) : 0;
+    int idx_col_w = glr_state_presentation().show_vertex_indices ? (6 * FONT_W) : 0;
     int text_x = CODE_MARGIN_X + linenum_w + FONT_W + idx_col_w;
     CodePanelDocumentLayout layout;
     repl_code_panel_document_build(&layout, cp_w, text_x, cp_h);
@@ -782,7 +783,7 @@ static void test_vertex2f_gutter_labels(void) {
      * wrapping changes, so the only glRasterPos2f delta is the "v0" label. */
     glr_app_reset_all();
     ui_state_viewport_set_size(4000, 600);
-    repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT; glr_ctrl_sync_ui_chrome();
+    glr_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT; glr_ctrl_sync_ui_chrome();
     ui_state_code_panel_mut()->panel_frac = 0.4f;
 
     /* Commit a real program so both the document array and editor buffer
@@ -805,7 +806,7 @@ static void test_vertex2f_gutter_labels(void) {
         ui_panels_render_code_panel(&s, NULL);   /* scroll now follows cursor */
     }
 
-    repl_state_presentation_mut()->show_vertex_indices = 0; glr_ctrl_sync_ui_chrome();
+    glr_state_presentation_mut()->show_vertex_indices = 0; glr_ctrl_sync_ui_chrome();
     unsigned long long base;
     {
         UiRenderSnapshot s; make_test_ui_snapshot(&s);
@@ -814,7 +815,7 @@ static void test_vertex2f_gutter_labels(void) {
         base = gl_stub_counts[GL_STUB_glRasterPos2f];
     }
 
-    repl_state_presentation_mut()->show_vertex_indices = 1; glr_ctrl_sync_ui_chrome();
+    glr_state_presentation_mut()->show_vertex_indices = 1; glr_ctrl_sync_ui_chrome();
     {
         UiRenderSnapshot s; make_test_ui_snapshot(&s);
         gl_stub_counts_reset();
@@ -826,7 +827,7 @@ static void test_vertex2f_gutter_labels(void) {
     /* Confirm vertex3f has the same behaviour */
     glr_app_reset_all();
     ui_state_viewport_set_size(4000, 600);
-    repl_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT; glr_ctrl_sync_ui_chrome();
+    glr_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT; glr_ctrl_sync_ui_chrome();
     ui_state_code_panel_mut()->panel_frac = 0.4f;
 
     repl_feed_line_public("glBegin(GL_TRIANGLES);");
@@ -840,7 +841,7 @@ static void test_vertex2f_gutter_labels(void) {
         ui_panels_render_code_panel(&s, NULL);
     }
 
-    repl_state_presentation_mut()->show_vertex_indices = 0; glr_ctrl_sync_ui_chrome();
+    glr_state_presentation_mut()->show_vertex_indices = 0; glr_ctrl_sync_ui_chrome();
     unsigned long long v3f_base;
     {
         UiRenderSnapshot s; make_test_ui_snapshot(&s);
@@ -848,7 +849,7 @@ static void test_vertex2f_gutter_labels(void) {
         ui_panels_render_code_panel(&s, NULL);
         v3f_base = gl_stub_counts[GL_STUB_glRasterPos2f];
     }
-    repl_state_presentation_mut()->show_vertex_indices = 1; glr_ctrl_sync_ui_chrome();
+    glr_state_presentation_mut()->show_vertex_indices = 1; glr_ctrl_sync_ui_chrome();
     {
         UiRenderSnapshot s; make_test_ui_snapshot(&s);
         gl_stub_counts_reset();

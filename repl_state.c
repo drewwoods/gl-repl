@@ -2,7 +2,6 @@
 #include "repl_state.h"
 #include "editor/help_session.h"
 #include "editor/state.h"
-#include "glr_camera.h"
 #include "glr_defaults.h" /* CFG_DEFAULT_* macros for state defaults */
 #include "repl_command_store.h"
 #include "repl_core.h"
@@ -21,23 +20,13 @@ int  parse_workspace_header_line(const char *line);
 void update_render_state_strings(void);
 void update_cam_lines(void);
 
-/* Step 2 of feature/decouple-repl-from-gl-repl-alt.md moved the
- * peer/UI/editor reset calls out of repl_state.c. The remaining
- * forward-declared symbols are camera (read by update_cam_lines via
- * the import_export string buffer; see repl_export.c). */
-ReplCameraState *glr_camera_mut(void);
+/* Step 7a of feature/decouple-repl-from-gl-repl-alt.md: presentation +
+ * render slices moved to glr_state.c, dropping the last `glr_camera.h`
+ * include from this TU. The previous `glr_camera_mut()->auto_rotate`
+ * resets in `_presentation_reset_*` are gone — `auto_rotate` is part
+ * of the per-scene cfg snapshot and the cfg bridge's `apply` callback
+ * restores it during scene switches. */
 
-static const float g_grid_major_steps[GRID_MAJOR_COUNT] = {
-    [GRID_MAJOR_1]  = 1.0f,
-    [GRID_MAJOR_2]  = 2.0f,
-    [GRID_MAJOR_5]  = 5.0f,
-    [GRID_MAJOR_10] = 10.0f,
-};
-static const float g_grid_extents[GRID_EXTENT_COUNT] = {
-    [GRID_EXTENT_CLOSE] = 5.0f,
-    [GRID_EXTENT_MID]   = 25.0f,
-    [GRID_EXTENT_FAR]   = 100.0f,
-};
 static const ReplRuntimeState g_repl_state_defaults = {
 #include "repl_state_defaults.inc"
 };
@@ -84,41 +73,14 @@ static ReplRuntimeState g_repl_state;
  * ui_state_camera_* directly.
  * g_mouse_* and g_win_* macros removed (Phase 1 commit 8); pointer and
  * viewport slices live on g_ui_state.{pointer,viewport} in ui_state.c. */
-#define g_wireframe                 (g_repl_state.presentation.wireframe)
-#define g_grid_theme                (g_repl_state.presentation.grid_theme)
-#define g_grid_major_idx            (g_repl_state.presentation.grid_major_idx)
-#define g_grid_extent_idx           (g_repl_state.presentation.grid_extent_idx)
-#define g_focus_vtx                 (g_repl_state.presentation.focus_vertex)
-#define g_focus_vtx_valid           (g_repl_state.presentation.focus_vertex_valid)
-#define g_axes_theme                (g_repl_state.presentation.axes_theme)
-#define g_show_vnums                (g_repl_state.presentation.show_vertex_labels)
-#define g_show_normals              (g_repl_state.presentation.show_normal_vectors)
-#define g_show_indices              (g_repl_state.presentation.show_vertex_indices)
-#define g_wrap_at_comma             (g_repl_state.presentation.wrap_at_comma)
-#define g_code_panel_layout         (g_repl_state.presentation.code_panel_layout)
-#define g_show_guides               (g_repl_state.presentation.show_vertex_guides)
-#define g_xform_guide_mode          (g_repl_state.presentation.xform_guide_mode)
-#define g_autonormal                (g_repl_state.presentation.autonormal)
-#define g_show_lights               (g_repl_state.presentation.show_light_indicators)
-#define g_backdrop_mode             (g_repl_state.presentation.backdrop_mode)
-/* g_cam_rotate macro removed (Phase A commit 13); auto_rotate lives on
- * g_ui_state.camera with the rest of the camera slice. */
-#define g_show_outlines             (g_repl_state.presentation.show_vertex_outlines)
-#define g_show_vpoints              (g_repl_state.presentation.show_vertex_points)
-#define g_highlight_current_poly    (g_repl_state.presentation.highlight_current_poly)
-#define g_ortho_mode                (g_repl_state.presentation.ortho_mode)
-/* g_cursor_px / g_cursor_py defined alongside the other code_panel
- * macro removals above. */
-#define g_use_accum                 (g_repl_state.render.use_accum)
-#define g_accum_aa_enabled          (g_repl_state.render.accum_aa_enabled)
-#define g_accum_samples             (g_repl_state.render.accum_samples)
-#define g_accum_jitter_x            (g_repl_state.render.accum_jitter_x)
-#define g_accum_jitter_y            (g_repl_state.render.accum_jitter_y)
-#define g_multisample_enabled       (g_repl_state.render.multisample_enabled)
-#define g_line_smooth_enabled       (g_repl_state.render.line_smooth_enabled)
-#define g_init_attenuate_points     (g_repl_state.render.point_attenuation_enabled)
-#define g_lights                    (g_repl_state.render.lights)
-#define g_clear_color               (g_repl_state.render.clear_color)
+/* presentation storage macros + render-config toggles removed (step 7a).
+ * Those fields live on `g_glr_state.{presentation,render}` in
+ * glr_state.c. The dead `g_focus_vtx` / `g_focus_vtx_valid` fields
+ * were dropped along with the move. The runtime-mutated render halves
+ * (`lights[]`, `clear_color[]`) stay here because the executor writes
+ * them in response to user GL commands. */
+#define g_lights        (g_repl_state.render.lights)
+#define g_clear_color   (g_repl_state.render.clear_color)
 /* g_status / g_status_ttl macros removed (Phase 1 commit 8); status
  * lives on g_ui_state.status in ui_state.c.
  * g_cursor_px / g_cursor_py macros removed (Phase A commit 12); the
@@ -421,45 +383,15 @@ void repl_state_time_reset_to_zero(void) {
  * Search + autocomplete accessors moved to editor_state.c (Phase 1
  * commit 7). Use editor_state_search / _autocomplete. */
 
-ReplPresentationState repl_state_presentation(void) {
-    return g_repl_state.presentation;
-}
-
-ReplPresentationState *repl_state_presentation_mut(void) {
-    return &g_repl_state.presentation;
-}
-
-const float *repl_state_grid_major_steps(void) {
-    return g_grid_major_steps;
-}
-
-const float *repl_state_grid_extents(void) {
-    return g_grid_extents;
-}
-
-
-void repl_state_presentation_reset_defaults(void) {
-    g_repl_state.presentation = g_repl_state_defaults.presentation;
-    glr_camera_mut()->auto_rotate = CFG_DEFAULT_CAMERA_ROTATE;
-}
-
-void repl_state_presentation_reset_example_defaults(void) {
-    g_wireframe = CFG_DEFAULT_WIREFRAME;
-    g_grid_theme = CFG_DEFAULT_GRID_THEME;
-    g_grid_major_idx = CFG_DEFAULT_GRID_MAJOR_IDX;
-    g_grid_extent_idx = CFG_DEFAULT_GRID_EXTENT_IDX;
-    g_axes_theme = CFG_DEFAULT_AXES_THEME;
-    g_show_vnums = CFG_DEFAULT_VERTEX_LABELS;
-    g_show_indices = CFG_DEFAULT_VERTEX_INDICES;
-    g_show_normals = CFG_DEFAULT_NORMAL_VECTORS;
-    g_show_outlines = CFG_DEFAULT_VERTEX_OUTLINES;
-    g_show_vpoints = CFG_DEFAULT_VERTEX_POINTS;
-    g_show_guides = CFG_DEFAULT_VERTEX_GUIDES;
-    g_xform_guide_mode = CFG_DEFAULT_XFORM_GUIDE_MODE;
-    g_show_lights = CFG_DEFAULT_LIGHT_INDICATORS;
-    g_backdrop_mode = CFG_DEFAULT_BACKDROP_MODE;
-    glr_camera_mut()->auto_rotate = CFG_DEFAULT_CAMERA_ROTATE;
-}
+/* repl_state_presentation* / _grid_*_steps / _extents and the
+ * render-config toggle accessors moved to glr_state.c (step 7a). The
+ * runtime-mutated render halves (`lights[]`, `clear_color[]`) keep
+ * these accessors because the executor writes them. Presentation
+ * reset paths are now `glr_state_presentation_reset_defaults` /
+ * `_example_defaults` and `glr_state_render_reset_defaults`, called
+ * from `glr_app_reset_all`. The example loader's per-load reset
+ * routes through the controller-installed sink
+ * `repl_install_example_presentation_reset_sink`. */
 
 ReplRenderState repl_state_render(void) {
     return g_repl_state.render;

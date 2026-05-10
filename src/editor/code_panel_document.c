@@ -9,6 +9,7 @@
 
 #include "./include/gl_2d.h"
 #include "repl_export.h" /* g_header_pre/post, RENDER_STATE_LINE_COUNT, CAM_LINE_COUNT */
+#include "glr_state.h"
 #include "repl_source_scope.h"
 #include "repl_state_views.h" /* repl_state_edit_line, repl_state_document_count, etc. */
 #include "replay_state.h"     /* replay_active, replay_src_line */
@@ -22,7 +23,7 @@
 CodePanelTextLayout repl_code_panel_document_text_layout(int panel_w,
                                                          int first_x) {
     return repl_code_panel_layout_make(panel_w, first_x, FONT_W,
-                                       repl_state_presentation().wrap_at_comma);
+                                       glr_state_presentation().wrap_at_comma);
 }
 
 void repl_code_panel_document_wrap_iter_init(CodePanelWrapIter *it,

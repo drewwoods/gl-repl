@@ -1,3 +1,5 @@
+#include "glr_camera.h"
+#include "glr_state.h"
 #include "glr_ctrl.h"
 #include "repl_core.h"
 #include "repl_state.h"
@@ -13,9 +15,10 @@
 #include <sys/types.h>
 
 #define g_render_state_lines    (repl_state_import_export().render_state_lines)
-#define g_multisample_enabled   (repl_state_render_mut()->multisample_enabled)
-#define g_line_smooth_enabled   (repl_state_render_mut()->line_smooth_enabled)
-#define g_init_attenuate_points (repl_state_render_mut()->point_attenuation_enabled)
+/* Render-config toggles moved to glr_state.render in step 7a. */
+#define g_multisample_enabled   (glr_state_render_mut()->multisample_enabled)
+#define g_line_smooth_enabled   (glr_state_render_mut()->line_smooth_enabled)
+#define g_init_attenuate_points (glr_state_render_mut()->point_attenuation_enabled)
 
 static TestHarness g_harness = TEST_HARNESS_INIT;
 
@@ -146,8 +149,8 @@ int main(void) {
 
     g_multisample_enabled = 0;
     g_line_smooth_enabled = 1;
-    repl_state_presentation_mut()->show_vertex_outlines = 0;
-    repl_state_presentation_mut()->show_vertex_points = 0;
+    glr_state_presentation_mut()->show_vertex_outlines = 0;
+    glr_state_presentation_mut()->show_vertex_points = 0;
     repl_export_save_output(path, editor_buffer_view());
     {
         char buf[16384];
@@ -392,8 +395,8 @@ int main(void) {
     int func_n = repl_state_document_count();
     for (int i = 0; i < func_n; i++) before_types[i] = repl_state_document_cmds_mut()[i].type;
 
-    repl_state_presentation_mut()->show_vertex_outlines = 1;
-    repl_state_presentation_mut()->show_vertex_points = 1;
+    glr_state_presentation_mut()->show_vertex_outlines = 1;
+    glr_state_presentation_mut()->show_vertex_points = 1;
     repl_export_save_output(func_path, editor_buffer_view());
     {
         char buf[32768];
@@ -551,8 +554,8 @@ int main(void) {
     repl_feed_line_public("glutSolidTorus(0.1, 0.35, 12, 4);");
     repl_feed_line_public("glutSolidTeapot(0.25);");
     repl_feed_line_public("glutSolidCube(0.5);");
-    repl_state_presentation_mut()->show_vertex_outlines = 0;
-    repl_state_presentation_mut()->show_vertex_points = 0;
+    glr_state_presentation_mut()->show_vertex_outlines = 0;
+    glr_state_presentation_mut()->show_vertex_points = 0;
     repl_export_save_output(shape_path, editor_buffer_view());
     {
         char buf[16384];
@@ -614,8 +617,8 @@ int main(void) {
     repl_feed_line_public("gluEnd();");
     repl_feed_line_public("}");
     repl_feed_line_public("func0(2.0);");
-    repl_state_presentation_mut()->show_vertex_outlines = 1;
-    repl_state_presentation_mut()->show_vertex_points = 1;
+    glr_state_presentation_mut()->show_vertex_outlines = 1;
+    glr_state_presentation_mut()->show_vertex_points = 1;
     repl_export_save_output(tess_path, editor_buffer_view());
     {
         char buf[65536];
@@ -729,7 +732,7 @@ int main(void) {
          * value that differs from BOTH scenes' saved values for
          * wireframe (e.g. 0 here — only matches scene B).  Pre-fix,
          * scene A would also be exported with wireframe=0. */
-        int *wireframe_live = &repl_state_presentation_mut()->wireframe;
+        int *wireframe_live = &glr_state_presentation_mut()->wireframe;
         *wireframe_live = 0;
 
         int saved = repl_save_workspace(workspace_out);
@@ -755,7 +758,7 @@ int main(void) {
          * the save (the loop's restore_live_from_stash now includes
          * cfg). */
         ASSERT_TRUE("p1 live wireframe survives the save",
-                    repl_state_presentation().wireframe == 0);
+                    glr_state_presentation().wireframe == 0);
     }
 
     printf("repl_core_io: %d/%d passed\n", g_harness.passed, g_harness.run);
