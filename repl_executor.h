@@ -88,4 +88,22 @@ void execute_commands(void);
  * once per frame from scene_render.c. */
 void repl_execute_program(const ReplExecutionOptions *options);
 
+/* Install a camera-distance source. The legacy point-size fallback
+ * compiled in via `NO_POINT_PARAMETER=1` (for platforms missing
+ * glPointParameterfv) needs the current camera distance to scale
+ * `glPointSize` calls. Pipeline TUs cannot include glr_camera.h
+ * (check-repl-state-no-glr-state would block them), so the executor
+ * accepts a controller-installed callback instead. The controller
+ * installs a function that returns `glr_camera().dist`. The demo
+ * (and any caller without point-attenuation) leaves the source
+ * unset; the fallback then emits `glPointSize(sz)` unchanged.
+ *
+ * Pass NULL to clear. Always available even when NO_POINT_PARAMETER
+ * is not set (the executor stores the callback regardless; only the
+ * compile-time fallback path consumes it) so callers can install
+ * unconditionally. */
+typedef float (*ReplExecutorCameraDistanceFn)(void);
+void repl_executor_install_camera_distance_source(ReplExecutorCameraDistanceFn fn);
+ReplExecutorCameraDistanceFn repl_executor_camera_distance_source(void);
+
 #endif /* REPL_EXECUTOR_H */

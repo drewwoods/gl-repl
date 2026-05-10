@@ -12,13 +12,16 @@
  *
  * Used by:
  *   - repl_export.c importer (single-line apply during file-load)
+ *   - repl_example_loader.c (built-in example loading; the loader
+ *     classifies lines into 3 buckets — decls, func_def blocks,
+ *     other — and emits each bucket through repl_load_apply_line
+ *     so the layout matches the editor's canonical reorder
+ *     without needing to touch the lean loader's append-at-end
+ *     contract; see step 7e of the decouple plan)
  *
  * Not used by:
  *   - editor commit chain (editor_commit_apply_plan covers that path
  *     with EditorCommitPlan side effects)
- *   - repl_example_loader.c (still uses feed_line until
- *     repl_compile_func_def gains the editor's reorder + comment-
- *     relocation behavior; see step 5b commit message)
  */
 #ifndef REPL_LOAD_H
 #define REPL_LOAD_H

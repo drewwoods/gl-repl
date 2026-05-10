@@ -9,13 +9,26 @@
 #include "replay.h"
 #include "replay_state.h"
 
-/* Camera lives on UiState; repl_*.c is not allowed to include
- * ui_state.h per check-controller-boundaries. The executor reads
- * camera distance once per frame for the legacy point-size fallback
- * on platforms missing glPointParameterfv. */
-#ifdef NO_POINT_PARAMETER
-ReplCameraState glr_camera(void);
-#endif
+/* Camera-distance source for the legacy point-size fallback on
+ * platforms missing glPointParameterfv. The executor used to call
+ * `glr_camera().dist` directly, but that pulled glr_camera.c into
+ * the demo link set even though glr_camera is app-shell state.
+ *
+ * Step 7e: the controller installs a callback that returns the
+ * current camera distance. The demo (and any caller without
+ * point-attenuation) leaves the source unset; the fallback then
+ * emits `glPointSize(sz)` unchanged. The callback storage is
+ * always present (not gated on NO_POINT_PARAMETER) so callers can
+ * install unconditionally without #ifdef'ing the install site. */
+static ReplExecutorCameraDistanceFn g_camera_distance_source = NULL;
+
+void repl_executor_install_camera_distance_source(ReplExecutorCameraDistanceFn fn) {
+    g_camera_distance_source = fn;
+}
+
+ReplExecutorCameraDistanceFn repl_executor_camera_distance_source(void) {
+    return g_camera_distance_source;
+}
 
 #define EXEC_RENDER (repl_state_render_mut())
 #define g_lights      (EXEC_RENDER->lights)
@@ -40,9 +53,14 @@ static int g_execute_skip_geom_before_pc = 0;
 #ifdef NO_POINT_PARAMETER
 /* Approximate glPointParameterfv distance attenuation by scaling every
  * glPointSize call by 2/cam_dist. Defined here so the override only affects
- * the executor's user-facing CMD_POINT_SIZE dispatch. */
+ * the executor's user-facing CMD_POINT_SIZE dispatch.
+ *
+ * Reads cam_dist from the controller-installed source. With no
+ * source installed (the demo, or any embedder without an app-shell
+ * camera), cam_dist defaults to 0 and the call passes `sz` through
+ * unchanged. */
 static void _repl_point_size(GLfloat sz) {
-    float cam_dist = glr_camera().dist;
+    float cam_dist = g_camera_distance_source ? g_camera_distance_source() : 0.0f;
     glPointSize(cam_dist > 0.0f ? sz * (2.0f / (0.5 * cam_dist)) : sz);
 }
 #define glPointSize _repl_point_size

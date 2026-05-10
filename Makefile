@@ -135,9 +135,15 @@ TEAPOT_DEMO_DEP_SRCS = $(SCENE_SRCS) prof.c
 # (src/editor/input.c), the controller (glr_ctrl.c + glr_ctrl_router_*),
 # or the UI (src/ui/*, replay_ui_hud.c)). Per-line text canonically lives
 # on src/editor/state.c's ReplEditorBuffer, so that TU stays in the link
-# set by design. The remaining REPL pipeline → editor/UI/peer/glr_config
-# couplings are still resolved via tools/repl_demo/stubs.c; the dependency
-# ledger and removal plan live in feature/decouple-repl-from-gl-repl-alt.md.
+# set by design. After step 7e, every REPL-pipeline → editor/UI/peer
+# /glr_config/glr_camera/glr_state edge has been routed through a
+# controller-installed sink/bridge or an opaque parameter, so
+# tools/repl_demo/stubs.c contains zero function bodies — the demo links
+# the pipeline TUs below with no stub backfill. Adding a new repl_*.c TU
+# here that pulls in an app/editor symbol is a regression and should be
+# resolved at the pipeline TU instead (the
+# check-repl-demo-stubs-shrinking guard catches it). The dependency
+# ledger lives in feature/decouple-repl-from-gl-repl-alt.md.
 REPL_DEMO_DEP_SRCS = repl_core.c repl_state.c repl_parser.c \
                      repl_command_spec.c repl_command_store.c \
                      repl_compile.c repl_load.c repl_apply.c repl_flatten.c \
@@ -482,6 +488,7 @@ check-state-ownership: ## Run state-ownership contract checks (new + tightened e
 		check-repl-export-no-ui-layout \
 		check-no-feed-line-in-pipeline \
 		check-repl-demo-stubs-shrinking \
+		check-no-point-parameter-builds \
 		check-no-test-default-output; do \
 		printf "  $(YELLOW)▶$(NC) $$target\n"; \
 		$(MAKE) --no-print-directory $$target 2>&1 | sed 's/^/    /' | sed $$'s/ OK / \033[0;32mOK\033[0m /g; s/ OK$$/ \033[0;32mOK\033[0m/' || exit $$?; \
@@ -555,6 +562,9 @@ check-no-feed-line-in-pipeline: ## Verify REPL pipeline TUs do not call feed_lin
 
 check-repl-demo-stubs-shrinking: ## Ratchet on tools/repl_demo/stubs.c — must not grow past 0 stubs.
 	@bash scripts/check-repl-demo-stubs-shrinking.sh
+
+check-no-point-parameter-builds: ## Verify repl_executor.c syntax-checks with NO_POINT_PARAMETER=1.
+	@bash scripts/check-no-point-parameter-builds.sh
 
 check-no-test-default-output: ## Hard guard: tests may not call repl_save_default_output() (writes ./output.c in repo root).
 	@bash scripts/check-no-test-default-output.sh

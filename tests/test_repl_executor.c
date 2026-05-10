@@ -292,6 +292,52 @@ static void test_glut_bitmap_string(void) {
     repl_executor_destroy_resources();
 }
 
+/* Step 7e regression: the executor consumes camera distance for the
+ * legacy point-size fallback through a controller-installed callback,
+ * not by reaching into glr_camera directly. The pipeline TU must
+ * compile + link without glr_camera.h or glr_camera.c, even when
+ * NO_POINT_PARAMETER=1 is defined. */
+static float g_test_camera_distance_value = 0.0f;
+static int   g_test_camera_distance_calls = 0;
+
+static float test_camera_distance_source(void) {
+    g_test_camera_distance_calls++;
+    return g_test_camera_distance_value;
+}
+
+static void test_executor_camera_distance_source(void) {
+    /* Default state: no source installed; getter returns NULL. */
+    repl_executor_install_camera_distance_source(NULL);
+    ASSERT_TRUE("default camera-distance source is NULL",
+                repl_executor_camera_distance_source() == NULL);
+
+    /* Install + readback. */
+    repl_executor_install_camera_distance_source(test_camera_distance_source);
+    ASSERT_TRUE("install + getter round-trips the same fn",
+                repl_executor_camera_distance_source() == test_camera_distance_source);
+
+    /* Clearing via NULL install reverts to default. */
+    repl_executor_install_camera_distance_source(NULL);
+    ASSERT_TRUE("install(NULL) clears the source",
+                repl_executor_camera_distance_source() == NULL);
+
+#ifdef NO_POINT_PARAMETER
+    /* When NO_POINT_PARAMETER is set, the fallback consults the
+     * source for cam_dist before scaling glPointSize. With no source
+     * installed (the demo case) cam_dist defaults to 0 and the call
+     * passes sz through unchanged — verified by the static
+     * `_repl_point_size` not crashing. */
+    g_test_camera_distance_calls = 0;
+    g_test_camera_distance_value = 4.0f;
+    repl_executor_install_camera_distance_source(test_camera_distance_source);
+    _repl_point_size(2.0f);
+    ASSERT_TRUE("fallback consulted the installed source",
+                g_test_camera_distance_calls == 1);
+    repl_executor_install_camera_distance_source(NULL);
+    _repl_point_size(2.0f);  /* must not crash with no source */
+#endif
+}
+
 int main(void) {
     test_tess_callbacks();
     test_fade_context();
@@ -301,6 +347,7 @@ int main(void) {
     test_execute_edge_cases();
     test_execute_all_commands();
     test_glut_bitmap_string();
+    test_executor_camera_distance_source();
     printf("repl_executor: %d/%d passed\n", g_harness.passed, g_harness.run);
     return (g_harness.passed == g_harness.run) ? 0 : 1;
 }
