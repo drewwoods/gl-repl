@@ -11,8 +11,13 @@
 
 set -euo pipefail
 
-# Mirrors REPL_DEMO_DEP_SRCS in the Makefile so the guard tracks what
-# the demo actually links from the REPL pipeline.
+# REPL pipeline TUs that the demo links — a subset of
+# REPL_DEMO_DEP_SRCS. The list intentionally excludes the app-side
+# `glr_*.c` modules (glr_camera, glr_camera_export, glr_scenes) that
+# also live in the demo link set: those are the legitimate consumers
+# of glr_state / GlrState symbols. When REPL_DEMO_DEP_SRCS changes,
+# this list must be updated alongside if a new repl_*.c TU is added;
+# new glr_*.c TUs are exempt by construction.
 files=(
     repl_core.c
     repl_state.c
