@@ -1601,7 +1601,8 @@ static void cycle_example_or_user_scene(void) {
     if (active_scene >= 0) {
         for (int scene_idx = active_scene + 1; scene_idx < MAX_USER_SCENES; scene_idx++) {
             if (repl_user_scene_slot_used(scene_idx)) {
-                repl_load_user_scene_idx(scene_idx);
+                if (repl_load_user_scene_idx(scene_idx))
+                    load_line_to_input(repl_state_edit_line());
                 return;
             }
         }
@@ -1620,7 +1621,8 @@ static void cycle_example_or_user_scene(void) {
 
     for (int scene_idx = 0; scene_idx < MAX_USER_SCENES; scene_idx++) {
         if (repl_user_scene_slot_used(scene_idx)) {
-            repl_load_user_scene_idx(scene_idx);
+            if (repl_load_user_scene_idx(scene_idx))
+                load_line_to_input(repl_state_edit_line());
             return;
         }
     }

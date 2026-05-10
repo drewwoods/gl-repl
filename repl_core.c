@@ -6,7 +6,7 @@
  *
  *   - repl_parse_and_normalize() / parse_and_normalize_impl() — until the
  *     parser absorbs them.
- *   - repl_reformat_commands() — pending extraction to repl_reformat.c.
+ *   - repl_reformat_program() — pending extraction to repl_reformat.c.
  *   - load_initial_commands() and a handful of startup helpers — pending move
  *     to repl_scenes.c.
  *   - current_begin_mode() / count_vertices() — pending move to
@@ -142,7 +142,7 @@ const char *cmd_type_name(CmdType t) {
 /* Strip leading/trailing whitespace from `raw_expr`, normalize comma
  * spacing (remove space before comma, ensure one space after), optionally
  * append a semicolon, and prepend `indent_spaces` spaces.  Used by
- * repl_parse_and_normalize() and repl_reformat_commands() to produce
+ * repl_parse_and_normalize() and repl_reformat_program() to produce
  * canonical source text for a command. */
 static void normalize_with_indent(const char *raw_expr, int indent_spaces,
                                   int ensure_semicolon, char *out, int out_sz) {
@@ -428,14 +428,8 @@ static void repl_core_replace_formatted_cmd(ReplCommandStore *store,
         editor_buffer_replace_line(cmd_idx, text);
 }
 
-void repl_reformat_commands(void) {
+void repl_reformat_program(void) {
     prof_begin(PROF_REFORMAT);
-    int saved_edit_line = repl_state_edit_line();
-    int saved_inserting = editor_insert_mode();
-    char saved_input[MAX_INPUT_LEN];
-    int saved_input_len = editor_state_input().input_len;
-    int saved_cursor_pos = editor_cursor_pos();
-    memcpy(saved_input, editor_state_input().input, sizeof(saved_input));
     ReplCommandStore store = repl_command_store_live();
     /* Source text reads route through an EditorBufferView so the
      * dependency is declared at function scope rather than via a
@@ -624,17 +618,6 @@ void repl_reformat_commands(void) {
     repl_source_scope_depth_cache_invalidate();
     mark_normals_dirty();
 
-    repl_state_edit_line_set(saved_edit_line);
-    repl_state_edit_line_clamp();
-    editor_insert_mode_set(saved_inserting);
-    if (saved_inserting) {
-        ReplEditorInputState *inp = editor_state_input_mut();
-        memcpy(inp->input, saved_input, sizeof(saved_input));
-        inp->input_len = saved_input_len;
-        editor_cursor_pos_set(saved_cursor_pos);
-    } else {
-        load_line_to_input(repl_state_edit_line());
-    }
     prof_end(PROF_REFORMAT);
 }
 

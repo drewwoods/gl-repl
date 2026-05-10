@@ -32,6 +32,7 @@
 #include "help_session.h"
 #include "inline_rename.h"
 #include "input.h"
+#include "reformat.h"
 #include "search.h"
 #include "undo.h"
 
@@ -958,7 +959,7 @@ static int handle_buffer_command_key_route(unsigned char key) {
     if (key == KEY_CTRL_BACKSLASH) {
         if (repl_state_document_count() > 0) {
             editor_undo_push_snapshot();
-            repl_reformat_commands();
+            editor_reformat_commands();
             set_status("Reformatted command buffer");
         } else {
             set_status("Nothing to reformat");
