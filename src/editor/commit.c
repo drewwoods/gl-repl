@@ -98,8 +98,7 @@ EditorCommitResult editor_commit_current_input(const struct EditorServices_s *se
          * a slot with no matching CMD_FUNC_DEF, and subsequent
          * `name()` calls would resolve but execute nothing. [P1]
          * regression. */
-        if (change.newly_aliased_slot >= 0)
-            repl_func_alias_clear(change.newly_aliased_slot);
+        repl_compiled_change_rollback_alias(&change);
         result.consumed = 1;
         result.capacity_failed = 1;
         return result;
@@ -131,8 +130,7 @@ int editor_commit_apply_external_change(const struct ReplCompiledChange_s *chang
     if (!repl_apply_can_apply_compiled_change(change)) {
         /* Mirror editor_commit_apply_plan: roll back any speculative
          * alias registration when preflight fails. [P1] regression. */
-        if (change->newly_aliased_slot >= 0)
-            repl_func_alias_clear(change->newly_aliased_slot);
+        repl_compiled_change_rollback_alias(change);
         return 0;
     }
 
@@ -223,8 +221,7 @@ int editor_commit_apply_plan(const EditorCommitPlan *plan) {
     if (!repl_apply_can_apply_compiled_change(&plan->change)) {
         /* Roll back any speculative alias registration. [P1]
          * regression: see editor_commit_apply_compiled_change. */
-        if (plan->change.newly_aliased_slot >= 0)
-            repl_func_alias_clear(plan->change.newly_aliased_slot);
+        repl_compiled_change_rollback_alias(&plan->change);
         return 0;
     }
 
@@ -619,8 +616,8 @@ ReplCompileResult editor_compile_func_def(const char *input,
      *
      * The pre-step mutates the global alias table; the rollback at
      * each downstream failure path (parse, dup, format) makes that
-     * speculative. The success path publishes the slot via
-     * out->change.newly_aliased_slot so editor_commit_apply_plan can
+     * speculative. The success path publishes the touched slot and its
+     * previous contents via out->change so editor_commit_apply_plan can
      * roll it back if its own preflight fails. [P2 editor] regression. */
     int newly_aliased_slot = -1;
     {
@@ -667,12 +664,24 @@ ReplCompileResult editor_compile_func_def(const char *input,
                                      REPL_FUNC_SLOT_COUNT);
                             return REPL_COMPILE_ERROR;
                         }
+                        char prev_alias[REPL_FUNC_NAME_MAX] = "";
+                        const char *prev_alias_live = repl_func_alias_get(target_slot);
+                        if (prev_alias_live)
+                            snprintf(prev_alias, sizeof(prev_alias),
+                                     "%s", prev_alias_live);
                         if (!repl_func_alias_set(target_slot, ident)) {
                             snprintf(err, (size_t)err_size,
                                      "name '%s' already used", ident);
                             return REPL_COMPILE_ERROR;
                         }
                         newly_aliased_slot = target_slot;
+                        out->change.newly_aliased_slot = target_slot;
+                        out->change.had_previous_alias =
+                            prev_alias[0] ? 1 : 0;
+                        if (out->change.had_previous_alias)
+                            snprintf(out->change.previous_alias,
+                                     sizeof(out->change.previous_alias),
+                                     "%s", prev_alias);
                     }
                 }
             }
@@ -682,8 +691,7 @@ ReplCompileResult editor_compile_func_def(const char *input,
     if (!parse_repl_func_signature(input ? input : "", &fn,
                                    param_names, MAX_EXPR_VARS,
                                    &param_count)) {
-        if (newly_aliased_slot >= 0)
-            repl_func_alias_clear(newly_aliased_slot);
+        repl_compiled_change_rollback_alias(&out->change);
         out->change.kind = REPL_COMPILED_NO_CHANGE;
         return REPL_COMPILE_OK;
     }
@@ -705,8 +713,7 @@ ReplCompileResult editor_compile_func_def(const char *input,
         if (overwriting_func && ei == edit_pos) continue;
         snprintf(err, (size_t)err_size,
                  "func%d already defined (line %d)", fn, ei + 1);
-        if (newly_aliased_slot >= 0)
-            repl_func_alias_clear(newly_aliased_slot);
+        repl_compiled_change_rollback_alias(&out->change);
         return REPL_COMPILE_ERROR;
     }
 

@@ -924,6 +924,40 @@ int main(void) {
                     repl_func_alias_lookup_slot("edBadRoll") < 0);
     }
 
+    /* [P1 editor] regression: a failed overwrite/rename must restore
+     * the previous alias, not merely clear the touched slot. The
+     * editor path targets the current CMD_FUNC_DEF slot when
+     * overwriting a header, so a malformed rename can replace an
+     * existing alias before parse validation fails. */
+    {
+        glr_app_reset_all();
+        repl_func_alias_clear_all();
+
+        char err[128] = "";
+        ASSERT_TRUE("[P1 editor] original aliased func loads",
+                    repl_load_apply_line("drawCube() {", err, sizeof(err)));
+        ASSERT_INT("[P1 editor] drawCube starts in slot 0",
+                   repl_func_alias_lookup_slot("drawCube"), 0);
+
+        repl_state_edit_line_set(0);
+        editor_insert_mode_set(0);
+
+        ReplCompileContext ctx = repl_compile_context_from_live();
+        EditorCommitPlan plan;
+        editor_commit_plan_init(&plan);
+        err[0] = '\0';
+        ReplCompileResult r = editor_compile_func_def(
+            "drawSphere(123) {", &ctx, &plan, err, sizeof(err));
+
+        ASSERT_TRUE("[P1 editor] malformed rename returns OK + NO_CHANGE",
+                    r == REPL_COMPILE_OK &&
+                    plan.change.kind == REPL_COMPILED_NO_CHANGE);
+        ASSERT_INT("[P1 editor] failed rename preserves old alias",
+                   repl_func_alias_lookup_slot("drawCube"), 0);
+        ASSERT_TRUE("[P1 editor] failed rename removes new alias",
+                    repl_func_alias_lookup_slot("drawSphere") < 0);
+    }
+
     /* [P2 editor] regression: editor_compile_func_def must roll back
      * alias registration on duplicate-funcN failure. The dup-check
      * branch (src/editor/commit.c ~line 678) returns ERROR without
