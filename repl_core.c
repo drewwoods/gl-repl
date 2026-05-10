@@ -772,8 +772,8 @@ static void load_initial_commands(const char *import_file) {
     scroll_to_display_function();
 }
 
-void repl_save_default_output(void) {
-    repl_export_save_output(outfile, editor_buffer_view());
+void repl_save_default_output(const ReplExportLayout *layout) {
+    repl_export_save_output(outfile, editor_buffer_view(), layout);
 }
 
 void repl_flatten_commands(void) {

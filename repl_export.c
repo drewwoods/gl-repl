@@ -14,7 +14,10 @@
 #include "repl_source_scope.h"
 #include "repl_state_owners.h"
 #include "ui/code_panel_layout.h"
-#include "ui/layout.h"
+#include "ui/layout.h"   /* CODE_PANEL_LAYOUT_* enum values only —
+                          * ui_layout_*() function calls were removed
+                          * in step 7c; values now arrive opaquely
+                          * via ReplExportLayout. */
 #include "ui/metrics.h"
 
 #define IMPORT_EXPORT_STATE (repl_state_import_export_mut())
@@ -2667,7 +2670,8 @@ typedef struct {
 } ExportNeeds;
 
 typedef struct {
-    ExportNeeds needs;
+    ExportNeeds              needs;
+    const ReplExportLayout  *layout;
 } ExportScaffoldContext;
 
 typedef void (*ExportDisplayPassSetupFn)(FILE *f);
@@ -2818,7 +2822,8 @@ static void emit_export_display_geometry(FILE *f) {
         emit_export_geometry_pass(f, &passes[i]);
 }
 
-static void emit_export_display_tail(FILE *f, const ExportNeeds *needs) {
+static void emit_export_display_tail(FILE *f, const ExportNeeds *needs,
+                                     const ReplExportLayout *layout) {
     int include_tess = needs ? needs->needs_tess : 0;
 
     for (int line_idx = 0; g_footer_pre_init[line_idx]; line_idx++)
@@ -2827,18 +2832,21 @@ static void emit_export_display_tail(FILE *f, const ExportNeeds *needs) {
 
     /* Use the actual scene rect so the exported window preserves the REPL
      * viewport's aspect ratio and geometry is never clipped. Fall back to
-     * 800x600 when dimensions aren't available (e.g. headless export). */
-    int sx, sy, sw, sh;
-    ui_layout_scene_rect(&sx, &sy, &sw, &sh);
+     * 800x600 when dimensions aren't available (headless / demo export).
+     * Step 7c: read from the explicit ReplExportLayout struct rather
+     * than calling ui_layout_scene_rect directly. */
+    int sw = layout ? layout->scene_w : 0;
+    int sh = layout ? layout->scene_h : 0;
     if (sw <= 0) sw = 800;
     if (sh <= 0) sh = 600;
     emit_footer_post_init(f, sw, sh);
 }
 
-static void emit_export_display(FILE *f, const ExportNeeds *needs) {
+static void emit_export_display(FILE *f, const ExportNeeds *needs,
+                                const ReplExportLayout *layout) {
     emit_export_display_begin(f);
     emit_export_display_geometry(f);
-    emit_export_display_tail(f, needs);
+    emit_export_display_tail(f, needs, layout);
 }
 
 typedef int  (*ExportScaffoldSectionEnabledFn)(const ExportScaffoldContext *ctx);
@@ -2950,7 +2958,7 @@ static void emit_export_render_helper_section(FILE *f,
 
 static void emit_export_display_section(FILE *f,
                                         const ExportScaffoldContext *ctx) {
-    emit_export_display(f, &ctx->needs);
+    emit_export_display(f, &ctx->needs, ctx->layout);
 }
 
 /* Section order is the exported C ABI: imports and compile tests assume it. */
@@ -2977,7 +2985,8 @@ static void emit_export_scaffold(FILE *f, const ExportScaffoldContext *ctx) {
     }
 }
 
-void repl_export_save_output(const char *filename, EditorBufferView text) {
+void repl_export_save_output(const char *filename, EditorBufferView text,
+                             const ReplExportLayout *layout) {
     FILE *f = fopen(filename, "w");
     if (!f) {
         set_status("Error: cannot write output.c");
@@ -2987,7 +2996,8 @@ void repl_export_save_output(const char *filename, EditorBufferView text) {
     s_export_text_view = text;
 
     ExportScaffoldContext scaffold = {
-        .needs = export_collect_needs(),
+        .needs  = export_collect_needs(),
+        .layout = layout,
     };
 
     update_render_state_strings();
@@ -3251,18 +3261,13 @@ int repl_export_load_from_file(const char *filename) {
 }
 
 static void dump_code_panel_wrapped_line(FILE *dst, const char *text,
-                                         int first_x, int panel_w) {
-    /* Step 7a: wrap_at_comma moved to glr_state.presentation. The
-     * dump path is reachable from REPL pipeline TUs but the toggle
-     * is app-side, so route through bridge.get_int. Step 7c will
-     * thread an explicit ReplExportLayout struct through these
-     * dump helpers, replacing the bridge lookup. */
-    int wrap_on = g_export_cfg_bridge && g_export_cfg_bridge->get_int
-                  ? g_export_cfg_bridge->get_int("wrap_at_commas", 1)
-                  : 1;
+                                         int first_x, int panel_w,
+                                         int wrap_at_comma) {
+    /* Step 7c: wrap_at_comma is threaded explicitly from the
+     * ReplExportLayout struct that the controller built. */
     const char *src = text ? text : "";
     CodePanelTextLayout layout =
-        repl_code_panel_layout_make(panel_w, first_x, FONT_W, wrap_on);
+        repl_code_panel_layout_make(panel_w, first_x, FONT_W, wrap_at_comma);
     CodePanelWrapIter it;
     int start, len, x;
 
@@ -3311,50 +3316,51 @@ void repl_dump_code_panel_text(FILE *out, EditorBufferView text) {
     fflush(dst);
 }
 
-void repl_dump_code_panel_visual_text(FILE *out, EditorBufferView text) {
+void repl_dump_code_panel_visual_text(FILE *out, EditorBufferView text,
+                                      const ReplExportLayout *layout) {
     FILE *dst = out ? out : stdout;
-    int panel_w;
+    /* Step 7c: panel width + presentation flags come in opaquely
+     * through the layout struct. The controller computes them via
+     * `ui_layout_*` / `glr_state_presentation()` before calling.
+     * NULL is treated as a zero-filled struct (the demo case). */
+    int panel_w       = layout ? layout->code_panel_w        : 0;
+    int show_indices  = layout ? layout->show_vertex_indices : 1;
+    int wrap_at_comma = layout ? layout->wrap_at_comma       : 1;
     int linenum_w = 4 * FONT_W;
-    /* Step 7a: show_vertex_indices moved to glr_state. Bridge lookup
-     * for now; step 7c threads this through ReplExportLayout. */
-    int show_indices = g_export_cfg_bridge && g_export_cfg_bridge->get_int
-                       ? g_export_cfg_bridge->get_int("vertex_indices", 1)
-                       : 1;
     int idx_col_w = show_indices ? (6 * FONT_W) : 0;
     int idx_x = CODE_MARGIN_X + linenum_w + FONT_W;
     int text_x = idx_x + idx_col_w;
 
     s_export_text_view = text;
 
-    ui_layout_code_panel_rect(NULL, NULL, &panel_w, NULL);
     update_render_state_strings();
     update_cam_lines();
 
     fprintf(dst, "--- header_pre ---\n");
     /* Dump pre-header lines with code panel wrapping. */
     for (int line_idx = 0; g_header_pre[line_idx]; line_idx++)
-        dump_code_panel_wrapped_line(dst, g_header_pre[line_idx], text_x, panel_w);
+        dump_code_panel_wrapped_line(dst, g_header_pre[line_idx], text_x, panel_w, wrap_at_comma);
 
     fprintf(dst, "--- render_state ---\n");
     /* Dump render state with code panel wrapping. */
     for (int state_line_idx = 0; state_line_idx < RENDER_STATE_LINE_COUNT; state_line_idx++)
-        dump_code_panel_wrapped_line(dst, g_render_state_lines[state_line_idx], text_x, panel_w);
+        dump_code_panel_wrapped_line(dst, g_render_state_lines[state_line_idx], text_x, panel_w, wrap_at_comma);
 
     fprintf(dst, "--- camera ---\n");
     /* Dump camera lines with code panel wrapping. */
     for (int cam_line_idx = 0; cam_line_idx < CAM_LINE_COUNT; cam_line_idx++)
-        dump_code_panel_wrapped_line(dst, g_cam_lines[cam_line_idx], text_x, panel_w);
+        dump_code_panel_wrapped_line(dst, g_cam_lines[cam_line_idx], text_x, panel_w, wrap_at_comma);
 
     fprintf(dst, "--- header_post ---\n");
     /* Dump post-header lines with code panel wrapping. */
     for (int line_idx = 0; g_header_post[line_idx]; line_idx++)
-        dump_code_panel_wrapped_line(dst, g_header_post[line_idx], text_x, panel_w);
+        dump_code_panel_wrapped_line(dst, g_header_post[line_idx], text_x, panel_w, wrap_at_comma);
 
     fprintf(dst, "--- source ---\n");
     /* Dump all valid user commands with code panel wrapping. */
     for (int cmd_idx = 0; cmd_idx < repl_state_document_count(); cmd_idx++) {
         if (!repl_state_document_cmds_mut()[cmd_idx].valid) continue;
-        dump_code_panel_wrapped_line(dst, export_document_text(cmd_idx), text_x, panel_w);
+        dump_code_panel_wrapped_line(dst, export_document_text(cmd_idx), text_x, panel_w, wrap_at_comma);
     }
 
     fflush(dst);

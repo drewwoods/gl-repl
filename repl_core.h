@@ -12,12 +12,15 @@
 #include <stdio.h>
 
 #include "editor/state.h"   /* EditorBufferView */
+#include "repl_export.h"    /* ReplExportLayout (step 7c) */
 #include "repl_flatten.h"
 
 /* --- Save / load ------------------------------------------------------- */
 
-/* Write the active user scene (or current example) to ./output.c. */
-void repl_save_default_output(void);
+/* Write the active user scene (or current example) to ./output.c.
+ * `layout` is the controller-built ReplExportLayout (step 7c); the
+ * pipeline reads its values as opaque integers. */
+void repl_save_default_output(const ReplExportLayout *layout);
 
 /* Load a single .c file containing source commands and camera state.
  * Parses leading workspace metadata, feeds lines through the commit pipeline,
@@ -29,8 +32,12 @@ int  repl_export_load_from_file(const char *filename);
  * (@var name=value, @cfg key=value, @camera, @scene-name, @workspace-dir).
  * Sets status message on success or failure. `text` is the editor
  * buffer view the caller built; export reads source text exclusively
- * through that view. */
-void repl_export_save_output(const char *filename, EditorBufferView text);
+ * through that view. `layout` carries opaque viewport / scene rect /
+ * code-panel width / wrap toggle the controller built; the export
+ * pipeline reads them as integers (step 7c of
+ * feature/decouple-repl-from-gl-repl-alt.md). */
+void repl_export_save_output(const char *filename, EditorBufferView text,
+                             const ReplExportLayout *layout);
 
 /* Workspace I/O: save every occupied user-scene slot to `<dir>/<slug>.c`.
  * Each slot is flushed with its own @scene-name header. Both functions
@@ -39,7 +46,7 @@ void repl_export_save_output(const char *filename, EditorBufferView text);
  * `repl_save_workspace()` returns the number of files written, or -1 on error.
  * `repl_load_workspace()` returns the number of files loaded, 0 for an empty
  * directory argument, or -1 on I/O error. */
-int  repl_save_workspace(const char *dir);
+int  repl_save_workspace(const char *dir, const ReplExportLayout *layout);
 int  repl_load_workspace(const char *dir);
 
 /* Query/set the bound workspace directory (persisted across save/load).

@@ -405,7 +405,9 @@ int glr_cfg_handle_special_shortcut(int key) {
 int glr_action_menu_item_activate(int menu_id, int item_idx) {
     if (menu_id == GLR_MENU_FILE) {
         if (item_idx == REPL_FILE_ITEM_EXPORT) {
-            repl_save_default_output();
+            ReplExportLayout layout;
+            glr_ctrl_fill_export_layout(&layout);
+            repl_save_default_output(&layout);
             return 1;
         }
         if (item_idx == REPL_FILE_ITEM_IMPORT) {
@@ -416,7 +418,9 @@ int glr_action_menu_item_activate(int menu_id, int item_idx) {
             const char *dir = repl_workspace_dir();
             if (!dir || !dir[0])
                 dir = GLR_DEFAULT_WORKSPACE_DIR;
-            repl_save_workspace(dir);
+            ReplExportLayout layout;
+            glr_ctrl_fill_export_layout(&layout);
+            repl_save_workspace(dir, &layout);
             return 1;
         }
         if (item_idx == REPL_FILE_ITEM_LOAD_WORKSPACE) {
@@ -445,7 +449,9 @@ int glr_action_menu_item_activate(int menu_id, int item_idx) {
             return 1;
         }
         if (item_idx == example_count + GLR_SCENE_OFF_SAVE) {
-            repl_save_default_output();
+            ReplExportLayout layout;
+            glr_ctrl_fill_export_layout(&layout);
+            repl_save_default_output(&layout);
             return 1;
         }
         if (item_idx == example_count + GLR_SCENE_OFF_RENAME) {
