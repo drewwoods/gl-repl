@@ -17,9 +17,11 @@
  *
  * Import format (load_from_file): Line-by-line scan that:
  *   1. Parses leading workspace header directives (@var, @cfg, @scene-name, @workspace-dir).
- *   2. Extracts camera state (raw glTranslatef/glRotatef lines).
+ *   2. Extracts camera state (raw glTranslatef/glRotatef lines) via the
+ *      controller-installed camera bridge.
  *   3. Detects function definitions (lines matching C function syntax).
- *   4. Feeds remaining geometry lines through feed_line() for normal parsing.
+ *   4. Feeds remaining geometry lines through repl_load_apply_line() — the
+ *      lean non-editor source-load path — for normal parsing.
  *   5. Stores pending scene-name and workspace-dir for the caller to apply after loading.
  *
  * Header templates: g_header_pre/post and g_footer_pre/post_init are boilerplate
