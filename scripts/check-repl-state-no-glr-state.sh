@@ -13,11 +13,11 @@ set -euo pipefail
 
 # REPL pipeline TUs that the demo links — a subset of
 # REPL_DEMO_DEP_SRCS. The list intentionally excludes the app-side
-# `glr_*.c` modules (glr_camera, glr_camera_export, glr_scenes) that
-# also live in the demo link set: those are the legitimate consumers
-# of glr_state / GlrState symbols. When REPL_DEMO_DEP_SRCS changes,
-# this list must be updated alongside if a new repl_*.c TU is added;
-# new glr_*.c TUs are exempt by construction.
+# `glr_*.c` modules (glr_camera, glr_camera_export) that also live in
+# the demo link set: those are the legitimate consumers of glr_state /
+# GlrState symbols. When REPL_DEMO_DEP_SRCS changes, this list must be
+# updated alongside if a new repl_*.c TU is added; new glr_*.c TUs are
+# exempt by construction.
 files=(
     repl_core.c
     repl_state.c
@@ -45,28 +45,6 @@ files=(
 # explaining the boundary don't trip the guard.
 violations=$(grep -nE '\bglr_state\.h\b|\bglr_state_[a-z_]+\b|\bGlrState\b|\bGlrPresentationState\b|\bGlrRenderState\b' "${files[@]}" 2>/dev/null \
     | grep -vE '^[^:]+:[0-9]+:[[:space:]]*(\*|//)' || true)
-
-# Step 7b: glr_scenes.{c,h} is the parallel app-side companion to
-# repl_scenes.c, holding per-slot cfg snapshots. repl_scenes.c is the
-# only REPL pipeline TU that may include it (it drives the slot
-# lifecycle and pairs every used=0 with glr_scenes_scene_cfg_clear).
-glr_scenes_files=()
-for f in "${files[@]}"; do
-    if [ "$f" != "repl_scenes.c" ]; then
-        glr_scenes_files+=("$f")
-    fi
-done
-
-scene_violations=$(grep -nE '\bglr_scenes\.h\b|\bglr_scenes_[a-z_]+\b' "${glr_scenes_files[@]}" 2>/dev/null \
-    | grep -vE '^[^:]+:[0-9]+:[[:space:]]*(\*|//)' || true)
-
-if [ -n "$scene_violations" ]; then
-    if [ -z "$violations" ]; then
-        violations="$scene_violations"
-    else
-        violations=$(printf '%s\n%s' "$violations" "$scene_violations")
-    fi
-fi
 
 if [ -z "$violations" ]; then
     echo "repl-state-no-glr-state OK"

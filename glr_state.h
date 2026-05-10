@@ -10,7 +10,7 @@
  *
  * REPL pipeline TUs (the REPL_DEMO_DEP_SRCS list) MUST NOT include this
  * header — that's the contract `check-repl-state-no-glr-state` enforces.
- * App-shell (`glr_*.c`), editor (`src/editor/*.c`), and UI / scene
+ * App-shell (`glr_*.c`), editor (`src/editor/` TUs), and UI / scene
  * renderers may include it freely.
  *
  * Storage layout mirrors the prior `ReplPresentationState` /

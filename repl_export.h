@@ -183,8 +183,17 @@ extern const char  *g_footer_post_init[];
  * of feature/decouple-repl-from-gl-repl-alt.md). The controller
  * computes these from `ui_layout_*` / `glr_state_presentation()`
  * before calling export; `repl_export.c` does not call ui_state_*
- * / ui_layout_* / glr_state_*. The demo passes a zero-filled struct
- * because it does not export. */
+ * / ui_layout_* / glr_state_*.
+ *
+ * Callers that do not have a viewport on hand (LRU evict in
+ * repl_scenes.c, headless tests, the standalone repl_demo which does
+ * not export) may pass NULL. The export call sites then use
+ * defensive defaults: scene_w / scene_h fall back to 800x600 in the
+ * exported display() boilerplate, code_panel_w defaults to 0 (which
+ * disables wrap), wrap_at_comma defaults to 1, and
+ * show_vertex_indices defaults to 1. The defaults are deliberately
+ * skewed toward "matches a typical interactive layout" so saved
+ * files remain readable when re-loaded with the editor running. */
 typedef struct {
     int viewport_w;          /* ui_state_viewport().window_w */
     int viewport_h;          /* ui_state_viewport().window_h */
