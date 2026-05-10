@@ -47,6 +47,8 @@
 
 #include "repl_compile.h"
 
+#include "repl_apply.h"          /* repl_apply_compiled_change for repl_load_apply_line */
+#include "repl_command_store.h"  /* repl_command_store_insert_one for plain-command path */
 #include "repl_core_internal.h"  /* repl_format_fits, repl_extract_assignment_parts, collect_visible_vars */
 #include "repl_parser.h"         /* repl_parser_parse_command_ctx (uncomment fallback) */
 #include "repl_source_scope.h"   /* repl_source_scope_cmd_indent, _find_block_end */
@@ -1769,4 +1771,129 @@ ReplCompileResult repl_compile_for_loop(const char *input,
     out->cmds[0] = fb;
     snprintf(out->text[0], sizeof(out->text[0]), "%s", fb_text);
     return REPL_COMPILE_OK;
+}
+
+/* ===== Non-editor source-load entry (step 5b of the decouple plan) ====== */
+
+/* Try one of the structured-block validators. Returns 1 if the line
+ * was consumed (kind != NO_CHANGE) or if the validator returned an
+ * error. Returns 0 if the line wasn't this block's shape (caller
+ * should fall through to the next handler). */
+static int load_try_block(ReplCompileResult (*compile)(const char *,
+                                                       const ReplCompileContext *,
+                                                       ReplCompiledChange *,
+                                                       char *, int),
+                          const char *line,
+                          const ReplCompileContext *ctx,
+                          ReplCompiledChange *out,
+                          char *err, int err_size,
+                          int *failed_out) {
+    ReplCompileResult r = compile(line, ctx, out, err, err_size);
+    if (r == REPL_COMPILE_ERROR) {
+        if (failed_out) *failed_out = 1;
+        return 1;  /* claimed but failed */
+    }
+    return out->kind != REPL_COMPILED_NO_CHANGE;
+}
+
+int repl_load_apply_line(const char *line, char *err, int err_size) {
+    if (!line) return 0;
+    if (err && err_size > 0) err[0] = '\0';
+
+    /* Don't pre-skip empty/comment lines: feed_line preserves them as
+     * CMD_EMPTY / CMD_COMMENT so flatten can pass them through and
+     * roundtrip preserves the line count. The parser handles them
+     * correctly. */
+
+    ReplCompileContext ctx = repl_compile_context_from_live();
+    ReplCompiledChange change;
+    repl_compiled_change_init(&change);
+    int failed = 0;
+
+    /* (1) float decl + var assign via dispatcher. */
+    {
+        ReplCompileResult r = repl_compile_dispatch(line, &ctx, &change,
+                                                    err, err_size);
+        if (r == REPL_COMPILE_ERROR) return 0;
+    }
+
+    /* (2) structured-block validators in canonical try_commit order:
+     * close_brace → for_loop → func_def → if_block. */
+    if (change.kind == REPL_COMPILED_NO_CHANGE &&
+        load_try_block(repl_compile_close_brace, line, &ctx, &change,
+                       err, err_size, &failed)) {
+        if (failed) return 0;
+    }
+    if (change.kind == REPL_COMPILED_NO_CHANGE &&
+        load_try_block(repl_compile_for_loop, line, &ctx, &change,
+                       err, err_size, &failed)) {
+        if (failed) return 0;
+    }
+    if (change.kind == REPL_COMPILED_NO_CHANGE &&
+        load_try_block(repl_compile_func_def, line, &ctx, &change,
+                       err, err_size, &failed)) {
+        if (failed) return 0;
+    }
+    if (change.kind == REPL_COMPILED_NO_CHANGE &&
+        load_try_block(repl_compile_if_block, line, &ctx, &change,
+                       err, err_size, &failed)) {
+        if (failed) return 0;
+    }
+
+    /* (3) Apply the structured/decl/assign change if any was produced.
+     * Order matches editor_commit_apply_plan's REPL halves:
+     * predef ops → editor-buffer text → REPL cmd-store.
+     *
+     * Force adjust_edit_line=1 so insert ops auto-advance edit_line.
+     * The compile validators leave it 0 because the editor wrapper
+     * controls cursor target via EditorCommitPlan; for the lean
+     * loader's append-at-end semantics, edit_line must auto-advance
+     * line-by-line so the next call sees insert_idx = document_count. */
+    if (change.kind != REPL_COMPILED_NO_CHANGE) {
+        change.adjust_edit_line = 1;
+        repl_apply_predef_ops(&change);
+        repl_apply_scratch_ops(&change);
+        if (!editor_buffer_apply_compiled_change(&change))
+            return 0;
+        return repl_apply_compiled_change(&change) ? 1 : 0;
+    }
+
+    /* (4) Plain GL command path — parse + insert via command store.
+     * Mirrors feed_line's plain-command tail but without writing the
+     * editor input buffer. */
+    int insert_idx = ctx.edit_line < ctx.document_count
+                         ? ctx.edit_line : ctx.document_count;
+
+    ExprVar vis_vars[MAX_EXPR_VARS];
+    int vis_total = 0;
+    int num_vis_vars = collect_visible_vars(insert_idx, vis_vars,
+                                            MAX_EXPR_VARS, &vis_total);
+
+    GLCmd cmd;
+    char cmd_text[MAX_LINE_LEN] = "";
+    memset(&cmd, 0, sizeof(cmd));
+    int parsed;
+    if (num_vis_vars > 0) {
+        parsed = repl_parse_and_normalize_strict(line, insert_idx,
+                                                 vis_vars, num_vis_vars,
+                                                 input_has_any_visible_vars(line, vis_vars, num_vis_vars),
+                                                 &cmd, cmd_text, sizeof(cmd_text));
+    } else {
+        parsed = repl_parse_and_normalize_strict(line, insert_idx,
+                                                 NULL, 0,
+                                                 repl_eval_input_has_predef_vars(line),
+                                                 &cmd, cmd_text, sizeof(cmd_text));
+    }
+    if (!parsed) {
+        if (err && err_size > 0 && err[0] == '\0')
+            snprintf(err, (size_t)err_size, "could not parse line: %s", line);
+        return 0;
+    }
+
+    ReplCommandStore store = repl_command_store_live();
+    if (!repl_command_store_insert_one(&store, insert_idx, &cmd,
+                                       REPL_COMMAND_STORE_ADJUST_EDIT_LINE))
+        return 0;
+    editor_buffer_insert_line(insert_idx, cmd_text);
+    return 1;
 }

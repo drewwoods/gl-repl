@@ -1,5 +1,6 @@
 #include "repl_export.h"
 #include "./include/gl_2d.h"
+#include "repl_compile.h"        /* repl_load_apply_line — step 5b */
 /* glr_camera.h removed in step 4a: the export pipeline no longer
  * references glr_camera_*. Camera state flows through the
  * controller-installed ReplExportCameraBridge (see repl_export.h).
@@ -2622,16 +2623,20 @@ static void import_feed_one_line(const char *line, int *loaded, int *warnings) {
     if (import_parse_declare_marker(line, loaded, warnings))
         return;
 
+    /* Step 5b: feed lines through the non-editor source-load API
+     * (repl_load_apply_line in repl_compile.c) instead of feed_line.
+     * Same compile + apply, no editor input dispatch. */
+    char load_err[256] = "";
     if (import_make_repl_for_header(line, repl_line, sizeof(repl_line))) {
-        handled = feed_line(repl_line);
+        handled = repl_load_apply_line(repl_line, load_err, (int)sizeof(load_err));
     } else if (import_make_repl_tess_line(line, repl_line, sizeof(repl_line)) ||
                import_make_repl_point_parameter_line(line, repl_line, sizeof(repl_line)) ||
                import_make_repl_label(line, repl_line, sizeof(repl_line)) ||
                import_make_repl_glut_bitmap_string(line, repl_line, sizeof(repl_line))) {
-        handled = feed_line(repl_line);
+        handled = repl_load_apply_line(repl_line, load_err, (int)sizeof(load_err));
     } else {
         repl_eval_c_expr_to_repl(line, repl_line, sizeof(repl_line));
-        handled = feed_line(repl_line);
+        handled = repl_load_apply_line(repl_line, load_err, (int)sizeof(load_err));
     }
 
     if (repl_state_document_count() > before) *loaded += (repl_state_document_count() - before);
@@ -3070,7 +3075,8 @@ static int import_try_function_header(ImportState *s, const char *p, const char 
         import_feed_one_line(s->pending_comments[comment_idx], &s->loaded, &s->warnings);
     import_reset_pending_function_prelude(s);
     int before = repl_state_document_count();
-    int handled = feed_line(repl_func_line);
+    char load_err[256] = "";
+    int handled = repl_load_apply_line(repl_func_line, load_err, (int)sizeof(load_err));
     if (repl_state_document_count() > before) s->loaded += (repl_state_document_count() - before);
     if (!handled) {
         fprintf(stderr, "Warning: could not parse line: %s\n", raw);

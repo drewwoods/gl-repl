@@ -32,11 +32,16 @@
  *   - ui_state_viewport / ui_state_code_panel layout reads (step 7)
  */
 
-/* --- src/editor/input.c entry points (only as hard references) -------- */
-
-/* feed_line is the programmatic commit entry used by file loading and
- * the example loader. Reachable from repl_load_initial_commands and
- * repl_export_load_from_file -- neither of which the demo invokes. */
+/* --- src/editor/input.c entry points (only as hard references) -------- *
+ *
+ * Step 5b cleared feed_line for the import path (repl_export.c) by
+ * routing it through repl_load_apply_line. The example loader still
+ * uses feed_line because the editor's try_commit_func_def has
+ * reorder + comment-relocation behavior the lean loader doesn't
+ * replicate; mid-snippet `func0() {` lines need to land at the
+ * canonical document-top position, which is editor-specific
+ * placement logic. Future cleanup can converge example loading
+ * onto the lean loader once that placement gets consolidated. */
 int feed_line(const char *line) {
     (void)line;
     return 0;
@@ -44,7 +49,7 @@ int feed_line(const char *line) {
 
 /* load_line_to_input is the editor's "navigate to line N" helper.
  * Reachable from repl_reformat_commands and repl_scenes::load_scene_from_slot.
- * The demo doesn't call either. */
+ * Step 6 will clear this. */
 void load_line_to_input(int idx) {
     (void)idx;
 }
