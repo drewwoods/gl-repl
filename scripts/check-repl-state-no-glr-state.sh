@@ -41,6 +41,28 @@ files=(
 violations=$(grep -nE '\bglr_state\.h\b|\bglr_state_[a-z_]+\b|\bGlrState\b|\bGlrPresentationState\b|\bGlrRenderState\b' "${files[@]}" 2>/dev/null \
     | grep -vE '^[^:]+:[0-9]+:[[:space:]]*(\*|//)' || true)
 
+# Step 7b: glr_scenes.{c,h} is the parallel app-side companion to
+# repl_scenes.c, holding per-slot cfg snapshots. repl_scenes.c is the
+# only REPL pipeline TU that may include it (it drives the slot
+# lifecycle and pairs every used=0 with glr_scenes_scene_cfg_clear).
+glr_scenes_files=()
+for f in "${files[@]}"; do
+    if [ "$f" != "repl_scenes.c" ]; then
+        glr_scenes_files+=("$f")
+    fi
+done
+
+scene_violations=$(grep -nE '\bglr_scenes\.h\b|\bglr_scenes_[a-z_]+\b' "${glr_scenes_files[@]}" 2>/dev/null \
+    | grep -vE '^[^:]+:[0-9]+:[[:space:]]*(\*|//)' || true)
+
+if [ -n "$scene_violations" ]; then
+    if [ -z "$violations" ]; then
+        violations="$scene_violations"
+    else
+        violations=$(printf '%s\n%s' "$violations" "$scene_violations")
+    fi
+fi
+
 if [ -z "$violations" ]; then
     echo "repl-state-no-glr-state OK"
     exit 0
