@@ -168,10 +168,18 @@ static void save_scene_to_slot(int idx, const char *name) {
         if (bridge && bridge->fill_scene_subset)
             bridge->fill_scene_subset(&s->scene_cfg);
     }
-    if (name && *name)
-        snprintf(s->name, sizeof(s->name), "%s", name);
-    else if (s->name[0] == '\0')
+    /* Callers re-saving an existing slot pass `g_user_scenes[idx].name`,
+     * which aliases s->name. snprintf with overlapping src/dst is UB
+     * (glibc with `%s` produces an empty buffer), so only copy when the
+     * pointers differ. The aliased path leaves the existing name in
+     * place — the caller's intent in that case is "save commands; keep
+     * the name". */
+    if (name && *name) {
+        if (name != s->name)
+            snprintf(s->name, sizeof(s->name), "%s", name);
+    } else if (s->name[0] == '\0') {
         snprintf(s->name, sizeof(s->name), "%s", USER_SCENE_HOME_NAME);
+    }
     s->used       = 1;
     s->last_touch = next_user_scene_tick();
 }

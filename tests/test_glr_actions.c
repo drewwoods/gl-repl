@@ -1,3 +1,4 @@
+#define _DEFAULT_SOURCE  /* mkdtemp() */
 #include "glr_ctrl.h"
 #include "glr_actions.h"
 #include "repl_state.h"
