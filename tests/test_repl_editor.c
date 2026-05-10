@@ -1,3 +1,4 @@
+#define _DEFAULT_SOURCE  /* mkdtemp() */
 #include "./include/gl_2d.h"
 #include "editor/clipboard.h"
 #include "editor/commit.h"
