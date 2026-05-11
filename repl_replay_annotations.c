@@ -1,7 +1,6 @@
 /*
  * repl_replay_annotations.c -- Code-panel replay variable annotations.
  */
-#include "code_annotations.h" /* neutral port for replay annotations (Phase 4 of feature/source-document-port.md) */
 #include "repl_core_internal.h"
 #include "repl_parser.h"
 #include "replay.h"
@@ -1167,8 +1166,30 @@ static int format_evaluated_cmd(const GLCmd *cmd, const char *orig_source,
 }
 
 
-static void repl_replay_annotations_refresh_virtual_lines(void) {
-    code_annotations_clear();
+static void replay_output_append(ReplReplayAnnotationOutput *out,
+                                 int after_line_idx,
+                                 ReplReplayAnnotationKind kind,
+                                 const char *text,
+                                 const char *aux) {
+    if (!out || out->count >= REPL_REPLAY_ANNOTATION_MAX)
+        return;
+    ReplReplayAnnotation *row = &out->items[out->count];
+    row->after_line_idx = after_line_idx;
+    row->kind           = kind;
+    if (text)
+        snprintf(row->text, sizeof(row->text), "%s", text);
+    else
+        row->text[0] = '\0';
+    if (aux)
+        snprintf(row->aux, sizeof(row->aux), "%s", aux);
+    else
+        row->aux[0] = '\0';
+    out->count++;
+}
+
+static void repl_replay_annotations_refresh_output(ReplReplayAnnotationOutput *out) {
+    if (!out) return;
+    memset(out, 0, sizeof(*out));
 
     ReplReplayRuntimeState replay = replay_state_view();
     if (!replay.active || !replay.expand_args)
@@ -1184,26 +1205,27 @@ static void repl_replay_annotations_refresh_virtual_lines(void) {
     if (flat_idx < 0)
         return;
 
-    char subst[CODE_ANNOTATION_TEXT_MAX];
-    char var_comment[CODE_ANNOTATION_AUX_MAX];
+    char subst[REPL_REPLAY_ANNOTATION_TEXT_MAX];
+    char var_comment[REPL_REPLAY_ANNOTATION_AUX_MAX];
     if (repl_replay_build_subst_annotation(cmd_idx, flat_idx,
                                            subst, sizeof(subst),
                                            var_comment, sizeof(var_comment)) > 0) {
-        code_annotations_append(cmd_idx,
-                                CODE_ANNOTATION_STYLE_REPLAY_SUBST,
-                                subst, var_comment);
+        replay_output_append(out, cmd_idx,
+                             REPL_REPLAY_ANNOTATION_KIND_SUBST,
+                             subst, var_comment);
     }
 
-    char eval_buf[CODE_ANNOTATION_TEXT_MAX];
+    char eval_buf[REPL_REPLAY_ANNOTATION_TEXT_MAX];
     if (repl_replay_build_eval_annotation(cmd_idx, flat_idx,
                                           eval_buf, sizeof(eval_buf))) {
-        code_annotations_append(cmd_idx,
-                                CODE_ANNOTATION_STYLE_REPLAY_EVAL,
-                                eval_buf, NULL);
+        replay_output_append(out, cmd_idx,
+                             REPL_REPLAY_ANNOTATION_KIND_EVAL,
+                             eval_buf, NULL);
     }
 }
 
-void repl_replay_annotations_prepare(SourceTextView text) {
+void repl_replay_annotations_prepare(SourceTextView text,
+                                     ReplReplayAnnotationOutput *out) {
     ReplReplayRuntimeState replay = replay_state_view();
 
     s_replay_text_view = text;
@@ -1213,5 +1235,5 @@ void repl_replay_annotations_prepare(SourceTextView text) {
     else if (!replay.active)
         repl_replay_annotations_invalidate();
 
-    repl_replay_annotations_refresh_virtual_lines();
+    repl_replay_annotations_refresh_output(out);
 }
