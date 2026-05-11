@@ -191,6 +191,19 @@ static void glr_export_cfg_fill_scene_subset(ReplExportConfig *cfg) {
     }
 }
 
+static void glr_export_cfg_normalize_legacy_alias(const char **slug, int *val,
+                                                  char *slug_buf,
+                                                  size_t slug_buf_sz) {
+    if (!slug || !*slug || !val || !slug_buf || slug_buf_sz == 0)
+        return;
+
+    if (strcmp(*slug, "top_code_panel") == 0) {
+        snprintf(slug_buf, slug_buf_sz, "%s", "code_panel");
+        *slug = slug_buf;
+        *val = *val ? CODE_PANEL_LAYOUT_TOP : CODE_PANEL_LAYOUT_LEFT;
+    }
+}
+
 static void glr_export_cfg_apply(const ReplExportConfig *cfg) {
     if (!cfg) return;
     int n = 0;
@@ -198,6 +211,10 @@ static void glr_export_cfg_apply(const ReplExportConfig *cfg) {
     for (int idx = 0; idx < cfg->count; idx++) {
         const char *slug = cfg->items[idx].key;
         int val = (int)strtol(cfg->items[idx].value, NULL, 10);
+        char normalized_slug[REPL_EXPORT_CFG_KEY_MAX];
+        glr_export_cfg_normalize_legacy_alias(&slug, &val,
+                                              normalized_slug,
+                                              sizeof(normalized_slug));
         for (int i = 0; i < n; i++) {
             const GlrConfigItem *item = &items[i];
             if (item->section_header || item->key == GLR_CONFIG_NONE) continue;
