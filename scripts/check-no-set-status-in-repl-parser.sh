@@ -1,6 +1,6 @@
 #!/bin/bash
 # Hard guard: the parser core (parse_command + its set_incomplete_*
-# helpers + the parser_emit_error_* helpers in repl_parser.c) does
+# helpers + the parser_emit_error_* helpers in src/repl/parser.c) does
 # not call set_status directly. Diagnostics flow through
 # `ReplParseContext.err_buf` and the caller decides whether and how
 # to surface them.
@@ -34,7 +34,7 @@ fi
 
 # Match call shape only (open paren) so doc/comment references to
 # the symbol don't trip the count.
-hits=$(grep -nE '\bset_status\s*\(' repl_parser.c 2>/dev/null || true)
+hits=$(grep -nE '\bset_status\s*\(' src/repl/parser.c 2>/dev/null || true)
 
 if [ -z "$hits" ]; then
     count=0
@@ -43,7 +43,7 @@ else
 fi
 
 if [ "$count" -gt "$baseline" ]; then
-    echo "ERROR: repl_parser.c set_status() count grew past baseline (${baseline} -> ${count})." >&2
+    echo "ERROR: src/repl/parser.c set_status() count grew past baseline (${baseline} -> ${count})." >&2
     echo "Parser diagnostics flow through ReplParseContext.err_buf — the caller" >&2
     echo "decides whether to surface them. See scripts/baselines/repl-parser-set-status.txt" >&2
     echo "for context. Hits:" >&2

@@ -1,5 +1,5 @@
 #!/bin/bash
-# Hard guard: repl_compile.c and repl_apply.c never call set_status.
+# Hard guard: src/repl/compile.c and src/repl/apply.c never call set_status.
 # Phase C established the contract that compile is a pure
 # parser/validator (errors return through `err` buffers) and apply
 # is pure mutation (no side-effecting status output). Phase I commit
@@ -18,7 +18,7 @@ cd "$(git rev-parse --show-toplevel)"
 # C-style block comment (leading-asterisk prefix `^\s* \*`) so the
 # Phase C "this file does NOT call set_status" doc comment doesn't
 # trip the count.
-violations=$(grep -nE '\bset_status\s*\(' repl_compile.c repl_apply.c 2>/dev/null \
+violations=$(grep -nE '\bset_status\s*\(' src/repl/compile.c src/repl/apply.c 2>/dev/null \
     | grep -vE '^[^:]+:[0-9]+: \*' || true)
 
 if [ -z "$violations" ]; then
@@ -26,7 +26,7 @@ if [ -z "$violations" ]; then
     exit 0
 fi
 
-echo "ERROR: repl_compile.c / repl_apply.c must not call set_status." >&2
+echo "ERROR: src/repl/compile.c / src/repl/apply.c must not call set_status." >&2
 echo "Phase C established compile = pure validator, apply = pure mutator." >&2
 echo "Errors flow through return values; status decisions belong upstream" >&2
 echo "(editor_commit / repl_editor / their callers). Hits:" >&2

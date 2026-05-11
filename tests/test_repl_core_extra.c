@@ -2,13 +2,13 @@
 #include "glr_ctrl.h"
 #define _DEFAULT_SOURCE
 #include "glr_config.h"
-#include "repl_command_spec.h"  /* cmd_type_name */
-#include "repl_core.h"
-#include "repl_core_internal.h"
+#include "repl/command_spec.h"  /* cmd_type_name */
+#include "repl/core.h"
+#include "repl/core_internal.h"
 #include "glr_debug.h"
 #include "replay.h"
-#include "repl_executor.h"
-#include "repl_state.h"
+#include "repl/executor.h"
+#include "repl/state.h"
 #include "ui/panels.h"
 #include "editor/inline_rename.h"
 

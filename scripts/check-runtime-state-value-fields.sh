@@ -2,7 +2,7 @@
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 
-header="${1:-repl_state.h}"
+header="${1:-src/repl/state.h}"
 
 python3 - "$header" <<'PY'
 import re

@@ -14,18 +14,18 @@
  * MAX_* or change a struct that uses one, append (or update) a row.
  *
  * The numbers are deliberately conservative — file-private structs
- * (UserScene in repl_scenes.c) are computed approximately because
+ * (UserScene in src/repl/scenes.c) are computed approximately because
  * their definitions aren't visible from a tool TU. Notes call out
  * those cases.
  */
 #include "editor/limits.h"
 #include "editor/undo.h"
-#include "repl_command.h"
-#include "repl_command_spec.h"
-#include "repl_compile.h"
-#include "repl_core.h"
-#include "repl_eval.h"
-#include "repl_export_state.h"
+#include "repl/command.h"
+#include "repl/command_spec.h"
+#include "repl/compile.h"
+#include "repl/core.h"
+#include "repl/eval.h"
+#include "repl/export_state.h"
 #include "replay.h"
 #include "scene/render_types.h"
 

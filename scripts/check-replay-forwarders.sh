@@ -12,7 +12,7 @@
 #
 # Sites inside the owner translation units are ignored:
 #   - replay_state.c is the peer (forward-targets the legacy names).
-#   - repl_state.c hosts the forwarder definitions.
+#   - src/repl/state.c hosts the forwarder definitions.
 #
 # Today's count is exclusively benchmark + test fixture sites. The
 # remaining work to drive this to zero is to migrate those call

@@ -1,7 +1,7 @@
 #include "glr_ctrl.h"
 #include "glr_actions.h"
 #include "glr_debug.h"
-#include "repl_executor.h"
+#include "repl/executor.h"
 #include "audio.h"
 
 #include <dirent.h>

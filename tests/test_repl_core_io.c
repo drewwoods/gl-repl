@@ -2,9 +2,9 @@
 #include "glr_camera.h"
 #include "glr_state.h"
 #include "glr_ctrl.h"
-#include "repl_core.h"
-#include "repl_state.h"
-#include "repl_export.h"
+#include "repl/core.h"
+#include "repl/state.h"
+#include "repl/export.h"
 #include "ui/state.h"
 
 #include "support/test_harness.h"
@@ -682,7 +682,7 @@ int main(void) {
         /* Scene A — wireframe = 1.  Scene B — wireframe = 0.
          * Body lines must sit inside // Snippet start / end markers
          * (that's how repl_export_load_from_file detects the geometry
-         * snippet — see import_try_snippet_start in repl_export.c). */
+         * snippet — see import_try_snippet_start in src/repl/export.c). */
         {
             FILE *f = fopen("/tmp/repl_core_p1_workspace_in/scene_a.c", "w");
             ASSERT_TRUE("p1 scene_a fopen", f != NULL);

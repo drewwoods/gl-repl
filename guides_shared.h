@@ -4,8 +4,8 @@
 #ifndef SCENE_GUIDES_SHARED_H
 #define SCENE_GUIDES_SHARED_H
 
-#include "repl_command.h"
-#include "repl_flatten.h"
+#include "repl/command.h"
+#include "repl/flatten.h"
 
 typedef struct SceneGuideSnapshot {
     int show_guides;

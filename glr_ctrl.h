@@ -60,7 +60,7 @@ int glr_ctrl_router_handle_debug_dump_key(unsigned char key);       /* Ctrl+P */
  * (step 7c of feature/decouple-repl-from-gl-repl-alt.md). Controllers
  * + tests building the export call site fill the struct via this
  * helper instead of inlining the reads. */
-#include "repl_export.h"   /* ReplExportLayout */
+#include "repl/export.h"   /* ReplExportLayout */
 void glr_ctrl_fill_export_layout(ReplExportLayout *out);
 int glr_ctrl_router_handle_quit_key(unsigned char key);             /* Ctrl+Q */
 int glr_ctrl_router_handle_config_menu_key(unsigned char key);      /* backtick → config menu */
@@ -120,7 +120,7 @@ const struct UiOverlayContent *glr_ctrl_help_overlay_content(void);
  * this helper to forward the rows to the editor's virtual-line list.
  * The standalone demo doesn't link this — it has no UI to render
  * annotations to. */
-#include "repl_replay_annotations.h" /* ReplReplayAnnotationOutput */
+#include "repl/replay_annotations.h" /* ReplReplayAnnotationOutput */
 void glr_publish_replay_annotations(const ReplReplayAnnotationOutput *out);
 
 #endif /* GLR_CTRL_H */

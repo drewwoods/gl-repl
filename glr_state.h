@@ -48,7 +48,7 @@ typedef struct {
     /* User-config toggles. The runtime-mutated halves of the render
      * slice — `lights[]` and `clear_color[]`, written by the executor
      * in response to glEnable(GL_LIGHTn) / glClearColor commands —
-     * stay on `ReplRenderState` since `repl_executor.c` is a REPL
+     * stay on `ReplRenderState` since `src/repl/executor.c` is a REPL
      * pipeline TU and cannot include `glr_state.h`. */
     int   use_accum;
     int   accum_aa_enabled;

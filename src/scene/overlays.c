@@ -4,7 +4,7 @@
  * here as full GLCmd-walking renderers; they moved to imrepl_ctrl.c
  * where they're driven by glPolygonMode tricks (re-execute the user's
  * program with GL_LINE / GL_POINT). The gluTessCallback edge-flag
- * registration in repl_executor.c keeps internal triangulation edges
+ * registration in src/repl/executor.c keeps internal triangulation edges
  * suppressed in GL_LINE mode, so the controller doesn't need to walk
  * the program either.
  */

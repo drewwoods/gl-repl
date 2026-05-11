@@ -6,13 +6,13 @@
  * replay fade passes, grid/axes, and visual overlays (polygon outlines, vertex
  * numbers, normal vectors, orbit target).
  *
- * Pipeline flow (per frame from display_func in repl_core.c):
+ * Pipeline flow (per frame from display_func in src/repl/core.c):
  *   1. scene_render_init_gl() — one-time setup of GL state, display lists,
  *      shaders, tessellator
  *   2. Per-accum-sample (if AA enabled):
  *      - Set up projection with optional sub-pixel jitter
  *      - Apply camera transforms
- *      - Execute user commands (repl_executor.c)
+ *      - Execute user commands (src/repl/executor.c)
  *      - Render grid, axes, orbit target
  *      - Render overlays (polygon outline, vertex guides, normals, etc.)
  *      - Accumulate into accumulation buffer

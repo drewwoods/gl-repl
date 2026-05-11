@@ -8,8 +8,8 @@
 
 #include "ui/state.h"
 #include "editor/code_panel_document.h"
-#include "repl_core.h"
-#include "repl_state.h"
+#include "repl/core.h"
+#include "repl/state.h"
 #include "ui/layout.h"
 #include "ui/metrics.h"
 #include "support/test_harness.h"

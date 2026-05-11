@@ -3,11 +3,11 @@
  */
 #include "glr_debug.h"
 
-#include "repl_export.h"
-#include "repl_command_spec.h"
-#include "repl_pipeline.h"
-#include "repl_state_owners.h"
-#include "repl_state.h"
+#include "repl/export.h"
+#include "repl/command_spec.h"
+#include "repl/pipeline.h"
+#include "repl/state_owners.h"
+#include "repl/state.h"
 
 #include <stddef.h>
 

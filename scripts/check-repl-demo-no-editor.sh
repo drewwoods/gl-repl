@@ -8,7 +8,7 @@
 #   2. nm repl_demo must not expose editor implementation symbols
 #      (editor_buffer_*, editor_state_*, editor_cursor_*, editor_scroll_*,
 #      editor_insert_mode_*, EditorState). The host-effect sinks in
-#      repl_core.h are editor-NEUTRAL by name (repl_install_input_reset_sink
+#      src/repl/core.h are editor-NEUTRAL by name (repl_install_input_reset_sink
 #      etc.) and the demo leaves them unset, so they do not appear here.
 #
 # Phase 7 of feature/source-document-port.md.

@@ -2,8 +2,8 @@
 #include "glr_ctrl.h"
 #include "editor/input.h"
 #include "editor/search.h"
-#include "repl_core.h"
-#include "repl_state.h"
+#include "repl/core.h"
+#include "repl/state.h"
 
 #define g_search_active    (editor_state_search_mut()->active)
 #define g_search_query     (editor_state_search_mut()->query)

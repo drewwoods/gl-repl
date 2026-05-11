@@ -67,8 +67,8 @@ enum {
  * examples can override via @cfg metadata headers. */
 void repl_actions_apply_defaults(void);
 
-/* Install the export-config bridge that lets repl_export.c emit/parse
- * @cfg headers and lets repl_scenes.c snapshot per-scene cfg without
+/* Install the export-config bridge that lets src/repl/export.c emit/parse
+ * @cfg headers and lets src/repl/scenes.c snapshot per-scene cfg without
  * referencing glr_config_*. Step 4 of the decouple plan. Called once
  * at app startup from glr_app_reset_all. */
 void glr_actions_install_export_cfg_bridge(void);

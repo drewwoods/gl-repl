@@ -4,7 +4,7 @@
  * Step 4a of feature/decouple-repl-from-gl-repl-alt.md: the camera-block
  * format owner (this file) translates between camera state and the 4-line
  * `// camera` block + `static float g_angle = N.NNNNf;` preamble that
- * appear in saved files. repl_export.c sees only the neutral
+ * appear in saved files. src/repl/export.c sees only the neutral
  * ReplExportCameraBlock + a single try_consume_import_line entry point;
  * it does not parse or format glRotatef/glTranslatef strings.
  *
@@ -19,7 +19,7 @@
  * before the g_angle placeholder; the import parser tolerates either
  * form so existing saved files keep working.
  */
-#include "repl_export.h"
+#include "repl/export.h"
 #include "glr_camera.h"
 
 #include <stdio.h>

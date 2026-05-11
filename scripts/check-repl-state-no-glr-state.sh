@@ -20,25 +20,25 @@ cd "$(git rev-parse --show-toplevel)"
 # updated alongside if a new repl_*.c TU is added; new glr_*.c TUs are
 # exempt by construction.
 files=(
-    repl_core.c
-    repl_state.c
-    repl_parser.c
-    repl_command_spec.c
-    repl_command_store.c
-    repl_compile.c
-    repl_load.c
-    repl_apply.c
-    repl_flatten.c
-    repl_executor.c
-    repl_eval.c
-    repl_source_scope.c
-    repl_autonormal.c
-    repl_scenes.c
-    repl_example_loader.c
-    repl_examples.c
-    repl_export.c
+    src/repl/core.c
+    src/repl/state.c
+    src/repl/parser.c
+    src/repl/command_spec.c
+    src/repl/command_store.c
+    src/repl/compile.c
+    src/repl/load.c
+    src/repl/apply.c
+    src/repl/flatten.c
+    src/repl/executor.c
+    src/repl/eval.c
+    src/repl/source_scope.c
+    src/repl/autonormal.c
+    src/repl/scenes.c
+    src/repl/example_loader.c
+    src/repl/examples.c
+    src/repl/export.c
     repl_autocomplete.c
-    repl_replay_annotations.c
+    src/repl/replay_annotations.c
 )
 
 # Match include lines + symbol references. Skip lines whose first

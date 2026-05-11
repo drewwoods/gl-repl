@@ -38,8 +38,8 @@
 #ifndef EDITOR_COMMIT_H
 #define EDITOR_COMMIT_H
 
-#include "repl_compile.h"     /* ReplCompiledChange, ReplCompileContext, ReplCompileResult */
-#include "repl_state_views.h" /* REPL_STATUS_TEXT_MAX */
+#include "repl/compile.h"     /* ReplCompiledChange, ReplCompileContext, ReplCompileResult */
+#include "repl/state_views.h" /* REPL_STATUS_TEXT_MAX */
 
 struct EditorServices_s;
 
@@ -271,7 +271,7 @@ ReplCompileResult editor_compile_for_loop(const char *input,
 /* ---- Commit dispatcher chain ----
  *
  * Phase H.5 commit 41: declarations moved here from
- * repl_core_internal.h. Bodies live in editor_commit.c (moved in
+ * src/repl/core_internal.h. Bodies live in editor_commit.c (moved in
  * Phase H.5 commit 39 from repl_commit.c, which is now deleted).
  *
  * Each `try_commit_*` inspects the live editor input. Returns 1 if

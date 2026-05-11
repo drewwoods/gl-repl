@@ -12,8 +12,8 @@
 #include "src/editor/reformat.h"
 
 #include "config.h"           /* MAX_INPUT_LEN */
-#include "repl_core.h"        /* repl_reformat_program */
-#include "repl_state.h"
+#include "repl/core.h"        /* repl_reformat_program */
+#include "repl/state.h"
 #include "src/editor/input.h" /* load_line_to_input */
 #include "src/editor/state.h"
 

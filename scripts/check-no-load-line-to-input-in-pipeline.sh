@@ -5,9 +5,9 @@
 # active source line — that is editor-input behavior and lives in
 # src/editor/input.c. Step 6 of the repl_demo decoupling plan moved
 # the only two pipeline call sites out: repl_reformat_commands() in
-# repl_core.c (split into pure repl_reformat_program() + editor
+# src/repl/core.c (split into pure repl_reformat_program() + editor
 # wrapper editor_reformat_commands()) and load_scene_from_slot() in
-# repl_scenes.c (the editor-input refresh now happens at the
+# src/repl/scenes.c (the editor-input refresh now happens at the
 # controller boundary after the scene-load API returns).
 #
 # This guard fails the build if a REPL pipeline TU starts calling
@@ -20,25 +20,25 @@ cd "$(git rev-parse --show-toplevel)"
 # Pipeline TUs in REPL_DEMO_DEP_SRCS. Mirrors the Makefile list so the
 # guard tracks what the demo actually links from the REPL pipeline.
 files=(
-    repl_core.c
-    repl_state.c
-    repl_parser.c
-    repl_command_spec.c
-    repl_command_store.c
-    repl_compile.c
-    repl_apply.c
-    repl_flatten.c
-    repl_executor.c
-    repl_eval.c
-    repl_source_scope.c
-    repl_autonormal.c
-    repl_scenes.c
-    repl_example_loader.c
-    repl_examples.c
-    repl_export.c
+    src/repl/core.c
+    src/repl/state.c
+    src/repl/parser.c
+    src/repl/command_spec.c
+    src/repl/command_store.c
+    src/repl/compile.c
+    src/repl/apply.c
+    src/repl/flatten.c
+    src/repl/executor.c
+    src/repl/eval.c
+    src/repl/source_scope.c
+    src/repl/autonormal.c
+    src/repl/scenes.c
+    src/repl/example_loader.c
+    src/repl/examples.c
+    src/repl/export.c
     repl_autocomplete.c
-    repl_help_text.c
-    repl_replay_annotations.c
+    src/repl/help_text.c
+    src/repl/replay_annotations.c
 )
 
 # Match call shape only; skip lines that are inside C block comments

@@ -144,7 +144,7 @@ void repl_editor_reset_transients(void);
 /* Programmatic entry point equivalent to typing `line` and pressing
  * `;`. Used by tests, the clipboard paste path, and editor-side
  * file/example loaders. Pipeline TUs use `repl_load_apply_line()` in
- * `repl_load.h` instead. */
+ * `src/repl/load.h` instead. */
 int feed_line(const char *line);
 
 #endif /* EDITOR_INPUT_H */

@@ -2,10 +2,10 @@
  * repl_menu_bar.c -- Code-panel menu bar, dropdowns, and search slot.
  */
 #include "glr_actions.h"
-#include "repl_core.h"
+#include "repl/core.h"
 #include "glr_config.h"
 #include "keys.h"
-#include "repl_state_views.h"
+#include "repl/state_views.h"
 #include "replay.h"   /* ReplayState (PLAYING / PAUSED / DONE) enum values */
 #include "state.h"
 #include "menu_bar.h"

@@ -1,6 +1,6 @@
 #include "glr_ctrl.h"
 /*
- * test_repl_compile.c - Phase C invariant tests.
+ * test_src/repl/compile.c - Phase C invariant tests.
  *
  * Verifies the compile/apply boundary established in Phase C
  * commits 19-21:
@@ -18,14 +18,14 @@
 #include "editor/reformat.h"
 #include "editor/services.h"
 #include "editor/state.h"
-#include "repl_apply.h"
-#include "repl_command_store.h"
-#include "repl_compile.h"
-#include "repl_core.h"
-#include "repl_core_internal.h"  /* try_commit_*, editor_commit_func_decl_resume_peek */
-#include "repl_eval.h"
-#include "repl_load.h"           /* repl_load_apply_line for [P2] dup-check test */
-#include "repl_state.h"
+#include "repl/apply.h"
+#include "repl/command_store.h"
+#include "repl/compile.h"
+#include "repl/core.h"
+#include "repl/core_internal.h"  /* try_commit_*, editor_commit_func_decl_resume_peek */
+#include "repl/eval.h"
+#include "repl/load.h"           /* repl_load_apply_line for [P2] dup-check test */
+#include "repl/state.h"
 #include "ui/state.h"
 #include "support/test_harness.h"
 

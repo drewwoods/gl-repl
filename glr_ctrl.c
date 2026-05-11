@@ -25,15 +25,15 @@
 #include "keys.h"
 #include "outline_offset.h" /* REPL_OUTLINE_POLYGON_OFFSET_{FACTOR,UNITS} */
 #include "prof.h"
-#include "repl_core.h"
-#include "repl_eval.h"
-#include "repl_executor.h"
-#include "repl_export.h"
-#include "repl_help_text.h"
-#include "repl_pipeline.h"
-#include "repl_replay_annotations.h"
-#include "repl_source_scope.h"
-#include "repl_state_owners.h"
+#include "repl/core.h"
+#include "repl/eval.h"
+#include "repl/executor.h"
+#include "repl/export.h"
+#include "repl/help_text.h"
+#include "repl/pipeline.h"
+#include "repl/replay_annotations.h"
+#include "repl/source_scope.h"
+#include "repl/state_owners.h"
 #include "replay.h"
 #include "replay_state.h"
 #include "replay_ui_hud.h"
@@ -1424,18 +1424,18 @@ static void glr_app_install_app_services(void) {
      * install this sink, so the loader's per-load reset is a no-op
      * — the demo doesn't load examples through this path anyway. */
     repl_install_example_presentation_reset_sink(glr_app_reset_example_chrome);
-    /* Install the export-config bridge so repl_export.c can emit/parse
-     * @cfg headers and repl_scenes.c can snapshot per-scene cfg
+    /* Install the export-config bridge so src/repl/export.c can emit/parse
+     * @cfg headers and src/repl/scenes.c can snapshot per-scene cfg
      * without referencing glr_config_* directly. The demo does not
      * install a bridge, so the @cfg path is a no-op there (clearing
      * g_cfg_items / CFG_ITEM_COUNT / audio_* / ui_state_profile_panel_mut
      * / variable_panel_view_mut stubs). */
     glr_actions_install_export_cfg_bridge();
-    /* Install the export-camera bridge (step 4a) so repl_export.c can
+    /* Install the export-camera bridge (step 4a) so src/repl/export.c can
      * emit/parse the `// camera` block + g_angle preamble without
      * referencing glr_camera_*. Camera state still pulls glr_camera.c
-     * into the demo link set via repl_state.c (auto_rotate reset) and
-     * repl_example_loader.c (example camera presets); step 7 closes
+     * into the demo link set via src/repl/state.c (auto_rotate reset) and
+     * src/repl/example_loader.c (example camera presets); step 7 closes
      * those last two doors. */
     glr_camera_export_install_bridge();
     /* Step 7e: install the executor's camera-distance source. The
@@ -1448,7 +1448,7 @@ static void glr_app_install_app_services(void) {
     repl_executor_install_camera_distance_source(glr_app_camera_distance);
     /* Install the host-effect sinks the example loader / scene loader /
      * snippet importer / replay engine dispatch through. The sinks are
-     * editor-neutral by name (no editor_ prefix in repl_core.h); this
+     * editor-neutral by name (no editor_ prefix in src/repl/core.h); this
      * file is where editor coupling concentrates. Phases 3 + 6 of
      * feature/source-document-port.md. */
     repl_install_input_reset_sink(glr_app_editor_input_reset);
@@ -1459,7 +1459,7 @@ static void glr_app_install_app_services(void) {
 
 /* Full-world reset entry point. Step 2 of
  * feature/decouple-repl-from-gl-repl-alt.md split this out of
- * repl_state.c so the REPL pipeline (and tools/repl_demo) does not
+ * src/repl/state.c so the REPL pipeline (and tools/repl_demo) does not
  * have to link / stub the peer / editor / UI reset symbols. */
 void glr_app_reset_all(void) {
     repl_state_reset_program();
@@ -1540,7 +1540,7 @@ void glr_ctrl_bootstrap_repl(const char *input_file) {
     }
     repl_load_initial_commands(input_file);
     /* Startup banner. Step 3 of feature/decouple-repl-from-gl-repl-alt.md
-     * moved this out of repl_core.c so pipeline TUs don't own
+     * moved this out of src/repl/core.c so pipeline TUs don't own
      * display-string side effects. */
     repl_set_status("Ready - type GL commands, press ; to execute. F1 for help. F12 for examples.");
 }
@@ -1750,7 +1750,7 @@ static void cycle_example_or_user_scene(void) {
      * Active user scene moves to the next occupied user slot, then example 0. */
     /* Clear editor / camera / menu / picker / code-panel-drag transients
      * so the new scene starts from a clean controller state. Step 2 of
-     * the decouple plan moved this out of repl_example_loader.c. */
+     * the decouple plan moved this out of src/repl/example_loader.c. */
     repl_editor_reset_transients();
     int count = repl_example_count();
     int active_scene = repl_active_user_scene();

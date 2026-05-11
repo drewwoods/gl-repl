@@ -51,7 +51,7 @@ void scene_draw_normal_vector_arrow(float vx, float vy, float vz,
 /* Note: outlines and vertex-point overlays no longer live in this header.
  * They moved to imrepl_ctrl.c where they're implemented by re-executing
  * the user's program with glPolygonMode(GL_LINE) / GL_POINT respectively
- * — the gluTessCallback edge-flag handler in repl_executor.c keeps
+ * — the gluTessCallback edge-flag handler in src/repl/executor.c keeps
  * triangulation interiors invisible in GL_LINE mode, so no GLCmd
  * iteration is needed. The visual style (currently black with lighting,
  * later stencil-based) is the controller's choice; the scene module is

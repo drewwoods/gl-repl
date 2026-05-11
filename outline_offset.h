@@ -6,7 +6,7 @@
  *   - imrepl_ctrl.c — live rendering: re-runs user geometry in
  *     glPolygonMode(GL_LINE) with these offsets to draw outlines on top
  *     of the filled pass without z-fighting.
- *   - repl_export.c — emits the same constants into the exported C file
+ *   - src/repl/export.c — emits the same constants into the exported C file
  *     so the standalone binary draws outlines identically.
  *
  * Not under src/scene/ because no scene module consumes them — the

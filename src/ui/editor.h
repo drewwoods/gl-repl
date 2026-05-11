@@ -12,7 +12,7 @@
 #ifndef UI_EDITOR_H
 #define UI_EDITOR_H
 
-#include "repl_command.h"   /* MAX_COMMANDS (line-override cap) */
+#include "repl/command.h"   /* MAX_COMMANDS (line-override cap) */
 
 typedef enum {
     TRANSFORMER_COLOR_PICKER,

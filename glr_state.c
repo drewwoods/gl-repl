@@ -12,7 +12,7 @@
  * Defaults come from `glr_defaults.h` (CFG_DEFAULT_*) which already
  * documents itself as controller-side scene/presentation defaults.
  *
- * `repl_state.c` no longer owns these fields and no longer references
+ * `src/repl/state.c` no longer owns these fields and no longer references
  * `glr_camera`; the `auto_rotate` reset moved to the camera bridge's
  * `apply` callback (driven via the bridge during scene-cfg restore).
  */

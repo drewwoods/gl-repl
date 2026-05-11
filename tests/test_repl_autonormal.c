@@ -1,6 +1,6 @@
 #include "glr_ctrl.h"
-#include "repl_core.h"
-#include "repl_state.h"
+#include "repl/core.h"
+#include "repl/state.h"
 #include "support/test_harness.h"
 #include <stdio.h>
 #include <stdlib.h>

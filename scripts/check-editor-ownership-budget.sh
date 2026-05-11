@@ -6,7 +6,7 @@
 #
 # Tracked couplings:
 #
-#   ui_forwarder_count       Lines in repl_state.c implementing
+#   ui_forwarder_count       Lines in src/repl/state.c implementing
 #                            `repl_state_(status|help|variable_panel|
 #                            profile_panel|viewport|pointer|code_panel)*`
 #                            forwarders into ui_state_*. Each
@@ -17,7 +17,7 @@
 #                            need the legacy names.
 #
 #   ui_state_includes_repl_views  Whether src/ui/state.h still includes
-#                                 repl_state_views.h to import the
+#                                 src/repl/state_views.h to import the
 #                                 Repl*State typedefs. Phase 5's
 #                                 typedef migration breaks this
 #                                 coupling.
@@ -43,7 +43,7 @@ baseline_includes=$(awk -F: '/^ui_state_includes_repl_views/{gsub(/[ \t]/,"",$2)
                           "$baseline_file")
 
 forwarders=$(grep -cE '^[[:space:]]*return[[:space:]]+ui_state_|^[[:space:]]*ui_state_[a-z_]+\(' \
-                  repl_state.c 2>/dev/null || true)
+                  src/repl/state.c 2>/dev/null || true)
 includes=$(grep -cE '^[[:space:]]*#[[:space:]]*include[[:space:]]+"repl_state_views\.h"' \
                 src/ui/state.h 2>/dev/null || true)
 
@@ -54,13 +54,13 @@ includes=${includes:-0}
 
 ok=1
 if [ "$forwarders" -gt "$baseline_forwarders" ]; then
-    echo "ERROR: repl_state.c ui-forwarder body line count grew (${baseline_forwarders} -> ${forwarders})." >&2
+    echo "ERROR: src/repl/state.c ui-forwarder body line count grew (${baseline_forwarders} -> ${forwarders})." >&2
     echo "These forwarders are transitional; new ones should not appear. See" >&2
     echo "scripts/baselines/editor-ownership-budget.txt for context." >&2
     ok=0
 fi
 if [ "$includes" -gt "$baseline_includes" ]; then
-    echo "ERROR: src/ui/state.h #include \"repl_state_views.h\" count grew (${baseline_includes} -> ${includes})." >&2
+    echo "ERROR: src/ui/state.h #include \"src/repl/state_views.h\" count grew (${baseline_includes} -> ${includes})." >&2
     echo "src/ui/state.h depending on repl_state's view header inverts ownership; the" >&2
     echo "coupling exists transitionally to import Repl*State typedefs and goes" >&2
     echo "away when those typedefs migrate to a ui-owned home." >&2

@@ -2,7 +2,7 @@
  * editor_search.h - Search overlay query helpers and input routing.
  *
  * Search helpers operate on the shared search overlay state exposed through
- * repl_state.h. Query helpers are read-only; the input handlers mutate the
+ * src/repl/state.h. Query helpers are read-only; the input handlers mutate the
  * overlay state.
  */
 #ifndef EDITOR_SEARCH_H

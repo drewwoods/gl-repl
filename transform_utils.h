@@ -3,14 +3,14 @@
  * controller code (imrepl_ctrl.c, transform_guides.c).
  *
  * Inline helpers for applying and unwinding GL matrix transforms.
- * Mirrors repl_executor.c functionality without requiring repl_executor.h.
- * Depends only on repl_command.h (GLCmd, CmdType). Lives at the repo root
+ * Mirrors src/repl/executor.c functionality without requiring src/repl/executor.h.
+ * Depends only on src/repl/command.h (GLCmd, CmdType). Lives at the repo root
  * because no src/scene/.c consumes it; only controller-layer helpers do.
  */
 #ifndef TRANSFORM_UTILS_H
 #define TRANSFORM_UTILS_H
 
-#include "repl_command.h"
+#include "repl/command.h"
 #include <gl_includes.h>
 
 /* Apply a single transform command to the GL matrix stack.

@@ -30,8 +30,8 @@
 #ifndef REPLAY_H
 #define REPLAY_H
 
-#include "repl_eval.h"
-#include "repl_flatten.h"    /* FlatProgramView used by ReplVertexWalkContext */
+#include "repl/eval.h"
+#include "repl/flatten.h"    /* FlatProgramView used by ReplVertexWalkContext */
 #include <gl_includes.h>     /* GLenum for ReplVertexWalkState.primitive_mode */
 
 #define REPLAY_FADE_BATCH_MAX 24

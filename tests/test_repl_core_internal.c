@@ -2,12 +2,12 @@
 #include "glr_state.h"
 #include "glr_ctrl.h"
 #include "glr_camera.h"
-#include "repl_core_internal.h"
-#include "repl_command_store.h"
-#include "repl_executor.h"
-#include "repl_source_scope.h"
-#include "repl_state.h"
-#include "repl_core.h"
+#include "repl/core_internal.h"
+#include "repl/command_store.h"
+#include "repl/executor.h"
+#include "repl/source_scope.h"
+#include "repl/state.h"
+#include "repl/core.h"
 #include "ui/state.h"
 #include "ui/layout.h"           /* CODE_PANEL_LAYOUT_* */
 #include "glr_defaults.h"   /* CFG_DEFAULT_* */
