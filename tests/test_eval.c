@@ -302,6 +302,204 @@ static void run_tests(void) {
     ASSERT_FLOAT("n*2", 48.0f);
     ASSERT_FLOAT("TAU/n", (float)(2.0 * M_PI / 24.0));
 
+    printf("Operator precedence (arithmetic):\n");
+    /* '*' '/' '%' bind tighter than '+' '-' */
+    ASSERT_FLOAT("2 + 3 * 4", 14.0f);
+    ASSERT_FLOAT("3 * 4 + 2", 14.0f);
+    ASSERT_FLOAT("20 - 6 / 2", 17.0f);
+    ASSERT_FLOAT("20 / 5 - 1", 3.0f);
+    ASSERT_FLOAT("10 + 7 % 3", 11.0f);
+    ASSERT_FLOAT("7 % 3 + 10", 11.0f);
+    ASSERT_FLOAT("2 + 3 * 4 + 5", 19.0f);
+    ASSERT_FLOAT("1 * 2 + 3 * 4", 14.0f);
+    ASSERT_FLOAT("2 + 3 * 4 - 5 / 5", 13.0f);
+    ASSERT_FLOAT("100 - 4 * 5 + 2", 82.0f);
+    /* '*' '/' '%' all share one level - strictly left-to-right */
+    ASSERT_FLOAT("12 / 3 * 2", 8.0f);   /* not 2 - left-assoc, not right */
+    ASSERT_FLOAT("12 * 2 / 3", 8.0f);
+    ASSERT_FLOAT("20 % 7 * 2", 12.0f);  /* (20%7)*2 = 6*2 */
+    ASSERT_FLOAT("2 * 20 % 7", 5.0f);   /* (2*20)%7 = 40%7 */
+    ASSERT_FLOAT("100 / 2 / 5 / 2", 5.0f);
+    /* '+' '-' left-to-right */
+    ASSERT_FLOAT("10 - 5 - 2", 3.0f);   /* not 7 */
+    ASSERT_FLOAT("10 - 5 + 2", 7.0f);
+    ASSERT_FLOAT("10 + 5 - 2", 13.0f);
+    ASSERT_FLOAT("1 - 2 - 3 - 4", -8.0f);
+    ASSERT_FLOAT("1 + 2 - 3 + 4 - 5", -1.0f);
+
+    printf("Operator precedence (unary):\n");
+    /* Unary '-' '+' '!' bind tighter than '*' */
+    ASSERT_FLOAT("-2 * 3", -6.0f);
+    ASSERT_FLOAT("2 * -3", -6.0f);
+    ASSERT_FLOAT("-2 * -3", 6.0f);
+    ASSERT_FLOAT("-(2 + 3)", -5.0f);
+    ASSERT_FLOAT("-(-3)", 3.0f);
+    ASSERT_FLOAT("--3", 3.0f);          /* unary chain */
+    ASSERT_FLOAT("---3", -3.0f);
+    ASSERT_FLOAT("----3", 3.0f);
+    ASSERT_FLOAT("-3 - -3", 0.0f);
+    ASSERT_FLOAT("+5 + -3", 2.0f);
+    ASSERT_FLOAT("!1 + 1", 1.0f);       /* (!1) + 1 = 0 + 1 */
+    ASSERT_FLOAT("!0 * 5", 5.0f);       /* (!0) * 5 = 1 * 5 */
+    ASSERT_FLOAT("!(1 + 0)", 0.0f);     /* paren forces order */
+    ASSERT_FLOAT("!!1", 1.0f);
+    ASSERT_FLOAT("!!0", 0.0f);
+    ASSERT_FLOAT("!!!1", 0.0f);
+
+    printf("Operator precedence (comparison):\n");
+    /* Arithmetic binds tighter than comparison */
+    ASSERT_FLOAT("1 + 2 < 5", 1.0f);    /* (1+2) < 5 */
+    ASSERT_FLOAT("5 > 1 + 2", 1.0f);
+    ASSERT_FLOAT("2 * 3 == 6", 1.0f);
+    ASSERT_FLOAT("2 * 3 != 7", 1.0f);
+    ASSERT_FLOAT("5 - 2 >= 3", 1.0f);
+    ASSERT_FLOAT("5 - 2 <= 3", 1.0f);
+    ASSERT_FLOAT("10 / 5 > 1", 1.0f);
+    ASSERT_FLOAT("3 * 4 == 2 * 6", 1.0f);
+    ASSERT_FLOAT("3 + 4 < 2 * 5", 1.0f);
+    /* Chained comparisons evaluate left-to-right and produce 0/1 */
+    ASSERT_FLOAT("5 > 3 > 0", 1.0f);    /* (5>3)=1, 1>0=1 */
+    ASSERT_FLOAT("1 < 2 == 1", 1.0f);   /* (1<2)=1, 1==1=1 */
+    ASSERT_FLOAT("0 == 0 == 1", 1.0f);  /* (0==0)=1, 1==1=1 */
+
+    printf("Operator precedence (logical):\n");
+    /* Comparison binds tighter than '&&' '||' */
+    ASSERT_FLOAT("1 < 2 && 2 < 3", 1.0f);
+    ASSERT_FLOAT("1 > 2 || 3 > 2", 1.0f);
+    ASSERT_FLOAT("1 == 1 && 0 != 0", 0.0f);
+    ASSERT_FLOAT("5 > 3 && 2 < 5 || 0", 1.0f);
+    ASSERT_FLOAT("1 + 1 == 2 && 3 - 1 == 2", 1.0f);
+    /* '&&' and '||' share one precedence level in this REPL - strictly
+     * left-to-right. This differs from standard C where '&&' binds
+     * tighter than '||'. Spot-check both flavors so any future grammar
+     * change shows up loudly. */
+    ASSERT_FLOAT("1 || 0 && 0", 0.0f);  /* REPL: (1||0)&&0 = 0; C: 1 */
+    ASSERT_FLOAT("0 || 1 && 0", 0.0f);  /* REPL: (0||1)&&0 = 0; C: 0 */
+    ASSERT_FLOAT("0 || 1 && 1", 1.0f);
+    ASSERT_FLOAT("1 && 0 || 1", 1.0f);  /* REPL: (1&&0)||1 = 1; C: 1 */
+    ASSERT_FLOAT("1 && 1 || 0", 1.0f);
+    ASSERT_FLOAT("0 && 1 || 0", 0.0f);
+
+    printf("Operator precedence (parenthesization):\n");
+    ASSERT_FLOAT("(2 + 3) * 4", 20.0f);
+    ASSERT_FLOAT("2 * (3 + 4)", 14.0f);
+    ASSERT_FLOAT("(1 + 2) * (3 + 4)", 21.0f);
+    ASSERT_FLOAT("((1 + 2) * 3) + 4", 13.0f);
+    ASSERT_FLOAT("((((1))))", 1.0f);
+    ASSERT_FLOAT("(((1 + 2))) * 3", 9.0f);
+    ASSERT_FLOAT("(2 + 3) * (4 - 1)", 15.0f);
+    ASSERT_FLOAT("-(2 + 3) * 2", -10.0f);
+    ASSERT_FLOAT("(1 || 0) && 0", 0.0f);
+    ASSERT_FLOAT("1 || (0 && 0)", 1.0f); /* parens recover C semantics */
+    ASSERT_FLOAT("(1 + 2) == (4 - 1)", 1.0f);
+
+    printf("Operator precedence (with variables):\n");
+    /* x=1.5, y=2.5, z=3.5, n=24, t=4 from the variable setup above */
+    ASSERT_FLOAT("x + y * z", 1.5f + 2.5f * 3.5f);     /* 10.25 */
+    ASSERT_FLOAT("(x + y) * z", (1.5f + 2.5f) * 3.5f); /* 14.0 */
+    ASSERT_FLOAT("n - t * 2", 16.0f);
+    ASSERT_FLOAT("-x + y", 1.0f);
+    ASSERT_FLOAT("x * -y", -3.75f);
+    ASSERT_FLOAT("-x * -y", 3.75f);
+    ASSERT_FLOAT("n / 2 + n / 2", 24.0f);
+    ASSERT_FLOAT("n / (2 + n / 2)", 24.0f / (2.0f + 24.0f / 2.0f));
+    ASSERT_FLOAT("x + y + z + t", 1.5f + 2.5f + 3.5f + 4.0f);
+    ASSERT_FLOAT("t - n + n - t", 0.0f);
+    ASSERT_FLOAT("n % 5 + t", 8.0f);    /* 24%5=4, +4=8 */
+    ASSERT_FLOAT("x < y && y < z", 1.0f);
+    ASSERT_FLOAT("x < y && y > z", 0.0f);
+    ASSERT_FLOAT("n > t * 5", 1.0f);        /* 24 > 20 */
+    ASSERT_FLOAT("n > t * 6", 0.0f);        /* 24 > 24 false */
+    ASSERT_FLOAT("n >= t * 6", 1.0f);
+    ASSERT_FLOAT("n - 4 == 5 * 4", 1.0f);   /* 20 == 20 */
+    ASSERT_FLOAT("x + y == z + 0.5", 1.0f);     /* 4.0 == 4.0 */
+    ASSERT_FLOAT("x * 2 + y == 5.5", 1.0f);     /* 3.0 + 2.5 == 5.5 */
+    ASSERT_FLOAT("x * 2 + y * 2 == 8", 1.0f);   /* 3.0 + 5.0 == 8.0 */
+    /* Unary on a variable, then arithmetic */
+    ASSERT_FLOAT("-x * 2 + y", -3.0f + 2.5f);
+    ASSERT_FLOAT("!(x > y)", 1.0f);   /* x<y so x>y is 0, !0=1 */
+    ASSERT_FLOAT("!(n > 0)", 0.0f);
+
+    printf("Operator precedence (with functions):\n");
+    /* Function-call arguments are full expressions; outer expression
+     * sees the call result as an atom that binds tighter than '*'. */
+    ASSERT_FLOAT("sin(0) + cos(0)", 1.0f);
+    ASSERT_FLOAT("cos(0) * 2 + 1", 3.0f);
+    ASSERT_FLOAT("sqrt(4) + sqrt(9)", 5.0f);
+    ASSERT_FLOAT("-sin(0)", 0.0f);
+    ASSERT_FLOAT("-cos(0)", -1.0f);
+    ASSERT_FLOAT("2 * sqrt(4)", 4.0f);
+    ASSERT_FLOAT("sqrt(2 * 2 + 3 * 3)", sqrtf(13.0f));
+    ASSERT_FLOAT("pow(2, 3) + 1", 9.0f);
+    ASSERT_FLOAT("pow(2, 1 + 2)", 8.0f);
+    ASSERT_FLOAT("pow(1 + 1, 3)", 8.0f);
+    ASSERT_FLOAT("pow(2, 3) * 2", 16.0f);
+    ASSERT_FLOAT("min(1, 2) + max(3, 4)", 5.0f);
+    ASSERT_FLOAT("min(2 * 3, 7)", 6.0f);
+    ASSERT_FLOAT("max(1 + 2, 3 - 4)", 3.0f);
+    ASSERT_FLOAT("sin(PI / 2)", 1.0f);
+    ASSERT_FLOAT("cos(PI) + 1", 0.0f);
+    ASSERT_FLOAT("abs(-3 * 2)", 6.0f);
+    ASSERT_FLOAT("abs(-3) * 2", 6.0f);
+    ASSERT_FLOAT("floor(3.7) + ceil(0.2)", 4.0f);
+    ASSERT_FLOAT("floor(3.7 + 0.2)", 3.0f);
+    ASSERT_FLOAT("floor(3.7) * 2", 6.0f);
+    /* Functions whose args reference variables (x=1.5, y=2.5, z=3.5,
+     * n=24, t=4) */
+    ASSERT_FLOAT("sin(t * 0)", 0.0f);
+    ASSERT_FLOAT("cos(t * 0)", 1.0f);
+    ASSERT_FLOAT("pow(x, 2)", 1.5f * 1.5f);     /* 2.25 */
+    ASSERT_FLOAT("pow(2, n / 12)", 4.0f);       /* 2^2 */
+    ASSERT_FLOAT("min(x, y)", 1.5f);
+    ASSERT_FLOAT("max(x, y)", 2.5f);
+    ASSERT_FLOAT("max(x + 1, y)", 2.5f);        /* tie, returns y */
+    ASSERT_FLOAT("abs(x - y) + abs(y - x)", 2.0f);
+    ASSERT_FLOAT("sqrt(x * x + y * y)",
+                 sqrtf(1.5f * 1.5f + 2.5f * 2.5f));
+    /* Function-of-function (nested calls) */
+    ASSERT_FLOAT("sin(cos(0))", sinf(1.0f));
+    ASSERT_FLOAT("sqrt(abs(-9))", 3.0f);
+    ASSERT_FLOAT("abs(sin(0) - 1)", 1.0f);
+    ASSERT_FLOAT("min(max(1, 2), 3)", 2.0f);
+    ASSERT_FLOAT("max(min(5, 7), min(3, 4))", 5.0f);
+    ASSERT_FLOAT("floor(abs(-2.7))", 2.0f);
+    ASSERT_FLOAT("pow(sqrt(4), 3)", 8.0f);
+    /* Function calls combined with logical operators */
+    ASSERT_FLOAT("sin(0) == 0 && cos(0) == 1", 1.0f);
+    ASSERT_FLOAT("pow(2, 3) > 5 || 0", 1.0f);
+    ASSERT_FLOAT("abs(x) > 0 && abs(y) > 0", 1.0f);
+    ASSERT_FLOAT("sqrt(x * x) == x", 1.0f);
+    /* Reset between sections */
+
+    printf("Operator precedence (with scratch arrays):\n");
+    {
+        repl_eval_reset_scratch_arrays();
+        repl_eval_scratch_set(0, 0, 10.0f);    /* A[0] */
+        repl_eval_scratch_set(0, 1, 20.0f);    /* A[1] */
+        repl_eval_scratch_set(0, 2, 5.0f);     /* A[2] */
+        repl_eval_scratch_set(1, 0, 100.0f);   /* B[0] */
+        repl_eval_scratch_set(1, 1, 200.0f);   /* B[1] */
+
+        ASSERT_FLOAT("A[0] + A[1]", 30.0f);
+        ASSERT_FLOAT("A[0] * 2 + 1", 21.0f);
+        ASSERT_FLOAT("A[0] + A[1] * 2", 50.0f);  /* 10 + 40 */
+        ASSERT_FLOAT("(A[0] + A[1]) * 2", 60.0f);
+        ASSERT_FLOAT("A[0] < A[1]", 1.0f);
+        ASSERT_FLOAT("A[0] + A[1] == 30", 1.0f);
+        ASSERT_FLOAT("A[0] + A[1] > B[0]", 0.0f);   /* 30 > 100 false */
+        ASSERT_FLOAT("A[1] * 5 == B[0]", 1.0f);     /* 100 == 100 */
+        ASSERT_FLOAT("-A[0] + A[1]", 10.0f);
+        ASSERT_FLOAT("A[1 + 1]", 5.0f);            /* index expression */
+        ASSERT_FLOAT("A[0] + B[0]", 110.0f);
+        ASSERT_FLOAT("B[1] - B[0]", 100.0f);
+        ASSERT_FLOAT("A[0] > 0 && B[0] > 0", 1.0f);
+        ASSERT_FLOAT("sqrt(A[0] * A[0] + A[1] * A[1])",
+                     sqrtf(10.0f * 10.0f + 20.0f * 20.0f));
+        ASSERT_FLOAT("max(A[0], A[1]) - min(A[0], A[1])", 10.0f);
+
+        repl_eval_reset_scratch_arrays();
+    }
+
     printf("scratch arrays:\n");
     {
         float value = -1.0f;
