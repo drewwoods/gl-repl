@@ -225,6 +225,19 @@ static void render_active_input_rows(const UiRenderSnapshot *snap,
                 gl2d_draw_string((float)text_x, (float)(*io_line_y), spaces, FONT_MONO);
             }
 
+            /* Paint order on the active input row: search highlights
+             * first (underneath), input-selection band second (on top
+             * of search), text glyphs last. The input selection wins
+             * visually because it represents the most recent user
+             * intent (see Open Question 5 in
+             * feature/editor-input-selection.md). The two bands are
+             * both translucent so the loser still shows through; the
+             * order just decides which dominates. */
+            glColor3f(0.95f, 0.95f, 0.90f);
+            code_panel_draw_search_highlights(snap, input, search_row_idx,
+                                              wrap_start, wrap_len,
+                                              wrap_x, *io_line_y);
+
             /* Input-buffer selection band. anchor_pos >= 0 means a
              * selection is live; the range [lo, hi) is min/max of
              * anchor and cursor. Intersect with the current wrap row
@@ -251,10 +264,6 @@ static void render_active_input_rows(const UiRenderSnapshot *snap,
                 }
             }
 
-            glColor3f(0.95f, 0.95f, 0.90f);
-            code_panel_draw_search_highlights(snap, input, search_row_idx,
-                                              wrap_start, wrap_len,
-                                              wrap_x, *io_line_y);
             code_panel_draw_segment(wrap_x, *io_line_y, input,
                                     wrap_start, wrap_len, FONT_MONO);
 

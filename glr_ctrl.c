@@ -2329,6 +2329,17 @@ int glr_ctrl_router_handle_code_panel_drag(int x, int y) {
         glr_ctrl_router_apply_input_row_drag(hit.line_idx, hit.char_idx))
         return 1;
 
+    /* Input-row drag is sticky: once the press armed the char anchor
+     * (g_code_panel_drag_char_anchor >= 0), motion that wanders off
+     * the row is absorbed as a no-op rather than switching to
+     * line-range selection. The plan calls this out explicitly: input
+     * text selection is single-line, so dragging downward shouldn't
+     * silently re-target the selection model. The user has to release
+     * and re-press in the gutter (or on a non-edit row) to start a
+     * line-range drag. */
+    if (g_code_panel_drag_char_anchor >= 0)
+        return 1;
+
     int target = code_panel_target_from_hit(hit);
     if (target < 0) {
         /* Drag wandered off the code-panel kinds — clamp the pointer
