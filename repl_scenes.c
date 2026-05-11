@@ -1,7 +1,6 @@
 /*
  * repl_scenes.c -- User scene slots, promotion, and workspace save/load.
  */
-#include "editor/state.h"  /* editor_insert_mode_set (Phase 3 of feature/source-document-port.md migrates editor-input out) */
 #include "repl_command_store.h"
 #include "repl_core_internal.h"
 #include "repl_examples.h"
@@ -295,7 +294,12 @@ static void load_scene_from_slot(int idx) {
         if (bridge && bridge->apply)
             bridge->apply(scene_cfg(idx));
     }
-    editor_insert_mode_set(0);
+    /* Exit insert mode so the next interactive line lands at the new
+     * scene's tail, not inside the previous typing context. The full
+     * reset (input buffer wipe, cursor home) belongs to the editor
+     * wrapper called after this API returns; scene loads deliberately
+     * preserve the user's typing context except for the mode flip. */
+    repl_dispatch_editor_insert_mode_off();
     /* Editor input buffer refresh is the controller's responsibility:
      * see check-no-load-line-to-input-in-pipeline. Controllers /
      * editor wrappers call load_line_to_input(repl_state_edit_line())

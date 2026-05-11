@@ -1,7 +1,6 @@
 /*
  * repl_example_loader.c -- Built-in example loading and metadata handling.
  */
-#include "editor/state.h"        /* editor_state_input_mut, editor_insert_mode_set, editor_cursor_pos_set (Phase 3 of feature/source-document-port.md migrates these out) */
 #include "repl_load.h"           /* repl_load_apply_line — step 5b */
 #include "repl_export.h"         /* ReplExportCameraBridge */
 #include "repl_command_store.h"
@@ -398,15 +397,11 @@ static void load_example_lines(const char *const *lines) {
     repl_command_store_load(&store, NULL, 0, 0);
     source_document_clear();
     repl_state_flat_program_set_count(0);
-    editor_insert_mode_set(0);
-    {
-        ReplEditorInputState *inp = editor_state_input_mut();
-        inp->input[0] = '\0';
-        inp->input_len = 0;
-        editor_cursor_pos_set(0);
-        inp->pending_newline[0] = '\0';
-        inp->pending_newline_len = 0;
-    }
+    /* Editor-input cleanup (insert mode off, input buffer wipe, cursor
+     * home, pending newline clear) routes through the controller-
+     * installed sink so the REPL pipeline doesn't reach into
+     * EditorState. Phase 3 of feature/source-document-port.md. */
+    repl_dispatch_editor_input_reset();
     /* Editor-side transient reset (camera drag / menu / picker /
      * code-panel-drag) is the controller's responsibility — see
      * cycle_example_or_user_scene in glr_ctrl.c and the
@@ -443,14 +438,11 @@ static void load_example_lines(const char *const *lines) {
      * to produce the canonical layout the existing fixtures pin. */
     emit_example_body_two_pass(body);
 
-    editor_insert_mode_set(0);
+    /* Post-load editor cleanup mirrors the pre-load sink dispatch so a
+     * stale input line or cursor doesn't survive the loaded body.
+     * repl_state_edit_line_set is REPL-state, not editor — it stays. */
+    repl_dispatch_editor_input_reset();
     repl_state_edit_line_set(repl_state_document_count());
-    {
-        ReplEditorInputState *inp = editor_state_input_mut();
-        inp->input[0] = '\0';
-        inp->input_len = 0;
-        editor_cursor_pos_set(0);
-    }
     repl_mark_normals_dirty();
 }
 

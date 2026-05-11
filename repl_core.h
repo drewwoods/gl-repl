@@ -103,6 +103,22 @@ void        repl_install_example_presentation_reset_sink(void (*fn)(void));
 /* Pipeline-side dispatch — invoked by repl_example_loader.c on every
  * example load. No-op when the sink is unset. */
 void        repl_dispatch_example_presentation_reset(void);
+
+/* Editor-input reset sink. Phase 3 of feature/source-document-port.md
+ * moves the editor-input cleanup the example loader used to do
+ * (insert_mode_set(0) + input buffer wipe + cursor home + pending
+ * newline clear) out of the REPL pipeline. The controller installs the
+ * concrete reset at startup; the demo leaves it unset and the
+ * dispatch is a no-op. */
+void        repl_install_editor_input_reset_sink(void (*fn)(void));
+void        repl_dispatch_editor_input_reset(void);
+
+/* Editor insert-mode-off sink. Scene load and snippet import commit
+ * the user's typing context before grafting new code onto the
+ * document — they exit insert mode WITHOUT clearing the input buffer.
+ * Lighter than the full editor-input reset above. */
+void        repl_install_editor_insert_mode_off_sink(void (*fn)(void));
+void        repl_dispatch_editor_insert_mode_off(void);
 const char *repl_mode_name(GLenum mode);
 GLenum      repl_current_begin_mode(void);
 int         repl_count_vertices(void);

@@ -1,6 +1,5 @@
 #include "repl_export.h"
 #include "./include/gl_2d.h"
-#include "editor/state.h"        /* editor_insert_mode_set (Phase 3 of feature/source-document-port.md migrates editor-input cleanup out) */
 #include "source_document.h"     /* source_document_insert_line */
 #include "repl_load.h"           /* repl_load_apply_line — step 5b */
 /* glr_camera.h removed in step 4a: the export pipeline no longer
@@ -3167,7 +3166,7 @@ static int import_try_snippet_start(ImportState *s, const char *p) {
     /* Function/header import may leave the editor cursor in an insertion slot
      * inside existing commands.  Force snippet lines to start appending from
      * the end of the command list. */
-    editor_insert_mode_set(0);
+    repl_dispatch_editor_insert_mode_off();
     repl_state_edit_line_set(repl_state_document_count());
     return 1;
 }
