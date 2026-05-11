@@ -13,7 +13,7 @@
 #include "repl_pipeline.h"
 #include "repl_source_scope.h"
 #include "repl_state_owners.h"
-#include "ui/code_panel_layout.h"
+#include "code_formatter.h"
 #include "ui/layout.h"   /* CODE_PANEL_LAYOUT_* enum values only —
                           * ui_layout_*() function calls were removed
                           * in step 7c; values now arrive opaquely

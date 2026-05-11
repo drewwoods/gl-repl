@@ -1392,9 +1392,9 @@ void glr_app_reset_all(void) {
     repl_editor_reset_transients();
     /* Register the default editor completion provider. Editor input
      * dispatch calls editor_completion_* without knowing about
-     * repl_autocomplete; the registration here installs the
+     * glr_completion; the registration here installs the
      * REPL-aware backing. */
-    repl_autocomplete_register_provider();
+    glr_completion_register_provider();
     glr_app_install_app_services();
     /* Refresh derived export/camera text caches AFTER peer resets
      * so the cached strings reflect post-reset state, not whatever
