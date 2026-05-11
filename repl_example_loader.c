@@ -1,7 +1,7 @@
 /*
  * repl_example_loader.c -- Built-in example loading and metadata handling.
  */
-#include "editor/state.h"        /* editor_buffer_clear, editor_state_input_mut, editor_insert_mode_set (Phase 3 migrates these out) */
+#include "editor/state.h"        /* editor_state_input_mut, editor_insert_mode_set, editor_cursor_pos_set (Phase 3 of feature/source-document-port.md migrates these out) */
 #include "repl_load.h"           /* repl_load_apply_line — step 5b */
 #include "repl_export.h"         /* ReplExportCameraBridge */
 #include "repl_command_store.h"
@@ -9,6 +9,7 @@
 #include "repl_examples.h"
 #include "repl_core.h"
 #include "repl_state_owners.h"
+#include "source_document.h"     /* source_document_clear */
 
 static const char *example_cam_skip_ws(const char *text) {
     while (*text && isspace((unsigned char)*text))
@@ -395,7 +396,7 @@ static void load_example_lines(const char *const *lines) {
     ReplCommandStore store = repl_command_store_live();
 
     repl_command_store_load(&store, NULL, 0, 0);
-    editor_buffer_clear();
+    source_document_clear();
     repl_state_flat_program_set_count(0);
     editor_insert_mode_set(0);
     {

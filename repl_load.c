@@ -13,7 +13,6 @@
  */
 #include "repl_load.h"
 
-#include "editor/state.h"        /* editor_buffer_apply_compiled_change, _insert_line */
 #include "repl_apply.h"
 #include "repl_command_store.h"
 #include "repl_compile.h"
@@ -21,6 +20,7 @@
 #include "repl_eval.h"
 #include "repl_parser.h"
 #include "repl_state_owners.h"
+#include "source_document.h"     /* source_document_apply_change, _insert_line */
 
 #include <ctype.h>
 #include <stdio.h>
@@ -123,7 +123,9 @@ int repl_load_apply_line(const char *line, char *err, int err_size) {
          * editor_commit_apply_plan uses. */
         repl_apply_predef_ops(&change);
         repl_apply_scratch_ops(&change);
-        editor_buffer_apply_compiled_change(&change);
+        SourceTextChange text_change;
+        repl_compiled_change_to_text_change(&change, &text_change);
+        source_document_apply_change(&text_change);
         return repl_apply_compiled_change(&change) ? 1 : 0;
     }
 
@@ -163,6 +165,6 @@ int repl_load_apply_line(const char *line, char *err, int err_size) {
     if (!repl_command_store_insert_one(&store, insert_idx, &cmd,
                                        REPL_COMMAND_STORE_ADJUST_EDIT_LINE))
         return 0;
-    editor_buffer_insert_line(insert_idx, cmd_text);
+    source_document_insert_line(insert_idx, cmd_text);
     return 1;
 }

@@ -22,7 +22,8 @@
 #include "repl_core.h"
 #include "cmd_format.h"
 #include "config.h" /* REPL_STATUS_TEXT_MAX */
-#include "editor/state.h" /* editor_buffer_replace_line, editor_scroll_set (Phase 2 of feature/source-document-port.md migrates these out) */
+#include "editor/state.h" /* editor_scroll_set, editor_scroll_follow_cursor_set (editor-input cleanup; future-phase migration) */
+#include "source_document.h"
 #include "prof.h"
 #include "repl_command_spec.h"
 #include "repl_command_store.h"
@@ -441,7 +442,7 @@ static void repl_core_replace_formatted_cmd(ReplCommandStore *store,
                                             const GLCmd *cmd,
                                             const char *text) {
     if (repl_command_store_replace_one(store, cmd_idx, cmd))
-        editor_buffer_replace_line(cmd_idx, text);
+        source_document_replace_line(cmd_idx, text);
 }
 
 void repl_reformat_program(void) {
