@@ -169,7 +169,7 @@ int main(int argc, char **argv) {
         if (dump_code || dump_flat)
             glr_ctrl_bootstrap_repl(input_file);
         if (dump_code)
-            glr_debug_dump_editor(stdout, editor_buffer_view());
+            glr_debug_dump_editor(stdout, source_document_view());
         if (dump_flat)
             glr_debug_dump_flat_commands(stdout, editor_buffer_view());
         if (dump_state_layout)

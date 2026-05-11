@@ -1563,7 +1563,7 @@ int glr_ctrl_router_handle_save_key(unsigned char key) {
 
 int glr_ctrl_router_handle_debug_dump_key(unsigned char key) {
     if (key == KEY_CTRL_P) {
-        glr_debug_dump_editor(stdout, editor_buffer_view());
+        glr_debug_dump_editor(stdout, source_document_view());
         glr_debug_dump_flat_commands(stdout, editor_buffer_view());
         repl_set_status("Dumped editor + flat commands to stdout");
         return 1;

@@ -114,7 +114,7 @@ void test_utils() {
     /* debug dump */
     FILE *devnull = fopen("/dev/null", "w");
     if (devnull) {
-        glr_debug_dump_editor(devnull, editor_buffer_view());
+        glr_debug_dump_editor(devnull, source_document_view());
         fclose(devnull);
     }
 }
@@ -869,7 +869,7 @@ void test_debug_dump_flat_commands() {
     ASSERT_TRUE("dump re-flattens commands", repl_state_flat_program_count() >= 1);
 }
 
-/* Capture the output of glr_debug_dump_editor(, editor_buffer_view()) into a malloc'd string. */
+/* Capture the output of glr_debug_dump_editor(, source_document_view()) into a malloc'd string. */
 static char *capture_editor_dump(void) {
     FILE *tmp = tmpfile();
     char *buf = NULL;
@@ -878,7 +878,7 @@ static char *capture_editor_dump(void) {
 
     if (!tmp)
         return NULL;
-    glr_debug_dump_editor(tmp, editor_buffer_view());
+    glr_debug_dump_editor(tmp, source_document_view());
     fflush(tmp);
     if (fseek(tmp, 0, SEEK_END) != 0) goto done;
     len = ftell(tmp);

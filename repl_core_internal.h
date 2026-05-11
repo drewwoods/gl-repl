@@ -165,19 +165,6 @@ int  repl_extract_assignment_target_parts(const char *src,
                                           char *index_expr, int index_expr_sz,
                                           char *rhs, int rhs_sz);
 
-/* ---- Code-panel dumps (debug + test fixtures) ------------------------- */
-
-void repl_dump_code_panel_text(FILE *out, SourceTextView text);
-/* Visual dump consumes the explicit layout struct (step 7c of
- * feature/decouple-repl-from-gl-repl-alt.md) so the REPL pipeline
- * doesn't reach into ui_state / glr_state for panel width or
- * presentation flags. The plain text dump above doesn't need the
- * struct because it doesn't measure or wrap. */
-/* ReplExportLayout typedef is in repl_export.h, transitively included
- * through repl_core.h above. */
-void repl_dump_code_panel_visual_text(FILE *out, SourceTextView text,
-                                      const ReplExportLayout *layout);
-
 /* ---- Source-scope helpers --------------------------------------------- */
 
 /* Depth/cache, indentation, and block-boundary queries live in
