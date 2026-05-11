@@ -154,4 +154,14 @@ int feed_line(const char *line);
  * three "replace selection" cases share one mutation primitive. */
 int editor_input_consume_selection(void);
 
+/* Walk left/right from char_idx in (text, len) over the word-character
+ * class [A-Za-z0-9_] and return the half-open range [out_start, out_end)
+ * covering the word. If text[char_idx] is not a word character, or
+ * char_idx is out of range, both outputs are clamped to char_idx (a
+ * zero-width range). Pure helper — no globals, no GL — so the
+ * double-click word-selection path can be tested without faking the
+ * click-timing dispatch. */
+void editor_input_word_bounds_at(const char *text, int len, int char_idx,
+                                 int *out_start, int *out_end);
+
 #endif /* EDITOR_INPUT_H */

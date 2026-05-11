@@ -118,6 +118,22 @@ void glr_ctrl_router_reset_code_panel_drag(void);
  * matching the live panel layout. */
 int glr_ctrl_router_apply_input_row_drag(int target_line, int target_char);
 
+/* Select the word at (line_idx, char_idx) as an input-buffer
+ * selection. Navigates to line_idx first so the word walk runs
+ * against that row's canonical text. A char_idx outside a word
+ * leaves the cursor placed with no selection. The double-click
+ * dispatch routes here; tests call it directly to verify word
+ * boundary behavior without faking the click-time clock. */
+void glr_ctrl_router_select_word_at(int line_idx, int char_idx);
+
+/* Replace the clock used by route_code_text_hit to detect
+ * double-clicks (the duplicate press within DOUBLE_CLICK_MS).
+ * Production falls back to glutGet(GLUT_ELAPSED_TIME); tests install
+ * a deterministic source. Pass NULL to restore the GLUT-backed clock.
+ * Installing a new clock also resets the last-press history. */
+void glr_ctrl_router_set_double_click_clock_for_test(
+    unsigned int (*clock_ms)(void));
+
 /* Build the app/UI-shaped F1 help content from the neutral REPL help
  * text model. The controller owns this adapter because it composes
  * `repl_help_text` with `ui_tabbed_overlay`. */

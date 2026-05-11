@@ -52,6 +52,10 @@ static int load_input(const char *text) {
 static int g_test_modifiers = 0;
 static int test_modifiers_provider(void) { return g_test_modifiers; }
 
+/* Clock seam for double-click dispatch tests. */
+static unsigned int g_test_clock_ms = 0;
+static unsigned int test_clock_ms_provider(void) { return g_test_clock_ms; }
+
 int main(void) {
     printf("--- input-anchor lifecycle ---\n");
     {
@@ -522,6 +526,126 @@ int main(void) {
         scenes = repl_state_scenes();
         ASSERT_INT("Ctrl+V (input-only) leaves example active",
                    scenes.active_example_idx, example_before);
+    }
+
+    printf("\n--- word-bounds helper (pure) ---\n");
+    {
+        int s = -1, e = -1;
+        const char *t = "glVertex3f(1, 2, 3)";
+        int len = (int)strlen(t);
+
+        /* Inside the identifier — walks both directions over [A-Za-z0-9_]. */
+        editor_input_word_bounds_at(t, len, 4, &s, &e);
+        ASSERT_INT("word start at 'glVertex3f'[0]", s, 0);
+        ASSERT_INT("word end at 'glVertex3f'[10]", e, 10);
+
+        /* Numeric tokens count as word chars too. */
+        editor_input_word_bounds_at(t, len, 11, &s, &e);
+        ASSERT_INT("digit word start", s, 11);
+        ASSERT_INT("digit word end", e, 12);
+
+        /* Underscore + alphanumeric. */
+        const char *u = "foo_bar_42 baz";
+        editor_input_word_bounds_at(u, (int)strlen(u), 2, &s, &e);
+        ASSERT_INT("underscore word start", s, 0);
+        ASSERT_INT("underscore word end", e, 10);
+
+        /* Whitespace position: zero-width range. */
+        editor_input_word_bounds_at(t, len, 10, &s, &e);
+        ASSERT_INT("'(' is not a word char: start=char_idx", s, 10);
+        ASSERT_INT("'(' is not a word char: end=char_idx",   e, 10);
+
+        /* Out-of-range char_idx is also a zero-width range. */
+        editor_input_word_bounds_at(t, len, -1, &s, &e);
+        ASSERT_INT("negative char_idx: start", s, -1);
+        editor_input_word_bounds_at(t, len, 999, &s, &e);
+        ASSERT_INT("past-end char_idx: start", s, 999);
+
+        /* Word at the very start of the buffer. */
+        const char *w = "hello world";
+        editor_input_word_bounds_at(w, (int)strlen(w), 0, &s, &e);
+        ASSERT_INT("first-char word start", s, 0);
+        ASSERT_INT("first-char word end", e, 5);
+
+        /* Word abutting end-of-buffer. */
+        editor_input_word_bounds_at(w, (int)strlen(w), 10, &s, &e);
+        ASSERT_INT("last-char word start", s, 6);
+        ASSERT_INT("last-char word end", e, 11);
+    }
+
+    printf("\n--- select_word_at integration ---\n");
+    {
+        glr_app_reset_all();
+        repl_feed_line_public("glVertex3f(1, 2, 3);");
+        repl_navigate_to_line(0);
+
+        /* Click on the 'V' of glVertex3f → selects the whole
+         * identifier. */
+        glr_ctrl_router_select_word_at(0, 4);
+        ASSERT_INT("word select: lo", editor_input_selection_lo(), 0);
+        ASSERT_INT("word select: hi", editor_input_selection_hi(), 10);
+        ASSERT_INT("word select: cursor at word_end",
+                   editor_cursor_pos(), 10);
+
+        /* Click on whitespace / punctuation → no selection. */
+        glr_ctrl_router_select_word_at(0, 10);   /* '(' */
+        ASSERT_INT("non-word: anchor stays -1",
+                   editor_input_anchor(), -1);
+        ASSERT_INT("non-word: cursor placed",
+                   editor_cursor_pos(), 10);
+    }
+
+    printf("\n--- double-click dispatches word selection ---\n");
+    {
+        glr_app_reset_all();
+        repl_feed_line_public("glVertex3f(1, 2, 3);");
+        repl_navigate_to_line(0);
+
+        glr_ctrl_router_set_double_click_clock_for_test(test_clock_ms_provider);
+
+        UiHit hit = ui_hit_none();
+        hit.kind = UI_HIT_CODE_TEXT;
+        hit.line_idx = 0;
+        hit.char_idx = 4;
+
+        /* First press at t=1000 → ordinary single-click placement. */
+        g_test_clock_ms = 1000;
+        glr_ctrl_router_handle_code_panel_hit(hit, 0, 0);
+        ASSERT_INT("first press: no anchor (single-click)",
+                   editor_input_anchor(), -1);
+        ASSERT_INT("first press: cursor at char_idx",
+                   editor_cursor_pos(), 4);
+
+        /* Second press at t=1200 (200ms later) at the same (line,
+         * char) → double-click, selects 'glVertex3f'. */
+        g_test_clock_ms = 1200;
+        glr_ctrl_router_handle_code_panel_hit(hit, 0, 0);
+        ASSERT_INT("double-click selection: lo",
+                   editor_input_selection_lo(), 0);
+        ASSERT_INT("double-click selection: hi",
+                   editor_input_selection_hi(), 10);
+
+        /* A third press more than DOUBLE_CLICK_MS later is a single
+         * click again — clears the selection and re-places cursor. */
+        g_test_clock_ms = 1200 + 500;
+        glr_ctrl_router_handle_code_panel_hit(hit, 0, 0);
+        ASSERT_INT("late press: single-click clears selection",
+                   editor_input_anchor(), -1);
+        ASSERT_INT("late press: cursor placed",
+                   editor_cursor_pos(), 4);
+
+        /* Two fast clicks at *different* chars stays a single click. */
+        UiHit other = hit;
+        other.char_idx = 12;
+        g_test_clock_ms = 2000;
+        glr_ctrl_router_handle_code_panel_hit(hit, 0, 0);
+        g_test_clock_ms = 2100;
+        glr_ctrl_router_handle_code_panel_hit(other, 0, 0);
+        ASSERT_INT("different char: still single-click",
+                   editor_input_anchor(), -1);
+
+        glr_ctrl_router_set_double_click_clock_for_test(NULL);
+        glr_ctrl_router_reset_code_panel_drag();
     }
 
     printf("\n--- code-panel press + drag on active edit row ---\n");

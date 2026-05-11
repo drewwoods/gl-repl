@@ -1202,6 +1202,32 @@ static int handle_semicolon_commit_key_route(unsigned char key) {
     return 0;
 }
 
+static int is_word_char(unsigned char c) {
+    return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+           (c >= '0' && c <= '9') || c == '_';
+}
+
+void editor_input_word_bounds_at(const char *text, int len, int char_idx,
+                                 int *out_start, int *out_end) {
+    int start = char_idx;
+    int end = char_idx;
+
+    if (!text || len <= 0 || char_idx < 0 || char_idx >= len ||
+        !is_word_char((unsigned char)text[char_idx])) {
+        if (out_start) *out_start = char_idx;
+        if (out_end)   *out_end   = char_idx;
+        return;
+    }
+
+    while (start > 0 && is_word_char((unsigned char)text[start - 1]))
+        start--;
+    while (end < len && is_word_char((unsigned char)text[end]))
+        end++;
+
+    if (out_start) *out_start = start;
+    if (out_end)   *out_end   = end;
+}
+
 int editor_input_consume_selection(void) {
     if (!editor_input_selection_active())
         return 0;
