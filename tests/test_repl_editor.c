@@ -19,6 +19,7 @@
 #include "repl_export.h"
 #include "keys.h"
 #include "glr_defaults.h" /* CFG_DEFAULT_* */
+#include "code_formatter.h"
 #include "repl_state.h"
 #include "replay.h"
 #include "replay_state.h"
@@ -128,9 +129,9 @@ static int cfg_row_for_key(GlrConfigKey key) {
 
 static int test_code_panel_row_count_for_text(const char *text, int first_x,
                                               int panel_w) {
-    CodePanelTextLayout layout =
-        repl_code_panel_layout_make(panel_w, first_x, FONT_W, glr_state_presentation().wrap_at_comma);
-    return repl_code_panel_row_count_for_text(text, &layout);
+    CodeLayout layout =
+        code_layout_make(panel_w, first_x, FONT_W, glr_state_presentation().wrap_at_comma);
+    return code_layout_row_count_for_text(text, &layout);
 }
 
 static int code_panel_header_row_count(void) {

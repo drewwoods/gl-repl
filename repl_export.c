@@ -3266,13 +3266,13 @@ static void dump_code_panel_wrapped_line(FILE *dst, const char *text,
     /* Step 7c: wrap_at_comma is threaded explicitly from the
      * ReplExportLayout struct that the controller built. */
     const char *src = text ? text : "";
-    CodePanelTextLayout layout =
-        repl_code_panel_layout_make(panel_w, first_x, FONT_W, wrap_at_comma);
-    CodePanelWrapIter it;
+    CodeLayout layout =
+        code_layout_make(panel_w, first_x, FONT_W, wrap_at_comma);
+    CodeWrapIter it;
     int start, len, x;
 
-    repl_code_panel_wrap_iter_init(&it, src, &layout);
-    while (repl_code_panel_wrap_iter_next(&it, &start, &len, &x)) {
+    code_layout_wrap_iter_init(&it, src, &layout);
+    while (code_layout_wrap_iter_next(&it, &start, &len, &x)) {
         int prefix_chars = (x - first_x) / FONT_W;
         fprintf(dst, "%*s%.*s\n", prefix_chars, "", len, src + start);
     }
