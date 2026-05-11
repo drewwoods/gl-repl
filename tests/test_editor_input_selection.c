@@ -385,5 +385,123 @@ int main(void) {
          * property is just that the anchor went away too. */
     }
 
+    printf("\n--- Ctrl+C copies input selection (preserves selection) ---\n");
+    {
+        glr_app_reset_all();
+        load_input("glVertex3f(1, 2, 3)");
+        editor_cursor_pos_set(11);
+        editor_input_anchor_set(18);   /* selects "1, 2, 3" */
+
+        editor_handle_key(KEY_CTRL_C, 0, 0);
+        ASSERT_TRUE("Ctrl+C → INPUT_TEXT clipboard",
+                    editor_clipboard_has_input_text());
+        ASSERT_STR("Ctrl+C captured substring",
+                   editor_clipboard_input_text(), "1, 2, 3");
+        ASSERT_INT("Ctrl+C preserves visual selection: anchor",
+                   editor_input_anchor(), 18);
+        ASSERT_STR("Ctrl+C leaves buffer untouched",
+                   editor_input_text(), "glVertex3f(1, 2, 3)");
+        /* line-copy clipboard slot is not populated. */
+        ASSERT_INT("Ctrl+C did not touch line clipboard",
+                   editor_state_clipboard_count(), 0);
+    }
+
+    printf("\n--- Ctrl+X cuts input selection (works in any mode) ---\n");
+    {
+        glr_app_reset_all();
+        load_input("glVertex3f(1, 2, 3)");
+        editor_cursor_pos_set(11);
+        editor_input_anchor_set(18);
+
+        editor_handle_key(KEY_CTRL_X, 0, 0);
+        ASSERT_TRUE("Ctrl+X → INPUT_TEXT clipboard",
+                    editor_clipboard_has_input_text());
+        ASSERT_STR("Ctrl+X captured substring",
+                   editor_clipboard_input_text(), "1, 2, 3");
+        ASSERT_STR("Ctrl+X deletes selection from input",
+                   editor_input_text(), "glVertex3f()");
+        ASSERT_INT("Ctrl+X clears anchor", editor_input_anchor(), -1);
+        ASSERT_INT("Ctrl+X cursor at lo", editor_cursor_pos(), 11);
+
+        /* Same path in insert mode — line-range cut is disabled there,
+         * but partial-line cut must still work. */
+        glr_app_reset_all();
+        load_input("foo bar baz");
+        editor_insert_mode_set(1);
+        editor_cursor_pos_set(4);
+        editor_input_anchor_set(7);
+        editor_handle_key(KEY_CTRL_X, 0, 0);
+        ASSERT_STR("Ctrl+X partial cut works in insert mode",
+                   editor_input_text(), "foo  baz");
+        ASSERT_STR("insert-mode cut captures substring",
+                   editor_clipboard_input_text(), "bar");
+        editor_insert_mode_set(0);
+    }
+
+    printf("\n--- Ctrl+V (input-text) inserts at cursor ---\n");
+    {
+        glr_app_reset_all();
+        /* Stage an INPUT_TEXT clipboard directly so the test is
+         * independent of the Ctrl+C path. */
+        editor_clipboard_set_input_text("sin(t)", 6);
+        load_input("glVertex3f()");
+        editor_cursor_pos_set(11);
+
+        editor_handle_key(KEY_CTRL_V, 0, 0);
+        ASSERT_STR("Ctrl+V inserts at cursor",
+                   editor_input_text(), "glVertex3f(sin(t))");
+        ASSERT_INT("Ctrl+V cursor advances to end of paste",
+                   editor_cursor_pos(), 17);
+        /* Paste leaves the clipboard intact — user can paste again. */
+        ASSERT_TRUE("Ctrl+V leaves clipboard populated",
+                    editor_clipboard_has_input_text());
+    }
+
+    printf("\n--- Ctrl+V (input-text) replaces destination selection ---\n");
+    {
+        glr_app_reset_all();
+        editor_clipboard_set_input_text("X", 1);
+        load_input("hello world");
+        editor_cursor_pos_set(6);
+        editor_input_anchor_set(11);    /* destination selection "world" */
+
+        editor_handle_key(KEY_CTRL_V, 0, 0);
+        ASSERT_STR("Ctrl+V consumes destination selection",
+                   editor_input_text(), "hello X");
+        ASSERT_INT("post-paste anchor cleared",
+                   editor_input_anchor(), -1);
+        ASSERT_INT("post-paste cursor after inserted char",
+                   editor_cursor_pos(), 7);
+    }
+
+    printf("\n--- Ctrl+V with EMPTY clipboard reports empty ---\n");
+    {
+        glr_app_reset_all();
+        editor_state_clipboard_clear();
+        load_input("unchanged");
+
+        editor_handle_key(KEY_CTRL_V, 0, 0);
+        ASSERT_STR("EMPTY paste leaves input untouched",
+                   editor_input_text(), "unchanged");
+    }
+
+    printf("\n--- Ctrl+V (LINES) routes through line paste, not input ---\n");
+    {
+        glr_app_reset_all();
+        /* Seed the LINES clipboard directly. */
+        ReplClipboardState *cb = editor_state_clipboard_mut();
+        strcpy(cb->lines[0], "glVertex3f(9, 9, 9);");
+        editor_state_clipboard_count_set(1);
+        ASSERT_INT("seeded LINES kind",
+                   cb->kind, EDITOR_CLIPBOARD_LINES);
+
+        int doc_before = editor_buffer_count();
+        editor_input_clear();
+        editor_handle_key(KEY_CTRL_V, 0, 0);
+        /* LINES paste runs feed_line — a new source command appears. */
+        ASSERT_TRUE("LINES paste extended the document",
+                    editor_buffer_count() > doc_before);
+    }
+
     return test_harness_report(&g_harness, "test_editor_input_selection");
 }
