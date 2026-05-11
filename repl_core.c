@@ -22,7 +22,6 @@
 #include "repl_core.h"
 #include "cmd_format.h"
 #include "config.h" /* REPL_STATUS_TEXT_MAX */
-#include "editor/state.h" /* editor_scroll_set, editor_scroll_follow_cursor_set (editor-input cleanup; future-phase migration) */
 #include "source_document.h"
 #include "prof.h"
 #include "repl_command_spec.h"
@@ -125,6 +124,37 @@ void repl_install_editor_insert_mode_off_sink(void (*fn)(void)) {
 void repl_dispatch_editor_insert_mode_off(void) {
     if (g_editor_insert_mode_off_sink)
         g_editor_insert_mode_off_sink();
+}
+
+/* Phase 6 of feature/source-document-port.md: route the last two
+ * direct editor symbol calls in REPL TUs through sinks so the demo
+ * can link with zero editor dependencies. */
+static int (*g_editor_insert_mode_query_sink)(void) = NULL;
+static void (*g_editor_scroll_to_line_sink)(int) = NULL;
+
+void repl_install_editor_insert_mode_query_sink(int (*fn)(void)) {
+    g_editor_insert_mode_query_sink = fn;
+}
+int repl_dispatch_editor_insert_mode_query(void) {
+    return g_editor_insert_mode_query_sink ? g_editor_insert_mode_query_sink()
+                                           : 0;
+}
+
+void repl_install_editor_scroll_to_line_sink(void (*fn)(int target)) {
+    g_editor_scroll_to_line_sink = fn;
+}
+void repl_dispatch_editor_scroll_to_line(int target) {
+    if (g_editor_scroll_to_line_sink)
+        g_editor_scroll_to_line_sink(target);
+}
+
+static void (*g_editor_follow_cursor_sink)(int) = NULL;
+void repl_install_editor_follow_cursor_sink(void (*fn)(int follow)) {
+    g_editor_follow_cursor_sink = fn;
+}
+void repl_dispatch_editor_follow_cursor(int follow) {
+    if (g_editor_follow_cursor_sink)
+        g_editor_follow_cursor_sink(follow);
 }
 
 const char *repl_mode_name(GLenum mode) {
@@ -766,8 +796,7 @@ static void scroll_to_display_function(void) {
             break;
         target++;
     }
-    editor_scroll_set(target);
-    editor_scroll_follow_cursor_set(0);
+    repl_dispatch_editor_scroll_to_line(target);
 }
 
 static void load_initial_commands(const char *import_file) {
