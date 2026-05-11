@@ -10,7 +10,7 @@
 #include "ui/layout.h"
 #include "ui/metrics.h"
 #include "support/test_harness.h"
-#include <gl_2d.h>
+#include <ui/gl_2d.h>
 #ifdef GL_STUBS
 #include <GL/gl_stub_counts.h>
 #endif

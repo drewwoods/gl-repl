@@ -15,7 +15,7 @@
 #include "layout.h"
 #include "metrics.h"
 
-#include "./include/gl_2d.h"
+#include "gl_2d.h"
 
 void ui_autocomplete_panel_render(const UiRenderSnapshot *snap,
                                   int cursor_px, int cursor_py) {
