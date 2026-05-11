@@ -1972,6 +1972,13 @@ static int import_parse_declare_marker(const char *line, int *loaded,
     cmd.valid     = 1;
     int count     = 0;
 
+    /* Names that THIS call newly declares in the predef table — kept
+     * separate so a later source/cmd-store insert failure can undeclare
+     * them without touching names that were already registered (e.g.
+     * by @var auto-declare or by test setup). */
+    char newly_declared[MAX_NAMES_PER_DECL][16];
+    int  new_count = 0;
+
     /* Build the canonical source string and collect names. Tokens take the
      * form `name` or `name=value`; the optional value carries the inline
      * initializer through the round-trip so the canonical decl text matches
@@ -2001,17 +2008,27 @@ static int import_parse_declare_marker(const char *line, int *loaded,
                 p = endp;
             }
         }
-        /* Declare the var if not yet registered (noop if already there). */
-        int var_idx = repl_eval_find_predef_var_idx(name);
-        if (var_idx < 0) {
-            var_idx = repl_eval_declare_predef_var(name, NULL, 0);
-            if (var_idx < 0) {
+        /* Declare the var if not yet registered. Record newly-declared
+         * names so we can undeclare them if a downstream step (name
+         * copy overflow, source/cmd-store insert failure) bails. */
+        int was_registered = (repl_eval_find_predef_var_idx(name) >= 0);
+        if (!was_registered) {
+            if (repl_eval_declare_predef_var(name, NULL, 0) < 0) {
                 if (warnings) (*warnings)++;
                 continue;
             }
+            memcpy(newly_declared[new_count], name, (size_t)len);
+            newly_declared[new_count][len] = '\0';
+            new_count++;
         }
         if (!repl_copy_string_fits(cmd.var_names[count],
                                    sizeof(cmd.var_names[count]), name)) {
+            /* Roll back the just-declared entry so the predef table
+             * doesn't carry a name the document never gets. */
+            if (!was_registered) {
+                repl_eval_undeclare_predef_var(name);
+                new_count--;
+            }
             if (warnings) (*warnings)++;
             continue;
         }
@@ -2022,7 +2039,12 @@ static int import_parse_declare_marker(const char *line, int *loaded,
                             " = %g", init_val);
         count++;
     }
-    if (count == 0) return 0;
+    if (count == 0) {
+        /* Nothing accepted; undeclare any names this call registered. */
+        for (int i = 0; i < new_count; i++)
+            repl_eval_undeclare_predef_var(newly_declared[i]);
+        return 0;
+    }
     snprintf(decl_line + off, sizeof(decl_line) - (size_t)off, ";");
     cmd.var_decl_count = count;
 
@@ -2036,8 +2058,11 @@ static int import_parse_declare_marker(const char *line, int *loaded,
 
         /* Source text first; cmd-store second so a text-write failure
          * leaves no orphan GLCmd row. cmd-store failure rolls the
-         * inserted line back. */
+         * inserted line back AND undeclares the newly-registered names
+         * so the eval table can't drift out of sync with the document. */
         if (!source_document_insert_line(decl_pos, decl_line)) {
+            for (int i = 0; i < new_count; i++)
+                repl_eval_undeclare_predef_var(newly_declared[i]);
             if (warnings) (*warnings)++;
             return 1;
         }
@@ -2052,6 +2077,8 @@ static int import_parse_declare_marker(const char *line, int *loaded,
                 .delete_count = 0,
             };
             source_document_apply_change(&rollback);
+            for (int i = 0; i < new_count; i++)
+                repl_eval_undeclare_predef_var(newly_declared[i]);
             if (warnings) (*warnings)++;
             return 1;
         }

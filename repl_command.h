@@ -1,18 +1,16 @@
 /*
  * repl_command.h - Core REPL command model types.
+ *
+ * MAX_COMMANDS / MAX_LINE_LEN moved to config.h (the neutral limits
+ * home that source_document.h also draws from). This header only
+ * pulls them in via config.h so the two values can't drift.
  */
 #ifndef REPL_COMMAND_H
 #define REPL_COMMAND_H
 
 #include <gl_includes.h>
 
-#ifndef MAX_COMMANDS
-#define MAX_COMMANDS 4096
-#endif
-
-#ifndef MAX_LINE_LEN
-#define MAX_LINE_LEN 256
-#endif
+#include "config.h"  /* MAX_COMMANDS, MAX_LINE_LEN */
 
 /* Maximum format-string length for CMD_LABEL (excluding
  * the surrounding quotes and trailing NUL). 64 fits ~5 short %f
