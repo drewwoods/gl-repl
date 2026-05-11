@@ -13,7 +13,12 @@
 #ifndef EDITOR_INPUT_H
 #define EDITOR_INPUT_H
 
-#include "repl_core_internal.h"  /* ReplModifierProvider (test seam) */
+/* Test seam: editor input reads modifiers through this hook so tests
+ * can simulate Ctrl/Shift/Alt without a real GLUT context. Production
+ * code installs no provider — `editor_get_modifiers()` falls back to
+ * glutGetModifiers() once `editor_input_enable_glut_modifier_reads()`
+ * has been called. */
+typedef int (*ReplModifierProvider)(void);
 
 /* Side-effects accumulated by editor input dispatch and replayed by
  * glr_ctrl_apply_input_effects (request_redraw → glutPostRedisplay,
@@ -108,5 +113,38 @@ void navigate_to_line(int target);
  * cannot leak out of the rename buffer. */
 int editor_input_rename_capture_key(unsigned char key);
 int editor_input_rename_capture_special(int key);
+
+/* Editor-side command-store / input-buffer operations.
+ *
+ * These mutate editor state directly (command store, input buffer,
+ * cursor, transient state). They are NOT REPL-pipeline helpers and
+ * must not be called from repl_*.c pipeline TUs — the hard guards
+ * `check-no-feed-line-in-pipeline` and
+ * `check-no-load-line-to-input-in-pipeline` enforce that. */
+
+/* Delete cmds[start..start+count) with a status-bar message describing
+ * what was removed. Guards against removing a `float` decl whose
+ * variable is still referenced elsewhere. */
+void delete_cmd_range(int start, int count, const char *what);
+
+/* Clear ALL commands unconditionally (same behavior as Ctrl+L). */
+void repl_clear_all_cmds(void);
+
+/* Sync the input buffer to the source line at `idx` (strips trailing
+ * `;` and whitespace). Used by the editor when navigating to an
+ * existing line and by reformat/scene-switch paths. */
+void load_line_to_input(int idx);
+
+/* Drop camera / menu / picker / code-panel-drag transient state in
+ * addition to the editor commit transients. Called from
+ * glr_app_reset_all() and from controller paths that switch examples /
+ * scenes so the editor returns to a clean idle posture. */
+void repl_editor_reset_transients(void);
+
+/* Programmatic entry point equivalent to typing `line` and pressing
+ * `;`. Used by tests, the clipboard paste path, and editor-side
+ * file/example loaders. Pipeline TUs use `repl_load_apply_line()` in
+ * `repl_load.h` instead. */
+int feed_line(const char *line);
 
 #endif /* EDITOR_INPUT_H */

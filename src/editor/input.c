@@ -37,6 +37,7 @@
 #include "undo.h"
 
 #include "color_picker_state.h"
+#include "glr_completion.h"
 #include "glr_state.h"
 #include "glr_camera.h"
 #include "glr_ctrl.h"

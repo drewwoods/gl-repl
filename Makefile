@@ -113,7 +113,7 @@ all: sample
 FORCE:
 
 SRCS = sample.c glr_ctrl.c repl_core.c glr_debug.c repl_state.c glr_state.c src/editor/state.c src/editor/commit.c src/editor/reformat.c src/editor/services.c src/editor/input.c src/editor/help_session.c src/editor/completion.c src/ui/state.c variable_panel_state.c replay_state.c glr_config.c repl_command_spec.c repl_parser.c repl_source_scope.c repl_command_store.c repl_compile.c repl_load.c repl_apply.c src/editor/clipboard.c src/editor/undo.c glr_camera.c glr_camera_export.c glr_actions.c src/ui/layout.c code_formatter.c src/editor/code_panel_document.c repl_flatten.c repl_executor.c glr_completion.c src/ui/autocomplete_panel.c repl_autonormal.c repl_scenes.c repl_example_loader.c replay.c repl_replay_annotations.c src/editor/search.c repl_export.c repl_examples.c src/scene/render.c geometry_guides.c transform_guides.c src/scene/grid.c src/scene/axes.c src/scene/backdrop.c src/scene/lights.c src/scene/overlays.c src/ui/panels.c src/ui/menu_bar.c src/ui/color_picker.c color_picker_state.c src/ui/tabbed_overlay.c repl_help_text.c src/ui/variable_panel.c replay_ui_hud.c variable_panel_drag.c src/editor/inline_rename.c repl_eval.c cmd_format.c audio.c src/ui/profile_panel.c prof.c tests/gl-stubs/gl_stub_counts.c
-HDRS = sample.h glr_defaults.h src/editor/search.h glr_ctrl.h repl_state.h glr_state.h src/editor/state.h src/editor/commit.h src/editor/reformat.h src/editor/services.h src/editor/input.h src/editor/help_session.h src/editor/completion.h src/ui/state.h src/ui/state_types.h variable_panel_state.h replay_state.h glr_config.h repl_core.h repl_core_internal.h glr_debug.h repl_command_spec.h repl_parser.h repl_source_scope.h repl_command_store.h repl_compile.h repl_apply.h src/ui/layout.h repl_pipeline.h src/editor/clipboard.h src/editor/undo.h glr_camera.h glr_actions.h code_formatter.h src/editor/code_panel_document.h replay.h repl_replay_annotations.h repl_examples.h src/scene/render_types.h guides_shared.h geometry_guides.h transform_guides.h transform_utils.h outline_offset.h src/scene/grid.h src/scene/axes.h src/scene/render.h src/scene/backdrop.h src/scene/lights.h src/scene/overlays.h src/ui/panels.h src/ui/menu_bar.h src/ui/color_picker.h color_picker_state.h src/ui/tabbed_overlay.h repl_help_text.h src/ui/variable_panel.h replay_ui_hud.h variable_panel_drag.h src/ui/autocomplete_panel.h src/editor/inline_rename.h repl_eval.h cmd_format.h audio.h src/ui/profile_panel.h prof.h
+HDRS = sample.h glr_defaults.h src/editor/search.h glr_ctrl.h glr_completion.h repl_state.h glr_state.h src/editor/state.h src/editor/commit.h src/editor/reformat.h src/editor/services.h src/editor/input.h src/editor/help_session.h src/editor/completion.h src/ui/state.h src/ui/state_types.h variable_panel_state.h replay_state.h glr_config.h repl_core.h repl_core_internal.h glr_debug.h repl_command_spec.h repl_parser.h repl_source_scope.h repl_command_store.h repl_compile.h repl_apply.h src/ui/layout.h repl_pipeline.h src/editor/clipboard.h src/editor/undo.h glr_camera.h glr_actions.h code_formatter.h src/editor/code_panel_document.h replay.h repl_replay_annotations.h repl_examples.h src/scene/render_types.h guides_shared.h geometry_guides.h transform_guides.h transform_utils.h outline_offset.h src/scene/grid.h src/scene/axes.h src/scene/render.h src/scene/backdrop.h src/scene/lights.h src/scene/overlays.h src/ui/panels.h src/ui/menu_bar.h src/ui/color_picker.h color_picker_state.h src/ui/tabbed_overlay.h repl_help_text.h src/ui/variable_panel.h replay_ui_hud.h variable_panel_drag.h src/ui/autocomplete_panel.h src/editor/inline_rename.h repl_eval.h cmd_format.h audio.h src/ui/profile_panel.h prof.h
 CORE_TEST_SRCS = repl_core.c glr_ctrl.c glr_debug.c repl_state.c glr_state.c src/editor/state.c src/editor/commit.c src/editor/reformat.c src/editor/services.c src/editor/input.c src/editor/help_session.c src/editor/completion.c src/ui/state.c variable_panel_state.c replay_state.c glr_config.c repl_command_spec.c repl_parser.c repl_source_scope.c repl_command_store.c repl_compile.c repl_load.c repl_apply.c src/editor/clipboard.c src/editor/undo.c glr_camera.c glr_camera_export.c glr_actions.c src/ui/layout.c code_formatter.c src/editor/code_panel_document.c repl_flatten.c repl_executor.c glr_completion.c src/ui/autocomplete_panel.c repl_autonormal.c repl_scenes.c repl_example_loader.c replay.c repl_replay_annotations.c src/editor/search.c repl_export.c repl_examples.c src/scene/render.c geometry_guides.c transform_guides.c src/scene/grid.c src/scene/axes.c src/scene/backdrop.c src/scene/lights.c src/scene/overlays.c src/ui/panels.c src/ui/menu_bar.c src/ui/color_picker.c color_picker_state.c src/ui/tabbed_overlay.c repl_help_text.c src/ui/variable_panel.c replay_ui_hud.c variable_panel_drag.c src/editor/inline_rename.c repl_eval.c cmd_format.c audio.c src/ui/profile_panel.c prof.c tests/gl-stubs/gl_stub_counts.c
 
 REPL_SRCS = $(filter repl_%.c,$(SRCS))
@@ -144,17 +144,30 @@ TEAPOT_DEMO_DEP_SRCS = $(SCENE_SRCS) prof.c
 # resolved at the pipeline TU instead (the
 # check-repl-demo-stubs-shrinking guard catches it). The dependency
 # ledger lives in feature/decouple-repl-from-gl-repl-alt.md.
-REPL_DEMO_DEP_SRCS = repl_core.c repl_state.c repl_parser.c \
-                     repl_command_spec.c repl_command_store.c \
-                     repl_compile.c repl_load.c repl_apply.c repl_flatten.c \
-                     repl_executor.c repl_eval.c repl_source_scope.c \
-                     repl_autonormal.c repl_scenes.c \
-                     repl_example_loader.c repl_examples.c \
-                     repl_export.c \
-                     repl_replay_annotations.c replay.c replay_state.c \
-                     src/editor/state.c \
+REPL_DEMO_DEP_SRCS = cmd_format.c \
                      code_formatter.c \
-                     cmd_format.c prof.c \
+                     prof.c \
+                     replay.c \
+                     replay_state.c \
+                     repl_apply.c \
+                     repl_autonormal.c \
+                     repl_command_spec.c \
+                     repl_command_store.c \
+                     repl_compile.c \
+                     repl_core.c \
+                     repl_eval.c \
+                     repl_example_loader.c \
+                     repl_examples.c \
+                     repl_executor.c \
+                     repl_export.c \
+                     repl_flatten.c \
+                     repl_load.c \
+                     repl_parser.c \
+                     repl_replay_annotations.c \
+                     repl_scenes.c \
+                     repl_source_scope.c \
+                     repl_state.c \
+                     src/editor/state.c \
                      tests/gl-stubs/gl_stub_counts.c
 # glr_config.c removed in step 4 of the decouple plan: pipeline TUs
 # (repl_export.c, repl_scenes.c, repl_example_loader.c) no longer call

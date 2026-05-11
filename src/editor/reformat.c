@@ -13,8 +13,8 @@
 
 #include "config.h"           /* MAX_INPUT_LEN */
 #include "repl_core.h"        /* repl_reformat_program */
-#include "repl_core_internal.h" /* load_line_to_input */
 #include "repl_state.h"
+#include "src/editor/input.h" /* load_line_to_input */
 #include "src/editor/state.h"
 
 void editor_reformat_commands(void) {
