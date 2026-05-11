@@ -47,7 +47,7 @@
 
 #include "repl_compile.h"
 
-#include "editor/state.h"        /* editor_insert_mode (compile-context fill) */
+#include "repl_core.h"           /* repl_dispatch_editor_insert_mode_query */
 #include "repl_core_internal.h"  /* repl_format_fits, repl_extract_assignment_parts, collect_visible_vars */
 #include "repl_parser.h"         /* repl_parser_parse_command_ctx (uncomment fallback) */
 #include "repl_source_scope.h"   /* repl_source_scope_cmd_indent, _find_block_end */
@@ -163,7 +163,7 @@ ReplCompileContext repl_compile_context_from_live(void) {
     ReplCompileContext ctx = {
         .edit_line       = repl_state_edit_line(),
         .document_count  = repl_state_document_count(),
-        .insert_mode     = editor_insert_mode(),
+        .insert_mode     = repl_dispatch_editor_insert_mode_query(),
         .text            = source_document_view(),
         .document_cmds   = repl_state_document_cmds(),
     };

@@ -42,7 +42,7 @@
 #include "repl_executor.h"
 #include "repl_parser.h"
 #include "repl_state_owners.h"
-#include "editor/state.h"         /* editor_buffer_view, editor_buffer_set_line */
+#include "source_document.h"      /* source_document_load_lines / _insert_line / _clear / _view */
 
 #include <gl_includes.h>          /* GLUT bootstrap for --render mode */
 
@@ -114,12 +114,11 @@ static void seed_for_loop_program(void) {
     };
     enum { LINE_COUNT = sizeof(lines) / sizeof(lines[0]) };
 
-    /* Editor buffer first -- repl_flatten reads the body's text from it.
-     * Keep editor_buffer_set_count in sync so source_document_view() (which
-     * honors line_count) sees the populated rows. */
-    for (int i = 0; i < LINE_COUNT; i++)
-        editor_buffer_set_line(i, lines[i]);
-    editor_buffer_set_count(LINE_COUNT);
+    /* Source-text first -- repl_flatten reads the body's text via
+     * source_document_view(). The demo links its own static-store
+     * implementation in tools/repl_demo/source_document.c, so no
+     * editor TU is pulled in. */
+    source_document_load_lines(lines, LINE_COUNT);
 
     GLCmd cmds[LINE_COUNT];
     memset(cmds, 0, sizeof(cmds));
@@ -172,6 +171,7 @@ static void seed_for_loop_program(void) {
 static int load_text_lines(const char *const *lines) {
     /* Reset state before each program so the two samples don't smear. */
     repl_state_init_defaults();
+    source_document_clear();
 
     int loaded = 0;
     for (int i = 0; lines[i]; i++) {
@@ -199,12 +199,9 @@ static int load_text_lines(const char *const *lines) {
             fprintf(stderr, "  command store full at line %d\n", loaded);
             return -1;
         }
-        editor_buffer_set_line(loaded, pl.text);
+        source_document_insert_line(loaded, pl.text);
         loaded++;
     }
-    /* Keep editor_buffer_count in sync with the populated rows so
-     * source_document_view() reports the correct line_count. */
-    editor_buffer_set_count(loaded);
     return loaded;
 }
 
@@ -222,6 +219,8 @@ static int load_text_lines(const char *const *lines) {
  * creates it), then "ticks the frame" by bumping `t` and re-executing.
  * No editor commit path involved. */
 static void seed_variable_driven_program(void) {
+    source_document_clear();
+
     /* `t` is created by repl_state_init_defaults() -> ... ->
      * repl_eval_init_predef_vars(). Add `r`. */
     char err[64] = "";
@@ -261,11 +260,9 @@ static void seed_variable_driven_program(void) {
         ReplCommandStore store = repl_command_store_live();
         repl_command_store_insert_one(&store, pos, &cmd,
                                       REPL_COMMAND_STORE_ADJUST_EDIT_LINE);
-        editor_buffer_set_line(pos, text);
+        source_document_insert_line(pos, text);
         pos++;
     }
-    /* Mirror the populated count so source_document_view() sees them. */
-    editor_buffer_set_count(pos);
 }
 
 static void tick_and_execute(float t_value) {

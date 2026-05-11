@@ -119,6 +119,30 @@ void        repl_dispatch_editor_input_reset(void);
  * Lighter than the full editor-input reset above. */
 void        repl_install_editor_insert_mode_off_sink(void (*fn)(void));
 void        repl_dispatch_editor_insert_mode_off(void);
+
+/* Editor insert-mode query sink. The compile context needs to know
+ * whether the editor is in insert mode so it can pick INSERT_ONE vs
+ * REPLACE_ONE shapes. Full app installs a sink that returns
+ * editor_insert_mode(); demo leaves it unset, defaulting to 0
+ * (overwrite mode — the safe default for a load path with no editor).
+ * Phase 6 of feature/source-document-port.md. */
+void        repl_install_editor_insert_mode_query_sink(int (*fn)(void));
+int         repl_dispatch_editor_insert_mode_query(void);
+
+/* Editor scroll-to-line sink. The startup `void display() {` scroll
+ * anchor uses it; production forwards to editor_scroll_set +
+ * editor_scroll_follow_cursor_set(0). Demo leaves it unset — no UI
+ * to scroll. */
+void        repl_install_editor_scroll_to_line_sink(void (*fn)(int target));
+void        repl_dispatch_editor_scroll_to_line(int target);
+
+/* Editor follow-cursor toggle sink. Replay calls this when the PC
+ * advances to a new source line, so the code panel auto-scrolls to
+ * keep the active line visible. Production forwards to
+ * editor_scroll_follow_cursor_set; demo leaves it unset. */
+void        repl_install_editor_follow_cursor_sink(void (*fn)(int follow));
+void        repl_dispatch_editor_follow_cursor(int follow);
+
 const char *repl_mode_name(GLenum mode);
 GLenum      repl_current_begin_mode(void);
 int         repl_count_vertices(void);

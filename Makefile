@@ -167,8 +167,7 @@ REPL_DEMO_DEP_SRCS = cmd_format.c \
                      repl_scenes.c \
                      repl_source_scope.c \
                      repl_state.c \
-                     glr_source_document.c \
-                     src/editor/state.c \
+                     tools/repl_demo/source_document.c \
                      tests/gl-stubs/gl_stub_counts.c
 # glr_config.c removed in step 4 of the decouple plan: pipeline TUs
 # (repl_export.c, repl_scenes.c, repl_example_loader.c) no longer call

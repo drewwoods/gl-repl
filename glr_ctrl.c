@@ -1352,6 +1352,21 @@ static void glr_app_editor_insert_mode_off(void) {
     editor_insert_mode_set(0);
 }
 
+/* Phase 6 of feature/source-document-port.md: route the last two
+ * direct editor reads/writes in REPL TUs through sinks. */
+static int glr_app_editor_insert_mode_query(void) {
+    return editor_insert_mode();
+}
+
+static void glr_app_editor_scroll_to_line(int target) {
+    editor_scroll_set(target);
+    editor_scroll_follow_cursor_set(0);
+}
+
+static void glr_app_editor_follow_cursor(int follow) {
+    editor_scroll_follow_cursor_set(follow);
+}
+
 void glr_publish_replay_annotations(const ReplReplayAnnotationOutput *out) {
     editor_state_virtual_lines_clear();
     if (!out) return;
@@ -1414,6 +1429,9 @@ static void glr_app_install_app_services(void) {
      * importer dispatch through. */
     repl_install_editor_input_reset_sink(glr_app_editor_input_reset);
     repl_install_editor_insert_mode_off_sink(glr_app_editor_insert_mode_off);
+    repl_install_editor_insert_mode_query_sink(glr_app_editor_insert_mode_query);
+    repl_install_editor_scroll_to_line_sink(glr_app_editor_scroll_to_line);
+    repl_install_editor_follow_cursor_sink(glr_app_editor_follow_cursor);
 }
 
 /* Full-world reset entry point. Step 2 of
