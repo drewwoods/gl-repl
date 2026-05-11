@@ -22,7 +22,7 @@
 #include "repl_state.h"
 #include "replay.h"
 #include "replay_state.h"
-#include "ui/code_panel_layout.h"
+#include "code_formatter.h"
 #include "ui/layout.h" /* CODE_PANEL_LAYOUT_* */
 #include "ui/layout.h"
 #include "ui/metrics.h"

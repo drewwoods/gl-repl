@@ -29,7 +29,7 @@
 #define EDITOR_CODE_PANEL_DOCUMENT_H
 
 #include "repl_command.h"
-#include "ui/code_panel_layout.h"
+#include "code_formatter.h"
 
 /* Full code-panel document layout. Combines header/footer fixed geometry with
  * per-command wrapping information. cmd_main_rows[] stores the row count for

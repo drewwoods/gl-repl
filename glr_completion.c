@@ -1,11 +1,11 @@
 /*
- * repl_autocomplete.c -- REPL-side completion provider.
+ * glr_completion.c -- Controller-side completion provider.
  *
- * Implements the EditorCompletionProvider seam: walks the REPL command
- * spec, predefined-variable table, and source CMD_FUNC_DEF entries to
- * produce matches, ghost text, and parameter hints. Registers itself
- * via repl_autocomplete_register_provider() at startup; the editor
- * calls it through editor_completion_update / _clear / etc.
+ * Cross-domain adapter: reads REPL state (command spec, predefined-
+ * variable table, source CMD_FUNC_DEF entries) and pushes results into
+ * the editor's completion system. Registers itself via
+ * glr_completion_register_provider() at startup; the editor calls it
+ * through editor_completion_update / _clear / etc.
  *
  * Runtime storage (matches, ghost, hint) lives on EditorState and is
  * accessed through the typed autocomplete facade.
@@ -403,25 +403,25 @@ void accept_autocomplete(void) {
  *
  * Phase G commit 36. Editor input dispatch invokes
  * editor_completion_update / _update_selected_preview / _clear; we
- * register the existing repl_autocomplete entry points here so the
+ * register the existing glr_completion entry points here so the
  * editor stays decoupled from REPL grammar specifics.
  *
  * editor_completion_clear() owns the slice wipe (it lives on
  * EditorState), so this provider hook only resets the
  * provider-private statics. */
 
-static void repl_autocomplete_provider_clear(void) {
+static void glr_completion_provider_clear(void) {
     g_ac_mode = AC_MODE_NONE;
     g_ac_token_len = 0;
     g_ac_suffix[0] = '\0';
 }
 
-static const EditorCompletionProvider g_repl_autocomplete_provider = {
+static const EditorCompletionProvider g_glr_completion_provider = {
     .update                  = update_autocomplete,
     .update_selected_preview = update_selected_autocomplete_preview,
-    .clear                   = repl_autocomplete_provider_clear,
+    .clear                   = glr_completion_provider_clear,
 };
 
-void repl_autocomplete_register_provider(void) {
-    editor_completion_register(&g_repl_autocomplete_provider);
+void glr_completion_register_provider(void) {
+    editor_completion_register(&g_glr_completion_provider);
 }
