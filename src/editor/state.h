@@ -61,6 +61,12 @@ typedef struct {
     int  input_capacity;
     int  input_len;
     int  cursor_pos;
+    /* Character-range selection anchor inside input[]. -1 = no
+     * selection. When >= 0, the selection is [lo, hi) with
+     * lo = min(anchor_pos, cursor_pos) and hi = max(...). An empty
+     * selection (anchor_pos == cursor_pos) is not allowed and collapses
+     * to -1; see feature/editor-input-selection.md. */
+    int  anchor_pos;
     int  edit_line_idx;
     char pending_newline[MAX_INPUT_LEN];
     int  pending_newline_capacity;
@@ -73,6 +79,7 @@ typedef struct {
     int         input_capacity;
     int         input_len;
     int         cursor_pos;
+    int         anchor_pos;
     int         edit_line_idx;
     const char *pending_newline;
     int         pending_newline_capacity;
@@ -89,10 +96,33 @@ typedef struct {
 
 /* Editor clipboard. Text-only — paste re-parses each line through the
  * standard commit chain, so the clipboard never holds REPL-shaped
- * data. Same model as file load. */
+ * data. Same model as file load.
+ *
+ * Tagged union covering two kinds of payload:
+ *   - EDITOR_CLIPBOARD_LINES: source lines (existing line-range copy).
+ *     Paste feeds each line through the commit pipeline.
+ *   - EDITOR_CLIPBOARD_INPUT_TEXT: a substring lifted from the active
+ *     input buffer. Paste inserts text into ReplEditorInputState.input
+ *     without going through feed_line.
+ * `kind` always matches the populated payload:
+ *   EMPTY       -> line_count == 0 && input_text_len == 0
+ *   LINES       -> line_count > 0
+ *   INPUT_TEXT  -> input_text_len > 0
+ * See feature/editor-input-selection.md for the full rules. */
+typedef enum {
+    EDITOR_CLIPBOARD_EMPTY = 0,
+    EDITOR_CLIPBOARD_LINES,
+    EDITOR_CLIPBOARD_INPUT_TEXT,
+} EditorClipboardKind;
+
 typedef struct {
+    EditorClipboardKind kind;
+
     char  lines[MAX_COMMANDS][MAX_LINE_LEN];
     int   line_count;
+
+    char  input_text[MAX_INPUT_LEN];
+    int   input_text_len;
 } ReplClipboardState;
 
 /* Search session state: the find-text query plus the current match
@@ -263,6 +293,16 @@ void        editor_input_set_text(const char *text);
 void        editor_input_clear(void);
 int         editor_cursor_pos(void);
 void        editor_cursor_pos_set(int cursor_pos);
+/* Input-buffer character-range selection anchor. -1 means "no
+ * selection." `_set` clamps to [0, input_len]; if the new value equals
+ * the current cursor, the anchor collapses to -1 (empty selections are
+ * not allowed). `_clear` is shorthand for `_set(-1)`. */
+int         editor_input_anchor(void);
+void        editor_input_anchor_set(int pos);
+void        editor_input_anchor_clear(void);
+int         editor_input_selection_active(void);
+int         editor_input_selection_lo(void);   /* -1 if inactive */
+int         editor_input_selection_hi(void);   /* -1 if inactive */
 int         editor_insert_mode(void);
 void        editor_insert_mode_set(int insert_mode);
 char       *editor_pending_newline_buffer_mut(void);
@@ -281,12 +321,27 @@ int                 editor_state_selection_anchor(void);
 int                 editor_state_selection_end_idx(void);
 void                editor_state_selection_set(int anchor_idx, int end_idx);
 
-/* Clipboard slice API. */
+/* Clipboard slice API.
+ *
+ * `_clear` resets to EDITOR_CLIPBOARD_EMPTY (line_count = 0,
+ * input_text_len = 0). `_count_set(n>0)` sets kind = LINES and clears
+ * any stale input_text; `_count_set(0)` resets to EMPTY. The
+ * input-text helpers below set kind = INPUT_TEXT and clear the line
+ * payload symmetrically. */
 ReplClipboardState  editor_state_clipboard(void);
 ReplClipboardState *editor_state_clipboard_mut(void);
 void                editor_state_clipboard_clear(void);
 int                 editor_state_clipboard_count(void);
 void                editor_state_clipboard_count_set(int line_count);
+
+/* Input-text clipboard payload. The selected substring is naturally a
+ * `[lo, hi)` slice inside `input[]`, not a standalone NUL-terminated
+ * string, so the setter takes an explicit length and copies that many
+ * bytes before NUL-terminating internally. */
+void        editor_clipboard_set_input_text(const char *text, int len);
+int         editor_clipboard_has_input_text(void);
+const char *editor_clipboard_input_text(void);
+int         editor_clipboard_input_text_len(void);
 
 /* Search slice API. _clear restores the slice to the post-init
  * default (no active query, hits invalidated). */
