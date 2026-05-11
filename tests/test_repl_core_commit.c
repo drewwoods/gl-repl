@@ -794,7 +794,12 @@ int main(void) {
 
         replay_pc = 3;
         replay_src_line = 2;
-        repl_replay_annotations_prepare(source_document_view());
+        {
+            ReplReplayAnnotationOutput annotations;
+            repl_replay_annotations_prepare(source_document_view(),
+                                            &annotations);
+            glr_publish_replay_annotations(&annotations);
+        }
         vlines = editor_state_virtual_lines();
         ASSERT_TRUE("scratch replay vertex annotation rows exist",
                     vlines != NULL && vlines->count >= 1);

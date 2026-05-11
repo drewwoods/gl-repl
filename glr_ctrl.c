@@ -1173,9 +1173,16 @@ void glr_ctrl_display_frame(void) {
 
     /* Prepare replay annotations + push the virtual-line list and
      * the per-line text-override list. Layout reads both as snapshot
-     * data; the editor is agnostic to which feature pushed them. */
+     * data; the editor is agnostic to which feature pushed them.
+     * Phase 4 of feature/source-document-port.md: prepare() now
+     * fills an output struct and the controller publishes via
+     * glr_publish_replay_annotations so REPL code doesn't reach
+     * directly into editor_state_virtual_lines. */
     prof_begin(PROF_SNAPSHOT_VIRTUAL_LINES);
-    repl_replay_annotations_prepare(source_document_view());
+    ReplReplayAnnotationOutput replay_annotations;
+    repl_replay_annotations_prepare(source_document_view(),
+                                    &replay_annotations);
+    glr_publish_replay_annotations(&replay_annotations);
     glr_ctrl_push_line_overrides();
     prof_end(PROF_SNAPSHOT_VIRTUAL_LINES);
 
@@ -1343,6 +1350,28 @@ static void glr_app_editor_input_reset(void) {
 
 static void glr_app_editor_insert_mode_off(void) {
     editor_insert_mode_set(0);
+}
+
+void glr_publish_replay_annotations(const ReplReplayAnnotationOutput *out) {
+    editor_state_virtual_lines_clear();
+    if (!out) return;
+    for (int i = 0; i < out->count; i++) {
+        const ReplReplayAnnotation *row = &out->items[i];
+        VirtualLineStyle style;
+        switch (row->kind) {
+        case REPL_REPLAY_ANNOTATION_KIND_SUBST:
+            style = VIRTUAL_STYLE_REPLAY_SUBST;
+            break;
+        case REPL_REPLAY_ANNOTATION_KIND_EVAL:
+            style = VIRTUAL_STYLE_REPLAY_EVAL;
+            break;
+        default:
+            continue;
+        }
+        editor_state_virtual_lines_append(row->after_line_idx, style,
+                                          row->text,
+                                          row->aux[0] ? row->aux : NULL);
+    }
 }
 
 static void glr_app_install_app_services(void) {
