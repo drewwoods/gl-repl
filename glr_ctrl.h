@@ -107,6 +107,17 @@ int glr_ctrl_router_handle_code_panel_drag(int x, int y);
  * example load) doesn't leave an orphaned mid-drag. */
 void glr_ctrl_router_reset_code_panel_drag(void);
 
+/* Apply an input-row drag motion. With the drag-anchor state armed by
+ * a prior code-panel press, if (target_line, target_char) still hits
+ * the active edit row, grow the input-buffer selection toward
+ * target_char and return 1. Returns 0 when the motion should fall
+ * through to the line-range path — drag wandered off the press row,
+ * the press wasn't on a code-text row, or no drag is armed. The
+ * production drag handler calls this after ui_panels_hit_test; tests
+ * call it directly so they don't need to compute pixel coordinates
+ * matching the live panel layout. */
+int glr_ctrl_router_apply_input_row_drag(int target_line, int target_char);
+
 /* Build the app/UI-shaped F1 help content from the neutral REPL help
  * text model. The controller owns this adapter because it composes
  * `repl_help_text` with `ui_tabbed_overlay`. */

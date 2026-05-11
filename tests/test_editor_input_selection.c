@@ -24,6 +24,7 @@
 #include "keys.h"
 #include "repl/core.h"
 #include "repl/state_owners.h"
+#include "ui/hit.h"
 #include "support/test_harness.h"
 
 #include <stdio.h>
@@ -521,6 +522,77 @@ int main(void) {
         scenes = repl_state_scenes();
         ASSERT_INT("Ctrl+V (input-only) leaves example active",
                    scenes.active_example_idx, example_before);
+    }
+
+    printf("\n--- code-panel press + drag on active edit row ---\n");
+    {
+        glr_app_reset_all();
+        /* Seed a single source line so the press hit targets a real
+         * committed row. */
+        repl_feed_line_public("glVertex3f(1, 2, 3);");
+        repl_navigate_to_line(0);
+        ASSERT_INT("baseline edit line", repl_state_edit_line(), 0);
+
+        /* Synthesize a UI_HIT_CODE_TEXT press at char 11 ("1" inside
+         * the parens). The router uses the hit directly; it doesn't
+         * need to come from a real ui_panels_hit_test. */
+        UiHit hit = ui_hit_none();
+        hit.kind = UI_HIT_CODE_TEXT;
+        hit.line_idx = 0;
+        hit.char_idx = 11;
+        hit.visual_row = 0;
+        glr_ctrl_router_handle_code_panel_hit(hit, 0, 0);
+
+        ASSERT_INT("press places cursor at char_idx",
+                   editor_cursor_pos(), 11);
+        ASSERT_INT("press clears any prior anchor",
+                   editor_input_anchor(), -1);
+
+        /* Drag motion still on the active edit row: extend the input
+         * selection. The first motion call pins the press column. */
+        int handled = glr_ctrl_router_apply_input_row_drag(0, 16);
+        ASSERT_INT("drag motion on edit row is handled", handled, 1);
+        ASSERT_INT("first drag motion pins press col as anchor",
+                   editor_input_anchor(), 11);
+        ASSERT_INT("first drag motion moves cursor",
+                   editor_cursor_pos(), 16);
+
+        /* Continuing motion grows the same selection. */
+        glr_ctrl_router_apply_input_row_drag(0, 18);
+        ASSERT_INT("continued drag keeps anchor",
+                   editor_input_anchor(), 11);
+        ASSERT_INT("continued drag moves cursor further",
+                   editor_cursor_pos(), 18);
+
+        /* Drag wandering off the active edit row is not handled by
+         * this path — falls through to line-range (existing behavior,
+         * not exercised here). */
+        handled = glr_ctrl_router_apply_input_row_drag(1, 0);
+        ASSERT_INT("drag off active edit row not handled here",
+                   handled, 0);
+
+        glr_ctrl_router_reset_code_panel_drag();
+    }
+
+    printf("\n--- press on insert-line / no-drag press does not arm input-row drag ---\n");
+    {
+        glr_app_reset_all();
+        repl_feed_line_public("glVertex3f(1, 2, 3);");
+        repl_navigate_to_line(0);
+
+        /* UI_HIT_CODE_INSERT_LINE doesn't arm any drag, so the
+         * input-row drag helper returns 0 with no state change. */
+        UiHit hit = ui_hit_none();
+        hit.kind = UI_HIT_CODE_INSERT_LINE;
+        hit.line_idx = 0;
+        hit.char_idx = 3;
+        glr_ctrl_router_handle_code_panel_hit(hit, 0, 0);
+
+        int handled = glr_ctrl_router_apply_input_row_drag(0, 8);
+        ASSERT_INT("insert-line press leaves drag unarmed",
+                   handled, 0);
+        ASSERT_INT("no spurious anchor after unarmed drag",
+                   editor_input_anchor(), -1);
     }
 
     printf("\n--- shift+arrow / home / end extend selection ---\n");
