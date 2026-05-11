@@ -37,7 +37,7 @@
 #include "search.h"
 #include "undo.h"
 
-#include "color_picker_state.h"
+#include "widgets/color_picker_state.h"
 #include "glr_completion.h"
 #include "glr_state.h"
 #include "glr_camera.h"

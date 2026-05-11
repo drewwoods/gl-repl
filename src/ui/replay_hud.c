@@ -7,9 +7,9 @@
  * must not call parser / compile / apply. Enforced by
  * `scripts/check-replay-ui-isolation.sh`.
  */
-#include "replay_ui_hud.h"
+#include "ui/replay_hud.h"
 #include "ui/gl_2d.h"
-#include "replay.h"
+#include "widgets/replay.h"
 #include "ui/layout.h" /* CODE_PANEL_LAYOUT_TOP enum value */
 #include "ui/metrics.h"
 

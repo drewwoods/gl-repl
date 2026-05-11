@@ -20,8 +20,8 @@
  *              Near-zero start value falls back to a linear bootstrap
  *              so the slider can walk off zero.
  */
-#include "variable_panel_drag.h"
-#include "variable_panel_state.h"
+#include "widgets/variable_panel_drag.h"
+#include "widgets/variable_panel_state.h"
 
 int variable_panel_drag_active(void) {
     return variable_panel_drag().var_idx >= 0;

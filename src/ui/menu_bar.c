@@ -6,7 +6,7 @@
 #include "glr_config.h"
 #include "keys.h"
 #include "repl/state_views.h"
-#include "replay.h"   /* ReplayState (PLAYING / PAUSED / DONE) enum values */
+#include "widgets/replay.h"   /* ReplayState (PLAYING / PAUSED / DONE) enum values */
 #include "state.h"
 #include "menu_bar.h"
 #include "metrics.h"

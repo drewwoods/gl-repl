@@ -155,8 +155,8 @@ Test sources live under `tests/` and shared test-only helpers live under
 | `src/repl/flatten.h` | Flatten public API (`repl_flatten_program`, cursor-highlight refresh) |
 | `src/repl/pipeline.h` | Pipeline and lifecycle surface for frame orchestration (flatten, autonormal, replay snapshots) |
 | `src/repl/autonormal.c` | Auto-generated `glNormal3f` maintenance for source commands |
-| `replay.c` | Replay state machine: PC, mode (OFF/PLAYING/PAUSED/DONE), speed, fade-batch ring |
-| `replay.h` | Replay public API (`repl_replay_start`, `repl_replay_toggle_play_pause`, etc.) |
+| `src/widgets/replay.c` | Replay state machine: PC, mode (OFF/PLAYING/PAUSED/DONE), speed, fade-batch ring |
+| `src/widgets/replay.h` | Replay public API (`repl_replay_start`, `repl_replay_toggle_play_pause`, etc.) |
 | `src/editor/search.c` | Case-insensitive substring search state and match navigation |
 | `src/editor/search.h` | Search query helpers and input routing API |
 | `repl_autocomplete.c` | REPL-side completion provider: walks command spec / predef vars / `CMD_FUNC_DEF` for matches, ghost text, parameter hints. Registered via `EditorCompletionProvider`. |
@@ -170,14 +170,14 @@ Test sources live under `tests/` and shared test-only helpers live under
 | `src/repl/replay_annotations.h` | Code-panel replay annotation API |
 | `src/ui/snapshot.h` | `UiRenderSnapshot` — frame-frozen bundle built once per frame by `glr_ctrl_build_ui_snapshot()` |
 | `src/ui/editor.h` | Per-frame editor-overlay snapshots (swatches, sliders, highlights) pushed by the controller |
-| `replay_ui_hud.c` | 2D replay status HUD (feature-UI under the `replay_ui_*` prefix; reads replay peer snapshot) |
-| `replay_ui_hud.h` | Replay HUD render entrypoint |
+| `src/ui/replay_hud.c` | 2D replay status HUD (feature-UI under the `replay_ui_*` prefix; reads replay peer snapshot) |
+| `src/ui/replay_hud.h` | Replay HUD render entrypoint |
 | `src/ui/profile_panel.c` | CPU profiling overlay panel (per-frame section timings) |
 | `src/ui/profile_panel.h` | Profile panel render entrypoint |
 | `src/ui/menu_bar.c` | Code-panel menu bar, dropdowns, config right-click handling, search slot |
 | `src/ui/menu_bar.h` | Menu/pin hit-test and dropdown state API |
-| `color_picker_state.c` | Floating color picker peer: state, lifecycle, slider input handlers, source-line writeback through editor commit |
-| `color_picker_state.h` | Peer API (`ColorPickerView`, `ColorPickerInputResult`, `color_picker_open/close/handle_*`, `color_picker_hsv_to_rgb`) |
+| `src/widgets/color_picker_state.c` | Floating color picker peer: state, lifecycle, slider input handlers, source-line writeback through editor commit |
+| `src/widgets/color_picker_state.h` | Peer API (`ColorPickerView`, `ColorPickerInputResult`, `color_picker_open/close/handle_*`, `color_picker_hsv_to_rgb`) |
 | `src/ui/color_picker.c` | Floating color picker renderer + hit-test (pure, takes `ColorPickerView *`) |
 | `src/ui/color_picker.h` | Picker UI render/hit-test API + `UI_COLOR_SWATCH_W` |
 | `src/ui/tabbed_overlay.c` | Generic modal tabbed text overlay renderer (the F1 help overlay's UI shell) |
@@ -190,12 +190,12 @@ Test sources live under `tests/` and shared test-only helpers live under
 | `src/ui/autocomplete_panel.h` | Autocomplete popup render entrypoint |
 | `src/editor/inline_rename.c` | Inline scene-rename input buffer and key handling (status-bar overlay) |
 | `src/editor/inline_rename.h` | Rename begin/active/cancel/key/special API |
-| `variable_panel_drag.c` | Variable slider drag transaction: begin/motion/reset, linear/log value writeback |
-| `variable_panel_drag.h` | Drag state accessors + begin/motion/reset API |
-| `variable_panel_state.c` | Variable-panel peer subsystem: owns visibility flag + drag-state storage |
-| `variable_panel_state.h` | Peer-subsystem facade (`VariablePanelState`, capture/restore/reset, view/drag accessors) |
-| `replay_state.c` | Replay peer subsystem: owns `ReplReplayRuntimeState` storage |
-| `replay_state.h` | Peer-subsystem facade (`replay_state_capture/restore/reset/view/mut`) |
+| `src/widgets/variable_panel_drag.c` | Variable slider drag transaction: begin/motion/reset, linear/log value writeback |
+| `src/widgets/variable_panel_drag.h` | Drag state accessors + begin/motion/reset API |
+| `src/widgets/variable_panel_state.c` | Variable-panel peer subsystem: owns visibility flag + drag-state storage |
+| `src/widgets/variable_panel_state.h` | Peer-subsystem facade (`VariablePanelState`, capture/restore/reset, view/drag accessors) |
+| `src/widgets/replay_state.c` | Replay peer subsystem: owns `ReplReplayRuntimeState` storage |
+| `src/widgets/replay_state.h` | Peer-subsystem facade (`replay_state_capture/restore/reset/view/mut`) |
 | `src/editor/help_session.c` | Read-only editor session for the help overlay (tab_idx + scroll) |
 | `src/editor/help_session.h` | `EditorHelpSession` API (capture/restore/reset, narrow accessors) |
 | `src/editor/completion.c` | Completion-provider registry: editor input invokes registered provider for autocomplete |
@@ -301,7 +301,7 @@ is no shim layer.
    → projection → execute user geometry via `SceneExecuteProgramFn`
    callback → replay fade batches → grid/axes/backdrop/orbit-target →
    polygon-outline, vertex, normal, and guide overlays → 2D replay HUD
-   (renders via `replay_ui_hud_render` from `replay_ui_hud.c`)
+   (renders via `replay_ui_hud_render` from `src/ui/replay_hud.c`)
 4. 2D overlays: code panel, autocomplete popup, example dropdown,
    variable slider panel, config menu, help overlay, search overlay
 
@@ -542,7 +542,7 @@ changing example-metadata behavior.
 
 ### Replay System
 
-Step-by-step execution visualization in `replay.c`:
+Step-by-step execution visualization in `src/widgets/replay.c`:
 - `ReplReplayRuntimeState` (via `replay_state_view()`) tracks state
   (OFF/PLAYING/PAUSED/DONE), program counter, and speed multiplier
 - During playback, the flat command count is clamped to `replay_exec_limit()`

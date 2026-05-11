@@ -1,7 +1,7 @@
 /*
  * variable_panel.c - Variable slider panel peer subsystem.
  */
-#include "variable_panel_state.h"
+#include "widgets/variable_panel_state.h"
 
 #define VARIABLE_PANEL_INITIAL                              \
     {                                                       \

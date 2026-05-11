@@ -6,7 +6,7 @@
 #include "repl/core.h"
 #include "repl/core_internal.h"
 #include "glr_debug.h"
-#include "replay.h"
+#include "widgets/replay.h"
 #include "repl/executor.h"
 #include "repl/state.h"
 #include "ui/panels.h"

@@ -21,8 +21,8 @@
 #include "repl/core_internal.h"
 #include "repl/export.h"
 #include "repl/state_owners.h"
-#include "replay.h"
-#include "replay_state.h"
+#include "widgets/replay.h"
+#include "widgets/replay_state.h"
 #include "ui/layout.h" /* CODE_PANEL_LAYOUT_* */
 #include "ui/layout.h"
 #include "ui/metrics.h"
@@ -97,8 +97,8 @@ static void declare_test_vars(void) {
     ASSERT_DECL_OK("declare_predef_var n", repl_eval_declare_predef_var("n", err, sizeof(err)), err);
 }
 
-#include "variable_panel_state.h"
-#include "variable_panel_drag.h"
+#include "widgets/variable_panel_state.h"
+#include "widgets/variable_panel_drag.h"
 
 #define VAR_PANEL_PAD_INTERNAL   6
 #define VAR_TITLE_H_INTERNAL    20

@@ -5,7 +5,7 @@
 #include "glr_config.h"
 #include "repl/core.h"
 #include "repl/state_owners.h"
-#include "replay.h"
+#include "widgets/replay.h"
 #include "ui/state.h"
 #include "ui/layout.h"
 #include "ui/metrics.h"

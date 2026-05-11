@@ -32,8 +32,8 @@
         "src/editor/undo.c",
         "src/editor/search.c",
         "src/editor/inline_rename.c",
-        "variable_panel_drag.c",
-        "color_picker_state.c",
+        "src/widgets/variable_panel_drag.c",
+        "src/widgets/color_picker_state.c",
         "glr_actions.c",
         "glr_camera.c"
       ]
@@ -50,10 +50,10 @@
         "src/repl/examples.c",
         "repl_autocomplete.c",
         "src/repl/autonormal.c",
-        "replay.c",
-        "replay_state.c",
+        "src/widgets/replay.c",
+        "src/widgets/replay_state.c",
         "src/repl/replay_annotations.c",
-        "variable_panel_state.c",
+        "src/widgets/variable_panel_state.c",
         "src/repl/help_text.c"
       ]
     },
@@ -69,7 +69,7 @@
         "src/scene/overlays.c",
         "geometry_guides.c",
         "transform_guides.c",
-        "replay_ui_hud.c"
+        "src/ui/replay_hud.c"
       ]
     },
     {

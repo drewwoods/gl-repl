@@ -92,7 +92,7 @@ When a module starts owning mutable REPL state, follow the Stage-1 template:
    UI inputs from REPL state, calls the scene renderer, then calls UI renderers.
    This role belongs in `glr_ctrl.c`.
 6. **Replay is REPL policy.** Replay state machine, PC, mode, baseline values,
-   and fade/highlight decisions belong in `repl_replay.c` or follow-up replay
+   and fade/highlight decisions belong in `src/widgets/replay.c` or follow-up replay
    planning code. Any scene use of replay data should be via snapshots or
    documented transitional helpers.
 
@@ -397,7 +397,7 @@ R1 target from `feature/done/push-architecture-refinement.md` (landed):
 * scene iterates the snapshot and owns the GL pass orchestration without
   calling `repl_replay_*` or `repl_state_*`
 * accumulation-AA settings are `SceneRenderConfig` fields set by the controller
-* 2D replay HUD lives in `replay_ui_hud.c`, driven by config fields
+* 2D replay HUD lives in `src/ui/replay_hud.c`, driven by config fields
 * `scene_*.c` files contain no `repl_state_*` or `repl_replay_*` calls; once
   the relevant Phase 2 slice is complete, Makefile checks keep that true
 
@@ -491,7 +491,7 @@ parse -> command store -> flatten -> execute
 ```
 
 can run without `glr_ctrl.c`, `src/editor/input.c`, `src/ui/*.c` renderers,
-or `replay_ui_hud.c`. It does **not** yet prove that the REPL pipeline has a
+or `src/ui/replay_hud.c`. It does **not** yet prove that the REPL pipeline has a
 stub-free link boundary. The current `REPL_DEMO_DEP_SRCS` object list still
 pulls in several app/editor/UI-adjacent translation units, and
 `tools/repl_demo/stubs.c` supplies the missing symbols when those owners are
@@ -523,7 +523,7 @@ These objects are linked into `repl_demo` rather than stubbed:
 | Object(s) | Why present | Removal path |
 |---|---|---|
 | `src/editor/state.c`, `src/editor/completion.c` | Per-line canonical text currently lives in `EditorState`; `repl_state_init_defaults()` also registers the REPL autocomplete provider with the editor completion registry. | Keeping editor-owned text makes this dependency intentional. Removing it means introducing a neutral source-document/text store owned by the REPL command document, then making the editor a controller/view over that store. That is feasible but large, because it cuts across commit, undo, scenes, clipboard, export, and tests. Autocomplete registration is easier: move it to app/editor startup instead of REPL state reset. |
-| `replay.c`, `replay_state.c`, `src/repl/replay_annotations.c` | Replay is a peer subsystem, but reset and annotation helpers are still in the demo link set through broad REPL object selection. | Split app reset from REPL reset and keep annotation preparation out of the minimal demo object list unless the demo explicitly exercises replay. Medium effort. |
+| `src/widgets/replay.c`, `src/widgets/replay_state.c`, `src/repl/replay_annotations.c` | Replay is a peer subsystem, but reset and annotation helpers are still in the demo link set through broad REPL object selection. | Split app reset from REPL reset and keep annotation preparation out of the minimal demo object list unless the demo explicitly exercises replay. Medium effort. |
 | `src/repl/export.c`, `src/repl/example_loader.c`, `src/repl/scenes.c`, `glr_camera.c`, `glr_config.c`, `src/ui/layout.c` | `src/repl/core.c` is still a residual helper bucket, and export/import/workspace/camera helpers sit behind it. The demo uses only a small subset (`repl_parse_and_normalize`, `cmd_type_name`), but the whole translation unit graph comes along. | Continue dissolving `src/repl/core.c`: move normalization into parser/format code, move startup/workspace helpers to scene/export owners, and split export generation from import and code-panel dump helpers. Medium effort, with high payoff for a clean demo link boundary. |
 | `repl_autocomplete.c`, `src/repl/help_text.c` | REPL state initialization registers the completion provider, and help text is part of the broad demo object list. | Treat completion/help as optional app/editor services. Low to medium effort if reset is split first. |
 
@@ -849,11 +849,11 @@ Completed (Phase 1 + most of Phase 2):
   focus/guide snapshot construction, scene-local accumulation jitter, and
   app-shell shim removal (`sample.c` calls `glr_ctrl_*` directly).
 - ✅ **R1** — Replay/HUD migration: controller builds `ReplayFadePlan`; scene
-  iterates it; 2D HUD lives in `replay_ui_hud.c`. Scene files contain zero
+  iterates it; 2D HUD lives in `src/ui/replay_hud.c`. Scene files contain zero
   `repl_replay_*` and `repl_state_*` calls.
 - ✅ **R2** — UI → REPL mutation holes closed end-to-end:
   - `src/ui/panels.c` is hit-test only (`check-ui-panels-no-mutators`).
-  - The color picker now lives across `color_picker_state.c` (peer state +
+  - The color picker now lives across `src/widgets/color_picker_state.c` (peer state +
     lifecycle + writeback through `editor_commit_apply_external_change`)
     and `src/ui/color_picker.c` (pure renderer + hit-test over a
     `ColorPickerView`); the picker UI carries no live state reads, no
