@@ -1,11 +1,11 @@
 /*
  * repl_autonormal.c -- Auto-generated normal commands and feeding-state lookup.
  */
-#include "editor/state.h"   /* editor_buffer_insert_line / _replace_line (Phase 2 migrates these to source_document_*) */
 #include "repl_core.h"
 #include "repl_command_store.h"
 #include "repl_source_scope.h"
 #include "repl_state_owners.h"
+#include "source_document.h"   /* source_document_insert_line / _replace_line */
 
 static void normal_indent(int pos, char *buf, int buf_sz) {
     int spaces;
@@ -65,7 +65,7 @@ static void insert_cmd_at(int pos, const GLCmd *cmd,
     make_auto_normal_text(pos, nx, ny, nz, line, sizeof(line));
     if (repl_command_store_insert_one(&store, pos, cmd,
                                       REPL_COMMAND_STORE_ADJUST_EDIT_LINE))
-        editor_buffer_insert_line(pos, line);
+        source_document_insert_line(pos, line);
 }
 
 static void apply_front_face_to_normal(GLenum front_face, float *n) {
@@ -213,7 +213,7 @@ void repl_recompute_autonormals(int autonormal_enabled) {
                     make_auto_normal_text(vidx - 1, nx, ny, nz, line, sizeof(line));
                     if (repl_command_store_replace_one(&store, vidx - 1,
                                                        &auto_normal))
-                        editor_buffer_replace_line(vidx - 1, line);
+                        source_document_replace_line(vidx - 1, line);
                 }
                 continue;
             }

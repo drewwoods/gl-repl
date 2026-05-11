@@ -1,7 +1,7 @@
 #define REPL_STATE_IMPLEMENTATION
 #include "repl_state.h"
-#include "editor/state.h"
 #include "repl_command_store.h"
+#include "source_document.h" /* source_document_clear */
 #include "repl_core.h"
 #include "repl_core_internal.h"
 #include "repl_eval.h"
@@ -201,7 +201,7 @@ void repl_state_normals_dirty_clear(void) {
 void repl_state_document_reset(void) {
     ReplCommandStore store = repl_command_store_live();
     repl_command_store_load(&store, NULL, 0, 0);
-    editor_buffer_clear();
+    source_document_clear();
 }
 
 ReplFlatProgramState *repl_state_flat_program_mut(void) {

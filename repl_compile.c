@@ -110,6 +110,36 @@ void repl_compiled_change_rollback_alias(const ReplCompiledChange *change) {
     }
 }
 
+void repl_compiled_change_to_text_change(const ReplCompiledChange *in,
+                                         SourceTextChange *out) {
+    if (!out) return;
+    memset(out, 0, sizeof(*out));
+    out->delete_pos = -1;
+    if (!in) return;
+
+    switch (in->kind) {
+    case REPL_COMPILED_NO_CHANGE:   out->kind = SOURCE_TEXT_NO_CHANGE;   break;
+    case REPL_COMPILED_INSERT_ONE:  out->kind = SOURCE_TEXT_INSERT_ONE;  break;
+    case REPL_COMPILED_REPLACE_ONE: out->kind = SOURCE_TEXT_REPLACE_ONE; break;
+    case REPL_COMPILED_INSERT_MANY: out->kind = SOURCE_TEXT_INSERT_MANY; break;
+    case REPL_COMPILED_DELETE_RANGE:out->kind = SOURCE_TEXT_DELETE_RANGE;break;
+    case REPL_COMPILED_LOAD_ALL:    out->kind = SOURCE_TEXT_LOAD_ALL;    break;
+    }
+    out->pos          = in->pos;
+    out->count        = in->count;
+    out->delete_pos   = in->delete_pos;
+    out->delete_count = in->delete_count;
+
+    int n = in->count;
+    if (n < 0) n = 0;
+    if (n > SOURCE_TEXT_CHANGE_MAX_LINES) n = SOURCE_TEXT_CHANGE_MAX_LINES;
+    for (int i = 0; i < n; i++) {
+        size_t len = strnlen(in->text[i], MAX_LINE_LEN - 1);
+        memcpy(out->text[i], in->text[i], len);
+        out->text[i][len] = '\0';
+    }
+}
+
 ReplCompileContext repl_compile_context_from_live(void) {
     ReplCompileContext ctx = {
         .edit_line       = repl_state_edit_line(),

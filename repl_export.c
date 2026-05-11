@@ -1,6 +1,7 @@
 #include "repl_export.h"
 #include "./include/gl_2d.h"
-#include "editor/state.h"        /* editor_buffer_insert_line, editor_insert_mode_set (Phase 2 of feature/source-document-port.md migrates these out) */
+#include "editor/state.h"        /* editor_insert_mode_set (Phase 3 of feature/source-document-port.md migrates editor-input cleanup out) */
+#include "source_document.h"     /* source_document_insert_line */
 #include "repl_load.h"           /* repl_load_apply_line — step 5b */
 /* glr_camera.h removed in step 4a: the export pipeline no longer
  * references glr_camera_*. Camera state flows through the
@@ -2039,7 +2040,7 @@ static int import_parse_declare_marker(const char *line, int *loaded,
             if (warnings) (*warnings)++;
             return 1;
         }
-        editor_buffer_insert_line(decl_pos, decl_line);
+        source_document_insert_line(decl_pos, decl_line);
         (*loaded)++;
     }
     (void)warnings;

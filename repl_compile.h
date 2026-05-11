@@ -205,6 +205,14 @@ void repl_compiled_change_init(ReplCompiledChange *out);
  * speculative alias rollback fields. No-op if no alias was touched. */
 void repl_compiled_change_rollback_alias(const ReplCompiledChange *change);
 
+/* Translate a ReplCompiledChange into the neutral SourceTextChange
+ * shape consumed by source_document_apply_change(). Copies kind, pos,
+ * count, delete_pos, delete_count, and up to SOURCE_TEXT_CHANGE_MAX_LINES
+ * text rows. Used by the load/apply path so the REPL pipeline no
+ * longer calls editor_buffer_apply_compiled_change directly. */
+void repl_compiled_change_to_text_change(const ReplCompiledChange *in,
+                                         SourceTextChange *out);
+
 /* Build a compile context from the live REPL state. Convenience
  * helper for callers in transition; once the editor commit
  * orchestration owns this, the caller will assemble the context

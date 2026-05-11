@@ -1,13 +1,14 @@
 /*
  * repl_scenes.c -- User scene slots, promotion, and workspace save/load.
  */
-#include "editor/state.h"  /* editor_buffer_load_lines, editor_insert_mode_set (Phase 2 migrates these out) */
+#include "editor/state.h"  /* editor_insert_mode_set (Phase 3 of feature/source-document-port.md migrates editor-input out) */
 #include "repl_command_store.h"
 #include "repl_core_internal.h"
 #include "repl_examples.h"
 #include "repl_core.h"
 #include "repl_export.h"   /* ReplExportConfig + bridge for per-scene cfg */
 #include "repl_state_owners.h"
+#include "source_document.h" /* source_document_load_lines */
 
 #include <dirent.h>
 #include <errno.h>
@@ -251,7 +252,7 @@ static int load_commands_into_live(const GLCmd *cmds,
     ReplCommandStore store = repl_command_store_live();
     if (!repl_command_store_load(&store, cmds, num_cmds, edit_line))
         return 0;
-    editor_buffer_load_lines(scene_line_ptrs(lines, num_cmds), num_cmds);
+    source_document_load_lines(scene_line_ptrs(lines, num_cmds), num_cmds);
     return 1;
 }
 
