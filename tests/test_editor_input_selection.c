@@ -873,5 +873,44 @@ int main(void) {
                     editor_buffer_count() > doc_before);
     }
 
+    printf("\n--- undo restore rebuilds input, clears anchor, preserves clipboard ---\n");
+    {
+        /* Undo's snapshot model intentionally does not capture
+         * ReplEditorInputState.input or ReplClipboardState (see Phase
+         * A item 6 in feature/editor-input-selection.md). After a
+         * source-mutating commit, undo rewinds the source array and
+         * editor_undo_snapshot_restore calls load_line_to_input to
+         * rebuild the active input from the restored source. This
+         * test pins those two properties:
+         *
+         *   1. After undo, the input anchor is -1 (input rebuilt
+         *      from canonical source, no persisted anchor).
+         *   2. After undo, an input-text clipboard payload survives
+         *      unchanged (undo does not snapshot clipboard state). */
+        glr_app_reset_all();
+        repl_feed_line_public("glVertex3f(1, 2, 3);");
+        repl_navigate_to_line(0);
+        editor_clipboard_set_input_text("sin(t)", 6);
+        editor_cursor_pos_set(2);
+        editor_input_anchor_set(8);
+        ASSERT_INT("pre-mutation anchor set", editor_input_anchor(), 8);
+
+        /* Source-mutating commit pushes an undo snapshot first. */
+        editor_input_set_text("glVertex3f(9, 9, 9)");
+        editor_handle_key(';', 0, 0);
+
+        ASSERT_TRUE("commit succeeded (still 1 line, content updated)",
+                    editor_buffer_count() == 1);
+
+        /* Ctrl+Z restores the prior snapshot. */
+        editor_handle_key(KEY_CTRL_Z, 0, 0);
+        ASSERT_INT("undo rebuilds input → anchor cleared",
+                   editor_input_anchor(), -1);
+        ASSERT_TRUE("undo preserves input-text clipboard payload",
+                    editor_clipboard_has_input_text());
+        ASSERT_STR("undo: clipboard payload intact",
+                   editor_clipboard_input_text(), "sin(t)");
+    }
+
     return test_harness_report(&g_harness, "test_editor_input_selection");
 }

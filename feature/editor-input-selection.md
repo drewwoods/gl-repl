@@ -523,14 +523,15 @@ future hardening.
    existing shortcuts; add Cmd/Ctrl+A in a follow-up after the
    anchor mechanics are stable.
 
-2. **Double-click timing seam for tests.** GLUT delivers single
-   mouse-down events; we synthesize double-click from a wall-clock
-   delta. Tests need a way to drive that deterministically — either
-   pass in the click time, expose a `editor_input_set_clock_for_test`
-   seam (mirroring `editor_input_set_modifier_provider_for_test`),
-   or factor the word-bounds walk into a pure helper that the test
-   calls directly and skip the timing logic. The factored-helper
-   route is cleanest; it avoids a new test seam.
+2. **Double-click timing seam for tests.** *Resolved.* The
+   word-bounds walk is a pure helper (`editor_input_word_bounds_at`
+   in `src/editor/input.c`) so tests cover the boundary logic
+   without any timing. The full double-click *dispatch* in
+   `route_code_text_hit` reads the clock through a function pointer
+   that tests replace via `glr_ctrl_router_set_double_click_clock_for_test`
+   (mirrors `editor_input_set_modifier_provider_for_test`); production
+   falls back to `glutGet(GLUT_ELAPSED_TIME)`. Both seams are exercised
+   in `tests/test_editor_input_selection.c`.
 
 3. **Snapshot the anchor on the UI side?** Phase F lists two options:
    live read from `editor_state_input()` in `panels.c` versus
