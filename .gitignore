@@ -33,6 +33,7 @@ test_repl_replay
 test_repl_compile
 test_repl_export_all_commands
 test_editor_completion
+test_editor_input_selection
 test_ui_menu_bar
 workspace/
 test_ui
