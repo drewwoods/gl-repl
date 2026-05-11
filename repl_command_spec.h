@@ -142,6 +142,10 @@ const ReplCommandTypeSpec *repl_command_type_spec(CmdType type);
  * "for", "if"). Used by error messages, autocomplete hints, and UI display. */
 const char *repl_cmd_type_name(CmdType type);
 
+/* Thin alias used by tests and the demo for the unprefixed identifier
+ * (cmd_type_name(CmdType)). Forwards to repl_cmd_type_name. */
+const char *cmd_type_name(CmdType type);
+
 /* Query whether a command type requires a trailing semicolon. Used by the
  * formatter and commit validation. */
 int repl_cmd_type_needs_semicolon(CmdType type);

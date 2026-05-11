@@ -299,7 +299,7 @@ static void load_scene_from_slot(int idx) {
      * reset (input buffer wipe, cursor home) belongs to the editor
      * wrapper called after this API returns; scene loads deliberately
      * preserve the user's typing context except for the mode flip. */
-    repl_dispatch_editor_insert_mode_off();
+    repl_dispatch_insert_mode_off();
     /* Editor input buffer refresh is the controller's responsibility:
      * see check-no-load-line-to-input-in-pipeline. Controllers /
      * editor wrappers call load_line_to_input(repl_state_edit_line())

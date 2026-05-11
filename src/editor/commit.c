@@ -1178,7 +1178,7 @@ void editor_commit_reset_transients(void) {
 /* --- Float-decl commit --- */
 
 int try_commit_float_decl(void) {
-    ReplCompileContext ctx = repl_compile_context_from_live();
+    ReplCompileContext ctx = repl_compile_context_from_live(); ctx.insert_mode = editor_insert_mode();
     EditorCommitPlan plan;
     editor_commit_plan_init(&plan);
     char err[REPL_STATUS_TEXT_MAX];
@@ -1225,7 +1225,7 @@ int try_commit_float_decl(void) {
 /* --- Var-assign commit --- */
 
 int try_assign_variable(void) {
-    ReplCompileContext ctx = repl_compile_context_from_live();
+    ReplCompileContext ctx = repl_compile_context_from_live(); ctx.insert_mode = editor_insert_mode();
     EditorCommitPlan plan;
     editor_commit_plan_init(&plan);
     char err[REPL_STATUS_TEXT_MAX];
@@ -1269,7 +1269,7 @@ int try_assign_variable(void) {
  * partner and applies the resulting plan via editor_commit_apply_plan. --- */
 
 int try_commit_for_loop(void) {
-    ReplCompileContext ctx = repl_compile_context_from_live();
+    ReplCompileContext ctx = repl_compile_context_from_live(); ctx.insert_mode = editor_insert_mode();
     EditorCommitPlan plan;
     char err[REPL_STATUS_TEXT_MAX];
 
@@ -1293,7 +1293,7 @@ int try_commit_for_loop(void) {
 }
 
 int try_commit_func_def(void) {
-    ReplCompileContext ctx = repl_compile_context_from_live();
+    ReplCompileContext ctx = repl_compile_context_from_live(); ctx.insert_mode = editor_insert_mode();
     EditorCommitPlan plan;
     char err[REPL_STATUS_TEXT_MAX];
 
@@ -1317,7 +1317,7 @@ int try_commit_func_def(void) {
 }
 
 int try_commit_if_block(void) {
-    ReplCompileContext ctx = repl_compile_context_from_live();
+    ReplCompileContext ctx = repl_compile_context_from_live(); ctx.insert_mode = editor_insert_mode();
     EditorCommitPlan plan;
     char err[REPL_STATUS_TEXT_MAX];
 
@@ -1341,7 +1341,7 @@ int try_commit_if_block(void) {
 }
 
 int try_commit_close_brace(void) {
-    ReplCompileContext ctx = repl_compile_context_from_live();
+    ReplCompileContext ctx = repl_compile_context_from_live(); ctx.insert_mode = editor_insert_mode();
     EditorCommitPlan plan;
     char err[REPL_STATUS_TEXT_MAX];
 

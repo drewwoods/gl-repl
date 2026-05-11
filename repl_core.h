@@ -104,44 +104,27 @@ void        repl_install_example_presentation_reset_sink(void (*fn)(void));
  * example load. No-op when the sink is unset. */
 void        repl_dispatch_example_presentation_reset(void);
 
-/* Editor-input reset sink. Phase 3 of feature/source-document-port.md
- * moves the editor-input cleanup the example loader used to do
- * (insert_mode_set(0) + input buffer wipe + cursor home + pending
- * newline clear) out of the REPL pipeline. The controller installs the
- * concrete reset at startup; the demo leaves it unset and the
- * dispatch is a no-op. */
-void        repl_install_editor_input_reset_sink(void (*fn)(void));
-void        repl_dispatch_editor_input_reset(void);
-
-/* Editor insert-mode-off sink. Scene load and snippet import commit
- * the user's typing context before grafting new code onto the
- * document — they exit insert mode WITHOUT clearing the input buffer.
- * Lighter than the full editor-input reset above. */
-void        repl_install_editor_insert_mode_off_sink(void (*fn)(void));
-void        repl_dispatch_editor_insert_mode_off(void);
-
-/* Editor insert-mode query sink. The compile context needs to know
- * whether the editor is in insert mode so it can pick INSERT_ONE vs
- * REPLACE_ONE shapes. Full app installs a sink that returns
- * editor_insert_mode(); demo leaves it unset, defaulting to 0
- * (overwrite mode — the safe default for a load path with no editor).
- * Phase 6 of feature/source-document-port.md. */
-void        repl_install_editor_insert_mode_query_sink(int (*fn)(void));
-int         repl_dispatch_editor_insert_mode_query(void);
-
-/* Editor scroll-to-line sink. The startup `void display() {` scroll
- * anchor uses it; production forwards to editor_scroll_set +
- * editor_scroll_follow_cursor_set(0). Demo leaves it unset — no UI
- * to scroll. */
-void        repl_install_editor_scroll_to_line_sink(void (*fn)(int target));
-void        repl_dispatch_editor_scroll_to_line(int target);
-
-/* Editor follow-cursor toggle sink. Replay calls this when the PC
- * advances to a new source line, so the code panel auto-scrolls to
- * keep the active line visible. Production forwards to
- * editor_scroll_follow_cursor_set; demo leaves it unset. */
-void        repl_install_editor_follow_cursor_sink(void (*fn)(int follow));
-void        repl_dispatch_editor_follow_cursor(int follow);
+/* Host-effect sinks. Loader / scene-switch / replay paths emit four
+ * host-visible effects (input reset, insert-mode off, scroll-to-line,
+ * follow-cursor toggle) the controller actualizes on the editor; the
+ * demo and tests leave the matching sinks unset and the dispatches
+ * become no-ops. The sinks are deliberately named after the EFFECT
+ * (what the REPL is asking for) rather than the implementation, so
+ * the public REPL surface doesn't carry editor concepts. Phases 3 +
+ * 6 of feature/source-document-port.md.
+ *
+ * Insert-mode QUERY (for ReplCompileContext.insert_mode) is the
+ * caller's responsibility — repl_compile_context_from_live() defaults
+ * to 0 (overwrite, the safe load-path value); editor-side callers
+ * overwrite the field with editor_insert_mode() before compiling. */
+void        repl_install_input_reset_sink(void (*fn)(void));
+void        repl_dispatch_input_reset(void);
+void        repl_install_insert_mode_off_sink(void (*fn)(void));
+void        repl_dispatch_insert_mode_off(void);
+void        repl_install_scroll_to_line_sink(void (*fn)(int target));
+void        repl_dispatch_scroll_to_line(int target);
+void        repl_install_follow_cursor_sink(void (*fn)(int follow));
+void        repl_dispatch_follow_cursor(int follow);
 
 const char *repl_mode_name(GLenum mode);
 GLenum      repl_current_begin_mode(void);

@@ -15,18 +15,22 @@
  * What's in the link set (see Makefile REPL_DEMO_DEP_SRCS):
  *   - REPL pipeline TUs: parser, command store, compile, apply, flatten,
  *     executor, eval, source-scope, command spec, autonormal, scenes,
- *     export, examples, replay annotations, help text, autocomplete.
- *   - State singleton: repl_state.c, plus glr_camera.c (referenced by
- *     repl_state.c) and src/editor/state.c (the editor *buffer* that holds
- *     per-line canonical text -- by design, not editor input dispatch).
- *   - GL stub-ready scene/peer surface for whatever repl_state.c reaches.
- *   - tools/repl_demo/stubs.c: no-op replacements for editor input
- *     dispatch (feed_line / load_line_to_input) and the glr_config /
- *     layout / app-storage symbols the REPL pipeline still reaches
- *     for. Pipeline diagnostics flow through repl_set_status_sink;
- *     the demo deliberately leaves the sink unset so set_status is a
- *     silent no-op. The dependency ledger and removal plan live in
- *     feature/decouple-repl-from-gl-repl-alt.md.
+ *     export, examples, replay annotations, replay, load.
+ *   - State singleton: repl_state.c.
+ *   - tools/repl_demo/source_document.c: standalone static line store
+ *     implementing the source_document_* contract (Phase 6 of
+ *     feature/source-document-port.md). The demo does NOT link
+ *     src/editor/state.c, glr_source_document.c, or any other editor
+ *     translation unit.
+ *   - tools/repl_demo/stubs.c: deliberately empty. After every
+ *     REPL-pipeline → editor/UI/controller edge was routed through a
+ *     controller-installed sink/bridge or an opaque parameter, there
+ *     are zero stubs to backfill. Pipeline diagnostics flow through
+ *     repl_set_status_sink; the demo leaves the sink (and every
+ *     host-effect sink in repl_core.h) unset, so dispatches silently
+ *     no-op. The dependency ledger and removal plan live in
+ *     feature/decouple-repl-from-gl-repl-alt.md and
+ *     feature/source-document-port.md.
  *
  * Run:
  *   make repl_demo USE_GL_STUBS=1
@@ -35,9 +39,10 @@
  */
 
 #include "repl_command.h"
+#include "repl_command_spec.h"    /* cmd_type_name */
 #include "repl_command_store.h"
 #include "repl_core.h"
-#include "repl_core_internal.h"   /* cmd_type_name */
+#include "repl_core_internal.h"   /* repl_parse_and_normalize */
 #include "repl_eval.h"            /* repl_eval_declare_predef_var, g_predef_vars */
 #include "repl_executor.h"
 #include "repl_parser.h"

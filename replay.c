@@ -149,7 +149,7 @@ static void replay_set_src_line(int src_line) {
     if (src_line != g_replay_last_src_line) {
         g_replay_last_src_line = src_line;
         if (src_line >= 0)
-            repl_dispatch_editor_follow_cursor(1);
+            repl_dispatch_follow_cursor(1);
     }
 }
 

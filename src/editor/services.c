@@ -10,6 +10,8 @@
 
 #include "services.h"
 
+#include "state.h"     /* editor_insert_mode */
+
 #include "repl_apply.h"
 #include "repl_compile.h"
 
@@ -17,7 +19,13 @@
 
 static ReplCompileContext default_context(void *user) {
     (void)user;
-    return repl_compile_context_from_live();
+    /* Editor-side context: repl_compile_context_from_live() defaults
+     * insert_mode to 0 (the non-editor convention); fill in the live
+     * value here so editor compile picks INSERT_ONE / REPLACE_ONE
+     * correctly. Phase 6 of feature/source-document-port.md. */
+    ReplCompileContext ctx = repl_compile_context_from_live();
+    ctx.insert_mode = editor_insert_mode();
+    return ctx;
 }
 
 static ReplCompileResult default_compile(const char *text,

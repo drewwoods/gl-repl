@@ -102,59 +102,44 @@ void repl_dispatch_example_presentation_reset(void) {
         g_example_presentation_reset_sink();
 }
 
-/* Phase 3 of feature/source-document-port.md: editor-input cleanup
- * the example loader / scene loader / snippet importer used to do
- * inline now travels through these callback sinks. Same shape as the
- * status / presentation-reset sinks above. The full app installs the
- * concrete reset; the demo leaves them unset and dispatches no-op. */
-static void (*g_editor_input_reset_sink)(void) = NULL;
-static void (*g_editor_insert_mode_off_sink)(void) = NULL;
+/* Host-effect sinks. The example loader / scene loader / snippet
+ * importer / replay engine emit four host-visible effects (input
+ * reset, insert-mode off, scroll-to-line, follow-cursor toggle) the
+ * controller actualizes on the editor. The sinks are named after the
+ * EFFECT rather than the implementation, so the public REPL surface
+ * stays editor-neutral. Demo + tests leave the sinks unset and the
+ * dispatches no-op. Phases 3 + 6 of feature/source-document-port.md. */
+static void (*g_input_reset_sink)(void)        = NULL;
+static void (*g_insert_mode_off_sink)(void)    = NULL;
+static void (*g_scroll_to_line_sink)(int)      = NULL;
+static void (*g_follow_cursor_sink)(int)       = NULL;
 
-void repl_install_editor_input_reset_sink(void (*fn)(void)) {
-    g_editor_input_reset_sink = fn;
+void repl_install_input_reset_sink(void (*fn)(void)) {
+    g_input_reset_sink = fn;
 }
-void repl_dispatch_editor_input_reset(void) {
-    if (g_editor_input_reset_sink)
-        g_editor_input_reset_sink();
-}
-
-void repl_install_editor_insert_mode_off_sink(void (*fn)(void)) {
-    g_editor_insert_mode_off_sink = fn;
-}
-void repl_dispatch_editor_insert_mode_off(void) {
-    if (g_editor_insert_mode_off_sink)
-        g_editor_insert_mode_off_sink();
+void repl_dispatch_input_reset(void) {
+    if (g_input_reset_sink) g_input_reset_sink();
 }
 
-/* Phase 6 of feature/source-document-port.md: route the last two
- * direct editor symbol calls in REPL TUs through sinks so the demo
- * can link with zero editor dependencies. */
-static int (*g_editor_insert_mode_query_sink)(void) = NULL;
-static void (*g_editor_scroll_to_line_sink)(int) = NULL;
-
-void repl_install_editor_insert_mode_query_sink(int (*fn)(void)) {
-    g_editor_insert_mode_query_sink = fn;
+void repl_install_insert_mode_off_sink(void (*fn)(void)) {
+    g_insert_mode_off_sink = fn;
 }
-int repl_dispatch_editor_insert_mode_query(void) {
-    return g_editor_insert_mode_query_sink ? g_editor_insert_mode_query_sink()
-                                           : 0;
+void repl_dispatch_insert_mode_off(void) {
+    if (g_insert_mode_off_sink) g_insert_mode_off_sink();
 }
 
-void repl_install_editor_scroll_to_line_sink(void (*fn)(int target)) {
-    g_editor_scroll_to_line_sink = fn;
+void repl_install_scroll_to_line_sink(void (*fn)(int target)) {
+    g_scroll_to_line_sink = fn;
 }
-void repl_dispatch_editor_scroll_to_line(int target) {
-    if (g_editor_scroll_to_line_sink)
-        g_editor_scroll_to_line_sink(target);
+void repl_dispatch_scroll_to_line(int target) {
+    if (g_scroll_to_line_sink) g_scroll_to_line_sink(target);
 }
 
-static void (*g_editor_follow_cursor_sink)(int) = NULL;
-void repl_install_editor_follow_cursor_sink(void (*fn)(int follow)) {
-    g_editor_follow_cursor_sink = fn;
+void repl_install_follow_cursor_sink(void (*fn)(int follow)) {
+    g_follow_cursor_sink = fn;
 }
-void repl_dispatch_editor_follow_cursor(int follow) {
-    if (g_editor_follow_cursor_sink)
-        g_editor_follow_cursor_sink(follow);
+void repl_dispatch_follow_cursor(int follow) {
+    if (g_follow_cursor_sink) g_follow_cursor_sink(follow);
 }
 
 const char *repl_mode_name(GLenum mode) {
@@ -796,7 +781,7 @@ static void scroll_to_display_function(void) {
             break;
         target++;
     }
-    repl_dispatch_editor_scroll_to_line(target);
+    repl_dispatch_scroll_to_line(target);
 }
 
 static void load_initial_commands(const char *import_file) {

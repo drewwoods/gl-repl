@@ -47,7 +47,6 @@
 
 #include "repl_compile.h"
 
-#include "repl_core.h"           /* repl_dispatch_editor_insert_mode_query */
 #include "repl_core_internal.h"  /* repl_format_fits, repl_extract_assignment_parts, collect_visible_vars */
 #include "repl_parser.h"         /* repl_parser_parse_command_ctx (uncomment fallback) */
 #include "repl_source_scope.h"   /* repl_source_scope_cmd_indent, _find_block_end */
@@ -160,10 +159,17 @@ void repl_compiled_change_to_text_change(const ReplCompiledChange *in,
 }
 
 ReplCompileContext repl_compile_context_from_live(void) {
+    /* insert_mode defaults to 0 (overwrite mode). The non-editor load
+     * path (repl_load.c, demo, parse tests) always appends at the
+     * end, so 0 is correct. The editor-side callers (glr_ctrl.c
+     * variable-panel commit, editor commit pipeline) overwrite
+     * ctx.insert_mode = editor_insert_mode() after this returns —
+     * insert mode is editor state, not REPL state, so the REPL
+     * pipeline doesn't reach for it. */
     ReplCompileContext ctx = {
         .edit_line       = repl_state_edit_line(),
         .document_count  = repl_state_document_count(),
-        .insert_mode     = repl_dispatch_editor_insert_mode_query(),
+        .insert_mode     = 0,
         .text            = source_document_view(),
         .document_cmds   = repl_state_document_cmds(),
     };
