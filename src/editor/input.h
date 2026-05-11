@@ -147,4 +147,11 @@ void repl_editor_reset_transients(void);
  * `src/repl/load.h` instead. */
 int feed_line(const char *line);
 
+/* If an input-buffer selection is active, delete [lo, hi) from input[],
+ * place the cursor at lo, and clear the anchor. Returns 1 if anything
+ * was deleted, 0 if no selection was active. Used as the pre-step for
+ * typed-char insertion, backspace/delete, and input-text paste so all
+ * three "replace selection" cases share one mutation primitive. */
+int editor_input_consume_selection(void);
+
 #endif /* EDITOR_INPUT_H */
