@@ -603,6 +603,11 @@ Declarative toggle system in `glr_actions.c`:
 | Enter | Insert new line |
 | Up/Down | Navigate lines |
 | Tab | Autocomplete |
+| Shift+Left/Right | Extend input-buffer selection by one character |
+| Shift+Home/End | Extend input-buffer selection to row start / end |
+| Double-click | Select the word under the cursor (input-buffer selection) |
+| Click + drag | Per-character selection inside the active input row |
+| Ctrl+C / Ctrl+X / Ctrl+V | Copy / cut / paste — input selection wins over line-range |
 | Ctrl+S | Save to output.c |
 | Ctrl+Z | Undo |
 | Ctrl+R | Reformat all lines |
@@ -610,6 +615,15 @@ Declarative toggle system in `glr_actions.c`:
 | F1 | Help overlay |
 | F2-F11 | Toggle visual overlays |
 | F12 | Cycle examples and user scenes |
+
+When an input-buffer (character-range) selection is active,
+`Ctrl+C` / `Ctrl+X` copy or cut the substring into a separate
+`INPUT_TEXT` clipboard slot — they do **not** copy the whole command
+line. `Ctrl+V` then inserts the substring at the cursor (replacing
+any active destination selection). With no input selection, the
+existing line-range clipboard path runs unchanged. See
+[`feature/editor-input-selection.md`](feature/editor-input-selection.md)
+for the full model.
 
 ## Supported Commands
 

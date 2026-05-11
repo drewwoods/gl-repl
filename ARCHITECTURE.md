@@ -353,6 +353,21 @@ Slices that would have been heavy to copy are deliberately excluded:
 `ReplClipboardState` (~1.88 MB with the lines sidecar) is not on the
 snapshot — the per-row selection band reads `selection_lo/_hi` instead.
 
+**Two selection models, one clipboard.** `selection_lo/_hi` above is
+the *line-range* selection used by gutter drag and the multi-line
+clipboard (`anchor_idx`/`end_idx` on `ReplSelectionState`). The
+*input-buffer* selection is a separate character-range model on
+`ReplEditorInputState.anchor_pos`, scoped to the active edit row only
+— shift+arrow, double-click word, drag-on-edit-row, and partial-line
+copy/cut/paste all drive that anchor. The two share one tagged
+clipboard object (`ReplClipboardState` carries an `EditorClipboardKind`
+discriminator plus both a line array and an `input_text` slot) so
+`Ctrl+V` after a partial copy pastes characters and `Ctrl+V` after a
+line copy still pastes whole commands. Input selection wins over
+line-range for `Ctrl+C` / `Ctrl+X` priority. See
+[`feature/editor-input-selection.md`](feature/editor-input-selection.md)
+for the full rules.
+
 Mutations route through `repl_actions`, `repl_command_store`,
 `variable_panel_drag`, or another REPL-owned mutation path. UI input
 hit-tests (`*_hit_test`, `*_rect`) compute neutral `UiHit` values and
