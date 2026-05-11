@@ -81,6 +81,7 @@ static int is_known_incomplete_func_name(const char *func) {
         "glPointParameterfv",
         "glPushMatrix",
         "glPopMatrix",
+        "glLoadIdentity",
         "gluBegin",
         "gluEnd",
         "gluColor",
@@ -644,6 +645,14 @@ static int parse_command(const char *line, GLCmd *cmd,
         cmd->type = CMD_POP_MATRIX;
         cmd->valid = 1;
         WRITE_TEXT("%sglPopMatrix();", indent);
+        return 1;
+    }
+
+    /* glLoadIdentity() */
+    if (strcmp(func, "glLoadIdentity") == 0) {
+        cmd->type = CMD_LOAD_IDENTITY;
+        cmd->valid = 1;
+        WRITE_TEXT("%sglLoadIdentity();", indent);
         return 1;
     }
 

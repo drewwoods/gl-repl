@@ -750,6 +750,15 @@ int main(void) {
         ASSERT_TRUE("glPopMatrix with parens type", cmd.type == CMD_POP_MATRIX);
     }
 
+    {
+        glr_app_reset_all();
+        GLCmd cmd;
+        memset(&cmd, 0, sizeof(cmd));
+        int ok = parse_for_test("glLoadIdentity()", &cmd);
+        ASSERT_TRUE("glLoadIdentity with parens parse ok", ok == 1);
+        ASSERT_TRUE("glLoadIdentity with parens type", cmd.type == CMD_LOAD_IDENTITY);
+    }
+
     /* fixed-arity command with extra args should be rejected predictably */
     {
         glr_app_reset_all();

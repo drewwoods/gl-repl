@@ -32,6 +32,9 @@ static inline void apply_tracked_transform(const GLCmd *cmd, int *depth) {
                 (*depth)--;
         }
         break;
+    case CMD_LOAD_IDENTITY:
+        glLoadIdentity();
+        break;
     case CMD_TRANSLATE3F:
         glTranslatef(cmd->args[0], cmd->args[1], cmd->args[2]);
         break;

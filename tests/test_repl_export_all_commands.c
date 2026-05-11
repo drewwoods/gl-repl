@@ -65,6 +65,7 @@ static const CmdType expected_commands[] = {
     CMD_ROTATEF,
     CMD_PUSH_MATRIX,
     CMD_POP_MATRIX,
+    CMD_LOAD_IDENTITY,
     CMD_ENABLE,
     CMD_DISABLE,
     CMD_SHADE_MODEL,
@@ -193,6 +194,7 @@ int main(void) {
     repl_feed_line_public("glRotatef(45, 0, 0, 1);");
     repl_feed_line_public("glPushMatrix();");
     repl_feed_line_public("glPopMatrix();");
+    repl_feed_line_public("glLoadIdentity();");
 
     /* State/capability commands */
     repl_feed_line_public("glEnable(GL_DEPTH_TEST);");

@@ -193,6 +193,9 @@ static void repl_executor_apply_transform_cmd(const GLCmd *cmd) {
     case CMD_POP_MATRIX:
         glPopMatrix();
         break;
+    case CMD_LOAD_IDENTITY:
+        glLoadIdentity();
+        break;
     default:
         break;
     }
@@ -690,6 +693,7 @@ void repl_execute_program(const ReplExecutionOptions *options) {
         /* Transforms handled by repl_cmd_is_transform() early-continue above. */
         case CMD_TRANSLATE3F: case CMD_SCALEF: case CMD_ROTATEF:
         case CMD_PUSH_MATRIX: case CMD_POP_MATRIX:
+        case CMD_LOAD_IDENTITY:
         /* These are resolved during flatten and should not appear in flat_cmds. */
         case CMD_FOR_BEGIN: case CMD_FOR_END:
         case CMD_FUNC_DEF: case CMD_FUNC_END: case CMD_CALL:
