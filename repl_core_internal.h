@@ -1,106 +1,32 @@
 /*
- * repl_core_internal.h - Implementation internals shared across REPL modules.
+ * repl_core_internal.h - Parse / executor / debug-dump REPL internals.
  *
- * Collects internal APIs used by repl_core.c, src/editor/input.c,
- * repl_executor.c, repl_export.c, repl_parser.c, src/editor/search.c, and the
- * unit test suites. These are NOT part of the public API (repl_core.h); they
- * are domain-specific helpers that tests and sibling modules need. When an
- * internal API stabilizes and becomes broadly useful, graduate it to
- * repl_core.h.
+ * Phase 5 of feature/source-document-port.md shrank this header to
+ * parse-and-friends. The previous catch-all was split:
  *
- * Organization by subsystem (see function declarations below):
+ *   repl_util.h           static inline format / copy helpers
+ *   repl_scenes.h         scene promotion / capture / reset
+ *   src/editor/input.h    feed_line, load_line_to_input, modifier
+ *                         provider typedef, editor transient reset
+ *   glr_completion.h      glr_completion_register_provider,
+ *                         accept_autocomplete
  *
- * 1. Normalization / commit pipeline: repl_parse_and_normalize() and the strict
- *    variant validate top-level function calls. Helpers update render and camera
- *    state strings for export consistency.
- *
- * 2. Text / expression parsing: Argument extraction, for-loop parsing, function
- *    signature parsing, variable reference checking, and normalization helpers.
- *
- * 3. Code-panel dumps: Debug output for tests and visual inspection of the code
- *    panel (wrapped text, highlighting, etc.). Used by test suites to verify
- *    rendering logic without running the full UI.
- *
- * 4. Source-scope: Block depth, indentation, and scope queries (documented in
- *    repl_source_scope.h). Prefixes cached to avoid re-traversal.
- *
- * 5. Executor helpers: Apply state commands (enable/disable), variable snapshot
- *    save/restore, and fade context setup for replay.
- *
- * 6. Visible-var collection: collect_visible_vars() walks loop/function-scope
- *    ancestors at a source line.
- *
- * 7. Replay/bench: repl_bench_fade_install/clear() for deterministic replay
- *    fade testing (bench_repl.c workload).
- *
- * 8. Test entry: repl_load_example_lines_for_test() drives example loading
- *    from unit tests without going through the GLUT example dropdown.
- *
- * 9. User scene promotion: repl_promote_example_if_needed() creates a user
- *    scene on first edit of an example. Scene state reset/initialization.
- *
- * Editor-input declarations (feed_line, load_line_to_input,
- * repl_editor_reset_transients, delete_cmd_range, repl_clear_all_cmds,
- * ReplModifierProvider) moved to src/editor/input.h. Controller-side
- * autocomplete entry points (accept_autocomplete,
- * glr_completion_register_provider) moved to glr_completion.h.
+ * What still lives here: the normalize / commit pipeline entry points,
+ * the parse / extract / format helpers callers use to build canonical
+ * source text, the executor's state-apply helper, the code-panel debug
+ * dumps that produce test fixtures, the bench fade hooks, and a few
+ * REPL test entries. None of these need editor headers or expose
+ * editor-input plumbing — the file pulls neutral REPL grammar +
+ * source-document types only.
  */
 #ifndef REPL_CORE_INTERNAL_H
 #define REPL_CORE_INTERNAL_H
 
-#include <stdarg.h>
-
 #include "repl_command.h"    /* GLCmd, CmdType */
 #include "repl_export.h"     /* ReplExportLayout (step 7c) */
-#include "source_document.h" /* SourceTextView (Phase 1 of feature/source-document-port.md) */
-
-#if defined(__GNUC__) || defined(__clang__)
-#define REPL_PRINTF_LIKE(fmt_idx, arg_idx) __attribute__((format(printf, fmt_idx, arg_idx)))
-#else
-#define REPL_PRINTF_LIKE(fmt_idx, arg_idx)
-#endif
-
-static inline int repl_format_fits(char *out, size_t out_sz,
-                                   const char *fmt, ...) REPL_PRINTF_LIKE(3, 4);
-static inline int repl_format_fits(char *out, size_t out_sz,
-                                   const char *fmt, ...) {
-    va_list ap;
-    int written;
-
-    if (!out || out_sz == 0)
-        return 0;
-
-    va_start(ap, fmt);
-    written = vsnprintf(out, out_sz, fmt, ap);
-    va_end(ap);
-
-    if (written < 0 || (size_t)written >= out_sz) {
-        out[0] = '\0';
-        return 0;
-    }
-    return 1;
-}
-
-static inline int repl_copy_string_fits(char *dst, size_t dst_sz,
-                                        const char *src) {
-    size_t len;
-
-    if (!dst || dst_sz == 0)
-        return 0;
-    if (!src) {
-        dst[0] = '\0';
-        return 1;
-    }
-
-    len = strlen(src);
-    if (len >= dst_sz) {
-        dst[0] = '\0';
-        return 0;
-    }
-
-    memcpy(dst, src, len + 1);
-    return 1;
-}
+#include "repl_scenes.h"     /* scene promotion/reset hooks (Phase 5) */
+#include "repl_util.h"       /* repl_format_fits / _copy_string_fits (Phase 5) */
+#include "source_document.h" /* SourceTextView (Phase 1) */
 
 /* ---- Normalize / commit pipeline -------------------------------------- */
 
@@ -165,26 +91,23 @@ int  repl_extract_assignment_target_parts(const char *src,
                                           char *index_expr, int index_expr_sz,
                                           char *rhs, int rhs_sz);
 
-/* ---- Source-scope helpers --------------------------------------------- */
+/* ---- Code-panel dumps (debug + test fixtures) ------------------------- */
 
-/* Depth/cache, indentation, and block-boundary queries live in
- * repl_source_scope.h. */
+/* repl_dump_code_panel_text / _visual_text declarations moved to
+ * repl_export.h (upstream commit 7601660) — glr_debug.c is now a real
+ * caller, so the dumps live with the export API where the
+ * implementations are.  */
 
 /* ---- Executor helpers ------------------------------------------------- */
 
 int  apply_state_cmd(const GLCmd *cmd, float alpha_scale);
 
-/* ---- Line feeding / source structure ---------------------------------- */
+/* ---- Visible-var collection ------------------------------------------- */
 
-void load_line_to_input(int idx);
 /* Populate `vars` with every loop/function-local visible at source line
  * `pos`. Returns the count (capped at max_vars). If total_out is non-NULL,
  * receives the uncapped total (for truncation detection at commit sites). */
 int  collect_visible_vars(int pos, ExprVar *vars, int max_vars, int *total_out);
-
-/* ---- Replay state machine --------------------------------------------- */
-
-/* Replay APIs live in replay.h. */
 
 /* ---- Bench helpers (populate replay fade state without stepping) -------
  * These exist solely for bench_repl.c to drive
@@ -205,29 +128,5 @@ void repl_load_example_lines_for_test(const char *const *lines);
 /* ---- Cmd-type name helper --------------------------------------------- */
 
 const char *cmd_type_name(CmdType t);
-
-/* repl_advance_time / repl_reset_time_to_zero moved to repl_core.h as
- * public REPL timekeeping APIs. */
-
-/* Called before any mutation: if an example is currently viewed (no active
- * user scene), allocate a scene slot, copy the current editor state into it,
- * and inherit the example's name (de-duplicated). Returns the promoted slot
- * index, or -1 if promotion was a no-op or rejected. */
-int repl_promote_example_if_needed(void);
-void repl_scenes_save_active_scene_if_any(void);
-void repl_scenes_capture_home_if_needed(void);
-/* Snapshot the 14 presentation-cfg keys when entering an example from
- * non-example state. Restored on the next user-scene / home transition.
- * Idempotent across consecutive example loads. */
-void repl_scenes_capture_pre_example_cfg_if_entering(void);
-void repl_scenes_mark_example_active(void);
-void repl_scenes_activate_home_slot(void);
-void repl_scenes_reset(void);
-
-/* Commit dispatcher chain (try_commit_*, editor_commit_func_decl_resume_*,
- * editor_commit_resolve_insert_exit_target, editor_commit_reset_transients)
- * declarations moved to editor_commit.h (Phase H.5 commit 41). The
- * bodies live in editor_commit.c (moved from repl_commit.c in
- * commit 39). */
 
 #endif /* REPL_CORE_INTERNAL_H */
