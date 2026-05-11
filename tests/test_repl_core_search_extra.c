@@ -1,5 +1,5 @@
 #include "editor/state.h"
-#include "glr_ctrl.h"
+#include "app/glr_ctrl.h"
 #include "editor/input.h"
 #include "editor/search.h"
 #include "repl/core.h"

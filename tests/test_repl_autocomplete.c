@@ -1,6 +1,6 @@
 #include "editor/state.h"
-#include "glr_completion.h"
-#include "glr_ctrl.h"
+#include "app/glr_completion.h"
+#include "app/glr_ctrl.h"
 #include "repl/core_internal.h"
 #include "repl/state.h"
 #include "repl/core.h"

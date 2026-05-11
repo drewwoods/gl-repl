@@ -12,16 +12,16 @@ from pathlib import Path
 
 strict = sys.argv[1] == "1"
 
-ctrl_path = Path("glr_ctrl.c")
+ctrl_path = Path("src/app/glr_ctrl.c")
 if not ctrl_path.exists():
-    print("ERROR: glr_ctrl.c missing", file=sys.stderr)
+    print("ERROR: src/app/glr_ctrl.c missing", file=sys.stderr)
     sys.exit(1)
 ctrl = ctrl_path.read_text(encoding="utf-8")
 
 missing = []
 output_structs = 0
 
-for hdr in sorted(glob.glob("ui_*.h")):
+for hdr in sorted(glob.glob("src/ui/*.h")):
     text = Path(hdr).read_text(encoding="utf-8")
     for m in re.finditer(r"typedef\s+struct\s+([A-Za-z_][A-Za-z0-9_]*)?\s*\{(.*?)\}\s*(Ui[A-Za-z0-9_]*Output)\s*;", text, re.S):
         body = m.group(2)

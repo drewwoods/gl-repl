@@ -1,7 +1,7 @@
 /*
  * repl_debug.c - Diagnostic dumps for CLI flags and tests.
  */
-#include "glr_debug.h"
+#include "app/glr_debug.h"
 
 #include "repl/export.h"
 #include "repl/command_spec.h"

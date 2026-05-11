@@ -1,9 +1,9 @@
 /*
  * repl_menu_bar.c -- Code-panel menu bar, dropdowns, and search slot.
  */
-#include "glr_actions.h"
+#include "app/glr_actions.h"
 #include "repl/core.h"
-#include "glr_config.h"
+#include "app/glr_config.h"
 #include "keys.h"
 #include "repl/state_views.h"
 #include "widgets/replay.h"   /* ReplayState (PLAYING / PAUSED / DONE) enum values */

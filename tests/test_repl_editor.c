@@ -9,12 +9,12 @@
 #include "editor/search.h"
 #include "editor/state.h"
 #include "editor/undo.h"
-#include "glr_actions.h"
-#include "glr_camera.h"
-#include "glr_config.h"
-#include "glr_ctrl.h"
-#include "glr_defaults.h" /* CFG_DEFAULT_* */
-#include "glr_state.h"
+#include "app/glr_actions.h"
+#include "app/glr_camera.h"
+#include "app/glr_config.h"
+#include "app/glr_ctrl.h"
+#include "app/glr_defaults.h" /* CFG_DEFAULT_* */
+#include "app/glr_state.h"
 #include "keys.h"
 #include "prof.h"
 #include "repl/core.h"

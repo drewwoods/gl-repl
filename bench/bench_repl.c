@@ -46,7 +46,7 @@
 #include "repl/parser.h"
 #include "widgets/replay.h"
 #include "widgets/replay_state.h"
-#include "glr_ctrl.h"
+#include "app/glr_ctrl.h"
 
 #include <stdio.h>
 #include <stdlib.h>

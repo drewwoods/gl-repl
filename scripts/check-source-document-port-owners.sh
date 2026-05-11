@@ -3,7 +3,7 @@
 # host adapters.
 #
 # Approved owner files:
-#   glr_source_document.c                  — full-app host (forwards to EditorState)
+#   src/app/glr_source_document.c          — full-app host (forwards to EditorState)
 #   tools/repl_demo/source_document.c      — standalone demo backend
 #   tests/support/source_document_fixture.c — optional test fixture (if added)
 #
@@ -16,7 +16,7 @@ set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 
 allowed_files=(
-  "glr_source_document.c"
+  "src/app/glr_source_document.c"
   "tools/repl_demo/source_document.c"
   "tests/support/source_document_fixture.c"
 )

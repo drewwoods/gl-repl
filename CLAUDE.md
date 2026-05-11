@@ -100,10 +100,10 @@ Test sources live under `tests/` and shared test-only helpers live under
 |------|----------------|
 | `sample.c` | GLUT callback registration, `main()`, window setup, buffer swap; forwards directly to `glr_ctrl_*` |
 | `sample.h` | Minimal legacy header: standard includes and `M_PI`; types/defaults moved out to dedicated headers |
-| `glr_ctrl.c` | App-frame controller: `glr_ctrl_display_frame`, `glr_ctrl_reshape`, `glr_ctrl_init_gl`; builds `SceneRenderConfig`, calls scene/UI renderers |
-| `glr_ctrl.h` | Controller public surface: display, reshape, init-GL entrypoints |
-| `glr_config.c` | Config key implementation and descriptor table helpers |
-| `glr_config.h` | `ReplConfigKey` / `ReplConfigItem` descriptor API for keyed config access |
+| `src/app/glr_ctrl.c` | App-frame controller: `glr_ctrl_display_frame`, `glr_ctrl_reshape`, `glr_ctrl_init_gl`; builds `SceneRenderConfig`, calls scene/UI renderers |
+| `src/app/glr_ctrl.h` | Controller public surface: display, reshape, init-GL entrypoints |
+| `src/app/glr_config.c` | Config key implementation and descriptor table helpers |
+| `src/app/glr_config.h` | `ReplConfigKey` / `ReplConfigItem` descriptor API for keyed config access |
 | `src/repl/command.h` | Core command model types: `CmdType` enum, `GLCmd` struct (pure parse-result: type, args, flags, provenance — no `source[]` field) |
 | `src/repl/compile.c` | Pure source-text validators that produce `ReplCompiledChange` descriptors; never mutates state |
 | `src/repl/compile.h` | `ReplCompiledChange`, `ReplCompileResult`, `ReplCompileContext`, compile entry points |
@@ -124,7 +124,7 @@ Test sources live under `tests/` and shared test-only helpers live under
 | `src/repl/state.h` | Typed runtime-state facade, reset helpers, and focused accessors over the live REPL state |
 | `src/repl/state_views.h` | Read-only (by-value) state getters; safe to include from `scene_*` and `ui_*` |
 | `src/repl/state_owners.h` | Mutable `_mut()` accessors; owner modules and controller only |
-| `src/editor/input.c` | Editor's text-document controller: keyboard/mouse dispatch, cursor/scroll/selection/search/autocomplete navigation, clipboard, undo, commit orchestration, `feed_line`. Non-editor routing (replay, audio, config, save, camera) lives in `glr_ctrl.c` |
+| `src/editor/input.c` | Editor's text-document controller: keyboard/mouse dispatch, cursor/scroll/selection/search/autocomplete navigation, clipboard, undo, commit orchestration, `feed_line`. Non-editor routing (replay, audio, config, save, camera) lives in `src/app/glr_ctrl.c` |
 | `src/editor/input.h` | Editor input dispatch entry points + `ReplInputDispatchEffects` typedef + `editor_input_active_modifiers` test seam |
 | `src/editor/commit.c` | Editor-side commit transaction boundary: compile via `repl_compile`, undo snapshot, text-buffer write, REPL apply, dirty-state updates |
 | `src/editor/commit.h` | Commit orchestration API (`editor_commit_apply_external_change`, `try_commit_*` helpers) |
@@ -138,12 +138,12 @@ Test sources live under `tests/` and shared test-only helpers live under
 | `src/editor/clipboard.h` | Clipboard public API |
 | `src/editor/undo.c` | Undo/redo snapshots, history rings, example auto-promote hook before mutation |
 | `src/editor/undo.h` | Undo public API (`editor_undo_push_snapshot`, `editor_undo_pop_snapshot`, `editor_undo_do_redo`) |
-| `glr_camera.c` | Scene camera pointer state, orbit/pan/zoom drags, wheel zoom velocity, momentum tick |
-| `glr_camera.h` | Camera state + setters (`glr_camera`, `glr_camera_set_*`, `glr_camera_controls_reset`) |
-| `glr_actions.c` | Config descriptor table, config shortcuts, menu actions |
-| `glr_actions.h` | Actions public API (`glr_action_menu_item_activate`, etc.) |
+| `src/app/glr_camera.c` | Scene camera pointer state, orbit/pan/zoom drags, wheel zoom velocity, momentum tick |
+| `src/app/glr_camera.h` | Camera state + setters (`glr_camera`, `glr_camera_set_*`, `glr_camera_controls_reset`) |
+| `src/app/glr_actions.c` | Config descriptor table, config shortcuts, menu actions |
+| `src/app/glr_actions.h` | Actions public API (`glr_action_menu_item_activate`, etc.) |
 | `config.h` | Project-wide compile-time configuration constants |
-| `glr_defaults.h` | Controller-side scene/presentation defaults (`CFG_DEFAULT_*` macros) |
+| `src/app/glr_defaults.h` | Controller-side scene/presentation defaults (`CFG_DEFAULT_*` macros) |
 | `outline_offset.h` | Polygon-offset depth-bias constants for the outline-pass rendering |
 | `src/ui/code_panel_layout.c` | Pure code-panel wrapping, row counts, segment lookup, cursor-row mapping |
 | `src/ui/code_panel_layout.h` | `CodePanelTextLayout` / `CodePanelWrapIter` API shared by UI, export dumps, tests |
@@ -164,8 +164,8 @@ Test sources live under `tests/` and shared test-only helpers live under
 | `src/ui/layout.h` | Layout geometry API (`ui_layout_scene_rect`, `ui_layout_code_panel_rect`) |
 | `src/repl/scenes.c` | User-scene slots, LRU eviction, workspace save/load, workspace dir binding |
 | `src/repl/example_loader.c` | Built-in example loading and active-example tracking |
-| `glr_debug.c` | Diagnostic dumps for CLI flags and tests |
-| `glr_debug.h` | Debug dump public API |
+| `src/app/glr_debug.c` | Diagnostic dumps for CLI flags and tests |
+| `src/app/glr_debug.h` | Debug dump public API |
 | `src/repl/replay_annotations.c` | Replay-time source annotations, variable substitution, evaluated command display text |
 | `src/repl/replay_annotations.h` | Code-panel replay annotation API |
 | `src/ui/snapshot.h` | `UiRenderSnapshot` — frame-frozen bundle built once per frame by `glr_ctrl_build_ui_snapshot()` |
@@ -226,7 +226,7 @@ Test sources live under `tests/` and shared test-only helpers live under
 | `src/scene/backdrop.h` | Backdrop render entrypoint |
 | `src/scene/lights.c` | Ambient init, light setup/reset, and visible light indicator overlay |
 | `src/scene/lights.h` | Scene light setup/render entrypoints |
-| `src/scene/overlays.c` | Tiny per-vertex GL primitives the controller calls (vertex-number labels, normal arrows). Outline / vertex-point passes moved to `glr_ctrl.c` |
+| `src/scene/overlays.c` | Tiny per-vertex GL primitives the controller calls (vertex-number labels, normal arrows). Outline / vertex-point passes moved to `src/app/glr_ctrl.c` |
 | `src/scene/overlays.h` | Scene overlay primitive API |
 | `src/ui/state.c` | Owns `UiState`: viewport, pointer, status text TTL, panel visibility, panel-divider geometry |
 | `src/ui/hit.h` | `UiHitKind` + `UiHit` — neutral hit-test result returned by UI input handlers to `glr_ctrl` |
@@ -259,7 +259,7 @@ Test sources live under `tests/` and shared test-only helpers live under
   app-level service; whether it gets a `glr_audio` rename is part of the open
   namespace audit. Don't introduce new top-level prefixes without a plan.
 - Config toggles use the `ReplConfigItem` / `ReplConfigKey` pattern: add a
-  descriptor entry to `g_cfg_items[]` in `glr_actions.c`; `CFG_ITEM_COUNT`
+  descriptor entry to `g_cfg_items[]` in `src/app/glr_actions.c`; `CFG_ITEM_COUNT`
   auto-computes via `sizeof`
 - New GL commands: add to the `CmdType` enum in `src/repl/command.h`, then
   handle in `repl_parser_parse_command_ctx()` in `src/repl/parser.c`,
@@ -273,7 +273,7 @@ Test sources live under `tests/` and shared test-only helpers live under
 - Keyboard bindings: `editor_handle_key()` for ASCII keys (Ctrl+X
   produces ASCII X & 0x1F via standard GLUT), `editor_handle_special()`
   for F-keys/arrows. Cross-subsystem routing (replay / save / config /
-  audio / camera) lives in `glr_ctrl.c::glr_ctrl_router_*`
+  audio / camera) lives in `src/app/glr_ctrl.c::glr_ctrl_router_*`
   helpers, called from `glr_ctrl_keyboard` before delegating to
   `editor_handle_key`. macOS Cmd+letter is normalized to its
   control-character form by `editor_input_normalize_super_to_ctrl`,
@@ -286,7 +286,7 @@ Test sources live under `tests/` and shared test-only helpers live under
 
 ### Rendering Pipeline
 
-`glr_ctrl_display_frame()` in `glr_ctrl.c` drives each frame.
+`glr_ctrl_display_frame()` in `src/app/glr_ctrl.c` drives each frame.
 `sample.c` registers the GLUT display callback and forwards directly — there
 is no shim layer.
 1. Rebuild autonormals and flat program if dirty; save predef var values;
@@ -513,11 +513,11 @@ comments.
   presentation state.
 
 The single source of truth for example-owned presentation defaults is
-the `CFG_DEFAULT_*` macro block in `glr_defaults.h`. Initializers, example
+the `CFG_DEFAULT_*` macro block in `src/app/glr_defaults.h`. Initializers, example
 reset helpers, and tests reuse those macros instead of duplicating
 literals. `make test_repl_core_examples` is the focused regression
 suite; touch `src/repl/core.c`, `src/repl/export.c`, `src/repl/examples.c`,
-`glr_defaults.h`, and `tests/test_repl_core_examples.c` together when
+`src/app/glr_defaults.h`, and `tests/test_repl_core_examples.c` together when
 changing example-metadata behavior.
 
 ### Save/Load (output.c)
@@ -585,13 +585,13 @@ Case-insensitive text search in `src/editor/search.c`:
 
 ### Config Menu
 
-Declarative toggle system in `glr_actions.c`:
+Declarative toggle system in `src/app/glr_actions.c`:
 - `g_cfg_items[]` array of `ReplConfigItem` descriptors: `{ label, key_code,
   is_special, key, state_count, state_names[], section_header }`
 - Each item is a toggle (2 states, default OFF/ON) or cycle (>2 states
   with named entries, e.g. grid themes)
 - Rendered by the Config dropdown in `src/ui/menu_bar.c`; menu clicks and
-  F-key/Ctrl-key shortcuts dispatch through `glr_actions.c`
+  F-key/Ctrl-key shortcuts dispatch through `src/app/glr_actions.c`
 - Adding a config item: append to `g_cfg_items[]` — count is
   auto-computed via `sizeof`
 

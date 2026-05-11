@@ -1,11 +1,11 @@
 #include "editor/state.h"
-#include "glr_ctrl.h"
+#include "app/glr_ctrl.h"
 #define _DEFAULT_SOURCE
-#include "glr_config.h"
+#include "app/glr_config.h"
 #include "repl/command_spec.h"  /* cmd_type_name */
 #include "repl/core.h"
 #include "repl/core_internal.h"
-#include "glr_debug.h"
+#include "app/glr_debug.h"
 #include "widgets/replay.h"
 #include "repl/executor.h"
 #include "repl/state.h"

@@ -1,16 +1,16 @@
-#include "glr_state.h"
-#include "glr_ctrl.h"
+#include "app/glr_state.h"
+#include "app/glr_ctrl.h"
 #include "repl/state.h"
 #include "editor/state.h"
 #include "ui/state.h"
-#include "glr_camera.h"
+#include "app/glr_camera.h"
 #include "ui/profile_panel.h"
 #include "ui/layout.h"            /* CODE_PANEL_LAYOUT_* enum values */
 #include "widgets/variable_panel_state.h"
 #include "widgets/replay.h"               /* REPLAY_PAUSED, REPLAY_MODE_* enums */
 #include "widgets/replay_state.h"
 #include "editor/help_session.h"
-#include "glr_defaults.h"    /* CFG_DEFAULT_* macros */
+#include "app/glr_defaults.h"    /* CFG_DEFAULT_* macros */
 
 #include "support/test_harness.h"
 #include <stdio.h>

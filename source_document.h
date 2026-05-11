@@ -6,7 +6,7 @@
  * live source text. Hosts (full app, demo, tests) provide implementations
  * that adapt their underlying storage:
  *
- *   Full app:     glr_source_document.c forwards to EditorState
+ *   Full app:     src/app/glr_source_document.c forwards to EditorState
  *   Demo:         tools/repl_demo/source_document.c (Phase 6) backs with
  *                 a tiny static line store, no editor link
  *   Tests:        link the full-app adapter OR a fixture under tests/support/

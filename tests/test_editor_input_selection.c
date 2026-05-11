@@ -21,7 +21,7 @@
 #include "editor/state.h"
 #include "editor/input.h"
 #include "editor/clipboard.h"
-#include "glr_ctrl.h"
+#include "app/glr_ctrl.h"
 #include "keys.h"
 #include "repl/core.h"
 #include "repl/state_owners.h"

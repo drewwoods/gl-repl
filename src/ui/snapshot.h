@@ -21,7 +21,7 @@
 
 #include "editor/state.h"  /* ReplEditorInputView (Phase 1 commit 5) */
 #include "editor/help_session.h"
-#include "glr_state.h"     /* GlrRenderState (step 7a) */
+#include "app/glr_state.h"     /* GlrRenderState (step 7a) */
 #include "repl/state_views.h"
 #include "repl/eval.h"
 #include "editor.h"
