@@ -41,6 +41,7 @@ typedef enum {
     CMD_ROTATEF,
     CMD_PUSH_MATRIX,
     CMD_POP_MATRIX,
+    CMD_LOAD_IDENTITY,
     CMD_COLOR_MATERIAL,
     CMD_LIGHT_MODEL_I,
     CMD_FRONT_FACE,
@@ -91,7 +92,8 @@ typedef struct {
 
 static inline int repl_cmd_is_transform(CmdType type) {
     return (type == CMD_TRANSLATE3F || type == CMD_SCALEF  || type == CMD_ROTATEF ||
-            type == CMD_PUSH_MATRIX || type == CMD_POP_MATRIX);
+            type == CMD_PUSH_MATRIX || type == CMD_POP_MATRIX ||
+            type == CMD_LOAD_IDENTITY);
 }
 
 #endif /* REPL_COMMAND_H */

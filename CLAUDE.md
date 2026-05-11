@@ -619,7 +619,7 @@ glVertex3f(x,y,z), glVertex2f(x,y)
 glNormal3f(x,y,z)
 glColor3f(r,g,b), glColor4f(r,g,b,a)
 glTranslatef(x,y,z), glScalef(sx,sy,sz), glRotatef(deg,x,y,z)
-glPushMatrix(), glPopMatrix()
+glPushMatrix(), glPopMatrix(), glLoadIdentity()
 glEnable(CAP), glDisable(CAP)
   CAP: GL_DEPTH_TEST, GL_LIGHTING, GL_COLOR_MATERIAL, GL_NORMALIZE,
        GL_LINE_SMOOTH, GL_POINT_SMOOTH, GL_BLEND, GL_CULL_FACE,
