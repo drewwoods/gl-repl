@@ -8,7 +8,6 @@
 #include "code_panel_document.h"
 #include "state.h"
 
-#include "./include/gl_2d.h"
 #include "glr_state.h"
 #include "repl/export.h" /* g_header_pre/post, RENDER_STATE_LINE_COUNT, CAM_LINE_COUNT */
 #include "repl/source_scope.h"

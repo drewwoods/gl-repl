@@ -24,7 +24,7 @@ static CodeLayout test_layout(int panel_w, int first_x,
  * Match the real code-panel geometry so wrap tests exercise the same
  * parameters the renderer uses at runtime.
  *
- * FONT_W = 9              (include/gl_2d.h)
+ * FONT_W = 9              (include/ui/gl_2d.h)
  * CODE_MARGIN_X = 10      (src/ui/metrics.h)
  * linenum column = 4 chars
  * index column   = 6 chars (when vertex indices enabled)

@@ -1,5 +1,5 @@
 #define _DEFAULT_SOURCE  /* mkdtemp() */
-#include "./include/gl_2d.h"
+#include "ui/gl_2d.h"
 #include "editor/clipboard.h"
 #include "editor/code_layout.h"
 #include "editor/commit.h"

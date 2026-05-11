@@ -23,7 +23,7 @@
 #include "variable_panel_drag.h"
 #include "support/test_harness.h"
 #include <GL/gl_stub_counts.h>
-#include "./include/gl_2d.h"
+#include "ui/gl_2d.h"
 
 #include <stdio.h>
 #include <string.h>

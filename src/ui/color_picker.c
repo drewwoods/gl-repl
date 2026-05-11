@@ -12,7 +12,7 @@
  */
 #include "color_picker.h"
 
-#include "./include/gl_2d.h"
+#include "gl_2d.h"
 
 #include <math.h>
 

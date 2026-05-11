@@ -11,7 +11,7 @@
 #include "menu_bar.h"
 #include "metrics.h"
 #include "layout.h"
-#include "./include/gl_2d.h"
+#include "gl_2d.h"
 
 /* Menu bar - styled after Header Wireframes v2.
  * Left: top-level menus (File, Scene, Config).

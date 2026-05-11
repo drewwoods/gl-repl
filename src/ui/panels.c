@@ -19,7 +19,7 @@
 #include "repl/replay_annotations.h"
 #include "prof.h"
 #include "panels.h"
-#include "./include/gl_2d.h"
+#include "gl_2d.h"
 
 #include <string.h>
 

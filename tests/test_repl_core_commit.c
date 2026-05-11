@@ -16,7 +16,7 @@
 #include "ui/panels.h"
 #include "ui/layout.h"
 #include "ui/metrics.h"
-#include "./include/gl_2d.h"
+#include "ui/gl_2d.h"
 
 #define g_status  (ui_state_status_mut()->text)
 #define g_scroll  (editor_state_scroll_mut()->scroll)

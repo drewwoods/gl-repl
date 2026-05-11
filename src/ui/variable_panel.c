@@ -12,7 +12,7 @@
  * variable mutation) and stays here.
  */
 #include "variable_panel.h"
-#include "./include/gl_2d.h"
+#include "gl_2d.h"
 #include "layout.h"
 #include "metrics.h"
 #include "replay_state.h"
