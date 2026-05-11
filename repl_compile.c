@@ -125,16 +125,34 @@ void repl_compiled_change_to_text_change(const ReplCompiledChange *in,
     case REPL_COMPILED_DELETE_RANGE:out->kind = SOURCE_TEXT_DELETE_RANGE;break;
     case REPL_COMPILED_LOAD_ALL:    out->kind = SOURCE_TEXT_LOAD_ALL;    break;
     }
-    int n = in->count;
-    if (n < 0) n = 0;
-    if (n > MAX_COMMIT_CMDS) n = MAX_COMMIT_CMDS;
-
     out->pos          = in->pos;
-    out->count        = n;   /* clamped — keep count in lockstep with text[] */
+    out->count        = in->count;   /* DELETE_RANGE: rows to delete, may exceed MAX_COMMIT_CMDS */
     out->delete_pos   = in->delete_pos;
     out->delete_count = in->delete_count;
 
-    for (int i = 0; i < n; i++) {
+    /* Only the insert/replace/load kinds carry text rows. DELETE_RANGE
+     * leaves text[] untouched (and its `count` is the delete range,
+     * which is *not* bounded by MAX_COMMIT_CMDS); clamping out->count
+     * for that kind would silently shrink the delete. */
+    int copy_n;
+    switch (in->kind) {
+    case REPL_COMPILED_INSERT_ONE:
+    case REPL_COMPILED_REPLACE_ONE:
+        copy_n = 1;
+        break;
+    case REPL_COMPILED_INSERT_MANY:
+    case REPL_COMPILED_LOAD_ALL:
+        copy_n = in->count;
+        if (copy_n < 0) copy_n = 0;
+        if (copy_n > MAX_COMMIT_CMDS) copy_n = MAX_COMMIT_CMDS;
+        break;
+    case REPL_COMPILED_NO_CHANGE:
+    case REPL_COMPILED_DELETE_RANGE:
+    default:
+        copy_n = 0;
+        break;
+    }
+    for (int i = 0; i < copy_n; i++) {
         size_t len = strnlen(in->text[i], MAX_LINE_LEN - 1);
         memcpy(out->text[i], in->text[i], len);
         out->text[i][len] = '\0';

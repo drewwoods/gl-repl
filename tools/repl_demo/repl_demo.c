@@ -114,9 +114,12 @@ static void seed_for_loop_program(void) {
     };
     enum { LINE_COUNT = sizeof(lines) / sizeof(lines[0]) };
 
-    /* Editor buffer first -- repl_flatten reads the body's text from it. */
+    /* Editor buffer first -- repl_flatten reads the body's text from it.
+     * Keep editor_buffer_set_count in sync so source_document_view() (which
+     * honors line_count) sees the populated rows. */
     for (int i = 0; i < LINE_COUNT; i++)
         editor_buffer_set_line(i, lines[i]);
+    editor_buffer_set_count(LINE_COUNT);
 
     GLCmd cmds[LINE_COUNT];
     memset(cmds, 0, sizeof(cmds));
@@ -199,6 +202,9 @@ static int load_text_lines(const char *const *lines) {
         editor_buffer_set_line(loaded, pl.text);
         loaded++;
     }
+    /* Keep editor_buffer_count in sync with the populated rows so
+     * source_document_view() reports the correct line_count. */
+    editor_buffer_set_count(loaded);
     return loaded;
 }
 
@@ -258,6 +264,8 @@ static void seed_variable_driven_program(void) {
         editor_buffer_set_line(pos, text);
         pos++;
     }
+    /* Mirror the populated count so source_document_view() sees them. */
+    editor_buffer_set_count(pos);
 }
 
 static void tick_and_execute(float t_value) {

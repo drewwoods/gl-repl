@@ -444,6 +444,9 @@ check-output-actualization: ## Verify Ui*Output fields are consumed by controlle
 check-state-c-shrinking: ## Ratchet repl_state.c line count down over time.
 	@bash scripts/check-state-c-shrinking.sh scripts/baselines/state-c-lines.txt repl_state.c
 
+check-repl-no-direct-editor: ## Ratchet net-new editor coupling in repl_*.{c,h} down (Phase 0 of feature/source-document-port.md).
+	@bash scripts/check-repl-no-direct-editor.sh scripts/baselines/repl-no-direct-editor.txt
+
 check-no-facade-include-in-views: ## Verify view/render files avoid repl_state facade headers.
 	@bash scripts/check-no-facade-include-in-views.sh scripts/allowlists/facade-includes-in-views.txt
 
@@ -502,6 +505,7 @@ check-state-ownership: ## Run state-ownership contract checks (new + tightened e
 		check-repl-export-no-ui-layout \
 		check-no-feed-line-in-pipeline \
 		check-repl-demo-stubs-shrinking \
+		check-repl-no-direct-editor \
 		check-no-point-parameter-builds \
 		check-no-test-default-output; do \
 		printf "  $(YELLOW)▶$(NC) $$target\n"; \

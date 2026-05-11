@@ -25,9 +25,9 @@
 #ifndef REPL_COMPILE_H
 #define REPL_COMPILE_H
 
-#include "config.h"
-#include "repl_command.h"   /* GLCmd, MAX_LINE_LEN */
-#include "repl_eval.h"      /* MAX_NAMES_PER_DECL, ExprVar */
+#include "config.h"          /* MAX_COMMIT_CMDS, MAX_LINE_LEN */
+#include "repl_command.h"    /* GLCmd */
+#include "repl_eval.h"       /* MAX_NAMES_PER_DECL, ExprVar */
 #include "source_document.h" /* SourceTextView (Phase 1 of feature/source-document-port.md) */
 
 /* Source-command level shape of a compiled change. The `kind` field
@@ -72,12 +72,11 @@ typedef enum {
  * comment relocation produces N comments + begin + end where N is
  * the count of contiguous depth-0 comments above the cursor.
  *
- * Set to 16 so practical func_def relocation cases (typical 0-4
- * leading comments) fit comfortably; deeper comment blocks are
- * rejected with a diagnostic in editor_compile_func_def. */
-#ifndef MAX_COMMIT_CMDS
-#define MAX_COMMIT_CMDS 16
-#endif
+ * MAX_COMMIT_CMDS lives in config.h (the neutral limits home) so
+ * source_document.h can size SourceTextChange.text[] with the same
+ * bound. This header pulls it through config.h (already included
+ * transitively via repl_command.h) — keep the comment block above
+ * for context, but no duplicate define. */
 
 /* Predef-variable side-effects produced by compile. The apply step
  * (Phase C commit 20) replays these atomically:
