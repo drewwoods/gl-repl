@@ -342,7 +342,7 @@ static void test_render_mode_toggles(void) {
 static void test_vertex2f_overlay_parity(void) {
     printf("--- vertex2f overlay parity (vertex numbers + outlines) ---\n");
 
-#ifdef OPENGL_VIBE_USE_GL_STUBS
+#ifdef GL_STUBS
     /* The vertex-number overlay moved to the controller. The scene-side
      * primitive scene_draw_vertex_number_label calls glRasterPos3f
      * directly — that's enough to pin the parity check here.
@@ -360,7 +360,7 @@ static void test_vertex2f_overlay_parity(void) {
 static void test_vertex2f_guide_cursor_dot(void) {
     printf("--- vertex2f guide: red cursor dot when both args filled ---\n");
 
-#ifdef OPENGL_VIBE_USE_GL_STUBS
+#ifdef GL_STUBS
     SceneGuideSnapshot snap = {0};
     snap.show_guides = 1;
     snap.alpha_scale = 1.0f;
@@ -409,7 +409,7 @@ static void test_vertex2f_guide_cursor_dot(void) {
 }
 
 int main(int argc, char **argv) {
-#ifdef OPENGL_VIBE_USE_GL_STUBS
+#ifdef GL_STUBS
     /* In stub mode these are no-ops, but keeping the calls preserves coverage
      * for GLUT symbol declarations. */
     glutInit(&argc, argv);
@@ -427,7 +427,7 @@ int main(int argc, char **argv) {
     test_config_defaults();
     test_frame_ctx_defaults();
 
-#ifndef OPENGL_VIBE_USE_GL_STUBS
+#ifndef GL_STUBS
     printf("--- GL-emitting scene smoke checks skipped in real-GL test build ---\n");
     printf("Run `make test_scene_render USE_GL_STUBS=1` for no-op GL path coverage.\n");
 

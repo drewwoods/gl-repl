@@ -18,7 +18,7 @@ UNAME_S := $(shell uname -s)
 ifeq ($(USE_GL_STUBS),1)
 GL_HEADER_CFLAGS = \
 	-I$(GL_STUB_INCLUDE) \
-	-DOPENGL_VIBE_USE_GL_STUBS
+	-DGL_STUBS
 else
 GL_HEADER_CFLAGS = \
 	-I/usr/include \

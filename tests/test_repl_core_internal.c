@@ -13,7 +13,7 @@
 #include "support/test_harness.h"
 #include "scene/render.h"
 
-#ifdef OPENGL_VIBE_USE_GL_STUBS
+#ifdef GL_STUBS
 #include <GL/gl_stub_counts.h>
 #endif
 
@@ -525,11 +525,11 @@ int main() {
         ASSERT_TRUE("render reset clear color b", g_clear_color[2] == 0.13f);
         ASSERT_TRUE("render reset clear color a", g_clear_color[3] == 1.0f);
 
-    #ifdef OPENGL_VIBE_USE_GL_STUBS
+    #ifdef GL_STUBS
         gl_stub_counts_reset();
     #endif
         repl_executor_init_resources();
-    #ifdef OPENGL_VIBE_USE_GL_STUBS
+    #ifdef GL_STUBS
         ASSERT_INT("executor init quadric removed", (int)gl_stub_counts[GL_STUB_gluNewQuadric], 0);
         ASSERT_INT("executor init quadric normals removed", (int)gl_stub_counts[GL_STUB_gluQuadricNormals], 0);
         ASSERT_INT("executor init quadric texture removed", (int)gl_stub_counts[GL_STUB_gluQuadricTexture], 0);
@@ -537,11 +537,11 @@ int main() {
         ASSERT_INT("executor init tess callbacks", (int)gl_stub_counts[GL_STUB_gluTessCallback], 6);
     #endif
 
-    #ifdef OPENGL_VIBE_USE_GL_STUBS
+    #ifdef GL_STUBS
         gl_stub_counts_reset();
     #endif
         repl_executor_destroy_resources();
-    #ifdef OPENGL_VIBE_USE_GL_STUBS
+    #ifdef GL_STUBS
         ASSERT_INT("executor destroy quadric removed", (int)gl_stub_counts[GL_STUB_gluDeleteQuadric], 0);
         ASSERT_INT("executor destroy tess", (int)gl_stub_counts[GL_STUB_gluDeleteTess], 1);
     #endif

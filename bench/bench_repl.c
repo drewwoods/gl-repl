@@ -52,7 +52,7 @@
 #include <string.h>
 #include <time.h>
 
-#ifdef OPENGL_VIBE_USE_GL_STUBS
+#ifdef GL_STUBS
 #include <GL/gl_stub_counts.h>
 #else
 /* Real-GL build: pull in GLUT so we can create an actual current
@@ -650,7 +650,7 @@ static BenchResult bench_fade_batches(int iters) {
     int base_limit;
     FlatProgramView program = repl_state_flat_program_view();
 
-#ifdef OPENGL_VIBE_USE_GL_STUBS
+#ifdef GL_STUBS
     /* Reset right before the timed region so the counter dump below
      * reflects only the per-batch repl_execute_program work across the
      * full iters×inner call count. */
@@ -686,7 +686,7 @@ static BenchResult bench_fade_batches(int iters) {
     if (!g_csv) {
         fprintf(stderr, "  (fade_batches: flat_cmds=%d, batches=%d, age=%.3f)\n",
                 flat_cmds, installed_count, age);
-#ifdef OPENGL_VIBE_USE_GL_STUBS
+#ifdef GL_STUBS
         fprintf(stderr, "  (GL stub calls per fade-batch frame:)\n");
         gl_stub_counts_dump(stderr, "    ", r.ops);
 #endif
@@ -743,7 +743,7 @@ static int wants(const char *filter, const char *name) {
  * glutInit() will exit non-zero with its own error message; that's
  * the cue to re-run with USE_GL_STUBS=1. */
 static void bench_gl_context_init(int *argc, char **argv) {
-#ifndef OPENGL_VIBE_USE_GL_STUBS
+#ifndef GL_STUBS
     static int glut_inited = 0;
     if (glut_inited) return;
     glutInit(argc, argv);

@@ -1,5 +1,5 @@
-#ifndef OPENGL_VIBE_GL_STUB_COUNTS_H
-#define OPENGL_VIBE_GL_STUB_COUNTS_H
+#ifndef GL_STUB_COUNTS_H
+#define GL_STUB_COUNTS_H
 
 /*
  * Per-function call counters for the stub GL/GLU/GLUT headers.
@@ -7,7 +7,7 @@
  * The stub headers (tests/gl-stubs/include/GL/gl.h etc.) reference gl_stub_tick() and
  * the GL_STUB_* enum unconditionally, so the enum and tick function
  * must always be visible — otherwise any build that falls back to the
- * local stubs without defining OPENGL_VIBE_USE_GL_STUBS fails to
+ * local stubs without defining GL_STUBS fails to
  * compile. Real storage only exists in stub builds; in every other
  * build gl_stub_tick() is a trivial no-op that the optimizer elides.
  *
@@ -120,7 +120,7 @@ enum {
     GL_STUB_COUNT_MAX
 };
 
-#ifdef OPENGL_VIBE_USE_GL_STUBS
+#ifdef GL_STUBS
 
 #include <stdio.h>
 
@@ -140,17 +140,17 @@ void         gl_stub_counts_reset(void);
  * averages, or 1 for raw totals. */
 void gl_stub_counts_dump(FILE *out, const char *prefix, long long divisor);
 
-#else  /* !OPENGL_VIBE_USE_GL_STUBS */
+#else  /* !GL_STUBS */
 
 /* Non-stub builds: no storage, and gl_stub_tick() is a no-op so the
  * stub headers still compile if they happen to be picked up as a
  * fallback on a system without real GL headers. */
 static inline void gl_stub_tick(int idx) { (void)idx; }
 
-#endif  /* OPENGL_VIBE_USE_GL_STUBS */
+#endif  /* GL_STUBS */
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif /* OPENGL_VIBE_GL_STUB_COUNTS_H */
+#endif /* GL_STUB_COUNTS_H */
