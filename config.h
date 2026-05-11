@@ -20,6 +20,12 @@
 #ifndef CONFIG_H
 #define CONFIG_H
 
+/* Default code-panel fraction (panel width / total viewport width) on
+ * startup and scene load. User-toggleable at runtime via the "Panel
+ * Layout" config row, which cycles through a few presets that include
+ * this default as the "Left" option. */
+#define CFG_DEFAULT_PANEL_FRAC 0.45f
+
 /* Max brightness (V in HSV) allowed for glClearColor channels.
  * Since max(r,g,b) == V, capping V caps all channels. */
 #define CP_CLEAR_MAX_V 0.1f
