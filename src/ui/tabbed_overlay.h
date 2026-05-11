@@ -8,8 +8,9 @@
  *
  * The renderer is feature-agnostic: callers supply title, tabs, and
  * cursor (visible / tab_idx / scroll) through `UiOverlayState`. The
- * F1 help overlay is the current sole consumer (content built by
- * repl_help_text.c) but nothing here knows about "help" specifically.
+ * F1 help overlay is the current sole consumer (content adapted by
+ * glr_ctrl from repl_help_text.c) but nothing here knows about "help"
+ * specifically.
  *
  * Visibility, tab index, and scroll are inputs — callers gate display
  * with `visible = 0` rather than letting the renderer reach into a

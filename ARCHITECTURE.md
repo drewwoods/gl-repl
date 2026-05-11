@@ -450,7 +450,7 @@ for replay buttons). `repl_state_*_mut()` accessors directly from
 `ui_color_picker`, `ui_panels`, and `ui_help_overlay` were all
 closed; their work redistributed into peer subsystems (`color_picker`)
 or generic renderers (`ui_tabbed_overlay` consuming
-`UiOverlayContent` produced by `repl_help_text`).
+`UiOverlayContent` adapted by `glr_ctrl` from `repl_help_text`).
 
 `ui_*.c` files include `repl_state_views.h` only, not `repl_state.h`
 or `repl_state_owners.h`. `check-views-no-owners` enforces this;
@@ -844,10 +844,11 @@ Completed (Phase 1 + most of Phase 2):
     parser/compile/apply, no `set_status`. Locked in by
     `check-color-picker-ui-isolation`.
   - The legacy `ui_help_overlay` is gone — split into the generic
-    `src/ui/tabbed_overlay.c` renderer (knows nothing about REPL) and the
+    `src/ui/tabbed_overlay.c` renderer (knows nothing about REPL), the
     REPL-side `repl_help_text.c` producer that walks
     `k_func_completions[]` to assemble the F1 overlay's per-command
-    rows. Adding a new GL command + `help_desc` + `help_group` to the
+    rows, and the `glr_ctrl` adapter that maps that neutral data to
+    `UiOverlayContent`. Adding a new GL command + `help_desc` + `help_group` to the
     spec entry now auto-populates F1.
   - All `ui_*.c` files have zero `_mut()` calls
     (`check-ui-returns-hits-only` baseline 0/0).

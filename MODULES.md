@@ -341,7 +341,7 @@ controllers; UI may render them; their input routes to them through
 | `replay` | Replay state machine implementation behind `replay_state`: PC stepping, mode toggling, fade batches. Routes via `replay_handle_pin_clicked` / `replay_handle_key` / `replay_handle_special` |
 | `editor_help_session` | Peer subsystem: read-only editor session for the help overlay (tab_idx, scroll). Visibility flag stays on `UiState.help` as chrome |
 | `color_picker` | Peer subsystem: floating HSV/alpha picker. Owns `g_cp_*` state, lifecycle (`color_picker_open` / `_close` / `_active_line` / `_can_edit_cmd`), input handlers (`color_picker_handle_press` / `_motion` / `_release` returning `ColorPickerInputResult`), and source-line writeback through `editor_commit_apply_external_change`. Exposes `color_picker_view()` for renderers and `color_picker_hsv_to_rgb` as a shared color-math helper. Storage lives in `color_picker_state.c`; renderer lives separately in `src/ui/color_picker.c` |
-| `repl_help_text` | REPL-side producer of the F1 help-overlay content. Walks `k_func_completions[]`, groups by `ReplHelpGroup`, emits per-command rows with header sections; appends hand-written language-level sections (Math operators, Variables, For-Loops, …) verbatim. Renderer (`src/ui/tabbed_overlay.c`) is feature-agnostic |
+| `repl_help_text` | REPL-side producer of neutral F1 help text. Walks `k_func_completions[]`, groups by `ReplHelpGroup`, emits per-command rows with header sections; appends hand-written language-level sections (Math operators, Variables, For-Loops, …) verbatim. `glr_ctrl` adapts the neutral content to `UiOverlayContent`; renderer (`src/ui/tabbed_overlay.c`) is feature-agnostic |
 
 Peer subsystems may *produce* overlays consumed by the editor (replay
 annotations are virtual lines the editor can render). They do not
@@ -429,7 +429,7 @@ Files no longer in this layer:
   moved to `src/editor/help_session.c` (Layer 2). The renderer became the
   generic, REPL-agnostic `src/ui/tabbed_overlay.c`; the per-row text
   content is built REPL-side by `repl_help_text.c` from
-  `k_func_completions[]` so adding a new GL command auto-populates
+  `k_func_completions[]` and adapted by `glr_ctrl` so adding a new GL command auto-populates
   the F1 overlay.
 - `ui_color_picker` → split into `color_picker_state.c` (peer state +
   lifecycle + writeback) and `src/ui/color_picker.c` (renderer +

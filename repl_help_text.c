@@ -188,8 +188,8 @@ static const char *g_tab_keys[HELP_KEYS_MAX];
 static char        g_cmd_strbuf[HELP_CMD_LINES_MAX][HELP_CMD_LINE_BUF];
 static const char *g_tab_commands[HELP_CMD_LINES_MAX];
 
-static UiOverlayTab g_tabs[2];
-static UiOverlayContent g_content;
+static ReplHelpTab g_tabs[2];
+static ReplHelpContent g_content;
 
 static const char *help_group_header(ReplHelpGroup g) {
     switch (g) {
@@ -252,7 +252,7 @@ static int cmd_emit_group(int n, ReplHelpGroup group) {
     return n;
 }
 
-const UiOverlayContent *repl_help_text_build(void) {
+const ReplHelpContent *repl_help_text_build(void) {
     /* --- Commands tab: per-command sections from the spec, then the
      * hand-written language sections. --- */
     int nc = 0;

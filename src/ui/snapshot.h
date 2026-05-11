@@ -85,8 +85,8 @@ typedef struct UiRenderSnapshot {
     /* User scenes */
     int                         user_scene_active_idx;
 
-    /* F1 help overlay text content (REPL-built; the renderer is
-     * tabbed-overlay-shaped and feature-agnostic). */
+    /* F1 help overlay text content (controller-adapted from REPL help
+     * text; the renderer is tabbed-overlay-shaped and feature-agnostic). */
     const struct UiOverlayContent *help_content;
 
     /* Per-frame editor overlay snapshots (controller-pushed). */
