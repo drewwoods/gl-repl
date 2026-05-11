@@ -877,7 +877,7 @@ int main(void) {
     {
         /* Undo's snapshot model intentionally does not capture
          * ReplEditorInputState.input or ReplClipboardState (see Phase
-         * A item 6 in feature/editor-input-selection.md). After a
+         * A item 6 in feature/done/editor-input-selection.md). After a
          * source-mutating commit, undo rewinds the source array and
          * editor_undo_snapshot_restore calls load_line_to_input to
          * rebuild the active input from the restored source. This

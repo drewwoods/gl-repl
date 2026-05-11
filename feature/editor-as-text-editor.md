@@ -75,7 +75,7 @@ is the worst remaining offender. The single function:
 ### V2 — Clipboard (separate plan)
 
 `editor_clipboard.c` and `editor_state.h`. Already covered in
-`feature/repl-agnostic-clipboard.md`.
+`feature/done/repl-agnostic-clipboard.md`.
 
 ### V3 — Replay annotations consumer
 
@@ -349,7 +349,7 @@ Phases 5, 6, 7 (audits/cleanups; can land in any order, in parallel)
 
 ## Relationship to existing plans
 
-- `feature/repl-agnostic-clipboard.md` (V2 of this inventory) is a
+- `feature/done/repl-agnostic-clipboard.md` (V2 of this inventory) is a
   sibling, not a dependency. Both can land in parallel; together they
   retire the bulk of `editor_*.c` direct REPL-grammar reads.
 - `done/predef-var-compaction-on-apply.md` is the precedent: pure
