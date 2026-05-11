@@ -1107,7 +1107,7 @@ static void glr_ctrl_build_ui_snapshot(UiRenderSnapshot *snap) {
 
     snap->user_scene_active_idx   = repl_active_user_scene();
 
-    snap->help_content = repl_help_text_build();
+    snap->help_content = glr_ctrl_help_overlay_content();
     snap->editor_transformers = editor_state_transformers();
     snap->editor_highlights = editor_state_highlights();
     snap->editor_virtual_lines = editor_state_virtual_lines();
@@ -1365,6 +1365,32 @@ static void glr_app_editor_scroll_to_line(int target) {
 
 static void glr_app_editor_follow_cursor(int follow) {
     editor_scroll_follow_cursor_set(follow);
+}
+
+const UiOverlayContent *glr_ctrl_help_overlay_content(void) {
+    enum { GLR_HELP_OVERLAY_MAX_TABS = 4 };
+    static UiOverlayTab tabs[GLR_HELP_OVERLAY_MAX_TABS];
+    static UiOverlayContent content;
+
+    const ReplHelpContent *help = repl_help_text_build();
+    if (!help)
+        return NULL;
+
+    int count = help->tab_count;
+    if (count < 0)
+        count = 0;
+    if (count > GLR_HELP_OVERLAY_MAX_TABS)
+        count = GLR_HELP_OVERLAY_MAX_TABS;
+
+    for (int i = 0; i < count; i++) {
+        tabs[i].label = help->tabs[i].label;
+        tabs[i].lines = help->tabs[i].lines;
+    }
+
+    content.title = help->title;
+    content.tabs = tabs;
+    content.tab_count = count;
+    return &content;
 }
 
 void glr_publish_replay_annotations(const ReplReplayAnnotationOutput *out) {

@@ -8,7 +8,6 @@
 #include "repl_core.h"
 #include "editor/help_session.h"
 #include "ui/tabbed_overlay.h"
-#include "repl_help_text.h"
 #include "prof.h"
 #include "ui/profile_panel.h"
 #include "color_picker_state.h"
@@ -105,7 +104,7 @@ static UiOverlayState build_help_overlay_input(void) {
         .scroll     = editor_help_session_view().scroll,
         .viewport_w = ui_state_viewport().window_w,
         .viewport_h = ui_state_viewport().window_h,
-        .content    = repl_help_text_build(),
+        .content    = glr_ctrl_help_overlay_content(),
     };
     return in;
 }

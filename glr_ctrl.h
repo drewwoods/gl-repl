@@ -107,6 +107,12 @@ int glr_ctrl_router_handle_code_panel_drag(int x, int y);
  * example load) doesn't leave an orphaned mid-drag. */
 void glr_ctrl_router_reset_code_panel_drag(void);
 
+/* Build the app/UI-shaped F1 help content from the neutral REPL help
+ * text model. The controller owns this adapter because it composes
+ * `repl_help_text` with `ui_tabbed_overlay`. */
+struct UiOverlayContent;
+const struct UiOverlayContent *glr_ctrl_help_overlay_content(void);
+
 /* Publish a ReplReplayAnnotationOutput to editor_state_virtual_lines.
  * Phase 4 of feature/source-document-port.md uses the return-value
  * shape: repl_replay_annotations_prepare() fills the output struct

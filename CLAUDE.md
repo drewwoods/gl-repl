@@ -182,7 +182,7 @@ Test sources live under `tests/` and shared test-only helpers live under
 | `src/ui/color_picker.h` | Picker UI render/hit-test API + `UI_COLOR_SWATCH_W` |
 | `src/ui/tabbed_overlay.c` | Generic modal tabbed text overlay renderer (the F1 help overlay's UI shell) |
 | `src/ui/tabbed_overlay.h` | Tabbed-overlay render API (`UiOverlayState`, `UiOverlayContent`) |
-| `repl_help_text.c` | Builds the F1 help overlay's content table (commands, key bindings) consumed by `tabbed_overlay` |
+| `repl_help_text.c` | Builds neutral F1 help text tables (commands, key bindings); `glr_ctrl` adapts them to `UiOverlayContent` |
 | `repl_help_text.h` | Help-content public API |
 | `src/ui/variable_panel.c` | Floating variable slider panel rendering, geometry, and hit-test |
 | `src/ui/variable_panel.h` | Variable panel render/rect/hit API |
