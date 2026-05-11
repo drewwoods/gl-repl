@@ -7,6 +7,10 @@ New to the tree? Start with [`MODULES.md`](MODULES.md) for the one-page
 layered overview of the source files. This file is the agent-facing project
 brief and goes deeper.
 
+## GNU Sed
+
+GNU sed is available as `gsed` on macOS via Homebrew (`brew install gnu-sed`).
+
 ## Build
 
 ```bash
