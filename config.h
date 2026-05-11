@@ -31,7 +31,7 @@
 #define REPL_STATUS_TEXT_MAX 256
 
 /* Storage capacity of the source command document and the matching
- * editor buffer. Surfaces here (not in repl_command.h) so neutral
+ * editor buffer. Surfaces here (not in src/repl/command.h) so neutral
  * boundary headers — source_document.h in particular — can size their
  * structs without including REPL grammar types. */
 #ifndef MAX_COMMANDS

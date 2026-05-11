@@ -1,5 +1,5 @@
 #!/bin/bash
-# Hard guard: repl_export.c must not depend on UI layout/state.
+# Hard guard: src/repl/export.c must not depend on UI layout/state.
 # Step 7c of feature/decouple-repl-from-gl-repl-alt.md routes layout
 # values through the opaque ReplExportLayout struct so the export
 # pipeline never reaches into UI state. Code-panel cfg slug aliases
@@ -8,7 +8,7 @@
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 
-violations=$(grep -nE '#[[:space:]]*include[[:space:]]+"ui/layout\.h"|\bui_layout_[a-z_]+\s*\(|\bui_state_viewport\s*\(|\bui_state_code_panel\s*\(|\bCODE_PANEL_LAYOUT_|"top_code_panel"|"code_panel"' repl_export.c 2>/dev/null \
+violations=$(grep -nE '#[[:space:]]*include[[:space:]]+"ui/layout\.h"|\bui_layout_[a-z_]+\s*\(|\bui_state_viewport\s*\(|\bui_state_code_panel\s*\(|\bCODE_PANEL_LAYOUT_|"top_code_panel"|"code_panel"' src/repl/export.c 2>/dev/null \
     | grep -vE '^[^:]+:[0-9]+:[[:space:]]*(\*|//)' || true)
 
 if [ -z "$violations" ]; then
@@ -16,7 +16,7 @@ if [ -z "$violations" ]; then
     exit 0
 fi
 
-echo "ERROR: repl_export.c must not depend on UI layout/state or code-panel cfg semantics." >&2
+echo "ERROR: src/repl/export.c must not depend on UI layout/state or code-panel cfg semantics." >&2
 echo "Step 7c routes layout values through ReplExportLayout opaquely; cfg slug semantics belong behind the cfg bridge." >&2
 echo "Hits:" >&2
 printf '%s\n' "$violations" >&2

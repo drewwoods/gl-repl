@@ -1,6 +1,6 @@
 #include "glr_state.h"
 #include "glr_ctrl.h"
-#include "repl_state.h"
+#include "repl/state.h"
 #include "editor/state.h"
 #include "ui/state.h"
 #include "glr_camera.h"

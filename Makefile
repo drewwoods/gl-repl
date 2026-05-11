@@ -112,11 +112,11 @@ all: sample
 # Used to force rebuild if you list as a prerequisite, e.g. `test_eval: FORCE $(test_eval_OBJS)`.
 FORCE:
 
-SRCS = sample.c glr_ctrl.c repl_core.c glr_debug.c repl_state.c glr_state.c src/editor/state.c src/editor/commit.c glr_source_document.c src/editor/reformat.c src/editor/services.c src/editor/input.c src/editor/help_session.c src/editor/completion.c src/ui/state.c variable_panel_state.c replay_state.c glr_config.c repl_command_spec.c repl_parser.c repl_source_scope.c repl_command_store.c repl_compile.c repl_load.c repl_apply.c src/editor/clipboard.c src/editor/undo.c glr_camera.c glr_camera_export.c glr_actions.c src/ui/layout.c code_formatter.c src/editor/code_panel_document.c repl_flatten.c repl_executor.c glr_completion.c src/ui/autocomplete_panel.c repl_autonormal.c repl_scenes.c repl_example_loader.c replay.c repl_replay_annotations.c src/editor/search.c repl_export.c repl_examples.c src/scene/render.c geometry_guides.c transform_guides.c src/scene/grid.c src/scene/axes.c src/scene/backdrop.c src/scene/lights.c src/scene/overlays.c src/ui/panels.c src/ui/menu_bar.c src/ui/color_picker.c color_picker_state.c src/ui/tabbed_overlay.c repl_help_text.c src/ui/variable_panel.c replay_ui_hud.c variable_panel_drag.c src/editor/inline_rename.c repl_eval.c cmd_format.c audio.c src/ui/profile_panel.c prof.c tests/gl-stubs/gl_stub_counts.c
-HDRS = sample.h glr_defaults.h src/editor/search.h glr_ctrl.h glr_completion.h repl_state.h glr_state.h src/editor/state.h src/editor/commit.h source_document.h repl_util.h repl_scenes.h repl_example_loader.h src/editor/reformat.h src/editor/services.h src/editor/input.h src/editor/help_session.h src/editor/completion.h src/ui/state.h src/ui/state_types.h variable_panel_state.h replay_state.h glr_config.h repl_core.h repl_core_internal.h glr_debug.h repl_command_spec.h repl_parser.h repl_source_scope.h repl_command_store.h repl_compile.h repl_apply.h src/ui/layout.h repl_pipeline.h src/editor/clipboard.h src/editor/undo.h glr_camera.h glr_actions.h code_formatter.h src/editor/code_panel_document.h replay.h repl_replay_annotations.h repl_examples.h src/scene/render_types.h guides_shared.h geometry_guides.h transform_guides.h transform_utils.h outline_offset.h src/scene/grid.h src/scene/axes.h src/scene/render.h src/scene/backdrop.h src/scene/lights.h src/scene/overlays.h src/ui/panels.h src/ui/menu_bar.h src/ui/color_picker.h color_picker_state.h src/ui/tabbed_overlay.h repl_help_text.h src/ui/variable_panel.h replay_ui_hud.h variable_panel_drag.h src/ui/autocomplete_panel.h src/editor/inline_rename.h repl_eval.h cmd_format.h audio.h src/ui/profile_panel.h prof.h
-CORE_TEST_SRCS = repl_core.c glr_ctrl.c glr_debug.c repl_state.c glr_state.c src/editor/state.c src/editor/commit.c glr_source_document.c src/editor/reformat.c src/editor/services.c src/editor/input.c src/editor/help_session.c src/editor/completion.c src/ui/state.c variable_panel_state.c replay_state.c glr_config.c repl_command_spec.c repl_parser.c repl_source_scope.c repl_command_store.c repl_compile.c repl_load.c repl_apply.c src/editor/clipboard.c src/editor/undo.c glr_camera.c glr_camera_export.c glr_actions.c src/ui/layout.c code_formatter.c src/editor/code_panel_document.c repl_flatten.c repl_executor.c glr_completion.c src/ui/autocomplete_panel.c repl_autonormal.c repl_scenes.c repl_example_loader.c replay.c repl_replay_annotations.c src/editor/search.c repl_export.c repl_examples.c src/scene/render.c geometry_guides.c transform_guides.c src/scene/grid.c src/scene/axes.c src/scene/backdrop.c src/scene/lights.c src/scene/overlays.c src/ui/panels.c src/ui/menu_bar.c src/ui/color_picker.c color_picker_state.c src/ui/tabbed_overlay.c repl_help_text.c src/ui/variable_panel.c replay_ui_hud.c variable_panel_drag.c src/editor/inline_rename.c repl_eval.c cmd_format.c audio.c src/ui/profile_panel.c prof.c tests/gl-stubs/gl_stub_counts.c
+SRCS = sample.c glr_ctrl.c src/repl/core.c glr_debug.c src/repl/state.c glr_state.c src/editor/state.c src/editor/commit.c glr_source_document.c src/editor/reformat.c src/editor/services.c src/editor/input.c src/editor/help_session.c src/editor/completion.c src/ui/state.c variable_panel_state.c replay_state.c glr_config.c src/repl/command_spec.c src/repl/parser.c src/repl/source_scope.c src/repl/command_store.c src/repl/compile.c src/repl/load.c src/repl/apply.c src/editor/clipboard.c src/editor/undo.c glr_camera.c glr_camera_export.c glr_actions.c src/ui/layout.c code_formatter.c src/editor/code_panel_document.c src/repl/flatten.c src/repl/executor.c glr_completion.c src/ui/autocomplete_panel.c src/repl/autonormal.c src/repl/scenes.c src/repl/example_loader.c replay.c src/repl/replay_annotations.c src/editor/search.c src/repl/export.c src/repl/examples.c src/scene/render.c geometry_guides.c transform_guides.c src/scene/grid.c src/scene/axes.c src/scene/backdrop.c src/scene/lights.c src/scene/overlays.c src/ui/panels.c src/ui/menu_bar.c src/ui/color_picker.c color_picker_state.c src/ui/tabbed_overlay.c src/repl/help_text.c src/ui/variable_panel.c replay_ui_hud.c variable_panel_drag.c src/editor/inline_rename.c src/repl/eval.c cmd_format.c audio.c src/ui/profile_panel.c prof.c tests/gl-stubs/gl_stub_counts.c
+HDRS = sample.h glr_defaults.h src/editor/search.h glr_ctrl.h glr_completion.h src/repl/state.h glr_state.h src/editor/state.h src/editor/commit.h source_document.h src/repl/util.h src/repl/scenes.h src/repl/example_loader.h src/editor/reformat.h src/editor/services.h src/editor/input.h src/editor/help_session.h src/editor/completion.h src/ui/state.h src/ui/state_types.h variable_panel_state.h replay_state.h glr_config.h src/repl/core.h src/repl/core_internal.h glr_debug.h src/repl/command_spec.h src/repl/parser.h src/repl/source_scope.h src/repl/command_store.h src/repl/compile.h src/repl/apply.h src/ui/layout.h src/repl/pipeline.h src/editor/clipboard.h src/editor/undo.h glr_camera.h glr_actions.h code_formatter.h src/editor/code_panel_document.h replay.h src/repl/replay_annotations.h src/repl/examples.h src/scene/render_types.h guides_shared.h geometry_guides.h transform_guides.h transform_utils.h outline_offset.h src/scene/grid.h src/scene/axes.h src/scene/render.h src/scene/backdrop.h src/scene/lights.h src/scene/overlays.h src/ui/panels.h src/ui/menu_bar.h src/ui/color_picker.h color_picker_state.h src/ui/tabbed_overlay.h src/repl/help_text.h src/ui/variable_panel.h replay_ui_hud.h variable_panel_drag.h src/ui/autocomplete_panel.h src/editor/inline_rename.h src/repl/eval.h cmd_format.h audio.h src/ui/profile_panel.h prof.h
+CORE_TEST_SRCS = src/repl/core.c glr_ctrl.c glr_debug.c src/repl/state.c glr_state.c src/editor/state.c src/editor/commit.c glr_source_document.c src/editor/reformat.c src/editor/services.c src/editor/input.c src/editor/help_session.c src/editor/completion.c src/ui/state.c variable_panel_state.c replay_state.c glr_config.c src/repl/command_spec.c src/repl/parser.c src/repl/source_scope.c src/repl/command_store.c src/repl/compile.c src/repl/load.c src/repl/apply.c src/editor/clipboard.c src/editor/undo.c glr_camera.c glr_camera_export.c glr_actions.c src/ui/layout.c code_formatter.c src/editor/code_panel_document.c src/repl/flatten.c src/repl/executor.c glr_completion.c src/ui/autocomplete_panel.c src/repl/autonormal.c src/repl/scenes.c src/repl/example_loader.c replay.c src/repl/replay_annotations.c src/editor/search.c src/repl/export.c src/repl/examples.c src/scene/render.c geometry_guides.c transform_guides.c src/scene/grid.c src/scene/axes.c src/scene/backdrop.c src/scene/lights.c src/scene/overlays.c src/ui/panels.c src/ui/menu_bar.c src/ui/color_picker.c color_picker_state.c src/ui/tabbed_overlay.c src/repl/help_text.c src/ui/variable_panel.c replay_ui_hud.c variable_panel_drag.c src/editor/inline_rename.c src/repl/eval.c cmd_format.c audio.c src/ui/profile_panel.c prof.c tests/gl-stubs/gl_stub_counts.c
 
-REPL_SRCS = $(filter repl_%.c,$(SRCS))
+REPL_SRCS = $(filter src/repl/%.c,$(SRCS))
 SCENE_SRCS = $(filter src/scene/%.c,$(SRCS))
 UI_SRCS = $(filter src/ui/%.c,$(SRCS))
 SCENE_HDRS = $(filter src/scene/%.h,$(HDRS))
@@ -142,7 +142,7 @@ TEAPOT_DEMO_DEP_SRCS = $(SCENE_SRCS) prof.c
 # through a controller-installed sink/bridge or an opaque parameter,
 # tools/repl_demo/stubs.c contains zero function bodies — the demo
 # links the pipeline TUs below with no stub backfill. Adding a new
-# repl_*.c TU that pulls in an app/editor symbol is a regression and
+# src/repl/*.c TU that pulls in an app/editor symbol is a regression and
 # should be resolved at the pipeline TU instead (the
 # check-repl-demo-stubs-shrinking and check-repl-no-direct-editor
 # guards catch it). The dependency ledger lives in
@@ -153,28 +153,28 @@ REPL_DEMO_DEP_SRCS = cmd_format.c \
                      prof.c \
                      replay.c \
                      replay_state.c \
-                     repl_apply.c \
-                     repl_autonormal.c \
-                     repl_command_spec.c \
-                     repl_command_store.c \
-                     repl_compile.c \
-                     repl_core.c \
-                     repl_eval.c \
-                     repl_example_loader.c \
-                     repl_examples.c \
-                     repl_executor.c \
-                     repl_export.c \
-                     repl_flatten.c \
-                     repl_load.c \
-                     repl_parser.c \
-                     repl_replay_annotations.c \
-                     repl_scenes.c \
-                     repl_source_scope.c \
-                     repl_state.c \
+					 src/repl/apply.c \
+                     src/repl/autonormal.c \
+                     src/repl/command_spec.c \
+                     src/repl/command_store.c \
+                     src/repl/compile.c \
+                     src/repl/core.c \
+                     src/repl/eval.c \
+                     src/repl/example_loader.c \
+                     src/repl/examples.c \
+                     src/repl/executor.c \
+                     src/repl/export.c \
+                     src/repl/flatten.c \
+                     src/repl/load.c \
+                     src/repl/parser.c \
+                     src/repl/replay_annotations.c \
+                     src/repl/scenes.c \
+                     src/repl/source_scope.c \
+                     src/repl/state.c \
                      tools/repl_demo/source_document.c \
                      tests/gl-stubs/gl_stub_counts.c
 # glr_config.c removed in step 4 of the decouple plan: pipeline TUs
-# (repl_export.c, repl_scenes.c, repl_example_loader.c) no longer call
+# (src/repl/export.c, src/repl/scenes.c, src/repl/example_loader.c) no longer call
 # glr_config_*; the controller-installed ReplExportConfigBridge is the
 # only path that touches cfg state, and that lives in glr_actions.c
 # (not in the demo link set).
@@ -245,7 +245,7 @@ endef
 $(foreach test,$(CORE_TEST_BINS),$(eval $(call core_test_binary,$(test))))
 $(foreach bin,$(BENCH_BINS),$(eval $(call bench_binary,$(bin))))
 
-test_eval_OBJS = $(OBJDIR)/$(TEST_DIR)/test_eval.o $(OBJDIR)/repl_eval.o
+test_eval_OBJS = $(OBJDIR)/$(TEST_DIR)/test_eval.o $(OBJDIR)/src/repl/eval.o
 test_eval_LDLIBS = -lm -lpthread
 test_eval_RUN = ./test_eval --run-tests
 
@@ -266,7 +266,7 @@ test_audio_RUN ?= ./test_audio
 # the CORE_TEST_OBJS link list to prevent duplicate symbol errors.
 test_glr_ctrl_OBJS = $(OBJDIR)/$(TEST_DIR)/test_glr_ctrl.o $(filter-out $(OBJDIR)/glr_ctrl.o,$(CORE_TEST_OBJS))
 
-test_repl_executor_OBJS = $(OBJDIR)/$(TEST_DIR)/test_repl_executor.o $(filter-out $(OBJDIR)/repl_executor.o,$(CORE_TEST_OBJS))
+test_repl_executor_OBJS = $(OBJDIR)/$(TEST_DIR)/test_repl_executor.o $(filter-out $(OBJDIR)/src/repl/executor.o,$(CORE_TEST_OBJS))
 
 test_repl_replay_OBJS = $(OBJDIR)/$(TEST_DIR)/test_repl_replay.o $(filter-out $(OBJDIR)/replay.o,$(CORE_TEST_OBJS))
 
@@ -317,11 +317,11 @@ $(TEST_BINS) $(BENCH_BINS): %: $$($$@_OBJS)
 # Layering boundary enforcement ------------------------------------------
 check-gl-boundaries: ## Verify GL/GLUT calls are isolated to allowed files.
 	@echo "    Checking GL/GLU drawing calls isolation..."
-	@! grep -nE '\b(gl[A-Z]|glu[A-Z])[A-Za-z0-9]*[[:space:]]*\(' $(REPL_SRCS) | grep -v '^repl_executor\.c:' | grep -vE '^([^:]+:)?[0-9]+:[[:space:]]*(/\*|\*|//)' | grep -vE '"' || (echo "    $(RED)ERROR: GL/GLU calls found outside repl_executor.c$(NC)" && exit 1)
+	@! grep -nE '\b(gl[A-Z]|glu[A-Z])[A-Za-z0-9]*[[:space:]]*\(' $(REPL_SRCS) | grep -v '^src/repl/executor\.c:' | grep -vE '^([^:]+:)?[0-9]+:[[:space:]]*(/\*|\*|//)' | grep -vE '"' || (echo "    $(RED)ERROR: GL/GLU calls found outside src/repl/executor.c$(NC)" && exit 1)
 	@echo "    Checking GL/GLU calls in sample.h..."
 	@! grep -nE '\b(gl[A-Z]|glu[A-Z])[A-Za-z0-9]*[[:space:]]*\(' sample.h glr_defaults.h | grep -vE '^([^:]+:)?[0-9]+:[[:space:]]*(/\*|\*|//)' | grep -vE '"' || (echo "    $(RED)ERROR: GL/GLU calls found in sample.h$(NC)" && exit 1)
 	@echo "    Checking GLUT input/feedback calls isolation..."
-	@! grep -nE '\bglut[A-Z][A-Za-z0-9]*[[:space:]]*\(' $(REPL_SRCS) | grep -vE '^repl_executor\.c:' | grep -vE '^([^:]+:)?[0-9]+:[[:space:]]*(/\*|\*|//)' | grep -vE '"' || (echo "    $(RED)ERROR: GLUT calls found outside repl_executor.c$(NC)" && exit 1)
+	@! grep -nE '\bglut[A-Z][A-Za-z0-9]*[[:space:]]*\(' $(REPL_SRCS) | grep -vE '^src/repl/executor\.c:' | grep -vE '^([^:]+:)?[0-9]+:[[:space:]]*(/\*|\*|//)' | grep -vE '"' || (echo "    $(RED)ERROR: GLUT calls found outside src/repl/executor.c$(NC)" && exit 1)
 	@echo "    GL/GLUT boundaries $(GREEN)OK$(NC)"
 
 check-layer-coupling: ## Verify UI and scene layers don't include each other's headers.
@@ -341,7 +341,7 @@ check-controller-boundaries: ## Verify controller owns the scene/UI wiring bound
 	fi
 	@# Boundary allowlist for ui/ includes: glr_ctrl.c is the
 	@# router/controller and explicitly orchestrates UI; glr_actions.c
-	@# is the menu/shortcut dispatch; repl_export.c reads UI chrome
+	@# is the menu/shortcut dispatch; src/repl/export.c reads UI chrome
 	@# state to serialize ; repl_editor.c stays in the list as a
 	@# historical breadcrumb (the file is deleted but the regex
 	@# tolerates absence). The previously-listed repl_(debug|config|
@@ -349,7 +349,7 @@ check-controller-boundaries: ## Verify controller owns the scene/UI wiring bound
 	@# into the glr_* namespace and are no longer matched by
 	@# REPL_SRCS, so the check skips them entirely.
 	@bad=$$(grep -lE '#[[:space:]]*include[[:space:]]+"ui/' $(REPL_SRCS) glr_ctrl.c \
-		| grep -vE '^(glr_ctrl|glr_actions|repl_(editor|export))\.c$$' || true); \
+		| grep -vE '^(glr_ctrl|glr_actions)\.c$$|^src/repl/export\.c$$|^repl_editor\.c$$' || true); \
 	if [ -n "$$bad" ]; then \
 		echo "$(RED)ERROR: new ui headers included outside approved exceptions:$(NC)"; \
 		echo "$$bad"; exit 1; \
@@ -376,16 +376,16 @@ check-pure-scene-no-repl-state: ## Verify scene files do not reach into REPL sta
 
 check-state-boundaries: ## Verify REPL state facade usage stays in owned modules.
 	@echo "Checking state facade boundaries..."
-	@bad=$$(grep -lE '#[[:space:]]*include[[:space:]]+"repl_state\.h"' $(SCENE_SRCS) $(STATE_NEUTRAL_SRCS) 2>/dev/null || true); \
+	@bad=$$(grep -lE '#[[:space:]]*include[[:space:]]+"repl/state\.h"' $(SCENE_SRCS) $(STATE_NEUTRAL_SRCS) 2>/dev/null || true); \
 	if [ -n "$$bad" ]; then \
-		echo "$(RED)ERROR: scene or state-neutral files include repl_state.h:$(NC)"; \
+		echo "$(RED)ERROR: scene or state-neutral files include src/repl/state.h:$(NC)"; \
 		echo "$$bad"; exit 1; \
 	fi
-	@bad=$$(grep -lE '#[[:space:]]*include[[:space:]]+"repl_core_internal\.h"' \
+	@bad=$$(grep -lE '#[[:space:]]*include[[:space:]]+"repl/core_internal\.h"' \
 		glr_ctrl.c $(SCENE_SRCS) $(UI_SRCS) $(STATE_NEUTRAL_SRCS) 2>/dev/null \
 		| grep -vE '^ui_(color_picker|panels)\.c$$' || true); \
 	if [ -n "$$bad" ]; then \
-		echo "$(RED)ERROR: unapproved view/utility files include repl_core_internal.h:$(NC)"; \
+		echo "$(RED)ERROR: unapproved view/utility files include src/repl/core_internal.h:$(NC)"; \
 		echo "$$bad"; exit 1; \
 	fi
 	@bad=$$(grep -lE 'repl_state_[A-Za-z0-9_]*_mut[[:space:]]*\(' $(UI_SRCS) 2>/dev/null \
@@ -401,11 +401,11 @@ check-state-boundaries: ## Verify REPL state facade usage stays in owned modules
 	fi
 	@echo "State facade boundaries $(GREEN)OK$(NC)"
 
-check-views-no-owners: ## Verify scene/UI files do not include repl_state_owners.h.
-	@echo "Checking scene/UI view files do not include repl_state_owners.h..."
-	@bad=$$(grep -lE '#[[:space:]]*include[[:space:]]+"repl_state_owners\.h"' $(SCENE_SRCS) $(UI_SRCS) 2>/dev/null || true); \
+check-views-no-owners: ## Verify scene/UI files do not include src/repl/state_owners.h.
+	@echo "Checking scene/UI view files do not include src/repl/state_owners.h..."
+	@bad=$$(grep -lE '#[[:space:]]*include[[:space:]]+"repl/state_owners\.h"' $(SCENE_SRCS) $(UI_SRCS) 2>/dev/null || true); \
 	if [ -n "$$bad" ]; then \
-		echo "$(RED)ERROR: scene/UI view files include repl_state_owners.h:$(NC)"; \
+		echo "$(RED)ERROR: scene/UI view files include src/repl/state_owners.h:$(NC)"; \
 		echo "$$bad"; exit 1; \
 	fi
 	@echo "View-file ownership boundary $(GREEN)OK$(NC)"
@@ -423,7 +423,7 @@ check-no-write-through-view: ## Verify no writes happen through pointer fields o
 	@bash scripts/check-no-write-through-view.sh scripts/allowlists/write-through-view.txt $(UI_SRCS) $(SCENE_SRCS)
 
 check-runtime-state-value-fields: ## Verify ReplRuntimeState owns values, not pointer aliases.
-	@bash scripts/check-runtime-state-value-fields.sh repl_state.h
+	@bash scripts/check-runtime-state-value-fields.sh src/repl/state.h
 
 check-views-flat-types: ## Verify view/state snapshot structs avoid mutable pointer fields.
 	@bash scripts/check-views-flat.sh scripts/baselines/views-flat-violations.txt
@@ -444,8 +444,8 @@ check-renderer-no-direct-mutators: ## Verify audited renderers do not mutate sta
 check-output-actualization: ## Verify Ui*Output fields are consumed by controller actualization.
 	@bash scripts/check-output-actualization.sh
 
-check-state-c-shrinking: ## Ratchet repl_state.c line count down over time.
-	@bash scripts/check-state-c-shrinking.sh scripts/baselines/state-c-lines.txt repl_state.c
+check-state-c-shrinking: ## Ratchet src/repl/state.c line count down over time.
+	@bash scripts/check-state-c-shrinking.sh scripts/baselines/state-c-lines.txt src/repl/state.c
 
 check-repl-no-direct-editor: ## Forbid editor coupling in repl_*.{c,h} (Phase 7 of feature/source-document-port.md — hard zero).
 	@bash scripts/check-repl-no-direct-editor.sh
@@ -565,10 +565,10 @@ check-no-repl-commit: ## Verify repl_commit.{c,h} stays deleted (commit dispatch
 check-no-repl-editor-input-shim: ## Verify src/editor/input.c does not delegate to legacy repl_*_func entry points.
 	@bash scripts/check-no-repl-editor-input-shim.sh
 
-check-no-set-status-in-repl-parser: ## Ratchet set_status calls inside repl_parser.c (parser diagnostics flow via ctx->err_buf).
+check-no-set-status-in-repl-parser: ## Ratchet set_status calls inside src/repl/parser.c (parser diagnostics flow via ctx->err_buf).
 	@bash scripts/check-no-set-status-in-repl-parser.sh scripts/baselines/repl-parser-set-status.txt
 
-check-no-set-status-in-compile-apply: ## Verify repl_compile.c / repl_apply.c never call set_status (Phase C purity).
+check-no-set-status-in-compile-apply: ## Verify src/repl/compile.c / src/repl/apply.c never call set_status (Phase C purity).
 	@bash scripts/check-no-set-status-in-compile-apply.sh
 
 check-no-load-line-to-input-in-pipeline: ## Verify REPL pipeline TUs do not call editor-side load_line_to_input.
@@ -580,10 +580,10 @@ check-repl-state-no-glr-state: ## Verify REPL pipeline TUs do not include glr_st
 check-glr-state-no-repl-mutators: ## Verify glr_state.c does not call back into REPL state mutators.
 	@bash scripts/check-glr-state-no-repl-mutators.sh
 
-check-repl-scenes-cfg-clear-paired: ## Verify every g_user_scenes[X].used=0 in repl_scenes.c pairs with scene_cfg_clear.
+check-repl-scenes-cfg-clear-paired: ## Verify every g_user_scenes[X].used=0 in src/repl/scenes.c pairs with scene_cfg_clear.
 	@bash scripts/check-repl-scenes-cfg-clear-paired.sh
 
-check-repl-export-no-ui-layout: ## Verify repl_export.c does not call ui_layout_* / ui_state_*.
+check-repl-export-no-ui-layout: ## Verify src/repl/export.c does not call ui_layout_* / ui_state_*.
 	@bash scripts/check-repl-export-no-ui-layout.sh
 
 check-no-feed-line-in-pipeline: ## Verify REPL pipeline TUs do not call feed_line() (cleared by step 5b/7e).
@@ -592,7 +592,7 @@ check-no-feed-line-in-pipeline: ## Verify REPL pipeline TUs do not call feed_lin
 check-repl-demo-stubs-shrinking: ## Ratchet on tools/repl_demo/stubs.c — must not grow past 0 stubs.
 	@bash scripts/check-repl-demo-stubs-shrinking.sh
 
-check-no-point-parameter-builds: ## Verify repl_executor.c syntax-checks with NO_POINT_PARAMETER=1.
+check-no-point-parameter-builds: ## Verify src/repl/executor.c syntax-checks with NO_POINT_PARAMETER=1.
 	@bash scripts/check-no-point-parameter-builds.sh
 
 check-no-test-default-output: ## Hard guard: tests may not call repl_save_default_output() (writes ./output.c in repo root).

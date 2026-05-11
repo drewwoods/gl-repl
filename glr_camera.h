@@ -79,7 +79,7 @@ void glr_camera_drag_motion(int x, int y);
 void glr_camera_tick(void);
 
 /* Step 4a of feature/decouple-repl-from-gl-repl-alt.md: install the
- * default ReplExportCameraBridge so repl_export.c can emit/parse the
+ * default ReplExportCameraBridge so src/repl/export.c can emit/parse the
  * `// camera` block + `static float g_angle = N.NNNNf;` preamble
  * without referencing glr_camera_*. The bridge implementation lives
  * in glr_camera_export.c. Called once at app startup from

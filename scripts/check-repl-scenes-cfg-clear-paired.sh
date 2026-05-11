@@ -1,15 +1,15 @@
 #!/bin/bash
-# Hard guard: every site in repl_scenes.c that flips
+# Hard guard: every site in src/repl/scenes.c that flips
 # `g_user_scenes[X].used = 0` must also call `scene_cfg_clear(X)`
 # in the immediately surrounding block.
 #
 # Step 7b split the per-slot cfg storage off of UserScene into a
 # parallel array (originally in glr_scenes.c, inlined as file-statics
-# in repl_scenes.c by 7d). The slot lifecycle still drives both
+# in src/repl/scenes.c by 7d). The slot lifecycle still drives both
 # halves, so the parallel array only stays in sync if every "release
 # this slot" path clears both.
 #
-# The check is a heuristic: look for `used = 0` lines in repl_scenes.c
+# The check is a heuristic: look for `used = 0` lines in src/repl/scenes.c
 # and require a `scene_cfg_clear` within the next few lines. False
 # positives can be silenced by inlining the clear adjacent to the
 # used flip.
@@ -17,7 +17,7 @@
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 
-file="repl_scenes.c"
+file="src/repl/scenes.c"
 
 # Pull the line numbers of every "used = 0" assignment.
 used_zero_lines=$(grep -nE '\.used\s*=\s*0\b|->used\s*=\s*0\b' "$file" 2>/dev/null | cut -d: -f1 || true)
@@ -56,7 +56,7 @@ if [ -z "$violations" ]; then
     exit 0
 fi
 
-echo "ERROR: repl_scenes.c has used=0 sites without paired scene_cfg_clear:" >&2
+echo "ERROR: src/repl/scenes.c has used=0 sites without paired scene_cfg_clear:" >&2
 printf "%b" "$violations" >&2
 echo "Step 7b requires every slot-release path to clear the parallel cfg slot." >&2
 exit 1

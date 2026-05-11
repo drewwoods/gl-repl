@@ -16,7 +16,7 @@ print_section() {
 }
 
 # 1. Editor / UI-shaped slices still exposed through repl_state_*.
-#    Phase 1 (commits 3-7) drives this to zero outside repl_state.c +
+#    Phase 1 (commits 3-7) drives this to zero outside src/repl/state.c +
 #    forwarder shims. Tests are excluded so the signal tracks shipping
 #    code, not test scaffolding.
 print_section "editor/ui-like state still exposed through repl_state"

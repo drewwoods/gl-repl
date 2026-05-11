@@ -104,26 +104,26 @@ Test sources live under `tests/` and shared test-only helpers live under
 | `glr_ctrl.h` | Controller public surface: display, reshape, init-GL entrypoints |
 | `glr_config.c` | Config key implementation and descriptor table helpers |
 | `glr_config.h` | `ReplConfigKey` / `ReplConfigItem` descriptor API for keyed config access |
-| `repl_command.h` | Core command model types: `CmdType` enum, `GLCmd` struct (pure parse-result: type, args, flags, provenance — no `source[]` field) |
-| `repl_compile.c` | Pure source-text validators that produce `ReplCompiledChange` descriptors; never mutates state |
-| `repl_compile.h` | `ReplCompiledChange`, `ReplCompileResult`, `ReplCompileContext`, compile entry points |
-| `repl_apply.c` | Applies a `ReplCompiledChange` to `ReplState` command arrays |
-| `repl_apply.h` | Apply public API (`repl_apply_compiled_change`, `repl_apply_predef_ops`) |
-| `repl_core.c` | Normalization pipeline (`repl_parse_and_normalize*`), reformatter, startup helpers |
-| `repl_parser.c` | REPL source-line parser, expression validation, canonical line text emission via `ReplParsedLine.text` (the per-line text lives in `EditorState`'s editor buffer, not on `GLCmd`) |
-| `repl_parser.h` | Parser entrypoints (`repl_parser_parse_command*`, `repl_parser_parse_command_ctx`), `ReplParseContext`, `ReplParsedLine` |
-| `repl_source_scope.c` | Source prefix-depth cache, indentation helpers, block lookup |
-| `repl_source_scope.h` | Source-scope query API (`repl_source_scope_block_depth_at`, `repl_source_scope_find_block_end`, indent helpers) |
-| `repl_command_spec.c` | Command type metadata and specifications (parsing, formatting, completion requirements) |
-| `repl_command_spec.h` | Command spec query API |
-| `repl_command_store.c` | Low-level `GLCmd` array mechanics: insert, delete, replace, bulk-load (no text-buffer writes) |
-| `repl_command_store.h` | Command-store public API (`repl_command_store_insert_one`, etc.) |
-| `repl_core.h` | Public API (parse, flatten, user scene + workspace); GLUT input-dispatch declarations |
-| `repl_core_internal.h` | Test-visible internals (normalize/commit pipeline, `feed_line`, `load_line_to_input`, `repl_promote_example_if_needed`) |
-| `repl_state.c` | Owns `g_repl_state`, lifecycle, snapshot assembly (`repl_state_capture` / `repl_state_restore`) |
-| `repl_state.h` | Typed runtime-state facade, reset helpers, and focused accessors over the live REPL state |
-| `repl_state_views.h` | Read-only (by-value) state getters; safe to include from `scene_*` and `ui_*` |
-| `repl_state_owners.h` | Mutable `_mut()` accessors; owner modules and controller only |
+| `src/repl/command.h` | Core command model types: `CmdType` enum, `GLCmd` struct (pure parse-result: type, args, flags, provenance — no `source[]` field) |
+| `src/repl/compile.c` | Pure source-text validators that produce `ReplCompiledChange` descriptors; never mutates state |
+| `src/repl/compile.h` | `ReplCompiledChange`, `ReplCompileResult`, `ReplCompileContext`, compile entry points |
+| `src/repl/apply.c` | Applies a `ReplCompiledChange` to `ReplState` command arrays |
+| `src/repl/apply.h` | Apply public API (`repl_apply_compiled_change`, `repl_apply_predef_ops`) |
+| `src/repl/core.c` | Normalization pipeline (`repl_parse_and_normalize*`), reformatter, startup helpers |
+| `src/repl/parser.c` | REPL source-line parser, expression validation, canonical line text emission via `ReplParsedLine.text` (the per-line text lives in `EditorState`'s editor buffer, not on `GLCmd`) |
+| `src/repl/parser.h` | Parser entrypoints (`repl_parser_parse_command*`, `repl_parser_parse_command_ctx`), `ReplParseContext`, `ReplParsedLine` |
+| `src/repl/source_scope.c` | Source prefix-depth cache, indentation helpers, block lookup |
+| `src/repl/source_scope.h` | Source-scope query API (`repl_source_scope_block_depth_at`, `repl_source_scope_find_block_end`, indent helpers) |
+| `src/repl/command_spec.c` | Command type metadata and specifications (parsing, formatting, completion requirements) |
+| `src/repl/command_spec.h` | Command spec query API |
+| `src/repl/command_store.c` | Low-level `GLCmd` array mechanics: insert, delete, replace, bulk-load (no text-buffer writes) |
+| `src/repl/command_store.h` | Command-store public API (`repl_command_store_insert_one`, etc.) |
+| `src/repl/core.h` | Public API (parse, flatten, user scene + workspace); GLUT input-dispatch declarations |
+| `src/repl/core_internal.h` | Test-visible internals (normalize/commit pipeline, `feed_line`, `load_line_to_input`, `repl_promote_example_if_needed`) |
+| `src/repl/state.c` | Owns `g_repl_state`, lifecycle, snapshot assembly (`repl_state_capture` / `repl_state_restore`) |
+| `src/repl/state.h` | Typed runtime-state facade, reset helpers, and focused accessors over the live REPL state |
+| `src/repl/state_views.h` | Read-only (by-value) state getters; safe to include from `scene_*` and `ui_*` |
+| `src/repl/state_owners.h` | Mutable `_mut()` accessors; owner modules and controller only |
 | `src/editor/input.c` | Editor's text-document controller: keyboard/mouse dispatch, cursor/scroll/selection/search/autocomplete navigation, clipboard, undo, commit orchestration, `feed_line`. Non-editor routing (replay, audio, config, save, camera) lives in `glr_ctrl.c` |
 | `src/editor/input.h` | Editor input dispatch entry points + `ReplInputDispatchEffects` typedef + `editor_input_active_modifiers` test seam |
 | `src/editor/commit.c` | Editor-side commit transaction boundary: compile via `repl_compile`, undo snapshot, text-buffer write, REPL apply, dirty-state updates |
@@ -149,12 +149,12 @@ Test sources live under `tests/` and shared test-only helpers live under
 | `src/ui/code_panel_layout.h` | `CodePanelTextLayout` / `CodePanelWrapIter` API shared by UI, export dumps, tests |
 | `src/editor/code_panel_document.c` | Code-panel document row model, scroll-follow calculation, hit-test targets |
 | `src/editor/code_panel_document.h` | `CodePanelDocumentLayout` API consumed by UI and scrolling tests |
-| `repl_executor.c` | Narrow live-GL dispatch: walks the flat command array emitting OpenGL calls |
-| `repl_executor.h` | Executor public API (`repl_execute_program`, transform helpers) |
-| `repl_flatten.c` | Source-to-flat program builder: unrolls loops, inlines functions, resolves if-blocks |
-| `repl_flatten.h` | Flatten public API (`repl_flatten_program`, cursor-highlight refresh) |
-| `repl_pipeline.h` | Pipeline and lifecycle surface for frame orchestration (flatten, autonormal, replay snapshots) |
-| `repl_autonormal.c` | Auto-generated `glNormal3f` maintenance for source commands |
+| `src/repl/executor.c` | Narrow live-GL dispatch: walks the flat command array emitting OpenGL calls |
+| `src/repl/executor.h` | Executor public API (`repl_execute_program`, transform helpers) |
+| `src/repl/flatten.c` | Source-to-flat program builder: unrolls loops, inlines functions, resolves if-blocks |
+| `src/repl/flatten.h` | Flatten public API (`repl_flatten_program`, cursor-highlight refresh) |
+| `src/repl/pipeline.h` | Pipeline and lifecycle surface for frame orchestration (flatten, autonormal, replay snapshots) |
+| `src/repl/autonormal.c` | Auto-generated `glNormal3f` maintenance for source commands |
 | `replay.c` | Replay state machine: PC, mode (OFF/PLAYING/PAUSED/DONE), speed, fade-batch ring |
 | `replay.h` | Replay public API (`repl_replay_start`, `repl_replay_toggle_play_pause`, etc.) |
 | `src/editor/search.c` | Case-insensitive substring search state and match navigation |
@@ -162,12 +162,12 @@ Test sources live under `tests/` and shared test-only helpers live under
 | `repl_autocomplete.c` | REPL-side completion provider: walks command spec / predef vars / `CMD_FUNC_DEF` for matches, ghost text, parameter hints. Registered via `EditorCompletionProvider`. |
 | `src/ui/layout.c` | Pure window layout geometry: scene rect and code-panel rect derivation |
 | `src/ui/layout.h` | Layout geometry API (`ui_layout_scene_rect`, `ui_layout_code_panel_rect`) |
-| `repl_scenes.c` | User-scene slots, LRU eviction, workspace save/load, workspace dir binding |
-| `repl_example_loader.c` | Built-in example loading and active-example tracking |
+| `src/repl/scenes.c` | User-scene slots, LRU eviction, workspace save/load, workspace dir binding |
+| `src/repl/example_loader.c` | Built-in example loading and active-example tracking |
 | `glr_debug.c` | Diagnostic dumps for CLI flags and tests |
 | `glr_debug.h` | Debug dump public API |
-| `repl_replay_annotations.c` | Replay-time source annotations, variable substitution, evaluated command display text |
-| `repl_replay_annotations.h` | Code-panel replay annotation API |
+| `src/repl/replay_annotations.c` | Replay-time source annotations, variable substitution, evaluated command display text |
+| `src/repl/replay_annotations.h` | Code-panel replay annotation API |
 | `src/ui/snapshot.h` | `UiRenderSnapshot` — frame-frozen bundle built once per frame by `glr_ctrl_build_ui_snapshot()` |
 | `src/ui/editor.h` | Per-frame editor-overlay snapshots (swatches, sliders, highlights) pushed by the controller |
 | `replay_ui_hud.c` | 2D replay status HUD (feature-UI under the `replay_ui_*` prefix; reads replay peer snapshot) |
@@ -182,8 +182,8 @@ Test sources live under `tests/` and shared test-only helpers live under
 | `src/ui/color_picker.h` | Picker UI render/hit-test API + `UI_COLOR_SWATCH_W` |
 | `src/ui/tabbed_overlay.c` | Generic modal tabbed text overlay renderer (the F1 help overlay's UI shell) |
 | `src/ui/tabbed_overlay.h` | Tabbed-overlay render API (`UiOverlayState`, `UiOverlayContent`) |
-| `repl_help_text.c` | Builds neutral F1 help text tables (commands, key bindings); `glr_ctrl` adapts them to `UiOverlayContent` |
-| `repl_help_text.h` | Help-content public API |
+| `src/repl/help_text.c` | Builds neutral F1 help text tables (commands, key bindings); `glr_ctrl` adapts them to `UiOverlayContent` |
+| `src/repl/help_text.h` | Help-content public API |
 | `src/ui/variable_panel.c` | Floating variable slider panel rendering, geometry, and hit-test |
 | `src/ui/variable_panel.h` | Variable panel render/rect/hit API |
 | `src/ui/autocomplete_panel.c` | Floating autocomplete popup renderer (reads autocomplete state populated by `repl_autocomplete.c`) |
@@ -200,11 +200,11 @@ Test sources live under `tests/` and shared test-only helpers live under
 | `src/editor/help_session.h` | `EditorHelpSession` API (capture/restore/reset, narrow accessors) |
 | `src/editor/completion.c` | Completion-provider registry: editor input invokes registered provider for autocomplete |
 | `src/editor/completion.h` | `EditorCompletionProvider` struct + `editor_completion_register/update/clear` API |
-| `repl_examples.c` | Predefined example data (`g_examples[]`, `g_example_names[]`) |
-| `repl_examples.h` | Example query API (`repl_examples_count/name/lines`) |
-| `repl_export.c` | `repl_export_save_output` / `repl_export_load_from_file`, workspace header directives, `@scene-name` / `@workspace-dir` markers |
-| `repl_export.h` | Export/import public API and workspace-header pending-state types |
-| `repl_export_state.h` | Shared dimensions for import/export state text |
+| `src/repl/examples.c` | Predefined example data (`g_examples[]`, `g_example_names[]`) |
+| `src/repl/examples.h` | Example query API (`repl_examples_count/name/lines`) |
+| `src/repl/export.c` | `repl_export_save_output` / `repl_export_load_from_file`, workspace header directives, `@scene-name` / `@workspace-dir` markers |
+| `src/repl/export.h` | Export/import public API and workspace-header pending-state types |
+| `src/repl/export_state.h` | Shared dimensions for import/export state text |
 | `audio.c` | App-level playlist engine and persisted audio config |
 | `audio.h` | Audio playback API |
 | `prof.c` | CPU wall-time profiling instrumentation (per-section accumulators, frame tick) |
@@ -215,7 +215,7 @@ Test sources live under `tests/` and shared test-only helpers live under
 | `geometry_guides.h` | Geometry guides render entrypoint |
 | `transform_guides.c` | Transform guide rendering (pending matrix ops during replay) |
 | `transform_guides.h` | Transform guides render entrypoint |
-| `transform_utils.h` | Header-only GL matrix helpers (`apply_tracked_transform`, `unwind_transform_stack`) mirroring executor transforms without requiring `repl_executor.h` |
+| `transform_utils.h` | Header-only GL matrix helpers (`apply_tracked_transform`, `unwind_transform_stack`) mirroring executor transforms without requiring `src/repl/executor.h` |
 | `src/scene/render.c` | 3D scene frame orchestration, one-shot init, scene config/frame prep, edit guides, orbit target, replay fade pass orchestration |
 | `src/scene/grid.c` | Grid theme rendering and custom focus/ocean/ruler/planes passes |
 | `src/scene/grid.h` | Grid render entrypoint |
@@ -232,8 +232,8 @@ Test sources live under `tests/` and shared test-only helpers live under
 | `src/ui/hit.h` | `UiHitKind` + `UiHit` — neutral hit-test result returned by UI input handlers to `glr_ctrl` |
 | `src/ui/panels.c` | Code-panel row rendering (incl. inline ghost/hint text), scene status banner, hit-test (returns `UiHit`) |
 | `src/ui/panels.h` | Code-panel geometry, render, and hit-test declarations |
-| `repl_eval.c` | Expression evaluator (recursive descent), REPL<->C translators, for-loop parsers |
-| `repl_eval.h` | Evaluator types (`ExprVar`, `ExprCtx`), function declarations |
+| `src/repl/eval.c` | Expression evaluator (recursive descent), REPL<->C translators, for-loop parsers |
+| `src/repl/eval.h` | Evaluator types (`ExprVar`, `ExprCtx`), function declarations |
 | `cmd_format.c` | Pure indentation/depth computation (no GL dependency) |
 | `cmd_format.h` | Formatting types (`FmtCmd`, `FmtType`), indent functions |
 | `include/gl_2d.h` | Header-only 2D OpenGL helper functions |
@@ -245,7 +245,7 @@ Test sources live under `tests/` and shared test-only helpers live under
 
 - File-private statics use `g_` prefix (e.g., `g_cfg_items[]`, `g_user_scenes[]`).
   Runtime state that crosses module boundaries is accessed through typed
-  facades: `repl_state.h` for REPL program state (e.g., `repl_state_render()`,
+  facades: `src/repl/state.h` for REPL program state (e.g., `repl_state_render()`,
   `repl_state_variables()`), `src/editor/state.h` for editor session state
   (e.g., `editor_state_input()`, `editor_state_search()`), and peer-subsystem
   accessors for replay (`replay_state_view()`) and variable panel
@@ -261,11 +261,11 @@ Test sources live under `tests/` and shared test-only helpers live under
 - Config toggles use the `ReplConfigItem` / `ReplConfigKey` pattern: add a
   descriptor entry to `g_cfg_items[]` in `glr_actions.c`; `CFG_ITEM_COUNT`
   auto-computes via `sizeof`
-- New GL commands: add to the `CmdType` enum in `repl_command.h`, then
-  handle in `repl_parser_parse_command_ctx()` in `repl_parser.c`,
-  `repl_execute_program()` in `repl_executor.c`, and `flatten_range()`
-  (static, inside `repl_flatten.c`). Add a `g_command_type_specs[]`
-  entry in `repl_command_spec.c` with the right `CmdSyntaxCategory`
+- New GL commands: add to the `CmdType` enum in `src/repl/command.h`, then
+  handle in `repl_parser_parse_command_ctx()` in `src/repl/parser.c`,
+  `repl_execute_program()` in `src/repl/executor.c`, and `flatten_range()`
+  (static, inside `src/repl/flatten.c`). Add a `g_command_type_specs[]`
+  entry in `src/repl/command_spec.c` with the right `CmdSyntaxCategory`
   so the new command picks up its code-panel highlight color
   automatically; if you need a `glEnable`-shaped enum-arg spec or a
   standard float-arg spec, append a row to `k_enum_command_specs[]`
@@ -279,7 +279,7 @@ Test sources live under `tests/` and shared test-only helpers live under
   control-character form by `editor_input_normalize_super_to_ctrl`,
   called at the top of `glr_ctrl_keyboard` so every downstream
   dispatcher sees Cmd+B identically to Ctrl+B.
-- Expression variables: `ExprVar` struct in `repl_eval.h`, predefined set
+- Expression variables: `ExprVar` struct in `src/repl/eval.h`, predefined set
   accessible via `repl_state_variables()` and managed by `repl_eval_declare_predef_var()`
 
 ## Architecture
@@ -353,9 +353,9 @@ The core data flow is **source commands → flat commands → GL calls**:
    `try_assign_variable`, otherwise `float x` is misread as an
    assignment. Each handler returns 1 if it consumed the input
    (success or error with status message), 0 if it didn't match.
-   If all handlers return 0, `parse_command()` in `repl_parser.c`
+   If all handlers return 0, `parse_command()` in `src/repl/parser.c`
    sets the per-context error buffer.
-3. **Parse** — `parse_command()` in `repl_parser.c` matches the line to a
+3. **Parse** — `parse_command()` in `src/repl/parser.c` matches the line to a
    `CmdType`, evaluates argument expressions via `eval_expr()`, stores
    result in `GLCmd.args[]`. Per-line canonical text lives in
    `EditorState`'s editor buffer (not on `GLCmd`); the parser returns it as
@@ -435,11 +435,11 @@ Key details:
   by itself is allowed. Cut/copy/paste of decl rows remain blocked
   outright (clipboard semantics — see commit 72be1dd).
 - C export writes `// @declare name` markers; import via
-  `import_parse_declare_marker()` in `repl_export.c` reconstructs
+  `import_parse_declare_marker()` in `src/repl/export.c` reconstructs
   the `CMD_VAR_DECLARE` commands, bypassing `try_commit_float_decl`
-- `repl_examples.c` has multi-name declarations (e.g. `"float n, x, y, z, j, k;"`)
+- `src/repl/examples.c` has multi-name declarations (e.g. `"float n, x, y, z, j, k;"`)
   — if simplifying to single-name, these must be split into separate lines
-- Related helpers in `repl_eval.c`: `repl_eval_declare_predef_var()`,
+- Related helpers in `src/repl/eval.c`: `repl_eval_declare_predef_var()`,
   `repl_eval_undeclare_predef_var()`, `repl_eval_find_predef_var_idx()`,
   `repl_eval_is_reserved_ident()`, `repl_eval_source_uses_ident()`,
   `repl_eval_validate_expression_idents()`
@@ -447,7 +447,7 @@ Key details:
 ### User Scenes & Auto-Promotion
 
 The REPL keeps up to `MAX_USER_SCENES = 8` independent scenes in
-`g_user_scenes[]` (`repl_scenes.c`). Slot 0 is the pinned "home" scene —
+`g_user_scenes[]` (`src/repl/scenes.c`). Slot 0 is the pinned "home" scene —
 the pre-example editor state captured on first example load, never
 auto-evicted. Each `UserScene` stores command array + count + edit_line
 + predef variable values + scene `name` + `last_touch` tick.
@@ -483,7 +483,7 @@ auto-evicted. Each `UserScene` stores command array + count + edit_line
 
 ### Example Metadata
 
-Built-in examples in `repl_examples.c` can prefix their command list
+Built-in examples in `src/repl/examples.c` can prefix their command list
 with:
 
 1. Contiguous `// @cfg <slug> = <value>` lines.
@@ -491,7 +491,7 @@ with:
 
 Leading metadata is consumed before lines feed through the commit
 pipeline, so it stays hidden from the code panel. `@cfg` parsing reuses
-`parse_workspace_header_line()` from `repl_export.c`, restricted to
+`parse_workspace_header_line()` from `src/repl/export.c`, restricted to
 these scene-presentation slugs:
 
 `wireframe`, `grid`, `grid_major`, `grid_extent`, `axes`,
@@ -516,13 +516,13 @@ The single source of truth for example-owned presentation defaults is
 the `CFG_DEFAULT_*` macro block in `glr_defaults.h`. Initializers, example
 reset helpers, and tests reuse those macros instead of duplicating
 literals. `make test_repl_core_examples` is the focused regression
-suite; touch `repl_core.c`, `repl_export.c`, `repl_examples.c`,
+suite; touch `src/repl/core.c`, `src/repl/export.c`, `src/repl/examples.c`,
 `glr_defaults.h`, and `tests/test_repl_core_examples.c` together when
 changing example-metadata behavior.
 
 ### Save/Load (output.c)
 
-`repl_export.c` handles bidirectional text format:
+`src/repl/export.c` handles bidirectional text format:
 - **Export** (`repl_export_save_output()`): writes a standalone C file with header
   comments embedding workspace state (`@var name=value`,
   `@cfg setting=value`, `@scene-name <name>`, `@workspace-dir <path>`),
@@ -530,7 +530,7 @@ changing example-metadata behavior.
   uses internally, predefined vars plus fixed scratch arrays `A/B/C[8]` as
   globals, REPL functions as C
   functions, and `display()` body containing the user's geometry commands.
-  The workspace iterator in `repl_core.c` sets the export scene-name hint
+  The workspace iterator in `src/repl/core.c` sets the export scene-name hint
   in import/export state before each slot's save so the hint wins over the
   active user scene index.
 - **Import** (`repl_export_load_from_file()`): line-by-line scan parses camera state

@@ -4,19 +4,19 @@
  *
  * Extracted from sample.c for maintainability.
  */
-#include "repl_command_spec.h"
-#include "repl_state_views.h"
+#include "repl/command_spec.h"
+#include "repl/state_views.h"
 #include "state.h"
-#include "repl_export.h"
+#include "repl/export.h"
 #include "layout.h"
 #include "color_picker.h"
 #include "metrics.h"
 #include "editor/code_panel_document.h"
-#include "repl_core.h"
+#include "repl/core.h"
 #include "editor/search.h"
 #include "menu_bar.h"
 #include "variable_panel.h"
-#include "repl_replay_annotations.h"
+#include "repl/replay_annotations.h"
 #include "prof.h"
 #include "panels.h"
 #include "./include/gl_2d.h"
@@ -49,7 +49,7 @@ static const EditorTransformer *find_color_transformer(const EditorTransformerLi
 /* ========================================================================= */
 
 /* Category → RGB palette. The category for each CmdType is declared in
- * repl_command_spec.c's g_command_type_specs[] table; the renderer just
+ * src/repl/command_spec.c's g_command_type_specs[] table; the renderer just
  * looks the color up here. Adding a new CmdType picks up its highlight
  * automatically — set its category in the spec table and the renderer
  * follows. Tweak the palette here if you want to change how a category
@@ -105,7 +105,7 @@ static void code_panel_static_line_rgb(const char *text,
     if (b) *b = fallback_b;
 }
 
-/* Replay annotations live in repl_replay_annotations.c. */
+/* Replay annotations live in src/repl/replay_annotations.c. */
 
 /* ========================================================================= */
 /* Code panel                                                                 */

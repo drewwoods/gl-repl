@@ -37,13 +37,13 @@
 #include "state.h"
 #include "undo.h"
 
-#include "repl_apply.h"
-#include "repl_compile.h"
-#include "repl_core_internal.h"
-#include "repl_parser.h"
-#include "repl_core.h"
-#include "repl_state_owners.h"
-#include "repl_source_scope.h"
+#include "repl/apply.h"
+#include "repl/compile.h"
+#include "repl/core_internal.h"
+#include "repl/parser.h"
+#include "repl/core.h"
+#include "repl/state_owners.h"
+#include "repl/source_scope.h"
 
 #include <ctype.h>
 #include <stdio.h>

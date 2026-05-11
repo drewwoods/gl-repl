@@ -1,10 +1,10 @@
 #include "editor/state.h"
-#include "repl_core.h"
-#include "repl_state.h"
+#include "repl/core.h"
+#include "repl/state.h"
 
 // Include the C file directly to access its static callbacks.
 // We must NOT link repl_executor.o into test_repl_executor!
-#include "repl_executor.c"
+#include "repl/executor.c"
 
 #include "support/test_harness.h"
 #include <stdio.h>

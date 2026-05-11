@@ -4,7 +4,7 @@
  * Editor input routing decides when copy/cut/paste happens; this file decides
  * which command range that means, preserves var-declaration guards, and
  * performs the actual clipboard mutation. Phase 2 keeps selection and
- * clipboard storage in repl_state.c while this module owns the behavior.
+ * clipboard storage in src/repl/state.c while this module owns the behavior.
  */
 
 #include "state.h"
@@ -12,11 +12,11 @@
 #include "input.h"
 #include "undo.h"
 
-#include "repl_command_store.h"
-#include "repl_core.h"
-#include "repl_core_internal.h"
-#include "repl_source_scope.h"
-#include "repl_state_owners.h"
+#include "repl/command_store.h"
+#include "repl/core.h"
+#include "repl/core_internal.h"
+#include "repl/source_scope.h"
+#include "repl/state_owners.h"
 
 void editor_clipboard_clear_selection(void) {
     editor_state_selection_clear();

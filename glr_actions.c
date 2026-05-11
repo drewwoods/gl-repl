@@ -12,16 +12,16 @@
 #include "ui/layout.h"           /* CODE_PANEL_LAYOUT_* enum values */
 #include "color_picker_state.h"
 #include "audio.h"
-#include "repl_core.h"
-#include "repl_core_internal.h"
+#include "repl/core.h"
+#include "repl/core_internal.h"
 #include "glr_config.h"
 #include "editor/input.h"
 #include "editor/completion.h"
 #include "keys.h"
 #include "replay_state.h"
 #include "editor/help_session.h"
-#include "repl_pipeline.h"
-#include "repl_state_owners.h"
+#include "repl/pipeline.h"
+#include "repl/state_owners.h"
 #include "ui/menu_bar.h"
 #include "ui/profile_panel.h"
 #include "ui/state.h"
@@ -127,7 +127,7 @@ const int CFG_ITEM_COUNT = (int)(sizeof(g_cfg_items) / sizeof(g_cfg_items[0]));
 
 /* ---- Export-config bridge (step 4 of the decouple plan) ---------------- */
 
-#include "repl_export.h"
+#include "repl/export.h"
 
 static void cfg_slug_from_label(const char *label, char *out, size_t out_sz) {
     size_t out_idx = 0;
@@ -143,7 +143,7 @@ static void cfg_slug_from_label(const char *label, char *out, size_t out_sz) {
 /* Subset of cfg keys saved per-scene (mirrors what the pre-step-4
  * k_scene_cfg_keys list covered, including camera_rotate). The
  * subset includes presentation toggles plus camera_rotate; the
- * controller owns this knowledge so repl_scenes.c stays neutral. */
+ * controller owns this knowledge so src/repl/scenes.c stays neutral. */
 static int cfg_key_in_scene_subset(GlrConfigKey key) {
     switch (key) {
     case GLR_CONFIG_WIREFRAME:
@@ -453,7 +453,7 @@ int glr_action_menu_item_activate(int menu_id, int item_idx) {
             /* Clear editor / camera / menu / picker / code-panel-drag
              * transients so the new scene starts from a clean controller
              * state. Step 2 of the decouple plan moved this out of
-             * repl_example_loader.c. */
+             * src/repl/example_loader.c. */
             repl_editor_reset_transients();
             repl_load_example(item_idx - 1);
             return 1;

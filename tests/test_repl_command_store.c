@@ -1,9 +1,9 @@
 #include "editor/state.h"
 #include "glr_ctrl.h"
-#include "repl_command_store.h"
-#include "repl_core.h"
-#include "repl_state.h"
-#include "repl_eval.h"
+#include "repl/command_store.h"
+#include "repl/core.h"
+#include "repl/state.h"
+#include "repl/eval.h"
 #include "support/test_harness.h"
 
 #include <stdio.h>

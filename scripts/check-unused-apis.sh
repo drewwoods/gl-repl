@@ -10,8 +10,8 @@ echo "Scanning for potentially unused public APIs..."
 unused_count=0
 output=""
 
-for hdr in repl_parser.h repl_executor.h repl_flatten.h repl_eval.h repl_export.h \
-	repl_editor.h repl_replay.h repl_undo.h repl_command_store.h repl_scenes.h; do
+for hdr in src/repl/parser.h src/repl/executor.h src/repl/flatten.h src/repl/eval.h src/repl/export.h \
+	repl_editor.h repl_replay.h repl_undo.h src/repl/command_store.h src/repl/scenes.h; do
 
 	[ ! -f "$hdr" ] && continue
 
@@ -33,7 +33,7 @@ if [ -f "/tmp/check_unused_apis_$$.txt" ] && [ -s "/tmp/check_unused_apis_$$.txt
 	echo "⚠️  Potentially unused APIs found:"
 	cat "/tmp/check_unused_apis_$$.txt"
 	echo ""
-	echo "   Consider moving these to repl_core_internal.h or making them static."
+	echo "   Consider moving these to src/repl/core_internal.h or making them static."
 	rm -f "/tmp/check_unused_apis_$$.txt"
 	exit 0  # Don't fail the build; this is informational only
 else

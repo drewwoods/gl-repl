@@ -13,7 +13,7 @@
  *
  * The snapshot embeds existing by-value `Repl*State` slices verbatim plus
  * pointer-style views (`ReplEditorInputView`, `ReplImportExportView`) whose
- * stable storage is owned by `repl_state.c`. Embedded pointers are valid for
+ * stable storage is owned by `src/repl/state.c`. Embedded pointers are valid for
  * the duration of the frame; the snapshot itself is `const` to the renderer.
  */
 #ifndef UI_SNAPSHOT_H
@@ -22,8 +22,8 @@
 #include "editor/state.h"  /* ReplEditorInputView (Phase 1 commit 5) */
 #include "editor/help_session.h"
 #include "glr_state.h"     /* GlrRenderState (step 7a) */
-#include "repl_state_views.h"
-#include "repl_eval.h"
+#include "repl/state_views.h"
+#include "repl/eval.h"
 #include "editor.h"
 #include "color_picker_state.h"
 
@@ -64,7 +64,7 @@ typedef struct UiRenderSnapshot {
     EditorScrollState           scroll;
     ColorPickerView             color_picker;
 
-    /* Pointer-shaped read-only views (storage owned by repl_state.c) */
+    /* Pointer-shaped read-only views (storage owned by src/repl/state.c) */
     ReplEditorInputView         editor_input;
     ReplImportExportView        import_export;
 

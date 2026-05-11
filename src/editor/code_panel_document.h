@@ -28,7 +28,7 @@
 #ifndef EDITOR_CODE_PANEL_DOCUMENT_H
 #define EDITOR_CODE_PANEL_DOCUMENT_H
 
-#include "repl_command.h"
+#include "repl/command.h"
 #include "code_formatter.h"
 
 /* Full code-panel document layout. Combines header/footer fixed geometry with

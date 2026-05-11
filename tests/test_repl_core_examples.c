@@ -5,11 +5,11 @@
 // For linux mkdtemp
 #define _DEFAULT_SOURCE
 
-#include "repl_core_internal.h"
-#include "repl_example_loader.h"  /* repl_load_example_lines_for_test */
-#include "repl_examples.h"
-#include "repl_state.h"
-#include "repl_core.h"
+#include "repl/core_internal.h"
+#include "repl/example_loader.h"  /* repl_load_example_lines_for_test */
+#include "repl/examples.h"
+#include "repl/state.h"
+#include "repl/core.h"
 #include "ui/state.h"
 #include "scene/render.h"
 #include "glr_defaults.h"   /* CFG_DEFAULT_* */

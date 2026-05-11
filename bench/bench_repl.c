@@ -37,13 +37,13 @@
 #define _DEFAULT_SOURCE
 #define _POSIX_C_SOURCE 200809L
 
-#include "repl_core.h"
-#include "repl_core_internal.h"
-#include "repl_eval.h"
-#include "repl_example_loader.h"  /* repl_load_example_lines_for_test */
-#include "repl_examples.h"
-#include "repl_executor.h"
-#include "repl_parser.h"
+#include "repl/core.h"
+#include "repl/core_internal.h"
+#include "repl/eval.h"
+#include "repl/example_loader.h"  /* repl_load_example_lines_for_test */
+#include "repl/examples.h"
+#include "repl/executor.h"
+#include "repl/parser.h"
 #include "replay.h"
 #include "replay_state.h"
 #include "glr_ctrl.h"
@@ -257,7 +257,7 @@ static BenchResult bench_flatten_examples(int iters) {
             repl_load_example_lines_for_test(repl_examples_lines(e));
 
             /* Snapshot post-load predef values. flatten_range() writes
-             * g_predef_vars[].value on CMD_VAR_ASSIGN (repl_core.c:2624),
+             * g_predef_vars[].value on CMD_VAR_ASSIGN (src/repl/core.c:2624),
              * so without restoring each iter sees drifted values and
              * measures a different workload than the first - several
              * examples have self-referential-looking assignments whose
@@ -371,7 +371,7 @@ static BenchResult bench_replay_examples(int iters) {
     /* load_example_lines() leaves repl_state_flat_program_dirty()=1, and repl_replay_start() will
      * flatten once on its own - calling repl_flatten_commands() explicitly
      * beforehand would flatten twice, because repl_flatten_commands() does
-     * NOT clear repl_state_flat_program_dirty() (see repl_core.c:4462-4464 vs. :3265-3269). */
+     * NOT clear repl_state_flat_program_dirty() (see src/repl/core.c:4462-4464 vs. :3265-3269). */
     for (int it = 0; it < iters; it++) {
         long long steps = 0;
         double t0 = now_seconds();
@@ -449,7 +449,7 @@ static BenchResult bench_replay_long(int iters) {
      * repl_flatten_commands) so the flatten's CMD_VAR_ASSIGN writes
      * to g_predef_vars don't leak into the timed iterations -
      * repl_replay_start does its own predef snapshot/restore around the
-     * flatten (repl_core.c:3264-3268). */
+     * flatten (src/repl/core.c:3264-3268). */
     repl_mark_normals_dirty();
     repl_replay_start();
     int flat_cmds = repl_state_flat_program_count();
@@ -457,7 +457,7 @@ static BenchResult bench_replay_long(int iters) {
 
     /* Snapshot post-load predef values. repl_replay_advance() writes
      * g_predef_vars on CMD_VAR_ASSIGN during playback
-     * (repl_core.c:3655-3656), so without restoring, each iteration
+     * (src/repl/core.c:3655-3656), so without restoring, each iteration
      * would start repl_replay_start()'s baseline capture from progressively
      * drifted values. */
     float saved_vals[MAX_PREDEF_VARS];

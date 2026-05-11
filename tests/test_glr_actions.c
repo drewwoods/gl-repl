@@ -2,13 +2,13 @@
 #include "glr_state.h"
 #include "glr_ctrl.h"
 #include "glr_actions.h"
-#include "repl_state.h"
+#include "repl/state.h"
 #include "replay_state.h"
 #include "ui/state.h"
 #include "editor/help_session.h"
 #include "glr_config.h"
 #include "audio.h"
-#include "repl_core.h"
+#include "repl/core.h"
 #include "support/test_harness.h"
 #include <stdlib.h>
 #include <stdio.h>

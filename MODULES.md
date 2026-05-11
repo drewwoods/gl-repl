@@ -92,7 +92,7 @@ Consequences:
 
 - **State has three owners.** `ReplState` is the program. `EditorState`
   is the text-document session. `UiState` is transient UI/session
-  chrome. Their storage lives in their owner modules (`repl_state.c`,
+  chrome. Their storage lives in their owner modules (`src/repl/state.c`,
   `src/editor/state.c`, `src/ui/state.c`). `glr_ctrl` orchestrates them; it
   does not become a dumping ground for their bytes.
 - **REPL compiles; it does not edit.** The editor calls
@@ -428,7 +428,7 @@ Files no longer in this layer:
 - `ui_help_overlay` → split. The session state (`tab_idx`, `scroll`)
   moved to `src/editor/help_session.c` (Layer 2). The renderer became the
   generic, REPL-agnostic `src/ui/tabbed_overlay.c`; the per-row text
-  content is built REPL-side by `repl_help_text.c` from
+  content is built REPL-side by `src/repl/help_text.c` from
   `k_func_completions[]` and adapted by `glr_ctrl` so adding a new GL command auto-populates
   the F1 overlay.
 - `ui_color_picker` → split into `color_picker_state.c` (peer state +
@@ -486,12 +486,12 @@ flowchart LR
     end
 
     subgraph repl_pipeline["1. REPL compiler/program pipeline"]
-        compile["repl_compile.c<br/>pure validation → ReplCompiledChange"]
-        parser["repl_parser.c<br/>line parser"]
-        scope["repl_source_scope.c<br/>depth · indent · context"]
-        flatten["repl_flatten.c<br/>source-to-flat builder"]
-        exec["repl_executor.c<br/>flat command execution"]
-        store["repl_command_store.c<br/>GLCmd array only"]
+        compile["src/repl/compile.c<br/>pure validation → ReplCompiledChange"]
+        parser["src/repl/parser.c<br/>line parser"]
+        scope["src/repl/source_scope.c<br/>depth · indent · context"]
+        flatten["src/repl/flatten.c<br/>source-to-flat builder"]
+        exec["src/repl/executor.c<br/>flat command execution"]
+        store["src/repl/command_store.c<br/>GLCmd array only"]
     end
 
     subgraph editor["2. Editor (text model + controller)"]
@@ -516,16 +516,16 @@ flowchart LR
     end
 
     subgraph models["3. REPL domain models"]
-        state["repl_state.c<br/>ReplState"]
-        scenes["repl_scenes.c<br/>user scenes · workspace"]
-        replay_ann["repl_replay_annotations.c<br/>takes EditorBufferView"]
-        autonormal["repl_autonormal.c<br/>autonormals · feeding cmds"]
+        state["src/repl/state.c<br/>ReplState"]
+        scenes["src/repl/scenes.c<br/>user scenes · workspace"]
+        replay_ann["src/repl/replay_annotations.c<br/>takes EditorBufferView"]
+        autonormal["src/repl/autonormal.c<br/>autonormals · feeding cmds"]
     end
 
     subgraph services["6. Services + lifecycle"]
         audio["audio.c<br/>playlist"]
         prof["prof.c<br/>instrumentation"]
-        export["repl_export.c<br/>save/load · takes EditorBufferView"]
+        export["src/repl/export.c<br/>save/load · takes EditorBufferView"]
     end
 
     subgraph ui_layer["5. 2D UI rendering + hit-test"]
@@ -534,7 +534,7 @@ flowchart LR
         uipanels["src/ui/panels.c<br/>code panel · statusbar<br/>(returns UiHit)"]
         uimenu["src/ui/menu_bar.c<br/>menubar + dropdowns<br/>(returns UiHit)"]
         uicolor["src/ui/color_picker.c<br/>color picker render + hit-test<br/>(feature-UI · reads ColorPickerView)"]
-        uitabbed["src/ui/tabbed_overlay.c<br/>generic modal tabbed text<br/>(content from repl_help_text.c)"]
+        uitabbed["src/ui/tabbed_overlay.c<br/>generic modal tabbed text<br/>(content from src/repl/help_text.c)"]
         uivpanel["src/ui/variable_panel.c<br/>variable panel chrome"]
         uiac["src/ui/autocomplete_panel.c<br/>completion popup"]
         uiprof["src/ui/profile_panel.c<br/>timing HUD"]
@@ -698,7 +698,7 @@ Allowed:
 ```text
 scene_*.c
 ui_*.c render paths
-repl_executor.c
+src/repl/executor.c
 sample.c        future glr_ctrl.c
 ```
 
@@ -755,8 +755,8 @@ check-no-repl-editor-input-shim        (Phase J1)
     non-editor routing lives in glr_ctrl_router_* helpers.
 
 check-editor-ownership-budget          (landed commit 11)
-    Ratchets the transitional ui-forwarder line count in repl_state.c
-    and the src/ui/state.h -> repl_state_views.h include count strictly
+    Ratchets the transitional ui-forwarder line count in src/repl/state.c
+    and the src/ui/state.h -> src/repl/state_views.h include count strictly
     downward.
 ```
 
@@ -863,7 +863,7 @@ side-effect routing. As of that branch landing:
   and hard-guarded against return (Phase H.5). `try_commit_float_decl`
   and `try_assign_variable` now route through
   `editor_commit_apply_plan`.
-- **Parser diagnostic flow: data, not side effects.** `repl_parser.c`
+- **Parser diagnostic flow: data, not side effects.** `src/repl/parser.c`
   writes diagnostics to `ReplParseContext.err_buf`. The parser core
   has zero `set_status` calls; the legacy no-ctx wrappers
   (`repl_parser_parse_command` / `_with_vars`) keep one bridge for
@@ -952,12 +952,12 @@ syntax highlighting metadata-driven via `CmdSyntaxCategory` on
 Outstanding tracks:
 
 ```text
-R10-phase1                    reassess "stale" GLUT decls in repl_core.h
-R10-ph2-5                     dissolve repl_core.c into natural owners
+R10-phase1                    reassess "stale" GLUT decls in src/repl/core.h
+R10-ph2-5                     dissolve src/repl/core.c into natural owners
 R11 (tail)                    shrink remaining allowlists (bench_repl.c)
 R12                           consolidate public REPL APIs into one repl.h
 R8                            sample -> glr rename (mechanical, last)
-R9                            optional: split repl_export.c
+R9                            optional: split src/repl/export.c
 Color scheme + syntax         deferred sub-task of editor-owns-text Step 6
 ```
 

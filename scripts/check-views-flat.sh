@@ -13,7 +13,7 @@ from pathlib import Path
 baseline_path = Path(sys.argv[1])
 
 patterns = [
-    "repl_state_views.h",
+    "src/repl/state_views.h",
     "ui_*.h",
     "src/scene/render_types.h",
     "src/scene/guides_shared.h",
@@ -59,7 +59,7 @@ for path in files:
         struct_name = m.group(1) if m else f"<anonymous@{path}:{start_line}>"
 
         should_scan = False
-        if path == "repl_state_views.h":
+        if path == "src/repl/state_views.h":
             should_scan = True
         elif struct_name.startswith("Ui") and struct_name.endswith(("View", "State", "Output")):
             should_scan = True

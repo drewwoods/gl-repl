@@ -6,7 +6,7 @@
 #include <string.h>
 
 /* Defaults preserve the legacy behavior the pre-migration
- * repl_state_defaults.inc enshrined: pointer button starts at -1
+ * src/repl/state_defaults.inc enshrined: pointer button starts at -1
  * (no button held); cursor starts visible so the renderer's blink
  * phase begins ON; camera faces the same orbit/distance the example
  * loader expects on a fresh session; other slices zeroed.
@@ -152,6 +152,6 @@ void ui_state_code_panel_reset(void) {
 
 /* Legacy `repl_state_*` forwarders for the slices migrated in Phase 1
  * commit 8 (and the code_panel slice migrated in Phase A commit 12)
- * are defined in repl_state.c rather than here so the
+ * are defined in src/repl/state.c rather than here so the
  * check-state-boundaries guard's "no repl_state_*_mut from ui_*.c"
  * rule keeps working. */

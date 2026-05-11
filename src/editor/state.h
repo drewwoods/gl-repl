@@ -2,7 +2,7 @@
 #define EDITOR_STATE_H
 
 #include "limits.h"
-#include "repl_command.h"
+#include "repl/command.h"
 #include "ui/editor.h"  /* EditorTransformerList, EditorHighlightList,
                          * EditorVirtualLineList typedefs (live state) */
 
@@ -30,7 +30,7 @@
  * source command index. Text is the user-typed form (no trailing ';',
  * no leading whitespace) — the same shape `load_line_to_input` produces
  * after stripping. The typedef lives in editor_state.h because
- * EditorState owns the buffer; repl_state_views.h no longer defines or
+ * EditorState owns the buffer; src/repl/state_views.h no longer defines or
  * declares anything related to it. */
 typedef struct {
     char lines[MAX_COMMANDS][MAX_LINE_LEN];
@@ -224,7 +224,7 @@ void editor_buffer_clear(void);
 EditorBufferView editor_buffer_view(void);
 
 /* Forward decl for apply boundary. The full type lives in
- * repl_compile.h; the editor commit orchestration drives it
+ * src/repl/compile.h; the editor commit orchestration drives it
  * alongside repl_apply_compiled_change inside one undo
  * transaction. */
 struct ReplCompiledChange_s;

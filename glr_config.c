@@ -2,7 +2,7 @@
 #include "audio.h"
 #include "glr_camera.h"
 #include "glr_state.h"           /* presentation + render storage (step 7a) */
-#include "repl_state_owners.h"
+#include "repl/state_owners.h"
 #include "ui/state_types.h"
 
 /* Camera, profile_panel slices live on UiState; variable_panel

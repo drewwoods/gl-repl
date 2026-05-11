@@ -1,9 +1,9 @@
 #include "glr_ctrl.h"
 #include "variable_panel_drag.h"
 #include "variable_panel_state.h"
-#include "repl_state.h"
-#include "repl_core.h"
-#include "repl_eval.h"
+#include "repl/state.h"
+#include "repl/core.h"
+#include "repl/eval.h"
 #include "support/test_harness.h"
 
 #include <math.h>

@@ -3,7 +3,7 @@
 
 /* UI-chrome typedefs (Status / Help / VariablePanel / ProfilePanel /
  * Viewport / Pointer / CodePanel / Camera) used to live in
- * repl_state_views.h, which inverted ownership: every UI file pulled
+ * src/repl/state_views.h, which inverted ownership: every UI file pulled
  * in a REPL header just to reach a chrome typedef. They moved to
  * src/ui/state_types.h (Phase H typedef relocation), and ui_state.h
  * now includes the ui-owned header directly. */

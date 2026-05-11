@@ -3,7 +3,7 @@
  *
  * The 2D editor chrome owns a handful of small structs (panel divider,
  * camera viewport pose, status bar, help overlay flag, etc.). They used
- * to live in repl_state_views.h alongside the REPL-domain slices, which
+ * to live in src/repl/state_views.h alongside the REPL-domain slices, which
  * inverted ownership: every UI file pulled in a REPL header just to
  * reach a chrome typedef. Hoisting them here lets ui_*.c files include
  * a UI-owned header for UI-owned types.
@@ -12,7 +12,7 @@
  * cascades through every member access. Renaming is a separate
  * cleanup; this header is purely a relocation.
  *
- * repl_state_views.h includes this header so existing transitive
+ * src/repl/state_views.h includes this header so existing transitive
  * consumers keep working.
  */
 #ifndef UI_STATE_TYPES_H

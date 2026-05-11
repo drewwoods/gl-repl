@@ -14,7 +14,7 @@
  * ordinals across navigation by remembering the per-row occurrence index
  * and remapping it after a navigation shifts the row mapping.
  *
- * The module owns search behavior; storage lives in repl_state.c and is
+ * The module owns search behavior; storage lives in src/repl/state.c and is
  * accessed through the typed search facade.
  */
 #include "state.h"
@@ -23,7 +23,7 @@
 #include "search.h"
 
 #include "keys.h"
-#include "repl_state_views.h"
+#include "repl/state_views.h"
 #include "ui/state_types.h"
 
 /* ui_state_help_mut is forward-declared here because repl_*.c is not

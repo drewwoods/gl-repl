@@ -4,17 +4,17 @@
       "id": "repl_command_pipeline",
       "label": "1. REPL command pipeline",
       "files": [
-        "repl_core.c",
+        "src/repl/core.c",
         "glr_ctrl.c",
-        "repl_command_spec.c",
-        "repl_parser.c",
-        "repl_source_scope.c",
-        "repl_command_store.c",
-        "repl_compile.c",
-        "repl_apply.c",
-        "repl_flatten.c",
-        "repl_executor.c",
-        "repl_eval.c",
+        "src/repl/command_spec.c",
+        "src/repl/parser.c",
+        "src/repl/source_scope.c",
+        "src/repl/command_store.c",
+        "src/repl/compile.c",
+        "src/repl/apply.c",
+        "src/repl/flatten.c",
+        "src/repl/executor.c",
+        "src/repl/eval.c",
         "cmd_format.c"
       ]
     },
@@ -44,17 +44,17 @@
       "files": [
         "glr_config.c",
         "glr_debug.c",
-        "repl_state.c",
-        "repl_scenes.c",
-        "repl_example_loader.c",
-        "repl_examples.c",
+        "src/repl/state.c",
+        "src/repl/scenes.c",
+        "src/repl/example_loader.c",
+        "src/repl/examples.c",
         "repl_autocomplete.c",
-        "repl_autonormal.c",
+        "src/repl/autonormal.c",
         "replay.c",
         "replay_state.c",
-        "repl_replay_annotations.c",
+        "src/repl/replay_annotations.c",
         "variable_panel_state.c",
-        "repl_help_text.c"
+        "src/repl/help_text.c"
       ]
     },
     {
@@ -93,7 +93,7 @@
       "id": "persistence_lifecycle",
       "label": "6. Persistence, audio, instrumentation, lifecycle",
       "files": [
-        "repl_export.c",
+        "src/repl/export.c",
         "audio.c",
         "prof.c",
         "sample.c",

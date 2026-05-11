@@ -3,7 +3,7 @@
  *
  * The editor calls into REPL through this table rather than reaching
  * directly at `repl_compile_*` / `repl_apply_*`. The boundary keeps
- * the editor free of `repl_compile.h` / `repl_apply.h` includes
+ * the editor free of `src/repl/compile.h` / `src/repl/apply.h` includes
  * outside the orchestration site, and gives the controller a single
  * place to substitute test doubles or alternate implementations.
  *
@@ -22,7 +22,7 @@
 #ifndef EDITOR_SERVICES_H
 #define EDITOR_SERVICES_H
 
-#include "repl_compile.h"
+#include "repl/compile.h"
 
 typedef struct EditorServices_s {
     /* Build a ReplCompileContext snapshot for the current frame.

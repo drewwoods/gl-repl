@@ -5,10 +5,10 @@
 
 #include "config.h"               /* CP_CLEAR_MAX_V */
 #include "editor/commit.h"
-#include "repl_command.h"
-#include "repl_compile.h"
-#include "repl_core.h"             /* set_status, MAX_LINE_LEN */
-#include "repl_parser.h"
+#include "repl/command.h"
+#include "repl/compile.h"
+#include "repl/core.h"             /* set_status, MAX_LINE_LEN */
+#include "repl/parser.h"
 #include "ui/layout.h"
 #include "ui/state.h"
 

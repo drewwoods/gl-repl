@@ -5,11 +5,11 @@
  * Verifies that every supported GL command survives the export/import cycle
  * with stable, identical code output (like test_repl_core_examples.c).
  */
-#include "repl_command_spec.h"  /* cmd_type_name */
-#include "repl_core.h"
-#include "repl_core_internal.h"
-#include "repl_state.h"
-#include "repl_pipeline.h"
+#include "repl/command_spec.h"  /* cmd_type_name */
+#include "repl/core.h"
+#include "repl/core_internal.h"
+#include "repl/state.h"
+#include "repl/pipeline.h"
 
 #include "support/test_harness.h"
 #include <stdio.h>

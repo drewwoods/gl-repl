@@ -1,9 +1,9 @@
 #include "editor/state.h"
 #include "glr_completion.h"
 #include "glr_ctrl.h"
-#include "repl_core_internal.h"
-#include "repl_state.h"
-#include "repl_core.h"
+#include "repl/core_internal.h"
+#include "repl/state.h"
+#include "repl/core.h"
 #include "editor/completion.h"
 #include "support/test_harness.h"
 

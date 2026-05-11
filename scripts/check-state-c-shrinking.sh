@@ -3,7 +3,7 @@ set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 
 baseline_file="${1:-scripts/baselines/state-c-lines.txt}"
-state_file="${2:-repl_state.c}"
+state_file="${2:-src/repl/state.c}"
 
 if [ ! -f "$baseline_file" ]; then
   echo "ERROR: missing baseline file $baseline_file" >&2
@@ -24,7 +24,7 @@ fi
 current="$(wc -l < "$state_file" | tr -d '[:space:]')"
 
 if [ "$current" -gt "$baseline" ]; then
-  echo "ERROR: repl_state.c line count increased (current=$current baseline=$baseline)" >&2
+  echo "ERROR: src/repl/state.c line count increased (current=$current baseline=$baseline)" >&2
   exit 1
 fi
 

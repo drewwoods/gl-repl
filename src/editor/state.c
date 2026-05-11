@@ -1,6 +1,6 @@
 #include "state.h"
 
-#include "repl_compile.h"   /* ReplCompiledChange struct definition */
+#include "repl/compile.h"   /* ReplCompiledChange struct definition */
 
 #include <stddef.h>
 #include <string.h>
@@ -47,7 +47,7 @@ static const EditorState g_editor_state_defaults = EDITOR_STATE_INITIAL;
  * src is too long, dst is cleared to "" — same surrender behavior as
  * the legacy repl_copy_string_fits helper this slice depended on
  * before the migration. Inlined locally so editor_state.c does not
- * depend on repl_core_internal.h. */
+ * depend on src/repl/core_internal.h. */
 static void editor_input_copy_str(char *dst, size_t sz, const char *src) {
     if (!dst || sz == 0)
         return;
@@ -245,13 +245,13 @@ const char *editor_buffer_view_line(EditorBufferView view, int idx) {
 
 /* The canonical edit-line cursor lives on ReplDocumentState. The input
  * slice copies it into the view for callers that consume the input as
- * one bundle. Forward-declared rather than including repl_state_views.h
+ * one bundle. Forward-declared rather than including src/repl/state_views.h
  * to keep editor_state.h independent of the REPL state facade.
  *
  * The other forward decls below cover entry points editor_state.c
  * implements that get called from sibling impls in this file (e.g.
  * editor_state_input_reset reuses editor_input_clear). They are
- * the same symbols declared in repl_state_views.h / repl_state_owners.h;
+ * the same symbols declared in src/repl/state_views.h / src/repl/state_owners.h;
  * the headers are not included here to keep editor_state.c free of the
  * REPL state facade. Phase 5's rename will fold these into the
  * editor_* namespace. */

@@ -16,7 +16,7 @@
  *   - REPL pipeline TUs: parser, command store, compile, apply, flatten,
  *     executor, eval, source-scope, command spec, autonormal, scenes,
  *     export, examples, replay annotations, replay, load.
- *   - State singleton: repl_state.c.
+ *   - State singleton: src/repl/state.c.
  *   - tools/repl_demo/source_document.c: standalone static line store
  *     implementing the source_document_* contract (Phase 6 of
  *     feature/source-document-port.md). The demo does NOT link
@@ -27,7 +27,7 @@
  *     controller-installed sink/bridge or an opaque parameter, there
  *     are zero stubs to backfill. Pipeline diagnostics flow through
  *     repl_set_status_sink; the demo leaves the sink (and every
- *     host-effect sink in repl_core.h) unset, so dispatches silently
+ *     host-effect sink in src/repl/core.h) unset, so dispatches silently
  *     no-op. The dependency ledger and removal plan live in
  *     feature/decouple-repl-from-gl-repl-alt.md and
  *     feature/source-document-port.md.
@@ -38,15 +38,15 @@
  *   ./repl_demo --execute        # also call repl_execute_program()
  */
 
-#include "repl_command.h"
-#include "repl_command_spec.h"    /* cmd_type_name */
-#include "repl_command_store.h"
-#include "repl_core.h"
-#include "repl_core_internal.h"   /* repl_parse_and_normalize */
-#include "repl_eval.h"            /* repl_eval_declare_predef_var, g_predef_vars */
-#include "repl_executor.h"
-#include "repl_parser.h"
-#include "repl_state_owners.h"
+#include "repl/command.h"
+#include "repl/command_spec.h"    /* cmd_type_name */
+#include "repl/command_store.h"
+#include "repl/core.h"
+#include "repl/core_internal.h"   /* repl_parse_and_normalize */
+#include "repl/eval.h"            /* repl_eval_declare_predef_var, g_predef_vars */
+#include "repl/executor.h"
+#include "repl/parser.h"
+#include "repl/state_owners.h"
 #include "source_document.h"      /* source_document_load_lines / _insert_line / _clear / _view */
 
 #include <gl_includes.h>          /* GLUT bootstrap for --render mode */

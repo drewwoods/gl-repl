@@ -3,17 +3,17 @@
  *
  * The implementation is a thin shim over `repl_compile_*` and
  * `repl_apply_*`. The compile hook delegates to `repl_compile_dispatch`
- * (defined in `repl_compile.c`); structured-block handlers continue
+ * (defined in `src/repl/compile.c`); structured-block handlers continue
  * to live in editor commit code until step 5a of the decouple plan
- * extracts pure variants into `repl_compile.c`.
+ * extracts pure variants into `src/repl/compile.c`.
  */
 
 #include "services.h"
 
 #include "state.h"     /* editor_insert_mode */
 
-#include "repl_apply.h"
-#include "repl_compile.h"
+#include "repl/apply.h"
+#include "repl/compile.h"
 
 /* ---- Default service bindings ----------------------------------- */
 

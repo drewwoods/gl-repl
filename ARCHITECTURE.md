@@ -14,7 +14,7 @@ superseded. This is a one-frontend REPL sample, so the useful boundary is
 between the REPL model/controller and the rendering views. The goal is not to
 turn `scene_*` into a plugin host.
 
-Current code already routes frame wiring through `glr_ctrl.c`. `repl_core.c`
+Current code already routes frame wiring through `glr_ctrl.c`. `src/repl/core.c`
 now keeps the REPL model/pipeline wrappers, while `src/scene/render.c` consumes
 explicit per-frame config. Phase 2 is still in progress; remaining work is
 mostly about shrinking transitional state/config surfaces and removing
@@ -61,7 +61,7 @@ When a module starts owning mutable REPL state, follow the Stage-1 template:
 1. Put the live bytes in `ReplRuntimeState` unless the state is intentionally a
    sidecar such as undo rings or user-scene slots. If it is a sidecar, call
    that out explicitly instead of describing it as runtime-state migration.
-2. Add a named runtime slice in `repl_state.h`, wire it into
+2. Add a named runtime slice in `src/repl/state.h`, wire it into
    `static ReplRuntimeState g_repl_state;`, and say whether the read path is
    currently `facade-backed`, `direct-runtime`, or `value-getter`.
 3. Keep mutations on the owner side. Scene/UI renderers read snapshots only;
@@ -79,7 +79,7 @@ When a module starts owning mutable REPL state, follow the Stage-1 template:
    flattens loops/functions/conditionals, owns predefined variables, and owns
    replay policy.
 2. **The executor is the narrow live-GL gate for user geometry.**
-   `repl_executor.c` turns a flat program into OpenGL calls. General `repl_*`
+   `src/repl/executor.c` turns a flat program into OpenGL calls. General `repl_*`
    modules should not casually call OpenGL.
 3. **The scene owns the stage, not the editor.** It sets viewport, clear,
    projection, camera, accumulation, baseline lighting, grid, axes, backdrop,
@@ -208,7 +208,7 @@ once and the UI consumes read-only. The snapshot family lives in
 
 All three lists are stored on `ReplRuntimeState` as named slices and
 exposed via `repl_state_editor_*()` accessors (read-only view in
-`repl_state_views.h`, mutating clear/append in `repl_state_owners.h`).
+`src/repl/state_views.h`, mutating clear/append in `src/repl/state_owners.h`).
 `UiRenderSnapshot.editor_transformers / editor_highlights /
 editor_virtual_lines` are pointers into those slices.
 
@@ -232,14 +232,14 @@ Owned stages:
 |-------|-------|
 | GLUT input dispatch (cross-subsystem routing) | `glr_ctrl.c` |
 | Editor text-document input + commit orchestration | `editor_input.c` + `editor_commit.c` |
-| Parsing | `repl_parser.c` |
-| Validation / compilation (pure, returns `ReplCompiledChange`) | `repl_compile.c` |
-| Apply (writes `ReplState` only) | `repl_apply.c` |
-| Source command mutation (low-level shifts) | `repl_command_store.c` |
-| Source scope/depth | `repl_source_scope.c` |
-| Flattening | `repl_flatten.c` |
-| User geometry execution | `repl_executor.c` |
-| Export/import | `repl_export.c` |
+| Parsing | `src/repl/parser.c` |
+| Validation / compilation (pure, returns `ReplCompiledChange`) | `src/repl/compile.c` |
+| Apply (writes `ReplState` only) | `src/repl/apply.c` |
+| Source command mutation (low-level shifts) | `src/repl/command_store.c` |
+| Source scope/depth | `src/repl/source_scope.c` |
+| Flattening | `src/repl/flatten.c` |
+| User geometry execution | `src/repl/executor.c` |
+| Export/import | `src/repl/export.c` |
 
 Note: `repl_editor.{c,h}` and `repl_commit.{c,h}` are deleted (Phase J1
 + Phase H.5). Their responsibilities split into the entries above.
@@ -252,7 +252,7 @@ paths instead of directly mutating command arrays.
 ## Controller Layer
 
 The controller layer is the home for app-frame wiring that used to live in
-`repl_core.c`.
+`src/repl/core.c`.
 
 Responsibilities:
 
@@ -394,7 +394,7 @@ Allowed:
 ```text
 scene_*.c
 ui_*.c
-repl_executor.c
+src/repl/executor.c
 sample.c        GLUT/window lifecycle and buffer swap; future `glr` shell
 ```
 
@@ -412,7 +412,7 @@ glr_ctrl.c      GLUT modifier reads + cross-layer input routing
                 (took over from the deleted repl_editor.c in Phase J1)
 editor_input.c  glutGetModifiers via editor_get_modifiers (gated behind
                 editor_input_enable_glut_modifier_reads so tests stay safe)
-repl_executor.c tessellator callback setup only
+src/repl/executor.c tessellator callback setup only
 ```
 
 ### Controller-only scene wiring
@@ -425,7 +425,7 @@ live in neutral headers (`glr_defaults.h`, `outline_offset.h`,
 `src/scene/render_types.h`) that both sides include via existing transitive
 paths.
 
-Remaining `ui_*` include exceptions: `repl_actions.c` and `repl_export.c`.
+Remaining `ui_*` include exceptions: `repl_actions.c` and `src/repl/export.c`.
 The `repl_editor.c` exception is gone — that file is deleted (Phase J1).
 The other two require separate cleanup tracks tied to the deferred
 `repl_actions` rename and the export-as-its-own-feature split.
@@ -452,8 +452,8 @@ closed; their work redistributed into peer subsystems (`color_picker`)
 or generic renderers (`ui_tabbed_overlay` consuming
 `UiOverlayContent` adapted by `glr_ctrl` from `repl_help_text`).
 
-`ui_*.c` files include `repl_state_views.h` only, not `repl_state.h`
-or `repl_state_owners.h`. `check-views-no-owners` enforces this;
+`ui_*.c` files include `src/repl/state_views.h` only, not `src/repl/state.h`
+or `src/repl/state_owners.h`. `check-views-no-owners` enforces this;
 `check-ui-returns-hits-only` (baseline 0/0) keeps any new mutator
 out of the input + render paths;
 `check-color-picker-ui-isolation` and `check-replay-ui-isolation`
@@ -493,12 +493,12 @@ is **4**: steps 1, 2, 3, and 4 have landed.
 |---|---|---|---|---|---|
 | Global lifecycle reset | `ui_state_reset`, `variable_panel_state_reset`, `editor_help_session_reset`, `repl_editor_reset_transients` | (Historically) `repl_state_init_defaults()` called `repl_state_reset_all()`, which reset every app singleton / peer, not just `ReplState`. | Yes, every sample reset entered this path. | Split into pure `repl_state_reset_program()` and app-level `glr_app_reset_all()`. | ✅ **Cleared (step 2, commit `310eca0`).** Reset renamed; full-world reset moved to `glr_ctrl.c`. |
 | UI chrome mirror | `ui_state_code_panel_mut` | `repl_state_sync_ui_chrome()` mirrored presentation fields into `UiState.code_panel`; `repl_state_reset_all()` called it. | Yes, via reset. | Move chrome mirroring to the controller. | ✅ **Cleared (step 2, commit `310eca0`).** Body moved to `glr_ctrl_sync_ui_chrome()` in `glr_ctrl.c`. |
-| Compile dispatcher location | `repl_compile_dispatch` | `repl_compile_toggle_comment()` needed the float-decl / var-assign dispatcher, but the implementation lived in `src/editor/services.c`. | No; the demo does not toggle comments. The reference was still hard at link time. | Move the dispatcher into `repl_compile.c`. | ✅ **Cleared (step 1, commit `ef3fc09`).** Moved into `repl_compile.c`; declared in `repl_compile.h`. |
-| Status relay | `ui_state_status_set` | Legacy `repl_core.c::set_status()` forwarded diagnostics to UI status text. | Only on errors or helper paths that report status. | Replace `set_status()` body with a callback dispatch (`repl_set_status_sink`); controller installs `ui_state_status_set` as the sink at app startup. Demo doesn't install one, so set_status is a no-op there. | ✅ **Cleared (step 3, commit `5f1b8bc`).** Callback branch chosen over per-function out-params; ~15 pipeline-side set_status call sites remain as future per-TU cleanup but no longer drag the stub. |
-| Programmatic editor input | `feed_line`, `load_line_to_input` | `repl_export.c` imports exported files by feeding lines through the editor commit path; `repl_core.c` and scene activation paths also have legacy line-loading references. | No for the current static samples. | Extract pure structured-block validators (5a) and add a non-editor source-loader API (5b); move reformatter and scene cursor-restore out of REPL pipeline TUs (6). | Pending (steps 5a/5b/6). |
-| Config descriptor table | `g_cfg_items`, `CFG_ITEM_COUNT` | `glr_config.c` iterated menu/action descriptors while parsing or applying config keys, but the table is defined in `glr_actions.c`. | Not for the current samples; relevant to `@cfg` metadata and export/import helpers. | Introduce a neutral `ReplExportConfig` bag in `repl_export.h` and a controller-installed bridge that fills/applies it; pipeline TUs (`repl_export.c`, `repl_scenes.c`) stop calling `glr_config_*`. | ✅ **Cleared (step 4, commit `b58cdef`).** Bridge installed in `glr_app_reset_all`; demo doesn't install one → @cfg is a no-op there. |
+| Compile dispatcher location | `repl_compile_dispatch` | `repl_compile_toggle_comment()` needed the float-decl / var-assign dispatcher, but the implementation lived in `src/editor/services.c`. | No; the demo does not toggle comments. The reference was still hard at link time. | Move the dispatcher into `src/repl/compile.c`. | ✅ **Cleared (step 1, commit `ef3fc09`).** Moved into `src/repl/compile.c`; declared in `src/repl/compile.h`. |
+| Status relay | `ui_state_status_set` | Legacy `src/repl/core.c::set_status()` forwarded diagnostics to UI status text. | Only on errors or helper paths that report status. | Replace `set_status()` body with a callback dispatch (`repl_set_status_sink`); controller installs `ui_state_status_set` as the sink at app startup. Demo doesn't install one, so set_status is a no-op there. | ✅ **Cleared (step 3, commit `5f1b8bc`).** Callback branch chosen over per-function out-params; ~15 pipeline-side set_status call sites remain as future per-TU cleanup but no longer drag the stub. |
+| Programmatic editor input | `feed_line`, `load_line_to_input` | `src/repl/export.c` imports exported files by feeding lines through the editor commit path; `src/repl/core.c` and scene activation paths also have legacy line-loading references. | No for the current static samples. | Extract pure structured-block validators (5a) and add a non-editor source-loader API (5b); move reformatter and scene cursor-restore out of REPL pipeline TUs (6). | Pending (steps 5a/5b/6). |
+| Config descriptor table | `g_cfg_items`, `CFG_ITEM_COUNT` | `glr_config.c` iterated menu/action descriptors while parsing or applying config keys, but the table is defined in `glr_actions.c`. | Not for the current samples; relevant to `@cfg` metadata and export/import helpers. | Introduce a neutral `ReplExportConfig` bag in `src/repl/export.h` and a controller-installed bridge that fills/applies it; pipeline TUs (`src/repl/export.c`, `src/repl/scenes.c`) stop calling `glr_config_*`. | ✅ **Cleared (step 4, commit `b58cdef`).** Bridge installed in `glr_app_reset_all`; demo doesn't install one → @cfg is a no-op there. |
 | App-owned config storage | `audio_get_cfg_mode`, `audio_set_cfg_mode`, `ui_state_profile_panel_mut`, `variable_panel_view_mut` | `glr_config.c` mapped config keys directly to storage owned by audio, UI profile panel, and the variable-panel peer. | Not for the current samples. | Same fix as the descriptor table row: pipeline TUs go through the `ReplExportConfigBridge` instead of calling `glr_config_*`. `glr_config.c` falls out of the demo link set, so its references to audio / profile / variable_panel disappear. | ✅ **Cleared (step 4, commit `b58cdef`).** |
-| UI layout state | `ui_state_viewport`, `ui_state_code_panel` | `src/ui/layout.c` reads live `UiState`; `repl_export.c` uses layout helpers for export viewport sizing and code-panel visual dumps. | Not for the current samples. | Pass viewport/layout values to `repl_export` as explicit export inputs; move app-state slices to `glr_state.c`. | Pending (step 7). |
+| UI layout state | `ui_state_viewport`, `ui_state_code_panel` | `src/ui/layout.c` reads live `UiState`; `src/repl/export.c` uses layout helpers for export viewport sizing and code-panel visual dumps. | Not for the current samples. | Pass viewport/layout values to `repl_export` as explicit export inputs; move app-state slices to `glr_state.c`. | Pending (step 7). |
 
 ### Non-stubbed But Still Non-pipeline Link Dependencies
 
@@ -507,9 +507,9 @@ These objects are linked into `repl_demo` rather than stubbed:
 | Object(s) | Why present | Removal path |
 |---|---|---|
 | `src/editor/state.c`, `src/editor/completion.c` | Per-line canonical text currently lives in `EditorState`; `repl_state_init_defaults()` also registers the REPL autocomplete provider with the editor completion registry. | Keeping editor-owned text makes this dependency intentional. Removing it means introducing a neutral source-document/text store owned by the REPL command document, then making the editor a controller/view over that store. That is feasible but large, because it cuts across commit, undo, scenes, clipboard, export, and tests. Autocomplete registration is easier: move it to app/editor startup instead of REPL state reset. |
-| `replay.c`, `replay_state.c`, `repl_replay_annotations.c` | Replay is a peer subsystem, but reset and annotation helpers are still in the demo link set through broad REPL object selection. | Split app reset from REPL reset and keep annotation preparation out of the minimal demo object list unless the demo explicitly exercises replay. Medium effort. |
-| `repl_export.c`, `repl_example_loader.c`, `repl_scenes.c`, `glr_camera.c`, `glr_config.c`, `src/ui/layout.c` | `repl_core.c` is still a residual helper bucket, and export/import/workspace/camera helpers sit behind it. The demo uses only a small subset (`repl_parse_and_normalize`, `cmd_type_name`), but the whole translation unit graph comes along. | Continue dissolving `repl_core.c`: move normalization into parser/format code, move startup/workspace helpers to scene/export owners, and split export generation from import and code-panel dump helpers. Medium effort, with high payoff for a clean demo link boundary. |
-| `repl_autocomplete.c`, `repl_help_text.c` | REPL state initialization registers the completion provider, and help text is part of the broad demo object list. | Treat completion/help as optional app/editor services. Low to medium effort if reset is split first. |
+| `replay.c`, `replay_state.c`, `src/repl/replay_annotations.c` | Replay is a peer subsystem, but reset and annotation helpers are still in the demo link set through broad REPL object selection. | Split app reset from REPL reset and keep annotation preparation out of the minimal demo object list unless the demo explicitly exercises replay. Medium effort. |
+| `src/repl/export.c`, `src/repl/example_loader.c`, `src/repl/scenes.c`, `glr_camera.c`, `glr_config.c`, `src/ui/layout.c` | `src/repl/core.c` is still a residual helper bucket, and export/import/workspace/camera helpers sit behind it. The demo uses only a small subset (`repl_parse_and_normalize`, `cmd_type_name`), but the whole translation unit graph comes along. | Continue dissolving `src/repl/core.c`: move normalization into parser/format code, move startup/workspace helpers to scene/export owners, and split export generation from import and code-panel dump helpers. Medium effort, with high payoff for a clean demo link boundary. |
+| `repl_autocomplete.c`, `src/repl/help_text.c` | REPL state initialization registers the completion provider, and help text is part of the broad demo object list. | Treat completion/help as optional app/editor services. Low to medium effort if reset is split first. |
 
 ### Practical Decoupling Sequence
 
@@ -526,7 +526,7 @@ The full plan lives in `feature/decouple-repl-from-gl-repl-alt.md`
    out-params for cost reasons; per-TU conversion remains a future
    opportunity.
 4. ✅ **Step 4 — Introduce neutral `ReplExportConfig` bag and bridge;
-   make `repl_export.c` and `repl_scenes.c` opaque to cfg semantics**
+   make `src/repl/export.c` and `src/repl/scenes.c` opaque to cfg semantics**
    (commit `b58cdef`). Bridge installed by the controller; demo
    doesn't install one → @cfg path is a no-op there. `glr_config.c`
    falls out of the demo link set.
@@ -535,12 +535,12 @@ The full plan lives in `feature/decouple-repl-from-gl-repl-alt.md`
    block) + `ReplExportCameraBridge` (fill_save_block /
    fill_display_block / fill_save_preamble / try_consume_import_line /
    reset_import). Bridge implementation lives in `glr_camera_export.c`.
-   `repl_export.c` no longer references `glr_camera_*` — verified via
+   `src/repl/export.c` no longer references `glr_camera_*` — verified via
    `nm build/release-gl-stubs/repl_export.o`. Architectural cleanup
    only; no stub change. `glr_camera.c` stays in the demo link set
    until step 7 closes the last two doors (auto_rotate reset in
-   `repl_state.c` + example camera presets in
-   `repl_example_loader.c`).
+   `src/repl/state.c` + example camera presets in
+   `src/repl/example_loader.c`).
 5. Step 5a/5b — Extract pure structured-block validators from
    `editor_compile_*`; add non-editor source-load/commit API so
    examples and imports stop calling `feed_line`.
@@ -557,9 +557,9 @@ The full plan lives in `feature/decouple-repl-from-gl-repl-alt.md`
 
 ## Where To Put New Code
 
-* New REPL syntax: `repl_parser.c`, `repl_command_spec.c`, `repl_compile.c`,
-  `src/editor/commit.c`, `repl_flatten.c`, and `repl_executor.c` as needed.
-* New user-geometry execution behavior: `repl_executor.c`.
+* New REPL syntax: `src/repl/parser.c`, `src/repl/command_spec.c`, `src/repl/compile.c`,
+  `src/editor/commit.c`, `src/repl/flatten.c`, and `src/repl/executor.c` as needed.
+* New user-geometry execution behavior: `src/repl/executor.c`.
 * New 3D world decorator: `scene_*`.
 * New 3D REPL-aware overlay: current home is still `scene_*`, consuming
   `FlatProgramView` or a snapshot from `SceneRenderConfig`.
@@ -592,7 +592,7 @@ shapes that the recent commits tripped on.
 >   semantic parity), 6, 7, 8. Step 7 must include a hand-written export
 >   helper because the line is not a real GL symbol.
 > - **Math / expression function** (`rand`, `rand2`, `sin`, etc.) — these are
->   evaluated inline by `repl_eval.c`, never become a `CmdType`, and skip
+>   evaluated inline by `src/repl/eval.c`, never become a `CmdType`, and skip
 >   steps 1, 2bc, 3, 4. They still need step 2a (autocomplete + F1 help) and
 >   step 7 (export round-trip helper if non-trivial). See **Step 0b** below.
 
@@ -607,7 +607,7 @@ common review-time finding.
 
 Functions evaluated inside expressions (e.g. `rand2(seed, iter)` inside
 `glVertex3f(rand2(t, 0), …)`) do **not** become a `CmdType` and do **not**
-go through `repl_executor.c`. They live entirely inside `repl_eval.c`:
+go through `src/repl/executor.c`. They live entirely inside `src/repl/eval.c`:
 
 1. Add the name to `k_reserved_idents[]` so the user can't shadow it with a
    `float` declaration.
@@ -619,25 +619,25 @@ go through `repl_executor.c`. They live entirely inside `repl_eval.c`:
 4. Step 2a still applies — add a `k_func_completions[]` entry with
    `REPL_HELP_GROUP_MATH` so it shows up in F1 help and autocomplete.
 5. Step 7 still applies — emit a standalone helper function from
-   `repl_export.c` (gated on a `needs_*` flag detected via
+   `src/repl/export.c` (gated on a `needs_*` flag detected via
    `export_text_uses_token("rand2(", …)`) so the exported file compiles
    without dragging the whole REPL runtime.
 
 After step 0b, skip to step 2a, then jump to step 7. Steps 1, 2bc, 3, 4, 5,
 and 6 do not apply to math functions.
 
-### 1. `repl_command.h` — declare the type
+### 1. `src/repl/command.h` — declare the type
 
 Add a new `CmdType` enum entry in the `CMD_*` block, adjacent to related
 commands. The enum drives switch dispatch everywhere. (`CmdType` lives in
-`repl_command.h`; `sample.h` only re-exports it transitively via
-`#include "repl_command.h"`.)
+`src/repl/command.h`; `sample.h` only re-exports it transitively via
+`#include "repl/command.h"`.)
 
 ```c
 CMD_GLUT_CUBE, CMD_GLUT_SPHERE, CMD_GLUT_TEAPOT, CMD_GLUT_CONE,
 ```
 
-### 2. `repl_command_spec.c` — three additions
+### 2. `src/repl/command_spec.c` — three additions
 
 > **Required, not optional.** All three sub-tables feed different consumers.
 > Without 2a the command is invisible in F1 help and Tab-completion; without
@@ -646,7 +646,7 @@ CMD_GLUT_CUBE, CMD_GLUT_SPHERE, CMD_GLUT_TEAPOT, CMD_GLUT_CONE,
 
 **a. `k_func_completions[]`** — autocomplete prefix/hint entry **and** the
 F1 help row. **This is the single source of truth for both surfaces** —
-`repl_autocomplete.c` and `repl_help_text.c` both read this table. If the
+`repl_autocomplete.c` and `src/repl/help_text.c` both read this table. If the
 new command isn't here, F1 will silently omit it and Tab won't complete
 it, even if everything else works. The recent `rand2` / `glRasterPos3f` /
 `label` commits all skipped this step and shipped half-visible features.
@@ -670,7 +670,7 @@ indented continuation row.
     REPL_HELP_GROUP_MATH },
 ```
 
-**b. `k_std_command_specs[]`** — parse spec used by `repl_parser.c` and the
+**b. `k_std_command_specs[]`** — parse spec used by `src/repl/parser.c` and the
 autocomplete lookup. `num_args` must match the `%g` count in `fmt`. For
 commands with `glEnable`/`glBlendFunc`-style enum arguments, append to
 `k_enum_command_specs[]` instead and wire `enums1` / `enums2` to the
@@ -684,7 +684,7 @@ appropriate `ReplEnumEntry` tables.
 syntax category that drives code-panel highlight color. The
 `CMD_TYPE_SPEC(type, needs_semicolon, needs_block_indent, category)`
 macro is keyed on the enum, so order is validated at compile time. Pick
-the matching `CMD_CAT_*` from `repl_command_spec.h` (e.g.
+the matching `CMD_CAT_*` from `src/repl/command_spec.h` (e.g.
 `CMD_CAT_GLUT_SHAPE` for solid shapes, `CMD_CAT_VERTEX` for vertices,
 `CMD_CAT_STATE` for `glEnable`-shaped state). Nearly all geometry
 commands use `(1, 1, ...)` — needs semicolon, needs block indent.
@@ -693,7 +693,7 @@ commands use `(1, 1, ...)` — needs semicolon, needs block indent.
 CMD_TYPE_SPEC(CMD_GLUT_CUBE, 1, 1, CMD_CAT_GLUT_SHAPE),
 ```
 
-### 3. `repl_executor.c` — execute the command
+### 3. `src/repl/executor.c` — execute the command
 
 Add a `case` block after the nearest related command. Call the GL/GLU/GLUT
 function, casting `flat_cmds[pc].args[N]` to the correct C type (`(double)`,
@@ -710,7 +710,7 @@ case CMD_GLUT_CUBE:
     break;
 ```
 
-### 4. `repl_replay_annotations.c` — replay display format
+### 4. `src/repl/replay_annotations.c` — replay display format
 
 Add a `case` that sets `*nargs_out` and returns a `printf`-style format string
 for the replay annotation overlay.
@@ -723,7 +723,7 @@ case CMD_GLUT_CUBE: *nargs_out = 1; return "glutSolidCube(%g);";
 
 Help is generated from `k_func_completions[]` (step 2a). The `help_desc`
 + `help_group` fields you set there feed the F1 overlay's Commands tab
-automatically — `repl_help_text.c` walks the spec table, groups by
+automatically — `src/repl/help_text.c` walks the spec table, groups by
 section, and emits one row per command. **Step 5 is a no-op only if step
 2a is filled in correctly.** If F1 doesn't show the new command, you
 forgot 2a; if it shows the signature with no description, your
@@ -732,10 +732,10 @@ header, your `help_group` is wrong.
 
 A new help group (beyond `TOP` / `LIGHTING` / `GLUT_SHAPES` / `GLU_TESS`
 / `MATH` / `NONE`) requires:
-- a new enum value in `ReplHelpGroup` in `repl_command_spec.h`
-- a `help_group_header` case in `repl_help_text.c`
+- a new enum value in `ReplHelpGroup` in `src/repl/command_spec.h`
+- a `help_group_header` case in `src/repl/help_text.c`
 
-The hand-written language-level sections in `repl_help_text.c`
+The hand-written language-level sections in `src/repl/help_text.c`
 (`Math Expressions`, `Variables`, `For-Loops`, `Functions`, etc.)
 remain manual since they document REPL syntax, not commands.
 
@@ -763,12 +763,12 @@ unused-parameter warnings with `(void)`, no real rendering.
 
 ### 7. Save/load round-trip — verify byte-for-byte and behavior parity
 
-Most commands round-trip automatically: `repl_export.c` writes the
+Most commands round-trip automatically: `src/repl/export.c` writes the
 editor-buffer line text (`editor_buffer_view_line(view, cmd_idx)` —
 `GLCmd.source[]` was removed in the editor-owns-text refactor) verbatim
 into the exported `display()` body, and `repl_export_load_from_file`
 feeds those lines back through the commit pipeline. You only need to
-touch `repl_export.c` for commands with non-source-text encoding —
+touch `src/repl/export.c` for commands with non-source-text encoding —
 declarations (`@declare`), tess blocks, REPL primitives that need a
 standalone helper, etc.
 
@@ -799,7 +799,7 @@ this test catches it. Adding the test is part of the step, not optional.
 
 When emitting a custom helper (`label`, `rand2`, scratch arrays, tess):
 
-1. Add a `needs_<name>` flag to `ExportNeeds` in `repl_export.c`.
+1. Add a `needs_<name>` flag to `ExportNeeds` in `src/repl/export.c`.
 2. Detect usage during the per-line scan with
    `export_text_uses_token("name(", source)`.
 3. Emit the helper in the file prologue from a `write_<name>_helper`
@@ -845,7 +845,7 @@ Completed (Phase 1 + most of Phase 2):
     `check-color-picker-ui-isolation`.
   - The legacy `ui_help_overlay` is gone — split into the generic
     `src/ui/tabbed_overlay.c` renderer (knows nothing about REPL), the
-    REPL-side `repl_help_text.c` producer that walks
+    REPL-side `src/repl/help_text.c` producer that walks
     `k_func_completions[]` to assemble the F1 overlay's per-command
     rows, and the `glr_ctrl` adapter that maps that neutral data to
     `UiOverlayContent`. Adding a new GL command + `help_desc` + `help_group` to the
@@ -854,16 +854,16 @@ Completed (Phase 1 + most of Phase 2):
     (`check-ui-returns-hits-only` baseline 0/0).
 - ✅ **R3** — `repl_layout.c` / `repl_layout.h` own `ui_layout_scene_rect` /
   `ui_layout_code_panel_rect`; non-UI callers include `repl_layout.h`.
-- ✅ **R4** — `glr_ctrl.c` no longer includes `repl_core_internal.h`;
-  `repl_pipeline.h` exists; `repl_eval_predef_view()` hides
+- ✅ **R4** — `glr_ctrl.c` no longer includes `src/repl/core_internal.h`;
+  `src/repl/pipeline.h` exists; `repl_eval_predef_view()` hides
   `g_predef_vars`. R4d (public-API audit) landed; only `bench_repl.c`
-  retains a `repl_core_internal.h` include outside the test/REPL set.
+  retains a `src/repl/core_internal.h` include outside the test/REPL set.
 - ✅ **R5** — `SceneRenderConfig` slimmed and reorganized into labeled
   sections; HUD fields moved to `UiReplayHudState`; `ReplayFadePlan` and
   accum-AA fields landed.
-- ✅ **R6** — `repl_state.h` split into `repl_state_views.h` (read-only) and
-  `repl_state_owners.h` (mutating); scene/UI files include only the views
-  header; `repl_state.h` is a compatibility shim.
+- ✅ **R6** — `src/repl/state.h` split into `src/repl/state_views.h` (read-only) and
+  `src/repl/state_owners.h` (mutating); scene/UI files include only the views
+  header; `src/repl/state.h` is a compatibility shim.
 - ✅ **R7** — `check-pure-scene-no-repl-state`, `check-views-no-owners`,
   `check-ui-no-repl-state-mut`, and the `check-state-ownership` umbrella
   are wired into `make test`.
@@ -872,26 +872,26 @@ Still open:
 
 - ⚠️ **R10-phase1** — Phase J1 obsoleted the original framing of this
   task: `repl_editor.c/h` is deleted. The remaining GLUT-flavored
-  declarations in `repl_core.h` should be reviewed against the actual
+  declarations in `src/repl/core.h` should be reviewed against the actual
   callers in `glr_ctrl.c` and `editor_input.c`; anything that's
   no longer reachable can be removed, and anything still in use can
   move to a more specific home (`editor_input.h` for editor input,
   `glr_ctrl.h` for controller routing).
-- ❌ **R10-phase2..phase5** — Dissolve `repl_core.c` (~663 lines): move
+- ❌ **R10-phase2..phase5** — Dissolve `src/repl/core.c` (~663 lines): move
   `repl_parse_and_normalize*` / `normalize_with_indent` /
-  `parse_and_normalize_impl` to `repl_parser.c`; move `collect_visible_vars`
-  to `repl_source_scope.c`; extract `repl_reformat.c`; move
-  `load_initial_commands` / `scroll_to_display_function` to `repl_scenes.c`;
-  move `current_begin_mode` / `count_vertices` to `repl_executor.c`; move
-  debug dumps to `repl_state.c` or `repl_debug.c`.
+  `parse_and_normalize_impl` to `src/repl/parser.c`; move `collect_visible_vars`
+  to `src/repl/source_scope.c`; extract `repl_reformat.c`; move
+  `load_initial_commands` / `scroll_to_display_function` to `src/repl/scenes.c`;
+  move `current_begin_mode` / `count_vertices` to `src/repl/executor.c`; move
+  debug dumps to `src/repl/state.c` or `repl_debug.c`.
 - ❌ **R11 (tail)** — Shrink the surviving allowlists, mainly the
-  `bench_repl.c` exception for `repl_core_internal.h`.
+  `bench_repl.c` exception for `src/repl/core_internal.h`.
 - ❌ **R12** — Consolidate truly public REPL APIs into one concise public
   header, grouped by implementation owner; keep internals out.
 - ❌ **R8** — Rename `sample.c` / `sample.h` into the `glr_*` shell
   namespace (mechanical; last). The exact target name (`glr.c/h`,
   `glr_shell.c/h`, etc.) is open.
-- ❌ **R9** — Optional: split `repl_export.c`.
+- ❌ **R9** — Optional: split `src/repl/export.c`.
 
 A parallel state-ownership track lives in
 `feature/gold-standard-state-ownership.md`. Stage 0/1 are complete; Stage 2
@@ -940,13 +940,13 @@ work can either close the gap or document the intentional behaviour.
   focused test asserts the `"name '%s' already used"` diagnostic for the
   collision.
 - **`label()` format-string boundaries.** `repl_label_split_args`
-  (`repl_parser.c`) hard-rejects `(`, `)`, `\`, `,`, and `//` in the format
+  (`src/repl/parser.c`) hard-rejects `(`, `)`, `\`, `,`, and `//` in the format
   string, plus formats longer than `GLUT_BITMAP_FMT_MAX - 1` characters and
   formats whose `%f` count diverges from the supplied substitution-arg count.
   `tests/test_repl_core_parse.c` covers `//`, `,`, `\`, missing close quote,
   arg-count mismatch, `%d` rejection, and >4 sub args; the `(`/`)` rejection
   and the 64-char length boundary are not tested.
-- **Visit-budget vs depth-limit guards.** `repl_flatten.c` enforces
+- **Visit-budget vs depth-limit guards.** `src/repl/flatten.c` enforces
   `MAX_FLATTEN_CALL_DEPTH = 64` and `MAX_FLATTEN_VISIT_BUDGET = 200000`
   independently. The "runaway recursion" assertion in
   `tests/test_repl_core_commit.c` accepts either `"depth limit"` or
@@ -959,7 +959,7 @@ work can either close the gap or document the intentional behaviour.
 ### Known TODO with no regression test yet
 
 - **SET_VALUE drop on decl-row overwrite (different name).**
-  `repl_compile_var_assign` in `repl_compile.c` documents (line ~889) that
+  `repl_compile_var_assign` in `src/repl/compile.c` documents (line ~889) that
   when an assignment overwrites a `CMD_VAR_DECLARE` whose dropped names
   include a name *other* than the assigned identifier, the salvage block
   reorders the `predef_op` list in a way that turns the SET_VALUE into a

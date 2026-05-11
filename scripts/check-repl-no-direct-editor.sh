@@ -43,7 +43,7 @@ if [ -n "$hits" ]; then
   echo "$hits" >&2
   echo >&2
   echo "       Route the call through a host-effect sink (repl_install_*_sink" >&2
-  echo "       in repl_core.h) or include the symbol from a host adapter" >&2
+  echo "       in src/repl/core.h) or include the symbol from a host adapter" >&2
   echo "       (glr_*.c / tools/repl_demo/*.c) instead." >&2
   exit 1
 fi

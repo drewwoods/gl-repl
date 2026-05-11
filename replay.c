@@ -2,11 +2,11 @@
  * replay.c - Replay state machine, fade batches, and replay input.
  */
 #include "replay.h"
-#include "repl_core_internal.h"
-#include "repl_pipeline.h"
+#include "repl/core_internal.h"
+#include "repl/pipeline.h"
 #include "keys.h"
-#include "repl_core.h"
-#include "repl_state_owners.h"
+#include "repl/core.h"
+#include "repl/state_owners.h"
 #include "replay_state.h"
 
 #define REPLAY_STATE (replay_state_mut())
