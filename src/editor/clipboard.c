@@ -9,6 +9,7 @@
 
 #include "state.h"
 #include "clipboard.h"
+#include "completion.h"
 #include "input.h"
 #include "undo.h"
 
@@ -133,7 +134,97 @@ static int current_cut_range(int *out_start, int *out_count) {
     return editor_selection_normalize_cmd_range(start, count, out_start, out_count);
 }
 
+/* Copy [lo, hi) from the active input buffer into the input-text
+ * clipboard. Preserves the visual selection — copy is non-destructive
+ * and shouldn't make the user re-select if they want to copy again. */
+static int editor_clipboard_copy_input_selection(void) {
+    if (!editor_input_selection_active())
+        return 0;
+    int lo = editor_input_selection_lo();
+    int hi = editor_input_selection_hi();
+    int len = hi - lo;
+    if (len <= 0)
+        return 0;
+    editor_clipboard_set_input_text(editor_input_text() + lo, len);
+    {
+        char msg[64];
+        snprintf(msg, sizeof(msg), "Copied %d char%s",
+                 len, len == 1 ? "" : "s");
+        repl_set_status(msg);
+    }
+    return 1;
+}
+
+/* Cut: copy step then delete the range via the shared
+ * editor_input_consume_selection helper. Works in any mode because the
+ * mutation lives on the active input buffer, not on source commands —
+ * the line-range insert-mode guard doesn't apply. */
+static int editor_clipboard_cut_input_selection(void) {
+    if (!editor_input_selection_active())
+        return 0;
+    int lo = editor_input_selection_lo();
+    int hi = editor_input_selection_hi();
+    int len = hi - lo;
+    if (len <= 0)
+        return 0;
+    editor_undo_push_snapshot();
+    editor_clipboard_set_input_text(editor_input_text() + lo, len);
+    (void)editor_input_consume_selection();
+    editor_completion_update();
+    {
+        char msg[64];
+        snprintf(msg, sizeof(msg), "Cut %d char%s",
+                 len, len == 1 ? "" : "s");
+        repl_set_status(msg);
+    }
+    return 1;
+}
+
+/* Paste of an INPUT_TEXT clipboard. If a destination input selection
+ * is active, consume it first via the same Phase C primitive so paste
+ * replaces the selected range instead of inserting beside it. */
+static int editor_clipboard_paste_input_text(void) {
+    if (!editor_clipboard_has_input_text())
+        return 0;
+    editor_undo_push_snapshot();
+    (void)editor_input_consume_selection();
+
+    int cur = editor_cursor_pos();
+    int paste_len = editor_clipboard_input_text_len();
+    const char *paste = editor_clipboard_input_text();
+    ReplEditorInputState *inp = editor_state_input_mut();
+    int existing = inp->input_len;
+    int room = (MAX_INPUT_LEN - 1) - existing;
+    if (room < 0)
+        room = 0;
+    if (paste_len > room)
+        paste_len = room;
+    if (paste_len > 0) {
+        /* Shift the trailing bytes (including the NUL) right by
+         * paste_len, then copy the substring in. */
+        memmove(&inp->input[cur + paste_len], &inp->input[cur],
+                (size_t)(existing - cur + 1));
+        memcpy(&inp->input[cur], paste, (size_t)paste_len);
+        inp->input_len = existing + paste_len;
+        editor_cursor_pos_set(cur + paste_len);
+    }
+    editor_completion_update();
+    {
+        char msg[64];
+        snprintf(msg, sizeof(msg), "Pasted %d char%s",
+                 paste_len, paste_len == 1 ? "" : "s");
+        repl_set_status(msg);
+    }
+    return 1;
+}
+
 void editor_clipboard_copy_current(void) {
+    /* Input-buffer selection wins over line-range / current line.
+     * Works in insert mode too — the cut/copy of a partial input
+     * substring is a pure input-buffer mutation. */
+    if (editor_clipboard_copy_input_selection())
+        return;
+
     if (editor_insert_mode()) {
         editor_clipboard_clear_selection();
         return;
@@ -190,6 +281,13 @@ void editor_clipboard_cut_current(void) {
     int start;
     int count;
 
+    /* Same priority as copy: input-buffer selection wins. This path
+     * deliberately runs *before* the insert-mode guard so partial-line
+     * cut works in insert mode, where line-range cut is intentionally
+     * disabled. */
+    if (editor_clipboard_cut_input_selection())
+        return;
+
     if (editor_insert_mode()) {
         editor_clipboard_clear_selection();
         return;
@@ -211,6 +309,13 @@ void editor_clipboard_cut_current(void) {
 }
 
 void editor_clipboard_paste_current(void) {
+    /* INPUT_TEXT paste targets the active input buffer (replacing any
+     * destination selection); LINES paste runs the existing
+     * feed_line() chain; EMPTY emits the same "Clipboard empty"
+     * status the count-based check below has always produced. */
+    if (editor_clipboard_paste_input_text())
+        return;
+
     int count = editor_state_clipboard_count();
     if (count <= 0) {
         repl_set_status("Clipboard empty");
