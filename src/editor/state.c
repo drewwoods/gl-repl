@@ -308,10 +308,12 @@ void editor_input_len_set(int input_len) {
         input_len = MAX_INPUT_LEN - 1;
     g_editor_state.input.input_len = input_len;
     g_editor_state.input.input[input_len] = '\0';
-    /* Invariant: anchor_pos in [0, input_len]; clear when buffer
-     * shrinks past it. */
-    if (g_editor_state.input.anchor_pos > input_len)
-        g_editor_state.input.anchor_pos = -1;
+    /* The trailing default-policy cursor_pos_set clears the anchor as
+     * a side effect, which also satisfies the
+     * "anchor_pos in [0, input_len]" invariant when the buffer shrinks.
+     * Anchor-preserving callers (Phase E shift handlers) drive the
+     * buffer through narrower primitives and route through
+     * editor_cursor_pos_set_keep_anchor themselves. */
     editor_cursor_pos_set(g_editor_state.input.cursor_pos);
 }
 
@@ -333,12 +335,34 @@ int editor_cursor_pos(void) {
     return g_editor_state.input.cursor_pos;
 }
 
-void editor_cursor_pos_set(int cursor_pos) {
+/* Single home for "move the input cursor." `keep_anchor` distinguishes
+ * the default move (which clears the input-selection anchor) from the
+ * shift-extended move (which leaves the anchor alone so selection
+ * grows / shrinks). The plain entry points below are thin wrappers so
+ * the anchor-clear policy lives in exactly one place; the 60+ existing
+ * cursor-set call sites stay on the default and inherit auto-clear. */
+static void cursor_pos_set_internal(int cursor_pos, int keep_anchor) {
     if (cursor_pos < 0)
         cursor_pos = 0;
     if (cursor_pos > g_editor_state.input.input_len)
         cursor_pos = g_editor_state.input.input_len;
     g_editor_state.input.cursor_pos = cursor_pos;
+    if (!keep_anchor) {
+        g_editor_state.input.anchor_pos = -1;
+        return;
+    }
+    /* keep_anchor: empty selections still collapse — if the anchor
+     * just collided with the cursor, drop it. */
+    if (g_editor_state.input.anchor_pos == cursor_pos)
+        g_editor_state.input.anchor_pos = -1;
+}
+
+void editor_cursor_pos_set(int cursor_pos) {
+    cursor_pos_set_internal(cursor_pos, /*keep_anchor=*/0);
+}
+
+void editor_cursor_pos_set_keep_anchor(int cursor_pos) {
+    cursor_pos_set_internal(cursor_pos, /*keep_anchor=*/1);
 }
 
 int editor_input_anchor(void) {

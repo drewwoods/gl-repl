@@ -292,7 +292,18 @@ void        editor_input_len_set(int input_len);
 void        editor_input_set_text(const char *text);
 void        editor_input_clear(void);
 int         editor_cursor_pos(void);
+/* Default cursor move: clears the input-selection anchor. Every
+ * existing cursor-set call site uses this and inherits auto-clear,
+ * which keeps stale highlights from outliving the move that produced
+ * them. */
 void        editor_cursor_pos_set(int cursor_pos);
+/* Shift-extended cursor move: leaves the anchor in place so the
+ * selection grows or shrinks. Reserved for handlers that explicitly
+ * want to extend an active selection (shift+arrow, shift+home/end,
+ * mouse drag). If the move collapses the selection to empty
+ * (anchor == cursor) the anchor still drops to -1 so "has selection"
+ * remains a single test. */
+void        editor_cursor_pos_set_keep_anchor(int cursor_pos);
 /* Input-buffer character-range selection anchor. -1 means "no
  * selection." `_set` clamps to [0, input_len]; if the new value equals
  * the current cursor, the anchor collapses to -1 (empty selections are
