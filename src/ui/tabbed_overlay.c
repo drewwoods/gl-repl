@@ -6,7 +6,9 @@
  */
 #include "tabbed_overlay.h"
 #include "metrics.h"
-#include "./include/gl_2d.h"
+
+#include "config.h"
+#include "include/gl_2d.h"
 
 #include <stdio.h>
 #include <string.h>

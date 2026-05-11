@@ -2,13 +2,6 @@
 #define GL_2D_H
 #include <gl_includes.h>
 
-#define FONT_MONO       GLUT_BITMAP_9_BY_15
-#define FONT_SMALL      GLUT_BITMAP_8_BY_13
-#define FONT_W          9
-#define FONT_H          15
-#define FONT_SMALL_W    8
-#define FONT_SMALL_H    13
-
 /* Push a 2D ortho projection sized to (0,0)-(w,h) and disable depth +
  * lighting via glPushAttrib so the corresponding gl2d_end() restores
  * prior state without project-side lighting queries. */
