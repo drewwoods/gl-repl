@@ -179,6 +179,7 @@ REPL_DEMO_DEP_SRCS = cmd_format.c \
 # (not in the demo link set).
 
 OBJDIR = build/$(BUILD)$(if $(filter 1,$(USE_GL_STUBS)),-gl-stubs,)
+BINDIR = $(OBJDIR)
 OBJ_CFLAGS = $(BUILD_CFLAGS) $(CFLAGS)
 DEPFLAGS = -MMD -MP
 
@@ -230,16 +231,24 @@ CORE_TEST_BINS = $(filter-out test_eval test_format test_repl_code_panel_layout 
 # them — benchmarks are timing-sensitive and should be invoked explicitly.
 BENCH_BINS = bench_repl
 
+ROOT_BIN_LINKS = sample teapot_demo repl_demo
+
+.PHONY: $(ROOT_BIN_LINKS) $(TEST_BINS) $(BENCH_BINS)
+
+SAMPLE_BIN = $(BINDIR)/sample
+TEAPOT_DEMO_BIN = $(BINDIR)/teapot_demo
+REPL_DEMO_BIN = $(BINDIR)/repl_demo
+
 define core_test_binary
 $(1)_OBJS = $$(OBJDIR)/$$(TEST_DIR)/$(1).o $$(CORE_TEST_OBJS)
 $(1)_LDLIBS = $$(GL_LDFLAGS)
-$(1)_RUN ?= ./$(1)
+$(1)_RUN ?= $$(BINDIR)/$(1)
 endef
 
 define bench_binary
 $(1)_OBJS = $$(OBJDIR)/$$(BENCH_DIR)/$(1).o $$(CORE_TEST_OBJS)
 $(1)_LDLIBS = $$(GL_LDFLAGS)
-$(1)_RUN ?= ./$(1)
+$(1)_RUN ?= $$(BINDIR)/$(1)
 endef
 
 $(foreach test,$(CORE_TEST_BINS),$(eval $(call core_test_binary,$(test))))
@@ -247,19 +256,19 @@ $(foreach bin,$(BENCH_BINS),$(eval $(call bench_binary,$(bin))))
 
 test_eval_OBJS = $(OBJDIR)/$(TEST_DIR)/test_eval.o $(OBJDIR)/src/repl/eval.o
 test_eval_LDLIBS = -lm -lpthread
-test_eval_RUN = ./test_eval --run-tests
+test_eval_RUN = $(BINDIR)/test_eval --run-tests
 
 test_format_OBJS = $(OBJDIR)/$(TEST_DIR)/test_format.o $(OBJDIR)/cmd_format.o
 test_format_LDLIBS = -lm
-test_format_RUN ?= ./test_format
+test_format_RUN ?= $(BINDIR)/test_format
 
 test_repl_code_panel_layout_OBJS = $(OBJDIR)/$(TEST_DIR)/test_repl_code_panel_layout.o $(OBJDIR)/src/editor/code_layout.o
 test_repl_code_panel_layout_LDLIBS =
-test_repl_code_panel_layout_RUN ?= ./test_repl_code_panel_layout
+test_repl_code_panel_layout_RUN ?= $(BINDIR)/test_repl_code_panel_layout
 
 test_audio_OBJS = $(OBJDIR)/$(TEST_DIR)/test_audio.o $(OBJDIR)/audio.o
 test_audio_LDLIBS = $(GL_LDFLAGS)
-test_audio_RUN ?= ./test_audio
+test_audio_RUN ?= $(BINDIR)/test_audio
 
 # For tests using the "include-as-unit" pattern (e.g., `#include "file.c"` to test
 # internal static functions), we must filter out the original object file from
@@ -284,8 +293,12 @@ $(OBJDIR)/%.o: %.c
 	@mkdir -p $(dir $@)
 	$(CC) $(OBJ_CFLAGS) $(DEPFLAGS) -c -o $@ $<
 
-sample: $(SAMPLE_OBJS) ## Build the main REPL sample using release flags by default.
+$(SAMPLE_BIN): $(SAMPLE_OBJS)
+	@mkdir -p $(dir $@)
 	$(CC) $(OBJ_CFLAGS) -o $@ $(SAMPLE_OBJS) $(GL_LDFLAGS)
+
+sample: FORCE $(SAMPLE_BIN) ## Build the main REPL sample using release flags by default.
+	ln -sfn $(SAMPLE_BIN) $@
 
 # Standalone demo binary that drives the scene module with a teapot callback.
 # Proves the scene/ subtree links cleanly without the editor/UI/controller code.
@@ -293,7 +306,12 @@ TEAPOT_DEMO_OBJS = $(OBJDIR)/tools/teapot_demo/teapot.o \
                    $(addprefix $(OBJDIR)/,$(TEAPOT_DEMO_DEP_SRCS:.c=.o))
 
 teapot_demo: $(TEAPOT_DEMO_OBJS) ## Build the standalone teapot demo.
+$(TEAPOT_DEMO_BIN): $(TEAPOT_DEMO_OBJS)
+	@mkdir -p $(dir $@)
 	$(CC) $(OBJ_CFLAGS) -o $@ $(TEAPOT_DEMO_OBJS) $(GL_LDFLAGS)
+
+teapot_demo: FORCE $(TEAPOT_DEMO_BIN) ## Build the standalone teapot demo.
+	ln -sfn $(TEAPOT_DEMO_BIN) $@
 
 # Standalone REPL pipeline demo. Inverse of teapot_demo: proves the
 # REPL pipeline links without editor input dispatch / controller / UI.
@@ -302,7 +320,12 @@ REPL_DEMO_OBJS = $(OBJDIR)/tools/repl_demo/repl_demo.o \
                  $(addprefix $(OBJDIR)/,$(REPL_DEMO_DEP_SRCS:.c=.o))
 
 repl_demo: $(REPL_DEMO_OBJS) ## Build the standalone REPL pipeline demo.
+$(REPL_DEMO_BIN): $(REPL_DEMO_OBJS)
+	@mkdir -p $(dir $@)
 	$(CC) $(OBJ_CFLAGS) -o $@ $(REPL_DEMO_OBJS) $(GL_LDFLAGS)
+
+repl_demo: FORCE $(REPL_DEMO_BIN) ## Build the standalone REPL pipeline demo.
+	ln -sfn $(REPL_DEMO_BIN) $@
 
 .SECONDEXPANSION:
 
@@ -311,8 +334,16 @@ repl_demo: $(REPL_DEMO_OBJS) ## Build the standalone REPL pipeline demo.
 # turn `test_eval` into `$(test_eval_OBJS)`, `test_repl_core_io` into
 # `$(test_repl_core_io_OBJS)`, etc. The doubled dollars delay that lookup until
 # the second pass.
-$(TEST_BINS) $(BENCH_BINS): %: $$($$@_OBJS)
-	$(CC) $(OBJ_CFLAGS) -o $@ $^ $($@_LDLIBS) $(COVERAGE_LDFLAGS)
+define built_binary
+$(BINDIR)/$(1): $$($(1)_OBJS)
+	@mkdir -p $$(dir $$@)
+	$$(CC) $$(OBJ_CFLAGS) -o $$@ $$^ $$($(1)_LDLIBS) $$(COVERAGE_LDFLAGS)
+
+$(1): $$(BINDIR)/$(1)
+endef
+
+$(foreach test,$(TEST_BINS),$(eval $(call built_binary,$(test))))
+$(foreach bin,$(BENCH_BINS),$(eval $(call built_binary,$(bin))))
 
 # Layering boundary enforcement ------------------------------------------
 check-gl-boundaries: ## Verify GL/GLUT calls are isolated to allowed files.
@@ -643,12 +674,12 @@ capacity-matrix: ## Print state-scaling matrix: per-tunable bytes-per-unit, curr
 bench: $(BENCH_BINS) ## Build and run the REPL runtime benchmarks.
 	@for b in $(BENCH_BINS); do \
 		echo "==> $$b $(BENCH_ARGS)"; \
-		./$$b $(BENCH_ARGS) || exit $$?; \
+		$(BINDIR)/$$b $(BENCH_ARGS) || exit $$?; \
 	done
 
 bench-csv: $(BENCH_BINS) ## Run benchmarks with --csv output (machine readable).
 	@for b in $(BENCH_BINS); do \
-		./$$b --csv $(BENCH_ARGS) || exit $$?; \
+		$(BINDIR)/$$b --csv $(BENCH_ARGS) || exit $$?; \
 	done
 
 # count lines: $(SRCS) $(HDRS)
@@ -703,7 +734,7 @@ else
 endif
 
 clean: ## Remove built binaries and object files.
-	rm -rf sample sample.dSYM \
+	rm -rf $(ROOT_BIN_LINKS) sample.dSYM teapot_demo.dSYM repl_demo.dSYM \
 		$(TEST_BINS) $(addsuffix .dSYM,$(TEST_BINS)) \
 		$(BENCH_BINS) $(addsuffix .dSYM,$(BENCH_BINS)) \
 		build/coverage/lcov.info build/coverage/html \
