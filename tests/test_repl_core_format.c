@@ -217,6 +217,7 @@ int main(void) {
         repl_state_document_cmds_mut()[0].valid = 1;
         editor_buffer_set_line(0, wrapped);
         repl_state_document_count_set(1);
+        editor_buffer_set_count(1);
 
         ASSERT_TRUE("open visual dump file", dump_f != NULL);
         if (dump_f) {
@@ -261,6 +262,7 @@ int main(void) {
         repl_state_document_cmds_mut()[0].valid = 1;
         editor_buffer_set_line(0, wrapped);
         repl_state_document_count_set(1);
+        editor_buffer_set_count(1);
 
         ASSERT_TRUE("open overflow visual dump file", dump_f != NULL);
         if (dump_f) {
@@ -308,6 +310,7 @@ int main(void) {
         repl_state_document_cmds_mut()[0].valid = 1;
         editor_buffer_set_line(0, wrapped);
         repl_state_document_count_set(1);
+        editor_buffer_set_count(1);
 
         ASSERT_TRUE("open point-parameter visual dump file", dump_f != NULL);
         if (dump_f) {
@@ -353,6 +356,7 @@ int main(void) {
         repl_state_document_cmds_mut()[0].valid = 1;
         editor_buffer_set_line(0, wrapped);
         repl_state_document_count_set(1);
+        editor_buffer_set_count(1);
 
         ASSERT_TRUE("open narrow point-parameter visual dump file", dump_f != NULL);
         if (dump_f) {
@@ -407,6 +411,7 @@ int main(void) {
             repl_state_document_cmds_mut()[0].valid = 1;
             editor_buffer_set_line(0, src);
             repl_state_document_count_set(1);
+            editor_buffer_set_count(1);
 
             ASSERT_TRUE("open layout visual dump file", dump_f != NULL);
             if (dump_f) {
@@ -468,6 +473,7 @@ int main(void) {
         repl_state_document_cmds_mut()[0].valid = 1;
         editor_buffer_set_line(0, wrapped);
         repl_state_document_count_set(1);
+        editor_buffer_set_count(1);
 
         glr_state_presentation_mut()->show_vertex_indices = 0;
         glr_ctrl_sync_ui_chrome();

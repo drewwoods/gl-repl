@@ -249,10 +249,16 @@ static const char *const *scene_line_ptrs(const char lines[MAX_COMMANDS][MAX_LIN
 static int load_commands_into_live(const GLCmd *cmds,
                                    const char lines[MAX_COMMANDS][MAX_LINE_LEN],
                                    int num_cmds, int edit_line) {
-    ReplCommandStore store = repl_command_store_live();
-    if (!repl_command_store_load(&store, cmds, num_cmds, edit_line))
+    /* Source text first so a bulk-load failure (capacity, fixture
+     * refusal) leaves the cmd-store untouched and the caller can
+     * surface the error to the user. */
+    if (!source_document_load_lines(scene_line_ptrs(lines, num_cmds), num_cmds))
         return 0;
-    source_document_load_lines(scene_line_ptrs(lines, num_cmds), num_cmds);
+    ReplCommandStore store = repl_command_store_live();
+    if (!repl_command_store_load(&store, cmds, num_cmds, edit_line)) {
+        source_document_clear();
+        return 0;
+    }
     return 1;
 }
 

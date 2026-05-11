@@ -184,7 +184,7 @@ static void workspace_format_float(char *buf, size_t n, float v) {
  * that reads source text. Static helpers route through
  * `export_document_text` instead of calling `editor_buffer_line`
  * directly so the source-text dependency is declared at the API
- * boundary as an SourceTextView parameter rather than a hidden
+ * boundary as a SourceTextView parameter rather than a hidden
  * global reach-through. */
 static SourceTextView s_export_text_view;
 
@@ -2034,13 +2034,27 @@ static int import_parse_declare_marker(const char *line, int *loaded,
         ReplCommandStore store = repl_command_store_live();
         int decl_pos = repl_command_store_first_non_decl(&store);
 
-        if (!repl_command_store_insert_one(
-                &store, decl_pos, &cmd,
-                REPL_COMMAND_STORE_ADJUST_EDIT_LINE)) {
+        /* Source text first; cmd-store second so a text-write failure
+         * leaves no orphan GLCmd row. cmd-store failure rolls the
+         * inserted line back. */
+        if (!source_document_insert_line(decl_pos, decl_line)) {
             if (warnings) (*warnings)++;
             return 1;
         }
-        source_document_insert_line(decl_pos, decl_line);
+        if (!repl_command_store_insert_one(
+                &store, decl_pos, &cmd,
+                REPL_COMMAND_STORE_ADJUST_EDIT_LINE)) {
+            SourceTextChange rollback = {
+                .kind         = SOURCE_TEXT_DELETE_RANGE,
+                .pos          = decl_pos,
+                .count        = 1,
+                .delete_pos   = -1,
+                .delete_count = 0,
+            };
+            source_document_apply_change(&rollback);
+            if (warnings) (*warnings)++;
+            return 1;
+        }
         (*loaded)++;
     }
     (void)warnings;

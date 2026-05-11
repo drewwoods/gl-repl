@@ -11,13 +11,16 @@
  *                 a tiny static line store, no editor link
  *   Tests:        link the full-app adapter OR a fixture under tests/support/
  *
- * The header includes no REPL or editor headers. MAX_COMMANDS and
- * MAX_LINE_LEN come from repl_command.h, which itself is a neutral REPL
- * grammar header (no editor coupling). */
+ * The header includes only config.h — no REPL, editor, GL, or evaluator
+ * headers. MAX_COMMANDS / MAX_LINE_LEN / MAX_COMMIT_CMDS live in config.h
+ * for exactly this reason: a neutral boundary header can size its structs
+ * without dragging in grammar types. The compile pipeline reuses the
+ * same MAX_COMMIT_CMDS constant, so the translator from ReplCompiledChange
+ * to SourceTextChange copies 1:1 without a silent bound mismatch. */
 #ifndef SOURCE_DOCUMENT_H
 #define SOURCE_DOCUMENT_H
 
-#include "repl_command.h"  /* MAX_COMMANDS, MAX_LINE_LEN */
+#include "config.h"  /* MAX_COMMANDS, MAX_LINE_LEN, MAX_COMMIT_CMDS */
 
 /* Read-only view over the live source document. Pointer + count;
  * passed by value to REPL consumers that need source text (replay
@@ -28,19 +31,19 @@ typedef struct {
     int          line_count;
 } SourceTextView;
 
-/* Slice-style index: bounded by MAX_COMMANDS (the underlying storage),
- * not by view.line_count. Matches the editor_buffer_view_line() it
- * replaces — readers that only care about populated lines should guard
- * with view.line_count themselves. */
+/* Slice-style accessor bounded by view.line_count. Out-of-range reads
+ * return "" so callers can iterate without a separate count check.
+ * The full-app adapter populates line_count from
+ * EditorState.buffer.line_count; tests that poke the buffer directly
+ * must keep that count in sync (editor_buffer_set_count). */
 static inline const char *source_text_line(SourceTextView view, int idx) {
-    if (!view.lines || idx < 0 || idx >= MAX_COMMANDS)
+    if (!view.lines || idx < 0 || idx >= view.line_count)
         return "";
     return view.lines[idx];
 }
 
-/* Mutation port (Phase 2). REPL_DEMO/test hosts that don't exercise
- * mutation may leave these undefined; the linker will flag any reach
- * that actually calls them. */
+/* Mutation port. Hosts that don't exercise mutation may leave these
+ * undefined; the linker will flag any reach that actually calls them. */
 
 typedef enum {
     SOURCE_TEXT_NO_CHANGE = 0,
@@ -50,10 +53,6 @@ typedef enum {
     SOURCE_TEXT_DELETE_RANGE,
     SOURCE_TEXT_LOAD_ALL,
 } SourceTextChangeKind;
-
-#ifndef SOURCE_TEXT_CHANGE_MAX_LINES
-#define SOURCE_TEXT_CHANGE_MAX_LINES 16
-#endif
 
 typedef struct {
     SourceTextChangeKind kind;
@@ -65,7 +64,7 @@ typedef struct {
     int delete_pos;
     int delete_count;
 
-    char text[SOURCE_TEXT_CHANGE_MAX_LINES][MAX_LINE_LEN];
+    char text[MAX_COMMIT_CMDS][MAX_LINE_LEN];
 } SourceTextChange;
 
 /* Read accessor. Implemented by the host. */
