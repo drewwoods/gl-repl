@@ -763,18 +763,30 @@ static void glr_ctrl_post_overlays(void *user_data) {
 
     int multisample = cfg ? cfg->multisample_enabled : 0;
     int line_smooth = cfg ? cfg->line_smooth_enabled : 0;
+    prof_begin(PROF_SCENE_3D_OVERLAY_OUTLINES);
     glr_ctrl_render_outlines(&walk, multisample, line_smooth);
     glr_ctrl_render_vertex_points(&walk);
+    prof_accum_end(PROF_SCENE_3D_OVERLAY_OUTLINES);
 
     /* Cursor edit guides need the full snapshot (input string, predef
      * vars, source cmds). Build it once here and feed the walker. */
+    prof_begin(PROF_SCENE_3D_OVERLAY_BUILD_GUIDES);
     SceneGuideSnapshot snapshot = glr_ctrl_build_guide_snapshot(cfg);
+    prof_accum_end(PROF_SCENE_3D_OVERLAY_BUILD_GUIDES);
+    prof_begin(PROF_SCENE_3D_OVERLAY_TRANSFORM_GUIDES);
     glr_ctrl_render_cursor_guides(&snapshot);
+    prof_accum_end(PROF_SCENE_3D_OVERLAY_TRANSFORM_GUIDES);
 
-    if (presentation.show_vertex_labels)
+    if (presentation.show_vertex_labels){
+        prof_begin(PROF_SCENE_3D_OVERLAY_VERTEX_NUMBERS);
         glr_ctrl_render_vertex_numbers();
-    if (presentation.show_normal_vectors)
+        prof_accum_end(PROF_SCENE_3D_OVERLAY_VERTEX_NUMBERS);
+    }
+    if (presentation.show_normal_vectors) {
+        prof_begin(PROF_SCENE_3D_OVERLAY_NORMALS);
         glr_ctrl_render_normal_vectors();
+        prof_accum_end(PROF_SCENE_3D_OVERLAY_NORMALS);
+    }
 }
 
 static void glr_ctrl_push_highlights(void) {
@@ -1215,7 +1227,7 @@ void glr_ctrl_display_frame(void) {
     /* 3D scene - scene_render_3d_scene() handles optional accumulation-buffer AA */
     /* Reset subsection accumulators so timings across all AA samples sum up
      * correctly before the first (or only) scene_render_3d_scene() call. */
-    for (ProfSection section_idx = PROF_SCENE_3D_SETUP; section_idx <= PROF_SCENE_3D_HUD; section_idx++)
+    for (ProfSection section_idx = PROF_SCENE_3D_SETUP; section_idx <= PROF_SCENE_3D_LAST; section_idx++)
         prof_accum_reset(section_idx);
     prof_begin(PROF_SCENE_3D);
     {
@@ -1258,7 +1270,7 @@ void glr_ctrl_display_frame(void) {
     }
 
     /* Commit the accumulated subsection totals now that all AA samples are done. */
-    for (ProfSection section_idx = PROF_SCENE_3D_SETUP; section_idx <= PROF_SCENE_3D_HUD; section_idx++)
+    for (ProfSection section_idx = PROF_SCENE_3D_SETUP; section_idx <= PROF_SCENE_3D_LAST; section_idx++)
         prof_accum_commit(section_idx);
 
     prof_begin(PROF_CODE_PANEL);

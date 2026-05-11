@@ -74,7 +74,6 @@ static const char *section_label(ProfSection s) {
     case PROF_SCENE_3D_SETUP:    return "  setup";
     case PROF_SCENE_3D_FILL:     return "  fill";
     case PROF_SCENE_3D_FADE:     return "  fade batches";
-    case PROF_SCENE_3D_FADE_PROLOGUE:   return "    prologue";
     case PROF_SCENE_3D_FADE_BATCH_PREP: return "    batch prep";
     case PROF_SCENE_3D_FADE_BATCH_EXEC: return "    batch exec";
     case PROF_SCENE_3D_FADE_BATCH_POST: return "    batch post";
@@ -83,15 +82,14 @@ static const char *section_label(ProfSection s) {
     case PROF_SCENE_3D_GRID:         return "    grid";
     case PROF_SCENE_3D_AXES:         return "    axes";
     case PROF_SCENE_3D_ORBIT_TARGET: return "    orbit target";
-    case PROF_SCENE_3D_OUTLINES: return "  outlines";
     case PROF_SCENE_3D_OVERLAYS: return "  overlays";
-    case PROF_SCENE_3D_HUD:      return "  hud";
+    case PROF_SCENE_3D_OVERLAY_OUTLINES: return "    outlines";
+    case PROF_SCENE_3D_OVERLAY_BUILD_GUIDES: return "    build guides";
+    case PROF_SCENE_3D_OVERLAY_TRANSFORM_GUIDES: return "    xform guides";
+    case PROF_SCENE_3D_OVERLAY_NORMALS: return "    normals";
+    case PROF_SCENE_3D_OVERLAY_VERTEX_NUMBERS: return "    vertex nums";
     case PROF_CODE_PANEL:  return "Code Panel";
     case PROF_CODE_PANEL_LAYOUT:   return "  layout";
-    case PROF_CODE_PANEL_LAYOUT_GEOM:   return "    geom+rows";
-    case PROF_CODE_PANEL_LAYOUT_GEOM_SETUP:      return "      setup";
-    case PROF_CODE_PANEL_LAYOUT_GEOM_PRECOMPUTE: return "      precompute";
-    case PROF_CODE_PANEL_LAYOUT_SCROLL: return "    scroll/follow";
     case PROF_CODE_PANEL_CHROME:   return "  chrome";
     case PROF_CODE_PANEL_LINES:    return "  lines";
     case PROF_CODE_PANEL_LINES_STATIC: return "    static";
@@ -131,7 +129,6 @@ static int is_detail_section(ProfSection s) {
     return (s == PROF_SCENE_3D_SETUP ||
             s == PROF_SCENE_3D_FILL ||
             s == PROF_SCENE_3D_FADE ||
-            s == PROF_SCENE_3D_FADE_PROLOGUE ||
             s == PROF_SCENE_3D_FADE_BATCH_PREP ||
             s == PROF_SCENE_3D_FADE_BATCH_EXEC ||
             s == PROF_SCENE_3D_FADE_BATCH_POST ||
@@ -140,14 +137,12 @@ static int is_detail_section(ProfSection s) {
             s == PROF_SCENE_3D_GRID ||
             s == PROF_SCENE_3D_AXES ||
             s == PROF_SCENE_3D_ORBIT_TARGET ||
-            s == PROF_SCENE_3D_OUTLINES ||
+            s == PROF_SCENE_3D_OVERLAY_OUTLINES ||
             s == PROF_SCENE_3D_OVERLAYS ||
-            s == PROF_SCENE_3D_HUD ||
+            s == PROF_SCENE_3D_OVERLAY_BUILD_GUIDES ||
+            s == PROF_SCENE_3D_OVERLAY_TRANSFORM_GUIDES ||
+            s == PROF_SCENE_3D_OVERLAY_VERTEX_NUMBERS ||
             s == PROF_CODE_PANEL_LAYOUT ||
-            s == PROF_CODE_PANEL_LAYOUT_GEOM ||
-            s == PROF_CODE_PANEL_LAYOUT_GEOM_SETUP ||
-            s == PROF_CODE_PANEL_LAYOUT_GEOM_PRECOMPUTE ||
-            s == PROF_CODE_PANEL_LAYOUT_SCROLL ||
             s == PROF_CODE_PANEL_CHROME ||
             s == PROF_CODE_PANEL_LINES ||
             s == PROF_CODE_PANEL_LINES_STATIC ||

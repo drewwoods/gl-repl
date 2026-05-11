@@ -793,14 +793,10 @@ void ui_panels_render_code_panel(const UiRenderSnapshot *snap,
     /* replay PC just moved.                                              */
     /* ------------------------------------------------------------------ */
     prof_begin(PROF_CODE_PANEL_LAYOUT);
-    prof_begin(PROF_CODE_PANEL_LAYOUT_GEOM);
-    prof_begin(PROF_CODE_PANEL_LAYOUT_GEOM_SETUP);
 
     int cp_x, cp_y, cp_w, cp_h;
     ui_layout_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
     if (cp_w <= 0 || cp_h <= 0) {
-        prof_end(PROF_CODE_PANEL_LAYOUT_GEOM_SETUP);
-        prof_end(PROF_CODE_PANEL_LAYOUT_GEOM);
         prof_end(PROF_CODE_PANEL_LAYOUT);
         return;
     }
@@ -834,23 +830,15 @@ void ui_panels_render_code_panel(const UiRenderSnapshot *snap,
     /* Own the full-window 2D viewport for the chrome + UI stack. */
     glViewport(0, 0, snap->viewport.window_w, snap->viewport.window_h);
 
-    prof_end(PROF_CODE_PANEL_LAYOUT_GEOM_SETUP);
-    prof_begin(PROF_CODE_PANEL_LAYOUT_GEOM_PRECOMPUTE);
-
     CodePanelDocumentLayout doc_layout;
     repl_code_panel_document_build(&doc_layout, panel_w, text_x, cp_h);
     int visible_lines = doc_layout.visible_lines;
     int total_lines   = doc_layout.total_lines;
 
-    prof_end(PROF_CODE_PANEL_LAYOUT_GEOM_PRECOMPUTE);
-    prof_end(PROF_CODE_PANEL_LAYOUT_GEOM);
-    prof_begin(PROF_CODE_PANEL_LAYOUT_SCROLL);
-
     /* Snap the scroll position to follow the cursor / replay PC, but only
      * if either just moved; manual scroll stays where the user left it. */
     repl_code_panel_document_apply_follow_scroll(&doc_layout);
 
-    prof_end(PROF_CODE_PANEL_LAYOUT_SCROLL);
     prof_end(PROF_CODE_PANEL_LAYOUT);
 
     /* ------------------------------------------------------------------ */

@@ -99,7 +99,7 @@ const GlrConfigItem g_cfg_items[] = {
     { "Grid major",        KEY_CTRL_O, 0, GLR_CONFIG_GRID_MAJOR,  GRID_MAJOR_COUNT, grid_major_names, 0 },
     { "Grid extent",       0, 0,  GLR_CONFIG_GRID_EXTENT,         GRID_EXTENT_COUNT, grid_extent_names, 0 },
     { "Axes",              GLUT_KEY_F4, 1, GLR_CONFIG_AXES_THEME,  AXES_THEME_COUNT, axes_theme_names,    0 },
-    { "Vertex guides",     GLUT_KEY_F8, 1, GLR_CONFIG_VERTEX_GUIDES, 2, NULL,             0 },
+    { "Xform guides",     GLUT_KEY_F8, 1, GLR_CONFIG_XFORM_GUIDES, 2, NULL,             0 },
     { "Xform guide mode",  0, 0,  GLR_CONFIG_XFORM_GUIDE_MODE,     2, xform_guide_mode_names, 0 },
     { "Light indicators",  GLUT_KEY_F10, 1, GLR_CONFIG_LIGHT_INDICATORS, 2, NULL,        0 },
     { "Poly highlight",    0, 0,  GLR_CONFIG_POLY_HIGHLIGHT,       2, NULL,                 0 },
@@ -155,7 +155,7 @@ static int cfg_key_in_scene_subset(GlrConfigKey key) {
     case GLR_CONFIG_NORMAL_VECTORS:
     case GLR_CONFIG_VERTEX_OUTLINES:
     case GLR_CONFIG_VERTEX_POINTS:
-    case GLR_CONFIG_VERTEX_GUIDES:
+    case GLR_CONFIG_XFORM_GUIDES:
     case GLR_CONFIG_XFORM_GUIDE_MODE:
     case GLR_CONFIG_LIGHT_INDICATORS:
     case GLR_CONFIG_BACKDROP:
