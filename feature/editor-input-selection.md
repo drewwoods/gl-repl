@@ -18,6 +18,9 @@ Make this work like every other editor:
 | **Cmd/Ctrl + A** (currently jumps to line start) | Reinterpret as "select entire input line"; the existing line-start jump stays available via Home. |
 | **Type a printable char with selection active** | Replace the selected range with the typed char. |
 | **Backspace / Delete with selection active** | Delete the selected range; cursor lands at the range start. |
+| **Ctrl/Cmd + C with selection active** | Copy the selected substring, not the current command line / line-range selection. |
+| **Ctrl/Cmd + X with selection active** | Copy the selected substring, then delete it from the input buffer. |
+| **Ctrl/Cmd + V after partial-line copy/cut** | Insert the copied text at the cursor, replacing any active input selection first. |
 | **Tab / `;` / Enter with selection active** | Selection is cleared; the key performs its normal commit/accept behavior on the resulting buffer. |
 | **Any plain cursor move (no shift)** | Clears the selection. |
 | **Click without drag** | Clears the selection and places the cursor. |
@@ -43,6 +46,21 @@ There's no character-range selection. The only "selection" concept is
 `ReplSelectionState { anchor_idx; end_idx; }` which is **line-range**
 (used by clipboard cut/copy/paste, see `src/editor/clipboard.c`). That
 state stays as-is; it is *different* from what this feature adds.
+
+The current clipboard stores complete source lines:
+
+```c
+typedef struct {
+    char lines[MAX_COMMANDS][MAX_LINE_LEN];
+    int  line_count;
+} ReplClipboardState;
+```
+
+`Ctrl+C` / `Ctrl+X` copy or cut the current command line / selected line
+range, and `Ctrl+V` feeds those lines back through the commit pipeline.
+Partial input-buffer selections cannot reuse that shape blindly: a selected
+substring such as `sin(t)` is not a command line and must paste back into the
+active input buffer, not through `feed_line()`.
 
 Cursor mutations are scattered. `grep -n editor_cursor_pos_set` shows
 ~37 call sites across `src/editor/{input,undo,commit,clipboard}.c`,
@@ -87,9 +105,50 @@ typedef struct {
 The selection range is **derived**, never stored separately. There's
 one source of truth.
 
+### Clipboard Model
+
+Extend the editor clipboard into a small tagged union so line-range
+copy/cut and input-substring copy/cut share one logical clipboard without
+confusing paste:
+
+```c
+typedef enum {
+    EDITOR_CLIPBOARD_EMPTY = 0,
+    EDITOR_CLIPBOARD_LINES,
+    EDITOR_CLIPBOARD_INPUT_TEXT,
+} EditorClipboardKind;
+
+typedef struct {
+    EditorClipboardKind kind;
+
+    char lines[MAX_COMMANDS][MAX_LINE_LEN];
+    int  line_count;
+
+    char input_text[MAX_INPUT_LEN];
+    int  input_text_len;
+} ReplClipboardState;
+```
+
+**Clipboard rules:**
+
+- Input selection wins over line-range selection for `Ctrl+C` / `Ctrl+X`.
+  If `anchor_pos >= 0`, copy/cut `[lo, hi)` from `input[]` and return
+  before the existing command-line clipboard path runs.
+- Copying an input selection sets `kind = EDITOR_CLIPBOARD_INPUT_TEXT`,
+  stores the selected substring, and leaves the selection active.
+- Cutting an input selection does the same copy step, then deletes the
+  selected range from `input[]`, places the cursor at `lo`, and clears
+  the anchor.
+- Existing line-range copy/cut sets `kind = EDITOR_CLIPBOARD_LINES` and
+  keeps the existing command-line behavior.
+- `Ctrl+V` switches on `kind`: input text inserts into the active
+  input buffer (replacing any active input selection first), while line
+  clipboard paste keeps feeding whole lines through the existing commit
+  path.
+
 ## Phase Plan
 
-### Phase A — State + accessors
+### Phase A — State, accessors, and clipboard shape
 
 `src/editor/state.h` / `state.c`:
 
@@ -103,12 +162,32 @@ one source of truth.
    - `int  editor_input_selection_active(void);`  /* `anchor_pos >= 0` */
    - `int  editor_input_selection_lo(void);`       /* derived; returns `-1` if inactive */
    - `int  editor_input_selection_hi(void);`       /* derived; returns `-1` if inactive */
-4. Add `editor_state_capture` / `editor_state_restore` symmetry: the
-   anchor is part of the editor session and must round-trip through
-   undo snapshots. The `ReplUndoSnapshot` already captures the input
-   buffer — extending it with one int is local to `src/editor/undo.c`.
+4. Extend `ReplClipboardState` with `EditorClipboardKind kind`,
+   `input_text[MAX_INPUT_LEN]`, and `input_text_len`. Add narrow helpers:
+   - `void editor_clipboard_set_input_text(const char *text, int len);`
+   - `int  editor_clipboard_has_input_text(void);`
+   - `const char *editor_clipboard_input_text(void);`
+   - `int  editor_clipboard_input_text_len(void);`
+   Keep the explicit `len` parameter: the natural source is a selected
+   `[lo, hi)` slice inside `input[]`, not necessarily a standalone
+   NUL-terminated string before the helper copies it.
+   Existing line-range copy should set `kind = EDITOR_CLIPBOARD_LINES`;
+   clearing the clipboard sets `EDITOR_CLIPBOARD_EMPTY`.
+5. Keep `editor_state_capture` / `editor_state_restore` symmetry. Since
+   that API whole-copies `EditorState`, the new anchor and tagged
+   clipboard fields should round-trip through full editor-state
+   snapshots automatically once they live in `EditorState`.
+6. Do **not** extend `ReplUndoSnapshot` for v1. Undo snapshots currently
+   do not capture `ReplEditorInputState.input` or `ReplClipboardState`;
+   restore rebuilds the active input via
+   `load_line_to_input(repl_state_edit_line())`. Intended undo behavior:
+   - undo/redo clears the input anchor (`anchor_pos = -1`) as part of
+     the input reload.
+   - the tagged clipboard survives undo/redo unchanged, matching the
+     current line clipboard behavior, because undo does not snapshot
+     clipboard state.
 
-Hard-guard nothing yet — the field is unused after Phase A.
+Hard-guard nothing yet — these fields are unused after Phase A.
 
 ### Phase B — The "clear anchor on cursor move" rule
 
@@ -173,7 +252,70 @@ commit-or-accept behavior runs on the input as it stands. This matches
 common editor convention (typing `;` after selecting "foo" inside `bar
 foo;` commits `bar foo;` cleanly, not `bar ;`).
 
-### Phase D — Mouse and keyboard input handlers
+### Phase D — Partial-line clipboard operations
+
+`src/editor/clipboard.c` should remain the clipboard owner, but it needs
+to understand the new input-buffer selection before falling back to the
+existing line-range logic.
+
+Add helpers in `src/editor/clipboard.c`:
+
+```c
+/* Copy [lo, hi) from ReplEditorInputState.input into the input-text
+ * clipboard. Returns 1 if an input selection was active and copied. */
+static int editor_clipboard_copy_input_selection(void);
+
+/* Same copy step, then delete [lo, hi) from input[], cursor=lo,
+ * anchor=-1. Returns 1 if it consumed the key. */
+static int editor_clipboard_cut_input_selection(void);
+
+/* If the active clipboard is INPUT_TEXT, insert it into input[] at the
+ * cursor, replacing any active input selection first. Returns 1 if it
+ * consumed paste. */
+static int editor_clipboard_paste_input_text(void);
+```
+
+Wire the public routes:
+
+1. `editor_clipboard_copy_current()`:
+   - First, if `editor_input_selection_active()`, copy the substring,
+     set status like `"Copied %d chars"`, and return. Do **not** clear
+     the input selection; copy should preserve visual selection.
+   - Otherwise, run the existing line-range / current-line copy path.
+2. `editor_clipboard_cut_current()`:
+   - First, if `editor_input_selection_active()`, copy the substring,
+     delete it from `input[]`, push one undo snapshot, set status like
+     `"Cut %d chars"`, and return. This path must work in insert mode;
+     the existing line-range cut remains disabled in insert mode.
+   - Otherwise, run the existing line-range / current-line cut path.
+3. `editor_clipboard_paste_current()`:
+   - First, if `clipboard.kind == EDITOR_CLIPBOARD_INPUT_TEXT`, insert
+     text into the input buffer. As the pre-step, call Phase C's
+     `input_consume_selection()` so paste onto an active destination
+     selection replaces that range instead of inserting beside it.
+     Push one undo snapshot for the edit-buffer mutation.
+   - If `clipboard.kind == EDITOR_CLIPBOARD_EMPTY`, keep the existing
+     empty-paste behavior and status (`"Clipboard empty"`).
+   - Otherwise, run the existing whole-line paste path.
+
+This gives predictable priority:
+
+```text
+Ctrl+C / Ctrl+X:
+  active input selection -> substring clipboard
+  else active line-range selection/current line -> line clipboard
+
+Ctrl+V:
+  input-text clipboard -> edit input buffer
+  line clipboard       -> existing feed_line paste
+  empty clipboard      -> existing "Clipboard empty" status
+```
+
+The line-range variable-declaration guards do not apply to partial input
+text, because no source command is removed until the user later commits
+the edited line through the normal validation path.
+
+### Phase E — Mouse and keyboard input handlers
 
 `src/editor/input.c::editor_handle_mouse`:
 
@@ -223,7 +365,7 @@ foo;` commits `bar foo;` cleanly, not `bar ;`).
 2. **Escape**: extend the existing Escape handler to clear the anchor
    along with the other transient states it drops.
 
-### Phase E — Render the selection band
+### Phase F — Render the selection band
 
 `src/ui/panels.c::render_active_input_rows()` already paints the
 active-input row glyph-by-glyph. Extend it to paint a colored
@@ -248,7 +390,7 @@ Implementation shape:
    is one end of the selection range, so visually the user sees the
    highlighted run with a caret at the moving end.
 
-### Phase F — Tests
+### Phase G — Tests
 
 Add focused unit tests under `tests/`:
 
@@ -259,11 +401,31 @@ Add focused unit tests under `tests/`:
      orderings.
    - Selection-consuming mutations: typed char replaces, backspace
      deletes, delete deletes, mixed orderings.
-   - Capture/restore symmetry (anchor survives undo/redo round-trip).
+   - Input clipboard: copy preserves selection and stores the selected
+     substring; cut stores the substring, deletes `[lo, hi)`, clears
+     anchor, and leaves cursor at `lo`; paste inserts from the
+     input-text clipboard without invoking the line paste path.
+   - Paste over active input selection: destination selection is consumed
+     via `input_consume_selection()`, then input-text clipboard content
+     is inserted at `lo`.
+   - Clipboard kind transitions: line copy sets `LINES`, input copy sets
+     `INPUT_TEXT`, clear resets to `EMPTY`.
+   - Full `editor_state_capture` / `editor_state_restore` symmetry for
+     anchor and tagged clipboard fields.
+   - Undo/redo behavior: after restore, the active input is rebuilt and
+     `anchor_pos == -1`; clipboard contents are preserved unchanged.
 2. Extend `tests/test_repl_editor.c`:
    - Shift+arrow extends, then a plain arrow clears.
    - Typed printable replaces the selection.
    - Backspace replaces, then a follow-up typed char inserts at lo.
+   - Ctrl+C with active input selection copies the substring and does
+     not copy the current command line.
+   - Ctrl+X with active input selection cuts only that substring, even
+     in insert mode.
+   - Ctrl+V after input-selection copy inserts text into the input
+     buffer; Ctrl+V onto an active input selection replaces the
+     selected destination range; Ctrl+V after line copy still pastes
+     whole commands.
    - Tab/Enter/`;` clear without deleting.
    - Double-click selects the expected word in a representative
      input line (use the existing modifier-provider seam plus a
@@ -272,35 +434,39 @@ Add focused unit tests under `tests/`:
    needs explicit coverage (selection clears, then ghost expansion
    runs).
 
-### Phase G — Documentation
+### Phase H — Documentation
 
 1. Update `CLAUDE.md` "Key Controls" with the new shift-modified
-   navigation keys and the double-click behavior.
+   navigation keys, double-click behavior, and input-selection
+   copy/cut/paste precedence.
 2. Update `MODULES.md` `EditorState` row to mention the new anchor
-   field on `ReplEditorInputState`.
+   field on `ReplEditorInputState` and the tagged editor clipboard.
 3. A one-paragraph note in `ARCHITECTURE.md` near the existing
    "Editing Existing Lines" section explaining that input-buffer
    selection is character-range and distinct from line-range
-   clipboard selection.
+   clipboard selection, but both share one tagged clipboard object.
 
 ## File Touch Inventory
 
 | File | What changes | Approx LOC |
 |---|---|---|
-| `src/editor/state.h` | Add `anchor_pos` field; declare accessors. | +15 |
-| `src/editor/state.c` | Define accessors; init in reset. | +40 |
-| `src/editor/undo.c` | Snapshot/restore the anchor. | +5 |
+| `src/editor/state.h` | Add `anchor_pos`; add clipboard kind/input-text fields; declare accessors. | +30 |
+| `src/editor/state.c` | Define anchor + input-text clipboard accessors; init in reset/clear. | +70 |
+| `src/editor/undo.c` | No snapshot payload change; verify restore rebuilds input and leaves anchor cleared. | +0 |
+| `src/editor/clipboard.c` | Prefer input selection for copy/cut; tagged paste dispatch; input-text insert/delete helpers. | +100 |
+| `src/editor/clipboard.h` | Document tagged clipboard behavior; expose input-text helpers if needed by tests. | +20 |
 | `src/editor/input.c` | Cursor-set wrappers; double-click detection; shift-extended moves; selection-aware text mutations; Esc clears anchor. | +150 |
-| `src/editor/code_panel_document.c` | If/when the controller-snapshot route is taken (Phase E option), publish lo/hi. | +20 (optional) |
+| `src/editor/code_panel_document.c` | If/when the controller-snapshot route is taken (Phase F option), publish lo/hi. | +20 (optional) |
 | `src/ui/panels.c` | Paint the selection band in `render_active_input_rows`. | +30 |
 | `tests/test_editor_input_selection.c` | New focused suite. | +250 |
-| `tests/test_repl_editor.c` | Add cases for shift+arrow / double-click / replace. | +120 |
+| `tests/test_repl_editor.c` | Add cases for shift+arrow / double-click / replace / input copy-cut-paste. | +170 |
 | `Makefile` | Wire the new test binary. | +3 |
 | `CLAUDE.md`, `MODULES.md`, `ARCHITECTURE.md` | Doc updates. | +30 |
 
-**Total estimate: ~650 LOC across 11 files.** The single-feature
-churn is concentrated in `input.c`, `state.c`, and the new test file;
-everything else is small touch-ups.
+**Total estimate: ~815 LOC across 12 required files, plus the optional
+snapshot-plumbing file if chosen.** The single-feature churn is
+concentrated in `input.c`, `clipboard.c`, `state.c`, and the new test
+file; everything else is small touch-ups.
 
 ## Invariants and Hard Guards
 
@@ -315,6 +481,12 @@ After this feature lands, the following must always hold:
 3. **The only path that mutates the cursor without clearing the
    anchor is `editor_cursor_pos_set_keep_anchor()`** — all other
    call sites use the default and inherit auto-clear.
+4. **Clipboard kind matches payload.**
+   - `EDITOR_CLIPBOARD_EMPTY`: `line_count == 0`, `input_text_len == 0`.
+   - `EDITOR_CLIPBOARD_LINES`: `line_count > 0`, paste uses the
+     existing line feed path.
+   - `EDITOR_CLIPBOARD_INPUT_TEXT`: `input_text_len > 0`, paste edits
+     `ReplEditorInputState.input[]` only.
 
 Optional ratchet to consider: a Makefile check that no file outside
 `src/editor/state.c` calls `editor_cursor_pos_set_keep_anchor` from
@@ -350,7 +522,7 @@ future hardening.
    calls directly and skip the timing logic. The factored-helper
    route is cleanest; it avoids a new test seam.
 
-3. **Snapshot the anchor on the UI side?** Phase E lists two options:
+3. **Snapshot the anchor on the UI side?** Phase F lists two options:
    live read from `editor_state_input()` in `panels.c` versus
    publishing `selection_lo` / `selection_hi` through `UiRenderSnapshot`.
    The snapshot version matches the existing direction
@@ -374,18 +546,21 @@ future hardening.
    (most recent user intent), but the rule should be explicit in
    the panel render code.
 
+6. **System clipboard integration.** This plan keeps the existing
+   in-app clipboard model. Input-selection copy/cut writes to the
+   editor's tagged clipboard, not the OS clipboard. Bridging to
+   platform clipboard APIs is useful later, but it should be its own
+   feature because it affects line-range copy too.
+
 ## Out of Scope
 
 - **Vertical selection** (shift+up/down). The selection model in this
   feature is intentionally single-line, scoped to the active input
   buffer. The line-range clipboard selection covers multi-line use.
 - **Block / column selection** (alt+drag). Not a need today.
-- **Selection-aware Ctrl+C / Ctrl+X from the input buffer.** Today's
-  Ctrl+C/Ctrl+X operate on the line-range clipboard selection (see
-  `handle_line_delete_key_route`). Adding "copy/cut the input-buffer
-  selection to a separate clipboard slot" is a reasonable follow-up,
-  not part of v1. Punt: typing replaces the selection, which covers
-  the most common "select word, type replacement" use case.
+- **OS clipboard bridging.** Copy/cut stays inside the app clipboard
+  for v1; system clipboard integration can layer on after the in-app
+  semantics are stable.
 - **Browser-style cmd-shift-arrow word jumps.** Word-boundary
   navigation is its own feature; this plan only handles word
   *selection* via double-click. Word-jump-by-arrow can layer on later
@@ -402,15 +577,19 @@ testable:
 2. **C** in one commit: selection-aware text mutations. Still no
    user-visible behavior because no UI sets the anchor; tests drive
    it manually.
-3. **D-mouse** (single click and drag) in one commit. Now the user
+3. **D** in one commit: partial-line copy/cut/paste over the new
+   tagged clipboard. Tests can drive it manually before mouse/keyboard
+   selection exists by setting `anchor_pos` / cursor state through the
+   Phase A accessors and then invoking the clipboard routes.
+4. **E-mouse** (single click and drag) in one commit. Now the user
    can drag-to-select inside the input row.
-4. **D-keyboard** (shift+arrow / shift+home / shift+end / Esc) in one
+5. **E-keyboard** (shift+arrow / shift+home / shift+end / Esc) in one
    commit.
-5. **D-double-click** in one commit.
-6. **E** (render band) — could land alongside D-mouse so the drag has
+6. **E-double-click** in one commit.
+7. **F** (render band) — could land alongside E-mouse so the drag has
    a visible result, but if it lands later the keyboard cases above
    are still testable via state assertions.
-7. **F** focused tests can land alongside each behavior phase; the
+8. **G** focused tests can land alongside each behavior phase; the
    new `test_editor_input_selection.c` should appear with Phase A.
 
 Each commit is small (~50–150 LOC) and individually buildable. The
