@@ -130,7 +130,7 @@ static int color_picker_write_cmd(void) {
     }
 
     if (written < 0 || written >= (int)sizeof(new_line)) {
-        set_status("Command too long");
+        repl_set_status("Command too long");
         return 0;
     }
 
@@ -148,7 +148,7 @@ static int color_picker_write_cmd(void) {
     ReplParsedLine pl;
     if (!repl_parser_parse_command_ctx(new_line, &pl, &parse_ctx)) {
         if (picker_parse_err[0])
-            set_status(picker_parse_err);
+            repl_set_status(picker_parse_err);
         return 0;
     }
 

@@ -574,7 +574,7 @@ void repl_execute_program(const ReplExecutionOptions *options) {
                                          label_name, sizeof(label_name)))
                 break;
             if (goto_count++ > 100000) {
-                set_status("goto: loop limit reached");
+                repl_set_status("goto: loop limit reached");
                 goto execute_done;
             }
             for (int label_idx = 0; label_idx < flat_cmd_count; label_idx++) {
@@ -710,7 +710,7 @@ execute_done:
     repl_executor_unwind_tracked_transform_stack(&matrix_depth);
 }
 
-void execute_commands(void) {
+void repl_execute_commands(void) {
     /* Test/legacy entry point. The executor's goto-label and
      * paren-payload helpers route through the editor-text view; pass
      * the live buffer view so those features work the same as the

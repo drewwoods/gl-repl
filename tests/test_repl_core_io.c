@@ -75,8 +75,8 @@ static int appears_before(const char *haystack, const char *first,
 static int find_init_line(const char *needle) {
     char line[256];
 
-    for (int i = 0; i < init_section_line_count(); i++) {
-        init_section_line(i, line, sizeof(line));
+    for (int i = 0; i < repl_export_init_section_line_count(); i++) {
+        repl_export_init_section_line(i, line, sizeof(line));
         if (strcmp(line, needle) == 0)
             return i;
     }
@@ -86,8 +86,8 @@ static int find_init_line(const char *needle) {
 static int find_init_line_substr(const char *needle) {
     char line[256];
 
-    for (int i = 0; i < init_section_line_count(); i++) {
-        init_section_line(i, line, sizeof(line));
+    for (int i = 0; i < repl_export_init_section_line_count(); i++) {
+        repl_export_init_section_line(i, line, sizeof(line));
         if (strstr(line, needle) != NULL)
             return i;
     }

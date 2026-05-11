@@ -81,7 +81,7 @@ void repl_executor_destroy_resources(void);
 void repl_execute_set_fade_context(float alpha_scale, int skip_geom_before_pc);
 
 /* Execute the live flat program against the current editor buffer view. */
-void execute_commands(void);
+void repl_execute_commands(void);
 
 /* Execute a flat program: walk cmds[0..flat_cmd_count), emit GL calls,
  * re-evaluate expressions with current predefined variable values. Called

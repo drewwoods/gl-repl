@@ -29,7 +29,6 @@
 #include "repl_export.h"
 #include "repl_flatten.h"
 #include "repl_parser.h"
-#include "repl_pipeline.h"
 #include "repl_source_scope.h"
 #include "repl_state_owners.h"
 
@@ -46,7 +45,7 @@ static const char *outfile = "output.c";
 /* Global state                                                               */
 /* ========================================================================= */
 
-void mark_normals_dirty(void) {
+void repl_mark_normals_dirty(void) {
     repl_state_mark_normals_dirty();
 }
 
@@ -81,7 +80,7 @@ void repl_set_status_sink(void (*sink)(const char *)) {
     g_status_sink = sink;
 }
 
-void set_status(const char *msg) {
+void repl_set_status(const char *msg) {
     if (g_status_sink && msg && msg[0])
         g_status_sink(msg);
 }
@@ -102,11 +101,11 @@ void repl_dispatch_example_presentation_reset(void) {
         g_example_presentation_reset_sink();
 }
 
-const char *mode_name(GLenum mode) {
+const char *repl_mode_name(GLenum mode) {
     return repl_begin_mode_name(mode);
 }
 
-GLenum current_begin_mode(void) {
+GLenum repl_current_begin_mode(void) {
     GLenum mode = GL_TRIANGLES;
     for (int cmd_idx = 0; cmd_idx < repl_state_document_count(); cmd_idx++)
         if (repl_state_document_cmds_mut()[cmd_idx].valid && repl_state_document_cmds_mut()[cmd_idx].type == CMD_BEGIN)
@@ -114,7 +113,7 @@ GLenum current_begin_mode(void) {
     return mode;
 }
 
-int count_vertices(void) {
+int repl_count_vertices(void) {
     int n = 0;
     FlatProgramView flat_program = repl_state_flat_program_view();
     const GLCmd *g_flat_cmds = flat_program.cmds;
@@ -392,7 +391,7 @@ static int parse_and_normalize_impl(const char *line, int pos,
     ReplParsedLine pl;
     int parsed = repl_parser_parse_command_ctx(line, &pl, &parse_ctx);
     if (!parsed && normalize_parse_err[0])
-        set_status(normalize_parse_err);
+        repl_set_status(normalize_parse_err);
 
     if (!parsed) return 0;
     *out_cmd = pl.cmd;
@@ -632,7 +631,7 @@ void repl_reformat_program(void) {
     }
 
     repl_source_scope_depth_cache_invalidate();
-    mark_normals_dirty();
+    repl_mark_normals_dirty();
 
     prof_end(PROF_REFORMAT);
 }
@@ -774,10 +773,6 @@ static void load_initial_commands(const char *import_file) {
 
 void repl_save_default_output(const ReplExportLayout *layout) {
     repl_export_save_output(outfile, editor_buffer_view(), layout);
-}
-
-void repl_flatten_commands(void) {
-    flatten_commands();
 }
 
 void repl_load_initial_commands(const char *import_file) {

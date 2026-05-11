@@ -427,7 +427,7 @@ static const WorkspaceDirective WORKSPACE_DIRECTIVES[] = {
 
 #undef WS_DIR
 
-void refresh_workspace_header_lines(void) {
+void repl_state_refresh_workspace_header_lines(void) {
     int line_count = 0;
     if (line_count < MAX_WORKSPACE_HEADER_LINES) {
         snprintf(g_workspace_header_lines[line_count++], WORKSPACE_HEADER_LINE_LEN,
@@ -438,7 +438,7 @@ void refresh_workspace_header_lines(void) {
     g_workspace_header_line_count = line_count;
 }
 
-int parse_workspace_header_line(const char *line) {
+int repl_state_parse_workspace_header_line(const char *line) {
     const char *p = line;
     while (*p && isspace((unsigned char)*p)) p++;
     if (p[0] != '/' || p[1] != '/') return 0;
@@ -625,13 +625,13 @@ static void parse_init_bootstrap(void) {
     g_init_bootstrap_ready = 1;
 }
 
-void ensure_init_bootstrap_ready(void) {
+void repl_ensure_init_bootstrap_ready(void) {
     if (!g_init_bootstrap_ready)
         parse_init_bootstrap();
 }
 
-void apply_init_bootstrap(void) {
-    ensure_init_bootstrap_ready();
+void repl_apply_init_bootstrap(void) {
+    repl_ensure_init_bootstrap_ready();
 
     for (int bootstrap_idx = 0; bootstrap_idx < NUM_INIT_BOOTSTRAP; bootstrap_idx++) {
         const InitBootstrapEntry *entry = &g_init_bootstrap_repl[bootstrap_idx];
@@ -650,10 +650,10 @@ void apply_init_bootstrap(void) {
     }
 }
 
-int init_section_line_count(void) {
+int repl_export_init_section_line_count(void) {
     int count = init_host_only_line_count();
 
-    ensure_init_bootstrap_ready();
+    repl_ensure_init_bootstrap_ready();
     for (int bootstrap_idx = 0; bootstrap_idx < NUM_INIT_BOOTSTRAP; bootstrap_idx++) {
         const InitBootstrapEntry *entry = &g_init_bootstrap_repl[bootstrap_idx];
         if (entry->toggle_slug && !init_bootstrap_toggle_get(entry->toggle_slug, 1))
@@ -664,15 +664,15 @@ int init_section_line_count(void) {
     return count;
 }
 
-void init_section_line(int i, char *buf, size_t n) {
+void repl_export_init_section_line(int i, char *buf, size_t n) {
     int host_count = init_host_only_line_count();
     int enabled_idx = 0;
 
     if (!buf || n == 0)
         return;
 
-    ensure_init_bootstrap_ready();
-    if (i < 0 || i >= init_section_line_count()) {
+    repl_ensure_init_bootstrap_ready();
+    if (i < 0 || i >= repl_export_init_section_line_count()) {
         buf[0] = '\0';
         return;
     }
@@ -708,7 +708,7 @@ static void emit_export_init_section_to_file(FILE *f, int include_tess) {
         for (int line_idx = 0; g_init_host_only_tess_c[line_idx]; line_idx++)
             fprintf(f, "%s\n", g_init_host_only_tess_c[line_idx]);
 
-    ensure_init_bootstrap_ready();
+    repl_ensure_init_bootstrap_ready();
     for (int bootstrap_idx = 0; bootstrap_idx < NUM_INIT_BOOTSTRAP; bootstrap_idx++) {
         const InitBootstrapEntry *entry = &g_init_bootstrap_repl[bootstrap_idx];
         if (entry->toggle_slug && !init_bootstrap_toggle_get(entry->toggle_slug, 1))
@@ -759,7 +759,7 @@ static void emit_export_cam_lines(FILE *f) {
     }
 }
 
-void update_render_state_strings(void) {
+void repl_refresh_render_state_strings(void) {
     /* Step 7a: render-config toggles moved to glr_state. Read them
      * via the bridge's slug-keyed get_int — same opaque path the rest
      * of the export pipeline uses for cfg state. The demo doesn't
@@ -795,7 +795,7 @@ int import_parse_cam_line(const char *text) {
     return g_export_camera_bridge->try_consume_import_line(text);
 }
 
-void update_cam_lines(void) {
+void repl_refresh_camera_lines(void) {
     /* Bridge-driven preview: the bridge formats the 4-line block from
      * current camera state with numeric ry (no g_angle placeholder).
      * Without a bridge installed (the demo case), g_cam_lines stays
@@ -2989,7 +2989,7 @@ void repl_export_save_output(const char *filename, EditorBufferView text,
                              const ReplExportLayout *layout) {
     FILE *f = fopen(filename, "w");
     if (!f) {
-        set_status("Error: cannot write output.c");
+        repl_set_status("Error: cannot write output.c");
         return;
     }
 
@@ -3000,9 +3000,9 @@ void repl_export_save_output(const char *filename, EditorBufferView text,
         .layout = layout,
     };
 
-    update_render_state_strings();
-    update_cam_lines();
-    refresh_workspace_header_lines();
+    repl_refresh_render_state_strings();
+    repl_refresh_camera_lines();
+    repl_state_refresh_workspace_header_lines();
 
     emit_export_scaffold(f, &scaffold);
 
@@ -3010,7 +3010,7 @@ void repl_export_save_output(const char *filename, EditorBufferView text,
 
     char msg[128];
     snprintf(msg, sizeof(msg), "Saved to output.c (%d commands)", repl_state_document_count());
-    set_status(msg);
+    repl_set_status(msg);
 }
 
 /* ========================================================================= */
@@ -3181,7 +3181,7 @@ static void import_process_line(ImportState *s, const char *p, const char *raw) 
     if (s->past_snippet)                                       return;
 
     if (!s->in_snippet) {
-        if (parse_workspace_header_line(p))                    return;
+        if (repl_state_parse_workspace_header_line(p))         return;
         if (import_try_function_body(s, p))                    return;
         if (import_try_function_header(s, p, raw))             return;
         if (import_try_snippet_start(s, p))                    return;
@@ -3254,7 +3254,7 @@ int repl_export_load_from_file(const char *filename) {
         else
             snprintf(msg, sizeof(msg),
                      "Loaded %d commands from %s", state.loaded, filename);
-        set_status(msg);
+        repl_set_status(msg);
         fprintf(stderr, "%s\n", msg);
     }
     return state.loaded > 0;
@@ -3283,8 +3283,8 @@ void repl_dump_code_panel_text(FILE *out, EditorBufferView text) {
 
     s_export_text_view = text;
 
-    update_render_state_strings();
-    update_cam_lines();
+    repl_refresh_render_state_strings();
+    repl_refresh_camera_lines();
 
     fprintf(dst, "--- header_pre ---\n");
     /* Dump pre-header lines (includes, setup). */
@@ -3339,8 +3339,8 @@ void repl_dump_code_panel_visual_text(FILE *out, EditorBufferView text,
 
     s_export_text_view = text;
 
-    update_render_state_strings();
-    update_cam_lines();
+    repl_refresh_render_state_strings();
+    repl_refresh_camera_lines();
 
     fprintf(dst, "--- header_pre ---\n");
     /* Dump pre-header lines with code panel wrapping. */

@@ -22,7 +22,7 @@ static void rename_refresh_status(void) {
     char msg[160];
     snprintf(msg, sizeof(msg),
              "Rename scene (Enter to save, Esc to cancel): %s", g_rename_buf);
-    set_status(msg);
+    repl_set_status(msg);
 }
 
 int editor_inline_rename_active(void) {
@@ -66,13 +66,13 @@ int editor_inline_rename_handle_key(unsigned char key) {
          * names at the API boundary.  A 0 return means reject-and-retry
          * (keep the overlay open); non-zero means success and we close. */
         if (!repl_user_scene_rename(g_rename_slot, g_rename_buf)) {
-            set_status("Scene name cannot be empty");
+            repl_set_status("Scene name cannot be empty");
             return 1;
         }
         char msg[128];
         snprintf(msg, sizeof(msg), "Renamed to: %s",
                  repl_user_scene_name(g_rename_slot));
-        set_status(msg);
+        repl_set_status(msg);
         editor_inline_rename_cancel();
         return 1;
     }

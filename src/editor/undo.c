@@ -78,7 +78,7 @@ void editor_undo_snapshot_restore(const ReplUndoSnapshot *snapshot) {
     }
     editor_insert_mode_set(0);
     load_line_to_input(repl_state_edit_line());
-    mark_normals_dirty();
+    repl_mark_normals_dirty();
 }
 
 void editor_undo_ring_state_capture(ReplUndoRingState *state) {
@@ -112,7 +112,7 @@ void editor_undo_push_snapshot(void) {
 
 void editor_undo_pop_snapshot(void) {
     if (g_undo_count == 0) {
-        set_status("Nothing to undo");
+        repl_set_status("Nothing to undo");
         return;
     }
     editor_undo_snapshot_save(&g_redo_buf[g_redo_head]);
@@ -125,13 +125,13 @@ void editor_undo_pop_snapshot(void) {
     {
         char msg[64];
         snprintf(msg, sizeof(msg), "Undo (%d more)", g_undo_count);
-        set_status(msg);
+        repl_set_status(msg);
     }
 }
 
 void editor_undo_do_redo(void) {
     if (g_redo_count == 0) {
-        set_status("Nothing to redo");
+        repl_set_status("Nothing to redo");
         return;
     }
     editor_undo_snapshot_save(&g_undo_buf[g_undo_head]);
@@ -144,6 +144,6 @@ void editor_undo_do_redo(void) {
     {
         char msg[64];
         snprintf(msg, sizeof(msg), "Redo (%d more)", g_redo_count);
-        set_status(msg);
+        repl_set_status(msg);
     }
 }

@@ -56,7 +56,7 @@ static int parse_for_test(const char *line, GLCmd *cmd) {
     ReplParsedLine pl;
     int ok = repl_parser_parse_command_ctx(line, &pl, &ctx);
     if (cmd) *cmd = pl.cmd;
-    if (!ok && err_buf[0]) set_status(err_buf);
+    if (!ok && err_buf[0]) repl_set_status(err_buf);
     return ok;
 }
 
@@ -73,7 +73,7 @@ static int parse_for_test_with_vars(const char *line, GLCmd *cmd,
     ReplParsedLine pl;
     int ok = repl_parser_parse_command_ctx(line, &pl, &ctx);
     if (cmd) *cmd = pl.cmd;
-    if (!ok && err_buf[0]) set_status(err_buf);
+    if (!ok && err_buf[0]) repl_set_status(err_buf);
     return ok;
 }
 

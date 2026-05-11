@@ -314,7 +314,7 @@ static void test_display_frame_profile_coverage(void) {
     /* Drive one frame after marking both dirty so PROF_AUTONORMAL
      * and PROF_FLATTEN both run. The fixture also leaves replay
      * active so PROF_REPLAY_HUD lands. */
-    mark_normals_dirty();
+    repl_mark_normals_dirty();
     repl_state_mark_flat_dirty();
     glr_ctrl_display_frame();
 

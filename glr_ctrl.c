@@ -1122,7 +1122,7 @@ static void glr_ctrl_build_ui_snapshot(UiRenderSnapshot *snap) {
     snap->active_indent_chars   = repl_code_panel_document_active_indent_chars();
     snap->trailing_indent_chars = repl_source_scope_cmd_indent_chars(snap->document_count);
     snap->in_begin_block        = repl_source_scope_in_begin_block();
-    snap->current_begin_mode    = current_begin_mode();
+    snap->current_begin_mode    = repl_current_begin_mode();
 }
 
 void glr_ctrl_display_frame(void) {
@@ -1144,13 +1144,13 @@ void glr_ctrl_display_frame(void) {
 
     if (repl_state_normals_dirty()) {
         prof_begin(PROF_AUTONORMAL);
-        recompute_autonormals(glr_state_presentation().autonormal);
+        repl_recompute_autonormals(glr_state_presentation().autonormal);
         repl_state_normals_dirty_clear();
         prof_end(PROF_AUTONORMAL);
     }
     if (repl_state_flat_program_dirty()) {
         prof_begin(PROF_FLATTEN);
-        flatten_commands();
+        repl_flatten_commands();
         repl_state_flat_program_clear_dirty();
         prof_end(PROF_FLATTEN);
         flat_program = repl_state_flat_program_view();
@@ -1191,8 +1191,8 @@ void glr_ctrl_display_frame(void) {
     if (replay_active())
         repl_state_flat_program_set_count(repl_replay_prepare_frame(saved_flat_count));
 
-    update_render_state_strings();
-    update_cam_lines();
+    repl_refresh_render_state_strings();
+    repl_refresh_camera_lines();
     prof_end(PROF_SNAPSHOT_PREP);
 
     prof_begin(PROF_SNAPSHOT_SCENE_CONFIG);
@@ -1400,8 +1400,8 @@ void glr_app_reset_all(void) {
      * + display, so tests that go through glr_app_reset_all see
      * coherent caches without waiting for a frame. */
     repl_state_refresh_workspace_header_lines();
-    update_render_state_strings();
-    update_cam_lines();
+    repl_refresh_render_state_strings();
+    repl_refresh_camera_lines();
     glr_ctrl_sync_ui_chrome();
 }
 
@@ -1414,10 +1414,10 @@ void glr_ctrl_sync_ui_chrome(void) {
 
 void glr_ctrl_init_gl(void) {
     glr_app_reset_all();
-    ensure_init_bootstrap_ready();
+    repl_ensure_init_bootstrap_ready();
     scene_render_init_gl();
     repl_executor_init_resources();
-    apply_init_bootstrap();
+    repl_apply_init_bootstrap();
     /* glutInit has run by the time glr_ctrl_init_gl is called.
      * Unlock glutGetModifiers() reads in editor_input so Cmd / Ctrl /
      * Shift modifier checks land. Tests skip this hook so modifier
@@ -1449,7 +1449,7 @@ void glr_ctrl_bootstrap_repl(const char *input_file) {
     /* Startup banner. Step 3 of feature/decouple-repl-from-gl-repl-alt.md
      * moved this out of repl_core.c so pipeline TUs don't own
      * display-string side effects. */
-    set_status("Ready - type GL commands, press ; to execute. F1 for help. F12 for examples.");
+    repl_set_status("Ready - type GL commands, press ; to execute. F1 for help. F12 for examples.");
 }
 
 void glr_ctrl_set_accum(int enabled) {
@@ -1513,7 +1513,7 @@ int glr_ctrl_router_handle_debug_dump_key(unsigned char key) {
     if (key == KEY_CTRL_P) {
         glr_debug_dump_editor(stdout, editor_buffer_view());
         glr_debug_dump_flat_commands(stdout, editor_buffer_view());
-        set_status("Dumped editor + flat commands to stdout");
+        repl_set_status("Dumped editor + flat commands to stdout");
         return 1;
     }
     return 0;
@@ -1569,7 +1569,7 @@ int glr_ctrl_router_handle_accum_samples_key(unsigned char key) {
             }
             char msg[64];
             snprintf(msg, sizeof(msg), "Accum samples: %d", rs->accum_samples);
-            set_status(msg);
+            repl_set_status(msg);
         }
         return 1;
     }
@@ -1585,7 +1585,7 @@ int glr_ctrl_router_handle_accum_samples_key(unsigned char key) {
             }
             char msg[64];
             snprintf(msg, sizeof(msg), "Accum samples: %d", rs->accum_samples);
-            set_status(msg);
+            repl_set_status(msg);
         }
         return 1;
     }
@@ -1788,13 +1788,13 @@ static int glr_ctrl_apply_variable_panel_value_change(
     if (repl_compile_set_predef_value(value_change->name, value_change->value,
                                       &ctx, &compiled,
                                       err, sizeof(err)) != REPL_COMPILE_OK) {
-        set_status(err[0] ? err : "Variable update failed");
+        repl_set_status(err[0] ? err : "Variable update failed");
         return 1;
     }
 
     capture_undo = !variable_panel_drag_undo_snapshot_pushed();
     if (!editor_commit_apply_external_change(&compiled, capture_undo)) {
-        set_status("Command buffer full!");
+        repl_set_status("Command buffer full!");
         return 1;
     }
     if (capture_undo)
@@ -2419,7 +2419,7 @@ void glr_ctrl_tick(void) {
                 base = base ? base + 1 : path;
                 char msg[128];
                 snprintf(msg, sizeof(msg), "Now playing: %s", base);
-                set_status(msg);
+                repl_set_status(msg);
             }
         }
     }

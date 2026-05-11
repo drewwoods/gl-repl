@@ -735,7 +735,7 @@ int repl_replay_seek_to_src_line(int target_line) {
         float live_scratch_arrays[REPL_SCRATCH_ARRAY_COUNT][REPL_SCRATCH_ARRAY_LEN] = { { 0.0f } };
         repl_copy_predef_values(live_predef_vals, MAX_PREDEF_VARS);
         repl_eval_copy_scratch_arrays(live_scratch_arrays);
-        flatten_commands();
+        repl_flatten_commands();
         repl_state_flat_program_clear_dirty();
         repl_restore_predef_values(live_predef_vals, MAX_PREDEF_VARS);
         repl_eval_restore_scratch_arrays(live_scratch_arrays);
@@ -784,14 +784,14 @@ void repl_replay_start(void) {
     repl_copy_predef_values(live_predef_vals, MAX_PREDEF_VARS);
     repl_eval_copy_scratch_arrays(live_scratch_arrays);
     if (repl_state_flat_program_dirty()) {
-        flatten_commands();
+        repl_flatten_commands();
         repl_state_flat_program_clear_dirty();
         repl_restore_predef_values(live_predef_vals, MAX_PREDEF_VARS);
         repl_eval_restore_scratch_arrays(live_scratch_arrays);
     }
 
     if (!replay_has_meaningful_cmds()) {
-        set_status("Replay: nothing to play");
+        repl_set_status("Replay: nothing to play");
         return;
     }
 
@@ -808,7 +808,7 @@ void repl_replay_start(void) {
     g_replay_src_line = -1;
     g_replay_total_flat = g_num_flat_cmds;
     g_replay_last_src_line = -1;
-    set_status("Replay: playing");
+    repl_set_status("Replay: playing");
 }
 
 void repl_replay_stop(void) {
@@ -855,7 +855,7 @@ void repl_replay_advance(void) {
 
     if (g_replay_pc >= g_num_flat_cmds) {
         g_replay_state = REPLAY_DONE;
-        set_status("Replay: done");
+        repl_set_status("Replay: done");
     }
 }
 
@@ -865,7 +865,7 @@ void repl_replay_step_back(void) {
 
     if (g_replay_pc <= 0) {
         repl_replay_seek(0);
-        set_status("Replay: at start");
+        repl_set_status("Replay: at start");
         return;
     }
 
@@ -885,7 +885,7 @@ void repl_replay_speed_adjust(float factor) {
     if (g_replay_speed < 0.5f) g_replay_speed = 0.5f;
     if (g_replay_speed > 200.0f) g_replay_speed = 200.0f;
     snprintf(msg, sizeof(msg), "Replay: %.1f step/s", g_replay_speed);
-    set_status(msg);
+    repl_set_status(msg);
 }
 
 void repl_replay_toggle_play_pause(void) {
@@ -896,10 +896,10 @@ void repl_replay_toggle_play_pause(void) {
 
     if (g_replay_state == REPLAY_PLAYING) {
         g_replay_state = REPLAY_PAUSED;
-        set_status("Replay: paused");
+        repl_set_status("Replay: paused");
     } else if (g_replay_state == REPLAY_PAUSED) {
         g_replay_state = REPLAY_PLAYING;
-        set_status("Replay: playing");
+        repl_set_status("Replay: playing");
     } else {
         repl_replay_start();
     }
@@ -958,12 +958,12 @@ int repl_replay_handle_key(unsigned char key) {
             if (g_replay_active) {
                 int landed = repl_replay_seek_to_src_line(target_line);
                 if (landed < 0) {
-                    set_status("Jump: no geometry at or after cursor");
+                    repl_set_status("Jump: no geometry at or after cursor");
                 } else {
                     char msg[64];
                     g_replay_state = REPLAY_PAUSED;
                     snprintf(msg, sizeof(msg), "Jump: paused at line %d", landed + 1);
-                    set_status(msg);
+                    repl_set_status(msg);
                 }
             }
             return 1;
@@ -973,31 +973,31 @@ int repl_replay_handle_key(unsigned char key) {
 
     if (key == KEY_CTRL_R) {
         repl_replay_stop();
-        set_status("Replay: off");
+        repl_set_status("Replay: off");
         return 1;
     }
     if (key == KEY_CTRL_K) {
         int landed = repl_replay_seek_to_src_line(repl_state_edit_line());
         if (landed < 0) {
-            set_status("Jump: no geometry at or after cursor");
+            repl_set_status("Jump: no geometry at or after cursor");
         } else {
             char msg[64];
             g_replay_state = REPLAY_PAUSED;
             snprintf(msg, sizeof(msg), "Jump: paused at line %d", landed + 1);
-            set_status(msg);
+            repl_set_status(msg);
         }
         return 1;
     }
     if (key == ' ') {
         if (g_replay_state == REPLAY_PLAYING) {
             g_replay_state = REPLAY_PAUSED;
-            set_status("Replay: paused");
+            repl_set_status("Replay: paused");
         } else if (g_replay_state == REPLAY_PAUSED) {
             g_replay_state = REPLAY_PLAYING;
-            set_status("Replay: playing");
+            repl_set_status("Replay: playing");
         } else if (g_replay_state == REPLAY_DONE) {
             repl_replay_restart_from_beginning();
-            set_status("Replay: restarted");
+            repl_set_status("Replay: restarted");
         }
         return 1;
     }
@@ -1017,7 +1017,7 @@ int repl_replay_handle_key(unsigned char key) {
         repl_replay_seek(g_replay_pc);
         if (was_playing && g_replay_state != REPLAY_DONE)
             g_replay_state = REPLAY_PLAYING;
-        set_status(g_replay_mode == REPLAY_MODE_VERTEX
+        repl_set_status(g_replay_mode == REPLAY_MODE_VERTEX
                  ? "Replay: vertex mode"
                  : "Replay: polygon mode");
         return 1;
@@ -1028,7 +1028,7 @@ int repl_replay_handle_key(unsigned char key) {
     }
     if (key == KEY_ESC) {
         repl_replay_stop();
-        set_status("Replay: off");
+        repl_set_status("Replay: off");
         return 1;
     }
 

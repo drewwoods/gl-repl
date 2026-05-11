@@ -307,7 +307,7 @@ int main(void) {
     ASSERT_TRUE("export stability (idempotent)", stable_match);
 
     /* Flatten to ensure no parsing errors */
-    flatten_commands();
+    repl_flatten_commands();
     ASSERT_TRUE("flatten succeeded", repl_state_flat_program_count() > 0);
 
     /* Clean up */

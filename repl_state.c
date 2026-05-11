@@ -1,8 +1,6 @@
 #define REPL_STATE_IMPLEMENTATION
 #include "repl_state.h"
-#include "editor/help_session.h"
 #include "editor/state.h"
-#include "glr_defaults.h" /* CFG_DEFAULT_* macros for state defaults */
 #include "repl_command_store.h"
 #include "repl_core.h"
 #include "repl_core_internal.h"
@@ -10,15 +8,7 @@
 #include "repl_pipeline.h"
 #include "repl_source_scope.h"
 #include "repl_state_owners.h"
-#include "replay_state.h"
-#include "variable_panel_state.h"
 #undef REPL_STATE_IMPLEMENTATION
-
-/* Import/export helpers stay in repl_export.c for now; state exposes them. */
-void refresh_workspace_header_lines(void);
-int  parse_workspace_header_line(const char *line);
-void update_render_state_strings(void);
-void update_cam_lines(void);
 
 /* Step 7a of feature/decouple-repl-from-gl-repl-alt.md: presentation +
  * render slices moved to glr_state.c, dropping the last `glr_camera.h`
@@ -447,9 +437,9 @@ void repl_state_capture(ReplRuntimeState *snapshot) {
         return;
 
     repl_state_bind_eval_predef_storage();
-    refresh_workspace_header_lines();
-    update_render_state_strings();
-    update_cam_lines();
+    repl_state_refresh_workspace_header_lines();
+    repl_refresh_render_state_strings();
+    repl_refresh_camera_lines();
     *snapshot = g_repl_state;
 }
 
@@ -465,14 +455,6 @@ void repl_state_restore(const ReplRuntimeState *snapshot) {
 
 void repl_state_import_export_reset(void) {
     g_repl_state.import_export = g_repl_state_defaults.import_export;
-}
-
-void repl_state_refresh_workspace_header_lines(void) {
-    refresh_workspace_header_lines();
-}
-
-int repl_state_parse_workspace_header_line(const char *line) {
-    return parse_workspace_header_line(line);
 }
 
 /* repl_state_init_defaults is the program-only (REPL-state) entry

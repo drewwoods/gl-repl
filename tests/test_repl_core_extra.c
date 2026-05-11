@@ -47,11 +47,11 @@ static void declare_test_vars(void) {
 }
 
 /* Some functions are not in internal header but are non-static */
-const char *mode_name(GLenum mode);
+const char *repl_mode_name(GLenum mode);
 int repl_source_scope_in_begin_block(void);
 int repl_source_scope_cmd_indent_chars(int pos);
-GLenum current_begin_mode(void);
-int count_vertices(void);
+GLenum repl_current_begin_mode(void);
+int repl_count_vertices(void);
 extern int repl_state_flat_program_count();
 
 /* Capture the output of glr_debug_dump_flat_commands(, editor_buffer_view()) into a malloc'd string.
@@ -82,13 +82,13 @@ done:
 void test_utils() {
     printf("--- Utility functions ---\n");
 
-    ASSERT_STR("mode_name(GL_POINTS)", mode_name(GL_POINTS), "GL_POINTS");
-    ASSERT_STR("mode_name(GL_TRIANGLES)", mode_name(GL_TRIANGLES), "GL_TRIANGLES");
-    ASSERT_STR("mode_name(unknown)", mode_name(9999), "???");
+    ASSERT_STR("mode_name(GL_POINTS)", repl_mode_name(GL_POINTS), "GL_POINTS");
+    ASSERT_STR("mode_name(GL_TRIANGLES)", repl_mode_name(GL_TRIANGLES), "GL_TRIANGLES");
+    ASSERT_STR("mode_name(unknown)", repl_mode_name(9999), "???");
 
     glr_app_reset_all(); declare_test_vars();
-    ASSERT_INT("count_vertices initial", count_vertices(), 0);
-    ASSERT_INT("current_begin_mode initial", current_begin_mode(), GL_TRIANGLES);
+    ASSERT_INT("count_vertices initial", repl_count_vertices(), 0);
+    ASSERT_INT("current_begin_mode initial", repl_current_begin_mode(), GL_TRIANGLES);
     ASSERT_INT("in_begin_block initial", repl_source_scope_in_begin_block(), 0);
 
     repl_feed_line_public("glBegin(GL_TRIANGLES);");
@@ -96,13 +96,13 @@ void test_utils() {
     repl_feed_line_public("glVertex3f(1,0,0);");
     repl_flatten_commands();
 
-    ASSERT_INT("count_vertices after 2 vtx", count_vertices(), 2);
-    ASSERT_INT("current_begin_mode in block", current_begin_mode(), GL_TRIANGLES);
+    ASSERT_INT("count_vertices after 2 vtx", repl_count_vertices(), 2);
+    ASSERT_INT("current_begin_mode in block", repl_current_begin_mode(), GL_TRIANGLES);
     ASSERT_INT("in_begin_block in block", repl_source_scope_in_begin_block(), 1);
 
     repl_feed_line_public("glEnd();");
     repl_flatten_commands();
-    ASSERT_INT("current_begin_mode after end", current_begin_mode(), GL_TRIANGLES);
+    ASSERT_INT("current_begin_mode after end", repl_current_begin_mode(), GL_TRIANGLES);
     ASSERT_INT("in_begin_block after end", repl_source_scope_in_begin_block(), 0);
 
     /* cmd_indent_chars */
@@ -171,12 +171,12 @@ void test_io() {
     repl_export_save_output(tmpf, editor_buffer_view(), NULL);
 
     glr_app_reset_all(); declare_test_vars();
-    ASSERT_INT("num_cmds after reset", count_vertices(), 0);
+    ASSERT_INT("num_cmds after reset", repl_count_vertices(), 0);
 
     int r = repl_export_load_from_file(tmpf);
     ASSERT_INT("load_from_file return", r, 1);
     repl_flatten_commands();
-    ASSERT_INT("count_vertices after load", count_vertices(), 1);
+    ASSERT_INT("count_vertices after load", repl_count_vertices(), 1);
 
     unlink(tmpf);
 
@@ -194,7 +194,7 @@ void test_execution() {
     repl_feed_line_public("n = 1;");
     repl_flatten_commands();
 
-    execute_commands();
+    repl_execute_commands();
 }
 
 void test_examples() {
@@ -225,7 +225,7 @@ void test_user_scene() {
     /* Home slot stays populated after restore in the multi-scene model. */
     repl_load_user_scene();
     repl_flatten_commands();
-    ASSERT_INT("count_vertices after restore", count_vertices(), 1);
+    ASSERT_INT("count_vertices after restore", repl_count_vertices(), 1);
     ASSERT_INT("user_scene_valid after restore", repl_user_scene_valid(), 1);
     ASSERT_INT("active user scene == 0 after restore",
                repl_active_user_scene(), 0);
@@ -245,12 +245,12 @@ void test_user_scene_persists_across_example_switch() {
 
     repl_feed_line_public("glVertex3f(2,2,2);");
     repl_flatten_commands();
-    ASSERT_INT("edited home scene vertex count", count_vertices(), 2);
+    ASSERT_INT("edited home scene vertex count", repl_count_vertices(), 2);
 
     repl_load_example(0);
     repl_load_user_scene();
     repl_flatten_commands();
-    ASSERT_INT("persisted home scene vertex count", count_vertices(), 2);
+    ASSERT_INT("persisted home scene vertex count", repl_count_vertices(), 2);
 }
 
 void test_user_scene_promote_on_edit() {
@@ -586,7 +586,7 @@ void test_your_scene_persists_edits_from_startup() {
     /* User adds a vertex in "Your Scene". */
     repl_feed_line_public("glVertex3f(9,9,9);");
     repl_flatten_commands();
-    ASSERT_INT("vertex present in Your Scene", count_vertices(), 1);
+    ASSERT_INT("vertex present in Your Scene", repl_count_vertices(), 1);
 
     /* Switch to example 0 -- this auto-saves slot 0 before overwriting. */
     repl_load_example(0);
@@ -597,7 +597,7 @@ void test_your_scene_persists_edits_from_startup() {
     repl_load_user_scene_idx(0);
     repl_flatten_commands();
     ASSERT_INT("vertex restored after returning to Your Scene",
-               count_vertices(), 1);
+               repl_count_vertices(), 1);
     ASSERT_INT("slot 0 active again", repl_active_user_scene(), 0);
 }
 
