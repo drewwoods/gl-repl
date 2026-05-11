@@ -225,16 +225,6 @@ void repl_export_save_output(const char *filename, SourceTextView text,
 /* Code-panel dumps used by debug output and test fixtures. */
 void repl_dump_code_panel_text(FILE *out, SourceTextView text);
 
-/* Visual dump consumes the explicit layout struct (step 7c of
- * feature/decouple-repl-from-gl-repl-alt.md) so the REPL pipeline
- * doesn't reach into ui_state / glr_state for panel width or
- * presentation flags. The plain text dump above doesn't need the
- * struct because it doesn't measure or wrap. `code_margin_x` is passed
- * by the caller so this REPL-side dump helper does not include UI metrics. */
-void repl_dump_code_panel_visual_text(FILE *out, SourceTextView text,
-                                      const ReplExportLayout *layout,
-                                      int code_margin_x);
-
 /* Import a C source file saved by save_output(). Parses workspace header directives,
  * camera state, function definitions, and geometry commands. Feeds geometry lines
  * through repl_load_apply_line() (the lean non-editor source-load path from step
@@ -260,5 +250,17 @@ int  repl_state_parse_workspace_header_line(const char *line);
  * exported output. */
 int  repl_export_init_section_line_count(void);
 void repl_export_init_section_line(int i, char *buf, size_t n);
+
+#if 0
+/* Visual dump consumes the explicit layout struct (step 7c of
+ * feature/decouple-repl-from-gl-repl-alt.md) so the REPL pipeline
+ * doesn't reach into ui_state / glr_state for panel width or
+ * presentation flags. The plain text dump above doesn't need the
+ * struct because it doesn't measure or wrap. `code_margin_x` is passed
+ * by the caller so this REPL-side dump helper does not include UI metrics. */
+void repl_dump_code_panel_visual_text(FILE *out, SourceTextView text,
+                                      const ReplExportLayout *layout,
+                                      int code_margin_x);
+#endif
 
 #endif
