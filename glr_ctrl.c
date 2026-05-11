@@ -1951,11 +1951,42 @@ int glr_ctrl_router_handle_glut_scroll_wheel_button(int button, int state, int x
 static int g_code_panel_drag_active = 0;
 static int g_code_panel_drag_anchor = -1;
 static int g_code_panel_drag_moved  = 0;
+/* Press char column inside the active-edit-row drag. -1 when the
+ * press wasn't on a code-text row (gutter / insert-line / non-text
+ * hits don't arm an input-row drag). The drag motion handler reads
+ * this to decide between per-char input-buffer selection (drag stays
+ * on the active edit row) and the existing line-range path. */
+static int g_code_panel_drag_char_anchor = -1;
 
 void glr_ctrl_router_reset_code_panel_drag(void) {
     g_code_panel_drag_active = 0;
     g_code_panel_drag_anchor = -1;
     g_code_panel_drag_moved  = 0;
+    g_code_panel_drag_char_anchor = -1;
+}
+
+/* Apply an input-row drag motion: if the press char-anchor is armed
+ * and the drag still hits the active edit row, grow the input-buffer
+ * selection toward target_char. Returns 1 if handled (caller should
+ * stop processing), 0 otherwise (caller falls through to line-range).
+ * Exposed in glr_ctrl.h so tests can drive the per-char logic without
+ * computing pixel coordinates that match the live panel layout. */
+int glr_ctrl_router_apply_input_row_drag(int target_line, int target_char) {
+    if (!g_code_panel_drag_active || g_code_panel_drag_anchor < 0)
+        return 0;
+    if (g_code_panel_drag_char_anchor < 0)
+        return 0;
+    if (target_line != g_code_panel_drag_anchor)
+        return 0;
+    if (target_line != repl_state_edit_line())
+        return 0;
+    if (target_char < 0)
+        return 0;
+    editor_cursor_pos_extend_selection(target_char);
+    g_code_panel_drag_moved = 1;
+    glr_action_cursor_blink_reset();
+    editor_request_redraw();
+    return 1;
 }
 
 /* Common epilog for clicks that move the editor cursor: blink reset,
@@ -1986,6 +2017,12 @@ static int route_code_text_hit(const UiHit *hit) {
         g_code_panel_drag_active = 1;
         g_code_panel_drag_anchor = hit->line_idx;
         g_code_panel_drag_moved  = 0;
+        /* Record the press column so a drag that stays on the active
+         * edit row can build a per-character input-buffer selection.
+         * The press itself moved the cursor to hit->char_idx (and
+         * cleared any anchor as the Phase B default), so on the first
+         * drag-motion the extend helper pins this column. */
+        g_code_panel_drag_char_anchor = hit->char_idx;
     } else {
         glr_ctrl_router_reset_code_panel_drag();
     }
@@ -2196,6 +2233,15 @@ int glr_ctrl_router_handle_code_panel_drag(int x, int y) {
         return 0;
 
     UiHit hit = ui_panels_hit_test(x, y, repl_eval_predef_view().count);
+
+    /* Per-character input-buffer drag: as long as the drag stays on
+     * the same source row as the press AND that row is the active
+     * edit line, grow the input-buffer selection toward the current
+     * char column. */
+    if (hit.kind == UI_HIT_CODE_TEXT && hit.char_idx >= 0 &&
+        glr_ctrl_router_apply_input_row_drag(hit.line_idx, hit.char_idx))
+        return 1;
+
     int target = code_panel_target_from_hit(hit);
     if (target < 0) {
         /* Drag wandered off the code-panel kinds — clamp the pointer
