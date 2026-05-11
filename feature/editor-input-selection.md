@@ -549,12 +549,13 @@ future hardening.
    no — selection lives in the main `input[]` only. Document the
    limitation; revisit if users hit it.
 
-5. **Search interaction.** Search-hit highlighting paints its own
-   band on the active row. If both are active (user searched, then
-   double-clicked a word that happens to be a different match
-   instance), which paints on top? Likely the input selection wins
-   (most recent user intent), but the rule should be explicit in
-   the panel render code.
+5. **Search interaction.** *Resolved.* Search-hit highlighting paints
+   first; the input-selection band paints over it; text glyphs paint
+   last. Both bands are translucent so the loser still shows through,
+   but input selection dominates because it represents the most
+   recent user intent. The rule lives in
+   `render_active_input_rows` in `src/ui/panels.c` with a comment
+   pointing back to this open question.
 
 6. **System clipboard integration.** This plan keeps the existing
    in-app clipboard model. Input-selection copy/cut writes to the

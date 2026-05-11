@@ -20,6 +20,7 @@
 
 #include "editor/state.h"
 #include "editor/input.h"
+#include "editor/clipboard.h"
 #include "glr_ctrl.h"
 #include "keys.h"
 #include "repl/core.h"
@@ -694,6 +695,66 @@ int main(void) {
         handled = glr_ctrl_router_apply_input_row_drag(1, 0);
         ASSERT_INT("drag off active edit row not handled here",
                    handled, 0);
+
+        glr_ctrl_router_reset_code_panel_drag();
+    }
+
+    printf("\n--- input-row drag is sticky: off-row motion is a no-op ---\n");
+    {
+        /* Regression for the Phase E/F review finding: once a press
+         * arms an input-row drag (char_anchor >= 0), motion that
+         * wanders off the press row must not silently switch the
+         * interaction into line-range selection mode. Otherwise a
+         * user trying to select text inside the input would
+         * accidentally start a multi-line range when they drift the
+         * cursor below the row. */
+        glr_app_reset_all();
+        repl_feed_line_public("glVertex3f(1, 2, 3);");
+        repl_feed_line_public("glVertex3f(4, 5, 6);");
+        repl_navigate_to_line(0);
+
+        /* Arm the drag on line 0 at char 4. */
+        UiHit hit = ui_hit_none();
+        hit.kind = UI_HIT_CODE_TEXT;
+        hit.line_idx = 0;
+        hit.char_idx = 4;
+        glr_ctrl_router_handle_code_panel_hit(hit, 0, 0);
+
+        /* Build a partial input selection by dragging within row 0. */
+        glr_ctrl_router_apply_input_row_drag(0, 8);
+        ASSERT_INT("setup: input selection lo",
+                   editor_input_selection_lo(), 4);
+        ASSERT_TRUE("setup: no line-range selection yet",
+                    !editor_clipboard_sel_active());
+
+        /* Motion off the press row returns 0 from the input-row
+         * helper. The sticky-mode guard in the top-level drag handler
+         * must keep us from falling through to the line-range path.
+         * We can't easily call the top-level drag handler in a test
+         * (it expects real pixel coords through ui_panels_hit_test),
+         * but we can verify the precondition the guard checks: an
+         * armed input-row drag (char_anchor >= 0) plus off-row motion
+         * → apply_input_row_drag returns 0, and at that point the
+         * caller in glr_ctrl_router_handle_code_panel_drag stops. The
+         * downstream effect: line-range selection stays clear. */
+        int handled = glr_ctrl_router_apply_input_row_drag(1, 0);
+        ASSERT_INT("off-row motion not handled by input-row path",
+                   handled, 0);
+        /* The input-row selection survives the off-row motion. */
+        ASSERT_INT("off-row motion preserves input anchor",
+                   editor_input_anchor(), 4);
+        ASSERT_INT("off-row motion preserves input cursor",
+                   editor_cursor_pos(), 8);
+        /* No line-range selection got started. */
+        ASSERT_TRUE("off-row motion did not start line-range",
+                    !editor_clipboard_sel_active());
+
+        /* Drag back onto the original row resumes per-char selection. */
+        handled = glr_ctrl_router_apply_input_row_drag(0, 12);
+        ASSERT_INT("back-on-row motion resumes input drag",
+                   handled, 1);
+        ASSERT_INT("input selection grew on return",
+                   editor_cursor_pos(), 12);
 
         glr_ctrl_router_reset_code_panel_drag();
     }
