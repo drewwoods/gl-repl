@@ -225,6 +225,32 @@ static void render_active_input_rows(const UiRenderSnapshot *snap,
                 gl2d_draw_string((float)text_x, (float)(*io_line_y), spaces, FONT_MONO);
             }
 
+            /* Input-buffer selection band. anchor_pos >= 0 means a
+             * selection is live; the range [lo, hi) is min/max of
+             * anchor and cursor. Intersect with the current wrap row
+             * and paint under the glyphs so the text renders on top.
+             * Color matches the existing line-range selection band so
+             * "selected text" reads consistently across both
+             * granularities. */
+            if (inp.anchor_pos >= 0) {
+                int sel_lo = inp.anchor_pos < cursor_pos
+                           ? inp.anchor_pos : cursor_pos;
+                int sel_hi = inp.anchor_pos > cursor_pos
+                           ? inp.anchor_pos : cursor_pos;
+                int row_lo = sel_lo > wrap_start ? sel_lo : wrap_start;
+                int row_hi = sel_hi < wrap_start + wrap_len
+                           ? sel_hi : wrap_start + wrap_len;
+                if (row_hi > row_lo) {
+                    float bx = (float)(wrap_x + (row_lo - wrap_start) * FONT_W);
+                    float bw = (float)((row_hi - row_lo) * FONT_W);
+                    glEnable(GL_BLEND);
+                    glColor4f(0.20f, 0.30f, 0.50f, 0.55f);
+                    glRectf(bx, (float)(*io_line_y - 3),
+                            bx + bw, (float)(*io_line_y - 3) + (float)LINE_H);
+                    glDisable(GL_BLEND);
+                }
+            }
+
             glColor3f(0.95f, 0.95f, 0.90f);
             code_panel_draw_search_highlights(snap, input, search_row_idx,
                                               wrap_start, wrap_len,
