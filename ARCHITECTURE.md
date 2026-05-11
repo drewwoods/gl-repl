@@ -909,16 +909,17 @@ Still open:
   `glr_shell.c/h`, etc.) is open.
 - ❌ **R9** — Optional: split `src/repl/export.c`.
 
-A parallel state-ownership track lives in
-`feature/gold-standard-state-ownership.md`. Stage 0/1 are complete; Stage 2
-(by-value getters) is broadly applied with a few view-struct slices
-remaining; Stage 7 (UI snapshot purity) is done at the render boundary —
-every `ui_*_render*()` entry point consumes `const UiRenderSnapshot *snap`
-built once per frame by `glr_ctrl_build_ui_snapshot()` (Phase B in
-`feature/done/push-architecture-ui.md`); input-bridge helpers in `ui_*.c`
-remain on live state pending Phase C. Stages 4 (cursor-pixel `Ui*Output`
-actualization) and 6 (`repl_undo.c` consumes `repl_state_capture()`) are
-still open.
+The original parallel state-ownership track shipped between 2026-04
+and 2026-05: by-value read getters, controller-actualized
+`UiCodePanelOutput` (cursor pixel), per-frame `UiRenderSnapshot`
+consumption by every `ui_*_render*()` entry point. The remaining
+narrow items — possible rename of `state_views.h` / `state_owners.h`,
+domain-helper audit, and explicit docs for the three capture/restore
+boundaries (REPL document / editor session / undo ring) — live in
+[`feature/state-ownership-finalize.md`](feature/state-ownership-finalize.md).
+The original Stage 6 (rebuild `repl_undo` on `repl_state_capture`)
+was abandoned: undo deliberately doesn't snapshot input/clipboard
+state (see `feature/done/editor-input-selection.md` Phase A item 6).
 
 The `feature/editor-owns-text.md` track (Steps 2–6) is complete:
 

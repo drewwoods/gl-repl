@@ -962,16 +962,21 @@ R9                            optional: split src/repl/export.c
 Color scheme + syntax         deferred sub-task of editor-owns-text Step 6
 ```
 
-`feature/gold-standard-state-ownership.md`:
+`feature/state-ownership-finalize.md` (residual of the original
+`gold-standard-state-ownership.md` plan, retired 2026-05-11):
 
-- Stage 0/1 (Makefile checks, capture/restore) — done.
-- Stage 2 (by-value read getters) — broadly applied.
-- Stage 3 (UI-facing leaf state) — complete once Phase 1 of this plan
-  lands.
-- Stage 4 (cursor-pixel `Ui*Output`) — partial.
-- Stage 5 (medium slices) — partial.
-- Stage 6 (`repl_undo` on top of `repl_state_capture()`) — superseded by
-  `editor_state_capture()` symmetry.
+- Stages 0/1 (Makefile checks, capture/restore) — landed.
+- Stages 2/3 (by-value read getters, UI-facing leaf state) — landed.
+- Stage 4 (cursor-pixel `UiCodePanelOutput` actualization) — landed.
+- Stage 5 (medium slices return by-value or view structs, UI no longer
+  reads `repl_state_presentation/replay/render` directly) — landed.
+- Stage 6 (`repl_undo` on top of `repl_state_capture()`) — abandoned;
+  superseded by the deliberate editor/REPL undo split documented in
+  `feature/done/editor-input-selection.md` Phase A item 6.
 - Stage 7 (UI snapshot purity) — render boundary done; input-bridge
-  cleanup is Phase 4 of this plan.
-- Stage 8 (collapse views/owners headers) — revisit after Phase 5 rename.
+  conversion is the deferred Phase C of
+  `feature/done/push-architecture-ui.md`, explicitly optional and
+  not pursued.
+- Stages 8/9 (collapse views/owners headers, domain-helper audit,
+  capture-semantics docs) — open. See
+  `feature/state-ownership-finalize.md`.
