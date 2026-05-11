@@ -10,24 +10,24 @@
 #include <ctype.h>
 #include <string.h>
 
-CodePanelTextLayout repl_code_panel_layout_make(int panel_w, int first_x,
+CodeLayout code_layout_make(int panel_w, int first_x,
                                                 int char_w, int wrap_at_comma) {
-    CodePanelTextLayout layout;
+    CodeLayout layout;
 
     layout.panel_w = panel_w;
     layout.first_x = first_x;
     layout.char_w = char_w > 0 ? char_w : 1;
     layout.wrap_at_comma = wrap_at_comma;
-    layout.right_pad_px = CODE_PANEL_LAYOUT_DEFAULT_RIGHT_PAD_PX;
+    layout.right_pad_px = CODE_LAYOUT_DEFAULT_RIGHT_PAD_PX;
     layout.max_hang_indent_chars =
-        CODE_PANEL_LAYOUT_DEFAULT_MAX_HANG_INDENT_CHARS;
+        CODE_LAYOUT_DEFAULT_MAX_HANG_INDENT_CHARS;
     return layout;
 }
 
-int repl_code_panel_available_chars(const CodePanelTextLayout *layout, int x) {
+int code_layout_available_chars(const CodeLayout *layout, int x) {
     int char_w = layout && layout->char_w > 0 ? layout->char_w : 1;
     int right_pad = layout ? layout->right_pad_px
-                           : CODE_PANEL_LAYOUT_DEFAULT_RIGHT_PAD_PX;
+                           : CODE_LAYOUT_DEFAULT_RIGHT_PAD_PX;
     int panel_w = layout ? layout->panel_w : 0;
     int avail_px = panel_w - x - right_pad;
 
@@ -36,7 +36,7 @@ int repl_code_panel_available_chars(const CodePanelTextLayout *layout, int x) {
     return avail_px / char_w;
 }
 
-int repl_code_panel_cont_indent_chars(const char *text,
+int code_layout_cont_indent_chars(const char *text,
                                       int max_hang_indent_chars) {
     const char *src = text ? text : "";
     int leading = 0;
@@ -64,7 +64,7 @@ static int is_secondary_break(char c) {
            c == '*' || c == '-' || c == '/';
 }
 
-int repl_code_panel_find_wrap_break(const char *text, int start,
+int code_layout_find_wrap_break(const char *text, int start,
                                     int max_chars, int len) {
     if (!text || start < 0 || max_chars < 1 || len <= 0 || start >= len)
         return -1;
@@ -100,27 +100,27 @@ int repl_code_panel_find_wrap_break(const char *text, int start,
     return -1;
 }
 
-void repl_code_panel_wrap_iter_init(CodePanelWrapIter *it, const char *text,
-                                    const CodePanelTextLayout *layout) {
+void code_layout_wrap_iter_init(CodeWrapIter *it, const char *text,
+                                    const CodeLayout *layout) {
     if (!it)
         return;
 
     it->text = text ? text : "";
     it->len = (int)strlen(it->text);
     it->layout = layout ? *layout
-                        : repl_code_panel_layout_make(0, 0, 1, 0);
+                        : code_layout_make(0, 0, 1, 0);
     if (it->layout.char_w <= 0)
         it->layout.char_w = 1;
     it->pos = 0;
     it->x = it->layout.first_x;
     it->cont_x = it->layout.first_x +
-                 repl_code_panel_cont_indent_chars(
+                 code_layout_cont_indent_chars(
                      it->text, it->layout.max_hang_indent_chars) *
                  it->layout.char_w;
     it->done = 0;
 }
 
-int repl_code_panel_wrap_iter_next(CodePanelWrapIter *it, int *out_start,
+int code_layout_wrap_iter_next(CodeWrapIter *it, int *out_start,
                                    int *out_len, int *out_x) {
     if (!it || it->done)
         return 0;
@@ -134,7 +134,7 @@ int repl_code_panel_wrap_iter_next(CodePanelWrapIter *it, int *out_start,
         return 1;
     }
 
-    int width_chars = repl_code_panel_available_chars(&it->layout, it->x);
+    int width_chars = code_layout_available_chars(&it->layout, it->x);
     int remaining = it->len - it->pos;
 
     if (!it->layout.wrap_at_comma ||
@@ -145,7 +145,7 @@ int repl_code_panel_wrap_iter_next(CodePanelWrapIter *it, int *out_start,
         return 1;
     }
 
-    int break_idx = repl_code_panel_find_wrap_break(it->text, it->pos,
+    int break_idx = code_layout_find_wrap_break(it->text, it->pos,
                                                     width_chars, it->len);
     if (break_idx < 0) {
         if (out_len) *out_len = remaining;
@@ -159,32 +159,32 @@ int repl_code_panel_wrap_iter_next(CodePanelWrapIter *it, int *out_start,
     return 1;
 }
 
-int repl_code_panel_row_count_for_text(const char *text,
-                                       const CodePanelTextLayout *layout) {
-    CodePanelWrapIter it;
+int code_layout_row_count_for_text(const char *text,
+                                       const CodeLayout *layout) {
+    CodeWrapIter it;
     int rows = 0;
     int start, len, x;
 
-    repl_code_panel_wrap_iter_init(&it, text, layout);
-    while (repl_code_panel_wrap_iter_next(&it, &start, &len, &x))
+    code_layout_wrap_iter_init(&it, text, layout);
+    while (code_layout_wrap_iter_next(&it, &start, &len, &x))
         rows++;
 
     return rows > 0 ? rows : 1;
 }
 
-int repl_code_panel_segment_for_row(const char *text,
-                                    const CodePanelTextLayout *layout,
+int code_layout_segment_for_row(const char *text,
+                                    const CodeLayout *layout,
                                     int want_row, int *out_start,
                                     int *out_len, int *out_x) {
-    CodePanelWrapIter it;
+    CodeWrapIter it;
     int row = 0;
     int start, len, x;
 
     if (want_row < 0)
         return 0;
 
-    repl_code_panel_wrap_iter_init(&it, text, layout);
-    while (repl_code_panel_wrap_iter_next(&it, &start, &len, &x)) {
+    code_layout_wrap_iter_init(&it, text, layout);
+    while (code_layout_wrap_iter_next(&it, &start, &len, &x)) {
         if (row == want_row) {
             if (out_start) *out_start = start;
             if (out_len) *out_len = len;
@@ -197,13 +197,13 @@ int repl_code_panel_segment_for_row(const char *text,
     return 0;
 }
 
-int repl_code_panel_cursor_row_for_text(const char *text,
-                                        const CodePanelTextLayout *layout,
+int code_layout_cursor_row_for_text(const char *text,
+                                        const CodeLayout *layout,
                                         int cursor_pos,
                                         int *out_seg_start,
                                         int *out_seg_len,
                                         int *out_seg_x) {
-    CodePanelWrapIter it;
+    CodeWrapIter it;
     int row = 0;
     int start, len, x;
     int text_len = (int)strlen(text ? text : "");
@@ -213,8 +213,8 @@ int repl_code_panel_cursor_row_for_text(const char *text,
     if (cursor_pos > text_len)
         cursor_pos = text_len;
 
-    repl_code_panel_wrap_iter_init(&it, text, layout);
-    while (repl_code_panel_wrap_iter_next(&it, &start, &len, &x)) {
+    code_layout_wrap_iter_init(&it, text, layout);
+    while (code_layout_wrap_iter_next(&it, &start, &len, &x)) {
         int next_start = start + len;
         if (next_start >= text_len || cursor_pos < next_start) {
             if (out_seg_start) *out_seg_start = start;

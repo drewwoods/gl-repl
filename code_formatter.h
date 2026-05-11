@@ -38,8 +38,8 @@
 /* Layout tuning constants. DEFAULT_RIGHT_PAD_PX reserves pixels on the right to
  * avoid cramming text to the edge. DEFAULT_MAX_HANG_INDENT_CHARS caps hanging
  * indentation to prevent excessive indentation on deeply nested expressions. */
-#define CODE_PANEL_LAYOUT_DEFAULT_RIGHT_PAD_PX 4
-#define CODE_PANEL_LAYOUT_DEFAULT_MAX_HANG_INDENT_CHARS 12
+#define CODE_LAYOUT_DEFAULT_RIGHT_PAD_PX 4
+#define CODE_LAYOUT_DEFAULT_MAX_HANG_INDENT_CHARS 12
 
 /* Layout descriptor for text wrapping. panel_w is the pixel width available;
  * first_x is the starting x-coordinate (for initial indentation); char_w is the
@@ -53,7 +53,7 @@ typedef struct {
     int wrap_at_comma;
     int right_pad_px;
     int max_hang_indent_chars;
-} CodePanelTextLayout;
+} CodeLayout;
 
 /* Iterator state for walking a wrapped line segment by segment. Initialized by
  * repl_code_panel_wrap_iter_init() and advanced by repl_code_panel_wrap_iter_next().
@@ -62,64 +62,64 @@ typedef struct {
 typedef struct {
     const char     *text;
     int             len;
-    CodePanelTextLayout layout;
+    CodeLayout layout;
     int             pos;
     int             x;
     int             cont_x;
     int             done;
-} CodePanelWrapIter;
+} CodeWrapIter;
 
 /* Create a layout descriptor for text wrapping. panel_w is pixel width; first_x is
  * starting x-coordinate; char_w is character width (monospace); wrap_at_comma enables
- * breaking at commas. Returns a CodePanelTextLayout ready for layout queries. Used by
+ * breaking at commas. Returns a CodeLayout ready for layout queries. Used by
  * the renderer and tests to configure wrapping behavior. */
-CodePanelTextLayout repl_code_panel_layout_make(int panel_w, int first_x,
+CodeLayout code_layout_make(int panel_w, int first_x,
                                                 int char_w, int wrap_at_comma);
 
 /* Compute available characters from position x in the current line, given the layout
  * and right padding. Used to determine how many characters fit before line wrap.
  * Returns character count (rounded down to character boundaries). */
-int  repl_code_panel_available_chars(const CodePanelTextLayout *layout, int x);
+int  code_layout_available_chars(const CodeLayout *layout, int x);
 
 /* Compute hanging indentation for a continuation line based on the text structure.
  * Scans text for the first argument/token position (e.g., after '(' in a function
  * call) and returns that position as hanging indent, capped at max_hang_indent_chars.
  * Used to visually align function arguments and array indices on continuation lines. */
-int  repl_code_panel_cont_indent_chars(const char *text,
+int  code_layout_cont_indent_chars(const char *text,
                                        int max_hang_indent_chars);
 
 /* Find a safe break point within a text range. Scans from start position to find
  * the nearest whitespace or comma (if wrap_at_comma enabled) within max_chars.
  * Returns the break position; if no break found, returns max_chars. Used by the
  * wrap iterator to identify where to split a line. */
-int  repl_code_panel_find_wrap_break(const char *text, int start,
+int  code_layout_find_wrap_break(const char *text, int start,
                                      int max_chars, int len);
 
 /* Initialize a wrap iterator for text. Sets up the iterator to walk the text
- * segmented into rows according to the layout. Call repl_code_panel_wrap_iter_next()
+ * segmented into rows according to the layout. Call code_layout_wrap_iter_next()
  * repeatedly to yield each row's segment. */
-void repl_code_panel_wrap_iter_init(CodePanelWrapIter *it, const char *text,
-                                    const CodePanelTextLayout *layout);
+void code_layout_wrap_iter_init(CodeWrapIter *it, const char *text,
+                                    const CodeLayout *layout);
 
 /* Advance the wrap iterator to the next row. Outputs the segment's start position,
  * length, and x-coordinate for rendering. Returns 1 if a segment was yielded, 0 if
  * at end of text. Used by the renderer to iterate rows. */
-int  repl_code_panel_wrap_iter_next(CodePanelWrapIter *it, int *out_start,
+int  code_layout_wrap_iter_next(CodeWrapIter *it, int *out_start,
                                     int *out_len, int *out_x);
 
 /* Compute the total number of rows (lines) needed to display text with the given
  * layout (accounting for wrapping). Used by the code-panel document model to
  * compute layout heights. Returns 1 for unwrapped single-line text, >1 for wrapped
  * multi-line text. */
-int  repl_code_panel_row_count_for_text(const char *text,
-                                        const CodePanelTextLayout *layout);
+int  code_layout_row_count_for_text(const char *text,
+                                        const CodeLayout *layout);
 
 /* Find the text segment for a specific row within wrapped text. want_row is the
  * target row (0 = first row). Outputs the segment's start position (out_start),
  * length (out_len), and x-coordinate for rendering (out_x). Returns 1 on success,
  * 0 if want_row is out of bounds. Used by hit-testing and rendering. */
-int  repl_code_panel_segment_for_row(const char *text,
-                                     const CodePanelTextLayout *layout,
+int  code_layout_segment_for_row(const char *text,
+                                     const CodeLayout *layout,
                                      int want_row, int *out_start,
                                      int *out_len, int *out_x);
 
@@ -127,8 +127,8 @@ int  repl_code_panel_segment_for_row(const char *text,
  * the character index into text. Outputs the segment start (out_seg_start), length
  * (out_seg_len), and x-coordinate (out_seg_x) for rendering the cursor. Returns 1 on
  * success, 0 if cursor_pos is out of bounds. Used by the cursor renderer and hit-test. */
-int  repl_code_panel_cursor_row_for_text(const char *text,
-                                         const CodePanelTextLayout *layout,
+int  code_layout_cursor_row_for_text(const char *text,
+                                         const CodeLayout *layout,
                                          int cursor_pos,
                                          int *out_seg_start,
                                          int *out_seg_len,

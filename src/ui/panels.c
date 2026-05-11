@@ -181,7 +181,7 @@ static void render_active_input_rows(const UiRenderSnapshot *snap,
     const char *input = inp.input;
     int cursor_pos = snap->editor_input.cursor_pos;
     int input_len = inp.input_len;
-    CodePanelWrapIter wrap_it;
+    CodeWrapIter wrap_it;
     int wrap_row = 0;
     int wrap_start, wrap_len, wrap_x;
     int input_x = text_x + indent_chars * FONT_W;
@@ -394,7 +394,7 @@ static void code_panel_draw_chrome(const UiRenderSnapshot *snap,
  * gutter line number is drawn on the first wrap row only. */
 static void code_panel_draw_static_line(CodePanelRowCtx *ctx, const char *text,
                                         float r, float g, float b) {
-    CodePanelWrapIter wrap_it;
+    CodeWrapIter wrap_it;
     int wrap_row = 0;
     int wrap_start, wrap_len, wrap_x;
     float draw_r, draw_g, draw_b;
@@ -558,7 +558,7 @@ static void code_panel_draw_command_row(CodePanelRowCtx *ctx, int i,
         snprintf(display_text, sizeof(display_text), "%s", src);
     }
 
-    CodePanelWrapIter wrap_it;
+    CodeWrapIter wrap_it;
     int wrap_row = 0;
     int wrap_start, wrap_len, wrap_x;
     repl_code_panel_document_wrap_iter_init(&wrap_it, display_text,

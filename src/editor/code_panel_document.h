@@ -54,20 +54,20 @@ typedef struct {
  * indentation. panel_w is pixel width; first_x is the x-coordinate offset for
  * indentation (based on command depth). Returns a CodePanelTextLayout ready for
  * wrapping queries. */
-CodePanelTextLayout repl_code_panel_document_text_layout(int panel_w,
+CodeLayout repl_code_panel_document_text_layout(int panel_w,
                                                          int first_x);
 
 /* Initialize a wrap iterator for document text (convenience wrapper that sets
  * up CodePanelWrapIter with document-appropriate layout). Used to walk wrapped
  * lines segment-by-segment for rendering. */
-void repl_code_panel_document_wrap_iter_init(CodePanelWrapIter *it,
+void repl_code_panel_document_wrap_iter_init(CodeWrapIter *it,
                                              const char *text,
                                              int first_x, int panel_w);
 
 /* Advance wrap iterator to next segment (convenience wrapper). Returns 1 if a
  * segment was yielded, 0 if at end. Used by the renderer to iterate wrapped
  * line segments. */
-int  repl_code_panel_document_wrap_iter_next(CodePanelWrapIter *it,
+int  repl_code_panel_document_wrap_iter_next(CodeWrapIter *it,
                                              int *out_start,
                                              int *out_len,
                                              int *out_x);

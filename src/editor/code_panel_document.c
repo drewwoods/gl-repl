@@ -20,32 +20,32 @@
 #define g_render_state_lines (repl_state_import_export().render_state_lines)
 #define g_cam_lines (repl_state_import_export().cam_lines)
 
-CodePanelTextLayout repl_code_panel_document_text_layout(int panel_w,
+CodeLayout repl_code_panel_document_text_layout(int panel_w,
                                                          int first_x) {
-    return repl_code_panel_layout_make(panel_w, first_x, FONT_W,
+    return code_layout_make(panel_w, first_x, FONT_W,
                                        glr_state_presentation().wrap_at_comma);
 }
 
-void repl_code_panel_document_wrap_iter_init(CodePanelWrapIter *it,
+void repl_code_panel_document_wrap_iter_init(CodeWrapIter *it,
                                              const char *text,
                                              int first_x, int panel_w) {
-    CodePanelTextLayout layout =
+    CodeLayout layout =
         repl_code_panel_document_text_layout(panel_w, first_x);
-    repl_code_panel_wrap_iter_init(it, text, &layout);
+    code_layout_wrap_iter_init(it, text, &layout);
 }
 
-int repl_code_panel_document_wrap_iter_next(CodePanelWrapIter *it,
+int repl_code_panel_document_wrap_iter_next(CodeWrapIter *it,
                                             int *out_start,
                                             int *out_len,
                                             int *out_x) {
-    return repl_code_panel_wrap_iter_next(it, out_start, out_len, out_x);
+    return code_layout_wrap_iter_next(it, out_start, out_len, out_x);
 }
 
 int repl_code_panel_document_row_count_for_text(const char *text,
                                                 int first_x, int panel_w) {
-    CodePanelTextLayout layout =
+    CodeLayout layout =
         repl_code_panel_document_text_layout(panel_w, first_x);
-    return repl_code_panel_row_count_for_text(text, &layout);
+    return code_layout_row_count_for_text(text, &layout);
 }
 
 int repl_code_panel_document_segment_for_row(const char *text,
@@ -54,9 +54,9 @@ int repl_code_panel_document_segment_for_row(const char *text,
                                              int *out_start,
                                              int *out_len,
                                              int *out_x) {
-    CodePanelTextLayout layout =
+    CodeLayout layout =
         repl_code_panel_document_text_layout(panel_w, first_x);
-    return repl_code_panel_segment_for_row(text, &layout, want_row,
+    return code_layout_segment_for_row(text, &layout, want_row,
                                            out_start, out_len, out_x);
 }
 
@@ -66,9 +66,9 @@ int repl_code_panel_document_cursor_row_for_text(const char *text,
                                                  int *out_seg_start,
                                                  int *out_seg_len,
                                                  int *out_seg_x) {
-    CodePanelTextLayout layout =
+    CodeLayout layout =
         repl_code_panel_document_text_layout(panel_w, first_x);
-    return repl_code_panel_cursor_row_for_text(text, &layout, cursor_pos,
+    return code_layout_cursor_row_for_text(text, &layout, cursor_pos,
                                                out_seg_start, out_seg_len,
                                                out_seg_x);
 }

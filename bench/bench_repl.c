@@ -45,9 +45,7 @@
 #include "repl_parser.h"
 #include "replay.h"
 #include "replay_state.h"
-#include "scene/render.h"
-#include "scene/render_types.h"
-#include "repl_state.h"
+#include "glr_ctrl.h"
 
 #include <stdio.h>
 #include <stdlib.h>
