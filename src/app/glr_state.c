@@ -16,12 +16,12 @@
  * `glr_camera`; the `auto_rotate` reset moved to the camera bridge's
  * `apply` callback (driven via the bridge during scene-cfg restore).
  */
-#include "glr_state.h"
+#include "app/glr_state.h"
 
 #include <string.h>
 
 #include "config.h"          /* MAX_PREDEF_VARS, etc. (transitively) */
-#include "glr_defaults.h"    /* CFG_DEFAULT_* */
+#include "app/glr_defaults.h"    /* CFG_DEFAULT_* */
 #include "scene/themes.h"    /* GRID_MAJOR_*, GRID_EXTENT_*, GridTheme defaults */
 #include "ui/layout.h"       /* CODE_PANEL_LAYOUT_* */
 

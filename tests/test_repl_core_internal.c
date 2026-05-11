@@ -1,7 +1,7 @@
 #include "editor/state.h"
-#include "glr_state.h"
-#include "glr_ctrl.h"
-#include "glr_camera.h"
+#include "app/glr_state.h"
+#include "app/glr_ctrl.h"
+#include "app/glr_camera.h"
 #include "repl/core_internal.h"
 #include "repl/command_store.h"
 #include "repl/executor.h"
@@ -10,7 +10,7 @@
 #include "repl/core.h"
 #include "ui/state.h"
 #include "ui/layout.h"           /* CODE_PANEL_LAYOUT_* */
-#include "glr_defaults.h"   /* CFG_DEFAULT_* */
+#include "app/glr_defaults.h"   /* CFG_DEFAULT_* */
 #include "support/test_harness.h"
 #include "scene/render.h"
 

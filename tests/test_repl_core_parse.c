@@ -1,4 +1,4 @@
-#include "glr_ctrl.h"
+#include "app/glr_ctrl.h"
 #include "repl/core_internal.h"
 #include "repl/parser.h"
 #include "repl/state.h"

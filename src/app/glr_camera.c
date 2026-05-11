@@ -11,8 +11,8 @@
  * consumers) is updated by callers in glr_ctrl, not by this module,
  * so glr_camera stays free of UI dependencies.
  */
-#include "glr_camera.h"
-#include "glr_defaults.h"  /* CFG_DEFAULT_CAMERA_ROTATE */
+#include "app/glr_camera.h"
+#include "app/glr_defaults.h"  /* CFG_DEFAULT_CAMERA_ROTATE */
 
 #include <gl_includes.h>      /* GLUT_*BUTTON constants */
 #include <math.h>

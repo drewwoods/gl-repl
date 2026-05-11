@@ -1,7 +1,7 @@
-#include "glr_config.h"
+#include "app/glr_config.h"
 #include "audio.h"
-#include "glr_camera.h"
-#include "glr_state.h"           /* presentation + render storage (step 7a) */
+#include "app/glr_camera.h"
+#include "app/glr_state.h"           /* presentation + render storage (step 7a) */
 #include "repl/state_owners.h"
 #include "ui/state_types.h"
 

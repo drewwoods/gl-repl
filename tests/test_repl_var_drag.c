@@ -1,4 +1,4 @@
-#include "glr_ctrl.h"
+#include "app/glr_ctrl.h"
 #include "widgets/variable_panel_drag.h"
 #include "widgets/variable_panel_state.h"
 #include "repl/state.h"

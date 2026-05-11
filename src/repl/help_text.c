@@ -8,7 +8,7 @@
  */
 #include "repl/help_text.h"
 #include "repl/command_spec.h"   /* MAX_FUNC_HINT_PARAMS */
-#include "glr_config.h"
+#include "app/glr_config.h"
 #include "repl/eval.h"           /* REPL_SCRATCH_ARRAY_LEN */
 
 #include <stdarg.h>

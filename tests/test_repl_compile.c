@@ -1,4 +1,4 @@
-#include "glr_ctrl.h"
+#include "app/glr_ctrl.h"
 /*
  * test_src/repl/compile.c - Phase C invariant tests.
  *

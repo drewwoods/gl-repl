@@ -1,6 +1,6 @@
-#include "glr_ctrl.h"
-#include "glr_actions.h"
-#include "glr_debug.h"
+#include "app/glr_ctrl.h"
+#include "app/glr_actions.h"
+#include "app/glr_debug.h"
 #include "repl/executor.h"
 #include "audio.h"
 

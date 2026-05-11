@@ -1,4 +1,4 @@
-#include "glr_ctrl.h"
+#include "app/glr_ctrl.h"
 /*
  * test_repl_export_all_commands.c - Comprehensive roundtrip test for all supported GL commands
  *

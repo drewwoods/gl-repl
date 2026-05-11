@@ -1,6 +1,6 @@
 #include "editor/state.h"
-#include "glr_state.h"
-#include "glr_ctrl.h"
+#include "app/glr_state.h"
+#include "app/glr_ctrl.h"
 #include "ui/gl_2d.h"
 #include "editor/input.h"
 #include <stdio.h>

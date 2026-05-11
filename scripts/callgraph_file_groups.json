@@ -5,7 +5,7 @@
       "label": "1. REPL command pipeline",
       "files": [
         "src/repl/core.c",
-        "glr_ctrl.c",
+        "src/app/glr_ctrl.c",
         "src/repl/command_spec.c",
         "src/repl/parser.c",
         "src/repl/source_scope.c",
@@ -34,16 +34,16 @@
         "src/editor/inline_rename.c",
         "src/widgets/variable_panel_drag.c",
         "src/widgets/color_picker_state.c",
-        "glr_actions.c",
-        "glr_camera.c"
+        "src/app/glr_actions.c",
+        "src/app/glr_camera.c"
       ]
     },
     {
       "id": "repl_domain_models",
       "label": "3. REPL domain models",
       "files": [
-        "glr_config.c",
-        "glr_debug.c",
+        "src/app/glr_config.c",
+        "src/app/glr_debug.c",
         "src/repl/state.c",
         "src/repl/scenes.c",
         "src/repl/example_loader.c",

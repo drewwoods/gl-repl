@@ -6,15 +6,15 @@
  * cycling, F-key/Ctrl-key config shortcuts, startup config defaults, and menu
  * item actions that touch scenes, files, replay, audio, or presentation state.
  */
-#include "glr_actions.h"
-#include "glr_ctrl.h"            /* glr_ctrl_sync_ui_chrome */
-#include "glr_state.h"           /* presentation/render storage (step 7a) */
+#include "app/glr_actions.h"
+#include "app/glr_ctrl.h"            /* glr_ctrl_sync_ui_chrome */
+#include "app/glr_state.h"           /* presentation/render storage (step 7a) */
 #include "ui/layout.h"           /* CODE_PANEL_LAYOUT_* enum values */
 #include "widgets/color_picker_state.h"
 #include "audio.h"
 #include "repl/core.h"
 #include "repl/core_internal.h"
-#include "glr_config.h"
+#include "app/glr_config.h"
 #include "editor/input.h"
 #include "editor/completion.h"
 #include "keys.h"

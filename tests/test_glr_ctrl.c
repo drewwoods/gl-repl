@@ -1,7 +1,7 @@
 #include "editor/state.h"
-#include "glr_camera.h"
-#include "glr_state.h"
-#include "glr_ctrl.h"
+#include "app/glr_camera.h"
+#include "app/glr_state.h"
+#include "app/glr_ctrl.h"
 #include <stdio.h>
 #include <string.h>
 #include "editor/undo.h"
@@ -36,7 +36,7 @@ static TestHarness g_harness = TEST_HARNESS_INIT;
 #define ui_tabbed_overlay_render           test_ui_tabbed_overlay_render
 #define ui_profile_panel_render            test_ui_profile_panel_render
 
-#include "glr_ctrl.c"
+#include "app/glr_ctrl.c"
 
 #undef scene_render_3d_scene
 #undef scene_apply_camera

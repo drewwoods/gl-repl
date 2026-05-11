@@ -172,7 +172,7 @@ to make the layer boundaries observable:
   REPL pipeline (parse → command store → flatten → execute) from
   static text. Proves the REPL pipeline has no hard dependency on
   editor input dispatch (`src/editor/input.c`), the controller
-  (`glr_ctrl.c`), or the UI (`src/ui/`, `src/ui/replay_hud.c`). Per-line
+  (`src/app/glr_ctrl.c`), or the UI (`src/ui/`, `src/ui/replay_hud.c`). Per-line
   text canonically lives on `src/editor/state.c`'s `ReplEditorBuffer`,
   so that one editor TU is in the link set by design. The
   `tools/repl_demo/stubs.c` file is the visible record of what the
@@ -227,7 +227,7 @@ gets a `glr_audio` rename is part of the open namespace audit.
 ## Intended Frame Shape
 
 ```text
-sample.c (future glr_ctrl.c) GLUT callback
+sample.c (future src/app/glr_ctrl.c) GLUT callback
   -> glr_ctrl_* callback wrapper                  (routing role)
   -> UI hit-test:  ui_panels_hit_test(mx, my, variable_count) -> UiHit
   -> glr_ctrl dispatches on UiHit.kind to the OWNING subsystem:
@@ -381,11 +381,11 @@ never read `ReplState`, `EditorState`, or `UiState` directly.
 | `src/scene/axes` | Axis rendering and axis themes |
 | `src/scene/backdrop` | Backdrop/environment rendering |
 | `src/scene/lights` | Baseline lighting and light indicators |
-| `src/scene/overlays` | Tiny per-vertex GL primitives (vertex-number labels, normal arrows). REPL-walking overlays moved out to `glr_ctrl.c`. |
+| `src/scene/overlays` | Tiny per-vertex GL primitives (vertex-number labels, normal arrows). REPL-walking overlays moved out to `src/app/glr_ctrl.c`. |
 | `geometry_guides` | Vertex/primitive guide rendering from snapshots. Lives at root (REPL-aware: knows about cursor input) |
 | `transform_guides` | Transform-guide rendering from snapshots. Lives at root (REPL-aware) |
 | `glr_camera` | Camera/view transform helpers — orbit/pan/zoom drag state machine. `glr_ctrl_router_handle_camera_mouse` drives input; scene consumes final camera state through `SceneRenderConfig`. (Future `scene_camera_controls` move is still possible if the scene/viewport split lands.) |
-| `transform_utils` | Small GL matrix helpers used by `glr_ctrl.c` and `transform_guides.c` (root: no `src/scene/*.c` consumes it) |
+| `transform_utils` | Small GL matrix helpers used by `src/app/glr_ctrl.c` and `transform_guides.c` (root: no `src/scene/*.c` consumes it) |
 | `guides_shared` | Shared guide snapshot/planning types for REPL-aware 3D overlays (root, paired with the guides modules) |
 
 Scene code renders. It does not parse, edit, save, or dispatch UI actions.
@@ -483,7 +483,7 @@ flowchart LR
     sample["sample.c<br/>GLUT callback wiring · buffer swap"]
 
     subgraph app["0. App router"]
-        ctrl["glr_ctrl.c<br/>raw input router · frame/snapshot coordinator<br/>non-editor router helpers · timer tick<br/>does NOT drive editor behavior"]
+        ctrl["src/app/glr_ctrl.c<br/>raw input router · frame/snapshot coordinator<br/>non-editor router helpers · timer tick<br/>does NOT drive editor behavior"]
     end
 
     subgraph repl_pipeline["1. REPL compiler/program pipeline"]
@@ -513,7 +513,7 @@ flowchart LR
         vpanel["src/widgets/variable_panel_state.c + src/widgets/variable_panel_drag.c<br/>(was repl_var_drag)<br/>visibility + drag transaction"]
         replay_sys["src/widgets/replay.c + src/widgets/replay_state.c<br/>(was repl_replay)<br/>state machine · fades"]
         cpicker["src/widgets/color_picker_state.c<br/>(was inside ui_color_picker)<br/>HSV/alpha state · lifecycle · writeback"]
-        camera["glr_camera.c<br/>orbit/pan/zoom transform"]
+        camera["src/app/glr_camera.c<br/>orbit/pan/zoom transform"]
     end
 
     subgraph models["3. REPL domain models"]
@@ -700,7 +700,7 @@ Allowed:
 scene_*.c
 ui_*.c render paths
 src/repl/executor.c
-sample.c        future glr_ctrl.c
+sample.c        future src/app/glr_ctrl.c
 ```
 
 Parser/spec/export/example modules may emit GL command names as text.
@@ -839,7 +839,7 @@ side-effect routing. As of that branch landing:
   the press / click / drag / release / scene-press / motion / mouse-
   release / escape forwarders are deleted. Hard-guarded by
   `check-ui-panels-no-mutators`. Drag-anchor state moved into
-  `glr_ctrl.c`; `route_menu_button_hit` / `route_menu_item_hit`
+  `src/app/glr_ctrl.c`; `route_menu_button_hit` / `route_menu_item_hit`
   use `UI_HIT_MENU_BUTTON` vs `UI_HIT_MENU_ITEM` to disambiguate
   top-level button clicks from open-dropdown row clicks via the
   payload's `cmd_idx` / `item_idx` rather than reading menu state
@@ -847,7 +847,7 @@ side-effect routing. As of that branch landing:
 - **Input dispatch boundary: closed (Phase J1).** `repl_editor.{c,h}`
   is deleted. All keyboard, special-key, mouse, motion, and
   mousewheel dispatch migrated into `src/editor/input.c` (editor-text
-  concerns only) and `glr_ctrl.c` (non-editor routing via
+  concerns only) and `src/app/glr_ctrl.c` (non-editor routing via
   `glr_ctrl_router_*` helpers: replay, audio, config, save,
   camera, variable panel, scene press, scroll-wheel zoom). Timer
   dispatch inlined into `glr_ctrl_timer` / `glr_ctrl_tick`.
@@ -893,7 +893,7 @@ side-effect routing. As of that branch landing:
   state reads / mutations / parser / commit) and
   `check-replay-ui-isolation` (Phase J3.1, the feature-UI prefix
   discipline). `check-output-actualization` actively scans
-  `UiCodePanelOutput` and verifies `glr_ctrl.c` reads every
+  `UiCodePanelOutput` and verifies `src/app/glr_ctrl.c` reads every
   field.
 - **Migration ratchets: all at 0/0.** `check-ui-returns-hits-only`,
   `check-no-set-status-in-repl-parser`, `check-replay-forwarders`,

@@ -1,7 +1,7 @@
 #include "editor/state.h"
-#include "glr_camera.h"
-#include "glr_state.h"
-#include "glr_ctrl.h"
+#include "app/glr_camera.h"
+#include "app/glr_state.h"
+#include "app/glr_ctrl.h"
 // For linux mkdtemp
 #define _DEFAULT_SOURCE
 
@@ -12,7 +12,7 @@
 #include "repl/core.h"
 #include "ui/state.h"
 #include "scene/render.h"
-#include "glr_defaults.h"   /* CFG_DEFAULT_* */
+#include "app/glr_defaults.h"   /* CFG_DEFAULT_* */
 
 #define g_accum_aa_enabled    (glr_state_render_mut()->accum_aa_enabled)
 #define g_multisample_enabled (glr_state_render_mut()->multisample_enabled)

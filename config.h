@@ -10,12 +10,12 @@
  * compile, apply, flatten, export) include this just for
  * REPL_STATUS_TEXT_MAX and shouldn't transitively pull in scene or
  * UI types. Defaults that REFERENCE scene/UI enums live in
- * `glr_defaults.h`; only callers of those defaults pay the include.
+ * `src/app/glr_defaults.h`; only callers of those defaults pay the include.
  *
  * NOTE: This file is for *compile-time* configuration. User-toggleable
  * runtime settings (wireframe / grid theme / etc.) live on
  * `repl_config.h` and the `g_cfg_items[]` descriptor table in
- * `glr_actions.c` — different concept, do not conflate.
+ * `src/app/glr_actions.c` — different concept, do not conflate.
  */
 #ifndef CONFIG_H
 #define CONFIG_H

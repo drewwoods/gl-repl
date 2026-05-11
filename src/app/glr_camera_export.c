@@ -20,7 +20,7 @@
  * form so existing saved files keep working.
  */
 #include "repl/export.h"
-#include "glr_camera.h"
+#include "app/glr_camera.h"
 
 #include <stdio.h>
 #include <string.h>
