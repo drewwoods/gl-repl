@@ -22,6 +22,8 @@
 #include "editor/input.h"
 #include "glr_ctrl.h"
 #include "keys.h"
+#include "repl/core.h"
+#include "repl/state_owners.h"
 #include "support/test_harness.h"
 
 #include <stdio.h>
@@ -483,6 +485,38 @@ int main(void) {
         editor_handle_key(KEY_CTRL_V, 0, 0);
         ASSERT_STR("EMPTY paste leaves input untouched",
                    editor_input_text(), "unchanged");
+    }
+
+    printf("\n--- input-only cut/paste does NOT auto-promote example ---\n");
+    {
+        /* Loaded example + first source-mutating edit normally promotes
+         * the example into a fresh user-scene slot via
+         * repl_promote_example_if_needed inside editor_undo_push_snapshot.
+         * Partial-line cut/paste must not trigger that hook: it edits
+         * only the input buffer, never a source command, and the undo
+         * model can't restore the input anyway. Regression for the
+         * Phase D review finding. */
+        glr_app_reset_all();
+        repl_load_example(0);
+        ReplSceneRuntimeState scenes = repl_state_scenes();
+        int example_before = scenes.active_example_idx;
+        ASSERT_TRUE("example is active before edit", example_before >= 0);
+
+        editor_input_set_text("foo bar baz");
+        editor_cursor_pos_set(4);
+        editor_input_anchor_set(7);     /* selects "bar" */
+        editor_handle_key(KEY_CTRL_X, 0, 0);
+        scenes = repl_state_scenes();
+        ASSERT_INT("Ctrl+X (input-only) leaves example active",
+                   scenes.active_example_idx, example_before);
+
+        /* And the paste path. */
+        editor_input_set_text("destination");
+        editor_cursor_pos_set(0);
+        editor_handle_key(KEY_CTRL_V, 0, 0);
+        scenes = repl_state_scenes();
+        ASSERT_INT("Ctrl+V (input-only) leaves example active",
+                   scenes.active_example_idx, example_before);
     }
 
     printf("\n--- Ctrl+V (LINES) routes through line paste, not input ---\n");

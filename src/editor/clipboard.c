@@ -158,7 +158,16 @@ static int editor_clipboard_copy_input_selection(void) {
 /* Cut: copy step then delete the range via the shared
  * editor_input_consume_selection helper. Works in any mode because the
  * mutation lives on the active input buffer, not on source commands —
- * the line-range insert-mode guard doesn't apply. */
+ * the line-range insert-mode guard doesn't apply.
+ *
+ * Intentionally does NOT push an undo snapshot. ReplUndoSnapshot does
+ * not capture the input buffer (restore reloads input via
+ * load_line_to_input from the committed source line), so a push here
+ * cannot rewind the cut — it would only have the side effect of
+ * tripping the example auto-promotion hook in
+ * editor_undo_push_snapshot. This matches typed-char and backspace,
+ * which never push undo either; the undo history is reserved for
+ * source-command mutations. */
 static int editor_clipboard_cut_input_selection(void) {
     if (!editor_input_selection_active())
         return 0;
@@ -167,7 +176,6 @@ static int editor_clipboard_cut_input_selection(void) {
     int len = hi - lo;
     if (len <= 0)
         return 0;
-    editor_undo_push_snapshot();
     editor_clipboard_set_input_text(editor_input_text() + lo, len);
     (void)editor_input_consume_selection();
     editor_completion_update();
@@ -182,11 +190,15 @@ static int editor_clipboard_cut_input_selection(void) {
 
 /* Paste of an INPUT_TEXT clipboard. If a destination input selection
  * is active, consume it first via the same Phase C primitive so paste
- * replaces the selected range instead of inserting beside it. */
+ * replaces the selected range instead of inserting beside it.
+ *
+ * No undo push here — same reasoning as cut above: the undo snapshot
+ * doesn't capture input bytes, so it cannot rewind the paste, and
+ * pushing would falsely auto-promote a loaded example before any
+ * source command is touched. */
 static int editor_clipboard_paste_input_text(void) {
     if (!editor_clipboard_has_input_text())
         return 0;
-    editor_undo_push_snapshot();
     (void)editor_input_consume_selection();
 
     int cur = editor_cursor_pos();

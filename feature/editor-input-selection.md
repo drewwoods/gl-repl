@@ -284,19 +284,29 @@ Wire the public routes:
    - Otherwise, run the existing line-range / current-line copy path.
 2. `editor_clipboard_cut_current()`:
    - First, if `editor_input_selection_active()`, copy the substring,
-     delete it from `input[]`, push one undo snapshot, set status like
-     `"Cut %d chars"`, and return. This path must work in insert mode;
-     the existing line-range cut remains disabled in insert mode.
+     delete it from `input[]`, set status like `"Cut %d chars"`, and
+     return. This path must work in insert mode; the existing
+     line-range cut remains disabled in insert mode.
    - Otherwise, run the existing line-range / current-line cut path.
 3. `editor_clipboard_paste_current()`:
    - First, if `clipboard.kind == EDITOR_CLIPBOARD_INPUT_TEXT`, insert
      text into the input buffer. As the pre-step, call Phase C's
      `input_consume_selection()` so paste onto an active destination
      selection replaces that range instead of inserting beside it.
-     Push one undo snapshot for the edit-buffer mutation.
    - If `clipboard.kind == EDITOR_CLIPBOARD_EMPTY`, keep the existing
      empty-paste behavior and status (`"Clipboard empty"`).
    - Otherwise, run the existing whole-line paste path.
+
+Input-only cut and paste deliberately do not push undo snapshots.
+`ReplUndoSnapshot` does not capture input-buffer bytes — restore
+reloads input via `load_line_to_input(repl_state_edit_line())` from
+the committed source line — so a push cannot rewind the edit. The
+push would only have the side effect of tripping
+`repl_promote_example_if_needed()` inside `editor_undo_push_snapshot`,
+which would falsely promote a loaded example before any source
+command actually changed. This matches typed-char insertion and
+backspace/delete, which have never pushed undo either; the undo
+history is reserved for source-command mutations.
 
 This gives predictable priority:
 
