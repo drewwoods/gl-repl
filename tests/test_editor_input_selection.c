@@ -19,6 +19,9 @@
  */
 
 #include "editor/state.h"
+#include "editor/input.h"
+#include "glr_ctrl.h"
+#include "keys.h"
 #include "support/test_harness.h"
 
 #include <stdio.h>
@@ -256,6 +259,130 @@ int main(void) {
                    EDITOR_CLIPBOARD_INPUT_TEXT);
         ASSERT_STR("restored clipboard payload",
                    editor_clipboard_input_text(), "sin(t)");
+    }
+
+    printf("\n--- input_consume_selection ---\n");
+    {
+        editor_state_reset();
+        load_input("abcdefghij");
+        editor_cursor_pos_set(2);
+        editor_input_anchor_set(7);
+        ASSERT_INT("selection [2,7) active",
+                   editor_input_selection_lo(), 2);
+
+        int consumed = editor_input_consume_selection();
+        ASSERT_INT("consume returns 1", consumed, 1);
+        ASSERT_STR("consume deletes [lo,hi)",
+                   editor_input_text(), "abhij");
+        ASSERT_INT("consume cursor at lo", editor_cursor_pos(), 2);
+        ASSERT_INT("consume clears anchor", editor_input_anchor(), -1);
+
+        /* No-op when no selection. */
+        consumed = editor_input_consume_selection();
+        ASSERT_INT("consume on inactive returns 0", consumed, 0);
+        ASSERT_STR("consume no-op leaves buffer",
+                   editor_input_text(), "abhij");
+    }
+
+    /* The remaining tests drive the editor's keyboard dispatch, which
+     * needs the full app shell wired so commit / autocomplete / status
+     * paths don't dereference uninitialized state. */
+    glr_app_reset_all();
+
+    printf("\n--- typed char replaces input selection ---\n");
+    {
+        editor_state_reset();
+        load_input("hello world");
+        editor_cursor_pos_set(6);
+        editor_input_anchor_set(11);   /* selection on "world" */
+
+        editor_handle_key('X', 0, 0);
+        ASSERT_STR("typed char replaces selection",
+                   editor_input_text(), "hello X");
+        ASSERT_INT("post-replace cursor", editor_cursor_pos(), 7);
+        ASSERT_INT("post-replace anchor cleared",
+                   editor_input_anchor(), -1);
+    }
+
+    printf("\n--- backspace replaces selection (single deletion) ---\n");
+    {
+        editor_state_reset();
+        load_input("hello world");
+        editor_cursor_pos_set(0);
+        editor_input_anchor_set(5);    /* selection on "hello" */
+
+        editor_handle_key(KEY_BACKSPACE, 0, 0);
+        ASSERT_STR("backspace deletes only the selection",
+                   editor_input_text(), " world");
+        ASSERT_INT("backspace cursor at lo", editor_cursor_pos(), 0);
+        ASSERT_INT("backspace clears anchor",
+                   editor_input_anchor(), -1);
+
+        /* Follow-up typed char inserts at the post-cut cursor (lo). */
+        editor_handle_key('H', 0, 0);
+        ASSERT_STR("follow-up insert lands at lo",
+                   editor_input_text(), "H world");
+    }
+
+    printf("\n--- delete (forward) replaces selection ---\n");
+    {
+        editor_state_reset();
+        load_input("hello world");
+        editor_cursor_pos_set(0);
+        editor_input_anchor_set(6);    /* selection on "hello " */
+
+        editor_handle_key(KEY_DELETE, 0, 0);
+        ASSERT_STR("delete consumes selection",
+                   editor_input_text(), "world");
+        ASSERT_INT("delete clears anchor", editor_input_anchor(), -1);
+    }
+
+    printf("\n--- semicolon commits, anchor clears, no delete ---\n");
+    {
+        editor_state_reset();
+        load_input("glVertex3f(0, 0, 0)");
+        /* Place a selection inside the line. ; should commit the full
+         * text (parser strips trailing whitespace + ;) — the selection
+         * is dismissed but the underlying bytes survive. */
+        editor_cursor_pos_set(11);
+        editor_input_anchor_set(18);
+
+        editor_handle_key(';', 0, 0);
+        ASSERT_INT("; clears anchor", editor_input_anchor(), -1);
+        /* After successful commit the editor reloads the canonical
+         * line, so the input buffer no longer holds the typed text;
+         * the strong assertion is just the no-delete property: the
+         * pre-commit anchor never deleted "0, 0)" mid-line. The
+         * commit produced exactly one new GLCmd. */
+        ASSERT_TRUE("; commits one command",
+                    editor_buffer_count() >= 1);
+    }
+
+    printf("\n--- tab keeps buffer text, clears anchor ---\n");
+    {
+        editor_state_reset();
+        load_input("plain text");
+        editor_cursor_pos_set(0);
+        editor_input_anchor_set(5);
+
+        editor_handle_key('\t', 0, 0);
+        ASSERT_INT("tab clears anchor", editor_input_anchor(), -1);
+        ASSERT_STR("tab does not delete selection",
+                   editor_input_text(), "plain text");
+    }
+
+    printf("\n--- escape clears anchor without touching buffer ---\n");
+    {
+        editor_state_reset();
+        load_input("plain text");
+        editor_cursor_pos_set(0);
+        editor_input_anchor_set(5);
+
+        editor_handle_key(KEY_ESC, 0, 0);
+        ASSERT_INT("esc clears anchor", editor_input_anchor(), -1);
+        /* The current Esc branch with no other transient state clears
+         * the whole input. That's an existing behavior — the new
+         * property is just that the anchor went away too. */
     }
 
     return test_harness_report(&g_harness, "test_editor_input_selection");

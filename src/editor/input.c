@@ -870,6 +870,11 @@ static int handle_search_key_route(unsigned char key) {
 
 static int handle_escape_key_route(unsigned char key) {
     if (key == KEY_ESC) {
+        /* Escape drops transient state. The input-selection anchor is
+         * one such state — clear it alongside whatever specific branch
+         * fires below, so Esc is the universal "dismiss" key for both
+         * visible selection bands and the other overlays. */
+        editor_input_anchor_clear();
         if (color_picker_close()) {
             editor_request_redraw();
             return 1;
@@ -1043,6 +1048,15 @@ static int handle_comment_toggle_key_route(unsigned char key) {
 
 static int handle_text_delete_key_route(unsigned char key) {
     if (key == KEY_BACKSPACE || key == KEY_DELETE) {
+        /* Input-buffer selection wins over the line-range selection.
+         * Editing the input row is the more local concern and matches
+         * standard editor behavior. Works in insert mode too — the
+         * line-range guard below only matters when no input selection
+         * is active. */
+        if (editor_input_consume_selection()) {
+            editor_completion_update();
+            return 1;
+        }
         if (editor_clipboard_sel_active() && !editor_insert_mode()) {
             int start = editor_clipboard_sel_lo();
             int hi = editor_clipboard_sel_hi();
@@ -1069,6 +1083,12 @@ static int handle_text_delete_key_route(unsigned char key) {
 
 static int handle_tab_key_route(unsigned char key) {
     if (key == '\t') {
+        /* Tab/Enter/; clear the input-selection anchor without
+         * deleting: the commit/accept behavior runs on the buffer as
+         * it stands. Selecting "foo" inside `bar foo;` and pressing
+         * `;` should commit `bar foo;`, not delete the selection
+         * first. */
+        editor_input_anchor_clear();
         if (editor_state_autocomplete().match_count > 0) {
             accept_autocomplete();
             editor_completion_update();
@@ -1080,6 +1100,7 @@ static int handle_tab_key_route(unsigned char key) {
 
 static int handle_enter_key_route(unsigned char key) {
     if (key == '\r' || key == '\n') {
+        editor_input_anchor_clear();
         if (editor_state_autocomplete().match_count > 0) {
             accept_autocomplete();
             editor_completion_update();
@@ -1096,6 +1117,7 @@ static int handle_enter_key_route(unsigned char key) {
 
 static int handle_semicolon_commit_key_route(unsigned char key) {
     if (key == ';') {
+        editor_input_anchor_clear();
         if (editor_state_input().input_len > 0) {
             editor_undo_push_snapshot();
             if (try_commit_any()) {
@@ -1180,10 +1202,40 @@ static int handle_semicolon_commit_key_route(unsigned char key) {
     return 0;
 }
 
+int editor_input_consume_selection(void) {
+    if (!editor_input_selection_active())
+        return 0;
+
+    int lo = editor_input_selection_lo();
+    int hi = editor_input_selection_hi();
+    ReplEditorInputState *inp = editor_state_input_mut();
+    int len = inp->input_len;
+
+    if (lo < 0 || hi <= lo || hi > len) {
+        /* Defensive: derived view inconsistent with buffer length.
+         * Drop the anchor and bail rather than scribbling on input[]. */
+        editor_input_anchor_clear();
+        return 0;
+    }
+
+    int tail = len - hi;
+    memmove(&inp->input[lo], &inp->input[hi], (size_t)tail);
+    inp->input_len = len - (hi - lo);
+    inp->input[inp->input_len] = '\0';
+    /* Default cursor-set clears the anchor as a side effect. */
+    editor_cursor_pos_set(lo);
+    return 1;
+}
+
 static int handle_printable_input_key_route(unsigned char key) {
+    if (!(key >= 32 && key < 127))
+        return 0;
+    /* Replace any active input selection with the typed char: the
+     * insert proceeds on the post-consume buffer. */
+    (void)editor_input_consume_selection();
     int cur = editor_cursor_pos();
     ReplEditorInputState *inp = editor_state_input_mut();
-    if (key >= 32 && key < 127 && inp->input_len < MAX_INPUT_LEN - 2) {
+    if (inp->input_len < MAX_INPUT_LEN - 2) {
         memmove(&inp->input[cur + 1], &inp->input[cur],
                 (size_t)(inp->input_len - cur + 1));
         inp->input[cur] = (char)key;
