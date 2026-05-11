@@ -9,6 +9,7 @@
     {                                                 \
         .input = {                                    \
             .input_capacity = MAX_INPUT_LEN,          \
+            .anchor_pos = -1,                         \
             .pending_newline_capacity = MAX_INPUT_LEN,\
         },                                            \
         .selection = {                                \
@@ -16,7 +17,9 @@
             .end_idx = -1,                            \
         },                                            \
         .clipboard = {                                \
+            .kind = EDITOR_CLIPBOARD_EMPTY,           \
             .line_count = 0,                          \
+            .input_text_len = 0,                      \
         },                                            \
         .search = {                                   \
             .active = 0,                              \
@@ -267,6 +270,7 @@ ReplEditorInputView editor_state_input(void) {
         .input_capacity = MAX_INPUT_LEN,
         .input_len = in->input_len,
         .cursor_pos = in->cursor_pos,
+        .anchor_pos = in->anchor_pos,
         .edit_line_idx = repl_state_edit_line(),
         .pending_newline = in->pending_newline,
         .pending_newline_capacity = MAX_INPUT_LEN,
@@ -304,6 +308,10 @@ void editor_input_len_set(int input_len) {
         input_len = MAX_INPUT_LEN - 1;
     g_editor_state.input.input_len = input_len;
     g_editor_state.input.input[input_len] = '\0';
+    /* Invariant: anchor_pos in [0, input_len]; clear when buffer
+     * shrinks past it. */
+    if (g_editor_state.input.anchor_pos > input_len)
+        g_editor_state.input.anchor_pos = -1;
     editor_cursor_pos_set(g_editor_state.input.cursor_pos);
 }
 
@@ -318,6 +326,7 @@ void editor_input_clear(void) {
     g_editor_state.input.input[0] = '\0';
     g_editor_state.input.input_len = 0;
     g_editor_state.input.cursor_pos = 0;
+    g_editor_state.input.anchor_pos = -1;
 }
 
 int editor_cursor_pos(void) {
@@ -330,6 +339,48 @@ void editor_cursor_pos_set(int cursor_pos) {
     if (cursor_pos > g_editor_state.input.input_len)
         cursor_pos = g_editor_state.input.input_len;
     g_editor_state.input.cursor_pos = cursor_pos;
+}
+
+int editor_input_anchor(void) {
+    return g_editor_state.input.anchor_pos;
+}
+
+void editor_input_anchor_set(int pos) {
+    if (pos < 0) {
+        g_editor_state.input.anchor_pos = -1;
+        return;
+    }
+    if (pos > g_editor_state.input.input_len)
+        pos = g_editor_state.input.input_len;
+    /* Empty selection collapses immediately: keep "has selection" a
+     * single test (anchor_pos >= 0) rather than two. */
+    if (pos == g_editor_state.input.cursor_pos) {
+        g_editor_state.input.anchor_pos = -1;
+        return;
+    }
+    g_editor_state.input.anchor_pos = pos;
+}
+
+void editor_input_anchor_clear(void) {
+    g_editor_state.input.anchor_pos = -1;
+}
+
+int editor_input_selection_active(void) {
+    return g_editor_state.input.anchor_pos >= 0;
+}
+
+int editor_input_selection_lo(void) {
+    int a = g_editor_state.input.anchor_pos;
+    int c = g_editor_state.input.cursor_pos;
+    if (a < 0) return -1;
+    return a < c ? a : c;
+}
+
+int editor_input_selection_hi(void) {
+    int a = g_editor_state.input.anchor_pos;
+    int c = g_editor_state.input.cursor_pos;
+    if (a < 0) return -1;
+    return a > c ? a : c;
 }
 
 int editor_insert_mode(void) {
@@ -404,7 +455,10 @@ ReplClipboardState *editor_state_clipboard_mut(void) {
 }
 
 void editor_state_clipboard_clear(void) {
+    g_editor_state.clipboard.kind = EDITOR_CLIPBOARD_EMPTY;
     g_editor_state.clipboard.line_count = 0;
+    g_editor_state.clipboard.input_text_len = 0;
+    g_editor_state.clipboard.input_text[0] = '\0';
 }
 
 int editor_state_clipboard_count(void) {
@@ -417,6 +471,46 @@ void editor_state_clipboard_count_set(int line_count) {
     if (line_count > MAX_COMMANDS)
         line_count = MAX_COMMANDS;
     g_editor_state.clipboard.line_count = line_count;
+    if (line_count > 0) {
+        g_editor_state.clipboard.kind = EDITOR_CLIPBOARD_LINES;
+        /* Lines and input-text payloads are mutually exclusive. */
+        g_editor_state.clipboard.input_text_len = 0;
+        g_editor_state.clipboard.input_text[0] = '\0';
+    } else {
+        g_editor_state.clipboard.kind = EDITOR_CLIPBOARD_EMPTY;
+    }
+}
+
+void editor_clipboard_set_input_text(const char *text, int len) {
+    ReplClipboardState *cb = &g_editor_state.clipboard;
+    if (!text || len <= 0) {
+        cb->input_text_len = 0;
+        cb->input_text[0] = '\0';
+        cb->kind = (cb->line_count > 0) ? EDITOR_CLIPBOARD_LINES
+                                        : EDITOR_CLIPBOARD_EMPTY;
+        return;
+    }
+    if (len >= MAX_INPUT_LEN)
+        len = MAX_INPUT_LEN - 1;
+    memcpy(cb->input_text, text, (size_t)len);
+    cb->input_text[len] = '\0';
+    cb->input_text_len = len;
+    cb->kind = EDITOR_CLIPBOARD_INPUT_TEXT;
+    /* Mutually exclusive with the line payload. */
+    cb->line_count = 0;
+}
+
+int editor_clipboard_has_input_text(void) {
+    return g_editor_state.clipboard.kind == EDITOR_CLIPBOARD_INPUT_TEXT
+        && g_editor_state.clipboard.input_text_len > 0;
+}
+
+const char *editor_clipboard_input_text(void) {
+    return g_editor_state.clipboard.input_text;
+}
+
+int editor_clipboard_input_text_len(void) {
+    return g_editor_state.clipboard.input_text_len;
 }
 
 ReplSearchState editor_state_search(void) {
