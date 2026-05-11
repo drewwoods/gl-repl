@@ -10,8 +10,9 @@
 > this contract directly.
 
 For per-module detail and frame-pipeline narrative read
-[`ARCHITECTURE.md`](ARCHITECTURE.md). For the staged cleanup plan see
-[`feature/push-architecture-refinement.md`](feature/push-architecture-refinement.md)
+[`ARCHITECTURE.md`](ARCHITECTURE.md). For the staged-cleanup history
+(both plans landed) see
+[`feature/done/push-architecture-refinement.md`](feature/done/push-architecture-refinement.md)
 and [`feature/done/editor-owns-text-completion.md`](feature/done/editor-owns-text-completion.md).
 
 ## Four-Role Ownership Contract

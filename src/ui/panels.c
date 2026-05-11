@@ -230,7 +230,7 @@ static void render_active_input_rows(const UiRenderSnapshot *snap,
              * of search), text glyphs last. The input selection wins
              * visually because it represents the most recent user
              * intent (see Open Question 5 in
-             * feature/editor-input-selection.md). The two bands are
+             * feature/done/editor-input-selection.md). The two bands are
              * both translucent so the loser still shows through; the
              * order just decides which dominates. */
             glColor3f(0.95f, 0.95f, 0.90f);

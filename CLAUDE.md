@@ -622,7 +622,7 @@ When an input-buffer (character-range) selection is active,
 line. `Ctrl+V` then inserts the substring at the cursor (replacing
 any active destination selection). With no input selection, the
 existing line-range clipboard path runs unchanged. See
-[`feature/editor-input-selection.md`](feature/editor-input-selection.md)
+[`feature/done/editor-input-selection.md`](feature/done/editor-input-selection.md)
 for the full model.
 
 ## Supported Commands

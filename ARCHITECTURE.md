@@ -1,13 +1,14 @@
 # REPL Architecture
 
-> For the quick module map, see [`MODULES.md`](MODULES.md). For the staged
-> controller extraction plan, see
-> [`feature/push-architecture-refinement.md`](feature/push-architecture-refinement.md).
+> For the quick module map, see [`MODULES.md`](MODULES.md). For the
+> staged controller-extraction history (now landed), see
+> [`feature/done/push-architecture-refinement.md`](feature/done/push-architecture-refinement.md).
 
 ## Direction
 
-This document follows the controller-first direction from
-`feature/push-architecture-refinement.md`.
+This document follows the controller-first direction originally laid
+out in `feature/done/push-architecture-refinement.md` (the plan
+shipped; the doc lives in `done/` as design history).
 
 The older "generic scene callback plus `ReplGeometryRenderPlan`" direction is
 superseded. This is a one-frontend REPL sample, so the useful boundary is
@@ -365,7 +366,7 @@ discriminator plus both a line array and an `input_text` slot) so
 `Ctrl+V` after a partial copy pastes characters and `Ctrl+V` after a
 line copy still pastes whole commands. Input selection wins over
 line-range for `Ctrl+C` / `Ctrl+X` priority. See
-[`feature/editor-input-selection.md`](feature/editor-input-selection.md)
+[`feature/done/editor-input-selection.md`](feature/done/editor-input-selection.md)
 for the full rules.
 
 Mutations route through `repl_actions`, `repl_command_store`,
@@ -389,7 +390,7 @@ take a snapshot pointer is the next layer of cleanup.
 Replay is REPL-owned. The scene may render the current visual effect, but it
 should not own replay policy.
 
-R1 target in `feature/push-architecture-refinement.md`:
+R1 target from `feature/done/push-architecture-refinement.md` (landed):
 
 * controller builds a `ReplayFadePlan` snapshot once per frame (batches,
   alpha, skip limits, baseline predef values)
