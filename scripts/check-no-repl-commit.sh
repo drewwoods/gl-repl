@@ -10,6 +10,7 @@
 # anywhere in the tree.
 
 set -euo pipefail
+cd "$(git rev-parse --show-toplevel)"
 
 violations=$(find . \
     -path './.claude' -prune -o \

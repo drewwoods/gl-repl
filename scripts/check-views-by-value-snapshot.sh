@@ -1,5 +1,6 @@
 #!/bin/bash
 set -euo pipefail
+cd "$(git rev-parse --show-toplevel)"
 
 baseline_file="${1:-scripts/baselines/by-value-snapshot-pointer-returns.txt}"
 

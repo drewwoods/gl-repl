@@ -34,6 +34,7 @@
 # action dispatch via imrepl_ctrl on UiHit.kind).
 
 set -euo pipefail
+cd "$(git rev-parse --show-toplevel)"
 
 baseline_file="${1:-scripts/baselines/ui-returns-hits-only.txt}"
 

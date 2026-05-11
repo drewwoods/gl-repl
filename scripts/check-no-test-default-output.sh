@@ -15,6 +15,7 @@
 # chdir redirect before invoking the save-key router.
 
 set -euo pipefail
+cd "$(git rev-parse --show-toplevel)"
 
 direct_hits=$(grep -RIn \
     --include='*.c' \

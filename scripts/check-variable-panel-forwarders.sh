@@ -24,6 +24,7 @@
 # lowering scripts/baselines/variable-panel-forwarders.txt.
 
 set -euo pipefail
+cd "$(git rev-parse --show-toplevel)"
 
 baseline_file="${1:-scripts/baselines/variable-panel-forwarders.txt}"
 

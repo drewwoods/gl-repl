@@ -1,6 +1,7 @@
 #!/bin/bash
 # Check for potentially unused public APIs in repl_*.h headers.
 # Prints function names that are declared but not called in any .c file.
+cd "$(git rev-parse --show-toplevel)"
 
 echo "Scanning for potentially unused public APIs..."
 

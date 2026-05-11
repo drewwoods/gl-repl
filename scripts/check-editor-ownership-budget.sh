@@ -28,6 +28,7 @@
 # silently regress past the new low).
 
 set -euo pipefail
+cd "$(git rev-parse --show-toplevel)"
 
 baseline_file="${1:-scripts/baselines/editor-ownership-budget.txt}"
 

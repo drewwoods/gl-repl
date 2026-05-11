@@ -27,6 +27,7 @@
 # shaped.
 
 set -euo pipefail
+cd "$(git rev-parse --show-toplevel)"
 
 violations=$(grep -RInE \
     --include='*.c' --include='*.h' \

@@ -9,6 +9,7 @@
 #        make audit-editor-ownership
 
 set -eu
+cd "$(git rev-parse --show-toplevel)"
 
 print_section() {
     printf '\n== %s ==\n' "$1"

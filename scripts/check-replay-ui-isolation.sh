@@ -32,6 +32,7 @@
 # UI metrics / gl2d / GL drawing.
 
 set -euo pipefail
+cd "$(git rev-parse --show-toplevel)"
 
 shopt -s nullglob
 

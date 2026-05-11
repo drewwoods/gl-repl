@@ -12,6 +12,7 @@
 # is intentional for Phase 0 — historical comments that still reference
 # editor_* APIs will need to be revisited as the migration completes.
 set -euo pipefail
+cd "$(git rev-parse --show-toplevel)"
 
 baseline_file="${1:-scripts/baselines/repl-no-direct-editor.txt}"
 

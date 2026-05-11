@@ -13,6 +13,7 @@
 #     repl_mousewheel_func / repl_timer_func   ← deleted entry points
 
 set -euo pipefail
+cd "$(git rev-parse --show-toplevel)"
 
 violations=$(grep -nE \
     '#include[[:space:]]+"repl_editor|repl_keyboard_func|repl_special_func|repl_mouse_func|repl_motion_func|repl_passive_motion_func|repl_mousewheel_func|repl_timer_func' \

@@ -1,5 +1,6 @@
 #!/bin/bash
 set -euo pipefail
+cd "$(git rev-parse --show-toplevel)"
 
 header="${1:-repl_state.h}"
 

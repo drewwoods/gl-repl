@@ -1,5 +1,6 @@
 #!/bin/bash
 set -euo pipefail
+cd "$(git rev-parse --show-toplevel)"
 
 baseline="${1:-scripts/baselines/views-flat-violations.txt}"
 

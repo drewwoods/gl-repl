@@ -20,6 +20,7 @@
 # encapsulation that hides the raw struct.
 
 set -euo pipefail
+cd "$(git rev-parse --show-toplevel)"
 
 baseline_file="${1:-scripts/baselines/replay-forwarders.txt}"
 

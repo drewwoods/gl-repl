@@ -18,6 +18,7 @@
 # test harness consume err_buf directly) and lower the baseline to 0.
 
 set -euo pipefail
+cd "$(git rev-parse --show-toplevel)"
 
 baseline_file="${1:-scripts/baselines/repl-parser-set-status.txt}"
 if [ ! -f "$baseline_file" ]; then

@@ -1,5 +1,6 @@
 #!/bin/bash
 set -euo pipefail
+cd "$(git rev-parse --show-toplevel)"
 
 allowlist="${1:-scripts/allowlists/facade-includes-in-views.txt}"
 

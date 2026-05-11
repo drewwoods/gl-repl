@@ -10,6 +10,7 @@
 # scoped to the demo's REPL link set.
 
 set -euo pipefail
+cd "$(git rev-parse --show-toplevel)"
 
 # REPL pipeline TUs that the demo links — a subset of
 # REPL_DEMO_DEP_SRCS. The list intentionally excludes the app-side

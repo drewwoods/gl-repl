@@ -18,6 +18,7 @@
 # directly exercises the relevant translation unit.
 
 set -euo pipefail
+cd "$(git rev-parse --show-toplevel)"
 
 CC=${CC:-gcc}
 GL_STUBS_INC=tests/gl-stubs/include
