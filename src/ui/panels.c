@@ -8,7 +8,6 @@
 #include "repl_state_views.h"
 #include "state.h"
 #include "repl_export.h"
-#include "glr_ctrl.h"   /* glr_publish_replay_annotations (Phase 4) */
 #include "layout.h"
 #include "color_picker.h"
 #include "metrics.h"
@@ -290,17 +289,11 @@ int ui_panels_code_panel_apply_scroll_follow_for_test(int show_vertex_indices,
     (void)cp_x;
     (void)cp_y;
 
-    /* Tests drive this helper directly without going through the
-     * controller's per-frame snapshot build, so refresh the
-     * virtual-line list here so layout sees the same shape it does
-     * in production. Phase 4 of feature/source-document-port.md:
-     * prepare() now fills an output struct; publish through the
-     * controller-owned helper so the editor's virtual-line list
-     * matches what the production frame loop produces. */
-    ReplReplayAnnotationOutput replay_annotations;
-    repl_replay_annotations_prepare(source_document_view(),
-                                    &replay_annotations);
-    glr_publish_replay_annotations(&replay_annotations);
+    /* This helper operates on the already-published editor state.
+     * Tests that exercise replay annotations must prepare + publish
+     * (glr_publish_replay_annotations) before calling — the
+     * controller does this each frame; tests use
+     * test_replay_annotations_publish() in tests/support/. */
     repl_code_panel_document_build(&layout, cp_w, text_x, cp_h);
     repl_code_panel_document_apply_follow_scroll(&layout);
 

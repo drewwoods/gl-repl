@@ -48,6 +48,7 @@
 #define refresh_workspace_header_lines repl_state_refresh_workspace_header_lines
 #define parse_workspace_header_line    repl_state_parse_workspace_header_line
 
+#include "support/repl_test_support.h"
 #include "support/test_harness.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -2125,12 +2126,14 @@ int main() {
         g_scroll_follow_cursor = 0;
 
         replay_expand_args = 0;
+        repl_test_publish_replay_annotations();
         (void)ui_panels_code_panel_apply_scroll_follow_for_test(glr_state_presentation().show_vertex_indices, &collapsed_follow,
                                                       &visible_lines);
         ASSERT_TRUE("collapsed replay follow resolves command row",
                     collapsed_follow >= 0);
 
         replay_expand_args = 1;
+        repl_test_publish_replay_annotations();
         (void)ui_panels_code_panel_apply_scroll_follow_for_test(glr_state_presentation().show_vertex_indices, &expanded_follow,
                                                       &visible_lines);
         ASSERT_INT("expanded replay follows final annotation row",
@@ -2138,6 +2141,7 @@ int main() {
 
         replay_expand_args = 0;
         expanded_follow = -1;
+        repl_test_publish_replay_annotations();
         (void)ui_panels_code_panel_apply_scroll_follow_for_test(glr_state_presentation().show_vertex_indices, &expanded_follow,
                                                       &visible_lines);
         ASSERT_INT("collapsed replay removes annotation rows from follow",
