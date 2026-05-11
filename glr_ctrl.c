@@ -8,6 +8,7 @@
 #include "audio.h"
 #include "color_picker_state.h"
 #include "editor/clipboard.h"
+#include "glr_completion.h"
 #include "glr_defaults.h"        /* CFG_DEFAULT_* */
 #include "glr_state.h"
 #include "editor/code_panel_document.h"
@@ -54,12 +55,11 @@
 #include "variable_panel_drag.h"
 #include "variable_panel_state.h"
 
-/* Forward decl: repl_editor_reset_transients lives in
- * src/editor/input.c. The check-state-boundaries guard forbids
- * glr_ctrl.c from including repl_core_internal.h, so we forward-
- * declare the one symbol we need (also called by glr_app_reset_all
- * and the F12 cycle handler). */
-void repl_editor_reset_transients(void);
+/* Forward decl: repl_advance_time lives in repl_core.c, declared in
+ * repl_core_internal.h. The check-state-boundaries guard forbids
+ * glr_ctrl.c from including that header, so we forward-declare the
+ * one symbol the timer tick needs. */
+void repl_advance_time(float dt);
 
 static int glr_ctrl_cmd_is_focus_vertex(const GLCmd *cmd) {
     return cmd->valid &&

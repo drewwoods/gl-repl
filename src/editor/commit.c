@@ -32,6 +32,7 @@
 
 #include "commit.h"
 #include "completion.h"
+#include "input.h"
 #include "services.h"
 #include "state.h"
 #include "undo.h"

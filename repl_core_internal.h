@@ -21,42 +21,31 @@
  *    panel (wrapped text, highlighting, etc.). Used by test suites to verify
  *    rendering logic without running the full UI.
  *
- * 4. Autocomplete: Update and accept logic for symbol completion and parameter
- *    hints. Integrates with repl_autocomplete.c model.
- *
- * 5. Source-scope: Block depth, indentation, and scope queries (documented in
+ * 4. Source-scope: Block depth, indentation, and scope queries (documented in
  *    repl_source_scope.h). Prefixes cached to avoid re-traversal.
  *
- * 6. Executor helpers: Apply state commands (enable/disable), variable snapshot
+ * 5. Executor helpers: Apply state commands (enable/disable), variable snapshot
  *    save/restore, and fade context setup for replay.
  *
- * 7. Line feeding: load_line_to_input() and collect_visible_vars() support
- *    editing existing lines and variable scope queries.
+ * 6. Visible-var collection: collect_visible_vars() walks loop/function-scope
+ *    ancestors at a source line.
  *
- * 8. Replay/bench: repl_bench_fade_install/clear() for deterministic replay
+ * 7. Replay/bench: repl_bench_fade_install/clear() for deterministic replay
  *    fade testing (bench_repl.c workload).
  *
- * 9. Feed line (test entry): feed_line() is the programmatic equivalent of typing
- *    a command and pressing ';'. Used by all test harnesses and file loading.
+ * 8. Test entry: repl_load_example_lines_for_test() drives example loading
+ *    from unit tests without going through the GLUT example dropdown.
  *
- * 10. Timekeeping: Advance and reset the animated 't' variable.
+ * 9. Timekeeping: Advance and reset the animated 't' variable.
  *
- * 11. Search dispatch: Keyboard routing for the search overlay
- *     (src/editor/search.c).
- *
- * 12. Editor input test hooks: Modifier provider for simulating Ctrl/Shift/Alt
- *     in tests.
- *
- * 13. Command mutations: delete_cmd_range() with guards against orphaning
- *     variable references, repl_clear_all_cmds() for full clear.
- *
- * 14. User scene promotion: repl_promote_example_if_needed() creates a user
+ * 10. User scene promotion: repl_promote_example_if_needed() creates a user
  *     scene on first edit of an example. Scene state reset/initialization.
  *
- * 15. Commit handler chain: try_commit_*() functions in declaration order
- *     (float, assign, close-brace, for, func, if, GL command). Each returns 1
- *     if consumed, 0 if not matched. Utilities editor_commit_reset_transients()
- *     and editor_commit_resolve_insert_exit_target().
+ * Editor-input declarations (feed_line, load_line_to_input,
+ * repl_editor_reset_transients, delete_cmd_range, repl_clear_all_cmds,
+ * ReplModifierProvider) moved to src/editor/input.h. Controller-side
+ * autocomplete entry points (accept_autocomplete,
+ * glr_completion_register_provider) moved to glr_completion.h.
  */
 #ifndef REPL_CORE_INTERNAL_H
 #define REPL_CORE_INTERNAL_H
@@ -190,19 +179,6 @@ void repl_dump_code_panel_text(FILE *out, EditorBufferView text);
 void repl_dump_code_panel_visual_text(FILE *out, EditorBufferView text,
                                       const ReplExportLayout *layout);
 
-/* ---- Autocomplete ----------------------------------------------------- */
-
-/* update_autocomplete / update_selected_autocomplete_preview are
- * file-static inside glr_completion.c — production code reaches
- * them through the EditorCompletionProvider seam in
- * editor_completion.h. accept_autocomplete is exposed because the
- * editor input dispatcher invokes it directly when the user presses
- * Tab / Enter on the popup. */
-void accept_autocomplete(void);
-/* Register glr_completion as the EditorCompletionProvider. Called
- * once at startup before the editor processes input. */
-void glr_completion_register_provider(void);
-
 /* ---- Source-scope helpers --------------------------------------------- */
 
 /* Depth/cache, indentation, and block-boundary queries live in
@@ -233,19 +209,11 @@ int  repl_bench_fade_install(const int *old_pcs, const int *new_pcs,
                              int count, float age);
 void repl_bench_fade_clear(void);
 
-/* ---- Line feeding (test entry) ---------------------------------------- */
+/* ---- Test entry: example loading -------------------------------------- */
 
-/* Programmatic entry point equivalent to typing `line` and pressing ';'.
- * Used by file loading, example loading, and every test harness. */
-int  feed_line(const char *line);
-/* Defined in src/editor/input.c. Drops camera/menu/picker/code-panel-drag
- * transient state in addition to the editor commit transients; called from
- * glr_app_reset_all() and from controller paths that switch examples /
- * scenes (cycle_example_or_user_scene in glr_ctrl.c, the GLR_MENU_SCENE
- * activation in glr_actions.c) so the editor returns to a clean idle
- * posture. Step 2 of feature/decouple-repl-from-gl-repl-alt.md moved
- * the call out of repl_example_loader.c. */
-void repl_editor_reset_transients(void);
+/* Drive example loading from unit tests without going through the GLUT
+ * example dropdown. Production code uses repl_example_loader.c
+ * directly. */
 void repl_load_example_lines_for_test(const char *const *lines);
 
 /* ---- Timekeeping ------------------------------------------------------ */
@@ -253,21 +221,6 @@ void repl_load_example_lines_for_test(const char *const *lines);
 const char *cmd_type_name(CmdType t);
 void repl_advance_time(float dt);
 void repl_reset_time_to_zero(void);
-
-/* ---- Editor input dispatch test hooks --------------------------------- */
-
-typedef int (*ReplModifierProvider)(void);
-/* Phase J1 commit 49a renamed repl_set_modifier_provider_for_test ->
- * editor_input_set_modifier_provider_for_test (declared in editor_input.h);
- * the typedef stays here so its callers don't ripple. */
-
-/* Delete cmds[start..start+count) with a status-bar message describing
- * what was removed. Guards against removing a `float` decl whose variable
- * is still referenced elsewhere. */
-void delete_cmd_range(int start, int count, const char *what);
-
-/* Clear ALL commands unconditionally (same behaviour as Ctrl+L). */
-void repl_clear_all_cmds(void);
 
 /* Called before any mutation: if an example is currently viewed (no active
  * user scene), allocate a scene slot, copy the current editor state into it,

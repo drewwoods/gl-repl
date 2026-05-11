@@ -8,6 +8,7 @@
  */
 
 #include "clipboard.h"
+#include "input.h"
 #include "undo.h"
 
 #include "repl_command_store.h"

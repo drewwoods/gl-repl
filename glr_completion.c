@@ -14,6 +14,7 @@
 #include "repl_core_internal.h"
 #include "repl_command_spec.h"
 #include "editor/completion.h"
+#include "glr_completion.h"
 static const ReplFuncCompletion *g_ac_func_matches[MAX_AC_MATCHES];
 
 typedef enum {
