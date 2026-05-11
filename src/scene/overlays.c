@@ -8,8 +8,9 @@
  * suppressed in GL_LINE mode, so the controller doesn't need to walk
  * the program either.
  */
+#include "gl_includes.h"
 #include "overlays.h"
-#include "./include/gl_2d.h"
+#include "config.h"
 
 #include <stdio.h>
 

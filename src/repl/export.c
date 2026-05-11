@@ -1,5 +1,4 @@
 #include "repl/export.h"
-#include "./include/gl_2d.h"
 #include "source_document.h"     /* source_document_insert_line */
 #include "repl/load.h"           /* repl_load_apply_line — step 5b */
 /* glr_camera.h removed in step 4a: the export pipeline no longer

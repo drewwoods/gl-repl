@@ -2,7 +2,7 @@
  * scene_lights.c - scene light setup and visible light indicators.
  */
 #include "lights.h"
-#include "./include/gl_2d.h"
+#include "config.h"
 #include <math.h>
 #include <stdio.h>
 

@@ -2,7 +2,6 @@
  * scene_grid.c - grid theme rendering
  */
 #include "grid.h"
-#include "./include/gl_2d.h"
 #include <math.h>
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
@@ -328,9 +327,22 @@ static void scene_grid_render_ocean_theme(const GridDrawContext *grid_ctx,
     if (camera_world_y < 0.0f) {
         glDisable(GL_DEPTH_TEST);
         glColor4f(0.05f, 0.25f, 0.35f, 0.75f);
-        gl2d_begin(config->viewport_w, config->viewport_h);
+        glMatrixMode(GL_PROJECTION);
+        glPushMatrix();
+        glLoadIdentity();
+        gluOrtho2D(0, config->viewport_w, 0, config->viewport_h);
+        glMatrixMode(GL_MODELVIEW);
+        glPushMatrix();
+        glLoadIdentity();
+        glPushAttrib(GL_DEPTH_BUFFER_BIT | GL_LIGHTING_BIT);
+        glDisable(GL_DEPTH_TEST);
+        glDisable(GL_LIGHTING);
         glRectf(0, 0, (float)config->viewport_w, (float)config->viewport_h);
-        gl2d_end();
+        glPopAttrib();
+        glMatrixMode(GL_PROJECTION);
+        glPopMatrix();
+        glMatrixMode(GL_MODELVIEW);
+        glPopMatrix();
         glEnable(GL_DEPTH_TEST);
     } else {
         glEnable(GL_FOG);

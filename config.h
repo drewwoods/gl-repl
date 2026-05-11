@@ -20,6 +20,16 @@
 #ifndef CONFIG_H
 #define CONFIG_H
 
+/* Font metrics for menu rendering. These are fixed-width bitmap fonts, so the
+ * width and height are compile-time constants. Used by menu layout and rendering
+ * code to compute positions and sizes. */
+#define FONT_MONO       GLUT_BITMAP_9_BY_15
+#define FONT_SMALL      GLUT_BITMAP_8_BY_13
+#define FONT_W          9
+#define FONT_H          15
+#define FONT_SMALL_W    8
+#define FONT_SMALL_H    13
+
 /* Default code-panel fraction (panel width / total viewport width) on
  * startup and scene load. User-toggleable at runtime via the "Panel
  * Layout" config row, which cycles through a few presets that include

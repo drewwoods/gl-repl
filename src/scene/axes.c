@@ -2,7 +2,7 @@
  * scene_axes.c - axes theme rendering
  */
 #include "axes.h"
-#include "./include/gl_2d.h"
+#include "config.h"
 #include <math.h>
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
