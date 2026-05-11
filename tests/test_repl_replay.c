@@ -45,7 +45,7 @@ static void test_replay_basic_controls(void) {
     add_mock_cmd(0, CMD_COLOR3F);
     add_mock_cmd(1, CMD_VERTEX3F);
     repl_state_mark_flat_dirty();
-    flatten_commands();
+    repl_flatten_commands();
 
     ASSERT_TRUE("not active initially", !g_replay_active);
 
@@ -78,7 +78,7 @@ static void test_replay_stepping(void) {
     add_mock_cmd(2, CMD_VERTEX3F);
     add_mock_cmd(3, CMD_END);
     repl_state_mark_flat_dirty();
-    flatten_commands();
+    repl_flatten_commands();
 
     repl_replay_start();
     g_replay_state = REPLAY_PAUSED;
@@ -108,7 +108,7 @@ static void test_replay_tessellation_stepping(void) {
     add_mock_cmd(3, CMD_TESS_END);
     add_mock_cmd(4, CMD_TESS_END);
     repl_state_mark_flat_dirty();
-    flatten_commands();
+    repl_flatten_commands();
 
     repl_replay_start();
     g_replay_mode = REPLAY_MODE_POLYGON;
@@ -128,7 +128,7 @@ static void test_replay_fade_batches(void) {
     glr_app_reset_all();
     add_mock_cmd(0, CMD_VERTEX3F);
     repl_state_mark_flat_dirty();
-    flatten_commands();
+    repl_flatten_commands();
 
     repl_replay_start();
     replay_push_fade_batch(0, 1);
@@ -153,7 +153,7 @@ static void test_replay_input(void) {
     glr_app_reset_all();
     add_mock_cmd(0, CMD_VERTEX3F);
     repl_state_mark_flat_dirty();
-    flatten_commands();
+    repl_flatten_commands();
 
     // When off
     repl_replay_handle_key(KEY_CTRL_R);
@@ -186,7 +186,7 @@ static void test_replay_modifiers(void) {
     glr_app_reset_all();
     add_mock_cmd(0, CMD_VERTEX3F);
     repl_state_mark_flat_dirty();
-    flatten_commands();
+    repl_flatten_commands();
     repl_replay_start();
 
 #ifndef USE_GLUT
@@ -207,7 +207,7 @@ static void test_bench_helpers(void) {
     add_mock_cmd(1, CMD_VERTEX3F);
     add_mock_cmd(2, CMD_VERTEX3F);
     repl_state_mark_flat_dirty();
-    flatten_commands();
+    repl_flatten_commands();
 
     int old_pcs[] = {0, 1};
     int new_pcs[] = {1, 2};
@@ -222,7 +222,7 @@ static void test_misc_helpers(void) {
     glr_app_reset_all();
     add_mock_cmd(0, CMD_VERTEX3F);
     repl_state_mark_flat_dirty();
-    flatten_commands();
+    repl_flatten_commands();
     repl_replay_start();
 
     int limit = repl_replay_exec_limit();

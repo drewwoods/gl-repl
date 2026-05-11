@@ -4,7 +4,7 @@
 #include "repl_core.h"
 #include "repl_command_store.h"
 #include "repl_source_scope.h"
-#include "repl_state.h"
+#include "repl_state_owners.h"
 
 static void normal_indent(int pos, char *buf, int buf_sz) {
     int spaces;
@@ -160,7 +160,7 @@ static void compute_block_normals(GLenum mode, GLenum front_face,
  * autonormal pass is a REPL pipeline TU and cannot include
  * `glr_state.h`, so the caller (controller / tests) gates the call
  * by passing the toggle explicitly. */
-void recompute_autonormals(int autonormal_enabled) {
+void repl_recompute_autonormals(int autonormal_enabled) {
     if (!autonormal_enabled) return;
 
     int i = 0;
@@ -257,8 +257,4 @@ int repl_find_feeding_normal_cmd(int line_idx) {
 
 int repl_find_feeding_color_cmd(int line_idx) {
     return find_feeding_state_cmd(line_idx, 0);
-}
-
-void repl_recompute_autonormals(int autonormal_enabled) {
-    recompute_autonormals(autonormal_enabled);
 }

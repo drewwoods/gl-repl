@@ -292,13 +292,13 @@ static void load_scene_from_slot(int idx) {
      * see check-no-load-line-to-input-in-pipeline. Controllers /
      * editor wrappers call load_line_to_input(repl_state_edit_line())
      * after a scene-load API returns. */
-    mark_normals_dirty();
+    repl_mark_normals_dirty();
     s->last_touch       = next_user_scene_tick();
     g_active_user_scene = idx;
     g_example_idx       = -1;
     char msg[128];
     snprintf(msg, sizeof(msg), "Loaded scene: %s", s->name);
-    set_status(msg);
+    repl_set_status(msg);
 }
 
 static void save_user_scene(void) {
@@ -421,14 +421,14 @@ static void scene_name_from_filename(const char *path,
 
 int repl_save_workspace(const char *dir, const ReplExportLayout *layout) {
     if (!dir || !*dir) {
-        set_status("Workspace save: no folder provided");
+        repl_set_status("Workspace save: no folder provided");
         return -1;
     }
 
     if (mkdir(dir, 0755) != 0 && errno != EEXIST) {
         char msg[256];
         snprintf(msg, sizeof(msg), "Workspace save: cannot create %s", dir);
-        set_status(msg);
+        repl_set_status(msg);
         return -1;
     }
 
@@ -465,7 +465,7 @@ int repl_save_workspace(const char *dir, const ReplExportLayout *layout) {
     char msg[256];
     snprintf(msg, sizeof(msg), "Saved %d scene%s to %s",
              written, written == 1 ? "" : "s", dir);
-    set_status(msg);
+    repl_set_status(msg);
     return written;
 }
 
@@ -512,7 +512,7 @@ int repl_load_workspace(const char *dir) {
     if (!d) {
         char msg[256];
         snprintf(msg, sizeof(msg), "Workspace load: cannot open %s", dir);
-        set_status(msg);
+        repl_set_status(msg);
         return -1;
     }
 
@@ -545,7 +545,7 @@ int repl_load_workspace(const char *dir) {
     char msg[256];
     snprintf(msg, sizeof(msg), "Loaded %d scene%s from %s",
              loaded, loaded == 1 ? "" : "s", dir);
-    set_status(msg);
+    repl_set_status(msg);
     return loaded;
 }
 
@@ -613,7 +613,7 @@ int repl_promote_example_if_needed(void) {
             }
         }
         if (slot < 0) {
-            set_status("All user scene slots full -- save workspace to free a slot");
+            repl_set_status("All user scene slots full -- save workspace to free a slot");
             return -1;
         }
     }
@@ -628,7 +628,7 @@ int repl_promote_example_if_needed(void) {
 
     char msg[128];
     snprintf(msg, sizeof(msg), "Promoted to scene: %s", unique);
-    set_status(msg);
+    repl_set_status(msg);
     return slot;
 }
 

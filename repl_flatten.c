@@ -617,7 +617,7 @@ int repl_flatten_program(const ReplFlattenOptions *options,
     return result->ok;
 }
 
-void flatten_commands(void) {
+void repl_flatten_commands(void) {
     ReplFlatProgramState *flat_program = repl_state_flat_program_mut();
     ReplFlattenOptions options = {
         .source_cmds = repl_state_document_cmds_mut(),
@@ -636,7 +636,7 @@ void flatten_commands(void) {
     repl_state_flat_program_set_user_lighting_enabled(
         result.user_lighting_enabled);
     if (result.status[0])
-        set_status(result.status);
+        repl_set_status(result.status);
 
     repl_flatten_refresh_current_block_highlight();
 }

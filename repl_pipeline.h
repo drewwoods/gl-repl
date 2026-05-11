@@ -7,12 +7,12 @@
 #ifndef REPL_PIPELINE_H
 #define REPL_PIPELINE_H
 
-void flatten_commands(void);
-void recompute_autonormals(int autonormal_enabled);
-void update_cam_lines(void);
-void update_render_state_strings(void);
-void ensure_init_bootstrap_ready(void);
-void apply_init_bootstrap(void);
+void repl_flatten_commands(void);
+void repl_recompute_autonormals(int autonormal_enabled);
+void repl_refresh_camera_lines(void);
+void repl_refresh_render_state_strings(void);
+void repl_ensure_init_bootstrap_ready(void);
+void repl_apply_init_bootstrap(void);
 void repl_copy_predef_values(float *dst, int max_vals);
 void repl_restore_predef_values(const float *src, int max_vals);
 

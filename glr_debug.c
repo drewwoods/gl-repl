@@ -47,16 +47,16 @@ void glr_debug_dump_editor(FILE *out, EditorBufferView text) {
                 (double)cam.rx, (double)cam.ry, (double)cam.dist,
                 (double)cam.tx, (double)cam.ty, (double)cam.tz);
     }
-    update_cam_lines();
+    repl_refresh_camera_lines();
     {
         ReplImportExportView meta = repl_state_import_export();
         for (int cam_line_idx = 0; cam_line_idx < CAM_LINE_COUNT; cam_line_idx++)
             fprintf(dst, "%s\n", meta.cam_lines[cam_line_idx]);
     }
     fprintf(dst, "--- init ---\n");
-    for (int init_line_idx = 0; init_line_idx < init_section_line_count(); init_line_idx++) {
+    for (int init_line_idx = 0; init_line_idx < repl_export_init_section_line_count(); init_line_idx++) {
         char line[MAX_LINE_LEN];
-        init_section_line(init_line_idx, line, sizeof(line));
+        repl_export_init_section_line(init_line_idx, line, sizeof(line));
         fprintf(dst, "%s\n", line);
     }
     fprintf(dst, "=== End REPL Editor Dump ===\n");
@@ -70,7 +70,7 @@ void glr_debug_dump_flat_commands(FILE *out, EditorBufferView text) {
     int g_num_flat_cmds = flat_program.cmd_count;
 
     if (repl_state_flat_program_dirty()) {
-        flatten_commands();
+        repl_flatten_commands();
         flat_program = repl_state_flat_program_view();
         g_flat_cmds = flat_program.cmds;
         g_num_flat_cmds = flat_program.cmd_count;

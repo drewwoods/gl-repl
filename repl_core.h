@@ -84,7 +84,7 @@ void repl_flatten_commands(void);
 void repl_recompute_autonormals(int autonormal_enabled);
 
 /* Shared status/document helpers surfaced outside repl_core.c. */
-void        set_status(const char *msg);
+void        repl_set_status(const char *msg);
 /* Install a status-message sink. Pipeline TUs call set_status() to
  * surface diagnostics; the controller installs ui_state_status_set as
  * the sink at startup. Pass NULL to clear (test scaffolding may want
@@ -103,10 +103,10 @@ void        repl_install_example_presentation_reset_sink(void (*fn)(void));
 /* Pipeline-side dispatch — invoked by repl_example_loader.c on every
  * example load. No-op when the sink is unset. */
 void        repl_dispatch_example_presentation_reset(void);
-const char *mode_name(GLenum mode);
-GLenum      current_begin_mode(void);
-int         count_vertices(void);
-void        mark_normals_dirty(void);
+const char *repl_mode_name(GLenum mode);
+GLenum      repl_current_begin_mode(void);
+int         repl_count_vertices(void);
+void        repl_mark_normals_dirty(void);
 
 /* --- Example library & user scene -------------------------------------- */
 #ifndef MAX_USER_SCENES

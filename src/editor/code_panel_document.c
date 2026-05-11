@@ -109,8 +109,8 @@ static int code_panel_footer_row_count(int panel_w, int text_x) {
         rows += repl_code_panel_document_row_count_for_text(
             g_footer_pre_init[line_idx], text_x, panel_w);
     /* Count rows for init section lines. */
-    for (int init_line_idx = 0; init_line_idx < init_section_line_count(); init_line_idx++) {
-        init_section_line(init_line_idx, line, sizeof(line));
+    for (int init_line_idx = 0; init_line_idx < repl_export_init_section_line_count(); init_line_idx++) {
+        repl_export_init_section_line(init_line_idx, line, sizeof(line));
         rows += repl_code_panel_document_row_count_for_text(
             line, text_x, panel_w);
     }

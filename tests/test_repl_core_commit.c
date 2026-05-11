@@ -296,7 +296,7 @@ int main(void) {
     repl_feed_line_public("}");
     repl_feed_line_public("func0(3);");
     repl_flatten_commands();
-    execute_commands();
+    repl_execute_commands();
     {
         float scratch = 0.0f;
         ASSERT_TRUE("recursive scratch A[1]",
@@ -351,7 +351,7 @@ int main(void) {
     ASSERT_TRUE("expr assign preserves source", strstr(editor_buffer_line(2) ? editor_buffer_line(2) : "", "n + 1") != NULL);
     ASSERT_TRUE("expr assign marked has_vars", repl_state_document_cmds_mut()[2].has_vars == 1);
     repl_flatten_commands();
-    execute_commands();
+    repl_execute_commands();
     {
         int n_idx = -1;
         for (int i = 0; i < g_num_predef_vars; i++) {

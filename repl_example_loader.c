@@ -449,7 +449,7 @@ static void load_example_lines(const char *const *lines) {
         inp->input_len = 0;
         editor_cursor_pos_set(0);
     }
-    mark_normals_dirty();
+    repl_mark_normals_dirty();
 }
 
 static void load_example(int idx) {
@@ -477,7 +477,7 @@ static void load_example(int idx) {
     char msg[128];
     snprintf(msg, sizeof(msg), "Example %d/%d: %s (F12 for next)",
              idx + 1, count, name);
-    set_status(msg);
+    repl_set_status(msg);
 }
 
 int repl_example_count(void) {

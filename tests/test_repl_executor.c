@@ -145,7 +145,7 @@ static void test_execute_edge_cases(void) {
     opts.program.local_vars = NULL;
     repl_execute_program(&opts);
 
-    execute_commands();
+    repl_execute_commands();
 }
 
 static void test_execute_all_commands(void) {

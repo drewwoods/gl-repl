@@ -57,7 +57,7 @@ int editor_selection_normalize_cmd_range(int start, int count,
 void editor_selection_set_var_decl_action_status(const char *action) {
     char msg[96];
     snprintf(msg, sizeof(msg), "Cannot %s float declarations", action);
-    set_status(msg);
+    repl_set_status(msg);
 }
 
 static void clipboard_copy_range(int start, int count) {
@@ -155,7 +155,7 @@ void editor_clipboard_copy_current(void) {
             snprintf(msg, sizeof(msg), "Copied %d line%s",
                      editor_state_clipboard_count(),
                      editor_state_clipboard_count() > 1 ? "s" : "");
-            set_status(msg);
+            repl_set_status(msg);
         }
     } else if (repl_state_edit_line() < repl_state_document_count()) {
         int start;
@@ -174,9 +174,9 @@ void editor_clipboard_copy_current(void) {
             char msg[64];
             snprintf(msg, sizeof(msg), "Copied block (%d lines)",
                      editor_state_clipboard_count());
-            set_status(msg);
+            repl_set_status(msg);
         } else {
-            set_status("Copied line");
+            repl_set_status("Copied line");
         }
     } else {
         editor_state_clipboard_count_set(0);
@@ -212,14 +212,14 @@ void editor_clipboard_cut_current(void) {
 void editor_clipboard_paste_current(void) {
     int count = editor_state_clipboard_count();
     if (count <= 0) {
-        set_status("Clipboard empty");
+        repl_set_status("Clipboard empty");
         return;
     }
 
     {
         ReplCommandStore store = repl_command_store_live();
         if (!repl_command_store_can_insert(&store, count)) {
-            set_status("Command buffer full!");
+            repl_set_status("Command buffer full!");
             return;
         }
     }
@@ -252,12 +252,12 @@ void editor_clipboard_paste_current(void) {
 
     editor_insert_mode_set(saved_insert);
     load_line_to_input(repl_state_edit_line());
-    mark_normals_dirty();
+    repl_mark_normals_dirty();
 
     {
         char msg[64];
         snprintf(msg, sizeof(msg), "Pasted %d line%s",
                  count, count > 1 ? "s" : "");
-        set_status(msg);
+        repl_set_status(msg);
     }
 }

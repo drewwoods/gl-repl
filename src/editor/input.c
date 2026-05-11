@@ -176,7 +176,7 @@ void delete_cmd_range(int start, int count, const char *what) {
 
     if (repl_compile_delete_range(start, count, &ctx, &change,
                                   err, sizeof(err)) != REPL_COMPILE_OK) {
-        if (err[0]) set_status(err);
+        if (err[0]) repl_set_status(err);
         return;
     }
     if (change.kind == REPL_COMPILED_NO_CHANGE)
@@ -188,7 +188,7 @@ void delete_cmd_range(int start, int count, const char *what) {
              what, change.count, change.count > 1 ? "s" : "");
 
     if (!editor_commit_apply_external_change(&change, /*capture_undo=*/1)) {
-        set_status("Command buffer error");
+        repl_set_status("Command buffer error");
         return;
     }
 
@@ -196,9 +196,9 @@ void delete_cmd_range(int start, int count, const char *what) {
     if (repl_state_edit_line() > repl_state_document_count())
         repl_state_edit_line_set(repl_state_document_count());
     load_line_to_input(repl_state_edit_line());
-    mark_normals_dirty();
+    repl_mark_normals_dirty();
     editor_clipboard_clear_selection();
-    set_status(change.commit_message);
+    repl_set_status(change.commit_message);
 }
 
 void repl_clear_all_cmds(void) {
@@ -219,8 +219,8 @@ void repl_clear_all_cmds(void) {
         inp->pending_newline_len = 0;
     }
     repl_eval_init_predef_vars();
-    mark_normals_dirty();
-    set_status("All commands cleared");
+    repl_mark_normals_dirty();
+    repl_set_status("All commands cleared");
 }
 
 static const char *editor_committed_line_text(int idx) {
@@ -363,7 +363,7 @@ static void warn_if_scope_truncated(int vis_total) {
     snprintf(msg, sizeof(msg),
              "scope has %d loop vars (max %d); deepest iterator vars may appear undeclared",
              vis_total, MAX_EXPR_VARS);
-    set_status(msg);
+    repl_set_status(msg);
 }
 
 static int parse_for_overwrite_enter(GLCmd *cmd, char *text_out, int text_sz,
@@ -411,7 +411,7 @@ static int parse_for_overwrite_enter(GLCmd *cmd, char *text_out, int text_sz,
         }
     }
     if (!parsed && editor_parse_err[0])
-        set_status(editor_parse_err);
+        repl_set_status(editor_parse_err);
     warn_if_scope_truncated(vis_total);
     return parsed;
 }
@@ -521,8 +521,8 @@ static CommitResult commit_current_input(int enter_mode) {
             }
             editor_cursor_pos_set(0);
             editor_completion_clear();
-            set_status("Insert mode");
-            mark_normals_dirty();
+            repl_set_status("Insert mode");
+            repl_mark_normals_dirty();
             return COMMIT_OK;
         }
     }
@@ -549,11 +549,11 @@ static CommitResult commit_current_input(int enter_mode) {
 
             if (repl_compile_empty_line(insert_pos, &ctx, &change,
                                         err, sizeof(err)) != REPL_COMPILE_OK) {
-                set_status(err[0] ? err : "Cannot insert blank line");
+                repl_set_status(err[0] ? err : "Cannot insert blank line");
                 return COMMIT_REJECTED;
             }
             if (!editor_commit_apply_external_change(&change, /*capture_undo=*/0)) {
-                set_status("Command buffer full!");
+                repl_set_status("Command buffer full!");
                 return COMMIT_REJECTED;
             }
             repl_state_edit_line_set(insert_pos + 1);
@@ -563,7 +563,7 @@ static CommitResult commit_current_input(int enter_mode) {
                 inp->input_len = 0;
             }
             editor_cursor_pos_set(0);
-            set_status(change.commit_message);
+            repl_set_status(change.commit_message);
             return COMMIT_OK;
         }
 
@@ -609,14 +609,14 @@ static CommitResult commit_current_input(int enter_mode) {
                 }
             }
             if (!parsed && enter_parse_err[0])
-                set_status(enter_parse_err);
+                repl_set_status(enter_parse_err);
 
             if (parsed) {
                 ReplCommandStore store = repl_command_store_live();
                 int insert_pos = repl_state_edit_line();
                 if (!repl_command_store_insert_one(&store, insert_pos,
                                                    &cmd, 0)) {
-                    set_status("Command buffer full!");
+                    repl_set_status("Command buffer full!");
                     return COMMIT_REJECTED;
                 }
                 editor_buffer_insert_line(insert_pos, cmd_text);
@@ -627,7 +627,7 @@ static CommitResult commit_current_input(int enter_mode) {
                     inp->input_len = 0;
                 }
                 editor_cursor_pos_set(0);
-                set_status("Inserted");
+                repl_set_status("Inserted");
                 warn_if_scope_truncated(vis_total);
                 return COMMIT_OK;
             }
@@ -686,7 +686,7 @@ static CommitResult commit_current_input(int enter_mode) {
                 inp->input_len = 0;
             }
             editor_cursor_pos_set(0);
-            set_status("Insert mode");
+            repl_set_status("Insert mode");
             return COMMIT_OK;
         }
         return COMMIT_REJECTED;
@@ -700,11 +700,11 @@ static CommitResult commit_current_input(int enter_mode) {
 
         if (repl_compile_empty_line(insert_pos, &ctx, &change,
                                     err, sizeof(err)) != REPL_COMPILE_OK) {
-            set_status(err[0] ? err : "Cannot insert blank line");
+            repl_set_status(err[0] ? err : "Cannot insert blank line");
             return COMMIT_REJECTED;
         }
         if (!editor_commit_apply_external_change(&change, /*capture_undo=*/0)) {
-            set_status("Command buffer full!");
+            repl_set_status("Command buffer full!");
             return COMMIT_REJECTED;
         }
         repl_state_edit_line_set(repl_state_document_count());
@@ -717,7 +717,7 @@ static CommitResult commit_current_input(int enter_mode) {
             inp->pending_newline_len = 0;
         }
         editor_cursor_pos_set(0);
-        set_status(change.commit_message);
+        repl_set_status(change.commit_message);
         return COMMIT_OK;
     }
 
@@ -732,7 +732,7 @@ static CommitResult commit_current_input(int enter_mode) {
             int insert_pos = repl_state_document_count();
             if (!repl_command_store_insert_one(&store, insert_pos,
                                                &cmd, 0)) {
-                set_status("Command buffer full!");
+                repl_set_status("Command buffer full!");
                 return COMMIT_REJECTED;
             }
             editor_buffer_insert_line(insert_pos, cmd_text);
@@ -748,7 +748,7 @@ static CommitResult commit_current_input(int enter_mode) {
                 inp->pending_newline[0] = '\0';
                 inp->pending_newline_len = 0;
             }
-            set_status("OK");
+            repl_set_status("OK");
             return COMMIT_OK;
         }
         return COMMIT_REJECTED;
@@ -883,7 +883,7 @@ static int handle_escape_key_route(unsigned char key) {
             editor_insert_mode_set(0);
             if (repl_state_edit_line() <= repl_state_document_count())
                 load_line_to_input(repl_state_edit_line());
-            set_status("Insert mode exited");
+            repl_set_status("Insert mode exited");
         } else {
             {
                 ReplEditorInputState *inp = editor_state_input_mut();
@@ -891,7 +891,7 @@ static int handle_escape_key_route(unsigned char key) {
                 inp->input_len = 0;
             }
             editor_cursor_pos_set(0);
-            set_status("Input cleared");
+            repl_set_status("Input cleared");
         }
         return 1;
     }
@@ -934,7 +934,7 @@ static int handle_line_delete_key_route(unsigned char key) {
             editor_insert_mode_set(0);
             if (repl_state_edit_line() <= repl_state_document_count())
                 load_line_to_input(repl_state_edit_line());
-            set_status("Insert mode exited");
+            repl_set_status("Insert mode exited");
         } else if (editor_clipboard_sel_active()) {
             int start = editor_clipboard_sel_lo();
             int hi = editor_clipboard_sel_hi();
@@ -962,9 +962,9 @@ static int handle_buffer_command_key_route(unsigned char key) {
         if (repl_state_document_count() > 0) {
             editor_undo_push_snapshot();
             editor_reformat_commands();
-            set_status("Reformatted command buffer");
+            repl_set_status("Reformatted command buffer");
         } else {
-            set_status("Nothing to reformat");
+            repl_set_status("Nothing to reformat");
         }
         return 1;
     }
@@ -1023,20 +1023,20 @@ static int handle_comment_toggle_key_route(unsigned char key) {
         char msg[REPL_STATUS_TEXT_MAX];
         snprintf(msg, sizeof(msg), "Toggle failed: %s",
                  err[0] ? err : "not a valid command");
-        set_status(msg);
+        repl_set_status(msg);
         return 1;
     }
     if (change.kind == REPL_COMPILED_NO_CHANGE)
         return 1;
 
     if (!editor_commit_apply_external_change(&change, /*capture_undo=*/1)) {
-        set_status("Command buffer error");
+        repl_set_status("Command buffer error");
         return 1;
     }
 
     load_line_to_input(repl_state_edit_line());
-    mark_normals_dirty();
-    set_status(change.commit_message);
+    repl_mark_normals_dirty();
+    repl_set_status(change.commit_message);
     return 1;
 }
 
@@ -1087,7 +1087,7 @@ static int handle_enter_key_route(unsigned char key) {
 
         (void)commit_current_input(1);
         editor_completion_clear();
-        mark_normals_dirty();
+        repl_mark_normals_dirty();
         return 1;
     }
     return 0;
@@ -1135,15 +1135,15 @@ static int handle_semicolon_commit_key_route(unsigned char key) {
                                 inp->input_len = 0;
                             }
                             editor_cursor_pos_set(0);
-                            set_status("Inserted");
+                            repl_set_status("Inserted");
                         } else {
-                            set_status("Command buffer full!");
+                            repl_set_status("Command buffer full!");
                         }
                     } else if (repl_state_edit_line() < repl_state_document_count()) {
                         int replace_idx = repl_state_edit_line();
                         if (repl_command_store_replace_one(&store, replace_idx, &cmd))
                             editor_buffer_replace_line(replace_idx, cmd_text);
-                        set_status("Line updated");
+                        repl_set_status("Line updated");
                         repl_state_edit_line_set(repl_state_edit_line() + 1);
                         load_line_to_input(repl_state_edit_line());
                     } else {
@@ -1152,7 +1152,7 @@ static int handle_semicolon_commit_key_route(unsigned char key) {
                                                           &cmd, 0)) {
                             editor_buffer_insert_line(insert_pos, cmd_text);
                             repl_state_edit_line_set(repl_state_document_count());
-                            set_status("OK");
+                            repl_set_status("OK");
                             {
                                 ReplEditorInputState *inp = editor_state_input_mut();
                                 inp->input[0] = '\0';
@@ -1165,7 +1165,7 @@ static int handle_semicolon_commit_key_route(unsigned char key) {
                                 inp->pending_newline_len = 0;
                             }
                         } else {
-                            set_status("Command buffer full!");
+                            repl_set_status("Command buffer full!");
                         }
                     }
                 }
@@ -1173,7 +1173,7 @@ static int handle_semicolon_commit_key_route(unsigned char key) {
             }
         }
         editor_completion_clear();
-        mark_normals_dirty();
+        repl_mark_normals_dirty();
         return 1;
     }
     return 0;

@@ -695,7 +695,7 @@ static void code_panel_draw_statusbar(const UiRenderSnapshot *snap,
         snprintf(ln_buf, sizeof(ln_buf), "Ln %d [INSERT]", edit_line + 1);
     else if (snap->in_begin_block)
         snprintf(ln_buf, sizeof(ln_buf), "Ln %d  %s",
-                 edit_line + 1, mode_name(snap->current_begin_mode));
+                 edit_line + 1, repl_mode_name(snap->current_begin_mode));
     else
         snprintf(ln_buf, sizeof(ln_buf), "Ln %d", edit_line + 1);
     glColor3f(0.627f, 0.627f, 0.627f);
@@ -1003,9 +1003,9 @@ void ui_panels_render_code_panel(const UiRenderSnapshot *snap,
     for (int i = 0; g_footer_pre_init[i]; i++)
         code_panel_draw_static_line(&ctx, g_footer_pre_init[i],
                                     0.38f, 0.38f, 0.42f);
-    for (int i = 0; i < init_section_line_count(); i++) {
+    for (int i = 0; i < repl_export_init_section_line_count(); i++) {
         char line[MAX_LINE_LEN];
-        init_section_line(i, line, sizeof(line));
+        repl_export_init_section_line(i, line, sizeof(line));
         code_panel_draw_static_line(&ctx, line, 0.38f, 0.38f, 0.42f);
     }
     for (int i = 0; g_footer_post_init[i]; i++)

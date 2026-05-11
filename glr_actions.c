@@ -284,7 +284,7 @@ void glr_cfg_cycle_row(int row, int delta) {
     if (item->key == GLR_CONFIG_REPLAY) {
         if (glr_config_get(GLR_CONFIG_REPLAY)) {
             repl_replay_stop();
-            set_status("Replay: off");
+            repl_set_status("Replay: off");
         } else {
             repl_replay_start();
         }
@@ -294,7 +294,7 @@ void glr_cfg_cycle_row(int row, int delta) {
     if (item->key == GLR_CONFIG_AUTO_TIME) {
         if (editor_input_active_modifiers() & GLUT_ACTIVE_SHIFT) {
             repl_reset_time_to_zero();
-            set_status(repl_state_variables().time_playing ? "Time: reset to 0"
+            repl_set_status(repl_state_variables().time_playing ? "Time: reset to 0"
                                                            : "Time: reset to 0 (paused)");
             return;
         }
@@ -309,27 +309,27 @@ void glr_cfg_cycle_row(int row, int delta) {
     if (item->key == GLR_CONFIG_CODE_PANEL_LAYOUT) {
         ui_state_code_panel_mut()->panel_frac = 0.3f;
         if (glr_state_presentation().code_panel_layout == CODE_PANEL_LAYOUT_TOP) {
-            set_status("Layout: top code panel");
+            repl_set_status("Layout: top code panel");
         } else if (glr_state_presentation().code_panel_layout == CODE_PANEL_LAYOUT_BOTTOM) {
-            set_status("Layout: bottom code panel");
+            repl_set_status("Layout: bottom code panel");
         } else if (glr_state_presentation().code_panel_layout == CODE_PANEL_LAYOUT_HIDDEN) {
             ui_menu_bar_close();
             color_picker_close();
             editor_completion_clear();
-            set_status("Layout: code panel hidden");
+            repl_set_status("Layout: code panel hidden");
         } else {
-            set_status("Layout: left code panel");
+            repl_set_status("Layout: left code panel");
         }
     } else if (item->key == GLR_CONFIG_AUTO_NORMALS) {
         if (glr_state_presentation().autonormal) {
-            mark_normals_dirty();
-            set_status("Auto-normals: ON");
+            repl_mark_normals_dirty();
+            repl_set_status("Auto-normals: ON");
         } else {
-            set_status("Auto-normals: OFF (existing normals kept)");
+            repl_set_status("Auto-normals: OFF (existing normals kept)");
         }
     } else if (item->key == GLR_CONFIG_POINT_ATTENUATION) {
-        apply_init_bootstrap();
-        set_status(glr_config_get(GLR_CONFIG_POINT_ATTENUATION) ? "Point attenuation: ON"
+        repl_apply_init_bootstrap();
+        repl_set_status(glr_config_get(GLR_CONFIG_POINT_ATTENUATION) ? "Point attenuation: ON"
                                                                   : "Point attenuation: OFF");
     } else if (item->key == GLR_CONFIG_AUDIO_MODE) {
         int mode = glr_config_get(GLR_CONFIG_AUDIO_MODE);
@@ -340,15 +340,15 @@ void glr_cfg_cycle_row(int row, int delta) {
             "Audio: loop song",
             "Audio: loop all",
         };
-        set_status(labels[mode]);
+        repl_set_status(labels[mode]);
     } else if (item->state_names) {
         snprintf(cfg_status_buf, sizeof(cfg_status_buf), "%s: %s",
                  item->label, glr_config_state_name(item->key, new_value));
-        set_status(cfg_status_buf);
+        repl_set_status(cfg_status_buf);
     } else if (item->state_count == 2) {
         snprintf(cfg_status_buf, sizeof(cfg_status_buf), "%s: %s",
                  item->label, new_value ? "ON" : "OFF");
-        set_status(cfg_status_buf);
+        repl_set_status(cfg_status_buf);
     }
 }
 
@@ -411,7 +411,7 @@ int glr_action_menu_item_activate(int menu_id, int item_idx) {
             return 1;
         }
         if (item_idx == REPL_FILE_ITEM_IMPORT) {
-            set_status("Import not implemented yet");
+            repl_set_status("Import not implemented yet");
             return 1;
         }
         if (item_idx == REPL_FILE_ITEM_SAVE_WORKSPACE) {
@@ -457,7 +457,7 @@ int glr_action_menu_item_activate(int menu_id, int item_idx) {
         if (item_idx == example_count + GLR_SCENE_OFF_RENAME) {
             int slot = repl_active_user_scene();
             if (slot < 0) {
-                set_status("No active scene to rename");
+                repl_set_status("No active scene to rename");
                 return 1;
             }
             editor_inline_rename_begin(slot);
