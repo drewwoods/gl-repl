@@ -37,7 +37,11 @@ if [ "${#files[@]}" -eq 0 ]; then
   exit 0
 fi
 
-current="$(grep -cE "$pattern" "${files[@]}" 2>/dev/null | awk -F: '{ s += $2 } END { print (s == "" ? 0 : s) }')"
+# `grep -h` prints each matching line once without a filename prefix; pipe
+# through wc -l for the total count. grep exits 1 when nothing matches
+# (which is the *success* case for this guard once the baseline reaches 0),
+# so wrap it in `|| true` to keep set -o pipefail happy.
+current="$( { grep -hE "$pattern" "${files[@]}" 2>/dev/null || true; } | wc -l | tr -d '[:space:]')"
 
 if [ "$current" -gt "$baseline" ]; then
   echo "ERROR: repl_*.{c,h} editor-coupling count increased (current=$current baseline=$baseline)" >&2

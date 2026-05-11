@@ -1327,6 +1327,24 @@ static float glr_app_camera_distance(void) {
     return glr_camera().dist;
 }
 
+/* Phase 3 of feature/source-document-port.md: editor-input cleanup
+ * the REPL loaders used to do inline now routes through callback
+ * sinks. The two helpers below are the full-app implementations the
+ * controller installs at startup; the demo leaves both unset. */
+static void glr_app_editor_input_reset(void) {
+    editor_insert_mode_set(0);
+    ReplEditorInputState *inp = editor_state_input_mut();
+    inp->input[0] = '\0';
+    inp->input_len = 0;
+    editor_cursor_pos_set(0);
+    inp->pending_newline[0] = '\0';
+    inp->pending_newline_len = 0;
+}
+
+static void glr_app_editor_insert_mode_off(void) {
+    editor_insert_mode_set(0);
+}
+
 static void glr_app_install_app_services(void) {
     /* Install the status-message sink. Pipeline TUs call set_status()
      * to surface diagnostics; this routes them to UiState. The demo
@@ -1362,6 +1380,11 @@ static void glr_app_install_app_services(void) {
      * REPL pipeline. The demo doesn't install — the fallback then
      * passes glPointSize through unscaled. */
     repl_executor_install_camera_distance_source(glr_app_camera_distance);
+    /* Phase 3 of feature/source-document-port.md: install the editor-
+     * input cleanup sinks the example loader / scene loader / snippet
+     * importer dispatch through. */
+    repl_install_editor_input_reset_sink(glr_app_editor_input_reset);
+    repl_install_editor_insert_mode_off_sink(glr_app_editor_insert_mode_off);
 }
 
 /* Full-world reset entry point. Step 2 of

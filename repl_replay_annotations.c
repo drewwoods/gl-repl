@@ -1,7 +1,7 @@
 /*
  * repl_replay_annotations.c -- Code-panel replay variable annotations.
  */
-#include "editor/state.h"  /* editor_state_virtual_lines_*, MAX_VIRTUAL_LINE_* (Phase 4 of feature/source-document-port.md migrates these out) */
+#include "code_annotations.h" /* neutral port for replay annotations (Phase 4 of feature/source-document-port.md) */
 #include "repl_core_internal.h"
 #include "repl_parser.h"
 #include "replay.h"
@@ -9,6 +9,16 @@
 #include "replay_state.h"
 #include "repl_replay_annotations.h"
 #include "config.h"        /* REPL_STATUS_TEXT_MAX */
+
+/* Inline-comment scratch buffer for display-text formatting. Local to
+ * this TU — the editor's MAX_INPUT_LEN used to be the source of this
+ * value, but Phase 4 of feature/source-document-port.md dropped the
+ * editor/state.h include. 1024 preserves the original headroom; final
+ * output gets truncated to out_size or to CODE_ANNOTATION_TEXT_MAX
+ * downstream. */
+#ifndef REPL_REPLAY_COMMENT_BUF
+#define REPL_REPLAY_COMMENT_BUF 1024
+#endif
 
 /* ========================================================================= */
 /* Replay variable display helpers                                            */
@@ -923,7 +933,7 @@ int repl_replay_code_panel_get_command_display_text(SourceTextView text,
     ReplReplayRuntimeState replay = replay_state_view();
     s_replay_text_view = text;
     int flat_idx;
-    char comment[MAX_INPUT_LEN];
+    char comment[REPL_REPLAY_COMMENT_BUF];
 
     if (!out || out_size <= 0)
         return 0;
@@ -1158,7 +1168,7 @@ static int format_evaluated_cmd(const GLCmd *cmd, const char *orig_source,
 
 
 static void repl_replay_annotations_refresh_virtual_lines(void) {
-    editor_state_virtual_lines_clear();
+    code_annotations_clear();
 
     ReplReplayRuntimeState replay = replay_state_view();
     if (!replay.active || !replay.expand_args)
@@ -1174,22 +1184,22 @@ static void repl_replay_annotations_refresh_virtual_lines(void) {
     if (flat_idx < 0)
         return;
 
-    char subst[MAX_VIRTUAL_LINE_TEXT];
-    char var_comment[MAX_VIRTUAL_LINE_AUX];
+    char subst[CODE_ANNOTATION_TEXT_MAX];
+    char var_comment[CODE_ANNOTATION_AUX_MAX];
     if (repl_replay_build_subst_annotation(cmd_idx, flat_idx,
                                            subst, sizeof(subst),
                                            var_comment, sizeof(var_comment)) > 0) {
-        editor_state_virtual_lines_append(cmd_idx,
-                                               VIRTUAL_STYLE_REPLAY_SUBST,
-                                               subst, var_comment);
+        code_annotations_append(cmd_idx,
+                                CODE_ANNOTATION_STYLE_REPLAY_SUBST,
+                                subst, var_comment);
     }
 
-    char eval_buf[MAX_VIRTUAL_LINE_TEXT];
+    char eval_buf[CODE_ANNOTATION_TEXT_MAX];
     if (repl_replay_build_eval_annotation(cmd_idx, flat_idx,
                                           eval_buf, sizeof(eval_buf))) {
-        editor_state_virtual_lines_append(cmd_idx,
-                                               VIRTUAL_STYLE_REPLAY_EVAL,
-                                               eval_buf, NULL);
+        code_annotations_append(cmd_idx,
+                                CODE_ANNOTATION_STYLE_REPLAY_EVAL,
+                                eval_buf, NULL);
     }
 }
 

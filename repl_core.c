@@ -103,6 +103,30 @@ void repl_dispatch_example_presentation_reset(void) {
         g_example_presentation_reset_sink();
 }
 
+/* Phase 3 of feature/source-document-port.md: editor-input cleanup
+ * the example loader / scene loader / snippet importer used to do
+ * inline now travels through these callback sinks. Same shape as the
+ * status / presentation-reset sinks above. The full app installs the
+ * concrete reset; the demo leaves them unset and dispatches no-op. */
+static void (*g_editor_input_reset_sink)(void) = NULL;
+static void (*g_editor_insert_mode_off_sink)(void) = NULL;
+
+void repl_install_editor_input_reset_sink(void (*fn)(void)) {
+    g_editor_input_reset_sink = fn;
+}
+void repl_dispatch_editor_input_reset(void) {
+    if (g_editor_input_reset_sink)
+        g_editor_input_reset_sink();
+}
+
+void repl_install_editor_insert_mode_off_sink(void (*fn)(void)) {
+    g_editor_insert_mode_off_sink = fn;
+}
+void repl_dispatch_editor_insert_mode_off(void) {
+    if (g_editor_insert_mode_off_sink)
+        g_editor_insert_mode_off_sink();
+}
+
 const char *repl_mode_name(GLenum mode) {
     return repl_begin_mode_name(mode);
 }
