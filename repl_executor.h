@@ -88,6 +88,12 @@ void repl_execute_commands(void);
  * once per frame from scene_render.c. */
 void repl_execute_program(const ReplExecutionOptions *options);
 
+/* Apply a single state-mutating GL command (enable/disable/color/shade
+ * model/blend func/etc.). Used inside the executor's own loop and by
+ * the export fade pass to apply scene defaults without driving a full
+ * program. `alpha_scale` multiplies any color alpha channel. */
+int  apply_state_cmd(const GLCmd *cmd, float alpha_scale);
+
 /* Install a camera-distance source. The legacy point-size fallback
  * compiled in via `NO_POINT_PARAMETER=1` (for platforms missing
  * glPointParameterfv) needs the current camera distance to scale

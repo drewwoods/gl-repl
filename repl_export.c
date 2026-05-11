@@ -10,6 +10,7 @@
 #include "repl_command_store.h"
 #include "repl_core.h"
 #include "repl_core_internal.h"
+#include "repl_executor.h"        /* apply_state_cmd */
 #include "repl_parser.h"
 #include "repl_pipeline.h"
 #include "repl_source_scope.h"
@@ -3165,7 +3166,7 @@ static int import_try_snippet_start(ImportState *s, const char *p) {
     /* Function/header import may leave the editor cursor in an insertion slot
      * inside existing commands.  Force snippet lines to start appending from
      * the end of the command list. */
-    repl_dispatch_editor_insert_mode_off();
+    repl_dispatch_insert_mode_off();
     repl_state_edit_line_set(repl_state_document_count());
     return 1;
 }

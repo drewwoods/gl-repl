@@ -2,6 +2,7 @@
 #include "glr_ctrl.h"
 #define _DEFAULT_SOURCE
 #include "glr_config.h"
+#include "repl_command_spec.h"  /* cmd_type_name */
 #include "repl_core.h"
 #include "repl_core_internal.h"
 #include "glr_debug.h"

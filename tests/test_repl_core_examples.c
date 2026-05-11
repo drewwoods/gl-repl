@@ -6,6 +6,7 @@
 #define _DEFAULT_SOURCE
 
 #include "repl_core_internal.h"
+#include "repl_example_loader.h"  /* repl_load_example_lines_for_test */
 #include "repl_examples.h"
 #include "repl_state.h"
 #include "repl_core.h"

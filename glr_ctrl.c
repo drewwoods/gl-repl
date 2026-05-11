@@ -1352,18 +1352,14 @@ static void glr_app_editor_insert_mode_off(void) {
     editor_insert_mode_set(0);
 }
 
-/* Phase 6 of feature/source-document-port.md: route the last two
- * direct editor reads/writes in REPL TUs through sinks. */
-static int glr_app_editor_insert_mode_query(void) {
-    return editor_insert_mode();
-}
-
-static void glr_app_editor_scroll_to_line(int target) {
+/* Phase 6 of feature/source-document-port.md: route the residual
+ * editor scroll/follow writes through host-effect sinks. */
+static void glr_app_scroll_to_line(int target) {
     editor_scroll_set(target);
     editor_scroll_follow_cursor_set(0);
 }
 
-static void glr_app_editor_follow_cursor(int follow) {
+static void glr_app_follow_cursor(int follow) {
     editor_scroll_follow_cursor_set(follow);
 }
 
@@ -1450,14 +1446,15 @@ static void glr_app_install_app_services(void) {
      * REPL pipeline. The demo doesn't install — the fallback then
      * passes glPointSize through unscaled. */
     repl_executor_install_camera_distance_source(glr_app_camera_distance);
-    /* Phase 3 of feature/source-document-port.md: install the editor-
-     * input cleanup sinks the example loader / scene loader / snippet
-     * importer dispatch through. */
-    repl_install_editor_input_reset_sink(glr_app_editor_input_reset);
-    repl_install_editor_insert_mode_off_sink(glr_app_editor_insert_mode_off);
-    repl_install_editor_insert_mode_query_sink(glr_app_editor_insert_mode_query);
-    repl_install_editor_scroll_to_line_sink(glr_app_editor_scroll_to_line);
-    repl_install_editor_follow_cursor_sink(glr_app_editor_follow_cursor);
+    /* Install the host-effect sinks the example loader / scene loader /
+     * snippet importer / replay engine dispatch through. The sinks are
+     * editor-neutral by name (no editor_ prefix in repl_core.h); this
+     * file is where editor coupling concentrates. Phases 3 + 6 of
+     * feature/source-document-port.md. */
+    repl_install_input_reset_sink(glr_app_editor_input_reset);
+    repl_install_insert_mode_off_sink(glr_app_editor_insert_mode_off);
+    repl_install_scroll_to_line_sink(glr_app_scroll_to_line);
+    repl_install_follow_cursor_sink(glr_app_follow_cursor);
 }
 
 /* Full-world reset entry point. Step 2 of
@@ -1881,6 +1878,10 @@ static int glr_ctrl_apply_variable_panel_value_change(
         return 1;
 
     ctx = repl_compile_context_from_live();
+    /* repl_compile_context_from_live() defaults insert_mode to 0
+     * (non-editor convention); the editor-side caller knows the live
+     * value and overrides. */
+    ctx.insert_mode = editor_insert_mode();
     if (repl_compile_set_predef_value(value_change->name, value_change->value,
                                       &ctx, &compiled,
                                       err, sizeof(err)) != REPL_COMPILE_OK) {

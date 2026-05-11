@@ -401,7 +401,7 @@ static void load_example_lines(const char *const *lines) {
      * home, pending newline clear) routes through the controller-
      * installed sink so the REPL pipeline doesn't reach into
      * EditorState. Phase 3 of feature/source-document-port.md. */
-    repl_dispatch_editor_input_reset();
+    repl_dispatch_input_reset();
     /* Editor-side transient reset (camera drag / menu / picker /
      * code-panel-drag) is the controller's responsibility — see
      * cycle_example_or_user_scene in glr_ctrl.c and the
@@ -441,7 +441,7 @@ static void load_example_lines(const char *const *lines) {
     /* Post-load editor cleanup mirrors the pre-load sink dispatch so a
      * stale input line or cursor doesn't survive the loaded body.
      * repl_state_edit_line_set is REPL-state, not editor — it stays. */
-    repl_dispatch_editor_input_reset();
+    repl_dispatch_input_reset();
     repl_state_edit_line_set(repl_state_document_count());
     repl_mark_normals_dirty();
 }
