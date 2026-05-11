@@ -55,12 +55,6 @@
 #include "variable_panel_drag.h"
 #include "variable_panel_state.h"
 
-/* Forward decl: repl_advance_time lives in repl_core.c, declared in
- * repl_core_internal.h. The check-state-boundaries guard forbids
- * glr_ctrl.c from including that header, so we forward-declare the
- * one symbol the timer tick needs. */
-void repl_advance_time(float dt);
-
 static int glr_ctrl_cmd_is_focus_vertex(const GLCmd *cmd) {
     return cmd->valid &&
            (cmd->type == CMD_VERTEX3F || cmd->type == CMD_TESS_VERTEX);
