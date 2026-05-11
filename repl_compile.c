@@ -47,6 +47,7 @@
 
 #include "repl_compile.h"
 
+#include "editor/state.h"        /* editor_insert_mode (compile-context fill) */
 #include "repl_core_internal.h"  /* repl_format_fits, repl_extract_assignment_parts, collect_visible_vars */
 #include "repl_parser.h"         /* repl_parser_parse_command_ctx (uncomment fallback) */
 #include "repl_source_scope.h"   /* repl_source_scope_cmd_indent, _find_block_end */
@@ -114,7 +115,7 @@ ReplCompileContext repl_compile_context_from_live(void) {
         .edit_line       = repl_state_edit_line(),
         .document_count  = repl_state_document_count(),
         .insert_mode     = editor_insert_mode(),
-        .text            = editor_buffer_view(),
+        .text            = source_document_view(),
         .document_cmds   = repl_state_document_cmds(),
     };
     return ctx;
@@ -243,7 +244,7 @@ static int compile_build_literal_assign_change(const ReplCompileContext *ctx,
     if (!ctx || !out || !name || cmd_idx < 0 || cmd_idx >= ctx->document_count)
         return 0;
 
-    compile_copy_leading_ws(editor_buffer_view_line(ctx->text, cmd_idx),
+    compile_copy_leading_ws(source_text_line(ctx->text, cmd_idx),
                             indent, sizeof(indent));
 
     out->kind = REPL_COMPILED_REPLACE_ONE;
@@ -691,7 +692,7 @@ ReplCompileResult repl_compile_float_decl(const char *input,
             if (kept) continue;
             for (int cmd_idx = 0; cmd_idx < ctx->document_count; cmd_idx++) {
                 if (cmd_idx == insert_idx) continue;
-                const char *line = editor_buffer_view_line(ctx->text, cmd_idx);
+                const char *line = source_text_line(ctx->text, cmd_idx);
                 if (repl_eval_source_uses_ident(line ? line : "", nm))
                     return compile_set_err(err, err_size,
                         "variable '%s' is in use, cannot overwrite", nm);
@@ -932,7 +933,7 @@ ReplCompileResult repl_compile_var_assign(const char *input,
             const char *nm = old_decl->var_names[decl_idx];
             for (int cmd_idx = 0; cmd_idx < ctx->document_count; cmd_idx++) {
                 if (cmd_idx == insert_idx) continue;
-                const char *line = editor_buffer_view_line(ctx->text, cmd_idx);
+                const char *line = source_text_line(ctx->text, cmd_idx);
                 if (repl_eval_source_uses_ident(line ? line : "", nm))
                     return compile_set_err(err, err_size,
                         "variable '%s' is in use, cannot overwrite", nm);
@@ -1004,7 +1005,7 @@ ReplCompileResult repl_compile_set_predef_value(const char *name,
     if (decl_idx >= 0) {
         char rewritten[MAX_LINE_LEN];
         if (compile_rewrite_decl_initializer_text(
-                editor_buffer_view_line(ctx->text, decl_idx),
+                source_text_line(ctx->text, decl_idx),
                 name, value, rewritten, sizeof(rewritten))) {
             out->kind = REPL_COMPILED_REPLACE_ONE;
             out->pos = decl_idx;
@@ -1075,7 +1076,7 @@ static ReplCompileResult compile_collect_undeclare_for_range(
             for (int j = 0; j < n; j++) {
                 if (j >= range_start && j < range_end) continue;
                 if (ctx->document_cmds[j].type == CMD_COMMENT) continue;
-                const char *line = editor_buffer_view_line(ctx->text, j);
+                const char *line = source_text_line(ctx->text, j);
                 if (line && repl_eval_source_uses_ident(line, nm))
                     return compile_set_err(err, err_size,
                                            "Cannot %s '%s': still referenced",
@@ -1276,7 +1277,7 @@ ReplCompileResult repl_compile_toggle_comment(int line_idx,
             return REPL_COMPILE_ERROR;
 
         for (int i = 0; i < n; i++) {
-            const char *orig = editor_buffer_view_line(ctx->text, head + i);
+            const char *orig = source_text_line(ctx->text, head + i);
             compile_prepend_prefix(orig, prefix,
                                    out->text[i], (int)sizeof(out->text[i]));
             memset(&out->cmds[i], 0, sizeof(out->cmds[i]));
@@ -1297,7 +1298,7 @@ ReplCompileResult repl_compile_toggle_comment(int line_idx,
 
     /* CMD_COMMENT: strip prefix and re-parse. */
     if (type == CMD_COMMENT) {
-        const char *orig = editor_buffer_view_line(ctx->text, line_idx);
+        const char *orig = source_text_line(ctx->text, line_idx);
         char stripped[MAX_LINE_LEN];
         ReplCompileResult r;
 
@@ -1350,7 +1351,7 @@ ReplCompileResult repl_compile_toggle_comment(int line_idx,
 
     /* Plain non-comment, non-structural: prepend prefix → CMD_COMMENT. */
     {
-        const char *orig = editor_buffer_view_line(ctx->text, line_idx);
+        const char *orig = source_text_line(ctx->text, line_idx);
 
         /* If the line is a CMD_VAR_DECLARE, commenting it out must
          * also remove the variable from the predef table — otherwise

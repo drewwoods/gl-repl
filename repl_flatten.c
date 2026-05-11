@@ -15,10 +15,10 @@
  * if unset. The view is supplied by `ReplFlattenOptions.text`; the
  * GLCmd parameter is unused (kept for symmetry with earlier helpers
  * before GLCmd carried no source text). */
-static const char *spike_text_for(EditorBufferView text,
+static const char *spike_text_for(SourceTextView text,
                                   const GLCmd *src_cmd, int i) {
     (void)src_cmd;
-    const char *line = editor_buffer_view_line(text, i);
+    const char *line = source_text_line(text, i);
     return (line && line[0]) ? line : "";
 }
 
@@ -29,7 +29,7 @@ typedef struct {
     FlatCmdLocalVars *flat_local_vars;
     int               flat_capacity;
     int               flat_count;
-    EditorBufferView  text;             /* editor source-text view for inline expansion */
+    SourceTextView  text;             /* editor source-text view for inline expansion */
     int               max_call_depth;
     int call_depth;
     int abort;
@@ -48,7 +48,7 @@ static void flatten_fail(FlattenContext *ctx, const char *msg) {
     ctx->abort = 1;
 }
 
-static void flatten_get_for_var_name(EditorBufferView text,
+static void flatten_get_for_var_name(SourceTextView text,
                                      const GLCmd *cmd, int cmd_idx,
                                      char *var, int var_sz) {
     const char *p = spike_text_for(text, cmd, cmd_idx);
@@ -584,7 +584,7 @@ int repl_flatten_program(const ReplFlattenOptions *options,
         .flat_local_vars = options ? options->flat_local_vars : NULL,
         .flat_capacity = options ? options->flat_capacity : 0,
         .flat_count = 0,
-        .text = options ? options->text : (EditorBufferView){0},
+        .text = options ? options->text : (SourceTextView){0},
         .max_call_depth = options && options->max_call_depth > 0
                         ? options->max_call_depth : MAX_FLATTEN_CALL_DEPTH,
         .call_depth = 0,
@@ -625,7 +625,7 @@ void repl_flatten_commands(void) {
         .flat_cmds = flat_program->cmds,
         .flat_local_vars = flat_program->local_vars,
         .flat_capacity = flat_program->capacity,
-        .text = editor_buffer_view(),
+        .text = source_document_view(),
         .max_call_depth = MAX_FLATTEN_CALL_DEPTH,
         .visit_budget = MAX_FLATTEN_VISIT_BUDGET
     };

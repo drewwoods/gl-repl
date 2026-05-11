@@ -1,6 +1,7 @@
 /*
  * repl_scenes.c -- User scene slots, promotion, and workspace save/load.
  */
+#include "editor/state.h"  /* editor_buffer_load_lines, editor_insert_mode_set (Phase 2 migrates these out) */
 #include "repl_command_store.h"
 #include "repl_core_internal.h"
 #include "repl_examples.h"
@@ -190,11 +191,11 @@ static void derive_unique_scene_name(char *out, size_t out_sz,
 static void save_scene_to_slot(int idx, const char *name) {
     if (idx < 0 || idx >= MAX_USER_SCENES) return;
     UserScene *s = &g_user_scenes[idx];
-    EditorBufferView text = editor_buffer_view();
+    SourceTextView text = source_document_view();
     memcpy(s->cmds, repl_state_document_cmds_mut(), (size_t)repl_state_document_count() * sizeof(GLCmd));
     for (int i = 0; i < repl_state_document_count(); i++)
         repl_copy_string_fits(s->lines[i], MAX_LINE_LEN,
-                              editor_buffer_view_line(text, i));
+                              source_text_line(text, i));
     s->num_cmds        = repl_state_document_count();
     s->edit_line       = repl_state_edit_line();
     s->num_predef_vars = g_num_predef_vars;
@@ -353,12 +354,12 @@ static void install_scene_into_live(int slot) {
  * live cfg so install_scene_into_live can be undone. Callers
  * allocate both on the stack. */
 static void stash_live_state(UserScene *dst, ReplExportConfig *cfg_out) {
-    EditorBufferView text = editor_buffer_view();
+    SourceTextView text = source_document_view();
     memset(dst, 0, sizeof(*dst));
     memcpy(dst->cmds, repl_state_document_cmds_mut(), (size_t)repl_state_document_count() * sizeof(GLCmd));
     for (int i = 0; i < repl_state_document_count(); i++)
         repl_copy_string_fits(dst->lines[i], MAX_LINE_LEN,
-                              editor_buffer_view_line(text, i));
+                              source_text_line(text, i));
     dst->num_cmds        = repl_state_document_count();
     dst->edit_line       = repl_state_edit_line();
     dst->num_predef_vars = g_num_predef_vars;
@@ -455,7 +456,7 @@ int repl_save_workspace(const char *dir, const ReplExportLayout *layout) {
         snprintf(path, sizeof(path), "%s/%s.c", dir, slug);
 
         g_export_scene_name_hint = g_user_scenes[s].name;
-        repl_export_save_output(path, editor_buffer_view(), layout);
+        repl_export_save_output(path, source_document_view(), layout);
         g_export_scene_name_hint = NULL;
         written++;
     }
@@ -569,7 +570,7 @@ static int evict_scene_to_workspace(int slot) {
      * (called from editor_undo_push_snapshot). The user isn't actively
      * saving here, so the layout struct is unavailable — pass NULL and
      * accept the 800x600 fallback in the exported display(). */
-    repl_export_save_output(path, editor_buffer_view(), NULL);
+    repl_export_save_output(path, source_document_view(), NULL);
     g_export_scene_name_hint = NULL;
 
     g_user_scenes[slot].used = 0;

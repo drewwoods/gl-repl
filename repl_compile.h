@@ -26,9 +26,9 @@
 #define REPL_COMPILE_H
 
 #include "config.h"
-#include "editor/state.h" /* EditorBufferView */
-#include "repl_command.h" /* GLCmd, MAX_LINE_LEN */
-#include "repl_eval.h"    /* MAX_NAMES_PER_DECL, ExprVar */
+#include "repl_command.h"   /* GLCmd, MAX_LINE_LEN */
+#include "repl_eval.h"      /* MAX_NAMES_PER_DECL, ExprVar */
+#include "source_document.h" /* SourceTextView (Phase 1 of feature/source-document-port.md) */
 
 /* Source-command level shape of a compiled change. The `kind` field
  * picks which fields are meaningful:
@@ -189,7 +189,7 @@ typedef struct {
     int               edit_line;        /* current cursor source-cmd idx */
     int               document_count;   /* current cmd count */
     int               insert_mode;      /* 1 if editor is in insert mode */
-    EditorBufferView  text;             /* source-text view for ident-usage checks */
+    SourceTextView    text;             /* source-text view for ident-usage checks */
     const GLCmd      *document_cmds;    /* source-command array snapshot */
 } ReplCompileContext;
 

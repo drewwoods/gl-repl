@@ -2,6 +2,7 @@
  * replay.c - Replay state machine, fade batches, and replay input.
  */
 #include "replay.h"
+#include "editor/state.h"     /* editor_scroll_follow_cursor_set */
 #include "repl_core_internal.h"
 #include "repl_pipeline.h"
 #include "keys.h"

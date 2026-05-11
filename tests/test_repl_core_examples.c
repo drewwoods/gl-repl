@@ -1,3 +1,4 @@
+#include "editor/state.h"
 #include "glr_camera.h"
 #include "glr_state.h"
 #include "glr_ctrl.h"
@@ -175,7 +176,7 @@ static char *dump_current_code_panel_text(void) {
     char *buf;
     if (!tmp)
         return NULL;
-    repl_dump_code_panel_text(tmp, editor_buffer_view());
+    repl_dump_code_panel_text(tmp, source_document_view());
     buf = slurp_stream(tmp);
     fclose(tmp);
     return buf;
@@ -946,7 +947,7 @@ int main(int argc, char **argv) {
         snprintf(export_path, sizeof(export_path), "%s/example_%02d.c",
                  temp_dir, idx);
         log_example_step(idx, name, "export", export_path);
-        repl_export_save_output(export_path, editor_buffer_view(), NULL);
+        repl_export_save_output(export_path, source_document_view(), NULL);
         compile_detail[0] = '\0';
         compiled = compile_exported_source(idx, name, export_path,
                                            compile_detail,
@@ -1016,7 +1017,7 @@ int main(int argc, char **argv) {
                 snprintf(reexport_path, sizeof(reexport_path),
                          "%s/example_%02d_roundtrip.c", temp_dir, idx);
                 log_example_step(idx, name, "re-export", reexport_path);
-                repl_export_save_output(reexport_path, editor_buffer_view(), NULL);
+                repl_export_save_output(reexport_path, source_document_view(), NULL);
                 reexport_detail[0] = '\0';
                 roundtrip_compiled = compile_exported_source(idx, name, reexport_path,
                                                              reexport_detail,

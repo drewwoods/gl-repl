@@ -1,3 +1,4 @@
+#include "editor/state.h"
 #include "glr_completion.h"
 #include "glr_ctrl.h"
 #include "repl_core_internal.h"

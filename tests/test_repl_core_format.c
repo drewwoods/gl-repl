@@ -1,3 +1,4 @@
+#include "editor/state.h"
 #include "glr_state.h"
 #include "glr_ctrl.h"
 #include "repl_core_internal.h"
@@ -168,7 +169,7 @@ int main(void) {
         FILE *dump_f = fopen(tmp_dump_path, "w");
         ASSERT_TRUE("open dump file", dump_f != NULL);
         if (dump_f) {
-            repl_dump_code_panel_text(dump_f, editor_buffer_view());
+            repl_dump_code_panel_text(dump_f, source_document_view());
             fclose(dump_f);
         }
 
@@ -222,7 +223,7 @@ int main(void) {
             {
                 ReplExportLayout layout;
                 glr_ctrl_fill_export_layout(&layout);
-                repl_dump_code_panel_visual_text(dump_f, editor_buffer_view(), &layout);
+                repl_dump_code_panel_visual_text(dump_f, source_document_view(), &layout);
             }
             fclose(dump_f);
         }
@@ -266,7 +267,7 @@ int main(void) {
             {
                 ReplExportLayout layout;
                 glr_ctrl_fill_export_layout(&layout);
-                repl_dump_code_panel_visual_text(dump_f, editor_buffer_view(), &layout);
+                repl_dump_code_panel_visual_text(dump_f, source_document_view(), &layout);
             }
             fclose(dump_f);
         }
@@ -313,7 +314,7 @@ int main(void) {
             {
                 ReplExportLayout layout;
                 glr_ctrl_fill_export_layout(&layout);
-                repl_dump_code_panel_visual_text(dump_f, editor_buffer_view(), &layout);
+                repl_dump_code_panel_visual_text(dump_f, source_document_view(), &layout);
             }
             fclose(dump_f);
         }
@@ -358,7 +359,7 @@ int main(void) {
             {
                 ReplExportLayout layout;
                 glr_ctrl_fill_export_layout(&layout);
-                repl_dump_code_panel_visual_text(dump_f, editor_buffer_view(), &layout);
+                repl_dump_code_panel_visual_text(dump_f, source_document_view(), &layout);
             }
             fclose(dump_f);
         }
@@ -412,7 +413,7 @@ int main(void) {
                 {
                 ReplExportLayout layout;
                 glr_ctrl_fill_export_layout(&layout);
-                repl_dump_code_panel_visual_text(dump_f, editor_buffer_view(), &layout);
+                repl_dump_code_panel_visual_text(dump_f, source_document_view(), &layout);
             }
                 fclose(dump_f);
             }
@@ -477,7 +478,7 @@ int main(void) {
             glr_ctrl_fill_export_layout(&layout);
             ASSERT_TRUE("layout struct picks up show_vertex_indices=0",
                         layout.show_vertex_indices == 0);
-            repl_dump_code_panel_visual_text(dump_f, editor_buffer_view(), &layout);
+            repl_dump_code_panel_visual_text(dump_f, source_document_view(), &layout);
             fclose(dump_f);
         }
         dump_f = fopen(tmp_dump_path, "r");
@@ -496,7 +497,7 @@ int main(void) {
             glr_ctrl_fill_export_layout(&layout);
             ASSERT_TRUE("layout struct picks up show_vertex_indices=1",
                         layout.show_vertex_indices == 1);
-            repl_dump_code_panel_visual_text(dump_f, editor_buffer_view(), &layout);
+            repl_dump_code_panel_visual_text(dump_f, source_document_view(), &layout);
             fclose(dump_f);
         }
         dump_f = fopen(tmp_dump_path, "r");

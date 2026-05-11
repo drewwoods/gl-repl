@@ -1,5 +1,6 @@
 #include "repl_export.h"
 #include "./include/gl_2d.h"
+#include "editor/state.h"        /* editor_buffer_insert_line, editor_insert_mode_set (Phase 2 of feature/source-document-port.md migrates these out) */
 #include "repl_load.h"           /* repl_load_apply_line — step 5b */
 /* glr_camera.h removed in step 4a: the export pipeline no longer
  * references glr_camera_*. Camera state flows through the
@@ -182,9 +183,9 @@ static void workspace_format_float(char *buf, size_t n, float v) {
  * that reads source text. Static helpers route through
  * `export_document_text` instead of calling `editor_buffer_line`
  * directly so the source-text dependency is declared at the API
- * boundary as an EditorBufferView parameter rather than a hidden
+ * boundary as an SourceTextView parameter rather than a hidden
  * global reach-through. */
-static EditorBufferView s_export_text_view;
+static SourceTextView s_export_text_view;
 
 static const char *export_document_text(int cmd_idx) {
     const char *text;
@@ -192,7 +193,7 @@ static const char *export_document_text(int cmd_idx) {
     if (cmd_idx < 0 || cmd_idx >= repl_state_document_count())
         return "";
 
-    text = editor_buffer_view_line(s_export_text_view, cmd_idx);
+    text = source_text_line(s_export_text_view, cmd_idx);
     return (text && text[0]) ? text : "";
 }
 
@@ -2985,7 +2986,7 @@ static void emit_export_scaffold(FILE *f, const ExportScaffoldContext *ctx) {
     }
 }
 
-void repl_export_save_output(const char *filename, EditorBufferView text,
+void repl_export_save_output(const char *filename, SourceTextView text,
                              const ReplExportLayout *layout) {
     FILE *f = fopen(filename, "w");
     if (!f) {
@@ -3278,7 +3279,7 @@ static void dump_code_panel_wrapped_line(FILE *dst, const char *text,
     }
 }
 
-void repl_dump_code_panel_text(FILE *out, EditorBufferView text) {
+void repl_dump_code_panel_text(FILE *out, SourceTextView text) {
     FILE *dst = out ? out : stdout;
 
     s_export_text_view = text;
@@ -3316,7 +3317,7 @@ void repl_dump_code_panel_text(FILE *out, EditorBufferView text) {
     fflush(dst);
 }
 
-void repl_dump_code_panel_visual_text(FILE *out, EditorBufferView text,
+void repl_dump_code_panel_visual_text(FILE *out, SourceTextView text,
                                       const ReplExportLayout *layout) {
     FILE *dst = out ? out : stdout;
     /* Step 7c: panel width + presentation flags come in opaquely

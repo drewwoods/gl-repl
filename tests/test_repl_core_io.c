@@ -1,3 +1,4 @@
+#include "editor/state.h"
 #include "glr_camera.h"
 #include "glr_state.h"
 #include "glr_ctrl.h"
@@ -151,7 +152,7 @@ int main(void) {
     g_line_smooth_enabled = 1;
     glr_state_presentation_mut()->show_vertex_outlines = 0;
     glr_state_presentation_mut()->show_vertex_points = 0;
-    repl_export_save_output(path, editor_buffer_view(), NULL);
+    repl_export_save_output(path, source_document_view(), NULL);
     {
         char buf[16384];
         read_text_file(path, buf, sizeof(buf));
@@ -218,7 +219,7 @@ int main(void) {
     g_init_attenuate_points = 0;
     ASSERT_TRUE("init hides point attenuation when disabled",
                 find_init_line_substr("glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION") < 0);
-    repl_export_save_output(path, editor_buffer_view(), NULL);
+    repl_export_save_output(path, source_document_view(), NULL);
     {
         char buf[16384];
         read_text_file(path, buf, sizeof(buf));
@@ -249,7 +250,7 @@ int main(void) {
     repl_feed_line_public("A[1] = 1;");
     repl_feed_line_public("A[0] = A[0] + (A[1] - A[0])*0.25;");
     repl_feed_line_public("glVertex3f(A[0], 0, 0);");
-    repl_export_save_output(scratch_path, editor_buffer_view(), NULL);
+    repl_export_save_output(scratch_path, source_document_view(), NULL);
     {
         char buf[16384];
         read_text_file(scratch_path, buf, sizeof(buf));
@@ -276,7 +277,7 @@ int main(void) {
         repl_feed_line_public("A[0] = 1;");
         repl_feed_line_public("B[0] = 2;");
         repl_feed_line_public("glVertex3f(A[0], B[0], 0);");
-        repl_export_save_output(cross_path, editor_buffer_view(), NULL);
+        repl_export_save_output(cross_path, source_document_view(), NULL);
         char buf[8192];
         read_text_file(cross_path, buf, sizeof(buf));
         ASSERT_TRUE("scratch A exported when used",
@@ -314,7 +315,7 @@ int main(void) {
         const char *post_decl = repl_func_alias_get(0);
         ASSERT_TRUE("alias readable post-decl",
                     post_decl && strcmp(post_decl, "drawCube") == 0);
-        repl_export_save_output(alias_path, editor_buffer_view(), NULL);
+        repl_export_save_output(alias_path, source_document_view(), NULL);
         {
             char buf[16384];
             read_text_file(alias_path, buf, sizeof(buf));
@@ -354,7 +355,7 @@ int main(void) {
     glr_camera_set_orbit(31.523f, 31.4799f);
     glr_camera_set_distance(7.59313f);
     glr_camera_set_pan(1.50f, 0.0f, -2.00f);
-    repl_export_save_output(path, editor_buffer_view(), NULL);
+    repl_export_save_output(path, source_document_view(), NULL);
     {
         char buf[16384];
         read_text_file(path, buf, sizeof(buf));
@@ -397,7 +398,7 @@ int main(void) {
 
     glr_state_presentation_mut()->show_vertex_outlines = 1;
     glr_state_presentation_mut()->show_vertex_points = 1;
-    repl_export_save_output(func_path, editor_buffer_view(), NULL);
+    repl_export_save_output(func_path, source_document_view(), NULL);
     {
         char buf[32768];
         read_text_file(func_path, buf, sizeof(buf));
@@ -460,7 +461,7 @@ int main(void) {
     repl_feed_line_public("}");
     repl_feed_line_public("}");
     repl_feed_line_public("func0(1, 6, 0);");
-    repl_export_save_output(param_loop_path, editor_buffer_view(), NULL);
+    repl_export_save_output(param_loop_path, source_document_view(), NULL);
     {
         char buf[32768];
         read_text_file(param_loop_path, buf, sizeof(buf));
@@ -499,7 +500,7 @@ int main(void) {
     repl_feed_line_public("}");
     repl_feed_line_public("r = 2;");
     repl_feed_line_public("func0();");
-    repl_export_save_output(decl_func_path, editor_buffer_view(), NULL);
+    repl_export_save_output(decl_func_path, source_document_view(), NULL);
 
     glr_app_reset_all(); declare_test_vars();
     ASSERT_TRUE("load decl plus promoted func output",
@@ -521,7 +522,7 @@ int main(void) {
     repl_feed_line_public("glVertex3f(radius, 0, 0);");
     repl_feed_line_public("}");
     repl_feed_line_public("func0(2);");
-    repl_export_save_output(decl_func_blank_path, editor_buffer_view(), NULL);
+    repl_export_save_output(decl_func_blank_path, source_document_view(), NULL);
 
     glr_app_reset_all(); declare_test_vars();
     ASSERT_TRUE("load decl blank plus func output",
@@ -556,7 +557,7 @@ int main(void) {
     repl_feed_line_public("glutSolidCube(0.5);");
     glr_state_presentation_mut()->show_vertex_outlines = 0;
     glr_state_presentation_mut()->show_vertex_points = 0;
-    repl_export_save_output(shape_path, editor_buffer_view(), NULL);
+    repl_export_save_output(shape_path, source_document_view(), NULL);
     {
         char buf[16384];
         read_text_file(shape_path, buf, sizeof(buf));
@@ -619,7 +620,7 @@ int main(void) {
     repl_feed_line_public("func0(2.0);");
     glr_state_presentation_mut()->show_vertex_outlines = 1;
     glr_state_presentation_mut()->show_vertex_points = 1;
-    repl_export_save_output(tess_path, editor_buffer_view(), NULL);
+    repl_export_save_output(tess_path, source_document_view(), NULL);
     {
         char buf[65536];
         read_text_file(tess_path, buf, sizeof(buf));

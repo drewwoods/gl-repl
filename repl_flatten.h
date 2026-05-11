@@ -20,8 +20,8 @@
 #define REPL_FLATTEN_H
 
 #include "repl_command.h"
-#include "editor/state.h"  /* EditorBufferView */
 #include "repl_eval.h"
+#include "source_document.h"  /* SourceTextView (Phase 1 of feature/source-document-port.md) */
 
 /* Local variable snapshot for a single flat command. Captured when the
  * command is emitted (e.g., loop counter value, function parameter binding).
@@ -52,7 +52,7 @@ typedef struct {
     GLCmd            *flat_cmds;
     FlatCmdLocalVars *flat_local_vars;
     int               flat_capacity;
-    EditorBufferView  text;             /* editor source-text view used for inline expansion */
+    SourceTextView    text;             /* source-text view used for inline expansion */
     int               max_call_depth;   /* recursion limit (default MAX_FLATTEN_CALL_DEPTH) */
     int               visit_budget;     /* total command visits allowed (default MAX_FLATTEN_VISIT_BUDGET) */
 } ReplFlattenOptions;

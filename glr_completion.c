@@ -10,6 +10,7 @@
  * Runtime storage (matches, ghost, hint) lives on EditorState and is
  * accessed through the typed autocomplete facade.
  */
+#include "editor/state.h"        /* EditorBufferView, ReplAutocompleteState, editor_state_* */
 #include "repl_state_owners.h"
 #include "repl_core_internal.h"
 #include "repl_command_spec.h"

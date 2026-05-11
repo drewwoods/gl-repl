@@ -7,6 +7,7 @@
  * clipboard storage in repl_state.c while this module owns the behavior.
  */
 
+#include "state.h"
 #include "clipboard.h"
 #include "input.h"
 #include "undo.h"

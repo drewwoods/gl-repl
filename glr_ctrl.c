@@ -285,7 +285,7 @@ static void glr_ctrl_render_replay_fade_batches(void) {
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
     FlatProgramView program = repl_state_flat_program_view();
-    EditorBufferView text = editor_buffer_view();
+    SourceTextView text = source_document_view();
 
     for (int batch_idx = 0; batch_idx < batch_count; batch_idx++) {
         const ReplayFadeBatch *batch = &plan->batches[batch_idx];
@@ -816,14 +816,14 @@ static void glr_ctrl_push_line_overrides(void) {
     if (!replay.active || !replay.expand_args)
         return;
 
-    EditorBufferView view = editor_buffer_view();
+    SourceTextView view = source_document_view();
     int n = repl_state_document_count();
     for (int i = 0; i < n; i++) {
         char display[MAX_LINE_OVERRIDE_TEXT];
         if (!repl_replay_code_panel_get_command_display_text(view, i, display,
                                                              sizeof(display)))
             continue;
-        const char *base = editor_buffer_view_line(view, i);
+        const char *base = source_text_line(view, i);
         if (base && strcmp(display, base) == 0)
             continue;
         editor_state_line_overrides_append(i, display);
@@ -905,7 +905,7 @@ static void scene_execute_adapter(const SceneExecuteContext *ctx,
     repl_execute_program(&(ReplExecutionOptions){
         .flat_cmd_count = count,
         .program        = repl_state_flat_program_view(),
-        .text           = editor_buffer_view(),
+        .text           = source_document_view(),
     });
     glPopAttrib();
 }
@@ -1175,7 +1175,7 @@ void glr_ctrl_display_frame(void) {
      * the per-line text-override list. Layout reads both as snapshot
      * data; the editor is agnostic to which feature pushed them. */
     prof_begin(PROF_SNAPSHOT_VIRTUAL_LINES);
-    repl_replay_annotations_prepare(editor_buffer_view());
+    repl_replay_annotations_prepare(source_document_view());
     glr_ctrl_push_line_overrides();
     prof_end(PROF_SNAPSHOT_VIRTUAL_LINES);
 
@@ -1523,7 +1523,7 @@ int glr_ctrl_router_handle_quit_key(unsigned char key) {
     if (key == KEY_CTRL_Q) {
         ReplExportLayout layout;
         glr_ctrl_fill_export_layout(&layout);
-        repl_export_save_output("/tmp/temp-output.c", editor_buffer_view(),
+        repl_export_save_output("/tmp/temp-output.c", source_document_view(),
                                 &layout);
         printf("Saved to %s\n", "/tmp/temp-output.c");
         exit(0);

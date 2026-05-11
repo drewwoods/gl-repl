@@ -5,6 +5,7 @@
  * Rendering and mouse hit-testing consume the same layout so scrolling,
  * selection, replay annotations, and visual dumps do not drift apart.
  */
+#include "state.h"
 #include "code_panel_document.h"
 
 #include "./include/gl_2d.h"

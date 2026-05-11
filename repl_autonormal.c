@@ -1,6 +1,7 @@
 /*
  * repl_autonormal.c -- Auto-generated normal commands and feeding-state lookup.
  */
+#include "editor/state.h"   /* editor_buffer_insert_line / _replace_line (Phase 2 migrates these to source_document_*) */
 #include "repl_core.h"
 #include "repl_command_store.h"
 #include "repl_source_scope.h"

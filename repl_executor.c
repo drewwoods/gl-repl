@@ -322,7 +322,7 @@ static FlatCmdLocalVars *execution_local_vars_at(FlatProgramView program,
     return &program.local_vars[flat_cmd_idx];
 }
 
-static const char *execution_flat_text(EditorBufferView text,
+static const char *execution_flat_text(SourceTextView text,
                                        const GLCmd *flat_cmd) {
     int src_cmd_idx;
 
@@ -334,7 +334,7 @@ static const char *execution_flat_text(EditorBufferView text,
         return "";
 
     {
-        const char *line = editor_buffer_view_line(text, src_cmd_idx);
+        const char *line = source_text_line(text, src_cmd_idx);
         return (line && line[0]) ? line : "";
     }
 }
@@ -350,7 +350,7 @@ void repl_execute_program(const ReplExecutionOptions *options) {
     FlatProgramView program = execution_program_from_options(options);
     const GLCmd *flat_cmds = program.cmds;
     int flat_cmd_count = execution_flat_count_from_options(options, program);
-    EditorBufferView text = options ? options->text : (EditorBufferView){0};
+    SourceTextView text = options ? options->text : (SourceTextView){0};
     int in_begin = 0;
     int tess_depth = 0; /* 0=outside, 1=in polygon, 2=in contour */
     int matrix_depth = 0;
@@ -718,7 +718,7 @@ void repl_execute_commands(void) {
     ReplExecutionOptions options = {
         .flat_cmd_count = repl_state_flat_program_count(),
         .program        = repl_state_flat_program_view(),
-        .text           = editor_buffer_view(),
+        .text           = source_document_view(),
     };
     repl_execute_program(&options);
 }

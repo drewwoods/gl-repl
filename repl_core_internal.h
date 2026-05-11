@@ -50,8 +50,8 @@
 
 #include <stdarg.h>
 
-#include "editor/state.h"  /* EditorBufferView */
-#include "repl_export.h"   /* ReplExportLayout (step 7c) */
+#include "repl_export.h"     /* ReplExportLayout (step 7c) */
+#include "source_document.h" /* SourceTextView (Phase 1 of feature/source-document-port.md) */
 
 #if defined(__GNUC__) || defined(__clang__)
 #define REPL_PRINTF_LIKE(fmt_idx, arg_idx) __attribute__((format(printf, fmt_idx, arg_idx)))
@@ -166,7 +166,7 @@ int  repl_extract_assignment_target_parts(const char *src,
 
 /* ---- Code-panel dumps (debug + test fixtures) ------------------------- */
 
-void repl_dump_code_panel_text(FILE *out, EditorBufferView text);
+void repl_dump_code_panel_text(FILE *out, SourceTextView text);
 /* Visual dump consumes the explicit layout struct (step 7c of
  * feature/decouple-repl-from-gl-repl-alt.md) so the REPL pipeline
  * doesn't reach into ui_state / glr_state for panel width or
@@ -174,7 +174,7 @@ void repl_dump_code_panel_text(FILE *out, EditorBufferView text);
  * struct because it doesn't measure or wrap. */
 /* ReplExportLayout typedef is in repl_export.h, transitively included
  * through repl_core.h above. */
-void repl_dump_code_panel_visual_text(FILE *out, EditorBufferView text,
+void repl_dump_code_panel_visual_text(FILE *out, SourceTextView text,
                                       const ReplExportLayout *layout);
 
 /* ---- Source-scope helpers --------------------------------------------- */

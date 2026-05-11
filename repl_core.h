@@ -11,9 +11,9 @@
 
 #include <stdio.h>
 
-#include "editor/state.h"   /* EditorBufferView */
-#include "repl_export.h"    /* ReplExportLayout (step 7c) */
+#include "repl_export.h"     /* ReplExportLayout (step 7c) */
 #include "repl_flatten.h"
+#include "source_document.h" /* SourceTextView (Phase 1 of feature/source-document-port.md) */
 
 /* --- Save / load ------------------------------------------------------- */
 
@@ -30,13 +30,13 @@ int  repl_export_load_from_file(const char *filename);
 
 /* Save active scene or example to a standalone .c file with metadata headers
  * (@var name=value, @cfg key=value, @camera, @scene-name, @workspace-dir).
- * Sets status message on success or failure. `text` is the editor
- * buffer view the caller built; export reads source text exclusively
+ * Sets status message on success or failure. `text` is the source-
+ * text view the caller built; export reads source text exclusively
  * through that view. `layout` carries opaque viewport / scene rect /
  * code-panel width / wrap toggle the controller built; the export
  * pipeline reads them as integers (step 7c of
  * feature/decouple-repl-from-gl-repl-alt.md). */
-void repl_export_save_output(const char *filename, EditorBufferView text,
+void repl_export_save_output(const char *filename, SourceTextView text,
                              const ReplExportLayout *layout);
 
 /* Workspace I/O: save every occupied user-scene slot to `<dir>/<slug>.c`.

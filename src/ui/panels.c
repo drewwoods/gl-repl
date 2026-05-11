@@ -293,7 +293,7 @@ int ui_panels_code_panel_apply_scroll_follow_for_test(int show_vertex_indices,
      * controller's per-frame snapshot build, so refresh the
      * virtual-line list here so layout sees the same shape it does
      * in production. */
-    repl_replay_annotations_prepare(editor_buffer_view());
+    repl_replay_annotations_prepare(source_document_view());
     repl_code_panel_document_build(&layout, cp_w, text_x, cp_h);
     repl_code_panel_document_apply_follow_scroll(&layout);
 

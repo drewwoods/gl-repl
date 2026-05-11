@@ -17,6 +17,7 @@
  * The module owns search behavior; storage lives in repl_state.c and is
  * accessed through the typed search facade.
  */
+#include "state.h"
 #include "input.h"
 #include "completion.h"
 #include "search.h"

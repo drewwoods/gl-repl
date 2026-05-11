@@ -155,7 +155,7 @@ static char *dump_code_panel(void) {
 
     if (!tmp)
         return strdup("");
-    repl_dump_code_panel_text(tmp, editor_buffer_view());
+    repl_dump_code_panel_text(tmp, source_document_view());
     buf = slurp_stream(tmp);
     fclose(tmp);
     return buf ? buf : strdup("");
@@ -256,7 +256,7 @@ int main(void) {
     ASSERT_TRUE("code before export captured", code_before != NULL);
 
     /* First export to file */
-    repl_export_save_output(path1, editor_buffer_view(), NULL);
+    repl_export_save_output(path1, source_document_view(), NULL);
 
     /* Reimport from file */
     glr_app_reset_all();
@@ -291,7 +291,7 @@ int main(void) {
     ASSERT_TRUE("exact export/import roundtrip", exact_match);
 
     /* Verify stability: re-export should produce the same output */
-    repl_export_save_output(path2, editor_buffer_view(), NULL);
+    repl_export_save_output(path2, source_document_view(), NULL);
     glr_app_reset_all();
     declare_test_vars();
     ASSERT_TRUE("re-import succeeded", repl_export_load_from_file(path2) == 1);
