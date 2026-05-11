@@ -1,5 +1,5 @@
-#ifndef OPENGL_VIBE_STUB_GL_H
-#define OPENGL_VIBE_STUB_GL_H
+#ifndef STUB_GL_H
+#define STUB_GL_H
 
 /*
  * Minimal fixed-function OpenGL header for remote build environments that do

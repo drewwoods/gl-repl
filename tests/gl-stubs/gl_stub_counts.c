@@ -2,11 +2,11 @@
  * gl_stub_counts.c - storage + helpers for the stub GL/GLU/GLUT call
  * counters declared in tests/gl-stubs/include/GL/gl_stub_counts.h.
  *
- * The file compiles to nothing when OPENGL_VIBE_USE_GL_STUBS is not
+ * The file compiles to nothing when GL_STUBS is not
  * defined, so linking it into the normal real-GL build is a no-op.
  */
 
-#ifdef OPENGL_VIBE_USE_GL_STUBS
+#ifdef GL_STUBS
 
 #include <GL/gl_stub_counts.h>
 
@@ -46,4 +46,4 @@ void gl_stub_counts_dump(FILE *out, const char *prefix, long long divisor) {
     }
 }
 
-#endif /* OPENGL_VIBE_USE_GL_STUBS */
+#endif /* GL_STUBS */

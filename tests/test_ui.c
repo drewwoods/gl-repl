@@ -860,7 +860,7 @@ static void test_vertex2f_gutter_labels(void) {
 }
 
 int main(void) {
-#ifndef OPENGL_VIBE_USE_GL_STUBS
+#ifndef GL_STUBS
     printf("This test requires GL stubs (USE_GL_STUBS=1)\n");
     return 0;
 #endif

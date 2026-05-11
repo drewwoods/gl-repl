@@ -11,7 +11,7 @@
 #include "ui/metrics.h"
 #include "support/test_harness.h"
 #include <gl_2d.h>
-#ifdef OPENGL_VIBE_USE_GL_STUBS
+#ifdef GL_STUBS
 #include <GL/gl_stub_counts.h>
 #endif
 #include <stdio.h>
@@ -231,7 +231,7 @@ static void test_unified_hit_test(void) {
     ASSERT_INT_EQ("hit_test: pin id", h.item_idx, REPL_MENU_BAR_PIN_REPLAY);
 }
 
-#ifdef OPENGL_VIBE_USE_GL_STUBS
+#ifdef GL_STUBS
 static void make_test_ui_snapshot(UiRenderSnapshot *snap) {
     memset(snap, 0, sizeof(*snap));
     snap->viewport = ui_state_viewport();
@@ -314,7 +314,7 @@ int main(void) {
     test_top_level_hits();
     test_dropdown_and_config_press();
     test_unified_hit_test();
-#ifdef OPENGL_VIBE_USE_GL_STUBS
+#ifdef GL_STUBS
     test_render_paths_with_stubs();
 #endif
 

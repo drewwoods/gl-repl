@@ -327,7 +327,7 @@ static void execute_against_stubs(void) {
  *         make repl_demo USE_GL_STUBS=1   (headless, --render is a no-op)
  */
 
-#ifndef OPENGL_VIBE_USE_GL_STUBS
+#ifndef GL_STUBS
 
 #define DEMO_WINDOW_W 800
 #define DEMO_WINDOW_H 600
@@ -446,7 +446,7 @@ static int run_render_mode(int argc, char **argv) {
     return 0;
 }
 
-#else  /* OPENGL_VIBE_USE_GL_STUBS */
+#else  /* GL_STUBS */
 
 static int run_render_mode(int argc, char **argv) {
     (void)argc; (void)argv;
@@ -456,7 +456,7 @@ static int run_render_mode(int argc, char **argv) {
     return 1;
 }
 
-#endif /* OPENGL_VIBE_USE_GL_STUBS */
+#endif /* GL_STUBS */
 
 /* --- Main ------------------------------------------------------------- */
 

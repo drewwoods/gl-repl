@@ -1,5 +1,5 @@
-#ifndef OPENGL_VIBE_STUB_GLU_H
-#define OPENGL_VIBE_STUB_GLU_H
+#ifndef STUB_GLU_H
+#define STUB_GLU_H
 
 #include <stddef.h>
 #include <GL/gl.h>
@@ -12,8 +12,8 @@ typedef struct GLUquadric GLUquadric;
 typedef struct GLUtesselator GLUtesselator;
 typedef void (CALLBACK *GLUfuncptr)(void);
 
-struct GLUquadric { int opengl_vibe_stub; };
-struct GLUtesselator { int opengl_vibe_stub; };
+struct GLUquadric { int stub; };
+struct GLUtesselator { int stub; };
 
 #define GLU_SMOOTH 100000
 #define GLU_TESS_BEGIN 100100

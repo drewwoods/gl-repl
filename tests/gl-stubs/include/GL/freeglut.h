@@ -1,5 +1,5 @@
-#ifndef OPENGL_VIBE_STUB_FREEGLUT_H
-#define OPENGL_VIBE_STUB_FREEGLUT_H
+#ifndef STUB_FREEGLUT_H
+#define STUB_FREEGLUT_H
 
 #include <stdint.h>
 #include <GL/gl.h>
@@ -87,10 +87,10 @@ extern "C" {
 
 #define GLUT_ELAPSED_TIME 700
 
-static const char opengl_vibe_glut_bitmap_8_by_13_stub = 0;
-static const char opengl_vibe_glut_bitmap_9_by_15_stub = 0;
-#define GLUT_BITMAP_8_BY_13 ((void *)(uintptr_t)&opengl_vibe_glut_bitmap_8_by_13_stub)
-#define GLUT_BITMAP_9_BY_15 ((void *)(uintptr_t)&opengl_vibe_glut_bitmap_9_by_15_stub)
+static const char glut_bitmap_8_by_13_stub = 0;
+static const char glut_bitmap_9_by_15_stub = 0;
+#define GLUT_BITMAP_8_BY_13 ((void *)(uintptr_t)&glut_bitmap_8_by_13_stub)
+#define GLUT_BITMAP_9_BY_15 ((void *)(uintptr_t)&glut_bitmap_9_by_15_stub)
 
 typedef void (*GLUTdisplayCB)(void);
 typedef void (*GLUTreshapeCB)(int width, int height);

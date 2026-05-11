@@ -24,7 +24,7 @@ GL_STUBS_INC=tests/gl-stubs/include
 ROOT=$(pwd)
 
 if ! "$CC" -fsyntax-only -DNO_POINT_PARAMETER -DGL_SILENCE_DEPRECATION \
-        -DOPENGL_VIBE_USE_GL_STUBS \
+        -DGL_STUBS \
         -I"$GL_STUBS_INC" -I"$ROOT" -I"$ROOT/src" -I"$ROOT/include" \
         -std=c2x -Wall -Wno-deprecated-declarations -Wfloat-conversion \
         repl_executor.c \
