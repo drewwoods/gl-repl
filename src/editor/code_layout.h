@@ -1,5 +1,5 @@
 /*
- * code_formatter.h - Pure text layout for code-panel line wrapping.
+ * code_layout.h - Pure text layout for code-panel line wrapping.
  *
  * Stateless algorithms for wrapping source lines to a fixed panel width, with
  * support for hanging indentation and optional break points (commas). Used by the
@@ -32,8 +32,8 @@
  * yielding position, length, and x-coordinate for each segment. Used by the renderer
  * to draw each wrapped line segment at the correct position.
  */
-#ifndef CODE_FORMATTER_H
-#define CODE_FORMATTER_H
+#ifndef EDITOR_CODE_FORMATTER_H
+#define EDITOR_CODE_FORMATTER_H
 
 /* Layout tuning constants. DEFAULT_RIGHT_PAD_PX reserves pixels on the right to
  * avoid cramming text to the edge. DEFAULT_MAX_HANG_INDENT_CHARS caps hanging
@@ -134,4 +134,4 @@ int  code_layout_cursor_row_for_text(const char *text,
                                          int *out_seg_len,
                                          int *out_seg_x);
 
-#endif /* CODE_FORMATTER_H */
+#endif /* EDITOR_CODE_FORMATTER_H */

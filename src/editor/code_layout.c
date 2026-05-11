@@ -1,11 +1,11 @@
 /*
- * code_formatter.c -- Pure code-panel text wrapping helpers.
+ * code_layout.c -- Pure code-panel text wrapping helpers.
  *
  * The code panel has several consumers that must agree on visual rows:
  * renderer, hit-testing, search/cursor positioning, tests, and visual text
  * dumps. Keep wrapping math here so those paths do not grow separate copies.
  */
-#include "code_formatter.h"
+#include "code_layout.h"
 
 #include <ctype.h>
 #include <string.h>

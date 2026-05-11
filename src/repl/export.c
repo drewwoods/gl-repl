@@ -15,7 +15,6 @@
 #include "repl/pipeline.h"
 #include "repl/source_scope.h"
 #include "repl/state_owners.h"
-#include "code_formatter.h"
 
 #define IMPORT_EXPORT_STATE (repl_state_import_export_mut())
 #define g_workspace_header_lines (IMPORT_EXPORT_STATE->workspace_header_lines)
@@ -3289,24 +3288,6 @@ int repl_export_load_from_file(const char *filename) {
     return state.loaded > 0;
 }
 
-static void dump_code_panel_wrapped_line(FILE *dst, const char *text,
-                                         int first_x, int panel_w,
-                                         int wrap_at_comma) {
-    /* Step 7c: wrap_at_comma is threaded explicitly from the
-     * ReplExportLayout struct that the controller built. */
-    const char *src = text ? text : "";
-    CodeLayout layout =
-        code_layout_make(panel_w, first_x, FONT_W, wrap_at_comma);
-    CodeWrapIter it;
-    int start, len, x;
-
-    code_layout_wrap_iter_init(&it, src, &layout);
-    while (code_layout_wrap_iter_next(&it, &start, &len, &x)) {
-        int prefix_chars = (x - first_x) / FONT_W;
-        fprintf(dst, "%*s%.*s\n", prefix_chars, "", len, src + start);
-    }
-}
-
 void repl_dump_code_panel_text(FILE *out, SourceTextView text) {
     FILE *dst = out ? out : stdout;
 
@@ -3343,6 +3324,30 @@ void repl_dump_code_panel_text(FILE *out, SourceTextView text) {
     }
 
     fflush(dst);
+}
+
+// Unused code for dumping the code panel's text with wrapping applied. It pulls
+// in editor code which crosses the intended independence boundary for src/repl.
+// I should probaby delete this and leave a note about how to re-apply the code panel's wrapping
+// logic if I need it again
+#if 0
+#include "editor/code_layout.h"
+static void dump_code_panel_wrapped_line(FILE *dst, const char *text,
+                                         int first_x, int panel_w,
+                                         int wrap_at_comma) {
+    /* Step 7c: wrap_at_comma is threaded explicitly from the
+     * ReplExportLayout struct that the controller built. */
+    const char *src = text ? text : "";
+    CodeLayout layout =
+        code_layout_make(panel_w, first_x, FONT_W, wrap_at_comma);
+    CodeWrapIter it;
+    int start, len, x;
+
+    code_layout_wrap_iter_init(&it, src, &layout);
+    while (code_layout_wrap_iter_next(&it, &start, &len, &x)) {
+        int prefix_chars = (x - first_x) / FONT_W;
+        fprintf(dst, "%*s%.*s\n", prefix_chars, "", len, src + start);
+    }
 }
 
 void repl_dump_code_panel_visual_text(FILE *out, SourceTextView text,
@@ -3402,3 +3407,4 @@ void repl_dump_code_panel_visual_text(FILE *out, SourceTextView text,
 
     fflush(dst);
 }
+#endif

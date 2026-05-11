@@ -5,12 +5,12 @@
  * Rendering and mouse hit-testing consume the same layout so scrolling,
  * selection, replay annotations, and visual dumps do not drift apart.
  */
-#include "state.h"
 #include "code_panel_document.h"
+#include "state.h"
 
 #include "./include/gl_2d.h"
-#include "repl/export.h" /* g_header_pre/post, RENDER_STATE_LINE_COUNT, CAM_LINE_COUNT */
 #include "glr_state.h"
+#include "repl/export.h" /* g_header_pre/post, RENDER_STATE_LINE_COUNT, CAM_LINE_COUNT */
 #include "repl/source_scope.h"
 #include "repl/state_views.h" /* repl_state_edit_line, repl_state_document_count, etc. */
 #include "replay_state.h"     /* replay_active, replay_src_line */
