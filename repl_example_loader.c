@@ -1,6 +1,7 @@
 /*
  * repl_example_loader.c -- Built-in example loading and metadata handling.
  */
+#include "editor/state.h"        /* editor_buffer_clear, editor_state_input_mut, editor_insert_mode_set (Phase 3 migrates these out) */
 #include "repl_load.h"           /* repl_load_apply_line — step 5b */
 #include "repl_export.h"         /* ReplExportCameraBridge */
 #include "repl_command_store.h"

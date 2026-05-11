@@ -5,6 +5,7 @@
  * predefined-variable table. Input routing decides when a mutation is about to
  * happen; this module records and restores the state affected by that mutation.
  */
+#include "state.h"
 #include "undo.h"
 
 #include "input.h"

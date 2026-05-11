@@ -1,6 +1,7 @@
 /*
  * repl_replay_annotations.c -- Code-panel replay variable annotations.
  */
+#include "editor/state.h"  /* editor_state_virtual_lines_*, MAX_VIRTUAL_LINE_* (Phase 4 of feature/source-document-port.md migrates these out) */
 #include "repl_core_internal.h"
 #include "repl_parser.h"
 #include "replay.h"
@@ -32,11 +33,11 @@ static int   s_replay_predef_snap_valid[MAX_COMMANDS];
  *  `repl_replay_code_panel_get_command_display_text`). Static helpers
  * read source text through this view instead of calling
  * `editor_buffer_line` globally — that keeps the module's source-text
- * dependency declared at the API boundary as an EditorBufferView
+ * dependency declared at the API boundary as a SourceTextView
  * parameter rather than a hidden global reach-through. The view is
  * refreshed at frame start; the cache invariant matches the frame's
  * snapshot of the editor buffer. */
-static EditorBufferView s_replay_text_view;
+static SourceTextView s_replay_text_view;
 
 static void replay_build_predef_snapshots(void);
 static int replay_eval_expr_with_state(
@@ -46,7 +47,7 @@ static int replay_eval_expr_with_state(
     float *out_value);
 
 static const char *replay_document_text(int cmd_idx) {
-    const char *text = editor_buffer_view_line(s_replay_text_view, cmd_idx);
+    const char *text = source_text_line(s_replay_text_view, cmd_idx);
     return (text && text[0]) ? text : "";
 }
 
@@ -916,7 +917,7 @@ static int build_replay_assignment_inline_comment(int cmd_idx, int flat_idx,
     }
 }
 
-int repl_replay_code_panel_get_command_display_text(EditorBufferView text,
+int repl_replay_code_panel_get_command_display_text(SourceTextView text,
                                                     int cmd_idx,
                                                     char *out, int out_size) {
     ReplReplayRuntimeState replay = replay_state_view();
@@ -1192,7 +1193,7 @@ static void repl_replay_annotations_refresh_virtual_lines(void) {
     }
 }
 
-void repl_replay_annotations_prepare(EditorBufferView text) {
+void repl_replay_annotations_prepare(SourceTextView text) {
     ReplReplayRuntimeState replay = replay_state_view();
 
     s_replay_text_view = text;

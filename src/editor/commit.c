@@ -812,13 +812,13 @@ ReplCompileResult editor_compile_func_def(const char *input,
         ctx, comment_start, comment_count);
 
     /* Fill the change's cmds[] / text[] with comments + fd + fe.
-     * Comment text comes from the editor buffer view; the cmds
+     * Comment text comes from the source-text view; the cmds
      * themselves come from the document. */
-    EditorBufferView text_view = ctx->text;
+    SourceTextView text_view = ctx->text;
     for (int i = 0; i < comment_count; i++) {
         out->change.cmds[i] = ctx->document_cmds[comment_start + i];
-        const char *line = editor_buffer_view_line(text_view,
-                                                   comment_start + i);
+        const char *line = source_text_line(text_view,
+                                            comment_start + i);
         if (line)
             repl_copy_string_fits(out->change.text[i],
                                   sizeof(out->change.text[i]), line);

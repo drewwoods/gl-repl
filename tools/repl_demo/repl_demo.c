@@ -268,7 +268,7 @@ static void tick_and_execute(float t_value) {
     ReplExecutionOptions opts = {
         .flat_cmd_count = repl_state_flat_program_count(),
         .program        = repl_state_flat_program_view(),
-        .text           = editor_buffer_view(),
+        .text           = source_document_view(),
     };
     repl_execute_program(&opts);
     const GLCmd *flat = opts.program.cmds;
@@ -305,7 +305,7 @@ static void execute_against_stubs(void) {
     ReplExecutionOptions opts = {
         .flat_cmd_count = repl_state_flat_program_count(),
         .program        = repl_state_flat_program_view(),
-        .text           = editor_buffer_view(),
+        .text           = source_document_view(),
     };
     repl_execute_program(&opts);
     printf("  executed %d flat cmd(s) against GL stubs\n", opts.flat_cmd_count);
@@ -385,7 +385,7 @@ static void render_display_func(void) {
     ReplExecutionOptions opts = {
         .flat_cmd_count = repl_state_flat_program_count(),
         .program        = repl_state_flat_program_view(),
-        .text           = editor_buffer_view(),
+        .text           = source_document_view(),
     };
     repl_execute_program(&opts);
 

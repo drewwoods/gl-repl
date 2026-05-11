@@ -1,3 +1,4 @@
+#include "editor/state.h"
 #include "editor/completion.h"
 #include "support/test_harness.h"
 #include <stddef.h>

@@ -1,3 +1,4 @@
+#include "editor/state.h"
 #include "glr_camera.h"
 #include "glr_state.h"
 #include "glr_ctrl.h"

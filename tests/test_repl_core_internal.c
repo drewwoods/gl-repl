@@ -1,3 +1,4 @@
+#include "editor/state.h"
 #include "glr_state.h"
 #include "glr_ctrl.h"
 #include "glr_camera.h"
@@ -193,7 +194,7 @@ int main() {
             .flat_cmds = temp_flat,
             .flat_local_vars = temp_locals,
             .flat_capacity = 8,
-            .text = editor_buffer_view()
+            .text = source_document_view()
         };
         ASSERT_INT("flatten_program ok",
                    repl_flatten_program(&opts, &result), 1);

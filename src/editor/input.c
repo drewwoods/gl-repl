@@ -26,6 +26,7 @@
  *  - feed_line() programmatic commit entry
  */
 
+#include "state.h"
 #include "clipboard.h"
 #include "commit.h"
 #include "completion.h"

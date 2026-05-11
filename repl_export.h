@@ -40,8 +40,8 @@
 #ifndef REPL_EXPORT_H
 #define REPL_EXPORT_H
 
-#include "editor/state.h"  /* EditorBufferView */
-#include "repl_eval.h"     /* REPL_SCRATCH_ARRAY_LEN */
+#include "repl_eval.h"        /* REPL_SCRATCH_ARRAY_LEN */
+#include "source_document.h"  /* SourceTextView (Phase 1 of feature/source-document-port.md) */
 
 /* Neutral header-config bag (step 4 of feature/decouple-repl-from-gl-repl-alt.md).
  *
@@ -214,12 +214,12 @@ typedef struct {
  * C program that can be reloaded via load_from_file(). Called by save-to-output and
  * workspace export routines.
  *
- * `text` is the editor buffer view the caller built; the export
+ * `text` is the source-text view the caller built; the export
  * pipeline reads source text exclusively through that view rather
- * than reaching into editor globals. `layout` carries the viewport /
+ * than reaching into globals. `layout` carries the viewport /
  * scene rect / code-panel width / wrap toggle the controller built;
  * `repl_export.c` consumes it as opaque integers. */
-void repl_export_save_output(const char *filename, EditorBufferView text,
+void repl_export_save_output(const char *filename, SourceTextView text,
                              const ReplExportLayout *layout);
 
 /* Import a C source file saved by save_output(). Parses workspace header directives,
