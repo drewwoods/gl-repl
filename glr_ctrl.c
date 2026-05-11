@@ -1958,6 +1958,37 @@ static int g_code_panel_drag_moved  = 0;
  * on the active edit row) and the existing line-range path. */
 static int g_code_panel_drag_char_anchor = -1;
 
+/* Double-click detection: previous UI_HIT_CODE_TEXT press timestamp
+ * and target. A second press at the same (line, char) within
+ * DOUBLE_CLICK_MS reads as a double-click and selects the word under
+ * the cursor. Using line/char instead of pixel coords means small
+ * mouse jitter between presses doesn't break the gesture. */
+#define DOUBLE_CLICK_MS 400u
+static unsigned int g_last_text_press_ms     = 0;
+static int          g_last_text_press_line   = -1;
+static int          g_last_text_press_char   = -1;
+/* Test clock seam mirrors editor_input_set_modifier_provider_for_test:
+ * tests that drive a double-click without a live GLUT context replace
+ * the clock with a deterministic source. Production code falls back to
+ * glutGet(GLUT_ELAPSED_TIME). */
+static unsigned int (*g_double_click_clock_ms_for_test)(void) = NULL;
+
+void glr_ctrl_router_set_double_click_clock_for_test(
+    unsigned int (*clock_ms)(void)) {
+    g_double_click_clock_ms_for_test = clock_ms;
+    /* Tests typically arrange a fresh clock per case — wipe the
+     * stored press so prior real-time history can't leak across. */
+    g_last_text_press_ms   = 0;
+    g_last_text_press_line = -1;
+    g_last_text_press_char = -1;
+}
+
+static unsigned int current_double_click_ms(void) {
+    if (g_double_click_clock_ms_for_test)
+        return g_double_click_clock_ms_for_test();
+    return (unsigned int)glutGet(GLUT_ELAPSED_TIME);
+}
+
 void glr_ctrl_router_reset_code_panel_drag(void) {
     g_code_panel_drag_active = 0;
     g_code_panel_drag_anchor = -1;
@@ -1999,12 +2030,68 @@ static void route_code_click_epilog(void) {
     editor_request_redraw();
 }
 
+/* Select the word containing (line_idx, char_idx) as an input-buffer
+ * selection. Navigates to the line first (reloads input) so the word
+ * walk runs against the row's actual canonical text. char_idx outside
+ * a word leaves the buffer unselected. Public so tests can drive
+ * double-click selection without faking GLUT_ELAPSED_TIME. */
+void glr_ctrl_router_select_word_at(int line_idx, int char_idx) {
+    if (line_idx < 0)
+        return;
+    navigate_to_line(line_idx);
+
+    const char *text = editor_input_text();
+    int len = editor_input_len();
+    int word_start = char_idx;
+    int word_end   = char_idx;
+    editor_input_word_bounds_at(text, len, char_idx, &word_start, &word_end);
+    if (word_end <= word_start) {
+        /* Clicked between words / on whitespace: leave cursor placed
+         * but no selection. */
+        editor_cursor_pos_set(char_idx);
+        return;
+    }
+    /* Place cursor at word_start, then atomically pin and extend to
+     * word_end. Doing it as two steps with editor_input_anchor_set
+     * would collapse immediately (anchor == cursor) — that's the
+     * footgun the extend helper was added to avoid. */
+    editor_cursor_pos_set(word_start);
+    editor_cursor_pos_extend_selection(word_end);
+}
+
 /* UI_HIT_CODE_TEXT: navigate to clicked line, set cursor column, arm
- * the selection drag anchor. */
+ * the selection drag anchor. A press that hits the same (line, char)
+ * as the previous press within DOUBLE_CLICK_MS reads as a double-click
+ * and selects the word at the cursor instead of placing a bare
+ * cursor. */
 static int route_code_text_hit(const UiHit *hit) {
     /* A non-swatch click on the code panel closes any open color picker
      * (matches legacy ui_panels_handle_code_panel_press behaviour). */
     color_picker_close();
+
+    unsigned int now_ms = current_double_click_ms();
+    int is_double_click = (g_last_text_press_line == hit->line_idx &&
+                           g_last_text_press_char == hit->char_idx &&
+                           hit->line_idx >= 0 &&
+                           hit->char_idx >= 0 &&
+                           now_ms - g_last_text_press_ms < DOUBLE_CLICK_MS);
+    g_last_text_press_ms   = now_ms;
+    g_last_text_press_line = hit->line_idx;
+    g_last_text_press_char = hit->char_idx;
+
+    if (is_double_click) {
+        glr_ctrl_router_select_word_at(hit->line_idx, hit->char_idx);
+        route_code_click_epilog();
+        /* Double-click also arms the drag in case the user starts to
+         * drag-extend the word selection. */
+        if (hit->line_idx >= 0 && hit->line_idx < repl_state_document_count()) {
+            g_code_panel_drag_active = 1;
+            g_code_panel_drag_anchor = hit->line_idx;
+            g_code_panel_drag_moved  = 0;
+            g_code_panel_drag_char_anchor = hit->char_idx;
+        }
+        return 1;
+    }
 
     if (hit->line_idx >= 0)
         navigate_to_line(hit->line_idx);
