@@ -15,8 +15,6 @@ typedef enum {
 	CODE_PANEL_LAYOUT_COUNT
 } CodePanelLayout;
 
-#define CFG_DEFAULT_PANEL_FRAC 0.45f
-
 void ui_layout_code_panel_rect(int *x, int *y, int *w, int *h);
 void ui_layout_scene_rect(int *x, int *y, int *w, int *h);
 
