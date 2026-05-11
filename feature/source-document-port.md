@@ -2,8 +2,15 @@
 
 ## Status
 
-Not started. Intended follow-up to
-`feature/decouple-repl-from-gl-repl-alt.md` after the step-7 endpoint.
+Done. Phases 0–7 landed on `feature/source-document-port`. The hard-zero
+`check-repl-no-direct-editor`, `check-repl-demo-no-editor`, and
+`check-source-document-port-owners` guards live in
+`scripts/check-repl-no-direct-editor.sh`,
+`scripts/check-repl-demo-no-editor.sh`, and
+`scripts/check-source-document-port-owners.sh`, wired into
+`check-state-ownership`. `tools/repl_demo/source_document.c` is the
+standalone demo backend; `glr_source_document.c` is the full-app
+adapter forwarding to EditorState.
 
 ## Goal
 

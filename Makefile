@@ -136,7 +136,7 @@ TEAPOT_DEMO_DEP_SRCS = $(SCENE_SRCS) prof.c
 # the UI (src/ui/*, replay_ui_hud.c), or — as of Phase 6 of
 # feature/source-document-port.md — the editor text store
 # (src/editor/state.c). Per-line text comes from
-# tools/repl_demo/source_document.c, a standalone static line store
+# src/editor/state.c, a standalone static line store
 # implementing the source_document_* contract. After every REPL-pipeline
 # → editor/UI/peer/glr_config/glr_camera/glr_state edge was routed
 # through a controller-installed sink/bridge or an opaque parameter,
@@ -447,8 +447,14 @@ check-output-actualization: ## Verify Ui*Output fields are consumed by controlle
 check-state-c-shrinking: ## Ratchet repl_state.c line count down over time.
 	@bash scripts/check-state-c-shrinking.sh scripts/baselines/state-c-lines.txt repl_state.c
 
-check-repl-no-direct-editor: ## Ratchet net-new editor coupling in repl_*.{c,h} down (Phase 0 of feature/source-document-port.md).
-	@bash scripts/check-repl-no-direct-editor.sh scripts/baselines/repl-no-direct-editor.txt
+check-repl-no-direct-editor: ## Forbid editor coupling in repl_*.{c,h} (Phase 7 of feature/source-document-port.md — hard zero).
+	@bash scripts/check-repl-no-direct-editor.sh
+
+check-repl-demo-no-editor: ## Forbid editor implementation in the standalone demo (Phase 7).
+	@bash scripts/check-repl-demo-no-editor.sh
+
+check-source-document-port-owners: ## source_document_* symbols only defined in approved host adapters (Phase 7).
+	@bash scripts/check-source-document-port-owners.sh
 
 check-no-facade-include-in-views: ## Verify view/render files avoid repl_state facade headers.
 	@bash scripts/check-no-facade-include-in-views.sh scripts/allowlists/facade-includes-in-views.txt
@@ -509,6 +515,8 @@ check-state-ownership: ## Run state-ownership contract checks (new + tightened e
 		check-no-feed-line-in-pipeline \
 		check-repl-demo-stubs-shrinking \
 		check-repl-no-direct-editor \
+		check-repl-demo-no-editor \
+		check-source-document-port-owners \
 		check-no-point-parameter-builds \
 		check-no-test-default-output; do \
 		printf "  $(YELLOW)▶$(NC) $$target\n"; \
