@@ -1,0 +1,262 @@
+/*
+ * test_editor_input_selection.c - Phase A/B coverage for the input-buffer
+ * selection model and the tagged editor clipboard.
+ *
+ * Verifies:
+ *   - Anchor lifecycle (set / clear / collapse on equal cursor).
+ *   - Selection derivation (lo / hi / active for various orderings).
+ *   - The atomic extend-selection helper. Regression: setting the
+ *     anchor to the current cursor position and then moving with
+ *     _keep_anchor would clear the anchor before the move and produce
+ *     no selection. The extend helper pins first, moves second.
+ *   - Cursor-set policy: default clears anchor, keep_anchor preserves
+ *     it, empty selections still collapse.
+ *   - Buffer-shrink invariant: cutting input_len below anchor clears
+ *     the anchor.
+ *   - Clipboard kind/payload invariants for every transition. Regression:
+ *     _count_set(0) after a previous INPUT_TEXT copy must fully clear
+ *     the input_text payload, not leave it stranded behind kind=EMPTY.
+ */
+
+#include "editor/state.h"
+#include "support/test_harness.h"
+
+#include <stdio.h>
+#include <string.h>
+
+static TestHarness g_harness = TEST_HARNESS_INIT;
+
+#define ASSERT_TRUE(label, cond) \
+    TEST_ASSERT_TRUE(&g_harness, (label), (cond))
+
+#define ASSERT_INT(label, got, exp) \
+    TEST_ASSERT_TRUE(&g_harness, (label), (got) == (exp))
+
+#define ASSERT_STR(label, got, exp) \
+    TEST_ASSERT_STR(&g_harness, (label), (got), (exp))
+
+/* Load a known string into the input buffer with cursor at the
+ * end. Returns the input length. */
+static int load_input(const char *text) {
+    editor_input_set_text(text);
+    return editor_input_len();
+}
+
+int main(void) {
+    printf("--- input-anchor lifecycle ---\n");
+    {
+        editor_state_reset();
+        load_input("glVertex3f");
+
+        ASSERT_INT("fresh anchor is -1", editor_input_anchor(), -1);
+        ASSERT_TRUE("fresh selection inactive",
+                    !editor_input_selection_active());
+        ASSERT_INT("fresh selection lo is -1",
+                   editor_input_selection_lo(), -1);
+
+        editor_cursor_pos_set(4);
+        editor_input_anchor_set(0);
+        ASSERT_INT("anchor pinned at 0", editor_input_anchor(), 0);
+        ASSERT_TRUE("selection active", editor_input_selection_active());
+        ASSERT_INT("selection lo", editor_input_selection_lo(), 0);
+        ASSERT_INT("selection hi", editor_input_selection_hi(), 4);
+
+        /* Setting anchor equal to cursor collapses immediately —
+         * empty selections are not representable. */
+        editor_input_anchor_set(4);
+        ASSERT_INT("anchor==cursor collapses to -1",
+                   editor_input_anchor(), -1);
+        ASSERT_TRUE("collapse → selection inactive",
+                    !editor_input_selection_active());
+
+        /* Anchor with cursor on the right end of the range — derivation
+         * still picks min/max correctly. */
+        editor_cursor_pos_set(2);
+        editor_input_anchor_set(7);
+        ASSERT_INT("reverse anchor lo", editor_input_selection_lo(), 2);
+        ASSERT_INT("reverse anchor hi", editor_input_selection_hi(), 7);
+
+        editor_input_anchor_clear();
+        ASSERT_INT("clear drops to -1", editor_input_anchor(), -1);
+    }
+
+    printf("\n--- buffer-shrink invariant ---\n");
+    {
+        editor_state_reset();
+        load_input("0123456789");
+        editor_cursor_pos_set(3);
+        editor_input_anchor_set(8);
+        ASSERT_INT("anchor at 8", editor_input_anchor(), 8);
+
+        editor_input_len_set(5);
+        ASSERT_INT("anchor cleared when buffer shrinks past it",
+                   editor_input_anchor(), -1);
+    }
+
+    printf("\n--- cursor-set policy ---\n");
+    {
+        editor_state_reset();
+        load_input("hello world");
+        editor_cursor_pos_set(0);
+        editor_input_anchor_set(5);
+        ASSERT_INT("setup anchor", editor_input_anchor(), 5);
+
+        /* Default cursor move clears anchor. */
+        editor_cursor_pos_set(3);
+        ASSERT_INT("default cursor move clears anchor",
+                   editor_input_anchor(), -1);
+
+        /* keep_anchor preserves an active anchor. */
+        editor_cursor_pos_set(0);
+        editor_input_anchor_set(5);
+        editor_cursor_pos_set_keep_anchor(7);
+        ASSERT_INT("keep_anchor preserves anchor",
+                   editor_input_anchor(), 5);
+        ASSERT_INT("keep_anchor moved cursor",
+                   editor_cursor_pos(), 7);
+
+        /* keep_anchor still collapses empty selection. */
+        editor_cursor_pos_set_keep_anchor(5);
+        ASSERT_INT("keep_anchor collapses when cursor reaches anchor",
+                   editor_input_anchor(), -1);
+    }
+
+    printf("\n--- extend-selection helper ---\n");
+    {
+        editor_state_reset();
+        load_input("hello world");
+
+        /* Inactive anchor + extend move pins old cursor as anchor
+         * and produces [old, new) selection. This is the regression
+         * case: editor_input_anchor_set(cursor_pos) would collapse
+         * before the move, so the shift handler must use this atomic
+         * helper instead. */
+        editor_cursor_pos_set(3);
+        ASSERT_INT("pre-extend anchor inactive",
+                   editor_input_anchor(), -1);
+        editor_cursor_pos_extend_selection(6);
+        ASSERT_INT("extend from inactive pins old cursor",
+                   editor_input_anchor(), 3);
+        ASSERT_INT("extend from inactive moves cursor",
+                   editor_cursor_pos(), 6);
+        ASSERT_INT("extend selection lo",
+                   editor_input_selection_lo(), 3);
+        ASSERT_INT("extend selection hi",
+                   editor_input_selection_hi(), 6);
+
+        /* Active anchor + extend just grows the selection. */
+        editor_cursor_pos_extend_selection(9);
+        ASSERT_INT("extend keeps existing anchor",
+                   editor_input_anchor(), 3);
+        ASSERT_INT("extend grew cursor", editor_cursor_pos(), 9);
+
+        /* Extending back across the anchor flips the range and lo/hi
+         * stay in min/max order. */
+        editor_cursor_pos_extend_selection(1);
+        ASSERT_INT("extend across anchor: lo",
+                   editor_input_selection_lo(), 1);
+        ASSERT_INT("extend across anchor: hi",
+                   editor_input_selection_hi(), 3);
+
+        /* Extending to the anchor collapses selection. */
+        editor_cursor_pos_extend_selection(3);
+        ASSERT_INT("extend to anchor collapses",
+                   editor_input_anchor(), -1);
+
+        /* Zero-distance extend from inactive anchor stays inactive. */
+        editor_cursor_pos_set(4);
+        editor_cursor_pos_extend_selection(4);
+        ASSERT_INT("no-op extend stays inactive",
+                   editor_input_anchor(), -1);
+    }
+
+    printf("\n--- clipboard transitions ---\n");
+    {
+        editor_state_reset();
+        ReplClipboardState *cb = editor_state_clipboard_mut();
+        ASSERT_INT("fresh kind = EMPTY", cb->kind, EDITOR_CLIPBOARD_EMPTY);
+        ASSERT_INT("fresh line_count", cb->line_count, 0);
+        ASSERT_INT("fresh input_text_len", cb->input_text_len, 0);
+
+        /* EMPTY → LINES (existing line-copy path). */
+        strcpy(cb->lines[0], "glVertex3f(0,0,0);");
+        editor_state_clipboard_count_set(1);
+        ASSERT_INT("LINES kind", cb->kind, EDITOR_CLIPBOARD_LINES);
+        ASSERT_INT("LINES line_count", cb->line_count, 1);
+        ASSERT_INT("LINES clears input_text_len", cb->input_text_len, 0);
+
+        /* LINES → INPUT_TEXT (partial-line copy path). The
+         * input-text setter must clear the previous line payload. */
+        editor_clipboard_set_input_text("sin(t)", 6);
+        ASSERT_INT("INPUT_TEXT kind", cb->kind, EDITOR_CLIPBOARD_INPUT_TEXT);
+        ASSERT_INT("INPUT_TEXT input_text_len", cb->input_text_len, 6);
+        ASSERT_STR("INPUT_TEXT payload",
+                   editor_clipboard_input_text(), "sin(t)");
+        ASSERT_INT("INPUT_TEXT clears line_count", cb->line_count, 0);
+        ASSERT_TRUE("has_input_text reports true",
+                    editor_clipboard_has_input_text());
+
+        /* INPUT_TEXT → EMPTY via explicit clear. */
+        editor_state_clipboard_clear();
+        ASSERT_INT("clear → kind EMPTY", cb->kind, EDITOR_CLIPBOARD_EMPTY);
+        ASSERT_INT("clear → line_count 0", cb->line_count, 0);
+        ASSERT_INT("clear → input_text_len 0", cb->input_text_len, 0);
+        ASSERT_TRUE("clear → has_input_text false",
+                    !editor_clipboard_has_input_text());
+
+        /* Regression: INPUT_TEXT → EMPTY via _count_set(0) must also
+         * drop input_text_len. Previously, _count_set(0) only set
+         * kind=EMPTY and line_count=0 but left input_text_len stale,
+         * violating the kind/payload invariant. */
+        editor_clipboard_set_input_text("sin(t)", 6);
+        ASSERT_INT("pre-bug setup: INPUT_TEXT",
+                   cb->kind, EDITOR_CLIPBOARD_INPUT_TEXT);
+        ASSERT_INT("pre-bug setup: text_len", cb->input_text_len, 6);
+        editor_state_clipboard_count_set(0);
+        ASSERT_INT("_count_set(0) → kind EMPTY",
+                   cb->kind, EDITOR_CLIPBOARD_EMPTY);
+        ASSERT_INT("_count_set(0) → input_text_len cleared",
+                   cb->input_text_len, 0);
+        ASSERT_TRUE("_count_set(0) → has_input_text false",
+                    !editor_clipboard_has_input_text());
+
+        /* set_input_text with len<=0 also clears the input-text slot
+         * and recomputes kind. */
+        editor_clipboard_set_input_text("ignored", 0);
+        ASSERT_INT("zero-len set → EMPTY when no lines",
+                   cb->kind, EDITOR_CLIPBOARD_EMPTY);
+    }
+
+    printf("\n--- editor_state_capture/restore round-trips anchor + clipboard ---\n");
+    {
+        editor_state_reset();
+        load_input("snapshot test");
+        editor_cursor_pos_set(2);
+        editor_input_anchor_set(8);
+        editor_clipboard_set_input_text("sin(t)", 6);
+
+        EditorState snap;
+        editor_state_capture(&snap);
+
+        /* Trash the live state. */
+        editor_input_anchor_clear();
+        editor_cursor_pos_set(0);
+        editor_state_clipboard_clear();
+        ASSERT_INT("trashed anchor", editor_input_anchor(), -1);
+        ASSERT_INT("trashed clipboard kind",
+                   editor_state_clipboard_mut()->kind,
+                   EDITOR_CLIPBOARD_EMPTY);
+
+        /* Restore — full struct copy brings everything back. */
+        editor_state_restore(&snap);
+        ASSERT_INT("restored anchor", editor_input_anchor(), 8);
+        ASSERT_INT("restored cursor", editor_cursor_pos(), 2);
+        ASSERT_INT("restored clipboard kind",
+                   editor_state_clipboard_mut()->kind,
+                   EDITOR_CLIPBOARD_INPUT_TEXT);
+        ASSERT_STR("restored clipboard payload",
+                   editor_clipboard_input_text(), "sin(t)");
+    }
+
+    return test_harness_report(&g_harness, "test_editor_input_selection");
+}

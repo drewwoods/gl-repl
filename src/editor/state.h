@@ -304,6 +304,15 @@ void        editor_cursor_pos_set(int cursor_pos);
  * (anchor == cursor) the anchor still drops to -1 so "has selection"
  * remains a single test. */
 void        editor_cursor_pos_set_keep_anchor(int cursor_pos);
+/* Atomic "start or extend a selection" primitive. If the anchor is
+ * currently inactive and the move would actually move the cursor, pin
+ * the pre-move cursor as the new anchor *before* moving, so the
+ * resulting selection is [old, new). If the anchor is already active,
+ * just keep it (selection grows / shrinks like _keep_anchor). Prefer
+ * this over `_anchor_set + _keep_anchor` for shift-style handlers —
+ * `_anchor_set(cursor_pos)` collapses immediately and would defeat
+ * the intended pin. */
+void        editor_cursor_pos_extend_selection(int new_pos);
 /* Input-buffer character-range selection anchor. -1 means "no
  * selection." `_set` clamps to [0, input_len]; if the new value equals
  * the current cursor, the anchor collapses to -1 (empty selections are

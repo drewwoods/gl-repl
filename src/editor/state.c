@@ -365,6 +365,25 @@ void editor_cursor_pos_set_keep_anchor(int cursor_pos) {
     cursor_pos_set_internal(cursor_pos, /*keep_anchor=*/1);
 }
 
+void editor_cursor_pos_extend_selection(int new_pos) {
+    ReplEditorInputState *in = &g_editor_state.input;
+    int old = in->cursor_pos;
+
+    if (new_pos < 0) new_pos = 0;
+    if (new_pos > in->input_len) new_pos = in->input_len;
+
+    /* Pin the pre-move cursor as the anchor *before* the move so a
+     * previously inactive selection becomes [old, new). If the anchor
+     * is already set, leave it alone — the existing range just extends
+     * or contracts. Using anchor_pos_set here would collapse the
+     * anchor on (anchor == cursor) before we get the chance to move,
+     * which is exactly the footgun this helper avoids. */
+    if (in->anchor_pos < 0 && new_pos != old)
+        in->anchor_pos = old;
+
+    cursor_pos_set_internal(new_pos, /*keep_anchor=*/1);
+}
+
 int editor_input_anchor(void) {
     return g_editor_state.input.anchor_pos;
 }
@@ -494,15 +513,19 @@ void editor_state_clipboard_count_set(int line_count) {
         line_count = 0;
     if (line_count > MAX_COMMANDS)
         line_count = MAX_COMMANDS;
-    g_editor_state.clipboard.line_count = line_count;
-    if (line_count > 0) {
-        g_editor_state.clipboard.kind = EDITOR_CLIPBOARD_LINES;
-        /* Lines and input-text payloads are mutually exclusive. */
-        g_editor_state.clipboard.input_text_len = 0;
-        g_editor_state.clipboard.input_text[0] = '\0';
-    } else {
-        g_editor_state.clipboard.kind = EDITOR_CLIPBOARD_EMPTY;
+    /* _count_set(0) is a full clipboard reset, not a "drop the lines
+     * but keep stale input_text" partial — otherwise a previous
+     * INPUT_TEXT payload would survive as EMPTY-kind with non-zero
+     * input_text_len, breaking the kind/payload invariant. */
+    if (line_count == 0) {
+        editor_state_clipboard_clear();
+        return;
     }
+    g_editor_state.clipboard.line_count = line_count;
+    g_editor_state.clipboard.kind = EDITOR_CLIPBOARD_LINES;
+    /* Lines and input-text payloads are mutually exclusive. */
+    g_editor_state.clipboard.input_text_len = 0;
+    g_editor_state.clipboard.input_text[0] = '\0';
 }
 
 void editor_clipboard_set_input_text(const char *text, int len) {
