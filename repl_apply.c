@@ -3,8 +3,9 @@
  *
  * Pure mutation half of the compile/apply split:
  *   - touches ReplState command arrays only,
- *   - never touches the editor buffer (that's
- *     editor_buffer_apply_compiled_change in editor_state.c),
+ *   - never touches the source-text document (callers drive that
+ *     through the editor's editor_buffer_apply_compiled_change OR
+ *     the neutral source_document_apply_change port),
  *   - never touches status,
  *   - never pushes an undo entry.
  *

@@ -30,4 +30,27 @@
  * status bar in `ReplStatusState` mirrors the size end-to-end. */
 #define REPL_STATUS_TEXT_MAX 256
 
+/* Storage capacity of the source command document and the matching
+ * editor buffer. Surfaces here (not in repl_command.h) so neutral
+ * boundary headers — source_document.h in particular — can size their
+ * structs without including REPL grammar types. */
+#ifndef MAX_COMMANDS
+#define MAX_COMMANDS 4096
+#endif
+
+/* Maximum characters in a single canonical source line, including the
+ * trailing NUL. Same neutrality argument as MAX_COMMANDS. */
+#ifndef MAX_LINE_LEN
+#define MAX_LINE_LEN 256
+#endif
+
+/* Maximum source-command rows touched by a single compiled change —
+ * insert_many block batches, comment toggles, etc. The neutral
+ * SourceTextChange in source_document.h sizes its text[] array by this
+ * constant so the translator from ReplCompiledChange.text[] copies
+ * 1:1 without a bound mismatch. */
+#ifndef MAX_COMMIT_CMDS
+#define MAX_COMMIT_CMDS 16
+#endif
+
 #endif /* CONFIG_H */

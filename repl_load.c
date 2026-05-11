@@ -119,13 +119,22 @@ int repl_load_apply_line(const char *line, char *err, int err_size) {
             return 0;
         }
 
-        /* Past preflight: apply chain succeeds in the order
-         * editor_commit_apply_plan uses. */
-        repl_apply_predef_ops(&change);
-        repl_apply_scratch_ops(&change);
+        /* Past preflight: apply source text FIRST so a host that can
+         * fail the write (a non-editor backend or test fixture) doesn't
+         * leave predef-vars registered + scratch arrays mutated with no
+         * matching text on the document. predef/scratch/command-store
+         * mutations follow only once the text apply has committed. */
         SourceTextChange text_change;
         repl_compiled_change_to_text_change(&change, &text_change);
-        source_document_apply_change(&text_change);
+        if (!source_document_apply_change(&text_change)) {
+            repl_compiled_change_rollback_alias(&change);
+            if (err && err_size > 0 && err[0] == '\0')
+                snprintf(err, (size_t)err_size,
+                         "source document apply failed");
+            return 0;
+        }
+        repl_apply_predef_ops(&change);
+        repl_apply_scratch_ops(&change);
         return repl_apply_compiled_change(&change) ? 1 : 0;
     }
 
@@ -161,10 +170,27 @@ int repl_load_apply_line(const char *line, char *err, int err_size) {
         return 0;
     }
 
+    /* Source text first; command store second. If the cmd-store insert
+     * fails (capacity), roll the text back so the document stays in
+     * lockstep with the GLCmd array. */
+    if (!source_document_insert_line(insert_idx, cmd_text)) {
+        if (err && err_size > 0 && err[0] == '\0')
+            snprintf(err, (size_t)err_size,
+                     "source document insert failed");
+        return 0;
+    }
     ReplCommandStore store = repl_command_store_live();
     if (!repl_command_store_insert_one(&store, insert_idx, &cmd,
-                                       REPL_COMMAND_STORE_ADJUST_EDIT_LINE))
+                                       REPL_COMMAND_STORE_ADJUST_EDIT_LINE)) {
+        SourceTextChange rollback = {
+            .kind         = SOURCE_TEXT_DELETE_RANGE,
+            .pos          = insert_idx,
+            .count        = 1,
+            .delete_pos   = -1,
+            .delete_count = 0,
+        };
+        source_document_apply_change(&rollback);
         return 0;
-    source_document_insert_line(insert_idx, cmd_text);
+    }
     return 1;
 }

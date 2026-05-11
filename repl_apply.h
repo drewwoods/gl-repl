@@ -1,16 +1,22 @@
 /*
  * repl_apply.h - Apply a ReplCompiledChange to ReplState command arrays.
  *
- * The dual of repl_compile. The pair is wired into the editor commit
- * orchestration so a single transaction drives both halves:
+ * The dual of repl_compile. The pair is wired into two apply paths,
+ * each owning its own text-mutation step:
  *
- *   editor_undo_begin
- *   editor_buffer_apply_compiled_change   (EditorState text only)
- *   repl_apply_compiled_change            (ReplState command store only)
- *   editor_undo_commit
+ *   Editor-input commit (src/editor/commit.c):
+ *     editor_undo_begin
+ *     editor_buffer_apply_compiled_change   (EditorState text)
+ *     repl_apply_compiled_change            (ReplState command store)
+ *     editor_undo_commit
+ *
+ *   Lean source-loader (repl_load.c):
+ *     repl_compiled_change_to_text_change   (translate)
+ *     source_document_apply_change          (neutral text port)
+ *     repl_apply_compiled_change            (ReplState command store)
  *
  * `repl_apply_compiled_change()` mutates ReplState command arrays
- * only. It does not touch editor text, status, undo entries, or
+ * only. It does not touch source text, status, undo entries, or
  * predef-variable registrations. The predef-variable cascade is
  * applied separately through `repl_apply_predef_ops()` so callers
  * can sequence it correctly relative to undo capture.

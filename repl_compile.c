@@ -125,14 +125,15 @@ void repl_compiled_change_to_text_change(const ReplCompiledChange *in,
     case REPL_COMPILED_DELETE_RANGE:out->kind = SOURCE_TEXT_DELETE_RANGE;break;
     case REPL_COMPILED_LOAD_ALL:    out->kind = SOURCE_TEXT_LOAD_ALL;    break;
     }
+    int n = in->count;
+    if (n < 0) n = 0;
+    if (n > MAX_COMMIT_CMDS) n = MAX_COMMIT_CMDS;
+
     out->pos          = in->pos;
-    out->count        = in->count;
+    out->count        = n;   /* clamped — keep count in lockstep with text[] */
     out->delete_pos   = in->delete_pos;
     out->delete_count = in->delete_count;
 
-    int n = in->count;
-    if (n < 0) n = 0;
-    if (n > SOURCE_TEXT_CHANGE_MAX_LINES) n = SOURCE_TEXT_CHANGE_MAX_LINES;
     for (int i = 0; i < n; i++) {
         size_t len = strnlen(in->text[i], MAX_LINE_LEN - 1);
         memcpy(out->text[i], in->text[i], len);

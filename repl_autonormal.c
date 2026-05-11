@@ -63,9 +63,22 @@ static void insert_cmd_at(int pos, const GLCmd *cmd,
     char line[MAX_LINE_LEN];
 
     make_auto_normal_text(pos, nx, ny, nz, line, sizeof(line));
-    if (repl_command_store_insert_one(&store, pos, cmd,
-                                      REPL_COMMAND_STORE_ADJUST_EDIT_LINE))
-        source_document_insert_line(pos, line);
+    /* Text first; if the cmd-store insert fails (capacity), roll the
+     * text back so the auto-normal line doesn't linger without its
+     * matching GLCmd. */
+    if (!source_document_insert_line(pos, line))
+        return;
+    if (!repl_command_store_insert_one(&store, pos, cmd,
+                                       REPL_COMMAND_STORE_ADJUST_EDIT_LINE)) {
+        SourceTextChange rollback = {
+            .kind         = SOURCE_TEXT_DELETE_RANGE,
+            .pos          = pos,
+            .count        = 1,
+            .delete_pos   = -1,
+            .delete_count = 0,
+        };
+        source_document_apply_change(&rollback);
+    }
 }
 
 static void apply_front_face_to_normal(GLenum front_face, float *n) {
@@ -211,9 +224,13 @@ void repl_recompute_autonormals(int autonormal_enabled) {
                     char line[MAX_LINE_LEN];
 
                     make_auto_normal_text(vidx - 1, nx, ny, nz, line, sizeof(line));
-                    if (repl_command_store_replace_one(&store, vidx - 1,
-                                                       &auto_normal))
-                        source_document_replace_line(vidx - 1, line);
+                    /* In-place replacement: both ops touch the same
+                     * row, no order-dependent rollback to worry about.
+                     * Both writes are required for consistency, so
+                     * gate the cmd-store on a successful text write. */
+                    if (source_document_replace_line(vidx - 1, line))
+                        repl_command_store_replace_one(&store, vidx - 1,
+                                                       &auto_normal);
                 }
                 continue;
             }

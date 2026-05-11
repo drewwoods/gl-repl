@@ -448,7 +448,7 @@ static void repl_core_replace_formatted_cmd(ReplCommandStore *store,
 void repl_reformat_program(void) {
     prof_begin(PROF_REFORMAT);
     ReplCommandStore store = repl_command_store_live();
-    /* Source text reads route through an SourceTextView so the
+    /* Source text reads route through a SourceTextView so the
      * dependency is declared at function scope rather than via a
      * scattered global accessor. Phase D will replace this entry-time
      * fetch with a view threaded from the controller. */
@@ -671,7 +671,7 @@ int collect_visible_vars(int pos, ExprVar *vars, int max_vars, int *total_out) {
     ScopeFrame frames[64];
     int depth = 0;
     /* Source text reads for for-loop / func-def reparse route through
-     * an SourceTextView fetched at entry. Phase D will accept the
+     * a SourceTextView fetched at entry. Phase D will accept the
      * view as a parameter once collect_visible_vars is folded into
      * the editor commit path. */
     SourceTextView text = source_document_view();

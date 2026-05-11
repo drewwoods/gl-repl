@@ -50,6 +50,7 @@
 
 #include <stdarg.h>
 
+#include "repl_command.h"    /* GLCmd, CmdType */
 #include "repl_export.h"     /* ReplExportLayout (step 7c) */
 #include "source_document.h" /* SourceTextView (Phase 1 of feature/source-document-port.md) */
 
