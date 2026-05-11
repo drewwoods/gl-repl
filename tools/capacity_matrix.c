@@ -26,7 +26,7 @@
 #include "repl/core.h"
 #include "repl/eval.h"
 #include "repl/export_state.h"
-#include "replay.h"
+#include "widgets/replay.h"
 #include "scene/render_types.h"
 
 #include <stddef.h>

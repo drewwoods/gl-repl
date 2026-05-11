@@ -3,7 +3,7 @@
 #include "glr_ctrl.h"
 #include "glr_actions.h"
 #include "repl/state.h"
-#include "replay_state.h"
+#include "widgets/replay_state.h"
 #include "ui/state.h"
 #include "editor/help_session.h"
 #include "glr_config.h"

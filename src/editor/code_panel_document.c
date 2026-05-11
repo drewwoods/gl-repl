@@ -12,7 +12,7 @@
 #include "repl/export.h" /* g_header_pre/post, RENDER_STATE_LINE_COUNT, CAM_LINE_COUNT */
 #include "repl/source_scope.h"
 #include "repl/state_views.h" /* repl_state_edit_line, repl_state_document_count, etc. */
-#include "replay_state.h"     /* replay_active, replay_src_line */
+#include "widgets/replay_state.h"     /* replay_active, replay_src_line */
 #include "ui/metrics.h"
 
 #define g_workspace_header_lines (repl_state_import_export().workspace_header_lines)

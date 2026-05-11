@@ -3,9 +3,9 @@
  */
 #include "repl/core_internal.h"
 #include "repl/parser.h"
-#include "replay.h"
+#include "widgets/replay.h"
 #include "repl/state_owners.h"
-#include "replay_state.h"
+#include "widgets/replay_state.h"
 #include "repl/replay_annotations.h"
 #include "config.h"        /* REPL_STATUS_TEXT_MAX */
 

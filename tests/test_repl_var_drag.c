@@ -1,6 +1,6 @@
 #include "glr_ctrl.h"
-#include "variable_panel_drag.h"
-#include "variable_panel_state.h"
+#include "widgets/variable_panel_drag.h"
+#include "widgets/variable_panel_state.h"
 #include "repl/state.h"
 #include "repl/core.h"
 #include "repl/eval.h"

@@ -6,7 +6,7 @@
 #include <stdlib.h>
 
 #include "audio.h"
-#include "color_picker_state.h"
+#include "widgets/color_picker_state.h"
 #include "editor/clipboard.h"
 #include "glr_completion.h"
 #include "glr_defaults.h"        /* CFG_DEFAULT_* */
@@ -34,9 +34,9 @@
 #include "repl/replay_annotations.h"
 #include "repl/source_scope.h"
 #include "repl/state_owners.h"
-#include "replay.h"
-#include "replay_state.h"
-#include "replay_ui_hud.h"
+#include "widgets/replay.h"
+#include "widgets/replay_state.h"
+#include "ui/replay_hud.h"
 #include "scene/overlays.h" /* scene_draw_vertex_number_label / _arrow primitives */
 #include "scene/render.h"
 #include "transform_guides.h" /* transform_guides_prepare / _render_if_due */
@@ -52,8 +52,8 @@
 #include "ui/state_types.h" /* UI-chrome typedefs (CodePanel/Camera/Help/etc.) */
 #include "ui/tabbed_overlay.h"
 #include "ui/variable_panel.h"
-#include "variable_panel_drag.h"
-#include "variable_panel_state.h"
+#include "widgets/variable_panel_drag.h"
+#include "widgets/variable_panel_state.h"
 
 static int glr_ctrl_cmd_is_focus_vertex(const GLCmd *cmd) {
     return cmd->valid &&

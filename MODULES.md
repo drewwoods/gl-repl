@@ -123,10 +123,10 @@ Consequences:
 | `ReplState` | Parsed command array, flat program, REPL variable state (scalar predefined vars plus fixed scratch arrays `A/B/C` of `REPL_SCRATCH_ARRAY_LEN` floats and the `func0..func9` user-alias table), scenes, import/export metadata, persistent render/presentation config | Replay runtime state (peer), variable-panel state (peer), help-session state (peer), color-picker state (peer), editable text, cursor, selection, search query, UI visibility, pointer/viewport chrome |
 | `EditorState` | Editable text buffer, active input, cursor/edit-line, insert mode, selection, clipboard, search/autocomplete, scroll, **cursor blink** (the editor controls cursor visibility/blink — UI just renders), undo/redo, editor transactions | Variable-panel drag (now on the variable_panel peer), parsed command semantics, GL execution, menu chrome, transient status banners, render-output pixel coordinates |
 | `UiState` | Viewport, pointer, status text TTL, help-overlay visibility (chrome flag), profile-panel visibility, panel-divider geometry (panel_frac + resizing_panel), camera viewport pose | Help-session tab/scroll (peer), variable-panel state (peer), program model, editable text, command validation, cursor blink (editor owns), per-frame render-output (uses `Ui*Output`) |
-| `variable_panel` peer | Variable-panel visibility flag + slider drag transaction (var_idx, log_mode, start_value, start_x). Storage in `variable_panel_state.c`. | Editor text behavior, REPL grammar |
-| `replay` peer | Replay state machine: PC, mode, speed, accum, fade speed, src_line_idx, total_flat_cmds, expand_args. Storage in `replay_state.c`. | Editor text behavior, REPL grammar |
+| `variable_panel` peer | Variable-panel visibility flag + slider drag transaction (var_idx, log_mode, start_value, start_x). Storage in `src/widgets/variable_panel_state.c`. | Editor text behavior, REPL grammar |
+| `replay` peer | Replay state machine: PC, mode, speed, accum, fade speed, src_line_idx, total_flat_cmds, expand_args. Storage in `src/widgets/replay_state.c`. | Editor text behavior, REPL grammar |
 | `editor_help_session` peer | Help-overlay session state: tab_idx, scroll. Storage in `src/editor/help_session.c`. Visibility flag stays on `UiState.help` as chrome. | Help content (provided by content provider) |
-| `color_picker` peer | Floating color-picker state, lifecycle, slider input handlers, source-line writeback through editor commit. Storage in `color_picker_state.c`; peer view + `ColorPickerInputResult` in `color_picker_state.h`. | Picker rendering / hit-test (lives on `src/ui/color_picker.c`) |
+| `color_picker` peer | Floating color-picker state, lifecycle, slider input handlers, source-line writeback through editor commit. Storage in `src/widgets/color_picker_state.c`; peer view + `ColorPickerInputResult` in `src/widgets/color_picker_state.h`. | Picker rendering / hit-test (lives on `src/ui/color_picker.c`) |
 
 > The legacy forwarders (`ui_state_variable_panel*`, `editor_state_variable_drag*`,
 > `repl_state_replay*`) were retired in Phases J5–J7. Production callers and
@@ -172,7 +172,7 @@ to make the layer boundaries observable:
   REPL pipeline (parse → command store → flatten → execute) from
   static text. Proves the REPL pipeline has no hard dependency on
   editor input dispatch (`src/editor/input.c`), the controller
-  (`glr_ctrl.c`), or the UI (`src/ui/`, `replay_ui_hud.c`). Per-line
+  (`glr_ctrl.c`), or the UI (`src/ui/`, `src/ui/replay_hud.c`). Per-line
   text canonically lives on `src/editor/state.c`'s `ReplEditorBuffer`,
   so that one editor TU is in the link set by design. The
   `tools/repl_demo/stubs.c` file is the visible record of what the
@@ -336,12 +336,12 @@ controllers; UI may render them; their input routes to them through
 
 | Module | Role |
 |--------|------|
-| `variable_panel` | Peer subsystem: owns visibility flag + slider drag transaction in a single `VariablePanelState`. Storage lives in `variable_panel_state.c`. |
+| `variable_panel` | Peer subsystem: owns visibility flag + slider drag transaction in a single `VariablePanelState`. Storage lives in `src/widgets/variable_panel_state.c`. |
 | `variable_panel_drag` | Implementation behind `variable_panel`'s drag transaction (begin/motion/reset, value writeback, source-line rewrite). Reads/writes through `variable_panel_drag_mut()`; legacy `repl_var_drag_*` symbol surface ratchets toward zero |
-| `replay_state` | Peer subsystem: owns `ReplReplayRuntimeState` storage in `replay_state.c`. Narrow accessors (`replay_active`, `replay_pc`, `replay_mode`, …) plus `replay_state_view()` for the per-frame snapshot fill |
+| `replay_state` | Peer subsystem: owns `ReplReplayRuntimeState` storage in `src/widgets/replay_state.c`. Narrow accessors (`replay_active`, `replay_pc`, `replay_mode`, …) plus `replay_state_view()` for the per-frame snapshot fill |
 | `replay` | Replay state machine implementation behind `replay_state`: PC stepping, mode toggling, fade batches. Routes via `replay_handle_pin_clicked` / `replay_handle_key` / `replay_handle_special` |
 | `editor_help_session` | Peer subsystem: read-only editor session for the help overlay (tab_idx, scroll). Visibility flag stays on `UiState.help` as chrome |
-| `color_picker` | Peer subsystem: floating HSV/alpha picker. Owns `g_cp_*` state, lifecycle (`color_picker_open` / `_close` / `_active_line` / `_can_edit_cmd`), input handlers (`color_picker_handle_press` / `_motion` / `_release` returning `ColorPickerInputResult`), and source-line writeback through `editor_commit_apply_external_change`. Exposes `color_picker_view()` for renderers and `color_picker_hsv_to_rgb` as a shared color-math helper. Storage lives in `color_picker_state.c`; renderer lives separately in `src/ui/color_picker.c` |
+| `color_picker` | Peer subsystem: floating HSV/alpha picker. Owns `g_cp_*` state, lifecycle (`color_picker_open` / `_close` / `_active_line` / `_can_edit_cmd`), input handlers (`color_picker_handle_press` / `_motion` / `_release` returning `ColorPickerInputResult`), and source-line writeback through `editor_commit_apply_external_change`. Exposes `color_picker_view()` for renderers and `color_picker_hsv_to_rgb` as a shared color-math helper. Storage lives in `src/widgets/color_picker_state.c`; renderer lives separately in `src/ui/color_picker.c` |
 | `repl_help_text` | REPL-side producer of neutral F1 help text. Walks `k_func_completions[]`, groups by `ReplHelpGroup`, emits per-command rows with header sections; appends hand-written language-level sections (Math operators, Variables, For-Loops, …) verbatim. `glr_ctrl` adapts the neutral content to `UiOverlayContent`; renderer (`src/ui/tabbed_overlay.c`) is feature-agnostic |
 
 Peer subsystems may *produce* overlays consumed by the editor (replay
@@ -417,7 +417,7 @@ allowlists. The contract is enforced by a per-feature lighter guard:
 | `ui_layout` | Pure scene/code-panel rectangle geometry |
 | `ui_code_panel_layout` | Pure text wrapping and visual-line iteration |
 | `ui_menu_bar` | Menu bar, dropdowns, pinned buttons, search entry, and menu hit-testing |
-| `src/ui/color_picker.c` | **Feature-UI** (color-picker peer): pure renderer + hit-test over `ColorPickerView`. State, lifecycle, and source-line writeback live on the `color_picker_state.c` peer; the UI side is mutator- and live-state-free, audited by `check-color-picker-ui-isolation` |
+| `src/ui/color_picker.c` | **Feature-UI** (color-picker peer): pure renderer + hit-test over `ColorPickerView`. State, lifecycle, and source-line writeback live on the `src/widgets/color_picker_state.c` peer; the UI side is mutator- and live-state-free, audited by `check-color-picker-ui-isolation` |
 | `ui_tabbed_overlay` | Generic modal tabbed text overlay renderer. Takes a `UiOverlayState` (visible / tab_idx / scroll / viewport / `UiOverlayContent`) and draws a titled, paged reference card. Knows nothing about REPL semantics. Currently consumed by the F1 help; available for future modal text panels |
 | `ui_variable_panel` | Renderer for the variable-slider panel (the panel chrome — the *peer subsystem* owns drag/visibility state). Input returns `UI_HIT_VARIABLE_SLIDER` |
 | `ui_autocomplete_panel` | Completion popup renderer; reads `EditorState.autocomplete` |
@@ -432,7 +432,7 @@ Files no longer in this layer:
   content is built REPL-side by `src/repl/help_text.c` from
   `k_func_completions[]` and adapted by `glr_ctrl` so adding a new GL command auto-populates
   the F1 overlay.
-- `ui_color_picker` → split into `color_picker_state.c` (peer state +
+- `ui_color_picker` → split into `src/widgets/color_picker_state.c` (peer state +
   lifecycle + writeback) and `src/ui/color_picker.c` (renderer +
   hit-test). The picker UI is a pure renderer over `ColorPickerView`;
   the peer is the only mutator. Locked in by
@@ -510,9 +510,9 @@ flowchart LR
     end
 
     subgraph peers["2b. Peer subsystems (own state + controller)"]
-        vpanel["variable_panel_state.c + variable_panel_drag.c<br/>(was repl_var_drag)<br/>visibility + drag transaction"]
-        replay_sys["replay.c + replay_state.c<br/>(was repl_replay)<br/>state machine · fades"]
-        cpicker["color_picker_state.c<br/>(was inside ui_color_picker)<br/>HSV/alpha state · lifecycle · writeback"]
+        vpanel["src/widgets/variable_panel_state.c + src/widgets/variable_panel_drag.c<br/>(was repl_var_drag)<br/>visibility + drag transaction"]
+        replay_sys["src/widgets/replay.c + src/widgets/replay_state.c<br/>(was repl_replay)<br/>state machine · fades"]
+        cpicker["src/widgets/color_picker_state.c<br/>(was inside ui_color_picker)<br/>HSV/alpha state · lifecycle · writeback"]
         camera["glr_camera.c<br/>orbit/pan/zoom transform"]
     end
 
@@ -539,7 +539,7 @@ flowchart LR
         uivpanel["src/ui/variable_panel.c<br/>variable panel chrome"]
         uiac["src/ui/autocomplete_panel.c<br/>completion popup"]
         uiprof["src/ui/profile_panel.c<br/>timing HUD"]
-        uirhud["replay_ui_hud.c<br/>replay HUD (feature-UI)"]
+        uirhud["src/ui/replay_hud.c<br/>replay HUD (feature-UI)"]
         uilayout["src/ui/layout.c<br/>rect geometry"]
         uicpdoc["src/editor/code_panel_document.c<br/>document row model"]
         uicplay["src/ui/code_panel_layout.c<br/>wrap iterator"]

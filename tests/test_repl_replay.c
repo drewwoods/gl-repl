@@ -1,8 +1,8 @@
 #include "glr_ctrl.h"
 #include "repl/core.h"
-#include "replay.h"
+#include "widgets/replay.h"
 #include "repl/state.h"
-#include "replay.c"
+#include "widgets/replay.c"
 #include "keys.h"
 #include "support/test_harness.h"
 #include <stdio.h>

@@ -10,7 +10,7 @@
 #include "glr_ctrl.h"            /* glr_ctrl_sync_ui_chrome */
 #include "glr_state.h"           /* presentation/render storage (step 7a) */
 #include "ui/layout.h"           /* CODE_PANEL_LAYOUT_* enum values */
-#include "color_picker_state.h"
+#include "widgets/color_picker_state.h"
 #include "audio.h"
 #include "repl/core.h"
 #include "repl/core_internal.h"
@@ -18,7 +18,7 @@
 #include "editor/input.h"
 #include "editor/completion.h"
 #include "keys.h"
-#include "replay_state.h"
+#include "widgets/replay_state.h"
 #include "editor/help_session.h"
 #include "repl/pipeline.h"
 #include "repl/state_owners.h"

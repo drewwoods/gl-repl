@@ -25,7 +25,7 @@
 #include "repl/state_views.h"
 #include "repl/eval.h"
 #include "editor.h"
-#include "color_picker_state.h"
+#include "widgets/color_picker_state.h"
 
 #include "state_types.h"
 

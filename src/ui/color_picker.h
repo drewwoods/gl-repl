@@ -15,7 +15,7 @@
 #ifndef UI_COLOR_PICKER_H
 #define UI_COLOR_PICKER_H
 
-#include "color_picker_state.h"
+#include "widgets/color_picker_state.h"
 #include "ui/editor.h"
 #include "ui/hit.h"
 
