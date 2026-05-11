@@ -1420,23 +1420,47 @@ static int handle_search_special_route(int key) {
  * (audio prev/next) and help-tab toggling on Left/Right when help is
  * visible are router-side and never reach this dispatcher. */
 static int handle_horizontal_special_key_route(int key) {
+    /* Shift+Left/Right/Home/End extend the input-buffer selection.
+     * editor_cursor_pos_extend_selection pins the pre-move cursor as
+     * the anchor on the first extending press (when no selection is
+     * active yet) and then grows or shrinks the range. The unshifted
+     * cases keep the plain editor_cursor_pos_set, which clears the
+     * anchor as part of the Phase B default cursor-move policy. */
+    int shift = (editor_get_modifiers() & GLUT_ACTIVE_SHIFT) != 0;
+    int input_len = editor_state_input().input_len;
+    int cur = editor_cursor_pos();
+
     switch (key) {
     case GLUT_KEY_LEFT:
-        if (editor_cursor_pos() > 0)
-            editor_cursor_pos_set(editor_cursor_pos() - 1);
+        if (cur > 0) {
+            if (shift)
+                editor_cursor_pos_extend_selection(cur - 1);
+            else
+                editor_cursor_pos_set(cur - 1);
+        }
         editor_completion_update();
         return 1;
     case GLUT_KEY_RIGHT:
-        if (editor_cursor_pos() < editor_state_input().input_len)
-            editor_cursor_pos_set(editor_cursor_pos() + 1);
+        if (cur < input_len) {
+            if (shift)
+                editor_cursor_pos_extend_selection(cur + 1);
+            else
+                editor_cursor_pos_set(cur + 1);
+        }
         editor_completion_update();
         return 1;
     case GLUT_KEY_HOME:
-        editor_cursor_pos_set(0);
+        if (shift)
+            editor_cursor_pos_extend_selection(0);
+        else
+            editor_cursor_pos_set(0);
         editor_completion_update();
         return 1;
     case GLUT_KEY_END:
-        editor_cursor_pos_set(editor_state_input().input_len);
+        if (shift)
+            editor_cursor_pos_extend_selection(input_len);
+        else
+            editor_cursor_pos_set(input_len);
         editor_completion_update();
         return 1;
     default:

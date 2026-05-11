@@ -47,6 +47,10 @@ static int load_input(const char *text) {
     return editor_input_len();
 }
 
+/* Modifier-provider seam for shift+arrow tests. */
+static int g_test_modifiers = 0;
+static int test_modifiers_provider(void) { return g_test_modifiers; }
+
 int main(void) {
     printf("--- input-anchor lifecycle ---\n");
     {
@@ -517,6 +521,81 @@ int main(void) {
         scenes = repl_state_scenes();
         ASSERT_INT("Ctrl+V (input-only) leaves example active",
                    scenes.active_example_idx, example_before);
+    }
+
+    printf("\n--- shift+arrow / home / end extend selection ---\n");
+    {
+        glr_app_reset_all();
+        editor_input_set_modifier_provider_for_test(test_modifiers_provider);
+
+        load_input("hello world");
+        editor_cursor_pos_set(5);
+        ASSERT_INT("baseline anchor inactive",
+                   editor_input_anchor(), -1);
+
+        /* Shift+Right pins old cursor and extends. */
+        g_test_modifiers = GLUT_ACTIVE_SHIFT;
+        editor_handle_special(GLUT_KEY_RIGHT, 0, 0);
+        ASSERT_INT("shift+right pins old cursor as anchor",
+                   editor_input_anchor(), 5);
+        ASSERT_INT("shift+right moved cursor", editor_cursor_pos(), 6);
+        ASSERT_INT("selection lo", editor_input_selection_lo(), 5);
+        ASSERT_INT("selection hi", editor_input_selection_hi(), 6);
+
+        /* Subsequent shift+right grows the same selection. */
+        editor_handle_special(GLUT_KEY_RIGHT, 0, 0);
+        ASSERT_INT("shift+right grows: anchor stays",
+                   editor_input_anchor(), 5);
+        ASSERT_INT("shift+right grows: cursor at 7",
+                   editor_cursor_pos(), 7);
+
+        /* Shift+Left shrinks. */
+        editor_handle_special(GLUT_KEY_LEFT, 0, 0);
+        ASSERT_INT("shift+left shrinks cursor",
+                   editor_cursor_pos(), 6);
+        ASSERT_INT("shift+left keeps anchor",
+                   editor_input_anchor(), 5);
+
+        /* Shift+Left across the anchor collapses (returns to no
+         * selection at the start position). */
+        editor_handle_special(GLUT_KEY_LEFT, 0, 0);
+        ASSERT_INT("shift+left to anchor collapses anchor",
+                   editor_input_anchor(), -1);
+        ASSERT_INT("shift+left to anchor: cursor at 5",
+                   editor_cursor_pos(), 5);
+
+        /* Unshifted arrow clears any active anchor. */
+        editor_input_anchor_set(0);
+        g_test_modifiers = 0;
+        editor_handle_special(GLUT_KEY_LEFT, 0, 0);
+        ASSERT_INT("plain arrow clears anchor",
+                   editor_input_anchor(), -1);
+
+        /* Shift+Home extends to start. */
+        editor_cursor_pos_set(8);
+        editor_input_anchor_clear();
+        g_test_modifiers = GLUT_ACTIVE_SHIFT;
+        editor_handle_special(GLUT_KEY_HOME, 0, 0);
+        ASSERT_INT("shift+home pins cursor",
+                   editor_input_anchor(), 8);
+        ASSERT_INT("shift+home cursor at 0", editor_cursor_pos(), 0);
+
+        /* Shift+End extends to end. */
+        editor_cursor_pos_set(3);
+        editor_input_anchor_clear();
+        editor_handle_special(GLUT_KEY_END, 0, 0);
+        ASSERT_INT("shift+end pins cursor",
+                   editor_input_anchor(), 3);
+        ASSERT_INT("shift+end cursor at input_len",
+                   editor_cursor_pos(), editor_input_len());
+
+        /* Plain Home clears anchor as a side effect. */
+        g_test_modifiers = 0;
+        editor_handle_special(GLUT_KEY_HOME, 0, 0);
+        ASSERT_INT("plain home clears anchor",
+                   editor_input_anchor(), -1);
+
+        editor_input_set_modifier_provider_for_test(NULL);
     }
 
     printf("\n--- Ctrl+V (LINES) routes through line paste, not input ---\n");
