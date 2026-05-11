@@ -16,10 +16,6 @@
 #include "repl_source_scope.h"
 #include "repl_state_owners.h"
 #include "code_formatter.h"
-#include "ui/layout.h"   /* CODE_PANEL_LAYOUT_* enum values only —
-                          * ui_layout_*() function calls were removed
-                          * in step 7c; values now arrive opaquely
-                          * via ReplExportLayout. */
 
 #define IMPORT_EXPORT_STATE (repl_state_import_export_mut())
 #define g_workspace_header_lines (IMPORT_EXPORT_STATE->workspace_header_lines)
@@ -370,15 +366,6 @@ static int parse_cfg(const char *args) {
     p++;
     while (*p && isspace((unsigned char)*p)) p++;
     int val = (int)strtol(p, NULL, 10);
-    /* Legacy slug alias: `top_code_panel = 1` translates to
-     * `code_panel = TOP`. CODE_PANEL_LAYOUT_TOP / _LEFT enum values
-     * are stable across builds (defined in ui/layout.h). */
-    const char *out_slug = slug;
-    int         out_val  = val;
-    if (strcmp(slug, "top_code_panel") == 0) {
-        out_slug = "code_panel";
-        out_val  = val ? CODE_PANEL_LAYOUT_TOP : CODE_PANEL_LAYOUT_LEFT;
-    }
     /* Apply immediately via the bridge: callers (tests, the importer,
      * the example loader) expect line-by-line @cfg parsing to update
      * live state synchronously. We also accumulate so callers that
@@ -388,10 +375,10 @@ static int parse_cfg(const char *args) {
     if (g_export_cfg_bridge && g_export_cfg_bridge->apply) {
         ReplExportConfig single;
         repl_export_config_clear(&single);
-        repl_export_config_set_int(&single, out_slug, out_val);
+        repl_export_config_set_int(&single, slug, val);
         g_export_cfg_bridge->apply(&single);
     }
-    repl_export_config_set_int(&g_import_cfg_accumulator, out_slug, out_val);
+    repl_export_config_set_int(&g_import_cfg_accumulator, slug, val);
     return 1;
 }
 
