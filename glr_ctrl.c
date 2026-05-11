@@ -703,6 +703,7 @@ typedef struct {
     const SceneGuideSnapshot *snapshot;
     SceneTransformGuidePlan   xform_plan;
     float                     cam_view[16];
+    int                       geometry_guide_done;
 } CursorGuideRenderCtx;
 
 static void on_cmd_render_cursor_guides(const ReplVertexWalkState *state,
@@ -710,8 +711,10 @@ static void on_cmd_render_cursor_guides(const ReplVertexWalkState *state,
     CursorGuideRenderCtx *ctx = (CursorGuideRenderCtx *)user;
     int is_cursor = (state->src_cmd_idx == ctx->snapshot->edit_line_idx);
 
-    if (is_cursor && !ctx->snapshot->replaying)
+    if (is_cursor && !ctx->geometry_guide_done && !ctx->snapshot->replaying) {
         geometry_guides_render_for_cursor(ctx->snapshot);
+        ctx->geometry_guide_done = 1;
+    }
 
     transform_guides_render_if_due(ctx->snapshot, &ctx->xform_plan,
                                          state->flat_cmd_idx, ctx->cam_view);
@@ -722,7 +725,14 @@ static void glr_ctrl_render_cursor_guides(const SceneGuideSnapshot *snapshot) {
 
     CursorGuideRenderCtx ctx;
     ctx.snapshot = snapshot;
-    transform_guides_prepare(snapshot, &ctx.xform_plan);
+    ctx.geometry_guide_done = 0;
+    int have_xform = transform_guides_prepare(snapshot, &ctx.xform_plan);
+
+    /* Skip the expensive flat-program walk when neither guide type needs it. */
+    if (!have_xform && !snapshot->replaying) {
+        geometry_guides_render_for_cursor(snapshot);
+        return;
+    }
 
     glPushAttrib(GL_ALL_ATTRIB_BITS);
     glDisable(GL_LIGHTING);
