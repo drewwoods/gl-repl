@@ -15,6 +15,7 @@
 # used flip.
 
 set -euo pipefail
+cd "$(git rev-parse --show-toplevel)"
 
 file="repl_scenes.c"
 

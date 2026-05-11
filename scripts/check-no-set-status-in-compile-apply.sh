@@ -12,6 +12,7 @@
 # legitimate bridge — both are purely value-returning.
 
 set -euo pipefail
+cd "$(git rev-parse --show-toplevel)"
 
 # Match call shape only; exclude lines that are clearly inside a
 # C-style block comment (leading-asterisk prefix `^\s* \*`) so the

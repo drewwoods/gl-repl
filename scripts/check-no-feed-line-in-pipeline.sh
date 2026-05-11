@@ -10,6 +10,7 @@
 # `repl_load_apply_line` from repl_load.h.
 
 set -euo pipefail
+cd "$(git rev-parse --show-toplevel)"
 
 # REPL pipeline TUs that the demo links — same scope as
 # check-repl-state-no-glr-state.sh. App-side glr_*.c modules,

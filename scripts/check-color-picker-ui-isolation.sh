@@ -23,6 +23,7 @@
 # src/ui/metrics.h / src/ui/layout.h constants, math / string helpers.
 
 set -euo pipefail
+cd "$(git rev-parse --show-toplevel)"
 
 shopt -s nullglob
 

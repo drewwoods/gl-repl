@@ -11,6 +11,7 @@
 # H ships, the allowlist contracts further.
 
 set -euo pipefail
+cd "$(git rev-parse --show-toplevel)"
 
 allowlist="${1:-scripts/allowlists/repl-no-direct-buffer-read.txt}"
 

@@ -15,6 +15,7 @@
 # and controller TUs (glr_ctrl.c, glr_actions.c) may still call it.
 
 set -euo pipefail
+cd "$(git rev-parse --show-toplevel)"
 
 # Pipeline TUs in REPL_DEMO_DEP_SRCS. Mirrors the Makefile list so the
 # guard tracks what the demo actually links from the REPL pipeline.

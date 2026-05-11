@@ -10,6 +10,7 @@
 # pipeline TU instead (introduce a bridge / sink / opaque parameter).
 
 set -euo pipefail
+cd "$(git rev-parse --show-toplevel)"
 
 file="tools/repl_demo/stubs.c"
 baseline=0

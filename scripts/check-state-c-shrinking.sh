@@ -1,5 +1,6 @@
 #!/bin/bash
 set -euo pipefail
+cd "$(git rev-parse --show-toplevel)"
 
 baseline_file="${1:-scripts/baselines/state-c-lines.txt}"
 state_file="${2:-repl_state.c}"

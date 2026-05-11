@@ -1,5 +1,6 @@
 #!/bin/bash
 set -euo pipefail
+cd "$(git rev-parse --show-toplevel)"
 
 rules_file="${1:-scripts/allowlists/domain-owner-encapsulation.txt}"
 

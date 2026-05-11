@@ -1,5 +1,6 @@
 #!/bin/bash
 set -euo pipefail
+cd "$(git rev-parse --show-toplevel)"
 
 strict="${CHECK_OUTPUT_ACTUALIZATION_STRICT:-0}"
 

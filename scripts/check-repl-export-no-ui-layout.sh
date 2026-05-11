@@ -7,6 +7,7 @@
 # values, not function calls.
 
 set -euo pipefail
+cd "$(git rev-parse --show-toplevel)"
 
 violations=$(grep -nE '\bui_layout_[a-z_]+\s*\(|\bui_state_viewport\s*\(|\bui_state_code_panel\s*\(' repl_export.c 2>/dev/null \
     | grep -vE '^[^:]+:[0-9]+:[[:space:]]*(\*|//)' || true)
