@@ -36,10 +36,8 @@
  * 8. Test entry: repl_load_example_lines_for_test() drives example loading
  *    from unit tests without going through the GLUT example dropdown.
  *
- * 9. Timekeeping: Advance and reset the animated 't' variable.
- *
- * 10. User scene promotion: repl_promote_example_if_needed() creates a user
- *     scene on first edit of an example. Scene state reset/initialization.
+ * 9. User scene promotion: repl_promote_example_if_needed() creates a user
+ *    scene on first edit of an example. Scene state reset/initialization.
  *
  * Editor-input declarations (feed_line, load_line_to_input,
  * repl_editor_reset_transients, delete_cmd_range, repl_clear_all_cmds,
@@ -216,11 +214,12 @@ void repl_bench_fade_clear(void);
  * directly. */
 void repl_load_example_lines_for_test(const char *const *lines);
 
-/* ---- Timekeeping ------------------------------------------------------ */
+/* ---- Cmd-type name helper --------------------------------------------- */
 
 const char *cmd_type_name(CmdType t);
-void repl_advance_time(float dt);
-void repl_reset_time_to_zero(void);
+
+/* repl_advance_time / repl_reset_time_to_zero moved to repl_core.h as
+ * public REPL timekeeping APIs. */
 
 /* Called before any mutation: if an example is currently viewed (no active
  * user scene), allocate a scene slot, copy the current editor state into it,

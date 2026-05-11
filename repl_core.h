@@ -145,6 +145,17 @@ int  repl_active_user_scene(void);        /* current slot index, -1 if none */
 void repl_replay_start(void);
 void repl_replay_stop(void);
 
+/* --- Timekeeping ------------------------------------------------------- */
+
+/* Advance the predefined `t` variable by `dt` seconds. The controller's
+ * timer tick calls this every frame when the animation toggle (Ctrl+T)
+ * is on. */
+void repl_advance_time(float dt);
+
+/* Reset `t` to 0. Called from controller/test paths that need a
+ * deterministic time origin. */
+void repl_reset_time_to_zero(void);
+
 /* --- Editor / navigation helpers called from outside repl_core.c ------- */
 void repl_navigate_to_line(int target);
 void repl_load_initial_commands(const char *import_file);
