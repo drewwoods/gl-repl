@@ -11,9 +11,7 @@
 
 #include <stddef.h>
 
-#include "glr_camera.h"          /* ReplCameraState + glr_camera() */
-
-void glr_debug_dump_editor(FILE *out, EditorBufferView text) {
+void glr_debug_dump_editor(FILE *out, SourceTextView text) {
     FILE *dst = out ? out : stdout;
 
     fprintf(dst, "=== REPL Editor Dump ===\n");
@@ -25,7 +23,7 @@ void glr_debug_dump_editor(FILE *out, EditorBufferView text) {
 
     for (int cmd_idx = 0; cmd_idx < repl_state_document_count(); cmd_idx++) {
         const GLCmd *cmd = &repl_state_document_cmds()[cmd_idx];
-        const char *line_text = editor_buffer_view_line(text, cmd_idx);
+        const char *line_text = source_text_line(text, cmd_idx);
         fprintf(dst,
                 "%4d | %-22s | valid=%d has_vars=%d is_auto=%d src_idx=%d | %s\n",
                 cmd_idx, repl_cmd_type_name(cmd->type), cmd->valid,
@@ -33,32 +31,7 @@ void glr_debug_dump_editor(FILE *out, EditorBufferView text) {
                 line_text ? line_text : "");
     }
 
-    fprintf(dst, "--- source ---\n");
-    for (int cmd_idx = 0; cmd_idx < repl_state_document_count(); cmd_idx++) {
-        const GLCmd *cmd = &repl_state_document_cmds()[cmd_idx];
-        if (!cmd->valid) continue;
-        const char *line_text = editor_buffer_view_line(text, cmd_idx);
-        fprintf(dst, "%s\n", line_text ? line_text : "");
-    }
-    fprintf(dst, "--- camera ---\n");
-    {
-        ReplCameraState cam = glr_camera();
-        fprintf(dst, "rx=%g ry=%g dist=%g tx=%g ty=%g tz=%g\n",
-                (double)cam.rx, (double)cam.ry, (double)cam.dist,
-                (double)cam.tx, (double)cam.ty, (double)cam.tz);
-    }
-    repl_refresh_camera_lines();
-    {
-        ReplImportExportView meta = repl_state_import_export();
-        for (int cam_line_idx = 0; cam_line_idx < CAM_LINE_COUNT; cam_line_idx++)
-            fprintf(dst, "%s\n", meta.cam_lines[cam_line_idx]);
-    }
-    fprintf(dst, "--- init ---\n");
-    for (int init_line_idx = 0; init_line_idx < repl_export_init_section_line_count(); init_line_idx++) {
-        char line[MAX_LINE_LEN];
-        repl_export_init_section_line(init_line_idx, line, sizeof(line));
-        fprintf(dst, "%s\n", line);
-    }
+    repl_dump_code_panel_text(dst, text);
     fprintf(dst, "=== End REPL Editor Dump ===\n");
     fflush(dst);
 }

@@ -19,7 +19,6 @@
                           * ui_layout_*() function calls were removed
                           * in step 7c; values now arrive opaquely
                           * via ReplExportLayout. */
-#include "ui/metrics.h"
 
 #define IMPORT_EXPORT_STATE (repl_state_import_export_mut())
 #define g_workspace_header_lines (IMPORT_EXPORT_STATE->workspace_header_lines)
@@ -3359,7 +3358,8 @@ void repl_dump_code_panel_text(FILE *out, SourceTextView text) {
 }
 
 void repl_dump_code_panel_visual_text(FILE *out, SourceTextView text,
-                                      const ReplExportLayout *layout) {
+                                      const ReplExportLayout *layout,
+                                      int code_margin_x) {
     FILE *dst = out ? out : stdout;
     /* Step 7c: panel width + presentation flags come in opaquely
      * through the layout struct. The controller computes them via
@@ -3376,7 +3376,8 @@ void repl_dump_code_panel_visual_text(FILE *out, SourceTextView text,
     int wrap_at_comma = layout ? layout->wrap_at_comma       : 1;
     int linenum_w = 4 * FONT_W;
     int idx_col_w = show_indices ? (6 * FONT_W) : 0;
-    int idx_x = CODE_MARGIN_X + linenum_w + FONT_W;
+    int margin_x = code_margin_x >= 0 ? code_margin_x : 0;
+    int idx_x = margin_x + linenum_w + FONT_W;
     int text_x = idx_x + idx_col_w;
 
     s_export_text_view = text;
