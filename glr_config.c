@@ -48,7 +48,7 @@ static int *config_value_ptr(GlrConfigKey key) {
     case GLR_CONFIG_GRID_MAJOR:          return &glr_state_presentation_mut()->grid_major_idx;
     case GLR_CONFIG_GRID_EXTENT:         return &glr_state_presentation_mut()->grid_extent_idx;
     case GLR_CONFIG_AXES_THEME:          return &glr_state_presentation_mut()->axes_theme;
-    case GLR_CONFIG_VERTEX_GUIDES:       return &glr_state_presentation_mut()->show_vertex_guides;
+    case GLR_CONFIG_XFORM_GUIDES:       return &glr_state_presentation_mut()->show_vertex_guides;
     case GLR_CONFIG_XFORM_GUIDE_MODE:    return &glr_state_presentation_mut()->xform_guide_mode;
     case GLR_CONFIG_LIGHT_INDICATORS:    return &glr_state_presentation_mut()->show_light_indicators;
     case GLR_CONFIG_POLY_HIGHLIGHT:      return &glr_state_presentation_mut()->highlight_current_poly;

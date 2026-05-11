@@ -13,7 +13,6 @@ typedef enum {
     PROF_SCENE_3D_SETUP,     /* projection/camera/lights/material setup */
     PROF_SCENE_3D_FILL,      /* execute_commands() main fill pass */
     PROF_SCENE_3D_FADE,      /* replay fade batches pass */
-    PROF_SCENE_3D_FADE_PROLOGUE,    /* outer fade-pass state setup */
     PROF_SCENE_3D_FADE_BATCH_PREP,  /* per-batch find-open + color */
     PROF_SCENE_3D_FADE_BATCH_EXEC,  /* per-batch execute_commands */
     PROF_SCENE_3D_FADE_BATCH_POST,  /* per-batch post-execute cleanup */
@@ -22,15 +21,15 @@ typedef enum {
     PROF_SCENE_3D_GRID,         /* scene_grid_render() */
     PROF_SCENE_3D_AXES,         /* scene_axes_render() */
     PROF_SCENE_3D_ORBIT_TARGET, /* draw_orbit_target() */
-    PROF_SCENE_3D_OUTLINES,  /* polygon outline + current-block highlight */
     PROF_SCENE_3D_OVERLAYS,  /* vertex dots, vertex/normal/transform guides */
-    PROF_SCENE_3D_HUD,       /* lights, vertex nums, normals, replay HUD */
+    PROF_SCENE_3D_OVERLAY_OUTLINES,  /* polygon outline + current-block highlight */
+    PROF_SCENE_3D_OVERLAY_BUILD_GUIDES,  /* transform-editing gizmos (translate/rotate/scale) */
+    PROF_SCENE_3D_OVERLAY_TRANSFORM_GUIDES,  /* transform-editing gizmos (translate/rotate/scale) */
+    PROF_SCENE_3D_OVERLAY_NORMALS,        /* normal vector labels */
+    PROF_SCENE_3D_OVERLAY_VERTEX_NUMBERS,    /* vertex numbers labels */
+    PROF_SCENE_3D_LAST = PROF_SCENE_3D_OVERLAY_VERTEX_NUMBERS,
     PROF_CODE_PANEL,    /* render_code_panel() */
     PROF_CODE_PANEL_LAYOUT,   /* render_code_panel() layout/precompute */
-    PROF_CODE_PANEL_LAYOUT_GEOM,   /* panel geom + row precompute */
-    PROF_CODE_PANEL_LAYOUT_GEOM_SETUP,      /* workspace refresh + panel geometry */
-    PROF_CODE_PANEL_LAYOUT_GEOM_PRECOMPUTE, /* wrap/precompute row counts */
-    PROF_CODE_PANEL_LAYOUT_SCROLL, /* scroll clamping + follow-cursor updates */
     PROF_CODE_PANEL_CHROME,   /* background, border, header/search chrome */
     PROF_CODE_PANEL_LINES,    /* header/body/footer line rendering */
     PROF_CODE_PANEL_LINES_STATIC,  /* workspace/header static rows */
