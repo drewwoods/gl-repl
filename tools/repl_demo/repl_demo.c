@@ -270,11 +270,36 @@ static void seed_variable_driven_program(void) {
     }
 }
 
+/* Real-GL builds (GL_STUBS not defined) emit live OpenGL calls from
+ * repl_execute_program. The headless samples below never bootstrap a
+ * GL context — that's the --render mode's job — so invoking the
+ * executor here would segfault. The stubs build (USE_GL_STUBS=1)
+ * defines GL_STUBS and turns every GL call into a no-op, so the
+ * headless path is safe there. Print a one-shot warning and skip the
+ * executor call in real-GL builds; the print summaries still run. */
+static int headless_executor_safe(void) {
+#ifdef GL_STUBS
+    return 1;
+#else
+    static int warned = 0;
+    if (!warned) {
+        fprintf(stderr,
+                "repl_demo: skipping repl_execute_program — no GL context.\n"
+                "  Use --render to bootstrap GLUT, or rebuild with"
+                " USE_GL_STUBS=1 for the headless executor path.\n");
+        warned = 1;
+    }
+    return 0;
+#endif
+}
+
 static void tick_and_execute(float t_value) {
     int t_idx = repl_eval_find_predef_var_idx("t");
     g_predef_vars[t_idx].value = t_value;
     repl_state_mark_flat_dirty();
     repl_flatten_commands();
+    if (!headless_executor_safe())
+        return;
     ReplExecutionOptions opts = {
         .flat_cmd_count = repl_state_flat_program_count(),
         .program        = repl_state_flat_program_view(),
@@ -312,6 +337,8 @@ static void print_flat_summary(void) {
 }
 
 static void execute_against_stubs(void) {
+    if (!headless_executor_safe())
+        return;
     ReplExecutionOptions opts = {
         .flat_cmd_count = repl_state_flat_program_count(),
         .program        = repl_state_flat_program_view(),
