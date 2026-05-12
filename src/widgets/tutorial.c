@@ -262,6 +262,29 @@ int tutorial_line_is_locked(int line_idx) {
     return 0;
 }
 
+int tutorial_shadow_suffix(const char *input, char *out, size_t out_size) {
+    const char *expected;
+    size_t input_len;
+
+    if (out && out_size > 0)
+        out[0] = '\0';
+    if (!out || out_size == 0)
+        return 0;
+    if (!tutorial_active())
+        return 0;
+
+    expected = tutorial_current_expected_text();
+    if (!expected)
+        return 0;
+
+    input_len = input ? strlen(input) : 0;
+    if (strncmp(expected, input ? input : "", input_len) != 0)
+        return 0;
+
+    snprintf(out, out_size, "%s", expected + input_len);
+    return 1;
+}
+
 int tutorial_guard_source_change(int pos, int delete_count, int insert_count) {
     TutorialRuntimeState state = tutorial_state_view();
 
