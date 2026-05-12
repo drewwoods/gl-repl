@@ -7,7 +7,7 @@
  *
  * Execution model: The replay state machine (OFF/PLAYING/PAUSED/DONE) tracks
  * a program counter (PC) into the flat command array. During playback, the
- * executor only renders commands with index < repl_replay_exec_limit() (the PC
+ * executor only renders commands with index < replay_exec_limit() (the PC
  * clamped by replay speed/pause state). Geometry fades in/out as new geometry
  * appears via a ring buffer of fading geometry snapshots (ReplayFadeBatch).
  *
@@ -83,42 +83,42 @@ typedef enum {
 
 /* --- State machine control -------------------------------------------- */
 
-void repl_replay_start(void);                /* Enter PLAYING state */
-void repl_replay_stop(void);                 /* Enter OFF state, clear history */
-void repl_replay_advance(void);              /* Increment PC by 1 */
-void repl_replay_tick_fade_batches(float dt);/* Age and decay active fades */
+void replay_start(void);                /* Enter PLAYING state */
+void replay_stop(void);                 /* Enter OFF state, clear history */
+void replay_advance(void);              /* Increment PC by 1 */
+void replay_tick_fade_batches(float dt);/* Age and decay active fades */
 
 /* --- Seek operations --------------------------------------------------- */
 
-void repl_replay_seek(int new_pc);           /* Jump to PC; restores baseline vars */
-int  repl_replay_seek_to_src_line(int target_line);
-void repl_replay_step_back(void);            /* Retreat PC; re-execute from new point */
-void repl_replay_restart_from_beginning(void);
+void replay_seek(int new_pc);           /* Jump to PC; restores baseline vars */
+int  replay_seek_to_src_line(int target_line);
+void replay_step_back(void);            /* Retreat PC; re-execute from new point */
+void replay_restart_from_beginning(void);
 
 /* --- Speed / playback control ----------------------------------------- */
 
-void repl_replay_speed_adjust(float factor); /* Multiply speed by factor (1.5 = faster) */
+void replay_speed_adjust(float factor); /* Multiply speed by factor (1.5 = faster) */
 
 /* Toggle the Replay pin button state. Playing pauses, paused resumes, and
  * stopped/done states restart playback from the beginning. */
-void repl_replay_toggle_play_pause(void);
+void replay_toggle_play_pause(void);
 
 /* --- Query / renderer helpers ----------------------------------------- */
 
-int  repl_replay_exec_limit(void);           /* Current PC (what executor renders to) */
-int  repl_replay_has_active_fades(void);     /* Any fades currently visible? */
-int  repl_replay_fill_base_limit(void);      /* Highest PC reached so far */
+int  replay_exec_limit(void);           /* Current PC (what executor renders to) */
+int  replay_has_active_fades(void);     /* Any fades currently visible? */
+int  replay_fill_base_limit(void);      /* Highest PC reached so far */
 
 /* Compute skip limits for performance: scene_render.c can skip rendering
  * commands in ranges where no fade is active (optimization). */
-int  repl_replay_compute_fade_skip_limits(int *out_limits, int max_count);
+int  replay_compute_fade_skip_limits(int *out_limits, int max_count);
 
-ReplayFadeBatchView repl_replay_fade_batches_view(void);
-float repl_replay_batch_alpha(const ReplayFadeBatch *batch);
+ReplayFadeBatchView replay_fade_batches_view(void);
+float replay_batch_alpha(const ReplayFadeBatch *batch);
 
 /* Per-frame: updates exec_limit based on speed multiplier and pause state,
  * captures geometry snapshots for new fades. Called each frame. */
-int  repl_replay_prepare_frame(int full_flat_count);
+int  replay_prepare_frame(int full_flat_count);
 
 /* --- Vertex-overlay walk (vertex numbers / normal vectors / vertex dots) -
  *
@@ -174,7 +174,7 @@ typedef struct ReplVertexWalkCallbacks {
                       void *user_data);
 } ReplVertexWalkCallbacks;
 
-void repl_walk_user_vertices(const ReplVertexWalkContext *ctx,
+void replay_walk_user_vertices(const ReplVertexWalkContext *ctx,
                              const ReplVertexWalkCallbacks *cb,
                              void *user_data);
 
@@ -196,26 +196,26 @@ typedef struct ReplTessPreviewCallbacks {
     void (*end_contour)(void *user_data);
 } ReplTessPreviewCallbacks;
 
-void repl_replay_walk_tess_preview(const ReplTessPreviewCallbacks *cb,
+void replay_walk_tess_preview(const ReplTessPreviewCallbacks *cb,
                                    void *user_data);
 
 /* --- Variable state for step-back --------------------------------------- */
 
-void repl_replay_restore_baseline_predef_values(void);
-void repl_replay_copy_baseline_predef_values(float *dst, int max_vals);
-void repl_replay_restore_baseline_scratch_arrays(void);
-void repl_replay_copy_baseline_scratch_arrays(
+void replay_restore_baseline_predef_values(void);
+void replay_copy_baseline_predef_values(float *dst, int max_vals);
+void replay_restore_baseline_scratch_arrays(void);
+void replay_copy_baseline_scratch_arrays(
     float dst[REPL_SCRATCH_ARRAY_COUNT][REPL_SCRATCH_ARRAY_LEN]);
 
 /* --- Input routing (called from repl_editor.c) ----------------------- */
 
-int  repl_replay_handle_key(unsigned char key);
-int  repl_replay_handle_special_key(int key);
+int  replay_handle_key(unsigned char key);
+int  replay_handle_special_key(int key);
 
 /* --- Benchmark / test helpers ----------------------------------------- */
 
-int  repl_bench_fade_install(const int *old_pcs, const int *new_pcs,
+int  replay_bench_fade_install(const int *old_pcs, const int *new_pcs,
                              int count, float age);
-void repl_bench_fade_clear(void);
+void replay_bench_fade_clear(void);
 
 #endif /* REPLAY_H */

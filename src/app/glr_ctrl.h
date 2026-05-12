@@ -142,7 +142,7 @@ const struct UiOverlayContent *glr_ctrl_help_overlay_content(void);
 
 /* Publish a ReplReplayAnnotationOutput to editor_state_virtual_lines.
  * Phase 4 of feature/source-document-port.md uses the return-value
- * shape: repl_replay_annotations_prepare() fills the output struct
+ * shape: replay_annotations_prepare() fills the output struct
  * and the caller (controller, panels.c, full-app-linked tests) calls
  * this helper to forward the rows to the editor's virtual-line list.
  * The standalone demo doesn't link this — it has no UI to render

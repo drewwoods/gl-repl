@@ -153,14 +153,14 @@ static void replay_set_src_line(int src_line) {
     }
 }
 
-float repl_replay_batch_alpha(const ReplayFadeBatch *batch) {
+float replay_batch_alpha(const ReplayFadeBatch *batch) {
     float alpha = batch->age * g_replay_fade_speed;
     if (alpha < 0.0f) alpha = 0.0f;
     if (alpha > 1.0f) alpha = 1.0f;
     return alpha;
 }
 
-ReplayFadeBatchView repl_replay_fade_batches_view(void) {
+ReplayFadeBatchView replay_fade_batches_view(void) {
     ReplayFadeBatchView view = {
         .batches = g_replay_fade_batches,
         .count = g_replay_fade_batch_count,
@@ -168,11 +168,11 @@ ReplayFadeBatchView repl_replay_fade_batches_view(void) {
     return view;
 }
 
-int repl_replay_compute_fade_skip_limits(int *out_limits, int max_count) {
+int replay_compute_fade_skip_limits(int *out_limits, int max_count) {
     FlatProgramView flat_program = repl_state_flat_program_view();
     const GLCmd *g_flat_cmds = flat_program.cmds;
     int g_num_flat_cmds = flat_program.cmd_count;
-    ReplayFadeBatchView fade_batches = repl_replay_fade_batches_view();
+    ReplayFadeBatchView fade_batches = replay_fade_batches_view();
     int batch_limit;
     int batch_idx = 0;
     int open_begin = -1;
@@ -181,7 +181,7 @@ int repl_replay_compute_fade_skip_limits(int *out_limits, int max_count) {
 
     if (!out_limits || max_count <= 0)
         return 0;
-    if (!repl_replay_has_active_fades())
+    if (!replay_has_active_fades())
         return 0;
 
     batch_limit = fade_batches.count;
@@ -265,7 +265,7 @@ static void replay_clamp_fade_batches(int max_pc) {
     g_replay_fade_batch_count = dst;
 }
 
-void repl_replay_tick_fade_batches(float dt) {
+void replay_tick_fade_batches(float dt) {
     int dst = 0;
 
     for (int idx = 0; idx < g_replay_fade_batch_count; idx++) {
@@ -279,13 +279,13 @@ void repl_replay_tick_fade_batches(float dt) {
     g_replay_fade_batch_count = dst;
 }
 
-int repl_replay_has_active_fades(void) {
+int replay_has_active_fades(void) {
     return g_replay_active && g_replay_fade_batch_count > 0;
 }
 
-int repl_replay_fill_base_limit(void) {
+int replay_fill_base_limit(void) {
     REPLAY_FLAT_STATE;
-    if (!repl_replay_has_active_fades())
+    if (!replay_has_active_fades())
         return g_num_flat_cmds;
     if (g_replay_fade_batches[0].old_pc < 0)
         return 0;
@@ -295,7 +295,7 @@ int repl_replay_fill_base_limit(void) {
 }
 
 /* Apply a single transform CmdType to the current GL modelview, tracking
- * push/pop balance. Used by repl_replay_walk_tess_preview below — REPL is
+ * push/pop balance. Used by replay_walk_tess_preview below — REPL is
  * the home of GLCmd→GL translation, so the scene module never has to do
  * its own command iteration. */
 static void replay_walk_apply_transform(const GLCmd *cmd, int *depth) {
@@ -327,7 +327,7 @@ static void replay_walk_apply_transform(const GLCmd *cmd, int *depth) {
     }
 }
 
-void repl_replay_walk_tess_preview(const ReplTessPreviewCallbacks *cb,
+void replay_walk_tess_preview(const ReplTessPreviewCallbacks *cb,
                                    void *user_data) {
     if (!cb) return;
 
@@ -438,7 +438,7 @@ static int replay_walk_block_matches_cursor(int begin_idx, int is_tess,
     return 0;
 }
 
-void repl_walk_user_vertices(const ReplVertexWalkContext *ctx,
+void replay_walk_user_vertices(const ReplVertexWalkContext *ctx,
                              const ReplVertexWalkCallbacks *cb,
                              void *user_data) {
     if (!ctx || !cb) return;
@@ -711,7 +711,7 @@ static int replay_prev_limit(int current_pc) {
     return prev_pc;
 }
 
-void repl_replay_seek(int new_pc) {
+void replay_seek(int new_pc) {
     REPLAY_FLAT_STATE;
     if (new_pc < 0)
         new_pc = 0;
@@ -727,7 +727,7 @@ void repl_replay_seek(int new_pc) {
                    : REPLAY_PAUSED;
 }
 
-int repl_replay_seek_to_src_line(int target_line) {
+int replay_seek_to_src_line(int target_line) {
     int pc = 0;
     int landed_pc = -1;
     int landed_src = -1;
@@ -766,11 +766,11 @@ int repl_replay_seek_to_src_line(int target_line) {
     if (landed_pc < 0)
         return -1;
 
-    repl_replay_seek(landed_pc);
+    replay_seek(landed_pc);
     return landed_src;
 }
 
-void repl_replay_restart_from_beginning(void) {
+void replay_restart_from_beginning(void) {
     g_replay_pc = 0;
     g_replay_accum = 0.0f;
     replay_clear_fade_batches();
@@ -779,7 +779,7 @@ void repl_replay_restart_from_beginning(void) {
     g_replay_last_src_line = -1;
 }
 
-void repl_replay_start(void) {
+void replay_start(void) {
     float live_predef_vals[MAX_PREDEF_VARS];
     float live_scratch_arrays[REPL_SCRATCH_ARRAY_COUNT][REPL_SCRATCH_ARRAY_LEN];
     REPLAY_FLAT_STATE;
@@ -814,7 +814,7 @@ void repl_replay_start(void) {
     repl_set_status("Replay: playing");
 }
 
-void repl_replay_stop(void) {
+void replay_stop(void) {
     repl_state_variables_mut()->time_playing = g_replay_saved_t_playing;
     g_replay_active = 0;
     g_replay_state = REPLAY_OFF;
@@ -826,7 +826,7 @@ void repl_replay_stop(void) {
     g_replay_last_src_line = -1;
 }
 
-void repl_replay_advance(void) {
+void replay_advance(void) {
     REPLAY_FLAT_STATE;
     int old_pc;
     int next_pc;
@@ -862,27 +862,27 @@ void repl_replay_advance(void) {
     }
 }
 
-void repl_replay_step_back(void) {
+void replay_step_back(void) {
     if (!g_replay_active)
         return;
 
     if (g_replay_pc <= 0) {
-        repl_replay_seek(0);
+        replay_seek(0);
         repl_set_status("Replay: at start");
         return;
     }
 
-    repl_replay_seek(replay_prev_limit(g_replay_pc));
+    replay_seek(replay_prev_limit(g_replay_pc));
 }
 
-int repl_replay_exec_limit(void) {
+int replay_exec_limit(void) {
     REPLAY_FLAT_STATE;
     if (replay_enabled())
         return g_replay_pc;
     return g_num_flat_cmds;
 }
 
-void repl_replay_speed_adjust(float factor) {
+void replay_speed_adjust(float factor) {
     char msg[64];
     g_replay_speed *= factor;
     if (g_replay_speed < 0.5f) g_replay_speed = 0.5f;
@@ -891,9 +891,9 @@ void repl_replay_speed_adjust(float factor) {
     repl_set_status(msg);
 }
 
-void repl_replay_toggle_play_pause(void) {
+void replay_toggle_play_pause(void) {
     if (!g_replay_active || g_replay_state == REPLAY_DONE) {
-        repl_replay_start();
+        replay_start();
         return;
     }
 
@@ -904,11 +904,11 @@ void repl_replay_toggle_play_pause(void) {
         g_replay_state = REPLAY_PLAYING;
         repl_set_status("Replay: playing");
     } else {
-        repl_replay_start();
+        replay_start();
     }
 }
 
-int repl_replay_prepare_frame(int full_flat_count) {
+int replay_prepare_frame(int full_flat_count) {
     REPLAY_FLAT_STATE;
     if (!g_replay_active)
         return g_num_flat_cmds;
@@ -920,14 +920,14 @@ int repl_replay_prepare_frame(int full_flat_count) {
         g_replay_state == REPLAY_PLAYING)
         g_replay_state = REPLAY_DONE;
     replay_clamp_fade_batches(g_replay_pc);
-    return repl_replay_exec_limit();
+    return replay_exec_limit();
 }
 
-void repl_replay_restore_baseline_predef_values(void) {
+void replay_restore_baseline_predef_values(void) {
     repl_restore_predef_values(g_replay_baseline_predef_vals, MAX_PREDEF_VARS);
 }
 
-void repl_replay_copy_baseline_predef_values(float *dst, int max_vals) {
+void replay_copy_baseline_predef_values(float *dst, int max_vals) {
     int n;
 
     if (!dst || max_vals <= 0)
@@ -937,11 +937,11 @@ void repl_replay_copy_baseline_predef_values(float *dst, int max_vals) {
     memcpy(dst, g_replay_baseline_predef_vals, (size_t)n * sizeof(float));
 }
 
-void repl_replay_restore_baseline_scratch_arrays(void) {
+void replay_restore_baseline_scratch_arrays(void) {
     repl_eval_restore_scratch_arrays(g_replay_baseline_scratch_arrays);
 }
 
-void repl_replay_copy_baseline_scratch_arrays(
+void replay_copy_baseline_scratch_arrays(
     float dst[REPL_SCRATCH_ARRAY_COUNT][REPL_SCRATCH_ARRAY_LEN]) {
     if (!dst)
         return;
@@ -949,17 +949,17 @@ void repl_replay_copy_baseline_scratch_arrays(
            sizeof(g_replay_baseline_scratch_arrays));
 }
 
-int repl_replay_handle_key(unsigned char key) {
+int replay_handle_key(unsigned char key) {
     if (!g_replay_active) {
         if (key == KEY_CTRL_R) {
-            repl_replay_start();
+            replay_start();
             return 1;
         }
         if (key == KEY_CTRL_K) {
             int target_line = repl_state_edit_line();
-            repl_replay_start();
+            replay_start();
             if (g_replay_active) {
-                int landed = repl_replay_seek_to_src_line(target_line);
+                int landed = replay_seek_to_src_line(target_line);
                 if (landed < 0) {
                     repl_set_status("Jump: no geometry at or after cursor");
                 } else {
@@ -975,12 +975,12 @@ int repl_replay_handle_key(unsigned char key) {
     }
 
     if (key == KEY_CTRL_R) {
-        repl_replay_stop();
+        replay_stop();
         repl_set_status("Replay: off");
         return 1;
     }
     if (key == KEY_CTRL_K) {
-        int landed = repl_replay_seek_to_src_line(repl_state_edit_line());
+        int landed = replay_seek_to_src_line(repl_state_edit_line());
         if (landed < 0) {
             repl_set_status("Jump: no geometry at or after cursor");
         } else {
@@ -999,17 +999,17 @@ int repl_replay_handle_key(unsigned char key) {
             g_replay_state = REPLAY_PLAYING;
             repl_set_status("Replay: playing");
         } else if (g_replay_state == REPLAY_DONE) {
-            repl_replay_restart_from_beginning();
+            replay_restart_from_beginning();
             repl_set_status("Replay: restarted");
         }
         return 1;
     }
     if (key == '+' || key == '=') {
-        repl_replay_speed_adjust(1.5f);
+        replay_speed_adjust(1.5f);
         return 1;
     }
     if (key == '-') {
-        repl_replay_speed_adjust(0.67f);
+        replay_speed_adjust(0.67f);
         return 1;
     }
     if (key == 'm' || key == 'M') {
@@ -1017,7 +1017,7 @@ int repl_replay_handle_key(unsigned char key) {
         g_replay_mode = (g_replay_mode == REPLAY_MODE_VERTEX)
                       ? REPLAY_MODE_POLYGON
                       : REPLAY_MODE_VERTEX;
-        repl_replay_seek(g_replay_pc);
+        replay_seek(g_replay_pc);
         if (was_playing && g_replay_state != REPLAY_DONE)
             g_replay_state = REPLAY_PLAYING;
         repl_set_status(g_replay_mode == REPLAY_MODE_VERTEX
@@ -1030,12 +1030,12 @@ int repl_replay_handle_key(unsigned char key) {
         return 1;
     }
     if (key == KEY_ESC) {
-        repl_replay_stop();
+        replay_stop();
         repl_set_status("Replay: off");
         return 1;
     }
 
-    repl_replay_stop();
+    replay_stop();
     return 0;
 }
 
@@ -1051,33 +1051,33 @@ static int replay_modifier_special_key(int key) {
 #endif
 }
 
-int repl_replay_handle_special_key(int key) {
+int replay_handle_special_key(int key) {
     if (!g_replay_active)
         return 0;
 
     if (key == GLUT_KEY_LEFT) {
-        repl_replay_step_back();
+        replay_step_back();
         return 1;
     }
     if (key == GLUT_KEY_RIGHT) {
-        repl_replay_advance();
+        replay_advance();
         return 1;
     }
     if (key == GLUT_KEY_UP) {
-        repl_replay_speed_adjust(1.5f);
+        replay_speed_adjust(1.5f);
         return 1;
     }
     if (key == GLUT_KEY_DOWN) {
-        repl_replay_speed_adjust(0.67f);
+        replay_speed_adjust(0.67f);
         return 1;
     }
 
     if (!replay_modifier_special_key(key))
-        repl_replay_stop();
+        replay_stop();
     return 0;
 }
 
-int repl_bench_fade_install(const int *old_pcs, const int *new_pcs,
+int replay_bench_fade_install(const int *old_pcs, const int *new_pcs,
                             int count, float age) {
     int installed = 0;
     REPLAY_FLAT_STATE;
@@ -1112,7 +1112,7 @@ int repl_bench_fade_install(const int *old_pcs, const int *new_pcs,
     return installed;
 }
 
-void repl_bench_fade_clear(void) {
+void replay_bench_fade_clear(void) {
     g_replay_fade_batch_count = 0;
     g_replay_active = 0;
 }

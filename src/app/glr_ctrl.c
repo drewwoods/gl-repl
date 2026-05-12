@@ -243,17 +243,17 @@ static void glr_ctrl_build_replay_fade_plan(int replaying) {
     if (!replaying)
         return;
 
-    repl_replay_copy_baseline_predef_values(g_replay_fade_plan.baseline_predef_vals,
+    replay_copy_baseline_predef_values(g_replay_fade_plan.baseline_predef_vals,
                                             MAX_PREDEF_VARS);
-    repl_replay_copy_baseline_scratch_arrays(
+    replay_copy_baseline_scratch_arrays(
         g_replay_fade_plan.baseline_scratch_arrays);
 
-    if (!repl_replay_has_active_fades())
+    if (!replay_has_active_fades())
         return;
 
-    g_replay_fade_plan_base_limit = repl_replay_fill_base_limit();
-    fade_batches = repl_replay_fade_batches_view();
-    batch_count = repl_replay_compute_fade_skip_limits(g_replay_fade_plan.skip_limits,
+    g_replay_fade_plan_base_limit = replay_fill_base_limit();
+    fade_batches = replay_fade_batches_view();
+    batch_count = replay_compute_fade_skip_limits(g_replay_fade_plan.skip_limits,
                                                        REPLAY_FADE_BATCH_MAX);
     if (batch_count > REPLAY_FADE_BATCH_MAX)
         batch_count = REPLAY_FADE_BATCH_MAX;
@@ -262,7 +262,7 @@ static void glr_ctrl_build_replay_fade_plan(int replaying) {
     for (int batch_idx = 0; batch_idx < batch_count; batch_idx++) {
         const ReplayFadeBatch *batch = &fade_batches.batches[batch_idx];
         g_replay_fade_plan.batches[batch_idx] = *batch;
-        g_replay_fade_plan.batch_alpha[batch_idx] = repl_replay_batch_alpha(batch);
+        g_replay_fade_plan.batch_alpha[batch_idx] = replay_batch_alpha(batch);
     }
     g_replay_fade_plan_active = 1;
 }
@@ -320,7 +320,7 @@ static void glr_ctrl_render_replay_fade_batches(void) {
 }
 
 /* Render the polygon-mode tess-preview wireframe by walking the flat
- * program through repl_replay_walk_tess_preview() and emitting line
+ * program through replay_walk_tess_preview() and emitting line
  * strips at each transformed contour. The walker handles iteration and
  * matrix tracking; we own the visual GL state. */
 static void glr_ctrl_render_replay_tess_preview(void) {
@@ -332,7 +332,7 @@ static void glr_ctrl_render_replay_tess_preview(void) {
     glColor4f(0.30f, 0.95f, 0.75f, 0.80f);
     glLineWidth(2.0f);
 
-    repl_replay_walk_tess_preview(&g_tess_preview_cb, NULL);
+    replay_walk_tess_preview(&g_tess_preview_cb, NULL);
 
     glLineWidth(1.0f);
     glPopAttrib();
@@ -401,7 +401,7 @@ static void glr_ctrl_render_vertex_numbers(void) {
         .on_vertex = on_vertex_number_label,
     };
     ReplVertexWalkContext ctx = glr_ctrl_build_vertex_walk_context(1);
-    repl_walk_user_vertices(&ctx, &cb, NULL);
+    replay_walk_user_vertices(&ctx, &cb, NULL);
 
     glPopAttrib();
 }
@@ -417,7 +417,7 @@ static void glr_ctrl_render_normal_vectors(void) {
     };
     float scale = 0.35f;
     ReplVertexWalkContext ctx = glr_ctrl_build_vertex_walk_context(0);
-    repl_walk_user_vertices(&ctx, &cb, &scale);
+    replay_walk_user_vertices(&ctx, &cb, &scale);
 
     glPopAttrib();
 }
@@ -747,7 +747,7 @@ static void glr_ctrl_render_cursor_guides(const SceneGuideSnapshot *snapshot) {
         .on_each_cmd = on_cmd_render_cursor_guides,
     };
     ReplVertexWalkContext walk = glr_ctrl_build_vertex_walk_context(0);
-    repl_walk_user_vertices(&walk, &cb, &ctx);
+    replay_walk_user_vertices(&walk, &cb, &ctx);
 
     glPopMatrix();
     glPopAttrib();
@@ -843,7 +843,7 @@ static void glr_ctrl_push_line_overrides(void) {
     int n = repl_state_document_count();
     for (int i = 0; i < n; i++) {
         char display[MAX_LINE_OVERRIDE_TEXT];
-        if (!repl_replay_code_panel_get_command_display_text(view, i, display,
+        if (!replay_code_panel_get_command_display_text(view, i, display,
                                                              sizeof(display)))
             continue;
         const char *base = source_text_line(view, i);
@@ -1154,7 +1154,7 @@ void glr_ctrl_display_frame(void) {
     float live_scratch_arrays[REPL_SCRATCH_ARRAY_COUNT][REPL_SCRATCH_ARRAY_LEN] = { { 0.0f } };
     FlatProgramView flat_program = repl_state_flat_program_view();
     int g_num_flat_cmds = flat_program.cmd_count;
-    /* Capture replay state once before repl_replay_prepare_frame so the
+    /* Capture replay state once before replay_prepare_frame so the
      * HUD shows the per-frame "before-prepare" view (the contract that
      * test_imrepl_ctrl pins). Per-field narrow accessors elsewhere in
      * the frame are reading post-prepare state, which is what they want. */
@@ -1203,7 +1203,7 @@ void glr_ctrl_display_frame(void) {
      * directly into editor_state_virtual_lines. */
     prof_begin(PROF_SNAPSHOT_VIRTUAL_LINES);
     ReplReplayAnnotationOutput replay_annotations;
-    repl_replay_annotations_prepare(source_document_view(),
+    replay_annotations_prepare(source_document_view(),
                                     &replay_annotations);
     glr_publish_replay_annotations(&replay_annotations);
     glr_ctrl_push_line_overrides();
@@ -1219,7 +1219,7 @@ void glr_ctrl_display_frame(void) {
     repl_copy_predef_values(live_predef_vals, MAX_PREDEF_VARS);
     repl_eval_copy_scratch_arrays(live_scratch_arrays);
     if (replay_active())
-        repl_state_flat_program_set_count(repl_replay_prepare_frame(saved_flat_count));
+        repl_state_flat_program_set_count(replay_prepare_frame(saved_flat_count));
 
     repl_refresh_render_state_strings();
     repl_refresh_camera_lines();
@@ -1652,7 +1652,7 @@ int glr_ctrl_router_handle_quit_key(unsigned char key) {
 int glr_ctrl_router_handle_config_menu_key(unsigned char key) {
     if (!editor_state_search().active && key == '`') {
         if (replay_active())
-            repl_replay_stop();
+            replay_stop();
         editor_input_restore_hidden_code_panel();
         ui_menu_bar_open_config(repl_state_variables().anim_time);
         return 1;
@@ -1832,7 +1832,7 @@ int glr_ctrl_router_handle_variable_panel_drag_begin(int button, int state, int 
                                          &row_idx))
         return 0;
     if (replay_active())
-        repl_replay_stop();
+        replay_stop();
     int log_mode = (button == GLUT_RIGHT_BUTTON) ? 1 : 0;
     variable_panel_handle_drag_begin(row_idx, log_mode, x);
     editor_request_redraw();
@@ -2696,14 +2696,14 @@ void glr_ctrl_tick(void) {
         ReplReplayRuntimeState *replay = replay_state_mut();
 
         if (replay->active)
-            repl_replay_tick_fade_batches(0.016f);
+            replay_tick_fade_batches(0.016f);
 
         if (replay->active && replay->state == REPLAY_PLAYING) {
             replay->accum += replay->speed * 0.016f;
             while (replay->accum >= 1.0f &&
                    replay->state == REPLAY_PLAYING) {
                 replay->accum -= 1.0f;
-                repl_replay_advance();
+                replay_advance();
             }
         }
     }

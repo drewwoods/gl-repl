@@ -368,7 +368,7 @@ static BenchResult bench_replay_examples(int iters) {
     BenchResult r = { .name = "replay_examples", .unit = "steps",
                       .min_sec = 1e18 };
 
-    /* load_example_lines() leaves repl_state_flat_program_dirty()=1, and repl_replay_start() will
+    /* load_example_lines() leaves repl_state_flat_program_dirty()=1, and replay_start() will
      * flatten once on its own - calling repl_flatten_commands() explicitly
      * beforehand would flatten twice, because repl_flatten_commands() does
      * NOT clear repl_state_flat_program_dirty() (see src/repl/core.c:4462-4464 vs. :3265-3269). */
@@ -378,14 +378,14 @@ static BenchResult bench_replay_examples(int iters) {
         for (int e = 0; e < n_examples; e++) {
             repl_load_example_lines_for_test(repl_examples_lines(e));
 
-            repl_replay_start();
+            replay_start();
             int safety = repl_state_flat_program_count() + 1;
             ReplReplayRuntimeState replay = replay_state_view();
             while (replay.state == REPLAY_PLAYING && safety-- > 0) {
-                repl_replay_advance();
+                replay_advance();
                 steps++;
             }
-            repl_replay_stop();
+            replay_stop();
         }
         double dt = now_seconds() - t0;
         if (dt < r.min_sec) r.min_sec = dt;
@@ -438,27 +438,27 @@ static BenchResult bench_replay_long(int iters) {
     /* Load once outside the inner loop - feed_line is not what we are
      * measuring here. Re-using the same repl_state_document_cmds_mut()[] across iterations is
      * fine because replay only mutates the replay state, not the source
-     * commands. We mark repl_state_flat_program_dirty() between iterations so repl_replay_start()
+     * commands. We mark repl_state_flat_program_dirty() between iterations so replay_start()
      * does a fresh flatten each time - that matches "what happens the
-     * first time you press play". Note: repl_replay_start() handles the
+     * first time you press play". Note: replay_start() handles the
      * flatten itself and clears repl_state_flat_program_dirty(), so calling
      * repl_flatten_commands() explicitly here would flatten twice. */
     repl_load_example_lines_for_test(k_long_replay_scene);
 
-    /* Warm up via repl_replay_start/repl_replay_stop (not a bare
+    /* Warm up via replay_start/replay_stop (not a bare
      * repl_flatten_commands) so the flatten's CMD_VAR_ASSIGN writes
      * to g_predef_vars don't leak into the timed iterations -
-     * repl_replay_start does its own predef snapshot/restore around the
+     * replay_start does its own predef snapshot/restore around the
      * flatten (src/repl/core.c:3264-3268). */
     repl_mark_normals_dirty();
-    repl_replay_start();
+    replay_start();
     int flat_cmds = repl_state_flat_program_count();
-    repl_replay_stop();
+    replay_stop();
 
-    /* Snapshot post-load predef values. repl_replay_advance() writes
+    /* Snapshot post-load predef values. replay_advance() writes
      * g_predef_vars on CMD_VAR_ASSIGN during playback
      * (src/repl/core.c:3655-3656), so without restoring, each iteration
-     * would start repl_replay_start()'s baseline capture from progressively
+     * would start replay_start()'s baseline capture from progressively
      * drifted values. */
     float saved_vals[MAX_PREDEF_VARS];
     int saved_n = g_num_predef_vars;
@@ -473,14 +473,14 @@ static BenchResult bench_replay_long(int iters) {
         repl_mark_normals_dirty();
         double t0 = now_seconds();
 
-        repl_replay_start();
+        replay_start();
         int safety = repl_state_flat_program_count() + 1;
         ReplReplayRuntimeState replay = replay_state_view();
         while (replay.state == REPLAY_PLAYING && safety-- > 0) {
-            repl_replay_advance();
+            replay_advance();
             steps++;
         }
-        repl_replay_stop();
+        replay_stop();
 
         double dt = now_seconds() - t0;
         if (dt < r.min_sec) r.min_sec = dt;
@@ -588,16 +588,16 @@ static int bench_refresh_fade_plan(ReplayFadePlan *plan, int *base_limit_out) {
     memset(plan, 0, sizeof(*plan));
     *base_limit_out = 0;
 
-    repl_replay_copy_baseline_predef_values(plan->baseline_predef_vals,
+    replay_copy_baseline_predef_values(plan->baseline_predef_vals,
                                             MAX_PREDEF_VARS);
 
-    if (!repl_replay_has_active_fades())
+    if (!replay_has_active_fades())
         return 0;
 
-    *base_limit_out = repl_replay_fill_base_limit();
+    *base_limit_out = replay_fill_base_limit();
 
-    ReplayFadeBatchView fade_batches = repl_replay_fade_batches_view();
-    int batch_count = repl_replay_compute_fade_skip_limits(plan->skip_limits,
+    ReplayFadeBatchView fade_batches = replay_fade_batches_view();
+    int batch_count = replay_compute_fade_skip_limits(plan->skip_limits,
                                                            REPLAY_FADE_BATCH_MAX);
     if (batch_count > REPLAY_FADE_BATCH_MAX)
         batch_count = REPLAY_FADE_BATCH_MAX;
@@ -606,7 +606,7 @@ static int bench_refresh_fade_plan(ReplayFadePlan *plan, int *base_limit_out) {
     for (int i = 0; i < batch_count; i++) {
         const ReplayFadeBatch *batch = &fade_batches.batches[i];
         plan->batches[i] = *batch;
-        plan->batch_alpha[i] = repl_replay_batch_alpha(batch);
+        plan->batch_alpha[i] = replay_batch_alpha(batch);
     }
     return batch_count;
 }
@@ -616,16 +616,16 @@ static BenchResult bench_fade_batches(int iters) {
                       .min_sec = 1e18 };
 
     /* Build the long scene and flatten once. The flatten pass runs
-     * inside repl_replay_start(); we piggy-back on that to also capture
-     * repl_state_flat_program_count() (repl_replay_start clamps repl_state_flat_program_count() during
+     * inside replay_start(); we piggy-back on that to also capture
+     * repl_state_flat_program_count() (replay_start clamps repl_state_flat_program_count() during
      * playback, so we snapshot before/after). */
     repl_load_example_lines_for_test(k_fade_bench_scene);
     repl_mark_normals_dirty();
-    repl_replay_start();
+    replay_start();
     int flat_cmds = repl_state_flat_program_count();
-    repl_replay_stop();
+    replay_stop();
 
-    /* Re-flatten after repl_replay_stop so repl_state_flat_program_count() is the full stream
+    /* Re-flatten after replay_stop so repl_state_flat_program_count() is the full stream
      * (replay's clamp might still be in effect otherwise - we observed
      * flat_cmds via the post-start snapshot above). */
     repl_mark_normals_dirty();
@@ -634,7 +634,7 @@ static BenchResult bench_fade_batches(int iters) {
 
     /* 32 batches mirrors a typical in-flight count at the default 30fps
      * replay speed (REPLAY_FADE_DURATION is 0.5s). age=0.25s → alpha≈0.5
-     * so repl_replay_batch_alpha() returns a non-zero value and the per-batch
+     * so replay_batch_alpha() returns a non-zero value and the per-batch
      * body runs. */
     enum { N_BATCHES = 32 };
     int old_pcs[N_BATCHES];
@@ -664,7 +664,7 @@ static BenchResult bench_fade_batches(int iters) {
             /* Reinstall on every call so a fade batch that ticks its
              * age past REPLAY_FADE_DURATION doesn't silently reduce
              * the measured workload. */
-            repl_bench_fade_install(old_pcs, new_pcs, installed_count, age);
+            replay_bench_fade_install(old_pcs, new_pcs, installed_count, age);
             int batch_count = bench_refresh_fade_plan(&plan, &base_limit);
             for (int b = 0; b < batch_count; b++) {
                 float alpha = plan.batch_alpha[b];
@@ -682,7 +682,7 @@ static BenchResult bench_fade_batches(int iters) {
         r.iters++;
     }
 
-    repl_bench_fade_clear();
+    replay_bench_fade_clear();
 
     if (!g_csv) {
         fprintf(stderr, "  (fade_batches: flat_cmds=%d, batches=%d, age=%.3f)\n",

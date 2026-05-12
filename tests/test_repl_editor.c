@@ -1981,25 +1981,25 @@ int main() {
         repl_flatten_commands();
 
         ASSERT_INT("replay key ctrl-r consumed",
-                   repl_replay_handle_key(KEY_CTRL_R), 1);
+                   replay_handle_key(KEY_CTRL_R), 1);
         ASSERT_INT("replay key ctrl-r starts replay",
                    replay_active, 1);
         ASSERT_INT("replay space consumed",
-                   repl_replay_handle_key(' '), 1);
+                   replay_handle_key(' '), 1);
         ASSERT_INT("replay space pauses",
                    replay_state, REPLAY_PAUSED);
         ASSERT_INT("replay space resumes",
-                   repl_replay_handle_key(' '), 1);
+                   replay_handle_key(' '), 1);
         ASSERT_INT("replay resumed playing",
                    replay_state, REPLAY_PLAYING);
 
         replay_state = REPLAY_PAUSED;
         ASSERT_INT("replay right consumed",
-                   repl_replay_handle_special_key(GLUT_KEY_RIGHT), 1);
+                   replay_handle_special_key(GLUT_KEY_RIGHT), 1);
         ASSERT_INT("replay right advances one step",
                    replay_pc, 1);
         ASSERT_INT("replay left consumed",
-                   repl_replay_handle_special_key(GLUT_KEY_LEFT), 1);
+                   replay_handle_special_key(GLUT_KEY_LEFT), 1);
         ASSERT_INT("replay left steps back",
                    replay_pc, 0);
 
@@ -2021,7 +2021,7 @@ int main() {
         glr_state_presentation_mut()->code_panel_layout = CFG_DEFAULT_CODE_PANEL_LAYOUT; glr_ctrl_sync_ui_chrome();
 
         ASSERT_INT("replay unknown key unconsumed",
-                   repl_replay_handle_key('x'), 0);
+                   replay_handle_key('x'), 0);
         ASSERT_INT("replay unknown key stops replay",
                    replay_active, 0);
     }
@@ -2095,21 +2095,21 @@ int main() {
         repl_flatten_commands();
 
         replay_mode = REPLAY_MODE_VERTEX;
-        repl_replay_start();
-        repl_replay_advance();
+        replay_start();
+        replay_advance();
         ASSERT_INT("replay vertex mode focuses first gluVertex",
                    replay_src_line, 2);
-        repl_replay_advance();
+        replay_advance();
         ASSERT_INT("replay vertex mode focuses next gluVertex",
                    replay_src_line, 3);
-        repl_replay_stop();
+        replay_stop();
 
         replay_mode = REPLAY_MODE_POLYGON;
-        repl_replay_start();
-        repl_replay_advance();
+        replay_start();
+        replay_advance();
         ASSERT_INT("replay polygon mode focuses tess vertex",
                    replay_src_line, 4);
-        repl_replay_stop();
+        replay_stop();
         replay_mode = REPLAY_MODE_VERTEX;
     }
 
@@ -2842,7 +2842,7 @@ int main() {
         replay_state_mut()->state = REPLAY_PLAYING;
         replay_state_mut()->speed = 1.0f;
         replay_state_mut()->accum = 0.99f;
-        /* This should trigger at least one repl_replay_advance */
+        /* This should trigger at least one replay_advance */
         glr_ctrl_tick();
         ASSERT_TRUE("timer: replay accum advanced", replay_state_view().accum < 0.5f);
 
