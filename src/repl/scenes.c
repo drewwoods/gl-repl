@@ -328,11 +328,20 @@ void repl_scenes_save_active_scene_if_any(void) {
 
 void repl_scenes_enter_transient_scene(void) {
     repl_scenes_save_active_scene_if_any();
+    repl_scenes_capture_home_if_needed();
     restore_pre_example_cfg_if_valid();
     g_export_scene_name_hint = NULL;
     g_pending_scene_name[0] = '\0';
     g_active_user_scene = -1;
     g_example_idx = -1;
+}
+
+void repl_scenes_reset_for_transient(void) {
+    repl_state_document_reset();
+    repl_state_flat_program_set_count(0);
+    repl_dispatch_input_reset();
+    repl_eval_init_predef_vars();
+    repl_func_alias_clear_all();
 }
 
 static void restore_user_scene(void) {

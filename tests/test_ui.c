@@ -14,6 +14,7 @@
 #include "ui/color_picker.h"
 #include "ui/autocomplete_panel.h"
 #include "ui/variable_panel.h"
+#include "app/glr_actions.h"
 #include "ui/menu_bar.h"
 #include "ui/panels.h"
 #include "ui/snapshot.h"
@@ -388,7 +389,7 @@ static void test_menu_bar(void) {
 
     /* Test config menu */
     ui_menu_bar_open_config(0.0f);
-    ASSERT_TRUE("config menu open", ui_menu_bar_open_menu_id() == 2); // MENU_CONFIG
+    ASSERT_TRUE("config menu open", ui_menu_bar_open_menu_id() == GLR_MENU_CONFIG);
 
     /* Test search overlay */
     editor_state_search_mut()->active = 1;

@@ -7,7 +7,6 @@
 #include "editor/completion.h"
 #include "editor/state.h"
 #include "repl/core.h"
-#include "repl/eval.h"
 #include "repl/load.h"
 #include "repl/scenes.h"
 #include "repl/state_owners.h"
@@ -28,17 +27,6 @@ static void tutorial_store_result(TutorialMatchResult *dst,
     if (dst)
         *dst = result;
     state->last_result = result;
-}
-
-static void tutorial_clear_input_transients(void) {
-    ReplEditorInputState *input = editor_state_input_mut();
-
-    editor_input_clear();
-    input->pending_newline[0] = '\0';
-    input->pending_newline_len = 0;
-    editor_insert_mode_set(0);
-    editor_cursor_pos_set(0);
-    editor_completion_clear();
 }
 
 static void tutorial_set_expected_message(TutorialMatchResult *result,
@@ -100,19 +88,21 @@ static int tutorial_emit_instruction_comment(const char *comment) {
     if (!comment || !comment[0])
         return 0;
 
+    /* repl_load_apply_line caller contract (src/repl/load.h): set
+     * edit_line to document_count, clear insert mode, then mark both
+     * flat and normals dirty after loading. */
     repl_state_edit_line_set(repl_state_document_count());
-    tutorial_clear_input_transients();
+    editor_insert_mode_set(0);
     if (!repl_load_apply_line(comment, err, (int)sizeof(err))) {
         repl_set_status(err[0] ? err : "Tutorial instruction load failed");
         return 0;
     }
 
-    repl_state_flat_program_set_count(0);
-    repl_mark_normals_dirty();
+    repl_state_mark_flat_dirty();
+    repl_state_mark_normals_dirty();
     state->fade_line_idx = repl_state_document_count() - 1;
     state->fade_start_t = repl_state_variables().anim_time;
     tutorial_append_locked_line(state->fade_line_idx);
-    tutorial_clear_input_transients();
     return 1;
 }
 
@@ -141,15 +131,14 @@ TutorialMatchResult tutorial_match(const char *expected, const char *got) {
 }
 
 void tutorial_start(int idx) {
-    if (idx < 0 || idx >= repl_tutorial_count())
+    if (idx < 0 || idx >= repl_tutorial_count()) {
+        repl_set_status("Tutorial index out of range");
         return;
+    }
 
     repl_scenes_enter_transient_scene();
-    repl_state_document_reset();
-    repl_state_flat_program_set_count(0);
-    repl_eval_init_predef_vars();
-    repl_func_alias_clear_all();
-    tutorial_clear_input_transients();
+    repl_scenes_reset_for_transient();
+    editor_completion_clear();
     tutorial_state_reset();
 
     TutorialRuntimeState *state = tutorial_state_mut();

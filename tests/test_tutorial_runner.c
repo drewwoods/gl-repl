@@ -160,11 +160,37 @@ static void test_complete_and_menu_actions(void) {
                 glr_action_menu_item_activate(GLR_MENU_TUTORIALS, tutorial_count + 2) == 1);
 }
 
+static void test_start_captures_home_for_unsaved_buffer(void) {
+    reset_fixture();
+    /* Type a line into a fresh buffer (no example, no user scene) so the
+     * pre-tutorial state lives only in the live document. */
+    repl_feed_line_public("glBegin(GL_TRIANGLES);");
+    ASSERT_INT("user typed line is in document",
+               repl_state_document_count(), 1);
+
+    tutorial_start(0);
+    ASSERT_TRUE("home slot captured before transient discard",
+                repl_user_scene_slot_used(0));
+    ASSERT_TRUE("tutorial active after start", tutorial_active());
+}
+
+static void test_start_rejects_out_of_range_idx(void) {
+    reset_fixture();
+    tutorial_start(repl_tutorial_count());
+
+    ASSERT_TRUE("tutorial inactive after bad index",
+                !tutorial_active());
+    ASSERT_STR("bad index status set",
+               status_text(), "Tutorial index out of range");
+}
+
 int main(void) {
     test_start_enters_transient_tutorial_scene();
     test_runner_match_and_advance();
     test_feed_line_alone_does_not_advance_tutorial();
     test_fade_alpha_math();
     test_complete_and_menu_actions();
+    test_start_captures_home_for_unsaved_buffer();
+    test_start_rejects_out_of_range_idx();
     return test_harness_report(&g_harness, "test_tutorial_runner");
 }
