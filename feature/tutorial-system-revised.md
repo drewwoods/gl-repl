@@ -50,7 +50,7 @@ User-facing behavior agreed:
 | `src/widgets/tutorial.h` / `.c` | Runner: `tutorial_start(idx)`, `tutorial_exit()`, `tutorial_handle_commit_attempt(const char *input)`, `tutorial_advance_after_successful_commit()`, `tutorial_current_expected_text()`, `tutorial_step_fade_alpha(int line_idx, int char_idx, float now)`, `tutorial_line_is_fading(int line_idx, float now)`, `tutorial_line_is_locked(int line_idx)`, `tutorial_guard_source_change(pos, delete_count, insert_count)` (used by editor to enforce read-only / no-renumber rules). |
 | `src/repl/tutorials.h` / `.c` | Catalog parallel to `repl/examples`: per-tutorial null-terminated `comments[]` and `expected[]` arrays + name. Query API `repl_tutorial_count/name/step_count/step_comment/step_expected`. Ship 2–3 starter tutorials (e.g., "First Triangle", "Color & Transform"). |
 | `tests/test_tutorial_match.c` | Pure-function tests for the match comparator (whitespace tolerance, shape mismatch, default field values). |
-| `tests/test_tutorial_runner.c` | Runner tests: start enters a transient tutorial scene and feeds step 0 comment, correct line committed through `editor_handle_key(';')` advances, wrong line preserves status + doesn't advance, direct `repl_feed_line_public` is not used for tutorial user commits, loading an example resets `tutorial_active()`, `tutorial_current_expected_text` reflects the current step, fade alpha hits 0 at start and 1 after duration. |
+| `tests/test_tutorial_runner.c` | Runner tests: start enters a transient tutorial scene and emits step 0 comment through `repl_load_apply_line`, correct line committed through `editor_handle_key(';')` advances, wrong line preserves status + doesn't advance, direct `repl_feed_line_public` is not used for tutorial user commits, loading an example resets `tutorial_active()`, `tutorial_current_expected_text` reflects the current step, fade alpha hits 0 at start and 1 after duration. |
 
 ## Files to modify
 
@@ -61,12 +61,14 @@ User-facing behavior agreed:
 | `src/ui/menu_bar.c:88-132` | Add `case MENU_TUTORIALS:` branches in `menu_item_count`, `menu_item_label` (returns `repl_tutorial_name(i)`, plus `"---"` / `"Restart Tutorial"` / `"Exit Tutorial"` trailing items when `tutorial_active()`), and `menu_item_shortcut` (NULL). |
 | `src/app/glr_actions.c` (menu-click dispatch around lines 423-494) | Route `menu_id == GLR_MENU_TUTORIALS` clicks: tutorial-name → `tutorial_start(item_idx)`; Restart → `tutorial_start(current_tutorial_idx)`; Exit → `tutorial_exit()`. |
 | `src/editor/input.c:1118-1203` (`handle_semicolon_commit_key_route`) and `:1101-1116` (`handle_enter_key_route`) | Add a shared tutorial precheck helper before normal commit. On mismatch, `repl_set_status(result.message)`, leave the input buffer, return consumed. On match, fall through to normal commit and call `tutorial_advance_after_successful_commit()` only after a real successful source mutation/accepted commit, never from the generic function tail. |
-| `src/editor/input.c` (Tab key handler) | Before delegating Tab to autocomplete, if `tutorial_active()` and input is empty (or user explicitly wants the fill), replace the input buffer with `tutorial_current_expected_text()`, move cursor to end, set status `"Filled expected tutorial command; press ; to commit"`, return consumed. Autocomplete is bypassed only while a tutorial is active. |
+| `src/editor/input.c` (Tab key handler) | Keep the existing `editor_input_anchor_clear()` pre-step, then before delegating Tab to autocomplete, if `tutorial_active()`, replace the whole input buffer with `tutorial_current_expected_text()`, move cursor to end, set status `"Replaced input with expected tutorial command; press ; to commit"`, return consumed. This is intentionally always-overwrite while tutorial mode is active. |
 | `src/editor/input.c` / `src/editor/clipboard.c` / `src/editor/undo.c` | Reject source mutations that would edit locked tutorial comments or renumber locked-line indices: replace/toggle/delete/cut of a locked row, insert/paste above or inside the locked prefix, Ctrl+L clear, Ctrl+\ reformat, and undo/redo while active. Input-row editing remains allowed. |
-| `src/repl/scenes.h` / `.c` | Add `repl_scenes_enter_transient_scene()` (name bikesheddable): save the active user scene if any, restore any pre-example cfg snapshot, then detach live state from both `active_example_idx` and `g_active_user_scene`. `tutorial_start()` calls this before clearing/loading tutorial content so tutorial buffers are not saved back into a user-scene slot. |
+| `src/editor/input.c:232` (`load_line_to_input`) | If `tutorial_line_is_locked(idx)`, clear the input buffer, move cursor to 0, set status `"Tutorial instruction is read-only"`, and return. Navigation may land on instruction rows, but locked comment text should not be copied into the editable input row. |
+| `src/repl/scenes.h` / `.c` | Add `repl_scenes_enter_transient_scene()` (name bikesheddable): save the active user scene if any, restore any pre-example cfg snapshot, clear pending scene-name metadata, then detach live state from both `active_example_idx` and `g_active_user_scene`. `tutorial_start()` calls this before clearing/loading tutorial content so tutorial buffers are not saved back into a user-scene slot. |
 | `src/repl/example_loader.c:393-487` (`load_example_lines`, `repl_load_example`) and `src/repl/scenes.c:670` (`repl_load_user_scene_idx`) | Call `tutorial_state_reset()` on entry so loading an example or activating a user scene exits tutorial mode cleanly. |
-| `src/ui/panels.c:613` (code-panel row segment draw) | If `tutorial_line_is_fading(i, ctx->snap->anim_time)`, draw the visible segment char-by-char with `glColor4f(r, g, b, alpha_for_char)`; otherwise keep the existing `code_panel_draw_segment` fast path. Use source line `i`, not a non-existent row field. |
-| `src/widgets/tutorial.c` | Timestamp newly revealed comments from the existing `repl_state_variables().anim_time` view. Render code receives `now` from `UiRenderSnapshot.anim_time`; do not add a new `repl_anim_time_now()` public API. |
+| `src/app/glr_ctrl.c` (`glr_app_reset_all`) | Reset tutorial state alongside replay/help/color-picker peers so full app reset and CLI startup cannot inherit an active tutorial. |
+| `src/ui/panels.c` (`code_panel_draw_command_row`, `code_panel_draw_segment(...)` call) | If `tutorial_line_is_fading(i, ctx->snap->anim_time)`, draw the visible segment char-by-char with `glColor4f(r, g, b, alpha_for_char)`; otherwise keep the existing `code_panel_draw_segment` fast path. Use source line `i`, not a non-existent row field. |
+| `src/widgets/tutorial.c` | Emit tutorial instruction comments via `repl_load_apply_line` from `src/repl/load.h`, not `feed_line`; timestamp newly revealed comments from the existing `repl_state_variables().anim_time` view. Render code receives `now` from `UiRenderSnapshot.anim_time`; both clocks come from the same source. Do not add a new `repl_anim_time_now()` public API. |
 | `Makefile` | Add `tutorial.o`, `tutorial_state.o`, `tutorials.o` to the link list; add rules for `test_tutorial_match` and `test_tutorial_runner`; include both in the aggregate `test` target. |
 | `MODULES.md` | List the three new modules in the layered overview; add `TutorialRuntimeState` to the state-ownership table. |
 | `CLAUDE.md` (File Layout table) | One row per new file. |
@@ -124,10 +126,12 @@ are still allowed.
    `repl_scenes_enter_transient_scene()`, clears the live document with
    `repl_state_document_reset()` (not `repl_clear_all_cmds()`), resets
    tutorial state / predef vars / function aliases / editor input
-   transients, then calls `feed_line(comments[0])` for the first
-   instructional comment. It records `fade_line_idx = doc_count - 1`,
-   appends that line to `locked_lines`, and sets `fade_start_t` from
-   `repl_state_variables().anim_time`.
+   transients, then emits `comments[0]` through a small runner helper
+   around `repl_load_apply_line()`. That helper follows `src/repl/load.h`'s
+   caller contract: set `edit_line` to `document_count`, clear insert mode,
+   call the lean loader, then mark normals/flat state dirty. It records
+   `fade_line_idx = doc_count - 1`, appends that line to `locked_lines`,
+   and sets `fade_start_t` from `repl_state_variables().anim_time`.
 3. Each frame, `panels.c` passes `ctx->snap->anim_time` to
    `tutorial_line_is_fading` / `tutorial_step_fade_alpha` for the source
    line. Fading rows draw per-char with `glColor4f`; all other rows keep
@@ -138,9 +142,11 @@ are still allowed.
      preserved.
    - Match → fall through to normal commit. Only if the commit actually
      succeeds, `tutorial_advance_after_successful_commit()` increments
-     `step`, feeds the next comment via `feed_line`, records the locked
-     line, and seeds the new fade. If `comments[step]==NULL` it calls
-     `repl_set_status("Tutorial complete")` and clears `active`.
+     `step`, appends the next comment through `repl_load_apply_line`,
+     records the locked line, and seeds the new fade. If
+     `comments[step]==NULL` it calls `repl_set_status("Tutorial complete")`
+     and clears active state / lock state; the tutorial rows remain in the
+     document and become editable.
 5. Loading an example or user scene anywhere calls `tutorial_state_reset()`,
    exiting tutorial mode cleanly.
 
@@ -162,10 +168,11 @@ Create:
 Modify:
 - `src/repl/scenes.h` / `.c` — declare and implement
   `repl_scenes_enter_transient_scene()`: save the active user scene if
-  one is loaded, restore any pre-example cfg snapshot, then set both the
-  active user-scene marker and active example marker to `-1`. This gives
-  tutorials an unsaved transient buffer and prevents tutorial contents
-  from being flushed into a user-scene slot later.
+  one is loaded, restore any pre-example cfg snapshot, clear pending
+  scene-name metadata, then set both the active user-scene marker and
+  active example marker to `-1`. This gives tutorials an unsaved
+  transient buffer and prevents tutorial contents from being flushed into
+  a user-scene slot later.
 - `Makefile` — append `tutorials.o`, `tutorial_state.o` to the same `OBJS` list that currently builds `replay_state.o` (`grep -n replay_state Makefile` to locate).
 
 Verify: `make sample` builds. `nm sample | grep tutorial_state_view` shows the symbol.
@@ -190,11 +197,15 @@ Create:
   `repl_scenes_enter_transient_scene()`, then clears the live document via
   `repl_state_document_reset()` (not `repl_clear_all_cmds()`), resets
   predef vars / function aliases / input transients, resets tutorial
-  state, calls `feed_line(comments[0])` for the first instruction comment,
-  appends that line to `locked_lines`, and records
-  `fade_line_idx = repl_state_document_count() - 1` plus
-  `fade_start_t = repl_state_variables().anim_time`. `tutorial_match` v1
-  = whitespace-normalize-and-strcmp.
+  state, emits `comments[0]` through a file-private
+  `tutorial_emit_instruction_comment()` helper backed by
+  `repl_load_apply_line()`, appends that line to `locked_lines`, and
+  records `fade_line_idx = repl_state_document_count() - 1` plus
+  `fade_start_t = repl_state_variables().anim_time`. The emit helper must
+  set `repl_state_edit_line` to `repl_state_document_count()`, clear insert
+  mode before loading, and mark normals dirty after loading, matching
+  `src/repl/load.h`'s caller responsibilities. `tutorial_match` v1 =
+  whitespace-normalize-and-strcmp.
 - `tests/test_tutorial_match.c` — uses `tests/support/test_harness.h`. Cases: exact match, extra inner whitespace, leading/trailing whitespace, trailing `;` tolerance, empty input → `TUT_MISMATCH_EMPTY`, token-count mismatch → `TUT_MISMATCH_SHAPE`, default `arg_index == -1`. The `TUT_MISMATCH_COMMAND` and `TUT_MISMATCH_ARG` enum values are declared but not produced by v1; tests just assert they exist so v2 can wire them in without an API break.
 - `tests/test_tutorial_runner.c` — uses `tests/support/repl_test_support.h`. Cases: `tutorial_start(0)` → first comment appears at line 0 and begins with `//`, active user scene/example markers are detached, and line 0 is locked; correct line committed by loading `editor_state_input_mut()->input` and calling `editor_handle_key(';', 0, 0)` advances `step`; wrong line preserves `step` and input; direct `repl_feed_line_public(expected)` is not a tutorial-success path; `tutorial_current_expected_text()` returns the right string for the current step; fade-alpha math (now == start → 0 for char 0, now == start + duration → 1 for last char).
 - `Makefile` — add rules for `test_tutorial_match` and `test_tutorial_runner` mirroring `test_eval` / `test_format`; add both to the aggregate `test` target.
@@ -233,6 +244,10 @@ Modify (with exact anchors):
 - Include `widgets/tutorial.h` and `widgets/tutorial_state.h` in `src/app/glr_actions.c` and `src/ui/menu_bar.c`.
 
 Verify: `./sample` opens, the Tutorials menu lists the starter tutorial, clicking it clears the buffer and shows the first `// ...` comment on line 0; reopening the menu now shows the Restart/Exit items. No fade yet — that lands in Phase 7.
+Also smoke-test a narrow window/code panel: adding the top-level
+Tutorials menu shifts `menubar_rects()`'s left-menu edge, so verify the
+Search and Replay pins remain usable or degrade acceptably when the code
+panel is narrow.
 
 ### Phase 4 — Commit interception (match check)
 
@@ -261,10 +276,14 @@ Modify (with exact anchors):
   `tutorial_precheck_current_input()` inside the `input_len > 0` branch
   before any undo snapshot or commit attempt. On false, return consumed.
   Track whether the subsequent normal commit path actually succeeded
-  (`try_commit_any()` consumed, or the parser path inserted/replaced a
-  line). Call `tutorial_advance_after_successful_commit()` only on that
-  success path. Do not call it from the generic tail before `return 1`,
-  because parse/capacity failures also reach that tail.
+  by comparing pre/post command state (reuse
+  `capture_commit_attempt_state` / `commit_progressed_since`, or an
+  equivalent local success flag around the actual insert/replace writes).
+  Do not treat `try_commit_any()` returning 1 as success by itself; some
+  handlers consume invalid input to surface an error. Call
+  `tutorial_advance_after_successful_commit()` only on a proven success
+  path. Do not call it from the generic tail before `return 1`, because
+  parse/capacity failures also reach that tail.
 - `src/editor/input.c:1101-1116` (`handle_enter_key_route`) — run
   `tutorial_precheck_current_input()` before `commit_current_input(1)`;
   capture the returned `CommitResult`, then call
@@ -284,10 +303,13 @@ Verify: With a starter tutorial loaded, typing `glEnd()` then `;` shows `"expect
 
 ### Phase 5 — Tab autofill
 
-Goal: pressing Tab fills the input buffer with the current step's expected command (whole-line), without committing. The user inspects, optionally edits, then presses `;` to commit through the Phase 4 path.
+Goal: pressing Tab replaces the input buffer with the current step's
+expected command (whole-line), without committing. The user inspects,
+optionally edits, then presses `;` to commit through the Phase 4 path.
+This is intentionally always-overwrite while a tutorial is active.
 
 Modify:
-- `src/editor/input.c` — locate the existing Tab key handler (`grep -n "'\\\\t'" src/editor/input.c` — should sit alongside the autocomplete-accept path). Insert a tutorial branch ahead of the autocomplete dispatch:
+- `src/editor/input.c` — locate the existing Tab key handler (`grep -n "'\\\\t'" src/editor/input.c` — should sit alongside the autocomplete-accept path). Keep `editor_input_anchor_clear()` before the tutorial branch, then insert the tutorial branch ahead of the autocomplete dispatch:
   ```c
   if (tutorial_active()) {
       const char *expected = tutorial_current_expected_text();
@@ -298,12 +320,15 @@ Modify:
           inp->input_len = (int)strlen(inp->input);
           editor_cursor_pos_set(inp->input_len);
           editor_completion_clear();
-          repl_set_status("Filled expected tutorial command; press ; to commit");
+          repl_set_status("Replaced input with expected tutorial command; press ; to commit");
           return 1;
       }
   }
   ```
-  Autocomplete is suppressed only while a tutorial is active; outside tutorial mode Tab keeps its current autocomplete behavior.
+  Autocomplete is suppressed only while a tutorial is active; outside
+  tutorial mode Tab keeps its current autocomplete behavior. Clearing the
+  input-selection anchor first is load-bearing: otherwise overwriting
+  `inp->input` can leave a stale selection range behind.
 
 Tests:
 - Extend `tests/test_tutorial_runner.c`: after `tutorial_start(0)`,
@@ -312,7 +337,7 @@ Tests:
   `input_len` is non-zero. Then commit with `editor_handle_key(';', 0, 0)`
   and assert `step` advanced.
 
-Verify: with a tutorial active, Tab fills the input row with the expected command; pressing `;` commits and the next comment appears. Tab in a non-tutorial scene still triggers autocomplete.
+Verify: with a tutorial active, Tab replaces the input row with the expected command; pressing `;` commits and the next comment appears. Tab in a non-tutorial scene still triggers autocomplete.
 
 ### Phase 6 — Read-only locking of revealed comments
 
@@ -333,6 +358,18 @@ input row freely, but source-document mutations outside the expected
 tutorial commit path are blocked so recorded line indices cannot drift.
 
 Modify (single guard helper, called at each existing mutation site):
+- `src/editor/input.c:232` (`load_line_to_input`) — add a locked-line
+  early return:
+  ```c
+  if (tutorial_line_is_locked(idx)) {
+      editor_input_clear();
+      editor_cursor_pos_set(0);
+      repl_set_status("Tutorial instruction is read-only");
+      return;
+  }
+  ```
+  Arrow/mouse navigation may land on tutorial comments, but their text
+  should not be copied into the editable input row.
 - `src/editor/input.c` — every line-deletion / row-replace / line-insert
   site (Ctrl+D, backspace/delete with a line selection, semicolon parser
   replace/insert, Enter parser replace/insert, Ctrl+/ comment toggle,
@@ -352,6 +389,16 @@ Modify (single guard helper, called at each existing mutation site):
   redo while a tutorial is active:
   `if (tutorial_active()) { repl_set_status("Undo disabled during tutorial"); return; }`.
 
+Mutation-site coverage checklist:
+```bash
+rg -n 'repl_command_store_(insert|replace|delete|clear)|editor_buffer_(insert_line|insert_lines|replace_line|delete_range)|delete_cmd_range|repl_clear_all_cmds\(' src/editor src/app src/widgets src/repl
+```
+Every user-reachable source mutation from that list must either be guarded
+by `tutorial_guard_source_change`, be part of the tutorial runner's own
+instruction-comment append path, or be documented as unreachable while a
+tutorial is active. This is the backstop against silently corrupting
+`locked_lines[]` when a mutation site is missed.
+
 Verify: cursor on a tutorial comment line, overwrite / Ctrl+/ / backspace /
 line-cut all bounce off with status text. Pasting or inserting above the
 first locked comment is rejected. Cursor on the in-progress input line:
@@ -370,8 +417,8 @@ Modify:
   int tutorial_line_is_fading(int line_idx, float now);
   ```
   Implementation: `return active && line_idx == fade_line_idx && now < fade_start_t + fade_duration;`
-- `src/ui/panels.c:613` (the `code_panel_draw_segment(...)` call inside
-  `code_panel_draw_command_row`) — wrap:
+- `src/ui/panels.c` (`code_panel_draw_command_row`, the
+  `code_panel_draw_segment(...)` call) — wrap:
   ```c
   float now = ctx->snap->anim_time;
   if (tutorial_line_is_fading(i, now)) {
@@ -393,6 +440,9 @@ Modify:
   float t = (now - fade_start_t) - char_idx * (fade_duration / line_len);
   return clamp01(t / per_char_window);
   ```
+  `fade_start_t` is captured from `repl_state_variables().anim_time`, and
+  render-time `now` comes from `UiRenderSnapshot.anim_time`; those are the
+  same clock, so runner timestamps and renderer comparisons stay aligned.
 
 Verify: visually run a tutorial, watch the comment animate in over ~0.5 s left-to-right. Once finished it stays at full brightness and the renderer takes the fast path on subsequent frames.
 
@@ -401,12 +451,17 @@ Verify: visually run a tutorial, watch the comment animate in over ~0.5 s left-t
 Modify:
 - `MODULES.md` — add `src/widgets/tutorial_state.{c,h}`, `src/widgets/tutorial.{c,h}`, `src/repl/tutorials.{c,h}` to the layered overview and the state-ownership table (`TutorialRuntimeState` is owned by the peer subsystem, not `ReplState` / `EditorState`).
 - `CLAUDE.md` — add one row per new file to the **File Layout** table.
+- `Makefile` — add new tutorial sources/headers to `SRCS`, `HDRS`,
+  `CORE_TEST_SRCS`, and test binary lists, not just the sample link path.
+- `scripts/callgraph_file_groups.json` and any ownership allowlists/baselines
+  touched by `make check-state-ownership` — classify the tutorial runner
+  and tutorial state as peer-widget modules, not REPL or editor owners.
 
 Run:
 - `make check-state-ownership` — must pass; tutorial code owns only its
   peer storage, uses the new transient-scene/document reset boundary for
-  tutorial startup, uses `feed_line` only for runner-owned instructional
-  comments, and uses the editor key route for user commits.
+  tutorial startup, uses `repl_load_apply_line` for runner-owned
+  instructional comments, and uses the editor key route for user commits.
 - `make test` — full suite. The Phase 3 menu enum bump should be caught by any test asserting `GLR_MENU_COUNT`; update expectations if so.
 - Manual smoke test against the verification checklist below.
 
@@ -423,6 +478,13 @@ Run:
   first comment fades in, mistyping shows a status message, correct typing
   reveals the next comment, F12 cycling or loading an example exits the
   tutorial.
+- Manual: finish the last tutorial step; verify the status says tutorial
+  complete, tutorial mode is inactive, and the previously locked tutorial
+  rows can now be edited like normal source lines.
+- Manual: start `./sample output.c`; tutorial state should be inactive on
+  startup. This should already follow from zero-initialized state plus
+  `glr_app_reset_all`, but keep it in the smoke test so future reset wiring
+  changes do not regress it.
 
 ## Follow-up ideas (out of scope)
 
