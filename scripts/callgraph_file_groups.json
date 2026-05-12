@@ -70,8 +70,8 @@
         "src/scene/backdrop.c",
         "src/scene/lights.c",
         "src/scene/overlays.c",
-        "geometry_guides.c",
-        "transform_guides.c",
+        "src/scene/guides/geometry_guides.c",
+        "src/scene/guides/transform_guides.c",
         "src/ui/replay_hud.c"
       ]
     },

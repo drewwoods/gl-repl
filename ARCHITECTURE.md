@@ -307,9 +307,9 @@ Responsibilities:
 
 Neutral scene modules such as `src/scene/grid.c`, `src/scene/axes.c`,
 `src/scene/backdrop.c`, and `src/scene/lights.c` should remain free of REPL
-state access. REPL-aware overlays now live with the controller
-(`geometry_guides.c` / `transform_guides.c` at the repo root) and consume
-the explicit `SceneGuideSnapshot` rather than pulling globals directly.
+state access. REPL-aware overlays now live under `src/scene/guides/`
+and consume the explicit `SceneGuideSnapshot` rather than pulling globals
+directly.
 
 ## UI Layer
 
