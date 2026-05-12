@@ -955,6 +955,18 @@ void ui_panels_render_code_panel(const UiRenderSnapshot *snap,
     for (int i = 0; i < CAM_LINE_COUNT; i++)
         code_panel_draw_static_line(&ctx, imex->cam_lines[i],
                                     0.50f, 0.45f, 0.55f);
+    /* Light position lines — set after the camera transforms so
+     * glLightfv(GL_POSITION) snapshots the post-camera modelview and
+     * lights stay anchored in world space as the camera orbits. */
+    {
+        int n_pos = repl_export_lights_display_line_count();
+        for (int pos_idx = 0; pos_idx < n_pos; pos_idx++) {
+            char pos_line[MAX_LINE_LEN];
+            repl_export_lights_display_line(pos_idx, pos_line, sizeof(pos_line));
+            code_panel_draw_static_line(&ctx, pos_line,
+                                        0.50f, 0.45f, 0.55f);
+        }
+    }
     /* Header post-camera scaffolding */
     for (int i = 0; g_header_post[i]; i++)
         code_panel_draw_static_line(&ctx, g_header_post[i],

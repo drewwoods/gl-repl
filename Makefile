@@ -197,6 +197,7 @@ TEST_BINS = \
 	test_repl_core_commit \
 	test_repl_core_io \
 	test_repl_export_all_commands \
+	test_repl_export_lights \
 	test_repl_core_examples \
 	test_repl_core_search \
 	test_repl_core_search_extra \

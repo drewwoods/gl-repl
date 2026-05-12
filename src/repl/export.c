@@ -638,7 +638,7 @@ void repl_apply_init_bootstrap(void) {
 }
 
 int repl_export_init_section_line_count(void) {
-    int count = init_host_only_line_count();
+    int count = init_host_only_line_count() + repl_export_lights_init_line_count();
 
     repl_ensure_init_bootstrap_ready();
     for (int bootstrap_idx = 0; bootstrap_idx < NUM_INIT_BOOTSTRAP; bootstrap_idx++) {
@@ -653,6 +653,7 @@ int repl_export_init_section_line_count(void) {
 
 void repl_export_init_section_line(int i, char *buf, size_t n) {
     int host_count = init_host_only_line_count();
+    int lights_count = repl_export_lights_init_line_count();
     int enabled_idx = 0;
 
     if (!buf || n == 0)
@@ -670,6 +671,12 @@ void repl_export_init_section_line(int i, char *buf, size_t n) {
     }
 
     i -= host_count;
+    if (i < lights_count) {
+        repl_export_lights_init_line(i, buf, n);
+        return;
+    }
+
+    i -= lights_count;
     for (int bootstrap_idx = 0; bootstrap_idx < NUM_INIT_BOOTSTRAP; bootstrap_idx++) {
         const InitBootstrapEntry *entry = &g_init_bootstrap_repl[bootstrap_idx];
         if (entry->toggle_slug && !init_bootstrap_toggle_get(entry->toggle_slug, 1))
@@ -694,6 +701,12 @@ static void emit_export_init_section_to_file(FILE *f, int include_tess) {
     if (include_tess)
         for (int line_idx = 0; g_init_host_only_tess_c[line_idx]; line_idx++)
             fprintf(f, "%s\n", g_init_host_only_tess_c[line_idx]);
+
+    int n_lights = repl_export_lights_init_line_count();
+    for (int lights_idx = 0; lights_idx < n_lights; lights_idx++) {
+        repl_export_lights_init_line(lights_idx, line, sizeof(line));
+        fprintf(f, "%s\n", line);
+    }
 
     repl_ensure_init_bootstrap_ready();
     for (int bootstrap_idx = 0; bootstrap_idx < NUM_INIT_BOOTSTRAP; bootstrap_idx++) {
@@ -802,42 +815,78 @@ void repl_refresh_camera_lines(void) {
     }
 }
 
-static void write_light_setup(FILE *f) {
-    static const char *light_names[] = {
-        "GL_LIGHT0", "GL_LIGHT1", "GL_LIGHT2", "GL_LIGHT3"
-    };
-    ReplRenderState render = repl_state_render();
+/* Light-text generators. Per the "fewer surprises" principle, every GL
+ * state change should be visible to the editor; the lights are the
+ * largest hidden block. Init lines (colors + baseline disable) belong in
+ * init() because they don't depend on the modelview. Position lines
+ * belong in display() after the camera transforms because
+ * glLightfv(GL_POSITION) snapshots the active modelview — calling them
+ * in init() would lock positions to whatever modelview was current there
+ * (identity), so they wouldn't orbit with the scene.
+ *
+ * The same text appears in the editor's code panel and the exported C.
+ * Format uses inline `(GLfloat[]){...}` literals matching the bootstrap
+ * REPL commands' rendered C; %g strips trailing zeros so 0.10 → 0.1. */
 
-    int first_light = 1;
+static const char *const k_light_names[MAX_LIGHTS] = {
+    "GL_LIGHT0", "GL_LIGHT1", "GL_LIGHT2", "GL_LIGHT3"
+};
 
-    /* Iterate through configured lights and export their setup to C code. */
-    for (int light_idx = 0; light_idx < MAX_LIGHTS; light_idx++) {
-        const SceneLight *l = &render.lights[light_idx];
-        const char *ln = light_names[light_idx];
+#define LIGHT_INIT_LINES_PER_LIGHT 4  /* DIFFUSE, AMBIENT, SPECULAR, glDisable */
 
-        if (!l->enabled) continue;
+int repl_export_lights_init_line_count(void) {
+    return MAX_LIGHTS * LIGHT_INIT_LINES_PER_LIGHT;
+}
 
-        if (first_light) {
-            fprintf(f, "\n  /* Light setup */\n");
-            first_light = 0;
-        }
-
-        fprintf(f, "  {\n");
-        fprintf(f, "    GLfloat pos[]  = { %.2ff, %.2ff, %.2ff, %.2ff };\n",
-                l->pos[0], l->pos[1], l->pos[2], l->pos[3]);
-        fprintf(f, "    GLfloat dif[]  = { %.2ff, %.2ff, %.2ff, 1.0f };\n",
-                l->diffuse[0], l->diffuse[1], l->diffuse[2]);
-        fprintf(f, "    GLfloat amb[]  = { %.2ff, %.2ff, %.2ff, 1.0f };\n",
-                l->ambient[0], l->ambient[1], l->ambient[2]);
-        fprintf(f, "    GLfloat spec[] = { %.2ff, %.2ff, %.2ff, 1.0f };\n",
-                l->specular[0], l->specular[1], l->specular[2]);
-        fprintf(f, "    glDisable(%s);\n", ln); // lights are disabled by default, each scene enables them as needed
-        fprintf(f, "    glLightfv(%s, GL_POSITION, pos);\n", ln);
-        fprintf(f, "    glLightfv(%s, GL_DIFFUSE,  dif);\n", ln);
-        fprintf(f, "    glLightfv(%s, GL_AMBIENT,  amb);\n", ln);
-        fprintf(f, "    glLightfv(%s, GL_SPECULAR, spec);\n", ln);
-        fprintf(f, "  }\n");
+void repl_export_lights_init_line(int i, char *buf, size_t n) {
+    if (!buf || n == 0) return;
+    if (i < 0 || i >= repl_export_lights_init_line_count()) {
+        buf[0] = '\0';
+        return;
     }
+    int light_idx = i / LIGHT_INIT_LINES_PER_LIGHT;
+    int sub_idx   = i % LIGHT_INIT_LINES_PER_LIGHT;
+    ReplRenderState render = repl_state_render();
+    const SceneLight *l = &render.lights[light_idx];
+    const char *ln = k_light_names[light_idx];
+    switch (sub_idx) {
+    case 0:
+        snprintf(buf, n,
+                 "  glLightfv(%s, GL_DIFFUSE,  (GLfloat[]){%g, %g, %g, %g});",
+                 ln, l->diffuse[0], l->diffuse[1], l->diffuse[2], l->diffuse[3]);
+        break;
+    case 1:
+        snprintf(buf, n,
+                 "  glLightfv(%s, GL_AMBIENT,  (GLfloat[]){%g, %g, %g, %g});",
+                 ln, l->ambient[0], l->ambient[1], l->ambient[2], l->ambient[3]);
+        break;
+    case 2:
+        snprintf(buf, n,
+                 "  glLightfv(%s, GL_SPECULAR, (GLfloat[]){%g, %g, %g, %g});",
+                 ln, l->specular[0], l->specular[1], l->specular[2], l->specular[3]);
+        break;
+    case 3:
+        snprintf(buf, n, "  glDisable(%s);", ln);
+        break;
+    }
+}
+
+int repl_export_lights_display_line_count(void) {
+    return MAX_LIGHTS;
+}
+
+void repl_export_lights_display_line(int i, char *buf, size_t n) {
+    if (!buf || n == 0) return;
+    if (i < 0 || i >= repl_export_lights_display_line_count()) {
+        buf[0] = '\0';
+        return;
+    }
+    ReplRenderState render = repl_state_render();
+    const SceneLight *l = &render.lights[i];
+    const char *ln = k_light_names[i];
+    snprintf(buf, n,
+             "  glLightfv(%s, GL_POSITION, (GLfloat[]){%g, %g, %g, %g});",
+             ln, l->pos[0], l->pos[1], l->pos[2], l->pos[3]);
 }
 
 static void write_for_begin_as_c(FILE *f, const GLCmd *cmd,
@@ -2812,7 +2861,19 @@ static void emit_export_display_begin(FILE *f) {
     /* Emit post-render-state header lines (typically additional setup). */
     for (int line_idx = 0; g_header_post[line_idx]; line_idx++)
         fprintf(f, "%s\n", g_header_post[line_idx]);
-    write_light_setup(f);
+    /* Light positions are set after the camera transforms so
+     * glLightfv(GL_POSITION) snapshots the post-camera modelview and
+     * lights stay anchored in world space as the camera orbits. The
+     * non-positional light state (colors + baseline glDisable) is
+     * emitted into init() — see emit_export_init_section_to_file. */
+    {
+        int n_pos = repl_export_lights_display_line_count();
+        for (int pos_idx = 0; pos_idx < n_pos; pos_idx++) {
+            char line[MAX_LINE_LEN];
+            repl_export_lights_display_line(pos_idx, line, sizeof(line));
+            fprintf(f, "%s\n", line);
+        }
+    }
     /* Per-frame baseline reset to mirror src/scene/render.c:237-244. The
      * REPL forces GL_LIGHTING off every frame so user-typed glEnable
      * lasts only one frame, and resets specular/shininess to its

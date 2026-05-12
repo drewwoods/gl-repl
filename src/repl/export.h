@@ -251,6 +251,18 @@ int  repl_state_parse_workspace_header_line(const char *line);
 int  repl_export_init_section_line_count(void);
 void repl_export_init_section_line(int i, char *buf, size_t n);
 
+/* Light-setup text lines. Init lines (per-light DIFFUSE/AMBIENT/SPECULAR +
+ * baseline glDisable) belong in the init() section. Display lines (POSITION)
+ * belong in display() after the camera transforms — glLightfv(GL_POSITION)
+ * snapshots the active modelview, so positions set before the camera would
+ * not orbit with the scene. The editor's code panel renders these verbatim
+ * and the exported C file writes the same text, so a single generator
+ * keeps the two surfaces in lockstep. */
+int  repl_export_lights_init_line_count(void);
+void repl_export_lights_init_line(int i, char *buf, size_t n);
+int  repl_export_lights_display_line_count(void);
+void repl_export_lights_display_line(int i, char *buf, size_t n);
+
 #if 0
 /* Visual dump consumes the explicit layout struct (step 7c of
  * feature/decouple-repl-from-gl-repl-alt.md) so the REPL pipeline
