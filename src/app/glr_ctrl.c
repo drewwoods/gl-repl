@@ -1347,6 +1347,7 @@ void glr_ctrl_reshape(int w, int h) {
 static void glr_app_reset_example_chrome(void) {
     glr_state_presentation_reset_example_defaults();
     glr_camera_mut()->auto_rotate = CFG_DEFAULT_CAMERA_ROTATE;
+    variable_panel_view_mut()->visible = CFG_DEFAULT_VARIABLE_PANEL;
 }
 
 /* Adapter for repl_executor_install_camera_distance_source. The
