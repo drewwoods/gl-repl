@@ -65,7 +65,7 @@ User-facing behavior agreed:
 | `src/editor/input.c` / `src/editor/clipboard.c` / `src/editor/undo.c` | Reject source mutations that would edit locked tutorial comments or renumber locked-line indices: replace/toggle/delete/cut of a locked row, insert/paste above or inside the locked prefix, Ctrl+L clear, Ctrl+\ reformat, and undo/redo while active. Input-row editing remains allowed. |
 | `src/editor/input.c:232` (`load_line_to_input`) | If `tutorial_line_is_locked(idx)`, clear the input buffer, move cursor to 0, set status `"Tutorial instruction is read-only"`, and return. Navigation may land on instruction rows, but locked comment text should not be copied into the editable input row. |
 | `src/repl/scenes.h` / `.c` | Add `repl_scenes_enter_transient_scene()` (name bikesheddable): save the active user scene if any, restore any pre-example cfg snapshot, clear pending scene-name metadata, then detach live state from both `active_example_idx` and `g_active_user_scene`. `tutorial_start()` calls this before clearing/loading tutorial content so tutorial buffers are not saved back into a user-scene slot. |
-| `src/repl/example_loader.c:393-487` (`load_example_lines`, `repl_load_example`) and `src/repl/scenes.c:670` (`repl_load_user_scene_idx`) | Call `tutorial_state_reset()` on entry so loading an example or activating a user scene exits tutorial mode cleanly. |
+| `src/repl/example_loader.c:393-487` (`load_example_lines`, `repl_load_example`) and `src/repl/scenes.c` (`repl_load_workspace`, `repl_load_user_scene_idx`) | Call `tutorial_state_reset()` on entry so loading an example, loading a workspace, or activating a user scene exits tutorial mode cleanly. `repl_load_workspace()` loads slots directly and restores a live stash; do not rely on `repl_load_user_scene_idx()` for this reset. |
 | `src/app/glr_ctrl.c` (`glr_app_reset_all`) | Reset tutorial state alongside replay/help/color-picker peers so full app reset and CLI startup cannot inherit an active tutorial. |
 | `src/ui/panels.c` (`code_panel_draw_command_row`, `code_panel_draw_segment(...)` call) | If `tutorial_line_is_fading(i, ctx->snap->anim_time)`, draw the visible segment char-by-char with `glColor4f(r, g, b, alpha_for_char)`; otherwise keep the existing `code_panel_draw_segment` fast path. Use source line `i`, not a non-existent row field. |
 | `src/widgets/tutorial.c` | Emit tutorial instruction comments via `repl_load_apply_line` from `src/repl/load.h`, not `feed_line`; timestamp newly revealed comments from the existing `repl_state_variables().anim_time` view. Render code receives `now` from `UiRenderSnapshot.anim_time`; both clocks come from the same source. Do not add a new `repl_anim_time_now()` public API. |
@@ -128,10 +128,11 @@ are still allowed.
    tutorial state / predef vars / function aliases / editor input
    transients, then emits `comments[0]` through a small runner helper
    around `repl_load_apply_line()`. That helper follows `src/repl/load.h`'s
-   caller contract: set `edit_line` to `document_count`, clear insert mode,
-   call the lean loader, then mark normals/flat state dirty. It records
-   `fade_line_idx = doc_count - 1`, appends that line to `locked_lines`,
-   and sets `fade_start_t` from `repl_state_variables().anim_time`.
+   caller contract: set `edit_line` to `document_count`, clear the editor
+   input buffer, clear insert mode, call the lean loader, then mark both
+   flat state and normals dirty. It records `fade_line_idx = doc_count - 1`,
+   appends that line to `locked_lines`, and sets `fade_start_t` from
+   `repl_state_variables().anim_time`.
 3. Each frame, `panels.c` passes `ctx->snap->anim_time` to
    `tutorial_line_is_fading` / `tutorial_step_fade_alpha` for the source
    line. Fading rows draw per-char with `glColor4f`; all other rows keep
@@ -202,10 +203,14 @@ Create:
   `repl_load_apply_line()`, appends that line to `locked_lines`, and
   records `fade_line_idx = repl_state_document_count() - 1` plus
   `fade_start_t = repl_state_variables().anim_time`. The emit helper must
-  set `repl_state_edit_line` to `repl_state_document_count()`, clear insert
-  mode before loading, and mark normals dirty after loading, matching
-  `src/repl/load.h`'s caller responsibilities. `tutorial_match` v1 =
-  whitespace-normalize-and-strcmp.
+  set `repl_state_edit_line` to `repl_state_document_count()`, clear the
+  editor input buffer, clear insert mode before loading, and mark both
+  `repl_state_mark_flat_dirty()` and `repl_state_mark_normals_dirty()`
+  after loading, matching `src/repl/load.h`'s caller responsibilities.
+  If the reset choreography starts spreading beyond `tutorial_start`,
+  extract a REPL-side `repl_scenes_reset_for_transient()` helper rather
+  than duplicating direct predef-var / alias / dispatch reset calls across
+  widgets. `tutorial_match` v1 = whitespace-normalize-and-strcmp.
 - `tests/test_tutorial_match.c` — uses `tests/support/test_harness.h`. Cases: exact match, extra inner whitespace, leading/trailing whitespace, trailing `;` tolerance, empty input → `TUT_MISMATCH_EMPTY`, token-count mismatch → `TUT_MISMATCH_SHAPE`, default `arg_index == -1`. The `TUT_MISMATCH_COMMAND` and `TUT_MISMATCH_ARG` enum values are declared but not produced by v1; tests just assert they exist so v2 can wire them in without an API break.
 - `tests/test_tutorial_runner.c` — uses `tests/support/repl_test_support.h`. Cases: `tutorial_start(0)` → first comment appears at line 0 and begins with `//`, active user scene/example markers are detached, and line 0 is locked; correct line committed by loading `editor_state_input_mut()->input` and calling `editor_handle_key(';', 0, 0)` advances `step`; wrong line preserves `step` and input; direct `repl_feed_line_public(expected)` is not a tutorial-success path; `tutorial_current_expected_text()` returns the right string for the current step; fade-alpha math (now == start → 0 for char 0, now == start + duration → 1 for last char).
 - `Makefile` — add rules for `test_tutorial_match` and `test_tutorial_runner` mirroring `test_eval` / `test_format`; add both to the aggregate `test` target.
@@ -275,12 +280,14 @@ Modify (with exact anchors):
 - `src/editor/input.c:1118-1203` (`handle_semicolon_commit_key_route`) — run
   `tutorial_precheck_current_input()` inside the `input_len > 0` branch
   before any undo snapshot or commit attempt. On false, return consumed.
-  Track whether the subsequent normal commit path actually succeeded
-  by comparing pre/post command state (reuse
-  `capture_commit_attempt_state` / `commit_progressed_since`, or an
-  equivalent local success flag around the actual insert/replace writes).
-  Do not treat `try_commit_any()` returning 1 as success by itself; some
-  handlers consume invalid input to surface an error. Call
+  Because this route open-codes its parser insert/replace path instead of
+  calling `commit_current_input()`, add a local
+  `CommitAttemptState before; capture_commit_attempt_state(&before);`
+  after the tutorial precheck and before the normal commit attempts, then
+  call `commit_progressed_since(&before)` after the normal route finishes
+  to decide whether a real commit occurred. Do not treat
+  `try_commit_any()` returning 1 as success by itself; some handlers
+  consume invalid input to surface an error. Call
   `tutorial_advance_after_successful_commit()` only on a proven success
   path. Do not call it from the generic tail before `return 1`, because
   parse/capacity failures also reach that tail.
@@ -290,11 +297,18 @@ Modify (with exact anchors):
   `tutorial_advance_if_commit_ok(result)`. This keeps Enter behavior
   aligned with semicolon and avoids advancing on `COMMIT_REJECTED`.
 - `src/repl/example_loader.c:393` (`load_example_lines`) — call `tutorial_state_reset()` as the first statement.
+- `src/repl/scenes.c:520` (`repl_load_workspace`) — call
+  `tutorial_state_reset()` on entry. Workspace load fills user-scene slots
+  with `load_scene_file_into_slot()` and restores the live stash; it does
+  not transitively pass through `repl_load_user_scene_idx()`.
 - `src/repl/scenes.c:670` (`repl_load_user_scene_idx`) — same first-statement reset before `load_scene_from_slot(slot)`.
 - Include `widgets/tutorial.h` in `src/editor/input.c`; include the smallest reset header needed by `src/repl/example_loader.c` and `src/repl/scenes.c` (prefer `widgets/tutorial_state.h` if reset is declared there).
 
 Tests:
-- Extend `tests/test_tutorial_runner.c`: `tutorial_start` then `repl_load_example(0)` → `tutorial_active()` becomes 0.
+- Extend `tests/test_tutorial_runner.c`: `tutorial_start` then
+  `repl_load_example(0)` → `tutorial_active()` becomes 0; `tutorial_start`
+  then `repl_load_workspace(tmp_workspace_dir)` → `tutorial_active()`
+  becomes 0.
 - Add a wrong-input case asserting `repl_set_status` was called with a non-empty message (install a sink via `repl_set_status_sink` in the test).
 - Add a rejected-parse case: precheck matches but the normal parser path
   rejects/capacity-fails; assert `step` does not advance.
@@ -391,7 +405,7 @@ Modify (single guard helper, called at each existing mutation site):
 
 Mutation-site coverage checklist:
 ```bash
-rg -n 'repl_command_store_(insert|replace|delete|clear)|editor_buffer_(insert_line|insert_lines|replace_line|delete_range)|delete_cmd_range|repl_clear_all_cmds\(' src/editor src/app src/widgets src/repl
+rg -n 'repl_command_store_(insert|replace|delete|clear)|editor_buffer_(insert_line|insert_lines|replace_line|delete_range|set_line|set_count|load_lines|clear|apply_compiled_change)|delete_cmd_range|repl_clear_all_cmds\(' src/editor src/app src/widgets src/repl
 ```
 Every user-reachable source mutation from that list must either be guarded
 by `tutorial_guard_source_change`, be part of the tutorial runner's own
@@ -453,9 +467,12 @@ Modify:
 - `CLAUDE.md` — add one row per new file to the **File Layout** table.
 - `Makefile` — add new tutorial sources/headers to `SRCS`, `HDRS`,
   `CORE_TEST_SRCS`, and test binary lists, not just the sample link path.
-- `scripts/callgraph_file_groups.json` and any ownership allowlists/baselines
-  touched by `make check-state-ownership` — classify the tutorial runner
-  and tutorial state as peer-widget modules, not REPL or editor owners.
+- `scripts/callgraph_file_groups.json` — classify the tutorial runner and
+  tutorial state as peer-widget modules, not REPL or editor owners.
+- Any individual `scripts/check-*` ownership guard that hard-codes source
+  file lists — update that script's list or expectation if
+  `make check-state-ownership` reports the new tutorial files. There is no
+  single monolithic ownership allowlist.
 
 Run:
 - `make check-state-ownership` — must pass; tutorial code owns only its
