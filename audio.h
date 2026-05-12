@@ -111,7 +111,7 @@ void audio_set_state_file(const char *path);
 
 /* Opaque audio-config integer owned by the action/config layer. The audio
  * module stores this value in the state file and restores it on load so
- * startup can call repl_actions_apply_defaults() with the right mode. Pass -1
+ * startup can call glr_actions_apply_defaults() with the right mode. Pass -1
  * to clear (no cfg_mode= line written). */
 void audio_set_cfg_mode(int mode);
 int  audio_get_cfg_mode(void);  /* returns -1 when not yet loaded */

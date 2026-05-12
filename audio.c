@@ -84,7 +84,7 @@ static char  g_state_file[AUDIO_MAX_PATH] = "";
 
 /* Opaque integer owned by repl_actions.c (maps to AUDIO_CFG_* enum).
  * Stored in the INI as cfg_mode= and handed back through
- * audio_get_cfg_mode() so repl_actions_apply_defaults() can map it
+ * audio_get_cfg_mode() so glr_actions_apply_defaults() can map it
  * to paused/loop state. -1 means "not yet loaded / not set". */
 static int g_cfg_mode = -1;
 
@@ -173,7 +173,7 @@ static void save_state(void) {
 
 /* Loads persisted playback position and audio cfg from the state file.
  * cfg_mode is stored in g_cfg_mode for repl_actions.c to pick up via
- * audio_get_cfg_mode() and apply via repl_actions_apply_defaults().
+ * audio_get_cfg_mode() and apply via glr_actions_apply_defaults().
  * Returns the playlist index of the saved track, or -1 on failure.
  * Sets *out_offset to the saved cursor in seconds (0 on failure). */
 static int load_state(float *out_offset) {

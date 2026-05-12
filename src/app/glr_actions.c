@@ -281,7 +281,7 @@ static void apply_audio_cfg_mode(int mode) {
     }
 }
 
-int repl_scene_menu_slot_for_dense_index(int scene_idx) {
+int glr_scene_menu_slot_for_dense_index(int scene_idx) {
     int seen = 0;
     for (int slot = 0; slot < MAX_USER_SCENES; slot++) {
         if (!repl_user_scene_slot_used(slot))
@@ -487,7 +487,7 @@ int glr_action_menu_item_activate(int menu_id, int item_idx) {
 
         int scene_idx = item_idx - (example_count + GLR_SCENE_OFF_SCENES);
         if (scene_idx >= 0 && scene_idx < repl_user_scene_count()) {
-            int slot = repl_scene_menu_slot_for_dense_index(scene_idx);
+            int slot = glr_scene_menu_slot_for_dense_index(scene_idx);
             if (slot >= 0) {
                 if (repl_load_user_scene_idx(slot))
                     load_line_to_input(repl_state_edit_line());
@@ -523,7 +523,7 @@ int glr_action_menu_item_activate(int menu_id, int item_idx) {
     return 1;
 }
 
-void repl_actions_apply_defaults(void) {
+void glr_actions_apply_defaults(void) {
     /* Restore the audio mode persisted from the previous session.
      * audio_play_playlist() calls load_state() which stores the cfg_mode
      * in the audio module; pull it here so the UI config and the actual audio

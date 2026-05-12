@@ -123,7 +123,7 @@ static const char *menu_item_label(int menu_id, int i) {
         if (i == e + SCENE_OFF_RENAME)                        return "Rename active scene";
         int scene_n = i - (e + SCENE_OFF_SCENES);
         if (scene_n >= 0 && scene_n < repl_user_scene_count()) {
-            int slot = repl_scene_menu_slot_for_dense_index(scene_n);
+            int slot = glr_scene_menu_slot_for_dense_index(scene_n);
             return (slot >= 0) ? repl_user_scene_name(slot) : NULL;
         }
         return NULL;
@@ -828,7 +828,7 @@ void ui_menu_bar_render_example_dropdown(const UiRenderSnapshot *snap) {
         if (menu_id == MENU_SCENE && ne >= 0) {
             int scene_n = i - (ne + SCENE_OFF_SCENES);
             if (scene_n >= 0 && scene_n < repl_user_scene_count())
-                scene_hit = repl_scene_menu_slot_for_dense_index(scene_n);
+                scene_hit = glr_scene_menu_slot_for_dense_index(scene_n);
         }
         int is_active_example = (menu_id == MENU_SCENE && ne >= 0 &&
                      i >= 1 && i <= ne &&

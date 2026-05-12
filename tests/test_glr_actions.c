@@ -77,9 +77,9 @@ static void run_menu_action_in_temp_dir(const char *label,
 
 static void test_apply_defaults(void) {
     glr_app_reset_all();
-    /* repl_actions_apply_defaults pulls from audio_get_cfg_mode()
+    /* glr_actions_apply_defaults pulls from audio_get_cfg_mode()
      * which defaults to AUDIO_CFG_ALL (3) if invalid. */
-    repl_actions_apply_defaults();
+    glr_actions_apply_defaults();
     ASSERT_INT("default audio mode is ALL", glr_config_get(GLR_CONFIG_AUDIO_MODE), 3);
 }
 
@@ -265,7 +265,7 @@ static void test_menu_actions(void) {
     repl_load_example(0);
 
     ASSERT_INT("Slot 0 used", repl_user_scene_slot_used(0), 1);
-    ASSERT_INT("Dense index 0 is slot 0", repl_scene_menu_slot_for_dense_index(0), 0);
+    ASSERT_INT("Dense index 0 is slot 0", glr_scene_menu_slot_for_dense_index(0), 0);
     ASSERT_INT("Load user scene 0", glr_action_menu_item_activate(GLR_MENU_SCENE, example_count + GLR_SCENE_OFF_SCENES), 1);
     ASSERT_INT("active user scene slot", repl_active_user_scene(), 0);
 

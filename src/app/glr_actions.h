@@ -17,7 +17,7 @@
  * GlrConfigKey (repl_config.h), allowing the help overlay to display current
  * bindings.
  *
- * Default values: repl_actions_apply_defaults() applies initial config state
+ * Default values: glr_actions_apply_defaults() applies initial config state
  * on startup, allowing examples to override via @cfg metadata.
  */
 #ifndef GLR_ACTIONS_H
@@ -47,7 +47,7 @@ enum {
 /* Scene menu item offsets and fixed rows. Offsets are relative to the start of
  * the Scene section after the built-in examples block. Fixed rows are the
  * divider, label, new scene, save output, rename, then the user-scene list.
- * Item count is implicit; lookup uses repl_scene_menu_slot_for_dense_index()
+ * Item count is implicit; lookup uses glr_scene_menu_slot_for_dense_index()
  * to map dense display index to the actual user scene slot. */
 enum {
     GLR_SCENE_OFF_DIVIDER = 1,
@@ -66,7 +66,7 @@ enum {
 /* Apply initial configuration defaults at startup. Initializes all config
  * toggles and cycles to their default values. Called during REPL init;
  * examples can override via @cfg metadata headers. */
-void repl_actions_apply_defaults(void);
+void glr_actions_apply_defaults(void);
 
 /* Install the export-config bridge that lets src/repl/export.c emit/parse
  * @cfg headers and lets src/repl/scenes.c snapshot per-scene cfg without
@@ -110,6 +110,6 @@ int  glr_action_menu_item_activate(int menu_id, int item_idx);
  * returns the slot index into g_user_scenes[]. Used by the scene menu renderer
  * and action dispatcher to locate the correct slot when user scenes have gaps
  * (unused slots are skipped in the display). */
-int  repl_scene_menu_slot_for_dense_index(int scene_idx);
+int  glr_scene_menu_slot_for_dense_index(int scene_idx);
 
 #endif /* GLR_ACTIONS_H */
