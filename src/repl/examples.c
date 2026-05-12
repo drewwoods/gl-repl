@@ -665,6 +665,8 @@ static const char *const g_example_traveling_ripple_ring[] = {
     NULL
 };
 
+/* Animated quadratic Bezier curve - vertex + line loop with parametric
+ * function, showing variable assignment and reuse across calls. */
 static const char *const g_example_bezier[] = {
     "// @cfg vertex_outlines = 0",
     "// @cfg vertex_points = 0",
@@ -735,7 +737,48 @@ static const char *const g_example_bezier[] = {
     NULL
 };
 
-/* Example 17: Stress test - exercises parser, code UI, nested structures,
+/* Snowfall - 550 GL_POINTS with x/y/z from rand(seed, iter) + time,
+ * creating a looping field of falling points with depth-based color. */
+static const char *const g_example_snowfall[] = {
+    "// @cfg vertex_outlines = 0",
+    "// @cfg vertex_points = 0",
+    "// @cfg light_indicators = 0",
+    "// @cfg poly_highlight = 0",
+    "// @cfg grid = 0",
+    "// @cfg msaa = 1",
+    "// @cfg line_smooth = 0",
+    "// camera",
+    "glTranslatef(0.0f, 0.0f, -13.5f);",
+    "glRotatef(0.0f, 1.0f, 0.0f, 0.0f);",
+    "glRotatef(0.0f, 0.0f, 1.0f, 0.0f);",
+    "glTranslatef(0.0f, 0.0f, 0.0f);",
+    "float x, y;",
+    "float xVel, yVel;",
+    "float zColProp;",
+    "float xVelMax = 0.5;",
+    "float g = -1.5;",
+    "float xMax = 12, yMax = 5, zMax = 10;",
+    "glClearColor(0.05, 0.05, 0.05, 1);",
+    "glEnable(GL_DEPTH_TEST);",
+    "glPointSize(10);",
+    "glBegin(GL_POINTS);",
+    "  for (p, 0, 550) {",
+    "    xVel = xVelMax * repl_rand2f(p, 1);",
+    "    x = remainderf(xMax * repl_rand2f(p,4) + t * xVel, 2 * xMax);",
+    "",
+    "    yVel = g - repl_randf(p, 2);",
+    "    y = remainderf(yMax * repl_rand2f(p,3) + t * yVel, 2 * yMax);",
+    "",
+    "    zColProp = repl_randf(p, 5); // z affects color and distance",
+    "",
+    "    glColor3f(0.5 + 0.5 * zColProp, 0.5 + 0.5 * zColProp, 0.5 + 0.5 * zColProp);",
+    "    glVertex3f(x, y, zMax * zColProp);",
+    "  }",
+    "glEnd();",
+    NULL
+};
+
+/* Stress test - exercises parser, code UI, nested structures,
  * multiple functions, recursion, conditionals, variables, tessellation,
  * GLU primitives, matrix stack, animation, and long line count. */
 static const char *const g_example_stress[] = {
@@ -1173,6 +1216,7 @@ static const char *const *const g_examples[] = {
     g_example_spirograph_curve,
     g_example_traveling_ripple_ring,
     g_example_bezier,
+    g_example_snowfall,
     g_example_xform_stress,
     g_example_stress,
     g_example_scratch_casteljau,
@@ -1198,6 +1242,7 @@ static const char *const g_example_names[] = {
     "Animated spirograph curve",
     "Traveling ripple ring",
     "Bezier curve with guides",
+    "Snowfall demo (550 particles)",
     "Transform stress (translate/rotate/scale guides)",
     "Stress test (all features)",
     "Scratch arrays (de Casteljau curve)",
