@@ -1090,12 +1090,27 @@ static int handle_text_delete_key_route(unsigned char key) {
 
 static int handle_tab_key_route(unsigned char key) {
     if (key == '\t') {
+        const char *expected;
+
         /* Tab/Enter/; clear the input-selection anchor without
          * deleting: the commit/accept behavior runs on the buffer as
          * it stands. Selecting "foo" inside `bar foo;` and pressing
          * `;` should commit `bar foo;`, not delete the selection
          * first. */
         editor_input_anchor_clear();
+        expected = tutorial_current_expected_text();
+        if (tutorial_active() && expected) {
+            ReplEditorInputState *inp = editor_state_input_mut();
+
+            strncpy(inp->input, expected, MAX_INPUT_LEN - 1);
+            inp->input[MAX_INPUT_LEN - 1] = '\0';
+            inp->input_len = (int)strlen(inp->input);
+            editor_cursor_pos_set(inp->input_len);
+            editor_completion_clear();
+            repl_set_status(
+                "Replaced input with expected tutorial command; press ; to commit");
+            return 1;
+        }
         if (editor_state_autocomplete().match_count > 0) {
             accept_autocomplete();
             editor_completion_update();
