@@ -263,6 +263,8 @@ static int load_commands_into_live(const GLCmd *cmds,
 
 void repl_scenes_save_active_scene_if_any(void);
 
+void repl_scenes_enter_transient_scene(void);
+
 static void load_scene_from_slot(int idx) {
     if (idx < 0 || idx >= MAX_USER_SCENES) return;
     UserScene *s = &g_user_scenes[idx];
@@ -322,6 +324,15 @@ void repl_scenes_save_active_scene_if_any(void) {
         save_scene_to_slot(g_active_user_scene,
                            g_user_scenes[g_active_user_scene].name);
     }
+}
+
+void repl_scenes_enter_transient_scene(void) {
+    repl_scenes_save_active_scene_if_any();
+    restore_pre_example_cfg_if_valid();
+    g_export_scene_name_hint = NULL;
+    g_pending_scene_name[0] = '\0';
+    g_active_user_scene = -1;
+    g_example_idx = -1;
 }
 
 static void restore_user_scene(void) {

@@ -26,6 +26,10 @@ int  repl_promote_example_if_needed(void);
  * loading a different scene/example. No-op when no slot is active. */
 void repl_scenes_save_active_scene_if_any(void);
 
+/* Detach the live document from examples and user-scene slots so a
+ * transient buffer can take over without being written back into a slot. */
+void repl_scenes_enter_transient_scene(void);
+
 /* On first example load only, capture the pre-example editor state
  * into the pinned "home" slot (slot 0) so the user can always return
  * to their starting work. */
