@@ -8,6 +8,7 @@
 #include "repl/export.h"   /* ReplExportConfig + bridge for per-scene cfg */
 #include "repl/state_owners.h"
 #include "source_document.h" /* source_document_load_lines */
+#include "widgets/tutorial_state.h"
 
 #include <dirent.h>
 #include <errno.h>
@@ -538,6 +539,8 @@ static int has_dot_c_ext(const char *name) {
 }
 
 int repl_load_workspace(const char *dir) {
+    tutorial_state_reset();
+
     if (!dir || !*dir) return 0;
 
     DIR *d = opendir(dir);
@@ -688,6 +691,8 @@ const char *repl_user_scene_name(int slot) {
 }
 
 int repl_load_user_scene_idx(int slot) {
+    tutorial_state_reset();
+
     if (slot < 0 || slot >= MAX_USER_SCENES) return 0;
     if (!g_user_scenes[slot].used) return 0;
     load_scene_from_slot(slot);
