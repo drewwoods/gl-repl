@@ -949,7 +949,7 @@ void replay_copy_baseline_scratch_arrays(
            sizeof(g_replay_baseline_scratch_arrays));
 }
 
-int replay_handle_key(unsigned char key) {
+int replay_handle_key_impl(unsigned char key) {
     if (!g_replay_active) {
         if (key == KEY_CTRL_R) {
             replay_start();
@@ -1051,7 +1051,7 @@ static int replay_modifier_special_key(int key) {
 #endif
 }
 
-int replay_handle_special_key(int key) {
+int replay_handle_special_key_impl(int key) {
     if (!g_replay_active)
         return 0;
 

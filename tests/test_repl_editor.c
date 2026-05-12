@@ -1995,11 +1995,11 @@ int main() {
 
         replay_state = REPLAY_PAUSED;
         ASSERT_INT("replay right consumed",
-                   replay_handle_special_key(GLUT_KEY_RIGHT), 1);
+                   replay_handle_special(GLUT_KEY_RIGHT), 1);
         ASSERT_INT("replay right advances one step",
                    replay_pc, 1);
         ASSERT_INT("replay left consumed",
-                   replay_handle_special_key(GLUT_KEY_LEFT), 1);
+                   replay_handle_special(GLUT_KEY_LEFT), 1);
         ASSERT_INT("replay left steps back",
                    replay_pc, 0);
 
@@ -2431,7 +2431,7 @@ int main() {
                     fabsf(repl_state_document_cmds_mut()[0].args[0] - 0.0f) < 1e-6f);
     }
 
-    /* repl_clear_all_cmds - clears scene including float declarations. */
+    /* editor_clear_all_cmds - clears scene including float declarations. */
     {
         int base_num_predef_vars;
         int i;
@@ -2454,7 +2454,7 @@ int main() {
         }
         ASSERT_TRUE("clear_all: tmp is registered before clear", found_tmp_before_clear);
 
-        repl_clear_all_cmds();
+        editor_clear_all_cmds();
         ASSERT_INT("clear_all: num_cmds is 0", repl_state_document_count(), 0);
         ASSERT_INT("clear_all: edit_line is 0", repl_state_edit_line(), 0);
         ASSERT_INT("clear_all: inserting is 0", editor_insert_mode(), 0);

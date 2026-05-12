@@ -163,10 +163,10 @@ static void test_replay_input(void) {
     replay_handle_key(' ');
     ASSERT_TRUE("Space pauses", g_replay_state == REPLAY_PAUSED);
 
-    replay_handle_special_key(GLUT_KEY_RIGHT);
+    replay_handle_special(GLUT_KEY_RIGHT);
     ASSERT_TRUE("Right advances", g_replay_pc > 0);
 
-    replay_handle_special_key(GLUT_KEY_LEFT);
+    replay_handle_special(GLUT_KEY_LEFT);
     ASSERT_TRUE("Left retreats", g_replay_pc == 0);
 
     // Ensure replay is active for following tests
@@ -190,7 +190,7 @@ static void test_replay_modifiers(void) {
     replay_start();
 
 #ifndef USE_GLUT
-    int handled = replay_handle_special_key(GLUT_KEY_SHIFT_L);
+    int handled = replay_handle_special(GLUT_KEY_SHIFT_L);
     ASSERT_TRUE("modifier handled internally", handled == 0);
     ASSERT_TRUE("modifier doesn't stop replay", g_replay_active);
 #else

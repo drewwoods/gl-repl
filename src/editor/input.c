@@ -13,7 +13,7 @@
  * Editor-owned concerns hosted here:
  *  - Effect accumulation (g_pending_input_effects + reset/take helpers)
  *  - Modifier provider test seam
- *  - Cmd-range deletion + repl_clear_all_cmds
+ *  - Cmd-range deletion + editor_clear_all_cmds
  *  - load_line_to_input / save_newline_buf / line navigation
  *  - Commit-attempt orchestration (try_commit_*, navigation commit,
  *    parse_for_overwrite_enter, rewrite_source_text_with_indent)
@@ -239,7 +239,7 @@ void delete_cmd_range(int start, int count, const char *what) {
     repl_set_status(change.commit_message);
 }
 
-void repl_clear_all_cmds(void) {
+void editor_clear_all_cmds(void) {
     if (!tutorial_guard_source_change_or_status(0, repl_state_document_count(), 0))
         return;
 
@@ -334,7 +334,7 @@ static void save_newline_buf(void) {
     inp->pending_newline_len = inp->input_len;
 }
 
-void repl_editor_reset_transients(void) {
+void editor_reset_transients(void) {
     editor_commit_reset_transients();
     glr_camera_controls_reset();
     ui_menu_bar_close();
@@ -1026,7 +1026,7 @@ static int handle_line_delete_key_route(unsigned char key) {
  * (Ctrl+Q) variants are router-side. */
 static int handle_buffer_command_key_route(unsigned char key) {
     if (key == KEY_CTRL_L) {
-        repl_clear_all_cmds();
+        editor_clear_all_cmds();
         return 1;
     }
 

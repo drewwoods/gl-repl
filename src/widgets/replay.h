@@ -209,8 +209,8 @@ void replay_copy_baseline_scratch_arrays(
 
 /* --- Input routing (called from repl_editor.c) ----------------------- */
 
-int  replay_handle_key(unsigned char key);
-int  replay_handle_special_key(int key);
+int  replay_handle_key_impl(unsigned char key);
+int  replay_handle_special_key_impl(int key);
 
 /* --- Benchmark / test helpers ----------------------------------------- */
 
