@@ -104,6 +104,7 @@ int main(void) {
     const char *decl_func_blank_path = "/tmp/repl_core_decl_func_blank_output.c";
     const char *shape_path = "/tmp/repl_core_shapes_output.c";
     const char *tess_path = "/tmp/repl_core_tess_output.c";
+    const char *rand_alias_path = "/tmp/repl_core_rand_alias_output.c";
 
     repl_eval_init_predef_vars();
     glr_app_reset_all(); declare_test_vars();
@@ -287,6 +288,26 @@ int main(void) {
         ASSERT_TRUE("scratch C omitted when unused",
                     strstr(buf, "static float C[") == NULL);
         remove(cross_path);
+    }
+
+    /* Export helper gate must tolerate already-C spellings that can
+     * leak into source text (for example older fixtures or hand-edited
+     * snippets) so the standalone file still emits the RNG helpers. */
+    {
+        glr_app_reset_all(); declare_test_vars();
+        repl_feed_line_public("glVertex3f(repl_randf(i, 3), repl_rand2f(i, 4), 0);");
+        repl_export_save_output(rand_alias_path, source_document_view(), NULL);
+        char buf[8192];
+        read_text_file(rand_alias_path, buf, sizeof(buf));
+        ASSERT_TRUE("rand helper emitted for repl_randf source",
+                    strstr(buf, "static float repl_randf(float seed, float iter)") != NULL);
+        ASSERT_TRUE("rand2 helper emitted for repl_rand2f source",
+                    strstr(buf, "static float repl_rand2f(float seed, float iter)") != NULL);
+        ASSERT_TRUE("rand helper emitted once",
+                    count_substr(buf, "static float repl_randf(float seed, float iter)") == 1);
+        ASSERT_TRUE("rand2 helper emitted once",
+                    count_substr(buf, "static float repl_rand2f(float seed, float iter)") == 1);
+        remove(rand_alias_path);
     }
 
     glr_app_reset_all(); declare_test_vars();

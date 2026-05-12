@@ -2750,6 +2750,8 @@ static ExportNeeds export_collect_needs(void) {
         const char *src = export_document_text(cmd_idx);
         if (export_text_uses_token(src, "rand(")) needs.needs_rand = 1;
         if (export_text_uses_token(src, "rand2(")) needs.needs_rand = 1;
+        if (export_text_uses_token(src, "repl_randf(")) needs.needs_rand = 1;
+        if (export_text_uses_token(src, "repl_rand2f(")) needs.needs_rand = 1;
         if (export_text_uses_token(src, "A["))    needs.needs_scratch_a = 1;
         if (export_text_uses_token(src, "B["))    needs.needs_scratch_b = 1;
         if (export_text_uses_token(src, "C["))    needs.needs_scratch_c = 1;
