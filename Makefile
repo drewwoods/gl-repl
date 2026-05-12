@@ -152,6 +152,7 @@ REPL_DEMO_DEP_SRCS = cmd_format.c \
                      prof.c \
                      src/widgets/replay.c \
                      src/widgets/replay_state.c \
+                     src/widgets/tutorial_state.c \
 					 src/repl/apply.c \
                      src/repl/autonormal.c \
                      src/repl/command_spec.c \
