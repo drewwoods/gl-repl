@@ -161,6 +161,10 @@ void tutorial_start(int idx) {
         return;
     }
     tutorial_set_step_status(idx, 0);
+    /* Refresh the autocomplete provider so the shadow ghost text for
+     * step 0's expected command appears on the very first frame
+     * instead of waiting for the user's next keystroke. */
+    editor_completion_update();
 }
 
 void tutorial_exit(void) {
@@ -169,6 +173,7 @@ void tutorial_exit(void) {
 
     tutorial_state_reset();
     repl_set_status("Tutorial exited");
+    editor_completion_update();
 }
 
 int tutorial_handle_commit_attempt(const char *input, TutorialMatchResult *out) {
@@ -203,12 +208,20 @@ void tutorial_advance_after_successful_commit(void) {
     if (!comment) {
         tutorial_state_reset();
         repl_set_status("Tutorial complete");
+        /* Refresh autocomplete so the lingering shadow ghost from the
+         * final step clears immediately rather than persisting until
+         * the user's next keystroke. */
+        editor_completion_update();
         return;
     }
 
     if (!tutorial_emit_instruction_comment(comment))
         return;
     tutorial_set_step_status(state->tutorial_idx, state->step);
+    /* The semicolon route called editor_completion_clear() before this
+     * advance runs; without the explicit refresh, the next step's
+     * shadow ghost wouldn't appear until the user types again. */
+    editor_completion_update();
 }
 
 const char *tutorial_current_expected_text(void) {

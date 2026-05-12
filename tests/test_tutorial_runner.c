@@ -296,6 +296,49 @@ static void test_shadow_text_populates_autocomplete_ghost(void) {
                ac.hint, "");
 }
 
+static void test_shadow_text_appears_immediately_on_start(void) {
+    /* Regression: tutorial_start must poke editor_completion_update()
+     * itself so the shadow ghost appears on the first frame instead
+     * of waiting for the user's next keystroke. */
+    ReplAutocompleteState ac;
+
+    reset_fixture();
+    tutorial_start(0);
+    /* No keystroke, no manual editor_completion_update() — just read. */
+    ac = editor_state_autocomplete();
+    ASSERT_STR("ghost populated immediately after tutorial_start",
+               ac.ghost, "glBegin(GL_TRIANGLES)");
+}
+
+static void test_shadow_text_refreshes_on_advance(void) {
+    /* Regression: tutorial_advance_after_successful_commit must
+     * refresh autocomplete so the next step's shadow appears on the
+     * very next frame, not after the user types again. */
+    ReplAutocompleteState ac;
+
+    reset_fixture();
+    tutorial_start(0);
+    set_input_text(tutorial_current_expected_text());
+    (void)editor_handle_key(';', 0, 0);
+
+    ac = editor_state_autocomplete();
+    ASSERT_STR("ghost shows next step's expected after advance",
+               ac.ghost, "glVertex3f(0, 0.8, 0)");
+}
+
+static void test_shadow_text_clears_on_exit(void) {
+    /* Regression: tutorial_exit must refresh autocomplete so the
+     * ghost from the in-progress step clears immediately. */
+    ReplAutocompleteState ac;
+
+    reset_fixture();
+    tutorial_start(0);
+    tutorial_exit();
+
+    ac = editor_state_autocomplete();
+    ASSERT_STR("ghost clears on tutorial_exit", ac.ghost, "");
+}
+
 static void test_tutorial_start_sets_step_progress_status(void) {
     reset_fixture();
     tutorial_start(0);
@@ -664,6 +707,9 @@ int main(void) {
     test_shadow_suffix_strict_prefix();
     test_shadow_suffix_inactive_returns_zero();
     test_shadow_text_populates_autocomplete_ghost();
+    test_shadow_text_appears_immediately_on_start();
+    test_shadow_text_refreshes_on_advance();
+    test_shadow_text_clears_on_exit();
     test_tutorial_start_sets_step_progress_status();
     test_tutorial_advance_updates_step_progress_status();
     test_locked_comment_load_is_read_only();

@@ -1233,7 +1233,12 @@ static int handle_enter_key_route(unsigned char key) {
 
         result = commit_current_input(1);
         tutorial_advance_if_commit_ok(result);
-        editor_completion_clear();
+        /* update, not clear: tutorial_advance may have just changed
+         * the expected text, and the provider's tutorial branch needs
+         * to re-populate the shadow ghost. For non-tutorial mode the
+         * update sees empty input and returns early, matching the
+         * previous clear-only behavior. */
+        editor_completion_update();
         repl_mark_normals_dirty();
         return 1;
     }
@@ -1256,7 +1261,9 @@ static int handle_semicolon_commit_key_route(unsigned char key) {
             if (try_commit_any()) {
                 tutorial_advance_if_commit_ok(
                     commit_progressed_since(&before) ? COMMIT_OK : COMMIT_REJECTED);
-                editor_completion_clear();
+                /* see Enter-route note above: update lets the tutorial
+                 * provider re-emit the shadow ghost after the advance. */
+                editor_completion_update();
                 return 1;
             }
             {
@@ -1333,7 +1340,8 @@ static int handle_semicolon_commit_key_route(unsigned char key) {
             tutorial_advance_if_commit_ok(
                 commit_progressed_since(&before) ? COMMIT_OK : COMMIT_REJECTED);
         }
-        editor_completion_clear();
+        /* see Enter-route note above. */
+        editor_completion_update();
         repl_mark_normals_dirty();
         return 1;
     }
