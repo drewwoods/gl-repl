@@ -19,6 +19,7 @@
 #include "editor/completion.h"
 #include "keys.h"
 #include "repl/tutorials.h"
+#include "widgets/replay.h"
 #include "widgets/replay_state.h"
 #include "widgets/tutorial.h"
 #include "widgets/tutorial_state.h"
