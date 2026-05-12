@@ -463,13 +463,29 @@ typedef struct {
     const char *toggle_slug;
 } InitBootstrapEntry;
 
+/* Bootstrap commands are REPL lines that run once at startup through
+ * apply_state_cmd. Each frame's glPushAttrib/glPopAttrib bracket then
+ * preserves this state across user commands. Comment entries (// ...)
+ * parse as CMD_COMMENT — apply_state_cmd no-ops them, but the editor
+ * and exporter render them as section headers in the init() body. */
 static const InitBootstrapEntry g_init_bootstrap_repl[] = {
+    { "// Background color used by glClear at the start of every frame.", NULL },
     { "glClearColor(0.10, 0.10, 0.10, 1.0);", NULL },
+    { "// Color material: glColor* values drive ambient + diffuse so user", NULL },
+    { "// code can tint lit geometry without explicit glMaterial calls.", NULL },
     { "glEnable(GL_COLOR_MATERIAL);", NULL },
+    { "glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);", NULL },
+    { "// Light both sides of each face, and set non-zero specular and", NULL },
+    { "// shininess defaults so user-enabled lighting matches the REPL", NULL },
+    { "// preview instead of the GL-default black specular.", NULL },
     { "glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);", NULL },
+    { "glMaterialf(GL_FRONT_AND_BACK, GL_SPECULAR, 0.4, 0.4, 0.4, 1.0);", NULL },
+    { "glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 30.0);", NULL },
+    { "// Blending: standard src-over for translucent geometry.", NULL },
     { "glEnable(GL_BLEND);", NULL },
     { "glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);", NULL },
 #ifndef NO_POINT_PARAMETER
+    { "// Point attenuation: distance-based point-size falloff.", "point_attenuation" },
     { "glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION, 1.0, 0.0, 0.02);",
       "point_attenuation" },
 #endif
@@ -777,8 +793,6 @@ void repl_refresh_render_state_strings(void) {
     snprintf(g_render_state_lines[1], sizeof(g_render_state_lines[1]),
              "  gl%s(GL_LINE_SMOOTH);",
              line_smooth_on ? "Enable" : "Disable");
-    snprintf(g_render_state_lines[2], sizeof(g_render_state_lines[2]),
-             "  glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);");
 }
 
 /* Step 4a: the camera-block parser state machine moved to the bridge
@@ -2874,22 +2888,11 @@ static void emit_export_display_begin(FILE *f) {
             fprintf(f, "%s\n", line);
         }
     }
-    /* Per-frame baseline reset to mirror src/scene/render.c:237-244. The
-     * REPL forces GL_LIGHTING off every frame so user-typed glEnable
-     * lasts only one frame, and resets specular/shininess to its
-     * default values so lit geometry uses the same material parameters
-     * the live REPL applies. Without this, exported scenes that enable
-     * lighting compute lit colors with GL defaults (specular {0,0,0,1},
-     * shininess 0) and render visibly different from the REPL — most
-     * obviously, glRasterPos3f-driven label() text computed via
-     * lighting comes out darker. */
-    fprintf(f, "  glDisable(GL_LIGHTING);\n");
-    fprintf(f, "  {\n");
-    fprintf(f, "    GLfloat _mspec[] = { 0.4f, 0.4f, 0.4f, 1.0f };\n");
-    fprintf(f, "    GLfloat _mshin[] = { 30.0f };\n");
-    fprintf(f, "    glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, _mspec);\n");
-    fprintf(f, "    glMaterialfv(GL_FRONT_AND_BACK, GL_SHININESS, _mshin);\n");
-    fprintf(f, "  }\n");
+    /* Lighting is disabled by GL default and not re-enabled in init();
+     * each frame's glPushAttrib(GL_LIGHTING_BIT) at the top of display()
+     * captures that "off" state, so user code's glEnable(GL_LIGHTING)
+     * scopes to one frame. Material specular/shininess are set in
+     * init() via the bootstrap and preserved through the same bracket. */
 }
 
 static void emit_export_display_geometry(FILE *f) {
