@@ -123,14 +123,14 @@ SCENE_HDRS = $(filter src/scene/%.h,$(HDRS))
 UI_HDRS = $(filter src/ui/%.h,$(HDRS))
 STATE_NEUTRAL_SRCS = cmd_format.c prof.c tests/gl-stubs/gl_stub_counts.c
 
-# Object lists used to build the standalone teapot_demo without dragging in
+# Object lists used to build the standalone scene_demo without dragging in
 # any REPL editor/controller code. Scene + prof — the scene module no
 # longer touches repl_eval (replay-baseline restore is dispatched through a
 # function pointer the controller installs; geometry-guide arg parsing is
 # done in the controller before snapshot is built).
-TEAPOT_DEMO_DEP_SRCS = $(SCENE_SRCS) prof.c
+SCENE_DEMO_DEP_SRCS = $(SCENE_SRCS) prof.c
 
-# Object list for the standalone repl_demo (the inverse of teapot_demo:
+# Object list for the standalone repl_demo (the inverse of scene_demo:
 # proves the REPL pipeline links without editor input dispatch
 # (src/editor/input.c), the controller (src/app/glr_ctrl.c + glr_ctrl_router_*),
 # the UI (src/ui/*, src/ui/replay_hud.c), or — as of Phase 6 of
@@ -235,12 +235,12 @@ CORE_TEST_BINS = $(filter-out test_eval test_format test_repl_code_panel_layout 
 # them — benchmarks are timing-sensitive and should be invoked explicitly.
 BENCH_BINS = bench_repl
 
-ROOT_BIN_LINKS = sample teapot_demo repl_demo
+ROOT_BIN_LINKS = sample scene_demo repl_demo
 
 .PHONY: $(ROOT_BIN_LINKS) $(TEST_BINS) $(BENCH_BINS)
 
 SAMPLE_BIN = $(BINDIR)/sample
-TEAPOT_DEMO_BIN = $(BINDIR)/teapot_demo
+SCENE_DEMO_BIN = $(BINDIR)/scene_demo
 REPL_DEMO_BIN = $(BINDIR)/repl_demo
 
 define core_test_binary
@@ -306,17 +306,17 @@ sample: FORCE $(SAMPLE_BIN) ## Build the main REPL sample using release flags by
 
 # Standalone demo binary that drives the scene module with a teapot callback.
 # Proves the scene/ subtree links cleanly without the editor/UI/controller code.
-TEAPOT_DEMO_OBJS = $(OBJDIR)/tools/teapot_demo/teapot.o \
-                   $(addprefix $(OBJDIR)/,$(TEAPOT_DEMO_DEP_SRCS:.c=.o))
+SCENE_DEMO_OBJS = $(OBJDIR)/tools/scene_demo/scene_demo.o \
+                   $(addprefix $(OBJDIR)/,$(SCENE_DEMO_DEP_SRCS:.c=.o))
 
-$(TEAPOT_DEMO_BIN): $(TEAPOT_DEMO_OBJS)
+$(SCENE_DEMO_BIN): $(SCENE_DEMO_OBJS)
 	@mkdir -p $(dir $@)
-	$(CC) $(OBJ_CFLAGS) -o $@ $(TEAPOT_DEMO_OBJS) $(GL_LDFLAGS)
+	$(CC) $(OBJ_CFLAGS) -o $@ $(SCENE_DEMO_OBJS) $(GL_LDFLAGS)
 
-teapot_demo: FORCE $(TEAPOT_DEMO_BIN) ## Build the standalone teapot demo.
-	ln -sfn $(TEAPOT_DEMO_BIN) $@
+scene_demo: FORCE $(SCENE_DEMO_BIN) ## Build the standalone scene demo.
+	ln -sfn $(SCENE_DEMO_BIN) $@
 
-# Standalone REPL pipeline demo. Inverse of teapot_demo: proves the
+# Standalone REPL pipeline demo. Inverse of scene_demo: proves the
 # REPL pipeline links without editor input dispatch / controller / UI.
 REPL_DEMO_OBJS = $(OBJDIR)/tools/repl_demo/repl_demo.o \
                  $(OBJDIR)/tools/repl_demo/stubs.o \
@@ -740,7 +740,7 @@ else
 endif
 
 clean: ## Remove built binaries and object files.
-	rm -rf $(ROOT_BIN_LINKS) sample.dSYM teapot_demo.dSYM repl_demo.dSYM \
+	rm -rf $(ROOT_BIN_LINKS) sample.dSYM scene_demo.dSYM repl_demo.dSYM \
 		$(TEST_BINS) $(addsuffix .dSYM,$(TEST_BINS)) \
 		$(BENCH_BINS) $(addsuffix .dSYM,$(BENCH_BINS)) \
 		build/coverage/lcov.info build/coverage/html \

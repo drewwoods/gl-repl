@@ -7,7 +7,7 @@
  * controller (glr_ctrl.c and the glr_ctrl_router_* family), or the UI
  * (src/ui/, replay_ui_hud.c).
  *
- * The mirror of tools/teapot_demo/teapot.c: that one proves src/scene/
+ * The mirror of tools/scene_demo/scene_demo.c: that one proves src/scene/
  * has no hard dependency on REPL editor / controller / UI; this one
  * proves the REPL pipeline has no hard dependency on the editor input
  * dispatch / controller / UI.
