@@ -35,6 +35,7 @@
 #include "input.h"
 #include "reformat.h"
 #include "search.h"
+#include "widgets/tutorial.h"
 #include "undo.h"
 
 #include "widgets/color_picker_state.h"
@@ -1104,8 +1105,28 @@ static int handle_tab_key_route(unsigned char key) {
     return 0;
 }
 
+static int tutorial_precheck_current_input(void) {
+    TutorialMatchResult result;
+
+    if (!tutorial_active())
+        return 1;
+    if (!tutorial_handle_commit_attempt(editor_state_input().input, &result)) {
+        repl_set_status(result.message);
+        editor_completion_clear();
+        return 0;
+    }
+    return 1;
+}
+
+static void tutorial_advance_if_commit_ok(CommitResult result) {
+    if (tutorial_active() && result == COMMIT_OK)
+        tutorial_advance_after_successful_commit();
+}
+
 static int handle_enter_key_route(unsigned char key) {
     if (key == '\r' || key == '\n') {
+        CommitResult result;
+
         editor_input_anchor_clear();
         if (editor_state_autocomplete().match_count > 0) {
             accept_autocomplete();
@@ -1113,7 +1134,11 @@ static int handle_enter_key_route(unsigned char key) {
             return 1;
         }
 
-        (void)commit_current_input(1);
+        if (!tutorial_precheck_current_input())
+            return 1;
+
+        result = commit_current_input(1);
+        tutorial_advance_if_commit_ok(result);
         editor_completion_clear();
         repl_mark_normals_dirty();
         return 1;
@@ -1125,8 +1150,16 @@ static int handle_semicolon_commit_key_route(unsigned char key) {
     if (key == ';') {
         editor_input_anchor_clear();
         if (editor_state_input().input_len > 0) {
+            CommitAttemptState before;
+
+            if (!tutorial_precheck_current_input())
+                return 1;
+
             editor_undo_push_snapshot();
+            capture_commit_attempt_state(&before);
             if (try_commit_any()) {
+                tutorial_advance_if_commit_ok(
+                    commit_progressed_since(&before) ? COMMIT_OK : COMMIT_REJECTED);
                 editor_completion_clear();
                 return 1;
             }
@@ -1200,6 +1233,9 @@ static int handle_semicolon_commit_key_route(unsigned char key) {
                 }
                 warn_if_scope_truncated(vis_total);
             }
+
+            tutorial_advance_if_commit_ok(
+                commit_progressed_since(&before) ? COMMIT_OK : COMMIT_REJECTED);
         }
         editor_completion_clear();
         repl_mark_normals_dirty();

@@ -1,5 +1,9 @@
+#define _DEFAULT_SOURCE  /* mkdtemp() */
 #include "app/glr_actions.h"
 #include "app/glr_ctrl.h"
+#include "config.h"
+#include "editor/input.h"
+#include "editor/state.h"
 #include "repl/core.h"
 #include "repl/state_views.h"
 #include "repl/tutorials.h"
@@ -9,7 +13,9 @@
 #include "widgets/tutorial.h"
 #include "widgets/tutorial_state.h"
 
+#include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 static TestHarness g_harness = TEST_HARNESS_INIT;
 
@@ -32,6 +38,19 @@ static const char *trim_leading_ws(const char *text) {
     while (text && *text == '\t')
         text++;
     return text ? text : "";
+}
+
+static void set_input_text(const char *text) {
+    ReplEditorInputState *inp = editor_state_input_mut();
+    size_t len = text ? strlen(text) : 0;
+
+    if (len >= MAX_INPUT_LEN)
+        len = MAX_INPUT_LEN - 1;
+    if (text && len > 0)
+        memcpy(inp->input, text, len);
+    inp->input[len] = '\0';
+    inp->input_len = (int)len;
+    editor_cursor_pos_set(inp->input_len);
 }
 
 static void reset_fixture(void) {
@@ -91,6 +110,65 @@ static void test_runner_match_and_advance(void) {
                repl_tutorial_step_expected(0, 1));
 }
 
+static void test_semicolon_route_rejects_mismatch_and_preserves_input(void) {
+    SourceTextView doc;
+
+    reset_fixture();
+    tutorial_start(0);
+    set_input_text("glEnd()");
+
+    (void)editor_handle_key(';', 0, 0);
+
+    doc = source_document_view();
+    ASSERT_INT("step unchanged after semicolon mismatch",
+               tutorial_state_view().step, 0);
+    ASSERT_STR("semicolon mismatch status",
+               status_text(), "expected: glBegin(GL_TRIANGLES)");
+    ASSERT_STR("semicolon mismatch preserves input",
+               editor_state_input().input, "glEnd()");
+    ASSERT_INT("semicolon mismatch does not commit line",
+               doc.line_count, 1);
+}
+
+static void test_enter_route_advances_after_match(void) {
+    SourceTextView doc;
+
+    reset_fixture();
+    tutorial_start(0);
+    set_input_text(tutorial_current_expected_text());
+
+    (void)editor_handle_key('\n', 0, 0);
+
+    doc = source_document_view();
+    ASSERT_INT("enter route advanced step", tutorial_state_view().step, 1);
+    ASSERT_INT("enter route appended instruction", doc.line_count, 3);
+    ASSERT_STR("enter route next instruction text",
+               trim_leading_ws(source_text_line(doc, 2)),
+               repl_tutorial_step_comment(0, 1));
+}
+
+static void test_rejected_commit_does_not_advance_tutorial(void) {
+    reset_fixture();
+    tutorial_start(0);
+
+    for (int i = repl_state_document_count(); i < MAX_COMMANDS; i++)
+        repl_feed_line_public("glPointSize(1);");
+
+    ASSERT_INT("document filled to capacity",
+               repl_state_document_count(), MAX_COMMANDS);
+
+    set_input_text(tutorial_current_expected_text());
+    (void)editor_handle_key(';', 0, 0);
+
+    ASSERT_INT("step unchanged after rejected commit",
+               tutorial_state_view().step, 0);
+    ASSERT_STR("capacity failure status preserved",
+               status_text(), "Command buffer full!");
+    ASSERT_STR("rejected commit keeps expected input",
+               editor_state_input().input,
+               repl_tutorial_step_expected(0, 0));
+}
+
 static void test_feed_line_alone_does_not_advance_tutorial(void) {
     const char *expected;
 
@@ -102,6 +180,34 @@ static void test_feed_line_alone_does_not_advance_tutorial(void) {
 
     ASSERT_INT("step unchanged after direct feed line", tutorial_state_view().step, 0);
     ASSERT_TRUE("tutorial still active after direct feed line", tutorial_active());
+}
+
+static void test_loading_example_exits_tutorial(void) {
+    reset_fixture();
+    tutorial_start(0);
+
+    repl_load_example(0);
+
+    ASSERT_TRUE("example load exits tutorial", !tutorial_active());
+}
+
+static void test_loading_workspace_exits_tutorial(void) {
+    char temp_dir[] = "/tmp/test_tutorial_workspace.XXXXXX";
+    char *made_dir;
+
+    reset_fixture();
+    tutorial_start(0);
+
+    made_dir = mkdtemp(temp_dir);
+    ASSERT_TRUE("mkdtemp tutorial workspace", made_dir != NULL);
+    if (!made_dir)
+        return;
+
+    ASSERT_INT("empty workspace load succeeds",
+               repl_load_workspace(made_dir), 0);
+    ASSERT_TRUE("workspace load exits tutorial", !tutorial_active());
+
+    rmdir(made_dir);
 }
 
 static void test_fade_alpha_math(void) {
@@ -187,7 +293,12 @@ static void test_start_rejects_out_of_range_idx(void) {
 int main(void) {
     test_start_enters_transient_tutorial_scene();
     test_runner_match_and_advance();
+    test_semicolon_route_rejects_mismatch_and_preserves_input();
+    test_enter_route_advances_after_match();
+    test_rejected_commit_does_not_advance_tutorial();
     test_feed_line_alone_does_not_advance_tutorial();
+    test_loading_example_exits_tutorial();
+    test_loading_workspace_exits_tutorial();
     test_fade_alpha_math();
     test_complete_and_menu_actions();
     test_start_captures_home_for_unsaved_buffer();

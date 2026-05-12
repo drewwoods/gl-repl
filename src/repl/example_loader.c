@@ -9,6 +9,7 @@
 #include "repl/core.h"
 #include "repl/state_owners.h"
 #include "source_document.h"     /* source_document_clear */
+#include "widgets/tutorial_state.h"
 
 static const char *example_cam_skip_ws(const char *text) {
     while (*text && isspace((unsigned char)*text))
@@ -395,6 +396,7 @@ static void load_example_lines(const char *const *lines) {
     const char *const *body = lines;
     ReplCommandStore store = repl_command_store_live();
 
+    tutorial_state_reset();
     repl_command_store_load(&store, NULL, 0, 0);
     source_document_clear();
     repl_state_flat_program_set_count(0);
