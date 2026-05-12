@@ -28,7 +28,7 @@ and the assumption holds.
 2. **Wired writes from `repl_command_store_*`** (insert_many, replace_one, delete_range, load, clear, color-picker writes) so `editor_buffer.lines[idx]` mirrors `cmds[idx].source` after every store mutation.
 3. **Switched flatten to read text from `editor_buffer.lines[i]`** instead of `cmds[i].source` for ALL three branches — including the no-vars pass-through path that previously avoided re-parsing entirely. This is the worst-case stress: every command re-parses every flatten.
 4. **Switched display read path** in `repl_replay_code_panel_get_command_display_text()` and `code_panel_draw_search_highlights()` to `editor_buffer.lines[]`.
-5. **Switched search read path** in `repl_search_row_text()` to `editor_buffer.lines[]`.
+5. **Switched search read path** in `editor_search_row_text()` to `editor_buffer.lines[]`.
 6. **Added `bench_spike_flatten_largest`** sub-benchmark in `bench/bench_repl.c`. Picks the example with the largest flat-command count after load and times flatten on it alone.
 
 `GLCmd.source[]` is still populated in parallel by the parser/commit pipeline; it stays as a verbatim mirror of `editor_buffer.lines[]` for backwards compatibility with non-spiked code paths (export, undo snapshots, autonormal display, structural-block parsers in flatten).

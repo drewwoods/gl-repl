@@ -87,7 +87,7 @@ architecture refinement plan now calls out that `repl_` is not a catch-all
 sample prefix.
 
 **Function Naming (Waves 1-2):**
-- **repl_replay.h:** 18 functions renamed (replay_start → repl_replay_start, etc.)
+- **repl_replay.h:** 18 functions renamed (replay_start → replay_start, etc.)
 - **repl_eval.h:** 16 functions renamed (init_predef_vars → repl_eval_init_predef_vars, etc.)
 - **repl_parser.h:** 3 functions renamed (repl_parse_command → repl_parser_parse_command, etc.)
 - **repl_source_scope.h:** 10 functions renamed (depth_cache_invalidate → repl_source_scope_depth_cache_invalidate, etc.)

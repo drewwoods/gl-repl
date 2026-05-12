@@ -38,7 +38,7 @@ cleanup (app-shell shim removal) has also been completed. Phase 2 status as of
   `repl_pipeline.h`.
 - ✅ R2 (UI → REPL mutation hole): Complete — color picker, panels, and
   help overlay route mutations through `repl_command_store`/`repl_actions`/
-  `repl_replay_toggle_play_pause()`; `check-ui-no-repl-state-mut` passes.
+  `replay_toggle_play_pause()`; `check-ui-no-repl-state-mut` passes.
 - ✅ R3 (Extract layout geometry): Complete — `repl_layout.h/c` own
   `repl_layout_scene_rect` / `repl_layout_code_panel_rect`.
 - ⚠️ R4 (Controller off repl_core_internal.h): Mostly complete
@@ -400,7 +400,7 @@ emission.
 |------|-------------------|
 | Main geometry pass clamped to `replay_base_limit` | Already executor-driven — just `execute_fn(1.0f, 0, pc, ...)`. No problem. |
 | Fade batch loop (`render_3d_scene_pass` lines 424–480) | Multiple *additional* calls to `execute_fn`, each with different alpha/skip-limit, plus full GL state setup (push attrib, re-setup lighting, materials, blend) between each one. |
-| `repl_replay_restore_baseline_predef_values()` | Resets user-declared vars to their replay-start values before each fade pass and each AA sample — so animated geometry looks consistent across passes. |
+| `replay_restore_baseline_predef_values()` | Resets user-declared vars to their replay-start values before each fade pass and each AA sample — so animated geometry looks consistent across passes. |
 | `ui_replay_hud_render()` | Pure 2D UI, now in `ui_replay_hud.c`. |
 | `draw_replay_tess_preview()` | 3D wireframe overlay — same family as `scene_overlays.c`. |
 
@@ -432,7 +432,7 @@ role as a "narrow live-GL gate" breaks down the moment it starts managing
 multi-pass render orchestration.
 
 The accumulation-buffer AA loop has the same problem: it also calls
-`repl_replay_restore_baseline_predef_values()` before each sample so that
+`replay_restore_baseline_predef_values()` before each sample so that
 animated geometry is consistent across AA jitter passes. The AA loop lives in
 scene code because AA is a rendering-quality concern, but it needs the baseline
 vars for the same reason the fade passes do.
@@ -465,7 +465,7 @@ Executor:     emit one geometry pass from the flat program
 ```
 
 The baseline-restore is the key detail: instead of calling
-`repl_replay_restore_baseline_predef_values()` at render time, the controller
+`replay_restore_baseline_predef_values()` at render time, the controller
 bakes the baseline into the plan snapshot (`baseline_predef_vals[]`). Scene
 restores from the snapshot before each fade pass and each AA sample. After
 this, `repl_replay_*` and `repl_state_*` are never called from `scene_render.c`.
@@ -536,7 +536,7 @@ that returns 1 (consumed):
 void imrepl_ctrl_keyboard(unsigned char key, int x, int y) {
     if (ui_help_overlay_handle_key(key))      return;
     if (repl_inline_rename_handle_key(key))   return;
-    if (repl_search_handle_key(key))          return;
+    if (editor_search_handle_key(key))          return;
     if (ui_color_picker_handle_key(key))      return;
     if (ui_menu_bar_handle_key(key))          return;
     repl_editor_handle_key(key, x, y);
@@ -555,7 +555,7 @@ Each UI component and REPL overlay exposes a consumed/not-consumed handler:
 
 ```c
 /* ui_help_overlay.h  */  int ui_help_overlay_handle_key(unsigned char key);
-/* repl_search.h      */  int repl_search_handle_key(unsigned char key);
+/* repl_search.h      */  int editor_search_handle_key(unsigned char key);
 /* ui_color_picker.h  */  int ui_color_picker_handle_key(unsigned char key);
 ```
 
@@ -833,7 +833,7 @@ Exit criterion: `scene_render.c` no longer calls `repl_state_render()`.
 **R1b — Build a `ReplayFadePlan` snapshot in the controller; scene iterates it**
 
 `render_3d_scene_pass()` (scene_render.c:424–481) calls three `repl_replay_*`
-functions and `repl_replay_restore_baseline_predef_values()` between batches.
+functions and `replay_restore_baseline_predef_values()` between batches.
 The fix is to build the plan once in the controller so the scene only needs to
 iterate it.
 
@@ -868,15 +868,15 @@ existing replay fields:
 ```c
 if (config->replay_has_fades) {
     ReplayFadePlan *plan = &config->replay_fade_plan;
-    ReplayFadeBatchView view = repl_replay_fade_batches_view();
-    plan->batch_count = repl_replay_compute_fade_skip_limits(
+    ReplayFadeBatchView view = replay_fade_batches_view();
+    plan->batch_count = replay_compute_fade_skip_limits(
         plan->skip_limits, REPLAY_FADE_PLAN_MAX);
     for (int i = 0; i < plan->batch_count && i < view.count; i++) {
         plan->old_pc[i] = view.batches[i].old_pc;
         plan->new_pc[i] = view.batches[i].new_pc;
-        plan->alpha[i]  = repl_replay_batch_alpha(&view.batches[i]);
+        plan->alpha[i]  = replay_batch_alpha(&view.batches[i]);
     }
-    repl_replay_copy_baseline_predef_values(plan->baseline_predef, MAX_PREDEF_VARS);
+    replay_copy_baseline_predef_values(plan->baseline_predef, MAX_PREDEF_VARS);
     plan->baseline_count = MAX_PREDEF_VARS;
 } else {
     config->replay_fade_plan.batch_count = 0;
@@ -911,7 +911,7 @@ Note: `repl_restore_predef_values` is already public (used by
 never calls `repl_replay_*` again after this change.
 
 The same baseline restore applies before each accumulation-AA sample in
-`scene_render_3d_scene()`. Replace the `repl_replay_restore_baseline_predef_values()`
+`scene_render_3d_scene()`. Replace the `replay_restore_baseline_predef_values()`
 calls there with:
 
 ```c
@@ -1033,13 +1033,13 @@ Add to `repl_replay.h`:
 
 ```c
 /* Toggle play/pause for the Replay pin button: PLAYING→PAUSED, PAUSED→PLAYING,
- * OFF or DONE→calls repl_replay_start(). Mirrors the button glyph logic. */
-void repl_replay_toggle_play_pause(void);
+ * OFF or DONE→calls replay_start(). Mirrors the button glyph logic. */
+void replay_toggle_play_pause(void);
 ```
 
 Implement in `repl_replay.c`. Replace the three-branch switch in
 `ui_panels.c::ui_panels_handle_code_panel_press()` (lines 1148–1154) with a
-single `repl_replay_toggle_play_pause()` call. Remove the
+single `replay_toggle_play_pause()` call. Remove the
 `repl_state_replay_mut()` fetch on line 1131.
 
 Exit criterion: `ui_panels.c` contains zero `_mut()` call sites that are

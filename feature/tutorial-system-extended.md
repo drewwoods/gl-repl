@@ -649,7 +649,7 @@ guards or state ownership rules.
 Run the mutation-site checklist from the original tutorial plan:
 
 ```bash
-rg -n 'repl_command_store_(insert|replace|delete|clear)|editor_buffer_(insert_line|insert_lines|replace_line|delete_range|set_line|set_count|load_lines|clear|apply_compiled_change)|delete_cmd_range|repl_clear_all_cmds\(' src/editor src/app src/widgets src/repl
+rg -n 'repl_command_store_(insert|replace|delete|clear)|editor_buffer_(insert_line|insert_lines|replace_line|delete_range|set_line|set_count|load_lines|clear|apply_compiled_change)|delete_cmd_range|editor_clear_all_cmds\(' src/editor src/app src/widgets src/repl
 ```
 
 Every user-reachable source mutation must be one of:

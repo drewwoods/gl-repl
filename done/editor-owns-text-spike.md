@@ -316,7 +316,7 @@ first.
 | `repl_command_store.c` | In `repl_command_store_insert_one`, `replace_one`, `load`, also write to `editor_buffer.lines[]` |
 | `repl_flatten.c` | In `flatten_range()`, for ALL commands (not just `has_vars`), re-parse from `editor_buffer.lines[src_cmd_idx]` instead of using `src_cmd->args` directly. Time this path. |
 | `ui_panels.c` | In `ui_panels_render_code_panel()`, for committed non-edit lines, read from `editor_buffer.lines[i]` instead of `cmds[i].source`. Compare visual output. |
-| `repl_search.c` | In `repl_search_row_text()`, read committed lines from `editor_buffer.lines[row_idx]` instead of `cmds[row_idx].source`. |
+| `repl_search.c` | In `editor_search_row_text()`, read committed lines from `editor_buffer.lines[row_idx]` instead of `cmds[row_idx].source`. |
 | `tests/test_spike_perf.c` (new) | Loads the largest built-in example, runs flatten 1000 times, prints mean and max flatten time per frame. Pass/fail vs 4ms target. |
 
 ## Key Existing Functions to Reuse

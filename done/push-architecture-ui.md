@@ -259,7 +259,7 @@ Phase A and Phase B can ship without Phase C.
 - `SceneFocusVertex` — example of a render-discovered value handed back
   through config rather than written to live state. Same shape as the
   Phase A cursor-px output struct.
-- `repl_action_cursor_blink_reset()`, `repl_replay_toggle_play_pause()`
+- `repl_action_cursor_blink_reset()`, `replay_toggle_play_pause()`
   (R2 outputs) — proven way to expose a one-line action API for what
   used to be an inline `_mut()` write.
 - `ReplPredefView` (`repl_eval.h`, R4b) — example of a by-value snapshot

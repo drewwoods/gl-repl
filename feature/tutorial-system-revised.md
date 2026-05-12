@@ -50,7 +50,7 @@ User-facing behavior agreed:
 | `src/widgets/tutorial.h` / `.c` | Runner: `tutorial_start(idx)`, `tutorial_exit()`, `tutorial_handle_commit_attempt(const char *input)`, `tutorial_advance_after_successful_commit()`, `tutorial_current_expected_text()`, `tutorial_step_fade_alpha(int line_idx, int char_idx, int line_len, float now)`, `tutorial_line_is_fading(int line_idx, float now)`, `tutorial_line_is_locked(int line_idx)`, `tutorial_guard_source_change(pos, delete_count, insert_count)` (used by editor to enforce read-only / no-renumber rules). |
 | `src/repl/tutorials.h` / `.c` | Catalog parallel to `repl/examples`: per-tutorial null-terminated `comments[]` and `expected[]` arrays + name. Query API `repl_tutorial_count/name/step_count/step_comment/step_expected`. Ship 2–3 starter tutorials (e.g., "First Triangle", "Color & Transform"). |
 | `tests/test_tutorial_match.c` | Pure-function tests for the match comparator (whitespace tolerance, shape mismatch, default field values). |
-| `tests/test_tutorial_runner.c` | Runner tests: start enters a transient tutorial scene and emits step 0 comment through `repl_load_apply_line`, correct line committed through `editor_handle_key(';')` advances, wrong line preserves status + doesn't advance, direct `repl_feed_line_public` is not used for tutorial user commits, loading an example resets `tutorial_active()`, `tutorial_current_expected_text` reflects the current step, fade alpha hits 0 at start and 1 after duration. |
+| `tests/test_tutorial_runner.c` | Runner tests: start enters a transient tutorial scene and emits step 0 comment through `repl_load_apply_line`, correct line committed through `editor_handle_key(';')` advances, wrong line preserves status + doesn't advance, direct `editor_feed_line` is not used for tutorial user commits, loading an example resets `tutorial_active()`, `tutorial_current_expected_text` reflects the current step, fade alpha hits 0 at start and 1 after duration. |
 
 ## Files to modify
 
@@ -124,7 +124,7 @@ are still allowed.
    `tutorial_start(0)`.
 2. `tutorial_start` saves/detaches the current scene via
    `repl_scenes_enter_transient_scene()`, clears the live document with
-   `repl_state_document_reset()` (not `repl_clear_all_cmds()`), resets
+   `repl_state_document_reset()` (not `editor_clear_all_cmds()`), resets
    tutorial state / predef vars / function aliases / editor input
    transients, then emits `comments[0]` through a small runner helper
    around `repl_load_apply_line()`. That helper follows `src/repl/load.h`'s
@@ -198,7 +198,7 @@ Create:
   - `TutorialMatchResult tutorial_match(const char *expected, const char *got);`
 - `src/widgets/tutorial.c` — implementations. `tutorial_start` first calls
   `repl_scenes_enter_transient_scene()`, then clears the live document via
-  `repl_state_document_reset()` (not `repl_clear_all_cmds()`), resets
+  `repl_state_document_reset()` (not `editor_clear_all_cmds()`), resets
   predef vars / function aliases / input transients, resets tutorial
   state, emits `comments[0]` through a file-private
   `tutorial_emit_instruction_comment()` helper backed by
@@ -214,7 +214,7 @@ Create:
   than duplicating direct predef-var / alias / dispatch reset calls across
   widgets. `tutorial_match` v1 = whitespace-normalize-and-strcmp.
 - `tests/test_tutorial_match.c` — uses `tests/support/test_harness.h`. Cases: exact match, extra inner whitespace, leading/trailing whitespace, trailing `;` tolerance, empty input → `TUT_MISMATCH_EMPTY`, token-count mismatch → `TUT_MISMATCH_SHAPE`, default `arg_index == -1`. The `TUT_MISMATCH_COMMAND` and `TUT_MISMATCH_ARG` enum values are declared but not produced by v1; tests just assert they exist so v2 can wire them in without an API break.
-- `tests/test_tutorial_runner.c` — uses `tests/support/repl_test_support.h`. Cases: `tutorial_start(0)` → first comment appears at line 0 and begins with `//`, active user scene/example markers are detached, and line 0 is locked; correct line committed by loading `editor_state_input_mut()->input` and calling `editor_handle_key(';', 0, 0)` advances `step`; wrong line preserves `step` and input; direct `repl_feed_line_public(expected)` is not a tutorial-success path; `tutorial_current_expected_text()` returns the right string for the current step; fade-alpha math (now == start → 0 for char 0, now == start + duration → 1 for last char).
+- `tests/test_tutorial_runner.c` — uses `tests/support/repl_test_support.h`. Cases: `tutorial_start(0)` → first comment appears at line 0 and begins with `//`, active user scene/example markers are detached, and line 0 is locked; correct line committed by loading `editor_state_input_mut()->input` and calling `editor_handle_key(';', 0, 0)` advances `step`; wrong line preserves `step` and input; direct `editor_feed_line(expected)` is not a tutorial-success path; `tutorial_current_expected_text()` returns the right string for the current step; fade-alpha math (now == start → 0 for char 0, now == start + duration → 1 for last char).
 - `Makefile` — add rules for `test_tutorial_match` and `test_tutorial_runner` mirroring `test_eval` / `test_format`; add both to the aggregate `test` target.
 
 Verify: `make test_tutorial_match` and `make test_tutorial_runner` pass.
@@ -407,7 +407,7 @@ Modify (single guard helper, called at each existing mutation site):
 
 Mutation-site coverage checklist:
 ```bash
-rg -n 'repl_command_store_(insert|replace|delete|clear)|editor_buffer_(insert_line|insert_lines|replace_line|delete_range|set_line|set_count|load_lines|clear|apply_compiled_change)|delete_cmd_range|repl_clear_all_cmds\(' src/editor src/app src/widgets src/repl
+rg -n 'repl_command_store_(insert|replace|delete|clear)|editor_buffer_(insert_line|insert_lines|replace_line|delete_range|set_line|set_count|load_lines|clear|apply_compiled_change)|delete_cmd_range|editor_clear_all_cmds\(' src/editor src/app src/widgets src/repl
 ```
 Every user-reachable source mutation from that list must either be guarded
 by `tutorial_guard_source_change`, be part of the tutorial runner's own
