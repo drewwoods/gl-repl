@@ -129,7 +129,7 @@ registry metadata only.
 ## Step 2: Add Example Tag Query API
 
 Extend `src/repl/examples.h` and `src/repl/examples.c` with low-level metadata
-queries:
+queries. Add `<limits.h>` to `examples.h` for `CHAR_BIT`:
 
 ```c
 int repl_example_tag_count(void);
@@ -147,8 +147,12 @@ int repl_example_visible_tag_count(void);
 int repl_example_visible_tag_at(int dense_idx);
 
 /* Public mask helper. The bit position equals the tag index, but exposing
- * the helper keeps test code from assuming the bit layout. */
+ * the helper keeps test code from assuming the bit layout. Invalid or
+ * unrepresentable tag indices return 0 before shifting. */
 static inline unsigned int repl_example_tag_bit(int tag_idx) {
+    if (tag_idx < 0 || tag_idx >= repl_example_tag_count() ||
+        tag_idx >= (int)(sizeof(unsigned int) * CHAR_BIT))
+        return 0u;
     return 1u << (unsigned int)tag_idx;
 }
 ```
@@ -156,7 +160,8 @@ static inline unsigned int repl_example_tag_bit(int tag_idx) {
 Behavior:
 
 - Invalid `tag_idx` returns neutral values (`NULL`, `0`, or `-1` as
-  appropriate).
+  appropriate). This includes `repl_example_tag_bit(tag_idx)`, which returns
+  `0` for negative, out-of-range, or unrepresentable shift counts.
 - Invalid `example_idx` returns neutral values.
 - `repl_example_index_for_tag(tag_idx, ordinal)` walks the flat registry and
   returns the global example index for the Nth matching example.
@@ -475,6 +480,8 @@ Update `tests/test_repl_core_examples.c` or add a focused examples test block:
   `repl_example_tag_mask(idx) & repl_example_tag_bit(tag)`. The public
   `repl_example_tag_bit()` inline added in Step 2 is the canonical mask
   helper; do not assume the raw `1u << tag` layout in test code.
+- Invalid-index tests should assert `repl_example_tag_bit(-1) == 0` and
+  `repl_example_tag_bit(repl_example_tag_count()) == 0`.
 - `repl_example_visible_tag_count() <= repl_example_tag_count()`, and
   every dense visible index maps to a tag with a non-zero example count
   (regression guard for the empty-tag skip path).
