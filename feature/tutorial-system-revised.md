@@ -46,8 +46,8 @@ User-facing behavior agreed:
 
 | Path | Purpose |
 |---|---|
-| `src/widgets/tutorial_state.h` / `.c` | Peer subsystem owning `TutorialRuntimeState` (active flag, tutorial idx, step, fade line + start time, last match result). Standard `_view/_mut/_capture/_restore/_reset` API mirroring `replay_state` / `variable_panel_state`. |
-| `src/widgets/tutorial.h` / `.c` | Runner: `tutorial_start(idx)`, `tutorial_exit()`, `tutorial_handle_commit_attempt(const char *input)`, `tutorial_advance_after_successful_commit()`, `tutorial_current_expected_text()`, `tutorial_step_fade_alpha(int line_idx, int char_idx, float now)`, `tutorial_line_is_fading(int line_idx, float now)`, `tutorial_line_is_locked(int line_idx)`, `tutorial_guard_source_change(pos, delete_count, insert_count)` (used by editor to enforce read-only / no-renumber rules). |
+| `src/widgets/tutorial_state.h` / `.c` | Peer subsystem owning `TutorialRuntimeState` (active flag, tutorial idx, step, fade line + start time, last match result). Start with `_view/_mut/_reset/_active`; defer `_capture/_restore` unless tutorials later need to participate in undo/snapshot flows. |
+| `src/widgets/tutorial.h` / `.c` | Runner: `tutorial_start(idx)`, `tutorial_exit()`, `tutorial_handle_commit_attempt(const char *input)`, `tutorial_advance_after_successful_commit()`, `tutorial_current_expected_text()`, `tutorial_step_fade_alpha(int line_idx, int char_idx, int line_len, float now)`, `tutorial_line_is_fading(int line_idx, float now)`, `tutorial_line_is_locked(int line_idx)`, `tutorial_guard_source_change(pos, delete_count, insert_count)` (used by editor to enforce read-only / no-renumber rules). |
 | `src/repl/tutorials.h` / `.c` | Catalog parallel to `repl/examples`: per-tutorial null-terminated `comments[]` and `expected[]` arrays + name. Query API `repl_tutorial_count/name/step_count/step_comment/step_expected`. Ship 2–3 starter tutorials (e.g., "First Triangle", "Color & Transform"). |
 | `tests/test_tutorial_match.c` | Pure-function tests for the match comparator (whitespace tolerance, shape mismatch, default field values). |
 | `tests/test_tutorial_runner.c` | Runner tests: start enters a transient tutorial scene and emits step 0 comment through `repl_load_apply_line`, correct line committed through `editor_handle_key(';')` advances, wrong line preserves status + doesn't advance, direct `repl_feed_line_public` is not used for tutorial user commits, loading an example resets `tutorial_active()`, `tutorial_current_expected_text` reflects the current step, fade alpha hits 0 at start and 1 after duration. |
@@ -65,7 +65,7 @@ User-facing behavior agreed:
 | `src/editor/input.c` / `src/editor/clipboard.c` / `src/editor/undo.c` | Reject source mutations that would edit locked tutorial comments or renumber locked-line indices: replace/toggle/delete/cut of a locked row, insert/paste above or inside the locked prefix, Ctrl+L clear, Ctrl+\ reformat, and undo/redo while active. Input-row editing remains allowed. |
 | `src/editor/input.c:232` (`load_line_to_input`) | If `tutorial_line_is_locked(idx)`, clear the input buffer, move cursor to 0, set status `"Tutorial instruction is read-only"`, and return. Navigation may land on instruction rows, but locked comment text should not be copied into the editable input row. |
 | `src/repl/scenes.h` / `.c` | Add `repl_scenes_enter_transient_scene()` (name bikesheddable): save the active user scene if any, restore any pre-example cfg snapshot, clear pending scene-name metadata, then detach live state from both `active_example_idx` and `g_active_user_scene`. `tutorial_start()` calls this before clearing/loading tutorial content so tutorial buffers are not saved back into a user-scene slot. |
-| `src/repl/example_loader.c:393-487` (`load_example_lines`, `repl_load_example`) and `src/repl/scenes.c` (`repl_load_workspace`, `repl_load_user_scene_idx`) | Call `tutorial_state_reset()` on entry so loading an example, loading a workspace, or activating a user scene exits tutorial mode cleanly. `repl_load_workspace()` loads slots directly and restores a live stash; do not rely on `repl_load_user_scene_idx()` for this reset. |
+| `src/repl/example_loader.c:393-487` (`load_example_lines`, `repl_load_example`) and `src/repl/scenes.c` (`repl_load_workspace`, `repl_load_user_scene_idx`) | Call `tutorial_state_reset()` on entry so loading an example, loading a workspace, or activating a user scene exits tutorial mode cleanly. `repl_load_workspace()` loads slots directly and restores a live stash; do not rely on `repl_load_user_scene_idx()` for this reset. After workspace load, the live document is intentionally restored as it was; any visible tutorial comments remain but are editable because tutorial lock state is cleared. |
 | `src/app/glr_ctrl.c` (`glr_app_reset_all`) | Reset tutorial state alongside replay/help/color-picker peers so full app reset and CLI startup cannot inherit an active tutorial. |
 | `src/ui/panels.c` (`code_panel_draw_command_row`, `code_panel_draw_segment(...)` call) | If `tutorial_line_is_fading(i, ctx->snap->anim_time)`, draw the visible segment char-by-char with `glColor4f(r, g, b, alpha_for_char)`; otherwise keep the existing `code_panel_draw_segment` fast path. Use source line `i`, not a non-existent row field. |
 | `src/widgets/tutorial.c` | Emit tutorial instruction comments via `repl_load_apply_line` from `src/repl/load.h`, not `feed_line`; timestamp newly revealed comments from the existing `repl_state_variables().anim_time` view. Render code receives `now` from `UiRenderSnapshot.anim_time`; both clocks come from the same source. Do not add a new `repl_anim_time_now()` public API. |
@@ -132,7 +132,9 @@ are still allowed.
    input buffer, clear insert mode, call the lean loader, then mark both
    flat state and normals dirty. It records `fade_line_idx = doc_count - 1`,
    appends that line to `locked_lines`, and sets `fade_start_t` from
-   `repl_state_variables().anim_time`.
+   `repl_state_variables().anim_time`. Camera/orbit state is intentionally
+   preserved when a tutorial starts; only the source document and language
+   runtime state are reset.
 3. Each frame, `panels.c` passes `ctx->snap->anim_time` to
    `tutorial_line_is_fading` / `tutorial_step_fade_alpha` for the source
    line. Fading rows draw per-char with `glColor4f`; all other rows keep
@@ -189,7 +191,7 @@ Create:
   - `int   tutorial_handle_commit_attempt(const char *input, TutorialMatchResult *out);`
   - `void  tutorial_advance_after_successful_commit(void);`
   - `const char *tutorial_current_expected_text(void);`
-  - `float tutorial_step_fade_alpha(int line_idx, int char_idx, float now);`
+  - `float tutorial_step_fade_alpha(int line_idx, int char_idx, int line_len, float now);`
   - `int   tutorial_line_is_fading(int line_idx, float now);`
   - `int   tutorial_line_is_locked(int line_idx);`
   - `int   tutorial_guard_source_change(int pos, int delete_count, int insert_count);`
@@ -436,8 +438,9 @@ Modify:
   ```c
   float now = ctx->snap->anim_time;
   if (tutorial_line_is_fading(i, now)) {
+      int line_len = (int)strlen(display_text);
       /* per-char loop: glColor4f(r, g, b,
-         tutorial_step_fade_alpha(i, wrap_start + local_i, now))
+         tutorial_step_fade_alpha(i, wrap_start + local_i, line_len, now))
          + glutBitmapCharacter at x = wrap_x + local_i * char_w */
   } else {
       code_panel_draw_segment(wrap_x, ctx->line_y, display_text,
@@ -445,13 +448,19 @@ Modify:
   }
   ```
   The fading branch must respect `wrap_start` / `wrap_len` so wrapped rows
-  animate only the visible segment. Once the fade window closes, the
-  predicate returns 0 and every row takes the existing fast path. No global
-  slowdown.
+  animate only the visible segment. Use the complete logical source-line
+  display text length (`strlen(display_text)` before wrapping) as
+  `line_len`, and pass absolute character indices
+  `wrap_start + local_i` into `tutorial_step_fade_alpha`; this makes the
+  reveal cascade span the whole source line consistently across wrapped
+  continuation rows. Once the fade window closes, the predicate returns 0
+  and every row takes the existing fast path. No global slowdown.
 - `src/widgets/tutorial.c` — implement `tutorial_step_fade_alpha`:
   ```c
   /* returns 1.0 if line_idx != fade_line_idx or now >= start + duration */
-  float t = (now - fade_start_t) - char_idx * (fade_duration / line_len);
+  int safe_len = line_len > 0 ? line_len : 1;
+  float per_char_window = fade_duration / safe_len;
+  float t = (now - fade_start_t) - char_idx * per_char_window;
   return clamp01(t / per_char_window);
   ```
   `fade_start_t` is captured from `repl_state_variables().anim_time`, and
