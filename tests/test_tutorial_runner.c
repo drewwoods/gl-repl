@@ -87,6 +87,51 @@ static void test_start_enters_transient_tutorial_scene(void) {
                repl_tutorial_step_expected(0, 0));
 }
 
+static void test_catalog_includes_color_transform_tutorial(void) {
+    /* "Color & Transform" exercises push/pop matrix, color, translate,
+     * rotate and quads — a richer set of GL commands than the starter
+     * "First Triangle". Pin both tutorials in the catalog so a future
+     * catalog rewrite has to keep them. */
+    ASSERT_TRUE("at least two starter tutorials available",
+                repl_tutorial_count() >= 2);
+    ASSERT_STR("first tutorial is First Triangle",
+               repl_tutorial_name(0), "First Triangle");
+    ASSERT_STR("second tutorial is Color & Transform",
+               repl_tutorial_name(1), "Color & Transform");
+    ASSERT_INT("color-transform tutorial has 11 steps",
+               repl_tutorial_step_count(1), 11);
+    ASSERT_STR("color-transform first expected command",
+               repl_tutorial_step_expected(1, 0), "glPushMatrix()");
+    ASSERT_STR("color-transform last expected command",
+               repl_tutorial_step_expected(1, 10), "glPopMatrix()");
+}
+
+static void test_color_transform_walkthrough(void) {
+    const char *expected;
+    int total_steps;
+    int idx;
+
+    reset_fixture();
+    tutorial_start(1);
+    ASSERT_TRUE("color-transform tutorial active", tutorial_active());
+    ASSERT_INT("color-transform tutorial idx",
+               tutorial_state_view().tutorial_idx, 1);
+    ASSERT_STR("color-transform start status",
+               status_text(), "Tutorial: step 1/11");
+
+    total_steps = repl_tutorial_step_count(1);
+    for (idx = 0; idx < total_steps; idx++) {
+        expected = tutorial_current_expected_text();
+        ASSERT_TRUE("expected exists mid-tutorial", expected != NULL);
+        set_input_text(expected);
+        (void)editor_handle_key(';', 0, 0);
+    }
+
+    ASSERT_TRUE("color-transform tutorial completed", !tutorial_active());
+    ASSERT_STR("color-transform completion status",
+               status_text(), "Tutorial complete");
+}
+
 static void test_runner_match_and_advance(void) {
     const char *expected;
     SourceTextView doc;
@@ -548,6 +593,8 @@ static void test_start_rejects_out_of_range_idx(void) {
 
 int main(void) {
     test_start_enters_transient_tutorial_scene();
+    test_catalog_includes_color_transform_tutorial();
+    test_color_transform_walkthrough();
     test_runner_match_and_advance();
     test_semicolon_route_rejects_mismatch_and_preserves_input();
     test_replace_existing_line_does_not_advance();

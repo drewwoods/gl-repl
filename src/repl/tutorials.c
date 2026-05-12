@@ -20,11 +20,46 @@ static const char *const g_tutorial_first_triangle_expected[] = {
     NULL,
 };
 
+static const char *const g_tutorial_color_transform_comments[] = {
+    "// Save the current transform so changes below stay local.",
+    "// Pick a vivid color for the shape.",
+    "// Slide the next shape to the right.",
+    "// Rotate it 30 degrees around the Z axis.",
+    "// Start a quad - four vertices form a filled square.",
+    "// Bottom-left corner.",
+    "// Bottom-right corner.",
+    "// Top-right corner.",
+    "// Top-left corner - closes the loop.",
+    "// Finish the quad.",
+    "// Restore the original transform.",
+    NULL,
+};
+
+static const char *const g_tutorial_color_transform_expected[] = {
+    "glPushMatrix()",
+    "glColor3f(0.2, 0.8, 1)",
+    "glTranslatef(0.4, 0, 0)",
+    "glRotatef(30, 0, 0, 1)",
+    "glBegin(GL_QUADS)",
+    "glVertex3f(-0.2, -0.2, 0)",
+    "glVertex3f(0.2, -0.2, 0)",
+    "glVertex3f(0.2, 0.2, 0)",
+    "glVertex3f(-0.2, 0.2, 0)",
+    "glEnd()",
+    "glPopMatrix()",
+    NULL,
+};
+
 static const TutorialEntry g_tutorials[] = {
     {
         .name = "First Triangle",
         .comments = g_tutorial_first_triangle_comments,
         .expected = g_tutorial_first_triangle_expected,
+    },
+    {
+        .name = "Color & Transform",
+        .comments = g_tutorial_color_transform_comments,
+        .expected = g_tutorial_color_transform_expected,
     },
 };
 

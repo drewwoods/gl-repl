@@ -34,6 +34,7 @@
         "src/editor/inline_rename.c",
         "src/widgets/variable_panel_drag.c",
         "src/widgets/color_picker_state.c",
+        "src/widgets/tutorial.c",
         "src/app/glr_actions.c",
         "src/app/glr_camera.c"
       ]
@@ -54,6 +55,8 @@
         "src/widgets/replay_state.c",
         "src/repl/replay_annotations.c",
         "src/widgets/variable_panel_state.c",
+        "src/widgets/tutorial_state.c",
+        "src/repl/tutorials.c",
         "src/repl/help_text.c"
       ]
     },

@@ -127,6 +127,7 @@ Consequences:
 | `replay` peer | Replay state machine: PC, mode, speed, accum, fade speed, src_line_idx, total_flat_cmds, expand_args. Storage in `src/widgets/replay_state.c`. | Editor text behavior, REPL grammar |
 | `editor_help_session` peer | Help-overlay session state: tab_idx, scroll. Storage in `src/editor/help_session.c`. Visibility flag stays on `UiState.help` as chrome. | Help content (provided by content provider) |
 | `color_picker` peer | Floating color-picker state, lifecycle, slider input handlers, source-line writeback through editor commit. Storage in `src/widgets/color_picker_state.c`; peer view + `ColorPickerInputResult` in `src/widgets/color_picker_state.h`. | Picker rendering / hit-test (lives on `src/ui/color_picker.c`) |
+| `tutorial` peer | Tutorial runtime state: active flag, tutorial idx, current step, locked-line array, fade timing, last match result. Storage in `src/widgets/tutorial_state.c`. Runner orchestration in `src/widgets/tutorial.c`. | Editor text behavior, REPL grammar, tutorial catalog (`src/repl/tutorials.c`) |
 
 > The legacy forwarders (`ui_state_variable_panel*`, `editor_state_variable_drag*`,
 > `repl_state_replay*`) were retired in Phases J5–J7. Production callers and
@@ -342,6 +343,8 @@ controllers; UI may render them; their input routes to them through
 | `replay` | Replay state machine implementation behind `replay_state`: PC stepping, mode toggling, fade batches. Routes via `replay_handle_pin_clicked` / `replay_handle_key` / `replay_handle_special` |
 | `editor_help_session` | Peer subsystem: read-only editor session for the help overlay (tab_idx, scroll). Visibility flag stays on `UiState.help` as chrome |
 | `color_picker` | Peer subsystem: floating HSV/alpha picker. Owns `g_cp_*` state, lifecycle (`color_picker_open` / `_close` / `_active_line` / `_can_edit_cmd`), input handlers (`color_picker_handle_press` / `_motion` / `_release` returning `ColorPickerInputResult`), and source-line writeback through `editor_commit_apply_external_change`. Exposes `color_picker_view()` for renderers and `color_picker_hsv_to_rgb` as a shared color-math helper. Storage lives in `src/widgets/color_picker_state.c`; renderer lives separately in `src/ui/color_picker.c` |
+| `tutorial_state` | Peer subsystem: owns `TutorialRuntimeState` storage in `src/widgets/tutorial_state.c`. Narrow accessor (`tutorial_active`) plus `tutorial_state_view()` for the per-frame snapshot fill. Does not participate in undo capture/restore (tutorials are linear by design and Phase 6 blocks undo during a tutorial) |
+| `tutorial` | Runner behind `tutorial_state`: `tutorial_start` / `_exit` orchestrate the transient-scene boundary via `repl_scenes_enter_transient_scene` + `repl_scenes_reset_for_transient`; `tutorial_handle_commit_attempt` gates editor commits; `tutorial_advance_after_successful_commit` appends the next instruction comment via `repl_load_apply_line` and seeds the fade. Locked rows are enforced through `tutorial_guard_source_change`, called from every editor / clipboard / reformat / clear mutation site |
 | `repl_help_text` | REPL-side producer of neutral F1 help text. Walks `k_func_completions[]`, groups by `ReplHelpGroup`, emits per-command rows with header sections; appends hand-written language-level sections (Math operators, Variables, For-Loops, …) verbatim. `glr_ctrl` adapts the neutral content to `UiOverlayContent`; renderer (`src/ui/tabbed_overlay.c`) is feature-agnostic |
 
 Peer subsystems may *produce* overlays consumed by the editor (replay
@@ -513,6 +516,7 @@ flowchart LR
         vpanel["src/widgets/variable_panel_state.c + src/widgets/variable_panel_drag.c<br/>(was repl_var_drag)<br/>visibility + drag transaction"]
         replay_sys["src/widgets/replay.c + src/widgets/replay_state.c<br/>(was repl_replay)<br/>state machine · fades"]
         cpicker["src/widgets/color_picker_state.c<br/>(was inside ui_color_picker)<br/>HSV/alpha state · lifecycle · writeback"]
+        tutorial_sys["src/widgets/tutorial.c + src/widgets/tutorial_state.c<br/>(catalog in src/repl/tutorials.c)<br/>runner · step state · locks · fade timing"]
         camera["src/app/glr_camera.c<br/>orbit/pan/zoom transform"]
     end
 
