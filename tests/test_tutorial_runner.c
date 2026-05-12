@@ -147,6 +147,34 @@ static void test_enter_route_advances_after_match(void) {
                repl_tutorial_step_comment(0, 1));
 }
 
+static void test_tab_autofill_then_semicolon_advances(void) {
+    const char *expected;
+    SourceTextView doc;
+
+    reset_fixture();
+    tutorial_start(0);
+    set_input_text("glEnd()");
+    expected = tutorial_current_expected_text();
+
+    (void)editor_handle_key('\t', 0, 0);
+
+    ASSERT_STR("tab autofill replaces input",
+               editor_state_input().input, expected);
+    ASSERT_INT("tab autofill updates input len",
+               editor_state_input().input_len, (int)strlen(expected));
+    ASSERT_STR("tab autofill status",
+               status_text(),
+               "Replaced input with expected tutorial command; press ; to commit");
+
+    (void)editor_handle_key(';', 0, 0);
+
+    doc = source_document_view();
+    ASSERT_INT("tab then semicolon advances step",
+               tutorial_state_view().step, 1);
+    ASSERT_INT("tab then semicolon appends instruction",
+               doc.line_count, 3);
+}
+
 static void test_rejected_commit_does_not_advance_tutorial(void) {
     reset_fixture();
     tutorial_start(0);
@@ -295,6 +323,7 @@ int main(void) {
     test_runner_match_and_advance();
     test_semicolon_route_rejects_mismatch_and_preserves_input();
     test_enter_route_advances_after_match();
+    test_tab_autofill_then_semicolon_advances();
     test_rejected_commit_does_not_advance_tutorial();
     test_feed_line_alone_does_not_advance_tutorial();
     test_loading_example_exits_tutorial();
