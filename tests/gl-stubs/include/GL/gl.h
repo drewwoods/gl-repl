@@ -169,8 +169,10 @@ static inline void glBlendFunc(GLenum sfactor, GLenum dfactor) { gl_stub_tick(GL
 static inline void glClear(GLbitfield mask) { gl_stub_tick(GL_STUB_glClear); (void)mask; }
 static inline void glClearColor(GLclampf red, GLclampf green, GLclampf blue, GLclampf alpha) { gl_stub_tick(GL_STUB_glClearColor); (void)red; (void)green; (void)blue; (void)alpha; }
 static inline void glColor3f(GLfloat red, GLfloat green, GLfloat blue) { gl_stub_tick(GL_STUB_glColor3f); (void)red; (void)green; (void)blue; }
+static inline void glColor3fv(const GLfloat *v) { gl_stub_tick(GL_STUB_glColor3fv); (void)v; }
 static inline void glColor4dv(const GLdouble *v) { gl_stub_tick(GL_STUB_glColor4dv); (void)v; }
 static inline void glColor4f(GLfloat red, GLfloat green, GLfloat blue, GLfloat alpha) { gl_stub_tick(GL_STUB_glColor4f); (void)red; (void)green; (void)blue; (void)alpha; }
+static inline void glColor4fv(const GLfloat *v) { gl_stub_tick(GL_STUB_glColor4fv); (void)v; }
 static inline void glColorMask(GLboolean red, GLboolean green, GLboolean blue, GLboolean alpha) { gl_stub_tick(GL_STUB_glColorMask); (void)red; (void)green; (void)blue; (void)alpha; }
 static inline void glColorMaterial(GLenum face, GLenum mode) { gl_stub_tick(GL_STUB_glColorMaterial); (void)face; (void)mode; }
 static inline void glDepthMask(GLboolean flag) { gl_stub_tick(GL_STUB_glDepthMask); (void)flag; }

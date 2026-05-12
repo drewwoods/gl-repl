@@ -108,6 +108,18 @@ static void code_panel_static_line_rgb(const char *text,
 /* Replay annotations live in src/repl/replay_annotations.c. */
 
 /* ========================================================================= */
+/* Interactive UI color palette (input row, selection, search, cursor)       */
+/* ========================================================================= */
+static const GLfloat k_clr_input_text[3]     = { 0.95f, 0.95f, 0.90f };
+static const GLfloat k_clr_active_row_bg[4]  = { 0.15f, 0.18f, 0.28f, 0.70f };
+static const GLfloat k_clr_selection_band[4] = { 0.20f, 0.30f, 0.50f, 0.55f };
+static const GLfloat k_clr_search_match[4]   = { 0.25f, 0.45f, 0.85f, 0.30f };
+static const GLfloat k_clr_search_hit[4]     = { 0.95f, 0.65f, 0.18f, 0.55f };
+static const GLfloat k_clr_ghost_text[4]     = { 0.50f, 0.55f, 0.65f, 0.55f };
+static const GLfloat k_clr_hint_text[4]      = { 0.56f, 0.62f, 0.72f, 0.38f };
+static const GLfloat k_clr_cursor_caret[4]   = { 0.90f, 0.80f, 0.25f, 0.85f };
+
+/* ========================================================================= */
 /* Code panel                                                                 */
 /* ========================================================================= */
 
@@ -156,9 +168,9 @@ static void code_panel_draw_search_highlights(const UiRenderSnapshot *snap,
         }
 
         if (search_row_idx == srch.hit_line_idx && pos == srch.hit_char_idx)
-            glColor4f(0.95f, 0.65f, 0.18f, 0.55f);
+            glColor4fv(k_clr_search_hit);
         else
-            glColor4f(0.25f, 0.45f, 0.85f, 0.30f);
+            glColor4fv(k_clr_search_match);
 
         glRectf((float)((float)(seg_x + (draw_start - seg_start) * FONT_W)), (float)((float)(y - 2)), (float)((float)(seg_x + (draw_start - seg_start) * FONT_W))+(float)((float)((draw_end - draw_start) * FONT_W)), (float)((float)(y - 2))+(float)(FONT_H + 4));
     }
@@ -210,7 +222,7 @@ static void render_active_input_rows(const UiRenderSnapshot *snap,
             }
 
             glEnable(GL_BLEND);
-            glColor4f(0.15f, 0.18f, 0.28f, 0.70f);
+            glColor4fv(k_clr_active_row_bg);
             glRectf((float)(0), (float)((float)(*io_line_y - 3)), (float)(0)+(float)((float)panel_w), (float)((float)(*io_line_y - 3))+(float)(LINE_H));
             glDisable(GL_BLEND);
 
@@ -230,10 +242,10 @@ static void render_active_input_rows(const UiRenderSnapshot *snap,
              * of search), text glyphs last. The input selection wins
              * visually because it represents the most recent user
              * intent (see Open Question 5 in
-             * feature/done/editor-input-selection.md). The two bands are
+             * done/editor-input-selection.md). The two bands are
              * both translucent so the loser still shows through; the
              * order just decides which dominates. */
-            glColor3f(0.95f, 0.95f, 0.90f);
+            glColor3fv(k_clr_input_text);
             code_panel_draw_search_highlights(snap, input, search_row_idx,
                                               wrap_start, wrap_len,
                                               wrap_x, *io_line_y);
@@ -257,14 +269,14 @@ static void render_active_input_rows(const UiRenderSnapshot *snap,
                     float bx = (float)(wrap_x + (row_lo - wrap_start) * FONT_W);
                     float bw = (float)((row_hi - row_lo) * FONT_W);
                     glEnable(GL_BLEND);
-                    glColor4f(0.20f, 0.30f, 0.50f, 0.55f);
+                    glColor4fv(k_clr_selection_band);
                     glRectf(bx, (float)(*io_line_y - 3),
                             bx + bw, (float)(*io_line_y - 3) + (float)LINE_H);
                     glDisable(GL_BLEND);
                 }
             }
 
-            glColor3f(0.95f, 0.95f, 0.90f);
+            glColor3fv(k_clr_input_text);
             code_panel_draw_segment(wrap_x, *io_line_y, input,
                                     wrap_start, wrap_len, FONT_MONO);
 
@@ -274,7 +286,7 @@ static void render_active_input_rows(const UiRenderSnapshot *snap,
 
                 if (ac.ghost[0] && cursor_pos == input_len) {
                     glEnable(GL_BLEND);
-                    glColor4f(0.50f, 0.55f, 0.65f, 0.55f);
+                    glColor4fv(k_clr_ghost_text);
                     gl2d_draw_string((float)cursor_x, (float)(*io_line_y),
                                 ac.ghost, FONT_MONO);
                     glDisable(GL_BLEND);
@@ -283,7 +295,7 @@ static void render_active_input_rows(const UiRenderSnapshot *snap,
 
                 if (ac.hint[0] && cursor_pos == input_len) {
                     glEnable(GL_BLEND);
-                    glColor4f(0.56f, 0.62f, 0.72f, 0.38f);
+                    glColor4fv(k_clr_hint_text);
                     gl2d_draw_string((float)hint_x, (float)(*io_line_y),
                                 ac.hint, FONT_MONO);
                     glDisable(GL_BLEND);
@@ -291,7 +303,7 @@ static void render_active_input_rows(const UiRenderSnapshot *snap,
 
                 if (cp.cursor_visible && !srch.active) {
                     glEnable(GL_BLEND);
-                    glColor4f(0.90f, 0.80f, 0.25f, 0.85f);
+                    glColor4fv(k_clr_cursor_caret);
                     glRectf((float)((float)cursor_x), (float)((float)(*io_line_y - 2)), (float)((float)cursor_x)+(float)(2.0f), (float)((float)(*io_line_y - 2))+(float)(FONT_H + 2));
                     glDisable(GL_BLEND);
                 }
@@ -473,7 +485,7 @@ static void code_panel_draw_row_overlays(const CodePanelRowCtx *ctx, int i) {
     if (ctx->snap->selection_active &&
         i >= ctx->snap->selection_lo && i <= ctx->snap->selection_hi) {
         glEnable(GL_BLEND);
-        glColor4f(0.20f, 0.30f, 0.50f, 0.55f);
+        glColor4fv(k_clr_selection_band);
         glRectf(0.0f, (float)(ctx->line_y - 3),
                 (float)ctx->panel_w, (float)(ctx->line_y - 3) + (float)LINE_H);
         glDisable(GL_BLEND);
