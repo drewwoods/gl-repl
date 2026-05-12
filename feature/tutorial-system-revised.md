@@ -11,16 +11,36 @@ success — using the existing editor, parser, and code-panel rendering.
 
 User-facing behavior agreed:
 - Tutorials live in their own top-level menu ("Tutorials"), parallel to Scene.
+  The dropdown lists tutorial names and, while a tutorial is active, also
+  exposes "Restart Tutorial" and "Exit Tutorial" items.
 - Each step is a `(comment, expected)` pair. Match is whitespace-tolerant
-  exact-string in v1; the match result struct already carries fields for
-  future "command-right, arg-wrong" granularity and Tab-autofill seams.
+  exact-string in v1; the match result struct carries enum + arg_index
+  fields so v2 can distinguish wrong command from wrong argument without
+  touching call sites.
 - Mismatch surfaces via `repl_set_status` only; typed input is preserved
   so the user can edit and retry.
+- Pressing **Tab** fills the input buffer with the current step's expected
+  command (whole-line) but does **not** commit. The user sees the answer,
+  can inspect/edit, and commits with `;`.
 - Revealed comments are read-only while the tutorial is active.
 - Completing the last step shows a status message and leaves the buffer in
   place; no auto-promotion to a user scene.
 - Newly revealed comments fade in left-to-right (~0.5 s total) for a subtle
   cue. After the fade window the row reverts to the cheap whole-line draw.
+
+## MVP scope
+
+1. Tutorial catalog in `src/repl/tutorials.c`.
+2. Runtime state in `src/widgets/tutorial_state.c`.
+3. Runner in `src/widgets/tutorial.c`.
+4. Top-level **Tutorials** menu with selection + **Restart** / **Exit**.
+5. Whitespace-tolerant exact matching with a future-friendly mismatch enum.
+6. Status message on mismatch, preserving the typed input.
+7. Advance to next `//` comment after a correct commit.
+8. Read-only tutorial comments.
+9. Left-to-right fade for newly revealed comments.
+10. **Tab autofill** of the current expected command (whole-line; no commit).
+11. Auto-exit when an example or user scene is loaded.
 
 ## Files to create
 
@@ -38,9 +58,10 @@ User-facing behavior agreed:
 |---|---|
 | `src/app/glr_actions.h` (`GLR_MENU_*` enum) | Add `GLR_MENU_TUTORIALS` before `GLR_MENU_COUNT`. |
 | `src/ui/menu_bar.c:21-30` | Add `MENU_TUTORIALS = GLR_MENU_TUTORIALS`, bump `NUM_MENUS` via `GLR_MENU_COUNT`, append `"Tutorials"` to `g_menu_labels`. |
-| `src/ui/menu_bar.c:88-132` | Add `case MENU_TUTORIALS:` branches in `menu_item_count`, `menu_item_label` (returns `repl_tutorial_name(i)`), and `menu_item_shortcut` (NULL). |
-| `src/app/glr_actions.c` (menu-click dispatch around lines 423-494) | Route `menu_id == GLR_MENU_TUTORIALS` clicks to `tutorial_start(item_idx)`. |
+| `src/ui/menu_bar.c:88-132` | Add `case MENU_TUTORIALS:` branches in `menu_item_count`, `menu_item_label` (returns `repl_tutorial_name(i)`, plus `"---"` / `"Restart Tutorial"` / `"Exit Tutorial"` trailing items when `tutorial_active()`), and `menu_item_shortcut` (NULL). |
+| `src/app/glr_actions.c` (menu-click dispatch around lines 423-494) | Route `menu_id == GLR_MENU_TUTORIALS` clicks: tutorial-name → `tutorial_start(item_idx)`; Restart → `tutorial_start(current_tutorial_idx)`; Exit → `tutorial_exit()`. |
 | `src/editor/input.c:1118-1203` (`handle_semicolon_commit_key_route`) and `:1101-1116` (`handle_enter_key_route`) | Before `try_commit_any()`, if `tutorial_active()`: call `tutorial_handle_commit_attempt(editor_state_input().input)`. On mismatch, `repl_set_status(result.message)`, leave the input buffer, return 1 (consumed). On match, fall through to normal commit, then call `tutorial_advance_after_commit()` which feeds the next comment via `feed_line()` (line 1315) and seeds a new fade. |
+| `src/editor/input.c` (Tab key handler) | Before delegating Tab to autocomplete, if `tutorial_active()` and input is empty (or user explicitly wants the fill), replace the input buffer with `tutorial_current_expected_text()`, move cursor to end, set status `"Filled expected tutorial command; press ; to commit"`, return consumed. Autocomplete is bypassed only while a tutorial is active. |
 | `src/editor/input.c` (delete/backspace/cut handlers + line-range delete in `src/editor/clipboard.c`) | Reject mutation of any line where `tutorial_line_is_locked(idx)` returns 1 with status `"Tutorial comment is read-only"`. Single guard helper, called from each existing mutation site. |
 | `src/repl/example_loader.c:393-487` (`load_example_lines`, `repl_load_example`) and `src/repl/scenes.c` user-scene activation | Call `tutorial_state_reset()` on entry so loading an example or activating a user scene exits tutorial mode cleanly. |
 | `src/ui/panels.c:548` (code-panel row draw) | If `tutorial_step_fade_alpha(line_idx, 0, now) < 1.0`, draw the row char-by-char with `glColor4f(r, g, b, alpha_for_char)`; otherwise keep the existing single `gl2d_draw_string` call. The fast path is the default. |
@@ -59,7 +80,8 @@ User-facing behavior agreed:
 
 `TutorialMatchKind`:
 - `TUT_MATCH_OK`
-- `TUT_MISMATCH_SHAPE` — token count differs (v1 catch-all)
+- `TUT_MISMATCH_EMPTY` — input is empty / whitespace only
+- `TUT_MISMATCH_SHAPE` — token count differs (v1 catch-all for "something is off")
 - `TUT_MISMATCH_COMMAND` — reserved for v2 (command keyword wrong)
 - `TUT_MISMATCH_ARG` — reserved for v2 (specific arg wrong)
 
@@ -72,13 +94,25 @@ User-facing behavior agreed:
 - `int active`
 - `int tutorial_idx`
 - `int step` (next comment to reveal)
+- `int locked_line_count`
+- `int locked_lines[64]` (source-line indices of revealed instruction comments)
 - `int fade_line_idx` (-1 when no row is fading)
 - `float fade_start_t`, `fade_duration` (0.5 s)
 - `TutorialMatchResult last_result`
 
-V1 `tutorial_match`: whitespace-normalize both strings, strcmp → `OK` or
-`SHAPE`. The struct shape lets v2 add token-walk classification without
-touching call sites.
+V1 `tutorial_match`: whitespace-normalize both strings, strcmp → `OK`,
+`EMPTY`, or `SHAPE`. The enum and `arg_index` field are wider than v1
+needs so v2 can drop in a token-walk classifier without touching call
+sites.
+
+V1 line-locking: `tutorial_line_is_locked(idx)` returns 1 iff `idx` is
+in `locked_lines[0..locked_line_count]`. Each successful
+`tutorial_advance_after_commit()` appends the just-revealed comment's
+line index. Since the user is forbidden from inserting/deleting locked
+lines (Phase 6), the recorded indices stay valid for the duration of
+the tutorial; promoting to dynamic re-derivation is a follow-up if
+document-mutating tools (multi-line paste from clipboard) need to
+shift indices upward.
 
 ## End-to-end sequence
 
@@ -107,7 +141,8 @@ touching call sites.
 ## Implementation Phases
 
 Each phase is independently buildable and testable. Land them as separate
-commits; the feature is non-visible until Phase 3 ships.
+commits; the feature is non-visible until Phase 3 ships, and the MVP is
+complete once Phase 7 lands (Phase 8 is docs only).
 
 ### Phase 1 — Catalog + peer state scaffolding
 
@@ -140,7 +175,7 @@ Create:
   - `int   tutorial_line_is_locked(int line_idx);`
   - `TutorialMatchResult tutorial_match(const char *expected, const char *got);`
 - `src/widgets/tutorial.c` — implementations. `tutorial_start` clears the document, resets state, then calls `feed_line(comments[0])` (defined at `src/editor/input.c:1315`; public alias `repl_feed_line_public` at `src/editor/input.c:1388`) and records `fade_line_idx = repl_state_document_count() - 1`, `fade_start_t = repl_anim_time_now()`. `tutorial_match` v1 = whitespace-normalize-and-strcmp.
-- `tests/test_tutorial_match.c` — uses `tests/support/test_harness.h`. Cases: exact match, extra inner whitespace, leading/trailing whitespace, trailing `;` tolerance, token-count mismatch → `TUT_MISMATCH_SHAPE`, default `arg_index == -1`.
+- `tests/test_tutorial_match.c` — uses `tests/support/test_harness.h`. Cases: exact match, extra inner whitespace, leading/trailing whitespace, trailing `;` tolerance, empty input → `TUT_MISMATCH_EMPTY`, token-count mismatch → `TUT_MISMATCH_SHAPE`, default `arg_index == -1`. The `TUT_MISMATCH_COMMAND` and `TUT_MISMATCH_ARG` enum values are declared but not produced by v1; tests just assert they exist so v2 can wire them in without an API break.
 - `tests/test_tutorial_runner.c` — uses `tests/support/repl_test_support.h`. Cases: `tutorial_start(0)` → first comment appears at line 0 and begins with `//`; correct line via `repl_feed_line_public` advances `step`; wrong line preserves `step`; `tutorial_current_expected_text()` returns the right string for the current step; fade-alpha math (now == start → 0 for char 0, now == start + duration → 1 for last char).
 - `Makefile` — add rules for `test_tutorial_match` and `test_tutorial_runner` mirroring `test_eval` / `test_format`; add both to the aggregate `test` target.
 
@@ -160,17 +195,24 @@ Modify (with exact anchors):
   GLR_MENU_COUNT
   ```
 - `src/ui/menu_bar.c:21-30` — add `MENU_TUTORIALS = GLR_MENU_TUTORIALS` to the local enum and append `"Tutorials"` to `g_menu_labels[]` (size auto-tracks via `GLR_MENU_COUNT`).
-- `src/ui/menu_bar.c:88-100` (`menu_item_count`) — add `case MENU_TUTORIALS: return repl_tutorial_count();`.
-- `src/ui/menu_bar.c:102-132` (`menu_item_label`) — add the `MENU_TUTORIALS` branch returning `repl_tutorial_name(i)`.
+- `src/ui/menu_bar.c:88-100` (`menu_item_count`) — `case MENU_TUTORIALS: return repl_tutorial_count() + (tutorial_active() ? 3 : 0);` (the 3 trailing slots are the divider, Restart, and Exit items, shown only while a tutorial is active).
+- `src/ui/menu_bar.c:102-132` (`menu_item_label`) — `MENU_TUTORIALS` branch: items `[0..N-1]` return `repl_tutorial_name(i)`; if `tutorial_active()`, item `N` is `"---"`, `N+1` is `"Restart Tutorial"`, `N+2` is `"Exit Tutorial"`.
 - `src/ui/menu_bar.c:134+` (`menu_item_shortcut`) — `case MENU_TUTORIALS: return NULL;`.
 - `src/app/glr_actions.c:422-498` (`glr_action_menu_item_activate`) — add a new branch after the `GLR_MENU_SCENE` block (line 450) and before `GLR_MENU_CONFIG` (line 494):
   ```c
   } else if (menu_id == GLR_MENU_TUTORIALS) {
-      tutorial_start(item_idx);
+      int n = repl_tutorial_count();
+      if (item_idx < n) {
+          tutorial_start(item_idx);
+      } else if (tutorial_active() && item_idx == n + 1) {
+          tutorial_start(tutorial_state_view().tutorial_idx);  /* Restart */
+      } else if (tutorial_active() && item_idx == n + 2) {
+          tutorial_exit();
+      }
   ```
-- Include `widgets/tutorial.h` in `src/app/glr_actions.c` and `src/ui/menu_bar.c`.
+- Include `widgets/tutorial.h` and `widgets/tutorial_state.h` in `src/app/glr_actions.c` and `src/ui/menu_bar.c`.
 
-Verify: `./sample` opens, the Tutorials menu lists the starter tutorial, clicking it clears the buffer and shows the first `// ...` comment on line 0. No fade yet — that lands in Phase 6.
+Verify: `./sample` opens, the Tutorials menu lists the starter tutorial, clicking it clears the buffer and shows the first `// ...` comment on line 0; reopening the menu now shows the Restart/Exit items. No fade yet — that lands in Phase 7.
 
 ### Phase 4 — Commit interception (match check)
 
@@ -203,11 +245,39 @@ Tests:
 
 Verify: With a starter tutorial loaded, typing `glEnd()` then `;` shows `"expected: glBegin(GL_TRIANGLES)"` in the status bar and does NOT commit; typing the right line commits, then a new instructional comment for step 2 appears.
 
-### Phase 5 — Read-only locking of revealed comments
+### Phase 5 — Tab autofill
+
+Goal: pressing Tab fills the input buffer with the current step's expected command (whole-line), without committing. The user inspects, optionally edits, then presses `;` to commit through the Phase 4 path.
+
+Modify:
+- `src/editor/input.c` — locate the existing Tab key handler (`grep -n "'\\\\t'" src/editor/input.c` — should sit alongside the autocomplete-accept path). Insert a tutorial branch ahead of the autocomplete dispatch:
+  ```c
+  if (tutorial_active()) {
+      const char *expected = tutorial_current_expected_text();
+      if (expected) {
+          ReplEditorInputState *inp = editor_state_input_mut();
+          strncpy(inp->input, expected, MAX_INPUT_LEN - 1);
+          inp->input[MAX_INPUT_LEN - 1] = '\0';
+          inp->input_len = (int)strlen(inp->input);
+          editor_cursor_pos_set(inp->input_len);
+          editor_completion_clear();
+          repl_set_status("Filled expected tutorial command; press ; to commit");
+          return 1;
+      }
+  }
+  ```
+  Autocomplete is suppressed only while a tutorial is active; outside tutorial mode Tab keeps its current autocomplete behavior.
+
+Tests:
+- Extend `tests/test_tutorial_runner.c`: after `tutorial_start(0)`, simulate Tab (call the same helper the key router calls), then assert `editor_state_input().input` equals the step's expected text and `input_len` is non-zero. Then call `repl_feed_line_public(input + ";")` and assert `step` advanced.
+
+Verify: with a tutorial active, Tab fills the input row with the expected command; pressing `;` commits and the next comment appears. Tab in a non-tutorial scene still triggers autocomplete.
+
+### Phase 6 — Read-only locking of revealed comments
 
 Goal: prevent the user from deleting or editing the tutorial's instructional comments mid-flow.
 
-Add `int tutorial_line_is_locked(int line_idx)`: tracks a small ring of locked line indices in `TutorialRuntimeState` updated each time `tutorial_advance_after_commit` reveals a comment. Indices need re-numbering on any document insert/delete that happens above them — simplest v1 is to re-derive on read by scanning the document for lines matching the revealed comment texts.
+Maintain `locked_lines[64]` in `TutorialRuntimeState`. Each successful `tutorial_advance_after_commit` appends the just-revealed comment's source-line index. `tutorial_line_is_locked(idx)` is then an O(N) lookup over a tiny array. Since Phase 6 also blocks the operations that would re-number lines (line insert/delete above the locks), the recorded indices stay valid without a notification scheme.
 
 Modify (single guard helper, called at each existing mutation site):
 - `src/editor/input.c` — every line-deletion / row-replace site (backspace at column 0 merging up, Ctrl+K, line-up replace, etc.). Wrap with:
@@ -222,34 +292,40 @@ Modify (single guard helper, called at each existing mutation site):
 
 Verify: cursor on a tutorial comment line, backspace / Ctrl+K / line-cut all bounce off with status text. Cursor on the in-progress input line: editing works normally.
 
-### Phase 6 — Fade-in render
+### Phase 7 — Fade-in render
 
 Goal: newly revealed comments fade in left-to-right over ~0.5 s.
 
+Important: don't gate the per-char path on `alpha0 < 1.0`. In a left-to-right reveal, char 0 reaches alpha 1 well before later chars do, so an alpha-0 check flips back to the cheap whole-line draw mid-animation. Use a dedicated `tutorial_line_is_fading()` predicate instead.
+
 Modify:
+- `src/widgets/tutorial.h` / `.c` — add:
+  ```c
+  /* true iff line_idx is the current reveal target and the fade window is still open */
+  int tutorial_line_is_fading(int line_idx, float now);
+  ```
+  Implementation: `return active && line_idx == fade_line_idx && now < fade_start_t + fade_duration;`
 - `src/ui/panels.c:548` (the `gl2d_draw_string(text_x, line_y, text, FONT_MONO)` call for command rows) — wrap:
   ```c
   float now = repl_anim_time_now();
-  float alpha0 = tutorial_step_fade_alpha(ctx->row_idx, 0, now);
-  if (alpha0 < 1.0f) {
+  if (tutorial_line_is_fading(ctx->row_idx, now)) {
       /* per-char loop: glColor4f(r, g, b, tutorial_step_fade_alpha(row, i, now))
          + glutBitmapCharacter at x = text_x + i * char_w */
   } else {
       gl2d_draw_string((float)ctx->text_x, (float)ctx->line_y, text, FONT_MONO);
   }
   ```
-  The `alpha0 < 1.0f` check is the fast-path skip; once the fade window passes, every row takes the existing single-call path.
+  Once the fade window closes, the runner clears `fade_line_idx`, the predicate returns 0, and every row takes the existing single-call path. No global slowdown.
 - `src/widgets/tutorial.c` — implement `tutorial_step_fade_alpha`:
   ```c
   /* returns 1.0 if line_idx != fade_line_idx or now >= start + duration */
   float t = (now - fade_start_t) - char_idx * (fade_duration / line_len);
   return clamp01(t / per_char_window);
   ```
-  Once `now >= fade_start_t + fade_duration`, the runner clears `fade_line_idx` so the cheap path engages immediately on the next frame.
 
-Verify: visually run a tutorial, watch the comment animate in over ~0.5 s left-to-right. Once finished it stays at full brightness.
+Verify: visually run a tutorial, watch the comment animate in over ~0.5 s left-to-right. Once finished it stays at full brightness and the renderer takes the fast path on subsequent frames.
 
-### Phase 7 — Docs, ownership audit, smoke test
+### Phase 8 — Docs, ownership audit, smoke test
 
 Modify:
 - `MODULES.md` — add `src/widgets/tutorial_state.{c,h}`, `src/widgets/tutorial.{c,h}`, `src/repl/tutorials.{c,h}` to the layered overview and the state-ownership table (`TutorialRuntimeState` is owned by the peer subsystem, not `ReplState` / `EditorState`).
@@ -277,16 +353,16 @@ Run:
 
 - **Token-aware match classifier.** v2 of `tutorial_match` tokenizes both
   sides; on mismatch reports whether the command keyword or a specific
-  argument index is wrong, populating `kind` / `arg_index` so the status
-  message can read "command correct, argument 2 should be `0.5`".
-- **Tab/Enter autofill.** With `tutorial_current_expected_text()` already in
-  the runner API, an input.c Tab handler can fill the input buffer with the
-  expected line for browsing tutorials quickly.
-- **Feature highlights.** After tutorial completion (or as standalone
-  "tours"), highlight a UI element (Replay button, a menu item, etc.) with
-  a pulsing outline. Same fade infrastructure plus a hit-rect registry in
-  the menu bar / pin buttons.
-- **Popup tooltips.** Tutorial steps could optionally trigger a small
-  floating panel anchored to a UI element with longer-form explanation —
-  reuse `src/ui/tabbed_overlay.c` for the renderer, drive visibility from
-  the tutorial step.
+  argument index is wrong, populating `kind` (`TUT_MISMATCH_COMMAND` /
+  `TUT_MISMATCH_ARG`) and `arg_index` so the status message can read
+  "command correct, argument 2 should be `0.5`".
+- **Progressive autofill.** Successive Tab presses walk the expected line
+  step by step — `glBegin` → `glBegin(` → `glBegin(GL_TRIANGLES)` → full
+  line — so the user can learn syntax piece by piece instead of seeing the
+  whole answer at once.
+- **UI feature highlights.** Pulse / highlight named UI rects (menu items,
+  the Replay button, panel regions) during a tutorial step. Needs a
+  hit-rect registry and a pulsing overlay renderer.
+- **Popup description panels.** Small anchored explanations for UI elements,
+  shown while a tutorial step references them — reuse
+  `src/ui/tabbed_overlay.c` or a single-panel variant.
