@@ -240,11 +240,10 @@ static void render_3d_scene_pass(const SceneRenderConfig *config,
     scene_lights_setup(&frame_ctx);
     glDisable(GL_LIGHTING); /* baseline: disabled; execute_commands() enables if user typed it */
 
-    glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
-    GLfloat mspec[] = { 0.4f, 0.4f, 0.4f, 1.0f };
-    GLfloat mshin[] = { 30.0f };
-    glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, mspec);
-    glMaterialfv(GL_FRONT_AND_BACK, GL_SHININESS, mshin);
+    /* glColorMaterial mode and default material specular/shininess are
+     * set once at startup via repl_apply_init_bootstrap. The outer
+     * glPushAttrib(GL_ALL_ATTRIB_BITS) preserves them across user
+     * commands so this pass doesn't need to re-assert them per frame. */
 
     scene_apply_quality_config(config);
     scene_apply_wireframe_config(config);
