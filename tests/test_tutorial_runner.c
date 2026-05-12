@@ -3,6 +3,7 @@
 #include "app/glr_ctrl.h"
 #include "editor/clipboard.h"
 #include "config.h"
+#include "editor/completion.h"
 #include "editor/input.h"
 #include "editor/state.h"
 #include "keys.h"
@@ -231,6 +232,68 @@ static void test_replace_existing_line_does_not_advance(void) {
                editor_state_input().input, expected);
     ASSERT_INT("non-append commit does not append a new line",
                doc.line_count, 3);
+}
+
+static void test_shadow_suffix_strict_prefix(void) {
+    char buf[128];
+
+    reset_fixture();
+    tutorial_start(0);
+
+    /* Empty input is the empty prefix - shadow returns the full expected
+     * line so the user can see the full hint before typing anything. */
+    ASSERT_TRUE("empty input yields full expected as shadow",
+                tutorial_shadow_suffix("", buf, sizeof(buf)) == 1);
+    ASSERT_STR("empty-input shadow equals full expected",
+               buf, "glBegin(GL_TRIANGLES)");
+
+    /* Typed prefix - shadow returns only the untyped suffix. */
+    ASSERT_TRUE("prefix input yields untyped suffix",
+                tutorial_shadow_suffix("glBegin", buf, sizeof(buf)) == 1);
+    ASSERT_STR("prefix shadow is suffix",
+               buf, "(GL_TRIANGLES)");
+
+    /* Fully-typed input - shadow returns an empty suffix but still
+     * reports success so the caller can clear any prior ghost. */
+    ASSERT_TRUE("fully-typed input yields empty suffix",
+                tutorial_shadow_suffix("glBegin(GL_TRIANGLES)",
+                                       buf, sizeof(buf)) == 1);
+    ASSERT_STR("fully-typed shadow is empty", buf, "");
+
+    /* Non-prefix input - shadow returns 0 and clears `out`. The user
+     * has gone off-script; Tab autofill is the recovery path. */
+    ASSERT_TRUE("non-prefix input yields no shadow",
+                tutorial_shadow_suffix("glEnd", buf, sizeof(buf)) == 0);
+    ASSERT_STR("non-prefix shadow is empty after rejection", buf, "");
+}
+
+static void test_shadow_suffix_inactive_returns_zero(void) {
+    char buf[128];
+
+    reset_fixture();
+    ASSERT_TRUE("inactive tutorial yields no shadow",
+                tutorial_shadow_suffix("anything", buf, sizeof(buf)) == 0);
+    ASSERT_STR("inactive shadow is empty", buf, "");
+}
+
+static void test_shadow_text_populates_autocomplete_ghost(void) {
+    /* The autocomplete provider mirrors tutorial shadow text into
+     * autocomplete.ghost so the existing input-row ghost render path
+     * draws it dimmed after the cursor. */
+    ReplAutocompleteState ac;
+
+    reset_fixture();
+    tutorial_start(0);
+    set_input_text("glBe");
+    editor_completion_update();
+
+    ac = editor_state_autocomplete();
+    ASSERT_STR("autocomplete ghost carries tutorial suffix",
+               ac.ghost, "gin(GL_TRIANGLES)");
+    ASSERT_INT("autocomplete suppresses match list during tutorial",
+               ac.match_count, 0);
+    ASSERT_STR("autocomplete suppresses param hint during tutorial",
+               ac.hint, "");
 }
 
 static void test_tutorial_start_sets_step_progress_status(void) {
@@ -598,6 +661,9 @@ int main(void) {
     test_runner_match_and_advance();
     test_semicolon_route_rejects_mismatch_and_preserves_input();
     test_replace_existing_line_does_not_advance();
+    test_shadow_suffix_strict_prefix();
+    test_shadow_suffix_inactive_returns_zero();
+    test_shadow_text_populates_autocomplete_ghost();
     test_tutorial_start_sets_step_progress_status();
     test_tutorial_advance_updates_step_progress_status();
     test_locked_comment_load_is_read_only();

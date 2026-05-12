@@ -16,6 +16,7 @@
 #include "repl/command_spec.h"
 #include "editor/completion.h"
 #include "app/glr_completion.h"
+#include "widgets/tutorial.h"
 static const ReplFuncCompletion *g_ac_func_matches[MAX_AC_MATCHES];
 
 typedef enum {
@@ -239,6 +240,17 @@ static void update_autocomplete(void) {
     g_ac_token_len = 0;
     g_ac_input_offset = 0;
     g_ac_suffix[0] = '\0';
+
+    /* While a tutorial is active, autocomplete matches/hints would
+     * compete with the tutorial UI. Suppress normal completion and
+     * emit the expected-command shadow text as the ghost suffix
+     * instead — the active-input renderer already draws ghost in
+     * dimmed color after the cursor. Empty input + tutorial active
+     * yields the full expected line as the ghost. */
+    if (tutorial_active()) {
+        tutorial_shadow_suffix(raw_input, ac->ghost, sizeof(ac->ghost));
+        return;
+    }
 
     if (raw_input_len == 0) return;
 
