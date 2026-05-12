@@ -150,7 +150,7 @@ static void test_runner_match_and_advance(void) {
     expected = tutorial_current_expected_text();
     ASSERT_TRUE("matching command accepted",
                 tutorial_handle_commit_attempt(expected, &result));
-    repl_feed_line_public(expected);
+    editor_feed_line(expected);
     tutorial_advance_after_successful_commit();
 
     doc = source_document_view();
@@ -448,7 +448,7 @@ static void test_navigation_rejects_non_matching_input(void) {
      * path tutorial gate, commit_before_navigation would slip the line in
      * without advancing the step. */
     set_input_text("glPointSize(1)");
-    repl_navigate_to_line(1);
+    editor_navigate_to_line(1);
 
     doc_after = source_document_view();
     ASSERT_INT("navigation does not commit non-matching line",
@@ -473,7 +473,7 @@ static void test_navigation_advances_on_matching_input(void) {
      * The navigation commit should advance the tutorial. */
     expected = tutorial_current_expected_text();
     set_input_text(expected);
-    repl_navigate_to_line(1);
+    editor_navigate_to_line(1);
 
     doc = source_document_view();
     ASSERT_INT("navigation advance committed user line + next instruction",
@@ -494,7 +494,7 @@ static void test_enter_on_locked_line_shows_position_hint(void) {
     set_input_text(tutorial_current_expected_text());
     (void)editor_handle_key(';', 0, 0);
 
-    repl_navigate_to_line(0);
+    editor_navigate_to_line(0);
     (void)editor_handle_key('\n', 0, 0);
 
     ASSERT_STR("enter on locked line shows position hint",
@@ -513,7 +513,7 @@ static void test_ctrl_slash_on_locked_line_is_blocked(void) {
     editor_set_line_comment_prefix("// ");
     reset_fixture();
     tutorial_start(0);
-    repl_navigate_to_line(0);
+    editor_navigate_to_line(0);
 
     g_mock_modifiers = GLUT_ACTIVE_CTRL;
     (void)editor_handle_key('/', 0, 0);
@@ -559,7 +559,7 @@ static void test_rejected_commit_does_not_advance_tutorial(void) {
     tutorial_start(0);
 
     for (int i = repl_state_document_count(); i < MAX_COMMANDS; i++)
-        repl_feed_line_public("glPointSize(1);");
+        editor_feed_line("glPointSize(1);");
 
     ASSERT_INT("document filled to capacity",
                repl_state_document_count(), MAX_COMMANDS);
@@ -583,7 +583,7 @@ static void test_feed_line_alone_does_not_advance_tutorial(void) {
     tutorial_start(0);
 
     expected = tutorial_current_expected_text();
-    repl_feed_line_public(expected);
+    editor_feed_line(expected);
 
     ASSERT_INT("step unchanged after direct feed line", tutorial_state_view().step, 0);
     ASSERT_TRUE("tutorial still active after direct feed line", tutorial_active());
@@ -654,7 +654,7 @@ static void test_complete_and_menu_actions(void) {
     ASSERT_TRUE("tutorial active from menu action", tutorial_active());
 
     expected = tutorial_current_expected_text();
-    repl_feed_line_public(expected);
+    editor_feed_line(expected);
     tutorial_advance_after_successful_commit();
     ASSERT_TRUE("restart menu item restarts tutorial",
                 glr_action_menu_item_activate(GLR_MENU_TUTORIALS, tutorial_count + 1) == 1);
@@ -663,7 +663,7 @@ static void test_complete_and_menu_actions(void) {
     while (tutorial_active()) {
         expected = tutorial_current_expected_text();
         ASSERT_TRUE("expected exists while tutorial active", expected != NULL);
-        repl_feed_line_public(expected);
+        editor_feed_line(expected);
         tutorial_advance_after_successful_commit();
     }
 
@@ -677,7 +677,7 @@ static void test_start_captures_home_for_unsaved_buffer(void) {
     reset_fixture();
     /* Type a line into a fresh buffer (no example, no user scene) so the
      * pre-tutorial state lives only in the live document. */
-    repl_feed_line_public("glBegin(GL_TRIANGLES);");
+    editor_feed_line("glBegin(GL_TRIANGLES);");
     ASSERT_INT("user typed line is in document",
                repl_state_document_count(), 1);
 

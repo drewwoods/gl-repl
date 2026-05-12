@@ -1527,11 +1527,11 @@ feed_line_done:
     }
 }
 
-void repl_navigate_to_line(int target) {
+void editor_navigate_to_line(int target) {
     navigate_to_line(target);
 }
 
-void repl_feed_line_public(const char *line) {
+void editor_feed_line(const char *line) {
     feed_line(line);
 }
 

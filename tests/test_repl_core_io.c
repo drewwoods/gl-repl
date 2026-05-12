@@ -109,13 +109,13 @@ int main(void) {
     repl_eval_init_predef_vars();
     glr_app_reset_all(); declare_test_vars();
 
-    repl_feed_line_public("x = 1.25;");
-    repl_feed_line_public("glBegin(GL_LINE_STRIP);");
-    repl_feed_line_public("");
-    repl_feed_line_public("for(i, 0, 3) {");
-    repl_feed_line_public("glVertex3f(i + x, 0, 0);");
-    repl_feed_line_public("}");
-    repl_feed_line_public("glEnd();");
+    editor_feed_line("x = 1.25;");
+    editor_feed_line("glBegin(GL_LINE_STRIP);");
+    editor_feed_line("");
+    editor_feed_line("for(i, 0, 3) {");
+    editor_feed_line("glVertex3f(i + x, 0, 0);");
+    editor_feed_line("}");
+    editor_feed_line("glEnd();");
 
     ASSERT_TRUE("pre-save cmds", repl_state_document_count() > 0);
     ASSERT_TRUE("init has host-only ambient line",
@@ -248,10 +248,10 @@ int main(void) {
     ASSERT_TRUE("flatten produced cmds", repl_state_flat_program_count() > 0);
 
     glr_app_reset_all(); declare_test_vars();
-    repl_feed_line_public("A[0] = 0;");
-    repl_feed_line_public("A[1] = 1;");
-    repl_feed_line_public("A[0] = A[0] + (A[1] - A[0])*0.25;");
-    repl_feed_line_public("glVertex3f(A[0], 0, 0);");
+    editor_feed_line("A[0] = 0;");
+    editor_feed_line("A[1] = 1;");
+    editor_feed_line("A[0] = A[0] + (A[1] - A[0])*0.25;");
+    editor_feed_line("glVertex3f(A[0], 0, 0);");
     repl_export_save_output(scratch_path, source_document_view(), NULL);
     {
         char buf[16384];
@@ -276,9 +276,9 @@ int main(void) {
     {
         const char *cross_path = "/tmp/repl_core_scratch_cross.c";
         glr_app_reset_all(); declare_test_vars();
-        repl_feed_line_public("A[0] = 1;");
-        repl_feed_line_public("B[0] = 2;");
-        repl_feed_line_public("glVertex3f(A[0], B[0], 0);");
+        editor_feed_line("A[0] = 1;");
+        editor_feed_line("B[0] = 2;");
+        editor_feed_line("glVertex3f(A[0], B[0], 0);");
         repl_export_save_output(cross_path, source_document_view(), NULL);
         char buf[8192];
         read_text_file(cross_path, buf, sizeof(buf));
@@ -296,7 +296,7 @@ int main(void) {
      * snippets) so the standalone file still emits the RNG helpers. */
     {
         glr_app_reset_all(); declare_test_vars();
-        repl_feed_line_public("glVertex3f(repl_randf(i, 3), repl_rand2f(i, 4), 0);");
+        editor_feed_line("glVertex3f(repl_randf(i, 3), repl_rand2f(i, 4), 0);");
         repl_export_save_output(rand_alias_path, source_document_view(), NULL);
         char buf[8192];
         read_text_file(rand_alias_path, buf, sizeof(buf));
@@ -328,10 +328,10 @@ int main(void) {
     {
         const char *alias_path = "/tmp/repl_core_func_alias_roundtrip.c";
         glr_app_reset_all(); declare_test_vars();
-        repl_feed_line_public("drawCube {");
-        repl_feed_line_public("  glVertex3f(0, 0, 0);");
-        repl_feed_line_public("}");
-        repl_feed_line_public("drawCube();");
+        editor_feed_line("drawCube {");
+        editor_feed_line("  glVertex3f(0, 0, 0);");
+        editor_feed_line("}");
+        editor_feed_line("drawCube();");
         ASSERT_TRUE("alias decl assigned slot 0",
                     repl_func_alias_lookup_slot("drawCube") == 0);
         const char *post_decl = repl_func_alias_get(0);
@@ -364,16 +364,16 @@ int main(void) {
      * keyword must fall through to try_commit_if_block. */
     {
         glr_app_reset_all(); declare_test_vars();
-        repl_feed_line_public("if(1) {");
+        editor_feed_line("if(1) {");
         ASSERT_TRUE("'if' did not register as alias",
                     repl_func_alias_lookup_slot("if") == -1);
     }
 
     /* Camera state round-trip: non-default eye/center must survive save+load. */
     glr_app_reset_all(); declare_test_vars();
-    repl_feed_line_public("glBegin(GL_POINTS);");
-    repl_feed_line_public("glVertex3f(0, 0, 0);");
-    repl_feed_line_public("glEnd();");
+    editor_feed_line("glBegin(GL_POINTS);");
+    editor_feed_line("glVertex3f(0, 0, 0);");
+    editor_feed_line("glEnd();");
     glr_camera_set_orbit(31.523f, 31.4799f);
     glr_camera_set_distance(7.59313f);
     glr_camera_set_pan(1.50f, 0.0f, -2.00f);
@@ -409,11 +409,11 @@ int main(void) {
     }
 
     glr_app_reset_all(); declare_test_vars();
-    repl_feed_line_public("x = 1;");
-    repl_feed_line_public("func0(radius, yoff) {");
-    repl_feed_line_public("glVertex3f(radius, yoff, 0);");
-    repl_feed_line_public("}");
-    repl_feed_line_public("func0(1.5, x + 2);");
+    editor_feed_line("x = 1;");
+    editor_feed_line("func0(radius, yoff) {");
+    editor_feed_line("glVertex3f(radius, yoff, 0);");
+    editor_feed_line("}");
+    editor_feed_line("func0(1.5, x + 2);");
 
     int func_n = repl_state_document_count();
     for (int i = 0; i < func_n; i++) before_types[i] = repl_state_document_cmds_mut()[i].type;
@@ -477,12 +477,12 @@ int main(void) {
                 fabsf(repl_state_flat_program_cmds_mut()[repl_state_flat_program_count() - 1].args[1] - 3.0f) < 1e-6f);
 
     glr_app_reset_all();
-    repl_feed_line_public("func0(radius, sides, phase) {");
-    repl_feed_line_public("for(i, 0, sides + 1) {");
-    repl_feed_line_public("glVertex3f(cos(i*TAU/sides + phase)*radius, sin(i*TAU/sides + phase)*radius, 0);");
-    repl_feed_line_public("}");
-    repl_feed_line_public("}");
-    repl_feed_line_public("func0(1, 6, 0);");
+    editor_feed_line("func0(radius, sides, phase) {");
+    editor_feed_line("for(i, 0, sides + 1) {");
+    editor_feed_line("glVertex3f(cos(i*TAU/sides + phase)*radius, sin(i*TAU/sides + phase)*radius, 0);");
+    editor_feed_line("}");
+    editor_feed_line("}");
+    editor_feed_line("func0(1, 6, 0);");
     repl_export_save_output(param_loop_path, source_document_view(), NULL);
     {
         char buf[32768];
@@ -515,13 +515,13 @@ int main(void) {
     }
 
     glr_app_reset_all(); declare_test_vars();
-    repl_feed_line_public("float r;");
-    repl_feed_line_public("glClearColor(0.1, 0.1, 0.1, 1);");
-    repl_feed_line_public("func0 {");
-    repl_feed_line_public("glVertex3f(r, 0, 0);");
-    repl_feed_line_public("}");
-    repl_feed_line_public("r = 2;");
-    repl_feed_line_public("func0();");
+    editor_feed_line("float r;");
+    editor_feed_line("glClearColor(0.1, 0.1, 0.1, 1);");
+    editor_feed_line("func0 {");
+    editor_feed_line("glVertex3f(r, 0, 0);");
+    editor_feed_line("}");
+    editor_feed_line("r = 2;");
+    editor_feed_line("func0();");
     repl_export_save_output(decl_func_path, source_document_view(), NULL);
 
     glr_app_reset_all(); declare_test_vars();
@@ -537,13 +537,13 @@ int main(void) {
     ASSERT_TRUE("imported call follows assign", repl_state_document_cmds_mut()[6].type == CMD_CALL);
 
     glr_app_reset_all(); declare_test_vars();
-    repl_feed_line_public("float r;");
-    repl_feed_line_public("");
-    repl_feed_line_public("// func prelude");
-    repl_feed_line_public("func0(radius) {");
-    repl_feed_line_public("glVertex3f(radius, 0, 0);");
-    repl_feed_line_public("}");
-    repl_feed_line_public("func0(2);");
+    editor_feed_line("float r;");
+    editor_feed_line("");
+    editor_feed_line("// func prelude");
+    editor_feed_line("func0(radius) {");
+    editor_feed_line("glVertex3f(radius, 0, 0);");
+    editor_feed_line("}");
+    editor_feed_line("func0(2);");
     repl_export_save_output(decl_func_blank_path, source_document_view(), NULL);
 
     glr_app_reset_all(); declare_test_vars();
@@ -571,12 +571,12 @@ int main(void) {
                        "func prelude") != NULL);
 
     glr_app_reset_all(); declare_test_vars();
-    repl_feed_line_public("x = 0.25;");
-    repl_feed_line_public("glutSolidSphere(x, 16, 12);");
-    repl_feed_line_public("glutSolidCone(0.15, 1.5, 8, 1);");
-    repl_feed_line_public("glutSolidTorus(0.1, 0.35, 12, 4);");
-    repl_feed_line_public("glutSolidTeapot(0.25);");
-    repl_feed_line_public("glutSolidCube(0.5);");
+    editor_feed_line("x = 0.25;");
+    editor_feed_line("glutSolidSphere(x, 16, 12);");
+    editor_feed_line("glutSolidCone(0.15, 1.5, 8, 1);");
+    editor_feed_line("glutSolidTorus(0.1, 0.35, 12, 4);");
+    editor_feed_line("glutSolidTeapot(0.25);");
+    editor_feed_line("glutSolidCube(0.5);");
     glr_state_presentation_mut()->show_vertex_outlines = 0;
     glr_state_presentation_mut()->show_vertex_points = 0;
     repl_export_save_output(shape_path, source_document_view(), NULL);
@@ -629,17 +629,17 @@ int main(void) {
                            "g_quadric") == NULL);
 
     glr_app_reset_all(); declare_test_vars();
-    repl_feed_line_public("func0(radius) {");
-    repl_feed_line_public("gluBegin(GLU_POLYGON);");
-    repl_feed_line_public("gluBegin(GLU_CONTOUR);");
-    repl_feed_line_public("for(i, 0, 4) {");
-    repl_feed_line_public("gluColor(0.25 + 0.15*sin(i), 0.3, 0.4);");
-    repl_feed_line_public("gluVertex(radius*cos(i), 0, radius*sin(i));");
-    repl_feed_line_public("}");
-    repl_feed_line_public("gluEnd();");
-    repl_feed_line_public("gluEnd();");
-    repl_feed_line_public("}");
-    repl_feed_line_public("func0(2.0);");
+    editor_feed_line("func0(radius) {");
+    editor_feed_line("gluBegin(GLU_POLYGON);");
+    editor_feed_line("gluBegin(GLU_CONTOUR);");
+    editor_feed_line("for(i, 0, 4) {");
+    editor_feed_line("gluColor(0.25 + 0.15*sin(i), 0.3, 0.4);");
+    editor_feed_line("gluVertex(radius*cos(i), 0, radius*sin(i));");
+    editor_feed_line("}");
+    editor_feed_line("gluEnd();");
+    editor_feed_line("gluEnd();");
+    editor_feed_line("}");
+    editor_feed_line("func0(2.0);");
     glr_state_presentation_mut()->show_vertex_outlines = 1;
     glr_state_presentation_mut()->show_vertex_points = 1;
     repl_export_save_output(tess_path, source_document_view(), NULL);

@@ -142,9 +142,9 @@ int main() {
     /* 6. Block helpers */
     {
         glr_app_reset_all(); declare_test_vars();
-        repl_feed_line_public("for(i, 0, 1) {");     /* 0 */
-        repl_feed_line_public("  glVertex3f(0,0,0);"); /* 1 */
-        repl_feed_line_public("}");                    /* 2 */
+        editor_feed_line("for(i, 0, 1) {");     /* 0 */
+        editor_feed_line("  glVertex3f(0,0,0);"); /* 1 */
+        editor_feed_line("}");                    /* 2 */
 
         ASSERT_INT("repl_source_scope_find_block_end(0)", repl_source_scope_find_block_end(0), 2);
         ASSERT_INT("repl_source_scope_block_depth_at(1)", repl_source_scope_block_depth_at(1), 1);
@@ -155,8 +155,8 @@ int main() {
     /* 7. collect_visible_vars */
     {
         glr_app_reset_all(); declare_test_vars();
-        repl_feed_line_public("for(i, 0, 1) {");
-        repl_feed_line_public("  for(j, 0, 1) {");
+        editor_feed_line("for(i, 0, 1) {");
+        editor_feed_line("  for(j, 0, 1) {");
 
         ExprVar vars[8];
         int n = collect_visible_vars(2, vars, 8, NULL);
@@ -177,11 +177,11 @@ int main() {
         FlatProgramView live_view;
 
         glr_app_reset_all(); declare_test_vars();
-        repl_feed_line_public("glEnable(GL_LIGHTING);");
-        repl_feed_line_public("func0(r) {");
-        repl_feed_line_public("  glVertex3f(r, 0, 0);");
-        repl_feed_line_public("}");
-        repl_feed_line_public("func0(2);");
+        editor_feed_line("glEnable(GL_LIGHTING);");
+        editor_feed_line("func0(r) {");
+        editor_feed_line("  glVertex3f(r, 0, 0);");
+        editor_feed_line("}");
+        editor_feed_line("func0(2);");
         repl_flatten_commands();
         live_count = repl_state_flat_program_count();
         live_first = repl_state_flat_program_cmds()[0];
@@ -242,8 +242,8 @@ int main() {
         ReplCommandStore store;
 
         glr_app_reset_all(); declare_test_vars();
-        repl_feed_line_public("for(i, 0, 1) {");
-        repl_feed_line_public("}");
+        editor_feed_line("for(i, 0, 1) {");
+        editor_feed_line("}");
         ASSERT_INT("command_store_load pre-cache depth", repl_source_scope_block_depth_at(1), 1);
 
         memset(loaded, 0, sizeof(loaded));
@@ -553,8 +553,8 @@ int main() {
         /* Test A: verify collect_visible_vars returns correct total when not truncated */
         {
             glr_app_reset_all(); declare_test_vars();
-            repl_feed_line_public("for(i, 0, 1) {");
-            repl_feed_line_public("  for(j, 0, 1) {");
+            editor_feed_line("for(i, 0, 1) {");
+            editor_feed_line("  for(j, 0, 1) {");
 
             ExprVar vars[8];
             int total = 0;
@@ -571,7 +571,7 @@ int main() {
                and we ask for only 8, we should see total > 8 if we had more scope */
             ExprVar vars[8];
             int total = 0;
-            repl_feed_line_public("for(i, 0, 1) {");
+            editor_feed_line("for(i, 0, 1) {");
             int count1 = collect_visible_vars(1, vars, 8, &total);
             ASSERT_INT("1 loop with max_vars=8: count", count1, 1);
             ASSERT_INT("1 loop with max_vars=8: total", total, 1);
@@ -582,9 +582,9 @@ int main() {
          * nesting (the truncation guard should never fire here). */
         {
             glr_app_reset_all();
-            repl_feed_line_public("for(i, 0, 1) {");
-            repl_feed_line_public("  for(j, 0, 1) {");
-            repl_feed_line_public("    for(k, 0, 1) {");
+            editor_feed_line("for(i, 0, 1) {");
+            editor_feed_line("  for(j, 0, 1) {");
+            editor_feed_line("    for(k, 0, 1) {");
             ExprVar vars[MAX_EXPR_VARS];
             int total = 0;
             int count = collect_visible_vars(3, vars, MAX_EXPR_VARS, &total);
@@ -602,11 +602,11 @@ int main() {
 
             /* Simulate 5 nested scopes */
             glr_app_reset_all();
-            repl_feed_line_public("for(a, 0, 1) {");
-            repl_feed_line_public("  for(b, 0, 1) {");
-            repl_feed_line_public("    for(c, 0, 1) {");
-            repl_feed_line_public("      for(d, 0, 1) {");
-            repl_feed_line_public("        for(e, 0, 1) {");
+            editor_feed_line("for(a, 0, 1) {");
+            editor_feed_line("  for(b, 0, 1) {");
+            editor_feed_line("    for(c, 0, 1) {");
+            editor_feed_line("      for(d, 0, 1) {");
+            editor_feed_line("        for(e, 0, 1) {");
             /* Query at position 5 with max_vars=4 */
             int count = collect_visible_vars(5, vars, 4, &total);
             ASSERT_INT("5 nested, max_vars=4: count capped", count, 4);

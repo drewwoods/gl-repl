@@ -398,10 +398,10 @@ static void test_reformat_keeps_buffer_and_store_aligned(void) {
 static void test_set_predef_value_prefers_last_literal_assign(void) {
     glr_app_reset_all();
 
-    repl_feed_line_public("float x = 1, y;");
-    repl_feed_line_public("x = 2;");
-    repl_feed_line_public("x = y + 1;");
-    repl_feed_line_public("x = 3;");
+    editor_feed_line("float x = 1, y;");
+    editor_feed_line("x = 2;");
+    editor_feed_line("x = y + 1;");
+    editor_feed_line("x = 3;");
 
     ReplCompileContext ctx = repl_compile_context_from_live();
     ReplCompiledChange change;
@@ -433,7 +433,7 @@ static void test_set_predef_value_prefers_last_literal_assign(void) {
 static void test_set_predef_value_rewrites_declaration_initializer(void) {
     glr_app_reset_all();
 
-    repl_feed_line_public("float a = 1, x = 2, y; // vars");
+    editor_feed_line("float a = 1, x = 2, y; // vars");
 
     ReplCompileContext ctx = repl_compile_context_from_live();
     ReplCompiledChange change;
@@ -462,7 +462,7 @@ static void test_set_predef_value_rewrites_declaration_initializer(void) {
 static void test_set_predef_value_adds_declaration_initializer(void) {
     glr_app_reset_all();
 
-    repl_feed_line_public("float x;");
+    editor_feed_line("float x;");
 
     ReplCompileContext ctx = repl_compile_context_from_live();
     ReplCompiledChange change;
@@ -484,9 +484,9 @@ static void test_set_predef_value_adds_declaration_initializer(void) {
 static void test_set_predef_value_keeps_expression_sources(void) {
     glr_app_reset_all();
 
-    repl_feed_line_public("float x;");
-    repl_feed_line_public("float y;");
-    repl_feed_line_public("x = y + 1;");
+    editor_feed_line("float x;");
+    editor_feed_line("float y;");
+    editor_feed_line("x = y + 1;");
 
     ReplCompileContext ctx = repl_compile_context_from_live();
     ReplCompiledChange change;
@@ -622,9 +622,9 @@ static void test_func_def_comment_relocation(void) {
      *   line 2: // continuation          (top-level comment)
      *   cursor sits at line 3 (end of doc), about to define func0.
      */
-    repl_feed_line_public("  glVertex3f(1, 0, 0);");
-    repl_feed_line_public("// descriptive comment");
-    repl_feed_line_public("// continuation");
+    editor_feed_line("  glVertex3f(1, 0, 0);");
+    editor_feed_line("// descriptive comment");
+    editor_feed_line("// continuation");
 
     int pre_doc_count = repl_state_document_count();
     ASSERT_INT("pre-funcdef doc count", pre_doc_count, 3);
@@ -688,10 +688,10 @@ static void test_func_def_comment_relocation(void) {
 static void test_func_def_blank_line_relocation(void) {
     glr_app_reset_all();
 
-    repl_feed_line_public("  glVertex3f(1, 0, 0);");
-    repl_feed_line_public("");
-    repl_feed_line_public("// descriptive comment");
-    repl_feed_line_public("// continuation");
+    editor_feed_line("  glVertex3f(1, 0, 0);");
+    editor_feed_line("");
+    editor_feed_line("// descriptive comment");
+    editor_feed_line("// continuation");
 
     ASSERT_INT("pre-funcdef blank relocation count",
                repl_state_document_count(), 4);
@@ -739,11 +739,11 @@ static void test_func_def_resume_publish_consumed_by_close_brace(void) {
      * That's a degenerate case; let's add a vertex above so the
      * cursor sits past more state.
      */
-    repl_feed_line_public("// header");
-    repl_feed_line_public("  glVertex3f(1, 0, 0);");
+    editor_feed_line("// header");
+    editor_feed_line("  glVertex3f(1, 0, 0);");
 
     /* Move cursor between the vertex and a new comment. */
-    repl_feed_line_public("// before func");
+    editor_feed_line("// before func");
     int pre_count = repl_state_document_count();
     ASSERT_INT("pre-funcdef count", pre_count, 3);
 
@@ -771,10 +771,10 @@ static void test_func_def_resume_publish_consumed_by_close_brace(void) {
      * = 4 - 1 = 3. resume_delta = 3 - 2 = 1.
      */
     glr_app_reset_all();
-    repl_feed_line_public("// header");
-    repl_feed_line_public("// pre-vertex");
-    repl_feed_line_public("  glVertex3f(1, 0, 0);");
-    repl_feed_line_public("// about to define func");
+    editor_feed_line("// header");
+    editor_feed_line("// pre-vertex");
+    editor_feed_line("  glVertex3f(1, 0, 0);");
+    editor_feed_line("// about to define func");
 
     set_input("func0() {");
     /* Drive the migration through try_commit_block_structs since

@@ -170,8 +170,8 @@ int main() {
     /* 5. User-defined function completion */
     {
         glr_app_reset_all(); declare_test_vars();
-        repl_feed_line_public("func0(radius, height) {");
-        repl_feed_line_public("}");
+        editor_feed_line("func0(radius, height) {");
+        editor_feed_line("}");
 
         set_input_text("func0(");
 

@@ -441,7 +441,7 @@ int main() {
     /* 0c3. Search mode captures printable editing keys before text editing. */
     {
         glr_app_reset_all();
-        repl_feed_line_public("glVertex3f(0,0,0)");
+        editor_feed_line("glVertex3f(0,0,0)");
         set_editor_input("");
 
         editor_handle_key(KEY_CTRL_F, 0, 0);
@@ -511,7 +511,7 @@ int main() {
     /* 0c6. Search mode captures special arrows before editor/help navigation. */
     {
         glr_app_reset_all();
-        repl_feed_line_public("glVertex3f(0,0,0)");
+        editor_feed_line("glVertex3f(0,0,0)");
         navigate_to_line(0);
         set_editor_input("abc");
         editor_cursor_pos_set(2);
@@ -617,14 +617,14 @@ int main() {
     {
         float scratch = 0.0f;
         glr_app_reset_all(); declare_test_vars();
-        repl_feed_line_public("A[0] = 3;");
+        editor_feed_line("A[0] = 3;");
         ASSERT_INT("num_cmds 1", repl_state_document_count(), 1);
         ASSERT_TRUE("scratch set before undo snapshot",
                     repl_eval_scratch_get(0, 0, &scratch) && fabsf(scratch - 3.0f) < 1e-6f);
 
         editor_undo_push_snapshot();
-        repl_feed_line_public("A[0] = 7;");
-        repl_feed_line_public("glVertex3f(2,2,2)");
+        editor_feed_line("A[0] = 7;");
+        editor_feed_line("glVertex3f(2,2,2)");
         ASSERT_INT("num_cmds 3", repl_state_document_count(), 3);
         ASSERT_TRUE("scratch changed after redo mutation",
                     repl_eval_scratch_get(0, 0, &scratch) && fabsf(scratch - 7.0f) < 1e-6f);
@@ -645,9 +645,9 @@ int main() {
     /* 4. Deleting commands - basic */
     {
         glr_app_reset_all(); declare_test_vars();
-        repl_feed_line_public("glVertex3f(0,0,0)");
-        repl_feed_line_public("glVertex3f(1,1,1)");
-        repl_feed_line_public("glVertex3f(2,2,2)");
+        editor_feed_line("glVertex3f(0,0,0)");
+        editor_feed_line("glVertex3f(1,1,1)");
+        editor_feed_line("glVertex3f(2,2,2)");
         ASSERT_INT("num_cmds 3", repl_state_document_count(), 3);
 
         delete_cmd_range(1, 1, "test");
@@ -659,7 +659,7 @@ int main() {
     /* 5. delete_cmd_range - count=0 (no-op) */
     {
         glr_app_reset_all();
-        repl_feed_line_public("glVertex3f(1,1,1)");
+        editor_feed_line("glVertex3f(1,1,1)");
         delete_cmd_range(0, 0, "noop");
         ASSERT_INT("delete count=0: no change", repl_state_document_count(), 1);
     }
@@ -667,7 +667,7 @@ int main() {
     /* 6. delete_cmd_range - start=repl_state_document_count() (out of bounds, no-op) */
     {
         glr_app_reset_all();
-        repl_feed_line_public("glVertex3f(1,1,1)");
+        editor_feed_line("glVertex3f(1,1,1)");
         delete_cmd_range(1, 1, "oob");  /* start == repl_state_document_count() (1) */
         ASSERT_INT("delete oob start: no change", repl_state_document_count(), 1);
     }
@@ -675,8 +675,8 @@ int main() {
     /* 7. delete_cmd_range - count clamped when over-count */
     {
         glr_app_reset_all();
-        repl_feed_line_public("glVertex3f(0,0,0)");
-        repl_feed_line_public("glVertex3f(1,1,1)");
+        editor_feed_line("glVertex3f(0,0,0)");
+        editor_feed_line("glVertex3f(1,1,1)");
         /* ask to delete 5 but only 1 remains at start=1 */
         delete_cmd_range(1, 5, "clamp");
         ASSERT_INT("delete clamp: leaves 1 cmd", repl_state_document_count(), 1);
@@ -686,8 +686,8 @@ int main() {
     /* 8. delete_cmd_range - edit_line clamped when it would exceed repl_state_document_count() */
     {
         glr_app_reset_all();
-        repl_feed_line_public("glVertex3f(0,0,0)");
-        repl_feed_line_public("glVertex3f(1,1,1)");
+        editor_feed_line("glVertex3f(0,0,0)");
+        editor_feed_line("glVertex3f(1,1,1)");
         repl_state_edit_line_set(2);  /* beyond last cmd */
         delete_cmd_range(1, 1, "elclamp");
         /* repl_state_edit_line() should be clamped to repl_state_document_count() (1) */
@@ -697,11 +697,11 @@ int main() {
     /* 8a. delete_cmd_range - interior multi-line block */
     {
         glr_app_reset_all();
-        repl_feed_line_public("glVertex3f(0,0,0)");
-        repl_feed_line_public("glVertex3f(1,1,1)");
-        repl_feed_line_public("glVertex3f(2,2,2)");
-        repl_feed_line_public("glVertex3f(3,3,3)");
-        repl_feed_line_public("glVertex3f(4,4,4)");
+        editor_feed_line("glVertex3f(0,0,0)");
+        editor_feed_line("glVertex3f(1,1,1)");
+        editor_feed_line("glVertex3f(2,2,2)");
+        editor_feed_line("glVertex3f(3,3,3)");
+        editor_feed_line("glVertex3f(4,4,4)");
         editor_state_selection_set(1, 3);
 
         delete_cmd_range(1, 3, "Deleted");
@@ -718,11 +718,11 @@ int main() {
     /* 8b. Backspace deletes a reversed selection */
     {
         glr_app_reset_all();
-        repl_feed_line_public("glVertex3f(0,0,0)");
-        repl_feed_line_public("glVertex3f(1,1,1)");
-        repl_feed_line_public("glVertex3f(2,2,2)");
-        repl_feed_line_public("glVertex3f(3,3,3)");
-        repl_feed_line_public("glVertex3f(4,4,4)");
+        editor_feed_line("glVertex3f(0,0,0)");
+        editor_feed_line("glVertex3f(1,1,1)");
+        editor_feed_line("glVertex3f(2,2,2)");
+        editor_feed_line("glVertex3f(3,3,3)");
+        editor_feed_line("glVertex3f(4,4,4)");
         editor_state_selection_set(4, 2);
         repl_state_edit_line_set(4);
 
@@ -738,11 +738,11 @@ int main() {
     /* 8b2. Ctrl+D deletes a selected range through its own key path */
     {
         glr_app_reset_all();
-        repl_feed_line_public("glVertex3f(0,0,0)");
-        repl_feed_line_public("glVertex3f(1,1,1)");
-        repl_feed_line_public("glVertex3f(2,2,2)");
-        repl_feed_line_public("glVertex3f(3,3,3)");
-        repl_feed_line_public("glVertex3f(4,4,4)");
+        editor_feed_line("glVertex3f(0,0,0)");
+        editor_feed_line("glVertex3f(1,1,1)");
+        editor_feed_line("glVertex3f(2,2,2)");
+        editor_feed_line("glVertex3f(3,3,3)");
+        editor_feed_line("glVertex3f(4,4,4)");
         editor_state_selection_set(3, 1);
         repl_state_edit_line_set(3);
 
@@ -759,11 +759,11 @@ int main() {
     /* 8c. Undo/redo after a multi-line delete */
     {
         glr_app_reset_all();
-        repl_feed_line_public("glVertex3f(0,0,0)");
-        repl_feed_line_public("glVertex3f(1,1,1)");
-        repl_feed_line_public("glVertex3f(2,2,2)");
-        repl_feed_line_public("glVertex3f(3,3,3)");
-        repl_feed_line_public("glVertex3f(4,4,4)");
+        editor_feed_line("glVertex3f(0,0,0)");
+        editor_feed_line("glVertex3f(1,1,1)");
+        editor_feed_line("glVertex3f(2,2,2)");
+        editor_feed_line("glVertex3f(3,3,3)");
+        editor_feed_line("glVertex3f(4,4,4)");
 
         delete_cmd_range(1, 3, "Deleted");
         ASSERT_INT("delete undo setup: leaves 2 cmds", repl_state_document_count(), 2);
@@ -780,13 +780,13 @@ int main() {
     /* 8d. Copy selected block and paste inside a later block */
     {
         glr_app_reset_all(); declare_test_vars();
-        repl_feed_line_public("glBegin(GL_POINTS);");
-        repl_feed_line_public("glVertex3f(0,0,0);");
-        repl_feed_line_public("glVertex3f(1,1,1);");
-        repl_feed_line_public("glEnd();");
-        repl_feed_line_public("if(x > 0) {");
-        repl_feed_line_public("glColor3f(1,0,0);");
-        repl_feed_line_public("}");
+        editor_feed_line("glBegin(GL_POINTS);");
+        editor_feed_line("glVertex3f(0,0,0);");
+        editor_feed_line("glVertex3f(1,1,1);");
+        editor_feed_line("glEnd();");
+        editor_feed_line("if(x > 0) {");
+        editor_feed_line("glColor3f(1,0,0);");
+        editor_feed_line("}");
         editor_state_selection_set(1, 2);
 
         editor_handle_key(3, 0, 0);
@@ -822,10 +822,10 @@ int main() {
     /* 8e. Cut selected block, then undo/redo */
     {
         glr_app_reset_all();
-        repl_feed_line_public("glVertex3f(0,0,0)");
-        repl_feed_line_public("glVertex3f(1,1,1)");
-        repl_feed_line_public("glVertex3f(2,2,2)");
-        repl_feed_line_public("glVertex3f(3,3,3)");
+        editor_feed_line("glVertex3f(0,0,0)");
+        editor_feed_line("glVertex3f(1,1,1)");
+        editor_feed_line("glVertex3f(2,2,2)");
+        editor_feed_line("glVertex3f(3,3,3)");
         editor_state_selection_set(1, 2);
 
         editor_handle_key(24, 0, 0);
@@ -849,9 +849,9 @@ int main() {
     /* 8f. Copy/cut from a for-begin line captures the whole block */
     {
         glr_app_reset_all(); declare_test_vars();
-        repl_feed_line_public("for(i, 0, 2) {");
-        repl_feed_line_public("glVertex3f(i,0,0);");
-        repl_feed_line_public("}");
+        editor_feed_line("for(i, 0, 2) {");
+        editor_feed_line("glVertex3f(i,0,0);");
+        editor_feed_line("}");
         repl_state_edit_line_set(0);
 
         editor_handle_key(3, 0, 0);
@@ -863,9 +863,9 @@ int main() {
         ASSERT_INT("copy for block: source unchanged", repl_state_document_count(), 3);
 
         glr_app_reset_all(); declare_test_vars();
-        repl_feed_line_public("for(i, 0, 2) {");
-        repl_feed_line_public("glVertex3f(i,0,0);");
-        repl_feed_line_public("}");
+        editor_feed_line("for(i, 0, 2) {");
+        editor_feed_line("glVertex3f(i,0,0);");
+        editor_feed_line("}");
         repl_state_edit_line_set(0);
 
         editor_handle_key(24, 0, 0);
@@ -881,7 +881,7 @@ int main() {
     /* 8g. Paste with empty clipboard */
     {
         glr_app_reset_all();
-        repl_feed_line_public("glVertex3f(1,1,1)");
+        editor_feed_line("glVertex3f(1,1,1)");
         editor_state_clipboard_count_set(0);
 
         editor_handle_key(22, 0, 0);
@@ -894,7 +894,7 @@ int main() {
     /* 8h. Paste refuses to overflow the command buffer */
     {
         glr_app_reset_all();
-        repl_feed_line_public("glVertex3f(1,1,1)");
+        editor_feed_line("glVertex3f(1,1,1)");
         repl_copy_string_fits(editor_state_clipboard_mut()->lines[0], MAX_LINE_LEN,
                               editor_buffer_line(0));
         editor_state_clipboard_count_set(1);
@@ -915,8 +915,8 @@ int main() {
      * and surfaces a parser-level diagnostic if it conflicts.) */
     {
         glr_app_reset_all();
-        repl_feed_line_public("float n;");
-        repl_feed_line_public("n = 5;");
+        editor_feed_line("float n;");
+        editor_feed_line("n = 5;");
         repl_copy_string_fits(editor_state_clipboard_mut()->lines[0], MAX_LINE_LEN,
                               editor_buffer_line(1));
         editor_state_clipboard_count_set(1);
@@ -933,8 +933,8 @@ int main() {
     /* 8j. Copy/cut in insert mode clear selection without touching clipboard */
     {
         glr_app_reset_all();
-        repl_feed_line_public("glVertex3f(1,1,1)");
-        repl_feed_line_public("glVertex3f(2,2,2)");
+        editor_feed_line("glVertex3f(1,1,1)");
+        editor_feed_line("glVertex3f(2,2,2)");
         repl_copy_string_fits(editor_state_clipboard_mut()->lines[0], MAX_LINE_LEN,
                               editor_buffer_line(1));
         editor_state_clipboard_count_set(1);
@@ -960,8 +960,8 @@ int main() {
     /* 8k. Backspace in insert mode edits input instead of selected source lines */
     {
         glr_app_reset_all();
-        repl_feed_line_public("glVertex3f(1,1,1)");
-        repl_feed_line_public("glVertex3f(2,2,2)");
+        editor_feed_line("glVertex3f(1,1,1)");
+        editor_feed_line("glVertex3f(2,2,2)");
         editor_state_selection_set(0, 1);
         repl_state_edit_line_set(1);
         editor_insert_mode_set(1);
@@ -1004,7 +1004,7 @@ int main() {
     {
         glr_app_reset_all();
         /* Feed a label command to create a CMD_GOTO_LABEL entry */
-        repl_feed_line_public(":myloop");
+        editor_feed_line(":myloop");
         ASSERT_INT("label cmd created", repl_state_document_count(), 1);
         ASSERT_INT("label cmd type", repl_state_document_cmds_mut()[0].type, CMD_GOTO_LABEL);
 
@@ -1018,7 +1018,7 @@ int main() {
     /* 10. navigate_to_line - clamp target < 0 */
     {
         glr_app_reset_all();
-        repl_feed_line_public("glVertex3f(1,1,1)");
+        editor_feed_line("glVertex3f(1,1,1)");
         navigate_to_line(-5);
         ASSERT_INT("navigate_to_line neg: edit_line=0", repl_state_edit_line(), 0);
     }
@@ -1026,7 +1026,7 @@ int main() {
     /* 11. navigate_to_line - clamp target > repl_state_document_count() */
     {
         glr_app_reset_all();
-        repl_feed_line_public("glVertex3f(1,1,1)");
+        editor_feed_line("glVertex3f(1,1,1)");
         navigate_to_line(999);
         ASSERT_INT("navigate_to_line over: edit_line=repl_state_document_count()", repl_state_edit_line(), repl_state_document_count());
     }
@@ -1049,11 +1049,11 @@ int main() {
     /* 12b. Enter on an empty insert row creates a persistent blank line. */
     {
         glr_app_reset_all();
-        repl_feed_line_public("glBegin(GL_POINTS);");
-        repl_feed_line_public("glColor3f(1,0,0);");
-        repl_feed_line_public("glEnd();");
+        editor_feed_line("glBegin(GL_POINTS);");
+        editor_feed_line("glColor3f(1,0,0);");
+        editor_feed_line("glEnd();");
 
-        repl_navigate_to_line(1);
+        editor_navigate_to_line(1);
         editor_cursor_pos_set(1);
         editor_handle_key('\r', 0, 0);
 
@@ -1068,7 +1068,7 @@ int main() {
         ASSERT_INT("blank line inserted: edit line advances", repl_state_edit_line(), 3);
         ASSERT_INT("blank line inserted: stays in insert mode", editor_insert_mode(), 1);
 
-        repl_navigate_to_line(2);
+        editor_navigate_to_line(2);
 
         ASSERT_INT("blank line edit uses scope indent",
                    editor_code_panel_document_active_indent_chars(),
@@ -1078,8 +1078,8 @@ int main() {
     /* 13. try_assign_variable - inserting mode (inserts before cursor) */
     {
         glr_app_reset_all(); declare_test_vars();
-        repl_feed_line_public("glVertex3f(1,1,1)");
-        repl_feed_line_public("glVertex3f(2,2,2)");
+        editor_feed_line("glVertex3f(1,1,1)");
+        editor_feed_line("glVertex3f(2,2,2)");
         /* Put cursor at line 1, inserting mode */
         repl_state_edit_line_set(1);
         editor_insert_mode_set(1);
@@ -1099,8 +1099,8 @@ int main() {
     /* 14. try_assign_variable - overwrite existing cmd */
     {
         glr_app_reset_all(); declare_test_vars();
-        repl_feed_line_public("n = 1.0");
-        repl_feed_line_public("glVertex3f(1,1,1)");
+        editor_feed_line("n = 1.0");
+        editor_feed_line("glVertex3f(1,1,1)");
         /* Navigate to the assignment line and overwrite */
         repl_state_edit_line_set(0);
         editor_insert_mode_set(0);
@@ -1282,7 +1282,7 @@ int main() {
     /* 23. Committing close brace - for-loop */
     {
         glr_app_reset_all(); declare_test_vars();
-        repl_feed_line_public("for(i, 0, 1) {");
+        editor_feed_line("for(i, 0, 1) {");
         {
             ReplEditorInputState *inp = editor_state_input_mut();
             strcpy(inp->input, "}");
@@ -1436,7 +1436,7 @@ int main() {
     /* 27. float decl WITH trailing semicolon (feed_line path) */
     {
         glr_app_reset_all();
-        repl_feed_line_public("float abc;");
+        editor_feed_line("float abc;");
         ASSERT_INT("float_decl with-semi: cmd added", repl_state_document_count(), 1);
         ASSERT_INT("float_decl with-semi: type", repl_state_document_cmds_mut()[0].type, CMD_VAR_DECLARE);
         ASSERT_STR("float_decl with-semi: var name", repl_state_document_cmds_mut()[0].var_names[0], "abc");
@@ -1473,7 +1473,7 @@ int main() {
     /* 29. float decl with initializer expression */
     {
         glr_app_reset_all();
-        repl_feed_line_public("float radius = 2.5;");
+        editor_feed_line("float radius = 2.5;");
         ASSERT_INT("float_decl init expr: cmd added", repl_state_document_count(), 1);
         ASSERT_INT("float_decl init expr: type", repl_state_document_cmds_mut()[0].type, CMD_VAR_DECLARE);
         ASSERT_STR("float_decl init expr: var name", repl_state_document_cmds_mut()[0].var_names[0], "radius");
@@ -1514,7 +1514,7 @@ int main() {
     /* 31. multi-name float decl with initializers */
     {
         glr_app_reset_all();
-        repl_feed_line_public("float x = 1, y = 2;");
+        editor_feed_line("float x = 1, y = 2;");
         ASSERT_INT("float_decl multi init: cmd added", repl_state_document_count(), 1);
         ASSERT_INT("float_decl multi init: var_decl_count",
                    repl_state_document_cmds_mut()[0].var_decl_count, 2);
@@ -1539,12 +1539,12 @@ int main() {
      * the top of non-decl code. */
     {
         glr_app_reset_all();
-        repl_feed_line_public("float n;");
-        repl_feed_line_public("n = 5;");
-        repl_feed_line_public("glBegin(GL_POINTS);");
+        editor_feed_line("float n;");
+        editor_feed_line("n = 5;");
+        editor_feed_line("glBegin(GL_POINTS);");
         ASSERT_INT("decl-top baseline: 3 cmds", repl_state_document_count(), 3);
 
-        repl_feed_line_public("float tmp = 40;");
+        editor_feed_line("float tmp = 40;");
         ASSERT_INT("decl-top: 4 cmds after float tmp", repl_state_document_count(), 4);
         ASSERT_INT("decl-top: repl_state_document_cmds_mut()[0] is float n", repl_state_document_cmds_mut()[0].type, CMD_VAR_DECLARE);
         ASSERT_STR("decl-top: repl_state_document_cmds_mut()[0] name", repl_state_document_cmds_mut()[0].var_names[0], "n");
@@ -1558,8 +1558,8 @@ int main() {
      * lands at the top (not at the cursor). */
     {
         glr_app_reset_all();
-        repl_feed_line_public("glBegin(GL_LINES);");
-        repl_feed_line_public("glEnd();");
+        editor_feed_line("glBegin(GL_LINES);");
+        editor_feed_line("glEnd();");
         ASSERT_INT("decl-top mid: 2 cmds", repl_state_document_count(), 2);
 
         /* Simulate being on line 1 in overwrite mode when committing
@@ -1593,7 +1593,7 @@ int main() {
      * names (still registered from the old decl) collided. */
     {
         glr_app_reset_all();
-        repl_feed_line_public("float a, b;");
+        editor_feed_line("float a, b;");
         ASSERT_INT("overwrite shared: baseline cmd count", repl_state_document_count(), 1);
         ASSERT_TRUE("overwrite shared: a registered",
                     repl_eval_find_predef_var_idx("a") >= 0);
@@ -1630,8 +1630,8 @@ int main() {
      * names and errored on `n is in use` even though `n` is being kept. */
     {
         glr_app_reset_all();
-        repl_feed_line_public("float n, b;");
-        repl_feed_line_public("n = 5;");
+        editor_feed_line("float n, b;");
+        editor_feed_line("n = 5;");
         ASSERT_INT("drop b: baseline cmd count", repl_state_document_count(), 2);
 
         {
@@ -1659,8 +1659,8 @@ int main() {
      * different name in the same decl). */
     {
         glr_app_reset_all();
-        repl_feed_line_public("float n, b;");
-        repl_feed_line_public("b = 7;");
+        editor_feed_line("float n, b;");
+        editor_feed_line("b = 7;");
         ASSERT_INT("drop referenced b: baseline", repl_state_document_count(), 2);
 
         {
@@ -1690,8 +1690,8 @@ int main() {
      * referenced outside the deleted range. */
     {
         glr_app_reset_all();
-        repl_feed_line_public("float n;");
-        repl_feed_line_public("n = 5;");
+        editor_feed_line("float n;");
+        editor_feed_line("n = 5;");
         ASSERT_TRUE("delete referenced decl setup: n registered",
                     repl_eval_find_predef_var_idx("n") >= 0);
 
@@ -1709,8 +1709,8 @@ int main() {
     /* 37a. Ctrl+X rejects cutting declaration lines */
     {
         glr_app_reset_all();
-        repl_feed_line_public("float n;");
-        repl_feed_line_public("n = 5;");
+        editor_feed_line("float n;");
+        editor_feed_line("n = 5;");
         repl_copy_string_fits(editor_state_clipboard_mut()->lines[0], MAX_LINE_LEN,
                               editor_buffer_line(1));
         editor_state_clipboard_count_set(1);
@@ -1731,8 +1731,8 @@ int main() {
     /* 37b. Ctrl+X rejects blocks that include a declaration and all uses */
     {
         glr_app_reset_all();
-        repl_feed_line_public("float n;");
-        repl_feed_line_public("n = 5;");
+        editor_feed_line("float n;");
+        editor_feed_line("n = 5;");
         ASSERT_TRUE("cut decl block setup: n registered",
                     repl_eval_find_predef_var_idx("n") >= 0);
         repl_copy_string_fits(editor_state_clipboard_mut()->lines[0], MAX_LINE_LEN,
@@ -1754,8 +1754,8 @@ int main() {
      * no remaining references means the variable can be cleanly removed. */
     {
         glr_app_reset_all();
-        repl_feed_line_public("float n;");
-        repl_feed_line_public("n = 5;");
+        editor_feed_line("float n;");
+        editor_feed_line("n = 5;");
         ASSERT_TRUE("delete decl block setup: n registered",
                     repl_eval_find_predef_var_idx("n") >= 0);
 
@@ -1769,7 +1769,7 @@ int main() {
     /* 38a. Deleting an unreferenced decl line on its own succeeds. */
     {
         glr_app_reset_all();
-        repl_feed_line_public("float n;");
+        editor_feed_line("float n;");
         ASSERT_TRUE("delete unref decl setup: n registered",
                     repl_eval_find_predef_var_idx("n") >= 0);
 
@@ -1825,7 +1825,7 @@ int main() {
                     snprintf(last_var, sizeof(last_var), "v%d", base + j);
             }
             snprintf(decl + pos, sizeof(decl) - pos, ";");
-            repl_feed_line_public(decl);
+            editor_feed_line(decl);
             filled_cmds++;
         }
         ASSERT_INT("decl table full setup: all decl cmds", repl_state_document_count(), filled_cmds);
@@ -1854,7 +1854,7 @@ int main() {
     /* 41. Declaration validation failures are atomic */
     {
         glr_app_reset_all();
-        repl_feed_line_public("float anchor;");
+        editor_feed_line("float anchor;");
         ASSERT_INT("decl atomic setup: one decl", repl_state_document_count(), 1);
         ASSERT_TRUE("decl atomic setup: anchor registered",
                     repl_eval_find_predef_var_idx("anchor") >= 0);
@@ -1880,10 +1880,10 @@ int main() {
      * value 0.0f, silently zeroing a, b, and c. */
     {
         glr_app_reset_all();
-        repl_feed_line_public("float a, b, c;");
-        repl_feed_line_public("a = 1;");
-        repl_feed_line_public("b = 2;");
-        repl_feed_line_public("c = 3;");
+        editor_feed_line("float a, b, c;");
+        editor_feed_line("a = 1;");
+        editor_feed_line("b = 2;");
+        editor_feed_line("c = 3;");
         ASSERT_INT("expand decl: baseline cmd count", repl_state_document_count(), 4);
 
         int ai = repl_eval_find_predef_var_idx("a");
@@ -1976,8 +1976,8 @@ int main() {
     /* Replay keyboard dispatch is owned by repl_replay.c, not the editor. */
     {
         glr_app_reset_all(); declare_test_vars();
-        repl_feed_line_public("glVertex3f(0, 0, 0);");
-        repl_feed_line_public("glVertex3f(1, 0, 0);");
+        editor_feed_line("glVertex3f(0, 0, 0);");
+        editor_feed_line("glVertex3f(1, 0, 0);");
         repl_flatten_commands();
 
         ASSERT_INT("replay key ctrl-r consumed",
@@ -2036,7 +2036,7 @@ int main() {
         for (int i = 0; i < 30; i++) {
             char line[64];
             snprintf(line, sizeof(line), "glVertex3f(%d, 0, 0);", i);
-            repl_feed_line_public(line);
+            editor_feed_line(line);
         }
         repl_flatten_commands();
 
@@ -2085,13 +2085,13 @@ int main() {
      * structural gluBegin/gluEnd commands that wrap them. */
     {
         glr_app_reset_all(); declare_test_vars();
-        repl_feed_line_public("gluBegin(GLU_POLYGON);");
-        repl_feed_line_public("gluBegin(GLU_CONTOUR);");
-        repl_feed_line_public("gluVertex(0, 0, 0);");
-        repl_feed_line_public("gluVertex(1, 0, 0);");
-        repl_feed_line_public("gluVertex(0, 1, 0);");
-        repl_feed_line_public("gluEnd();");
-        repl_feed_line_public("gluEnd();");
+        editor_feed_line("gluBegin(GLU_POLYGON);");
+        editor_feed_line("gluBegin(GLU_CONTOUR);");
+        editor_feed_line("gluVertex(0, 0, 0);");
+        editor_feed_line("gluVertex(1, 0, 0);");
+        editor_feed_line("gluVertex(0, 1, 0);");
+        editor_feed_line("gluEnd();");
+        editor_feed_line("gluEnd();");
         repl_flatten_commands();
 
         replay_mode = REPLAY_MODE_VERTEX;
@@ -2121,9 +2121,9 @@ int main() {
         int visible_lines = -1;
 
         glr_app_reset_all(); declare_test_vars();
-        repl_feed_line_public("glVertex3f(0, 0, 0);");
-        repl_feed_line_public("glVertex3f(x, y, z);");
-        repl_feed_line_public("glVertex3f(2, 0, 0);");
+        editor_feed_line("glVertex3f(0, 0, 0);");
+        editor_feed_line("glVertex3f(x, y, z);");
+        editor_feed_line("glVertex3f(2, 0, 0);");
         repl_flatten_commands();
 
 
@@ -2176,9 +2176,9 @@ int main() {
      * of the cursor. */
     {
         glr_app_reset_all();
-        repl_feed_line_public("glVertex3f(0,0,0)");
-        repl_feed_line_public("glVertex3f(1,1,1)");
-        repl_feed_line_public("glVertex3f(2,2,2)");
+        editor_feed_line("glVertex3f(0,0,0)");
+        editor_feed_line("glVertex3f(1,1,1)");
+        editor_feed_line("glVertex3f(2,2,2)");
         navigate_to_line(2);
         ASSERT_INT("enter-at-last: setup edit_line", repl_state_edit_line(), 2);
         ASSERT_INT("enter-at-last: setup not inserting", editor_insert_mode(), 0);
@@ -2201,7 +2201,7 @@ int main() {
         for (int i = 0; i < 20; i++) {
             char line[64];
             snprintf(line, sizeof(line), "glVertex3f(%d, 0, 0);", i);
-            repl_feed_line_public(line);
+            editor_feed_line(line);
         }
 
 
@@ -2241,7 +2241,7 @@ int main() {
      * fix only keyboard_func set the flag, so Up/Down left the view stale. */
     {
         glr_app_reset_all();
-        repl_feed_line_public("glVertex3f(0,0,0)");
+        editor_feed_line("glVertex3f(0,0,0)");
         navigate_to_line(0);
 
         g_scroll_follow_cursor = 0;
@@ -2274,7 +2274,7 @@ int main() {
         for (int i = 0; i < 20; i++) {
             char line[64];
             snprintf(line, sizeof(line), "glVertex3f(%d, 0, 0);", i);
-            repl_feed_line_public(line);
+            editor_feed_line(line);
         }
 
 
@@ -2299,8 +2299,8 @@ int main() {
     /* Auto-commit modified lines before keyboard navigation. */
     {
         glr_app_reset_all();
-        repl_feed_line_public("glVertex3f(0,0,0)");
-        repl_feed_line_public("glVertex3f(1,1,1)");
+        editor_feed_line("glVertex3f(0,0,0)");
+        editor_feed_line("glVertex3f(1,1,1)");
         navigate_to_line(0);
         set_editor_input("glVertex3f(9, 0, 0)");
 
@@ -2320,8 +2320,8 @@ int main() {
         int old_num_cmds;
 
         glr_app_reset_all();
-        repl_feed_line_public("glColor3f(1,0,0)");
-        repl_feed_line_public("glVertex3f(1,1,1)");
+        editor_feed_line("glColor3f(1,0,0)");
+        editor_feed_line("glVertex3f(1,1,1)");
         navigate_to_line(0);
         snprintf(old_source, sizeof(old_source), "%s",
                  editor_buffer_line(0) ? editor_buffer_line(0) : "");
@@ -2343,8 +2343,8 @@ int main() {
     /* Auto-commit new end-of-buffer input before moving away. */
     {
         glr_app_reset_all();
-        repl_feed_line_public("glVertex3f(0,0,0)");
-        repl_feed_line_public("glVertex3f(1,1,1)");
+        editor_feed_line("glVertex3f(0,0,0)");
+        editor_feed_line("glVertex3f(1,1,1)");
         navigate_to_line(repl_state_document_count());
         set_editor_input("glVertex3f(3, 3, 3)");
 
@@ -2363,8 +2363,8 @@ int main() {
         int old_num_cmds;
 
         glr_app_reset_all();
-        repl_feed_line_public("glVertex3f(0,0,0)");
-        repl_feed_line_public("glVertex3f(1,1,1)");
+        editor_feed_line("glVertex3f(0,0,0)");
+        editor_feed_line("glVertex3f(1,1,1)");
         old_num_cmds = repl_state_document_count();
         navigate_to_line(repl_state_document_count());
         set_editor_input("glVertex3f(");
@@ -2388,9 +2388,9 @@ int main() {
     /* Code-panel clicks use the same auto-commit path. */
     {
         glr_app_reset_all();
-        repl_feed_line_public("glVertex3f(0,0,0)");
-        repl_feed_line_public("glVertex3f(1,1,1)");
-        repl_feed_line_public("glVertex3f(2,2,2)");
+        editor_feed_line("glVertex3f(0,0,0)");
+        editor_feed_line("glVertex3f(1,1,1)");
+        editor_feed_line("glVertex3f(2,2,2)");
 
         ui_state_viewport_set_size(800, 600);
         g_panel_frac = 0.5f;
@@ -2416,8 +2416,8 @@ int main() {
     /* Autocomplete Up/Down keeps selection behavior and does not navigate. */
     {
         glr_app_reset_all();
-        repl_feed_line_public("glVertex3f(0,0,0)");
-        repl_feed_line_public("glVertex3f(1,1,1)");
+        editor_feed_line("glVertex3f(0,0,0)");
+        editor_feed_line("glVertex3f(1,1,1)");
         navigate_to_line(0);
         set_editor_input("glVertex3f(7, 0, 0)");
         g_ac_count = 2;
@@ -2440,8 +2440,8 @@ int main() {
 
         glr_app_reset_all();
         base_num_predef_vars = g_num_predef_vars;
-        repl_feed_line_public("float tmp;");
-        repl_feed_line_public("glVertex3f(1, 0, 0)");
+        editor_feed_line("float tmp;");
+        editor_feed_line("glVertex3f(1, 0, 0)");
         ASSERT_INT("clear_all: setup two cmds", repl_state_document_count(), 2);
         ASSERT_INT("clear_all: first is var decl", repl_state_document_cmds_mut()[0].type, CMD_VAR_DECLARE);
         ASSERT_INT("clear_all: decl registers one predef var",
@@ -2478,8 +2478,8 @@ int main() {
         int saved_mods = g_mock_modifiers;
 
         glr_app_reset_all();
-        repl_feed_line_public("float x;");
-        repl_feed_line_public("x = 1;");
+        editor_feed_line("float x;");
+        editor_feed_line("x = 1;");
         ASSERT_INT("uncomment setup: two cmds", repl_state_document_count(), 2);
         ASSERT_INT("uncomment setup: line 1 is assign",
                    repl_state_document_cmds_mut()[1].type, CMD_VAR_ASSIGN);
@@ -2521,7 +2521,7 @@ int main() {
         int saved_mods = g_mock_modifiers;
 
         glr_app_reset_all();
-        repl_feed_line_public("float comment_x;");
+        editor_feed_line("float comment_x;");
         ASSERT_TRUE("comment-decl setup: x declared",
                     repl_eval_find_predef_var_idx("comment_x") >= 0);
 
@@ -2547,8 +2547,8 @@ int main() {
         int saved_mods = g_mock_modifiers;
 
         glr_app_reset_all();
-        repl_feed_line_public("float refed_y;");
-        repl_feed_line_public("refed_y = 5;");
+        editor_feed_line("float refed_y;");
+        editor_feed_line("refed_y = 5;");
 
         repl_state_edit_line_set(0);
         editor_insert_mode_set(0);
@@ -2571,8 +2571,8 @@ int main() {
      * real use of `p`; deleting `float p;` should succeed. */
     {
         glr_app_reset_all();
-        repl_feed_line_public("float p;");
-        repl_feed_line_public("// p axis");
+        editor_feed_line("float p;");
+        editor_feed_line("// p axis");
         ASSERT_TRUE("delete-with-comment-mention setup: p declared",
                     repl_eval_find_predef_var_idx("p") >= 0);
 
@@ -2592,8 +2592,8 @@ int main() {
      * the trailing comment. */
     {
         glr_app_reset_all();
-        repl_feed_line_public("float p;");
-        repl_feed_line_public("glVertex3f(0,0,0); // p axis");
+        editor_feed_line("float p;");
+        editor_feed_line("glVertex3f(0,0,0); // p axis");
         ASSERT_TRUE("delete-with-inline-comment setup: p declared",
                     repl_eval_find_predef_var_idx("p") >= 0);
         ASSERT_INT("delete-with-inline-comment setup: vertex line is GL cmd",
@@ -2626,7 +2626,7 @@ int main() {
         int saved_mods = g_mock_modifiers;
 
         glr_app_reset_all();
-        repl_feed_line_public("glVertex3f(0, 0, 0);");
+        editor_feed_line("glVertex3f(0, 0, 0);");
         repl_state_edit_line_set(0);
         editor_insert_mode_set(0);
         g_status[0] = '\0';
@@ -2685,7 +2685,7 @@ int main() {
     {
         int saved_mods = g_mock_modifiers;
         glr_app_reset_all();
-        repl_feed_line_public("glVertex3f(1,1,1)");
+        editor_feed_line("glVertex3f(1,1,1)");
         ASSERT_INT("Ctrl+L setup: 1 cmd", repl_state_document_count(), 1);
 
         g_mock_modifiers = GLUT_ACTIVE_CTRL;
@@ -2821,8 +2821,8 @@ int main() {
     /* Extra coverage: timer_func logic */
     {
         glr_app_reset_all();
-        repl_feed_line_public("glVertex3f(0,0,0);");
-        repl_feed_line_public("glVertex3f(1,1,1);");
+        editor_feed_line("glVertex3f(0,0,0);");
+        editor_feed_line("glVertex3f(1,1,1);");
         repl_flatten_commands();
 
         /* 1. Status TTL decrement */
@@ -2854,7 +2854,7 @@ int main() {
         glr_app_reset_all();
         ui_state_viewport_set_size(1000, 1000);
         variable_panel_view_mut()->visible = 1;
-        repl_feed_line_public("float testvar = 5.0;");
+        editor_feed_line("float testvar = 5.0;");
 
         /* Variable panel is usually at bottom-right of scene.
          * Scene is to the right of code panel (0.3 frac).
@@ -2887,7 +2887,7 @@ int main() {
         int saved_mods = g_mock_modifiers;
         glr_app_reset_all();
         editor_undo_push_snapshot();
-        repl_feed_line_public("glVertex3f(1,1,1)");
+        editor_feed_line("glVertex3f(1,1,1)");
         ASSERT_INT("undo setup: 1 cmd", repl_state_document_count(), 1);
 
         /* Undo */
@@ -2981,7 +2981,7 @@ int main() {
     {
         int saved_mods = g_mock_modifiers;
         glr_app_reset_all();
-        repl_feed_line_public("glVertex3f(1,1,1)");
+        editor_feed_line("glVertex3f(1,1,1)");
 
         g_mock_modifiers = GLUT_ACTIVE_CTRL;
 
@@ -3046,9 +3046,9 @@ int main() {
     /* Extra coverage: Commenting Func/If blocks */
     {
         glr_app_reset_all();
-        repl_feed_line_public("if(1) {");
-        repl_feed_line_public("  glVertex3f(0,0,0);");
-        repl_feed_line_public("}");
+        editor_feed_line("if(1) {");
+        editor_feed_line("  glVertex3f(0,0,0);");
+        editor_feed_line("}");
 
         int saved_mods = g_mock_modifiers;
         g_mock_modifiers = GLUT_ACTIVE_CTRL;
@@ -3069,9 +3069,9 @@ int main() {
      * for-loop in one stroke. */
     {
         glr_app_reset_all();
-        repl_feed_line_public("for(i, 0, 3) {");
-        repl_feed_line_public("  glVertex2f(i, 0);");
-        repl_feed_line_public("}");
+        editor_feed_line("for(i, 0, 3) {");
+        editor_feed_line("  glVertex2f(i, 0);");
+        editor_feed_line("}");
 
         int saved_mods = g_mock_modifiers;
         g_mock_modifiers = GLUT_ACTIVE_CTRL;
@@ -3102,9 +3102,9 @@ int main() {
      * back to the matching FOR_BEGIN and comments the whole block. */
     {
         glr_app_reset_all();
-        repl_feed_line_public("for(i, 0, 3) {");
-        repl_feed_line_public("  glVertex2f(i, 0);");
-        repl_feed_line_public("}");
+        editor_feed_line("for(i, 0, 3) {");
+        editor_feed_line("  glVertex2f(i, 0);");
+        editor_feed_line("}");
 
         int saved_mods = g_mock_modifiers;
         g_mock_modifiers = GLUT_ACTIVE_CTRL;
@@ -3127,9 +3127,9 @@ int main() {
      * different head/end cmd kinds. */
     {
         glr_app_reset_all();
-        repl_feed_line_public("func0() {");
-        repl_feed_line_public("  glVertex3f(0,0,0);");
-        repl_feed_line_public("}");
+        editor_feed_line("func0() {");
+        editor_feed_line("  glVertex3f(0,0,0);");
+        editor_feed_line("}");
 
         int saved_mods = g_mock_modifiers;
         g_mock_modifiers = GLUT_ACTIVE_CTRL;
@@ -3154,7 +3154,7 @@ int main() {
         int saved_mods = g_mock_modifiers;
 
         glr_app_reset_all();
-        repl_feed_line_public("glVertex3f(0, 0, 0);");
+        editor_feed_line("glVertex3f(0, 0, 0);");
         repl_state_edit_line_set(0);
         editor_insert_mode_set(0);
         g_status[0] = '\0';
@@ -3181,7 +3181,7 @@ int main() {
         int saved_mods = g_mock_modifiers;
 
         glr_app_reset_all();
-        repl_feed_line_public("glVertex3f(0, 0, 0);");
+        editor_feed_line("glVertex3f(0, 0, 0);");
         editor_set_line_comment_prefix(NULL);
 
         repl_state_edit_line_set(0);
@@ -3219,7 +3219,7 @@ int main() {
         glr_app_reset_all();
         ui_state_viewport_set_size(1000, 1000);
         variable_panel_view_mut()->visible = 1;
-        repl_feed_line_public("float testvar = 5.0;");
+        editor_feed_line("float testvar = 5.0;");
 
         int px, py, pw, ph;
         ui_variable_panel_rect_for_count(g_num_predef_vars, &px, &py, &pw, &ph);

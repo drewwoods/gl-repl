@@ -58,8 +58,8 @@ int main(void) {
     repl_eval_init_predef_vars();
 
     glr_app_reset_all(); declare_test_vars();
-    repl_feed_line_public("glColor3f(1, 0, 0);");
-    repl_feed_line_public("glEnd();");
+    editor_feed_line("glColor3f(1, 0, 0);");
+    editor_feed_line("glEnd();");
     {
         char before0[MAX_LINE_LEN];
         int before_num = repl_state_document_count();
@@ -77,9 +77,9 @@ int main(void) {
     }
 
     glr_app_reset_all(); declare_test_vars();
-    repl_feed_line_public("// color COLOR");
-    repl_feed_line_public("glColor3f(1, 0, 0);");
-    repl_feed_line_public("glVertex3f(0, 0, 0);");
+    editor_feed_line("// color COLOR");
+    editor_feed_line("glColor3f(1, 0, 0);");
+    editor_feed_line("glVertex3f(0, 0, 0);");
     open_search();
     type_search_text("CoLoR");
     {
@@ -121,9 +121,9 @@ int main(void) {
     }
 
     glr_app_reset_all(); declare_test_vars();
-    repl_feed_line_public("glBegin(GL_POINTS);");
-    repl_feed_line_public("glEnd();");
-    repl_navigate_to_line(1);
+    editor_feed_line("glBegin(GL_POINTS);");
+    editor_feed_line("glEnd();");
+    editor_navigate_to_line(1);
     open_search();
     type_search_text("#include");
     ASSERT_TRUE("header text is not searched", g_search_match_count == 0);
@@ -131,8 +131,8 @@ int main(void) {
     ASSERT_TRUE("zero-hit search leaves line unchanged", repl_state_edit_line() == 1);
 
     glr_app_reset_all(); declare_test_vars();
-    repl_feed_line_public("glBegin(GL_POINTS);");
-    repl_navigate_to_line(0);
+    editor_feed_line("glBegin(GL_POINTS);");
+    editor_navigate_to_line(0);
     set_live_input("NeedleLine");
     open_search();
     type_search_text("needle");
@@ -187,7 +187,7 @@ int main(void) {
     }
 
     glr_app_reset_all(); declare_test_vars();
-    repl_feed_line_public("abc");
+    editor_feed_line("abc");
     open_search();
     type_search_text("abc");
     ASSERT_TRUE("search cursor starts at query len", g_search_cursor_pos == 3);
@@ -201,7 +201,7 @@ int main(void) {
     ASSERT_TRUE("search cursor end", g_search_cursor_pos == g_search_query_len);
 
     glr_app_reset_all(); declare_test_vars();
-    repl_feed_line_public("abcd");
+    editor_feed_line("abcd");
     open_search();
     type_search_text("abcd");
     ASSERT_TRUE("search backspace initial len", g_search_query_len == 4);
@@ -211,8 +211,8 @@ int main(void) {
                 strcmp(g_search_query, "abc") == 0);
 
     glr_app_reset_all(); declare_test_vars();
-    repl_feed_line_public("glBegin(GL_POINTS);");
-    repl_feed_line_public("glEnd();");
+    editor_feed_line("glBegin(GL_POINTS);");
+    editor_feed_line("glEnd();");
     editor_insert_mode_set(1);
     repl_state_edit_line_set(1);
     ASSERT_TRUE("row count inserting includes input row",

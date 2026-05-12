@@ -36,11 +36,11 @@ static void test_degenerate_normal(void) {
 
     glr_app_reset_all(); declare_test_vars();
     /* All three vertices collinear along x - cross product is zero */
-    repl_feed_line_public("glBegin(GL_TRIANGLES);");
-    repl_feed_line_public("glVertex3f(0, 0, 0);");
-    repl_feed_line_public("glVertex3f(1, 0, 0);");
-    repl_feed_line_public("glVertex3f(2, 0, 0);");
-    repl_feed_line_public("glEnd();");
+    editor_feed_line("glBegin(GL_TRIANGLES);");
+    editor_feed_line("glVertex3f(0, 0, 0);");
+    editor_feed_line("glVertex3f(1, 0, 0);");
+    editor_feed_line("glVertex3f(2, 0, 0);");
+    editor_feed_line("glEnd();");
     repl_recompute_autonormals(1);
 
     /* An auto-normal should be inserted before each vertex */
@@ -60,12 +60,12 @@ static void test_triangle_strip(void) {
     printf("test_triangle_strip\n");
 
     glr_app_reset_all(); declare_test_vars();
-    repl_feed_line_public("glBegin(GL_TRIANGLE_STRIP);");
-    repl_feed_line_public("glVertex3f(0, 0, 0);");
-    repl_feed_line_public("glVertex3f(1, 0, 0);");
-    repl_feed_line_public("glVertex3f(0, 1, 0);");
-    repl_feed_line_public("glVertex3f(1, 1, 0);");
-    repl_feed_line_public("glEnd();");
+    editor_feed_line("glBegin(GL_TRIANGLE_STRIP);");
+    editor_feed_line("glVertex3f(0, 0, 0);");
+    editor_feed_line("glVertex3f(1, 0, 0);");
+    editor_feed_line("glVertex3f(0, 1, 0);");
+    editor_feed_line("glVertex3f(1, 1, 0);");
+    editor_feed_line("glEnd();");
     repl_recompute_autonormals(1);
 
     /* 4 vertices + 4 auto normals + BEGIN + END */
@@ -86,12 +86,12 @@ static void test_triangle_fan(void) {
     printf("test_triangle_fan\n");
 
     glr_app_reset_all(); declare_test_vars();
-    repl_feed_line_public("glBegin(GL_TRIANGLE_FAN);");
-    repl_feed_line_public("glVertex3f(0, 0, 0);");
-    repl_feed_line_public("glVertex3f(1, 0, 0);");
-    repl_feed_line_public("glVertex3f(0, 1, 0);");
-    repl_feed_line_public("glVertex3f(-1, 0, 0);");
-    repl_feed_line_public("glEnd();");
+    editor_feed_line("glBegin(GL_TRIANGLE_FAN);");
+    editor_feed_line("glVertex3f(0, 0, 0);");
+    editor_feed_line("glVertex3f(1, 0, 0);");
+    editor_feed_line("glVertex3f(0, 1, 0);");
+    editor_feed_line("glVertex3f(-1, 0, 0);");
+    editor_feed_line("glEnd();");
     repl_recompute_autonormals(1);
 
     /* 4 vertices + 4 auto normals + BEGIN + END */
@@ -110,12 +110,12 @@ static void test_quads(void) {
     printf("test_quads\n");
 
     glr_app_reset_all(); declare_test_vars();
-    repl_feed_line_public("glBegin(GL_QUADS);");
-    repl_feed_line_public("glVertex3f(0, 0, 0);");
-    repl_feed_line_public("glVertex3f(1, 0, 0);");
-    repl_feed_line_public("glVertex3f(1, 1, 0);");
-    repl_feed_line_public("glVertex3f(0, 1, 0);");
-    repl_feed_line_public("glEnd();");
+    editor_feed_line("glBegin(GL_QUADS);");
+    editor_feed_line("glVertex3f(0, 0, 0);");
+    editor_feed_line("glVertex3f(1, 0, 0);");
+    editor_feed_line("glVertex3f(1, 1, 0);");
+    editor_feed_line("glVertex3f(0, 1, 0);");
+    editor_feed_line("glEnd();");
     repl_recompute_autonormals(1);
 
     /* 4 vertices + 4 auto normals + BEGIN + END */
@@ -134,12 +134,12 @@ static void test_quad_strip(void) {
     printf("test_quad_strip\n");
 
     glr_app_reset_all(); declare_test_vars();
-    repl_feed_line_public("glBegin(GL_QUAD_STRIP);");
-    repl_feed_line_public("glVertex3f(0, 0, 0);");
-    repl_feed_line_public("glVertex3f(1, 0, 0);");
-    repl_feed_line_public("glVertex3f(0, 1, 0);");
-    repl_feed_line_public("glVertex3f(1, 1, 0);");
-    repl_feed_line_public("glEnd();");
+    editor_feed_line("glBegin(GL_QUAD_STRIP);");
+    editor_feed_line("glVertex3f(0, 0, 0);");
+    editor_feed_line("glVertex3f(1, 0, 0);");
+    editor_feed_line("glVertex3f(0, 1, 0);");
+    editor_feed_line("glVertex3f(1, 1, 0);");
+    editor_feed_line("glEnd();");
     repl_recompute_autonormals(1);
 
     /* 4 vertices + 4 auto normals + BEGIN + END */
@@ -158,12 +158,12 @@ static void test_polygon(void) {
     printf("test_polygon\n");
 
     glr_app_reset_all(); declare_test_vars();
-    repl_feed_line_public("glBegin(GL_POLYGON);");
-    repl_feed_line_public("glVertex3f(0, 0, 0);");
-    repl_feed_line_public("glVertex3f(1, 0, 0);");
-    repl_feed_line_public("glVertex3f(1, 1, 0);");
-    repl_feed_line_public("glVertex3f(0, 1, 0);");
-    repl_feed_line_public("glEnd();");
+    editor_feed_line("glBegin(GL_POLYGON);");
+    editor_feed_line("glVertex3f(0, 0, 0);");
+    editor_feed_line("glVertex3f(1, 0, 0);");
+    editor_feed_line("glVertex3f(1, 1, 0);");
+    editor_feed_line("glVertex3f(0, 1, 0);");
+    editor_feed_line("glEnd();");
     repl_recompute_autonormals(1);
 
     /* 4 vertices + 4 auto normals + BEGIN + END */
@@ -182,10 +182,10 @@ static void test_unsupported_mode(void) {
 
     glr_app_reset_all(); declare_test_vars();
     /* GL_LINES is valid for glBegin but not handled in compute_block_normals */
-    repl_feed_line_public("glBegin(GL_LINES);");
-    repl_feed_line_public("glVertex3f(0, 0, 0);");
-    repl_feed_line_public("glVertex3f(1, 0, 0);");
-    repl_feed_line_public("glEnd();");
+    editor_feed_line("glBegin(GL_LINES);");
+    editor_feed_line("glVertex3f(0, 0, 0);");
+    editor_feed_line("glVertex3f(1, 0, 0);");
+    editor_feed_line("glEnd();");
     repl_recompute_autonormals(1);
 
     /* compute_block_normals default branch leaves all norms at zero,
@@ -206,14 +206,14 @@ static void test_block_skipping(void) {
 
     /* for-loop block before glBegin */
     glr_app_reset_all(); declare_test_vars();
-    repl_feed_line_public("for(n, 0, 2) {");
-    repl_feed_line_public("glVertex3f(n, 0, 0);");
-    repl_feed_line_public("}");
-    repl_feed_line_public("glBegin(GL_TRIANGLES);");
-    repl_feed_line_public("glVertex3f(0, 0, 0);");
-    repl_feed_line_public("glVertex3f(1, 0, 0);");
-    repl_feed_line_public("glVertex3f(0, 1, 0);");
-    repl_feed_line_public("glEnd();");
+    editor_feed_line("for(n, 0, 2) {");
+    editor_feed_line("glVertex3f(n, 0, 0);");
+    editor_feed_line("}");
+    editor_feed_line("glBegin(GL_TRIANGLES);");
+    editor_feed_line("glVertex3f(0, 0, 0);");
+    editor_feed_line("glVertex3f(1, 0, 0);");
+    editor_feed_line("glVertex3f(0, 1, 0);");
+    editor_feed_line("glEnd();");
     int cmds_before = repl_state_document_count();
     repl_recompute_autonormals(1);
 
@@ -222,14 +222,14 @@ static void test_block_skipping(void) {
 
     /* func-def block before glBegin */
     glr_app_reset_all(); declare_test_vars();
-    repl_feed_line_public("func0(n) {");
-    repl_feed_line_public("glVertex3f(n, 0, 0);");
-    repl_feed_line_public("}");
-    repl_feed_line_public("glBegin(GL_TRIANGLES);");
-    repl_feed_line_public("glVertex3f(0, 0, 0);");
-    repl_feed_line_public("glVertex3f(1, 0, 0);");
-    repl_feed_line_public("glVertex3f(0, 1, 0);");
-    repl_feed_line_public("glEnd();");
+    editor_feed_line("func0(n) {");
+    editor_feed_line("glVertex3f(n, 0, 0);");
+    editor_feed_line("}");
+    editor_feed_line("glBegin(GL_TRIANGLES);");
+    editor_feed_line("glVertex3f(0, 0, 0);");
+    editor_feed_line("glVertex3f(1, 0, 0);");
+    editor_feed_line("glVertex3f(0, 1, 0);");
+    editor_feed_line("glEnd();");
     cmds_before = repl_state_document_count();
     repl_recompute_autonormals(1);
 
@@ -237,14 +237,14 @@ static void test_block_skipping(void) {
 
     /* if-block before glBegin */
     glr_app_reset_all(); declare_test_vars();
-    repl_feed_line_public("if(n > 0) {");
-    repl_feed_line_public("glVertex3f(0, 0, 0);");
-    repl_feed_line_public("}");
-    repl_feed_line_public("glBegin(GL_TRIANGLES);");
-    repl_feed_line_public("glVertex3f(0, 0, 0);");
-    repl_feed_line_public("glVertex3f(1, 0, 0);");
-    repl_feed_line_public("glVertex3f(0, 1, 0);");
-    repl_feed_line_public("glEnd();");
+    editor_feed_line("if(n > 0) {");
+    editor_feed_line("glVertex3f(0, 0, 0);");
+    editor_feed_line("}");
+    editor_feed_line("glBegin(GL_TRIANGLES);");
+    editor_feed_line("glVertex3f(0, 0, 0);");
+    editor_feed_line("glVertex3f(1, 0, 0);");
+    editor_feed_line("glVertex3f(0, 1, 0);");
+    editor_feed_line("glEnd();");
     cmds_before = repl_state_document_count();
     repl_recompute_autonormals(1);
 
@@ -259,11 +259,11 @@ static void test_autonormal_disabled(void) {
     printf("test_autonormal_disabled\n");
 
     glr_app_reset_all(); declare_test_vars();
-    repl_feed_line_public("glBegin(GL_TRIANGLES);");
-    repl_feed_line_public("glVertex3f(0, 0, 0);");
-    repl_feed_line_public("glVertex3f(1, 0, 0);");
-    repl_feed_line_public("glVertex3f(0, 1, 0);");
-    repl_feed_line_public("glEnd();");
+    editor_feed_line("glBegin(GL_TRIANGLES);");
+    editor_feed_line("glVertex3f(0, 0, 0);");
+    editor_feed_line("glVertex3f(1, 0, 0);");
+    editor_feed_line("glVertex3f(0, 1, 0);");
+    editor_feed_line("glEnd();");
     repl_recompute_autonormals(0);  /* disabled — no normals inserted */
     ASSERT_INT("disabled: no cmds added", repl_state_document_count(), 5);
 }
@@ -276,11 +276,11 @@ static void test_gl_triangles(void) {
     printf("test_gl_triangles\n");
 
     glr_app_reset_all(); declare_test_vars();
-    repl_feed_line_public("glBegin(GL_TRIANGLES);");
-    repl_feed_line_public("glVertex3f(0, 0, 0);");
-    repl_feed_line_public("glVertex3f(1, 0, 0);");
-    repl_feed_line_public("glVertex3f(0, 1, 0);");
-    repl_feed_line_public("glEnd();");
+    editor_feed_line("glBegin(GL_TRIANGLES);");
+    editor_feed_line("glVertex3f(0, 0, 0);");
+    editor_feed_line("glVertex3f(1, 0, 0);");
+    editor_feed_line("glVertex3f(0, 1, 0);");
+    editor_feed_line("glEnd();");
     repl_recompute_autonormals(1);
     ASSERT_TRUE("autonormal inserts before each triangle vertex", repl_state_document_count() == 8);
     ASSERT_TRUE("autonormal default front-face first cmd type", repl_state_document_cmds_mut()[1].type == CMD_NORMAL3F);
@@ -288,12 +288,12 @@ static void test_gl_triangles(void) {
     ASSERT_TRUE("autonormal default front-face keeps +z", fabsf(repl_state_document_cmds_mut()[1].args[2] - 1.0f) < 1e-6f);
 
     glr_app_reset_all(); declare_test_vars();
-    repl_feed_line_public("glFrontFace(GL_CW);");
-    repl_feed_line_public("glBegin(GL_TRIANGLES);");
-    repl_feed_line_public("glVertex3f(0, 0, 0);");
-    repl_feed_line_public("glVertex3f(1, 0, 0);");
-    repl_feed_line_public("glVertex3f(0, 1, 0);");
-    repl_feed_line_public("glEnd();");
+    editor_feed_line("glFrontFace(GL_CW);");
+    editor_feed_line("glBegin(GL_TRIANGLES);");
+    editor_feed_line("glVertex3f(0, 0, 0);");
+    editor_feed_line("glVertex3f(1, 0, 0);");
+    editor_feed_line("glVertex3f(0, 1, 0);");
+    editor_feed_line("glEnd();");
     repl_recompute_autonormals(1);
     ASSERT_TRUE("autonormal front-face cw inserts before each triangle vertex", repl_state_document_count() == 9);
     ASSERT_TRUE("autonormal front-face cw first cmd type", repl_state_document_cmds_mut()[2].type == CMD_NORMAL3F);

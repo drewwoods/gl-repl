@@ -41,7 +41,7 @@ int main(void) {
 
     glr_app_reset_all();
     declare_test_vars();
-    repl_feed_line_public(line);
+    editor_feed_line(line);
     ASSERT_TRUE("feed inserted one", repl_state_document_count() == 1);
     ASSERT_TRUE("feed matches interactive",
                 strcmp(editor_buffer_line(0), interactive_text) == 0);
@@ -111,9 +111,9 @@ int main(void) {
 
     glr_app_reset_all();
     declare_test_vars();
-    repl_feed_line_public("for(i, 0, 3) {");
-    repl_feed_line_public("x = i + 1;");
-    repl_feed_line_public("}");
+    editor_feed_line("for(i, 0, 3) {");
+    editor_feed_line("x = i + 1;");
+    editor_feed_line("}");
     ASSERT_TRUE("assign in loop cmd count", repl_state_document_count() == 3);
     ASSERT_TRUE("assign in loop type", repl_state_document_cmds_mut()[1].type == CMD_VAR_ASSIGN);
     ASSERT_TRUE("assign in loop indent", strncmp(editor_buffer_line(1), "    ", 4) == 0);
@@ -180,7 +180,7 @@ int main(void) {
     }
 
     glr_app_reset_all();
-    repl_feed_line_public("float a = 2, b, c = 3;");
+    editor_feed_line("float a = 2, b, c = 3;");
     ASSERT_TRUE("decl cmd count", repl_state_document_count() == 1);
     ASSERT_TRUE("decl cmd type", repl_state_document_cmds_mut()[0].type == CMD_VAR_DECLARE);
     editor_buffer_set_line(0, "float a=max(1, 2),b,c=abs(-3)// vars");

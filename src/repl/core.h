@@ -158,7 +158,7 @@ void repl_advance_time(float dt);
 void repl_reset_time_to_zero(void);
 
 /* --- Editor / navigation helpers called from outside src/repl/core.c ------- */
-void repl_navigate_to_line(int target);
+void editor_navigate_to_line(int target);
 void repl_load_initial_commands(const char *import_file);
 /* Pure REPL pass: walks every command and rewrites the canonical
  * line text + GLCmd in place. Does not save/restore editor input;
@@ -188,6 +188,6 @@ int  repl_find_feeding_color_cmd(int line_idx);
 /* Public wrapper over the internal feed_line() so test code outside
  * src/repl/core_internal.h users can drive command commitment end-to-end.
  * Used by integration tests that validate parsing → commit → execute flows. */
-void repl_feed_line_public(const char *line);
+void editor_feed_line(const char *line);
 
 #endif /* REPL_CORE_H */
