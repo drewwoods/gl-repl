@@ -577,8 +577,8 @@ int main(void) {
     printf("\n--- select_word_at integration ---\n");
     {
         glr_app_reset_all();
-        repl_feed_line_public("glVertex3f(1, 2, 3);");
-        repl_navigate_to_line(0);
+        editor_feed_line("glVertex3f(1, 2, 3);");
+        editor_navigate_to_line(0);
 
         /* Click on the 'V' of glVertex3f → selects the whole
          * identifier. */
@@ -599,8 +599,8 @@ int main(void) {
     printf("\n--- double-click dispatches word selection ---\n");
     {
         glr_app_reset_all();
-        repl_feed_line_public("glVertex3f(1, 2, 3);");
-        repl_navigate_to_line(0);
+        editor_feed_line("glVertex3f(1, 2, 3);");
+        editor_navigate_to_line(0);
 
         glr_ctrl_router_set_double_click_clock_for_test(test_clock_ms_provider);
 
@@ -654,8 +654,8 @@ int main(void) {
         glr_app_reset_all();
         /* Seed a single source line so the press hit targets a real
          * committed row. */
-        repl_feed_line_public("glVertex3f(1, 2, 3);");
-        repl_navigate_to_line(0);
+        editor_feed_line("glVertex3f(1, 2, 3);");
+        editor_navigate_to_line(0);
         ASSERT_INT("baseline edit line", repl_state_edit_line(), 0);
 
         /* Synthesize a UI_HIT_CODE_TEXT press at char 11 ("1" inside
@@ -709,9 +709,9 @@ int main(void) {
          * accidentally start a multi-line range when they drift the
          * cursor below the row. */
         glr_app_reset_all();
-        repl_feed_line_public("glVertex3f(1, 2, 3);");
-        repl_feed_line_public("glVertex3f(4, 5, 6);");
-        repl_navigate_to_line(0);
+        editor_feed_line("glVertex3f(1, 2, 3);");
+        editor_feed_line("glVertex3f(4, 5, 6);");
+        editor_navigate_to_line(0);
 
         /* Arm the drag on line 0 at char 4. */
         UiHit hit = ui_hit_none();
@@ -762,8 +762,8 @@ int main(void) {
     printf("\n--- press on insert-line / no-drag press does not arm input-row drag ---\n");
     {
         glr_app_reset_all();
-        repl_feed_line_public("glVertex3f(1, 2, 3);");
-        repl_navigate_to_line(0);
+        editor_feed_line("glVertex3f(1, 2, 3);");
+        editor_navigate_to_line(0);
 
         /* UI_HIT_CODE_INSERT_LINE doesn't arm any drag, so the
          * input-row drag helper returns 0 with no state change. */
@@ -888,8 +888,8 @@ int main(void) {
          *   2. After undo, an input-text clipboard payload survives
          *      unchanged (undo does not snapshot clipboard state). */
         glr_app_reset_all();
-        repl_feed_line_public("glVertex3f(1, 2, 3);");
-        repl_navigate_to_line(0);
+        editor_feed_line("glVertex3f(1, 2, 3);");
+        editor_navigate_to_line(0);
         editor_clipboard_set_input_text("sin(t)", 6);
         editor_cursor_pos_set(2);
         editor_input_anchor_set(8);

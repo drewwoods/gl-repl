@@ -93,16 +93,16 @@ void test_utils() {
     ASSERT_INT("current_begin_mode initial", repl_current_begin_mode(), GL_TRIANGLES);
     ASSERT_INT("in_begin_block initial", repl_source_scope_in_begin_block(), 0);
 
-    repl_feed_line_public("glBegin(GL_TRIANGLES);");
-    repl_feed_line_public("glVertex3f(0,0,0);");
-    repl_feed_line_public("glVertex3f(1,0,0);");
+    editor_feed_line("glBegin(GL_TRIANGLES);");
+    editor_feed_line("glVertex3f(0,0,0);");
+    editor_feed_line("glVertex3f(1,0,0);");
     repl_flatten_commands();
 
     ASSERT_INT("count_vertices after 2 vtx", repl_count_vertices(), 2);
     ASSERT_INT("current_begin_mode in block", repl_current_begin_mode(), GL_TRIANGLES);
     ASSERT_INT("in_begin_block in block", repl_source_scope_in_begin_block(), 1);
 
-    repl_feed_line_public("glEnd();");
+    editor_feed_line("glEnd();");
     repl_flatten_commands();
     ASSERT_INT("current_begin_mode after end", repl_current_begin_mode(), GL_TRIANGLES);
     ASSERT_INT("in_begin_block after end", repl_source_scope_in_begin_block(), 0);
@@ -123,9 +123,9 @@ void test_utils() {
 void test_repl_replay_advanced() {
     printf("--- Replay advanced functions ---\n");
     glr_app_reset_all(); declare_test_vars();
-    repl_feed_line_public("glVertex3f(0,0,0);");
-    repl_feed_line_public("glVertex3f(1,1,1);");
-    repl_feed_line_public("glVertex3f(2,2,2);");
+    editor_feed_line("glVertex3f(0,0,0);");
+    editor_feed_line("glVertex3f(1,1,1);");
+    editor_feed_line("glVertex3f(2,2,2);");
     repl_flatten_commands();
 
     int full_flat_count = repl_state_flat_program_count();
@@ -167,7 +167,7 @@ void test_repl_replay_advanced() {
 void test_io() {
     printf("--- IO functions ---\n");
     glr_app_reset_all(); declare_test_vars();
-    repl_feed_line_public("glVertex3f(1,2,3);");
+    editor_feed_line("glVertex3f(1,2,3);");
 
     const char *tmpf = "/tmp/test_repl_core_extra_io.c";
     repl_export_save_output(tmpf, source_document_view(), NULL);
@@ -193,7 +193,7 @@ void test_io() {
 void test_execution() {
     printf("--- Execution functions ---\n");
     glr_app_reset_all(); declare_test_vars();
-    repl_feed_line_public("n = 1;");
+    editor_feed_line("n = 1;");
     repl_flatten_commands();
 
     repl_execute_commands();
@@ -214,7 +214,7 @@ void test_examples() {
 void test_user_scene() {
     printf("--- User scene functions ---\n");
     glr_app_reset_all(); declare_test_vars();
-    repl_feed_line_public("glVertex3f(1,1,1);");
+    editor_feed_line("glVertex3f(1,1,1);");
 
     /* Loading an example should save slot 0 (home scene) if it's the first time */
     repl_load_example(0);
@@ -238,14 +238,14 @@ void test_user_scene_persists_across_example_switch() {
     glr_app_reset_all(); declare_test_vars();
     if (repl_example_count() < 1) return;
 
-    repl_feed_line_public("glVertex3f(1,1,1);");
+    editor_feed_line("glVertex3f(1,1,1);");
     repl_load_example(0);
     ASSERT_INT("home slot used after example load", repl_user_scene_slot_used(0), 1);
 
     repl_load_user_scene();
     ASSERT_INT("active user scene after restore", repl_active_user_scene(), 0);
 
-    repl_feed_line_public("glVertex3f(2,2,2);");
+    editor_feed_line("glVertex3f(2,2,2);");
     repl_flatten_commands();
     ASSERT_INT("edited home scene vertex count", repl_count_vertices(), 2);
 
@@ -327,7 +327,7 @@ void test_workspace_round_trip() {
     if (repl_example_count() < 2) return;
 
     /* Populate: home (from feed) + two promoted example scenes. */
-    repl_feed_line_public("glVertex3f(1,1,1);");
+    editor_feed_line("glVertex3f(1,1,1);");
     repl_load_example(0);
     int p1 = repl_promote_example_if_needed();
     ASSERT_TRUE("first promotion ok", p1 >= 1);
@@ -393,12 +393,12 @@ void test_user_scene_preserves_scratch_state(void) {
     glr_app_reset_all(); declare_test_vars();
     if (repl_example_count() < 1) return;
 
-    repl_feed_line_public("A[0] = 1;");
+    editor_feed_line("A[0] = 1;");
     repl_load_example(0);
     ASSERT_INT("home slot captured", repl_user_scene_slot_used(0), 1);
 
     ASSERT_INT("promotion creates slot 1", repl_promote_example_if_needed(), 1);
-    repl_feed_line_public("A[0] = 5;");
+    editor_feed_line("A[0] = 5;");
 
     {
         float scratch = 0.0f;
@@ -586,7 +586,7 @@ void test_your_scene_persists_edits_from_startup() {
     ASSERT_INT("slot 0 active (Your Scene mode)", repl_active_user_scene(), 0);
 
     /* User adds a vertex in "Your Scene". */
-    repl_feed_line_public("glVertex3f(9,9,9);");
+    editor_feed_line("glVertex3f(9,9,9);");
     repl_flatten_commands();
     ASSERT_INT("vertex present in Your Scene", repl_count_vertices(), 1);
 
@@ -734,13 +734,13 @@ void test_debug_dump_flat_commands() {
     /* Basic source commands: each type name should appear in the flattened
      * dump, with one row per flat command. */
     glr_app_reset_all(); declare_test_vars();
-    repl_feed_line_public("glFrontFace(GL_CW);");
-    repl_feed_line_public("glColor3f(1,0,0);");
-    repl_feed_line_public("glBegin(GL_TRIANGLES);");
-    repl_feed_line_public("glVertex3f(0,0,0);");
-    repl_feed_line_public("glVertex3f(1,0,0);");
-    repl_feed_line_public("glVertex3f(0,1,0);");
-    repl_feed_line_public("glEnd();");
+    editor_feed_line("glFrontFace(GL_CW);");
+    editor_feed_line("glColor3f(1,0,0);");
+    editor_feed_line("glBegin(GL_TRIANGLES);");
+    editor_feed_line("glVertex3f(0,0,0);");
+    editor_feed_line("glVertex3f(1,0,0);");
+    editor_feed_line("glVertex3f(0,1,0);");
+    editor_feed_line("glEnd();");
     repl_flatten_commands();
 
     char *basic = capture_flat_dump();
@@ -793,9 +793,9 @@ void test_debug_dump_flat_commands() {
     /* For-loop expansion: flattening unrolls the loop body and records a
      * stable src_cmd_idx pointing back at the source line. */
     glr_app_reset_all(); declare_test_vars();
-    repl_feed_line_public("for(i, 0, 3) {");
-    repl_feed_line_public("glVertex3f(i,0,0);");
-    repl_feed_line_public("}");
+    editor_feed_line("for(i, 0, 3) {");
+    editor_feed_line("glVertex3f(i,0,0);");
+    editor_feed_line("}");
     repl_flatten_commands();
 
     int vertex_flats = 0;
@@ -824,10 +824,10 @@ void test_debug_dump_flat_commands() {
     /* Function call inlining: flat commands inside the inlined call should
      * carry a non-zero func_scope_mask. */
     glr_app_reset_all(); declare_test_vars();
-    repl_feed_line_public("func0() {");
-    repl_feed_line_public("glVertex3f(0,0,0);");
-    repl_feed_line_public("}");
-    repl_feed_line_public("func0();");
+    editor_feed_line("func0() {");
+    editor_feed_line("glVertex3f(0,0,0);");
+    editor_feed_line("}");
+    editor_feed_line("func0();");
     repl_flatten_commands();
 
     int scoped_hits = 0;
@@ -859,7 +859,7 @@ void test_debug_dump_flat_commands() {
     /* Implicit flatten: even if the caller leaves repl_state_flat_program_dirty() set and stale
      * flat state behind, the dump should rebuild repl_state_flat_program_cmds_mut()[] on demand. */
     glr_app_reset_all(); declare_test_vars();
-    repl_feed_line_public("glVertex3f(0,0,0);");
+    editor_feed_line("glVertex3f(0,0,0);");
     repl_state_mark_flat_dirty();
     repl_state_flat_program_set_count(0);
     FILE *dn = fopen("/dev/null", "w");
@@ -899,7 +899,7 @@ void test_var_declare_cmd() {
 
     /* Feed a float declaration and verify it produces CMD_VAR_DECLARE */
     glr_app_reset_all();
-    repl_feed_line_public("float a, b, c;");
+    editor_feed_line("float a, b, c;");
 
     /* 1. The source array should have exactly one CMD_VAR_DECLARE entry */
     int found_decl = 0;

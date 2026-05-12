@@ -50,9 +50,9 @@ int main(void) {
     int row_offset = -99;
 
     reset_doc_fixture();
-    repl_feed_line_public("glBegin(GL_POINTS);");
-    repl_feed_line_public("glColor3f(1, 0, 0);");
-    repl_feed_line_public("glEnd();");
+    editor_feed_line("glBegin(GL_POINTS);");
+    editor_feed_line("glColor3f(1, 0, 0);");
+    editor_feed_line("glEnd();");
     build_doc(&layout);
 
     ASSERT_TRUE("document counts commands",
@@ -70,7 +70,7 @@ int main(void) {
         ASSERT_TRUE("target lookup row offset", row_offset == 0);
     }
 
-    repl_navigate_to_line(1);
+    editor_navigate_to_line(1);
     editor_cursor_pos_set(0);
     editor_handle_key('\r', 0, 0);
     build_doc(&layout);
@@ -84,10 +84,10 @@ int main(void) {
     }
 
     reset_doc_fixture();
-    repl_feed_line_public("glBegin(GL_POINTS);");
-    repl_feed_line_public("glColor3f(1, 0, 0);");
-    repl_feed_line_public("glEnd();");
-    repl_navigate_to_line(2);
+    editor_feed_line("glBegin(GL_POINTS);");
+    editor_feed_line("glColor3f(1, 0, 0);");
+    editor_feed_line("glEnd();");
+    editor_navigate_to_line(2);
     editor_scroll_set(0);
     editor_scroll_follow_cursor_set(1);
     build_doc(&layout);

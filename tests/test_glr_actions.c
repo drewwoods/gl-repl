@@ -261,7 +261,7 @@ static void test_menu_actions(void) {
 
     /* User scenes */
     /* Add a user scene by loading an example first (promotes current scene to slot 0) */
-    repl_feed_line_public("glVertex3f(1,1,1);");
+    editor_feed_line("glVertex3f(1,1,1);");
     repl_load_example(0);
 
     ASSERT_INT("Slot 0 used", repl_user_scene_slot_used(0), 1);

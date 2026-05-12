@@ -756,7 +756,7 @@ static void test_ui_panels_hit_test_insert_line(void) {
 
     /* Commit one line so insert mode at edit_line=0 produces an
      * insertion ghost row above it. */
-    repl_feed_line_public("glBegin(GL_POINTS);");
+    editor_feed_line("glBegin(GL_POINTS);");
     repl_state_edit_line_set(0);
     editor_insert_mode_set(1);
 
@@ -792,9 +792,9 @@ static void test_vertex2f_gutter_labels(void) {
     /* Commit a real program so both the document array and editor buffer
      * are populated — the wrap iterator needs non-empty display text to
      * produce rows, which is required for the gutter to draw. */
-    repl_feed_line_public("glBegin(GL_TRIANGLES);");
-    repl_feed_line_public("glVertex2f(1, 2);");
-    repl_feed_line_public("glEnd();");
+    editor_feed_line("glBegin(GL_TRIANGLES);");
+    editor_feed_line("glVertex2f(1, 2);");
+    editor_feed_line("glEnd();");
     /* Cursor on glEnd so glVertex2f is a non-edit row with a visible gutter */
     repl_state_edit_line_set(2);
 
@@ -833,9 +833,9 @@ static void test_vertex2f_gutter_labels(void) {
     glr_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT; glr_ctrl_sync_ui_chrome();
     ui_state_code_panel_mut()->panel_frac = 0.4f;
 
-    repl_feed_line_public("glBegin(GL_TRIANGLES);");
-    repl_feed_line_public("glVertex3f(1, 2, 0);");
-    repl_feed_line_public("glEnd();");
+    editor_feed_line("glBegin(GL_TRIANGLES);");
+    editor_feed_line("glVertex3f(1, 2, 0);");
+    editor_feed_line("glEnd();");
     repl_state_edit_line_set(2);
 
     editor_scroll_follow_cursor_set(1);

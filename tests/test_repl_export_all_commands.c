@@ -180,68 +180,68 @@ int main(void) {
     /* Add one example of every supported GL command to verify roundtrip */
 
     /* Vertex/geometry commands */
-    repl_feed_line_public("glBegin(GL_TRIANGLES);");
-    repl_feed_line_public("glVertex3f(0, 0, 0);");
-    repl_feed_line_public("glVertex2f(1, 1);");
-    repl_feed_line_public("glNormal3f(0, 0, 1);");
-    repl_feed_line_public("glColor3f(1, 0, 0);");
-    repl_feed_line_public("glColor4f(0, 1, 0, 0.5);");
-    repl_feed_line_public("glEnd();");
+    editor_feed_line("glBegin(GL_TRIANGLES);");
+    editor_feed_line("glVertex3f(0, 0, 0);");
+    editor_feed_line("glVertex2f(1, 1);");
+    editor_feed_line("glNormal3f(0, 0, 1);");
+    editor_feed_line("glColor3f(1, 0, 0);");
+    editor_feed_line("glColor4f(0, 1, 0, 0.5);");
+    editor_feed_line("glEnd();");
 
     /* Transform commands */
-    repl_feed_line_public("glTranslatef(1, 2, 3);");
-    repl_feed_line_public("glScalef(0.5, 0.5, 0.5);");
-    repl_feed_line_public("glRotatef(45, 0, 0, 1);");
-    repl_feed_line_public("glPushMatrix();");
-    repl_feed_line_public("glPopMatrix();");
-    repl_feed_line_public("glLoadIdentity();");
+    editor_feed_line("glTranslatef(1, 2, 3);");
+    editor_feed_line("glScalef(0.5, 0.5, 0.5);");
+    editor_feed_line("glRotatef(45, 0, 0, 1);");
+    editor_feed_line("glPushMatrix();");
+    editor_feed_line("glPopMatrix();");
+    editor_feed_line("glLoadIdentity();");
 
     /* State/capability commands */
-    repl_feed_line_public("glEnable(GL_DEPTH_TEST);");
-    repl_feed_line_public("glDisable(GL_DEPTH_TEST);");
-    repl_feed_line_public("glShadeModel(GL_SMOOTH);");
-    repl_feed_line_public("glFrontFace(GL_CCW);");
+    editor_feed_line("glEnable(GL_DEPTH_TEST);");
+    editor_feed_line("glDisable(GL_DEPTH_TEST);");
+    editor_feed_line("glShadeModel(GL_SMOOTH);");
+    editor_feed_line("glFrontFace(GL_CCW);");
 
     /* Attribute commands */
-    repl_feed_line_public("glPointSize(5);");
-    repl_feed_line_public("glLineWidth(2);");
-    repl_feed_line_public("glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION, 1, 0, 0.01);");
+    editor_feed_line("glPointSize(5);");
+    editor_feed_line("glLineWidth(2);");
+    editor_feed_line("glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION, 1, 0, 0.01);");
 
     /* Blend/depth commands */
-    repl_feed_line_public("glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);");
-    repl_feed_line_public("glClearColor(0.2, 0.2, 0.2, 1);");
-    repl_feed_line_public("glDepthMask(GL_TRUE);");
+    editor_feed_line("glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);");
+    editor_feed_line("glClearColor(0.2, 0.2, 0.2, 1);");
+    editor_feed_line("glDepthMask(GL_TRUE);");
 
     /* Material/lighting commands */
-    repl_feed_line_public("glColorMaterial(GL_FRONT, GL_DIFFUSE);");
-    repl_feed_line_public("glMaterialf(GL_FRONT, GL_SHININESS, 128);");
-    repl_feed_line_public("glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);");
+    editor_feed_line("glColorMaterial(GL_FRONT, GL_DIFFUSE);");
+    editor_feed_line("glMaterialf(GL_FRONT, GL_SHININESS, 128);");
+    editor_feed_line("glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);");
 
     /* GLUT solid shapes */
-    repl_feed_line_public("glutSolidSphere(1, 16, 12);");
-    repl_feed_line_public("glutSolidCube(0.5);");
-    repl_feed_line_public("glutSolidCone(0.5, 1, 8, 1);");
-    repl_feed_line_public("glutSolidTorus(0.1, 0.5, 8, 4);");
-    repl_feed_line_public("glutSolidTeapot(0.5);");
+    editor_feed_line("glutSolidSphere(1, 16, 12);");
+    editor_feed_line("glutSolidCube(0.5);");
+    editor_feed_line("glutSolidCone(0.5, 1, 8, 1);");
+    editor_feed_line("glutSolidTorus(0.1, 0.5, 8, 4);");
+    editor_feed_line("glutSolidTeapot(0.5);");
 
     /* glRasterPos3f sets the raster position; label emits text at
      * that position. Together they exercise the round-trip for both
      * the new state primitive and the format-string + substitution
      * arg list. */
-    repl_feed_line_public("glRasterPos3f(0, 1.5, 0);");
-    repl_feed_line_public("label(\"x = %f\", x);");
+    editor_feed_line("glRasterPos3f(0, 1.5, 0);");
+    editor_feed_line("label(\"x = %f\", x);");
 
     /* GLU tessellation commands - polygon */
-    repl_feed_line_public("gluBegin(GLU_POLYGON);");
-    repl_feed_line_public("gluNormal(0, 0, 1);");
-    repl_feed_line_public("gluColor(1, 0, 0, 1);");
-    repl_feed_line_public("gluVertex(0.5, 0.5, 0);");
-    repl_feed_line_public("gluEnd();");
+    editor_feed_line("gluBegin(GLU_POLYGON);");
+    editor_feed_line("gluNormal(0, 0, 1);");
+    editor_feed_line("gluColor(1, 0, 0, 1);");
+    editor_feed_line("gluVertex(0.5, 0.5, 0);");
+    editor_feed_line("gluEnd();");
 
     /* GLU tessellation commands - contour */
-    repl_feed_line_public("gluBegin(GLU_CONTOUR);");
-    repl_feed_line_public("gluVertex(1, 1, 0);");
-    repl_feed_line_public("gluEnd();");
+    editor_feed_line("gluBegin(GLU_CONTOUR);");
+    editor_feed_line("gluVertex(1, 1, 0);");
+    editor_feed_line("gluEnd();");
 
     cmd_count_before = repl_state_document_count();
     ASSERT_TRUE("commands loaded", cmd_count_before > 0);

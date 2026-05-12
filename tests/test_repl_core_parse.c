@@ -212,7 +212,7 @@ int main(void) {
     {
         glr_app_reset_all();
         declare_test_vars();
-        repl_feed_line_public("glBegin(GL_TRIANGLES);");
+        editor_feed_line("glBegin(GL_TRIANGLES);");
         repl_state_edit_line_set(0);
 
         GLCmd cmd;
@@ -235,9 +235,9 @@ int main(void) {
     {
         glr_app_reset_all();
         declare_test_vars();
-        repl_feed_line_public("gluBegin(GLU_POLYGON);");
-        repl_feed_line_public("gluBegin(GLU_CONTOUR);");
-        repl_feed_line_public("glBegin(GL_TRIANGLES);");
+        editor_feed_line("gluBegin(GLU_POLYGON);");
+        editor_feed_line("gluBegin(GLU_CONTOUR);");
+        editor_feed_line("glBegin(GL_TRIANGLES);");
 
         GLCmd tess_cmd;
         GLCmd gl_cmd;

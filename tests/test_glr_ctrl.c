@@ -410,7 +410,7 @@ static void test_variable_panel_motion_routes_through_compile_and_coalesces_undo
     glr_app_reset_all();
     ui_state_viewport_set_size(1000, 1000);
     variable_panel_set_visible(1);
-    repl_feed_line_public("float testvar = 1.0;");
+    editor_feed_line("float testvar = 1.0;");
 
     var_idx = repl_eval_find_predef_var_idx("testvar");
     ASSERT_TRUE("testvar declared", var_idx >= 0);
@@ -478,7 +478,7 @@ static void test_variable_panel_motion_initializes_uninitialized_declaration(voi
     glr_app_reset_all();
     ui_state_viewport_set_size(1000, 1000);
     variable_panel_set_visible(1);
-    repl_feed_line_public("float testvar;");
+    editor_feed_line("float testvar;");
 
     var_idx = repl_eval_find_predef_var_idx("testvar");
     ASSERT_TRUE("uninitialized testvar declared", var_idx >= 0);

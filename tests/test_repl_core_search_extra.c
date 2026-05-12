@@ -94,8 +94,8 @@ int main(void) {
     ASSERT_TRUE("search clear resets match count", g_search_match_count == 0);
 
     glr_app_reset_all(); declare_test_vars();
-    repl_feed_line_public("glBegin(GL_POINTS);");
-    repl_feed_line_public("glEnd();");
+    editor_feed_line("glBegin(GL_POINTS);");
+    editor_feed_line("glEnd();");
     open_search();
     type_search_text("definitelynomatch");
     ASSERT_TRUE("search no match count zero", g_search_match_count == 0);

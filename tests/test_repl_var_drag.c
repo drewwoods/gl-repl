@@ -141,7 +141,7 @@ static void test_request_uses_dragged_variable_name(void) {
     int x_idx;
 
     glr_app_reset_all();
-    repl_feed_line_public("float x;");
+    editor_feed_line("float x;");
     x_idx = repl_eval_find_predef_var_idx("x");
     ASSERT_TRUE("x declared", x_idx >= 0);
 
