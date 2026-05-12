@@ -183,13 +183,15 @@ file-local — no public API exposure.
 
 ## Runtime State
 
-Extend `TutorialRuntimeState` with the current expected insertion site and the
-document count captured before the expected user commit.
+Extend `TutorialRuntimeState` with the current expected insertion site, the
+document count captured before the expected user commit, and the guard-exception
+flag for the matched insert:
 
 ```c
 int expected_commit_line;
 int pending_doc_count_before_commit;
 int pending_commit_line;
+int allow_expected_insert;
 ```
 
 Recommended sentinels:
@@ -197,6 +199,9 @@ Recommended sentinels:
 - `expected_commit_line = -1` when no step is waiting for a user command.
 - `pending_doc_count_before_commit = -1` when no commit is in flight.
 - `pending_commit_line = -1` when no commit is in flight.
+- `allow_expected_insert = 0` when no matched commit is in flight.
+
+`tutorial_state_reset` clears all four fields.
 
 The existing `locked_lines[]` remains a list of source line indices for
 revealed tutorial instruction comments. The extension needs one helper that
@@ -296,11 +301,15 @@ If `expected_commit_line < document_count`, also require insert mode:
 ```c
 if (expected_commit_line < repl_state_document_count() &&
     !editor_insert_mode()) {
-    repl_set_status("Tutorial step must insert at the highlighted line");
+    repl_set_status("Tutorial step must insert at the fading line");
     editor_completion_clear();
     return 0;
 }
 ```
+
+("fading line" rather than "highlighted line" because the new instruction
+comment is the row currently animating via `tutorial_line_is_fading`; that
+gives the user a concrete visual anchor for the message.)
 
 Then run the existing matcher. Mismatch behavior stays unchanged: status shows
 `expected: ...`, the typed input is preserved, and the command is not applied.
@@ -386,6 +395,14 @@ static void tutorial_advance_if_commit_ok(CommitResult result) {
 `tutorial_cancel_expected_commit_attempt()` clears the pending fields and the
 `allow_expected_insert` flag without shifting any tracked lines.
 
+Navigation rejection needs an explicit cleanup path. Today
+`commit_before_navigation()` has a `COMMIT_REJECTED` branch that restores the
+committed state and returns without flowing through
+`tutorial_advance_if_commit_ok(result)`. If the tutorial precheck matched and
+set `allow_expected_insert`, but the editor commit later failed, that branch
+must call `tutorial_cancel_expected_commit_attempt()` before returning. Without
+that call, the pending fields and allow flag can leak into the next attempt.
+
 ## Guard Changes
 
 The current `tutorial_guard_source_change(pos, delete_count, insert_count)` is
@@ -399,16 +416,18 @@ Allow exactly this case:
 delete_count == 0 &&
 insert_count > 0 &&
 pos == expected_commit_line &&
-tutorial input has already matched the current expected command
+allow_expected_insert
 ```
 
-Implementation options:
+Implementation (commit to the flag-based design):
 
-1. Add a runtime flag set by `tutorial_begin_expected_commit_attempt()`:
-   `allow_expected_insert = 1`.
-2. Make `tutorial_guard_source_change` allow the current expected insert only
-   while that flag is set.
-3. Clear the flag after commit success or rejection.
+- `tutorial_begin_expected_commit_attempt()` sets
+  `allow_expected_insert = 1` along with the pending bookkeeping fields.
+- `tutorial_guard_source_change` allows the current expected insert iff
+  `allow_expected_insert && pos == expected_commit_line && delete_count == 0
+  && insert_count > 0`. All other guard rejection paths are unchanged.
+- `tutorial_note_expected_commit_applied()` and
+  `tutorial_cancel_expected_commit_attempt()` both clear the flag.
 
 This keeps paste, Ctrl+/ comment toggle, Ctrl+D, reformat, clear-all, undo, and
 redo blocked by the existing call sites. It also avoids opening a generic
@@ -503,8 +522,8 @@ Modify:
 
 Verify:
 
-- `make test_tutorial_runner`
-- `build/release/test_tutorial_runner`
+- `make test_tutorial_runner` (builds and runs both the runner and match
+  tests under the GL stubs path by default).
 
 ### Phase 2 - Targeted Instruction Emission
 
@@ -515,8 +534,8 @@ Modify:
 
 - `src/widgets/tutorial_state.h`
   - Add `expected_commit_line`.
-  - Add pending commit bookkeeping fields.
-  - Add the expected-insert allow flag if using the flag-based guard.
+  - Add `pending_doc_count_before_commit` and `pending_commit_line`.
+  - Add `allow_expected_insert` (guard-exception flag).
 - `src/widgets/tutorial_state.c`
   - Initialize all new line fields to `-1` in reset.
 - `src/widgets/tutorial.c`
@@ -557,10 +576,16 @@ Modify:
 
 - `src/editor/input.c`
   - Replace the append-only tutorial precheck with an expected-line precheck.
-  - Begin tutorial expected-commit bookkeeping after a match and before the
-    normal commit path runs.
-  - On `COMMIT_OK`, note the applied tutorial insert before advancing.
-  - On rejection, clear pending tutorial commit bookkeeping.
+  - The precheck itself calls `tutorial_begin_expected_commit_attempt()` on
+    match success (see Commit Success Bookkeeping); no extra hook needed in
+    the `;`/Enter/navigation routes.
+  - `tutorial_advance_if_commit_ok(result)` now branches: on `COMMIT_OK`
+    call `tutorial_note_expected_commit_applied()` then advance; on
+    `COMMIT_REJECTED` call `tutorial_cancel_expected_commit_attempt()`.
+  - `commit_before_navigation()`'s `COMMIT_REJECTED` branch (the one that
+    restores undo state without flowing through
+    `tutorial_advance_if_commit_ok`) must also call
+    `tutorial_cancel_expected_commit_attempt()` before returning.
 - `src/widgets/tutorial.h` / `.c`
   - Add narrow helpers for expected commit bookkeeping:
     - `tutorial_expected_commit_line`
@@ -588,23 +613,27 @@ Verify:
 - `make test_ui USE_GL_STUBS=1` if fade-line tracking is touched by the test
   path.
 
-### Phase 4 - Add a Worked Targeted Tutorial
+### Phase 4 - Polish the Worked Targeted Tutorial
 
-Goal: ship a user-visible tutorial that uses specified-line insertion.
+Goal: take the third tutorial added in Phase 2 and ship it as user-visible.
+Phase 2 lands the catalog entry as a test fixture; Phase 4 is the polish
+pass — final wording on the instruction comments, final choice of teaching
+narrative, final menu name. The same `TutorialStep` array is the source of
+truth across both phases.
 
 Modify:
 
 - `src/repl/tutorials.c`
-  - Add or revise a tutorial to demonstrate "draw first, then insert setup
-    before the batch".
-  - Keep comments written as teaching prompts, not test assertions.
-  - Use a targeted step such as `TUTORIAL_STEP_LINE, 1` once the triangle batch
-    exists.
+  - Replace any placeholder names/comments from the Phase 2 fixture with
+    finished teaching prose.
+  - Confirm the targeted step (e.g. `STEP_AT("// Enable depth testing ...",
+    "glEnable(GL_DEPTH_TEST)", 1)`) is correctly positioned for the final
+    document shape.
 - `tests/test_tutorial_runner.c`
-  - Pin the new tutorial name, step count, first expected command, and targeted
-    step placement.
-  - Walk the full tutorial and assert the final source order has the inserted
-    setup command before the original batch command.
+  - Update the Phase 2 fixture assertions to match the polished name and
+    expected text. Walking the full tutorial and asserting the final source
+    order (inserted setup command appears before the original batch
+    command) should already be in place from Phase 2.
 
 Verify:
 
@@ -646,8 +675,10 @@ Run:
   message. Since tutorials are built in, this should be covered by tests.
 - **Commit produces multiple source rows:** shift tracked lines by the actual
   document-count delta. Starter tutorials should still use one-line commands.
-- **User navigates away before typing:** should not mutate source. Avoid noisy
-  "expected: ..." status if possible when the input buffer is empty.
+- **User navigates away before typing:** should not mutate source. The
+  precheck's empty-input branch (see Commit Precheck) silently rejects
+  empty input on navigation auto-commit, so the cursor moves without
+  spamming `expected: …`.
 - **User navigates to another editable line and types the expected text:** reject
   because the edit line is not `expected_commit_line`.
 - **Tutorial completion:** clear active state and locks. The source document
