@@ -104,6 +104,162 @@ touching call sites.
 5. Loading an example or user scene anywhere calls `tutorial_state_reset()`,
    exiting tutorial mode cleanly.
 
+## Implementation Phases
+
+Each phase is independently buildable and testable. Land them as separate
+commits; the feature is non-visible until Phase 3 ships.
+
+### Phase 1 — Catalog + peer state scaffolding
+
+Goal: data and storage exist; nothing wired into UI or commit flow yet.
+
+Create:
+- `src/repl/tutorials.h` — query API (`repl_tutorial_count/name/step_count/step_comment/step_expected`) + struct typedefs.
+- `src/repl/tutorials.c` — one starter tutorial: `g_tutorial_first_triangle_comments[]` and `_expected[]` (null-terminated parallel arrays), `g_tutorials[]` table, query implementations.
+- `src/widgets/tutorial_state.h` / `.c` — `TutorialRuntimeState` struct, static `g_tutorial_state`, `tutorial_state_view/_mut/_reset/_active`. No capture/restore yet (tutorials don't participate in undo snapshots).
+
+Modify:
+- `src/repl/core.h` — declare `float repl_anim_time_now(void);` next to `repl_advance_time`.
+- `src/repl/core.c:822` (`repl_advance_time`) — add `float repl_anim_time_now(void) { return g_anim_time; }` alongside it.
+- `Makefile` — append `tutorials.o`, `tutorial_state.o` to the same `OBJS` list that currently builds `replay_state.o` (`grep -n replay_state Makefile` to locate).
+
+Verify: `make sample` builds. `nm sample | grep tutorial_state_view` shows the symbol.
+
+### Phase 2 — Runner + match function (headless)
+
+Goal: full runtime logic exists and is unit-tested, still not wired to UI.
+
+Create:
+- `src/widgets/tutorial.h` — public runner API:
+  - `void  tutorial_start(int idx);`
+  - `void  tutorial_exit(void);`
+  - `int   tutorial_handle_commit_attempt(const char *input, TutorialMatchResult *out);`
+  - `void  tutorial_advance_after_commit(void);`
+  - `const char *tutorial_current_expected_text(void);`
+  - `float tutorial_step_fade_alpha(int line_idx, int char_idx, float now);`
+  - `int   tutorial_line_is_locked(int line_idx);`
+  - `TutorialMatchResult tutorial_match(const char *expected, const char *got);`
+- `src/widgets/tutorial.c` — implementations. `tutorial_start` clears the document, resets state, then calls `feed_line(comments[0])` (defined at `src/editor/input.c:1315`; public alias `repl_feed_line_public` at `src/editor/input.c:1388`) and records `fade_line_idx = repl_state_document_count() - 1`, `fade_start_t = repl_anim_time_now()`. `tutorial_match` v1 = whitespace-normalize-and-strcmp.
+- `tests/test_tutorial_match.c` — uses `tests/support/test_harness.h`. Cases: exact match, extra inner whitespace, leading/trailing whitespace, trailing `;` tolerance, token-count mismatch → `TUT_MISMATCH_SHAPE`, default `arg_index == -1`.
+- `tests/test_tutorial_runner.c` — uses `tests/support/repl_test_support.h`. Cases: `tutorial_start(0)` → first comment appears at line 0 and begins with `//`; correct line via `repl_feed_line_public` advances `step`; wrong line preserves `step`; `tutorial_current_expected_text()` returns the right string for the current step; fade-alpha math (now == start → 0 for char 0, now == start + duration → 1 for last char).
+- `Makefile` — add rules for `test_tutorial_match` and `test_tutorial_runner` mirroring `test_eval` / `test_format`; add both to the aggregate `test` target.
+
+Verify: `make test_tutorial_match` and `make test_tutorial_runner` pass.
+
+### Phase 3 — Tutorials menu
+
+Goal: user can pick a tutorial from the menu and see the first comment.
+
+Modify (with exact anchors):
+- `src/app/glr_actions.h:30-33` — change the enum to:
+  ```c
+  GLR_MENU_FILE = 0,
+  GLR_MENU_SCENE,
+  GLR_MENU_TUTORIALS,
+  GLR_MENU_CONFIG,
+  GLR_MENU_COUNT
+  ```
+- `src/ui/menu_bar.c:21-30` — add `MENU_TUTORIALS = GLR_MENU_TUTORIALS` to the local enum and append `"Tutorials"` to `g_menu_labels[]` (size auto-tracks via `GLR_MENU_COUNT`).
+- `src/ui/menu_bar.c:88-100` (`menu_item_count`) — add `case MENU_TUTORIALS: return repl_tutorial_count();`.
+- `src/ui/menu_bar.c:102-132` (`menu_item_label`) — add the `MENU_TUTORIALS` branch returning `repl_tutorial_name(i)`.
+- `src/ui/menu_bar.c:134+` (`menu_item_shortcut`) — `case MENU_TUTORIALS: return NULL;`.
+- `src/app/glr_actions.c:422-498` (`glr_action_menu_item_activate`) — add a new branch after the `GLR_MENU_SCENE` block (line 450) and before `GLR_MENU_CONFIG` (line 494):
+  ```c
+  } else if (menu_id == GLR_MENU_TUTORIALS) {
+      tutorial_start(item_idx);
+  ```
+- Include `widgets/tutorial.h` in `src/app/glr_actions.c` and `src/ui/menu_bar.c`.
+
+Verify: `./sample` opens, the Tutorials menu lists the starter tutorial, clicking it clears the buffer and shows the first `// ...` comment on line 0. No fade yet — that lands in Phase 6.
+
+### Phase 4 — Commit interception (match check)
+
+Goal: typing wrong rejects with status; typing right advances and reveals next.
+
+Modify (with exact anchors):
+- `src/editor/input.c:1118-1203` (`handle_semicolon_commit_key_route`) — insert a guard between line 1121 (`if (editor_state_input().input_len > 0)`) and line 1122 (`editor_undo_push_snapshot()`):
+  ```c
+  if (tutorial_active()) {
+      TutorialMatchResult r;
+      if (!tutorial_handle_commit_attempt(editor_state_input().input, &r)) {
+          repl_set_status(r.message);
+          editor_completion_clear();
+          return 1;
+      }
+  }
+  ```
+  At the very end of the function, just before `return 1;` at line 1200, add:
+  ```c
+  if (tutorial_active()) tutorial_advance_after_commit();
+  ```
+- `src/editor/input.c:1101-1116` (`handle_enter_key_route`) — mirror the same pre-commit guard at line 1110 before `commit_current_input(1);`.
+- `src/repl/example_loader.c:393` (`load_example_lines`) — call `tutorial_state_reset()` as the first statement.
+- `src/repl/scenes.c` (user-scene activation; `grep -n repl_user_scene_activate src/repl/scenes.c`) — same first-statement reset.
+- Include `widgets/tutorial.h` in `src/editor/input.c`, `src/repl/example_loader.c`, `src/repl/scenes.c`.
+
+Tests:
+- Extend `tests/test_tutorial_runner.c`: `tutorial_start` then `repl_load_example(0)` → `tutorial_active()` becomes 0.
+- Add a wrong-input case asserting `repl_set_status` was called with a non-empty message (install a sink via `repl_set_status_sink` in the test).
+
+Verify: With a starter tutorial loaded, typing `glEnd()` then `;` shows `"expected: glBegin(GL_TRIANGLES)"` in the status bar and does NOT commit; typing the right line commits, then a new instructional comment for step 2 appears.
+
+### Phase 5 — Read-only locking of revealed comments
+
+Goal: prevent the user from deleting or editing the tutorial's instructional comments mid-flow.
+
+Add `int tutorial_line_is_locked(int line_idx)`: tracks a small ring of locked line indices in `TutorialRuntimeState` updated each time `tutorial_advance_after_commit` reveals a comment. Indices need re-numbering on any document insert/delete that happens above them — simplest v1 is to re-derive on read by scanning the document for lines matching the revealed comment texts.
+
+Modify (single guard helper, called at each existing mutation site):
+- `src/editor/input.c` — every line-deletion / row-replace site (backspace at column 0 merging up, Ctrl+K, line-up replace, etc.). Wrap with:
+  ```c
+  if (tutorial_line_is_locked(target_line)) {
+      repl_set_status("Tutorial comment is read-only");
+      return ...;
+  }
+  ```
+- `src/editor/clipboard.c` — line-range cut/delete: same guard on the range (reject the whole operation if any line in the range is locked).
+- `src/editor/undo.c` — undo that would roll the document back below the active step is hard to validate cheaply, so v1 = block undo while a tutorial is active: `if (tutorial_active()) { repl_set_status("Undo disabled during tutorial"); return; }`.
+
+Verify: cursor on a tutorial comment line, backspace / Ctrl+K / line-cut all bounce off with status text. Cursor on the in-progress input line: editing works normally.
+
+### Phase 6 — Fade-in render
+
+Goal: newly revealed comments fade in left-to-right over ~0.5 s.
+
+Modify:
+- `src/ui/panels.c:548` (the `gl2d_draw_string(text_x, line_y, text, FONT_MONO)` call for command rows) — wrap:
+  ```c
+  float now = repl_anim_time_now();
+  float alpha0 = tutorial_step_fade_alpha(ctx->row_idx, 0, now);
+  if (alpha0 < 1.0f) {
+      /* per-char loop: glColor4f(r, g, b, tutorial_step_fade_alpha(row, i, now))
+         + glutBitmapCharacter at x = text_x + i * char_w */
+  } else {
+      gl2d_draw_string((float)ctx->text_x, (float)ctx->line_y, text, FONT_MONO);
+  }
+  ```
+  The `alpha0 < 1.0f` check is the fast-path skip; once the fade window passes, every row takes the existing single-call path.
+- `src/widgets/tutorial.c` — implement `tutorial_step_fade_alpha`:
+  ```c
+  /* returns 1.0 if line_idx != fade_line_idx or now >= start + duration */
+  float t = (now - fade_start_t) - char_idx * (fade_duration / line_len);
+  return clamp01(t / per_char_window);
+  ```
+  Once `now >= fade_start_t + fade_duration`, the runner clears `fade_line_idx` so the cheap path engages immediately on the next frame.
+
+Verify: visually run a tutorial, watch the comment animate in over ~0.5 s left-to-right. Once finished it stays at full brightness.
+
+### Phase 7 — Docs, ownership audit, smoke test
+
+Modify:
+- `MODULES.md` — add `src/widgets/tutorial_state.{c,h}`, `src/widgets/tutorial.{c,h}`, `src/repl/tutorials.{c,h}` to the layered overview and the state-ownership table (`TutorialRuntimeState` is owned by the peer subsystem, not `ReplState` / `EditorState`).
+- `CLAUDE.md` — add one row per new file to the **File Layout** table.
+
+Run:
+- `make check-state-ownership` — must pass; tutorial code reads `repl_state_*` views but only mutates its own peer storage and goes through `feed_line` / `repl_set_status` for cross-module effects.
+- `make test` — full suite. The Phase 3 menu enum bump should be caught by any test asserting `GLR_MENU_COUNT`; update expectations if so.
+- Manual smoke test against the verification checklist below.
+
 ## Verification
 
 - `make test_tutorial_match` — comparator unit tests.
