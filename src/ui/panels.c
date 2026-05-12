@@ -20,6 +20,7 @@
 #include "prof.h"
 #include "panels.h"
 #include "gl_2d.h"
+#include "widgets/tutorial.h"
 
 #include <string.h>
 
@@ -135,6 +136,24 @@ static void code_panel_draw_segment(int x, int y, const char *text,
     memcpy(buf, text + start, (size_t)len);
     buf[len] = '\0';
     gl2d_draw_string((float)x, (float)y, buf, font);
+}
+
+static void code_panel_draw_fading_segment(int x, int y, const char *text,
+                                           int start, int len,
+                                           int line_idx, int line_len,
+                                           float now, void *font,
+                                           float r, float g, float b) {
+    if (!text || len <= 0)
+        return;
+
+    for (int local_i = 0; local_i < len && text[start + local_i]; local_i++) {
+        int char_idx = start + local_i;
+        float alpha = tutorial_step_fade_alpha(line_idx, char_idx, line_len, now);
+
+        glColor4f(r, g, b, alpha);
+        glRasterPos2f((float)(x + local_i * FONT_W), (float)y);
+        glutBitmapCharacter(font, (unsigned char)text[char_idx]);
+    }
 }
 
 /* Menu bar lives in repl_menu_bar.c. */
@@ -580,6 +599,11 @@ static void code_panel_draw_command_row(CodePanelRowCtx *ctx, int i,
                                         int primitive_vnums_exact) {
     const GLCmd *document_cmds = ctx->snap->document_cmds;
     char display_text[MAX_INPUT_LEN];
+    float text_r;
+    float text_g;
+    float text_b;
+    float now = ctx->snap->anim_time;
+    int line_len;
     /* Search row index: shifted by one when an insert preview row sits
      * before this command. Pure function of snap fields. */
     int search_row_idx;
@@ -605,6 +629,9 @@ static void code_panel_draw_command_row(CodePanelRowCtx *ctx, int i,
         }
         snprintf(display_text, sizeof(display_text), "%s", src);
     }
+    category_rgb(repl_cmd_type_category(document_cmds[i].type),
+                 &text_r, &text_g, &text_b);
+    line_len = (int)strlen(display_text);
 
     CodeWrapIter wrap_it;
     int wrap_row = 0;
@@ -623,8 +650,18 @@ static void code_panel_draw_command_row(CodePanelRowCtx *ctx, int i,
                                               search_row_idx,
                                               wrap_start, wrap_len,
                                               wrap_x, ctx->line_y);
-            code_panel_draw_segment(wrap_x, ctx->line_y, display_text,
-                                    wrap_start, wrap_len, FONT_MONO);
+            if (tutorial_line_is_fading(i, now)) {
+                code_panel_draw_fading_segment(wrap_x, ctx->line_y,
+                                               display_text,
+                                               wrap_start, wrap_len,
+                                               i, line_len, now,
+                                               FONT_MONO,
+                                               text_r, text_g, text_b);
+            } else {
+                glColor3f(text_r, text_g, text_b);
+                code_panel_draw_segment(wrap_x, ctx->line_y, display_text,
+                                        wrap_start, wrap_len, FONT_MONO);
+            }
             ctx->line_y -= LINE_H;
         }
         ctx->cur++;

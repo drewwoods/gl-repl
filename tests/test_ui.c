@@ -22,6 +22,8 @@
 #include "editor/code_panel_document.h"
 #include "widgets/variable_panel_state.h"
 #include "widgets/variable_panel_drag.h"
+#include "widgets/tutorial.h"
+#include "widgets/tutorial_state.h"
 #include "support/test_harness.h"
 #include <GL/gl_stub_counts.h>
 #include "ui/gl_2d.h"
@@ -860,6 +862,57 @@ static void test_vertex2f_gutter_labels(void) {
                 gl_stub_counts[GL_STUB_glRasterPos2f] > v3f_base);
 }
 
+static void test_tutorial_fade_render_uses_per_char_path(void) {
+    unsigned long long fading_raster_calls;
+    unsigned long long settled_raster_calls;
+    unsigned long long fading_alpha_calls;
+    unsigned long long settled_alpha_calls;
+    TutorialRuntimeState tutorial;
+
+    printf("Testing tutorial fade render...\n");
+
+    glr_app_reset_all();
+    ui_state_viewport_set_size(4000, 600);
+    glr_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
+    glr_ctrl_sync_ui_chrome();
+    ui_state_code_panel_mut()->panel_frac = 0.4f;
+
+    tutorial_start(0);
+    tutorial = tutorial_state_view();
+
+    editor_scroll_follow_cursor_set(1);
+    {
+        UiRenderSnapshot s;
+        make_test_ui_snapshot(&s);
+        ui_panels_render_code_panel(&s, NULL);
+    }
+
+    {
+        UiRenderSnapshot s;
+        make_test_ui_snapshot(&s);
+        s.anim_time = tutorial.fade_start_t + 0.01f;
+        gl_stub_counts_reset();
+        ui_panels_render_code_panel(&s, NULL);
+        fading_raster_calls = gl_stub_counts[GL_STUB_glRasterPos2f];
+        fading_alpha_calls = gl_stub_counts[GL_STUB_glColor4f];
+    }
+
+    {
+        UiRenderSnapshot s;
+        make_test_ui_snapshot(&s);
+        s.anim_time = tutorial.fade_start_t + tutorial.fade_duration + 0.1f;
+        gl_stub_counts_reset();
+        ui_panels_render_code_panel(&s, NULL);
+        settled_raster_calls = gl_stub_counts[GL_STUB_glRasterPos2f];
+        settled_alpha_calls = gl_stub_counts[GL_STUB_glColor4f];
+    }
+
+    ASSERT_TRUE("tutorial fade increases raster ops",
+                fading_raster_calls > settled_raster_calls);
+    ASSERT_TRUE("tutorial fade increases alpha color ops",
+                fading_alpha_calls > settled_alpha_calls);
+}
+
 int main(void) {
 #ifndef GL_STUBS
     printf("This test requires GL stubs (USE_GL_STUBS=1)\n");
@@ -883,6 +936,7 @@ int main(void) {
     test_ui_panels_hit_test_code_text_cursor();
     test_ui_panels_hit_test_insert_line();
     test_vertex2f_gutter_labels();
+    test_tutorial_fade_render_uses_per_char_path();
 
     printf("\nUI Tests: %d/%d passed\n", g_harness.passed, g_harness.run);
     return (g_harness.passed == g_harness.run) ? 0 : 1;
