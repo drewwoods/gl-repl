@@ -1087,6 +1087,73 @@ static const char *const g_example_scratch_casteljau[] = {
     NULL
 };
 
+/* Text annotation demo - pairs glRasterPos3f with label() so scene data can
+ * carry live numeric readouts instead of geometry alone. */
+static const char *const g_example_annotated_orbit_plot[] = {
+    "// @cfg vertex_outlines = 0",
+    "// @cfg vertex_points = 0",
+    "// @cfg light_indicators = 0",
+    "// @cfg grid = 9",
+    "// camera",
+    "glTranslatef(0.0f, 0.0f, -6.0f);",
+    "glRotatef(0.0f, 1.0f, 0.0f, 0.0f);",
+    "glRotatef(0.0f, 0.0f, 1.0f, 0.0f);",
+    "glTranslatef(0.0f, 0.0f, 0.0f);",
+    "float n, r, x, y, phase, sample;",
+    "glClearColor(0.06, 0.07, 0.09, 1);",
+    "glDisable(GL_LIGHTING);",
+    "glDisable(GL_DEPTH_TEST);",
+    "glEnable(GL_BLEND);",
+    "glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);",
+    "glLineWidth(1.4);",
+    "// Annotation demo: geometry plus live numeric labels.",
+    "phase = fmod(t*0.2, 1);",
+    "n = 72;",
+    "for(r, 1, 4) {",
+        "glColor4f(0.2, 0.35, 0.55, 0.45);",
+        "glBegin(GL_LINE_LOOP);",
+        "for(i, 0, n) {",
+            "glVertex3f(cos(i*TAU/n)*r*0.6, sin(i*TAU/n)*r*0.6, 0);",
+        "}",
+        "glEnd();",
+        "glRasterPos3f(r*0.6 + 0.08, 0, 0);",
+        "label(\"r=%f\", r*0.6);",
+    "}",
+    "glColor4f(0.45, 0.5, 0.65, 0.45);",
+    "glBegin(GL_LINES);",
+    "for(i, 0, 12) {",
+        "glVertex3f(0, 0, 0);",
+        "glVertex3f(cos(i*TAU/12)*2.4, sin(i*TAU/12)*2.4, 0);",
+    "}",
+    "glEnd();",
+    "glColor3f(1.0, 0.75, 0.25);",
+    "glLineWidth(3);",
+    "glBegin(GL_LINE_STRIP);",
+    "for(i, 0, n+1) {",
+        "sample = i/n;",
+        "r = 1.0 + 0.5*sin(sample*TAU*3 + t);",
+        "glVertex3f(cos(sample*TAU)*r, sin(sample*TAU)*r, 0);",
+    "}",
+    "glEnd();",
+    "sample = phase;",
+    "r = 1.0 + 0.5*sin(sample*TAU*3 + t);",
+    "x = cos(sample*TAU)*r;",
+    "y = sin(sample*TAU)*r;",
+    "glPointSize(11);",
+    "glColor3f(0.1, 0.9, 1.0);",
+    "glBegin(GL_POINTS);",
+    "glVertex3f(x, y, 0);",
+    "glEnd();",
+    "glColor3f(1.0, 1.0, 1.0);",
+    "glRasterPos3f(-2.35, 2.35, 0);",
+    "label(\"phase=%f\", phase);",
+    "glRasterPos3f(x + 0.12, y + 0.12, 0);",
+    "label(\"r=%f\", r);",
+    "glRasterPos3f(-2.35, -2.35, 0);",
+    "label(\"label text follows glRasterPos3f\");",
+    NULL
+};
+
 static const char *const *const g_examples[] = {
     g_example_cube,
     g_example_ring,
@@ -1109,6 +1176,7 @@ static const char *const *const g_examples[] = {
     g_example_xform_stress,
     g_example_stress,
     g_example_scratch_casteljau,
+    g_example_annotated_orbit_plot,
 };
 
 static const char *const g_example_names[] = {
@@ -1133,6 +1201,7 @@ static const char *const g_example_names[] = {
     "Transform stress (translate/rotate/scale guides)",
     "Stress test (all features)",
     "Scratch arrays (de Casteljau curve)",
+    "Annotated orbit plot (labels)",
 };
 
 int repl_examples_count(void) {
