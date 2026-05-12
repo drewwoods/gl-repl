@@ -1,9 +1,9 @@
-# Landed feature plans
+# Landed Plan Archive
 
-This directory archives plans whose contracts shipped. Files are
-preserved verbatim — they double as design history and the audit trail
-for the hard guards that lock the contracts in (`make
-check-state-ownership`).
+This directory is the canonical archive for plans whose contracts
+shipped. Files are preserved verbatim — they double as design history
+and the audit trail for the hard guards that lock the contracts in
+(`make check-state-ownership`).
 
 | Plan | Landed | What it shipped |
 |---|---|---|
@@ -21,5 +21,5 @@ check-state-ownership`).
 | `repl-agnostic-clipboard.md` | Phase A 2026-05-08; Phase B incidentally landed | Move block-aware copy + decl-guard queries out of `editor_clipboard.c` behind REPL-side predicates (`repl_source_scope_block_extent`, `repl_range_contains_var_decl`). Phase B (drop `GLCmd[]` storage from `ReplClipboardState`) was optional and has since been satisfied incidentally — the live struct now holds only `char lines[][]` plus `char input_text[]`. |
 | `editor-input-selection.md` | 2026-05-11 | Character-range input-buffer selection model with `anchor_pos` on `ReplEditorInputState`; tagged `ReplClipboardState` (`EMPTY` / `LINES` / `INPUT_TEXT`) so partial-line and whole-line copy/cut/paste share one clipboard; shift+arrow / shift+home-end, double-click word selection (with a clock seam), per-character mouse drag on the active edit row (sticky), Ctrl+C/X/V priority routing input selection over line-range, selection band rendered on the active row. 169 focused tests in `test_editor_input_selection.c`. |
 
-Plans not in this directory are still active or proposal-only; see
-the parent `feature/` directory.
+Plans not in this directory are still active or proposal-only; see the
+sibling `feature/` directory.

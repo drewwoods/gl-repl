@@ -9,7 +9,7 @@
 /* EditorState owns editable text, cursor, selection, navigation, undo
  * transactions, and the rest of the code-editor session per the
  * three-layer ownership contract in MODULES.md and
- * feature/editor-owns-text-completion.md.
+ * done/editor-owns-text-completion.md.
  *
  * Phase 1 progress:
  *   commit 3: scaffold (placeholder struct).
@@ -64,8 +64,8 @@ typedef struct {
     /* Character-range selection anchor inside input[]. -1 = no
      * selection. When >= 0, the selection is [lo, hi) with
      * lo = min(anchor_pos, cursor_pos) and hi = max(...). An empty
-     * selection (anchor_pos == cursor_pos) is not allowed and collapses
-     * to -1; see feature/editor-input-selection.md. */
+    * selection (anchor_pos == cursor_pos) is not allowed and collapses
+    * to -1; see done/editor-input-selection.md. */
     int  anchor_pos;
     int  edit_line_idx;
     char pending_newline[MAX_INPUT_LEN];
@@ -108,7 +108,7 @@ typedef struct {
  *   EMPTY       -> line_count == 0 && input_text_len == 0
  *   LINES       -> line_count > 0
  *   INPUT_TEXT  -> input_text_len > 0
- * See feature/editor-input-selection.md for the full rules. */
+ * See done/editor-input-selection.md for the full rules. */
 typedef enum {
     EDITOR_CLIPBOARD_EMPTY = 0,
     EDITOR_CLIPBOARD_LINES,

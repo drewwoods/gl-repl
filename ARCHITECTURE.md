@@ -2,12 +2,12 @@
 
 > For the quick module map, see [`MODULES.md`](MODULES.md). For the
 > staged controller-extraction history (now landed), see
-> [`feature/done/push-architecture-refinement.md`](feature/done/push-architecture-refinement.md).
+> [`done/push-architecture-refinement.md`](done/push-architecture-refinement.md).
 
 ## Direction
 
 This document follows the controller-first direction originally laid
-out in `feature/done/push-architecture-refinement.md` (the plan
+out in `done/push-architecture-refinement.md` (the plan
 shipped; the doc lives in `done/` as design history).
 
 The older "generic scene callback plus `ReplGeometryRenderPlan`" direction is
@@ -366,7 +366,7 @@ discriminator plus both a line array and an `input_text` slot) so
 `Ctrl+V` after a partial copy pastes characters and `Ctrl+V` after a
 line copy still pastes whole commands. Input selection wins over
 line-range for `Ctrl+C` / `Ctrl+X` priority. See
-[`feature/done/editor-input-selection.md`](feature/done/editor-input-selection.md)
+[`done/editor-input-selection.md`](done/editor-input-selection.md)
 for the full rules.
 
 Mutations route through `repl_actions`, `repl_command_store`,
@@ -390,7 +390,7 @@ take a snapshot pointer is the next layer of cleanup.
 Replay is REPL-owned. The scene may render the current visual effect, but it
 should not own replay policy.
 
-R1 target from `feature/done/push-architecture-refinement.md` (landed):
+R1 target from `done/push-architecture-refinement.md` (landed):
 
 * controller builds a `ReplayFadePlan` snapshot once per frame (batches,
   alpha, skip limits, baseline predef values)
@@ -919,7 +919,7 @@ boundaries (REPL document / editor session / undo ring) — live in
 [`feature/state-ownership-finalize.md`](feature/state-ownership-finalize.md).
 The original Stage 6 (rebuild `repl_undo` on `repl_state_capture`)
 was abandoned: undo deliberately doesn't snapshot input/clipboard
-state (see `feature/done/editor-input-selection.md` Phase A item 6).
+state (see `done/editor-input-selection.md` Phase A item 6).
 
 The `feature/editor-owns-text.md` track (Steps 2–6) is complete:
 
