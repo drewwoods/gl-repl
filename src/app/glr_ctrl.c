@@ -968,7 +968,7 @@ static void glr_ctrl_build_scene_config(SceneRenderConfig *config) {
      * default if none). Scene takes the pre-resolved float[4] and
      * doesn't touch the flat program. */
     {
-        float cr = 0.10f, cg = 0.10f, cb = 0.13f, ca = 1.0f;
+        float cr = 0.10f, cg = 0.10f, cb = 0.10f, ca = 1.0f;
         FlatProgramView fp = repl_state_flat_program_view();
         for (int ci = 0; ci < fp.cmd_count; ci++) {
             if (fp.cmds[ci].valid && fp.cmds[ci].type == CMD_CLEAR_COLOR) {
