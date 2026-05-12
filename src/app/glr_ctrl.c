@@ -1141,8 +1141,8 @@ static void glr_ctrl_build_ui_snapshot(UiRenderSnapshot *snap) {
     snap->selection_hi     = snap->selection_active ? editor_clipboard_sel_hi() : -1;
 
     /* Indent + statusbar metadata so the render path does not call back
-     * into repl_source_scope_* / repl_code_panel_document_* per row. */
-    snap->active_indent_chars   = repl_code_panel_document_active_indent_chars();
+     * into repl_source_scope_* / editor_code_panel_document_* per row. */
+    snap->active_indent_chars   = editor_code_panel_document_active_indent_chars();
     snap->trailing_indent_chars = repl_source_scope_cmd_indent_chars(snap->document_count);
     snap->in_begin_block        = repl_source_scope_in_begin_block();
     snap->current_begin_mode    = repl_current_begin_mode();

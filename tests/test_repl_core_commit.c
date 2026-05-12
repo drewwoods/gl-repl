@@ -79,7 +79,7 @@ static int code_panel_mouse_y_for_cmd(int cmd_idx) {
     (void)ui_panels_code_panel_apply_scroll_follow_for_test(glr_state_presentation().show_vertex_indices, NULL, NULL);
 
     ui_layout_code_panel_rect(NULL, &cp_y, &panel_w, &cp_h);
-    repl_code_panel_document_build(&layout, panel_w, text_x, cp_h);
+    editor_code_panel_document_build(&layout, panel_w, text_x, cp_h);
 
     doc_line = layout.header_rows;
     for (int i = 0; i < cmd_idx && i < repl_state_document_count(); i++)

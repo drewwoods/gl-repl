@@ -227,15 +227,15 @@ static void render_active_input_rows(const UiRenderSnapshot *snap,
     int cursor_seg_start = 0;
     int cursor_seg_len = 0;
     int cursor_seg_x = input_x;
-    int cursor_row = repl_code_panel_document_cursor_row_for_text(input, input_x, panel_w,
+    int cursor_row = editor_code_panel_document_cursor_row_for_text(input, input_x, panel_w,
                                                     cursor_pos,
                                                     &cursor_seg_start,
                                                     &cursor_seg_len,
                                                     &cursor_seg_x);
     int cursor_col = cursor_pos - cursor_seg_start;
 
-    repl_code_panel_document_wrap_iter_init(&wrap_it, input, input_x, panel_w);
-    while (repl_code_panel_document_wrap_iter_next(&wrap_it, &wrap_start, &wrap_len, &wrap_x)) {
+    editor_code_panel_document_wrap_iter_init(&wrap_it, input, input_x, panel_w);
+    while (editor_code_panel_document_wrap_iter_next(&wrap_it, &wrap_start, &wrap_len, &wrap_x)) {
         if (*io_cur >= snap->scroll.scroll && *io_cur < snap->scroll.scroll + visible_lines) {
             glColor3f(0.55f, 0.55f, 0.30f);
             if (wrap_row == 0) {
@@ -369,8 +369,8 @@ int ui_panels_code_panel_apply_scroll_follow_for_test(int show_vertex_indices,
      * (glr_publish_replay_annotations) before calling — the
      * controller does this each frame; tests use
      * test_replay_annotations_publish() in tests/support/. */
-    repl_code_panel_document_build(&layout, cp_w, text_x, cp_h);
-    repl_code_panel_document_apply_follow_scroll(&layout);
+    editor_code_panel_document_build(&layout, cp_w, text_x, cp_h);
+    editor_code_panel_document_apply_follow_scroll(&layout);
 
     if (out_follow_doc_line)
         *out_follow_doc_line = layout.follow_doc_line;
@@ -476,8 +476,8 @@ static void code_panel_draw_static_line(CodePanelRowCtx *ctx, const char *text,
 
     code_panel_static_line_rgb(text, r, g, b, &draw_r, &draw_g, &draw_b);
 
-    repl_code_panel_document_wrap_iter_init(&wrap_it, text, ctx->text_x, ctx->panel_w);
-    while (repl_code_panel_document_wrap_iter_next(&wrap_it,
+    editor_code_panel_document_wrap_iter_init(&wrap_it, text, ctx->text_x, ctx->panel_w);
+    while (editor_code_panel_document_wrap_iter_next(&wrap_it,
                                                    &wrap_start, &wrap_len, &wrap_x)) {
         if (code_panel_row_visible(ctx)) {
             if (wrap_row == 0)
@@ -644,9 +644,9 @@ static void code_panel_draw_command_row(CodePanelRowCtx *ctx, int i,
     CodeWrapIter wrap_it;
     int wrap_row = 0;
     int wrap_start, wrap_len, wrap_x;
-    repl_code_panel_document_wrap_iter_init(&wrap_it, display_text,
+    editor_code_panel_document_wrap_iter_init(&wrap_it, display_text,
                                             ctx->text_x, ctx->panel_w);
-    while (repl_code_panel_document_wrap_iter_next(&wrap_it,
+    while (editor_code_panel_document_wrap_iter_next(&wrap_it,
                                                    &wrap_start, &wrap_len, &wrap_x)) {
         if (code_panel_row_visible(ctx)) {
             code_panel_draw_row_overlays(ctx, i);
@@ -889,13 +889,13 @@ void ui_panels_render_code_panel(const UiRenderSnapshot *snap,
     glViewport(0, 0, snap->viewport.window_w, snap->viewport.window_h);
 
     CodePanelDocumentLayout doc_layout;
-    repl_code_panel_document_build(&doc_layout, panel_w, text_x, cp_h);
+    editor_code_panel_document_build(&doc_layout, panel_w, text_x, cp_h);
     int visible_lines = doc_layout.visible_lines;
     int total_lines   = doc_layout.total_lines;
 
     /* Snap the scroll position to follow the cursor / replay PC, but only
      * if either just moved; manual scroll stays where the user left it. */
-    repl_code_panel_document_apply_follow_scroll(&doc_layout);
+    editor_code_panel_document_apply_follow_scroll(&doc_layout);
 
     prof_end(PROF_CODE_PANEL_LAYOUT);
 
@@ -995,7 +995,7 @@ void ui_panels_render_code_panel(const UiRenderSnapshot *snap,
         if (insert_mode && i == edit_line) {
             render_active_input_rows(snap, panel_w, text_x, idx_x,
                                      visible_lines, ctx.file_line,
-                                     repl_code_panel_document_active_indent_chars(),
+                                     editor_code_panel_document_active_indent_chars(),
                                      NULL,
                                      edit_line,
                                      out,
@@ -1037,7 +1037,7 @@ void ui_panels_render_code_panel(const UiRenderSnapshot *snap,
             }
             render_active_input_rows(snap, panel_w, text_x, idx_x,
                                      visible_lines, ctx.file_line,
-                                     repl_code_panel_document_active_indent_chars(),
+                                     editor_code_panel_document_active_indent_chars(),
                                      idx_text,
                                      edit_line,
                                      out,
@@ -1235,12 +1235,12 @@ static int ui_panels_input_cursor_for_click(int mx, int row_offset,
     int linenum_w = 4 * FONT_W;
     int idx_col_w = ui_state_code_panel().show_vertex_indices ? (6 * FONT_W) : 0;
     int text_x = CODE_MARGIN_X + linenum_w + FONT_W + idx_col_w;
-    int indent_chars = repl_code_panel_document_active_indent_chars();
+    int indent_chars = editor_code_panel_document_active_indent_chars();
     int seg_start = editor_state_input().input_len;
     int seg_len = 0;
     int seg_x = text_x + indent_chars * FONT_W;
 
-    repl_code_panel_document_segment_for_row(editor_state_input().input,
+    editor_code_panel_document_segment_for_row(editor_state_input().input,
                                              seg_x, cp_w, row_offset,
                                              &seg_start, &seg_len, &seg_x);
 
@@ -1334,13 +1334,13 @@ UiHit ui_panels_hit_test(int mx, int my, int variable_count) {
         int vis = (line_y_start + LINE_H - 3 - gl_y) / LINE_H;
         int row_resolved = 0;
         if (vis >= 0 &&
-            vis < repl_code_panel_document_visible_lines_for_height(cp_h)) {
+            vis < editor_code_panel_document_visible_lines_for_height(cp_h)) {
             int idx_col_w = ui_state_code_panel().show_vertex_indices ? (6 * FONT_W) : 0;
             int text_x = CODE_MARGIN_X + linenum_w + FONT_W + idx_col_w;
             int doc_line = editor_scroll() + vis;
             CodePanelDocumentLayout layout;
-            repl_code_panel_document_build(&layout, cp_w, text_x, cp_h);
-            if (repl_code_panel_document_target_for_doc_line(doc_line, &layout,
+            editor_code_panel_document_build(&layout, cp_w, text_x, cp_h);
+            if (editor_code_panel_document_target_for_doc_line(doc_line, &layout,
                                                              &target,
                                                              &on_insert_line,
                                                              &row_offset)) {

@@ -1071,7 +1071,7 @@ int main() {
         repl_navigate_to_line(2);
 
         ASSERT_INT("blank line edit uses scope indent",
-                   repl_code_panel_document_active_indent_chars(),
+                   editor_code_panel_document_active_indent_chars(),
                    repl_source_scope_cmd_indent_chars(2));
     }
 
