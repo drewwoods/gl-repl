@@ -10,7 +10,7 @@
  * History (each step cleared the listed stubs):
  *   Step 1: repl_compile_dispatch.
  *   Step 2: ui_state_reset, variable_panel_state_reset,
- *           editor_help_session_reset, repl_editor_reset_transients,
+ *           editor_help_session_reset, editor_reset_transients,
  *           ui_state_code_panel_mut.
  *   Step 3: ui_state_status_set (via repl_set_status_sink).
  *   Step 4: g_cfg_items, CFG_ITEM_COUNT, audio_get_cfg_mode,
