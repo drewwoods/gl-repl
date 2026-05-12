@@ -264,6 +264,7 @@ static void render_active_input_rows(const UiRenderSnapshot *snap,
                 }
             }
 
+            glColor3f(0.95f, 0.95f, 0.90f);
             code_panel_draw_segment(wrap_x, *io_line_y, input,
                                     wrap_start, wrap_len, FONT_MONO);
 
