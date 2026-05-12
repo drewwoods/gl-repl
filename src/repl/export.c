@@ -848,8 +848,24 @@ static const char *const k_light_names[MAX_LIGHTS] = {
 
 #define LIGHT_INIT_LINES_PER_LIGHT 4  /* DIFFUSE, AMBIENT, SPECULAR, glDisable */
 
+/* Section-header comment lines emitted above the generated GL calls.
+ * Pure text — the editor renders them as dimmed init/header lines and
+ * the export writes them verbatim as C comments. */
+static const char *const k_lights_init_header[] = {
+    "  // Per-light colors. Light POSITION is set in display() after the camera",
+    "  // transforms (glLightfv(GL_POSITION) snapshots the active modelview).",
+};
+#define LIGHTS_INIT_HEADER_LINES \
+    ((int)(sizeof(k_lights_init_header) / sizeof(k_lights_init_header[0])))
+
+static const char *const k_lights_display_header[] = {
+    "  // Light positions, set after the camera so they stay anchored in world space.",
+};
+#define LIGHTS_DISPLAY_HEADER_LINES \
+    ((int)(sizeof(k_lights_display_header) / sizeof(k_lights_display_header[0])))
+
 int repl_export_lights_init_line_count(void) {
-    return MAX_LIGHTS * LIGHT_INIT_LINES_PER_LIGHT;
+    return LIGHTS_INIT_HEADER_LINES + MAX_LIGHTS * LIGHT_INIT_LINES_PER_LIGHT;
 }
 
 void repl_export_lights_init_line(int i, char *buf, size_t n) {
@@ -858,6 +874,11 @@ void repl_export_lights_init_line(int i, char *buf, size_t n) {
         buf[0] = '\0';
         return;
     }
+    if (i < LIGHTS_INIT_HEADER_LINES) {
+        snprintf(buf, n, "%s", k_lights_init_header[i]);
+        return;
+    }
+    i -= LIGHTS_INIT_HEADER_LINES;
     int light_idx = i / LIGHT_INIT_LINES_PER_LIGHT;
     int sub_idx   = i % LIGHT_INIT_LINES_PER_LIGHT;
     ReplRenderState render = repl_state_render();
@@ -886,7 +907,7 @@ void repl_export_lights_init_line(int i, char *buf, size_t n) {
 }
 
 int repl_export_lights_display_line_count(void) {
-    return MAX_LIGHTS;
+    return LIGHTS_DISPLAY_HEADER_LINES + MAX_LIGHTS;
 }
 
 void repl_export_lights_display_line(int i, char *buf, size_t n) {
@@ -895,6 +916,11 @@ void repl_export_lights_display_line(int i, char *buf, size_t n) {
         buf[0] = '\0';
         return;
     }
+    if (i < LIGHTS_DISPLAY_HEADER_LINES) {
+        snprintf(buf, n, "%s", k_lights_display_header[i]);
+        return;
+    }
+    i -= LIGHTS_DISPLAY_HEADER_LINES;
     ReplRenderState render = repl_state_render();
     const SceneLight *l = &render.lights[i];
     const char *ln = k_light_names[i];
