@@ -1,6 +1,7 @@
 #define _DEFAULT_SOURCE  /* mkdtemp() */
 #include "ui/gl_2d.h"
 #include "editor/clipboard.h"
+#include "editor/code_panel_document.h"
 #include "editor/code_layout.h"
 #include "editor/commit.h"
 #include "editor/help_session.h"
@@ -20,6 +21,7 @@
 #include "repl/core.h"
 #include "repl/core_internal.h"
 #include "repl/export.h"
+#include "repl/source_scope.h"
 #include "repl/state_owners.h"
 #include "widgets/replay.h"
 #include "widgets/replay_state.h"
@@ -1057,6 +1059,12 @@ int main() {
         ASSERT_STR("blank line inserted: source text empty", editor_buffer_line(2), "");
         ASSERT_INT("blank line inserted: edit line advances", repl_state_edit_line(), 3);
         ASSERT_INT("blank line inserted: stays in insert mode", editor_insert_mode(), 1);
+
+        repl_navigate_to_line(2);
+
+        ASSERT_INT("blank line edit uses scope indent",
+                   repl_code_panel_document_active_indent_chars(),
+                   repl_source_scope_cmd_indent_chars(2));
     }
 
     /* 13. try_assign_variable - inserting mode (inserts before cursor) */
