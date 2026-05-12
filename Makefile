@@ -308,7 +308,6 @@ sample: FORCE $(SAMPLE_BIN) ## Build the main REPL sample using release flags by
 TEAPOT_DEMO_OBJS = $(OBJDIR)/tools/teapot_demo/teapot.o \
                    $(addprefix $(OBJDIR)/,$(TEAPOT_DEMO_DEP_SRCS:.c=.o))
 
-teapot_demo: $(TEAPOT_DEMO_OBJS) ## Build the standalone teapot demo.
 $(TEAPOT_DEMO_BIN): $(TEAPOT_DEMO_OBJS)
 	@mkdir -p $(dir $@)
 	$(CC) $(OBJ_CFLAGS) -o $@ $(TEAPOT_DEMO_OBJS) $(GL_LDFLAGS)
@@ -322,7 +321,6 @@ REPL_DEMO_OBJS = $(OBJDIR)/tools/repl_demo/repl_demo.o \
                  $(OBJDIR)/tools/repl_demo/stubs.o \
                  $(addprefix $(OBJDIR)/,$(REPL_DEMO_DEP_SRCS:.c=.o))
 
-repl_demo: $(REPL_DEMO_OBJS) ## Build the standalone REPL pipeline demo.
 $(REPL_DEMO_BIN): $(REPL_DEMO_OBJS)
 	@mkdir -p $(dir $@)
 	$(CC) $(OBJ_CFLAGS) -o $@ $(REPL_DEMO_OBJS) $(GL_LDFLAGS)
