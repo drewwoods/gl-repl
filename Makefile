@@ -557,7 +557,7 @@ check-state-ownership: ## Run state-ownership contract checks (new + tightened e
 check-public-api-usage: ## Scan public API declarations for unused functions (informational).
 	@bash scripts/check-unused-apis.sh
 
-audit-editor-ownership: ## Report editor/REPL/UI ownership drift (informational; see feature/editor-owns-text-completion.md).
+audit-editor-ownership: ## Report editor/REPL/UI ownership drift (informational; see done/editor-owns-text-completion.md).
 	@bash scripts/audit_editor_ownership.sh
 
 check-editor-ownership-budget: ## Ratchet the editor/UI transitional-coupling budget down only.

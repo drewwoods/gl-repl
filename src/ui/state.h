@@ -18,7 +18,7 @@
  * should not own editor behavior or mutate editor/REPL state
  * directly.
  *
- * See feature/editor-text-model-controller.md and MODULES.md for the
+ * See done/editor-text-model-controller.md and MODULES.md for the
  * authoritative contract. The forwarder block that previously kept
  * the legacy `repl_state_*` chrome accessors alive was deleted in
  * Phase A commit 14; non-allowlisted repl_*.c callers forward-

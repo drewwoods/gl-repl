@@ -1,7 +1,7 @@
 #!/bin/bash
 # Audit script for the editor / REPL / UI three-layer ownership split.
-# See feature/editor-owns-text-completion.md (Phase 0) and
-# feature/editor-ownership-gap-cleanup.md (§0.1) for the contract this is
+# See done/editor-owns-text-completion.md (Phase 0) and
+# done/editor-ownership-gap-cleanup.md (§0.1) for the contract this is
 # measuring. This is a *report*, not a hard guard. Hard guards land in
 # Phase 5 (commit 17) once each phase has driven its signal to its target.
 #

@@ -43,7 +43,7 @@ on or before commit `edc682e`.
 - **Stage 6 — rebuild `repl_undo.c` on `repl_state_capture()`.**
   Premise overtaken. Undo lives at `src/editor/undo.c` and
   *deliberately* does not snapshot input bytes or clipboard state.
-  See [`feature/done/editor-input-selection.md`](done/editor-input-selection.md)
+  See [`done/editor-input-selection.md`](done/editor-input-selection.md)
   Phase A item 6: input is rebuilt on undo via `load_line_to_input`,
   and the input-text clipboard payload intentionally survives
   unchanged across undo/redo. Folding all state into one
@@ -51,7 +51,7 @@ on or before commit `edc682e`.
   the stage as written no longer makes sense.
 
 - **Stage 7 input-bridge cleanup (Phase C of
-  [`feature/done/push-architecture-ui.md`](done/push-architecture-ui.md)).**
+  [`done/push-architecture-ui.md`](done/push-architecture-ui.md)).**
   Explicitly optional in the original plan; not pursued. UI input
   handlers stay as direct action calls rather than returning
   `UiAction` lists. The trade-off (15–25 new variants for limited
@@ -124,7 +124,7 @@ boundary between them is load-bearing:
 The undo subset is *not* a bug; it's the rule that lets typed-char
 insertion, partial-line cut, and partial-line paste avoid
 spuriously promoting an example to a custom scene (see Phase A item
-6 of `feature/done/editor-input-selection.md`). Future migrations
+6 of `done/editor-input-selection.md`). Future migrations
 must not silently fold one boundary into another.
 
 Add a short section to `ARCHITECTURE.md` documenting this — currently
