@@ -104,7 +104,9 @@ enum {
 };
 ```
 
-Use a mask helper:
+Use a mask helper. Keep this file-local for the registry's own initializer
+table; the public mask helper for tests and other call sites is
+`repl_example_tag_bit()` in `examples.h` (added in Step 2):
 
 ```c
 #define EXAMPLE_TAG_BIT(tag) (1u << (tag))
@@ -136,6 +138,19 @@ unsigned int repl_example_tag_mask(int example_idx);
 int repl_example_has_tag(int example_idx, int tag_idx);
 int repl_example_count_for_tag(int tag_idx);
 int repl_example_index_for_tag(int tag_idx, int ordinal);
+
+/* Visible-tag layer: tags whose `repl_example_count_for_tag(tag) > 0`.
+ * Both UI offset math and action offset math MUST use these helpers so
+ * empty-tag skipping cannot desynchronize the two sides. Mirrors the
+ * dense-user-scene helper pattern in src/app/glr_actions.h. */
+int repl_example_visible_tag_count(void);
+int repl_example_visible_tag_at(int dense_idx);
+
+/* Public mask helper. The bit position equals the tag index, but exposing
+ * the helper keeps test code from assuming the bit layout. */
+static inline unsigned int repl_example_tag_bit(int tag_idx) {
+    return 1u << (unsigned int)tag_idx;
+}
 ```
 
 Behavior:
@@ -145,6 +160,10 @@ Behavior:
 - Invalid `example_idx` returns neutral values.
 - `repl_example_index_for_tag(tag_idx, ordinal)` walks the flat registry and
   returns the global example index for the Nth matching example.
+- `repl_example_visible_tag_count()` returns the count of tags whose
+  `repl_example_count_for_tag()` is > 0. `repl_example_visible_tag_at(d)`
+  maps a dense visible-tag index `[0, visible_tag_count)` to the underlying
+  full tag index; returns -1 for out-of-range `d`.
 - Avoid storing per-tag generated arrays unless profiling shows a need. The
   example count is small, and walking the registry keeps tag metadata single
   sourced.
@@ -184,16 +203,17 @@ submenu rows behavior-identical.
 
 ## Step 4: Change Scene Parent Row Math From Examples To Tags
 
-In `src/ui/menu_bar.c`, define the Scene parent section in terms of tag rows:
+In `src/ui/menu_bar.c`, define the Scene parent section in terms of *visible*
+tag rows (tags with at least one matching example):
 
 - `0`: `### EXAMPLES`
-- `1..tag_count`: tag rows
-- `tag_count + SCENE_OFF_DIVIDER`: divider
-- `tag_count + SCENE_OFF_HDR`: `### SCENE`
-- `tag_count + SCENE_OFF_NEW`: `New empty scene`
-- `tag_count + SCENE_OFF_SAVE`: `Save to output.c`
-- `tag_count + SCENE_OFF_RENAME`: `Rename active scene`
-- `tag_count + SCENE_OFF_SCENES + dense_scene_idx`: user scenes
+- `1..visible_tag_count`: tag rows
+- `visible_tag_count + SCENE_OFF_DIVIDER`: divider
+- `visible_tag_count + SCENE_OFF_HDR`: `### SCENE`
+- `visible_tag_count + SCENE_OFF_NEW`: `New empty scene`
+- `visible_tag_count + SCENE_OFF_SAVE`: `Save to output.c`
+- `visible_tag_count + SCENE_OFF_RENAME`: `Rename active scene`
+- `visible_tag_count + SCENE_OFF_SCENES + dense_scene_idx`: user scenes
 
 Update these helpers together:
 
@@ -205,24 +225,27 @@ Update these helpers together:
 
 Important: `GLR_SCENE_OFF_*` values can stay as-is because they are relative to
 the start of the section after the dynamic examples block. Only the dynamic
-block changes from `example_count` to `tag_count`.
+block changes from `example_count` to `visible_tag_count`.
 
-Empty-tag handling: if a tag has zero matching examples, the parent dropdown
-should skip it. Implement this as a "visible tag" filter on top of
-`repl_example_tag_count()` so `menu_item_count(MENU_SCENE)` only counts tags
-with `repl_example_count_for_tag(tag_idx) > 0`. This keeps the initial tag
-set forgiving when categories are tuned later.
+Empty-tag handling: if a tag has zero matching examples, both UI and action
+sides MUST skip it. Use `repl_example_visible_tag_count()` (added in Step 2)
+on both sides; never reach for raw `repl_example_tag_count()` inside menu-row
+arithmetic. If raw and visible counts diverge, action offsets desynchronize
+from UI offsets and the user's New/Save/Rename/user-scene clicks land on the
+wrong action. Treat `repl_example_visible_tag_count()` as the load-bearing
+identity for Scene-menu row math.
 
 In `src/app/glr_actions.c::glr_action_menu_item_activate()`, mirror the same
-offset migration:
+offset migration using the same visible-tag count:
 
 ```c
-int tag_count = repl_example_tag_count();
+int tag_count = repl_example_visible_tag_count();
 ```
 
 Then use `tag_count + GLR_SCENE_OFF_*` for New/Save/Rename/user-scene rows.
-Parent tag rows are intentional no-ops: return `0` (menu stays open) so the
-user can hover the tag to see the submenu, then click an example inside it.
+Parent tag rows are intentional no-ops: detect them with
+`item_idx >= 1 && item_idx <= tag_count` and `return 0` (menu stays open) so
+the user can hover the tag to see the submenu, then click an example inside it.
 Returning `1` would close the menu and defeat the submenu workflow.
 
 Mirroring rule for hit-test exclusion: `ui_menu_bar_dropdown_item_hit()`
@@ -245,7 +268,15 @@ Reset this state in:
 - `ui_menu_bar_set_open_menu()` when opening anything other than Scene
 - `ui_menu_bar_set_open_menu()` when opening Scene fresh
 
-During Scene dropdown rendering/hit-testing:
+Mutation contract: `g_scene_open_tag` and `g_scene_submenu_open_time` are
+mutated **only inside the render path**
+(`ui_menu_bar_render_example_dropdown()`), mirroring the existing
+`g_menu_item_hover` pattern. `ui_menu_bar_hit_test()` must stay passive — it
+reads `g_scene_open_tag` to know which submenu rect to test against, but
+never writes either field. This is what keeps the new submenu code inside
+the `scripts/check-ui-returns-hits-only.sh` boundary.
+
+During Scene dropdown rendering (write path):
 
 - Compute the currently hovered parent row via `ui_menu_bar_dropdown_item_hit()`.
 - If that row maps to a tag row, update `g_scene_open_tag`.
@@ -258,7 +289,7 @@ During Scene dropdown rendering/hit-testing:
 - If the pointer is outside both the parent dropdown and the submenu, close the
   submenu but leave the parent dropdown behavior unchanged.
 
-Hit-test must read open-tag state, not just write it: the new submenu hit
+Hit-test reads the open-tag state without writing it: the new submenu hit
 branch in `ui_menu_bar_hit_test()` calls `scene_example_submenu_rect(
 g_scene_open_tag, ...)` to test against whatever submenu the previous
 render frame opened. With `g_scene_open_tag == -1` no submenu rect exists,
@@ -266,11 +297,19 @@ so hit-test transparently falls through to parent rows. This implies a
 one-frame lag between hovering a tag and the submenu being click-targetable
 — acceptable because the submenu fade is also one frame behind.
 
-Add local geometry helpers:
+Add local geometry helpers. The parent-row ↔ tag mapping goes through the
+visible-tag layer added in Step 2:
 
 ```c
+/* Map parent row [1..visible_tag_count] to the underlying tag_idx via
+ * repl_example_visible_tag_at(row - 1). Returns -1 for non-tag rows
+ * (header, divider, scene actions, user scenes). */
 static int scene_tag_idx_for_parent_row(int row);
+
+/* Inverse: returns the parent row that displays tag_idx, or -1 if
+ * tag_idx is not currently visible (zero matching examples). */
 static int scene_parent_row_for_tag(int tag_idx);
+
 static int scene_example_submenu_rect(int tag_idx,
                                       int *sx, int *sy,
                                       int *sw, int *sh);
@@ -408,13 +447,16 @@ tag_row)` should not accidentally load an example. The old condition:
 if (item_idx >= 1 && item_idx <= example_count)
 ```
 
-must be removed or changed to a tag no-op. Concretely: detect
+must be removed or changed to a tag no-op. Concretely: bind
+`tag_count = repl_example_visible_tag_count()` (the same visible-tag
+identity used by `menu_item_count(MENU_SCENE)`), then detect
 `item_idx >= 1 && item_idx <= tag_count` and `return 0` immediately so the
 controller leaves the dropdown open and the user can keep hovering tags. All
 example loading from the Scene menu should flow through
 `UI_HIT_EXAMPLE_SUBMENU_ITEM` and `glr_action_load_example(example_idx)`.
 
-Verify the user-scene row mapping still uses dense user-scene indices:
+Verify the user-scene row mapping still uses dense user-scene indices, and
+that the visible-tag count drives the offset:
 
 ```c
 int scene_idx = item_idx - (tag_count + GLR_SCENE_OFF_SCENES);
@@ -430,7 +472,12 @@ Update `tests/test_repl_core_examples.c` or add a focused examples test block:
 - Every bit set in an example mask is within `[0, repl_example_tag_count())`.
 - Every tag query ordinal maps to a valid global example index.
 - `repl_example_has_tag(idx, tag)` agrees with
-  `repl_example_tag_mask(idx) & EXAMPLE_TAG_BIT(tag)`.
+  `repl_example_tag_mask(idx) & repl_example_tag_bit(tag)`. The public
+  `repl_example_tag_bit()` inline added in Step 2 is the canonical mask
+  helper; do not assume the raw `1u << tag` layout in test code.
+- `repl_example_visible_tag_count() <= repl_example_tag_count()`, and
+  every dense visible index maps to a tag with a non-zero example count
+  (regression guard for the empty-tag skip path).
 - At least one known multi-tag example is discoverable under each assigned tag.
 - Existing example load/export/round-trip tests still pass without fixture
   changes unless the registry conversion accidentally changes source lines.
