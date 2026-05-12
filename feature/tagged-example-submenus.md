@@ -32,10 +32,22 @@ The implementation should preserve the current ownership split:
   - `example_count + GLR_SCENE_OFF_*`: divider, `### SCENE`, actions, user
     scenes
 - `ui_menu_bar_hit_test()` returns only passive `UiHit` values. The controller
-  routes `UI_HIT_MENU_ITEM` to `glr_action_menu_item_activate()`.
+  routes `UI_HIT_MENU_ITEM` to `glr_action_menu_item_activate()`. The hard
+  guard `scripts/check-ui-returns-hits-only.sh` covers this contract for
+  `ui_menu_bar.c`; the new submenu hit-test must also return `UiHit` values
+  only, with no input forwarding bodies.
 - `ui_menu_bar_render_example_dropdown()` is legacy-named, but currently renders
-  every top-level dropdown, not only the F12/example list. Keep that in mind
-  when changing it.
+  every top-level dropdown, not only the F12/example list. This feature keeps
+  the name and lets the function grow a submenu render side-effect when
+  `g_open_menu == MENU_SCENE`; the rename is out of scope.
+- F12 cycling does not open the Scene menu. `cycle_example_or_user_scene()`
+  calls `repl_load_example(idx)` directly with a flat registry index, so the
+  submenu/hover state in this feature has no effect on F12 behavior.
+- `g_menu_item_hover` is already mutated during render in
+  `ui_menu_bar_render_example_dropdown()` (line ~773); the new submenu state
+  (`g_scene_open_tag`, `g_scene_submenu_open_time`) follows that same
+  "hover state updated during render" pattern, so `ui_menu_bar.c` stays
+  hit-test-only by the project's boundary contract.
 
 ## Target Behavior
 
@@ -195,6 +207,12 @@ Important: `GLR_SCENE_OFF_*` values can stay as-is because they are relative to
 the start of the section after the dynamic examples block. Only the dynamic
 block changes from `example_count` to `tag_count`.
 
+Empty-tag handling: if a tag has zero matching examples, the parent dropdown
+should skip it. Implement this as a "visible tag" filter on top of
+`repl_example_tag_count()` so `menu_item_count(MENU_SCENE)` only counts tags
+with `repl_example_count_for_tag(tag_idx) > 0`. This keeps the initial tag
+set forgiving when categories are tuned later.
+
 In `src/app/glr_actions.c::glr_action_menu_item_activate()`, mirror the same
 offset migration:
 
@@ -203,11 +221,14 @@ int tag_count = repl_example_tag_count();
 ```
 
 Then use `tag_count + GLR_SCENE_OFF_*` for New/Save/Rename/user-scene rows.
-Parent tag rows should not load examples directly. Returning `0` for tag rows
-is reasonable if a click should keep the menu open, but make sure the controller
-does not close the menu before submenu clicks can work. Another option is to
-return `1` for tag rows and treat clicks as no-op close actions, but hover is
-the primary interaction, so keeping the menu open is better.
+Parent tag rows are intentional no-ops: return `0` (menu stays open) so the
+user can hover the tag to see the submenu, then click an example inside it.
+Returning `1` would close the menu and defeat the submenu workflow.
+
+Mirroring rule for hit-test exclusion: `ui_menu_bar_dropdown_item_hit()`
+already returns `-1` for `###` headers and `---` dividers. Tag rows must
+remain hit-testable (clicks are no-ops but hover must register), so they
+should pass through the existing `-1` filter unchanged.
 
 ## Step 5: Add Submenu UI State And Geometry
 
@@ -231,8 +252,19 @@ During Scene dropdown rendering/hit-testing:
 - If the tag changes, set `g_scene_submenu_open_time = snap->anim_time`.
 - If the pointer is inside the currently open submenu, keep
   `g_scene_open_tag` unchanged.
+- If the pointer is on a parent row that is not a tag row (header, divider,
+  scene action, user-scene row), close the submenu — the user has moved
+  attention away from the tag area.
 - If the pointer is outside both the parent dropdown and the submenu, close the
   submenu but leave the parent dropdown behavior unchanged.
+
+Hit-test must read open-tag state, not just write it: the new submenu hit
+branch in `ui_menu_bar_hit_test()` calls `scene_example_submenu_rect(
+g_scene_open_tag, ...)` to test against whatever submenu the previous
+render frame opened. With `g_scene_open_tag == -1` no submenu rect exists,
+so hit-test transparently falls through to parent rows. This implies a
+one-frame lag between hovering a tag and the submenu being click-targetable
+— acceptable because the submenu fade is also one frame behind.
 
 Add local geometry helpers:
 
@@ -255,6 +287,23 @@ static int scene_example_submenu_rect(int tag_idx,
 - Place to the right of the parent by default.
 - Flip to the left when `sx + sw > viewport.window_w`.
 
+Expose a thin test-only accessor so `tests/test_ui_menu_bar.c` can drive
+hit-test points inside the submenu without scanning the viewport:
+
+```c
+/* Test helper: return the submenu rect that would render for tag_idx,
+ * assuming MENU_SCENE is the open menu. Returns 0 if no rect would
+ * render (e.g. tag has no examples). */
+int ui_menu_bar_scene_example_submenu_rect_for_test(int tag_idx,
+                                                    int *sx, int *sy,
+                                                    int *sw, int *sh);
+```
+
+Keep this declaration in `src/ui/menu_bar.h` alongside other
+`_for_test` accessors, and document that it ignores `g_scene_open_tag`
+so a test can probe any tag's geometry without first driving the
+hover state.
+
 ## Step 6: Render Tag Rows And Submenu Rows
 
 In the parent Scene dropdown:
@@ -264,7 +313,11 @@ In the parent Scene dropdown:
   A text glyph such as `>` is enough and avoids adding a custom icon path.
 - Highlight the hovered/open tag row using the existing hover color.
 - Do not highlight the parent tag row as the active example; active example
-  highlighting belongs in the submenu rows.
+  highlighting belongs in the submenu rows. (UX consequence: when the user
+  arrows back via F12, the parent dropdown shows no "you are here" cue
+  unless they hover into the matching tag. Acceptable for v1 — a small
+  bullet/dot suffix on tag rows that contain the active example is a
+  future polish item.)
 
 After rendering the parent dropdown, render the open submenu if
 `g_open_menu == MENU_SCENE && g_scene_open_tag >= 0`:
@@ -277,6 +330,11 @@ After rendering the parent dropdown, render the open submenu if
 - Highlight hover row with the existing hover color.
 - Highlight active example with the green accent if
   `example_idx == snap->scenes.active_example_idx`.
+
+This submenu render is scoped to `MENU_SCENE` only. The legacy-named
+`ui_menu_bar_render_example_dropdown()` renders every top-level dropdown
+today; the submenu code path must early-out for `g_open_menu != MENU_SCENE`
+so opening the File or Config dropdown doesn't leak a stale Scene submenu.
 
 Keep blend enable/disable balanced around the whole parent+submenu render.
 
@@ -300,7 +358,8 @@ Add a hit-test helper in `src/ui/menu_bar.c`:
 static UiHit scene_example_submenu_hit_test(int mx, int my);
 ```
 
-Priority:
+Priority (insert submenu rows at the top of the existing chain in
+`ui_menu_bar_hit_test()`, which today is parent-row → pin → menu-button):
 
 1. Submenu rows.
 2. Parent dropdown rows.
@@ -308,7 +367,10 @@ Priority:
 4. Top-level menu buttons.
 
 This prevents a submenu click from being interpreted as an outside click that
-closes the parent menu before loading the example.
+closes the parent menu before loading the example. The submenu rect and parent
+dropdown rect do not overlap geometrically (submenu is placed to the right /
+left of the parent), so a real geometric collision is unlikely; the priority
+ordering is the belt-and-suspenders defense against future layout changes.
 
 `ui_menu_bar_dropdown_item_hit()` can remain parent-menu-only for compatibility,
 or it can internally call a parent-only helper. Keep its current return contract:
@@ -346,9 +408,11 @@ tag_row)` should not accidentally load an example. The old condition:
 if (item_idx >= 1 && item_idx <= example_count)
 ```
 
-must be removed or changed to a tag no-op. All example loading from the Scene
-menu should flow through `UI_HIT_EXAMPLE_SUBMENU_ITEM` and
-`glr_action_load_example(example_idx)`.
+must be removed or changed to a tag no-op. Concretely: detect
+`item_idx >= 1 && item_idx <= tag_count` and `return 0` immediately so the
+controller leaves the dropdown open and the user can keep hovering tags. All
+example loading from the Scene menu should flow through
+`UI_HIT_EXAMPLE_SUBMENU_ITEM` and `glr_action_load_example(example_idx)`.
 
 Verify the user-scene row mapping still uses dense user-scene indices:
 
@@ -373,22 +437,35 @@ Update `tests/test_repl_core_examples.c` or add a focused examples test block:
 
 Update `tests/test_ui_menu_bar.c`:
 
-- Scene parent dropdown uses tag rows, not example rows.
+- Scene parent dropdown uses tag rows, not example rows. The existing
+  `find_dropdown_item_point(GLR_MENU_SCENE, 1, ...)` style probe will now
+  hit the first tag row, not the first example. Update fixtures that
+  asserted example-row positions accordingly.
 - Parent Scene tag row hit returns `UI_HIT_MENU_ITEM` with
   `cmd_idx == GLR_MENU_SCENE` and the parent row index.
 - Hovering a tag row causes the submenu render path to draw example text under
-  GL stubs.
+  GL stubs. The render-time hover update means the test must call
+  `ui_menu_bar_render_example_dropdown(&snap)` (which mutates
+  `g_scene_open_tag`) before issuing the submenu hit-test.
 - A point inside a submenu example row returns
-  `UI_HIT_EXAMPLE_SUBMENU_ITEM`.
+  `UI_HIT_EXAMPLE_SUBMENU_ITEM`. Use the new
+  `ui_menu_bar_scene_example_submenu_rect_for_test()` helper to pick a
+  pixel inside the submenu rather than scanning the viewport.
 - Submenu hit payload has `cmd_idx == tag_idx` and
   `item_idx == global example_idx`.
 - Active example highlight path renders when `snap.scenes.active_example_idx`
   matches a submenu example.
-- Offscreen horizontal flip can be covered by a narrow viewport test if the
-  geometry is exposed through test-only helpers or can be found by scanning
-  hit-test points.
+- Offscreen horizontal flip: a narrow-viewport test feeds the test helper
+  a tag index and asserts the returned rect lands to the left of the
+  parent rather than off-screen to the right.
 - Parent dropdown hit tests still work for File, Tutorials, Config, and Scene
   fixed rows.
+- Existing assertion at `test_ui_menu_bar.c:286` that exercises the Scene
+  dropdown with `snap.scenes.active_example_idx = 0` continues to render
+  rows (the parent now renders tag rows); the active-example highlight
+  moves to the submenu and only fires when a submenu is open. Either
+  drive the hover state to open the matching submenu, or relax the
+  assertion to just confirm rendering happens.
 
 Controller/action coverage:
 
@@ -431,8 +508,15 @@ or header.
 
 - Should the first tag set stay limited to `2D`, `3D`, `Polygons`, and `Lines`,
   or should obvious categories such as `Animation`, `Functions`, and `Particles`
-  be added immediately?
+  be added immediately? Suggest starting with the four-tag set; add categories
+  once the assignment table proves stable.
 - Should clicking a parent tag row pin/keep the submenu open, or should hover be
-  the only opener?
+  the only opener? Resolved above (Step 4) — parent tag rows are no-ops and
+  hover is the only opener.
 - Should a tag row show a count, for example `3D (12)`, or keep the Windows
-  menu style minimal?
+  menu style minimal? Suggest minimal for v1; the active-example bullet
+  follow-up (Step 6) is the higher-value polish item.
+- Should an active-example bullet/dot suffix mark tag rows whose submenu
+  contains the currently loaded example? Out of scope for v1 per Step 6; the
+  hit-test/render plumbing for it already exists (`snap.scenes.active_example_idx`),
+  so this is a one-line addition later.
