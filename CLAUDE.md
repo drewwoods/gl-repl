@@ -202,6 +202,12 @@ Test sources live under `tests/` and shared test-only helpers live under
 | `src/editor/completion.h` | `EditorCompletionProvider` struct + `editor_completion_register/update/clear` API |
 | `src/repl/examples.c` | Predefined example data (`g_examples[]`, `g_example_names[]`) |
 | `src/repl/examples.h` | Example query API (`repl_examples_count/name/lines`) |
+| `src/repl/tutorials.c` | Built-in tutorial catalog: per-tutorial null-terminated `comments[]` / `expected[]` parallel arrays + name. Starter set: "First Triangle", "Color & Transform" |
+| `src/repl/tutorials.h` | Catalog query API (`repl_tutorial_count/name/step_count/step_comment/step_expected`) + `TutorialEntry` typedef |
+| `src/widgets/tutorial_state.c` | Tutorial peer subsystem: owns `TutorialRuntimeState` (active flag, step, locked_lines, fade timing, last match result) |
+| `src/widgets/tutorial_state.h` | Peer-subsystem facade (`tutorial_state_view/_mut/_reset`, `tutorial_active`), `TutorialMatchKind/Result` types |
+| `src/widgets/tutorial.c` | Tutorial runner: starts/exits/advances, emits instruction comments via `repl_load_apply_line`, whitespace-tolerant match, locked-line guard, fade-alpha math |
+| `src/widgets/tutorial.h` | Runner API (`tutorial_start/_exit/_handle_commit_attempt/_advance_after_successful_commit/_current_expected_text/_line_is_locked/_line_is_fading/_step_fade_alpha/_guard_source_change/_match`) |
 | `src/repl/export.c` | `repl_export_save_output` / `repl_export_load_from_file`, workspace header directives, `@scene-name` / `@workspace-dir` markers |
 | `src/repl/export.h` | Export/import public API and workspace-header pending-state types |
 | `src/repl/export_state.h` | Shared dimensions for import/export state text |
