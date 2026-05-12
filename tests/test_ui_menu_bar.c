@@ -160,6 +160,8 @@ static void test_top_level_hits(void) {
 static void test_dropdown_and_config_press(void) {
     int item_mx = -1;
     int item_my = -1;
+    int tutorial_mx = -1;
+    int tutorial_my = -1;
     int cfg_row = -1;
     int cfg_mx = -1;
     int cfg_my = -1;
@@ -178,6 +180,13 @@ static void test_dropdown_and_config_press(void) {
 
     ui_menu_bar_close();
     ASSERT_INT_EQ("hit when closed", ui_menu_bar_dropdown_item_hit(item_mx, item_my), -1);
+
+    ASSERT_TRUE("found tutorial item point",
+                find_dropdown_item_point(GLR_MENU_TUTORIALS, 0,
+                                         &tutorial_mx, &tutorial_my));
+    ASSERT_INT_EQ("hit first tutorial item",
+                  ui_menu_bar_dropdown_item_hit(tutorial_mx, tutorial_my),
+                  0);
 
     ASSERT_TRUE("found config action point",
                 find_first_config_action_point(&cfg_row, &cfg_mx, &cfg_my));
