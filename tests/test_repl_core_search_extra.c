@@ -58,21 +58,21 @@ int main(void) {
 
     {
         ASSERT_TRUE("find prev empty query",
-                    repl_search_find_prev_in_text("abc", "", 1) == -1);
+                    editor_search_find_prev_in_text("abc", "", 1) == -1);
         ASSERT_TRUE("find prev empty text",
-                    repl_search_find_prev_in_text("", "a", 0) == -1);
+                    editor_search_find_prev_in_text("", "a", 0) == -1);
         ASSERT_TRUE("find prev start clamped",
-                    repl_search_find_prev_in_text("abc abc", "abc", 999) == 4);
+                    editor_search_find_prev_in_text("abc abc", "abc", 999) == 4);
         ASSERT_TRUE("find prev single char",
-                    repl_search_find_prev_in_text("xyz", "z", 2) == 2);
+                    editor_search_find_prev_in_text("xyz", "z", 2) == 2);
         ASSERT_TRUE("find prev last occurrence",
-                    repl_search_find_prev_in_text("one two one", "one", 999) == 8);
+                    editor_search_find_prev_in_text("one two one", "one", 999) == 8);
         ASSERT_TRUE("find prev start position match",
-                    repl_search_find_prev_in_text("abcabc", "abc", 3) == 3);
+                    editor_search_find_prev_in_text("abcabc", "abc", 3) == 3);
         ASSERT_TRUE("find prev case insensitive",
-                    repl_search_find_prev_in_text("AbCaBc", "abc", 99) == 3);
+                    editor_search_find_prev_in_text("AbCaBc", "abc", 99) == 3);
         ASSERT_TRUE("find prev no match",
-                    repl_search_find_prev_in_text("abc", "zzz", 2) == -1);
+                    editor_search_find_prev_in_text("abc", "zzz", 2) == -1);
     }
 
     glr_app_reset_all(); declare_test_vars();
