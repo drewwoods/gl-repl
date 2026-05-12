@@ -285,6 +285,13 @@ int apply_state_cmd(const GLCmd *cmd, float alpha_scale) {
     case CMD_BLEND_FUNC:
         glBlendFunc(cmd->mode, (GLenum)cmd->args[0]);
         return 1;
+    case CMD_CLEAR_COLOR:
+        g_clear_color[0] = cmd->args[0];
+        g_clear_color[1] = cmd->args[1];
+        g_clear_color[2] = cmd->args[2];
+        g_clear_color[3] = cmd->args[3];
+        glClearColor(cmd->args[0], cmd->args[1], cmd->args[2], cmd->args[3]);
+        return 1;
     default:
         return 0;
     }
@@ -447,15 +454,9 @@ void repl_execute_program(const ReplExecutionOptions *options) {
             break;
         case CMD_POINT_PARAMETER_FV:
         case CMD_BLEND_FUNC:
-            if (in_begin) { glEnd(); in_begin = 0; }
-            apply_state_cmd(&flat_cmds[pc], g_execute_alpha_scale);
-            break;
         case CMD_CLEAR_COLOR:
             if (in_begin) { glEnd(); in_begin = 0; }
-            g_clear_color[0] = flat_cmds[pc].args[0];
-            g_clear_color[1] = flat_cmds[pc].args[1];
-            g_clear_color[2] = flat_cmds[pc].args[2];
-            g_clear_color[3] = flat_cmds[pc].args[3];
+            apply_state_cmd(&flat_cmds[pc], g_execute_alpha_scale);
             break;
         case CMD_GLUT_TORUS:
             if (in_begin) { glEnd(); in_begin = 0; }

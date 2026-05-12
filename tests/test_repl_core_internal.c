@@ -523,7 +523,7 @@ int main() {
         ASSERT_INT("render reset light enabled", g_lights[0].enabled, 1);
         ASSERT_TRUE("render reset clear color r", g_clear_color[0] == 0.10f);
         ASSERT_TRUE("render reset clear color g", g_clear_color[1] == 0.10f);
-        ASSERT_TRUE("render reset clear color b", g_clear_color[2] == 0.13f);
+        ASSERT_TRUE("render reset clear color b", g_clear_color[2] == 0.10f);
         ASSERT_TRUE("render reset clear color a", g_clear_color[3] == 1.0f);
 
     #ifdef GL_STUBS

@@ -61,7 +61,7 @@
               { 0.05f, 0.05f, 0.06f, 1.0f },
               { 0.20f, 0.20f, 0.25f, 1.0f } },
         },
-        .clear_color = { 0.10f, 0.10f, 0.13f, 1.0f },
+        .clear_color = { 0.10f, 0.10f, 0.10f, 1.0f },
     },
     .scenes = {
         .active_example_idx = -1,

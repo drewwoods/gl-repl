@@ -464,6 +464,7 @@ typedef struct {
 } InitBootstrapEntry;
 
 static const InitBootstrapEntry g_init_bootstrap_repl[] = {
+    { "glClearColor(0.10, 0.10, 0.10, 1.0);", NULL },
     { "glEnable(GL_COLOR_MATERIAL);", NULL },
     { "glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);", NULL },
     { "glEnable(GL_BLEND);", NULL },
