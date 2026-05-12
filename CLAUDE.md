@@ -156,7 +156,7 @@ Test sources live under `tests/` and shared test-only helpers live under
 | `src/repl/pipeline.h` | Pipeline and lifecycle surface for frame orchestration (flatten, autonormal, replay snapshots) |
 | `src/repl/autonormal.c` | Auto-generated `glNormal3f` maintenance for source commands |
 | `src/widgets/replay.c` | Replay state machine: PC, mode (OFF/PLAYING/PAUSED/DONE), speed, fade-batch ring |
-| `src/widgets/replay.h` | Replay public API (`repl_replay_start`, `repl_replay_toggle_play_pause`, etc.) |
+| `src/widgets/replay.h` | Replay public API (`replay_start`, `replay_toggle_play_pause`, etc.) |
 | `src/editor/search.c` | Case-insensitive substring search state and match navigation |
 | `src/editor/search.h` | Search query helpers and input routing API |
 | `repl_autocomplete.c` | REPL-side completion provider: walks command spec / predef vars / `CMD_FUNC_DEF` for matches, ghost text, parameter hints. Registered via `EditorCompletionProvider`. |
@@ -584,7 +584,7 @@ Symbol matching and function parameter hints in `repl_autocomplete.c` (registere
 
 Case-insensitive text search in `src/editor/search.c`:
 - Activated by Ctrl+F; query and state accessed via `editor_state_search()`
-- `repl_search_find_next_in_text()` finds substring matches across
+- `editor_search_find_next_in_text()` finds substring matches across
   all visible lines (header, user code, footer)
 - `hit_line_idx`/`hit_char_idx` in `ReplSearchState` track current match position
 - Integrated with code panel rendering for match highlighting

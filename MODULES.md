@@ -364,7 +364,7 @@ Program-side state that is not the source command array itself.
 | `repl_examples` | Built-in example source data |
 | `repl_autonormal` | Auto-generated `glNormal3f` maintenance and feeding-command lookup |
 | `repl_replay` | Replay state machine, replay PC/mode, fade batches, replay timing |
-| `repl_replay_annotations` | Replay annotation cache and virtual-line production; takes `EditorBufferView` explicitly |
+| `replay_annotations` | Replay annotation cache and virtual-line production; takes `EditorBufferView` explicitly |
 | `repl_debug` | Program/debug dump helpers; takes editor text views when it needs source text |
 
 These modules may consume editor text through explicit
@@ -690,7 +690,7 @@ Reading the diagram:
 - `repl_compile` is pure: incoming dotted edges only (reads parser +
   scope), no outgoing mutation edges. `repl_command_store` mutates
   command arrays only; `editor_buffer` mutates line text only.
-- `repl_replay_annotations` and `repl_export` receive
+- `replay_annotations` and `repl_export` receive
   `EditorBufferView`; they do not reach into editor state.
 - UI render is read-only. UI input is hit-test-and-return.
 
@@ -918,7 +918,7 @@ The deferred items still on the books:
   The function names should follow the `ui_*` filename in a follow-up.
 - `audio` namespace audit (neutrally-named app service; revisit
   when the namespace audit happens — likely future `glr_audio`).
-- `repl_editor_reset_transients` symbol rename: the function lives in
+- `editor_reset_transients` symbol rename: the function lives in
   `src/editor/input.c` and resets editor + camera + menu + picker +
   code-panel-drag transients; the `repl_editor_*` prefix is leftover from
   the deleted `repl_editor.{c,h}`. Follow-up should rename to

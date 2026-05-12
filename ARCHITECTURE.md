@@ -107,7 +107,7 @@ sample.c GLUT display callback (future `glr` shell)
         -> rebuild autonormals if dirty
         -> rebuild flat program if dirty                          [PROF_FLATTEN]
         -> push editor snapshots (transformers / highlights /     [PROF_SNAPSHOT*]
-           virtual lines via repl_replay_annotations_prepare)
+           virtual lines via replay_annotations_prepare)
         -> save live predefined variable values
         -> prepare replay frame if replay is active
         -> update export/camera strings
@@ -205,7 +205,7 @@ once and the UI consumes read-only. The snapshot family lives in
 |---|---|---|
 | `EditorTransformerList editor_transformers` | `glr_ctrl_push_color_transformers()` | One entry per editable color command (line idx + r/g/b/a/has_alpha/is_clear). Drives inline swatch render and color-picker hit-test. Future kinds: numeric slider. |
 | `EditorHighlightList editor_highlights` | `glr_ctrl_push_highlights()` | Feeding-normal cmd, feeding-color cmd, replay PC, search match, selection. Rendered as gutter accents and row backgrounds. |
-| `EditorVirtualLineList editor_virtual_lines` | `repl_replay_annotations_prepare()` (via `_refresh_virtual_lines()`) | Replay-time annotation rows (substitution + evaluation) attached to the current source line. Layout, scroll, hit-test, and render all read from this list, so virtual-row counts have one source of truth (`repl_replay_annotation_extra_rows_for_line()` counts the list). |
+| `EditorVirtualLineList editor_virtual_lines` | `replay_annotations_prepare()` (via `_refresh_virtual_lines()`) | Replay-time annotation rows (substitution + evaluation) attached to the current source line. Layout, scroll, hit-test, and render all read from this list, so virtual-row counts have one source of truth (`replay_annotation_extra_rows_for_line()` counts the list). |
 
 All three lists are stored on `ReplRuntimeState` as named slices and
 exposed via `repl_state_editor_*()` accessors (read-only view in
@@ -379,8 +379,8 @@ discoveries (e.g. the editor cursor pixel computed during
 `Ui*Output` structs that the controller actualizes after the render
 call (Phase J4 introduced `UiCodePanelOutput`; the pattern is
 hard-guarded by `check-output-actualization`). Two render-path live
-reads remain (`repl_code_panel_document_build` /
-`apply_follow_scroll` and `repl_replay_code_panel_get_command_display_text`);
+reads remain (`editor_code_panel_document_build` /
+`apply_follow_scroll` and `replay_code_panel_get_command_display_text`);
 both produce snap-equivalent results because they run after the
 controller has finished updating live state, but converting them to
 take a snapshot pointer is the next layer of cleanup.
@@ -395,10 +395,10 @@ R1 target from `done/push-architecture-refinement.md` (landed):
 * controller builds a `ReplayFadePlan` snapshot once per frame (batches,
   alpha, skip limits, baseline predef values)
 * scene iterates the snapshot and owns the GL pass orchestration without
-  calling `repl_replay_*` or `repl_state_*`
+  calling `replay_*` or `repl_state_*`
 * accumulation-AA settings are `SceneRenderConfig` fields set by the controller
 * 2D replay HUD lives in `src/ui/replay_hud.c`, driven by config fields
-* `scene_*.c` files contain no `repl_state_*` or `repl_replay_*` calls; once
+* `scene_*.c` files contain no `repl_state_*` or `replay_*` calls; once
   the relevant Phase 2 slice is complete, Makefile checks keep that true
 
 ## Boundary Rules
@@ -507,7 +507,7 @@ is **4**: steps 1, 2, 3, and 4 have landed.
 
 | Coupling root | Stubbed symbols | Why the link reaches it | Demo exercises it? | Removal path | Status |
 |---|---|---|---|---|---|
-| Global lifecycle reset | `ui_state_reset`, `variable_panel_state_reset`, `editor_help_session_reset`, `repl_editor_reset_transients` | (Historically) `repl_state_init_defaults()` called `repl_state_reset_all()`, which reset every app singleton / peer, not just `ReplState`. | Yes, every sample reset entered this path. | Split into pure `repl_state_reset_program()` and app-level `glr_app_reset_all()`. | ✅ **Cleared (step 2, commit `310eca0`).** Reset renamed; full-world reset moved to `src/app/glr_ctrl.c`. |
+| Global lifecycle reset | `ui_state_reset`, `variable_panel_state_reset`, `editor_help_session_reset`, `editor_reset_transients` | (Historically) `repl_state_init_defaults()` called `repl_state_reset_all()`, which reset every app singleton / peer, not just `ReplState`. | Yes, every sample reset entered this path. | Split into pure `repl_state_reset_program()` and app-level `glr_app_reset_all()`. | ✅ **Cleared (step 2, commit `310eca0`).** Reset renamed; full-world reset moved to `src/app/glr_ctrl.c`. |
 | UI chrome mirror | `ui_state_code_panel_mut` | `repl_state_sync_ui_chrome()` mirrored presentation fields into `UiState.code_panel`; `repl_state_reset_all()` called it. | Yes, via reset. | Move chrome mirroring to the controller. | ✅ **Cleared (step 2, commit `310eca0`).** Body moved to `glr_ctrl_sync_ui_chrome()` in `src/app/glr_ctrl.c`. |
 | Compile dispatcher location | `repl_compile_dispatch` | `repl_compile_toggle_comment()` needed the float-decl / var-assign dispatcher, but the implementation lived in `src/editor/services.c`. | No; the demo does not toggle comments. The reference was still hard at link time. | Move the dispatcher into `src/repl/compile.c`. | ✅ **Cleared (step 1, commit `ef3fc09`).** Moved into `src/repl/compile.c`; declared in `src/repl/compile.h`. |
 | Status relay | `ui_state_status_set` | Legacy `src/repl/core.c::set_status()` forwarded diagnostics to UI status text. | Only on errors or helper paths that report status. | Replace `set_status()` body with a callback dispatch (`repl_set_status_sink`); controller installs `ui_state_status_set` as the sink at app startup. Demo doesn't install one, so set_status is a no-op there. | ✅ **Cleared (step 3, commit `5f1b8bc`).** Callback branch chosen over per-function out-params; ~15 pipeline-side set_status call sites remain as future per-TU cleanup but no longer drag the stub. |
@@ -850,7 +850,7 @@ Completed (Phase 1 + most of Phase 2):
   app-shell shim removal (`sample.c` calls `glr_ctrl_*` directly).
 - ✅ **R1** — Replay/HUD migration: controller builds `ReplayFadePlan`; scene
   iterates it; 2D HUD lives in `src/ui/replay_hud.c`. Scene files contain zero
-  `repl_replay_*` and `repl_state_*` calls.
+  `replay_*` and `repl_state_*` calls.
 - ✅ **R2** — UI → REPL mutation holes closed end-to-end:
   - `src/ui/panels.c` is hit-test only (`check-ui-panels-no-mutators`).
   - The color picker now lives across `src/widgets/color_picker_state.c` (peer state +
