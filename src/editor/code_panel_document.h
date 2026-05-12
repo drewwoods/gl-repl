@@ -10,18 +10,18 @@
  * Document layout: CodePanelDocumentLayout contains row counts per section
  * (header, code, footer), per-command row counts (main text + replay annotations),
  * visible line count, cursor position, and follow target. Computed once per
- * frame by repl_code_panel_document_build().
+ * frame by editor_code_panel_document_build().
  *
  * Wrapping: Uses CodePanelTextLayout (from ui_code_panel_layout.h) to wrap
  * individual command text to panel width with hanging indentation. Wrapping
  * accounts for command indentation (depth-based) and optional break points
  * (commas).
  *
- * Scroll following: repl_code_panel_document_apply_follow_scroll() auto-scrolls
+ * Scroll following: editor_code_panel_document_apply_follow_scroll() auto-scrolls
  * the view to keep the cursor/target line visible, used during replay and after
  * mutations to keep user focus centered.
  *
- * Hit-testing: repl_code_panel_document_target_for_doc_line() maps a document
+ * Hit-testing: editor_code_panel_document_target_for_doc_line() maps a document
  * line index to row scroll target (for Ctrl+K jump-to-line during replay and
  * keyboard navigation).
  */
@@ -54,32 +54,32 @@ typedef struct {
  * indentation. panel_w is pixel width; first_x is the x-coordinate offset for
  * indentation (based on command depth). Returns a CodePanelTextLayout ready for
  * wrapping queries. */
-CodeLayout repl_code_panel_document_text_layout(int panel_w,
+CodeLayout editor_code_panel_document_text_layout(int panel_w,
                                                          int first_x);
 
 /* Initialize a wrap iterator for document text (convenience wrapper that sets
  * up CodePanelWrapIter with document-appropriate layout). Used to walk wrapped
  * lines segment-by-segment for rendering. */
-void repl_code_panel_document_wrap_iter_init(CodeWrapIter *it,
+void editor_code_panel_document_wrap_iter_init(CodeWrapIter *it,
                                              const char *text,
                                              int first_x, int panel_w);
 
 /* Advance wrap iterator to next segment (convenience wrapper). Returns 1 if a
  * segment was yielded, 0 if at end. Used by the renderer to iterate wrapped
  * line segments. */
-int  repl_code_panel_document_wrap_iter_next(CodeWrapIter *it,
+int  editor_code_panel_document_wrap_iter_next(CodeWrapIter *it,
                                              int *out_start,
                                              int *out_len,
                                              int *out_x);
 
 /* Compute row count for wrapped text (convenience wrapper). Returns the number
  * of rows (lines) needed to display text with document layout. */
-int  repl_code_panel_document_row_count_for_text(const char *text,
+int  editor_code_panel_document_row_count_for_text(const char *text,
                                                  int first_x, int panel_w);
 
 /* Find text segment for a specific row (convenience wrapper). Returns 1 on
  * success, outputs segment start/length/x. Used by rendering and hit-testing. */
-int  repl_code_panel_document_segment_for_row(const char *text,
+int  editor_code_panel_document_segment_for_row(const char *text,
                                               int first_x, int panel_w,
                                               int want_row,
                                               int *out_start,
@@ -89,7 +89,7 @@ int  repl_code_panel_document_segment_for_row(const char *text,
 /* Find row and segment for cursor position (convenience wrapper). Returns 1 on
  * success, outputs segment info for cursor rendering. Used by the cursor
  * renderer during editing. */
-int  repl_code_panel_document_cursor_row_for_text(const char *text,
+int  editor_code_panel_document_cursor_row_for_text(const char *text,
                                                   int first_x, int panel_w,
                                                   int cursor_pos,
                                                   int *out_seg_start,
@@ -98,32 +98,32 @@ int  repl_code_panel_document_cursor_row_for_text(const char *text,
 
 /* Query the current command indentation depth (character count). Used by layout
  * queries to compute hanging indentation for wrapped lines. */
-int  repl_code_panel_document_active_indent_chars(void);
+int  editor_code_panel_document_active_indent_chars(void);
 
 /* Compute visible line count from panel height. Returns how many lines fit
  * in a code panel of height cp_h (in pixels). Used during layout to determine
  * visible line window. */
-int  repl_code_panel_document_visible_lines_for_height(int cp_h);
+int  editor_code_panel_document_visible_lines_for_height(int cp_h);
 
 /* Build the full code-panel document layout. Computes header/footer row counts,
  * per-command wrapping (cmd_main_rows[]), replay annotation rows, and total
  * visible line count. Called once per frame before rendering. layout is filled
  * with complete geometry; panel_w is pixel width, text_x is indentation offset,
  * cp_h is panel height. */
-void repl_code_panel_document_build(CodePanelDocumentLayout *layout,
+void editor_code_panel_document_build(CodePanelDocumentLayout *layout,
                                     int panel_w, int text_x, int cp_h);
 
 /* Auto-scroll to keep the follow target visible. Computes the scroll offset
  * needed to bring follow_doc_line into view, then applies the offset. Called
  * after mutations or during replay to center the user's focus. */
-void repl_code_panel_document_apply_follow_scroll(
+void editor_code_panel_document_apply_follow_scroll(
     const CodePanelDocumentLayout *layout);
 
 /* Compute scroll target for jump-to-line (Ctrl+K during replay, Ctrl+G goto line).
  * Given doc_line (source command index), outputs the scroll target (row offset
  * from top of panel), whether the jump hits the insert line, and row offset
  * within the wrapped segment. Used by keyboard navigation and replay seek. */
-int  repl_code_panel_document_target_for_doc_line(
+int  editor_code_panel_document_target_for_doc_line(
     int doc_line, const CodePanelDocumentLayout *layout,
     int *out_target, int *out_on_insert_line, int *out_row_offset);
 

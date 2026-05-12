@@ -686,7 +686,7 @@ static void code_panel_first_row_text_click(int *out_mx, int *out_my) {
     int idx_col_w = glr_state_presentation().show_vertex_indices ? (6 * FONT_W) : 0;
     int text_x = CODE_MARGIN_X + linenum_w + FONT_W + idx_col_w;
     CodePanelDocumentLayout layout;
-    repl_code_panel_document_build(&layout, cp_w, text_x, cp_h);
+    editor_code_panel_document_build(&layout, cp_w, text_x, cp_h);
 
     /* Scroll past the header so vis=0 maps to a resolvable doc row. */
     editor_scroll_set(layout.header_rows);
