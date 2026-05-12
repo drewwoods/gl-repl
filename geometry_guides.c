@@ -13,12 +13,12 @@ static void geometry_guides_pop_state(void) {
 
 /* Draw a semi-transparent plane perpendicular to the X axis at x=v (red) */
 static void draw_guide_yz_plane(float v, float sz, float as) {
-    glColor4f(0.90f, 0.65f, 0.60f, fminf(0.72f * as, 1.0f));
+    glColor4f(0.90f, 0.65f, 0.60f, fminf(0.40f * as, 1.0f));
     glBegin(GL_QUADS);
     glVertex3f(v, -sz, -sz); glVertex3f(v,  sz, -sz);
     glVertex3f(v,  sz,  sz); glVertex3f(v, -sz,  sz);
     glEnd();
-    glColor4f(0.90f, 0.30f, 0.30f, fminf(0.45f * as, 1.0f));
+    glColor4f(0.90f, 0.30f, 0.30f, fminf(0.25f * as, 1.0f));
     glBegin(GL_LINE_LOOP);
     glVertex3f(v, -sz, -sz); glVertex3f(v,  sz, -sz);
     glVertex3f(v,  sz,  sz); glVertex3f(v, -sz,  sz);
@@ -27,12 +27,12 @@ static void draw_guide_yz_plane(float v, float sz, float as) {
 
 /* Draw a semi-transparent plane perpendicular to the Y axis at y=v (green) */
 static void draw_guide_xz_plane(float v, float sz, float as) {
-    glColor4f(0.65f, 0.90f, 0.60f, fminf(0.72f * as, 1.0f));
+    glColor4f(0.65f, 0.90f, 0.60f, fminf(0.40f * as, 1.0f));
     glBegin(GL_QUADS);
     glVertex3f(-sz, v, -sz); glVertex3f( sz, v, -sz);
     glVertex3f( sz, v,  sz); glVertex3f(-sz, v,  sz);
     glEnd();
-    glColor4f(0.30f, 0.70f, 0.30f, fminf(0.45f * as, 1.0f));
+    glColor4f(0.30f, 0.70f, 0.30f, fminf(0.25f * as, 1.0f));
     glBegin(GL_LINE_LOOP);
     glVertex3f(-sz, v, -sz); glVertex3f( sz, v, -sz);
     glVertex3f( sz, v,  sz); glVertex3f(-sz, v,  sz);
@@ -41,12 +41,12 @@ static void draw_guide_xz_plane(float v, float sz, float as) {
 
 /* Draw a semi-transparent plane perpendicular to the Z axis at z=v (blue) */
 static void draw_guide_xy_plane(float v, float sz, float as) {
-    glColor4f(0.60f, 0.65f, 0.90f, fminf(0.72f * as, 1.0f));
+    glColor4f(0.60f, 0.65f, 0.90f, fminf(0.40f * as, 1.0f));
     glBegin(GL_QUADS);
     glVertex3f(-sz, -sz, v); glVertex3f( sz, -sz, v);
     glVertex3f( sz,  sz, v); glVertex3f(-sz,  sz, v);
     glEnd();
-    glColor4f(0.30f, 0.30f, 0.80f, fminf(0.45f * as, 1.0f));
+    glColor4f(0.30f, 0.30f, 0.80f, fminf(0.25f * as, 1.0f));
     glBegin(GL_LINE_LOOP);
     glVertex3f(-sz, -sz, v); glVertex3f( sz, -sz, v);
     glVertex3f( sz,  sz, v); glVertex3f(-sz,  sz, v);
@@ -89,7 +89,9 @@ static void draw_vertex_guides(const SceneGuideSnapshot *snapshot) {
     geometry_guides_push_state();
     glDisable(GL_LIGHTING);
     glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    /* use additive blending to make guides more visible over dark backgrounds, and
+     * also to make overlapping guide elements more visible */
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE);
 
     if (n == 2 && is_vertex2f) {
         /* Both x,y filled for glVertex2f — treat as a complete vertex at z=0 */
