@@ -2,7 +2,7 @@
 #define REPL_TEST_SUPPORT_H
 
 #include "app/glr_ctrl.h"   /* glr_app_reset_all, glr_publish_replay_annotations */
-#include "repl/core.h"  /* repl_feed_line_public, set_status, etc. */
+#include "repl/core.h"  /* editor_feed_line, set_status, etc. */
 #include "repl/eval.h"
 #include "repl/replay_annotations.h" /* ReplReplayAnnotationOutput */
 #include "source_document.h"         /* source_document_view */
