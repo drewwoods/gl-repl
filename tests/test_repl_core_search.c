@@ -83,9 +83,9 @@ int main(void) {
     open_search();
     type_search_text("CoLoR");
     {
-        int first = repl_search_find_next_in_text(repl_search_row_text(0),
+        int first = editor_search_find_next_in_text(editor_search_row_text(0),
                                                   g_search_query, 0);
-        int second = repl_search_find_next_in_text(repl_search_row_text(0),
+        int second = editor_search_find_next_in_text(editor_search_row_text(0),
                                                    g_search_query, first + 1);
 
         ASSERT_TRUE("search matches case-insensitively", g_search_match_count == 3);
@@ -105,7 +105,7 @@ int main(void) {
         ASSERT_TRUE("down hit ordinal", g_search_hit_ordinal == 3);
         ASSERT_TRUE("down hit char",
                     g_search_hit_char ==
-                    repl_search_find_next_in_text(repl_search_row_text(1),
+                    editor_search_find_next_in_text(editor_search_row_text(1),
                                                   g_search_query, 0));
 
         editor_handle_special(GLUT_KEY_DOWN, 0, 0);
@@ -140,7 +140,7 @@ int main(void) {
     ASSERT_TRUE("active edit line hit line", g_search_hit_line == 0);
     ASSERT_TRUE("active edit line hit char", g_search_hit_char == 0);
     ASSERT_TRUE("active edit line search uses live input",
-                strcmp(repl_search_row_text(0), "NeedleLine") == 0);
+                strcmp(editor_search_row_text(0), "NeedleLine") == 0);
 
     glr_app_reset_all(); declare_test_vars();
     set_live_input("ColorProbe");
@@ -160,30 +160,30 @@ int main(void) {
     {
         const char *text = "abcabc";
         ASSERT_TRUE("find next empty query",
-                    repl_search_find_next_in_text(text, "", 0) == -1);
+                    editor_search_find_next_in_text(text, "", 0) == -1);
         ASSERT_TRUE("find next empty text",
-                    repl_search_find_next_in_text("", "a", 0) == -1);
+                    editor_search_find_next_in_text("", "a", 0) == -1);
         ASSERT_TRUE("find next start at strlen",
-                    repl_search_find_next_in_text(text, "a", (int)strlen(text)) == -1);
+                    editor_search_find_next_in_text(text, "a", (int)strlen(text)) == -1);
         ASSERT_TRUE("find next query longer than text",
-                    repl_search_find_next_in_text("ab", "abcd", 0) == -1);
+                    editor_search_find_next_in_text("ab", "abcd", 0) == -1);
         ASSERT_TRUE("find next single char at zero",
-                    repl_search_find_next_in_text("z", "z", 0) == 0);
+                    editor_search_find_next_in_text("z", "z", 0) == 0);
         ASSERT_TRUE("find next match at start pos",
-                    repl_search_find_next_in_text(text, "abc", 3) == 3);
+                    editor_search_find_next_in_text(text, "abc", 3) == 3);
     }
 
     {
         ASSERT_TRUE("find prev empty query",
-                    repl_search_find_prev_in_text("abc", "", 0) == -1);
+                    editor_search_find_prev_in_text("abc", "", 0) == -1);
         ASSERT_TRUE("find prev empty text",
-                    repl_search_find_prev_in_text("", "a", 0) == -1);
+                    editor_search_find_prev_in_text("", "a", 0) == -1);
         ASSERT_TRUE("find prev start larger than strlen",
-                    repl_search_find_prev_in_text("abc abc", "abc", 999) == 4);
+                    editor_search_find_prev_in_text("abc abc", "abc", 999) == 4);
         ASSERT_TRUE("find prev single character",
-                    repl_search_find_prev_in_text("xyz", "y", 2) == 1);
+                    editor_search_find_prev_in_text("xyz", "y", 2) == 1);
         ASSERT_TRUE("find prev last occurrence with past start",
-                    repl_search_find_prev_in_text("abaaba", "aba", 99) == 3);
+                    editor_search_find_prev_in_text("abaaba", "aba", 99) == 3);
     }
 
     glr_app_reset_all(); declare_test_vars();
@@ -216,11 +216,11 @@ int main(void) {
     editor_insert_mode_set(1);
     repl_state_edit_line_set(1);
     ASSERT_TRUE("row count inserting includes input row",
-                repl_search_row_count() == repl_state_document_count() + 1);
+                editor_search_row_count() == repl_state_document_count() + 1);
     ASSERT_TRUE("row map inserting shifts at edit line",
-                repl_search_row_for_cmd_index(1) == 2);
+                editor_search_row_for_cmd_index(1) == 2);
     ASSERT_TRUE("row map inserting keeps prior rows",
-                repl_search_row_for_cmd_index(0) == 0);
+                editor_search_row_for_cmd_index(0) == 0);
 
     printf("repl_core_search: %d/%d passed\n", g_harness.passed, g_harness.run);
     return (g_harness.run == g_harness.passed) ? 0 : 1;

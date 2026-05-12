@@ -177,9 +177,9 @@ static void code_panel_draw_search_highlights(const UiRenderSnapshot *snap,
         !text || seg_len <= 0)
         return;
 
-    for (int pos = repl_search_find_next_in_text(text, srch.query, 0);
+    for (int pos = editor_search_find_next_in_text(text, srch.query, 0);
          pos >= 0;
-         pos = repl_search_find_next_in_text(text, srch.query, pos + 1)) {
+         pos = editor_search_find_next_in_text(text, srch.query, pos + 1)) {
         int match_end = pos + srch.query_len;
         int seg_end = seg_start + seg_len;
         int draw_start = pos > seg_start ? pos : seg_start;
