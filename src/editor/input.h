@@ -128,7 +128,7 @@ int editor_input_rename_capture_special(int key);
 void delete_cmd_range(int start, int count, const char *what);
 
 /* Clear ALL commands unconditionally (same behavior as Ctrl+L). */
-void repl_clear_all_cmds(void);
+void editor_clear_all_cmds(void);
 
 /* Sync the input buffer to the source line at `idx` (strips trailing
  * `;` and whitespace). Used by the editor when navigating to an
@@ -139,7 +139,7 @@ void load_line_to_input(int idx);
  * addition to the editor commit transients. Called from
  * glr_app_reset_all() and from controller paths that switch examples /
  * scenes so the editor returns to a clean idle posture. */
-void repl_editor_reset_transients(void);
+void editor_reset_transients(void);
 
 /* Programmatic entry point equivalent to typing `line` and pressing
  * `;`. Used by tests, the clipboard paste path, and editor-side

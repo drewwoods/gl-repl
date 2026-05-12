@@ -1501,7 +1501,7 @@ void glr_app_reset_all(void) {
     replay_state_reset();
     tutorial_state_reset();
     editor_help_session_reset();
-    repl_editor_reset_transients();
+    editor_reset_transients();
     /* Register the default editor completion provider. Editor input
      * dispatch calls editor_completion_* without knowing about
      * glr_completion; the registration here installs the
@@ -1776,7 +1776,7 @@ static void cycle_example_or_user_scene(void) {
     /* Clear editor / camera / menu / picker / code-panel-drag transients
      * so the new scene starts from a clean controller state. Step 2 of
      * the decouple plan moved this out of src/repl/example_loader.c. */
-    repl_editor_reset_transients();
+    editor_reset_transients();
     int count = repl_example_count();
     int active_scene = repl_active_user_scene();
 

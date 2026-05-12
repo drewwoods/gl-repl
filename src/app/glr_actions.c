@@ -458,7 +458,7 @@ int glr_action_menu_item_activate(int menu_id, int item_idx) {
              * transients so the new scene starts from a clean controller
              * state. Step 2 of the decouple plan moved this out of
              * src/repl/example_loader.c. */
-            repl_editor_reset_transients();
+            editor_reset_transients();
             repl_load_example(item_idx - 1);
             return 1;
         }
@@ -466,7 +466,7 @@ int glr_action_menu_item_activate(int menu_id, int item_idx) {
             ReplSceneRuntimeState *scenes = repl_state_scenes_mut();
             if (scenes->active_example_idx >= 0)
                 scenes->active_example_idx = -1;
-            repl_clear_all_cmds();
+            editor_clear_all_cmds();
             return 1;
         }
         if (item_idx == example_count + GLR_SCENE_OFF_SAVE) {

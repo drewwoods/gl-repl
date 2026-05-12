@@ -76,13 +76,13 @@ int replay_expand_args(void) {
 }
 
 void replay_handle_pin_clicked(void) {
-    repl_replay_toggle_play_pause();
+    replay_toggle_play_pause();
 }
 
 int replay_handle_key(unsigned char key) {
-    return repl_replay_handle_key(key);
+    return replay_handle_key_impl(key);
 }
 
 int replay_handle_special(int key) {
-    return repl_replay_handle_special_key(key);
+    return replay_handle_special_key_impl(key);
 }
