@@ -36,6 +36,7 @@
 #include "repl/state_owners.h"
 #include "widgets/replay.h"
 #include "widgets/replay_state.h"
+#include "widgets/tutorial_state.h"
 #include "ui/replay_hud.h"
 #include "scene/overlays.h" /* scene_draw_vertex_number_label / _arrow primitives */
 #include "scene/render.h"
@@ -1497,6 +1498,7 @@ void glr_app_reset_all(void) {
     ui_state_reset();
     variable_panel_state_reset();
     replay_state_reset();
+    tutorial_state_reset();
     editor_help_session_reset();
     repl_editor_reset_transients();
     /* Register the default editor completion provider. Editor input
