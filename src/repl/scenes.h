@@ -27,8 +27,18 @@ int  repl_promote_example_if_needed(void);
 void repl_scenes_save_active_scene_if_any(void);
 
 /* Detach the live document from examples and user-scene slots so a
- * transient buffer can take over without being written back into a slot. */
+ * transient buffer can take over without being written back into a slot.
+ * Also captures the pre-tutorial buffer into slot 0 if home is not yet
+ * populated, mirroring the example-load capture so fresh-buffer work
+ * isn't silently discarded. */
 void repl_scenes_enter_transient_scene(void);
+
+/* Reset the REPL-side document / flat program / predef vars / func
+ * aliases / editor-input dispatch so a transient buffer can be
+ * populated from scratch. The choreography mirrors load_example_lines
+ * but skips example-specific cfg handling. Callers must pair this with
+ * `repl_scenes_enter_transient_scene` to detach the slot markers. */
+void repl_scenes_reset_for_transient(void);
 
 /* On first example load only, capture the pre-example editor state
  * into the pinned "home" slot (slot 0) so the user can always return
