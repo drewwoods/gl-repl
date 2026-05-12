@@ -164,6 +164,37 @@ int editor_input_active_modifiers(void) {
     return editor_get_modifiers();
 }
 
+static int tutorial_guard_source_change_or_status(int pos,
+                                                  int delete_count,
+                                                  int insert_count) {
+    if (tutorial_guard_source_change(pos, delete_count, insert_count))
+        return 1;
+    repl_set_status("Tutorial comment is read-only");
+    return 0;
+}
+
+static int tutorial_guard_pending_input_commit_or_status(int enter_mode) {
+    int pos;
+    int delete_count = 0;
+    int insert_count = 0;
+
+    if (!tutorial_active())
+        return 1;
+
+    pos = repl_state_edit_line();
+    if (editor_insert_mode() || pos >= repl_state_document_count()) {
+        if (editor_insert_mode() || enter_mode || editor_state_input().input_len > 0)
+            insert_count = 1;
+    } else if (editor_state_input().input_len > 0) {
+        delete_count = 1;
+        insert_count = 1;
+    }
+
+    if (delete_count == 0 && insert_count == 0)
+        return 1;
+    return tutorial_guard_source_change_or_status(pos, delete_count, insert_count);
+}
+
 
 void delete_cmd_range(int start, int count, const char *what) {
     ReplCompileContext ctx;
@@ -171,6 +202,8 @@ void delete_cmd_range(int start, int count, const char *what) {
     char err[REPL_STATUS_TEXT_MAX];
 
     if (!editor_selection_normalize_cmd_range(start, count, &start, &count))
+        return;
+    if (!tutorial_guard_source_change_or_status(start, count, 0))
         return;
 
     ctx = repl_compile_context_from_live();
@@ -204,6 +237,9 @@ void delete_cmd_range(int start, int count, const char *what) {
 }
 
 void repl_clear_all_cmds(void) {
+    if (!tutorial_guard_source_change_or_status(0, repl_state_document_count(), 0))
+        return;
+
     editor_undo_push_snapshot();
     ReplCommandStore store = repl_command_store_live();
     repl_command_store_clear(&store);
@@ -233,6 +269,13 @@ static const char *editor_committed_line_text(int idx) {
 void load_line_to_input(int idx) {
     ReplEditorInputState *inp = editor_state_input_mut();
     if (idx >= 0 && idx < repl_state_document_count()) {
+        if (tutorial_line_is_locked(idx)) {
+            editor_input_clear();
+            editor_cursor_pos_set(0);
+            repl_set_status("Tutorial instruction is read-only");
+            return;
+        }
+
         const char *s = editor_committed_line_text(idx);
         while (*s && isspace((unsigned char)*s))
             s++;
@@ -528,6 +571,9 @@ static CommitResult commit_current_input(int enter_mode) {
             return COMMIT_OK;
         }
     }
+
+    if (!tutorial_guard_pending_input_commit_or_status(enter_mode))
+        return COMMIT_REJECTED;
 
     if (editor_state_input().input_len > 0 ||
         editor_insert_mode() ||
@@ -973,6 +1019,9 @@ static int handle_buffer_command_key_route(unsigned char key) {
 
     if (key == KEY_CTRL_BACKSLASH) {
         if (repl_state_document_count() > 0) {
+            if (!tutorial_guard_source_change_or_status(
+                    0, repl_state_document_count(), repl_state_document_count()))
+                return 1;
             editor_undo_push_snapshot();
             editor_reformat_commands();
             repl_set_status("Reformatted command buffer");
@@ -1026,6 +1075,8 @@ static int handle_comment_toggle_key_route(unsigned char key) {
 
     line = repl_state_edit_line();
     if (line < 0 || line >= repl_state_document_count())
+        return 1;
+    if (!tutorial_guard_source_change_or_status(line, 1, 1))
         return 1;
 
     ctx = repl_compile_context_from_live();
@@ -1125,6 +1176,21 @@ static int tutorial_precheck_current_input(void) {
 
     if (!tutorial_active())
         return 1;
+
+    /* Tutorial commits must land as an append at the trailing edit row.
+     * Replacing an earlier line would let a matching keystroke clobber
+     * prior progress while still advancing the step; middle-inserts
+     * would drift line indices out from under locked_lines[]. Reject
+     * with a hint so the user moves to the end of the buffer first.
+     * Empty input falls through to tutorial_match below, where it
+     * surfaces as "expected: ..." and acts as a built-in hint for
+     * Enter pressed on an empty row. */
+    if (repl_state_edit_line() < repl_state_document_count()) {
+        repl_set_status(
+            "Move cursor to the end of the buffer before committing");
+        editor_completion_clear();
+        return 0;
+    }
     if (!tutorial_handle_commit_attempt(editor_state_input().input, &result)) {
         repl_set_status(result.message);
         editor_completion_clear();
@@ -1168,6 +1234,8 @@ static int handle_semicolon_commit_key_route(unsigned char key) {
             CommitAttemptState before;
 
             if (!tutorial_precheck_current_input())
+                return 1;
+            if (!tutorial_guard_pending_input_commit_or_status(/*enter_mode=*/0))
                 return 1;
 
             editor_undo_push_snapshot();

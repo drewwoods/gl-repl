@@ -18,6 +18,16 @@
 #include "repl/core_internal.h"
 #include "repl/source_scope.h"
 #include "repl/state_owners.h"
+#include "widgets/tutorial.h"
+
+static int tutorial_guard_clipboard_change_or_status(int pos,
+                                                     int delete_count,
+                                                     int insert_count) {
+    if (tutorial_guard_source_change(pos, delete_count, insert_count))
+        return 1;
+    repl_set_status("Tutorial comment is read-only");
+    return 0;
+}
 
 void editor_clipboard_clear_selection(void) {
     editor_state_selection_clear();
@@ -310,6 +320,8 @@ void editor_clipboard_cut_current(void) {
         editor_clipboard_clear_selection();
         return;
     }
+    if (!tutorial_guard_clipboard_change_or_status(start, count, 0))
+        return;
 
     if (repl_range_contains_var_decl(start, count)) {
         editor_selection_set_var_decl_action_status("remove");
@@ -352,6 +364,9 @@ void editor_clipboard_paste_current(void) {
     int edit = repl_state_edit_line();
     int pos = editor_insert_mode() ? edit : (edit < n ? edit : n);
     int saved_insert = editor_insert_mode();
+
+    if (!tutorial_guard_clipboard_change_or_status(pos, 0, count))
+        return;
 
     repl_state_edit_line_set(pos);
     editor_insert_mode_set(1);

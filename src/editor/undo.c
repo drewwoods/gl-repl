@@ -13,6 +13,7 @@
 #include "repl/core.h"
 #include "repl/core_internal.h"
 #include "repl/state_owners.h"
+#include "widgets/tutorial_state.h"
 
 #define REPL_UNDO_DEPTH 32
 
@@ -112,6 +113,11 @@ void editor_undo_push_snapshot(void) {
 }
 
 void editor_undo_pop_snapshot(void) {
+    if (tutorial_active()) {
+        repl_set_status("Undo disabled during tutorial");
+        return;
+    }
+
     if (g_undo_count == 0) {
         repl_set_status("Nothing to undo");
         return;
@@ -131,6 +137,11 @@ void editor_undo_pop_snapshot(void) {
 }
 
 void editor_undo_do_redo(void) {
+    if (tutorial_active()) {
+        repl_set_status("Undo disabled during tutorial");
+        return;
+    }
+
     if (g_redo_count == 0) {
         repl_set_status("Nothing to redo");
         return;

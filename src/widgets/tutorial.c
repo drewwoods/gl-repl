@@ -81,6 +81,16 @@ static int tutorial_append_locked_line(int line_idx) {
     return 1;
 }
 
+static void tutorial_set_step_status(int tutorial_idx, int step) {
+    int total = repl_tutorial_step_count(tutorial_idx);
+    char msg[64];
+
+    if (total <= 0)
+        return;
+    snprintf(msg, sizeof(msg), "Tutorial: step %d/%d", step + 1, total);
+    repl_set_status(msg);
+}
+
 static int tutorial_emit_instruction_comment(const char *comment) {
     char err[TUTORIAL_STATUS_MAX] = "";
     TutorialRuntimeState *state = tutorial_state_mut();
@@ -150,6 +160,7 @@ void tutorial_start(int idx) {
         tutorial_state_reset();
         return;
     }
+    tutorial_set_step_status(idx, 0);
 }
 
 void tutorial_exit(void) {
@@ -195,7 +206,9 @@ void tutorial_advance_after_successful_commit(void) {
         return;
     }
 
-    tutorial_emit_instruction_comment(comment);
+    if (!tutorial_emit_instruction_comment(comment))
+        return;
+    tutorial_set_step_status(state->tutorial_idx, state->step);
 }
 
 const char *tutorial_current_expected_text(void) {
