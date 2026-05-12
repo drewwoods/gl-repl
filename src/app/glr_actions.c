@@ -18,7 +18,10 @@
 #include "editor/input.h"
 #include "editor/completion.h"
 #include "keys.h"
+#include "repl/tutorials.h"
 #include "widgets/replay_state.h"
+#include "widgets/tutorial.h"
+#include "widgets/tutorial_state.h"
 #include "editor/help_session.h"
 #include "repl/pipeline.h"
 #include "repl/state_owners.h"
@@ -489,6 +492,23 @@ int glr_action_menu_item_activate(int menu_id, int item_idx) {
                     load_line_to_input(repl_state_edit_line());
                 return 1;
             }
+        }
+        return 1;
+    } else if (menu_id == GLR_MENU_TUTORIALS) {
+        int tutorial_count = repl_tutorial_count();
+        if (item_idx < tutorial_count) {
+            tutorial_start(item_idx);
+            return 1;
+        }
+        if (tutorial_active() && item_idx == tutorial_count + 1) {
+            TutorialRuntimeState tutorial = tutorial_state_view();
+            if (tutorial.tutorial_idx >= 0)
+                tutorial_start(tutorial.tutorial_idx);
+            return 1;
+        }
+        if (tutorial_active() && item_idx == tutorial_count + 2) {
+            tutorial_exit();
+            return 1;
         }
         return 1;
     } else if (menu_id == GLR_MENU_CONFIG) {

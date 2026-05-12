@@ -3,10 +3,12 @@
  */
 #include "app/glr_actions.h"
 #include "repl/core.h"
+#include "repl/tutorials.h"
 #include "app/glr_config.h"
 #include "keys.h"
 #include "repl/state_views.h"
 #include "widgets/replay.h"   /* ReplayState (PLAYING / PAUSED / DONE) enum values */
+#include "widgets/tutorial_state.h"
 #include "state.h"
 #include "menu_bar.h"
 #include "metrics.h"
@@ -14,19 +16,20 @@
 #include "gl_2d.h"
 
 /* Menu bar - styled after Header Wireframes v2.
- * Left: top-level menus (File, Scene, Config).
+ * Left: top-level menus (File, Scene, Tutorials, Config).
  * Right: pinned buttons (Search, Replay) - retained in flat form until the
  * right-side redesign lands. */
 
 enum {
     MENU_FILE = GLR_MENU_FILE,
     MENU_SCENE = GLR_MENU_SCENE,
+    MENU_TUTORIALS = GLR_MENU_TUTORIALS,
     MENU_CONFIG = GLR_MENU_CONFIG,
     NUM_MENUS = GLR_MENU_COUNT
 };
 
 static const char *g_menu_labels[NUM_MENUS] = {
-    "File", "Scene", "Config"
+    "File", "Scene", "Tutorials", "Config"
 };
 
 /* Right-to-left the pins render from highest index first, so PIN_REPLAY sits
@@ -90,6 +93,8 @@ static int menu_item_count(int menu_id) {
     case MENU_FILE:   return FILE_ITEM_COUNT;
     case MENU_SCENE:  return repl_example_count() + SCENE_FIXED_COUNT
                              + repl_user_scene_count();
+    case MENU_TUTORIALS:
+        return repl_tutorial_count() + (tutorial_active() ? 3 : 0);
     case MENU_CONFIG: {
         int count = 0;
         glr_config_items(&count);
@@ -123,6 +128,17 @@ static const char *menu_item_label(int menu_id, int i) {
         }
         return NULL;
     }
+    if (menu_id == MENU_TUTORIALS) {
+        int tutorial_count = repl_tutorial_count();
+        if (i >= 0 && i < tutorial_count)
+            return repl_tutorial_name(i);
+        if (!tutorial_active())
+            return NULL;
+        if (i == tutorial_count) return "---";
+        if (i == tutorial_count + 1) return "Restart Tutorial";
+        if (i == tutorial_count + 2) return "Exit Tutorial";
+        return NULL;
+    }
     if (menu_id == MENU_CONFIG) {
         const GlrConfigItem *item = glr_config_item_at(i);
         if (item) return item->label;
@@ -138,6 +154,8 @@ static const char *menu_item_shortcut(int menu_id, int i) {
         if (i == e + SCENE_OFF_SAVE) return "Ctrl+S";
         return NULL;
     }
+    if (menu_id == MENU_TUTORIALS)
+        return NULL;
     if (menu_id == MENU_CONFIG) {
         const GlrConfigItem *item = glr_config_item_at(i);
         if (!item || item->section_header || item->key == GLR_CONFIG_NONE)

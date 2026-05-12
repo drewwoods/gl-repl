@@ -1,3 +1,4 @@
+#include "app/glr_actions.h"
 #include "app/glr_ctrl.h"
 #include "repl/core.h"
 #include "repl/state_views.h"
@@ -129,11 +130,22 @@ static void test_fade_alpha_math(void) {
                 !tutorial_line_is_fading(0, state.fade_start_t + state.fade_duration));
 }
 
-static void test_completion_status(void) {
+static void test_complete_and_menu_actions(void) {
     const char *expected;
+    int tutorial_count;
 
     reset_fixture();
-    tutorial_start(0);
+    tutorial_count = repl_tutorial_count();
+    ASSERT_TRUE("tutorial menu action starts tutorial",
+                glr_action_menu_item_activate(GLR_MENU_TUTORIALS, 0) == 1);
+    ASSERT_TRUE("tutorial active from menu action", tutorial_active());
+
+    expected = tutorial_current_expected_text();
+    repl_feed_line_public(expected);
+    tutorial_advance_after_successful_commit();
+    ASSERT_TRUE("restart menu item restarts tutorial",
+                glr_action_menu_item_activate(GLR_MENU_TUTORIALS, tutorial_count + 1) == 1);
+    ASSERT_INT("restart resets step", tutorial_state_view().step, 0);
 
     while (tutorial_active()) {
         expected = tutorial_current_expected_text();
@@ -143,6 +155,9 @@ static void test_completion_status(void) {
     }
 
     ASSERT_STR("completion status set", status_text(), "Tutorial complete");
+
+    ASSERT_TRUE("exit menu item accepted when inactive",
+                glr_action_menu_item_activate(GLR_MENU_TUTORIALS, tutorial_count + 2) == 1);
 }
 
 int main(void) {
@@ -150,6 +165,6 @@ int main(void) {
     test_runner_match_and_advance();
     test_feed_line_alone_does_not_advance_tutorial();
     test_fade_alpha_math();
-    test_completion_status();
+    test_complete_and_menu_actions();
     return test_harness_report(&g_harness, "test_tutorial_runner");
 }

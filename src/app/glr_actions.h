@@ -24,11 +24,12 @@
 #define GLR_ACTIONS_H
 
 /* Top-level menu identifiers. Corresponds to the menu bar structure (File /
- * Scene / Config). Used by the menu UI (ui_menu_bar.h) and this module's
+ * Scene / Tutorials / Config). Used by the menu UI (ui_menu_bar.h) and this module's
  * dispatch to route actions. */
 typedef enum {
     GLR_MENU_FILE = 0,
     GLR_MENU_SCENE,
+    GLR_MENU_TUTORIALS,
     GLR_MENU_CONFIG,
     GLR_MENU_COUNT
 } ReplMenuId;
