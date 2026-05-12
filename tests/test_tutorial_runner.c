@@ -1,10 +1,13 @@
 #define _DEFAULT_SOURCE  /* mkdtemp() */
 #include "app/glr_actions.h"
 #include "app/glr_ctrl.h"
+#include "editor/clipboard.h"
 #include "config.h"
 #include "editor/input.h"
 #include "editor/state.h"
+#include "keys.h"
 #include "repl/core.h"
+#include "repl/state_owners.h"
 #include "repl/state_views.h"
 #include "repl/tutorials.h"
 #include "source_document.h"
@@ -145,6 +148,130 @@ static void test_enter_route_advances_after_match(void) {
     ASSERT_STR("enter route next instruction text",
                trim_leading_ws(source_text_line(doc, 2)),
                repl_tutorial_step_comment(0, 1));
+}
+
+static void test_replace_existing_line_does_not_advance(void) {
+    const char *expected;
+    SourceTextView doc;
+
+    reset_fixture();
+    tutorial_start(0);
+
+    /* Commit step 0 cleanly so there is an existing user line to land on. */
+    set_input_text(tutorial_current_expected_text());
+    (void)editor_handle_key(';', 0, 0);
+    ASSERT_INT("step advanced after first commit", tutorial_state_view().step, 1);
+
+    /* Navigate back to the previously-committed user line (line 1) and try to
+     * commit the current step's expected text. The precheck must reject the
+     * non-append commit so the user does not overwrite prior progress while
+     * also advancing. */
+    repl_state_edit_line_set(1);
+    expected = tutorial_current_expected_text();
+    set_input_text(expected);
+    (void)editor_handle_key(';', 0, 0);
+
+    doc = source_document_view();
+    ASSERT_INT("step unchanged after non-append commit",
+               tutorial_state_view().step, 1);
+    ASSERT_STR("non-append commit status",
+               status_text(),
+               "Move cursor to the end of the buffer before committing");
+    ASSERT_STR("non-append commit preserves input",
+               editor_state_input().input, expected);
+    ASSERT_INT("non-append commit does not append a new line",
+               doc.line_count, 3);
+}
+
+static void test_tutorial_start_sets_step_progress_status(void) {
+    reset_fixture();
+    tutorial_start(0);
+    ASSERT_STR("start sets step 1 status",
+               status_text(), "Tutorial: step 1/5");
+}
+
+static void test_tutorial_advance_updates_step_progress_status(void) {
+    const char *expected;
+
+    reset_fixture();
+    tutorial_start(0);
+    expected = tutorial_current_expected_text();
+    set_input_text(expected);
+    (void)editor_handle_key(';', 0, 0);
+    ASSERT_STR("advance sets step 2 status",
+               status_text(), "Tutorial: step 2/5");
+}
+
+static void test_locked_comment_load_is_read_only(void) {
+    reset_fixture();
+    tutorial_start(0);
+    set_input_text("glEnd()");
+
+    load_line_to_input(0);
+
+    ASSERT_INT("locked line load clears input len",
+               editor_state_input().input_len, 0);
+    ASSERT_STR("locked line load clears input text",
+               editor_state_input().input, "");
+    ASSERT_STR("locked line load status",
+               status_text(), "Tutorial instruction is read-only");
+}
+
+static void test_locked_comment_mutations_are_blocked(void) {
+    reset_fixture();
+    tutorial_start(0);
+    repl_state_edit_line_set(0);
+
+    (void)editor_handle_key(KEY_CTRL_D, 0, 0);
+    ASSERT_INT("ctrl-d keeps locked comment row",
+               repl_state_document_count(), 1);
+    ASSERT_STR("ctrl-d read-only status",
+               status_text(), "Tutorial comment is read-only");
+
+    (void)editor_handle_key(KEY_CTRL_L, 0, 0);
+    ASSERT_INT("ctrl-l keeps tutorial rows",
+               repl_state_document_count(), 1);
+    ASSERT_STR("ctrl-l read-only status",
+               status_text(), "Tutorial comment is read-only");
+
+    (void)editor_handle_key(KEY_CTRL_BACKSLASH, 0, 0);
+    ASSERT_INT("ctrl-backslash keeps tutorial rows",
+               repl_state_document_count(), 1);
+    ASSERT_STR("ctrl-backslash read-only status",
+               status_text(), "Tutorial comment is read-only");
+}
+
+static void test_paste_before_locked_prefix_is_blocked(void) {
+    const char *expected;
+
+    reset_fixture();
+    tutorial_start(0);
+    expected = tutorial_current_expected_text();
+    set_input_text(expected);
+    (void)editor_handle_key(';', 0, 0);
+
+    repl_state_edit_line_set(1);
+    editor_clipboard_copy_current();
+    repl_state_edit_line_set(0);
+    editor_clipboard_paste_current();
+
+    ASSERT_INT("paste before locked prefix keeps line count",
+               repl_state_document_count(), 3);
+    ASSERT_STR("paste before locked prefix status",
+               status_text(), "Tutorial comment is read-only");
+}
+
+static void test_undo_redo_blocked_during_tutorial(void) {
+    reset_fixture();
+    tutorial_start(0);
+
+    (void)editor_handle_key(KEY_CTRL_Z, 0, 0);
+    ASSERT_STR("undo blocked status",
+               status_text(), "Undo disabled during tutorial");
+
+    (void)editor_handle_key(KEY_CTRL_Y, 0, 0);
+    ASSERT_STR("redo blocked status",
+               status_text(), "Undo disabled during tutorial");
 }
 
 static void test_tab_autofill_then_semicolon_advances(void) {
@@ -322,6 +449,13 @@ int main(void) {
     test_start_enters_transient_tutorial_scene();
     test_runner_match_and_advance();
     test_semicolon_route_rejects_mismatch_and_preserves_input();
+    test_replace_existing_line_does_not_advance();
+    test_tutorial_start_sets_step_progress_status();
+    test_tutorial_advance_updates_step_progress_status();
+    test_locked_comment_load_is_read_only();
+    test_locked_comment_mutations_are_blocked();
+    test_paste_before_locked_prefix_is_blocked();
+    test_undo_redo_blocked_during_tutorial();
     test_enter_route_advances_after_match();
     test_tab_autofill_then_semicolon_advances();
     test_rejected_commit_does_not_advance_tutorial();
