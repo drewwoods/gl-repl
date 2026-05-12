@@ -209,6 +209,7 @@ static int example_cfg_slug_allowed(const char *slug) {
         "light_indicators",
         "backdrop",
         "camera_rotate",
+        "variable_panel",
         NULL
     };
 

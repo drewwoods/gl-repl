@@ -496,7 +496,7 @@ these scene-presentation slugs:
 
 `wireframe`, `grid`, `grid_major`, `grid_extent`, `axes`,
 `vertex_labels`, `normal_vectors`, `vertex_outlines`, `vertex_points`,
-`vertex_guides`, `light_indicators`, `backdrop`, `camera_rotate`.
+`vertex_guides`, `light_indicators`, `backdrop`, `camera_rotate`, `variable_panel`.
 
 Non-leading `@cfg` lines are not metadata — they stay as ordinary
 comments.
