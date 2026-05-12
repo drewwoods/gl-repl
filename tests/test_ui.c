@@ -867,6 +867,12 @@ static void test_tutorial_fade_render_uses_per_char_path(void) {
     unsigned long long settled_raster_calls;
     unsigned long long fading_alpha_calls;
     unsigned long long settled_alpha_calls;
+    unsigned long long fading_solid_color_calls;
+    unsigned long long settled_solid_color_calls;
+    unsigned long long fading_blend_func_calls;
+    unsigned long long settled_blend_func_calls;
+    unsigned long long fading_enable_calls;
+    unsigned long long settled_enable_calls;
     TutorialRuntimeState tutorial;
 
     printf("Testing tutorial fade render...\n");
@@ -895,6 +901,9 @@ static void test_tutorial_fade_render_uses_per_char_path(void) {
         ui_panels_render_code_panel(&s, NULL);
         fading_raster_calls = gl_stub_counts[GL_STUB_glRasterPos2f];
         fading_alpha_calls = gl_stub_counts[GL_STUB_glColor4f];
+        fading_solid_color_calls = gl_stub_counts[GL_STUB_glColor3f];
+        fading_blend_func_calls = gl_stub_counts[GL_STUB_glBlendFunc];
+        fading_enable_calls = gl_stub_counts[GL_STUB_glEnable];
     }
 
     {
@@ -905,12 +914,83 @@ static void test_tutorial_fade_render_uses_per_char_path(void) {
         ui_panels_render_code_panel(&s, NULL);
         settled_raster_calls = gl_stub_counts[GL_STUB_glRasterPos2f];
         settled_alpha_calls = gl_stub_counts[GL_STUB_glColor4f];
+        settled_solid_color_calls = gl_stub_counts[GL_STUB_glColor3f];
+        settled_blend_func_calls = gl_stub_counts[GL_STUB_glBlendFunc];
+        settled_enable_calls = gl_stub_counts[GL_STUB_glEnable];
     }
 
     ASSERT_TRUE("tutorial fade increases raster ops",
                 fading_raster_calls > settled_raster_calls);
     ASSERT_TRUE("tutorial fade increases alpha color ops",
                 fading_alpha_calls > settled_alpha_calls);
+    /* Settled path uses glColor3f for the body row; fade path replaces
+     * it with per-char glColor4f. Pin both to confirm neither path
+     * silently drifts into the other. */
+    ASSERT_TRUE("settled path uses solid color body draw",
+                settled_solid_color_calls > fading_solid_color_calls);
+    /* Without an extra glBlendFunc / glEnable call inside the fade
+     * path, glColor4f's alpha is dropped on the floor because the
+     * panel chrome disables GL_BLEND before body rows render. */
+    ASSERT_TRUE("tutorial fade enables blending",
+                fading_blend_func_calls > settled_blend_func_calls);
+    ASSERT_TRUE("tutorial fade re-enables GL_BLEND",
+                fading_enable_calls > settled_enable_calls);
+}
+
+static void test_tutorial_fade_handles_wrapped_lines(void) {
+    /* Force the comment row to wrap by shrinking the code panel until
+     * the instruction text spans multiple wrap segments. The fade path
+     * must still emit per-char raster ops across every visible segment
+     * — line_len is computed from the full display_text so the per-
+     * char delay spans the wrapped line, but every visible char on
+     * every wrap row should still get a raster + alpha call. */
+    unsigned long long fading_raster_calls;
+    unsigned long long fading_alpha_calls;
+    TutorialRuntimeState tutorial;
+    int code_panel_w;
+
+    printf("Testing tutorial fade render across wrap rows...\n");
+
+    glr_app_reset_all();
+    ui_state_viewport_set_size(220, 600);
+    glr_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
+    glr_ctrl_sync_ui_chrome();
+    ui_state_code_panel_mut()->panel_frac = 1.0f;
+
+    tutorial_start(0);
+    tutorial = tutorial_state_view();
+
+    {
+        int cp_x;
+        int cp_y;
+        int cp_h;
+        ui_layout_code_panel_rect(&cp_x, &cp_y, &code_panel_w, &cp_h);
+    }
+
+    editor_scroll_follow_cursor_set(1);
+    {
+        UiRenderSnapshot s;
+        make_test_ui_snapshot(&s);
+        ui_panels_render_code_panel(&s, NULL);
+    }
+
+    {
+        UiRenderSnapshot s;
+        make_test_ui_snapshot(&s);
+        s.anim_time = tutorial.fade_start_t + 0.01f;
+        gl_stub_counts_reset();
+        ui_panels_render_code_panel(&s, NULL);
+        fading_raster_calls = gl_stub_counts[GL_STUB_glRasterPos2f];
+        fading_alpha_calls = gl_stub_counts[GL_STUB_glColor4f];
+    }
+
+    /* The first tutorial comment is ~25 chars and the panel is narrow
+     * enough that it must wrap. The per-char fade emits a raster +
+     * glColor4f per visible glyph across every wrap row. */
+    ASSERT_TRUE("wrap-row fade emits raster ops",
+                fading_raster_calls > 0);
+    ASSERT_TRUE("wrap-row fade emits alpha color ops",
+                fading_alpha_calls > 0);
 }
 
 int main(void) {
@@ -937,6 +1017,7 @@ int main(void) {
     test_ui_panels_hit_test_insert_line();
     test_vertex2f_gutter_labels();
     test_tutorial_fade_render_uses_per_char_path();
+    test_tutorial_fade_handles_wrapped_lines();
 
     printf("\nUI Tests: %d/%d passed\n", g_harness.passed, g_harness.run);
     return (g_harness.passed == g_harness.run) ? 0 : 1;

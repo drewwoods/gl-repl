@@ -146,6 +146,13 @@ static void code_panel_draw_fading_segment(int x, int y, const char *text,
     if (!text || len <= 0)
         return;
 
+    /* The code-panel chrome disables GL_BLEND before body rows render,
+     * so the per-char alpha needs blending re-enabled around the loop
+     * for glutBitmapCharacter to actually fade. Without this, the
+     * glColor4f alpha is dropped on the floor and the row renders
+     * opaque from the first frame. */
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     for (int local_i = 0; local_i < len && text[start + local_i]; local_i++) {
         int char_idx = start + local_i;
         float alpha = tutorial_step_fade_alpha(line_idx, char_idx, line_len, now);
@@ -154,6 +161,7 @@ static void code_panel_draw_fading_segment(int x, int y, const char *text,
         glRasterPos2f((float)(x + local_i * FONT_W), (float)y);
         glutBitmapCharacter(font, (unsigned char)text[char_idx]);
     }
+    glDisable(GL_BLEND);
 }
 
 /* Menu bar lives in repl_menu_bar.c. */
