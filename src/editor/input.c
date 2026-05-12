@@ -164,6 +164,9 @@ int editor_input_active_modifiers(void) {
     return editor_get_modifiers();
 }
 
+static int tutorial_precheck_current_input(void);
+static void tutorial_advance_if_commit_ok(CommitResult result);
+
 static int tutorial_guard_source_change_or_status(int pos,
                                                   int delete_count,
                                                   int insert_count) {
@@ -815,11 +818,21 @@ static CommitResult commit_before_navigation(void) {
     if (!current_input_needs_navigation_commit())
         return COMMIT_UNCHANGED;
 
+    /* Tutorials route navigation commits through the same precheck +
+     * advance as Enter/;. Without this gate, typing any parseable
+     * line at the tutorial append row and pressing Up/Down would
+     * slip the line into the document without advancing the step,
+     * leaving the runner out of sync with the source. */
+    if (!tutorial_precheck_current_input())
+        return COMMIT_REJECTED;
+
     capture_commit_attempt_state(before);
     editor_undo_ring_state_capture(&undo_before);
     CommitResult result = commit_current_input(0);
-    if (result != COMMIT_REJECTED)
+    if (result != COMMIT_REJECTED) {
+        tutorial_advance_if_commit_ok(result);
         return result;
+    }
 
     {
         ReplStatusState *status = ui_state_status_mut();

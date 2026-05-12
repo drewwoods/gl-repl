@@ -21,6 +21,11 @@
 #include <unistd.h>
 
 static TestHarness g_harness = TEST_HARNESS_INIT;
+static int g_mock_modifiers = 0;
+
+static int mock_get_modifiers(void) {
+    return g_mock_modifiers;
+}
 
 #define ASSERT_TRUE(label, cond) \
     TEST_ASSERT_TRUE(&g_harness, label, cond)
@@ -274,6 +279,102 @@ static void test_undo_redo_blocked_during_tutorial(void) {
                status_text(), "Undo disabled during tutorial");
 }
 
+static void test_navigation_rejects_non_matching_input(void) {
+    SourceTextView doc_before;
+    SourceTextView doc_after;
+
+    reset_fixture();
+    tutorial_start(0);
+    /* Commit step 0 first so there's a non-locked user line to navigate to;
+     * landing on a locked instruction would have load_line_to_input
+     * overwrite the precheck status. */
+    set_input_text(tutorial_current_expected_text());
+    (void)editor_handle_key(';', 0, 0);
+    doc_before = source_document_view();
+
+    /* Type a parseable but non-matching line at the trailing edit row,
+     * then navigate to the non-locked user line. Without the navigation-
+     * path tutorial gate, commit_before_navigation would slip the line in
+     * without advancing the step. */
+    set_input_text("glPointSize(1)");
+    repl_navigate_to_line(1);
+
+    doc_after = source_document_view();
+    ASSERT_INT("navigation does not commit non-matching line",
+               doc_after.line_count, doc_before.line_count);
+    ASSERT_INT("step unchanged after rejected navigation",
+               tutorial_state_view().step, 1);
+    ASSERT_STR("navigation rejection surfaces hint status",
+               status_text(), "expected: glVertex3f(0, 0.8, 0)");
+}
+
+static void test_navigation_advances_on_matching_input(void) {
+    SourceTextView doc;
+    const char *expected;
+
+    reset_fixture();
+    tutorial_start(0);
+    /* Commit step 0 cleanly so navigation lands on a non-locked user line. */
+    set_input_text(tutorial_current_expected_text());
+    (void)editor_handle_key(';', 0, 0);
+
+    /* Type the current expected text at trailing edit row, navigate up.
+     * The navigation commit should advance the tutorial. */
+    expected = tutorial_current_expected_text();
+    set_input_text(expected);
+    repl_navigate_to_line(1);
+
+    doc = source_document_view();
+    ASSERT_INT("navigation advance committed user line + next instruction",
+               doc.line_count, 5);
+    ASSERT_INT("step advanced via navigation", tutorial_state_view().step, 2);
+    ASSERT_STR("navigation advance sets step 3 status",
+               status_text(), "Tutorial: step 3/5");
+}
+
+static void test_enter_on_locked_line_shows_position_hint(void) {
+    /* Regression: an earlier review flagged that
+     * commit_current_input's unmodified+enter_mode branch could toggle
+     * insert mode at a locked line. The Phase 4 precheck's position
+     * guard actually catches this before commit_current_input runs;
+     * lock that down so a future refactor doesn't re-open the gap. */
+    reset_fixture();
+    tutorial_start(0);
+    set_input_text(tutorial_current_expected_text());
+    (void)editor_handle_key(';', 0, 0);
+
+    repl_navigate_to_line(0);
+    (void)editor_handle_key('\n', 0, 0);
+
+    ASSERT_STR("enter on locked line shows position hint",
+               status_text(),
+               "Move cursor to the end of the buffer before committing");
+    ASSERT_TRUE("enter on locked line did not enter insert mode",
+                !editor_insert_mode());
+    ASSERT_INT("enter on locked line did not advance step",
+               tutorial_state_view().step, 1);
+}
+
+static void test_ctrl_slash_on_locked_line_is_blocked(void) {
+    int saved_modifiers = g_mock_modifiers;
+
+    editor_input_set_modifier_provider_for_test(mock_get_modifiers);
+    editor_set_line_comment_prefix("// ");
+    reset_fixture();
+    tutorial_start(0);
+    repl_navigate_to_line(0);
+
+    g_mock_modifiers = GLUT_ACTIVE_CTRL;
+    (void)editor_handle_key('/', 0, 0);
+    g_mock_modifiers = saved_modifiers;
+    editor_input_set_modifier_provider_for_test(NULL);
+
+    ASSERT_INT("ctrl-/ keeps tutorial comment row",
+               repl_state_document_count(), 1);
+    ASSERT_STR("ctrl-/ read-only status",
+               status_text(), "Tutorial comment is read-only");
+}
+
 static void test_tab_autofill_then_semicolon_advances(void) {
     const char *expected;
     SourceTextView doc;
@@ -457,6 +558,10 @@ int main(void) {
     test_paste_before_locked_prefix_is_blocked();
     test_undo_redo_blocked_during_tutorial();
     test_enter_route_advances_after_match();
+    test_navigation_rejects_non_matching_input();
+    test_navigation_advances_on_matching_input();
+    test_enter_on_locked_line_shows_position_hint();
+    test_ctrl_slash_on_locked_line_is_blocked();
     test_tab_autofill_then_semicolon_advances();
     test_rejected_commit_does_not_advance_tutorial();
     test_feed_line_alone_does_not_advance_tutorial();
