@@ -34,7 +34,7 @@ Current `repl_demo` link shape:
 | Stub(s) | Root cause |
 |---|---|
 | `repl_compile_dispatch` | grammar dispatcher lives in editor services |
-| `ui_state_reset`, `variable_panel_state_reset`, `editor_help_session_reset`, `repl_editor_reset_transients` | `repl_state_reset_all()` resets non-REPL owners |
+| `ui_state_reset`, `variable_panel_state_reset`, `editor_help_session_reset`, `editor_reset_transients` | `repl_state_reset_all()` resets non-REPL owners |
 | `ui_state_code_panel_mut` | `repl_state_sync_ui_chrome()` writes UI chrome from `repl_state.c` |
 | `ui_state_status_set` | pipeline TUs call `set_status()` |
 | `g_cfg_items`, `CFG_ITEM_COUNT`, `audio_get_cfg_mode`, `audio_set_cfg_mode`, `variable_panel_view_mut`, `ui_state_profile_panel_mut` | `repl_export.c` / `repl_scenes.c` use `glr_config` directly for `@cfg` |
@@ -126,7 +126,7 @@ Fix:
 Stubs cleared:
 
 `ui_state_reset`, `variable_panel_state_reset`,
-`editor_help_session_reset`, `repl_editor_reset_transients`,
+`editor_help_session_reset`, `editor_reset_transients`,
 `ui_state_code_panel_mut`.
 
 ## Step 3 - Decouple Pipeline Diagnostics from `ui_state_status_set`

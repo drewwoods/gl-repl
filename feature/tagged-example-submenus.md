@@ -197,7 +197,7 @@ Implementation should reuse the exact transient reset path currently duplicated
 inside `glr_action_menu_item_activate()` for Scene example rows:
 
 ```c
-repl_editor_reset_transients();
+editor_reset_transients();
 repl_load_example(example_idx);
 return 1;
 ```

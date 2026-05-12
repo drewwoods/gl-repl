@@ -8,7 +8,7 @@
 
 ## Interface And Structure Changes
 - Update `Makefile` so `SRCS` and `CORE_TEST_SRCS` both include `repl_search.c`, `repl_export.c`, and `repl_editor.c`.
-- Keep search state and UI-facing search helpers in `sample.h`: `g_search_*`, `repl_search_row_count`, `repl_search_row_text`, `repl_search_row_for_cmd_index`, `repl_search_find_next_in_text`, and `repl_search_find_prev_in_text`.
+- Keep search state and UI-facing search helpers in `sample.h`: `g_search_*`, `editor_search_row_count`, `editor_search_row_text`, `editor_search_row_for_cmd_index`, `editor_search_find_next_in_text`, and `editor_search_find_prev_in_text`.
 - Keep scaffold/export state already consumed outside core in `sample.h`: `g_header_pre`, `g_render_state_lines`, `g_lookat`, `g_header_post`, `init_section_line_count`, `init_section_line`, and `update_lookat_strings`.
 - Add only true cross-module internals to `repl_core_internal.h`, such as any non-public helper that `repl_export.c` needs to call into the editor/core commit path.
 - Do not add new module headers unless an include cycle forces it.
