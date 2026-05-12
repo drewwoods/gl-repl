@@ -3,7 +3,7 @@
 ## Goal
 
 `tools/repl_demo` is the REPL-pipeline counterpart to
-`tools/teapot_demo`: it should prove that
+`tools/scene_demo`: it should prove that
 
 ```text
 parse -> command store -> flatten -> execute

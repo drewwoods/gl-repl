@@ -311,7 +311,7 @@ is no shim layer.
 4. 2D overlays: code panel, autocomplete popup, example dropdown,
    variable slider panel, config menu, help overlay, search overlay
 
-The standalone `make teapot_demo` binary (sources in `tools/teapot_demo/`)
+The standalone `make scene_demo` binary (sources in `tools/scene_demo/`)
 exercises the scene contract with a non-REPL geometry callback — it builds
 without dragging in the REPL editor / controller, which is the load-bearing
 proof that `src/scene/` has no hard dependency on REPL code.

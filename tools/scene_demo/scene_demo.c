@@ -1,5 +1,5 @@
 /*
- * tools/teapot_demo/teapot.c — independent binary that drives the scene
+ * tools/scene_demo/scene_demo.c — independent binary that drives the scene
  * module with a non-REPL geometry callback (a single glutSolidTeapot).
  *
  * Demonstrates that scene/ has no hard dependency on the REPL editor or
@@ -290,7 +290,7 @@ static void display_func(void) {
                        cfg.cam_tx, cfg.cam_ty, cfg.cam_tz);
     if (scene_render_3d_scene(&cfg) != 0) {
         fprintf(stderr,
-                "teapot_demo: scene_render_3d_scene rejected config (errno=%d)\n",
+                "scene_demo: scene_render_3d_scene rejected config (errno=%d)\n",
                 errno);
         exit(1);
     }
