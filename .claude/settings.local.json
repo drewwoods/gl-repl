@@ -116,7 +116,8 @@
       "Bash(awk -F: '{if \\($1+0 <= 617\\) last=$0} END {print last}')",
       "Bash(awk NR>=600 && NR<=640 {print NR\": \"$0} *)",
       "Bash(chmod +x *)",
-      "Bash(./test_repl_core_internal *)"
+      "Bash(./test_repl_core_internal *)",
+      "Bash(./build/release/test_repl_core_examples)"
     ]
   }
 }
