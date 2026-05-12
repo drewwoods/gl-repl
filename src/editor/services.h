@@ -65,13 +65,8 @@ typedef struct EditorServices_s {
  * The `context` hook returns `repl_compile_context_from_live`. */
 EditorServices editor_services_default(void);
 
-/* Walk the registered compile handlers in canonical order and
- * return the first one that produces a non-NO_CHANGE result. Public
- * because tests + the editor commit orchestration both call it; the
- * default `EditorServices.compile` is a thin wrapper. */
-ReplCompileResult repl_compile_dispatch(const char *text,
-                                        const ReplCompileContext *ctx,
-                                        ReplCompiledChange *out,
-                                        char *err, int err_size);
+/* repl_compile_dispatch lives in src/repl/compile.h — include that
+ * header directly to use it (the default `EditorServices.compile` is
+ * a thin wrapper around it). */
 
 #endif /* EDITOR_SERVICES_H */

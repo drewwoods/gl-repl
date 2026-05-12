@@ -22,22 +22,8 @@
  * pipeline reads its values as opaque integers. */
 void repl_save_default_output(const ReplExportLayout *layout);
 
-/* Load a single .c file containing source commands and camera state.
- * Parses leading workspace metadata, feeds lines through the commit pipeline,
- * and leaves any pending scene/workspace directives in import/export state for
- * the caller to apply. Returns 1 on success, 0 on error. */
-int  repl_export_load_from_file(const char *filename);
-
-/* Save active scene or example to a standalone .c file with metadata headers
- * (@var name=value, @cfg key=value, @camera, @scene-name, @workspace-dir).
- * Sets status message on success or failure. `text` is the source-
- * text view the caller built; export reads source text exclusively
- * through that view. `layout` carries opaque viewport / scene rect /
- * code-panel width / wrap toggle the controller built; the export
- * pipeline reads them as integers (step 7c of
- * feature/decouple-repl-from-gl-repl-alt.md). */
-void repl_export_save_output(const char *filename, SourceTextView text,
-                             const ReplExportLayout *layout);
+/* repl_export_load_from_file / repl_export_save_output live in
+ * src/repl/export.h — include that header directly to use them. */
 
 /* Workspace I/O: save every occupied user-scene slot to `<dir>/<slug>.c`.
  * Each slot is flushed with its own @scene-name header. Both functions
@@ -57,16 +43,8 @@ void repl_set_workspace_dir(const char *dir);
 
 /* --- Command pipeline -------------------------------------------------- */
 
-/* Expand a source program into caller-provided flat buffers. This is the
- * core two-level model: for-loops are unrolled, function calls are inlined,
- * and if-blocks are evaluated against their conditions, subject to the
- * MAX_FLATTEN_CALL_DEPTH and MAX_FLATTEN_VISIT_BUDGET limits. Tests use this
- * to flatten into temporary storage without mutating the live flat program;
- * the display loop uses the wrapped repl_flatten_commands() below. Result->
- * flat_cmd_count carries the generated count. Returns 1 on success, 0 on
- * error. */
-int  repl_flatten_program(const ReplFlattenOptions *options,
-                          ReplFlattenResult *result);
+/* repl_flatten_program lives in src/repl/flatten.h — include that
+ * header directly to use it. */
 
 /* Rebuild the live flat program from the current source commands (idempotent).
  * Expansion honors the laziness flag set by mark_normals_dirty(); call this
@@ -165,8 +143,8 @@ int  repl_load_user_scene_idx(int slot);  /* load slot, returns 1 on success */
 int  repl_active_user_scene(void);        /* current slot index, -1 if none */
 
 /* --- Replay ------------------------------------------------------------ */
-void repl_replay_start(void);
-void repl_replay_stop(void);
+/* repl_replay_start / repl_replay_stop live in src/widgets/replay.h —
+ * include that header directly to use them. */
 
 /* --- Timekeeping ------------------------------------------------------- */
 
