@@ -491,7 +491,7 @@ static int commit_progressed_since(const CommitAttemptState *s) {
 }
 
 static int current_input_needs_navigation_commit(void) {
-    if (editor_state_input().input_len <= 0)
+    if (editor_state_input().input_len <= 0 && !editor_insert_mode())
         return 0;
     if (!editor_insert_mode() && repl_state_edit_line() < repl_state_document_count() &&
         input_matches_committed_line(repl_state_edit_line()))
@@ -529,7 +529,7 @@ static CommitResult commit_current_input(int enter_mode) {
     }
 
     if (editor_state_input().input_len > 0 ||
-        (enter_mode && editor_insert_mode()) ||
+        editor_insert_mode() ||
         (enter_mode && repl_state_edit_line() >= repl_state_document_count()))
         editor_undo_push_snapshot();
 
@@ -542,7 +542,7 @@ static CommitResult commit_current_input(int enter_mode) {
     }
 
     if (editor_insert_mode()) {
-        if (enter_mode && editor_state_input().input_len == 0) {
+        if (editor_state_input().input_len == 0) {
             ReplCompileContext ctx = repl_compile_context_from_live();
             ReplCompiledChange change;
             char err[REPL_STATUS_TEXT_MAX] = "";
@@ -557,7 +557,8 @@ static CommitResult commit_current_input(int enter_mode) {
                 repl_set_status("Command buffer full!");
                 return COMMIT_REJECTED;
             }
-            repl_state_edit_line_set(insert_pos + 1);
+            if (enter_mode)
+                repl_state_edit_line_set(insert_pos + 1);
             {
                 ReplEditorInputState *inp = editor_state_input_mut();
                 inp->input[0] = '\0';
@@ -792,8 +793,13 @@ void navigate_to_line(int target) {
     if (target == repl_state_edit_line() && !editor_insert_mode())
         return;
 
-    if (target != repl_state_edit_line())
+    if (target != repl_state_edit_line()) {
+        int inserted_at = repl_state_edit_line();
+        int doc_before  = repl_state_document_count();
         (void)commit_before_navigation();
+        if (repl_state_document_count() > doc_before && target > inserted_at)
+            target++;
+    }
 
     if (target > repl_state_document_count())
         target = repl_state_document_count();
