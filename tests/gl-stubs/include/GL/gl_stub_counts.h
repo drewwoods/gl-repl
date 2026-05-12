@@ -31,8 +31,10 @@ extern "C" {
     X(glClear)                         \
     X(glClearColor)                    \
     X(glColor3f)                       \
+    X(glColor3fv)                      \
     X(glColor4dv)                      \
     X(glColor4f)                       \
+    X(glColor4fv)                      \
     X(glColorMask)                     \
     X(glColorMaterial)                 \
     X(glDepthMask)                     \
