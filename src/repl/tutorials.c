@@ -3,11 +3,11 @@
 #include <stddef.h>
 
 static const char *const g_tutorial_first_triangle_comments[] = {
-    "// Start a triangle batch.",
-    "// Add the top vertex.",
-    "// Add the bottom-left vertex.",
-    "// Add the bottom-right vertex.",
-    "// Finish the triangle.",
+    "// Build the smallest filled shape: open a GL_TRIANGLES batch.",
+    "// Place the first vertex near the top; this becomes the triangle tip.",
+    "// Add the lower-left corner so the triangle has width.",
+    "// Add the lower-right corner; three vertices complete one triangle.",
+    "// Close the batch and the filled triangle appears in the scene.",
     NULL,
 };
 
@@ -21,17 +21,17 @@ static const char *const g_tutorial_first_triangle_expected[] = {
 };
 
 static const char *const g_tutorial_color_transform_comments[] = {
-    "// Save the current transform so changes below stay local.",
-    "// Pick a vivid color for the shape.",
-    "// Slide the next shape to the right.",
-    "// Rotate it 30 degrees around the Z axis.",
-    "// Start a quad - four vertices form a filled square.",
-    "// Bottom-left corner.",
-    "// Bottom-right corner.",
-    "// Top-right corner.",
-    "// Top-left corner - closes the loop.",
-    "// Finish the quad.",
-    "// Restore the original transform.",
+    "// Save the current matrix so this example can clean up after itself.",
+    "// Set the drawing color; OpenGL keeps using it for later vertices.",
+    "// Move the local coordinate system to the right before drawing.",
+    "// Rotate those local axes 30 degrees around Z, the screen-facing axis.",
+    "// Open a GL_QUADS batch; the next four corners make one filled square.",
+    "// Give the square its lower-left corner in the transformed space.",
+    "// Add the lower-right corner at the same height.",
+    "// Add the upper-right corner so the quad has height.",
+    "// Add the upper-left corner; vertex order walks around the square.",
+    "// Close the quad batch to draw the rotated cyan square.",
+    "// Restore the saved matrix so future commands are not moved or rotated.",
     NULL,
 };
 
