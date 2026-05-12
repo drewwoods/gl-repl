@@ -16,7 +16,7 @@
  * already-published state, per the UI/controller boundary. */
 static inline void repl_test_publish_replay_annotations(void) {
     ReplReplayAnnotationOutput out;
-    repl_replay_annotations_prepare(source_document_view(), &out);
+    replay_annotations_prepare(source_document_view(), &out);
     glr_publish_replay_annotations(&out);
 }
 

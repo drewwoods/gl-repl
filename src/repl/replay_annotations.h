@@ -11,11 +11,11 @@
  * link this TU without dragging in editor render code.
  *
  * Public surface:
- *   - repl_replay_annotations_prepare() — fills the output. Idempotent
+ *   - replay_annotations_prepare() — fills the output. Idempotent
  *     within a frame; safe to call from the controller, layout, and
  *     tests. The full app uses glr_publish_replay_annotations() (in
  *     glr_ctrl.h) to copy the rows into editor_state_virtual_lines.
- *   - repl_replay_code_panel_get_command_display_text() returns the
+ *   - replay_code_panel_get_command_display_text() returns the
  *     in-line annotated source text for a command (no extra rows).
  *
  * The substitution / evaluation builders and the per-source flat-cmd
@@ -69,14 +69,14 @@ typedef struct {
  * function memsets it to a clean state on entry). `out->count == 0`
  * means "no annotations apply" (replay is off, the line has no vars,
  * etc.). */
-void repl_replay_annotations_prepare(SourceTextView text,
+void replay_annotations_prepare(SourceTextView text,
                                      ReplReplayAnnotationOutput *out);
 
 /* Get the inline annotated display text for a source line during replay
  * (the source body, without the extra annotation rows). Writes up to
  * out_size bytes into out. `text` is the source-text view the caller
  * built for this frame. */
-int  repl_replay_code_panel_get_command_display_text(SourceTextView text,
+int  replay_code_panel_get_command_display_text(SourceTextView text,
                                                      int cmd_idx,
                                                      char *out, int out_size);
 

@@ -190,7 +190,7 @@ static void prepare_display_fixture(void) {
         g_predef_vars[g_t_idx].value = 9.0f;
     repl_eval_scratch_set(0, 0, 4.0f);
 
-    repl_replay_start();
+    replay_start();
     repl_state_flat_program_set_user_lighting_enabled(1);
 
     replay_state_mut()->active = 1;

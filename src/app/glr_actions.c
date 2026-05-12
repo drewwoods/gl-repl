@@ -304,10 +304,10 @@ void glr_cfg_cycle_row(int row, int delta) {
      * collapse to "toggle". */
     if (item->key == GLR_CONFIG_REPLAY) {
         if (glr_config_get(GLR_CONFIG_REPLAY)) {
-            repl_replay_stop();
+            replay_stop();
             repl_set_status("Replay: off");
         } else {
-            repl_replay_start();
+            replay_start();
         }
         return;
     }
@@ -322,7 +322,7 @@ void glr_cfg_cycle_row(int row, int delta) {
     }
 
     if (replay_active())
-        repl_replay_stop();
+        replay_stop();
 
     int new_value = glr_config_cycle(item->key, delta);
     glr_ctrl_sync_ui_chrome();  /* refresh ui_state.code_panel mirrors */

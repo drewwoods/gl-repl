@@ -49,25 +49,25 @@ static void test_replay_basic_controls(void) {
 
     ASSERT_TRUE("not active initially", !g_replay_active);
 
-    repl_replay_start();
+    replay_start();
     ASSERT_TRUE("active after start", g_replay_active);
     ASSERT_TRUE("state is PLAYING", g_replay_state == REPLAY_PLAYING);
     ASSERT_TRUE("pc is 0", g_replay_pc == 0);
 
-    repl_replay_toggle_play_pause();
+    replay_toggle_play_pause();
     ASSERT_TRUE("state is PAUSED", g_replay_state == REPLAY_PAUSED);
 
-    repl_replay_toggle_play_pause();
+    replay_toggle_play_pause();
     ASSERT_TRUE("state is PLAYING", g_replay_state == REPLAY_PLAYING);
 
     float old_speed = g_replay_speed;
-    repl_replay_speed_adjust(1.5f);
+    replay_speed_adjust(1.5f);
     ASSERT_TRUE("speed is adjusted up", g_replay_speed > old_speed);
 
-    repl_replay_speed_adjust(0.67f);
+    replay_speed_adjust(0.67f);
     ASSERT_TRUE("speed is adjusted down", g_replay_speed < old_speed * 1.5f);
 
-    repl_replay_stop();
+    replay_stop();
     ASSERT_TRUE("not active after stop", !g_replay_active);
 }
 
@@ -80,23 +80,23 @@ static void test_replay_stepping(void) {
     repl_state_mark_flat_dirty();
     repl_flatten_commands();
 
-    repl_replay_start();
+    replay_start();
     g_replay_state = REPLAY_PAUSED;
 
     int initial_pc = g_replay_pc;
-    repl_replay_advance();
+    replay_advance();
     ASSERT_TRUE("advance moves pc", g_replay_pc > initial_pc);
 
-    repl_replay_step_back();
+    replay_step_back();
     ASSERT_TRUE("step back restores pc", g_replay_pc == initial_pc || g_replay_pc == 0);
 
-    repl_replay_seek(2);
+    replay_seek(2);
     ASSERT_TRUE("seek sets pc", g_replay_pc == 2);
 
-    int landed = repl_replay_seek_to_src_line(2);
+    int landed = replay_seek_to_src_line(2);
     ASSERT_TRUE("seek to src line lands", landed >= 0);
 
-    repl_replay_restart_from_beginning();
+    replay_restart_from_beginning();
     ASSERT_TRUE("restart works", g_replay_pc == 0 && g_replay_state == REPLAY_PLAYING);
 }
 
@@ -110,17 +110,17 @@ static void test_replay_tessellation_stepping(void) {
     repl_state_mark_flat_dirty();
     repl_flatten_commands();
 
-    repl_replay_start();
+    replay_start();
     g_replay_mode = REPLAY_MODE_POLYGON;
 
-    repl_replay_advance();
+    replay_advance();
     ASSERT_TRUE("tess poly advance", g_replay_pc > 0);
 
-    repl_replay_step_back();
+    replay_step_back();
     ASSERT_TRUE("tess poly back", g_replay_pc == 0);
 
     g_replay_mode = REPLAY_MODE_VERTEX;
-    repl_replay_advance();
+    replay_advance();
     ASSERT_TRUE("tess vert advance", g_replay_pc > 0);
 }
 
@@ -130,23 +130,23 @@ static void test_replay_fade_batches(void) {
     repl_state_mark_flat_dirty();
     repl_flatten_commands();
 
-    repl_replay_start();
+    replay_start();
     replay_push_fade_batch(0, 1);
 
-    ASSERT_TRUE("has active fades", repl_replay_has_active_fades());
+    ASSERT_TRUE("has active fades", replay_has_active_fades());
 
-    ReplayFadeBatchView view = repl_replay_fade_batches_view();
+    ReplayFadeBatchView view = replay_fade_batches_view();
     ASSERT_TRUE("batch count > 0", view.count > 0);
 
-    repl_replay_tick_fade_batches(0.016f);
-    ASSERT_TRUE("batch alpha updated", repl_replay_batch_alpha(&view.batches[0]) > 0.0f);
+    replay_tick_fade_batches(0.016f);
+    ASSERT_TRUE("batch alpha updated", replay_batch_alpha(&view.batches[0]) > 0.0f);
 
     int limits[5];
-    int lcount = repl_replay_compute_fade_skip_limits(limits, 5);
+    int lcount = replay_compute_fade_skip_limits(limits, 5);
     ASSERT_TRUE("fade skip limits computed", lcount >= 0);
 
-    repl_replay_tick_fade_batches(10.0f); // Age completely
-    ASSERT_TRUE("no active fades after aging", !repl_replay_has_active_fades());
+    replay_tick_fade_batches(10.0f); // Age completely
+    ASSERT_TRUE("no active fades after aging", !replay_has_active_fades());
 }
 
 static void test_replay_input(void) {
@@ -156,29 +156,29 @@ static void test_replay_input(void) {
     repl_flatten_commands();
 
     // When off
-    repl_replay_handle_key(KEY_CTRL_R);
+    replay_handle_key(KEY_CTRL_R);
     ASSERT_TRUE("Ctrl+R starts replay", g_replay_active);
 
     // When on
-    repl_replay_handle_key(' ');
+    replay_handle_key(' ');
     ASSERT_TRUE("Space pauses", g_replay_state == REPLAY_PAUSED);
 
-    repl_replay_handle_special_key(GLUT_KEY_RIGHT);
+    replay_handle_special_key(GLUT_KEY_RIGHT);
     ASSERT_TRUE("Right advances", g_replay_pc > 0);
 
-    repl_replay_handle_special_key(GLUT_KEY_LEFT);
+    replay_handle_special_key(GLUT_KEY_LEFT);
     ASSERT_TRUE("Left retreats", g_replay_pc == 0);
 
     // Ensure replay is active for following tests
-    repl_replay_start();
+    replay_start();
 
-    repl_replay_handle_key('m');
+    replay_handle_key('m');
     ASSERT_TRUE("m toggles mode", g_replay_mode == REPLAY_MODE_POLYGON);
 
-    repl_replay_handle_key('e');
+    replay_handle_key('e');
     ASSERT_TRUE("e toggles expand args", g_replay_expand_args == 0);
 
-    repl_replay_handle_key(KEY_ESC);
+    replay_handle_key(KEY_ESC);
     ASSERT_TRUE("Esc stops replay", !g_replay_active);
 }
 
@@ -187,10 +187,10 @@ static void test_replay_modifiers(void) {
     add_mock_cmd(0, CMD_VERTEX3F);
     repl_state_mark_flat_dirty();
     repl_flatten_commands();
-    repl_replay_start();
+    replay_start();
 
 #ifndef USE_GLUT
-    int handled = repl_replay_handle_special_key(GLUT_KEY_SHIFT_L);
+    int handled = replay_handle_special_key(GLUT_KEY_SHIFT_L);
     ASSERT_TRUE("modifier handled internally", handled == 0);
     ASSERT_TRUE("modifier doesn't stop replay", g_replay_active);
 #else
@@ -211,10 +211,10 @@ static void test_bench_helpers(void) {
 
     int old_pcs[] = {0, 1};
     int new_pcs[] = {1, 2};
-    repl_bench_fade_install(old_pcs, new_pcs, 2, 0.1f);
+    replay_bench_fade_install(old_pcs, new_pcs, 2, 0.1f);
     ASSERT_TRUE("bench install sets batches", g_replay_fade_batch_count == 2);
 
-    repl_bench_fade_clear();
+    replay_bench_fade_clear();
     ASSERT_TRUE("bench clear unsets batches", g_replay_fade_batch_count == 0);
 }
 
@@ -223,29 +223,29 @@ static void test_misc_helpers(void) {
     add_mock_cmd(0, CMD_VERTEX3F);
     repl_state_mark_flat_dirty();
     repl_flatten_commands();
-    repl_replay_start();
+    replay_start();
 
-    int limit = repl_replay_exec_limit();
+    int limit = replay_exec_limit();
     ASSERT_TRUE("exec limit", limit >= 0);
 
-    int fill_base = repl_replay_fill_base_limit();
+    int fill_base = replay_fill_base_limit();
     ASSERT_TRUE("fill base limit", fill_base >= 0);
 
-    repl_replay_prepare_frame(1);
+    replay_prepare_frame(1);
 
     float dummy[MAX_PREDEF_VARS];
     float scratch[REPL_SCRATCH_ARRAY_COUNT][REPL_SCRATCH_ARRAY_LEN];
     float scratch_value = 0.0f;
-    repl_replay_copy_baseline_predef_values(dummy, MAX_PREDEF_VARS);
+    replay_copy_baseline_predef_values(dummy, MAX_PREDEF_VARS);
     repl_eval_scratch_set(0, 0, 3.0f);
-    repl_replay_start();
+    replay_start();
     repl_eval_scratch_set(0, 0, 9.0f);
-    repl_replay_copy_baseline_scratch_arrays(scratch);
+    replay_copy_baseline_scratch_arrays(scratch);
     ASSERT_TRUE("baseline scratch copied", fabsf(scratch[0][0] - 3.0f) < 1e-6f);
-    repl_replay_restore_baseline_scratch_arrays();
+    replay_restore_baseline_scratch_arrays();
     ASSERT_TRUE("baseline scratch restored",
                 repl_eval_scratch_get(0, 0, &scratch_value) && fabsf(scratch_value - 3.0f) < 1e-6f);
-    repl_replay_restore_baseline_predef_values();
+    replay_restore_baseline_predef_values();
 }
 
 int main(void) {

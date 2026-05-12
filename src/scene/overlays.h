@@ -39,7 +39,7 @@
  * orchestration. Each draws ONE label / arrow at a transformed position;
  * iteration of the user's program and applying transforms is the
  * controller's responsibility (it walks the program via
- * repl_walk_user_vertices and calls these primitives at each visit).
+ * replay_walk_user_vertices and calls these primitives at each visit).
  * The controller is also responsible for setting up the surrounding GL
  * state (color, depth disable, push/pop attribs). */
 void scene_draw_vertex_number_label(int vertex_idx,
