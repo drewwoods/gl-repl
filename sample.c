@@ -211,7 +211,7 @@ int main(int argc, char **argv) {
         /* Apply saved audio cfg after play_playlist() so load_state() has
          * already populated g_cfg_mode. The action layer maps that UI config
          * value back onto the audio engine before the first frame. */
-        repl_actions_apply_defaults();
+        glr_actions_apply_defaults();
         atexit(audio_shutdown);
     }
 
