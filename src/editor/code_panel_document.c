@@ -92,6 +92,17 @@ static int code_panel_header_row_count(int panel_w, int text_x) {
     for (int cam_line_idx = 0; cam_line_idx < CAM_LINE_COUNT; cam_line_idx++)
         rows += repl_code_panel_document_row_count_for_text(
             g_cam_lines[cam_line_idx], text_x, panel_w);
+    /* Count rows for light position lines (after camera transforms — they
+     * snapshot the post-camera modelview). */
+    {
+        char line[MAX_LINE_LEN];
+        int n = repl_export_lights_display_line_count();
+        for (int pos_idx = 0; pos_idx < n; pos_idx++) {
+            repl_export_lights_display_line(pos_idx, line, sizeof(line));
+            rows += repl_code_panel_document_row_count_for_text(
+                line, text_x, panel_w);
+        }
+    }
     /* Count rows for post-header setup lines. */
     for (int line_idx = 0; g_header_post[line_idx]; line_idx++)
         rows += repl_code_panel_document_row_count_for_text(

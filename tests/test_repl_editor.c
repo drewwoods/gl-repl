@@ -155,6 +155,14 @@ static int code_panel_header_row_count(void) {
                                                    text_x, panel_w);
     for (int i = 0; i < CAM_LINE_COUNT; i++)
         rows += test_code_panel_row_count_for_text(g_cam_lines[i], text_x, panel_w);
+    {
+        char line[MAX_LINE_LEN];
+        int n = repl_export_lights_display_line_count();
+        for (int pos_idx = 0; pos_idx < n; pos_idx++) {
+            repl_export_lights_display_line(pos_idx, line, sizeof(line));
+            rows += test_code_panel_row_count_for_text(line, text_x, panel_w);
+        }
+    }
     for (int i = 0; g_header_post[i]; i++)
         rows += test_code_panel_row_count_for_text(g_header_post[i], text_x, panel_w);
     return rows;
