@@ -1,0 +1,155 @@
+#include "app/glr_ctrl.h"
+#include "repl/core.h"
+#include "repl/state_views.h"
+#include "repl/tutorials.h"
+#include "source_document.h"
+#include "support/test_harness.h"
+#include "ui/state.h"
+#include "widgets/tutorial.h"
+#include "widgets/tutorial_state.h"
+
+#include <string.h>
+
+static TestHarness g_harness = TEST_HARNESS_INIT;
+
+#define ASSERT_TRUE(label, cond) \
+    TEST_ASSERT_TRUE(&g_harness, label, cond)
+
+#define ASSERT_INT(label, got, exp) \
+    TEST_ASSERT_INT(&g_harness, label, got, exp)
+
+#define ASSERT_STR(label, got, exp) \
+    TEST_ASSERT_STR(&g_harness, label, got, exp)
+
+static const char *status_text(void) {
+    return ui_state_status_mut()->text;
+}
+
+static const char *trim_leading_ws(const char *text) {
+    while (text && *text == ' ')
+        text++;
+    while (text && *text == '\t')
+        text++;
+    return text ? text : "";
+}
+
+static void reset_fixture(void) {
+    glr_app_reset_all();
+}
+
+static void test_start_enters_transient_tutorial_scene(void) {
+    SourceTextView doc;
+
+    reset_fixture();
+    repl_load_example(0);
+    tutorial_start(0);
+
+    doc = source_document_view();
+    ASSERT_TRUE("tutorial active after start", tutorial_active());
+    ASSERT_INT("tutorial index stored", tutorial_state_view().tutorial_idx, 0);
+    ASSERT_INT("tutorial step starts at zero", tutorial_state_view().step, 0);
+    ASSERT_INT("example detached", repl_state_scenes().active_example_idx, -1);
+    ASSERT_INT("user scene detached", repl_active_user_scene(), -1);
+    ASSERT_INT("tutorial doc line count", doc.line_count, 1);
+    ASSERT_TRUE("first line is comment",
+                strncmp(trim_leading_ws(source_text_line(doc, 0)), "//", 2) == 0);
+    ASSERT_TRUE("first line locked", tutorial_line_is_locked(0));
+    ASSERT_STR("current expected text",
+               tutorial_current_expected_text(),
+               repl_tutorial_step_expected(0, 0));
+}
+
+static void test_runner_match_and_advance(void) {
+    const char *expected;
+    SourceTextView doc;
+    TutorialMatchResult result;
+
+    reset_fixture();
+    tutorial_start(0);
+
+    ASSERT_TRUE("wrong command rejected",
+                !tutorial_handle_commit_attempt("glEnd()", &result));
+    ASSERT_INT("wrong command mismatch kind", result.kind, TUT_MISMATCH_SHAPE);
+    ASSERT_INT("step unchanged after wrong command", tutorial_state_view().step, 0);
+    ASSERT_TRUE("wrong command message populated", result.message[0] != '\0');
+
+    expected = tutorial_current_expected_text();
+    ASSERT_TRUE("matching command accepted",
+                tutorial_handle_commit_attempt(expected, &result));
+    repl_feed_line_public(expected);
+    tutorial_advance_after_successful_commit();
+
+    doc = source_document_view();
+    ASSERT_INT("step advanced after success", tutorial_state_view().step, 1);
+    ASSERT_INT("next instruction appended", doc.line_count, 3);
+    ASSERT_STR("new instruction text", trim_leading_ws(source_text_line(doc, 2)),
+               repl_tutorial_step_comment(0, 1));
+    ASSERT_TRUE("new instruction locked", tutorial_line_is_locked(2));
+    ASSERT_STR("expected text advanced",
+               tutorial_current_expected_text(),
+               repl_tutorial_step_expected(0, 1));
+}
+
+static void test_feed_line_alone_does_not_advance_tutorial(void) {
+    const char *expected;
+
+    reset_fixture();
+    tutorial_start(0);
+
+    expected = tutorial_current_expected_text();
+    repl_feed_line_public(expected);
+
+    ASSERT_INT("step unchanged after direct feed line", tutorial_state_view().step, 0);
+    ASSERT_TRUE("tutorial still active after direct feed line", tutorial_active());
+}
+
+static void test_fade_alpha_math(void) {
+    SourceTextView doc;
+    TutorialRuntimeState state;
+    int line_len;
+
+    reset_fixture();
+    tutorial_start(0);
+    doc = source_document_view();
+    state = tutorial_state_view();
+    line_len = (int)strlen(source_text_line(doc, 0));
+
+    ASSERT_TRUE("line is fading at start",
+                tutorial_line_is_fading(0, state.fade_start_t + 0.01f));
+    ASSERT_INT("fade line idx is first row", state.fade_line_idx, 0);
+    ASSERT_INT("fade duration half second", (int)(state.fade_duration * 10.0f), 5);
+    TEST_ASSERT_FLOAT_DEFAULT(&g_harness, "char zero starts transparent",
+                              tutorial_step_fade_alpha(0, 0, line_len, state.fade_start_t),
+                              0.0f);
+    TEST_ASSERT_FLOAT_DEFAULT(&g_harness, "last char finishes opaque",
+                              tutorial_step_fade_alpha(0, line_len - 1, line_len,
+                                                       state.fade_start_t + state.fade_duration),
+                              1.0f);
+    ASSERT_TRUE("line stops fading after duration",
+                !tutorial_line_is_fading(0, state.fade_start_t + state.fade_duration));
+}
+
+static void test_completion_status(void) {
+    const char *expected;
+
+    reset_fixture();
+    tutorial_start(0);
+
+    while (tutorial_active()) {
+        expected = tutorial_current_expected_text();
+        ASSERT_TRUE("expected exists while tutorial active", expected != NULL);
+        repl_feed_line_public(expected);
+        tutorial_advance_after_successful_commit();
+    }
+
+    ASSERT_STR("completion status set", status_text(), "Tutorial complete");
+}
+
+int main(void) {
+    test_start_enters_transient_tutorial_scene();
+    test_runner_match_and_advance();
+    test_feed_line_alone_does_not_advance_tutorial();
+    test_fade_alpha_math();
+    test_completion_status();
+    return test_harness_report(&g_harness, "test_tutorial_runner");
+}
