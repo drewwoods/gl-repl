@@ -45,17 +45,58 @@ is_keyword() {
     return 1
 }
 
+# Collapse multi-line declarations (e.g. `void foo(\n  args\n);`) onto a
+# single logical line, and skip block-comment bodies, so the declaration
+# regex catches declarations whose argument list wrapped. Kept in sync
+# with check-duplicate-api-decls.sh.
+flatten_header() {
+    awk '
+        function strip_comment(s,    out, i, ja, jb) {
+            out = ""
+            i = 1
+            while (i <= length(s)) {
+                if (in_bc) {
+                    ja = index(substr(s, i), "*/")
+                    if (ja == 0) { i = length(s) + 1 }
+                    else { in_bc = 0; i = i + ja + 1 }
+                } else {
+                    ja = index(substr(s, i), "/*")
+                    jb = index(substr(s, i), "//")
+                    if (ja == 0 && jb == 0) {
+                        out = out substr(s, i); i = length(s) + 1
+                    } else if (jb > 0 && (ja == 0 || jb < ja)) {
+                        out = out substr(s, i, jb - 1); i = length(s) + 1
+                    } else {
+                        out = out substr(s, i, ja - 1); in_bc = 1; i = i + ja + 1
+                    }
+                }
+            }
+            return out
+        }
+        {
+            line = strip_comment($0)
+            if (line ~ /^[[:space:]]*#/) { print line; next }
+            gsub(/[[:space:]]+/, " ", line)
+            sub(/^ /, "", line); sub(/ $/, "", line)
+            if (line == "") next
+            acc = (acc == "" ? line : acc " " line)
+            if (acc ~ /[;{}]$/) { print acc; acc = "" }
+        }
+        END { if (acc != "") print acc }
+    ' "$1"
+}
+
 unused=""
 for hdr in $headers; do
     [ -f "$hdr" ] || continue
 
     # Extract every line that looks like a function declaration:
     #   `<return-type> ... <name>( ... );`
-    # Skip preprocessor lines (`#...`) and block-comment continuation
-    # lines (` * doc`) so prose mentioning `func()` doesn't get picked
-    # up as a declaration. Require the line to begin with an identifier
-    # so single-line `/* ... */` comments are filtered too.
-    funcs=$(grep -E '^[[:space:]]*[A-Za-z_]' "$hdr" \
+    # Skip preprocessor lines (`#...`); block comments are already
+    # stripped by flatten_header, so prose mentioning `func()` no
+    # longer trips the regex.
+    funcs=$(flatten_header "$hdr" \
+        | grep -E '^[[:space:]]*[A-Za-z_]' \
         | grep -v '^[[:space:]]*#' \
         | grep -oE '[a-zA-Z_][a-zA-Z0-9_]*[[:space:]]*\([^;{]*\)[[:space:]]*;' \
         | sed -E 's/[[:space:]]*\(.*$//' \
