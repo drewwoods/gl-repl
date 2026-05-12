@@ -18,7 +18,7 @@
 #include "editor/input.h"
 #include "editor/search.h"
 #include "editor/state.h"
-#include "geometry_guides.h" /* geometry_guides_render_for_cursor */
+#include "scene/guides/geometry_guides.h" /* geometry_guides_render_for_cursor */
 #include "app/glr_actions.h"
 #include "app/glr_camera.h"
 #include "app/glr_debug.h"
@@ -40,7 +40,7 @@
 #include "ui/replay_hud.h"
 #include "scene/overlays.h" /* scene_draw_vertex_number_label / _arrow primitives */
 #include "scene/render.h"
-#include "transform_guides.h" /* transform_guides_prepare / _render_if_due */
+#include "scene/guides/transform_guides.h" /* transform_guides_prepare / _render_if_due */
 #include "transform_utils.h"  /* apply_tracked_transform / unwind_transform_stack */
 #include "ui/autocomplete_panel.h"
 #include "ui/editor.h"

@@ -16,7 +16,7 @@ patterns = [
     "src/repl/state_views.h",
     "ui_*.h",
     "src/scene/render_types.h",
-    "src/scene/guides_shared.h",
+    "src/scene/guides/guides_shared.h",
 ]
 
 files = []

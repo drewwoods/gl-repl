@@ -8,7 +8,7 @@
 #include "scene/backdrop.h"
 #include "scene/lights.h"
 #include "scene/overlays.h"
-#include "geometry_guides.h"
+#include "scene/guides/geometry_guides.h"
 #include "scene/render_types.h"
 
 #include "support/test_harness.h"

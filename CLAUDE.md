@@ -216,11 +216,11 @@ Test sources live under `tests/` and shared test-only helpers live under
 | `prof.c` | CPU wall-time profiling instrumentation (per-section accumulators, frame tick) |
 | `prof.h` | Profiling API (`prof_begin`, `prof_end`, `prof_frame_tick`, etc.); no UI dependency |
 | `src/scene/render_types.h` | Shared `SceneRgba` / `SceneRenderConfig` / `FrameRenderContext` types for scene helpers |
-| `guides_shared.h` | Shared guide snapshot and planning types for REPL-aware 3D overlay passes (lives at root because no `src/scene/*.c` consumes it; see also `transform_utils.h`) |
-| `geometry_guides.c` | Vertex/primitive guide rendering (input context at cursor) from `SceneGuideSnapshot` |
-| `geometry_guides.h` | Geometry guides render entrypoint |
-| `transform_guides.c` | Transform guide rendering (pending matrix ops during replay) |
-| `transform_guides.h` | Transform guides render entrypoint |
+| `src/scene/guides/guides_shared.h` | Shared guide snapshot and planning types for REPL-aware 3D overlay passes |
+| `src/scene/guides/geometry_guides.c` | Vertex/primitive guide rendering (input context at cursor) from `SceneGuideSnapshot` |
+| `src/scene/guides/geometry_guides.h` | Geometry guides render entrypoint |
+| `src/scene/guides/transform_guides.c` | Transform guide rendering (pending matrix ops during replay) |
+| `src/scene/guides/transform_guides.h` | Transform guides render entrypoint |
 | `transform_utils.h` | Header-only GL matrix helpers (`apply_tracked_transform`, `unwind_transform_stack`) mirroring executor transforms without requiring `src/repl/executor.h` |
 | `src/scene/render.c` | 3D scene frame orchestration, one-shot init, scene config/frame prep, edit guides, orbit target, replay fade pass orchestration |
 | `src/scene/grid.c` | Grid theme rendering and custom focus/ocean/ruler/planes passes |
