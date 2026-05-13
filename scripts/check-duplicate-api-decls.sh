@@ -9,7 +9,7 @@
 # the function-shaped regex, and function-like macros are seldom
 # named identically across headers.
 #
-# Informational only — never fails the build.
+# Exits 1 when duplicates are found so the check can gate CI.
 set -u
 cd "$(git rev-parse --show-toplevel)"
 
@@ -109,13 +109,13 @@ dups=$({
 ' | sort)
 
 if [ -n "$dups" ]; then
-    echo "⚠️  Duplicate API declarations found:"
+    echo "❌ Duplicate API declarations found:"
     printf '%s\n' "$dups" | sed 's/^/  /'
     echo ""
     echo "   Each name appears in more than one module header. Keep the"
     echo "   canonical declaration in the owning module's header and"
     echo "   delete the rest; downstream code should #include that header."
-else
-    echo "✓ No duplicate API declarations detected"
+    exit 1
 fi
+echo "✓ No duplicate API declarations detected"
 exit 0
