@@ -904,11 +904,50 @@ unknown_command:
 #undef WRITE_TEXT_APPEND
 }
 
+/* User-facing name for commands the begin-scope rejection might surface.
+ * The std/enum spec tables already carry these names but they're indexed
+ * by string-search rather than CmdType; this small switch is the smallest
+ * thing that makes the error message read naturally. */
+static const char *cmd_display_name_for_begin_error(CmdType type) {
+    switch (type) {
+        case CMD_BEGIN:               return "glBegin";
+        case CMD_POINT_SIZE:          return "glPointSize";
+        case CMD_LINE_WIDTH:          return "glLineWidth";
+        case CMD_POINT_PARAMETER_FV:  return "glPointParameterfv";
+        case CMD_BLEND_FUNC:          return "glBlendFunc";
+        case CMD_CLEAR_COLOR:         return "glClearColor";
+        case CMD_DEPTH_MASK:          return "glDepthMask";
+        case CMD_GLUT_TORUS:          return "glutSolidTorus";
+        case CMD_GLUT_CUBE:           return "glutSolidCube";
+        case CMD_GLUT_SPHERE:         return "glutSolidSphere";
+        case CMD_GLUT_TEAPOT:         return "glutSolidTeapot";
+        case CMD_GLUT_CONE:           return "glutSolidCone";
+        case CMD_RASTER_POS3F:        return "glRasterPos3f";
+        case CMD_LABEL:               return "label";
+        case CMD_TESS_BEGIN_POLYGON:  return "gluTessBeginPolygon";
+        default:                      return repl_cmd_type_name(type);
+    }
+}
+
 int repl_parser_parse_command_ctx(const char *line, ReplParsedLine *out,
                            const ReplParseContext *ctx) {
     if (!out) return 0;
     memset(out, 0, sizeof(*out));
-    return parse_command(line, &out->cmd, out->text, sizeof(out->text), ctx);
+    if (!parse_command(line, &out->cmd, out->text, sizeof(out->text), ctx))
+        return 0;
+
+    /* Reject commands that real GL rejects with GL_INVALID_OPERATION inside
+     * glBegin/glEnd. The executor used to defensively glEnd() the active
+     * begin block before running them, which broke loop-body usage by
+     * tearing down the block for subsequent glVertex calls. Now the parser
+     * is the gate, so the executor can rely on the invariant. */
+    if (ctx && !repl_cmd_type_valid_in_begin(out->cmd.type) &&
+        repl_source_scope_in_begin_block_at(ctx->source_line_idx)) {
+        parser_emit_error(ctx, "%s not valid inside glBegin/glEnd",
+                          cmd_display_name_for_begin_error(out->cmd.type));
+        return 0;
+    }
+    return 1;
 }
 
 int repl_label_split_args(const char *args,

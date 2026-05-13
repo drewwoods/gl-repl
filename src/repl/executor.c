@@ -403,7 +403,7 @@ void repl_execute_program(const ReplExecutionOptions *options) {
         }
         switch (flat_cmds[pc].type) {
         case CMD_BEGIN:
-            if (in_begin) glEnd();
+            /* Parser rejects nested glBegin via repl_cmd_type_valid_in_begin. */
             glBegin(flat_cmds[pc].mode);
             in_begin = 1;
             break;
@@ -444,50 +444,45 @@ void repl_execute_program(const ReplExecutionOptions *options) {
         case CMD_DEPTH_MASK:
             apply_state_cmd(&flat_cmds[pc], g_execute_alpha_scale);
             break;
+        /* The CMD_*-not-in-begin block below relies on the parser
+         * rejecting these commands inside glBegin/glEnd
+         * (repl_cmd_type_valid_in_begin). The executor no longer
+         * defensively glEnd()s the active begin block. */
         case CMD_POINT_SIZE:
-            if (in_begin) { glEnd(); in_begin = 0; }
             glPointSize(flat_cmds[pc].args[0]);
             break;
         case CMD_LINE_WIDTH:
-            if (in_begin) { glEnd(); in_begin = 0; }
             glLineWidth(flat_cmds[pc].args[0]);
             break;
         case CMD_POINT_PARAMETER_FV:
         case CMD_BLEND_FUNC:
         case CMD_CLEAR_COLOR:
-            if (in_begin) { glEnd(); in_begin = 0; }
             apply_state_cmd(&flat_cmds[pc], g_execute_alpha_scale);
             break;
         case CMD_GLUT_TORUS:
-            if (in_begin) { glEnd(); in_begin = 0; }
             glutSolidTorus((double)flat_cmds[pc].args[0],
                            (double)flat_cmds[pc].args[1],
                            (int)flat_cmds[pc].args[2],
                            (int)flat_cmds[pc].args[3]);
             break;
         case CMD_GLUT_CUBE:
-            if (in_begin) { glEnd(); in_begin = 0; }
             glutSolidCube((double)flat_cmds[pc].args[0]);
             break;
         case CMD_GLUT_SPHERE:
-            if (in_begin) { glEnd(); in_begin = 0; }
             glutSolidSphere((double)flat_cmds[pc].args[0],
                             (int)flat_cmds[pc].args[1],
                             (int)flat_cmds[pc].args[2]);
             break;
         case CMD_GLUT_TEAPOT:
-            if (in_begin) { glEnd(); in_begin = 0; }
             glutSolidTeapot((double)flat_cmds[pc].args[0]);
             break;
         case CMD_GLUT_CONE:
-            if (in_begin) { glEnd(); in_begin = 0; }
             glutSolidCone((double)flat_cmds[pc].args[0],
                           (double)flat_cmds[pc].args[1],
                           (int)flat_cmds[pc].args[2],
                           (int)flat_cmds[pc].args[3]);
             break;
         case CMD_RASTER_POS3F:
-            if (in_begin) { glEnd(); in_begin = 0; }
             glRasterPos3f(flat_cmds[pc].args[0],
                           flat_cmds[pc].args[1],
                           flat_cmds[pc].args[2]);
@@ -503,7 +498,6 @@ void repl_execute_program(const ReplExecutionOptions *options) {
              * args[0..3] and %% to a literal '%'. The flatten pass
              * keeps args[] in sync with current variable values for
              * has_vars commands, so we use them directly. */
-            if (in_begin) { glEnd(); in_begin = 0; }
             char buf[128];
             int sub_count = flat_cmds[pc].num_args;
             if (sub_count < 0) sub_count = 0;
@@ -530,7 +524,6 @@ void repl_execute_program(const ReplExecutionOptions *options) {
             break;
         }
         case CMD_TESS_BEGIN_POLYGON:
-            if (in_begin) { glEnd(); in_begin = 0; }
             if (g_tess) { g_tess_vert_count = 0; gluTessBeginPolygon(g_tess, NULL); tess_depth = 1; }
             break;
         case CMD_TESS_BEGIN_CONTOUR:
