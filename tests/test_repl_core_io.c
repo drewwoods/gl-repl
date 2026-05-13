@@ -172,12 +172,16 @@ int main(void) {
                                    "#include <gl_includes.h>"));
         ASSERT_TRUE("scaffold header before globals",
                     appears_before(buf, "#include <gl_includes.h>",
-                                   "static float x = 0.0f;"));
-        ASSERT_TRUE("scaffold globals before reset",
-                    appears_before(buf, "static float x = 0.0f;",
-                                   "static void reset_repl_vars(void)"));
-        ASSERT_TRUE("scaffold reset before render helper",
-                    appears_before(buf, "static void reset_repl_vars(void)",
+                                   "static float t = 0.0f;"));
+        /* Predef-var initializer carries the export-time snapshot value
+         * (replaces the role reset_repl_vars used to play). */
+        ASSERT_TRUE("predef var initializer carries snapshot value",
+                    strstr(buf, "static float x = 1.25;") != NULL);
+        /* Single-pass exports do not need save/restore helpers. */
+        ASSERT_TRUE("single-pass export omits save_repl_vars",
+                    strstr(buf, "save_repl_vars") == NULL);
+        ASSERT_TRUE("scaffold globals before render helper",
+                    appears_before(buf, "static float t = 0.0f;",
                                    "static void render_repl_geometry(void)"));
         ASSERT_TRUE("scaffold render helper before display",
                     appears_before(buf, "static void render_repl_geometry(void)",
@@ -659,9 +663,13 @@ int main(void) {
                     count_substr(buf, "func0(2.0);") == 1);
         ASSERT_TRUE("saved tess export includes tess global",
                     strstr(buf, "static GLUtesselator *g_tess = NULL;") != NULL);
-        ASSERT_TRUE("saved tess preamble before reset",
+        /* Multipass export (vertex_outlines + vertex_points enabled
+         * earlier) emits the save/restore helpers, and the tess
+         * preamble must come before them so the helpers can reference
+         * any tess-related state without forward-decl issues. */
+        ASSERT_TRUE("saved tess preamble before save/restore helpers",
                     appears_before(buf, "static GLUtesselator *g_tess = NULL;",
-                                   "static void reset_repl_vars(void)"));
+                                   "static void save_repl_vars(void)"));
         ASSERT_TRUE("saved tess export includes tess init",
                     strstr(buf, "g_tess = gluNewTess();") != NULL);
         ASSERT_TRUE("saved tess export includes tess callback",

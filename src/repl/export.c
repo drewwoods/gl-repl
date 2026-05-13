@@ -1826,24 +1826,82 @@ static void write_render_body_range_as_c(FILE *f, int start, int end_idx,
     }
 }
 
+/* Number of geometry passes display() will emit. Always at least 1
+ * (Vertex Fill); outline / vertex-point passes are gated by cfg
+ * toggles. The save / restore helpers and the wrapping save call in
+ * display() are emitted only when this returns >1, so single-pass
+ * exports stay zero-overhead. */
+static int export_count_enabled_passes(void) {
+    int count = 1;
+    if (g_export_cfg_bridge && g_export_cfg_bridge->get_int) {
+        if (g_export_cfg_bridge->get_int("vertex_outlines", 0)) count++;
+        if (g_export_cfg_bridge->get_int("vertex_points", 0)) count++;
+    }
+    return count;
+}
+
+/* Predef vars other than `t` carry their snapshot value forward into
+ * the next frame. `t` is set per-frame from glutGet at the top of
+ * display(), so its static initializer is irrelevant. */
+static int export_predef_var_persists(int var_idx) {
+    return strcmp(g_predef_vars[var_idx].name, "t") != 0;
+}
+
+static int export_has_persistent_predef_vars(void) {
+    for (int i = 0; i < g_num_predef_vars; i++)
+        if (export_predef_var_persists(i))
+            return 1;
+    return 0;
+}
+
 static void write_predef_var_globals(FILE *f) {
     if (g_num_predef_vars <= 0) return;
-    fprintf(f, "\n/* Predefined REPL variables (file scope for func access) */\n");
+    fprintf(f, "\n/* Predefined REPL variables (file scope for func access).\n"
+               " * Initializers are the live snapshot at export time so the\n"
+               " * exported binary starts in the same state the REPL ended in;\n"
+               " * the live REPL preserves these mutations across frames and\n"
+               " * the exported display() does the same (no per-frame reset). */\n");
     for (int var_idx = 0; var_idx < g_num_predef_vars; var_idx++) {
-        fprintf(f, "static float %s = 0.0f;\n", g_predef_vars[var_idx].name);
+        const char *name = g_predef_vars[var_idx].name;
+        if (!export_predef_var_persists(var_idx)) {
+            /* `t` is overwritten each frame in display() from glutGet. */
+            fprintf(f, "static float %s = 0.0f;\n", name);
+        } else {
+            fprintf(f, "static float %s = %g;\n",
+                    name, g_predef_vars[var_idx].value);
+        }
     }
 }
 
-static void write_predef_var_reset_func(FILE *f) {
-    fprintf(f, "\nstatic void reset_repl_vars(void) {\n");
+/* Multipass save/restore: capture the predef-var state once at the top
+ * of each frame and restore it before every pass after the first, so
+ * each pass sees the same starting state but the LAST pass's mutations
+ * persist into the next frame. Mirrors the live REPL's per-frame
+ * save/restore around the executor. `t` is not saved — every pass
+ * sees the same per-frame `t` value set in display(). */
+static void write_save_restore_helpers(FILE *f) {
+    if (!export_has_persistent_predef_vars())
+        return;
+
+    fprintf(f, "\n/* Per-frame snapshot of predef vars for multipass rendering. */\n");
     for (int var_idx = 0; var_idx < g_num_predef_vars; var_idx++) {
-        if (strcmp(g_predef_vars[var_idx].name, "t") == 0) {
-            fprintf(f, "  %s = 0.001f * (float)glutGet(GLUT_ELAPSED_TIME);\n",
-                    g_predef_vars[var_idx].name);
-        } else {
-            fprintf(f, "  %s = %g;\n",
-                    g_predef_vars[var_idx].name, g_predef_vars[var_idx].value);
-        }
+        if (!export_predef_var_persists(var_idx)) continue;
+        fprintf(f, "static float _saved_%s;\n", g_predef_vars[var_idx].name);
+    }
+
+    fprintf(f, "\nstatic void save_repl_vars(void) {\n");
+    for (int var_idx = 0; var_idx < g_num_predef_vars; var_idx++) {
+        if (!export_predef_var_persists(var_idx)) continue;
+        const char *name = g_predef_vars[var_idx].name;
+        fprintf(f, "  _saved_%s = %s;\n", name, name);
+    }
+    fprintf(f, "}\n");
+
+    fprintf(f, "\nstatic void restore_repl_vars(void) {\n");
+    for (int var_idx = 0; var_idx < g_num_predef_vars; var_idx++) {
+        if (!export_predef_var_persists(var_idx)) continue;
+        const char *name = g_predef_vars[var_idx].name;
+        fprintf(f, "  %s = _saved_%s;\n", name, name);
     }
     fprintf(f, "}\n");
 }
@@ -2897,7 +2955,8 @@ static void emit_export_point_pass_setup(FILE *f) {
 }
 
 static void emit_export_geometry_pass(FILE *f,
-                                      const ExportDisplayPassSpec *pass) {
+                                      const ExportDisplayPassSpec *pass,
+                                      int needs_restore) {
     if (!pass || !pass->enabled)
         return;
 
@@ -2906,7 +2965,8 @@ static void emit_export_geometry_pass(FILE *f,
     if (pass->emit_setup)
         pass->emit_setup(f);
     fprintf(f, "  glPushMatrix();\n");
-    fprintf(f, "  reset_repl_vars();\n");
+    if (needs_restore)
+        fprintf(f, "  restore_repl_vars();\n");
     fprintf(f, "  render_repl_geometry();\n");
     fprintf(f, "  glPopMatrix();\n");
     fprintf(f, "  glPopAttrib();\n");
@@ -2962,8 +3022,29 @@ static void emit_export_display_geometry(FILE *f) {
         { "Vertex Point Pass",   vpoints_on,  emit_export_point_pass_setup },
     };
 
-    for (size_t i = 0; i < sizeof(passes) / sizeof(passes[0]); i++)
-        emit_export_geometry_pass(f, &passes[i]);
+    /* Advance `t` once per frame (matches the live REPL's timer-driven
+     * `t` advance). Other predef vars are left alone — their static
+     * initializers carry the export-time snapshot, and any runtime
+     * mutations in render_repl_geometry persist across frames. */
+    if (g_num_predef_vars > 0)
+        fprintf(f, "  t = 0.001f * (float)glutGet(GLUT_ELAPSED_TIME);\n");
+
+    /* Multipass rendering: snapshot predef vars before the first pass
+     * and restore between passes so each pass starts from the same
+     * state, while the LAST pass's mutations carry into the next
+     * frame. */
+    int multipass = export_count_enabled_passes() > 1 &&
+                    export_has_persistent_predef_vars();
+    if (multipass)
+        fprintf(f, "  save_repl_vars();\n");
+
+    int rendered_passes = 0;
+    for (size_t i = 0; i < sizeof(passes) / sizeof(passes[0]); i++) {
+        if (!passes[i].enabled) continue;
+        int needs_restore = multipass && rendered_passes > 0;
+        emit_export_geometry_pass(f, &passes[i], needs_restore);
+        rendered_passes++;
+    }
 }
 
 static void emit_export_display_tail(FILE *f, const ExportNeeds *needs,
@@ -3082,10 +3163,16 @@ static void emit_export_tess_preamble_section(FILE *f,
     write_tess_preamble(f);
 }
 
-static void emit_export_reset_vars_section(FILE *f,
-                                           const ExportScaffoldContext *ctx) {
+static int export_section_needs_save_restore(const ExportScaffoldContext *ctx) {
     (void)ctx;
-    write_predef_var_reset_func(f);
+    return export_count_enabled_passes() > 1 &&
+           export_has_persistent_predef_vars();
+}
+
+static void emit_export_save_restore_section(FILE *f,
+                                             const ExportScaffoldContext *ctx) {
+    (void)ctx;
+    write_save_restore_helpers(f);
 }
 
 static void emit_export_functions_section(FILE *f,
@@ -3114,7 +3201,7 @@ static const ExportScaffoldSectionSpec EXPORT_SCAFFOLD_SECTIONS[] = {
     { "rand helper",        emit_export_rand_helper_section,        export_section_needs_rand },
     { "label helper",       emit_export_label_helper_section,       export_section_needs_label },
     { "tess preamble",      emit_export_tess_preamble_section,      export_section_needs_tess },
-    { "reset vars",         emit_export_reset_vars_section,         export_section_always },
+    { "save/restore vars",  emit_export_save_restore_section,       export_section_needs_save_restore },
     { "functions",          emit_export_functions_section,          export_section_always },
     { "render helper",      emit_export_render_helper_section,      export_section_always },
     { "display",            emit_export_display_section,            export_section_always },
