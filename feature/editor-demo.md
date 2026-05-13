@@ -2,7 +2,7 @@
 
 ## Summary
 
-Split the code-panel UI into a generic text-panel renderer plus a REPL-specific adapter, then add `editor_demo` backed by a demo-local fake REPL shim. Like `teapot_demo` (which keeps `src/scene/` honest about its REPL dependencies) and `repl_demo`, `editor_demo` is a forcing function for module independence — a second binary that fails to link if the split regresses, turning "the module is independent" from a claim into a checkable invariant. The goal is not to make the editor fully reusable in one step; it is to create a working standalone proof and improve `ui/panels.c` by separating text-editor rendering from REPL presentation.
+Split the code-panel UI into a generic text-panel renderer plus a REPL-specific adapter, then add `editor_demo` backed by a demo-local fake REPL shim. Like `scene_demo` (which keeps `src/scene/` honest about its REPL dependencies) and `repl_demo`, `editor_demo` is a forcing function for module independence — a second binary that fails to link if the split regresses, turning "the module is independent" from a claim into a checkable invariant. The goal is not to make the editor fully reusable in one step; it is to create a working standalone proof and improve `ui/panels.c` by separating text-editor rendering from REPL presentation.
 
 ## Phase 0 — Baseline And Invariants
 
@@ -11,7 +11,16 @@ Split the code-panel UI into a generic text-panel renderer plus a REPL-specific 
   - Run `make test-stubs` and `make check-state-ownership`.
   - **Capture baseline snapshots** so logical regressions are catchable later:
     - `testdata/repl_examples_ui/*.golden.txt` is a **logical** fixture (one row per header/source line, no wrap geometry), not a pixel-accurate visual fixture — see the comment at `tests/test_repl_core_examples.c:1044-1048` that calls this out and points to "the visual code-panel dump tests" as the place wrapped-row rendering is checked. Re-running the example-fixture suite after each phase catches structural drift (row counts, source order, header/footer scaffolding) but **does not** catch glyph-level visual regressions (color shifts, alpha blending, kerning, wrap geometry).
-    - For real visual coverage, capture `--dump-code` outputs of representative scenes (wrapped lines, tutorial mid-fade, replay annotations, color swatches) to `/tmp/editor-demo-baseline/` and byte-diff after Phase 2 and Phase 3 land. The dump-code path exercises the wrap iterator and is the closest checkable proxy for the renderer's pixel output. Manual smoke testing (Test Plan below) covers what the dumps cannot.
+    - Current `--dump-code` output is useful as a source/export baseline, but it is still logical text: `sample.c` calls `glr_debug_dump_editor()`, which calls `repl_dump_code_panel_text()`, and that path does **not** exercise the wrap iterator. Capture those dumps for structural/source diffs if useful, but do not treat them as visual coverage.
+    - For a checkable wrapped-rendering proxy, expose
+      `repl_dump_code_panel_visual_text()` (already defined in
+      `src/repl/export.c:3445`, just not wired through `--dump-code`) via
+      a CLI flag such as `--dump-code-visual`, or add a UI-side test helper
+      that emits wrapped rows from `ui_text_panel_render` inputs. Capture
+      representative scenes (wrapped lines, tutorial mid-fade, replay
+      annotations, color swatches) to `/tmp/editor-demo-baseline/` and
+      byte-diff after Phase 2 and Phase 3 land. Manual smoke testing (Test
+      Plan below) covers what text dumps cannot.
 - Keep public app entrypoints stable:
   - `ui_panels_render_code_panel`
   - `ui_panels_hit_test`
@@ -37,10 +46,10 @@ Split the code-panel UI into a generic text-panel renderer plus a REPL-specific 
     - Plus: text pointer, file-line number, source line index, search row index, indent chars, colors, hit eligibility flags.
   - `UiTextPanelInput`: input text, length, cursor, anchor, ghost, hint, cursor-visible flag. `ghost` and `hint` are pre-resolved strings — the text panel treats them as opaque and does not interpret them. The full app populates both from REPL-side autocomplete (`editor_state_autocomplete()`); the editor demo does **not** need ghost/hint (no grammar to suggest from) and just sends empty strings, so the fields cost nothing in the demo path.
   - `UiTextPanelSearch`: active flag, query, query length, hit row/char. The adapter resolves the REPL-side source-line index to the snapshot's row index before populating `hit_row` (same shape as replay-row routing — REPL line indices are translated to text-panel row indices in the adapter).
-  - `UiTextPanelSnapshot`: viewport, panel rect, rows, row count, scroll, visible chrome flags, input/search/completion state.
-    - `rows` is a fixed inline array of `UI_TEXT_PANEL_ROW_CAP` (= 512) `UiTextPanelRow` entries.
+  - `UiTextPanelSnapshot`: viewport, panel rect, `const UiTextPanelRow *rows`, row count, scroll, visible chrome flags, input/search/completion state.
+    - `rows` is caller-owned storage valid for the render/hit-test call. Do **not** put a generic fixed `UI_TEXT_PANEL_ROW_CAP` in `text_panel.h`; the generic renderer should not bake in REPL document limits or a too-small visible-window assumption.
     - **Wrapping math is a generic-panel responsibility, not an adapter one.** Today `src/ui/panels.c:417` walks the *full* logical document while maintaining an absolute visual-row cursor — that's the math being moved into the generic panel in Phase 2. If the adapter pre-clips the row set, every subsequent caller has to reason about an offset between "snapshot row index" and "absolute visual row" — which means the wrapping calculation gets duplicated on both sides. Avoid that.
-    - **Contract: the adapter ships *logical* rows (one entry per source line / virtual / static / input row) covering the entire document; the generic panel does the wrap iteration and visible-row clipping itself, the same way the current `code_panel_draw_command_row` does.** The 512-row cap is therefore on logical rows, not visual rows. For the current document cap of 4096 commands, 512 is too small for a worst-case full document — bump `UI_TEXT_PANEL_ROW_CAP` to cover `MAX_COMMANDS + chrome` (header/footer/input/virtual rows), or have the snapshot grow to a heap-backed array sized from `repl_state_document_count()`. The inline 512 figure was sized for the visible-window assumption that this contract rejects.
+    - **Contract: the adapter ships *logical* rows (one entry per source line / virtual / static / input row) covering the entire document; the generic panel does the wrap iteration and visible-row clipping itself, the same way the current `code_panel_draw_command_row` does.** The REPL adapter sizes a temporary row array from live counts (`document_count + editor_virtual_lines->count + chrome/input rows`) or from the known upper bound (`MAX_COMMANDS` from `config.h` plus `MAX_VIRTUAL_LINES` from `src/ui/editor.h` plus chrome/input rows). The editor demo can use a much smaller caller-owned array because its fake document is small.
     - If profiling later shows a real per-frame cost in walking the full document, add an explicit `visible_row_first_absolute_idx` field on the snapshot so the renderer can resume the wrap walk from a known offset — but defer that until the cost is measured. Today the wrap walker is O(document_count × char_count) and that's not been a bottleneck.
   - `UiTextPanelOutput`: cursor pixel, cursor-valid, total rows, visible rows, **text-area rect + statusbar-slot rect** so the REPL adapter can overlay its status strip without recomputing layout (statusbar is REPL chrome — see Phase 3).
 - Add APIs:
@@ -164,6 +173,14 @@ Two ways to resolve this:
    pointers, well inside the tripwire. This is the same shape as the
    existing `repl_set_status_sink` / `repl_install_input_reset_sink` /
    `EditorServices` patterns the project already uses.
+
+   The chrome reach in `input.c` (`glr_camera_controls_reset`,
+   `glr_ctrl_router_*`, `glr_ctrl_sync_ui_chrome`, `glr_state_presentation*`)
+   needs its own seam — call it `EditorChromeServices` — extracted in the
+   same refactor so the demo doesn't accidentally pull in
+   `src/app/glr_ctrl.c`. The two seams are orthogonal: `EditorReplServices`
+   covers REPL-pipeline surface, `EditorChromeServices` covers
+   app-controller chrome. Both must land before Phase 5.
 2. **Raise the tripwire and accept the shim**. Treat 56-function shim as
    the price of the demo today and use the demo as the forcing function
    to motivate (1). The downside: the shim is no longer a small
@@ -194,8 +211,19 @@ audit — when each file's count drops below ~5, Phase 5 is ready to go.
     "extends the shim within reason" is only coherent for the four
     smaller files (sum: ~29). The two largest files have to come down
     first.
-  - Policy: **extend the shim within reason.** The shim is already an artifact of present coupling; growing it by a stub or two per file is fine. The tripwire numbers in this phase (~12-15 REPL functions / ~5-7 chrome functions) are the enforcement mechanism — when *either* gets uncomfortably close to its cap, that's the cue to pause and decouple at source rather than to keep stubbing.
-  - In particular: `state.c`'s one function (`repl_state_edit_line`) is cheap to shim and produces no churn anywhere else. The hard-line "must not" framing earlier in this plan was too strict for that case.
+  - Policy after the prerequisite refactor lands: **the shim is a small
+    dependency ledger, not a parallel implementation.** Once
+    `input.c`/`commit.c` route their REPL surface through
+    `EditorReplServices`, the shim only populates the table with no-op or
+    fake implementations — a handful of function pointers per file. Per-file
+    stub growth of one or two functions to make a TU linkable is fine; the
+    tripwires (~12-15 REPL functions / ~5-7 chrome functions) are quality
+    gates against regression. If a future change pushes the shim past either
+    cap, that's the cue to pause and decouple further at source rather than
+    keep stubbing.
+  - `state.c`'s one function (`repl_state_edit_line`) is cheap to shim and
+    produces no churn anywhere else — exactly the per-file stub-growth case
+    the policy above accepts.
   - Builds a `UiTextPanelSnapshot` directly from `EditorState` and fake document rows.
   - Applies `ReplInputDispatchEffects`: redraw, cursor, timer.
   - Calls `editor_handle_key`, `editor_handle_special`, mouse handlers, and wheel handler.
@@ -206,15 +234,29 @@ audit — when each file's count drops below ~5, Phase 5 is ready to go.
   - No-op source-scope, tutorial, replay, variable, color-picker, export, and dirty-state functions.
   - Registering an `EditorCompletionProvider` is **optional**, not required for safety: `editor_completion_update`, `editor_completion_update_selected_preview`, and `editor_completion_clear` in `src/editor/completion.c` all early-return when `g_provider == NULL`. The demo skips registration entirely — there's no grammar to suggest from, so ghost/hint stay empty and the Tab key path no-ops cleanly.
   - Status messages forward to `ui_state_status_set`.
-- Add `tools/editor_demo/app_chrome_shim.c` or, preferably, extract an `EditorChromeServices` seam before linking the demo:
-  - Today `src/editor/input.c` still reaches app/controller chrome directly: `glr_camera_controls_reset`, `glr_ctrl_router_reset_code_panel_drag`, `glr_ctrl_sync_ui_chrome`, and `glr_state_presentation*`.
-  - The demo must account for those hooks explicitly instead of accidentally pulling in `src/app/glr_ctrl.c`. A short-term shim can provide no-op camera/router reset plus local code-panel layout state; the cleaner implementation is a small editor-input service table with production bindings in the controller and demo bindings in `tools/editor_demo`.
-  - Keep this separate from `repl_shim.c` so the dependency ledger distinguishes text/REPL semantics from app chrome.
-- Shim-size tripwire: if `repl_shim.c` grows past ~12-15 functions, or the app/chrome shim grows past ~5-7 functions, treat that as a real coupling problem and pause to evaluate `editor/*` decoupling before continuing. The shims are meant to be small dependency ledgers, not sprawling parallel implementations.
+- Add `tools/editor_demo/app_chrome_shim.c` that populates the
+  `EditorChromeServices` table extracted in the prerequisite refactor:
+  - Today `src/editor/input.c` reaches app/controller chrome directly:
+    `glr_camera_controls_reset`, `glr_ctrl_router_reset_code_panel_drag`,
+    `glr_ctrl_sync_ui_chrome`, and `glr_state_presentation*`. The
+    prerequisite refactor routes those through `EditorChromeServices`.
+  - The demo binds the table to no-op camera/router reset plus local
+    code-panel layout state. Production bindings stay in the controller.
+  - Keep this separate from `repl_shim.c` so the dependency ledger
+    distinguishes text/REPL semantics (`EditorReplServices`) from app chrome
+    (`EditorChromeServices`).
+- Shim-size tripwire (regression gate, **not** entry budget): once the
+  prerequisite refactor lands and Phase 5 is in flight, `repl_shim.c` should
+  stay under ~12-15 functions and the chrome shim under ~5-7 functions.
+  Growth past those caps means a regression in the seam contract — pause and
+  re-evaluate before continuing. The shims are small dependency ledgers
+  against the two service tables, not sprawling parallel implementations.
 - Add `make editor_demo`.
   - `USE_GL_STUBS=1` verifies compile/link only.
   - Real GL build opens the editor demo window.
-- Code touched: `tools/editor_demo/*`, `src/editor/input.{c,h}` if an `EditorChromeServices` seam is extracted, `Makefile`.
+- Code touched: `tools/editor_demo/*`, `Makefile`. (`src/editor/input.{c,h}`
+  and `src/editor/commit.{c,h}` change in the prerequisite refactor, not in
+  Phase 5 itself.)
 
 ## Phase 6 — Guards And Documentation
 
@@ -253,8 +295,18 @@ audit — when each file's count drops below ~5, Phase 5 is ready to go.
 - `editor_demo` is a plain text editor proof, not a GL language editor.
 - `src/ui/panels.h` remains the stable public surface for the full app.
 - The fake REPL shim is intentionally demo-local and should not migrate into production code.
-- The shim is a **measurement device**, not a permanent architectural choice: it acknowledges current `src/editor/*` ↔ REPL coupling so the demo can link today. Extending it stub-by-stub is fine and expected — the tripwire (~12-15 REPL fns / ~5-7 chrome fns) is the budget. The long-term direction is splitting `src/editor/*` so the shim shrinks toward zero, but a small shim growth to make a file linkable is not a cardinal sin; it's the whole point of having a shim.
-- Further cleanup of `src/editor/input.c`, `src/editor/clipboard.c`, and `src/editor/undo.c` into generic document services is the real goal of this initiative; this demo is the scaffolding that makes the coupling visible and shrinkable.
+- The shim is a **dependency ledger against `EditorReplServices` /
+  `EditorChromeServices`**, not a parallel implementation. After the
+  prerequisite refactor lands, the shim's role is to populate those tables
+  with no-op or fake function pointers. The tripwires (~12-15 REPL fns /
+  ~5-7 chrome fns) are regression gates on that ledger, not a license to
+  grow it case-by-case from today's ~56-function entry-point state — that
+  state is what the prerequisite refactor is for.
+- Further cleanup of `src/editor/input.c`, `src/editor/clipboard.c`, and
+  `src/editor/undo.c` into generic document services is the long-term
+  direction. The seam extraction in the prerequisite refactor is the first
+  step; this demo is the scaffolding that makes the remaining coupling
+  visible and shrinkable.
 
 ## Landing Strategy
 
