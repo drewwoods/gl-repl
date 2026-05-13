@@ -3423,7 +3423,7 @@ void repl_dump_code_panel_text(FILE *out, SourceTextView text) {
 // I should probaby delete this and leave a note about how to re-apply the code panel's wrapping
 // logic if I need it again
 #if 0
-#include "editor/code_layout.h"
+#include "ui/text_layout.h"
 static void dump_code_panel_wrapped_line(FILE *dst, const char *text,
                                          int first_x, int panel_w,
                                          int wrap_at_comma) {

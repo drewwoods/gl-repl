@@ -2,7 +2,7 @@
 #include "ui/gl_2d.h"
 #include "editor/clipboard.h"
 #include "editor/code_panel_document.h"
-#include "editor/code_layout.h"
+#include "ui/text_layout.h"
 #include "editor/commit.h"
 #include "editor/help_session.h"
 #include "editor/inline_rename.h"
