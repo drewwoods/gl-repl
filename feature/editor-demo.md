@@ -123,7 +123,19 @@ Split the code-panel UI into a generic text-panel renderer plus a REPL-specific 
 
 - Add `tools/editor_demo/editor_demo.c`.
   - GLUT window setup and callback registration.
-  - Links `src/editor/state.c` directly and uses the same global `EditorState` the full app uses — no parallel state instance. The constraint is: `src/editor/state.c` itself **must not** transitively pull in real REPL logic (parser, executor, flatten, etc.) when linked into the demo. If linking the demo today requires REPL symbols that aren't backstopped by a shim, treat that as a coupling bug in `src/editor/*` and fix at source rather than expanding the shim.
+  - Links `src/editor/state.c` directly and uses the same global `EditorState` the full app uses — no parallel state instance.
+  - REPL-symbol surface of each `src/editor/*.c` file (measured 2026-05-13):
+
+    | File | REPL functions called | Shim cost |
+    |------|----------------------|-----------|
+    | `state.c` | 1 (`repl_state_edit_line`) | Trivial — one-line stub returning a local int. Just shim it. |
+    | `code_panel_document.c` | ~8 (state, source_scope, export) | Small. Most are already pure queries (export getters are no-side-effect). Shim them. |
+    | `clipboard.c` | ~10 (command_store, source_scope, status) | Moderate. The command_store mutators are where work happens; mostly no-ops in the demo. |
+    | `undo.c` | ~10 (command_store, func_alias, eval, promote_example) | Moderate. `repl_promote_example_if_needed` is the only REPL-semantics call; no-op in the demo. |
+    | `input.c` | 23 (parse + compile + command_store + status) | Larger. This is where the "is the editor really decoupled" question lives. |
+    | `commit.c` | 33 (compile / apply / func_alias / eval / source_scope) | Largest. Genuine REPL pipeline use — the right place to push real decoupling work into a follow-up. |
+  - Policy: **extend the shim within reason.** The shim is already an artifact of present coupling; growing it by a stub or two per file is fine. The tripwire numbers in this phase (~12-15 REPL functions / ~5-7 chrome functions) are the enforcement mechanism — when *either* gets uncomfortably close to its cap, that's the cue to pause and decouple at source rather than to keep stubbing.
+  - In particular: `state.c`'s one function (`repl_state_edit_line`) is cheap to shim and produces no churn anywhere else. The hard-line "must not" framing earlier in this plan was too strict for that case.
   - Builds a `UiTextPanelSnapshot` directly from `EditorState` and fake document rows.
   - Applies `ReplInputDispatchEffects`: redraw, cursor, timer.
   - Calls `editor_handle_key`, `editor_handle_special`, mouse handlers, and wheel handler.
@@ -181,8 +193,8 @@ Split the code-panel UI into a generic text-panel renderer plus a REPL-specific 
 - `editor_demo` is a plain text editor proof, not a GL language editor.
 - `src/ui/panels.h` remains the stable public surface for the full app.
 - The fake REPL shim is intentionally demo-local and should not migrate into production code.
-- The shim is a **compromise**, not a permanent architectural choice: it acknowledges current `src/editor/*` ↔ REPL coupling so the demo can link today. The long-term direction is splitting `src/editor/*` so it no longer pulls in REPL grammar/pipeline symbols — at which point the shim shrinks toward zero. Keep the shim lightweight (see the tripwire in Phase 5) so its size visibly tracks the real coupling debt.
-- Further cleanup of `src/editor/input.c`, `src/editor/clipboard.c`, and `src/editor/undo.c` into generic document services is deferred — but that cleanup is the *real* goal; this demo is the scaffolding that makes the coupling measurable.
+- The shim is a **measurement device**, not a permanent architectural choice: it acknowledges current `src/editor/*` ↔ REPL coupling so the demo can link today. Extending it stub-by-stub is fine and expected — the tripwire (~12-15 REPL fns / ~5-7 chrome fns) is the budget. The long-term direction is splitting `src/editor/*` so the shim shrinks toward zero, but a small shim growth to make a file linkable is not a cardinal sin; it's the whole point of having a shim.
+- Further cleanup of `src/editor/input.c`, `src/editor/clipboard.c`, and `src/editor/undo.c` into generic document services is the real goal of this initiative; this demo is the scaffolding that makes the coupling visible and shrinkable.
 
 ## Landing Strategy
 
