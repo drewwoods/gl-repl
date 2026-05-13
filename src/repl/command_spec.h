@@ -94,12 +94,19 @@ typedef enum {
 /* Metadata for control structures and command-type properties. Describes whether
  * a command type needs a trailing semicolon (e.g., float decl, assignment) and
  * whether it needs block-based indentation (for, func, if blocks). The category
- * field drives the code-panel renderer's syntax highlighting. */
+ * field drives the code-panel renderer's syntax highlighting.
+ *
+ * valid_in_begin: 1 if the command may appear between glBegin and glEnd. 0 marks
+ * commands real GL would reject with GL_INVALID_OPERATION inside a begin block
+ * (glPointSize, glRasterPos3f, GLUT solids, nested glBegin, etc.); the parser
+ * rejects them at commit time so the executor doesn't have to defensively close
+ * the active begin block. */
 typedef struct {
     const char *name;
     int needs_semicolon;
     int needs_block_indent;
     CmdSyntaxCategory category;
+    int valid_in_begin;
 } ReplCommandTypeSpec;
 
 /* Metadata for GL commands with enumerated arguments. Specifies the command name,
@@ -158,6 +165,12 @@ int repl_cmd_type_needs_block_indent(CmdType type);
  * code-panel renderer to pick the row color. Returns CMD_CAT_DEFAULT
  * for out-of-range types. */
 CmdSyntaxCategory repl_cmd_type_category(CmdType type);
+
+/* 1 if the command may appear between glBegin and glEnd, 0 otherwise.
+ * The parser uses this to reject illegal-in-begin commands at commit time
+ * (e.g. glPointSize, glRasterPos3f, GLUT solids, nested glBegin). Out-of-
+ * range / missing types default to 1 so unknown commands aren't blocked. */
+int repl_cmd_type_valid_in_begin(CmdType type);
 
 /* Query the full array of enum-backed GL command specs (glBegin, glEnable,
  * glShadeModel, etc.). Terminated by an entry with a null name. Used by the

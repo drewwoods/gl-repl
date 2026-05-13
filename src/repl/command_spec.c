@@ -311,10 +311,16 @@ static const ReplStdCommandSpec k_std_command_specs[] = {
 };
 
 #define CMD_TYPE_SPEC(type_, semicolon_, block_indent_, category_) \
-    [type_] = { #type_, (semicolon_), (block_indent_), (category_) }
+    [type_] = { #type_, (semicolon_), (block_indent_), (category_), 1 }
+
+/* Same as CMD_TYPE_SPEC but marks the command as illegal inside a glBegin
+ * block. The parser rejects these at commit time; the executor no longer
+ * defensively auto-closes the begin block for them. */
+#define CMD_TYPE_SPEC_NOT_IN_BEGIN(type_, semicolon_, block_indent_, category_) \
+    [type_] = { #type_, (semicolon_), (block_indent_), (category_), 0 }
 
 static const ReplCommandTypeSpec g_command_type_specs[CMD_TYPE_COUNT] = {
-    CMD_TYPE_SPEC(CMD_BEGIN,                1, 1, CMD_CAT_PRIMITIVE),
+    CMD_TYPE_SPEC_NOT_IN_BEGIN(CMD_BEGIN,   1, 1, CMD_CAT_PRIMITIVE),
     CMD_TYPE_SPEC(CMD_END,                  1, 1, CMD_CAT_PRIMITIVE),
     CMD_TYPE_SPEC(CMD_VERTEX3F,             1, 1, CMD_CAT_VERTEX),
     CMD_TYPE_SPEC(CMD_VERTEX2F,             1, 1, CMD_CAT_VERTEX),
@@ -347,26 +353,26 @@ static const ReplCommandTypeSpec g_command_type_specs[CMD_TYPE_COUNT] = {
     CMD_TYPE_SPEC(CMD_VAR_DECLARE,          0, 0, CMD_CAT_VARIABLE),
     CMD_TYPE_SPEC(CMD_GOTO_LABEL,                0, 0, CMD_CAT_LABEL),
     CMD_TYPE_SPEC(CMD_GOTO,                 1, 0, CMD_CAT_LABEL),
-    CMD_TYPE_SPEC(CMD_GLUT_TORUS,           1, 1, CMD_CAT_GLUT_SHAPE),
-    CMD_TYPE_SPEC(CMD_GLUT_CUBE,            1, 1, CMD_CAT_GLUT_SHAPE),
-    CMD_TYPE_SPEC(CMD_GLUT_SPHERE,          1, 1, CMD_CAT_GLUT_SHAPE),
-    CMD_TYPE_SPEC(CMD_GLUT_TEAPOT,          1, 1, CMD_CAT_GLUT_SHAPE),
-    CMD_TYPE_SPEC(CMD_GLUT_CONE,            1, 1, CMD_CAT_GLUT_SHAPE),
-    CMD_TYPE_SPEC(CMD_TESS_BEGIN_POLYGON,   1, 1, CMD_CAT_TESS_BLOCK),
+    CMD_TYPE_SPEC_NOT_IN_BEGIN(CMD_GLUT_TORUS,    1, 1, CMD_CAT_GLUT_SHAPE),
+    CMD_TYPE_SPEC_NOT_IN_BEGIN(CMD_GLUT_CUBE,     1, 1, CMD_CAT_GLUT_SHAPE),
+    CMD_TYPE_SPEC_NOT_IN_BEGIN(CMD_GLUT_SPHERE,   1, 1, CMD_CAT_GLUT_SHAPE),
+    CMD_TYPE_SPEC_NOT_IN_BEGIN(CMD_GLUT_TEAPOT,   1, 1, CMD_CAT_GLUT_SHAPE),
+    CMD_TYPE_SPEC_NOT_IN_BEGIN(CMD_GLUT_CONE,     1, 1, CMD_CAT_GLUT_SHAPE),
+    CMD_TYPE_SPEC_NOT_IN_BEGIN(CMD_TESS_BEGIN_POLYGON, 1, 1, CMD_CAT_TESS_BLOCK),
     CMD_TYPE_SPEC(CMD_TESS_BEGIN_CONTOUR,   1, 1, CMD_CAT_TESS_BLOCK),
     CMD_TYPE_SPEC(CMD_TESS_END,             1, 1, CMD_CAT_TESS_BLOCK),
     CMD_TYPE_SPEC(CMD_TESS_NORMAL,          1, 1, CMD_CAT_NORMAL),
     CMD_TYPE_SPEC(CMD_TESS_COLOR,           1, 1, CMD_CAT_COLOR),
     CMD_TYPE_SPEC(CMD_TESS_VERTEX,          1, 1, CMD_CAT_VERTEX),
     CMD_TYPE_SPEC(CMD_MATERIALF,            1, 1, CMD_CAT_COLOR),
-    CMD_TYPE_SPEC(CMD_POINT_SIZE,           1, 1, CMD_CAT_STATE),
-    CMD_TYPE_SPEC(CMD_LINE_WIDTH,           1, 1, CMD_CAT_STATE),
-    CMD_TYPE_SPEC(CMD_POINT_PARAMETER_FV,   1, 1, CMD_CAT_STATE),
-    CMD_TYPE_SPEC(CMD_BLEND_FUNC,           1, 1, CMD_CAT_STATE),
-    CMD_TYPE_SPEC(CMD_CLEAR_COLOR,          1, 1, CMD_CAT_COLOR),
-    CMD_TYPE_SPEC(CMD_DEPTH_MASK,           1, 1, CMD_CAT_STATE),
-    CMD_TYPE_SPEC(CMD_RASTER_POS3F,         1, 1, CMD_CAT_STATE),
-    CMD_TYPE_SPEC(CMD_LABEL,   1, 1, CMD_CAT_GLUT_SHAPE),
+    CMD_TYPE_SPEC_NOT_IN_BEGIN(CMD_POINT_SIZE,         1, 1, CMD_CAT_STATE),
+    CMD_TYPE_SPEC_NOT_IN_BEGIN(CMD_LINE_WIDTH,         1, 1, CMD_CAT_STATE),
+    CMD_TYPE_SPEC_NOT_IN_BEGIN(CMD_POINT_PARAMETER_FV, 1, 1, CMD_CAT_STATE),
+    CMD_TYPE_SPEC_NOT_IN_BEGIN(CMD_BLEND_FUNC,         1, 1, CMD_CAT_STATE),
+    CMD_TYPE_SPEC_NOT_IN_BEGIN(CMD_CLEAR_COLOR,        1, 1, CMD_CAT_COLOR),
+    CMD_TYPE_SPEC_NOT_IN_BEGIN(CMD_DEPTH_MASK,         1, 1, CMD_CAT_STATE),
+    CMD_TYPE_SPEC_NOT_IN_BEGIN(CMD_RASTER_POS3F,       1, 1, CMD_CAT_STATE),
+    CMD_TYPE_SPEC_NOT_IN_BEGIN(CMD_LABEL,              1, 1, CMD_CAT_GLUT_SHAPE),
 };
 
 const ReplCommandTypeSpec *repl_command_type_spec(CmdType type) {
@@ -395,6 +401,11 @@ int repl_cmd_type_needs_block_indent(CmdType type) {
 CmdSyntaxCategory repl_cmd_type_category(CmdType type) {
     const ReplCommandTypeSpec *spec = repl_command_type_spec(type);
     return spec ? spec->category : CMD_CAT_DEFAULT;
+}
+
+int repl_cmd_type_valid_in_begin(CmdType type) {
+    const ReplCommandTypeSpec *spec = repl_command_type_spec(type);
+    return spec ? spec->valid_in_begin : 1;
 }
 
 const ReplEnumCommandSpec *repl_enum_command_specs(void) {
