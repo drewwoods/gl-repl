@@ -167,6 +167,29 @@ static void test_wrap_and_hit_are_panel_local(void) {
     ASSERT_INT_EQ("nonzero cp_x hit char index", hit.char_idx, 2);
 }
 
+static void test_virtual_row_keeps_hit_target_out_of_generic_hit(void) {
+    UiTextPanelRow row = {
+        .text = "virtual row",
+        .kind = UI_TEXT_PANEL_ROW_VIRTUAL,
+        .left_gutter_label = 7,
+        .source_line_idx = -1,
+        .hit_target_line_idx = 5,
+        .hit_eligible = 1,
+        .color = { 1.0f, 1.0f, 1.0f, 1.0f, 0 },
+    };
+    UiTextPanelSnapshot snap = make_snapshot(&row, 1, 0, 0, 220, 140, 0);
+    UiHit hit;
+
+    hit = ui_text_panel_hit_test(&snap,
+                                 snap.cp_x + snap.text_x + 2 * FONT_W,
+                                 my_for_visual_row(&snap, 0));
+    ASSERT_INT_EQ("virtual row hit kind", hit.kind, UI_HIT_CODE_TEXT);
+    ASSERT_INT_EQ("virtual row keeps line_idx unresolved in generic hit",
+                  hit.line_idx, -1);
+    ASSERT_INT_EQ("virtual row keeps cmd_idx", hit.cmd_idx, 0);
+    ASSERT_INT_EQ("virtual row char index still computed", hit.char_idx, 2);
+}
+
 static void test_alpha_text_enables_blending(void) {
     UiTextPanelRow row = {
         .text = "alpha row",
@@ -254,6 +277,7 @@ int main(void) {
 
     test_visible_rows_respect_statusbar_flag();
     test_wrap_and_hit_are_panel_local();
+    test_virtual_row_keeps_hit_target_out_of_generic_hit();
     test_alpha_text_enables_blending();
     test_color_segments_enable_blending();
 
