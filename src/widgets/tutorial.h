@@ -14,6 +14,8 @@ int                  tutorial_handle_commit_attempt(const char *input,
                                                     TutorialMatchResult *out);
 void                 tutorial_advance_after_successful_commit(void);
 const char          *tutorial_current_expected_text(void);
+int                  tutorial_step_fade_front(int line_idx, int line_len,
+                                              float now);
 float                tutorial_step_fade_alpha(int line_idx, int char_idx,
                                               int line_len, float now);
 int                  tutorial_line_is_fading(int line_idx, float now);

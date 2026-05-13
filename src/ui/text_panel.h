@@ -80,9 +80,22 @@ typedef enum {
  * color swatch) own that region test and may rewrite the result to a
  * feature-specific UiHitKind. */
 typedef struct {
-    int   active;        /* non-zero if a decoration is present on this row */
-    float r, g, b;       /* decoration fill color */
+    int              active;      /* non-zero if a decoration is present */
+    UiTextPanelColor color;       /* decoration fill color */
+    int              emphasized;  /* draw an extra outer outline */
 } UiTextPanelRightAction;
+
+/* Optional per-character color overrides for a row. The adapter may fill a
+ * small ordered list of spans when a row needs color variation across its
+ * text (for example tutorial fade). Any gaps fall back to UiTextPanelRow.color.
+ */
+#define UI_TEXT_PANEL_MAX_COLOR_SEGMENTS 4
+
+typedef struct {
+    int              char_start;
+    int              char_count;
+    UiTextPanelColor color;
+} UiTextPanelColorSegment;
 
 /* -------------------------------------------------------------------------
  * Row descriptor
@@ -118,7 +131,14 @@ typedef struct {
  *                      UiTextPanelSearch.hit_row for match highlighting.
  *   indent_chars     - Leading indentation in character widths; the renderer
  *                      adds this as additional first_x offset.
+ *   background_color - Optional full-row background fill, drawn behind text
+ *                      and search highlights.
+ *   left_marker_color - Optional narrow accent strip on the panel's left
+ *                      edge, repeated on every wrap row.
  *   color            - Text fill color for this row.
+ *   color_segments   - Optional ordered per-character color spans. When
+ *                      color_segment_count == 0 the renderer uses color for
+ *                      the whole row. Gaps fall back to color.
  *   hit_eligible     - Non-zero if mouse clicks on this row should generate
  *                      a code-panel hit (UI_HIT_CODE_TEXT etc.). Static
  *                      chrome rows typically set this to 0.
@@ -133,7 +153,13 @@ typedef struct {
     int                   hit_target_line_idx;
     int                   search_row_idx;
     int                   indent_chars;
+    UiTextPanelColor      background_color;
+    int                   background_active;
+    UiTextPanelColor      left_marker_color;
+    int                   left_marker_active;
     UiTextPanelColor      color;
+    UiTextPanelColorSegment color_segments[UI_TEXT_PANEL_MAX_COLOR_SEGMENTS];
+    int                   color_segment_count;
     int                   hit_eligible;
 } UiTextPanelRow;
 

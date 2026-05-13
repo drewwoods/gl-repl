@@ -50,15 +50,18 @@ typedef enum {
  *     line_idx = committed source-cmd row the click landed on
  *     char_idx = input-cursor target (column within input buffer)
  *     visual_row = wrap-row offset within line_idx
+ *     cmd_idx = logical text-panel row index (adapter-private lookup key)
  *
  *   UI_HIT_CODE_INSERT_LINE
  *     line_idx = current edit_line (the row appended commands land on)
  *     char_idx = input-cursor target
  *     visual_row = wrap-row offset
+ *     cmd_idx = logical text-panel row index
  *
  *   UI_HIT_CODE_GUTTER
  *     line_idx = committed source-cmd row
  *     visual_row = wrap-row offset
+ *     cmd_idx = logical text-panel row index
  *
  *   UI_HIT_PANEL_DIVIDER  — coordinates only, no line / row payload
  *

@@ -232,6 +232,34 @@ const char *tutorial_current_expected_text(void) {
     return repl_tutorial_step_expected(state.tutorial_idx, state.step);
 }
 
+int tutorial_step_fade_front(int line_idx, int line_len, float now) {
+    TutorialRuntimeState state = tutorial_state_view();
+    int safe_len;
+    float per_char_window;
+    float elapsed;
+
+    if (!state.active || line_idx != state.fade_line_idx)
+        return -1;
+    if (now >= state.fade_start_t + state.fade_duration)
+        return -1;
+
+    safe_len = line_len > 0 ? line_len : 1;
+    per_char_window = state.fade_duration / (float)safe_len;
+    if (per_char_window <= 0.0f)
+        return -1;
+
+    elapsed = now - state.fade_start_t;
+    if (elapsed <= 0.0f)
+        return 0;
+
+    int front = (int)(elapsed / per_char_window);
+    if (front < 0)
+        front = 0;
+    if (front >= safe_len)
+        return -1;
+    return front;
+}
+
 float tutorial_step_fade_alpha(int line_idx, int char_idx, int line_len, float now) {
     TutorialRuntimeState state = tutorial_state_view();
     int safe_len;

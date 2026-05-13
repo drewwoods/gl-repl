@@ -147,8 +147,8 @@ Test sources live under `tests/` and shared test-only helpers live under
 | `outline_offset.h` | Polygon-offset depth-bias constants for the outline-pass rendering |
 | `src/ui/text_layout.c` | Pure code-panel wrapping, row counts, segment lookup, cursor-row mapping |
 | `src/ui/text_layout.h` | `CodeLayout` / `CodeWrapIter` API shared by UI, export dumps, tests |
-| `src/editor/code_panel_document.c` | Code-panel document row model, scroll-follow calculation, hit-test targets |
-| `src/editor/code_panel_document.h` | `CodePanelDocumentLayout` API consumed by UI and scrolling tests |
+| `src/ui/repl_code_panel.c` | REPL-specific code-panel adapter: row building, scroll-follow layout, render/hit bridging |
+| `src/ui/repl_code_panel.h` | `UiReplCodePanelLayout` plus REPL adapter render/hit/layout entrypoints |
 | `src/repl/executor.c` | Narrow live-GL dispatch: walks the flat command array emitting OpenGL calls |
 | `src/repl/executor.h` | Executor public API (`repl_execute_program`, transform helpers) |
 | `src/repl/flatten.c` | Source-to-flat program builder: unrolls loops, inlines functions, resolves if-blocks |

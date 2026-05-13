@@ -19,7 +19,7 @@
 #include "ui/panels.h"
 #include "ui/snapshot.h"
 #include "ui/layout.h"
-#include "editor/code_panel_document.h"
+#include "ui/repl_code_panel.h"
 #include "widgets/variable_panel_state.h"
 #include "widgets/variable_panel_drag.h"
 #include "widgets/tutorial.h"
@@ -685,8 +685,8 @@ static void code_panel_first_row_text_click(int *out_mx, int *out_my) {
     int linenum_w = 4 * FONT_W;
     int idx_col_w = glr_state_presentation().show_vertex_indices ? (6 * FONT_W) : 0;
     int text_x = CODE_MARGIN_X + linenum_w + FONT_W + idx_col_w;
-    CodePanelDocumentLayout layout;
-    editor_code_panel_document_build(&layout, cp_w, text_x, cp_h);
+    UiReplCodePanelLayout layout;
+    ui_repl_code_panel_build_layout(&layout, cp_w, text_x, cp_h);
 
     /* Scroll past the header so vis=0 maps to a resolvable doc row. */
     editor_scroll_set(layout.header_rows);

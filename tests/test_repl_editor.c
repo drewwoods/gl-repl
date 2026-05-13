@@ -1,7 +1,7 @@
 #define _DEFAULT_SOURCE  /* mkdtemp() */
 #include "ui/gl_2d.h"
 #include "editor/clipboard.h"
-#include "editor/code_panel_document.h"
+#include "ui/repl_code_panel.h"
 #include "ui/text_layout.h"
 #include "editor/commit.h"
 #include "editor/help_session.h"
@@ -1071,7 +1071,7 @@ int main() {
         editor_navigate_to_line(2);
 
         ASSERT_INT("blank line edit uses scope indent",
-                   editor_code_panel_document_active_indent_chars(),
+                   ui_repl_code_panel_active_indent_chars(),
                    repl_source_scope_cmd_indent_chars(2));
     }
 
