@@ -1630,6 +1630,11 @@ static void write_canonical_cmd_as_c(FILE *f, const GLCmd *cmd, int cmd_idx,
         {
             const char *p = source_text;
             while (*p && isspace((unsigned char)*p)) p++;
+            /* Optional canonical `static ` prefix. */
+            if (strncmp(p, "static", 6) == 0 && isspace((unsigned char)p[6])) {
+                p += 6;
+                while (*p && isspace((unsigned char)*p)) p++;
+            }
             if (strncmp(p, "float", 5) == 0 &&
                 (p[5] == ' ' || p[5] == '\t')) {
                 p += 5;
@@ -1980,6 +1985,11 @@ static void write_tess_preamble(FILE *f) {
 static int import_parse_predef_decl(const char *line) {
     const char *p = line;
     while (*p && isspace((unsigned char)*p)) p++;
+    /* Optional canonical `static ` prefix (see format_decl_text). */
+    if (strncmp(p, "static", 6) == 0 && isspace((unsigned char)p[6])) {
+        p += 6;
+        while (*p && isspace((unsigned char)*p)) p++;
+    }
     if (strncmp(p, "float ", 6) != 0) return 0;
     p += 6;
 
@@ -2058,7 +2068,10 @@ static int import_parse_declare_marker(const char *line, int *loaded,
      * initializer through the round-trip so the canonical decl text matches
      * the original source byte-for-byte. */
     char decl_line[MAX_LINE_LEN];
-    int off = snprintf(decl_line, sizeof(decl_line), "  float");
+    /* Canonical form matches format_decl_text: `  static float ...`.
+     * The exporter writes file-scope `static float` lines anyway, so
+     * the keyword here reinforces that lifetime in the code panel. */
+    int off = snprintf(decl_line, sizeof(decl_line), "  static float");
     while (*p) {
         while (*p && isspace((unsigned char)*p)) p++;
         if (!*p) break;

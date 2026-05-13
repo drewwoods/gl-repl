@@ -318,7 +318,7 @@ static const char *const g_example_tess[] = {
 
 /* Example 9: GLU tessellator - concave arrow polygon cutout */
 static const char *const g_example_tess_cutout[] = {
-    "float z;",
+    "static float z;",
     "glClearColor(0.1, 0.1, 0.1, 1.0);",
     "glEnable(GL_DEPTH_TEST);",
     "glEnable(GL_LIGHTING);",
@@ -445,7 +445,7 @@ static const char *const g_example_tess_cutout[] = {
  * top-level only, not replay-safe, and not suitable for variable-driven
  * geometry loops. Keep coverage in tests/docs instead of F12 examples. */
 static const char *const g_example_assign_2d[] = {
-    "float x, y;",
+    "static float x, y;",
     "glClearColor(0.1, 0.1, 0.1, 1.0);",
     "// 2D assignment sketch: tests runtime variable assignment without goto",
     "glDisable(GL_LIGHTING);",
@@ -463,7 +463,7 @@ static const char *const g_example_assign_2d[] = {
 
 /* Example 11: Stateless particle field using deterministic rand(seed, iter) */
 static const char *const g_example_particles_stateless[] = {
-    "float n, x, y, z, j, k;",
+    "static float n, x, y, z, j, k;",
     "glClearColor(0.1, 0.1, 0.1, 1.0);",
     "// Stateless particle field: deterministic rand(seed, iter)",
     "glDisable(GL_LIGHTING);",
@@ -491,7 +491,7 @@ static const char *const g_example_particles_stateless[] = {
 static const char *const g_example_glow_particles[] = {
     "// @cfg vertex_outlines = 0",
     "// @cfg vertex_points = 0",
-    "float n, x, y, z, j, k;",
+    "static float n, x, y, z, j, k;",
     "glClearColor(0.1, 0.1, 0.1, 1.0);",
     "// Glow sprites: additive blend + distance-attenuated point size",
     "glDisable(GL_LIGHTING);",
@@ -527,7 +527,7 @@ static const char *const g_example_glow_particles[] = {
  * smooth-shaded. */
 
 static const char *const g_example_random_surface[] = {
-  "float n, i, j, k;",
+  "static float n, i, j, k;",
     "glClearColor(0.1, 0.1, 0.1, 1.0);",
   "glEnable(GL_DEPTH_TEST);",
   "glEnable(GL_LIGHTING);",
@@ -574,7 +574,7 @@ static const char *const g_example_random_surface[] = {
 
 static const char *const g_example_waves[] = {
     "// @cfg vertex_points = 0",
-    "float n, b, x, y, z, a;",
+    "static float n, b, x, y, z, a;",
     "glClearColor(0.1, 0.1, 0.1, 1.0);",
     "// Waves: nested for-loops + math",
     "glEnable(GL_DEPTH_TEST);",
@@ -619,7 +619,7 @@ static const char *const g_example_spirograph_curve[] = {
     "glRotatef(0.0f, 1.0f, 0.0f, 0.0f);",
     "glRotatef(0.0f, 0.0f, 1.0f, 0.0f);",
     "glTranslatef(0.0f, -0.25f, 0.0f);",
-    "float dist, n, x, y, ang;",
+    "static float dist, n, x, y, ang;",
     "glClearColor(0.1, 0.1, 0.1, 1.0);",
     "dist = 1.4;",
     "n = 400;",
@@ -645,7 +645,7 @@ static const char *const g_example_traveling_ripple_ring[] = {
     "glRotatef(0.0f, 0.0f, 1.0f, 0.0f);",
     "glTranslatef(0.0f, -0.15f, 0.0f);",
     "// Traveling ripple ring: nested for + fmod + conditional deformation",
-    "float ripplephase, ripplewidth, rippledelta, rippleamp, x, y;",
+    "static float ripplephase, ripplewidth, rippledelta, rippleamp, x, y;",
     "glClearColor(0.1, 0.1, 0.1, 1.0);",
     "rippleamp = 0.1 * sin(t * TAU);",
     "ripplephase = fmod(t / 3, TAU);",
@@ -680,11 +680,11 @@ static const char *const g_example_bezier[] = {
     "glRotatef(0.0f, 1.0f, 0.0f, 0.0f);",
     "glRotatef(0.0f, 0.0f, 1.0f, 0.0f);",
     "glTranslatef(0.0f, 0.0f, 0.0f);",
-    "float x, y, x0, y0, x1 = 1, y1 = 1, x2 = 2, y2;",
-    "float period = 5;",
-    "float x_a, x_b, y_a, y_b;",
+    "static float x, y, x0, y0, x1 = 1, y1 = 1, x2 = 2, y2;",
+    "static float period = 5;",
+    "static float x_a, x_b, y_a, y_b;",
     "// current progress",
-    "float t0;",
+    "static float t0;",
     "func0(x0, y0, x1, y1, x2, y2, u) {",
     "  x = pow(1-u, 2) * x0 + 2 * (1-u)*u * x1 + u*u * x2;",
     "  y = pow(1-u, 2) * y0 + 2 * (1-u)*u * y1 + u*u * y2;",
@@ -753,12 +753,12 @@ static const char *const g_example_snowfall[] = {
     "glRotatef(0.0f, 1.0f, 0.0f, 0.0f);",
     "glRotatef(0.0f, 0.0f, 1.0f, 0.0f);",
     "glTranslatef(0.0f, 0.0f, 0.0f);",
-    "float x, y;",
-    "float xVel, yVel;",
-    "float zColProp;",
-    "float xVelMax = 0.5;",
-    "float g = -1.5;",
-    "float xMax = 12, yMax = 5, zMax = 10;",
+    "static float x, y;",
+    "static float xVel, yVel;",
+    "static float zColProp;",
+    "static float xVelMax = 0.5;",
+    "static float g = -1.5;",
+    "static float xMax = 12, yMax = 5, zMax = 10;",
     "glClearColor(0.05, 0.05, 0.05, 1);",
     "glEnable(GL_DEPTH_TEST);",
     "glPointSize(10);",
@@ -793,7 +793,7 @@ static const char *const g_example_stress[] = {
     "glRotatef(27.5f, 1.0f, 0.0f, 0.0f);",
     "glRotatef(-24.0f, 0.0f, 1.0f, 0.0f);",
     "glTranslatef(-0.6f, -0.1f, -0.4f);",
-    "float n, x, y, z, k;",
+    "static float n, x, y, z, k;",
     "glClearColor(0.1, 0.1, 0.1, 1.0);",
     "// ===== Stress-test scene: parser + code UI torture =====",
     "glEnable(GL_DEPTH_TEST);",
@@ -1066,7 +1066,7 @@ static const char *const g_example_scratch_casteljau[] = {
     "glEnable(GL_DEPTH_TEST);",
     "glDisable(GL_LIGHTING);",
     "glLineWidth(3);",
-    "float u;",
+    "static float u;",
     "// func0(dst, lo, hi, blend): collapse one Bezier edge in place.",
     "func0(dst, lo, hi, blend) {",
         "A[dst] = A[lo] + (A[hi] - A[lo])*blend;",
@@ -1143,7 +1143,7 @@ static const char *const g_example_annotated_orbit_plot[] = {
     "glRotatef(0.0f, 1.0f, 0.0f, 0.0f);",
     "glRotatef(0.0f, 0.0f, 1.0f, 0.0f);",
     "glTranslatef(0.0f, 0.0f, 0.0f);",
-    "float n, r, x, y, phase, sample;",
+    "static float n, r, x, y, phase, sample;",
     "glClearColor(0.06, 0.07, 0.09, 1);",
     "glDisable(GL_LIGHTING);",
     "glDisable(GL_DEPTH_TEST);",

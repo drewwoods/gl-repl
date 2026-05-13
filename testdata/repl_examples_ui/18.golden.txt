@@ -29,12 +29,12 @@ void display() {
   glTranslatef(0.0000f, 0.0000f, 0.0000f);
 --- header_post ---
 --- source ---
-  float x, y;
-  float xVel, yVel;
-  float zColProp;
-  float xVelMax = 0.5;
-  float g = -1.5;
-  float xMax = 12, yMax = 5, zMax = 10;
+  static float x, y;
+  static float xVel, yVel;
+  static float zColProp;
+  static float xVelMax = 0.5;
+  static float g = -1.5;
+  static float xMax = 12, yMax = 5, zMax = 10;
   glClearColor(0.05, 0.05, 0.05, 1);
   glEnable(GL_DEPTH_TEST);
   glPointSize(10);

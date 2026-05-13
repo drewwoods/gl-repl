@@ -217,7 +217,7 @@ static void test_compile_apply_updates_both(void) {
     ASSERT_TRUE("post-apply predef registered",
                 repl_eval_find_predef_var_idx("energy") >= 0);
     ASSERT_STR("post-apply buffer line text",
-               editor_buffer_line(0), "  float energy;");
+               editor_buffer_line(0), "  static float energy;");
 }
 
 /* Var-assign compile + apply updates the predef value alongside the
@@ -300,7 +300,7 @@ static void test_capacity_failure_is_atomic(void) {
     strncpy(change.cmds[0].var_names[0], "ghost",
             sizeof(change.cmds[0].var_names[0]) - 1);
     change.cmds[0].var_names[0][sizeof(change.cmds[0].var_names[0]) - 1] = '\0';
-    strncpy(change.text[0], "  float ghost;", sizeof(change.text[0]) - 1);
+    strncpy(change.text[0], "  static float ghost;", sizeof(change.text[0]) - 1);
     change.text[0][sizeof(change.text[0]) - 1] = '\0';
     /* Add a predef-op that, if replayed, would register a new
      * predef and grow num_predef_vars by 1. */
@@ -445,12 +445,12 @@ static void test_set_predef_value_rewrites_declaration_initializer(void) {
     ASSERT_INT("set_predef decl replace kind", change.kind,
                REPL_COMPILED_REPLACE_ONE);
     ASSERT_STR("set_predef decl text",
-               change.text[0], "  float a = 1, x = 2.5, y; // vars");
+               change.text[0], "  static float a = 1, x = 2.5, y; // vars");
 
     ASSERT_INT("set_predef decl apply OK",
                editor_commit_apply_compiled_change(&change), 1);
     ASSERT_STR("set_predef decl buffer line updated",
-               editor_buffer_line(0), "  float a = 1, x = 2.5, y; // vars");
+               editor_buffer_line(0), "  static float a = 1, x = 2.5, y; // vars");
     {
         int x_idx = repl_eval_find_predef_var_idx("x");
         ASSERT_TRUE("set_predef decl x exists", x_idx >= 0);
@@ -473,12 +473,12 @@ static void test_set_predef_value_adds_declaration_initializer(void) {
     ASSERT_INT("set_predef add init compile OK", r, REPL_COMPILE_OK);
     ASSERT_INT("set_predef add init replace kind", change.kind,
                REPL_COMPILED_REPLACE_ONE);
-    ASSERT_STR("set_predef add init text", change.text[0], "  float x = 2.5;");
+    ASSERT_STR("set_predef add init text", change.text[0], "  static float x = 2.5;");
 
     ASSERT_INT("set_predef add init apply OK",
                editor_commit_apply_compiled_change(&change), 1);
     ASSERT_STR("set_predef add init buffer line updated",
-               editor_buffer_line(0), "  float x = 2.5;");
+               editor_buffer_line(0), "  static float x = 2.5;");
 }
 
 static void test_set_predef_value_keeps_expression_sources(void) {
@@ -503,7 +503,7 @@ static void test_set_predef_value_keeps_expression_sources(void) {
     ASSERT_STR("set_predef expr formula preserved",
                editor_buffer_line(2), "  x = y + 1;");
     ASSERT_STR("set_predef expr decl preserved",
-               editor_buffer_line(0), "  float x;");
+               editor_buffer_line(0), "  static float x;");
     {
         int x_idx = repl_eval_find_predef_var_idx("x");
         ASSERT_TRUE("set_predef expr x exists", x_idx >= 0);

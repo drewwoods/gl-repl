@@ -306,6 +306,11 @@ static int repl_core_format_var_decl_text(const char *orig_text,
     int off = 0;
 
     while (*p && isspace((unsigned char)*p)) p++;
+    /* Optional canonical `static ` prefix (see format_decl_text). */
+    if (strncmp(p, "static", 6) == 0 && isspace((unsigned char)p[6])) {
+        p += 6;
+        while (*p && isspace((unsigned char)*p)) p++;
+    }
     if (strncmp(p, "float", 5) != 0)
         return 0;
     if (isalnum((unsigned char)p[5]) || p[5] == '_')
@@ -314,7 +319,7 @@ static int repl_core_format_var_decl_text(const char *orig_text,
 
     if (!repl_core_append_text(buf, sizeof(buf), &off, indent ? indent : ""))
         return 0;
-    if (!repl_core_append_text(buf, sizeof(buf), &off, "float "))
+    if (!repl_core_append_text(buf, sizeof(buf), &off, "static float "))
         return 0;
 
     while (*p) {

@@ -29,7 +29,7 @@ void display() {
   glTranslatef(-0.0000f, -0.0000f, -0.0000f);
 --- header_post ---
 --- source ---
-  float x, y;
+  static float x, y;
   glClearColor(0.1, 0.1, 0.1, 1);
   // 2D assignment sketch: tests runtime variable assignment without goto
   glDisable(GL_LIGHTING);

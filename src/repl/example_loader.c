@@ -257,6 +257,11 @@ static int example_line_is_comment(const char *line) {
 
 static int example_line_is_var_decl(const char *line) {
     while (*line && isspace((unsigned char)*line)) line++;
+    /* Optional `static ` prefix — canonical form per format_decl_text. */
+    if (strncmp(line, "static", 6) == 0 && isspace((unsigned char)line[6])) {
+        line += 6;
+        while (*line && isspace((unsigned char)*line)) line++;
+    }
     return strncmp(line, "float ", 6) == 0 ||
            strncmp(line, "float\t", 6) == 0;
 }
