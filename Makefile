@@ -249,6 +249,7 @@ SRCS = \
 	src/ui/tabbed_overlay.c \
 	src/ui/text_layout.c \
 	src/ui/text_panel.c \
+	src/ui/text_search.c \
 	src/ui/variable_panel.c \
 	src/widgets/color_picker_state.c \
 	src/widgets/replay.c \
@@ -326,6 +327,7 @@ HDRS = \
 	src/ui/tabbed_overlay.h \
 	src/ui/text_layout.h \
 	src/ui/text_panel.h \
+	src/ui/text_search.h \
 	src/ui/variable_panel.h \
 	src/widgets/color_picker_state.h \
 	src/widgets/replay.h \
@@ -398,6 +400,7 @@ CORE_TEST_SRCS = \
 	src/ui/tabbed_overlay.c \
 	src/ui/text_layout.c \
 	src/ui/text_panel.c \
+	src/ui/text_search.c \
 	src/ui/variable_panel.c \
 	src/widgets/color_picker_state.c \
 	src/widgets/replay.c \

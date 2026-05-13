@@ -24,6 +24,8 @@
 
 #include "ui/hit.h"          /* UiHit return type for hit_test */
 
+#define UI_TEXT_PANEL_RIGHT_ACTION_W 12
+
 /* -------------------------------------------------------------------------
  * Colors
  * ---------------------------------------------------------------------- */
@@ -67,12 +69,13 @@ typedef enum {
  * Right-edge decoration
  * ---------------------------------------------------------------------- */
 
-/* Right-edge decoration drawn at the trailing end of a code-panel row.
+/* Right-edge decoration drawn at the trailing end of a logical row.
  * When active the renderer draws a filled color rectangle at the row's
- * right margin. A hit on this region returns UI_HIT_INLINE_COLOR_SWATCH.
- * The generic panel treats the color data as opaque display values — it
- * does not interpret what the decoration represents. The REPL adapter
- * fills this with swatch data for live-editable color arguments. */
+ * right margin. The generic panel treats the color data as opaque display
+ * values and does not assign hit semantics to this region. Adapters that
+ * use the decoration as an interactive affordance (for example an inline
+ * color swatch) own that region test and may rewrite the result to a
+ * feature-specific UiHitKind. */
 typedef struct {
     int   active;        /* non-zero if a decoration is present on this row */
     float r, g, b;       /* decoration fill color */
@@ -92,13 +95,14 @@ typedef struct {
  *   text             - NUL-terminated display text (caller-owned, valid for
  *                      the render/hit-test call duration). May be "" but not
  *                      NULL.
- *   kind             - Row classification; drives cursor/swatch/hit logic.
+ *   kind             - Row classification; drives cursor/generic-hit logic.
  *   left_gutter_label - Line number shown in the leftmost numeric gutter
  *                      column. 0 means no label (static/virtual rows).
  *   left_aux_label   - Optional short string drawn at the idx_x column
  *                      (e.g. "v3", "vn"). Empty string means no label.
-   *   right_action     - Right-edge decoration. active==0 means no
-   *                      decoration on this row.
+ *   right_action     - Right-edge decoration. active==0 means no
+ *                      decoration on this row. Any semantic routing for
+ *                      this region is adapter-owned.
  *   source_line_idx  - Index into the source document (-1 for rows not
  *                      directly backed by a source command).
  *   hit_target_line_idx - For VIRTUAL rows: the source line index that
@@ -198,12 +202,17 @@ typedef struct {
      * accounts for gutter width). */
     int text_x;
 
+    /* Wrapping policy for code_layout_make(). The renderer combines this
+     * with panel geometry and each row's indent_chars to build per-row
+     * CodeLayout values without consulting app state. */
+    int wrap_at_comma;
+
     /* Logical row array — one entry per source / chrome / virtual / input
      * line. The renderer iterates all rows and wraps each one internally. */
     const UiTextPanelRow *rows;
     int                   row_count;
 
-    /* Scroll position: doc-line index at the top of the viewport. */
+    /* Scroll position: absolute visual-row index at the top of the viewport. */
     int scroll;
 
     /* Chrome visibility flags (UI_TEXT_PANEL_CHROME_* bitmask). */
@@ -265,9 +274,11 @@ void ui_text_panel_render(const UiTextPanelSnapshot *snap,
                           UiTextPanelOutput         *out);
 
 /* Hit-test the text panel at window coordinates (mx, my). Returns a UiHit
- * describing the region struck. Only text-panel hit kinds are returned:
- * UI_HIT_CODE_TEXT, UI_HIT_CODE_INSERT_LINE, UI_HIT_CODE_GUTTER,
- * UI_HIT_INLINE_COLOR_SWATCH, UI_HIT_PANEL_DIVIDER, UI_HIT_NONE. */
+ * describing the region struck. Only generic text-panel hit kinds are
+ * returned: UI_HIT_CODE_TEXT, UI_HIT_CODE_INSERT_LINE,
+ * UI_HIT_CODE_GUTTER, UI_HIT_PANEL_DIVIDER, UI_HIT_NONE. Adapters that
+ * expose feature-specific right-edge actions own that routing and may
+ * rewrite to UI_HIT_INLINE_COLOR_SWATCH or another feature-specific kind. */
 UiHit ui_text_panel_hit_test(const UiTextPanelSnapshot *snap,
                               int mx, int my);
 

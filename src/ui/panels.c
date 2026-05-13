@@ -13,10 +13,9 @@
 #include "metrics.h"
 #include "editor/code_panel_document.h"
 #include "repl/core.h"
-#include "editor/search.h"
+#include "text_search.h"
 #include "menu_bar.h"
 #include "variable_panel.h"
-#include "repl/replay_annotations.h"
 #include "prof.h"
 #include "panels.h"
 #include "gl_2d.h"
@@ -177,9 +176,9 @@ static void code_panel_draw_search_highlights(const UiRenderSnapshot *snap,
         !text || seg_len <= 0)
         return;
 
-    for (int pos = editor_search_find_next_in_text(text, srch.query, 0);
+    for (int pos = ui_text_find_next_in_text(text, srch.query, 0);
          pos >= 0;
-         pos = editor_search_find_next_in_text(text, srch.query, pos + 1)) {
+         pos = ui_text_find_next_in_text(text, srch.query, pos + 1)) {
         int match_end = pos + srch.query_len;
         int seg_end = seg_start + seg_len;
         int draw_start = pos > seg_start ? pos : seg_start;
