@@ -2,7 +2,7 @@
 
 ## Summary
 
-Three steps: (1) split the code-panel UI into a generic text-panel renderer plus a REPL-specific adapter; (2) decouple `src/editor/input.c` and `src/editor/commit.c`'s REPL/chrome reach by **extending** the existing `EditorServices` seam (`src/editor/services.h`, today scoped to compile/apply via `commit.c`) and adding an `EditorChromeServices` seam alongside it, so the editor module set can link without the full REPL pipeline or `glr_*` chrome; (3) add `editor_demo` as the forcing function that proves the split. Like `scene_demo` (which keeps `src/scene/` honest about its REPL dependencies) and `repl_demo`, `editor_demo` is a second binary that fails to link if the split regresses, turning "the module is independent" from a claim into a checkable invariant. The goal is not to make the editor fully reusable in one step; it is to create a working standalone proof and improve `ui/panels.c` by separating text-editor rendering from REPL presentation.
+Three steps: (1) split the code-panel UI into a generic text-panel renderer plus a REPL-specific adapter; (2) decouple `src/editor/input.c` and `src/editor/commit.c`'s REPL/chrome reach by **extending** the existing `EditorServices` seam (`src/editor/services.h`, today scoped to compile/apply via `commit.c`) and adding an `EditorChromeServices` seam alongside it, so the editor module set can link without the full REPL pipeline or `glr_*` chrome; (3) add `editor_demo` as the forcing function that proves the split. Like `scene_demo` (which keeps `src/scene/` honest about its REPL dependencies) and `repl_demo`, `editor_demo` is a second binary that fails to link if the split regresses, turning "the module is independent" from a claim into a checkable invariant. The near-term implementation can stop after Phases 0-4 (plus the relevant Phase 7 docs/guards): that still completes the SRP cleanup for `ui/panels.c`. Phases 5 and 6 are deferred draft work and need a fresh review before implementation.
 
 ## Phase 0 — Baseline And Invariants
 
@@ -160,9 +160,15 @@ Three steps: (1) split the code-panel UI into a generic text-panel renderer plus
 - When the generic hit lands on a `VIRTUAL` row with `hit_target_line_idx >= 0`, the adapter rewrites the hit to point at the owning source line before returning to the caller — matches the current `code_panel_document` routing for replay annotations so users can still click replay-evaluated rows to navigate to their source.
 - Code touched: `src/ui/repl_code_panel.c`, `src/ui/panels.c`.
 
-## Phase 5 — Editor REPL/Chrome Decoupling
+## Phase 5 — Editor REPL/Chrome Decoupling (Deferred)
 
 This phase is the load-bearing prerequisite for Phase 6's editor demo. It is **not** about the demo — it's a focused refactor of `src/editor/input.c` and `src/editor/commit.c` that pulls their REPL-pipeline and app-controller reach behind registered service tables. The demo in Phase 6 is downstream proof that this phase worked.
+
+**Deferred status:** Phases 5 and 6 are intentionally not required for the
+SRP split of `ui/panels.c`. Treat the rest of this phase as a draft design
+and dependency ledger, not an implementation-ready spec. Before starting
+Phase 5, do a fresh source review against the then-current tree and update
+the service tables, shim counts, and guards below.
 
 The starting point is **not green-field**: `src/editor/services.h` already defines an `EditorServices` table that `src/editor/commit.c` uses for compile/apply (`context`, `compile`, `apply_repl_change`, `apply_predef_ops`, `apply_scratch_ops`). Phase 5 **extends** that seam rather than introducing a parallel `EditorReplServices`. The chrome reach gets its own complementary `EditorChromeServices` table.
 
@@ -180,9 +186,54 @@ REPL-symbol surface of each `src/editor/*.c` file:
 
 `code_panel_document.c` is **not in this table** — it was split during Phases 1 and 3 (pure half → `src/ui/text_layout`; REPL-aware half → `src/ui/repl_code_panel.c`) and no longer exists in `src/editor/` by the time Phase 5 starts.
 
-Sum today: **~77 REPL function calls across the five remaining files** — roughly 5× the Phase 6 shim tripwire (~12-15 functions). The three smaller files (sum: ~21) can be shimmed directly. The two largest carry the real coupling and have to come down before any demo work can land coherently.
+Sum today: **~77 REPL function calls across the five remaining files**. The
+old "~12-15" shim target was aspirational and is no longer the operative
+budget; the current draft ledger later in this phase estimates a larger
+surface (~45 unique symbols) and still needs a fresh review before Phase 5
+or 6 implementation. The three smaller files can be shimmed directly, but
+the two largest carry the real coupling and have to come down before any
+demo work can land coherently.
+
+### Required Review Before Implementation
+
+Run this review immediately before implementing Phase 5 or Phase 6:
+
+- Rebuild the REPL-symbol inventory for `src/editor/input.c` and
+  `src/editor/commit.c`. The draft `EditorServices` table below is known
+  incomplete today: it does not yet cover the document-state accessors
+  (`repl_state_edit_line`, `repl_state_edit_line_set`,
+  `repl_state_document_count`, `repl_state_document_cmds_mut`) that dominate
+  both files. Decide explicitly whether those become service callbacks,
+  move behind existing compile/apply helpers, or remain direct shim symbols.
+- Audit the remaining nontrivial REPL calls in `input.c` / `commit.c` that
+  are not represented in the draft table: delete-range compile,
+  command-store clear, predef-var reset, comment-toggle compile,
+  strict parse/normalize, apply preflight, compiled-change rollback, and
+  any legacy `try_commit_*` compile helpers still called directly. Each one
+  needs an owned path: service callback, relocated compile/apply helper, or
+  counted direct shim.
+- Re-review `EditorChromeServices` against current `input.c`. The draft
+  table below is also incomplete if the guard counts all `ui_*` calls:
+  status snapshot restore, help visibility mutation, code-panel runtime
+  state, viewport size, panel rect lookup, resize flags, and panel fraction
+  must either move behind chrome services or be excluded by a narrower guard.
+- Count non-`repl_*` direct shim requirements. Today the editor files also
+  call tutorial APIs (`tutorial_active`, `tutorial_guard_source_change`,
+  `tutorial_line_is_locked`, `tutorial_current_expected_text`,
+  `tutorial_handle_commit_attempt`,
+  `tutorial_advance_after_successful_commit`) and the Phase 5 totals below
+  do not include them. Include tutorial and any other non-REPL direct symbols
+  in the Phase 6 shim ledger.
+- Recompute the Phase 6 caps from measured unique symbols after the service
+  split lands. The current `~36 REPL-side + ~9 chrome` estimate is a draft,
+  and is likely low until the missing document-state, chrome-state, and
+  tutorial surfaces above are accounted for.
 
 ### What this phase produces
+
+The following tables are a starting shape for the deferred work, not a
+complete checklist. The implementation review above must update them before
+code lands.
 
 - **Extended `EditorServices` table** (`src/editor/services.h`). The existing
   struct already covers compile/apply for `commit.c`; this phase adds the
@@ -340,9 +391,9 @@ fields:
 
 That's **19 unique direct-stub symbols** for the three smaller files.
 
-### Total shim surface
+### Draft Total Shim Surface
 
-Concrete totals after Phase 5 lands:
+Draft totals before the required implementation review:
 
 | Surface | Count | Notes |
 |---------|-------|-------|
@@ -351,14 +402,15 @@ Concrete totals after Phase 5 lands:
 | Direct REPL stubs in `repl_shim.c` | ~19 | state.c + clipboard.c + undo.c |
 | **Total unique shim symbols** | **~45** | function pointers + direct symbols |
 
-This is the realistic shim cost — meaningfully larger than the
-12-15/5-7 figures the earlier draft cited. The tripwires in Phase 6
-need to reflect measured reality (see Phase 6 below).
+This is already meaningfully larger than the 12-15/5-7 figures the earlier
+draft cited, but it is still not complete until the required review accounts
+for the missing document-state, chrome-state, and tutorial surfaces above.
+The tripwires in Phase 6 must reflect the final measured reality.
 
 ### Target reductions
 
-- `input.c`: 23 → ~5 REPL function calls + chrome/UI reach routed through `EditorChromeServices` (verified by the chrome-surface guard).
-- `commit.c`: 33 → ~5 REPL function calls.
+- `input.c`: 23 → ~5 REPL function calls + chrome/UI reach routed through `EditorChromeServices` (draft target; revalidate in the required review).
+- `commit.c`: 33 → ~5 REPL function calls (draft target; revalidate in the required review).
 - The three smaller editor files stay where they are — they're already within budget.
 
 ### Validation
@@ -380,9 +432,14 @@ need to reflect measured reality (see Phase 6 below).
 - new `scripts/check-editor-repl-surface.sh` and `scripts/check-editor-chrome-surface.sh` — surface-count regression gates.
 - `Makefile` — wire both check targets.
 
-## Phase 6 — Add Editor Demo Host
+## Phase 6 — Add Editor Demo Host (Deferred)
 
 This phase only lands after Phase 5. By the time Phase 6 starts, `input.c` / `commit.c` route their REPL/chrome reach through service tables, so the demo's job is to populate those tables with fake/no-op bindings — not to fight against direct calls.
+
+Because Phase 5 is deferred, Phase 6 is deferred too. Before implementing
+the demo, rerun the Phase 5 review gate, update the shim ledger with the
+actual service fields and direct symbols, and only then set the
+`repl_shim.c` / `app_chrome_shim.c` tripwires.
 
 - Add `tools/editor_demo/editor_demo.c`.
   - GLUT window setup and callback registration.
@@ -400,7 +457,7 @@ This phase only lands after Phase 5. By the time Phase 6 starts, `input.c` / `co
 - Add `tools/editor_demo/app_chrome_shim.c`. Populates `EditorChromeServices` with no-op camera/router reset plus local code-panel layout state. Production bindings stay in the controller. Kept separate from `repl_shim.c` so the dependency ledger distinguishes text/REPL semantics from app chrome.
 - Shim-size tripwire (regression gate, **not** entry budget): count
   **unique shim functions / exported symbols**, not raw call sites. The
-  measured surface after Phase 5 lands (see "Total shim surface" table in
+  measured surface after Phase 5 lands (see "Draft Total Shim Surface" table in
   Phase 5) is roughly:
   - `repl_shim.c`: ~17 `EditorServices` field bindings + ~19 direct REPL
     stubs = **~36 unique REPL-side symbols**.
@@ -439,8 +496,7 @@ This phase only lands after Phase 5. By the time Phase 6 starts, `input.c` / `co
 
 ## Test Plan
 
-- Build/check:
-  - `make editor_demo USE_GL_STUBS=1`
+- Build/check for the near-term UI split (Phases 0-4 plus applicable Phase 7 guards):
   - `make sample USE_GL_STUBS=1`
   - `make repl_demo USE_GL_STUBS=1`
   - `make scene_demo USE_GL_STUBS=1`
@@ -448,12 +504,15 @@ This phase only lands after Phase 5. By the time Phase 6 starts, `input.c` / `co
   - `make test_ui_text_panel USE_GL_STUBS=1` (focused unit run)
   - `make check-state-ownership`
   - `make check-ui-text-panel-pure`
-  - `make check-editor-repl-surface` (input.c / commit.c REPL surface gate)
-  - `make check-editor-chrome-surface` (input.c chrome surface gate)
 - Manual full-app smoke:
   - code panel renders header/footer, command rows, colors, search, active input, replay annotations, tutorial fade, color swatches, statusbar, and hit-test routing.
-- Manual editor-demo smoke:
-  - type text, commit lines, navigate, edit existing lines, delete, search, select/copy/paste input text, scroll, resize panel.
+- Additional checks when deferred Phases 5-6 land:
+  - Rerun the Phase 5 "Required Review Before Implementation" checklist and update this plan with measured surfaces.
+  - `make editor_demo USE_GL_STUBS=1`
+  - `make check-editor-repl-surface` (input.c / commit.c REPL surface gate)
+  - `make check-editor-chrome-surface` (input.c chrome surface gate)
+  - Manual editor-demo smoke:
+    - type text, commit lines, navigate, edit existing lines, delete, search, select/copy/paste input text, scroll, resize panel.
 
 ## Assumptions
 
@@ -464,19 +523,18 @@ This phase only lands after Phase 5. By the time Phase 6 starts, `input.c` / `co
   extended `EditorServices` and the new `EditorChromeServices` tables,
   plus a small set of direct stubs** for the three smaller editor files
   (`state.c`, `clipboard.c`, `undo.c`) that keep calling REPL helpers by
-  name. The measured surface (Phase 5 "Total shim surface" table) is
-  ~36 REPL-side symbols + ~9 chrome symbols. The Phase 6 tripwires are
-  set at those measured caps + small headroom — a regression gate, not
-  a license for unbounded growth. The earlier "~12-15 / ~5-7" figures
-  cited elsewhere in this plan are aspirational long-term targets,
-  reachable only by a further decoupling pass on state.c / clipboard.c
-  / undo.c that Phase 5 deliberately does not attempt.
+  name. The current draft surface (Phase 5 "Draft Total Shim Surface"
+  table) is ~36 REPL-side symbols + ~9 chrome symbols, but the required
+  review is expected to revise that upward unless the missing surfaces are
+  moved behind coarser services. The Phase 6 tripwires should be set at the
+  final measured caps + small headroom — a regression gate, not a license
+  for unbounded growth.
 - Further cleanup of `src/editor/input.c`, `src/editor/clipboard.c`, and `src/editor/undo.c` into generic document services is the long-term direction. Phase 5's seam extraction is the first concrete step; the demo in Phase 6 is the scaffolding that makes the remaining coupling visible and shrinkable.
 
 ## Landing Strategy
 
 - **Phases 0-2** are the load-bearing UI split: text-panel module exists, generic rendering + hit-mapping live there, full app still works through the unchanged `ui_panels_*` surface. This is the first natural pause point — the cleanup is real even without the rest.
 - **Phase 3** is mechanical once Phase 2 lands; **Phase 4** is hit-routing cleanup. Together these complete the SRP split for `ui/panels.c`.
-- **Phase 5** is the editor-side decoupling: **extend** the existing `EditorServices` seam (already used by `commit.c` for compile/apply) to cover the rest of the REPL-pipeline surface and add a complementary `EditorChromeServices` seam for `input.c`'s `glr_*` / `ui_*` / `color_picker_*` reach. This is the second natural pause point — the project still has no second editor binary, but the editor module set is now much closer to linkable without the REPL pipeline. Useful on its own: the service tables also make the existing test harnesses easier to drive in isolation.
-- **Phase 6** (demo) lands only after Phase 5's measured surface reductions land. By that point the shims are concrete ledgers against the service tables (~36 REPL-side symbols + ~9 chrome symbols by the Phase 5 enumeration), and the tripwires are set at those measured caps with small headroom rather than aspirational figures. Long-term decoupling of state.c / clipboard.c / undo.c can ratchet the caps down.
-- **Phase 7** (guards + docs) lands incrementally as each preceding phase merges — don't batch the purity guard until the end.
+- **Phase 5** is deferred editor-side decoupling. Before implementation, run the required review in that phase and update the service tables, shim ledger, and guards against the current source tree. Useful on its own once it lands: the service tables should make the existing test harnesses easier to drive in isolation, but it is not required for the `ui/panels.c` SRP split.
+- **Phase 6** (demo) is deferred and lands only after Phase 5's measured surface reductions land. Its shims and tripwires must be based on the final reviewed ledger, not the current draft counts.
+- **Phase 7** (guards + docs) lands incrementally as each preceding phase merges — don't batch the purity guard until the end. The editor-surface guards belong with deferred Phase 5; the generic text-panel purity guard can land with the UI split.
