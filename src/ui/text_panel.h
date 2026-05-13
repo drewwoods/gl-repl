@@ -31,8 +31,8 @@
  * ---------------------------------------------------------------------- */
 
 /* RGBA color for a text panel element. has_alpha controls whether the alpha
- * channel is applied when rendering (allows palette entries that are
- * fully opaque without requiring the renderer to blend). */
+ * channel is applied when rendering; when set, the renderer enables blending
+ * for the affected text draw so sub-opaque rows can fade correctly. */
 typedef struct {
     float r, g, b, a;
     int   has_alpha;
@@ -52,10 +52,13 @@ typedef enum {
     UI_TEXT_PANEL_ROW_TEXT,
 
     /* The active edit row — the renderer draws cursor, selection, and
-     * autocomplete ghost/hint here. */
+     * autocomplete ghost/hint here. row->text is ignored; the live input
+     * comes from UiTextPanelSnapshot.input. */
     UI_TEXT_PANEL_ROW_INPUT,
 
-    /* Scroll-position-only row (e.g. blank insert-mode preview). */
+    /* Scroll-position-only row (e.g. blank insert-mode preview). Empty-text
+     * placeholders render as indentation-only slots; non-empty placeholders
+     * fall through to normal wrapped text rendering. */
     UI_TEXT_PANEL_ROW_PLACEHOLDER,
 
     /* Adapter-supplied row not backed by a source line directly (replay
@@ -94,7 +97,8 @@ typedef struct {
  * Field semantics:
  *   text             - NUL-terminated display text (caller-owned, valid for
  *                      the render/hit-test call duration). May be "" but not
- *                      NULL.
+ *                      NULL. INPUT rows ignore this field and render from
+ *                      UiTextPanelSnapshot.input.input instead.
  *   kind             - Row classification; drives cursor/generic-hit logic.
  *   left_gutter_label - Line number shown in the leftmost numeric gutter
  *                      column. 0 means no label (static/virtual rows).
@@ -263,9 +267,10 @@ typedef struct {
  * API
  * ---------------------------------------------------------------------- */
 
-/* Compute how many visual rows fit in a panel of height panel_h pixels.
- * Pure geometry — does not read any global state. */
-int  ui_text_panel_visible_lines_for_height(int panel_h);
+/* Compute how many visual rows fit in a panel of height panel_h pixels for
+ * the supplied UI_TEXT_PANEL_CHROME_* bitmask. Pure geometry — does not read
+ * any global state. */
+int  ui_text_panel_visible_lines_for_height(int panel_h, int chrome_flags);
 
 /* Render the text panel using the provided snapshot. Writes render-discovered
  * state into *out (must not be NULL). The snapshot and all pointer fields it

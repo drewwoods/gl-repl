@@ -518,6 +518,7 @@ TEST_BINS = \
 
 ifeq ($(USE_GL_STUBS),1)
 TEST_BINS += test_ui
+TEST_BINS += test_ui_text_panel
 TEST_BINS += test_glr_actions
 TEST_BINS += test_repl_executor
 endif

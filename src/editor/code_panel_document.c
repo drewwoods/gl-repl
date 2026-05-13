@@ -13,7 +13,6 @@
 #include "repl/source_scope.h"
 #include "repl/state_views.h" /* repl_state_edit_line, repl_state_document_count, etc. */
 #include "widgets/replay_state.h"     /* replay_active, replay_src_line */
-#include "ui/metrics.h"
 #include "ui/text_panel.h"
 
 #define g_workspace_header_lines (repl_state_import_export().workspace_header_lines)
@@ -234,7 +233,8 @@ static int code_panel_follow_doc_line_from_layout(
 }
 
 int editor_code_panel_document_visible_lines_for_height(int cp_h) {
-    return ui_text_panel_visible_lines_for_height(cp_h);
+    return ui_text_panel_visible_lines_for_height(
+        cp_h, UI_TEXT_PANEL_CHROME_STATUSBAR);
 }
 
 void editor_code_panel_document_build(CodePanelDocumentLayout *layout,

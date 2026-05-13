@@ -49,7 +49,8 @@
 #define CODE_LAYOUT_DEFAULT_MAX_HANG_INDENT_CHARS 12
 
 /* Layout descriptor for text wrapping. panel_w is the pixel width available;
- * first_x is the starting x-coordinate (for initial indentation); char_w is the
+ * first_x is the starting x-coordinate relative to the panel's left edge (for
+ * initial indentation); char_w is the
  * pixel width of each character (monospace); wrap_at_comma enables breaking at
  * commas instead of only whitespace; right_pad_px reserves right margin space;
  * max_hang_indent_chars caps hanging indentation. Passed to all layout queries. */
@@ -77,9 +78,10 @@ typedef struct {
 } CodeWrapIter;
 
 /* Create a layout descriptor for text wrapping. panel_w is pixel width; first_x is
- * starting x-coordinate; char_w is character width (monospace); wrap_at_comma enables
- * breaking at commas. Returns a CodeLayout ready for layout queries. Used by
- * the renderer and tests to configure wrapping behavior. */
+ * the starting x-coordinate relative to the panel's left edge; char_w is character
+ * width (monospace); wrap_at_comma enables breaking at commas. Returns a CodeLayout
+ * ready for layout queries. Used by the renderer and tests to configure wrapping
+ * behavior. */
 CodeLayout code_layout_make(int panel_w, int first_x,
                             int char_w, int wrap_at_comma);
 
