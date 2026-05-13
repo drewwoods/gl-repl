@@ -763,7 +763,8 @@ UiHit ui_text_panel_hit_test(const UiTextPanelSnapshot *snap,
                 return h;
             }
 
-            if (row->kind == UI_TEXT_PANEL_ROW_PLACEHOLDER ||
+              if ((row->kind == UI_TEXT_PANEL_ROW_PLACEHOLDER &&
+                  row->source_line_idx < 0) ||
                 (row->kind == UI_TEXT_PANEL_ROW_INPUT &&
                  row->source_line_idx < 0)) {
                 h.kind = UI_HIT_CODE_INSERT_LINE;

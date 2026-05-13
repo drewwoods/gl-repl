@@ -82,7 +82,10 @@ typedef enum {
 typedef struct {
     int              active;      /* non-zero if a decoration is present */
     UiTextPanelColor color;       /* decoration fill color */
-    int              emphasized;  /* draw an extra bright outer outline */
+    int              emphasized;  /* non-zero to draw an extra bright outer
+                                   * outline. Adapters set this for the
+                                   * active interactive target (for example
+                                   * the swatch bound to a live color picker). */
 } UiTextPanelRightAction;
 
 /* Optional per-character color overrides for a row. The adapter may fill a
@@ -134,9 +137,11 @@ typedef struct {
  *   background_color - Optional full-row background fill, drawn behind text
  *                      and search highlights (used by adapters such as the
  *                      REPL code panel for replay/selection bands).
+ *   background_active - Non-zero to enable the background fill.
  *   left_marker_color - Optional narrow accent strip on the panel's left
  *                      edge, repeated on every wrap row (for example the
  *                      REPL adapter's replay/feeding markers).
+ *   left_marker_active - Non-zero to enable the left marker.
  *   color            - Text fill color for this row.
  *   color_segments   - Optional ordered per-character color spans. When
  *                      color_segment_count == 0 the renderer uses color for
