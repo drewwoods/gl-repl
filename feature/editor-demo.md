@@ -2,7 +2,7 @@
 
 ## Summary
 
-Split the code-panel UI into a generic text-panel renderer plus a REPL-specific adapter, then add `editor_demo` backed by a demo-local fake REPL shim. The goal is not to make the editor fully reusable in one step; it is to create a working standalone proof and improve `ui/panels.c` by separating text-editor rendering from REPL presentation.
+Split the code-panel UI into a generic text-panel renderer plus a REPL-specific adapter, then add `editor_demo` backed by a demo-local fake REPL shim. Like `teapot_demo` (which keeps `src/scene/` honest about its REPL dependencies) and `repl_demo`, `editor_demo` is a forcing function for module independence — a second binary that fails to link if the split regresses, turning "the module is independent" from a claim into a checkable invariant. The goal is not to make the editor fully reusable in one step; it is to create a working standalone proof and improve `ui/panels.c` by separating text-editor rendering from REPL presentation.
 
 ## Phase 0 — Baseline And Invariants
 
