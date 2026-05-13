@@ -25,10 +25,28 @@ allowed_files=(
 # starting at column 0) — function CALLS in pipeline TUs are fine.
 symbols='source_document_view|source_document_apply_change|source_document_insert_line|source_document_replace_line|source_document_load_lines|source_document_clear'
 
+# Collect linked-worktree roots so we can exclude them from the scan.
+# `git worktree list` prints one line per worktree; the first field is the
+# absolute path.  We skip the main worktree (first line) and convert each
+# linked-worktree absolute path to a path relative to the repo root so we can
+# pass it as --exclude-dir to grep.
+worktree_excludes=()
+main_worktree="$(git worktree list --porcelain | awk '/^worktree /{print $2; exit}')"
+while IFS= read -r wt_path; do
+  # Skip the main worktree — we want to scan that.
+  [ "$wt_path" = "$main_worktree" ] && continue
+  # Convert to a path relative to the repo root (handles sibling worktrees).
+  rel="$(realpath --relative-to="$(pwd)" "$wt_path" 2>/dev/null || python3 -c \
+    "import os,sys; print(os.path.relpath(sys.argv[1]))" "$wt_path")"
+  worktree_excludes+=("--exclude-dir=$rel")
+done < <(git worktree list --porcelain | awk '/^worktree /{print $2}')
+
 # Find every .c that defines (not just declares) one of the symbols.
 # A definition has the symbol name followed by `(` at column 0.
 offenders="$(
   grep -rlE "^[A-Za-z_].*[[:space:]]($symbols)[[:space:]]*\(" \
+    --exclude-dir=".git" \
+    "${worktree_excludes[@]}" \
     --include="*.c" --include="*.cc" --include="*.cpp" . 2>/dev/null \
   | sed 's|^\./||' \
   | sort -u
