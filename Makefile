@@ -522,6 +522,12 @@ TEST_BINS += test_ui
 TEST_BINS += test_ui_text_panel
 TEST_BINS += test_glr_actions
 TEST_BINS += test_repl_executor
+# Cross-checks that REPL execution and the exported C produce the same
+# gl_stub_counts trace. Needs USE_GL_STUBS=1 on both legs (the REPL side
+# to count, and the child binary the test compiles at runtime to count
+# the same way). The test shells out to cc using paths relative to CWD;
+# `make test` runs from the repo root which is what the test expects.
+TEST_BINS += test_export_trace_parity
 endif
 
 CORE_TEST_BINS = $(filter-out test_eval test_format test_repl_code_panel_layout test_audio,$(TEST_BINS))
