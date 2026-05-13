@@ -12,7 +12,7 @@
  * visible line count, cursor position, and follow target. Computed once per
  * frame by editor_code_panel_document_build().
  *
- * Wrapping: Uses CodePanelTextLayout (from ui_code_panel_layout.h) to wrap
+ * Wrapping: Uses CodeLayout (from ui/text_layout.h) to wrap
  * individual command text to panel width with hanging indentation. Wrapping
  * accounts for command indentation (depth-based) and optional break points
  * (commas).
@@ -50,59 +50,20 @@ typedef struct {
     int replay_extra_rows[MAX_COMMANDS];
 } CodePanelDocumentLayout;
 
-/* Create a layout descriptor for text wrapping, configured for code-panel
- * indentation. panel_w is pixel width; first_x is the x-coordinate offset for
- * indentation (based on command depth). Returns a CodePanelTextLayout ready for
- * wrapping queries. */
-CodeLayout editor_code_panel_document_text_layout(int panel_w,
-                                                         int first_x);
+/* Create a CodeLayout descriptor configured for code-panel indentation.
+ * panel_w is the panel pixel width; first_x is the x-coordinate offset for
+ * the current command's indentation depth. Reads wrap_at_comma from app state.
+ * Returns a CodeLayout ready for code_layout_* queries. */
+CodeLayout editor_code_panel_document_text_layout(int panel_w, int first_x);
 
-/* Initialize a wrap iterator for document text (convenience wrapper that sets
- * up CodePanelWrapIter with document-appropriate layout). Used to walk wrapped
- * lines segment-by-segment for rendering. */
-void editor_code_panel_document_wrap_iter_init(CodeWrapIter *it,
-                                             const char *text,
-                                             int first_x, int panel_w);
-
-/* Advance wrap iterator to next segment (convenience wrapper). Returns 1 if a
- * segment was yielded, 0 if at end. Used by the renderer to iterate wrapped
- * line segments. */
-int  editor_code_panel_document_wrap_iter_next(CodeWrapIter *it,
-                                             int *out_start,
-                                             int *out_len,
-                                             int *out_x);
-
-/* Compute row count for wrapped text (convenience wrapper). Returns the number
- * of rows (lines) needed to display text with document layout. */
-int  editor_code_panel_document_row_count_for_text(const char *text,
-                                                 int first_x, int panel_w);
-
-/* Find text segment for a specific row (convenience wrapper). Returns 1 on
- * success, outputs segment start/length/x. Used by rendering and hit-testing. */
-int  editor_code_panel_document_segment_for_row(const char *text,
-                                              int first_x, int panel_w,
-                                              int want_row,
-                                              int *out_start,
-                                              int *out_len,
-                                              int *out_x);
-
-/* Find row and segment for cursor position (convenience wrapper). Returns 1 on
- * success, outputs segment info for cursor rendering. Used by the cursor
- * renderer during editing. */
-int  editor_code_panel_document_cursor_row_for_text(const char *text,
-                                                  int first_x, int panel_w,
-                                                  int cursor_pos,
-                                                  int *out_seg_start,
-                                                  int *out_seg_len,
-                                                  int *out_seg_x);
 
 /* Query the current command indentation depth (character count). Used by layout
  * queries to compute hanging indentation for wrapped lines. */
 int  editor_code_panel_document_active_indent_chars(void);
 
-/* Compute visible line count from panel height. Returns how many lines fit
- * in a code panel of height cp_h (in pixels). Used during layout to determine
- * visible line window. */
+/* Compute visible line count from panel height. Delegates to
+ * ui_text_panel_visible_lines_for_height(). Returns how many lines fit
+ * in a code panel of height cp_h (in pixels). */
 int  editor_code_panel_document_visible_lines_for_height(int cp_h);
 
 /* Build the full code-panel document layout. Computes header/footer row counts,

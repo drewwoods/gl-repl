@@ -46,7 +46,7 @@ done < <(git worktree list --porcelain | awk '/^worktree /{print $2}')
 offenders="$(
   grep -rlE "^[A-Za-z_].*[[:space:]]($symbols)[[:space:]]*\(" \
     --exclude-dir=".git" \
-    "${worktree_excludes[@]}" \
+    "${worktree_excludes[@]+"${worktree_excludes[@]}"}" \
     --include="*.c" --include="*.cc" --include="*.cpp" . 2>/dev/null \
   | sed 's|^\./||' \
   | sort -u

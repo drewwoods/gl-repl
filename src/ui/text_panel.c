@@ -5,7 +5,7 @@
  * moves here from src/ui/panels.c in Phase 2 of the editor-demo SRP split
  * (feature/editor-demo.md).
  *
- * This file has no dependency on repl/*, editor/*, or app/* headers.
+ * This file has no dependency on repl, editor, or app headers.
  */
 #include "ui/text_panel.h"
 #include "ui/metrics.h"

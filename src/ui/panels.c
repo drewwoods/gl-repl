@@ -227,15 +227,16 @@ static void render_active_input_rows(const UiRenderSnapshot *snap,
     int cursor_seg_start = 0;
     int cursor_seg_len = 0;
     int cursor_seg_x = input_x;
-    int cursor_row = editor_code_panel_document_cursor_row_for_text(input, input_x, panel_w,
-                                                    cursor_pos,
-                                                    &cursor_seg_start,
-                                                    &cursor_seg_len,
-                                                    &cursor_seg_x);
+    CodeLayout input_layout = editor_code_panel_document_text_layout(panel_w, input_x);
+    int cursor_row = code_layout_cursor_row_for_text(input, &input_layout,
+                                                     cursor_pos,
+                                                     &cursor_seg_start,
+                                                     &cursor_seg_len,
+                                                     &cursor_seg_x);
     int cursor_col = cursor_pos - cursor_seg_start;
 
-    editor_code_panel_document_wrap_iter_init(&wrap_it, input, input_x, panel_w);
-    while (editor_code_panel_document_wrap_iter_next(&wrap_it, &wrap_start, &wrap_len, &wrap_x)) {
+    code_layout_wrap_iter_init(&wrap_it, input, &input_layout);
+    while (code_layout_wrap_iter_next(&wrap_it, &wrap_start, &wrap_len, &wrap_x)) {
         if (*io_cur >= snap->scroll.scroll && *io_cur < snap->scroll.scroll + visible_lines) {
             glColor3f(0.55f, 0.55f, 0.30f);
             if (wrap_row == 0) {
@@ -476,9 +477,10 @@ static void code_panel_draw_static_line(CodePanelRowCtx *ctx, const char *text,
 
     code_panel_static_line_rgb(text, r, g, b, &draw_r, &draw_g, &draw_b);
 
-    editor_code_panel_document_wrap_iter_init(&wrap_it, text, ctx->text_x, ctx->panel_w);
-    while (editor_code_panel_document_wrap_iter_next(&wrap_it,
-                                                   &wrap_start, &wrap_len, &wrap_x)) {
+    CodeLayout sl_layout = editor_code_panel_document_text_layout(ctx->panel_w, ctx->text_x);
+    code_layout_wrap_iter_init(&wrap_it, text, &sl_layout);
+    while (code_layout_wrap_iter_next(&wrap_it,
+                                      &wrap_start, &wrap_len, &wrap_x)) {
         if (code_panel_row_visible(ctx)) {
             if (wrap_row == 0)
                 code_panel_draw_gutter_lineno(ctx->line_y, ctx->file_line);
@@ -644,10 +646,10 @@ static void code_panel_draw_command_row(CodePanelRowCtx *ctx, int i,
     CodeWrapIter wrap_it;
     int wrap_row = 0;
     int wrap_start, wrap_len, wrap_x;
-    editor_code_panel_document_wrap_iter_init(&wrap_it, display_text,
-                                            ctx->text_x, ctx->panel_w);
-    while (editor_code_panel_document_wrap_iter_next(&wrap_it,
-                                                   &wrap_start, &wrap_len, &wrap_x)) {
+    CodeLayout cmd_layout = editor_code_panel_document_text_layout(ctx->panel_w, ctx->text_x);
+    code_layout_wrap_iter_init(&wrap_it, display_text, &cmd_layout);
+    while (code_layout_wrap_iter_next(&wrap_it,
+                                      &wrap_start, &wrap_len, &wrap_x)) {
         if (code_panel_row_visible(ctx)) {
             code_panel_draw_row_overlays(ctx, i);
             if (wrap_row == 0)
@@ -1240,9 +1242,9 @@ static int ui_panels_input_cursor_for_click(int mx, int row_offset,
     int seg_len = 0;
     int seg_x = text_x + indent_chars * FONT_W;
 
-    editor_code_panel_document_segment_for_row(editor_state_input().input,
-                                             seg_x, cp_w, row_offset,
-                                             &seg_start, &seg_len, &seg_x);
+    CodeLayout seg_layout = editor_code_panel_document_text_layout(cp_w, seg_x);
+    code_layout_segment_for_row(editor_state_input().input, &seg_layout,
+                                row_offset, &seg_start, &seg_len, &seg_x);
 
     int col = (mx - seg_x + FONT_W / 2) / FONT_W;
     if (col < 0) col = 0;

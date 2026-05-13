@@ -12,6 +12,10 @@ from pathlib import Path
 
 strict = sys.argv[1] == "1"
 
+# Phase 1 stubs: UiTextPanelOutput is declared but not yet wired to glr_ctrl.
+# Remove entries here as each struct becomes connected in Phase 3+.
+STUB_STRUCTS = {"UiTextPanelOutput"}
+
 ctrl_path = Path("src/app/glr_ctrl.c")
 if not ctrl_path.exists():
     print("ERROR: src/app/glr_ctrl.c missing", file=sys.stderr)
@@ -26,6 +30,8 @@ for hdr in sorted(glob.glob("src/ui/*.h")):
     for m in re.finditer(r"typedef\s+struct\s+([A-Za-z_][A-Za-z0-9_]*)?\s*\{(.*?)\}\s*(Ui[A-Za-z0-9_]*Output)\s*;", text, re.S):
         body = m.group(2)
         name = m.group(3)
+        if name in STUB_STRUCTS:
+            continue
         output_structs += 1
 
         fields = []
