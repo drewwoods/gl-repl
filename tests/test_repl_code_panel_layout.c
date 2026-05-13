@@ -1,4 +1,4 @@
-#include "editor/code_layout.h"
+#include "ui/text_layout.h"
 #include "support/test_harness.h"
 
 #include <stdio.h>
