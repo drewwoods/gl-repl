@@ -32,30 +32,32 @@ Split the code-panel UI into a generic text-panel renderer plus a REPL-specific 
     - `left_aux_label`: auxiliary left-gutter content drawn at `idx_x` — currently the vertex/tess index (`v3`, `vn`); see `src/ui/panels.c:540-545`. Optional per row.
     - `right_action`: right-edge interactive element. Color swatches go here (drawn at `cp_x + cp_w - CODE_MARGIN_X - sw - 2`; see `src/ui/panels.c:548-558`). Distinct from `left_aux_label` because the right action is interactive (hit-testable, opens picker) while the left aux is purely visual.
     - Plus: text pointer, file-line number, source line index, search row index, indent chars, colors, hit eligibility flags.
-  - `UiTextPanelInput`: input text, length, cursor, anchor, ghost, hint, cursor-visible flag
-  - `UiTextPanelSearch`: active flag, query, query length, hit row/char
-  - `UiTextPanelSnapshot`: viewport, panel rect, rows, scroll, visible chrome flags, input/search/completion state
+  - `UiTextPanelInput`: input text, length, cursor, anchor, ghost, hint, cursor-visible flag. `ghost` and `hint` are pre-resolved strings — the text panel treats them as opaque and does not interpret them.
+  - `UiTextPanelSearch`: active flag, query, query length, hit row/char. The adapter resolves the REPL-side source-line index to the snapshot's row index before populating `hit_row` (same shape as replay-row routing — REPL line indices are translated to text-panel row indices in the adapter).
+  - `UiTextPanelSnapshot`: viewport, panel rect, rows, row count, scroll, visible chrome flags, input/search/completion state.
+    - `rows` is a fixed inline array of `UI_TEXT_PANEL_ROW_CAP` (= 512) `UiTextPanelRow` entries. The adapter clips to a "visible window + small scroll buffer" before building the snapshot, so it never has to ship the entire 4096-command document; 512 covers any realistic panel height (~24-50 visible rows) with ~10× headroom for wrapping plus scroll overscan.
   - `UiTextPanelOutput`: cursor pixel, cursor-valid, total rows, visible rows, **text-area rect + statusbar-slot rect** so the REPL adapter can overlay its status strip without recomputing layout (statusbar is REPL chrome — see Phase 3).
 - Add APIs:
   - `ui_text_panel_visible_lines_for_height(int panel_h)`
   - `ui_text_panel_render(const UiTextPanelSnapshot *, UiTextPanelOutput *)`
   - `ui_text_panel_hit_test(const UiTextPanelSnapshot *, int mx, int my)`
+- Layout helpers are pure pixel-math, not editor state — **move `src/editor/code_layout.{c,h}` to `src/ui/text_layout.{c,h}`** as part of this phase so the text panel doesn't have to include from a higher-level module. Update every existing caller (`src/editor/code_panel_document.c`, `src/ui/panels.c`, `tests/test_repl_editor.c`, etc.) to the new include path.
 - Constraints:
-  - `src/ui/text_panel.*` must not include `repl/*`.
+  - `src/ui/text_panel.*` must not include `repl/*` or `src/editor/*`.
   - It must not mention `GLCmd`, `CmdType`, or `CMD_*`.
-- Code touched: new `src/ui/text_panel.{c,h}`, `Makefile` source/header lists.
+- Code touched: new `src/ui/text_panel.{c,h}`, renamed `src/ui/text_layout.{c,h}` (was `src/editor/code_layout.{c,h}`), every existing caller of `code_layout_*` for the include rename, `Makefile` source/header lists.
 
 ## Phase 2 — Extract Generic Rendering
 
 - Move generic code-panel rendering from `src/ui/panels.c` into `src/ui/text_panel.c`:
   - panel background/divider
-  - line wrapping using `src/editor/code_layout.h`
+  - line wrapping using `src/ui/text_layout.h` (renamed from `src/editor/code_layout.h` in Phase 1)
   - gutter line numbers
   - active input row
   - caret, input selection, autocomplete ghost/hint
   - search highlight drawing
   - scrollbar
-- Move the generic hit-mapping math (mouse → row / source line / visual row / input cursor char) in the **same** phase. It shares every layout call with rendering, so splitting it across phases would force the same `code_layout_*` walks to be reproduced twice. Phase 4 keeps only the overlay-priority routing, which is independent of layout math.
+- Move the generic hit-mapping math (mouse → row / source line / visual row / input cursor char) in the **same** phase. It shares every layout call with rendering, so splitting it across phases would force the same `text_layout_*` walks to be reproduced twice. Phase 4 keeps only the overlay-priority routing, which is independent of layout math.
 - Keep REPL-only features out:
   - command colors
   - header/footer scaffolding
@@ -76,10 +78,27 @@ Split the code-panel UI into a generic text-panel renderer plus a REPL-specific 
     - `left_aux_label` ← vertex/tess index for the row (REPL-specific; uses `primitive_vnums_exact` etc. from the snapshot).
     - `right_action` ← color swatch sourced from `snap->editor_transformers`. `EditorTransformer` snapshots stay owned by `EditorState` (the controller already pushes them per frame); the adapter maps each transformer to its row's `right_action`.
   - insert replay `VIRTUAL` rows **after** their owning source row, with `hit_target_line_idx` set to that source line. TEXT row source-line indices stay sequential; clicks on replay virtual rows route to the owning source line, preserving the current `editor_code_panel_document_target_for_doc_line` replay-extra-row behavior.
-  - tutorial fade is **per-character**, not per-row: `src/ui/panels.c:158` calls `tutorial_step_fade_alpha(line_idx, char_idx, line_len, now)` inside the character loop. The generic text panel needs a way to vary alpha across a row — options:
-    - `UiTextPanelFadeFn` callback on the row (called per character with `line_idx, char_idx, line_len`).
-    - Per-row segment metadata (array of `{start, len, alpha}` runs) so the adapter pre-computes fade and the renderer just walks segments.
-    - Whichever shape is picked, the contract must preserve current behavior — a row-wide alpha modifier is **not sufficient** and would regress the tutorial fade visual.
+  - tutorial fade is **per-character**, not per-row: `src/ui/panels.c:158` calls `tutorial_step_fade_alpha(line_idx, char_idx, line_len, now)` inside the character loop. The implementation has to vary alpha across a row, but the fade math is REPL-specific and the generic text panel must not call out per character.
+
+    **Design** — keep the fade machinery in `ui_repl_code_panel.c` and use a small color-segments array on the row, written by the adapter and walked by the renderer:
+
+    ```c
+    /* In text_panel.h — generic, no fade-specific naming */
+    #define UI_TEXT_PANEL_MAX_COLOR_SEGMENTS 4
+    typedef struct {
+        int                 char_start;   /* inclusive */
+        int                 char_count;
+        UiTextPanelColor    color;        /* applied via one glColor4f for the whole span */
+    } UiTextPanelColorSegment;
+    /* On UiTextPanelRow: */
+    UiTextPanelColorSegment color_segments[UI_TEXT_PANEL_MAX_COLOR_SEGMENTS];
+    int                     color_segment_count;   /* 0 = use row's solid text_color */
+    ```
+
+    - Why this avoids a function call per char: the fade is monotonic and produces a typewriter-reveal shape — at any instant, characters before the wipe front are fully visible (α = 1.0), the leading character is mid-ramp (α ∈ (0, 1)), and characters after are hidden (α = 0.0). That's at most **3 segments per fading row**, regardless of row length. The renderer issues one `glColor4f` per segment and batches `glutBitmapCharacter` calls inside — `O(segments)` color changes, not `O(chars)`.
+    - Why this is implementation-specific: the segment field is generic data ("color may vary across char ranges"), but the *fade-aware* code that calls `tutorial_step_fade_alpha` and computes the wipe front lives entirely in `ui_repl_code_panel.c`. The generic text panel never imports `widgets/tutorial.h` and has no `UiTextPanelFadeFn` symbol in its API surface.
+    - Default cost: rows with `color_segment_count == 0` (the 99% case) bypass the segment loop entirely and use the row's `text_color` — no overhead added for non-fading rows.
+    - Adapter responsibility: for any row where `tutorial_line_is_fading(line_idx, now)` is true, call a local helper (e.g. `static void fill_fade_segments(int line_idx, int line_len, float now, UiTextPanelRow *row);`) that calls `tutorial_step_fade_alpha` at most ~3 times to find the wipe-front character and writes 1-3 segments into the row. Cap at `UI_TEXT_PANEL_MAX_COLOR_SEGMENTS` (4); fall back to a single dimmed segment if the cap is ever exceeded (it won't be in practice).
   - render REPL-specific statusbar after `ui_text_panel_render()` returns, using the `UiTextPanelOutput.statusbar_slot_rect` so the adapter doesn't recompute layout.
 - Keep existing visual behavior by having:
   - `ui_panels_render_code_panel()` call `ui_repl_code_panel_render()`
