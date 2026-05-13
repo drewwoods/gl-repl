@@ -708,6 +708,7 @@ static void repl_code_panel_add_placeholder_row(ReplCodePanelBuilder *builder,
     row->text = "";
     row->kind = UI_TEXT_PANEL_ROW_PLACEHOLDER;
     row->left_gutter_label = builder->file_line++;
+    row->source_line_idx = hit_target_line_idx;
     row->hit_target_line_idx = hit_target_line_idx;
     row->indent_chars = indent_chars;
     row->hit_eligible = 1;

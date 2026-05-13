@@ -496,6 +496,26 @@ int main(void) {
     ASSERT_TRUE("backspace keeps edit line at start after delete", repl_state_edit_line() == 0);
 
     glr_app_reset_all(); declare_test_vars();
+    editor_feed_line("glBegin(GL_POINTS);");
+    editor_feed_line("glEnd();");
+    editor_navigate_to_line(0);
+    {
+        int linenum_w = 4 * FONT_W;
+        int idx_col_w = glr_state_presentation().show_vertex_indices ? (6 * FONT_W) : 0;
+        int text_x = CODE_MARGIN_X + linenum_w + FONT_W + idx_col_w;
+        int mx = text_x + 1;
+        int my = code_panel_mouse_y_for_cmd(repl_state_document_count());
+        UiHit hit = code_panel_hit_test_current_snapshot(mx, my,
+                                 g_num_predef_vars);
+        ASSERT_TRUE("trailing blank row hit kind", hit.kind == UI_HIT_CODE_TEXT);
+        ASSERT_TRUE("trailing blank row targets document end",
+                    hit.line_idx == repl_state_document_count());
+        glr_ctrl_router_handle_code_panel_hit(hit, mx, my);
+        ASSERT_TRUE("clicking trailing blank row navigates to document end",
+                    repl_state_edit_line() == repl_state_document_count());
+    }
+
+    glr_app_reset_all(); declare_test_vars();
     editor_feed_line("if(x > 0) {");
     editor_feed_line("glColor3f(1, 0, 0);");
     editor_feed_line("}");
