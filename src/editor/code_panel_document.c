@@ -14,6 +14,7 @@
 #include "repl/state_views.h" /* repl_state_edit_line, repl_state_document_count, etc. */
 #include "widgets/replay_state.h"     /* replay_active, replay_src_line */
 #include "ui/metrics.h"
+#include "ui/text_panel.h"
 
 #define g_workspace_header_lines (repl_state_import_export().workspace_header_lines)
 #define g_workspace_header_line_count (repl_state_import_export().workspace_header_line_count)
@@ -26,51 +27,21 @@ CodeLayout editor_code_panel_document_text_layout(int panel_w,
                                        glr_state_presentation().wrap_at_comma);
 }
 
-void editor_code_panel_document_wrap_iter_init(CodeWrapIter *it,
-                                             const char *text,
-                                             int first_x, int panel_w) {
-    CodeLayout layout =
-        editor_code_panel_document_text_layout(panel_w, first_x);
-    code_layout_wrap_iter_init(it, text, &layout);
-}
-
-int editor_code_panel_document_wrap_iter_next(CodeWrapIter *it,
-                                            int *out_start,
-                                            int *out_len,
-                                            int *out_x) {
-    return code_layout_wrap_iter_next(it, out_start, out_len, out_x);
-}
-
-int editor_code_panel_document_row_count_for_text(const char *text,
-                                                int first_x, int panel_w) {
-    CodeLayout layout =
-        editor_code_panel_document_text_layout(panel_w, first_x);
+/* File-local layout helpers. Build the layout from app state and forward to
+ * the pure code_layout_* functions in ui/text_layout.h. These replaced the
+ * five public wrapper functions removed in Phase 1 of the editor-demo split;
+ * the app-state read (glr_state_presentation().wrap_at_comma) stays here so
+ * ui/text_layout remains free of app-state dependencies. */
+static int cpd_row_count(const char *text, int first_x, int panel_w) {
+    CodeLayout layout = editor_code_panel_document_text_layout(panel_w, first_x);
     return code_layout_row_count_for_text(text, &layout);
 }
 
-int editor_code_panel_document_segment_for_row(const char *text,
-                                             int first_x, int panel_w,
-                                             int want_row,
-                                             int *out_start,
-                                             int *out_len,
-                                             int *out_x) {
-    CodeLayout layout =
-        editor_code_panel_document_text_layout(panel_w, first_x);
-    return code_layout_segment_for_row(text, &layout, want_row,
+static int cpd_cursor_row(const char *text, int first_x, int panel_w,
+                          int cursor, int *out_start, int *out_len, int *out_x) {
+    CodeLayout layout = editor_code_panel_document_text_layout(panel_w, first_x);
+    return code_layout_cursor_row_for_text(text, &layout, cursor,
                                            out_start, out_len, out_x);
-}
-
-int editor_code_panel_document_cursor_row_for_text(const char *text,
-                                                 int first_x, int panel_w,
-                                                 int cursor_pos,
-                                                 int *out_seg_start,
-                                                 int *out_seg_len,
-                                                 int *out_seg_x) {
-    CodeLayout layout =
-        editor_code_panel_document_text_layout(panel_w, first_x);
-    return code_layout_cursor_row_for_text(text, &layout, cursor_pos,
-                                               out_seg_start, out_seg_len,
-                                               out_seg_x);
 }
 
 static int code_panel_header_row_count(int panel_w, int text_x) {
@@ -78,19 +49,19 @@ static int code_panel_header_row_count(int panel_w, int text_x) {
 
     /* Count rows for workspace header lines. */
     for (int header_line_idx = 0; header_line_idx < g_workspace_header_line_count; header_line_idx++)
-        rows += editor_code_panel_document_row_count_for_text(
+        rows += cpd_row_count(
             g_workspace_header_lines[header_line_idx], text_x, panel_w);
     /* Count rows for pre-header setup lines. */
     for (int line_idx = 0; g_header_pre[line_idx]; line_idx++)
-        rows += editor_code_panel_document_row_count_for_text(
+        rows += cpd_row_count(
             g_header_pre[line_idx], text_x, panel_w);
     /* Count rows for render state setup lines. */
     for (int state_line_idx = 0; state_line_idx < RENDER_STATE_LINE_COUNT; state_line_idx++)
-        rows += editor_code_panel_document_row_count_for_text(
+        rows += cpd_row_count(
             g_render_state_lines[state_line_idx], text_x, panel_w);
     /* Count rows for camera transformation lines. */
     for (int cam_line_idx = 0; cam_line_idx < CAM_LINE_COUNT; cam_line_idx++)
-        rows += editor_code_panel_document_row_count_for_text(
+        rows += cpd_row_count(
             g_cam_lines[cam_line_idx], text_x, panel_w);
     /* Count rows for light position lines (after camera transforms — they
      * snapshot the post-camera modelview). */
@@ -99,13 +70,13 @@ static int code_panel_header_row_count(int panel_w, int text_x) {
         int n = repl_export_lights_display_line_count();
         for (int pos_idx = 0; pos_idx < n; pos_idx++) {
             repl_export_lights_display_line(pos_idx, line, sizeof(line));
-            rows += editor_code_panel_document_row_count_for_text(
+            rows += cpd_row_count(
                 line, text_x, panel_w);
         }
     }
     /* Count rows for post-header setup lines. */
     for (int line_idx = 0; g_header_post[line_idx]; line_idx++)
-        rows += editor_code_panel_document_row_count_for_text(
+        rows += cpd_row_count(
             g_header_post[line_idx], text_x, panel_w);
 
     return rows;
@@ -117,17 +88,17 @@ static int code_panel_footer_row_count(int panel_w, int text_x) {
 
     /* Count rows for pre-init footer lines. */
     for (int line_idx = 0; g_footer_pre_init[line_idx]; line_idx++)
-        rows += editor_code_panel_document_row_count_for_text(
+        rows += cpd_row_count(
             g_footer_pre_init[line_idx], text_x, panel_w);
     /* Count rows for init section lines. */
     for (int init_line_idx = 0; init_line_idx < repl_export_init_section_line_count(); init_line_idx++) {
         repl_export_init_section_line(init_line_idx, line, sizeof(line));
-        rows += editor_code_panel_document_row_count_for_text(
+        rows += cpd_row_count(
             line, text_x, panel_w);
     }
     /* Count rows for post-init footer lines. */
     for (int line_idx = 0; g_footer_post_init[line_idx]; line_idx++)
-        rows += editor_code_panel_document_row_count_for_text(
+        rows += cpd_row_count(
             g_footer_post_init[line_idx], text_x, panel_w);
 
     return rows;
@@ -156,7 +127,7 @@ int editor_code_panel_document_active_indent_chars(void) {
 static int code_panel_command_main_rows(int cmd_idx, int panel_w, int text_x) {
     if (!editor_insert_mode() && cmd_idx == repl_state_edit_line()) {
         int indent_chars = editor_code_panel_document_active_indent_chars();
-        return editor_code_panel_document_row_count_for_text(
+        return cpd_row_count(
             editor_state_input().input, text_x + indent_chars * FONT_W, panel_w);
     }
 
@@ -166,7 +137,7 @@ static int code_panel_command_main_rows(int cmd_idx, int panel_w, int text_x) {
             display_text = editor_buffer_line(cmd_idx);
         if (!display_text)
             display_text = "";
-        return editor_code_panel_document_row_count_for_text(display_text,
+        return cpd_row_count(display_text,
                                                            text_x, panel_w);
     }
 }
@@ -186,14 +157,14 @@ static void code_panel_precompute_layout_rows(int panel_w, int text_x,
 
 static int code_panel_insert_rows(int panel_w, int text_x) {
     int indent_chars = editor_code_panel_document_active_indent_chars();
-    return editor_code_panel_document_row_count_for_text(
+    return cpd_row_count(
         editor_state_input().input, text_x + indent_chars * FONT_W, panel_w);
 }
 
 static int code_panel_newline_rows(int panel_w, int text_x) {
     if (repl_state_edit_line() == repl_state_document_count()) {
         int indent_chars = editor_code_panel_document_active_indent_chars();
-        return editor_code_panel_document_row_count_for_text(
+        return cpd_row_count(
             editor_state_input().input, text_x + indent_chars * FONT_W, panel_w);
     }
     return 1;
@@ -210,7 +181,7 @@ static int code_panel_cursor_doc_line_from_layout(
             cursor_doc_line += cmd_main_rows[cmd_idx];
             cursor_doc_line += replay_extra_rows[cmd_idx];
         }
-        cursor_doc_line += editor_code_panel_document_cursor_row_for_text(
+        cursor_doc_line += cpd_cursor_row(
             editor_state_input().input, text_x + editor_code_panel_document_active_indent_chars() * FONT_W,
             panel_w, editor_cursor_pos(), NULL, NULL, NULL);
     } else if (repl_state_edit_line() < repl_state_document_count()) {
@@ -219,7 +190,7 @@ static int code_panel_cursor_doc_line_from_layout(
             cursor_doc_line += cmd_main_rows[cmd_idx];
             cursor_doc_line += replay_extra_rows[cmd_idx];
         }
-        cursor_doc_line += editor_code_panel_document_cursor_row_for_text(
+        cursor_doc_line += cpd_cursor_row(
             editor_state_input().input, text_x + editor_code_panel_document_active_indent_chars() * FONT_W,
             panel_w, editor_cursor_pos(), NULL, NULL, NULL);
     } else {
@@ -228,7 +199,7 @@ static int code_panel_cursor_doc_line_from_layout(
             cursor_doc_line += cmd_main_rows[cmd_idx];
             cursor_doc_line += replay_extra_rows[cmd_idx];
         }
-        cursor_doc_line += editor_code_panel_document_cursor_row_for_text(
+        cursor_doc_line += cpd_cursor_row(
             editor_state_input().input, text_x + editor_code_panel_document_active_indent_chars() * FONT_W,
             panel_w, editor_cursor_pos(), NULL, NULL, NULL);
     }
@@ -263,10 +234,7 @@ static int code_panel_follow_doc_line_from_layout(
 }
 
 int editor_code_panel_document_visible_lines_for_height(int cp_h) {
-    int available = cp_h - CODE_MARGIN_Y - 2 * LINE_H - 3 - STATUSBAR_H;
-    if (available < 0)
-        return 1;
-    return available / LINE_H + 1;
+    return ui_text_panel_visible_lines_for_height(cp_h);
 }
 
 void editor_code_panel_document_build(CodePanelDocumentLayout *layout,

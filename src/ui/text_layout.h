@@ -34,6 +34,10 @@
  *
  * Moved from src/editor/code_layout.h in Phase 1 of the editor-demo SRP split.
  * This file has no dependency on repl, editor, or app headers.
+ *
+ * Naming note: all public types and functions use the code_layout_* / CodeLayout
+ * prefix rather than text_layout_* to minimise caller churn from the file rename.
+ * A follow-up refactor can unify the names independently.
  */
 #ifndef UI_TEXT_LAYOUT_H
 #define UI_TEXT_LAYOUT_H

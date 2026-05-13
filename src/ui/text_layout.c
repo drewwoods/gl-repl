@@ -6,7 +6,7 @@
  * dumps. Keep wrapping math here so those paths do not grow separate copies.
  *
  * Moved from src/editor/code_layout.c in Phase 1 of the editor-demo SRP split.
- * This file has no dependency on repl/*, editor/*, or app/* headers.
+ * This file has no dependency on repl, editor, or app headers.
  */
 #include "ui/text_layout.h"
 

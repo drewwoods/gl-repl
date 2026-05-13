@@ -8,7 +8,7 @@
  * and delegates to these functions.
  *
  * Constraints (enforced by make check-ui-text-panel-pure, Phase 7):
- *   - This file must not include repl/* or editor/* headers.
+ *   - This file must not include repl or editor headers.
  *   - This file must not mention GLCmd, CmdType, or CMD_*.
  *
  * Row model:
@@ -64,18 +64,19 @@ typedef enum {
 } UiTextPanelRowKind;
 
 /* -------------------------------------------------------------------------
- * Right-edge interactive action (color swatch for the REPL adapter)
+ * Right-edge decoration
  * ---------------------------------------------------------------------- */
 
-/* Right-edge decoration drawn at cp_x + cp_w - margin - swatch_w. When
- * active the renderer draws a filled color rectangle; a hit on the swatch
- * returns UI_HIT_INLINE_COLOR_SWATCH so the controller can open the picker.
- * The generic panel treats the color as opaque — it does not interpret what
- * the swatch represents. */
+/* Right-edge decoration drawn at the trailing end of a code-panel row.
+ * When active the renderer draws a filled color rectangle at the row's
+ * right margin. A hit on this region returns UI_HIT_INLINE_COLOR_SWATCH.
+ * The generic panel treats the color data as opaque display values — it
+ * does not interpret what the decoration represents. The REPL adapter
+ * fills this with swatch data for live-editable color arguments. */
 typedef struct {
-    int   active;        /* non-zero if a swatch is present on this row */
-    float r, g, b;       /* swatch fill color */
-} UiTextPanelSwatch;
+    int   active;        /* non-zero if a decoration is present on this row */
+    float r, g, b;       /* decoration fill color */
+} UiTextPanelRightAction;
 
 /* -------------------------------------------------------------------------
  * Row descriptor
@@ -96,8 +97,8 @@ typedef struct {
  *                      column. 0 means no label (static/virtual rows).
  *   left_aux_label   - Optional short string drawn at the idx_x column
  *                      (e.g. "v3", "vn"). Empty string means no label.
- *   swatch           - Right-edge interactive color swatch. active==0 means
- *                      no swatch on this row.
+   *   right_action     - Right-edge decoration. active==0 means no
+   *                      decoration on this row.
  *   source_line_idx  - Index into the source document (-1 for rows not
  *                      directly backed by a source command).
  *   hit_target_line_idx - For VIRTUAL rows: the source line index that
@@ -119,7 +120,7 @@ typedef struct {
     UiTextPanelRowKind    kind;
     int                   left_gutter_label;
     char                  left_aux_label[8];
-    UiTextPanelSwatch     swatch;
+    UiTextPanelRightAction right_action;
     int                   source_line_idx;
     int                   hit_target_line_idx;
     int                   search_row_idx;
