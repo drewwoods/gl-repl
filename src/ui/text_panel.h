@@ -62,9 +62,10 @@ typedef enum {
     UI_TEXT_PANEL_ROW_PLACEHOLDER,
 
     /* Adapter-supplied row not backed by a source line directly (replay
-     * annotations, evaluated-arg previews). Carries hit_target_line_idx
-     * so clicks route to the owning source line, or -1 for non-hit-testable
-     * virtual rows (demo-only rows). */
+     * annotations, evaluated-arg previews). ui_text_panel_hit_test()
+     * leaves line_idx unresolved for VIRTUAL rows; the adapter rewrites
+     * those hits to hit_target_line_idx before controller routing. -1 means
+     * the row is not hit-testable (demo-only rows). */
     UI_TEXT_PANEL_ROW_VIRTUAL,
 } UiTextPanelRowKind;
 
@@ -125,9 +126,12 @@ typedef struct {
  *                      this region is adapter-owned.
  *   source_line_idx  - Index into the source document (-1 for rows not
  *                      directly backed by a source command).
- *   hit_target_line_idx - For VIRTUAL rows: the source line index that
- *                      mouse clicks on this row should route to. -1 for
- *                      non-hit-testable virtual rows.
+    *   hit_target_line_idx - For VIRTUAL rows: the source line index the
+    *                      adapter should route clicks to. The generic
+    *                      hit-tester leaves line_idx unresolved for these
+    *                      rows and the adapter rewrites it before returning
+    *                      the hit to callers. -1 for non-hit-testable
+    *                      virtual rows.
  *   search_row_idx   - Row index in the editor search row space, or -1
  *                      for rows outside the search model (static chrome,
  *                      non-searchable virtual rows). Compared with
@@ -316,7 +320,10 @@ void ui_text_panel_render(const UiTextPanelSnapshot *snap,
  * returned: UI_HIT_CODE_TEXT, UI_HIT_CODE_INSERT_LINE,
  * UI_HIT_CODE_GUTTER, UI_HIT_PANEL_DIVIDER, UI_HIT_NONE. Adapters that
  * expose feature-specific right-edge actions own that routing and may
- * rewrite to UI_HIT_INLINE_COLOR_SWATCH or another feature-specific kind. */
+ * rewrite to UI_HIT_INLINE_COLOR_SWATCH or another feature-specific kind.
+ * For UI_TEXT_PANEL_ROW_VIRTUAL rows, the generic hit-test may leave
+ * line_idx = -1; the adapter is responsible for rewriting it to the
+ * owning source line before controller routing. */
 UiHit ui_text_panel_hit_test(const UiTextPanelSnapshot *snap,
                               int mx, int my);
 

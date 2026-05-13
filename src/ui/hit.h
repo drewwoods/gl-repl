@@ -12,7 +12,9 @@
  * handlers. It carries enough context for the controller to dispatch
  * to the right owner — the kind of region that was hit, plus optional
  * coordinate fields (line / row / char / cmd index) the owner uses to
- * interpret the hit.
+ * interpret the hit. Some generic hit-testers leave adapter-owned
+ * virtual rows unresolved; the adapter rewrites those hits before the
+ * controller routes them.
  *
  * The struct is intentionally narrow. Click-driven UI elements that
  * still need richer state (e.g. color picker drag in progress) keep
@@ -48,7 +50,10 @@ typedef enum {
  * fields; each composer fills only what its kind requires.
  *
  *   UI_HIT_CODE_TEXT
- *     line_idx = committed source-cmd row the click landed on
+ *     line_idx = committed source-cmd row the click landed on after any
+ *                adapter-side rewrite; generic text-panel virtual rows may
+ *                still arrive with line_idx = -1 until that rewrite
+ *                happens
  *     char_idx = input-cursor target (column within input buffer)
  *     visual_row = wrap-row offset within line_idx
  *     cmd_idx = logical text-panel row index (adapter-private lookup key)
@@ -98,7 +103,8 @@ typedef struct {
     UiHitKind kind;
 
     /* Source-command line targeted by the hit. -1 when not
-     * applicable. */
+     * applicable, including generic text-panel virtual rows before the
+     * adapter rewrites them. */
     int  line_idx;
 
     /* Visual row inside that line (for wrap-aware code panel
