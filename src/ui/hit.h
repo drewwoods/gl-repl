@@ -31,6 +31,7 @@ typedef enum {
     UI_HIT_CODE_TEXT,            /* committed code-panel text row */
     UI_HIT_CODE_INSERT_LINE,     /* code-panel "next line" past last commit */
     UI_HIT_CODE_GUTTER,          /* code-panel left margin / line numbers */
+    UI_HIT_CODE_PANEL_CHROME,    /* non-text code-panel chrome (e.g. statusbar) */
     UI_HIT_INLINE_COLOR_SWATCH,  /* inline color swatch drawn in a code-panel row */
     UI_HIT_COLOR_SWATCH,         /* floating color picker slider control */
     UI_HIT_MENU_BUTTON,          /* top-level menu-bar button (open / switch / dismiss) */
@@ -62,6 +63,9 @@ typedef enum {
  *     line_idx = committed source-cmd row
  *     visual_row = wrap-row offset
  *     cmd_idx = logical text-panel row index
+
+ *   UI_HIT_CODE_PANEL_CHROME
+ *     coordinates only, no line / row payload
  *
  *   UI_HIT_PANEL_DIVIDER  — coordinates only, no line / row payload
  *

@@ -46,50 +46,27 @@ static TestHarness g_harness = TEST_HARNESS_INIT;
     TEST_ASSERT_TRUE(&g_harness, label, gl_stub_counts[counter] >= (min_calls)); \
 } while (0)
 
-/* Build a UiRenderSnapshot from the current REPL state for renderer tests.
- * Mirrors glr_ctrl_build_ui_snapshot(); the test harness can't link the
- * controller TU, so we duplicate the relevant slice population here. */
+/* Build a UiRenderSnapshot from the current REPL state for renderer tests. */
 static void make_test_ui_snapshot(UiRenderSnapshot *snap) {
-    FlatProgramView flat_program;
-    ReplPredefView predef;
-    memset(snap, 0, sizeof(*snap));
-    snap->viewport       = ui_state_viewport();
-    snap->code_panel     = ui_state_code_panel();
-    snap->help           = ui_state_help();
-    snap->help_session   = editor_help_session_view();
-    snap->variable_panel = variable_panel_view();
-    snap->profile_panel  = ui_state_profile_panel();
-    snap->status         = ui_state_status();
-    snap->search         = editor_state_search();
-    snap->autocomplete   = editor_state_autocomplete();
-    snap->pointer        = ui_state_pointer();
-    snap->render         = glr_state_render();
-    snap->replay         = replay_state_view();
-    snap->scenes         = repl_state_scenes();
-    snap->scroll         = editor_state_scroll();
-    snap->color_picker   = color_picker_view();
-    snap->editor_input   = editor_state_input();
-    snap->import_export  = repl_state_import_export();
-    flat_program         = repl_state_flat_program_view();
-    predef = repl_eval_predef_view();
-    snap->variable_panel_vars.vars = snap->variable_panel_var_storage;
-    snap->variable_panel_vars.count = predef.count;
-    if (snap->variable_panel_vars.count < 0 || !predef.vars)
-        snap->variable_panel_vars.count = 0;
-    if (snap->variable_panel_vars.count > MAX_PREDEF_VARS)
-        snap->variable_panel_vars.count = MAX_PREDEF_VARS;
-    for (int i = 0; i < snap->variable_panel_vars.count; i++) {
-        snprintf(snap->variable_panel_var_storage[i].name,
-                 sizeof(snap->variable_panel_var_storage[i].name),
-                 "%s", predef.vars[i].name);
-        snap->variable_panel_var_storage[i].value = &predef.vars[i].value;
-    }
-    snap->document_cmds  = repl_state_document_cmds();
-    snap->document_count = repl_state_document_count();
-    snap->edit_line      = repl_state_edit_line();
-    snap->flat_program_count = flat_program.cmd_count;
-    snap->anim_time      = repl_state_variables().anim_time;
-    snap->user_scene_active_idx = -1;
+    glr_ctrl_build_ui_snapshot(snap);
+    glr_ctrl_code_panel_apply_scroll_follow_for_test(snap, NULL, NULL);
+    glr_ctrl_build_ui_snapshot(snap);
+}
+
+static UiHit ui_panels_hit_test_current_snapshot(int mx, int my,
+                                                 int variable_count) {
+    UiRenderSnapshot snap;
+
+    make_test_ui_snapshot(&snap);
+    return ui_panels_hit_test(&snap, mx, my, variable_count);
+}
+
+static void build_test_code_panel_layout(UiReplCodePanelLayout *layout,
+                                         int cp_w, int text_x, int cp_h) {
+    UiRenderSnapshot snap;
+
+    make_test_ui_snapshot(&snap);
+    ui_repl_code_panel_build_layout(&snap, layout, cp_w, text_x, cp_h);
 }
 
 /* Test-side helper: build a fresh ColorPickerView and hit-test against
@@ -414,23 +391,35 @@ static void test_ui_panels_hit_test(void) {
     ui_state_viewport_set_size(800, 600);
 
     /* Click in the scene region (below the panel, my > 270). */
-    UiHit h_scene = ui_panels_hit_test(400, 400, 0);
+    UiHit h_scene = ui_panels_hit_test_current_snapshot(400, 400, 0);
     ASSERT_TRUE("scene hit kind", h_scene.kind == UI_HIT_SCENE);
 
     /* Click inside the code panel's text area. mx > gutter end
      * (CODE_MARGIN_X + 4*FONT_W = ~40) and my within the panel. */
-    UiHit h_text = ui_panels_hit_test(150, 100, 0);
+    UiHit h_text = ui_panels_hit_test_current_snapshot(150, 100, 0);
     ASSERT_TRUE("code-panel text hit kind",
                 h_text.kind == UI_HIT_CODE_TEXT);
 
     /* Click in the gutter (line numbers, mx < ~40). */
-    UiHit h_gutter = ui_panels_hit_test(20, 100, 0);
+    UiHit h_gutter = ui_panels_hit_test_current_snapshot(20, 100, 0);
     ASSERT_TRUE("code-panel gutter hit kind",
                 h_gutter.kind == UI_HIT_CODE_GUTTER);
 
+    {
+        int cp_x, cp_y, cp_w, cp_h;
+        int my_status;
+
+        ui_layout_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
+        my_status = ui_state_viewport().window_h - (cp_y + STATUSBAR_H / 2);
+        UiHit h_status = ui_panels_hit_test_current_snapshot(cp_x + cp_w / 2,
+                                                             my_status, 0);
+        ASSERT_TRUE("code-panel statusbar consumes clicks",
+                    h_status.kind == UI_HIT_CODE_PANEL_CHROME);
+    }
+
     /* Help overlay takes priority over everything. */
     ui_state_help_mut()->visible = 1;
-    UiHit h_help = ui_panels_hit_test(150, 100, 0);
+    UiHit h_help = ui_panels_hit_test_current_snapshot(150, 100, 0);
     ASSERT_TRUE("help overlay takes priority",
                 h_help.kind == UI_HIT_HELP_PANEL);
     ui_state_help_mut()->visible = 0;
@@ -578,14 +567,14 @@ static void test_ui_panels_hit_test_dispatch(void) {
     int px, py, pw, ph;
     ui_variable_panel_rect_for_count(1, &px, &py, &pw, &ph);
     int my_var = ui_state_viewport().window_h - (py + 10);
-    UiHit h_var = ui_panels_hit_test(px + 10, my_var, 1);
+    UiHit h_var = ui_panels_hit_test_current_snapshot(px + 10, my_var, 1);
     ASSERT_TRUE("var panel routed via panels_hit_test",
                 h_var.kind == UI_HIT_VARIABLE_SLIDER);
     variable_panel_view_mut()->visible = 0;
 
     /* Menu pin button click should resolve as UI_HIT_PIN_BUTTON. */
     ui_menu_bar_close();
-    UiHit h_pin = ui_panels_hit_test(380, 10, 0);
+    UiHit h_pin = ui_panels_hit_test_current_snapshot(380, 10, 0);
     ASSERT_TRUE("pin routed via panels_hit_test",
                 h_pin.kind == UI_HIT_PIN_BUTTON);
 
@@ -612,7 +601,7 @@ static void test_ui_panels_hit_test_dispatch(void) {
         }
     }
     ASSERT_TRUE("dispatch SV rect probed", sv_mx >= 0);
-    UiHit h_pick = ui_panels_hit_test(sv_mx, sv_my, 0);
+    UiHit h_pick = ui_panels_hit_test_current_snapshot(sv_mx, sv_my, 0);
     ASSERT_TRUE("picker routed via panels_hit_test",
                 h_pick.kind == UI_HIT_COLOR_SWATCH);
     color_picker_close();
@@ -629,7 +618,7 @@ static void test_ui_panels_hit_test_panel_divider(void) {
     glr_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT; glr_ctrl_sync_ui_chrome();
     int cp_x, cp_y, cp_w, cp_h;
     ui_layout_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
-    UiHit h_left = ui_panels_hit_test(cp_x + cp_w, cp_y + 20, 0);
+    UiHit h_left = ui_panels_hit_test_current_snapshot(cp_x + cp_w, cp_y + 20, 0);
     ASSERT_TRUE("LEFT divider hit kind",
                 h_left.kind == UI_HIT_PANEL_DIVIDER);
 
@@ -638,7 +627,7 @@ static void test_ui_panels_hit_test_panel_divider(void) {
     glr_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_TOP; glr_ctrl_sync_ui_chrome();
     ui_layout_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
     int my_top = ui_state_viewport().window_h - cp_y;
-    UiHit h_top = ui_panels_hit_test(cp_x + 100, my_top, 0);
+    UiHit h_top = ui_panels_hit_test_current_snapshot(cp_x + 100, my_top, 0);
     ASSERT_TRUE("TOP divider hit kind",
                 h_top.kind == UI_HIT_PANEL_DIVIDER);
 
@@ -646,13 +635,13 @@ static void test_ui_panels_hit_test_panel_divider(void) {
     glr_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_BOTTOM; glr_ctrl_sync_ui_chrome();
     ui_layout_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
     int my_bot = ui_state_viewport().window_h - (cp_y + cp_h);
-    UiHit h_bot = ui_panels_hit_test(cp_x + 100, my_bot, 0);
+    UiHit h_bot = ui_panels_hit_test_current_snapshot(cp_x + 100, my_bot, 0);
     ASSERT_TRUE("BOTTOM divider hit kind",
                 h_bot.kind == UI_HIT_PANEL_DIVIDER);
 
     /* HIDDEN layout: no divider. */
     glr_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_HIDDEN; glr_ctrl_sync_ui_chrome();
-    UiHit h_hidden = ui_panels_hit_test(400, 300, 0);
+    UiHit h_hidden = ui_panels_hit_test_current_snapshot(400, 300, 0);
     ASSERT_TRUE("HIDDEN layout has no divider hit",
                 h_hidden.kind != UI_HIT_PANEL_DIVIDER);
 
@@ -686,7 +675,7 @@ static void code_panel_first_row_text_click(int *out_mx, int *out_my) {
     int idx_col_w = glr_state_presentation().show_vertex_indices ? (6 * FONT_W) : 0;
     int text_x = CODE_MARGIN_X + linenum_w + FONT_W + idx_col_w;
     UiReplCodePanelLayout layout;
-    ui_repl_code_panel_build_layout(&layout, cp_w, text_x, cp_h);
+    build_test_code_panel_layout(&layout, cp_w, text_x, cp_h);
 
     /* Scroll past the header so vis=0 maps to a resolvable doc row. */
     editor_scroll_set(layout.header_rows);
@@ -721,7 +710,7 @@ static void test_ui_panels_hit_test_code_text_cursor(void) {
         inp->input[0] = '\0';
         inp->input_len = 0;
     }
-    UiHit h_empty = ui_panels_hit_test(mx, my, 0);
+    UiHit h_empty = ui_panels_hit_test_current_snapshot(mx, my, 0);
     ASSERT_TRUE("empty input code-text kind",
                 h_empty.kind == UI_HIT_CODE_TEXT ||
                 h_empty.kind == UI_HIT_CODE_INSERT_LINE);
@@ -736,7 +725,7 @@ static void test_ui_panels_hit_test_code_text_cursor(void) {
         strcpy(inp->input, "abcdef");
         inp->input_len = 6;
     }
-    UiHit h_mid = ui_panels_hit_test(mx + 4 * FONT_W, my, 0);
+    UiHit h_mid = ui_panels_hit_test_current_snapshot(mx + 4 * FONT_W, my, 0);
     ASSERT_TRUE("mid-input code-text kind",
                 h_mid.kind == UI_HIT_CODE_TEXT ||
                 h_mid.kind == UI_HIT_CODE_INSERT_LINE);
@@ -766,13 +755,29 @@ static void test_ui_panels_hit_test_insert_line(void) {
     int mx, my;
     code_panel_first_row_text_click(&mx, &my);
 
-    UiHit h = ui_panels_hit_test(mx, my, 0);
+    UiHit h = ui_panels_hit_test_current_snapshot(mx, my, 0);
     ASSERT_TRUE("insert-mode ghost row hit kind",
                 h.kind == UI_HIT_CODE_INSERT_LINE);
     ASSERT_INT("insert-line line_idx == edit_line",
                h.line_idx, repl_state_edit_line());
 
     editor_insert_mode_set(0);
+}
+
+static void test_ui_panels_hit_test_overwrite_row_kind(void) {
+    glr_app_reset_all();
+    ui_state_viewport_set_size(800, 600);
+
+    editor_feed_line("glBegin(GL_POINTS);");
+    repl_state_edit_line_set(0);
+    editor_insert_mode_set(0);
+
+    int mx, my;
+    code_panel_first_row_text_click(&mx, &my);
+
+    UiHit h = ui_panels_hit_test_current_snapshot(mx, my, 0);
+    ASSERT_TRUE("overwrite active row hit kind",
+                h.kind == UI_HIT_CODE_TEXT);
 }
 
 /* Regression: glVertex2f commands should generate gutter vertex-index labels
@@ -1015,6 +1020,7 @@ int main(void) {
     test_ui_panels_hit_test_panel_divider();
     test_ui_panels_hit_test_code_text_cursor();
     test_ui_panels_hit_test_insert_line();
+    test_ui_panels_hit_test_overwrite_row_kind();
     test_vertex2f_gutter_labels();
     test_tutorial_fade_render_uses_per_char_path();
     test_tutorial_fade_handles_wrapped_lines();

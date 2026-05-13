@@ -99,6 +99,30 @@ static void declare_test_vars(void) {
     ASSERT_DECL_OK("declare_predef_var n", repl_eval_declare_predef_var("n", err, sizeof(err)), err);
 }
 
+static int apply_code_panel_follow_for_test(int *out_follow_doc_line,
+                                            int *out_visible_lines) {
+    UiRenderSnapshot snap;
+
+    glr_ctrl_build_ui_snapshot(&snap);
+    return glr_ctrl_code_panel_apply_scroll_follow_for_test(
+        &snap, out_follow_doc_line, out_visible_lines);
+}
+
+static UiHit code_panel_hit_test_current_snapshot(int mx, int my,
+                                                  int variable_count) {
+    UiRenderSnapshot snap;
+
+    glr_ctrl_build_ui_snapshot(&snap);
+    return ui_panels_hit_test(&snap, mx, my, variable_count);
+}
+
+static int current_active_indent_chars(void) {
+    UiRenderSnapshot snap;
+
+    glr_ctrl_build_ui_snapshot(&snap);
+    return snap.active_indent_chars;
+}
+
 #include "widgets/variable_panel_state.h"
 #include "widgets/variable_panel_drag.h"
 
@@ -1071,7 +1095,7 @@ int main() {
         editor_navigate_to_line(2);
 
         ASSERT_INT("blank line edit uses scope indent",
-                   ui_repl_code_panel_active_indent_chars(),
+                   current_active_indent_chars(),
                    repl_source_scope_cmd_indent_chars(2));
     }
 
@@ -2054,8 +2078,8 @@ int main() {
         g_scroll = 0;
         g_scroll_follow_cursor = 0;
 
-        (void)ui_panels_code_panel_apply_scroll_follow_for_test(glr_state_presentation().show_vertex_indices, &follow_doc_line,
-                                                      &visible_lines);
+        (void)apply_code_panel_follow_for_test(&follow_doc_line,
+                               &visible_lines);
         ASSERT_TRUE("replay follow helper computes target",
                     follow_doc_line >= 0);
         ASSERT_INT("code panel visible rows match rendered rows",
@@ -2065,8 +2089,8 @@ int main() {
         g_scroll_follow_cursor = 1;
 
         ASSERT_TRUE("replay follow helper reports visible",
-                    ui_panels_code_panel_apply_scroll_follow_for_test(glr_state_presentation().show_vertex_indices, &follow_doc_line,
-                                                            &visible_lines));
+                    apply_code_panel_follow_for_test(&follow_doc_line,
+                                                     &visible_lines));
         ASSERT_INT("replay follow scrolls row above status bar",
                    g_scroll, follow_doc_line - visible_lines + 1);
         ASSERT_TRUE("replay follow line after scroll",
@@ -2142,23 +2166,23 @@ int main() {
 
         replay_expand_args = 0;
         repl_test_publish_replay_annotations();
-        (void)ui_panels_code_panel_apply_scroll_follow_for_test(glr_state_presentation().show_vertex_indices, &collapsed_follow,
-                                                      &visible_lines);
+        (void)apply_code_panel_follow_for_test(&collapsed_follow,
+                               &visible_lines);
         ASSERT_TRUE("collapsed replay follow resolves command row",
                     collapsed_follow >= 0);
 
         replay_expand_args = 1;
         repl_test_publish_replay_annotations();
-        (void)ui_panels_code_panel_apply_scroll_follow_for_test(glr_state_presentation().show_vertex_indices, &expanded_follow,
-                                                      &visible_lines);
+        (void)apply_code_panel_follow_for_test(&expanded_follow,
+                               &visible_lines);
         ASSERT_INT("expanded replay follows final annotation row",
                    expanded_follow, collapsed_follow + 2);
 
         replay_expand_args = 0;
         expanded_follow = -1;
         repl_test_publish_replay_annotations();
-        (void)ui_panels_code_panel_apply_scroll_follow_for_test(glr_state_presentation().show_vertex_indices, &expanded_follow,
-                                                      &visible_lines);
+        (void)apply_code_panel_follow_for_test(&expanded_follow,
+                               &visible_lines);
         ASSERT_INT("collapsed replay removes annotation rows from follow",
                    expanded_follow, collapsed_follow);
 
@@ -2221,7 +2245,7 @@ int main() {
         editor_cursor_pos_set(0);
         g_scroll = 0;
         g_scroll_follow_cursor = 1;
-        ui_panels_code_panel_apply_scroll_follow_for_test(glr_state_presentation().show_vertex_indices, &follow_insert, &visible_lines);
+        apply_code_panel_follow_for_test(&follow_insert, &visible_lines);
         ASSERT_TRUE("insert-at-end cursor in visible region",
                     follow_insert >= g_scroll &&
                     follow_insert < g_scroll + visible_lines);
@@ -2230,7 +2254,7 @@ int main() {
         editor_insert_mode_set(0);
         g_scroll = 0;
         g_scroll_follow_cursor = 1;
-        ui_panels_code_panel_apply_scroll_follow_for_test(glr_state_presentation().show_vertex_indices, &follow_overwrite, &visible_lines);
+        apply_code_panel_follow_for_test(&follow_overwrite, &visible_lines);
 
         ASSERT_INT("insert-at-end follow matches overwrite-at-end follow",
                    follow_insert, follow_overwrite);
@@ -2292,8 +2316,8 @@ int main() {
         ASSERT_INT("up nav: scroll_follow_cursor set", g_scroll_follow_cursor, 1);
 
         ASSERT_TRUE("up nav: cursor visible after follow",
-                    ui_panels_code_panel_apply_scroll_follow_for_test(glr_state_presentation().show_vertex_indices, &follow_doc_line,
-                                                            &visible_lines));
+                    apply_code_panel_follow_for_test(&follow_doc_line,
+                                                     &visible_lines));
     }
 
     /* Auto-commit modified lines before keyboard navigation. */
@@ -2403,7 +2427,8 @@ int main() {
         {
             int mx = CODE_MARGIN_X + 1;
             int my = code_panel_mouse_y_for_cmd(2);
-            UiHit hit = ui_panels_hit_test(mx, my, g_num_predef_vars);
+            UiHit hit = code_panel_hit_test_current_snapshot(mx, my,
+                                                             g_num_predef_vars);
             glr_ctrl_router_handle_code_panel_hit(hit, mx, my);
         }
 

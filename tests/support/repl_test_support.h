@@ -9,10 +9,10 @@
 
 /* Test-support shim that mirrors what the controller's per-frame snapshot
  * build does for replay annotations: prepare + publish. Tests that drive
- * ui_panels_code_panel_apply_scroll_follow_for_test() or other code-panel
+ * glr_ctrl_code_panel_apply_scroll_follow_for_test() or other code-panel
  * layout entry points directly (i.e. bypass glr_ctrl_build_ui_snapshot)
  * call this to bring editor_state_virtual_lines into the production
- * shape before the helper runs. Keeps the UI helper operating on
+ * shape before the helper runs. Keeps the controller helper operating on
  * already-published state, per the UI/controller boundary. */
 static inline void repl_test_publish_replay_annotations(void) {
     ReplReplayAnnotationOutput out;

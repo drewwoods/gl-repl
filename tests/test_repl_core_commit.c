@@ -66,7 +66,29 @@ static void declare_test_vars(void) {
     repl_eval_declare_predef_var("n", err, sizeof(err));
 }
 
+static void build_test_ui_snapshot(UiRenderSnapshot *snap) {
+    glr_ctrl_build_ui_snapshot(snap);
+}
+
+static int apply_code_panel_follow_for_test(int *out_follow_doc_line,
+                                            int *out_visible_lines) {
+    UiRenderSnapshot snap;
+
+    build_test_ui_snapshot(&snap);
+    return glr_ctrl_code_panel_apply_scroll_follow_for_test(
+        &snap, out_follow_doc_line, out_visible_lines);
+}
+
+static UiHit code_panel_hit_test_current_snapshot(int mx, int my,
+                                                  int variable_count) {
+    UiRenderSnapshot snap;
+
+    build_test_ui_snapshot(&snap);
+    return ui_panels_hit_test(&snap, mx, my, variable_count);
+}
+
 static int code_panel_mouse_y_for_cmd(int cmd_idx) {
+    UiRenderSnapshot snap;
     UiReplCodePanelLayout layout;
     int cp_y, cp_h, panel_w;
     int linenum_w = 4 * FONT_W;
@@ -76,10 +98,11 @@ static int code_panel_mouse_y_for_cmd(int cmd_idx) {
 
     /* Mirror the frame path: scroll-follow is applied before the code panel is
      * rendered or hit-tested, so synthetic mouse targets need the same step. */
-    (void)ui_panels_code_panel_apply_scroll_follow_for_test(glr_state_presentation().show_vertex_indices, NULL, NULL);
+    (void)apply_code_panel_follow_for_test(NULL, NULL);
 
     ui_layout_code_panel_rect(NULL, &cp_y, &panel_w, &cp_h);
-    ui_repl_code_panel_build_layout(&layout, panel_w, text_x, cp_h);
+    build_test_ui_snapshot(&snap);
+    ui_repl_code_panel_build_layout(&snap, &layout, panel_w, text_x, cp_h);
 
     doc_line = layout.header_rows;
     for (int i = 0; i < cmd_idx && i < repl_state_document_count(); i++)
@@ -128,7 +151,8 @@ static const char *flat_cmd_text(int pc) {
 /*
  * Mirror only the execute-time control-flow pieces that affect variables.
  * This lets the tests exercise goto/if/assignment replay rules without
- * needing a live GL context for the geometry commands in the same flat stream.
+            UiHit hit = code_panel_hit_test_current_snapshot(mx, my,
+                                                             g_num_predef_vars);
  */
 static void run_flat_control_flow_only(void) {
     int pc = 0;
@@ -450,9 +474,10 @@ int main(void) {
      * calls glr_ctrl_router_handle_code_panel_drag with the new
      * coords. */
     {
-        UiHit hit = ui_panels_hit_test(CODE_MARGIN_X + 1,
-                                       code_panel_mouse_y_for_cmd(0),
-                                       g_num_predef_vars);
+        UiHit hit = code_panel_hit_test_current_snapshot(
+            CODE_MARGIN_X + 1,
+            code_panel_mouse_y_for_cmd(0),
+            g_num_predef_vars);
         glr_ctrl_router_handle_code_panel_hit(hit, CODE_MARGIN_X + 1,
                                                  code_panel_mouse_y_for_cmd(0));
     }
@@ -481,7 +506,8 @@ int main(void) {
         int indent = test_leading_ws_chars(editor_buffer_line(1) ? editor_buffer_line(1) : "");
         int mx = text_x + indent * FONT_W + 1;
         int my = code_panel_mouse_y_for_cmd(1);
-        UiHit hit = ui_panels_hit_test(mx, my, g_num_predef_vars);
+        UiHit hit = code_panel_hit_test_current_snapshot(mx, my,
+                                 g_num_predef_vars);
         glr_ctrl_router_handle_code_panel_hit(hit, mx, my);
         ASSERT_TRUE("clicking indented active line keeps cursor at first char",
                     editor_cursor_pos() == 0);
