@@ -1221,6 +1221,109 @@ int main(void) {
     ASSERT_TRUE("mutual recursion: flatten reaches base case",
                 repl_state_flat_program_count() > 0);
 
+    /* Regression: commands marked CMD_TYPE_SPEC_NOT_IN_BEGIN in
+     * src/repl/command_spec.c must be rejected at commit time when
+     * source-scope says the cursor sits inside a glBegin/glEnd block.
+     * Representative CMD_TYPE_SPEC commands (vertex/normal/color/etc.)
+     * must still commit. Before this fix the executor defensively
+     * glEnd()ed the begin block for not-in-begin commands and never
+     * reopened it, silently dropping every subsequent glVertex inside
+     * the same flat-stream iteration of a for-loop. The parser is now
+     * the gate. */
+    {
+        static const struct {
+            const char *line;
+            const char *name_substr;
+        } not_in_begin_cases[] = {
+            { "glBegin(GL_LINES);",                                          "glBegin" },
+            { "glPointSize(2);",                                             "glPointSize" },
+            { "glLineWidth(2);",                                             "glLineWidth" },
+            { "glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION, 1, 0, 0);", "glPointParameterfv" },
+            { "glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);",          "glBlendFunc" },
+            { "glClearColor(0, 0, 0, 1);",                                   "glClearColor" },
+            { "glDepthMask(GL_TRUE);",                                       "glDepthMask" },
+            { "glutSolidTorus(0.1, 0.5, 8, 8);",                             "glutSolidTorus" },
+            { "glutSolidCube(1);",                                           "glutSolidCube" },
+            { "glutSolidSphere(1, 8, 8);",                                   "glutSolidSphere" },
+            { "glutSolidTeapot(1);",                                         "glutSolidTeapot" },
+            { "glutSolidCone(1, 1, 8, 8);",                                  "glutSolidCone" },
+            { "glRasterPos3f(0, 0, 0);",                                     "glRasterPos3f" },
+            { "label(\"hi\");",                                              "label" },
+            { "gluBegin(GLU_POLYGON);",                                      "gluTessBeginPolygon" },
+        };
+        int case_count = (int)(sizeof(not_in_begin_cases) / sizeof(not_in_begin_cases[0]));
+        for (int i = 0; i < case_count; i++) {
+            glr_app_reset_all(); declare_test_vars();
+            editor_feed_line("glBegin(GL_TRIANGLES);");
+            int before = repl_state_document_count();
+            g_status[0] = '\0';
+            editor_feed_line(not_in_begin_cases[i].line);
+            char label[160];
+
+            snprintf(label, sizeof(label),
+                     "not-in-begin %s: line rejected, doc count unchanged",
+                     not_in_begin_cases[i].name_substr);
+            ASSERT_TRUE(label, repl_state_document_count() == before);
+
+            snprintf(label, sizeof(label),
+                     "not-in-begin %s: status names the command",
+                     not_in_begin_cases[i].name_substr);
+            ASSERT_TRUE(label,
+                strstr(g_status, not_in_begin_cases[i].name_substr) != NULL);
+
+            snprintf(label, sizeof(label),
+                     "not-in-begin %s: status mentions glBegin/glEnd",
+                     not_in_begin_cases[i].name_substr);
+            ASSERT_TRUE(label, strstr(g_status, "glBegin/glEnd") != NULL);
+        }
+    }
+
+    /* And the inverse: representative CMD_TYPE_SPEC commands (the
+     * standard "real GL would actually accept" set plus a few that the
+     * REPL just doesn't bother rejecting) still commit cleanly inside
+     * a glBegin block. */
+    {
+        static const struct {
+            const char *line;
+            const char *name;
+            CmdType     expected_type;
+        } in_begin_cases[] = {
+            { "glVertex3f(0, 0, 0);",                       "glVertex3f",   CMD_VERTEX3F },
+            { "glVertex2f(0, 0);",                          "glVertex2f",   CMD_VERTEX2F },
+            { "glNormal3f(0, 0, 1);",                       "glNormal3f",   CMD_NORMAL3F },
+            { "glColor3f(1, 0, 0);",                        "glColor3f",    CMD_COLOR3F },
+            { "glColor4f(1, 0, 0, 1);",                     "glColor4f",    CMD_COLOR4F },
+            { "glMaterialf(GL_FRONT, GL_SHININESS, 32);",   "glMaterialf",  CMD_MATERIALF },
+        };
+        int case_count = (int)(sizeof(in_begin_cases) / sizeof(in_begin_cases[0]));
+        for (int i = 0; i < case_count; i++) {
+            glr_app_reset_all(); declare_test_vars();
+            editor_feed_line("glBegin(GL_TRIANGLES);");
+            int before = repl_state_document_count();
+            g_status[0] = '\0';
+            editor_feed_line(in_begin_cases[i].line);
+            char label[160];
+
+            snprintf(label, sizeof(label),
+                     "in-begin %s: doc grew by one",
+                     in_begin_cases[i].name);
+            ASSERT_TRUE(label, repl_state_document_count() == before + 1);
+
+            snprintf(label, sizeof(label),
+                     "in-begin %s: committed type matches",
+                     in_begin_cases[i].name);
+            ASSERT_TRUE(label,
+                repl_state_document_cmds_mut()[before].type
+                    == in_begin_cases[i].expected_type);
+
+            snprintf(label, sizeof(label),
+                     "in-begin %s: no begin-scope rejection in status",
+                     in_begin_cases[i].name);
+            ASSERT_TRUE(label,
+                strstr(g_status, "not valid inside glBegin") == NULL);
+        }
+    }
+
     printf("repl_core_commit: %d/%d passed\n", g_harness.passed, g_harness.run);
     return (g_harness.run == g_harness.passed) ? 0 : 1;
 }
