@@ -752,6 +752,9 @@ UiHit ui_text_panel_hit_test(const UiTextPanelSnapshot *snap,
                               ? row->source_line_idx
                               : row->hit_target_line_idx;
 
+            if (row->kind == UI_TEXT_PANEL_ROW_VIRTUAL)
+                resolved_line = row->source_line_idx;
+
             if (!row->hit_eligible)
                 return h;
 

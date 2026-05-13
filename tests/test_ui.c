@@ -821,6 +821,48 @@ static void test_ui_panels_hit_test_trailing_blank_row_kind(void) {
                h.line_idx, repl_state_document_count());
 }
 
+static void test_ui_panels_hit_test_virtual_row_routes_to_source(void) {
+    int cp_x, cp_y, cp_w, cp_h;
+    int linenum_w = 4 * FONT_W;
+    int idx_col_w = glr_state_presentation().show_vertex_indices ? (6 * FONT_W) : 0;
+    int text_x = CODE_MARGIN_X + linenum_w + FONT_W + idx_col_w;
+    int virtual_row;
+    int line_y_start;
+    int gl_y_mid;
+    int mx;
+    int my;
+    UiReplCodePanelLayout layout;
+
+    glr_app_reset_all();
+    ui_state_viewport_set_size(800, 600);
+
+    editor_feed_line("glBegin(GL_POINTS);");
+    editor_feed_line("glEnd();");
+    editor_state_virtual_lines_append(0, VIRTUAL_STYLE_REPLAY_EVAL,
+                                      "replay eval", "");
+    repl_state_edit_line_set(1);
+
+    ui_layout_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
+    build_test_code_panel_layout(&layout, cp_w, text_x, cp_h);
+
+    virtual_row = layout.header_rows + layout.cmd_main_rows[0];
+    editor_scroll_set(virtual_row);
+
+    line_y_start = (cp_y + cp_h) - CODE_MARGIN_Y - 2 * LINE_H;
+    gl_y_mid = line_y_start - 3 + LINE_H / 2;
+    my = ui_state_viewport().window_h - gl_y_mid;
+    mx = cp_x + text_x + 2 * FONT_W;
+
+    UiHit h = ui_panels_hit_test_current_snapshot(mx, my, 0);
+    ASSERT_TRUE("virtual row hit kind", h.kind == UI_HIT_CODE_TEXT);
+    ASSERT_TRUE("virtual row hit rewrites to source line", h.line_idx == 0);
+    ASSERT_TRUE("virtual row hit clears char index", h.char_idx == -1);
+
+    glr_ctrl_router_handle_code_panel_hit(h, mx, my);
+    ASSERT_TRUE("virtual row click navigates to source line",
+                repl_state_edit_line() == 0);
+}
+
 /* Regression: glVertex2f commands should generate gutter vertex-index labels
  * (v0, v1, ...) when show_vertex_indices is on, just like glVertex3f. */
 static void test_vertex2f_gutter_labels(void) {
@@ -1063,6 +1105,7 @@ int main(void) {
     test_ui_panels_hit_test_insert_line();
     test_ui_panels_hit_test_overwrite_row_kind();
     test_ui_panels_hit_test_trailing_blank_row_kind();
+    test_ui_panels_hit_test_virtual_row_routes_to_source();
     test_vertex2f_gutter_labels();
     test_tutorial_fade_render_uses_per_char_path();
     test_tutorial_fade_handles_wrapped_lines();

@@ -1159,6 +1159,8 @@ static UiHit repl_code_panel_rewrite_hit(const ReplCodePanelBuilder *builder,
 
     row = &builder->text_snap.rows[hit.cmd_idx];
     if (row->kind == UI_TEXT_PANEL_ROW_VIRTUAL) {
+        if (hit.line_idx < 0 && row->hit_target_line_idx >= 0)
+            hit.line_idx = row->hit_target_line_idx;
         hit.char_idx = -1;
     } else if (row->kind == UI_TEXT_PANEL_ROW_TEXT &&
                hit.kind == UI_HIT_CODE_TEXT &&
