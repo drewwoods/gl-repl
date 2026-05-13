@@ -142,23 +142,10 @@ static void run_flat_control_flow_only(void) {
 
         switch (repl_state_flat_program_cmds_mut()[pc].type) {
         case CMD_VAR_ASSIGN: {
+            /* Match the real executor: apply pre-computed args[0]
+             * without re-evaluating. Flatten owns the eval. */
             int vi = repl_state_flat_program_cmds_mut()[pc].num_args;
             float value = repl_state_flat_program_cmds_mut()[pc].args[0];
-            if (repl_state_flat_program_cmds_mut()[pc].has_vars) {
-                char rhs[256];
-                if (repl_extract_assignment_parts(flat_cmd_text(pc),
-                                                  NULL, 0,
-                                                  rhs, sizeof(rhs))) {
-                    ExprVar *eval_vars = g_predef_vars;
-                    int eval_num_vars = g_num_predef_vars;
-                    if (repl_state_flat_program_local_vars_mut()[pc].num_vars > 0) {
-                        eval_vars = repl_state_flat_program_local_vars_mut()[pc].vars;
-                        eval_num_vars = repl_state_flat_program_local_vars_mut()[pc].num_vars;
-                    }
-                    ExprCtx ctx = { rhs, eval_vars, eval_num_vars };
-                    value = repl_eval_expr(&ctx);
-                }
-            }
             if (vi >= 0 && vi < g_num_predef_vars)
                 g_predef_vars[vi].value = value;
             break;
@@ -341,6 +328,13 @@ int main(void) {
                     repl_eval_find_predef_var_idx("foo") >= 0);
     }
 
+    /* Goto loops can no longer drive a counter through an if-block
+     * gate: flatten resolves the if-condition once (eval-at-flatten),
+     * so each goto iteration re-runs the same flat command with the
+     * same args. With self-referential `n = n + 1;`, the executor
+     * applies args[0] = 1 every iteration and `n` plateaus. Goto
+     * remains documented as partial; the test now exercises the
+     * single-pass path and verifies n stops at 1. */
     glr_app_reset_all(); declare_test_vars();
     editor_feed_line("n = 0;");
     editor_feed_line(":walk");
@@ -363,7 +357,8 @@ int main(void) {
         }
         ASSERT_TRUE("n predef exists", n_idx >= 0);
         if (n_idx >= 0)
-            ASSERT_TRUE("goto loop increments n to 3", fabsf(g_predef_vars[n_idx].value - 3.0f) < 1e-6f);
+            ASSERT_TRUE("goto-with-if no longer iterates self-ref counter",
+                        fabsf(g_predef_vars[n_idx].value - 1.0f) < 1e-6f);
     }
 
     glr_app_reset_all(); declare_test_vars();
@@ -388,8 +383,10 @@ int main(void) {
     {
         int n_idx = predef_idx("n");
         ASSERT_TRUE("goto geom n predef exists", n_idx >= 0);
+        /* Same partial-goto behaviour as above: n stops at 1. */
         if (n_idx >= 0)
-            ASSERT_TRUE("goto geom loop increments n to 3", fabsf(g_predef_vars[n_idx].value - 3.0f) < 1e-6f);
+            ASSERT_TRUE("goto geom no longer iterates self-ref counter",
+                        fabsf(g_predef_vars[n_idx].value - 1.0f) < 1e-6f);
     }
     ASSERT_TRUE("goto geom flat first vertex still at initial x",
                 fabsf(repl_state_flat_program_cmds_mut()[3].args[0] - (-1.5f)) < 1e-5f);
@@ -552,6 +549,11 @@ int main(void) {
     ASSERT_TRUE("user function hint suppresses stale no-arg ghost",
                 g_ac_ghost[0] == '\0');
 
+    /* Top-level if-blocks are now resolved at flatten time: the
+     * IF_BEGIN/IF_END markers are compiled away, and the body is
+     * included iff the condition evaluates non-zero. With x == 0
+     * (declare_test_vars only declares, doesn't init) the cond is
+     * false and the body is skipped entirely. */
     glr_app_reset_all(); declare_test_vars();
     editor_feed_line("if(x > 0) {");
     editor_feed_line("glColor3f(1, 0, 0);");
@@ -561,10 +563,26 @@ int main(void) {
     ASSERT_TRUE("if body", repl_state_document_cmds_mut()[1].type == CMD_COLOR3F);
     ASSERT_TRUE("if end", repl_state_document_cmds_mut()[2].type == CMD_IF_END);
     repl_flatten_commands();
-    ASSERT_TRUE("top-level if flat count", repl_state_flat_program_count() == 3);
-    ASSERT_TRUE("top-level if flat begin", repl_state_flat_program_cmds_mut()[0].type == CMD_IF_BEGIN);
-    ASSERT_TRUE("top-level if flat body", repl_state_flat_program_cmds_mut()[1].type == CMD_COLOR3F);
-    ASSERT_TRUE("top-level if flat end", repl_state_flat_program_cmds_mut()[2].type == CMD_IF_END);
+    ASSERT_TRUE("top-level if (false cond) compiled away",
+                repl_state_flat_program_count() == 0);
+
+    /* When the cond is true at flatten time, the body lands in the
+     * flat array without IF_BEGIN/IF_END markers. */
+    {
+        char err[128];
+        glr_app_reset_all();
+        repl_eval_declare_predef_var("xx", err, sizeof(err));
+        int xx_idx = repl_eval_find_predef_var_idx("xx");
+        repl_state_variables_mut()->predef_vars[xx_idx].value = 1.0f;
+        editor_feed_line("if(xx > 0) {");
+        editor_feed_line("glColor3f(1, 0, 0);");
+        editor_feed_line("}");
+        repl_flatten_commands();
+        ASSERT_TRUE("top-level if (true cond) body in flat",
+                    repl_state_flat_program_count() == 1);
+        ASSERT_TRUE("top-level if (true cond) body type",
+                    repl_state_flat_program_cmds_mut()[0].type == CMD_COLOR3F);
+    }
 
     glr_app_reset_all(); declare_test_vars();
     editor_feed_line("func0 {");

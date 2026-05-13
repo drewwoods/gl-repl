@@ -117,7 +117,8 @@
       "Bash(awk NR>=600 && NR<=640 {print NR\": \"$0} *)",
       "Bash(chmod +x *)",
       "Bash(./test_repl_core_internal *)",
-      "Bash(./build/release/test_repl_core_examples)"
+      "Bash(./build/release/test_repl_core_examples)",
+      "Bash(./build/release-gl-stubs/test_repl_core_internal)"
     ]
   }
 }

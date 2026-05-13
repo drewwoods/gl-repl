@@ -632,62 +632,23 @@ void repl_execute_program(const ReplExecutionOptions *options) {
         case CMD_IF_END:
             break; /* body executed; just step past */
         case CMD_VAR_ASSIGN: {
-            /* Re-apply variable assignment so goto loops see updated values. */
+            /* Flatten already computed the RHS against current vars and
+             * stored the result in args[0]. Re-evaluating here would
+             * double-apply self-referential assignments like
+             * `tmp2 = tmp2 + 1;` (once during flatten, once here).
+             * Apply args[0] directly so flatten owns the eval semantics. */
             int var_idx = flat_cmds[pc].num_args;
             float value = flat_cmds[pc].args[0];
-            if (flat_cmds[pc].has_vars) {
-                char rhs[MAX_LINE_LEN] = "";
-                if (repl_extract_assignment_parts(execution_flat_text(text, &flat_cmds[pc]), NULL, 0,
-                                                  rhs, sizeof(rhs)) && rhs[0]) {
-                    FlatCmdLocalVars *local_vars =
-                        execution_local_vars_at(program, pc);
-                    ExprVar *eval_vars = g_predef_vars;
-                    int eval_num_vars = g_num_predef_vars;
-                    if (local_vars && local_vars->num_vars > 0) {
-                        eval_vars = local_vars->vars;
-                        eval_num_vars = local_vars->num_vars;
-                    }
-                    char repl_rhs[MAX_LINE_LEN];
-                    repl_eval_c_expr_to_repl(rhs, repl_rhs, sizeof(repl_rhs));
-                    ExprCtx ctx = { repl_rhs, eval_vars, eval_num_vars };
-                    value = repl_eval_expr(&ctx);
-                }
-            }
             if (var_idx >= 0 && var_idx < g_num_predef_vars)
                 g_predef_vars[var_idx].value = value;
             break;
         }
         case CMD_SCRATCH_ASSIGN: {
+            /* Same model as CMD_VAR_ASSIGN: flatten owns the eval; we
+             * just apply the precomputed value. */
             int array_idx = (int)flat_cmds[pc].args[0];
             int elem_idx = (int)flat_cmds[pc].args[1];
             float value = flat_cmds[pc].args[2];
-            if (flat_cmds[pc].has_vars) {
-                char name[16] = "";
-                char index_expr[MAX_LINE_LEN] = "";
-                char rhs[MAX_LINE_LEN] = "";
-                if (repl_extract_assignment_target_parts(execution_flat_text(text, &flat_cmds[pc]),
-                                                        name, sizeof(name),
-                                                        index_expr, sizeof(index_expr),
-                                                        rhs, sizeof(rhs)) &&
-                    index_expr[0] && rhs[0]) {
-                    FlatCmdLocalVars *local_vars =
-                        execution_local_vars_at(program, pc);
-                    ExprVar *eval_vars = g_predef_vars;
-                    int eval_num_vars = g_num_predef_vars;
-                    if (local_vars && local_vars->num_vars > 0) {
-                        eval_vars = local_vars->vars;
-                        eval_num_vars = local_vars->num_vars;
-                    }
-                    char repl_index[MAX_LINE_LEN];
-                    char repl_rhs[MAX_LINE_LEN];
-                    repl_eval_c_expr_to_repl(index_expr, repl_index, sizeof(repl_index));
-                    repl_eval_c_expr_to_repl(rhs, repl_rhs, sizeof(repl_rhs));
-                    ExprCtx index_ctx = { repl_index, eval_vars, eval_num_vars, NULL, 0 };
-                    ExprCtx rhs_ctx = { repl_rhs, eval_vars, eval_num_vars, NULL, 0 };
-                    elem_idx = (int)repl_eval_expr(&index_ctx);
-                    value = repl_eval_expr(&rhs_ctx);
-                }
-            }
             repl_eval_scratch_set(array_idx, elem_idx, value);
             break;
         }

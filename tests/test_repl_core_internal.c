@@ -166,6 +166,107 @@ int main() {
         ASSERT_STR("var1 name", vars[1].name, "i");
     }
 
+    /* 7b. if-block at top level with predef-var condition must
+     * re-evaluate at execute time (not blindly enter the body). */
+    {
+        char err[128];
+        glr_app_reset_all();
+        repl_eval_declare_predef_var("tmp", err, sizeof(err));
+        repl_eval_declare_predef_var("tmp2", err, sizeof(err));
+        editor_feed_line("if(tmp == 1) {");
+        editor_feed_line("tmp2 = tmp2 + 1;");
+        editor_feed_line("}");
+
+        int tmp_idx  = repl_eval_find_predef_var_idx("tmp");
+        int tmp2_idx = repl_eval_find_predef_var_idx("tmp2");
+        ASSERT_TRUE("tmp declared", tmp_idx >= 0);
+        ASSERT_TRUE("tmp2 declared", tmp2_idx >= 0);
+
+        ExprVar *vars_arr = repl_state_variables_mut()->predef_vars;
+        vars_arr[tmp_idx].value  = 0.0f;
+        vars_arr[tmp2_idx].value = 0.0f;
+
+        repl_flatten_commands();
+        ReplExecutionOptions opts = {0};
+        opts.flat_cmd_count = repl_state_flat_program_count();
+        opts.program = repl_state_flat_program_view();
+        opts.text = source_document_view();
+        repl_execute_program(&opts);
+
+        ASSERT_TRUE("tmp still 0 after run", vars_arr[tmp_idx].value == 0.0f);
+        ASSERT_TRUE("tmp2 still 0 (if-body skipped)",
+                    vars_arr[tmp2_idx].value == 0.0f);
+    }
+
+    /* 7c. if-block at top level with predef-var condition that IS true:
+     * body should run AND subsequent commands in the same frame must see
+     * the updated predef var. */
+    {
+        char err[128];
+        glr_app_reset_all();
+        repl_eval_declare_predef_var("tmp", err, sizeof(err));
+        repl_eval_declare_predef_var("tmp2", err, sizeof(err));
+        editor_feed_line("if(tmp > 1) {");
+        editor_feed_line("tmp2 = tmp2 + 1;");
+        editor_feed_line("}");
+        /* CMD_VERTEX3F (tmp2, tmp2, tmp2) reads tmp2 *after* the if-block. */
+        editor_feed_line("glBegin(GL_POINTS);");
+        editor_feed_line("glVertex3f(tmp2, tmp2, tmp2);");
+        editor_feed_line("glEnd();");
+
+        int tmp_idx  = repl_eval_find_predef_var_idx("tmp");
+        int tmp2_idx = repl_eval_find_predef_var_idx("tmp2");
+        ExprVar *vars_arr = repl_state_variables_mut()->predef_vars;
+        vars_arr[tmp_idx].value  = 2.0f;
+        vars_arr[tmp2_idx].value = 0.0f;
+
+        repl_flatten_commands();
+        ReplExecutionOptions opts = {0};
+        opts.flat_cmd_count = repl_state_flat_program_count();
+        opts.program = repl_state_flat_program_view();
+        opts.text = source_document_view();
+        repl_execute_program(&opts);
+
+        ASSERT_TRUE("if-true: tmp2 incremented once",
+                    vars_arr[tmp2_idx].value == 1.0f);
+
+        /* Find the CMD_VERTEX3F in the flat array and check its args. */
+        const GLCmd *fcmds = repl_state_flat_program_cmds();
+        int fcount = repl_state_flat_program_count();
+        float vx = -9999.0f;
+        for (int fi = 0; fi < fcount; fi++) {
+            if (fcmds[fi].type == CMD_VERTEX3F) {
+                vx = fcmds[fi].args[0];
+                break;
+            }
+        }
+        ASSERT_TRUE("vertex3f sees post-if tmp2 (==1)", vx == 1.0f);
+    }
+
+    /* 7d. self-referential assignment at top-level: tmp2 = tmp2 + 1
+     * should increment by 1 per frame, not 2. Flatten owns the eval
+     * and the executor applies the precomputed value; no double-apply. */
+    {
+        char err[128];
+        glr_app_reset_all();
+        repl_eval_declare_predef_var("tmp2", err, sizeof(err));
+        editor_feed_line("tmp2 = tmp2 + 1;");
+
+        int tmp2_idx = repl_eval_find_predef_var_idx("tmp2");
+        ExprVar *vars_arr = repl_state_variables_mut()->predef_vars;
+        vars_arr[tmp2_idx].value = 0.0f;
+
+        repl_flatten_commands();
+        ReplExecutionOptions opts = {0};
+        opts.flat_cmd_count = repl_state_flat_program_count();
+        opts.program = repl_state_flat_program_view();
+        opts.text = source_document_view();
+        repl_execute_program(&opts);
+
+        ASSERT_TRUE("top-level self-ref: 1 increment per frame",
+                    vars_arr[tmp2_idx].value == 1.0f);
+    }
+
     /* 8. explicit flatten destination */
     {
         GLCmd temp_flat[8];

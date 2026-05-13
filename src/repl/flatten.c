@@ -339,44 +339,46 @@ static void flatten_range(FlattenContext *ctx,
         }
 
         if (src_cmd->type == CMD_IF_BEGIN) {
+            /* Resolve the if-block at flatten time: evaluate the condition
+             * against the current loop/func vars and predef vars, then
+             * either recurse into the body (cond true) or skip it
+             * entirely (cond false). The IF_BEGIN/IF_END pair is compiled
+             * away — they never reach the executor.
+             *
+             * This single-pass model matches the user's mental model
+             * (`if(cond) body` reads top-down each frame) and prevents two
+             * classes of bugs:
+             *   1. body side-effects firing during flatten even when the
+             *      branch should be skipped (false cond → tmp2 still grew);
+             *   2. subsequent flatten ops in the same frame missing the
+             *      body's updates (vertex sees stale tmp2 after `if(true)`).
+             *
+             * Trade-off: goto loops can no longer use if-blocks to drive
+             * per-iteration branching, since the if is resolved once per
+             * frame. Goto support is already documented as partial. */
             int if_end = flatten_repl_source_scope_find_block_end(ctx, i);
             char cond_text[MAX_LINE_LEN];
-            int needs_local_eval = 0;
             const char *src_text = spike_text_for(ctx->text, src_cmd, i);
+            float cond = src_cmd->args[0]; /* commit-time eval fallback */
 
-            if (vars && nv > 0 &&
-                repl_extract_paren_payload(src_text, cond_text, sizeof(cond_text)) &&
-                (input_has_expr_vars(cond_text, vars, nv) ||
-                 repl_eval_input_has_predef_vars(cond_text))) {
-                needs_local_eval = 1;
-            }
-
-            if (needs_local_eval) {
+            if (repl_extract_paren_payload(src_text, cond_text, sizeof(cond_text))) {
                 char repl_cond[MAX_LINE_LEN];
                 repl_eval_c_expr_to_repl(cond_text, repl_cond, sizeof(repl_cond));
                 ExprCtx expr_ctx = { repl_cond, vars, nv };
-                float cond = repl_eval_expr(&expr_ctx);
-                if (cond != 0.0f)
-                    flatten_range(ctx, i + 1, if_end, vars, nv,
-                                  call_src_cmd_idx, root_call_src_cmd_idx,
-                                  func_scope_mask);
-                i = (if_end < ctx->source_count) ? if_end + 1 : ctx->source_count;
-                continue;
+                cond = repl_eval_expr(&expr_ctx);
             }
 
-            if (!flatten_append_cmd(ctx, src_cmd, i, call_src_cmd_idx,
-                                    root_call_src_cmd_idx, func_scope_mask,
-                                    NULL, 0))
-                return;
-            i++;
+            if (cond != 0.0f)
+                flatten_range(ctx, i + 1, if_end, vars, nv,
+                              call_src_cmd_idx, root_call_src_cmd_idx,
+                              func_scope_mask);
+            i = (if_end < ctx->source_count) ? if_end + 1 : ctx->source_count;
             continue;
         }
 
         if (src_cmd->type == CMD_IF_END) {
-            if (!flatten_append_cmd(ctx, src_cmd, i, call_src_cmd_idx,
-                                    root_call_src_cmd_idx, func_scope_mask,
-                                    NULL, 0))
-                return;
+            /* Standalone IF_END (no matching IF_BEGIN visited in this
+             * range — possible during partial flattening). Drop it. */
             i++;
             continue;
         }
