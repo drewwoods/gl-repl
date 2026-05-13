@@ -220,12 +220,14 @@ int main() {
         vars_arr[tmp_idx].value  = 2.0f;
         vars_arr[tmp2_idx].value = 0.0f;
 
+        /* Flatten alone is enough for both assertions: it mutates the
+         * predef table when it executes the if-body's CMD_VAR_ASSIGN,
+         * and it stores the post-if tmp2 value into the downstream
+         * CMD_VERTEX3F's args[0]. We deliberately don't call
+         * repl_execute_program here — the source contains glBegin/
+         * glVertex3f/glEnd, and the live test runs without a GL
+         * context (this binary links real libGL, not the stubs). */
         repl_flatten_commands();
-        ReplExecutionOptions opts = {0};
-        opts.flat_cmd_count = repl_state_flat_program_count();
-        opts.program = repl_state_flat_program_view();
-        opts.text = source_document_view();
-        repl_execute_program(&opts);
 
         ASSERT_TRUE("if-true: tmp2 incremented once",
                     vars_arr[tmp2_idx].value == 1.0f);
