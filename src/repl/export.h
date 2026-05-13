@@ -158,11 +158,15 @@ typedef struct {
 void                          repl_export_install_camera_bridge(const ReplExportCameraBridge *bridge);
 const ReplExportCameraBridge *repl_export_camera_bridge(void);
 
-/* Boilerplate C file segments for export. g_header_pre is the initial includes
- * and setup; g_header_post follows the metadata comments; g_footer_pre_init is
- * before the display() function; g_footer_post_init follows the function body.
- * Together they bracket the exported code to create a valid C program. */
+/* Boilerplate C file segments for export. g_header_pre is the file-scope
+ * preamble (includes, macros, rotation globals). g_display_header opens
+ * the display() function (`void display() { ...clear/load/push...`) and
+ * is shared verbatim by the code panel and emit_export_display_begin so
+ * the two stay in sync. g_header_post follows the dynamic state lines
+ * inside display(); g_footer_pre_init / g_footer_post_init bracket the
+ * init() function. Together they form a valid C program. */
 extern const char  *g_header_pre[];
+extern const char  *g_display_header[];
 extern const char  *g_header_post[];
 extern const char  *g_footer_pre_init[];
 extern const char  *g_footer_post_init[];

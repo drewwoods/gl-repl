@@ -122,7 +122,10 @@
       "Bash(gsed -i 's|\"  float testvar|\"  static float testvar|g' tests/test_glr_ctrl.c)",
       "Bash(gsed -i 's|\"  float \\\\\\([a-zA-Z]\\\\\\)|\"  static float \\\\1|g' tests/test_repl_compile.c)",
       "Bash(gsed -i 's/\"float /\"static float /g' src/repl/examples.c)",
-      "Bash(./build/release-gl-stubs/test_repl_core_examples)"
+      "Bash(./build/release-gl-stubs/test_repl_core_examples)",
+      "Bash(./build/release-gl-stubs/test_repl_core_io)",
+      "Bash(gsed -i 's|\"  glPushAttrib\\(GL_ALL_ATTRIB_BITS\\);\",|\"  glPushAttrib\\(GL_LIGHTING_BIT\\);\",|' src/repl/export.c)",
+      "Bash(gsed -i 's|\"  glPushAttrib\\(GL_LIGHTING_BIT\\);\",|\"  glPushAttrib\\(GL_ALL_ATTRIB_BITS\\);\",|' src/repl/export.c)"
     ]
   }
 }

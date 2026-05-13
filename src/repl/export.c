@@ -128,6 +128,11 @@ void repl_export_apply_pending_cfg(void) {
     import_cfg_accumulator_apply_and_reset();
 }
 
+/* File-scope C boilerplate: includes, macros, and the rotation globals.
+ * Lines here appear in BOTH the code panel header AND the exported C
+ * file's file-scope region (above display()). They never run at REPL
+ * time — see g_display_header for the display() opening, and the
+ * controller (src/app/glr_ctrl.c) for what actually executes. */
 const char *g_header_pre[] = {
     "#define y0 _y0",
     "#define y1 _y1",
@@ -144,11 +149,18 @@ const char *g_header_pre[] = {
     "static float g_angle = 0.0f;",
     "static int   g_rotating = 0;",
     "",
+    NULL
+};
+
+/* display() opening: shared by the code panel header and by
+ * emit_export_display_begin. Keeping these as literal strings in one
+ * array (rather than hardcoded fprintf calls in the exporter) is what
+ * keeps panel and export byte-identical for the opening lines. */
+const char *g_display_header[] = {
     "void display() {",
     "  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);",
     "  glLoadIdentity();",
     "  glPushAttrib(GL_ALL_ATTRIB_BITS);",
-    REPL_CODE_PANEL_SCRATCH_DECL_LINE,
     NULL
 };
 
@@ -746,8 +758,6 @@ static void emit_export_header_pre(FILE *f) {
         g_export_camera_bridge->fill_save_preamble(angle_line, (int)sizeof(angle_line));
 
     for (int line_idx = 0; g_header_pre[line_idx]; line_idx++) {
-        if (strcmp(g_header_pre[line_idx], "void display() {") == 0)
-            break;
         if (strcmp(g_header_pre[line_idx], "static float g_angle = 0.0f;") == 0) {
             if (angle_line[0])
                 fprintf(f, "%s\n", angle_line);
@@ -2903,22 +2913,25 @@ static void emit_export_geometry_pass(FILE *f,
 }
 
 static void emit_export_display_begin(FILE *f) {
-    fprintf(f, "\nvoid display() {\n");
-    fprintf(f, "  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);\n");
-    fprintf(f, "  glLoadIdentity();\n");
-    fprintf(f, "  glPushAttrib(GL_LIGHTING_BIT);\n");
+    /* display() opening lines come from g_display_header so the panel
+     * (which renders the same array) and the exported file stay
+     * byte-identical here. */
+    fprintf(f, "\n");
+    for (int line_idx = 0; g_display_header[line_idx]; line_idx++)
+        fprintf(f, "%s\n", g_display_header[line_idx]);
     /* Emit render state configuration lines (lighting, depth, etc). */
     for (int state_line_idx = 0; state_line_idx < RENDER_STATE_LINE_COUNT; state_line_idx++)
         fprintf(f, "%s\n", g_render_state_lines[state_line_idx]);
     emit_export_cam_lines(f);
-    /* Emit post-render-state header lines (typically additional setup). */
-    for (int line_idx = 0; g_header_post[line_idx]; line_idx++)
-        fprintf(f, "%s\n", g_header_post[line_idx]);
     /* Light positions are set after the camera transforms so
      * glLightfv(GL_POSITION) snapshots the post-camera modelview and
      * lights stay anchored in world space as the camera orbits. The
      * non-positional light state (colors + baseline glDisable) is
-     * emitted into init() — see emit_export_init_section_to_file. */
+     * emitted into init() — see emit_export_init_section_to_file.
+     *
+     * Lights are emitted before g_header_post to match the panel's
+     * rendering order; both consumers walk: display_header →
+     * render_state → cam → lights → header_post → user code. */
     {
         int n_pos = repl_export_lights_display_line_count();
         for (int pos_idx = 0; pos_idx < n_pos; pos_idx++) {
@@ -2927,11 +2940,9 @@ static void emit_export_display_begin(FILE *f) {
             fprintf(f, "%s\n", line);
         }
     }
-    /* Lighting is disabled by GL default and not re-enabled in init();
-     * each frame's glPushAttrib(GL_LIGHTING_BIT) at the top of display()
-     * captures that "off" state, so user code's glEnable(GL_LIGHTING)
-     * scopes to one frame. Material specular/shininess are set in
-     * init() via the bootstrap and preserved through the same bracket. */
+    /* g_header_post: additional setup after the dynamic state lines. */
+    for (int line_idx = 0; g_header_post[line_idx]; line_idx++)
+        fprintf(f, "%s\n", g_header_post[line_idx]);
 }
 
 static void emit_export_display_geometry(FILE *f) {
@@ -3406,6 +3417,13 @@ void repl_dump_code_panel_text(FILE *out, SourceTextView text) {
     for (int line_idx = 0; g_header_pre[line_idx]; line_idx++)
         fprintf(dst, "%s\n", g_header_pre[line_idx]);
 
+    fprintf(dst, "--- display_header ---\n");
+    /* Dump display() opening lines (shared with export). */
+    for (int line_idx = 0; g_display_header[line_idx]; line_idx++)
+        fprintf(dst, "%s\n", g_display_header[line_idx]);
+    /* Scratch decoration follows the display() opening — panel-only. */
+    fprintf(dst, "%s\n", REPL_CODE_PANEL_SCRATCH_DECL_LINE);
+
     fprintf(dst, "--- render_state ---\n");
     /* Dump render state configuration. */
     for (int state_line_idx = 0; state_line_idx < RENDER_STATE_LINE_COUNT; state_line_idx++)
@@ -3487,6 +3505,12 @@ void repl_dump_code_panel_visual_text(FILE *out, SourceTextView text,
     /* Dump pre-header lines with code panel wrapping. */
     for (int line_idx = 0; g_header_pre[line_idx]; line_idx++)
         dump_code_panel_wrapped_line(dst, g_header_pre[line_idx], text_x, panel_w, wrap_at_comma);
+
+    fprintf(dst, "--- display_header ---\n");
+    /* Dump display() opening lines with code panel wrapping. */
+    for (int line_idx = 0; g_display_header[line_idx]; line_idx++)
+        dump_code_panel_wrapped_line(dst, g_display_header[line_idx], text_x, panel_w, wrap_at_comma);
+    dump_code_panel_wrapped_line(dst, REPL_CODE_PANEL_SCRATCH_DECL_LINE, text_x, panel_w, wrap_at_comma);
 
     fprintf(dst, "--- render_state ---\n");
     /* Dump render state with code panel wrapping. */

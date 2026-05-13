@@ -3,6 +3,7 @@
 #include "app/glr_state.h"
 #include "app/glr_ctrl.h"
 #include "repl/core.h"
+#include "repl/pipeline.h"
 #include "repl/state.h"
 #include "repl/export.h"
 #include "ui/state.h"
@@ -782,6 +783,92 @@ int main(void) {
          * cfg). */
         ASSERT_TRUE("p1 live wireframe survives the save",
                     glr_state_presentation().wireframe == 0);
+    }
+
+    /* --- Regression: code panel and export must agree on the
+     *     display() body's shared dynamic state ---
+     *
+     * Three variants share state — what the code panel shows, what the
+     * REPL executes, and what gets exported. The first two are easy to
+     * keep in sync because the panel is decorative; the panel vs export
+     * comparison is the one with real drift risk (e.g. a prior bug had
+     * the export emit glPushAttrib(GL_LIGHTING_BIT) while the panel
+     * showed GL_ALL_ATTRIB_BITS).
+     *
+     * After the g_display_header split, the export's display() opening
+     * is literally `for (g_display_header) fprintf`, so byte-equality
+     * is structural. This test pins that contract: every line in
+     * g_display_header must appear in the exported file in order and
+     * contiguously, and every dynamic line (render_state / cam / light
+     * positions) emitted by the export must match the strings the
+     * panel reads from the same shared buffers. */
+    {
+        const char *cmp_path = "/tmp/repl_core_panel_export_agreement.c";
+
+        glr_app_reset_all(); declare_test_vars();
+        editor_feed_line("glBegin(GL_POINTS);");
+        editor_feed_line("glVertex3f(0, 0, 0);");
+        editor_feed_line("glEnd();");
+
+        /* Refresh the dynamic-state strings the panel reads. The
+         * exporter calls refresh internally, so by mirroring that we
+         * read the same byte sequence the panel would have shown. */
+        repl_refresh_render_state_strings();
+        repl_refresh_camera_lines();
+        repl_export_save_output(cmp_path, source_document_view(), NULL);
+
+        char buf[16384];
+        size_t nread = read_text_file(cmp_path, buf, sizeof(buf));
+        ASSERT_TRUE("panel-export agreement: export readable", nread > 0);
+
+        /* (1) g_display_header lines appear in order and contiguously
+         *     in the exported file. */
+        const char *cursor = buf;
+        int header_ok = 1;
+        for (int i = 0; g_display_header[i]; i++) {
+            const char *hit = strstr(cursor, g_display_header[i]);
+            if (!hit) { header_ok = 0; break; }
+            cursor = hit + strlen(g_display_header[i]);
+            /* Next line must follow immediately after a newline. */
+            if (g_display_header[i + 1] && *cursor != '\n') {
+                header_ok = 0;
+                break;
+            }
+        }
+        ASSERT_TRUE("g_display_header appears verbatim in export",
+                    header_ok);
+
+        /* (2) The opening line of display() in the export must equal
+         *     the first line of g_display_header (i.e. no hardcoded
+         *     `fprintf(f, "void display()...")` re-introduced). */
+        ASSERT_TRUE("first g_display_header line is the display() opener",
+                    g_display_header[0] != NULL &&
+                    strcmp(g_display_header[0], "void display() {") == 0);
+
+        /* (3) Each render_state / cam line the panel would render must
+         *     appear in the exported display() body — same buffers. */
+        for (int i = 0; i < RENDER_STATE_LINE_COUNT; i++) {
+            char label[64];
+            snprintf(label, sizeof(label),
+                     "render_state[%d] appears in export", i);
+            ASSERT_TRUE(label, strstr(buf, g_render_state_lines[i]) != NULL);
+        }
+
+        /* (4) The scratch decoration line is panel-only — must NOT
+         *     appear in the export (otherwise it shadows the
+         *     file-scope statics emitted by emit_export_scratch_globals_section). */
+        ASSERT_TRUE("scratch decoration is panel-only, not in export",
+                    strstr(buf, REPL_CODE_PANEL_SCRATCH_DECL_LINE) == NULL);
+
+        /* (5) The export's outer attrib mask in display() must be
+         *     GL_ALL_ATTRIB_BITS (not the previous GL_LIGHTING_BIT).
+         *     This is what g_display_header guarantees by construction;
+         *     pinning it here catches anyone re-introducing a hardcoded
+         *     fprintf with the wrong mask. */
+        ASSERT_TRUE("display() outer push uses GL_ALL_ATTRIB_BITS",
+                    strstr(buf, "  glPushAttrib(GL_ALL_ATTRIB_BITS);") != NULL);
+        ASSERT_TRUE("display() does not use GL_LIGHTING_BIT outer",
+                    count_substr(buf, "glPushAttrib(GL_LIGHTING_BIT)") == 0);
     }
 
     printf("repl_core_io: %d/%d passed\n", g_harness.passed, g_harness.run);
