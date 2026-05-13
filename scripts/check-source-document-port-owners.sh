@@ -31,14 +31,21 @@ symbols='source_document_view|source_document_apply_change|source_document_inser
 # linked-worktree absolute path to a path relative to the repo root so we can
 # pass it as --exclude-dir to grep.
 worktree_excludes=()
-main_worktree="$(git worktree list --porcelain | awk '/^worktree /{print $2; exit}')"
+current_worktree="$(git rev-parse --show-toplevel)"
 while IFS= read -r wt_path; do
-  # Skip the main worktree — we want to scan that.
-  [ "$wt_path" = "$main_worktree" ] && continue
+  # Skip the current worktree — we want to scan that.
+  [ "$wt_path" = "$current_worktree" ] && continue
   # Convert to a path relative to the repo root (handles sibling worktrees).
   rel="$(realpath --relative-to="$(pwd)" "$wt_path" 2>/dev/null || python3 -c \
     "import os,sys; print(os.path.relpath(sys.argv[1]))" "$wt_path")"
-  worktree_excludes+=("--exclude-dir=$rel")
+
+  # grep --exclude-dir matches against the basename, and passing '.' or '..'
+  # or a path with '/' doesn't work as expected. But for nested worktrees,
+  # excluding the basename is usually sufficient to prevent traversal.
+  base="$(basename "$rel")"
+  if [ "$base" != "." ] && [ "$base" != ".." ]; then
+    worktree_excludes+=("--exclude-dir=$base")
+  fi
 done < <(git worktree list --porcelain | awk '/^worktree /{print $2}')
 
 # Find every .c that defines (not just declares) one of the symbols.
