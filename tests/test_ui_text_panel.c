@@ -201,12 +201,61 @@ static void test_alpha_text_enables_blending(void) {
                 gl_stub_counts[GL_STUB_glBlendFunc] > opaque_blend_func);
 }
 
+static void test_color_segments_enable_blending(void) {
+    UiTextPanelRow row = {
+        .text = "segment fade",
+        .kind = UI_TEXT_PANEL_ROW_TEXT,
+        .left_gutter_label = 1,
+        .source_line_idx = 0,
+        .search_row_idx = 0,
+        .hit_eligible = 1,
+        .color = { 0.8f, 0.9f, 1.0f, 1.0f, 0 },
+    };
+    UiTextPanelSnapshot snap = make_snapshot(&row, 1, 0, 0, 220, 140, 0);
+    UiTextPanelOutput out = {0};
+    unsigned long long base_enable;
+    unsigned long long base_blend_func;
+
+    gl_stub_counts_reset();
+    ui_text_panel_render(&snap, &out);
+    base_enable = gl_stub_counts[GL_STUB_glEnable];
+    base_blend_func = gl_stub_counts[GL_STUB_glBlendFunc];
+
+    row.color_segments[0] = (UiTextPanelColorSegment){
+        .char_start = 0,
+        .char_count = 7,
+        .color = { 0.8f, 0.9f, 1.0f, 1.0f, 0 },
+    };
+    row.color_segments[1] = (UiTextPanelColorSegment){
+        .char_start = 7,
+        .char_count = 1,
+        .color = { 0.8f, 0.9f, 1.0f, 0.35f, 1 },
+    };
+    row.color_segments[2] = (UiTextPanelColorSegment){
+        .char_start = 8,
+        .char_count = (int)strlen(row.text) - 8,
+        .color = { 0.8f, 0.9f, 1.0f, 0.0f, 1 },
+    };
+    row.color_segment_count = 3;
+
+    gl_stub_counts_reset();
+    ui_text_panel_render(&snap, &out);
+
+    ASSERT_TRUE("segmented text emits glyphs",
+                gl_stub_counts[GL_STUB_glutBitmapCharacter] > 0);
+    ASSERT_TRUE("segmented text adds a blend enable",
+                gl_stub_counts[GL_STUB_glEnable] > base_enable);
+    ASSERT_TRUE("segmented text adds a blend func",
+                gl_stub_counts[GL_STUB_glBlendFunc] > base_blend_func);
+}
+
 int main(void) {
     printf("--- ui_text_panel tests ---\n");
 
     test_visible_rows_respect_statusbar_flag();
     test_wrap_and_hit_are_panel_local();
     test_alpha_text_enables_blending();
+    test_color_segments_enable_blending();
 
     printf("\n");
     return test_harness_report(&g_harness, "test_ui_text_panel");

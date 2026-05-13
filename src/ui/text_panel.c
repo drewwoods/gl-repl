@@ -2,10 +2,6 @@
  * text_panel.c -- Generic text panel renderer and hit-tester.
  *
  * This file has no dependency on repl, editor, or app headers.
- * XXX Phase 3: src/ui/panels.c still carries the live REPL-specific code-panel
- * path. This module is the intended destination for the generic rendering and
- * hit-test logic; keep fixes mirrored until the adapter switch deletes the
- * duplicate code.
  */
 #include "config.h"
 #include "ui/gl_2d.h"
@@ -60,6 +56,118 @@ static void text_panel_draw_segment(int x, int y, const char *text,
         glutBitmapCharacter(font, (unsigned char)text[start + i]);
 }
 
+static int text_panel_row_uses_blend(const UiTextPanelRow *row) {
+    int seg_count;
+
+    if (!row)
+        return 0;
+    if (text_panel_color_uses_blend(&row->color))
+        return 1;
+
+    seg_count = row->color_segment_count;
+    if (seg_count > UI_TEXT_PANEL_MAX_COLOR_SEGMENTS)
+        seg_count = UI_TEXT_PANEL_MAX_COLOR_SEGMENTS;
+
+    for (int i = 0; i < seg_count; i++) {
+        if (text_panel_color_uses_blend(&row->color_segments[i].color))
+            return 1;
+    }
+
+    return 0;
+}
+
+static void text_panel_draw_colored_span(const UiTextPanelSnapshot *snap,
+                                         const char *text,
+                                         int wrap_start,
+                                         int wrap_x,
+                                         int span_start,
+                                         int span_end,
+                                         int line_y,
+                                         const UiTextPanelColor *color) {
+    int span_len;
+
+    if (!snap || !text || !color || span_end <= span_start)
+        return;
+    if (color->has_alpha && color->a <= 0.0f)
+        return;
+
+    span_len = span_end - span_start;
+    text_panel_set_color(color);
+    text_panel_draw_segment(snap->cp_x + wrap_x +
+                            (span_start - wrap_start) * FONT_W,
+                            line_y, text, span_start, span_len, FONT_MONO);
+}
+
+static void text_panel_draw_colored_text(const UiTextPanelSnapshot *snap,
+                                         const UiTextPanelRow *row,
+                                         const char *text,
+                                         int wrap_start,
+                                         int wrap_len,
+                                         int wrap_x,
+                                         int line_y) {
+    int wrap_end;
+    int seg_count;
+    int cursor;
+    int use_segments;
+
+    if (!snap || !row || !text || wrap_len <= 0)
+        return;
+
+    wrap_end = wrap_start + wrap_len;
+    seg_count = row->color_segment_count;
+    if (seg_count > UI_TEXT_PANEL_MAX_COLOR_SEGMENTS)
+        seg_count = UI_TEXT_PANEL_MAX_COLOR_SEGMENTS;
+    use_segments = seg_count > 0;
+
+    if (text_panel_row_uses_blend(row)) {
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    }
+
+    if (!use_segments) {
+        text_panel_set_color(&row->color);
+        text_panel_draw_segment(snap->cp_x + wrap_x, line_y, text,
+                                wrap_start, wrap_len, FONT_MONO);
+        if (text_panel_row_uses_blend(row))
+            glDisable(GL_BLEND);
+        return;
+    }
+
+    cursor = wrap_start;
+    for (int i = 0; i < seg_count; i++) {
+        const UiTextPanelColorSegment *segment = &row->color_segments[i];
+        int seg_start = segment->char_start;
+        int seg_end = segment->char_start + segment->char_count;
+
+        if (seg_end <= wrap_start || seg_start >= wrap_end)
+            continue;
+
+        if (seg_start < wrap_start)
+            seg_start = wrap_start;
+        if (seg_end > wrap_end)
+            seg_end = wrap_end;
+        if (cursor < seg_start) {
+            text_panel_draw_colored_span(snap, text, wrap_start, wrap_x,
+                                         cursor, seg_start, line_y,
+                                         &row->color);
+        }
+        text_panel_draw_colored_span(snap, text, wrap_start, wrap_x,
+                                     seg_start, seg_end, line_y,
+                                     &segment->color);
+        if (seg_end > cursor)
+            cursor = seg_end;
+    }
+
+    if (cursor < wrap_end) {
+        text_panel_draw_colored_span(snap, text, wrap_start, wrap_x,
+                                     cursor, wrap_end, line_y,
+                                     &row->color);
+    }
+
+    if (text_panel_row_uses_blend(row))
+        glDisable(GL_BLEND);
+}
+
 static void text_panel_draw_line_number(const UiTextPanelSnapshot *snap,
                                         int line_y, int file_line) {
     char ln[16];
@@ -105,8 +213,7 @@ static void text_panel_draw_right_action(const UiTextPanelSnapshot *snap,
 
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    glColor4f(row->right_action.r, row->right_action.g,
-              row->right_action.b, 1.0f);
+    text_panel_set_color(&row->right_action.color);
     glRectf((float)sx, (float)sy,
             (float)(sx + sw), (float)(sy + sw));
     glColor4f(0.10f, 0.10f, 0.12f, 0.85f);
@@ -116,7 +223,49 @@ static void text_panel_draw_right_action(const UiTextPanelSnapshot *snap,
     glVertex2f((float)(sx + sw), (float)(sy + sw));
     glVertex2f((float)sx,        (float)(sy + sw));
     glEnd();
+    if (row->right_action.emphasized) {
+        glColor4f(1.0f, 1.0f, 1.0f, 0.9f);
+        glBegin(GL_LINE_LOOP);
+        glVertex2f((float)(sx - 1),        (float)(sy - 1));
+        glVertex2f((float)(sx + sw + 1),   (float)(sy - 1));
+        glVertex2f((float)(sx + sw + 1),   (float)(sy + sw + 1));
+        glVertex2f((float)(sx - 1),        (float)(sy + sw + 1));
+        glEnd();
+    }
     glDisable(GL_BLEND);
+}
+
+static void text_panel_draw_row_background(const UiTextPanelSnapshot *snap,
+                                           const UiTextPanelRow *row,
+                                           int line_y) {
+    if (!snap || !row)
+        return;
+
+    if (row->background_active) {
+        if (text_panel_color_uses_blend(&row->background_color)) {
+            glEnable(GL_BLEND);
+            glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+        }
+        text_panel_set_color(&row->background_color);
+        glRectf((float)snap->cp_x, (float)(line_y - 3),
+                (float)(snap->cp_x + snap->cp_w),
+                (float)(line_y - 3 + LINE_H));
+        if (text_panel_color_uses_blend(&row->background_color))
+            glDisable(GL_BLEND);
+    }
+
+    if (row->left_marker_active) {
+        if (text_panel_color_uses_blend(&row->left_marker_color)) {
+            glEnable(GL_BLEND);
+            glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+        }
+        text_panel_set_color(&row->left_marker_color);
+        glRectf((float)(snap->cp_x + 1), (float)(line_y - 3),
+                (float)(snap->cp_x + 4),
+                (float)(line_y - 3 + LINE_H));
+        if (text_panel_color_uses_blend(&row->left_marker_color))
+            glDisable(GL_BLEND);
+    }
 }
 
 static void text_panel_draw_search_highlights(const UiTextPanelSnapshot *snap,
@@ -219,6 +368,7 @@ static int text_panel_draw_input_row(const UiTextPanelSnapshot *snap,
     code_layout_wrap_iter_init(&wrap_it, input, &layout);
     while (code_layout_wrap_iter_next(&wrap_it, &wrap_start, &wrap_len, &wrap_x)) {
         if (*io_cur >= snap->scroll && *io_cur < snap->scroll + visible_rows) {
+            text_panel_draw_row_background(snap, row, *io_line_y);
             if (wrap_row == 0) {
                 text_panel_draw_line_number(snap, *io_line_y,
                                             row->left_gutter_label);
@@ -352,15 +502,9 @@ static int text_panel_draw_regular_row(const UiTextPanelSnapshot *snap,
             text_panel_draw_search_highlights(snap, row, text,
                                               wrap_start, wrap_len,
                                               wrap_x, *io_line_y);
-            if (text_panel_color_uses_blend(&row->color)) {
-                glEnable(GL_BLEND);
-                glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-            }
-            text_panel_set_color(&row->color);
-            text_panel_draw_segment(snap->cp_x + wrap_x, *io_line_y, text,
-                                    wrap_start, wrap_len, FONT_MONO);
-            if (text_panel_color_uses_blend(&row->color))
-                glDisable(GL_BLEND);
+            text_panel_draw_colored_text(snap, row, text,
+                                         wrap_start, wrap_len,
+                                         wrap_x, *io_line_y);
             *io_line_y -= LINE_H;
         }
         (*io_cur)++;
@@ -613,6 +757,7 @@ UiHit ui_text_panel_hit_test(const UiTextPanelSnapshot *snap,
                 h.kind = UI_HIT_CODE_GUTTER;
                 h.line_idx = resolved_line;
                 h.visual_row = row_offset;
+                h.cmd_idx = i;
                 return h;
             }
 
@@ -622,6 +767,7 @@ UiHit ui_text_panel_hit_test(const UiTextPanelSnapshot *snap,
                 h.line_idx = resolved_line;
                 h.visual_row = row_offset;
                 h.char_idx = text_panel_char_for_click(snap, row, mx, row_offset);
+                h.cmd_idx = i;
                 return h;
             }
 
@@ -629,6 +775,7 @@ UiHit ui_text_panel_hit_test(const UiTextPanelSnapshot *snap,
             h.line_idx = resolved_line;
             h.visual_row = row_offset;
             h.char_idx = text_panel_char_for_click(snap, row, mx, row_offset);
+            h.cmd_idx = i;
             return h;
         }
 

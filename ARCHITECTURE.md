@@ -374,16 +374,16 @@ Mutations route through `repl_actions`, `repl_command_store`,
 hit-tests (`*_hit_test`, `*_rect`) compute neutral `UiHit` values and
 return — `glr_ctrl_router_handle_code_panel_hit` dispatches by
 `UiHit.kind` to the owning subsystem (Phase J2). Render-side
-discoveries (e.g. the editor cursor pixel computed during
-`render_active_input_rows`) flow back through per-frame
-`Ui*Output` structs that the controller actualizes after the render
-call (Phase J4 introduced `UiCodePanelOutput`; the pattern is
-hard-guarded by `check-output-actualization`). Two render-path live
-reads remain (`editor_code_panel_document_build` /
-`apply_follow_scroll` and `replay_code_panel_get_command_display_text`);
-both produce snap-equivalent results because they run after the
-controller has finished updating live state, but converting them to
-take a snapshot pointer is the next layer of cleanup.
+discoveries (e.g. the editor cursor pixel computed during the generic
+text-panel pass) flow back through per-frame `Ui*Output` structs that
+the controller actualizes after the render call (Phase J4 introduced
+`UiCodePanelOutput`; the pattern is hard-guarded by
+`check-output-actualization`). Two render-path live reads remain
+(`ui_repl_code_panel_build_layout` / `ui_repl_code_panel_apply_follow_scroll`
+and `replay_code_panel_get_command_display_text`); both produce
+snap-equivalent results because they run after the controller has
+finished updating live state, but converting them to take a snapshot
+pointer is the next layer of cleanup.
 
 ## Replay Architecture
 

@@ -7,11 +7,11 @@
 #include <string.h>
 
 #include "ui/state.h"
-#include "editor/code_panel_document.h"
 #include "repl/core.h"
 #include "repl/state.h"
 #include "ui/layout.h"
 #include "ui/metrics.h"
+#include "ui/repl_code_panel.h"
 #include "support/test_harness.h"
 
 static TestHarness g_harness = TEST_HARNESS_INIT;
@@ -37,14 +37,14 @@ static void reset_doc_fixture(void) {
     repl_state_refresh_workspace_header_lines();
 }
 
-static void build_doc(CodePanelDocumentLayout *layout) {
+static void build_doc(UiReplCodePanelLayout *layout) {
     int cp_w, cp_h;
     ui_layout_code_panel_rect(NULL, NULL, &cp_w, &cp_h);
-    editor_code_panel_document_build(layout, cp_w, code_panel_text_x(), cp_h);
+    ui_repl_code_panel_build_layout(layout, cp_w, code_panel_text_x(), cp_h);
 }
 
 int main(void) {
-    CodePanelDocumentLayout layout;
+    UiReplCodePanelLayout layout;
     int target = -99;
     int on_insert = -99;
     int row_offset = -99;
@@ -63,7 +63,7 @@ int main(void) {
     {
         int doc_line = layout.header_rows + layout.cmd_main_rows[0];
         ASSERT_TRUE("target lookup succeeds",
-                    editor_code_panel_document_target_for_doc_line(
+                    ui_repl_code_panel_target_for_doc_line(
                         doc_line, &layout, &target, &on_insert, &row_offset));
         ASSERT_TRUE("target lookup command index", target == 1);
         ASSERT_TRUE("target lookup is source row", on_insert == 0);
@@ -77,7 +77,7 @@ int main(void) {
     {
         int doc_line = layout.header_rows + layout.cmd_main_rows[0];
         ASSERT_TRUE("insert row lookup succeeds",
-                    editor_code_panel_document_target_for_doc_line(
+                    ui_repl_code_panel_target_for_doc_line(
                         doc_line, &layout, &target, &on_insert, &row_offset));
         ASSERT_TRUE("insert row reports virtual line", target == -1);
         ASSERT_TRUE("insert row flag", on_insert == 1);
@@ -91,7 +91,7 @@ int main(void) {
     editor_scroll_set(0);
     editor_scroll_follow_cursor_set(1);
     build_doc(&layout);
-    editor_code_panel_document_apply_follow_scroll(&layout);
+    ui_repl_code_panel_apply_follow_scroll(&layout);
     ASSERT_TRUE("follow line visible after apply",
                 layout.follow_doc_line >= editor_scroll() &&
                 layout.follow_doc_line < editor_scroll() + layout.visible_lines);

@@ -199,7 +199,6 @@ SRCS = \
 	src/app/glr_source_document.c \
 	src/app/glr_state.c \
 	src/editor/clipboard.c \
-	src/editor/code_panel_document.c \
 	src/editor/commit.c \
 	src/editor/completion.c \
 	src/editor/help_session.c \
@@ -244,6 +243,7 @@ SRCS = \
 	src/ui/menu_bar.c \
 	src/ui/panels.c \
 	src/ui/profile_panel.c \
+	src/ui/repl_code_panel.c \
 	src/ui/replay_hud.c \
 	src/ui/state.c \
 	src/ui/tabbed_overlay.c \
@@ -276,7 +276,6 @@ HDRS = \
 	src/app/glr_defaults.h \
 	src/app/glr_state.h \
 	src/editor/clipboard.h \
-	src/editor/code_panel_document.h \
 	src/editor/commit.h \
 	src/editor/completion.h \
 	src/editor/help_session.h \
@@ -321,6 +320,7 @@ HDRS = \
 	src/ui/menu_bar.h \
 	src/ui/panels.h \
 	src/ui/profile_panel.h \
+	src/ui/repl_code_panel.h \
 	src/ui/replay_hud.h \
 	src/ui/state.h \
 	src/ui/state_types.h \
@@ -350,7 +350,6 @@ CORE_TEST_SRCS = \
 	src/app/glr_source_document.c \
 	src/app/glr_state.c \
 	src/editor/clipboard.c \
-	src/editor/code_panel_document.c \
 	src/editor/commit.c \
 	src/editor/completion.c \
 	src/editor/help_session.c \
@@ -395,6 +394,7 @@ CORE_TEST_SRCS = \
 	src/ui/menu_bar.c \
 	src/ui/panels.c \
 	src/ui/profile_panel.c \
+	src/ui/repl_code_panel.c \
 	src/ui/replay_hud.c \
 	src/ui/state.c \
 	src/ui/tabbed_overlay.c \

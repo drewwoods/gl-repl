@@ -12,11 +12,11 @@
 #include "widgets/replay_state.h"
 #include "ui/state.h"
 #include "repl/replay_annotations.h"
-#include "editor/code_panel_document.h"
 #include "ui/panels.h"
 #include "ui/layout.h"
 #include "ui/metrics.h"
 #include "ui/gl_2d.h"
+#include "ui/repl_code_panel.h"
 
 #define g_status  (ui_state_status_mut()->text)
 #define g_scroll  (editor_state_scroll_mut()->scroll)
@@ -67,7 +67,7 @@ static void declare_test_vars(void) {
 }
 
 static int code_panel_mouse_y_for_cmd(int cmd_idx) {
-    CodePanelDocumentLayout layout;
+    UiReplCodePanelLayout layout;
     int cp_y, cp_h, panel_w;
     int linenum_w = 4 * FONT_W;
     int idx_col_w = glr_state_presentation().show_vertex_indices ? (6 * FONT_W) : 0;
@@ -79,7 +79,7 @@ static int code_panel_mouse_y_for_cmd(int cmd_idx) {
     (void)ui_panels_code_panel_apply_scroll_follow_for_test(glr_state_presentation().show_vertex_indices, NULL, NULL);
 
     ui_layout_code_panel_rect(NULL, &cp_y, &panel_w, &cp_h);
-    editor_code_panel_document_build(&layout, panel_w, text_x, cp_h);
+    ui_repl_code_panel_build_layout(&layout, panel_w, text_x, cp_h);
 
     doc_line = layout.header_rows;
     for (int i = 0; i < cmd_idx && i < repl_state_document_count(); i++)
