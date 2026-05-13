@@ -5,46 +5,37 @@
 #include <stddef.h>
 #include <string.h>
 
-#define EDITOR_STATE_INITIAL                          \
-    {                                                 \
-        .input = {                                    \
-            .input_capacity = MAX_INPUT_LEN,          \
-            .anchor_pos = -1,                         \
-            .pending_newline_capacity = MAX_INPUT_LEN,\
-        },                                            \
-        .selection = {                                \
-            .anchor_idx = -1,                         \
-            .end_idx = -1,                            \
-        },                                            \
-        .clipboard = {                                \
-            .kind = EDITOR_CLIPBOARD_EMPTY,           \
-            .line_count = 0,                          \
-            .input_text_len = 0,                      \
-        },                                            \
-        .search = {                                   \
-            .active = 0,                              \
-            .query = "",                              \
-            .query_len = 0,                           \
-            .cursor_pos = 0,                          \
-            .hit_line_idx = -1,                       \
-            .hit_char_idx = -1,                       \
-            .hit_ordinal = 0,                         \
-            .match_count = 0,                         \
-        },                                            \
-        .autocomplete = {                             \
-            .match_count = 0,                         \
-            .selected_idx = 0,                        \
-            .ghost = "",                              \
-            .hint = "",                               \
-        },                                            \
-        .scroll = {                                   \
-            .scroll = 0,                              \
-            .scroll_follow_cursor = 0,                \
-        },                                            \
-    }
 
-static EditorState g_editor_state = EDITOR_STATE_INITIAL;
-static const EditorState g_editor_state_defaults = EDITOR_STATE_INITIAL;
+
+static EditorState g_editor_state;   /* zero-initialised by BSS */
+
+/* Writes the handful of non-zero sentinel values that distinguish a
+ * valid default EditorState from a raw zero-fill. */
+static void editor_state_apply_sentinels(EditorState *s) {
+    s->input.input_capacity          = MAX_INPUT_LEN;
+    s->input.anchor_pos              = -1;
+    s->input.pending_newline_capacity = MAX_INPUT_LEN;
+    s->selection.anchor_idx           = -1;
+    s->selection.end_idx              = -1;
+    s->clipboard.kind                 = EDITOR_CLIPBOARD_EMPTY;
+}
+
+/* Lazily-initialised defaults — avoids embedding a 3.2 MB const copy
+ * of EditorState in the object file.  Also patches the live state on
+ * first call so callers that run before an explicit reset() still see
+ * correct sentinels (anchor_pos = -1, etc.). */
+static const EditorState *editor_state_get_defaults(void) {
+    static EditorState defaults;
+    static int inited;
+    if (!inited) {
+        /* defaults is BSS-zeroed; add the non-zero sentinels. */
+        editor_state_apply_sentinels(&defaults);
+        /* Patch live state once — it's also BSS-zeroed at this point. */
+        editor_state_apply_sentinels(&g_editor_state);
+        inited = 1;
+    }
+    return &defaults;
+}
 
 /* Bounded copy: writes src into dst (capacity sz, NUL-terminated). If
  * src is too long, dst is cleared to "" — same surrender behavior as
@@ -79,7 +70,7 @@ void editor_state_restore(const EditorState *snapshot) {
 }
 
 void editor_state_reset(void) {
-    g_editor_state = g_editor_state_defaults;
+    g_editor_state = *editor_state_get_defaults();
 }
 
 const ReplEditorBuffer *editor_state_buffer(void) {
@@ -569,7 +560,7 @@ ReplSearchState *editor_state_search_mut(void) {
 }
 
 void editor_state_search_clear(void) {
-    g_editor_state.search = g_editor_state_defaults.search;
+    g_editor_state.search = editor_state_get_defaults()->search;
 }
 
 ReplAutocompleteState editor_state_autocomplete(void) {
@@ -581,7 +572,7 @@ ReplAutocompleteState *editor_state_autocomplete_mut(void) {
 }
 
 void editor_state_autocomplete_clear(void) {
-    g_editor_state.autocomplete = g_editor_state_defaults.autocomplete;
+    g_editor_state.autocomplete = editor_state_get_defaults()->autocomplete;
 }
 
 const EditorTransformerList *editor_state_transformers(void) {

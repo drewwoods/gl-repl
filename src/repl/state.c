@@ -10,6 +10,8 @@
 #include "repl/state_owners.h"
 #undef REPL_STATE_IMPLEMENTATION
 
+#include <string.h>  /* snprintf for cam_lines init */
+
 /* Step 7a of feature/decouple-repl-from-gl-repl-alt.md: presentation +
  * render slices moved to glr_state.c, dropping the last `glr_camera.h`
  * include from this TU. The previous `glr_camera_mut()->auto_rotate`
@@ -17,11 +19,85 @@
  * of the per-scene cfg snapshot and the cfg bridge's `apply` callback
  * restores it during scene switches. */
 
-static const ReplRuntimeState g_repl_state_defaults = {
-#include "repl/state_defaults.inc"
-};
+static ReplRuntimeState g_repl_state;  /* BSS zero-initialised */
 
-static ReplRuntimeState g_repl_state;
+/* Writes the non-zero default values that distinguish a valid default
+ * ReplRuntimeState from raw zero-fill.  Mirrors the old
+ * state_defaults.inc designator initialiser. */
+static void repl_state_apply_sentinels(ReplRuntimeState *s) {
+    /* --- document --- */
+    s->document.capacity       = MAX_COMMANDS;
+    s->document.normals_dirty  = 1;
+
+    /* --- flat_program --- */
+    s->flat_program.capacity                    = MAX_COMMANDS;
+    s->flat_program.dirty                       = 1;
+    s->flat_program.current_block_begin_idx      = -1;
+    s->flat_program.current_block_end_idx        = -1;
+    s->flat_program.current_block_source_line_idx = -1;
+
+    /* --- variables --- */
+    s->variables.time_var_idx  = -1;
+    s->variables.time_playing  = 1;
+
+    /* --- render: default lights --- */
+    s->render.lights[0] = (SceneLight){ GL_LIGHT0, 1,
+        { 2.0f, 4.0f, 5.0f, 0.0f },
+        { 0.80f, 0.80f, 0.75f, 1.0f },
+        { 0.10f, 0.10f, 0.12f, 1.0f },
+        { 1.0f, 1.0f, 0.95f, 1.0f } };
+    s->render.lights[1] = (SceneLight){ GL_LIGHT1, 1,
+        { -3.0f, 2.0f, -2.0f, 1.0f },
+        { 0.45f, 0.30f, 0.15f, 1.0f },
+        { 0.05f, 0.03f, 0.02f, 1.0f },
+        { 0.30f, 0.20f, 0.10f, 1.0f } };
+    s->render.lights[2] = (SceneLight){ GL_LIGHT2, 1,
+        { 0.0f, -1.0f, 3.0f, 1.0f },
+        { 0.15f, 0.25f, 0.50f, 1.0f },
+        { 0.02f, 0.03f, 0.06f, 1.0f },
+        { 0.10f, 0.15f, 0.35f, 1.0f } };
+    s->render.lights[3] = (SceneLight){ GL_LIGHT3, 0,
+        { 1.0f, 1.0f, -4.0f, 0.0f },
+        { 0.35f, 0.35f, 0.40f, 1.0f },
+        { 0.05f, 0.05f, 0.06f, 1.0f },
+        { 0.20f, 0.20f, 0.25f, 1.0f } };
+    s->render.clear_color[0] = 0.10f;
+    s->render.clear_color[1] = 0.10f;
+    s->render.clear_color[2] = 0.10f;
+    s->render.clear_color[3] = 1.0f;
+
+    /* --- scenes --- */
+    s->scenes.active_example_idx = -1;
+
+    /* --- import_export: default render-state + cam lines --- */
+    snprintf(s->import_export.render_state_lines[0], 64,
+             "  glEnable(GL_MULTISAMPLE);");
+    snprintf(s->import_export.render_state_lines[1], 64,
+             "  glDisable(GL_LINE_SMOOTH);");
+    snprintf(s->import_export.cam_lines[0], 96,
+             "  glTranslatef(0.0000f, 0.0000f, -5.0000f);");
+    snprintf(s->import_export.cam_lines[1], 96,
+             "  glRotatef(20.0000f, 1.0f, 0.0f, 0.0f);");
+    snprintf(s->import_export.cam_lines[2], 96,
+             "  glRotatef(30.0000f, 0.0f, 1.0f, 0.0f);");
+    snprintf(s->import_export.cam_lines[3], 96,
+             "  glTranslatef(0.0000f, 0.0000f, 0.0000f);");
+}
+
+/* Lazily-initialised defaults — avoids embedding a 4.6 MB const copy
+ * of ReplRuntimeState in the object file.  Also patches the live state
+ * on first call so callers that run before an explicit reset_program()
+ * still see correct sentinels. */
+static const ReplRuntimeState *repl_state_get_defaults(void) {
+    static ReplRuntimeState defaults;
+    static int inited;
+    if (!inited) {
+        repl_state_apply_sentinels(&defaults);
+        repl_state_apply_sentinels(&g_repl_state);
+        inited = 1;
+    }
+    return &defaults;
+}
 
 #define g_cmds                      (g_repl_state.document.cmds)
 #define g_num_cmds                  (g_repl_state.document.cmd_count)
@@ -316,7 +392,7 @@ ReplVariableState *repl_state_variables_mut(void) {
 
 void repl_state_variables_reset(void) {
     repl_state_bind_eval_predef_storage();
-    g_repl_state.variables = g_repl_state_defaults.variables;
+    g_repl_state.variables = repl_state_get_defaults()->variables;
     repl_eval_init_predef_vars();
     g_t_var_idx = repl_eval_find_predef_var_idx("t");
 }
@@ -392,7 +468,7 @@ ReplRenderState *repl_state_render_mut(void) {
 }
 
 void repl_state_render_reset_defaults(void) {
-    g_repl_state.render = g_repl_state_defaults.render;
+    g_repl_state.render = repl_state_get_defaults()->render;
 }
 
 /* Phase J7: the legacy `repl_state_replay` / `_mut` / `_reset`
@@ -454,7 +530,7 @@ void repl_state_restore(const ReplRuntimeState *snapshot) {
 }
 
 void repl_state_import_export_reset(void) {
-    g_repl_state.import_export = g_repl_state_defaults.import_export;
+    g_repl_state.import_export = repl_state_get_defaults()->import_export;
 }
 
 /* repl_state_init_defaults is the program-only (REPL-state) entry
@@ -485,7 +561,7 @@ void repl_state_init_defaults(void) {
  * separation is what lets tools/repl_demo build without stubbing
  * editor / UI / peer reset symbols. */
 void repl_state_reset_program(void) {
-    g_repl_state = g_repl_state_defaults;
+    g_repl_state = *repl_state_get_defaults();
     repl_state_bind_eval_predef_storage();
     repl_scenes_reset();
     reset_time_state();
