@@ -851,7 +851,7 @@ check-state-ownership: ## Run state-ownership contract checks (new + tightened e
 check-public-api-usage: ## Scan public API declarations for unused functions (informational).
 	@bash scripts/check-unused-apis.sh
 
-check-duplicate-api-decls: ## Scan module public headers for duplicate function declarations (informational).
+check-duplicate-api-decls: ## Scan module public headers for duplicate function declarations; fails if any are found.
 	@bash scripts/check-duplicate-api-decls.sh
 
 audit-editor-ownership: ## Report editor/REPL/UI ownership drift (informational; see done/editor-owns-text-completion.md).
