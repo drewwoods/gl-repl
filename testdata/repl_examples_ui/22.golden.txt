@@ -29,7 +29,7 @@ void display() {
   glTranslatef(0.0000f, 0.0000f, 0.0000f);
 --- header_post ---
 --- source ---
-  float n, r, x, y, phase, sample;
+  static float n, r, x, y, phase, sample;
   glClearColor(0.06, 0.07, 0.09, 1);
   glDisable(GL_LIGHTING);
   glDisable(GL_DEPTH_TEST);

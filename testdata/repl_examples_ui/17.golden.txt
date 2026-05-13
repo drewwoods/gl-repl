@@ -29,10 +29,10 @@ void display() {
   glTranslatef(0.0000f, 0.0000f, 0.0000f);
 --- header_post ---
 --- source ---
-  float x, y, x0, y0, x1 = 1, y1 = 1, x2 = 2, y2;
-  float period = 5;
-  float x_a, x_b, y_a, y_b;
-  float t0;
+  static float x, y, x0, y0, x1 = 1, y1 = 1, x2 = 2, y2;
+  static float period = 5;
+  static float x_a, x_b, y_a, y_b;
+  static float t0;
   // current progress
   func0(x0, y0, x1, y1, x2, y2, u) {
     x = pow(1-u, 2) * x0 + 2 * (1-u)*u * x1 + u*u * x2;

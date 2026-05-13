@@ -350,6 +350,12 @@ static int compile_rewrite_decl_initializer_text(const char *orig_text,
     line = orig_text ? orig_text : "";
     compile_copy_leading_ws(line, indent, sizeof(indent));
     scan = line + strlen(indent);
+    /* Optional `static ` prefix (canonical form per format_decl_text). */
+    if (strncmp(scan, "static", 6) == 0 && isspace((unsigned char)scan[6])) {
+        scan += 6;
+        while (*scan && isspace((unsigned char)*scan))
+            scan++;
+    }
     if (strncmp(scan, "float", 5) != 0 ||
         isalnum((unsigned char)scan[5]) || scan[5] == '_')
         return 0;
@@ -369,7 +375,7 @@ static int compile_rewrite_decl_initializer_text(const char *orig_text,
     }
 
     out[0] = '\0';
-    if (!compile_append_text(out, out_sz, &off, "%sfloat ", indent))
+    if (!compile_append_text(out, out_sz, &off, "%sstatic float ", indent))
         return 0;
 
     chunk_start = scan;
@@ -468,6 +474,12 @@ static ReplCompileResult parse_float_name_list(const char *input,
 
     const char *p = input ? input : "";
     while (*p && isspace((unsigned char)*p)) p++;
+    /* Optional `static ` prefix: format_decl_text emits it, so we
+     * must accept it on the round-trip. */
+    if (strncmp(p, "static", 6) == 0 && isspace((unsigned char)p[6])) {
+        p += 6;
+        while (*p && isspace((unsigned char)*p)) p++;
+    }
     if (strncmp(p, "float", 5) != 0)
         return REPL_COMPILE_OK;
     if (isalnum((unsigned char)p[5]) || p[5] == '_')
@@ -610,11 +622,15 @@ static ReplCompileResult validate_decl_names(const FloatDeclParse *parsed,
 }
 
 /* Format the decl into source text. Decls always live at depth 0,
- * so the indent is the project's standard 2-space gutter. */
+ * so the indent is the project's standard 2-space gutter. The
+ * `static` keyword is canonical: predef vars are file-scope statics
+ * that retain their values across frames (the exporter emits them
+ * as `static float ...` in the generated C file), and surfacing the
+ * keyword in the code panel makes that lifetime obvious. */
 static void format_decl_text(const FloatDeclParse *parsed,
                              char *out, int out_sz) {
     const char indent[] = "  ";
-    int off = snprintf(out, (size_t)out_sz, "%sfloat ", indent);
+    int off = snprintf(out, (size_t)out_sz, "%sstatic float ", indent);
     for (int var_idx = 0;
          var_idx < parsed->count && off < out_sz - 4;
          var_idx++) {

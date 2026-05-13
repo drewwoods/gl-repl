@@ -118,7 +118,11 @@
       "Bash(chmod +x *)",
       "Bash(./test_repl_core_internal *)",
       "Bash(./build/release/test_repl_core_examples)",
-      "Bash(./build/release-gl-stubs/test_repl_core_internal)"
+      "Bash(./build/release-gl-stubs/test_repl_core_internal)",
+      "Bash(gsed -i 's|\"  float testvar|\"  static float testvar|g' tests/test_glr_ctrl.c)",
+      "Bash(gsed -i 's|\"  float \\\\\\([a-zA-Z]\\\\\\)|\"  static float \\\\1|g' tests/test_repl_compile.c)",
+      "Bash(gsed -i 's/\"float /\"static float /g' src/repl/examples.c)",
+      "Bash(./build/release-gl-stubs/test_repl_core_examples)"
     ]
   }
 }

@@ -29,7 +29,7 @@ void display() {
   glTranslatef(-0.6000f, -0.1000f, -0.4000f);
 --- header_post ---
 --- source ---
-  float n, x, y, z, k;
+  static float n, x, y, z, k;
 
   // --- func0: parametric surface patch (nested for + math) ---
   func0(rows, cols, amp, phase) {

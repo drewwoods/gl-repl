@@ -336,6 +336,11 @@ static int is_definition_source_line(const char *line) {
 
     while (*p && isspace((unsigned char)*p))
         p++;
+    /* Optional canonical `static ` prefix (see format_decl_text). */
+    if (strncmp(p, "static", 6) == 0 && isspace((unsigned char)p[6])) {
+        p += 6;
+        while (*p && isspace((unsigned char)*p)) p++;
+    }
     if (strncmp(p, "float", 5) == 0 &&
         !isalnum((unsigned char)p[5]) && p[5] != '_')
         return 1;
