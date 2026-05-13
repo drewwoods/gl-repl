@@ -26,7 +26,7 @@ Split the code-panel UI into a generic text-panel renderer plus a REPL-specific 
     - `TEXT`: a committed source row (one per document command in the REPL adapter).
     - `INPUT`: the active edit row — the renderer draws cursor, selection, autocomplete ghost/hint here.
     - `PLACEHOLDER`: scroll-position-only row (e.g., blank insert-mode preview).
-    - `VIRTUAL`: adapter-supplied row not backed by a source line directly (replay annotations, evaluated-arg previews). Carries an optional `hit_target_line_idx` — replay virtual rows map back to their owning source line (current `code_panel_document` behavior at `src/editor/code_panel_document.c:243` routes replay rows to `replay_src_line()`), while demo-only virtual rows may set it to `-1` for non-hit-testable.
+    - `VIRTUAL`: adapter-supplied row not backed by a source line directly (replay annotations, evaluated-arg previews). Carries an optional `hit_target_line_idx` — replay virtual rows map back to their owning source line (current hit-test behavior in `editor_code_panel_document_target_for_doc_line` maps replay extra rows to their owning `cmd_idx`; replay follow-scroll separately uses `replay_src_line()`), while demo-only virtual rows may set it to `-1` for non-hit-testable.
   - `UiTextPanelRow` decoration slots — *distinct fields, not a single "gutter labels" bag*:
     - `left_gutter_label`: line number (always the leftmost numeric column).
     - `left_aux_label`: auxiliary left-gutter content drawn at `idx_x` — currently the vertex/tess index (`v3`, `vn`); see `src/ui/panels.c:540-545`. Optional per row.
@@ -75,7 +75,7 @@ Split the code-panel UI into a generic text-panel renderer plus a REPL-specific 
   - populate row decoration slots:
     - `left_aux_label` ← vertex/tess index for the row (REPL-specific; uses `primitive_vnums_exact` etc. from the snapshot).
     - `right_action` ← color swatch sourced from `snap->editor_transformers`. `EditorTransformer` snapshots stay owned by `EditorState` (the controller already pushes them per frame); the adapter maps each transformer to its row's `right_action`.
-  - insert replay `VIRTUAL` rows **after** their owning source row, with `hit_target_line_idx` set to that source line. TEXT row source-line indices stay sequential; clicks on replay virtual rows route to the owning source line, preserving current `code_panel_document` behavior.
+  - insert replay `VIRTUAL` rows **after** their owning source row, with `hit_target_line_idx` set to that source line. TEXT row source-line indices stay sequential; clicks on replay virtual rows route to the owning source line, preserving the current `editor_code_panel_document_target_for_doc_line` replay-extra-row behavior.
   - tutorial fade is **per-character**, not per-row: `src/ui/panels.c:158` calls `tutorial_step_fade_alpha(line_idx, char_idx, line_len, now)` inside the character loop. The generic text panel needs a way to vary alpha across a row — options:
     - `UiTextPanelFadeFn` callback on the row (called per character with `line_idx, char_idx, line_len`).
     - Per-row segment metadata (array of `{start, len, alpha}` runs) so the adapter pre-computes fade and the renderer just walks segments.
@@ -113,11 +113,15 @@ Split the code-panel UI into a generic text-panel renderer plus a REPL-specific 
   - No-op source-scope, tutorial, replay, variable, color-picker, export, and dirty-state functions.
   - Registering an `EditorCompletionProvider` is **optional**, not required for safety: `editor_completion_update`, `editor_completion_update_selected_preview`, and `editor_completion_clear` in `src/editor/completion.c` all early-return when `g_provider == NULL`. Add a minimal word-prefix dictionary provider only if the demo wants to show visible autocomplete suggestions.
   - Status messages forward to `ui_state_status_set`.
-- Shim-size tripwire: if the shim grows past ~12-15 functions during implementation, treat that as a real coupling problem and pause to evaluate `editor/*` decoupling before continuing. The shim is meant to be a small dependency ledger, not a sprawling parallel implementation.
+- Add `tools/editor_demo/app_chrome_shim.c` or, preferably, extract an `EditorChromeServices` seam before linking the demo:
+  - Today `src/editor/input.c` still reaches app/controller chrome directly: `glr_camera_controls_reset`, `glr_ctrl_router_reset_code_panel_drag`, `glr_ctrl_sync_ui_chrome`, and `glr_state_presentation*`.
+  - The demo must account for those hooks explicitly instead of accidentally pulling in `src/app/glr_ctrl.c`. A short-term shim can provide no-op camera/router reset plus local code-panel layout state; the cleaner implementation is a small editor-input service table with production bindings in the controller and demo bindings in `tools/editor_demo`.
+  - Keep this separate from `repl_shim.c` so the dependency ledger distinguishes text/REPL semantics from app chrome.
+- Shim-size tripwire: if `repl_shim.c` grows past ~12-15 functions, or the app/chrome shim grows past ~5-7 functions, treat that as a real coupling problem and pause to evaluate `editor/*` decoupling before continuing. The shims are meant to be small dependency ledgers, not sprawling parallel implementations.
 - Add `make editor_demo`.
   - `USE_GL_STUBS=1` verifies compile/link only.
   - Real GL build opens the editor demo window.
-- Code touched: `tools/editor_demo/*`, `Makefile`.
+- Code touched: `tools/editor_demo/*`, `src/editor/input.{c,h}` if an `EditorChromeServices` seam is extracted, `Makefile`.
 
 ## Phase 6 — Guards And Documentation
 
@@ -163,4 +167,3 @@ Split the code-panel UI into a generic text-panel renderer plus a REPL-specific 
 - Phases 0-2 are the load-bearing refactor: text-panel module exists, generic rendering + hit-mapping live there, full app still works through the unchanged `ui_panels_*` surface. This is the natural pause point — the cleanup is real even without the demo.
 - Phase 3 is mechanical once Phase 2 lands; Phase 4 is cleanup; Phase 5 is the proof-of-concept demo. If Phase 5's shim trips the size tripwire, pause and reassess whether decoupling `src/editor/*` from REPL types is a prerequisite rather than a follow-up.
 - Phase 6 (guards + docs) lands incrementally as each preceding phase merges — don't batch the purity guard until the end.
-
