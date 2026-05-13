@@ -26,8 +26,12 @@ Split the code-panel UI into a generic text-panel renderer plus a REPL-specific 
     - `TEXT`: a committed source row (one per document command in the REPL adapter).
     - `INPUT`: the active edit row — the renderer draws cursor, selection, autocomplete ghost/hint here.
     - `PLACEHOLDER`: scroll-position-only row (e.g., blank insert-mode preview).
-    - `VIRTUAL`: adapter-supplied row not backed by source (replay annotations, evaluated-arg previews); ignored for hit-test routing to source lines.
-  - `UiTextPanelRow`: text pointer, file-line number, source line index, search row index, indent chars, optional gutter/right-gutter labels, colors, hit eligibility flags. Right-gutter slots cover *all* per-row REPL annotations — color swatches (currently drawn at `cp_x + cp_w - CODE_MARGIN_X - sw - 2` in `src/ui/panels.c`) and vertex/tess labels are right-gutter; no inline mid-line drawing API is needed.
+    - `VIRTUAL`: adapter-supplied row not backed by a source line directly (replay annotations, evaluated-arg previews). Carries an optional `hit_target_line_idx` — replay virtual rows map back to their owning source line (current `code_panel_document` behavior at `src/editor/code_panel_document.c:243` routes replay rows to `replay_src_line()`), while demo-only virtual rows may set it to `-1` for non-hit-testable.
+  - `UiTextPanelRow` decoration slots — *distinct fields, not a single "gutter labels" bag*:
+    - `left_gutter_label`: line number (always the leftmost numeric column).
+    - `left_aux_label`: auxiliary left-gutter content drawn at `idx_x` — currently the vertex/tess index (`v3`, `vn`); see `src/ui/panels.c:540-545`. Optional per row.
+    - `right_action`: right-edge interactive element. Color swatches go here (drawn at `cp_x + cp_w - CODE_MARGIN_X - sw - 2`; see `src/ui/panels.c:548-558`). Distinct from `left_aux_label` because the right action is interactive (hit-testable, opens picker) while the left aux is purely visual.
+    - Plus: text pointer, file-line number, source line index, search row index, indent chars, colors, hit eligibility flags.
   - `UiTextPanelInput`: input text, length, cursor, anchor, ghost, hint, cursor-visible flag
   - `UiTextPanelSearch`: active flag, query, query length, hit row/char
   - `UiTextPanelSnapshot`: viewport, panel rect, rows, scroll, visible chrome flags, input/search/completion state
@@ -68,9 +72,14 @@ Split the code-panel UI into a generic text-panel renderer plus a REPL-specific 
 - Move REPL-aware code-panel behavior from `src/ui/panels.c` into this adapter:
   - build `UiTextPanelRow[]` from `UiRenderSnapshot`, editor buffer lines, `GLCmd[]`, and import/export header/footer lines.
   - compute command colors from `repl_cmd_type_category`.
-  - attach vertex labels and color swatches via right-gutter slots. `EditorTransformer` snapshots stay owned by `EditorState` (the controller already pushes them per frame); the adapter reads `snap->editor_transformers` and maps each transformer to the row's right-gutter slot.
-  - insert replay `VIRTUAL` rows **after** gathering the main TEXT rows but before passing the snapshot to `ui_text_panel_render()`, so the source-line indices on TEXT rows stay sequential for gutter/hit-test.
-  - attach tutorial fade as a per-row color alpha modifier — the row's color field is already alpha-aware, no extra API needed.
+  - populate row decoration slots:
+    - `left_aux_label` ← vertex/tess index for the row (REPL-specific; uses `primitive_vnums_exact` etc. from the snapshot).
+    - `right_action` ← color swatch sourced from `snap->editor_transformers`. `EditorTransformer` snapshots stay owned by `EditorState` (the controller already pushes them per frame); the adapter maps each transformer to its row's `right_action`.
+  - insert replay `VIRTUAL` rows **after** their owning source row, with `hit_target_line_idx` set to that source line. TEXT row source-line indices stay sequential; clicks on replay virtual rows route to the owning source line, preserving current `code_panel_document` behavior.
+  - tutorial fade is **per-character**, not per-row: `src/ui/panels.c:158` calls `tutorial_step_fade_alpha(line_idx, char_idx, line_len, now)` inside the character loop. The generic text panel needs a way to vary alpha across a row — options:
+    - `UiTextPanelFadeFn` callback on the row (called per character with `line_idx, char_idx, line_len`).
+    - Per-row segment metadata (array of `{start, len, alpha}` runs) so the adapter pre-computes fade and the renderer just walks segments.
+    - Whichever shape is picked, the contract must preserve current behavior — a row-wide alpha modifier is **not sufficient** and would regress the tutorial fade visual.
   - render REPL-specific statusbar after `ui_text_panel_render()` returns, using the `UiTextPanelOutput.statusbar_slot_rect` so the adapter doesn't recompute layout.
 - Keep existing visual behavior by having:
   - `ui_panels_render_code_panel()` call `ui_repl_code_panel_render()`
@@ -84,9 +93,10 @@ Split the code-panel UI into a generic text-panel renderer plus a REPL-specific 
   - color picker (modal while open)
   - menu bar
   - variable panel
-  - inline color swatch — actually right-gutter, routed through the adapter, not the generic panel
+  - color swatch row action — drawn as `right_action`, routed through the adapter, not the generic panel
   - scene fallback when no panel hit lands
 - Generic `ui_text_panel_hit_test` returns only text-panel hit kinds: text row, insert/input row, gutter, panel divider, none.
+- When the generic hit lands on a `VIRTUAL` row with `hit_target_line_idx >= 0`, the adapter rewrites the hit to point at the owning source line before returning to the caller — matches the current `code_panel_document` routing for replay annotations so users can still click replay-evaluated rows to navigate to their source.
 - Code touched: `src/ui/repl_code_panel.c`, `src/ui/panels.c`.
 
 ## Phase 5 — Add Editor Demo Host
@@ -101,7 +111,7 @@ Split the code-panel UI into a generic text-panel renderer plus a REPL-specific 
   - Fake parser: empty line -> `CMD_EMPTY`; non-empty text -> inert `CMD_COMMENT`; canonical text is stripped input without trailing `;`.
   - Fake command store/state functions expected by editor input.
   - No-op source-scope, tutorial, replay, variable, color-picker, export, and dirty-state functions.
-  - Register a minimal `EditorCompletionProvider` (no-op or word-prefix dictionary) via `editor_completion_register` so the Tab key path doesn't dereference a null provider.
+  - Registering an `EditorCompletionProvider` is **optional**, not required for safety: `editor_completion_update`, `editor_completion_update_selected_preview`, and `editor_completion_clear` in `src/editor/completion.c` all early-return when `g_provider == NULL`. Add a minimal word-prefix dictionary provider only if the demo wants to show visible autocomplete suggestions.
   - Status messages forward to `ui_state_status_set`.
 - Shim-size tripwire: if the shim grows past ~12-15 functions during implementation, treat that as a real coupling problem and pause to evaluate `editor/*` decoupling before continuing. The shim is meant to be a small dependency ledger, not a sprawling parallel implementation.
 - Add `make editor_demo`.
