@@ -9,6 +9,7 @@ Split the code-panel UI into a generic text-panel renderer plus a REPL-specific 
 - Record current behavior before refactor:
   - Build `make sample USE_GL_STUBS=1`, `make repl_demo USE_GL_STUBS=1`, `make scene_demo USE_GL_STUBS=1`.
   - Run `make test-stubs` and `make check-state-ownership`.
+  - **Capture baseline snapshots** so visual regressions are catchable later: regenerate `testdata/repl_examples_ui/*.golden.txt` from the current binary and save the SHA before any refactor; copy a few `--dump-code` outputs of representative scenes to `/tmp/editor-demo-baseline/` for byte-level diffs after Phase 2 and Phase 3 land. The example-fixture suite is the existing golden harness — re-running it after each phase is the primary regression check.
 - Keep public app entrypoints stable:
   - `ui_panels_render_code_panel`
   - `ui_panels_hit_test`
@@ -32,7 +33,7 @@ Split the code-panel UI into a generic text-panel renderer plus a REPL-specific 
     - `left_aux_label`: auxiliary left-gutter content drawn at `idx_x` — currently the vertex/tess index (`v3`, `vn`); see `src/ui/panels.c:540-545`. Optional per row.
     - `right_action`: right-edge interactive element. Color swatches go here (drawn at `cp_x + cp_w - CODE_MARGIN_X - sw - 2`; see `src/ui/panels.c:548-558`). Distinct from `left_aux_label` because the right action is interactive (hit-testable, opens picker) while the left aux is purely visual.
     - Plus: text pointer, file-line number, source line index, search row index, indent chars, colors, hit eligibility flags.
-  - `UiTextPanelInput`: input text, length, cursor, anchor, ghost, hint, cursor-visible flag. `ghost` and `hint` are pre-resolved strings — the text panel treats them as opaque and does not interpret them.
+  - `UiTextPanelInput`: input text, length, cursor, anchor, ghost, hint, cursor-visible flag. `ghost` and `hint` are pre-resolved strings — the text panel treats them as opaque and does not interpret them. The full app populates both from REPL-side autocomplete (`editor_state_autocomplete()`); the editor demo does **not** need ghost/hint (no grammar to suggest from) and just sends empty strings, so the fields cost nothing in the demo path.
   - `UiTextPanelSearch`: active flag, query, query length, hit row/char. The adapter resolves the REPL-side source-line index to the snapshot's row index before populating `hit_row` (same shape as replay-row routing — REPL line indices are translated to text-panel row indices in the adapter).
   - `UiTextPanelSnapshot`: viewport, panel rect, rows, row count, scroll, visible chrome flags, input/search/completion state.
     - `rows` is a fixed inline array of `UI_TEXT_PANEL_ROW_CAP` (= 512) `UiTextPanelRow` entries. The adapter clips to a "visible window + small scroll buffer" before building the snapshot, so it never has to ship the entire 4096-command document; 512 covers any realistic panel height (~24-50 visible rows) with ~10× headroom for wrapping plus scroll overscan.
@@ -66,7 +67,7 @@ Split the code-panel UI into a generic text-panel renderer plus a REPL-specific 
   - tutorial fading
   - color swatches
   - REPL statusbar content
-- Code touched: `src/ui/panels.c`, new `src/ui/text_panel.c`.
+- Code touched: `src/ui/panels.c`, new `src/ui/text_panel.c`, `tests/test_repl_editor.c` (private `code_panel_header_row_count` helper duplicates the header-row math; any rename/move of those primitives during this phase ripples here — keep the helper aligned in the same patch).
 
 ## Phase 3 — Add REPL Code Panel Adapter
 
@@ -122,6 +123,7 @@ Split the code-panel UI into a generic text-panel renderer plus a REPL-specific 
 
 - Add `tools/editor_demo/editor_demo.c`.
   - GLUT window setup and callback registration.
+  - Links `src/editor/state.c` directly and uses the same global `EditorState` the full app uses — no parallel state instance. The constraint is: `src/editor/state.c` itself **must not** transitively pull in real REPL logic (parser, executor, flatten, etc.) when linked into the demo. If linking the demo today requires REPL symbols that aren't backstopped by a shim, treat that as a coupling bug in `src/editor/*` and fix at source rather than expanding the shim.
   - Builds a `UiTextPanelSnapshot` directly from `EditorState` and fake document rows.
   - Applies `ReplInputDispatchEffects`: redraw, cursor, timer.
   - Calls `editor_handle_key`, `editor_handle_special`, mouse handlers, and wheel handler.
@@ -130,7 +132,7 @@ Split the code-panel UI into a generic text-panel renderer plus a REPL-specific 
   - Fake parser: empty line -> `CMD_EMPTY`; non-empty text -> inert `CMD_COMMENT`; canonical text is stripped input without trailing `;`.
   - Fake command store/state functions expected by editor input.
   - No-op source-scope, tutorial, replay, variable, color-picker, export, and dirty-state functions.
-  - Registering an `EditorCompletionProvider` is **optional**, not required for safety: `editor_completion_update`, `editor_completion_update_selected_preview`, and `editor_completion_clear` in `src/editor/completion.c` all early-return when `g_provider == NULL`. Add a minimal word-prefix dictionary provider only if the demo wants to show visible autocomplete suggestions.
+  - Registering an `EditorCompletionProvider` is **optional**, not required for safety: `editor_completion_update`, `editor_completion_update_selected_preview`, and `editor_completion_clear` in `src/editor/completion.c` all early-return when `g_provider == NULL`. The demo skips registration entirely — there's no grammar to suggest from, so ghost/hint stay empty and the Tab key path no-ops cleanly.
   - Status messages forward to `ui_state_status_set`.
 - Add `tools/editor_demo/app_chrome_shim.c` or, preferably, extract an `EditorChromeServices` seam before linking the demo:
   - Today `src/editor/input.c` still reaches app/controller chrome directly: `glr_camera_controls_reset`, `glr_ctrl_router_reset_code_panel_drag`, `glr_ctrl_sync_ui_chrome`, and `glr_state_presentation*`.
@@ -179,7 +181,8 @@ Split the code-panel UI into a generic text-panel renderer plus a REPL-specific 
 - `editor_demo` is a plain text editor proof, not a GL language editor.
 - `src/ui/panels.h` remains the stable public surface for the full app.
 - The fake REPL shim is intentionally demo-local and should not migrate into production code.
-- Further cleanup of `src/editor/input.c`, `src/editor/clipboard.c`, and `src/editor/undo.c` into generic document services is deferred.
+- The shim is a **compromise**, not a permanent architectural choice: it acknowledges current `src/editor/*` ↔ REPL coupling so the demo can link today. The long-term direction is splitting `src/editor/*` so it no longer pulls in REPL grammar/pipeline symbols — at which point the shim shrinks toward zero. Keep the shim lightweight (see the tripwire in Phase 5) so its size visibly tracks the real coupling debt.
+- Further cleanup of `src/editor/input.c`, `src/editor/clipboard.c`, and `src/editor/undo.c` into generic document services is deferred — but that cleanup is the *real* goal; this demo is the scaffolding that makes the coupling measurable.
 
 ## Landing Strategy
 
