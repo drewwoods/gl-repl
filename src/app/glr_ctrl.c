@@ -1,5 +1,6 @@
 #include "app/glr_ctrl.h"
 
+#include <ctype.h>
 #include <errno.h>
 #include <gl_includes.h>
 #include <stdio.h>
@@ -17,7 +18,6 @@
 #include "editor/input.h"
 #include "editor/search.h"
 #include "editor/state.h"
-#include "ui/repl_code_panel.h"
 #include "scene/guides/geometry_guides.h" /* geometry_guides_render_for_cursor */
 #include "app/glr_actions.h"
 #include "app/glr_camera.h"
@@ -46,6 +46,7 @@
 #include "ui/editor.h"
 #include "ui/layout.h"
 #include "ui/menu_bar.h"
+#include "ui/metrics.h"
 #include "ui/panels.h"
 #include "ui/profile_panel.h"
 #include "ui/snapshot.h"
@@ -55,6 +56,11 @@
 #include "ui/variable_panel.h"
 #include "widgets/variable_panel_drag.h"
 #include "widgets/variable_panel_state.h"
+
+static int glr_ctrl_apply_code_panel_follow_scroll_for_snapshot(
+    const UiRenderSnapshot *snap,
+    int *out_follow_doc_line,
+    int *out_visible_lines);
 
 static int glr_ctrl_cmd_is_focus_vertex(const GLCmd *cmd) {
     return cmd->valid &&
@@ -1085,7 +1091,30 @@ static void glr_ctrl_fill_ui_variable_panel_vars(UiRenderSnapshot *snap,
     }
 }
 
-static void glr_ctrl_build_ui_snapshot(UiRenderSnapshot *snap) {
+static int glr_ctrl_leading_ws_chars(const char *text) {
+    int count = 0;
+
+    while (text && text[count] && isspace((unsigned char)text[count]))
+        count++;
+    return count;
+}
+
+static int glr_ctrl_active_indent_chars(void) {
+    int edit_line = repl_state_edit_line();
+    int document_count = repl_state_document_count();
+
+    if (editor_insert_mode())
+        return repl_source_scope_cmd_indent_chars(edit_line);
+    if (edit_line >= 0 && edit_line < document_count) {
+        const char *line_text = editor_buffer_line(edit_line);
+        if (!line_text || line_text[0] == '\0')
+            return repl_source_scope_cmd_indent_chars(edit_line);
+        return glr_ctrl_leading_ws_chars(line_text);
+    }
+    return repl_source_scope_cmd_indent_chars(document_count);
+}
+
+void glr_ctrl_build_ui_snapshot(UiRenderSnapshot *snap) {
     FlatProgramView flat_program;
     ReplPredefView predef;
     memset(snap, 0, sizeof(*snap));
@@ -1142,7 +1171,7 @@ static void glr_ctrl_build_ui_snapshot(UiRenderSnapshot *snap) {
 
     /* Indent + statusbar metadata so the render path does not call back
      * into repl_source_scope_* / ui_repl_code_panel_* per row. */
-    snap->active_indent_chars   = ui_repl_code_panel_active_indent_chars();
+    snap->active_indent_chars   = glr_ctrl_active_indent_chars();
     snap->trailing_indent_chars = repl_source_scope_cmd_indent_chars(snap->document_count);
     snap->in_begin_block        = repl_source_scope_in_begin_block();
     snap->current_begin_mode    = repl_current_begin_mode();
@@ -1230,6 +1259,8 @@ void glr_ctrl_display_frame(void) {
     prof_end(PROF_SNAPSHOT_SCENE_CONFIG);
 
     prof_begin(PROF_SNAPSHOT_UI);
+    glr_ctrl_build_ui_snapshot(&ui_snap);
+    glr_ctrl_apply_code_panel_follow_scroll_for_snapshot(&ui_snap, NULL, NULL);
     glr_ctrl_build_ui_snapshot(&ui_snap);
     prof_end(PROF_SNAPSHOT_UI);
 
@@ -1528,6 +1559,84 @@ void glr_ctrl_sync_ui_chrome(void) {
     ReplCodePanelRuntimeState *cp = ui_state_code_panel_mut();
     cp->layout_mode         = p.code_panel_layout;
     cp->show_vertex_indices = p.show_vertex_indices;
+    cp->wrap_at_comma       = p.wrap_at_comma;
+}
+
+void glr_ctrl_apply_code_panel_follow_scroll(
+    const UiReplCodePanelLayout *layout) {
+    int max_scroll;
+    EditorScrollState *scroll;
+
+    if (!layout)
+        return;
+
+    max_scroll = layout->total_lines - layout->visible_lines;
+    if (max_scroll < 0)
+        max_scroll = 0;
+
+    scroll = editor_state_scroll_mut();
+    if (scroll->scroll > max_scroll)
+        scroll->scroll = max_scroll;
+    if (scroll->scroll < 0)
+        scroll->scroll = 0;
+
+    if (scroll->scroll_follow_cursor) {
+        if (layout->follow_doc_line < scroll->scroll)
+            scroll->scroll = layout->follow_doc_line;
+        if (layout->follow_doc_line >= scroll->scroll + layout->visible_lines)
+            scroll->scroll = layout->follow_doc_line - layout->visible_lines + 1;
+        if (scroll->scroll > max_scroll)
+            scroll->scroll = max_scroll;
+        if (scroll->scroll < 0)
+            scroll->scroll = 0;
+        scroll->scroll_follow_cursor = 0;
+    }
+}
+
+static int glr_ctrl_apply_code_panel_follow_scroll_for_snapshot(
+    const UiRenderSnapshot *snap,
+    int *out_follow_doc_line,
+    int *out_visible_lines) {
+    UiReplCodePanelLayout layout;
+    int cp_x;
+    int cp_y;
+    int cp_w;
+    int cp_h;
+    int linenum_w = 4 * FONT_W;
+    int idx_col_w;
+    int idx_x = CODE_MARGIN_X + linenum_w + FONT_W;
+    int text_x;
+    int scroll;
+
+    if (!snap)
+        return 0;
+
+    idx_col_w = snap->code_panel.show_vertex_indices ? (6 * FONT_W) : 0;
+    text_x = idx_x + idx_col_w;
+
+    ui_layout_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
+    (void)cp_x;
+    (void)cp_y;
+
+    ui_repl_code_panel_build_layout(snap, &layout, cp_w, text_x, cp_h);
+    glr_ctrl_apply_code_panel_follow_scroll(&layout);
+
+    if (out_follow_doc_line)
+        *out_follow_doc_line = layout.follow_doc_line;
+    if (out_visible_lines)
+        *out_visible_lines = layout.visible_lines;
+
+    scroll = editor_scroll();
+    return layout.follow_doc_line >= scroll &&
+           layout.follow_doc_line < scroll + layout.visible_lines;
+}
+
+int glr_ctrl_code_panel_apply_scroll_follow_for_test(
+    const UiRenderSnapshot *snap,
+    int *out_follow_doc_line,
+    int *out_visible_lines) {
+    return glr_ctrl_apply_code_panel_follow_scroll_for_snapshot(
+        snap, out_follow_doc_line, out_visible_lines);
 }
 
 void glr_ctrl_init_gl(void) {
@@ -2170,6 +2279,16 @@ static int route_code_gutter_hit(const UiHit *hit) {
     return 1;
 }
 
+/* UI_HIT_CODE_PANEL_CHROME: inert code-panel chrome (e.g. statusbar).
+ * Consume the press so scene/camera handlers do not see it, but do not
+ * move the cursor or selection. */
+static int route_code_panel_chrome_hit(void) {
+    color_picker_close();
+    glr_ctrl_router_reset_code_panel_drag();
+    editor_request_redraw();
+    return 1;
+}
+
 /* UI_HIT_INLINE_COLOR_SWATCH: toggle / open the floating color picker
  * for the swatch's source line. Undo capture is owned by the picker's
  * writeback path (color_picker_write_cmd → editor_commit_apply_external
@@ -2323,6 +2442,8 @@ int glr_ctrl_router_handle_code_panel_hit(UiHit hit, int x, int y) {
         consumed = route_code_insert_line_hit(&hit); break;
     case UI_HIT_CODE_GUTTER:
         consumed = route_code_gutter_hit(&hit); break;
+    case UI_HIT_CODE_PANEL_CHROME:
+        consumed = route_code_panel_chrome_hit(); break;
     case UI_HIT_HELP_PANEL:
     case UI_HIT_REPLAY_BUTTON:
     case UI_HIT_SCENE:
@@ -2344,7 +2465,9 @@ int glr_ctrl_router_handle_code_panel_drag(int x, int y) {
     if (!g_code_panel_drag_active || g_code_panel_drag_anchor < 0)
         return 0;
 
-    UiHit hit = ui_panels_hit_test(x, y, repl_eval_predef_view().count);
+    UiRenderSnapshot ui_snap;
+    glr_ctrl_build_ui_snapshot(&ui_snap);
+    UiHit hit = ui_panels_hit_test(&ui_snap, x, y, repl_eval_predef_view().count);
 
     /* Per-character input-buffer drag: as long as the drag stays on
      * the same source row as the press AND that row is the active
@@ -2377,12 +2500,13 @@ int glr_ctrl_router_handle_code_panel_drag(int x, int y) {
         if (cp_w > 0 && cp_h > 0 && win_h > 0) {
             int gl_y = win_h - y;
             int cx = x;
+            UiRenderSnapshot ui_snap;
+            glr_ctrl_build_ui_snapshot(&ui_snap);
             int cy = y;
             if (cx < cp_x + 1) cx = cp_x + 1;
             if (cx > cp_x + cp_w - 1) cx = cp_x + cp_w - 1;
             if (gl_y < cp_y + 1) cy = win_h - (cp_y + 1);
-            if (gl_y > cp_y + cp_h - 1) cy = win_h - (cp_y + cp_h - 1);
-            UiHit clamped = ui_panels_hit_test(cx, cy,
+            UiHit clamped = ui_panels_hit_test(&ui_snap, cx, cy,
                                                repl_eval_predef_view().count);
             target = code_panel_target_from_hit(clamped);
         }
@@ -2529,7 +2653,10 @@ void glr_ctrl_mouse(int button, int state, int x, int y) {
          * buttons. Only kinds that don't apply (UI_HIT_SCENE,
          * UI_HIT_NONE, UI_HIT_HELP_PANEL) fall through to scene
          * press / camera. */
-        UiHit hit = ui_panels_hit_test(x, y, repl_eval_predef_view().count);
+        UiRenderSnapshot ui_snap;
+        glr_ctrl_build_ui_snapshot(&ui_snap);
+        UiHit hit = ui_panels_hit_test(&ui_snap, x, y,
+                           repl_eval_predef_view().count);
         if (glr_ctrl_router_handle_code_panel_hit(hit, x, y)) {
             glr_ctrl_apply_input_effects(editor_take_input_effects());
             return;

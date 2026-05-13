@@ -1,7 +1,7 @@
 #ifndef GLR_CTRL_H
 #define GLR_CTRL_H
 
-#include "ui/hit.h"        /* UiHit (code-panel hit dispatch) */
+#include "ui/repl_code_panel.h"
 
 void glr_ctrl_init_gl(void);
 void glr_ctrl_bootstrap_repl(const char *input_file);
@@ -19,6 +19,13 @@ void glr_app_reset_all(void);
  * subsequent ui_layout_* / ui_panels_hit_test calls see the new
  * chrome state. */
 void glr_ctrl_sync_ui_chrome(void);
+void glr_ctrl_build_ui_snapshot(UiRenderSnapshot *snap);
+void glr_ctrl_apply_code_panel_follow_scroll(
+    const UiReplCodePanelLayout *layout);
+int glr_ctrl_code_panel_apply_scroll_follow_for_test(
+    const UiRenderSnapshot *snap,
+    int *out_follow_doc_line,
+    int *out_visible_lines);
 void glr_ctrl_set_accum(int enabled);
 void glr_ctrl_display_frame(void);
 void glr_ctrl_reshape(int w, int h);

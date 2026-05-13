@@ -10,7 +10,6 @@
 #include "ui/menu_bar.h"
 #include "ui/metrics.h"
 #include "ui/repl_code_panel.h"
-#include "ui/state.h"
 #include "ui/variable_panel.h"
 
 #include <math.h>
@@ -20,13 +19,6 @@
 void ui_panels_render_code_panel(const UiRenderSnapshot *snap,
                                  UiCodePanelOutput *out) {
     ui_repl_code_panel_render(snap, out);
-}
-
-int ui_panels_code_panel_apply_scroll_follow_for_test(int show_vertex_indices,
-                                                      int *out_follow_doc_line,
-                                                      int *out_visible_lines) {
-    return ui_repl_code_panel_apply_scroll_follow_for_test(
-        show_vertex_indices, out_follow_doc_line, out_visible_lines);
 }
 
 void ui_panels_render_scene_status(const UiRenderSnapshot *snap) {
@@ -113,18 +105,24 @@ int ui_panels_handle_right_press(int mx, int my) {
     return ui_menu_bar_handle_config_right_press(mx, my);
 }
 
-UiHit ui_panels_hit_test(int mx, int my, int variable_count) {
+UiHit ui_panels_hit_test(const UiRenderSnapshot *snap,
+                         int mx, int my, int variable_count) {
     UiHit hit = ui_hit_none();
-    int win_w = ui_state_viewport().window_w;
-    int win_h = ui_state_viewport().window_h;
+    int win_w;
+    int win_h;
     int gl_y;
 
+    if (!snap)
+        return hit;
+
+    win_w = snap->viewport.window_w;
+    win_h = snap->viewport.window_h;
     if (win_w <= 0 || win_h <= 0)
         return hit;
 
     gl_y = win_h - my;
 
-    if (ui_state_help().visible) {
+    if (snap->help.visible) {
         hit.kind = UI_HIT_HELP_PANEL;
         hit.local_x = (float)mx;
         hit.local_y = (float)gl_y;
@@ -132,8 +130,8 @@ UiHit ui_panels_hit_test(int mx, int my, int variable_count) {
     }
 
     {
-        ColorPickerView picker_view = color_picker_view();
-        UiHit picker_hit = ui_color_picker_hit_test(&picker_view, mx, my, win_h);
+        UiHit picker_hit = ui_color_picker_hit_test(&snap->color_picker,
+                                                    mx, my, win_h);
         if (picker_hit.kind != UI_HIT_NONE)
             return picker_hit;
     }
@@ -151,7 +149,7 @@ UiHit ui_panels_hit_test(int mx, int my, int variable_count) {
     }
 
     {
-        UiHit code_hit = ui_repl_code_panel_hit_test(mx, my);
+        UiHit code_hit = ui_repl_code_panel_hit_test(snap, mx, my);
         if (code_hit.kind != UI_HIT_NONE)
             return code_hit;
     }

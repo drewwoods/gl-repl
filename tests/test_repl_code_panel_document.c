@@ -37,13 +37,15 @@ static void reset_doc_fixture(void) {
     repl_state_refresh_workspace_header_lines();
 }
 
-static void build_doc(UiReplCodePanelLayout *layout) {
+static void build_doc(UiRenderSnapshot *snap, UiReplCodePanelLayout *layout) {
     int cp_w, cp_h;
     ui_layout_code_panel_rect(NULL, NULL, &cp_w, &cp_h);
-    ui_repl_code_panel_build_layout(layout, cp_w, code_panel_text_x(), cp_h);
+    glr_ctrl_build_ui_snapshot(snap);
+    ui_repl_code_panel_build_layout(snap, layout, cp_w, code_panel_text_x(), cp_h);
 }
 
 int main(void) {
+    UiRenderSnapshot snap;
     UiReplCodePanelLayout layout;
     int target = -99;
     int on_insert = -99;
@@ -53,7 +55,7 @@ int main(void) {
     editor_feed_line("glBegin(GL_POINTS);");
     editor_feed_line("glColor3f(1, 0, 0);");
     editor_feed_line("glEnd();");
-    build_doc(&layout);
+    build_doc(&snap, &layout);
 
     ASSERT_TRUE("document counts commands",
                 layout.total_lines >= layout.header_rows + layout.footer_rows + 4);
@@ -64,7 +66,7 @@ int main(void) {
         int doc_line = layout.header_rows + layout.cmd_main_rows[0];
         ASSERT_TRUE("target lookup succeeds",
                     ui_repl_code_panel_target_for_doc_line(
-                        doc_line, &layout, &target, &on_insert, &row_offset));
+                        &snap, doc_line, &layout, &target, &on_insert, &row_offset));
         ASSERT_TRUE("target lookup command index", target == 1);
         ASSERT_TRUE("target lookup is source row", on_insert == 0);
         ASSERT_TRUE("target lookup row offset", row_offset == 0);
@@ -73,12 +75,12 @@ int main(void) {
     editor_navigate_to_line(1);
     editor_cursor_pos_set(0);
     editor_handle_key('\r', 0, 0);
-    build_doc(&layout);
+    build_doc(&snap, &layout);
     {
         int doc_line = layout.header_rows + layout.cmd_main_rows[0];
         ASSERT_TRUE("insert row lookup succeeds",
                     ui_repl_code_panel_target_for_doc_line(
-                        doc_line, &layout, &target, &on_insert, &row_offset));
+                        &snap, doc_line, &layout, &target, &on_insert, &row_offset));
         ASSERT_TRUE("insert row reports virtual line", target == -1);
         ASSERT_TRUE("insert row flag", on_insert == 1);
     }
@@ -90,8 +92,8 @@ int main(void) {
     editor_navigate_to_line(2);
     editor_scroll_set(0);
     editor_scroll_follow_cursor_set(1);
-    build_doc(&layout);
-    ui_repl_code_panel_apply_follow_scroll(&layout);
+    build_doc(&snap, &layout);
+    glr_ctrl_apply_code_panel_follow_scroll(&layout);
     ASSERT_TRUE("follow line visible after apply",
                 layout.follow_doc_line >= editor_scroll() &&
                 layout.follow_doc_line < editor_scroll() + layout.visible_lines);

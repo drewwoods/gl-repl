@@ -478,6 +478,7 @@ static int text_panel_draw_regular_row(const UiTextPanelSnapshot *snap,
 
     if (row->kind == UI_TEXT_PANEL_ROW_PLACEHOLDER && text[0] == '\0') {
         if (*io_cur >= snap->scroll && *io_cur < snap->scroll + visible_rows) {
+            text_panel_draw_row_background(snap, row, *io_line_y);
             text_panel_draw_line_number(snap, *io_line_y, row->left_gutter_label);
             text_panel_draw_left_aux(snap, row, *io_line_y);
             text_panel_draw_right_action(snap, row, *io_line_y);
@@ -492,6 +493,7 @@ static int text_panel_draw_regular_row(const UiTextPanelSnapshot *snap,
     code_layout_wrap_iter_init(&wrap_it, text, &layout);
     while (code_layout_wrap_iter_next(&wrap_it, &wrap_start, &wrap_len, &wrap_x)) {
         if (*io_cur >= snap->scroll && *io_cur < snap->scroll + visible_rows) {
+            text_panel_draw_row_background(snap, row, *io_line_y);
             if (wrap_row == 0) {
                 text_panel_draw_line_number(snap, *io_line_y,
                                             row->left_gutter_label);
@@ -761,8 +763,9 @@ UiHit ui_text_panel_hit_test(const UiTextPanelSnapshot *snap,
                 return h;
             }
 
-            if (row->kind == UI_TEXT_PANEL_ROW_INPUT ||
-                row->kind == UI_TEXT_PANEL_ROW_PLACEHOLDER) {
+            if (row->kind == UI_TEXT_PANEL_ROW_PLACEHOLDER ||
+                (row->kind == UI_TEXT_PANEL_ROW_INPUT &&
+                 row->source_line_idx < 0)) {
                 h.kind = UI_HIT_CODE_INSERT_LINE;
                 h.line_idx = resolved_line;
                 h.visual_row = row_offset;

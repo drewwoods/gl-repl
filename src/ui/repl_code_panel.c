@@ -1,12 +1,9 @@
 #include "ui/repl_code_panel.h"
 
-#include "app/glr_state.h"
-#include "editor/clipboard.h"
 #include "editor/state.h"
 #include "repl/command_spec.h"
 #include "repl/core.h"
 #include "repl/export.h"
-#include "repl/source_scope.h"
 #include "repl/state_views.h"
 #include "ui/color_picker.h"
 #include "ui/gl_2d.h"
@@ -14,9 +11,8 @@
 #include "ui/menu_bar.h"
 #include "ui/metrics.h"
 #include "ui/panels.h"
-#include "ui/state.h"
+#include "ui/text_layout.h"
 #include "ui/text_panel.h"
-#include "widgets/replay_state.h"
 #include "widgets/tutorial.h"
 
 #include <ctype.h>
@@ -117,64 +113,74 @@ static UiTextPanelColor repl_code_panel_static_line_color(const char *text,
     return repl_code_panel_rgb(fallback_r, fallback_g, fallback_b);
 }
 
-CodeLayout ui_repl_code_panel_text_layout(int panel_w, int first_x) {
+static CodeLayout repl_code_panel_text_layout(const UiRenderSnapshot *snap,
+                                              int panel_w, int first_x) {
     return code_layout_make(panel_w, first_x, FONT_W,
-                            glr_state_presentation().wrap_at_comma);
+                            snap ? snap->code_panel.wrap_at_comma : 1);
 }
 
-static int repl_code_panel_row_count(const char *text, int first_x, int panel_w) {
-    CodeLayout layout = ui_repl_code_panel_text_layout(panel_w, first_x);
+static int repl_code_panel_row_count(const UiRenderSnapshot *snap,
+                                     const char *text,
+                                     int first_x, int panel_w) {
+    CodeLayout layout = repl_code_panel_text_layout(snap, panel_w, first_x);
     return code_layout_row_count_for_text(text, &layout);
 }
 
-static int repl_code_panel_cursor_row(const char *text, int first_x, int panel_w,
+static int repl_code_panel_cursor_row(const UiRenderSnapshot *snap,
+                                      const char *text,
+                                      int first_x, int panel_w,
                                       int cursor, int *out_start,
                                       int *out_len, int *out_x) {
-    CodeLayout layout = ui_repl_code_panel_text_layout(panel_w, first_x);
+    CodeLayout layout = repl_code_panel_text_layout(snap, panel_w, first_x);
     return code_layout_cursor_row_for_text(text, &layout, cursor,
                                            out_start, out_len, out_x);
 }
 
-static int repl_code_panel_header_row_count(int panel_w, int text_x) {
-    ReplImportExportView import_export = repl_state_import_export();
+static int repl_code_panel_header_row_count(const UiRenderSnapshot *snap,
+                                            int panel_w, int text_x) {
+    ReplImportExportView import_export = snap->import_export;
     int rows = 0;
 
     for (int i = 0; i < import_export.workspace_header_line_count; i++)
-        rows += repl_code_panel_row_count(import_export.workspace_header_lines[i],
+        rows += repl_code_panel_row_count(snap,
+                                          import_export.workspace_header_lines[i],
                                           text_x, panel_w);
     for (int i = 0; g_header_pre[i]; i++)
-        rows += repl_code_panel_row_count(g_header_pre[i], text_x, panel_w);
+        rows += repl_code_panel_row_count(snap, g_header_pre[i], text_x, panel_w);
     for (int i = 0; i < RENDER_STATE_LINE_COUNT; i++)
-        rows += repl_code_panel_row_count(import_export.render_state_lines[i],
+        rows += repl_code_panel_row_count(snap,
+                                          import_export.render_state_lines[i],
                                           text_x, panel_w);
     for (int i = 0; i < CAM_LINE_COUNT; i++)
-        rows += repl_code_panel_row_count(import_export.cam_lines[i],
+        rows += repl_code_panel_row_count(snap,
+                                          import_export.cam_lines[i],
                                           text_x, panel_w);
     {
         char line[MAX_LINE_LEN];
         int line_count = repl_export_lights_display_line_count();
         for (int i = 0; i < line_count; i++) {
             repl_export_lights_display_line(i, line, sizeof(line));
-            rows += repl_code_panel_row_count(line, text_x, panel_w);
+            rows += repl_code_panel_row_count(snap, line, text_x, panel_w);
         }
     }
     for (int i = 0; g_header_post[i]; i++)
-        rows += repl_code_panel_row_count(g_header_post[i], text_x, panel_w);
+        rows += repl_code_panel_row_count(snap, g_header_post[i], text_x, panel_w);
     return rows;
 }
 
-static int repl_code_panel_footer_row_count(int panel_w, int text_x) {
+static int repl_code_panel_footer_row_count(const UiRenderSnapshot *snap,
+                                            int panel_w, int text_x) {
     int rows = 0;
     char line[MAX_LINE_LEN];
 
     for (int i = 0; g_footer_pre_init[i]; i++)
-        rows += repl_code_panel_row_count(g_footer_pre_init[i], text_x, panel_w);
+        rows += repl_code_panel_row_count(snap, g_footer_pre_init[i], text_x, panel_w);
     for (int i = 0; i < repl_export_init_section_line_count(); i++) {
         repl_export_init_section_line(i, line, sizeof(line));
-        rows += repl_code_panel_row_count(line, text_x, panel_w);
+        rows += repl_code_panel_row_count(snap, line, text_x, panel_w);
     }
     for (int i = 0; g_footer_post_init[i]; i++)
-        rows += repl_code_panel_row_count(g_footer_post_init[i], text_x, panel_w);
+        rows += repl_code_panel_row_count(snap, g_footer_post_init[i], text_x, panel_w);
     return rows;
 }
 
@@ -186,24 +192,13 @@ static int repl_code_panel_leading_ws_chars(const char *text) {
     return count;
 }
 
-int ui_repl_code_panel_active_indent_chars(void) {
-    if (editor_insert_mode())
-        return repl_source_scope_cmd_indent_chars(repl_state_edit_line());
-    if (repl_state_edit_line() >= 0 &&
-        repl_state_edit_line() < repl_state_document_count()) {
-        const char *line_text = editor_buffer_line(repl_state_edit_line());
-        if (!line_text || line_text[0] == '\0')
-            return repl_source_scope_cmd_indent_chars(repl_state_edit_line());
-        return repl_code_panel_leading_ws_chars(line_text);
-    }
-    return repl_source_scope_cmd_indent_chars(repl_state_document_count());
-}
-
-static int repl_code_panel_command_main_rows(int cmd_idx, int panel_w,
+static int repl_code_panel_command_main_rows(const UiRenderSnapshot *snap,
+                                             int cmd_idx, int panel_w,
                                              int text_x) {
-    if (!editor_insert_mode() && cmd_idx == repl_state_edit_line()) {
-        int indent_chars = ui_repl_code_panel_active_indent_chars();
-        return repl_code_panel_row_count(editor_state_input().input,
+    if (!snap->editor_input.insert_mode && cmd_idx == snap->edit_line) {
+        int indent_chars = snap->active_indent_chars;
+        return repl_code_panel_row_count(snap,
+                                         snap->editor_input.input,
                                          text_x + indent_chars * FONT_W,
                                          panel_w);
     }
@@ -214,32 +209,38 @@ static int repl_code_panel_command_main_rows(int cmd_idx, int panel_w,
             display_text = editor_buffer_line(cmd_idx);
         if (!display_text)
             display_text = "";
-        return repl_code_panel_row_count(display_text, text_x, panel_w);
+        return repl_code_panel_row_count(snap, display_text, text_x, panel_w);
     }
 }
 
-static void repl_code_panel_precompute_layout_rows(int panel_w, int text_x,
+static void repl_code_panel_precompute_layout_rows(const UiRenderSnapshot *snap,
+                                                   int panel_w, int text_x,
                                                    int *main_rows,
                                                    int *replay_extra_rows) {
-    for (int i = 0; i < repl_state_document_count(); i++) {
+    for (int i = 0; i < snap->document_count; i++) {
         if (main_rows)
-            main_rows[i] = repl_code_panel_command_main_rows(i, panel_w, text_x);
+            main_rows[i] = repl_code_panel_command_main_rows(snap, i, panel_w,
+                                                             text_x);
         if (replay_extra_rows)
             replay_extra_rows[i] = editor_state_virtual_lines_count_for(i);
     }
 }
 
-static int repl_code_panel_insert_rows(int panel_w, int text_x) {
-    int indent_chars = ui_repl_code_panel_active_indent_chars();
-    return repl_code_panel_row_count(editor_state_input().input,
+static int repl_code_panel_insert_rows(const UiRenderSnapshot *snap,
+                                       int panel_w, int text_x) {
+    int indent_chars = snap->active_indent_chars;
+    return repl_code_panel_row_count(snap,
+                                     snap->editor_input.input,
                                      text_x + indent_chars * FONT_W,
                                      panel_w);
 }
 
-static int repl_code_panel_newline_rows(int panel_w, int text_x) {
-    if (repl_state_edit_line() == repl_state_document_count()) {
-        int indent_chars = ui_repl_code_panel_active_indent_chars();
-        return repl_code_panel_row_count(editor_state_input().input,
+static int repl_code_panel_newline_rows(const UiRenderSnapshot *snap,
+                                        int panel_w, int text_x) {
+    if (snap->edit_line == snap->document_count) {
+        int indent_chars = snap->active_indent_chars;
+        return repl_code_panel_row_count(snap,
+                                         snap->editor_input.input,
                                          text_x + indent_chars * FONT_W,
                                          panel_w);
     }
@@ -247,52 +248,56 @@ static int repl_code_panel_newline_rows(int panel_w, int text_x) {
 }
 
 static int repl_code_panel_cursor_doc_line_from_layout(
+    const UiRenderSnapshot *snap,
     int header_rows, const int *cmd_main_rows, const int *replay_extra_rows,
     int panel_w, int text_x) {
     int cursor_doc_line = header_rows;
 
-    if (editor_insert_mode()) {
+    if (snap->editor_input.insert_mode) {
         for (int i = 0;
-             i < repl_state_edit_line() && i < repl_state_document_count();
+             i < snap->edit_line && i < snap->document_count;
              i++) {
             cursor_doc_line += cmd_main_rows[i];
             cursor_doc_line += replay_extra_rows[i];
         }
         cursor_doc_line += repl_code_panel_cursor_row(
-            editor_state_input().input,
-            text_x + ui_repl_code_panel_active_indent_chars() * FONT_W,
-            panel_w, editor_cursor_pos(), NULL, NULL, NULL);
-    } else if (repl_state_edit_line() < repl_state_document_count()) {
-        for (int i = 0; i < repl_state_edit_line(); i++) {
+            snap,
+            snap->editor_input.input,
+            text_x + snap->active_indent_chars * FONT_W,
+            panel_w, snap->editor_input.cursor_pos, NULL, NULL, NULL);
+    } else if (snap->edit_line < snap->document_count) {
+        for (int i = 0; i < snap->edit_line; i++) {
             cursor_doc_line += cmd_main_rows[i];
             cursor_doc_line += replay_extra_rows[i];
         }
         cursor_doc_line += repl_code_panel_cursor_row(
-            editor_state_input().input,
-            text_x + ui_repl_code_panel_active_indent_chars() * FONT_W,
-            panel_w, editor_cursor_pos(), NULL, NULL, NULL);
+            snap,
+            snap->editor_input.input,
+            text_x + snap->active_indent_chars * FONT_W,
+            panel_w, snap->editor_input.cursor_pos, NULL, NULL, NULL);
     } else {
-        for (int i = 0; i < repl_state_document_count(); i++) {
+        for (int i = 0; i < snap->document_count; i++) {
             cursor_doc_line += cmd_main_rows[i];
             cursor_doc_line += replay_extra_rows[i];
         }
         cursor_doc_line += repl_code_panel_cursor_row(
-            editor_state_input().input,
-            text_x + ui_repl_code_panel_active_indent_chars() * FONT_W,
-            panel_w, editor_cursor_pos(), NULL, NULL, NULL);
+            snap,
+            snap->editor_input.input,
+            text_x + snap->active_indent_chars * FONT_W,
+            panel_w, snap->editor_input.cursor_pos, NULL, NULL, NULL);
     }
 
     return cursor_doc_line;
 }
 
 static int repl_code_panel_follow_doc_line_from_layout(
+    const UiRenderSnapshot *snap,
     int cursor_doc_line, int header_rows, const int *cmd_main_rows,
     const int *replay_extra_rows) {
     int follow_doc_line = cursor_doc_line;
-    ReplReplayRuntimeState replay = replay_state_view();
-    int src_line = replay.src_line_idx;
+    int src_line = snap->replay.src_line_idx;
 
-    if (replay.active && src_line >= 0 && src_line < repl_state_document_count()) {
+    if (snap->replay.active && src_line >= 0 && src_line < snap->document_count) {
         follow_doc_line = header_rows;
         for (int i = 0; i < src_line; i++) {
             follow_doc_line += cmd_main_rows[i];
@@ -314,11 +319,12 @@ int ui_repl_code_panel_visible_lines_for_height(int cp_h) {
         cp_h, UI_TEXT_PANEL_CHROME_STATUSBAR);
 }
 
-void ui_repl_code_panel_build_layout(UiReplCodePanelLayout *layout,
+void ui_repl_code_panel_build_layout(const UiRenderSnapshot *snap,
+                                     UiReplCodePanelLayout *layout,
                                      int panel_w, int text_x, int cp_h) {
     int total_lines;
 
-    if (!layout)
+    if (!snap || !layout)
         return;
 
     memset(layout, 0, sizeof(*layout));
@@ -326,77 +332,50 @@ void ui_repl_code_panel_build_layout(UiReplCodePanelLayout *layout,
     layout->text_x = text_x;
     layout->cp_h = cp_h;
     layout->visible_lines = ui_repl_code_panel_visible_lines_for_height(cp_h);
-    layout->header_rows = repl_code_panel_header_row_count(panel_w, text_x);
-    layout->footer_rows = repl_code_panel_footer_row_count(panel_w, text_x);
-    repl_code_panel_precompute_layout_rows(panel_w, text_x,
+    layout->header_rows = repl_code_panel_header_row_count(snap, panel_w, text_x);
+    layout->footer_rows = repl_code_panel_footer_row_count(snap, panel_w, text_x);
+    repl_code_panel_precompute_layout_rows(snap, panel_w, text_x,
                                            layout->cmd_main_rows,
                                            layout->replay_extra_rows);
 
     total_lines = layout->header_rows + layout->footer_rows +
-                  repl_code_panel_newline_rows(panel_w, text_x);
-    for (int i = 0; i < repl_state_document_count(); i++) {
-        if (editor_insert_mode() && i == repl_state_edit_line())
-            total_lines += repl_code_panel_insert_rows(panel_w, text_x);
+                  repl_code_panel_newline_rows(snap, panel_w, text_x);
+    for (int i = 0; i < snap->document_count; i++) {
+        if (snap->editor_input.insert_mode && i == snap->edit_line)
+            total_lines += repl_code_panel_insert_rows(snap, panel_w, text_x);
         total_lines += layout->cmd_main_rows[i];
         total_lines += layout->replay_extra_rows[i];
     }
     layout->total_lines = total_lines;
 
     layout->cursor_doc_line = repl_code_panel_cursor_doc_line_from_layout(
+        snap,
         layout->header_rows, layout->cmd_main_rows, layout->replay_extra_rows,
         panel_w, text_x);
     layout->follow_doc_line = repl_code_panel_follow_doc_line_from_layout(
+        snap,
         layout->cursor_doc_line, layout->header_rows, layout->cmd_main_rows,
         layout->replay_extra_rows);
 }
 
-void ui_repl_code_panel_apply_follow_scroll(const UiReplCodePanelLayout *layout) {
-    int max_scroll;
-    EditorScrollState *scroll;
-
-    if (!layout)
-        return;
-
-    max_scroll = layout->total_lines - layout->visible_lines;
-    if (max_scroll < 0)
-        max_scroll = 0;
-
-    scroll = editor_state_scroll_mut();
-    if (scroll->scroll > max_scroll)
-        scroll->scroll = max_scroll;
-    if (scroll->scroll < 0)
-        scroll->scroll = 0;
-
-    if (scroll->scroll_follow_cursor) {
-        if (layout->follow_doc_line < scroll->scroll)
-            scroll->scroll = layout->follow_doc_line;
-        if (layout->follow_doc_line >= scroll->scroll + layout->visible_lines)
-            scroll->scroll = layout->follow_doc_line - layout->visible_lines + 1;
-        if (scroll->scroll > max_scroll)
-            scroll->scroll = max_scroll;
-        if (scroll->scroll < 0)
-            scroll->scroll = 0;
-        scroll->scroll_follow_cursor = 0;
-    }
-}
-
-int ui_repl_code_panel_target_for_doc_line(int doc_line,
+int ui_repl_code_panel_target_for_doc_line(const UiRenderSnapshot *snap,
+                                           int doc_line,
                                            const UiReplCodePanelLayout *layout,
                                            int *out_target,
                                            int *out_on_insert_line,
                                            int *out_row_offset) {
     int row;
 
-    if (!layout)
+    if (!snap || !layout)
         return 0;
 
     row = doc_line - layout->header_rows;
     if (row < 0)
         return 0;
 
-    for (int cmd_idx = 0; cmd_idx <= repl_state_document_count(); cmd_idx++) {
-        if (editor_insert_mode() && cmd_idx == repl_state_edit_line()) {
-            int insert_rows = repl_code_panel_insert_rows(layout->panel_w,
+    for (int cmd_idx = 0; cmd_idx <= snap->document_count; cmd_idx++) {
+        if (snap->editor_input.insert_mode && cmd_idx == snap->edit_line) {
+            int insert_rows = repl_code_panel_insert_rows(snap, layout->panel_w,
                                                           layout->text_x);
             if (row < insert_rows) {
                 if (out_target) *out_target = -1;
@@ -407,7 +386,7 @@ int ui_repl_code_panel_target_for_doc_line(int doc_line,
             row -= insert_rows;
         }
 
-        if (cmd_idx < repl_state_document_count()) {
+        if (cmd_idx < snap->document_count) {
             int main_rows = layout->cmd_main_rows[cmd_idx];
             if (row < main_rows) {
                 if (out_target) *out_target = cmd_idx;
@@ -425,10 +404,10 @@ int ui_repl_code_panel_target_for_doc_line(int doc_line,
             }
             row -= layout->replay_extra_rows[cmd_idx];
         } else {
-            int newline_rows = repl_code_panel_newline_rows(layout->panel_w,
+            int newline_rows = repl_code_panel_newline_rows(snap, layout->panel_w,
                                                             layout->text_x);
             if (row < newline_rows) {
-                if (out_target) *out_target = repl_state_document_count();
+                if (out_target) *out_target = snap->document_count;
                 if (out_on_insert_line) *out_on_insert_line = 0;
                 if (out_row_offset) *out_row_offset = row;
                 return 1;
@@ -495,7 +474,7 @@ static int repl_code_panel_init_builder(ReplCodePanelBuilder *builder,
         .cp_w = cp_w,
         .cp_h = cp_h,
         .text_x = idx_x + idx_col_w,
-        .wrap_at_comma = glr_state_presentation().wrap_at_comma,
+        .wrap_at_comma = snap->code_panel.wrap_at_comma,
         .rows = g_repl_code_panel_rows,
         .row_count = 0,
         .scroll = snap->scroll.scroll,
@@ -1120,10 +1099,9 @@ void ui_repl_code_panel_render(const UiRenderSnapshot *snap,
 
     glViewport(0, 0, snap->viewport.window_w, snap->viewport.window_h);
 
-    ui_repl_code_panel_build_layout(&layout, builder.text_snap.cp_w,
+    ui_repl_code_panel_build_layout(snap, &layout, builder.text_snap.cp_w,
                                     builder.text_snap.text_x,
                                     builder.text_snap.cp_h);
-    ui_repl_code_panel_apply_follow_scroll(&layout);
     repl_code_panel_build_rows(&builder);
 
     memset(&text_out, 0, sizeof(text_out));
@@ -1148,39 +1126,6 @@ void ui_repl_code_panel_render(const UiRenderSnapshot *snap,
                            snap->viewport.window_w,
                            snap->viewport.window_h);
     gl2d_end();
-}
-
-static void repl_code_panel_fill_live_snapshot(UiRenderSnapshot *snap) {
-    if (!snap)
-        return;
-
-    memset(snap, 0, sizeof(*snap));
-    snap->viewport = ui_state_viewport();
-    snap->code_panel = ui_state_code_panel();
-    snap->search = editor_state_search();
-    snap->autocomplete = editor_state_autocomplete();
-    snap->scroll = editor_state_scroll();
-    snap->color_picker = color_picker_view();
-    snap->editor_input = editor_state_input();
-    snap->render = glr_state_render();
-    snap->replay = replay_state_view();
-    snap->import_export = repl_state_import_export();
-    snap->document_cmds = repl_state_document_cmds();
-    snap->document_count = repl_state_document_count();
-    snap->edit_line = repl_state_edit_line();
-    snap->flat_program_count = repl_state_flat_program_count();
-    snap->anim_time = repl_state_variables().anim_time;
-    snap->editor_transformers = editor_state_transformers();
-    snap->editor_highlights = editor_state_highlights();
-    snap->editor_virtual_lines = editor_state_virtual_lines();
-    snap->selection_active = editor_clipboard_sel_active();
-    snap->selection_lo = snap->selection_active ? editor_clipboard_sel_lo() : -1;
-    snap->selection_hi = snap->selection_active ? editor_clipboard_sel_hi() : -1;
-    snap->active_indent_chars = ui_repl_code_panel_active_indent_chars();
-    snap->trailing_indent_chars = repl_source_scope_cmd_indent_chars(
-        snap->document_count);
-    snap->in_begin_block = repl_source_scope_in_begin_block();
-    snap->current_begin_mode = repl_current_begin_mode();
 }
 
 static UiHit repl_code_panel_rewrite_hit(const ReplCodePanelBuilder *builder,
@@ -1224,14 +1169,13 @@ static UiHit repl_code_panel_rewrite_hit(const ReplCodePanelBuilder *builder,
     return hit;
 }
 
-UiHit ui_repl_code_panel_hit_test(int mx, int my) {
-    UiRenderSnapshot snap;
+UiHit ui_repl_code_panel_hit_test(const UiRenderSnapshot *snap,
+                                  int mx, int my) {
     ReplCodePanelBuilder builder;
     UiHit hit;
     int gl_y;
 
-    repl_code_panel_fill_live_snapshot(&snap);
-    if (!repl_code_panel_init_builder(&builder, &snap))
+    if (!snap || !repl_code_panel_init_builder(&builder, snap))
         return ui_hit_none();
 
     repl_code_panel_build_rows(&builder);
@@ -1242,8 +1186,14 @@ UiHit ui_repl_code_panel_hit_test(int mx, int my) {
     gl_y = builder.text_snap.vp_h - my;
     if (mx >= builder.text_snap.cp_x &&
         mx < builder.text_snap.cp_x + builder.text_snap.cp_w &&
-        gl_y >= builder.text_snap.cp_y + STATUSBAR_H &&
+        gl_y >= builder.text_snap.cp_y &&
         gl_y < builder.text_snap.cp_y + builder.text_snap.cp_h) {
+        if (gl_y < builder.text_snap.cp_y + STATUSBAR_H) {
+            hit.kind = UI_HIT_CODE_PANEL_CHROME;
+            hit.local_x = (float)(mx - builder.text_snap.cp_x);
+            hit.local_y = (float)(gl_y - builder.text_snap.cp_y);
+            return hit;
+        }
         hit.kind = mx < builder.text_snap.cp_x + builder.text_snap.text_x
             ? UI_HIT_CODE_GUTTER
             : UI_HIT_CODE_TEXT;
@@ -1251,35 +1201,4 @@ UiHit ui_repl_code_panel_hit_test(int mx, int my) {
         hit.local_y = (float)(gl_y - builder.text_snap.cp_y);
     }
     return hit;
-}
-
-int ui_repl_code_panel_apply_scroll_follow_for_test(int show_vertex_indices,
-                                                    int *out_follow_doc_line,
-                                                    int *out_visible_lines) {
-    UiReplCodePanelLayout layout;
-    int cp_x;
-    int cp_y;
-    int cp_w;
-    int cp_h;
-    int linenum_w = 4 * FONT_W;
-    int idx_col_w = show_vertex_indices ? (6 * FONT_W) : 0;
-    int idx_x = CODE_MARGIN_X + linenum_w + FONT_W;
-    int text_x = idx_x + idx_col_w;
-    int scroll;
-
-    ui_layout_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
-    (void)cp_x;
-    (void)cp_y;
-
-    ui_repl_code_panel_build_layout(&layout, cp_w, text_x, cp_h);
-    ui_repl_code_panel_apply_follow_scroll(&layout);
-
-    if (out_follow_doc_line)
-        *out_follow_doc_line = layout.follow_doc_line;
-    if (out_visible_lines)
-        *out_visible_lines = layout.visible_lines;
-
-    scroll = editor_scroll();
-    return layout.follow_doc_line >= scroll &&
-           layout.follow_doc_line < scroll + layout.visible_lines;
 }

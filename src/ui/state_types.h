@@ -37,6 +37,7 @@ typedef struct {
     int   blink_tick;
     int   layout_mode;          /* mirror of presentation.code_panel_layout */
     int   show_vertex_indices;  /* mirror of presentation.show_vertex_indices */
+    int   wrap_at_comma;        /* mirror of presentation.wrap_at_comma */
 } ReplCodePanelRuntimeState;
 
 /* Help-overlay chrome flag. The session-state fields (tab_idx, scroll)

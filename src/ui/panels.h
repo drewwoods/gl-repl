@@ -79,18 +79,7 @@ int  ui_panels_handle_right_press(int mx, int my);
  * dispatches by UiHit.kind to the owning subsystem. `variable_count` is
  * supplied by the controller so UI hit-testing does not read the live
  * REPL variable table. */
-UiHit ui_panels_hit_test(int mx, int my, int variable_count);
-
-/* --- Test helpers --- */
-
-/* Apply scroll-follow logic without rendering (for test verification). Computes
- * the scroll target for the follow line and outputs the follow_doc_line and
- * visible_lines. `show_vertex_indices` mirrors
- * `ReplPresentationState.show_vertex_indices` so the gutter width matches what
- * the renderer will use. Used by tests to verify scroll-follow calculation.
- * Returns 1 on success, 0 if follow target is out of bounds. */
-int  ui_panels_code_panel_apply_scroll_follow_for_test(int show_vertex_indices,
-                                                       int *out_follow_doc_line,
-                                                       int *out_visible_lines);
+UiHit ui_panels_hit_test(const UiRenderSnapshot *snap,
+                         int mx, int my, int variable_count);
 
 #endif /* UI_PANELS_H */

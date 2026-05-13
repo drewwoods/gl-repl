@@ -12,7 +12,6 @@
 #include "config.h"
 #include "ui/hit.h"
 #include "ui/snapshot.h"
-#include "ui/text_layout.h"
 
 struct UiCodePanelOutput;
 
@@ -30,14 +29,13 @@ typedef struct {
     int replay_extra_rows[MAX_COMMANDS];
 } UiReplCodePanelLayout;
 
-CodeLayout ui_repl_code_panel_text_layout(int panel_w, int first_x);
-int        ui_repl_code_panel_active_indent_chars(void);
 int        ui_repl_code_panel_visible_lines_for_height(int cp_h);
 
-void ui_repl_code_panel_build_layout(UiReplCodePanelLayout *layout,
+void ui_repl_code_panel_build_layout(const UiRenderSnapshot *snap,
+                                     UiReplCodePanelLayout *layout,
                                      int panel_w, int text_x, int cp_h);
-void ui_repl_code_panel_apply_follow_scroll(const UiReplCodePanelLayout *layout);
-int  ui_repl_code_panel_target_for_doc_line(int doc_line,
+int  ui_repl_code_panel_target_for_doc_line(const UiRenderSnapshot *snap,
+                                            int doc_line,
                                             const UiReplCodePanelLayout *layout,
                                             int *out_target,
                                             int *out_on_insert_line,
@@ -45,10 +43,7 @@ int  ui_repl_code_panel_target_for_doc_line(int doc_line,
 
 void ui_repl_code_panel_render(const UiRenderSnapshot *snap,
                                struct UiCodePanelOutput *out);
-UiHit ui_repl_code_panel_hit_test(int mx, int my);
-
-int  ui_repl_code_panel_apply_scroll_follow_for_test(int show_vertex_indices,
-                                                     int *out_follow_doc_line,
-                                                     int *out_visible_lines);
+UiHit ui_repl_code_panel_hit_test(const UiRenderSnapshot *snap,
+                                  int mx, int my);
 
 #endif /* UI_REPL_CODE_PANEL_H */
