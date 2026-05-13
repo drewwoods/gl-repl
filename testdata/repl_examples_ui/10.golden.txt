@@ -14,6 +14,7 @@
 static float g_angle = 0.0f;
 static int   g_rotating = 0;
 
+--- display_header ---
 void display() {
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
   glLoadIdentity();

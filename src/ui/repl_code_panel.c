@@ -147,6 +147,10 @@ static int repl_code_panel_header_row_count(const UiRenderSnapshot *snap,
                                           text_x, panel_w);
     for (int i = 0; g_header_pre[i]; i++)
         rows += repl_code_panel_row_count(snap, g_header_pre[i], text_x, panel_w);
+    for (int i = 0; g_display_header[i]; i++)
+        rows += repl_code_panel_row_count(snap, g_display_header[i], text_x, panel_w);
+    rows += repl_code_panel_row_count(snap, REPL_CODE_PANEL_SCRATCH_DECL_LINE,
+                                      text_x, panel_w);
     for (int i = 0; i < RENDER_STATE_LINE_COUNT; i++)
         rows += repl_code_panel_row_count(snap,
                                           import_export.render_state_lines[i],
@@ -830,6 +834,18 @@ static void repl_code_panel_build_rows(ReplCodePanelBuilder *builder) {
             repl_code_panel_static_line_color(g_header_pre[i],
                                               0.38f, 0.38f, 0.42f));
     }
+    for (int i = 0; g_display_header[i]; i++) {
+        repl_code_panel_add_static_row(
+            builder, g_display_header[i],
+            repl_code_panel_static_line_color(g_display_header[i],
+                                              0.38f, 0.38f, 0.42f));
+    }
+    /* Scratch decoration row: panel-only (the exporter emits the
+     * arrays as file-scope statics on demand instead). */
+    repl_code_panel_add_static_row(
+        builder, REPL_CODE_PANEL_SCRATCH_DECL_LINE,
+        repl_code_panel_static_line_color(REPL_CODE_PANEL_SCRATCH_DECL_LINE,
+                                          0.38f, 0.38f, 0.42f));
     for (int i = 0; i < RENDER_STATE_LINE_COUNT; i++) {
         repl_code_panel_add_static_row(
             builder,
