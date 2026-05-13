@@ -479,20 +479,37 @@ actual service fields and direct symbols, and only then set the
 
 ## Phase 7 — Guards And Documentation
 
-- Add a guard target, e.g. `check-ui-text-panel-pure`.
-  - Fail if `src/ui/text_panel.*` includes `repl/`.
-  - Fail if it references `GLCmd`, `CmdType`, or `CMD_`.
-- Wire `scripts/check-editor-repl-surface.sh` **and** `scripts/check-editor-chrome-surface.sh` (both added in Phase 5) into `make check` so the `input.c` / `commit.c` REPL-call surface and the `input.c` chrome-call surface each stay below threshold over time. Ratchet both thresholds down as further decoupling lands.
-- Add `tests/test_ui_text_panel.c` (built with `USE_GL_STUBS=1`).
-  - Drives `ui_text_panel_render` and `ui_text_panel_hit_test` with a fabricated snapshot (rows constructed inline, no REPL state).
-  - Asserts: total/visible row counts, cursor pixel for a known input, hit-test row mapping for known coordinates, statusbar slot rect dimensions.
-  - Locks the contract independently of the REPL pipeline so future refactors can't quietly drift.
-- Add root-level `editor_demo` symlink alongside `sample` / `repl_demo` so `./editor_demo` runs the binary from the repo root (matches the existing convention).
-- Update `MODULES.md` and `feature/editor-demo.md`:
-  - `ui_text_panel` is generic text rendering/hit-test.
-  - `ui_repl_code_panel` is the REPL adapter.
-  - `tools/editor_demo/repl_shim.c` is a dependency ledger, not production architecture.
-- Code touched: `Makefile`, `scripts/check-ui-text-panel-pure.sh`, `tests/test_ui_text_panel.c`, docs.
+Phase 7 splits into two halves by dependency:
+
+- **Phase 7a — lock in the UI split (Phases 1-4).** Lands regardless of whether Phase 5/6 ever land. This is the load-bearing tail of the work already merged.
+- **Phase 7b — gates and polish for the demo (Phases 5-6).** Only meaningful after Phases 5 and 6 land; deferred when those phases are deferred.
+
+### Phase 7a — Lock in the UI split (active)
+
+1. Add `scripts/check-ui-text-panel-pure.sh` and a `check-ui-text-panel-pure` Makefile target. Wire into `make check`.
+   - Fail if `src/ui/text_panel.*` includes `repl/` or `src/editor/`.
+   - Fail if it references `GLCmd`, `CmdType`, or `CMD_`.
+   - This is the single most important item in this phase — without it the Phase 1-4 invariants can quietly regress in the next refactor.
+2. `tests/test_ui_text_panel.c` — **already landed** during Phase 3 findings-fix and extended in Phase 4 (virtual-row routing regression). 25 tests under `USE_GL_STUBS=1`. No further work required.
+3. Update `MODULES.md`:
+   - Replace the `editor_code_panel_document` row (around line 325) with entries for `ui_text_panel` (generic text rendering/hit-test) and `ui_repl_code_panel` (REPL adapter over the generic panel).
+   - Fix the rename table near line 883 (`repl_code_panel_document → editor_code_panel_document` references a file that no longer exists).
+   - Update any diagram nodes referencing the deleted `src/editor/code_panel_document.c`.
+4. Tighten `src/ui/text_panel.h` field docs (from Phase 3 review nits):
+   - Document `background_active` and `left_marker_active` next to their `_color` siblings (currently the `_active` gate fields aren't in the field-doc block, only the `_color` ones).
+   - Add a "when adapters set this" sentence to `UiTextPanelRightAction.emphasized` — the current inline comment explains *what* is drawn but not *when* an adapter would set it.
+- Code touched: `Makefile`, `scripts/check-ui-text-panel-pure.sh`, `MODULES.md`, `src/ui/text_panel.h`, optionally `feature/editor-demo.md` (move this section to `done/` once 7a lands).
+
+### Phase 7b — Demo / decoupling polish (deferred with Phases 5-6)
+
+These items are gated on Phase 5 (surface guards) and Phase 6 (editor demo binary). They land alongside or immediately after those phases:
+
+1. Wire `scripts/check-editor-repl-surface.sh` **and** `scripts/check-editor-chrome-surface.sh` (both added in Phase 5) into `make check` so the `input.c` / `commit.c` REPL-call surface and the `input.c` chrome-call surface each stay below threshold over time. Ratchet both thresholds down as further decoupling lands. **Depends on Phase 5.**
+2. Add root-level `editor_demo` symlink alongside `sample` / `repl_demo` so `./editor_demo` runs the binary from the repo root. **Depends on Phase 6.**
+3. Extend the `MODULES.md` update from 7a to also note:
+   - `tools/editor_demo/repl_shim.c` is a dependency ledger against `EditorServices`, not production architecture.
+   - `tools/editor_demo/app_chrome_shim.c` is the same ledger against `EditorChromeServices`. **Depends on Phase 6.**
+- Code touched (when unblocked): `Makefile`, `MODULES.md`, docs.
 
 ## Test Plan
 
@@ -537,4 +554,4 @@ actual service fields and direct symbols, and only then set the
 - **Phase 3** is mechanical once Phase 2 lands; **Phase 4** is hit-routing cleanup. Together these complete the SRP split for `ui/panels.c`.
 - **Phase 5** is deferred editor-side decoupling. Before implementation, run the required review in that phase and update the service tables, shim ledger, and guards against the current source tree. Useful on its own once it lands: the service tables should make the existing test harnesses easier to drive in isolation, but it is not required for the `ui/panels.c` SRP split.
 - **Phase 6** (demo) is deferred and lands only after Phase 5's measured surface reductions land. Its shims and tripwires must be based on the final reviewed ledger, not the current draft counts.
-- **Phase 7** (guards + docs) lands incrementally as each preceding phase merges — don't batch the purity guard until the end. The editor-surface guards belong with deferred Phase 5; the generic text-panel purity guard can land with the UI split.
+- **Phase 7** splits along the same boundary: **Phase 7a** (text-panel purity guard, MODULES.md docs, header doc cleanups) lands now as the tail of the UI split — it locks in what Phases 1-4 just achieved. **Phase 7b** (editor surface guards, `editor_demo` symlink, shim documentation) is gated on the deferred Phase 5 and Phase 6 and lands with them.
