@@ -2,6 +2,10 @@
  * text_panel.c -- Generic text panel renderer and hit-tester.
  *
  * This file has no dependency on repl, editor, or app headers.
+ * XXX Phase 3: src/ui/panels.c still carries the live REPL-specific code-panel
+ * path. This module is the intended destination for the generic rendering and
+ * hit-test logic; keep fixes mirrored until the adapter switch deletes the
+ * duplicate code.
  */
 #include "config.h"
 #include "ui/gl_2d.h"
@@ -22,10 +26,19 @@ static const GLfloat k_clr_ghost_text[4]     = { 0.50f, 0.55f, 0.65f, 0.55f };
 static const GLfloat k_clr_hint_text[4]      = { 0.56f, 0.62f, 0.72f, 0.38f };
 static const GLfloat k_clr_cursor_caret[4]   = { 0.90f, 0.80f, 0.25f, 0.85f };
 
+static int text_panel_statusbar_h(const UiTextPanelSnapshot *snap) {
+    return (snap && (snap->chrome_flags & UI_TEXT_PANEL_CHROME_STATUSBAR))
+         ? STATUSBAR_H : 0;
+}
+
 static CodeLayout text_panel_row_layout(const UiTextPanelSnapshot *snap,
                                         const UiTextPanelRow *row) {
-    int first_x = snap->cp_x + snap->text_x + row->indent_chars * FONT_W;
+    int first_x = snap->text_x + row->indent_chars * FONT_W;
     return code_layout_make(snap->cp_w, first_x, FONT_W, snap->wrap_at_comma);
+}
+
+static int text_panel_color_uses_blend(const UiTextPanelColor *color) {
+    return color && color->has_alpha && color->a < 1.0f;
 }
 
 static void text_panel_set_color(const UiTextPanelColor *color) {
@@ -111,6 +124,7 @@ static void text_panel_draw_search_highlights(const UiTextPanelSnapshot *snap,
                                               const char *text,
                                               int seg_start, int seg_len,
                                               int seg_x, int line_y) {
+    int abs_seg_x = snap->cp_x + seg_x;
     int drew = 0;
 
     if (!snap->search.active || snap->search.query_len <= 0 ||
@@ -140,9 +154,9 @@ static void text_panel_draw_search_highlights(const UiTextPanelSnapshot *snap,
         else
             glColor4fv(k_clr_search_match);
 
-        glRectf((float)(seg_x + (draw_start - seg_start) * FONT_W),
+        glRectf((float)(abs_seg_x + (draw_start - seg_start) * FONT_W),
                 (float)(line_y - 2),
-                (float)(seg_x + (draw_end - seg_start) * FONT_W),
+            (float)(abs_seg_x + (draw_end - seg_start) * FONT_W),
                 (float)(line_y - 2 + FONT_H + 4));
     }
 
@@ -179,7 +193,7 @@ static int text_panel_draw_input_row(const UiTextPanelSnapshot *snap,
     int anchor_pos = snap->input.anchor;
     int cursor_seg_start = 0;
     int cursor_seg_len = 0;
-    int cursor_seg_x = snap->cp_x + snap->text_x + row->indent_chars * FONT_W;
+    int cursor_seg_x = snap->text_x + row->indent_chars * FONT_W;
     int wrap_row = 0;
     int wrap_start;
     int wrap_len;
@@ -235,7 +249,8 @@ static int text_panel_draw_input_row(const UiTextPanelSnapshot *snap,
                            ? sel_hi : wrap_start + wrap_len;
 
                 if (row_hi > row_lo) {
-                    float bx = (float)(wrap_x + (row_lo - wrap_start) * FONT_W);
+                    float bx = (float)(snap->cp_x + wrap_x +
+                                       (row_lo - wrap_start) * FONT_W);
                     float bw = (float)((row_hi - row_lo) * FONT_W);
                     glEnable(GL_BLEND);
                     glColor4fv(k_clr_selection_band);
@@ -246,11 +261,11 @@ static int text_panel_draw_input_row(const UiTextPanelSnapshot *snap,
             }
 
             glColor3fv(k_clr_input_text);
-            text_panel_draw_segment(wrap_x, *io_line_y, input,
+            text_panel_draw_segment(snap->cp_x + wrap_x, *io_line_y, input,
                                     wrap_start, wrap_len, FONT_MONO);
 
             if (wrap_row == cursor_row) {
-                int cursor_x = wrap_x + cursor_col * FONT_W;
+                int cursor_x = snap->cp_x + wrap_x + cursor_col * FONT_W;
                 int hint_x = cursor_x;
 
                 if (snap->input.ghost && snap->input.ghost[0] &&
@@ -337,9 +352,15 @@ static int text_panel_draw_regular_row(const UiTextPanelSnapshot *snap,
             text_panel_draw_search_highlights(snap, row, text,
                                               wrap_start, wrap_len,
                                               wrap_x, *io_line_y);
+            if (text_panel_color_uses_blend(&row->color)) {
+                glEnable(GL_BLEND);
+                glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+            }
             text_panel_set_color(&row->color);
-            text_panel_draw_segment(wrap_x, *io_line_y, text,
+            text_panel_draw_segment(snap->cp_x + wrap_x, *io_line_y, text,
                                     wrap_start, wrap_len, FONT_MONO);
+            if (text_panel_color_uses_blend(&row->color))
+                glDisable(GL_BLEND);
             *io_line_y -= LINE_H;
         }
         (*io_cur)++;
@@ -364,7 +385,7 @@ static void text_panel_draw_scrollbar(const UiTextPanelSnapshot *snap,
         return;
 
     panel_top = snap->cp_y + snap->cp_h;
-    bar_h = snap->cp_h - CODE_MARGIN_Y - LINE_H - STATUSBAR_H;
+    bar_h = snap->cp_h - CODE_MARGIN_Y - LINE_H - text_panel_statusbar_h(snap);
     frac = (float)visible_rows / (float)total_rows;
     pos = (float)snap->scroll / (float)total_rows;
     thumb_h = (int)(bar_h * frac);
@@ -432,11 +453,9 @@ static int text_panel_row_wrap_count(const UiTextPanelSnapshot *snap,
     if (row->kind == UI_TEXT_PANEL_ROW_PLACEHOLDER &&
         (!row->text || row->text[0] == '\0'))
         return 1;
-    {
-        CodeLayout layout = text_panel_row_layout(snap, row);
+    CodeLayout layout = text_panel_row_layout(snap, row);
     return code_layout_row_count_for_text(row->text ? row->text : "",
                                           &layout);
-    }
 }
 
 static int text_panel_char_for_click(const UiTextPanelSnapshot *snap,
@@ -453,14 +472,14 @@ static int text_panel_char_for_click(const UiTextPanelSnapshot *snap,
                  : (int)strlen(text);
     int seg_start = text_len;
     int seg_len = 0;
-    int seg_x = snap->cp_x + snap->text_x + row->indent_chars * FONT_W;
+    int seg_x = snap->text_x + row->indent_chars * FONT_W;
     int col;
     int new_cursor;
     CodeLayout layout = text_panel_row_layout(snap, row);
 
     code_layout_segment_for_row(text, &layout, row_offset,
                                 &seg_start, &seg_len, &seg_x);
-    col = (mx - seg_x + FONT_W / 2) / FONT_W;
+    col = (mx - (snap->cp_x + seg_x) + FONT_W / 2) / FONT_W;
     if (col < 0)
         col = 0;
     if (col > seg_len)
@@ -471,8 +490,10 @@ static int text_panel_char_for_click(const UiTextPanelSnapshot *snap,
     return new_cursor;
 }
 
-int ui_text_panel_visible_lines_for_height(int panel_h) {
-    int available = panel_h - CODE_MARGIN_Y - 2 * LINE_H - 3 - STATUSBAR_H;
+int ui_text_panel_visible_lines_for_height(int panel_h, int chrome_flags) {
+    int statusbar_h = (chrome_flags & UI_TEXT_PANEL_CHROME_STATUSBAR)
+                    ? STATUSBAR_H : 0;
+    int available = panel_h - CODE_MARGIN_Y - 2 * LINE_H - 3 - statusbar_h;
     if (available < 0)
         return 1;
     return available / LINE_H + 1;
@@ -492,9 +513,9 @@ void ui_text_panel_render(const UiTextPanelSnapshot *snap,
     if (!snap || !out)
         return;
 
-    visible_rows = ui_text_panel_visible_lines_for_height(snap->cp_h);
-    statusbar_h = (snap->chrome_flags & UI_TEXT_PANEL_CHROME_STATUSBAR)
-                ? STATUSBAR_H : 0;
+    visible_rows = ui_text_panel_visible_lines_for_height(snap->cp_h,
+                                                          snap->chrome_flags);
+    statusbar_h = text_panel_statusbar_h(snap);
 
     out->visible_rows = visible_rows;
     out->statusbar_slot = (UiTextPanelRect){
@@ -564,7 +585,8 @@ UiHit ui_text_panel_hit_test(const UiTextPanelSnapshot *snap,
 
     panel_top = snap->cp_y + snap->cp_h;
     line_y_start = panel_top - CODE_MARGIN_Y - 2 * LINE_H;
-    visible_rows = ui_text_panel_visible_lines_for_height(snap->cp_h);
+    visible_rows = ui_text_panel_visible_lines_for_height(snap->cp_h,
+                                                          snap->chrome_flags);
     row_from_top = (line_y_start + LINE_H - 3 - gl_y) / LINE_H;
     if (row_from_top < 0 || row_from_top >= visible_rows)
         return h;

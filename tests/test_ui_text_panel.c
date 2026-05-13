@@ -1,0 +1,222 @@
+#ifdef GL_STUBS
+#include "support/test_harness.h"
+#include "config.h"
+#include "ui/metrics.h"
+#include "ui/text_layout.h"
+#include "ui/text_panel.h"
+#include <GL/gl_stub_counts.h>
+#endif
+
+#include <stdio.h>
+#include <string.h>
+
+#ifdef GL_STUBS
+static TestHarness g_harness = TEST_HARNESS_INIT;
+
+#define ASSERT_TRUE(label, cond) \
+    TEST_ASSERT_TRUE(&g_harness, label, cond)
+
+#define ASSERT_INT_EQ(label, got, exp) \
+    TEST_ASSERT_INT(&g_harness, label, got, exp)
+
+static UiTextPanelSnapshot make_snapshot(const UiTextPanelRow *rows,
+                                         int row_count,
+                                         int cp_x,
+                                         int cp_y,
+                                         int cp_w,
+                                         int cp_h,
+                                         int chrome_flags) {
+    UiTextPanelSnapshot snap;
+
+    memset(&snap, 0, sizeof(snap));
+    snap.vp_w = 800;
+    snap.vp_h = 600;
+    snap.cp_x = cp_x;
+    snap.cp_y = cp_y;
+    snap.cp_w = cp_w;
+    snap.cp_h = cp_h;
+    snap.text_x = CODE_MARGIN_X + 5 * FONT_W;
+    snap.wrap_at_comma = 1;
+    snap.rows = rows;
+    snap.row_count = row_count;
+    snap.chrome_flags = chrome_flags;
+    snap.input.input = "";
+    snap.input.input_len = 0;
+    snap.input.cursor = 0;
+    snap.input.anchor = 0;
+    snap.input.ghost = "";
+    snap.input.hint = "";
+    snap.search.query = "";
+    return snap;
+}
+
+static int expected_visible_rows(int panel_h, int chrome_flags) {
+    int statusbar_h = (chrome_flags & UI_TEXT_PANEL_CHROME_STATUSBAR)
+                    ? STATUSBAR_H : 0;
+    int available = panel_h - CODE_MARGIN_Y - 2 * LINE_H - 3 - statusbar_h;
+
+    if (available < 0)
+        return 1;
+    return available / LINE_H + 1;
+}
+
+static int my_for_visual_row(const UiTextPanelSnapshot *snap, int visual_row) {
+    int panel_top = snap->cp_y + snap->cp_h;
+    int gl_y = panel_top - CODE_MARGIN_Y - 2 * LINE_H - visual_row * LINE_H;
+    return snap->vp_h - gl_y;
+}
+
+static void test_visible_rows_respect_statusbar_flag(void) {
+    UiTextPanelRow rows[3] = {
+        {
+            .text = "row 0",
+            .kind = UI_TEXT_PANEL_ROW_TEXT,
+            .left_gutter_label = 1,
+            .source_line_idx = 0,
+            .search_row_idx = 0,
+            .hit_eligible = 1,
+            .color = { 1.0f, 1.0f, 1.0f, 1.0f, 0 },
+        },
+        {
+            .text = "row 1",
+            .kind = UI_TEXT_PANEL_ROW_TEXT,
+            .left_gutter_label = 2,
+            .source_line_idx = 1,
+            .search_row_idx = 1,
+            .hit_eligible = 1,
+            .color = { 1.0f, 1.0f, 1.0f, 1.0f, 0 },
+        },
+        {
+            .text = "row 2",
+            .kind = UI_TEXT_PANEL_ROW_TEXT,
+            .left_gutter_label = 3,
+            .source_line_idx = 2,
+            .search_row_idx = 2,
+            .hit_eligible = 1,
+            .color = { 1.0f, 1.0f, 1.0f, 1.0f, 0 },
+        },
+    };
+    int cp_h = CODE_MARGIN_Y + 2 * LINE_H + 3 + STATUSBAR_H + LINE_H;
+    UiTextPanelSnapshot snap_no_status = make_snapshot(rows, 3, 0, 0, 240, cp_h, 0);
+    UiTextPanelSnapshot snap_with_status = make_snapshot(
+        rows, 3, 0, 0, 240, cp_h, UI_TEXT_PANEL_CHROME_STATUSBAR);
+    UiTextPanelOutput out = {0};
+    UiHit hit;
+
+    ASSERT_INT_EQ("visible rows without statusbar helper",
+                  ui_text_panel_visible_lines_for_height(cp_h, 0),
+                  expected_visible_rows(cp_h, 0));
+    ASSERT_INT_EQ("visible rows with statusbar helper",
+                  ui_text_panel_visible_lines_for_height(
+                      cp_h, UI_TEXT_PANEL_CHROME_STATUSBAR),
+                  expected_visible_rows(cp_h,
+                                        UI_TEXT_PANEL_CHROME_STATUSBAR));
+
+    ui_text_panel_render(&snap_no_status, &out);
+    ASSERT_INT_EQ("render visible rows without statusbar", out.visible_rows, 3);
+    ASSERT_INT_EQ("render statusbar slot disabled", out.statusbar_slot.h, 0);
+
+    hit = ui_text_panel_hit_test(&snap_no_status,
+                                 snap_no_status.cp_x + snap_no_status.text_x,
+                                 my_for_visual_row(&snap_no_status, 2));
+    ASSERT_INT_EQ("third row clickable without statusbar", hit.kind,
+                  UI_HIT_CODE_TEXT);
+    ASSERT_INT_EQ("third row maps to line 2", hit.line_idx, 2);
+
+    ui_text_panel_render(&snap_with_status, &out);
+    ASSERT_INT_EQ("render visible rows with statusbar", out.visible_rows, 2);
+    ASSERT_INT_EQ("render statusbar slot enabled", out.statusbar_slot.h,
+                  STATUSBAR_H);
+
+    hit = ui_text_panel_hit_test(&snap_with_status,
+                                 snap_with_status.cp_x + snap_with_status.text_x,
+                                 my_for_visual_row(&snap_with_status, 2));
+    ASSERT_INT_EQ("third row clipped by statusbar", hit.kind, UI_HIT_NONE);
+}
+
+static void test_wrap_and_hit_are_panel_local(void) {
+    static const char *k_text =
+        "glVertex3f(123456, 234567, 345678, 456789, 567890, 678901)";
+    UiTextPanelRow row = {
+        .text = k_text,
+        .kind = UI_TEXT_PANEL_ROW_TEXT,
+        .left_gutter_label = 7,
+        .source_line_idx = 7,
+        .search_row_idx = 7,
+        .hit_eligible = 1,
+        .color = { 1.0f, 1.0f, 1.0f, 1.0f, 0 },
+    };
+    UiTextPanelSnapshot snap = make_snapshot(&row, 1, 140, 0, 150, 180, 0);
+    UiTextPanelOutput out = {0};
+    snap.text_x = FONT_W;
+    CodeLayout layout = code_layout_make(snap.cp_w, snap.text_x, FONT_W,
+                                         snap.wrap_at_comma);
+    int expected_rows = code_layout_row_count_for_text(k_text, &layout);
+    UiHit hit;
+
+    ui_text_panel_render(&snap, &out);
+    ASSERT_INT_EQ("panel-local wrap count", out.total_rows, expected_rows);
+    ASSERT_TRUE("test text actually wraps", expected_rows > 1);
+
+    hit = ui_text_panel_hit_test(&snap,
+                                 snap.cp_x + snap.text_x + 2 * FONT_W,
+                                 my_for_visual_row(&snap, 0));
+    ASSERT_INT_EQ("nonzero cp_x hit kind", hit.kind, UI_HIT_CODE_TEXT);
+    ASSERT_INT_EQ("nonzero cp_x hit line", hit.line_idx, 7);
+    ASSERT_INT_EQ("nonzero cp_x hit visual row", hit.visual_row, 0);
+    ASSERT_INT_EQ("nonzero cp_x hit char index", hit.char_idx, 2);
+}
+
+static void test_alpha_text_enables_blending(void) {
+    UiTextPanelRow row = {
+        .text = "alpha row",
+        .kind = UI_TEXT_PANEL_ROW_TEXT,
+        .left_gutter_label = 1,
+        .source_line_idx = 0,
+        .search_row_idx = 0,
+        .hit_eligible = 1,
+        .color = { 0.8f, 0.9f, 1.0f, 1.0f, 0 },
+    };
+    UiTextPanelSnapshot snap = make_snapshot(&row, 1, 0, 0, 220, 140, 0);
+    UiTextPanelOutput out = {0};
+    unsigned long long opaque_enable;
+    unsigned long long opaque_blend_func;
+
+    gl_stub_counts_reset();
+    ui_text_panel_render(&snap, &out);
+    opaque_enable = gl_stub_counts[GL_STUB_glEnable];
+    opaque_blend_func = gl_stub_counts[GL_STUB_glBlendFunc];
+
+    row.color.has_alpha = 1;
+    row.color.a = 0.35f;
+
+    gl_stub_counts_reset();
+    ui_text_panel_render(&snap, &out);
+
+    ASSERT_TRUE("alpha text emits glyphs",
+                gl_stub_counts[GL_STUB_glutBitmapCharacter] > 0);
+    ASSERT_TRUE("alpha text adds a blend enable",
+                gl_stub_counts[GL_STUB_glEnable] > opaque_enable);
+    ASSERT_TRUE("alpha text adds a blend func",
+                gl_stub_counts[GL_STUB_glBlendFunc] > opaque_blend_func);
+}
+
+int main(void) {
+    printf("--- ui_text_panel tests ---\n");
+
+    test_visible_rows_respect_statusbar_flag();
+    test_wrap_and_hit_are_panel_local();
+    test_alpha_text_enables_blending();
+
+    printf("\n");
+    return test_harness_report(&g_harness, "test_ui_text_panel");
+}
+
+#else
+
+int main(void) {
+    printf("This test requires GL stubs (USE_GL_STUBS=1)\n");
+    return 0;
+}
+
+#endif

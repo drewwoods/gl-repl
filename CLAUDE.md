@@ -145,8 +145,8 @@ Test sources live under `tests/` and shared test-only helpers live under
 | `config.h` | Project-wide compile-time configuration constants |
 | `src/app/glr_defaults.h` | Controller-side scene/presentation defaults (`CFG_DEFAULT_*` macros) |
 | `outline_offset.h` | Polygon-offset depth-bias constants for the outline-pass rendering |
-| `src/ui/code_panel_layout.c` | Pure code-panel wrapping, row counts, segment lookup, cursor-row mapping |
-| `src/ui/code_panel_layout.h` | `CodePanelTextLayout` / `CodePanelWrapIter` API shared by UI, export dumps, tests |
+| `src/ui/text_layout.c` | Pure code-panel wrapping, row counts, segment lookup, cursor-row mapping |
+| `src/ui/text_layout.h` | `CodeLayout` / `CodeWrapIter` API shared by UI, export dumps, tests |
 | `src/editor/code_panel_document.c` | Code-panel document row model, scroll-follow calculation, hit-test targets |
 | `src/editor/code_panel_document.h` | `CodePanelDocumentLayout` API consumed by UI and scrolling tests |
 | `src/repl/executor.c` | Narrow live-GL dispatch: walks the flat command array emitting OpenGL calls |

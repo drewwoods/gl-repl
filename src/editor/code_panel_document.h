@@ -28,7 +28,7 @@
 #ifndef EDITOR_CODE_PANEL_DOCUMENT_H
 #define EDITOR_CODE_PANEL_DOCUMENT_H
 
-#include "repl/command.h"
+#include "config.h"
 #include "ui/text_layout.h"
 
 /* Full code-panel document layout. Combines header/footer fixed geometry with
@@ -62,8 +62,9 @@ CodeLayout editor_code_panel_document_text_layout(int panel_w, int first_x);
 int  editor_code_panel_document_active_indent_chars(void);
 
 /* Compute visible line count from panel height. Delegates to
- * ui_text_panel_visible_lines_for_height(). Returns how many lines fit
- * in a code panel of height cp_h (in pixels). */
+ * ui_text_panel_visible_lines_for_height() with the REPL code panel's
+ * chrome flags. Returns how many lines fit in a code panel of height cp_h
+ * (in pixels). */
 int  editor_code_panel_document_visible_lines_for_height(int cp_h);
 
 /* Build the full code-panel document layout. Computes header/footer row counts,
