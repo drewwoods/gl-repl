@@ -559,9 +559,16 @@ const char *g_footer_pre_init[] = {
     "  if (key == 27) exit(0);",
     "}",
     "",
-    "void idle() {",
+    "void tick(int v) {",
+    "  (void)v;",
+    "  /* Fixed-step time advance, matching the live REPL's",
+    "   * repl_state_time_advance(0.016) timer. Keeps tDelta = (t -",
+    "   * tLast) * 10 constant across frames, independent of how long",
+    "   * each render actually takes. */",
+    "  t += 0.016f;",
     "  if (g_rotating) g_angle += 0.5f;",
     "  glutPostRedisplay();",
+    "  glutTimerFunc(16, tick, 0);",
     "}",
     "",
     "void init() {",
@@ -581,7 +588,7 @@ const char *g_footer_post_init[] = {
     "  glutDisplayFunc(display);",
     "  glutReshapeFunc(reshape);",
     "  glutKeyboardFunc(keyboard);",
-    "  glutIdleFunc(idle);",
+    "  glutTimerFunc(16, tick, 0);",
     "  glutMainLoop();",
     "  return 0;",
     "}",
@@ -601,7 +608,7 @@ static void emit_footer_post_init(FILE *f, int win_w, int win_h) {
         "  glutDisplayFunc(display);\n"
         "  glutReshapeFunc(reshape);\n"
         "  glutKeyboardFunc(keyboard);\n"
-        "  glutIdleFunc(idle);\n"
+        "  glutTimerFunc(16, tick, 0);\n"
         "  glutMainLoop();\n"
         "  return 0;\n"
         "}\n",
@@ -3022,12 +3029,12 @@ static void emit_export_display_geometry(FILE *f) {
         { "Vertex Point Pass",   vpoints_on,  emit_export_point_pass_setup },
     };
 
-    /* Advance `t` once per frame (matches the live REPL's timer-driven
-     * `t` advance). Other predef vars are left alone — their static
-     * initializers carry the export-time snapshot, and any runtime
-     * mutations in render_repl_geometry persist across frames. */
-    if (g_num_predef_vars > 0)
-        fprintf(f, "  t = 0.001f * (float)glutGet(GLUT_ELAPSED_TIME);\n");
+    /* `t` is advanced by the tick() timer at a fixed step (see the
+     * footer's tick() / glutTimerFunc setup), mirroring the live
+     * REPL's repl_state_time_advance(0.016). display() only renders;
+     * it does NOT touch t. Using glutGet(GLUT_ELAPSED_TIME) here
+     * would make tDelta = (t - tLast) * 10 frame-rate dependent and
+     * diverge from the REPL preview, where tDelta is constant. */
 
     /* Multipass rendering: snapshot predef vars before the first pass
      * and restore between passes so each pass starts from the same

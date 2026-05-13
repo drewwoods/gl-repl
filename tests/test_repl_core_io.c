@@ -159,8 +159,18 @@ int main(void) {
     {
         char buf[16384];
         read_text_file(path, buf, sizeof(buf));
-        ASSERT_TRUE("saved t uses elapsed time",
-                    strstr(buf, "t = 0.001f * (float)glutGet(GLUT_ELAPSED_TIME)") != NULL);
+        /* Time advance lives in the tick() timer at a fixed step,
+         * matching the live REPL's repl_state_time_advance(0.016).
+         * display() must NOT advance t (that would make tDelta
+         * frame-rate dependent). */
+        ASSERT_TRUE("saved t advances at fixed step in tick()",
+                    strstr(buf, "t += 0.016f;") != NULL);
+        ASSERT_TRUE("saved tick scheduled via glutTimerFunc",
+                    strstr(buf, "glutTimerFunc(16, tick, 0)") != NULL);
+        ASSERT_TRUE("saved display does not call glutGet(GLUT_ELAPSED_TIME)",
+                    strstr(buf, "glutGet(GLUT_ELAPSED_TIME)") == NULL);
+        ASSERT_TRUE("saved no longer uses glutIdleFunc",
+                    strstr(buf, "glutIdleFunc") == NULL);
         ASSERT_TRUE("saved multisample header state",
                     strstr(buf, "glDisable(GL_MULTISAMPLE);") != NULL);
         ASSERT_TRUE("saved line smooth header state",
