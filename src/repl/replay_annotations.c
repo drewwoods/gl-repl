@@ -577,47 +577,25 @@ static int replay_copy_runtime_state_before_flat_cmd(
 
         switch (repl_state_flat_program_cmds_mut()[pc].type) {
         case CMD_VAR_ASSIGN: {
+            /* Mirror executor.c CMD_VAR_ASSIGN: flatten owns the eval
+             * and stores the result in args[0]. Re-evaluating here
+             * would diverge from the live executor (replay doesn't
+             * re-flatten, so args[0] is the value the live executor
+             * keeps applying) and also double-apply self-referential
+             * assignments like `tmp2 = tmp2 + 1`. */
             int vi = repl_state_flat_program_cmds_mut()[pc].num_args;
             float value = repl_state_flat_program_cmds_mut()[pc].args[0];
-            if (repl_state_flat_program_cmds_mut()[pc].has_vars) {
-                char rhs[MAX_LINE_LEN];
-                if (repl_extract_assignment_parts(replay_flat_text(pc),
-                                                  NULL, 0,
-                                                  rhs, sizeof(rhs)) &&
-                    rhs[0]) {
-                    replay_eval_expr_with_state(pc, rhs, out_vals, out_scratch,
-                                                &value);
-                }
-            }
             if (vi >= 0 && vi < g_num_predef_vars)
                 out_vals[vi] = value;
             break;
         }
         case CMD_SCRATCH_ASSIGN: {
+            /* Same model as CMD_VAR_ASSIGN — apply the precomputed
+             * (array, index, value) triple flatten stored. */
             int array_idx = (int)repl_state_flat_program_cmds_mut()[pc].args[0];
             int elem_idx = (int)repl_state_flat_program_cmds_mut()[pc].args[1];
             float value = repl_state_flat_program_cmds_mut()[pc].args[2];
-            char name[16] = "";
-            char index_expr[MAX_LINE_LEN] = "";
-            char rhs[MAX_LINE_LEN] = "";
 
-            if (repl_state_flat_program_cmds_mut()[pc].has_vars &&
-                repl_extract_assignment_target_parts(replay_flat_text(pc),
-                                                    name, sizeof(name),
-                                                    index_expr, sizeof(index_expr),
-                                                    rhs, sizeof(rhs))) {
-                float resolved_index = (float)elem_idx;
-                if (index_expr[0])
-                    replay_eval_expr_with_state(pc, index_expr, out_vals,
-                                                out_scratch, &resolved_index);
-                if (rhs[0])
-                    replay_eval_expr_with_state(pc, rhs, out_vals, out_scratch,
-                                                &value);
-                elem_idx = (int)resolved_index;
-            }
-
-            if (array_idx < 0 || array_idx >= REPL_SCRATCH_ARRAY_COUNT)
-                array_idx = repl_eval_scratch_array_index(name);
             if (out_scratch && array_idx >= 0 && array_idx < REPL_SCRATCH_ARRAY_COUNT &&
                 elem_idx >= 0 && elem_idx < REPL_SCRATCH_ARRAY_LEN)
                 out_scratch[array_idx][elem_idx] = value;
@@ -723,16 +701,10 @@ static void replay_build_predef_snapshots(void) {
 
         switch (repl_state_flat_program_cmds_mut()[pc].type) {
         case CMD_VAR_ASSIGN: {
+            /* Mirror executor.c — apply args[0] directly (see the
+             * matching comment in replay_copy_runtime_state_before_flat_cmd). */
             int vi = repl_state_flat_program_cmds_mut()[pc].num_args;
             float value = repl_state_flat_program_cmds_mut()[pc].args[0];
-            if (repl_state_flat_program_cmds_mut()[pc].has_vars) {
-                char rhs[MAX_LINE_LEN];
-                if (repl_extract_assignment_parts(replay_flat_text(pc),
-                                                  NULL, 0,
-                                                  rhs, sizeof(rhs)) &&
-                    rhs[0])
-                    replay_eval_expr_with_state(pc, rhs, vals, scratch, &value);
-            }
             if (vi >= 0 && vi < g_num_predef_vars)
                 vals[vi] = value;
             break;
@@ -741,26 +713,7 @@ static void replay_build_predef_snapshots(void) {
             int array_idx = (int)repl_state_flat_program_cmds_mut()[pc].args[0];
             int elem_idx = (int)repl_state_flat_program_cmds_mut()[pc].args[1];
             float value = repl_state_flat_program_cmds_mut()[pc].args[2];
-            char name[16] = "";
-            char index_expr[MAX_LINE_LEN] = "";
-            char rhs[MAX_LINE_LEN] = "";
 
-            if (repl_state_flat_program_cmds_mut()[pc].has_vars &&
-                repl_extract_assignment_target_parts(replay_flat_text(pc),
-                                                    name, sizeof(name),
-                                                    index_expr, sizeof(index_expr),
-                                                    rhs, sizeof(rhs))) {
-                float resolved_index = (float)elem_idx;
-                if (index_expr[0])
-                    replay_eval_expr_with_state(pc, index_expr, vals, scratch,
-                                                &resolved_index);
-                if (rhs[0])
-                    replay_eval_expr_with_state(pc, rhs, vals, scratch, &value);
-                elem_idx = (int)resolved_index;
-            }
-
-            if (array_idx < 0 || array_idx >= REPL_SCRATCH_ARRAY_COUNT)
-                array_idx = repl_eval_scratch_array_index(name);
             if (array_idx >= 0 && array_idx < REPL_SCRATCH_ARRAY_COUNT &&
                 elem_idx >= 0 && elem_idx < REPL_SCRATCH_ARRAY_LEN)
                 scratch[array_idx][elem_idx] = value;

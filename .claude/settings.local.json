@@ -125,7 +125,9 @@
       "Bash(./build/release-gl-stubs/test_repl_core_examples)",
       "Bash(./build/release-gl-stubs/test_repl_core_io)",
       "Bash(gsed -i 's|\"  glPushAttrib\\(GL_ALL_ATTRIB_BITS\\);\",|\"  glPushAttrib\\(GL_LIGHTING_BIT\\);\",|' src/repl/export.c)",
-      "Bash(gsed -i 's|\"  glPushAttrib\\(GL_LIGHTING_BIT\\);\",|\"  glPushAttrib\\(GL_ALL_ATTRIB_BITS\\);\",|' src/repl/export.c)"
+      "Bash(gsed -i 's|\"  glPushAttrib\\(GL_LIGHTING_BIT\\);\",|\"  glPushAttrib\\(GL_ALL_ATTRIB_BITS\\);\",|' src/repl/export.c)",
+      "Bash(./build/release/test_repl_core_internal)",
+      "Bash(./build/release/test_repl_replay)"
     ]
   }
 }

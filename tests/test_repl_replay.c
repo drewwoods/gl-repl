@@ -3,6 +3,8 @@
 #include "widgets/replay.h"
 #include "repl/state.h"
 #include "widgets/replay.c"
+#include "repl/replay_annotations.h"
+#include "source_document.h"
 #include "keys.h"
 #include "support/test_harness.h"
 #include <stdio.h>
@@ -248,6 +250,98 @@ static void test_misc_helpers(void) {
     replay_restore_baseline_predef_values();
 }
 
+/* Regression: replay annotation simulation must apply the precomputed
+ * args[0] for CMD_VAR_ASSIGN, mirroring the live executor (which
+ * deliberately does not re-evaluate — see executor.c:CMD_VAR_ASSIGN).
+ *
+ * The original bug: `tDelta = (t - tLast) * 10;` substituted as 0 in the
+ * downstream `p = tDelta * i * scale;` annotation while the variable
+ * panel correctly displayed 0.16. Cause: replay does not re-flatten, so
+ * the live executor keeps applying the args[0] frozen at the prior
+ * flatten (when tLast still held its previous-frame value); meanwhile
+ * flatten itself ran `tLast = t` afterward, so the baseline replay_start
+ * captured had t == tLast — and the simulation re-evaluated the RHS
+ * against that baseline, producing 0 instead of the cached 0.16. */
+static void test_replay_var_assign_uses_flatten_args(void) {
+    glr_app_reset_all();
+
+    int t_idx = repl_eval_find_predef_var_idx("t");
+    ASSERT_TRUE("t predef exists", t_idx >= 0);
+
+    /* Set t before feeding so commit-time eval sees t=1, giving args[0]=5. */
+    g_predef_vars[t_idx].value = 1.0f;
+
+    editor_feed_line("float u;");
+    editor_feed_line("u = (t - 0.5) * 10;");
+    editor_feed_line("glVertex3f(u, 0, 0);");
+
+    int u_idx = repl_eval_find_predef_var_idx("u");
+    ASSERT_TRUE("u predef declared", u_idx >= 0);
+
+    repl_state_mark_flat_dirty();
+    repl_flatten_commands();
+    /* Clear dirty so replay_start does NOT re-flatten with the mutated
+     * t below — we want args[0]=5 frozen at this flatten. */
+    repl_state_flat_program_clear_dirty();
+
+    /* Sanity-check the args[0] flatten captured. */
+    {
+        FlatProgramView fp = repl_state_flat_program_view();
+        int found = 0;
+        for (int i = 0; i < fp.cmd_count; i++) {
+            if (fp.cmds[i].type == CMD_VAR_ASSIGN &&
+                fp.cmds[i].num_args == u_idx) {
+                ASSERT_TRUE("flatten cached args[0]=5 for u",
+                            fabsf(fp.cmds[i].args[0] - 5.0f) < 1e-5f);
+                found = 1;
+                break;
+            }
+        }
+        ASSERT_TRUE("flat program contains u assignment", found);
+    }
+
+    /* Mutate t after flatten — replay never re-flattens, so the live
+     * executor keeps using args[0]=5 frozen above. A re-evaluation
+     * against this baseline would give (10-0.5)*10=95. */
+    g_predef_vars[t_idx].value = 10.0f;
+
+    replay_start();
+    ASSERT_TRUE("replay started", g_replay_active);
+
+    /* Step PC to the end so all flat cmds (incl. the assignment and the
+     * vertex call) have been consumed, and src_line points at the last
+     * focus-candidate command (the glVertex3f). */
+    int safety = 1024;
+    while (g_replay_pc < g_replay_total_flat && safety-- > 0)
+        replay_advance();
+
+    ASSERT_TRUE("replay reached end without runaway", safety > 0);
+    ASSERT_TRUE("expand_args on by default", g_replay_expand_args == 1);
+
+    SourceTextView text = source_document_view();
+    ReplReplayAnnotationOutput out;
+    replay_annotations_prepare(text, &out);
+
+    int subst_found = 0;
+    int subst_uses_flatten_value = 0;
+    for (int i = 0; i < out.count; i++) {
+        if (out.items[i].kind != REPL_REPLAY_ANNOTATION_KIND_SUBST)
+            continue;
+        subst_found = 1;
+        /* Substitution should produce "glVertex3f(5, 0, 0);" (args[0]=5).
+         * The buggy re-eval would substitute "95" instead. Match on the
+         * exact "(5," prefix so "5" inside "95" can't false-pass. */
+        if (strstr(out.items[i].text, "glVertex3f(5,") != NULL &&
+            strstr(out.items[i].text, "95") == NULL)
+            subst_uses_flatten_value = 1;
+    }
+    ASSERT_TRUE("SUBST annotation present", subst_found);
+    ASSERT_TRUE("SUBST uses flatten args[0]=5, not re-eval=95",
+                subst_uses_flatten_value);
+
+    replay_stop();
+}
+
 int main(void) {
     test_replay_basic_controls();
     test_replay_stepping();
@@ -257,6 +351,7 @@ int main(void) {
     test_replay_modifiers();
     test_bench_helpers();
     test_misc_helpers();
+    test_replay_var_assign_uses_flatten_args();
 
     printf("test_repl_replay: %d/%d passed\n", g_harness.passed, g_harness.run);
     return (g_harness.run == g_harness.passed) ? 0 : 1;
