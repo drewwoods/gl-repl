@@ -160,6 +160,7 @@ endif
 	check-ui-no-repl-state-mut \
 	check-ui-no-repl-state-read \
 	check-ui-panels-no-mutators \
+	check-ui-text-panel-pure \
 	check-ui-renderer-takes-view \
 	check-ui-returns-hits-only \
 	check-variable-panel-forwarders \
@@ -876,6 +877,9 @@ check-glr-ctrl-not-editor-mirror: ## Verify imrepl_ctrl does not grow per-field 
 check-ui-returns-hits-only: ## Verify ui_*.c input helpers do not call REPL/editor mutators (ratchet down only).
 	@bash scripts/check-ui-returns-hits-only.sh scripts/baselines/ui-returns-hits-only.txt
 
+check-ui-text-panel-pure: ## Verify src/ui/text_panel.* stays REPL/editor-free.
+	@bash scripts/check-ui-text-panel-pure.sh
+
 check-ui-panels-no-mutators: ## Hard guard: src/ui/panels.c references no input-dispatch mutators (Phase J2.2).
 	@bash scripts/check-ui-panels-no-mutators.sh
 
@@ -934,6 +938,7 @@ CHECK_TARGETS = \
 	check-gl-boundaries \
 	check-layer-coupling \
 	check-state-ownership \
+	check-ui-text-panel-pure \
 	check-public-api-usage \
 	check-duplicate-api-decls
 

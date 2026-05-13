@@ -484,7 +484,7 @@ Phase 7 splits into two halves by dependency:
 - **Phase 7a — lock in the UI split (Phases 1-4).** Lands regardless of whether Phase 5/6 ever land. This is the load-bearing tail of the work already merged.
 - **Phase 7b — gates and polish for the demo (Phases 5-6).** Only meaningful after Phases 5 and 6 land; deferred when those phases are deferred.
 
-### Phase 7a — Lock in the UI split (active)
+### Phase 7a — Lock in the UI split (done)
 
 1. Add `scripts/check-ui-text-panel-pure.sh` and a `check-ui-text-panel-pure` Makefile target. Wire into `make check`.
    - Fail if `src/ui/text_panel.*` includes `repl/` or `src/editor/`.
