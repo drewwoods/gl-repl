@@ -487,7 +487,7 @@ Phase 7 splits into two halves by dependency:
 ### Phase 7a — Lock in the UI split (done)
 
 1. Add `scripts/check-ui-text-panel-pure.sh` and a `check-ui-text-panel-pure` Makefile target. Wire into `make check`.
-   - Fail if `src/ui/text_panel.*` includes `repl/` or `src/editor/`.
+   - Fail if `src/ui/text_panel.*` includes `repl/`, `editor/`, `src/repl/`, or `src/editor/`.
    - Fail if it references `GLCmd`, `CmdType`, or `CMD_`.
    - This is the single most important item in this phase — without it the Phase 1-4 invariants can quietly regress in the next refactor.
 2. `tests/test_ui_text_panel.c` — **already landed** during Phase 3 findings-fix and extended in Phase 4 (virtual-row routing regression). 25 tests under `USE_GL_STUBS=1`. No further work required.

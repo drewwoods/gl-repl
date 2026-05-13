@@ -322,11 +322,14 @@ text edit into a committed program change.
 | `repl_autocomplete` | REPL-side completion provider. Walks command spec, predef-var table, and source `CMD_FUNC_DEF` entries; produces matches, ghost text, parameter hints. Registers itself with `editor_completion` at startup; the editor only invokes the provider, it does not know about variables or GL command names directly |
 | `editor_inline_rename` | Inline scene-name edit buffer and validation |
 | `editor_help_session` | Read-only editor session backed by a help-text content provider. Uses the same scroll/search/cursor model as code editing; no commit path. Help visibility flag stays on `UiState` |
-| `editor_code_panel_document` | Code-panel document row model, scroll state, hit-test mapping, and editor-visible line metadata |
 
 If accepting a keystroke can change line text, cursor position, scroll,
 selection, search/autocomplete state, or undo history, the code belongs
 in the editor layer.
+
+Code-panel row construction is no longer editor-owned. Generic text-panel
+rendering and hit-test live in `ui_text_panel`; the REPL/editor adapter that
+turns snapshots into panel rows lives in `ui_repl_code_panel`.
 
 ### 2b. Peer subsystems (carved out of editor / UI)
 
@@ -416,7 +419,9 @@ allowlists. The contract is enforced by a per-feature lighter guard:
 | `ui_snapshot` | Defines `UiRenderSnapshot`, the read-only bundle passed to every UI renderer |
 | `ui_editor` | Editor-overlay snapshot types: transformers, highlights, virtual lines |
 | `ui_hit` | Defines `UiHitKind` + `UiHit`, the passive UI → controller contract. UI hit-test functions return `UiHit`; `glr_ctrl` dispatches on it |
-| `ui_panels` | Code-panel and status-banner rendering; input hit-tests return `UiHit` |
+| `ui_panels` | Top-level panel bridge: delegates code-panel rendering/hit-test to `ui_repl_code_panel`, renders the scene status banner, and prioritizes overlay/menu hit-tests before returning `UiHit` |
+| `ui_text_panel` | Generic text-panel renderer and hit-tester over `UiTextPanelSnapshot`; owns wrapping, row drawing, cursor/search visuals, and generic text hit mapping. REPL/editor-free, guarded by `check-ui-text-panel-pure` |
+| `ui_repl_code_panel` | REPL-aware adapter over `ui_text_panel`: builds rows from `UiRenderSnapshot`, editor buffer/virtual-line views, command metadata, tutorial fade, replay annotations, and color-transformer state; rewrites generic hits back to source-line targets |
 | `ui_layout` | Pure scene/code-panel rectangle geometry |
 | `ui_code_panel_layout` | Pure text wrapping and visual-line iteration |
 | `ui_menu_bar` | Menu bar, dropdowns, pinned buttons, search entry, and menu hit-testing |
@@ -536,7 +541,9 @@ flowchart LR
     subgraph ui_layer["5. 2D UI rendering + hit-test"]
         uistate["src/ui/state.c<br/>UiState (chrome only)"]
         uihit["src/ui/hit.h<br/>UiHit · UiHitKind"]
-        uipanels["src/ui/panels.c<br/>code panel · statusbar<br/>(returns UiHit)"]
+        uipanels["src/ui/panels.c<br/>panel bridge · statusbar<br/>(returns UiHit)"]
+        uireplcp["src/ui/repl_code_panel.c<br/>REPL code-panel adapter"]
+        uitextpanel["src/ui/text_panel.c<br/>generic text panel"]
         uimenu["src/ui/menu_bar.c<br/>menubar + dropdowns<br/>(returns UiHit)"]
         uicolor["src/ui/color_picker.c<br/>color picker render + hit-test<br/>(feature-UI · reads ColorPickerView)"]
         uitabbed["src/ui/tabbed_overlay.c<br/>generic modal tabbed text<br/>(content from src/repl/help_text.c)"]
@@ -545,7 +552,6 @@ flowchart LR
         uiprof["src/ui/profile_panel.c<br/>timing HUD"]
         uirhud["src/ui/replay_hud.c<br/>replay HUD (feature-UI)"]
         uilayout["src/ui/layout.c<br/>rect geometry"]
-        uicpdoc["src/editor/code_panel_document.c<br/>document row model"]
         uicplay["src/ui/code_panel_layout.c<br/>wrap iterator"]
     end
 
@@ -657,13 +663,14 @@ flowchart LR
     autonormal -.-> state
     replay_sys i31@--> exec
 
-    %% UI render reads (snapshot-only; UI never mutates)
+    %% UI render reads (read-only; UI never mutates)
     uipanels -.-> uistate
-    uipanels -.-> uicpdoc
+    uipanels -.-> uireplcp
+    uireplcp -.-> uitextpanel
+    uireplcp -.-> uicplay
+    uitextpanel -.-> uicplay
     uipanels -.-> uilayout
     uipanels -.-> uicolor
-    uicpdoc -.-> uicplay
-    uicpdoc -.-> replay_ann
     uiac -.-> eac
     uiprof -.-> prof
     uivpanel -.-> vpanel
@@ -880,7 +887,8 @@ side-effect routing. As of that branch landing:
   `repl_var_drag` → `variable_panel_drag`,
   `repl_replay` → `replay`, `repl_layout` → `ui_layout`,
   `repl_code_panel_layout` → `ui_code_panel_layout`,
-  `repl_code_panel_document` → `editor_code_panel_document`,
+  `repl_code_panel_document` → split into `ui_text_panel` plus
+  `ui_repl_code_panel` (`src/editor/code_panel_document.c` deleted),
   `repl_editor` → deleted (dispatch split between `editor_input`
   and `glr_ctrl`), `repl_camera_controls` → `glr_camera`,
   `repl_actions` → `glr_actions`. The `glr_*` namespace covers the

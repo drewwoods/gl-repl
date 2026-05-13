@@ -3,7 +3,7 @@ set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 
 violations=$(grep -nE \
-    'repl/|src/editor/|GLCmd|CmdType|CMD_[A-Za-z0-9_]*' \
+    '^[[:space:]]*#include[[:space:]]+["<](src/)?(editor|repl)/|GLCmd|CmdType|CMD_[A-Za-z0-9_]*' \
     src/ui/text_panel.c src/ui/text_panel.h 2>/dev/null \
     || true)
 
