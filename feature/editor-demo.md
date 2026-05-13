@@ -12,15 +12,15 @@ Split the code-panel UI into a generic text-panel renderer plus a REPL-specific 
   - **Capture baseline snapshots** so logical regressions are catchable later:
     - `testdata/repl_examples_ui/*.golden.txt` is a **logical** fixture (one row per header/source line, no wrap geometry), not a pixel-accurate visual fixture — see the comment at `tests/test_repl_core_examples.c:1044-1048` that calls this out and points to "the visual code-panel dump tests" as the place wrapped-row rendering is checked. Re-running the example-fixture suite after each phase catches structural drift (row counts, source order, header/footer scaffolding) but **does not** catch glyph-level visual regressions (color shifts, alpha blending, kerning, wrap geometry).
     - Current `--dump-code` output is useful as a source/export baseline, but it is still logical text: `sample.c` calls `glr_debug_dump_editor()`, which calls `repl_dump_code_panel_text()`, and that path does **not** exercise the wrap iterator. Capture those dumps for structural/source diffs if useful, but do not treat them as visual coverage.
-    - For a checkable wrapped-rendering proxy, expose
-      `repl_dump_code_panel_visual_text()` (already defined in
-      `src/repl/export.c:3445`, just not wired through `--dump-code`) via
-      a CLI flag such as `--dump-code-visual`, or add a UI-side test helper
-      that emits wrapped rows from `ui_text_panel_render` inputs. Capture
-      representative scenes (wrapped lines, tutorial mid-fade, replay
-      annotations, color swatches) to `/tmp/editor-demo-baseline/` and
-      byte-diff after Phase 2 and Phase 3 land. Manual smoke testing (Test
-      Plan below) covers what text dumps cannot.
+    - For a checkable wrapped-rendering proxy, revive the disabled
+      `repl_dump_code_panel_visual_text()` helper currently parked under
+      `#if 0` in `src/repl/export.{c,h}` and wire it through a CLI flag
+      such as `--dump-code-visual`, or add a UI-side test helper that emits
+      wrapped rows from `ui_text_panel_render` inputs. Capture representative
+      scenes (wrapped lines, tutorial mid-fade, replay annotations, color
+      swatches) to `/tmp/editor-demo-baseline/` and byte-diff after Phase 2
+      and Phase 3 land. Manual smoke testing (Test Plan below) covers what
+      text dumps cannot.
 - Keep public app entrypoints stable:
   - `ui_panels_render_code_panel`
   - `ui_panels_hit_test`
@@ -45,7 +45,7 @@ Split the code-panel UI into a generic text-panel renderer plus a REPL-specific 
     - `right_action`: right-edge interactive element. Color swatches go here (drawn at `cp_x + cp_w - CODE_MARGIN_X - sw - 2`; see `src/ui/panels.c:548-558`). Distinct from `left_aux_label` because the right action is interactive (hit-testable, opens picker) while the left aux is purely visual.
     - Plus: text pointer, file-line number, source line index, search row index, indent chars, colors, hit eligibility flags.
   - `UiTextPanelInput`: input text, length, cursor, anchor, ghost, hint, cursor-visible flag. `ghost` and `hint` are pre-resolved strings — the text panel treats them as opaque and does not interpret them. The full app populates both from REPL-side autocomplete (`editor_state_autocomplete()`); the editor demo does **not** need ghost/hint (no grammar to suggest from) and just sends empty strings, so the fields cost nothing in the demo path.
-  - `UiTextPanelSearch`: active flag, query, query length, hit row/char. The adapter resolves the REPL-side source-line index to the snapshot's row index before populating `hit_row` (same shape as replay-row routing — REPL line indices are translated to text-panel row indices in the adapter).
+  - `UiTextPanelSearch`: active flag, query, query length, hit row/char. Preserve current **search-row** semantics: `hit_row` is already in the editor search row space, where insert-mode can add a live input row and shift source rows (`editor_search_row_for_cmd_index` does this today). This is not the same as replay/source-line routing; the adapter assigns each `UiTextPanelRow.search_row_idx` to the search row that should be compared with `hit_row`, or `-1` for rows outside the search model.
   - `UiTextPanelSnapshot`: viewport, panel rect, `const UiTextPanelRow *rows`, row count, scroll, visible chrome flags, input/search/completion state.
     - `rows` is caller-owned storage valid for the render/hit-test call. Do **not** put a generic fixed `UI_TEXT_PANEL_ROW_CAP` in `text_panel.h`; the generic renderer should not bake in REPL document limits or a too-small visible-window assumption.
     - **Wrapping math is a generic-panel responsibility, not an adapter one.** Today `src/ui/panels.c:417` walks the *full* logical document while maintaining an absolute visual-row cursor — that's the math being moved into the generic panel in Phase 2. If the adapter pre-clips the row set, every subsequent caller has to reason about an offset between "snapshot row index" and "absolute visual row" — which means the wrapping calculation gets duplicated on both sides. Avoid that.
@@ -72,6 +72,7 @@ Split the code-panel UI into a generic text-panel renderer plus a REPL-specific 
   - caret, input selection, autocomplete ghost/hint
   - search highlight drawing
   - scrollbar
+- Before moving search highlighting, move the pure case-insensitive text-match helpers out of `src/editor/search.c` into a neutral UI/text helper (for example `src/ui/text_search.{c,h}` with `ui_text_find_next/prev`). `src/ui/text_panel.c` must not include `src/editor/search.h`; `editor/search.c` can keep thin wrappers or switch its internal calls to the neutral helper.
 - Move the generic hit-mapping math (mouse → row / source line / visual row / input cursor char) in the **same** phase. It shares every layout call with rendering, so splitting it across phases would force the same `text_layout_*` walks to be reproduced twice. Phase 4 keeps only the overlay-priority routing, which is independent of layout math.
 - Keep REPL-only features out:
   - command colors
@@ -81,7 +82,7 @@ Split the code-panel UI into a generic text-panel renderer plus a REPL-specific 
   - tutorial fading
   - color swatches
   - REPL statusbar content
-- Code touched: `src/ui/panels.c`, new `src/ui/text_panel.c`, `tests/test_repl_editor.c` (private `code_panel_header_row_count` helper duplicates the header-row math; any rename/move of those primitives during this phase ripples here — keep the helper aligned in the same patch).
+- Code touched: `src/ui/panels.c`, new `src/ui/text_panel.c`, new `src/ui/text_search.{c,h}` or equivalent neutral helper, `src/editor/search.c`, `tests/test_repl_editor.c` (private `code_panel_header_row_count` helper duplicates the header-row math; any rename/move of those primitives during this phase ripples here — keep the helper aligned in the same patch).
 
 ## Phase 3 — Add REPL Code Panel Adapter
 
