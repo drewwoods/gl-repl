@@ -184,24 +184,176 @@ Sum today: **~77 REPL function calls across the five remaining files** — rough
 
 ### What this phase produces
 
-- **Extended `EditorServices` table** (`src/editor/services.h`). The existing struct already covers compile/apply for `commit.c`; this phase adds the remaining REPL-pipeline surface `input.c` and `commit.c` currently reach by name:
-  - command-store mutators (`repl_command_store_*`)
-  - parser front-door (`repl_parser_parse_command_ctx`)
-  - eval helpers used in commit (`repl_eval_parse_exprs`, `repl_eval_validate_expression_idents`, etc.)
-  - func-alias bookkeeping (`repl_func_alias_*`)
-  - source-scope queries (`repl_source_scope_*` — pure, but uniform dispatch keeps the shape clean)
-  - dirty-state notifier (`repl_mark_normals_dirty`)
-  - status sink (`repl_set_status` — likely the existing `repl_set_status_sink` extended)
-  - The existing compile/apply members stay as-is. `editor_services_default()` keeps working unchanged for production code; the new fields populate via the same default.
-- **`EditorChromeServices` table** (`src/editor/chrome_services.h`). Covers app-controller reach from `input.c`:
-  - `glr_camera_controls_reset`
-  - `glr_ctrl_router_reset_code_panel_drag`
-  - `glr_ctrl_sync_ui_chrome`
-  - `glr_state_presentation` / `glr_state_presentation_mut` getters/setters for `code_panel_layout`
-  - `color_picker_*` reach from `input.c` (audit during implementation). These route through `EditorChromeServices` too — keeping color-picker dispatch on the same table avoids growing a third seam for a handful of calls. The color-picker module's own state continues to live in `src/widgets/color_picker_state.c`; `EditorChromeServices` just exposes the open/close/close-if-active entry points the input dispatcher needs.
-  - Current direct `ui_*` reach from `input.c`: status mutations (`ui_state_status_mut` / eventual status setter), help visibility access, code-panel runtime state, viewport height/width, `ui_layout_code_panel_rect`, and `ui_menu_bar_close`. Because the chrome-surface guard below counts `ui_*(`, the plan chooses to route these through `EditorChromeServices`; if implementation intentionally allows any direct UI calls to remain, narrow the guard to the disallowed symbols instead of counting every `ui_*`.
+- **Extended `EditorServices` table** (`src/editor/services.h`). The existing
+  struct already covers compile/apply for `commit.c`; this phase adds the
+  remaining REPL-pipeline surface `input.c` and `commit.c` currently reach
+  by name. Concrete extension:
+
+  ```c
+  typedef struct EditorServices_s {
+      /* --- existing fields (compile/apply) --- */
+      ReplCompileContext (*context)(void *user);
+      ReplCompileResult  (*compile)(...);
+      int                (*apply_repl_change)(const ReplCompiledChange *, void *user);
+      void               (*apply_predef_ops)(const ReplCompiledChange *, void *user);
+      void               (*apply_scratch_ops)(const ReplCompiledChange *, void *user);
+
+      /* --- new in Phase 5: input.c + commit.c REPL surface --- */
+      /* Status sink. Already has a sink pattern (repl_set_status_sink);
+       * folding it into EditorServices removes the parallel install path. */
+      void               (*set_status)(const char *msg, void *user);
+
+      /* Dirty-state notifier — both routes call this after a successful
+       * commit. */
+      void               (*mark_normals_dirty)(void *user);
+
+      /* Parser front-door used by both routes' open-coded parser path. */
+      int                (*parse_command_ctx)(const char *input,
+                                              ReplParsedLine *out,
+                                              const ReplParseContext *ctx,
+                                              void *user);
+
+      /* Command-store handle + mutators. Today the editor builds a
+       * `ReplCommandStore` via `repl_command_store_live()` then calls
+       * `_insert_one` / `_replace_one`. Coarsen to two callbacks so the
+       * shim doesn't have to model the store struct: */
+      int                (*command_store_insert_one)(int pos,
+                                                     const GLCmd *cmd,
+                                                     unsigned flags,
+                                                     void *user);
+      int                (*command_store_replace_one)(int pos,
+                                                      const GLCmd *cmd,
+                                                      void *user);
+
+      /* Func-alias bookkeeping used by commit.c's func-def handler. Five
+       * production symbols collapse to two callbacks: */
+      int                (*func_alias_lookup_or_alloc)(const char *ident,
+                                                       int *out_slot,
+                                                       char *err, int err_sz,
+                                                       void *user);
+      const char *       (*func_alias_get)(int slot, void *user);
+
+      /* Eval helpers commit.c calls during expression normalization. Pure
+       * today, but routing keeps the shape uniform and gives the demo a
+       * place to refuse expression evaluation cleanly. */
+      int                (*eval_parse_exprs)(const char *text,
+                                             float *args, int max_args,
+                                             const ExprVar *vars, int nvars,
+                                             int *out_n, void *user);
+      int                (*eval_validate_expression_idents)(const char *expr,
+                                                            const ExprVar *vars, int nvars,
+                                                            char *err, int err_sz,
+                                                            void *user);
+
+      /* Source-scope queries used by commit.c's indent / block-end logic.
+       * Four production symbols, collapsed under the same uniformity
+       * rationale: */
+      int                (*source_scope_block_depth_at)(int pos, void *user);
+      int                (*source_scope_find_block_end)(int pos, void *user);
+      void               (*source_scope_cmd_indent)(int pos, char *out, int out_sz, void *user);
+      CmdType            (*source_scope_nearest_open_block_at)(int pos, void *user);
+
+      void *user;
+  } EditorServices;
+  ```
+
+  That's the existing 5 fields plus **~12 new fields** for input.c +
+  commit.c's reachable REPL surface. `editor_services_default()` populates
+  every field with the corresponding `repl_*` symbol; production code is
+  unchanged. The shim populates each field with a no-op or fake.
+
+  Two of the new fields (`command_store_*` and `func_alias_lookup_or_alloc`)
+  are deliberate coarsenings of the raw surface: the editor currently makes
+  ~5 `repl_command_store_*` calls and ~5 `repl_func_alias_*` calls, but the
+  flows behind those calls reduce to two and one callback shapes
+  respectively. Coarsening here keeps the table from blowing past 20 fields
+  and gives the shim a much smaller surface to populate.
+- **`EditorChromeServices` table** (`src/editor/chrome_services.h`). Covers
+  app-controller and UI-chrome reach from `input.c`:
+
+  ```c
+  typedef struct EditorChromeServices_s {
+      /* Camera + controller transient resets, currently called inline. */
+      void (*camera_controls_reset)(void *user);
+      void (*router_reset_code_panel_drag)(void *user);
+      void (*sync_ui_chrome)(void *user);
+
+      /* Code-panel layout — input.c reads/writes glr_state_presentation()
+       * fields. Coarsen to two getters/one setter rather than exposing
+       * the full presentation struct: */
+      int  (*code_panel_layout_get)(void *user);
+      void (*code_panel_layout_set)(int layout, void *user);
+
+      /* Menu / overlay chrome touched by input dispatch. */
+      void (*menu_bar_close)(void *user);
+      int  (*help_overlay_is_visible)(void *user);
+
+      /* Color picker entry points the input dispatcher needs to call
+       * (the picker's own state stays in src/widgets/color_picker_state.c). */
+      void (*color_picker_close)(void *user);
+      int  (*color_picker_close_if_active_for_line)(int line_idx, void *user);
+
+      void *user;
+  } EditorChromeServices;
+  ```
+
+  Nine fields. The color-picker entry points sit on the same table to avoid
+  growing a third seam for a handful of calls. The picker module's state
+  stays in `src/widgets/color_picker_state.c`; this table just exposes the
+  close/close-if-active entry points the input dispatcher needs. The
+  chrome-surface guard counts `glr_*(`, `ui_*(`, and `color_picker_*(`
+  call sites in `input.c`; if implementation intentionally leaves any
+  direct calls in, narrow the guard to the disallowed symbols instead of
+  the prefix glob.
 - Controller registers production bindings at app init (`glr_ctrl_init_gl` or equivalent). `input.c` / `commit.c` switch their REPL/chrome calls to the registered tables.
 - The pattern matches existing seams: `repl_set_status_sink`, `repl_install_input_reset_sink`, the existing `EditorServices` — same dispatch shape, same lifecycle.
+
+### Direct stub surface (three smaller editor files)
+
+Phase 5 does not touch `state.c`, `clipboard.c`, or `undo.c` — they're
+already inside the per-file stub-growth budget. They continue to call
+`repl_*` symbols by name. The Phase 6 shim provides these as direct
+symbol definitions in `repl_shim.c`, separate from the service-table
+fields:
+
+| Symbol | Caller | Shim semantics |
+|--------|--------|----------------|
+| `repl_state_edit_line` | state.c, clipboard.c, undo.c | return shim-local edit_line |
+| `repl_state_edit_line_set` | clipboard.c | write shim-local edit_line |
+| `repl_state_document_count` | clipboard.c, undo.c | return shim cmd count |
+| `repl_state_document_cmds_mut` | undo.c | return shim cmd array |
+| `repl_command_store_live` | clipboard.c, undo.c | return a `ReplCommandStore` over shim cmds |
+| `repl_command_store_can_insert` | clipboard.c | true unless capacity |
+| `repl_command_store_normalize_range` | clipboard.c | range-clamp helper, pure |
+| `repl_command_store_load` | undo.c | bulk replace shim cmds |
+| `repl_copy_string_fits` | clipboard.c, undo.c | direct call to live impl (pure) |
+| `repl_range_contains_var_decl` | clipboard.c | return 0 (no decls in demo) |
+| `repl_source_scope_block_extent` | clipboard.c | return single-row extent |
+| `repl_mark_normals_dirty` | clipboard.c, undo.c | no-op |
+| `repl_set_status` | clipboard.c, undo.c | forward to `ui_state_status_set` |
+| `repl_eval_copy_scratch_arrays` | undo.c | memcpy local arrays |
+| `repl_eval_restore_scratch_arrays` | undo.c | memcpy local arrays |
+| `repl_func_alias_clear_all` | undo.c | no-op |
+| `repl_func_alias_get` | undo.c | return "" |
+| `repl_func_alias_set` | undo.c | no-op, return 1 |
+| `repl_promote_example_if_needed` | undo.c | no-op |
+
+That's **19 unique direct-stub symbols** for the three smaller files.
+
+### Total shim surface
+
+Concrete totals after Phase 5 lands:
+
+| Surface | Count | Notes |
+|---------|-------|-------|
+| `EditorServices` fields (incl. 5 existing) | ~17 | input.c + commit.c REPL pipeline |
+| `EditorChromeServices` fields | ~9 | input.c chrome / UI / picker reach |
+| Direct REPL stubs in `repl_shim.c` | ~19 | state.c + clipboard.c + undo.c |
+| **Total unique shim symbols** | **~45** | function pointers + direct symbols |
+
+This is the realistic shim cost — meaningfully larger than the
+12-15/5-7 figures the earlier draft cited. The tripwires in Phase 6
+need to reflect measured reality (see Phase 6 below).
 
 ### Target reductions
 
@@ -246,7 +398,23 @@ This phase only lands after Phase 5. By the time Phase 6 starts, `input.c` / `co
   - Registering an `EditorCompletionProvider` is **optional**, not required for safety: `editor_completion_update`, `editor_completion_update_selected_preview`, and `editor_completion_clear` in `src/editor/completion.c` all early-return when `g_provider == NULL`. The demo skips registration entirely — there's no grammar to suggest from, so ghost/hint stay empty and the Tab key path no-ops cleanly.
   - Status messages forward to `ui_state_status_set`.
 - Add `tools/editor_demo/app_chrome_shim.c`. Populates `EditorChromeServices` with no-op camera/router reset plus local code-panel layout state. Production bindings stay in the controller. Kept separate from `repl_shim.c` so the dependency ledger distinguishes text/REPL semantics from app chrome.
-- Shim-size tripwire (regression gate, **not** entry budget): count **unique shim functions / exported symbols**, not raw call sites. `repl_shim.c` should stay under ~12-15 unique REPL symbols after the `input.c` / `commit.c` reductions; the chrome shim should stay under ~5-7 unique chrome/UI symbols. The three smaller editor files still have ~21 raw direct REPL call sites today, so this cap is only realistic if those calls dedupe to a small symbol set after Phase 5. If the actual unique-symbol count still exceeds the cap, do not hand-wave it — either raise the tripwire explicitly with the measured count or coarsen the service callbacks so the demo does not grow a parallel REPL implementation. Growth past the final measured cap means a regression in the seam contract.
+- Shim-size tripwire (regression gate, **not** entry budget): count
+  **unique shim functions / exported symbols**, not raw call sites. The
+  measured surface after Phase 5 lands (see "Total shim surface" table in
+  Phase 5) is roughly:
+  - `repl_shim.c`: ~17 `EditorServices` field bindings + ~19 direct REPL
+    stubs = **~36 unique REPL-side symbols**.
+  - `app_chrome_shim.c`: ~9 `EditorChromeServices` field bindings.
+
+  Set the tripwires at the measured caps + small headroom (e.g. cap REPL
+  at 40, chrome at 12) so future seam regression — a new direct-name
+  call leaking back in — actually trips the gate. The earlier "~12-15
+  REPL / ~5-7 chrome" figures were aspirational and don't match the
+  enumerated surface; using them as gates would either be permanently
+  red or force fictitious work to make them green. If a later
+  decoupling pass (the long-term direction in Assumptions below)
+  shrinks state.c / clipboard.c / undo.c's REPL reach, ratchet both
+  caps down then.
 - Add `make editor_demo`.
   - `USE_GL_STUBS=1` verifies compile/link only.
   - Real GL build opens the editor demo window.
@@ -292,7 +460,17 @@ This phase only lands after Phase 5. By the time Phase 6 starts, `input.c` / `co
 - `editor_demo` is a plain text editor proof, not a GL language editor.
 - `src/ui/panels.h` remains the stable public surface for the full app.
 - The fake REPL shim is intentionally demo-local and should not migrate into production code.
-- After Phase 5 lands, the shim is a **dependency ledger against the extended `EditorServices` and the new `EditorChromeServices` tables, plus a small set of direct stubs** for the three smaller editor files (`state.c`, `clipboard.c`, `undo.c`) that keep calling REPL helpers by name. Its role is to populate the tables with no-op or fake function pointers and to stub the remaining direct calls. The Phase 6 tripwires (~12-15 unique REPL shim symbols / ~5-7 unique chrome/UI shim symbols) are regression gates on that ledger, not a promise that ~21 remaining raw call sites magically fit under a 15-function cap. Before landing Phase 6, measure the actual unique symbol set required by those three files; if it is larger than the cap, either extend Phase 5 to coarsen the service surface or record a deliberately higher tripwire with rationale.
+- After Phase 5 lands, the shim is a **dependency ledger against the
+  extended `EditorServices` and the new `EditorChromeServices` tables,
+  plus a small set of direct stubs** for the three smaller editor files
+  (`state.c`, `clipboard.c`, `undo.c`) that keep calling REPL helpers by
+  name. The measured surface (Phase 5 "Total shim surface" table) is
+  ~36 REPL-side symbols + ~9 chrome symbols. The Phase 6 tripwires are
+  set at those measured caps + small headroom — a regression gate, not
+  a license for unbounded growth. The earlier "~12-15 / ~5-7" figures
+  cited elsewhere in this plan are aspirational long-term targets,
+  reachable only by a further decoupling pass on state.c / clipboard.c
+  / undo.c that Phase 5 deliberately does not attempt.
 - Further cleanup of `src/editor/input.c`, `src/editor/clipboard.c`, and `src/editor/undo.c` into generic document services is the long-term direction. Phase 5's seam extraction is the first concrete step; the demo in Phase 6 is the scaffolding that makes the remaining coupling visible and shrinkable.
 
 ## Landing Strategy
@@ -300,5 +478,5 @@ This phase only lands after Phase 5. By the time Phase 6 starts, `input.c` / `co
 - **Phases 0-2** are the load-bearing UI split: text-panel module exists, generic rendering + hit-mapping live there, full app still works through the unchanged `ui_panels_*` surface. This is the first natural pause point — the cleanup is real even without the rest.
 - **Phase 3** is mechanical once Phase 2 lands; **Phase 4** is hit-routing cleanup. Together these complete the SRP split for `ui/panels.c`.
 - **Phase 5** is the editor-side decoupling: **extend** the existing `EditorServices` seam (already used by `commit.c` for compile/apply) to cover the rest of the REPL-pipeline surface and add a complementary `EditorChromeServices` seam for `input.c`'s `glr_*` / `ui_*` / `color_picker_*` reach. This is the second natural pause point — the project still has no second editor binary, but the editor module set is now much closer to linkable without the REPL pipeline. Useful on its own: the service tables also make the existing test harnesses easier to drive in isolation.
-- **Phase 6** (demo) lands only after Phase 5's measured surface reductions land. By that point the shims become small dependency ledgers against the service tables, and the tripwires (~12-15 REPL fns / ~5-7 chrome fns) are meaningful regression gates rather than aspirational.
+- **Phase 6** (demo) lands only after Phase 5's measured surface reductions land. By that point the shims are concrete ledgers against the service tables (~36 REPL-side symbols + ~9 chrome symbols by the Phase 5 enumeration), and the tripwires are set at those measured caps with small headroom rather than aspirational figures. Long-term decoupling of state.c / clipboard.c / undo.c can ratchet the caps down.
 - **Phase 7** (guards + docs) lands incrementally as each preceding phase merges — don't batch the purity guard until the end.
