@@ -9,7 +9,9 @@ Split the code-panel UI into a generic text-panel renderer plus a REPL-specific 
 - Record current behavior before refactor:
   - Build `make sample USE_GL_STUBS=1`, `make repl_demo USE_GL_STUBS=1`, `make scene_demo USE_GL_STUBS=1`.
   - Run `make test-stubs` and `make check-state-ownership`.
-  - **Capture baseline snapshots** so visual regressions are catchable later: regenerate `testdata/repl_examples_ui/*.golden.txt` from the current binary and save the SHA before any refactor; copy a few `--dump-code` outputs of representative scenes to `/tmp/editor-demo-baseline/` for byte-level diffs after Phase 2 and Phase 3 land. The example-fixture suite is the existing golden harness — re-running it after each phase is the primary regression check.
+  - **Capture baseline snapshots** so logical regressions are catchable later:
+    - `testdata/repl_examples_ui/*.golden.txt` is a **logical** fixture (one row per header/source line, no wrap geometry), not a pixel-accurate visual fixture — see the comment at `tests/test_repl_core_examples.c:1044-1048` that calls this out and points to "the visual code-panel dump tests" as the place wrapped-row rendering is checked. Re-running the example-fixture suite after each phase catches structural drift (row counts, source order, header/footer scaffolding) but **does not** catch glyph-level visual regressions (color shifts, alpha blending, kerning, wrap geometry).
+    - For real visual coverage, capture `--dump-code` outputs of representative scenes (wrapped lines, tutorial mid-fade, replay annotations, color swatches) to `/tmp/editor-demo-baseline/` and byte-diff after Phase 2 and Phase 3 land. The dump-code path exercises the wrap iterator and is the closest checkable proxy for the renderer's pixel output. Manual smoke testing (Test Plan below) covers what the dumps cannot.
 - Keep public app entrypoints stable:
   - `ui_panels_render_code_panel`
   - `ui_panels_hit_test`
@@ -36,7 +38,10 @@ Split the code-panel UI into a generic text-panel renderer plus a REPL-specific 
   - `UiTextPanelInput`: input text, length, cursor, anchor, ghost, hint, cursor-visible flag. `ghost` and `hint` are pre-resolved strings — the text panel treats them as opaque and does not interpret them. The full app populates both from REPL-side autocomplete (`editor_state_autocomplete()`); the editor demo does **not** need ghost/hint (no grammar to suggest from) and just sends empty strings, so the fields cost nothing in the demo path.
   - `UiTextPanelSearch`: active flag, query, query length, hit row/char. The adapter resolves the REPL-side source-line index to the snapshot's row index before populating `hit_row` (same shape as replay-row routing — REPL line indices are translated to text-panel row indices in the adapter).
   - `UiTextPanelSnapshot`: viewport, panel rect, rows, row count, scroll, visible chrome flags, input/search/completion state.
-    - `rows` is a fixed inline array of `UI_TEXT_PANEL_ROW_CAP` (= 512) `UiTextPanelRow` entries. The adapter clips to a "visible window + small scroll buffer" before building the snapshot, so it never has to ship the entire 4096-command document; 512 covers any realistic panel height (~24-50 visible rows) with ~10× headroom for wrapping plus scroll overscan.
+    - `rows` is a fixed inline array of `UI_TEXT_PANEL_ROW_CAP` (= 512) `UiTextPanelRow` entries.
+    - **Wrapping math is a generic-panel responsibility, not an adapter one.** Today `src/ui/panels.c:417` walks the *full* logical document while maintaining an absolute visual-row cursor — that's the math being moved into the generic panel in Phase 2. If the adapter pre-clips the row set, every subsequent caller has to reason about an offset between "snapshot row index" and "absolute visual row" — which means the wrapping calculation gets duplicated on both sides. Avoid that.
+    - **Contract: the adapter ships *logical* rows (one entry per source line / virtual / static / input row) covering the entire document; the generic panel does the wrap iteration and visible-row clipping itself, the same way the current `code_panel_draw_command_row` does.** The 512-row cap is therefore on logical rows, not visual rows. For the current document cap of 4096 commands, 512 is too small for a worst-case full document — bump `UI_TEXT_PANEL_ROW_CAP` to cover `MAX_COMMANDS + chrome` (header/footer/input/virtual rows), or have the snapshot grow to a heap-backed array sized from `repl_state_document_count()`. The inline 512 figure was sized for the visible-window assumption that this contract rejects.
+    - If profiling later shows a real per-frame cost in walking the full document, add an explicit `visible_row_first_absolute_idx` field on the snapshot so the renderer can resume the wrap walk from a known offset — but defer that until the cost is measured. Today the wrap walker is O(document_count × char_count) and that's not been a bottleneck.
   - `UiTextPanelOutput`: cursor pixel, cursor-valid, total rows, visible rows, **text-area rect + statusbar-slot rect** so the REPL adapter can overlay its status strip without recomputing layout (statusbar is REPL chrome — see Phase 3).
 - Add APIs:
   - `ui_text_panel_visible_lines_for_height(int panel_h)`
@@ -99,7 +104,22 @@ Split the code-panel UI into a generic text-panel renderer plus a REPL-specific 
     - Why this avoids a function call per char: the fade is monotonic and produces a typewriter-reveal shape — at any instant, characters before the wipe front are fully visible (α = 1.0), the leading character is mid-ramp (α ∈ (0, 1)), and characters after are hidden (α = 0.0). That's at most **3 segments per fading row**, regardless of row length. The renderer issues one `glColor4f` per segment and batches `glutBitmapCharacter` calls inside — `O(segments)` color changes, not `O(chars)`.
     - Why this is implementation-specific: the segment field is generic data ("color may vary across char ranges"), but the *fade-aware* code that calls `tutorial_step_fade_alpha` and computes the wipe front lives entirely in `ui_repl_code_panel.c`. The generic text panel never imports `widgets/tutorial.h` and has no `UiTextPanelFadeFn` symbol in its API surface.
     - Default cost: rows with `color_segment_count == 0` (the 99% case) bypass the segment loop entirely and use the row's `text_color` — no overhead added for non-fading rows.
-    - Adapter responsibility: for any row where `tutorial_line_is_fading(line_idx, now)` is true, call a local helper (e.g. `static void fill_fade_segments(int line_idx, int line_len, float now, UiTextPanelRow *row);`) that calls `tutorial_step_fade_alpha` at most ~3 times to find the wipe-front character and writes 1-3 segments into the row. Cap at `UI_TEXT_PANEL_MAX_COLOR_SEGMENTS` (4); fall back to a single dimmed segment if the cap is ever exceeded (it won't be in practice).
+    - Adapter responsibility: for any row where `tutorial_line_is_fading(line_idx, now)` is true, the adapter calls a local helper (e.g. `static void fill_fade_segments(int line_idx, int line_len, float now, UiTextPanelRow *row);`) that resolves the wipe-front character and writes 1-3 segments into the row. The wipe-front position is computed from timing state currently private to `src/widgets/tutorial.c` (fade_start_t, fade_duration, per-char window), so the adapter cannot derive it cheaply from outside. Two acceptable options:
+      1. **Expose a tutorial API** (preferred). Add a single helper to `src/widgets/tutorial.h`:
+         ```c
+         /* Returns the index of the first character whose fade alpha is < 1.0
+          * at `now`. Returns -1 if the line is not fading or `now` is past the
+          * fade window (all characters fully revealed). When >= 0, the caller
+          * can split the row into [0, front-1] @ alpha 1.0, [front] @ partial
+          * alpha (read via tutorial_step_fade_alpha), and [front+1, end] @
+          * alpha 0.0. */
+         int tutorial_step_fade_front(int line_idx, int line_len, float now);
+         ```
+         The tutorial module already has the timing math; surfacing the front position is one helper, O(1), and keeps the fade math owned by the widget.
+      2. **Bounded binary search** over `tutorial_step_fade_alpha`. The function is monotonic in `char_idx` (later characters reveal later), so a binary search on `alpha < 1.0` finds the front in `ceil(log2(line_len))` calls — 7 calls for a 100-char line, 10 for a 1000-char line. The plan's "~3 calls" claim is wrong; it should say `O(log2 line_len)` if option 2 is chosen.
+
+      Pick option 1 for v1: the API is narrower, the cost is one helper definition, and it doesn't lock the adapter to the current binary-search-friendly shape of the fade math.
+    - Cap at `UI_TEXT_PANEL_MAX_COLOR_SEGMENTS` (4); fall back to a single dimmed segment if the cap is ever exceeded (it won't be in practice — fade is at most 3 segments).
   - render REPL-specific statusbar after `ui_text_panel_render()` returns, using the `UiTextPanelOutput.statusbar_slot_rect` so the adapter doesn't recompute layout.
 - Keep existing visual behavior by having:
   - `ui_panels_render_code_panel()` call `ui_repl_code_panel_render()`
@@ -121,6 +141,40 @@ Split the code-panel UI into a generic text-panel renderer plus a REPL-specific 
 
 ## Phase 5 — Add Editor Demo Host
 
+**Prerequisite: the measured REPL-symbol surface of `src/editor/*.c` is
+already past the shim tripwire.** The table below shows `input.c` and
+`commit.c` together calling **~56 REPL functions** (23 + 33). The tripwire
+near the end of this phase is ~12-15 REPL shim functions. Phase 5 as
+written trips its own guard immediately, because the demo host has to call
+`editor_handle_key` / `editor_handle_special` — which pulls in `input.c`,
+which transitively pulls in `commit.c`. There is no way to link the demo
+without shimming the full ~56-function surface today.
+
+Two ways to resolve this:
+
+1. **Decouple `input.c` and `commit.c` from REPL types first** (recommended).
+   The relevant REPL surface in those files is parse/compile/apply, status
+   set, command_store mutation, and func-alias/eval bookkeeping. The
+   compile/apply path is where the "is the editor really decoupled"
+   question lives. Land a focused refactor that pulls compile/apply onto
+   an `EditorReplServices` table (or equivalent dispatch seam) registered
+   by the controller, so `input.c`/`commit.c` call the table, not the
+   REPL functions by name. The shim then only needs to populate the
+   table with no-op or fake implementations — a handful of function
+   pointers, well inside the tripwire. This is the same shape as the
+   existing `repl_set_status_sink` / `repl_install_input_reset_sink` /
+   `EditorServices` patterns the project already uses.
+2. **Raise the tripwire and accept the shim**. Treat 56-function shim as
+   the price of the demo today and use the demo as the forcing function
+   to motivate (1). The downside: the shim is no longer a small
+   dependency ledger; it's a substantial parallel implementation, and
+   the tripwire stops being a useful enforcement signal.
+
+Pick (1). Phase 5 lands only after the `input.c`/`commit.c` decoupling
+refactor reduces their REPL-function surface to something close to the
+existing tripwire. The measurement table below stays as the entry-time
+audit — when each file's count drops below ~5, Phase 5 is ready to go.
+
 - Add `tools/editor_demo/editor_demo.c`.
   - GLUT window setup and callback registration.
   - Links `src/editor/state.c` directly and uses the same global `EditorState` the full app uses — no parallel state instance.
@@ -132,8 +186,14 @@ Split the code-panel UI into a generic text-panel renderer plus a REPL-specific 
     | `code_panel_document.c` | ~8 (state, source_scope, export) | Small. Most are already pure queries (export getters are no-side-effect). Shim them. |
     | `clipboard.c` | ~10 (command_store, source_scope, status) | Moderate. The command_store mutators are where work happens; mostly no-ops in the demo. |
     | `undo.c` | ~10 (command_store, func_alias, eval, promote_example) | Moderate. `repl_promote_example_if_needed` is the only REPL-semantics call; no-op in the demo. |
-    | `input.c` | 23 (parse + compile + command_store + status) | Larger. This is where the "is the editor really decoupled" question lives. |
-    | `commit.c` | 33 (compile / apply / func_alias / eval / source_scope) | Largest. Genuine REPL pipeline use — the right place to push real decoupling work into a follow-up. |
+    | `input.c` | 23 (parse + compile + command_store + status) | **Past the tripwire today.** Needs the prerequisite refactor above. |
+    | `commit.c` | 33 (compile / apply / func_alias / eval / source_scope) | **Past the tripwire today.** Needs the prerequisite refactor above. |
+
+    Sum: **~85 REPL function calls across all six files** without the
+    prerequisite refactor — roughly 6× the tripwire. The plan that
+    "extends the shim within reason" is only coherent for the four
+    smaller files (sum: ~29). The two largest files have to come down
+    first.
   - Policy: **extend the shim within reason.** The shim is already an artifact of present coupling; growing it by a stub or two per file is fine. The tripwire numbers in this phase (~12-15 REPL functions / ~5-7 chrome functions) are the enforcement mechanism — when *either* gets uncomfortably close to its cap, that's the cue to pause and decouple at source rather than to keep stubbing.
   - In particular: `state.c`'s one function (`repl_state_edit_line`) is cheap to shim and produces no churn anywhere else. The hard-line "must not" framing earlier in this plan was too strict for that case.
   - Builds a `UiTextPanelSnapshot` directly from `EditorState` and fake document rows.
@@ -199,5 +259,6 @@ Split the code-panel UI into a generic text-panel renderer plus a REPL-specific 
 ## Landing Strategy
 
 - Phases 0-2 are the load-bearing refactor: text-panel module exists, generic rendering + hit-mapping live there, full app still works through the unchanged `ui_panels_*` surface. This is the natural pause point — the cleanup is real even without the demo.
-- Phase 3 is mechanical once Phase 2 lands; Phase 4 is cleanup; Phase 5 is the proof-of-concept demo. If Phase 5's shim trips the size tripwire, pause and reassess whether decoupling `src/editor/*` from REPL types is a prerequisite rather than a follow-up.
+- Phase 3 is mechanical once Phase 2 lands; Phase 4 is cleanup.
+- **Phase 5 is gated on a separate `input.c`/`commit.c` decoupling pass.** The 2026-05-13 measurement table (56 REPL functions across those two files) already trips the shim tripwire by ~4×. Treat the decoupling refactor as a prerequisite, not a follow-up — without it, Phase 5 ships a 56-stub parallel implementation that defeats the purpose of having a tripwire.
 - Phase 6 (guards + docs) lands incrementally as each preceding phase merges — don't batch the purity guard until the end.
