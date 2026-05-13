@@ -185,7 +185,6 @@ all: sample
 FORCE:
 
 SRCS = \
-	audio.c \
 	cmd_format.c \
 	prof.c \
 	sample.c \
