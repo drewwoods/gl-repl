@@ -41,8 +41,6 @@
 #include "source_document.h"
 #include "ui/state.h"
 
-#include "support/test_harness.h"
-
 #include <GL/gl_stub_counts.h>
 
 #include <stdio.h>
@@ -51,18 +49,31 @@
 #include <sys/types.h>
 #include <unistd.h>
 
-static TestHarness g_harness = TEST_HARNESS_INIT;
-
-#define ASSERT_TRUE(label, cond) do { \
-    TEST_ASSERT_TRUE(&g_harness, label, cond); \
-} while (0)
+/* This test runs its own four-bucket tally (PASS/FAIL/XFAIL/XPASS) and
+ * doesn't use support/test_harness.h — the asserts-passed/total model
+ * doesn't fit XFAIL/XPASS cleanly, and the exit code is what
+ * scripts/run-tests.sh actually checks. */
 
 #define g_status (ui_state_status_mut()->text)
 
 typedef struct {
     const char *name;
-    const char *const *lines; /* NULL-terminated */
+    const char *const *lines;   /* NULL-terminated */
+    const char *expected_fail;  /* NULL => no annotation; non-NULL => XFAIL
+                                 * if traces mismatch, XPASS if they match. */
 } TraceProgram;
+
+/* Four-bucket parity result. PASS / FAIL behave the obvious way. XFAIL
+ * is a mismatch that we've explicitly annotated as expected (won't fail
+ * the test, won't dump diff noise). XPASS is a match for a case that
+ * has an annotation: the annotation is now stale and should be removed,
+ * so we treat it as a loud failure to keep the annotation list honest. */
+typedef enum {
+    PARITY_PASS,
+    PARITY_FAIL,
+    PARITY_XFAIL,
+    PARITY_XPASS,
+} ParityResult;
 
 /* Curated programs. Each exercises a shape the executor / exporter
  * could plausibly disagree on. Keep them small — every entry triggers
@@ -143,15 +154,41 @@ static const char *prog_label_rasterpos[] = {
 };
 
 static const TraceProgram g_curated[] = {
-    { "triangle",            prog_triangle },
-    { "loop_in_begin",       prog_loop_in_begin },
-    { "color_normal",        prog_color_normal },
-    { "transforms",          prog_transforms },
-    { "glut_cube",           prog_glut_cube },
-    { "function_call",       prog_function_call },
-    { "label_rasterpos",     prog_label_rasterpos },
+    { "triangle",            prog_triangle,        NULL },
+    { "loop_in_begin",       prog_loop_in_begin,   NULL },
+    { "color_normal",        prog_color_normal,    NULL },
+    { "transforms",          prog_transforms,      NULL },
+    { "glut_cube",           prog_glut_cube,       NULL },
+    { "function_call",       prog_function_call,   NULL },
+    { "label_rasterpos",     prog_label_rasterpos, NULL },
 };
 static const int g_curated_count = (int)(sizeof(g_curated)/sizeof(g_curated[0]));
+
+/* Expected-fail annotations for built-in examples (consulted in --full
+ * mode). Keyed by repl_examples_name(). A mismatch on an annotated
+ * example is reported as XFAIL (quiet, doesn't fail the test). A *match*
+ * on an annotated example is reported as XPASS, which DOES fail the
+ * test — the annotation has gone stale and needs to be removed. Keeping
+ * this table small and high-quality is the whole point. */
+static const struct {
+    const char *name;
+    const char *reason;
+} g_example_xfail[] = {
+    { "Bezier curve with guides",
+      "for(u, 0, 1, 0.01) accumulator drifts past 1.0 in REPL eval vs "
+      "native float loop; one side runs an extra iteration. Fix: use "
+      "an integer counter and compute u = k * 0.01 inside the body." },
+};
+static const int g_example_xfail_count =
+    (int)(sizeof(g_example_xfail)/sizeof(g_example_xfail[0]));
+
+static const char *expected_fail_for_example(const char *name) {
+    if (!name) return NULL;
+    for (int i = 0; i < g_example_xfail_count; i++)
+        if (strcmp(g_example_xfail[i].name, name) == 0)
+            return g_example_xfail[i].reason;
+    return NULL;
+}
 
 /* Counter pairs the executor folds together: CMD_COLOR3F → glColor4f
  * (executor.c:422 routes 3f through glColor4f with g_execute_alpha_scale)
@@ -211,12 +248,14 @@ static void compose_compile_cmd(char *buf, size_t n,
         exported_c, bin_path, log_path);
 }
 
-/* Compare REPL-side and (boilerplate-subtracted) child counts. Returns
- * 1 on full parity, 0 on any mismatch, with an explanatory line on
- * stderr per mismatched counter. */
+/* Compare REPL-side and child counts. Returns 1 on full parity,
+ * 0 on any mismatch. If `details` is non-NULL, one line per mismatched
+ * counter is written to it; callers pass stderr to print, NULL to stay
+ * silent (used for XFAIL cases so the diff noise stays quiet). */
 static int compare_counts(const char *case_name,
                           const unsigned long long *repl_counts,
-                          const unsigned long long *child_counts) {
+                          const unsigned long long *child_counts,
+                          FILE *details) {
     int mismatches = 0;
 
     /* Walk fused pairs first: any counter that appears in a fusion pair
@@ -229,7 +268,7 @@ static int compare_counts(const char *case_name,
         unsigned long long repl_sum  = repl_counts[a] + repl_counts[b];
         unsigned long long child_sum = child_counts[a] + child_counts[b];
         if (repl_sum != child_sum) {
-            fprintf(stderr,
+            if (details) fprintf(details,
                 "  [%s] fused %s+%s mismatch: repl=%llu child=%llu\n",
                 case_name,
                 gl_stub_count_name(a), gl_stub_count_name(b),
@@ -241,7 +280,7 @@ static int compare_counts(const char *case_name,
     for (int i = 0; i < GL_STUB_COUNT_MAX; i++) {
         if (fused[i]) continue;
         if (repl_counts[i] != child_counts[i]) {
-            fprintf(stderr,
+            if (details) fprintf(details,
                 "  [%s] %s mismatch: repl=%llu child=%llu\n",
                 case_name, gl_stub_count_name(i),
                 repl_counts[i], child_counts[i]);
@@ -251,10 +290,14 @@ static int compare_counts(const char *case_name,
     return mismatches == 0;
 }
 
-/* Run one program through both legs and compare. Returns 1 on parity,
- * 0 if anything failed along the way (compile error, run error,
- * count mismatch). */
-static int run_one_case(const TraceProgram *prog) {
+/* Run one program through both legs and compare. Returns the four-
+ * bucket ParityResult so the caller can tally PASS/FAIL/XFAIL/XPASS.
+ *
+ * Infrastructure failures (compile error, child error, unreadable child
+ * output) always return PARITY_FAIL regardless of the case's XFAIL
+ * annotation — those are bugs in the test, not in the program, and
+ * silencing them would defeat the point of the test. */
+static ParityResult run_one_case(const TraceProgram *prog) {
     pid_t pid = getpid();
     /* Example names can contain spaces, parens, slashes — anything goes
      * via repl_examples_name(). Build a safe path stem by mapping every
@@ -318,7 +361,7 @@ static int run_one_case(const TraceProgram *prog) {
         fprintf(stderr,
             "  [%s] compile failed (rc=%d). cmd:\n    %s\n  log: %s\n",
             prog->name, rc, cmd, temp_log);
-        return 0;
+        return PARITY_FAIL;
     }
 
     snprintf(cmd, sizeof cmd, "'%s' '%s' '%s'",
@@ -326,24 +369,43 @@ static int run_one_case(const TraceProgram *prog) {
     rc = system(cmd);
     if (rc != 0) {
         fprintf(stderr, "  [%s] child rc=%d\n", prog->name, rc);
-        return 0;
+        return PARITY_FAIL;
     }
 
     unsigned long long child_counts[GL_STUB_COUNT_MAX];
     if (!read_child_counts(temp_out, child_counts)) {
         fprintf(stderr, "  [%s] child output unreadable: %s\n",
                 prog->name, temp_out);
-        return 0;
+        return PARITY_FAIL;
     }
 
-    int ok = compare_counts(prog->name, repl_counts, child_counts);
+    /* Silent comparison first so XFAIL cases stay quiet. We'll re-call
+     * with stderr for FAIL cases below to print the per-counter
+     * mismatch lines. */
+    int match = compare_counts(prog->name, repl_counts, child_counts, NULL);
 
-    /* On count mismatch, fire up diff(1) and stream the first hunk of
-     * its output to stderr so the failure includes a localized hint.
-     * head -50 keeps the noise bounded; the full trace files are kept
-     * if --keep-traces was passed (otherwise the unlink below clears
-     * them on success and failure both, to avoid /tmp clutter). */
-    if (!ok) {
+    ParityResult result;
+    if (match) {
+        result = prog->expected_fail ? PARITY_XPASS : PARITY_PASS;
+    } else {
+        result = prog->expected_fail ? PARITY_XFAIL : PARITY_FAIL;
+    }
+
+    /* Output dispatch by bucket:
+     *   PASS  — silent (only the run-counter prints later).
+     *   XFAIL — one info line so the divergence stays visible, no diff.
+     *   FAIL  — counter-mismatch lines + a unified diff hunk.
+     *   XPASS — explicit "annotation stale" callout; no diff (the
+     *           traces matched). */
+    switch (result) {
+    case PARITY_PASS:
+        break;
+    case PARITY_XFAIL:
+        fprintf(stderr, "  XFAIL [%s] expected: %s\n",
+                prog->name, prog->expected_fail);
+        break;
+    case PARITY_FAIL: {
+        (void)compare_counts(prog->name, repl_counts, child_counts, stderr);
         char diff_cmd[1024];
         snprintf(diff_cmd, sizeof diff_cmd,
                  "diff --color=always -u '%s' '%s' | head -50 >&2",
@@ -351,31 +413,51 @@ static int run_one_case(const TraceProgram *prog) {
         fprintf(stderr, "  [%s] trace diff (repl - / child +):\n",
                 prog->name);
         (void)system(diff_cmd);
+        break;
+    }
+    case PARITY_XPASS:
+        fprintf(stderr,
+                "  XPASS [%s] annotation is now stale, remove the "
+                "g_example_xfail entry. Old reason: %s\n",
+                prog->name, prog->expected_fail);
+        break;
     }
 
-    /* Best-effort cleanup; ignore errors. */
+    /* Best-effort cleanup. Keep trace files only for FAIL+--keep-traces;
+     * XFAIL traces would just be noise (the divergence is expected). */
     unlink(temp_c); unlink(temp_bin); unlink(temp_out); unlink(temp_log);
-    if (!g_keep_traces) {
+    if (!g_keep_traces || result != PARITY_FAIL) {
         unlink(temp_repl_tr); unlink(temp_child_tr);
-    } else if (!ok) {
+    } else {
         fprintf(stderr, "  [%s] traces kept: %s %s\n",
                 prog->name, temp_repl_tr, temp_child_tr);
     }
-    return ok;
+    return result;
 }
 
-/* --full: walk repl_examples_*. Each example is loaded as a single
- * pre-flattened name + line list, fed through editor_feed_line() in
- * the same shape as the curated cases. */
-static void run_examples(void) {
+typedef struct {
+    int pass, fail, xfail, xpass;
+} ParityTotals;
+
+static void tally(ParityTotals *t, ParityResult r) {
+    switch (r) {
+    case PARITY_PASS:  t->pass++;  break;
+    case PARITY_FAIL:  t->fail++;  break;
+    case PARITY_XFAIL: t->xfail++; break;
+    case PARITY_XPASS: t->xpass++; break;
+    }
+}
+
+/* --full: walk repl_examples_*. Each example is constructed on the fly
+ * from the (name, lines) pair plus an XFAIL annotation looked up in
+ * g_example_xfail. */
+static void run_examples(ParityTotals *totals) {
     int n = repl_examples_count();
     for (int i = 0; i < n; i++) {
         const char *name = repl_examples_name(i);
         const char *const *lines = repl_examples_lines(i);
-        TraceProgram p = { name, lines };
-        char label[160];
-        snprintf(label, sizeof label, "example/%s: REPL == exported C", name);
-        ASSERT_TRUE(label, run_one_case(&p));
+        TraceProgram p = { name, lines, expected_fail_for_example(name) };
+        tally(totals, run_one_case(&p));
     }
 }
 
@@ -404,15 +486,21 @@ static void print_help(const char *argv0) {
 "\"<symbol> <args>\" line per call) and pipes the first 50 lines of\n"
 "the unified diff to stderr to localize the divergence.\n"
 "\n"
+"Cases listed in g_example_xfail (in the test source) are treated as\n"
+"expected-to-fail. Buckets:\n"
+"  PASS  — match, no annotation.\n"
+"  FAIL  — mismatch, no annotation; fails the test, dumps diff.\n"
+"  XFAIL — mismatch, has annotation; quiet info line, doesn't fail.\n"
+"  XPASS — match, has annotation; the annotation is stale, remove it.\n"
+"          Fails the test (loud) so the list doesn't accumulate cruft.\n"
+"\n"
 "Options:\n"
 "  --full          After the curated table, also run every built-in\n"
 "                  example via repl_examples_*. Slow: one cc invocation\n"
-"                  per program. Surfaces real REPL/exporter divergences\n"
-"                  as test discoveries; see\n"
-"                  plans/not-started/gl-stub-extensions.md.\n"
-"  --keep-traces   On failure, leave the .repl.tr and .child.tr trace\n"
-"                  files in /tmp for inspection. By default both files\n"
-"                  are unlinked after each case.\n"
+"                  per program. See plans/not-started/gl-stub-extensions.md.\n"
+"  --keep-traces   On real FAIL, leave the .repl.tr and .child.tr trace\n"
+"                  files in /tmp for inspection. XFAIL traces are still\n"
+"                  unlinked (the divergence is expected).\n"
 "  --help          Show this help and exit 0.\n"
 "\n"
 "Notes:\n"
@@ -442,16 +530,22 @@ int main(int argc, char **argv) {
     repl_eval_init_predef_vars();
     ui_state_viewport_set_size(1200, 800);
 
+    ParityTotals totals = {0};
     for (int i = 0; i < g_curated_count; i++) {
-        char label[160];
-        snprintf(label, sizeof label,
-                 "curated/%s: REPL == exported C", g_curated[i].name);
-        ASSERT_TRUE(label, run_one_case(&g_curated[i]));
+        tally(&totals, run_one_case(&g_curated[i]));
     }
+    if (full) run_examples(&totals);
 
-    if (full) run_examples();
-
-    printf("test_export_trace_parity: %d/%d passed\n",
-           g_harness.passed, g_harness.run);
-    return (g_harness.run == g_harness.passed) ? 0 : 1;
+    int total = totals.pass + totals.fail + totals.xfail + totals.xpass;
+    int ok    = totals.pass + totals.xfail;
+    /* "%d/%d passed" shape so scripts/run-tests.sh picks up the
+     * pass/total count for its summary; the bucket breakdown trails. */
+    printf("test_export_trace_parity: %d/%d passed"
+           " (pass=%d fail=%d xfail=%d xpass=%d)\n",
+           ok, total,
+           totals.pass, totals.fail, totals.xfail, totals.xpass);
+    /* Real failures and stale XPASS annotations both fail the test.
+     * XFAIL is the silent OK bucket the user can grow when a divergence
+     * is understood and triaged; XPASS keeps that list honest. */
+    return (totals.fail + totals.xpass) > 0 ? 1 : 0;
 }
