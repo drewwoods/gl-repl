@@ -974,6 +974,16 @@ int repl_eval_parse_exprs(const char *s, float *out, int max,
     return n;
 }
 
+const char *repl_scan_next_arg_delim(const char *s) {
+    int depth = 0;
+    while (*s && (depth > 0 || (*s != ',' && *s != ')'))) {
+        if (*s == '(') depth++;
+        else if (*s == ')') depth--;
+        s++;
+    }
+    return s;
+}
+
 /* ========================================================================= */
 /* Expression translation: REPL <-> C                                         */
 /* ========================================================================= */

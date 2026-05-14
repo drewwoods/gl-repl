@@ -989,6 +989,79 @@ static void run_tests(void) {
         set_predef("x", 0.0f);
     }
 
+    /* ---- repl_scan_next_arg_delim ----
+     *
+     * Paren-aware delimiter scan: finds the next top-level `,` or `)`,
+     * skipping over nested `(...)`. Locks down the helper's contract so
+     * any future callers that lift it for new arg-parsing inherit a
+     * tested predicate. */
+    {
+        printf("\n--- repl_scan_next_arg_delim ---\n");
+
+        /* Trivial: empty input → returns the terminator. */
+        {
+            const char *s = "";
+            const char *r = repl_scan_next_arg_delim(s);
+            TEST_ASSERT_TRUE(&g_harness, "scan: empty → '\\0'", *r == '\0');
+        }
+
+        /* Flat args: stops at the first top-level comma. */
+        {
+            const char *s = "1, 2, 3)";
+            const char *r = repl_scan_next_arg_delim(s);
+            TEST_ASSERT_TRUE(&g_harness, "scan: flat → first ','", *r == ',');
+            TEST_ASSERT_TRUE(&g_harness, "scan: flat: r points at ','",
+                             (r - s) == 1);
+        }
+
+        /* Nested call: comma inside (...) is NOT a delimiter. */
+        {
+            const char *s = "cos(i*TAU + phase)*r, sin(j)*r, 0)";
+            const char *r = repl_scan_next_arg_delim(s);
+            TEST_ASSERT_TRUE(&g_harness, "scan: nested cos(): stops at top ','",
+                             *r == ',');
+            /* The top-level comma is right after "*r" — index 20. */
+            TEST_ASSERT_TRUE(&g_harness, "scan: nested cos(): correct position",
+                             (r - s) == 20);
+        }
+
+        /* Multiple nested parens: also handled. */
+        {
+            const char *s = "func0((a, b), (c, d)), more)";
+            const char *r = repl_scan_next_arg_delim(s);
+            TEST_ASSERT_TRUE(&g_harness, "scan: deep nesting: stops at top ','",
+                             *r == ',');
+            TEST_ASSERT_TRUE(&g_harness, "scan: deep nesting: correct position",
+                             (r - s) == 21);
+        }
+
+        /* Top-level close paren ends the scan. */
+        {
+            const char *s = "cos(i) + 1)";
+            const char *r = repl_scan_next_arg_delim(s);
+            TEST_ASSERT_TRUE(&g_harness, "scan: ends at top ')'", *r == ')');
+            TEST_ASSERT_TRUE(&g_harness, "scan: ')' at correct position",
+                             (r - s) == 10);
+        }
+
+        /* No delimiter: walks to end-of-string. */
+        {
+            const char *s = "0.5 + 1";
+            const char *r = repl_scan_next_arg_delim(s);
+            TEST_ASSERT_TRUE(&g_harness, "scan: no delim → '\\0'", *r == '\0');
+        }
+
+        /* Unbalanced open paren: walks to end-of-string instead of
+         * matching a top-level delim. Defensive: malformed input
+         * shouldn't loop forever. */
+        {
+            const char *s = "max(1, 2";
+            const char *r = repl_scan_next_arg_delim(s);
+            TEST_ASSERT_TRUE(&g_harness, "scan: unbalanced '(' → '\\0'",
+                             *r == '\0');
+        }
+    }
+
     /* ---- Summary ---- */
     printf("\n%d / %d tests passed", g_harness.passed, g_harness.run);
     if (g_harness.passed == g_harness.run)
