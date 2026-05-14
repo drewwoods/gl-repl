@@ -715,36 +715,48 @@ typedef struct {
     int                       early_stop;
 } CursorGuideRenderCtx;
 
+/* Return a copy of `snapshot` with vertex_args overridden by the cursor
+ * flat cmd's already-evaluated args when that cmd is a vertex command.
+ *
+ * Why: the snapshot's vertex_args are parsed from the input text via a
+ * predef-only evaluator, which can't resolve function-local parameters
+ * (e.g. `scale`, `phase` from `funcN(scale, phase)`). On a cursor inside
+ * a funcN body, those args silently evaluate to 0, so a guide drawn from
+ * them lands at the local origin — visually the *center* of the
+ * transformed object rather than the vertex the user is editing.
+ *
+ * Flatten has already substituted the funcN parameters and evaluated the
+ * expressions, so `flat->args[0..2]` are the real numeric position. The
+ * helper is pure — no GL state, no side effects — to keep
+ * `on_cmd_render_cursor_guides` testable in isolation. */
+static SceneGuideSnapshot
+cursor_guide_snapshot_with_flat_args(const SceneGuideSnapshot *snapshot,
+                                     const GLCmd *flat) {
+    SceneGuideSnapshot snap = *snapshot;
+    if (flat && (flat->type == CMD_VERTEX3F ||
+                 flat->type == CMD_VERTEX2F ||
+                 flat->type == CMD_TESS_VERTEX)) {
+        snap.vertex_args[0] = flat->args[0];
+        snap.vertex_args[1] = flat->args[1];
+        snap.vertex_args[2] = (flat->type == CMD_VERTEX2F) ? 0.0f
+                                                           : flat->args[2];
+    }
+    return snap;
+}
+
 static void on_cmd_render_cursor_guides(const ReplVertexWalkState *state,
                                          void *user) {
     CursorGuideRenderCtx *ctx = (CursorGuideRenderCtx *)user;
     int is_cursor = (state->src_cmd_idx == ctx->snapshot->edit_line_idx);
 
     if (is_cursor && !ctx->geometry_guide_done && !ctx->snapshot->replaying) {
-        /* The snapshot's vertex_args were parsed from the input text via
-         * a predef-only evaluator, which can't resolve function-local
-         * parameters (e.g. `scale`, `phase` from `funcN(scale, phase)`).
-         * For a cursor on a vertex line inside a funcN body, those args
-         * silently evaluate to 0, so the guide gets drawn at the local
-         * origin — which visually sits at the *center* of the
-         * transformed object, not at the vertex the user is editing.
-         *
-         * Override with the flat cmd's already-evaluated args: flatten
-         * substitutes the funcN parameters before evaluating, so cmd
-         * args carry the real numeric position. */
-        SceneGuideSnapshot snap = *ctx->snapshot;
-        const GLCmd *flat = (state->flat_cmd_idx >= 0 &&
-                             state->flat_cmd_idx < snap.flat_program.cmd_count)
-                          ? &snap.flat_program.cmds[state->flat_cmd_idx]
-                          : NULL;
-        if (flat && (flat->type == CMD_VERTEX3F ||
-                     flat->type == CMD_VERTEX2F ||
-                     flat->type == CMD_TESS_VERTEX)) {
-            snap.vertex_args[0] = flat->args[0];
-            snap.vertex_args[1] = flat->args[1];
-            snap.vertex_args[2] = (flat->type == CMD_VERTEX2F) ? 0.0f
-                                                               : flat->args[2];
-        }
+        const GLCmd *flat =
+            (state->flat_cmd_idx >= 0 &&
+             state->flat_cmd_idx < ctx->snapshot->flat_program.cmd_count)
+              ? &ctx->snapshot->flat_program.cmds[state->flat_cmd_idx]
+              : NULL;
+        SceneGuideSnapshot snap =
+            cursor_guide_snapshot_with_flat_args(ctx->snapshot, flat);
         geometry_guides_render_for_cursor(&snap);
         ctx->geometry_guide_done = 1;
     }

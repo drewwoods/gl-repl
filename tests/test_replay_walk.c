@@ -1,0 +1,419 @@
+/*
+ * test_replay_walk.c - regression tests for replay_walk_user_vertices.
+ *
+ * These tests guard the invariants the cursor-edit-guide stack depends
+ * on:
+ *
+ *   1. The walker fires `on_each_cmd` at the cursor's first flat
+ *      occurrence even when no transform guide is active. Earlier a
+ *      fast-path in glr_ctrl_render_cursor_guides skipped the walk in
+ *      that case, so the geometry guide ran with the caller's
+ *      (un-transformed) modelview — guide marker landed at world
+ *      origin instead of at the vertex.
+ *
+ *   2. The flat command's `args[]` carry the *evaluated* coordinates
+ *      after funcN inlining (with the call site's parameter values
+ *      substituted in). The cursor-guide fix overrides the input-text
+ *      snapshot args with these, which is only correct if the flat
+ *      args are real numeric positions, not zeros.
+ *
+ *   3. ctx->stop_flag halts the walker. The cursor-guide path uses
+ *      stop_flag to bail out as soon as both guides have rendered, so
+ *      a regression in stop_flag would silently re-introduce the
+ *      O(flat_count) walk every frame.
+ *
+ * The walker calls glPushMatrix / glTranslatef directly, so this test
+ * needs the no-op GL stubs — it lives under the USE_GL_STUBS=1 gate in
+ * the Makefile.
+ */
+#include "app/glr_ctrl.h"
+#include "repl/core.h"
+#include "repl/state_owners.h"
+#include "widgets/replay.h"
+#include "support/test_harness.h"
+
+#include <stdio.h>
+#include <string.h>
+
+/* Pulled in as a translation unit so we can call the static
+ * cursor_guide_snapshot_with_flat_args helper directly. Same pattern
+ * used by tests/test_glr_ctrl.c. */
+#include "app/glr_ctrl.c"
+
+static TestHarness g_harness = TEST_HARNESS_INIT;
+
+#define ASSERT_TRUE(label, cond)    TEST_ASSERT_TRUE(&g_harness, label, cond)
+#define ASSERT_INT(label, got, exp) TEST_ASSERT_INT(&g_harness, label, got, exp)
+#define ASSERT_NEAR(label, got, exp) \
+    TEST_ASSERT_FLOAT_DEFAULT(&g_harness, label, got, exp)
+
+#define MAX_RECORDED 64
+
+typedef struct {
+    int   flat_idx;
+    int   src_idx;
+    float args[3];
+} RecordedCmd;
+
+typedef struct {
+    /* Records every flat cmd whose src_cmd_idx matches edit_line_idx,
+     * so we can verify the walker reaches the cursor and the args it
+     * sees come from the flatten-time evaluation. */
+    RecordedCmd cursor_hits[MAX_RECORDED];
+    int         cursor_hit_count;
+
+    /* Total cb fires (for stop_flag regression). */
+    int cmd_visits;
+    int vertex_visits;
+
+    /* Optional: set by on_each_cmd to test early-stop. */
+    int   *stop_after_first_cursor;
+    int    edit_line_idx;
+} Recorder;
+
+static void on_each_cmd_record(const ReplVertexWalkState *state, void *user) {
+    Recorder *rec = (Recorder *)user;
+    rec->cmd_visits++;
+    if (state->src_cmd_idx == rec->edit_line_idx) {
+        if (rec->cursor_hit_count < MAX_RECORDED) {
+            RecordedCmd *r = &rec->cursor_hits[rec->cursor_hit_count++];
+            r->flat_idx = state->flat_cmd_idx;
+            r->src_idx  = state->src_cmd_idx;
+            /* args copied below in on_vertex (or filled in by caller via
+             * the flat program directly). */
+            r->args[0] = r->args[1] = r->args[2] = 0.0f;
+        }
+        if (rec->stop_after_first_cursor)
+            *rec->stop_after_first_cursor = 1;
+    }
+}
+
+static void on_vertex_record(const ReplVertexWalkState *state,
+                             float vx, float vy, float vz, void *user) {
+    Recorder *rec = (Recorder *)user;
+    rec->vertex_visits++;
+    if (state->src_cmd_idx == rec->edit_line_idx &&
+        rec->cursor_hit_count > 0) {
+        RecordedCmd *r = &rec->cursor_hits[rec->cursor_hit_count - 1];
+        r->args[0] = vx; r->args[1] = vy; r->args[2] = vz;
+    }
+}
+
+static ReplVertexWalkContext make_ctx(int edit_line_idx) {
+    ReplVertexWalkContext ctx = {
+        .program             = repl_state_flat_program_view(),
+        .edit_line_idx       = edit_line_idx,
+        .cursor_block_begin  = -1,
+        .cursor_block_end    = -1,
+        .selected_block_only = 0,
+        .stop_flag           = NULL,
+    };
+    return ctx;
+}
+
+/* Locate the source-line index of the (commit-sequence-th) commit
+ * matching `prefix`. Lets the tests resolve the cursor line without
+ * hard-coding indices that change as the program grows. */
+static int find_source_line(const char *prefix) {
+    const GLCmd *cmds = repl_state_document_cmds();
+    int count = repl_state_document_count();
+    for (int i = 0; i < count; i++) {
+        if (!cmds[i].valid) continue;
+        /* The document doesn't expose the original text directly here;
+         * fall back to matching by cmd type for our cases. */
+        (void)prefix;
+        if (cmds[i].type == CMD_VERTEX3F) return i;
+    }
+    return -1;
+}
+
+/* --- 1. Walker reaches cursor flat-idx with funcN-substituted args -----
+ *
+ * Program shape:
+ *
+ *   func0(s, p){ glBegin(GL_TRIANGLES); glVertex3f(s, p, 0); glEnd(); }
+ *   glPushMatrix();
+ *   glTranslatef(-2, 0, 0);
+ *   func0(0.5, 0.25);
+ *   glPopMatrix();
+ *   glPushMatrix();
+ *   glTranslatef(2, 0, 0);
+ *   func0(0.75, -0.4);
+ *   glPopMatrix();
+ *
+ * Putting the cursor on `glVertex3f(s, p, 0)` (a line inside func0
+ * that references function-local params), the walker should reach
+ * the flat cmd at *each* call site with args carrying the
+ * call-site's substituted values:
+ *
+ *   call A: args = (0.5, 0.25, 0)
+ *   call B: args = (0.75, -0.4, 0)
+ *
+ * If those came back as (0, 0, 0) — which is what the input-text
+ * parser produces for funcN locals — the cursor guide would render
+ * at the local origin and we'd be back in the bug.
+ */
+static void test_walker_resolves_funcn_args_at_cursor(void) {
+    glr_app_reset_all();
+    editor_feed_line("func0(s, p){");
+    editor_feed_line("glBegin(GL_TRIANGLES);");
+    editor_feed_line("glVertex3f(s, p, 0);");
+    editor_feed_line("glEnd();");
+    editor_feed_line("}");
+    editor_feed_line("glPushMatrix();");
+    editor_feed_line("glTranslatef(-2, 0, 0);");
+    editor_feed_line("func0(0.5, 0.25);");
+    editor_feed_line("glPopMatrix();");
+    editor_feed_line("glPushMatrix();");
+    editor_feed_line("glTranslatef(2, 0, 0);");
+    editor_feed_line("func0(0.75, -0.4);");
+    editor_feed_line("glPopMatrix();");
+
+    repl_state_mark_flat_dirty();
+    repl_flatten_commands();
+
+    int cursor_line = find_source_line("glVertex3f");
+    ASSERT_TRUE("found a CMD_VERTEX3F to use as cursor", cursor_line >= 0);
+    repl_state_edit_line_set(cursor_line);
+
+    Recorder rec = {0};
+    rec.edit_line_idx = cursor_line;
+
+    static const ReplVertexWalkCallbacks cb = {
+        .on_each_cmd = on_each_cmd_record,
+        .on_vertex   = on_vertex_record,
+    };
+    ReplVertexWalkContext ctx = make_ctx(cursor_line);
+    replay_walk_user_vertices(&ctx, &cb, &rec);
+
+    ASSERT_INT("walker reaches cursor at both call sites",
+               rec.cursor_hit_count, 2);
+    /* Call A: glTranslatef(-2,0,0) then func0(0.5, 0.25) → args (0.5, 0.25, 0). */
+    ASSERT_NEAR("call A: cursor flat-cmd args[0] (= scale)",
+                rec.cursor_hits[0].args[0], 0.5f);
+    ASSERT_NEAR("call A: cursor flat-cmd args[1] (= phase)",
+                rec.cursor_hits[0].args[1], 0.25f);
+    ASSERT_NEAR("call A: cursor flat-cmd args[2]",
+                rec.cursor_hits[0].args[2], 0.0f);
+    /* Call B: func0(0.75, -0.4) → args (0.75, -0.4, 0). */
+    ASSERT_NEAR("call B: cursor flat-cmd args[0] (= scale)",
+                rec.cursor_hits[1].args[0], 0.75f);
+    ASSERT_NEAR("call B: cursor flat-cmd args[1] (= phase)",
+                rec.cursor_hits[1].args[1], -0.4f);
+
+    /* Crucial regression guard: if the cursor-guide path ever falls
+     * back to the predef-only text parser for vertex args, those args
+     * collapse to (0,0,0). Assert nonzero magnitude. */
+    ASSERT_TRUE("flat args carry resolved funcN params, not zero",
+                rec.cursor_hits[0].args[0] != 0.0f &&
+                rec.cursor_hits[1].args[0] != 0.0f);
+}
+
+/* --- 2. on_each_cmd fires at cursor even with no transform guide -------
+ *
+ * Guards the 23c9e1a fast-path regression: a program with no transform
+ * cursor and no replay would previously short-circuit the walker.
+ * The cursor-guide path now always walks, so on_each_cmd MUST fire at
+ * the cursor's flat-cmd index.
+ */
+static void test_walker_fires_on_each_cmd_at_cursor(void) {
+    glr_app_reset_all();
+    editor_feed_line("glPushMatrix();");
+    editor_feed_line("glTranslatef(1, 2, 3);");
+    editor_feed_line("glBegin(GL_TRIANGLES);");
+    editor_feed_line("glVertex3f(0.5, 0.5, 0);");
+    editor_feed_line("glVertex3f(0.7, 0.7, 0);");
+    editor_feed_line("glVertex3f(0.9, 0.9, 0);");
+    editor_feed_line("glEnd();");
+    editor_feed_line("glPopMatrix();");
+
+    repl_state_mark_flat_dirty();
+    repl_flatten_commands();
+
+    int cursor_line = find_source_line("glVertex3f");
+    ASSERT_TRUE("found cursor line", cursor_line >= 0);
+    repl_state_edit_line_set(cursor_line);
+
+    Recorder rec = {0};
+    rec.edit_line_idx = cursor_line;
+
+    static const ReplVertexWalkCallbacks cb = {
+        .on_each_cmd = on_each_cmd_record,
+        .on_vertex   = on_vertex_record,
+    };
+    ReplVertexWalkContext ctx = make_ctx(cursor_line);
+    replay_walk_user_vertices(&ctx, &cb, &rec);
+
+    ASSERT_TRUE("on_each_cmd fires at least once for cursor src",
+                rec.cursor_hit_count >= 1);
+    ASSERT_NEAR("cursor flat-cmd args[0] preserved",
+                rec.cursor_hits[0].args[0], 0.5f);
+    ASSERT_NEAR("cursor flat-cmd args[1] preserved",
+                rec.cursor_hits[0].args[1], 0.5f);
+}
+
+/* --- 3. stop_flag halts the walker -------------------------------------
+ *
+ * Two sub-cases:
+ *   (a) Pre-set stop_flag: walker exits after at most one on_each_cmd
+ *       fire, with no vertex visits.
+ *   (b) on_each_cmd sets stop_flag when it hits the cursor: walker
+ *       does NOT continue past the cursor flat-cmd.
+ *
+ * The cursor-guide path uses pattern (b) so a regression in stop_flag
+ * would silently restore the O(flat_count) walk every frame.
+ */
+static void test_walker_stop_flag_halts(void) {
+    glr_app_reset_all();
+    editor_feed_line("glPushMatrix();");
+    editor_feed_line("glTranslatef(0, 1, 0);");
+    editor_feed_line("glBegin(GL_TRIANGLES);");
+    editor_feed_line("glVertex3f(0.1, 0.2, 0);");
+    editor_feed_line("glVertex3f(0.3, 0.4, 0);");
+    editor_feed_line("glVertex3f(0.5, 0.6, 0);");
+    editor_feed_line("glEnd();");
+    editor_feed_line("glPopMatrix();");
+
+    repl_state_mark_flat_dirty();
+    repl_flatten_commands();
+
+    int cursor_line = find_source_line("glVertex3f");
+    ASSERT_TRUE("found cursor line", cursor_line >= 0);
+    repl_state_edit_line_set(cursor_line);
+
+    static const ReplVertexWalkCallbacks cb = {
+        .on_each_cmd = on_each_cmd_record,
+        .on_vertex   = on_vertex_record,
+    };
+
+    /* Baseline: no stop_flag → walker emits all three vertices. */
+    Recorder rec_full = { .edit_line_idx = cursor_line };
+    ReplVertexWalkContext ctx_full = make_ctx(cursor_line);
+    replay_walk_user_vertices(&ctx_full, &cb, &rec_full);
+    ASSERT_INT("baseline: walker emits all 3 vertices",
+               rec_full.vertex_visits, 3);
+
+    /* (a) Pre-set stop_flag=1: walker breaks before doing any work. */
+    int stop = 1;
+    Recorder rec_pre = { .edit_line_idx = cursor_line };
+    ReplVertexWalkContext ctx_pre = make_ctx(cursor_line);
+    ctx_pre.stop_flag = &stop;
+    replay_walk_user_vertices(&ctx_pre, &cb, &rec_pre);
+    ASSERT_INT("stop_flag=1 emits zero vertices",
+               rec_pre.vertex_visits, 0);
+    ASSERT_TRUE("stop_flag=1 fires on_each_cmd at most once",
+                rec_pre.cmd_visits <= 1);
+
+    /* (b) on_each_cmd sets stop_flag once it sees the cursor. The
+     * walker should stop emitting vertices from THAT POINT onward
+     * (vertices before the cursor in the flat program may still have
+     * fired, but vertices AFTER the cursor should not). */
+    int stop_b = 0;
+    Recorder rec_b = { .edit_line_idx = cursor_line,
+                       .stop_after_first_cursor = &stop_b };
+    ReplVertexWalkContext ctx_b = make_ctx(cursor_line);
+    ctx_b.stop_flag = &stop_b;
+    replay_walk_user_vertices(&ctx_b, &cb, &rec_b);
+
+    ASSERT_TRUE("dynamic stop_flag fires on_each_cmd at the cursor",
+                rec_b.cursor_hit_count == 1);
+    /* The first cursor hit is at the first glVertex3f; the walker
+     * stops there, so it should not have visited the later glVertex3f
+     * lines (vertex_visits at most 1). */
+    ASSERT_TRUE("dynamic stop_flag halts walk after cursor",
+                rec_b.vertex_visits <= 1);
+    ASSERT_TRUE("dynamic stop_flag walks fewer cmds than baseline",
+                rec_b.cmd_visits < rec_full.cmd_visits);
+}
+
+/* --- 4. cursor_guide_snapshot_with_flat_args overrides correctly -------
+ *
+ * Direct unit test of the helper that the cursor-guide path uses to
+ * fix up vertex_args before handing them to
+ * geometry_guides_render_for_cursor. This is the actual fix for the
+ * "guide rendered at object center" bug: if someone reverts the helper
+ * to just `return *snapshot`, this test fails.
+ */
+static void test_cursor_guide_snapshot_override(void) {
+    SceneGuideSnapshot base = {0};
+    base.vertex_args[0] = 0.0f;  /* what the predef-only text parser
+                                  * would write for a funcN-local
+                                  * expression like `cos(phase)*scale` */
+    base.vertex_args[1] = 0.0f;
+    base.vertex_args[2] = 0.0f;
+    base.vertex_n_filled = 3;
+    base.vertex_filled[0] = base.vertex_filled[1] = base.vertex_filled[2] = 1;
+
+    GLCmd vertex3f = {0};
+    vertex3f.type = CMD_VERTEX3F;
+    vertex3f.valid = 1;
+    vertex3f.args[0] = 0.42f;
+    vertex3f.args[1] = -0.17f;
+    vertex3f.args[2] = 0.99f;
+
+    SceneGuideSnapshot snap =
+        cursor_guide_snapshot_with_flat_args(&base, &vertex3f);
+    ASSERT_NEAR("VERTEX3F: x overridden from flat args",
+                snap.vertex_args[0], 0.42f);
+    ASSERT_NEAR("VERTEX3F: y overridden from flat args",
+                snap.vertex_args[1], -0.17f);
+    ASSERT_NEAR("VERTEX3F: z overridden from flat args",
+                snap.vertex_args[2], 0.99f);
+
+    /* VERTEX2F: z should be forced to 0 regardless of flat->args[2]. */
+    GLCmd vertex2f = {0};
+    vertex2f.type = CMD_VERTEX2F;
+    vertex2f.valid = 1;
+    vertex2f.args[0] = 0.5f;
+    vertex2f.args[1] = 0.5f;
+    vertex2f.args[2] = 9999.0f;  /* garbage; helper should ignore it */
+    SceneGuideSnapshot snap2 =
+        cursor_guide_snapshot_with_flat_args(&base, &vertex2f);
+    ASSERT_NEAR("VERTEX2F: x overridden", snap2.vertex_args[0], 0.5f);
+    ASSERT_NEAR("VERTEX2F: y overridden", snap2.vertex_args[1], 0.5f);
+    ASSERT_NEAR("VERTEX2F: z forced to 0", snap2.vertex_args[2], 0.0f);
+
+    /* TESS_VERTEX: should also pass through args (path goes through
+     * draw_vertex_guides like glVertex). */
+    GLCmd tess = {0};
+    tess.type = CMD_TESS_VERTEX;
+    tess.valid = 1;
+    tess.args[0] = -1.2f; tess.args[1] = 0.45f; tess.args[2] = -0.5f;
+    SceneGuideSnapshot snap3 =
+        cursor_guide_snapshot_with_flat_args(&base, &tess);
+    ASSERT_NEAR("TESS_VERTEX: x", snap3.vertex_args[0], -1.2f);
+    ASSERT_NEAR("TESS_VERTEX: y", snap3.vertex_args[1],  0.45f);
+    ASSERT_NEAR("TESS_VERTEX: z", snap3.vertex_args[2], -0.5f);
+
+    /* Non-vertex cmd: snapshot should pass through unchanged. */
+    GLCmd translate = {0};
+    translate.type = CMD_TRANSLATE3F;
+    translate.valid = 1;
+    translate.args[0] = 5.0f; translate.args[1] = 5.0f; translate.args[2] = 5.0f;
+    SceneGuideSnapshot snap4 =
+        cursor_guide_snapshot_with_flat_args(&base, &translate);
+    ASSERT_NEAR("non-vertex cmd: x untouched",
+                snap4.vertex_args[0], base.vertex_args[0]);
+    ASSERT_NEAR("non-vertex cmd: y untouched",
+                snap4.vertex_args[1], base.vertex_args[1]);
+    ASSERT_NEAR("non-vertex cmd: z untouched",
+                snap4.vertex_args[2], base.vertex_args[2]);
+
+    /* NULL flat (e.g. cursor flat_cmd_idx out of bounds): also a
+     * pass-through. */
+    SceneGuideSnapshot snap5 =
+        cursor_guide_snapshot_with_flat_args(&base, NULL);
+    ASSERT_NEAR("NULL flat cmd: x untouched",
+                snap5.vertex_args[0], base.vertex_args[0]);
+}
+
+int main(void) {
+    test_walker_resolves_funcn_args_at_cursor();
+    test_walker_fires_on_each_cmd_at_cursor();
+    test_walker_stop_flag_halts();
+    test_cursor_guide_snapshot_override();
+
+    printf("test_replay_walk: %d/%d passed\n",
+           g_harness.passed, g_harness.run);
+    return (g_harness.run == g_harness.passed) ? 0 : 1;
+}
