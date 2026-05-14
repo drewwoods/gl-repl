@@ -1,0 +1,180 @@
+# `src/repl/` Architectural Review — Findings & Followups
+
+## Provenance
+
+Captured 2026-05-14 from an arch-simplicity-reviewer pass over `src/repl/`.
+This document records both what the reviewer found durable (so we don't
+churn it) and the localized brittle spots worth scheduling work against.
+No rewrite is proposed; every recommended fix uses an idiom already
+present in the tree.
+
+## Durable spine — leave it alone
+
+These are the structural commitments the reviewer flagged as load-bearing
+and well-paid-for. Future changes should preserve them.
+
+- **Two-level command model (source → flat → GL).** `command.h`'s `GLCmd`
+  is a clean parse-result record — type/args/flags + provenance
+  (`src_cmd_idx`, `call_src_cmd_idx`, `func_scope_mask`) — with **no
+  source text field**. The fact that per-line text lives on
+  `EditorState` (not on `GLCmd`) is what lets `flatten.c`/`executor.c`/
+  `replay_annotations.c` take a `SourceTextView` and what lets the
+  `tools/repl_demo` binary link without the editor.
+- **Descriptor-table pattern is fully internalized.** `command_spec.c`
+  has three coherent static arrays — `k_enum_command_specs[]`,
+  `k_std_command_specs[]`, and `g_command_type_specs[CMD_TYPE_COUNT]`
+  via the `CMD_TYPE_SPEC` designated-initializer macro. Parser,
+  formatter, autocomplete provider, code-panel renderer, F1 help
+  builder, and the "valid in begin block" guard all read from it.
+  Adding `CmdSyntaxCategory` and `valid_in_begin` to the one struct
+  rather than scattering switches is the canonical extension point for
+  new commands.
+- **compile/apply purity split is enforced.** `compile.c` produces
+  `ReplCompiledChange` values; predef-var/scratch side effects are
+  represented as data (`ReplPredefOp[]`, `ReplScratchOp[]`) rather
+  than mutation. `apply.c` is strictly the dual — touches command
+  arrays only, with an explicit preflight
+  (`repl_apply_can_apply_compiled_change`) so capacity failure can't
+  half-commit. The `delete_pos`/`delete_count` + `INSERT_MANY`
+  compound-plan shape expresses "replace block" atomically without a
+  new kind enum.
+- **`command_store.c` is small (~151 lines) and stays parse-free.**
+  Pure array mechanics; the seam is honest.
+- **Owner-vs-view header split.** `state.h` / `state_views.h` /
+  `state_owners.h` plus the `check-views-no-owners` guard is the
+  cheapest possible structural barrier between read-by-value (UI,
+  scene, tests) and mutate (controller, owners). The `_mut()` suffix
+  reads cleanly.
+- **`source_scope.c` (~201 lines) is right-sized.** Prefix-depth cache,
+  indent helpers, block-end finder, plus small predicates exposed to
+  the editor (`repl_line_is_block_head`, `repl_line_is_label`,
+  `repl_range_contains_var_decl`) so the editor doesn't pattern-match
+  on `CmdType`.
+
+## Brittle spots — actionable followups
+
+Each item below is localized. None requires redesign; all three have the
+right idiom already in-tree.
+
+### 1. Split `compile.c` at the verb boundary
+
+**Problem.** `compile.c` is **1914 lines** and growing. The static
+helpers around float-decl parsing alone — `parse_float_name_list`,
+`validate_decl_names`, `format_decl_text`, `build_decl_predef_ops`,
+`build_decl_commit_message` — total ~250 lines for one command form.
+`repl_compile_toggle_comment` is at lines 1289–1473. The four
+structured-block validators (`close_brace`, `if_block`, `func_def`,
+`for_loop`) are each ~140 lines.
+
+**Proposed split.**
+- `compile_var.c` — float-decl, var-assign, set-predef.
+- `compile_block.c` — close-brace, if, func, for.
+- `compile.c` keeps the dispatcher + range/comment/empty +
+  `ReplCompiledChange` helpers.
+
+**Contract.** No public API changes. File-boundary refactor at a natural
+seam. Pure mechanical move; `make check-state-ownership` and the full
+test suite should pass unchanged.
+
+**Suggested split landings (line numbers approximate as of review):**
+~717, 816, 1289, 1487, 1540, 1648, 1794.
+
+### 2. Consolidate `core.c` sink installers into one `ReplHostEffects` bridge
+
+**Problem.** `core.c` currently exposes six function-pointer sink
+installers (`repl_install_status_sink`,
+`repl_install_example_presentation_reset_sink`,
+`repl_install_input_reset_sink`,
+`repl_install_insert_mode_off_sink`,
+`repl_install_scroll_to_line_sink`,
+`repl_install_follow_cursor_sink`) plus matching `g_*_sink` statics and
+dispatchers. Each is individually justified by demo-link isolation, but
+**collectively** they read as a callback bus — the only pattern-soup
+risk in this directory.
+
+**Proposed shape.** Collect the sinks into one `ReplHostEffects` struct
+installed in a single call, mirroring `ReplExportConfigBridge` /
+`ReplExportCameraBridge` (already in `export.h`, lines ~91–105). This
+is the **already-present** idiom for "controller installs vtable into
+pipeline" — the sinks should match it rather than invent their own
+shape.
+
+**Guardrail.** Resist adding a 7th individual `repl_install_*_sink`. If
+a 7th effect is needed, the bridge-struct consolidation becomes
+mandatory rather than optional.
+
+### 3. `export.c` split (R9 in MODULES.md)
+
+**Status.** Already an acknowledged open edge. `export.c` is **3633
+lines** — the largest file in the directory by a wide margin. Single
+TU does import + export + workspace headers + camera-line refresh +
+bootstrap init for two orchestration modes.
+
+**Not urgent.** The `ReplExportConfigBridge` / `ReplExportCameraBridge`
+pattern inside already absorbs new persisted keys without code change,
+so this split is comfort, not necessity. Defer until either (a) a third
+bridge wants to appear, or (b) editing the file becomes a friction
+point.
+
+## Smaller risks — note and watch
+
+- **`repl_compile_func_def` mutates `g_func_aliases` as a pre-step.**
+  This is the one bent purity seam in `compile.c`; it exists so
+  `parse_repl_func_signature` can map the name → slot.
+  `repl_compiled_change_rollback_alias` documents the exception. Watch
+  for a **second** case wanting the same exception — that's when to
+  formalize a "compile pre-step allowed to touch X" mechanism, or
+  push alias resolution into `ReplCompileContext`.
+- **`apply.c:121–124` reaches into `repl_state_document_cmds_mut()`**
+  to cascade `num_args` decrements during `repl_apply_predef_ops`.
+  Correct, but grabby across the module boundary. A
+  `command_store` helper for "decrement num_args above slot X" would
+  localize the concern.
+- **`core.h` still publishes `editor_navigate_to_line` /
+  `editor_feed_line`** on the REPL public facade. Tracked under the
+  R10 plan; don't let the list of `editor_*` exports on this header
+  bloat further.
+- **`eval.h:38–88` comment drift.** Comment text disagrees with the
+  actual `MAX_EXPR_VARS=32` / `MAX_PREDEF_VARS=24` constants and
+  describes a "silent truncation at 16" that no longer matches the
+  code. Fix the constants-vs-comment drift, or add an assert that
+  makes truncation impossible.
+- **`compile.h` is 401 lines, much of it a doc block.**
+  `ReplCompileContext` is half real fields, half admission that
+  compile still reads predef vars through a global. The transitional
+  state should be explicitly time-bounded — pick a "promote to context"
+  ratchet before the next compile-facing feature lands.
+
+## Verdict
+
+The spine ages well. New GL commands cost one `CmdType` row + one
+`g_command_type_specs[]` row + one `k_*_command_specs[]` row + the
+executor/flatten cases. New editor modes don't touch `src/repl/` at all.
+New export formats pay the `export.c` size tax but the existing
+bridge-struct pattern absorbs new keys cleanly.
+
+The brittle spots (`compile.c` size, `core.c` sink soup, `export.c`
+size) are all localized and the project already has the right idioms
+in-tree to fix them. Schedule the `compile.c` split and the
+`ReplHostEffects` consolidation; leave the rest unless a triggering
+change arrives.
+
+## Files cited (review snapshot, 2026-05-14)
+
+- `src/repl/command.h`
+- `src/repl/command_spec.c` (lines 313–376 — `CMD_TYPE_SPEC` macro and
+  `g_command_type_specs[]`)
+- `src/repl/compile.c` (1914 lines; split candidates ~717, 816, 1289,
+  1487, 1540, 1648, 1794)
+- `src/repl/compile.h` (401 lines)
+- `src/repl/apply.c` (lines 121–124 — `num_args` cascade)
+- `src/repl/command_store.c`
+- `src/repl/state_views.h` / `state_owners.h` / `state.h`
+- `src/repl/core.c` (six sink installers; flagged for dissolution under
+  R10)
+- `src/repl/core.h` (`editor_*` symbols still on this facade)
+- `src/repl/export.h` (lines ~91–105 — bridge pattern to mirror in
+  `core.c`)
+- `src/repl/export.c` (3633 lines; R9 split deferred)
+- `src/repl/eval.h` (lines 38–88 — `MAX_EXPR_VARS` / `MAX_PREDEF_VARS`
+  comment drift)
