@@ -346,9 +346,9 @@ static int run_one_case(const TraceProgram *prog) {
     if (!ok) {
         char diff_cmd[1024];
         snprintf(diff_cmd, sizeof diff_cmd,
-                 "diff -u '%s' '%s' | head -50 >&2",
+                 "diff --color=always -u '%s' '%s' | head -50 >&2",
                  temp_repl_tr, temp_child_tr);
-        fprintf(stderr, "  [%s] trace diff (repl < / child >):\n",
+        fprintf(stderr, "  [%s] trace diff (repl - / child +):\n",
                 prog->name);
         (void)system(diff_cmd);
     }
