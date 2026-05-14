@@ -231,6 +231,17 @@ float repl_eval_expr(ExprCtx *ctx);
 int   repl_eval_parse_exprs(const char *s, float *out, int max,
                             ExprVar *vars, int num_vars);
 
+/* Advance past one comma-separated argument and return the pointer to the
+ * next top-level `,`, `)`, or `\0`. Treats nested `(...)` as a unit so
+ * args containing function calls or grouped sub-expressions are spanned
+ * whole.
+ *
+ * Use this anywhere you'd reach for strchr(s, ',') to split a function
+ * call's args — strchr is paren-naive and finds inner commas inside
+ * `max(a, b)` etc. Caller advances past the returned delimiter to start
+ * the next slot. */
+const char *repl_scan_next_arg_delim(const char *s);
+
 /* ---- Expression translation: REPL <-> C syntax ----------------------- */
 
 /* Translate REPL expression (sin, cos, etc.) to C (sinf, cosf, etc.).
