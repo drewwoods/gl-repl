@@ -15,49 +15,58 @@ existing geometry. Example:
 2. Observe that it renders without depth testing.
 3. Insert `glEnable(GL_DEPTH_TEST)` before the triangle batch.
 
-This plan extends tutorial steps so a built-in tutorial can specify an exact
-source line where the next instruction should be inserted. This is not an
-anchor-to-prior-step system. The catalog supplies a concrete line number, and
-the runner interprets that number against the current source document at the
-moment the step begins.
+This plan extends tutorial steps so a built-in tutorial can place a later step
+relative to a named earlier step. The catalog assigns an optional label to a
+step's committed command, and another step can target that label. The runner
+resolves the label to the command's current source line at the moment the later
+step begins.
 
 ## Goals
 
-- Allow a tutorial step to insert its instruction comment above an arbitrary
-  specified source line, not only at the end of the document.
+- Allow a tutorial step to insert its instruction comment above the source line
+  committed by a labeled earlier tutorial step.
 - Keep user commits constrained to the step's intended insertion line.
 - Preserve read-only behavior for revealed tutorial instruction comments.
 - Keep the matcher API and current Tab autofill behavior intact.
 - Keep existing append-only tutorials working with minimal catalog churn.
-- Add tests that prove line targets, lock shifting, navigation commits, and
+- Validate tutorial catalogs so labels are unique and label-targeted steps
+  cannot reference missing labels.
+- Add tests that prove label targeting, lock shifting, navigation commits, and
   completion still behave correctly.
 
 ## Non-Goals
 
-- No anchor-step placement in this version. A step does not say "before step 2"
-  or "after the last `glBegin`"; it says "line N".
+- No raw source-line-number placement in the catalog.
 - No free-form tutorial scripting language.
-- No UI picker for line targets. Placement is authored in the built-in tutorial
-  catalog.
+- No UI picker for labels or insertion targets. Placement is authored in the
+  built-in tutorial catalog.
 - No change to v1 matching. Matching remains whitespace-tolerant exact text.
 - No support for user edits that move tutorial comments around while a tutorial
   is active.
 
-## Line Target Semantics
+## Label Target Semantics
 
-Line targets are zero-based source-document line indices.
+Each tutorial step may define a non-empty `label`. That label names the source
+line created when the user successfully commits that step's `expected` command,
+not the locked instruction comment line.
 
-A targeted step uses this sequence:
+Labels are optional:
 
-1. Read `target_line` from the catalog.
-2. Interpret it against the current source document before this step emits
-   anything.
-3. Insert the step's locked instruction comment at `target_line`.
-4. Set the expected user commit line to `target_line + 1`.
+- `label == NULL` or `label[0] == '\0'` means unlabeled.
+- Non-empty labels must be unique within a tutorial.
+- A label becomes resolvable only after its step has committed successfully.
+
+A label-targeted step uses this sequence:
+
+1. Read `target_label` from the catalog.
+2. Resolve `target_label` to the current source line of the earlier committed
+   step with that label.
+3. Insert the new locked instruction comment at that source line.
+4. Set the expected user commit line to the line below the new instruction
+   comment.
 5. Put the editor cursor on that expected commit line.
-6. If `target_line + 1` is before the end of the document, put the editor in
-   insert mode so the expected command inserts before the existing line instead
-   of replacing it.
+6. Put the editor in insert mode so the expected command inserts before the
+   original target command instead of replacing it.
 
 For example, after a triangle tutorial has produced:
 
@@ -69,23 +78,19 @@ glVertex3f(0, 0.8, 0);
 ...
 ```
 
-A later step can target line `1`. The runner inserts the new instruction at
-line `1`; the user's expected command lands at line `2`; the original
-`glBegin(GL_TRIANGLES);` shifts down.
+If the `glBegin(GL_TRIANGLES)` step was labeled `"triangle_begin"`, a later
+step can target `"triangle_begin"`. The runner inserts the new instruction
+above the current `glBegin` line; the user's expected command lands directly
+under that instruction; the original `glBegin(GL_TRIANGLES);` shifts down.
 
-`target_line == document_count` is allowed and is equivalent to appending.
-Append-only steps should still use the explicit append placement for clarity.
-Targets outside `[0, document_count]` are catalog errors. The runner should not
-partially mutate the document when a target is invalid. Concretely:
-`tutorial_step_instruction_line` returns false → `tutorial_start` /
-`tutorial_advance_after_successful_commit` set a status message, call
-`tutorial_state_reset()`, and return. No instruction comment is emitted, no
-locked line is recorded, and the editor is left in its prior state.
+Append-only steps still use explicit append placement. Label-targeted steps
+must use a non-null, non-empty `target_label` that refers to an earlier labeled
+step. Missing labels, duplicate labels, and forward references are catalog
+errors and should be rejected before the tutorial mutates the document.
 
-Important: line targets are source-document lines, not wrapped code-panel rows.
-Later line targets are authored against the document shape that exists when
-that later step begins, after all prior instruction comments and user commands
-have been inserted.
+Important: labels resolve to source-document lines, not wrapped code-panel
+rows. The line for a label is tracked by the tutorial runtime and shifts as
+tutorial-approved insertions move source rows.
 
 ### `repl_load_apply_line` Contract Drift
 
@@ -124,14 +129,15 @@ records.
 ```c
 typedef enum {
     TUTORIAL_STEP_APPEND = 0,
-    TUTORIAL_STEP_LINE,
+    TUTORIAL_STEP_LABEL,
 } TutorialStepPlacementKind;
 
 typedef struct {
+    const char *label;
     const char *comment;
     const char *expected;
     TutorialStepPlacementKind placement;
-    int target_line;
+    const char *target_label;
 } TutorialStep;
 
 typedef struct {
@@ -142,11 +148,15 @@ typedef struct {
 
 Conventions:
 
+- `label` is optional. `NULL` and `""` mean unlabeled.
 - `comment` begins with `//`.
 - `expected` has no trailing `;`, matching the current catalog.
-- `placement == TUTORIAL_STEP_APPEND` ignores `target_line`.
-- `placement == TUTORIAL_STEP_LINE` uses `target_line` as described above.
-- The steps array terminates with `{ NULL, NULL, TUTORIAL_STEP_APPEND, 0 }`.
+- `placement == TUTORIAL_STEP_APPEND` ignores `target_label`, which should be
+  `NULL` or empty.
+- `placement == TUTORIAL_STEP_LABEL` requires a non-null, non-empty
+  `target_label` that names an earlier step in the same tutorial.
+- The steps array terminates with
+  `{ NULL, NULL, NULL, TUTORIAL_STEP_APPEND, NULL }`.
 
 Keep the current query API working:
 
@@ -154,44 +164,95 @@ Keep the current query API working:
 - `repl_tutorial_step_comment`
 - `repl_tutorial_step_expected`
 
-Add placement queries:
+Add placement and label queries:
 
 ```c
 TutorialStepPlacementKind repl_tutorial_step_placement(int idx, int step_idx);
-int repl_tutorial_step_target_line(int idx, int step_idx);
+const char *repl_tutorial_step_label(int idx, int step_idx);
+const char *repl_tutorial_step_target_label(int idx, int step_idx);
+int repl_tutorial_validate(int idx, char *err, int err_size);
 ```
 
 Existing tutorials can migrate mechanically. To keep the migration readable,
 introduce file-local convenience macros in `src/repl/tutorials.c`:
 
 ```c
-#define STEP_APPEND(c, e)   { (c), (e), TUTORIAL_STEP_APPEND, 0 }
-#define STEP_AT(c, e, line) { (c), (e), TUTORIAL_STEP_LINE,   (line) }
+#define STEP_APPEND(label, c, e) \
+    { (label), (c), (e), TUTORIAL_STEP_APPEND, NULL }
+
+#define STEP_AT(label, c, e, target) \
+    { (label), (c), (e), TUTORIAL_STEP_LABEL, (target) }
 ```
 
-The 11-step "Color & Transform" tutorial then stays compact:
+For unlabeled append steps, use `NULL` for the label:
 
 ```c
-STEP_APPEND("// Save the current matrix ...", "glPushMatrix()"),
-STEP_APPEND("// Set the drawing color ...",   "glColor3f(0.2, 0.8, 1)"),
-...
+STEP_APPEND(NULL, "// Save the current matrix ...", "glPushMatrix()"),
+STEP_APPEND(NULL, "// Set the drawing color ...",   "glColor3f(0.2, 0.8, 1)"),
 ```
 
-Without macros each row needs a literal `TUTORIAL_STEP_APPEND, 0` trailer,
-which makes the catalog harder to scan and easier to mis-edit. Macros are
-file-local — no public API exposure.
+For a targetable step, provide a label:
+
+```c
+STEP_APPEND("triangle_begin",
+            "// Start the triangle batch.",
+            "glBegin(GL_TRIANGLES)"),
+```
+
+For a later insertion, target that label:
+
+```c
+STEP_AT(NULL,
+        "// Enable depth testing before the triangle is submitted.",
+        "glEnable(GL_DEPTH_TEST)",
+        "triangle_begin"),
+```
+
+Macros are file-local; no public API exposure.
+
+## Catalog Validation
+
+Add a simple validation pass over each tutorial. `tutorial_start(idx)` should
+validate before any transient-scene reset or source mutation. Tests should also
+iterate the full catalog and validate every tutorial.
+
+Validation rules:
+
+- Each step before the sentinel has non-null `comment` and `expected`.
+- Every non-empty `label` is unique within the tutorial.
+- `TUTORIAL_STEP_APPEND` has no non-empty `target_label`.
+- `TUTORIAL_STEP_LABEL` has a non-null, non-empty `target_label`.
+- `TUTORIAL_STEP_LABEL.target_label` refers to an earlier non-empty label in
+  the same tutorial. Forward references are rejected so every label target is
+  already committed when the step begins.
+- Step count fits the runtime tracking arrays.
+
+Failure behavior:
+
+- `repl_tutorial_validate` returns 0 and writes a concise diagnostic to `err`.
+- `tutorial_start` surfaces the diagnostic via `repl_set_status`, resets
+  tutorial state, and returns without mutating the source document.
+- `tutorial_advance_after_successful_commit` should not encounter validation
+  failures if `tutorial_start` validated the full tutorial. If it cannot resolve
+  a target label at runtime anyway, it sets a status message, calls
+  `tutorial_state_reset()`, and returns without emitting an instruction comment
+  or recording a locked line.
 
 ## Runtime State
 
 Extend `TutorialRuntimeState` with the current expected insertion site, the
-document count captured before the expected user commit, and the guard-exception
-flag for the matched insert:
+document count captured before the expected user commit, the guard-exception
+flag for the matched insert, and a per-step source-line map.
 
 ```c
+#define TUTORIAL_STEP_MAX 64
+
 int expected_commit_line;
 int pending_doc_count_before_commit;
 int pending_commit_line;
+int pending_step_idx;
 int allow_expected_insert;
+int committed_line_for_step[TUTORIAL_STEP_MAX];
 ```
 
 Recommended sentinels:
@@ -199,9 +260,11 @@ Recommended sentinels:
 - `expected_commit_line = -1` when no step is waiting for a user command.
 - `pending_doc_count_before_commit = -1` when no commit is in flight.
 - `pending_commit_line = -1` when no commit is in flight.
+- `pending_step_idx = -1` when no commit is in flight.
 - `allow_expected_insert = 0` when no matched commit is in flight.
+- `committed_line_for_step[i] = -1` until step `i` has committed.
 
-`tutorial_state_reset` clears all four fields.
+`tutorial_state_reset` clears all new fields.
 
 The existing `locked_lines[]` remains a list of source line indices for
 revealed tutorial instruction comments. The extension needs one helper that
@@ -218,6 +281,7 @@ This helper should shift:
 - `fade_line_idx >= pos`
 - `expected_commit_line >= pos`, if it is already set and the shift is not for
   the insertion currently defining it
+- `committed_line_for_step[i] >= pos`
 
 For this feature, tutorial-approved changes are insert-only. The existing
 guards should continue to block deletes, replacements, paste operations, undo,
@@ -250,11 +314,19 @@ Flow:
 11. Move the editor to `expected_commit_line`.
 12. Set insert mode to `expected_commit_line < document_count`.
 
-The current append path falls out naturally:
+The append path falls out naturally:
 
 - Before emit: `instruction_line == old_document_count`.
 - After emit: `expected_commit_line == new_document_count`.
 - Insert mode remains off because the user command lands at the trailing row.
+
+The label-target path also falls out naturally:
+
+- Before emit: `instruction_line` is the current line for `target_label`.
+- After the instruction comment inserts, the target label's committed line has
+  shifted down by one.
+- `expected_commit_line == instruction_line + 1`, so the expected command
+  inserts below the new instruction and above the original target command.
 
 ### Step Placement
 
@@ -268,9 +340,11 @@ static int tutorial_step_instruction_line(int tutorial_idx, int step,
 Rules:
 
 - Append placement returns `document_count`.
-- Line placement returns `target_line` if `0 <= target_line <= document_count`.
-- Invalid placement sets a status message such as
-  `"Tutorial step target is out of range"` and returns false.
+- Label placement resolves `target_label` to the current
+  `committed_line_for_step[target_step]`.
+- If the target label is missing, unresolved, or out of range, set a status
+  message such as `"Tutorial step target label is unresolved"` and return
+  false.
 
 `tutorial_start` and `tutorial_advance_after_successful_commit` should use this
 helper before emitting each instruction comment.
@@ -314,24 +388,23 @@ gives the user a concrete visual anchor for the message.)
 Then run the existing matcher. Mismatch behavior stays unchanged: status shows
 `expected: ...`, the typed input is preserved, and the command is not applied.
 
-Empty-input special case: when the input buffer is empty and the commit
-route is a navigation auto-commit (not a `;`/Enter direct intent), the
-precheck must return 0 **without updating the status**. Otherwise the
-navigation that initially places the cursor on `expected_commit_line` —
-with empty input and insert mode on — would immediately spam `expected:
-…` even though the user hasn't typed yet. The simplest implementation
-splits the precheck: keep the existing `expected: …` for non-empty input
-and surface a silent rejection for empty input. Direct `;`/Enter on
-empty input can keep the existing "expected: …" hint by checking the
-key path explicitly, or by always-rejecting silently and accepting that
-Enter on empty input becomes a no-op (the user has Tab and the visible
-shadow text as discovery affordances).
+Empty-input special case: when the input buffer is empty and the commit route
+is a navigation auto-commit (not a `;`/Enter direct intent), the precheck must
+return 0 **without updating the status**. Otherwise the navigation that
+initially places the cursor on `expected_commit_line` — with empty input and
+insert mode on — would immediately spam `expected: ...` even though the user
+hasn't typed yet. The simplest implementation splits the precheck: keep the
+existing `expected: ...` for non-empty input and surface a silent rejection for
+empty input. Direct `;`/Enter on empty input can keep the existing
+`"expected: ..."` hint by checking the key path explicitly, or by
+always-rejecting silently and accepting that Enter on empty input becomes a
+no-op (the user has Tab and the visible shadow text as discovery affordances).
 
 ### Commit Success Bookkeeping
 
-The "begin" call is paired with the precheck, not a separate editor route
-hook: fold it into `tutorial_precheck_current_input()` so it fires exactly
-when the matcher passes and never on rejection:
+The "begin" call is paired with the precheck, not a separate editor route hook:
+fold it into `tutorial_precheck_current_input()` so it fires exactly when the
+matcher passes and never on rejection:
 
 ```c
 static int tutorial_precheck_current_input(void) {
@@ -350,6 +423,7 @@ That helper stores:
 
 - `pending_doc_count_before_commit = repl_state_document_count()`
 - `pending_commit_line = expected_commit_line`
+- `pending_step_idx = tutorial_state.step`
 - `allow_expected_insert = 1`
 
 After a real successful commit, before advancing to the next step, call:
@@ -364,15 +438,23 @@ It computes:
 int delta = repl_state_document_count() - pending_doc_count_before_commit;
 ```
 
-If `delta > 0`, shift tracked tutorial lines at or after
-`pending_commit_line` by `delta`. Then clear the pending fields and the
-`allow_expected_insert` flag.
+If `delta > 0`, first shift existing tracked tutorial lines at or after
+`pending_commit_line` by `delta`. Then, if the just-committed step has a
+non-empty label, record:
 
-This keeps locked instruction comments correct when the expected command is
-inserted in the middle of the document. It also handles future expected lines
-that compile to more than one source row (e.g. `func0() { ... }` block
-commits that grow the document by N rows), although starter tutorials should
-continue to use one-line expected commands.
+```c
+committed_line_for_step[pending_step_idx] = pending_commit_line;
+```
+
+Record the current step's label line after shifting existing lines so the new
+step's own label is not shifted as though it pre-existed the insertion. Then
+clear the pending fields and the `allow_expected_insert` flag.
+
+This keeps locked instruction comments and prior label positions correct when
+the expected command is inserted in the middle of the document. It also handles
+future expected lines that compile to more than one source row (e.g.
+`func0() { ... }` block commits that grow the document by N rows), although
+starter tutorials should continue to use one-line expected commands.
 
 The existing `tutorial_advance_if_commit_ok(result)` wrapper is the right place
 to sequence this, with explicit symmetry for rejected commits:
@@ -419,10 +501,10 @@ pos == expected_commit_line &&
 allow_expected_insert
 ```
 
-Implementation (commit to the flag-based design):
+Implementation:
 
-- `tutorial_begin_expected_commit_attempt()` sets
-  `allow_expected_insert = 1` along with the pending bookkeeping fields.
+- `tutorial_begin_expected_commit_attempt()` sets `allow_expected_insert = 1`
+  along with the pending bookkeeping fields.
 - `tutorial_guard_source_change` allows the current expected insert iff
   `allow_expected_insert && pos == expected_commit_line && delete_count == 0
   && insert_count > 0`. All other guard rejection paths are unchanged.
@@ -442,7 +524,7 @@ The guard should still reject:
 
 ## Editor Behavior
 
-When a targeted step starts:
+When a label-targeted step starts:
 
 - The cursor moves to the expected command line.
 - The input buffer is empty.
@@ -472,35 +554,42 @@ triangle batch:
 
 ```c
 static const TutorialStep g_tutorial_depth_triangle_steps[] = {
-    { "// Start the triangle batch.", "glBegin(GL_TRIANGLES)",
-      TUTORIAL_STEP_APPEND, 0 },
-    { "// Add the top vertex.", "glVertex3f(0, 0.8, 0)",
-      TUTORIAL_STEP_APPEND, 0 },
-    { "// Add the lower-left vertex.", "glVertex3f(-0.8, -0.6, 0)",
-      TUTORIAL_STEP_APPEND, 0 },
-    { "// Add the lower-right vertex.", "glVertex3f(0.8, -0.6, 0)",
-      TUTORIAL_STEP_APPEND, 0 },
-    { "// Close the triangle batch.", "glEnd()",
-      TUTORIAL_STEP_APPEND, 0 },
+    STEP_APPEND("triangle_begin",
+        "// Start the triangle batch.",
+        "glBegin(GL_TRIANGLES)"),
+    STEP_APPEND(NULL,
+        "// Add the top vertex.",
+        "glVertex3f(0, 0.8, 0)"),
+    STEP_APPEND(NULL,
+        "// Add the lower-left vertex.",
+        "glVertex3f(-0.8, -0.6, 0)"),
+    STEP_APPEND(NULL,
+        "// Add the lower-right vertex.",
+        "glVertex3f(0.8, -0.6, 0)"),
+    STEP_APPEND(NULL,
+        "// Close the triangle batch.",
+        "glEnd()"),
 
     /*
-     * At this point line 1 is the glBegin command. Insert a new
-     * instruction above it, then place glEnable directly under the new
-     * instruction and before the original glBegin.
+     * Insert a new instruction above the source line committed by the
+     * step labeled "triangle_begin", then place glEnable directly under
+     * the new instruction and before the original glBegin.
      */
-    { "// Enable depth testing before the triangle is submitted.",
-      "glEnable(GL_DEPTH_TEST)", TUTORIAL_STEP_LINE, 1 },
+    STEP_AT(NULL,
+        "// Enable depth testing before the triangle is submitted.",
+        "glEnable(GL_DEPTH_TEST)",
+        "triangle_begin"),
 
-    { NULL, NULL, TUTORIAL_STEP_APPEND, 0 },
+    { NULL, NULL, NULL, TUTORIAL_STEP_APPEND, NULL },
 };
 ```
 
-The `target_line = 1` value is authored against the current document at the
-moment that step begins.
+The label remains stable if earlier tutorial copy changes or if previous steps
+grow by more than one source row.
 
 ## Implementation Phases
 
-### Phase 1 - Catalog Step Records
+### Phase 1 - Catalog Step Records + Validation
 
 Goal: migrate the catalog shape without changing behavior.
 
@@ -510,39 +599,50 @@ Modify:
   - Add `TutorialStepPlacementKind`.
   - Add `TutorialStep`.
   - Change `TutorialEntry` to hold `const TutorialStep *steps`.
-  - Add `repl_tutorial_step_placement` and
-    `repl_tutorial_step_target_line`.
+  - Add `repl_tutorial_step_placement`,
+    `repl_tutorial_step_label`, `repl_tutorial_step_target_label`, and
+    `repl_tutorial_validate`.
 - `src/repl/tutorials.c`
   - Convert existing tutorials to `TutorialStep` arrays.
   - Mark every existing step as `TUTORIAL_STEP_APPEND`.
   - Preserve all existing tutorial names and expected command strings.
+  - Add file-local `STEP_APPEND` / `STEP_AT` macros.
+  - Implement validation for unique labels and valid label targets.
 - `tests/test_tutorial_runner.c`
   - Keep existing catalog assertions.
   - Add assertions that current starter steps report append placement.
+  - Add catalog-validation tests: valid tutorials pass; duplicate labels,
+    missing target labels, and forward references fail.
 
 Verify:
 
-- `make test_tutorial_runner` (builds and runs both the runner and match
-  tests under the GL stubs path by default).
+- `make test_tutorial_runner` (builds and runs both the runner and match tests
+  under the GL stubs path by default).
 
-### Phase 2 - Targeted Instruction Emission
+### Phase 2 - Label-Targeted Instruction Emission
 
-Goal: the runner can reveal an instruction comment at an arbitrary source line,
-but all catalog steps still append.
+Goal: the runner can reveal an instruction comment above a labeled earlier
+command line, with a small real tutorial fixture exercising the label-targeted
+path. Phase 4 turns that fixture into the polished worked tutorial.
 
 Modify:
 
 - `src/widgets/tutorial_state.h`
   - Add `expected_commit_line`.
-  - Add `pending_doc_count_before_commit` and `pending_commit_line`.
+  - Add `pending_doc_count_before_commit`, `pending_commit_line`, and
+    `pending_step_idx`.
   - Add `allow_expected_insert` (guard-exception flag).
+  - Add `committed_line_for_step[TUTORIAL_STEP_MAX]`.
 - `src/widgets/tutorial_state.c`
-  - Initialize all new line fields to `-1` in reset.
+  - Initialize all new line fields and committed-line slots to `-1`.
+  - Initialize `allow_expected_insert` to 0.
 - `src/widgets/tutorial.c`
   - Add `tutorial_shift_tracked_lines_from`.
   - Change `tutorial_emit_instruction_comment` to take an
     `instruction_line`.
+  - Add label lookup over the catalog steps.
   - Add `tutorial_step_instruction_line`.
+  - Have `tutorial_start` validate the full tutorial before mutating state.
   - Have `tutorial_start` and `tutorial_advance_after_successful_commit`
     compute the instruction line before emitting.
   - After emitting, set `expected_commit_line` and place the editor on it.
@@ -551,17 +651,17 @@ Tests:
 
 - Start an append tutorial and assert the first expected commit line is the
   trailing row.
-- Add a real third tutorial with a targeted step rather than a test-only
+- Add a real third tutorial with a label-targeted step rather than a test-only
   entry. The user-visible tutorial in Phase 4 already needs to ship; landing
   it in Phase 2 means both Phase 2's code path and Phase 4's dogfood get
-  covered by the same fixture instead of carrying a synthetic entry that
-  later has to be deleted. The Phase 4 section below stays as the "ship a
-  worked targeted tutorial" milestone — Phase 2 just brings forward enough
-  of it to exercise the runner.
-- Advance to the targeted step and assert the new instruction appears at the
-  specified line, not the end.
-- Assert previously locked instruction comments after the insertion were
-  shifted and remain locked.
+  covered by the same fixture instead of carrying a synthetic entry that later
+  has to be deleted. The Phase 4 section below stays as the "ship a worked
+  targeted tutorial" milestone — Phase 2 just brings forward enough of it to
+  exercise the runner.
+- Advance to the label-targeted step and assert the new instruction appears
+  above the command line for the target label, not at the end.
+- Assert previously locked instruction comments and previously recorded label
+  lines after the insertion were shifted and remain correct.
 
 Verify:
 
@@ -569,23 +669,19 @@ Verify:
 
 ### Phase 3 - Commit Precheck and Guard Exception
 
-Goal: a matching expected command can be inserted at the targeted line, while
-ordinary user edits above locked comments remain blocked.
+Goal: a matching expected command can be inserted at the label-targeted line,
+while ordinary user edits above locked comments remain blocked.
 
 Modify:
 
 - `src/editor/input.c`
   - Replace the append-only tutorial precheck with an expected-line precheck.
-  - The precheck itself calls `tutorial_begin_expected_commit_attempt()` on
-    match success (see Commit Success Bookkeeping); no extra hook needed in
-    the `;`/Enter/navigation routes.
-  - `tutorial_advance_if_commit_ok(result)` now branches: on `COMMIT_OK`
-    call `tutorial_note_expected_commit_applied()` then advance; on
-    `COMMIT_REJECTED` call `tutorial_cancel_expected_commit_attempt()`.
-  - `commit_before_navigation()`'s `COMMIT_REJECTED` branch (the one that
-    restores undo state without flowing through
-    `tutorial_advance_if_commit_ok`) must also call
-    `tutorial_cancel_expected_commit_attempt()` before returning.
+  - Keep `tutorial_begin_expected_commit_attempt()` inside the successful
+    precheck path.
+  - On `COMMIT_OK`, note the applied tutorial insert before advancing.
+  - On rejection, clear pending tutorial commit bookkeeping.
+  - Add the explicit `commit_before_navigation()` rejection cleanup call noted
+    above.
 - `src/widgets/tutorial.h` / `.c`
   - Add narrow helpers for expected commit bookkeeping:
     - `tutorial_expected_commit_line`
@@ -597,15 +693,17 @@ Modify:
 
 Tests:
 
-- Targeted step with correct input inserts the command at the expected middle
-  line and advances.
-- Targeted step with wrong input preserves input, does not insert, and does
-  not advance.
+- Label-targeted step with correct input inserts the command at the expected
+  middle line and advances.
+- Label-targeted step with wrong input preserves input, does not insert, and
+  does not advance.
 - Pasting or manually inserting above a locked tutorial comment is still
   rejected when not part of the matched expected commit.
 - Ctrl+/ and Ctrl+D on locked comments still reject.
 - Navigation commit with matching input at the expected line advances.
 - Navigation commit with matching input from any other line rejects.
+- Editor commit failure after a matched precheck clears `allow_expected_insert`
+  and the pending fields.
 
 Verify:
 
@@ -613,33 +711,30 @@ Verify:
 - `make test_ui USE_GL_STUBS=1` if fade-line tracking is touched by the test
   path.
 
-### Phase 4 - Polish the Worked Targeted Tutorial
+### Phase 4 - Add a Worked Label-Targeted Tutorial
 
-Goal: take the third tutorial added in Phase 2 and ship it as user-visible.
-Phase 2 lands the catalog entry as a test fixture; Phase 4 is the polish
-pass — final wording on the instruction comments, final choice of teaching
-narrative, final menu name. The same `TutorialStep` array is the source of
-truth across both phases.
+Goal: ship a user-visible tutorial that uses label-targeted insertion.
 
 Modify:
 
 - `src/repl/tutorials.c`
-  - Replace any placeholder names/comments from the Phase 2 fixture with
-    finished teaching prose.
-  - Confirm the targeted step (e.g. `STEP_AT("// Enable depth testing ...",
-    "glEnable(GL_DEPTH_TEST)", 1)`) is correctly positioned for the final
-    document shape.
+  - Add or revise a tutorial to demonstrate "draw first, then insert setup
+    before the batch".
+  - Keep comments written as teaching prompts, not test assertions.
+  - Label the target batch-opening step, then use
+    `TUTORIAL_STEP_LABEL` / `STEP_AT` to insert before it.
 - `tests/test_tutorial_runner.c`
-  - Update the Phase 2 fixture assertions to match the polished name and
-    expected text. Walking the full tutorial and asserting the final source
-    order (inserted setup command appears before the original batch
-    command) should already be in place from Phase 2.
+  - Pin the new tutorial name, step count, first expected command, target
+    label, and label-targeted step placement.
+  - Walk the full tutorial and assert the final source order has the inserted
+    setup command before the original batch command.
 
 Verify:
 
 - `make test_tutorial_runner`
 - Manual `./sample`: run the tutorial, confirm the cursor jumps back to the
-  targeted insertion line and the command lands before the existing line.
+  label-targeted insertion line and the command lands before the existing
+  labeled command.
 
 ### Phase 5 - Ownership and Regression Sweep
 
@@ -649,7 +744,7 @@ guards or state ownership rules.
 Run the mutation-site checklist from the original tutorial plan:
 
 ```bash
-rg -n 'repl_command_store_(insert|replace|delete|clear)|editor_buffer_(insert_line|insert_lines|replace_line|delete_range|set_line|set_count|load_lines|clear|apply_compiled_change)|delete_cmd_range|editor_clear_all_cmds\(' src/editor src/app src/widgets src/repl
+rg -n 'repl_command_store_(insert|replace|delete|clear)|editor_buffer_(insert_line|insert_lines|replace_line|delete_range|set_line|set_count|load_lines|clear|apply_compiled_change)|delete_cmd_range|repl_clear_all_cmds\(' src/editor src/app src/widgets src/repl
 ```
 
 Every user-reachable source mutation must be one of:
@@ -667,18 +762,19 @@ Run:
 
 ## Edge Cases
 
-- **Target is a locked instruction line:** allowed for the runner. The new
-  instruction inserts above that locked line. Ordinary user insertions there
-  remain blocked.
-- **Target is the end of the document:** allowed. Equivalent to append.
-- **Target is out of range:** reject without partial mutation and set a status
-  message. Since tutorials are built in, this should be covered by tests.
+- **Target label belongs to a locked instruction's neighboring command:**
+  allowed for the runner. The new instruction inserts above the labeled command.
+  Ordinary user insertions there remain blocked.
+- **Target label is missing or forward-referenced:** catalog validation fails
+  before tutorial startup mutates state.
+- **Target label has not been committed at runtime:** treat as an internal
+  runner failure, set status, reset tutorial state, and do not emit a new
+  instruction.
 - **Commit produces multiple source rows:** shift tracked lines by the actual
-  document-count delta. Starter tutorials should still use one-line commands.
-- **User navigates away before typing:** should not mutate source. The
-  precheck's empty-input branch (see Commit Precheck) silently rejects
-  empty input on navigation auto-commit, so the cursor moves without
-  spamming `expected: …`.
+  document-count delta, then record the just-committed step's label at the
+  inserted command line.
+- **User navigates away before typing:** should not mutate source. Avoid noisy
+  `"expected: ..."` status if possible when the input buffer is empty.
 - **User navigates to another editable line and types the expected text:** reject
   because the edit line is not `expected_commit_line`.
 - **Tutorial completion:** clear active state and locks. The source document
@@ -688,15 +784,18 @@ Run:
 ## Verification Checklist
 
 - Existing append-only tutorials still pass unchanged.
-- A targeted step inserts its instruction comment at the requested current
-  source line.
+- Catalog validation rejects duplicate labels, missing targets, and forward
+  references.
+- A label-targeted step inserts its instruction comment above the command line
+  for the target label.
 - The expected command lands immediately below that instruction comment.
 - Existing lines at and below the target shift down.
 - Previously locked instruction comments remain locked after shifting.
+- Previously recorded label lines remain correct after shifting.
 - Manual edits above locked comments are still blocked.
-- Wrong input at a targeted step does not insert anything.
+- Wrong input at a label-targeted step does not insert anything.
 - Correct input at the wrong line does not insert anything.
-- Tab autofill still fills the expected command for targeted steps.
+- Tab autofill still fills the expected command for label-targeted steps.
 - Fade applies to the newly inserted instruction line, even when it appears in
   the middle of the document.
 - Completing the tutorial clears locks and leaves the final document editable.
