@@ -712,7 +712,11 @@ int repl_flat_cmd_matches_cursor(int flat_idx) {
     switch (cursor_cmd->type) {
     case CMD_COLOR3F:
     case CMD_COLOR4F: {
-        if (cmd->type == CMD_VERTEX3F) {
+        /* glColor3f / glColor4f feed glVertex3f and glVertex2f. Tess
+         * vertices have their own state line (CMD_TESS_COLOR) handled
+         * by a sibling case below, so CMD_TESS_VERTEX is intentionally
+         * excluded here. */
+        if (cmd->type == CMD_VERTEX3F || cmd->type == CMD_VERTEX2F) {
             int last_color_src = -1;
             for (int i = 0; i <= flat_idx; i++) {
                 if (!flat_cmds[i].valid) continue;
@@ -726,7 +730,11 @@ int repl_flat_cmd_matches_cursor(int flat_idx) {
         break;
     }
     case CMD_NORMAL3F: {
-        if (cmd->type == CMD_VERTEX3F) {
+        /* glNormal3f feeds glVertex3f and glVertex2f. Tess vertices
+         * have their own state line (CMD_TESS_NORMAL) handled by a
+         * sibling case below, so CMD_TESS_VERTEX is intentionally
+         * excluded here. */
+        if (cmd->type == CMD_VERTEX3F || cmd->type == CMD_VERTEX2F) {
             int last_normal_src = -1;
             for (int i = 0; i <= flat_idx; i++) {
                 if (!flat_cmds[i].valid) continue;
@@ -739,6 +747,9 @@ int repl_flat_cmd_matches_cursor(int flat_idx) {
         break;
     }
     case CMD_TESS_COLOR: {
+        /* CMD_TESS_COLOR feeds tess vertices only; immediate-mode
+         * vertices (CMD_VERTEX3F / CMD_VERTEX2F) are fed by glColor3f
+         * / glColor4f handled in the COLOR3F / COLOR4F cases above. */
         if (cmd->type == CMD_TESS_VERTEX) {
             int last_tess_color_src = -1;
             for (int i = 0; i <= flat_idx; i++) {
@@ -752,6 +763,9 @@ int repl_flat_cmd_matches_cursor(int flat_idx) {
         break;
     }
     case CMD_TESS_NORMAL: {
+        /* CMD_TESS_NORMAL feeds tess vertices only; immediate-mode
+         * vertices are fed by glNormal3f handled in the NORMAL3F case
+         * above. */
         if (cmd->type == CMD_TESS_VERTEX) {
             int last_tess_normal_src = -1;
             for (int i = 0; i <= flat_idx; i++) {

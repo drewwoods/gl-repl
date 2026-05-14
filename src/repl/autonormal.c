@@ -204,7 +204,14 @@ void repl_recompute_autonormals(int autonormal_enabled) {
             if (!repl_state_document_cmds_mut()[j].valid) continue;
             if (repl_state_document_cmds_mut()[j].type == CMD_END) { block_end = j; break; }
             if (repl_state_document_cmds_mut()[j].type == CMD_BEGIN) { block_end = j; break; }
-            if (repl_state_document_cmds_mut()[j].type == CMD_VERTEX3F)
+            /* CMD_TESS_VERTEX is intentionally absent: it never appears
+             * inside a CMD_BEGIN block — tess vertices live between
+             * CMD_TESS_BEGIN_CONTOUR / CMD_TESS_END and use their own
+             * normal feeder (CMD_TESS_NORMAL). glVertex2f sets args[2]
+             * to 0 (parser default), so its cross product folds into
+             * the same (x, y, 0) plane as a 3D vertex with z=0. */
+            if (repl_state_document_cmds_mut()[j].type == CMD_VERTEX3F ||
+                repl_state_document_cmds_mut()[j].type == CMD_VERTEX2F)
                 vi[nv++] = j;
         }
 
@@ -249,6 +256,10 @@ static int find_feeding_state_cmd(int line_idx, int want_normal) {
     if (line_idx < 0 || line_idx >= repl_state_document_count()) return -1;
     if (!repl_state_document_cmds_mut()[line_idx].valid) return -1;
 
+    /* Intentional split, not a candidate for repl_cmd_emits_vertex: gl
+     * vertices look back for CMD_NORMAL3F / CMD_COLOR3F / CMD_COLOR4F,
+     * tess vertices look back for CMD_TESS_NORMAL / CMD_TESS_COLOR.
+     * The two families have separate state-feeder commands. */
     CmdType target = repl_state_document_cmds_mut()[line_idx].type;
     int is_gl_vtx = (target == CMD_VERTEX3F || target == CMD_VERTEX2F);
     int is_tess_vtx = (target == CMD_TESS_VERTEX);
