@@ -197,7 +197,10 @@ static void draw_normal_guides(const SceneGuideSnapshot *snapshot) {
     for (int i = search_start; i < snapshot->source_cmd_count; i++) {
         const GLCmd *cmd = &snapshot->source_cmds[i];
         if (!cmd->valid) continue;
-        if (cmd->type == CMD_VERTEX3F || cmd->type == CMD_TESS_VERTEX) {
+        if (repl_cmd_emits_vertex(cmd->type)) {
+            /* For glVertex2f, cmd->args[2] is zero (parser leaves it
+             * default-initialised) — the right z-value for a 2D
+             * vertex used as a guide reference. */
             vx = cmd->args[0];
             vy = cmd->args[1];
             vz = cmd->args[2];

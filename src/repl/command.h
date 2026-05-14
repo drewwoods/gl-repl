@@ -96,4 +96,17 @@ static inline int repl_cmd_is_transform(CmdType type) {
             type == CMD_LOAD_IDENTITY);
 }
 
+/* True for every command type that contributes a per-vertex position to
+ * GL: glVertex3f, glVertex2f (implicit z=0), and gluVertex (the tess
+ * variant). Use this anywhere the question is "does this cmd emit a
+ * vertex?". For tess-vs-immediate-mode distinctions (e.g. choosing
+ * between CMD_NORMAL3F and CMD_TESS_NORMAL as the feeding state cmd),
+ * spell the subset out at the call site — that's intent, not a
+ * uniform predicate. */
+static inline int repl_cmd_emits_vertex(CmdType type) {
+    return (type == CMD_VERTEX3F ||
+            type == CMD_VERTEX2F ||
+            type == CMD_TESS_VERTEX);
+}
+
 #endif /* REPL_COMMAND_H */

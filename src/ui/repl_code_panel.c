@@ -897,9 +897,7 @@ static void repl_code_panel_build_rows(ReplCodePanelBuilder *builder) {
 
         is_edit = (!snap->editor_input.insert_mode && i == snap->edit_line);
         is_vertex = snap->document_cmds[i].valid &&
-                    (snap->document_cmds[i].type == CMD_VERTEX3F ||
-                     snap->document_cmds[i].type == CMD_VERTEX2F ||
-                     snap->document_cmds[i].type == CMD_TESS_VERTEX);
+                    repl_cmd_emits_vertex(snap->document_cmds[i].type);
 
         if (snap->code_panel.show_vertex_indices && is_vertex) {
             snprintf(aux_label, sizeof(aux_label),

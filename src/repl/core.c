@@ -161,7 +161,8 @@ int repl_count_vertices(void) {
     int g_num_flat_cmds = flat_program.cmd_count;
 
     for (int flat_idx = 0; flat_idx < g_num_flat_cmds; flat_idx++)
-        if (g_flat_cmds[flat_idx].valid && g_flat_cmds[flat_idx].type == CMD_VERTEX3F) n++;
+        if (g_flat_cmds[flat_idx].valid &&
+            repl_cmd_emits_vertex(g_flat_cmds[flat_idx].type)) n++;
     return n;
 }
 

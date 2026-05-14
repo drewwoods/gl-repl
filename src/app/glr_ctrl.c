@@ -63,8 +63,10 @@ static int glr_ctrl_apply_code_panel_follow_scroll_for_snapshot(
     int *out_visible_lines);
 
 static int glr_ctrl_cmd_is_focus_vertex(const GLCmd *cmd) {
-    return cmd->valid &&
-           (cmd->type == CMD_VERTEX3F || cmd->type == CMD_TESS_VERTEX);
+    /* glVertex2f counts too: args[2] is zero on a well-formed 2D vertex
+     * (parser leaves the slot zero-initialised), so building focus.pos
+     * from args[0..2] gives (x, y, 0) — the right point to focus on. */
+    return cmd->valid && repl_cmd_emits_vertex(cmd->type);
 }
 
 static SceneFocusVertex glr_ctrl_build_focus_vertex(void) {
@@ -677,9 +679,7 @@ static void glr_ctrl_render_vertex_points(const OverlayWalkCtx *ctx) {
                 primitive_mode = flat_cmds[i].mode;
             } else if (flat_cmds[i].type == CMD_END) {
                 primitive_mode = 0;
-            } else if (flat_cmds[i].type == CMD_VERTEX3F ||
-                       flat_cmds[i].type == CMD_VERTEX2F ||
-                       flat_cmds[i].type == CMD_TESS_VERTEX) {
+            } else if (repl_cmd_emits_vertex(flat_cmds[i].type)) {
                 int is_line = (primitive_mode == GL_LINES ||
                                primitive_mode == GL_LINE_STRIP ||
                                primitive_mode == GL_LINE_LOOP);
@@ -733,9 +733,7 @@ static SceneGuideSnapshot
 cursor_guide_snapshot_with_flat_args(const SceneGuideSnapshot *snapshot,
                                      const GLCmd *flat) {
     SceneGuideSnapshot snap = *snapshot;
-    if (flat && (flat->type == CMD_VERTEX3F ||
-                 flat->type == CMD_VERTEX2F ||
-                 flat->type == CMD_TESS_VERTEX)) {
+    if (flat && repl_cmd_emits_vertex(flat->type)) {
         snap.vertex_args[0] = flat->args[0];
         snap.vertex_args[1] = flat->args[1];
         snap.vertex_args[2] = (flat->type == CMD_VERTEX2F) ? 0.0f
