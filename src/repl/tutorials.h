@@ -64,9 +64,12 @@ const char               *repl_tutorial_step_target_label(int idx, int step_idx)
  *   - TUTORIAL_STEP_LABEL has a non-null non-empty target_label that
  *     names an earlier non-empty label in the same tutorial (forward
  *     references rejected).
- *   - Each expected parses to a single source command (v1 catalog rule:
- *     no `;`, no `\n`, no block-open `{`/`}`, no multi-name float
- *     decl).
+ *   - Each expected parses to a single source command and lands at
+ *     the runner's chosen row (v1 catalog rule, syntactic best-
+ *     effort: no `;`, no `\n`, no block-open `{`/`}`, no `float`
+ *     declarations of any shape — single-name float decls are
+ *     relocated to the top of non-decl code on commit, which
+ *     breaks the runner's pending.commit_line bookkeeping).
  *   - Step count stays within TUTORIAL_LOCKED_LINE_MAX. */
 int repl_tutorial_validate(int idx, char *err, int err_size);
 
