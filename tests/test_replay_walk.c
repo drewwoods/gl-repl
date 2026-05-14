@@ -353,7 +353,7 @@ static void test_cursor_guide_snapshot_override(void) {
     vertex3f.args[2] = 0.99f;
 
     SceneGuideSnapshot snap =
-        cursor_guide_snapshot_with_flat_args(&base, &vertex3f);
+        cursor_guide_snapshot_with_flat_args(&base, &vertex3f, -1);
     ASSERT_NEAR("VERTEX3F: x overridden from flat args",
                 snap.vertex_args[0], 0.42f);
     ASSERT_NEAR("VERTEX3F: y overridden from flat args",
@@ -369,7 +369,7 @@ static void test_cursor_guide_snapshot_override(void) {
     vertex2f.args[1] = 0.5f;
     vertex2f.args[2] = 9999.0f;  /* garbage; helper should ignore it */
     SceneGuideSnapshot snap2 =
-        cursor_guide_snapshot_with_flat_args(&base, &vertex2f);
+        cursor_guide_snapshot_with_flat_args(&base, &vertex2f, -1);
     ASSERT_NEAR("VERTEX2F: x overridden", snap2.vertex_args[0], 0.5f);
     ASSERT_NEAR("VERTEX2F: y overridden", snap2.vertex_args[1], 0.5f);
     ASSERT_NEAR("VERTEX2F: z forced to 0", snap2.vertex_args[2], 0.0f);
@@ -381,7 +381,7 @@ static void test_cursor_guide_snapshot_override(void) {
     tess.valid = 1;
     tess.args[0] = -1.2f; tess.args[1] = 0.45f; tess.args[2] = -0.5f;
     SceneGuideSnapshot snap3 =
-        cursor_guide_snapshot_with_flat_args(&base, &tess);
+        cursor_guide_snapshot_with_flat_args(&base, &tess, -1);
     ASSERT_NEAR("TESS_VERTEX: x", snap3.vertex_args[0], -1.2f);
     ASSERT_NEAR("TESS_VERTEX: y", snap3.vertex_args[1],  0.45f);
     ASSERT_NEAR("TESS_VERTEX: z", snap3.vertex_args[2], -0.5f);
@@ -396,13 +396,59 @@ static void test_cursor_guide_snapshot_override(void) {
     nrm.args[0] = 0.0f; nrm.args[1] = 1.0f; nrm.args[2] = 0.0f;
     base.normal_args[0] = base.normal_args[1] = base.normal_args[2] = 0.0f;
     SceneGuideSnapshot snap_n =
-        cursor_guide_snapshot_with_flat_args(&base, &nrm);
+        cursor_guide_snapshot_with_flat_args(&base, &nrm, -1);
     ASSERT_NEAR("NORMAL3F: nx overridden", snap_n.normal_args[0], 0.0f);
     ASSERT_NEAR("NORMAL3F: ny overridden", snap_n.normal_args[1], 1.0f);
     ASSERT_NEAR("NORMAL3F: nz overridden", snap_n.normal_args[2], 0.0f);
     /* vertex_args should NOT be touched when cursor is on a normal. */
     ASSERT_NEAR("NORMAL3F: vertex_args x untouched",
                 snap_n.vertex_args[0], base.vertex_args[0]);
+    /* normal_base_pos stays invalid when no flat program / index. */
+    ASSERT_INT("NORMAL3F: base_pos invalid without flat",
+               snap_n.normal_base_pos_valid, 0);
+
+    /* NORMAL3F + flat program with a following vertex: base_pos picks
+     * up the next vertex's args from FLAT (not source), so the normal
+     * arrow tracks the dynamic position even when the surrounding
+     * vars are reassigned per loop iteration. */
+    GLCmd flat_seq[3] = {0};
+    flat_seq[0].type = CMD_NORMAL3F; flat_seq[0].valid = 1;
+    flat_seq[0].args[0] = 0; flat_seq[0].args[1] = 1; flat_seq[0].args[2] = 0;
+    flat_seq[1].type = CMD_COLOR3F;  flat_seq[1].valid = 1;
+    flat_seq[2].type = CMD_VERTEX3F; flat_seq[2].valid = 1;
+    flat_seq[2].args[0] = -1.5f; flat_seq[2].args[1] = 0.42f; flat_seq[2].args[2] = 0.25f;
+
+    SceneGuideSnapshot base_with_flat = base;
+    base_with_flat.flat_program.cmds      = flat_seq;
+    base_with_flat.flat_program.cmd_count = 3;
+
+    SceneGuideSnapshot snap_n2 =
+        cursor_guide_snapshot_with_flat_args(&base_with_flat, &flat_seq[0], 0);
+    ASSERT_INT("NORMAL3F: base_pos valid when next flat vertex exists",
+               snap_n2.normal_base_pos_valid, 1);
+    ASSERT_NEAR("NORMAL3F: base_pos x from flat vertex",
+                snap_n2.normal_base_pos[0], -1.5f);
+    ASSERT_NEAR("NORMAL3F: base_pos y from flat vertex",
+                snap_n2.normal_base_pos[1], 0.42f);
+    ASSERT_NEAR("NORMAL3F: base_pos z from flat vertex",
+                snap_n2.normal_base_pos[2], 0.25f);
+
+    /* Block boundary between normal and vertex → base_pos stays
+     * invalid (the vertex doesn't belong to this normal's block). */
+    GLCmd flat_blocked[3] = {0};
+    flat_blocked[0].type = CMD_NORMAL3F; flat_blocked[0].valid = 1;
+    flat_blocked[1].type = CMD_END;      flat_blocked[1].valid = 1;
+    flat_blocked[2].type = CMD_VERTEX3F; flat_blocked[2].valid = 1;
+    flat_blocked[2].args[0] = 99.0f;
+
+    SceneGuideSnapshot base_blocked = base;
+    base_blocked.flat_program.cmds      = flat_blocked;
+    base_blocked.flat_program.cmd_count = 3;
+
+    SceneGuideSnapshot snap_blocked =
+        cursor_guide_snapshot_with_flat_args(&base_blocked, &flat_blocked[0], 0);
+    ASSERT_INT("NORMAL3F: CMD_END stops the forward search",
+               snap_blocked.normal_base_pos_valid, 0);
 
     /* TESS_NORMAL: same as NORMAL3F. */
     GLCmd tnorm = {0};
@@ -410,7 +456,7 @@ static void test_cursor_guide_snapshot_override(void) {
     tnorm.valid = 1;
     tnorm.args[0] = 1.0f; tnorm.args[1] = 0.0f; tnorm.args[2] = 0.0f;
     SceneGuideSnapshot snap_tn =
-        cursor_guide_snapshot_with_flat_args(&base, &tnorm);
+        cursor_guide_snapshot_with_flat_args(&base, &tnorm, -1);
     ASSERT_NEAR("TESS_NORMAL: nx", snap_tn.normal_args[0], 1.0f);
     ASSERT_NEAR("TESS_NORMAL: ny", snap_tn.normal_args[1], 0.0f);
     ASSERT_NEAR("TESS_NORMAL: nz", snap_tn.normal_args[2], 0.0f);
@@ -421,7 +467,7 @@ static void test_cursor_guide_snapshot_override(void) {
     translate.valid = 1;
     translate.args[0] = 5.0f; translate.args[1] = 5.0f; translate.args[2] = 5.0f;
     SceneGuideSnapshot snap4 =
-        cursor_guide_snapshot_with_flat_args(&base, &translate);
+        cursor_guide_snapshot_with_flat_args(&base, &translate, -1);
     ASSERT_NEAR("non-vertex/normal cmd: vx untouched",
                 snap4.vertex_args[0], base.vertex_args[0]);
     ASSERT_NEAR("non-vertex/normal cmd: vy untouched",
@@ -434,7 +480,7 @@ static void test_cursor_guide_snapshot_override(void) {
     /* NULL flat (e.g. cursor flat_cmd_idx out of bounds): also a
      * pass-through. */
     SceneGuideSnapshot snap5 =
-        cursor_guide_snapshot_with_flat_args(&base, NULL);
+        cursor_guide_snapshot_with_flat_args(&base, NULL, -1);
     ASSERT_NEAR("NULL flat cmd: x untouched",
                 snap5.vertex_args[0], base.vertex_args[0]);
 }

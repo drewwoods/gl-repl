@@ -188,28 +188,43 @@ static void draw_normal_guides(const SceneGuideSnapshot *snapshot) {
     if (component > 2)
         component = 2;
 
-    int search_start = (snapshot->edit_line_idx < snapshot->source_cmd_count &&
-                        !snapshot->inserting)
-                     ? snapshot->edit_line_idx + 1
-                     : snapshot->edit_line_idx;
     float vx = 0.0f, vy = 0.0f, vz = 0.0f;
     int found = 0;
-    for (int i = search_start; i < snapshot->source_cmd_count; i++) {
-        const GLCmd *cmd = &snapshot->source_cmds[i];
-        if (!cmd->valid) continue;
-        if (repl_cmd_emits_vertex(cmd->type)) {
-            /* For glVertex2f, cmd->args[2] is zero (parser leaves it
-             * default-initialised) — the right z-value for a 2D
-             * vertex used as a guide reference. */
-            vx = cmd->args[0];
-            vy = cmd->args[1];
-            vz = cmd->args[2];
-            found = 1;
-            break;
-        }
-        if (cmd->type == CMD_END || cmd->type == CMD_BEGIN ||
-            cmd->type == CMD_TESS_END || cmd->type == CMD_TESS_BEGIN_POLYGON) {
-            break;
+
+    /* Prefer the live (flat-program) anchor position when the
+     * controller has supplied one — it's re-evaluated every frame, so
+     * it tracks dynamic vars (e.g. waves' `x = -b/2 + b*j/n` inside a
+     * loop). The source-cmd fallback below is parse-time-frozen and
+     * lands the arrow at the literal source coords. */
+    if (snapshot->normal_base_pos_valid) {
+        vx = snapshot->normal_base_pos[0];
+        vy = snapshot->normal_base_pos[1];
+        vz = snapshot->normal_base_pos[2];
+        found = 1;
+    } else {
+        int search_start =
+            (snapshot->edit_line_idx < snapshot->source_cmd_count &&
+             !snapshot->inserting)
+                ? snapshot->edit_line_idx + 1
+                : snapshot->edit_line_idx;
+        for (int i = search_start; i < snapshot->source_cmd_count; i++) {
+            const GLCmd *cmd = &snapshot->source_cmds[i];
+            if (!cmd->valid) continue;
+            if (repl_cmd_emits_vertex(cmd->type)) {
+                /* For glVertex2f, cmd->args[2] is zero (parser leaves
+                 * it default-initialised) — the right z-value for a
+                 * 2D vertex used as a guide reference. */
+                vx = cmd->args[0];
+                vy = cmd->args[1];
+                vz = cmd->args[2];
+                found = 1;
+                break;
+            }
+            if (cmd->type == CMD_END || cmd->type == CMD_BEGIN ||
+                cmd->type == CMD_TESS_END ||
+                cmd->type == CMD_TESS_BEGIN_POLYGON) {
+                break;
+            }
         }
     }
     if (!found)

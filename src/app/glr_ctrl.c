@@ -717,24 +717,62 @@ typedef struct {
     int                       early_stop;
 } CursorGuideRenderCtx;
 
-/* Return a copy of `snapshot` with vertex_args / normal_args overridden
- * by the cursor flat cmd's already-evaluated args.
+/* Search forward in `flat` from `start_idx` looking for the next
+ * vertex-emitting command, and write its evaluated args into `out`.
+ * Returns 1 on success, 0 if a block boundary (CMD_BEGIN / CMD_END /
+ * tess boundaries) intervenes or no vertex is found before the end.
  *
- * Why: the snapshot's vertex_args / normal_args are parsed from the
- * input text via a predef-only evaluator, which can't resolve
- * function-local parameters (e.g. `scale`, `phase` from
- * `funcN(scale, phase)`). On a cursor inside a funcN body, those args
- * silently evaluate to 0, so a guide drawn from them lands at the
- * local origin — visually the *center* of the transformed object
- * rather than the vertex/normal the user is editing.
+ * Mirrors draw_normal_guides's source-cmd forward search but reads
+ * from the flat program — flat args are re-evaluated every frame for
+ * has_vars commands, so the position tracks dynamically-assigned
+ * vars (e.g. waves' `x = -b/2 + b*j/n` inside the loop body). */
+static int find_next_vertex_args_in_flat(const FlatProgramView *flat,
+                                         int start_idx, float out[3]) {
+    if (!flat || !out) return 0;
+    for (int i = start_idx + 1; i < flat->cmd_count; i++) {
+        const GLCmd *c = &flat->cmds[i];
+        if (!c->valid) continue;
+        if (repl_cmd_emits_vertex(c->type)) {
+            out[0] = c->args[0];
+            out[1] = c->args[1];
+            out[2] = (c->type == CMD_VERTEX2F) ? 0.0f : c->args[2];
+            return 1;
+        }
+        if (c->type == CMD_END || c->type == CMD_BEGIN ||
+            c->type == CMD_TESS_END || c->type == CMD_TESS_BEGIN_POLYGON)
+            return 0;
+    }
+    return 0;
+}
+
+/* Return a copy of `snapshot` with vertex_args / normal_args / normal
+ * base position overridden from live flat-program data.
  *
- * Flatten has already substituted the funcN parameters and evaluated
- * the expressions, so `flat->args[0..2]` are the real numeric values.
- * The helper is pure — no GL state, no side effects — to keep
+ * Why (vertex_args / normal_args): the snapshot's vertex_args /
+ * normal_args are parsed from the input text via a predef-only
+ * evaluator, which can't resolve function-local parameters
+ * (e.g. `scale`, `phase` from `funcN(scale, phase)`). On a cursor
+ * inside a funcN body those args silently evaluate to 0, so a guide
+ * drawn from them lands at the local origin — visually the *center*
+ * of the transformed object rather than the vertex/normal the user
+ * is editing.
+ *
+ * Why (normal_base_pos): draw_normal_guides anchors its arrow at the
+ * NEXT vertex following the cursor's normal line. Its built-in
+ * forward search uses source_cmds whose args are frozen at parse
+ * time; for examples like waves — where the surrounding x/y/z vars
+ * are reassigned inside a for-loop body — that anchor doesn't track
+ * the dynamic per-iteration position. Walking the flat program
+ * (re-evaluated every frame) gives the live anchor.
+ *
+ * Flatten has already substituted parameters and evaluated
+ * expressions, so flat->args carries the real numeric values. The
+ * helper is pure — no GL state, no side effects — to keep
  * `on_cmd_render_cursor_guides` testable in isolation. */
 static SceneGuideSnapshot
 cursor_guide_snapshot_with_flat_args(const SceneGuideSnapshot *snapshot,
-                                     const GLCmd *flat) {
+                                     const GLCmd *flat,
+                                     int flat_idx) {
     SceneGuideSnapshot snap = *snapshot;
     if (!flat) return snap;
     if (repl_cmd_emits_vertex(flat->type)) {
@@ -746,6 +784,9 @@ cursor_guide_snapshot_with_flat_args(const SceneGuideSnapshot *snapshot,
         snap.normal_args[0] = flat->args[0];
         snap.normal_args[1] = flat->args[1];
         snap.normal_args[2] = flat->args[2];
+        if (find_next_vertex_args_in_flat(&snap.flat_program, flat_idx,
+                                          snap.normal_base_pos))
+            snap.normal_base_pos_valid = 1;
     }
     return snap;
 }
@@ -762,7 +803,8 @@ static void on_cmd_render_cursor_guides(const ReplVertexWalkState *state,
               ? &ctx->snapshot->flat_program.cmds[state->flat_cmd_idx]
               : NULL;
         SceneGuideSnapshot snap =
-            cursor_guide_snapshot_with_flat_args(ctx->snapshot, flat);
+            cursor_guide_snapshot_with_flat_args(ctx->snapshot, flat,
+                                                 state->flat_cmd_idx);
         geometry_guides_render_for_cursor(&snap);
         ctx->geometry_guide_done = 1;
     }
