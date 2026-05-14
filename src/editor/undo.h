@@ -84,4 +84,11 @@ void editor_undo_push_snapshot(void);
 void editor_undo_pop_snapshot(void);
 void editor_undo_do_redo(void);
 
+/* Drop every snapshot from both the undo and redo rings. Must be called
+ * any time the live REPL document is replaced wholesale (scene switch,
+ * example load, workspace load, full app reset) — otherwise a pop after
+ * the switch restores the previous scene's pre-mutation content into
+ * the new scene's live state, silently corrupting it. */
+void editor_undo_clear(void);
+
 #endif /* EDITOR_UNDO_H */

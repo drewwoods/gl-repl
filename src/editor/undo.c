@@ -97,6 +97,13 @@ void editor_undo_ring_state_restore(const ReplUndoRingState *state) {
     g_redo_count = state->redo_count;
 }
 
+void editor_undo_clear(void) {
+    g_undo_head = 0;
+    g_undo_count = 0;
+    g_redo_head = 0;
+    g_redo_count = 0;
+}
+
 void editor_undo_push_snapshot(void) {
     /* First mutation on a loaded example auto-promotes to a user scene,
      * inheriting the example's name. The snapshot captures the post-promotion

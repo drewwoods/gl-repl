@@ -18,6 +18,7 @@
 #include "editor/input.h"
 #include "editor/search.h"
 #include "editor/state.h"
+#include "editor/undo.h"
 #include "scene/guides/geometry_guides.h" /* geometry_guides_render_for_cursor */
 #include "app/glr_actions.h"
 #include "app/glr_config.h"
@@ -1576,6 +1577,11 @@ static void glr_app_install_app_services(void) {
  * src/repl/state.c so the REPL pipeline (and tools/repl_demo) does not
  * have to link / stub the peer / editor / UI reset symbols. */
 void glr_app_reset_all(void) {
+    /* Drop the undo/redo rings first: the live REPL document is about
+     * to be replaced wholesale, and a leftover snapshot would let a
+     * post-reset Ctrl+Z restore the *previous* world's content into
+     * the new one. */
+    editor_undo_clear();
     repl_state_reset_program();
     /* Step 7a: GlrState owns presentation + render-config toggles.
      * Reset them alongside the REPL halves so callers see a coherent
@@ -1969,6 +1975,10 @@ static void cycle_example_or_user_scene(void) {
      * so the new scene starts from a clean controller state. Step 2 of
      * the decouple plan moved this out of src/repl/example_loader.c. */
     editor_reset_transients();
+    /* F12 cycles through wholesale scene replacements — drop the undo
+     * ring so a post-cycle Ctrl+Z can't bleed the previous scene's
+     * pre-mutation state into the destination. */
+    editor_undo_clear();
     int count = repl_example_count();
     int active_scene = repl_active_user_scene();
 
