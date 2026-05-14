@@ -4,11 +4,11 @@
 The stub layer at `tests/gl-stubs/include/GL/*` currently records only a
 per-symbol call count (`gl_stub_counts[GL_STUB_*]`). That's enough for
 shape comparisons — "did the REPL emit the same number of `glVertex3f`
-calls as the exported C?" — but it's blind to argument values. Two
-divergences the count-only `test_export_trace_parity` already surfaces
-on `--full` (Bezier off-by-one, label glutBitmapCharacter delta) would
-be much easier to root-cause if the test could also assert the *values*
-the two legs pass through the stubs.
+calls as the exported C?" — but it's blind to argument values. The
+one real divergence the count-only `test_export_trace_parity` surfaces
+on `--full` today (Bezier off-by-one `glVertex2f`) would be much easier
+to root-cause if the test could also assert the *values* the two legs
+pass through the stubs.
 
 ### Motivation
 `test_export_trace_parity` (added alongside this plan) cross-checks REPL
@@ -81,11 +81,9 @@ stays accurate even after wrap because it's still incremented
 independently.
 
 Trace consumers iterate `gl_stub_rings[i].entries[0..ring_count(i))` and
-diff in order. The two known `--full` divergences become tractable:
+diff in order. The remaining `--full` divergence becomes tractable:
 - **Bezier off-by-one**: walk both rings for `glVertex2f` until they
   diverge, print the first mismatched index and arguments.
-- **Label glutBitmapCharacter delta**: same approach over the character
-  ring shows which formatted strings differ.
 
 ### V3: Argument Predicates / Tolerances
 Float comparisons need tolerance. Add a `gl_stub_arg_eq()` helper that

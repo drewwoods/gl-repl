@@ -349,10 +349,54 @@ static void run_examples(void) {
     }
 }
 
+static void print_help(const char *argv0) {
+    printf(
+"Usage: %s [--full] [--help]\n"
+"\n"
+"Cross-checks REPL execution against the exported C trace by counting\n"
+"per-symbol stub GL calls on both sides and asserting parity.\n"
+"\n"
+"For each program the test:\n"
+"  1. feeds source lines through feed_line(), flattens, snapshots\n"
+"     gl_stub_counts[] around repl_execute_program();\n"
+"  2. calls repl_export_save_output() to a temp file, shells out to cc\n"
+"     to compile that file together with tests/export_trace_driver.c\n"
+"     (which #includes the exported file so its static helpers\n"
+"     render_repl_geometry / reset_repl_vars are visible);\n"
+"  3. runs the child, reads its dumped counts, compares.\n"
+"\n"
+"glColor3f and glColor4f are summed before comparing because the\n"
+"executor folds CMD_COLOR3F through glColor4f at execute time while\n"
+"the exporter emits glColor3f literally.\n"
+"\n"
+"Options:\n"
+"  --full     After the curated table, also run every built-in example\n"
+"             via repl_examples_*. Slow: one cc invocation per program.\n"
+"             Currently surfaces two known divergences (Bezier glVertex2f,\n"
+"             orbit-plot glutBitmapCharacter) — left as test discoveries\n"
+"             for follow-up; see plans/not-started/gl-stub-extensions.md.\n"
+"  --help     Show this help and exit 0.\n"
+"\n"
+"Notes:\n"
+"  Stub-only test (linked only when USE_GL_STUBS=1) because both legs\n"
+"  need gl_stub_counts[] live. The cc invocation expects to run from\n"
+"  the repo root; make test runs tests from there.\n",
+        argv0 ? argv0 : "test_export_trace_parity");
+}
+
 int main(int argc, char **argv) {
     int full = 0;
     for (int i = 1; i < argc; i++) {
-        if (strcmp(argv[i], "--full") == 0) full = 1;
+        if (strcmp(argv[i], "--full") == 0) {
+            full = 1;
+        } else if (strcmp(argv[i], "--help") == 0 || strcmp(argv[i], "-h") == 0) {
+            print_help(argv[0]);
+            return 0;
+        } else {
+            fprintf(stderr, "unknown arg: %s\n", argv[i]);
+            print_help(argv[0]);
+            return 2;
+        }
     }
 
     repl_eval_init_predef_vars();
