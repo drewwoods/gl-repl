@@ -185,12 +185,31 @@ static int label_is_empty(const char *s) {
     return !s || s[0] == '\0';
 }
 
-/* v1 catalog rule: each `expected` must parse to exactly one source
- * command. Detected syntactically without dragging the parser into
- * the catalog: reject empty/whitespace-only text, embedded newlines,
- * statement separators (`;`), and block punctuation (`{`/`}`). Also
- * reject multi-name float decls (`float a, b`) since those expand
- * into multiple source rows. */
+/* v1 catalog rule: each `expected` must parse to exactly one
+ * source command AND land at the runner's chosen
+ * expected_commit_line on commit. The full guarantee would require
+ * driving the live parser/compile seam against a temp document
+ * snapshot, which the catalog validator can't easily do without
+ * dragging REPL state into Phase 1. Until that lands, this checker
+ * is a best-effort syntactic filter focused on the patterns that
+ * actively break label-line bookkeeping:
+ *
+ *   - empty / whitespace-only text;
+ *   - embedded newlines (`\n`, `\r`);
+ *   - statement separators (`;`) — would commit two source rows;
+ *   - block punctuation (`{`/`}`) — opens a structured block;
+ *   - any `float ` declaration (single- or multi-name) — the
+ *     CMD_VAR_DECLARE placement rule relocates the new decl to the
+ *     top of non-decl code regardless of edit_line, so
+ *     pending.commit_line would not match the actual landing row
+ *     and committed_line_for_step would point at the wrong source
+ *     line for any later label-targeted step.
+ *
+ * Known-shallow gaps (commit-time failures, not catastrophic): an
+ * unknown GL call or one with wrong arity validates here but fails
+ * at commit time, leaving the tutorial unrunnable at that step.
+ * Catalog authors notice immediately. Promoting this to a real
+ * parser-driven check is tracked as future work. */
 static int expected_is_single_command(const char *expected,
                                       char *err, int err_size) {
     if (!expected) {
@@ -230,22 +249,26 @@ static int expected_is_single_command(const char *expected,
         return 0;
     }
 
-    /* Reject multi-name float decls like "float a, b" which expand into
-     * one CMD_VAR_DECLARE per name. */
+    /* Reject every `float ` declaration. Single-name decls like
+     * `float x` parse fine but the commit path relocates them to
+     * the top of non-decl code (CLAUDE.md: "new CMD_VAR_DECLARE
+     * lines are inserted at the top of non-decl code [...]
+     * regardless of cursor position"), which means
+     * pending.commit_line drifts away from the actual landing row
+     * and any later label-targeted step that targets this decl
+     * would resolve to the wrong source line. Multi-name decls
+     * additionally expand into one CMD_VAR_DECLARE per name. */
     const char *s = expected;
     while (*s && isspace((unsigned char)*s))
         s++;
     if (strncmp(s, "float", 5) == 0 &&
         (s[5] == '\0' || isspace((unsigned char)s[5]))) {
-        for (const char *p = s + 5; *p; p++) {
-            if (*p == ',') {
-                if (err_size > 0)
-                    snprintf(err, (size_t)err_size,
-                             "expected float decl must be single-name: %s",
-                             expected);
-                return 0;
-            }
-        }
+        if (err_size > 0)
+            snprintf(err, (size_t)err_size,
+                     "expected `float` declarations are not allowed in "
+                     "tutorial steps (placement rule relocates them): %s",
+                     expected);
+        return 0;
     }
     return 1;
 }

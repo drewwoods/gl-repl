@@ -838,6 +838,26 @@ static void test_validate_rejects_multi_row_expected(void) {
     err[0] = '\0';
     ASSERT_TRUE("multi-name float decl rejected",
                 !repl_tutorial_validate_entry(&entry_decl, err, sizeof(err)));
+
+    /* Single-name float decls also rejected: even though they
+     * parse to one source command, the commit path relocates
+     * CMD_VAR_DECLARE rows to the top of non-decl code, so the
+     * pending bookkeeping cannot trust pending.commit_line for
+     * label resolution. */
+    static const TutorialStep single_decl_steps[] = {
+        { NULL, "// declares one",
+                "float x",
+                TUTORIAL_STEP_APPEND, NULL },
+        { NULL, NULL, NULL, TUTORIAL_STEP_APPEND, NULL },
+    };
+    TutorialEntry entry_single_decl = { .name = "single_decl",
+                                        .steps = single_decl_steps };
+    err[0] = '\0';
+    ASSERT_TRUE("single-name float decl rejected",
+                !repl_tutorial_validate_entry(&entry_single_decl,
+                                              err, sizeof(err)));
+    ASSERT_TRUE("single-name float decl diagnostic mentions 'float'",
+                strstr(err, "float") != NULL);
 }
 
 static void test_append_first_expected_commit_line_is_trailing_row(void) {
