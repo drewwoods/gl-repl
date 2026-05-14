@@ -14,6 +14,32 @@ int                  tutorial_handle_commit_attempt(const char *input,
                                                     TutorialMatchResult *out);
 void                 tutorial_advance_after_successful_commit(void);
 const char          *tutorial_current_expected_text(void);
+
+/* The source row the next user commit should land on. -1 when no
+ * step is currently waiting for a user commit. */
+int                  tutorial_expected_commit_line(void);
+
+/* Stamp a pending-commit record after the precheck matcher passes
+ * but before the editor's commit dispatch runs. Pairs 1:1 with
+ * exactly one of tutorial_note_expected_commit_applied (on
+ * COMMIT_OK) or tutorial_cancel_pending (every other outcome).
+ * `step_idx` should be the current step at the moment of begin. */
+void                 tutorial_begin_expected_commit_attempt(void);
+
+/* Bookkeeping after a matched expected commit succeeded: shift any
+ * existing tracked tutorial lines at-or-after pending.commit_line by
+ * the row delta the commit produced (v1 catalog rule constrains
+ * delta to 1, but the math stays general), then record the source
+ * row for the just-committed step so a later label-targeted step
+ * can resolve a target_label pointing at it. Clears the pending
+ * record. */
+void                 tutorial_note_expected_commit_applied(void);
+
+/* Idempotent: no-op when no pending record is in flight. Call from
+ * any commit-rejection path that bypasses
+ * tutorial_note_expected_commit_applied. */
+void                 tutorial_cancel_pending(void);
+
 int                  tutorial_step_fade_front(int line_idx, int line_len,
                                               float now);
 float                tutorial_step_fade_alpha(int line_idx, int char_idx,

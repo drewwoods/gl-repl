@@ -227,7 +227,7 @@ static void test_replace_existing_line_does_not_advance(void) {
                tutorial_state_view().step, 1);
     ASSERT_STR("non-append commit status",
                status_text(),
-               "Move cursor to the end of the buffer before committing");
+               "Move cursor to the tutorial insertion line");
     ASSERT_STR("non-append commit preserves input",
                editor_state_input().input, expected);
     ASSERT_INT("non-append commit does not append a new line",
@@ -486,9 +486,12 @@ static void test_navigation_advances_on_matching_input(void) {
 static void test_enter_on_locked_line_shows_position_hint(void) {
     /* Regression: an earlier review flagged that
      * commit_current_input's unmodified+enter_mode branch could toggle
-     * insert mode at a locked line. The Phase 4 precheck's position
-     * guard actually catches this before commit_current_input runs;
-     * lock that down so a future refactor doesn't re-open the gap. */
+     * insert mode at a locked line. With the Phase 3 precheck,
+     * landing on a locked line first triggers load_line_to_input,
+     * which clears the input and sets the read-only status; the
+     * Enter that follows hits the precheck's empty-input silent
+     * reject, so the read-only status stays visible. The step
+     * neither advances nor enters insert mode. */
     reset_fixture();
     tutorial_start(0);
     set_input_text(tutorial_current_expected_text());
@@ -497,9 +500,9 @@ static void test_enter_on_locked_line_shows_position_hint(void) {
     editor_navigate_to_line(0);
     (void)editor_handle_key('\n', 0, 0);
 
-    ASSERT_STR("enter on locked line shows position hint",
+    ASSERT_STR("enter on locked line shows read-only status",
                status_text(),
-               "Move cursor to the end of the buffer before committing");
+               "Tutorial instruction is read-only");
     ASSERT_TRUE("enter on locked line did not enter insert mode",
                 !editor_insert_mode());
     ASSERT_INT("enter on locked line did not advance step",
@@ -555,6 +558,14 @@ static void test_tab_autofill_then_semicolon_advances(void) {
 }
 
 static void test_rejected_commit_does_not_advance_tutorial(void) {
+    /* Filling the document via feed_line (which intentionally
+     * bypasses the tutorial precheck) leaves the editor cursor at
+     * the trailing row while expected_commit_line still points at
+     * the row immediately below the first instruction. The Phase 3
+     * precheck rejects the mismatched cursor, so the step doesn't
+     * advance and the user's typed input is preserved — the same
+     * guarantee the original capacity-rejection test was after,
+     * achieved one rung earlier in the pipeline. */
     reset_fixture();
     tutorial_start(0);
 
@@ -569,8 +580,9 @@ static void test_rejected_commit_does_not_advance_tutorial(void) {
 
     ASSERT_INT("step unchanged after rejected commit",
                tutorial_state_view().step, 0);
-    ASSERT_STR("capacity failure status preserved",
-               status_text(), "Command buffer full!");
+    ASSERT_STR("position-mismatch status surfaces from precheck",
+               status_text(),
+               "Move cursor to the tutorial insertion line");
     ASSERT_STR("rejected commit keeps expected input",
                editor_state_input().input,
                repl_tutorial_step_expected(0, 0));
@@ -924,6 +936,175 @@ static void test_depth_tutorial_label_targeted_step_inserts_above_label(void) {
                 editor_insert_mode() != 0);
 }
 
+static void walk_depth_tutorial_to_label_step(void) {
+    int t_idx = depth_tutorial_idx();
+    if (t_idx < 0)
+        return;
+    reset_fixture();
+    tutorial_start(t_idx);
+    for (int s = 0; s < 5; s++) {
+        const char *expected = tutorial_current_expected_text();
+        set_input_text(expected);
+        (void)editor_handle_key(';', 0, 0);
+    }
+}
+
+static void test_phase3_label_targeted_commit_inserts_above_label(void) {
+    /* Phase 3: with the precheck + guard exception in place, the
+     * user can actually commit the label-targeted step's expected
+     * command at expected_commit_line and the runner advances.
+     * Walks the depth-test tutorial via the real keyboard route
+     * (which exercises the precheck) rather than feed_line. */
+    int t_idx = depth_tutorial_idx();
+    if (t_idx < 0)
+        return;
+
+    walk_depth_tutorial_to_label_step();
+    ASSERT_INT("walked to label-targeted step",
+               tutorial_state_view().step, 5);
+
+    int target_line = tutorial_state_view().expected_commit_line;
+    ASSERT_TRUE("expected_commit_line is set on label step",
+                target_line >= 0);
+
+    const char *expected = tutorial_current_expected_text();
+    ASSERT_STR("expected for label step is glEnable",
+               expected, "glEnable(GL_DEPTH_TEST)");
+    set_input_text(expected);
+    (void)editor_handle_key(';', 0, 0);
+
+    /* Step advanced past the label-targeted step (or completed). */
+    ASSERT_TRUE("step advanced or tutorial completed",
+                tutorial_state_view().step != 5 || !tutorial_active());
+
+    SourceTextView doc = source_document_view();
+    const char *committed = source_text_line(doc, target_line);
+    const char *glbegin   = source_text_line(doc, target_line + 1);
+    ASSERT_TRUE("committed glEnable lands at the expected commit line",
+                committed && strstr(committed, "glEnable(GL_DEPTH_TEST)") != NULL);
+    ASSERT_TRUE("originally-labeled glBegin is now directly below",
+                glbegin && strstr(glbegin, "glBegin(GL_TRIANGLES)") != NULL);
+}
+
+static void test_phase3_wrong_input_at_label_step_does_not_insert(void) {
+    int t_idx = depth_tutorial_idx();
+    if (t_idx < 0)
+        return;
+
+    walk_depth_tutorial_to_label_step();
+    int target_line = tutorial_state_view().expected_commit_line;
+    SourceTextView doc_before = source_document_view();
+    int step_before = tutorial_state_view().step;
+
+    set_input_text("glPointSize(2)");
+    (void)editor_handle_key(';', 0, 0);
+
+    SourceTextView doc_after = source_document_view();
+    ASSERT_INT("wrong input on label step does not insert",
+               doc_after.line_count, doc_before.line_count);
+    ASSERT_INT("wrong input does not advance step",
+               tutorial_state_view().step, step_before);
+    ASSERT_STR("wrong input keeps user text",
+               editor_state_input().input, "glPointSize(2)");
+    /* Status surfaces the expected hint. */
+    ASSERT_TRUE("wrong-input status starts with 'expected:'",
+                strncmp(status_text(), "expected:", 9) == 0);
+    (void)target_line;  /* keep variable for symmetry with happy-path test */
+}
+
+static void test_phase3_correct_input_at_wrong_line_does_not_insert(void) {
+    int t_idx = depth_tutorial_idx();
+    if (t_idx < 0)
+        return;
+
+    walk_depth_tutorial_to_label_step();
+    int target_line = tutorial_state_view().expected_commit_line;
+    SourceTextView doc_before = source_document_view();
+    int step_before = tutorial_state_view().step;
+
+    /* Move the cursor off the expected line (to the trailing row)
+     * but keep input correct. The precheck should reject. */
+    repl_state_edit_line_set(repl_state_document_count());
+    editor_insert_mode_set(0);
+    set_input_text("glEnable(GL_DEPTH_TEST)");
+    (void)editor_handle_key(';', 0, 0);
+
+    SourceTextView doc_after = source_document_view();
+    ASSERT_INT("correct input at wrong line does not insert",
+               doc_after.line_count, doc_before.line_count);
+    ASSERT_INT("correct input at wrong line does not advance",
+               tutorial_state_view().step, step_before);
+    ASSERT_STR("position-mismatch status surfaces",
+               status_text(),
+               "Move cursor to the tutorial insertion line");
+    (void)target_line;
+}
+
+static void test_phase3_empty_input_silent_reject(void) {
+    /* Phase 3: pressing ; or Enter with an empty input on the
+     * expected line should silently reject — no status update. */
+    reset_fixture();
+    tutorial_start(0);
+    repl_set_status("baseline");
+
+    ReplEditorInputState *inp = editor_state_input_mut();
+    inp->input[0] = '\0';
+    inp->input_len = 0;
+
+    (void)editor_handle_key(';', 0, 0);
+    ASSERT_STR("empty ;-commit leaves status untouched",
+               status_text(), "baseline");
+
+    (void)editor_handle_key('\n', 0, 0);
+    ASSERT_STR("empty Enter-commit leaves status untouched",
+               status_text(), "baseline");
+}
+
+static void test_phase3_pending_clears_after_match_failure(void) {
+    /* Phase 3 invariant: every begin pairs with exactly one note/
+     * cancel. Trigger a precheck match-pass (so _begin runs) then
+     * force the editor commit to fail — pending must reset to -1. */
+    reset_fixture();
+    tutorial_start(0);
+
+    /* Fill the buffer to capacity so the eventual commit fails. */
+    for (int i = repl_state_document_count(); i < MAX_COMMANDS; i++)
+        editor_feed_line("glPointSize(1);");
+
+    /* Move cursor to expected_commit_line so the position check
+     * passes; the matcher should accept the expected text. The
+     * capacity check in the editor commit will then fail, and
+     * tutorial_cancel_pending in commit_before_navigation's
+     * REJECTED branch (or the ;-route's REJECTED case) is supposed
+     * to clear the pending record. */
+    int expected_line = tutorial_state_view().expected_commit_line;
+    repl_state_edit_line_set(expected_line);
+    editor_insert_mode_set(expected_line < repl_state_document_count());
+    set_input_text(tutorial_current_expected_text());
+    (void)editor_handle_key(';', 0, 0);
+
+    ASSERT_INT("pending.step_idx reset after rejected commit",
+               tutorial_state_view().pending.step_idx, -1);
+}
+
+static void test_phase3_paste_above_locked_still_blocked(void) {
+    /* Phase 3 guard must keep paste / Ctrl-D / Ctrl-/ blocked
+     * above locked comments, since the guard exception is scoped
+     * to the in-flight matched expected commit. */
+    reset_fixture();
+    tutorial_start(0);
+    /* Commit step 0 so there's a non-locked user line we can copy. */
+    set_input_text(tutorial_current_expected_text());
+    (void)editor_handle_key(';', 0, 0);
+
+    repl_state_edit_line_set(1);
+    editor_clipboard_copy_current();
+    repl_state_edit_line_set(0);
+    editor_clipboard_paste_current();
+    ASSERT_STR("paste above locked still rejected",
+               status_text(), "Tutorial comment is read-only");
+}
+
 static void test_depth_tutorial_label_targeted_emit_shifts_prior_locked_lines(void) {
     /* Phase 2: the locked instruction comments for steps 0-4 should
      * shift to keep pointing at the same source content after the
@@ -1044,5 +1225,11 @@ int main(void) {
     test_append_first_expected_commit_line_is_trailing_row();
     test_depth_tutorial_label_targeted_step_inserts_above_label();
     test_depth_tutorial_label_targeted_emit_shifts_prior_locked_lines();
+    test_phase3_label_targeted_commit_inserts_above_label();
+    test_phase3_wrong_input_at_label_step_does_not_insert();
+    test_phase3_correct_input_at_wrong_line_does_not_insert();
+    test_phase3_empty_input_silent_reject();
+    test_phase3_pending_clears_after_match_failure();
+    test_phase3_paste_above_locked_still_blocked();
     return test_harness_report(&g_harness, "test_tutorial_runner");
 }
