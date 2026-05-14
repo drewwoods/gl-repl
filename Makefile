@@ -528,6 +528,11 @@ TEST_BINS += test_repl_executor
 # the same way). The test shells out to cc using paths relative to CWD;
 # `make test` runs from the repo root which is what the test expects.
 TEST_BINS += test_export_trace_parity
+# Walker invariants the cursor-guide stack relies on. Drives
+# replay_walk_user_vertices directly, which calls glPushMatrix /
+# glTranslatef, so it needs the no-op GL stubs to run without a
+# real GL context.
+TEST_BINS += test_replay_walk
 endif
 
 CORE_TEST_BINS = $(filter-out test_eval test_format test_repl_code_panel_layout test_audio,$(TEST_BINS))
@@ -585,6 +590,11 @@ test_glr_ctrl_OBJS = $(OBJDIR)/$(TEST_DIR)/test_glr_ctrl.o $(filter-out $(OBJDIR
 test_repl_executor_OBJS = $(OBJDIR)/$(TEST_DIR)/test_repl_executor.o $(filter-out $(OBJDIR)/src/repl/executor.o,$(CORE_TEST_OBJS))
 
 test_repl_replay_OBJS = $(OBJDIR)/$(TEST_DIR)/test_repl_replay.o $(filter-out $(OBJDIR)/src/widgets/replay.o,$(CORE_TEST_OBJS))
+
+# test_replay_walk includes app/glr_ctrl.c as a translation unit to reach
+# the static cursor_guide_snapshot_with_flat_args helper, so the object
+# must be filtered out the same way test_glr_ctrl does.
+test_replay_walk_OBJS = $(OBJDIR)/$(TEST_DIR)/test_replay_walk.o $(filter-out $(OBJDIR)/src/app/glr_ctrl.o,$(CORE_TEST_OBJS))
 
 TEST_OBJS = $(foreach test,$(TEST_BINS),$($(test)_OBJS))
 TEST_RUNNER_CASES = $(foreach test,$(TEST_BINS),'$(test):::$($(test)_RUN)')
