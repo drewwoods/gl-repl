@@ -92,8 +92,9 @@ Important: labels resolve to source-document lines, not wrapped code-panel
 rows. The line for a label is tracked by the tutorial runtime and shifts as
 tutorial-approved insertions move source rows.
 
-### `repl_load_apply_line` Contract Drift
+### `repl_load_apply_line` Contract Widening (prerequisite)
 
+Every later phase depends on the loader accepting a mid-document edit line.
 The current loader (`src/repl/load.c`) is documented in `src/repl/load.h:42-46`
 as append-only: callers are required to set `repl_state_edit_line` to
 `repl_state_document_count()` before calling. In practice the plain-command
@@ -104,22 +105,18 @@ path). The structured-block validators in the same function honor
 `change.pos` from the compile result, which today is set from `edit_line`
 too.
 
-Two acceptable resolutions:
+Resolution: widen the documented contract. Update the comment in
+`src/repl/load.h:42-46` to say `repl_state_edit_line` must be in
+`[0, document_count]` and the line will be inserted at that index. This
+matches actual behavior and unlocks the tutorial use case without new API
+surface. Land this as **Phase 0** below before any tutorial code change, with
+an assertion-test that pins the new contract.
 
-1. **Widen the contract.** Update the comment in `src/repl/load.h:42-46` to
-   say `repl_state_edit_line` must be in `[0, document_count]` and the line
-   will be inserted at that index. This matches actual behavior and unlocks
-   the tutorial use case without new API surface.
-2. **Add a focused helper.** Introduce
-   `repl_load_apply_line_at(const char *line, int target_idx, char *err,
-   int err_size)` that explicitly sets edit_line internally, then delegates.
-   Existing append callers stay on `repl_load_apply_line`; tutorial emission
-   uses the new helper.
-
-Option (1) is cheaper and the actual behavior is already what the tutorial
-runner needs. Option (2) is sturdier against future contract tightening.
-Pick (1) for v1; revisit if `repl_load_apply_line` ever grows an internal
-assertion that `edit_line == document_count`.
+(A focused `repl_load_apply_line_at(line, target_idx, err, err_size)` helper
+was considered as a sturdier alternative; rejected for v1 as needless API
+surface given actual behavior already matches the widened contract. Revisit
+only if `repl_load_apply_line` ever grows an internal assertion that
+`edit_line == document_count`.)
 
 ## Data Model
 
@@ -240,31 +237,39 @@ Failure behavior:
 
 ## Runtime State
 
-Extend `TutorialRuntimeState` with the current expected insertion site, the
-document count captured before the expected user commit, the guard-exception
-flag for the matched insert, and a per-step source-line map.
+Extend `TutorialRuntimeState` with the current expected insertion site, a
+single in-flight commit-attempt record, and a per-step source-line map.
 
 ```c
-#define TUTORIAL_STEP_MAX 64
+typedef struct {
+    int step_idx;        /* -1 ⇒ no commit attempt in flight */
+    int commit_line;
+    int doc_count_before;
+} TutorialPendingCommit;
 
 int expected_commit_line;
-int pending_doc_count_before_commit;
-int pending_commit_line;
-int pending_step_idx;
-int allow_expected_insert;
-int committed_line_for_step[TUTORIAL_STEP_MAX];
+TutorialPendingCommit pending;
+int committed_line_for_step[TUTORIAL_LOCKED_LINE_MAX];
 ```
+
+The four `pending_*` scalars and `allow_expected_insert` flag from earlier
+drafts collapsed into one struct with `step_idx == -1` as the "inactive"
+sentinel. The guard-exception predicate becomes `pending.step_idx >= 0` —
+it is derived, not stored independently, so the flag cannot drift out of
+sync with the rest of the bookkeeping. The committed-line map reuses
+`TUTORIAL_LOCKED_LINE_MAX` (the existing 64-element cap for tracked
+tutorial-owned lines) rather than introducing a second cap with a different
+name.
 
 Recommended sentinels:
 
 - `expected_commit_line = -1` when no step is waiting for a user command.
-- `pending_doc_count_before_commit = -1` when no commit is in flight.
-- `pending_commit_line = -1` when no commit is in flight.
-- `pending_step_idx = -1` when no commit is in flight.
-- `allow_expected_insert = 0` when no matched commit is in flight.
+- `pending.step_idx = -1` when no commit attempt is in flight; the other
+  `pending` fields are then ignored.
 - `committed_line_for_step[i] = -1` until step `i` has committed.
 
-`tutorial_state_reset` clears all new fields.
+`tutorial_state_reset` clears all new fields, including `pending.step_idx`
+to `-1`.
 
 The existing `locked_lines[]` remains a list of source line indices for
 revealed tutorial instruction comments. The extension needs one helper that
@@ -281,6 +286,7 @@ This helper should shift:
 - `fade_line_idx >= pos`
 - `expected_commit_line >= pos`, if it is already set and the shift is not for
   the insertion currently defining it
+- `pending.commit_line >= pos`, if `pending.step_idx >= 0`
 - `committed_line_for_step[i] >= pos`
 
 For this feature, tutorial-approved changes are insert-only. The existing
@@ -388,17 +394,15 @@ gives the user a concrete visual anchor for the message.)
 Then run the existing matcher. Mismatch behavior stays unchanged: status shows
 `expected: ...`, the typed input is preserved, and the command is not applied.
 
-Empty-input special case: when the input buffer is empty and the commit route
-is a navigation auto-commit (not a `;`/Enter direct intent), the precheck must
-return 0 **without updating the status**. Otherwise the navigation that
-initially places the cursor on `expected_commit_line` — with empty input and
-insert mode on — would immediately spam `expected: ...` even though the user
-hasn't typed yet. The simplest implementation splits the precheck: keep the
-existing `expected: ...` for non-empty input and surface a silent rejection for
-empty input. Direct `;`/Enter on empty input can keep the existing
-`"expected: ..."` hint by checking the key path explicitly, or by
-always-rejecting silently and accepting that Enter on empty input becomes a
-no-op (the user has Tab and the visible shadow text as discovery affordances).
+Empty-input rule (decided): when `input[0] == '\0'`, the precheck returns 0
+silently — no status update — on **both** the `;`/Enter path and the
+navigation auto-commit path. Without this, the navigation that initially
+places the cursor on `expected_commit_line` (empty input, insert mode on)
+would immediately spam `expected: ...` before the user has typed. The user's
+discovery affordances on an empty expected line are the visible shadow text
+and Tab; the `expected: ...` hint is reserved for the case where the user
+has typed *something* that didn't match. Enter on an empty expected line is
+accepted as a no-op.
 
 ### Commit Success Bookkeeping
 
@@ -421,10 +425,11 @@ static int tutorial_precheck_current_input(void) {
 
 That helper stores:
 
-- `pending_doc_count_before_commit = repl_state_document_count()`
-- `pending_commit_line = expected_commit_line`
-- `pending_step_idx = tutorial_state.step`
-- `allow_expected_insert = 1`
+```c
+pending.step_idx        = tutorial_state.step;
+pending.commit_line     = expected_commit_line;
+pending.doc_count_before = repl_state_document_count();
+```
 
 After a real successful commit, before advancing to the next step, call:
 
@@ -432,32 +437,45 @@ After a real successful commit, before advancing to the next step, call:
 tutorial_note_expected_commit_applied();
 ```
 
-It computes:
+It computes (catalog rule below guarantees `delta == 1`, but the math stays
+general):
 
 ```c
-int delta = repl_state_document_count() - pending_doc_count_before_commit;
+int delta = repl_state_document_count() - pending.doc_count_before;
 ```
 
 If `delta > 0`, first shift existing tracked tutorial lines at or after
-`pending_commit_line` by `delta`. Then, if the just-committed step has a
+`pending.commit_line` by `delta`. Then, if the just-committed step has a
 non-empty label, record:
 
 ```c
-committed_line_for_step[pending_step_idx] = pending_commit_line;
+committed_line_for_step[pending.step_idx] = pending.commit_line;
 ```
 
 Record the current step's label line after shifting existing lines so the new
 step's own label is not shifted as though it pre-existed the insertion. Then
-clear the pending fields and the `allow_expected_insert` flag.
+clear the pending record (`pending.step_idx = -1`).
 
 This keeps locked instruction comments and prior label positions correct when
-the expected command is inserted in the middle of the document. It also handles
-future expected lines that compile to more than one source row (e.g.
-`func0() { ... }` block commits that grow the document by N rows), although
-starter tutorials should continue to use one-line expected commands.
+the expected command is inserted in the middle of the document.
 
-The existing `tutorial_advance_if_commit_ok(result)` wrapper is the right place
-to sequence this, with explicit symmetry for rejected commits:
+**v1 catalog rule: one expected line == one source row.** Catalog validation
+(`repl_tutorial_validate`) rejects any `expected` that does not parse to a
+single source command. The `delta` arithmetic above stays general so a future
+extension to multi-row commits is mechanical, but designing for it now buys
+nothing for the starter catalog.
+
+**Single invariant for all rejection paths.** Every editor commit attempt
+that called `tutorial_begin_expected_commit_attempt` MUST be followed by
+exactly one of `tutorial_note_expected_commit_applied` (on `COMMIT_OK`) or
+`tutorial_cancel_pending` (on every other outcome).
+`tutorial_cancel_pending` is idempotent — calling it when
+`pending.step_idx == -1` is a no-op — so call sites can dispatch it
+unconditionally on the rejection branch without worrying about whether the
+precheck actually reached the `_begin` call.
+
+The existing `tutorial_advance_if_commit_ok(result)` wrapper is the right
+place to sequence this:
 
 ```c
 static void tutorial_advance_if_commit_ok(CommitResult result) {
@@ -466,24 +484,20 @@ static void tutorial_advance_if_commit_ok(CommitResult result) {
         tutorial_note_expected_commit_applied();
         tutorial_advance_after_successful_commit();
     } else {
-        /* Precheck called _begin; if the editor commit failed (parse
-         * error, capacity, etc.) we must clear the pending fields and
-         * the allow flag so the next attempt starts fresh. */
-        tutorial_cancel_expected_commit_attempt();
+        tutorial_cancel_pending();
     }
 }
 ```
 
-`tutorial_cancel_expected_commit_attempt()` clears the pending fields and the
-`allow_expected_insert` flag without shifting any tracked lines.
+`tutorial_cancel_pending()` clears the pending record without shifting any
+tracked lines.
 
-Navigation rejection needs an explicit cleanup path. Today
-`commit_before_navigation()` has a `COMMIT_REJECTED` branch that restores the
-committed state and returns without flowing through
-`tutorial_advance_if_commit_ok(result)`. If the tutorial precheck matched and
-set `allow_expected_insert`, but the editor commit later failed, that branch
-must call `tutorial_cancel_expected_commit_attempt()` before returning. Without
-that call, the pending fields and allow flag can leak into the next attempt.
+Because `tutorial_cancel_pending` is idempotent, any commit path that bypasses
+`tutorial_advance_if_commit_ok` (notably `commit_before_navigation()`'s
+`COMMIT_REJECTED` branch, which restores the committed state and returns
+early) calls `tutorial_cancel_pending()` unconditionally before returning.
+That is harder to forget than wiring a flag-clearing call into one specific
+branch, and it's safe because the no-op fast path costs nothing.
 
 ## Guard Changes
 
@@ -498,18 +512,19 @@ Allow exactly this case:
 delete_count == 0 &&
 insert_count > 0 &&
 pos == expected_commit_line &&
-allow_expected_insert
+pending.step_idx >= 0
 ```
 
 Implementation:
 
-- `tutorial_begin_expected_commit_attempt()` sets `allow_expected_insert = 1`
-  along with the pending bookkeeping fields.
+- `tutorial_begin_expected_commit_attempt()` populates the `pending` record
+  (`step_idx`, `commit_line`, `doc_count_before`); `pending.step_idx >= 0` is
+  the derived guard-exception predicate.
 - `tutorial_guard_source_change` allows the current expected insert iff
-  `allow_expected_insert && pos == expected_commit_line && delete_count == 0
+  `pending.step_idx >= 0 && pos == expected_commit_line && delete_count == 0
   && insert_count > 0`. All other guard rejection paths are unchanged.
-- `tutorial_note_expected_commit_applied()` and
-  `tutorial_cancel_expected_commit_attempt()` both clear the flag.
+- `tutorial_note_expected_commit_applied()` and `tutorial_cancel_pending()`
+  both clear `pending.step_idx` back to `-1`.
 
 This keeps paste, Ctrl+/ comment toggle, Ctrl+D, reformat, clear-all, undo, and
 redo blocked by the existing call sites. It also avoids opening a generic
@@ -589,6 +604,28 @@ grow by more than one source row.
 
 ## Implementation Phases
 
+### Phase 0 - Widen `repl_load_apply_line` Contract
+
+Goal: document and pin the loader's actual `[0, document_count]` behavior
+before any tutorial code depends on mid-document insertion. Every later
+phase depends on this; landing it first keeps the contract change out of the
+tutorial diff.
+
+Modify:
+
+- `src/repl/load.h`
+  - Update the comment at lines 42-46 to state that
+    `repl_state_edit_line` must be in `[0, document_count]` and the line
+    will be inserted at that index.
+- `tests/test_repl_load.c` (or the closest existing loader test)
+  - Add an assertion test that pins the widened contract: calling
+    `repl_load_apply_line` with `edit_line` set to a mid-document index
+    inserts at that index for plain GL commands and `// comment` lines.
+
+Verify:
+
+- `make test`
+
 ### Phase 1 - Catalog Step Records + Validation
 
 Goal: migrate the catalog shape without changing behavior.
@@ -607,12 +644,15 @@ Modify:
   - Mark every existing step as `TUTORIAL_STEP_APPEND`.
   - Preserve all existing tutorial names and expected command strings.
   - Add file-local `STEP_APPEND` / `STEP_AT` macros.
-  - Implement validation for unique labels and valid label targets.
+  - Implement validation for unique labels, valid label targets, and the
+    v1 one-source-row rule (each `expected` must parse to a single
+    source command).
 - `tests/test_tutorial_runner.c`
   - Keep existing catalog assertions.
   - Add assertions that current starter steps report append placement.
   - Add catalog-validation tests: valid tutorials pass; duplicate labels,
-    missing target labels, and forward references fail.
+    missing target labels, forward references, and multi-row `expected`
+    strings fail.
 
 Verify:
 
@@ -629,13 +669,13 @@ Modify:
 
 - `src/widgets/tutorial_state.h`
   - Add `expected_commit_line`.
-  - Add `pending_doc_count_before_commit`, `pending_commit_line`, and
-    `pending_step_idx`.
-  - Add `allow_expected_insert` (guard-exception flag).
-  - Add `committed_line_for_step[TUTORIAL_STEP_MAX]`.
+  - Add `TutorialPendingCommit pending` (single struct with `step_idx == -1`
+    sentinel; carries `commit_line` and `doc_count_before`).
+  - Add `committed_line_for_step[TUTORIAL_LOCKED_LINE_MAX]` (reuses the
+    existing tracked-line cap).
 - `src/widgets/tutorial_state.c`
-  - Initialize all new line fields and committed-line slots to `-1`.
-  - Initialize `allow_expected_insert` to 0.
+  - Initialize `expected_commit_line`, `pending.step_idx`, and every
+    `committed_line_for_step` slot to `-1`.
 - `src/widgets/tutorial.c`
   - Add `tutorial_shift_tracked_lines_from`.
   - Change `tutorial_emit_instruction_comment` to take an
@@ -676,20 +716,27 @@ Modify:
 
 - `src/editor/input.c`
   - Replace the append-only tutorial precheck with an expected-line precheck.
+  - Apply the empty-input silent-reject rule (`input[0] == '\0'` returns 0
+    without a status update) on both the `;`/Enter and navigation
+    auto-commit paths.
   - Keep `tutorial_begin_expected_commit_attempt()` inside the successful
     precheck path.
   - On `COMMIT_OK`, note the applied tutorial insert before advancing.
-  - On rejection, clear pending tutorial commit bookkeeping.
-  - Add the explicit `commit_before_navigation()` rejection cleanup call noted
-    above.
+  - On every other commit outcome (including the
+    `commit_before_navigation()` `COMMIT_REJECTED` branch that returns
+    early), dispatch `tutorial_cancel_pending()` unconditionally — it is
+    idempotent, so the call site does not need to know whether the precheck
+    actually reached `_begin`.
 - `src/widgets/tutorial.h` / `.c`
   - Add narrow helpers for expected commit bookkeeping:
     - `tutorial_expected_commit_line`
     - `tutorial_begin_expected_commit_attempt`
     - `tutorial_note_expected_commit_applied`
-    - `tutorial_cancel_expected_commit_attempt`
+    - `tutorial_cancel_pending` (idempotent — no-op when
+      `pending.step_idx == -1`)
   - Update `tutorial_guard_source_change` to allow only the current matched
-    expected insert.
+    expected insert (predicate: `pending.step_idx >= 0 && pos ==
+    expected_commit_line && delete_count == 0 && insert_count > 0`).
 
 Tests:
 
@@ -702,8 +749,10 @@ Tests:
 - Ctrl+/ and Ctrl+D on locked comments still reject.
 - Navigation commit with matching input at the expected line advances.
 - Navigation commit with matching input from any other line rejects.
-- Editor commit failure after a matched precheck clears `allow_expected_insert`
-  and the pending fields.
+- Editor commit failure after a matched precheck clears the `pending`
+  record back to `step_idx == -1`.
+- Empty-input commit attempt on the expected line — via `;`/Enter or
+  navigation — leaves the status untouched.
 
 Verify:
 
@@ -736,30 +785,6 @@ Verify:
   label-targeted insertion line and the command lands before the existing
   labeled command.
 
-### Phase 5 - Ownership and Regression Sweep
-
-Goal: ensure the new mid-document tutorial path does not bypass mutation
-guards or state ownership rules.
-
-Run the mutation-site checklist from the original tutorial plan:
-
-```bash
-rg -n 'repl_command_store_(insert|replace|delete|clear)|editor_buffer_(insert_line|insert_lines|replace_line|delete_range|set_line|set_count|load_lines|clear|apply_compiled_change)|delete_cmd_range|repl_clear_all_cmds\(' src/editor src/app src/widgets src/repl
-```
-
-Every user-reachable source mutation must be one of:
-
-- Guarded by `tutorial_guard_source_change`.
-- Part of the tutorial runner's own instruction-comment emission.
-- Part of the current matched expected-command insertion.
-- Documented as unreachable while a tutorial is active.
-
-Run:
-
-- `make test_tutorial_runner`
-- `make test`
-- `make check-state-ownership`
-
 ## Edge Cases
 
 - **Target label belongs to a locked instruction's neighboring command:**
@@ -770,11 +795,13 @@ Run:
 - **Target label has not been committed at runtime:** treat as an internal
   runner failure, set status, reset tutorial state, and do not emit a new
   instruction.
-- **Commit produces multiple source rows:** shift tracked lines by the actual
-  document-count delta, then record the just-committed step's label at the
-  inserted command line.
-- **User navigates away before typing:** should not mutate source. Avoid noisy
-  `"expected: ..."` status if possible when the input buffer is empty.
+- **Commit produces multiple source rows:** rejected at catalog validation
+  for v1. The runner's shift arithmetic stays general so a future extension
+  is mechanical, but starter tutorials must use single-row `expected`
+  strings.
+- **User navigates away before typing:** the empty-input silent-reject rule
+  applies on both the `;`/Enter and navigation auto-commit paths, so an
+  empty input buffer never mutates source and never updates the status.
 - **User navigates to another editable line and types the expected text:** reject
   because the edit line is not `expected_commit_line`.
 - **Tutorial completion:** clear active state and locks. The source document
@@ -784,8 +811,8 @@ Run:
 ## Verification Checklist
 
 - Existing append-only tutorials still pass unchanged.
-- Catalog validation rejects duplicate labels, missing targets, and forward
-  references.
+- Catalog validation rejects duplicate labels, missing targets, forward
+  references, and multi-row `expected` strings.
 - A label-targeted step inserts its instruction comment above the command line
   for the target label.
 - The expected command lands immediately below that instruction comment.
@@ -795,7 +822,27 @@ Run:
 - Manual edits above locked comments are still blocked.
 - Wrong input at a label-targeted step does not insert anything.
 - Correct input at the wrong line does not insert anything.
+- Empty input on the expected line — via `;`/Enter or navigation — never
+  updates the status.
 - Tab autofill still fills the expected command for label-targeted steps.
 - Fade applies to the newly inserted instruction line, even when it appears in
   the middle of the document.
 - Completing the tutorial clears locks and leaves the final document editable.
+
+### Ownership and regression sweep (run before merge)
+
+Every user-reachable source mutation must be one of: guarded by
+`tutorial_guard_source_change`; part of the tutorial runner's own
+instruction-comment emission; part of the current matched expected-command
+insertion; or documented as unreachable while a tutorial is active. Audit
+the mutation sites with:
+
+```bash
+rg -n 'repl_command_store_(insert|replace|delete|clear)|editor_buffer_(insert_line|insert_lines|replace_line|delete_range|set_line|set_count|load_lines|clear|apply_compiled_change)|delete_cmd_range|repl_clear_all_cmds\(' src/editor src/app src/widgets src/repl
+```
+
+Then run:
+
+- `make test_tutorial_runner`
+- `make test`
+- `make check-state-ownership`
