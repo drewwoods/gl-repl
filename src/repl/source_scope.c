@@ -48,8 +48,8 @@ static void depth_cache_rebuild(void) {
             if (t == CMD_FOR_BEGIN) for_depth++;
             else if (t == CMD_FOR_END) for_depth--;
 
-            if (t == CMD_FOR_BEGIN || t == CMD_FUNC_DEF || t == CMD_IF_BEGIN) block_depth++;
-            else if (t == CMD_FOR_END || t == CMD_FUNC_END || t == CMD_IF_END) block_depth--;
+            if (repl_cmd_is_block_head(t)) block_depth++;
+            else if (repl_cmd_is_block_end(t)) block_depth--;
 
             if (t == CMD_BEGIN) begin_depth++;
             else if (t == CMD_END) begin_depth--;
@@ -138,8 +138,8 @@ int repl_source_scope_find_block_end(int begin_idx) {
     int depth = 1;
     for (int j = begin_idx + 1; j < repl_state_document_count(); j++) {
         CmdType t = repl_state_document_cmds_mut()[j].type;
-        if (t == CMD_FOR_BEGIN || t == CMD_FUNC_DEF || t == CMD_IF_BEGIN) depth++;
-        else if (t == CMD_FOR_END || t == CMD_FUNC_END || t == CMD_IF_END) {
+        if (repl_cmd_is_block_head(t)) depth++;
+        else if (repl_cmd_is_block_end(t)) {
             depth--;
             if (depth == 0) return j;
         }
@@ -152,9 +152,9 @@ CmdType repl_source_scope_nearest_open_block_at(int pos) {
     int depth = 0;
     for (int i = 0; i < pos && i < repl_state_document_count(); i++) {
         CmdType t = repl_state_document_cmds_mut()[i].type;
-        if (t == CMD_FOR_BEGIN || t == CMD_FUNC_DEF || t == CMD_IF_BEGIN) {
+        if (repl_cmd_is_block_head(t)) {
             if (depth < 64) stack[depth++] = t;
-        } else if (t == CMD_FOR_END || t == CMD_FUNC_END || t == CMD_IF_END) {
+        } else if (repl_cmd_is_block_end(t)) {
             if (depth > 0) depth--;
         }
     }
@@ -176,8 +176,7 @@ int repl_source_scope_block_extent(int line_idx,
 
 int repl_line_is_block_head(int line_idx) {
     if (line_idx < 0 || line_idx >= repl_state_document_count()) return 0;
-    CmdType t = repl_state_document_cmds()[line_idx].type;
-    return (t == CMD_FOR_BEGIN || t == CMD_FUNC_DEF || t == CMD_IF_BEGIN);
+    return repl_cmd_is_block_head(repl_state_document_cmds()[line_idx].type);
 }
 
 int repl_line_is_label(int line_idx) {

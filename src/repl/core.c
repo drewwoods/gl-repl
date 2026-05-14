@@ -723,7 +723,7 @@ int collect_visible_vars(int pos, ExprVar *vars, int max_vars, int *total_out) {
 
     for (int cmd_idx = 0; cmd_idx < pos && cmd_idx < repl_state_document_count(); cmd_idx++) {
         CmdType t = repl_state_document_cmds_mut()[cmd_idx].type;
-        if (t == CMD_FOR_BEGIN || t == CMD_FUNC_DEF || t == CMD_IF_BEGIN) {
+        if (repl_cmd_is_block_head(t)) {
             if (depth >= (int)(sizeof(frames) / sizeof(frames[0])))
                 break;
 
@@ -757,7 +757,7 @@ int collect_visible_vars(int pos, ExprVar *vars, int max_vars, int *total_out) {
                 }
             }
             depth++;
-        } else if (t == CMD_FOR_END || t == CMD_FUNC_END || t == CMD_IF_END) {
+        } else if (repl_cmd_is_block_end(t)) {
             if (depth > 0) depth--;
         }
     }

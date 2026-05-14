@@ -27,6 +27,7 @@
  * the Makefile.
  */
 #include "app/glr_ctrl.h"
+#include "repl/command_spec.h"
 #include "repl/core.h"
 #include "repl/state_owners.h"
 #include "widgets/replay.h"
@@ -407,11 +408,52 @@ static void test_cursor_guide_snapshot_override(void) {
                 snap5.vertex_args[0], base.vertex_args[0]);
 }
 
+/* --- 5. predicate/category agreement (drift guard) --------------------
+ *
+ * src/repl/command.h holds inline control-flow predicates
+ * (repl_cmd_is_transform, repl_cmd_emits_vertex). src/repl/command_spec.h
+ * holds a CmdSyntaxCategory enum used for code-panel syntax highlighting.
+ * Both name the same sets of types from different angles.
+ *
+ * They're intentionally on separate axes (visual taxonomy vs control-flow
+ * shape) but for the predicates where a corresponding category exists,
+ * the two MUST agree on which types fall in the set. If somebody adds a
+ * new vertex-emitting command type, updates the spec table to
+ * CMD_CAT_VERTEX, but forgets the predicate (or vice versa), this test
+ * pins the discrepancy down at the responsible CmdType.
+ *
+ * Not every predicate has a category twin: repl_cmd_is_block_head /
+ * _is_block_end span three CmdSyntaxCategory values each, so no single
+ * category equals those predicates. Those don't get a drift test.
+ */
+static void test_predicate_category_agreement(void) {
+    for (int t_int = 0; t_int < CMD_TYPE_COUNT; t_int++) {
+        CmdType t = (CmdType)t_int;
+        CmdSyntaxCategory cat = repl_cmd_type_category(t);
+
+        int pred_vertex = repl_cmd_emits_vertex(t);
+        int cat_vertex  = (cat == CMD_CAT_VERTEX);
+        char label[96];
+        snprintf(label, sizeof(label),
+                 "type=%d: emits_vertex predicate matches CMD_CAT_VERTEX",
+                 t_int);
+        ASSERT_INT(label, pred_vertex, cat_vertex);
+
+        int pred_xform = repl_cmd_is_transform(t);
+        int cat_xform  = (cat == CMD_CAT_TRANSFORM);
+        snprintf(label, sizeof(label),
+                 "type=%d: is_transform predicate matches CMD_CAT_TRANSFORM",
+                 t_int);
+        ASSERT_INT(label, pred_xform, cat_xform);
+    }
+}
+
 int main(void) {
     test_walker_resolves_funcn_args_at_cursor();
     test_walker_fires_on_each_cmd_at_cursor();
     test_walker_stop_flag_halts();
     test_cursor_guide_snapshot_override();
+    test_predicate_category_agreement();
 
     printf("test_replay_walk: %d/%d passed\n",
            g_harness.passed, g_harness.run);

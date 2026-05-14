@@ -109,4 +109,27 @@ static inline int repl_cmd_emits_vertex(CmdType type) {
             type == CMD_TESS_VERTEX);
 }
 
+/* True for the opening commands of REPL control-flow blocks: for-loop,
+ * function definition, if-block. Block depth tracking treats all three
+ * the same way ("a new scope just opened, increment depth"). Used
+ * alongside repl_cmd_is_block_end below.
+ *
+ * Note: these three types live in three separate CmdSyntaxCategory
+ * values (CMD_CAT_LOOP / CMD_CAT_FUNCTION / CMD_CAT_CONDITIONAL) — the
+ * categories are about syntax-highlight color, this predicate is about
+ * control-flow shape. Two distinct axes. */
+static inline int repl_cmd_is_block_head(CmdType type) {
+    return (type == CMD_FOR_BEGIN ||
+            type == CMD_FUNC_DEF  ||
+            type == CMD_IF_BEGIN);
+}
+
+/* Mirror of repl_cmd_is_block_head — the closing commands of REPL
+ * control-flow blocks. */
+static inline int repl_cmd_is_block_end(CmdType type) {
+    return (type == CMD_FOR_END ||
+            type == CMD_FUNC_END ||
+            type == CMD_IF_END);
+}
+
 #endif /* REPL_COMMAND_H */

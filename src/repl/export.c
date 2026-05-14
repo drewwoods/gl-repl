@@ -1595,8 +1595,8 @@ static int find_export_block_end(int begin_idx) {
 
     for (int cmd_idx = begin_idx + 1; cmd_idx < repl_state_document_count(); cmd_idx++) {
         CmdType t = repl_state_document_cmds_mut()[cmd_idx].type;
-        if (t == CMD_FOR_BEGIN || t == CMD_FUNC_DEF || t == CMD_IF_BEGIN) depth++;
-        else if (t == CMD_FOR_END || t == CMD_FUNC_END || t == CMD_IF_END) {
+        if (repl_cmd_is_block_head(t)) depth++;
+        else if (repl_cmd_is_block_end(t)) {
             if (--depth == 0)
                 return cmd_idx;
         }
