@@ -339,6 +339,71 @@ static void test_executor_camera_distance_source(void) {
 #endif
 }
 
+/* Pin down two matrix-stack invariants the executor maintains on
+ * behalf of the user. User-program GL calls can leave the modelview
+ * stack imbalanced (extra pushes, or extra pops), but:
+ *
+ *   (a) the executor unwinds any net push imbalance at frame end so
+ *       state doesn't leak across frames, and
+ *   (b) a stray glPopMatrix is clamped before it reaches GL — the
+ *       tracked-pop refuses to call glPopMatrix when its depth
+ *       counter is at 0, preventing a GL_STACK_UNDERFLOW.
+ *
+ * Both behaviours are why scene/render's outer push/pop bracket
+ * around the user program is sufficient — the executor cooperates by
+ * leaving the inner stack net-zero. Without these invariants, a
+ * user's first frame with stray pushes would silently corrupt the
+ * outer (camera_view) frame and every subsequent overlay would
+ * render at the wrong transform. */
+static void test_executor_matrix_balance_unwind(void) {
+    repl_executor_init_resources();
+    gl_stub_counts_reset();
+
+    GLCmd cmds[4];
+    memset(cmds, 0, sizeof(cmds));
+    cmds[0].type = CMD_PUSH_MATRIX; cmds[0].valid = 1;
+    cmds[1].type = CMD_PUSH_MATRIX; cmds[1].valid = 1;
+    cmds[2].type = CMD_PUSH_MATRIX; cmds[2].valid = 1;
+    cmds[3].type = CMD_POP_MATRIX;  cmds[3].valid = 1;
+
+    ReplExecutionOptions opts = {0};
+    opts.flat_cmd_count = 4;
+    opts.program.cmds = cmds;
+    opts.program.cmd_count = 4;
+    repl_execute_program(&opts);
+
+    /* 3 user pushes + 1 user pop, plus the unwind that closes the
+     * remaining 2 outstanding pushes → expect 3 push, 3 pop calls. */
+    ASSERT_TRUE("3 pushes recorded",
+                gl_stub_counts[GL_STUB_glPushMatrix] == 3);
+    ASSERT_TRUE("3 pops total (1 user + 2 unwind)",
+                gl_stub_counts[GL_STUB_glPopMatrix] == 3);
+}
+
+static void test_executor_matrix_pop_underflow_clamped(void) {
+    repl_executor_init_resources();
+    gl_stub_counts_reset();
+
+    GLCmd cmds[3];
+    memset(cmds, 0, sizeof(cmds));
+    cmds[0].type = CMD_PUSH_MATRIX; cmds[0].valid = 1;
+    cmds[1].type = CMD_POP_MATRIX;  cmds[1].valid = 1;
+    cmds[2].type = CMD_POP_MATRIX;  cmds[2].valid = 1;  /* clamped */
+
+    ReplExecutionOptions opts = {0};
+    opts.flat_cmd_count = 3;
+    opts.program.cmds = cmds;
+    opts.program.cmd_count = 3;
+    repl_execute_program(&opts);
+
+    ASSERT_TRUE("1 push recorded",
+                gl_stub_counts[GL_STUB_glPushMatrix] == 1);
+    /* Second pop is clamped at depth=0, so only one glPopMatrix
+     * actually reaches GL. Unwind has nothing to do. */
+    ASSERT_TRUE("1 pop recorded (second was clamped)",
+                gl_stub_counts[GL_STUB_glPopMatrix] == 1);
+}
+
 int main(void) {
     test_tess_callbacks();
     test_fade_context();
@@ -349,6 +414,8 @@ int main(void) {
     test_execute_all_commands();
     test_glut_bitmap_string();
     test_executor_camera_distance_source();
+    test_executor_matrix_balance_unwind();
+    test_executor_matrix_pop_underflow_clamped();
     printf("repl_executor: %d/%d passed\n", g_harness.passed, g_harness.run);
     return (g_harness.passed == g_harness.run) ? 0 : 1;
 }
