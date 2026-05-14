@@ -4,7 +4,8 @@
 #ifndef TUTORIAL_STATE_H
 #define TUTORIAL_STATE_H
 
-#define TUTORIAL_LOCKED_LINE_MAX 64
+#include "repl/tutorials.h"  /* TUTORIAL_LOCKED_LINE_MAX */
+
 #define TUTORIAL_STATUS_MAX 128
 
 typedef enum {

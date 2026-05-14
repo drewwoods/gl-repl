@@ -1087,6 +1087,63 @@ static void test_phase3_pending_clears_after_match_failure(void) {
                tutorial_state_view().pending.step_idx, -1);
 }
 
+static void test_review_guard_blocks_expected_commit_line_without_pending(void) {
+    /* Review fix: tutorial_guard_source_change must block any
+     * mutation at expected_commit_line that did NOT come from the
+     * matched precheck (i.e., did not stamp pending). The original
+     * locked-line-prefix check only catches positions <= a locked
+     * row, so a label-targeted step whose anchor sits below every
+     * locked instruction would let an untracked paste through.
+     *
+     * Drive the guard directly with a crafted state: locked at row
+     * 0, expected_commit_line at row 5, no later locked rows. This
+     * isolates the new guard branch from the rest of the runner. */
+    reset_fixture();
+    tutorial_start(0);
+
+    TutorialRuntimeState *state = tutorial_state_mut();
+    state->locked_line_count = 1;
+    state->locked_lines[0] = 0;
+    state->expected_commit_line = 5;
+    state->pending.step_idx = -1;
+    state->pending.commit_line = -1;
+
+    /* Without the new guard branch this would return 1 (allow): pos
+     * 5 is greater than the only locked row 0 and pending is
+     * inactive, so the historical locked-line-prefix scan accepted
+     * it. The new check rejects pos == expected_commit_line when
+     * pending isn't matched. */
+    int allowed = tutorial_guard_source_change(/*pos=*/5,
+                                               /*delete_count=*/0,
+                                               /*insert_count=*/1);
+    ASSERT_TRUE("guard rejects insert at expected_commit_line without pending",
+                !allowed);
+
+    /* Sanity: with pending stamped and pos == pending.commit_line,
+     * the guard's existing exception still allows the matched
+     * commit through. */
+    state->pending.step_idx = state->step;
+    state->pending.commit_line = 5;
+    state->pending.doc_count_before = repl_state_document_count();
+    int allowed_with_pending =
+        tutorial_guard_source_change(/*pos=*/5,
+                                     /*delete_count=*/0,
+                                     /*insert_count=*/1);
+    ASSERT_TRUE("guard allows pending-matched insert at the same row",
+                allowed_with_pending);
+
+    /* And inserting at a different row with pending still set
+     * (pos != pending.commit_line) reverts to the same blocked
+     * behavior — pending only authorizes one specific row. */
+    int allowed_other = tutorial_guard_source_change(/*pos=*/6,
+                                                     /*delete_count=*/0,
+                                                     /*insert_count=*/1);
+    ASSERT_TRUE("pending does not authorize a different row",
+                /* row 6 is not == expected_commit_line (5) and not
+                 * <= any locked row (0); allowed before, allowed now */
+                allowed_other);
+}
+
 static void test_phase4_depth_tutorial_catalog_shape(void) {
     /* Phase 4: pin the worked label-targeted tutorial's catalog
      * shape so future catalog edits can't silently drop the
@@ -1316,5 +1373,6 @@ int main(void) {
     test_phase3_paste_above_locked_still_blocked();
     test_phase4_depth_tutorial_catalog_shape();
     test_phase4_full_walk_places_setup_before_batch();
+    test_review_guard_blocks_expected_commit_line_without_pending();
     return test_harness_report(&g_harness, "test_tutorial_runner");
 }
