@@ -185,13 +185,12 @@ void repl_recompute_autonormals(int autonormal_enabled) {
             i++;
             continue;
         }
-        if (repl_state_document_cmds_mut()[i].type == CMD_FOR_BEGIN ||
-            repl_state_document_cmds_mut()[i].type == CMD_FUNC_DEF ||
-            repl_state_document_cmds_mut()[i].type == CMD_IF_BEGIN) {
-            i = repl_source_scope_find_block_end(i);
-            if (i < repl_state_document_count()) i++;
-            continue;
-        }
+        /* CMD_FUNC_DEF / CMD_IF_BEGIN / CMD_FOR_BEGIN markers are
+         * structural — we don't auto-normal them, but we *do* enter
+         * the body. A glBegin inside a funcN body should still pick
+         * up an auto-normal as long as its vertices have literal
+         * coords (see the has_vars guard below). The matching END
+         * markers fall through to the `i++` at the bottom. */
         if (!repl_state_document_cmds_mut()[i].valid || repl_state_document_cmds_mut()[i].type != CMD_BEGIN) { i++; continue; }
 
         GLenum mode = repl_state_document_cmds_mut()[i].mode;
@@ -199,6 +198,7 @@ void repl_recompute_autonormals(int autonormal_enabled) {
 
         int vi[MAX_COMMANDS];
         int nv = 0;
+        int any_vertex_has_vars = 0;
         int block_end = repl_state_document_count();
         for (int j = i; j < repl_state_document_count(); j++) {
             if (!repl_state_document_cmds_mut()[j].valid) continue;
@@ -211,8 +211,23 @@ void repl_recompute_autonormals(int autonormal_enabled) {
              * to 0 (parser default), so its cross product folds into
              * the same (x, y, 0) plane as a 3D vertex with z=0. */
             if (repl_state_document_cmds_mut()[j].type == CMD_VERTEX3F ||
-                repl_state_document_cmds_mut()[j].type == CMD_VERTEX2F)
+                repl_state_document_cmds_mut()[j].type == CMD_VERTEX2F) {
                 vi[nv++] = j;
+                if (repl_state_document_cmds_mut()[j].has_vars)
+                    any_vertex_has_vars = 1;
+            }
+        }
+
+        /* Vertices with `has_vars` carry parse-time args (often the
+         * predef default, 0). A cross product on those would emit a
+         * degenerate (0, 0, 0) normal — strictly worse than leaving
+         * the block alone and letting GL fall back to the default
+         * normal or the user's manual glNormal3f. Skip the block as
+         * a whole rather than mixing literal-coord and vars-bearing
+         * normals from the same primitive. */
+        if (any_vertex_has_vars) {
+            i = block_end + 1;
+            continue;
         }
 
         float norms[MAX_COMMANDS][3];

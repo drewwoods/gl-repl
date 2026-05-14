@@ -310,6 +310,98 @@ static void test_gl_triangles(void) {
 /* main                                                                 */
 /* ------------------------------------------------------------------ */
 
+/* ------------------------------------------------------------------ */
+/* recompute_autonormals: glBegin INSIDE funcN body with literal coords */
+/* ------------------------------------------------------------------ */
+/*
+ * The autonormal pass used to skip over the entire body of any
+ * CMD_FUNC_DEF / CMD_IF_BEGIN / CMD_FOR_BEGIN block. That left any
+ * glBegin block inside a funcN body without normals — vertices got
+ * the default GL normal (0, 0, 1) at draw time and lighting was
+ * silently wrong for any face not in the XY plane.
+ *
+ * Fix: enter funcN / if / for bodies and process inner glBegin
+ * blocks, but only when every vertex in the block has has_vars=0
+ * (literal coords). Vars-dependent vertices (function params,
+ * for-loop counters, predef refs) have parse-time source args that
+ * don't reflect the evaluated values, so cross products on them
+ * would emit (0, 0, 0) garbage — strictly worse than no normal.
+ */
+static void test_autonormal_inside_funcn_literal_coords(void) {
+    printf("test_autonormal_inside_funcn_literal_coords\n");
+
+    glr_app_reset_all(); declare_test_vars();
+    /* func0 with a literal-coord triangle. The three vertices span the
+     * yz plane (varying y and z at x=1), so the cross product is along
+     * +X. Auto-normal must compute and insert these. */
+    editor_feed_line("func0() {");
+    editor_feed_line("glBegin(GL_TRIANGLES);");
+    editor_feed_line("glVertex3f(1, 0, 0);");
+    editor_feed_line("glVertex3f(1, 1, 0);");
+    editor_feed_line("glVertex3f(1, 0, 1);");
+    editor_feed_line("glEnd();");
+    editor_feed_line("}");
+    int cmds_before = repl_state_document_count();
+    repl_recompute_autonormals(1);
+
+    /* Three auto-normals inserted, one per vertex. */
+    ASSERT_INT("funcN literal: cmds added",
+               repl_state_document_count(), cmds_before + 3);
+
+    /* Find the first inserted auto-normal and verify it points along
+     * +X (cross product of (1,1,0)-(1,0,0)=(0,1,0) and (1,0,1)-(1,0,0)=
+     * (0,0,1) is (1,0,0)). With glFrontFace=GL_CCW (default) the
+     * outward normal is +X. */
+    int auto_idx = -1;
+    for (int i = 0; i < repl_state_document_count(); i++) {
+        if (repl_state_document_cmds_mut()[i].valid &&
+            repl_state_document_cmds_mut()[i].type == CMD_NORMAL3F &&
+            repl_state_document_cmds_mut()[i].is_auto) {
+            auto_idx = i;
+            break;
+        }
+    }
+    ASSERT_TRUE("funcN literal: auto-normal exists", auto_idx >= 0);
+    if (auto_idx >= 0) {
+        ASSERT_FLOAT("funcN literal: normal x",
+                     repl_state_document_cmds_mut()[auto_idx].args[0], 1.0f);
+        ASSERT_FLOAT("funcN literal: normal y",
+                     repl_state_document_cmds_mut()[auto_idx].args[1], 0.0f);
+        ASSERT_FLOAT("funcN literal: normal z",
+                     repl_state_document_cmds_mut()[auto_idx].args[2], 0.0f);
+    }
+}
+
+/* ------------------------------------------------------------------ */
+/* recompute_autonormals: glBegin inside funcN with var-bearing args   */
+/* ------------------------------------------------------------------ */
+/*
+ * When the vertices depend on a function parameter / for-loop
+ * counter / any var, source args are parse-time (often 0) and not a
+ * reliable basis for cross products. The autonormal pass must NOT
+ * insert (0, 0, 0) auto-normals in that case — leave the block
+ * untouched so GL falls back to the default normal (or a previously
+ * user-supplied glNormal3f survives).
+ */
+static void test_autonormal_inside_funcn_var_args_skipped(void) {
+    printf("test_autonormal_inside_funcn_var_args_skipped\n");
+
+    glr_app_reset_all(); declare_test_vars();
+    editor_feed_line("func0(s) {");
+    editor_feed_line("glBegin(GL_TRIANGLES);");
+    editor_feed_line("glVertex3f(s, 0, 0);");
+    editor_feed_line("glVertex3f(s, 1, 0);");
+    editor_feed_line("glVertex3f(s, 0, 1);");
+    editor_feed_line("glEnd();");
+    editor_feed_line("}");
+    int cmds_before = repl_state_document_count();
+    repl_recompute_autonormals(1);
+
+    /* Vars-bearing vertices → no auto-normals inserted. */
+    ASSERT_INT("funcN with vars: cmds unchanged",
+               repl_state_document_count(), cmds_before);
+}
+
 int main(void) {
     test_degenerate_normal();
     test_triangle_strip();
@@ -321,6 +413,8 @@ int main(void) {
     test_block_skipping();
     test_autonormal_disabled();
     test_gl_triangles();
+    test_autonormal_inside_funcn_literal_coords();
+    test_autonormal_inside_funcn_var_args_skipped();
 
     return test_harness_report(&g_harness, "test_repl_autonormal");
 }
