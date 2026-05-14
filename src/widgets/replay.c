@@ -449,6 +449,7 @@ void replay_walk_user_vertices(const ReplVertexWalkContext *ctx,
     int          cursor_block_end    = ctx->cursor_block_end;
     unsigned int cursor_func_scope_mask = ctx->cursor_func_scope_mask;
     int          selected_block_only = ctx->selected_block_only;
+    int         *stop_flag           = ctx->stop_flag;
 
     ReplVertexWalkState state = {
         .flat_cmd_idx        = -1,
@@ -472,6 +473,7 @@ void replay_walk_user_vertices(const ReplVertexWalkContext *ctx,
 
         if (cb->on_each_cmd)
             cb->on_each_cmd(&state, user_data);
+        if (stop_flag && *stop_flag) break;
 
         if (!state.in_block && repl_cmd_is_transform(cmd->type)) {
             replay_walk_apply_transform(cmd, &matrix_depth);
@@ -548,6 +550,7 @@ void replay_walk_user_vertices(const ReplVertexWalkContext *ctx,
         default:
             break;
         }
+        if (stop_flag && *stop_flag) break;
     }
     while (matrix_depth > 0) { glPopMatrix(); matrix_depth--; }
     glPopMatrix();

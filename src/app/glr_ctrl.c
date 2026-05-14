@@ -710,7 +710,9 @@ typedef struct {
     const SceneGuideSnapshot *snapshot;
     SceneTransformGuidePlan   xform_plan;
     float                     cam_view[16];
+    int                       have_xform;
     int                       geometry_guide_done;
+    int                       early_stop;
 } CursorGuideRenderCtx;
 
 static void on_cmd_render_cursor_guides(const ReplVertexWalkState *state,
@@ -719,12 +721,48 @@ static void on_cmd_render_cursor_guides(const ReplVertexWalkState *state,
     int is_cursor = (state->src_cmd_idx == ctx->snapshot->edit_line_idx);
 
     if (is_cursor && !ctx->geometry_guide_done && !ctx->snapshot->replaying) {
-        geometry_guides_render_for_cursor(ctx->snapshot);
+        /* The snapshot's vertex_args were parsed from the input text via
+         * a predef-only evaluator, which can't resolve function-local
+         * parameters (e.g. `scale`, `phase` from `funcN(scale, phase)`).
+         * For a cursor on a vertex line inside a funcN body, those args
+         * silently evaluate to 0, so the guide gets drawn at the local
+         * origin — which visually sits at the *center* of the
+         * transformed object, not at the vertex the user is editing.
+         *
+         * Override with the flat cmd's already-evaluated args: flatten
+         * substitutes the funcN parameters before evaluating, so cmd
+         * args carry the real numeric position. */
+        SceneGuideSnapshot snap = *ctx->snapshot;
+        const GLCmd *flat = (state->flat_cmd_idx >= 0 &&
+                             state->flat_cmd_idx < snap.flat_program.cmd_count)
+                          ? &snap.flat_program.cmds[state->flat_cmd_idx]
+                          : NULL;
+        if (flat && (flat->type == CMD_VERTEX3F ||
+                     flat->type == CMD_VERTEX2F ||
+                     flat->type == CMD_TESS_VERTEX)) {
+            snap.vertex_args[0] = flat->args[0];
+            snap.vertex_args[1] = flat->args[1];
+            snap.vertex_args[2] = (flat->type == CMD_VERTEX2F) ? 0.0f
+                                                               : flat->args[2];
+        }
+        geometry_guides_render_for_cursor(&snap);
         ctx->geometry_guide_done = 1;
     }
 
-    transform_guides_render_if_due(ctx->snapshot, &ctx->xform_plan,
-                                         state->flat_cmd_idx, ctx->cam_view);
+    if (ctx->have_xform && !ctx->xform_plan.consumed) {
+        transform_guides_render_if_due(ctx->snapshot, &ctx->xform_plan,
+                                       state->flat_cmd_idx, ctx->cam_view);
+    }
+
+    /* Bail out as soon as both guides have rendered. The geometry guide
+     * needs the modelview at the cursor's first flat occurrence; the
+     * transform guide fires at the same flat index. After both have run,
+     * the walker has no remaining work — important for big loops where
+     * walking the full flat program every frame is expensive. */
+    int xform_done = (!ctx->have_xform || ctx->xform_plan.consumed);
+    int geometry_done = (ctx->geometry_guide_done || ctx->snapshot->replaying);
+    if (geometry_done && xform_done)
+        ctx->early_stop = 1;
 }
 
 static void glr_ctrl_render_cursor_guides(const SceneGuideSnapshot *snapshot) {
@@ -733,14 +771,17 @@ static void glr_ctrl_render_cursor_guides(const SceneGuideSnapshot *snapshot) {
     CursorGuideRenderCtx ctx;
     ctx.snapshot = snapshot;
     ctx.geometry_guide_done = 0;
-    int have_xform = transform_guides_prepare(snapshot, &ctx.xform_plan);
+    ctx.early_stop = 0;
+    ctx.have_xform = transform_guides_prepare(snapshot, &ctx.xform_plan);
 
-    /* Skip the expensive flat-program walk when neither guide type needs it. */
-    if (!have_xform && !snapshot->replaying) {
-        geometry_guides_render_for_cursor(snapshot);
-        return;
-    }
-
+    /* Previously this path took a fast exit (`return;`) when no transform
+     * guide was needed, calling geometry_guides_render_for_cursor with
+     * the caller's modelview only. That broke the geometry guide for
+     * cursors inside funcN call frames — the user's accumulated
+     * transforms hadn't been applied yet, so the guide rendered at world
+     * origin. We always walk now; the stop_flag below makes the walk
+     * exit as soon as both guides have rendered, preserving the perf
+     * intent for big loops. */
     glPushAttrib(GL_ALL_ATTRIB_BITS);
     glDisable(GL_LIGHTING);
     glEnable(GL_BLEND);
@@ -753,6 +794,7 @@ static void glr_ctrl_render_cursor_guides(const SceneGuideSnapshot *snapshot) {
         .on_each_cmd = on_cmd_render_cursor_guides,
     };
     ReplVertexWalkContext walk = glr_ctrl_build_vertex_walk_context(0);
+    walk.stop_flag = &ctx.early_stop;
     replay_walk_user_vertices(&walk, &cb, &ctx);
 
     glPopMatrix();
