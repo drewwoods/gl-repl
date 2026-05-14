@@ -271,6 +271,12 @@ Recommended sentinels:
 `tutorial_state_reset` clears all new fields, including `pending.step_idx`
 to `-1`.
 
+**Immutability invariant.** `pending.commit_line` is captured at
+`tutorial_begin_expected_commit_attempt` time and is logically immutable
+until the paired `tutorial_note_expected_commit_applied` or
+`tutorial_cancel_pending` clears the record. In particular, the shift
+helper deliberately does not touch it — see below.
+
 The existing `locked_lines[]` remains a list of source line indices for
 revealed tutorial instruction comments. The extension needs one helper that
 updates all tracked line indices when the tutorial runner or the expected user
@@ -285,9 +291,14 @@ This helper should shift:
 - `locked_lines[i] >= pos`
 - `fade_line_idx >= pos`
 - `expected_commit_line >= pos`, if it is already set and the shift is not for
-  the insertion currently defining it
-- `pending.commit_line >= pos`, if `pending.step_idx >= 0`
+  the insertion described by `pending`
 - `committed_line_for_step[i] >= pos`
+
+It deliberately **does not** touch `pending.commit_line` — that field is the
+immutable snapshot of where the in-flight commit attempt is targeting, and
+the success bookkeeping below relies on reading it back unchanged after the
+shift pass. If the shift helper bumped it, a label recorded for the
+just-committed step would be one row too low.
 
 For this feature, tutorial-approved changes are insert-only. The existing
 guards should continue to block deletes, replacements, paste operations, undo,
@@ -511,9 +522,16 @@ Allow exactly this case:
 ```c
 delete_count == 0 &&
 insert_count > 0 &&
-pos == expected_commit_line &&
+pos == pending.commit_line &&
 pending.step_idx >= 0
 ```
+
+The guard predicate keys off `pending.commit_line` rather than
+`expected_commit_line` so the exception window is a property of the in-flight
+attempt rather than of ambient editor state. Both fields hold the same value
+at `_begin` time, but only `pending.commit_line` carries the immutability
+invariant above; any future change to navigation or fade-line logic that
+touches `expected_commit_line` cannot silently move the guard's exception.
 
 Implementation:
 
@@ -521,7 +539,7 @@ Implementation:
   (`step_idx`, `commit_line`, `doc_count_before`); `pending.step_idx >= 0` is
   the derived guard-exception predicate.
 - `tutorial_guard_source_change` allows the current expected insert iff
-  `pending.step_idx >= 0 && pos == expected_commit_line && delete_count == 0
+  `pending.step_idx >= 0 && pos == pending.commit_line && delete_count == 0
   && insert_count > 0`. All other guard rejection paths are unchanged.
 - `tutorial_note_expected_commit_applied()` and `tutorial_cancel_pending()`
   both clear `pending.step_idx` back to `-1`.
@@ -736,7 +754,7 @@ Modify:
       `pending.step_idx == -1`)
   - Update `tutorial_guard_source_change` to allow only the current matched
     expected insert (predicate: `pending.step_idx >= 0 && pos ==
-    expected_commit_line && delete_count == 0 && insert_count > 0`).
+    pending.commit_line && delete_count == 0 && insert_count > 0`).
 
 Tests:
 
