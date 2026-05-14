@@ -509,6 +509,19 @@ int tutorial_guard_source_change(int pos, int delete_count, int insert_count) {
         insert_count > 0 && pos == state.pending.commit_line)
         return 1;
 
+    /* Block any other mutation that would land at the row reserved
+     * for the next expected user commit. Without this, a paste or
+     * other non-precheck mutation (which never set `pending`) at
+     * expected_commit_line would slip in untracked when the target
+     * label refers to a step whose committed row has no later
+     * locked instruction comment below it — e.g. when the
+     * label-targeted step's anchor IS the most-recently-committed
+     * command. The locked-line check below would see no later
+     * locked row and let the insert through. */
+    if (state.expected_commit_line >= 0 &&
+        pos == state.expected_commit_line)
+        return 0;
+
     for (int i = 0; i < state.locked_line_count; i++) {
         if (pos <= state.locked_lines[i])
             return 0;

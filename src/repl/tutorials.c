@@ -1,7 +1,5 @@
 #include "repl/tutorials.h"
 
-#include "widgets/tutorial_state.h"  /* TUTORIAL_LOCKED_LINE_MAX */
-
 #include <ctype.h>
 #include <stddef.h>
 #include <stdio.h>

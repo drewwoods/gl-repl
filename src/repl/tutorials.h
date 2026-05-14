@@ -20,6 +20,13 @@
 #ifndef REPL_TUTORIALS_H
 #define REPL_TUTORIALS_H
 
+/* Maximum tutorial step count and tracked-line cap. Lives here
+ * (rather than in widgets/tutorial_state.h) so the catalog
+ * validator can use it without taking a dependency on widget
+ * runtime state — the catalog defines the upper bound and the
+ * widget-side state arrays consume it. */
+#define TUTORIAL_LOCKED_LINE_MAX 64
+
 typedef enum {
     TUTORIAL_STEP_APPEND = 0,
     TUTORIAL_STEP_LABEL,
