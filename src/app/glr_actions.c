@@ -84,7 +84,7 @@ static char cfg_status_buf[256];
 #define AUDIO_CFG_ALL   3
 static const char *audio_cfg_names[] = { "Pause", "Once", "Song", "All" };
 
-const GlrConfigItem g_cfg_items[] = {
+GlrConfigItem g_cfg_items[] = {
     { "### RENDERING",     0, 0,  GLR_CONFIG_NONE,               0, NULL,                 1 },
     { "MSAA",              KEY_CTRL_U, 0, GLR_CONFIG_MSAA,       2, NULL,                 0 },
     { "Line smooth",       0, 0,  GLR_CONFIG_LINE_SMOOTH,        2, NULL,                 0 },

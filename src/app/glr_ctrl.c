@@ -20,6 +20,7 @@
 #include "editor/state.h"
 #include "scene/guides/geometry_guides.h" /* geometry_guides_render_for_cursor */
 #include "app/glr_actions.h"
+#include "app/glr_config.h"
 #include "app/glr_camera.h"
 #include "app/glr_debug.h"
 #include "keys.h"
@@ -1708,6 +1709,30 @@ void glr_ctrl_init_gl(void) {
     scene_render_init_gl();
     repl_executor_init_resources();
     repl_apply_init_bootstrap();
+
+    /* Query actual MSAA sample count from OpenGL */
+    GLint samples = 0;
+    glGetIntegerv(GL_SAMPLES, &samples);
+    glr_state_render_mut()->msaa_samples = (int)samples;
+
+    if (samples > 1) {
+        static char msaa_label[32];
+        snprintf(msaa_label, sizeof(msaa_label), "MSAAx%d", (int)samples);
+        for (int i = 0; i < CFG_ITEM_COUNT; i++) {
+            if (g_cfg_items[i].key == GLR_CONFIG_MSAA) {
+                g_cfg_items[i].label = msaa_label;
+                break;
+            }
+        }
+    } else {
+        for (int i = 0; i < CFG_ITEM_COUNT; i++) {
+            if (g_cfg_items[i].key == GLR_CONFIG_MSAA) {
+                g_cfg_items[i].label = "MSAA";
+                break;
+            }
+        }
+    }
+
     /* glutInit has run by the time glr_ctrl_init_gl is called.
      * Unlock glutGetModifiers() reads in editor_input so Cmd / Ctrl /
      * Shift modifier checks land. Tests skip this hook so modifier

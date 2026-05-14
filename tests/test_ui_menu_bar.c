@@ -241,6 +241,40 @@ static void test_unified_hit_test(void) {
 }
 
 #ifdef GL_STUBS
+static void test_msaa_label_dynamic(void) {
+    extern int g_gl_stub_samples;
+
+    /* Test case 1: samples = 4 -> "MSAAx4" */
+    g_gl_stub_samples = 4;
+    glr_ctrl_init_gl();
+
+    int row = -1;
+    for (int i = 0; i < CFG_ITEM_COUNT; i++) {
+        const GlrConfigItem *item = glr_config_item_at(i);
+        if (item && item->key == GLR_CONFIG_MSAA) {
+            row = i;
+            break;
+        }
+    }
+    ASSERT_TRUE("found MSAA config item", row >= 0);
+    const char *lbl = glr_config_item_at(row)->label;
+    ASSERT_TRUE("label updated to MSAAx4", strcmp(lbl, "MSAAx4") == 0);
+
+    /* Test case 2: samples = 8 -> "MSAAx8" */
+    g_gl_stub_samples = 8;
+    glr_ctrl_init_gl();
+    lbl = glr_config_item_at(row)->label;
+    ASSERT_TRUE("label updated to MSAAx8", strcmp(lbl, "MSAAx8") == 0);
+
+    /* Test case 3: samples = 0 -> "MSAA" (fallback) */
+    g_gl_stub_samples = 0;
+    glr_ctrl_init_gl();
+    lbl = glr_config_item_at(row)->label;
+    ASSERT_TRUE("label fallback to MSAA", strcmp(lbl, "MSAA") == 0);
+}
+#endif
+
+#ifdef GL_STUBS
 static void make_test_ui_snapshot(UiRenderSnapshot *snap) {
     memset(snap, 0, sizeof(*snap));
     snap->viewport = ui_state_viewport();
@@ -322,6 +356,9 @@ int main(void) {
     test_open_close_state();
     test_top_level_hits();
     test_dropdown_and_config_press();
+#ifdef GL_STUBS
+    test_msaa_label_dynamic();
+#endif
     test_unified_hit_test();
 #ifdef GL_STUBS
     test_render_paths_with_stubs();

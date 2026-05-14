@@ -107,6 +107,7 @@ typedef double GLclampd;
 #define GL_LINE_SMOOTH 0x0B20
 #define GL_LINE_STIPPLE 0x0B24
 #define GL_MULTISAMPLE 0x809D
+#define GL_SAMPLES 0x80A9
 #define GL_NORMALIZE 0x0BA1
 #define GL_POINT_SMOOTH 0x0B10
 #define GL_POLYGON_OFFSET_LINE 0x2A02
@@ -210,6 +211,9 @@ static inline void glGetIntegerv(GLenum pname, GLint *params) {
         params[3] = 768;
     } else if (pname == GL_MATRIX_MODE) {
         params[0] = GL_MODELVIEW;
+    } else if (pname == GL_SAMPLES) {
+        extern int g_gl_stub_samples;
+        params[0] = g_gl_stub_samples;
     } else {
         params[0] = 0;
     }

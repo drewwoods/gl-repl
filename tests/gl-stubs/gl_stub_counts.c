@@ -14,6 +14,8 @@
 
 unsigned long long gl_stub_counts[GL_STUB_COUNT_MAX];
 
+int g_gl_stub_samples = 4;
+
 FILE *gl_stub_trace_fp = NULL;
 
 static const char *const g_gl_stub_names[GL_STUB_COUNT_MAX] = {

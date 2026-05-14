@@ -87,7 +87,7 @@ typedef struct {
 /* Exported config item table and count. g_cfg_items[] is a static array in
  * repl_actions.c; CFG_ITEM_COUNT is the count (auto-computed via sizeof). Used
  * by the menu UI and config accessor functions to iterate items. */
-extern const GlrConfigItem g_cfg_items[];
+extern GlrConfigItem g_cfg_items[];
 extern const int CFG_ITEM_COUNT;
 
 /* Query all config items. Outputs the item array and count. Used by the menu
