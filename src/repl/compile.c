@@ -45,6 +45,7 @@
  * uncomment path calls it as a fallback.
  */
 
+#define _POSIX_C_SOURCE 200809L /* for strnlen on linux */
 #include "repl/compile.h"
 
 #include "repl/core_internal.h"  /* repl_format_fits, repl_extract_assignment_parts, collect_visible_vars */
