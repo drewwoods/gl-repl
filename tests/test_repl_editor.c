@@ -624,17 +624,18 @@ int main() {
                     fabsf(glr_camera().dist - 0.5f) < 1e-6f);
     }
 
-    /* 1. Undo when nothing to undo - must run before any undo push */
+    /* 1. Undo when nothing to undo. glr_app_reset_all() clears the
+     * undo/redo rings (see editor_undo_clear in glr_app_reset_all), so
+     * we can rely on a clean undo state here regardless of previous
+     * pushes. */
     {
-        /* g_undo_count starts at 0 (global zero-init); glr_app_reset_all() does
-         * NOT clear the undo buffer, so run this before touching undo at all. */
         glr_app_reset_all();
         editor_undo_pop_snapshot();
         /* Should survive without crashing; state unchanged */
         ASSERT_INT("undo-nothing: num_cmds still 0", repl_state_document_count(), 0);
     }
 
-    /* 2. Redo when nothing to redo - similarly must be before any undo activity */
+    /* 2. Redo when nothing to redo - same clean-undo invariant as #1. */
     {
         glr_app_reset_all();
         editor_undo_do_redo();
@@ -668,6 +669,51 @@ int main() {
         ASSERT_STR("cmd 2 source", editor_buffer_line(2), "  glVertex3f(2, 2, 2);");
         ASSERT_TRUE("redo restores scratch value",
                     repl_eval_scratch_get(0, 0, &scratch) && fabsf(scratch - 7.0f) < 1e-6f);
+    }
+
+    /* 3b. Undo ring is cleared by glr_app_reset_all / scene switch /
+     * example load. Cross-scene undo would otherwise restore a previous
+     * scene's pre-mutation state into the current scene's live commands
+     * — silently corrupting the active scene.
+     *
+     * Reproducer for the bug (without the clear):
+     *   1. Populate scene A with 2 cmds; push an undo snapshot (saves
+     *      A's current state).
+     *   2. Reset (simulates scene switch / example load — the live REPL
+     *      state goes empty but the undo ring is preserved by the
+     *      buggy code).
+     *   3. Populate scene B with 1 cmd; verify it stuck.
+     *   4. Press Ctrl+Z. The pop pulls scene A's snapshot off the ring
+     *      and restores 2 cmds into the live state — but the user
+     *      thinks they're on scene B. Live state of "B" now shows
+     *      what A had at push time.
+     *
+     * The fix clears the ring on reset / scene-load / example-load so
+     * the pop after step 4 finds the ring empty and is a no-op.
+     */
+    {
+        glr_app_reset_all(); declare_test_vars();
+        editor_feed_line("glVertex3f(11,11,11)");
+        editor_feed_line("glVertex3f(22,22,22)");
+        ASSERT_INT("cross-scene undo: scene A populated",
+                   repl_state_document_count(), 2);
+        editor_undo_push_snapshot();
+
+        glr_app_reset_all(); declare_test_vars();
+        ASSERT_INT("cross-scene undo: reset clears live cmds",
+                   repl_state_document_count(), 0);
+
+        editor_feed_line("glVertex3f(99,99,99)");
+        ASSERT_INT("cross-scene undo: scene B populated",
+                   repl_state_document_count(), 1);
+
+        editor_undo_pop_snapshot();
+        /* With the fix, the reset cleared the undo ring, so this pop
+         * is a no-op and live state stays at scene B (1 cmd). Without
+         * the fix, the pop pulls scene A's snapshot off the ring and
+         * overwrites scene B's content with A's 2 cmds. */
+        ASSERT_INT("cross-scene undo: pop must NOT bleed scene A into scene B",
+                   repl_state_document_count(), 1);
     }
 
     /* 4. Deleting commands - basic */

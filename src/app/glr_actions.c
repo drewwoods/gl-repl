@@ -30,6 +30,7 @@
 #include "ui/profile_panel.h"
 #include "ui/state.h"
 #include "editor/inline_rename.h"
+#include "editor/undo.h"
 
 static const char *replay_mode_names[] = { "Polygon", "Vertex" };
 static const char *backdrop_mode_names[] = { "Off", "Cityscape", "Stars", "City+Stars" };
@@ -448,6 +449,10 @@ int glr_action_menu_item_activate(int menu_id, int item_idx) {
             const char *dir = repl_workspace_dir();
             if (!dir || !dir[0])
                 dir = GLR_DEFAULT_WORKSPACE_DIR;
+            /* Wholesale REPL state replacement — drop the undo ring so
+             * a post-load Ctrl+Z can't pull a snapshot from the
+             * previous workspace into the new one. */
+            editor_undo_clear();
             repl_load_workspace(dir);
             return 1;
         }
@@ -459,6 +464,7 @@ int glr_action_menu_item_activate(int menu_id, int item_idx) {
              * state. Step 2 of the decouple plan moved this out of
              * src/repl/example_loader.c. */
             editor_reset_transients();
+            editor_undo_clear();
             repl_load_example(item_idx - 1);
             return 1;
         }
@@ -489,6 +495,7 @@ int glr_action_menu_item_activate(int menu_id, int item_idx) {
         if (scene_idx >= 0 && scene_idx < repl_user_scene_count()) {
             int slot = glr_scene_menu_slot_for_dense_index(scene_idx);
             if (slot >= 0) {
+                editor_undo_clear();
                 if (repl_load_user_scene_idx(slot))
                     load_line_to_input(repl_state_edit_line());
                 return 1;
