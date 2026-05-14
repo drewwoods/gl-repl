@@ -91,28 +91,146 @@ static void tutorial_set_step_status(int tutorial_idx, int step) {
     repl_set_status(msg);
 }
 
-static int tutorial_emit_instruction_comment(const char *comment) {
+/* Shift any tutorial-tracked line at-or-after `pos` by `delta`. Used
+ * before a runner-driven instruction-comment insert and (in Phase 3)
+ * after a user's matched expected-command insert. Deliberately does
+ * NOT touch pending.commit_line — that field is the immutable
+ * snapshot of where the in-flight commit attempt targets, and the
+ * success bookkeeping relies on reading it back unchanged after the
+ * shift pass. */
+static void tutorial_shift_tracked_lines_from(int pos, int delta) {
+    TutorialRuntimeState *state = tutorial_state_mut();
+
+    if (delta == 0)
+        return;
+    for (int i = 0; i < state->locked_line_count; i++) {
+        if (state->locked_lines[i] >= pos)
+            state->locked_lines[i] += delta;
+    }
+    if (state->fade_line_idx >= pos)
+        state->fade_line_idx += delta;
+    if (state->expected_commit_line >= 0 &&
+        state->expected_commit_line >= pos &&
+        /* Skip the insertion described by `pending`: the in-flight
+         * user commit lands at pending.commit_line and the matched
+         * expected_commit_line tracks it; bumping it would double-
+         * shift the user row. */
+        !(state->pending.step_idx >= 0 &&
+          pos == state->pending.commit_line)) {
+        state->expected_commit_line += delta;
+    }
+    for (int i = 0; i < TUTORIAL_LOCKED_LINE_MAX; i++) {
+        if (state->committed_line_for_step[i] >= 0 &&
+            state->committed_line_for_step[i] >= pos)
+            state->committed_line_for_step[i] += delta;
+    }
+}
+
+static int tutorial_emit_instruction_comment(const char *comment,
+                                             int instruction_line) {
     char err[TUTORIAL_STATUS_MAX] = "";
     TutorialRuntimeState *state = tutorial_state_mut();
 
     if (!comment || !comment[0])
         return 0;
+    if (instruction_line < 0 ||
+        instruction_line > repl_state_document_count()) {
+        repl_set_status("Tutorial instruction line out of range");
+        return 0;
+    }
+
+    /* Shift tracked tutorial lines at-or-after the insertion site by
+     * +1 BEFORE the load so the loader's own apply doesn't see stale
+     * tracked indices. */
+    tutorial_shift_tracked_lines_from(instruction_line, 1);
 
     /* repl_load_apply_line caller contract (src/repl/load.h): set
-     * edit_line to document_count, clear insert mode, then mark both
-     * flat and normals dirty after loading. */
-    repl_state_edit_line_set(repl_state_document_count());
+     * edit_line to the desired insertion index in
+     * [0, document_count]; clear insert mode; mark flat/normals
+     * dirty after loading. */
+    repl_state_edit_line_set(instruction_line);
     editor_insert_mode_set(0);
     if (!repl_load_apply_line(comment, err, (int)sizeof(err))) {
+        /* Loader failed — undo the speculative shift so tracked
+         * indices stay consistent with the unchanged document. */
+        tutorial_shift_tracked_lines_from(instruction_line, -1);
         repl_set_status(err[0] ? err : "Tutorial instruction load failed");
         return 0;
     }
 
     repl_state_mark_flat_dirty();
     repl_state_mark_normals_dirty();
-    state->fade_line_idx = repl_state_document_count() - 1;
+    state->fade_line_idx = instruction_line;
     state->fade_start_t = repl_state_variables().anim_time;
-    tutorial_append_locked_line(state->fade_line_idx);
+    tutorial_append_locked_line(instruction_line);
+
+    /* Place the cursor on the row the user is expected to commit on
+     * (the row immediately below the new instruction) and enable
+     * insert mode iff that row is mid-document — otherwise it's the
+     * trailing row and append mode is correct. */
+    state->expected_commit_line = instruction_line + 1;
+    repl_state_edit_line_set(state->expected_commit_line);
+    editor_insert_mode_set(state->expected_commit_line <
+                           repl_state_document_count());
+    return 1;
+}
+
+/* Resolve where the next instruction comment for tutorial `idx`
+ * step `step` should be inserted. For append placement that's the
+ * current document_count; for label placement it's the target
+ * step's committed source line. Returns 1 on success and writes the
+ * insertion line into *out_line. Returns 0 (and sets a status
+ * message) on internal failure. tutorial_start validates the
+ * catalog up front so this should never fail at runtime unless
+ * something has gone catastrophically wrong with the tracked-line
+ * bookkeeping. */
+static int tutorial_step_instruction_line(int tutorial_idx, int step,
+                                          int *out_line) {
+    if (!out_line)
+        return 0;
+
+    TutorialStepPlacementKind placement =
+        repl_tutorial_step_placement(tutorial_idx, step);
+    if (placement == TUTORIAL_STEP_APPEND) {
+        *out_line = repl_state_document_count();
+        return 1;
+    }
+    if (placement != TUTORIAL_STEP_LABEL) {
+        repl_set_status("Tutorial step has unknown placement");
+        return 0;
+    }
+
+    const char *target = repl_tutorial_step_target_label(tutorial_idx, step);
+    if (!target || target[0] == '\0') {
+        repl_set_status("Tutorial step target label is unresolved");
+        return 0;
+    }
+
+    /* Walk earlier steps to find the one carrying this label. */
+    int target_step = -1;
+    for (int i = 0; i < step; i++) {
+        const char *lbl = repl_tutorial_step_label(tutorial_idx, i);
+        if (lbl && lbl[0] && strcmp(lbl, target) == 0) {
+            target_step = i;
+            break;
+        }
+    }
+    if (target_step < 0) {
+        repl_set_status("Tutorial step target label is unresolved");
+        return 0;
+    }
+
+    TutorialRuntimeState state = tutorial_state_view();
+    if (target_step >= TUTORIAL_LOCKED_LINE_MAX) {
+        repl_set_status("Tutorial step target label is unresolved");
+        return 0;
+    }
+    int line = state.committed_line_for_step[target_step];
+    if (line < 0 || line > repl_state_document_count()) {
+        repl_set_status("Tutorial step target label is unresolved");
+        return 0;
+    }
+    *out_line = line;
     return 1;
 }
 
@@ -141,8 +259,18 @@ TutorialMatchResult tutorial_match(const char *expected, const char *got) {
 }
 
 void tutorial_start(int idx) {
+    char err[TUTORIAL_STATUS_MAX] = "";
+
     if (idx < 0 || idx >= repl_tutorial_count()) {
         repl_set_status("Tutorial index out of range");
+        return;
+    }
+
+    /* Validate the full catalog entry BEFORE mutating any state so a
+     * malformed tutorial cannot leave the editor in a half-applied
+     * transient scene. */
+    if (!repl_tutorial_validate(idx, err, (int)sizeof(err))) {
+        repl_set_status(err[0] ? err : "Tutorial catalog validation failed");
         return;
     }
 
@@ -156,7 +284,13 @@ void tutorial_start(int idx) {
     state->tutorial_idx = idx;
     state->step = 0;
 
-    if (!tutorial_emit_instruction_comment(repl_tutorial_step_comment(idx, 0))) {
+    int instruction_line = 0;
+    if (!tutorial_step_instruction_line(idx, 0, &instruction_line)) {
+        tutorial_state_reset();
+        return;
+    }
+    if (!tutorial_emit_instruction_comment(repl_tutorial_step_comment(idx, 0),
+                                           instruction_line)) {
         tutorial_state_reset();
         return;
     }
@@ -203,6 +337,29 @@ void tutorial_advance_after_successful_commit(void) {
         return;
 
     state = tutorial_state_mut();
+
+    /* Phase 2 fallback: record the just-completed step's source row
+     * so later label-targeted steps can resolve their target. The
+     * exact value comes from `pending.commit_line` once Phase 3
+     * wires up the pending/applied bookkeeping; until then, the row
+     * is the trailing source row right after the append commit. */
+    if (state->step >= 0 && state->step < TUTORIAL_LOCKED_LINE_MAX &&
+        state->committed_line_for_step[state->step] < 0) {
+        if (state->pending.step_idx == state->step &&
+            state->pending.commit_line >= 0) {
+            state->committed_line_for_step[state->step] =
+                state->pending.commit_line;
+        } else {
+            int doc = repl_state_document_count();
+            state->committed_line_for_step[state->step] =
+                doc > 0 ? doc - 1 : 0;
+        }
+    }
+    state->pending.step_idx = -1;
+    state->pending.commit_line = -1;
+    state->pending.doc_count_before = -1;
+    state->expected_commit_line = -1;
+
     state->step++;
     comment = repl_tutorial_step_comment(state->tutorial_idx, state->step);
     if (!comment) {
@@ -215,7 +372,13 @@ void tutorial_advance_after_successful_commit(void) {
         return;
     }
 
-    if (!tutorial_emit_instruction_comment(comment))
+    int instruction_line = 0;
+    if (!tutorial_step_instruction_line(state->tutorial_idx, state->step,
+                                        &instruction_line)) {
+        tutorial_state_reset();
+        return;
+    }
+    if (!tutorial_emit_instruction_comment(comment, instruction_line))
         return;
     tutorial_set_step_status(state->tutorial_idx, state->step);
     /* The semicolon route called editor_completion_clear() before this

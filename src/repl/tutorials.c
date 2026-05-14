@@ -71,6 +71,34 @@ static const TutorialStep g_tutorial_color_transform_steps[] = {
     STEP_SENTINEL,
 };
 
+/* Phase 2 worked label-targeted tutorial: the user first draws a
+ * triangle (five append steps), then a sixth step splices
+ * glEnable(GL_DEPTH_TEST) above the original glBegin so the
+ * batch renders with depth testing already enabled. The label
+ * "triangle_begin" anchors the insertion. */
+static const TutorialStep g_tutorial_depth_triangle_steps[] = {
+    STEP_APPEND("triangle_begin",
+        "// Start the triangle batch; the label here anchors a later insert.",
+        "glBegin(GL_TRIANGLES)"),
+    STEP_APPEND(NULL,
+        "// Add the top vertex.",
+        "glVertex3f(0, 0.8, 0)"),
+    STEP_APPEND(NULL,
+        "// Add the lower-left vertex.",
+        "glVertex3f(-0.8, -0.6, 0)"),
+    STEP_APPEND(NULL,
+        "// Add the lower-right vertex.",
+        "glVertex3f(0.8, -0.6, 0)"),
+    STEP_APPEND(NULL,
+        "// Close the triangle batch.",
+        "glEnd()"),
+    STEP_AT(NULL,
+        "// Enable depth testing before the triangle is submitted.",
+        "glEnable(GL_DEPTH_TEST)",
+        "triangle_begin"),
+    STEP_SENTINEL,
+};
+
 static const TutorialEntry g_tutorials[] = {
     {
         .name  = "First Triangle",
@@ -79,6 +107,10 @@ static const TutorialEntry g_tutorials[] = {
     {
         .name  = "Color & Transform",
         .steps = g_tutorial_color_transform_steps,
+    },
+    {
+        .name  = "Depth Test Triangle",
+        .steps = g_tutorial_depth_triangle_steps,
     },
 };
 
