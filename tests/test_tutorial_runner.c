@@ -687,6 +687,153 @@ static void test_start_captures_home_for_unsaved_buffer(void) {
     ASSERT_TRUE("tutorial active after start", tutorial_active());
 }
 
+static void test_catalog_starter_steps_are_append(void) {
+    /* Phase 1: every existing starter step migrated to TutorialStep
+     * records should report append placement and carry neither a
+     * label nor a target_label. */
+    for (int t = 0; t < repl_tutorial_count(); t++) {
+        int n = repl_tutorial_step_count(t);
+        for (int s = 0; s < n; s++) {
+            ASSERT_INT("starter step is append placement",
+                       repl_tutorial_step_placement(t, s),
+                       TUTORIAL_STEP_APPEND);
+            ASSERT_TRUE("starter step has no label",
+                        repl_tutorial_step_label(t, s) == NULL ||
+                        repl_tutorial_step_label(t, s)[0] == '\0');
+            ASSERT_TRUE("starter step has no target_label",
+                        repl_tutorial_step_target_label(t, s) == NULL ||
+                        repl_tutorial_step_target_label(t, s)[0] == '\0');
+        }
+    }
+}
+
+static void test_catalog_validation_passes_for_all_tutorials(void) {
+    /* Phase 1: every shipped catalog entry must validate. */
+    for (int t = 0; t < repl_tutorial_count(); t++) {
+        char err[160] = "";
+        int ok = repl_tutorial_validate(t, err, sizeof(err));
+        ASSERT_TRUE("shipped tutorial validates", ok);
+        if (!ok) {
+            /* surface the diagnostic so test output explains the
+             * failure even when the assert collapses to 0/1. */
+            ASSERT_STR("validation err empty on success", err, "");
+        }
+    }
+}
+
+static void test_catalog_rejects_out_of_range_index(void) {
+    char err[160] = "";
+    int ok = repl_tutorial_validate(repl_tutorial_count(), err, sizeof(err));
+    ASSERT_TRUE("out-of-range tutorial idx fails validation", !ok);
+    ASSERT_TRUE("out-of-range tutorial idx has diagnostic",
+                err[0] != '\0');
+}
+
+static void test_validate_rejects_duplicate_label(void) {
+    static const TutorialStep dup_steps[] = {
+        { "lbl", "// one", "glPointSize(1)", TUTORIAL_STEP_APPEND, NULL },
+        { "lbl", "// two", "glPointSize(2)", TUTORIAL_STEP_APPEND, NULL },
+        { NULL,  NULL,     NULL,             TUTORIAL_STEP_APPEND, NULL },
+    };
+    TutorialEntry entry = { .name = "dup_labels", .steps = dup_steps };
+    char err[160] = "";
+    int ok = repl_tutorial_validate_entry(&entry, err, sizeof(err));
+    ASSERT_TRUE("duplicate label rejected", !ok);
+    ASSERT_TRUE("duplicate label diagnostic mentions 'duplicate'",
+                strstr(err, "duplicate") != NULL);
+}
+
+static void test_validate_rejects_missing_target_label(void) {
+    static const TutorialStep missing_steps[] = {
+        { NULL, "// one", "glPointSize(1)",
+          TUTORIAL_STEP_LABEL, "no_such_label" },
+        { NULL, NULL, NULL, TUTORIAL_STEP_APPEND, NULL },
+    };
+    TutorialEntry entry = { .name = "missing_target", .steps = missing_steps };
+    char err[160] = "";
+    int ok = repl_tutorial_validate_entry(&entry, err, sizeof(err));
+    ASSERT_TRUE("missing target_label rejected", !ok);
+    ASSERT_TRUE("missing target_label diagnostic mentions the label",
+                strstr(err, "no_such_label") != NULL);
+}
+
+static void test_validate_rejects_forward_reference(void) {
+    static const TutorialStep fwd_steps[] = {
+        { NULL,    "// targets the later step",
+                   "glPointSize(1)", TUTORIAL_STEP_LABEL, "later" },
+        { "later", "// gets labeled later",
+                   "glPointSize(2)", TUTORIAL_STEP_APPEND, NULL },
+        { NULL, NULL, NULL, TUTORIAL_STEP_APPEND, NULL },
+    };
+    TutorialEntry entry = { .name = "forward_ref", .steps = fwd_steps };
+    char err[160] = "";
+    int ok = repl_tutorial_validate_entry(&entry, err, sizeof(err));
+    ASSERT_TRUE("forward reference rejected", !ok);
+}
+
+static void test_validate_rejects_multi_row_expected(void) {
+    /* Semicolons inside `expected` are interpreted as statement
+     * separators and would expand the catalog row into multiple
+     * source rows on commit. */
+    static const TutorialStep semi_steps[] = {
+        { NULL, "// double commit",
+                "glPointSize(1); glPointSize(2)",
+                TUTORIAL_STEP_APPEND, NULL },
+        { NULL, NULL, NULL, TUTORIAL_STEP_APPEND, NULL },
+    };
+    TutorialEntry entry_semi = { .name = "multi_stmt", .steps = semi_steps };
+    char err[160] = "";
+    ASSERT_TRUE("expected with ';' rejected",
+                !repl_tutorial_validate_entry(&entry_semi, err, sizeof(err)));
+
+    /* Block-opening braces ({ }) would commit a CMD_BLOCK and shift
+     * the document by more than one row. */
+    static const TutorialStep brace_steps[] = {
+        { NULL, "// opens a block",
+                "for(i, 0, 3) {",
+                TUTORIAL_STEP_APPEND, NULL },
+        { NULL, NULL, NULL, TUTORIAL_STEP_APPEND, NULL },
+    };
+    TutorialEntry entry_brace = { .name = "block_open", .steps = brace_steps };
+    err[0] = '\0';
+    ASSERT_TRUE("expected with '{' rejected",
+                !repl_tutorial_validate_entry(&entry_brace, err, sizeof(err)));
+
+    /* Multi-name float decls expand into one CMD_VAR_DECLARE per
+     * name, which is several source rows. */
+    static const TutorialStep multi_decl_steps[] = {
+        { NULL, "// declares multiple",
+                "float a, b, c",
+                TUTORIAL_STEP_APPEND, NULL },
+        { NULL, NULL, NULL, TUTORIAL_STEP_APPEND, NULL },
+    };
+    TutorialEntry entry_decl = { .name = "multi_decl",
+                                 .steps = multi_decl_steps };
+    err[0] = '\0';
+    ASSERT_TRUE("multi-name float decl rejected",
+                !repl_tutorial_validate_entry(&entry_decl, err, sizeof(err)));
+}
+
+static void test_validate_accepts_well_formed_label_tutorial(void) {
+    static const TutorialStep ok_steps[] = {
+        { "open_batch", "// open the batch",
+                        "glBegin(GL_TRIANGLES)",
+                        TUTORIAL_STEP_APPEND, NULL },
+        { NULL,         "// add a vertex",
+                        "glVertex3f(0, 0.5, 0)",
+                        TUTORIAL_STEP_APPEND, NULL },
+        { NULL,         "// later: enable depth testing before open_batch",
+                        "glEnable(GL_DEPTH_TEST)",
+                        TUTORIAL_STEP_LABEL, "open_batch" },
+        { NULL, NULL, NULL, TUTORIAL_STEP_APPEND, NULL },
+    };
+    TutorialEntry entry = { .name = "label_ok", .steps = ok_steps };
+    char err[160] = "";
+    ASSERT_TRUE("well-formed label-targeted tutorial validates",
+                repl_tutorial_validate_entry(&entry, err, sizeof(err)));
+    ASSERT_STR("err empty on success", err, "");
+}
+
 static void test_start_rejects_out_of_range_idx(void) {
     reset_fixture();
     tutorial_start(repl_tutorial_count());
@@ -730,5 +877,13 @@ int main(void) {
     test_complete_and_menu_actions();
     test_start_captures_home_for_unsaved_buffer();
     test_start_rejects_out_of_range_idx();
+    test_catalog_starter_steps_are_append();
+    test_catalog_validation_passes_for_all_tutorials();
+    test_catalog_rejects_out_of_range_index();
+    test_validate_rejects_duplicate_label();
+    test_validate_rejects_missing_target_label();
+    test_validate_rejects_forward_reference();
+    test_validate_rejects_multi_row_expected();
+    test_validate_accepts_well_formed_label_tutorial();
     return test_harness_report(&g_harness, "test_tutorial_runner");
 }
