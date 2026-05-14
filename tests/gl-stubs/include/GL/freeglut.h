@@ -123,16 +123,16 @@ static inline void glutSwapBuffers(void) {}
 static inline int glutGet(GLenum type) { static int elapsed; (void)type; elapsed += 16; return elapsed; }
 static inline int glutGetModifiers(void) { return 0; }
 static inline void glutSetCursor(int cursor) { (void)cursor; }
-static inline void glutBitmapCharacter(void *font, int character) { gl_stub_tick(GL_STUB_glutBitmapCharacter); (void)font; (void)character; }
+static inline void glutBitmapCharacter(void *font, int character) { GL_STUB_TRACE_LINE("glutBitmapCharacter %d\n", (int)character); gl_stub_tick(GL_STUB_glutBitmapCharacter); (void)font; }
 static inline int glutBitmapWidth(void *font, int character) { (void)font; (void)character; return 8; }
-static inline void glutSolidSphere(double radius, int slices, int stacks) { gl_stub_tick(GL_STUB_glutSolidSphere); (void)radius; (void)slices; (void)stacks; }
-static inline void glutWireSphere(double radius, int slices, int stacks) { gl_stub_tick(GL_STUB_glutWireSphere); (void)radius; (void)slices; (void)stacks; }
-static inline void glutSolidTorus(double inner_radius, double outer_radius, int sides, int rings) { gl_stub_tick(GL_STUB_glutSolidTorus); (void)inner_radius; (void)outer_radius; (void)sides; (void)rings; }
-static inline void glutWireTorus(double inner_radius, double outer_radius, int sides, int rings) { gl_stub_tick(GL_STUB_glutWireTorus); (void)inner_radius; (void)outer_radius; (void)sides; (void)rings; }
-static inline void glutSolidCube(double size) { gl_stub_tick(GL_STUB_glutSolidCube); (void)size; }
-static inline void glutWireCube(double size) { gl_stub_tick(GL_STUB_glutWireCube); (void)size; }
-static inline void glutSolidTeapot(double size) { gl_stub_tick(GL_STUB_glutSolidTeapot); (void)size; }
-static inline void glutSolidCone(double base, double height, int slices, int stacks) { gl_stub_tick(GL_STUB_glutSolidCone); (void)base; (void)height; (void)slices; (void)stacks; }
+static inline void glutSolidSphere(double radius, int slices, int stacks) { GL_STUB_TRACE_LINE("glutSolidSphere %g %d %d\n", (double)radius, (int)slices, (int)stacks); gl_stub_tick(GL_STUB_glutSolidSphere); }
+static inline void glutWireSphere(double radius, int slices, int stacks) { GL_STUB_TRACE_LINE("glutWireSphere %g %d %d\n", (double)radius, (int)slices, (int)stacks); gl_stub_tick(GL_STUB_glutWireSphere); }
+static inline void glutSolidTorus(double inner_radius, double outer_radius, int sides, int rings) { GL_STUB_TRACE_LINE("glutSolidTorus %g %g %d %d\n", (double)inner_radius, (double)outer_radius, (int)sides, (int)rings); gl_stub_tick(GL_STUB_glutSolidTorus); }
+static inline void glutWireTorus(double inner_radius, double outer_radius, int sides, int rings) { GL_STUB_TRACE_LINE("glutWireTorus %g %g %d %d\n", (double)inner_radius, (double)outer_radius, (int)sides, (int)rings); gl_stub_tick(GL_STUB_glutWireTorus); }
+static inline void glutSolidCube(double size) { GL_STUB_TRACE_LINE("glutSolidCube %g\n", (double)size); gl_stub_tick(GL_STUB_glutSolidCube); }
+static inline void glutWireCube(double size) { GL_STUB_TRACE_LINE("glutWireCube %g\n", (double)size); gl_stub_tick(GL_STUB_glutWireCube); }
+static inline void glutSolidTeapot(double size) { GL_STUB_TRACE_LINE("glutSolidTeapot %g\n", (double)size); gl_stub_tick(GL_STUB_glutSolidTeapot); }
+static inline void glutSolidCone(double base, double height, int slices, int stacks) { GL_STUB_TRACE_LINE("glutSolidCone %g %g %d %d\n", (double)base, (double)height, (int)slices, (int)stacks); gl_stub_tick(GL_STUB_glutSolidCone); }
 
 #ifdef __cplusplus
 }

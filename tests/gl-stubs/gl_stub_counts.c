@@ -10,7 +10,11 @@
 
 #include <GL/gl_stub_counts.h>
 
+#include <locale.h>
+
 unsigned long long gl_stub_counts[GL_STUB_COUNT_MAX];
+
+FILE *gl_stub_trace_fp = NULL;
 
 static const char *const g_gl_stub_names[GL_STUB_COUNT_MAX] = {
 #define GL_STUB_COUNT_NAME_ENTRY(name) [GL_STUB_##name] = #name,
@@ -26,6 +30,22 @@ const char *gl_stub_count_name(int idx) {
 void gl_stub_counts_reset(void) {
     for (int i = 0; i < GL_STUB_COUNT_MAX; i++)
         gl_stub_counts[i] = 0;
+}
+
+void gl_stub_trace_open(const char *path) {
+    gl_stub_trace_close();
+    if (!path || !*path) return;
+    /* Force C locale for %g so the decimal separator stays '.' on hosts
+     * configured otherwise — text traces are diffed byte-for-byte. */
+    setlocale(LC_NUMERIC, "C");
+    gl_stub_trace_fp = fopen(path, "w");
+}
+
+void gl_stub_trace_close(void) {
+    if (gl_stub_trace_fp) {
+        fclose(gl_stub_trace_fp);
+        gl_stub_trace_fp = NULL;
+    }
 }
 
 void gl_stub_counts_dump(FILE *out, const char *prefix, long long divisor) {
