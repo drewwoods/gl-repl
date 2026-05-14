@@ -84,9 +84,9 @@ static int flatten_repl_source_scope_find_block_end(const FlattenContext *ctx, i
 
     for (int j = begin_idx + 1; j < ctx->source_count; j++) {
         CmdType t = ctx->source_cmds[j].type;
-        if (t == CMD_FOR_BEGIN || t == CMD_FUNC_DEF || t == CMD_IF_BEGIN)
+        if (repl_cmd_is_block_head(t))
             depth++;
-        else if (t == CMD_FOR_END || t == CMD_FUNC_END || t == CMD_IF_END) {
+        else if (repl_cmd_is_block_end(t)) {
             depth--;
             if (depth == 0)
                 return j;
@@ -145,11 +145,9 @@ void repl_flatten_refresh_current_block_highlight(void) {
         int fcur = 0;
         for (int ci = 0; ci < repl_state_document_count() && fcur < flat_cmd_count; ci++) {
             if (!repl_state_document_cmds_mut()[ci].valid) continue;
-            if (repl_state_document_cmds_mut()[ci].type == CMD_FUNC_DEF || repl_state_document_cmds_mut()[ci].type == CMD_FUNC_END ||
-                repl_state_document_cmds_mut()[ci].type == CMD_FOR_BEGIN || repl_state_document_cmds_mut()[ci].type == CMD_FOR_END ||
-                repl_state_document_cmds_mut()[ci].type == CMD_IF_BEGIN  || repl_state_document_cmds_mut()[ci].type == CMD_IF_END  ||
-                repl_state_document_cmds_mut()[ci].type == CMD_CALL ||
-                repl_state_document_cmds_mut()[ci].type == CMD_EMPTY)
+            CmdType ct = repl_state_document_cmds_mut()[ci].type;
+            if (repl_cmd_is_block_head(ct) || repl_cmd_is_block_end(ct) ||
+                ct == CMD_CALL || ct == CMD_EMPTY)
                 continue;
             while (fcur < flat_cmd_count && !flat_cmds[fcur].valid) fcur++;
             if (fcur >= flat_cmd_count) break;

@@ -71,7 +71,19 @@ typedef struct {
  * to exactly one category; the renderer (ui_panels.c) translates the
  * category into an RGB color via a category→color palette. Living in the
  * spec means a new CmdType picks up the right highlight automatically — the
- * UI doesn't need to grow another switch case. */
+ * UI doesn't need to grow another switch case.
+ *
+ * Categories are the *visual* taxonomy (one color per category). For
+ * *control-flow* predicates — "is this a transform?" / "does this emit a
+ * vertex?" / "is this a block head?" — see the inline helpers in
+ * src/repl/command.h (repl_cmd_is_transform, repl_cmd_emits_vertex,
+ * repl_cmd_is_block_head, repl_cmd_is_block_end). The two axes are
+ * intentionally separate: e.g. CMD_FOR_BEGIN / CMD_FUNC_DEF /
+ * CMD_IF_BEGIN live in three distinct visual categories
+ * (CMD_CAT_LOOP / CMD_CAT_FUNCTION / CMD_CAT_CONDITIONAL) but share a
+ * single control-flow predicate (repl_cmd_is_block_head). Don't fold
+ * the predicates through the spec table — that'd invert the header
+ * layering (command.h is foundational, command_spec.h depends on it). */
 typedef enum {
     CMD_CAT_DEFAULT = 0,    /* fallback gray; only hit for out-of-range types */
     CMD_CAT_PRIMITIVE,      /* glBegin / glEnd */

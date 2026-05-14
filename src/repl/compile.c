@@ -1276,9 +1276,9 @@ static int compile_find_block_head(const ReplCompileContext *ctx,
     int depth = 1;
     for (int j = end_idx - 1; j >= 0; j--) {
         CmdType t = ctx->document_cmds[j].type;
-        if (t == CMD_FOR_END || t == CMD_FUNC_END || t == CMD_IF_END) {
+        if (repl_cmd_is_block_end(t)) {
             depth++;
-        } else if (t == CMD_FOR_BEGIN || t == CMD_FUNC_DEF || t == CMD_IF_BEGIN) {
+        } else if (repl_cmd_is_block_head(t)) {
             depth--;
             if (depth == 0) return j;
         }
@@ -1308,10 +1308,8 @@ ReplCompileResult repl_compile_toggle_comment(int line_idx,
         return REPL_COMPILE_OK;
 
     type = ctx->document_cmds[line_idx].type;
-    is_block_head = (type == CMD_FOR_BEGIN || type == CMD_FUNC_DEF ||
-                     type == CMD_IF_BEGIN);
-    is_block_end  = (type == CMD_FOR_END || type == CMD_FUNC_END ||
-                     type == CMD_IF_END);
+    is_block_head = repl_cmd_is_block_head(type);
+    is_block_end  = repl_cmd_is_block_end(type);
 
     /* Block head/end: batch-comment the whole [head..end] range. */
     if (is_block_head || is_block_end) {
