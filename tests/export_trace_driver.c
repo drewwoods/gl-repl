@@ -54,12 +54,13 @@ int main(int argc, char **argv) {
      * into the trace. */
     gl_stub_counts_reset();
 
-    /* Both helpers are static-in-translation-unit by the exporter; the
-     * #include above makes them visible. reset_repl_vars() pulls the
-     * predefined REPL vars (t, scratch arrays) to their fresh values
-     * — equivalent to glr_app_reset_all() on the REPL side — and
-     * render_repl_geometry() runs the user's flat program. */
-    reset_repl_vars();
+    /* render_repl_geometry is static-in-translation-unit by the exporter;
+     * the #include above makes it visible. We deliberately skip the
+     * companion reset_repl_vars() — it's only emitted when the program
+     * actually uses a predefined REPL var, so calling it would be a
+     * compile error for predef-free programs. File-scope `static float
+     * t = 0.0f;` etc. emitted by the exporter already gives the same
+     * starting state the REPL side has after glr_app_reset_all(). */
     render_repl_geometry();
 
     FILE *f = fopen(argv[1], "w");
