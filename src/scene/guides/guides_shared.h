@@ -37,6 +37,18 @@ typedef struct SceneGuideSnapshot {
     float normal_args[3];
     int   normal_n_filled;
 
+    /* When the cursor is on a glNormal3f / gluNormal / CMD_TESS_NORMAL
+     * line, the controller looks forward in the *flat* program for the
+     * next vertex command and writes its evaluated position here. The
+     * normal-guide renderer prefers this over its own forward search
+     * through source_cmds — source args are frozen at parse time, so a
+     * dynamic wave (where the surrounding x/y/z vars are reassigned
+     * each frame inside a loop) would otherwise anchor the normal
+     * arrow at the parse-time vertex position instead of the live one.
+     * Zeroed / `_valid` = 0 means "fall back to the source search". */
+    float normal_base_pos[3];
+    int   normal_base_pos_valid;
+
     float alpha_scale; /* alpha boost to counter dark-bg crush; 1.0 = no change */
 } SceneGuideSnapshot;
 
