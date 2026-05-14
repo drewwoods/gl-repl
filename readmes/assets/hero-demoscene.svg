@@ -1,1 +1,141 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 460" role="img" aria-label="SYS_3D"><defs><linearGradient id="ds-sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1b0838"/><stop offset="0.45" stop-color="#7b2cbf"/><stop offset="0.62" stop-color="#ff1493"/><stop offset="0.78" stop-color="#ff6600"/><stop offset="1" stop-color="#ffd60a"/></linearGradient><linearGradient id="ds-sun" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffd60a"/><stop offset="0.5" stop-color="#ff6600"/><stop offset="1" stop-color="#ff1493"/></linearGradient><linearGradient id="ds-logo" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff7cc"/><stop offset="0.45" stop-color="#ffd60a"/><stop offset="0.5" stop-color="#ff6600"/><stop offset="0.55" stop-color="#ff1493"/><stop offset="1" stop-color="#7b2cbf"/></linearGradient><filter id="ds-bloom" x="-10%" y="-10%" width="120%" height="120%"><feGaussianBlur stdDeviation="2" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter><filter id="ds-rgb" x="-5%" y="-5%" width="110%" height="110%"><feOffset in="SourceGraphic" dx="-1.6" dy="0" result="r"/><feColorMatrix in="r" type="matrix" values="1 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 1 0" result="rOnly"/><feOffset in="SourceGraphic" dx="1.6" dy="0" result="c"/><feColorMatrix in="c" type="matrix" values="0 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 1 0" result="cOnly"/><feMerge><feMergeNode in="rOnly"/><feMergeNode in="cOnly"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs><rect width="1280" height="460" fill="url(#ds-sky)"/><g opacity="0.18" stroke="#fff7cc" stroke-width="1"><line x1="640" y1="230" x2="0" y2="0"/><line x1="640" y1="230" x2="200" y2="-20"/><line x1="640" y1="230" x2="440" y2="-20"/><line x1="640" y1="230" x2="640" y2="-20"/><line x1="640" y1="230" x2="840" y2="-20"/><line x1="640" y1="230" x2="1080" y2="-20"/><line x1="640" y1="230" x2="1280" y2="0"/></g><g transform="translate(640 240)" filter="url(#ds-bloom)"><circle r="120" fill="url(#ds-sun)"/><rect x="-122" y="42" width="244" height="3" fill="#1b0838"/><rect x="-122" y="56" width="244" height="4" fill="#1b0838"/><rect x="-122" y="72" width="244" height="5" fill="#1b0838"/><rect x="-122" y="92" width="244" height="7" fill="#1b0838"/><rect x="-122" y="116" width="244" height="9" fill="#1b0838"/></g><g transform="translate(0 320)"><g stroke="#ff1493" stroke-width="1.4" opacity="0.8"><line x1="0" y1="0" x2="1280" y2="0"/><line x1="0" y1="20" x2="1280" y2="20"/><line x1="0" y1="48" x2="1280" y2="48"/><line x1="0" y1="84" x2="1280" y2="84"/><line x1="0" y1="128" x2="1280" y2="128"/></g><g stroke="#ffd60a" stroke-width="1.2" opacity="0.65" stroke-linecap="round"><line x1="640" y1="0" x2="-100" y2="140"/><line x1="640" y1="0" x2="50" y2="140"/><line x1="640" y1="0" x2="180" y2="140"/><line x1="640" y1="0" x2="320" y2="140"/><line x1="640" y1="0" x2="460" y2="140"/><line x1="640" y1="0" x2="560" y2="140"/><line x1="640" y1="0" x2="640" y2="140"/><line x1="640" y1="0" x2="720" y2="140"/><line x1="640" y1="0" x2="820" y2="140"/><line x1="640" y1="0" x2="960" y2="140"/><line x1="640" y1="0" x2="1100" y2="140"/><line x1="640" y1="0" x2="1250" y2="140"/><line x1="640" y1="0" x2="1380" y2="140"/></g></g><g><animateTransform attributeName="transform" type="translate" values="0 0; 0 -12; 0 0" dur="4s" repeatCount="indefinite"/><g filter="url(#ds-bloom)"><animateTransform attributeName="transform" type="rotate" from="0 220 290" to="360 220 290" dur="9s" repeatCount="indefinite"/><g transform="translate(220 290)" stroke="#fff7cc" stroke-width="1.6" fill="none"><path d="M -30 -50 L 30 -50 L 30 10 L -30 10 Z" opacity="0.55"/><path d="M -60 -10 L 60 -10 L 60 50 L -60 50 Z"/><line x1="-30" y1="-50" x2="-60" y2="-10"/><line x1="30" y1="-50" x2="60" y2="-10"/><line x1="30" y1="10" x2="60" y2="50"/><line x1="-30" y1="10" x2="-60" y2="50"/></g></g></g><g><animateTransform attributeName="transform" type="translate" values="0 0; 0 -12; 0 0" dur="4s" begin="-1s" repeatCount="indefinite"/><g><animateTransform attributeName="transform" type="rotate" from="360 1080 280" to="0 1080 280" dur="7s" repeatCount="indefinite"/><g transform="translate(1080 280)" stroke="#fff7cc" stroke-width="1.6" fill="none" filter="url(#ds-bloom)"><path d="M 0 -60 L 60 30 L -60 30 Z"/><path d="M 0 -60 L 20 50 L -60 30 Z" opacity="0.7"/><path d="M 0 -60 L 20 50 L 60 30 Z" opacity="0.7"/></g></g></g><g><animateTransform attributeName="transform" type="translate" values="0 0; 0 -12; 0 0" dur="4s" begin="-2s" repeatCount="indefinite"/><g><animateTransform attributeName="transform" type="rotate" from="0 940 110" to="360 940 110" dur="11s" repeatCount="indefinite"/><g transform="translate(940 110)" stroke="#fff7cc" stroke-width="1.2" fill="none" opacity="0.85"><polygon points="0,-40 38,-12 23,34 -23,34 -38,-12"/><line x1="0" y1="-40" x2="0" y2="34"/><line x1="38" y1="-12" x2="-23" y2="34"/><line x1="-38" y1="-12" x2="23" y2="34"/></g></g></g><g transform="translate(640 180)" text-anchor="middle" filter="url(#ds-rgb)"><text y="0" fill="url(#ds-logo)" font-family="'Courier New', monospace" font-weight="900" font-size="148" letter-spacing="-4">SYS_3D</text><text y="42" fill="#fff7cc" font-family="monospace" font-size="14" letter-spacing="8" opacity="0.85">gl-repl  v0.1  ::  freeglut + opengl 1.1  ::  type to render</text></g><g opacity="0.16"><g><animateTransform attributeName="transform" type="translate" from="0 -30" to="0 460" dur="6s" repeatCount="indefinite"/><rect x="0" y="0" width="1280" height="2" fill="#ffffff"/><rect x="0" y="6" width="1280" height="3" fill="#ffffff"/><rect x="0" y="10" width="1280" height="1" fill="#ffffff"/></g></g><g transform="translate(640 430)" text-anchor="middle"><text fill="#fff7cc" font-family="monospace" font-size="14" letter-spacing="6"><animate attributeName="opacity" values="1;1;0;0" dur="0.8s" repeatCount="indefinite"/>▶  PRESS  ANY  KEY  TO  COMPILE  ◀</text></g></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 460" role="img" aria-label="SYS_3D">
+    <defs>
+        <linearGradient id="ds-sky" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#1b0838"/>
+            <stop offset="0.45" stop-color="#7b2cbf"/>
+            <stop offset="0.62" stop-color="#ff1493"/>
+            <stop offset="0.78" stop-color="#ff6600"/>
+            <stop offset="1" stop-color="#ffd60a"/>
+        </linearGradient>
+        <linearGradient id="ds-sun" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#ffd60a"/>
+            <stop offset="0.5" stop-color="#ff6600"/>
+            <stop offset="1" stop-color="#ff1493"/>
+        </linearGradient>
+        <linearGradient id="ds-logo" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#fff7cc"/>
+            <stop offset="0.45" stop-color="#ffd60a"/>
+            <stop offset="0.5" stop-color="#ff6600"/>
+            <stop offset="0.55" stop-color="#ff1493"/>
+            <stop offset="1" stop-color="#7b2cbf"/>
+        </linearGradient>
+        <filter id="ds-bloom" x="-10%" y="-10%" width="120%" height="120%">
+            <feGaussianBlur stdDeviation="2" result="b"/>
+            <feMerge>
+                <feMergeNode in="b"/>
+                <feMergeNode in="SourceGraphic"/>
+            </feMerge>
+        </filter>
+        <filter id="ds-rgb" x="-5%" y="-5%" width="110%" height="110%">
+            <feOffset in="SourceGraphic" dx="-1.6" dy="0" result="r"/>
+            <feColorMatrix in="r" type="matrix" values="1 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 1 0" result="rOnly"/>
+            <feOffset in="SourceGraphic" dx="1.6" dy="0" result="c"/>
+            <feColorMatrix in="c" type="matrix" values="0 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 1 0" result="cOnly"/>
+            <feMerge>
+                <feMergeNode in="rOnly"/>
+                <feMergeNode in="cOnly"/>
+                <feMergeNode in="SourceGraphic"/>
+            </feMerge>
+        </filter>
+    </defs>
+    <rect width="1280" height="460" fill="url(#ds-sky)"/>
+    <g opacity="0.18" stroke="#fff7cc" stroke-width="1">
+        <line x1="640" y1="230" x2="0" y2="0"/>
+        <line x1="640" y1="230" x2="200" y2="-20"/>
+        <line x1="640" y1="230" x2="440" y2="-20"/>
+        <line x1="640" y1="230" x2="640" y2="-20"/>
+        <line x1="640" y1="230" x2="840" y2="-20"/>
+        <line x1="640" y1="230" x2="1080" y2="-20"/>
+        <line x1="640" y1="230" x2="1280" y2="0"/>
+    </g>
+    <g transform="translate(640 240)" filter="url(#ds-bloom)">
+        <circle r="120" fill="url(#ds-sun)"/>
+        <rect x="-122" y="42" width="244" height="3" fill="#1b0838"/>
+        <rect x="-122" y="56" width="244" height="4" fill="#1b0838"/>
+        <rect x="-122" y="72" width="244" height="5" fill="#1b0838"/>
+        <rect x="-122" y="92" width="244" height="7" fill="#1b0838"/>
+        <rect x="-122" y="116" width="244" height="9" fill="#1b0838"/>
+    </g>
+    <g transform="translate(0 320)">
+        <g stroke="#ff1493" stroke-width="1.4" opacity="0.8">
+            <line x1="0" y1="0" x2="1280" y2="0"/>
+            <line x1="0" y1="20" x2="1280" y2="20"/>
+            <line x1="0" y1="48" x2="1280" y2="48"/>
+            <line x1="0" y1="84" x2="1280" y2="84"/>
+            <line x1="0" y1="128" x2="1280" y2="128"/>
+        </g>
+        <g stroke="#ffd60a" stroke-width="1.2" opacity="0.65" stroke-linecap="round">
+            <line x1="640" y1="0" x2="-100" y2="140"/>
+            <line x1="640" y1="0" x2="50" y2="140"/>
+            <line x1="640" y1="0" x2="180" y2="140"/>
+            <line x1="640" y1="0" x2="320" y2="140"/>
+            <line x1="640" y1="0" x2="460" y2="140"/>
+            <line x1="640" y1="0" x2="560" y2="140"/>
+            <line x1="640" y1="0" x2="640" y2="140"/>
+            <line x1="640" y1="0" x2="720" y2="140"/>
+            <line x1="640" y1="0" x2="820" y2="140"/>
+            <line x1="640" y1="0" x2="960" y2="140"/>
+            <line x1="640" y1="0" x2="1100" y2="140"/>
+            <line x1="640" y1="0" x2="1250" y2="140"/>
+            <line x1="640" y1="0" x2="1380" y2="140"/>
+        </g>
+    </g>
+    <g>
+        <animateTransform attributeName="transform" type="translate" values="0 0; 0 -12; 0 0" dur="4s" repeatCount="indefinite"/>
+        <g filter="url(#ds-bloom)">
+            <animateTransform attributeName="transform" type="rotate" from="0 220 290" to="360 220 290" dur="9s" repeatCount="indefinite"/>
+            <g transform="translate(220 290)" stroke="#fff7cc" stroke-width="1.6" fill="none">
+                <path d="M -30 -50 L 30 -50 L 30 10 L -30 10 Z" opacity="0.55"/>
+                <path d="M -60 -10 L 60 -10 L 60 50 L -60 50 Z"/>
+                <line x1="-30" y1="-50" x2="-60" y2="-10"/>
+                <line x1="30" y1="-50" x2="60" y2="-10"/>
+                <line x1="30" y1="10" x2="60" y2="50"/>
+                <line x1="-30" y1="10" x2="-60" y2="50"/>
+            </g>
+        </g>
+    </g>
+    <g>
+        <animateTransform attributeName="transform" type="translate" values="0 0; 0 -12; 0 0" dur="4s" begin="-1s" repeatCount="indefinite"/>
+        <g>
+            <animateTransform attributeName="transform" type="rotate" from="360 1080 280" to="0 1080 280" dur="7s" repeatCount="indefinite"/>
+            <g transform="translate(1080 280)" stroke="#fff7cc" stroke-width="1.6" fill="none" filter="url(#ds-bloom)">
+                <path d="M 0 -60 L 60 30 L -60 30 Z"/>
+                <path d="M 0 -60 L 20 50 L -60 30 Z" opacity="0.7"/>
+                <path d="M 0 -60 L 20 50 L 60 30 Z" opacity="0.7"/>
+            </g>
+        </g>
+    </g>
+    <g>
+        <animateTransform attributeName="transform" type="translate" values="0 0; 0 -12; 0 0" dur="4s" begin="-2s" repeatCount="indefinite"/>
+        <g>
+            <animateTransform attributeName="transform" type="rotate" from="0 940 110" to="360 940 110" dur="11s" repeatCount="indefinite"/>
+            <g transform="translate(940 110)" stroke="#fff7cc" stroke-width="1.2" fill="none" opacity="0.85">
+                <polygon points="0,-40 38,-12 23,34 -23,34 -38,-12"/>
+                <line x1="0" y1="-40" x2="0" y2="34"/>
+                <line x1="38" y1="-12" x2="-23" y2="34"/>
+                <line x1="-38" y1="-12" x2="23" y2="34"/>
+            </g>
+        </g>
+    </g>
+    <g transform="translate(640 180)" text-anchor="middle" filter="url(#ds-rgb)">
+        <text y="0" fill="url(#ds-logo)" font-family="'Courier New', monospace" font-weight="900" font-size="148" letter-spacing="-4">
+            SYS_3D
+        </text>
+        <text y="42" fill="#fff7cc" font-family="monospace" font-size="14" letter-spacing="8" opacity="0.85">
+            gl-repl  v0.1 :: freeglut + opengl 1.1 :: type to render
+        </text>
+    </g>
+    <g opacity="0.16">
+        <g>
+            <animateTransform attributeName="transform" type="translate" from="0 -30" to="0 460" dur="6s" repeatCount="indefinite"/>
+            <rect x="0" y="0" width="1280" height="2" fill="#ffffff"/>
+            <rect x="0" y="6" width="1280" height="3" fill="#ffffff"/>
+            <rect x="0" y="10" width="1280" height="1" fill="#ffffff"/>
+        </g>
+    </g>
+    <g transform="translate(640 430)" text-anchor="middle">
+        <text fill="#fff7cc" font-family="monospace" font-size="14" letter-spacing="6">
+            <animate attributeName="opacity" values="1;1;0;0" dur="0.8s" repeatCount="indefinite"/>
+            ▶  PRESS  ANY  KEY  TO  COMPILE  ◀</text>
+        </g>
+    </svg>
