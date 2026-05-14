@@ -133,14 +133,46 @@ void repl_export_apply_pending_cfg(void) {
  * file's file-scope region (above display()). They never run at REPL
  * time — see g_display_header for the display() opening, and the
  * controller (src/app/glr_ctrl.c) for what actually executes. */
+/* Wrap each common <math.h> identifier so a user-declared predef of
+ * the same name doesn't collide with the math.h function symbol at
+ * compile time. Pattern: `#define X _X` BEFORE `#include <math.h>`
+ * renames math.h's `X` to `_X`; `#undef X` AFTER the include restores
+ * the bare name for the user's declarations below. The exported user
+ * code (`static float X = ...;`) is then distinct from math.h's
+ * (now-renamed) `_X`.
+ *
+ * Coverage: Bessel functions (j0/j1/jn, y0/y1/yn) and the gamma
+ * family (gamma/lgamma/tgamma) — all single- or two-letter math.h
+ * functions that are plausible user variable names. The y0/y1 pair
+ * was the original motivator; jn/yn/gamma/lgamma/tgamma are added
+ * defensively after the audit in #7 of the bug investigation.
+ *
+ * If a math.h identifier isn't actually declared on the host platform
+ * (e.g. `pow10` is GNU-only), the `#define X _X` is harmless — the
+ * preprocessor rewrite has nothing to act on, and the `#undef`
+ * leaves the name back where it started. */
 const char *g_header_pre[] = {
+    "#define j0 _j0",
+    "#define j1 _j1",
+    "#define jn _jn",
     "#define y0 _y0",
     "#define y1 _y1",
+    "#define yn _yn",
+    "#define gamma _gamma",
+    "#define lgamma _lgamma",
+    "#define tgamma _tgamma",
     "#include <gl_includes.h>",
     "#include <math.h>",
     "#include <stdlib.h>",
+    "#undef j0",
+    "#undef j1",
+    "#undef jn",
     "#undef y0",
     "#undef y1",
+    "#undef yn",
+    "#undef gamma",
+    "#undef lgamma",
+    "#undef tgamma",
     "",
     "#ifndef M_PI",
     "#define M_PI 3.14159265358979323846",
