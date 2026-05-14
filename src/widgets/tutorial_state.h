@@ -53,11 +53,17 @@ typedef struct {
      * precheck immediately after the matcher passes; consumed by the
      * success or rejection paths. */
     TutorialPendingCommit pending;
-    /* Per-step source line of each step's committed command, used to
-     * resolve target_label at the moment a later step starts. -1
-     * until the step commits. Sized to TUTORIAL_LOCKED_LINE_MAX to
-     * match the existing tracked-line cap. */
-    int                   committed_line_for_step[TUTORIAL_LOCKED_LINE_MAX];
+    /* Per-step source line of each step's INSTRUCTION COMMENT (not
+     * the committed command), used to resolve target_label at the
+     * moment a later step starts. Anchoring on the instruction
+     * comment lets a label-targeted step splice ABOVE the original
+     * (instruction, command) pair so the comment stays adjacent to
+     * the command it describes. -1 until the step's instruction
+     * has been emitted. Shifted alongside locked_lines and
+     * fade_line_idx by tutorial_shift_tracked_lines_from. Sized to
+     * TUTORIAL_LOCKED_LINE_MAX to match the existing tracked-line
+     * cap. */
+    int                   instruction_line_for_step[TUTORIAL_LOCKED_LINE_MAX];
     TutorialMatchResult   last_result;
 } TutorialRuntimeState;
 
