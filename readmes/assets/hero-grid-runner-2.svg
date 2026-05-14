@@ -14,25 +14,25 @@
         <mask id="line-fade-mask">
             <rect x="-260" y="0" width="1800" height="200" fill="url(#line-fade)"/>
         </mask>
-        <linearGradient id="grh-sky" x1="0" y1="0" x2="0" y2="1">
+        <linearGradient id="grhv-sky" x1="0" y1="0" x2="0" y2="1">
             <stop offset="0" stop-color="#0a0014"/>
             <stop offset="0.5" stop-color="#1a0033"/>
             <stop offset="0.65" stop-color="#ff00aa" stop-opacity="0.45"/>
-            <stop offset="0.78" stop-color="#00ffff" stop-opacity="0.12"/>
+            <stop offset="0.78" stop-color="#00ffff" stop-opacity="0.15"/>
             <stop offset="1" stop-color="#000000"/>
         </linearGradient>
-        <linearGradient id="grh-chrome" x1="0" y1="0" x2="0" y2="1">
+        <linearGradient id="grhv-chrome" x1="0" y1="0" x2="0" y2="1">
             <stop offset="0" stop-color="#ffffff"/>
             <stop offset="0.42" stop-color="#00ffff"/>
             <stop offset="0.5" stop-color="#0088aa"/>
             <stop offset="0.58" stop-color="#ff00aa"/>
             <stop offset="1" stop-color="#5a0066"/>
         </linearGradient>
-        <radialGradient id="grh-glow" cx="0.5" cy="0.7" r="0.6">
+        <radialGradient id="grhv-glow" cx="0.5" cy="0.7" r="0.6">
             <stop offset="0" stop-color="#ff00aa" stop-opacity="0.55"/>
             <stop offset="1" stop-color="#ff00aa" stop-opacity="0"/>
         </radialGradient>
-        <filter id="grh-bloom" x="-20%" y="-20%" width="140%" height="140%">
+        <filter id="grhv-bloom" x="-20%" y="-20%" width="140%" height="140%">
             <feGaussianBlur stdDeviation="2.2" result="b"/>
             <feMerge>
                 <feMergeNode in="b"/>
@@ -40,11 +40,11 @@
             </feMerge>
         </filter>
     </defs>
-    <rect width="1280" height="440" fill="url(#grh-sky)"/>
-    <rect x="0" y="220" width="1280" height="140" fill="url(#grh-glow)"/>
+    <rect width="1280" height="440" fill="url(#grhv-sky)"/>
+    <rect x="0" y="220" width="1280" height="140" fill="url(#grhv-glow)"/>
     <g clip-path="url(#floor)">
         <g transform="translate(0 240)">
-            <g mask="url(#line-fade-mask)">
+            <g clip-path="url(#trap)" mask="url(#line-fade-mask)">
                 <g>
                     <animateTransform attributeName="transform" type="scale" from="1 1" to="1 1.1765" dur="2.4s" repeatCount="indefinite"/>
                     <line x1="-260" y1="200.00" x2="1540" y2="200.00" stroke="#ff66cc" stroke-width="2.30"/>
@@ -65,20 +65,33 @@
                     <line x1="-260" y1="17.47" x2="1540" y2="17.47" stroke="#ff00aa" stroke-width="0.84"/>
                 </g>
             </g>
+            <line x1="640" y1="0" x2="-200" y2="200" stroke="#00ffff" stroke-width="1.2" opacity="0.6" stroke-linecap="round"/>
+            <line x1="640" y1="0" x2="-40" y2="200" stroke="#00ffff" stroke-width="1.2" opacity="0.6" stroke-linecap="round"/>
+            <line x1="640" y1="0" x2="120" y2="200" stroke="#00ffff" stroke-width="1.2" opacity="0.6" stroke-linecap="round"/>
+            <line x1="640" y1="0" x2="280" y2="200" stroke="#00ffff" stroke-width="1.2" opacity="0.6" stroke-linecap="round"/>
+            <line x1="640" y1="0" x2="440" y2="200" stroke="#00ffff" stroke-width="1.2" opacity="0.6" stroke-linecap="round"/>
+            <line x1="640" y1="0" x2="560" y2="200" stroke="#00ffff" stroke-width="1.2" opacity="0.6" stroke-linecap="round"/>
+            <line x1="640" y1="0" x2="640" y2="200" stroke="#00ffff" stroke-width="1.2" opacity="0.6" stroke-linecap="round"/>
+            <line x1="640" y1="0" x2="720" y2="200" stroke="#00ffff" stroke-width="1.2" opacity="0.6" stroke-linecap="round"/>
+            <line x1="640" y1="0" x2="840" y2="200" stroke="#00ffff" stroke-width="1.2" opacity="0.6" stroke-linecap="round"/>
+            <line x1="640" y1="0" x2="1000" y2="200" stroke="#00ffff" stroke-width="1.2" opacity="0.6" stroke-linecap="round"/>
+            <line x1="640" y1="0" x2="1160" y2="200" stroke="#00ffff" stroke-width="1.2" opacity="0.6" stroke-linecap="round"/>
+            <line x1="640" y1="0" x2="1320" y2="200" stroke="#00ffff" stroke-width="1.2" opacity="0.6" stroke-linecap="round"/>
+            <line x1="640" y1="0" x2="1480" y2="200" stroke="#00ffff" stroke-width="1.2" opacity="0.6" stroke-linecap="round"/>
         </g>
     </g>
-    <g transform="translate(60 90)" filter="url(#grh-bloom)">
+    <g transform="translate(60 90)" filter="url(#grhv-bloom)">
         <animate attributeName="opacity" values="1;1;1;0.55;1;0.4;1;1;1" dur="5s" repeatCount="indefinite"/>
-        <text x="0" y="0" fill="url(#grh-chrome)" font-family="'Courier New', monospace" font-size="84" font-weight="900" letter-spacing="-2">
+        <text x="0" y="0" fill="url(#grhv-chrome)" font-family="'Courier New', monospace" font-size="84" font-weight="900" letter-spacing="-2">
             GL-REPL
         </text>
         <rect x="2" y="14" width="362" height="2" fill="#ff00aa" opacity="0.7"/>
         <text x="4" y="38" fill="#00ffff" font-family="monospace" font-size="12" letter-spacing="4">
-            IMMEDIATE  MODE //// HORIZONTAL PASS
+            IMMEDIATE  MODE //// H+V PASS
         </text>
     </g>
-    <g transform="translate(60 165)" font-family="monospace" font-size="15" fill="#00ffff">
-        <rect x="-10" y="-22" width="540" height="170" fill="#0a0014" stroke="#ff00aa" stroke-width="1.4" opacity="0.94"/>
+    <g transform="translate(60 165)" font-family="monospace" font-size="14" fill="#00ffff">
+        <rect x="-10" y="-22" width="560" height="218" fill="#0a0014" stroke="#ff00aa" stroke-width="1.4" opacity="0.94"/>
         <text x="0" y="0">
             &gt; glColor3f(
             <tspan fill="#ff66cc">
@@ -131,7 +144,7 @@ t
 </tspan>
 ));
 </text>
-<text x="0" y="88">
+<text x="0" y="86">
     &gt;   glVertex3f(
     <tspan fill="#ff66cc">
     50
@@ -150,10 +163,32 @@ t
 </tspan>
 ));
 </text>
-<text x="0" y="110">
+<text x="0" y="108">
+    &gt;   glVertex3f(i,
+    <tspan fill="#ff66cc">
+    0
+</tspan>
+,
+<tspan fill="#ff66cc">
+-50
+</tspan>
+);
+</text>
+<text x="0" y="130">
+    &gt;   glVertex3f(i,
+    <tspan fill="#ff66cc">
+    0
+</tspan>
+,
+<tspan fill="#ff66cc">
+50
+</tspan>
+);
+</text>
+<text x="0" y="152">
     &gt; }
 </text>
-<text x="0" y="132">
+<text x="0" y="174">
     &gt; glEnd()
     <tspan fill="#ff00aa">
     █

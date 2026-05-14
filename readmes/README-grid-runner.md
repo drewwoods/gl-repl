@@ -2,6 +2,8 @@
 
 <img src="assets/hero-grid-runner.svg" alt="gl-repl — type GL commands, watch geometry render" width="100%">
 
+<img src="assets/hero-grid-runner-2.svg" alt="gl-repl — type GL commands, watch geometry render" width="100%">
+
 <br>
 
 <!-- arcade-style badge strip -->
