@@ -1,120 +1,144 @@
-## GL Stub Extensions: Last-Argument Snapshots and Per-Symbol Ring Buffers
+## GL Stub Extensions: Printf Trace for Per-Call Argument Diffs
 
 ### Summary
 The stub layer at `tests/gl-stubs/include/GL/*` currently records only a
 per-symbol call count (`gl_stub_counts[GL_STUB_*]`). That's enough for
 shape comparisons — "did the REPL emit the same number of `glVertex3f`
-calls as the exported C?" — but it's blind to argument values. The
-one real divergence the count-only `test_export_trace_parity` surfaces
-on `--full` today (Bezier off-by-one `glVertex2f`) would be much easier
-to root-cause if the test could also assert the *values* the two legs
-pass through the stubs.
+calls as the exported C?" — but it's blind to argument values. The one
+real divergence the count-only `test_export_trace_parity` surfaces on
+`--full` today (Bezier off-by-one `glVertex2f`) would be much easier to
+root-cause if both legs could dump a full per-call trace that `diff(1)`
+can chew through.
 
-### Motivation
-`test_export_trace_parity` (added alongside this plan) cross-checks REPL
-execution and the exported C by counting per-symbol GL calls. Real
-divergences fall into a few buckets:
+### Approach
+Add a `GL_STUB_TRACE_LINE(...)` macro that each stub function calls
+just before `gl_stub_tick()`. The macro expands to either an fprintf
+or nothing, gated by a compile-time `#define`. No in-memory storage,
+no ring sizing decisions, no per-symbol tables — just lines of text
+flushed to a configurable file. Diagnosis becomes a `diff` invocation.
 
-- **Counts match, arguments don't.** Two passes of `glColor3f(1, 0, 0)`
-  vs `glColor3f(0.5, 0.5, 0.5)` look identical to the count comparator
-  but render very differently. Today the test can't see this.
-- **Counts are off by one in a long stream.** "REPL emitted 111
-  glVertex2f, exported emitted 112" doesn't say *which* vertex was
-  the extra one. With a per-symbol ring buffer of recent arguments the
-  test can diff the two streams and point at the divergence.
-- **Argument folding the REPL does on purpose.** `CMD_COLOR3F` routes
-  through `glColor4f(..., g_execute_alpha_scale)` in the executor.
-  Last-argument snapshots would let the test confirm the alpha was the
-  expected default, distinguishing "intentional fold" from "accidental
-  divergence."
+### Macro Design
+In `tests/gl-stubs/include/GL/gl_stub_counts.h` (or a sibling header),
+alongside the existing `gl_stub_tick`:
 
-### V1: Last-Argument Snapshots
-Drop-in compatible with the existing X-macro list in
-`tests/gl-stubs/include/GL/gl_stub_counts.h`.
-
-Add a parallel storage table indexed the same way:
-
-```
-extern union gl_stub_last_arg gl_stub_last_args[GL_STUB_COUNT_MAX];
+```c
+#ifdef GL_STUB_TRACE
+#  include <stdio.h>
+extern FILE *gl_stub_trace_fp;          /* defaults to NULL == off */
+#  define GL_STUB_TRACE_LINE(...) do {                            \
+        if (gl_stub_trace_fp) fprintf(gl_stub_trace_fp, __VA_ARGS__); \
+    } while (0)
+#else
+#  define GL_STUB_TRACE_LINE(...) ((void)0)
+#endif
 ```
 
-`gl_stub_last_arg` is a `union` over the largest argument tuple in the
-covered API. For Phase 1 cover the common shapes:
+Each stub function adds one line:
 
-```
-union gl_stub_last_arg {
-    struct { float a, b, c, d; } f4;
-    struct { int   a, b, c, d; } i4;
-    struct { GLenum a, b; }       e2;
-    GLenum                        e1;
-    float                         f1;
-    int                           i1;
-    GLboolean                     b1;
-};
+```c
+static inline void glColor3f(GLfloat r, GLfloat g, GLfloat b) {
+    GL_STUB_TRACE_LINE("glColor3f %g %g %g\n", r, g, b);
+    gl_stub_tick(GL_STUB_glColor3f);
+    /* body: still no-op */
+}
 ```
 
-Each stub function writes its arguments into its slot before
-`gl_stub_tick()`. The X-macro list grows a second column that names the
-appropriate union member:
+For zero-arg calls (`glPushMatrix`, `glEnd`) just emit the name:
 
-```
-X(glColor3f, f4)
-X(glColor4f, f4)
-X(glVertex3f, f4)
-X(glBegin, e1)
-...
+```c
+GL_STUB_TRACE_LINE("glEnd\n");
 ```
 
-Trace consumers compare `gl_stub_last_args[GL_STUB_glColor3f].f4.a/b/c`
-between REPL and child traces in the same place they compare counts.
+The storage definition (`FILE *gl_stub_trace_fp = NULL;`) lives in
+`tests/gl-stubs/gl_stub_counts.c` next to `gl_stub_counts[]`, inside
+the same `#ifdef GL_STUB_TRACE` guard.
 
-### V2: Per-Symbol Ring Buffers
-Gated behind `-DGL_STUBS_TRACE_BUFFER` so the build cost stays opt-in.
+### Output Format
+One call per line. First token is the symbol name; remaining tokens
+are arguments separated by spaces. Floats via `%g` (consistent across
+locales for the values the REPL emits). Enums via their integer value
+(consumers can map back via the stub `g_*_names` tables if needed).
 
+Example:
 ```
-extern struct gl_stub_ring gl_stub_rings[GL_STUB_COUNT_MAX];
+glBegin 4
+glColor4f 1 0 0 1
+glVertex3f 0 0 0
+glVertex3f 1 0 0
+glVertex3f 0 1 0
+glEnd
 ```
 
-Each ring is a small (configurable, default 64) circular buffer of the
-same union type as V1. On call: push at head, advance, wrap. Counter
-stays accurate even after wrap because it's still incremented
-independently.
+Newline-terminated and free of synchronization markers — `diff -u`
+sees aligned line ranges, the unified-diff hunk points at the
+offending range, and you're done.
 
-Trace consumers iterate `gl_stub_rings[i].entries[0..ring_count(i))` and
-diff in order. The remaining `--full` divergence becomes tractable:
-- **Bezier off-by-one**: walk both rings for `glVertex2f` until they
-  diverge, print the first mismatched index and arguments.
+### Runtime Hookup
+The trace file pointer is opt-in at runtime. Two reasonable shapes:
 
-### V3: Argument Predicates / Tolerances
-Float comparisons need tolerance. Add a `gl_stub_arg_eq()` helper that
-defaults to bit-exact for ints/enums and `fabsf(a - b) < 1e-5f` for
-floats (caller-overridable). The parity test calls this instead of
-`memcmp` on the union slots.
+- **Env var**: a small `gl_stub_trace_open_from_env(void)` helper in
+  `gl_stub_counts.c` that reads `$GL_STUB_TRACE_FILE`, fopen()s it,
+  and stores the result in `gl_stub_trace_fp`. Callers invoke it
+  once at startup. Closing on exit via `atexit()` is fine.
+- **Explicit**: the test or driver sets `gl_stub_trace_fp` directly
+  before the region of interest and clears it after. Simpler for the
+  parity test since each leg writes to a different path.
 
-### Migration Notes
-- The X-macro list is the single source of truth. Any new stub added
-  to `GL_STUB_COUNTER_LIST` automatically picks up the new storage.
-- Cost in real-GL builds is still zero: the entire storage and every
-  helper is wrapped in `#ifdef GL_STUBS`, exactly like
-  `gl_stub_counts[]` today.
-- The hot path stays a single increment plus (in V1) a tiny field
-  assignment. V2's ring push is a couple extra writes; gate behind
-  `-DGL_STUBS_TRACE_BUFFER` for builds that care.
+### Integration With test_export_trace_parity
+Add a `--trace` flag (or just always-on under `-DGL_STUB_TRACE`):
 
-### Test Harness Integration
-- `tests/export_trace_driver.c` already dumps `gl_stub_counts`; extend
-  it to emit `gl_stub_last_args` (V1) and `gl_stub_rings` (V2) on the
-  same out-file path, one section per channel.
-- `tests/test_export_trace_parity.c` grows a `compare_last_args()` /
-  `compare_rings()` step parallel to its existing `compare_counts()`.
-- Backwards-compatible: a stub-counts-only build still works; the new
-  channels just stay zeroed and the diff is a no-op.
+1. Test sets `gl_stub_trace_fp = fopen("/tmp/test_trace_<pid>_<name>_repl.tr", "w")`,
+   runs the REPL leg, fclose. Snapshot counts as today.
+2. Compose the child compile command with `-DGL_STUB_TRACE`; the
+   driver opens its trace file path from argv[2]. Run child.
+3. On count mismatch, run `diff -u <repl.tr> <child.tr>` via
+   `system()` and pipe the first ~50 lines to stderr so the failure
+   message includes a localized hint.
+4. On match, leave the trace files in place (no cleanup) if `--keep-traces`
+   was passed; otherwise unlink.
+
+The count check stays as the primary gate. The trace is a diagnosis
+aid — only consulted on failure or when explicitly requested.
+
+### Cost
+- Compile-time: ~one extra macro invocation per stub function. The
+  X-macro list in `gl_stub_counts.h` doesn't change.
+- Runtime when `gl_stub_trace_fp == NULL`: a single null-check and
+  branch, which the predictor pins to "skip." Effectively free.
+- Runtime when tracing: one fprintf per call. Slow, but only paid
+  during the parity test's diagnosis runs.
+- Code: the macro definition, one storage var, one optional env-var
+  helper, and one `GL_STUB_TRACE_LINE(...)` line per stub. About 80
+  lines of touched code across `gl_stub_counts.{c,h}` and the stub
+  headers (`GL/gl.h`, `GL/glu.h`, `GL/freeglut.h`).
+
+### Wrinkles
+- **Float precision.** `%g` is locale-sensitive (decimal separator).
+  Force `setlocale(LC_NUMERIC, "C")` once at trace open so the output
+  is reproducible.
+- **Deterministic ordering.** The REPL executor and the exported C
+  walk the flat program in source order, so traces are already
+  diff-aligned. If a future feature (parallel rendering, async
+  callbacks) breaks that, the trace would need a sequence prefix
+  per line and a more careful comparator.
+- **String args.** `glutBitmapCharacter` takes a single byte —
+  emit it as an integer code rather than as a char so a 0x00 or
+  newline byte doesn't corrupt the trace. `label()`-emitted text
+  shows up as a sequence of `glutBitmapCharacter N` lines, which is
+  exactly the diff granularity we want for the label-divergence
+  class of bugs.
 
 ### Out of Scope
-- Capturing pointer arguments (`glLightfv`, `glPointParameterfv`,
-  `glRasterPos3fv`) — content is array-by-reference; would require a
-  side-buffer copy and length annotation per X-entry. Defer until a
+- Capturing pointer-array arguments (`glLightfv`,
+  `glPointParameterfv`, `glRasterPos3fv`). Could be added later by
+  emitting `glLightfv GL_LIGHT0 GL_POSITION 2 4 5 0` after a small
+  per-call length annotation in each X-macro entry. Defer until a
   parity test actually needs it.
-- Real GL parity (running the same trace against a real driver). The
-  stubs intentionally don't render; comparing CPU-side trace shapes is
-  the design.
+- Programmatic in-memory ring buffers / last-argument tables. The
+  text trace plus `diff` covers the same diagnostic need with much
+  less code; revisit only if `fprintf` overhead becomes measurable
+  in a build that wants tracing always on (it shouldn't for the
+  parity-test use case).
+- Real GL parity (running the same trace against a real driver).
+  The stubs intentionally don't render; comparing CPU-side trace
+  shapes is the design.

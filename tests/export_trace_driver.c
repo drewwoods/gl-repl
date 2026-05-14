@@ -22,10 +22,11 @@
  * (test_export_trace_parity) reads back and compares against the
  * counts it captured around repl_execute_program().
  *
- * Future extensions (see plans/not-started/gl-stub-extensions.md): when
- * the stub layer records last-argument values or per-symbol ring
- * buffers, dump those extra channels here too so the parent can
- * compare argument values rather than just call counts.
+ * Future extensions (see plans/not-started/gl-stub-extensions.md): the
+ * proposed GL_STUB_TRACE_LINE macro would have each stub fprintf its
+ * own call+args to a per-leg trace file. The driver would just open
+ * that file before calling render_repl_geometry() and close it after,
+ * letting the parent compare traces with diff(1) on count mismatch.
  */
 #include <GL/gl_stub_counts.h>
 #include <stdio.h>
