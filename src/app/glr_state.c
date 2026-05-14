@@ -66,6 +66,7 @@ static const GlrState g_glr_state_defaults = {
         .accum_jitter_x            = 0.0f,
         .accum_jitter_y            = 0.0f,
         .multisample_enabled       = CFG_DEFAULT_MULTISAMPLE,
+        .msaa_samples              = 0,
         .line_smooth_enabled       = CFG_DEFAULT_LINE_SMOOTH,
         .point_attenuation_enabled = CFG_DEFAULT_ATTENUATE_POINTS,
     },

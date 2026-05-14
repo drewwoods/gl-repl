@@ -56,6 +56,7 @@ typedef struct {
     float accum_jitter_x;
     float accum_jitter_y;
     int   multisample_enabled;
+    int   msaa_samples;
     int   line_smooth_enabled;
     int   point_attenuation_enabled;
 } GlrRenderState;
