@@ -386,19 +386,50 @@ static void test_cursor_guide_snapshot_override(void) {
     ASSERT_NEAR("TESS_VERTEX: y", snap3.vertex_args[1],  0.45f);
     ASSERT_NEAR("TESS_VERTEX: z", snap3.vertex_args[2], -0.5f);
 
-    /* Non-vertex cmd: snapshot should pass through unchanged. */
+    /* NORMAL3F: override normal_args (not vertex_args) since cursor is
+     * on a glNormal3f line. Same root cause as the vertex bug — text
+     * parser collapses funcN-local refs to 0; we recover from flat
+     * cmd's evaluated args. */
+    GLCmd nrm = {0};
+    nrm.type = CMD_NORMAL3F;
+    nrm.valid = 1;
+    nrm.args[0] = 0.0f; nrm.args[1] = 1.0f; nrm.args[2] = 0.0f;
+    base.normal_args[0] = base.normal_args[1] = base.normal_args[2] = 0.0f;
+    SceneGuideSnapshot snap_n =
+        cursor_guide_snapshot_with_flat_args(&base, &nrm);
+    ASSERT_NEAR("NORMAL3F: nx overridden", snap_n.normal_args[0], 0.0f);
+    ASSERT_NEAR("NORMAL3F: ny overridden", snap_n.normal_args[1], 1.0f);
+    ASSERT_NEAR("NORMAL3F: nz overridden", snap_n.normal_args[2], 0.0f);
+    /* vertex_args should NOT be touched when cursor is on a normal. */
+    ASSERT_NEAR("NORMAL3F: vertex_args x untouched",
+                snap_n.vertex_args[0], base.vertex_args[0]);
+
+    /* TESS_NORMAL: same as NORMAL3F. */
+    GLCmd tnorm = {0};
+    tnorm.type = CMD_TESS_NORMAL;
+    tnorm.valid = 1;
+    tnorm.args[0] = 1.0f; tnorm.args[1] = 0.0f; tnorm.args[2] = 0.0f;
+    SceneGuideSnapshot snap_tn =
+        cursor_guide_snapshot_with_flat_args(&base, &tnorm);
+    ASSERT_NEAR("TESS_NORMAL: nx", snap_tn.normal_args[0], 1.0f);
+    ASSERT_NEAR("TESS_NORMAL: ny", snap_tn.normal_args[1], 0.0f);
+    ASSERT_NEAR("TESS_NORMAL: nz", snap_tn.normal_args[2], 0.0f);
+
+    /* Non-vertex/non-normal cmd: snapshot should pass through unchanged. */
     GLCmd translate = {0};
     translate.type = CMD_TRANSLATE3F;
     translate.valid = 1;
     translate.args[0] = 5.0f; translate.args[1] = 5.0f; translate.args[2] = 5.0f;
     SceneGuideSnapshot snap4 =
         cursor_guide_snapshot_with_flat_args(&base, &translate);
-    ASSERT_NEAR("non-vertex cmd: x untouched",
+    ASSERT_NEAR("non-vertex/normal cmd: vx untouched",
                 snap4.vertex_args[0], base.vertex_args[0]);
-    ASSERT_NEAR("non-vertex cmd: y untouched",
+    ASSERT_NEAR("non-vertex/normal cmd: vy untouched",
                 snap4.vertex_args[1], base.vertex_args[1]);
-    ASSERT_NEAR("non-vertex cmd: z untouched",
+    ASSERT_NEAR("non-vertex/normal cmd: vz untouched",
                 snap4.vertex_args[2], base.vertex_args[2]);
+    ASSERT_NEAR("non-vertex/normal cmd: nx untouched",
+                snap4.normal_args[0], base.normal_args[0]);
 
     /* NULL flat (e.g. cursor flat_cmd_idx out of bounds): also a
      * pass-through. */

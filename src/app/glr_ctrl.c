@@ -716,29 +716,35 @@ typedef struct {
     int                       early_stop;
 } CursorGuideRenderCtx;
 
-/* Return a copy of `snapshot` with vertex_args overridden by the cursor
- * flat cmd's already-evaluated args when that cmd is a vertex command.
+/* Return a copy of `snapshot` with vertex_args / normal_args overridden
+ * by the cursor flat cmd's already-evaluated args.
  *
- * Why: the snapshot's vertex_args are parsed from the input text via a
- * predef-only evaluator, which can't resolve function-local parameters
- * (e.g. `scale`, `phase` from `funcN(scale, phase)`). On a cursor inside
- * a funcN body, those args silently evaluate to 0, so a guide drawn from
- * them lands at the local origin — visually the *center* of the
- * transformed object rather than the vertex the user is editing.
+ * Why: the snapshot's vertex_args / normal_args are parsed from the
+ * input text via a predef-only evaluator, which can't resolve
+ * function-local parameters (e.g. `scale`, `phase` from
+ * `funcN(scale, phase)`). On a cursor inside a funcN body, those args
+ * silently evaluate to 0, so a guide drawn from them lands at the
+ * local origin — visually the *center* of the transformed object
+ * rather than the vertex/normal the user is editing.
  *
- * Flatten has already substituted the funcN parameters and evaluated the
- * expressions, so `flat->args[0..2]` are the real numeric position. The
- * helper is pure — no GL state, no side effects — to keep
+ * Flatten has already substituted the funcN parameters and evaluated
+ * the expressions, so `flat->args[0..2]` are the real numeric values.
+ * The helper is pure — no GL state, no side effects — to keep
  * `on_cmd_render_cursor_guides` testable in isolation. */
 static SceneGuideSnapshot
 cursor_guide_snapshot_with_flat_args(const SceneGuideSnapshot *snapshot,
                                      const GLCmd *flat) {
     SceneGuideSnapshot snap = *snapshot;
-    if (flat && repl_cmd_emits_vertex(flat->type)) {
+    if (!flat) return snap;
+    if (repl_cmd_emits_vertex(flat->type)) {
         snap.vertex_args[0] = flat->args[0];
         snap.vertex_args[1] = flat->args[1];
         snap.vertex_args[2] = (flat->type == CMD_VERTEX2F) ? 0.0f
                                                            : flat->args[2];
+    } else if (flat->type == CMD_NORMAL3F || flat->type == CMD_TESS_NORMAL) {
+        snap.normal_args[0] = flat->args[0];
+        snap.normal_args[1] = flat->args[1];
+        snap.normal_args[2] = flat->args[2];
     }
     return snap;
 }
