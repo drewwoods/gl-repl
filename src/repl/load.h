@@ -26,7 +26,7 @@
 #ifndef REPL_LOAD_H
 #define REPL_LOAD_H
 
-/* Compile + apply a single source line at the end of the document.
+/* Compile + apply a single source line at a caller-chosen index.
  *
  * Replaces feed_line() for callers that don't want editor input
  * dispatch (cursor mutations, insert mode toggle, input buffer
@@ -39,9 +39,14 @@
  * error fills `err` with a diagnostic and returns 0.
  *
  * Caller responsibilities:
- *   - Set repl_state_edit_line to repl_state_document_count() before
- *     the load loop.
- *   - Clear editor_insert_mode (the loader assumes append-at-end).
+ *   - Set repl_state_edit_line to the desired insertion index, which
+ *     must be in [0, repl_state_document_count()]. The line is
+ *     inserted at that index; document_count means append-at-end and
+ *     any smaller value inserts in the middle of the document.
+ *     (Mid-document inserts are used by the tutorial runner to place
+ *     instruction comments above earlier labeled commands; the
+ *     append case is still what example/workspace loaders use.)
+ *   - Clear editor_insert_mode (the loader does not consult it).
  *   - Call repl_state_mark_flat_dirty / repl_state_mark_normals_dirty
  *     after the load loop completes. */
 int repl_load_apply_line(const char *line, char *err, int err_size);

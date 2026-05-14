@@ -996,6 +996,69 @@ int main(void) {
                     repl_func_alias_lookup_slot("edDupAlias") < 0);
     }
 
+    /* [Phase 0] Pin the widened src/repl/load.h contract: setting
+     * repl_state_edit_line to a mid-document index must insert the
+     * line at that index (rather than appending to document_count).
+     * This is what the tutorial runner relies on for label-targeted
+     * steps that need to splice an instruction comment in front of
+     * an earlier committed command. The behavior already matched;
+     * Phase 0 only widened the documented contract and pins it. */
+    {
+        glr_app_reset_all();
+        repl_func_alias_clear_all();
+        editor_state_input_reset();
+
+        char err[128] = "";
+        repl_state_edit_line_set(repl_state_document_count());
+        editor_insert_mode_set(0);
+        ASSERT_TRUE("[Phase 0] seed line a loads",
+                    repl_load_apply_line("glColor3f(1, 0, 0)", err, sizeof(err)));
+        repl_state_edit_line_set(repl_state_document_count());
+        editor_insert_mode_set(0);
+        ASSERT_TRUE("[Phase 0] seed line b loads",
+                    repl_load_apply_line("glColor3f(0, 1, 0)", err, sizeof(err)));
+        ASSERT_INT("[Phase 0] seeded doc has 2 lines",
+                   repl_state_document_count(), 2);
+
+        /* Mid-document insert at index 1: between the two color
+         * commands. The widened contract allows edit_line in
+         * [0, document_count]. */
+        repl_state_edit_line_set(1);
+        editor_insert_mode_set(0);
+        err[0] = '\0';
+        int ok = repl_load_apply_line("// inserted in the middle",
+                                      err, sizeof(err));
+        ASSERT_TRUE("[Phase 0] mid-document comment insert succeeds", ok);
+        ASSERT_INT("[Phase 0] doc grew by exactly one row",
+                   repl_state_document_count(), 3);
+
+        EditorBufferView view = editor_buffer_view();
+        const char *line0 = editor_buffer_view_line(view, 0);
+        const char *line1 = editor_buffer_view_line(view, 1);
+        const char *line2 = editor_buffer_view_line(view, 2);
+        ASSERT_TRUE("[Phase 0] row 0 unchanged",
+                    line0 && strstr(line0, "glColor3f(1") != NULL);
+        ASSERT_TRUE("[Phase 0] inserted comment landed at row 1",
+                    line1 && strstr(line1, "inserted in the middle") != NULL);
+        ASSERT_TRUE("[Phase 0] original row 1 pushed down to row 2",
+                    line2 && strstr(line2, "glColor3f(0") != NULL);
+
+        /* And a plain GL command mid-document at index 0 — the
+         * widened contract allows insertion at the very top. */
+        repl_state_edit_line_set(0);
+        editor_insert_mode_set(0);
+        err[0] = '\0';
+        ASSERT_TRUE("[Phase 0] top-of-doc insert succeeds",
+                    repl_load_apply_line("glColor3f(0, 0, 1)",
+                                         err, sizeof(err)));
+        ASSERT_INT("[Phase 0] doc grew to 4 rows",
+                   repl_state_document_count(), 4);
+        view = editor_buffer_view();
+        const char *new_top = editor_buffer_view_line(view, 0);
+        ASSERT_TRUE("[Phase 0] new top row is the blue color",
+                    new_top && strstr(new_top, "glColor3f(0, 0, 1") != NULL);
+    }
+
     /* [P1 loader] regression: repl_load_apply_line must preflight
      * via repl_apply_can_apply_compiled_change before mutating
      * predef vars / scratch ops / editor buffer. Pre-fix, a
