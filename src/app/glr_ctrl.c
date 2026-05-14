@@ -97,7 +97,13 @@ static SceneFocusVertex glr_ctrl_build_focus_vertex(void) {
 /* Parse up to 3 comma-separated arg slots out of `src`, recording which
  * positions are actually present. repl_eval_parse_exprs() skips leading
  * commas so ",1," and "1," look identical to it; this version tracks slot
- * indices. Empty slots leave filled[i]=0, out[i] unchanged. */
+ * indices. Empty slots leave filled[i]=0, out[i] unchanged.
+ *
+ * The slot scanner skips over nested () so an arg like cos(i + phase)
+ * is treated as one slot, not as "cos(i + phase" then "". Without paren
+ * tracking the loop stops at the first inner ) and the cursor guide
+ * silently falls into its 1-arg branch (drawing a YZ plane instead of
+ * the vertex point). */
 static int parse_vertex_arg_slots(const char *src,
                                   const ExprVar *predef_vars, int predef_var_count,
                                   float out[3], int filled[3]) {
@@ -108,7 +114,12 @@ static int parse_vertex_arg_slots(const char *src,
     for (int slot = 0; slot < 3; slot++) {
         while (*s == ' ' || *s == '\t') s++;
         const char *start = s;
-        while (*s && *s != ',' && *s != ')') s++;
+        int depth = 0;
+        while (*s && (depth > 0 || (*s != ',' && *s != ')'))) {
+            if (*s == '(') depth++;
+            else if (*s == ')') depth--;
+            s++;
+        }
         const char *end = s;
         const char *c = start;
         while (c < end && (*c == ' ' || *c == '\t')) c++;
