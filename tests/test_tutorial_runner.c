@@ -1087,6 +1087,89 @@ static void test_phase3_pending_clears_after_match_failure(void) {
                tutorial_state_view().pending.step_idx, -1);
 }
 
+static void test_phase4_depth_tutorial_catalog_shape(void) {
+    /* Phase 4: pin the worked label-targeted tutorial's catalog
+     * shape so future catalog edits can't silently drop the
+     * label-targeted step or rename the label. */
+    int t_idx = depth_tutorial_idx();
+    ASSERT_TRUE("Depth Test Triangle is in the catalog", t_idx >= 0);
+    if (t_idx < 0)
+        return;
+
+    ASSERT_STR("Depth tutorial name",
+               repl_tutorial_name(t_idx), "Depth Test Triangle");
+    ASSERT_INT("Depth tutorial step count",
+               repl_tutorial_step_count(t_idx), 6);
+
+    /* Step 0: labeled append, the glBegin batch opener. */
+    ASSERT_STR("Step 0 expected is glBegin(GL_TRIANGLES)",
+               repl_tutorial_step_expected(t_idx, 0),
+               "glBegin(GL_TRIANGLES)");
+    ASSERT_STR("Step 0 label is 'triangle_begin'",
+               repl_tutorial_step_label(t_idx, 0), "triangle_begin");
+    ASSERT_INT("Step 0 placement is append",
+               repl_tutorial_step_placement(t_idx, 0),
+               TUTORIAL_STEP_APPEND);
+
+    /* Step 5: label-targeted insertion of glEnable(GL_DEPTH_TEST). */
+    ASSERT_INT("Step 5 placement is label-targeted",
+               repl_tutorial_step_placement(t_idx, 5),
+               TUTORIAL_STEP_LABEL);
+    ASSERT_STR("Step 5 target_label is 'triangle_begin'",
+               repl_tutorial_step_target_label(t_idx, 5),
+               "triangle_begin");
+    ASSERT_STR("Step 5 expected is glEnable(GL_DEPTH_TEST)",
+               repl_tutorial_step_expected(t_idx, 5),
+               "glEnable(GL_DEPTH_TEST)");
+}
+
+static void test_phase4_full_walk_places_setup_before_batch(void) {
+    /* Phase 4: walk the full Depth Test Triangle tutorial through
+     * the real keyboard route and assert the inserted setup
+     * command (glEnable) sits BEFORE the originally-committed
+     * glBegin row in the final source order. */
+    int t_idx = depth_tutorial_idx();
+    if (t_idx < 0)
+        return;
+
+    reset_fixture();
+    tutorial_start(t_idx);
+
+    int total = repl_tutorial_step_count(t_idx);
+    for (int s = 0; s < total; s++) {
+        const char *expected = tutorial_current_expected_text();
+        ASSERT_TRUE("expected exists during walk", expected != NULL);
+        if (!expected)
+            return;
+        set_input_text(expected);
+        (void)editor_handle_key(';', 0, 0);
+    }
+
+    ASSERT_TRUE("tutorial completed", !tutorial_active());
+    ASSERT_STR("tutorial completion status",
+               status_text(), "Tutorial complete");
+
+    /* Now scan the document and assert the glEnable line sits at a
+     * lower index than the glBegin line — the whole point of the
+     * label-targeted step. */
+    SourceTextView doc = source_document_view();
+    int glenable_row = -1;
+    int glbegin_row  = -1;
+    for (int i = 0; i < doc.line_count; i++) {
+        const char *line = source_text_line(doc, i);
+        if (!line) continue;
+        if (glenable_row < 0 && strstr(line, "glEnable(GL_DEPTH_TEST)"))
+            glenable_row = i;
+        if (glbegin_row < 0 && strstr(line, "glBegin(GL_TRIANGLES)"))
+            glbegin_row = i;
+    }
+    ASSERT_TRUE("glEnable row found", glenable_row >= 0);
+    ASSERT_TRUE("glBegin row found", glbegin_row >= 0);
+    ASSERT_TRUE("glEnable lands before glBegin in the final document",
+                glenable_row >= 0 && glbegin_row >= 0 &&
+                glenable_row < glbegin_row);
+}
+
 static void test_phase3_paste_above_locked_still_blocked(void) {
     /* Phase 3 guard must keep paste / Ctrl-D / Ctrl-/ blocked
      * above locked comments, since the guard exception is scoped
@@ -1231,5 +1314,7 @@ int main(void) {
     test_phase3_empty_input_silent_reject();
     test_phase3_pending_clears_after_match_failure();
     test_phase3_paste_above_locked_still_blocked();
+    test_phase4_depth_tutorial_catalog_shape();
+    test_phase4_full_walk_places_setup_before_batch();
     return test_harness_report(&g_harness, "test_tutorial_runner");
 }
