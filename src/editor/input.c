@@ -844,6 +844,10 @@ static CommitResult commit_before_navigation(void) {
         status->text[REPL_STATUS_TEXT_MAX - 1] = '\0';
         status->ttl = rejected_ttl;
     }
+    /* Idempotent: clears the pending record without shifting
+     * anything when the precheck reached _begin but the commit was
+     * then rolled back. Safe to dispatch when no pending exists. */
+    tutorial_cancel_pending();
     editor_completion_clear();
     return COMMIT_REJECTED;
 }
@@ -1190,17 +1194,30 @@ static int tutorial_precheck_current_input(void) {
     if (!tutorial_active())
         return 1;
 
-    /* Tutorial commits must land as an append at the trailing edit row.
-     * Replacing an earlier line would let a matching keystroke clobber
-     * prior progress while still advancing the step; middle-inserts
-     * would drift line indices out from under locked_lines[]. Reject
-     * with a hint so the user moves to the end of the buffer first.
-     * Empty input falls through to tutorial_match below, where it
-     * surfaces as "expected: ..." and acts as a built-in hint for
-     * Enter pressed on an empty row. */
-    if (repl_state_edit_line() < repl_state_document_count()) {
-        repl_set_status(
-            "Move cursor to the end of the buffer before committing");
+    /* Empty-input silent reject: the cursor lands on
+     * expected_commit_line in insert mode at start, and we don't
+     * want to spam "expected: ..." before the user has typed
+     * anything. Applies to both the ;/Enter path and the
+     * navigation auto-commit path; Enter on an empty expected line
+     * is accepted as a no-op. */
+    if (editor_state_input().input[0] == '\0')
+        return 0;
+
+    /* The matched commit must land on the current expected line.
+     * Anywhere else risks overwriting prior progress or drifting
+     * tracked-line indices. */
+    if (repl_state_edit_line() != tutorial_expected_commit_line()) {
+        repl_set_status("Move cursor to the tutorial insertion line");
+        editor_completion_clear();
+        return 0;
+    }
+    /* If the expected line is mid-document, the commit must insert
+     * a new row rather than overwrite the line that currently sits
+     * there (typically the originally-labeled command shifted down
+     * by the runner's instruction-comment splice). */
+    if (tutorial_expected_commit_line() < repl_state_document_count() &&
+        !editor_insert_mode()) {
+        repl_set_status("Tutorial step must insert at the fading line");
         editor_completion_clear();
         return 0;
     }
@@ -1209,12 +1226,23 @@ static int tutorial_precheck_current_input(void) {
         editor_completion_clear();
         return 0;
     }
+    /* Matcher passed. Stamp a pending record so the guard exception
+     * and success bookkeeping have an authorized window. Cleared by
+     * exactly one of tutorial_note_expected_commit_applied (on
+     * COMMIT_OK) or tutorial_cancel_pending (every other outcome). */
+    tutorial_begin_expected_commit_attempt();
     return 1;
 }
 
 static void tutorial_advance_if_commit_ok(CommitResult result) {
-    if (tutorial_active() && result == COMMIT_OK)
+    if (!tutorial_active())
+        return;
+    if (result == COMMIT_OK) {
+        tutorial_note_expected_commit_applied();
         tutorial_advance_after_successful_commit();
+    } else {
+        tutorial_cancel_pending();
+    }
 }
 
 static int handle_enter_key_route(unsigned char key) {
@@ -1253,8 +1281,10 @@ static int handle_semicolon_commit_key_route(unsigned char key) {
 
             if (!tutorial_precheck_current_input())
                 return 1;
-            if (!tutorial_guard_pending_input_commit_or_status(/*enter_mode=*/0))
+            if (!tutorial_guard_pending_input_commit_or_status(/*enter_mode=*/0)) {
+                tutorial_cancel_pending();
                 return 1;
+            }
 
             editor_undo_push_snapshot();
             capture_commit_attempt_state(&before);

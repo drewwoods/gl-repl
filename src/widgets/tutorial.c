@@ -499,9 +499,73 @@ int tutorial_guard_source_change(int pos, int delete_count, int insert_count) {
     if (delete_count == 0 && insert_count == 0)
         return 1;
 
+    /* Narrow allow-list for the in-flight matched expected commit:
+     * only the matched step may insert at its captured commit row,
+     * and only as a pure insert (delete_count == 0). Keying off the
+     * immutable pending.commit_line — rather than the ambient
+     * expected_commit_line — keeps the exception scoped to the one
+     * commit attempt the precheck already authorized. */
+    if (state.pending.step_idx >= 0 && delete_count == 0 &&
+        insert_count > 0 && pos == state.pending.commit_line)
+        return 1;
+
     for (int i = 0; i < state.locked_line_count; i++) {
         if (pos <= state.locked_lines[i])
             return 0;
     }
     return 1;
+}
+
+int tutorial_expected_commit_line(void) {
+    return tutorial_state_view().expected_commit_line;
+}
+
+void tutorial_begin_expected_commit_attempt(void) {
+    TutorialRuntimeState *state = tutorial_state_mut();
+
+    if (!state->active)
+        return;
+    state->pending.step_idx = state->step;
+    state->pending.commit_line = state->expected_commit_line;
+    state->pending.doc_count_before = repl_state_document_count();
+}
+
+void tutorial_cancel_pending(void) {
+    TutorialRuntimeState *state = tutorial_state_mut();
+
+    /* Idempotent: bail when no pending record is set so callers can
+     * dispatch this unconditionally on every rejection path. */
+    if (state->pending.step_idx < 0)
+        return;
+    state->pending.step_idx = -1;
+    state->pending.commit_line = -1;
+    state->pending.doc_count_before = -1;
+}
+
+void tutorial_note_expected_commit_applied(void) {
+    TutorialRuntimeState *state = tutorial_state_mut();
+
+    if (state->pending.step_idx < 0)
+        return;
+
+    int delta = repl_state_document_count() - state->pending.doc_count_before;
+    if (delta > 0) {
+        /* Shift existing tracked lines (locked instruction comments,
+         * fade row, prior label-step rows) so they keep referring to
+         * the same source content after the user's commit grew the
+         * document. The shift skips the in-flight pending row, so
+         * the just-committed step's own label gets recorded at the
+         * pre-shift index. */
+        tutorial_shift_tracked_lines_from(state->pending.commit_line, delta);
+    }
+
+    int step = state->pending.step_idx;
+    if (step >= 0 && step < TUTORIAL_LOCKED_LINE_MAX &&
+        state->pending.commit_line >= 0) {
+        state->committed_line_for_step[step] = state->pending.commit_line;
+    }
+
+    state->pending.step_idx = -1;
+    state->pending.commit_line = -1;
+    state->pending.doc_count_before = -1;
 }
