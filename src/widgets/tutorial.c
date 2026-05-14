@@ -120,9 +120,9 @@ static void tutorial_shift_tracked_lines_from(int pos, int delta) {
         state->expected_commit_line += delta;
     }
     for (int i = 0; i < TUTORIAL_LOCKED_LINE_MAX; i++) {
-        if (state->committed_line_for_step[i] >= 0 &&
-            state->committed_line_for_step[i] >= pos)
-            state->committed_line_for_step[i] += delta;
+        if (state->instruction_line_for_step[i] >= 0 &&
+            state->instruction_line_for_step[i] >= pos)
+            state->instruction_line_for_step[i] += delta;
     }
 }
 
@@ -164,6 +164,13 @@ static int tutorial_emit_instruction_comment(const char *comment,
     state->fade_start_t = repl_state_variables().anim_time;
     tutorial_append_locked_line(instruction_line);
 
+    /* Record where this step's instruction comment landed so a
+     * later label-targeted step can splice ABOVE this comment
+     * (rather than between the comment and the user's commit row),
+     * keeping the original (instruction, command) pair adjacent. */
+    if (state->step >= 0 && state->step < TUTORIAL_LOCKED_LINE_MAX)
+        state->instruction_line_for_step[state->step] = instruction_line;
+
     /* Place the cursor on the row the user is expected to commit on
      * (the row immediately below the new instruction) and enable
      * insert mode iff that row is mid-document — otherwise it's the
@@ -177,13 +184,15 @@ static int tutorial_emit_instruction_comment(const char *comment,
 
 /* Resolve where the next instruction comment for tutorial `idx`
  * step `step` should be inserted. For append placement that's the
- * current document_count; for label placement it's the target
- * step's committed source line. Returns 1 on success and writes the
- * insertion line into *out_line. Returns 0 (and sets a status
- * message) on internal failure. tutorial_start validates the
- * catalog up front so this should never fail at runtime unless
- * something has gone catastrophically wrong with the tracked-line
- * bookkeeping. */
+ * current document_count; for label placement it's the row of the
+ * target step's INSTRUCTION COMMENT — splicing above the comment
+ * (rather than between the comment and its committed command)
+ * keeps the original (instruction, command) pair adjacent in the
+ * final document. Returns 1 on success and writes the insertion
+ * line into *out_line. Returns 0 (and sets a status message) on
+ * internal failure. tutorial_start validates the catalog up front
+ * so this should never fail at runtime unless something has gone
+ * catastrophically wrong with the tracked-line bookkeeping. */
 static int tutorial_step_instruction_line(int tutorial_idx, int step,
                                           int *out_line) {
     if (!out_line)
@@ -225,7 +234,7 @@ static int tutorial_step_instruction_line(int tutorial_idx, int step,
         repl_set_status("Tutorial step target label is unresolved");
         return 0;
     }
-    int line = state.committed_line_for_step[target_step];
+    int line = state.instruction_line_for_step[target_step];
     if (line < 0 || line > repl_state_document_count()) {
         repl_set_status("Tutorial step target label is unresolved");
         return 0;
@@ -338,23 +347,11 @@ void tutorial_advance_after_successful_commit(void) {
 
     state = tutorial_state_mut();
 
-    /* Phase 2 fallback: record the just-completed step's source row
-     * so later label-targeted steps can resolve their target. The
-     * exact value comes from `pending.commit_line` once Phase 3
-     * wires up the pending/applied bookkeeping; until then, the row
-     * is the trailing source row right after the append commit. */
-    if (state->step >= 0 && state->step < TUTORIAL_LOCKED_LINE_MAX &&
-        state->committed_line_for_step[state->step] < 0) {
-        if (state->pending.step_idx == state->step &&
-            state->pending.commit_line >= 0) {
-            state->committed_line_for_step[state->step] =
-                state->pending.commit_line;
-        } else {
-            int doc = repl_state_document_count();
-            state->committed_line_for_step[state->step] =
-                doc > 0 ? doc - 1 : 0;
-        }
-    }
+    /* Label resolution now anchors on the labeled step's
+     * instruction-comment row (recorded at emit time, see
+     * tutorial_emit_instruction_comment), so we no longer need to
+     * snapshot the just-committed command row here. Just clear the
+     * per-attempt scratch fields and advance. */
     state->pending.step_idx = -1;
     state->pending.commit_line = -1;
     state->pending.doc_count_before = -1;
@@ -564,18 +561,14 @@ void tutorial_note_expected_commit_applied(void) {
     int delta = repl_state_document_count() - state->pending.doc_count_before;
     if (delta > 0) {
         /* Shift existing tracked lines (locked instruction comments,
-         * fade row, prior label-step rows) so they keep referring to
-         * the same source content after the user's commit grew the
-         * document. The shift skips the in-flight pending row, so
-         * the just-committed step's own label gets recorded at the
-         * pre-shift index. */
+         * fade row, instruction-line records for prior steps) so
+         * they keep referring to the same source content after the
+         * user's commit grew the document. The shift skips the
+         * in-flight pending row, but instruction_line_for_step
+         * entries always sit ABOVE pending.commit_line (the
+         * instruction is at expected_commit_line - 1), so they
+         * never need to shift for an in-flight commit. */
         tutorial_shift_tracked_lines_from(state->pending.commit_line, delta);
-    }
-
-    int step = state->pending.step_idx;
-    if (step >= 0 && step < TUTORIAL_LOCKED_LINE_MAX &&
-        state->pending.commit_line >= 0) {
-        state->committed_line_for_step[step] = state->pending.commit_line;
     }
 
     state->pending.step_idx = -1;

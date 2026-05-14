@@ -888,10 +888,11 @@ static int depth_tutorial_idx(void) {
 }
 
 static void test_depth_tutorial_label_targeted_step_inserts_above_label(void) {
-    /* Phase 2: walk the depth-test triangle tutorial up to the
-     * label-targeted step and confirm the new instruction comment
-     * lands above the row holding glBegin(GL_TRIANGLES), not at the
-     * tail of the document. Use editor_feed_line +
+    /* Phase 2 (post-fix): the label-targeted splice for step 5
+     * should land ABOVE the original (instruction, command) pair
+     * for step 0 — keeping the original step-0 instruction comment
+     * directly above its glBegin command rather than orphaning
+     * them. Use editor_feed_line +
      * tutorial_advance_after_successful_commit since the Phase 3
      * precheck has not landed yet and feed_line is the existing
      * way these tests step through append commits. */
@@ -903,52 +904,50 @@ static void test_depth_tutorial_label_targeted_step_inserts_above_label(void) {
     reset_fixture();
     tutorial_start(t_idx);
 
-    /* The labeled step (index 0) is glBegin(GL_TRIANGLES). Step 5
-     * is the label-targeted glEnable insert. Walk the five append
-     * steps; after each, record where the just-committed source row
-     * landed so we can assert the splice landed above it. */
-    int begin_row = -1;
+    /* The labeled step (index 0) emits its instruction at row 0;
+     * record that anchor before the appends. */
+    int instruction_row = tutorial_state_view().instruction_line_for_step[0];
+    ASSERT_INT("step 0 instruction recorded at row 0", instruction_row, 0);
+
     for (int s = 0; s < 5; s++) {
         const char *expected = tutorial_current_expected_text();
         editor_feed_line(expected);
-        if (s == 0) {
-            /* The first append commit landed at the row immediately
-             * below the instruction-comment for step 0. The doc
-             * currently has [instruction, command], so begin_row is
-             * doc_count - 1. */
-            begin_row = repl_state_document_count() - 1;
-        }
         tutorial_advance_after_successful_commit();
     }
 
-    /* We are now on the label-targeted step. expected_commit_line
-     * should sit *above* begin_row (specifically begin_row + 1,
-     * since the new instruction comment inserted at begin_row and
-     * pushed everything below it down by one). */
+    /* We are now on the label-targeted step. */
     int t_count = repl_tutorial_step_count(t_idx);
     ASSERT_INT("walk advanced to label-targeted step",
                tutorial_state_view().step, 5);
     ASSERT_TRUE("more steps left after walking through append",
                 t_count >= 6);
 
-    /* Read out the current document; the instruction comment for
-     * step 5 should be at begin_row, and glBegin(GL_TRIANGLES);
-     * should have shifted to begin_row + 1. */
+    /* The new step-5 instruction should land at the recorded
+     * instruction row (which has stayed at 0 because every prior
+     * append went strictly below it). The original step-0
+     * instruction shifted to row 1 and the originally-labeled
+     * glBegin shifted to row 2 — keeping the (instruction,
+     * command) pair adjacent. */
     SourceTextView doc = source_document_view();
-    const char *instruction_line = source_text_line(doc, begin_row);
-    const char *labeled_line = source_text_line(doc, begin_row + 1);
-    ASSERT_TRUE("instruction comment present at the splice row",
-                instruction_line &&
-                strstr(instruction_line,
+    const char *new_instruction = source_text_line(doc, 0);
+    const char *orig_instruction = source_text_line(doc, 1);
+    const char *labeled_line = source_text_line(doc, 2);
+    ASSERT_TRUE("new instruction comment lands at the splice row",
+                new_instruction &&
+                strstr(new_instruction,
                        "Enable depth testing before the triangle") != NULL);
-    ASSERT_TRUE("originally-labeled command moved one row down",
+    ASSERT_TRUE("original step-0 instruction shifted but stays adjacent",
+                orig_instruction &&
+                strstr(orig_instruction,
+                       "Start the triangle batch") != NULL);
+    ASSERT_TRUE("originally-labeled command kept directly below its instruction",
                 labeled_line &&
                 strstr(labeled_line, "glBegin(GL_TRIANGLES)") != NULL);
 
     ASSERT_TRUE("new instruction row is locked",
-                tutorial_line_is_locked(begin_row));
-    ASSERT_INT("expected_commit_line lands directly below instruction",
-               tutorial_state_view().expected_commit_line, begin_row + 1);
+                tutorial_line_is_locked(0));
+    ASSERT_INT("expected_commit_line lands directly below new instruction",
+               tutorial_state_view().expected_commit_line, 1);
     ASSERT_TRUE("editor cursor moved to expected commit line",
                 repl_state_edit_line() ==
                     tutorial_state_view().expected_commit_line);
@@ -999,10 +998,14 @@ static void test_phase3_label_targeted_commit_inserts_above_label(void) {
 
     SourceTextView doc = source_document_view();
     const char *committed = source_text_line(doc, target_line);
-    const char *glbegin   = source_text_line(doc, target_line + 1);
+    const char *orig_instr = source_text_line(doc, target_line + 1);
+    const char *glbegin   = source_text_line(doc, target_line + 2);
     ASSERT_TRUE("committed glEnable lands at the expected commit line",
                 committed && strstr(committed, "glEnable(GL_DEPTH_TEST)") != NULL);
-    ASSERT_TRUE("originally-labeled glBegin is now directly below",
+    ASSERT_TRUE("original step-0 instruction stays adjacent to its command",
+                orig_instr &&
+                strstr(orig_instr, "Start the triangle batch") != NULL);
+    ASSERT_TRUE("originally-labeled glBegin sits directly below its instruction",
                 glbegin && strstr(glbegin, "glBegin(GL_TRIANGLES)") != NULL);
 }
 
@@ -1245,6 +1248,23 @@ static void test_phase4_full_walk_places_setup_before_batch(void) {
     ASSERT_TRUE("glEnable lands before glBegin in the final document",
                 glenable_row >= 0 && glbegin_row >= 0 &&
                 glenable_row < glbegin_row);
+
+    /* The original step-0 (instruction, command) pair must remain
+     * adjacent — the label-targeted splice anchors above the
+     * instruction comment, not between the comment and its
+     * command. */
+    int begin_instr_row = -1;
+    for (int i = 0; i < doc.line_count; i++) {
+        const char *line = source_text_line(doc, i);
+        if (line && strstr(line, "Start the triangle batch")) {
+            begin_instr_row = i;
+            break;
+        }
+    }
+    ASSERT_TRUE("step-0 instruction comment still in document",
+                begin_instr_row >= 0);
+    ASSERT_TRUE("step-0 instruction sits directly above its glBegin",
+                begin_instr_row >= 0 && glbegin_row == begin_instr_row + 1);
 }
 
 static void test_phase3_paste_above_locked_still_blocked(void) {
@@ -1299,16 +1319,18 @@ static void test_depth_tutorial_label_targeted_emit_shifts_prior_locked_lines(vo
                     text != NULL && strstr(text, "//") != NULL);
     }
 
-    /* committed_line_for_step entries that were set during the walk
-     * should still resolve to the matching expected text. step 0
-     * (the labeled step) was glBegin(GL_TRIANGLES). */
-    int begin_step_line = state.committed_line_for_step[0];
-    ASSERT_TRUE("committed_line_for_step[0] points at glBegin",
-                begin_step_line >= 0 &&
-                begin_step_line < doc.line_count &&
-                source_text_line(doc, begin_step_line) &&
-                strstr(source_text_line(doc, begin_step_line),
-                       "glBegin(GL_TRIANGLES)") != NULL);
+    /* instruction_line_for_step now records each step's INSTRUCTION
+     * COMMENT row (not the committed command row), so a label
+     * target resolves above the original (instruction, command)
+     * pair and keeps it adjacent. Step 0's instruction starts with
+     * "// Start the triangle batch...". */
+    int begin_step_instruction = state.instruction_line_for_step[0];
+    ASSERT_TRUE("instruction_line_for_step[0] points at the comment",
+                begin_step_instruction >= 0 &&
+                begin_step_instruction < doc.line_count &&
+                source_text_line(doc, begin_step_instruction) &&
+                strstr(source_text_line(doc, begin_step_instruction),
+                       "Start the triangle batch") != NULL);
 }
 
 static void test_validate_accepts_well_formed_label_tutorial(void) {

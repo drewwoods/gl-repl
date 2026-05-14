@@ -15,7 +15,7 @@ static void tutorial_state_init_defaults(TutorialRuntimeState *s) {
     s->pending.commit_line = -1;
     s->pending.doc_count_before = -1;
     for (int i = 0; i < TUTORIAL_LOCKED_LINE_MAX; i++)
-        s->committed_line_for_step[i] = -1;
+        s->instruction_line_for_step[i] = -1;
     s->last_result.kind = TUT_MATCH_OK;
     s->last_result.arg_index = -1;
     s->last_result.message[0] = '\0';
