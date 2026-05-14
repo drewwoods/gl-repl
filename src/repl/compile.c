@@ -980,25 +980,20 @@ ReplCompileResult repl_compile_var_assign(const char *input,
      * float-decl overwrite check; the in-use predicate skips the
      * line being replaced.
      *
-     * Reorder note: the scalar branch above pushed a SET_VALUE op
-     * at slot 0 (predef_op_count = 1). This loop writes UNDECLAREs
-     * starting at slot 0 too, so it clobbers the SET_VALUE in place.
-     * The salvage block below copies whatever lives at slot 0
-     * (which is now an UNDECLARE) and appends it after the
-     * UNDECLAREs. The result is `[UNDECLARE_a, ..., UNDECLARE_n,
-     * UNDECLARE_a]` — a duplicate UNDECLARE rather than the
-     * SET_VALUE the layout-comment in src/repl/apply.c would suggest.
-     *
-     * This is benign because repl_apply_predef_ops is idempotent:
-     *   - the second UNDECLARE no-ops (find_predef_var_idx returns
-     *     -1 once the first call removed the variable), and
-     *   - a SET_VALUE for an undeclared name no-ops too.
-     *
-     * TODO: rewrite as stash-before-clobber so we actually preserve
-     * SET_VALUE for the case "overwrite decl-row of name Y with an
-     * assignment to X (X declared elsewhere)" — currently the
-     * SET_VALUE on X is silently dropped. Behavior change is
-     * observable, so add a focused test before fixing. */
+     * The scalar branch above parked a SET_VALUE op at slot 0
+     * (predef_op_count = 1). Stash it before the UNDECLARE loop
+     * writes from slot 0, then append it after so apply sees
+     * [UNDECLARE_old_0, ..., UNDECLARE_old_n, SET_VALUE_assigned].
+     * UNDECLARE-first matches the order repl_apply_predef_ops
+     * expects (cascades num_args before slot-index lookups). */
+    ReplPredefOp pending_set = {0};
+    int has_pending_set = 0;
+    if (!index_expr[0] && out->predef_op_count > 0) {
+        pending_set = out->predef_ops[out->predef_op_count - 1];
+        has_pending_set = 1;
+        out->predef_op_count = 0;
+    }
+
     int op_count = 0;
     if (overwriting_decl) {
         for (int decl_idx = 0; decl_idx < old_decl->var_decl_count; decl_idx++) {
@@ -1018,12 +1013,8 @@ ReplCompileResult repl_compile_var_assign(const char *input,
         }
     }
 
-    if (!index_expr[0] && out->predef_op_count > 0) {
-        ReplPredefOp set_value = out->predef_ops[out->predef_op_count - 1];
-        out->predef_op_count--;
-        if (op_count < MAX_PREDEF_OPS_PER_COMMIT) {
-            out->predef_ops[op_count++] = set_value;
-        }
+    if (has_pending_set && op_count < MAX_PREDEF_OPS_PER_COMMIT) {
+        out->predef_ops[op_count++] = pending_set;
     }
     out->predef_op_count = op_count;
 

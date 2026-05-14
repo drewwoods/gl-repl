@@ -252,6 +252,85 @@ static void test_compile_apply_var_assign_updates_value(void) {
     ASSERT_INT("doc has decl + assign", repl_state_document_count(), 2);
 }
 
+/* Regression: when an `X = expr;` assignment overwrites a
+ * `float Y;` decl row (overwrite mode, Y unused elsewhere), the
+ * SET_VALUE op for X must survive the UNDECLARE op insertion for
+ * Y. Pre-fix, src/repl/compile.c:983 documents that the UNDECLARE
+ * loop clobbers slot 0 (where the scalar branch parked SET_VALUE
+ * for X) and the salvage block copies the already-clobbered slot,
+ * producing [UNDECLARE_Y, UNDECLARE_Y] and silently dropping the
+ * SET_VALUE for X. X's predef value stays at its old value. */
+static void test_overwrite_decl_with_assign_preserves_set_value(void) {
+    glr_app_reset_all();
+
+    char err[REPL_STATUS_TEXT_MAX];
+    ReplCompiledChange change;
+    ReplCompileContext ctx;
+
+    /* Declare X with an initializer of 5. */
+    set_input("float X = 5;");
+    ctx = repl_compile_context_from_live();
+    ASSERT_INT("seed float X = 5 compile OK",
+               repl_compile_float_decl("float X = 5;", &ctx, &change, err, sizeof(err)),
+               REPL_COMPILE_OK);
+    ASSERT_INT("seed float X = 5 apply OK",
+               editor_commit_apply_compiled_change(&change), 1);
+
+    /* Declare Y (no initializer, no users — eligible for overwrite). */
+    set_input("float Y;");
+    ctx = repl_compile_context_from_live();
+    ASSERT_INT("seed float Y compile OK",
+               repl_compile_float_decl("float Y;", &ctx, &change, err, sizeof(err)),
+               REPL_COMPILE_OK);
+    ASSERT_INT("seed float Y apply OK",
+               editor_commit_apply_compiled_change(&change), 1);
+
+    int x_slot = repl_eval_find_predef_var_idx("X");
+    int y_slot = repl_eval_find_predef_var_idx("Y");
+    ASSERT_TRUE("X declared", x_slot >= 0);
+    ASSERT_TRUE("Y declared", y_slot >= 0);
+    ASSERT_TRUE("X starts at 5", g_predef_vars[x_slot].value == 5.0f);
+
+    /* Find Y's row index and point the editor at it in overwrite mode. */
+    int y_row = -1;
+    for (int i = 0; i < repl_state_document_count(); i++) {
+        const GLCmd *c = &repl_state_document_cmds_mut()[i];
+        if (c->type == CMD_VAR_DECLARE && c->var_decl_count == 1 &&
+            strcmp(c->var_names[0], "Y") == 0) {
+            y_row = i;
+            break;
+        }
+    }
+    ASSERT_TRUE("located float Y; row", y_row >= 0);
+
+    repl_state_edit_line_set(y_row);
+    editor_insert_mode_set(0);
+
+    /* Compile + apply `X = 42` overwriting the `float Y;` row. */
+    set_input("X = 42");
+    ctx = repl_compile_context_from_live();
+    ReplCompileResult r = repl_compile_var_assign(
+        "X = 42", &ctx, &change, err, sizeof(err));
+    ASSERT_INT("X = 42 over decl-row compile OK", r, REPL_COMPILE_OK);
+    ASSERT_INT("X = 42 over decl-row plans REPLACE_ONE",
+               change.kind, REPL_COMPILED_REPLACE_ONE);
+
+    int ok = editor_commit_apply_compiled_change(&change);
+    ASSERT_INT("X = 42 over decl-row apply OK", ok, 1);
+
+    /* Sanity: Y was undeclared (its UNDECLARE op did run). */
+    ASSERT_INT("Y undeclared after overwrite",
+               repl_eval_find_predef_var_idx("Y"), -1);
+
+    /* The bug: X's predef value should now be 42, but the dropped
+     * SET_VALUE op leaves it at 5. Re-find X's slot in case Y's
+     * removal shifted slot indices. */
+    x_slot = repl_eval_find_predef_var_idx("X");
+    ASSERT_TRUE("X still declared after overwrite", x_slot >= 0);
+    ASSERT_FLOAT("X = 42 SET_VALUE survives UNDECLARE cascade",
+                 g_predef_vars[x_slot].value, 42.0f, 1e-6f);
+}
+
 /* Forced cmd-store capacity failure leaves predef-vars, editor
  * buffer, and command store all unchanged. The preflight inside
  * editor_commit_apply_compiled_change is the load-bearing
@@ -803,6 +882,7 @@ int main(void) {
     test_compile_no_change_leaves_state();
     test_compile_apply_updates_both();
     test_compile_apply_var_assign_updates_value();
+    test_overwrite_decl_with_assign_preserves_set_value();
     test_capacity_failure_is_atomic();
     test_reformat_keeps_buffer_and_store_aligned();
     test_set_predef_value_prefers_last_literal_assign();
