@@ -142,12 +142,42 @@ void         gl_stub_counts_reset(void);
  * averages, or 1 for raw totals. */
 void gl_stub_counts_dump(FILE *out, const char *prefix, long long divisor);
 
+/* Per-call trace dump. When gl_stub_trace_fp is non-NULL every stub
+ * fprintfs one "<name> <args>\n" line before incrementing its counter.
+ * Default is NULL so the hot path is just a null-check; predicting the
+ * common no-trace case costs effectively nothing.
+ *
+ * gl_stub_trace_open(path) fopen()s the path for writing, force-sets
+ * LC_NUMERIC=C so float formatting is reproducible across hosts, and
+ * stores the FILE* in gl_stub_trace_fp. gl_stub_trace_close() flushes
+ * and clears. Both are safe to call repeatedly; opening twice closes
+ * the previous file first.
+ *
+ * Format contract for the line:
+ *   <symbol> <arg>...                — space-separated, %g for floats,
+ *                                      integer codes for enums and
+ *                                      bytes (so newlines inside text
+ *                                      labels can't corrupt the trace).
+ *   pointer-array args are omitted    — fp parity tests compare scalar
+ *                                      args only; see
+ *                                      plans/not-started/gl-stub-extensions.md
+ *                                      for the array-content sketch. */
+extern FILE *gl_stub_trace_fp;
+void gl_stub_trace_open(const char *path);
+void gl_stub_trace_close(void);
+
+#define GL_STUB_TRACE_LINE(...) do {                                \
+        if (gl_stub_trace_fp) fprintf(gl_stub_trace_fp, __VA_ARGS__); \
+    } while (0)
+
 #else  /* !GL_STUBS */
 
 /* Non-stub builds: no storage, and gl_stub_tick() is a no-op so the
  * stub headers still compile if they happen to be picked up as a
  * fallback on a system without real GL headers. */
 static inline void gl_stub_tick(int idx) { (void)idx; }
+
+#define GL_STUB_TRACE_LINE(...) ((void)0)
 
 #endif  /* GL_STUBS */
 

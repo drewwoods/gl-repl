@@ -194,6 +194,8 @@ static int read_child_counts(const char *path, unsigned long long *out) {
  * in the exported TU) are visible. -Dmain=app_main renames the
  * exported file's GLUT main() out of the way; the driver's main()
  * is the real one. */
+static int g_keep_traces = 0;  /* set by --keep-traces */
+
 static void compose_compile_cmd(char *buf, size_t n,
                                 const char *exported_c,
                                 const char *bin_path,
@@ -272,10 +274,13 @@ static int run_one_case(const TraceProgram *prog) {
         safe_name[out_idx] = '\0';
     }
     char temp_c[256], temp_bin[256], temp_out[256], temp_log[256];
-    snprintf(temp_c,   sizeof temp_c,   "/tmp/test_trace_%d_%s.c",   (int)pid, safe_name);
-    snprintf(temp_bin, sizeof temp_bin, "/tmp/test_trace_%d_%s.bin", (int)pid, safe_name);
-    snprintf(temp_out, sizeof temp_out, "/tmp/test_trace_%d_%s.txt", (int)pid, safe_name);
-    snprintf(temp_log, sizeof temp_log, "/tmp/test_trace_%d_%s.log", (int)pid, safe_name);
+    char temp_repl_tr[256], temp_child_tr[256];
+    snprintf(temp_c,        sizeof temp_c,        "/tmp/test_trace_%d_%s.c",         (int)pid, safe_name);
+    snprintf(temp_bin,      sizeof temp_bin,      "/tmp/test_trace_%d_%s.bin",       (int)pid, safe_name);
+    snprintf(temp_out,      sizeof temp_out,      "/tmp/test_trace_%d_%s.txt",       (int)pid, safe_name);
+    snprintf(temp_log,      sizeof temp_log,      "/tmp/test_trace_%d_%s.log",       (int)pid, safe_name);
+    snprintf(temp_repl_tr,  sizeof temp_repl_tr,  "/tmp/test_trace_%d_%s.repl.tr",   (int)pid, safe_name);
+    snprintf(temp_child_tr, sizeof temp_child_tr, "/tmp/test_trace_%d_%s.child.tr",  (int)pid, safe_name);
 
     /* REPL leg. */
     glr_app_reset_all();
@@ -292,10 +297,13 @@ static int run_one_case(const TraceProgram *prog) {
     /* Init+destroy bracket the executor's gluNewTess / gluTessCallback /
      * gluDeleteTess setup — these are REPL-internal, not user-emitted GL,
      * so reset counters AFTER init and snapshot BEFORE destroy to keep
-     * the trace user-code-only. */
+     * the trace user-code-only. The trace file opens between reset and
+     * execute for the same reason. */
     repl_executor_init_resources();
     gl_stub_counts_reset();
+    gl_stub_trace_open(temp_repl_tr);
     repl_execute_program(NULL);
+    gl_stub_trace_close();
     unsigned long long repl_counts[GL_STUB_COUNT_MAX];
     memcpy(repl_counts, gl_stub_counts, sizeof repl_counts);
     repl_executor_destroy_resources();
@@ -313,7 +321,8 @@ static int run_one_case(const TraceProgram *prog) {
         return 0;
     }
 
-    snprintf(cmd, sizeof cmd, "'%s' '%s'", temp_bin, temp_out);
+    snprintf(cmd, sizeof cmd, "'%s' '%s' '%s'",
+             temp_bin, temp_out, temp_child_tr);
     rc = system(cmd);
     if (rc != 0) {
         fprintf(stderr, "  [%s] child rc=%d\n", prog->name, rc);
@@ -329,8 +338,29 @@ static int run_one_case(const TraceProgram *prog) {
 
     int ok = compare_counts(prog->name, repl_counts, child_counts);
 
+    /* On count mismatch, fire up diff(1) and stream the first hunk of
+     * its output to stderr so the failure includes a localized hint.
+     * head -50 keeps the noise bounded; the full trace files are kept
+     * if --keep-traces was passed (otherwise the unlink below clears
+     * them on success and failure both, to avoid /tmp clutter). */
+    if (!ok) {
+        char diff_cmd[1024];
+        snprintf(diff_cmd, sizeof diff_cmd,
+                 "diff -u '%s' '%s' | head -50 >&2",
+                 temp_repl_tr, temp_child_tr);
+        fprintf(stderr, "  [%s] trace diff (repl < / child >):\n",
+                prog->name);
+        (void)system(diff_cmd);
+    }
+
     /* Best-effort cleanup; ignore errors. */
     unlink(temp_c); unlink(temp_bin); unlink(temp_out); unlink(temp_log);
+    if (!g_keep_traces) {
+        unlink(temp_repl_tr); unlink(temp_child_tr);
+    } else if (!ok) {
+        fprintf(stderr, "  [%s] traces kept: %s %s\n",
+                prog->name, temp_repl_tr, temp_child_tr);
+    }
     return ok;
 }
 
@@ -369,13 +399,21 @@ static void print_help(const char *argv0) {
 "executor folds CMD_COLOR3F through glColor4f at execute time while\n"
 "the exporter emits glColor3f literally.\n"
 "\n"
+"On count mismatch the test also runs diff(1) on the two per-call\n"
+"trace files the stubs emitted (gl_stub_trace_fp dumps one\n"
+"\"<symbol> <args>\" line per call) and pipes the first 50 lines of\n"
+"the unified diff to stderr to localize the divergence.\n"
+"\n"
 "Options:\n"
-"  --full     After the curated table, also run every built-in example\n"
-"             via repl_examples_*. Slow: one cc invocation per program.\n"
-"             Currently surfaces two known divergences (Bezier glVertex2f,\n"
-"             orbit-plot glutBitmapCharacter) — left as test discoveries\n"
-"             for follow-up; see plans/not-started/gl-stub-extensions.md.\n"
-"  --help     Show this help and exit 0.\n"
+"  --full          After the curated table, also run every built-in\n"
+"                  example via repl_examples_*. Slow: one cc invocation\n"
+"                  per program. Surfaces real REPL/exporter divergences\n"
+"                  as test discoveries; see\n"
+"                  plans/not-started/gl-stub-extensions.md.\n"
+"  --keep-traces   On failure, leave the .repl.tr and .child.tr trace\n"
+"                  files in /tmp for inspection. By default both files\n"
+"                  are unlinked after each case.\n"
+"  --help          Show this help and exit 0.\n"
 "\n"
 "Notes:\n"
 "  Stub-only test (linked only when USE_GL_STUBS=1) because both legs\n"
@@ -389,6 +427,8 @@ int main(int argc, char **argv) {
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "--full") == 0) {
             full = 1;
+        } else if (strcmp(argv[i], "--keep-traces") == 0) {
+            g_keep_traces = 1;
         } else if (strcmp(argv[i], "--help") == 0 || strcmp(argv[i], "-h") == 0) {
             print_help(argv[0]);
             return 0;

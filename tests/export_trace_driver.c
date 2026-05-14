@@ -45,7 +45,7 @@
 
 int main(int argc, char **argv) {
     if (argc < 2) {
-        fprintf(stderr, "usage: %s <out-file>\n",
+        fprintf(stderr, "usage: %s <counts-file> [<trace-file>]\n",
                 argc > 0 ? argv[0] : "export_trace_driver");
         return 2;
     }
@@ -55,6 +55,11 @@ int main(int argc, char **argv) {
      * into the trace. */
     gl_stub_counts_reset();
 
+    /* Optional per-call trace. The parent test passes a per-leg path
+     * here so it can diff the resulting file against the REPL leg's
+     * trace whenever counts disagree. */
+    if (argc >= 3) gl_stub_trace_open(argv[2]);
+
     /* render_repl_geometry is static-in-translation-unit by the exporter;
      * the #include above makes it visible. We deliberately skip the
      * companion reset_repl_vars() — it's only emitted when the program
@@ -63,6 +68,7 @@ int main(int argc, char **argv) {
      * t = 0.0f;` etc. emitted by the exporter already gives the same
      * starting state the REPL side has after glr_app_reset_all(). */
     render_repl_geometry();
+    gl_stub_trace_close();
 
     FILE *f = fopen(argv[1], "w");
     if (!f) {
