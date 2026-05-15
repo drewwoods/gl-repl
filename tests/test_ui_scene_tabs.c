@@ -279,6 +279,36 @@ static void test_dropdown_over_band_consumes(void) {
     }
 }
 
+/* The inline rename prompt is surfaced via the status line (TTL-based).
+ * glr_ctrl_tick() must NOT age the status out while the rename modal is
+ * active, or the prompt vanishes from under the user. */
+static void test_rename_prompt_does_not_auto_hide(void) {
+    ReplStatusState *st;
+
+    reset_fixture();
+    seed_user_scene();
+    editor_inline_rename_cancel();
+
+    ASSERT_TRUE("rename begins", editor_inline_rename_begin(0) != 0);
+    st = ui_state_status_mut();
+    ASSERT_TRUE("rename prompt shown", st->ttl > 0 && st->text[0] != '\0');
+
+    /* Far more ticks than the 240-frame status TTL. */
+    for (int i = 0; i < 1000; i++)
+        glr_ctrl_tick();
+    st = ui_state_status_mut();
+    ASSERT_TRUE("prompt persists while rename active",
+                st->ttl > 0 && st->text[0] != '\0');
+    ASSERT_TRUE("still in rename modal", editor_inline_rename_active());
+
+    /* Once rename ends, the status resumes aging out normally. */
+    editor_inline_rename_cancel();
+    for (int i = 0; i < 300; i++)
+        glr_ctrl_tick();
+    ASSERT_INT_EQ("status ages out after rename ends",
+                  ui_state_status_mut()->ttl, 0);
+}
+
 int main(void) {
     printf("--- ui_scene_tabs tests ---\n");
     test_derivation();
@@ -286,5 +316,6 @@ int main(void) {
     test_band_h_lockstep();
     test_double_click_rename();
     test_dropdown_over_band_consumes();
+    test_rename_prompt_does_not_auto_hide();
     return test_harness_report(&g_harness, "ui_scene_tabs");
 }
