@@ -4,6 +4,10 @@
 
 <img src="assets/hero-grid-runner-2.svg" alt="gl-repl — type GL commands, watch geometry render" width="100%">
 
+<img src="assets/hero-r9-rainbow.svg" alt="gl-repl — type GL commands, watch geometry render r9" width="100%">
+
+<img src="assets/hero-r9-gl-repl.svg" alt="gl-repl — type GL commands, watch geometry render r9c" width="100%">
+
 <br>
 
 <!-- arcade-style badge strip -->
