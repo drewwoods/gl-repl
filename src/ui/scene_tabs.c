@@ -19,9 +19,10 @@
 
 /* File-private tab metrics. */
 enum {
-    TAB_PAD_X = 10,   /* horizontal label padding each side */
-    TAB_MIN_W = 44,
-    TAB_MAX_W = 180,
+    TAB_PAD_X    = 10,  /* horizontal label padding each side */
+    TAB_MIN_W    = 44,
+    TAB_MAX_W    = 180,
+    TAB_CORNER_R = 9,   /* top-corner radius (clamped to the tab) */
 };
 
 /* Compute the band rect and per-tab x[]/w[]. Returns the tab count (0 when
@@ -102,7 +103,7 @@ int ui_scene_tabs_band_h(const UiRenderSnapshot *snap) {
  * so GL_POLYGON is fine. r is clamped to the rect. */
 static void scene_tabs_fill_round_top(float x, float y, float w, float h,
                                       float r) {
-    enum { SEG = 4 };
+    enum { SEG = 8 };
     const float HALF_PI = 1.57079633f;
     int k;
 
@@ -122,6 +123,33 @@ static void scene_tabs_fill_round_top(float x, float y, float w, float h,
         glVertex2f(x + r + r * cosf(a), y + h - r + r * sinf(a));
     }
     glEnd();                                /* closes back to bottom-left */
+}
+
+/* Stroke the rounded-top outline of a tab WITHOUT the bottom edge, so
+ * tabs visually connect to the content area below. Same corner geometry
+ * as scene_tabs_fill_round_top. Uses the current GL color. */
+static void scene_tabs_stroke_round_top(float x, float y, float w, float h,
+                                        float r) {
+    enum { SEG = 8 };
+    const float HALF_PI = 1.57079633f;
+    int k;
+
+    if (r > w * 0.5f) r = w * 0.5f;
+    if (r > h)        r = h;
+
+    glBegin(GL_LINE_STRIP);
+    glVertex2f(x + w, y);                   /* bottom-right (open bottom) */
+    glVertex2f(x + w, y + h - r);           /* up the right edge */
+    for (k = 1; k <= SEG; k++) {            /* top-right corner: 0->90 */
+        float a = (float)k / SEG * HALF_PI;
+        glVertex2f(x + w - r + r * cosf(a), y + h - r + r * sinf(a));
+    }
+    for (k = 0; k <= SEG; k++) {            /* top-left corner: 90->180 */
+        float a = HALF_PI + (float)k / SEG * HALF_PI;
+        glVertex2f(x + r + r * cosf(a), y + h - r + r * sinf(a));
+    }
+    glVertex2f(x, y);                       /* down to bottom-left */
+    glEnd();
 }
 
 /* Draw label clipped to max_w pixels (hard char truncation, no ellipsis —
@@ -195,22 +223,30 @@ void ui_scene_tabs_render(const UiRenderSnapshot *snap) {
             else
                 glColor4f(0.130f, 0.260f, 0.150f, 1.0f);  /* green tint */
             scene_tabs_fill_round_top((float)x[i], (float)by,
-                                      (float)w[i], (float)bh, 5.0f);
+                                      (float)w[i], (float)bh,
+                                      (float)TAB_CORNER_R);
         } else if (hover == i) {
             glColor4f(0.165f, 0.165f, 0.165f, 1.0f);       /* #2a2a2a */
             scene_tabs_fill_round_top((float)x[i], (float)by,
-                                      (float)w[i], (float)bh, 5.0f);
+                                      (float)w[i], (float)bh,
+                                      (float)TAB_CORNER_R);
         }
 
-        /* 1px left separator (#2a2a2a) — skip on the active tab; its
-         * rounded fill is the delimiter there. */
-        if (!active) {
-            glColor4f(0.165f, 0.165f, 0.165f, 1.0f);
-            glBegin(GL_LINES);
-            glVertex2f((float)x[i], (float)by);
-            glVertex2f((float)x[i], (float)(by + bh));
-            glEnd();
+        /* Rounded outline on EVERY tab (no bottom edge). The active
+         * tab's outline keys off its shaded hue (a brighter green /
+         * amber); inactive tabs get a neutral edge so they still read
+         * as discrete tabs. */
+        if (active) {
+            if (is_example)
+                glColor3f(0.900f, 0.660f, 0.320f);  /* bright amber */
+            else
+                glColor3f(0.420f, 0.780f, 0.500f);  /* bright green */
+        } else {
+            glColor3f(0.330f, 0.330f, 0.380f);      /* neutral edge */
         }
+        scene_tabs_stroke_round_top((float)x[i], (float)by,
+                                    (float)w[i], (float)bh,
+                                    (float)TAB_CORNER_R);
 
         /* Label color. Example tabs keep an amber/warm family vs the
          * user tabs' neutral so the kinds stay distinguishable even
