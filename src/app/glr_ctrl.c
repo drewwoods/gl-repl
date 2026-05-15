@@ -1216,6 +1216,54 @@ static int glr_ctrl_active_indent_chars(void) {
     return repl_source_scope_cmd_indent_chars(document_count);
 }
 
+/* Constants in snapshot.h are hardcoded to keep the UI layer free of
+ * repl-layer includes; assert equivalence here where repl/core.h is in
+ * scope. */
+_Static_assert(UI_SCENE_TAB_CAP >= MAX_USER_SCENES + 1,
+               "scene-tab cap must fit every user slot plus the example tab");
+_Static_assert(UI_SCENE_TAB_NAME_MAX == USER_SCENE_NAME_MAX,
+               "scene-tab name buffer must match the user-scene name max");
+
+/* Derive the scene tab strip each frame from existing state — no persistent
+ * model. One tab per occupied user-scene slot (dense slot order, matching
+ * the Scene menu / F12), plus one example tab iff an example is active.
+ * Transient/"neither active" (Scene→New, tutorial) leaves active_idx == -1
+ * with no synthetic tab (plan decision #6). */
+static void glr_ctrl_build_scene_tabs(UiSceneTabList *out) {
+    int active_slot = repl_active_user_scene();
+    int example_idx = repl_state_scenes().active_example_idx;
+    int n = 0;
+
+    memset(out, 0, sizeof(*out));
+    out->active_idx = -1;
+
+    for (int slot = 0; slot < MAX_USER_SCENES && n < UI_SCENE_TAB_CAP; slot++) {
+        if (!repl_user_scene_slot_used(slot))
+            continue;
+        snprintf(out->tabs[n].name, UI_SCENE_TAB_NAME_MAX, "%s",
+                 repl_user_scene_name(slot));
+        out->tabs[n].kind = UI_SCENE_TAB_USER;
+        out->tabs[n].slot = slot;
+        out->tabs[n].active = (slot == active_slot);
+        if (out->tabs[n].active)
+            out->active_idx = n;
+        n++;
+    }
+
+    if (example_idx >= 0 && n < UI_SCENE_TAB_CAP) {
+        snprintf(out->tabs[n].name, UI_SCENE_TAB_NAME_MAX, "%s",
+                 repl_example_name(example_idx));
+        out->tabs[n].kind = UI_SCENE_TAB_EXAMPLE;
+        out->tabs[n].slot = -1;
+        out->tabs[n].active = (active_slot < 0);
+        if (out->tabs[n].active)
+            out->active_idx = n;
+        n++;
+    }
+
+    out->count = n;
+}
+
 void glr_ctrl_build_ui_snapshot(UiRenderSnapshot *snap) {
     FlatProgramView flat_program;
     ReplPredefView predef;
@@ -1260,6 +1308,7 @@ void glr_ctrl_build_ui_snapshot(UiRenderSnapshot *snap) {
     snap->anim_time           = repl_state_variables().anim_time;
 
     snap->user_scene_active_idx   = repl_active_user_scene();
+    glr_ctrl_build_scene_tabs(&snap->scene_tabs);
 
     snap->help_content = glr_ctrl_help_overlay_content();
     snap->editor_transformers = editor_state_transformers();

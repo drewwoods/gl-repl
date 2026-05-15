@@ -1,0 +1,225 @@
+/*
+ * ui_scene_tabs.c -- Scene tab strip renderer + hit-test (see scene_tabs.h).
+ *
+ * Snapshot-pure: tab/scene content and the hit-test y-flip come from the
+ * frozen UiRenderSnapshot; panel geometry comes through the shared
+ * ui_layout_code_panel_rect() helper (single source of truth for panel
+ * chrome geometry, exactly as menu_bar.c uses it). No state.h, no
+ * repl-layer or editor-layer headers — reads/mutates no REPL/editor state.
+ */
+#include "ui/scene_tabs.h"
+
+#include "config.h"        /* FONT_SMALL, FONT_SMALL_W */
+#include "ui/gl_2d.h"
+#include "ui/layout.h"
+#include "ui/metrics.h"
+
+#include <string.h>
+
+/* File-private tab metrics. */
+enum {
+    TAB_PAD_X = 10,   /* horizontal label padding each side */
+    TAB_MIN_W = 44,
+    TAB_MAX_W = 180,
+};
+
+/* Compute the band rect and per-tab x[]/w[]. Returns the tab count (0 when
+ * the panel is hidden or the derived set is empty). cp_x / cp_w / tab_by /
+ * tab_bh are the band's outer rectangle (OpenGL bottom-left y). */
+static int scene_tabs_rects(const UiRenderSnapshot *snap,
+                            int x[UI_SCENE_TAB_CAP],
+                            int w[UI_SCENE_TAB_CAP],
+                            int *cp_x_out, int *cp_w_out,
+                            int *tab_by, int *tab_bh) {
+    int cp_x, cp_y, cp_w, cp_h;
+    int panel_top, menu_by, by, bh;
+    int count, avail, natural_sum, i, cx;
+
+    ui_layout_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
+    if (cp_w <= 0 || cp_h <= 0)
+        return 0;
+
+    count = snap->scene_tabs.count;
+    if (count <= 0)
+        return 0;
+    if (count > UI_SCENE_TAB_CAP)
+        count = UI_SCENE_TAB_CAP;
+
+    panel_top = cp_y + cp_h;
+    menu_by = panel_top - CODE_MARGIN_Y - LINE_H;  /* unchanged menu bar */
+    bh = TAB_STRIP_H;
+    by = menu_by - bh;
+
+    if (cp_x_out) *cp_x_out = cp_x;
+    if (cp_w_out) *cp_w_out = cp_w;
+    if (tab_by)   *tab_by = by;
+    if (tab_bh)   *tab_bh = bh;
+
+    avail = cp_w - 2 * CODE_MARGIN_X;
+    if (avail < count)
+        avail = count;
+
+    natural_sum = 0;
+    for (i = 0; i < count; i++) {
+        int lw = (int)strlen(snap->scene_tabs.tabs[i].name) * FONT_SMALL_W
+                 + 2 * TAB_PAD_X;
+        if (lw < TAB_MIN_W) lw = TAB_MIN_W;
+        if (lw > TAB_MAX_W) lw = TAB_MAX_W;
+        w[i] = lw;
+        natural_sum += lw;
+    }
+
+    /* Overflow v1: equal-share shrink, hard label truncation at render,
+     * no horizontal scroll (max 9 tabs fit any normal panel). */
+    if (natural_sum > avail) {
+        int share = avail / count;
+        for (i = 0; i < count; i++)
+            w[i] = share;
+    }
+
+    cx = cp_x + CODE_MARGIN_X;
+    for (i = 0; i < count; i++) {
+        x[i] = cx;
+        cx += w[i];
+    }
+    return count;
+}
+
+int ui_scene_tabs_band_h(const UiRenderSnapshot *snap) {
+    int x[UI_SCENE_TAB_CAP], w[UI_SCENE_TAB_CAP];
+    int by, bh;
+
+    if (!snap)
+        return 0;
+    if (scene_tabs_rects(snap, x, w, NULL, NULL, &by, &bh) <= 0)
+        return 0;
+    return bh;
+}
+
+/* Draw label clipped to max_w pixels (hard char truncation, no ellipsis —
+ * idiomatic with menu_bar's max_chars hard limit). */
+static void scene_tabs_draw_label(int tx, int ty, const char *name,
+                                  int max_w) {
+    char buf[UI_SCENE_TAB_NAME_MAX];
+    int max_chars = max_w / FONT_SMALL_W;
+    int n;
+
+    if (max_chars <= 0)
+        return;
+    if (max_chars >= (int)sizeof(buf))
+        max_chars = (int)sizeof(buf) - 1;
+    n = (int)strlen(name);
+    if (n > max_chars)
+        n = max_chars;
+    memcpy(buf, name, (size_t)n);
+    buf[n] = '\0';
+    gl2d_draw_string((float)tx, (float)ty, buf, FONT_SMALL);
+}
+
+void ui_scene_tabs_render(const UiRenderSnapshot *snap) {
+    int x[UI_SCENE_TAB_CAP], w[UI_SCENE_TAB_CAP];
+    int cp_x, cp_w, by, bh, count;
+    int ry, hover, i;
+
+    if (!snap)
+        return;
+    count = scene_tabs_rects(snap, x, w, &cp_x, &cp_w, &by, &bh);
+    if (count <= 0)
+        return;
+
+    /* Hover from the snapshot pointer (window coords -> bottom-left y),
+     * same flip the hit-test uses. */
+    ry = snap->viewport.window_h - snap->pointer.mouse_y;
+    hover = -1;
+    if (snap->pointer.mouse_x >= cp_x &&
+        snap->pointer.mouse_x < cp_x + cp_w &&
+        ry >= by && ry < by + bh) {
+        for (i = 0; i < count; i++) {
+            if (snap->pointer.mouse_x >= x[i] &&
+                snap->pointer.mouse_x < x[i] + w[i]) {
+                hover = i;
+                break;
+            }
+        }
+    }
+
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+    /* Full-width band background: #1d1d1d, matches the menu strip. */
+    glColor4f(0.114f, 0.114f, 0.114f, 0.98f);
+    glRectf((float)cp_x, (float)by,
+            (float)(cp_x + cp_w), (float)(by + bh));
+
+    for (i = 0; i < count; i++) {
+        const UiSceneTab *tab = &snap->scene_tabs.tabs[i];
+        int active = tab->active;
+        int tx = x[i] + TAB_PAD_X;
+
+        if (active) {
+            glColor4f(0.149f, 0.149f, 0.149f, 1.0f);   /* #262626 */
+            glRectf((float)x[i], (float)by,
+                    (float)(x[i] + w[i]), (float)(by + bh));
+        } else if (hover == i) {
+            glColor4f(0.165f, 0.165f, 0.165f, 1.0f);   /* #2a2a2a */
+            glRectf((float)x[i], (float)by,
+                    (float)(x[i] + w[i]), (float)(by + bh));
+        }
+
+        /* 1px left separator (#2a2a2a). */
+        glColor4f(0.165f, 0.165f, 0.165f, 1.0f);
+        glBegin(GL_LINES);
+        glVertex2f((float)x[i], (float)by);
+        glVertex2f((float)x[i], (float)(by + bh));
+        glEnd();
+
+        if (active) {
+            /* 2px accent-green top rule. */
+            glColor3f(UI_ACCENT_GREEN_R, UI_ACCENT_GREEN_G,
+                      UI_ACCENT_GREEN_B);
+            glRectf((float)x[i], (float)(by + bh - 2),
+                    (float)(x[i] + w[i]), (float)(by + bh));
+            glColor3f(1.0f, 1.0f, 1.0f);               /* bright label */
+        } else if (hover == i) {
+            glColor3f(1.0f, 1.0f, 1.0f);
+        } else {
+            glColor3f(0.847f, 0.847f, 0.847f);         /* #d8d8d8 */
+        }
+
+        scene_tabs_draw_label(tx, by + 3, tab->name,
+                              w[i] - 2 * TAB_PAD_X);
+    }
+}
+
+UiHit ui_scene_tabs_hit_test(const UiRenderSnapshot *snap, int mx, int my) {
+    UiHit h = ui_hit_none();
+    int x[UI_SCENE_TAB_CAP], w[UI_SCENE_TAB_CAP];
+    int cp_x, cp_w, by, bh, count, ry, i;
+
+    if (!snap)
+        return h;
+    count = scene_tabs_rects(snap, x, w, &cp_x, &cp_w, &by, &bh);
+    if (count <= 0)
+        return h;
+
+    ry = snap->viewport.window_h - my;
+    if (mx < cp_x || mx >= cp_x + cp_w || ry < by || ry >= by + bh)
+        return h;  /* outside the band -> let other handlers run */
+
+    for (i = 0; i < count; i++) {
+        if (mx >= x[i] && mx < x[i] + w[i]) {
+            h.kind = UI_HIT_CODE_PANEL_TAB;
+            h.item_idx = i;
+            h.local_x = (float)(mx - x[i]);
+            h.local_y = (float)(ry - by);
+            return h;
+        }
+    }
+
+    /* In-band but off-tab (gaps / right of last tab): consume it inertly
+     * so it cannot fall through to a code-text/gutter hit. */
+    h.kind = UI_HIT_CODE_PANEL_CHROME;
+    h.local_x = (float)(mx - cp_x);
+    h.local_y = (float)(ry - by);
+    return h;
+}
