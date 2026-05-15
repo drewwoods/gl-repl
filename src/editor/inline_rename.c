@@ -18,15 +18,12 @@ static int  g_rename_slot = -1;
 static char g_rename_buf[USER_SCENE_NAME_MAX];
 static int  g_rename_len  = 0;
 
-static void rename_refresh_status(void) {
-    char msg[160];
-    snprintf(msg, sizeof(msg),
-             "Rename scene (Enter to save, Esc to cancel): %s", g_rename_buf);
-    repl_set_status(msg);
-}
-
 int editor_inline_rename_active(void) {
     return g_rename_slot >= 0;
+}
+
+const char *editor_inline_rename_buffer(void) {
+    return g_rename_slot >= 0 ? g_rename_buf : "";
 }
 
 int editor_inline_rename_begin(int slot) {
@@ -36,7 +33,6 @@ int editor_inline_rename_begin(int slot) {
     const char *cur = repl_user_scene_name(slot);
     snprintf(g_rename_buf, sizeof(g_rename_buf), "%s", cur ? cur : "");
     g_rename_len = (int)strlen(g_rename_buf);
-    rename_refresh_status();
     return 1;
 }
 
@@ -77,16 +73,13 @@ int editor_inline_rename_handle_key(unsigned char key) {
         return 1;
     }
     if (key == KEY_BACKSPACE || key == KEY_DELETE) {
-        if (g_rename_len > 0) {
+        if (g_rename_len > 0)
             g_rename_buf[--g_rename_len] = '\0';
-            rename_refresh_status();
-        }
         return 1;
     }
     if (rename_char_ok(key) && g_rename_len < (int)sizeof(g_rename_buf) - 1) {
         g_rename_buf[g_rename_len++] = (char)key;
         g_rename_buf[g_rename_len] = '\0';
-        rename_refresh_status();
         return 1;
     }
     /* Swallow everything else so no stray character hits the editor. */

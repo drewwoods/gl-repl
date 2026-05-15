@@ -1311,6 +1311,10 @@ void glr_ctrl_build_ui_snapshot(UiRenderSnapshot *snap) {
     snap->user_scene_active_idx   = repl_active_user_scene();
     glr_ctrl_build_scene_tabs(&snap->scene_tabs);
 
+    snap->rename_active = editor_inline_rename_active();
+    snprintf(snap->rename_text, sizeof(snap->rename_text), "%s",
+             editor_inline_rename_buffer());
+
     snap->help_content = glr_ctrl_help_overlay_content();
     snap->editor_transformers = editor_state_transformers();
     snap->editor_highlights = editor_state_highlights();
@@ -3098,12 +3102,11 @@ void glr_ctrl_tick(void) {
     }
 
     {
-        /* Inline scene rename surfaces its prompt through the status
-         * line. While the rename modal is capturing keys, freeze the
-         * TTL so the prompt does not auto-hide out from under the user
-         * (pre-existing rename behavior, unrelated to scene tabs). */
+        /* Inline rename no longer rides the status line (it owns its
+         * own display state via the snapshot rename view), so the TTL
+         * just ages normally. */
         ReplStatusState *status = ui_state_status_mut();
-        if (status->ttl > 0 && !editor_inline_rename_active())
+        if (status->ttl > 0)
             status->ttl--;
     }
 }
