@@ -3,6 +3,7 @@
 #include "editor/state.h"
 #include "repl/command_spec.h"
 #include "repl/core.h"
+#include "repl/eval.h"
 #include "repl/export.h"
 #include "repl/state_views.h"
 #include "ui/color_picker.h"
@@ -663,6 +664,184 @@ static void repl_code_panel_apply_fade_segments(int line_idx, const char *text,
     }
 }
 
+/* -------------------------------------------------------------------------
+ * Per-kind argument syntax coloring
+ * ---------------------------------------------------------------------- */
+
+/* Per-kind base palette (RGB, 0..1). Tuned against the (0.06, 0.06, 0.10)
+ * code-panel background; test_repl_code_panel_syntax guards future edits. */
+static const float k_syntax_base_rgb[REPL_SYNTAX_KIND_COUNT][3] = {
+    [REPL_SYNTAX_LITERAL]  = { 0.93f, 0.66f, 0.40f },  /* warm amber */
+    [REPL_SYNTAX_CONSTANT] = { 0.45f, 0.85f, 0.78f },  /* teal */
+    [REPL_SYNTAX_VARIABLE] = { 0.62f, 0.78f, 0.98f },  /* cool blue */
+};
+
+/* Fraction of the command class color blended into each kind's base. Small
+ * enough that kinds stay distinguishable, large enough that a line reads as
+ * one class family (no rainbow). */
+#define REPL_SYNTAX_CLASS_NUDGE 0.22f
+
+void ui_repl_code_panel_syntax_kind_rgb(ReplSyntaxKind kind,
+                                        CmdSyntaxCategory category,
+                                        float out_rgb[3]) {
+    float cr = 0.0f;
+    float cg = 0.0f;
+    float cb = 0.0f;
+    const float *base;
+
+    if (!out_rgb)
+        return;
+    if (kind < 0 || kind >= REPL_SYNTAX_KIND_COUNT)
+        kind = REPL_SYNTAX_VARIABLE;
+
+    base = k_syntax_base_rgb[kind];
+    repl_code_panel_category_rgb(category, &cr, &cg, &cb);
+    out_rgb[0] = base[0] + (cr - base[0]) * REPL_SYNTAX_CLASS_NUDGE;
+    out_rgb[1] = base[1] + (cg - base[1]) * REPL_SYNTAX_CLASS_NUDGE;
+    out_rgb[2] = base[2] + (cb - base[2]) * REPL_SYNTAX_CLASS_NUDGE;
+}
+
+static int repl_syntax_is_ident_start(int c) {
+    return isalpha((unsigned char)c) || c == '_';
+}
+
+static int repl_syntax_is_ident_char(int c) {
+    return isalnum((unsigned char)c) || c == '_';
+}
+
+int ui_repl_code_panel_classify_syntax(const char *text,
+                                       ReplSyntaxSpan *out, int max_spans) {
+    int n = 0;
+    int i = 0;
+
+    if (!text || !out || max_spans <= 0)
+        return 0;
+
+    while (text[i] && n < max_spans) {
+        unsigned char c = (unsigned char)text[i];
+
+        /* Quoted string: the whole run (incl. quotes) is one literal. Do
+         * not descend into a label("...") format string. */
+        if (c == '"') {
+            int start = i;
+
+            i++;
+            while (text[i] && text[i] != '"')
+                i++;
+            if (text[i] == '"')
+                i++;
+            out[n++] = (ReplSyntaxSpan){ start, i - start, REPL_SYNTAX_LITERAL };
+            continue;
+        }
+
+        /* Numeric literal: digits / '.' / exponent. A leading '.' counts
+         * only when a digit follows (otherwise it is structural). */
+        if (isdigit(c) ||
+            (c == '.' && isdigit((unsigned char)text[i + 1]))) {
+            int start = i;
+
+            while (text[i] &&
+                   (isdigit((unsigned char)text[i]) || text[i] == '.'))
+                i++;
+            if ((text[i] == 'e' || text[i] == 'E') &&
+                (isdigit((unsigned char)text[i + 1]) ||
+                 ((text[i + 1] == '+' || text[i + 1] == '-') &&
+                  isdigit((unsigned char)text[i + 2])))) {
+                i++;
+                if (text[i] == '+' || text[i] == '-')
+                    i++;
+                while (isdigit((unsigned char)text[i]))
+                    i++;
+            }
+            out[n++] = (ReplSyntaxSpan){ start, i - start, REPL_SYNTAX_LITERAL };
+            continue;
+        }
+
+        /* Identifier. */
+        if (repl_syntax_is_ident_start(c)) {
+            int start = i;
+            int len;
+            int j;
+            char name[64];
+
+            while (text[i] && repl_syntax_is_ident_char(text[i]))
+                i++;
+            len = i - start;
+
+            /* Function-call name (ident immediately followed by '(',
+             * skipping spaces) keeps the class color — covers the command
+             * keyword, math fns, funcN, and user aliases. */
+            j = i;
+            while (text[j] == ' ' || text[j] == '\t')
+                j++;
+            if (text[j] == '(')
+                continue;
+
+            if (len >= (int)sizeof(name))
+                continue;  /* pathological; leave at class color */
+            memcpy(name, text + start, (size_t)len);
+            name[len] = '\0';
+
+            if (strcmp(name, "PI") == 0 || strcmp(name, "TAU") == 0 ||
+                (len > 3 && strncmp(name, "GL_", 3) == 0)) {
+                out[n++] = (ReplSyntaxSpan){ start, len,
+                                             REPL_SYNTAX_CONSTANT };
+            } else if (repl_eval_scratch_array_index(name) >= 0 ||
+                       repl_eval_find_predef_var_idx(name) >= 0) {
+                out[n++] = (ReplSyntaxSpan){ start, len,
+                                             REPL_SYNTAX_VARIABLE };
+            } else if (repl_eval_is_reserved_ident(name)) {
+                /* reserved word / math fn used bare — structural */
+            } else {
+                /* loop var, funcN param, or otherwise-unknown ident */
+                out[n++] = (ReplSyntaxSpan){ start, len,
+                                             REPL_SYNTAX_VARIABLE };
+            }
+            continue;
+        }
+
+        i++;  /* whitespace / operator / punctuation -> class color */
+    }
+
+    return n;
+}
+
+static void repl_code_panel_apply_syntax_segments(const char *text,
+                                                  CmdType type,
+                                                  UiTextPanelRow *row) {
+    ReplSyntaxSpan spans[UI_TEXT_PANEL_MAX_COLOR_SEGMENTS];
+    CmdSyntaxCategory cat;
+    int count;
+
+    if (!row || !text || !text[0])
+        return;
+
+    cat = repl_cmd_type_category(type);
+    if (cat == CMD_CAT_COMMENT)
+        return;  /* whole comment line keeps the comment color */
+
+    count = ui_repl_code_panel_classify_syntax(
+        text, spans, UI_TEXT_PANEL_MAX_COLOR_SEGMENTS);
+    if (count <= 0)
+        return;
+
+    row->color_segment_count = 0;
+    for (int i = 0;
+         i < count &&
+         row->color_segment_count < UI_TEXT_PANEL_MAX_COLOR_SEGMENTS;
+         i++) {
+        float rgb[3];
+
+        ui_repl_code_panel_syntax_kind_rgb(spans[i].kind, cat, rgb);
+        row->color_segments[row->color_segment_count++] =
+            (UiTextPanelColorSegment){
+                .char_start = spans[i].start,
+                .char_count = spans[i].len,
+                .color = repl_code_panel_rgb(rgb[0], rgb[1], rgb[2]),
+            };
+    }
+}
+
 static void repl_code_panel_add_static_row(ReplCodePanelBuilder *builder,
                                            const char *text,
                                            UiTextPanelColor color) {
@@ -747,6 +926,10 @@ static void repl_code_panel_add_command_row(ReplCodePanelBuilder *builder,
     if (tutorial_line_is_fading(line_idx, builder->snap->anim_time))
         repl_code_panel_apply_fade_segments(line_idx, display_text,
                                             builder->snap->anim_time, row);
+    else
+        repl_code_panel_apply_syntax_segments(
+            display_text,
+            builder->snap->document_cmds[line_idx].type, row);
 }
 
 static void repl_code_panel_add_virtual_rows(ReplCodePanelBuilder *builder,

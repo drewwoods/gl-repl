@@ -10,10 +10,51 @@
 #define UI_REPL_CODE_PANEL_H
 
 #include "config.h"
+#include "repl/command_spec.h"
 #include "ui/hit.h"
 #include "ui/snapshot.h"
 
 struct UiCodePanelOutput;
+
+/* -------------------------------------------------------------------------
+ * Per-kind argument syntax coloring
+ *
+ * The code panel colors a command row by its class (CmdSyntaxCategory).
+ * On top of that, argument *tokens* — literals, constants, and variables —
+ * get their own hue, nudged toward the row's class color so a line stays
+ * visually cohesive. Keyword / function-call names / operators / punctuation
+ * produce no span and keep the row class color.
+ *
+ * The classifier is a flat left-to-right lexer over the display text. It is
+ * exposed so tests can assert classification independently of rendering.
+ * ---------------------------------------------------------------------- */
+
+typedef enum {
+    REPL_SYNTAX_LITERAL = 0,   /* numeric literal or quoted string run */
+    REPL_SYNTAX_CONSTANT,      /* PI, TAU, or a GL_* enum constant */
+    REPL_SYNTAX_VARIABLE,      /* declared / predef / scratch / local var */
+    REPL_SYNTAX_KIND_COUNT
+} ReplSyntaxKind;
+
+typedef struct {
+    int            start;  /* char offset into the line text */
+    int            len;    /* span length in chars */
+    ReplSyntaxKind kind;
+} ReplSyntaxSpan;
+
+/* Classify argument tokens in a single display line. Writes up to
+ * max_spans ordered, non-overlapping spans and returns the count written.
+ * Keyword / function-call names / operators / punctuation produce no span.
+ * Pure: no global state, safe to call from tests. */
+int ui_repl_code_panel_classify_syntax(const char *text,
+                                        ReplSyntaxSpan *out, int max_spans);
+
+/* Final RGB (0..1) for a token kind, blended a fixed fraction toward the
+ * command's class color so per-line coloring stays cohesive. Exposed for
+ * the contrast regression test. */
+void ui_repl_code_panel_syntax_kind_rgb(ReplSyntaxKind kind,
+                                         CmdSyntaxCategory category,
+                                         float out_rgb[3]);
 
 typedef struct {
     int panel_w;
