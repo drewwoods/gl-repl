@@ -4,7 +4,14 @@
 
 /* Push a 2D ortho projection sized to (0,0)-(w,h) and disable depth +
  * lighting via glPushAttrib so the corresponding gl2d_end() restores
- * prior state without project-side lighting queries. */
+ * prior state without project-side lighting queries.
+ *
+ * GL_CURRENT_BIT is included so a 2D overlay's glColor* cannot leak
+ * into GL's current color and bleed into the next frame's scene
+ * geometry (uncolored user geometry otherwise inherited the status
+ * banner's orange / profile panel's green). Overlays stay fully
+ * transient: the scene/display color — or the GL default, or whatever
+ * init() set — is left exactly as it was. */
 static inline void gl2d_begin(int w, int h) {
     glMatrixMode(GL_PROJECTION);
     glPushMatrix();
@@ -13,7 +20,7 @@ static inline void gl2d_begin(int w, int h) {
     glMatrixMode(GL_MODELVIEW);
     glPushMatrix();
     glLoadIdentity();
-    glPushAttrib(GL_DEPTH_BUFFER_BIT | GL_LIGHTING_BIT);
+    glPushAttrib(GL_DEPTH_BUFFER_BIT | GL_LIGHTING_BIT | GL_CURRENT_BIT);
     glDisable(GL_DEPTH_TEST);
     glDisable(GL_LIGHTING);
 }
