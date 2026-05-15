@@ -14,6 +14,7 @@
 #include "audio.h"
 #include "repl/core.h"
 #include "repl/core_internal.h"
+#include "repl/scenes.h"
 #include "app/glr_config.h"
 #include "editor/input.h"
 #include "editor/completion.h"
@@ -478,32 +479,42 @@ int glr_action_menu_item_activate(int menu_id, int item_idx) {
             repl_load_workspace(dir);
             return 1;
         }
-    } else if (menu_id == GLR_MENU_SCENE) {
-        int example_count = repl_example_count();
-        if (item_idx >= 1 && item_idx <= example_count) {
-            glr_scene_load_example(item_idx - 1);
-            return 1;
-        }
-        if (item_idx == example_count + GLR_SCENE_OFF_NEW) {
+        if (item_idx == REPL_FILE_ITEM_NEW_SCENE) {
+            /* Not the old Scene-New body verbatim: it left the active
+             * user slot attached, so the new Save Scene would overwrite
+             * that slot's <slug>.c with the emptied buffer. Detach the
+             * scene fully (transient lifecycle) and drop the undo ring
+             * (wholesale document replacement, same as F12 / load). */
             ReplSceneRuntimeState *scenes = repl_state_scenes_mut();
             if (scenes->active_example_idx >= 0)
                 scenes->active_example_idx = -1;
+            repl_scenes_enter_transient_scene();
+            repl_scenes_reset_for_transient();
             editor_clear_all_cmds();
+            editor_undo_clear();
             return 1;
         }
-        if (item_idx == example_count + GLR_SCENE_OFF_SAVE) {
+        if (item_idx == REPL_FILE_ITEM_SAVE_SCENE) {
             ReplExportLayout layout;
             glr_ctrl_fill_export_layout(&layout);
-            repl_save_default_output(&layout);
+            repl_save_active_scene(&layout);
             return 1;
         }
-        if (item_idx == example_count + GLR_SCENE_OFF_RENAME) {
+        if (item_idx == REPL_FILE_ITEM_RENAME_SCENE) {
             int slot = repl_active_user_scene();
             if (slot < 0) {
                 repl_set_status("No active scene to rename");
                 return 1;
             }
             editor_inline_rename_begin(slot);
+            return 1;
+        }
+        /* REPL_FILE_ITEM_SCENE_SEP is a non-actionable "---" row (the
+         * dropdown hit-test never returns it); no case needed. */
+    } else if (menu_id == GLR_MENU_SCENE) {
+        int example_count = repl_example_count();
+        if (item_idx >= 1 && item_idx <= example_count) {
+            glr_scene_load_example(item_idx - 1);
             return 1;
         }
 
