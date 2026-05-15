@@ -246,6 +246,7 @@ SRCS = \
 	src/ui/profile_panel.c \
 	src/ui/repl_code_panel.c \
 	src/ui/replay_hud.c \
+	src/ui/scene_tabs.c \
 	src/ui/state.c \
 	src/ui/tabbed_overlay.c \
 	src/ui/text_layout.c \
@@ -323,6 +324,7 @@ HDRS = \
 	src/ui/profile_panel.h \
 	src/ui/repl_code_panel.h \
 	src/ui/replay_hud.h \
+	src/ui/scene_tabs.h \
 	src/ui/state.h \
 	src/ui/state_types.h \
 	src/ui/tabbed_overlay.h \
@@ -397,6 +399,7 @@ CORE_TEST_SRCS = \
 	src/ui/profile_panel.c \
 	src/ui/repl_code_panel.c \
 	src/ui/replay_hud.c \
+	src/ui/scene_tabs.c \
 	src/ui/state.c \
 	src/ui/tabbed_overlay.c \
 	src/ui/text_layout.c \
