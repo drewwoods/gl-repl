@@ -404,8 +404,68 @@ static void test_executor_matrix_pop_underflow_clamped(void) {
                 gl_stub_counts[GL_STUB_glPopMatrix] == 1);
 }
 
+/* Regression: lights[].enabled feeds only the light-indicator overlay.
+ * It must track what the current program does (glEnable(GL_LIGHTn)),
+ * not stay stuck at the default-on / last-run value. repl_execute_program
+ * resets it each walk; this guards that reset + selective re-enable. */
+static int light_enabled_by_id(const SceneLight *lights, int id) {
+    for (int i = 0; i < MAX_LIGHTS; i++)
+        if (lights[i].id == id)
+            return lights[i].enabled;
+    return -1;
+}
+
+static void test_light_indicator_tracks_program(void) {
+    SceneLight *L = repl_state_render_mut()->lights;
+    GLCmd cmds[1];
+    ReplExecutionOptions opts = {0};
+    ReplRenderState rs;
+
+    /* Simulate the old sticky / default-on bookkeeping. */
+    for (int i = 0; i < MAX_LIGHTS; i++) {
+        L[i].id = GL_LIGHT0 + i;
+        L[i].enabled = 1;
+    }
+
+    /* Program enables only GL_LIGHT0. */
+    memset(cmds, 0, sizeof(cmds));
+    cmds[0].type = CMD_ENABLE;
+    cmds[0].mode = GL_LIGHT0;
+    cmds[0].valid = 1;
+    opts.flat_cmd_count = 1;
+    opts.program.cmds = cmds;
+    opts.program.cmd_count = 1;
+    repl_execute_program(&opts);
+
+    rs = repl_state_render();
+    ASSERT_TRUE("GL_LIGHT0 enabled by program",
+                light_enabled_by_id(rs.lights, GL_LIGHT0) == 1);
+    ASSERT_TRUE("GL_LIGHT1 reset off (program did not enable)",
+                light_enabled_by_id(rs.lights, GL_LIGHT1) == 0);
+    ASSERT_TRUE("GL_LIGHT2 reset off (program did not enable)",
+                light_enabled_by_id(rs.lights, GL_LIGHT2) == 0);
+    ASSERT_TRUE("GL_LIGHT3 reset off",
+                light_enabled_by_id(rs.lights, GL_LIGHT3) == 0);
+
+    /* A subsequent program with no light commands must clear the
+     * previously-enabled light (the sticky bug). */
+    memset(cmds, 0, sizeof(cmds));
+    cmds[0].type = CMD_VERTEX3F;
+    cmds[0].valid = 1;
+    cmds[0].num_args = 3;
+    opts.flat_cmd_count = 1;
+    opts.program.cmds = cmds;
+    opts.program.cmd_count = 1;
+    repl_execute_program(&opts);
+
+    rs = repl_state_render();
+    ASSERT_TRUE("GL_LIGHT0 cleared when next program omits glEnable",
+                light_enabled_by_id(rs.lights, GL_LIGHT0) == 0);
+}
+
 int main(void) {
     test_tess_callbacks();
+    test_light_indicator_tracks_program();
     test_fade_context();
     test_predef_edge_cases();
     test_transform_stack_edge_cases();
