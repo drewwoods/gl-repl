@@ -1,9 +1,7 @@
 <div align="center">
 
-<img src="assets/hero-r11c-one-line-code.svg" alt="gl-repl — type GL commands, watch geometry render r9c" width="50%">
-<img src="assets/hero-r11a-one-line-code.svg" alt="gl-repl — type GL commands, watch geometry render r9c" width="75%">
-<img src="assets/hero-r11a-one-line-code.svg" alt="gl-repl — type GL commands, watch geometry render r9c" width="85%">
-<img src="assets/hero-r11c-one-line-code.svg" alt="gl-repl — type GL commands, watch geometry render r9c" width="75%">
+<img src="assets/hero-r11a-one-line-code-color.svg" alt="gl-repl — type GL commands, watch geometry render r9c" width="75%">
+<img src="assets/hero-r11a-one-line-code-color-dark.svg" alt="gl-repl — type GL commands, watch geometry render r9c" width="75%">
 
 <br>
 

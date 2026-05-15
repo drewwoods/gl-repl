@@ -4,7 +4,7 @@
   .repl-num { fill: #ffaa44; }
   .repl-pun { fill: #c5cad1; }
   .tag      { fill: #88ffff; opacity: 0.9; }
-  .cube-edge{ stroke: #0a3838; }
+  .cube-edge{ stroke: #ffffff; }
   .wm-dark  { display: block; }
   .wm-light { display: none; }
   @media (prefers-color-scheme: light) {
@@ -13,7 +13,7 @@
     .repl-num { fill: #c0440a; }
     .repl-pun { fill: #4a5560; }
     .tag      { fill: #155060; opacity: 0.95; }
-    .cube-edge{ stroke: #1a4858; }
+    .cube-edge{ stroke: #222; }
     .wm-dark  { display: none; }
     .wm-light { display: block; }
   }
