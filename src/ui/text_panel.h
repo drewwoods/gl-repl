@@ -92,9 +92,15 @@ typedef struct {
 
 /* Optional per-character color overrides for a row. The adapter may fill a
  * small ordered list of spans when a row needs color variation across its
- * text (for example tutorial fade). Any gaps fall back to UiTextPanelRow.color.
+ * text (for example tutorial fade or per-kind argument syntax coloring).
+ * Any gaps fall back to UiTextPanelRow.color, and the renderer clamps an
+ * over-long list to this cap, so callers may emit more spans than fit and
+ * the surplus simply degrades to UiTextPanelRow.color (no breakage).
+ *
+ * 16 comfortably covers real REPL lines (MAX_LINE_LEN == 256); denser lines
+ * fall back to the row's class color past the cap.
  */
-#define UI_TEXT_PANEL_MAX_COLOR_SEGMENTS 4
+#define UI_TEXT_PANEL_MAX_COLOR_SEGMENTS 16
 
 typedef struct {
     int              char_start;
