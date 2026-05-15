@@ -58,6 +58,24 @@ static void check_no_span(const char *label, const char *text,
     ASSERT_TRUE(name, find_tok(text, spans, n, tok) == NULL);
 }
 
+/* WCAG relative luminance + contrast ratio. */
+static float srgb_lin(float c) {
+    return c <= 0.03928f ? c / 12.92f
+                         : powf((c + 0.055f) / 1.055f, 2.4f);
+}
+
+static float rel_lum(const float rgb[3]) {
+    return 0.2126f * srgb_lin(rgb[0]) +
+           0.7152f * srgb_lin(rgb[1]) +
+           0.0722f * srgb_lin(rgb[2]);
+}
+
+static float contrast_ratio(const float a[3], const float b[3]) {
+    float la = rel_lum(a) + 0.05f;
+    float lb = rel_lum(b) + 0.05f;
+    return la > lb ? la / lb : lb / la;
+}
+
 int main(void) {
     /* glVertex3f(x + sin(t), y*2, z) */
     {
@@ -148,6 +166,30 @@ int main(void) {
         ASSERT_TRUE("kinds distinct (con vs var)",
                     fabsf(con[0] - var[0]) > 0.05f ||
                     fabsf(con[1] - var[1]) > 0.05f);
+    }
+
+    /* Optional contrast guard: every (kind x class) final color must stay
+     * legible against the code-panel background (src/ui/text_panel.c:571,
+     * glColor4f(0.06, 0.06, 0.10, ...)). Threshold 3.0 ~= WCAG AA for
+     * large text; guards future palette / nudge tweaks. */
+    {
+        const float bg[3] = { 0.06f, 0.06f, 0.10f };
+
+        for (int k = 0; k < REPL_SYNTAX_KIND_COUNT; k++) {
+            for (int c = 0; c < CMD_CAT_COUNT; c++) {
+                float rgb[3];
+                float ratio;
+                char name[96];
+
+                ui_repl_code_panel_syntax_kind_rgb((ReplSyntaxKind)k,
+                                                   (CmdSyntaxCategory)c, rgb);
+                ratio = contrast_ratio(rgb, bg);
+                snprintf(name, sizeof(name),
+                         "contrast kind %d class %d >= 3.0 (%.2f)",
+                         k, c, ratio);
+                ASSERT_TRUE(name, ratio >= 3.0f);
+            }
+        }
     }
 
     return test_harness_report(&g_harness, "repl_code_panel_syntax");
