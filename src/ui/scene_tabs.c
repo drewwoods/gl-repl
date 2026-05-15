@@ -23,6 +23,8 @@ enum {
     TAB_MIN_W    = 44,
     TAB_MAX_W    = 180,
     TAB_CORNER_R = 9,   /* top-corner radius (clamped to the tab) */
+    TAB_TOP_GAP  = 3,   /* band px left above the tab so its rounded
+                         * top isn't clipped by the menu bar */
 };
 
 /* Compute the band rect and per-tab x[]/w[]. Returns the tab count (0 when
@@ -212,6 +214,10 @@ void ui_scene_tabs_render(const UiRenderSnapshot *snap) {
         int active = tab->active;
         int is_example = (tab->kind == UI_SCENE_TAB_EXAMPLE);
         int tx = x[i] + TAB_PAD_X;
+        /* Draw the tab shorter than the reserved band so its rounded
+         * top clears the menu bar (band height stays TAB_STRIP_H for
+         * the visible-row lockstep; only the drawn tab is inset). */
+        float th = (float)(bh - TAB_TOP_GAP);
 
         /* Active tab: shade the WHOLE tab with a tinted hue (green for
          * user scenes, amber for the ephemeral example tab) so the
@@ -223,12 +229,12 @@ void ui_scene_tabs_render(const UiRenderSnapshot *snap) {
             else
                 glColor4f(0.130f, 0.260f, 0.150f, 1.0f);  /* green tint */
             scene_tabs_fill_round_top((float)x[i], (float)by,
-                                      (float)w[i], (float)bh,
+                                      (float)w[i], th,
                                       (float)TAB_CORNER_R);
         } else if (hover == i) {
             glColor4f(0.165f, 0.165f, 0.165f, 1.0f);       /* #2a2a2a */
             scene_tabs_fill_round_top((float)x[i], (float)by,
-                                      (float)w[i], (float)bh,
+                                      (float)w[i], th,
                                       (float)TAB_CORNER_R);
         }
 
@@ -245,7 +251,7 @@ void ui_scene_tabs_render(const UiRenderSnapshot *snap) {
             glColor3f(0.330f, 0.330f, 0.380f);      /* neutral edge */
         }
         scene_tabs_stroke_round_top((float)x[i], (float)by,
-                                    (float)w[i], (float)bh,
+                                    (float)w[i], th,
                                     (float)TAB_CORNER_R);
 
         /* Label color. Example tabs keep an amber/warm family vs the
