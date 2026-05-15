@@ -666,6 +666,24 @@ endef
 $(foreach test,$(TEST_BINS),$(eval $(call built_binary,$(test))))
 $(foreach bin,$(BENCH_BINS),$(eval $(call built_binary,$(bin))))
 
+# Real-GL tests: need an actual GL context (created via GLUT), which the
+# no-op stub harness cannot model and headless CI cannot provide. These
+# are intentionally NOT in TEST_BINS, so `make test` / `make test-stubs`
+# never build or run them. Run locally with a display via `make gl-tests`.
+# Link is GL-only (gl_2d.h is header-inline; no project objects needed).
+GL_TEST_BINS = test_ui_gl_state
+
+$(BINDIR)/test_ui_gl_state: $(OBJDIR)/$(TEST_DIR)/test_ui_gl_state.o
+	@mkdir -p $(dir $@)
+	$(CC) $(OBJ_CFLAGS) -o $@ $^ $(GL_LDFLAGS)
+
+gl-tests: $(addprefix $(BINDIR)/,$(GL_TEST_BINS)) ## Run real-GL UI state tests (needs a display; excluded from `make test`).
+	@for b in $(addprefix $(BINDIR)/,$(GL_TEST_BINS)); do \
+	  printf '$(CYAN)==> %s$(NC)\n' "$$b"; "$$b" || exit $$?; \
+	done
+
+.PHONY: gl-tests $(GL_TEST_BINS)
+
 # Layering boundary enforcement ------------------------------------------
 check-gl-boundaries: ## Verify GL/GLUT calls are isolated to allowed files.
 	@echo "    Checking GL/GLU drawing calls isolation..."
