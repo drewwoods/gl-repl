@@ -176,6 +176,8 @@ Test sources live under `tests/` and shared test-only helpers live under
 | `src/ui/profile_panel.h` | Profile panel render entrypoint |
 | `src/ui/menu_bar.c` | Code-panel menu bar, dropdowns, config right-click handling, search slot |
 | `src/ui/menu_bar.h` | Menu/pin hit-test and dropdown state API |
+| `src/ui/scene_tabs.c` | Scene tab strip below the menu bar: snapshot-pure render + whole-band hit-test (TAB / inert CHROME); derived each frame, no persistent model |
+| `src/ui/scene_tabs.h` | Scene tab strip render/hit/`band_h` API |
 | `src/widgets/color_picker_state.c` | Floating color picker peer: state, lifecycle, slider input handlers, source-line writeback through editor commit |
 | `src/widgets/color_picker_state.h` | Peer API (`ColorPickerView`, `ColorPickerInputResult`, `color_picker_open/close/handle_*`, `color_picker_hsv_to_rgb`) |
 | `src/ui/color_picker.c` | Floating color picker renderer + hit-test (pure, takes `ColorPickerView *`) |
