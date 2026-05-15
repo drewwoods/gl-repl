@@ -159,7 +159,7 @@ Test sources live under `tests/` and shared test-only helpers live under
 | `src/widgets/replay.h` | Replay public API (`replay_start`, `replay_toggle_play_pause`, etc.) |
 | `src/editor/search.c` | Case-insensitive substring search state and match navigation |
 | `src/editor/search.h` | Search query helpers and input routing API |
-| `repl_autocomplete.c` | REPL-side completion provider: walks command spec / predef vars / `CMD_FUNC_DEF` for matches, ghost text, parameter hints. Registered via `EditorCompletionProvider`. |
+| `src/app/glr_completion.c` | REPL-side completion provider: walks command spec / predef vars / `CMD_FUNC_DEF` for matches, ghost text, parameter hints. Registered via `EditorCompletionProvider`. |
 | `src/ui/layout.c` | Pure window layout geometry: scene rect and code-panel rect derivation |
 | `src/ui/layout.h` | Layout geometry API (`ui_layout_scene_rect`, `ui_layout_code_panel_rect`) |
 | `src/repl/scenes.c` | User-scene slots, LRU eviction, workspace save/load, workspace dir binding |
@@ -186,7 +186,7 @@ Test sources live under `tests/` and shared test-only helpers live under
 | `src/repl/help_text.h` | Help-content public API |
 | `src/ui/variable_panel.c` | Floating variable slider panel rendering, geometry, and hit-test |
 | `src/ui/variable_panel.h` | Variable panel render/rect/hit API |
-| `src/ui/autocomplete_panel.c` | Floating autocomplete popup renderer (reads autocomplete state populated by `repl_autocomplete.c`) |
+| `src/ui/autocomplete_panel.c` | Floating autocomplete popup renderer (reads autocomplete state populated by `src/app/glr_completion.c`) |
 | `src/ui/autocomplete_panel.h` | Autocomplete popup render entrypoint |
 | `src/editor/inline_rename.c` | Inline scene-rename input buffer and key handling (status-bar overlay) |
 | `src/editor/inline_rename.h` | Rename begin/active/cancel/key/special API |
@@ -276,6 +276,23 @@ Test sources live under `tests/` and shared test-only helpers live under
   automatically; if you need a `glEnable`-shaped enum-arg spec or a
   standard float-arg spec, append a row to `k_enum_command_specs[]`
   or `k_std_command_specs[]` in the same file.
+- `CmdType` set tests go through the inline predicates in
+  `src/repl/command.h`, not ad-hoc `||` chains: `repl_cmd_is_transform`,
+  `repl_cmd_emits_vertex` (VERTEX3F/VERTEX2F/TESS_VERTEX),
+  `repl_cmd_is_block_head` (FOR_BEGIN/FUNC_DEF/IF_BEGIN),
+  `repl_cmd_is_block_end` (FOR_END/FUNC_END/IF_END). These are the
+  *control-flow* taxonomy; `CmdSyntaxCategory` in `command_spec.h` is
+  the separate *visual* (syntax-highlight) taxonomy — don't fold one
+  through the other (it would invert the header layering). A drift
+  test in `tests/test_replay_walk.c` asserts predicate↔category
+  agreement for the pairs that have a category twin. When a subset is
+  *intentionally* narrower (e.g. autonormal's gl-vertex-vs-tess split),
+  spell it out inline with a comment rather than adding a predicate.
+- Splitting a function call's comma-separated args: use
+  `repl_scan_next_arg_delim()` from `src/repl/eval.h`, never a bare
+  `strchr(s, ',')` or `*s != ',' && *s != ')'` loop — those are
+  paren-naive and stop at the first inner `)` of e.g.
+  `cos(i + phase)`, silently truncating the slot.
 - Keyboard bindings: `editor_handle_key()` for ASCII keys (Ctrl+X
   produces ASCII X & 0x1F via standard GLUT), `editor_handle_special()`
   for F-keys/arrows. Cross-subsystem routing (replay / save / config /
@@ -569,10 +586,46 @@ Circular snapshot buffers in `src/editor/undo.c`:
   Ctrl+Y. Also the hook where `repl_promote_example_if_needed()` fires
   so editing an example auto-creates a user scene.
 - Pushing clears the redo stack; undo moves current state to redo
+- The rings are global, not per-scene. Any wholesale replacement of
+  the live REPL document **must** call `editor_undo_clear()` first or a
+  post-switch Ctrl+Z restores the previous scene's snapshot into the
+  new one. Call sites: `glr_app_reset_all`, the F12 cycle
+  (`cycle_example_or_user_scene`), and the load-example /
+  load-user-scene / load-workspace menu actions in
+  `src/app/glr_actions.c`. The clear lives in `src/editor/` (the ring's
+  owner); callers sit in `src/app/` to preserve the
+  editor-depends-on-repl layering (repl/scenes.c can't reach editor/).
+
+### Cursor Edit Guides
+
+The vertex/normal guides drawn at the cursor line
+(`src/scene/guides/geometry_guides.c`) are fed by a `SceneGuideSnapshot`.
+The non-obvious data-flow gotcha: `glr_ctrl_build_guide_snapshot()`
+fills `snapshot.vertex_args` / `normal_args` by text-parsing the input
+line with a **predef-only** evaluator. That can't resolve funcN-local
+params (`scale`, `phase`) or loop-assigned vars, so for a cursor inside
+a funcN body those args silently evaluate to 0 and the guide lands at
+the object's local origin.
+
+The fix path (`src/app/glr_ctrl.c`):
+- `glr_ctrl_render_cursor_guides` always walks the flat program via
+  `replay_walk_user_vertices` (no fast-path skip — that broke modelview
+  tracking inside funcN frames). `ctx.stop_flag` makes the walk bail
+  out once both guides have rendered, keeping big loops cheap.
+- At the cursor's first flat-cmd, `cursor_guide_snapshot_with_flat_args`
+  overrides `vertex_args` / `normal_args` from the **flat** cmd's args
+  (flatten already substituted funcN params and re-evaluates every
+  frame for `has_vars` cmds, so they track animation). For a normal
+  cursor it also walks forward in the flat program to set
+  `normal_base_pos` — the live anchor point — since
+  `draw_normal_guides`'s own source-cmd search is parse-time-frozen.
+- `parse_vertex_arg_slots` uses `repl_scan_next_arg_delim` so nested
+  parens (`cos(i + phase)`) don't truncate a slot and drop the guide
+  into its wrong-arg-count branch.
 
 ### Autocomplete
 
-Symbol matching and function parameter hints in `repl_autocomplete.c` (registered as the editor's `EditorCompletionProvider`):
+Symbol matching and function parameter hints in `src/app/glr_completion.c` (registered as the editor's `EditorCompletionProvider`):
 - `editor_state_autocomplete()->matches` — matched completions from GL command/constant tables
 - `editor_state_autocomplete()->ghost` — suffix to append to input on Tab accept
 - `editor_state_autocomplete()->hint` — parameter list hint shown below cursor
