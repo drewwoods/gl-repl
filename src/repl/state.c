@@ -456,8 +456,8 @@ void repl_state_time_reset_to_zero(void) {
  * reset paths are now `glr_state_presentation_reset_defaults` /
  * `_example_defaults` and `glr_state_render_reset_defaults`, called
  * from `glr_app_reset_all`. The example loader's per-load reset
- * routes through the controller-installed sink
- * `repl_install_example_presentation_reset_sink`. */
+ * routes through the controller-installed
+ * `ReplHostEffects.example_presentation_reset` callback. */
 
 ReplRenderState repl_state_render(void) {
     return g_repl_state.render;

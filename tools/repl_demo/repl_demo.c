@@ -25,10 +25,10 @@
  *   - tools/repl_demo/stubs.c: deliberately empty. After every
  *     REPL-pipeline → editor/UI/controller edge was routed through a
  *     controller-installed sink/bridge or an opaque parameter, there
- *     are zero stubs to backfill. Pipeline diagnostics flow through
- *     repl_set_status_sink; the demo leaves the sink (and every
- *     host-effect sink in src/repl/core.h) unset, so dispatches silently
- *     no-op. The dependency ledger and removal plan live in
+ *     are zero stubs to backfill. Pipeline diagnostics and the editor
+ *     host effects flow through the one ReplHostEffects bridge in
+ *     src/repl/core.h; the demo leaves the bridge unset, so every
+ *     dispatch silently no-ops. The dependency ledger and removal plan live in
  *     feature/decouple-repl-from-gl-repl-alt.md and
  *     feature/source-document-port.md.
  *

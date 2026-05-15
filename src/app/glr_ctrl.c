@@ -1568,19 +1568,28 @@ void glr_publish_replay_annotations(const ReplReplayAnnotationOutput *out) {
     }
 }
 
+/* The host-effect bridge the controller installs into the REPL
+ * pipeline. Status routes pipeline diagnostics to UiState; the rest
+ * actualize loader / scene-switch / replay effects on the editor.
+ * This file is where editor coupling concentrates, so the editor-
+ * neutral names in core.h resolve to glr_app_* here. The demo does
+ * not install this bridge, so every dispatch is a no-op there
+ * (clearing the ui_state_status_set / editor stubs). */
+static const ReplHostEffects g_glr_host_effects = {
+    .status                     = ui_state_status_set,
+    .example_presentation_reset = glr_app_reset_example_chrome,
+    .input_reset                = glr_app_editor_input_reset,
+    .insert_mode_off            = glr_app_editor_insert_mode_off,
+    .scroll_to_line             = glr_app_scroll_to_line,
+    .follow_cursor              = glr_app_follow_cursor,
+};
+
 static void glr_app_install_app_services(void) {
-    /* Install the status-message sink. Pipeline TUs call set_status()
-     * to surface diagnostics; this routes them to UiState. The demo
-     * does not install a sink, so set_status is a no-op there
-     * (clearing the ui_state_status_set stub). */
-    repl_set_status_sink(ui_state_status_set);
-    /* Step 7a: install the example-presentation-reset sink so the
-     * example loader can refresh scene-bound presentation defaults
-     * (wireframe, grid, axes, vertex overlays, backdrop) without
-     * pulling glr_state into the REPL pipeline. The demo doesn't
-     * install this sink, so the loader's per-load reset is a no-op
-     * — the demo doesn't load examples through this path anyway. */
-    repl_install_example_presentation_reset_sink(glr_app_reset_example_chrome);
+    /* Install the host-effect bridge (status sink + example-
+     * presentation-reset + the four editor effects). Consolidated from
+     * six individual repl_install_*_sink calls per
+     * plans/partial/src-repl-simplicity-review.md item 2. */
+    repl_install_host_effects(&g_glr_host_effects);
     /* Install the export-config bridge so src/repl/export.c can emit/parse
      * @cfg headers and src/repl/scenes.c can snapshot per-scene cfg
      * without referencing glr_config_* directly. The demo does not
@@ -1603,15 +1612,6 @@ static void glr_app_install_app_services(void) {
      * REPL pipeline. The demo doesn't install — the fallback then
      * passes glPointSize through unscaled. */
     repl_executor_install_camera_distance_source(glr_app_camera_distance);
-    /* Install the host-effect sinks the example loader / scene loader /
-     * snippet importer / replay engine dispatch through. The sinks are
-     * editor-neutral by name (no editor_ prefix in src/repl/core.h); this
-     * file is where editor coupling concentrates. Phases 3 + 6 of
-     * feature/source-document-port.md. */
-    repl_install_input_reset_sink(glr_app_editor_input_reset);
-    repl_install_insert_mode_off_sink(glr_app_editor_insert_mode_off);
-    repl_install_scroll_to_line_sink(glr_app_scroll_to_line);
-    repl_install_follow_cursor_sink(glr_app_follow_cursor);
 }
 
 /* Full-world reset entry point. Step 2 of

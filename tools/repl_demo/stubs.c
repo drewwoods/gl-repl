@@ -12,7 +12,7 @@
  *   Step 2: ui_state_reset, variable_panel_state_reset,
  *           editor_help_session_reset, editor_reset_transients,
  *           ui_state_code_panel_mut.
- *   Step 3: ui_state_status_set (via repl_set_status_sink).
+ *   Step 3: ui_state_status_set (via the ReplHostEffects bridge).
  *   Step 4: g_cfg_items, CFG_ITEM_COUNT, audio_get_cfg_mode,
  *           audio_set_cfg_mode, variable_panel_view_mut,
  *           ui_state_profile_panel_mut (via ReplExportConfigBridge).
@@ -29,8 +29,9 @@
  *           left REPL_DEMO_DEP_SRCS.
  *
  * Demo-side architectural choices that keep this file empty:
- *   - Pipeline diagnostics flow through repl_set_status_sink. The
- *     demo leaves the sink unset → set_status() is a silent no-op.
+ *   - Pipeline diagnostics flow through the ReplHostEffects bridge
+ *     (status callback). The demo leaves the bridge unset →
+ *     set_status() is a silent no-op.
  *   - Cfg state flows through repl_export_install_config_bridge.
  *     The demo doesn't install a bridge → @cfg emission/parsing is a
  *     no-op → no glr_config / audio / peer / profile reach-in.
