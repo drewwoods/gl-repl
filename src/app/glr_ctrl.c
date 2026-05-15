@@ -15,6 +15,7 @@
 #include "editor/commit.h"
 #include "editor/completion.h"
 #include "editor/help_session.h"
+#include "editor/inline_rename.h"
 #include "editor/input.h"
 #include "editor/search.h"
 #include "editor/state.h"
@@ -2286,6 +2287,10 @@ static int g_code_panel_drag_char_anchor = -1;
 static unsigned int g_last_text_press_ms     = 0;
 static int          g_last_text_press_line   = -1;
 static int          g_last_text_press_char   = -1;
+/* Scene-tab double-click: a 2nd press on the same tab display index
+ * within DOUBLE_CLICK_MS triggers inline rename (user tabs only). */
+static unsigned int g_last_tab_press_ms      = 0;
+static int          g_last_tab_press_idx     = -1;
 /* Test clock seam mirrors editor_input_set_modifier_provider_for_test:
  * tests that drive a double-click without a live GLUT context replace
  * the clock with a deterministic source. Production code falls back to
@@ -2300,6 +2305,8 @@ void glr_ctrl_router_set_double_click_clock_for_test(
     g_last_text_press_ms   = 0;
     g_last_text_press_line = -1;
     g_last_text_press_char = -1;
+    g_last_tab_press_ms    = 0;
+    g_last_tab_press_idx   = -1;
 }
 
 static unsigned int current_double_click_ms(void) {
@@ -2550,6 +2557,52 @@ static int route_menu_item_hit(const UiHit *hit) {
     return 1;
 }
 
+/* UI_HIT_CODE_PANEL_TAB: scene tab strip click. Single click switches
+ * scenes through the shared Scene-menu load helpers (reusing the exact
+ * load sequence — no duplication); a 2nd click on the same user tab
+ * within DOUBLE_CLICK_MS opens the existing status-bar inline rename.
+ * The display index is resolved against the *live* scene shape so a
+ * frame-stale click can't misroute. Always consumed. */
+static int route_scene_tab_hit(const UiHit *hit) {
+    int idx           = hit->item_idx;
+    int user_tab_count = repl_user_scene_count();
+    int example_idx   = repl_state_scenes().active_example_idx;
+    int active_slot   = repl_active_user_scene();
+    unsigned int now_ms = current_double_click_ms();
+    int is_double = (g_last_tab_press_idx >= 0 &&
+                     g_last_tab_press_idx == idx &&
+                     now_ms - g_last_tab_press_ms < DOUBLE_CLICK_MS);
+
+    g_last_tab_press_ms  = now_ms;
+    g_last_tab_press_idx = idx;
+
+    if (idx < 0)
+        return 1;  /* stale — consumed no-op */
+
+    if (idx < user_tab_count) {
+        int slot = glr_scene_menu_slot_for_dense_index(idx);
+        if (slot < 0)
+            return 1;  /* stale */
+        if (slot != active_slot)
+            glr_scene_load_user_slot(slot);  /* no-op when already active */
+        if (is_double)
+            editor_inline_rename_begin(slot);
+        editor_request_redraw();
+        return 1;
+    }
+
+    if (idx == user_tab_count && example_idx >= 0) {
+        /* The example tab is active iff no user slot is active. Only
+         * reload when it is not already the active scene; never rename. */
+        if (active_slot >= 0)
+            glr_scene_load_example(example_idx);
+        editor_request_redraw();
+        return 1;
+    }
+
+    return 1;  /* out-of-range stale idx — consumed no-op */
+}
+
 /* UI_HIT_PANEL_DIVIDER: start the panel-resize drag. Motion updates
  * panel_frac via editor_handle_motion's resizing-panel branch; UP
  * clears the resizing flag. */
@@ -2629,6 +2682,8 @@ int glr_ctrl_router_handle_code_panel_hit(UiHit hit, int x, int y) {
         consumed = route_code_gutter_hit(&hit); break;
     case UI_HIT_CODE_PANEL_CHROME:
         consumed = route_code_panel_chrome_hit(); break;
+    case UI_HIT_CODE_PANEL_TAB:
+        consumed = route_scene_tab_hit(&hit); break;
     case UI_HIT_HELP_PANEL:
     case UI_HIT_REPLAY_BUTTON:
     case UI_HIT_SCENE:

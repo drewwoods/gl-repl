@@ -296,6 +296,26 @@ int glr_scene_menu_slot_for_dense_index(int scene_idx) {
     return -1;
 }
 
+/* Shared scene-load sequences. The Scene menu and the scene tab strip
+ * both switch scenes; keep the load sequence (and its load-bearing
+ * subtleties) in one place rather than duplicating the statements.
+ * Neither helper self-no-ops on "already active" — the Scene menu
+ * always reloads, so callers that want a no-op (the tab router) check
+ * before calling. */
+void glr_scene_load_example(int example_idx) {
+    /* Clear editor / camera / menu / picker / code-panel-drag transients
+     * so the new scene starts from a clean controller state. */
+    editor_reset_transients();
+    editor_undo_clear();
+    repl_load_example(example_idx);
+}
+
+void glr_scene_load_user_slot(int slot) {
+    editor_undo_clear();
+    if (repl_load_user_scene_idx(slot))
+        load_line_to_input(repl_state_edit_line());
+}
+
 void glr_cfg_cycle_row(int row, int delta) {
     const GlrConfigItem *item = glr_config_item_at(row);
 
@@ -461,13 +481,7 @@ int glr_action_menu_item_activate(int menu_id, int item_idx) {
     } else if (menu_id == GLR_MENU_SCENE) {
         int example_count = repl_example_count();
         if (item_idx >= 1 && item_idx <= example_count) {
-            /* Clear editor / camera / menu / picker / code-panel-drag
-             * transients so the new scene starts from a clean controller
-             * state. Step 2 of the decouple plan moved this out of
-             * src/repl/example_loader.c. */
-            editor_reset_transients();
-            editor_undo_clear();
-            repl_load_example(item_idx - 1);
+            glr_scene_load_example(item_idx - 1);
             return 1;
         }
         if (item_idx == example_count + GLR_SCENE_OFF_NEW) {
@@ -497,9 +511,7 @@ int glr_action_menu_item_activate(int menu_id, int item_idx) {
         if (scene_idx >= 0 && scene_idx < repl_user_scene_count()) {
             int slot = glr_scene_menu_slot_for_dense_index(scene_idx);
             if (slot >= 0) {
-                editor_undo_clear();
-                if (repl_load_user_scene_idx(slot))
-                    load_line_to_input(repl_state_edit_line());
+                glr_scene_load_user_slot(slot);
                 return 1;
             }
         }
