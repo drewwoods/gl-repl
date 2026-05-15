@@ -786,12 +786,15 @@ int ui_repl_code_panel_classify_syntax(const char *text,
                 (len > 3 && strncmp(name, "GL_", 3) == 0)) {
                 out[n++] = (ReplSyntaxSpan){ start, len,
                                              REPL_SYNTAX_CONSTANT };
-            } else if (repl_eval_scratch_array_index(name) >= 0 ||
+            } else if (strcmp(name, "t") == 0 ||
+                       repl_eval_scratch_array_index(name) >= 0 ||
                        repl_eval_find_predef_var_idx(name) >= 0) {
+                /* 't' is reserved but is the predefined animation var, so
+                 * it must classify as a variable, not as structural. */
                 out[n++] = (ReplSyntaxSpan){ start, len,
                                              REPL_SYNTAX_VARIABLE };
             } else if (repl_eval_is_reserved_ident(name)) {
-                /* reserved word / math fn used bare — structural */
+                /* reserved keyword / math fn used bare — structural */
             } else {
                 /* loop var, funcN param, or otherwise-unknown ident */
                 out[n++] = (ReplSyntaxSpan){ start, len,
