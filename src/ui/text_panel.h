@@ -106,6 +106,10 @@ typedef struct {
     int              char_start;
     int              char_count;
     UiTextPanelColor color;
+    /* EXPERIMENT: when non-zero the renderer draws this span "fake bold"
+     * (a solid centre pass plus 4 additive 1px-shifted passes). Temporary
+     * hook for tuning weight; remove with the experiment. */
+    int              bold;
 } UiTextPanelColorSegment;
 
 /* -------------------------------------------------------------------------
