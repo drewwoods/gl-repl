@@ -12,6 +12,7 @@
 #include "ui/menu_bar.h"
 #include "ui/metrics.h"
 #include "ui/panels.h"
+#include "ui/scene_tabs.h"
 #include "ui/text_layout.h"
 #include "ui/text_panel.h"
 #include "widgets/tutorial.h"
@@ -319,9 +320,9 @@ static int repl_code_panel_follow_doc_line_from_layout(
     return follow_doc_line;
 }
 
-int ui_repl_code_panel_visible_lines_for_height(int cp_h) {
+int ui_repl_code_panel_visible_lines_for_height(int cp_h, int top_chrome_h) {
     return ui_text_panel_visible_lines_for_height(
-        cp_h, UI_TEXT_PANEL_CHROME_STATUSBAR);
+        cp_h, UI_TEXT_PANEL_CHROME_STATUSBAR, top_chrome_h);
 }
 
 void ui_repl_code_panel_build_layout(const UiRenderSnapshot *snap,
@@ -336,7 +337,8 @@ void ui_repl_code_panel_build_layout(const UiRenderSnapshot *snap,
     layout->panel_w = panel_w;
     layout->text_x = text_x;
     layout->cp_h = cp_h;
-    layout->visible_lines = ui_repl_code_panel_visible_lines_for_height(cp_h);
+    layout->visible_lines = ui_repl_code_panel_visible_lines_for_height(
+        cp_h, ui_scene_tabs_band_h(snap));
     layout->header_rows = repl_code_panel_header_row_count(snap, panel_w, text_x);
     layout->footer_rows = repl_code_panel_footer_row_count(snap, panel_w, text_x);
     repl_code_panel_precompute_layout_rows(snap, panel_w, text_x,
@@ -480,6 +482,7 @@ static int repl_code_panel_init_builder(ReplCodePanelBuilder *builder,
         .cp_h = cp_h,
         .text_x = idx_x + idx_col_w,
         .wrap_at_comma = snap->code_panel.wrap_at_comma,
+        .top_chrome_h = ui_scene_tabs_band_h(snap),
         .rows = g_repl_code_panel_rows,
         .row_count = 0,
         .scroll = snap->scroll.scroll,
@@ -1340,6 +1343,10 @@ void ui_repl_code_panel_render(const UiRenderSnapshot *snap,
     }
 
     gl2d_begin(snap->viewport.window_w, snap->viewport.window_h);
+    /* Draw the scene tab strip before the menu bar so the closed menu row
+     * stays the topmost chrome; the example dropdown is a later controller
+     * overlay pass (glr_ctrl.c) and still overpaints both. (Plan §4.) */
+    ui_scene_tabs_render(snap);
     ui_menu_bar_render(snap);
     ui_menu_bar_render_search_overlay(snap, builder.text_snap.cp_x,
                                       builder.text_snap.cp_w,

@@ -71,7 +71,8 @@ typedef struct {
     int replay_extra_rows[MAX_COMMANDS];
 } UiReplCodePanelLayout;
 
-int        ui_repl_code_panel_visible_lines_for_height(int cp_h);
+int        ui_repl_code_panel_visible_lines_for_height(int cp_h,
+                                                       int top_chrome_h);
 
 void ui_repl_code_panel_build_layout(const UiRenderSnapshot *snap,
                                      UiReplCodePanelLayout *layout,

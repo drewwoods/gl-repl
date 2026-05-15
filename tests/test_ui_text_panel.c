@@ -104,11 +104,11 @@ static void test_visible_rows_respect_statusbar_flag(void) {
     UiHit hit;
 
     ASSERT_INT_EQ("visible rows without statusbar helper",
-                  ui_text_panel_visible_lines_for_height(cp_h, 0),
+                  ui_text_panel_visible_lines_for_height(cp_h, 0, 0),
                   expected_visible_rows(cp_h, 0));
     ASSERT_INT_EQ("visible rows with statusbar helper",
                   ui_text_panel_visible_lines_for_height(
-                      cp_h, UI_TEXT_PANEL_CHROME_STATUSBAR),
+                      cp_h, UI_TEXT_PANEL_CHROME_STATUSBAR, 0),
                   expected_visible_rows(cp_h,
                                         UI_TEXT_PANEL_CHROME_STATUSBAR));
 
