@@ -22,6 +22,15 @@
  * pipeline reads its values as opaque integers. */
 void repl_save_default_output(const ReplExportLayout *layout);
 
+/* Save the active user scene to a file named after the scene:
+ * `<workspace_dir>/<slug>.c` when a workspace dir is bound, else
+ * `<slug>.c` in the cwd. When there is no active named user scene
+ * (an example / transient document) this falls back to
+ * repl_save_default_output() (./output.c). Creates the workspace dir
+ * if needed and sets its own status naming the real file (the
+ * underlying writer hardcodes an output.c message). */
+void repl_save_active_scene(const ReplExportLayout *layout);
+
 /* repl_export_load_from_file / repl_export_save_output live in
  * src/repl/export.h — include that header directly to use them. */
 

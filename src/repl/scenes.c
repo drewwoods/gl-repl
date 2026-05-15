@@ -502,6 +502,46 @@ int repl_save_workspace(const char *dir, const ReplExportLayout *layout) {
     return written;
 }
 
+void repl_save_active_scene(const ReplExportLayout *layout) {
+    int slot = g_active_user_scene;
+
+    /* No active named user scene (example / transient): keep the
+     * historical single-file behavior (./output.c). */
+    if (slot < 0 || slot >= MAX_USER_SCENES || !g_user_scenes[slot].used) {
+        repl_save_default_output(layout);
+        return;
+    }
+
+    char slug[USER_SCENE_NAME_MAX];
+    scene_filename_slug(g_user_scenes[slot].name, slug, sizeof(slug));
+
+    char path[WORKSPACE_DIR_MAX + USER_SCENE_NAME_MAX + 8];
+    if (g_workspace_dir[0]) {
+        if (mkdir(g_workspace_dir, 0755) != 0 && errno != EEXIST) {
+            char emsg[WORKSPACE_DIR_MAX + 48];
+            snprintf(emsg, sizeof(emsg),
+                     "Save scene: cannot create %s", g_workspace_dir);
+            repl_set_status(emsg);
+            return;
+        }
+        snprintf(path, sizeof(path), "%s/%s.c", g_workspace_dir, slug);
+    } else {
+        snprintf(path, sizeof(path), "%s.c", slug);
+    }
+
+    g_export_scene_name_hint = g_user_scenes[slot].name;
+    repl_export_save_output(path, source_document_view(), layout);
+    g_export_scene_name_hint = NULL;
+
+    /* repl_export_save_output hardcodes its success status to
+     * "...output.c"; mask it with the real path, same as
+     * repl_save_workspace does for its per-slot writes. */
+    char msg[WORKSPACE_DIR_MAX + USER_SCENE_NAME_MAX + 48];
+    snprintf(msg, sizeof(msg), "Saved %s (%d commands)",
+             path, repl_state_document_count());
+    repl_set_status(msg);
+}
+
 static int load_scene_file_into_slot(const char *path) {
     load_commands_into_live(NULL, NULL, 0, 0);
     /* Start each imported scene from the built-in predef baseline (`t`).
