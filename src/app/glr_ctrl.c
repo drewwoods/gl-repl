@@ -1914,9 +1914,11 @@ void glr_ctrl_fill_export_layout(ReplExportLayout *out) {
 
 int glr_ctrl_router_handle_save_key(unsigned char key) {
     if (key == KEY_CTRL_S) {
+        /* Ctrl+S == File > Save Scene: active named scene ->
+         * <workspace>/<slug>.c; example/transient -> ./output.c. */
         ReplExportLayout layout;
         glr_ctrl_fill_export_layout(&layout);
-        repl_save_default_output(&layout);
+        repl_save_active_scene(&layout);
         return 1;
     }
     return 0;

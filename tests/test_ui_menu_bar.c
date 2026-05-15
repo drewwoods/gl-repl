@@ -171,12 +171,12 @@ static void test_dropdown_and_config_press(void) {
 
     reset_menu_bar_fixture(1000, 600);
 
-    ASSERT_TRUE("found Export item point",
-                find_dropdown_item_point(GLR_MENU_FILE, REPL_FILE_ITEM_EXPORT,
+    ASSERT_TRUE("found New Scene item point",
+                find_dropdown_item_point(GLR_MENU_FILE, REPL_FILE_ITEM_NEW_SCENE,
                                          &item_mx, &item_my));
-    ASSERT_INT_EQ("hit Export item",
+    ASSERT_INT_EQ("hit New Scene item",
                   ui_menu_bar_dropdown_item_hit(item_mx, item_my),
-                  REPL_FILE_ITEM_EXPORT);
+                  REPL_FILE_ITEM_NEW_SCENE);
 
     ui_menu_bar_close();
     ASSERT_INT_EQ("hit when closed", ui_menu_bar_dropdown_item_hit(item_mx, item_my), -1);
@@ -227,12 +227,12 @@ static void test_unified_hit_test(void) {
     ASSERT_INT_EQ("hit_test: menu button id", h.cmd_idx, GLR_MENU_FILE);
 
     ASSERT_TRUE("found dropdown point for hit_test",
-                find_dropdown_item_point(GLR_MENU_FILE, REPL_FILE_ITEM_EXPORT,
+                find_dropdown_item_point(GLR_MENU_FILE, REPL_FILE_ITEM_NEW_SCENE,
                                          &item_mx, &item_my));
     h = ui_menu_bar_hit_test(item_mx, item_my);
     ASSERT_INT_EQ("hit_test: dropdown item kind", h.kind, UI_HIT_MENU_ITEM);
     ASSERT_INT_EQ("hit_test: dropdown item menu_id", h.cmd_idx, GLR_MENU_FILE);
-    ASSERT_INT_EQ("hit_test: dropdown item idx", h.item_idx, REPL_FILE_ITEM_EXPORT);
+    ASSERT_INT_EQ("hit_test: dropdown item idx", h.item_idx, REPL_FILE_ITEM_NEW_SCENE);
 
     ui_menu_bar_close();
     h = ui_menu_bar_hit_test(pin_mx, my);
@@ -306,7 +306,7 @@ static void test_render_paths_with_stubs(void) {
     ASSERT_TRUE("menu bar render covers replay done", gl_stub_counts[GL_STUB_glRectf] > 0);
 
     ASSERT_TRUE("found file dropdown point for render",
-                find_dropdown_item_point(GLR_MENU_FILE, REPL_FILE_ITEM_EXPORT,
+                find_dropdown_item_point(GLR_MENU_FILE, REPL_FILE_ITEM_NEW_SCENE,
                                          &item_mx, &item_my));
     snap.pointer.mouse_x = item_mx;
     snap.pointer.mouse_y = item_my;
