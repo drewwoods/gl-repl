@@ -14,6 +14,7 @@
 #include "ui/layout.h"
 #include "ui/metrics.h"
 
+#include <math.h>
 #include <string.h>
 
 /* File-private tab metrics. */
@@ -96,6 +97,33 @@ int ui_scene_tabs_band_h(const UiRenderSnapshot *snap) {
     return bh;
 }
 
+/* Fill a rect with rounded TOP corners (square bottom — the tab sits on
+ * the band's lower edge). The current GL color is used. Convex outline,
+ * so GL_POLYGON is fine. r is clamped to the rect. */
+static void scene_tabs_fill_round_top(float x, float y, float w, float h,
+                                      float r) {
+    enum { SEG = 4 };
+    const float HALF_PI = 1.57079633f;
+    int k;
+
+    if (r > w * 0.5f) r = w * 0.5f;
+    if (r > h)        r = h;
+
+    glBegin(GL_POLYGON);
+    glVertex2f(x, y);                       /* bottom-left  */
+    glVertex2f(x + w, y);                   /* bottom-right */
+    glVertex2f(x + w, y + h - r);           /* up the right edge */
+    for (k = 1; k <= SEG; k++) {            /* top-right corner: 0->90 */
+        float a = (float)k / SEG * HALF_PI;
+        glVertex2f(x + w - r + r * cosf(a), y + h - r + r * sinf(a));
+    }
+    for (k = 0; k <= SEG; k++) {            /* top-left corner: 90->180 */
+        float a = HALF_PI + (float)k / SEG * HALF_PI;
+        glVertex2f(x + r + r * cosf(a), y + h - r + r * sinf(a));
+    }
+    glEnd();                                /* closes back to bottom-left */
+}
+
 /* Draw label clipped to max_w pixels (hard char truncation, no ellipsis —
  * idiomatic with menu_bar's max_chars hard limit). */
 static void scene_tabs_draw_label(int tx, int ty, const char *name,
@@ -166,20 +194,23 @@ void ui_scene_tabs_render(const UiRenderSnapshot *snap) {
                 glColor4f(0.260f, 0.190f, 0.080f, 1.0f);  /* amber tint */
             else
                 glColor4f(0.130f, 0.260f, 0.150f, 1.0f);  /* green tint */
-            glRectf((float)x[i], (float)by,
-                    (float)(x[i] + w[i]), (float)(by + bh));
+            scene_tabs_fill_round_top((float)x[i], (float)by,
+                                      (float)w[i], (float)bh, 5.0f);
         } else if (hover == i) {
             glColor4f(0.165f, 0.165f, 0.165f, 1.0f);       /* #2a2a2a */
-            glRectf((float)x[i], (float)by,
-                    (float)(x[i] + w[i]), (float)(by + bh));
+            scene_tabs_fill_round_top((float)x[i], (float)by,
+                                      (float)w[i], (float)bh, 5.0f);
         }
 
-        /* 1px left separator (#2a2a2a). */
-        glColor4f(0.165f, 0.165f, 0.165f, 1.0f);
-        glBegin(GL_LINES);
-        glVertex2f((float)x[i], (float)by);
-        glVertex2f((float)x[i], (float)(by + bh));
-        glEnd();
+        /* 1px left separator (#2a2a2a) — skip on the active tab; its
+         * rounded fill is the delimiter there. */
+        if (!active) {
+            glColor4f(0.165f, 0.165f, 0.165f, 1.0f);
+            glBegin(GL_LINES);
+            glVertex2f((float)x[i], (float)by);
+            glVertex2f((float)x[i], (float)(by + bh));
+            glEnd();
+        }
 
         /* Label color. Example tabs keep an amber/warm family vs the
          * user tabs' neutral so the kinds stay distinguishable even
