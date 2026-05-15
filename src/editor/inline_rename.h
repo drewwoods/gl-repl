@@ -55,4 +55,11 @@ int  editor_inline_rename_handle_special(int key);
  * or explicitly by the editor. Clears the rename buffer and deactivates rename mode. */
 void editor_inline_rename_cancel(void);
 
+/* Current rename-buffer contents (the in-progress name). Valid only while
+ * editor_inline_rename_active(); returns "" otherwise. The renderer reads
+ * this directly so the prompt owns its own display state instead of riding
+ * the shared, transient status line (which other repl_set_status() writers
+ * would overwrite). */
+const char *editor_inline_rename_buffer(void);
+
 #endif /* EDITOR_INLINE_RENAME_H */

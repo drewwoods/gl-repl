@@ -107,6 +107,14 @@ typedef struct UiRenderSnapshot {
     /* Scene tab strip — derived each frame, no persistent model */
     UiSceneTabList              scene_tabs;
 
+    /* Inline scene-rename prompt. Owns its own display state (sourced
+     * from editor_inline_rename_buffer) instead of riding the shared
+     * transient status line, so other repl_set_status() writers can't
+     * overwrite the prompt mid-rename. rename_text reuses the scene-tab
+     * name cap (== USER_SCENE_NAME_MAX). */
+    int                         rename_active;
+    char                        rename_text[UI_SCENE_TAB_NAME_MAX];
+
     /* F1 help overlay text content (controller-adapted from REPL help
      * text; the renderer is tabbed-overlay-shaped and feature-agnostic). */
     const struct UiOverlayContent *help_content;
