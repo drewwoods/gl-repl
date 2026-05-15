@@ -5,6 +5,7 @@
  * Core test (runs under `make test`); mirrors the controller-seeded
  * fixture of test_repl_code_panel_document.c.
  */
+#include "app/glr_actions.h"
 #include "app/glr_state.h"
 #include "app/glr_ctrl.h"
 #include "editor/inline_rename.h"
@@ -12,7 +13,9 @@
 #include "repl/scenes.h"
 #include "ui/hit.h"
 #include "ui/layout.h"
+#include "ui/menu_bar.h"
 #include "ui/metrics.h"
+#include "ui/panels.h"
 #include "ui/scene_tabs.h"
 #include "ui/snapshot.h"
 #include "ui/state.h"
@@ -201,11 +204,87 @@ static void test_double_click_rename(void) {
     glr_ctrl_router_set_double_click_clock_for_test(NULL);
 }
 
+/* Regression: an open Scene/Config dropdown overlaps the tab band. A
+ * click on a non-actionable dropdown row (### header / --- separator)
+ * must be consumed by the menu layer (CHROME), NOT fall through to a
+ * scene tab underneath. ui_menu_bar_dropdown_item_hit() returns -1 for
+ * such rows, so without the full-rect consume the click switched scenes
+ * beneath the dropdown (overlay-precedence violation). */
+static void test_dropdown_over_band_consumes(void) {
+    UiRenderSnapshot snap;
+    int cp_x, cp_y, cp_w, cp_h;
+    int win_h, menu_by, tab_by, menu_my, my_click, cfg_mx;
+
+    reset_fixture();
+    seed_user_scene();
+    repl_load_example(0);
+    glr_ctrl_build_ui_snapshot(&snap);
+
+    win_h = snap.viewport.window_h;
+    ui_layout_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
+    menu_by = (cp_y + cp_h) - CODE_MARGIN_Y - LINE_H;
+    tab_by  = menu_by - TAB_STRIP_H;
+    menu_my = win_h - (menu_by + LINE_H / 2);
+
+    /* Locate the Config menu button column (its dropdown is left-aligned
+     * there and overlaps the tab band's top row). */
+    cfg_mx = -1;
+    for (int x = cp_x + CODE_MARGIN_X; x < cp_x + cp_w; x++) {
+        if (ui_menu_bar_menu_hit(x, menu_my) == GLR_MENU_CONFIG) {
+            cfg_mx = x + 2;
+            break;
+        }
+    }
+    ASSERT_TRUE("found Config menu button", cfg_mx >= 0);
+
+    my_click = win_h - (tab_by + TAB_STRIP_H / 2);  /* dropdown row 0 */
+
+    /* Positive control: dropdown closed -> the band point is reachable
+     * as a normal tab-strip hit (we did not over-suppress). */
+    ui_menu_bar_close();
+    {
+        UiHit ok = ui_panels_hit_test(&snap, cfg_mx, my_click, 0);
+        ASSERT_TRUE("closed dropdown: band still reachable",
+                    ok.kind == UI_HIT_CODE_PANEL_TAB ||
+                    ok.kind == UI_HIT_CODE_PANEL_CHROME);
+    }
+
+    /* Open Config; row 0 is "### RENDERING" (non-actionable header). */
+    ui_menu_bar_set_open_menu(GLR_MENU_CONFIG, 0.0f);
+    ASSERT_TRUE("Config dropdown open",
+                ui_menu_bar_menu_dropdown_is_open());
+
+    {
+        UiHit mh = ui_menu_bar_hit_test(cfg_mx, my_click);
+        ASSERT_TRUE("menu hit-test consumes in-dropdown header as CHROME",
+                    mh.kind == UI_HIT_CODE_PANEL_CHROME);
+    }
+    {
+        int active_before = repl_active_user_scene();
+        UiHit hit = ui_panels_hit_test(&snap, cfg_mx, my_click, 0);
+        int consumed;
+
+        ASSERT_TRUE("dropdown over band -> CHROME, not TAB",
+                    hit.kind == UI_HIT_CODE_PANEL_CHROME);
+
+        consumed = glr_ctrl_router_handle_code_panel_hit(hit, cfg_mx,
+                                                         my_click);
+        ASSERT_TRUE("routed click consumed", consumed != 0);
+        ASSERT_TRUE("preamble closed the dropdown",
+                    !ui_menu_bar_menu_dropdown_is_open());
+        ASSERT_INT_EQ("active scene unchanged underneath",
+                      repl_active_user_scene(), active_before);
+        ASSERT_TRUE("no rename triggered underneath",
+                    !editor_inline_rename_active());
+    }
+}
+
 int main(void) {
     printf("--- ui_scene_tabs tests ---\n");
     test_derivation();
     test_geometry_hit();
     test_band_h_lockstep();
     test_double_click_rename();
+    test_dropdown_over_band_consumes();
     return test_harness_report(&g_harness, "ui_scene_tabs");
 }
