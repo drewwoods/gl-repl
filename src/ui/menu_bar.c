@@ -66,24 +66,17 @@ enum {
     FILE_ITEM_COUNT = REPL_FILE_ITEM_COUNT
 };
 
-/* SCENE menu layout:
+/* SCENE menu layout (pure selector; actions are in the File menu):
  *   [0]                      "### EXAMPLES"
  *   [1..e]                   example names  (e = repl_example_count())
- *   [e + SCENE_OFF_DIVIDER]  "---"
- *   [e + SCENE_OFF_HDR]      "### SCENE"
- *   [e + SCENE_OFF_NEW]      "New empty scene"
- *   [e + SCENE_OFF_SAVE]     "Save to output.c"
- *   [e + SCENE_OFF_RENAME]   "Rename active scene"
+ *   [e + SCENE_OFF_HDR]      "### YOUR SCENES"
  *   [e + SCENE_OFF_SCENES ..
  *      e + SCENE_OFF_SCENES + n - 1]  user scene names
  *                                     (n = repl_user_scene_count())
+ * Both headers are always present even when a section is empty.
  */
 enum {
-    SCENE_OFF_DIVIDER = GLR_SCENE_OFF_DIVIDER,
     SCENE_OFF_HDR     = GLR_SCENE_OFF_HDR,
-    SCENE_OFF_NEW     = GLR_SCENE_OFF_NEW,
-    SCENE_OFF_SAVE    = GLR_SCENE_OFF_SAVE,
-    SCENE_OFF_RENAME  = GLR_SCENE_OFF_RENAME,
     SCENE_OFF_SCENES  = GLR_SCENE_OFF_SCENES,
     SCENE_FIXED_COUNT = REPL_SCENE_FIXED_COUNT
 };
@@ -110,17 +103,17 @@ static const char *menu_item_label(int menu_id, int i) {
         if (i == FILE_ITEM_IMPORT) return "Import";
         if (i == FILE_ITEM_SAVE_WORKSPACE) return "Save Workspace";
         if (i == FILE_ITEM_LOAD_WORKSPACE) return "Load Workspace";
+        if (i == REPL_FILE_ITEM_SCENE_SEP)    return "---";
+        if (i == REPL_FILE_ITEM_NEW_SCENE)    return "New Scene";
+        if (i == REPL_FILE_ITEM_SAVE_SCENE)   return "Save Scene";
+        if (i == REPL_FILE_ITEM_RENAME_SCENE) return "Rename Scene";
         return NULL;
     }
     if (menu_id == MENU_SCENE) {
         int e = repl_example_count();
         if (i == 0)                                            return "### EXAMPLES";
         if (i >= 1 && i <= e)                                 return repl_example_name(i - 1);
-        if (i == e + SCENE_OFF_DIVIDER)                       return "---";
-        if (i == e + SCENE_OFF_HDR)                           return "### SCENE";
-        if (i == e + SCENE_OFF_NEW)                           return "New empty scene";
-        if (i == e + SCENE_OFF_SAVE)                          return "Save to output.c";
-        if (i == e + SCENE_OFF_RENAME)                        return "Rename active scene";
+        if (i == e + SCENE_OFF_HDR)                           return "### YOUR SCENES";
         int scene_n = i - (e + SCENE_OFF_SCENES);
         if (scene_n >= 0 && scene_n < repl_user_scene_count()) {
             int slot = glr_scene_menu_slot_for_dense_index(scene_n);
@@ -149,11 +142,7 @@ static const char *menu_item_label(int menu_id, int i) {
 
 static const char *menu_item_shortcut(int menu_id, int i) {
     if (menu_id == MENU_FILE && i == FILE_ITEM_EXPORT) return "Ctrl+S";
-    if (menu_id == MENU_SCENE) {
-        int e = repl_example_count();
-        if (i == e + SCENE_OFF_SAVE) return "Ctrl+S";
-        return NULL;
-    }
+    if (menu_id == MENU_SCENE) return NULL;
     if (menu_id == MENU_TUTORIALS)
         return NULL;
     if (menu_id == MENU_CONFIG) {

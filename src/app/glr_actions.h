@@ -41,22 +41,24 @@ enum {
     REPL_FILE_ITEM_IMPORT,
     REPL_FILE_ITEM_SAVE_WORKSPACE,
     REPL_FILE_ITEM_LOAD_WORKSPACE,
+    REPL_FILE_ITEM_SCENE_SEP,      /* "---" non-actionable divider row */
+    REPL_FILE_ITEM_NEW_SCENE,
+    REPL_FILE_ITEM_SAVE_SCENE,
+    REPL_FILE_ITEM_RENAME_SCENE,
     REPL_FILE_ITEM_COUNT
 };
 
-/* Scene menu item offsets and fixed rows. Offsets are relative to the start of
- * the Scene section after the built-in examples block. Fixed rows are the
- * divider, label, new scene, save output, rename, then the user-scene list.
- * Item count is implicit; lookup uses glr_scene_menu_slot_for_dense_index()
- * to map dense display index to the actual user scene slot. */
+/* Scene menu is a pure selector: "### EXAMPLES" + example rows, then
+ * "### YOUR SCENES" + user-scene rows. Both headers are always present
+ * (fixed layout). Offsets are relative to the end of the examples block
+ * (e = repl_example_count()): the second header sits at e + HDR and the
+ * first user scene at e + SCENES. Lookup uses
+ * glr_scene_menu_slot_for_dense_index() to map dense display index to
+ * the actual user scene slot. Scene *actions* live in the File menu. */
 enum {
-    GLR_SCENE_OFF_DIVIDER = 1,
-    GLR_SCENE_OFF_HDR     = 2,
-    GLR_SCENE_OFF_NEW     = 3,
-    GLR_SCENE_OFF_SAVE    = 4,
-    GLR_SCENE_OFF_RENAME  = 5,
-    GLR_SCENE_OFF_SCENES  = 6,
-    REPL_SCENE_FIXED_COUNT = 6
+    GLR_SCENE_OFF_HDR      = 1,   /* "### YOUR SCENES" at e + 1 */
+    GLR_SCENE_OFF_SCENES   = 2,   /* first user scene row at e + 2 */
+    REPL_SCENE_FIXED_COUNT = 2    /* the two "###" header rows */
 };
 
 /* Default workspace directory for save/load operations. Can be overridden by
