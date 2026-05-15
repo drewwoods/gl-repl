@@ -525,7 +525,7 @@ These objects are linked into `repl_demo` rather than stubbed:
 | `src/editor/state.c`, `src/editor/completion.c` | Per-line canonical text currently lives in `EditorState`; `repl_state_init_defaults()` also registers the REPL autocomplete provider with the editor completion registry. | Keeping editor-owned text makes this dependency intentional. Removing it means introducing a neutral source-document/text store owned by the REPL command document, then making the editor a controller/view over that store. That is feasible but large, because it cuts across commit, undo, scenes, clipboard, export, and tests. Autocomplete registration is easier: move it to app/editor startup instead of REPL state reset. |
 | `src/widgets/replay.c`, `src/widgets/replay_state.c`, `src/repl/replay_annotations.c` | Replay is a peer subsystem, but reset and annotation helpers are still in the demo link set through broad REPL object selection. | Split app reset from REPL reset and keep annotation preparation out of the minimal demo object list unless the demo explicitly exercises replay. Medium effort. |
 | `src/repl/export.c`, `src/repl/example_loader.c`, `src/repl/scenes.c`, `src/app/glr_camera.c`, `src/app/glr_config.c`, `src/ui/layout.c` | `src/repl/core.c` is still a residual helper bucket, and export/import/workspace/camera helpers sit behind it. The demo uses only a small subset (`repl_parse_and_normalize`, `cmd_type_name`), but the whole translation unit graph comes along. | Continue dissolving `src/repl/core.c`: move normalization into parser/format code, move startup/workspace helpers to scene/export owners, and split export generation from import and code-panel dump helpers. Medium effort, with high payoff for a clean demo link boundary. |
-| `repl_autocomplete.c`, `src/repl/help_text.c` | REPL state initialization registers the completion provider, and help text is part of the broad demo object list. | Treat completion/help as optional app/editor services. Low to medium effort if reset is split first. |
+| `src/app/glr_completion.c`, `src/repl/help_text.c` | REPL state initialization registers the completion provider, and help text is part of the broad demo object list. | Treat completion/help as optional app/editor services. Low to medium effort if reset is split first. |
 
 ### Practical Decoupling Sequence
 
@@ -662,7 +662,7 @@ CMD_GLUT_CUBE, CMD_GLUT_SPHERE, CMD_GLUT_TEAPOT, CMD_GLUT_CONE,
 
 **a. `k_func_completions[]`** — autocomplete prefix/hint entry **and** the
 F1 help row. **This is the single source of truth for both surfaces** —
-`repl_autocomplete.c` and `src/repl/help_text.c` both read this table. If the
+`src/app/glr_completion.c` and `src/repl/help_text.c` both read this table. If the
 new command isn't here, F1 will silently omit it and Tab won't complete
 it, even if everything else works. The recent `rand2` / `glRasterPos3f` /
 `label` commits all skipped this step and shipped half-visible features.
