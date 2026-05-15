@@ -36,10 +36,13 @@ the Scene menu and F12 already do, with click-to-switch and double-click-to-rena
 
 ## Design overview
 
-A new `ui_*` view module mirrors `src/ui/menu_bar.{c,h}` exactly: reads only the
-frozen snapshot, returns a `UiHit`, mutates nothing. The controller bakes the
-tab list into the per-frame snapshot (precedent: `ReplImportExportView` flat
-by-value view). All routing/mutation stays in `src/app/glr_ctrl.c`.
+A new `ui_*` view module mirrors `src/ui/menu_bar.{c,h}` exactly: takes all
+tab/scene **content** from the frozen snapshot, derives panel **geometry**
+through the shared `ui_layout_code_panel_rect()` helper (exactly as
+`menu_bar.c` does — see §1/§5), returns a `UiHit`, mutates nothing, and never
+touches REPL/editor state. The controller bakes the tab list into the
+per-frame snapshot (precedent: `ReplImportExportView` flat by-value view). All
+routing/mutation stays in `src/app/glr_ctrl.c`.
 
 ## Implementation
 
@@ -57,10 +60,26 @@ Private `scene_tabs_rects()` mirrors `menubar_rects()` (`src/ui/menu_bar.c:248`)
 `ui_layout_code_panel_rect()` → `panel_top = cp_y + cp_h`; per-tab `x[]`/`w[]`.
 Render, hit-test, and `band_h` all derive from this one helper +
 `snap->scene_tabs.count`, so they stay consistent by construction.
-Includes: `metrics.h`, `layout.h`, `gl_2d.h` — and **no `state.h`**: unlike
-`menu_bar.c` (which reads live `ui_state_viewport()` for legacy reasons), this
-module is strictly snapshot-only and takes the viewport from `snap` (see §5).
-No `repl/*` or `editor/*`.
+
+Includes: `metrics.h`, `layout.h`, `gl_2d.h` — and **no `state.h`**, no
+`repl/*`, no `editor/*`. Purity here is *precise, not absolute*: the module
+takes tab/scene content (names, kinds, active idx, pointer) and the hit-test
+y-flip from `snap`, and never reads or mutates REPL/editor state — that is what
+the boundary guards actually enforce (`check-ui-returns-hits-only`,
+`check-ui-panels-no-mutators`, controller-boundary). Panel *geometry* still
+comes through the shared `ui_layout_code_panel_rect()` (declared in `layout.h`;
+`layout.c` forward-declares the `ui_state_*` chrome getters itself, so callers
+need no `state.h`). That helper reads live UiState chrome (viewport size,
+`panel_frac`, layout mode) and is the **single source of truth** for panel
+geometry used by *all* panel chrome including `menu_bar.c`; duplicating its
+mode/`panel_frac` math into snapshot fields is explicitly rejected
+(reuse-over-duplication; drift hazard). Consistency invariant:
+`snap->viewport`/`snap->code_panel` are captured from the same live UiState at
+frame start and UiState chrome does not mutate mid-frame, so the snapshot
+y-flip and the live-derived rect agree within a frame — the same reason
+`menu_bar.c` (layout-helper rect + viewport flip) is correct and passes the
+guards. This module is strictly *purer* than `menu_bar.c` (snapshot flip, not
+live `ui_state_viewport()`).
 
 ### 2. Snapshot view struct — zero persistent state
 
@@ -163,15 +182,34 @@ Add `UI_HIT_CODE_PANEL_TAB` to `src/ui/hit.h` (after `UI_HIT_CODE_PANEL_CHROME`)
 plus a field-semantics comment entry: `item_idx` = tab display index;
 `local_x/local_y` = sub-strip offset.
 
-`ui_scene_tabs_hit_test`: y-flip from the **snapshot** —
-`int ry = snap->viewport.window_h - my;` (NOT live `ui_state_viewport()`; the
-module is snapshot-only per the design contract, which is also why it needs no
-`state.h`). Reject if outside band / count==0; loop tabs
-`mx ∈ [x[i], x[i]+w[i])` → `UI_HIT_CODE_PANEL_TAB, item_idx=i`.
+`ui_scene_tabs_hit_test`: y-flip from the snapshot —
+`int ry = snap->viewport.window_h - my;` (snapshot, not live
+`ui_state_viewport()` — see §1 for why this is consistent and needs no
+`state.h`). Then **consume the entire band**, not just the tab rects:
+- outside the band (`mx ∉ [cp_x, cp_x+cp_w)` or `ry ∉ [tab_by, tab_by+tab_bh)`)
+  or `count==0` → `UI_HIT_NONE` (let other handlers run);
+- on a tab rect (`mx ∈ [x[i], x[i]+w[i])`) → `UI_HIT_CODE_PANEL_TAB,
+  item_idx=i`;
+- **in-band but off-tab** (gaps, right of the last tab) →
+  `UI_HIT_CODE_PANEL_CHROME` (inert; coordinates only, no line/row payload).
 
-Integrate in `ui_panels_hit_test()` (`src/ui/panels.c:108-160`) **between the
-menu-bar block and the variable-panel block**. Essential — otherwise the strip
-band falls through the y-shifted code-panel hit-test to `UI_HIT_SCENE`. Add
+The CHROME branch is load-bearing, not cosmetic — verified fall-through if the
+band returned `UI_HIT_NONE` off-tab: `ui_panels_hit_test` continues to
+`ui_repl_code_panel_hit_test` (`panels.c:151-154`); `ui_text_panel_hit_test`
+does *not* reject the point (the band is inside `[cp_y, cp_y+cp_h]`,
+`text_panel.c:754-756`) and at the band's lower pixels `row_from_top`
+integer-truncates to `0` → a spurious **row-0** `UI_HIT_CODE_TEXT`; for higher
+band pixels the text panel returns NONE but then `repl_code_panel.c:1414-1430`
+returns `UI_HIT_CODE_GUTTER`/`UI_HIT_CODE_TEXT` (the `gl_y < cp_y + STATUSBAR_H`
+chrome guard is false near the panel top). Net without the CHROME branch:
+blank-strip clicks move the cursor / start a selection. (The earlier "falls
+through to `UI_HIT_SCENE`" note was wrong: `UI_HIT_SCENE` is only the final
+fallback *after* the code-panel handler — `panels.c:157` — which the band
+never reaches.)
+
+Integrate in `ui_panels_hit_test()` **between the menu-bar block (`panels.c
+:139-143`) and the variable-panel block (`:145-149`)**, so the band is claimed
+before `ui_repl_code_panel_hit_test` (`:151-154`) runs. Add
 `#include "scene_tabs.h"` to `panels.c`.
 
 ### 6. Routing — `route_scene_tab_hit()` in `glr_ctrl.c`
@@ -243,7 +281,9 @@ thumb → clears the tab band (both scrollbar reserve sites threaded). Long name
 → hard-truncated. Too-narrow panel → off-panel tabs clipped. Click active tab →
 no-op (still records press time so a 2nd click double-clicks). Double-click
 example tab → switches only, no rename. Stale click → resolved against live
-`repl_*`, consumed no-op.
+`repl_*`, consumed no-op. Blank tab-strip space (gaps between tabs, right of
+the last tab) → `UI_HIT_CODE_PANEL_CHROME`, inert; never falls through to a
+code-text/gutter hit.
 
 ## Verification
 
@@ -263,8 +303,16 @@ default.
    home slot + example loaded (`active_example_idx>=0`, `active_user_scene=-1`)
    → 2 tabs (user + example), example active, correct kinds/order; multi-scene
    → N user tabs in slot order.
-2. **Geometry hit-mapping** — center of each tab → correct `item_idx`; outside
-   band / right edge → `UI_HIT_NONE`.
+2. **Geometry hit-mapping** (module-level `ui_scene_tabs_hit_test`) — center of
+   each tab → correct `item_idx`; in-band gap / right-of-last-tab →
+   `UI_HIT_CODE_PANEL_CHROME`; truly outside the band → `UI_HIT_NONE`.
+2b. **Band fall-through guard** (integration-level `ui_panels_hit_test`; seed a
+   tab list + panel rect) — a click on blank tab-strip space returns
+   `UI_HIT_CODE_PANEL_CHROME`, **not** `UI_HIT_CODE_TEXT`/`UI_HIT_CODE_GUTTER`
+   (regression for the verified fall-through via `ui_repl_code_panel_hit_test`,
+   incl. the band's lower pixels where `row_from_top` truncates to 0); a click
+   on a tab → `UI_HIT_CODE_PANEL_TAB`; a click below the band still reaches the
+   code panel.
 3. **band_h lockstep** — `==TAB_STRIP_H` (==`LINE_H`) with tabs, `==0` HIDDEN;
    assert `visible_lines(H,flags,TAB_STRIP_H)` is **exactly one** row fewer
    than `(H,flags,0)`, swept over several `H` — valid precisely because
@@ -291,8 +339,8 @@ cycle; test narrow panel and TOP/BOTTOM/HIDDEN layout modes.
 
 ## Review corrections (incorporated)
 
-Four review findings, all re-verified against source and folded into the
-sections above:
+Six review findings across two rounds, all re-verified against source and
+folded into the sections above:
 
 - **[P1] Startup is a user tab, not an example tab.** `core.c:790-791` →
   `repl_scenes_activate_home_slot()` (`scenes.c:755-766`) sets
@@ -311,6 +359,26 @@ sections above:
 - **[P2] Hit-test uses the snapshot, not live state.**
   `snap->viewport.window_h - my`; the module no longer includes `state.h`
   (purer than the `menu_bar.c` legacy it was mirroring).
+- **[P1 · round 2] Blank tab-strip space fell through to a code hit.**
+  Verified: off-tab band points returning `UI_HIT_NONE` let `ui_panels_hit_test`
+  → `ui_repl_code_panel_hit_test` misclassify them as
+  `UI_HIT_CODE_TEXT`/`UI_HIT_CODE_GUTTER` (or a row-0 hit via the
+  `row_from_top==0` truncation in `text_panel.c`; the `gl_y < cp_y +
+  STATUSBAR_H` chrome guard is false near the panel top,
+  `repl_code_panel.c:1414-1430`). Fix: the band hit-test now consumes the whole
+  band — tab → `UI_HIT_CODE_PANEL_TAB`, in-band off-tab →
+  `UI_HIT_CODE_PANEL_CHROME`, `UI_HIT_NONE` only outside. Added an
+  integration-level `ui_panels_hit_test` regression test (§Verification 2b).
+  Also corrected the inaccurate "falls through to `UI_HIT_SCENE`" note.
+- **[P2 · round 2] "Strictly snapshot-only" contradicted the geometry plan.**
+  `scene_tabs_rects()` calls `ui_layout_code_panel_rect()`, which reads live
+  `ui_state_viewport()`/`ui_state_code_panel()` (`layout.c:12-13, 29-58`).
+  Resolution = option (b): reworded §design / §1 / §5 to scope purity precisely
+  (snapshot for content + y-flip; no `state.h`, no REPL/editor state; panel
+  geometry via the shared layout helper exactly as `menu_bar.c`), documented
+  the within-frame consistency invariant, and explicitly rejected option (a)
+  (duplicating layout math into snapshot fields — forks geometry, drift
+  hazard).
 
 ## Scope / effort
 
