@@ -3087,8 +3087,12 @@ void glr_ctrl_tick(void) {
     }
 
     {
+        /* Inline scene rename surfaces its prompt through the status
+         * line. While the rename modal is capturing keys, freeze the
+         * TTL so the prompt does not auto-hide out from under the user
+         * (pre-existing rename behavior, unrelated to scene tabs). */
         ReplStatusState *status = ui_state_status_mut();
-        if (status->ttl > 0)
+        if (status->ttl > 0 && !editor_inline_rename_active())
             status->ttl--;
     }
 }
