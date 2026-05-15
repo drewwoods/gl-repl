@@ -375,6 +375,22 @@ UiHit ui_menu_bar_hit_test(int mx, int my) {
             h.local_y = (float)gl_y;
             return h;
         }
+        /* Click inside the open dropdown rect but not on an actionable
+         * row (### header / --- separator / dead space): consume it
+         * inertly. ui_menu_bar_dropdown_item_hit() returns -1 for these
+         * even though the point is over the dropdown, so without this
+         * the click falls through to the scene tab strip / code panel
+         * drawn beneath the dropdown and can switch scenes underneath
+         * (overlay-precedence requirement). The controller preamble
+         * closes the dropdown; CHROME is the generic inert-consume kind. */
+        int dx, dy, dw, dh;
+        if (menu_dropdown_rect(&dx, &dy, &dw, &dh) &&
+            mx >= dx && mx < dx + dw && gl_y >= dy && gl_y < dy + dh) {
+            h.kind = UI_HIT_CODE_PANEL_CHROME;
+            h.local_x = (float)mx;
+            h.local_y = (float)gl_y;
+            return h;
+        }
     }
 
     /* Pin button (Search / Replay). Pins are rendered after the menu
