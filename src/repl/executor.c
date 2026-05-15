@@ -370,6 +370,15 @@ void repl_execute_program(const ReplExecutionOptions *options) {
 
     tess_current_color[3] = g_execute_alpha_scale;
 
+    /* The light-indicator overlay reads lights[].enabled for its on/off
+     * visual. GL's real default — and scene_lights_setup() — is
+     * all-lights-disabled; only the program's glEnable(GL_LIGHTn) turns
+     * one on. Reset the bookkeeping at the start of every walk so the
+     * indicator tracks what the program actually does, instead of the
+     * sticky, default-on value that never reflected enable/disable. */
+    for (int li = 0; li < MAX_LIGHTS; li++)
+        g_lights[li].enabled = 0;
+
     int pc = 0;
     while (pc < flat_cmd_count) {
         if (!flat_cmds[pc].valid) { pc++; continue; }
