@@ -1843,6 +1843,27 @@ void glr_ctrl_init_gl(void) {
     editor_set_line_comment_prefix("// ");
 }
 
+/* Program name for user-facing messages. Defaults to "gl-repl" so it is
+ * sensible even if main() never forwards argv[0] (tests, demos). */
+static char g_program_name[64] = "gl-repl";
+
+void glr_ctrl_set_program_name(const char *argv0) {
+    const char *base;
+
+    if (!argv0 || !*argv0)
+        return;
+    base = argv0;
+    for (const char *p = argv0; *p; p++)
+        if (*p == '/')
+            base = p + 1;
+    if (*base)
+        snprintf(g_program_name, sizeof(g_program_name), "%s", base);
+}
+
+const char *glr_ctrl_program_name(void) {
+    return g_program_name;
+}
+
 void glr_ctrl_bootstrap_repl(const char *input_file) {
     /* Step 4 [P2] fix: dump-only CLI paths (--dump-code / --dump-flat)
      * call this without going through glr_ctrl_init_gl, so the status

@@ -133,6 +133,7 @@ static void timer_func(int value) {
 }
 
 int main(int argc, char **argv) {
+    glr_ctrl_set_program_name(argv[0]);
     const char *input_file = NULL;
     int dump_code = 0;
     int dump_flat = 0;
