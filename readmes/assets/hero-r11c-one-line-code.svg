@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 300" role="img" aria-label="gl-repl"><style>
+<svg xmlns="http://www.w3.org/2000/svg" width="1040" height="600" viewBox="380 0 520 300" role="img" aria-label="gl-repl"><style>
   .repl-fn  { fill: #66ccff; }
   .repl-var { fill: #ffd966; }
   .repl-num { fill: #ffaa44; }
