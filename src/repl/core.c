@@ -61,85 +61,60 @@ static void get_for_var_name_from_text(const char *text, char *var, int var_sz);
 /* Utility                                                                    */
 /* ========================================================================= */
 
-/* Diagnostic-sink dispatch. Step 3 of feature/decouple-repl-from-gl-repl-alt.md
- * replaces the direct ui_state_status_set forwarder with a callback the
- * controller installs at startup. Pipeline TUs keep calling set_status()
- * unchanged; the body now dispatches through the sink. The demo doesn't
- * install a sink, so set_status is a no-op there — clearing the
- * ui_state_status_set stub from tools/repl_demo/stubs.c.
+/* Host-effect bridge: a single file-static pointer the controller
+ * installs at startup, mirroring export.c's g_export_cfg_bridge /
+ * g_export_camera_bridge. NULL bridge = every dispatch no-ops, which
+ * is what the demo and tests want (they leave it unset, clearing the
+ * ui_state_status_set / editor stubs from tools/repl_demo/stubs.c).
  *
- * The plan's preferred long-term shape is per-function out-params (err_buf
- * / ReplDiagnostic) on each pipeline entry point. The callback is the
- * "or a callback" branch the plan explicitly allows, chosen here because
- * the alternative is 48+ test call-site updates for high-traffic public
- * APIs (export_save_output, save_workspace, etc.). Future commits can
- * convert individual TUs to out-params if pure-data-flow becomes
- * important; the callback shape doesn't block that migration. */
-static void (*g_status_sink)(const char *) = NULL;
+ * Step 3 of feature/decouple-repl-from-gl-repl-alt.md introduced these
+ * as individual callbacks; the six installers were consolidated into
+ * one struct per plans/partial/src-repl-simplicity-review.md item 2.
+ *
+ * The status callback's long-term preferred shape is still per-function
+ * out-params (err_buf / ReplDiagnostic) on each pipeline entry point.
+ * The callback is the "or a callback" branch the decouple plan allows,
+ * chosen because the alternative is 48+ test call-site updates for
+ * high-traffic public APIs (export_save_output, save_workspace, etc.).
+ * Bundling it in the bridge doesn't block that migration. */
+static const ReplHostEffects *g_host_effects = NULL;
 
-void repl_set_status_sink(void (*sink)(const char *)) {
-    g_status_sink = sink;
+void repl_install_host_effects(const ReplHostEffects *effects) {
+    g_host_effects = effects;
+}
+
+const ReplHostEffects *repl_host_effects(void) {
+    return g_host_effects;
 }
 
 void repl_set_status(const char *msg) {
-    if (g_status_sink && msg && msg[0])
-        g_status_sink(msg);
-}
-
-/* Step 7a: example-presentation-reset sink. Mirrors the status sink
- * shape — the controller installs
- * `glr_state_presentation_reset_example_defaults` from
- * `glr_app_install_app_services`; the demo leaves it unset so the
- * loader's per-load reset is a no-op. */
-static void (*g_example_presentation_reset_sink)(void) = NULL;
-
-void repl_install_example_presentation_reset_sink(void (*fn)(void)) {
-    g_example_presentation_reset_sink = fn;
+    if (g_host_effects && g_host_effects->status && msg && msg[0])
+        g_host_effects->status(msg);
 }
 
 void repl_dispatch_example_presentation_reset(void) {
-    if (g_example_presentation_reset_sink)
-        g_example_presentation_reset_sink();
+    if (g_host_effects && g_host_effects->example_presentation_reset)
+        g_host_effects->example_presentation_reset();
 }
 
-/* Host-effect sinks. The example loader / scene loader / snippet
- * importer / replay engine emit four host-visible effects (input
- * reset, insert-mode off, scroll-to-line, follow-cursor toggle) the
- * controller actualizes on the editor. The sinks are named after the
- * EFFECT rather than the implementation, so the public REPL surface
- * stays editor-neutral. Demo + tests leave the sinks unset and the
- * dispatches no-op. Phases 3 + 6 of feature/source-document-port.md. */
-static void (*g_input_reset_sink)(void)        = NULL;
-static void (*g_insert_mode_off_sink)(void)    = NULL;
-static void (*g_scroll_to_line_sink)(int)      = NULL;
-static void (*g_follow_cursor_sink)(int)       = NULL;
-
-void repl_install_input_reset_sink(void (*fn)(void)) {
-    g_input_reset_sink = fn;
-}
 void repl_dispatch_input_reset(void) {
-    if (g_input_reset_sink) g_input_reset_sink();
+    if (g_host_effects && g_host_effects->input_reset)
+        g_host_effects->input_reset();
 }
 
-void repl_install_insert_mode_off_sink(void (*fn)(void)) {
-    g_insert_mode_off_sink = fn;
-}
 void repl_dispatch_insert_mode_off(void) {
-    if (g_insert_mode_off_sink) g_insert_mode_off_sink();
+    if (g_host_effects && g_host_effects->insert_mode_off)
+        g_host_effects->insert_mode_off();
 }
 
-void repl_install_scroll_to_line_sink(void (*fn)(int target)) {
-    g_scroll_to_line_sink = fn;
-}
 void repl_dispatch_scroll_to_line(int target) {
-    if (g_scroll_to_line_sink) g_scroll_to_line_sink(target);
+    if (g_host_effects && g_host_effects->scroll_to_line)
+        g_host_effects->scroll_to_line(target);
 }
 
-void repl_install_follow_cursor_sink(void (*fn)(int follow)) {
-    g_follow_cursor_sink = fn;
-}
 void repl_dispatch_follow_cursor(int follow) {
-    if (g_follow_cursor_sink) g_follow_cursor_sink(follow);
+    if (g_host_effects && g_host_effects->follow_cursor)
+        g_host_effects->follow_cursor(follow);
 }
 
 const char *repl_mode_name(GLenum mode) {

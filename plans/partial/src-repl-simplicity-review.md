@@ -56,7 +56,11 @@ and well-paid-for. Future changes should preserve them.
 Each item below is localized. None requires redesign; all three have the
 right idiom already in-tree.
 
-### 1. Split `compile.c` at the verb boundary
+### 1. Split `compile.c` at the verb boundary — DEFERRED (2026-05-15)
+
+**Status.** Deferred. Pure file-boundary refactor with no behavior or
+API change; no triggering feature pending. Revisit when `compile.c`
+growth or a compile-facing feature makes the split pay for itself.
 
 **Problem.** `compile.c` is **1914 lines** and growing. The static
 helpers around float-decl parsing alone — `parse_float_name_list`,
@@ -79,7 +83,51 @@ test suite should pass unchanged.
 **Suggested split landings (line numbers approximate as of review):**
 ~717, 816, 1289, 1487, 1540, 1648, 1794.
 
-### 2. Consolidate `core.c` sink installers into one `ReplHostEffects` bridge
+**Scope note (2026-05-15, added when deferring).** The split is worth
+doing, but this plan understates the work. "Pure mechanical move"
+(line 75 of the original review) is true for the *function bodies*
+only — the surrounding build/guard plumbing also has to move with
+them:
+
+- **Makefile.** The compile TU is hardcoded in source lists, e.g.
+  `Makefile:217` (and the parallel stub/test object lists). Two new
+  TUs (`compile_var.c`, `compile_block.c`) must be added everywhere
+  `src/repl/compile.c` appears, or the new files won't link / won't
+  build under `USE_GL_STUBS=1`.
+- **Guard scripts hardcode the filename.**
+  `scripts/check-no-set-status-in-compile-apply.sh:21` greps a literal
+  `src/repl/compile.c src/repl/apply.c` pair; the new TUs inherit the
+  same "compile is a pure validator, never calls `set_status`"
+  contract and must be added to that grep (and any sibling guards that
+  name `compile.c`) or the invariant silently stops being enforced on
+  the moved code.
+- **Shared private helpers.** `compile_set_err` (and any other
+  `static` helper used by both the var and block validators —
+  `compile.c` has ~20 file-statics) currently rely on single-TU
+  visibility. Splitting forces either a small private
+  `compile_internal.h` exposing those helpers, or local duplication.
+  A private header is the cleaner choice and is itself a new file the
+  Makefile/guards don't need to know about but the split must create.
+
+So: low *behavioral* risk, but it is a multi-file change touching the
+build and the guard layer, not a single-file cut. Budget for the
+Makefile + guard-script + private-header edits, not just the function
+moves.
+
+### 2. Consolidate `core.c` sink installers into one `ReplHostEffects` bridge — DONE (2026-05-15)
+
+**Status.** Done. The six `repl_install_*_sink` installers and their
+`g_*_sink` statics collapsed into one `ReplHostEffects` struct +
+`repl_install_host_effects()` / `repl_host_effects()`, mirroring
+`ReplExportConfigBridge`. `core.c` keeps a single
+`g_host_effects` pointer; the `repl_set_status` / `repl_dispatch_*`
+emit functions are unchanged for callers and now read the struct.
+`glr_ctrl.c` installs one file-static `g_glr_host_effects`. Guardrail
+honored: no individual installers remain (a 7th effect extends the
+struct). Verified: `make sample`, `make sample USE_GL_STUBS=1`,
+`make repl_demo` (bridge unset → dispatches no-op, link isolation
+intact), `make test` (4298/4298), `make check-state-ownership` all
+green.
 
 **Problem.** `core.c` currently exposes six function-pointer sink
 installers (`repl_install_status_sink`,
@@ -103,7 +151,12 @@ shape.
 a 7th effect is needed, the bridge-struct consolidation becomes
 mandatory rather than optional.
 
-### 3. `export.c` split (R9 in MODULES.md)
+### 3. `export.c` split (R9 in MODULES.md) — DEFERRED (2026-05-15)
+
+**Status.** Deferred (already self-described as "Not urgent" below).
+The `ReplExportConfigBridge` / `ReplExportCameraBridge` pattern absorbs
+new persisted keys without code change, so the split is comfort, not
+necessity. Revisit on trigger (a third bridge, or editing friction).
 
 **Status.** Already an acknowledged open edge. `export.c` is **3633
 lines** — the largest file in the directory by a wide margin. Single

@@ -76,9 +76,9 @@ void glr_state_presentation_reset_defaults(void);
 /* Reset the scene-bound presentation subset to the example baseline.
  * Mirrors the cfg-bridge `fill_scene_subset` whitelist in glr_actions.c
  * (wireframe, grid theme, axes theme, vertex overlays, etc.). The
- * example loader invokes this through the controller-installed sink
- * `repl_install_example_presentation_reset_sink` so the REPL pipeline
- * never reaches into glr_state directly. */
+ * example loader invokes this through the controller-installed
+ * `ReplHostEffects.example_presentation_reset` callback so the REPL
+ * pipeline never reaches into glr_state directly. */
 void glr_state_presentation_reset_example_defaults(void);
 void glr_state_render_reset_defaults(void);
 

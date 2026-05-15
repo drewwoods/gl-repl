@@ -63,45 +63,52 @@ void repl_recompute_autonormals(int autonormal_enabled);
 
 /* Shared status/document helpers surfaced outside src/repl/core.c. */
 void        repl_set_status(const char *msg);
-/* Install a status-message sink. Pipeline TUs call set_status() to
- * surface diagnostics; the controller installs ui_state_status_set as
- * the sink at startup. Pass NULL to clear (test scaffolding may want
- * to). The demo deliberately leaves the sink unset, so set_status is
- * a no-op there. See step 3 of feature/decouple-repl-from-gl-repl-alt.md. */
-void        repl_set_status_sink(void (*sink)(const char *));
 
-/* Install a presentation-reset sink for the example loader. The
- * `presentation` slice moved to glr_state.c (step 7a of
- * feature/decouple-repl-from-gl-repl-alt.md), so the example loader
- * (REPL pipeline TU) can no longer reach into those fields. The
- * controller installs `glr_state_presentation_reset_example_defaults`
- * as the sink at startup; the demo leaves it unset so the per-load
- * reset is a no-op (the demo doesn't load examples). */
-void        repl_install_example_presentation_reset_sink(void (*fn)(void));
-/* Pipeline-side dispatch — invoked by src/repl/example_loader.c on every
- * example load. No-op when the sink is unset. */
-void        repl_dispatch_example_presentation_reset(void);
-
-/* Host-effect sinks. Loader / scene-switch / replay paths emit four
- * host-visible effects (input reset, insert-mode off, scroll-to-line,
- * follow-cursor toggle) the controller actualizes on the editor; the
- * demo and tests leave the matching sinks unset and the dispatches
- * become no-ops. The sinks are deliberately named after the EFFECT
- * (what the REPL is asking for) rather than the implementation, so
- * the public REPL surface doesn't carry editor concepts. Phases 3 +
- * 6 of feature/source-document-port.md.
+/* Host-effect bridge. The controller installs one struct of effect
+ * callbacks at startup; the demo and tests leave it unset and every
+ * dispatch below no-ops. Mirrors `ReplExportConfigBridge` /
+ * `ReplExportCameraBridge` in export.h — the single in-tree idiom for
+ * "controller installs a vtable into the REPL pipeline". Effects are
+ * deliberately named after WHAT the REPL is asking for, not the
+ * editor implementation, so the public REPL surface doesn't carry
+ * editor concepts. Phases 3 + 6 of feature/source-document-port.md;
+ * the six former repl_install_*_sink calls were consolidated here per
+ * plans/partial/src-repl-simplicity-review.md item 2 (one install call,
+ * no individual installers — adding a 7th effect extends this struct).
  *
  * Insert-mode QUERY (for ReplCompileContext.insert_mode) is the
  * caller's responsibility — repl_compile_context_from_live() defaults
  * to 0 (overwrite, the safe load-path value); editor-side callers
  * overwrite the field with editor_insert_mode() before compiling. */
-void        repl_install_input_reset_sink(void (*fn)(void));
+typedef struct {
+    /* Surface a diagnostic/status message. The controller routes this
+     * to UiState; pipeline TUs call repl_set_status() unchanged. */
+    void (*status)(const char *msg);
+    /* Refresh scene-bound presentation defaults (wireframe, grid,
+     * axes, vertex overlays, backdrop) before each example load. The
+     * `presentation` slice lives on glr_state, out of the REPL
+     * pipeline's reach. */
+    void (*example_presentation_reset)(void);
+    /* Clear the editor input buffer. */
+    void (*input_reset)(void);
+    /* Force the editor out of insert mode. */
+    void (*insert_mode_off)(void);
+    /* Scroll the code panel so source line `target` is visible. */
+    void (*scroll_to_line)(int target);
+    /* Toggle cursor-follow during replay. */
+    void (*follow_cursor)(int follow);
+} ReplHostEffects;
+
+void                   repl_install_host_effects(const ReplHostEffects *effects);
+const ReplHostEffects *repl_host_effects(void);
+
+/* Pipeline-side dispatchers — invoked by the loader / scene-switch /
+ * snippet-import / replay paths. Each is a no-op when the bridge is
+ * unset or the matching callback is NULL. */
+void        repl_dispatch_example_presentation_reset(void);
 void        repl_dispatch_input_reset(void);
-void        repl_install_insert_mode_off_sink(void (*fn)(void));
 void        repl_dispatch_insert_mode_off(void);
-void        repl_install_scroll_to_line_sink(void (*fn)(int target));
 void        repl_dispatch_scroll_to_line(int target);
-void        repl_install_follow_cursor_sink(void (*fn)(int follow));
 void        repl_dispatch_follow_cursor(int follow);
 
 const char *repl_mode_name(GLenum mode);
