@@ -10,6 +10,7 @@
 #include "ui/menu_bar.h"
 #include "ui/metrics.h"
 #include "ui/repl_code_panel.h"
+#include "ui/scene_tabs.h"
 #include "ui/variable_panel.h"
 
 #include <math.h>
@@ -140,6 +141,16 @@ UiHit ui_panels_hit_test(const UiRenderSnapshot *snap,
         UiHit menu_hit = ui_menu_bar_hit_test(mx, my);
         if (menu_hit.kind != UI_HIT_NONE)
             return menu_hit;
+    }
+
+    /* Claim the scene tab strip before the code panel: the band consumes
+     * its whole rect (TAB on a tab, CHROME in-band off-tab) so blank-strip
+     * clicks never fall through to a code-text/gutter hit. After the
+     * menu-bar block so an open dropdown over the band still wins. */
+    {
+        UiHit tab_hit = ui_scene_tabs_hit_test(snap, mx, my);
+        if (tab_hit.kind != UI_HIT_NONE)
+            return tab_hit;
     }
 
     {
