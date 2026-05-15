@@ -219,13 +219,8 @@ static void test_menu_actions(void) {
     glr_app_reset_all();
 
     /* File menu */
-    run_menu_action_in_temp_dir("File Export",
-                                GLR_MENU_FILE,
-                                REPL_FILE_ITEM_EXPORT,
-                                1,
-                                0);
-    ASSERT_INT("File Import", glr_action_menu_item_activate(GLR_MENU_FILE, REPL_FILE_ITEM_IMPORT), 1);
-    ASSERT_STR("Import status", g_last_status, "Import not implemented yet");
+    ASSERT_INT("File Load Scene", glr_action_menu_item_activate(GLR_MENU_FILE, REPL_FILE_ITEM_LOAD_SCENE), 1);
+    ASSERT_STR("Load Scene status", g_last_status, "Load scene not implemented yet");
     run_menu_action_in_temp_dir("File Save Workspace",
                                 GLR_MENU_FILE,
                                 REPL_FILE_ITEM_SAVE_WORKSPACE,

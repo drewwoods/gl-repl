@@ -58,13 +58,7 @@ int ui_menu_bar_menu_dropdown_is_open(void) {
 int ui_menu_bar_example_dropdown_is_open(void) { return ui_menu_bar_menu_dropdown_is_open(); }
 
 
-enum {
-    FILE_ITEM_EXPORT = REPL_FILE_ITEM_EXPORT,
-    FILE_ITEM_IMPORT = REPL_FILE_ITEM_IMPORT,
-    FILE_ITEM_SAVE_WORKSPACE = REPL_FILE_ITEM_SAVE_WORKSPACE,
-    FILE_ITEM_LOAD_WORKSPACE = REPL_FILE_ITEM_LOAD_WORKSPACE,
-    FILE_ITEM_COUNT = REPL_FILE_ITEM_COUNT
-};
+enum { FILE_ITEM_COUNT = REPL_FILE_ITEM_COUNT };
 
 /* SCENE menu layout (pure selector; actions are in the File menu):
  *   [0]                      "### EXAMPLES"
@@ -99,14 +93,13 @@ static int menu_item_count(int menu_id) {
 
 static const char *menu_item_label(int menu_id, int i) {
     if (menu_id == MENU_FILE) {
-        if (i == FILE_ITEM_EXPORT) return "Export";
-        if (i == FILE_ITEM_IMPORT) return "Import";
-        if (i == FILE_ITEM_SAVE_WORKSPACE) return "Save Workspace";
-        if (i == FILE_ITEM_LOAD_WORKSPACE) return "Load Workspace";
-        if (i == REPL_FILE_ITEM_SCENE_SEP)    return "---";
-        if (i == REPL_FILE_ITEM_NEW_SCENE)    return "New Scene";
-        if (i == REPL_FILE_ITEM_SAVE_SCENE)   return "Save Scene";
-        if (i == REPL_FILE_ITEM_RENAME_SCENE) return "Rename Scene";
+        if (i == REPL_FILE_ITEM_NEW_SCENE)     return "New Scene";
+        if (i == REPL_FILE_ITEM_SAVE_SCENE)    return "Save Scene";
+        if (i == REPL_FILE_ITEM_LOAD_SCENE)    return "Load Scene";
+        if (i == REPL_FILE_ITEM_RENAME_SCENE)  return "Rename Scene";
+        if (i == REPL_FILE_ITEM_SCENE_SEP)     return "---";
+        if (i == REPL_FILE_ITEM_SAVE_WORKSPACE) return "Save Workspace";
+        if (i == REPL_FILE_ITEM_LOAD_WORKSPACE) return "Load Workspace";
         return NULL;
     }
     if (menu_id == MENU_SCENE) {
@@ -141,7 +134,7 @@ static const char *menu_item_label(int menu_id, int i) {
 }
 
 static const char *menu_item_shortcut(int menu_id, int i) {
-    if (menu_id == MENU_FILE && i == FILE_ITEM_EXPORT) return "Ctrl+S";
+    if (menu_id == MENU_FILE && i == REPL_FILE_ITEM_SAVE_SCENE) return "Ctrl+S";
     if (menu_id == MENU_SCENE) return NULL;
     if (menu_id == MENU_TUTORIALS)
         return NULL;

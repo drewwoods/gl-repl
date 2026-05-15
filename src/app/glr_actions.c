@@ -449,14 +449,8 @@ int glr_cfg_handle_special_shortcut(int key) {
 
 int glr_action_menu_item_activate(int menu_id, int item_idx) {
     if (menu_id == GLR_MENU_FILE) {
-        if (item_idx == REPL_FILE_ITEM_EXPORT) {
-            ReplExportLayout layout;
-            glr_ctrl_fill_export_layout(&layout);
-            repl_save_default_output(&layout);
-            return 1;
-        }
-        if (item_idx == REPL_FILE_ITEM_IMPORT) {
-            repl_set_status("Import not implemented yet");
+        if (item_idx == REPL_FILE_ITEM_LOAD_SCENE) {
+            repl_set_status("Load scene not implemented yet");
             return 1;
         }
         if (item_idx == REPL_FILE_ITEM_SAVE_WORKSPACE) {

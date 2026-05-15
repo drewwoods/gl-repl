@@ -3071,6 +3071,11 @@ int main() {
 
         /* Ctrl+S (Save) */
         {
+            /* Ctrl+S is now File > Save Scene. With an active *example*
+             * (no named user scene, no workspace bound) it falls back
+             * to the default ./output.c save — keep that deterministic
+             * so the assertion below is stable. */
+            repl_load_example(0);
             /* Keep the default output path inside a throwaway directory so
              * the test never touches repo-root output.c. */
             char cwd[1024];

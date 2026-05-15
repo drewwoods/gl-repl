@@ -37,14 +37,13 @@ typedef enum {
 /* File menu item indices. Export/import single files, save/load workspace
  * directories. Item counts are implicit (REPL_FILE_ITEM_COUNT). */
 enum {
-    REPL_FILE_ITEM_EXPORT = 0,
-    REPL_FILE_ITEM_IMPORT,
+    REPL_FILE_ITEM_NEW_SCENE = 0,
+    REPL_FILE_ITEM_SAVE_SCENE,        /* Ctrl+S */
+    REPL_FILE_ITEM_LOAD_SCENE,        /* (was Import) — not implemented yet */
+    REPL_FILE_ITEM_RENAME_SCENE,
+    REPL_FILE_ITEM_SCENE_SEP,         /* "---" non-actionable divider row */
     REPL_FILE_ITEM_SAVE_WORKSPACE,
     REPL_FILE_ITEM_LOAD_WORKSPACE,
-    REPL_FILE_ITEM_SCENE_SEP,      /* "---" non-actionable divider row */
-    REPL_FILE_ITEM_NEW_SCENE,
-    REPL_FILE_ITEM_SAVE_SCENE,
-    REPL_FILE_ITEM_RENAME_SCENE,
     REPL_FILE_ITEM_COUNT
 };
 
