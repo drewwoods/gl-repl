@@ -33,6 +33,20 @@ the Scene menu and F12 already do, with click-to-switch and double-click-to-rena
 5. Double-click a **user-scene** tab → switch to it, then trigger the
    **existing status-bar inline rename** (`editor_inline_rename_begin`). No
    in-tab text editing. Example tabs are not renamable. Scene menu stays as-is.
+6. **Transient / "neither active" documents get no synthetic tab.** A live
+   document can exist while both `active_user_scene == -1` and
+   `active_example_idx == -1` — Scene → New (`glr_actions.c`: clears the
+   active example, `editor_clear_all_cmds()`, activates no slot) and tutorial
+   start (`repl_scenes_enter_transient_scene()`, `tutorial.c:286`). Decision:
+   the strip stays a *pure view of scene state* — it lists the occupied
+   user slots (+ the example tab iff `active_example_idx >= 0`) and sets
+   `active_idx = -1` (no highlighted tab) in this state. **No transient/
+   "Untitled" synthetic tab** (same rationale as the deferred dirty-dot: no
+   per-document identity exists to name or route). If the home slot is still
+   occupied (the common case after New) its tab simply shows unhighlighted;
+   if zero slots are occupied the band renders empty (still always-shown).
+   Switching back via F12 / Scene-menu / clicking a tab re-establishes an
+   active tab through the existing paths — zero extra routing.
 
 ## Design overview
 
@@ -316,13 +330,23 @@ there for the rename-trigger test).
     (repl_load_user_scene_idx(slot)) load_line_to_input(repl_state_edit_line());`.
     No `editor_reset_transients()` (load-bearing omission — keep it). No-op
     if `slot == repl_active_user_scene()`.
-  - `glr_scene_load_active_example(void)` — body exactly the current
-    `glr_actions.c:468-471`: `editor_reset_transients(); editor_undo_clear();
-    repl_load_example(active_example_idx);`. No-op if already active.
-  Placement follows existing layering (these touch `repl_*` + `editor_*`;
-  `glr_actions.c` already does, so co-locate there and have
-  `route_scene_tab_hit` call across — same direction as the existing
-  menu→action calls). Example tabs are never renamed.
+  - `glr_scene_load_example(int example_idx)` — body exactly the current
+    `glr_actions.c` example branch: `editor_reset_transients();
+    editor_undo_clear(); repl_load_example(example_idx);`. **Takes an
+    explicit index, not `active_example_idx`** — the Scene menu loads the
+    *clicked* example via `item_idx - 1`, so a `(void)` helper reading
+    `active_example_idx` would reload the wrong example (or no-op from a
+    user scene) when a *different* example is picked from the menu. The
+    menu action passes `item_idx - 1`; `route_scene_tab_hit` passes
+    `repl_state_scenes().active_example_idx` (the example tab can only
+    re-select the already-active example). No-op if already active.
+  Both helpers are **declared in `src/app/glr_actions.h`** (next to
+  `glr_scene_menu_slot_for_dense_index`) — `glr_ctrl.c` calls them and an
+  undeclared call is an error under C2x. Placement follows existing layering
+  (these touch `repl_*` + `editor_*`; `glr_actions.c` already does, so
+  co-locate there and have `route_scene_tab_hit` call across — same
+  direction as the existing menu→action calls). Example tabs are never
+  renamed.
 - Double-click on a user-scene tab (after switching, or if already active):
   `editor_inline_rename_begin(slot)`. Hard-modal capture and the status-bar
   prompt are already wired (`glr_ctrl_keyboard` → `editor_input_rename_capture_key`,
@@ -348,9 +372,12 @@ The existing dropdown-dismiss preamble correctly closes an open menu first.
   `ui_repl_code_panel_visible_lines_for_height` signature change** + every
   "rows that fit" / follow-scroll consumer threaded (§3 scroll-parity audit)
 - `src/ui/panels.c` — include + hit-test insert (+ dropdown precedence check)
-- `src/app/glr_actions.c` — extract `glr_scene_load_user_slot()` /
-  `glr_scene_load_active_example()` shared helpers; refactor the existing
-  Scene-menu user/example actions to call them (no behavior change)
+- `src/app/glr_actions.c` — extract `glr_scene_load_user_slot(int)` /
+  `glr_scene_load_example(int)` shared helpers; refactor the existing
+  Scene-menu user/example actions to call them (no behavior change — menu
+  still passes the clicked `item_idx - 1`)
+- `src/app/glr_actions.h` — declare the two shared helpers (called from
+  `glr_ctrl.c`; undeclared call is a C2x error)
 - `src/app/glr_ctrl.c` — snapshot build helper, **two** `_Static_assert`s
   (cap + name-max), double-click statics, `route_scene_tab_hit` (calls the
   shared helpers), dispatch case; thread band into scroll/Page/follow math
@@ -373,7 +400,12 @@ order. Example tab appears only after an explicit Scene-menu/F12 example load
 while a user scene exists. F12 → list rebuilt each frame, follows
 automatically. Auto-promote mid-edit (editing a loaded example) → example tab
 replaced by the new user tab next frame. Switch user tab while example active →
-example cleared, its tab vanishes (locked, zero code). HIDDEN → early-return,
+example cleared, its tab vanishes (locked, zero code). **Scene → New** →
+active example cleared, `editor_clear_all_cmds()`, no slot activated →
+`active_idx == -1`; occupied slots (home, typically) still listed but
+unhighlighted; no synthetic tab (decision #6). **Tutorial start
+(`repl_scenes_enter_transient_scene`)** → same `neither-active` shape:
+existing user tabs unhighlighted, no transient tab. HIDDEN → early-return,
 `top_chrome_h==0`. TOP/BOTTOM → relative to panel_top, follows. Scrollbar
 thumb → clears the tab band (both scrollbar reserve sites threaded). Long name
 → hard-truncated. Too-narrow panel → off-panel tabs clipped. Click active tab →
@@ -400,7 +432,11 @@ default.
    `active_example_idx=-1`) → exactly 1 *user* tab, active, no example tab;
    home slot + example loaded (`active_example_idx>=0`, `active_user_scene=-1`)
    → 2 tabs (user + example), example active, correct kinds/order; multi-scene
-   → N user tabs in slot order.
+   → N user tabs in slot order; **neither-active state (decision #6:
+   home slot used, `active_user_scene==-1`, `active_example_idx==-1`, as
+   after Scene→New / tutorial transient) → home tab listed, `active_idx ==
+   -1`, no example tab, no synthetic tab; zero occupied slots in that state
+   → `count == 0`**.
 2. **Geometry hit-mapping** (module-level `ui_scene_tabs_hit_test`) — center of
    each tab → correct `item_idx`; in-band gap / right-of-last-tab →
    `UI_HIT_CODE_PANEL_CHROME`; truly outside the band → `UI_HIT_NONE`.
@@ -415,7 +451,13 @@ default.
    assert `visible_lines(H,flags,TAB_STRIP_H)` is **exactly one** row fewer
    than `(H,flags,0)`, swept over several `H` — valid precisely because
    `TAB_STRIP_H==LINE_H` (see §3); the sweep guards a future
-   `TAB_STRIP_H != LINE_H` regression.
+   `TAB_STRIP_H != LINE_H` regression. **Restrict the sweep to heights where
+   the baseline `visible_lines(H,flags,0) > 1`.** `ui_text_panel_visible_
+   lines_for_height()` floors `available` at 0 and returns `available/LINE_H
+   + 1` (`text_panel.c:669-671`), so its minimum return is `1`; on very
+   short panels both sides hit that floor and the delta is `0`, not `1` —
+   not a regression, just the clamp. Skipping `baseline <= 1` heights keeps
+   the assertion meaningful without weakening it where it matters.
 4. In `tests/test_glr_ctrl.c` (already links the router + clock seam):
    deterministic clock, two tab hits on the same non-active tab within
    `DOUBLE_CLICK_MS` → `editor_inline_rename_active()` + slot switched; single
@@ -507,6 +549,31 @@ folded into the sections above:
   indicative-line-numbers banner (segment-cap / fake-bold work already
   shifted `text_panel.c`); added `MODULES.md` / `CLAUDE.md` to Files;
   corrected the effort estimate to ~a day-plus.
+
+### Round 4
+
+All four findings verified against source and incorporated:
+
+- **[P1] Example helper would break the Scene menu.** `glr_actions.c`
+  loads the *clicked* example via `repl_load_example(item_idx - 1)`; a
+  `glr_scene_load_active_example(void)` reading `active_example_idx` would
+  reload the wrong example (or no-op from a user scene) on a fresh menu
+  pick. §6 helper is now `glr_scene_load_example(int example_idx)` — menu
+  passes `item_idx - 1`, tab passes `active_example_idx`.
+- **[P2] Transient / neither-active documents were unspecified.** Tutorial
+  start (`tutorial.c:286 repl_scenes_enter_transient_scene()`) and Scene →
+  New leave `active_user_scene == -1 && active_example_idx == -1` with a
+  live document. Added locked decision #6 (no synthetic tab; list occupied
+  slots, `active_idx == -1`), edge-case entries, and a derivation test
+  case.
+- **[P2] Shared helpers need a header.** `glr_actions.h` exposes only the
+  existing action API; `glr_ctrl.c` calling the new helpers is a C2x
+  undeclared-call error. Added `glr_actions.h` to Files and the §6
+  declaration requirement.
+- **[P3] Lockstep sweep needs a min-height guard.**
+  `ui_text_panel_visible_lines_for_height()` floors at `1`
+  (`text_panel.c:669-671`), so on tiny panels the delta is `0`, not `1`.
+  Test #3 now restricts the sweep to heights where `baseline > 1`.
 
 ## Scope / effort
 
