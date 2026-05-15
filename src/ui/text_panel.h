@@ -261,6 +261,13 @@ typedef struct {
      * CodeLayout values without consulting app state. */
     int wrap_at_comma;
 
+    /* Generic top-chrome reserve (pixels) the adapter draws above the
+     * code rows, e.g. a scene tab strip. Subtracted from the render
+     * origin, hit-test origin, both scrollbar expressions, and the
+     * visible-row count so rows/scrollbar/scroll math clear it. Stays
+     * REPL-free: just an int (the adapter computes the value). */
+    int top_chrome_h;
+
     /* Logical row array — one entry per source / chrome / virtual / input
      * line. The renderer iterates all rows and wraps each one internally. */
     const UiTextPanelRow *rows;
@@ -320,7 +327,8 @@ typedef struct {
 /* Compute how many visual rows fit in a panel of height panel_h pixels for
  * the supplied UI_TEXT_PANEL_CHROME_* bitmask. Pure geometry — does not read
  * any global state. */
-int  ui_text_panel_visible_lines_for_height(int panel_h, int chrome_flags);
+int  ui_text_panel_visible_lines_for_height(int panel_h, int chrome_flags,
+                                             int top_chrome_h);
 
 /* Render the text panel using the provided snapshot. Writes render-discovered
  * state into *out (must not be NULL). The snapshot and all pointer fields it

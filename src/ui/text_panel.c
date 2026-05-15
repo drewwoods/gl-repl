@@ -557,13 +557,15 @@ static void text_panel_draw_scrollbar(const UiTextPanelSnapshot *snap,
         return;
 
     panel_top = snap->cp_y + snap->cp_h;
-    bar_h = snap->cp_h - CODE_MARGIN_Y - LINE_H - text_panel_statusbar_h(snap);
+    bar_h = snap->cp_h - CODE_MARGIN_Y - LINE_H - text_panel_statusbar_h(snap)
+            - snap->top_chrome_h;
     frac = (float)visible_rows / (float)total_rows;
     pos = (float)snap->scroll / (float)total_rows;
     thumb_h = (int)(bar_h * frac);
     if (thumb_h < 12)
         thumb_h = 12;
-    thumb_y = panel_top - CODE_MARGIN_Y - LINE_H - (int)(bar_h * pos) - thumb_h;
+    thumb_y = panel_top - CODE_MARGIN_Y - LINE_H - snap->top_chrome_h
+              - (int)(bar_h * pos) - thumb_h;
 
     glEnable(GL_BLEND);
     glColor4f(0.50f, 0.50f, 0.65f, 0.35f);
@@ -662,10 +664,12 @@ static int text_panel_char_for_click(const UiTextPanelSnapshot *snap,
     return new_cursor;
 }
 
-int ui_text_panel_visible_lines_for_height(int panel_h, int chrome_flags) {
+int ui_text_panel_visible_lines_for_height(int panel_h, int chrome_flags,
+                                            int top_chrome_h) {
     int statusbar_h = (chrome_flags & UI_TEXT_PANEL_CHROME_STATUSBAR)
                     ? STATUSBAR_H : 0;
-    int available = panel_h - CODE_MARGIN_Y - 2 * LINE_H - 3 - statusbar_h;
+    int available = panel_h - CODE_MARGIN_Y - 2 * LINE_H - 3 - statusbar_h
+                    - top_chrome_h;
     if (available < 0)
         return 1;
     return available / LINE_H + 1;
@@ -686,7 +690,8 @@ void ui_text_panel_render(const UiTextPanelSnapshot *snap,
         return;
 
     visible_rows = ui_text_panel_visible_lines_for_height(snap->cp_h,
-                                                          snap->chrome_flags);
+                                                          snap->chrome_flags,
+                                                          snap->top_chrome_h);
     statusbar_h = text_panel_statusbar_h(snap);
 
     out->visible_rows = visible_rows;
@@ -710,7 +715,7 @@ void ui_text_panel_render(const UiTextPanelSnapshot *snap,
     text_panel_draw_chrome(snap);
 
     panel_top = snap->cp_y + snap->cp_h;
-    line_y = panel_top - CODE_MARGIN_Y - 2 * LINE_H;
+    line_y = panel_top - CODE_MARGIN_Y - 2 * LINE_H - snap->top_chrome_h;
 
     for (int i = 0; i < snap->row_count; i++) {
         const UiTextPanelRow *row = &snap->rows[i];
@@ -756,9 +761,10 @@ UiHit ui_text_panel_hit_test(const UiTextPanelSnapshot *snap,
         return h;
 
     panel_top = snap->cp_y + snap->cp_h;
-    line_y_start = panel_top - CODE_MARGIN_Y - 2 * LINE_H;
+    line_y_start = panel_top - CODE_MARGIN_Y - 2 * LINE_H - snap->top_chrome_h;
     visible_rows = ui_text_panel_visible_lines_for_height(snap->cp_h,
-                                                          snap->chrome_flags);
+                                                          snap->chrome_flags,
+                                                          snap->top_chrome_h);
     row_from_top = (line_y_start + LINE_H - 3 - gl_y) / LINE_H;
     if (row_from_top < 0 || row_from_top >= visible_rows)
         return h;
