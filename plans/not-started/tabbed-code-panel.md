@@ -19,13 +19,17 @@ the Scene menu and F12 already do, with click-to-switch and double-click-to-rena
 2. Tab set is **derived each frame from existing state — no new persistent model**:
    one tab per occupied user-scene slot (slot order) + exactly one "example
    tab" iff `active_example_idx >= 0`. Active tab = active user slot, else the
-   example tab.
-3. **Always show** the strip, even with a single tab. (Fresh start is **one
-   user tab** — the home slot, *not* an example tab: `core.c:790-791` runs
-   `repl_load_example(0)` then `repl_scenes_activate_home_slot()`, which saves
-   slot 0 and sets `g_active_user_scene = 0`, `g_example_idx = -1`
-   (`scenes.c:763-765`). An example tab appears only once an example is
-   explicitly loaded via Scene-menu/F12 while a user scene exists.)
+   example tab if present; in the transient/neither-active state, `active_idx =
+   -1`.
+3. **Always show** the strip when the derived tab set is non-empty, even with
+   a single tab. (Fresh start is **one user tab** — the home slot, *not* an
+   example tab: `core.c:790-791` runs `repl_load_example(0)` then
+   `repl_scenes_activate_home_slot()`, which saves slot 0 and sets
+   `g_active_user_scene = 0`, `g_example_idx = -1` (`scenes.c:763-765`). An
+   example tab appears only once an example is explicitly loaded via
+   Scene-menu/F12 while a user scene exists.) If the derived count is zero
+   (only possible in reset/test/transient states with no occupied slots), the
+   band height is `0` and the strip is not rendered.
 4. Click a tab = switch, **reusing the exact Scene-menu load paths**. Switching
    to a user-scene tab clears the active example (existing behavior) → the
    example tab disappears; this needs *zero* extra code. Selecting another
@@ -44,9 +48,10 @@ the Scene menu and F12 already do, with click-to-switch and double-click-to-rena
    "Untitled" synthetic tab** (same rationale as the deferred dirty-dot: no
    per-document identity exists to name or route). If the home slot is still
    occupied (the common case after New) its tab simply shows unhighlighted;
-   if zero slots are occupied the band renders empty (still always-shown).
-   Switching back via F12 / Scene-menu / clicking a tab re-establishes an
-   active tab through the existing paths — zero extra routing.
+   if zero slots are occupied the derived count is `0`, the band height is
+   `0`, and nothing is rendered. Switching back via F12 / Scene-menu / clicking
+   a listed tab re-establishes an active tab through the existing paths — zero
+   extra routing.
 
 ## Design overview
 
@@ -225,21 +230,21 @@ Insert `ui_scene_tabs_render(snap);` in the `gl2d_begin/end` block of
 
 **Open-dropdown z-order (must resolve — closed-state-only reasoning is
 insufficient).** The Scene/Config dropdown expands *downward from the menu
-bar*, straight through the new band. Drawing tabs **after**
-`ui_menu_bar_render` paints the strip over the dropdown's top rows.
-Resolution: draw `ui_scene_tabs_render(snap)` **before**
-`ui_menu_bar_render(snap)` so the dropdown (rendered by the menu bar, last,
-on top) overpaints the strip rather than the reverse. This is a one-line
-order choice and safe — the strip and the *closed* menu bar share no pixels,
-and the menu-bar render does not depend on the strip being painted first.
-(If a future menu-bar change ever needs the opposite order, the alternative
-is to gate the strip background/labels behind the same menu-open snapshot
-flag `menu_bar.c` already uses.) The matching hit-precedence requirement is
-in §5.
+bar*, straight through the new band. Today the dropdown is not drawn inside
+`ui_menu_bar_render()`; it is the later controller overlay pass
+`ui_menu_bar_render_example_dropdown()` after `ui_panels_render_code_panel()`.
+Keep that later pass unchanged so the dropdown overpaints both the tab strip
+and closed menu bar. Inside the code-panel `gl2d_begin/end` block, draw
+`ui_scene_tabs_render(snap)` **before** `ui_menu_bar_render(snap)` so the
+closed menu row remains the topmost chrome in its own band. If a future change
+folds dropdown rendering back into `ui_menu_bar_render()`, this same order
+still lets the dropdown draw after the strip. The matching hit-precedence
+requirement is in §5.
 
 Visibility gating mirrors `menu_bar.c`: early-return if `cp_w<=0 || cp_h<=0`
-(HIDDEN) or `count<=0`. TOP/BOTTOM/LEFT need no special-casing — the strip is
-relative to `panel_top`+menu bar, which `layout.c` already places per mode.
+(HIDDEN) or `count<=0` (zero derived tabs means no band, consistent with
+decision #3/#6). TOP/BOTTOM/LEFT need no special-casing — the strip is relative
+to `panel_top`+menu bar, which `layout.c` already places per mode.
 
 Draw order: (1) dark background band (`#1d1d1d`, matches menu strip); (2) per
 tab L→R clipped at the right edge: inactive label `#d8d8d8`; active = 2px
@@ -313,10 +318,15 @@ Tab double-click statics next to `g_last_text_press_*` (`src/app/glr_ctrl.c`
 there for the rename-trigger test).
 
 `route_scene_tab_hit(const UiHit *hit)` near `route_menu_item_hit`:
-- Resolve display idx → slot by **reusing
-  `glr_scene_menu_slot_for_dense_index(idx)`** (`src/app/glr_actions.c:287`):
-  `>=0` → user tab; `-1` with `active_example_idx>=0` → example tab; else
-  stale → consumed no-op.
+- Resolve display idx against the **live** tab shape, not just the stale
+  snapshot payload: compute `user_tab_count = repl_user_scene_count()`. If
+  `idx < 0` → stale consumed no-op. If `idx < user_tab_count`, map it by
+  **reusing `glr_scene_menu_slot_for_dense_index(idx)`**
+  (`src/app/glr_actions.c:287`) and treat `>=0` as a user tab. If
+  `idx == user_tab_count && active_example_idx >= 0`, it is the single appended
+  example tab. Any other idx is stale → consumed no-op. This avoids
+  misclassifying arbitrary out-of-range stale clicks as the example tab just
+  because the dense slot lookup returned `-1`.
 - **Reuse, do not copy, the load sequences (shared-helper extraction).**
   Copying the Scene-menu's 3-statement load sequences inline into the router
   is the *same* drift hazard this plan rejects for layout math (§1) — the
@@ -328,8 +338,10 @@ there for the rename-trigger test).
   - `glr_scene_load_user_slot(int slot)` — body exactly the current
     `glr_actions.c:500-503`: `editor_undo_clear(); if
     (repl_load_user_scene_idx(slot)) load_line_to_input(repl_state_edit_line());`.
-    No `editor_reset_transients()` (load-bearing omission — keep it). No-op
-    if `slot == repl_active_user_scene()`.
+    No `editor_reset_transients()` (load-bearing omission — keep it). **No
+    active-slot no-op inside the helper**: Scene-menu behavior must stay
+    unchanged when refactored through this function. The tab router performs
+    its own active-tab no-op before calling the helper.
   - `glr_scene_load_example(int example_idx)` — body exactly the current
     `glr_actions.c` example branch: `editor_reset_transients();
     editor_undo_clear(); repl_load_example(example_idx);`. **Takes an
@@ -339,7 +351,9 @@ there for the rename-trigger test).
     user scene) when a *different* example is picked from the menu. The
     menu action passes `item_idx - 1`; `route_scene_tab_hit` passes
     `repl_state_scenes().active_example_idx` (the example tab can only
-    re-select the already-active example). No-op if already active.
+    re-select the already-active example). **No active-example no-op inside the
+    helper** for the same menu-preservation reason; the tab router consumes an
+    active example-tab click without reloading.
   Both helpers are **declared in `src/app/glr_actions.h`** (next to
   `glr_scene_menu_slot_for_dense_index`) — `glr_ctrl.c` calls them and an
   undeclared call is an error under C2x. Placement follows existing layering
@@ -351,6 +365,11 @@ there for the rename-trigger test).
   `editor_inline_rename_begin(slot)`. Hard-modal capture and the status-bar
   prompt are already wired (`glr_ctrl_keyboard` → `editor_input_rename_capture_key`,
   `editor_inline_rename_active()`), so no extra plumbing.
+- Active-tab clicks are consumed no-ops in the tab router (after updating the
+  tab double-click statics): active user tab → no reload but a second click can
+  still open rename; active example tab → no reload and never rename. This
+  preserves the tab UX while keeping the shared helpers exact copies of the
+  existing Scene-menu load behavior.
 
 Add `case UI_HIT_CODE_PANEL_TAB:` to the switch in
 `glr_ctrl_router_handle_code_panel_hit()` (after `UI_HIT_CODE_PANEL_CHROME`).
@@ -406,14 +425,14 @@ active example cleared, `editor_clear_all_cmds()`, no slot activated →
 unhighlighted; no synthetic tab (decision #6). **Tutorial start
 (`repl_scenes_enter_transient_scene`)** → same `neither-active` shape:
 existing user tabs unhighlighted, no transient tab. HIDDEN → early-return,
-`top_chrome_h==0`. TOP/BOTTOM → relative to panel_top, follows. Scrollbar
-thumb → clears the tab band (both scrollbar reserve sites threaded). Long name
-→ hard-truncated. Too-narrow panel → off-panel tabs clipped. Click active tab →
-no-op (still records press time so a 2nd click double-clicks). Double-click
-example tab → switches only, no rename. Stale click → resolved against live
-`repl_*`, consumed no-op. Blank tab-strip space (gaps between tabs, right of
-the last tab) → `UI_HIT_CODE_PANEL_CHROME`, inert; never falls through to a
-code-text/gutter hit.
+`top_chrome_h==0`; count==0 → same zero-band behavior. TOP/BOTTOM → relative
+to panel_top, follows. Scrollbar thumb → clears the tab band (both scrollbar
+reserve sites threaded). Long name → hard-truncated. Too-narrow panel →
+off-panel tabs clipped. Click active tab → no-op (still records press time so a
+2nd click double-clicks). Double-click example tab → consumed only, no rename.
+Stale click → resolved against live `repl_*`, consumed no-op. Blank tab-strip
+space (gaps between tabs, right of the last tab) → `UI_HIT_CODE_PANEL_CHROME`,
+inert; never falls through to a code-text/gutter hit.
 
 ## Verification
 
@@ -447,7 +466,8 @@ default.
    incl. the band's lower pixels where `row_from_top` truncates to 0); a click
    on a tab → `UI_HIT_CODE_PANEL_TAB`; a click below the band still reaches the
    code panel.
-3. **band_h lockstep** — `==TAB_STRIP_H` (==`LINE_H`) with tabs, `==0` HIDDEN;
+3. **band_h lockstep** — `==TAB_STRIP_H` (==`LINE_H`) with tabs, `==0` HIDDEN
+   or `count==0`;
    assert `visible_lines(H,flags,TAB_STRIP_H)` is **exactly one** row fewer
    than `(H,flags,0)`, swept over several `H` — valid precisely because
    `TAB_STRIP_H==LINE_H` (see §3); the sweep guards a future
@@ -534,14 +554,17 @@ folded into the sections above:
   exists to prevent. §2 now hardcodes `64` and adds the matching assert in
   `glr_ctrl.c`, symmetric with the cap.
 - **[P1] Open-dropdown z-order/hit interaction unanalyzed.** Scene/Config
-  dropdowns expand through the new band; drawing tabs after the menu bar
-  paints over them. §4 now draws the strip *before* `ui_menu_bar_render`;
-  §5 adds the matching dropdown hit-precedence requirement.
+  dropdowns expand through the new band. §4 now keeps the dropdown in the
+  later controller overlay pass (`ui_menu_bar_render_example_dropdown`) so it
+  overpaints the strip, and draws the strip before `ui_menu_bar_render` inside
+  the code-panel pass; §5 adds the matching dropdown hit-precedence
+  requirement.
 - **[P2] Scene-load sequences were duplicated.** §6 copied the menu's
   3-statement load paths inline — the same drift hazard the plan rejects for
   layout math. Replaced with `glr_scene_load_user_slot()` /
-  `glr_scene_load_active_example()` shared helpers that the Scene-menu
-  actions are refactored to call too.
+  `glr_scene_load_example(int)` shared helpers that the Scene-menu actions are
+  refactored to call too. The helpers preserve menu reload semantics;
+  active-tab no-ops live only in the tab router.
 - **[P2] CHROME router inertness asserted, not verified.** §5 now requires
   confirming `UI_HIT_CODE_PANEL_CHROME` is side-effect-free at the new band
   coordinates (no divider drag / cursor move) rather than assuming it.
@@ -574,6 +597,23 @@ All four findings verified against source and incorporated:
   `ui_text_panel_visible_lines_for_height()` floors at `1`
   (`text_panel.c:669-671`), so on tiny panels the delta is `0`, not `1`.
   Test #3 now restricts the sweep to heights where `baseline > 1`.
+
+### Round 5
+
+Follow-up coherence pass corrections:
+
+- **[P1] Helper no-ops conflicted with Scene-menu behavior.** The shared
+  `glr_scene_load_*` helpers now preserve the current menu reload semantics;
+  active-tab no-ops live only in `route_scene_tab_hit`.
+- **[P2] Stale tab indices could become example hits.** §6 now resolves
+  `item_idx` against the live `repl_user_scene_count()` shape and only treats
+  `idx == user_tab_count` as the example tab.
+- **[P2] Zero-tab visibility contradicted "always shown."** Decisions #3/#6
+  now state that non-empty tab sets always show, including one tab; `count==0`
+  means `band_h==0` and no strip.
+- **[P3] Dropdown z-order rationale was stale.** §4 now names the actual
+  later `ui_menu_bar_render_example_dropdown()` overlay pass instead of
+  implying dropdown rows are drawn inside `ui_menu_bar_render()`.
 
 ## Scope / effort
 
