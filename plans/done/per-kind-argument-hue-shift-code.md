@@ -1,5 +1,21 @@
 # Plan: Per-kind argument hue shift in the code panel
 
+## Progress
+
+- [x] Step 1 — segment cap 4 → 16 (`src/ui/text_panel.h`), committed
+- [x] Step 2 — classifier + color model + wiring + public API
+      (`src/ui/repl_code_panel.{c,h}`), `make sample` green,
+      `check-ui-text-panel-pure` OK, committed
+- [x] Step 3 — `test_repl_code_panel_syntax` + Makefile target;
+      caught & fixed `t` (reserved but is the predefined var) being
+      classified as structural, committed
+- [x] Step 4 — optional contrast regression test (3.0 WCAG vs the
+      `(0.06,0.06,0.10)` panel background), committed
+- [x] Step 5 — verified: `make test` 4373/4373, `make test-stubs`
+      4814/4814, `make sample` + `make sample USE_GL_STUBS=1` both link
+
+**Status: complete.** All five commits on branch `feat/per-kind-arg-hue`.
+
 ## Context
 
 Today every code-panel row is drawn in a **single color** chosen from the
