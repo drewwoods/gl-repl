@@ -220,9 +220,10 @@ static void test_menu_actions(void) {
 
     /* File menu */
     ASSERT_INT("File Load Scene", glr_action_menu_item_activate(GLR_MENU_FILE, REPL_FILE_ITEM_LOAD_SCENE), 1);
+    /* No glr_ctrl_set_program_name() in tests -> default "gl-repl". */
     ASSERT_STR("Load Scene status", g_last_status,
-               "Runtime load unsupported - relaunch "
-               "./sample <file> or use Load Workspace");
+               "Runtime load unsupported - relaunch gl-repl <file> "
+               "or use Load Workspace");
     run_menu_action_in_temp_dir("File Save Workspace",
                                 GLR_MENU_FILE,
                                 REPL_FILE_ITEM_SAVE_WORKSPACE,

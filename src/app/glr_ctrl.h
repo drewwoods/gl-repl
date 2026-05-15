@@ -157,4 +157,9 @@ const struct UiOverlayContent *glr_ctrl_help_overlay_content(void);
 #include "repl/replay_annotations.h" /* ReplReplayAnnotationOutput */
 void glr_publish_replay_annotations(const ReplReplayAnnotationOutput *out);
 
+/* Program name for user-facing messages. main() forwards argv[0]
+ * (basename kept); defaults to "gl-repl" when unset (tests/demos). */
+void        glr_ctrl_set_program_name(const char *argv0);
+const char *glr_ctrl_program_name(void);
+
 #endif /* GLR_CTRL_H */
