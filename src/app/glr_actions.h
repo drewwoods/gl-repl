@@ -112,4 +112,12 @@ int  glr_action_menu_item_activate(int menu_id, int item_idx);
  * (unused slots are skipped in the display). */
 int  glr_scene_menu_slot_for_dense_index(int scene_idx);
 
+/* Shared scene-load sequences used by both the Scene menu and the scene
+ * tab strip router (glr_ctrl.c). Neither self-no-ops on "already active";
+ * the menu always reloads, so a no-op-wanting caller checks first.
+ * glr_scene_load_example takes an explicit index (the menu loads the
+ * clicked example, NOT the active one). */
+void glr_scene_load_example(int example_idx);
+void glr_scene_load_user_slot(int slot);
+
 #endif /* GLR_ACTIONS_H */
