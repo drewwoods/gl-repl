@@ -44,6 +44,14 @@ touches REPL/editor state. The controller bakes the tab list into the
 per-frame snapshot (precedent: `ReplImportExportView` flat by-value view). All
 routing/mutation stays in `src/app/glr_ctrl.c`.
 
+> **Line references are indicative, not authoritative.** This branch has
+> already shifted `src/ui/text_panel.{c,h}` and `src/ui/repl_code_panel.c`
+> (color-segment cap raise + the generic fake-bold primitive). Treat every
+> `file:line` below as a search hint and re-derive the offset at
+> implementation. What binds is the *structural* claim (site counts,
+> expression forms, function names), not the numbers. The §Verification
+> grep is therefore a **mandatory, blocking** step, not a courtesy audit.
+
 ## Implementation
 
 ### 1. New module `src/ui/scene_tabs.{c,h}`
@@ -87,8 +95,12 @@ live `ui_state_viewport()`).
 controller and frozen. Add to `src/ui/snapshot.h`:
 
 ```c
-enum { UI_SCENE_TAB_NAME_MAX = USER_SCENE_NAME_MAX };   /* 64 */
-enum { UI_SCENE_TAB_CAP = 9 };                          /* MAX_USER_SCENES + 1 */
+/* Both constants are hardcoded here, NOT derived from repl macros —
+ * snapshot.h must stay free of repl/* includes (UI-layer purity). The
+ * equivalence to the repl source-of-truth is enforced by _Static_assert
+ * in glr_ctrl.c, which already includes repl/core.h. */
+enum { UI_SCENE_TAB_NAME_MAX = 64 };   /* == USER_SCENE_NAME_MAX */
+enum { UI_SCENE_TAB_CAP = 9 };         /* == MAX_USER_SCENES + 1 */
 typedef enum { UI_SCENE_TAB_USER = 0, UI_SCENE_TAB_EXAMPLE } UiSceneTabKind;
 typedef struct { char name[UI_SCENE_TAB_NAME_MAX]; UiSceneTabKind kind;
                  int slot; int active; } UiSceneTab;
@@ -96,9 +108,15 @@ typedef struct { UiSceneTab tabs[UI_SCENE_TAB_CAP]; int count; int active_idx; }
         UiSceneTabList;
 ```
 
-Add `UiSceneTabList scene_tabs;` to `UiRenderSnapshot`. Guard the cap with
-`_Static_assert(UI_SCENE_TAB_CAP >= MAX_USER_SCENES + 1, ...)` in `glr_ctrl.c`
-(which already includes `repl/core.h`; keep it out of `snapshot.h`).
+Add `UiSceneTabList scene_tabs;` to `UiRenderSnapshot`. Guard **both**
+constants in `glr_ctrl.c` (which already includes `repl/core.h`; keep both
+asserts out of `snapshot.h`):
+`_Static_assert(UI_SCENE_TAB_CAP >= MAX_USER_SCENES + 1, ...)` and
+`_Static_assert(UI_SCENE_TAB_NAME_MAX == USER_SCENE_NAME_MAX, ...)`. (The
+earlier draft wrote `UI_SCENE_TAB_NAME_MAX = USER_SCENE_NAME_MAX` directly in
+`snapshot.h`, which would have pulled a repl macro into the UI layer —
+exactly the dependency the hardcoded-cap treatment exists to avoid. Both
+constants get the same hardcode-plus-assert treatment for consistency.)
 
 Build helper in `glr_ctrl_build_ui_snapshot()` (`src/app/glr_ctrl.c`, just
 after `snap->user_scene_active_idx = repl_active_user_scene();`):
@@ -134,12 +152,39 @@ Fix — one carrier, compiler-enforced:
   `thumb_y -= top_chrome_h`).
 - Make `ui_text_panel_visible_lines_for_height()` take `top_chrome_h` as a
   **required new parameter** (break-the-build forcing function) and subtract it.
-- Adapter wires it in **one place**: `repl_code_panel_init_builder()`
-  (`src/ui/repl_code_panel.c`) sets `.top_chrome_h = ui_scene_tabs_band_h(snap)`.
-  Audit `ui_repl_code_panel_build_layout()` and the layout helper near
-  `repl_code_panel.c:324` for any other "rows that fit" computation.
-- Tests that call the helper pass `0` (behavior unchanged). `text_panel.c`
-  stays REPL-free (generic int, passes `check-ui-text-panel-pure`).
+- Adapter wires the **render/hit** path in `repl_code_panel_init_builder()`
+  (`src/ui/repl_code_panel.c`) — sets `.top_chrome_h =
+  ui_scene_tabs_band_h(snap)` on the `UiTextPanelSnapshot`.
+- Tests that call the generic helper pass `0` (behavior unchanged).
+  `text_panel.c` stays REPL-free (generic int, passes
+  `check-ui-text-panel-pure`).
+
+**Scroll / paging parity — mandatory consumer audit (this was the
+under-scoped risk, not the 5 render sites).** The band must subtract from
+*every* "rows that fit" computation, not just the renderer/hit-test, or
+scroll-clamp and cursor-follow drift exactly one row from what is drawn
+(bottom row never revealed; Page-Down overshoots by one). The public
+wrapper `ui_repl_code_panel_visible_lines_for_height(int cp_h)` has **no
+`snap`** and cannot see `scene_tabs.count`, so it cannot self-correct.
+Resolution: give it the band height explicitly — either add an `int
+top_chrome_h` parameter (break-the-build, mirrors the generic helper) or
+add a `snap`-taking variant — and migrate callers. Enumerate, thread, and
+unit-cover each "rows that fit" consumer (re-derive the line numbers):
+
+- `ui_repl_code_panel_build_layout()` — has `snap`; derive the band there
+  and feed `visible_lines`, `cursor_doc_line`, and follow-scroll from the
+  band-adjusted count.
+- the follow-scroll / row-count helpers around `repl_code_panel.c` ≈`:324`
+  (`repl_code_panel_*_rows`, `*_follow_doc_line_from_layout`).
+- `glr_ctrl.c`: scroll clamp, Page-Up/Down, and
+  `glr_ctrl_apply_code_panel_follow_scroll()` — any `visible_lines` use.
+- `editor_*` scroll / `scroll_follow_cursor` math, **iff** it reaches the
+  wrapper (verify; if it derives independently it needs the band too).
+- tests (`test_repl_code_panel_layout`, `test_repl_code_panel_document`)
+  pass `0`.
+
+The §Verification grep is the forcing function for this audit and is
+**blocking**, not "pre-finish".
 
 Strip rect: `panel_top = cp_y + cp_h`; `menu_by = panel_top - CODE_MARGIN_Y -
 LINE_H` (unchanged menu bar); `tab_bh = TAB_STRIP_H`; `tab_by = menu_by -
@@ -160,9 +205,23 @@ tabs fit any normal panel; idiomatic — `menu_bar.c` hard-limits via
 ### 4. Rendering
 
 Insert `ui_scene_tabs_render(snap);` in the `gl2d_begin/end` block of
-`ui_repl_code_panel_render()` (`src/ui/repl_code_panel.c:1342-1354`),
-**immediately after** `ui_menu_bar_render(snap);` (it draws into the caller's
-open block — no own `gl2d_begin/end`, same as the menu bar there).
+`ui_repl_code_panel_render()` (`src/ui/repl_code_panel.c`, the
+`ui_menu_bar_render` block), drawing into the caller's open block — no own
+`gl2d_begin/end`, same as the menu bar there.
+
+**Open-dropdown z-order (must resolve — closed-state-only reasoning is
+insufficient).** The Scene/Config dropdown expands *downward from the menu
+bar*, straight through the new band. Drawing tabs **after**
+`ui_menu_bar_render` paints the strip over the dropdown's top rows.
+Resolution: draw `ui_scene_tabs_render(snap)` **before**
+`ui_menu_bar_render(snap)` so the dropdown (rendered by the menu bar, last,
+on top) overpaints the strip rather than the reverse. This is a one-line
+order choice and safe — the strip and the *closed* menu bar share no pixels,
+and the menu-bar render does not depend on the strip being painted first.
+(If a future menu-bar change ever needs the opposite order, the alternative
+is to gate the strip background/labels behind the same menu-open snapshot
+flag `menu_bar.c` already uses.) The matching hit-precedence requirement is
+in §5.
 
 Visibility gating mirrors `menu_bar.c`: early-return if `cp_w<=0 || cp_h<=0`
 (HIDDEN) or `count<=0`. TOP/BOTTOM/LEFT need no special-casing — the strip is
@@ -207,10 +266,29 @@ through to `UI_HIT_SCENE`" note was wrong: `UI_HIT_SCENE` is only the final
 fallback *after* the code-panel handler — `panels.c:157` — which the band
 never reaches.)
 
-Integrate in `ui_panels_hit_test()` **between the menu-bar block (`panels.c
-:139-143`) and the variable-panel block (`:145-149`)**, so the band is claimed
-before `ui_repl_code_panel_hit_test` (`:151-154`) runs. Add
-`#include "scene_tabs.h"` to `panels.c`.
+Integrate in `ui_panels_hit_test()` **between the menu-bar block and the
+variable-panel block** (re-derive lines), so the band is claimed before
+`ui_repl_code_panel_hit_test` runs. Add `#include "scene_tabs.h"` to
+`panels.c`.
+
+**Dropdown hit-precedence (matches the §4 z-order fix).** An open
+Scene/Config dropdown's rect overlaps the band. Verify the menu-bar hit
+block consumes the *open dropdown's full list rect* (not just the bar) and
+runs **before** the band block — so a click on dropdown rows that visually
+sit over the strip routes to the menu, not a tab. If the menu-bar block only
+hit-tests the closed bar, the band block must early-out when a dropdown is
+open (same menu-open snapshot flag as the §4 render gate). State which is
+true after inspecting `panels.c` + `menu_bar.c`; do not assume.
+
+**CHROME router inertness (verify, don't assert).** §6 routes in-band
+off-tab clicks as `UI_HIT_CODE_PANEL_CHROME`. That kind today only services
+the statusbar slot; the band is a *new* coordinate region for it. Before
+relying on it, confirm `glr_ctrl_router_handle_code_panel_hit()`'s
+`UI_HIT_CODE_PANEL_CHROME` case is genuinely side-effect-free at band
+coordinates — specifically that it cannot start a panel-divider drag or move
+the cursor/selection there. If it is not inert, the band's off-tab branch
+must return `UI_HIT_NONE` *and* the §5 consume-the-whole-band guarantee must
+instead be enforced by an explicit early dismissal in the router.
 
 ### 6. Routing — `route_scene_tab_hit()` in `glr_ctrl.c`
 
@@ -225,15 +303,26 @@ there for the rename-trigger test).
   `glr_scene_menu_slot_for_dense_index(idx)`** (`src/app/glr_actions.c:287`):
   `>=0` → user tab; `-1` with `active_example_idx>=0` → example tab; else
   stale → consumed no-op.
-- **User-scene tab — exact path from `glr_actions.c:500-503`:**
-  `editor_undo_clear(); if (repl_load_user_scene_idx(slot))
-  load_line_to_input(repl_state_edit_line());` — the live user-scene Scene-menu
-  path does **not** call `editor_reset_transients()`; do not add it. No-op if
-  `slot == repl_active_user_scene()`.
-- **Example tab — exact path from `glr_actions.c:468-471`:**
-  `editor_reset_transients(); editor_undo_clear();
-  repl_load_example(active_example_idx);`. No-op if already active. Never
-  rename an example.
+- **Reuse, do not copy, the load sequences (shared-helper extraction).**
+  Copying the Scene-menu's 3-statement load sequences inline into the router
+  is the *same* drift hazard this plan rejects for layout math (§1) — the
+  load-bearing subtlety (user path must **not** call
+  `editor_reset_transients()`; example path must) would then live in two
+  places. Instead, extract two helpers in the same change and convert the
+  existing Scene-menu actions to call them, so menu and tab share one
+  definition:
+  - `glr_scene_load_user_slot(int slot)` — body exactly the current
+    `glr_actions.c:500-503`: `editor_undo_clear(); if
+    (repl_load_user_scene_idx(slot)) load_line_to_input(repl_state_edit_line());`.
+    No `editor_reset_transients()` (load-bearing omission — keep it). No-op
+    if `slot == repl_active_user_scene()`.
+  - `glr_scene_load_active_example(void)` — body exactly the current
+    `glr_actions.c:468-471`: `editor_reset_transients(); editor_undo_clear();
+    repl_load_example(active_example_idx);`. No-op if already active.
+  Placement follows existing layering (these touch `repl_*` + `editor_*`;
+  `glr_actions.c` already does, so co-locate there and have
+  `route_scene_tab_hit` call across — same direction as the existing
+  menu→action calls). Example tabs are never renamed.
 - Double-click on a user-scene tab (after switching, or if already active):
   `editor_inline_rename_begin(slot)`. Hard-modal capture and the status-bar
   prompt are already wired (`glr_ctrl_keyboard` → `editor_input_rename_capture_key`,
@@ -252,14 +341,23 @@ The existing dropdown-dismiss preamble correctly closes an open menu first.
 - `src/ui/hit.h` — `UI_HIT_CODE_PANEL_TAB` + comment block
 - `src/ui/metrics.h` — `TAB_STRIP_H`
 - `src/ui/text_panel.h` / `src/ui/text_panel.c` — `top_chrome_h` carrier +
-  helper signature; **5** reserve sites (3 code-row + 2 scrollbar) — highest risk
-- `src/ui/repl_code_panel.c` — include, set `.top_chrome_h`, call
-  `ui_scene_tabs_render`, layout-helper audit
-- `src/ui/panels.c` — include + hit-test insert
-- `src/app/glr_ctrl.c` — snapshot build helper, static_assert, double-click
-  statics, `route_scene_tab_hit`, dispatch case
-- `tests/test_ui_text_panel.c`, `tests/test_repl_code_panel_layout.c` — pass
-  `0` for the new helper arg
+  mandatory helper-signature change; **5** reserve sites (3 code-row + 2
+  scrollbar)
+- `src/ui/repl_code_panel.c` — include; set `.top_chrome_h` in
+  `init_builder`; call `ui_scene_tabs_render`; **public
+  `ui_repl_code_panel_visible_lines_for_height` signature change** + every
+  "rows that fit" / follow-scroll consumer threaded (§3 scroll-parity audit)
+- `src/ui/panels.c` — include + hit-test insert (+ dropdown precedence check)
+- `src/app/glr_actions.c` — extract `glr_scene_load_user_slot()` /
+  `glr_scene_load_active_example()` shared helpers; refactor the existing
+  Scene-menu user/example actions to call them (no behavior change)
+- `src/app/glr_ctrl.c` — snapshot build helper, **two** `_Static_assert`s
+  (cap + name-max), double-click statics, `route_scene_tab_hit` (calls the
+  shared helpers), dispatch case; thread band into scroll/Page/follow math
+- `MODULES.md`, `CLAUDE.md` — add `src/ui/scene_tabs.{c,h}` to the layered
+  overview and the File-Layout table (repo keeps these exhaustive)
+- `tests/test_ui_text_panel.c`, `tests/test_repl_code_panel_layout.c`,
+  `tests/test_repl_code_panel_document.c` — pass `0` for the new helper arg
 - `scripts/allowlists/ui-renderers-signature.txt` — add `ui_scene_tabs_render`
 - `Makefile` — add `src/ui/scene_tabs.c` to `SRCS` and `CORE_TEST_SRCS`,
   `src/ui/scene_tabs.h` to the header list, `test_ui_scene_tabs` to
@@ -380,12 +478,47 @@ folded into the sections above:
   (duplicating layout math into snapshot fields — forks geometry, drift
   hazard).
 
+### Round 3
+
+- **[P1] Vertical-reserve threading was scoped to rendering only.** The
+  public `ui_repl_code_panel_visible_lines_for_height(int cp_h)` has no
+  `snap`, so scroll-clamp / cursor-follow / Page math would drift one row
+  from the rendered text. §3 now carries a *mandatory* scroll-parity
+  consumer audit (named call sites + a signature change on the wrapper), and
+  the §Verification grep is reclassified blocking, not pre-finish.
+- **[P1] `snapshot.h` purity break.** Draft had `UI_SCENE_TAB_NAME_MAX =
+  USER_SCENE_NAME_MAX` directly in `snapshot.h`, pulling a repl macro into
+  the UI layer — the exact thing the hardcoded-cap+`_Static_assert` pattern
+  exists to prevent. §2 now hardcodes `64` and adds the matching assert in
+  `glr_ctrl.c`, symmetric with the cap.
+- **[P1] Open-dropdown z-order/hit interaction unanalyzed.** Scene/Config
+  dropdowns expand through the new band; drawing tabs after the menu bar
+  paints over them. §4 now draws the strip *before* `ui_menu_bar_render`;
+  §5 adds the matching dropdown hit-precedence requirement.
+- **[P2] Scene-load sequences were duplicated.** §6 copied the menu's
+  3-statement load paths inline — the same drift hazard the plan rejects for
+  layout math. Replaced with `glr_scene_load_user_slot()` /
+  `glr_scene_load_active_example()` shared helpers that the Scene-menu
+  actions are refactored to call too.
+- **[P2] CHROME router inertness asserted, not verified.** §5 now requires
+  confirming `UI_HIT_CODE_PANEL_CHROME` is side-effect-free at the new band
+  coordinates (no divider drag / cursor move) rather than assuming it.
+- **[P3] Line numbers stale on this branch + docs gap.** Added the
+  indicative-line-numbers banner (segment-cap / fake-bold work already
+  shifted `text_panel.c`); added `MODULES.md` / `CLAUDE.md` to Files;
+  corrected the effort estimate to ~a day-plus.
+
 ## Scope / effort
 
-Moderate — ~half a day to a day for someone familiar with the tree. Code
-volume is small and mostly a structural copy of `menu_bar.c`; the cost is
-*care*, concentrated in the vertical-reserve threading (small diff, high
-blast radius) and the tests. Risk is low: no new persistent state, no new
-ownership crossings, every reused function verified to exist, all boundary
-guards checked. The reserve lockstep is de-risked by the compiler-enforced
-mandatory helper parameter + the lockstep assertion in test #3.
+Moderate — realistically **~one day-plus** for someone familiar with the
+tree (the earlier "half a day" estimate predated the scroll-parity audit and
+dropdown-z-order work). Code volume is small and mostly a structural copy of
+`menu_bar.c`; the cost is *care*, concentrated in three things, not one:
+(1) the scroll/paging consumer audit (§3 — the genuine high-blast-radius
+item, broader than the 5 render sites), (2) the open-dropdown z-order +
+hit-precedence interaction (§4/§5), and (3) the shared-load-helper
+extraction + Scene-menu refactor (§6). *Architectural* risk is low (no new
+persistent state, no new ownership crossings, all boundary guards checked);
+*integration* risk is the residual, retired by the mandatory helper
+parameter, the blocking §Verification grep, and the lockstep + fall-through
++ scroll-parity tests.
