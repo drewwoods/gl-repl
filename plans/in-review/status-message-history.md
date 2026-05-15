@@ -44,9 +44,12 @@ snapshot-view pattern, pointer-hover pattern, existing overlay renderer).
   flickers; needs a dwell timer or it's twitchy.
 - **Click-to-toggle** the status area (hover only highlights it as
   clickable). Pro: steady, no flicker, simple. Con: slightly less
-  discoverable. — *recommended.*
-- **Keybinding / menu / pin.** Pro: steadiest, no geometry coupling.
-  Con: least discoverable.
+  discoverable.
+- **Persistent "messages" button** fixed at the bottom of the screen;
+  click it to toggle the history. Pro: always-visible affordance —
+  discoverability solved outright; clear, obvious purpose; steady (no
+  hover flicker). Con: adds a permanent screen element + a real
+  hit-region; small bespoke render. — *recommended (see fork 4).*
 
 ### 2. Surface
 - **Inline stacked list** just above the bar (newest at bottom, fades
@@ -62,12 +65,37 @@ snapshot-view pattern, pointer-hover pattern, existing overlay renderer).
 - De-dup consecutive identical messages? (propose: collapse with a
   count, e.g. "(x3)").
 
+### 4. Transient-message animation (ties trigger + button together)
+- **Fade in/out** (current behavior). Pro: zero new code. Con: doesn't
+  connect the message to any affordance; nothing teaches the user
+  history exists.
+- **Slide from / into the messages button.** A new transient message
+  slides out of the bottom "messages" button into the banner position;
+  on expiry it slides back into the button. Pro: visually *teaches*
+  what the button is and where messages go — discoverability and
+  purpose become self-evident; pairs naturally with the persistent
+  button (fork 1). Con: replaces the fade path in
+  `ui_panels_render_scene_status` with a slide transform anchored at
+  the button rect (offset driven by remaining `ttl` / `anim_time`);
+  modest extra render/animation code. — *recommended.*
+
+  Mechanics sketch: button rect is the slide anchor. On set, message
+  origin = button; animates to the banner slot over ~N frames; holds;
+  on `ttl` low, animates back to the button and disappears "into" it.
+  Reuses the existing `ttl` clock — no new timer. The button stays lit
+  while messages exist / briefly pulses on new message.
+
 ## Recommendation
 
-Build it (cheap, useful), with **click-to-toggle + inline stacked list +
-16-entry session ring, newest-at-bottom, age-dimmed, consecutive-dup
-collapse**. Reserve the `tabbed_overlay` route only if full scrollback
-is later wanted.
+Build it (cheap, useful) as a cohesive unit: **persistent bottom
+"messages" button (trigger, fork 1) + transient messages slide out
+of / into that button instead of fading (fork 4) + click the button to
+toggle an inline stacked history list (surface, fork 2) + 16-entry
+session ring, newest-at-bottom, age-dimmed, consecutive-dup collapse
+(fork 3)**. This makes the affordance and its purpose self-evident
+(the original ask). Reserve the modal `tabbed_overlay` route only if
+full scrollback is later wanted; keep plain fade as the trivial
+fallback if the slide proves fiddly.
 
 ## If approved (sketch)
 
@@ -76,13 +104,23 @@ is later wanted.
   `ui_state_reset`. Accessor `ui_state_status_history()`.
 - `src/ui/snapshot.h` + `glr_ctrl_build_ui_snapshot`: copy the ring
   by value.
-- `src/ui/panels.c`: a pure hover/hit helper for the status hot-zone
-  (returns whether the peek is open, given `snap->pointer` or a toggle
-  flag) + the inline-list renderer; wire the toggle through the
-  existing code-panel router (a new `UiHit` kind or reuse CHROME +
-  controller toggle state).
+- `src/ui/panels.c`:
+  - persistent bottom **messages button** (small fixed rect; lit while
+    history non-empty, brief pulse on new message) + a pure hit-test
+    for it (window coords vs the button rect; returns a new `UiHit`
+    kind or reuses CHROME + a controller toggle flag).
+  - replace the fade in `ui_panels_render_scene_status` with a **slide
+    transform**: interpolate the banner position between the button
+    rect and the banner slot, parameterised by remaining `ttl` (rise
+    on appear, hold, sink back into the button on expiry). Plain-fade
+    fallback kept behind the same path if needed.
+  - the inline stacked history list, anchored at / growing up from the
+    button, shown while the toggle is open.
+- Controller: a `status_history_open` toggle flipped by the button hit
+  (lives with UI chrome state; snapshot-exposed for the renderer).
 - Tests: `tests/test_ui_status_history.c` (ring order/cap/dedup, pure)
-  + hover-zone geometry if exposed as a pure fn.
+  + button hit-region geometry as a pure fn; slide math (position given
+  ttl) as a pure fn so it's headless-unit-testable.
 - Docs: CLAUDE.md File Layout / MODULES.md if a new module lands.
 - Verify `make test`, `make test-stubs`, UI boundary guards; `make
   gl-tests` if any gl2d bracket is added.
