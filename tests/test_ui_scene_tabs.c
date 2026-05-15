@@ -29,6 +29,7 @@ static TestHarness g_harness = TEST_HARNESS_INIT;
 
 #define ASSERT_TRUE(label, cond)   TEST_ASSERT_TRUE(&g_harness, label, cond)
 #define ASSERT_INT_EQ(label, g, e) TEST_ASSERT_INT(&g_harness, label, g, e)
+#define ASSERT_STR(label, g, e)    TEST_ASSERT_STR(&g_harness, label, g, e)
 
 static unsigned int g_fake_ms;
 static unsigned int fake_clock(void) { return g_fake_ms; }
@@ -279,34 +280,46 @@ static void test_dropdown_over_band_consumes(void) {
     }
 }
 
-/* The inline rename prompt is surfaced via the status line (TTL-based).
- * glr_ctrl_tick() must NOT age the status out while the rename modal is
- * active, or the prompt vanishes from under the user. */
-static void test_rename_prompt_does_not_auto_hide(void) {
-    ReplStatusState *st;
+/* The inline rename prompt owns its own display state (snapshot rename
+ * view), independent of the shared transient status line: it must not
+ * auto-hide, and a competing repl_set_status() must not overwrite it. */
+static void test_rename_prompt_owns_its_state(void) {
+    UiRenderSnapshot snap;
+    char prompt_before[UI_SCENE_TAB_NAME_MAX];
 
     reset_fixture();
     seed_user_scene();
     editor_inline_rename_cancel();
 
     ASSERT_TRUE("rename begins", editor_inline_rename_begin(0) != 0);
-    st = ui_state_status_mut();
-    ASSERT_TRUE("rename prompt shown", st->ttl > 0 && st->text[0] != '\0');
+    glr_ctrl_build_ui_snapshot(&snap);
+    ASSERT_TRUE("snapshot reports rename active", snap.rename_active);
+    ASSERT_TRUE("rename text is the seeded name",
+                snap.rename_text[0] != '\0');
+    snprintf(prompt_before, sizeof(prompt_before), "%s", snap.rename_text);
 
-    /* Far more ticks than the 240-frame status TTL. */
+    /* A competing status message (e.g. an audio track change) mid-rename
+     * must NOT clobber the rename prompt — the reported bug. */
+    repl_set_status("Now playing: some track");
+    glr_ctrl_build_ui_snapshot(&snap);
+    ASSERT_TRUE("rename still active after competing status",
+                snap.rename_active);
+    ASSERT_STR("rename prompt not overwritten by status",
+               snap.rename_text, prompt_before);
+
+    /* Not TTL-driven: survives far more than 240 frames. */
     for (int i = 0; i < 1000; i++)
         glr_ctrl_tick();
-    st = ui_state_status_mut();
-    ASSERT_TRUE("prompt persists while rename active",
-                st->ttl > 0 && st->text[0] != '\0');
-    ASSERT_TRUE("still in rename modal", editor_inline_rename_active());
+    glr_ctrl_build_ui_snapshot(&snap);
+    ASSERT_TRUE("prompt persists across many ticks", snap.rename_active);
+    ASSERT_STR("prompt text intact across ticks",
+               snap.rename_text, prompt_before);
 
-    /* Once rename ends, the status resumes aging out normally. */
     editor_inline_rename_cancel();
-    for (int i = 0; i < 300; i++)
-        glr_ctrl_tick();
-    ASSERT_INT_EQ("status ages out after rename ends",
-                  ui_state_status_mut()->ttl, 0);
+    glr_ctrl_build_ui_snapshot(&snap);
+    ASSERT_TRUE("rename view clears on cancel", !snap.rename_active);
+    ASSERT_INT_EQ("rename text empty on cancel",
+                  (int)snap.rename_text[0], 0);
 }
 
 /* Inline rename is a hard modal for keys but not the mouse; clicking
@@ -337,7 +350,7 @@ int main(void) {
     test_band_h_lockstep();
     test_double_click_rename();
     test_dropdown_over_band_consumes();
-    test_rename_prompt_does_not_auto_hide();
+    test_rename_prompt_owns_its_state();
     test_click_away_cancels_rename();
     return test_harness_report(&g_harness, "ui_scene_tabs");
 }

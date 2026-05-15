@@ -23,6 +23,56 @@ void ui_panels_render_code_panel(const UiRenderSnapshot *snap,
 }
 
 void ui_panels_render_scene_status(const UiRenderSnapshot *snap) {
+    /* Inline scene rename owns its own display state and takes
+     * precedence over the transient status line. Drawn solid (no TTL
+     * fade) in a distinct blue — visually unmistakable as a modal,
+     * and unaffected by other repl_set_status() writers. */
+    if (snap->rename_active) {
+        int sc_x, sc_y, sc_w, sc_h;
+        int bar_h, bar_y, text_y, tx, max_px, max_chars, n;
+        char msg[256];
+
+        ui_layout_scene_rect(&sc_x, &sc_y, &sc_w, &sc_h);
+        if (sc_w <= 0 || sc_h <= 0)
+            return;
+
+        bar_h = STATUSBAR_H;
+        bar_y = sc_y;
+
+        gl2d_begin(snap->viewport.window_w, snap->viewport.window_h);
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+        glColor4f(0.078f, 0.122f, 0.298f, 0.95f);  /* deep blue bar */
+        glRectf((float)sc_x, (float)bar_y,
+                (float)(sc_x + sc_w), (float)(bar_y + bar_h));
+        glColor4f(0.310f, 0.510f, 0.860f, 1.0f);    /* accent rule */
+        glBegin(GL_LINES);
+        glVertex2f((float)sc_x, (float)(bar_y + bar_h));
+        glVertex2f((float)(sc_x + sc_w), (float)(bar_y + bar_h));
+        glEnd();
+
+        text_y = bar_y + (bar_h - FONT_SMALL_H) / 2 + 1;
+        tx = sc_x + CODE_MARGIN_X;
+        max_px = sc_x + sc_w - CODE_MARGIN_X - tx;
+        max_chars = max_px / FONT_SMALL_W;
+        if (max_chars < 8)
+            max_chars = 8;
+        if (max_chars > 255)
+            max_chars = 255;
+        n = snprintf(msg, sizeof(msg),
+                     "Rename: %s_   [Enter] save   [Esc] cancel",
+                     snap->rename_text);
+        if (n > max_chars)
+            msg[max_chars] = '\0';
+        glColor4f(0.780f, 0.870f, 1.0f, 1.0f);      /* light blue text */
+        gl2d_draw_string((float)tx, (float)text_y, msg, FONT_SMALL);
+
+        glDisable(GL_BLEND);
+        gl2d_end();
+        return;
+    }
+
     ReplStatusState status = snap->status;
     if (status.ttl <= 0 || !status.text[0])
         return;
