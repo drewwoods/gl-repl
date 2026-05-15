@@ -24,6 +24,11 @@
  *   helper, exactly as menu_bar.c does (so the band stays consistent with
  *   the rest of the panel chrome by construction).
  *
+ * Kind cue: example tabs are ephemeral built-ins (they vanish when a
+ * user scene is selected and are not renamable unless promoted), so
+ * they render in a distinct amber family vs the user tabs' green /
+ * neutral — the behavioral difference is conveyed by color.
+ *
  * Dirty dot: deferred — there is no reachable per-scene modified flag
  * (editor dirty state is global), so no per-tab unsaved indicator is drawn.
  */
