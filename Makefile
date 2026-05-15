@@ -493,6 +493,7 @@ TEST_BINS = \
 	test_repl_code_panel_layout \
 	test_repl_code_panel_document \
 	test_repl_code_panel_syntax \
+	test_ui_scene_tabs \
 	test_repl_core_parse \
 	test_repl_core_format \
 	test_repl_core_commit \
