@@ -46,6 +46,25 @@ typedef struct {
     int               count;
 } UiVariableList;
 
+/* Scene tab strip view. Both constants are hardcoded here, NOT derived from
+ * repl macros — snapshot.h must stay free of repl-layer includes (UI-layer
+ * purity). Equivalence to the repl source-of-truth is enforced by
+ * _Static_assert in glr_ctrl.c (which already includes repl/core.h). */
+enum { UI_SCENE_TAB_NAME_MAX = 64 };   /* == USER_SCENE_NAME_MAX */
+enum { UI_SCENE_TAB_CAP = 9 };         /* == MAX_USER_SCENES + 1 */
+typedef enum { UI_SCENE_TAB_USER = 0, UI_SCENE_TAB_EXAMPLE } UiSceneTabKind;
+typedef struct {
+    char           name[UI_SCENE_TAB_NAME_MAX];
+    UiSceneTabKind kind;
+    int            slot;    /* user-scene slot, or -1 for the example tab */
+    int            active;  /* this tab is the active scene */
+} UiSceneTab;
+typedef struct {
+    UiSceneTab tabs[UI_SCENE_TAB_CAP];
+    int        count;
+    int        active_idx;  /* display idx of the active tab, or -1 */
+} UiSceneTabList;
+
 typedef struct UiRenderSnapshot {
     /* By-value state slices */
     ReplViewportState           viewport;
@@ -84,6 +103,9 @@ typedef struct UiRenderSnapshot {
 
     /* User scenes */
     int                         user_scene_active_idx;
+
+    /* Scene tab strip — derived each frame, no persistent model */
+    UiSceneTabList              scene_tabs;
 
     /* F1 help overlay text content (controller-adapted from REPL help
      * text; the renderer is tabbed-overlay-shaped and feature-agnostic). */
