@@ -157,12 +157,19 @@ void ui_scene_tabs_render(const UiRenderSnapshot *snap) {
         int is_example = (tab->kind == UI_SCENE_TAB_EXAMPLE);
         int tx = x[i] + TAB_PAD_X;
 
+        /* Active tab: shade the WHOLE tab with a tinted hue (green for
+         * user scenes, amber for the ephemeral example tab) so the
+         * highlight is unmistakably the tab — not a thin rule that
+         * reads as an underline of the menu row directly above. */
         if (active) {
-            glColor4f(0.149f, 0.149f, 0.149f, 1.0f);   /* #262626 */
+            if (is_example)
+                glColor4f(0.260f, 0.190f, 0.080f, 1.0f);  /* amber tint */
+            else
+                glColor4f(0.130f, 0.260f, 0.150f, 1.0f);  /* green tint */
             glRectf((float)x[i], (float)by,
                     (float)(x[i] + w[i]), (float)(by + bh));
         } else if (hover == i) {
-            glColor4f(0.165f, 0.165f, 0.165f, 1.0f);   /* #2a2a2a */
+            glColor4f(0.165f, 0.165f, 0.165f, 1.0f);       /* #2a2a2a */
             glRectf((float)x[i], (float)by,
                     (float)(x[i] + w[i]), (float)(by + bh));
         }
@@ -174,27 +181,14 @@ void ui_scene_tabs_render(const UiRenderSnapshot *snap) {
         glVertex2f((float)x[i], (float)(by + bh));
         glEnd();
 
-        /* Example tabs are ephemeral built-ins (vanish when a user
-         * scene is selected; not renamable unless promoted). Style them
-         * in a distinct amber family vs the user tabs' green/neutral so
-         * the difference is obvious at a glance. */
-        if (active) {
-            if (is_example)
-                glColor3f(0.941f, 0.753f, 0.439f);     /* amber accent */
-            else
-                glColor3f(UI_ACCENT_GREEN_R, UI_ACCENT_GREEN_G,
-                          UI_ACCENT_GREEN_B);           /* green accent */
-            glRectf((float)x[i], (float)(by + bh - 2),
-                    (float)(x[i] + w[i]), (float)(by + bh));
+        /* Label color. Example tabs keep an amber/warm family vs the
+         * user tabs' neutral so the kinds stay distinguishable even
+         * when no tab is active. */
+        if (active || hover == i) {
             if (is_example)
                 glColor3f(1.0f, 0.93f, 0.80f);          /* warm-white */
             else
                 glColor3f(1.0f, 1.0f, 1.0f);            /* bright label */
-        } else if (hover == i) {
-            if (is_example)
-                glColor3f(1.0f, 0.93f, 0.80f);
-            else
-                glColor3f(1.0f, 1.0f, 1.0f);
         } else if (is_example) {
             glColor3f(0.800f, 0.640f, 0.400f);          /* muted amber */
         } else {
