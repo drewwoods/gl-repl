@@ -244,19 +244,23 @@ static void test_menu_actions(void) {
         ASSERT_INT("active example is 0", repl_state_scenes().active_example_idx, 0);
     }
 
-    /* Scene menu - Fixed items */
-    ASSERT_INT("Scene New", glr_action_menu_item_activate(GLR_MENU_SCENE, example_count + GLR_SCENE_OFF_NEW), 1);
+    /* Scene actions now live in the File menu (Scene menu is a pure
+     * selector). New Scene enters the transient lifecycle: it clears
+     * both the active example and any active user slot. */
+    ASSERT_INT("File New Scene", glr_action_menu_item_activate(GLR_MENU_FILE, REPL_FILE_ITEM_NEW_SCENE), 1);
     ASSERT_INT("active example cleared", repl_state_scenes().active_example_idx, -1);
+    ASSERT_INT("active user scene detached", repl_active_user_scene(), -1);
 
-    run_menu_action_in_temp_dir("Scene Save",
-                                GLR_MENU_SCENE,
-                                example_count + GLR_SCENE_OFF_SAVE,
+    /* Save Scene with no active named scene falls back to the default
+     * single-file save; run sandboxed so it cannot touch repo output.c. */
+    run_menu_action_in_temp_dir("File Save Scene",
+                                GLR_MENU_FILE,
+                                REPL_FILE_ITEM_SAVE_SCENE,
                                 1,
                                 0);
 
-    /* Scene Rename - need an active user scene */
-    /* For now, just call it and expect "No active scene to rename" if none active */
-    ASSERT_INT("Scene Rename (none)", glr_action_menu_item_activate(GLR_MENU_SCENE, example_count + GLR_SCENE_OFF_RENAME), 1);
+    /* Rename Scene with no active user scene -> guarded no-op. */
+    ASSERT_INT("File Rename Scene (none)", glr_action_menu_item_activate(GLR_MENU_FILE, REPL_FILE_ITEM_RENAME_SCENE), 1);
     ASSERT_STR("Rename status", g_last_status, "No active scene to rename");
 
     /* User scenes */
