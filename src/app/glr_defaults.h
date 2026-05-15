@@ -43,6 +43,7 @@
 #define CFG_DEFAULT_VARIABLE_PANEL    1
 #define CFG_DEFAULT_WRAP_AT_COMMA     1
 #define CFG_DEFAULT_CODE_PANEL_LAYOUT CODE_PANEL_LAYOUT_TOP
+#define CFG_DEFAULT_SYNTAX_HIGHLIGHT  0   /* off by default */
 
 /* Render-side config defaults the REPL state initializer feeds into
  * the scene config. These are controller-policy defaults, not

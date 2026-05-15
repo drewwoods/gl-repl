@@ -42,6 +42,7 @@ typedef struct {
     int ortho_mode;
     int wrap_at_comma;
     int code_panel_layout;
+    int syntax_highlight;   /* 0 = off, 1 = on, 2 = on + fake-bold */
 } GlrPresentationState;
 
 typedef struct {

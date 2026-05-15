@@ -84,6 +84,7 @@ static char cfg_status_buf[256];
 #define AUDIO_CFG_SONG  2
 #define AUDIO_CFG_ALL   3
 static const char *audio_cfg_names[] = { "Pause", "Once", "Song", "All" };
+static const char *syntax_hl_names[] = { "Off", "On", "On+Bold" };
 
 GlrConfigItem g_cfg_items[] = {
     { "### RENDERING",     0, 0,  GLR_CONFIG_NONE,               0, NULL,                 1 },
@@ -123,6 +124,7 @@ GlrConfigItem g_cfg_items[] = {
     { "CPU profile",       KEY_CTRL_W, 0, GLR_CONFIG_CPU_PROFILE,  PROFILE_PANEL_MODE_COUNT, profile_panel_mode_names, 0 },
     { "Code panel",        KEY_CTRL_B, 0, GLR_CONFIG_CODE_PANEL_LAYOUT, CODE_PANEL_LAYOUT_COUNT, code_panel_layout_names, 0 },
     { "Wrap at commas",    0, 0,  GLR_CONFIG_WRAP_AT_COMMA,       2, NULL,                 0 },
+    { "Syntax highlight",  0, 0,  GLR_CONFIG_SYNTAX_HIGHLIGHT,    3, syntax_hl_names,      0 },
     { "---",               0, 0,  GLR_CONFIG_NONE,               0, NULL,                 1 },
     { "### AUDIO",         0, 0,  GLR_CONFIG_NONE,               0, NULL,                 1 },
     { "Audio",             0, 0,  GLR_CONFIG_AUDIO_MODE,          4, audio_cfg_names,      0 },

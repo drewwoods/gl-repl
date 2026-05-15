@@ -3,8 +3,9 @@
  *
  * Drives ui_repl_code_panel_classify_syntax() directly with representative
  * REPL display lines and asserts the (text, kind) of each emitted span, plus
- * the class-nudge color model. Comment suppression is category-driven, so it
- * is checked via repl_cmd_type_category() rather than a rendered row.
+ * the derive-from-class color model (same hue, dimmer tiers). Comment
+ * suppression is category-driven, so it is checked via
+ * repl_cmd_type_category() rather than a rendered row.
  */
 #include "repl/command_spec.h"
 #include "ui/repl_code_panel.h"
@@ -114,6 +115,13 @@ int main(void) {
         check_line("const", t, "1.5", REPL_SYNTAX_LITERAL);
     }
 
+    /* GLU_/GLUT_ enum constants classify like GL_ */
+    {
+        const char *t = "x(GLU_TESS_WINDING_ODD, GLUT_UP)";
+        check_line("glu", t, "GLU_TESS_WINDING_ODD", REPL_SYNTAX_CONSTANT);
+        check_line("glu", t, "GLUT_UP", REPL_SYNTAX_CONSTANT);
+    }
+
     /* label("a=%f", x): the whole quoted run is one literal */
     {
         const char *t = "label(\"a=%f\", x)";
@@ -143,13 +151,15 @@ int main(void) {
     ASSERT_TRUE("comment category maps to CMD_CAT_COMMENT",
                 repl_cmd_type_category(CMD_COMMENT) == CMD_CAT_COMMENT);
 
-    /* Color model: each kind nudged 22% toward the class color, and the
-     * three kinds stay distinct for a given class. */
+    /* Color model: shades derive from the class color only — same hue,
+     * three brightness tiers (constant > variable > literal). */
     {
         float lit[3];
         float con[3];
         float var[3];
 
+        /* Gray class (0.70,0.70,0.70): luminance == 0.70, so each channel
+         * collapses to 0.70 * brightness regardless of saturation. */
         ui_repl_code_panel_syntax_kind_rgb(REPL_SYNTAX_LITERAL,
                                            CMD_CAT_DEFAULT, lit);
         ui_repl_code_panel_syntax_kind_rgb(REPL_SYNTAX_CONSTANT,
@@ -157,27 +167,43 @@ int main(void) {
         ui_repl_code_panel_syntax_kind_rgb(REPL_SYNTAX_VARIABLE,
                                            CMD_CAT_DEFAULT, var);
 
-        /* literal base (0.93,0.66,0.40) nudged 22% toward (0.70,0.70,0.70) */
-        ASSERT_TRUE("literal r nudged",
-                    fabsf(lit[0] - (0.93f + (0.70f - 0.93f) * 0.22f)) < 1e-4f);
-        ASSERT_TRUE("kinds distinct (lit vs var)",
-                    fabsf(lit[0] - var[0]) > 0.05f ||
-                    fabsf(lit[2] - var[2]) > 0.05f);
-        ASSERT_TRUE("kinds distinct (con vs var)",
-                    fabsf(con[0] - var[0]) > 0.05f ||
-                    fabsf(con[1] - var[1]) > 0.05f);
+        ASSERT_TRUE("literal = class * 0.66 brightness",
+                    fabsf(lit[0] - 0.70f * 0.66f) < 1e-4f);
+        ASSERT_TRUE("brightness tiers constant > variable > literal",
+                    con[0] > var[0] + 0.03f && var[0] > lit[0] + 0.03f);
+
+        /* Colored class (VERTEX green 0.40,0.90,0.40): every kind stays
+         * green-dominant — hue is preserved, only brightness changes. */
+        ui_repl_code_panel_syntax_kind_rgb(REPL_SYNTAX_LITERAL,
+                                           CMD_CAT_VERTEX, lit);
+        ui_repl_code_panel_syntax_kind_rgb(REPL_SYNTAX_CONSTANT,
+                                           CMD_CAT_VERTEX, con);
+        ui_repl_code_panel_syntax_kind_rgb(REPL_SYNTAX_VARIABLE,
+                                           CMD_CAT_VERTEX, var);
+        ASSERT_TRUE("vertex hue preserved (literal green-dominant)",
+                    lit[1] > lit[0] && lit[1] > lit[2]);
+        ASSERT_TRUE("vertex hue preserved (constant green-dominant)",
+                    con[1] > con[0] && con[1] > con[2]);
+        ASSERT_TRUE("vertex hue preserved (variable green-dominant)",
+                    var[1] > var[0] && var[1] > var[2]);
+        ASSERT_TRUE("vertex tiers constant > variable > literal",
+                    con[1] > var[1] && var[1] > lit[1]);
     }
 
-    /* Optional contrast guard: every (kind x class) final color must stay
-     * legible against the code-panel background (src/ui/text_panel.c:571,
-     * glColor4f(0.06, 0.06, 0.10, ...)). Threshold 3.0 ~= WCAG AA for
-     * large text; guards future palette / nudge tweaks. */
+    /* Optional contrast guard: every (kind x class) final color that can
+     * actually render must stay legible against the code-panel background
+     * (src/ui/text_panel.c, glColor4f(0.06, 0.06, 0.10, ...)). Threshold
+     * 3.0 ~= WCAG AA large text; guards future palette tweaks. CMD_CAT_COMMENT
+     * is skipped — the wiring never emits syntax spans on comment rows. */
     {
         const float bg[3] = { 0.06f, 0.06f, 0.10f };
 
         for (int k = 0; k < REPL_SYNTAX_KIND_COUNT; k++) {
             for (int c = 0; c < CMD_CAT_COUNT; c++) {
                 float rgb[3];
+
+                if (c == CMD_CAT_COMMENT)
+                    continue;
                 float ratio;
                 char name[96];
 

@@ -668,18 +668,27 @@ static void repl_code_panel_apply_fade_segments(int line_idx, const char *text,
  * Per-kind argument syntax coloring
  * ---------------------------------------------------------------------- */
 
-/* Per-kind base palette (RGB, 0..1). Tuned against the (0.06, 0.06, 0.10)
- * code-panel background; test_repl_code_panel_syntax guards future edits. */
-static const float k_syntax_base_rgb[REPL_SYNTAX_KIND_COUNT][3] = {
-    [REPL_SYNTAX_LITERAL]  = { 0.93f, 0.66f, 0.40f },  /* warm amber */
-    [REPL_SYNTAX_CONSTANT] = { 0.45f, 0.85f, 0.78f },  /* teal */
-    [REPL_SYNTAX_VARIABLE] = { 0.62f, 0.78f, 0.98f },  /* cool blue */
+/* Argument shades are derived from the command's class color *only* — no
+ * independent per-kind hue (that produced cross-hue clashes / a rainbow).
+ * The keyword keeps the full class color; literals/constants/variables are
+ * dimmer/desaturated tiers of that same hue, so the class stays recognizable
+ * and a line never clashes with itself. Kinds differ only in brightness and
+ * saturation, not hue. {brightness, saturation} multipliers, all <= the
+ * keyword so it stays dominant; tuned against the (0.06,0.06,0.10) panel
+ * background and guarded by test_repl_code_panel_syntax's contrast check. */
+static const float k_syntax_shade[REPL_SYNTAX_KIND_COUNT][2] = {
+    [REPL_SYNTAX_CONSTANT] = { 0.90f, 0.72f },  /* vivid-ish, slightly dim */
+    [REPL_SYNTAX_VARIABLE] = { 0.78f, 0.52f },  /* muted, mid brightness */
+    [REPL_SYNTAX_LITERAL]  = { 0.66f, 0.36f },  /* most muted + dimmest */
 };
 
-/* Fraction of the command class color blended into each kind's base. Small
- * enough that kinds stay distinguishable, large enough that a line reads as
- * one class family (no rainbow). */
-#define REPL_SYNTAX_CLASS_NUDGE 0.22f
+static float repl_clamp01(float v) {
+    if (v < 0.0f)
+        return 0.0f;
+    if (v > 1.0f)
+        return 1.0f;
+    return v;
+}
 
 void ui_repl_code_panel_syntax_kind_rgb(ReplSyntaxKind kind,
                                         CmdSyntaxCategory category,
@@ -687,18 +696,26 @@ void ui_repl_code_panel_syntax_kind_rgb(ReplSyntaxKind kind,
     float cr = 0.0f;
     float cg = 0.0f;
     float cb = 0.0f;
-    const float *base;
+    float lum;
+    float bright;
+    float sat;
 
     if (!out_rgb)
         return;
     if (kind < 0 || kind >= REPL_SYNTAX_KIND_COUNT)
         kind = REPL_SYNTAX_VARIABLE;
 
-    base = k_syntax_base_rgb[kind];
     repl_code_panel_category_rgb(category, &cr, &cg, &cb);
-    out_rgb[0] = base[0] + (cr - base[0]) * REPL_SYNTAX_CLASS_NUDGE;
-    out_rgb[1] = base[1] + (cg - base[1]) * REPL_SYNTAX_CLASS_NUDGE;
-    out_rgb[2] = base[2] + (cb - base[2]) * REPL_SYNTAX_CLASS_NUDGE;
+    bright = k_syntax_shade[kind][0];
+    sat = k_syntax_shade[kind][1];
+
+    /* Saturation about the class color's own luminance keeps the hue fixed
+     * (sat only moves the channels toward/away from that gray), then a
+     * uniform brightness scale picks the tier. */
+    lum = 0.30f * cr + 0.59f * cg + 0.11f * cb;
+    out_rgb[0] = repl_clamp01((lum + (cr - lum) * sat) * bright);
+    out_rgb[1] = repl_clamp01((lum + (cg - lum) * sat) * bright);
+    out_rgb[2] = repl_clamp01((lum + (cb - lum) * sat) * bright);
 }
 
 static int repl_syntax_is_ident_start(int c) {
@@ -783,7 +800,9 @@ int ui_repl_code_panel_classify_syntax(const char *text,
             name[len] = '\0';
 
             if (strcmp(name, "PI") == 0 || strcmp(name, "TAU") == 0 ||
-                (len > 3 && strncmp(name, "GL_", 3) == 0)) {
+                strncmp(name, "GL_", 3) == 0 ||
+                strncmp(name, "GLU_", 4) == 0 ||
+                strncmp(name, "GLUT_", 5) == 0) {
                 out[n++] = (ReplSyntaxSpan){ start, len,
                                              REPL_SYNTAX_CONSTANT };
             } else if (strcmp(name, "t") == 0 ||
@@ -809,14 +828,16 @@ int ui_repl_code_panel_classify_syntax(const char *text,
     return n;
 }
 
+/* mode: 0 = off (no spans), 1 = on, 2 = on + fake-bold constants. */
 static void repl_code_panel_apply_syntax_segments(const char *text,
                                                   CmdType type,
+                                                  int mode,
                                                   UiTextPanelRow *row) {
     ReplSyntaxSpan spans[UI_TEXT_PANEL_MAX_COLOR_SEGMENTS];
     CmdSyntaxCategory cat;
     int count;
 
-    if (!row || !text || !text[0])
+    if (!row || !text || !text[0] || mode <= 0)
         return;
 
     cat = repl_cmd_type_category(type);
@@ -841,6 +862,9 @@ static void repl_code_panel_apply_syntax_segments(const char *text,
                 .char_start = spans[i].start,
                 .char_count = spans[i].len,
                 .color = repl_code_panel_rgb(rgb[0], rgb[1], rgb[2]),
+                /* On+Bold mode fake-bolds constants only. */
+                .bold = (mode == 2 &&
+                         spans[i].kind == REPL_SYNTAX_CONSTANT),
             };
     }
 }
@@ -932,7 +956,8 @@ static void repl_code_panel_add_command_row(ReplCodePanelBuilder *builder,
     else
         repl_code_panel_apply_syntax_segments(
             display_text,
-            builder->snap->document_cmds[line_idx].type, row);
+            builder->snap->document_cmds[line_idx].type,
+            builder->snap->code_panel.syntax_highlight, row);
 }
 
 static void repl_code_panel_add_virtual_rows(ReplCodePanelBuilder *builder,

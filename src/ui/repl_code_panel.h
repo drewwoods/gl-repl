@@ -21,9 +21,10 @@ struct UiCodePanelOutput;
  *
  * The code panel colors a command row by its class (CmdSyntaxCategory).
  * On top of that, argument *tokens* — literals, constants, and variables —
- * get their own hue, nudged toward the row's class color so a line stays
- * visually cohesive. Keyword / function-call names / operators / punctuation
- * produce no span and keep the row class color.
+ * are drawn as dimmer/desaturated tiers of that same class hue (derived
+ * from the class color only, never an independent hue), so the class stays
+ * recognizable and a line never clashes with itself. Keyword / function-call
+ * names / operators / punctuation produce no span and keep the class color.
  *
  * The classifier is a flat left-to-right lexer over the display text. It is
  * exposed so tests can assert classification independently of rendering.
@@ -49,9 +50,9 @@ typedef struct {
 int ui_repl_code_panel_classify_syntax(const char *text,
                                         ReplSyntaxSpan *out, int max_spans);
 
-/* Final RGB (0..1) for a token kind, blended a fixed fraction toward the
- * command's class color so per-line coloring stays cohesive. Exposed for
- * the contrast regression test. */
+/* Final RGB (0..1) for a token kind: a brightness/saturation tier of the
+ * command's class color (same hue, dimmer). Exposed for the contrast
+ * regression test. */
 void ui_repl_code_panel_syntax_kind_rgb(ReplSyntaxKind kind,
                                          CmdSyntaxCategory category,
                                          float out_rgb[3]);

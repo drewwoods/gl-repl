@@ -58,6 +58,7 @@ static const GlrState g_glr_state_defaults = {
         .ortho_mode             = 0,
         .wrap_at_comma          = CFG_DEFAULT_WRAP_AT_COMMA,
         .code_panel_layout      = CFG_DEFAULT_CODE_PANEL_LAYOUT,
+        .syntax_highlight       = CFG_DEFAULT_SYNTAX_HIGHLIGHT,
     },
     .render = {
         .use_accum                 = 1,
