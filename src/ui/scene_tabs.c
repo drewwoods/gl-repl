@@ -154,6 +154,7 @@ void ui_scene_tabs_render(const UiRenderSnapshot *snap) {
     for (i = 0; i < count; i++) {
         const UiSceneTab *tab = &snap->scene_tabs.tabs[i];
         int active = tab->active;
+        int is_example = (tab->kind == UI_SCENE_TAB_EXAMPLE);
         int tx = x[i] + TAB_PAD_X;
 
         if (active) {
@@ -173,17 +174,31 @@ void ui_scene_tabs_render(const UiRenderSnapshot *snap) {
         glVertex2f((float)x[i], (float)(by + bh));
         glEnd();
 
+        /* Example tabs are ephemeral built-ins (vanish when a user
+         * scene is selected; not renamable unless promoted). Style them
+         * in a distinct amber family vs the user tabs' green/neutral so
+         * the difference is obvious at a glance. */
         if (active) {
-            /* 2px accent-green top rule. */
-            glColor3f(UI_ACCENT_GREEN_R, UI_ACCENT_GREEN_G,
-                      UI_ACCENT_GREEN_B);
+            if (is_example)
+                glColor3f(0.941f, 0.753f, 0.439f);     /* amber accent */
+            else
+                glColor3f(UI_ACCENT_GREEN_R, UI_ACCENT_GREEN_G,
+                          UI_ACCENT_GREEN_B);           /* green accent */
             glRectf((float)x[i], (float)(by + bh - 2),
                     (float)(x[i] + w[i]), (float)(by + bh));
-            glColor3f(1.0f, 1.0f, 1.0f);               /* bright label */
+            if (is_example)
+                glColor3f(1.0f, 0.93f, 0.80f);          /* warm-white */
+            else
+                glColor3f(1.0f, 1.0f, 1.0f);            /* bright label */
         } else if (hover == i) {
-            glColor3f(1.0f, 1.0f, 1.0f);
+            if (is_example)
+                glColor3f(1.0f, 0.93f, 0.80f);
+            else
+                glColor3f(1.0f, 1.0f, 1.0f);
+        } else if (is_example) {
+            glColor3f(0.800f, 0.640f, 0.400f);          /* muted amber */
         } else {
-            glColor3f(0.847f, 0.847f, 0.847f);         /* #d8d8d8 */
+            glColor3f(0.847f, 0.847f, 0.847f);          /* #d8d8d8 */
         }
 
         scene_tabs_draw_label(tx, by + 3, tab->name,
