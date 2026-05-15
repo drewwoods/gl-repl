@@ -15,6 +15,12 @@
  * (replay HUD lift) so the HUD clears the strip. */
 #define STATUSBAR_H 22
 
+/* Scene tab strip height. MUST equal LINE_H: the visible-row count is
+ * integer division by LINE_H, so only an exact-LINE_H reserve drops the
+ * count by exactly one when the band is present (see tabbed-code-panel
+ * plan §3). Keeps the band visually uniform with the menu bar too. */
+#define TAB_STRIP_H LINE_H
+
 /* Shared UI accent palette - kept here so menu bar and HUD use identical
  * values. #6fb36f is the design-bundle green used for the Replay button,
  * progress fill, and active example. */
