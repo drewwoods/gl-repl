@@ -24,12 +24,14 @@
  *   helper, exactly as menu_bar.c does (so the band stays consistent with
  *   the rest of the panel chrome by construction).
  *
- * Kind cue: the active tab is shaded across its whole rect (so the
- * highlight reads as the tab, not as a thin rule underlining the menu
- * row above it) — green for a user scene, amber for the ephemeral
- * example tab (built-ins vanish when a user scene is selected and are
- * not renamable unless promoted). Idle example labels stay muted amber
- * vs the user tabs' neutral so the kinds differ even with no active tab.
+ * Shape/kind cues: every tab has a rounded-top outline (no bottom edge)
+ * so the strip reads as tabs, not flat menu buttons. The active tab is
+ * shaded across its whole rect and its outline keys off that hue —
+ * green for a user scene, amber for the ephemeral example tab (built-ins
+ * vanish when a user scene is selected and are not renamable unless
+ * promoted). Inactive tabs get a neutral outline; idle example labels
+ * stay muted amber vs the user tabs' neutral so the kinds differ even
+ * with no active tab.
  *
  * Dirty dot: deferred — there is no reachable per-scene modified flag
  * (editor dirty state is global), so no per-tab unsaved indicator is drawn.
