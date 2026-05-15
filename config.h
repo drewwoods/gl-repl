@@ -46,6 +46,12 @@
  * status bar in `ReplStatusState` mirrors the size end-to-end. */
 #define REPL_STATUS_TEXT_MAX 256
 
+/* How long a status-bar message stays visible, in frames (~60 fps, so
+ * 360 ≈ 6 s). Interim value bumped from 240 so messages linger longer
+ * until the recent-messages viewer lands
+ * (plans/in-review/status-message-history.md). */
+#define REPL_STATUS_MESSAGE_TTL 360
+
 /* Storage capacity of the source command document and the matching
  * editor buffer. Surfaces here (not in src/repl/command.h) so neutral
  * boundary headers — source_document.h in particular — can size their

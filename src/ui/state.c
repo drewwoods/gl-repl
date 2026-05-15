@@ -62,7 +62,7 @@ void ui_state_status_set(const char *message) {
     strncpy(g_ui_state.status.text, message,
             sizeof(g_ui_state.status.text) - 1);
     g_ui_state.status.text[sizeof(g_ui_state.status.text) - 1] = '\0';
-    g_ui_state.status.ttl = 240;
+    g_ui_state.status.ttl = REPL_STATUS_MESSAGE_TTL;
 }
 
 void ui_state_status_clear(void) {
