@@ -2644,6 +2644,17 @@ static int code_panel_target_from_hit(UiHit hit) {
 }
 
 int glr_ctrl_router_handle_code_panel_hit(UiHit hit, int x, int y) {
+    /* Inline rename is a hard modal for keystrokes but NOT for the
+     * mouse, so a click otherwise moves the cursor / switches tabs
+     * while typed keys still feed the rename buffer — misleading.
+     * Clicking anywhere cancels the in-progress rename (discard, like
+     * Esc), then the click proceeds normally (cursor lands where the
+     * user clicked, rename mode exits). Begin-rename routes through a
+     * later dispatch in this same call, so rename is not yet active at
+     * entry for the click that starts it — no self-cancel. */
+    if (editor_inline_rename_active())
+        editor_inline_rename_cancel();
+
     /* A click outside the menu bar (anywhere that isn't UI_HIT_MENU_BUTTON
      * / UI_HIT_MENU_ITEM) dismisses an open dropdown — matches the legacy
      * "click outside dropdown closes it" behaviour from

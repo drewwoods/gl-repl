@@ -309,6 +309,27 @@ static void test_rename_prompt_does_not_auto_hide(void) {
                   ui_state_status_mut()->ttl, 0);
 }
 
+/* Inline rename is a hard modal for keys but not the mouse; clicking
+ * anywhere in the code panel must cancel the in-progress rename (Esc-
+ * equivalent) so keystrokes don't keep feeding a hidden rename buffer. */
+static void test_click_away_cancels_rename(void) {
+    UiHit click = ui_hit_none();
+
+    reset_fixture();
+    seed_user_scene();
+    editor_inline_rename_cancel();
+
+    ASSERT_TRUE("rename begins", editor_inline_rename_begin(0) != 0);
+    ASSERT_TRUE("rename active before click",
+                editor_inline_rename_active());
+
+    /* Any code-panel press routes through this entry point. */
+    click.kind = UI_HIT_CODE_PANEL_CHROME;
+    glr_ctrl_router_handle_code_panel_hit(click, 10, 10);
+    ASSERT_TRUE("click away cancels rename",
+                !editor_inline_rename_active());
+}
+
 int main(void) {
     printf("--- ui_scene_tabs tests ---\n");
     test_derivation();
@@ -317,5 +338,6 @@ int main(void) {
     test_double_click_rename();
     test_dropdown_over_band_consumes();
     test_rename_prompt_does_not_auto_hide();
+    test_click_away_cancels_rename();
     return test_harness_report(&g_harness, "ui_scene_tabs");
 }
