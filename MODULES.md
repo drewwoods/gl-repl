@@ -319,7 +319,7 @@ text edit into a committed program change.
 | `editor_undo` | Undo/redo transaction rings that restore editor text and REPL command state together |
 | `editor_clipboard` | Selection anchors plus copy/cut/paste payloads, including parallel text sidecars |
 | `editor_search` | Search query, match tracking, row/char hits, next/previous navigation |
-| `repl_autocomplete` | REPL-side completion provider. Walks command spec, predef-var table, and source `CMD_FUNC_DEF` entries; produces matches, ghost text, parameter hints. Registers itself with `editor_completion` at startup; the editor only invokes the provider, it does not know about variables or GL command names directly |
+| `src/app/glr_completion.c` | REPL-side completion provider. Walks command spec, predef-var table, and source `CMD_FUNC_DEF` entries; produces matches, ghost text, parameter hints. Registers itself with `editor_completion` at startup; the editor only invokes the provider, it does not know about variables or GL command names directly |
 | `editor_inline_rename` | Inline scene-name edit buffer and validation |
 | `editor_help_session` | Read-only editor session backed by a help-text content provider. Uses the same scroll/search/cursor model as code editing; no commit path. Help visibility flag stays on `UiState` |
 
@@ -388,10 +388,10 @@ never read `ReplState`, `EditorState`, or `UiState` directly.
 | `src/scene/backdrop` | Backdrop/environment rendering |
 | `src/scene/lights` | Baseline lighting and light indicators |
 | `src/scene/overlays` | Tiny per-vertex GL primitives (vertex-number labels, normal arrows). REPL-walking overlays moved out to `src/app/glr_ctrl.c`. |
-| `geometry_guides` | Vertex/primitive guide rendering from snapshots. Lives at root (REPL-aware: knows about cursor input) |
-| `transform_guides` | Transform-guide rendering from snapshots. Lives at root (REPL-aware) |
+| `src/scene/guides/geometry_guides.c` | Vertex/primitive guide rendering from a `SceneGuideSnapshot`. The controller fills the snapshot's cursor args from the flat program (funcN-local resolution) before calling in — see CLAUDE.md "Cursor Edit Guides" |
+| `src/scene/guides/transform_guides.c` | Transform-guide rendering from a `SceneGuideSnapshot` (REPL-aware) |
 | `glr_camera` | Camera/view transform helpers — orbit/pan/zoom drag state machine. `glr_ctrl_router_handle_camera_mouse` drives input; scene consumes final camera state through `SceneRenderConfig`. (Future `scene_camera_controls` move is still possible if the scene/viewport split lands.) |
-| `transform_utils` | Small GL matrix helpers used by `src/app/glr_ctrl.c` and `transform_guides.c` (root: no `src/scene/*.c` consumes it) |
+| `transform_utils` | Header-only GL matrix helpers (at repo root). Consumed by `src/app/glr_ctrl.c` and `src/scene/guides/transform_guides.c` |
 | `guides_shared` | Shared guide snapshot/planning types for REPL-aware 3D overlays (root, paired with the guides modules) |
 
 Scene code renders. It does not parse, edit, save, or dispatch UI actions.
@@ -511,7 +511,7 @@ flowchart LR
         eundo["src/editor/undo.c<br/>transaction snapshots"]
         eclip["src/editor/clipboard.c<br/>cut/copy/paste"]
         esearch["src/editor/search.c<br/>query · hit tracking"]
-        eac["repl_autocomplete.c<br/>REPL-side provider<br/>(registers with editor_completion)"]
+        eac["src/app/glr_completion.c<br/>REPL-side provider<br/>(registers with editor_completion)"]
         ecompl["src/editor/completion.c<br/>completion-provider registry"]
         ehelpsess["src/editor/help_session.c<br/>read-only editor session<br/>(carved from ui_help_overlay state)"]
         erename["src/editor/inline_rename.c<br/>rename buffer"]
@@ -557,8 +557,8 @@ flowchart LR
 
     subgraph scene_layer["4. 3D scene rendering"]
         sceneR["src/scene/render.c<br/>3D frame"]
-        sgeomg["geometry_guides.c<br/>geometry guides<br/>(REPL-aware, root)"]
-        sxformg["transform_guides.c<br/>transform guides<br/>(REPL-aware, root)"]
+        sgeomg["src/scene/guides/geometry_guides.c<br/>geometry guides<br/>(REPL-aware)"]
+        sxformg["src/scene/guides/transform_guides.c<br/>transform guides<br/>(REPL-aware)"]
         sgrid["src/scene/grid.c<br/>grid"]
         saxes["src/scene/axes.c<br/>axes"]
         sbackdrop["src/scene/backdrop.c<br/>backdrop"]
