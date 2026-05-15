@@ -83,8 +83,10 @@ static void text_panel_draw_colored_span(const UiTextPanelSnapshot *snap,
                                          int span_start,
                                          int span_end,
                                          int line_y,
-                                         const UiTextPanelColor *color) {
+                                         const UiTextPanelColor *color,
+                                         int bold) {
     int span_len;
+    int x;
 
     if (!snap || !text || !color || span_end <= span_start)
         return;
@@ -92,10 +94,34 @@ static void text_panel_draw_colored_span(const UiTextPanelSnapshot *snap,
         return;
 
     span_len = span_end - span_start;
+    x = snap->cp_x + wrap_x + (span_start - wrap_start) * FONT_W;
+
+    if (bold) {
+        /* EXPERIMENT: fake-bold. Solid centre pass, then 4 additive
+         * 1px-shifted passes at alpha 0.25 to fatten the glyphs. */
+        static const int dx[4] = { -1, 1,  0, 0 };
+        static const int dy[4] = {  0, 0, -1, 1 };
+        GLboolean blend_was = glIsEnabled(GL_BLEND);
+
+        text_panel_set_color(color);
+        text_panel_draw_segment(x, line_y, text, span_start, span_len,
+                                FONT_MONO);
+
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+        glColor4f(color->r, color->g, color->b, 0.15f);
+        for (int p = 0; p < 4; p++)
+            text_panel_draw_segment(x + dx[p], line_y + dy[p], text,
+                                    span_start, span_len, FONT_MONO);
+
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+        if (!blend_was)
+            glDisable(GL_BLEND);
+        return;
+    }
+
     text_panel_set_color(color);
-    text_panel_draw_segment(snap->cp_x + wrap_x +
-                            (span_start - wrap_start) * FONT_W,
-                            line_y, text, span_start, span_len, FONT_MONO);
+    text_panel_draw_segment(x, line_y, text, span_start, span_len, FONT_MONO);
 }
 
 static void text_panel_draw_colored_text(const UiTextPanelSnapshot *snap,
@@ -149,11 +175,11 @@ static void text_panel_draw_colored_text(const UiTextPanelSnapshot *snap,
         if (cursor < seg_start) {
             text_panel_draw_colored_span(snap, text, wrap_start, wrap_x,
                                          cursor, seg_start, line_y,
-                                         &row->color);
+                                         &row->color, 0);
         }
         text_panel_draw_colored_span(snap, text, wrap_start, wrap_x,
                                      seg_start, seg_end, line_y,
-                                     &segment->color);
+                                     &segment->color, segment->bold);
         if (seg_end > cursor)
             cursor = seg_end;
     }
@@ -161,7 +187,7 @@ static void text_panel_draw_colored_text(const UiTextPanelSnapshot *snap,
     if (cursor < wrap_end) {
         text_panel_draw_colored_span(snap, text, wrap_start, wrap_x,
                                      cursor, wrap_end, line_y,
-                                     &row->color);
+                                     &row->color, 0);
     }
 
     if (text_panel_row_uses_blend(row))
