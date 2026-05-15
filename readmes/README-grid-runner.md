@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="assets/hero-r11a-one-line-code.svg" alt="gl-repl — type GL commands, watch geometry render r9c" width="100%">
+<img src="assets/hero-r11c-one-line-code.svg" alt="gl-repl — type GL commands, watch geometry render r9c" width="100%">
 
 <br>
 
