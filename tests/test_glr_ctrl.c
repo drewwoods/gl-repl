@@ -538,6 +538,90 @@ static void test_variable_panel_motion_initializes_uninitialized_declaration(voi
                  g_predef_vars[var_idx].value, 0.0f);
 }
 
+/* Grid/axes in-out transition wiring: the controller diffs the
+ * presentation theme, ticks g_grid_xn/g_axes_xn, and writes the
+ * effective {theme, opacity, phase} into SceneRenderConfig. Drives the
+ * machines via the real glr_ctrl_tick (the animation timer) and reads
+ * back through the g_last_scene_config capture stub. */
+static void test_overlay_transition_machine_wiring(void) {
+    printf("--- imrepl_ctrl grid/axes transition wiring ---\n");
+    prepare_display_fixture();
+    /* Quiesce replay so repeated ticks don't churn unrelated state. */
+    replay_state_mut()->active = 0;
+    replay_state_mut()->state = REPLAY_OFF;
+
+    /* 1. First frame is a SNAP — rule 8 seeding (in glr_app_reset_all)
+     *    means the non-off default grid does NOT animate in at startup. */
+    glr_ctrl_display_frame();
+    ASSERT_INT("snap grid theme = default",
+               g_last_scene_config.grid_theme, CFG_DEFAULT_GRID_THEME);
+    ASSERT_FLOAT("snap grid opacity 1", g_last_scene_config.grid_opacity, 1.0f);
+    ASSERT_INT("snap grid phase STEADY",
+               g_last_scene_config.grid_xn_phase, SCENE_XN_STEADY);
+    ASSERT_FLOAT("snap axes opacity 1", g_last_scene_config.axes_opacity, 1.0f);
+    ASSERT_INT("snap axes phase STEADY",
+               g_last_scene_config.axes_xn_phase, SCENE_XN_STEADY);
+
+    /* 2. A theme change drives FADE_OUT (old theme still drawn) then,
+     *    past the opacity-0 crossing, FADE_IN of the adopted theme. */
+    glr_state_presentation_mut()->grid_theme = GRID_THEME_CLASSIC;
+    glr_ctrl_tick();
+    glr_ctrl_display_frame();
+    ASSERT_INT("OUT keeps old theme",
+               g_last_scene_config.grid_theme, CFG_DEFAULT_GRID_THEME);
+    ASSERT_INT("phase FADE_OUT",
+               g_last_scene_config.grid_xn_phase, SCENE_XN_FADE_OUT);
+    ASSERT_TRUE("opacity dropping during OUT",
+                g_last_scene_config.grid_opacity < 1.0f &&
+                g_last_scene_config.grid_opacity > 0.0f);
+
+    for (int i = 0; i < 40; i++) glr_ctrl_tick();
+    glr_ctrl_display_frame();
+    ASSERT_INT("adopted new theme after crossing",
+               g_last_scene_config.grid_theme, GRID_THEME_CLASSIC);
+    ASSERT_FLOAT("faded fully back in",
+                 g_last_scene_config.grid_opacity, 1.0f);
+    ASSERT_INT("phase STEADY after IN",
+               g_last_scene_config.grid_xn_phase, SCENE_XN_STEADY);
+
+    /* 3. Rapid toggle: retarget mid-OUT; the latest selection is
+     *    adopted at the crossing and the ephemeral one is skipped. */
+    glr_state_presentation_mut()->grid_theme = GRID_THEME_TRON;
+    glr_ctrl_tick();
+    glr_state_presentation_mut()->grid_theme = GRID_THEME_EMBER;
+    for (int i = 0; i < 40; i++) glr_ctrl_tick();
+    glr_ctrl_display_frame();
+    ASSERT_INT("adopts latest, skips ephemeral TRON",
+               g_last_scene_config.grid_theme, GRID_THEME_EMBER);
+
+    /* 4. Rule 6 off-source: from the off index the controller calls
+     *    scene_xn_show, so the new theme fades IN from 0 with NO
+     *    preceding FADE_OUT (current jumps straight to the theme). */
+    glr_state_presentation_mut()->grid_theme = GRID_THEME_OFF;
+    for (int i = 0; i < 40; i++) glr_ctrl_tick();   /* settle to off */
+    glr_state_presentation_mut()->grid_theme = GRID_THEME_CLASSIC;
+    glr_ctrl_tick();
+    glr_ctrl_display_frame();
+    ASSERT_INT("show: current jumps straight to theme",
+               g_last_scene_config.grid_theme, GRID_THEME_CLASSIC);
+    ASSERT_INT("show: phase FADE_IN (no dead OUT)",
+               g_last_scene_config.grid_xn_phase, SCENE_XN_FADE_IN);
+    ASSERT_TRUE("show: fading up from 0",
+                g_last_scene_config.grid_opacity > 0.0f &&
+                g_last_scene_config.grid_opacity < 1.0f);
+
+    /* 5. glr_app_reset_all() re-seeds both machines to the post-reset
+     *    presentation at full opacity, STEADY — no post-reset animation. */
+    glr_app_reset_all();
+    glr_ctrl_display_frame();
+    ASSERT_INT("reset snaps grid to default",
+               g_last_scene_config.grid_theme, CFG_DEFAULT_GRID_THEME);
+    ASSERT_FLOAT("reset grid opacity 1",
+                 g_last_scene_config.grid_opacity, 1.0f);
+    ASSERT_INT("reset grid STEADY",
+               g_last_scene_config.grid_xn_phase, SCENE_XN_STEADY);
+}
+
 int main(void) {
     printf("--- imrepl_ctrl tests ---\n");
 
@@ -546,6 +630,7 @@ int main(void) {
     test_display_frame_profile_coverage();
     test_variable_panel_motion_routes_through_compile_and_coalesces_undo();
     test_variable_panel_motion_initializes_uninitialized_declaration();
+    test_overlay_transition_machine_wiring();
 
     printf("\n");
     return test_harness_report(&g_harness, "test_imrepl_ctrl");

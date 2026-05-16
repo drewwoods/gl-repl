@@ -385,6 +385,7 @@ never read `ReplState`, `EditorState`, or `UiState` directly.
 | `src/scene/render_types` | Scene config/context types and narrow callback interfaces |
 | `src/scene/grid` | Grid rendering and grid themes |
 | `src/scene/axes` | Axis rendering and axis themes |
+| `src/scene/scene_transition` | Pure grid/axes show↔hide fade state machine (no GL); controller diffs theme, renderer scales color alpha by opacity |
 | `src/scene/backdrop` | Backdrop/environment rendering |
 | `src/scene/lights` | Baseline lighting and light indicators |
 | `src/scene/overlays` | Tiny per-vertex GL primitives (vertex-number labels, normal arrows). REPL-walking overlays moved out to `src/app/glr_ctrl.c`. |

@@ -229,6 +229,8 @@ Test sources live under `tests/` and shared test-only helpers live under
 | `src/scene/grid.h` | Grid render entrypoint |
 | `src/scene/axes.c` | Axes theme rendering |
 | `src/scene/axes.h` | Axes render entrypoint |
+| `src/scene/scene_transition.c` | Pure grid/axes show↔hide fade state machine (`scene_xn_init/set/show/tick`); no GL, one instance per overlay |
+| `src/scene/scene_transition.h` | Transition machine API: `SceneXnState`, `SceneXnPhase`, entry points |
 | `src/scene/render.h` | Declares `scene_render_3d_scene(const SceneRenderConfig *)` and `scene_apply_camera(...)` |
 | `src/scene/backdrop.c` | Backdrop mode dispatch and deterministic cityscape renderer |
 | `src/scene/backdrop.h` | Backdrop render entrypoint |
