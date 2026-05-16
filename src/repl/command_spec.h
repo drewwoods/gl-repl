@@ -17,10 +17,12 @@
  * needs_block_indent to determine how to indent closing braces. The code-panel
  * renderer uses format strings to display canonical command text.
  *
- * Enum tables: each glEnable/glDisable/glBlendFunc command may reference up to
- * two enumeration tables (enums1, enums2), allowing autocomplete to suggest valid
- * parameter values at argument positions. For example, glBlendFunc has two enum
- * tables (source blend factors and destination blend factors).
+ * Enum tables: each enum-backed command declares an array of positional
+ * ReplEnumArgSpec slots (args[]), each carrying its enum token table,
+ * per-slot usage diagnostic, and ReplEnumSlotKind. Autocomplete and the
+ * generalized N-arg parser both read args[slot]. For example,
+ * glBlendFunc has two slots (source blend factors, destination blend
+ * factors).
  *
  * Built-in function completions: repl_func_completions() returns a table of
  * math functions (sin, cos, sqrt, etc.) for autocomplete. Enumeration entry
@@ -171,20 +173,16 @@ typedef struct {
 typedef struct {
     const char *name;
     CmdType     type;
+    /* Declared argument count. Positive: parsed by the generalized
+     * N-arg enum loop. Negative (e.g. glMaterialf -2): a custom parser
+     * branch handles parsing; abs(num_args) is still the slot count for
+     * autocomplete, which reads args[].enums. */
     int         num_args;
-    /* Legacy two-slot enum tables + per-slot usage strings. Retained
-     * only as a compile bridge until autocomplete migrates to the
-     * positional args[] form (enum-path generalization, phase 4); the
-     * parser already reads args[] exclusively. Do not add new readers. */
-    const ReplEnumEntry *enums1;
-    const ReplEnumEntry *enums2;
-    const char *fmt;
-    const char *usage1;
-    const char *usage2;
-    int         indent_type;
+    const char *fmt;          /* canonical-text format ("%sName(%s, %s);") */
+    int         indent_type;  /* 1 = glBegin-style begin-block indent */
     /* Positional enum-argument specs, one per declared argument. The
-     * single source of truth for enum-token resolution and emission;
-     * the generalized N-arg parser loop reads only these. */
+     * single source of truth for enum-token resolution + emission (the
+     * generalized N-arg parser loop) and for slot-indexed autocomplete. */
     ReplEnumArgSpec args[MAX_ENUM_ARGS];
 } ReplEnumCommandSpec;
 

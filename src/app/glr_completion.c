@@ -22,8 +22,7 @@ static const ReplFuncCompletion *g_ac_func_matches[MAX_AC_MATCHES];
 typedef enum {
     AC_MODE_NONE = 0,
     AC_MODE_POINT_PARAM,
-    AC_MODE_ENUM_ARG1,
-    AC_MODE_ENUM_ARG2,
+    AC_MODE_ENUM_SLOT,
     AC_MODE_FUNC_PREFIX
 } AutocompleteMode;
 
@@ -222,8 +221,7 @@ static void update_selected_autocomplete_preview(void) {
     }
 
     if (g_ac_mode == AC_MODE_POINT_PARAM ||
-        g_ac_mode == AC_MODE_ENUM_ARG1 ||
-        g_ac_mode == AC_MODE_ENUM_ARG2) {
+        g_ac_mode == AC_MODE_ENUM_SLOT) {
         snprintf(ac->ghost, sizeof(ac->ghost), "%s%s",
                  ac->insert_matches[ac->selected_idx] + g_ac_token_len, g_ac_suffix);
     }
@@ -314,65 +312,60 @@ static void update_autocomplete(void) {
         }
     }
 
-    /* Enum-based commands completion. */
+    /* Enum-based commands completion (slot-indexed).
+     *
+     * One path for every positional enum slot: the active slot is the
+     * count of top-level commas between '(' and the cursor; the token
+     * being completed is the trailing segment after the last comma.
+     * Matches come from def->args[slot].enums; the accept suffix is
+     * ")" for the last enum slot, ", " otherwise. abs(num_args) is the
+     * slot count so the custom glMaterialf row (num_args -2) still
+     * offers face/param completion even though the parser skips it. */
     const ReplEnumCommandSpec *enum_cmds = repl_enum_command_specs();
     for (int i = 0; enum_cmds[i].name; i++) {
         char prefix[64];
         snprintf(prefix, sizeof(prefix), "%s(", enum_cmds[i].name);
         int plen = (int)strlen(prefix);
 
-        if (strncmp(input, prefix, plen) == 0 && input_len > plen) {
-            const char *after = input + plen;
-            int alen = input_len - plen;
-            char *comma = strchr(after, ',');
+        if (strncmp(input, prefix, plen) != 0 || input_len <= plen)
+            continue;
 
-            if (!comma) {
-                /* Complete enum1. */
-                for (int j = 0; enum_cmds[i].enums1 && enum_cmds[i].enums1[j].name && ac->match_count < MAX_AC_MATCHES; j++) {
-                    if (strncmp(enum_cmds[i].enums1[j].name, after, alen) == 0 &&
-                        (int)strlen(enum_cmds[i].enums1[j].name) > alen) {
-                        ac->matches[ac->match_count] = enum_cmds[i].enums1[j].name;
-                        ac->insert_matches[ac->match_count] = enum_cmds[i].enums1[j].name;
-                        g_ac_func_matches[ac->match_count] = NULL;
-                        ac->match_count++;
-                    }
-                }
-                if (ac->match_count > 0) {
-                    g_ac_mode = AC_MODE_ENUM_ARG1;
-                    g_ac_token_len = alen;
-                    if (abs(enum_cmds[i].num_args) == 1)
-                        snprintf(g_ac_suffix, sizeof(g_ac_suffix), ")");
-                    else if (abs(enum_cmds[i].num_args) == 2)
-                        snprintf(g_ac_suffix, sizeof(g_ac_suffix), ", ");
-                    update_selected_autocomplete_preview();
-                }
-                return;
-            } else {
-                /* Complete enum2. */
-                if (abs(enum_cmds[i].num_args) == 2 && enum_cmds[i].enums2) {
-                    const char *arg2 = comma + 1;
-                    while (*arg2 == ' ') arg2++;
-                    int arg2_len = input_len - (int)(arg2 - input);
+        int nargs = abs(enum_cmds[i].num_args);
+        if (nargs < 1)
+            return; /* command matched but declares no enum slots */
+        if (nargs > MAX_ENUM_ARGS)
+            nargs = MAX_ENUM_ARGS;
 
-                    for (int j = 0; enum_cmds[i].enums2[j].name && ac->match_count < MAX_AC_MATCHES; j++) {
-                        if (strncmp(enum_cmds[i].enums2[j].name, arg2, arg2_len) == 0 &&
-                            (int)strlen(enum_cmds[i].enums2[j].name) > arg2_len) {
-                            ac->matches[ac->match_count] = enum_cmds[i].enums2[j].name;
-                            ac->insert_matches[ac->match_count] = enum_cmds[i].enums2[j].name;
-                            g_ac_func_matches[ac->match_count] = NULL;
-                            ac->match_count++;
-                        }
-                    }
-                    if (ac->match_count > 0) {
-                        g_ac_mode = AC_MODE_ENUM_ARG2;
-                        g_ac_token_len = arg2_len;
-                        snprintf(g_ac_suffix, sizeof(g_ac_suffix), ")");
-                        update_selected_autocomplete_preview();
-                    }
-                    return;
-                }
+        const char *after = input + plen;
+        int slot = 0;
+        const char *seg = after;
+        for (const char *q = after; *q; q++) {
+            if (*q == ',') { slot++; seg = q + 1; }
+        }
+        if (slot >= nargs)
+            return; /* cursor is past the last enum slot */
+        while (*seg == ' ') seg++;
+        int seg_len = input_len - (int)(seg - input);
+        if (seg_len < 0) seg_len = 0;
+
+        const ReplEnumEntry *tbl = enum_cmds[i].args[slot].enums;
+        for (int j = 0; tbl && tbl[j].name && ac->match_count < MAX_AC_MATCHES; j++) {
+            if (strncmp(tbl[j].name, seg, (size_t)seg_len) == 0 &&
+                (int)strlen(tbl[j].name) > seg_len) {
+                ac->matches[ac->match_count] = tbl[j].name;
+                ac->insert_matches[ac->match_count] = tbl[j].name;
+                g_ac_func_matches[ac->match_count] = NULL;
+                ac->match_count++;
             }
         }
+        if (ac->match_count > 0) {
+            g_ac_mode = AC_MODE_ENUM_SLOT;
+            g_ac_token_len = seg_len;
+            snprintf(g_ac_suffix, sizeof(g_ac_suffix), "%s",
+                     (slot + 1 == nargs) ? ")" : ", ");
+            update_selected_autocomplete_preview();
+        }
+        return;
     }
 
     /* Complete function names. */
