@@ -1682,7 +1682,7 @@ static void glr_ctrl_tick_overlay_xn(void) {
     else
         scene_xn_set(&g_grid_xn, p.grid_theme);
     scene_xn_tick(&g_grid_xn, 0.016f,
-                  GRID_AXES_FADE_IN_SECS, GRID_AXES_FADE_OUT_SECS);
+                  GRID_FADE_IN_SECS, GRID_FADE_OUT_SECS);
 
     if (p.axes_theme != g_axes_xn.current &&
         g_axes_xn.current == AXES_THEME_OFF)
@@ -1690,7 +1690,7 @@ static void glr_ctrl_tick_overlay_xn(void) {
     else
         scene_xn_set(&g_axes_xn, p.axes_theme);
     scene_xn_tick(&g_axes_xn, 0.016f,
-                  GRID_AXES_FADE_IN_SECS, GRID_AXES_FADE_OUT_SECS);
+                  AXES_FADE_IN_SECS, AXES_FADE_OUT_SECS);
 }
 
 static void glr_app_install_app_services(void) {
