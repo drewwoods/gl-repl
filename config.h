@@ -74,10 +74,10 @@
  * `make sample CPPFLAGS=-DGRID_XN_STYLE=GRID_AXES_XN_FOG`) without
  * editing this file. */
 #ifndef GRID_FADE_IN_SECS
-#define GRID_FADE_IN_SECS  0.55f
+#define GRID_FADE_IN_SECS  0.25f
 #endif
 #ifndef GRID_FADE_OUT_SECS
-#define GRID_FADE_OUT_SECS 0.50f
+#define GRID_FADE_OUT_SECS 0.20f
 #endif
 #ifndef GRID_XN_STYLE
 #define GRID_XN_STYLE      GRID_AXES_XN_FOG
