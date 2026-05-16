@@ -550,6 +550,13 @@ static void test_overlay_transition_machine_wiring(void) {
     replay_state_mut()->active = 0;
     replay_state_mut()->state = REPLAY_OFF;
 
+    /* Ticks to fully complete an OUT then IN at the *configured* grid
+     * durations (glr_ctrl_tick advances a fixed 0.016s). Derived from
+     * the constants, not hardcoded, so retuning GRID_FADE_*_SECS in
+     * config.h doesn't break this test. +6 ticks of margin. */
+    const int settle = (int)((GRID_FADE_OUT_SECS + GRID_FADE_IN_SECS)
+                             / 0.016f) + 6;
+
     /* 1. First frame is a SNAP — rule 8 seeding (in glr_app_reset_all)
      *    means the non-off default grid does NOT animate in at startup. */
     glr_ctrl_display_frame();
@@ -575,7 +582,7 @@ static void test_overlay_transition_machine_wiring(void) {
                 g_last_scene_config.grid_opacity < 1.0f &&
                 g_last_scene_config.grid_opacity > 0.0f);
 
-    for (int i = 0; i < 40; i++) glr_ctrl_tick();
+    for (int i = 0; i < settle; i++) glr_ctrl_tick();
     glr_ctrl_display_frame();
     ASSERT_INT("adopted new theme after crossing",
                g_last_scene_config.grid_theme, GRID_THEME_CLASSIC);
@@ -589,7 +596,7 @@ static void test_overlay_transition_machine_wiring(void) {
     glr_state_presentation_mut()->grid_theme = GRID_THEME_TRON;
     glr_ctrl_tick();
     glr_state_presentation_mut()->grid_theme = GRID_THEME_EMBER;
-    for (int i = 0; i < 40; i++) glr_ctrl_tick();
+    for (int i = 0; i < settle; i++) glr_ctrl_tick();
     glr_ctrl_display_frame();
     ASSERT_INT("adopts latest, skips ephemeral TRON",
                g_last_scene_config.grid_theme, GRID_THEME_EMBER);
@@ -598,7 +605,7 @@ static void test_overlay_transition_machine_wiring(void) {
      *    scene_xn_show, so the new theme fades IN from 0 with NO
      *    preceding FADE_OUT (current jumps straight to the theme). */
     glr_state_presentation_mut()->grid_theme = GRID_THEME_OFF;
-    for (int i = 0; i < 40; i++) glr_ctrl_tick();   /* settle to off */
+    for (int i = 0; i < settle; i++) glr_ctrl_tick();   /* settle to off */
     glr_state_presentation_mut()->grid_theme = GRID_THEME_CLASSIC;
     glr_ctrl_tick();
     glr_ctrl_display_frame();
