@@ -1,7 +1,7 @@
 <div align="center">
 
-<img src="assets/hero-r11a-one-line-code-color.svg" alt="gl-repl — type GL commands, watch geometry render r9c" width="75%">
-<img src="assets/hero-r11a-one-line-code-color-dark.svg" alt="gl-repl — type GL commands, watch geometry render r9c" width="75%">
+<img src="assets/hero-immediate-mode-immediately.svg" alt="gl-repl — type GL commands, watch geometry render r9c" width="75%">
+<img src="assets/hero-immediate-mode-immediately-dark.svg" alt="gl-repl — type GL commands, watch geometry render r9c" width="75%">
 
 <br>
 
