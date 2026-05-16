@@ -52,6 +52,11 @@
  * (plans/in-review/status-message-history.md). */
 #define REPL_STATUS_MESSAGE_TTL 360
 
+/* Grid/axes show/hide fade durations, seconds (the transition machine
+ * ticks on dt seconds; see plans/active/grid-axes-transitions.md). */
+#define GRID_AXES_FADE_IN_SECS  0.30f
+#define GRID_AXES_FADE_OUT_SECS 0.20f
+
 /* Storage capacity of the source command document and the matching
  * editor buffer. Surfaces here (not in src/repl/command.h) so neutral
  * boundary headers — source_document.h in particular — can size their
