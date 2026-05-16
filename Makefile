@@ -238,6 +238,7 @@ SRCS = \
 	src/scene/lights.c \
 	src/scene/overlays.c \
 	src/scene/render.c \
+	src/scene/scene_transition.c \
 	src/ui/autocomplete_panel.c \
 	src/ui/color_picker.c \
 	src/ui/layout.c \
@@ -315,6 +316,7 @@ HDRS = \
 	src/scene/lights.h \
 	src/scene/overlays.h \
 	src/scene/render.h \
+	src/scene/scene_transition.h \
 	src/scene/render_types.h \
 	src/ui/autocomplete_panel.h \
 	src/ui/color_picker.h \
@@ -391,6 +393,7 @@ CORE_TEST_SRCS = \
 	src/scene/lights.c \
 	src/scene/overlays.c \
 	src/scene/render.c \
+	src/scene/scene_transition.c \
 	src/ui/autocomplete_panel.c \
 	src/ui/color_picker.c \
 	src/ui/layout.c \
@@ -493,6 +496,7 @@ TEST_BINS = \
 	test_repl_code_panel_layout \
 	test_repl_code_panel_document \
 	test_repl_code_panel_syntax \
+	test_scene_transition \
 	test_ui_scene_tabs \
 	test_scene_file_menu \
 	test_repl_core_parse \
