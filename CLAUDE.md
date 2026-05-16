@@ -280,6 +280,19 @@ Test sources live under `tests/` and shared test-only helpers live under
   automatically; if you need a `glEnable`-shaped enum-arg spec or a
   standard float-arg spec, append a row to `k_enum_command_specs[]`
   or `k_std_command_specs[]` in the same file.
+- Enum-backed commands use **one uniform storage convention**: every
+  parsed enum argument lives in `GLCmd.args[]` (with `num_args` set),
+  N args wide, resolved by the generalized loop in `parser.c` from
+  each row's positional `ReplEnumArgSpec args[]`. There is **no
+  `GLCmd.mode` field** — it was deleted; the absence is the
+  compiler-enforced "enum args go through `args[]`" invariant (so no
+  `check-state-ownership` guard is needed for it). Each slot declares a
+  `ReplEnumSlotKind`: `ENUM_ONLY` (strict token; the behavior-neutral
+  default for non-bool slots), `ENUM_OR_CONST_VALUE` (token or a
+  constant 0/1 reverse-mapped — the bool-mask policy for `glDepthMask`
+  / `glColorMask`), or `ENUM_OR_EXPR` (token or a full expression —
+  only `glLightModeli` slot 1). `k_enum_command_specs[]` /
+  `k_std_command_specs[]` stay alphabetically sorted by GL name.
 - `CmdType` set tests go through the inline predicates in
   `src/repl/command.h`, not ad-hoc `||` chains: `repl_cmd_is_transform`,
   `repl_cmd_emits_vertex` (VERTEX3F/VERTEX2F/TESS_VERTEX),
@@ -634,7 +647,9 @@ Symbol matching and function parameter hints in `src/app/glr_completion.c` (regi
 - `editor_state_autocomplete()->ghost` — suffix to append to input on Tab accept
 - `editor_state_autocomplete()->hint` — parameter list hint shown below cursor
 - Modes: `AC_MODE_FUNC_PREFIX` (after `foo(` → param hints),
-  `AC_MODE_ENUM_ARG1/2` (GL constant completion),
+  `AC_MODE_ENUM_SLOT` (slot-indexed GL constant completion over
+  `def->args[slot].enums`; the active slot is the top-level comma
+  count),
   `AC_MODE_POINT_PARAM` (3D point coordinates)
 
 ### Search
@@ -710,6 +725,9 @@ glColorMaterial(face, mode), glMaterialf(face, pname, value)
   glColorMaterial mode: GL_AMBIENT, GL_DIFFUSE, GL_SPECULAR, GL_EMISSION, GL_AMBIENT_AND_DIFFUSE
 glLightModeli(pname, param), glFrontFace(mode)
 glDepthMask(GL_TRUE|GL_FALSE)
+glColorMask(red, green, blue, alpha)
+  Each channel is GL_TRUE/GL_FALSE (or 0/1, canonicalized to the
+  symbolic token). glDepthMask accepts 0/1 the same way.
 GLUT Solid Shapes:
   glutSolidTorus(inner, outer, nsides, rings)
   glutSolidCube(size)
