@@ -483,7 +483,7 @@ void replay_walk_user_vertices(const ReplVertexWalkContext *ctx,
         switch (cmd->type) {
         case CMD_BEGIN:
             state.in_block = 1;
-            state.primitive_mode = cmd->mode;
+            state.primitive_mode = (GLenum)cmd->args[0];
             state.block_selected = selected_block_only
                 ? replay_walk_block_matches_cursor(i, 0, edit_line_idx,
                                                    cursor_block_begin,

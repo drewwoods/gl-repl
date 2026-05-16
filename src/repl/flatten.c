@@ -565,10 +565,10 @@ static int flatten_source_lighting_enabled(const GLCmd *source_cmds,
 
     for (int i = 0; i < source_count; i++) {
         if (source_cmds[i].valid && source_cmds[i].type == CMD_ENABLE &&
-            source_cmds[i].mode == GL_LIGHTING)
+            (GLenum)source_cmds[i].args[0] == GL_LIGHTING)
             user_lighting_enabled = 1;
         if (source_cmds[i].valid && source_cmds[i].type == CMD_DISABLE &&
-            source_cmds[i].mode == GL_LIGHTING)
+            (GLenum)source_cmds[i].args[0] == GL_LIGHTING)
             user_lighting_enabled = 0;
     }
     return user_lighting_enabled;

@@ -300,7 +300,7 @@ static void test_gl_triangles(void) {
     ASSERT_TRUE("autonormal front-face cw first cmd auto", repl_state_document_cmds_mut()[2].is_auto == 1);
     ASSERT_TRUE("autonormal front-face cw flips z", fabsf(repl_state_document_cmds_mut()[2].args[2] - (-1.0f)) < 1e-6f);
 
-    repl_state_document_cmds_mut()[0].mode = GL_CCW;
+    repl_state_document_cmds_mut()[0].args[0] = GL_CCW;
     repl_recompute_autonormals(1);
     ASSERT_TRUE("autonormal front-face update flips auto normal back", fabsf(repl_state_document_cmds_mut()[2].args[2] - 1.0f) < 1e-6f);
 

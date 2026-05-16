@@ -110,6 +110,99 @@ static int is_known_incomplete_func_name(const char *func) {
 }
 
 /*
+ * resolve_enum_arg_slot - resolve one positional enum argument.
+ *
+ * `raw` is the trimmed source token for this slot. Resolution order:
+ *
+ *   1. Exact enum-token lookup against as->enums (non-null for every
+ *      kind). The matched token name is what gets emitted, so the
+ *      user's GL_* spelling is always preserved and autocomplete stays
+ *      table-driven. Token lookup always wins, which also makes the
+ *      numeric reverse-map below header-independent in practice.
+ *   2. On a token miss, behavior is keyed on the slot kind:
+ *      - ENUM_ONLY: reject (no numeric, no expression). Byte-for-byte
+ *        the historic behavior of every strict enum slot.
+ *      - ENUM_OR_CONST_VALUE: fold a constant-only expression (runtime
+ *        vars rejected) and reverse-map the value back into this slot's
+ *        table; emit the canonical token name. (Reserved for the
+ *        bool-slot policy; no slot is this kind in the behavior-neutral
+ *        generalization.)
+ *      - ENUM_OR_EXPR: evaluate a full expression (vars permitted),
+ *        store the folded value, emit the typed source token verbatim,
+ *        and set *any_vars when it references visible vars.
+ *
+ * Returns 1 with *out_val / emit[] filled, or 0 after emitting the
+ * slot's diagnostic.
+ */
+static int resolve_enum_arg_slot(const char *raw,
+                                 const ReplEnumArgSpec *as,
+                                 ExprVar *vars, int num_vars,
+                                 float *out_val,
+                                 char *emit, int emit_sz,
+                                 int *any_vars,
+                                 const ReplParseContext *ctx) {
+    for (int i = 0; as->enums && as->enums[i].name; i++) {
+        if (strcmp(raw, as->enums[i].name) == 0) {
+            *out_val = (float)as->enums[i].value;
+            snprintf(emit, (size_t)emit_sz, "%s", as->enums[i].name);
+            return 1;
+        }
+    }
+
+    switch (as->kind) {
+    case REPL_ENUM_SLOT_ENUM_ONLY:
+        parser_emit_error_static(ctx, as->usage);
+        return 0;
+
+    case REPL_ENUM_SLOT_ENUM_OR_CONST_VALUE: {
+        char verr[128];
+        if (!repl_eval_validate_expression_idents(raw, vars, num_vars,
+                                                  verr, sizeof(verr)) ||
+            input_has_any_visible_vars(raw, vars, num_vars)) {
+            parser_emit_error_static(ctx, as->usage);
+            return 0;
+        }
+        float fv;
+        if (repl_eval_parse_exprs(raw, &fv, 1, vars, num_vars) != 1) {
+            parser_emit_error_static(ctx, as->usage);
+            return 0;
+        }
+        for (int i = 0; as->enums && as->enums[i].name; i++) {
+            if ((float)as->enums[i].value == fv) {
+                *out_val = (float)as->enums[i].value;
+                snprintf(emit, (size_t)emit_sz, "%s", as->enums[i].name);
+                return 1;
+            }
+        }
+        parser_emit_error_static(ctx, as->usage);
+        return 0;
+    }
+
+    case REPL_ENUM_SLOT_ENUM_OR_EXPR: {
+        char verr[128];
+        if (!repl_eval_validate_expression_idents(raw, vars, num_vars,
+                                                  verr, sizeof(verr))) {
+            parser_emit_error_static(ctx, verr);
+            return 0;
+        }
+        float fv;
+        if (repl_eval_parse_exprs(raw, &fv, 1, vars, num_vars) != 1) {
+            parser_emit_error_static(ctx, as->usage);
+            return 0;
+        }
+        *out_val = fv;
+        snprintf(emit, (size_t)emit_sz, "%s", raw);
+        if (input_has_any_visible_vars(raw, vars, num_vars))
+            *any_vars = 1;
+        return 1;
+    }
+    }
+
+    parser_emit_error_static(ctx, as->usage);
+    return 0;
+}
+
+/*
  * parse_command - Convert a single REPL text line into a GLCmd.
  *
  * text_out receives the canonical source form (indented, with trailing ';')
@@ -211,86 +304,108 @@ static int parse_command(const char *line, GLCmd *cmd,
             goto unknown_command;
     }
 
-    /* Table-driven parsing for enum commands */
+    /* Table-driven parsing for enum commands (generalized N-arg).
+     *
+     * Every enum-backed command declares def->num_args positional slots
+     * in def->args[]. Split the call's args into exactly that many
+     * top-level fields (paren-aware), resolve each through the per-slot
+     * resolver keyed on its ReplEnumSlotKind, and store every resolved
+     * value uniformly in cmd->args[slot] with cmd->num_args set. There
+     * is no cmd->mode for table-driven enum commands — the executor and
+     * every other reader read args[]. Storing a GLenum in float args[]
+     * is exact: all GL enums in use are < 2^24, so (GLenum)cmd->args[i]
+     * round-trips losslessly. */
     for (const ReplEnumCommandSpec *def = repl_enum_command_specs(); def->name; def++) {
-        if (strcmp(func, def->name) == 0) {
-            if (def->num_args == 1) {
-                char *arg_str = args;
-                while (*arg_str && isspace((unsigned char)*arg_str)) arg_str++;
-                int arg_len = (int)strlen(arg_str);
-                while (arg_len > 0 && isspace((unsigned char)arg_str[arg_len - 1])) arg_str[--arg_len] = '\0';
-                for (int i = 0; def->enums1[i].name; i++) {
-                    if (strcmp(arg_str, def->enums1[i].name) == 0) {
-                        cmd->type = def->type;
-                        cmd->mode = def->enums1[i].value;
-                        cmd->valid = 1;
-                        if (def->indent_type == 1) {
-                            /* glBegin-style indent: 2 + 2*tess + 2*block  (begin depth excluded) */
-                            char ind[32];
-                            int td = repl_source_scope_tess_scope_depth_at(source_line_idx);
-                            int kd = repl_source_scope_block_depth_at(source_line_idx);
-                            int spaces = 2 + 2 * td + 2 * kd;
-                            if (spaces > (int)sizeof(ind) - 1) spaces = (int)sizeof(ind) - 1;
-                            memset(ind, ' ', (size_t)spaces);
-                            ind[spaces] = '\0';
-                            WRITE_TEXT(def->fmt, ind, def->enums1[i].name);
-                        } else {
-                            char ind[32];
-                            repl_source_scope_cmd_indent(source_line_idx, ind, sizeof(ind));
-                            WRITE_TEXT(def->fmt, ind, def->enums1[i].name);
-                        }
-                        return 1;
-                    }
-                }
-                parser_emit_error_static(ctx, def->usage1);
-                return 0;
-            } else if (def->num_args == 2) {
-                char raw_arg1[64] = "", raw_arg2[64] = "";
-                char *comma = strchr(args, ',');
-                if (!comma) { parser_emit_error_static(ctx, def->usage1 ? def->usage1 : "Invalid arguments"); return 0; }
-                int len1 = (int)(comma - args);
-                if (len1 >= (int)sizeof(raw_arg1)) len1 = (int)sizeof(raw_arg1) - 1;
-                strncpy(raw_arg1, args, len1); raw_arg1[len1] = '\0';
-                strncpy(raw_arg2, comma + 1, sizeof(raw_arg2) - 1);
+        if (strcmp(func, def->name) != 0)
+            continue;
+        if (def->num_args < 1)
+            break; /* custom/metadata row (e.g. glMaterialf, num_args -2):
+                    * not N-arg enum-parsed; a dedicated branch below
+                    * handles it. */
 
-                /* Trim whitespace from both arguments */
-                char *trimmed1 = raw_arg1; while (*trimmed1 == ' ') trimmed1++;
-                int tlen1 = (int)strlen(trimmed1); while (tlen1 > 0 && trimmed1[tlen1-1] == ' ') trimmed1[--tlen1] = '\0';
-                char *trimmed2 = raw_arg2; while (*trimmed2 == ' ') trimmed2++;
-                int tlen2 = (int)strlen(trimmed2); while (tlen2 > 0 && trimmed2[tlen2-1] == ' ') trimmed2[--tlen2] = '\0';
+        int n = def->num_args;
+        if (n > MAX_ENUM_ARGS) n = MAX_ENUM_ARGS;
 
-                GLenum val1 = 0;
-                int found1 = 0, found2 = 0;
-                float val2_f = 0.0f;
-
-                for (int i = 0; def->enums1[i].name; i++) {
-                    if (strcmp(trimmed1, def->enums1[i].name) == 0) { val1 = def->enums1[i].value; found1 = 1; break; }
-                }
-                for (int i = 0; def->enums2[i].name; i++) {
-                    if (strcmp(trimmed2, def->enums2[i].name) == 0) { val2_f = (float)def->enums2[i].value; found2 = 1; break; }
-                }
-                if (!found1) { parser_emit_error_static(ctx, def->usage1); return 0; }
-
-                if (!found2 && def->type == CMD_LIGHT_MODEL_I) {
-                    char verr[128];
-                    if (!repl_eval_validate_expression_idents(trimmed2, vars, num_vars, verr, sizeof(verr))) {
-                        parser_emit_error_static(ctx, verr); return 0;
-                    }
-                    float fv; if (repl_eval_parse_exprs(trimmed2, &fv, 1, vars, num_vars) == 1) { val2_f = fv; found2 = 1; }
-                }
-
-                if (!found2) { parser_emit_error_static(ctx, def->usage2); return 0; }
-
-                cmd->type = def->type;
-                cmd->valid = 1;
-                cmd->mode = val1;
-                cmd->args[0] = val2_f;
-                cmd->num_args = 1;
-                char ind[32]; repl_source_scope_cmd_indent(source_line_idx, ind, sizeof(ind));
-                WRITE_TEXT(def->fmt, ind, trimmed1, trimmed2);
-                return 1;
+        char slot_raw[MAX_ENUM_ARGS][64];
+        int  split_ok = 1;
+        const char *s = args;
+        for (int slot = 0; slot < n && split_ok; slot++) {
+            while (*s && isspace((unsigned char)*s)) s++;
+            const char *delim = repl_scan_next_arg_delim(s);
+            int seg_len = (int)(delim - s);
+            while (seg_len > 0 && isspace((unsigned char)s[seg_len - 1]))
+                seg_len--;
+            if (seg_len <= 0 || seg_len >= (int)sizeof(slot_raw[slot])) {
+                split_ok = 0;
+                break;
+            }
+            memcpy(slot_raw[slot], s, (size_t)seg_len);
+            slot_raw[slot][seg_len] = '\0';
+            if (slot < n - 1) {
+                if (*delim != ',') { split_ok = 0; break; }
+                s = delim + 1;
+            } else {
+                const char *t = delim;
+                while (*t && isspace((unsigned char)*t)) t++;
+                if (*t != '\0') split_ok = 0; /* extra trailing args */
             }
         }
+        if (!split_ok) {
+            parser_emit_error_static(ctx, def->args[0].usage
+                                     ? def->args[0].usage : "Invalid arguments");
+            return 0;
+        }
+
+        float slot_val[MAX_ENUM_ARGS];
+        char  slot_emit[MAX_ENUM_ARGS][64];
+        int   any_vars = 0;
+        for (int slot = 0; slot < n; slot++) {
+            if (!resolve_enum_arg_slot(slot_raw[slot], &def->args[slot],
+                                       vars, num_vars, &slot_val[slot],
+                                       slot_emit[slot],
+                                       (int)sizeof(slot_emit[slot]),
+                                       &any_vars, ctx))
+                return 0;
+        }
+
+        cmd->type = def->type;
+        cmd->valid = 1;
+        cmd->num_args = n;
+        for (int slot = 0; slot < n; slot++)
+            cmd->args[slot] = slot_val[slot];
+        if (any_vars)
+            cmd->has_vars = 1;
+
+        char ind[32];
+        if (def->indent_type == 1) {
+            /* glBegin-style indent: 2 + 2*tess + 2*block (begin depth excluded) */
+            int td = repl_source_scope_tess_scope_depth_at(source_line_idx);
+            int kd = repl_source_scope_block_depth_at(source_line_idx);
+            int spaces = 2 + 2 * td + 2 * kd;
+            if (spaces > (int)sizeof(ind) - 1) spaces = (int)sizeof(ind) - 1;
+            memset(ind, ' ', (size_t)spaces);
+            ind[spaces] = '\0';
+        } else {
+            repl_source_scope_cmd_indent(source_line_idx, ind, sizeof(ind));
+        }
+        if (text_out && text_sz > 0) {
+            if (n == 1) {
+                WRITE_TEXT(def->fmt, ind, slot_emit[0]);
+            } else if (n == 2) {
+                WRITE_TEXT(def->fmt, ind, slot_emit[0], slot_emit[1]);
+            } else {
+                /* No current command declares >2 enum slots; a generic
+                 * "name(joined token names);" join keeps a future
+                 * N-slot command honest without another fmt. */
+                int off = snprintf(text_out, (size_t)text_sz, "%s%s(",
+                                   ind, def->name);
+                for (int slot = 0; slot < n && off < (int)text_sz - 4; slot++)
+                    off += snprintf(text_out + off, (size_t)(text_sz - off),
+                                    "%s%s", slot ? ", " : "", slot_emit[slot]);
+                snprintf(text_out + off, (size_t)(text_sz - off), ");");
+            }
+        }
+        return 1;
     }
 
     /* glEnd() - aligns with its matching glBegin: 2 + 2*tess + 2*block (begin depth not added) */

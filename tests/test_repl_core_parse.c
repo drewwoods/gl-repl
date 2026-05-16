@@ -503,8 +503,8 @@ int main(void) {
                                       &cmd, cmd_text, sizeof(cmd_text));
         ASSERT_TRUE("glColorMaterial parse ok", ok == 1);
         ASSERT_TRUE("glColorMaterial type", cmd.type == CMD_COLOR_MATERIAL);
-        ASSERT_TRUE("glColorMaterial face", cmd.mode == GL_FRONT_AND_BACK);
-        ASSERT_TRUE("glColorMaterial mode", (GLenum)cmd.args[0] == GL_AMBIENT_AND_DIFFUSE);
+        ASSERT_TRUE("glColorMaterial face", (GLenum)cmd.args[0] == GL_FRONT_AND_BACK);
+        ASSERT_TRUE("glColorMaterial mode", (GLenum)cmd.args[1] == GL_AMBIENT_AND_DIFFUSE);
         ASSERT_TRUE("glColorMaterial source",
                     strstr(cmd_text, "glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);") != NULL);
     }
@@ -681,7 +681,7 @@ int main(void) {
         int ok = parse_cmd_with_text("glDepthMask(GL_FALSE)", &cmd, cmd_text, sizeof(cmd_text));
         ASSERT_TRUE("glDepthMask(GL_FALSE) parse ok", ok == 1);
         ASSERT_TRUE("glDepthMask type", cmd.type == CMD_DEPTH_MASK);
-        ASSERT_TRUE("glDepthMask mode GL_FALSE", cmd.mode == GL_FALSE);
+        ASSERT_TRUE("glDepthMask mode GL_FALSE", (GLenum)cmd.args[0] == GL_FALSE);
         ASSERT_TRUE("glDepthMask source canonicalized",
                     strstr(cmd_text, "glDepthMask(GL_FALSE);") != NULL);
     }
@@ -691,7 +691,7 @@ int main(void) {
         memset(&cmd, 0, sizeof(cmd));
         int ok = parse_for_test("glDepthMask(GL_TRUE)", &cmd);
         ASSERT_TRUE("glDepthMask(GL_TRUE) parse ok", ok == 1);
-        ASSERT_TRUE("glDepthMask GL_TRUE mode", cmd.mode == GL_TRUE);
+        ASSERT_TRUE("glDepthMask GL_TRUE mode", (GLenum)cmd.args[0] == GL_TRUE);
     }
     {
         glr_app_reset_all();

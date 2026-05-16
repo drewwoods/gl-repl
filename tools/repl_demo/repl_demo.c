@@ -142,7 +142,8 @@ static void seed_for_loop_program(void) {
 
     cmds[2].type = CMD_BEGIN;
     cmds[2].valid = 1;
-    cmds[2].mode = GL_POINTS;
+    cmds[2].args[0] = GL_POINTS;
+    cmds[2].num_args = 1;
 
     /* CMD_FOR_BEGIN: var name 'i', start 0, end 4, step 1 (default). */
     cmds[3].type = CMD_FOR_BEGIN;
