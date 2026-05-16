@@ -125,7 +125,7 @@ GLenum repl_current_begin_mode(void) {
     GLenum mode = GL_TRIANGLES;
     for (int cmd_idx = 0; cmd_idx < repl_state_document_count(); cmd_idx++)
         if (repl_state_document_cmds_mut()[cmd_idx].valid && repl_state_document_cmds_mut()[cmd_idx].type == CMD_BEGIN)
-            mode = repl_state_document_cmds_mut()[cmd_idx].mode;
+            mode = (GLenum)repl_state_document_cmds_mut()[cmd_idx].args[0];
     return mode;
 }
 

@@ -181,7 +181,7 @@ void repl_recompute_autonormals(int autonormal_enabled) {
     GLenum front_face = GL_CCW;
     while (i < repl_state_document_count()) {
         if (repl_state_document_cmds_mut()[i].valid && repl_state_document_cmds_mut()[i].type == CMD_FRONT_FACE) {
-            front_face = repl_state_document_cmds_mut()[i].mode;
+            front_face = (GLenum)repl_state_document_cmds_mut()[i].args[0];
             i++;
             continue;
         }
@@ -193,7 +193,7 @@ void repl_recompute_autonormals(int autonormal_enabled) {
          * markers fall through to the `i++` at the bottom. */
         if (!repl_state_document_cmds_mut()[i].valid || repl_state_document_cmds_mut()[i].type != CMD_BEGIN) { i++; continue; }
 
-        GLenum mode = repl_state_document_cmds_mut()[i].mode;
+        GLenum mode = (GLenum)repl_state_document_cmds_mut()[i].args[0];
         i++;
 
         int vi[MAX_COMMANDS];

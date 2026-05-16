@@ -121,19 +121,22 @@ static void test_apply_state_cmd_edge_cases(void) {
     ASSERT_TRUE("Non-state cmd returns 0", ret == 0);
 
     // Test all branches in apply_state_cmd
-    cmd.type = CMD_ENABLE; cmd.mode = GL_BLEND; apply_state_cmd(&cmd, 1.0f);
-    cmd.type = CMD_DISABLE; cmd.mode = GL_BLEND; apply_state_cmd(&cmd, 1.0f);
-    cmd.type = CMD_SHADE_MODEL; cmd.mode = GL_FLAT; apply_state_cmd(&cmd, 1.0f);
-    cmd.type = CMD_COLOR_MATERIAL; cmd.mode = GL_FRONT; cmd.args[0] = GL_AMBIENT; apply_state_cmd(&cmd, 1.0f);
+    /* Enum-spec commands now use uniform args[] storage (no GLCmd.mode). */
+    cmd.type = CMD_ENABLE; cmd.args[0] = GL_BLEND; apply_state_cmd(&cmd, 1.0f);
+    cmd.type = CMD_DISABLE; cmd.args[0] = GL_BLEND; apply_state_cmd(&cmd, 1.0f);
+    cmd.type = CMD_SHADE_MODEL; cmd.args[0] = GL_FLAT; apply_state_cmd(&cmd, 1.0f);
+    cmd.type = CMD_COLOR_MATERIAL; cmd.args[0] = GL_FRONT; cmd.args[1] = GL_AMBIENT; apply_state_cmd(&cmd, 1.0f);
 
+    /* glMaterialf is a documented custom command — still uses GLCmd.mode. */
     cmd.type = CMD_MATERIALF; cmd.mode = GL_FRONT; cmd.num_args = 2; cmd.args[0] = GL_SHININESS; cmd.args[1] = 50; apply_state_cmd(&cmd, 1.0f);
     cmd.num_args = 5; apply_state_cmd(&cmd, 1.0f);
 
-    cmd.type = CMD_LIGHT_MODEL_I; cmd.mode = GL_LIGHT_MODEL_TWO_SIDE; cmd.args[0] = 1; apply_state_cmd(&cmd, 1.0f);
-    cmd.type = CMD_FRONT_FACE; cmd.mode = GL_CCW; apply_state_cmd(&cmd, 1.0f);
-    cmd.type = CMD_DEPTH_MASK; cmd.mode = 1; apply_state_cmd(&cmd, 1.0f);
+    cmd.type = CMD_LIGHT_MODEL_I; cmd.args[0] = GL_LIGHT_MODEL_TWO_SIDE; cmd.args[1] = 1; apply_state_cmd(&cmd, 1.0f);
+    cmd.type = CMD_FRONT_FACE; cmd.args[0] = GL_CCW; apply_state_cmd(&cmd, 1.0f);
+    cmd.type = CMD_DEPTH_MASK; cmd.args[0] = 1; apply_state_cmd(&cmd, 1.0f);
+    /* glPointParameterfv is a documented custom command — still uses GLCmd.mode. */
     cmd.type = CMD_POINT_PARAMETER_FV; cmd.mode = 0; apply_state_cmd(&cmd, 1.0f);
-    cmd.type = CMD_BLEND_FUNC; cmd.mode = GL_SRC_ALPHA; cmd.args[0] = GL_ONE_MINUS_SRC_ALPHA; apply_state_cmd(&cmd, 1.0f);
+    cmd.type = CMD_BLEND_FUNC; cmd.args[0] = GL_SRC_ALPHA; cmd.args[1] = GL_ONE_MINUS_SRC_ALPHA; apply_state_cmd(&cmd, 1.0f);
 }
 
 static void test_execute_edge_cases(void) {
@@ -430,7 +433,8 @@ static void test_light_indicator_tracks_program(void) {
     /* Program enables only GL_LIGHT0. */
     memset(cmds, 0, sizeof(cmds));
     cmds[0].type = CMD_ENABLE;
-    cmds[0].mode = GL_LIGHT0;
+    cmds[0].args[0] = GL_LIGHT0;
+    cmds[0].num_args = 1;
     cmds[0].valid = 1;
     opts.flat_cmd_count = 1;
     opts.program.cmds = cmds;

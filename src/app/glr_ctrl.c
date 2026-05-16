@@ -590,7 +590,7 @@ static void glr_ctrl_render_outlines(const OverlayWalkCtx *ctx,
                 if (!tess_in_contour) tess_poly_is_current = 0;
                 break;
             case CMD_BEGIN: {
-                int draw_outline = outline_begin_mode_has_overlay(cmds[i].mode);
+                int draw_outline = outline_begin_mode_has_overlay((GLenum)cmds[i].args[0]);
                 if (in_begin) glEnd();
                 block_is_current = ctx->show_current_poly &&
                                    outline_block_matches_cursor(i, 0, ctx);
@@ -604,7 +604,7 @@ static void glr_ctrl_render_outlines(const OverlayWalkCtx *ctx,
                     in_begin = 0;
                     break;
                 }
-                glBegin(cmds[i].mode);
+                glBegin((GLenum)cmds[i].args[0]);
                 in_begin = 1;
                 break;
             }
@@ -679,7 +679,7 @@ static void glr_ctrl_render_vertex_points(const OverlayWalkCtx *ctx) {
             if (repl_cmd_is_transform(flat_cmds[i].type)) {
                 apply_tracked_transform(&flat_cmds[i], &matrix_depth);
             } else if (flat_cmds[i].type == CMD_BEGIN) {
-                primitive_mode = flat_cmds[i].mode;
+                primitive_mode = (GLenum)flat_cmds[i].args[0];
             } else if (flat_cmds[i].type == CMD_END) {
                 primitive_mode = 0;
             } else if (repl_cmd_emits_vertex(flat_cmds[i].type)) {

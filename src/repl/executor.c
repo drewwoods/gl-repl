@@ -239,23 +239,27 @@ int apply_state_cmd(const GLCmd *cmd, float alpha_scale) {
         return 0;
 
     switch (cmd->type) {
-    case CMD_ENABLE:
-        glEnable(cmd->mode);
+    case CMD_ENABLE: {
+        GLenum cap = (GLenum)cmd->args[0];
+        glEnable(cap);
         for (int light_idx = 0; light_idx < MAX_LIGHTS; light_idx++)
-            if (g_lights[light_idx].id == cmd->mode)
+            if (g_lights[light_idx].id == cap)
                 g_lights[light_idx].enabled = 1;
         return 1;
-    case CMD_DISABLE:
-        glDisable(cmd->mode);
+    }
+    case CMD_DISABLE: {
+        GLenum cap = (GLenum)cmd->args[0];
+        glDisable(cap);
         for (int light_idx = 0; light_idx < MAX_LIGHTS; light_idx++)
-            if (g_lights[light_idx].id == cmd->mode)
+            if (g_lights[light_idx].id == cap)
                 g_lights[light_idx].enabled = 0;
         return 1;
+    }
     case CMD_SHADE_MODEL:
-        glShadeModel(cmd->mode);
+        glShadeModel((GLenum)cmd->args[0]);
         return 1;
     case CMD_COLOR_MATERIAL:
-        glColorMaterial(cmd->mode, (GLenum)cmd->args[0]);
+        glColorMaterial((GLenum)cmd->args[0], (GLenum)cmd->args[1]);
         return 1;
     case CMD_MATERIALF:
         if (cmd->num_args == 2) {
@@ -269,13 +273,13 @@ int apply_state_cmd(const GLCmd *cmd, float alpha_scale) {
         }
         return 1;
     case CMD_LIGHT_MODEL_I:
-        glLightModeli(cmd->mode, (GLint)cmd->args[0]);
+        glLightModeli((GLenum)cmd->args[0], (GLint)cmd->args[1]);
         return 1;
     case CMD_FRONT_FACE:
-        glFrontFace(cmd->mode);
+        glFrontFace((GLenum)cmd->args[0]);
         return 1;
     case CMD_DEPTH_MASK:
-        glDepthMask((GLboolean)cmd->mode);
+        glDepthMask((GLboolean)cmd->args[0]);
         return 1;
     case CMD_POINT_PARAMETER_FV: {
         GLfloat params[3] = { cmd->args[0], cmd->args[1], cmd->args[2] };
@@ -413,7 +417,7 @@ void repl_execute_program(const ReplExecutionOptions *options) {
         switch (flat_cmds[pc].type) {
         case CMD_BEGIN:
             /* Parser rejects nested glBegin via repl_cmd_type_valid_in_begin. */
-            glBegin(flat_cmds[pc].mode);
+            glBegin((GLenum)flat_cmds[pc].args[0]);
             in_begin = 1;
             break;
         case CMD_END:
