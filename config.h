@@ -52,10 +52,46 @@
  * (plans/in-review/status-message-history.md). */
 #define REPL_STATUS_MESSAGE_TTL 360
 
-/* Grid/axes show/hide fade durations, seconds (the transition machine
- * ticks on dt seconds; see plans/active/grid-axes-transitions.md). */
-#define GRID_AXES_FADE_IN_SECS  0.15f
-#define GRID_AXES_FADE_OUT_SECS 0.10f
+/* Grid/axes show/hide transitions (see
+ * plans/done/grid-axes-transitions.md). The two overlays are fully
+ * independent: each has its own in/out durations (seconds; the
+ * transition machine ticks on dt seconds) and its own visual style.
+ *
+ * Style selects how the controller-owned opacity becomes a visual,
+ * resolved at compile time in src/scene/grid.c / src/scene/axes.c:
+ *   GRID_AXES_XN_FADE  plain alpha fade (default; original behavior)
+ *   GRID_AXES_XN_FOG   recede into clear-color fog on the way out /
+ *                      emerge from it on the way in, with an alpha
+ *                      knee near opacity 0 so even near-origin
+ *                      geometry (axis lines, grid origin) fully
+ *                      vanishes. Fog is distance-based, so this is a
+ *                      strong look for the grid and a subtle haze for
+ *                      the near-origin axes. */
+#define GRID_AXES_XN_FADE 0
+#define GRID_AXES_XN_FOG  1
+
+/* Each selector is overridable from the build (e.g.
+ * `make sample CPPFLAGS=-DGRID_XN_STYLE=GRID_AXES_XN_FOG`) without
+ * editing this file. */
+#ifndef GRID_FADE_IN_SECS
+#define GRID_FADE_IN_SECS  0.15f
+#endif
+#ifndef GRID_FADE_OUT_SECS
+#define GRID_FADE_OUT_SECS 0.10f
+#endif
+#ifndef GRID_XN_STYLE
+#define GRID_XN_STYLE      GRID_AXES_XN_FADE
+#endif
+
+#ifndef AXES_FADE_IN_SECS
+#define AXES_FADE_IN_SECS  0.15f
+#endif
+#ifndef AXES_FADE_OUT_SECS
+#define AXES_FADE_OUT_SECS 0.10f
+#endif
+#ifndef AXES_XN_STYLE
+#define AXES_XN_STYLE      GRID_AXES_XN_FADE
+#endif
 
 /* Storage capacity of the source command document and the matching
  * editor buffer. Surfaces here (not in src/repl/command.h) so neutral

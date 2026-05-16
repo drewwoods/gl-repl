@@ -2,6 +2,7 @@
  * scene_grid.c - grid theme rendering
  */
 #include "grid.h"
+#include "config.h"   /* GRID_XN_STYLE / GRID_AXES_XN_* */
 #include <math.h>
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
@@ -56,16 +57,47 @@ static SceneRgba rgba(float r, float g, float b, float a) {
     return c;
 }
 
-/* Grid/axes in-out transition opacity (plans/.../grid-axes-transitions.md
- * rule 4). Set once at scene_grid_render entry from
- * config.grid_opacity; every color path in this file routes through
- * gl_color so the fade is applied uniformly. The multiply lands AFTER
- * each call site's own alpha_scale clamp, so the controller-owned OUT
- * is the hard ceiling (rule 3). 1.0 = fully shown. */
+/* Grid in-out transition (plans/.../grid-axes-transitions.md rule 4).
+ * Set once at scene_grid_render entry from config.grid_opacity; every
+ * color path in this file routes through gl_color so it applies
+ * uniformly, AFTER each call site's own alpha_scale clamp so the
+ * controller-owned OUT is the hard ceiling (rule 3). 1.0 = shown.
+ *
+ * s_xn_opacity is the raw machine opacity; s_xn_alpha is the effective
+ * color-alpha multiplier, which differs from opacity only under the
+ * compile-time GRID_AXES_XN_FOG style (see config.h): there the alpha
+ * stays at 1 until opacity drops past a knee, so the fog carries the
+ * recede look and the alpha only guarantees a full vanish at the end. */
 static float s_xn_opacity = 1.0f;
+static float s_xn_alpha    = 1.0f;
+
+#if GRID_XN_STYLE == GRID_AXES_XN_FOG
+#define GRID_XN_FOG_ALPHA_KNEE 0.30f
+
+/* FOG style: as the grid fades OUT, pull a clear-color linear-fog wall
+ * in from beyond the grid toward the camera so the lines recede into
+ * the background; IN reverses it. tf = 1 - opacity (0 shown .. 1
+ * hidden). Left alone at tf<=0 so a steady, fully-shown grid keeps its
+ * own theme fog. Themes that re-issue glFog mid-draw (GRID_THEME_FOG,
+ * OCEAN) and the FAR-extent distance fog override this for their own
+ * geometry; the alpha knee still guarantees those vanish. */
+static void grid_xn_apply_transition_fog(float tf, float extent) {
+    if (tf <= 0.0f) return;
+    float clear_col[4];
+    glGetFloatv(GL_COLOR_CLEAR_VALUE, clear_col);
+    glFogfv(GL_FOG_COLOR, clear_col);
+    glEnable(GL_FOG);
+    glFogi(GL_FOG_MODE, GL_LINEAR);
+    float far_end  = extent * 1.25f;   /* tf=0: fog past the grid edge */
+    float near_end = extent * 0.02f;   /* tf=1: fog wall at the camera */
+    float end = far_end + (near_end - far_end) * tf;
+    glFogf(GL_FOG_START, end * 0.15f);
+    glFogf(GL_FOG_END,   end);
+}
+#endif
 
 static void gl_color(float r, float g, float b, float a) {
-    glColor4f(r, g, b, a * s_xn_opacity);
+    glColor4f(r, g, b, a * s_xn_alpha);
 }
 
 static void gl_color_rgba(SceneRgba c) {
@@ -601,6 +633,12 @@ void scene_grid_render(const FrameRenderContext *frame_ctx) {
     if (s_xn_opacity < 0.0f) s_xn_opacity = 0.0f;
     if (s_xn_opacity > 1.0f) s_xn_opacity = 1.0f;
     if (s_xn_opacity <= 0.0f) return;
+#if GRID_XN_STYLE == GRID_AXES_XN_FOG
+    s_xn_alpha = (s_xn_opacity >= GRID_XN_FOG_ALPHA_KNEE)
+               ? 1.0f : s_xn_opacity / GRID_XN_FOG_ALPHA_KNEE;
+#else
+    s_xn_alpha = s_xn_opacity;
+#endif
 
     scene_grid_push_state();
 
@@ -650,6 +688,10 @@ void scene_grid_render(const FrameRenderContext *frame_ctx) {
         glFogf(GL_FOG_START, extent * 0.7f);
         glFogf(GL_FOG_END, extent);
     }
+
+#if GRID_XN_STYLE == GRID_AXES_XN_FOG
+    grid_xn_apply_transition_fog(1.0f - s_xn_opacity, extent);
+#endif
 
     switch (grid_theme) {
 

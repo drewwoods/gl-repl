@@ -33,17 +33,44 @@ static SceneRgba rgba(float r, float g, float b, float a) {
     return c;
 }
 
-/* Grid/axes in-out transition opacity (plans/.../grid-axes-transitions.md
- * rule 4). Set once at scene_axes_render entry from
- * config.axes_opacity; every color path in this file — axis lines,
- * tips, quads, AND the bitmap labels — routes through gl_color so the
- * fade is uniform. The multiply lands AFTER each call site's own
- * alpha_scale clamp, so the controller-owned OUT is the hard ceiling
- * (rule 3). 1.0 = fully shown. */
+/* Axes in-out transition (plans/.../grid-axes-transitions.md rule 4).
+ * Set once at scene_axes_render entry from config.axes_opacity; every
+ * color path in this file — axis lines, tips, quads, AND the bitmap
+ * labels — routes through gl_color so it applies uniformly, AFTER each
+ * call site's own alpha_scale clamp so the controller-owned OUT is the
+ * hard ceiling (rule 3). 1.0 = shown.
+ *
+ * s_xn_opacity is the raw machine opacity; s_xn_alpha is the effective
+ * color-alpha multiplier, differing only under the compile-time
+ * GRID_AXES_XN_FOG style (config.h). Axes sit near the origin where
+ * distance fog barely bites, so for axes the FOG style is mostly the
+ * alpha knee with a faint clear-color haze — an intentionally subtle
+ * variant (the strong fog look is the grid's). */
 static float s_xn_opacity = 1.0f;
+static float s_xn_alpha    = 1.0f;
+
+#if AXES_XN_STYLE == GRID_AXES_XN_FOG
+#define AXES_XN_FOG_ALPHA_KNEE 0.30f
+#define AXES_XN_FOG_REACH      4.0f   /* nominal axis+label extent */
+
+/* tf = 1 - opacity (0 shown .. 1 hidden). Pull a clear-color linear-fog
+ * wall in toward the origin as the axes fade out. Untouched at tf<=0 so
+ * a steady, fully-shown axes set is unfogged. */
+static void axes_xn_apply_transition_fog(float tf, const float clear_col[4]) {
+    if (tf <= 0.0f) return;
+    glFogfv(GL_FOG_COLOR, clear_col);
+    glEnable(GL_FOG);
+    glFogi(GL_FOG_MODE, GL_LINEAR);
+    float far_end  = AXES_XN_FOG_REACH;
+    float near_end = AXES_XN_FOG_REACH * 0.02f;
+    float end = far_end + (near_end - far_end) * tf;
+    glFogf(GL_FOG_START, end * 0.15f);
+    glFogf(GL_FOG_END,   end);
+}
+#endif
 
 static void gl_color(float r, float g, float b, float a) {
-    glColor4f(r, g, b, a * s_xn_opacity);
+    glColor4f(r, g, b, a * s_xn_alpha);
 }
 
 static void gl_color_rgba(SceneRgba c) {
@@ -188,6 +215,12 @@ void scene_axes_render(const FrameRenderContext *frame_ctx) {
     if (s_xn_opacity < 0.0f) s_xn_opacity = 0.0f;
     if (s_xn_opacity > 1.0f) s_xn_opacity = 1.0f;
     if (s_xn_opacity <= 0.0f) return;
+#if AXES_XN_STYLE == GRID_AXES_XN_FOG
+    s_xn_alpha = (s_xn_opacity >= AXES_XN_FOG_ALPHA_KNEE)
+               ? 1.0f : s_xn_opacity / AXES_XN_FOG_ALPHA_KNEE;
+#else
+    s_xn_alpha = s_xn_opacity;
+#endif
 
     scene_axes_push_state();
 
@@ -197,6 +230,10 @@ void scene_axes_render(const FrameRenderContext *frame_ctx) {
     scene_axes_apply_quality_config(config);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+#if AXES_XN_STYLE == GRID_AXES_XN_FOG
+    axes_xn_apply_transition_fog(1.0f - s_xn_opacity, config->clear_color);
+#endif
 
     float breath = sinf(frame_ctx->config.anim_time * 0.8f) * 0.5f + 0.5f; /* 0..1 */
     float as = config->alpha_scale;
