@@ -273,17 +273,38 @@ static const ReplFuncCompletion k_func_completions[] = {
     { NULL, NULL, 0, { NULL } }
 };
 
+/* One positional enum-arg slot. Keeps the spec table rows readable now
+ * that each enum command carries an explicit args[] array. */
+#define ENUM_SLOT(tbl_, usage_, kind_) { (tbl_), (usage_), (kind_) }
+
+/* Strict token-only slot — the behavior-neutral baseline for every
+ * non-bool enum slot (and, until the bool-slot policy lands, for
+ * glDepthMask). */
+#define ENUM_SLOT_TOK(tbl_, usage_) ENUM_SLOT((tbl_), (usage_), REPL_ENUM_SLOT_ENUM_ONLY)
+
 static const ReplEnumCommandSpec k_enum_command_specs[] = {
-    { "glBegin",         CMD_BEGIN,         1, k_begin_modes,        NULL,              "%sglBegin(%s);",             "Unknown mode. Try GL_TRIANGLES, GL_TRIANGLE_STRIP, ...", NULL, 1 },
-    { "glBlendFunc",     CMD_BLEND_FUNC,    2, k_blend_src_factors,  k_blend_dst_factors, "%sglBlendFunc(%s, %s);",  "sfactor: GL_SRC_ALPHA", "dfactor: GL_ONE_MINUS_SRC_ALPHA, GL_ONE", 0 },
-    { "glColorMaterial", CMD_COLOR_MATERIAL,2, k_face_types,         k_color_material_modes, "%sglColorMaterial(%s, %s);", "face: GL_FRONT, GL_BACK, GL_FRONT_AND_BACK", "mode: GL_AMBIENT, GL_DIFFUSE, GL_SPECULAR, GL_EMISSION, GL_AMBIENT_AND_DIFFUSE", 0 },
-    { "glDepthMask",     CMD_DEPTH_MASK,    1, k_bool_vals,          NULL,              "%sglDepthMask(%s);",         "Try GL_TRUE or GL_FALSE", NULL, 0 },
-    { "glDisable",       CMD_DISABLE,       1, k_enable_caps,        NULL,              "%sglDisable(%s);",           "Try GL_DEPTH_TEST, GL_LIGHTING, GL_COLOR_MATERIAL", NULL, 0 },
-    { "glEnable",        CMD_ENABLE,        1, k_enable_caps,        NULL,              "%sglEnable(%s);",            "Try GL_DEPTH_TEST, GL_LIGHTING, GL_COLOR_MATERIAL", NULL, 0 },
-    { "glFrontFace",     CMD_FRONT_FACE,    1, k_front_face,         NULL,              "%sglFrontFace(%s);",         "Try GL_CW or GL_CCW", NULL, 0 },
-    { "glLightModeli",   CMD_LIGHT_MODEL_I, 2, k_light_model_params, k_bool_vals,       "%sglLightModeli(%s, %s);",   "pname: GL_LIGHT_MODEL_TWO_SIDE, GL_LIGHT_MODEL_LOCAL_VIEWER", "param: GL_TRUE, GL_FALSE, or integer", 0 },
+    { "glBegin",         CMD_BEGIN,         1, k_begin_modes,        NULL,              "%sglBegin(%s);",             "Unknown mode. Try GL_TRIANGLES, GL_TRIANGLE_STRIP, ...", NULL, 1,
+        .args = { ENUM_SLOT_TOK(k_begin_modes, "Unknown mode. Try GL_TRIANGLES, GL_TRIANGLE_STRIP, ...") } },
+    { "glBlendFunc",     CMD_BLEND_FUNC,    2, k_blend_src_factors,  k_blend_dst_factors, "%sglBlendFunc(%s, %s);",  "sfactor: GL_SRC_ALPHA", "dfactor: GL_ONE_MINUS_SRC_ALPHA, GL_ONE", 0,
+        .args = { ENUM_SLOT_TOK(k_blend_src_factors, "sfactor: GL_SRC_ALPHA"),
+                  ENUM_SLOT_TOK(k_blend_dst_factors, "dfactor: GL_ONE_MINUS_SRC_ALPHA, GL_ONE") } },
+    { "glColorMaterial", CMD_COLOR_MATERIAL,2, k_face_types,         k_color_material_modes, "%sglColorMaterial(%s, %s);", "face: GL_FRONT, GL_BACK, GL_FRONT_AND_BACK", "mode: GL_AMBIENT, GL_DIFFUSE, GL_SPECULAR, GL_EMISSION, GL_AMBIENT_AND_DIFFUSE", 0,
+        .args = { ENUM_SLOT_TOK(k_face_types, "face: GL_FRONT, GL_BACK, GL_FRONT_AND_BACK"),
+                  ENUM_SLOT_TOK(k_color_material_modes, "mode: GL_AMBIENT, GL_DIFFUSE, GL_SPECULAR, GL_EMISSION, GL_AMBIENT_AND_DIFFUSE") } },
+    { "glDepthMask",     CMD_DEPTH_MASK,    1, k_bool_vals,          NULL,              "%sglDepthMask(%s);",         "Try GL_TRUE or GL_FALSE", NULL, 0,
+        .args = { ENUM_SLOT_TOK(k_bool_vals, "Try GL_TRUE or GL_FALSE") } },
+    { "glDisable",       CMD_DISABLE,       1, k_enable_caps,        NULL,              "%sglDisable(%s);",           "Try GL_DEPTH_TEST, GL_LIGHTING, GL_COLOR_MATERIAL", NULL, 0,
+        .args = { ENUM_SLOT_TOK(k_enable_caps, "Try GL_DEPTH_TEST, GL_LIGHTING, GL_COLOR_MATERIAL") } },
+    { "glEnable",        CMD_ENABLE,        1, k_enable_caps,        NULL,              "%sglEnable(%s);",            "Try GL_DEPTH_TEST, GL_LIGHTING, GL_COLOR_MATERIAL", NULL, 0,
+        .args = { ENUM_SLOT_TOK(k_enable_caps, "Try GL_DEPTH_TEST, GL_LIGHTING, GL_COLOR_MATERIAL") } },
+    { "glFrontFace",     CMD_FRONT_FACE,    1, k_front_face,         NULL,              "%sglFrontFace(%s);",         "Try GL_CW or GL_CCW", NULL, 0,
+        .args = { ENUM_SLOT_TOK(k_front_face, "Try GL_CW or GL_CCW") } },
+    { "glLightModeli",   CMD_LIGHT_MODEL_I, 2, k_light_model_params, k_bool_vals,       "%sglLightModeli(%s, %s);",   "pname: GL_LIGHT_MODEL_TWO_SIDE, GL_LIGHT_MODEL_LOCAL_VIEWER", "param: GL_TRUE, GL_FALSE, or integer", 0,
+        .args = { ENUM_SLOT_TOK(k_light_model_params, "pname: GL_LIGHT_MODEL_TWO_SIDE, GL_LIGHT_MODEL_LOCAL_VIEWER"),
+                  ENUM_SLOT(k_bool_vals, "param: GL_TRUE, GL_FALSE, or integer", REPL_ENUM_SLOT_ENUM_OR_EXPR) } },
     { "glMaterialf",     CMD_MATERIALF,    -2, k_face_types,         k_material_params, NULL,                         "face: GL_FRONT, GL_BACK, GL_FRONT_AND_BACK", "pname: GL_DIFFUSE, GL_AMBIENT, GL_SPECULAR, GL_SHININESS", 0 },
-    { "glShadeModel",    CMD_SHADE_MODEL,   1, k_shade_models,       NULL,              "%sglShadeModel(%s);",        "Try GL_SMOOTH or GL_FLAT", NULL, 0 },
+    { "glShadeModel",    CMD_SHADE_MODEL,   1, k_shade_models,       NULL,              "%sglShadeModel(%s);",        "Try GL_SMOOTH or GL_FLAT", NULL, 0,
+        .args = { ENUM_SLOT_TOK(k_shade_models, "Try GL_SMOOTH or GL_FLAT") } },
     { NULL, 0, 0, NULL, NULL, NULL, NULL, NULL, 0 }
 };
 
