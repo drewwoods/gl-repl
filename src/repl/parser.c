@@ -393,6 +393,9 @@ static int parse_command(const char *line, GLCmd *cmd,
                 WRITE_TEXT(def->fmt, ind, slot_emit[0]);
             } else if (n == 2) {
                 WRITE_TEXT(def->fmt, ind, slot_emit[0], slot_emit[1]);
+            } else if (n == 4 && def->fmt) {
+                WRITE_TEXT(def->fmt, ind, slot_emit[0], slot_emit[1],
+                           slot_emit[2], slot_emit[3]);
             } else {
                 /* No current command declares >2 enum slots; a generic
                  * "name(joined token names);" join keeps a future
@@ -1037,6 +1040,7 @@ static const char *cmd_display_name_for_begin_error(CmdType type) {
         case CMD_BLEND_FUNC:          return "glBlendFunc";
         case CMD_CLEAR_COLOR:         return "glClearColor";
         case CMD_DEPTH_MASK:          return "glDepthMask";
+        case CMD_COLOR_MASK:          return "glColorMask";
         case CMD_GLUT_TORUS:          return "glutSolidTorus";
         case CMD_GLUT_CUBE:           return "glutSolidCube";
         case CMD_GLUT_SPHERE:         return "glutSolidSphere";

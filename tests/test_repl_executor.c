@@ -139,6 +139,72 @@ static void test_apply_state_cmd_edge_cases(void) {
     cmd.type = CMD_BLEND_FUNC; cmd.args[0] = GL_SRC_ALPHA; cmd.args[1] = GL_ONE_MINUS_SRC_ALPHA; apply_state_cmd(&cmd, 1.0f);
 }
 
+/* Regression net for the enum-arg storage migration: assert the actual
+ * GL arguments (not just call counts) for the multi-enum commands whose
+ * arg order is the easy thing to get wrong. Closes the gap that let a
+ * CMD_BLEND_FUNC arg-shift (cmd->mode vs args[]) pass silently — counts
+ * alone never noticed sfactor/dfactor were swapped/zeroed.
+ *
+ * Expected lines are built from the in-scope GL_* macros, so this is
+ * header-independent (real GL vs stub enum values both work). */
+static void test_enum_arg_gl_trace(void) {
+    char path[] = "/tmp/test_repl_executor_enum_trace.txt";
+    gl_stub_trace_open(path);
+
+    GLCmd cmd;
+    memset(&cmd, 0, sizeof(cmd));
+    cmd.type = CMD_BLEND_FUNC; cmd.num_args = 2;
+    cmd.args[0] = GL_SRC_ALPHA; cmd.args[1] = GL_ONE_MINUS_SRC_ALPHA;
+    apply_state_cmd(&cmd, 1.0f);
+
+    memset(&cmd, 0, sizeof(cmd));
+    cmd.type = CMD_COLOR_MASK; cmd.num_args = 4;
+    cmd.args[0] = GL_TRUE; cmd.args[1] = GL_FALSE;
+    cmd.args[2] = GL_TRUE; cmd.args[3] = GL_FALSE;
+    apply_state_cmd(&cmd, 1.0f);
+
+    memset(&cmd, 0, sizeof(cmd));
+    cmd.type = CMD_DEPTH_MASK; cmd.num_args = 1;
+    cmd.args[0] = GL_FALSE;
+    apply_state_cmd(&cmd, 1.0f);
+
+    memset(&cmd, 0, sizeof(cmd));
+    cmd.type = CMD_COLOR_MATERIAL; cmd.num_args = 2;
+    cmd.args[0] = GL_FRONT_AND_BACK; cmd.args[1] = GL_AMBIENT_AND_DIFFUSE;
+    apply_state_cmd(&cmd, 1.0f);
+
+    gl_stub_trace_close();
+
+    char buf[4096] = "";
+    FILE *f = fopen(path, "r");
+    ASSERT_TRUE("enum trace file opened", f != NULL);
+    if (f) {
+        size_t n = fread(buf, 1, sizeof(buf) - 1, f);
+        buf[n] = '\0';
+        fclose(f);
+    }
+
+    char want[128];
+    snprintf(want, sizeof(want), "glBlendFunc %u %u\n",
+             (unsigned)GL_SRC_ALPHA, (unsigned)GL_ONE_MINUS_SRC_ALPHA);
+    ASSERT_TRUE("glBlendFunc receives (sfactor, dfactor) in order",
+                strstr(buf, want) != NULL);
+
+    snprintf(want, sizeof(want), "glColorMask %u %u %u %u\n",
+             (unsigned)GL_TRUE, (unsigned)GL_FALSE,
+             (unsigned)GL_TRUE, (unsigned)GL_FALSE);
+    ASSERT_TRUE("glColorMask receives 4 channels in order",
+                strstr(buf, want) != NULL);
+
+    snprintf(want, sizeof(want), "glDepthMask %u\n", (unsigned)GL_FALSE);
+    ASSERT_TRUE("glDepthMask receives flag", strstr(buf, want) != NULL);
+
+    snprintf(want, sizeof(want), "glColorMaterial %u %u\n",
+             (unsigned)GL_FRONT_AND_BACK, (unsigned)GL_AMBIENT_AND_DIFFUSE);
+    ASSERT_TRUE("glColorMaterial receives (face, mode) in order",
+                strstr(buf, want) != NULL);
+}
+
 static void test_execute_edge_cases(void) {
     repl_execute_program(NULL);
 
@@ -474,6 +540,7 @@ int main(void) {
     test_predef_edge_cases();
     test_transform_stack_edge_cases();
     test_apply_state_cmd_edge_cases();
+    test_enum_arg_gl_trace();
     test_execute_edge_cases();
     test_execute_all_commands();
     test_glut_bitmap_string();

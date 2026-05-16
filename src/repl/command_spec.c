@@ -160,6 +160,8 @@ static const ReplFuncCompletion k_func_completions[] = {
         "GL_CW, GL_CCW", REPL_HELP_GROUP_TOP },
     { "glDepthMask(",        "glDepthMask(flag)",                                        1, { "flag" },
         "GL_TRUE, GL_FALSE (depth-buffer writes)", REPL_HELP_GROUP_TOP },
+    { "glColorMask(",        "glColorMask(red, green, blue, alpha)",                     4, { "red", "green", "blue", "alpha" },
+        "Per-channel color write enable: GL_TRUE / GL_FALSE", REPL_HELP_GROUP_TOP },
     { "glColorMaterial(",    "glColorMaterial(face, mode)",                              2, { "face", "mode" },
         "face: GL_FRONT, GL_BACK, or GL_FRONT_AND_BACK\n"
         "mode: GL_AMBIENT / GL_AMBIENT_AND_DIFFUSE / GL_DIFFUSE / GL_SPECULAR / GL_EMISSION",
@@ -282,17 +284,27 @@ static const ReplFuncCompletion k_func_completions[] = {
  * glDepthMask). */
 #define ENUM_SLOT_TOK(tbl_, usage_) ENUM_SLOT((tbl_), (usage_), REPL_ENUM_SLOT_ENUM_ONLY)
 
+/* Boolean mask slot — token first, else a constant 0/1 (no runtime
+ * vars) reverse-mapped to GL_FALSE/GL_TRUE. The bool-slot policy:
+ * glDepthMask and glColorMask. */
+#define ENUM_SLOT_BOOL(usage_) ENUM_SLOT(k_bool_vals, (usage_), REPL_ENUM_SLOT_ENUM_OR_CONST_VALUE)
+
 static const ReplEnumCommandSpec k_enum_command_specs[] = {
     { "glBegin",         CMD_BEGIN,          1, "%sglBegin(%s);",            1,
         .args = { ENUM_SLOT_TOK(k_begin_modes, "Unknown mode. Try GL_TRIANGLES, GL_TRIANGLE_STRIP, ...") } },
     { "glBlendFunc",     CMD_BLEND_FUNC,     2, "%sglBlendFunc(%s, %s);",    0,
         .args = { ENUM_SLOT_TOK(k_blend_src_factors, "sfactor: GL_SRC_ALPHA"),
                   ENUM_SLOT_TOK(k_blend_dst_factors, "dfactor: GL_ONE_MINUS_SRC_ALPHA, GL_ONE") } },
+    { "glColorMask",     CMD_COLOR_MASK,     4, "%sglColorMask(%s, %s, %s, %s);", 0,
+        .args = { ENUM_SLOT_BOOL("red: GL_TRUE or GL_FALSE"),
+                  ENUM_SLOT_BOOL("green: GL_TRUE or GL_FALSE"),
+                  ENUM_SLOT_BOOL("blue: GL_TRUE or GL_FALSE"),
+                  ENUM_SLOT_BOOL("alpha: GL_TRUE or GL_FALSE") } },
     { "glColorMaterial", CMD_COLOR_MATERIAL, 2, "%sglColorMaterial(%s, %s);", 0,
         .args = { ENUM_SLOT_TOK(k_face_types, "face: GL_FRONT, GL_BACK, GL_FRONT_AND_BACK"),
                   ENUM_SLOT_TOK(k_color_material_modes, "mode: GL_AMBIENT, GL_DIFFUSE, GL_SPECULAR, GL_EMISSION, GL_AMBIENT_AND_DIFFUSE") } },
     { "glDepthMask",     CMD_DEPTH_MASK,     1, "%sglDepthMask(%s);",        0,
-        .args = { ENUM_SLOT_TOK(k_bool_vals, "Try GL_TRUE or GL_FALSE") } },
+        .args = { ENUM_SLOT_BOOL("Try GL_TRUE or GL_FALSE") } },
     { "glDisable",       CMD_DISABLE,        1, "%sglDisable(%s);",          0,
         .args = { ENUM_SLOT_TOK(k_enable_caps, "Try GL_DEPTH_TEST, GL_LIGHTING, GL_COLOR_MATERIAL") } },
     { "glEnable",        CMD_ENABLE,         1, "%sglEnable(%s);",           0,
@@ -397,6 +409,7 @@ static const ReplCommandTypeSpec g_command_type_specs[CMD_TYPE_COUNT] = {
     CMD_TYPE_SPEC_NOT_IN_BEGIN(CMD_BLEND_FUNC,         1, 1, CMD_CAT_STATE),
     CMD_TYPE_SPEC_NOT_IN_BEGIN(CMD_CLEAR_COLOR,        1, 1, CMD_CAT_COLOR),
     CMD_TYPE_SPEC_NOT_IN_BEGIN(CMD_DEPTH_MASK,         1, 1, CMD_CAT_STATE),
+    CMD_TYPE_SPEC_NOT_IN_BEGIN(CMD_COLOR_MASK,         1, 1, CMD_CAT_STATE),
     CMD_TYPE_SPEC_NOT_IN_BEGIN(CMD_RASTER_POS3F,       1, 1, CMD_CAT_STATE),
     CMD_TYPE_SPEC_NOT_IN_BEGIN(CMD_LABEL,              1, 1, CMD_CAT_GLUT_SHAPE),
 };

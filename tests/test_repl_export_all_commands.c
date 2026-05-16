@@ -76,6 +76,7 @@ static const CmdType expected_commands[] = {
     CMD_BLEND_FUNC,
     CMD_CLEAR_COLOR,
     CMD_DEPTH_MASK,
+    CMD_COLOR_MASK,
     CMD_COLOR_MATERIAL,
     CMD_MATERIALF,
     CMD_LIGHT_MODEL_I,
@@ -211,6 +212,7 @@ int main(void) {
     editor_feed_line("glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);");
     editor_feed_line("glClearColor(0.2, 0.2, 0.2, 1);");
     editor_feed_line("glDepthMask(GL_TRUE);");
+    editor_feed_line("glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_FALSE);");
 
     /* Material/lighting commands */
     editor_feed_line("glColorMaterial(GL_FRONT, GL_DIFFUSE);");
