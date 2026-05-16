@@ -320,21 +320,6 @@ static SceneRgba grid_faint_origin_color(const GridDrawContext *ctx) {
     return rgba(0.50f, 0.50f, 0.60f, 0.18f);
 }
 
-/* Blueprint: high-contrast cyan graph paper. Bold major lines, dim
- * minor, bright origin — the CAD/drafting look. */
-static void grid_blueprint_line_color(float v, int is_major,
-                                       const GridDrawContext *ctx,
-                                       GridLineColors *out) {
-    (void)v;
-    (void)ctx;
-    grid_line_colors_same(out, rgba(0.32f, 0.66f, 0.86f,
-                                    is_major ? 0.42f : 0.15f));
-}
-
-static SceneRgba grid_blueprint_origin_color(const GridDrawContext *ctx) {
-    (void)ctx;
-    return rgba(0.60f, 0.88f, 1.0f, 0.70f);
-}
 
 static void grid_ruler_line_color(float v, int is_major,
                                   const GridDrawContext *ctx,
@@ -362,10 +347,6 @@ static const GridThemeSpec g_grid_theme_specs[GRID_THEME_COUNT] = {
     },
     [GRID_THEME_FAINT] = {
         grid_faint_line_color, grid_faint_origin_color, NULL, NULL, 1.0f
-    },
-    [GRID_THEME_BLUEPRINT] = {
-        grid_blueprint_line_color, grid_blueprint_origin_color,
-        NULL, NULL, 1.5f
     },
 };
 
@@ -710,55 +691,8 @@ static void scene_grid_render_planes_theme(const SceneRenderConfig *config,
     }
 }
 
-/* Polar: concentric rings at the minor step (every `major` ring
- * brighter) plus radial spokes every 15°, cardinals emphasized. A
- * lathe/turntable-friendly alternative to the Cartesian grid. */
-static void scene_grid_render_polar_theme(const GridDrawContext *grid_ctx) {
-    const float extent = grid_ctx->extent;
-    const float major  = grid_ctx->major;
-    const float step   = grid_ctx->step;
-    const float tol    = grid_ctx->major_tol;
-    const float as     = grid_ctx->alpha_scale;
-    const int   SEG    = 72;
-    const float TAU    = 2.0f * (float)M_PI;
-
-    for (float r = step; r <= extent + 0.01f; r += step) {
-        int is_major = grid_is_major_line(r, major, tol);
-        gl_color(0.45f, 0.55f, 0.72f,
-                 fminf((is_major ? 0.16f : 0.05f) * as, 1.0f));
-        glBegin(GL_LINE_LOOP);
-        for (int i = 0; i < SEG; i++) {
-            float th = (float)i / (float)SEG * TAU;
-            glVertex3f(r * cosf(th), 0.0f, r * sinf(th));
-        }
-        glEnd();
-    }
-
-    glBegin(GL_LINES);
-    for (int s = 0; s < 24; s++) {                 /* every 15° */
-        float th = (float)s / 24.0f * TAU;
-        int cardinal = (s % 6) == 0;               /* every 90° */
-        gl_color(0.45f, 0.55f, 0.72f,
-                 fminf((cardinal ? 0.16f : 0.05f) * as, 1.0f));
-        glVertex3f(0.0f, 0.0f, 0.0f);
-        glVertex3f(extent * cosf(th), 0.0f, extent * sinf(th));
-    }
-    glEnd();
-
-    glDepthMask(GL_TRUE);
-    glLineWidth(1.5f);
-    glBegin(GL_LINES);
-    gl_color(0.70f, 0.80f, 0.95f, fminf(0.55f * as, 1.0f));
-    glVertex3f(-0.25f, 0, 0); glVertex3f(0.25f, 0, 0);
-    glVertex3f(0, 0, -0.25f); glVertex3f(0, 0, 0.25f);
-    glEnd();
-    glLineWidth(1.0f);
-    glDepthMask(GL_FALSE);
-}
-
-/* Radar: faint green range rings + crosshair, an expanding ping ring,
- * and a sweep beam rotating on anim_time with a trailing afterglow
- * wedge and a bright leading edge. */
+/* Radar: faint green range rings + crosshair, a very faint expanding
+ * ping ring, and a single faint sweep line rotating on anim_time. */
 static void scene_grid_render_radar_theme(const GridDrawContext *grid_ctx) {
     const float extent = grid_ctx->extent;
     const float major  = grid_ctx->major;
@@ -784,9 +718,9 @@ static void scene_grid_render_radar_theme(const GridDrawContext *grid_ctx) {
     glVertex3f(0, 0, -extent); glVertex3f(0, 0, extent);
     glEnd();
 
-    /* Expanding ping, fades as it grows. */
+    /* Expanding ping, very faint, fades as it grows. */
     float pr = fmodf(t * 0.45f, 1.0f) * extent;
-    gl_color(GR, GG, GB, fminf((1.0f - pr / extent) * 0.35f * as, 1.0f));
+    gl_color(GR, GG, GB, fminf((1.0f - pr / extent) * 0.10f * as, 1.0f));
     glBegin(GL_LINE_LOOP);
     for (int i = 0; i < SEG; i++) {
         float th = (float)i / (float)SEG * TAU;
@@ -794,28 +728,13 @@ static void scene_grid_render_radar_theme(const GridDrawContext *grid_ctx) {
     }
     glEnd();
 
-    /* Sweep beam: trailing afterglow wedge + bright leading edge. */
+    /* Single faint sweep line. */
     float ang = fmodf(t * 0.8f, TAU);
-    const float TRAIL = 0.6f;
-    const int   FAN   = 16;
-    glBegin(GL_TRIANGLE_FAN);
-    gl_color(GR, GG, GB, fminf(0.10f * as, 1.0f));
-    glVertex3f(0.0f, 0.0f, 0.0f);
-    for (int i = 0; i <= FAN; i++) {
-        float f  = (float)i / (float)FAN;          /* 0 trail .. 1 lead */
-        float th = ang - TRAIL * (1.0f - f);
-        gl_color(GR, GG, GB, fminf(f * f * 0.28f * as, 1.0f));
-        glVertex3f(extent * cosf(th), 0.0f, extent * sinf(th));
-    }
-    glEnd();
-
-    glLineWidth(2.0f);
     glBegin(GL_LINES);
-    gl_color(GR, 1.0f, GB, fminf(0.55f * as, 1.0f));
+    gl_color(GR, GG, GB, fminf(0.12f * as, 1.0f));
     glVertex3f(0.0f, 0.0f, 0.0f);
     glVertex3f(extent * cosf(ang), 0.0f, extent * sinf(ang));
     glEnd();
-    glLineWidth(1.0f);
 }
 
 void scene_grid_render(const FrameRenderContext *frame_ctx) {
@@ -895,8 +814,7 @@ void scene_grid_render(const FrameRenderContext *frame_ctx) {
     case GRID_THEME_FOG:
     case GRID_THEME_TRON:
     case GRID_THEME_EMBER:
-    case GRID_THEME_FAINT:
-    case GRID_THEME_BLUEPRINT: {
+    case GRID_THEME_FAINT: {
         const GridThemeSpec *spec = grid_theme_spec(grid_theme);
         if (spec)
             draw_grid_standard_theme(&grid_ctx, spec);
@@ -917,10 +835,6 @@ void scene_grid_render(const FrameRenderContext *frame_ctx) {
 
     case GRID_THEME_PLANES:
         scene_grid_render_planes_theme(config, &grid_ctx);
-        break;
-
-    case GRID_THEME_POLAR:
-        scene_grid_render_polar_theme(&grid_ctx);
         break;
 
     case GRID_THEME_RADAR:

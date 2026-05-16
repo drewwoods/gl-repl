@@ -51,8 +51,6 @@ static const char *grid_theme_names[GRID_THEME_COUNT] = {
     [GRID_THEME_OCEAN]   = "Ocean",
     [GRID_THEME_XZRULER] = "XZ Ruler",
     [GRID_THEME_PLANES]  = "Adaptive Planes",
-    [GRID_THEME_BLUEPRINT] = "Blueprint",
-    [GRID_THEME_POLAR]   = "Polar",
     [GRID_THEME_RADAR]   = "Radar",
 };
 static const char *grid_major_names[GRID_MAJOR_COUNT] = {
