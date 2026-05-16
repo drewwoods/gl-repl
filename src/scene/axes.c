@@ -138,6 +138,19 @@ static const AxesThemeSpec g_axes_theme_specs[AXES_THEME_COUNT] = {
             {0.25f, 0.25f, 0.90f, 1.0f},
         },
     },
+    [AXES_THEME_RULER] = {
+        .len = 5.0f,
+        .axis = {
+            {0.88f, 0.30f, 0.22f, 0.90f},
+            {0.34f, 0.85f, 0.34f, 0.90f},
+            {0.30f, 0.46f, 0.92f, 0.90f},
+        },
+        .label = {
+            {0.92f, 0.42f, 0.34f, 1.0f},
+            {0.46f, 0.90f, 0.46f, 1.0f},
+            {0.42f, 0.56f, 0.95f, 1.0f},
+        },
+    },
 };
 
 static const AxesThemeSpec *axes_theme_spec(AxesTheme theme) {
@@ -447,6 +460,32 @@ void scene_axes_render(const FrameRenderContext *frame_ctx) {
         glVertex3f(0, 0, 0);
         glEnd();
         glPointSize(1.0f);
+
+        draw_axis_label_triplet(len, 0.15f, spec->label, "XYZ", 1);
+        break;
+    }
+
+    case AXES_THEME_RULER: {
+        /* Solid axes with measurement ticks: a short perpendicular bar
+         * at every unit, longer every 5 (mirrors the grid XZ Ruler). */
+        const AxesThemeSpec *spec = axes_theme_spec(AXES_THEME_RULER);
+        float len = spec->len;
+        draw_axis_line_triplet(len, 2.0f, spec->axis, 1);
+
+        glBegin(GL_LINES);
+        for (int i = 1; i <= (int)len; i++) {
+            float t = (i % 5 == 0) ? 0.16f : 0.07f;
+            /* X axis: ticks span ±Z */
+            gl_color_rgba(spec->axis[SCENE_AXIS_X]);
+            glVertex3f((float)i, 0, -t); glVertex3f((float)i, 0, t);
+            /* Y axis: ticks span ±X */
+            gl_color_rgba(spec->axis[SCENE_AXIS_Y]);
+            glVertex3f(-t, (float)i, 0); glVertex3f(t, (float)i, 0);
+            /* Z axis: ticks span ±X */
+            gl_color_rgba(spec->axis[SCENE_AXIS_Z]);
+            glVertex3f(-t, 0, (float)i); glVertex3f(t, 0, (float)i);
+        }
+        glEnd();
 
         draw_axis_label_triplet(len, 0.15f, spec->label, "XYZ", 1);
         break;
