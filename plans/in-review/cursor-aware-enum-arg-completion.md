@@ -6,6 +6,15 @@ input" assumption. How far to relax that assumption is a scope fork not
 yet decided. Do not implement until a direction is chosen and the file
 moves to `not-started/`.
 
+Dependency note: this is **separate** from
+`plans/in-review/glcolormask-gl-bool-tokens.md`. The glColorMask Path C
+work must make ordinary end-of-input enum completion N-slot aware as
+part of the enum-spec refactor. This plan owns the larger cursor-aware
+mid-line behavior: relaxing the end-of-input guard, computing the slot
+at the cursor, and splicing accepted completion text into the input
+buffer. If Path C lands first, rebase this plan from `enums1` /
+`enums2` terminology to `enums[slot]`.
+
 ## Context
 
 Ask: complete an earlier argument while a later one is already typed —
@@ -101,8 +110,9 @@ that delivers the literal ask. Concretely:
    end-of-input behavior (gate the new path explicitly).
 2. In the enum-command block, compute `slot` = number of `depth==0`
    commas in `after` *before the cursor offset* (reuse the
-   `build_param_hint_text` scan). Pick `enums1` when `slot==0`,
-   `enums2` when `slot==1` (respecting `num_args`). Extract the token
+   `build_param_hint_text` scan). Pick the enum table for that slot
+   (`enums[slot]` after the glColorMask enum-spec refactor; `enums1` /
+   `enums2` only if this lands before that refactor). Extract the token
    under the cursor as the match prefix instead of "text after `(`" /
    "text after first comma".
 3. Make accept cursor-relative: insert `match_suffix` at
@@ -122,7 +132,8 @@ explicitly out of scope, revisitable once this lands.
   - New predicate `tail_is_only_trailing_args(const char *p)` — accepts
     `[ws] (, … )* )` `[;]` `[ws]` to gate the relaxed guard.
   - Rework the enum block (`:318-376`) to branch on `slot` not
-    `strchr(',')`; prefix = token under cursor.
+    `strchr(',')`; prefix = token under cursor; table =
+    positional enum table for `slot`.
   - `accept_autocomplete()` (`:398`): splice at cursor when
     `g_ac_mode` is an enum mode and an interior-completion flag is set;
     keep strcat for the end-of-input path.
