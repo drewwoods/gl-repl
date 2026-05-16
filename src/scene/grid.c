@@ -71,39 +71,21 @@ static SceneRgba rgba(float r, float g, float b, float a) {
 static float s_xn_opacity = 1.0f;
 static float s_xn_alpha    = 1.0f;
 
-/* === Fog is touched in EXACTLY ONE place: the gl_fog_* wrappers
- * below, and the raw glFog* setters are #poisoned past them so a
- * future theme edit that bypasses them fails to compile.
- *
- * FOG-style transition continuity: s_xn_fog_tf is 0 when the overlay
- * is fully shown and ramps to 1 as it hides (= 1 - opacity; always 0
- * under the FADE style). Rather than *replacing* a fog-owning theme's
- * fog with a separate clear-color fog (which popped at opacity 1,
- * since the theme's steady fog appeared the instant the transition
- * released — visible on OCEAN/FOG/FAR), each wrapper *intensifies the
- * theme's own fog by tf*: at tf=0 it is exactly the theme's normal fog
- * (zero discontinuity), at tf=1 it is dense/near enough that the
- * geometry has receded into the clear color. Plain themes set no fog,
- * so they instead get the synthesized recede in
- * grid_xn_apply_transition_fog, which converges to no-fog at tf=0 —
- * continuous because a plain theme's steady state also has no fog. ===
- */
-static float s_xn_fog_tf = 0.0f;
-
-/* EXP2 density added at full hide (tf=1); the alpha knee finishes the
- * vanish, so this only has to read as a strong recede, not full
- * opacity on its own. Visual tunable. */
-#define GRID_XN_FOG_EXP2_GAIN 0.25f
-/* LINEAR fog end as a fraction of the theme's end at full hide. */
-#define GRID_XN_FOG_LINEAR_NEAR 0.02f
+/* FOG-style transition (config.h GRID_XN_STYLE). Only fog-less themes
+ * recede into a synthesized clear-color fog as they hide. Themes that
+ * draw their own fog (GRID_THEME_FOG, OCEAN) or *any* theme at the FAR
+ * extent fall back to the plain alpha FADE for the transition (no
+ * recede fog) — far simpler, and it sidesteps the discontinuity of
+ * trying to blend two fog models. scene_grid_render decides per pass
+ * which path applies and sets s_xn_alpha accordingly (alpha knee for
+ * the recede, plain opacity for FADE / the FADE fallback). */
 
 #if GRID_XN_STYLE == GRID_AXES_XN_FOG
 #define GRID_XN_FOG_ALPHA_KNEE 0.30f
 
-/* Synthetic recede fog for plain themes (no theme fog of their own).
- * Clear-color linear wall pulled in from beyond the grid as tf rises;
- * tf<=0 -> no fog, which is continuous with a plain theme's fogless
- * steady state. This is the one place that owns raw glFog directly. */
+/* Synthetic recede fog for fog-less themes: a clear-color linear wall
+ * pulled in from beyond the grid as the overlay hides (tf = 1 -
+ * opacity). tf<=0 -> no fog, continuous with the fogless steady look. */
 static void grid_xn_apply_transition_fog(float tf, float extent) {
     if (tf <= 0.0f) return;
     float clear_col[4];
@@ -118,53 +100,6 @@ static void grid_xn_apply_transition_fog(float tf, float extent) {
     glFogf(GL_FOG_END,   end);
 }
 #endif
-
-/* Theme EXP2 fog (GRID_THEME_FOG, OCEAN), intensified by the
- * transition: tf=0 -> exactly `density` (continuous with steady), so
- * there is no pop when the transition releases. Clear-color fog is
- * only forced while transitioning; at tf~0 the added density is ~0 so
- * the (unset) theme fog colour is irrelevant. */
-static void gl_fog_exp2(float density) {
-    float d = density + s_xn_fog_tf * GRID_XN_FOG_EXP2_GAIN;
-    if (s_xn_fog_tf > 0.0f) {
-        float clear_col[4];
-        glGetFloatv(GL_COLOR_CLEAR_VALUE, clear_col);
-        glFogfv(GL_FOG_COLOR, clear_col);
-    }
-    glEnable(GL_FOG);
-    glFogi(GL_FOG_MODE, GL_EXP2);
-    glFogf(GL_FOG_DENSITY, d);
-}
-
-/* Theme LINEAR clear-color distance fog (GRID_EXTENT_FAR), intensified
- * by pulling the end inward as tf rises; tf=0 -> the theme's own
- * start/end (continuous with steady). */
-static void gl_fog_linear(float start, float end) {
-    float e = end + (GRID_XN_FOG_LINEAR_NEAR * end - end) * s_xn_fog_tf;
-    float s = (s_xn_fog_tf > 0.0f) ? e * 0.15f : start;
-    float clear_col[4];
-    glGetFloatv(GL_COLOR_CLEAR_VALUE, clear_col);
-    glFogfv(GL_FOG_COLOR, clear_col);
-    glEnable(GL_FOG);
-    glFogi(GL_FOG_MODE, GL_LINEAR);
-    glFogf(GL_FOG_START, s);
-    glFogf(GL_FOG_END,   e);
-}
-
-/* Disable fog unless a FOG-style transition still needs it set (so a
- * theme teardown can't kill the intensified fog mid-pass, e.g. before
- * OCEAN's water surface). */
-static void gl_fog_off(void) {
-    if (s_xn_fog_tf > 0.0f) return;
-    glDisable(GL_FOG);
-}
-
-/* Poison the raw fog setters: every fog touch past this line must go
- * through a gl_fog_* wrapper. Using one expands to an undeclared
- * identifier, so the offending line fails to compile by name. */
-#define glFogi(...)  GRID_C_USE_gl_fog_WRAPPER
-#define glFogf(...)  GRID_C_USE_gl_fog_WRAPPER
-#define glFogfv(...) GRID_C_USE_gl_fog_WRAPPER
 
 static void gl_color(float r, float g, float b, float a) {
     glColor4f(r, g, b, a * s_xn_alpha);
@@ -246,12 +181,15 @@ static SceneRgba grid_classic_origin_color(const GridDrawContext *ctx) {
 }
 
 static void grid_fog_begin(const GridDrawContext *ctx) {
-    gl_fog_exp2(0.06f + ctx->breath * 0.04f);
+    float fog_density = 0.06f + ctx->breath * 0.04f;
+    glEnable(GL_FOG);
+    glFogi(GL_FOG_MODE, GL_EXP2);
+    glFogf(GL_FOG_DENSITY, fog_density);
 }
 
 static void grid_fog_end(const GridDrawContext *ctx) {
     (void)ctx;
-    gl_fog_off();
+    glDisable(GL_FOG);
 }
 
 static void grid_fog_line_color(float v, int is_major,
@@ -457,7 +395,9 @@ static void scene_grid_render_ocean_theme(const GridDrawContext *grid_ctx,
         glPopMatrix();
         glEnable(GL_DEPTH_TEST);
     } else {
-        gl_fog_exp2(0.045f + breath * 0.015f);
+        glEnable(GL_FOG);
+        glFogi(GL_FOG_MODE, GL_EXP2);
+        glFogf(GL_FOG_DENSITY, 0.045f + breath * 0.015f);
     }
 
     /* Ocean floor grid with animated caustic highlights */
@@ -499,10 +439,7 @@ static void scene_grid_render_ocean_theme(const GridDrawContext *grid_ctx,
         glDepthMask(GL_FALSE);
     }
 
-    /* Same teardown as the standard fog theme: disable fog unless a
-     * FOG-style transition is in progress (then keep the intensified
-     * fog over the water surface). Shared via grid_fog_end so the
-     * gl_fog_off gate lives in exactly one place. */
+    /* Same teardown as the standard fog theme. */
     grid_fog_end(grid_ctx);
 
     /* ---- Water surface plane ----
@@ -750,12 +687,22 @@ void scene_grid_render(const FrameRenderContext *frame_ctx) {
     if (s_xn_opacity > 1.0f) s_xn_opacity = 1.0f;
     if (s_xn_opacity <= 0.0f) return;
 #if GRID_XN_STYLE == GRID_AXES_XN_FOG
-    s_xn_alpha = (s_xn_opacity >= GRID_XN_FOG_ALPHA_KNEE)
-               ? 1.0f : s_xn_opacity / GRID_XN_FOG_ALPHA_KNEE;
-    s_xn_fog_tf = 1.0f - s_xn_opacity;          /* 0 shown .. 1 hidden */
+    /* Fog-owning configs — the FOG/OCEAN themes, or *any* theme at the
+     * FAR extent (which adds its own distance fog) — fall back to the
+     * plain alpha FADE for the transition: their fog is left as-is and
+     * the geometry just alpha-fades. Only fog-less themes get the
+     * synthesized clear-color recede + alpha knee. */
+    int xn_uses_fog = (grid_theme == GRID_THEME_FOG ||
+                       grid_theme == GRID_THEME_OCEAN ||
+                       config->grid_extent_idx == GRID_EXTENT_FAR);
+    if (xn_uses_fog)
+        s_xn_alpha = s_xn_opacity;                       /* FADE fallback */
+    else if (s_xn_opacity >= GRID_XN_FOG_ALPHA_KNEE)
+        s_xn_alpha = 1.0f;                               /* fog does the work */
+    else
+        s_xn_alpha = s_xn_opacity / GRID_XN_FOG_ALPHA_KNEE;  /* final vanish */
 #else
     s_xn_alpha = s_xn_opacity;
-    s_xn_fog_tf = 0.0f;
 #endif
 
     scene_grid_push_state();
@@ -795,17 +742,24 @@ void scene_grid_render(const FrameRenderContext *frame_ctx) {
     };
 
 #if GRID_XN_STYLE == GRID_AXES_XN_FOG
-    /* Plain-theme recede first; a fog-owning theme/extent below
-     * overrides it with its own intensified (continuous) fog. */
-    grid_xn_apply_transition_fog(s_xn_fog_tf, extent);
+    /* Fog-less themes only: recede into a synthesized clear-color fog
+     * as the overlay hides. Fog-owning configs took the FADE fallback
+     * above and keep their own fog untouched. */
+    if (!xn_uses_fog)
+        grid_xn_apply_transition_fog(1.0f - s_xn_opacity, extent);
 #endif
 
     if (config->grid_extent_idx == GRID_EXTENT_FAR) {
-        /* Clear-color linear fog: unfogged out to 0.7*extent, fully
-         * fogged at the edge — a nice distance fade-out of the grid
-         * lines. Intensified by the transition (end pulled in by tf),
-         * continuous with the steady FAR look at tf=0. */
-        gl_fog_linear(extent * 0.7f, extent);
+        /* Enable linear fog, colour from the clear colour. Start at
+         * 0.7*extent, fully fogged at extent — a distance fade-out of
+         * the grid lines. */
+        float clear_col[4];
+        glGetFloatv(GL_COLOR_CLEAR_VALUE, clear_col);
+        glFogfv(GL_FOG_COLOR, clear_col);
+        glEnable(GL_FOG);
+        glFogi(GL_FOG_MODE, GL_LINEAR);
+        glFogf(GL_FOG_START, extent * 0.7f);
+        glFogf(GL_FOG_END, extent);
     }
 
     switch (grid_theme) {
@@ -847,7 +801,7 @@ void scene_grid_render(const FrameRenderContext *frame_ctx) {
     glPopMatrix();
     glDepthMask(GL_TRUE);
     glDisable(GL_BLEND);
-    gl_fog_off();   /* scene_grid_pop_state's glPopAttrib also restores it */
+    glDisable(GL_FOG);
     if (frame_ctx->config.user_lighting_enabled) glEnable(GL_LIGHTING);
     scene_grid_pop_state();
 }
