@@ -1,6 +1,7 @@
 #include "editor/state.h"
 #include "repl/core.h"
 #include "repl/state.h"
+#include "app/glr_ctrl.h"   /* glr_app_reset_all (end-to-end P1 test) */
 
 // Include the C file directly to access its static callbacks.
 // We must NOT link repl_executor.o into test_repl_executor!
@@ -202,6 +203,66 @@ static void test_enum_arg_gl_trace(void) {
     snprintf(want, sizeof(want), "glColorMaterial %u %u\n",
              (unsigned)GL_FRONT_AND_BACK, (unsigned)GL_AMBIENT_AND_DIFFUSE);
     ASSERT_TRUE("glColorMaterial receives (face, mode) in order",
+                strstr(buf, want) != NULL);
+}
+
+/* End-to-end P1 regression: drive the *full* path the real app uses —
+ * source line -> parser -> commit -> flatten -> executor -> GL — and
+ * assert the GL trace. test_enum_arg_gl_trace covers only the executor
+ * half (hand-built GLCmd); this also pins parser arg ORDER into args[]
+ * for the multi-arg enum commands, so a future args[] arg-shift on
+ * either side is caught. Also pins glDepthMask(1) numeric -> GL_TRUE
+ * end-to-end (bool-slot policy). */
+static void test_enum_arg_end_to_end_trace(void) {
+    repl_executor_init_resources();
+    glr_app_reset_all();
+
+    char path[] = "/tmp/test_repl_executor_enum_e2e.txt";
+    gl_stub_trace_open(path);
+
+    editor_feed_line("glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);");
+    editor_feed_line("glColorMask(GL_TRUE, GL_FALSE, GL_TRUE, GL_FALSE);");
+    editor_feed_line("glDepthMask(1);");
+    editor_feed_line("glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);");
+    editor_feed_line("glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);");
+    repl_flatten_commands();
+    repl_execute_commands();
+
+    gl_stub_trace_close();
+
+    char buf[8192] = "";
+    FILE *f = fopen(path, "r");
+    ASSERT_TRUE("e2e trace file opened", f != NULL);
+    if (f) {
+        size_t n = fread(buf, 1, sizeof(buf) - 1, f);
+        buf[n] = '\0';
+        fclose(f);
+    }
+
+    char want[160];
+    snprintf(want, sizeof(want), "glBlendFunc %u %u\n",
+             (unsigned)GL_SRC_ALPHA, (unsigned)GL_ONE_MINUS_SRC_ALPHA);
+    ASSERT_TRUE("e2e glBlendFunc(sfactor, dfactor) order preserved",
+                strstr(buf, want) != NULL);
+
+    snprintf(want, sizeof(want), "glColorMask %u %u %u %u\n",
+             (unsigned)GL_TRUE, (unsigned)GL_FALSE,
+             (unsigned)GL_TRUE, (unsigned)GL_FALSE);
+    ASSERT_TRUE("e2e glColorMask 4-channel order preserved",
+                strstr(buf, want) != NULL);
+
+    /* glDepthMask(1) must reach GL as GL_TRUE (bool-slot canonicalize). */
+    snprintf(want, sizeof(want), "glDepthMask %u\n", (unsigned)GL_TRUE);
+    ASSERT_TRUE("e2e glDepthMask(1) -> GL_TRUE", strstr(buf, want) != NULL);
+
+    snprintf(want, sizeof(want), "glColorMaterial %u %u\n",
+             (unsigned)GL_FRONT_AND_BACK, (unsigned)GL_AMBIENT_AND_DIFFUSE);
+    ASSERT_TRUE("e2e glColorMaterial(face, mode) order preserved",
+                strstr(buf, want) != NULL);
+
+    snprintf(want, sizeof(want), "glLightModeli %u %d\n",
+             (unsigned)GL_LIGHT_MODEL_TWO_SIDE, (int)GL_TRUE);
+    ASSERT_TRUE("e2e glLightModeli(pname, param) order preserved",
                 strstr(buf, want) != NULL);
 }
 
@@ -541,6 +602,7 @@ int main(void) {
     test_transform_stack_edge_cases();
     test_apply_state_cmd_edge_cases();
     test_enum_arg_gl_trace();
+    test_enum_arg_end_to_end_trace();
     test_execute_edge_cases();
     test_execute_all_commands();
     test_glut_bitmap_string();
