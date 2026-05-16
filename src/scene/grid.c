@@ -71,16 +71,26 @@ static SceneRgba rgba(float r, float g, float b, float a) {
 static float s_xn_opacity = 1.0f;
 static float s_xn_alpha    = 1.0f;
 
+/* === Fog is touched in EXACTLY ONE place: the gl_fog_* wrappers
+ * below. A FOG-style transition (grid_xn_apply_transition_fog) sets a
+ * clear-color recede fog for the whole pass; if any theme re-issues
+ * raw glFog* it clobbers that and the recede look only shows on plain
+ * themes. So all theme fog goes through gl_fog_exp2 / gl_fog_linear /
+ * gl_fog_off, which stand down (no-op) while a transition owns the
+ * pass, and the raw glFog* setters are #poisoned past this point so a
+ * future theme edit that bypasses them fails to compile.
+ * s_xn_fog_active is always 0 under the FADE style, so theme fog is
+ * unaffected there. === */
+static int s_xn_fog_active = 0;
+
 #if GRID_XN_STYLE == GRID_AXES_XN_FOG
 #define GRID_XN_FOG_ALPHA_KNEE 0.30f
 
 /* FOG style: as the grid fades OUT, pull a clear-color linear-fog wall
  * in from beyond the grid toward the camera so the lines recede into
  * the background; IN reverses it. tf = 1 - opacity (0 shown .. 1
- * hidden). Left alone at tf<=0 so a steady, fully-shown grid keeps its
- * own theme fog. Themes that re-issue glFog mid-draw (GRID_THEME_FOG,
- * OCEAN) and the FAR-extent distance fog override this for their own
- * geometry; the alpha knee still guarantees those vanish. */
+ * hidden); tf<=0 leaves theme fog untouched. This is the authority the
+ * gl_fog_* gates defer to, so it owns raw glFog directly. */
 static void grid_xn_apply_transition_fog(float tf, float extent) {
     if (tf <= 0.0f) return;
     float clear_col[4];
@@ -95,6 +105,41 @@ static void grid_xn_apply_transition_fog(float tf, float extent) {
     glFogf(GL_FOG_END,   end);
 }
 #endif
+
+/* Theme EXP2 fog (GRID_THEME_FOG, OCEAN). No-op while a FOG-style
+ * transition owns the pass so it can't clobber the recede fog. */
+static void gl_fog_exp2(float density) {
+    if (s_xn_fog_active) return;
+    glEnable(GL_FOG);
+    glFogi(GL_FOG_MODE, GL_EXP2);
+    glFogf(GL_FOG_DENSITY, density);
+}
+
+/* Theme LINEAR clear-color distance fog (GRID_EXTENT_FAR). Same gate. */
+static void gl_fog_linear(float start, float end) {
+    if (s_xn_fog_active) return;
+    float clear_col[4];
+    glGetFloatv(GL_COLOR_CLEAR_VALUE, clear_col);
+    glFogfv(GL_FOG_COLOR, clear_col);
+    glEnable(GL_FOG);
+    glFogi(GL_FOG_MODE, GL_LINEAR);
+    glFogf(GL_FOG_START, start);
+    glFogf(GL_FOG_END,   end);
+}
+
+/* Disable fog unless a FOG-style transition still needs it set (so a
+ * theme teardown can't kill the recede fog mid-pass). */
+static void gl_fog_off(void) {
+    if (s_xn_fog_active) return;
+    glDisable(GL_FOG);
+}
+
+/* Poison the raw fog setters: every fog touch past this line must go
+ * through a gl_fog_* wrapper. Using one expands to an undeclared
+ * identifier, so the offending line fails to compile by name. */
+#define glFogi(...)  GRID_C_USE_gl_fog_WRAPPER
+#define glFogf(...)  GRID_C_USE_gl_fog_WRAPPER
+#define glFogfv(...) GRID_C_USE_gl_fog_WRAPPER
 
 static void gl_color(float r, float g, float b, float a) {
     glColor4f(r, g, b, a * s_xn_alpha);
@@ -176,15 +221,12 @@ static SceneRgba grid_classic_origin_color(const GridDrawContext *ctx) {
 }
 
 static void grid_fog_begin(const GridDrawContext *ctx) {
-    float fog_density = 0.06f + ctx->breath * 0.04f;
-    glEnable(GL_FOG);
-    glFogi(GL_FOG_MODE, GL_EXP2);
-    glFogf(GL_FOG_DENSITY, fog_density);
+    gl_fog_exp2(0.06f + ctx->breath * 0.04f);
 }
 
 static void grid_fog_end(const GridDrawContext *ctx) {
     (void)ctx;
-    glDisable(GL_FOG);
+    gl_fog_off();
 }
 
 static void grid_fog_line_color(float v, int is_major,
@@ -389,9 +431,7 @@ static void scene_grid_render_ocean_theme(const GridDrawContext *grid_ctx,
         glPopMatrix();
         glEnable(GL_DEPTH_TEST);
     } else {
-        glEnable(GL_FOG);
-        glFogi(GL_FOG_MODE, GL_EXP2);
-        glFogf(GL_FOG_DENSITY, 0.045f + breath * 0.015f);
+        gl_fog_exp2(0.045f + breath * 0.015f);
     }
 
     /* Ocean floor grid with animated caustic highlights */
@@ -433,7 +473,11 @@ static void scene_grid_render_ocean_theme(const GridDrawContext *grid_ctx,
         glDepthMask(GL_FALSE);
     }
 
-    glDisable(GL_FOG);
+    /* Same teardown as the standard fog theme: disable fog unless a
+     * FOG-style transition is in progress (then keep it over the water
+     * surface). Shared via grid_fog_end so the s_xn_fog_active gate
+     * lives in exactly one place. */
+    grid_fog_end(grid_ctx);
 
     /* ---- Water surface plane ----
      * A semi-transparent rippling mesh at Y ≈ 0.  Because the grid pass
@@ -636,8 +680,10 @@ void scene_grid_render(const FrameRenderContext *frame_ctx) {
 #if GRID_XN_STYLE == GRID_AXES_XN_FOG
     s_xn_alpha = (s_xn_opacity >= GRID_XN_FOG_ALPHA_KNEE)
                ? 1.0f : s_xn_opacity / GRID_XN_FOG_ALPHA_KNEE;
+    s_xn_fog_active = (s_xn_opacity < 1.0f);
 #else
     s_xn_alpha = s_xn_opacity;
+    s_xn_fog_active = 0;
 #endif
 
     scene_grid_push_state();
@@ -677,16 +723,11 @@ void scene_grid_render(const FrameRenderContext *frame_ctx) {
     };
 
     if (config->grid_extent_idx == GRID_EXTENT_FAR) {
-        /* Enable linear fog, get the color from clear color. Start at half
-         * extent, fully fogged at extent. This gives a nice fade-out of the
-         * grid lines. */
-        float clear_col[4];
-        glGetFloatv(GL_COLOR_CLEAR_VALUE, clear_col);
-        glFogfv(GL_FOG_COLOR, clear_col);
-        glEnable(GL_FOG);
-        glFogi(GL_FOG_MODE, GL_LINEAR);
-        glFogf(GL_FOG_START, extent * 0.7f);
-        glFogf(GL_FOG_END, extent);
+        /* Clear-color linear fog: unfogged out to 0.7*extent, fully
+         * fogged at the edge — a nice distance fade-out of the grid
+         * lines. Stands down during a FOG-style transition (the
+         * recede fog below takes over). */
+        gl_fog_linear(extent * 0.7f, extent);
     }
 
 #if GRID_XN_STYLE == GRID_AXES_XN_FOG
@@ -728,7 +769,7 @@ void scene_grid_render(const FrameRenderContext *frame_ctx) {
     glPopMatrix();
     glDepthMask(GL_TRUE);
     glDisable(GL_BLEND);
-    glDisable(GL_FOG);
+    gl_fog_off();   /* scene_grid_pop_state's glPopAttrib also restores it */
     if (frame_ctx->config.user_lighting_enabled) glEnable(GL_LIGHTING);
     scene_grid_pop_state();
 }
