@@ -126,14 +126,20 @@ Storage contract (atomic — all or nothing):
   value, even for one-arg commands.
 - Set `cmd->num_args = def->num_args`.
 - **No transitional dual-write.** `cmd->mode` is removed as the enum-arg
-  carrier in the same change: every `GLCmd.mode` reader for an
-  enum-spec command moves to `args[]` in one commit. Do not ship a
-  window where some readers use `mode` and others use `args[]` — a
-  half-migrated reader diverges silently (pitfall 8). The golden
-  snapshot below makes a big-bang refactor safe to verify, so the
-  dual-write window buys nothing and only adds a drift surface. If
-  `mode` has no remaining non-enum users after the audit, delete the
-  field; if it does, it keeps only those unrelated uses.
+  carrier for table-driven `ReplEnumCommandSpec` commands in the same
+  change: every `GLCmd.mode` reader for those commands moves to
+  `args[]` in one commit. Do not ship a window where some readers use
+  `mode` and others use `args[]` — a half-migrated reader diverges
+  silently (pitfall 8). The golden snapshot below makes a big-bang
+  refactor safe to verify, so the dual-write window buys nothing and
+  only adds a drift surface.
+- Custom enum+float commands are an explicit scope boundary:
+  `CMD_MATERIALF` and `CMD_POINT_PARAMETER_FV` currently use
+  `GLCmd.mode` through custom parser branches because they mix enum
+  slots with float payloads. Either migrate those commands deliberately
+  to `args[]` in the same refactor, or leave them as the only
+  documented legitimate `GLCmd.mode` users. Do not delete `mode` unless
+  those custom users are migrated too.
 - Emit canonical source text from the matched enum token names, not
   from numeric values.
 
@@ -184,6 +190,24 @@ Parser shape:
   is still desired, model the second slot as "enum token with expression
   fallback" rather than keeping a bespoke two-arg branch.
 
+Completion shape:
+
+- `src/app/glr_completion.c` is part of the enum-spec refactor, not a
+  later polish item. It currently has `AC_MODE_ENUM_ARG1` /
+  `AC_MODE_ENUM_ARG2` modes and reads `enums1` / `enums2` directly.
+- Replace those with a slot-indexed enum completion path:
+  - Track the active enum slot (`g_ac_enum_slot` or equivalent) instead
+    of encoding slot 1 vs slot 2 in the mode name.
+  - Select `def->enums[slot]` for end-of-input enum completion.
+  - Derive suffix from `slot + 1 == def->num_args`: `")"` for the last
+    enum arg, otherwise `", "`.
+  - Add `glColorMask` coverage so all four bool slots complete
+    `GL_TRUE` / `GL_FALSE`.
+- This is separate from cursor-aware mid-line completion. Path C only
+  needs the existing end-of-input completion behavior to work with N
+  enum slots; `plans/in-review/cursor-aware-enum-arg-completion.md`
+  owns the larger cursor/ghost/accept splice behavior.
+
 Expression and numeric compatibility:
 
 - Accept symbolic enum tokens first. The primary path is always token
@@ -227,8 +251,9 @@ Migration safety:
 
 - Update any non-executor reads of enum command values. Known examples:
   autonormal front-face tracking currently reads `CMD_FRONT_FACE.mode`;
-  block mode handling reads `CMD_BEGIN.mode`; tests assert
-  `CMD_DEPTH_MASK.mode`.
+  core block-mode helpers and controller outline/overlay passes read
+  `CMD_BEGIN.mode`; flat lighting detection reads `CMD_ENABLE.mode` /
+  `CMD_DISABLE.mode`; tests assert `CMD_DEPTH_MASK.mode`.
 - Add a drift/contract test that every `k_enum_command_specs[]` row with
   `num_args > 0` produces `cmd.num_args == num_args` and fills
   `args[0..num_args-1]`.
@@ -246,7 +271,8 @@ regression — compiles and parses fine, fails only at render/round-trip.
    migration *will* miss a site. Do a **type-aware** audit: every read
    of `GLCmd.mode` specifically. Real candidates today:
    `src/repl/executor.c`, `autonormal.c`, `core.c`, `export.c`,
-   `parser.c`, `flatten.c` (+ `repl_begin_mode_name` callers in
+   `parser.c`, `flatten.c`, and controller/render helpers in
+   `src/app/glr_ctrl.c` (+ `repl_begin_mode_name` callers in
    `core.c`). Treat this list as a starting grep, not the answer.
 2. **`glBegin` primitive-mode is a state machine, not a value.** The
    executor keys vertex emission, begin/end bracketing, and overlay
@@ -293,6 +319,11 @@ regression — compiles and parses fine, fails only at render/round-trip.
    "Storage contract"). This pitfall is therefore designed out rather
    than mitigated; the only defense needed is the type-aware audit
    (pitfall 1) being exhaustive in the single migrating commit.
+9. **Autocomplete is coupled to the old two-slot enum shape.**
+   `glr_completion.c` reads `enums1` / `enums2` directly and uses
+   `AC_MODE_ENUM_ARG1` / `AC_MODE_ENUM_ARG2`; a compile fix alone is not
+   enough. The end-of-input completion path must become slot-indexed in
+   the same commit as the spec shape change.
 
 ## Verification (beyond the functional list above)
 
@@ -338,18 +369,27 @@ Do the enum-path cleanup first, then add `glColorMask` as a normal
 3. `parser.c`: replace the one-arg/two-arg enum branches with one
    generalized N-arg parser, canonical text emitter, and diagnostics.
    Add `CMD_COLOR_MASK` to the begin-scope error display switch.
-4. `executor.c`: update every enum command dispatch to read from
+4. `src/app/glr_completion.c`: replace the `enums1`/`enums2` and
+   `AC_MODE_ENUM_ARG1`/`AC_MODE_ENUM_ARG2` assumptions with a
+   slot-indexed end-of-input enum completion path over `enums[slot]`.
+5. `executor.c`: update every enum command dispatch to read from
    `cmd->args[]`; add `CMD_COLOR_MASK` in `apply_state_cmd` and the
    main dispatch grouping.
-5. Other source reads: update `CMD_BEGIN` / `CMD_FRONT_FACE` /
+6. Other source reads: update `CMD_BEGIN` / `CMD_FRONT_FACE` /
    `CMD_DEPTH_MASK` / other enum users outside executor to read the
-   new `args[]` contract instead of `mode`.
-6. Tests:
+   new `args[]` contract instead of `mode`, including controller
+   outline/overlay paths.
+7. Decide and implement the custom-command boundary:
+   `CMD_MATERIALF` / `CMD_POINT_PARAMETER_FV` either remain documented
+   `mode` users or move to `args[]` with executor/tests updated.
+8. Tests:
    - Existing enum commands still parse, canonicalize, execute, export,
      and reject invalid tokens.
    - `glDepthMask(GL_TRUE)` and
      `glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_FALSE)` both round-trip
      symbolic bool tokens.
+   - End-of-input autocomplete works for all enum slots, including
+     `glColorMask` slot 4.
    - `expected_commands[]` and the all-commands export test include
      `CMD_COLOR_MASK`.
    - Contract test: enum-spec rows fill `args[]` uniformly and set
@@ -357,9 +397,9 @@ Do the enum-path cleanup first, then add `glColorMask` as a normal
    - If numeric bool fallback is intentionally added, test
      `glColorMask(1, 0, 1, 0)` canonicalizes to symbolic tokens. If it
      is intentionally rejected, test the rejection message instead.
-7. Docs: CLAUDE.md supported-commands list. Note that enum commands use
+9. Docs: CLAUDE.md supported-commands list. Note that enum commands use
    one uniform `args[]` storage convention.
-8. Gate: `make test`, `make test-stubs`,
+10. Gate: `make test`, `make test-stubs`,
    `make sample USE_GL_STUBS=1`, `make sample`,
    `make check-state-ownership`.
 
