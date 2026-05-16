@@ -518,6 +518,60 @@ int main(void) {
         assert_status_contains("glColorMaterial bad mode status", "GL_AMBIENT_AND_DIFFUSE");
     }
 
+    /* glLightModeli slot 1 is ENUM_OR_EXPR (token, else expression).
+     * Strict-compat: GL_TRUE / 1 / 0 / a non-table integer all parse
+     * and the typed source token is emitted verbatim (not
+     * canonicalized) on the expression-fallback path. */
+    {
+        glr_app_reset_all();
+        GLCmd cmd;
+        char t[MAX_LINE_LEN] = "";
+        memset(&cmd, 0, sizeof(cmd));
+        int ok = parse_cmd_with_text("glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE)",
+                                     &cmd, t, sizeof(t));
+        ASSERT_TRUE("glLightModeli GL_TRUE ok", ok == 1);
+        ASSERT_TRUE("glLightModeli pname", (GLenum)cmd.args[0] == GL_LIGHT_MODEL_TWO_SIDE);
+        ASSERT_TRUE("glLightModeli GL_TRUE val", (GLenum)cmd.args[1] == GL_TRUE);
+        ASSERT_TRUE("glLightModeli GL_TRUE text",
+                    strstr(t, "glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);") != NULL);
+    }
+    {
+        glr_app_reset_all();
+        GLCmd cmd;
+        char t[MAX_LINE_LEN] = "";
+        memset(&cmd, 0, sizeof(cmd));
+        int ok = parse_cmd_with_text("glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, 1)",
+                                     &cmd, t, sizeof(t));
+        ASSERT_TRUE("glLightModeli 1 ok", ok == 1);
+        ASSERT_TRUE("glLightModeli 1 val", cmd.args[1] == 1.0f);
+        ASSERT_TRUE("glLightModeli 1 verbatim (not canonicalized)",
+                    strstr(t, "glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, 1);") != NULL);
+    }
+    {
+        glr_app_reset_all();
+        GLCmd cmd;
+        char t[MAX_LINE_LEN] = "";
+        memset(&cmd, 0, sizeof(cmd));
+        /* Non-table integer: parsed before the refactor, still parses. */
+        int ok = parse_cmd_with_text("glLightModeli(GL_LIGHT_MODEL_LOCAL_VIEWER, 2)",
+                                     &cmd, t, sizeof(t));
+        ASSERT_TRUE("glLightModeli non-table int ok", ok == 1);
+        ASSERT_TRUE("glLightModeli non-table int val", cmd.args[1] == 2.0f);
+        ASSERT_TRUE("glLightModeli non-table int verbatim",
+                    strstr(t, "glLightModeli(GL_LIGHT_MODEL_LOCAL_VIEWER, 2);") != NULL);
+    }
+    {
+        glr_app_reset_all();
+        declare_test_vars();
+        GLCmd cmd;
+        memset(&cmd, 0, sizeof(cmd));
+        /* The one intentional change: a var expression in the ENUM_OR_EXPR
+         * slot now sets has_vars (re-evaluation) where it did not before. */
+        int ok = parse_for_test("glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, x)", &cmd);
+        ASSERT_TRUE("glLightModeli var ok", ok == 1);
+        ASSERT_TRUE("glLightModeli var sets has_vars", cmd.has_vars == 1);
+    }
+
     /* glMaterialf - scalar and vector (4-value) forms */
     {
         glr_app_reset_all();
@@ -697,10 +751,139 @@ int main(void) {
         glr_app_reset_all();
         GLCmd cmd;
         memset(&cmd, 0, sizeof(cmd));
-        int ok = parse_for_test("glDepthMask(1)", &cmd);
-        ASSERT_TRUE("glDepthMask rejects non-enum arg", ok == 0);
-        assert_status_contains("glDepthMask rejects non-enum status",
-                               "GL_TRUE");
+        /* Bool-slot policy: glDepthMask is ENUM_OR_CONST_VALUE, so a
+         * constant 0/1 canonicalizes to GL_FALSE/GL_TRUE instead of
+         * being rejected. */
+        char cmd_text[MAX_LINE_LEN] = "";
+        int ok = parse_cmd_with_text("glDepthMask(1)", &cmd,
+                                     cmd_text, sizeof(cmd_text));
+        ASSERT_TRUE("glDepthMask(1) parse ok", ok == 1);
+        ASSERT_TRUE("glDepthMask(1) -> GL_TRUE", (GLenum)cmd.args[0] == GL_TRUE);
+        ASSERT_TRUE("glDepthMask(1) canonicalized",
+                    strstr(cmd_text, "glDepthMask(GL_TRUE);") != NULL);
+    }
+    {
+        glr_app_reset_all();
+        GLCmd cmd;
+        char cmd_text[MAX_LINE_LEN] = "";
+        memset(&cmd, 0, sizeof(cmd));
+        int ok = parse_cmd_with_text("glDepthMask(0)", &cmd,
+                                     cmd_text, sizeof(cmd_text));
+        ASSERT_TRUE("glDepthMask(0) parse ok", ok == 1);
+        ASSERT_TRUE("glDepthMask(0) -> GL_FALSE", (GLenum)cmd.args[0] == GL_FALSE);
+        ASSERT_TRUE("glDepthMask(0) canonicalized",
+                    strstr(cmd_text, "glDepthMask(GL_FALSE);") != NULL);
+    }
+    {
+        glr_app_reset_all();
+        declare_test_vars();
+        GLCmd cmd;
+        memset(&cmd, 0, sizeof(cmd));
+        /* Runtime vars are rejected in bool-mask slots (would silently
+         * collapse under flatten/replay/export). */
+        int ok = parse_for_test("glDepthMask(x)", &cmd);
+        ASSERT_TRUE("glDepthMask(var) rejected", ok == 0);
+    }
+    {
+        glr_app_reset_all();
+        GLCmd cmd;
+        memset(&cmd, 0, sizeof(cmd));
+        /* Unknown magic numbers still rejected (only 0/1 reverse-map). */
+        int ok = parse_for_test("glDepthMask(2)", &cmd);
+        ASSERT_TRUE("glDepthMask(2) rejected", ok == 0);
+    }
+
+    /* glColorMask - 4 boolean-mask slots (the original ask) */
+    {
+        glr_app_reset_all();
+        GLCmd cmd;
+        char cmd_text[MAX_LINE_LEN] = "";
+        memset(&cmd, 0, sizeof(cmd));
+        int ok = parse_cmd_with_text("glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_FALSE)",
+                                     &cmd, cmd_text, sizeof(cmd_text));
+        ASSERT_TRUE("glColorMask parse ok", ok == 1);
+        ASSERT_TRUE("glColorMask type", cmd.type == CMD_COLOR_MASK);
+        ASSERT_TRUE("glColorMask num_args", cmd.num_args == 4);
+        ASSERT_TRUE("glColorMask r", (GLenum)cmd.args[0] == GL_TRUE);
+        ASSERT_TRUE("glColorMask g", (GLenum)cmd.args[1] == GL_TRUE);
+        ASSERT_TRUE("glColorMask b", (GLenum)cmd.args[2] == GL_TRUE);
+        ASSERT_TRUE("glColorMask a", (GLenum)cmd.args[3] == GL_FALSE);
+        ASSERT_TRUE("glColorMask symbolic round-trip",
+                    strstr(cmd_text, "glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_FALSE);") != NULL);
+    }
+    {
+        glr_app_reset_all();
+        GLCmd cmd;
+        char cmd_text[MAX_LINE_LEN] = "";
+        memset(&cmd, 0, sizeof(cmd));
+        /* Numeric 1/0 canonicalize to GL_TRUE/GL_FALSE (bool-slot policy). */
+        int ok = parse_cmd_with_text("glColorMask(1, 0, 1, 0)",
+                                     &cmd, cmd_text, sizeof(cmd_text));
+        ASSERT_TRUE("glColorMask(1,0,1,0) parse ok", ok == 1);
+        ASSERT_TRUE("glColorMask(1,0,1,0) canonicalized",
+                    strstr(cmd_text, "glColorMask(GL_TRUE, GL_FALSE, GL_TRUE, GL_FALSE);") != NULL);
+    }
+    {
+        glr_app_reset_all();
+        declare_test_vars();
+        GLCmd cmd;
+        memset(&cmd, 0, sizeof(cmd));
+        /* Runtime var in a bool-mask slot is rejected. */
+        int ok = parse_for_test("glColorMask(x, GL_TRUE, GL_TRUE, GL_TRUE)", &cmd);
+        ASSERT_TRUE("glColorMask(var,...) rejected", ok == 0);
+    }
+    {
+        glr_app_reset_all();
+        GLCmd cmd;
+        memset(&cmd, 0, sizeof(cmd));
+        /* Wrong arg count is rejected. */
+        int ok = parse_for_test("glColorMask(GL_TRUE, GL_TRUE)", &cmd);
+        ASSERT_TRUE("glColorMask wrong arg count rejected", ok == 0);
+    }
+
+    /* ENUM_ONLY behavior-neutral guard: strict enum slots did NOT get
+     * numeric fallback from the refactor. A raw enum number stays
+     * rejected exactly as before. */
+    {
+        glr_app_reset_all();
+        GLCmd cmd;
+        memset(&cmd, 0, sizeof(cmd));
+        int ok = parse_for_test("glEnable(3553)", &cmd);
+        ASSERT_TRUE("glEnable(3553) still rejected", ok == 0);
+    }
+    {
+        glr_app_reset_all();
+        GLCmd cmd;
+        memset(&cmd, 0, sizeof(cmd));
+        int ok = parse_for_test("glShadeModel(7425)", &cmd);
+        ASSERT_TRUE("glShadeModel(numeric) still rejected", ok == 0);
+    }
+
+    /* Contract: every parseable enum-spec row fills args[0..num_args-1]
+     * and sets num_args == abs(spec.num_args). Proves uniform args[]
+     * storage across the whole enum table, command-independently. */
+    {
+        struct { const char *line; int n; } cases[] = {
+            { "glBegin(GL_TRIANGLES)",                                  1 },
+            { "glEnable(GL_DEPTH_TEST)",                                1 },
+            { "glDisable(GL_BLEND)",                                    1 },
+            { "glShadeModel(GL_FLAT)",                                  1 },
+            { "glFrontFace(GL_CW)",                                     1 },
+            { "glDepthMask(GL_TRUE)",                                   1 },
+            { "glBlendFunc(GL_SRC_ALPHA, GL_ONE)",                      2 },
+            { "glColorMaterial(GL_FRONT, GL_DIFFUSE)",                  2 },
+            { "glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE)",        2 },
+            { "glColorMask(GL_TRUE, GL_FALSE, GL_TRUE, GL_FALSE)",      4 },
+        };
+        for (size_t ci = 0; ci < sizeof(cases) / sizeof(cases[0]); ci++) {
+            glr_app_reset_all();
+            GLCmd cmd;
+            memset(&cmd, 0, sizeof(cmd));
+            int ok = parse_for_test(cases[ci].line, &cmd);
+            ASSERT_TRUE("enum-spec contract parse ok", ok == 1);
+            ASSERT_TRUE("enum-spec contract num_args",
+                        cmd.num_args == cases[ci].n);
+        }
     }
 
     /* whitespace + semicolon trimming stays predictable */

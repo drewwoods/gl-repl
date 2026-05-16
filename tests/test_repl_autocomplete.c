@@ -167,6 +167,24 @@ int main() {
         ASSERT_STR("input", editor_state_input().input, "glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION, ");
     }
 
+    /* 4b. glColorMask - 4 bool slots; non-last slots suffix ", ",
+     * the final (alpha) slot closes with ")". */
+    {
+        glr_app_reset_all(); declare_test_vars();
+        set_input_text("glColorMask(GL_TR");
+        editor_completion_update();
+        ASSERT_STR("colormask slot1 match", g_ac_insert_matches[0], "GL_TRUE");
+        ASSERT_STR("colormask slot1 ghost", g_ac_ghost, "UE, ");
+
+        set_input_text("glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_FA");
+        editor_completion_update();
+        ASSERT_STR("colormask slot4 match", g_ac_insert_matches[0], "GL_FALSE");
+        ASSERT_STR("colormask slot4 ghost", g_ac_ghost, "LSE)");
+        accept_autocomplete();
+        ASSERT_STR("colormask slot4 accept", editor_state_input().input,
+                   "glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_FALSE)");
+    }
+
     /* 5. User-defined function completion */
     {
         glr_app_reset_all(); declare_test_vars();

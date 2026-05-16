@@ -283,6 +283,10 @@ int apply_state_cmd(const GLCmd *cmd, float alpha_scale) {
     case CMD_DEPTH_MASK:
         glDepthMask((GLboolean)cmd->args[0]);
         return 1;
+    case CMD_COLOR_MASK:
+        glColorMask((GLboolean)cmd->args[0], (GLboolean)cmd->args[1],
+                    (GLboolean)cmd->args[2], (GLboolean)cmd->args[3]);
+        return 1;
     case CMD_POINT_PARAMETER_FV: {
         /* args[0]=pname, args[1..3]=const/linear/quadratic. */
         GLfloat params[3] = { cmd->args[1], cmd->args[2], cmd->args[3] };
@@ -458,6 +462,7 @@ void repl_execute_program(const ReplExecutionOptions *options) {
             break;
         case CMD_FRONT_FACE:
         case CMD_DEPTH_MASK:
+        case CMD_COLOR_MASK:
             apply_state_cmd(&flat_cmds[pc], g_execute_alpha_scale);
             break;
         /* The CMD_*-not-in-begin block below relies on the parser
