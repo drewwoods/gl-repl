@@ -12,8 +12,13 @@ work must make ordinary end-of-input enum completion N-slot aware as
 part of the enum-spec refactor. This plan owns the larger cursor-aware
 mid-line behavior: relaxing the end-of-input guard, computing the slot
 at the cursor, and splicing accepted completion text into the input
-buffer. If Path C lands first, rebase this plan from `enums1` /
-`enums2` terminology to `enums[slot]`.
+buffer. **Cross-plan staleness (bidirectional):** both plans cite
+`glr_completion.c` by line number against the current
+`enums1`/`enums2` + `AC_MODE_ENUM_ARG1/2` shape. Whichever lands first
+invalidates the other's citations — if Path C lands first, re-derive
+this plan's `glr_completion.c` references and terminology
+(`enums1`/`enums2` → `enums[slot]`) from the then-current code; do not
+trust the line numbers here.
 
 ## Context
 
