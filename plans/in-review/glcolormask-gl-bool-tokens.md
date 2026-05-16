@@ -12,9 +12,14 @@ GL tokens should not be parsed through one command path for
 `glColorMask`.
 
 The previous design fork — how a slot declares "expression fallback"
-(`glLightModeli` arg2) — is resolved in "Slot-kind
-representation": explicit per-slot kind metadata, not a `NULL`
-sentinel. The plan is implementation-ready pending review.
+(`glLightModeli` arg2) — is resolved in "Slot-kind representation":
+an explicit three-value `ReplEnumSlotKind` (`ENUM_ONLY` /
+`ENUM_OR_CONST_VALUE` / `ENUM_OR_EXPR`), not a `NULL` sentinel and
+not a two-kind collapse. `ENUM_ONLY` is kept distinct specifically so
+non-bool enum commands stay strictly token-only; numeric value support
+is opt-in for boolean mask slots (`glDepthMask`, `glColorMask`) rather
+than silently applied to every enum command. The plan is
+implementation-ready pending review.
 
 Do not implement until this file moves to `not-started/`.
 
@@ -121,9 +126,10 @@ use `cmd->mode + cmd->args[0]`.
 Hard constraint: enum tables store **real GL constant values**, not
 project-local aliases or dense ordinal IDs. The REPL source should stay
 copy/paste-shaped like GL code: `GL_TRUE` means the platform's
-`GL_TRUE`, `GL_DEPTH_TEST` means the platform's `GL_DEPTH_TEST`, and a
-numeric fallback succeeds only by matching one of those real values in
-the expected enum table.
+`GL_TRUE`, `GL_DEPTH_TEST` means the platform's `GL_DEPTH_TEST`. Where
+a numeric fallback exists at all (only `ENUM_OR_CONST_VALUE` slots — see
+slot kinds below), it succeeds only by matching one of those real
+values in the expected enum table.
 
 Storage contract (atomic — all or nothing):
 
@@ -145,9 +151,9 @@ Storage contract (atomic — all or nothing):
   to `args[]` in the same refactor, or leave them as the only
   documented legitimate `GLCmd.mode` users. Do not delete `mode` unless
   those custom users are migrated too.
-- Emit enum-value slots from the matched enum token names, not from
-  numeric values. Enum-or-expression fallback slots preserve the typed
-  expression text when no enum token matched.
+- Emit `ENUM_ONLY` / `ENUM_OR_CONST_VALUE` slots from the matched enum
+  token names, not from numeric values. `ENUM_OR_EXPR` slots preserve
+  the typed expression text when no enum token matched.
 
 Spec shape:
 
@@ -161,8 +167,9 @@ Spec shape:
 
   ```c
   typedef enum {
-      REPL_ENUM_SLOT_ENUM_VALUE = 0,   /* token or constant numeric value */
-      REPL_ENUM_SLOT_ENUM_OR_EXPR      /* token first, else full expression */
+      REPL_ENUM_SLOT_ENUM_ONLY = 0,        /* token only; reject numeric + expr */
+      REPL_ENUM_SLOT_ENUM_OR_CONST_VALUE,  /* token, else const value reverse-mapped */
+      REPL_ENUM_SLOT_ENUM_OR_EXPR          /* token first, else full expression */
   } ReplEnumSlotKind;
 
   typedef struct {
@@ -172,11 +179,34 @@ Spec shape:
   } ReplEnumArgSpec;
   ```
 
-  `enums` remains the source of truth for real GL token values and
-  autocomplete. Both slot kinds used by this plan have a real enum
-  table; if a future command needs a true expression-only slot, add an
-  explicit slot kind for it instead of overloading a null table pointer.
-  The parser must branch on `kind`, not on whether `enums` is null.
+  Three kinds, deliberately distinct so non-bool enum slots stay
+  behavior-neutral while boolean mask slots can opt into numeric
+  `1` / `0` support:
+
+  - `REPL_ENUM_SLOT_ENUM_ONLY` — exact token match only; numeric and
+    expression input are rejected. Strict non-bool enum slots get this
+    kind (glBegin, glEnable/Disable, glShadeModel, glFrontFace,
+    glColorMaterial ×2, glBlendFunc ×2, glLightModeli slot 0). This is
+    exactly today's behavior — the current parser only `strcmp`s
+    against the table — so those commands do not silently start
+    accepting numbers.
+  - `REPL_ENUM_SLOT_ENUM_OR_CONST_VALUE` — token first, else a
+    constant-only expression reverse-mapped to a table value; runtime
+    vars rejected. **Boolean mask slots use this**: existing
+    `glDepthMask` and new `glColorMask`. This intentionally changes
+    `glDepthMask(1)` / `glDepthMask(0)` from rejected to canonicalized
+    `GL_TRUE` / `GL_FALSE`, and lets `glColorMask(1, 0, 1, 0)`
+    canonicalize to `GL_TRUE`/`GL_FALSE`. The numeric broadening is
+    explicit and scoped to bool-mask slots, not global.
+  - `REPL_ENUM_SLOT_ENUM_OR_EXPR` — token first, else a full
+    expression (vars permitted). **Only `glLightModeli` slot 1 uses
+    this**, reproducing its current bool-token-or-int/expr param.
+
+  `enums` stays the source of truth for real GL token values and
+  autocomplete and is non-null for all three kinds. The parser branches
+  on `kind`, never on whether `enums` is null. A future true
+  expression-only slot would need its own explicit kind, not a null
+  table.
 - Keep `fmt` only if it still buys enough for display. A cleaner option
   is to canonicalize generically as:
   `indent + name + "(" + joined matched token names + ");"`.
@@ -204,8 +234,11 @@ Spec shape:
     `has_vars` when an expression-fallback slot references visible vars
     is an intentional tightening of the parser contract so callers do
     not have to infer it later.
-  `REPL_ENUM_SLOT_ENUM_VALUE` slots, by contrast, are constant-only and
-  canonicalize to the table's token name.
+  By contrast, `REPL_ENUM_SLOT_ENUM_ONLY` slots accept only an exact
+  token (no numeric, no expression — today's behavior, preserved), and
+  `REPL_ENUM_SLOT_ENUM_OR_CONST_VALUE` slots accept a token or a
+  constant value but reject runtime vars; both canonicalize the emitted
+  text to the table's token name.
 
 Parser shape:
 
@@ -216,25 +249,33 @@ Parser shape:
   3. Resolve each token with one enum-arg resolver.
   4. Store each resolved value in `cmd->args[arg_idx]`.
   5. Emit text using the resolver's per-slot emitted arg text:
-     canonical enum names for enum-value slots, and original expression
-     text for enum-or-expression fallback misses.
+     canonical enum token names for `ENUM_ONLY` /
+     `ENUM_OR_CONST_VALUE`, and the original typed expression text for
+     `ENUM_OR_EXPR` fallback misses.
 - The per-slot resolver branches on `args[slot].kind`:
-  - **Enum-value slot** (`REPL_ENUM_SLOT_ENUM_VALUE`) —
-    `resolve_enum_arg(raw, args[slot].enums, vars, num_vars,
+  - **Enum-only slot** (`REPL_ENUM_SLOT_ENUM_ONLY`): exact
+    enum-token lookup against `args[slot].enums` only. No numeric, no
+    expression. Fail with the slot's usage if no token matches. This
+    is byte-for-byte today's behavior for every strict enum slot
+    assigned this kind — the behavior-neutral baseline the golden
+    snapshot pins.
+  - **Enum-or-const-value slot** (`REPL_ENUM_SLOT_ENUM_OR_CONST_VALUE`)
+    — `resolve_enum_arg(raw, args[slot].enums, vars, num_vars,
     out_value, out_name, err)`:
     1. Try exact enum-token lookup first.
     2. If that fails, evaluate the raw arg as a **constant-only**
-       expression (reject visible vars — enum-value slots never
-       animate).
+       expression (reject visible vars — these slots never animate).
     3. Reverse-map the folded value to a token by exact value match in
        `args[slot].enums`; fail with the slot's usage if no match.
     4. Return the numeric value **and** the canonical token name; the
-       canonical name is what gets emitted.
+       canonical name is what gets emitted. (`glDepthMask` /
+       `glColorMask` bool slots.)
   - **Enum-or-expression slot** (`REPL_ENUM_SLOT_ENUM_OR_EXPR`): try
-    exact enum-token lookup first if an enum table is present; if that
+    exact enum-token lookup first against `args[slot].enums`; if that
     fails, evaluate as a full expression (vars permitted), store the
     folded float, set `has_vars` accordingly, and carry the original
     trimmed source token through to the emitter unchanged.
+    (`glLightModeli` slot 1 only.)
   This keeps numeric fallback generic and table-driven instead of
   special-casing bools or `glColorMask`, while preserving
   `glLightModeli`'s expression arg without a bespoke command branch.
@@ -245,14 +286,19 @@ Parser shape:
   limitation.
 - `CMD_LIGHT_MODEL_I` is the concrete consumer of the slot-kind model:
   spec it as `num_args==2`, slot 0 =
-  `{ k_light_model_params, ..., REPL_ENUM_SLOT_ENUM_VALUE }`, slot 1 =
+  `{ k_light_model_params, ..., REPL_ENUM_SLOT_ENUM_ONLY }`, slot 1 =
   `{ k_bool_vals, ..., REPL_ENUM_SLOT_ENUM_OR_EXPR }`. This reproduces
   today's "pname is a token, param is a bool token *or* an
   int/expression" behavior with **no** bespoke command branch — it falls
-  out of the generalized resolver. This compatibility is a hard
-  requirement, not optional: it must have a dedicated test (`GL_TRUE`,
-  `1`, `0`, and a non-table integer / a var expression) written
-  *before* the refactor lands.
+  out of the generalized resolver. Two distinct test obligations:
+  - **Strict compat (pin *before* the refactor):** `GL_TRUE`, `1`, `0`,
+    and a non-table integer in slot 2 must parse, store, and emit
+    byte-identically to today. This is a hard requirement.
+  - **The one intentional change:** a *var* expression in slot 2 now
+    sets `has_vars` (see "Slot-kind … intentional tightening"), where
+    today it does not. This case must assert the **new** behavior
+    (re-evaluation), and therefore cannot be a pre-refactor pin —
+    snapshot today's value for documentation, then assert the change.
 
 Completion shape:
 
@@ -280,21 +326,23 @@ Completion shape:
 
 Expression and numeric compatibility:
 
-- Accept symbolic enum tokens first. The primary path is always token
-  lookup: `GL_TRUE` maps to the real `GL_TRUE` value, `GL_DEPTH_TEST`
-  maps to the real `GL_DEPTH_TEST` value, etc.
-- For enum-value slots, also accept numeric constant values as a
-  deliberate fallback. If token lookup fails, parse the slot as a
-  constant expression with no visible runtime vars. Then reverse-map the
-  folded numeric value through that slot's enum table. This makes
-  `glColorMask(1, 0, 1, 0)` canonicalize to
+- Accept symbolic enum tokens first. The primary path for all three
+  kinds is token lookup: `GL_TRUE` maps to the real `GL_TRUE` value,
+  `GL_DEPTH_TEST` to the real `GL_DEPTH_TEST` value, etc.
+- **Numeric constant fallback is `ENUM_OR_CONST_VALUE`-only**: existing
+  `glDepthMask` plus new `glColorMask`. For those slots, if token
+  lookup fails, parse the slot as a constant expression with no visible
+  runtime vars, then reverse-map the folded value through that slot's
+  enum table. This makes `glDepthMask(1)` canonicalize to
+  `glDepthMask(GL_TRUE);` and `glColorMask(1, 0, 1, 0)` canonicalize to
   `glColorMask(GL_TRUE, GL_FALSE, GL_TRUE, GL_FALSE);` because
-  `GL_TRUE == 1` and `GL_FALSE == 0`.
-- Enum-value numeric fallback should only succeed when the folded value
-  exactly matches an enum value in that argument's table. That permits
-  real GL enum values such as the numeric value for `GL_DEPTH_TEST`, but
-  still canonicalizes them back to symbolic source and rejects unknown
-  magic numbers.
+  `GL_TRUE == 1` and `GL_FALSE == 0`. It succeeds only when the folded
+  value exactly matches a value in that slot's table; unknown magic
+  numbers are rejected.
+- `ENUM_ONLY` slots do **not** get numeric fallback. `glEnable(3553)`
+  stays rejected exactly as today — the refactor does not silently
+  broaden strict enum commands to accept raw enum numbers. This is the
+  whole point of keeping `ENUM_ONLY` distinct.
 - Do **not** accept runtime-variable expressions for `glColorMask` in
   the enum path unless the storage/text model is extended to preserve
   expression source per arg. Otherwise flatten/replay/export semantics
@@ -429,9 +477,13 @@ regression — compiles and parses fine, fails only at render/round-trip.
   with `glFrontFace(GL_CW)` vs `GL_CCW`) for pitfalls 2 and 3.
 - **Commit isolation.** Land the enum-path generalization as its own
   commit with the full pre-existing enum-command regression green and
-  **no `CMD_COLOR_MASK` anywhere**. Add `glColorMask` only in a second
-  commit. A bisect then cleanly separates "refactor broke an existing
-  command" from "new command misbehaves".
+  **no `CMD_COLOR_MASK` anywhere**. In that first commit, keep
+  `glDepthMask` token-only if needed so the storage refactor remains
+  behavior-neutral. Then land the bool-slot policy in a second commit:
+  switch `glDepthMask` to `ENUM_OR_CONST_VALUE` and add `glColorMask`
+  with the same bool-slot behavior. A bisect then cleanly separates
+  "storage refactor broke an existing command" from "intentional bool
+  numeric widening / new command misbehaves".
 - Run the standard gate (`make test`, `make test-stubs`,
   `make sample USE_GL_STUBS=1`, `make sample`,
   `make check-state-ownership`) on **both** commits independently.
@@ -444,8 +496,9 @@ would remain enum-token parsed while `glColorMask` would be
 expression-parsed and repaired after the fact. That is not worth the
 long-term inconsistency.
 
-Do the enum-path cleanup first, then add `glColorMask` as a normal
-4-argument bool-token enum command.
+Do the enum-path cleanup first, then land the bool-slot policy: switch
+`glDepthMask` to `ENUM_OR_CONST_VALUE` and add `glColorMask` as a
+normal 4-argument bool-token enum command using the same slot kind.
 
 ## If approved (implement C from scratch)
 
@@ -455,8 +508,12 @@ Do the enum-path cleanup first, then add `glColorMask` as a normal
    "Slot-kind representation"). Keep enough compatibility
    helpers/macros locally to make the spec table readable.
 2. `command_spec.c`: migrate all existing enum rows to the new shape.
-   Add the `glColorMask` func-completion row and enum-spec row using
-   `k_bool_vals` for all four slots. Add
+   Strict enum slots are `REPL_ENUM_SLOT_ENUM_ONLY`; `glLightModeli`
+   slot 1 is `REPL_ENUM_SLOT_ENUM_OR_EXPR`. For the bool-slot commit,
+   switch `glDepthMask` to `REPL_ENUM_SLOT_ENUM_OR_CONST_VALUE` and add
+   the `glColorMask` func-completion row plus enum-spec row using
+   `k_bool_vals` + `REPL_ENUM_SLOT_ENUM_OR_CONST_VALUE` for all four
+   slots. Add
    `CMD_TYPE_SPEC_NOT_IN_BEGIN(CMD_COLOR_MASK, 1, 1, CMD_CAT_STATE)`.
 3. `parser.c`: replace the one-arg/two-arg enum branches with one
    generalized N-arg parser, canonical text emitter, and diagnostics.
@@ -481,19 +538,26 @@ Do the enum-path cleanup first, then add `glColorMask` as a normal
    - `glDepthMask(GL_TRUE)` and
      `glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_FALSE)` both round-trip
      symbolic bool tokens.
-   - `glLightModeli` expression-fallback compatibility (write *before*
-     the refactor): `GL_TRUE`, `1`, `0`, a non-table integer, and a
-     var expression in slot 2 all behave as today, and slot 2 emits
-     the typed source token verbatim (not canonicalized).
+   - `glLightModeli` slot 2: strict-compat cases (`GL_TRUE`, `1`, `0`,
+     non-table integer) pinned byte-identical *before* the refactor and
+     still passing after; slot 2 emits the typed source token verbatim
+     (not canonicalized). The var-expression case is the one
+     intentional change — assert the new `has_vars`/re-eval behavior,
+     not "as today" (see Spec shape).
    - End-of-input autocomplete works for all enum slots, including
      `glColorMask` slot 4.
    - `expected_commands[]` and the all-commands export test include
      `CMD_COLOR_MASK`.
    - Contract test: enum-spec rows fill `args[]` uniformly and set
      `num_args`.
-   - If numeric bool fallback is intentionally added, test
-     `glColorMask(1, 0, 1, 0)` canonicalizes to symbolic tokens. If it
-     is intentionally rejected, test the rejection message instead.
+   - `ENUM_OR_CONST_VALUE`: `glDepthMask(1)` canonicalizes to
+     `glDepthMask(GL_TRUE);`; `glColorMask(1, 0, 1, 0)` canonicalizes
+     to `glColorMask(GL_TRUE, GL_FALSE, GL_TRUE, GL_FALSE);`; runtime
+     vars in bool-mask slots are rejected.
+   - `ENUM_ONLY` behavior-neutral guard: `glEnable(3553)` (and a
+     numeric arg to another strict enum command) stays **rejected**
+     exactly as today — pins that the refactor did not broaden
+     non-bool enum commands to accept enum numbers.
 9. Standing guard: add a `check-*` target to the
    `make check-state-ownership` aggregator enforcing the
    no-`GLCmd.mode`-for-enum-spec invariant (delete the field outright
