@@ -75,7 +75,12 @@ typedef enum {
 
 typedef struct {
     CmdType  type;
-    GLenum   mode;
+    /* No `mode` field: every enum-backed command (table-driven *and*
+     * the custom glMaterialf / glPointParameterfv branches) stores its
+     * GL enum arguments in args[] alongside numeric args. GLenums fit
+     * float32 exactly (all in use are < 2^24), so (GLenum)args[i]
+     * round-trips losslessly. The absence of this field is the
+     * compiler-enforced invariant — no grep guard needed. */
     float    args[8];
     int      num_args;              /* Number of meaningful entries in args[] */
     int      valid;                 /* Deleted commands remain allocated but skipped */

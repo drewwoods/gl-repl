@@ -667,12 +667,15 @@ static int parse_command(const char *line, GLCmd *cmd,
             return 0;
         }
 
+        /* Uniform args[] layout (no GLCmd.mode): args[0]=face,
+         * args[1]=pname, args[2..]=value(s). GLenums fit float32
+         * exactly (all < 2^24), so the casts round-trip losslessly. */
         cmd->type = CMD_MATERIALF;
         cmd->valid = 1;
-        cmd->mode = face;
-        cmd->args[0] = (float)pname;
-        for (int k = 0; k < num_parsed; k++) cmd->args[k + 1] = parsed_args[k];
-        cmd->num_args = num_parsed + 1;
+        cmd->args[0] = (float)face;
+        cmd->args[1] = (float)pname;
+        for (int k = 0; k < num_parsed; k++) cmd->args[k + 2] = parsed_args[k];
+        cmd->num_args = num_parsed + 2;
         cmd->has_vars = input_has_any_visible_vars(a3, vars, num_vars);
 
         if (num_parsed == 1) {
@@ -730,13 +733,15 @@ static int parse_command(const char *line, GLCmd *cmd,
             return 0;
         }
 
+        /* Uniform args[] layout (no GLCmd.mode): args[0]=pname,
+         * args[1..3]=const/linear/quadratic attenuation coefficients. */
         cmd->type = CMD_POINT_PARAMETER_FV;
         cmd->valid = 1;
-        cmd->mode = pname;
-        cmd->args[0] = parsed_args[0];
-        cmd->args[1] = parsed_args[1];
-        cmd->args[2] = parsed_args[2];
-        cmd->num_args = 3;
+        cmd->args[0] = (float)pname;
+        cmd->args[1] = parsed_args[0];
+        cmd->args[2] = parsed_args[1];
+        cmd->args[3] = parsed_args[2];
+        cmd->num_args = 4;
         cmd->has_vars = (num_vars > 0);
 
         {

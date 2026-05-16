@@ -539,7 +539,7 @@ int main(void) {
         int ok = parse_for_test("glMaterialf(GL_FRONT, GL_DIFFUSE, 0.8, 0.2, 0.2, 1.0)", &cmd);
         ASSERT_TRUE("glMaterialf vector parse ok", ok == 1);
         ASSERT_TRUE("glMaterialf vector type", cmd.type == CMD_MATERIALF);
-        ASSERT_TRUE("glMaterialf vector num_args", cmd.num_args == 5); /* pname + 4 vals */
+        ASSERT_TRUE("glMaterialf vector num_args", cmd.num_args == 6); /* face + pname + 4 vals */
     }
 
     /* glMaterialf - bad face name */
