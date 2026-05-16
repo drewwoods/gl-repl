@@ -1042,6 +1042,13 @@ static void scene_execute_adapter(const SceneExecuteContext *ctx,
     glPopAttrib();
 }
 
+/* Grid/axes in-out fade machines (plans/.../grid-axes-transitions.md).
+ * The config path is untouched: toggling still just flips
+ * presentation.grid_theme/axes_theme. Each frame the diff feeds these
+ * machines and the renderer draws the effective {theme, opacity}. */
+static SceneXnState g_grid_xn;
+static SceneXnState g_axes_xn;
+
 static void glr_ctrl_build_scene_config(SceneRenderConfig *config) {
     GlrRenderState render = glr_state_render();
     ReplRenderState repl_render = repl_state_render();
@@ -1131,11 +1138,19 @@ static void glr_ctrl_build_scene_config(SceneRenderConfig *config) {
     config->backdrop_mode = presentation.backdrop_mode;
     config->wireframe = presentation.wireframe;
 
-    /* --- Grid and axes --- */
-    config->grid_theme = presentation.grid_theme;
+    /* --- Grid and axes ---
+     * Effective theme/opacity come from the transition machines (ticked
+     * in glr_ctrl_tick), NOT directly from presentation: `current` is
+     * the theme to draw while `next` may already point elsewhere mid
+     * fade-out. */
+    config->grid_theme = g_grid_xn.current;
+    config->grid_opacity = g_grid_xn.opacity;
+    config->grid_xn_phase = g_grid_xn.phase;
     config->grid_extent_idx = presentation.grid_extent_idx;
     config->grid_major_idx = presentation.grid_major_idx;
-    config->axes_theme = presentation.axes_theme;
+    config->axes_theme = g_axes_xn.current;
+    config->axes_opacity = g_axes_xn.opacity;
+    config->axes_xn_phase = g_axes_xn.phase;
     memcpy(config->grid_major_steps, grid_major_steps,
            sizeof(config->grid_major_steps));
     memcpy(config->grid_extents, grid_extents,
@@ -1638,6 +1653,46 @@ static const ReplHostEffects g_glr_host_effects = {
     .follow_cursor              = glr_app_follow_cursor,
 };
 
+/* Rule 8: seed both machines to the current presentation theme at full
+ * opacity, STEADY — a zero-init machine would diff OFF -> the non-off
+ * default grid and animate it in on frame 1, and animate stale prior
+ * themes after a world reset. Folded into glr_app_install_app_services
+ * (idempotent, called from both program init and glr_app_reset_all)
+ * so it runs AFTER glr_state_presentation_reset_defaults(). */
+static void glr_ctrl_seed_overlay_xn(void) {
+    GlrPresentationState p = glr_state_presentation();
+    scene_xn_init(&g_grid_xn, p.grid_theme);
+    scene_xn_init(&g_axes_xn, p.axes_theme);
+}
+
+/* Per-frame diff + advance, called from glr_ctrl_tick (the animation
+ * timer) with the same fixed 0.016f dt as repl_advance_time /
+ * replay_tick_fade_batches / glr_camera_tick. NOT the display path:
+ * display fires on reshape/expose without the timer, which would
+ * couple fade speed to redraw rate. Rule 6 off-source short-circuit:
+ * when the overlay is currently the off index, scene_xn_show skips the
+ * pointless OUT of an already-invisible overlay (controller owns the
+ * off-index policy; the machine stays theme-index-agnostic). */
+static void glr_ctrl_tick_overlay_xn(void) {
+    GlrPresentationState p = glr_state_presentation();
+
+    if (p.grid_theme != g_grid_xn.current &&
+        g_grid_xn.current == GRID_THEME_OFF)
+        scene_xn_show(&g_grid_xn, p.grid_theme);
+    else
+        scene_xn_set(&g_grid_xn, p.grid_theme);
+    scene_xn_tick(&g_grid_xn, 0.016f,
+                  GRID_AXES_FADE_IN_SECS, GRID_AXES_FADE_OUT_SECS);
+
+    if (p.axes_theme != g_axes_xn.current &&
+        g_axes_xn.current == AXES_THEME_OFF)
+        scene_xn_show(&g_axes_xn, p.axes_theme);
+    else
+        scene_xn_set(&g_axes_xn, p.axes_theme);
+    scene_xn_tick(&g_axes_xn, 0.016f,
+                  GRID_AXES_FADE_IN_SECS, GRID_AXES_FADE_OUT_SECS);
+}
+
 static void glr_app_install_app_services(void) {
     /* Install the host-effect bridge (status sink + example-
      * presentation-reset + the four editor effects). Consolidated from
@@ -1666,6 +1721,10 @@ static void glr_app_install_app_services(void) {
      * REPL pipeline. The demo doesn't install — the fallback then
      * passes glPointSize through unscaled. */
     repl_executor_install_camera_distance_source(glr_app_camera_distance);
+    /* Rule 8 seed. In glr_app_reset_all this runs after the
+     * presentation reset (line ordering above); at bootstrap it reads
+     * the static CFG_DEFAULT_* presentation. Idempotent. */
+    glr_ctrl_seed_overlay_xn();
 }
 
 /* Full-world reset entry point. Step 2 of
@@ -3114,6 +3173,7 @@ void glr_ctrl_tick(void) {
     }
 
     glr_camera_tick();
+    glr_ctrl_tick_overlay_xn();
 
     {
         ReplCodePanelRuntimeState *code_panel_state = ui_state_code_panel_mut();

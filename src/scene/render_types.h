@@ -5,6 +5,7 @@
 #define SCENE_RENDER_TYPES_H
 
 #include "themes.h"
+#include "scene_transition.h"  /* SceneXnPhase for the overlay fade fields */
 #include <gl_includes.h>     /* GLenum for SceneLight.id */
 
 #define MAX_LIGHTS 4
@@ -116,11 +117,19 @@ typedef struct SceneRenderConfig {
     int backdrop_mode;
     int wireframe;
 
-    /* --- Grid and axes --- */
-    int   grid_theme;
-    int   grid_extent_idx;
-    int   grid_major_idx;
-    int   axes_theme;
+    /* --- Grid and axes ---
+     * grid_theme/axes_theme are the *effective* (machine `current`)
+     * theme to draw; *_opacity is the transition fade (0..1, applied
+     * after alpha_scale so OUT stays authoritative); *_xn_phase is an
+     * advisory direction hint (unused by FADE v1, plumbed for fog). */
+    int          grid_theme;
+    float        grid_opacity;
+    SceneXnPhase grid_xn_phase;
+    int          grid_extent_idx;
+    int          grid_major_idx;
+    int          axes_theme;
+    float        axes_opacity;
+    SceneXnPhase axes_xn_phase;
     float grid_major_steps[GRID_MAJOR_COUNT];
     float grid_extents[GRID_EXTENT_COUNT];
 

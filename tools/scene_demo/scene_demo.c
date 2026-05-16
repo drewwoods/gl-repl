@@ -148,6 +148,11 @@ static void build_config(SceneRenderConfig *cfg) {
     cfg->grid_extent_idx  = GRID_EXTENT_MID;
     cfg->grid_major_idx   = GRID_MAJOR_1;
     cfg->axes_theme       = g_axes_theme;
+    /* No transition machine in the demo: draw overlays fully opaque.
+     * memset above zeroed these, which would otherwise blank grid/axes
+     * once the renderer multiplies color alpha by *_opacity. */
+    cfg->grid_opacity     = 1.0f;
+    cfg->axes_opacity     = 1.0f;
 
     /* The grid renderer iterates `for (v = -extent; v <= extent; v += step)`
      * with step = grid_major_steps[major_idx] * 0.2. If the tables are zero
