@@ -1,9 +1,62 @@
 # glColorMask: preserve GL_TRUE/GL_FALSE via generalized enum args
 
-Status: **design chosen; not implemented**. A full prototype (incl. a
-std-path special-case) was built and then **rolled back** at the user's
-request; only the unrelated alphabetical sort of `command_spec.c` was
-kept. This file captures the design so the work can be picked up later.
+Status: **DONE — fork C implemented in full (all 11 steps) on branch
+`enum-path-generalization`**. The design below is retained as the
+historical record; the implementation outcome is summarized next.
+
+## Implementation outcome
+
+Fork C ("generalize the enum path to N args, uniform `args[]`") shipped
+exactly as designed, including the bool-slot policy and `glColorMask`.
+`ReplEnumSlotKind` is the three-value enum (`ENUM_ONLY` /
+`ENUM_OR_CONST_VALUE` / `ENUM_OR_EXPR`) as specified.
+
+Commits (in order):
+
+- `abeadd8` step 1 — `ReplEnumSlotKind` + positional `ReplEnumArgSpec`.
+- `50e5b09` step 2 — populate positional `args[]` metadata.
+- `df1a6a8` steps 3+5+6 — generalized N-arg parser + uniform `args[]`
+  storage + every reader migrated. **Fused into one commit** because
+  the storage contract is atomic (pitfall 8: no transition window); the
+  2-arg `args[0]` slot means different things old vs. new, so
+  parser/executor/readers cannot be split into independently-green
+  commits. Per-commit grouping otherwise follows the steps.
+- `15d65ae` step 4 — slot-indexed autocomplete; legacy
+  `enums1/enums2/usage1/usage2` removed.
+- `006350d` step 7 — **option 1 chosen**: `CMD_MATERIALF` /
+  `CMD_POINT_PARAMETER_FV` migrated to `args[]` and `GLCmd.mode`
+  **deleted outright**. The compiler-enforced invariant immediately
+  flushed out a real straggler the step-3 atomic migration missed
+  (`CMD_BLEND_FUNC` in `apply_state_cmd` still read `cmd->mode`) — it
+  had passed only because stub `glBlendFunc` is a no-op and no test
+  asserted the call. This is exactly the payoff the plan argued for, so
+  no `check-state-ownership` guard is needed (step 9 is a no-op).
+- `be5de0c` step 8 — bool-slot policy (`glDepthMask` →
+  `ENUM_OR_CONST_VALUE`) + `CMD_COLOR_MASK`; full test suite incl. the
+  `glLightModeli` slot-2 strict-compat pins and the contract test.
+- `cc0f7de` — end-to-end GL-trace regression net (parser→executor) for
+  the P1 arg-shift class; closes the count-only test gap.
+- `d8849e0` steps 9–10 — docs (CLAUDE.md); step 9 documented as a no-op
+  (invariant is compiler-enforced by the field deletion).
+- `0a915f4` — post-review fixes: **P2** the `ENUM_OR_CONST_VALUE`
+  numeric fallback used the non-consuming evaluator (`glDepthMask(1+)`
+  → `GL_TRUE`); replaced with strict `strtod`-literal parsing. **P3**
+  stale "reserved/unused" comments refreshed.
+
+Deviations from the written plan, all deliberate and recorded above:
+(a) steps 3/5/6 fused for atomicity; (b) step 7 took option 1 (delete
+`mode`) so step 9 needs no guard; (c) P1/P2/P3 review follow-ups added.
+
+Gate green on the final state: `make test` (~4590), `make test-stubs`
+(~5074), `make sample` (GL + stubs), `repl_demo`, `scene_demo`,
+`make check-state-ownership`. The original ask works:
+`glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_FALSE)` round-trips
+symbolically; `glColorMask(1, 0, 1, 0)` / `glDepthMask(1)` canonicalize
+to the tokens.
+
+---
+
+## Original design (historical record)
 
 Chosen path: **C — generalize enum parsing to N args**. This is larger
 than the std-path workaround, but it is the right hygiene move: boolean
@@ -18,10 +71,7 @@ an explicit three-value `ReplEnumSlotKind` (`ENUM_ONLY` /
 not a two-kind collapse. `ENUM_ONLY` is kept distinct specifically so
 non-bool enum commands stay strictly token-only; numeric value support
 is opt-in for boolean mask slots (`glDepthMask`, `glColorMask`) rather
-than silently applied to every enum command. The plan is
-implementation-ready pending review.
-
-Do not implement until this file moves to `not-started/`.
+than silently applied to every enum command.
 
 ## Context
 
@@ -571,10 +621,7 @@ normal 4-argument bool-token enum command using the same slot kind.
 
 ## Folder note
 
-`plans/in-review/` = decision pending. The *direction* (fork C) is
-chosen, but it stays here rather than `not-started/` because C is a
-pre-req enum-path refactor with the blast radius documented above —
-it should not be picked up casually. Lifecycle from here: in-review →
-`not-started/` (when scheduled) → `active/` → `done/`. The prototype
-was rolled back, so this is a **from-scratch** implementation per "If
-approved", not a quick finish.
+**Completed.** Lifecycle reached its end: in-review → `done/`. Fork C
+was implemented from scratch in full (see "Implementation outcome" at
+the top for the commit list and deviations). This file now lives in
+`plans/done/` as the historical design + outcome record.
