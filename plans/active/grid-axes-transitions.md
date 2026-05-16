@@ -171,6 +171,53 @@ typedef struct {
 - **[P3] Units.** F2 settled on float-**seconds** `config.h` constants
   (model already ticks `dt`/`runtime` seconds); frame-counts rejected.
 
+## Progress / resumption recipe
+
+**Step A — DONE & committed.** `config.h`
+(`GRID_AXES_FADE_IN_SECS 0.30f`, `GRID_AXES_FADE_OUT_SECS 0.20f`);
+`src/scene/scene_transition.{c,h}` (pure machine: `SceneXnPhase`,
+`SceneXnState`, `scene_xn_init/set/tick`); `test_scene_transition`
+24/24; wired in Makefile SRCS/CORE_TEST_SRCS/header list + TEST_BINS.
+Build green, feature inert.
+
+**Step B — controller wiring (next). Build-green, still inert.**
+- `src/scene/render_types.h`: `#include "scene/scene_transition.h"`;
+  add to `SceneRenderConfig` near the grid/axes block:
+  `float grid_opacity; SceneXnPhase grid_xn_phase; float axes_opacity;
+  SceneXnPhase axes_xn_phase;` (existing `grid_theme`/`axes_theme`
+  ints become the *effective/current* theme).
+- `src/app/glr_ctrl.c`: file-static `SceneXnState g_grid_xn,
+  g_axes_xn;`. `glr_ctrl_seed_overlay_xn()` =
+  `scene_xn_init(&g_grid_xn, presentation.grid_theme)` /
+  `(&g_axes_xn, presentation.axes_theme)`; call from program init
+  *and* `glr_app_reset_all()` (rule 8). Pre-frame prep:
+  `scene_xn_set(&g_grid_xn, presentation.grid_theme)` +
+  `scene_xn_tick(&g_grid_xn, dt, GRID_AXES_FADE_IN_SECS,
+  GRID_AXES_FADE_OUT_SECS)` (axes likewise; `dt` = `anim_time`
+  delta). In `glr_ctrl_build_scene_config` (~:1135/:1138): set
+  `config->grid_theme=g_grid_xn.current; grid_opacity=g_grid_xn.opacity;
+  grid_xn_phase=g_grid_xn.phase;` (axes likewise) replacing the direct
+  `presentation.grid_theme` copy. Commit B.
+
+**Step C — renderer opacity (the bulk).** `scene/grid.c`,
+`scene/axes.c`: per-file static `s_xn_opacity` set at render entry
+from `config.grid_opacity`/`axes_opacity`; ONE opacity-aware color
+helper per file — route `gl_color_rgba` AND every direct
+`glColor4f`/`glColor3f` (axis labels, indicators, grid focus/ocean/
+ruler/planes) through it, multiplying final alpha by `s_xn_opacity`
+**after** any `alpha_scale` clamp (OUT authoritative); `GL_BLEND`
+bracket; skip drawing when effective theme == off index. `phase`
+unused (fog later). Commit C — feature visible.
+
+**Step D — tests/docs/verify.** `tests/test_glr_ctrl.c` via the
+existing `g_last_scene_config`/`test_scene_render_3d_scene` capture:
+first-frame **snap** (opacity 1, no startup fade), theme change →
+`grid_xn_phase` FADE_OUT then FADE_IN, rapid toggle adopts latest,
+`glr_app_reset_all()` snaps. CLAUDE.md/MODULES.md add
+`scene_transition`. Run `make test`, `make test-stubs`,
+`check-gl-boundaries`, UI guards, `make gl-tests`. Commit D; move
+plan to `plans/done/`.
+
 ## Folder note
 
 `plans/in-review/` = contested-direction. Lifecycle: in-review →
