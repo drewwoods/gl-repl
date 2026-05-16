@@ -35,6 +35,7 @@ typedef enum {
     AXES_THEME_NEON,
     AXES_THEME_COMPASS,
     AXES_THEME_GIZMO,
+    AXES_THEME_RULER,
     AXES_THEME_COUNT
 } AxesTheme;
 

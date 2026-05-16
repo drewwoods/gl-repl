@@ -71,6 +71,7 @@ static const char *axes_theme_names[AXES_THEME_COUNT] = {
     [AXES_THEME_NEON]    = "Neon",
     [AXES_THEME_COMPASS] = "Compass",
     [AXES_THEME_GIZMO]   = "Gizmo",
+    [AXES_THEME_RULER]   = "Ruler",
 };
 static char cfg_status_buf[256];
 
