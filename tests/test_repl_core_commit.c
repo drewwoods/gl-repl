@@ -1324,6 +1324,54 @@ int main(void) {
         }
     }
 
+    /* Regression: pasting into an Enter-created *virtual* blank line
+     * (insert mode, no doc mutation) must not leave the input buffer
+     * pre-loaded with the *following* line's text while still in
+     * insert mode. That made the code panel render a phantom copy of
+     * the following line and materialized a real duplicate on the next
+     * commit. (clipboard.c paste tail; saved_insert restore.) */
+    {
+        glr_app_reset_all(); declare_test_vars();
+        editor_feed_line("glEnable(GL_BLEND);");
+        editor_feed_line("glutSolidSphere(1, 20, 20);");
+        editor_feed_line("glDepthMask(GL_TRUE);");
+        ASSERT_TRUE("paste-vblank: initial doc count",
+                    repl_state_document_count() == 3);
+
+        /* Copy line 0 (glEnable) onto the line clipboard. */
+        editor_navigate_to_line(0);
+        editor_clipboard_copy_current();
+
+        /* Navigate onto glutSolidSphere (line 1); Enter opens a
+         * virtual blank below it (insert mode, no doc mutation). */
+        editor_navigate_to_line(1);
+        editor_handle_key('\r', 0, 0);
+        ASSERT_TRUE("paste-vblank: Enter sets insert mode",
+                    editor_insert_mode());
+        ASSERT_TRUE("paste-vblank: Enter did not mutate doc",
+                    repl_state_document_count() == 3);
+
+        /* Paste the clipboard line into the virtual blank. */
+        editor_clipboard_paste_current();
+
+        ASSERT_TRUE("paste-vblank: exactly one line inserted",
+                    repl_state_document_count() == 4);
+        ASSERT_TRUE("paste-vblank: glDepthMask not duplicated in doc",
+                    repl_state_document_cmds_mut()[3].type == CMD_DEPTH_MASK &&
+                    repl_state_document_cmds_mut()[2].type != CMD_DEPTH_MASK);
+        /* Core fix: if paste left us in insert mode, the input buffer
+         * must be empty — not pre-loaded with glDepthMask's text. */
+        if (editor_insert_mode())
+            ASSERT_TRUE("paste-vblank: insert-mode input buffer is clean",
+                        editor_state_input().input_len == 0);
+
+        /* The user's next keystroke is a commit. Pre-fix this
+         * materialized the staged glDepthMask into a real duplicate. */
+        editor_handle_key('\r', 0, 0);
+        ASSERT_TRUE("paste-vblank: commit after paste adds no duplicate",
+                    repl_state_document_count() == 4);
+    }
+
     printf("repl_core_commit: %d/%d passed\n", g_harness.passed, g_harness.run);
     return (g_harness.run == g_harness.passed) ? 0 : 1;
 }

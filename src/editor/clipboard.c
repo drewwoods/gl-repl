@@ -363,7 +363,6 @@ void editor_clipboard_paste_current(void) {
     int n = repl_state_document_count();
     int edit = repl_state_edit_line();
     int pos = editor_insert_mode() ? edit : (edit < n ? edit : n);
-    int saved_insert = editor_insert_mode();
 
     if (!tutorial_guard_clipboard_change_or_status(pos, 0, count))
         return;
@@ -383,7 +382,16 @@ void editor_clipboard_paste_current(void) {
     for (int i = 0; i < count; i++)
         feed_line(buf[i]);
 
-    editor_insert_mode_set(saved_insert);
+    /* Land in edit mode on the line after the pasted block. We do NOT
+     * restore the entry insert mode: load_line_to_input mirrors a
+     * *committed* line into the input buffer for re-editing, which is
+     * contradictory in insert mode — the panel renders an input row
+     * *before* document_cmds[edit_line], so a pre-loaded following line
+     * shows as a phantom duplicate and materializes a real duplicate on
+     * the next commit. (This is the Enter-virtual-blank paste bug: an
+     * unmodified-line Enter leaves insert_mode set with no doc mutation,
+     * so saved_insert was 1 and the following line got staged.) */
+    editor_insert_mode_set(0);
     load_line_to_input(repl_state_edit_line());
     repl_mark_normals_dirty();
 
