@@ -792,6 +792,35 @@ int main(void) {
         int ok = parse_for_test("glDepthMask(2)", &cmd);
         ASSERT_TRUE("glDepthMask(2) rejected", ok == 0);
     }
+    {
+        /* Malformed numerics must NOT slip through the bool-slot
+         * literal parse (the evaluator would fold "1+" -> 1 and
+         * "1abc" -> 1, silently canonicalizing garbage to GL_TRUE). */
+        const char *bad[] = {
+            "glDepthMask(1+)", "glDepthMask(1abc)", "glDepthMask(1 2)",
+            "glDepthMask()",
+            "glColorMask(1+, 0, 1, 0)", "glColorMask(1, 0abc, 1, 0)",
+        };
+        for (size_t bi = 0; bi < sizeof(bad) / sizeof(bad[0]); bi++) {
+            glr_app_reset_all();
+            GLCmd c;
+            memset(&c, 0, sizeof(c));
+            int r = parse_for_test(bad[bi], &c);
+            ASSERT_TRUE("bool-slot rejects malformed numeric", r == 0);
+        }
+    }
+    {
+        /* Well-formed literals still accepted and canonicalized. */
+        glr_app_reset_all();
+        GLCmd c;
+        char t[MAX_LINE_LEN] = "";
+        memset(&c, 0, sizeof(c));
+        int r = parse_cmd_with_text("glDepthMask(1.0)", &c, t, sizeof(t));
+        ASSERT_TRUE("glDepthMask(1.0) ok", r == 1);
+        ASSERT_TRUE("glDepthMask(1.0) -> GL_TRUE", (GLenum)c.args[0] == GL_TRUE);
+        ASSERT_TRUE("glDepthMask(1.0) canonicalized",
+                    strstr(t, "glDepthMask(GL_TRUE);") != NULL);
+    }
 
     /* glColorMask - 4 boolean-mask slots (the original ask) */
     {

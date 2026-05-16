@@ -15,6 +15,7 @@
 #include "config.h" /* CP_CLEAR_MAX_V */
 
 #include <stdarg.h>
+#include <stdlib.h>  /* strtod (strict bool-slot numeric literal) */
 
 /* Phase H.5 commit 40 introduced the err_buf seam. Phase I commit
  * 42a migrated every caller to provide a buffer. Commit 42b (this
@@ -122,11 +123,12 @@ static int is_known_incomplete_func_name(const char *func) {
  *   2. On a token miss, behavior is keyed on the slot kind:
  *      - ENUM_ONLY: reject (no numeric, no expression). Byte-for-byte
  *        the historic behavior of every strict enum slot.
- *      - ENUM_OR_CONST_VALUE: fold a constant-only expression (runtime
- *        vars rejected) and reverse-map the value back into this slot's
- *        table; emit the canonical token name. (Reserved for the
- *        bool-slot policy; no slot is this kind in the behavior-neutral
- *        generalization.)
+ *      - ENUM_OR_CONST_VALUE: parse a strict numeric literal (no
+ *        runtime vars, no trailing junk) and reverse-map the value
+ *        back into this slot's table; emit the canonical token name.
+ *        The bool-slot policy: glDepthMask and the four glColorMask
+ *        channels, so glDepthMask(1) / glColorMask(1, 0, 1, 0)
+ *        canonicalize to GL_TRUE/GL_FALSE.
  *      - ENUM_OR_EXPR: evaluate a full expression (vars permitted),
  *        store the folded value, emit the typed source token verbatim,
  *        and set *any_vars when it references visible vars.
@@ -162,10 +164,29 @@ static int resolve_enum_arg_slot(const char *raw,
             parser_emit_error_static(ctx, as->usage);
             return 0;
         }
+        /* Boolean-mask slot: accept only a well-formed numeric literal,
+         * then reverse-map. repl_eval_parse_exprs / repl_eval_expr do
+         * NOT require full input consumption (eval.c) — they evaluate
+         * "1+" as 1 (trailing '+' with an empty 0 operand) and "1abc"
+         * as 1, which would silently canonicalize garbage to GL_TRUE.
+         * strtod with an end-of-token check rejects "1+", "1abc",
+         * "1 2", etc. while still accepting 0/1/1.0. */
         float fv;
-        if (repl_eval_parse_exprs(raw, &fv, 1, vars, num_vars) != 1) {
-            parser_emit_error_static(ctx, as->usage);
-            return 0;
+        {
+            const char *q = raw;
+            while (*q && isspace((unsigned char)*q)) q++;
+            char *endp = NULL;
+            double d = strtod(q, &endp);
+            if (endp == q) {                 /* not a number at all */
+                parser_emit_error_static(ctx, as->usage);
+                return 0;
+            }
+            while (*endp && isspace((unsigned char)*endp)) endp++;
+            if (*endp != '\0') {             /* trailing junk: "1+", "1abc" */
+                parser_emit_error_static(ctx, as->usage);
+                return 0;
+            }
+            fv = (float)d;
         }
         for (int i = 0; as->enums && as->enums[i].name; i++) {
             if ((float)as->enums[i].value == fv) {

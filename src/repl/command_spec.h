@@ -53,12 +53,13 @@ typedef struct {
  *    input are rejected. This is byte-for-byte the historic behavior of
  *    every strict enum slot (glBegin, glEnable/Disable, glShadeModel,
  *    glFrontFace, glColorMaterial x2, glBlendFunc x2, glLightModeli
- *    slot 0, and — until the bool-slot policy lands — glDepthMask).
- *  - ENUM_OR_CONST_VALUE: token first, else a constant-only expression
- *    reverse-mapped to a value in this slot's table; runtime vars
- *    rejected. Reserved for boolean mask slots (glDepthMask /
- *    glColorMask) under the later bool-slot policy. Unused in the
- *    behavior-neutral enum-path generalization.
+ *    slot 0).
+ *  - ENUM_OR_CONST_VALUE: token first, else a well-formed numeric
+ *    literal (strict — no trailing junk, no runtime vars) reverse-
+ *    mapped to a value in this slot's table. The bool-slot policy:
+ *    used by glDepthMask and all four glColorMask channels, so
+ *    glDepthMask(1) / glColorMask(1, 0, 1, 0) canonicalize to
+ *    GL_TRUE/GL_FALSE.
  *  - ENUM_OR_EXPR: token first, else a full expression (vars
  *    permitted); the typed source token is emitted verbatim. Only
  *    glLightModeli slot 1 uses this, reproducing its historic
