@@ -649,6 +649,7 @@ static void scene_grid_render_radar_theme(const GridDrawContext *grid_ctx) {
         glEnd();
     }
 
+    glLineWidth(1.5f);
     glBegin(GL_LINES);
     gl_color(GR, GG, GB, fminf(0.07f * as, 1.0f));
     glVertex3f(-extent, 0, 0); glVertex3f(extent, 0, 0);
