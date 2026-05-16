@@ -11,11 +11,10 @@ GL tokens should not be parsed through one command path for
 `glDepthMask` and a different expression/text-repair path for
 `glColorMask`.
 
-The one open design fork — how a slot declares "expression fallback"
-(`glLightModeli` arg2) — is now resolved in "Slot-kind
-representation" (`NULL`-sentinel in `enums[slot]`; design call, open
-to override on review). The plan is implementation-ready pending that
-review.
+The previous design fork — how a slot declares "expression fallback"
+(`glLightModeli` arg2) — is resolved in "Slot-kind
+representation": explicit per-slot kind metadata, not a `NULL`
+sentinel. The plan is implementation-ready pending review.
 
 Do not implement until this file moves to `not-started/`.
 
@@ -146,50 +145,67 @@ Storage contract (atomic — all or nothing):
   to `args[]` in the same refactor, or leave them as the only
   documented legitimate `GLCmd.mode` users. Do not delete `mode` unless
   those custom users are migrated too.
-- Emit canonical source text from the matched enum token names, not
-  from numeric values.
+- Emit enum-value slots from the matched enum token names, not from
+  numeric values. Enum-or-expression fallback slots preserve the typed
+  expression text when no enum token matched.
 
 Spec shape:
 
-- Replace `enums1` / `enums2` with an array of enum-table pointers,
-  e.g. `const ReplEnumEntry *enums[MAX_ENUM_ARGS]`.
+- Replace `enums1` / `enums2` with an array of positional arg specs,
+  e.g. `ReplEnumArgSpec args[MAX_ENUM_ARGS]`.
 - Add `MAX_ENUM_ARGS` at the command-spec layer. `4` is enough for
   `glColorMask`, but `8` is a better match for `GLCmd.args[8]` and
   avoids another shape change later.
-- Keep one `usage[MAX_ENUM_ARGS]` or equivalent per-slot diagnostic
-  string.
+- Each `ReplEnumArgSpec` carries the enum table, the slot diagnostic,
+  and the slot kind:
+
+  ```c
+  typedef enum {
+      REPL_ENUM_SLOT_ENUM_VALUE = 0,   /* token or constant numeric value */
+      REPL_ENUM_SLOT_ENUM_OR_EXPR      /* token first, else full expression */
+  } ReplEnumSlotKind;
+
+  typedef struct {
+      const ReplEnumEntry *enums;
+      const char *usage;
+      ReplEnumSlotKind kind;
+  } ReplEnumArgSpec;
+  ```
+
+  `enums` remains the source of truth for real GL token values and
+  autocomplete. Both slot kinds used by this plan have a real enum
+  table; if a future command needs a true expression-only slot, add an
+  explicit slot kind for it instead of overloading a null table pointer.
+  The parser must branch on `kind`, not on whether `enums` is null.
 - Keep `fmt` only if it still buys enough for display. A cleaner option
   is to canonicalize generically as:
   `indent + name + "(" + joined matched token names + ");"`.
   `glBegin` can still use the existing `indent_type` hook for its
   special begin-block indentation.
-
-- **Slot-kind representation (design call — open to override).** Two
-  slot kinds exist: *pure-enum* and *expression-fallback*. Encode the
-  kind as a **`NULL` sentinel in `enums[slot]`**, not a separate
-  per-slot flag: `enums[slot] != NULL` ⇒ pure-enum slot;
-  `enums[slot] == NULL` ⇒ expression-fallback slot. Rationale: zero
-  struct growth, the table row reads self-documenting (a `NULL` where
-  a table pointer would be is visibly "this slot is an expression"),
-  and the parser already has the table pointer in hand to branch on.
-  The only command needing the expression kind today is
-  `glLightModeli` slot 2 (`param`). Downside vs. an explicit flag:
-  `NULL` is overloaded (also "no table"), so the parser must treat
-  `num_args` as authoritative for slot count and never infer arity
-  from the first `NULL`. If a future command needs *both* an
-  expression slot *and* a genuinely optional trailing slot, revisit
-  with an explicit flag — noted, not built.
-- **Expression-fallback slot semantics** (must match
-  `CMD_LIGHT_MODEL_I` today, verified in `parser.c`'s current
-  `num_args==2` branch): evaluate the raw arg once at commit via the
-  normal expression evaluator (vars in scope permitted), store the
-  folded float in `cmd->args[slot]`, set `has_vars` if the slot text
-  references visible vars, and **emit the original typed source token
-  for that slot verbatim** — do *not* canonicalize it to a value or a
-  token name. (The current code preserves `trimmed2` in the emitted
-  text; the generalized path must keep that.) Pure-enum slots, by
-  contrast, are constant-only and *are* canonicalized to the table's
-  token name.
+- Metadata-only/custom rows must be handled deliberately.
+  `CMD_MATERIALF` currently has a negative `num_args` enum-spec row for
+  metadata/completion while parsing is handled by a custom branch. Path
+  C must either move that metadata out of `repl_enum_command_specs()`
+  or mark custom rows so the generalized enum parser skips them. Do
+  not run the N-arg parser over negative/custom rows.
+- **Expression-fallback slot semantics**:
+  - Try enum-token lookup first when `args[slot].enums` is present.
+    This preserves `GL_TRUE` / `GL_FALSE` spelling and keeps
+    autocomplete table-driven.
+  - If no token matches and `kind == REPL_ENUM_SLOT_ENUM_OR_EXPR`,
+    evaluate the raw arg once through the normal expression evaluator
+    (vars in scope permitted), store the folded float in
+    `cmd->args[slot]`, and **emit the original typed source token for
+    that slot verbatim** — do not canonicalize it to a value or token
+    name.
+  - The current low-level parser branch for `CMD_LIGHT_MODEL_I` already
+    preserves the typed fallback text (`trimmed2`) but does not set
+    `cmd->has_vars` itself. Having the generalized parser set
+    `has_vars` when an expression-fallback slot references visible vars
+    is an intentional tightening of the parser contract so callers do
+    not have to infer it later.
+  `REPL_ENUM_SLOT_ENUM_VALUE` slots, by contrast, are constant-only and
+  canonicalize to the table's token name.
 
 Parser shape:
 
@@ -199,22 +215,26 @@ Parser shape:
   2. Trim each token.
   3. Resolve each token with one enum-arg resolver.
   4. Store each resolved value in `cmd->args[arg_idx]`.
-  5. Emit canonical text using the resolver's canonical enum names.
-- The per-slot resolver branches on slot kind (`enums[slot] == NULL`):
-  - **Pure-enum slot** (`enums[slot] != NULL`) —
-    `resolve_enum_arg(raw, enums[slot], vars, num_vars, out_value,
-    out_name, err)`:
+  5. Emit text using the resolver's per-slot emitted arg text:
+     canonical enum names for enum-value slots, and original expression
+     text for enum-or-expression fallback misses.
+- The per-slot resolver branches on `args[slot].kind`:
+  - **Enum-value slot** (`REPL_ENUM_SLOT_ENUM_VALUE`) —
+    `resolve_enum_arg(raw, args[slot].enums, vars, num_vars,
+    out_value, out_name, err)`:
     1. Try exact enum-token lookup first.
     2. If that fails, evaluate the raw arg as a **constant-only**
-       expression (reject visible vars — pure-enum slots never animate).
+       expression (reject visible vars — enum-value slots never
+       animate).
     3. Reverse-map the folded value to a token by exact value match in
-       `enums[slot]`; fail with the slot's `usage[]` if no match.
+       `args[slot].enums`; fail with the slot's usage if no match.
     4. Return the numeric value **and** the canonical token name; the
        canonical name is what gets emitted.
-  - **Expression-fallback slot** (`enums[slot] == NULL`): skip token
-    lookup entirely; evaluate as a full expression (vars permitted),
-    store the folded float, set `has_vars` accordingly, and carry the
-    original trimmed source token through to the emitter unchanged.
+  - **Enum-or-expression slot** (`REPL_ENUM_SLOT_ENUM_OR_EXPR`): try
+    exact enum-token lookup first if an enum table is present; if that
+    fails, evaluate as a full expression (vars permitted), store the
+    folded float, set `has_vars` accordingly, and carry the original
+    trimmed source token through to the emitter unchanged.
   This keeps numeric fallback generic and table-driven instead of
   special-casing bools or `glColorMask`, while preserving
   `glLightModeli`'s expression arg without a bespoke command branch.
@@ -224,14 +244,15 @@ Parser shape:
   helpers) so the enum path does not preserve today’s comma-splitting
   limitation.
 - `CMD_LIGHT_MODEL_I` is the concrete consumer of the slot-kind model:
-  spec it as `num_args==2`, `enums[0]=k_light_model_params`,
-  `enums[1]=NULL` (expression-fallback). This reproduces today's
-  "pname is a token, param is a bool token *or* an int/expression"
-  behavior with **no** bespoke command branch — it falls out of the
-  generalized resolver. This compatibility is a hard requirement, not
-  optional: it must have a dedicated test (`GL_TRUE`, `1`, `0`, and a
-  non-table integer / a var expression) written *before* the refactor
-  lands.
+  spec it as `num_args==2`, slot 0 =
+  `{ k_light_model_params, ..., REPL_ENUM_SLOT_ENUM_VALUE }`, slot 1 =
+  `{ k_bool_vals, ..., REPL_ENUM_SLOT_ENUM_OR_EXPR }`. This reproduces
+  today's "pname is a token, param is a bool token *or* an
+  int/expression" behavior with **no** bespoke command branch — it falls
+  out of the generalized resolver. This compatibility is a hard
+  requirement, not optional: it must have a dedicated test (`GL_TRUE`,
+  `1`, `0`, and a non-table integer / a var expression) written
+  *before* the refactor lands.
 
 Completion shape:
 
@@ -241,7 +262,7 @@ Completion shape:
 - Replace those with a slot-indexed enum completion path:
   - Track the active enum slot (`g_ac_enum_slot` or equivalent) instead
     of encoding slot 1 vs slot 2 in the mode name.
-  - Select `def->enums[slot]` for end-of-input enum completion.
+  - Select `def->args[slot].enums` for end-of-input enum completion.
   - Derive suffix from `slot + 1 == def->num_args`: `")"` for the last
     enum arg, otherwise `", "`.
   - Add `glColorMask` coverage so all four bool slots complete
@@ -262,17 +283,18 @@ Expression and numeric compatibility:
 - Accept symbolic enum tokens first. The primary path is always token
   lookup: `GL_TRUE` maps to the real `GL_TRUE` value, `GL_DEPTH_TEST`
   maps to the real `GL_DEPTH_TEST` value, etc.
-- Also accept numeric constant values as a deliberate fallback. If token
-  lookup fails, parse the slot as a constant expression with no visible
-  runtime vars. Then reverse-map the folded numeric value through that
-  slot's enum table. This makes `glColorMask(1, 0, 1, 0)` canonicalize
-  to `glColorMask(GL_TRUE, GL_FALSE, GL_TRUE, GL_FALSE);` because
+- For enum-value slots, also accept numeric constant values as a
+  deliberate fallback. If token lookup fails, parse the slot as a
+  constant expression with no visible runtime vars. Then reverse-map the
+  folded numeric value through that slot's enum table. This makes
+  `glColorMask(1, 0, 1, 0)` canonicalize to
+  `glColorMask(GL_TRUE, GL_FALSE, GL_TRUE, GL_FALSE);` because
   `GL_TRUE == 1` and `GL_FALSE == 0`.
-- Numeric fallback should only succeed when the folded value exactly
-  matches an enum value in that argument's table. That permits real GL
-  enum values such as the numeric value for `GL_DEPTH_TEST`, but still
-  canonicalizes them back to symbolic source and rejects unknown magic
-  numbers.
+- Enum-value numeric fallback should only succeed when the folded value
+  exactly matches an enum value in that argument's table. That permits
+  real GL enum values such as the numeric value for `GL_DEPTH_TEST`, but
+  still canonicalizes them back to symbolic source and rejects unknown
+  magic numbers.
 - Do **not** accept runtime-variable expressions for `glColorMask` in
   the enum path unless the storage/text model is extended to preserve
   expression source per arg. Otherwise flatten/replay/export semantics
@@ -428,9 +450,9 @@ Do the enum-path cleanup first, then add `glColorMask` as a normal
 ## If approved (implement C from scratch)
 
 1. `command_spec.h`: replace `ReplEnumCommandSpec.enums1/enums2` with
-   positional enum tables (`enums[MAX_ENUM_ARGS]`) and positional usage
-   strings, where `enums[slot] == NULL` marks an expression-fallback
-   slot (see "Slot-kind representation"). Keep enough compatibility
+   positional `ReplEnumArgSpec args[MAX_ENUM_ARGS]` entries carrying
+   `enums`, `usage`, and explicit `ReplEnumSlotKind` metadata (see
+   "Slot-kind representation"). Keep enough compatibility
    helpers/macros locally to make the spec table readable.
 2. `command_spec.c`: migrate all existing enum rows to the new shape.
    Add the `glColorMask` func-completion row and enum-spec row using
@@ -441,7 +463,8 @@ Do the enum-path cleanup first, then add `glColorMask` as a normal
    Add `CMD_COLOR_MASK` to the begin-scope error display switch.
 4. `src/app/glr_completion.c`: replace the `enums1`/`enums2` and
    `AC_MODE_ENUM_ARG1`/`AC_MODE_ENUM_ARG2` assumptions with a
-   slot-indexed end-of-input enum completion path over `enums[slot]`.
+   slot-indexed end-of-input enum completion path over
+   `args[slot].enums`.
 5. `executor.c`: update every enum command dispatch to read from
    `cmd->args[]`; add `CMD_COLOR_MASK` in `apply_state_cmd` and the
    main dispatch grouping.

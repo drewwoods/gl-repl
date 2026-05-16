@@ -17,8 +17,8 @@ buffer. **Cross-plan staleness (bidirectional):** both plans cite
 `enums1`/`enums2` + `AC_MODE_ENUM_ARG1/2` shape. Whichever lands first
 invalidates the other's citations — if Path C lands first, re-derive
 this plan's `glr_completion.c` references and terminology
-(`enums1`/`enums2` → `enums[slot]`) from the then-current code; do not
-trust the line numbers here.
+(`enums1`/`enums2` → `args[slot].enums`) from the then-current code;
+do not trust the line numbers here.
 
 ## Context
 
@@ -61,7 +61,7 @@ to find which slot the cursor is in.
 | Piece | Effort |
 |---|---|
 | Cursor-aware arg-slot detection (count `depth==0` commas before cursor offset; extract token under cursor) | Easy — mirrors `build_param_hint_text` |
-| Pick enum1 vs enum2 list from slot index | Trivial |
+| Pick the positional enum table from the slot index | Trivial |
 | Relax `:258` guard to "cursor at end of *current token*" not "end of input" | Moderate — must not regress POINT_PARAM / FUNC_PREFIX / ENUM modes |
 | Cursor-relative accept + ghost rendered at cursor (mid-buffer splice) | Moderate — touches the editor input buffer and the active-input ghost renderer (assumes draw-after-cursor) |
 
@@ -116,10 +116,10 @@ that delivers the literal ask. Concretely:
 2. In the enum-command block, compute `slot` = number of `depth==0`
    commas in `after` *before the cursor offset* (reuse the
    `build_param_hint_text` scan). Pick the enum table for that slot
-   (`enums[slot]` after the glColorMask enum-spec refactor; `enums1` /
-   `enums2` only if this lands before that refactor). Extract the token
-   under the cursor as the match prefix instead of "text after `(`" /
-   "text after first comma".
+   (`args[slot].enums` after the glColorMask enum-spec refactor;
+   `enums1` / `enums2` only if this lands before that refactor).
+   Extract the token under the cursor as the match prefix instead of
+   "text after `(`" / "text after first comma".
 3. Make accept cursor-relative: insert `match_suffix` at
    `editor_cursor_pos()` (buffer splice) instead of
    `strcat(inp->input, ac.ghost)`. Ghost preview already renders at the
