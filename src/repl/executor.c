@@ -262,14 +262,16 @@ int apply_state_cmd(const GLCmd *cmd, float alpha_scale) {
         glColorMaterial((GLenum)cmd->args[0], (GLenum)cmd->args[1]);
         return 1;
     case CMD_MATERIALF:
-        if (cmd->num_args == 2) {
-            glMaterialf(cmd->mode, (GLenum)cmd->args[0], cmd->args[1]);
-        } else if (cmd->num_args == 5) {
+        /* args[0]=face, args[1]=pname, args[2..]=value(s). */
+        if (cmd->num_args == 3) {
+            glMaterialf((GLenum)cmd->args[0], (GLenum)cmd->args[1],
+                        cmd->args[2]);
+        } else if (cmd->num_args == 6) {
             GLfloat mat[4] = {
-                cmd->args[1], cmd->args[2], cmd->args[3],
-                cmd->args[4] * alpha_scale
+                cmd->args[2], cmd->args[3], cmd->args[4],
+                cmd->args[5] * alpha_scale
             };
-            glMaterialfv(cmd->mode, (GLenum)cmd->args[0], mat);
+            glMaterialfv((GLenum)cmd->args[0], (GLenum)cmd->args[1], mat);
         }
         return 1;
     case CMD_LIGHT_MODEL_I:
@@ -282,12 +284,13 @@ int apply_state_cmd(const GLCmd *cmd, float alpha_scale) {
         glDepthMask((GLboolean)cmd->args[0]);
         return 1;
     case CMD_POINT_PARAMETER_FV: {
-        GLfloat params[3] = { cmd->args[0], cmd->args[1], cmd->args[2] };
-        glPointParameterfv(cmd->mode, params);
+        /* args[0]=pname, args[1..3]=const/linear/quadratic. */
+        GLfloat params[3] = { cmd->args[1], cmd->args[2], cmd->args[3] };
+        glPointParameterfv((GLenum)cmd->args[0], params);
         return 1;
     }
     case CMD_BLEND_FUNC:
-        glBlendFunc(cmd->mode, (GLenum)cmd->args[0]);
+        glBlendFunc((GLenum)cmd->args[0], (GLenum)cmd->args[1]);
         return 1;
     case CMD_CLEAR_COLOR:
         g_clear_color[0] = cmd->args[0];

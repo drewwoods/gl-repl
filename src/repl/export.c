@@ -691,11 +691,14 @@ void repl_apply_init_bootstrap(void) {
         const InitBootstrapEntry *entry = &g_init_bootstrap_repl[bootstrap_idx];
         if (entry->toggle_slug && !init_bootstrap_toggle_get(entry->toggle_slug, 1)) {
             if (g_init_bootstrap_cmds[bootstrap_idx].cmd.type == CMD_POINT_PARAMETER_FV &&
-                g_init_bootstrap_cmds[bootstrap_idx].cmd.mode == GL_POINT_DISTANCE_ATTENUATION) {
+                (GLenum)g_init_bootstrap_cmds[bootstrap_idx].cmd.args[0] ==
+                    GL_POINT_DISTANCE_ATTENUATION) {
+                /* args[0]=pname; args[1..3]=const/linear/quadratic.
+                 * Neutralize attenuation to a constant 1 (no falloff). */
                 GLCmd disabled = g_init_bootstrap_cmds[bootstrap_idx].cmd;
-                disabled.args[0] = 1.0f;
-                disabled.args[1] = 0.0f;
+                disabled.args[1] = 1.0f;
                 disabled.args[2] = 0.0f;
+                disabled.args[3] = 0.0f;
                 apply_state_cmd(&disabled, 1.0f);
             }
             continue;
