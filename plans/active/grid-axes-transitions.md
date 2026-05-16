@@ -58,14 +58,19 @@ Invariants / rules:
 2. **Rapid cycling skips ephemeral themes.** A theme that is only ever
    `next` and never becomes `current` gets no `runtime` and is never
    drawn. When OUT finishes, `current = next` *as of that instant*.
-3. **Controller owns OUT (strict).** During OUT, `opacity` is
-   authoritative — themes cannot override it. Interrupting an
-   incomplete IN forces OUT as a plain fade with a **global shortened
-   out duration** (handles toggle-spamming).
-4. **Theme may own IN.** During IN the controller supplies a default
-   rising-fade `opacity`, and also passes `runtime` so a theme can
-   substitute its own in-animation (fog, etc.), clamped to [0,1] and
-   instantly forced toward 0 if an OUT triggers.
+3. **Controller is history-agnostic.** It owns `opacity` outright.
+   `FADE_IN` ramps it toward 1 at `fade_in_secs`; `FADE_OUT` ramps it
+   toward 0 at `fade_out_secs`; both operate on *whatever opacity
+   currently is* — the controller never inspects how it got there. No
+   shortened-interrupt duration (dropped — rapid toggling is already
+   handled by reverse + skip-ephemeral; one out-rate suffices).
+4. **Renderer interprets, controller envelopes.** Grid/axes scale
+   color alpha by `opacity` (hard ceiling — OUT always wins). *How*
+   that becomes a visual (plain fade now; later fog approach/recede
+   keyed off `phase`) lives in `scene/grid.c`/`axes.c`, NOT the
+   controller — the controller does not own an anim-type. (`runtime`
+   and theme-dictated in-time are **deferred** — not in the contract
+   yet.)
 5. **Same-value set is a no-op.** Setting `next == current` while
    STEADY or IN does nothing (runtime keeps running) — so example
    loads that reuse the current theme don't re-fade. Examples
@@ -87,33 +92,38 @@ Invariants / rules:
    the rest (a post-reset same-theme is then a no-op). This snap is an
    explicit machine operation, not an observed diff.
 
-Pure: `(state, set_request, dt) -> state`. Renderer reads
-`{draw_theme, opacity, runtime, anim_type}`. Fully headless-unit-
-testable.
+Pure: `(state, set_request, dt) -> state`. Fully headless-unit-testable.
 
-## Open forks
+## Settled spec (decided — forks closed)
 
-- **F1 — return-to-current during OUT.** User toggles away then back
-  to `current` mid-OUT. Options: (a) **reverse** (fade back in —
-  smoother), (b) **complete-then-reenter** (run to 0, then IN same
-  theme — simplest, matches rule 1). Lean (a) as polish, (b) as the
-  trivial default. Pick one.
-- **F2 — durations (units settled: seconds).** The machine ticks on
-  `dt` and `runtime` in **seconds** (`anim_time` is seconds-based);
-  durations MUST be float-seconds constants, NOT frame counts — mixing
-  units makes interruption timing unreasonable. `config.h` float
-  constants, e.g. `GRID_AXES_FADE_IN_SECS`, `_FADE_OUT_SECS`,
-  `_FADE_OUT_INTERRUPT_SECS` (the global shortened-OUT). Only the
-  concrete values are open.
-- **F3 — animation-type registry.** Enum `{ FADE (default), ... }`;
-  ship FADE only, leave the switch + `runtime` hook for fog-near→far
-  later. Confirm scope (no fog now).
+**Phase enum & scene-facing struct** (controller-owned; per overlay):
 
-## Recommendation
+```c
+typedef enum {
+    SCENE_XN_STEADY = 0,   /* no ramp; opacity stable (1 shown / 0 hidden) */
+    SCENE_XN_FADE_IN,      /* opacity -> 1 at fade_in_secs  */
+    SCENE_XN_FADE_OUT      /* opacity -> 0 at fade_out_secs */
+} SceneXnPhase;
 
-Build via the observer/diff approach with the settled state model.
-Default everything to FADE. Resolve F1 (suggest (b) for v1, (a) as a
-follow-up), F2 (config.h constants), F3 (FADE-only v1).
+typedef struct {
+    int          theme;    /* authoritative = machine `current`; off => skip */
+    float        opacity;  /* 0..1; applied AFTER alpha_scale clamp (OUT wins) */
+    SceneXnPhase phase;    /* advisory direction hint (unused by FADE v1)      */
+} SceneOverlayXn;          /* one grid, one axes                              */
+```
+
+- No `anim_type` field, no `runtime` field (renderer owns the visual
+  taxonomy; runtime deferred).
+- **F1 = reverse, free.** `set(next)`: `next==current` while
+  STEADY/FADE_IN → no-op; `next!=current` → `FADE_OUT`;
+  `next==current` while `FADE_OUT` → `FADE_IN` (reverse from current
+  opacity). `FADE_OUT` reaching 0 with `next!=current` → `current=next;
+  FADE_IN`. History-agnostic ⇒ no resume-rate decision.
+- **F2 = two `config.h` float-seconds constants.**
+  `GRID_AXES_FADE_IN_SECS = 0.30f`, `GRID_AXES_FADE_OUT_SECS = 0.20f`.
+  (No interrupt constant — dropped.)
+- **F3 = FADE only for v1.** No fog; `phase` is plumbed but unused so
+  fog needs no later contract change.
 
 ## If approved (sketch)
 
