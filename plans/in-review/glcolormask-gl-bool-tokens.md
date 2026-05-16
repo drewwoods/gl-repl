@@ -120,15 +120,20 @@ copy/paste-shaped like GL code: `GL_TRUE` means the platform's
 numeric fallback succeeds only by matching one of those real values in
 the expected enum table.
 
-Recommended storage contract:
+Storage contract (atomic — all or nothing):
 
 - Store every parsed enum argument in `cmd->args[arg_idx]` as a float
   value, even for one-arg commands.
 - Set `cmd->num_args = def->num_args`.
-- Stop using `cmd->mode` for enum-spec command arguments after the
-  refactor. `mode` can remain in `GLCmd` for compatibility with
-  non-refactored/custom paths during the patch, but enum-spec executor
-  reads should move to `args[]`.
+- **No transitional dual-write.** `cmd->mode` is removed as the enum-arg
+  carrier in the same change: every `GLCmd.mode` reader for an
+  enum-spec command moves to `args[]` in one commit. Do not ship a
+  window where some readers use `mode` and others use `args[]` — a
+  half-migrated reader diverges silently (pitfall 8). The golden
+  snapshot below makes a big-bang refactor safe to verify, so the
+  dual-write window buys nothing and only adds a drift surface. If
+  `mode` has no remaining non-enum users after the audit, delete the
+  field; if it does, it keeps only those unrelated uses.
 - Emit canonical source text from the matched enum token names, not
   from numeric values.
 
@@ -230,6 +235,85 @@ Migration safety:
 - Add parser tests for existing enum commands before `glColorMask` so
   the refactor is proven independent of the new command.
 
+## Pitfalls (path C blast radius)
+
+These are the reasons C was the *hesitated* choice. Each is a silent
+regression — compiles and parses fine, fails only at render/round-trip.
+
+1. **The `mode`-reader audit is grep-hostile.** `->mode` / `.mode`
+   matches ~13 files, but most are unrelated `mode` fields (replay
+   mode, UI/profile/config mode), not `GLCmd.mode`. A list-driven
+   migration *will* miss a site. Do a **type-aware** audit: every read
+   of `GLCmd.mode` specifically. Real candidates today:
+   `src/repl/executor.c`, `autonormal.c`, `core.c`, `export.c`,
+   `parser.c`, `flatten.c` (+ `repl_begin_mode_name` callers in
+   `core.c`). Treat this list as a starting grep, not the answer.
+2. **`glBegin` primitive-mode is a state machine, not a value.** The
+   executor keys vertex emission, begin/end bracketing, and overlay
+   passes off the active begin mode. This is the hottest reader and the
+   one least covered by parse tests — move it last and verify by
+   rendering, not by asserting `args[0]`.
+3. **`glFrontFace` winding feeds autonormal.** `autonormal.c` computes
+   generated `glNormal3f` direction from `CMD_FRONT_FACE` winding. Miss
+   this read and normals silently flip (lighting wrong, geometry
+   "correct"). No parse/compile test catches it.
+4. **`glLightModeli` arg2 is the semantic-regression hotspot.** Today
+   slot 2 accepts a bool token **or an arbitrary int/expression**. A
+   naive "token, else reverse-map into the enum table" resolver
+   *narrows* this — `glLightModeli(pname, 2)` (or any value not in
+   `k_bool_vals`) would start failing where it parsed before, and
+   `glLightModeli(pname, 1)` would canonicalize to `GL_TRUE`
+   unexpectedly. Slot 2 must be modeled explicitly as "enum token with
+   expression fallback", and this exact compatibility must have a
+   dedicated test (`GL_TRUE`, `1`, `0`, and a non-table integer if
+   currently accepted) written *before* the refactor.
+5. **Numeric reverse-map is header-dependent and intra-table
+   ambiguous.** GL constant values differ between real GL headers and
+   `tests/gl-stubs/`. Resolution is table-scoped (so cross-table value
+   collisions like `GL_FALSE`/`GL_POINTS`/`GL_ZERO == 0` are harmless),
+   but **aliased values within one table** make the canonical-name
+   choice order-dependent. Mitigation: token lookup *always* wins
+   (the token the user typed is preserved verbatim); numeric is
+   fallback-only; and tests must feed **symbolic tokens**, never assert
+   canonical text from numeric input under stubs unless stub enum
+   values are pinned.
+6. **Storing a `GLenum` in `float args[]` is correct but looks
+   wrong.** All GL enums in use are < 2^24, so `float32` holds them
+   exactly and `(GLenum)cmd->args[i]` round-trips losslessly. State
+   this invariant in a comment at the storage site so a future
+   maintainer doesn't "fix" it or assume it's lossy.
+7. **`glBegin` indent must survive the generic emitter.** The
+   `indent_type==1` begin-block indentation (`2 + 2*tess + 2*block`)
+   and matching `glEnd` alignment are easy to drop when canonical text
+   becomes a generic "join token names". Guard with a golden snapshot
+   (below), not by eyeballing.
+8. **Partial migration is its own hazard.** If `mode` and `args[]`
+   were both live, a half-migrated reader would diverge silently.
+   Decision: **no transition window** — the migration is atomic (see
+   "Storage contract"). This pitfall is therefore designed out rather
+   than mitigated; the only defense needed is the type-aware audit
+   (pitfall 1) being exhaustive in the single migrating commit.
+
+## Verification (beyond the functional list above)
+
+- **Golden snapshot, behavior-neutral proof.** Before the refactor,
+  capture every built-in example (`src/repl/examples.c`) rendered
+  through `repl_dump_code_panel_text` *and* through `export.c`. After
+  the refactor (still zero `glColorMask` code), assert **byte-identical**
+  output. This is the cheapest high-coverage net for pitfalls 1, 2, 5,
+  7.
+- **Rendering-path coverage**, not just parse: scene/replay-walk tests
+  exercising `glBegin` modes and a manual visual smoke (a lit model
+  with `glFrontFace(GL_CW)` vs `GL_CCW`) for pitfalls 2 and 3.
+- **Commit isolation.** Land the enum-path generalization as its own
+  commit with the full pre-existing enum-command regression green and
+  **no `CMD_COLOR_MASK` anywhere**. Add `glColorMask` only in a second
+  commit. A bisect then cleanly separates "refactor broke an existing
+  command" from "new command misbehaves".
+- Run the standard gate (`make test`, `make test-stubs`,
+  `make sample USE_GL_STUBS=1`, `make sample`,
+  `make check-state-ownership`) on **both** commits independently.
+
 ## Recommendation
 
 **Fork C is chosen.** The std-path workaround is smaller, but it splits
@@ -281,8 +365,10 @@ Do the enum-path cleanup first, then add `glColorMask` as a normal
 
 ## Folder note
 
-`plans/in-review/` = decision pending. Lifecycle: in-review →
-(decision) → not-started → active → done, or deleted if rejected.
-The prototype was rolled back, so an approve-A decision means
-**implement from scratch** per "If approved" (move to `not-started/`
-→ `active/`), not a quick finish.
+`plans/in-review/` = decision pending. The *direction* (fork C) is
+chosen, but it stays here rather than `not-started/` because C is a
+pre-req enum-path refactor with the blast radius documented above —
+it should not be picked up casually. Lifecycle from here: in-review →
+`not-started/` (when scheduled) → `active/` → `done/`. The prototype
+was rolled back, so this is a **from-scratch** implementation per "If
+approved", not a quick finish.
