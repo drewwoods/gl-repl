@@ -37,6 +37,14 @@ void scene_xn_init(SceneXnState *s, int theme);
  * ==current while FADE_OUT -> FADE_IN (reverse); !=current -> FADE_OUT. */
 void scene_xn_set(SceneXnState *s, int theme);
 
+/* Show `theme` directly with no preceding FADE_OUT: current/next jump
+ * to `theme`, opacity resets to 0, phase = FADE_IN. The machine is
+ * theme-index-agnostic; the controller calls this (instead of
+ * scene_xn_set) when the current overlay is the "off" index, so
+ * show-from-off skips the pointless OUT of an already-invisible
+ * overlay (plans/active/grid-axes-transitions.md rule 6). */
+void scene_xn_show(SceneXnState *s, int theme);
+
 /* Advance by dt seconds. in_secs/out_secs are the fade durations
  * (<=0 => instant). At FADE_OUT reaching 0, `current` adopts `next`
  * and FADE_IN begins (or STEADY if unchanged). */

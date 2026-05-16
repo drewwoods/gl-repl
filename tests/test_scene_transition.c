@@ -56,14 +56,28 @@ int main(void) {
     AF("reverse completes", s.opacity, 1.0f);
     AT("STEADY after reverse", s.phase == SCENE_XN_STEADY);
 
-    /* rule 6: off needs no special case (off=0; OUT-of-off visually
-     * instant since nothing drawn, machine still sequences). */
+    /* rule 6: show-from-off skips the dead OUT. The controller calls
+     * scene_xn_show (not scene_xn_set) when current == off index, so
+     * the new theme fades IN from 0 with NO preceding FADE_OUT. */
     scene_xn_init(&s, 0);                      /* seeded to off */
-    scene_xn_set(&s, 4);
-    AT("off->theme FADE_OUT first", s.phase == SCENE_XN_FADE_OUT);
-    scene_xn_tick(&s, 1.0f, 0.30f, 0.20f);
-    AT("adopts theme", s.current == 4);
-    AT("FADE_IN of theme", s.phase == SCENE_XN_FADE_IN);
+    scene_xn_show(&s, 4);
+    AT("show: current jumps to theme", s.current == 4);
+    AT("show: next jumps to theme", s.next == 4);
+    AT("show: FADE_IN immediately (no OUT)", s.phase == SCENE_XN_FADE_IN);
+    AF("show: opacity reset to 0", s.opacity, 0.0f);
+    scene_xn_tick(&s, 0.15f, 0.30f, 0.20f);   /* 0.15/0.30 -> 0.5 */
+    AF("show: fades in from 0", s.opacity, 0.5f);
+    AT("show: still FADE_IN mid-ramp", s.phase == SCENE_XN_FADE_IN);
+    scene_xn_tick(&s, 0.15f, 0.30f, 0.20f);   /* -> 1.0 */
+    AF("show: fade-in completes", s.opacity, 1.0f);
+    AT("show: STEADY after fade-in", s.phase == SCENE_XN_STEADY);
+
+    /* scene_xn_show reverse-safety: a normal set back to current while
+     * mid show-fade-in is still a no-op (rule 5 / F1). */
+    scene_xn_show(&s, 6);
+    scene_xn_set(&s, 6);
+    AT("set==current during show FADE_IN no-op",
+       s.phase == SCENE_XN_FADE_IN);
 
     return test_harness_report(&g_h, "scene_transition");
 }

@@ -24,6 +24,14 @@ void scene_xn_set(SceneXnState *s, int theme) {
     }
 }
 
+void scene_xn_show(SceneXnState *s, int theme) {
+    if (!s) return;
+    s->current = theme;
+    s->next    = theme;
+    s->phase   = SCENE_XN_FADE_IN;
+    s->opacity = 0.0f;
+}
+
 void scene_xn_tick(SceneXnState *s, float dt, float in_secs,
                    float out_secs) {
     if (!s) return;
