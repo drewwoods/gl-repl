@@ -674,6 +674,11 @@ static void scene_grid_render_radar_theme(const GridDrawContext *grid_ctx) {
     glEnd();
 }
 
+int scene_grid_theme_uses_fog(int grid_theme) {
+    return grid_theme == GRID_THEME_FOG ||
+           grid_theme == GRID_THEME_OCEAN;
+}
+
 void scene_grid_render(const FrameRenderContext *frame_ctx) {
     const SceneRenderConfig *config = &frame_ctx->config;
     GridTheme grid_theme = (GridTheme)config->grid_theme;
@@ -687,14 +692,13 @@ void scene_grid_render(const FrameRenderContext *frame_ctx) {
     if (s_xn_opacity > 1.0f) s_xn_opacity = 1.0f;
     if (s_xn_opacity <= 0.0f) return;
 #if GRID_XN_STYLE == GRID_AXES_XN_FOG
-    /* Fog-owning configs — the FOG/OCEAN themes, or *any* theme at the
-     * FAR extent (which adds its own distance fog) — fall back to the
-     * plain alpha FADE for the transition: their fog is left as-is and
-     * the geometry just alpha-fades. Only fog-less themes get the
+    /* The EXP2-fog themes (FOG/OCEAN) fall back to the plain alpha
+     * FADE: their fog is left as-is and the geometry just alpha-fades,
+     * since their EXP2 fog can't blend continuously with the LINEAR
+     * recede. Every other theme — including any theme at the FAR
+     * extent, whose LINEAR distance fog composes fine — gets the
      * synthesized clear-color recede + alpha knee. */
-    int xn_uses_fog = (grid_theme == GRID_THEME_FOG ||
-                       grid_theme == GRID_THEME_OCEAN ||
-                       config->grid_extent_idx == GRID_EXTENT_FAR);
+    int xn_uses_fog = scene_grid_theme_uses_fog(grid_theme);
     if (xn_uses_fog)
         s_xn_alpha = s_xn_opacity;                       /* FADE fallback */
     else if (s_xn_opacity >= GRID_XN_FOG_ALPHA_KNEE)
@@ -741,25 +745,39 @@ void scene_grid_render(const FrameRenderContext *frame_ctx) {
         .alpha_scale = config->alpha_scale,
     };
 
+    int is_far = (config->grid_extent_idx == GRID_EXTENT_FAR);
+
 #if GRID_XN_STYLE == GRID_AXES_XN_FOG
-    /* Fog-less themes only: recede into a synthesized clear-color fog
-     * as the overlay hides. Fog-owning configs took the FADE fallback
-     * above and keep their own fog untouched. */
-    if (!xn_uses_fog)
+    /* Fog-less, non-FAR themes: recede into a synthesized clear-color
+     * fog as the overlay hides. At FAR the recede is driven by the
+     * FAR block's own fog (below) instead, so it isn't double-set /
+     * overwritten. Fog-owning configs took the FADE fallback above. */
+    if (!xn_uses_fog && !is_far)
         grid_xn_apply_transition_fog(1.0f - s_xn_opacity, extent);
 #endif
 
-    if (config->grid_extent_idx == GRID_EXTENT_FAR) {
-        /* Enable linear fog, colour from the clear colour. Start at
-         * 0.7*extent, fully fogged at extent — a distance fade-out of
-         * the grid lines. */
+    if (is_far) {
+        /* Clear-color linear distance fog. Steady: (0.7e .. e). Under
+         * the FOG transition style a fog-less theme animates the same
+         * fog inward as it hides — same LINEAR model, so tf=0 is
+         * exactly the steady look (no pop) and tf=1 is a tight recede
+         * wall near the camera. */
+        float fog_start = extent * 0.7f;
+        float fog_end   = extent;
+#if GRID_XN_STYLE == GRID_AXES_XN_FOG
+        if (!xn_uses_fog) {
+            float tf = 1.0f - s_xn_opacity;       /* 0 shown .. 1 hidden */
+            fog_end   = extent + (extent * 0.05f - extent) * tf;
+            fog_start = fog_end * 0.7f;
+        }
+#endif
         float clear_col[4];
         glGetFloatv(GL_COLOR_CLEAR_VALUE, clear_col);
         glFogfv(GL_FOG_COLOR, clear_col);
         glEnable(GL_FOG);
         glFogi(GL_FOG_MODE, GL_LINEAR);
-        glFogf(GL_FOG_START, extent * 0.7f);
-        glFogf(GL_FOG_END, extent);
+        glFogf(GL_FOG_START, fog_start);
+        glFogf(GL_FOG_END, fog_end);
     }
 
     switch (grid_theme) {

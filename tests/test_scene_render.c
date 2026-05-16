@@ -408,6 +408,72 @@ static void test_vertex2f_guide_cursor_dot(void) {
 #endif
 }
 
+/* --- Grid FOG-fallback predicate + the invariant it encodes ------- */
+
+/* Pure: scene_grid_theme_uses_fog must be true exactly for the
+ * EXP2-fog themes (FOG, OCEAN) — the ones that take the FADE fallback
+ * under the FOG transition style. FAR is deliberately not a factor.
+ * No GL — runs in both builds. */
+static void test_grid_theme_uses_fog_predicate(void) {
+    printf("--- scene_grid_theme_uses_fog predicate ---\n");
+    for (int th = 0; th < GRID_THEME_COUNT; th++) {
+        int expect = (th == GRID_THEME_FOG || th == GRID_THEME_OCEAN);
+        char lbl[64];
+        snprintf(lbl, sizeof lbl, "uses_fog theme=%d", th);
+        ASSERT_INT(lbl, scene_grid_theme_uses_fog(th) ? 1 : 0, expect);
+    }
+}
+
+/* Regression: at a non-FAR extent and *steady* opacity, a grid emits
+ * GL fog calls iff scene_grid_theme_uses_fog() says so. At opacity 1
+ * there is no transition fog in either style (the synth recede
+ * early-returns under FOG, compiled out under FADE), and at a non-FAR
+ * extent there is no distance fog, so any glFog* must come from a
+ * theme the predicate accounts for. Catches a future theme that starts
+ * touching fog without updating the predicate (which would silently
+ * break the FOG-style FADE-fallback decision). FAR is excluded because
+ * its LINEAR distance fog fires for every theme by design and is
+ * independent of the predicate. Default camera => OCEAN takes its
+ * above-water (fog) branch. */
+static void test_scene_grid_fog_matches_predicate(void) {
+    printf("--- grid fog calls match uses_fog predicate (steady) ---\n");
+#ifdef GL_STUBS
+    for (int e = 0; e < GRID_EXTENT_COUNT; e++) {
+        int is_far = (e == GRID_EXTENT_FAR);
+        for (int th = GRID_THEME_OFF + 1; th < GRID_THEME_COUNT; th++) {
+            FrameRenderContext ctx = make_test_frame_ctx();
+            ctx.config.grid_theme = th;
+            ctx.config.grid_extent_idx = e;
+            ctx.config.grid_opacity = 1.0f;     /* steady: no transition fog */
+
+            gl_stub_counts_reset();
+            scene_grid_render(&ctx);
+            unsigned long long fog =
+                gl_stub_counts[GL_STUB_glFogi] +
+                gl_stub_counts[GL_STUB_glFogf] +
+                gl_stub_counts[GL_STUB_glFogfv];
+
+            char lbl[80];
+            if (is_far) {
+                /* FAR is deliberately NOT in the predicate: its LINEAR
+                 * distance fog fires for every theme, independent of
+                 * scene_grid_theme_uses_fog. Lock that in. */
+                snprintf(lbl, sizeof lbl,
+                         "theme=%d FAR extent always fogs", th);
+                ASSERT_INT(lbl, (fog > 0) ? 1 : 0, 1);
+            } else {
+                snprintf(lbl, sizeof lbl,
+                         "theme=%d extent=%d fog<->predicate", th, e);
+                ASSERT_INT(lbl, (fog > 0) ? 1 : 0,
+                           scene_grid_theme_uses_fog(th) ? 1 : 0);
+            }
+        }
+    }
+#else
+    ASSERT_TRUE("grid fog/predicate regression (GL stubs only)", 1);
+#endif
+}
+
 int main(int argc, char **argv) {
 #ifdef GL_STUBS
     /* In stub mode these are no-ops, but keeping the calls preserves coverage
@@ -426,6 +492,7 @@ int main(int argc, char **argv) {
 
     test_config_defaults();
     test_frame_ctx_defaults();
+    test_grid_theme_uses_fog_predicate();   /* pure; runs in both builds */
 
 #ifndef GL_STUBS
     printf("--- GL-emitting scene smoke checks skipped in real-GL test build ---\n");
@@ -448,6 +515,7 @@ int main(int argc, char **argv) {
     test_render_mode_toggles();
     test_vertex2f_overlay_parity();
     test_vertex2f_guide_cursor_dot();
+    test_scene_grid_fog_matches_predicate();
 
     printf("\ntest_scene_render: %d/%d passed\n", g_harness.passed, g_harness.run);
     return (g_harness.passed == g_harness.run) ? 0 : 1;
