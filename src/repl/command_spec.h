@@ -36,6 +36,48 @@ typedef struct {
     GLenum      value;
 } ReplEnumEntry;
 
+/* Maximum number of positional enum arguments a single enum-backed GL
+ * command can declare. Sized to GLCmd.args[8] so the enum path and the
+ * std path share one storage width and a future wider enum command does
+ * not force another struct-shape change. */
+#define MAX_ENUM_ARGS 8
+
+/* How one positional enum argument resolves a typed token. The three
+ * kinds are deliberately distinct so strict (non-bool) enum slots stay
+ * behavior-neutral while boolean mask slots can opt into numeric 1/0
+ * support without broadening every enum command:
+ *
+ *  - ENUM_ONLY: exact enum-token match only; numeric and expression
+ *    input are rejected. This is byte-for-byte the historic behavior of
+ *    every strict enum slot (glBegin, glEnable/Disable, glShadeModel,
+ *    glFrontFace, glColorMaterial x2, glBlendFunc x2, glLightModeli
+ *    slot 0, and — until the bool-slot policy lands — glDepthMask).
+ *  - ENUM_OR_CONST_VALUE: token first, else a constant-only expression
+ *    reverse-mapped to a value in this slot's table; runtime vars
+ *    rejected. Reserved for boolean mask slots (glDepthMask /
+ *    glColorMask) under the later bool-slot policy. Unused in the
+ *    behavior-neutral enum-path generalization.
+ *  - ENUM_OR_EXPR: token first, else a full expression (vars
+ *    permitted); the typed source token is emitted verbatim. Only
+ *    glLightModeli slot 1 uses this, reproducing its historic
+ *    bool-token-or-int/expr param. */
+typedef enum {
+    REPL_ENUM_SLOT_ENUM_ONLY = 0,       /* token only; reject numeric + expr */
+    REPL_ENUM_SLOT_ENUM_OR_CONST_VALUE, /* token, else const value reverse-mapped */
+    REPL_ENUM_SLOT_ENUM_OR_EXPR         /* token first, else full expression */
+} ReplEnumSlotKind;
+
+/* One positional enum-argument spec: the source-of-truth enum token
+ * table (also drives autocomplete), the per-slot diagnostic shown when
+ * resolution fails, and the slot kind. `enums` is non-null for all
+ * three kinds — the parser branches on `kind`, never on whether `enums`
+ * is null. */
+typedef struct {
+    const ReplEnumEntry *enums;
+    const char          *usage;
+    ReplEnumSlotKind     kind;
+} ReplEnumArgSpec;
+
 #define MAX_FUNC_HINT_PARAMS 10
 
 /* F1 help-overlay grouping for autocomplete entries. The renderer walks
@@ -130,12 +172,20 @@ typedef struct {
     const char *name;
     CmdType     type;
     int         num_args;
+    /* Legacy two-slot enum tables + per-slot usage strings. Retained
+     * only as a compile bridge until autocomplete migrates to the
+     * positional args[] form (enum-path generalization, phase 4); the
+     * parser already reads args[] exclusively. Do not add new readers. */
     const ReplEnumEntry *enums1;
     const ReplEnumEntry *enums2;
     const char *fmt;
     const char *usage1;
     const char *usage2;
     int         indent_type;
+    /* Positional enum-argument specs, one per declared argument. The
+     * single source of truth for enum-token resolution and emission;
+     * the generalized N-arg parser loop reads only these. */
+    ReplEnumArgSpec args[MAX_ENUM_ARGS];
 } ReplEnumCommandSpec;
 
 /* Metadata for standard GL commands with float arguments (vertex, normal, color,
