@@ -33,14 +33,27 @@ static SceneRgba rgba(float r, float g, float b, float a) {
     return c;
 }
 
+/* Grid/axes in-out transition opacity (plans/.../grid-axes-transitions.md
+ * rule 4). Set once at scene_axes_render entry from
+ * config.axes_opacity; every color path in this file — axis lines,
+ * tips, quads, AND the bitmap labels — routes through gl_color so the
+ * fade is uniform. The multiply lands AFTER each call site's own
+ * alpha_scale clamp, so the controller-owned OUT is the hard ceiling
+ * (rule 3). 1.0 = fully shown. */
+static float s_xn_opacity = 1.0f;
+
+static void gl_color(float r, float g, float b, float a) {
+    glColor4f(r, g, b, a * s_xn_opacity);
+}
+
 static void gl_color_rgba(SceneRgba c) {
-    glColor4f(c.r, c.g, c.b, c.a);
+    gl_color(c.r, c.g, c.b, c.a);
 }
 
 /* Helper: draw an axis label at a 3D position */
 static void draw_axis_label(float x, float y, float z, char ch,
                             float r, float g, float b) {
-    glColor3f(r, g, b);
+    gl_color(r, g, b, 1.0f);
     glRasterPos3f(x, y, z);
     glutBitmapCharacter(FONT_MONO, ch);
 }
@@ -168,6 +181,14 @@ void scene_axes_render(const FrameRenderContext *frame_ctx) {
     AxesTheme axes_theme = (AxesTheme)config->axes_theme;
     if (axes_theme == AXES_THEME_OFF) return;
 
+    /* Transition fade: clamp defensively, then every gl_color in this
+     * file multiplies through it (rule 4). Skip drawing entirely once
+     * fully faded out so a 0-opacity pass costs nothing. */
+    s_xn_opacity = config->axes_opacity;
+    if (s_xn_opacity < 0.0f) s_xn_opacity = 0.0f;
+    if (s_xn_opacity > 1.0f) s_xn_opacity = 1.0f;
+    if (s_xn_opacity <= 0.0f) return;
+
     scene_axes_push_state();
 
     glDisable(GL_LIGHTING);
@@ -203,11 +224,11 @@ void scene_axes_render(const FrameRenderContext *frame_ctx) {
 
         glPointSize(8.0f);
         glBegin(GL_POINTS);
-        glColor4f(1.0f, 0.3f, 0.3f, glow);
+        gl_color(1.0f, 0.3f, 0.3f, glow);
         glVertex3f(pos, 0, 0);
-        glColor4f(0.3f, 1.0f, 0.3f, glow);
+        gl_color(0.3f, 1.0f, 0.3f, glow);
         glVertex3f(0, pos, 0);
-        glColor4f(0.3f, 0.3f, 1.0f, glow);
+        gl_color(0.3f, 0.3f, 1.0f, glow);
         glVertex3f(0, 0, pos);
         glEnd();
         glPointSize(1.0f);
@@ -218,19 +239,19 @@ void scene_axes_render(const FrameRenderContext *frame_ctx) {
         float t0 = pos - trail;
         if (t0 < 0) t0 = 0;
         glBegin(GL_LINES);
-        glColor4f(1.0f, 0.3f, 0.3f, 0.05f);
+        gl_color(1.0f, 0.3f, 0.3f, 0.05f);
         glVertex3f(t0, 0, 0);
-        glColor4f(1.0f, 0.3f, 0.3f, glow * 0.7f);
+        gl_color(1.0f, 0.3f, 0.3f, glow * 0.7f);
         glVertex3f(pos, 0, 0);
 
-        glColor4f(0.3f, 1.0f, 0.3f, 0.05f);
+        gl_color(0.3f, 1.0f, 0.3f, 0.05f);
         glVertex3f(0, t0, 0);
-        glColor4f(0.3f, 1.0f, 0.3f, glow * 0.7f);
+        gl_color(0.3f, 1.0f, 0.3f, glow * 0.7f);
         glVertex3f(0, pos, 0);
 
-        glColor4f(0.3f, 0.3f, 1.0f, 0.05f);
+        gl_color(0.3f, 0.3f, 1.0f, 0.05f);
         glVertex3f(0, 0, t0);
-        glColor4f(0.3f, 0.3f, 1.0f, glow * 0.7f);
+        gl_color(0.3f, 0.3f, 1.0f, glow * 0.7f);
         glVertex3f(0, 0, pos);
         glEnd();
         glLineWidth(1.0f);
@@ -314,7 +335,7 @@ void scene_axes_render(const FrameRenderContext *frame_ctx) {
         /* Origin sphere-ish dot */
         glPointSize(5.0f);
         glBegin(GL_POINTS);
-        glColor4f(0.9f, 0.9f, 0.9f, 0.6f);
+        gl_color(0.9f, 0.9f, 0.9f, 0.6f);
         glVertex3f(0, 0, 0);
         glEnd();
         glPointSize(1.0f);
@@ -347,7 +368,7 @@ void scene_axes_render(const FrameRenderContext *frame_ctx) {
 
         /* XZ floor plane quadrant - always shown */
         glBegin(GL_QUADS);
-        glColor4f(0.58f, 0.60f, 0.72f, fminf(0.07f * as, 1.0f));
+        gl_color(0.58f, 0.60f, 0.72f, fminf(0.07f * as, 1.0f));
         glVertex3f(0,    0, 0);    glVertex3f(fill, 0, 0);
         glVertex3f(fill, 0, fill); glVertex3f(0,    0, fill);
         glEnd();
@@ -356,12 +377,12 @@ void scene_axes_render(const FrameRenderContext *frame_ctx) {
         float xy_a = fminf(0.11f * xy_w * as, 1.0f);
         if (xy_a > 0.004f) {
             glBegin(GL_QUADS);
-            glColor4f(0.80f, 0.50f, 0.25f, xy_a);
+            gl_color(0.80f, 0.50f, 0.25f, xy_a);
             glVertex3f(0,    0,    0); glVertex3f(fill, 0,    0);
             glVertex3f(fill, fill, 0); glVertex3f(0,    fill, 0);
             glEnd();
             glBegin(GL_LINE_LOOP);
-            glColor4f(0.92f, 0.66f, 0.42f, xy_a * 2.2f);
+            gl_color(0.92f, 0.66f, 0.42f, xy_a * 2.2f);
             glVertex3f(0,    0,    0); glVertex3f(fill, 0,    0);
             glVertex3f(fill, fill, 0); glVertex3f(0,    fill, 0);
             glEnd();
@@ -371,12 +392,12 @@ void scene_axes_render(const FrameRenderContext *frame_ctx) {
         float zy_a = fminf(0.11f * zy_w * as, 1.0f);
         if (zy_a > 0.004f) {
             glBegin(GL_QUADS);
-            glColor4f(0.32f, 0.58f, 0.88f, zy_a);
+            gl_color(0.32f, 0.58f, 0.88f, zy_a);
             glVertex3f(0, 0,    0);    glVertex3f(0, 0,    fill);
             glVertex3f(0, fill, fill); glVertex3f(0, fill, 0);
             glEnd();
             glBegin(GL_LINE_LOOP);
-            glColor4f(0.48f, 0.72f, 0.95f, zy_a * 2.2f);
+            gl_color(0.48f, 0.72f, 0.95f, zy_a * 2.2f);
             glVertex3f(0, 0,    0);    glVertex3f(0, 0,    fill);
             glVertex3f(0, fill, fill); glVertex3f(0, fill, 0);
             glEnd();
@@ -385,7 +406,7 @@ void scene_axes_render(const FrameRenderContext *frame_ctx) {
         /* Origin dot */
         glPointSize(5.0f);
         glBegin(GL_POINTS);
-        glColor4f(0.95f, 0.95f, 0.95f, 0.72f);
+        gl_color(0.95f, 0.95f, 0.95f, 0.72f);
         glVertex3f(0, 0, 0);
         glEnd();
         glPointSize(1.0f);
