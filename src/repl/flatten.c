@@ -125,6 +125,15 @@ static int flatten_append_cmd(FlattenContext *ctx, const GLCmd *cmd,
     return 1;
 }
 
+static int flatten_source_cmd_is_flat_omitted(CmdType type) {
+    return repl_cmd_is_block_head(type) ||
+           repl_cmd_is_block_end(type) ||
+           type == CMD_CALL ||
+           type == CMD_COMMENT ||
+           type == CMD_EMPTY ||
+           type == CMD_VAR_DECLARE;
+}
+
 /* Determine which flat-command range corresponds to the innermost
  * glBegin/glEnd block containing repl_state_edit_line(). The result is stored in
  * g_current_block_begin / g_current_block_end and used by
@@ -136,18 +145,17 @@ void repl_flatten_refresh_current_block_highlight(void) {
     int current_block_begin = -1;
     int current_block_end = -1;
 
-    /* Scan repl_state_document_cmds_mut() alongside g_flat_cmds to find the innermost
-     * BEGIN/END block (in flat-cmd indices) that contains repl_state_edit_line()
-     * in source-cmd space. Skips for/func/if structural commands that
-     * don't appear in the flat stream. */
+    /* Scan repl_state_document_cmds_mut() alongside g_flat_cmds to find the
+     * innermost BEGIN/END block (in flat-cmd indices) that contains
+     * repl_state_edit_line() in source-cmd space. Skips structural and
+     * document-only rows that don't appear in the flat stream. */
     {
         int begin_src = -1, begin_flat = -1;
         int fcur = 0;
         for (int ci = 0; ci < repl_state_document_count() && fcur < flat_cmd_count; ci++) {
             if (!repl_state_document_cmds_mut()[ci].valid) continue;
             CmdType ct = repl_state_document_cmds_mut()[ci].type;
-            if (repl_cmd_is_block_head(ct) || repl_cmd_is_block_end(ct) ||
-                ct == CMD_CALL || ct == CMD_EMPTY)
+            if (flatten_source_cmd_is_flat_omitted(ct))
                 continue;
             while (fcur < flat_cmd_count && !flat_cmds[fcur].valid) fcur++;
             if (fcur >= flat_cmd_count) break;
@@ -387,15 +395,7 @@ static void flatten_range(FlattenContext *ctx,
             return;
         }
 
-        /* Comments: pass through to flat array (skipped by execute, kept in save) */
-        if (src_cmd->type == CMD_COMMENT) {
-            if (!flatten_append_cmd(ctx, src_cmd, i, call_src_cmd_idx,
-                                    root_call_src_cmd_idx, func_scope_mask,
-                                    NULL, 0))
-                return;
-            i++;
-            continue;
-        }
+        if (src_cmd->type == CMD_COMMENT) { i++; continue; }
 
         if (src_cmd->type == CMD_EMPTY) { i++; continue; }
 
