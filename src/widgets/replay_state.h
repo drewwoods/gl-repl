@@ -1,29 +1,24 @@
 /*
- * replay_state.h - Replay peer subsystem ownership.
+ * replay_state.h - Replay peer subsystem storage and accessors.
  *
- * Phase F commit 33 entry. The replay system is a peer alongside
- * editor / variable_panel / scene rather than a slice of ReplState.
- * It owns the program counter, mode (OFF/PLAYING/PAUSED/DONE),
- * speed, fade-batch ring, and other transient playback state, with
- * `imrepl_ctrl` routing UiHits (UI_HIT_REPLAY_BUTTON) to its handler
- * functions in commit 34.
+ * Owns the transient playback state that should not live in the REPL document
+ * model: replay on/off, machine state, program counter, playback speed, source
+ * line tracking, and annotation expansion mode. The main replay logic in
+ * src/widgets/replay.c writes this state; controller/UI code reads it for
+ * buttons, shortcuts, and per-frame snapshots.
  *
- * Storage migration: ReplReplayRuntimeState was a member of
- * ReplRuntimeState. Its bytes live in a static here. The legacy
- * `repl_state_replay` / `_mut` / `_reset` forwarders were retired
- * in Phase J7; callers use `replay_state_view` / `replay_state_mut`
- * / `replay_state_reset` directly.
- *
- * Snapshot/restore: tests and undo capture this state via
- * `replay_state_capture` / `_restore` alongside the editor / ui /
- * runtime captures. The replay-mode behavior in replay.c writes
- * through `replay_state_mut()`.
+ * Snapshot/restore is separate because tests, undo-like full-world captures,
+ * and frame snapshot builders need to copy replay state alongside REPL/editor/UI
+ * peers. Storage lives in a file-static here rather than in ReplRuntimeState,
+ * which reflects the replay-peer split introduced in Phase F / Phase J7.
  */
 #ifndef REPLAY_STATE_H
 #define REPLAY_STATE_H
 
 #include "repl/state_views.h"
 
+/* Copy or reset the full replay runtime snapshot. Used by app-wide capture /
+ * restore paths and by replay reset flows. */
 void                     replay_state_capture(ReplReplayRuntimeState *snapshot);
 void                     replay_state_restore(const ReplReplayRuntimeState *snapshot);
 void                     replay_state_reset(void);
@@ -42,9 +37,9 @@ ReplReplayRuntimeState  *replay_state_mut(void);
 
 /* --- Narrow read accessors ---
  *
- * Phase G commit 34c. Single-field queries that let callers avoid
- * pulling the entire struct just to read one field. Reduces public
- * exposure of ReplReplayRuntimeState's internal layout.
+ * Single-field queries for callers that only need one replay attribute. They
+ * keep most readers from depending on the full ReplReplayRuntimeState layout.
+ * Phase G added these to reduce unnecessary whole-struct traffic.
  */
 int    replay_active(void);          /* .active */
 int    replay_machine_state(void);   /* .state — REPLAY_OFF/PLAYING/PAUSED/DONE */
@@ -57,11 +52,10 @@ int    replay_expand_args(void);     /* .expand_args — annotation expansion to
 
 /* --- Handler API ---
  *
- * Phase F commit 34 entry points. `imrepl_ctrl` routes
- * UI_HIT_REPLAY_BUTTON hits through replay_handle_pin_clicked; the
- * editor's key dispatcher forwards keystrokes via replay_handle_key /
- * replay_handle_special. Implementations wrap the existing
- * repl_replay_* surface in replay.c.
+ * Small routing surface for controller/editor input code. UI hit handling calls
+ * replay_handle_pin_clicked(); keyboard dispatch forwards to replay_handle_key()
+ * / replay_handle_special() while replay is active. Implementations delegate to
+ * the main replay state machine in replay.c.
  */
 
 /* Toggle replay state on a Replay-pin button click: starts replay
