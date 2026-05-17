@@ -89,6 +89,7 @@ static char cfg_status_buf[256];
 #define AUDIO_CFG_ALL   3
 static const char *audio_cfg_names[] = { "Pause", "Once", "Song", "All" };
 static const char *syntax_hl_names[] = { "Off", "On", "On+Bold" };
+static const char *view_mode_names[] = { "3D", "2D" };
 
 GlrConfigItem g_cfg_items[] = {
     { "### RENDERING",     0, 0,  GLR_CONFIG_NONE,               0, NULL,                 1 },
@@ -114,6 +115,7 @@ GlrConfigItem g_cfg_items[] = {
     { "Light indicators",  GLUT_KEY_F10, 1, GLR_CONFIG_LIGHT_INDICATORS, 2, NULL,        0 },
     { "Poly highlight",    0, 0,  GLR_CONFIG_POLY_HIGHLIGHT,       2, NULL,                 0 },
     { "Backdrop",          0, 0,  GLR_CONFIG_BACKDROP,             4, backdrop_mode_names, 0 },
+    { "View mode",         0, 0,  GLR_CONFIG_ORTHO_MODE,           2, view_mode_names,      0 },
     { "Camera rotate",     GLUT_KEY_F11, 1, GLR_CONFIG_CAMERA_ROTATE, 2, NULL,            0 },
     { "Auto-normals",      GLUT_KEY_F9, 1, GLR_CONFIG_AUTO_NORMALS, 2, NULL,              0 },
     { "---",               0, 0,  GLR_CONFIG_NONE,               0, NULL,                 1 },

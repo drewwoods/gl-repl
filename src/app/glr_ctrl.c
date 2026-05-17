@@ -1050,6 +1050,64 @@ static void scene_execute_adapter(const SceneExecuteContext *ctx,
  * machines and the renderer draws the effective {theme, opacity}. */
 static SceneXnState g_grid_xn;
 static SceneXnState g_axes_xn;
+static float g_projection_mix = 1.0f; /* 0 = ortho, 1 = perspective */
+static int g_view_mode_prev_ortho = 0;
+static ReplCameraState g_saved_3d_camera;
+static int g_saved_3d_camera_valid = 0;
+
+#define VIEW_MODE_TRANSITION_SECS 0.5f
+
+static float smoothstep01(float t) {
+    if (t < 0.0f) t = 0.0f;
+    if (t > 1.0f) t = 1.0f;
+    return t * t * (3.0f - 2.0f * t);
+}
+
+static void glr_ctrl_sync_camera_control_mode(void) {
+    glr_camera_set_control_mode(glr_state_presentation().ortho_mode
+                                ? GLR_CAMERA_CONTROL_2D
+                                : GLR_CAMERA_CONTROL_3D);
+}
+
+static void glr_ctrl_handle_view_mode_target_change(void) {
+    int ortho = glr_state_presentation().ortho_mode ? 1 : 0;
+    ReplCameraState cam;
+
+    if (ortho == g_view_mode_prev_ortho)
+        return;
+
+    cam = glr_camera();
+    if (ortho) {
+        g_saved_3d_camera = cam;
+        g_saved_3d_camera_valid = 1;
+        glr_camera_ease_to(0.0f, 0.0f, cam.dist, cam.tx, cam.ty, 0.0f);
+    } else if (g_saved_3d_camera_valid) {
+        ReplCameraState target = g_saved_3d_camera;
+        target.tx = cam.tx;
+        target.ty = cam.ty;
+        target.dist = cam.dist;
+        glr_camera_ease_to(target.rx, target.ry, target.dist,
+                           target.tx, target.ty, target.tz);
+    }
+
+    g_view_mode_prev_ortho = ortho;
+    glr_ctrl_sync_camera_control_mode();
+}
+
+static void glr_ctrl_tick_projection_transition(float dt) {
+    float target = glr_state_presentation().ortho_mode ? 0.0f : 1.0f;
+    float step = dt / VIEW_MODE_TRANSITION_SECS;
+
+    glr_ctrl_handle_view_mode_target_change();
+
+    if (g_projection_mix < target) {
+        g_projection_mix += step;
+        if (g_projection_mix > target) g_projection_mix = target;
+    } else if (g_projection_mix > target) {
+        g_projection_mix -= step;
+        if (g_projection_mix < target) g_projection_mix = target;
+    }
+}
 
 static void glr_ctrl_build_scene_config(SceneRenderConfig *config) {
     GlrRenderState render = glr_state_render();
@@ -1123,6 +1181,7 @@ static void glr_ctrl_build_scene_config(SceneRenderConfig *config) {
     config->cam_ty = cam.ty;
     config->cam_tz = cam.tz;
     config->cam_motion_glow = cam.motion_glow;
+    config->projection_mix = smoothstep01(g_projection_mix);
 
     /* --- Rendering quality --- */
     config->multisample_enabled = render.multisample_enabled;
@@ -1749,6 +1808,9 @@ void glr_app_reset_all(void) {
     glr_state_presentation_reset_defaults();
     glr_state_render_reset_defaults();
     glr_camera_reset_default();
+    g_projection_mix = 1.0f;
+    g_view_mode_prev_ortho = 0;
+    g_saved_3d_camera_valid = 0;
     editor_state_reset();
     ui_state_reset();
     variable_panel_state_reset();
@@ -2276,6 +2338,7 @@ int glr_ctrl_router_handle_scene_press(int button, int state, int x, int y) {
 }
 
 int glr_ctrl_router_handle_camera_mouse(int button, int state, int x, int y) {
+    glr_ctrl_sync_camera_control_mode();
     glr_camera_mouse_event(button, state, x, y, editor_input_active_modifiers());
     return 1;
 }
@@ -2339,6 +2402,7 @@ int glr_ctrl_router_handle_variable_panel_motion(int x, int y) {
 }
 
 int glr_ctrl_router_handle_camera_motion(int x, int y) {
+    glr_ctrl_sync_camera_control_mode();
     glr_camera_drag_motion(x, y);
     return 1;
 }
@@ -3210,6 +3274,7 @@ void glr_ctrl_tick(void) {
         }
     }
 
+    glr_ctrl_tick_projection_transition(0.016f);
     glr_camera_tick();
     glr_ctrl_tick_overlay_xn();
 

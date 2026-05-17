@@ -49,6 +49,7 @@ static ReplCameraState       g_camera          = GLR_CAMERA_INITIAL;
 static const ReplCameraState g_camera_defaults = GLR_CAMERA_INITIAL;
 static ReplCameraState       g_camera_target   = GLR_CAMERA_INITIAL;
 static int                   g_camera_target_active = 0;
+static GlrCameraControlMode  g_control_mode    = GLR_CAMERA_CONTROL_3D;
 
 /* Internal pointer cache: where the mouse is + which button is held.
  * Used only for drag-delta computation. Snapshot consumers who need
@@ -172,6 +173,16 @@ static void tick_target_ease(void) {
 
 ReplCameraState glr_camera(void)        { return g_camera; }
 ReplCameraState *glr_camera_mut(void)   { return &g_camera; }
+GlrCameraControlMode glr_camera_control_mode(void) { return g_control_mode; }
+
+void glr_camera_set_control_mode(GlrCameraControlMode mode) {
+    if (mode != GLR_CAMERA_CONTROL_2D)
+        mode = GLR_CAMERA_CONTROL_3D;
+    if (g_control_mode == mode)
+        return;
+    g_control_mode = mode;
+    reset_velocities();
+}
 
 void glr_camera_set(float rx, float ry, float dist,
                     float tx, float ty, float tz,
@@ -225,6 +236,7 @@ void glr_camera_ease_to(float rx, float ry, float dist,
 void glr_camera_reset_default(void) {
     cancel_target_ease();
     reset_velocities();
+    g_control_mode = GLR_CAMERA_CONTROL_3D;
     g_camera = g_camera_defaults;
 }
 
@@ -279,7 +291,19 @@ void glr_camera_drag_motion(int x, int y) {
     int dx = x - px;
     int dy = y - py;
 
-    if (btn == GLUT_LEFT_BUTTON) {
+    if (g_control_mode == GLR_CAMERA_CONTROL_2D &&
+        (btn == GLUT_LEFT_BUTTON || btn == GLUT_RIGHT_BUTTON)) {
+        float scale = 0.005f * c->dist;
+        float dtx = -(float)dx * scale;
+        float dty =  (float)dy * scale;
+        c->tx += dtx;
+        c->ty += dty;
+        g_vel_tx *= CAM_DECAY;
+        g_vel_ty *= CAM_DECAY;
+        g_vel_tx += dtx * 0.5f;
+        g_vel_ty += dty * 0.5f;
+        c->motion_glow = 1.0f;
+    } else if (btn == GLUT_LEFT_BUTTON) {
         c->ry += (float)dx * 0.5f;
         c->rx += (float)dy * 0.5f;
         c->ry = fmodf(c->ry, 360.0f);
@@ -355,7 +379,9 @@ void glr_camera_tick(void) {
     if (c->motion_glow < 0.005f)
         c->motion_glow = 0.0f;
 
-    if (!g_camera_target_active && c->auto_rotate) {
+    if (!g_camera_target_active &&
+        g_control_mode == GLR_CAMERA_CONTROL_3D &&
+        c->auto_rotate) {
         c->ry += 0.3f;
         c->ry = fmodf(c->ry, 360.0f);
     }

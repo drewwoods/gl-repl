@@ -629,6 +629,51 @@ static void test_overlay_transition_machine_wiring(void) {
                g_last_scene_config.grid_xn_phase, SCENE_XN_STEADY);
 }
 
+static void test_view_mode_projection_transition_wiring(void) {
+    printf("--- imrepl_ctrl view mode projection transition ---\n");
+    prepare_display_fixture();
+    replay_state_mut()->active = 0;
+    replay_state_mut()->state = REPLAY_OFF;
+
+    glr_ctrl_display_frame();
+    ASSERT_FLOAT("view mode starts perspective",
+                 g_last_scene_config.projection_mix, 1.0f);
+    ASSERT_INT("camera controls start 3d",
+               glr_camera_control_mode(), GLR_CAMERA_CONTROL_3D);
+
+    glr_state_presentation_mut()->ortho_mode = 1;
+    glr_ctrl_tick();
+    glr_ctrl_display_frame();
+    ASSERT_INT("camera controls switch to 2d",
+               glr_camera_control_mode(), GLR_CAMERA_CONTROL_2D);
+    ASSERT_TRUE("projection starts moving toward ortho",
+                g_last_scene_config.projection_mix < 1.0f &&
+                g_last_scene_config.projection_mix > 0.0f);
+    ASSERT_TRUE("camera rx eases toward xy view",
+                glr_camera().rx < 11.0f);
+    ASSERT_TRUE("camera ry eases toward xy view",
+                glr_camera().ry < 22.0f);
+
+    for (int i = 0; i < 40; i++)
+        glr_ctrl_tick();
+    glr_ctrl_display_frame();
+    ASSERT_FLOAT("projection settles on ortho",
+                 g_last_scene_config.projection_mix, 0.0f);
+
+    glr_state_presentation_mut()->ortho_mode = 0;
+    glr_ctrl_tick();
+    glr_ctrl_display_frame();
+    ASSERT_INT("camera controls return to 3d",
+               glr_camera_control_mode(), GLR_CAMERA_CONTROL_3D);
+    ASSERT_TRUE("projection starts moving toward perspective",
+                g_last_scene_config.projection_mix > 0.0f &&
+                g_last_scene_config.projection_mix < 1.0f);
+    ASSERT_TRUE("camera rx returns toward saved 3d orbit",
+                glr_camera().rx > 0.0f);
+    ASSERT_TRUE("camera ry returns toward saved 3d orbit",
+                glr_camera().ry > 0.0f);
+}
+
 int main(void) {
     printf("--- imrepl_ctrl tests ---\n");
 
@@ -638,6 +683,7 @@ int main(void) {
     test_variable_panel_motion_routes_through_compile_and_coalesces_undo();
     test_variable_panel_motion_initializes_uninitialized_declaration();
     test_overlay_transition_machine_wiring();
+    test_view_mode_projection_transition_wiring();
 
     printf("\n");
     return test_harness_report(&g_harness, "test_imrepl_ctrl");
