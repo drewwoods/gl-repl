@@ -27,6 +27,12 @@ extern "C" {
     X(glAccum)                         \
     X(glBegin)                         \
     X(glBindTexture)                   \
+    X(glOrtho)                         \
+    X(glGenTextures)                   \
+    X(glDeleteTextures)                \
+    X(glTexImage2D)                    \
+    X(glCopyTexSubImage2D)             \
+    X(glTexParameteri)                 \
     X(glBlendFunc)                     \
     X(glClear)                         \
     X(glClearColor)                    \

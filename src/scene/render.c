@@ -7,6 +7,7 @@
 #include "backdrop.h"
 #include "grid.h"
 #include "lights.h"
+#include "postprocess_filter.h"
 #include "render_types.h"
 #include "render.h"
 #include "prof.h"
@@ -41,6 +42,7 @@ static const float g_jitter_table[MAX_ACCUM_SAMPLES][2] = {
 
 void scene_render_init_gl(void) {
     scene_lights_init_global_ambient();
+    scene_postprocess_filter_reset();
 }
 
 /* Reject SceneRenderConfig values that would cause undefined behavior or
@@ -324,5 +326,12 @@ int scene_render_3d_scene(const SceneRenderConfig *config) {
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         render_3d_scene_pass(config, 0.0f, 0.0f);
     }
+
+    /* Once per frame, on the fully resolved scene image (covers both
+     * the accum and non-accum branches), before any 2D overlay. */
+    if (config->post_filter_mode > SCENE_POST_FILTER_OFF)
+        scene_postprocess_filter_render(config->post_filter_mode,
+                                        config->scene_x, config->scene_y,
+                                        config->scene_w, config->scene_h);
     return 0;
 }

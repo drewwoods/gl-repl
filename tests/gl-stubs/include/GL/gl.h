@@ -163,9 +163,27 @@ typedef double GLclampd;
 #define GL_OPERAND0_ALPHA 0x8598
 #define GL_REPLACE 0x1E01
 
+/* Texture-capture post-processing filter (scene/postprocess_filter.c). */
+#define GL_RGB 0x1907
+#define GL_RGBA 0x1908
+#define GL_UNSIGNED_BYTE 0x1401
+#define GL_NEAREST 0x2600
+#define GL_TEXTURE_MIN_FILTER 0x2801
+#define GL_TEXTURE_MAG_FILTER 0x2800
+#define GL_TEXTURE_WRAP_S 0x2802
+#define GL_TEXTURE_WRAP_T 0x2803
+#define GL_CLAMP_TO_EDGE 0x812F
+#define GL_MAX_TEXTURE_SIZE 0x0D33
+
 static inline void glAccum(GLenum op, GLfloat value) { GL_STUB_TRACE_LINE("glAccum %u %g\n", (unsigned)op, (double)value); gl_stub_tick(GL_STUB_glAccum); }
 static inline void glBegin(GLenum mode) { GL_STUB_TRACE_LINE("glBegin %u\n", (unsigned)mode); gl_stub_tick(GL_STUB_glBegin); }
 static inline void glBindTexture(GLenum target, GLuint texture) { GL_STUB_TRACE_LINE("glBindTexture %u %u\n", (unsigned)target, (unsigned)texture); gl_stub_tick(GL_STUB_glBindTexture); }
+static inline void glOrtho(GLdouble l, GLdouble r, GLdouble b, GLdouble t, GLdouble n, GLdouble f) { GL_STUB_TRACE_LINE("glOrtho %g %g %g %g %g %g\n", (double)l, (double)r, (double)b, (double)t, (double)n, (double)f); gl_stub_tick(GL_STUB_glOrtho); }
+static inline void glGenTextures(GLsizei n, GLuint *textures) { GL_STUB_TRACE_LINE("glGenTextures %d\n", (int)n); gl_stub_tick(GL_STUB_glGenTextures); for (GLsizei i = 0; i < n; i++) textures[i] = 1; }
+static inline void glDeleteTextures(GLsizei n, const GLuint *textures) { GL_STUB_TRACE_LINE("glDeleteTextures %d\n", (int)n); gl_stub_tick(GL_STUB_glDeleteTextures); (void)textures; }
+static inline void glTexImage2D(GLenum target, GLint level, GLint internalformat, GLsizei width, GLsizei height, GLint border, GLenum format, GLenum type, const void *pixels) { GL_STUB_TRACE_LINE("glTexImage2D %u %d %d %d %d\n", (unsigned)target, (int)level, (int)internalformat, (int)width, (int)height); gl_stub_tick(GL_STUB_glTexImage2D); (void)border; (void)format; (void)type; (void)pixels; }
+static inline void glCopyTexSubImage2D(GLenum target, GLint level, GLint xoffset, GLint yoffset, GLint x, GLint y, GLsizei width, GLsizei height) { GL_STUB_TRACE_LINE("glCopyTexSubImage2D %u %d %d %d %d %d %d %d\n", (unsigned)target, (int)level, (int)xoffset, (int)yoffset, (int)x, (int)y, (int)width, (int)height); gl_stub_tick(GL_STUB_glCopyTexSubImage2D); }
+static inline void glTexParameteri(GLenum target, GLenum pname, GLint param) { GL_STUB_TRACE_LINE("glTexParameteri %u %u %d\n", (unsigned)target, (unsigned)pname, (int)param); gl_stub_tick(GL_STUB_glTexParameteri); }
 static inline void glBlendFunc(GLenum sfactor, GLenum dfactor) { GL_STUB_TRACE_LINE("glBlendFunc %u %u\n", (unsigned)sfactor, (unsigned)dfactor); gl_stub_tick(GL_STUB_glBlendFunc); }
 static inline void glClear(GLbitfield mask) { GL_STUB_TRACE_LINE("glClear %u\n", (unsigned)mask); gl_stub_tick(GL_STUB_glClear); }
 static inline void glClearColor(GLclampf red, GLclampf green, GLclampf blue, GLclampf alpha) { GL_STUB_TRACE_LINE("glClearColor %g %g %g %g\n", (double)red, (double)green, (double)blue, (double)alpha); gl_stub_tick(GL_STUB_glClearColor); }

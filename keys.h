@@ -55,6 +55,7 @@
 #define KEY_CTRL_T    20   /* toggle animated 't' time variable (Shift: reset to 0) */
 #define KEY_CTRL_U    21   /* toggle MSAA (Ctrl+U) */
 #define KEY_CTRL_O    15   /* cycle grid major spacing (Ctrl+O) */
+#define KEY_CTRL_N    14   /* cycle experimental post-processing filter (Ctrl+N) */
 #define KEY_CTRL_W    23   /* cycle CPU profile panel (Ctrl+W) */
 #define KEY_CTRL_DASH 31   /* decrement accum AA samples (Apple GLUT quirk, Ctrl+-) */
 
