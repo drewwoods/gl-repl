@@ -39,6 +39,8 @@
 #ifndef REPL_EXAMPLES_H
 #define REPL_EXAMPLES_H
 
+#include <limits.h>
+
 /* Query the source line array for an example. Returns a null-terminated array
  * of REPL command strings (ready to feed through the commit pipeline). Index
  * must be in range [0, repl_examples_count()). The returned pointer is valid
@@ -53,5 +55,23 @@ const char *repl_examples_name(int idx);
 /* Query the total number of built-in examples. Used by the Example dropdown and
  * F12 cycling to determine the range of valid example indices. */
 int repl_examples_count(void);
+
+/* Curated metadata tags used by the Scene menu. Examples keep their flat
+ * identity; tags are only a secondary discovery index. */
+int repl_example_tag_count(void);
+const char *repl_example_tag_label(int tag_idx);
+unsigned int repl_example_tag_mask(int example_idx);
+int repl_example_has_tag(int example_idx, int tag_idx);
+int repl_example_count_for_tag(int tag_idx);
+int repl_example_index_for_tag(int tag_idx, int ordinal);
+int repl_example_visible_tag_count(void);
+int repl_example_visible_tag_at(int dense_idx);
+
+static inline unsigned int repl_example_tag_bit(int tag_idx) {
+    if (tag_idx < 0 || tag_idx >= repl_example_tag_count() ||
+        tag_idx >= (int)(sizeof(unsigned int) * CHAR_BIT))
+        return 0u;
+    return 1u << (unsigned int)tag_idx;
+}
 
 #endif /* REPL_EXAMPLES_H */

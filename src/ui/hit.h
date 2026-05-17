@@ -39,6 +39,7 @@ typedef enum {
     UI_HIT_COLOR_SWATCH,         /* floating color picker slider control */
     UI_HIT_MENU_BUTTON,          /* top-level menu-bar button (open / switch / dismiss) */
     UI_HIT_MENU_ITEM,            /* open menu dropdown row */
+    UI_HIT_EXAMPLE_SUBMENU_ITEM, /* Scene example submenu row */
     UI_HIT_PIN_BUTTON,           /* pinned right-side button (search / replay) */
     UI_HIT_VARIABLE_SLIDER,      /* variable panel slider row */
     UI_HIT_REPLAY_BUTTON,        /* replay HUD play/pause/step button */
@@ -94,6 +95,11 @@ typedef enum {
  *   UI_HIT_MENU_ITEM
  *     cmd_idx  = menu_id (the menu the dropdown belongs to)
  *     item_idx = dropdown row index
+ *
+ *   UI_HIT_EXAMPLE_SUBMENU_ITEM
+ *     cmd_idx  = example tag index
+ *     item_idx = global flat example index
+ *     line_idx = ordinal within that tag submenu
  *
  *   UI_HIT_PIN_BUTTON
  *     item_idx = pin id (REPL_MENU_BAR_PIN_REPLAY / _SEARCH)
