@@ -66,6 +66,14 @@ static void _repl_point_size(GLfloat sz) {
 #define glPointSize _repl_point_size
 #endif
 
+/* gluTessCallback takes a single callback-pointer type but the GLU
+ * callbacks have heterogeneous real signatures; GLU re-dispatches by
+ * the `which` enum internally. A prototyped pointer keeps the casts
+ * C99-clean (-std=c99 -pedantic-errors rejects the old-style
+ * `void (*)()`). Self-owned because the real platform <GL/glu.h> does
+ * not expose a portable GLUfuncptr typedef. */
+typedef void (*ReplGluCallback)(void);
+
 static void repl_render_tess_vtx_begin_cb(GLenum mode) {
     glBegin(mode);
 }
@@ -134,16 +142,16 @@ void repl_executor_init_resources(void) {
 
     g_tess = gluNewTess();
     gluTessCallback(g_tess, GLU_TESS_BEGIN,
-                    (void (*)())repl_render_tess_vtx_begin_cb);
+                    (ReplGluCallback)repl_render_tess_vtx_begin_cb);
     gluTessCallback(g_tess, GLU_TESS_END,
-                    (void (*)())repl_render_tess_vtx_end_cb);
+                    (ReplGluCallback)repl_render_tess_vtx_end_cb);
     gluTessCallback(g_tess, GLU_TESS_VERTEX,
-                    (void (*)())repl_render_tess_vtx_cb);
+                    (ReplGluCallback)repl_render_tess_vtx_cb);
     gluTessCallback(g_tess, GLU_TESS_COMBINE,
-                    (void (*)())repl_render_tess_comb_cb);
+                    (ReplGluCallback)repl_render_tess_comb_cb);
     gluTessCallback(g_tess, GLU_TESS_ERROR,
-                    (void (*)())repl_render_tess_err_cb);
-    gluTessCallback(g_tess, GLU_TESS_EDGE_FLAG, (void (*)())glEdgeFlag);
+                    (ReplGluCallback)repl_render_tess_err_cb);
+    gluTessCallback(g_tess, GLU_TESS_EDGE_FLAG, (ReplGluCallback)glEdgeFlag);
 }
 
 void repl_copy_predef_values(float *dst, int max_vals) {
