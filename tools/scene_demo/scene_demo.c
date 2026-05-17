@@ -118,6 +118,13 @@ static void seed_lights(SceneLight lights[MAX_LIGHTS]) {
 }
 
 static void build_config(SceneRenderConfig *cfg) {
+    /* memset zeroes every field, which is the intended default for
+     * point_parameter_supported: 0 == unsupported, so the star
+     * backdrop skips its direct glPointParameterfv. scene_demo has no
+     * GL-context capability-query path (it is a link-proof harness,
+     * not a feature surface), and never calling the entry point
+     * unless a caller has explicitly confirmed support is the safe
+     * default — same as post_filter_mode defaulting off here. */
     memset(cfg, 0, sizeof(*cfg));
 
     cfg->execute_fn = my_scene_execute;

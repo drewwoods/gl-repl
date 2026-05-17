@@ -253,7 +253,7 @@ static void draw_cityscape(float anim_time) {
     scene_backdrop_pop_state();
 }
 
-static void draw_starry_sky(float anim_time) {
+static void draw_starry_sky(float anim_time, int point_parameter_supported) {
     scene_backdrop_push_state();
     glDisable(GL_LIGHTING);
     glEnable(GL_DEPTH_TEST);
@@ -263,7 +263,12 @@ static void draw_starry_sky(float anim_time) {
     glEnable(GL_POINT_SMOOTH);
     glHint(GL_POINT_SMOOTH_HINT, GL_NICEST);
     glDisable(GL_FOG);
-    glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION, (GLfloat[]){1, 0, 0.00});
+    /* Direct call, independent of the REPL executor. Gated on the
+     * runtime capability the controller mirrored into the config;
+     * when unsupported the stars still render at a fixed glPointSize
+     * (acceptable degradation, no distance attenuation). */
+    if (point_parameter_supported)
+        glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION, (GLfloat[]){1, 0, 0.00});
 
     /* Strip camera translation so stars follow rotation only (no zoom pop). */
     glMatrixMode(GL_MODELVIEW);
@@ -351,11 +356,13 @@ void scene_backdrop_render(const FrameRenderContext *frame_ctx) {
         draw_cityscape(frame_ctx->config.anim_time);
         break;
     case 2:
-        draw_starry_sky(frame_ctx->config.anim_time);
+        draw_starry_sky(frame_ctx->config.anim_time,
+                        frame_ctx->config.point_parameter_supported);
         break;
     case 3:
         /* Stars first so city geometry writes depth over them. */
-        draw_starry_sky(frame_ctx->config.anim_time);
+        draw_starry_sky(frame_ctx->config.anim_time,
+                        frame_ctx->config.point_parameter_supported);
         draw_cityscape(frame_ctx->config.anim_time);
         break;
     default:

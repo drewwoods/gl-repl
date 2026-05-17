@@ -96,6 +96,13 @@ typedef double GLclampd;
 #define GL_PROJECTION_MATRIX 0x0BA7
 #define GL_TEXTURE_MATRIX 0x0BA8
 #define GL_VIEWPORT 0x0BA2
+/* glGetString names — only GL_VERSION is consumed (runtime
+ * point-parameter detection in glr_ctrl_init_gl); the rest round out
+ * the enum so a real glGetString switch would still compile. */
+#define GL_VENDOR 0x1F00
+#define GL_RENDERER 0x1F01
+#define GL_VERSION 0x1F02
+#define GL_EXTENSIONS 0x1F03
 #define GL_COLOR_CLEAR_VALUE 0x0C22
 
 #define GL_ALPHA_TEST 0x0BC0
@@ -235,6 +242,14 @@ static inline void glGetIntegerv(GLenum pname, GLint *params) {
     } else {
         params[0] = 0;
     }
+}
+static inline const GLubyte *glGetString(GLenum name) {
+    (void)name;
+    /* Major version 2 → the runtime point-parameter detection in
+     * glr_ctrl_init_gl treats the stub context as "supported",
+     * matching the glutExtensionSupported stub (returns 1) and
+     * today's default build. Not counted/traced (no scalar args). */
+    return (const GLubyte *)"2.1 stub";
 }
 static inline void glHint(GLenum target, GLenum mode) { GL_STUB_TRACE_LINE("glHint %u %u\n", (unsigned)target, (unsigned)mode); gl_stub_tick(GL_STUB_glHint); }
 static inline GLboolean glIsEnabled(GLenum cap) { GL_STUB_TRACE_LINE("glIsEnabled %u\n", (unsigned)cap); gl_stub_tick(GL_STUB_glIsEnabled); return GL_FALSE; }

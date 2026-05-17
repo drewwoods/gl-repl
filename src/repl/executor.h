@@ -94,22 +94,33 @@ void repl_execute_program(const ReplExecutionOptions *options);
  * program. `alpha_scale` multiplies any color alpha channel. */
 int  apply_state_cmd(const GLCmd *cmd, float alpha_scale);
 
-/* Install a camera-distance source. The legacy point-size fallback
- * compiled in via `NO_POINT_PARAMETER=1` (for platforms missing
- * glPointParameterfv) needs the current camera distance to scale
- * `glPointSize` calls. Pipeline TUs cannot include glr_camera.h
- * (check-repl-state-no-glr-state would block them), so the executor
- * accepts a controller-installed callback instead. The controller
- * installs a function that returns `glr_camera().dist`. The demo
- * (and any caller without point-attenuation) leaves the source
- * unset; the fallback then emits `glPointSize(sz)` unchanged.
+/* Install a camera-distance source. The point-size fallback used when
+ * the runtime GL context lacks glPointParameterfv needs the current
+ * camera distance to scale `glPointSize` calls. Pipeline TUs cannot
+ * include glr_camera.h (check-repl-state-no-glr-state would block
+ * them), so the executor accepts a controller-installed callback
+ * instead. The controller installs a function that returns
+ * `glr_camera().dist`. The demo (and any caller without
+ * point-attenuation) leaves the source unset; the fallback then emits
+ * `glPointSize(sz)` unchanged.
  *
- * Pass NULL to clear. Always available even when NO_POINT_PARAMETER
- * is not set (the executor stores the callback regardless; only the
- * compile-time fallback path consumes it) so callers can install
+ * Pass NULL to clear. Always available; only consumed when point
+ * parameters are unsupported (see below) so callers install
  * unconditionally. */
 typedef float (*ReplExecutorCameraDistanceFn)(void);
 void repl_executor_install_camera_distance_source(ReplExecutorCameraDistanceFn fn);
 ReplExecutorCameraDistanceFn repl_executor_camera_distance_source(void);
+
+/* Runtime point-parameter capability (replaces the old compile-time
+ * NO_POINT_PARAMETER macro). The controller detects support after the
+ * GL context is current (glr_ctrl_init_gl) and sets this; everything
+ * else defaults to supported. When unsupported, CMD_POINT_PARAMETER_FV
+ * is a no-op in the executor and point sizes fall back to the
+ * camera-distance approximation above. export.c reads the getter to
+ * decide whether to apply/emit the point-attenuation init bootstrap
+ * entry; the scene controller mirrors it into SceneRenderConfig so the
+ * star backdrop's direct call can be gated too. */
+void repl_executor_set_point_parameter_supported(int supported);
+int  repl_executor_point_parameter_supported(void);
 
 #endif /* REPL_EXECUTOR_H */

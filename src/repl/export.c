@@ -528,11 +528,9 @@ static const InitBootstrapEntry g_init_bootstrap_repl[] = {
     { "// Blending: standard src-over for translucent geometry.", NULL },
     { "glEnable(GL_BLEND);", NULL },
     { "glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);", NULL },
-#ifndef NO_POINT_PARAMETER
     { "// Point attenuation: distance-based point-size falloff.", "point_attenuation" },
     { "glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION, 1.0, 0.0, 0.02);",
       "point_attenuation" },
-#endif
 };
 
 /* Helper: look up a cfg toggle via the installed bridge. Returns the
@@ -543,6 +541,21 @@ static int init_bootstrap_toggle_get(const char *slug, int fallback) {
     if (!g_export_cfg_bridge || !g_export_cfg_bridge->get_int)
         return fallback;
     return g_export_cfg_bridge->get_int(slug, fallback);
+}
+
+/* True when a bootstrap entry must be skipped *entirely* — not applied,
+ * not emitted, not counted — because the runtime GL context lacks the
+ * entry point it depends on. Only the point-attenuation entry has such
+ * a dependency (glPointParameterfv). This is deliberately independent
+ * of and ahead of the toggle-slug disable path in the loops below:
+ * that path only *neutralizes* attenuation by re-applying a
+ * no-falloff CMD_POINT_PARAMETER_FV, which would still invoke the
+ * missing glPointParameterfv. When unsupported we must not touch it
+ * at all. */
+static int init_bootstrap_entry_unsupported(const InitBootstrapEntry *entry) {
+    return entry->toggle_slug
+        && strcmp(entry->toggle_slug, "point_attenuation") == 0
+        && !repl_executor_point_parameter_supported();
 }
 #define NUM_INIT_BOOTSTRAP \
     ((int)(sizeof(g_init_bootstrap_repl) / sizeof(g_init_bootstrap_repl[0])))
@@ -689,6 +702,8 @@ void repl_apply_init_bootstrap(void) {
 
     for (int bootstrap_idx = 0; bootstrap_idx < NUM_INIT_BOOTSTRAP; bootstrap_idx++) {
         const InitBootstrapEntry *entry = &g_init_bootstrap_repl[bootstrap_idx];
+        if (init_bootstrap_entry_unsupported(entry))
+            continue;  /* runtime lacks glPointParameterfv: skip, don't neutralize */
         if (entry->toggle_slug && !init_bootstrap_toggle_get(entry->toggle_slug, 1)) {
             if (g_init_bootstrap_cmds[bootstrap_idx].cmd.type == CMD_POINT_PARAMETER_FV &&
                 (GLenum)g_init_bootstrap_cmds[bootstrap_idx].cmd.args[0] ==
@@ -713,6 +728,8 @@ int repl_export_init_section_line_count(void) {
     repl_ensure_init_bootstrap_ready();
     for (int bootstrap_idx = 0; bootstrap_idx < NUM_INIT_BOOTSTRAP; bootstrap_idx++) {
         const InitBootstrapEntry *entry = &g_init_bootstrap_repl[bootstrap_idx];
+        if (init_bootstrap_entry_unsupported(entry))
+            continue;
         if (entry->toggle_slug && !init_bootstrap_toggle_get(entry->toggle_slug, 1))
             continue;
         count++;
@@ -749,6 +766,8 @@ void repl_export_init_section_line(int i, char *buf, size_t n) {
     i -= lights_count;
     for (int bootstrap_idx = 0; bootstrap_idx < NUM_INIT_BOOTSTRAP; bootstrap_idx++) {
         const InitBootstrapEntry *entry = &g_init_bootstrap_repl[bootstrap_idx];
+        if (init_bootstrap_entry_unsupported(entry))
+            continue;
         if (entry->toggle_slug && !init_bootstrap_toggle_get(entry->toggle_slug, 1))
             continue;
         if (enabled_idx == i) {
@@ -781,6 +800,8 @@ static void emit_export_init_section_to_file(FILE *f, int include_tess) {
     repl_ensure_init_bootstrap_ready();
     for (int bootstrap_idx = 0; bootstrap_idx < NUM_INIT_BOOTSTRAP; bootstrap_idx++) {
         const InitBootstrapEntry *entry = &g_init_bootstrap_repl[bootstrap_idx];
+        if (init_bootstrap_entry_unsupported(entry))
+            continue;
         if (entry->toggle_slug && !init_bootstrap_toggle_get(entry->toggle_slug, 1))
             continue;
         format_cmd_source_as_c(line, sizeof(line),
