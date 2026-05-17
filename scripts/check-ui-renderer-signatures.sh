@@ -1,6 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
+. scripts/lib/rg-fallback.sh
 
 allowlist="${1:-scripts/allowlists/ui-renderers-signature.txt}"
 
