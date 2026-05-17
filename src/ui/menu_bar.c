@@ -13,6 +13,7 @@
 #include "state.h"
 #include "menu_bar.h"
 #include "metrics.h"
+#include "theme.h"
 #include "layout.h"
 #include "gl_2d.h"
 
@@ -731,10 +732,10 @@ static void render_scene_example_submenu(const UiRenderSnapshot *snap) {
             continue;
 
         if (ordinal == hover_ordinal) {
-            glColor4f(0.180f, 0.290f, 0.431f, alpha);
+            ui_clr_a(UI_TOK_DROPDOWN_ITEM_HOVER_BG, alpha);
             glRectf((float)(sx + 1), (float)(ey - 2),
                     (float)(sx + sw - 1), (float)(ey - 2 + LINE_H));
-            glColor4f(1.0f, 1.0f, 1.0f, alpha);
+            ui_clr_a(UI_TOK_TEXT_ON_HILITE, alpha);
         } else if (is_active) {
             glColor4f(UI_ACCENT_GREEN_R, UI_ACCENT_GREEN_G, UI_ACCENT_GREEN_B, alpha);
         } else {
@@ -1083,11 +1084,10 @@ void ui_menu_bar_render_example_dropdown(const UiRenderSnapshot *snap) {
                                  scene_hit == snap->user_scene_active_idx);
 
         if (i == g_menu_item_hover || is_open_tag) {
-            // TODO: should be based on color scheme (green)
-            glColor4f(0.180f, 0.290f, 0.431f, alpha);  /* #2e4a6e */
+            ui_clr_a(UI_TOK_DROPDOWN_ITEM_HOVER_BG, alpha);
             glRectf((float)(dx + 1), (float)(ey - 2),
                       (float)(dx + 1) + (float)(dw - 2), (float)(ey - 2) + (float)LINE_H);
-            glColor4f(1.0f, 1.0f, 1.0f, alpha);
+            ui_clr_a(UI_TOK_TEXT_ON_HILITE, alpha);
         } else if (is_active_scene) {
             glColor4f(UI_ACCENT_GREEN_R, UI_ACCENT_GREEN_G, UI_ACCENT_GREEN_B, alpha);
         } else {

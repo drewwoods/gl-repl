@@ -359,6 +359,7 @@ HDRS = \
 	src/ui/text_layout.h \
 	src/ui/text_panel.h \
 	src/ui/text_search.h \
+	src/ui/theme.h \
 	src/ui/variable_panel.h \
 	src/widgets/color_picker_state.h \
 	src/widgets/replay.h \
@@ -521,6 +522,7 @@ TEST_BINS = \
 	test_format \
 	test_repl_state \
 	test_repl_code_panel_layout \
+	test_ui_theme \
 	test_repl_code_panel_document \
 	test_repl_code_panel_syntax \
 	test_scene_transition \
@@ -572,7 +574,7 @@ TEST_BINS += test_export_trace_parity
 TEST_BINS += test_replay_walk
 endif
 
-CORE_TEST_BINS = $(filter-out test_eval test_format test_repl_code_panel_layout test_audio,$(TEST_BINS))
+CORE_TEST_BINS = $(filter-out test_eval test_format test_repl_code_panel_layout test_ui_theme test_audio,$(TEST_BINS))
 
 # Benchmark binaries follow the same linking pattern as core test binaries
 # (they reuse CORE_TEST_OBJS so they work in both real-GL and stubs builds),
@@ -614,6 +616,11 @@ test_format_RUN ?= $(BINDIR)/test_format
 test_repl_code_panel_layout_OBJS = $(OBJDIR)/$(TEST_DIR)/test_repl_code_panel_layout.o $(OBJDIR)/src/ui/text_layout.o
 test_repl_code_panel_layout_LDLIBS =
 test_repl_code_panel_layout_RUN ?= $(BINDIR)/test_repl_code_panel_layout
+
+# Header-only: ui/theme.h pulls in no project objects.
+test_ui_theme_OBJS = $(OBJDIR)/$(TEST_DIR)/test_ui_theme.o
+test_ui_theme_LDLIBS =
+test_ui_theme_RUN ?= $(BINDIR)/test_ui_theme
 
 test_audio_OBJS = $(OBJDIR)/$(TEST_DIR)/test_audio.o $(OBJDIR)/audio.o
 test_audio_LDLIBS = $(GL_LDFLAGS)
