@@ -1,8 +1,13 @@
 /*
- * src/repl/core_internal.h - Parse / extract / normalize helpers.
+ * src/repl/core_internal.h - Shared internal parse / normalize helpers.
  *
- * Phase 5 of feature/source-document-port.md shrank this header to
- * parse-only internals. The previous catch-all dispersed to:
+ * This is the small internal surface that multiple REPL TUs and tests still
+ * share: parse-and-normalize entry points, expression/string extractors,
+ * canonical-text builders, and visible-variable collection. It no longer owns
+ * scene loading, export, editor-input shims, or controller hooks.
+ *
+ * Phase 5 of feature/source-document-port.md shrank the old catch-all header to
+ * this parse-focused subset. The pieces that moved out now live in:
  *
  *   src/repl/util.h            static inline format / copy helpers
  *   src/repl/scenes.h          scene promotion / capture / reset
@@ -28,7 +33,7 @@
 #include "repl/eval.h"       /* ExprVar */
 #include "repl/scenes.h"     /* re-exported for legacy callers */
 #include "repl/util.h"       /* re-exported for legacy callers */
-#include "source_document.h" /* SourceTextView (Phase 1) */
+#include "source_document.h" /* SourceTextView document view */
 
 /* ---- Normalize / commit pipeline -------------------------------------- */
 

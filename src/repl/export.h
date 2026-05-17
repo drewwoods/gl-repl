@@ -41,20 +41,21 @@
 #define REPL_EXPORT_H
 
 #include "repl/eval.h"        /* REPL_SCRATCH_ARRAY_LEN */
-#include "source_document.h"  /* SourceTextView (Phase 1 of feature/source-document-port.md) */
+#include "source_document.h"  /* caller-supplied SourceTextView */
 
-/* Neutral header-config bag (step 4 of feature/decouple-repl-from-gl-repl-alt.md).
+/* Bag of `// @cfg` header key/value pairs used by save/load and scene snapshots.
  *
- * The REPL pipeline historically called glr_config_get/set/items directly to
- * emit and parse `// @cfg slug = value` header lines. That dragged glr_config.c
- * (and transitively audio, camera, profile, variable_panel) into the demo
- * link set. The neutral bag inverts the dependency: owners (controller-side)
- * fill a ReplExportConfig before save and read one after load; src/repl/export.c
- * iterates the bag without knowing what the slugs mean.
+ * Export writes the bag as header lines, import rebuilds the same shape from
+ * those lines, and src/repl/scenes.c uses it to snapshot the subset of
+ * presentation settings that travels with a user scene. The REPL exporter and
+ * importer treat keys and values as opaque strings; the controller-side config
+ * owner decides what each slug means.
  *
- * Step 4 is the temporary catalog split: presentation/render slugs land in
- * the bag because their backing storage is still in g_repl_state. Step 7
- * relocates that storage to glr_state.c and reassigns slugs.
+ * The neutral bag exists so src/repl/export.c can round-trip cfg state without
+ * including controller config headers. That dependency inversion came from
+ * step 4 of feature/decouple-repl-from-gl-repl-alt.md. Presentation/render
+ * slugs still flow through this bag while their storage finishes moving out of
+ * the REPL-owned runtime state.
  *
  * Why a flat key/value bag and not a callback registry: the cfg payload is
  * ~30 slugs, all int 0..N, decimal-encoded. A registered-callback dispatch
@@ -88,12 +89,14 @@ int         repl_export_config_count(const ReplExportConfig *cfg);
 int         repl_export_config_at(const ReplExportConfig *cfg, int idx,
                                   const char **key_out, const char **value_out);
 
-/* Bridge installed by the controller. The bridge knows how to project app/REPL
- * cfg state into a bag and apply a bag back. src/repl/export.c uses it for @cfg
- * emission (save) and apply (load); src/repl/scenes.c uses it for per-scene
- * snapshots. The demo deliberately leaves the bridge unset so src/repl/export.c
- * doesn't reach for cfg-bound state, which is what keeps glr_config.c out of
- * the demo link set. */
+/* Controller-installed adapter for cfg save/load.
+ *
+ * App startup installs this bridge from src/app/glr_actions.c. Save paths call
+ * fill_all() to emit `// @cfg` lines and get_int() to gate bootstrap lines;
+ * src/repl/scenes.c calls fill_scene_subset() when capturing scene-local cfg
+ * state; import and example-load paths call apply() as parsed cfg lines arrive.
+ * The standalone demo leaves the bridge unset, so cfg lines are skipped and the
+ * exporter/importer stay decoupled from glr_config.c. */
 typedef struct {
     /* Fill bag with all current cfg values for save-file emission. */
     void (*fill_all)(ReplExportConfig *cfg);
@@ -109,22 +112,25 @@ typedef struct {
     int  (*get_int)(const char *slug, int fallback);
 } ReplExportConfigBridge;
 
+/* Install or read the process-wide cfg bridge used by export/import and scene
+ * snapshot code. Callers normally install once at app startup. */
 void                          repl_export_install_config_bridge(const ReplExportConfigBridge *bridge);
 const ReplExportConfigBridge *repl_export_config_bridge(void);
 
-/* Drain the pending-import-cfg accumulator (populated by header-line parsing).
- * Used by import paths after they finish handing all `// @cfg` lines to
- * `repl_state_parse_workspace_header_line`. The drain calls the installed
- * bridge's apply() with the accumulated bag and resets the accumulator. */
+/* Apply the current batch of parsed `// @cfg` lines, then clear the accumulator.
+ * Importers call this after finishing a header batch; example loading uses the
+ * same drain after consuming leading example metadata. The per-line parser may
+ * already have applied each cfg immediately, so this is primarily the
+ * batch-shaped handoff for callers that want the full bag at once. */
 void repl_export_apply_pending_cfg(void);
 
-/* Neutral camera-block shape (step 4a of the decouple plan).
+/* Opaque 4-line camera transform block used by export, import, and examples.
  *
- * The exported `// camera` block is 4 raw GL lines (translate /
- * rotate-rx / rotate-g_angle / translate-target). src/repl/export.c
- * produces and consumes those lines as opaque strings via the
- * camera bridge; the bridge implementation (in glr_camera_export.c)
- * owns the format and the call to glr_camera_set_*. */
+ * Export writes these raw GL lines into saved files and the code-panel preview;
+ * import and example loading feed the same text back to the controller bridge.
+ * src/repl/export.c treats the block as opaque strings, while the bridge in
+ * src/app/glr_camera_export.c owns the actual camera parsing and mutation.
+ * This neutral block was introduced in step 4a of the decouple plan. */
 #define REPL_EXPORT_CAMERA_LINES        4
 #define REPL_EXPORT_CAMERA_LINE_MAX     96
 #define REPL_EXPORT_CAMERA_PREAMBLE_MAX 64
@@ -134,6 +140,14 @@ typedef struct {
     int  present;
 } ReplExportCameraBlock;
 
+/* Controller-installed adapter for camera block save/load.
+ *
+ * Save paths call fill_save_block() and fill_save_preamble(); the code-panel
+ * preview calls fill_display_block(); file import uses reset_import() plus
+ * try_consume_import_line() to stream camera lines back into live state; the
+ * example loader can call apply_example_block() after validating a `// camera`
+ * header. The bridge is installed from src/app/glr_camera_export.c and is
+ * intentionally optional so non-rendering hosts can leave camera handling out. */
 typedef struct {
     /* Fill block for saved-file emission. Line 3 uses the literal
      * "glRotatef(g_angle, 0,1,0)" so the saved file animates via
@@ -159,6 +173,8 @@ typedef struct {
     void (*apply_example_block)(const ReplExportCameraBlock *block);
 } ReplExportCameraBridge;
 
+/* Install or read the process-wide camera bridge used by export/import and
+ * example camera headers. Callers normally install once at app startup. */
 void                          repl_export_install_camera_bridge(const ReplExportCameraBridge *bridge);
 const ReplExportCameraBridge *repl_export_camera_bridge(void);
 
@@ -189,11 +205,13 @@ extern const char  *g_footer_post_init[];
     "B[" REPL_EXPORT_STRINGIFY(REPL_SCRATCH_ARRAY_LEN) "], " \
     "C[" REPL_EXPORT_STRINGIFY(REPL_SCRATCH_ARRAY_LEN) "];"
 
-/* Layout values the export pipeline reads as opaque integers (step 7c
- * of feature/decouple-repl-from-gl-repl-alt.md). The controller
- * computes these from `ui_layout_*` / `glr_state_presentation()`
- * before calling export; `src/repl/export.c` does not call ui_state_*
- * / ui_layout_* / glr_state_*.
+/* Controller-owned layout snapshot used by export and code-panel dumps.
+ *
+ * The exporter needs a few geometry and wrapping values to format saved output
+ * and preview text, but it should not query UI or app state directly. Callers
+ * compute the numbers once per export and pass them in here as opaque integers.
+ * Step 7c of feature/decouple-repl-from-gl-repl-alt.md moved this data flow out
+ * of hidden ui/glr state reads.
  *
  * Callers that do not have a viewport on hand (LRU evict in
  * src/repl/scenes.c, headless tests, the standalone repl_demo which does
@@ -272,12 +290,11 @@ int  repl_export_lights_display_line_count(void);
 void repl_export_lights_display_line(int i, char *buf, size_t n);
 
 #if 0
-/* Visual dump consumes the explicit layout struct (step 7c of
- * feature/decouple-repl-from-gl-repl-alt.md) so the REPL pipeline
- * doesn't reach into ui_state / glr_state for panel width or
- * presentation flags. The plain text dump above doesn't need the
- * struct because it doesn't measure or wrap. `code_margin_x` is passed
- * by the caller so this REPL-side dump helper does not include UI metrics. */
+/* Visual dump consumes the explicit layout snapshot so the REPL pipeline does
+ * not reach into ui_state / glr_state for panel width or presentation flags.
+ * The plain text dump above doesn't need the struct because it doesn't measure
+ * or wrap. `code_margin_x` is passed by the caller so this helper still stays
+ * free of UI metric ownership. Step 7c documented that dependency cut. */
 void repl_dump_code_panel_visual_text(FILE *out, SourceTextView text,
                                       const ReplExportLayout *layout,
                                       int code_margin_x);

@@ -1,27 +1,18 @@
 /*
- * src/repl/load.h - Non-editor source-load entry point.
+ * src/repl/load.h - Line-at-a-time loader used outside editor input dispatch.
  *
- * Step 5b of feature/decouple-repl-from-gl-repl-alt.md split this out
- * of src/repl/compile.c after a [P2] review finding: src/repl/compile.c is the
- * pure-validator module (each entry point reads inputs, returns a
- * ReplCompiledChange, and must not write the command store / editor
- * buffer / predef-var registrations). repl_load_apply_line drives the
- * apply side — it orchestrates compile → predef apply → editor-buffer
- * apply → command-store apply. That orchestration belongs in its own
- * module so the compile module can stay pure.
+ * repl_load_apply_line is the non-editor load path: the caller chooses the
+ * insertion index, this helper compiles the line, applies the resulting change,
+ * and updates REPL-owned state without touching editor input widgets. Typical
+ * callers are the save-file importer, built-in example loader, tutorial comment
+ * injector, and integration tests.
  *
- * Used by:
- *   - src/repl/export.c importer (single-line apply during file-load)
- *   - src/repl/example_loader.c (built-in example loading; the loader
- *     classifies lines into 3 buckets — decls, func_def blocks,
- *     other — and emits each bucket through repl_load_apply_line
- *     so the layout matches the editor's canonical reorder
- *     without needing to touch the lean loader's append-at-end
- *     contract; see step 7e of the decouple plan)
- *
- * Not used by:
- *   - editor commit chain (editor_commit_apply_plan covers that path
- *     with EditorCommitPlan side effects)
+ * The split from src/repl/compile.c matters because compile.c is the pure
+ * validator layer: it returns ReplCompiledChange descriptors and must not write
+ * command-store, editor-buffer, or predefined-variable state. This module owns
+ * the apply orchestration. That separation became explicit in step 5b of
+ * feature/decouple-repl-from-gl-repl-alt.md after a review finding on compile
+ * purity.
  */
 #ifndef REPL_LOAD_H
 #define REPL_LOAD_H
@@ -35,8 +26,10 @@
  *   close_brace → for_loop → func_def → if_block (block validators)
  *   plain GL command (via repl_parse_and_normalize_strict)
  *
- * Returns 1 if the line was consumed, 0 if nothing matched. On parse
- * error fills `err` with a diagnostic and returns 0.
+ * Returns 1 if the line was consumed, 0 if nothing matched. On parse error
+ * fills `err` with a diagnostic and returns 0. Callers usually loop this over
+ * imported/example lines, then mark the flat program and auto-normal state dirty
+ * once at the end of the batch.
  *
  * Caller responsibilities:
  *   - Set repl_state_edit_line to the desired insertion index, which
