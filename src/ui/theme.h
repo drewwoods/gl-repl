@@ -28,6 +28,7 @@
 
 #include <gl_includes.h>
 #include <c_compat.h>   /* STATIC_ASSERT (C99/C11 portable) */
+#include <config.h>     /* UI_THEME_DEFAULT (compile-time scheme select) */
 
 typedef float UiRgba[4];
 
@@ -133,13 +134,14 @@ static const UiRgba g_ui_theme_table[UI_THEME_COUNT][UI_TOK_COUNT] = {
     },
 };
 
-/* The single swap point. NOTE: header-only, so each translation unit
- * gets its own copy - sound today because this is the compile-time
- * default and nothing mutates it at runtime. A real runtime switcher
- * (e.g. a GlrConfigKey cycle) must relocate this to one .c TU; the
- * ui_theme_select / ui_theme_active seam keeps call sites stable when
- * that happens. */
-static int g_ui_theme = UI_THEME_GREEN;
+/* Active scheme. The default is the single compile-time swap point,
+ * UI_THEME_DEFAULT in config.h (build-overridable). NOTE: header-only,
+ * so each translation unit gets its own copy - sound today because the
+ * value is the compile-time default and nothing mutates it at runtime.
+ * A real runtime switcher (e.g. a GlrConfigKey cycle) must relocate
+ * this to one .c TU; the ui_theme_select / ui_theme_active seam keeps
+ * call sites stable when that happens. */
+static int g_ui_theme = UI_THEME_DEFAULT;
 
 static inline const float *ui_rgba(UiThemeToken t) {
     return g_ui_theme_table[g_ui_theme][t];
@@ -166,5 +168,7 @@ STATIC_ASSERT(UI_TOK_COUNT == 19,
               "UiThemeToken count changed - update g_ui_theme_table and test_ui_theme");
 STATIC_ASSERT(UI_THEME_COUNT == 6,
               "UiTheme row count changed - update g_ui_theme_table and test_ui_theme");
+STATIC_ASSERT(UI_THEME_DEFAULT >= 0 && UI_THEME_DEFAULT < UI_THEME_COUNT,
+              "UI_THEME_DEFAULT (config.h) out of range for the UiTheme table");
 
 #endif /* UI_THEME_H */

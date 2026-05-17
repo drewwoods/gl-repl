@@ -55,7 +55,9 @@ semantic/data named-const groups (`k_tab_example_*`, `k_var_*`,
 `k_prof_*`, panels.c `k_rename_bar_*` / `k_status_bar_*`,
 `k_menubar_bottom_rule`, `k_action_chip_outline`, `k_panel_dim`) that
 must stay fixed across schemes. Swap scheme via the single
-`g_ui_theme` constant in `theme.h` (6 rows populated).
+compile-time `UI_THEME_DEFAULT` knob in `config.h` (0=green default …
+5=mono; build-overridable; range-checked by a `STATIC_ASSERT` in
+`theme.h`; 6 rows populated).
 
 ## Context
 
