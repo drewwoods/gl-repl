@@ -65,6 +65,28 @@ void scene_apply_camera(float rx, float ry, float dist,
  * when accumulation AA is on. */
 int scene_render_3d_scene(const SceneRenderConfig *config);
 
+/* Canonical description of the projection the scene last applied this
+ * frame. scene_apply_projection() caches it (Tenet 3: a render-time
+ * discovery the controller actualizes back into GL-free state) so the
+ * exporter / code panel can emit a faithful reshape() without re-deriving
+ * the math or reaching into scene internals. The blend mid-transition is
+ * snapped to whichever side the mix is closest to — exporters want a
+ * discrete mode, not an interpolated matrix. ortho_top is the
+ * aspect-independent half-height (callers multiply by their own aspect).
+ * Read it through the controller-installed export projection bridge, not
+ * directly from repl_*. */
+typedef struct SceneProjectionDesc {
+    int    ortho;        /* 0 = perspective, 1 = orthographic */
+    double fovy_deg;     /* perspective vertical field of view */
+    double near_z;       /* perspective near plane (> 0) */
+    double far_z;        /* perspective far plane */
+    double ortho_top;    /* ortho half-height, aspect-independent */
+    double ortho_near;   /* ortho near clip (signed eye Z) */
+    double ortho_far;    /* ortho far clip */
+} SceneProjectionDesc;
+
+void scene_get_active_projection(SceneProjectionDesc *out);
+
 /* The replay-fade overlay pass used to live in src/scene/render.c and was
  * exposed here for benchmark use. It moved out to the REPL controller
  * (imrepl_ctrl.c) and now runs through SceneRenderConfig.post_fill_fn —

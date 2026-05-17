@@ -313,6 +313,50 @@ function: on unsupported hardware the injected `point_attenuation` bootstrap
 entry has to be skipped entirely rather than invoking the missing entry
 point.
 
+### Dynamic Reshape Projection (export + code panel)
+
+The exported standalone C file's `reshape()` and the live code panel's
+footer chrome must show the projection the scene is *currently* applying
+(perspective in 3D, ortho in 2D), not a hardcoded `gluPerspective`. This
+is the canonical pattern for a **per-frame, GL-derived value that becomes
+emitted source text** consumed by GL-free modules. Two cooperating
+mechanisms:
+
+1. **Scene caches what it applied (Tenet 3).**
+   `scene_apply_projection()` writes a jitter-free `SceneProjectionDesc`
+   into a file static every frame; `scene_get_active_projection()` reads
+   it. The continuous perspective↔ortho blend is *snapped to the
+   dominant side* (`mix < 0.5` ⇒ ortho) because `reshape()` emits one
+   discrete mode, never an interpolated matrix. Scene exposes data; it
+   does not format text or know about export.
+
+2. **Controller-installed projection bridge** (same shape as
+   `ReplExportCameraBridge`). `src/repl/export.c` is GL-free, so it owns
+   no projection math. `ReplExportProjectionBridge.fill_reshape_block`
+   is installed by `glr_ctrl.c` next to the camera-distance source; its
+   adapter reads `scene_get_active_projection()` and formats the C
+   lines. No bridge installed (scene_demo, tests) ⇒
+   `repl_export_reshape_projection_lines()` returns the canonical
+   perspective default (correct `0.1, 200.0` near/far).
+
+**Dynamic-footer sentinel convention.** `g_footer_pre_init[]` is iterated
+verbatim by three consumers (the file writer in `src/repl/export.c` and
+the code panel's row-count *and* render passes in
+`src/ui/repl_code_panel.c`). A line whose count or text is dynamic is
+stored as a unique sentinel constant
+(`REPL_EXPORT_RESHAPE_PROJ_SENTINEL`); **every** consumer must
+special-case the sentinel and expand it through the single resolver
+`repl_export_reshape_projection_lines()` — mirroring the older
+`"static float g_angle = 0.0f;"` special-case for the saved-file angle
+preamble. Invariant: the resolver is deterministic within a frame, so
+the panel's row-count pass and render pass agree on row count even
+though the projection expands to one line (perspective) or two (ortho).
+The resolver returns pointers into reused static storage; the panel
+copies them into its per-builder text arena (`add_static_row` stores the
+pointer, not a copy). Adding another dynamic footer line follows the
+same recipe: sentinel constant in `export.h`, one resolver, special-case
+in all three consumers.
+
 ### Startup & Audio-Worker Diagnostics
 
 Two always-on stderr diagnostics localise startup stalls and
@@ -674,6 +718,16 @@ The full plan lives in `feature/decouple-repl-from-gl-repl-alt.md`
    until step 7 closes the last two doors (auto_rotate reset in
    `src/repl/state.c` + example camera presets in
    `src/repl/example_loader.c`).
+4b. ✅ **Step 4b — Reshape-projection neutralization.** Same shape as
+   the camera block: `ReplExportProjectionBlock` (≤4-line block) +
+   `ReplExportProjectionBridge` (`fill_reshape_block`), installed in
+   `glr_ctrl.c`. `src/repl/export.c` keeps no projection math — it
+   resolves the dynamic `reshape()` body through
+   `repl_export_reshape_projection_lines()` (bridge if installed, else
+   the canonical perspective default). Scene side is the cached
+   `SceneProjectionDesc` from `scene_get_active_projection()` (Tenet 3).
+   See *Dynamic Reshape Projection* above for the sentinel/refresh
+   convention shared by the file writer and the code panel.
 5. Step 5a/5b — Extract pure structured-block validators from
    `editor_compile_*`; add non-editor source-load/commit API so
    examples and imports stop calling `feed_line`.

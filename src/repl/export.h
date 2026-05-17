@@ -178,6 +178,41 @@ typedef struct {
 void                          repl_export_install_camera_bridge(const ReplExportCameraBridge *bridge);
 const ReplExportCameraBridge *repl_export_camera_bridge(void);
 
+/* Neutral reshape-projection seam (same shape as the camera bridge).
+ *
+ * The exported reshape() body between glLoadIdentity() and
+ * glMatrixMode(GL_MODELVIEW) is dynamic: it must reproduce whatever
+ * projection the scene is currently applying (perspective in 3D, ortho
+ * in 2D). src/repl/export.c is GL-free, so the controller installs a
+ * bridge whose implementation reads scene_get_active_projection() and
+ * formats the lines. The g_footer_pre_init slot for those lines holds
+ * REPL_EXPORT_RESHAPE_PROJ_SENTINEL; every consumer (file writer and the
+ * live code panel) expands it through repl_export_reshape_projection_lines()
+ * so the saved file and the panel always agree. No bridge installed (the
+ * scene_demo, tests) => the canonical perspective default. */
+#define REPL_EXPORT_PROJ_LINES    4
+#define REPL_EXPORT_PROJ_LINE_MAX 96
+#define REPL_EXPORT_RESHAPE_PROJ_SENTINEL "\x01@reshape-projection"
+
+typedef struct {
+    char lines[REPL_EXPORT_PROJ_LINES][REPL_EXPORT_PROJ_LINE_MAX];
+    int  count;
+} ReplExportProjectionBlock;
+
+typedef struct {
+    void (*fill_reshape_block)(ReplExportProjectionBlock *block);
+} ReplExportProjectionBridge;
+
+void                              repl_export_install_projection_bridge(const ReplExportProjectionBridge *bridge);
+const ReplExportProjectionBridge *repl_export_projection_bridge(void);
+
+/* Resolve the reshape projection lines: the installed bridge, else the
+ * canonical perspective default. Fills up to REPL_EXPORT_PROJ_LINES
+ * pointers into out[] and returns the count. Returned pointers reference
+ * internal static storage valid until the next call — emit/copy them
+ * before calling again. Main-thread only. */
+int repl_export_reshape_projection_lines(const char *out[REPL_EXPORT_PROJ_LINES]);
+
 /* Boilerplate C file segments for export. g_header_pre is the file-scope
  * preamble (includes, macros, rotation globals). g_display_header opens
  * the display() function (`void display() { ...clear/load/push...`) and
