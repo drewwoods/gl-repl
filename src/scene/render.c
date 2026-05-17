@@ -102,12 +102,16 @@ static void scene_render_pop_state(void) {
  * animates, at the cost of not tracking post-switch motion. */
 static double g_frozen_ortho_ref = 0.0;
 
-/* Run the user geometry through GL_FEEDBACK with an identity projection so
- * the recorded vertices are plain eye-space coordinates, and return the
- * mean eye distance of the geometry. With projection == identity and the
- * default glDepthRange(0,1), a vertex's window z is 0.5*z_eye + 0.5, so
- * z_eye = 2*winz - 1 and the camera-space distance is -z_eye (the eye
- * looks down -Z).
+/* Run the user geometry through GL_FEEDBACK with a wide ortho box so the
+ * recorded window z maps linearly back to eye space, and return the
+ * depth-center (midpoint of the min/max eye distance) of the geometry.
+ *
+ * An identity probe projection would clip to the NDC unit cube, so any
+ * geometry past |z_eye| > 1 (essentially everything) is discarded and
+ * feedback returns nothing. glOrtho(-B,B,-B,B,-B,B) keeps the whole
+ * frustum-visible scene; with the default glDepthRange(0,1) a vertex's
+ * window z is (-z_eye/B + 1)/2, so z_eye = -B*(2*winz - 1) and the
+ * camera distance is -z_eye.
  *
  * Returns 0.0 when there is nothing to measure or the feedback buffer
  * overflowed (glRenderMode < 0) — the caller treats 0 as "use cam_dist".
@@ -115,10 +119,13 @@ static double g_frozen_ortho_ref = 0.0;
  * scenes simply fall back, which is safe. */
 static double scene_probe_eye_dist(const SceneRenderConfig *config) {
     static GLfloat fb[96 * 1024]; /* ~384 KB; overflow -> cam_dist fallback */
+    /* Probe-projection half-extent; >= far_z so nothing the real frustum
+     * can show is clipped during the feedback pass. */
+    const double PROBE_BOX = 200.0;
     GLint n;
     int i;
-    double sum = 0.0;
-    long count = 0;
+    double dmin = 0.0, dmax = 0.0;
+    int have = 0;
 
     if (!config->execute_fn)
         return 0.0;
@@ -126,6 +133,8 @@ static double scene_probe_eye_dist(const SceneRenderConfig *config) {
     glMatrixMode(GL_PROJECTION);
     glPushMatrix();
     glLoadIdentity();
+    glOrtho(-PROBE_BOX, PROBE_BOX, -PROBE_BOX, PROBE_BOX,
+            -PROBE_BOX, PROBE_BOX);
     glMatrixMode(GL_MODELVIEW); /* leave camera modelview untouched */
 
     glFeedbackBuffer((GLsizei)(sizeof fb / sizeof fb[0]), GL_3D, fb);
@@ -179,17 +188,22 @@ static double scene_probe_eye_dist(const SceneRenderConfig *config) {
         }
 
         while (verts-- > 0 && i + 3 <= n) {
-            double z_eye = 2.0 * (double)fb[i + 2] - 1.0;
-            double dist = -z_eye;
-            if (dist > 1e-4) {
-                sum += dist;
-                count++;
+            /* fb[i+2] is window z; invert the wide-ortho mapping above. */
+            double dist = PROBE_BOX * (2.0 * (double)fb[i + 2] - 1.0);
+            if (dist > 1e-4 && dist < PROBE_BOX) {
+                if (!have || dist < dmin) dmin = dist;
+                if (!have || dist > dmax) dmax = dist;
+                have = 1;
             }
             i += 3;
         }
     }
 
-    return count > 0 ? sum / (double)count : 0.0;
+    /* Depth-center of the drawn geometry: the midpoint holds its size
+     * across the switch, near (perspective-magnified) geometry shrinks
+     * inward, far geometry grows off-screen. Midpoint, not mean, so a
+     * dense near/far cluster can't drag the pivot off the visual center. */
+    return have ? 0.5 * (dmin + dmax) : 0.0;
 }
 
 /* Capture / release the frozen ortho reference on the projection-mix
