@@ -108,6 +108,49 @@ const ReplExportCameraBridge *repl_export_camera_bridge(void) {
     return g_export_camera_bridge;
 }
 
+/* Reshape-projection bridge — same install/getter shape as the camera
+ * bridge. NULL on the demo / in tests, where the perspective default is
+ * emitted. */
+static const ReplExportProjectionBridge *g_export_projection_bridge = NULL;
+
+void repl_export_install_projection_bridge(const ReplExportProjectionBridge *bridge) {
+    g_export_projection_bridge = bridge;
+}
+
+const ReplExportProjectionBridge *repl_export_projection_bridge(void) {
+    return g_export_projection_bridge;
+}
+
+int repl_export_reshape_projection_lines(const char *out[REPL_EXPORT_PROJ_LINES]) {
+    static char buf[REPL_EXPORT_PROJ_LINES][REPL_EXPORT_PROJ_LINE_MAX];
+    int count = 0;
+
+    if (g_export_projection_bridge &&
+        g_export_projection_bridge->fill_reshape_block) {
+        ReplExportProjectionBlock blk;
+        blk.count = 0;
+        g_export_projection_bridge->fill_reshape_block(&blk);
+        if (blk.count > 0 && blk.count <= REPL_EXPORT_PROJ_LINES) {
+            for (int i = 0; i < blk.count; i++) {
+                snprintf(buf[i], sizeof buf[i], "%s", blk.lines[i]);
+                out[i] = buf[i];
+            }
+            count = blk.count;
+        }
+    }
+
+    if (count == 0) {
+        /* Canonical default: the steady 3D frustum with the *correct*
+         * far plane (the historical literal said 100.0; the live scene
+         * uses 200.0). */
+        snprintf(buf[0], sizeof buf[0],
+                 "  gluPerspective(45.0, (float)w/(float)h, 0.1, 200.0);");
+        out[0] = buf[0];
+        count = 1;
+    }
+    return count;
+}
+
 /* Pending @cfg accumulator: parse_cfg() during import populates this; the
  * import driver drains it via the bridge after parse completes. */
 static ReplExportConfig g_import_cfg_accumulator;
@@ -594,7 +637,10 @@ const char *g_footer_pre_init[] = {
     "  glViewport(0, 0, w, h);",
     "  glMatrixMode(GL_PROJECTION);",
     "  glLoadIdentity();",
-    "  gluPerspective(45.0, (float)w/(float)h, 0.1, 100.0);",
+    /* Dynamic: every consumer expands this via
+     * repl_export_reshape_projection_lines() so the saved file and the
+     * live code panel reflect the scene's current projection. */
+    REPL_EXPORT_RESHAPE_PROJ_SENTINEL,
     "  glMatrixMode(GL_MODELVIEW);",
     "}",
     "",
@@ -3115,8 +3161,17 @@ static void emit_export_display_tail(FILE *f, const ExportNeeds *needs,
                                      const ReplExportLayout *layout) {
     int include_tess = needs ? needs->needs_tess : 0;
 
-    for (int line_idx = 0; g_footer_pre_init[line_idx]; line_idx++)
+    for (int line_idx = 0; g_footer_pre_init[line_idx]; line_idx++) {
+        if (strcmp(g_footer_pre_init[line_idx],
+                   REPL_EXPORT_RESHAPE_PROJ_SENTINEL) == 0) {
+            const char *proj[REPL_EXPORT_PROJ_LINES];
+            int pn = repl_export_reshape_projection_lines(proj);
+            for (int j = 0; j < pn; j++)
+                fprintf(f, "%s\n", proj[j]);
+            continue;
+        }
         fprintf(f, "%s\n", g_footer_pre_init[line_idx]);
+    }
     emit_export_init_section_to_file(f, include_tess);
 
     /* Use the actual scene rect so the exported window preserves the REPL
