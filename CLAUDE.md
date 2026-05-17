@@ -115,7 +115,26 @@ compatibility wrappers.
 ./sample workspace/       # Load every *.c under workspace/ as a user scene
 ./sample --noaccum        # Disable accumulation buffer AA
 ./sample --dump-code      # Print loaded buffer to stdout
+GLR_NO_POINT_PARAMETER=1 ./sample   # Force the no-glPointParameterfv path
 ```
+
+### `GLR_NO_POINT_PARAMETER`
+
+Runtime env var (any non-empty value). `glr_ctrl_init_gl()` auto-detects
+`glPointParameterfv` support from the live GL context
+(`GL_VERSION >= 1.4 || GL_ARB/EXT_point_parameters`); this var forces the
+unsupported path on capable hardware so the fallback stays testable.
+There is **no build flag** — it replaced the old compile-time
+`NO_POINT_PARAMETER` macro. When point attenuation is off the binary
+logs one stderr line distinguishing the env override from a GL context
+that genuinely lacks the entry point. Unsupported → `CMD_POINT_PARAMETER_FV`
+is a silent no-op (executor falls back to a camera-distance `glPointSize`
+approximation), the injected `point_attenuation` init bootstrap entry is
+skipped in apply *and* export, and the star backdrop's direct call is
+gated via `SceneRenderConfig.point_parameter_supported`. User-typed
+`glPointParameterfv(...)` is still kept verbatim in exported standalone C
+(it may target other hardware). See *Runtime GL Capability Detection* in
+`ARCHITECTURE.md`.
 
 ## Test
 
@@ -765,6 +784,9 @@ glShadeModel(MODE)
 glPointSize(size)
 glLineWidth(width)
 glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION, const, linear, quadratic)
+  - Runtime-gated: silent no-op when the GL context lacks
+    glPointParameterfv or GLR_NO_POINT_PARAMETER is set (see the
+    GLR_NO_POINT_PARAMETER section under Run).
 glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA|GL_ONE)
 glColorMaterial(face, mode), glMaterialf(face, pname, value)
   glColorMaterial mode: GL_AMBIENT, GL_DIFFUSE, GL_SPECULAR, GL_EMISSION, GL_AMBIENT_AND_DIFFUSE
