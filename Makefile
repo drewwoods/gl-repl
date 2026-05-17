@@ -27,12 +27,13 @@ GL_HEADER_CFLAGS = \
 endif
 
 # Language standard. Everything (sample, tests, CI) is C2x by default
-# and that does not change. The sample source is *also* kept valid C99
-# (guarded by `make c99`); `make sample-c99` opts into an actual
-# C99-compiled binary in its own object tree via SAMPLE_STD=c99. Plain
-# -std=c99 (no -pedantic-errors) here: the strict pedantic bar lives in
-# the stub-path `make c99` guard, so the real-GL-linked binary doesn't
-# trip on platform headers' own old-style declarations.
+# and that does not change. The sample source is *also* kept buildable
+# as C99 on old machines / old GCC (guarded by `make c99`, which is
+# `gcc -std=c99` WITHOUT -pedantic — GNU extensions GCC accepts are
+# fine; the goal is "old gcc compiles it", not pure ISO C99).
+# `make sample-c99` opts into an actual C99-compiled binary in its own
+# object tree via SAMPLE_STD=c99 (plain -std=c99, so it doesn't trip on
+# platform GL headers' own old-style declarations).
 SAMPLE_STD ?= c2x
 
 COMMON_CFLAGS = \
@@ -1006,7 +1007,7 @@ check-repl-demo-stubs-shrinking: ## Ratchet on tools/repl_demo/stubs.c — must 
 check-no-point-parameter-builds: ## Verify src/repl/executor.c syntax-checks with NO_POINT_PARAMETER=1.
 	@bash scripts/check-no-point-parameter-builds.sh
 
-check-c99: ## Verify the sample source set syntax-checks under -std=c99 -pedantic-errors (default build stays C2x).
+check-c99: ## Verify the sample source set builds under gcc -std=c99 (old-machine target; default build stays C2x).
 	@C99_SRCS='$(SRCS)' bash scripts/check-c99.sh
 
 c99: check-c99 ## Alias for check-c99 (C99 sample-source conformance guard).
