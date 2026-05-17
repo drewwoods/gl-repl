@@ -1,5 +1,6 @@
 #include "app/glr_ctrl.h"
 
+#include <c_compat.h>  /* STATIC_ASSERT (C99/C11 portable) */
 #include <ctype.h>
 #include <errno.h>
 #include <gl_includes.h>
@@ -1235,10 +1236,10 @@ static int glr_ctrl_active_indent_chars(void) {
 /* Constants in snapshot.h are hardcoded to keep the UI layer free of
  * repl-layer includes; assert equivalence here where repl/core.h is in
  * scope. */
-_Static_assert(UI_SCENE_TAB_CAP >= MAX_USER_SCENES + 1,
-               "scene-tab cap must fit every user slot plus the example tab");
-_Static_assert(UI_SCENE_TAB_NAME_MAX == USER_SCENE_NAME_MAX,
-               "scene-tab name buffer must match the user-scene name max");
+STATIC_ASSERT(UI_SCENE_TAB_CAP >= MAX_USER_SCENES + 1,
+              "scene-tab cap must fit every user slot plus the example tab");
+STATIC_ASSERT(UI_SCENE_TAB_NAME_MAX == USER_SCENE_NAME_MAX,
+              "scene-tab name buffer must match the user-scene name max");
 
 /* Derive the scene tab strip each frame from existing state — no persistent
  * model. One tab per occupied user-scene slot (dense slot order, matching

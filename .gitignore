@@ -8,6 +8,7 @@ workspace/
 bench_repl
 /scene_demo
 /repl_demo
+/sample-c99
 .cache/
 compile_commands.json
 coverage.lcov

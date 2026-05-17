@@ -17,11 +17,36 @@ GNU sed is available as `gsed` on macOS via Homebrew (`brew install gnu-sed`).
 make sample          # Build main binary (freeglut)
 make glut            # Build with system GLUT (macOS framework)
 make test            # Build and run all tests
+make c99             # Guard: sample source must syntax-check as C99
 make clean           # Remove binaries
 ```
 
 Requires: gcc with C2x support, OpenGL, GLUT/freeglut, AddressSanitizer enabled
 by default in debug builds.
+
+### C99 portability contract
+
+All builds (`make sample`, `make test`, CI) compile `-std=c2x` — that
+does not change. Separately, the **sample source set must stay valid
+C99**: `make c99` (also run as `check-c99` inside
+`make check-state-ownership`, so it's part of the standard gate)
+syntax-checks every sample TU under `-std=c99 -pedantic-errors` on the
+GL-stub include path. It is `-fsyntax-only` — it does not build objects
+or flip any build's standard, so there is no object-tree split.
+
+Keep new sample code C99-clean:
+
+- Compile-time asserts: `STATIC_ASSERT(expr, msg)` from
+  `include/c_compat.h` (real `_Static_assert` under C11+, negative-array
+  fallback under C99) — never raw `_Static_assert`.
+- Variadic macros: plain `, __VA_ARGS__`, never GNU `, ##__VA_ARGS__`.
+- One `typedef` per type name across headers (no C11 typedef
+  redefinition); forward via the owning header instead.
+- Function-pointer casts must be prototyped (e.g. the
+  `ReplGluCallback` typedef in `src/repl/executor.c`), never old-style
+  `void (*)()`.
+
+Test-only and generated harness files are out of the C99 promise.
 
 `include/gl_includes.h` is vendored alongside the source — the Makefile adds
 `-Iinclude` to `COMMON_CFLAGS` so every translation unit can resolve it via

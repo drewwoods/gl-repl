@@ -49,7 +49,7 @@ typedef struct {
 /* Scene tab strip view. Both constants are hardcoded here, NOT derived from
  * repl macros — snapshot.h must stay free of repl-layer includes (UI-layer
  * purity). Equivalence to the repl source-of-truth is enforced by
- * _Static_assert in glr_ctrl.c (which already includes repl/core.h). */
+ * STATIC_ASSERT in glr_ctrl.c (which already includes repl/core.h). */
 enum { UI_SCENE_TAB_NAME_MAX = 64 };   /* == USER_SCENE_NAME_MAX */
 enum { UI_SCENE_TAB_CAP = 9 };         /* == MAX_USER_SCENES + 1 */
 typedef enum { UI_SCENE_TAB_USER = 0, UI_SCENE_TAB_EXAMPLE } UiSceneTabKind;

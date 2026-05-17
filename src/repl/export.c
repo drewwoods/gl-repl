@@ -558,12 +558,12 @@ static const char *g_init_host_only_visible_c[] = {
 
 static const char *g_init_host_only_tess_c[] = {
     "  g_tess = gluNewTess();",
-    "  gluTessCallback(g_tess, GLU_TESS_BEGIN, (void (*)())_tess_vtx_begin_cb);",
-    "  gluTessCallback(g_tess, GLU_TESS_END, (void (*)())_tess_vtx_end_cb);",
-    "  gluTessCallback(g_tess, GLU_TESS_VERTEX, (void (*)())_tess_vtx_cb);",
-    "  gluTessCallback(g_tess, GLU_TESS_COMBINE, (void (*)())_tess_comb_cb);",
-    "  gluTessCallback(g_tess, GLU_TESS_ERROR, (void (*)())_tess_err_cb);",
-    "  gluTessCallback(g_tess, GLU_TESS_EDGE_FLAG, (void (*)())glEdgeFlag);",
+    "  gluTessCallback(g_tess, GLU_TESS_BEGIN, (_GluCb)_tess_vtx_begin_cb);",
+    "  gluTessCallback(g_tess, GLU_TESS_END, (_GluCb)_tess_vtx_end_cb);",
+    "  gluTessCallback(g_tess, GLU_TESS_VERTEX, (_GluCb)_tess_vtx_cb);",
+    "  gluTessCallback(g_tess, GLU_TESS_COMBINE, (_GluCb)_tess_comb_cb);",
+    "  gluTessCallback(g_tess, GLU_TESS_ERROR, (_GluCb)_tess_err_cb);",
+    "  gluTessCallback(g_tess, GLU_TESS_EDGE_FLAG, (_GluCb)glEdgeFlag);",
     NULL
 };
 
@@ -2066,6 +2066,7 @@ static void write_tess_preamble(FILE *f) {
         "static GLdouble _tn[3] = {0.0, 0.0, 1.0};\n"
         "static GLdouble _tc[4] = {1.0, 1.0, 1.0, 1.0};\n"
         "static GLUtesselator *g_tess = NULL;\n"
+        "typedef void (*_GluCb)(void);\n"
         "static void _tess_vtx_begin_cb(GLenum mode) { glBegin(mode); }\n"
         "static void _tess_vtx_end_cb(void) { glEnd(); }\n"
         "static void _tess_vtx_cb(void *vd) {\n"
