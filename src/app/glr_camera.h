@@ -31,10 +31,17 @@ typedef struct {
     int   auto_rotate;
 } ReplCameraState;
 
+typedef enum {
+    GLR_CAMERA_CONTROL_3D = 0,
+    GLR_CAMERA_CONTROL_2D = 1
+} GlrCameraControlMode;
+
 /* ---- Accessors ------------------------------------------------------ */
 
 ReplCameraState  glr_camera(void);
 ReplCameraState *glr_camera_mut(void);
+GlrCameraControlMode glr_camera_control_mode(void);
+void             glr_camera_set_control_mode(GlrCameraControlMode mode);
 void             glr_camera_set(float rx, float ry, float dist,
                                 float tx, float ty, float tz,
                                 float motion_glow);

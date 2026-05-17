@@ -101,19 +101,73 @@ static void scene_apply_projection(const SceneRenderConfig *config,
     glLoadIdentity();
 
     /* Build a jitter-aware perspective frustum.  With zero jitter this is
-     * identical to gluPerspective(45, aspect, 0.1, 100). */
+     * identical to gluPerspective(45, aspect, 0.1, 200). */
     double near_z = 0.1, far_z = 200.0;
     double aspect  = (double)config->scene_w / (double)config->scene_h;
-    double top_v   = near_z * tan(45.0 * M_PI / 360.0);
-    double right_v = top_v * aspect;
-    double dx = (double)accum_jitter_x * 2.0 * right_v /
-                (double)config->scene_w;
-    double dy = (double)accum_jitter_y * 2.0 * top_v /
-                (double)config->scene_h;
+    double persp_top   = near_z * tan(45.0 * M_PI / 360.0);
+    double persp_right = persp_top * aspect;
+    double persp_dx = (double)accum_jitter_x * 2.0 * persp_right /
+                      (double)config->scene_w;
+    double persp_dy = (double)accum_jitter_y * 2.0 * persp_top /
+                      (double)config->scene_h;
+    float mix = config->projection_mix;
 
-    glFrustum(-right_v + dx, right_v + dx,
-              -top_v   + dy, top_v   + dy,
-              near_z, far_z);
+    if (mix < 0.0f) mix = 0.0f;
+    if (mix > 1.0f) mix = 1.0f;
+
+    if (mix >= 0.999f) {
+        glFrustum(-persp_right + persp_dx, persp_right + persp_dx,
+                  -persp_top   + persp_dy, persp_top   + persp_dy,
+                  near_z, far_z);
+    } else {
+        double ortho_near = -far_z;
+        double ortho_far = far_z;
+        double ortho_top = (double)config->cam_dist * tan(45.0 * M_PI / 360.0);
+        double ortho_right = ortho_top * aspect;
+        double ortho_dx = (double)accum_jitter_x * 2.0 * ortho_right /
+                          (double)config->scene_w;
+        double ortho_dy = (double)accum_jitter_y * 2.0 * ortho_top /
+                          (double)config->scene_h;
+
+        if (mix <= 0.001f) {
+            glOrtho(-ortho_right + ortho_dx, ortho_right + ortho_dx,
+                    -ortho_top   + ortho_dy, ortho_top   + ortho_dy,
+                    ortho_near, ortho_far);
+        } else {
+            GLfloat ortho[16] = { 0.0f };
+            GLfloat persp[16] = { 0.0f };
+            GLfloat blended[16];
+            double ol = -ortho_right + ortho_dx;
+            double or_ = ortho_right + ortho_dx;
+            double ob = -ortho_top + ortho_dy;
+            double ot = ortho_top + ortho_dy;
+            double pl = -persp_right + persp_dx;
+            double pr = persp_right + persp_dx;
+            double pb = -persp_top + persp_dy;
+            double pt = persp_top + persp_dy;
+
+            ortho[0]  = (GLfloat)(2.0 / (or_ - ol));
+            ortho[5]  = (GLfloat)(2.0 / (ot - ob));
+            ortho[10] = (GLfloat)(-2.0 / (ortho_far - ortho_near));
+            ortho[12] = (GLfloat)(-(or_ + ol) / (or_ - ol));
+            ortho[13] = (GLfloat)(-(ot + ob) / (ot - ob));
+            ortho[14] = (GLfloat)(-(ortho_far + ortho_near) /
+                                  (ortho_far - ortho_near));
+            ortho[15] = 1.0f;
+
+            persp[0]  = (GLfloat)((2.0 * near_z) / (pr - pl));
+            persp[5]  = (GLfloat)((2.0 * near_z) / (pt - pb));
+            persp[8]  = (GLfloat)((pr + pl) / (pr - pl));
+            persp[9]  = (GLfloat)((pt + pb) / (pt - pb));
+            persp[10] = (GLfloat)(-(far_z + near_z) / (far_z - near_z));
+            persp[11] = -1.0f;
+            persp[14] = (GLfloat)(-(2.0 * far_z * near_z) / (far_z - near_z));
+
+            for (int i = 0; i < 16; i++)
+                blended[i] = ortho[i] + (persp[i] - ortho[i]) * mix;
+            glLoadMatrixf(blended);
+        }
+    }
 }
 
 void scene_apply_camera(float rx, float ry, float dist,

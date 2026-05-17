@@ -101,6 +101,11 @@ typedef struct SceneRenderConfig {
     float cam_tz;
     float cam_motion_glow; /* 0 = orbit-target gizmo hidden */
 
+    /* Projection blend: 0 = orthographic XY view, 1 = perspective 3D.
+     * Intermediate values load a blended projection matrix for the
+     * 2D<->3D transition. */
+    float projection_mix;
+
     /* --- Rendering quality --- */
     int multisample_enabled;
     int line_smooth_enabled;

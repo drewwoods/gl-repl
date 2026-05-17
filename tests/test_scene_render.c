@@ -9,6 +9,7 @@
 #include "scene/lights.h"
 #include "scene/overlays.h"
 #include "scene/guides/geometry_guides.h"
+#include "scene/render.h"
 #include "scene/render_types.h"
 
 #include "support/test_harness.h"
@@ -72,6 +73,7 @@ static SceneRenderConfig make_test_config(void) {
     cfg.cam_ty = 0.0f;
     cfg.cam_tz = 0.0f;
     cfg.cam_motion_glow = 0.0f;
+    cfg.projection_mix = 1.0f;
     cfg.multisample_enabled = 0;
     cfg.line_smooth_enabled = 0;
     cfg.wireframe = 0;
@@ -82,6 +84,37 @@ static SceneRenderConfig make_test_config(void) {
     cfg.alpha_scale = 1.0f;
 
     return cfg;
+}
+
+static void test_scene_projection_modes(void) {
+    printf("--- scene projection modes ---\n");
+
+#ifdef GL_STUBS
+    SceneRenderConfig cfg = make_test_config();
+    cfg.use_accum = 0;
+    cfg.accum_aa_enabled = 0;
+    cfg.accum_samples = 1;
+
+    gl_stub_counts_reset();
+    cfg.projection_mix = 1.0f;
+    ASSERT_INT("perspective render ok", scene_render_3d_scene(&cfg), 0);
+    ASSERT_TRUE("perspective uses glFrustum",
+                gl_stub_counts[GL_STUB_glFrustum] > 0);
+
+    gl_stub_counts_reset();
+    cfg.projection_mix = 0.0f;
+    ASSERT_INT("ortho render ok", scene_render_3d_scene(&cfg), 0);
+    ASSERT_TRUE("ortho uses glOrtho",
+                gl_stub_counts[GL_STUB_glOrtho] > 0);
+
+    gl_stub_counts_reset();
+    cfg.projection_mix = 0.5f;
+    ASSERT_INT("mixed projection render ok", scene_render_3d_scene(&cfg), 0);
+    ASSERT_TRUE("mixed projection loads custom matrix",
+                gl_stub_counts[GL_STUB_glLoadMatrixf] > 0);
+#else
+    ASSERT_TRUE("projection mode GL-call checks require GL stubs", 1);
+#endif
 }
 
 /* Build a test FrameRenderContext. */
@@ -491,6 +524,7 @@ int main(int argc, char **argv) {
     printf("Scene render modules\n\n");
 
     test_config_defaults();
+    test_scene_projection_modes();
     test_frame_ctx_defaults();
     test_grid_theme_uses_fog_predicate();   /* pure; runs in both builds */
 

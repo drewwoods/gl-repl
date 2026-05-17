@@ -617,6 +617,20 @@ int main() {
                     fabsf(glr_camera().motion_glow - 1.0f) < 1e-6f);
 
         glr_camera_controls_reset();
+        glr_camera_set_control_mode(GLR_CAMERA_CONTROL_2D);
+        glr_camera_set_orbit(0.0f, 0.0f);
+        glr_camera_set_pan(0.0f, 0.0f, 0.0f);
+        glr_camera_set_distance(10.0f);
+        glr_camera_mouse_event(GLUT_LEFT_BUTTON, GLUT_DOWN, 0, 0, 0);
+        glr_camera_drag_motion(20, 10);
+        ASSERT_TRUE("2d left drag does not yaw",
+                    fabsf(glr_camera().ry) < 1e-6f);
+        ASSERT_TRUE("2d left drag pans x",
+                    fabsf(glr_camera().tx - (-1.0f)) < 1e-6f);
+        ASSERT_TRUE("2d left drag pans y",
+                    fabsf(glr_camera().ty - 0.5f) < 1e-6f);
+
+        glr_camera_controls_reset();
         glr_camera_set_distance(0.6f);
         glr_camera_mouse_event(GLUT_MIDDLE_BUTTON, GLUT_DOWN, 0, 0, 0);
         glr_camera_drag_motion(0, -100);

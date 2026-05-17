@@ -53,6 +53,7 @@ static int *config_value_ptr(GlrConfigKey key) {
     case GLR_CONFIG_LIGHT_INDICATORS:    return &glr_state_presentation_mut()->show_light_indicators;
     case GLR_CONFIG_POLY_HIGHLIGHT:      return &glr_state_presentation_mut()->highlight_current_poly;
     case GLR_CONFIG_BACKDROP:            return &glr_state_presentation_mut()->backdrop_mode;
+    case GLR_CONFIG_ORTHO_MODE:          return &glr_state_presentation_mut()->ortho_mode;
     case GLR_CONFIG_CAMERA_ROTATE:       return &glr_camera_mut()->auto_rotate;
     case GLR_CONFIG_AUTO_NORMALS:        return &glr_state_presentation_mut()->autonormal;
     case GLR_CONFIG_VERTEX_LABELS:       return &glr_state_presentation_mut()->show_vertex_labels;
