@@ -45,10 +45,20 @@ endif
 # plain -std=c99 (the pedantic delta there is real work, not a no-op,
 # and tests are not the shipped artifact).
 
+# -std=c99 sets __STRICT_ANSI__, so glibc hides POSIX-but-not-ISO
+# functions (strdup, mkdtemp, ...) from its headers. Without a
+# feature-test macro they'd be implicitly declared -> assumed to
+# return int -> 64-bit pointer truncated -> segfault at runtime
+# (only on glibc/Linux; macOS libc exposes them anyway). _GNU_SOURCE
+# is the standard "build glibc code as -std=c99" switch and is benign
+# on macOS. -Werror=implicit-function-declaration makes any future
+# such hidden-symbol regression a hard compile error instead of a
+# silent pointer-truncation crash.
 COMMON_CFLAGS = \
 	-Wall -ggdb -g3 \
 	-Wno-deprecated-declarations -Wfloat-conversion \
-	-std=c99 -DGL_SILENCE_DEPRECATION \
+	-std=c99 -D_GNU_SOURCE -Werror=implicit-function-declaration \
+	-DGL_SILENCE_DEPRECATION \
 	$(GL_HEADER_CFLAGS) \
 	-I$(PROJECT_ROOT) \
 	-I$(SRC_DIR) \
