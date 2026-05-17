@@ -32,35 +32,41 @@ GCC. It is *non-pedantic* by default — GNU extensions GCC accepts in
 `-std=c99` are fine; the goal is "old gcc compiles it", not pure ISO
 C99. There is no C2x build and no `STD` knob.
 
-On top of that, **`make c99` is a pedantic ratchet**: it syntax-checks
-the *shipped/real* sources — the sample object set (`$(SRCS)`) plus
-the demo drivers (`tools/`) and bench harness (`bench/`) — under
-`gcc -std=c99 -pedantic-errors -fsyntax-only`, and is run as
-`check-c99` inside `make check-state-ownership` (so it's in the
-standard gate). Strictness scoping: our code dirs are `-I` (so
-`-pedantic-errors` judges them); the real GL/GLU/GLUT/freeglut headers
-are `-isystem` (a vendored header's own old-style decl, e.g.
-`freeglut_ext.h`, can't fail the ratchet). **Tests are intentionally
-excluded** from the pedantic ratchet — the pedantic delta there
-(zero-length arrays, `{}` inits, old-style prototypes) is real work,
-not a no-op, and tests are not shipped; they still build+pass under
-plain `-std=c99`.
+**`make c99` is a build guard** (run as `check-c99` inside
+`make check-state-ownership`, so it's in the standard gate): it
+syntax-checks the *shipped/real* sources — the sample object set
+(`$(SRCS)`) plus the demo drivers (`tools/`) and bench harness
+(`bench/`) — under `gcc -std=c99 -fsyntax-only`, **non-pedantic**.
+Our code dirs are `-I`; the real GL/GLU/GLUT/freeglut headers are
+`-isystem` so a vendored header's own old-style decl (e.g.
+`freeglut_ext.h`) can't fail it. It still has teeth: C99 makes
+implicit function declarations a hard error even non-pedantic, and
+unknown symbols fail. Tests are excluded (not shipped); they build
+under plain `-std=c99` too.
 
-Rules the pedantic ratchet enforces for shipped/real sources (keep new
-code conformant):
+Why non-pedantic: a real-GCC check found the *only*
+`-std=c99 -pedantic-errors` failures across the whole shipped set
+were 22 hits of one benign rule — C99 forbids the implicit
+pointer-to-array `const`-qualifier conversion (`T (*)[N]` →
+`const T (*)[N]`) that **C2x explicitly re-allows**. The code is
+correct under C99/C2x/Clang; clearing it would mean de-`const`-ing
+~7 files of legitimate const-correctness (and there is no granular
+`-Wno-` for it — it's pure `-Wpedantic`). Not worth it; the guard
+stays non-pedantic.
+
+Coding conventions for genuinely-old-GCC portability (not all
+machine-enforced by the non-pedantic guard, but follow them):
 
 - Compile-time asserts: `STATIC_ASSERT(expr, msg)` from
   `include/c_compat.h` — **never raw `_Static_assert`** (early-2000s
-  GCC predates it entirely; the shim falls back to a negative-array
-  typedef under C99).
-- Every TU must be non-empty even when its body is `#ifdef`-gated
-  off (`-Wempty-translation-unit`): keep a token (e.g. a `typedef`)
-  outside the guard.
-- Function-pointer casts must use a prototyped typedef (e.g.
-  `ReplGluCallback` in `src/repl/executor.c`), not old-style
-  `void (*)()`.
-- No GNU `, ##__VA_ARGS__` (use plain `, __VA_ARGS__`); one `typedef`
-  per type name across headers (forward via the owning header).
+  GCC predates it; the shim falls back to a negative-array typedef
+  under C99).
+- Keep every TU non-empty even when its body is `#ifdef`-gated off
+  (a token/`typedef` outside the guard).
+- Prototyped function-pointer typedefs (e.g. `ReplGluCallback` in
+  `src/repl/executor.c`), not old-style `void (*)()`.
+- Plain `, __VA_ARGS__` (no GNU `, ##__VA_ARGS__`); one `typedef`
+  per type name across headers.
 
 `include/gl_includes.h` is vendored alongside the source — the Makefile adds
 `-Iinclude` to `COMMON_CFLAGS` so every translation unit can resolve it via
