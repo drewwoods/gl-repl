@@ -161,6 +161,9 @@ static int is_detail_section(ProfSection s) {
 /* Apply a green/yellow/red color based on section timing thresholds.
  * FRAME_TOTAL uses 1/120s (8.3ms) and 1/60s (16.7ms) breakpoints.
  * All other sections use half those thresholds (4.15ms / 8.3ms). */
+/* FPS gauge: green/yellow/red is a fixed data-viz semantic, NOT theme
+ * tokens (theme.h bucket 3 - red must read as "over budget" in every
+ * scheme; it must not follow the UI accent). */
 static void set_time_color(ProfSection s, double us) {
     if (us < 2.0) {
         glColor3f(0.30f, 0.30f, 0.38f);       /* near-zero – same as stale */

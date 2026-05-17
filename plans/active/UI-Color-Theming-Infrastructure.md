@@ -23,7 +23,25 @@
   deleted from `metrics.h` (now points at theme.h). Gates green: both
   sample builds, `make test 5356/5356`, `check-c99` + `check-state-
   ownership` exit 0.
-- [ ] **Phase C** — document exclusions + final gates.
+- [x] **Phase C** — pointer comments added at the deliberately-excluded
+  data palettes: `color_picker.c` (computed HSV/preview data),
+  `repl_code_panel.c` (`k_category_colors[]` / `k_syntax_shade` syntax
+  palette), `profile_panel.c` (FPS gauge — red must stay red),
+  `text_panel.c` `k_clr_*` editor sub-palette (commented in Phase B).
+  Final gates green: `make sample` (freeglut + stub), `make test`
+  37/37 bins · 5356/5356, `check-c99` + `check-state-ownership` exit 0.
+
+### Coverage note / out of approved scope
+
+The approved Phase B file list was 7 files. Two **floating
+diagnostic/utility** panels were not in it and still hold bare
+literals: `profile_panel.c` (panel bg/border/header text — chrome;
+plus the FPS gauge which is a documented exclusion) and
+`variable_panel.c` (panel bg/border/header — chrome; plus value-state
+semantics green/yellow/orange/blue which are data-viz, exclusion-like).
+Their genuine *chrome* is tokenizable for full consistency but was out
+of the approved Phase B scope — surfaced to the user as a possible
+follow-up rather than silently expanding scope.
 
 ## Context
 

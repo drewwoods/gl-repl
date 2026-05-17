@@ -29,6 +29,11 @@
 static UiTextPanelRow g_repl_code_panel_rows[UI_REPL_CODE_PANEL_MAX_ROWS];
 static char g_repl_code_panel_generated_text[UI_REPL_CODE_PANEL_MAX_GENERATED_TEXT_ROWS][MAX_LINE_LEN];
 
+/* Syntax-highlight palette: a deliberate per-category color scheme,
+ * intentionally NOT theme tokens (theme.h bucket 3 - it is its own
+ * domain palette and must stay legible/distinct independent of the UI
+ * accent). k_syntax_shade below is the matching constant/var/literal
+ * shade ramp; same rationale. */
 static const struct { float r, g, b; } k_category_colors[CMD_CAT_COUNT] = {
     [CMD_CAT_DEFAULT]     = { 0.70f, 0.70f, 0.70f },
     [CMD_CAT_PRIMITIVE]   = { 0.85f, 0.45f, 0.85f },
