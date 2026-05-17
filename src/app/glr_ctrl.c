@@ -2339,6 +2339,12 @@ int glr_ctrl_router_handle_scene_press(int button, int state, int x, int y) {
 
 int glr_ctrl_router_handle_camera_mouse(int button, int state, int x, int y) {
     glr_ctrl_sync_camera_control_mode();
+    if (state == GLUT_DOWN)
+        ui_state_pointer_set(x, y, button);
+    else if (state == GLUT_UP)
+        ui_state_pointer_set(x, y, -1);
+    else
+        ui_state_pointer_set_pos(x, y);
     glr_camera_mouse_event(button, state, x, y, editor_input_active_modifiers());
     return 1;
 }
@@ -2409,6 +2415,7 @@ int glr_ctrl_router_handle_camera_motion(int x, int y) {
 
 int glr_ctrl_router_handle_camera_pointer_set(int x, int y) {
     glr_camera_pointer_set(x, y);
+    ui_state_pointer_set_pos(x, y);
     return 1;
 }
 
@@ -3065,6 +3072,12 @@ void glr_ctrl_mouse(int button, int state, int x, int y) {
     glr_ctrl_notify_audio_gesture_once();
 
     editor_reset_input_effects();
+    if (button == GLUT_LEFT_BUTTON || button == GLUT_MIDDLE_BUTTON ||
+        button == GLUT_RIGHT_BUTTON) {
+        ui_state_pointer_set(x, y, state == GLUT_DOWN ? button : -1);
+    } else {
+        ui_state_pointer_set_pos(x, y);
+    }
 
     if (state == GLUT_UP) {
         /* UP cleanup: release floating color picker drag, clear the
