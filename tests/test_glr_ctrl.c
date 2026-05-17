@@ -538,6 +538,39 @@ static void test_variable_panel_motion_initializes_uninitialized_declaration(voi
                  g_predef_vars[var_idx].value, 0.0f);
 }
 
+static void test_pointer_state_tracks_controller_mouse_routes(void) {
+    printf("--- imrepl_ctrl pointer state routing ---\n");
+
+    glr_app_reset_all();
+    ui_state_viewport_set_size(1000, 1000);
+
+    ASSERT_INT("initial pointer x", ui_state_pointer().mouse_x, 0);
+    ASSERT_INT("initial pointer y", ui_state_pointer().mouse_y, 0);
+    ASSERT_INT("initial pointer button", ui_state_pointer().mouse_button, -1);
+
+    ASSERT_INT("passive pointer route handled",
+               glr_ctrl_router_handle_camera_pointer_set(123, 234), 1);
+    ASSERT_INT("passive pointer route x", ui_state_pointer().mouse_x, 123);
+    ASSERT_INT("passive pointer route y", ui_state_pointer().mouse_y, 234);
+    ASSERT_INT("passive pointer leaves button",
+               ui_state_pointer().mouse_button, -1);
+
+    ASSERT_INT("mouse down route handled",
+               glr_ctrl_router_handle_camera_mouse(GLUT_LEFT_BUTTON,
+                                                   GLUT_DOWN, 345, 456), 1);
+    ASSERT_INT("mouse down route x", ui_state_pointer().mouse_x, 345);
+    ASSERT_INT("mouse down route y", ui_state_pointer().mouse_y, 456);
+    ASSERT_INT("mouse down route button", ui_state_pointer().mouse_button,
+               GLUT_LEFT_BUTTON);
+
+    ASSERT_INT("mouse up route handled",
+               glr_ctrl_router_handle_camera_mouse(GLUT_LEFT_BUTTON,
+                                                   GLUT_UP, 567, 678), 1);
+    ASSERT_INT("mouse up route x", ui_state_pointer().mouse_x, 567);
+    ASSERT_INT("mouse up route y", ui_state_pointer().mouse_y, 678);
+    ASSERT_INT("mouse up route clears button", ui_state_pointer().mouse_button, -1);
+}
+
 /* Grid/axes in-out transition wiring: the controller diffs the
  * presentation theme, ticks g_grid_xn/g_axes_xn, and writes the
  * effective {theme, opacity, phase} into SceneRenderConfig. Drives the
@@ -682,6 +715,7 @@ int main(void) {
     test_display_frame_profile_coverage();
     test_variable_panel_motion_routes_through_compile_and_coalesces_undo();
     test_variable_panel_motion_initializes_uninitialized_declaration();
+    test_pointer_state_tracks_controller_mouse_routes();
     test_overlay_transition_machine_wiring();
     test_view_mode_projection_transition_wiring();
 
