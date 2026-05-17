@@ -273,6 +273,46 @@ types/constants. A future `glr_*`-namespaced rename of the shell is open work
 mechanical cleanup after controller extraction, because `sample.h` is included
 broadly.
 
+### Runtime GL Capability Detection
+
+GL feature availability that varies by *runtime context* (not by build) is
+detected once in `glr_ctrl_init_gl()` — the first point at which the GL
+context is current — and pushed into the GL-free REPL/scene layers through
+setters and `SceneRenderConfig`, never re-queried per frame.
+
+The one current case is **`glPointParameterfv`** (distance-attenuated point
+size), core GL 1.4 but absent on some legacy contexts. Detection:
+
+```
+supported = GL_VERSION >= 1.4
+          || glutExtensionSupported("GL_ARB_point_parameters")
+          || glutExtensionSupported("GL_EXT_point_parameters")
+```
+
+The version check comes first on purpose: an ARB/EXT-only test
+false-negatives on a 1.4+ core context that doesn't advertise the extension
+string. The result is stored via `repl_executor_set_point_parameter_supported()`
+(the executor no-ops `CMD_POINT_PARAMETER_FV` and falls back to a
+camera-distance `glPointSize` approximation when unsupported) and mirrored
+into `SceneRenderConfig.point_parameter_supported` so the star backdrop's
+own direct call is gated identically.
+
+**`GLR_NO_POINT_PARAMETER`** (environment variable, any non-empty value)
+forces the unsupported path on capable hardware — the only override; there
+is no build flag (it replaced the old compile-time `NO_POINT_PARAMETER`
+macro). When point attenuation ends up off, `glr_ctrl_init_gl()` logs one
+line to stderr that distinguishes the two causes:
+
+* env override — `"glPointParameterfv disabled via GLR_NO_POINT_PARAMETER=..."`
+  (and notes whether the hardware would otherwise support it);
+* genuine lack — `"glPointParameterfv unsupported by this GL context
+  (GL_VERSION ...)"` (and points at the env var for forced testing).
+
+Detection MUST run before `repl_apply_init_bootstrap()` in the same
+function: on unsupported hardware the injected `point_attenuation` bootstrap
+entry has to be skipped entirely rather than invoking the missing entry
+point.
+
 ## Scene Render Config
 
 `SceneRenderConfig` is the scene's explicit per-frame input. In Option B it is
