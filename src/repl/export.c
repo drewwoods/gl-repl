@@ -121,6 +121,12 @@ const ReplExportProjectionBridge *repl_export_projection_bridge(void) {
     return g_export_projection_bridge;
 }
 
+/* Resolves to live scene state via the bridge. Callable directly only
+ * from single-pass, off-frame-loop consumers (the file writer). The code
+ * panel must NOT call this — the controller resolves it once per frame
+ * into UiRenderSnapshot.reshape_proj_lines so the panel's row-count and
+ * render passes (which straddle scene_render_3d_scene) agree. See
+ * ARCHITECTURE.md, "Rule — where a per-frame dynamic value is resolved". */
 int repl_export_reshape_projection_lines(const char *out[REPL_EXPORT_PROJ_LINES]) {
     static char buf[REPL_EXPORT_PROJ_LINES][REPL_EXPORT_PROJ_LINE_MAX];
     int count = 0;
@@ -866,6 +872,13 @@ static void emit_export_header_pre(FILE *f) {
     if (g_export_camera_bridge && g_export_camera_bridge->fill_save_preamble)
         g_export_camera_bridge->fill_save_preamble(angle_line, (int)sizeof(angle_line));
 
+    /* NOTE: resolving a dynamic boilerplate line at the consumer site
+     * (as here) is safe ONLY because this one consumer is the file
+     * writer — a single pass off the frame loop. Do NOT copy this shape
+     * for a line the code panel reads: panel row-count and render
+     * straddle scene_render_3d_scene() and would diverge. Resolve once
+     * into UiRenderSnapshot instead. See ARCHITECTURE.md, "Rule — where
+     * a per-frame dynamic value is resolved". */
     for (int line_idx = 0; g_header_pre[line_idx]; line_idx++) {
         if (strcmp(g_header_pre[line_idx], "static float g_angle = 0.0f;") == 0) {
             if (angle_line[0])
