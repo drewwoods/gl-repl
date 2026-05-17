@@ -25,8 +25,19 @@ ROOT=$(pwd)
 LOG=/tmp/check-c99.log
 : > "$LOG"
 
-# Sample product source set == Makefile $(SRCS): root TUs + src/**.c.
-FILES=$(printf '%s\n' audio.c cmd_format.c prof.c sample.c; find src -name '*.c' | sort)
+# The exact sample object source set. Authoritatively passed in as
+# Makefile $(SRCS) (C99_SRCS) so coverage can never drift from what the
+# sample/stub build actually compiles — $(SRCS) includes root TUs,
+# src/**.c, AND tests/gl-stubs/gl_stub_counts.c (linked into sample).
+# The fallback (direct invocation without make) mirrors that set,
+# including the stub-count TU, so a regression there is still caught.
+if [ -n "${C99_SRCS:-}" ]; then
+    FILES=$(printf '%s\n' ${C99_SRCS})
+else
+    FILES=$(printf '%s\n' audio.c cmd_format.c prof.c sample.c \
+                          tests/gl-stubs/gl_stub_counts.c; \
+            find src -name '*.c' | sort)
+fi
 
 fail=0
 while IFS= read -r f; do
