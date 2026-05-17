@@ -11,6 +11,8 @@
 
 #include <stddef.h>
 
+#include <c_compat.h>  /* STATIC_ASSERT (C99/C11 portable) */
+
 void glr_debug_dump_editor(FILE *out, SourceTextView text) {
     FILE *dst = out ? out : stdout;
 
@@ -104,7 +106,7 @@ void glr_debug_dump_runtime_state_layout(FILE *out) {
     REPL_ALIGN_UP(REPL_RUNTIME_STATE_LAST_FIELD_END, REPL_ALIGNOF(ReplRuntimeState))
 
 #if defined(REPL_HAS_ALIGNOF)
-    _Static_assert(REPL_RUNTIME_STATE_EXPECTED_SIZE == sizeof(ReplRuntimeState),
+    STATIC_ASSERT(REPL_RUNTIME_STATE_EXPECTED_SIZE == sizeof(ReplRuntimeState),
                    "ReplRuntimeState layout list does not end at the actual struct size,\n\n"
                    "!!!! vvvvv READ vvvvv  !!!!\n"
                    "Please make sure ALL ReplRuntimeState fields are included in "

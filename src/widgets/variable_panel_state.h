@@ -30,6 +30,7 @@
 
 #include "editor/state.h"
 #include "ui/state_types.h"  /* UI-chrome typedefs (CodePanel/Camera/Help/etc.) */
+#include "widgets/variable_panel_drag.h"  /* VariablePanelValueChange (sole def) */
 
 /* Composite peer state. The two slices are kept as their existing
  * typedefs so legacy accessors can return them by value without
@@ -39,10 +40,6 @@ typedef struct {
     ReplVariableDragState  drag;   /* slider drag transaction */
 } VariablePanelState;
 
-typedef struct VariablePanelValueChange_s {
-    char  name[16];
-    float value;
-} VariablePanelValueChange;
 
 /* Lifecycle. */
 void variable_panel_state_capture(VariablePanelState *snapshot);

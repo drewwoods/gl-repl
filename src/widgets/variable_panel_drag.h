@@ -15,6 +15,13 @@
 #ifndef VARIABLE_PANEL_DRAG_H
 #define VARIABLE_PANEL_DRAG_H
 
-typedef struct VariablePanelValueChange_s VariablePanelValueChange;
+/* Sole definition of the per-call value-change struct.
+ * variable_panel_state.h includes this header rather than re-typedefing
+ * it — a duplicate typedef is a C11 feature that
+ * -std=c99 -pedantic-errors rejects. */
+typedef struct VariablePanelValueChange_s {
+    char  name[16];
+    float value;
+} VariablePanelValueChange;
 
 #endif /* VARIABLE_PANEL_DRAG_H */

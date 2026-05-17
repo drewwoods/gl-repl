@@ -26,10 +26,19 @@ GL_HEADER_CFLAGS = \
 	-I$(HOME)/src/freeglut-fork/include
 endif
 
+# Language standard. Everything (sample, tests, CI) is C2x by default
+# and that does not change. The sample source is *also* kept valid C99
+# (guarded by `make c99`); `make sample-c99` opts into an actual
+# C99-compiled binary in its own object tree via SAMPLE_STD=c99. Plain
+# -std=c99 (no -pedantic-errors) here: the strict pedantic bar lives in
+# the stub-path `make c99` guard, so the real-GL-linked binary doesn't
+# trip on platform headers' own old-style declarations.
+SAMPLE_STD ?= c2x
+
 COMMON_CFLAGS = \
 	-Wall -ggdb -g3 \
 	-Wno-deprecated-declarations -Wfloat-conversion \
-	-std=c2x -DGL_SILENCE_DEPRECATION \
+	-std=$(SAMPLE_STD) -DGL_SILENCE_DEPRECATION \
 	$(GL_HEADER_CFLAGS) \
 	-I$(PROJECT_ROOT) \
 	-I$(SRC_DIR) \
@@ -110,6 +119,7 @@ endif
 	audit-editor-ownership \
 	bench \
 	bench-csv \
+	c99 \
 	callgraph-files \
 	callgraph-graphviz \
 	callgraph-html \
@@ -117,6 +127,7 @@ endif
 	callgraph-static \
 	callgraph-static-entry \
 	check \
+	check-c99 \
 	check-color-picker-ui-isolation \
 	check-controller-boundaries \
 	check-domain-owner-encapsulation \
@@ -174,6 +185,7 @@ endif
 	help \
 	lines \
 	sample \
+	sample-c99 \
 	test \
 	test-detailed \
 	test-stubs \
@@ -627,6 +639,15 @@ $(SAMPLE_BIN): $(SAMPLE_OBJS)
 sample: FORCE $(SAMPLE_BIN) ## Build the main REPL sample using release flags by default.
 	ln -sfn $(SAMPLE_BIN) $@
 
+# Optional: an actual C99-compiled sample binary. Separate object root
+# (BUILD=release-c99 -> build/release-c99/) so it never collides with
+# the default C2x objects, and a distinct `sample-c99` symlink so the
+# default `sample` link is left untouched. The default build is
+# unchanged; this is opt-in for the retro "built as C99" stance.
+sample-c99: ## Optional: build a C99-compiled sample binary (default build stays C2x).
+	@$(MAKE) build/release-c99/sample BUILD=release-c99 SAMPLE_STD=c99
+	ln -sfn build/release-c99/sample $@
+
 # Standalone demo binary that drives the scene module with a teapot callback.
 # Proves the scene/ subtree links cleanly without the editor/UI/controller code.
 SCENE_DEMO_OBJS = $(OBJDIR)/tools/scene_demo/scene_demo.o \
@@ -892,6 +913,7 @@ check-state-ownership: ## Run state-ownership contract checks (new + tightened e
 		check-repl-demo-no-editor \
 		check-source-document-port-owners \
 		check-no-point-parameter-builds \
+		check-c99 \
 		check-no-test-default-output; do \
 		printf "  $(YELLOW)▶$(NC) $$target\n"; \
 		$(MAKE) --no-print-directory $$target 2>&1 | sed 's/^/    /' | sed $$'s/ OK / \033[0;32mOK\033[0m /g; s/ OK$$/ \033[0;32mOK\033[0m/' || exit $$?; \
@@ -974,6 +996,11 @@ check-repl-demo-stubs-shrinking: ## Ratchet on tools/repl_demo/stubs.c — must 
 
 check-no-point-parameter-builds: ## Verify src/repl/executor.c syntax-checks with NO_POINT_PARAMETER=1.
 	@bash scripts/check-no-point-parameter-builds.sh
+
+check-c99: ## Verify the sample source set syntax-checks under -std=c99 -pedantic-errors (default build stays C2x).
+	@bash scripts/check-c99.sh
+
+c99: check-c99 ## Alias for check-c99 (C99 sample-source conformance guard).
 
 check-no-test-default-output: ## Hard guard: tests may not call repl_save_default_output() (writes ./output.c in repo root).
 	@bash scripts/check-no-test-default-output.sh
@@ -1085,7 +1112,7 @@ else
 endif
 
 clean: ## Remove built binaries and object files.
-	rm -rf $(ROOT_BIN_LINKS) sample.dSYM scene_demo.dSYM repl_demo.dSYM \
+	rm -rf $(ROOT_BIN_LINKS) sample-c99 sample.dSYM scene_demo.dSYM repl_demo.dSYM \
 		$(TEST_BINS) $(addsuffix .dSYM,$(TEST_BINS)) \
 		$(BENCH_BINS) $(addsuffix .dSYM,$(BENCH_BINS)) \
 		build/coverage/lcov.info build/coverage/html \

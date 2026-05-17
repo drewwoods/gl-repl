@@ -254,13 +254,12 @@ static int parse_command(const char *line, GLCmd *cmd,
     char buf[MAX_LINE_LEN];
 
     /* Null-safe text helpers: write to text_out when provided */
+/* Every call passes at least one variadic arg after fmt, so plain
+ * __VA_ARGS__ suffices — no GNU `, ##__VA_ARGS__` comma-elision (which
+ * -std=c99 -pedantic-errors rejects). */
 #define WRITE_TEXT(fmt, ...) do { \
     if (text_out && text_sz > 0) \
-        snprintf(text_out, (size_t)text_sz, fmt, ##__VA_ARGS__); \
-} while (0)
-#define WRITE_TEXT_APPEND(off, fmt, ...) do { \
-    if (text_out && text_sz > 0) \
-        snprintf(text_out + (off), (size_t)(text_sz - (off)), fmt, ##__VA_ARGS__); \
+        snprintf(text_out, (size_t)text_sz, fmt, __VA_ARGS__); \
 } while (0)
     strncpy(buf, line, sizeof(buf) - 1);
     buf[sizeof(buf) - 1] = '\0';
@@ -1045,7 +1044,6 @@ unknown_command:
     return 0;
 
 #undef WRITE_TEXT
-#undef WRITE_TEXT_APPEND
 }
 
 /* User-facing name for commands the begin-scope rejection might surface.
