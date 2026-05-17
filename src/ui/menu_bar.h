@@ -118,6 +118,10 @@ int  ui_menu_bar_scene_example_submenu_rect_for_test(int tag_idx,
                                                      int *sx, int *sy,
                                                      int *sw, int *sh);
 
+/* Refresh open-dropdown hover state from the current pointer. Returns 1 when
+ * the hovered parent row or Scene example submenu changed. */
+int  ui_menu_bar_update_pointer_hover(int mx, int my, float now);
+
 /* Pure hit-test: classify (mx, my) as a UiHit for menu-bar-related regions.
  *
  * Phase E commit 29 entry. Reports the menu-bar slice of the hit-test in

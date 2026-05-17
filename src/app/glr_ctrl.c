@@ -3187,11 +3187,16 @@ void glr_ctrl_motion(int x, int y) {
 }
 
 void glr_ctrl_passive_motion(int x, int y) {
+    int menu_hover_changed;
     editor_reset_input_effects();
     /* Passive motion (no button held) just updates the pointer
      * position — there's no drag delta to preserve. */
     glr_ctrl_router_handle_camera_pointer_set(x, y);
     ReplInputDispatchEffects editor_effects = editor_handle_passive_motion(x, y);
+    menu_hover_changed = ui_menu_bar_update_pointer_hover(x, y,
+                                                          repl_state_variables().anim_time);
+    if (menu_hover_changed)
+        editor_request_redraw();
     glr_ctrl_apply_input_effects(editor_take_input_effects());
     glr_ctrl_apply_input_effects(editor_effects);
 }
