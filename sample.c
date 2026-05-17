@@ -5,7 +5,26 @@
 #include "audio.h"
 
 #include <dirent.h>
+#include <stdio.h>
 #include <stdlib.h>
+#include <sys/time.h>
+
+/* Startup stall diagnostic. Each phase logs wall-clock seconds elapsed
+ * since main() started so a slow phase (e.g. ma_engine_init opening the
+ * audio device) is visible in the terminal. gettimeofday keeps this
+ * portable/C99 without the per-platform timebase branching in prof.c. */
+static double g_init_t0 = -1.0;
+
+static double init_now(void) {
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+    return (double)tv.tv_sec + (double)tv.tv_usec / 1e6;
+}
+
+static void init_trace(const char *phase) {
+    if (g_init_t0 < 0.0) g_init_t0 = init_now();
+    fprintf(stderr, "[init +%6.3fs] %s\n", init_now() - g_init_t0, phase);
+}
 
 /* Music assets live here. Relative to the sample's working directory
  * on native, and to the Emscripten virtual FS mount point set up by
@@ -178,22 +197,28 @@ int main(int argc, char **argv) {
         return 0;
     }
 
+    init_trace("start");
     glutInit(&argc, argv);
     glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGBA | GLUT_DEPTH | GLUT_MULTISAMPLE |
                         (use_accum ? GLUT_ACCUM : 0));
     glutInitWindowSize(window_w, window_h);
     glutCreateWindow("OpenGL REPL - Display List Dynamic Rendering");
+    init_trace("window created");
 
     glr_ctrl_init_gl();
+    init_trace("GL init done");
     atexit(repl_executor_destroy_resources);
     glr_ctrl_bootstrap_repl(input_file);
+    init_trace("REPL bootstrap done");
     glr_ctrl_set_accum(use_accum);
 
     /* Audio: init once, scan assets/ *.mp3 for a playlist, play the
      * first track, shutdown on exit. Failures here are non-fatal: the
      * REPL keeps running without sound.
      * Skipped entirely when --no-audio was passed. */
+    if (!no_audio) init_trace("audio_init begin");
     if (!no_audio && audio_init() == 0) {
+        init_trace("audio_init done");
         audio_set_state_file(AUDIO_STATE_FILE);
         static char music_paths[AUDIO_MUSIC_MAX_PATHS]
                                [AUDIO_MUSIC_MAX_LEN];
@@ -214,8 +239,10 @@ int main(int argc, char **argv) {
          * value back onto the audio engine before the first frame. */
         glr_actions_apply_defaults();
         atexit(audio_shutdown);
+        init_trace("audio playlist started");
     }
 
+    init_trace("entering main loop");
     glutDisplayFunc(display_func);
     glutReshapeFunc(reshape_func);
     glutKeyboardFunc(keyboard_func);

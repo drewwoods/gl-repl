@@ -161,6 +161,32 @@ static void lock(void)   { if (g_worker_running) pthread_mutex_lock(&g_mtx); }
 static void unlock(void) { if (g_worker_running) pthread_mutex_unlock(&g_mtx); }
 
 /* ------------------------------------------------------------------ */
+/* Worker hitch detector                                               */
+/* ------------------------------------------------------------------ */
+
+/* Each worker wakeup runs one blocking lifecycle op (file open, sound
+ * uninit page-flush, state-file write). On Linux a slow disk / page
+ * read shows up as the worker taking far longer than the usual sub-ms.
+ * We time the dispatch span and log any op over the threshold so the
+ * culprit op is named in the terminal. Threshold is tunable via
+ * GLR_AUDIO_HITCH_MS (default 50ms); 0 disables the check. */
+static double worker_now_ms(void) {
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (double)ts.tv_sec * 1e3 + (double)ts.tv_nsec / 1e6;
+}
+
+static double worker_hitch_threshold_ms(void) {
+    static double cached = -1.0;
+    if (cached < 0.0) {
+        const char *env = getenv("GLR_AUDIO_HITCH_MS");
+        cached = (env && *env) ? atof(env) : 50.0;
+        if (cached < 0.0) cached = 0.0;
+    }
+    return cached;
+}
+
+/* ------------------------------------------------------------------ */
 /* State-file helpers                                                  */
 /* ------------------------------------------------------------------ */
 
@@ -459,12 +485,23 @@ static void *audio_worker_main(void *arg) {
             worker_uninit_all();
             return NULL;
         }
-        if (k == AWR_START)        worker_load(idx, seek);
-        else if (k == AWR_ADVANCE) worker_advance();
-        else if (k == AWR_UNINIT)  worker_uninit_all();
+
+        double t0 = worker_now_ms();
+        const char *op = "save-only";
+        if (k == AWR_START)        { op = "load";    worker_load(idx, seek); }
+        else if (k == AWR_ADVANCE) { op = "advance"; worker_advance(); }
+        else if (k == AWR_UNINIT)  { op = "uninit";  worker_uninit_all(); }
 
         if (save)
             worker_save_state();    /* after the lifecycle op: fresh cursor */
+
+        double thr = worker_hitch_threshold_ms();
+        double dt  = worker_now_ms() - t0;
+        if (thr > 0.0 && dt >= thr)
+            fprintf(stderr,
+                    "repl_audio: worker hitch: %s%s took %.1f ms "
+                    "(threshold %.0f ms)\n",
+                    op, save ? "+save" : "", dt, thr);
 
         pthread_mutex_lock(&g_mtx);
     }

@@ -313,6 +313,41 @@ function: on unsupported hardware the injected `point_attenuation` bootstrap
 entry has to be skipped entirely rather than invoking the missing entry
 point.
 
+### Startup & Audio-Worker Diagnostics
+
+Two always-on stderr diagnostics localise startup stalls and
+audio-thread hitches (notably on slow Linux disks). Both follow the
+project's one-line-stderr convention (same as the point-parameter log
+above); neither is gated off by default — the point is to see them
+when a stall happens.
+
+* **Init trace** (`sample.c`). `main()` calls `init_trace(<phase>)` at
+  each startup phase; it prints `[init +N.NNNs] <phase>` with
+  wall-clock seconds (`gettimeofday`, not the per-platform timebase in
+  `prof.c` — ms granularity is enough and this stays portable/C99)
+  elapsed since the first call. Phases: window create, GL init, REPL
+  bootstrap, `audio_init` begin/done, playlist start, main loop. The
+  only synchronous audio work on the `main()` path is
+  `ma_engine_init()` (it opens the OS audio device); `--no-audio`
+  isolates it.
+
+* **Worker hitch detector** (`audio.c`). The audio worker
+  (`audio_worker_main`) is event-driven: it sleeps on
+  `pthread_cond_wait`, wakes to run exactly one blocking lifecycle op
+  (`worker_load` → `ma_sound_init_from_file`; `worker_uninit_all` →
+  `ma_sound_uninit` stream page-flush; `worker_advance`;
+  `worker_save_state`), then sleeps again. The dispatch span is timed
+  with `clock_gettime(CLOCK_MONOTONIC)` **after the mutex is released**
+  so only the blocking work counts, and any op at/over the threshold
+  logs `repl_audio: worker hitch: <op>[+save] took N ms (threshold
+  M ms)`. Threshold via `GLR_AUDIO_HITCH_MS` (default 50; `0` disables;
+  read once and cached in a static). `AWR_QUIT` is intentionally
+  outside the timed span — a slow final save/uninit at shutdown is not
+  a runtime hitch. These stalls delay track change / resume only; the
+  miniaudio device-callback thread is owned by miniaudio, not the
+  REPL, so this detector does not (and cannot) observe playback
+  underruns there.
+
 ## Scene Render Config
 
 `SceneRenderConfig` is the scene's explicit per-frame input. In Option B it is
