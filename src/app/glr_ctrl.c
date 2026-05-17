@@ -2664,6 +2664,18 @@ static int route_menu_item_hit(const UiHit *hit) {
     return 1;
 }
 
+/* UI_HIT_EXAMPLE_SUBMENU_ITEM: Scene menu tag submenu row. The hit payload
+ * carries the global flat example index, so route directly through the shared
+ * scene-load helper instead of reconstructing parent menu row offsets. */
+static int route_example_submenu_item_hit(const UiHit *hit) {
+    if (hit->item_idx < 0)
+        return 0;
+    glr_scene_load_example(hit->item_idx);
+    ui_menu_bar_close();
+    editor_request_redraw();
+    return 1;
+}
+
 /* UI_HIT_CODE_PANEL_TAB: scene tab strip click. Single click switches
  * scenes through the shared Scene-menu load helpers (reusing the exact
  * load sequence — no duplication); a 2nd click on the same user tab
@@ -2762,13 +2774,15 @@ int glr_ctrl_router_handle_code_panel_hit(UiHit hit, int x, int y) {
     if (editor_inline_rename_active())
         editor_inline_rename_cancel();
 
-    /* A click outside the menu bar (anywhere that isn't UI_HIT_MENU_BUTTON
-     * / UI_HIT_MENU_ITEM) dismisses an open dropdown — matches the legacy
+    /* A click outside the menu bar (anywhere that isn't UI_HIT_MENU_BUTTON,
+     * UI_HIT_MENU_ITEM, or UI_HIT_EXAMPLE_SUBMENU_ITEM) dismisses an open
+     * dropdown — matches the legacy
      * "click outside dropdown closes it" behaviour from
      * ui_panels_handle_code_panel_press. */
     int dismissed_dropdown = 0;
     if (hit.kind != UI_HIT_MENU_BUTTON &&
         hit.kind != UI_HIT_MENU_ITEM &&
+        hit.kind != UI_HIT_EXAMPLE_SUBMENU_ITEM &&
         hit.kind != UI_HIT_PIN_BUTTON &&
         hit.kind != UI_HIT_COLOR_SWATCH &&
         ui_menu_bar_menu_dropdown_is_open()) {
@@ -2788,6 +2802,8 @@ int glr_ctrl_router_handle_code_panel_hit(UiHit hit, int x, int y) {
         consumed = route_menu_button_hit(&hit); break;
     case UI_HIT_MENU_ITEM:
         consumed = route_menu_item_hit(&hit); break;
+    case UI_HIT_EXAMPLE_SUBMENU_ITEM:
+        consumed = route_example_submenu_item_hit(&hit); break;
     case UI_HIT_VARIABLE_SLIDER:
         consumed = route_variable_slider_hit(x, y); break;
     case UI_HIT_PANEL_DIVIDER:

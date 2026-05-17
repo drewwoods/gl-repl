@@ -3,6 +3,7 @@
  */
 #include "app/glr_actions.h"
 #include "repl/core.h"
+#include "repl/examples.h"
 #include "repl/tutorials.h"
 #include "app/glr_config.h"
 #include "keys.h"
@@ -45,6 +46,8 @@ static const char *g_pin_btn_labels[NUM_PIN_BTNS] = {
 static int g_open_menu = -1;      /* index into g_menu_labels; -1 = none */
 
 static int g_menu_item_hover = -1;
+static int g_scene_open_tag = -1;
+static float g_scene_submenu_open_time = -1.0f;
 static float g_menu_open_time = -1.0f;   /* anim_time when current menu opened */
 static float g_search_open_time = -1.0f; /* anim_time when search opened */
 #define UI_FADE_DURATION 0.18f
@@ -62,10 +65,10 @@ enum { FILE_ITEM_COUNT = REPL_FILE_ITEM_COUNT };
 
 /* SCENE menu layout (pure selector; actions are in the File menu):
  *   [0]                      "### EXAMPLES"
- *   [1..e]                   example names  (e = repl_example_count())
- *   [e + SCENE_OFF_HDR]      "### YOUR SCENES"
- *   [e + SCENE_OFF_SCENES ..
- *      e + SCENE_OFF_SCENES + n - 1]  user scene names
+ *   [1..t]                   tag names  (t = repl_example_visible_tag_count())
+ *   [t + SCENE_OFF_HDR]      "### YOUR SCENES"
+ *   [t + SCENE_OFF_SCENES ..
+ *      t + SCENE_OFF_SCENES + n - 1]  user scene names
  *                                     (n = repl_user_scene_count())
  * Both headers are always present even when a section is empty.
  */
@@ -75,10 +78,24 @@ enum {
     SCENE_FIXED_COUNT = REPL_SCENE_FIXED_COUNT
 };
 
+static int scene_tag_idx_for_parent_row(int row) {
+    if (row < 1 || row > repl_example_visible_tag_count())
+        return -1;
+    return repl_example_visible_tag_at(row - 1);
+}
+
+static int scene_parent_row_for_tag(int tag_idx) {
+    int visible_count = repl_example_visible_tag_count();
+    for (int dense_idx = 0; dense_idx < visible_count; dense_idx++)
+        if (repl_example_visible_tag_at(dense_idx) == tag_idx)
+            return dense_idx + 1;
+    return -1;
+}
+
 static int menu_item_count(int menu_id) {
     switch (menu_id) {
     case MENU_FILE:   return FILE_ITEM_COUNT;
-    case MENU_SCENE:  return repl_example_count() + SCENE_FIXED_COUNT
+    case MENU_SCENE:  return repl_example_visible_tag_count() + SCENE_FIXED_COUNT
                              + repl_user_scene_count();
     case MENU_TUTORIALS:
         return repl_tutorial_count() + (tutorial_active() ? 3 : 0);
@@ -103,11 +120,14 @@ static const char *menu_item_label(int menu_id, int i) {
         return NULL;
     }
     if (menu_id == MENU_SCENE) {
-        int e = repl_example_count();
+        int tag_count = repl_example_visible_tag_count();
         if (i == 0)                                            return "### EXAMPLES";
-        if (i >= 1 && i <= e)                                 return repl_example_name(i - 1);
-        if (i == e + SCENE_OFF_HDR)                           return "### YOUR SCENES";
-        int scene_n = i - (e + SCENE_OFF_SCENES);
+        if (i >= 1 && i <= tag_count) {
+            int tag_idx = repl_example_visible_tag_at(i - 1);
+            return repl_example_tag_label(tag_idx);
+        }
+        if (i == tag_count + SCENE_OFF_HDR)                   return "### YOUR SCENES";
+        int scene_n = i - (tag_count + SCENE_OFF_SCENES);
         if (scene_n >= 0 && scene_n < repl_user_scene_count()) {
             int slot = glr_scene_menu_slot_for_dense_index(scene_n);
             return (slot >= 0) ? repl_user_scene_name(slot) : NULL;
@@ -323,6 +343,78 @@ static int menu_dropdown_rect(int *dx, int *dy, int *dw, int *dh) {
     return 1;
 }
 
+static int point_in_rect_gl(int mx, int my, int x, int y, int w, int h) {
+    int ry = ui_state_viewport().window_h - my;
+    return mx >= x && mx < x + w && ry >= y && ry < y + h;
+}
+
+static int scene_example_submenu_rect(int tag_idx,
+                                      int *sx, int *sy,
+                                      int *sw, int *sh) {
+    int parent_row;
+    int pdx, pdy, pdw, pdh;
+    int count;
+    int max_lbl = 0;
+    int width;
+    int height;
+    int x;
+    int y;
+    int win_w = ui_state_viewport().window_w;
+    int win_h = ui_state_viewport().window_h;
+
+    if (g_open_menu != MENU_SCENE || win_w <= 0 || win_h <= 0)
+        return 0;
+    if (repl_example_count_for_tag(tag_idx) <= 0)
+        return 0;
+    parent_row = scene_parent_row_for_tag(tag_idx);
+    if (parent_row < 0)
+        return 0;
+    if (!menu_dropdown_rect(&pdx, &pdy, &pdw, &pdh))
+        return 0;
+
+    count = repl_example_count_for_tag(tag_idx);
+    for (int ordinal = 0; ordinal < count; ordinal++) {
+        int example_idx = repl_example_index_for_tag(tag_idx, ordinal);
+        const char *name = repl_example_name(example_idx);
+        int w = (int)(name ? strlen(name) : 0) * FONT_SMALL_W;
+        if (w > max_lbl)
+            max_lbl = w;
+    }
+    if (max_lbl < 80)
+        max_lbl = 80;
+    width = max_lbl + 28;
+    height = count * LINE_H + 8;
+
+    x = pdx + pdw;
+    if (x + width > win_w)
+        x = pdx - width;
+    if (x < 0)
+        x = 0;
+
+    {
+        int parent_row_top = pdy + pdh - 4 - parent_row * LINE_H;
+        y = parent_row_top - height;
+    }
+    if (y < 0)
+        y = 0;
+    if (y + height > win_h)
+        y = win_h - height;
+    if (y < 0)
+        y = 0;
+
+    if (sx) *sx = x;
+    if (sy) *sy = y;
+    if (sw) *sw = width;
+    if (sh) *sh = height;
+    return 1;
+}
+
+int ui_menu_bar_scene_example_submenu_rect_for_test(int tag_idx,
+                                                    int *sx, int *sy,
+                                                    int *sw, int *sh) {
+    return scene_example_submenu_rect(tag_idx, sx, sy, sw, sh);
+}
+
 int ui_menu_bar_dropdown_item_hit(int gx, int gy) {
     if (g_open_menu < 0) return -1;
     int n = menu_item_count(g_open_menu);
@@ -338,6 +430,38 @@ int ui_menu_bar_dropdown_item_hit(int gx, int gy) {
     return row;
 }
 
+static UiHit scene_example_submenu_hit_test(int mx, int my) {
+    UiHit h = ui_hit_none();
+    int sx, sy, sw, sh;
+    int ry;
+    int ordinal;
+    int example_idx;
+
+    if (g_scene_open_tag < 0)
+        return h;
+    if (!scene_example_submenu_rect(g_scene_open_tag, &sx, &sy, &sw, &sh))
+        return h;
+    if (!point_in_rect_gl(mx, my, sx, sy, sw, sh))
+        return h;
+
+    ry = ui_state_viewport().window_h - my;
+    ordinal = (sy + sh - 4 - ry) / LINE_H;
+    if (ordinal < 0 || ordinal >= repl_example_count_for_tag(g_scene_open_tag))
+        return h;
+
+    example_idx = repl_example_index_for_tag(g_scene_open_tag, ordinal);
+    if (example_idx < 0)
+        return h;
+
+    h.kind = UI_HIT_EXAMPLE_SUBMENU_ITEM;
+    h.cmd_idx = g_scene_open_tag;
+    h.item_idx = example_idx;
+    h.line_idx = ordinal;
+    h.local_x = (float)(mx - sx);
+    h.local_y = (float)(ry - sy);
+    return h;
+}
+
 UiHit ui_menu_bar_hit_test(int mx, int my) {
     UiHit h = ui_hit_none();
     int win_h = ui_state_viewport().window_h;
@@ -348,6 +472,12 @@ UiHit ui_menu_bar_hit_test(int mx, int my) {
      * carries the menu_id the row belongs to so the controller can
      * activate the action without reading ui_menu_bar state. */
     if (g_open_menu >= 0) {
+        if (g_open_menu == MENU_SCENE) {
+            UiHit submenu_hit = scene_example_submenu_hit_test(mx, my);
+            if (submenu_hit.kind != UI_HIT_NONE)
+                return submenu_hit;
+        }
+
         int row = ui_menu_bar_dropdown_item_hit(mx, my);
         if (row >= 0) {
             h.kind = UI_HIT_MENU_ITEM;
@@ -418,6 +548,8 @@ int ui_menu_bar_open_menu_id(void) {
 void ui_menu_bar_close(void) {
     g_open_menu = -1;
     g_menu_item_hover = -1;
+    g_scene_open_tag = -1;
+    g_scene_submenu_open_time = -1.0f;
 }
 
 void ui_menu_bar_set_open_menu(int menu_id, float now) {
@@ -428,6 +560,8 @@ void ui_menu_bar_set_open_menu(int menu_id, float now) {
     g_open_menu = menu_id;
     g_menu_open_time = now;
     g_menu_item_hover = -1;
+    g_scene_open_tag = -1;
+    g_scene_submenu_open_time = -1.0f;
 }
 
 void ui_menu_bar_open_config(float now) {
@@ -503,6 +637,104 @@ static float ui_fade_alpha(float anim_time, float open_time) {
     if (dt >= UI_FADE_DURATION) return 1.0f;
     if (dt <= 0.0f) return 0.0f;
     return dt / UI_FADE_DURATION;
+}
+
+static int scene_submenu_hover_ordinal(const UiRenderSnapshot *snap,
+                                       int tag_idx) {
+    int sx, sy, sw, sh;
+    int ry;
+    int ordinal;
+
+    if (!scene_example_submenu_rect(tag_idx, &sx, &sy, &sw, &sh))
+        return -1;
+    if (!point_in_rect_gl(snap->pointer.mouse_x, snap->pointer.mouse_y,
+                          sx, sy, sw, sh))
+        return -1;
+
+    ry = snap->viewport.window_h - snap->pointer.mouse_y;
+    ordinal = (sy + sh - 4 - ry) / LINE_H;
+    if (ordinal < 0 || ordinal >= repl_example_count_for_tag(tag_idx))
+        return -1;
+    return ordinal;
+}
+
+static void update_scene_submenu_hover(const UiRenderSnapshot *snap) {
+    int tag_idx;
+    int sx, sy, sw, sh;
+
+    if (g_open_menu != MENU_SCENE) {
+        g_scene_open_tag = -1;
+        g_scene_submenu_open_time = -1.0f;
+        return;
+    }
+
+    tag_idx = scene_tag_idx_for_parent_row(g_menu_item_hover);
+    if (tag_idx >= 0) {
+        if (tag_idx != g_scene_open_tag)
+            g_scene_submenu_open_time = snap->anim_time;
+        g_scene_open_tag = tag_idx;
+        return;
+    }
+
+    if (g_scene_open_tag >= 0 &&
+        scene_example_submenu_rect(g_scene_open_tag, &sx, &sy, &sw, &sh) &&
+        point_in_rect_gl(snap->pointer.mouse_x, snap->pointer.mouse_y,
+                         sx, sy, sw, sh))
+        return;
+
+    g_scene_open_tag = -1;
+    g_scene_submenu_open_time = -1.0f;
+}
+
+static void render_scene_example_submenu(const UiRenderSnapshot *snap) {
+    int sx, sy, sw, sh;
+    int count;
+    int hover_ordinal;
+    int ey;
+    float alpha;
+
+    if (g_open_menu != MENU_SCENE || g_scene_open_tag < 0)
+        return;
+    if (!scene_example_submenu_rect(g_scene_open_tag, &sx, &sy, &sw, &sh))
+        return;
+
+    count = repl_example_count_for_tag(g_scene_open_tag);
+    hover_ordinal = scene_submenu_hover_ordinal(snap, g_scene_open_tag);
+    alpha = ui_fade_alpha(snap->anim_time, g_scene_submenu_open_time);
+
+    glColor4f(0.133f, 0.133f, 0.133f, 0.98f * alpha);
+    glRectf((float)sx, (float)sy, (float)(sx + sw), (float)(sy + sh));
+    glColor4f(0.227f, 0.227f, 0.227f, alpha);
+    glBegin(GL_LINE_LOOP);
+    glVertex2f((float)sx,        (float)sy);
+    glVertex2f((float)(sx + sw), (float)sy);
+    glVertex2f((float)(sx + sw), (float)(sy + sh));
+    glVertex2f((float)sx,        (float)(sy + sh));
+    glEnd();
+
+    ey = sy + sh - LINE_H + 1;
+    for (int ordinal = 0; ordinal < count; ordinal++) {
+        int example_idx = repl_example_index_for_tag(g_scene_open_tag, ordinal);
+        const char *name = repl_example_name(example_idx);
+        int is_active = (example_idx == snap->scenes.active_example_idx);
+
+        if (!name)
+            continue;
+
+        if (ordinal == hover_ordinal) {
+            glColor4f(0.180f, 0.290f, 0.431f, alpha);
+            glRectf((float)(sx + 1), (float)(ey - 2),
+                    (float)(sx + sw - 1), (float)(ey - 2 + LINE_H));
+            glColor4f(1.0f, 1.0f, 1.0f, alpha);
+        } else if (is_active) {
+            glColor4f(UI_ACCENT_GREEN_R, UI_ACCENT_GREEN_G, UI_ACCENT_GREEN_B, alpha);
+        } else {
+            glColor4f(0.847f, 0.847f, 0.847f, alpha);
+        }
+
+        gl2d_draw_string((float)(sx + 14), (float)ey, name, FONT_SMALL);
+        ey -= LINE_H;
+    }
 }
 
 /* Draws a simple magnifying-glass icon (circle + handle) at (cx, cy) with
@@ -763,12 +995,13 @@ void ui_menu_bar_render_example_dropdown(const UiRenderSnapshot *snap) {
     if (g_open_menu < 0) return;
     int menu_id = g_open_menu;
     int n  = menu_item_count(menu_id);
-    int ne = (menu_id == MENU_SCENE) ? repl_example_count() : -1;
+    int tag_count = (menu_id == MENU_SCENE) ? repl_example_visible_tag_count() : -1;
 
     int dx, dy, dw, dh;
     if (!menu_dropdown_rect(&dx, &dy, &dw, &dh)) return;
 
     g_menu_item_hover = ui_menu_bar_dropdown_item_hit(snap->pointer.mouse_x, snap->pointer.mouse_y);
+    update_scene_submenu_hover(snap);
 
     float alpha = ui_fade_alpha(snap->anim_time, g_menu_open_time);
 
@@ -823,29 +1056,37 @@ void ui_menu_bar_render_example_dropdown(const UiRenderSnapshot *snap) {
         }
 
         int scene_hit = -1;
-        if (menu_id == MENU_SCENE && ne >= 0) {
-            int scene_n = i - (ne + SCENE_OFF_SCENES);
+        int scene_tag_idx = -1;
+        int is_open_tag = 0;
+        if (menu_id == MENU_SCENE && tag_count >= 0) {
+            scene_tag_idx = scene_tag_idx_for_parent_row(i);
+            is_open_tag = (scene_tag_idx >= 0 && scene_tag_idx == g_scene_open_tag);
+        }
+        if (menu_id == MENU_SCENE && tag_count >= 0) {
+            int scene_n = i - (tag_count + SCENE_OFF_SCENES);
             if (scene_n >= 0 && scene_n < repl_user_scene_count())
                 scene_hit = glr_scene_menu_slot_for_dense_index(scene_n);
         }
-        int is_active_example = (menu_id == MENU_SCENE && ne >= 0 &&
-                     i >= 1 && i <= ne &&
-                     (i - 1) == snap->scenes.active_example_idx);
         int is_active_scene   = (scene_hit >= 0 &&
                                  scene_hit == snap->user_scene_active_idx);
 
-        if (i == g_menu_item_hover) {
+        if (i == g_menu_item_hover || is_open_tag) {
             glColor4f(0.180f, 0.290f, 0.431f, alpha);  /* #2e4a6e */
             glRectf((float)(dx + 1), (float)(ey - 2),
                       (float)(dx + 1) + (float)(dw - 2), (float)(ey - 2) + (float)LINE_H);
             glColor4f(1.0f, 1.0f, 1.0f, alpha);
-        } else if (is_active_example || is_active_scene) {
+        } else if (is_active_scene) {
             glColor4f(UI_ACCENT_GREEN_R, UI_ACCENT_GREEN_G, UI_ACCENT_GREEN_B, alpha);
         } else {
             glColor4f(0.847f, 0.847f, 0.847f, alpha);  /* #d8d8d8 */
         }
 
         gl2d_draw_string((float)(dx + 14), (float)ey, lbl, FONT_SMALL);
+
+        if (scene_tag_idx >= 0) {
+            glColor4f(0.533f, 0.533f, 0.533f, alpha);
+            gl2d_draw_string((float)(dx + dw - 20), (float)ey, ">", FONT_SMALL);
+        }
 
         const char *sc = menu_item_shortcut(menu_id, i);
         if (sc) {
@@ -871,6 +1112,8 @@ void ui_menu_bar_render_example_dropdown(const UiRenderSnapshot *snap) {
 
         ey -= LINE_H;
     }
+
+    render_scene_example_submenu(snap);
 
     glDisable(GL_BLEND);
     gl2d_end();

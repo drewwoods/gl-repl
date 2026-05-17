@@ -14,6 +14,7 @@
 #include "audio.h"
 #include "repl/core.h"
 #include "repl/core_internal.h"
+#include "repl/examples.h"
 #include "repl/scenes.h"
 #include "app/glr_config.h"
 #include "editor/input.h"
@@ -515,13 +516,11 @@ int glr_action_menu_item_activate(int menu_id, int item_idx) {
         /* REPL_FILE_ITEM_SCENE_SEP is a non-actionable "---" row (the
          * dropdown hit-test never returns it); no case needed. */
     } else if (menu_id == GLR_MENU_SCENE) {
-        int example_count = repl_example_count();
-        if (item_idx >= 1 && item_idx <= example_count) {
-            glr_scene_load_example(item_idx - 1);
-            return 1;
-        }
+        int tag_count = repl_example_visible_tag_count();
+        if (item_idx >= 1 && item_idx <= tag_count)
+            return 0;
 
-        int scene_idx = item_idx - (example_count + GLR_SCENE_OFF_SCENES);
+        int scene_idx = item_idx - (tag_count + GLR_SCENE_OFF_SCENES);
         if (scene_idx >= 0 && scene_idx < repl_user_scene_count()) {
             int slot = glr_scene_menu_slot_for_dense_index(scene_idx);
             if (slot >= 0) {
