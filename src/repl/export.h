@@ -153,6 +153,10 @@ typedef struct {
     int  (*try_consume_import_line)(const char *line);
     /* Reset import-side parser state at the start of each load. */
     void (*reset_import)(void);
+    /* Apply a validated example camera block. This is separate from
+     * import-line consumption so app bridges can animate example
+     * switches while save/workspace imports still restore immediately. */
+    void (*apply_example_block)(const ReplExportCameraBlock *block);
 } ReplExportCameraBridge;
 
 void                          repl_export_install_camera_bridge(const ReplExportCameraBridge *bridge);

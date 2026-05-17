@@ -197,6 +197,39 @@ static void cam_reset_import(void) {
     g_cam_parse_state = 0;
 }
 
+static int cam_consume_example_block_now(const ReplExportCameraBlock *block) {
+    if (!block || !block->present)
+        return 0;
+
+    cam_reset_import();
+    if (!cam_try_consume_import_line(block->lines[0])) return 0;
+    if (!cam_try_consume_import_line(block->lines[1])) return 0;
+    if (!cam_try_consume_import_line(block->lines[2])) return 0;
+    if (!cam_try_consume_import_line("glRotatef(g_angle, 0, 1, 0)")) return 0;
+    if (!cam_try_consume_import_line(block->lines[3])) return 0;
+    return 1;
+}
+
+static void cam_apply_example_block(const ReplExportCameraBlock *block) {
+    ReplCameraState start;
+    ReplCameraState target;
+
+    if (!block || !block->present)
+        return;
+
+    glr_camera_capture(&start);
+    if (!cam_consume_example_block_now(block)) {
+        cam_reset_import();
+        glr_camera_restore(&start);
+        return;
+    }
+    glr_camera_capture(&target);
+    cam_reset_import();
+    glr_camera_restore(&start);
+    glr_camera_ease_to(target.rx, target.ry, target.dist,
+                       target.tx, target.ty, target.tz);
+}
+
 /* ----- Bridge install ------------------------------------------------- */
 
 static const ReplExportCameraBridge g_glr_export_camera_bridge = {
@@ -205,6 +238,7 @@ static const ReplExportCameraBridge g_glr_export_camera_bridge = {
     .fill_save_preamble     = cam_format_save_preamble,
     .try_consume_import_line = cam_try_consume_import_line,
     .reset_import           = cam_reset_import,
+    .apply_example_block    = cam_apply_example_block,
 };
 
 void glr_camera_export_install_bridge(void) {
