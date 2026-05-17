@@ -344,18 +344,45 @@ verbatim by three consumers (the file writer in `src/repl/export.c` and
 the code panel's row-count *and* render passes in
 `src/ui/repl_code_panel.c`). A line whose count or text is dynamic is
 stored as a unique sentinel constant
-(`REPL_EXPORT_RESHAPE_PROJ_SENTINEL`); **every** consumer must
-special-case the sentinel and expand it through the single resolver
-`repl_export_reshape_projection_lines()` — mirroring the older
-`"static float g_angle = 0.0f;"` special-case for the saved-file angle
-preamble. Invariant: the resolver is deterministic within a frame, so
-the panel's row-count pass and render pass agree on row count even
-though the projection expands to one line (perspective) or two (ortho).
-The resolver returns pointers into reused static storage; the panel
-copies them into its per-builder text arena (`add_static_row` stores the
-pointer, not a copy). Adding another dynamic footer line follows the
-same recipe: sentinel constant in `export.h`, one resolver, special-case
-in all three consumers.
+(`REPL_EXPORT_RESHAPE_PROJ_SENTINEL`); every consumer special-cases it —
+mirroring the older `"static float g_angle = 0.0f;"` special-case for
+the saved-file angle preamble. **The sentinel must be resolved exactly
+once per consumption, never re-resolved live by the UI**, because the
+two panel passes run on *opposite sides* of `scene_render_3d_scene()`
+(`glr_ctrl_display_frame`: snapshot/follow-scroll → scene render → panel
+render). If each pass called `repl_export_reshape_projection_lines()`
+itself, a 2D/3D transition that frame would let row-count see one
+`gluPerspective(...)` line while render emits two `glOrtho(...)` lines,
+skewing scroll-follow and row hit mapping. So:
+
+* **Code panel (per frame):** the controller resolves the block once in
+  `glr_ctrl_build_ui_snapshot()` into
+  `UiRenderSnapshot.reshape_proj_lines/_count`; both panel passes read
+  that frozen copy and never touch the resolver. This is the canonical
+  shape — UI reads the snapshot only (the symmetric counterpart of
+  `SceneRenderConfig`). The block is the *previous* frame's scene
+  projection (snapshot is built before scene render); a one-frame text
+  lag during a transition is invisible and, crucially, internally
+  consistent. snapshot.h hardcodes `UI_RESHAPE_PROJ_LINES/_LINE_MAX`
+  for UI-layer purity, with `STATIC_ASSERT` equivalence to the
+  `REPL_EXPORT_PROJ_*` source-of-truth in `glr_ctrl.c` (same pattern as
+  the scene-tab dims).
+* **File save (discrete action):** `repl_export_save_output()` calls
+  `repl_export_reshape_projection_lines()` directly — a single pass on
+  the Ctrl+S thread, not split across scene render, so it correctly
+  captures the projection in effect at save time. (Routing this through
+  a controller-owned `ReplExportLayout`-style export context is the
+  documented next step if save is ever folded into the frame path.)
+
+`scene_get_active_projection()` is the *nearest-steady* projection: the
+continuous blend is snapped to the dominant side (`mix < 0.5` ⇒ ortho).
+It is deliberately not the live blended 16-float matrix — `reshape()`
+emits one discrete mode, not an interpolation; a faithful mid-transition
+matrix export would need a different, explicitly-named contract.
+
+Adding another dynamic footer line follows the same recipe: sentinel
+constant in `export.h`, one resolver, controller resolves once into the
+snapshot for the panel, special-case in the consumers.
 
 ### Startup & Audio-Worker Diagnostics
 
