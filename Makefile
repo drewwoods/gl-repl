@@ -124,10 +124,6 @@ GLUT_GL_LDFLAGS = $(GL_STUB_LDFLAGS)
 GL_LDFLAGS = $(GL_STUB_LDFLAGS)
 endif
 
-ifeq ($(NO_POINT_PARAMETER),1)
-CFLAGS += -DNO_POINT_PARAMETER
-endif
-
 ifeq ($(BUILD),coverage)
 COVERAGE_LDFLAGS = --coverage
 else
@@ -159,7 +155,6 @@ endif
 	check-no-facade-include-in-views \
 	check-no-feed-line-in-pipeline \
 	check-no-load-line-to-input-in-pipeline \
-	check-no-point-parameter-builds \
 	check-no-repl-commit \
 	check-no-repl-editor-input-shim \
 	check-no-set-status-in-compile-apply \
@@ -923,7 +918,6 @@ check-state-ownership: ## Run state-ownership contract checks (new + tightened e
 		check-repl-no-direct-editor \
 		check-repl-demo-no-editor \
 		check-source-document-port-owners \
-		check-no-point-parameter-builds \
 		check-c99 \
 		check-no-test-default-output; do \
 		printf "  $(YELLOW)▶$(NC) $$target\n"; \
@@ -1004,9 +998,6 @@ check-no-feed-line-in-pipeline: ## Verify REPL pipeline TUs do not call feed_lin
 
 check-repl-demo-stubs-shrinking: ## Ratchet on tools/repl_demo/stubs.c — must not grow past 0 stubs.
 	@bash scripts/check-repl-demo-stubs-shrinking.sh
-
-check-no-point-parameter-builds: ## Verify src/repl/executor.c syntax-checks with NO_POINT_PARAMETER=1.
-	@bash scripts/check-no-point-parameter-builds.sh
 
 check-c99: ## C99 build guard: sample + bench + demo sources must syntax-check under gcc -std=c99 (non-pedantic; tests excluded; in the standard gate).
 	@C99_SRCS='$(SRCS)' bash scripts/check-c99.sh
@@ -1235,8 +1226,6 @@ help: ## Show available targets and build-mode notes.
 	@printf "  debug:         \$$(common_flags) %s \n" "$(filter-out $(COMMON_CFLAGS),$(DEBUG_CFLAGS))"
 	@printf "  coverage:      \$$(common_flags) %s \n\n" "$(filter-out $(COMMON_CFLAGS),$(COVERAGE_CFLAGS))"
 	@printf "GL stubs:        make test-stubs, or add USE_GL_STUBS=1 to any target.\n"
-	@printf "No PointParameter: add NO_POINT_PARAMETER=1 to disable glPointParameterfv and use\n"
-	@printf "                 glPointSize(5/cam_dist) as a per-frame distance-attenuation fallback.\n"
 	@printf "User CFLAGS are appended to the selected build mode.\n\n"
 	@printf "Tests:           make test runs test binaries in parallel; set TEST_JOBS=N to limit jobs.\n\n"
 	@printf "Individual tests can still be built directly, e.g. make test_eval or make test_repl_core_io.\n\n"

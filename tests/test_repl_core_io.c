@@ -6,6 +6,7 @@
 #include "repl/pipeline.h"
 #include "repl/state.h"
 #include "repl/export.h"
+#include "repl/executor.h"
 #include "ui/state.h"
 
 #include "support/test_harness.h"
@@ -139,10 +140,10 @@ int main(void) {
                 find_init_line_substr("glEnable(GL_BLEND);") >= 0);
     ASSERT_TRUE("init has blend func bootstrap",
                 find_init_line_substr("glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);") >= 0);
-#ifndef NO_POINT_PARAMETER
+    /* Default: point parameters supported, so the attenuation
+     * bootstrap is present. */
     ASSERT_TRUE("init has point attenuation bootstrap",
                 find_init_line_substr("glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION") >= 0);
-#endif
     ASSERT_TRUE("init omits tess edge-flag callback",
                 find_init_line_substr("GLU_TESS_EDGE_FLAG") < 0);
 
@@ -226,13 +227,12 @@ int main(void) {
                     color_material_line > init_func);
         ASSERT_TRUE("saved init light model line once",
                     count_substr(buf, "glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);") == 1);
-#ifndef NO_POINT_PARAMETER
         ASSERT_TRUE("saved init point attenuation line once",
                     count_substr(buf, "glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION") == 1);
-#endif
     }
 
-#ifndef NO_POINT_PARAMETER
+    /* @cfg toggle path: neutralized (still emitted today by the
+     * toggle-disable branch — unchanged behavior). */
     g_init_attenuate_points = 0;
     ASSERT_TRUE("init hides point attenuation when disabled",
                 find_init_line_substr("glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION") < 0);
@@ -244,7 +244,24 @@ int main(void) {
                     strstr(buf, "glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION") == NULL);
     }
     g_init_attenuate_points = 1;
-#endif
+
+    /* Runtime capability path (replaces the compile-time
+     * NO_POINT_PARAMETER #ifndef): when the runtime GL lacks
+     * glPointParameterfv the bootstrap entry is skipped entirely —
+     * not applied, not emitted — independent of the @cfg toggle. */
+    repl_executor_set_point_parameter_supported(0);
+    ASSERT_TRUE("init omits point attenuation when unsupported",
+                find_init_line_substr("glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION") < 0);
+    repl_export_save_output(path, source_document_view(), NULL);
+    {
+        char buf[16384];
+        read_text_file(path, buf, sizeof(buf));
+        ASSERT_TRUE("saved init omits point attenuation when unsupported",
+                    strstr(buf, "glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION") == NULL);
+    }
+    repl_executor_set_point_parameter_supported(1);
+    ASSERT_TRUE("init restores point attenuation when supported again",
+                find_init_line_substr("glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION") >= 0);
 
     glr_app_reset_all(); declare_test_vars();
     ASSERT_TRUE("load saved output", repl_export_load_from_file(path) == 1);

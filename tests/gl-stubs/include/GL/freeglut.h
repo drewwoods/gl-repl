@@ -122,6 +122,9 @@ static inline void glutPostRedisplay(void) {}
 static inline void glutSwapBuffers(void) {}
 static inline int glutGet(GLenum type) { static int elapsed; (void)type; elapsed += 16; return elapsed; }
 static inline int glutGetModifiers(void) { return 0; }
+/* Returns 1 so the stub-built controller's runtime point-parameter
+ * detection defaults to "supported" == today's default build. */
+static inline int glutExtensionSupported(const char *name) { (void)name; return 1; }
 static inline void glutSetCursor(int cursor) { (void)cursor; }
 static inline void glutBitmapCharacter(void *font, int character) { GL_STUB_TRACE_LINE("glutBitmapCharacter %d\n", (int)character); gl_stub_tick(GL_STUB_glutBitmapCharacter); (void)font; }
 static inline int glutBitmapWidth(void *font, int character) { (void)font; (void)character; return 8; }
