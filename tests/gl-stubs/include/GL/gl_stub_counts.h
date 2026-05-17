@@ -48,6 +48,7 @@ extern "C" {
     X(glEdgeFlag)                      \
     X(glEnable)                        \
     X(glEnd)                           \
+    X(glFeedbackBuffer)                \
     X(glFogf)                          \
     X(glFogfv)                         \
     X(glFogi)                          \
@@ -80,6 +81,7 @@ extern "C" {
     X(glRasterPos2f)                   \
     X(glRasterPos3f)                   \
     X(glRectf)                         \
+    X(glRenderMode)                    \
     X(glRotatef)                       \
     X(glScalef)                        \
     X(glScissor)                       \

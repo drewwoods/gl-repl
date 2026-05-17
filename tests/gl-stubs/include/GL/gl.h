@@ -182,6 +182,24 @@ typedef double GLclampd;
 #define GL_CLAMP_TO_EDGE 0x812F
 #define GL_MAX_TEXTURE_SIZE 0x0D33
 
+/* Feedback / render-mode (scene/render.c ortho-freeze eye-distance probe). */
+#define GL_RENDER 0x1C00
+#define GL_FEEDBACK 0x1C01
+#define GL_SELECT 0x1C02
+#define GL_2D 0x0600
+#define GL_3D 0x0601
+#define GL_3D_COLOR 0x0602
+#define GL_3D_COLOR_TEXTURE 0x0603
+#define GL_4D_COLOR_TEXTURE 0x0604
+#define GL_PASS_THROUGH_TOKEN 0x0700
+#define GL_POINT_TOKEN 0x0701
+#define GL_LINE_TOKEN 0x0702
+#define GL_POLYGON_TOKEN 0x0703
+#define GL_BITMAP_TOKEN 0x0704
+#define GL_DRAW_PIXEL_TOKEN 0x0705
+#define GL_COPY_PIXEL_TOKEN 0x0706
+#define GL_LINE_RESET_TOKEN 0x0707
+
 static inline void glAccum(GLenum op, GLfloat value) { GL_STUB_TRACE_LINE("glAccum %u %g\n", (unsigned)op, (double)value); gl_stub_tick(GL_STUB_glAccum); }
 static inline void glBegin(GLenum mode) { GL_STUB_TRACE_LINE("glBegin %u\n", (unsigned)mode); gl_stub_tick(GL_STUB_glBegin); }
 static inline void glBindTexture(GLenum target, GLuint texture) { GL_STUB_TRACE_LINE("glBindTexture %u %u\n", (unsigned)target, (unsigned)texture); gl_stub_tick(GL_STUB_glBindTexture); }
@@ -211,6 +229,7 @@ static inline void glFogfv(GLenum pname, const GLfloat *params) { GL_STUB_TRACE_
 static inline void glFogi(GLenum pname, GLint param) { GL_STUB_TRACE_LINE("glFogi %u %d\n", (unsigned)pname, (int)param); gl_stub_tick(GL_STUB_glFogi); }
 static inline void glFrontFace(GLenum mode) { GL_STUB_TRACE_LINE("glFrontFace %u\n", (unsigned)mode); gl_stub_tick(GL_STUB_glFrontFace); }
 static inline void glFrustum(GLdouble left, GLdouble right, GLdouble bottom, GLdouble top, GLdouble z_near, GLdouble z_far) { GL_STUB_TRACE_LINE("glFrustum %g %g %g %g %g %g\n", (double)left, (double)right, (double)bottom, (double)top, (double)z_near, (double)z_far); gl_stub_tick(GL_STUB_glFrustum); }
+static inline void glFeedbackBuffer(GLsizei size, GLenum type, GLfloat *buffer) { GL_STUB_TRACE_LINE("glFeedbackBuffer %d %u\n", (int)size, (unsigned)type); gl_stub_tick(GL_STUB_glFeedbackBuffer); (void)buffer; }
 static inline void glGetFloatv(GLenum pname, GLfloat *params) {
     GL_STUB_TRACE_LINE("glGetFloatv %u\n", (unsigned)pname);
     gl_stub_tick(GL_STUB_glGetFloatv);
@@ -276,6 +295,7 @@ static inline void glPushMatrix(void) { GL_STUB_TRACE_LINE("glPushMatrix\n"); gl
 static inline void glRasterPos2f(GLfloat x, GLfloat y) { GL_STUB_TRACE_LINE("glRasterPos2f %g %g\n", (double)x, (double)y); gl_stub_tick(GL_STUB_glRasterPos2f); }
 static inline void glRasterPos3f(GLfloat x, GLfloat y, GLfloat z) { GL_STUB_TRACE_LINE("glRasterPos3f %g %g %g\n", (double)x, (double)y, (double)z); gl_stub_tick(GL_STUB_glRasterPos3f); }
 static inline void glRectf(GLfloat x1, GLfloat y1, GLfloat x2, GLfloat y2) { GL_STUB_TRACE_LINE("glRectf %g %g %g %g\n", (double)x1, (double)y1, (double)x2, (double)y2); gl_stub_tick(GL_STUB_glRectf); }
+static inline GLint glRenderMode(GLenum mode) { GL_STUB_TRACE_LINE("glRenderMode %u\n", (unsigned)mode); gl_stub_tick(GL_STUB_glRenderMode); return 0; }
 static inline void glRotatef(GLfloat angle, GLfloat x, GLfloat y, GLfloat z) { GL_STUB_TRACE_LINE("glRotatef %g %g %g %g\n", (double)angle, (double)x, (double)y, (double)z); gl_stub_tick(GL_STUB_glRotatef); }
 static inline void glScalef(GLfloat x, GLfloat y, GLfloat z) { GL_STUB_TRACE_LINE("glScalef %g %g %g\n", (double)x, (double)y, (double)z); gl_stub_tick(GL_STUB_glScalef); }
 static inline void glScissor(GLint x, GLint y, GLsizei width, GLsizei height) { GL_STUB_TRACE_LINE("glScissor %d %d %d %d\n", (int)x, (int)y, (int)width, (int)height); gl_stub_tick(GL_STUB_glScissor); }
