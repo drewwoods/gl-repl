@@ -26,20 +26,22 @@ GL_HEADER_CFLAGS = \
 	-I$(HOME)/src/freeglut-fork/include
 endif
 
-# Language standard. Everything (sample, tests, CI) is C2x by default
-# and that does not change. The sample source is *also* kept buildable
-# as C99 on old machines / old GCC (guarded by `make c99`, which is
-# `gcc -std=c99` WITHOUT -pedantic — GNU extensions GCC accepts are
-# fine; the goal is "old gcc compiles it", not pure ISO C99).
-# `make sample-c99` opts into an actual C99-compiled binary in its own
-# object tree via SAMPLE_STD=c99 (plain -std=c99, so it doesn't trip on
-# platform GL headers' own old-style declarations).
-SAMPLE_STD ?= c2x
+# Project-wide language standard. STD governs -std= for EVERY TU
+# (sample, tests, demos, CI). Default C2x — that does not change.
+# `STD=c99` builds the whole project as non-pedantic C99 (old-machine
+# target; GNU extensions GCC accepts are fine — the goal is "old gcc
+# compiles it", not pure ISO C99). The whole test suite builds and
+# passes under it; verify with `make c99-full`. The fast gate guard
+# `make c99` syntax-checks the sample source set under `gcc -std=c99`;
+# `make sample-c99` opts into a real C99-compiled binary (own object
+# tree). Always build a different STD into a distinct BUILD/object
+# tree (e.g. BUILD=release-c99) so C99 and C2x objects never collide.
+STD ?= c2x
 
 COMMON_CFLAGS = \
 	-Wall -ggdb -g3 \
 	-Wno-deprecated-declarations -Wfloat-conversion \
-	-std=$(SAMPLE_STD) -DGL_SILENCE_DEPRECATION \
+	-std=$(STD) -DGL_SILENCE_DEPRECATION \
 	$(GL_HEADER_CFLAGS) \
 	-I$(PROJECT_ROOT) \
 	-I$(SRC_DIR) \
@@ -121,6 +123,7 @@ endif
 	bench \
 	bench-csv \
 	c99 \
+	c99-full \
 	callgraph-files \
 	callgraph-graphviz \
 	callgraph-html \
@@ -655,7 +658,7 @@ sample-c99: ## Optional: build a C99-compiled sample binary (default build stays
 		echo "ERROR: sample-c99 builds a real GL-linked C99 binary; USE_GL_STUBS=1 is not supported (stub GL is a no-op). Run 'make sample-c99' without USE_GL_STUBS, or use 'make c99' for the stub-path C99 syntax guard." >&2; \
 		exit 1; \
 	fi
-	@$(MAKE) build/release-c99/sample BUILD=release-c99 SAMPLE_STD=c99
+	@$(MAKE) build/release-c99/sample BUILD=release-c99 STD=c99
 	ln -sfn build/release-c99/sample $@
 
 # Standalone demo binary that drives the scene module with a teapot callback.
@@ -1010,7 +1013,10 @@ check-no-point-parameter-builds: ## Verify src/repl/executor.c syntax-checks wit
 check-c99: ## Verify the sample source set builds under gcc -std=c99 (old-machine target; default build stays C2x).
 	@C99_SRCS='$(SRCS)' bash scripts/check-c99.sh
 
-c99: check-c99 ## Alias for check-c99 (C99 sample-source conformance guard).
+c99: check-c99 ## Alias for check-c99 (fast C99 sample-source syntax guard; in the standard gate).
+
+c99-full: ## Opt-in: build AND run the WHOLE test suite under non-pedantic gcc -std=c99 (isolated tree; slow, not in the gate).
+	@$(MAKE) test-stubs STD=c99 BUILD=release-c99
 
 check-no-test-default-output: ## Hard guard: tests may not call repl_save_default_output() (writes ./output.c in repo root).
 	@bash scripts/check-no-test-default-output.sh
