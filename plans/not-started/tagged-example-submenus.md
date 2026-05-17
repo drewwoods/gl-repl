@@ -25,12 +25,14 @@ The implementation should preserve the current ownership split:
   `src/app/glr_ctrl.c::cycle_example_or_user_scene()` uses this flat count and
   must remain unchanged.
 - The Scene dropdown row math is duplicated across `src/ui/menu_bar.c` and
-  `src/app/glr_actions.c`. Today the fixed scene rows are offset by the number
+  `src/app/glr_actions.c`. Today the user-scene rows are offset by the number
   of examples:
   - `0`: `### EXAMPLES`
   - `1..example_count`: example rows
-  - `example_count + GLR_SCENE_OFF_*`: divider, `### SCENE`, actions, user
-    scenes
+  - `example_count + GLR_SCENE_OFF_HDR`: `### YOUR SCENES`
+  - `example_count + GLR_SCENE_OFF_SCENES + dense_scene_idx`: user scenes
+  Scene actions (`New Scene`, `Save Scene`, `Load Scene`, `Rename Scene`) live
+  in the File menu and must not be reintroduced into the Scene menu.
 - `ui_menu_bar_hit_test()` returns only passive `UiHit` values. The controller
   routes `UI_HIT_MENU_ITEM` to `glr_action_menu_item_activate()`. The hard
   guard `scripts/check-ui-returns-hits-only.sh` covers this contract for
@@ -54,9 +56,7 @@ The implementation should preserve the current ownership split:
 - Scene menu parent layout:
   - `### EXAMPLES`
   - one row per tag, with a right-facing submenu indicator
-  - divider
-  - `### SCENE`
-  - scene actions
+  - `### YOUR SCENES`
   - user scenes
 - Hovering a tag row opens a submenu next to the parent Scene dropdown.
 - Moving between tag rows switches the submenu and starts a fresh submenu fade.
@@ -70,8 +70,9 @@ The implementation should preserve the current ownership split:
   the top alignment with the hovered tag row where practical.
 - F12 cycling remains flat registry order:
   `examples[0..N-1] -> user scenes -> examples[0]`.
-- The existing F12/open-menu example dropdown behavior should remain flat unless
-  it is explicitly redesigned later. This feature is for Scene menu submenus.
+- F12 cycling stays a flat scene-cycle operation and does not open or depend on
+  the Scene menu. The legacy renderer name (`ui_menu_bar_render_example_dropdown`)
+  can remain even though the Scene menu's visible example rows become tag rows.
 
 ## Step 1: Replace Parallel Example Arrays With A Registry
 
@@ -183,28 +184,27 @@ const char *const *repl_examples_lines(int idx);
 
 After the registry change, these should read from `g_example_entries[idx]`.
 
-## Step 3: Add Loader/Action Surface For Global Example Indices
+## Step 3: Reuse The Existing Loader Surface For Global Example Indices
 
-The submenu click should not encode fake parent-menu row indices. Add a small
-action helper in `src/app/glr_actions.c` and declare it in
-`src/app/glr_actions.h`:
+The submenu click should not encode fake parent-menu row indices. Route global
+example indices through the existing action helper in `src/app/glr_actions.c`:
 
 ```c
-int glr_action_load_example(int example_idx);
+void glr_scene_load_example(int example_idx);
 ```
 
-Implementation should reuse the exact transient reset path currently duplicated
-inside `glr_action_menu_item_activate()` for Scene example rows:
+That helper already owns the current example-load side effects shared by the
+Scene menu and scene tab strip:
 
 ```c
 editor_reset_transients();
+editor_undo_clear();
 repl_load_example(example_idx);
-return 1;
 ```
 
-Then change the current parent Scene example-row branch, while it still exists
-during migration, to call this helper. This keeps direct menu rows and future
-submenu rows behavior-identical.
+During migration, keep the current parent Scene example-row branch calling this
+helper until parent rows become tags. After Step 4, all Scene-menu example
+loading should flow through submenu hits and this existing helper.
 
 ## Step 4: Change Scene Parent Row Math From Examples To Tags
 
@@ -213,11 +213,7 @@ tag rows (tags with at least one matching example):
 
 - `0`: `### EXAMPLES`
 - `1..visible_tag_count`: tag rows
-- `visible_tag_count + SCENE_OFF_DIVIDER`: divider
-- `visible_tag_count + SCENE_OFF_HDR`: `### SCENE`
-- `visible_tag_count + SCENE_OFF_NEW`: `New empty scene`
-- `visible_tag_count + SCENE_OFF_SAVE`: `Save to output.c`
-- `visible_tag_count + SCENE_OFF_RENAME`: `Rename active scene`
+- `visible_tag_count + SCENE_OFF_HDR`: `### YOUR SCENES`
 - `visible_tag_count + SCENE_OFF_SCENES + dense_scene_idx`: user scenes
 
 Update these helpers together:
@@ -226,19 +222,21 @@ Update these helpers together:
 - `menu_item_label(MENU_SCENE, i)`
 - `menu_item_shortcut(MENU_SCENE, i)`
 - any active example/scene highlight logic in the parent dropdown renderer
-- hit-test exclusions for header/divider rows
+- hit-test exclusions for header rows
 
 Important: `GLR_SCENE_OFF_*` values can stay as-is because they are relative to
 the start of the section after the dynamic examples block. Only the dynamic
-block changes from `example_count` to `visible_tag_count`.
+block changes from `example_count` to `visible_tag_count`. Do not add back
+old Scene action offsets; those actions now belong to File-menu
+`REPL_FILE_ITEM_*` rows.
 
 Empty-tag handling: if a tag has zero matching examples, both UI and action
 sides MUST skip it. Use `repl_example_visible_tag_count()` (added in Step 2)
 on both sides; never reach for raw `repl_example_tag_count()` inside menu-row
 arithmetic. If raw and visible counts diverge, action offsets desynchronize
-from UI offsets and the user's New/Save/Rename/user-scene clicks land on the
-wrong action. Treat `repl_example_visible_tag_count()` as the load-bearing
-identity for Scene-menu row math.
+from UI offsets and user-scene clicks land on the wrong scene. Treat
+`repl_example_visible_tag_count()` as the load-bearing identity for Scene-menu
+row math.
 
 In `src/app/glr_actions.c::glr_action_menu_item_activate()`, mirror the same
 offset migration using the same visible-tag count:
@@ -247,8 +245,9 @@ offset migration using the same visible-tag count:
 int tag_count = repl_example_visible_tag_count();
 ```
 
-Then use `tag_count + GLR_SCENE_OFF_*` for New/Save/Rename/user-scene rows.
-Parent tag rows are intentional no-ops: detect them with
+Then use `tag_count + GLR_SCENE_OFF_HDR` for `### YOUR SCENES` and
+`tag_count + GLR_SCENE_OFF_SCENES` for user-scene rows. Parent tag rows are
+intentional no-ops: detect them with
 `item_idx >= 1 && item_idx <= tag_count` and `return 0` (menu stays open) so
 the user can hover the tag to see the submenu, then click an example inside it.
 Returning `1` would close the menu and defeat the submenu workflow.
@@ -288,9 +287,9 @@ During Scene dropdown rendering (write path):
 - If the tag changes, set `g_scene_submenu_open_time = snap->anim_time`.
 - If the pointer is inside the currently open submenu, keep
   `g_scene_open_tag` unchanged.
-- If the pointer is on a parent row that is not a tag row (header, divider,
-  scene action, user-scene row), close the submenu — the user has moved
-  attention away from the tag area.
+- If the pointer is on a parent row that is not a tag row (header or
+  user-scene row), close the submenu — the user has moved attention away from
+  the tag area.
 - If the pointer is outside both the parent dropdown and the submenu, close the
   submenu but leave the parent dropdown behavior unchanged.
 
@@ -308,7 +307,7 @@ visible-tag layer added in Step 2:
 ```c
 /* Map parent row [1..visible_tag_count] to the underlying tag_idx via
  * repl_example_visible_tag_at(row - 1). Returns -1 for non-tag rows
- * (header, divider, scene actions, user scenes). */
+ * (headers and user scenes). */
 static int scene_tag_idx_for_parent_row(int row);
 
 /* Inverse: returns the parent row that displays tag_idx, or -1 if
@@ -378,7 +377,8 @@ After rendering the parent dropdown, render the open submenu if
 This submenu render is scoped to `MENU_SCENE` only. The legacy-named
 `ui_menu_bar_render_example_dropdown()` renders every top-level dropdown
 today; the submenu code path must early-out for `g_open_menu != MENU_SCENE`
-so opening the File or Config dropdown doesn't leak a stale Scene submenu.
+so opening the File, Tutorials, or Config dropdown doesn't leak a stale Scene
+submenu.
 
 Keep blend enable/disable balanced around the whole parent+submenu render.
 
@@ -403,12 +403,15 @@ static UiHit scene_example_submenu_hit_test(int mx, int my);
 ```
 
 Priority (insert submenu rows at the top of the existing chain in
-`ui_menu_bar_hit_test()`, which today is parent-row → pin → menu-button):
+`ui_menu_bar_hit_test()`, before the parent-row branch and before the inert
+open-dropdown-rect consume branch):
 
 1. Submenu rows.
 2. Parent dropdown rows.
-3. Pin buttons.
-4. Top-level menu buttons.
+3. Inert open-dropdown rect hits (`UI_HIT_CODE_PANEL_CHROME` for headers,
+   dead space, and other non-actionable dropdown pixels).
+4. Pin buttons.
+5. Top-level menu buttons.
 
 This prevents a submenu click from being interpreted as an outside click that
 closes the parent menu before loading the example. The submenu rect and parent
@@ -428,8 +431,8 @@ Update `ui_menu_bar_hit_test()` so submenu hits return
 In `src/app/glr_ctrl.c`:
 
 - Add a `route_example_submenu_item_hit(const UiHit *hit)` helper.
-- Call `glr_action_load_example(hit->item_idx)`.
-- Close the menu after a successful load with `ui_menu_bar_close()`.
+- Call `glr_scene_load_example(hit->item_idx)`.
+- Close the menu with `ui_menu_bar_close()` after the load.
 - Request redraw.
 
 Update the switch in `glr_ctrl_router_handle_code_panel_hit()` to dispatch
@@ -458,7 +461,7 @@ identity used by `menu_item_count(MENU_SCENE)`), then detect
 `item_idx >= 1 && item_idx <= tag_count` and `return 0` immediately so the
 controller leaves the dropdown open and the user can keep hovering tags. All
 example loading from the Scene menu should flow through
-`UI_HIT_EXAMPLE_SUBMENU_ITEM` and `glr_action_load_example(example_idx)`.
+`UI_HIT_EXAMPLE_SUBMENU_ITEM` and `glr_scene_load_example(example_idx)`.
 
 Verify the user-scene row mapping still uses dense user-scene indices, and
 that the visible-tag count drives the offset:
@@ -513,7 +516,7 @@ Update `tests/test_ui_menu_bar.c`:
   a tag index and asserts the returned rect lands to the left of the
   parent rather than off-screen to the right.
 - Parent dropdown hit tests still work for File, Tutorials, Config, and Scene
-  fixed rows.
+  header/user-scene rows.
 - Existing assertion at `test_ui_menu_bar.c:286` that exercises the Scene
   dropdown with `snap.scenes.active_example_idx = 0` continues to render
   rows (the parent now renders tag rows); the active-example highlight
