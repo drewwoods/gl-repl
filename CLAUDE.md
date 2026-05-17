@@ -26,16 +26,28 @@ by default in debug builds.
 
 ### C99 portability contract
 
-All builds (`make sample`, `make test`, CI) compile `-std=c2x` — that
-does not change. Separately, the sample must stay buildable as **C99 on
-old machines / old GCC** — *not* pure pedantic ISO C99. `make c99`
-(also run as `check-c99` inside `make check-state-ownership`, so it's
-part of the standard gate) compiles every sample TU with
-`gcc -std=c99` (**no `-pedantic`**) on the GL-stub include path. It is
-`-fsyntax-only` — no objects, no build-standard flip, no object-tree
-split. Genuine C99 breakers still fail it (C99 makes implicit function
-declarations an error; raw C11 constructs are unknown to old GCC); GNU
-extensions GCC accepts in `-std=c99` mode are fine.
+The default standard is C2x and that does not change. The whole
+project is *also* buildable as **C99 on old machines / old GCC** —
+*not* pure pedantic ISO C99. One project-wide knob drives it: the
+`STD` make variable (default `c2x`) sets `-std=` for every TU
+(sample, tests, demos). `STD=c99` builds the entire project as
+non-pedantic C99 — the full test suite compiles and passes under it
+(5080/5080). Always pair a non-default `STD` with a distinct
+`BUILD=` so C99 and C2x objects never share a tree.
+
+Three entry points:
+
+- **`make c99`** — fast gate guard. `gcc -std=c99` (**no
+  `-pedantic`**), `-fsyntax-only`, sample source set, GL-stub include
+  path. Run as `check-c99` inside `make check-state-ownership`, so
+  it's in the standard gate. Genuine C99 breakers still fail it (C99
+  makes implicit function declarations an error; raw C11 constructs
+  are unknown to old GCC); GNU extensions GCC accepts are fine.
+- **`make c99-full`** — opt-in, slow, *not* in the gate. Builds **and
+  runs** the whole test suite under non-pedantic `STD=c99` in an
+  isolated `build/release-c99-gl-stubs` tree. The thorough proof.
+- **`make sample-c99`** — a real `-std=c99`-compiled sample binary
+  (own object tree; default `sample`/C2x untouched).
 
 The one load-bearing rule for new sample code: compile-time asserts
 must use `STATIC_ASSERT(expr, msg)` from `include/c_compat.h` (real
@@ -48,10 +60,8 @@ owning header), and old-style `void (*)()` casts (use a prototyped
 typedef like `ReplGluCallback` in `src/repl/executor.c`) — but those
 are GCC-tolerated and the relaxed guard does not fail them.
 
-`make sample-c99` optionally produces a real `-std=c99`-compiled
-binary (separate object tree; default `sample`/C2x untouched).
-Test-only and generated harness files are out of the C99 promise
-(`make test` stays C2x).
+The default gate still runs C2x (`make test` / CI unchanged); the
+C99 paths above are additive verification, not a default-build change.
 
 `include/gl_includes.h` is vendored alongside the source — the Makefile adds
 `-Iinclude` to `COMMON_CFLAGS` so every translation unit can resolve it via
