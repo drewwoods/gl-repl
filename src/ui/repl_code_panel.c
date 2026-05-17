@@ -187,10 +187,13 @@ static int repl_code_panel_footer_row_count(const UiRenderSnapshot *snap,
     for (int i = 0; g_footer_pre_init[i]; i++) {
         if (strcmp(g_footer_pre_init[i],
                    REPL_EXPORT_RESHAPE_PROJ_SENTINEL) == 0) {
-            const char *proj[REPL_EXPORT_PROJ_LINES];
-            int pn = repl_export_reshape_projection_lines(proj);
-            for (int j = 0; j < pn; j++)
-                rows += repl_code_panel_row_count(snap, proj[j], text_x, panel_w);
+            /* Read the frame-frozen block from the snapshot — never
+             * re-resolve live here, or this pass and the render pass
+             * (opposite sides of scene_render_3d_scene) could disagree
+             * on row count across a 2D/3D transition. */
+            for (int j = 0; j < snap->reshape_proj_count; j++)
+                rows += repl_code_panel_row_count(snap, snap->reshape_proj_lines[j],
+                                                  text_x, panel_w);
             continue;
         }
         rows += repl_code_panel_row_count(snap, g_footer_pre_init[i], text_x, panel_w);
@@ -1190,22 +1193,15 @@ static void repl_code_panel_build_rows(ReplCodePanelBuilder *builder) {
     for (int i = 0; g_footer_pre_init[i]; i++) {
         if (strcmp(g_footer_pre_init[i],
                    REPL_EXPORT_RESHAPE_PROJ_SENTINEL) == 0) {
-            const char *proj[REPL_EXPORT_PROJ_LINES];
-            int pn = repl_export_reshape_projection_lines(proj);
-            for (int j = 0; j < pn; j++) {
-                /* add_static_row stores the pointer, not a copy, and the
-                 * resolver's storage is reused on its next call — copy
-                 * into the builder's generated-text arena (same as the
-                 * init-section rows below). */
-                char *slot = repl_code_panel_next_generated_text(builder);
-                if (!slot)
-                    break;
-                snprintf(slot, MAX_LINE_LEN, "%s", proj[j]);
+            /* Frame-frozen in the snapshot by the controller; its
+             * storage outlives this render, so add_static_row may hold
+             * the pointer directly (like the literal g_footer lines).
+             * Same block the row-count pass read, so they agree. */
+            for (int j = 0; j < snap->reshape_proj_count; j++)
                 repl_code_panel_add_static_row(
-                    builder, slot,
-                    repl_code_panel_static_line_color(slot,
-                                                      0.38f, 0.38f, 0.42f));
-            }
+                    builder, snap->reshape_proj_lines[j],
+                    repl_code_panel_static_line_color(
+                        snap->reshape_proj_lines[j], 0.38f, 0.38f, 0.42f));
             continue;
         }
         repl_code_panel_add_static_row(
