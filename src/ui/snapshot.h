@@ -52,6 +52,15 @@ typedef struct {
  * STATIC_ASSERT in glr_ctrl.c (which already includes repl/core.h). */
 enum { UI_SCENE_TAB_NAME_MAX = 64 };   /* == USER_SCENE_NAME_MAX */
 enum { UI_SCENE_TAB_CAP = 9 };         /* == MAX_USER_SCENES + 1 */
+
+/* Resolved reshape() projection block, frozen into the snapshot once per
+ * frame by the controller so the code panel's row-count and render
+ * passes (which run on opposite sides of scene_render_3d_scene) always
+ * agree. Dimensions hardcoded for UI-layer purity — equivalence with
+ * REPL_EXPORT_PROJ_LINES / _LINE_MAX is STATIC_ASSERTed in glr_ctrl.c. */
+enum { UI_RESHAPE_PROJ_LINES = 4 };    /* == REPL_EXPORT_PROJ_LINES */
+enum { UI_RESHAPE_PROJ_LINE_MAX = 96 };/* == REPL_EXPORT_PROJ_LINE_MAX */
+
 typedef enum { UI_SCENE_TAB_USER = 0, UI_SCENE_TAB_EXAMPLE } UiSceneTabKind;
 typedef struct {
     char           name[UI_SCENE_TAB_NAME_MAX];
@@ -137,6 +146,16 @@ typedef struct UiRenderSnapshot {
     int                         trailing_indent_chars;
     int                         in_begin_block;
     GLenum                      current_begin_mode;
+
+    /* Reshape() projection body, resolved once per frame by the
+     * controller from the scene's nearest-steady projection (see
+     * scene_get_active_projection). The code panel expands the
+     * REPL_EXPORT_RESHAPE_PROJ_SENTINEL footer slot from this, so its
+     * row-count and render passes agree even when a 2D/3D transition
+     * changes the line count mid-frame. */
+    char                        reshape_proj_lines[UI_RESHAPE_PROJ_LINES]
+                                                  [UI_RESHAPE_PROJ_LINE_MAX];
+    int                         reshape_proj_count;
 } UiRenderSnapshot;
 
 #endif /* UI_SNAPSHOT_H */

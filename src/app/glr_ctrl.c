@@ -1388,6 +1388,13 @@ STATIC_ASSERT(UI_SCENE_TAB_CAP >= MAX_USER_SCENES + 1,
               "scene-tab cap must fit every user slot plus the example tab");
 STATIC_ASSERT(UI_SCENE_TAB_NAME_MAX == USER_SCENE_NAME_MAX,
               "scene-tab name buffer must match the user-scene name max");
+/* Same rationale for the snapshot's resolved reshape-projection block:
+ * snapshot.h hardcodes the dimensions (UI-layer purity), repl/export.h
+ * owns the source-of-truth, equivalence is asserted here. */
+STATIC_ASSERT(UI_RESHAPE_PROJ_LINES == REPL_EXPORT_PROJ_LINES,
+              "snapshot reshape-projection line count must match repl/export");
+STATIC_ASSERT(UI_RESHAPE_PROJ_LINE_MAX == REPL_EXPORT_PROJ_LINE_MAX,
+              "snapshot reshape-projection line width must match repl/export");
 
 /* Derive the scene tab strip each frame from existing state — no persistent
  * model. One tab per occupied user-scene slot (dense slot order, matching
@@ -1495,6 +1502,23 @@ void glr_ctrl_build_ui_snapshot(UiRenderSnapshot *snap) {
     snap->trailing_indent_chars = repl_source_scope_cmd_indent_chars(snap->document_count);
     snap->in_begin_block        = repl_source_scope_in_begin_block();
     snap->current_begin_mode    = repl_current_begin_mode();
+
+    /* Resolve the dynamic reshape() projection ONCE here so the panel's
+     * row-count and render passes (which straddle scene_render_3d_scene)
+     * read one frozen value. This is the previous frame's scene
+     * projection — build_ui_snapshot runs before scene render — which is
+     * exactly the consistency the panel needs; a 1-frame text lag during
+     * a 2D/3D transition is invisible. */
+    {
+        const char *proj[REPL_EXPORT_PROJ_LINES];
+        int pn = repl_export_reshape_projection_lines(proj);
+        if (pn < 0) pn = 0;
+        if (pn > UI_RESHAPE_PROJ_LINES) pn = UI_RESHAPE_PROJ_LINES;
+        for (int i = 0; i < pn; i++)
+            snprintf(snap->reshape_proj_lines[i],
+                     UI_RESHAPE_PROJ_LINE_MAX, "%s", proj[i]);
+        snap->reshape_proj_count = pn;
+    }
 }
 
 void glr_ctrl_display_frame(void) {
