@@ -41,7 +41,7 @@ endif
 # extensions GCC accepts in -std=c99 are fine; the goal is "old gcc
 # compiles it", not pure ISO C99. The shipped/real binaries (sample,
 # bench, demos) are additionally held to -pedantic-errors by the
-# `make c99` ratchet (syntax-only, in the standard gate); tests are
+# `make check-c99` ratchet (syntax-only, in the standard gate); tests are
 # plain -std=c99 (the pedantic delta there is real work, not a no-op,
 # and tests are not the shipped artifact).
 
@@ -139,7 +139,6 @@ endif
 	audit-editor-ownership \
 	bench \
 	bench-csv \
-	c99 \
 	callgraph-files \
 	callgraph-graphviz \
 	callgraph-html \
@@ -1011,8 +1010,6 @@ check-no-point-parameter-builds: ## Verify src/repl/executor.c syntax-checks wit
 
 check-c99: ## C99 build guard: sample + bench + demo sources must syntax-check under gcc -std=c99 (non-pedantic; tests excluded; in the standard gate).
 	@C99_SRCS='$(SRCS)' bash scripts/check-c99.sh
-
-c99: check-c99 ## Alias for the C99 build guard (check-c99).
 
 check-no-test-default-output: ## Hard guard: tests may not call repl_save_default_output() (writes ./output.c in repo root).
 	@bash scripts/check-no-test-default-output.sh
