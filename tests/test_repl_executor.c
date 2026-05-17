@@ -424,10 +424,12 @@ static void test_glut_bitmap_string(void) {
 }
 
 /* Step 7e regression: the executor consumes camera distance for the
- * legacy point-size fallback through a controller-installed callback,
- * not by reaching into glr_camera directly. The pipeline TU must
- * compile + link without glr_camera.h or glr_camera.c, even when
- * NO_POINT_PARAMETER=1 is defined. */
+ * point-size fallback through a controller-installed callback, not by
+ * reaching into glr_camera directly. The pipeline TU must compile +
+ * link without glr_camera.h or glr_camera.c. Also pins the runtime
+ * point-parameter capability behavior that replaced the compile-time
+ * NO_POINT_PARAMETER macro (and the behavioral value of the deleted
+ * check-no-point-parameter-builds.sh). */
 static float g_test_camera_distance_value = 0.0f;
 static int   g_test_camera_distance_calls = 0;
 
@@ -452,21 +454,49 @@ static void test_executor_camera_distance_source(void) {
     ASSERT_TRUE("install(NULL) clears the source",
                 repl_executor_camera_distance_source() == NULL);
 
-#ifdef NO_POINT_PARAMETER
-    /* When NO_POINT_PARAMETER is set, the fallback consults the
-     * source for cam_dist before scaling glPointSize. With no source
-     * installed (the demo case) cam_dist defaults to 0 and the call
-     * passes sz through unchanged — verified by the static
-     * `_repl_point_size` not crashing. */
+    /* Runtime point-parameter capability (replaces the compile-time
+     * NO_POINT_PARAMETER macro). Two cases, observed through the
+     * public surface. */
+    GLCmd pp = {0};
+    pp.type = CMD_POINT_PARAMETER_FV;
+    pp.args[0] = GL_POINT_DISTANCE_ATTENUATION;
+    pp.args[1] = 1.0f; pp.args[2] = 0.0f; pp.args[3] = 0.02f;
+    pp.num_args = 4;
+
+    /* (a) Unsupported: CMD_POINT_PARAMETER_FV must NOT reach
+     * glPointParameterfv, and the point-size path consults the
+     * camera-distance source to scale the visual fallback. */
+    repl_executor_set_point_parameter_supported(0);
+    gl_stub_counts_reset();
+    apply_state_cmd(&pp, 1.0f);
+    ASSERT_TRUE("unsupported: CMD_POINT_PARAMETER_FV does not call glPointParameterfv",
+                gl_stub_counts[GL_STUB_glPointParameterfv] == 0);
     g_test_camera_distance_calls = 0;
     g_test_camera_distance_value = 4.0f;
     repl_executor_install_camera_distance_source(test_camera_distance_source);
-    _repl_point_size(2.0f);
-    ASSERT_TRUE("fallback consulted the installed source",
+    repl_exec_point_size(2.0f);
+    ASSERT_TRUE("unsupported: point-size fallback consulted the camera-distance source",
                 g_test_camera_distance_calls == 1);
     repl_executor_install_camera_distance_source(NULL);
-    _repl_point_size(2.0f);  /* must not crash with no source */
-#endif
+    repl_exec_point_size(2.0f);  /* must not crash with no source */
+
+    /* (b) Supported (default): CMD_POINT_PARAMETER_FV calls
+     * glPointParameterfv, and the point-size path passes sz straight
+     * through without consulting the camera-distance source. */
+    repl_executor_set_point_parameter_supported(1);
+    gl_stub_counts_reset();
+    apply_state_cmd(&pp, 1.0f);
+    ASSERT_TRUE("supported: CMD_POINT_PARAMETER_FV calls glPointParameterfv",
+                gl_stub_counts[GL_STUB_glPointParameterfv] == 1);
+    g_test_camera_distance_calls = 0;
+    repl_executor_install_camera_distance_source(test_camera_distance_source);
+    repl_exec_point_size(2.0f);
+    ASSERT_TRUE("supported: point-size does not consult the camera-distance source",
+                g_test_camera_distance_calls == 0);
+    repl_executor_install_camera_distance_source(NULL);
+
+    /* Restore default for subsequent tests. */
+    repl_executor_set_point_parameter_supported(1);
 }
 
 /* Pin down two matrix-stack invariants the executor maintains on

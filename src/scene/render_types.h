@@ -120,6 +120,12 @@ typedef struct SceneRenderConfig {
 
     /* --- Environment --- */
     int backdrop_mode;
+    /* Runtime point-parameter (glPointParameterfv) capability, mirrored
+     * from the REPL executor flag. Gates the star backdrop's direct
+     * call. Non-REPL callers (scene_demo) leave this 0 via memset —
+     * the safe default: never call the entry point unless a caller has
+     * confirmed support. */
+    int point_parameter_supported;
     /* Experimental scene-viewport post-processing (ScenePostFilterMode).
      * Runtime-only (Ctrl+N); never persisted via @cfg. */
     int post_filter_mode;

@@ -1199,6 +1199,10 @@ static void glr_ctrl_build_scene_config(SceneRenderConfig *config) {
     config->backdrop_mode = presentation.backdrop_mode;
     config->post_filter_mode = presentation.post_filter_mode;
     config->wireframe = presentation.wireframe;
+    /* Single source of truth: the executor flag set in glr_ctrl_init_gl.
+     * Lets the star backdrop's direct glPointParameterfv call be gated
+     * the same way the executor's is. */
+    config->point_parameter_supported = repl_executor_point_parameter_supported();
 
     /* --- Grid and axes ---
      * Effective theme/opacity come from the transition machines (ticked
@@ -1615,9 +1619,10 @@ static void glr_app_reset_example_chrome(void) {
 }
 
 /* Adapter for repl_executor_install_camera_distance_source. The
- * source is unconditionally installed; only the NO_POINT_PARAMETER
- * code path consumes it, so this is a small zero-cost shim on
- * default builds. */
+ * source is unconditionally installed; only the point-size fallback
+ * (taken when the runtime GL lacks glPointParameterfv) consumes it,
+ * so this is a small zero-cost shim when point parameters are
+ * supported. */
 static float glr_app_camera_distance(void) {
     return glr_camera().dist;
 }
@@ -1776,12 +1781,12 @@ static void glr_app_install_app_services(void) {
      * those last two doors. */
     glr_camera_export_install_bridge();
     /* Step 7e: install the executor's camera-distance source. The
-     * legacy point-size fallback (compiled in via NO_POINT_PARAMETER=1
-     * on platforms missing glPointParameterfv) needs the current
-     * camera distance to scale glPointSize calls; routing it through
-     * a controller-installed callback keeps glr_camera.c out of the
-     * REPL pipeline. The demo doesn't install — the fallback then
-     * passes glPointSize through unscaled. */
+     * point-size fallback (taken at runtime when the GL context lacks
+     * glPointParameterfv) needs the current camera distance to scale
+     * glPointSize calls; routing it through a controller-installed
+     * callback keeps glr_camera.c out of the REPL pipeline. The demo
+     * doesn't install — the fallback then passes glPointSize through
+     * unscaled. */
     repl_executor_install_camera_distance_source(glr_app_camera_distance);
     /* Rule 8 seed. In glr_app_reset_all this runs after the
      * presentation reset (line ordering above); at bootstrap it reads
@@ -1930,6 +1935,29 @@ void glr_ctrl_init_gl(void) {
     repl_ensure_init_bootstrap_ready();
     scene_render_init_gl();
     repl_executor_init_resources();
+
+    /* Runtime point-parameter capability (replaces the old
+     * compile-time NO_POINT_PARAMETER macro). glPointParameterfv is
+     * core GL 1.4 but absent on some legacy contexts — a runtime
+     * property, not a build one. The GL context is already current
+     * here (glr_ctrl_init_gl runs post-glutInit/window), so query it
+     * now. This MUST run before repl_apply_init_bootstrap() below: on
+     * unsupported hardware the point-attenuation bootstrap entry has
+     * to be skipped entirely rather than invoking the missing entry
+     * point. Check the GL version first — an ARB/EXT-only test
+     * false-negatives on a 1.4+ core context that doesn't advertise
+     * the extension string. GLR_NO_POINT_PARAMETER (any non-empty
+     * value) forces the unsupported path for testing on capable HW. */
+    int gl_major = 0, gl_minor = 0;
+    const char *gl_ver = (const char *)glGetString(GL_VERSION);
+    if (gl_ver) sscanf(gl_ver, "%d.%d", &gl_major, &gl_minor);
+    int point_param_ok = (gl_major > 1) || (gl_major == 1 && gl_minor >= 4)
+        || glutExtensionSupported("GL_ARB_point_parameters")
+        || glutExtensionSupported("GL_EXT_point_parameters");
+    const char *no_pp = getenv("GLR_NO_POINT_PARAMETER");
+    if (no_pp && no_pp[0]) point_param_ok = 0;
+    repl_executor_set_point_parameter_supported(point_param_ok);
+
     repl_apply_init_bootstrap();
 
     /* Query actual MSAA sample count from OpenGL */

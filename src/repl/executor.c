@@ -9,17 +9,16 @@
 #include "widgets/replay.h"
 #include "widgets/replay_state.h"
 
-/* Camera-distance source for the legacy point-size fallback on
- * platforms missing glPointParameterfv. The executor used to call
- * `glr_camera().dist` directly, but that pulled glr_camera.c into
- * the demo link set even though glr_camera is app-shell state.
+/* Camera-distance source for the point-size fallback used when the
+ * runtime GL context lacks glPointParameterfv. The executor used to
+ * call `glr_camera().dist` directly, but that pulled glr_camera.c
+ * into the demo link set even though glr_camera is app-shell state.
  *
- * Step 7e: the controller installs a callback that returns the
- * current camera distance. The demo (and any caller without
- * point-attenuation) leaves the source unset; the fallback then
- * emits `glPointSize(sz)` unchanged. The callback storage is
- * always present (not gated on NO_POINT_PARAMETER) so callers can
- * install unconditionally without #ifdef'ing the install site. */
+ * The controller installs a callback that returns the current camera
+ * distance. The demo (and any caller without point-attenuation)
+ * leaves the source unset; the fallback then emits `glPointSize(sz)`
+ * unchanged. The callback storage is always present so callers can
+ * install unconditionally. */
 static ReplExecutorCameraDistanceFn g_camera_distance_source = NULL;
 
 void repl_executor_install_camera_distance_source(ReplExecutorCameraDistanceFn fn) {
@@ -28,6 +27,24 @@ void repl_executor_install_camera_distance_source(ReplExecutorCameraDistanceFn f
 
 ReplExecutorCameraDistanceFn repl_executor_camera_distance_source(void) {
     return g_camera_distance_source;
+}
+
+/* Runtime point-parameter capability. Replaces the old compile-time
+ * NO_POINT_PARAMETER macro: glPointParameterfv is core GL 1.4 but
+ * absent on some legacy contexts, which is a property of the runtime
+ * GL, not the build. The controller detects support post-context
+ * (glr_ctrl_init_gl) and sets this; everything else (demo, tests
+ * without an explicit set) defaults to supported == today's default
+ * build. When unsupported: CMD_POINT_PARAMETER_FV is a no-op and
+ * point sizes are scaled by camera distance as a visual stand-in. */
+static int g_point_parameter_supported = 1;
+
+void repl_executor_set_point_parameter_supported(int supported) {
+    g_point_parameter_supported = supported ? 1 : 0;
+}
+
+int repl_executor_point_parameter_supported(void) {
+    return g_point_parameter_supported;
 }
 
 #define EXEC_RENDER (repl_state_render_mut())
@@ -50,21 +67,22 @@ static float g_execute_alpha_scale = 1.0f;
  * batches land mid-primitive, so the full primitive still renders. */
 static int g_execute_skip_geom_before_pc = 0;
 
-#ifdef NO_POINT_PARAMETER
-/* Approximate glPointParameterfv distance attenuation by scaling every
- * glPointSize call by 2/cam_dist. Defined here so the override only affects
- * the executor's user-facing CMD_POINT_SIZE dispatch.
- *
- * Reads cam_dist from the controller-installed source. With no
- * source installed (the demo, or any embedder without an app-shell
- * camera), cam_dist defaults to 0 and the call passes `sz` through
- * unchanged. */
-static void _repl_point_size(GLfloat sz) {
-    float cam_dist = g_camera_distance_source ? g_camera_distance_source() : 0.0f;
-    glPointSize(cam_dist > 0.0f ? sz * (2.0f / (0.5 * cam_dist)) : sz);
+/* User-facing point-size emission. When the runtime lacks
+ * glPointParameterfv, approximate its distance attenuation by scaling
+ * every glPointSize call by 2/cam_dist (parity with the old
+ * NO_POINT_PARAMETER fallback). Reads cam_dist from the
+ * controller-installed source; with no source installed (the demo, or
+ * any embedder without an app-shell camera) cam_dist defaults to 0
+ * and `sz` passes through unchanged. When supported, emit `sz`
+ * directly — CMD_POINT_PARAMETER_FV handles the real attenuation. */
+static void repl_exec_point_size(GLfloat sz) {
+    if (!g_point_parameter_supported) {
+        float cam_dist = g_camera_distance_source ? g_camera_distance_source() : 0.0f;
+        glPointSize(cam_dist > 0.0f ? sz * (2.0f / (0.5f * cam_dist)) : sz);
+    } else {
+        glPointSize(sz);
+    }
 }
-#define glPointSize _repl_point_size
-#endif
 
 /* gluTessCallback takes a single callback-pointer type but the GLU
  * callbacks have heterogeneous real signatures; GLU re-dispatches by
@@ -296,9 +314,14 @@ int apply_state_cmd(const GLCmd *cmd, float alpha_scale) {
                     (GLboolean)cmd->args[2], (GLboolean)cmd->args[3]);
         return 1;
     case CMD_POINT_PARAMETER_FV: {
-        /* args[0]=pname, args[1..3]=const/linear/quadratic. */
-        GLfloat params[3] = { cmd->args[1], cmd->args[2], cmd->args[3] };
-        glPointParameterfv((GLenum)cmd->args[0], params);
+        /* args[0]=pname, args[1..3]=const/linear/quadratic. Skipped
+         * entirely when the runtime GL lacks glPointParameterfv; the
+         * repl_exec_point_size camera-distance scaling stands in
+         * visually. */
+        if (g_point_parameter_supported) {
+            GLfloat params[3] = { cmd->args[1], cmd->args[2], cmd->args[3] };
+            glPointParameterfv((GLenum)cmd->args[0], params);
+        }
         return 1;
     }
     case CMD_BLEND_FUNC:
@@ -478,7 +501,7 @@ void repl_execute_program(const ReplExecutionOptions *options) {
          * (repl_cmd_type_valid_in_begin). The executor no longer
          * defensively glEnd()s the active begin block. */
         case CMD_POINT_SIZE:
-            glPointSize(flat_cmds[pc].args[0]);
+            repl_exec_point_size(flat_cmds[pc].args[0]);
             break;
         case CMD_LINE_WIDTH:
             glLineWidth(flat_cmds[pc].args[0]);
