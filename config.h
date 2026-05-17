@@ -110,6 +110,17 @@
 #define GLR_VIEW_PROJECTION_TRANSITION_SECS 2.50f
 #endif
 
+/* Active UI color scheme, resolved at compile time. A bare integer
+ * index into the UiTheme table in src/ui/theme.h (kept type-free here
+ * so config.h stays clear of UI types per the dependency note above):
+ *   0 green (default)  1 warm  2 cyan  3 amber  4 violet  5 mono
+ * Overridable from the build, e.g.
+ * `make sample CPPFLAGS=-DUI_THEME_DEFAULT=1`. theme.h STATIC_ASSERTs
+ * the value is in range against the UiTheme enum. */
+#ifndef UI_THEME_DEFAULT
+#define UI_THEME_DEFAULT 0
+#endif
+
 /* Storage capacity of the source command document and the matching
  * editor buffer. Surfaces here (not in src/repl/command.h) so neutral
  * boundary headers — source_document.h in particular — can size their
