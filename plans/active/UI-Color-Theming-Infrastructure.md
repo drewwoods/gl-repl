@@ -31,17 +31,31 @@
   Final gates green: `make sample` (freeglut + stub), `make test`
   37/37 bins · 5356/5356, `check-c99` + `check-state-ownership` exit 0.
 
-### Coverage note / out of approved scope
+- [x] **Phase D** — user opted to extend beyond the approved Phase B.
+  `variable_panel.c` chrome tokenized (bg→SUNKEN, border→BORDER,
+  title→TEXT_PRIMARY, track→MENU_LABEL_ACTIVE_BG, tick→DIVIDER;
+  `test_repl_var_drag 36/36`); variable-row data palette + drag-state
+  indicators kept as documented `k_var_*` named consts.
+  `profile_panel.c` chrome tokenized (bg→SUNKEN, border→BORDER,
+  title/total→TEXT_PRIMARY, hint→TEXT_MUTED, headings/detail→
+  TEXT_SECTION, rules→DIVIDER); dim/stale tiers → `k_prof_*` named
+  consts; the `set_time_color` FPS gauge stays the documented data-viz
+  exclusion. Final gates green: `make sample` (freeglut + stub),
+  `make test` 37/37 bins · 5356/5356, `check-c99` +
+  `check-state-ownership` exit 0.
 
-The approved Phase B file list was 7 files. Two **floating
-diagnostic/utility** panels were not in it and still hold bare
-literals: `profile_panel.c` (panel bg/border/header text — chrome;
-plus the FPS gauge which is a documented exclusion) and
-`variable_panel.c` (panel bg/border/header — chrome; plus value-state
-semantics green/yellow/orange/blue which are data-viz, exclusion-like).
-Their genuine *chrome* is tokenizable for full consistency but was out
-of the approved Phase B scope — surfaced to the user as a possible
-follow-up rather than silently expanding scope.
+### Final coverage
+
+All app/diagnostic UI chrome now resolves through `theme.h` tokens.
+Remaining bare literals are intentional, documented exclusions only
+(theme.h bucket 3): `color_picker.c` HSV/preview data,
+`repl_code_panel.c` syntax palette, `profile_panel.c` FPS gauge,
+`text_panel.c` `k_clr_*` editor sub-palette, plus per-widget
+semantic/data named-const groups (`k_tab_example_*`, `k_var_*`,
+`k_prof_*`, panels.c `k_rename_bar_*` / `k_status_bar_*`,
+`k_menubar_bottom_rule`, `k_action_chip_outline`, `k_panel_dim`) that
+must stay fixed across schemes. Swap scheme via the single
+`g_ui_theme` constant in `theme.h` (6 rows populated).
 
 ## Context
 
