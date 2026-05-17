@@ -755,6 +755,28 @@ int main(void) {
     ASSERT_TRUE("local for body uses param", fabsf(repl_state_flat_program_cmds_mut()[2].args[1] - 3.0f) < 1e-6f);
 
     glr_app_reset_all(); declare_test_vars();
+    editor_feed_line("// top-level note");
+    editor_feed_line("for(i, 0, 3) {");
+    editor_feed_line("// loop note");
+    editor_feed_line("glVertex3f(i, 0, 0);");
+    editor_feed_line("}");
+    editor_feed_line("// trailing note");
+    ASSERT_TRUE("comments remain source rows",
+                repl_state_document_count() == 6 &&
+                repl_state_document_cmds_mut()[0].type == CMD_COMMENT &&
+                repl_state_document_cmds_mut()[2].type == CMD_COMMENT &&
+                repl_state_document_cmds_mut()[5].type == CMD_COMMENT);
+    repl_flatten_commands();
+    ASSERT_TRUE("comments omitted from flattened loop count",
+                repl_state_flat_program_count() == 3);
+    for (int flat_idx = 0; flat_idx < repl_state_flat_program_count(); flat_idx++) {
+        ASSERT_TRUE("flattened loop command is executable vertex",
+                    repl_state_flat_program_cmds_mut()[flat_idx].type == CMD_VERTEX3F);
+        ASSERT_TRUE("flattened loop command maps to source body",
+                    repl_state_flat_program_cmds_mut()[flat_idx].src_cmd_idx == 3);
+    }
+
+    glr_app_reset_all(); declare_test_vars();
     editor_feed_line("func0(scale) {");
     editor_feed_line("if(scale > 1) {");
     editor_feed_line("glVertex3f(scale, 0, 0);");

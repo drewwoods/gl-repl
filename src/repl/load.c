@@ -52,8 +52,8 @@ int repl_load_apply_line(const char *line, char *err, int err_size) {
     if (err && err_size > 0) err[0] = '\0';
 
     /* Don't pre-skip empty/comment lines: feed_line preserves them as
-     * CMD_EMPTY / CMD_COMMENT so flatten can pass them through and
-     * roundtrip preserves the line count. The parser handles them. */
+     * CMD_EMPTY / CMD_COMMENT source rows so editor/export round-trips
+     * preserve line count. Flatten drops both from the executable stream. */
 
     ReplCompileContext ctx = repl_compile_context_from_live();
     ReplCompiledChange change;
