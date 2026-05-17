@@ -263,6 +263,7 @@ SRCS = \
 	src/repl/tutorials.c \
 	src/scene/axes.c \
 	src/scene/backdrop.c \
+	src/scene/postprocess_filter.c \
 	src/scene/grid.c \
 	src/scene/guides/geometry_guides.c \
 	src/scene/guides/transform_guides.c \
@@ -418,6 +419,7 @@ CORE_TEST_SRCS = \
 	src/repl/tutorials.c \
 	src/scene/axes.c \
 	src/scene/backdrop.c \
+	src/scene/postprocess_filter.c \
 	src/scene/grid.c \
 	src/scene/guides/geometry_guides.c \
 	src/scene/guides/transform_guides.c \

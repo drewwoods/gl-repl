@@ -43,6 +43,7 @@
 #include "widgets/tutorial_state.h"
 #include "ui/replay_hud.h"
 #include "scene/overlays.h" /* scene_draw_vertex_number_label / _arrow primitives */
+#include "scene/postprocess_filter.h" /* ScenePostFilterMode, mode_name */
 #include "scene/render.h"
 #include "scene/guides/transform_guides.h" /* transform_guides_prepare / _render_if_due */
 #include "transform_utils.h"  /* apply_tracked_transform / unwind_transform_stack */
@@ -1137,6 +1138,7 @@ static void glr_ctrl_build_scene_config(SceneRenderConfig *config) {
 
     /* --- Environment --- */
     config->backdrop_mode = presentation.backdrop_mode;
+    config->post_filter_mode = presentation.post_filter_mode;
     config->wireframe = presentation.wireframe;
 
     /* --- Grid and axes ---
@@ -2088,6 +2090,24 @@ int glr_ctrl_router_handle_accum_samples_key(unsigned char key) {
     return 0;
 }
 
+/* Ctrl+N: cycle the experimental scene post-processing filter. Hidden
+ * shortcut only — no Config row, no @cfg. Session-level state on
+ * GlrPresentationState; flows into SceneRenderConfig each frame. */
+int glr_ctrl_router_handle_post_filter_key(unsigned char key) {
+    if (key != KEY_CTRL_N)
+        return 0;
+
+    GlrPresentationState *p = glr_state_presentation_mut();
+    p->post_filter_mode =
+        (p->post_filter_mode + 1) % SCENE_POST_FILTER_COUNT;
+
+    char msg[64];
+    snprintf(msg, sizeof(msg), "Post filter: %s",
+             scene_postprocess_filter_mode_name(p->post_filter_mode));
+    repl_set_status(msg);
+    return 1;
+}
+
 /* ---- Special-key router helpers --------------------------------------- */
 
 int glr_ctrl_router_handle_replay_special(int key) {
@@ -2913,6 +2933,7 @@ void glr_ctrl_keyboard(unsigned char key, int x, int y) {
         glr_ctrl_router_handle_save_key(key) ||
         glr_ctrl_router_handle_debug_dump_key(key) ||
         glr_ctrl_router_handle_accum_samples_key(key) ||
+        glr_ctrl_router_handle_post_filter_key(key) ||
         glr_ctrl_router_handle_quit_key(key)) {
         glr_ctrl_apply_input_effects(editor_take_input_effects());
         return;

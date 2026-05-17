@@ -23,6 +23,7 @@
 #include "config.h"          /* MAX_PREDEF_VARS, etc. (transitively) */
 #include "app/glr_defaults.h"    /* CFG_DEFAULT_* */
 #include "scene/themes.h"    /* GRID_MAJOR_*, GRID_EXTENT_*, GridTheme defaults */
+#include "scene/postprocess_filter.h" /* SCENE_POST_FILTER_OFF */
 #include "ui/layout.h"       /* CODE_PANEL_LAYOUT_* */
 
 static const float g_grid_major_steps[GRID_MAJOR_COUNT] = {
@@ -54,6 +55,7 @@ static const GlrState g_glr_state_defaults = {
         .autonormal             = 0,
         .show_light_indicators  = CFG_DEFAULT_LIGHT_INDICATORS,
         .backdrop_mode          = CFG_DEFAULT_BACKDROP_MODE,
+        .post_filter_mode       = SCENE_POST_FILTER_OFF,
         .highlight_current_poly = 1,
         .ortho_mode             = 0,
         .wrap_at_comma          = CFG_DEFAULT_WRAP_AT_COMMA,
