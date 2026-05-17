@@ -115,6 +115,9 @@ typedef struct SceneRenderConfig {
 
     /* --- Environment --- */
     int backdrop_mode;
+    /* Experimental scene-viewport post-processing (ScenePostFilterMode).
+     * Runtime-only (Ctrl+N); never persisted via @cfg. */
+    int post_filter_mode;
     int wireframe;
 
     /* --- Grid and axes ---

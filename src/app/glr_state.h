@@ -38,6 +38,9 @@ typedef struct {
     int autonormal;
     int show_light_indicators;
     int backdrop_mode;
+    /* Experimental scene post-processing (ScenePostFilterMode).
+     * Session-level only: Ctrl+N toggles it; never in @cfg / examples. */
+    int post_filter_mode;
     int highlight_current_poly;
     int ortho_mode;
     int wrap_at_comma;
