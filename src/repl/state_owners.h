@@ -1,5 +1,11 @@
 /*
  * src/repl/state_owners.h -- REPL runtime-state owner/mutation API.
+ *
+ * Declares the mutable accessors and reset helpers for REPL-owned runtime
+ * slices: source document, flat program, predefined variables, runtime-mutated
+ * render state, scene bookkeeping, and import/export scratch storage. Companion
+ * state owned by the editor, UI, replay peer, or app shell is mutated through
+ * their own owner headers rather than through repl_state_* forwarders.
  */
 #ifndef REPL_STATE_OWNERS_H
 #define REPL_STATE_OWNERS_H
@@ -49,55 +55,24 @@ void                     repl_state_variables_reset(void);
 void                     repl_state_time_advance(float dt);
 void                     repl_state_time_reset_to_zero(void);
 
-/* Editor-input + editor-buffer accessors moved to editor_state.h
- * (Phase 1 commits 4-5). Use `editor_state_input / _mut / _reset` for
- * the input slice, `editor_state_buffer / _mut` for the whole-buffer
- * struct, and `editor_buffer_line / set_line / count / set_count` for
- * slice-level access. */
-
-/* Per-frame editor transformer snapshot pushed by the controller after
- * flatten so renderers/UI can iterate inline swatch/slider affordances
- * without walking the document themselves. */
-/* Editor overlay snapshot list accessors moved to editor_state.h
- * (Phase 1 commit 9). Use editor_state_transformers / _highlights /
- * _virtual_lines. */
-
-/* Per-frame editor highlight snapshot. The controller refills the list
- * each frame with feeding-cmd, replay-PC, search-match, etc. entries so
- * UI render code can iterate it instead of recomputing positions inline. */
-/* Editor highlight + virtual-line accessors moved to editor_state.h
- * (Phase 1 commit 9). Use editor_state_highlights /
- * _virtual_lines. */
-/* Editor-input convenience getters/setters moved to editor_state.h
- * (Phase 1 commit 10). Use editor_input_* / editor_cursor_pos* /
- * editor_insert_mode* / editor_pending_newline_*. */
-
-/* Selection + clipboard accessors moved to editor_state.h (Phase 1
- * commit 6). Use editor_state_selection / _clipboard and friends. */
-
-/* Code-panel / help / variable_panel / profile_panel / status /
- * camera / pointer / viewport accessors moved to ui_state.h (Phase 1
- * commit 8 + Phase A commits 12-14). Use the canonical
- * `ui_state_*` API directly; the legacy `repl_state_*` forwarders
- * were removed in Phase A commit 14.
- * Search + autocomplete accessors moved to editor_state.h (Phase 1
- * commit 7). Use editor_state_search / _autocomplete and friends.
- * Variable-drag accessors live on the variable_panel peer
- * (variable_panel.h). Use `variable_panel_drag` /
- * `variable_panel_handle_drag_*` directly. */
-
-/* `repl_state_presentation*` accessors and reset helpers moved to
- * `glr_state.h` (step 7a of feature/decouple-repl-from-gl-repl-alt.md).
- * REPL pipeline TUs MUST NOT include `glr_state.h`; controller /
- * editor / UI / scene callers use it directly. The grid-step /
- * grid-extent tables moved alongside as
- * `glr_state_grid_major_steps` / `_grid_extents`.
+/* Mutable accessor boundary: this header intentionally stops at REPL-owned
+ * slices. For other runtime state, use the owner module directly:
+ * - `editor_state.h` for input/buffer/selection/search/autocomplete and editor
+ *   overlay lists
+ * - `ui_state.h` for code-panel/help/status/pointer/viewport state
+ * - `variable_panel_state.h` / variable-panel drag helpers for variable drag
+ * - `glr_state.h` for presentation policy, render config, and grid tables
  *
- * The render-config toggles (msaa, line_smooth, accum_aa, etc.) moved
- * to `glr_state.h` as `GlrRenderState`. The runtime-mutated halves
- * (`lights[]`, `clear_color[]`) keep these accessors because the
- * executor still writes them in response to user GL commands. */
+ * Phase 1 of the state split and step 7a of
+ * feature/decouple-repl-from-gl-repl-alt.md removed the older
+ * `repl_state_*` forwarders for those owners. REPL pipeline TUs still avoid
+ * including `glr_state.h`; controller/editor/UI/scene callers can include it
+ * directly. */
 
+/* Runtime-mutated render tail only: executor writes `lights[]` and
+ * `clear_color[]` in response to user GL commands, so those bytes remain
+ * REPL-owned. Policy toggles such as msaa, line smoothing, accumulation AA, and
+ * point-attenuation enablement are app-owned in glr_state. */
 ReplRenderState        repl_state_render(void);
 ReplRenderState       *repl_state_render_mut(void);
 /* Reset the runtime-mutated render halves (`lights[]`, `clear_color[]`)

@@ -1,27 +1,23 @@
 /*
- * glr_state.h -- App-frame presentation/render state owner.
+ * glr_state.h -- App-frame presentation and render-policy state owner.
  *
- * Step 7a of feature/decouple-repl-from-gl-repl-alt.md relocates the
- * `presentation` and `render` slices out of `ReplRuntimeState` (REPL
- * pipeline) and into this new app-side owner. After the move,
- * `repl_state.{c,h}` contains only REPL-language state (document, flat
- * program, variables, scenes-program-state, REPL-side import_export);
- * `GlrState` covers everything that's app-frame chrome / render policy.
+ * Holds the UI/render policy that belongs to the app shell rather than the REPL
+ * language runtime: overlay toggles, grid/axes/backdrop presentation, code-panel
+ * layout options, anti-aliasing configuration, and other scene-display policy.
+ * Controller, editor, UI, and scene code read or mutate this state when they
+ * need app-frame behavior; the REPL pipeline itself should not depend on it.
  *
- * REPL pipeline TUs (the REPL_DEMO_DEP_SRCS list) MUST NOT include this
- * header — that's the contract `check-repl-state-no-glr-state` enforces.
- * App-shell (`glr_*.c`), editor (`src/editor/` TUs), and UI / scene
- * renderers may include it freely.
- *
- * Storage layout mirrors the prior `ReplPresentationState` /
- * `ReplRenderState` typedefs minus the dead `focus_vertex[3]` /
- * `_valid` fields. `glr_ctrl.c::glr_ctrl_build_focus_vertex` recomputes
- * the focus vertex from the document each frame into a
- * `SceneFocusVertex` snapshot; the persistent storage was unused.
+ * That ownership boundary is enforced by `check-repl-state-no-glr-state`: REPL
+ * pipeline TUs do not include this header, while app-shell, editor, UI, and
+ * scene files may. Step 7a of feature/decouple-repl-from-gl-repl-alt.md records
+ * the move from the old mixed ReplRuntimeState layout into this app-side owner.
  */
 #ifndef GLR_STATE_H
 #define GLR_STATE_H
 
+/* Scene-presentation policy: what chrome and overlays the app should show, how
+ * the code panel should format text, and which view mode/backdrop/filter choices
+ * are active for the current session. */
 typedef struct {
     int wireframe;
     int grid_theme;
@@ -48,6 +44,9 @@ typedef struct {
     int syntax_highlight;   /* 0 = off, 1 = on, 2 = on + fake-bold */
 } GlrPresentationState;
 
+/* App-owned render policy toggles. Runtime values emitted directly by user GL
+ * commands, such as `lights[]` and `clear_color[]`, stay on ReplRenderState so
+ * src/repl/executor.c can mutate them without depending on glr_state. */
 typedef struct {
     /* User-config toggles. The runtime-mutated halves of the render
      * slice — `lights[]` and `clear_color[]`, written by the executor
@@ -65,11 +64,16 @@ typedef struct {
     int   point_attenuation_enabled;
 } GlrRenderState;
 
+/* Whole app-side state bundle captured/restored alongside REPL/editor/UI peers
+ * for full-world resets and snapshots. */
 typedef struct {
     GlrPresentationState presentation;
     GlrRenderState       render;
 } GlrState;
 
+/* Read/write accessors for the live app-side presentation and render-policy
+ * slices. Callers that only need to inspect the current values can use the
+ * by-value accessors; mutating callers take the pointer forms. */
 GlrPresentationState  glr_state_presentation(void);
 GlrPresentationState *glr_state_presentation_mut(void);
 
@@ -86,9 +90,14 @@ void glr_state_presentation_reset_defaults(void);
 void glr_state_presentation_reset_example_defaults(void);
 void glr_state_render_reset_defaults(void);
 
+/* Copy or restore the full app-side state bundle. Used by whole-app snapshot and
+ * reset flows that pair this state with REPL/editor/UI/replay captures. */
 void glr_state_capture(GlrState *snapshot);
 void glr_state_restore(const GlrState *snapshot);
 
+/* Lookup tables for the currently-supported grid step/extents enum values. These
+ * live with app-side presentation policy because grid theme/extent selection is
+ * an app concern rather than a REPL-language concern. */
 const float *glr_state_grid_major_steps(void);
 const float *glr_state_grid_extents(void);
 

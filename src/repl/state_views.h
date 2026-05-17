@@ -1,5 +1,11 @@
 /*
- * src/repl/state_views.h -- REPL runtime-state value/view types and read API.
+ * src/repl/state_views.h -- REPL-owned runtime slice types and read API.
+ *
+ * Defines the value structs stored in REPL runtime state, along with the
+ * read-only/by-value accessors that expose those slices to the pipeline,
+ * controller, and tests. Companion state owned by the editor, UI, replay peer,
+ * or app shell lives in their own headers; this file keeps the REPL-owned
+ * shapes plus a few shared snapshot structs that other owners pass around.
  */
 #ifndef REPL_STATE_VIEWS_H
 #define REPL_STATE_VIEWS_H
@@ -17,6 +23,8 @@
 #define USER_SCENE_NAME_MAX 64
 #endif
 
+/* Source document storage: canonical source commands, current edit-line index,
+ * and the source-level auto-normal dirty flag. */
 typedef struct {
     GLCmd cmds[MAX_COMMANDS];
     int   cmd_count;
@@ -25,6 +33,9 @@ typedef struct {
     int   normals_dirty;
 } ReplDocumentState;
 
+/* Expanded flat program rebuilt from the source document: flattened commands,
+ * per-flat-command local-variable bindings, and the current cursor-block range
+ * used by highlight/guides/replay helpers. */
 typedef struct {
     GLCmd            cmds[MAX_COMMANDS];
     FlatCmdLocalVars local_vars[MAX_COMMANDS];
@@ -37,6 +48,8 @@ typedef struct {
     int              current_block_source_line_idx;
 } ReplFlatProgramState;
 
+/* Predefined-variable runtime: named float table, scratch arrays, optional
+ * funcN aliases, and the special time variable's playhead state. */
 typedef struct {
     ExprVar predef_vars[MAX_PREDEF_VARS];
     int     predef_var_count;
@@ -51,6 +64,8 @@ typedef struct {
     float   anim_time;
 } ReplVariableState;
 
+/* Read-only projection of ReplVariableState for callers that need the current
+ * bindings and scratch-array dimensions without mutable access. */
 typedef struct {
     const ExprVar *vars;
     int            var_count;
@@ -62,44 +77,27 @@ typedef struct {
     float          anim_time;
 } ReplVariableView;
 
-/* ReplEditorInputState / ReplEditorInputView typedefs moved to
- * editor_state.h alongside the EditorState struct that owns them
- * (Phase 1 commit 5). The ReplEditorBuffer typedef moved earlier
- * (Phase 1 commit 4). */
-
-/* ReplSelectionState / ReplClipboardState typedefs moved to
- * editor_state.h alongside the EditorState struct that owns them
- * (Phase 1 commit 6). */
-
-/* UI-chrome typedefs (ReplCodePanelRuntimeState / ReplHelpState /
- * ReplVariablePanelState / ReplProfilePanelState / ReplStatusState /
- * ReplCameraState / ReplPointerState / ReplViewportState) moved to
- * src/ui/state_types.h; this header now pulls them via the include
- * above so existing transitive consumers keep working.
+/* State declared elsewhere:
+ * - editor-owned input/buffer/selection/search/autocomplete and editor overlay
+ *   list types live in editor_state.h
+ * - UI chrome types live in src/ui/state_types.h
+ * - app-owned presentation policy and render-config toggles live in glr_state.h
  *
- * ReplSearchState / ReplAutocompleteState typedefs moved to
- * editor_state.h alongside the EditorState struct that owns them
- * (Phase 1 commit 7). */
-
-/* `ReplPresentationState` typedef moved to `glr_state.h` (step 7a of
- * feature/decouple-repl-from-gl-repl-alt.md). The dead
- * `focus_vertex[3]` / `focus_vertex_valid` fields were dropped along
- * with the move; `glr_ctrl_build_focus_vertex` recomputes the focus
- * vertex from the document each frame into a `SceneFocusVertex`
- * snapshot and the persistent storage was unused.
- *
- * The render-config toggles (msaa, line_smooth, accum_aa,
- * point_attenuation, accum_*) moved to `GlrRenderState` in
- * `glr_state.h`. The runtime-mutated halves of the slice
- * (`lights[]`, `clear_color[]`) stay here because `src/repl/executor.c`
- * writes them in response to user `glEnable(GL_LIGHTn)` /
- * `glClearColor` commands, and the executor cannot include
- * `glr_state.h`. */
+ * Phase 1 of the state split and step 7a of
+ * feature/decouple-repl-from-gl-repl-alt.md moved those declarations to their
+ * owning modules. This header keeps only the REPL-owned render tail that the
+ * executor mutates directly. */
+/* REPL-owned render tail: mutable per-light state and clear color written by
+ * user GL commands. Policy toggles such as msaa, line smoothing, point
+ * attenuation enablement, and grid/axes visibility are app-owned in glr_state. */
 typedef struct {
     SceneLight lights[MAX_LIGHTS];
     float      clear_color[4];
 } ReplRenderState;
 
+/* Replay snapshot shape shared with the replay peer subsystem. Storage lives in
+ * src/widgets/replay_state.c; this value type stays here so snapshots and UI
+ * bundles can pass replay state by value without depending on the peer's API. */
 typedef struct {
     int   active;
     int   state;
@@ -113,14 +111,16 @@ typedef struct {
     int   expand_args;
 } ReplReplayRuntimeState;
 
+/* Scene/workspace bookkeeping kept with the REPL runtime: which built-in example
+ * is active, and the bound workspace directory used by scene save/load. */
 typedef struct {
     int  active_example_idx;
     char workspace_dir[REPL_WORKSPACE_DIR_MAX];
 } ReplSceneRuntimeState;
 
-/* ReplVariableDragState typedef moved to editor_state.h alongside the
- * EditorState struct that owns it (Phase 1 commit 9). */
-
+/* Export/import scratch storage: prebuilt workspace-header lines, cached render
+ * and camera boilerplate text, and pending scene/workspace metadata collected
+ * while importing a file. */
 typedef struct {
     char        workspace_header_lines[MAX_WORKSPACE_HEADER_LINES][WORKSPACE_HEADER_LINE_LEN];
     int         workspace_header_line_count;
@@ -131,6 +131,8 @@ typedef struct {
     char        pending_workspace_dir[REPL_WORKSPACE_DIR_MAX];
 } ReplImportExportState;
 
+/* Read-only view over the import/export scratch storage. Used by save/load and
+ * snapshot builders that only need to inspect the cached strings. */
 typedef struct {
     const char (*workspace_header_lines)[WORKSPACE_HEADER_LINE_LEN];
     int         workspace_header_line_count;
@@ -160,35 +162,12 @@ FlatProgramView   repl_state_flat_program_view(void);
 
 ReplVariableView repl_state_variables(void);
 
-/* `repl_state_presentation` / `_render` accessors moved to
- * `glr_state.h` (step 7a). Use `glr_state_presentation` /
- * `glr_state_render` instead. The `repl_state_grid_major_steps` /
- * `_grid_extents` helpers moved alongside them as
- * `glr_state_grid_major_steps` / `_grid_extents`. */
-
-/* Editor-input + editor-buffer accessors moved to editor_state.h
- * (Phase 1 commits 4-5). Use `editor_state_input` for the input view,
- * `editor_state_buffer` for the buffer view, and the slice-level
- * `editor_buffer_*` API for line text. */
-
-/* Per-frame editor overlay snapshots, read-only. UI input handlers read
- * these between frames; renderers prefer the UiRenderSnapshot copy. */
-/* Editor overlay snapshot list view accessors moved to editor_state.h
- * (Phase 1 commit 9). Use editor_state_transformers / _highlights /
- * _virtual_lines. */
-/* Editor-input convenience getters moved to editor_state.h
- * (Phase 1 commit 10). Use editor_input_text / _len, editor_cursor_pos,
- * editor_insert_mode, editor_pending_newline_len. */
-
-/* Selection + clipboard view accessors moved to editor_state.h
- * (Phase 1 commit 6). Use editor_state_selection / _clipboard. */
-
-/* Code-panel / help / variable_panel / profile_panel / status /
- * camera / pointer / viewport view accessors moved to ui_state.h
- * (Phase 1 commit 8 + Phase A commits 12-14); the legacy
- * `repl_state_*` forwarders were removed in Phase A commit 14.
- * Search + autocomplete view accessors moved to editor_state.h
- * (Phase 1 commit 7). Use editor_state_search / _autocomplete. */
+/* Read-only accessor boundary: functions below expose only REPL-owned slices.
+ * For the rest of runtime state, include the owning header directly:
+ * `glr_state.h` for presentation policy/render config and grid tables,
+ * `editor_state.h` for input/buffer/selection/search/autocomplete/overlay
+ * lists, and `ui_state.h` for code-panel/help/status/pointer/viewport state.
+ * Phase 1 and step 7a removed the old `repl_state_*` forwarders. */
 
 ReplSceneRuntimeState     repl_state_scenes(void);
 const char *repl_state_workspace_dir(void);
