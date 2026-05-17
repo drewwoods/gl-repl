@@ -1710,6 +1710,35 @@ static float glr_app_camera_distance(void) {
     return glr_camera().dist;
 }
 
+/* Adapter for the export reshape-projection bridge. Translates the
+ * scene's currently-applied projection (cached by scene_apply_projection)
+ * into the C lines the exported reshape() / live code panel emit between
+ * glLoadIdentity() and glMatrixMode(GL_MODELVIEW). Ortho uses the
+ * aspect-independent half-height and recomputes the aspect at runtime
+ * from w/h so the exported program stays resolution-independent. */
+static void glr_app_export_reshape_projection(ReplExportProjectionBlock *blk) {
+    SceneProjectionDesc p;
+
+    scene_get_active_projection(&p);
+    blk->count = 0;
+    if (p.ortho) {
+        snprintf(blk->lines[blk->count++], REPL_EXPORT_PROJ_LINE_MAX,
+                 "  double _t = %.6g, _r = _t * (double)w / (double)h;",
+                 p.ortho_top);
+        snprintf(blk->lines[blk->count++], REPL_EXPORT_PROJ_LINE_MAX,
+                 "  glOrtho(-_r, _r, -_t, _t, %.6g, %.6g);",
+                 p.ortho_near, p.ortho_far);
+    } else {
+        snprintf(blk->lines[blk->count++], REPL_EXPORT_PROJ_LINE_MAX,
+                 "  gluPerspective(%.6g, (double)w/(double)h, %.6g, %.6g);",
+                 p.fovy_deg, p.near_z, p.far_z);
+    }
+}
+
+static const ReplExportProjectionBridge g_export_projection_bridge_impl = {
+    glr_app_export_reshape_projection
+};
+
 /* Phase 3 of feature/source-document-port.md: editor-input cleanup
  * the REPL loaders used to do inline now routes through callback
  * sinks. The two helpers below are the full-app implementations the
@@ -1871,6 +1900,11 @@ static void glr_app_install_app_services(void) {
      * doesn't install — the fallback then passes glPointSize through
      * unscaled. */
     repl_executor_install_camera_distance_source(glr_app_camera_distance);
+    /* Reshape-projection bridge: lets the GL-free exporter / code panel
+     * emit a reshape() that matches the scene's live projection
+     * (perspective in 3D, ortho in 2D). Demo/tests don't install, so the
+     * canonical perspective default is used there. */
+    repl_export_install_projection_bridge(&g_export_projection_bridge_impl);
     /* Rule 8 seed. In glr_app_reset_all this runs after the
      * presentation reset (line ordering above); at bootstrap it reads
      * the static CFG_DEFAULT_* presentation. Idempotent. */

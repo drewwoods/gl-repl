@@ -103,6 +103,20 @@ static void scene_render_pop_state(void) {
  * orbit-target-plane behavior). */
 static double g_ortho_ref_dist = 0.0;
 
+/* Last projection scene_apply_projection() resolved this frame. Cached
+ * for scene_get_active_projection() so the exporter/code panel can emit
+ * a faithful reshape() without re-deriving the math (Tenet 3). Default
+ * mirrors the steady 3D frustum so a getter call before the first frame
+ * is still sane. */
+static SceneProjectionDesc g_active_projection = {
+    0, 45.0, 0.1, 200.0, 0.0, -200.0, 200.0
+};
+
+void scene_get_active_projection(SceneProjectionDesc *out) {
+    if (out)
+        *out = g_active_projection;
+}
+
 /* Run the user geometry through GL_FEEDBACK with a wide ortho box so the
  * recorded window z maps linearly back to eye space, and return the
  * depth-center (midpoint of the min/max eye distance) of the geometry.
@@ -258,6 +272,22 @@ static void scene_apply_projection(const SceneRenderConfig *config,
 
     if (mix < 0.0f) mix = 0.0f;
     if (mix > 1.0f) mix = 1.0f;
+
+    /* Cache the canonical (jitter-free) projection for the exporter /
+     * code panel. The continuous blend is snapped to the dominant side
+     * because reshape() emits one discrete mode, not an interpolation. */
+    {
+        double ortho_ref = (g_ortho_ref_dist > 1e-4)
+                               ? g_ortho_ref_dist
+                               : (double)config->cam_dist;
+        g_active_projection.ortho      = (mix < 0.5f) ? 1 : 0;
+        g_active_projection.fovy_deg   = 45.0;
+        g_active_projection.near_z     = near_z;
+        g_active_projection.far_z      = far_z;
+        g_active_projection.ortho_top  = ortho_ref * tan(45.0 * M_PI / 360.0);
+        g_active_projection.ortho_near = -far_z;
+        g_active_projection.ortho_far  = far_z;
+    }
 
     if (mix >= 0.999f) {
         glFrustum(-persp_right + persp_dx, persp_right + persp_dx,
