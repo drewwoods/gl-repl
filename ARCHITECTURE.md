@@ -404,6 +404,20 @@ Adding another dynamic footer line follows the same recipe: sentinel
 constant in `export.h`, one resolver, controller resolves once into the
 snapshot for the panel, special-case in the consumers.
 
+**Build-enforced**, not convention-only (both in the
+`check-state-ownership` gate):
+
+* `check-ui-no-export-resolver` — no `src/ui/` file may call
+  `repl_export_reshape_projection_lines()`; the panel reads the
+  snapshot-frozen block. This is the structural backstop for the rule
+  above: the mistake fails the build, not just review.
+* `check-repl-export-via-bridge` — `src/repl/export.c` may not include
+  `scene/`/`app/` headers or call `scene_*`/`glr_*`; it pulls
+  app/scene-derived values only through controller-installed bridges
+  (`ReplExportProjectionBridge`, `ReplExportCameraBridge`,
+  `ReplExportConfig`). Complements `check-gl-boundaries` (which already
+  bars GL *calls* in the REPL pipeline) and `check-repl-export-no-ui-layout`.
+
 ### Startup & Audio-Worker Diagnostics
 
 Two always-on stderr diagnostics localise startup stalls and

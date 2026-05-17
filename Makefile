@@ -168,6 +168,7 @@ endif
 	check-repl-demo-no-editor \
 	check-repl-demo-stubs-shrinking \
 	check-repl-export-no-ui-layout \
+	check-repl-export-via-bridge \
 	check-repl-no-direct-buffer-read \
 	check-repl-no-direct-editor \
 	check-repl-scenes-cfg-clear-paired \
@@ -182,6 +183,7 @@ endif
 	check-state-c-shrinking \
 	check-state-ownership \
 	check-state-read-getters-return-values \
+	check-ui-no-export-resolver \
 	check-ui-no-repl-state-mut \
 	check-ui-no-repl-state-read \
 	check-ui-panels-no-mutators \
@@ -920,6 +922,8 @@ check-state-ownership: ## Run state-ownership contract checks (new + tightened e
 		check-glr-state-no-repl-mutators \
 		check-repl-scenes-cfg-clear-paired \
 		check-repl-export-no-ui-layout \
+		check-repl-export-via-bridge \
+		check-ui-no-export-resolver \
 		check-no-feed-line-in-pipeline \
 		check-repl-demo-stubs-shrinking \
 		check-repl-no-direct-editor \
@@ -999,6 +1003,12 @@ check-repl-scenes-cfg-clear-paired: ## Verify every g_user_scenes[X].used=0 in s
 
 check-repl-export-no-ui-layout: ## Verify src/repl/export.c does not call ui_layout_* / ui_state_*.
 	@bash scripts/check-repl-export-no-ui-layout.sh
+
+check-repl-export-via-bridge: ## Verify src/repl/export.c pulls app/scene state only via controller-installed bridges (no scene_*/glr_* calls or scene/app includes).
+	@bash scripts/check-repl-export-via-bridge.sh
+
+check-ui-no-export-resolver: ## Verify src/ui reads the snapshot-frozen reshape projection, never calls repl_export_reshape_projection_lines() live.
+	@bash scripts/check-ui-no-export-resolver.sh
 
 check-no-feed-line-in-pipeline: ## Verify REPL pipeline TUs do not call feed_line() (cleared by step 5b/7e).
 	@bash scripts/check-no-feed-line-in-pipeline.sh
