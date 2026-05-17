@@ -1951,11 +1951,33 @@ void glr_ctrl_init_gl(void) {
     int gl_major = 0, gl_minor = 0;
     const char *gl_ver = (const char *)glGetString(GL_VERSION);
     if (gl_ver) sscanf(gl_ver, "%d.%d", &gl_major, &gl_minor);
-    int point_param_ok = (gl_major > 1) || (gl_major == 1 && gl_minor >= 4)
+    int hw_point_param = (gl_major > 1) || (gl_major == 1 && gl_minor >= 4)
         || glutExtensionSupported("GL_ARB_point_parameters")
         || glutExtensionSupported("GL_EXT_point_parameters");
     const char *no_pp = getenv("GLR_NO_POINT_PARAMETER");
-    if (no_pp && no_pp[0]) point_param_ok = 0;
+    int forced_off = (no_pp && no_pp[0]) ? 1 : 0;
+    int point_param_ok = hw_point_param && !forced_off;
+    /* Tell the user on the terminal when point attenuation is off, and
+     * which of the two reasons applies — a deliberate env override vs.
+     * a GL context that genuinely lacks the entry point. */
+    if (!point_param_ok) {
+        if (forced_off)
+            fprintf(stderr,
+                "[gl-repl] glPointParameterfv disabled via "
+                "GLR_NO_POINT_PARAMETER=%s; using the glPointSize "
+                "distance approximation%s.\n",
+                no_pp,
+                hw_point_param ? " (this GL context does support it)"
+                               : " (this GL context does not support it either)");
+        else
+            fprintf(stderr,
+                "[gl-repl] glPointParameterfv unsupported by this GL "
+                "context (GL_VERSION \"%s\", no GL_ARB/EXT_point_parameters); "
+                "using the glPointSize distance approximation. Set "
+                "GLR_NO_POINT_PARAMETER=1 to force this path on capable "
+                "hardware.\n",
+                gl_ver ? gl_ver : "unknown");
+    }
     repl_executor_set_point_parameter_supported(point_param_ok);
 
     repl_apply_init_bootstrap();
