@@ -460,6 +460,48 @@ snap-equivalent results because they run after the controller has
 finished updating live state, but converting them to take a snapshot
 pointer is the next layer of cleanup.
 
+### UI Color Theming
+
+All 2D UI chrome resolves color through `src/ui/theme.h` (header-only,
+the `gl_2d.h` pattern) instead of scattered `glColor*` literals. It
+defines ~19 semantic `UI_TOK_*` tokens and a
+`g_ui_theme_table[UiTheme][UI_TOK_COUNT]` with six rows (green default,
+plus warm / cyan / amber / violet / mono from the design-rework
+bundle). Neutral chrome columns are identical across rows; only the
+three accent-derived tokens (`UI_TOK_ACCENT`,
+`UI_TOK_DROPDOWN_ITEM_HOVER_BG`, `UI_TOK_ACCENT_GLOW_BG`) vary per
+scheme. Inline `ui_clr(tok)` / `ui_clr_a(tok, alpha)` set the GL color;
+the token is a compile-time constant so the lookup folds to a fixed
+`.rodata` read.
+
+Color falls into three buckets:
+
+1. **Theme token** — accent + shared neutral chrome (surfaces, borders,
+   dividers, text tiers, hover/selection): `ui_clr(UI_TOK_*)`.
+2. **Named constant** — fixed, non-theme one-offs that must keep their
+   hue in every scheme: the blue inline-rename modal, the amber status
+   banner, the ephemeral example-tab amber, the variable-row data
+   palette, dim/stale text tiers, the `#000` menubar rule. A local
+   `static const` documented at the use site.
+3. **Left as-is** — computed/domain palettes that must not follow the
+   accent: `color_picker.c` HSV math, `repl_code_panel.c`
+   syntax-highlight palette, the `profile_panel.c` FPS gauge (red must
+   keep meaning "over budget"), `text_panel.c` `k_clr_*` editor
+   sub-palette. Each carries a one-line pointer back to theme.h.
+
+**Selecting the scheme.** `UI_THEME_DEFAULT` in `config.h` is the
+single compile-time knob: a bare integer (`0` green … `5` mono — kept
+type-free so `config.h` stays clear of UI types per its dependency
+note) used to initialize `g_ui_theme`. It is `#ifndef`-guarded and
+build-overridable, e.g. `make sample CPPFLAGS=-DUI_THEME_DEFAULT=1`;
+`theme.h` `STATIC_ASSERT`s the value is in range against the `UiTheme`
+enum. The `ui_theme_select()` / `ui_theme_active()` seam keeps call
+sites stable for a future runtime switcher (e.g. a `GlrConfigKey`
+cycle) that would relocate the active index into one `.c` TU.
+`tests/test_ui_theme.c` (header-only) guards table integrity: no
+zeroed token, neutral tokens stable across rows, green accent ==
+`#6fb36f`, and the dropdown hover is green (the Issue-1 regression).
+
 ## Replay Architecture
 
 Replay is REPL-owned. The scene may render the current visual effect, but it
