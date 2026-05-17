@@ -42,12 +42,14 @@ void             glr_camera_set_orbit(float rx, float ry);
 void             glr_camera_set_pan(float tx, float ty, float tz);
 void             glr_camera_set_distance(float dist);
 void             glr_camera_set_motion_glow(float motion_glow);
+void             glr_camera_ease_to(float rx, float ry, float dist,
+                                    float tx, float ty, float tz);
 void             glr_camera_reset_default(void);
 
 /* Capture/restore for state round-trip tests and undo paths. The
  * snapshot is a value copy of the camera struct; restoring overwrites
- * the live state. Pointer cache and momentum velocities are NOT part
- * of the snapshot — those are transient session state. */
+ * the live state. Pointer cache, target easing, and momentum velocities
+ * are NOT part of the snapshot — those are transient session state. */
 void glr_camera_capture(ReplCameraState *out);
 void glr_camera_restore(const ReplCameraState *snapshot);
 

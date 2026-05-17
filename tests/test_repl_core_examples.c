@@ -140,6 +140,22 @@ static void seed_nondefault_example_presentation_state(void) {
     glr_camera_mut()->auto_rotate = 1;
 }
 
+static int camera_pose_near(float rx, float ry, float dist,
+                            float tx, float ty, float tz) {
+    ReplCameraState cam = glr_camera();
+    return fabsf(cam.rx - rx) < 1e-4f &&
+           fabsf(cam.ry - ry) < 1e-4f &&
+           fabsf(cam.dist - dist) < 1e-4f &&
+           fabsf(cam.tx - tx) < 1e-4f &&
+           fabsf(cam.ty - ty) < 1e-4f &&
+           fabsf(cam.tz - tz) < 1e-4f;
+}
+
+static void settle_camera_transition_for_test(void) {
+    for (int i = 0; i < 140; i++)
+        glr_camera_tick();
+}
+
 static char *slurp_stream(FILE *f) {
     char *buf;
     long len;
@@ -491,12 +507,14 @@ static void load_example_for_test(int idx) {
     glr_app_reset_all(); declare_test_vars();
     pin_code_panel_state();
     repl_load_example(idx);
+    settle_camera_transition_for_test();
 }
 
 static void load_custom_example_lines_for_test(const char *const *lines) {
     glr_app_reset_all(); declare_test_vars();
     pin_code_panel_state();
     repl_load_example_lines_for_test(lines);
+    settle_camera_transition_for_test();
 }
 
 static void test_example_tag_metadata(void) {
@@ -767,6 +785,50 @@ int main(int argc, char **argv) {
                     glr_camera().auto_rotate == CFG_DEFAULT_CAMERA_ROTATE);
         ASSERT_TRUE("partial cfg keeps camera rx",
                     fabsf(glr_camera().rx - (-41.0f)) < 1e-4f);
+    }
+
+    {
+        static const char *const easing_camera_example[] = {
+            "// camera",
+            "glTranslatef(0.0f, 0.0f, -10.0f);",
+            "glRotatef(40.0f, 1.0f, 0.0f, 0.0f);",
+            "glRotatef(64.0f, 0.0f, 1.0f, 0.0f);",
+            "glTranslatef(-1.0f, 0.5f, -2.0f);",
+            "glBegin(GL_POINTS);",
+            "glVertex3f(0, 0, 0);",
+            "glEnd();",
+            NULL
+        };
+        ReplCameraState before;
+        ReplCameraState after_load;
+        ReplCameraState after_tick;
+
+        glr_app_reset_all(); declare_test_vars();
+        pin_code_panel_state();
+        before = glr_camera();
+        repl_load_example_lines_for_test(easing_camera_example);
+        after_load = glr_camera();
+        ASSERT_TRUE("example camera preset does not teleport",
+                    fabsf(after_load.rx - before.rx) < 1e-4f &&
+                    fabsf(after_load.ry - before.ry) < 1e-4f &&
+                    fabsf(after_load.dist - before.dist) < 1e-4f &&
+                    fabsf(after_load.tx - before.tx) < 1e-4f &&
+                    fabsf(after_load.ty - before.ty) < 1e-4f &&
+                    fabsf(after_load.tz - before.tz) < 1e-4f);
+
+        glr_camera_tick();
+        after_tick = glr_camera();
+        ASSERT_TRUE("example camera preset eases toward target",
+                    after_tick.rx > after_load.rx &&
+                    after_tick.rx < 40.0f &&
+                    after_tick.ry > after_load.ry &&
+                    after_tick.ry < 64.0f &&
+                    after_tick.dist > after_load.dist &&
+                    after_tick.dist < 10.0f);
+        settle_camera_transition_for_test();
+        ASSERT_TRUE("example camera preset settles on target",
+                    camera_pose_near(40.0f, 64.0f, 10.0f,
+                                     1.0f, -0.5f, 2.0f));
     }
 
     {

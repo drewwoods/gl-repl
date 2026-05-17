@@ -127,9 +127,20 @@ static int try_apply_example_camera_header(const char *const *lines) {
     /* Apply via the camera bridge. The bridge is unset in the
      * standalone demo (no rendering), where camera state is
      * irrelevant; the example still loads, the camera block is just
-     * a no-op. The bridge's import parser is stateful, so reset
-     * before and feed the four GL lines in order. */
+     * a no-op. App bridges can consume the validated block directly
+     * (used for animated example-camera presets). Older/fallback
+     * bridges can still receive the block through the import parser. */
     const ReplExportCameraBridge *bridge = repl_export_camera_bridge();
+    if (bridge && bridge->apply_example_block) {
+        ReplExportCameraBlock block;
+
+        for (int i = 0; i < REPL_EXPORT_CAMERA_LINES; i++)
+            snprintf(block.lines[i], sizeof(block.lines[i]), "%s", lines[i + 1]);
+        block.present = 1;
+        bridge->apply_example_block(&block);
+        return 1;
+    }
+
     if (!bridge || !bridge->try_consume_import_line)
         return 1;  /* validated; bridge absent; treat as successfully consumed */
 

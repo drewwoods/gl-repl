@@ -22,6 +22,9 @@
 
 #define CAM_DECAY 0.88f
 #define CAM_DECAY_ZOOM 0.65f
+#define CAM_TARGET_DECAY CAM_DECAY
+#define CAM_TARGET_ANGLE_EPS 0.01f
+#define CAM_TARGET_POS_EPS 0.001f
 #define CAM_MOMENTUM_THRESHOLD 1.0f
 #define CAM_RX_MIN (-89.0f)
 #define CAM_RX_MAX 89.0f
@@ -44,6 +47,8 @@
 
 static ReplCameraState       g_camera          = GLR_CAMERA_INITIAL;
 static const ReplCameraState g_camera_defaults = GLR_CAMERA_INITIAL;
+static ReplCameraState       g_camera_target   = GLR_CAMERA_INITIAL;
+static int                   g_camera_target_active = 0;
 
 /* Internal pointer cache: where the mouse is + which button is held.
  * Used only for drag-delta computation. Snapshot consumers who need
@@ -99,6 +104,10 @@ static void reset_velocities(void) {
     g_vel_zoom = 0.0f;
 }
 
+static void cancel_target_ease(void) {
+    g_camera_target_active = 0;
+}
+
 static void drop_small_velocities(void) {
     g_vel_ry   = fabsf(g_vel_ry)   > CAM_MOMENTUM_THRESHOLD ? g_vel_ry   : 0.0f;
     g_vel_rx   = fabsf(g_vel_rx)   > CAM_MOMENTUM_THRESHOLD ? g_vel_rx   : 0.0f;
@@ -106,6 +115,57 @@ static void drop_small_velocities(void) {
     g_vel_ty   = fabsf(g_vel_ty)   > CAM_MOMENTUM_THRESHOLD ? g_vel_ty   : 0.0f;
     g_vel_tz   = fabsf(g_vel_tz)   > CAM_MOMENTUM_THRESHOLD ? g_vel_tz   : 0.0f;
     g_vel_zoom = fabsf(g_vel_zoom) > CAM_MOMENTUM_THRESHOLD ? g_vel_zoom : 0.0f;
+}
+
+static float shortest_angle_delta(float from, float to) {
+    float delta = fmodf(to - from, 360.0f);
+    if (delta > 180.0f)
+        delta -= 360.0f;
+    if (delta < -180.0f)
+        delta += 360.0f;
+    return delta;
+}
+
+static int target_deltas_within_epsilon(const ReplCameraState *c) {
+    return fabsf(g_camera_target.rx - c->rx) < CAM_TARGET_ANGLE_EPS &&
+           fabsf(shortest_angle_delta(c->ry, g_camera_target.ry)) <
+               CAM_TARGET_ANGLE_EPS &&
+           fabsf(g_camera_target.dist - c->dist) < CAM_TARGET_POS_EPS &&
+           fabsf(g_camera_target.tx - c->tx) < CAM_TARGET_POS_EPS &&
+           fabsf(g_camera_target.ty - c->ty) < CAM_TARGET_POS_EPS &&
+           fabsf(g_camera_target.tz - c->tz) < CAM_TARGET_POS_EPS;
+}
+
+static void snap_to_target(void) {
+    g_camera.rx = g_camera_target.rx;
+    g_camera.ry = g_camera_target.ry;
+    g_camera.dist = g_camera_target.dist;
+    g_camera.tx = g_camera_target.tx;
+    g_camera.ty = g_camera_target.ty;
+    g_camera.tz = g_camera_target.tz;
+    g_camera_target_active = 0;
+}
+
+static void tick_target_ease(void) {
+    ReplCameraState *c = &g_camera;
+    float k = 1.0f - CAM_TARGET_DECAY;
+    float dx = g_camera_target.tx - c->tx;
+    float dy = g_camera_target.ty - c->ty;
+    float dz = g_camera_target.tz - c->tz;
+
+    c->rx += (g_camera_target.rx - c->rx) * k;
+    c->ry += shortest_angle_delta(c->ry, g_camera_target.ry) * k;
+    c->dist += (g_camera_target.dist - c->dist) * k;
+    c->tx += dx * k;
+    c->ty += dy * k;
+    c->tz += dz * k;
+
+    if (fabsf(dx) + fabsf(dy) + fabsf(dz) > CAM_TARGET_POS_EPS &&
+        c->motion_glow < 0.6f)
+        c->motion_glow = 0.6f;
+
+    if (target_deltas_within_epsilon(c))
+        snap_to_target();
 }
 
 /* ---- Accessors ------------------------------------------------------ */
@@ -116,6 +176,7 @@ ReplCameraState *glr_camera_mut(void)   { return &g_camera; }
 void glr_camera_set(float rx, float ry, float dist,
                     float tx, float ty, float tz,
                     float motion_glow) {
+    cancel_target_ease();
     g_camera.rx = rx;
     g_camera.ry = ry;
     g_camera.dist = dist;
@@ -126,31 +187,62 @@ void glr_camera_set(float rx, float ry, float dist,
 }
 
 void glr_camera_set_orbit(float rx, float ry) {
+    cancel_target_ease();
     g_camera.rx = rx;
     g_camera.ry = ry;
 }
 
 void glr_camera_set_pan(float tx, float ty, float tz) {
+    cancel_target_ease();
     g_camera.tx = tx;
     g_camera.ty = ty;
     g_camera.tz = tz;
 }
 
-void glr_camera_set_distance(float dist)         { g_camera.dist = dist; }
+void glr_camera_set_distance(float dist) {
+    cancel_target_ease();
+    g_camera.dist = dist;
+}
+
 void glr_camera_set_motion_glow(float mg)        { g_camera.motion_glow = mg; }
-void glr_camera_reset_default(void)              { g_camera = g_camera_defaults; }
+
+void glr_camera_ease_to(float rx, float ry, float dist,
+                        float tx, float ty, float tz) {
+    g_camera_target = g_camera;
+    g_camera_target.rx = rx;
+    g_camera_target.ry = ry;
+    g_camera_target.dist = dist;
+    g_camera_target.tx = tx;
+    g_camera_target.ty = ty;
+    g_camera_target.tz = tz;
+    g_camera_target_active = 1;
+    g_pointer_button = -1;
+    reset_velocities();
+    if (target_deltas_within_epsilon(&g_camera))
+        snap_to_target();
+}
+
+void glr_camera_reset_default(void) {
+    cancel_target_ease();
+    reset_velocities();
+    g_camera = g_camera_defaults;
+}
 
 void glr_camera_capture(ReplCameraState *out) {
     if (out) *out = g_camera;
 }
 
 void glr_camera_restore(const ReplCameraState *snap) {
-    if (snap) g_camera = *snap;
+    if (snap) {
+        cancel_target_ease();
+        g_camera = *snap;
+    }
 }
 
 /* ---- Controls ------------------------------------------------------- */
 
 void glr_camera_controls_reset(void) {
+    cancel_target_ease();
     g_pointer_button = -1;
     g_mouse_mods = 0;
     reset_velocities();
@@ -164,6 +256,7 @@ void glr_camera_pointer_set(int x, int y) {
 void glr_camera_mouse_event(int button, int state, int x, int y, int mods) {
     g_mouse_mods = mods;
     if (state == GLUT_DOWN) {
+        cancel_target_ease();
         g_pointer_button = button;
         g_pointer_x = x;
         g_pointer_y = y;
@@ -233,7 +326,9 @@ void glr_camera_drag_motion(int x, int y) {
 void glr_camera_tick(void) {
     ReplCameraState *c = &g_camera;
 
-    if (g_pointer_button == -1) {
+    if (g_camera_target_active && g_pointer_button == -1) {
+        tick_target_ease();
+    } else if (g_pointer_button == -1) {
         c->ry += g_vel_ry;
         c->rx += g_vel_rx;
         c->ry = fmodf(c->ry, 360.0f);
@@ -260,7 +355,7 @@ void glr_camera_tick(void) {
     if (c->motion_glow < 0.005f)
         c->motion_glow = 0.0f;
 
-    if (c->auto_rotate) {
+    if (!g_camera_target_active && c->auto_rotate) {
         c->ry += 0.3f;
         c->ry = fmodf(c->ry, 360.0f);
     }
