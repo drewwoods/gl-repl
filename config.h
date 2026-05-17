@@ -110,6 +110,35 @@
 #define GLR_VIEW_PROJECTION_TRANSITION_SECS 2.50f
 #endif
 
+/* 2D ortho scale reference.
+ *
+ * The orthographic projection has no single "correct" size — it must
+ * pick one eye distance whose on-screen scale it reproduces. Both modes
+ * probe the drawn geometry via a GL_FEEDBACK pass and pivot on the
+ * midpoint of its eye-distance span (the depth-center), so the middle
+ * of the scene holds its size across the 2D/3D switch while nearer
+ * (perspective-magnified) geometry shrinks inward and farther geometry
+ * grows off-screen. They differ only in WHEN that reference is sampled:
+ *
+ *   GLR_ORTHO_REF_FROZEN   sample once, the instant a 2D/3D switch
+ *                          begins, and hold it for the whole 2D dwell
+ *                          and the blend back. Rock-stable: the 2D view
+ *                          never breathes even if the scene animates.
+ *                          Does not track post-switch motion.
+ *
+ *   GLR_ORTHO_REF_PERFRAME re-probe every frame ortho is contributing.
+ *                          Tracks animation and camera moves live, at
+ *                          the cost of one extra geometry pass per
+ *                          frame while ortho is on screen.
+ *
+ * Either way a probe that finds nothing (empty scene / feedback buffer
+ * overflow) falls back to cam_dist, the old orbit-target-plane behavior. */
+#define GLR_ORTHO_REF_FROZEN   0
+#define GLR_ORTHO_REF_PERFRAME 1
+#ifndef GLR_ORTHO_REF_MODE
+#define GLR_ORTHO_REF_MODE GLR_ORTHO_REF_FROZEN
+#endif
+
 /* Active UI color scheme, resolved at compile time. A bare integer
  * index into the UiTheme table in src/ui/theme.h (kept type-free here
  * so config.h stays clear of UI types per the dependency note above):
