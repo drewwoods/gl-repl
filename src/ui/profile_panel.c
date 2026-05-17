@@ -5,11 +5,19 @@
 #include "gl_2d.h"
 #include "layout.h"
 #include "metrics.h"
+#include "theme.h"
 #include "variable_panel.h"
 #include "prof.h"
 
 #include <stdio.h>
 #include <string.h>
+
+/* Dim/stale text tiers: deliberately darker than TEXT_MUTED so stale
+ * rows recede - no clean token twin, kept as theme-stable named consts
+ * (theme.h "named constant" bucket). The FPS gauge in set_time_color
+ * is the separate documented data-viz exclusion (red must stay red). */
+static const float k_prof_stale[3] = { 0.35f, 0.35f, 0.42f };
+static const float k_prof_dim[3]   = { 0.30f, 0.30f, 0.38f };
 
 /* ========================================================================= */
 /* Configuration                                                              */
@@ -229,11 +237,11 @@ void ui_profile_panel_render(const UiRenderSnapshot *snap) {
     /* Background */
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    glColor4f(0.05f, 0.05f, 0.08f, 0.91f);
+    ui_clr_a(UI_TOK_SUNKEN, 0.91f);
     glRectf((float)((float)panel_x), (float)((float)panel_y), (float)((float)panel_x)+(float)((float)PROF_PANEL_W), (float)((float)panel_y)+(float)panel_h);
 
     /* Border */
-    glColor4f(0.35f, 0.35f, 0.55f, 0.85f);
+    ui_clr_a(UI_TOK_BORDER, 0.85f);
     glBegin(GL_LINE_LOOP);
     glVertex2f((float)panel_x,                   (float)panel_y);
     glVertex2f((float)(panel_x + PROF_PANEL_W),  (float)panel_y);
@@ -248,9 +256,9 @@ void ui_profile_panel_render(const UiRenderSnapshot *snap) {
     const int hint_width = FONT_SMALL_W * (int)strlen(HINT) + 2;
 
     /* Title */
-    glColor3f(0.85f, 0.90f, 1.00f);
+    ui_clr(UI_TOK_TEXT_PRIMARY);
     gl2d_draw_string((float)tx, (float)ty, "CPU Profile", FONT_SMALL);
-    glColor3f(0.40f, 0.42f, 0.50f);
+    ui_clr(UI_TOK_TEXT_MUTED);
     gl2d_draw_string((float)(panel_x + PROF_PANEL_W - hint_width), (float)ty, HINT, FONT_SMALL);
 
     ty -= PROF_HEADER_H;
@@ -259,14 +267,14 @@ void ui_profile_panel_render(const UiRenderSnapshot *snap) {
     int col_last = tx + PROF_COL_LABEL_W;
     int col_avg  = col_last + PROF_COL_LAST_W;
 
-    glColor3f(0.45f, 0.50f, 0.62f);
+    ui_clr(UI_TOK_TEXT_SECTION);
     gl2d_draw_string((float)tx,        (float)ty, "Section",  FONT_SMALL);
     gl2d_draw_string((float)col_last,  (float)ty, "Last",     FONT_SMALL);
     gl2d_draw_string((float)col_avg,   (float)ty, "Avg",      FONT_SMALL);
     ty -= 2;
 
     /* Thin rule under headings */
-    glColor4f(0.25f, 0.25f, 0.40f, 0.80f);
+    ui_clr_a(UI_TOK_DIVIDER, 0.80f);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     glBegin(GL_LINES);
@@ -284,7 +292,7 @@ void ui_profile_panel_render(const UiRenderSnapshot *snap) {
 
         if (s == PROF_FRAME_TOTAL) {
             /* Divider above totals row */
-            glColor4f(0.25f, 0.25f, 0.40f, 0.80f);
+            ui_clr_a(UI_TOK_DIVIDER, 0.80f);
             glEnable(GL_BLEND);
             glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
             glBegin(GL_LINES);
@@ -298,13 +306,13 @@ void ui_profile_panel_render(const UiRenderSnapshot *snap) {
 
         /* Label */
         if (s == PROF_FRAME_TOTAL)
-            glColor3f(0.80f, 0.85f, 1.00f);
+            ui_clr(UI_TOK_TEXT_PRIMARY);
         else if (stale)
-            glColor3f(0.35f, 0.35f, 0.42f);
+            glColor3fv(k_prof_stale);
         else if (is_detail_section(s))
-            glColor3f(0.62f, 0.68f, 0.80f);
+            ui_clr(UI_TOK_TEXT_SECTION);
         else
-            glColor3f(0.72f, 0.78f, 0.90f);
+            ui_clr(UI_TOK_TEXT_PRIMARY);
         gl2d_draw_string((float)tx, (float)ty, section_label(s), FONT_SMALL);
 
         /* Last / avg values */
@@ -312,7 +320,7 @@ void ui_profile_panel_render(const UiRenderSnapshot *snap) {
         if (stale) {
             snprintf(last_buf, sizeof(last_buf), "--");
             snprintf(avg_buf,  sizeof(avg_buf),  "--");
-            glColor3f(0.30f, 0.30f, 0.38f);
+            glColor3fv(k_prof_dim);
             gl2d_draw_string((float)col_last, (float)ty, last_buf, FONT_SMALL);
             gl2d_draw_string((float)col_avg,  (float)ty, avg_buf,  FONT_SMALL);
         } else {

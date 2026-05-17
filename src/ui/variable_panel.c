@@ -15,10 +15,23 @@
 #include "gl_2d.h"
 #include "layout.h"
 #include "metrics.h"
+#include "theme.h"
 #include "widgets/replay_state.h"
 #include "ui/replay_hud.h"
 #include "state.h"
 #include "widgets/variable_panel_state.h"
+
+/* Variable-row data presentation + drag-state indicators. Deliberately
+ * NOT theme tokens (theme.h "named constant" bucket): the green-name /
+ * yellow-value two-tone and the log/linear/idle handle states encode
+ * meaning and must stay fixed across every UI scheme. */
+static const float k_var_name[3]           = { 0.70f, 0.85f, 0.70f };
+static const float k_var_value[3]          = { 0.90f, 0.90f, 0.60f };
+static const float k_var_drag_log_bg[4]    = { 0.30f, 0.20f, 0.05f, 0.60f };
+static const float k_var_drag_linear_bg[4] = { 0.20f, 0.20f, 0.40f, 0.60f };
+static const float k_var_handle_log[4]     = { 1.00f, 0.55f, 0.10f, 0.95f };
+static const float k_var_handle_linear[4]  = { 1.00f, 0.80f, 0.20f, 0.95f };
+static const float k_var_handle_idle[4]    = { 0.55f, 0.70f, 1.00f, 0.90f };
 
 /* Local copy of the layout-mode clamp.  Duplicated by repl_editor.c and
  * ui_panels.c; promoting to a shared header is a separate cleanup. */
@@ -206,11 +219,11 @@ void ui_variable_panel_render(const UiRenderSnapshot *snap) {
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
     /* Background */
-    glColor4f(0.05f, 0.05f, 0.10f, 0.88f);
+    ui_clr_a(UI_TOK_SUNKEN, 0.88f);
     glRectf((float)((float)px), (float)((float)py), (float)((float)px)+(float)((float)pw), (float)((float)py)+(float)ph);
 
     /* Border */
-    glColor4f(0.40f, 0.40f, 0.70f, 0.75f);
+    ui_clr_a(UI_TOK_BORDER, 0.75f);
     glBegin(GL_LINE_LOOP);
     glVertex2f((float)px,        (float)py);
     glVertex2f((float)(px + pw), (float)py);
@@ -219,7 +232,7 @@ void ui_variable_panel_render(const UiRenderSnapshot *snap) {
     glEnd();
 
     /* Title */
-    glColor3f(0.75f, 0.75f, 1.00f);
+    ui_clr(UI_TOK_TEXT_PRIMARY);
     gl2d_draw_string((float)(px + 6),
                 (float)(py + ph - VAR_PANEL_PAD - 4),
                 "Variables (declared)", FONT_SMALL);
@@ -253,29 +266,29 @@ void ui_variable_panel_render(const UiRenderSnapshot *snap) {
         /* Drag highlight - amber tint for log mode, blue for linear */
         if (variable_panel_drag_active_var() == i) {
             if (variable_panel_drag_log_mode())
-                glColor4f(0.30f, 0.20f, 0.05f, 0.60f);
+                glColor4fv(k_var_drag_log_bg);
             else
-                glColor4f(0.20f, 0.20f, 0.40f, 0.60f);
+                glColor4fv(k_var_drag_linear_bg);
             glRectf((float)(px + 1), (float)row_y, (float)(px + 1) + (float)(pw - 2), (float)row_y + (float)VAR_ROW_H);
         }
 
         /* Label */
-        glColor3f(0.70f, 0.85f, 0.70f);
+        glColor3fv(k_var_name);
         gl2d_draw_string((float)label_x, (float)text_y,
                     var->name, FONT_SMALL);
 
         /* Value */
         char valstr[16]; snprintf(valstr, sizeof(valstr), "%7.3f", (double)val);
-        glColor3f(0.90f, 0.90f, 0.60f);
+        glColor3fv(k_var_value);
         gl2d_draw_string((float)val_x, (float)text_y, valstr, FONT_SMALL);
 
         /* Slider track */
-        glColor4f(0.18f, 0.18f, 0.28f, 0.90f);
+        ui_clr_a(UI_TOK_MENU_LABEL_ACTIVE_BG, 0.90f);
         glRectf((float)track_x, (float)(row_y + 6), (float)track_x + (float)track_w, (float)(row_y + 6) + (float)(VAR_ROW_H - 12));
 
         /* Centre tick (marks zero on the log scale) */
         float cx = (float)track_x + (float)track_w * 0.5f;
-        glColor4f(0.35f, 0.35f, 0.50f, 0.70f);
+        ui_clr_a(UI_TOK_DIVIDER, 0.70f);
         glBegin(GL_LINES);
         glVertex2f(cx, (float)(row_y + 5));
         glVertex2f(cx, (float)(row_y + VAR_ROW_H - 5));
@@ -287,11 +300,11 @@ void ui_variable_panel_render(const UiRenderSnapshot *snap) {
         float hx = (float)track_x + t * (float)(track_w - handle_w);
         if (variable_panel_drag_active_var() == i) {
             if (variable_panel_drag_log_mode())
-                glColor4f(1.00f, 0.55f, 0.10f, 0.95f);  /* orange: log mode */
+                glColor4fv(k_var_handle_log);     /* log mode */
             else
-                glColor4f(1.00f, 0.80f, 0.20f, 0.95f);  /* yellow: linear mode */
+                glColor4fv(k_var_handle_linear);  /* linear mode */
         } else {
-            glColor4f(0.55f, 0.70f, 1.00f, 0.90f);      /* blue: idle */
+            glColor4fv(k_var_handle_idle);        /* idle */
         }
         glRectf(hx, (float)(row_y + 4), hx + (float)handle_w, (float)(row_y + 4) + (float)(VAR_ROW_H - 8));
     }
