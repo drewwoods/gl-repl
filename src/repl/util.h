@@ -1,14 +1,14 @@
 /*
- * src/repl/util.h - Small inline utilities used across REPL pipeline TUs.
+ * src/repl/util.h - Small inline buffer helpers shared across REPL TUs.
  *
  * `repl_format_fits` and `repl_copy_string_fits` are size-checked
- * vsnprintf / strcpy wrappers — both return 0 on truncation so the
- * caller can surface a diagnostic. They live in this small header
- * so consumers don't have to include the full src/repl/core_internal.h
- * surface just to get a safe printf into a fixed buffer.
+ * vsnprintf / copy wrappers. They return 0 on truncation so the caller can
+ * surface a diagnostic instead of silently clipping text. Keeping them in this
+ * narrow header lets consumers get safe fixed-buffer helpers without pulling in
+ * the broader src/repl/core_internal.h surface.
  *
  * Phase 5 of feature/source-document-port.md split these out of
- * src/repl/core_internal.h. The latter still pulls this header in for
+ * src/repl/core_internal.h. The latter still includes this header for
  * back-compat, so existing consumers see no behavioural change.
  */
 #ifndef REPL_UTIL_H

@@ -3,12 +3,12 @@
  *
  * During replay, the code panel shows annotated versions of source lines:
  * variable values substituted into expressions and the result of evaluating
- * the line's expressions. Phase 4 of feature/source-document-port.md
- * (return-value shape): this module fills a ReplReplayAnnotationOutput
- * struct each frame and the caller publishes the rows to whatever
- * presentation layer it owns. The REPL pipeline does not call into the
- * editor's virtual-line API itself, so the demo and other non-UI hosts
- * link this TU without dragging in editor render code.
+ * the line's expressions. This module fills a ReplReplayAnnotationOutput each
+ * frame and leaves publication to the caller's presentation layer. The REPL
+ * pipeline does not call into the editor's virtual-line API itself, so the demo
+ * and other non-UI hosts can link this TU without dragging in editor render
+ * code. Phase 4 of feature/source-document-port.md standardized that
+ * return-value shape.
  *
  * Public surface:
  *   - replay_annotations_prepare() — fills the output. Idempotent
@@ -25,7 +25,7 @@
 #ifndef REPL_REPLAY_ANNOTATIONS_H
 #define REPL_REPLAY_ANNOTATIONS_H
 
-#include "source_document.h"  /* SourceTextView (Phase 1 of feature/source-document-port.md) */
+#include "source_document.h"  /* caller-supplied SourceTextView */
 
 /* Per-row capacity. Callers reading the output struct should treat the
  * arrays as NUL-terminated within these bounds. Sized to match the

@@ -257,21 +257,20 @@ ReplCompileResult repl_compile_dispatch(const char *text,
                                         ReplCompiledChange *out,
                                         char *err, int err_size);
 
-/* Pure structured-block validators (step 5a of
- * feature/decouple-repl-from-gl-repl-alt.md).
+/* Pure structured-block compile helpers for the line-at-a-time loader.
  *
  * These are the REPL-pipeline-side counterparts to the editor's
  * editor_compile_close_brace / _if_block / _func_def / _for_loop
- * (in src/editor/commit.c). Same parse + validation; produce a
- * ReplCompiledChange with no editor-effect baggage (no cursor target,
- * no insert-mode toggle, no clear-input — those live on the editor
- * wrapper).
+ * wrappers in src/editor/commit.c. They perform the same parse and
+ * validation work, but return a ReplCompiledChange with no editor-side baggage
+ * (no cursor target, insert-mode toggle, or clear-input request).
  *
- * Scope: line-by-line load. They handle the case the lean source
- * loader (step 5b) needs — single line in, single CMD inserted at the
- * end of the document. They do NOT handle the editor's edit-time
- * branches (header replace, oneliner body, matched-existing-end
- * close-brace) since none of those arise during incremental load.
+ * Scope: line-by-line load. repl_load_apply_line() uses them for import/example
+ * loading, where a single source line either inserts one command or fails.
+ * They do NOT handle the editor's edit-time branches (header replace, oneliner
+ * body, matched-existing-end close-brace) since those only arise in the live
+ * editor commit path. This split became explicit in step 5a/5b of
+ * feature/decouple-repl-from-gl-repl-alt.md.
  *
  * Each returns:
  *   REPL_COMPILE_OK + INSERT_ONE         valid block-structure line

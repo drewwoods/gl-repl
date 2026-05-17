@@ -11,15 +11,16 @@
 
 #include <stdio.h>
 
-#include "repl/export.h"     /* ReplExportLayout (step 7c) */
+#include "repl/export.h"     /* ReplExportLayout and save/load helpers */
 #include "repl/flatten.h"
-#include "source_document.h" /* SourceTextView (Phase 1 of feature/source-document-port.md) */
+#include "source_document.h" /* SourceTextView document view */
 
 /* --- Save / load ------------------------------------------------------- */
 
-/* Write the active user scene (or current example) to ./output.c.
- * `layout` is the controller-built ReplExportLayout (step 7c); the
- * pipeline reads its values as opaque integers. */
+/* Write the active user scene (or current example/transient buffer) to
+ * ./output.c. This is the default single-file export path behind Ctrl+S when no
+ * named scene-specific save target takes over. `layout` is the controller-built
+ * ReplExportLayout passed through to the exporter as opaque integers. */
 void repl_save_default_output(const ReplExportLayout *layout);
 
 /* Save the active user scene to a file named after the scene:
@@ -73,17 +74,18 @@ void repl_recompute_autonormals(int autonormal_enabled);
 /* Shared status/document helpers surfaced outside src/repl/core.c. */
 void        repl_set_status(const char *msg);
 
-/* Host-effect bridge. The controller installs one struct of effect
- * callbacks at startup; the demo and tests leave it unset and every
- * dispatch below no-ops. Mirrors `ReplExportConfigBridge` /
- * `ReplExportCameraBridge` in export.h — the single in-tree idiom for
- * "controller installs a vtable into the REPL pipeline". Effects are
- * deliberately named after WHAT the REPL is asking for, not the
- * editor implementation, so the public REPL surface doesn't carry
- * editor concepts. Phases 3 + 6 of feature/source-document-port.md;
- * the six former repl_install_*_sink calls were consolidated here per
- * plans/partial/src-repl-simplicity-review.md item 2 (one install call,
- * no individual installers — adding a 7th effect extends this struct).
+/* Controller-installed side-effect hooks for pipeline-only code paths.
+ *
+ * Loader, scene-switch, snippet-import, and replay code in src/repl call
+ * through this table when they need a host action such as clearing editor
+ * input, scrolling the code panel, or resetting example presentation state.
+ * The demo and most pure REPL tests leave the table unset, so every dispatcher
+ * below becomes a no-op.
+ *
+ * This mirrors the export cfg/camera bridges: the REPL asks for an effect by
+ * purpose, without naming editor/UI implementation details. Phases 3 + 6 of
+ * feature/source-document-port.md consolidated the older per-effect installers
+ * into this single struct.
  *
  * Insert-mode QUERY (for ReplCompileContext.insert_mode) is the
  * caller's responsibility — repl_compile_context_from_live() defaults
@@ -195,11 +197,11 @@ int  repl_find_feeding_color_cmd(int line_idx);
 
 /* --- Test helpers ------------------------------------------------------ */
 
-/* repl_reset_state was removed in step 2 of
- * feature/decouple-repl-from-gl-repl-alt.md. Tests and callers that
- * want full-world reset call `glr_app_reset_all()` from glr_ctrl.h.
- * REPL-only callers use `repl_state_init_defaults()` /
- * `repl_state_reset_program()` from src/repl/state_owners.h. */
+/* There is no public full-world `repl_reset_state()` anymore. Callers that need
+ * app + REPL reset use `glr_app_reset_all()` from glr_ctrl.h; REPL-only callers
+ * use `repl_state_init_defaults()` / `repl_state_reset_program()` from
+ * src/repl/state_owners.h. The old single entry point disappeared in step 2 of
+ * feature/decouple-repl-from-gl-repl-alt.md. */
 
 /* Public wrapper over the internal feed_line() so test code outside
  * src/repl/core_internal.h users can drive command commitment end-to-end.

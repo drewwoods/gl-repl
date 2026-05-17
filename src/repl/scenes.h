@@ -1,16 +1,16 @@
 /*
- * src/repl/scenes.h - User-scene promotion, capture, and reset API.
+ * src/repl/scenes.h - User-scene promotion, capture, and reset hooks.
  *
- * The user-scene model lives in src/repl/scenes.c (slots + LRU eviction +
- * workspace persistence). This header is the public surface other
- * REPL TUs and the editor/controller call into. Scene queries (slot
- * count / names / load / active) live on src/repl/core.h; THIS file
- * exposes the lifecycle hooks that fire on edit, example load, and
- * world reset.
+ * The slot model itself lives in src/repl/scenes.c (home slot, LRU eviction,
+ * workspace persistence). This header exposes the lifecycle entry points that
+ * other REPL modules, the editor, and the controller call when an edit should
+ * promote an example, an example load should capture/restore scene context, or
+ * a full reset should discard scene state. Slot queries such as count/name/load
+ * stay on src/repl/core.h.
  *
- * Phase 5 of feature/source-document-port.md split these out of
- * src/repl/core_internal.h so the "core internal" header can shrink
- * toward parse-only internals.
+ * Phase 5 of feature/source-document-port.md split these hooks out of
+ * src/repl/core_internal.h so the remaining internal header could focus on
+ * parse/normalize helpers.
  */
 #ifndef REPL_SCENES_H
 #define REPL_SCENES_H
@@ -45,9 +45,9 @@ void repl_scenes_reset_for_transient(void);
  * to their starting work. */
 void repl_scenes_capture_home_if_needed(void);
 
-/* Snapshot the 14 presentation-cfg keys when entering an example from
- * non-example state. Restored on the next user-scene / home transition.
- * Idempotent across consecutive example loads. */
+/* Snapshot the scene-presentation cfg subset when entering an example from
+ * non-example state. The saved values are restored on the next user-scene/home
+ * transition. Idempotent across consecutive example loads. */
 void repl_scenes_capture_pre_example_cfg_if_entering(void);
 
 /* Record that an example is currently the active scene (active_example_idx
