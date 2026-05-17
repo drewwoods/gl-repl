@@ -1198,70 +1198,165 @@ static const char *const g_example_annotated_orbit_plot[] = {
     NULL
 };
 
-static const char *const *const g_examples[] = {
-    g_example_cube,
-    g_example_ring,
-    g_example_func,
-    g_example_func_loop,
-    g_example_func_if,
-    g_example_func_recurse,
-    g_example_cond,
-    g_example_torus,
-    g_example_tess,
-    g_example_tess_cutout,
-    g_example_assign_2d,
-    g_example_particles_stateless,
-    g_example_glow_particles,
-    g_example_random_surface,
-    g_example_waves,
-    g_example_spirograph_curve,
-    g_example_traveling_ripple_ring,
-    g_example_bezier,
-    g_example_snowfall,
-    g_example_xform_stress,
-    g_example_stress,
-    g_example_scratch_casteljau,
-    g_example_annotated_orbit_plot,
+typedef unsigned int ReplExampleTagMask;
+
+typedef struct {
+    const char *name;
+    const char *const *lines;
+    ReplExampleTagMask tags;
+} ReplExampleEntry;
+
+enum {
+    REPL_EXAMPLE_TAG_2D = 0,
+    REPL_EXAMPLE_TAG_3D,
+    REPL_EXAMPLE_TAG_POLYGONS,
+    REPL_EXAMPLE_TAG_LINES,
+    REPL_EXAMPLE_TAG_COUNT
 };
 
-static const char *const g_example_names[] = {
-    "Lit cube",
-    "Animated ring (for + t)",
-    "Function demo (func0)",
-    "Function polygons (args + for)",
-    "Function branching (args + if)",
-    "Recursive triangle tree (func + recursion)",
-    "Conditional colors (if + t)",
-    "Parametric torus (nested for)",
-    "GLU tessellator (concave arrow)",
-    "GLU tessellator (concave arrow cutout)",
-    "2D assignment sketch (vars only)",
-    "Stateless particles (rand seed+iter)",
-    "Glow sprites (blend + point attenuation)",
-    "Procedural terrain (rand grid + sin ripple)",
-    "Animated wave surface (analytic normals)",
-    "Animated spirograph curve",
-    "Traveling ripple ring",
-    "Bezier curve with guides",
-    "Snowfall demo (550 particles)",
-    "Transform stress (translate/rotate/scale guides)",
-    "Stress test (all features)",
-    "Scratch arrays (de Casteljau curve)",
-    "Annotated orbit plot (labels)",
+#define EXAMPLE_TAG_BIT(tag) (1u << (tag))
+#define EXAMPLE_TAG_2D       EXAMPLE_TAG_BIT(REPL_EXAMPLE_TAG_2D)
+#define EXAMPLE_TAG_3D       EXAMPLE_TAG_BIT(REPL_EXAMPLE_TAG_3D)
+#define EXAMPLE_TAG_POLYGONS EXAMPLE_TAG_BIT(REPL_EXAMPLE_TAG_POLYGONS)
+#define EXAMPLE_TAG_LINES    EXAMPLE_TAG_BIT(REPL_EXAMPLE_TAG_LINES)
+
+static const char *const g_example_tag_labels[] = {
+    "2D",
+    "3D",
+    "Polygons",
+    "Lines",
+};
+
+static const ReplExampleEntry g_example_entries[] = {
+    { "Lit cube", g_example_cube,
+      EXAMPLE_TAG_3D | EXAMPLE_TAG_POLYGONS },
+    { "Animated ring (for + t)", g_example_ring,
+      EXAMPLE_TAG_2D | EXAMPLE_TAG_LINES },
+    { "Function demo (func0)", g_example_func,
+      EXAMPLE_TAG_2D | EXAMPLE_TAG_LINES },
+    { "Function polygons (args + for)", g_example_func_loop,
+      EXAMPLE_TAG_2D | EXAMPLE_TAG_POLYGONS },
+    { "Function branching (args + if)", g_example_func_if,
+      EXAMPLE_TAG_2D | EXAMPLE_TAG_POLYGONS },
+    { "Recursive triangle tree (func + recursion)", g_example_func_recurse,
+      EXAMPLE_TAG_2D | EXAMPLE_TAG_LINES },
+    { "Conditional colors (if + t)", g_example_cond,
+      EXAMPLE_TAG_2D | EXAMPLE_TAG_POLYGONS },
+    { "Parametric torus (nested for)", g_example_torus,
+      EXAMPLE_TAG_3D | EXAMPLE_TAG_POLYGONS },
+    { "GLU tessellator (concave arrow)", g_example_tess,
+      EXAMPLE_TAG_2D | EXAMPLE_TAG_POLYGONS },
+    { "GLU tessellator (concave arrow cutout)", g_example_tess_cutout,
+      EXAMPLE_TAG_2D | EXAMPLE_TAG_POLYGONS },
+    { "2D assignment sketch (vars only)", g_example_assign_2d,
+      EXAMPLE_TAG_2D | EXAMPLE_TAG_LINES },
+    { "Stateless particles (rand seed+iter)", g_example_particles_stateless,
+      EXAMPLE_TAG_3D },
+    { "Glow sprites (blend + point attenuation)", g_example_glow_particles,
+      EXAMPLE_TAG_3D },
+    { "Procedural terrain (rand grid + sin ripple)", g_example_random_surface,
+      EXAMPLE_TAG_3D | EXAMPLE_TAG_POLYGONS },
+    { "Animated wave surface (analytic normals)", g_example_waves,
+      EXAMPLE_TAG_3D | EXAMPLE_TAG_POLYGONS },
+    { "Animated spirograph curve", g_example_spirograph_curve,
+      EXAMPLE_TAG_2D | EXAMPLE_TAG_LINES },
+    { "Traveling ripple ring", g_example_traveling_ripple_ring,
+      EXAMPLE_TAG_2D | EXAMPLE_TAG_LINES },
+    { "Bezier curve with guides", g_example_bezier,
+      EXAMPLE_TAG_2D | EXAMPLE_TAG_LINES },
+    { "Snowfall demo (550 particles)", g_example_snowfall,
+      EXAMPLE_TAG_3D },
+    { "Transform stress (translate/rotate/scale guides)", g_example_xform_stress,
+      EXAMPLE_TAG_3D | EXAMPLE_TAG_LINES },
+    { "Stress test (all features)", g_example_stress,
+      EXAMPLE_TAG_2D | EXAMPLE_TAG_3D | EXAMPLE_TAG_POLYGONS | EXAMPLE_TAG_LINES },
+    { "Scratch arrays (de Casteljau curve)", g_example_scratch_casteljau,
+      EXAMPLE_TAG_2D | EXAMPLE_TAG_LINES },
+    { "Annotated orbit plot (labels)", g_example_annotated_orbit_plot,
+      EXAMPLE_TAG_3D | EXAMPLE_TAG_LINES },
 };
 
 int repl_examples_count(void) {
-    return (int)(sizeof(g_examples) / sizeof(g_examples[0]));
+    return (int)(sizeof(g_example_entries) / sizeof(g_example_entries[0]));
 }
 
 const char *repl_examples_name(int idx) {
     if (idx < 0 || idx >= repl_examples_count())
         return NULL;
-    return g_example_names[idx];
+    return g_example_entries[idx].name;
 }
 
 const char *const *repl_examples_lines(int idx) {
     if (idx < 0 || idx >= repl_examples_count())
         return NULL;
-    return g_examples[idx];
+    return g_example_entries[idx].lines;
+}
+
+int repl_example_tag_count(void) {
+    return REPL_EXAMPLE_TAG_COUNT;
+}
+
+const char *repl_example_tag_label(int tag_idx) {
+    if (tag_idx < 0 || tag_idx >= repl_example_tag_count())
+        return NULL;
+    return g_example_tag_labels[tag_idx];
+}
+
+unsigned int repl_example_tag_mask(int example_idx) {
+    if (example_idx < 0 || example_idx >= repl_examples_count())
+        return 0u;
+    return g_example_entries[example_idx].tags;
+}
+
+int repl_example_has_tag(int example_idx, int tag_idx) {
+    unsigned int bit = repl_example_tag_bit(tag_idx);
+    if (!bit)
+        return 0;
+    return (repl_example_tag_mask(example_idx) & bit) != 0u;
+}
+
+int repl_example_count_for_tag(int tag_idx) {
+    int count = 0;
+    if (!repl_example_tag_bit(tag_idx))
+        return 0;
+    for (int idx = 0; idx < repl_examples_count(); idx++)
+        if (repl_example_has_tag(idx, tag_idx))
+            count++;
+    return count;
+}
+
+int repl_example_index_for_tag(int tag_idx, int ordinal) {
+    int seen = 0;
+    if (ordinal < 0 || !repl_example_tag_bit(tag_idx))
+        return -1;
+    for (int idx = 0; idx < repl_examples_count(); idx++) {
+        if (!repl_example_has_tag(idx, tag_idx))
+            continue;
+        if (seen == ordinal)
+            return idx;
+        seen++;
+    }
+    return -1;
+}
+
+int repl_example_visible_tag_count(void) {
+    int count = 0;
+    for (int tag_idx = 0; tag_idx < repl_example_tag_count(); tag_idx++)
+        if (repl_example_count_for_tag(tag_idx) > 0)
+            count++;
+    return count;
+}
+
+int repl_example_visible_tag_at(int dense_idx) {
+    int seen = 0;
+    if (dense_idx < 0)
+        return -1;
+    for (int tag_idx = 0; tag_idx < repl_example_tag_count(); tag_idx++) {
+        if (repl_example_count_for_tag(tag_idx) <= 0)
+            continue;
+        if (seen == dense_idx)
+            return tag_idx;
+        seen++;
+    }
+    return -1;
 }

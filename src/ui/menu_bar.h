@@ -11,8 +11,9 @@
  * Target contract (Phase E onward):
  *
  *   UI renders the menu bar and reports `UiHit` results from
- *   ui_menu_bar_hit_test() (UI_HIT_MENU_ITEM for top-level buttons
- *   and open-dropdown rows; UI_HIT_PIN_BUTTON for pinned buttons).
+ *   ui_menu_bar_hit_test() (UI_HIT_MENU_BUTTON for top-level buttons,
+ *   UI_HIT_MENU_ITEM / UI_HIT_EXAMPLE_SUBMENU_ITEM for dropdown rows,
+ *   UI_HIT_PIN_BUTTON for pinned buttons).
  *   `imrepl_ctrl` routes the hit; repl_actions.c performs the action.
  *   This module does not dispatch actions itself — `activate_dropdown_item`
  *   stays as a transitional helper that the controller calls.
@@ -110,18 +111,22 @@ int  ui_menu_bar_pin_hit(int mx, int my);
  * ui_panels.c on left-click while a dropdown is open. */
 int  ui_menu_bar_dropdown_item_hit(int mx, int my);
 
+/* Test helper: return the Scene example submenu rect for a visible tag while
+ * the Scene menu is open. Ignores the current hover/open-tag state. Rect
+ * coordinates are in GL space (origin at bottom-left). */
+int  ui_menu_bar_scene_example_submenu_rect_for_test(int tag_idx,
+                                                     int *sx, int *sy,
+                                                     int *sw, int *sh);
+
 /* Pure hit-test: classify (mx, my) as a UiHit for menu-bar-related regions.
  *
  * Phase E commit 29 entry. Reports the menu-bar slice of the hit-test in
- * priority order: open dropdown row > top-level menu button > pin button.
+ * priority order: submenu row > open dropdown row > pin button >
+ * top-level menu button.
  * The result kind is one of:
- *   UI_HIT_MENU_ITEM   — top-level menu button or open-dropdown row.
- *                        item_idx carries the menu_id (top-level button)
- *                        OR the dropdown row index (when a dropdown is
- *                        already open). The router can disambiguate via
- *                        ui_menu_bar_open_menu_id() — when -1 the hit is
- *                        a top-level button, otherwise it is a dropdown
- *                        row inside that menu.
+ *   UI_HIT_MENU_BUTTON — top-level menu button.
+ *   UI_HIT_MENU_ITEM   — open-dropdown parent row.
+ *   UI_HIT_EXAMPLE_SUBMENU_ITEM — Scene example submenu row.
  *   UI_HIT_PIN_BUTTON  — pinned right-side button (Search/Replay).
  *                        item_idx carries the pin id.
  *   UI_HIT_NONE        — pointer is outside every menu-bar region.

@@ -4,6 +4,7 @@
 #include "app/glr_actions.h"
 #include "app/glr_config.h"
 #include "repl/core.h"
+#include "repl/examples.h"
 #include "repl/state_owners.h"
 #include "widgets/replay.h"
 #include "ui/state.h"
@@ -162,6 +163,8 @@ static void test_dropdown_and_config_press(void) {
     int item_my = -1;
     int tutorial_mx = -1;
     int tutorial_my = -1;
+    int scene_tag_mx = -1;
+    int scene_tag_my = -1;
     int cfg_row = -1;
     int cfg_mx = -1;
     int cfg_my = -1;
@@ -187,6 +190,15 @@ static void test_dropdown_and_config_press(void) {
     ASSERT_INT_EQ("hit first tutorial item",
                   ui_menu_bar_dropdown_item_hit(tutorial_mx, tutorial_my),
                   0);
+
+    ASSERT_TRUE("found first Scene tag row point",
+                find_dropdown_item_point(GLR_MENU_SCENE, 1,
+                                         &scene_tag_mx, &scene_tag_my));
+    ASSERT_INT_EQ("hit first Scene tag row",
+                  ui_menu_bar_dropdown_item_hit(scene_tag_mx, scene_tag_my),
+                  1);
+    ASSERT_INT_EQ("Scene tag row activation keeps menu open",
+                  glr_action_menu_item_activate(GLR_MENU_SCENE, 1), 0);
 
     ASSERT_TRUE("found config action point",
                 find_first_config_action_point(&cfg_row, &cfg_mx, &cfg_my));
@@ -234,6 +246,14 @@ static void test_unified_hit_test(void) {
     ASSERT_INT_EQ("hit_test: dropdown item menu_id", h.cmd_idx, GLR_MENU_FILE);
     ASSERT_INT_EQ("hit_test: dropdown item idx", h.item_idx, REPL_FILE_ITEM_NEW_SCENE);
 
+    ASSERT_TRUE("found Scene tag point for hit_test",
+                find_dropdown_item_point(GLR_MENU_SCENE, 1,
+                                         &item_mx, &item_my));
+    h = ui_menu_bar_hit_test(item_mx, item_my);
+    ASSERT_INT_EQ("hit_test: Scene tag kind", h.kind, UI_HIT_MENU_ITEM);
+    ASSERT_INT_EQ("hit_test: Scene tag menu_id", h.cmd_idx, GLR_MENU_SCENE);
+    ASSERT_INT_EQ("hit_test: Scene tag row", h.item_idx, 1);
+
     ui_menu_bar_close();
     h = ui_menu_bar_hit_test(pin_mx, my);
     ASSERT_INT_EQ("hit_test: pin kind", h.kind, UI_HIT_PIN_BUTTON);
@@ -280,6 +300,82 @@ static void make_test_ui_snapshot(UiRenderSnapshot *snap) {
     snap->viewport = ui_state_viewport();
     snap->anim_time = 1.0f;
     snap->user_scene_active_idx = repl_active_user_scene();
+}
+
+static int submenu_row_point(int sx, int sy, int sw, int sh, int ordinal,
+                             int *out_mx, int *out_my) {
+    int ry;
+    if (ordinal < 0)
+        return 0;
+    ry = sy + sh - 4 - ordinal * LINE_H - LINE_H / 2;
+    if (out_mx)
+        *out_mx = sx + sw / 2;
+    if (out_my)
+        *out_my = ui_state_viewport().window_h - ry;
+    return 1;
+}
+
+static void test_scene_submenu_with_stubs(void) {
+    UiRenderSnapshot snap;
+    UiHit hit;
+    int tag_idx;
+    int example_idx;
+    int tag_mx = -1;
+    int tag_my = -1;
+    int sx = 0;
+    int sy = 0;
+    int sw = 0;
+    int sh = 0;
+    int sub_mx = -1;
+    int sub_my = -1;
+
+    reset_menu_bar_fixture(1000, 600);
+    make_test_ui_snapshot(&snap);
+    tag_idx = repl_example_visible_tag_at(0);
+    ASSERT_TRUE("first visible example tag exists", tag_idx >= 0);
+    ASSERT_TRUE("found first Scene tag hover point",
+                find_dropdown_item_point(GLR_MENU_SCENE, 1, &tag_mx, &tag_my));
+
+    snap.pointer.mouse_x = tag_mx;
+    snap.pointer.mouse_y = tag_my;
+    gl_stub_counts_reset();
+    ui_menu_bar_render_example_dropdown(&snap);
+    ASSERT_TRUE("Scene tag hover renders submenu text",
+                gl_stub_counts[GL_STUB_glRasterPos2f] > 0);
+    ASSERT_TRUE("Scene submenu rect available",
+                ui_menu_bar_scene_example_submenu_rect_for_test(tag_idx,
+                                                                &sx, &sy,
+                                                                &sw, &sh));
+
+    example_idx = repl_example_index_for_tag(tag_idx, 0);
+    ASSERT_TRUE("first submenu example exists", example_idx >= 0);
+    ASSERT_TRUE("submenu row point computed",
+                submenu_row_point(sx, sy, sw, sh, 0, &sub_mx, &sub_my));
+
+    hit = ui_menu_bar_hit_test(sub_mx, sub_my);
+    ASSERT_INT_EQ("hit_test: submenu kind", hit.kind, UI_HIT_EXAMPLE_SUBMENU_ITEM);
+    ASSERT_INT_EQ("hit_test: submenu tag", hit.cmd_idx, tag_idx);
+    ASSERT_INT_EQ("hit_test: submenu example", hit.item_idx, example_idx);
+    ASSERT_INT_EQ("hit_test: submenu ordinal", hit.line_idx, 0);
+
+    snap.pointer.mouse_x = sub_mx;
+    snap.pointer.mouse_y = sub_my;
+    snap.scenes.active_example_idx = example_idx;
+    gl_stub_counts_reset();
+    ui_menu_bar_render_example_dropdown(&snap);
+    ASSERT_TRUE("Scene submenu active example render path draws",
+                gl_stub_counts[GL_STUB_glRasterPos2f] > 0);
+
+    reset_menu_bar_fixture(420, 600);
+    tag_idx = repl_example_visible_tag_at(0);
+    ASSERT_TRUE("found narrow Scene tag point",
+                find_dropdown_item_point(GLR_MENU_SCENE, 1, &tag_mx, &tag_my));
+    ASSERT_TRUE("narrow submenu rect available",
+                ui_menu_bar_scene_example_submenu_rect_for_test(tag_idx,
+                                                                &sx, &sy,
+                                                                &sw, &sh));
+    ASSERT_TRUE("narrow submenu flips left of parent point", sx < tag_mx);
+    ASSERT_TRUE("narrow submenu stays onscreen", sx + sw <= ui_state_viewport().window_w);
 }
 
 static void test_render_paths_with_stubs(void) {
@@ -361,6 +457,7 @@ int main(void) {
 #endif
     test_unified_hit_test();
 #ifdef GL_STUBS
+    test_scene_submenu_with_stubs();
     test_render_paths_with_stubs();
 #endif
 
