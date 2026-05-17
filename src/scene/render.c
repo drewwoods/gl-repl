@@ -11,6 +11,7 @@
 #include "render_types.h"
 #include "render.h"
 #include "prof.h"
+#include "config.h"
 
 #include <errno.h>
 #include <math.h>
@@ -94,13 +95,13 @@ static void scene_render_pop_state(void) {
     glPopAttrib();
 }
 
-/* ortho-freeze-scale: the scene's eye distance, sampled ONCE the moment a
- * 2D/3D switch begins (the projection mix first leaves pure perspective)
- * and held for the whole 2D dwell + blend. 0 means "not frozen" — ortho
- * then uses config->cam_dist (the orbit-target plane). Unlike a per-frame
- * probe this is rock-stable: the 2D view will not breathe if the scene
- * animates, at the cost of not tracking post-switch motion. */
-static double g_frozen_ortho_ref = 0.0;
+/* 2D ortho scale reference (depth-center of the drawn geometry). How it
+ * is sampled — once at the switch vs. every frame — is selected at
+ * compile time by GLR_ORTHO_REF_MODE in config.h; see
+ * scene_update_ortho_ref. 0 means "no usable measurement" and
+ * scene_apply_projection falls back to config->cam_dist (the old
+ * orbit-target-plane behavior). */
+static double g_ortho_ref_dist = 0.0;
 
 /* Run the user geometry through GL_FEEDBACK with a wide ortho box so the
  * recorded window z maps linearly back to eye space, and return the
@@ -206,28 +207,35 @@ static double scene_probe_eye_dist(const SceneRenderConfig *config) {
     return have ? 0.5 * (dmin + dmax) : 0.0;
 }
 
-/* Capture / release the frozen ortho reference on the projection-mix
- * edges. mix == 1 is pure perspective; anything below means ortho is
- * contributing (a switch is in progress or we are dwelling in 2D).
+/* Refresh the ortho scale reference for this frame. mix == 1 is pure
+ * perspective; anything below means ortho is contributing (a switch is
+ * in progress or we are dwelling in 2D). Sampling strategy is chosen at
+ * compile time by GLR_ORTHO_REF_MODE.
  *
- * Edge perspective -> ortho: sample once and freeze. The controller
- * sequences the 3D->2D switch as "flatten camera, THEN blend
- * projection", so by the time mix leaves 1.0 the camera is already
- * top-down — exactly the camera ortho will use — so the frozen scale is
- * the scene's true on-screen size at the switch.
+ * FROZEN: capture once on the perspective->ortho edge, release on the
+ * ortho->perspective edge. The controller sequences the 3D->2D switch as
+ * "flatten camera, THEN blend projection", so by the time mix leaves 1.0
+ * the camera is already top-down — exactly the camera ortho will use —
+ * so the one sample is the scene's true on-screen size at the switch and
+ * never breathes afterward.
  *
- * Edge ortho -> perspective complete: release, so the next switch
- * re-measures against whatever the scene looks like then. */
-static void scene_update_frozen_ortho_ref(const SceneRenderConfig *config) {
-    static int s_ortho_active = 0;
+ * PERFRAME: re-probe whenever ortho is contributing; tracks animation
+ * and camera live. Pure-perspective frames pay nothing either way. */
+static void scene_update_ortho_ref(const SceneRenderConfig *config) {
     int ortho_now = (config->projection_mix < 0.999f);
 
-    if (ortho_now && !s_ortho_active)
-        g_frozen_ortho_ref = scene_probe_eye_dist(config);
-    else if (!ortho_now && s_ortho_active)
-        g_frozen_ortho_ref = 0.0;
-
-    s_ortho_active = ortho_now;
+#if GLR_ORTHO_REF_MODE == GLR_ORTHO_REF_PERFRAME
+    g_ortho_ref_dist = ortho_now ? scene_probe_eye_dist(config) : 0.0;
+#else /* GLR_ORTHO_REF_FROZEN */
+    {
+        static int s_ortho_active = 0;
+        if (ortho_now && !s_ortho_active)
+            g_ortho_ref_dist = scene_probe_eye_dist(config);
+        else if (!ortho_now && s_ortho_active)
+            g_ortho_ref_dist = 0.0;
+        s_ortho_active = ortho_now;
+    }
+#endif
 }
 
 static void scene_apply_projection(const SceneRenderConfig *config,
@@ -258,8 +266,8 @@ static void scene_apply_projection(const SceneRenderConfig *config,
     } else {
         double ortho_near = -far_z;
         double ortho_far = far_z;
-        double ortho_ref = (g_frozen_ortho_ref > 1e-4)
-                               ? g_frozen_ortho_ref
+        double ortho_ref = (g_ortho_ref_dist > 1e-4)
+                               ? g_ortho_ref_dist
                                : (double)config->cam_dist;
         double ortho_top = ortho_ref * tan(45.0 * M_PI / 360.0);
         double ortho_right = ortho_top * aspect;
@@ -504,11 +512,11 @@ int scene_render_3d_scene(const SceneRenderConfig *config) {
                config->scene_w, config->scene_h);
     scene_apply_clear_color(config->clear_color);
 
-    /* Capture/release the frozen ortho reference on the projection-mix
-     * edge. Done here (modelview still holds the caller's camera,
-     * nothing has touched it yet) so the one-shot feedback probe sees
-     * the right matrix; thereafter it is a cheap state-machine no-op. */
-    scene_update_frozen_ortho_ref(config);
+    /* Refresh the ortho scale reference. Done here — modelview still
+     * holds the caller's camera, nothing has touched it yet — so the
+     * feedback probe sees the right matrix and one update serves every
+     * jitter sample below. */
+    scene_update_ortho_ref(config);
 
     if (config->use_accum && config->accum_aa_enabled && accum_samples > 1) {
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_ACCUM_BUFFER_BIT);
