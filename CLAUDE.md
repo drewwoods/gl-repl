@@ -115,8 +115,34 @@ compatibility wrappers.
 ./sample workspace/       # Load every *.c under workspace/ as a user scene
 ./sample --noaccum        # Disable accumulation buffer AA
 ./sample --dump-code      # Print loaded buffer to stdout
+./sample --no-audio       # Skip audio init entirely (isolates startup stalls)
 GLR_NO_POINT_PARAMETER=1 ./sample   # Force the no-glPointParameterfv path
+GLR_AUDIO_HITCH_MS=10 ./sample      # Lower the audio-worker hitch threshold
 ```
+
+### Startup & audio-worker diagnostics
+
+Two always-on stderr diagnostics help locate startup stalls and
+audio-thread hitches (the kind seen on slow Linux disks):
+
+- **Init trace.** `main()` in `sample.c` logs a wall-clock line per
+  startup phase (`[init +N.NNNs] <phase>`: window create, GL init,
+  REPL bootstrap, audio_init, playlist start, main loop) via
+  `gettimeofday`. A large gap names the slow phase; `--no-audio`
+  isolates whether `ma_engine_init()` (the one synchronous audio call
+  on the `main()` path — it opens the OS audio device) is the cause.
+- **Worker hitch detector.** The audio worker thread
+  (`audio_worker_main` in `audio.c`) wakes from `pthread_cond_wait`,
+  runs exactly one blocking lifecycle op, then sleeps again. The
+  dispatch span is timed with `clock_gettime(CLOCK_MONOTONIC)` (after
+  the mutex is released, so only the blocking work counts); any op
+  over the threshold logs `repl_audio: worker hitch: <op>[+save] took
+  N ms`. `<op>` is `load` (`ma_sound_init_from_file`), `uninit`
+  (`ma_sound_uninit` stream page-flush), `advance`, or `save-only`.
+  Threshold via `GLR_AUDIO_HITCH_MS` (default 50; `0` disables; read
+  once and cached). `AWR_QUIT` (shutdown) is intentionally not timed.
+  These stalls delay track changes / resume, not the miniaudio device
+  callback (a thread the REPL does not own).
 
 ### `GLR_NO_POINT_PARAMETER`
 
