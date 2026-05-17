@@ -94,6 +94,128 @@ static void scene_render_pop_state(void) {
     glPopAttrib();
 }
 
+/* ortho-freeze-scale: the scene's eye distance, sampled ONCE the moment a
+ * 2D/3D switch begins (the projection mix first leaves pure perspective)
+ * and held for the whole 2D dwell + blend. 0 means "not frozen" — ortho
+ * then uses config->cam_dist (the orbit-target plane). Unlike a per-frame
+ * probe this is rock-stable: the 2D view will not breathe if the scene
+ * animates, at the cost of not tracking post-switch motion. */
+static double g_frozen_ortho_ref = 0.0;
+
+/* Run the user geometry through GL_FEEDBACK with an identity projection so
+ * the recorded vertices are plain eye-space coordinates, and return the
+ * mean eye distance of the geometry. With projection == identity and the
+ * default glDepthRange(0,1), a vertex's window z is 0.5*z_eye + 0.5, so
+ * z_eye = 2*winz - 1 and the camera-space distance is -z_eye (the eye
+ * looks down -Z).
+ *
+ * Returns 0.0 when there is nothing to measure or the feedback buffer
+ * overflowed (glRenderMode < 0) — the caller treats 0 as "use cam_dist".
+ * The fixed buffer caps how much geometry can be probed; very dense
+ * scenes simply fall back, which is safe. */
+static double scene_probe_eye_dist(const SceneRenderConfig *config) {
+    static GLfloat fb[96 * 1024]; /* ~384 KB; overflow -> cam_dist fallback */
+    GLint n;
+    int i;
+    double sum = 0.0;
+    long count = 0;
+
+    if (!config->execute_fn)
+        return 0.0;
+
+    glMatrixMode(GL_PROJECTION);
+    glPushMatrix();
+    glLoadIdentity();
+    glMatrixMode(GL_MODELVIEW); /* leave camera modelview untouched */
+
+    glFeedbackBuffer((GLsizei)(sizeof fb / sizeof fb[0]), GL_3D, fb);
+    glRenderMode(GL_FEEDBACK);
+
+    glPushMatrix();
+    {
+        SceneExecuteContext ctx = { 0 };
+        config->execute_fn(&ctx, config->execute_user_data);
+    }
+    glPopMatrix();
+
+    n = glRenderMode(GL_RENDER);
+
+    glMatrixMode(GL_PROJECTION);
+    glPopMatrix();
+    glMatrixMode(GL_MODELVIEW);
+
+    if (n <= 0)
+        return 0.0;
+
+    /* Token walk. GL_3D records 3 floats per vertex (no color). */
+    i = 0;
+    while (i < n) {
+        GLenum tok = (GLenum)fb[i++];
+        int verts;
+
+        switch (tok) {
+        case GL_POINT_TOKEN:
+        case GL_BITMAP_TOKEN:
+        case GL_DRAW_PIXEL_TOKEN:
+        case GL_COPY_PIXEL_TOKEN:
+            verts = 1;
+            break;
+        case GL_LINE_TOKEN:
+        case GL_LINE_RESET_TOKEN:
+            verts = 2;
+            break;
+        case GL_POLYGON_TOKEN:
+            if (i >= n) { verts = 0; break; }
+            verts = (int)fb[i++];
+            break;
+        case GL_PASS_THROUGH_TOKEN:
+            i++; /* one value, no vertex */
+            continue;
+        default:
+            /* Unknown token: parser desynced, stop rather than guess. */
+            n = i = 0;
+            verts = 0;
+            break;
+        }
+
+        while (verts-- > 0 && i + 3 <= n) {
+            double z_eye = 2.0 * (double)fb[i + 2] - 1.0;
+            double dist = -z_eye;
+            if (dist > 1e-4) {
+                sum += dist;
+                count++;
+            }
+            i += 3;
+        }
+    }
+
+    return count > 0 ? sum / (double)count : 0.0;
+}
+
+/* Capture / release the frozen ortho reference on the projection-mix
+ * edges. mix == 1 is pure perspective; anything below means ortho is
+ * contributing (a switch is in progress or we are dwelling in 2D).
+ *
+ * Edge perspective -> ortho: sample once and freeze. The controller
+ * sequences the 3D->2D switch as "flatten camera, THEN blend
+ * projection", so by the time mix leaves 1.0 the camera is already
+ * top-down — exactly the camera ortho will use — so the frozen scale is
+ * the scene's true on-screen size at the switch.
+ *
+ * Edge ortho -> perspective complete: release, so the next switch
+ * re-measures against whatever the scene looks like then. */
+static void scene_update_frozen_ortho_ref(const SceneRenderConfig *config) {
+    static int s_ortho_active = 0;
+    int ortho_now = (config->projection_mix < 0.999f);
+
+    if (ortho_now && !s_ortho_active)
+        g_frozen_ortho_ref = scene_probe_eye_dist(config);
+    else if (!ortho_now && s_ortho_active)
+        g_frozen_ortho_ref = 0.0;
+
+    s_ortho_active = ortho_now;
+}
+
 static void scene_apply_projection(const SceneRenderConfig *config,
                                    float accum_jitter_x,
                                    float accum_jitter_y) {
@@ -122,7 +244,10 @@ static void scene_apply_projection(const SceneRenderConfig *config,
     } else {
         double ortho_near = -far_z;
         double ortho_far = far_z;
-        double ortho_top = (double)config->cam_dist * tan(45.0 * M_PI / 360.0);
+        double ortho_ref = (g_frozen_ortho_ref > 1e-4)
+                               ? g_frozen_ortho_ref
+                               : (double)config->cam_dist;
+        double ortho_top = ortho_ref * tan(45.0 * M_PI / 360.0);
         double ortho_right = ortho_top * aspect;
         double ortho_dx = (double)accum_jitter_x * 2.0 * ortho_right /
                           (double)config->scene_w;
@@ -364,6 +489,12 @@ int scene_render_3d_scene(const SceneRenderConfig *config) {
     glViewport(config->scene_x, config->scene_y,
                config->scene_w, config->scene_h);
     scene_apply_clear_color(config->clear_color);
+
+    /* Capture/release the frozen ortho reference on the projection-mix
+     * edge. Done here (modelview still holds the caller's camera,
+     * nothing has touched it yet) so the one-shot feedback probe sees
+     * the right matrix; thereafter it is a cheap state-machine no-op. */
+    scene_update_frozen_ortho_ref(config);
 
     if (config->use_accum && config->accum_aa_enabled && accum_samples > 1) {
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_ACCUM_BUFFER_BIT);
