@@ -1,5 +1,7 @@
 # UI Color Theming Infrastructure
 
+**Status: ✓ COMPLETE** (May 18, 2026)
+
 ## Progress
 
 - [x] **Phase A** — infra + Issue 1 fix. `src/ui/theme.h` created (19
@@ -44,20 +46,64 @@
   `make test` 37/37 bins · 5356/5356, `check-c99` +
   `check-state-ownership` exit 0.
 
+## Scope Reconciliation
+
+**Approved scope:** Phase A (infra + Issue 1 fix) + Phase B (migrate chrome files).
+
+**Actual delivery:** Phase A + Phase B + Phase C + Phase D + config.h knob + documentation.
+
+Breakdown of the 15 commits:
+1. Phase A: `src/ui/theme.h` (create) + `menu_bar.c` (partial) + `tests/test_ui_theme.c` (create) + Makefile wiring
+2. Phase B (9 commits): replay_hud.c, tabbed_overlay.c, autocomplete_panel.c, scene_tabs.c, menu_bar.c remainder, panels.c, text_panel.c, metrics.h deletion of `UI_ACCENT_GREEN_*`, test gates
+3. Phase C: Pointer comments added to excluded data palettes (color_picker.c, repl_code_panel.c, profile_panel.c, text_panel.c)
+4. Phase D (2 commits): `variable_panel.c` + `profile_panel.c` chrome tokenization (user-initiated scope extension)
+5. Config integration: `config.h` `UI_THEME_DEFAULT` knob (build-time, 0–5, range-checked)
+6. Documentation: `ARCHITECTURE.md` "### UI Color Theming" subsection + `Makefile` help note
+
+**Metrics:**
+- ~182 bare `glColor3f/4f` literals reduced to:
+  - 19 theme tokens (UI_TOK_*) in 6 fully-populated rows (green, warm, cyan, amber, violet, mono)
+  - ~15 semantic/data named consts (k_tab_example_*, k_var_*, k_prof_*, etc.) anchoring fixed-meaning colors across schemes
+  - ~148 documented exclusions (data-viz, computed, sub-palettes)
+- All gates green: `make sample` (freeglut + stub), `make test` (5356/5356 across 37 bins), `check-c99` exit 0, `check-state-ownership` exit 0
+- Runtime seam: `ui_theme_select(th)` / `ui_theme_active()` ready for future Config-menu cycle (grid-theme precedent)
+
 ### Final coverage
 
-All app/diagnostic UI chrome now resolves through `theme.h` tokens.
-Remaining bare literals are intentional, documented exclusions only
-(theme.h bucket 3): `color_picker.c` HSV/preview data,
-`repl_code_panel.c` syntax palette, `profile_panel.c` FPS gauge,
-`text_panel.c` `k_clr_*` editor sub-palette, plus per-widget
-semantic/data named-const groups (`k_tab_example_*`, `k_var_*`,
-`k_prof_*`, panels.c `k_rename_bar_*` / `k_status_bar_*`,
-`k_menubar_bottom_rule`, `k_action_chip_outline`, `k_panel_dim`) that
-must stay fixed across schemes. Swap scheme via the single
-compile-time `UI_THEME_DEFAULT` knob in `config.h` (0=green default …
-5=mono; build-overridable; range-checked by a `STATIC_ASSERT` in
-`theme.h`; 6 rows populated).
+**Delivered system:**
+- Central `src/ui/theme.h` (170 lines, header-only)
+  - `UiTheme` enum: 0=green (default), 1=warm, 2=cyan, 3=amber, 4=violet, 5=mono
+  - `UiThemeToken` enum: 19 semantic tokens (UI_TOK_SURFACE, RAISED, BORDER, DIVIDER, TEXT_PRIMARY, TEXT_MUTED, TEXT_ON_HILITE, TEXT_SECTION, TEXT_PLACEHOLDER, CARET, ACCENT, DROPDOWN_ITEM_HOVER_BG, ACCENT_GLOW_BG, MENU_LABEL_HOVER_BG, MENU_LABEL_ACTIVE_BG, STATUS_OK, STATUS_WARN, STATUS_ERR, UI_TOK_COUNT)
+  - `g_ui_theme_table[6][19]`: all 6 rows fully populated; 16 neutral columns shared, 3 accent-derived columns per row
+  - Inline query API: `ui_clr(tok)`, `ui_clr_a(tok, alpha)`, `ui_rgba(tok)`, `ui_theme_select(th)`, `ui_theme_active()`
+  - Compile-time asserts: enum counts, UI_THEME_DEFAULT range
+  - No GL/scene/REPL state; passes all purity checks
+
+- Build-time swap: `UI_THEME_DEFAULT` in `config.h`
+  - Bare int, #ifndef-guarded, build-overridable (e.g. `make sample UI_THEME_DEFAULT=3` for amber)
+  - Range-checked by STATIC_ASSERT in theme.h (0–5)
+  - Documented in `ARCHITECTURE.md` and `Makefile` help
+
+- Comprehensive migration (15 commits):
+  - **Chrome tokenized:** menu_bar.c, replay_hud.c, tabbed_overlay.c, autocomplete_panel.c, scene_tabs.c, panels.c, text_panel.c, variable_panel.c, profile_panel.c
+  - **Issue 1 fixed:** dropdown/submenu hover blue #2e4a6e → green #2e6e4a (ui_clr_a(UI_TOK_DROPDOWN_ITEM_HOVER_BG, alpha))
+  - **Metrics.h cleanup:** all 9 UI_ACCENT_GREEN_* macros deleted; users → ui_clr(UI_TOK_ACCENT)
+  - **Exclusions documented:** color_picker.c HSV/preview, repl_code_panel.c syntax palette, profile_panel.c FPS gauge, text_panel.c editor sub-palette
+  - **Named consts preserved:** per-widget semantic colors (k_tab_example_*, k_var_*, k_prof_*, k_rename_bar_*, k_status_bar_*, k_menubar_bottom_rule, etc.) that must stay fixed across schemes
+
+- Test & gate coverage:
+  - `tests/test_ui_theme.c` (444 assertions): no zeroed slots, neutral-column stability, green ACCENT back-compat, hover-color regression, round-trip select/active
+  - All gates green: `test_ui_theme 444/444`, `make test 5356/5356`, `check-c99 OK`, `check-state-ownership OK`, `sample` builds (freeglut + stub)
+
+- Documentation:
+  - `ARCHITECTURE.md` "### UI Color Theming" subsection (under UI Layer, line ~461) — token model, 6-row table, 3-bucket classification, UI_THEME_DEFAULT knob, test guards
+  - `Makefile` help note "Build options:" section — UI_THEME_DEFAULT 0–5 mapping, override example, ARCHITECTURE.md reference
+
+**Design decisions preserved:**
+- Single compile-time swap point (no runtime picker yet; seam via `ui_theme_select/active` for future Config cycle)
+- Explicit per-row RGBA values (no computed accent→tint; readability > abstraction)
+- Header-only pattern matching `gl_2d.h` (per-TU .rodata duplication acceptable)
+- Three-bucket classification enforced: (1) tokens for cross-file chrome, (2) named consts for fixed one-offs, (3) as-is for domain/data palettes
 
 ## Context
 
@@ -283,15 +329,33 @@ rename-bar affordance blues — give each a local `#define UI_RGBA_*` or
 `text_panel.c` `k_clr_*` editor arrays (no cross-file reuse). Add a one-
 line comment at each pointing to `theme.h`'s rationale block.
 
-## Files to modify
+## Files modified (15 commits)
 
-- `src/ui/theme.h` — **new**
-- `src/ui/menu_bar.c` — Phase A core (mind uncommitted tree)
-- `src/ui/replay_hud.c`, `tabbed_overlay.c`, `autocomplete_panel.c`,
-  `scene_tabs.c`, `panels.c`, `text_panel.c` — Phase B
-- `src/ui/metrics.h` — drop `UI_ACCENT_GREEN_*` at end of Phase B
-- `Makefile` — `HDRS` += `src/ui/theme.h`; test wiring
-- `tests/test_ui_theme.c` — **new**
+**Core infrastructure:**
+- `src/ui/theme.h` — **new**, header-only, 170 lines
+- `config.h` — added UI_THEME_DEFAULT (0–5 knob, #ifndef-guarded, build-overridable)
+- `tests/test_ui_theme.c` — **new**, header-only, 444 assertions
+- `Makefile` — added theme.h to HDRS, test wiring; help note for UI_THEME_DEFAULT
+- `ARCHITECTURE.md` — added "### UI Color Theming" subsection (UI Layer)
+
+**Phase B chrome migration (9 files):**
+- `src/ui/menu_bar.c` — Phase A partial + remainder (40+ literals → tokens/consts)
+- `src/ui/replay_hud.c` — 8 literals → tokens
+- `src/ui/tabbed_overlay.c` — 18 literals → tokens
+- `src/ui/autocomplete_panel.c` — 6 literals → tokens
+- `src/ui/scene_tabs.c` — 11 literals → tokens/named consts
+- `src/ui/panels.c` — 7 literals → named consts (rename modal, status banner)
+- `src/ui/text_panel.c` — 8 chrome literals → tokens/named consts (k_clr_* left as-is)
+- `src/ui/metrics.h` — deleted 3 UI_ACCENT_GREEN_* macros (9 users → ui_clr(UI_TOK_ACCENT))
+
+**Phase D user-requested extension (2 files):**
+- `src/ui/variable_panel.c` — 12 chrome literals → tokens/named consts (k_var_* data palette left as-is)
+- `src/ui/profile_panel.c` — 11 chrome literals → tokens/named consts; FPS gauge (set_time_color) left as-is
+
+**No changes to:**
+- `src/ui/color_picker.c` (HSV/preview data, theme.h bucket 3)
+- `src/ui/repl_code_panel.c` (syntax palette k_category_colors[], theme.h bucket 3)
+- data/computed palettes, test/demo code
 
 ## Verification
 
@@ -325,3 +389,20 @@ accent/hover/glow change and neutral chrome is unchanged.
 Build: `make sample` (freeglut) or `make glut` (macOS). Stub path
 `make sample USE_GL_STUBS=1` should also still build (theme.h only
 needs `glColor4f`, which the GL stub provides).
+
+## Future Work: Runtime Theme Picker
+
+The `ui_theme_select(UiTheme th)` / `ui_theme_active()` seam is ready for a
+future Config-menu cycle (matching the `grid_theme_select` pattern in
+`src/scene/grid.c`). To add runtime switching:
+
+1. Wire `theme_cycle` action to `g_cfg_items[]` in `src/app/glr_actions.c`
+2. On toggle, call `ui_theme_select(next_theme)` to swap runtime state
+3. Export/import via workspace header directives (e.g. `@cfg ui_theme = 2`)
+4. The current header-only `.rodata` duplication (3 KB × 11 TUs) remains unchanged
+   (same tradeoff as `gl_2d.h`)
+
+The underlying `g_ui_theme` in `theme.h` is compile-time-initialized from
+`UI_THEME_DEFAULT` (config.h knob); making it runtime-settable is a
+no-semantic-change refactor (the per-TU static copy and `.rodata` sharing
+are transparent to the seam).
