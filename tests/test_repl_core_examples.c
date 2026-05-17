@@ -499,6 +499,88 @@ static void load_custom_example_lines_for_test(const char *const *lines) {
     repl_load_example_lines_for_test(lines);
 }
 
+static void test_example_tag_metadata(void) {
+    int tag_count = repl_example_tag_count();
+    int example_count = repl_example_count();
+    unsigned int known_tag_bits = 0u;
+    int stress_idx;
+    int stress_tag_hits = 0;
+
+    ASSERT_TRUE("example tag count positive", tag_count > 0);
+    for (int tag_idx = 0; tag_idx < tag_count; tag_idx++) {
+        char label[128];
+        const char *tag_label = repl_example_tag_label(tag_idx);
+        int count;
+
+        snprintf(label, sizeof(label), "example tag %d label", tag_idx);
+        ASSERT_TRUE(label, tag_label != NULL && tag_label[0] != '\0');
+        known_tag_bits |= repl_example_tag_bit(tag_idx);
+
+        count = repl_example_count_for_tag(tag_idx);
+        for (int ordinal = 0; ordinal < count; ordinal++) {
+            int example_idx = repl_example_index_for_tag(tag_idx, ordinal);
+            snprintf(label, sizeof(label), "tag %d ordinal %d maps valid",
+                     tag_idx, ordinal);
+            ASSERT_TRUE(label, example_idx >= 0 && example_idx < example_count);
+            snprintf(label, sizeof(label), "tag %d ordinal %d has tag",
+                     tag_idx, ordinal);
+            ASSERT_TRUE(label, repl_example_has_tag(example_idx, tag_idx));
+        }
+    }
+
+    ASSERT_TRUE("invalid negative tag bit", repl_example_tag_bit(-1) == 0u);
+    ASSERT_TRUE("invalid high tag bit",
+                repl_example_tag_bit(repl_example_tag_count()) == 0u);
+    ASSERT_TRUE("visible tag count within tag count",
+                repl_example_visible_tag_count() <= tag_count);
+    for (int dense_idx = 0; dense_idx < repl_example_visible_tag_count(); dense_idx++) {
+        char label[128];
+        int tag_idx = repl_example_visible_tag_at(dense_idx);
+        snprintf(label, sizeof(label), "visible tag %d maps valid", dense_idx);
+        ASSERT_TRUE(label, tag_idx >= 0 && tag_idx < tag_count);
+        snprintf(label, sizeof(label), "visible tag %d has examples", dense_idx);
+        ASSERT_TRUE(label, repl_example_count_for_tag(tag_idx) > 0);
+    }
+
+    for (int idx = 0; idx < example_count; idx++) {
+        char label[160];
+        unsigned int mask = repl_example_tag_mask(idx);
+
+        snprintf(label, sizeof(label), "example %d tag mask nonzero", idx);
+        ASSERT_TRUE(label, mask != 0u);
+        snprintf(label, sizeof(label), "example %d tag mask known bits", idx);
+        ASSERT_TRUE(label, (mask & ~known_tag_bits) == 0u);
+        for (int tag_idx = 0; tag_idx < tag_count; tag_idx++) {
+            int expected = (mask & repl_example_tag_bit(tag_idx)) != 0u;
+            snprintf(label, sizeof(label), "example %d tag %d agreement",
+                     idx, tag_idx);
+            ASSERT_TRUE(label, repl_example_has_tag(idx, tag_idx) == expected);
+        }
+    }
+
+    stress_idx = find_example_index_by_name("Stress test (all features)");
+    ASSERT_TRUE("known multi-tag example found", stress_idx >= 0);
+    if (stress_idx >= 0) {
+        for (int tag_idx = 0; tag_idx < tag_count; tag_idx++) {
+            int found_under_tag = 0;
+            if (!repl_example_has_tag(stress_idx, tag_idx))
+                continue;
+            stress_tag_hits++;
+            for (int ordinal = 0;
+                 ordinal < repl_example_count_for_tag(tag_idx);
+                 ordinal++) {
+                if (repl_example_index_for_tag(tag_idx, ordinal) == stress_idx) {
+                    found_under_tag = 1;
+                    break;
+                }
+            }
+            ASSERT_TRUE("known multi-tag discoverable under assigned tag",
+                        found_under_tag);
+        }
+        ASSERT_TRUE("known example has multiple tags", stress_tag_hits > 1);
+    }
+}
+
 static void print_usage(const char *prog) {
     printf("Usage: %s [OPTIONS]\n\n", prog);
     printf("Options:\n");
@@ -586,6 +668,7 @@ int main(int argc, char **argv) {
     }
 
     repl_eval_init_predef_vars();
+    test_example_tag_metadata();
 
     {
         static const char *const no_cfg_reset_example[] = {

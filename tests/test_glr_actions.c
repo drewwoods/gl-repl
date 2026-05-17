@@ -9,6 +9,7 @@
 #include "app/glr_config.h"
 #include "audio.h"
 #include "repl/core.h"
+#include "repl/examples.h"
 #include "support/test_harness.h"
 #include <stdlib.h>
 #include <stdio.h>
@@ -235,11 +236,13 @@ static void test_menu_actions(void) {
                                 0,
                                 0);
 
-    /* Scene menu - Examples */
-    int example_count = repl_example_count();
-    if (example_count > 0) {
-        ASSERT_INT("Load Example 0", glr_action_menu_item_activate(GLR_MENU_SCENE, 1), 1);
-        ASSERT_INT("active example is 0", repl_state_scenes().active_example_idx, 0);
+    /* Scene menu - tag rows are hover-only; examples load via submenu hits. */
+    int tag_count = repl_example_visible_tag_count();
+    if (tag_count > 0) {
+        ASSERT_INT("Scene tag row keeps menu open",
+                   glr_action_menu_item_activate(GLR_MENU_SCENE, 1), 0);
+        ASSERT_INT("Scene tag row does not load an example",
+                   repl_state_scenes().active_example_idx, -1);
     }
 
     /* Scene actions now live in the File menu (Scene menu is a pure
@@ -268,7 +271,7 @@ static void test_menu_actions(void) {
 
     ASSERT_INT("Slot 0 used", repl_user_scene_slot_used(0), 1);
     ASSERT_INT("Dense index 0 is slot 0", glr_scene_menu_slot_for_dense_index(0), 0);
-    ASSERT_INT("Load user scene 0", glr_action_menu_item_activate(GLR_MENU_SCENE, example_count + GLR_SCENE_OFF_SCENES), 1);
+    ASSERT_INT("Load user scene 0", glr_action_menu_item_activate(GLR_MENU_SCENE, tag_count + GLR_SCENE_OFF_SCENES), 1);
     ASSERT_INT("active user scene slot", repl_active_user_scene(), 0);
 
     /* Config menu */

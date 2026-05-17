@@ -11,6 +11,7 @@
 #include "app/glr_actions.h"
 #include "editor/inline_rename.h"
 #include "repl/core.h"
+#include "repl/examples.h"
 #include "repl/scenes.h"
 #include "repl/state_views.h"
 #include "ui/state.h"
@@ -117,8 +118,8 @@ static void test_rename_scene_guard(void) {
                 !editor_inline_rename_active());
 }
 
-/* Scene menu is a pure selector: header rows are inert; an example row
- * loads that example. */
+/* Scene menu is a pure selector: header rows are inert; tag rows are hover-only
+ * and keep the menu open for submenu selection. */
 static void test_scene_menu_is_selector(void) {
     reset_fixture();
     seed_user_scene();
@@ -127,10 +128,18 @@ static void test_scene_menu_is_selector(void) {
     int h = glr_action_menu_item_activate(GLR_MENU_SCENE, 0);
     ASSERT_TRUE("Scene header row consumed", h == 1);
 
-    /* Row 1 is the first example -> active example set. */
-    glr_action_menu_item_activate(GLR_MENU_SCENE, 1);
-    ASSERT_INT_EQ("Scene example row loads that example",
-                  repl_state_scenes().active_example_idx, 0);
+    /* Row 1 is the first example tag, not an example load action. */
+    h = glr_action_menu_item_activate(GLR_MENU_SCENE, 1);
+    ASSERT_TRUE("Scene tag row keeps menu open", h == 0);
+    ASSERT_INT_EQ("Scene tag row does not load example",
+                  repl_state_scenes().active_example_idx, -1);
+
+    h = glr_action_menu_item_activate(
+        GLR_MENU_SCENE,
+        repl_example_visible_tag_count() + GLR_SCENE_OFF_SCENES);
+    ASSERT_TRUE("Scene user row loads active user scene", h == 1);
+    ASSERT_INT_EQ("Scene user row keeps user slot active",
+                  repl_active_user_scene(), 0);
 }
 
 int main(void) {
