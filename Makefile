@@ -644,7 +644,16 @@ sample: FORCE $(SAMPLE_BIN) ## Build the main REPL sample using release flags by
 # the default C2x objects, and a distinct `sample-c99` symlink so the
 # default `sample` link is left untouched. The default build is
 # unchanged; this is opt-in for the retro "built as C99" stance.
+#
+# USE_GL_STUBS=1 is rejected: it would reroute the sub-make's BINDIR to
+# build/release-c99-gl-stubs (so the hardcoded target below would miss
+# the real $(SAMPLE_BIN) rule and fall through to a bad implicit link),
+# and a stub-GL binary is meaningless for a "real C99 binary" anyway.
 sample-c99: ## Optional: build a C99-compiled sample binary (default build stays C2x).
+	@if [ "$(USE_GL_STUBS)" = "1" ]; then \
+		echo "ERROR: sample-c99 builds a real GL-linked C99 binary; USE_GL_STUBS=1 is not supported (stub GL is a no-op). Run 'make sample-c99' without USE_GL_STUBS, or use 'make c99' for the stub-path C99 syntax guard." >&2; \
+		exit 1; \
+	fi
 	@$(MAKE) build/release-c99/sample BUILD=release-c99 SAMPLE_STD=c99
 	ln -sfn build/release-c99/sample $@
 
@@ -998,7 +1007,7 @@ check-no-point-parameter-builds: ## Verify src/repl/executor.c syntax-checks wit
 	@bash scripts/check-no-point-parameter-builds.sh
 
 check-c99: ## Verify the sample source set syntax-checks under -std=c99 -pedantic-errors (default build stays C2x).
-	@bash scripts/check-c99.sh
+	@C99_SRCS='$(SRCS)' bash scripts/check-c99.sh
 
 c99: check-c99 ## Alias for check-c99 (C99 sample-source conformance guard).
 
