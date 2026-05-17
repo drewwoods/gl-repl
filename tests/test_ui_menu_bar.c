@@ -328,6 +328,8 @@ static void test_scene_submenu_with_stubs(void) {
     int sh = 0;
     int sub_mx = -1;
     int sub_my = -1;
+    unsigned long long base_raster_calls;
+    unsigned long long hover_raster_calls;
 
     reset_menu_bar_fixture(1000, 600);
     make_test_ui_snapshot(&snap);
@@ -336,13 +338,15 @@ static void test_scene_submenu_with_stubs(void) {
     ASSERT_TRUE("found first Scene tag hover point",
                 find_dropdown_item_point(GLR_MENU_SCENE, 1, &tag_mx, &tag_my));
 
-    snap.pointer.mouse_x = tag_mx;
-    snap.pointer.mouse_y = tag_my;
+    snap.pointer.mouse_x = ui_state_viewport().window_w - 1;
+    snap.pointer.mouse_y = ui_state_viewport().window_h - 1;
     gl_stub_counts_reset();
     ui_menu_bar_render_example_dropdown(&snap);
-    ASSERT_TRUE("Scene tag hover renders submenu text",
-                gl_stub_counts[GL_STUB_glRasterPos2f] > 0);
-    ASSERT_TRUE("Scene submenu rect available",
+    base_raster_calls = gl_stub_counts[GL_STUB_glRasterPos2f];
+
+    ASSERT_TRUE("Scene tag hover update opens submenu",
+                ui_menu_bar_update_pointer_hover(tag_mx, tag_my, snap.anim_time));
+    ASSERT_TRUE("Scene submenu rect available after hover update",
                 ui_menu_bar_scene_example_submenu_rect_for_test(tag_idx,
                                                                 &sx, &sy,
                                                                 &sw, &sh));
@@ -353,10 +357,21 @@ static void test_scene_submenu_with_stubs(void) {
                 submenu_row_point(sx, sy, sw, sh, 0, &sub_mx, &sub_my));
 
     hit = ui_menu_bar_hit_test(sub_mx, sub_my);
-    ASSERT_INT_EQ("hit_test: submenu kind", hit.kind, UI_HIT_EXAMPLE_SUBMENU_ITEM);
+    ASSERT_INT_EQ("hover update makes submenu hittable",
+                  hit.kind, UI_HIT_EXAMPLE_SUBMENU_ITEM);
     ASSERT_INT_EQ("hit_test: submenu tag", hit.cmd_idx, tag_idx);
     ASSERT_INT_EQ("hit_test: submenu example", hit.item_idx, example_idx);
     ASSERT_INT_EQ("hit_test: submenu ordinal", hit.line_idx, 0);
+
+    snap.pointer.mouse_x = tag_mx;
+    snap.pointer.mouse_y = tag_my;
+    gl_stub_counts_reset();
+    ui_menu_bar_render_example_dropdown(&snap);
+    hover_raster_calls = gl_stub_counts[GL_STUB_glRasterPos2f];
+    ASSERT_TRUE("Scene tag hover renders submenu rows",
+                hover_raster_calls >=
+                base_raster_calls +
+                (unsigned long long)repl_example_count_for_tag(tag_idx));
 
     snap.pointer.mouse_x = sub_mx;
     snap.pointer.mouse_y = sub_my;

@@ -658,7 +658,7 @@ static int scene_submenu_hover_ordinal(const UiRenderSnapshot *snap,
     return ordinal;
 }
 
-static void update_scene_submenu_hover(const UiRenderSnapshot *snap) {
+static void update_scene_submenu_hover_at(int mx, int my, float now) {
     int tag_idx;
     int sx, sy, sw, sh;
 
@@ -671,19 +671,28 @@ static void update_scene_submenu_hover(const UiRenderSnapshot *snap) {
     tag_idx = scene_tag_idx_for_parent_row(g_menu_item_hover);
     if (tag_idx >= 0) {
         if (tag_idx != g_scene_open_tag)
-            g_scene_submenu_open_time = snap->anim_time;
+            g_scene_submenu_open_time = now;
         g_scene_open_tag = tag_idx;
         return;
     }
 
     if (g_scene_open_tag >= 0 &&
         scene_example_submenu_rect(g_scene_open_tag, &sx, &sy, &sw, &sh) &&
-        point_in_rect_gl(snap->pointer.mouse_x, snap->pointer.mouse_y,
-                         sx, sy, sw, sh))
+        point_in_rect_gl(mx, my, sx, sy, sw, sh))
         return;
 
     g_scene_open_tag = -1;
     g_scene_submenu_open_time = -1.0f;
+}
+
+int ui_menu_bar_update_pointer_hover(int mx, int my, float now) {
+    int old_hover = g_menu_item_hover;
+    int old_open_tag = g_scene_open_tag;
+
+    g_menu_item_hover = ui_menu_bar_dropdown_item_hit(mx, my);
+    update_scene_submenu_hover_at(mx, my, now);
+
+    return old_hover != g_menu_item_hover || old_open_tag != g_scene_open_tag;
 }
 
 static void render_scene_example_submenu(const UiRenderSnapshot *snap) {
@@ -1000,8 +1009,9 @@ void ui_menu_bar_render_example_dropdown(const UiRenderSnapshot *snap) {
     int dx, dy, dw, dh;
     if (!menu_dropdown_rect(&dx, &dy, &dw, &dh)) return;
 
-    g_menu_item_hover = ui_menu_bar_dropdown_item_hit(snap->pointer.mouse_x, snap->pointer.mouse_y);
-    update_scene_submenu_hover(snap);
+    ui_menu_bar_update_pointer_hover(snap->pointer.mouse_x,
+                                     snap->pointer.mouse_y,
+                                     snap->anim_time);
 
     float alpha = ui_fade_alpha(snap->anim_time, g_menu_open_time);
 
