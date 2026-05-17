@@ -6,6 +6,11 @@
  * defined, so linking it into the normal real-GL build is a no-op.
  */
 
+/* Keep this a non-empty translation unit even when GL_STUBS is
+ * undefined: ISO C (enforced by the -std=c99 -pedantic-errors ratchet)
+ * rejects an empty TU. Behavior-neutral — just a typedef. */
+typedef int gl_stub_counts_tu_nonempty_t;
+
 #ifdef GL_STUBS
 
 #include <GL/gl_stub_counts.h>

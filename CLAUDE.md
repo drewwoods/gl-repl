@@ -17,51 +17,50 @@ GNU sed is available as `gsed` on macOS via Homebrew (`brew install gnu-sed`).
 make sample          # Build main binary (freeglut)
 make glut            # Build with system GLUT (macOS framework)
 make test            # Build and run all tests
-make c99             # Guard: sample source must syntax-check as C99
+make c99             # Pedantic C99 ratchet (sample + demos + bench)
 make clean           # Remove binaries
 ```
 
-Requires: gcc with C2x support, OpenGL, GLUT/freeglut, AddressSanitizer enabled
-by default in debug builds.
+Requires: gcc with C99 support, OpenGL, GLUT/freeglut, AddressSanitizer
+enabled by default in debug builds.
 
-### C99 portability contract
+### C99 standard
 
-The default standard is C2x and that does not change. The whole
-project is *also* buildable as **C99 on old machines / old GCC** —
-*not* pure pedantic ISO C99. One project-wide knob drives it: the
-`STD` make variable (default `c2x`) sets `-std=` for every TU
-(sample, tests, demos). `STD=c99` builds the entire project as
-non-pedantic C99 — the full test suite compiles and passes under it
-(5080/5080). Always pair a non-default `STD` with a distinct
-`BUILD=` so C99 and C2x objects never share a tree.
+**The whole project compiles `-std=c99`, project-wide, no exceptions**
+(sample, tests, demos, bench, CI) so it runs on old machines / old
+GCC. It is *non-pedantic* by default — GNU extensions GCC accepts in
+`-std=c99` are fine; the goal is "old gcc compiles it", not pure ISO
+C99. There is no C2x build and no `STD` knob.
 
-Three entry points:
+On top of that, **`make c99` is a pedantic ratchet**: it syntax-checks
+the *shipped/real* sources — the sample object set (`$(SRCS)`) plus
+the demo drivers (`tools/`) and bench harness (`bench/`) — under
+`gcc -std=c99 -pedantic-errors -fsyntax-only`, and is run as
+`check-c99` inside `make check-state-ownership` (so it's in the
+standard gate). Strictness scoping: our code dirs are `-I` (so
+`-pedantic-errors` judges them); the real GL/GLU/GLUT/freeglut headers
+are `-isystem` (a vendored header's own old-style decl, e.g.
+`freeglut_ext.h`, can't fail the ratchet). **Tests are intentionally
+excluded** from the pedantic ratchet — the pedantic delta there
+(zero-length arrays, `{}` inits, old-style prototypes) is real work,
+not a no-op, and tests are not shipped; they still build+pass under
+plain `-std=c99`.
 
-- **`make c99`** — fast gate guard. `gcc -std=c99` (**no
-  `-pedantic`**), `-fsyntax-only`, sample source set, GL-stub include
-  path. Run as `check-c99` inside `make check-state-ownership`, so
-  it's in the standard gate. Genuine C99 breakers still fail it (C99
-  makes implicit function declarations an error; raw C11 constructs
-  are unknown to old GCC); GNU extensions GCC accepts are fine.
-- **`make c99-full`** — opt-in, slow, *not* in the gate. Builds **and
-  runs** the whole test suite under non-pedantic `STD=c99` in an
-  isolated `build/release-c99-gl-stubs` tree. The thorough proof.
-- **`make sample-c99`** — a real `-std=c99`-compiled sample binary
-  (own object tree; default `sample`/C2x untouched).
+Rules the pedantic ratchet enforces for shipped/real sources (keep new
+code conformant):
 
-The one load-bearing rule for new sample code: compile-time asserts
-must use `STATIC_ASSERT(expr, msg)` from `include/c_compat.h` (real
-`_Static_assert` under C11+, negative-array fallback under C99) —
-**never raw `_Static_assert`** (early-2000s GCC predates it entirely).
-
-As a matter of style the tree also avoids GNU `, ##__VA_ARGS__`
-(use plain `, __VA_ARGS__`), duplicate typedefs (forward via the
-owning header), and old-style `void (*)()` casts (use a prototyped
-typedef like `ReplGluCallback` in `src/repl/executor.c`) — but those
-are GCC-tolerated and the relaxed guard does not fail them.
-
-The default gate still runs C2x (`make test` / CI unchanged); the
-C99 paths above are additive verification, not a default-build change.
+- Compile-time asserts: `STATIC_ASSERT(expr, msg)` from
+  `include/c_compat.h` — **never raw `_Static_assert`** (early-2000s
+  GCC predates it entirely; the shim falls back to a negative-array
+  typedef under C99).
+- Every TU must be non-empty even when its body is `#ifdef`-gated
+  off (`-Wempty-translation-unit`): keep a token (e.g. a `typedef`)
+  outside the guard.
+- Function-pointer casts must use a prototyped typedef (e.g.
+  `ReplGluCallback` in `src/repl/executor.c`), not old-style
+  `void (*)()`.
+- No GNU `, ##__VA_ARGS__` (use plain `, __VA_ARGS__`); one `typedef`
+  per type name across headers (forward via the owning header).
 
 `include/gl_includes.h` is vendored alongside the source — the Makefile adds
 `-Iinclude` to `COMMON_CFLAGS` so every translation unit can resolve it via

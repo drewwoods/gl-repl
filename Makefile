@@ -26,22 +26,20 @@ GL_HEADER_CFLAGS = \
 	-I$(HOME)/src/freeglut-fork/include
 endif
 
-# Project-wide language standard. STD governs -std= for EVERY TU
-# (sample, tests, demos, CI). Default C2x — that does not change.
-# `STD=c99` builds the whole project as non-pedantic C99 (old-machine
-# target; GNU extensions GCC accepts are fine — the goal is "old gcc
-# compiles it", not pure ISO C99). The whole test suite builds and
-# passes under it; verify with `make c99-full`. The fast gate guard
-# `make c99` syntax-checks the sample source set under `gcc -std=c99`;
-# `make sample-c99` opts into a real C99-compiled binary (own object
-# tree). Always build a different STD into a distinct BUILD/object
-# tree (e.g. BUILD=release-c99) so C99 and C2x objects never collide.
-STD ?= c2x
+# Language standard: C99, project-wide, no exceptions. Everything
+# (sample, tests, demos, bench, CI) compiles -std=c99 so the project
+# runs on old machines / old GCC. Non-pedantic by default — GNU
+# extensions GCC accepts in -std=c99 are fine; the goal is "old gcc
+# compiles it", not pure ISO C99. The shipped/real binaries (sample,
+# bench, demos) are additionally held to -pedantic-errors by the
+# `make c99` ratchet (syntax-only, in the standard gate); tests are
+# plain -std=c99 (the pedantic delta there is real work, not a no-op,
+# and tests are not the shipped artifact).
 
 COMMON_CFLAGS = \
 	-Wall -ggdb -g3 \
 	-Wno-deprecated-declarations -Wfloat-conversion \
-	-std=$(STD) -DGL_SILENCE_DEPRECATION \
+	-std=c99 -DGL_SILENCE_DEPRECATION \
 	$(GL_HEADER_CFLAGS) \
 	-I$(PROJECT_ROOT) \
 	-I$(SRC_DIR) \
@@ -123,7 +121,6 @@ endif
 	bench \
 	bench-csv \
 	c99 \
-	c99-full \
 	callgraph-files \
 	callgraph-graphviz \
 	callgraph-html \
@@ -189,7 +186,6 @@ endif
 	help \
 	lines \
 	sample \
-	sample-c99 \
 	test \
 	test-detailed \
 	test-stubs \
@@ -643,24 +639,6 @@ $(SAMPLE_BIN): $(SAMPLE_OBJS)
 sample: FORCE $(SAMPLE_BIN) ## Build the main REPL sample using release flags by default.
 	ln -sfn $(SAMPLE_BIN) $@
 
-# Optional: an actual C99-compiled sample binary. Separate object root
-# (BUILD=release-c99 -> build/release-c99/) so it never collides with
-# the default C2x objects, and a distinct `sample-c99` symlink so the
-# default `sample` link is left untouched. The default build is
-# unchanged; this is opt-in for the retro "built as C99" stance.
-#
-# USE_GL_STUBS=1 is rejected: it would reroute the sub-make's BINDIR to
-# build/release-c99-gl-stubs (so the hardcoded target below would miss
-# the real $(SAMPLE_BIN) rule and fall through to a bad implicit link),
-# and a stub-GL binary is meaningless for a "real C99 binary" anyway.
-sample-c99: ## Optional: build a C99-compiled sample binary (default build stays C2x).
-	@if [ "$(USE_GL_STUBS)" = "1" ]; then \
-		echo "ERROR: sample-c99 builds a real GL-linked C99 binary; USE_GL_STUBS=1 is not supported (stub GL is a no-op). Run 'make sample-c99' without USE_GL_STUBS, or use 'make c99' for the stub-path C99 syntax guard." >&2; \
-		exit 1; \
-	fi
-	@$(MAKE) build/release-c99/sample BUILD=release-c99 STD=c99
-	ln -sfn build/release-c99/sample $@
-
 # Standalone demo binary that drives the scene module with a teapot callback.
 # Proves the scene/ subtree links cleanly without the editor/UI/controller code.
 SCENE_DEMO_OBJS = $(OBJDIR)/tools/scene_demo/scene_demo.o \
@@ -1010,13 +988,10 @@ check-repl-demo-stubs-shrinking: ## Ratchet on tools/repl_demo/stubs.c — must 
 check-no-point-parameter-builds: ## Verify src/repl/executor.c syntax-checks with NO_POINT_PARAMETER=1.
 	@bash scripts/check-no-point-parameter-builds.sh
 
-check-c99: ## Verify the sample source set builds under gcc -std=c99 (old-machine target; default build stays C2x).
+check-c99: ## Pedantic C99 ratchet: sample + bench + demo sources must syntax-check under -std=c99 -pedantic-errors (tests excluded; in the standard gate).
 	@C99_SRCS='$(SRCS)' bash scripts/check-c99.sh
 
-c99: check-c99 ## Alias for check-c99 (fast C99 sample-source syntax guard; in the standard gate).
-
-c99-full: ## Opt-in: build AND run the WHOLE test suite under non-pedantic gcc -std=c99 (isolated tree; slow, not in the gate).
-	@$(MAKE) test-stubs STD=c99 BUILD=release-c99
+c99: check-c99 ## Alias for the pedantic C99 ratchet (check-c99).
 
 check-no-test-default-output: ## Hard guard: tests may not call repl_save_default_output() (writes ./output.c in repo root).
 	@bash scripts/check-no-test-default-output.sh
@@ -1128,7 +1103,7 @@ else
 endif
 
 clean: ## Remove built binaries and object files.
-	rm -rf $(ROOT_BIN_LINKS) sample-c99 sample.dSYM scene_demo.dSYM repl_demo.dSYM \
+	rm -rf $(ROOT_BIN_LINKS) sample.dSYM scene_demo.dSYM repl_demo.dSYM \
 		$(TEST_BINS) $(addsuffix .dSYM,$(TEST_BINS)) \
 		$(BENCH_BINS) $(addsuffix .dSYM,$(BENCH_BINS)) \
 		build/coverage/lcov.info build/coverage/html \
