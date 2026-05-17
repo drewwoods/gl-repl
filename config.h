@@ -93,6 +93,23 @@
 #define AXES_XN_STYLE      GRID_AXES_XN_FADE
 #endif
 
+/* View-mode transitions.
+ *
+ * GLR_CAMERA_TARGET_DECAY is the per-frame decay used by
+ * glr_camera_ease_to: at the default 0.88, each 16 ms tick applies
+ * 12% of the remaining distance to the target. Lower values move
+ * faster; higher values move slower.
+ *
+ * GLR_VIEW_PROJECTION_TRANSITION_SECS controls the orthographic <->
+ * perspective matrix blend duration once its sequential phase starts. */
+#ifndef GLR_CAMERA_TARGET_DECAY
+#define GLR_CAMERA_TARGET_DECAY 0.88f
+#endif
+
+#ifndef GLR_VIEW_PROJECTION_TRANSITION_SECS
+#define GLR_VIEW_PROJECTION_TRANSITION_SECS 2.50f
+#endif
+
 /* Storage capacity of the source command document and the matching
  * editor buffer. Surfaces here (not in src/repl/command.h) so neutral
  * boundary headers — source_document.h in particular — can size their

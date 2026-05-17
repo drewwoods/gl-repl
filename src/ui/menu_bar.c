@@ -888,9 +888,11 @@ void ui_menu_bar_render(const UiRenderSnapshot *snap) {
             int active = (g_open_menu == i);
             int hover  = (hover_menu == i);
             if (active) {
+                // TODO: should be based on color scheme
                 glColor4f(0.149f, 0.149f, 0.149f, 1.0f); /* #262626 */
                 glRectf((float)menu_x[i], (float)by, (float)menu_x[i] + (float)menu_w[i], (float)by + (float)bh);
             } else if (hover) {
+                // TODO: should be based on color scheme
                 glColor4f(0.165f, 0.165f, 0.165f, 1.0f); /* #2a2a2a */
                 glRectf((float)menu_x[i], (float)by, (float)menu_x[i] + (float)menu_w[i], (float)by + (float)bh);
             }

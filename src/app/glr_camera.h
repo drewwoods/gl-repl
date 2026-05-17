@@ -41,6 +41,7 @@ typedef enum {
 ReplCameraState  glr_camera(void);
 ReplCameraState *glr_camera_mut(void);
 GlrCameraControlMode glr_camera_control_mode(void);
+int              glr_camera_target_active(void);
 void             glr_camera_set_control_mode(GlrCameraControlMode mode);
 void             glr_camera_set(float rx, float ry, float dist,
                                 float tx, float ty, float tz,

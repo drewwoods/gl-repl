@@ -663,6 +663,10 @@ static void test_overlay_transition_machine_wiring(void) {
 }
 
 static void test_view_mode_projection_transition_wiring(void) {
+    ReplCameraState cam;
+    int projection_settle_ticks =
+        (int)(GLR_VIEW_PROJECTION_TRANSITION_SECS / 0.016f) + 4;
+
     printf("--- imrepl_ctrl view mode projection transition ---\n");
     prepare_display_fixture();
     replay_state_mut()->active = 0;
@@ -679,15 +683,34 @@ static void test_view_mode_projection_transition_wiring(void) {
     glr_ctrl_display_frame();
     ASSERT_INT("camera controls switch to 2d",
                glr_camera_control_mode(), GLR_CAMERA_CONTROL_2D);
-    ASSERT_TRUE("projection starts moving toward ortho",
-                g_last_scene_config.projection_mix < 1.0f &&
-                g_last_scene_config.projection_mix > 0.0f);
+    ASSERT_FLOAT("projection waits for camera before ortho",
+                 g_last_scene_config.projection_mix, 1.0f);
+    ASSERT_INT("camera-to-2d target is active",
+               glr_camera_target_active(), 1);
     ASSERT_TRUE("camera rx eases toward xy view",
                 glr_camera().rx < 11.0f);
     ASSERT_TRUE("camera ry eases toward xy view",
                 glr_camera().ry < 22.0f);
 
-    for (int i = 0; i < 40; i++)
+    for (int i = 0; i < 200 && glr_camera_target_active(); i++)
+        glr_ctrl_tick();
+    ASSERT_INT("camera-to-2d target completes",
+               glr_camera_target_active(), 0);
+    glr_ctrl_display_frame();
+    ASSERT_FLOAT("projection still perspective when camera completes",
+                 g_last_scene_config.projection_mix, 1.0f);
+    cam = glr_camera();
+    ASSERT_FLOAT("camera rx reaches xy view", cam.rx, 0.0f);
+    ASSERT_FLOAT("camera ry reaches xy view", cam.ry, 0.0f);
+    ASSERT_FLOAT("camera z pan reaches xy plane", cam.tz, 0.0f);
+
+    glr_ctrl_tick();
+    glr_ctrl_display_frame();
+    ASSERT_TRUE("projection starts moving toward ortho after camera",
+                g_last_scene_config.projection_mix < 1.0f &&
+                g_last_scene_config.projection_mix > 0.0f);
+
+    for (int i = 0; i < projection_settle_ticks; i++)
         glr_ctrl_tick();
     glr_ctrl_display_frame();
     ASSERT_FLOAT("projection settles on ortho",
@@ -696,11 +719,22 @@ static void test_view_mode_projection_transition_wiring(void) {
     glr_state_presentation_mut()->ortho_mode = 0;
     glr_ctrl_tick();
     glr_ctrl_display_frame();
-    ASSERT_INT("camera controls return to 3d",
-               glr_camera_control_mode(), GLR_CAMERA_CONTROL_3D);
+    ASSERT_INT("camera controls stay 2d while projection exits ortho",
+               glr_camera_control_mode(), GLR_CAMERA_CONTROL_2D);
     ASSERT_TRUE("projection starts moving toward perspective",
                 g_last_scene_config.projection_mix > 0.0f &&
                 g_last_scene_config.projection_mix < 1.0f);
+    cam = glr_camera();
+    ASSERT_FLOAT("camera rx waits while projection exits ortho", cam.rx, 0.0f);
+    ASSERT_FLOAT("camera ry waits while projection exits ortho", cam.ry, 0.0f);
+
+    for (int i = 0; i < projection_settle_ticks; i++)
+        glr_ctrl_tick();
+    glr_ctrl_display_frame();
+    ASSERT_FLOAT("projection settles on perspective before camera",
+                 g_last_scene_config.projection_mix, 1.0f);
+    ASSERT_INT("camera controls return to 3d after projection",
+               glr_camera_control_mode(), GLR_CAMERA_CONTROL_3D);
     ASSERT_TRUE("camera rx returns toward saved 3d orbit",
                 glr_camera().rx > 0.0f);
     ASSERT_TRUE("camera ry returns toward saved 3d orbit",
