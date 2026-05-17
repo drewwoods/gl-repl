@@ -17,7 +17,7 @@ GNU sed is available as `gsed` on macOS via Homebrew (`brew install gnu-sed`).
 make sample          # Build main binary (freeglut)
 make glut            # Build with system GLUT (macOS framework)
 make test            # Build and run all tests
-make c99             # Pedantic C99 ratchet (sample + demos + bench)
+make check-c99       # C99 ratchet (sample + demos + bench)
 make clean           # Remove binaries
 ```
 
@@ -32,7 +32,7 @@ GCC. It is *non-pedantic* by default — GNU extensions GCC accepts in
 `-std=c99` are fine; the goal is "old gcc compiles it", not pure ISO
 C99. There is no C2x build and no `STD` knob.
 
-**`make c99` is a build guard** (run as `check-c99` inside
+**`make check-c99` is a build guard** (also run inside
 `make check-state-ownership`, so it's in the standard gate): it
 syntax-checks the *shipped/real* sources — the sample object set
 (`$(SRCS)`) plus the demo drivers (`tools/`) and bench harness
