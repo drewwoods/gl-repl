@@ -4,6 +4,7 @@
 #include <ctype.h>
 #include <errno.h>
 #include <gl_includes.h>
+#include "config.h"
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -1051,11 +1052,18 @@ static void scene_execute_adapter(const SceneExecuteContext *ctx,
 static SceneXnState g_grid_xn;
 static SceneXnState g_axes_xn;
 static float g_projection_mix = 1.0f; /* 0 = ortho, 1 = perspective */
-static int g_view_mode_prev_ortho = 0;
+typedef enum {
+    GLR_VIEW_XN_IDLE = 0,
+    GLR_VIEW_XN_CAMERA_TO_2D,
+    GLR_VIEW_XN_PROJECTION_TO_2D,
+    GLR_VIEW_XN_PROJECTION_TO_3D,
+    GLR_VIEW_XN_CAMERA_TO_3D
+} GlrViewTransitionPhase;
+
+static int g_view_mode_target_ortho = 0;
+static GlrViewTransitionPhase g_view_xn_phase = GLR_VIEW_XN_IDLE;
 static ReplCameraState g_saved_3d_camera;
 static int g_saved_3d_camera_valid = 0;
-
-#define VIEW_MODE_TRANSITION_SECS 0.5f
 
 static float smoothstep01(float t) {
     if (t < 0.0f) t = 0.0f;
@@ -1063,50 +1071,125 @@ static float smoothstep01(float t) {
     return t * t * (3.0f - 2.0f * t);
 }
 
+static int glr_ctrl_view_controls_are_2d(void) {
+    return g_view_mode_target_ortho ||
+           g_view_xn_phase == GLR_VIEW_XN_PROJECTION_TO_3D;
+}
+
 static void glr_ctrl_sync_camera_control_mode(void) {
-    glr_camera_set_control_mode(glr_state_presentation().ortho_mode
+    glr_camera_set_control_mode(glr_ctrl_view_controls_are_2d()
                                 ? GLR_CAMERA_CONTROL_2D
                                 : GLR_CAMERA_CONTROL_3D);
 }
 
-static void glr_ctrl_handle_view_mode_target_change(void) {
-    int ortho = glr_state_presentation().ortho_mode ? 1 : 0;
-    ReplCameraState cam;
-
-    if (ortho == g_view_mode_prev_ortho)
-        return;
-
-    cam = glr_camera();
-    if (ortho) {
+static void glr_ctrl_start_camera_to_2d(void) {
+    ReplCameraState cam = glr_camera();
+    if (!g_saved_3d_camera_valid || g_view_xn_phase == GLR_VIEW_XN_IDLE) {
         g_saved_3d_camera = cam;
         g_saved_3d_camera_valid = 1;
-        glr_camera_ease_to(0.0f, 0.0f, cam.dist, cam.tx, cam.ty, 0.0f);
-    } else if (g_saved_3d_camera_valid) {
-        ReplCameraState target = g_saved_3d_camera;
-        target.tx = cam.tx;
-        target.ty = cam.ty;
-        target.dist = cam.dist;
-        glr_camera_ease_to(target.rx, target.ry, target.dist,
-                           target.tx, target.ty, target.tz);
+    }
+    glr_camera_ease_to(0.0f, 0.0f, cam.dist, cam.tx, cam.ty, 0.0f);
+    g_view_xn_phase = GLR_VIEW_XN_CAMERA_TO_2D;
+}
+
+static void glr_ctrl_start_camera_to_3d(void) {
+    ReplCameraState cam;
+    ReplCameraState target;
+
+    if (!g_saved_3d_camera_valid) {
+        g_view_xn_phase = GLR_VIEW_XN_IDLE;
+        return;
     }
 
-    g_view_mode_prev_ortho = ortho;
+    cam = glr_camera();
+    target = g_saved_3d_camera;
+    target.tx = cam.tx;
+    target.ty = cam.ty;
+    target.dist = cam.dist;
+    glr_camera_ease_to(target.rx, target.ry, target.dist,
+                       target.tx, target.ty, target.tz);
+    g_view_xn_phase = GLR_VIEW_XN_CAMERA_TO_3D;
+}
+
+static void glr_ctrl_handle_view_mode_target_change(void) {
+    int ortho = glr_state_presentation().ortho_mode ? 1 : 0;
+
+    if (ortho == g_view_mode_target_ortho)
+        return;
+
+    g_view_mode_target_ortho = ortho;
+    if (ortho)
+        glr_ctrl_start_camera_to_2d();
+    else
+        g_view_xn_phase = GLR_VIEW_XN_PROJECTION_TO_3D;
     glr_ctrl_sync_camera_control_mode();
 }
 
-static void glr_ctrl_tick_projection_transition(float dt) {
-    float target = glr_state_presentation().ortho_mode ? 0.0f : 1.0f;
-    float step = dt / VIEW_MODE_TRANSITION_SECS;
+static int glr_ctrl_step_projection_toward(float target, float dt) {
+    float step;
+
+    if (GLR_VIEW_PROJECTION_TRANSITION_SECS <= 0.0f) {
+        g_projection_mix = target;
+        return 1;
+    }
+
+    step = dt / GLR_VIEW_PROJECTION_TRANSITION_SECS;
+    if (g_projection_mix < target) {
+        g_projection_mix += step;
+        if (g_projection_mix >= target) {
+            g_projection_mix = target;
+            return 1;
+        }
+        return 0;
+    }
+    if (g_projection_mix > target) {
+        g_projection_mix -= step;
+        if (g_projection_mix <= target) {
+            g_projection_mix = target;
+            return 1;
+        }
+        return 0;
+    }
+    return 1;
+}
+
+static void glr_ctrl_tick_view_transition(float dt) {
+    int guard;
 
     glr_ctrl_handle_view_mode_target_change();
 
-    if (g_projection_mix < target) {
-        g_projection_mix += step;
-        if (g_projection_mix > target) g_projection_mix = target;
-    } else if (g_projection_mix > target) {
-        g_projection_mix -= step;
-        if (g_projection_mix < target) g_projection_mix = target;
+    for (guard = 0; guard < 2; guard++) {
+        int phase_changed_without_work = 0;
+
+        switch (g_view_xn_phase) {
+        case GLR_VIEW_XN_CAMERA_TO_2D:
+            if (!glr_camera_target_active()) {
+                g_view_xn_phase = GLR_VIEW_XN_PROJECTION_TO_2D;
+                phase_changed_without_work = 1;
+            }
+            break;
+        case GLR_VIEW_XN_PROJECTION_TO_2D:
+            if (glr_ctrl_step_projection_toward(0.0f, dt))
+                g_view_xn_phase = GLR_VIEW_XN_IDLE;
+            break;
+        case GLR_VIEW_XN_PROJECTION_TO_3D:
+            if (glr_ctrl_step_projection_toward(1.0f, dt))
+                glr_ctrl_start_camera_to_3d();
+            break;
+        case GLR_VIEW_XN_CAMERA_TO_3D:
+            if (!glr_camera_target_active())
+                g_view_xn_phase = GLR_VIEW_XN_IDLE;
+            break;
+        case GLR_VIEW_XN_IDLE:
+        default:
+            break;
+        }
+
+        if (!phase_changed_without_work)
+            break;
     }
+
+    glr_ctrl_sync_camera_control_mode();
 }
 
 static void glr_ctrl_build_scene_config(SceneRenderConfig *config) {
@@ -1814,7 +1897,8 @@ void glr_app_reset_all(void) {
     glr_state_render_reset_defaults();
     glr_camera_reset_default();
     g_projection_mix = 1.0f;
-    g_view_mode_prev_ortho = 0;
+    g_view_mode_target_ortho = 0;
+    g_view_xn_phase = GLR_VIEW_XN_IDLE;
     g_saved_3d_camera_valid = 0;
     editor_state_reset();
     ui_state_reset();
@@ -3342,7 +3426,7 @@ void glr_ctrl_tick(void) {
         }
     }
 
-    glr_ctrl_tick_projection_transition(0.016f);
+    glr_ctrl_tick_view_transition(0.016f);
     glr_camera_tick();
     glr_ctrl_tick_overlay_xn();
 

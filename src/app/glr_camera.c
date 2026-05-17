@@ -15,6 +15,7 @@
 #include "app/glr_defaults.h"  /* CFG_DEFAULT_CAMERA_ROTATE */
 
 #include <gl_includes.h>      /* GLUT_*BUTTON constants */
+#include "config.h"
 #include <math.h>
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
@@ -22,7 +23,6 @@
 
 #define CAM_DECAY 0.88f
 #define CAM_DECAY_ZOOM 0.65f
-#define CAM_TARGET_DECAY CAM_DECAY
 #define CAM_TARGET_ANGLE_EPS 0.01f
 #define CAM_TARGET_POS_EPS 0.001f
 #define CAM_MOMENTUM_THRESHOLD 1.0f
@@ -149,7 +149,7 @@ static void snap_to_target(void) {
 
 static void tick_target_ease(void) {
     ReplCameraState *c = &g_camera;
-    float k = 1.0f - CAM_TARGET_DECAY;
+    float k = 1.0f - GLR_CAMERA_TARGET_DECAY;
     float dx = g_camera_target.tx - c->tx;
     float dy = g_camera_target.ty - c->ty;
     float dz = g_camera_target.tz - c->tz;
@@ -174,6 +174,7 @@ static void tick_target_ease(void) {
 ReplCameraState glr_camera(void)        { return g_camera; }
 ReplCameraState *glr_camera_mut(void)   { return &g_camera; }
 GlrCameraControlMode glr_camera_control_mode(void) { return g_control_mode; }
+int glr_camera_target_active(void) { return g_camera_target_active; }
 
 void glr_camera_set_control_mode(GlrCameraControlMode mode) {
     if (mode != GLR_CAMERA_CONTROL_2D)
