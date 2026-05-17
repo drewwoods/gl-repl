@@ -39,3 +39,9 @@
  *     (used by both the importer and the example loader). Demo
  *     leaves the bridge unset → camera blocks parse but apply nothing.
  */
+
+/* This file is intentionally documentation-only (the demo's "stubs"
+ * are achieved by simply not installing optional bridges). Keep it a
+ * non-empty translation unit so the -std=c99 -pedantic-errors ratchet
+ * doesn't reject it (-Wempty-translation-unit). Behavior-neutral. */
+typedef int repl_demo_stubs_tu_nonempty_t;
