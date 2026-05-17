@@ -1,6 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
+. scripts/lib/rg-fallback.sh
 
 baseline_file="${1:-scripts/baselines/by-value-snapshot-pointer-returns.txt}"
 
