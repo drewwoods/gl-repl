@@ -27,26 +27,31 @@ by default in debug builds.
 ### C99 portability contract
 
 All builds (`make sample`, `make test`, CI) compile `-std=c2x` — that
-does not change. Separately, the **sample source set must stay valid
-C99**: `make c99` (also run as `check-c99` inside
-`make check-state-ownership`, so it's part of the standard gate)
-syntax-checks every sample TU under `-std=c99 -pedantic-errors` on the
-GL-stub include path. It is `-fsyntax-only` — it does not build objects
-or flip any build's standard, so there is no object-tree split.
+does not change. Separately, the sample must stay buildable as **C99 on
+old machines / old GCC** — *not* pure pedantic ISO C99. `make c99`
+(also run as `check-c99` inside `make check-state-ownership`, so it's
+part of the standard gate) compiles every sample TU with
+`gcc -std=c99` (**no `-pedantic`**) on the GL-stub include path. It is
+`-fsyntax-only` — no objects, no build-standard flip, no object-tree
+split. Genuine C99 breakers still fail it (C99 makes implicit function
+declarations an error; raw C11 constructs are unknown to old GCC); GNU
+extensions GCC accepts in `-std=c99` mode are fine.
 
-Keep new sample code C99-clean:
+The one load-bearing rule for new sample code: compile-time asserts
+must use `STATIC_ASSERT(expr, msg)` from `include/c_compat.h` (real
+`_Static_assert` under C11+, negative-array fallback under C99) —
+**never raw `_Static_assert`** (early-2000s GCC predates it entirely).
 
-- Compile-time asserts: `STATIC_ASSERT(expr, msg)` from
-  `include/c_compat.h` (real `_Static_assert` under C11+, negative-array
-  fallback under C99) — never raw `_Static_assert`.
-- Variadic macros: plain `, __VA_ARGS__`, never GNU `, ##__VA_ARGS__`.
-- One `typedef` per type name across headers (no C11 typedef
-  redefinition); forward via the owning header instead.
-- Function-pointer casts must be prototyped (e.g. the
-  `ReplGluCallback` typedef in `src/repl/executor.c`), never old-style
-  `void (*)()`.
+As a matter of style the tree also avoids GNU `, ##__VA_ARGS__`
+(use plain `, __VA_ARGS__`), duplicate typedefs (forward via the
+owning header), and old-style `void (*)()` casts (use a prototyped
+typedef like `ReplGluCallback` in `src/repl/executor.c`) — but those
+are GCC-tolerated and the relaxed guard does not fail them.
 
-Test-only and generated harness files are out of the C99 promise.
+`make sample-c99` optionally produces a real `-std=c99`-compiled
+binary (separate object tree; default `sample`/C2x untouched).
+Test-only and generated harness files are out of the C99 promise
+(`make test` stays C2x).
 
 `include/gl_includes.h` is vendored alongside the source — the Makefile adds
 `-Iinclude` to `COMMON_CFLAGS` so every translation unit can resolve it via
