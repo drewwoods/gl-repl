@@ -11,12 +11,18 @@
   Gates green: `test_ui_theme 444/444`, `make test 5356/5356`,
   `check-c99 OK`, `check-state-ownership` exit 0, sample builds
   (freeglut + stub).
-- [ ] **Phase B** — migrate chrome files to tokens (replay_hud →
-  tabbed_overlay → autocomplete_panel → scene_tabs → menu_bar remainder
-  → panels status → text_panel chrome).
-- [ ] **Phase B finalize** — migrate the 9 `UI_ACCENT_GREEN_*` users to
-  `ui_clr(UI_TOK_ACCENT)`; delete the 3 macros from `metrics.h`. (Rows
-  were already fully populated in Phase A.)
+- [x] **Phase B** — chrome files tokenized, one commit each:
+  replay_hud, tabbed_overlay, autocomplete_panel, scene_tabs,
+  menu_bar remainder (`test_ui_menu_bar 71/71`), panels (named consts
+  for the blue rename modal + amber status banner — deliberately
+  non-accent), text_panel chrome (`test_ui_text_panel 25/25`,
+  `check-ui-text-panel-pure OK`). scene_tabs' ephemeral example-tab
+  amber kept as documented `k_tab_example_*` named consts.
+- [x] **Phase B finalize** — all 9 `UI_ACCENT_GREEN_*` users moved to
+  `ui_clr(UI_TOK_ACCENT)` during the per-file work; the 3 macros
+  deleted from `metrics.h` (now points at theme.h). Gates green: both
+  sample builds, `make test 5356/5356`, `check-c99` + `check-state-
+  ownership` exit 0.
 - [ ] **Phase C** — document exclusions + final gates.
 
 ## Context

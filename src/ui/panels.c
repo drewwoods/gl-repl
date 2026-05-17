@@ -17,6 +17,18 @@
 #include <stdio.h>
 #include <string.h>
 
+/* Two deliberately non-accent semantic surfaces, theme-stable in every
+ * scheme (see theme.h's "named constant" bucket - fixed, non-theme
+ * one-offs that must NOT follow the UI accent):
+ *   - the inline-rename modal: a distinct blue so it reads as modal;
+ *   - the bottom status banner: amber, the conventional status hue. */
+static const float k_rename_bar_bg[4]   = { 0.078f, 0.122f, 0.298f, 0.95f };
+static const float k_rename_bar_rule[4] = { 0.310f, 0.510f, 0.860f, 1.0f };
+static const float k_rename_bar_text[4] = { 0.780f, 0.870f, 1.000f, 1.0f };
+static const float k_status_bar_bg[3]   = { 0.227f, 0.165f, 0.063f };
+static const float k_status_bar_edge[3] = { 0.102f, 0.071f, 0.031f };
+static const float k_status_bar_fg[3]   = { 0.941f, 0.753f, 0.439f };
+
 void ui_panels_render_code_panel(const UiRenderSnapshot *snap,
                                  UiCodePanelOutput *out) {
     ui_repl_code_panel_render(snap, out);
@@ -43,10 +55,10 @@ void ui_panels_render_scene_status(const UiRenderSnapshot *snap) {
         glEnable(GL_BLEND);
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-        glColor4f(0.078f, 0.122f, 0.298f, 0.95f);  /* deep blue bar */
+        glColor4fv(k_rename_bar_bg);  /* deep blue modal bar */
         glRectf((float)sc_x, (float)bar_y,
                 (float)(sc_x + sc_w), (float)(bar_y + bar_h));
-        glColor4f(0.310f, 0.510f, 0.860f, 1.0f);    /* accent rule */
+        glColor4fv(k_rename_bar_rule);  /* modal rule */
         glBegin(GL_LINES);
         glVertex2f((float)sc_x, (float)(bar_y + bar_h));
         glVertex2f((float)(sc_x + sc_w), (float)(bar_y + bar_h));
@@ -65,7 +77,7 @@ void ui_panels_render_scene_status(const UiRenderSnapshot *snap) {
                      snap->rename_text);
         if (n > max_chars)
             msg[max_chars] = '\0';
-        glColor4f(0.780f, 0.870f, 1.0f, 1.0f);      /* light blue text */
+        glColor4fv(k_rename_bar_text);  /* light blue modal text */
         gl2d_draw_string((float)tx, (float)text_y, msg, FONT_SMALL);
 
         glDisable(GL_BLEND);
@@ -107,10 +119,12 @@ void ui_panels_render_scene_status(const UiRenderSnapshot *snap) {
         glEnable(GL_BLEND);
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-        glColor4f(0.227f, 0.165f, 0.063f, 0.92f * alpha);
+        glColor4f(k_status_bar_bg[0], k_status_bar_bg[1], k_status_bar_bg[2],
+                  0.92f * alpha);
         glRectf((float)sc_x, (float)bar_y,
                 (float)(sc_x + sc_w), (float)(bar_y + bar_h));
-        glColor4f(0.102f, 0.071f, 0.031f, alpha);
+        glColor4f(k_status_bar_edge[0], k_status_bar_edge[1],
+                  k_status_bar_edge[2], alpha);
         glBegin(GL_LINES);
         glVertex2f((float)sc_x, (float)(bar_y + bar_h));
         glVertex2f((float)(sc_x + sc_w), (float)(bar_y + bar_h));
@@ -120,7 +134,8 @@ void ui_panels_render_scene_status(const UiRenderSnapshot *snap) {
         badge_d = 14;
         badge_x = sc_x + CODE_MARGIN_X;
         badge_y = bar_y + (bar_h - badge_d) / 2;
-        glColor4f(0.941f, 0.753f, 0.439f, alpha);
+        glColor4f(k_status_bar_fg[0], k_status_bar_fg[1], k_status_bar_fg[2],
+                  alpha);
         glBegin(GL_LINE_LOOP);
         for (int i = 0; i < 16; i++) {
             float angle = (float)i * (6.2831853f / 16.0f);
@@ -144,7 +159,8 @@ void ui_panels_render_scene_status(const UiRenderSnapshot *snap) {
             snprintf(msg, sizeof(msg), "%.*s...", max_chars - 3, status.text);
         else
             snprintf(msg, sizeof(msg), "%s", status.text);
-        glColor4f(0.941f, 0.753f, 0.439f, alpha);
+        glColor4f(k_status_bar_fg[0], k_status_bar_fg[1], k_status_bar_fg[2],
+                  alpha);
         gl2d_draw_string((float)tx, (float)text_y, msg, FONT_SMALL);
 
         glDisable(GL_BLEND);

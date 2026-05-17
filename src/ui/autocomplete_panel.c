@@ -14,6 +14,7 @@
 #include "autocomplete_panel.h"
 #include "layout.h"
 #include "metrics.h"
+#include "theme.h"
 
 #include "gl_2d.h"
 
@@ -47,11 +48,11 @@ void ui_autocomplete_panel_render(const UiRenderSnapshot *snap,
     if (popup_x < cp_x + 4) popup_x = cp_x + 4;
 
     /* Background */
-    glColor4f(0.08f, 0.08f, 0.15f, 0.95f);
+    ui_clr_a(UI_TOK_SUNKEN, 0.95f);
     glRectf((float)((float)popup_x), (float)((float)(popup_y - popup_h)), (float)((float)popup_x)+(float)((float)popup_w), (float)((float)(popup_y - popup_h))+(float)((float)popup_h));
 
     /* Border */
-    glColor4f(0.40f, 0.40f, 0.65f, 0.80f);
+    ui_clr_a(UI_TOK_BORDER, 0.80f);
     glBegin(GL_LINE_LOOP);
     glVertex2f((float)popup_x, (float)(popup_y - popup_h));
     glVertex2f((float)(popup_x + popup_w), (float)(popup_y - popup_h));
@@ -63,12 +64,12 @@ void ui_autocomplete_panel_render(const UiRenderSnapshot *snap,
     int ey = popup_y - LINE_H + 1;
     for (int i = 0; i < ac.match_count; i++) {
         if (i == ac.selected_idx) {
-            /* Highlight selected */
-            glColor4f(0.20f, 0.25f, 0.42f, 0.90f);
+            /* Highlight selected (accent selection band) */
+            ui_clr_a(UI_TOK_DROPDOWN_ITEM_HOVER_BG, 0.90f);
             glRectf((float)((float)(popup_x + 1)), (float)((float)(ey - 2)), (float)((float)(popup_x + 1))+(float)((float)(popup_w - 2)), (float)((float)(ey - 2))+(float)((float)LINE_H));
-            glColor3f(1.0f, 1.0f, 0.90f);
+            ui_clr(UI_TOK_TEXT_ON_HILITE);
         } else {
-            glColor3f(0.65f, 0.65f, 0.72f);
+            ui_clr(UI_TOK_TEXT_MUTED);
         }
         gl2d_draw_string((float)(popup_x + 8), (float)ey,
                     ac.matches[i], FONT_MONO);
@@ -76,7 +77,7 @@ void ui_autocomplete_panel_render(const UiRenderSnapshot *snap,
     }
 
     /* Hint text */
-    glColor4f(0.45f, 0.45f, 0.55f, 0.70f);
+    ui_clr_a(UI_TOK_TEXT_MUTED, 0.70f);
     gl2d_draw_string((float)(popup_x + 4),
                 (float)(popup_y - popup_h - FONT_H - 2),
                 "Tab to accept", FONT_SMALL);
