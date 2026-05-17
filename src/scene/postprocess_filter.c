@@ -129,6 +129,15 @@ void scene_postprocess_filter_render(int mode, int sx, int sy,
         (tex_w > g_max_tex_size || tex_h > g_max_tex_size))
         return; /* would exceed the GL texture limit — skip this frame */
 
+    /* The state guard MUST start before the first glBindTexture: per
+     * the GL spec, glPushAttrib(GL_TEXTURE_BIT, via GL_ALL_ATTRIB_BITS)
+     * snapshots the texture binding at push time, so glPopAttrib only
+     * restores the caller's GL_TEXTURE_BINDING_2D if the push precedes
+     * our bind. Allocation/copy are matrix/viewport-independent, so
+     * running them inside the 2D bracket is safe. Do not reorder a
+     * glBindTexture before this call. */
+    postprocess_filter_begin_2d(sx, sy, sw, sh);
+
     if (g_filter_tex == 0 || tex_w > g_tex_w || tex_h > g_tex_h) {
         if (g_filter_tex == 0)
             glGenTextures(1, &g_filter_tex);
@@ -152,8 +161,6 @@ void scene_postprocess_filter_render(int mode, int sx, int sy,
 
     float umax = (float)sw / (float)g_tex_w;
     float vmax = (float)sh / (float)g_tex_h;
-
-    postprocess_filter_begin_2d(sx, sy, sw, sh);
 
     /* Base image: full RGB, unshifted. */
     glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
