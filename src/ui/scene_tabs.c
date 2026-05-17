@@ -227,7 +227,8 @@ void ui_scene_tabs_render(const UiRenderSnapshot *snap) {
             if (is_example)
                 glColor4f(0.260f, 0.190f, 0.080f, 1.0f);  /* amber tint */
             else
-                glColor4f(0.130f, 0.260f, 0.150f, 1.0f);  /* green tint */
+                // TODO: should be derived from color scheme not a literal
+                glColor4f(0.100f, 0.200f, 0.120f, 1.0f);  /* green tint */
             scene_tabs_fill_round_top((float)x[i], (float)by,
                                       (float)w[i], th,
                                       (float)TAB_CORNER_R);
@@ -246,6 +247,7 @@ void ui_scene_tabs_render(const UiRenderSnapshot *snap) {
             if (is_example)
                 glColor3f(0.900f, 0.660f, 0.320f);  /* bright amber */
             else
+                // TODO: should be derived from color scheme not a literal
                 glColor3f(0.420f, 0.780f, 0.500f);  /* bright green */
         } else {
             glColor3f(0.330f, 0.330f, 0.380f);      /* neutral edge */
