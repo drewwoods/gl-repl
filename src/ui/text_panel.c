@@ -9,6 +9,7 @@
 #include "ui/text_search.h"
 #include "ui/text_panel.h"
 #include "ui/metrics.h"
+#include "ui/theme.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -21,6 +22,14 @@ static const GLfloat k_clr_search_hit[4]     = { 0.95f, 0.65f, 0.18f, 0.55f };
 static const GLfloat k_clr_ghost_text[4]     = { 0.50f, 0.55f, 0.65f, 0.55f };
 static const GLfloat k_clr_hint_text[4]      = { 0.56f, 0.62f, 0.72f, 0.38f };
 static const GLfloat k_clr_cursor_caret[4]   = { 0.90f, 0.80f, 0.25f, 0.85f };
+
+/* text_panel chrome that has no clean theme-token twin: a very dim
+ * gutter/indent-guide tier and a specific dark action-chip ring. Kept
+ * as named consts (theme.h "named constant" bucket) - theme-stable,
+ * not shoehorned into a token. The k_clr_* block above is the editor
+ * sub-palette (intentionally NOT themed - see theme.h bucket 3). */
+static const GLfloat k_panel_dim[3]           = { 0.30f, 0.30f, 0.38f };
+static const GLfloat k_action_chip_outline[4] = { 0.10f, 0.10f, 0.12f, 0.85f };
 
 static int text_panel_statusbar_h(const UiTextPanelSnapshot *snap) {
     return (snap && (snap->chrome_flags & UI_TEXT_PANEL_CHROME_STATUSBAR))
@@ -203,7 +212,7 @@ static void text_panel_draw_line_number(const UiTextPanelSnapshot *snap,
         return;
 
     snprintf(ln, sizeof(ln), "%3d", file_line);
-    glColor3f(0.30f, 0.30f, 0.38f);
+    glColor3fv(k_panel_dim);
     gl2d_draw_string((float)(snap->cp_x + CODE_MARGIN_X),
                      (float)line_y, ln, FONT_MONO);
 }
@@ -218,7 +227,7 @@ static void text_panel_draw_left_aux(const UiTextPanelSnapshot *snap,
         return;
 
     aux_x = snap->cp_x + snap->text_x - 6 * FONT_W;
-    glColor3f(0.45f, 0.50f, 0.65f);
+    ui_clr(UI_TOK_TEXT_SECTION);
     gl2d_draw_string((float)aux_x, (float)line_y,
                      row->left_aux_label, FONT_MONO);
 }
@@ -242,7 +251,7 @@ static void text_panel_draw_right_action(const UiTextPanelSnapshot *snap,
     text_panel_set_color(&row->right_action.color);
     glRectf((float)sx, (float)sy,
             (float)(sx + sw), (float)(sy + sw));
-    glColor4f(0.10f, 0.10f, 0.12f, 0.85f);
+    glColor4fv(k_action_chip_outline);
     glBegin(GL_LINE_LOOP);
     glVertex2f((float)sx,        (float)sy);
     glVertex2f((float)(sx + sw), (float)sy);
@@ -250,7 +259,7 @@ static void text_panel_draw_right_action(const UiTextPanelSnapshot *snap,
     glVertex2f((float)sx,        (float)(sy + sw));
     glEnd();
     if (row->right_action.emphasized) {
-        glColor4f(1.0f, 1.0f, 1.0f, 0.9f);
+        ui_clr_a(UI_TOK_TEXT_ON_HILITE, 0.9f);
         glBegin(GL_LINE_LOOP);
         glVertex2f((float)(sx - 1),        (float)(sy - 1));
         glVertex2f((float)(sx + sw + 1),   (float)(sy - 1));
@@ -350,7 +359,7 @@ static void text_panel_draw_indent(int x, int y, int indent_chars) {
 
     memset(spaces, ' ', (size_t)draw_indent);
     spaces[draw_indent] = '\0';
-    glColor3f(0.30f, 0.30f, 0.38f);
+    glColor3fv(k_panel_dim);
     gl2d_draw_string((float)x, (float)y, spaces, FONT_MONO);
 }
 
@@ -568,7 +577,7 @@ static void text_panel_draw_scrollbar(const UiTextPanelSnapshot *snap,
               - (int)(bar_h * pos) - thumb_h;
 
     glEnable(GL_BLEND);
-    glColor4f(0.50f, 0.50f, 0.65f, 0.35f);
+    ui_clr_a(UI_TOK_TEXT_MUTED, 0.35f);
     glRectf((float)(snap->cp_x + snap->cp_w - 6), (float)thumb_y,
             (float)(snap->cp_x + snap->cp_w - 1),
             (float)(thumb_y + thumb_h));
@@ -596,12 +605,12 @@ static int text_panel_point_on_divider(const UiTextPanelSnapshot *snap,
 static void text_panel_draw_chrome(const UiTextPanelSnapshot *snap) {
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    glColor4f(0.06f, 0.06f, 0.10f, 0.92f);
+    ui_clr_a(UI_TOK_SUNKEN, 0.92f);
     glRectf((float)snap->cp_x, (float)snap->cp_y,
             (float)(snap->cp_x + snap->cp_w),
             (float)(snap->cp_y + snap->cp_h));
 
-    glColor4f(0.30f, 0.30f, 0.50f, 0.80f);
+    ui_clr_a(UI_TOK_DIVIDER, 0.80f);
     glBegin(GL_LINES);
     if (snap->cp_w < snap->vp_w) {
         glVertex2f((float)(snap->cp_x + snap->cp_w), 0.0f);

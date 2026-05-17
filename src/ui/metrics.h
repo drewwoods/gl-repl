@@ -21,11 +21,7 @@
  * plan §3). Keeps the band visually uniform with the menu bar too. */
 #define TAB_STRIP_H LINE_H
 
-/* Shared UI accent palette - kept here so menu bar and HUD use identical
- * values. #6fb36f is the design-bundle green used for the Replay button,
- * progress fill, and active example. */
-#define UI_ACCENT_GREEN_R 0.435f
-#define UI_ACCENT_GREEN_G 0.702f
-#define UI_ACCENT_GREEN_B 0.435f
+/* UI colors moved to theme.h. The accent (#6fb36f green) is now
+ * UI_TOK_ACCENT, resolved via ui_clr(UI_TOK_ACCENT). */
 
 #endif /* UI_METRICS_H */

@@ -34,6 +34,11 @@ static const char *g_menu_labels[NUM_MENUS] = {
     "File", "Scene", "Tutorials", "Config"
 };
 
+/* Menubar bottom hairline: intentionally pure #000 in every theme
+ * (design ref) - a theme-stable rule, not an accent. Kept as a named
+ * constant per theme.h's "named constant" bucket, not a token. */
+static const float k_menubar_bottom_rule[4] = { 0.0f, 0.0f, 0.0f, 1.0f };
+
 /* Right-to-left the pins render from highest index first, so PIN_REPLAY sits
  * at the far right matching the design. PIN_SEARCH fills the gap between the
  * last menu on the left and PIN_REPLAY. */
@@ -712,9 +717,9 @@ static void render_scene_example_submenu(const UiRenderSnapshot *snap) {
     hover_ordinal = scene_submenu_hover_ordinal(snap, g_scene_open_tag);
     alpha = ui_fade_alpha(snap->anim_time, g_scene_submenu_open_time);
 
-    glColor4f(0.133f, 0.133f, 0.133f, 0.98f * alpha);
+    ui_clr_a(UI_TOK_RAISED, 0.98f * alpha);
     glRectf((float)sx, (float)sy, (float)(sx + sw), (float)(sy + sh));
-    glColor4f(0.227f, 0.227f, 0.227f, alpha);
+    ui_clr_a(UI_TOK_BORDER, alpha);
     glBegin(GL_LINE_LOOP);
     glVertex2f((float)sx,        (float)sy);
     glVertex2f((float)(sx + sw), (float)sy);
@@ -737,9 +742,9 @@ static void render_scene_example_submenu(const UiRenderSnapshot *snap) {
                     (float)(sx + sw - 1), (float)(ey - 2 + LINE_H));
             ui_clr_a(UI_TOK_TEXT_ON_HILITE, alpha);
         } else if (is_active) {
-            glColor4f(UI_ACCENT_GREEN_R, UI_ACCENT_GREEN_G, UI_ACCENT_GREEN_B, alpha);
+            ui_clr_a(UI_TOK_ACCENT, alpha);
         } else {
-            glColor4f(0.847f, 0.847f, 0.847f, alpha);
+            ui_clr_a(UI_TOK_TEXT_PRIMARY, alpha);
         }
 
         gl2d_draw_string((float)(sx + 14), (float)ey, name, FONT_SMALL);
@@ -817,13 +822,13 @@ void ui_menu_bar_render_search_overlay(const UiRenderSnapshot *snap,
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-    /* Background: a shade lighter than the menu bar (#262626) so the active
+    /* Background: a shade lighter than the menu bar so the active
      * search input reads as "focused". */
-    glColor4f(0.149f, 0.149f, 0.149f, alpha);
+    ui_clr_a(UI_TOK_MENU_LABEL_ACTIVE_BG, alpha);
     glRectf((float)box_x, (float)box_y, (float)box_x + (float)box_w, (float)box_y + (float)box_h);
 
     /* Inner border */
-    glColor4f(0.298f, 0.329f, 0.392f, alpha); /* #4c5464 */
+    ui_clr_a(UI_TOK_BORDER, alpha);
     glBegin(GL_LINE_LOOP);
     glVertex2f((float)box_x + 0.5f,              (float)box_y + 0.5f);
     glVertex2f((float)(box_x + box_w) - 0.5f,    (float)box_y + 0.5f);
@@ -832,26 +837,26 @@ void ui_menu_bar_render_search_overlay(const UiRenderSnapshot *snap,
     glEnd();
 
     /* Magnifying-glass icon */
-    glColor4f(0.667f, 0.706f, 0.784f, alpha); /* #aab3c8 */
+    ui_clr_a(UI_TOK_TEXT_SECTION, alpha);
     draw_search_icon((float)icon_cx, (float)icon_cy, (float)icon_r);
 
     /* Query text (or placeholder style when empty) */
     if (srch.query_len <= 0)
-        glColor4f(0.478f, 0.478f, 0.478f, alpha); /* #7a7a7a placeholder */
+        ui_clr_a(UI_TOK_TEXT_PLACEHOLDER, alpha);
     else
-        glColor4f(0.941f, 0.941f, 0.902f, alpha);
+        ui_clr_a(UI_TOK_TEXT_PRIMARY, alpha);
     gl2d_draw_string((float)query_x, (float)text_y, query_buf, FONT_SMALL);
 
     /* Count/status on the right */
     if (srch.query_len > 0 && srch.match_count <= 0)
-        glColor4f(0.851f, 0.424f, 0.310f, alpha); /* accent for "0" */
+        ui_clr_a(UI_TOK_STATUS_ERR, alpha); /* "0 matches" */
     else
-        glColor4f(0.533f, 0.533f, 0.533f, alpha);
+        ui_clr_a(UI_TOK_TEXT_MUTED, alpha);
     gl2d_draw_string((float)count_x, (float)text_y, count_buf, FONT_SMALL);
 
     if (snap->code_panel.cursor_visible && srch.query_len > 0) {
         int cursor_x = query_x + cursor_col * FONT_SMALL_W;
-        glColor4f(0.95f, 0.80f, 0.24f, 0.85f * alpha);
+        ui_clr_a(UI_TOK_CARET, 0.85f * alpha);
         glRectf((float)cursor_x, (float)(text_y - 2), (float)cursor_x + 2.0f,
                   (float)(text_y - 2) + (float)(FONT_SMALL_H + 2));
     }
@@ -877,8 +882,8 @@ void ui_menu_bar_render(const UiRenderSnapshot *snap) {
         glEnable(GL_BLEND);
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-        /* Full-width strip: #1d1d1d */
-        glColor4f(0.114f, 0.114f, 0.114f, 0.98f);
+        /* Full-width strip surface */
+        ui_clr_a(UI_TOK_SURFACE, 0.98f);
         glRectf((float)cp_x, (float)by, (float)cp_x + (float)cp_w, (float)by + (float)bh);
 
         int hover_menu = ui_menu_bar_menu_hit(snap->pointer.mouse_x, snap->pointer.mouse_y);
@@ -889,18 +894,16 @@ void ui_menu_bar_render(const UiRenderSnapshot *snap) {
             int active = (g_open_menu == i);
             int hover  = (hover_menu == i);
             if (active) {
-                // TODO: should be based on color scheme
-                glColor4f(0.149f, 0.149f, 0.149f, 1.0f); /* #262626 */
+                ui_clr(UI_TOK_MENU_LABEL_ACTIVE_BG);
                 glRectf((float)menu_x[i], (float)by, (float)menu_x[i] + (float)menu_w[i], (float)by + (float)bh);
             } else if (hover) {
-                // TODO: should be based on color scheme
-                glColor4f(0.165f, 0.165f, 0.165f, 1.0f); /* #2a2a2a */
+                ui_clr(UI_TOK_MENU_LABEL_HOVER_BG);
                 glRectf((float)menu_x[i], (float)by, (float)menu_x[i] + (float)menu_w[i], (float)by + (float)bh);
             }
             if (active || hover)
-                glColor3f(1.0f, 1.0f, 1.0f);
+                ui_clr(UI_TOK_TEXT_ON_HILITE);
             else
-                glColor3f(0.847f, 0.847f, 0.847f);       /* #d8d8d8 */
+                ui_clr(UI_TOK_TEXT_PRIMARY);
             int tx = menu_x[i] + 9;
             gl2d_draw_string((float)tx, (float)(by + 3),
                         g_menu_labels[i], FONT_SMALL);
@@ -911,7 +914,7 @@ void ui_menu_bar_render(const UiRenderSnapshot *snap) {
          * slots (pins must stay visible and take hit-test priority). */
         int pin_block_x = pin_x[PIN_SEARCH];
         int pin_block_w = cp_x + cp_w - CODE_MARGIN_X - pin_block_x;
-        glColor4f(0.114f, 0.114f, 0.114f, 1.0f); /* #1d1d1d, fully opaque */
+        ui_clr(UI_TOK_SURFACE); /* fully opaque pin mask */
         glRectf((float)pin_block_x, (float)by, (float)pin_block_x + (float)pin_block_w, (float)by + (float)bh);
 
         /* Right-side pins: Search | Replay (always rendered on top) */
@@ -919,14 +922,14 @@ void ui_menu_bar_render(const UiRenderSnapshot *snap) {
             int hover = (hover_pin == i);
             int active = (i == PIN_REPLAY && replay.active);
             if (hover) {
-                glColor4f(0.165f, 0.165f, 0.165f, 1.0f);
+                ui_clr(UI_TOK_MENU_LABEL_HOVER_BG);
                 glRectf((float)pin_x[i], (float)by, (float)pin_x[i] + (float)pin_w[i], (float)by + (float)bh);
             } else if (active) {
-                glColor4f(0.149f, 0.149f, 0.149f, 1.0f);
+                ui_clr(UI_TOK_MENU_LABEL_ACTIVE_BG);
                 glRectf((float)pin_x[i], (float)by, (float)pin_x[i] + (float)pin_w[i], (float)by + (float)bh);
             }
-            /* Left separator rule (#2a2a2a) */
-            glColor4f(0.165f, 0.165f, 0.165f, 1.0f);
+            /* Left separator rule */
+            ui_clr(UI_TOK_DIVIDER);
             glBegin(GL_LINES);
             glVertex2f((float)pin_x[i], (float)by);
             glVertex2f((float)pin_x[i], (float)(by + bh));
@@ -938,7 +941,7 @@ void ui_menu_bar_render(const UiRenderSnapshot *snap) {
                     continue;
                 }
                 /* "search..." label in muted gray */
-                glColor3f(0.478f, 0.478f, 0.478f); /* #7a7a7a */
+                ui_clr(UI_TOK_TEXT_PLACEHOLDER);
                 int tx = pin_x[i] + 12;
                 gl2d_draw_string((float)tx, (float)(by + 3),
                             g_pin_btn_labels[i], FONT_SMALL);
@@ -953,7 +956,7 @@ void ui_menu_bar_render(const UiRenderSnapshot *snap) {
                 int icon_cy = by + bh / 2;
                 int icon_sz = 8;
 
-                glColor3f(UI_ACCENT_GREEN_R, UI_ACCENT_GREEN_G, UI_ACCENT_GREEN_B);
+                ui_clr(UI_TOK_ACCENT);
 
                 if (replay.state == REPLAY_PLAYING) {
                     /* Two vertical bars (pause glyph) */
@@ -982,17 +985,17 @@ void ui_menu_bar_render(const UiRenderSnapshot *snap) {
                 gl2d_draw_string((float)tx, (float)(by + 3), label, FONT_SMALL);
             } else {
                 if (hover || active)
-                    glColor3f(1.0f, 1.0f, 1.0f);
+                    ui_clr(UI_TOK_TEXT_ON_HILITE);
                 else
-                    glColor3f(0.847f, 0.847f, 0.847f);
+                    ui_clr(UI_TOK_TEXT_PRIMARY);
                 int tx = pin_x[i] + 9;
                 gl2d_draw_string((float)tx, (float)(by + 3),
                             g_pin_btn_labels[i], FONT_SMALL);
             }
         }
 
-        /* Bottom divider (#000) */
-        glColor4f(0.0f, 0.0f, 0.0f, 1.0f);
+        /* Bottom divider - theme-stable pure-black rule */
+        glColor4fv(k_menubar_bottom_rule);
         glBegin(GL_LINES);
         glVertex2f((float)cp_x,          (float)by);
         glVertex2f((float)(cp_x + cp_w), (float)by);
@@ -1023,9 +1026,9 @@ void ui_menu_bar_render_example_dropdown(const UiRenderSnapshot *snap) {
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
     /* Dropdown bg (#222) + border (#3a3a3a) - design ref */
-    glColor4f(0.133f, 0.133f, 0.133f, 0.98f * alpha);
+    ui_clr_a(UI_TOK_RAISED, 0.98f * alpha);
     glRectf((float)dx, (float)dy, (float)dx + (float)dw, (float)dy + (float)dh);
-    glColor4f(0.227f, 0.227f, 0.227f, alpha);
+    ui_clr_a(UI_TOK_BORDER, alpha);
     glBegin(GL_LINE_LOOP);
     glVertex2f((float)dx,        (float)dy);
     glVertex2f((float)(dx + dw), (float)dy);
@@ -1035,7 +1038,7 @@ void ui_menu_bar_render_example_dropdown(const UiRenderSnapshot *snap) {
 
     if (n == 0) {
         int ey = dy + dh - LINE_H + 1;
-        glColor4f(0.478f, 0.518f, 0.580f, alpha);  /* #7a8494 (header style) */
+        ui_clr_a(UI_TOK_TEXT_SECTION, alpha);
         gl2d_draw_string((float)(dx + 14), (float)ey, "(empty)", FONT_SMALL);
         glDisable(GL_BLEND);
         gl2d_end();
@@ -1052,14 +1055,14 @@ void ui_menu_bar_render_example_dropdown(const UiRenderSnapshot *snap) {
         if (!lbl) continue;
 
         if (strncmp(lbl, "### ", 4) == 0) {
-            glColor4f(0.478f, 0.518f, 0.580f, alpha);  /* #7a8494 (header style) */
+            ui_clr_a(UI_TOK_TEXT_SECTION, alpha);
             gl2d_draw_string((float)(dx + 14), (float)ey, lbl + 4, FONT_SMALL);
             ey -= LINE_H;
             continue;
         }
 
         if (strcmp(lbl, "---") == 0) {
-            glColor4f(0.20f, 0.20f, 0.20f, alpha);  /* #333 */
+            ui_clr_a(UI_TOK_DIVIDER, alpha);
             glBegin(GL_LINES);
             glVertex2f((float)(dx + 6),       (float)(ey + LINE_H / 2 - 2));
             glVertex2f((float)(dx + dw - 6),  (float)(ey + LINE_H / 2 - 2));
@@ -1089,22 +1092,22 @@ void ui_menu_bar_render_example_dropdown(const UiRenderSnapshot *snap) {
                       (float)(dx + 1) + (float)(dw - 2), (float)(ey - 2) + (float)LINE_H);
             ui_clr_a(UI_TOK_TEXT_ON_HILITE, alpha);
         } else if (is_active_scene) {
-            glColor4f(UI_ACCENT_GREEN_R, UI_ACCENT_GREEN_G, UI_ACCENT_GREEN_B, alpha);
+            ui_clr_a(UI_TOK_ACCENT, alpha);
         } else {
-            glColor4f(0.847f, 0.847f, 0.847f, alpha);  /* #d8d8d8 */
+            ui_clr_a(UI_TOK_TEXT_PRIMARY, alpha);
         }
 
         gl2d_draw_string((float)(dx + 14), (float)ey, lbl, FONT_SMALL);
 
         if (scene_tag_idx >= 0) {
-            glColor4f(0.533f, 0.533f, 0.533f, alpha);
+            ui_clr_a(UI_TOK_TEXT_MUTED, alpha);
             gl2d_draw_string((float)(dx + dw - 20), (float)ey, ">", FONT_SMALL);
         }
 
         const char *sc = menu_item_shortcut(menu_id, i);
         if (sc) {
             int sc_px = (int)strlen(sc) * FONT_SMALL_W;
-            glColor4f(0.533f, 0.533f, 0.533f, alpha);  /* #888 */
+            ui_clr_a(UI_TOK_TEXT_MUTED, alpha);
             gl2d_draw_string((float)(dx + dw - 14 - sc_px), (float)ey, sc, FONT_SMALL);
         }
 
@@ -1117,9 +1120,9 @@ void ui_menu_bar_render_example_dropdown(const UiRenderSnapshot *snap) {
             int st_px = (int)strlen(st) * FONT_SMALL_W;
             int val = glr_config_get(item->key);
             if (val)
-                glColor4f(UI_ACCENT_GREEN_R, UI_ACCENT_GREEN_G, UI_ACCENT_GREEN_B, alpha);
+                ui_clr_a(UI_TOK_ACCENT, alpha);
             else
-                glColor4f(0.533f, 0.533f, 0.533f, alpha);
+                ui_clr_a(UI_TOK_TEXT_MUTED, alpha);
             gl2d_draw_string((float)(state_right - st_px), (float)ey, st, FONT_SMALL);
         }
 

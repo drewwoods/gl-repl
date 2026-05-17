@@ -12,6 +12,7 @@
 #include "widgets/replay.h"
 #include "ui/layout.h" /* CODE_PANEL_LAYOUT_TOP enum value */
 #include "ui/metrics.h"
+#include "ui/theme.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -55,11 +56,11 @@ void replay_ui_hud_render(const UiReplayHudState *state) {
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-    /* Panel bg matches the menubar palette: #1d1d1d with subtle green tint
-     * on the border so the HUD reads as paired with the green Replay button. */
-    glColor4f(0.114f, 0.118f, 0.114f, 0.94f); /* #1d1e1d */
+    /* Neutral menubar surface; accent-glow border so the HUD reads as
+     * paired with the accent Replay button (both follow the theme). */
+    ui_clr_a(UI_TOK_SURFACE, 0.94f);
     glRectf((float)(hud_x), (float)(hud_y), (float)(hud_x)+(float)(hud_w), (float)(hud_y)+(float)(REPLAY_HUD_HEIGHT));
-    glColor4f(0.188f, 0.298f, 0.220f, 0.95f); /* #304c38 */
+    ui_clr_a(UI_TOK_ACCENT_GLOW_BG, 0.95f);
     glBegin(GL_LINE_LOOP);
     glVertex2f((float)hud_x + 0.5f,                      (float)hud_y + 0.5f);
     glVertex2f((float)(hud_x + hud_w) - 0.5f,            (float)hud_y + 0.5f);
@@ -74,7 +75,7 @@ void replay_ui_hud_render(const UiReplayHudState *state) {
     int icon_cy    = hud_y + REPLAY_HUD_TEXT_LINE1_Y + FONT_SMALL_H / 2;
     int icon_sz    = 10;
 
-    glColor4f(UI_ACCENT_GREEN_R, UI_ACCENT_GREEN_G, UI_ACCENT_GREEN_B, 1.0f);
+    ui_clr(UI_TOK_ACCENT);
     if (state->replay_state_val == REPLAY_PLAYING) {
         float bw = 3.0f, gap = 3.0f;
         float by0 = (float)icon_cy - (float)icon_sz * 0.5f;
@@ -104,7 +105,7 @@ void replay_ui_hud_render(const UiReplayHudState *state) {
              state->replay_mode == REPLAY_MODE_VERTEX ? "Vertex" : "Polygon",
              state->replay_expand_args ? "Code Expanded" : ""
              );
-    glColor3f(UI_ACCENT_GREEN_R, UI_ACCENT_GREEN_G, UI_ACCENT_GREEN_B);
+    ui_clr(UI_TOK_ACCENT);
     gl2d_draw_string((float)text_col_x,
                 (float)(hud_y + REPLAY_HUD_TEXT_LINE1_Y),
                 progress_txt, FONT_SMALL);
@@ -121,13 +122,13 @@ void replay_ui_hud_render(const UiReplayHudState *state) {
     int groove_x = hud_x + REPLAY_HUD_TEXT_PAD_X;
     int groove_w = hud_w - 2 * REPLAY_HUD_TEXT_PAD_X;
     int groove_y = hud_y + REPLAY_HUD_PROGRESS_Y;
-    glColor4f(0.094f, 0.118f, 0.102f, 1.0f);  /* #181e1a */
+    ui_clr(UI_TOK_SUNKEN);
     glRectf((float)(groove_x), (float)(groove_y),
               (float)(groove_x) + (float)(groove_w), (float)(groove_y) + (float)(REPLAY_HUD_PROGRESS_H));
-    glColor4f(UI_ACCENT_GREEN_R, UI_ACCENT_GREEN_G, UI_ACCENT_GREEN_B, 1.0f);
+    ui_clr(UI_TOK_ACCENT);
     glRectf((float)(groove_x), (float)(groove_y),
               (float)(groove_x) + (float)(groove_w * progress), (float)(groove_y) + (float)(REPLAY_HUD_PROGRESS_H));
-    glColor4f(0.227f, 0.298f, 0.243f, 1.0f);  /* #3a4c3e border */
+    ui_clr(UI_TOK_ACCENT_GLOW_BG);  /* accent-glow groove border */
     glBegin(GL_LINE_LOOP);
     glVertex2f((float)groove_x + 0.5f,                     (float)groove_y + 0.5f);
     glVertex2f((float)(groove_x + groove_w) - 0.5f,        (float)groove_y + 0.5f);
@@ -138,7 +139,7 @@ void replay_ui_hud_render(const UiReplayHudState *state) {
     /* Line 2 - compact kbd hints along the bottom in muted gray */
     snprintf(kbd_txt, sizeof(kbd_txt),
              "Space pause  |  +/- speed  |  m mode  |  e expand |  %c %c step |  Esc stop", 0xAB, 0xBB);
-    glColor3f(0.533f, 0.533f, 0.533f);  /* #888 */
+    ui_clr(UI_TOK_TEXT_MUTED);
     gl2d_draw_string((float)text_col_x,
                 (float)(hud_y + REPLAY_HUD_TEXT_LINE2_Y),
                 kbd_txt, FONT_SMALL);

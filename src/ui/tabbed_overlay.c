@@ -7,6 +7,7 @@
 #include "tabbed_overlay.h"
 #include "gl_2d.h"
 #include "metrics.h"
+#include "theme.h"
 
 #include "config.h"
 
@@ -54,12 +55,12 @@ void ui_tabbed_overlay_render(const UiOverlayState *in) {
     if (scroll > max_scroll) scroll = max_scroll;
     if (scroll < 0) scroll = 0;
 
-    /* Background - matches config menu #222 */
-    glColor4f(0.133f, 0.133f, 0.133f, 0.98f);
+    /* Background - shared raised-panel surface (config menu / dropdown) */
+    ui_clr_a(UI_TOK_RAISED, 0.98f);
     glRectf((float)hx, (float)hy, (float)hx + (float)hw, (float)hy + (float)hh);
 
-    /* Border - matches config menu #3a3a3a */
-    glColor4f(0.227f, 0.227f, 0.227f, 1.0f);
+    /* Border - shared panel border */
+    ui_clr(UI_TOK_BORDER);
     glBegin(GL_LINE_LOOP);
     glVertex2f((float)hx,        (float)hy);
     glVertex2f((float)(hx + hw), (float)hy);
@@ -71,7 +72,7 @@ void ui_tabbed_overlay_render(const UiOverlayState *in) {
     {
         int title_y = hy + hh - title_h;
         /* Title bar separator */
-        glColor4f(0.20f, 0.20f, 0.20f, 1.0f);
+        ui_clr(UI_TOK_DIVIDER);
         glBegin(GL_LINES);
         glVertex2f((float)hx,        (float)title_y);
         glVertex2f((float)(hx + hw), (float)title_y);
@@ -79,13 +80,13 @@ void ui_tabbed_overlay_render(const UiOverlayState *in) {
 
         /* Title text - dim, left-aligned like config menu section headers */
         const char *title = content->title ? content->title : "";
-        glColor4f(0.478f, 0.518f, 0.580f, 1.0f);
+        ui_clr(UI_TOK_TEXT_SECTION);
         gl2d_draw_string((float)(hx + 14), (float)(title_y + 4), title, FONT_SMALL);
 
         /* Tab switch hint right-aligned */
         const char *nav_hint = "Left/Right: switch tabs";
         int nh_x = hx + hw - (int)strlen(nav_hint) * FONT_SMALL_W - 14;
-        glColor4f(0.533f, 0.533f, 0.533f, 0.70f);
+        ui_clr_a(UI_TOK_TEXT_MUTED, 0.70f);
         gl2d_draw_string((float)nh_x, (float)(title_y + 4), nav_hint, FONT_SMALL);
     }
 
@@ -95,18 +96,18 @@ void ui_tabbed_overlay_render(const UiOverlayState *in) {
         int tab_w  = hw / num_tabs;
 
         /* Tab bar background */
-        glColor4f(0.10f, 0.10f, 0.10f, 1.0f);
+        ui_clr(UI_TOK_SUNKEN);
         glRectf((float)hx, (float)tab_y, (float)hx + (float)hw, (float)tab_y + (float)tab_bar_h);
 
         for (int t = 0; t < num_tabs; t++) {
             int tx_tab = hx + t * tab_w;
             if (t == tab_idx) {
                 /* Active tab: bottom accent bar + bright label */
-                glColor4f(UI_ACCENT_GREEN_R, UI_ACCENT_GREEN_G, UI_ACCENT_GREEN_B, 0.85f);
+                ui_clr_a(UI_TOK_ACCENT, 0.85f);
                 glRectf((float)tx_tab, (float)tab_y, (float)tx_tab + (float)tab_w, (float)tab_y + 2.0f);
-                glColor4f(0.847f, 0.847f, 0.847f, 1.0f);
+                ui_clr(UI_TOK_TEXT_PRIMARY);
             } else {
-                glColor4f(0.533f, 0.533f, 0.533f, 1.0f);
+                ui_clr(UI_TOK_TEXT_MUTED);
             }
             const char *label = content->tabs[t].label ? content->tabs[t].label : "";
             int lbl_len = (int)strlen(label);
@@ -115,7 +116,7 @@ void ui_tabbed_overlay_render(const UiOverlayState *in) {
         }
 
         /* Separator line below tab bar */
-        glColor4f(0.20f, 0.20f, 0.20f, 1.0f);
+        ui_clr(UI_TOK_DIVIDER);
         glBegin(GL_LINES);
         glVertex2f((float)hx,        (float)tab_y);
         glVertex2f((float)(hx + hw), (float)tab_y);
@@ -167,24 +168,24 @@ void ui_tabbed_overlay_render(const UiOverlayState *in) {
             if (ln > 255) ln = 255;
             memcpy(left, text[i], ln);
             left[ln] = '\0';
-            glColor4f(0.847f, 0.847f, 0.847f, 1.0f);
+            ui_clr(UI_TOK_TEXT_PRIMARY);
             gl2d_draw_string((float)tx, (float)ty, left, FONT_SMALL);
 
             /* Right column - aligned to shared tab stop */
-            glColor4f(0.533f, 0.533f, 0.533f, 1.0f);
+            ui_clr(UI_TOK_TEXT_MUTED);
             gl2d_draw_string((float)(tx + tab_stop * FONT_SMALL_W), (float)ty,
                         tab + 1, FONT_SMALL);
         } else if (text[i][0] != ' ') {
             /* Section header - dim gray-blue like config menu */
-            glColor4f(0.478f, 0.518f, 0.580f, 1.0f);
+            ui_clr(UI_TOK_TEXT_SECTION);
             gl2d_draw_string((float)tx, (float)ty, text[i], FONT_SMALL);
         } else if (text[i][2] == ' ' && text[i][3] == ' ') {
-            /* 4+ space indent - code example, green accent */
-            glColor4f(UI_ACCENT_GREEN_R, UI_ACCENT_GREEN_G, UI_ACCENT_GREEN_B, 0.90f);
+            /* 4+ space indent - code example, accent */
+            ui_clr_a(UI_TOK_ACCENT, 0.90f);
             gl2d_draw_string((float)tx, (float)ty, text[i], FONT_SMALL);
         } else {
             /* 2-space indent, no split - light label colour */
-            glColor4f(0.847f, 0.847f, 0.847f, 1.0f);
+            ui_clr(UI_TOK_TEXT_PRIMARY);
             gl2d_draw_string((float)tx, (float)ty, text[i], FONT_SMALL);
         }
     }
@@ -202,12 +203,12 @@ void ui_tabbed_overlay_render(const UiOverlayState *in) {
         if (thumb_h < 12) thumb_h = 12;
         int thumb_y = bar_top - (int)(bar_h * pos) - thumb_h;
 
-        /* Track - #333 */
-        glColor4f(0.20f, 0.20f, 0.20f, 0.60f);
+        /* Track */
+        ui_clr_a(UI_TOK_DIVIDER, 0.60f);
         glRectf((float)bar_x, (float)(bar_top - bar_h), (float)bar_x + 4.0f, (float)(bar_top - bar_h) + (float)bar_h);
 
         /* Thumb - #888 */
-        glColor4f(0.533f, 0.533f, 0.533f, 0.80f);
+        ui_clr_a(UI_TOK_TEXT_MUTED, 0.80f);
         glRectf((float)bar_x, (float)thumb_y, (float)bar_x + 4.0f, (float)thumb_y + (float)thumb_h);
 
         /* Scroll hint at bottom */
@@ -216,7 +217,7 @@ void ui_tabbed_overlay_render(const UiOverlayState *in) {
             snprintf(hint, sizeof(hint), "v %d more v",
                      n_lines - scroll - visible_lines);
             int hint_x = hx + (hw - (int)strlen(hint) * FONT_SMALL_W) / 2;
-            glColor4f(0.533f, 0.533f, 0.533f, 0.50f);
+            ui_clr_a(UI_TOK_TEXT_MUTED, 0.50f);
             gl2d_draw_string((float)hint_x, (float)(hy + 4), hint, FONT_SMALL);
         }
     }

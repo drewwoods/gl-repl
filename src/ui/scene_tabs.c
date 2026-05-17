@@ -13,6 +13,7 @@
 #include "ui/gl_2d.h"
 #include "ui/layout.h"
 #include "ui/metrics.h"
+#include "ui/theme.h"
 
 #include <math.h>
 #include <string.h>
@@ -26,6 +27,15 @@ enum {
     TAB_TOP_GAP  = 3,   /* band px left above the tab so its rounded
                          * top isn't clipped by the menu bar */
 };
+
+/* Ephemeral-example-tab identity. Deliberately NOT theme tokens: example
+ * tabs must stay an amber/warm family across every scheme so they read
+ * as distinct from the accent-colored user-scene tabs. (See theme.h:
+ * the "named constant" bucket - fixed, non-theme one-offs.) */
+static const float k_tab_example_fill[4]      = { 0.260f, 0.190f, 0.080f, 1.0f };
+static const float k_tab_example_edge[3]      = { 0.900f, 0.660f, 0.320f };
+static const float k_tab_example_label[3]     = { 0.800f, 0.640f, 0.400f };
+static const float k_tab_example_label_hot[3] = { 1.000f, 0.930f, 0.800f };
 
 /* Compute the band rect and per-tab x[]/w[]. Returns the tab count (0 when
  * the panel is hidden or the derived set is empty). cp_x / cp_w / tab_by /
@@ -204,8 +214,8 @@ void ui_scene_tabs_render(const UiRenderSnapshot *snap) {
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-    /* Full-width band background: #1d1d1d, matches the menu strip. */
-    glColor4f(0.114f, 0.114f, 0.114f, 0.98f);
+    /* Full-width band background: matches the menu strip surface. */
+    ui_clr_a(UI_TOK_SURFACE, 0.98f);
     glRectf((float)cp_x, (float)by,
             (float)(cp_x + cp_w), (float)(by + bh));
 
@@ -225,15 +235,14 @@ void ui_scene_tabs_render(const UiRenderSnapshot *snap) {
          * reads as an underline of the menu row directly above. */
         if (active) {
             if (is_example)
-                glColor4f(0.260f, 0.190f, 0.080f, 1.0f);  /* amber tint */
+                glColor4fv(k_tab_example_fill);
             else
-                // TODO: should be derived from color scheme not a literal
-                glColor4f(0.100f, 0.200f, 0.120f, 1.0f);  /* green tint */
+                ui_clr(UI_TOK_DROPDOWN_ITEM_HOVER_BG);  /* accent selection */
             scene_tabs_fill_round_top((float)x[i], (float)by,
                                       (float)w[i], th,
                                       (float)TAB_CORNER_R);
         } else if (hover == i) {
-            glColor4f(0.165f, 0.165f, 0.165f, 1.0f);       /* #2a2a2a */
+            ui_clr(UI_TOK_MENU_LABEL_HOVER_BG);
             scene_tabs_fill_round_top((float)x[i], (float)by,
                                       (float)w[i], th,
                                       (float)TAB_CORNER_R);
@@ -245,12 +254,11 @@ void ui_scene_tabs_render(const UiRenderSnapshot *snap) {
          * as discrete tabs. */
         if (active) {
             if (is_example)
-                glColor3f(0.900f, 0.660f, 0.320f);  /* bright amber */
+                glColor3fv(k_tab_example_edge);
             else
-                // TODO: should be derived from color scheme not a literal
-                glColor3f(0.420f, 0.780f, 0.500f);  /* bright green */
+                ui_clr(UI_TOK_ACCENT);              /* accent outline */
         } else {
-            glColor3f(0.330f, 0.330f, 0.380f);      /* neutral edge */
+            ui_clr(UI_TOK_BORDER);                  /* neutral edge */
         }
         scene_tabs_stroke_round_top((float)x[i], (float)by,
                                     (float)w[i], th,
@@ -261,13 +269,13 @@ void ui_scene_tabs_render(const UiRenderSnapshot *snap) {
          * when no tab is active. */
         if (active || hover == i) {
             if (is_example)
-                glColor3f(1.0f, 0.93f, 0.80f);          /* warm-white */
+                glColor3fv(k_tab_example_label_hot);
             else
-                glColor3f(1.0f, 1.0f, 1.0f);            /* bright label */
+                ui_clr(UI_TOK_TEXT_ON_HILITE);
         } else if (is_example) {
-            glColor3f(0.800f, 0.640f, 0.400f);          /* muted amber */
+            glColor3fv(k_tab_example_label);
         } else {
-            glColor3f(0.847f, 0.847f, 0.847f);          /* #d8d8d8 */
+            ui_clr(UI_TOK_TEXT_PRIMARY);
         }
 
         scene_tabs_draw_label(tx, by + 3, tab->name,
