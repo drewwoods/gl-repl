@@ -339,21 +339,41 @@ mechanisms:
    `repl_export_reshape_projection_lines()` returns the canonical
    perspective default (correct `0.1, 200.0` near/far).
 
-**Dynamic-footer sentinel convention.** `g_footer_pre_init[]` is iterated
+**Rule — where a per-frame dynamic value is resolved.** Apply this test
+to *any* value that is (a) recomputed per frame from live REPL/scene
+state and (b) read by more than one consumer in the frame loop:
+
+> **If a per-frame value has more than one consumer, the controller
+> resolves it once into the frame snapshot; consumers read the snapshot.
+> Never let two consumers re-resolve it independently.**
+
+The reason is structural, not specific to any one value: the code
+panel's row-count/follow-scroll pass and its render pass sit on
+*opposite sides* of `scene_render_3d_scene()` in
+`glr_ctrl_display_frame()` (snapshot/follow-scroll → scene render →
+panel render). Anything resolved live in both passes can observe two
+different values across that boundary whenever a transition lands on
+that frame — here a 2D/3D switch would let row-count see one
+`gluPerspective(...)` line while render emits two `glOrtho(...)` lines,
+skewing scroll-follow and row hit mapping. "Deterministic within a
+frame" is *not* sufficient — the inputs themselves change mid-frame at
+the scene-render boundary. This is just `UiRenderSnapshot`'s existing
+contract ("UI render code reads only from the snapshot") restated for
+the case where the value is computed rather than copied.
+
+⚠️ **Do not generalize the `"static float g_angle = 0.0f;"` precedent.**
+That special-case resolves at the consumer site, which is safe *only*
+because its single consumer is the file writer (one pass, off the frame
+loop). It is the wrong model for any value the code panel reads — copy
+the snapshot shape below, not the `g_angle` shape.
+
+**Dynamic-footer sentinel mechanism.** `g_footer_pre_init[]` is iterated
 verbatim by three consumers (the file writer in `src/repl/export.c` and
 the code panel's row-count *and* render passes in
 `src/ui/repl_code_panel.c`). A line whose count or text is dynamic is
 stored as a unique sentinel constant
-(`REPL_EXPORT_RESHAPE_PROJ_SENTINEL`); every consumer special-cases it —
-mirroring the older `"static float g_angle = 0.0f;"` special-case for
-the saved-file angle preamble. **The sentinel must be resolved exactly
-once per consumption, never re-resolved live by the UI**, because the
-two panel passes run on *opposite sides* of `scene_render_3d_scene()`
-(`glr_ctrl_display_frame`: snapshot/follow-scroll → scene render → panel
-render). If each pass called `repl_export_reshape_projection_lines()`
-itself, a 2D/3D transition that frame would let row-count see one
-`gluPerspective(...)` line while render emits two `glOrtho(...)` lines,
-skewing scroll-follow and row hit mapping. So:
+(`REPL_EXPORT_RESHAPE_PROJ_SENTINEL`); every consumer special-cases it.
+Per the rule above:
 
 * **Code panel (per frame):** the controller resolves the block once in
   `glr_ctrl_build_ui_snapshot()` into
