@@ -988,10 +988,10 @@ check-repl-demo-stubs-shrinking: ## Ratchet on tools/repl_demo/stubs.c — must 
 check-no-point-parameter-builds: ## Verify src/repl/executor.c syntax-checks with NO_POINT_PARAMETER=1.
 	@bash scripts/check-no-point-parameter-builds.sh
 
-check-c99: ## Pedantic C99 ratchet: sample + bench + demo sources must syntax-check under -std=c99 -pedantic-errors (tests excluded; in the standard gate).
+check-c99: ## C99 build guard: sample + bench + demo sources must syntax-check under gcc -std=c99 (non-pedantic; tests excluded; in the standard gate).
 	@C99_SRCS='$(SRCS)' bash scripts/check-c99.sh
 
-c99: check-c99 ## Alias for the pedantic C99 ratchet (check-c99).
+c99: check-c99 ## Alias for the C99 build guard (check-c99).
 
 check-no-test-default-output: ## Hard guard: tests may not call repl_save_default_output() (writes ./output.c in repo root).
 	@bash scripts/check-no-test-default-output.sh
