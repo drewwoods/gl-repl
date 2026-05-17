@@ -71,8 +71,14 @@ stale texture name.
 1. Lazy-allocate or grow the texture if `g_filter_tex == 0` or the scene grew
    beyond `g_tex_w/g_tex_h`.
 
-   Use power-of-two dimensions (`next_pow2(sw) x next_pow2(sh)`) for legacy
-   fixed-function robustness. Allocate with:
+   Use power-of-two dimensions (`next_pow2(sw) x next_pow2(sh)`). This is
+   **required**, not just conservative: NPOT textures are an OpenGL 2.0
+   feature (`ARB_texture_non_power_of_two`); OpenGL 1.1 — the
+   fixed-function baseline this codebase targets (no shaders, no FBOs) —
+   only supports power-of-two `GL_TEXTURE_2D` dimensions. Do **not** add a
+   runtime NPOT check: the POT-texture-plus-`umax/vmax`-subregion path
+   below renders correctly on both GL 1.1 and GL 2.0+, so branching on
+   NPOT support buys nothing but complexity. Allocate with:
 
    ```c
    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, tex_w, tex_h,
@@ -93,6 +99,15 @@ stale texture name.
    glBindTexture(GL_TEXTURE_2D, g_filter_tex);
    glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, sx, sy, sw, sh);
    ```
+
+   Coordinate origin: `glCopyTexSubImage2D` reads the framebuffer in
+   GL window coordinates (**bottom-left origin**). `sx, sy, sw, sh` are
+   the exact rect `config->scene_x/y/w/h` — the same rect the scene was
+   rendered into via `glViewport(sx, sy, sw, sh)` — so the copy region
+   and the redraw viewport are consistent by construction (no Y flip is
+   needed; do not introduce one). If a future change makes `scene_y`
+   top-left-origin, this copy and the redraw below must both flip
+   together — assert/keep them defined in the same convention.
 
    The visible texture region is:
 
@@ -126,13 +141,20 @@ stale texture name.
 4. Draw the chromatic-aberration channel offsets.
 
    Keep texture enabled and blending disabled. Use `glColorMask` to redraw only
-   one channel at a time over the base image:
+   one channel at a time over the base image.
+
+   The offset is applied to the quad's **vertex X positions**, in the
+   `gluOrtho2D(0, sw, 0, sh)` pixel space — i.e. translate the screen
+   quad by ±dx pixels. **Texcoords are unchanged** (still `0..umax` /
+   `0..vmax`); do not offset in texture space. (Vertex-space shift keeps
+   the offset an exact pixel amount regardless of the POT texture size;
+   a texcoord-space shift would have to be rescaled by `umax/vmax`.)
 
    - red-only pass: `glColorMask(GL_TRUE, GL_FALSE, GL_FALSE, GL_FALSE)` and
-     draw the same textured quad with a small positive x offset, e.g. `+1.5f`
-     to `+2.0f` pixels
+     draw the same textured quad translated `+dx` px in X
+     (`dx` ≈ `1.5f`–`2.0f`)
    - blue-only pass: `glColorMask(GL_FALSE, GL_FALSE, GL_TRUE, GL_FALSE)` and
-     draw the same textured quad with a matching negative x offset
+     draw the same textured quad translated `-dx` px in X
    - restore full color writes with
      `glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE)`
 
@@ -261,8 +283,9 @@ or `// @cfg crt_shader = ...` line.
 Keep `USE_GL_STUBS=1` and `make test-stubs` building.
 
 `tests/gl-stubs/include/GL/gl.h` already has `glBindTexture`,
-`glTexCoord2f`, `glTexEnvi`, `GL_TEXTURE_2D`, `GL_LINEAR`, `GL_REPLACE`,
-`GL_TEXTURE_ENV`, and `GL_TEXTURE_ENV_MODE`.
+`glTexCoord2f`, `glTexEnvi`, `glGetIntegerv` (used for the
+`GL_MAX_TEXTURE_SIZE` guard — do **not** re-add it), `GL_TEXTURE_2D`,
+`GL_LINEAR`, `GL_REPLACE`, `GL_TEXTURE_ENV`, and `GL_TEXTURE_ENV_MODE`.
 
 Add, following the file's existing inline no-op + `gl_stub_tick` style:
 
