@@ -1081,6 +1081,7 @@ void ui_menu_bar_render_example_dropdown(const UiRenderSnapshot *snap) {
                                  scene_hit == snap->user_scene_active_idx);
 
         if (i == g_menu_item_hover || is_open_tag) {
+            // TODO: should be based on color scheme (green)
             glColor4f(0.180f, 0.290f, 0.431f, alpha);  /* #2e4a6e */
             glRectf((float)(dx + 1), (float)(ey - 2),
                       (float)(dx + 1) + (float)(dw - 2), (float)(ey - 2) + (float)LINE_H);

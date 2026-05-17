@@ -18,3 +18,5 @@ callgrind.out*
 .compat-scratch/
 *.swp
 *.swo
+*.DS_Store
+your_scene.c
