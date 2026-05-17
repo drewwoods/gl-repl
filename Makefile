@@ -1,3 +1,12 @@
+# Recipes use bash features (`set -o pipefail`, `$'...'` ANSI-C
+# quoting for colorized check output). Without this, GNU make runs
+# recipes via /bin/sh — which is dash on Debian/Ubuntu — and
+# `set -e -o pipefail` aborts with "Illegal option -o pipefail",
+# breaking check-state-ownership / test-stubs on Linux. bash is
+# present on every supported dev box (macOS /bin/bash, Linux
+# /bin/bash); pin it so recipe behavior is identical everywhere.
+SHELL := /bin/bash
+
 CC = gcc
 PROJECT_ROOT := $(abspath .)
 LOCAL_INCLUDE := $(abspath include)
