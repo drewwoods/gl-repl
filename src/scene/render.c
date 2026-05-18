@@ -17,6 +17,7 @@
 
 #include <errno.h>
 #include <math.h>
+#include <stdio.h>
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
 #endif
@@ -460,6 +461,17 @@ static void draw_orbit_target(const SceneFrameRenderContext *frame_ctx) {
     }
     glLineWidth(1.0f);
     glPointSize(1.0f);
+
+    /* World-position readout floating just above the Y arm. Depth-test off
+     * so the coordinates stay legible even when the gizmo is inside
+     * geometry; alpha follows the same glow fade as the crosshair. */
+    char coord[48];
+    snprintf(coord, sizeof coord, "(%.2f, %.2f, %.2f)", tx, ty, tz);
+    glDisable(GL_DEPTH_TEST);
+    scene_clr_a(SCENE_CLR_ORBIT_GLOW_INNER, 0.95f * glow);
+    glRasterPos3f(tx + r * 0.15f, ty + r * 1.15f, tz);
+    for (const char *c = coord; *c; c++)
+        glutBitmapCharacter(FONT_SMALL, (unsigned char)*c);
 
     glDepthMask(GL_TRUE);
     glDisable(GL_BLEND);
