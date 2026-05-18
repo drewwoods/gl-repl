@@ -9,7 +9,7 @@ buildability (state field before its `config_value_ptr` reference).
 - [x] Commit 2 — Step 1: config key, descriptor, mapping, cycle-row branch (`make sample` green)
 - [x] Commit 3 — Step 3: UI-snapshot mirror + sync (`make sample` green)
 - [x] Commit 4 — Step 4: gate chrome in code panel (feature live; `make sample` green)
-- [ ] Commit 5 — Step 5: layout regression test
+- [x] Commit 5 — Step 5: layout regression test (22/22 passed)
 
 ## Context
 
