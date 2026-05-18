@@ -48,11 +48,11 @@ void ui_state_reset(void) {
     g_ui_state = g_ui_state_defaults;
 }
 
-ReplStatusState ui_state_status(void) {
+UiStatusState ui_state_status(void) {
     return g_ui_state.status;
 }
 
-ReplStatusState *ui_state_status_mut(void) {
+UiStatusState *ui_state_status_mut(void) {
     return &g_ui_state.status;
 }
 
@@ -75,11 +75,11 @@ void ui_state_status_tick(void) {
         g_ui_state.status.ttl--;
 }
 
-ReplHelpState ui_state_help(void) {
+UiHelpState ui_state_help(void) {
     return g_ui_state.help;
 }
 
-ReplHelpState *ui_state_help_mut(void) {
+UiHelpState *ui_state_help_mut(void) {
     return &g_ui_state.help;
 }
 
@@ -91,19 +91,19 @@ void ui_state_help_reset(void) {
  * forwarders are gone. Callers use `variable_panel_view` /
  * `variable_panel_view_mut` directly. */
 
-ReplProfilePanelState ui_state_profile_panel(void) {
+UiProfilePanelState ui_state_profile_panel(void) {
     return g_ui_state.profile_panel;
 }
 
-ReplProfilePanelState *ui_state_profile_panel_mut(void) {
+UiProfilePanelState *ui_state_profile_panel_mut(void) {
     return &g_ui_state.profile_panel;
 }
 
-ReplViewportState ui_state_viewport(void) {
+UiViewportState ui_state_viewport(void) {
     return g_ui_state.viewport;
 }
 
-ReplViewportState *ui_state_viewport_mut(void) {
+UiViewportState *ui_state_viewport_mut(void) {
     return &g_ui_state.viewport;
 }
 
@@ -112,11 +112,11 @@ void ui_state_viewport_set_size(int window_w, int window_h) {
     g_ui_state.viewport.window_h = window_h;
 }
 
-ReplPointerState ui_state_pointer(void) {
+UiPointerState ui_state_pointer(void) {
     return g_ui_state.pointer;
 }
 
-ReplPointerState *ui_state_pointer_mut(void) {
+UiPointerState *ui_state_pointer_mut(void) {
     return &g_ui_state.pointer;
 }
 
@@ -135,11 +135,11 @@ void ui_state_pointer_set_button(int mouse_button) {
     g_ui_state.pointer.mouse_button = mouse_button;
 }
 
-ReplCodePanelRuntimeState ui_state_code_panel(void) {
+UiCodePanelRuntimeState ui_state_code_panel(void) {
     return g_ui_state.code_panel;
 }
 
-ReplCodePanelRuntimeState *ui_state_code_panel_mut(void) {
+UiCodePanelRuntimeState *ui_state_code_panel_mut(void) {
     return &g_ui_state.code_panel;
 }
 

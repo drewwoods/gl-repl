@@ -73,11 +73,11 @@ void editor_state_reset(void) {
     g_editor_state = *editor_state_get_defaults();
 }
 
-const ReplEditorBuffer *editor_state_buffer(void) {
+const EditorBuffer *editor_state_buffer(void) {
     return &g_editor_state.buffer;
 }
 
-ReplEditorBuffer *editor_state_buffer_mut(void) {
+EditorBuffer *editor_state_buffer_mut(void) {
     return &g_editor_state.buffer;
 }
 
@@ -119,7 +119,7 @@ static void editor_buffer_write_slot(char dst[MAX_LINE_LEN], const char *text) {
 }
 
 int editor_buffer_insert_lines(int pos, const char *const *lines, int count) {
-    ReplEditorBuffer *buf = &g_editor_state.buffer;
+    EditorBuffer *buf = &g_editor_state.buffer;
     int old_count = buf->line_count;
 
     if (count <= 0) return 1;
@@ -143,7 +143,7 @@ int editor_buffer_insert_line(int pos, const char *line) {
 }
 
 int editor_buffer_replace_line(int pos, const char *line) {
-    ReplEditorBuffer *buf = &g_editor_state.buffer;
+    EditorBuffer *buf = &g_editor_state.buffer;
     if (pos < 0 || pos >= MAX_COMMANDS) return 0;
     editor_buffer_write_slot(buf->lines[pos], line ? line : "");
     if (buf->line_count <= pos)
@@ -152,7 +152,7 @@ int editor_buffer_replace_line(int pos, const char *line) {
 }
 
 int editor_buffer_delete_range(int start, int count) {
-    ReplEditorBuffer *buf = &g_editor_state.buffer;
+    EditorBuffer *buf = &g_editor_state.buffer;
     int old_count = buf->line_count;
 
     if (count <= 0) return 1;
@@ -170,7 +170,7 @@ int editor_buffer_delete_range(int start, int count) {
 }
 
 int editor_buffer_load_lines(const char *const *lines, int count) {
-    ReplEditorBuffer *buf = &g_editor_state.buffer;
+    EditorBuffer *buf = &g_editor_state.buffer;
     if (count < 0) return 0;
     if (count > MAX_COMMANDS) count = MAX_COMMANDS;
 
@@ -254,9 +254,9 @@ void editor_input_clear(void);
 void editor_pending_newline_clear(void);
 void editor_cursor_pos_set(int cursor_pos);
 
-ReplEditorInputView editor_state_input(void) {
-    const ReplEditorInputState *in = &g_editor_state.input;
-    return (ReplEditorInputView){
+EditorInputView editor_state_input(void) {
+    const EditorInputState *in = &g_editor_state.input;
+    return (EditorInputView){
         .input = in->input,
         .input_capacity = MAX_INPUT_LEN,
         .input_len = in->input_len,
@@ -270,7 +270,7 @@ ReplEditorInputView editor_state_input(void) {
     };
 }
 
-ReplEditorInputState *editor_state_input_mut(void) {
+EditorInputState *editor_state_input_mut(void) {
     return &g_editor_state.input;
 }
 
@@ -357,7 +357,7 @@ void editor_cursor_pos_set_keep_anchor(int cursor_pos) {
 }
 
 void editor_cursor_pos_extend_selection(int new_pos) {
-    ReplEditorInputState *in = &g_editor_state.input;
+    EditorInputState *in = &g_editor_state.input;
     int old = in->cursor_pos;
 
     if (new_pos < 0) new_pos = 0;
@@ -454,11 +454,11 @@ void editor_pending_newline_clear(void) {
     g_editor_state.input.pending_newline_len = 0;
 }
 
-ReplSelectionState editor_state_selection(void) {
+EditorSelectionState editor_state_selection(void) {
     return g_editor_state.selection;
 }
 
-ReplSelectionState *editor_state_selection_mut(void) {
+EditorSelectionState *editor_state_selection_mut(void) {
     return &g_editor_state.selection;
 }
 
@@ -480,11 +480,11 @@ void editor_state_selection_set(int anchor_idx, int end_idx) {
     g_editor_state.selection.end_idx = end_idx;
 }
 
-ReplClipboardState editor_state_clipboard(void) {
+EditorClipboardState editor_state_clipboard(void) {
     return g_editor_state.clipboard;
 }
 
-ReplClipboardState *editor_state_clipboard_mut(void) {
+EditorClipboardState *editor_state_clipboard_mut(void) {
     return &g_editor_state.clipboard;
 }
 
@@ -520,7 +520,7 @@ void editor_state_clipboard_count_set(int line_count) {
 }
 
 void editor_clipboard_set_input_text(const char *text, int len) {
-    ReplClipboardState *cb = &g_editor_state.clipboard;
+    EditorClipboardState *cb = &g_editor_state.clipboard;
     if (!text || len <= 0) {
         cb->input_text_len = 0;
         cb->input_text[0] = '\0';
@@ -551,11 +551,11 @@ int editor_clipboard_input_text_len(void) {
     return g_editor_state.clipboard.input_text_len;
 }
 
-ReplSearchState editor_state_search(void) {
+EditorSearchState editor_state_search(void) {
     return g_editor_state.search;
 }
 
-ReplSearchState *editor_state_search_mut(void) {
+EditorSearchState *editor_state_search_mut(void) {
     return &g_editor_state.search;
 }
 
@@ -563,11 +563,11 @@ void editor_state_search_clear(void) {
     g_editor_state.search = editor_state_get_defaults()->search;
 }
 
-ReplAutocompleteState editor_state_autocomplete(void) {
+EditorAutocompleteState editor_state_autocomplete(void) {
     return g_editor_state.autocomplete;
 }
 
-ReplAutocompleteState *editor_state_autocomplete_mut(void) {
+EditorAutocompleteState *editor_state_autocomplete_mut(void) {
     return &g_editor_state.autocomplete;
 }
 
@@ -575,7 +575,7 @@ void editor_state_autocomplete_clear(void) {
     g_editor_state.autocomplete = editor_state_get_defaults()->autocomplete;
 }
 
-const EditorTransformerList *editor_state_transformers(void) {
+const UiTransformerList *editor_state_transformers(void) {
     return &g_editor_state.transformers;
 }
 
@@ -583,15 +583,15 @@ void editor_state_transformers_clear(void) {
     g_editor_state.transformers.count = 0;
 }
 
-int editor_state_transformers_append(const EditorTransformer *transformer) {
-    EditorTransformerList *list = &g_editor_state.transformers;
+int editor_state_transformers_append(const UiTransformer *transformer) {
+    UiTransformerList *list = &g_editor_state.transformers;
     if (!transformer || list->count >= MAX_TRANSFORMERS)
         return 0;
     list->items[list->count++] = *transformer;
     return 1;
 }
 
-const EditorHighlightList *editor_state_highlights(void) {
+const UiHighlightList *editor_state_highlights(void) {
     return &g_editor_state.highlights;
 }
 
@@ -600,11 +600,11 @@ void editor_state_highlights_clear(void) {
 }
 
 int editor_state_highlights_append(int line_idx, int char_start,
-                                   int char_end, HighlightKind kind) {
-    EditorHighlightList *list = &g_editor_state.highlights;
+                                   int char_end, UiHighlightKind kind) {
+    UiHighlightList *list = &g_editor_state.highlights;
     if (list->count >= MAX_HIGHLIGHTS)
         return 0;
-    list->items[list->count++] = (EditorHighlight){
+    list->items[list->count++] = (UiHighlight){
         .line_idx = line_idx,
         .char_start = char_start,
         .char_end = char_end,
@@ -613,7 +613,7 @@ int editor_state_highlights_append(int line_idx, int char_start,
     return 1;
 }
 
-const EditorVirtualLineList *editor_state_virtual_lines(void) {
+const UiVirtualLineList *editor_state_virtual_lines(void) {
     return &g_editor_state.virtual_lines;
 }
 
@@ -622,13 +622,13 @@ void editor_state_virtual_lines_clear(void) {
 }
 
 int editor_state_virtual_lines_append(int after_line_idx,
-                                      VirtualLineStyle style,
+                                      UiVirtualLineStyle style,
                                       const char *text,
                                       const char *aux) {
-    EditorVirtualLineList *list = &g_editor_state.virtual_lines;
+    UiVirtualLineList *list = &g_editor_state.virtual_lines;
     if (list->count >= MAX_VIRTUAL_LINES)
         return 0;
-    EditorVirtualLine *vl = &list->items[list->count++];
+    UiVirtualLine *vl = &list->items[list->count++];
     vl->after_line_idx = after_line_idx;
     vl->style = style;
     if (text) {
@@ -647,7 +647,7 @@ int editor_state_virtual_lines_append(int after_line_idx,
 }
 
 int editor_state_virtual_lines_count_for(int after_line_idx) {
-    const EditorVirtualLineList *list = &g_editor_state.virtual_lines;
+    const UiVirtualLineList *list = &g_editor_state.virtual_lines;
     int count = 0;
     if (after_line_idx < 0)
         return 0;
@@ -658,7 +658,7 @@ int editor_state_virtual_lines_count_for(int after_line_idx) {
     return count;
 }
 
-const EditorLineOverrideList *editor_state_line_overrides(void) {
+const UiLineOverrideList *editor_state_line_overrides(void) {
     return &g_editor_state.line_overrides;
 }
 
@@ -667,8 +667,8 @@ void editor_state_line_overrides_clear(void) {
 }
 
 int editor_state_line_overrides_append(int line_idx, const char *text) {
-    EditorLineOverrideList *list = &g_editor_state.line_overrides;
-    EditorLineOverride *o;
+    UiLineOverrideList *list = &g_editor_state.line_overrides;
+    UiLineOverride *o;
     if (list->count >= MAX_LINE_OVERRIDES)
         return 0;
     o = &list->items[list->count++];
@@ -683,7 +683,7 @@ int editor_state_line_overrides_append(int line_idx, const char *text) {
 }
 
 const char *editor_state_line_override_for(int line_idx) {
-    const EditorLineOverrideList *list = &g_editor_state.line_overrides;
+    const UiLineOverrideList *list = &g_editor_state.line_overrides;
     if (line_idx < 0)
         return NULL;
     for (int i = 0; i < list->count; i++) {

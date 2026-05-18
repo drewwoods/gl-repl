@@ -185,7 +185,7 @@ static void fill_guide_arg_slots(SceneGuideSnapshot *snapshot,
 static SceneGuideSnapshot glr_ctrl_build_guide_snapshot(const SceneRenderConfig *config) {
     GlrPresentationState presentation = glr_state_presentation();
     ReplVariableView vars = repl_state_variables();
-    ReplEditorInputView input = editor_state_input();
+    EditorInputView input = editor_state_input();
     int edit_line = repl_state_edit_line();
 
     SceneGuideSnapshot snapshot = {
@@ -241,7 +241,7 @@ static void tess_preview_vertex(float x, float y, float z, void *ud) {
 }
 static void tess_preview_end_contour(void *ud) { (void)ud; glEnd(); }
 
-static const ReplTessPreviewCallbacks g_tess_preview_cb = {
+static const ReplayTessPreviewCallbacks g_tess_preview_cb = {
     .begin_contour = tess_preview_begin_contour,
     .vertex        = tess_preview_vertex,
     .end_contour   = tess_preview_end_contour,
@@ -376,14 +376,14 @@ static void glr_ctrl_post_fill_replay_overlay(void *user_data) {
  * here in the controller — scene/overlays.c just exposes
  * scene_draw_vertex_number_label / scene_draw_normal_vector_arrow. */
 
-static void on_vertex_number_label(const ReplVertexWalkState *state,
+static void on_vertex_number_label(const ReplayVertexWalkState *state,
                                    float vx, float vy, float vz,
                                    void *user) {
     (void)user;
     scene_draw_vertex_number_label(state->vertex_idx_in_block, vx, vy, vz);
 }
 
-static void on_normal_vector_arrow(const ReplVertexWalkState *state,
+static void on_normal_vector_arrow(const ReplayVertexWalkState *state,
                                    float vx, float vy, float vz,
                                    void *user) {
     float scale = *(const float *)user;
@@ -394,11 +394,11 @@ static void on_normal_vector_arrow(const ReplVertexWalkState *state,
                                    scale);
 }
 
-static ReplVertexWalkContext glr_ctrl_build_vertex_walk_context(int selected_block_only) {
+static ReplayVertexWalkContext glr_ctrl_build_vertex_walk_context(int selected_block_only) {
     GlrPresentationState presentation = glr_state_presentation();
     (void)presentation;  /* might be useful for future overlay variants */
 
-    ReplVertexWalkContext ctx = {
+    ReplayVertexWalkContext ctx = {
         .program                = repl_state_flat_program_view(),
         .edit_line_idx          = repl_state_edit_line(),
         .cursor_block_begin     = repl_state_flat_program_current_block_begin(),
@@ -415,10 +415,10 @@ static void glr_ctrl_render_vertex_numbers(void) {
     glDisable(GL_DEPTH_TEST);
     scene_clr(SCENE_CLR_VERTEX_LABEL);
 
-    static const ReplVertexWalkCallbacks cb = {
+    static const ReplayVertexWalkCallbacks cb = {
         .on_vertex = on_vertex_number_label,
     };
-    ReplVertexWalkContext ctx = glr_ctrl_build_vertex_walk_context(1);
+    ReplayVertexWalkContext ctx = glr_ctrl_build_vertex_walk_context(1);
     replay_walk_user_vertices(&ctx, &cb, NULL);
 
     glPopAttrib();
@@ -430,11 +430,11 @@ static void glr_ctrl_render_normal_vectors(void) {
     glDisable(GL_DEPTH_TEST);
     scene_clr(SCENE_CLR_NORMAL_LABEL);
 
-    static const ReplVertexWalkCallbacks cb = {
+    static const ReplayVertexWalkCallbacks cb = {
         .on_vertex = on_normal_vector_arrow,
     };
     float scale = 0.35f;
-    ReplVertexWalkContext ctx = glr_ctrl_build_vertex_walk_context(0);
+    ReplayVertexWalkContext ctx = glr_ctrl_build_vertex_walk_context(0);
     replay_walk_user_vertices(&ctx, &cb, &scale);
 
     glPopAttrib();
@@ -799,7 +799,7 @@ cursor_guide_snapshot_with_flat_args(const SceneGuideSnapshot *snapshot,
     return snap;
 }
 
-static void on_cmd_render_cursor_guides(const ReplVertexWalkState *state,
+static void on_cmd_render_cursor_guides(const ReplayVertexWalkState *state,
                                          void *user) {
     CursorGuideRenderCtx *ctx = (CursorGuideRenderCtx *)user;
     int is_cursor = (state->src_cmd_idx == ctx->snapshot->edit_line_idx);
@@ -858,10 +858,10 @@ static void glr_ctrl_render_cursor_guides(const SceneGuideSnapshot *snapshot) {
     glPushMatrix();
     glGetFloatv(GL_MODELVIEW_MATRIX, ctx.cam_view);
 
-    static const ReplVertexWalkCallbacks cb = {
+    static const ReplayVertexWalkCallbacks cb = {
         .on_each_cmd = on_cmd_render_cursor_guides,
     };
-    ReplVertexWalkContext walk = glr_ctrl_build_vertex_walk_context(0);
+    ReplayVertexWalkContext walk = glr_ctrl_build_vertex_walk_context(0);
     walk.stop_flag = &ctx.early_stop;
     replay_walk_user_vertices(&walk, &cb, &ctx);
 
@@ -981,7 +981,7 @@ static void glr_ctrl_push_color_transformers(void) {
         int has_alpha = (cmd->type == CMD_COLOR4F ||
                          cmd->type == CMD_TESS_COLOR ||
                          cmd->type == CMD_CLEAR_COLOR);
-        EditorTransformer t = {
+        UiTransformer t = {
             .line_idx = i,
             .char_start = -1,
             .char_end = -1,
@@ -1012,7 +1012,7 @@ static void glr_ctrl_notify_audio_gesture_once(void) {
     audio_on_user_gesture();
 }
 
-static void glr_ctrl_apply_input_effects(ReplInputDispatchEffects effects) {
+static void glr_ctrl_apply_input_effects(EditorInputDispatchEffects effects) {
     if (effects.set_cursor)
         glutSetCursor(effects.cursor);
     if (effects.request_redraw)
@@ -1066,7 +1066,7 @@ typedef enum {
 
 static int g_view_mode_target_ortho = 0;
 static GlrViewTransitionPhase g_view_xn_phase = GLR_VIEW_XN_IDLE;
-static ReplCameraState g_saved_3d_camera;
+static GlrCameraState g_saved_3d_camera;
 static int g_saved_3d_camera_valid = 0;
 
 static float smoothstep01(float t) {
@@ -1087,7 +1087,7 @@ static void glr_ctrl_sync_camera_control_mode(void) {
 }
 
 static void glr_ctrl_start_camera_to_2d(void) {
-    ReplCameraState cam = glr_camera();
+    GlrCameraState cam = glr_camera();
     if (!g_saved_3d_camera_valid || g_view_xn_phase == GLR_VIEW_XN_IDLE) {
         g_saved_3d_camera = cam;
         g_saved_3d_camera_valid = 1;
@@ -1097,8 +1097,8 @@ static void glr_ctrl_start_camera_to_2d(void) {
 }
 
 static void glr_ctrl_start_camera_to_3d(void) {
-    ReplCameraState cam;
-    ReplCameraState target;
+    GlrCameraState cam;
+    GlrCameraState target;
 
     if (!g_saved_3d_camera_valid) {
         g_view_xn_phase = GLR_VIEW_XN_IDLE;
@@ -1200,7 +1200,7 @@ static void glr_ctrl_build_scene_config(SceneRenderConfig *config) {
     GlrRenderState render = glr_state_render();
     ReplRenderState repl_render = repl_state_render();
     GlrPresentationState presentation = glr_state_presentation();
-    ReplCameraState cam = glr_camera();
+    GlrCameraState cam = glr_camera();
     const float *grid_major_steps = glr_state_grid_major_steps();
     const float *grid_extents = glr_state_grid_extents();
     float bg_lum;
@@ -1621,7 +1621,7 @@ void glr_ctrl_display_frame(void) {
         prof_accum_reset(section_idx);
     prof_begin(PROF_SCENE_3D);
     {
-        ReplCameraState cam = glr_camera();
+        GlrCameraState cam = glr_camera();
         scene_apply_camera(cam.rx, cam.ry, cam.dist, cam.tx, cam.ty, cam.tz);
     }
     if (scene_render_3d_scene(&scene_config) != 0) {
@@ -1773,7 +1773,7 @@ static const ReplExportProjectionBridge g_export_projection_bridge_impl = {
  * controller installs at startup; the demo leaves both unset. */
 static void glr_app_editor_input_reset(void) {
     editor_insert_mode_set(0);
-    ReplEditorInputState *inp = editor_state_input_mut();
+    EditorInputState *inp = editor_state_input_mut();
     inp->input[0] = '\0';
     inp->input_len = 0;
     editor_cursor_pos_set(0);
@@ -1827,7 +1827,7 @@ void glr_publish_replay_annotations(const ReplReplayAnnotationOutput *out) {
     if (!out) return;
     for (int i = 0; i < out->count; i++) {
         const ReplReplayAnnotation *row = &out->items[i];
-        VirtualLineStyle style;
+        UiVirtualLineStyle style;
         switch (row->kind) {
         case REPL_REPLAY_ANNOTATION_KIND_SUBST:
             style = VIRTUAL_STYLE_REPLAY_SUBST;
@@ -1992,7 +1992,7 @@ void glr_app_reset_all(void) {
 
 void glr_ctrl_sync_ui_chrome(void) {
     GlrPresentationState p = glr_state_presentation();
-    ReplCodePanelRuntimeState *cp = ui_state_code_panel_mut();
+    UiCodePanelRuntimeState *cp = ui_state_code_panel_mut();
     cp->layout_mode         = p.code_panel_layout;
     cp->show_vertex_indices = p.show_vertex_indices;
     cp->wrap_at_comma       = p.wrap_at_comma;
@@ -2218,7 +2218,7 @@ void glr_ctrl_fill_export_layout(ReplExportLayout *out) {
     ui_layout_scene_rect(&sx, &sy, &sw, &sh);
     ui_layout_code_panel_rect(&cx, &cy, &cw, &ch);
     GlrPresentationState p = glr_state_presentation();
-    ReplViewportState    v = ui_state_viewport();
+    UiViewportState    v = ui_state_viewport();
     *out = (ReplExportLayout){
         .viewport_w          = v.window_w,
         .viewport_h          = v.window_h,
@@ -2244,7 +2244,7 @@ void glr_ctrl_fill_export_layout(ReplExportLayout *out) {
  *
  * Helpers are exported (declared in imrepl_ctrl.h) so test fixtures
  * can drive a single routing concern without applying GLUT effects.
- * Helpers fill the editor_input ReplInputDispatchEffects via
+ * Helpers fill the editor_input EditorInputDispatchEffects via
  * editor_request_redraw etc.; glutPostRedisplay / glutSetCursor /
  * glutTimerFunc fire only from glr_ctrl_apply_input_effects, which
  * the dispatch entry points call after the helpers. Test fixtures
@@ -2438,7 +2438,7 @@ int glr_ctrl_router_handle_help_scroll_special(int key) {
 
 /* Shared by the F1 key and the status-bar "F1 help" keycap click. */
 void glr_ctrl_toggle_help(void) {
-    ReplHelpState *help = ui_state_help_mut();
+    UiHelpState *help = ui_state_help_mut();
     help->visible = !help->visible;
     editor_help_session_set_tab(0);
     editor_help_session_set_scroll(0);
@@ -2576,7 +2576,7 @@ static int glr_ctrl_apply_variable_panel_value_change(
         const VariablePanelValueChange *value_change) {
     ReplCompiledChange compiled;
     ReplCompileContext ctx;
-    ReplVariableDragState drag;
+    EditorVariableDragState drag;
     char err[REPL_STATUS_TEXT_MAX] = "";
     int var_idx;
     int capture_undo;
@@ -2934,10 +2934,10 @@ static int route_color_picker_control_hit(int x, int y) {
 static int route_pin_button_hit(const UiHit *hit) {
     ui_menu_bar_close();
     switch (hit->item_idx) {
-    case REPL_MENU_BAR_PIN_REPLAY:
+    case UI_MENU_BAR_PIN_REPLAY:
         replay_handle_pin_clicked();
         break;
-    case REPL_MENU_BAR_PIN_SEARCH:
+    case UI_MENU_BAR_PIN_SEARCH:
         handle_search_key(KEY_CTRL_F);
         ui_menu_bar_note_search_opened(repl_state_variables().anim_time);
         break;
@@ -3445,7 +3445,7 @@ void glr_ctrl_motion(int x, int y) {
     /* Editor's domain: panel resize tracking. editor_handle_motion is
      * a no-op when resizing_panel is clear. */
     if (ui_state_code_panel().resizing_panel) {
-        ReplInputDispatchEffects pre_editor = editor_take_input_effects();
+        EditorInputDispatchEffects pre_editor = editor_take_input_effects();
         glr_ctrl_apply_input_effects(editor_handle_motion(x, y));
         glr_ctrl_router_handle_camera_pointer_set(x, y);
         glr_ctrl_apply_input_effects(pre_editor);
@@ -3464,7 +3464,7 @@ void glr_ctrl_passive_motion(int x, int y) {
     /* Passive motion (no button held) just updates the pointer
      * position — there's no drag delta to preserve. */
     glr_ctrl_router_handle_camera_pointer_set(x, y);
-    ReplInputDispatchEffects editor_effects = editor_handle_passive_motion(x, y);
+    EditorInputDispatchEffects editor_effects = editor_handle_passive_motion(x, y);
     menu_hover_changed = ui_menu_bar_update_pointer_hover(x, y,
                                                           repl_state_variables().anim_time);
     if (menu_hover_changed)
@@ -3556,7 +3556,7 @@ void glr_ctrl_tick(void) {
     glr_ctrl_tick_overlay_xn();
 
     {
-        ReplCodePanelRuntimeState *code_panel_state = ui_state_code_panel_mut();
+        UiCodePanelRuntimeState *code_panel_state = ui_state_code_panel_mut();
         (code_panel_state->blink_tick)++;
         if (code_panel_state->blink_tick >= 30) {
             code_panel_state->blink_tick = 0;
@@ -3568,7 +3568,7 @@ void glr_ctrl_tick(void) {
         /* Inline rename no longer rides the status line (it owns its
          * own display state via the snapshot rename view), so the TTL
          * just ages normally. */
-        ReplStatusState *status = ui_state_status_mut();
+        UiStatusState *status = ui_state_status_mut();
         if (status->ttl > 0)
             status->ttl--;
     }

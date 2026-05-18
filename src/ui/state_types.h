@@ -33,26 +33,26 @@ typedef struct {
     int   wrap_at_comma;        /* mirror of presentation.wrap_at_comma */
     int   syntax_highlight;     /* mirror of presentation.syntax_highlight */
     int   code_focus;           /* mirror of presentation.code_focus */
-} ReplCodePanelRuntimeState;
+} UiCodePanelRuntimeState;
 
 /* Help-overlay visibility. Tab selection and scroll live in the separate
  * EditorHelpSession snapshot carried alongside this flag. */
 typedef struct {
     int visible;
-} ReplHelpState;
+} UiHelpState;
 
 typedef struct {
     int visible;
-} ReplVariablePanelState;
+} UiVariablePanelState;
 
 typedef struct {
     int mode;
-} ReplProfilePanelState;
+} UiProfilePanelState;
 
 typedef struct {
     char text[REPL_STATUS_TEXT_MAX];
     int  ttl;
-} ReplStatusState;
+} UiStatusState;
 
 /* Camera pose is intentionally not part of the UI chrome types. See
  * glr_camera.h for the app-owned orbit/pan/zoom state. */
@@ -61,11 +61,11 @@ typedef struct {
     int mouse_x;
     int mouse_y;
     int mouse_button;
-} ReplPointerState;
+} UiPointerState;
 
 typedef struct {
     int window_w;
     int window_h;
-} ReplViewportState;
+} UiViewportState;
 
 #endif /* UI_STATE_TYPES_H */

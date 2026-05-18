@@ -18,12 +18,12 @@
 /* Live UI-owned chrome state captured into UiRenderSnapshot each frame. */
 
 typedef struct {
-    ReplStatusState           status;
-    ReplHelpState             help;
-    ReplProfilePanelState     profile_panel;
-    ReplViewportState         viewport;
-    ReplPointerState          pointer;
-    ReplCodePanelRuntimeState code_panel;
+    UiStatusState           status;
+    UiHelpState             help;
+    UiProfilePanelState     profile_panel;
+    UiViewportState         viewport;
+    UiPointerState          pointer;
+    UiCodePanelRuntimeState code_panel;
 } UiState;
 
 void ui_state_capture(UiState *snapshot);
@@ -31,29 +31,29 @@ void ui_state_restore(const UiState *snapshot);
 void ui_state_reset(void);
 
 /* Status slice. */
-ReplStatusState  ui_state_status(void);
-ReplStatusState *ui_state_status_mut(void);
+UiStatusState  ui_state_status(void);
+UiStatusState *ui_state_status_mut(void);
 void             ui_state_status_set(const char *message);
 void             ui_state_status_clear(void);
 void             ui_state_status_tick(void);
 
 /* Help overlay visibility. */
-ReplHelpState  ui_state_help(void);
-ReplHelpState *ui_state_help_mut(void);
+UiHelpState  ui_state_help(void);
+UiHelpState *ui_state_help_mut(void);
 void           ui_state_help_reset(void);
 
 /* Profile panel mode. */
-ReplProfilePanelState  ui_state_profile_panel(void);
-ReplProfilePanelState *ui_state_profile_panel_mut(void);
+UiProfilePanelState  ui_state_profile_panel(void);
+UiProfilePanelState *ui_state_profile_panel_mut(void);
 
 /* Viewport size. */
-ReplViewportState  ui_state_viewport(void);
-ReplViewportState *ui_state_viewport_mut(void);
+UiViewportState  ui_state_viewport(void);
+UiViewportState *ui_state_viewport_mut(void);
 void               ui_state_viewport_set_size(int window_w, int window_h);
 
 /* Pointer state. */
-ReplPointerState  ui_state_pointer(void);
-ReplPointerState *ui_state_pointer_mut(void);
+UiPointerState  ui_state_pointer(void);
+UiPointerState *ui_state_pointer_mut(void);
 void              ui_state_pointer_set(int mouse_x, int mouse_y, int mouse_button);
 void              ui_state_pointer_set_pos(int mouse_x, int mouse_y);
 void              ui_state_pointer_set_button(int mouse_button);
@@ -61,8 +61,8 @@ void              ui_state_pointer_set_button(int mouse_button);
 /* Code-panel render chrome: panel divider, cursor blink, cursor px/py.
  * The editor-session bits (scroll / scroll_follow_cursor) live on
  * EditorState.scroll instead. */
-ReplCodePanelRuntimeState  ui_state_code_panel(void);
-ReplCodePanelRuntimeState *ui_state_code_panel_mut(void);
+UiCodePanelRuntimeState  ui_state_code_panel(void);
+UiCodePanelRuntimeState *ui_state_code_panel_mut(void);
 void                       ui_state_code_panel_reset(void);
 
 /* Camera pose is not part of UiState; use glr_camera.h for orbit/pan/zoom

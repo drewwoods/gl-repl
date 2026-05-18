@@ -268,7 +268,7 @@ static void test_color_picker(void) {
      * from the document, so build a minimal one for the test. */
     gl_stub_counts_reset();
     {
-        EditorTransformer t = {
+        UiTransformer t = {
             .line_idx = 0,
             .char_start = -1,
             .char_end = -1,
@@ -706,7 +706,7 @@ static void test_ui_panels_hit_test_code_text_cursor(void) {
 
     /* Empty input → click resolves char_idx == 0 regardless of mx. */
     {
-        ReplEditorInputState *inp = editor_state_input_mut();
+        EditorInputState *inp = editor_state_input_mut();
         inp->input[0] = '\0';
         inp->input_len = 0;
     }
@@ -721,7 +721,7 @@ static void test_ui_panels_hit_test_code_text_cursor(void) {
      * on segment / indent math but the property holds: clicking
      * further right yields a higher char_idx (capped at input_len). */
     {
-        ReplEditorInputState *inp = editor_state_input_mut();
+        EditorInputState *inp = editor_state_input_mut();
         strcpy(inp->input, "abcdef");
         inp->input_len = 6;
     }

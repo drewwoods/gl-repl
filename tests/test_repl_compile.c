@@ -70,7 +70,7 @@ static ComputeFingerprint capture_fingerprint(void) {
     fp.insert_mode     = editor_insert_mode();
     fp.num_predef_vars = g_num_predef_vars;
 
-    ReplStatusState st = ui_state_status();
+    UiStatusState st = ui_state_status();
     strncpy(fp.status_text, st.text, sizeof(fp.status_text) - 1);
     fp.status_text[sizeof(fp.status_text) - 1] = '\0';
     fp.status_ttl = st.ttl;

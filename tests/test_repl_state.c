@@ -36,11 +36,11 @@ static void populate_runtime_snapshot_fixture(const char *scene_hint) {
     GLCmd *doc_cmds;
     GLCmd *flat_cmds;
     FlatCmdLocalVars *flat_locals;
-    ReplClipboardState *clipboard;
-    ReplCodePanelRuntimeState *code_panel;
-    ReplStatusState *status;
-    ReplAutocompleteState *ac;
-    ReplVariableDragState *drag;
+    EditorClipboardState *clipboard;
+    UiCodePanelRuntimeState *code_panel;
+    UiStatusState *status;
+    EditorAutocompleteState *ac;
+    EditorVariableDragState *drag;
     ReplImportExportState *io;
     ReplSceneRuntimeState *scenes;
     GlrPresentationState *presentation;
@@ -206,8 +206,8 @@ static void test_capture_restore_round_trip(void) {
     static ReplRuntimeState round_trip;
     static GlrState glr_snap;
     static GlrState glr_round_trip;
-    static ReplCameraState camera_snap;
-    static ReplCameraState camera_round_trip;
+    static GlrCameraState camera_snap;
+    static GlrCameraState camera_round_trip;
     static EditorState editor_snap;
     static EditorState editor_round_trip;
     static UiState ui_snap;
@@ -290,9 +290,9 @@ static void test_capture_restore_round_trip(void) {
     ASSERT_INT("profile panel restored",
                ui_state_profile_panel().mode, PROFILE_PANEL_DETAILS);
     {
-        ReplStatusState status = ui_state_status();
-        ReplSearchState search = editor_state_search();
-        ReplAutocompleteState autocomplete = editor_state_autocomplete();
+        UiStatusState status = ui_state_status();
+        EditorSearchState search = editor_state_search();
+        EditorAutocompleteState autocomplete = editor_state_autocomplete();
 
         ASSERT_STR("status text restored", status.text, "state snapshot");
         ASSERT_INT("status ttl restored", status.ttl, 17);

@@ -49,7 +49,7 @@ typedef struct {
     char  predef_names[MAX_PREDEF_VARS][16];
     int   num_predef_vars;
     char  func_aliases[REPL_FUNC_SLOT_COUNT][REPL_FUNC_NAME_MAX];
-} ReplUndoSnapshot;
+} EditorUndoSnapshot;
 
 /* Ring state descriptors: exposed for test access to undo/redo ring pointers
  * without revealing the full history buffers. undo_head is the index of the
@@ -60,20 +60,20 @@ typedef struct {
     int undo_count;
     int redo_head;
     int redo_count;
-} ReplUndoRingState;
+} EditorUndoRingState;
 
 /* Save/restore helpers for manual snapshot capture and restore. Used by
  * import/export code to preserve full state without involving the history
  * rings. editor_undo_snapshot_save() captures current editor state;
  * editor_undo_snapshot_restore() reverts to a prior snapshot. */
-void editor_undo_snapshot_save(ReplUndoSnapshot *snapshot);
-void editor_undo_snapshot_restore(const ReplUndoSnapshot *snapshot);
+void editor_undo_snapshot_save(EditorUndoSnapshot *snapshot);
+void editor_undo_snapshot_restore(const EditorUndoSnapshot *snapshot);
 
 /* Ring state inspection: capture and restore the internal undo/redo head/count
  * pointers. Used by tests to verify ring state without exposing the history
  * buffers themselves. */
-void editor_undo_ring_state_capture(ReplUndoRingState *state);
-void editor_undo_ring_state_restore(const ReplUndoRingState *state);
+void editor_undo_ring_state_capture(EditorUndoRingState *state);
+void editor_undo_ring_state_restore(const EditorUndoRingState *state);
 
 /* Undo/redo operations. editor_undo_push_snapshot() saves current editor state
  * to the undo ring and clears the redo ring; called before any mutation.

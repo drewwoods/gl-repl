@@ -24,7 +24,7 @@ direct_hits=$(grep -RIn \
 
 menu_hits=$(grep -RInE \
     --include='*.c' \
-    'repl_action_menu_item_activate\(.*REPL_MENU_FILE.*REPL_FILE_ITEM_EXPORT|repl_action_menu_item_activate\(.*REPL_MENU_SCENE.*REPL_SCENE_OFF_SAVE' \
+    'repl_action_menu_item_activate\(.*REPL_MENU_FILE.*GLR_FILE_ITEM_EXPORT|repl_action_menu_item_activate\(.*REPL_MENU_SCENE.*REPL_SCENE_OFF_SAVE' \
     tests/ 2>/dev/null | grep -vE '^\./\.claude/worktrees/' || true)
 
 save_key_hits=$(grep -RIn \

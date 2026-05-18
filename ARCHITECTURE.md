@@ -176,7 +176,7 @@ derived from it instead of poking raw global arrays.
 `GLCmd` is a pure parse-result struct: `type`, `args[]`, validity / vars
 flags, and provenance fields (`src_cmd_idx`, `call_src_cmd_idx`, etc.).
 There is no `source[]` member. Per-line text lives in
-`ReplEditorBuffer.lines[MAX_COMMANDS][MAX_LINE_LEN]` inside
+`EditorBuffer.lines[MAX_COMMANDS][MAX_LINE_LEN]` inside
 `ReplRuntimeState`. The parser returns both the `GLCmd` and the
 canonical text in `ReplParsedLine { GLCmd cmd; char text[MAX_LINE_LEN] }`;
 commit code passes both to text-aware command-store APIs
@@ -187,9 +187,9 @@ Persistence sidecars carry parallel `lines[][]` arrays:
 
 | Persisted form | Module |
 |---|---|
-| Undo / redo snapshots | `repl_undo` (`ReplUndoSnapshot.editor_lines`) |
+| Undo / redo snapshots | `repl_undo` (`EditorUndoSnapshot.editor_lines`) |
 | User-scene slots | `repl_scenes` (workspace save / load + LRU eviction) |
-| Clipboard cmds | `ReplClipboardState.lines` |
+| Clipboard cmds | `EditorClipboardState.lines` |
 | Single-file / workspace export | `repl_export` (no extra sidecar; export reads `editor_buffer`) |
 
 Flat commands have no text of their own. `repl_flat_cmd_text(flat_cmd)`
@@ -203,9 +203,9 @@ once and the UI consumes read-only. The snapshot family lives in
 
 | List | Push helper | What it carries |
 |---|---|---|
-| `EditorTransformerList editor_transformers` | `glr_ctrl_push_color_transformers()` | One entry per editable color command (line idx + r/g/b/a/has_alpha/is_clear). Drives inline swatch render and color-picker hit-test. Future kinds: numeric slider. |
-| `EditorHighlightList editor_highlights` | `glr_ctrl_push_highlights()` | Feeding-normal cmd, feeding-color cmd, replay PC, search match, selection. Rendered as gutter accents and row backgrounds. |
-| `EditorVirtualLineList editor_virtual_lines` | `replay_annotations_prepare()` (via `_refresh_virtual_lines()`) | Replay-time annotation rows (substitution + evaluation) attached to the current source line. Layout, scroll, hit-test, and render all read from this list, so virtual-row counts have one source of truth (`replay_annotation_extra_rows_for_line()` counts the list). |
+| `UiTransformerList editor_transformers` | `glr_ctrl_push_color_transformers()` | One entry per editable color command (line idx + r/g/b/a/has_alpha/is_clear). Drives inline swatch render and color-picker hit-test. Future kinds: numeric slider. |
+| `UiHighlightList editor_highlights` | `glr_ctrl_push_highlights()` | Feeding-normal cmd, feeding-color cmd, replay PC, search match, selection. Rendered as gutter accents and row backgrounds. |
+| `UiVirtualLineList editor_virtual_lines` | `replay_annotations_prepare()` (via `_refresh_virtual_lines()`) | Replay-time annotation rows (substitution + evaluation) attached to the current source line. Layout, scroll, hit-test, and render all read from this list, so virtual-row counts have one source of truth (`replay_annotation_extra_rows_for_line()` counts the list). |
 
 All three lists are stored on `ReplRuntimeState` as named slices and
 exposed via `repl_state_editor_*()` accessors (read-only view in
@@ -518,7 +518,7 @@ signature for audited renderers.
 
 * by-value `Repl*State` slices (presentation, code_panel, render, replay,
   search, autocomplete, status, …) — small structs cheap to copy
-* pointer-shaped read-only views (`ReplVariableView`, `ReplEditorInputView`,
+* pointer-shaped read-only views (`ReplVariableView`, `EditorInputView`,
   `ReplImportExportView`, `FlatProgramView`, `ReplPredefView`)
 * document/flat metadata (`document_cmds`, `document_count`, `edit_line`,
   `flat_program_count`, …)
@@ -531,17 +531,17 @@ signature for audited renderers.
   `current_begin_mode`
 
 Slices that would have been heavy to copy are deliberately excluded:
-`ReplClipboardState` (~1.88 MB with the lines sidecar) is not on the
+`EditorClipboardState` (~1.88 MB with the lines sidecar) is not on the
 snapshot — the per-row selection band reads `selection_lo/_hi` instead.
 
 **Two selection models, one clipboard.** `selection_lo/_hi` above is
 the *line-range* selection used by gutter drag and the multi-line
-clipboard (`anchor_idx`/`end_idx` on `ReplSelectionState`). The
+clipboard (`anchor_idx`/`end_idx` on `EditorSelectionState`). The
 *input-buffer* selection is a separate character-range model on
-`ReplEditorInputState.anchor_pos`, scoped to the active edit row only
+`EditorInputState.anchor_pos`, scoped to the active edit row only
 — shift+arrow, double-click word, drag-on-edit-row, and partial-line
 copy/cut/paste all drive that anchor. The two share one tagged
-clipboard object (`ReplClipboardState` carries an `EditorClipboardKind`
+clipboard object (`EditorClipboardState` carries an `EditorClipboardKind`
 discriminator plus both a line array and an `input_text` slot) so
 `Ctrl+V` after a partial copy pastes characters and `Ctrl+V` after a
 line copy still pastes whole commands. Input selection wins over
@@ -1155,15 +1155,15 @@ state (see `done/editor-input-selection.md` Phase A item 6).
 
 The `feature/editor-owns-text.md` track (Steps 2–6) is complete:
 
-* `GLCmd.source[]` removed; per-line text owned by `ReplEditorBuffer`.
+* `GLCmd.source[]` removed; per-line text owned by `EditorBuffer`.
 * Parser returns `ReplParsedLine`; commit-store APIs are text-aware.
 * Text sidecars added to undo snapshots, user scenes, and clipboard.
-* Color picker rebuilt as a controller-pushed `EditorTransformer` with
+* Color picker rebuilt as a controller-pushed `UiTransformer` with
   store `replace_one(... line)` writeback (no more `set_color` API).
-* Cross-line `EditorHighlight` snapshot replaces inline `repl_find_feeding_*`
+* Cross-line `UiHighlight` snapshot replaces inline `repl_find_feeding_*`
   calls in render.
 * Replay annotations move from inline row injection to controller-pushed
-  `EditorVirtualLine` rows; layout / scroll / hit-test / render share one
+  `UiVirtualLine` rows; layout / scroll / hit-test / render share one
   source-of-truth count.
 
 The deferred sub-task is the color-scheme + syntax-keyword extraction

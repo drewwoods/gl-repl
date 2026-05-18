@@ -84,19 +84,19 @@ typedef enum {
     COMMIT_REJECTED
 } CommitResult;
 
-static ReplModifierProvider g_modifier_provider_for_test = NULL;
-static ReplInputDispatchEffects g_pending_input_effects = {0};
+static EditorModifierProvider g_modifier_provider_for_test = NULL;
+static EditorInputDispatchEffects g_pending_input_effects = {0};
 
-void editor_input_set_modifier_provider_for_test(ReplModifierProvider provider) {
+void editor_input_set_modifier_provider_for_test(EditorModifierProvider provider) {
     g_modifier_provider_for_test = provider;
 }
 
 void editor_reset_input_effects(void) {
-    g_pending_input_effects = (ReplInputDispatchEffects){0};
+    g_pending_input_effects = (EditorInputDispatchEffects){0};
 }
 
-ReplInputDispatchEffects editor_take_input_effects(void) {
-    ReplInputDispatchEffects out = g_pending_input_effects;
+EditorInputDispatchEffects editor_take_input_effects(void) {
+    EditorInputDispatchEffects out = g_pending_input_effects;
     editor_reset_input_effects();
     return out;
 }
@@ -249,13 +249,13 @@ void editor_clear_all_cmds(void) {
     repl_state_edit_line_set(0);
     editor_insert_mode_set(0);
     {
-        ReplEditorInputState *inp = editor_state_input_mut();
+        EditorInputState *inp = editor_state_input_mut();
         inp->input[0] = '\0';
         inp->input_len = 0;
     }
     editor_cursor_pos_set(0);
     {
-        ReplEditorInputState *inp = editor_state_input_mut();
+        EditorInputState *inp = editor_state_input_mut();
         inp->pending_newline[0] = '\0';
         inp->pending_newline_len = 0;
     }
@@ -270,7 +270,7 @@ static const char *editor_committed_line_text(int idx) {
 }
 
 void load_line_to_input(int idx) {
-    ReplEditorInputState *inp = editor_state_input_mut();
+    EditorInputState *inp = editor_state_input_mut();
     if (idx >= 0 && idx < repl_state_document_count()) {
         if (tutorial_line_is_locked(idx)) {
             editor_input_clear();
@@ -329,7 +329,7 @@ void load_line_to_input(int idx) {
 }
 
 static void save_newline_buf(void) {
-    ReplEditorInputState *inp = editor_state_input_mut();
+    EditorInputState *inp = editor_state_input_mut();
     memcpy(inp->pending_newline, inp->input, (size_t)inp->input_len + 1);
     inp->pending_newline_len = inp->input_len;
 }
@@ -465,7 +465,7 @@ static int parse_for_overwrite_enter(GLCmd *cmd, char *text_out, int text_sz,
 }
 
 typedef struct {
-    ReplUndoSnapshot undo;
+    EditorUndoSnapshot undo;
     char input[MAX_INPUT_LEN];
     int input_len;
     int cursor_pos;
@@ -478,7 +478,7 @@ static CommitAttemptState g_commit_attempt_before;
 static CommitAttemptState g_navigation_commit_before;
 
 static void capture_commit_attempt_state(CommitAttemptState *s) {
-    ReplEditorInputView inp = editor_state_input();
+    EditorInputView inp = editor_state_input();
     editor_undo_snapshot_save(&s->undo);
     memcpy(s->input, inp.input, sizeof(s->input));
     s->input_len = inp.input_len;
@@ -492,7 +492,7 @@ static void capture_commit_attempt_state(CommitAttemptState *s) {
  * buffer.  The transient typed input stays discarded by the undo snapshot
  * restore; captured input fields are used only to detect commit progress. */
 static void restore_commit_attempt_committed_state(const CommitAttemptState *s) {
-    ReplEditorInputState *inp = editor_state_input_mut();
+    EditorInputState *inp = editor_state_input_mut();
     memcpy(inp->pending_newline, s->newline_buf, sizeof(s->newline_buf));
     inp->pending_newline_len = s->newline_len;
     editor_undo_snapshot_restore(&s->undo);
@@ -512,13 +512,13 @@ static int input_matches_committed_line(int line) {
         slen--;
 
     {
-        ReplEditorInputView inp = editor_state_input();
+        EditorInputView inp = editor_state_input();
         return slen == inp.input_len && strncmp(inp.input, s, (size_t)slen) == 0;
     }
 }
 
 static int commit_progressed_since(const CommitAttemptState *s) {
-    ReplEditorInputView inp = editor_state_input();
+    EditorInputView inp = editor_state_input();
     if (repl_state_document_count() != s->undo.num_cmds ||
         repl_state_edit_line() != s->undo.edit_line ||
         editor_insert_mode() != s->inserting ||
@@ -563,7 +563,7 @@ static CommitResult commit_current_input(int enter_mode) {
                 repl_state_edit_line_set(repl_state_edit_line() + 1);
             editor_insert_mode_set(1);
             {
-                ReplEditorInputState *inp = editor_state_input_mut();
+                EditorInputState *inp = editor_state_input_mut();
                 inp->input[0] = '\0';
                 inp->input_len = 0;
             }
@@ -610,7 +610,7 @@ static CommitResult commit_current_input(int enter_mode) {
             if (enter_mode)
                 repl_state_edit_line_set(insert_pos + 1);
             {
-                ReplEditorInputState *inp = editor_state_input_mut();
+                EditorInputState *inp = editor_state_input_mut();
                 inp->input[0] = '\0';
                 inp->input_len = 0;
             }
@@ -674,7 +674,7 @@ static CommitResult commit_current_input(int enter_mode) {
                 editor_buffer_insert_line(insert_pos, cmd_text);
                 repl_state_edit_line_set(repl_state_edit_line() + 1);
                 {
-                    ReplEditorInputState *inp = editor_state_input_mut();
+                    EditorInputState *inp = editor_state_input_mut();
                     inp->input[0] = '\0';
                     inp->input_len = 0;
                 }
@@ -733,7 +733,7 @@ static CommitResult commit_current_input(int enter_mode) {
             repl_state_edit_line_set(repl_state_edit_line() + 1);
             editor_insert_mode_set(1);
             {
-                ReplEditorInputState *inp = editor_state_input_mut();
+                EditorInputState *inp = editor_state_input_mut();
                 inp->input[0] = '\0';
                 inp->input_len = 0;
             }
@@ -762,7 +762,7 @@ static CommitResult commit_current_input(int enter_mode) {
         repl_state_edit_line_set(repl_state_document_count());
         editor_insert_mode_set(1);
         {
-            ReplEditorInputState *inp = editor_state_input_mut();
+            EditorInputState *inp = editor_state_input_mut();
             inp->input[0] = '\0';
             inp->input_len = 0;
             inp->pending_newline[0] = '\0';
@@ -790,13 +790,13 @@ static CommitResult commit_current_input(int enter_mode) {
             editor_buffer_insert_line(insert_pos, cmd_text);
             repl_state_edit_line_set(repl_state_document_count());
             {
-                ReplEditorInputState *inp = editor_state_input_mut();
+                EditorInputState *inp = editor_state_input_mut();
                 inp->input[0] = '\0';
                 inp->input_len = 0;
             }
             editor_cursor_pos_set(0);
             {
-                ReplEditorInputState *inp = editor_state_input_mut();
+                EditorInputState *inp = editor_state_input_mut();
                 inp->pending_newline[0] = '\0';
                 inp->pending_newline_len = 0;
             }
@@ -811,7 +811,7 @@ static CommitResult commit_current_input(int enter_mode) {
 
 static CommitResult commit_before_navigation(void) {
     CommitAttemptState *before = &g_navigation_commit_before;
-    ReplUndoRingState undo_before;
+    EditorUndoRingState undo_before;
     char rejected_status[REPL_STATUS_TEXT_MAX];
     int rejected_ttl;
 
@@ -835,7 +835,7 @@ static CommitResult commit_before_navigation(void) {
     }
 
     {
-        ReplStatusState *status = ui_state_status_mut();
+        UiStatusState *status = ui_state_status_mut();
         memcpy(rejected_status, status->text, sizeof(rejected_status));
         rejected_ttl = status->ttl;
         restore_commit_attempt_committed_state(before);
@@ -905,7 +905,7 @@ static int editor_key_restores_hidden_code_panel(unsigned char key, int mods) {
 }
 
 static void keyboard_begin_key(unsigned char key) {
-    ReplCodePanelRuntimeState *code_panel_state = ui_state_code_panel_mut();
+    UiCodePanelRuntimeState *code_panel_state = ui_state_code_panel_mut();
     code_panel_state->cursor_visible = 1;
     code_panel_state->blink_tick = 0;
 
@@ -962,7 +962,7 @@ static int handle_escape_key_route(unsigned char key) {
             repl_set_status("Insert mode exited");
         } else {
             {
-                ReplEditorInputState *inp = editor_state_input_mut();
+                EditorInputState *inp = editor_state_input_mut();
                 inp->input[0] = '\0';
                 inp->input_len = 0;
             }
@@ -1142,7 +1142,7 @@ static int handle_text_delete_key_route(unsigned char key) {
         }
         {
             int cur = editor_cursor_pos();
-            ReplEditorInputState *inp = editor_state_input_mut();
+            EditorInputState *inp = editor_state_input_mut();
             if (cur > 0 && inp->input_len > 0) {
                 memmove(&inp->input[cur - 1], &inp->input[cur],
                         (size_t)(inp->input_len - cur + 1));
@@ -1168,7 +1168,7 @@ static int handle_tab_key_route(unsigned char key) {
         editor_input_anchor_clear();
         expected = tutorial_current_expected_text();
         if (tutorial_active() && expected) {
-            ReplEditorInputState *inp = editor_state_input_mut();
+            EditorInputState *inp = editor_state_input_mut();
 
             strncpy(inp->input, expected, MAX_INPUT_LEN - 1);
             inp->input[MAX_INPUT_LEN - 1] = '\0';
@@ -1325,7 +1325,7 @@ static int handle_semicolon_commit_key_route(unsigned char key) {
                             editor_buffer_insert_line(insert_pos, cmd_text);
                             repl_state_edit_line_set(repl_state_edit_line() + 1);
                             {
-                                ReplEditorInputState *inp = editor_state_input_mut();
+                                EditorInputState *inp = editor_state_input_mut();
                                 inp->input[0] = '\0';
                                 inp->input_len = 0;
                             }
@@ -1349,13 +1349,13 @@ static int handle_semicolon_commit_key_route(unsigned char key) {
                             repl_state_edit_line_set(repl_state_document_count());
                             repl_set_status("OK");
                             {
-                                ReplEditorInputState *inp = editor_state_input_mut();
+                                EditorInputState *inp = editor_state_input_mut();
                                 inp->input[0] = '\0';
                                 inp->input_len = 0;
                             }
                             editor_cursor_pos_set(0);
                             {
-                                ReplEditorInputState *inp = editor_state_input_mut();
+                                EditorInputState *inp = editor_state_input_mut();
                                 inp->pending_newline[0] = '\0';
                                 inp->pending_newline_len = 0;
                             }
@@ -1410,7 +1410,7 @@ int editor_input_consume_selection(void) {
 
     int lo = editor_input_selection_lo();
     int hi = editor_input_selection_hi();
-    ReplEditorInputState *inp = editor_state_input_mut();
+    EditorInputState *inp = editor_state_input_mut();
     int len = inp->input_len;
 
     if (lo < 0 || hi <= lo || hi > len) {
@@ -1436,7 +1436,7 @@ static int handle_printable_input_key_route(unsigned char key) {
      * insert proceeds on the post-consume buffer. */
     (void)editor_input_consume_selection();
     int cur = editor_cursor_pos();
-    ReplEditorInputState *inp = editor_state_input_mut();
+    EditorInputState *inp = editor_state_input_mut();
     if (inp->input_len < MAX_INPUT_LEN - 2) {
         memmove(&inp->input[cur + 1], &inp->input[cur],
                 (size_t)(inp->input_len - cur + 1));
@@ -1490,7 +1490,7 @@ static void keyboard_func(unsigned char key, int x, int y) {
 
 int feed_line(const char *line) {
     {
-        ReplEditorInputState *inp = editor_state_input_mut();
+        EditorInputState *inp = editor_state_input_mut();
         strncpy(inp->input, line, MAX_INPUT_LEN - 1);
         inp->input[MAX_INPUT_LEN - 1] = '\0';
         inp->input_len = (int)strlen(inp->input);
@@ -1547,7 +1547,7 @@ int feed_line(const char *line) {
         }
 feed_line_done:
         {
-            ReplEditorInputState *inp = editor_state_input_mut();
+            EditorInputState *inp = editor_state_input_mut();
             inp->input[0] = '\0';
             inp->input_len = 0;
         }
@@ -1581,7 +1581,7 @@ void editor_feed_line(const char *line) {
 
 static void special_begin_key(int key) {
     (void)key;
-    ReplCodePanelRuntimeState *code_panel_state = ui_state_code_panel_mut();
+    UiCodePanelRuntimeState *code_panel_state = ui_state_code_panel_mut();
     code_panel_state->cursor_visible = 1;
     code_panel_state->blink_tick = 0;
     editor_scroll_follow_cursor_set(1);
@@ -1675,7 +1675,7 @@ static int handle_horizontal_special_key_route(int key) {
  * (glr_ctrl_router_handle_help_scroll_special) and never reaches
  * this dispatcher when help is visible. */
 static int handle_vertical_special_key_route(int key) {
-    ReplAutocompleteState *ac = editor_state_autocomplete_mut();
+    EditorAutocompleteState *ac = editor_state_autocomplete_mut();
     switch (key) {
     case GLUT_KEY_UP:
         if (ac->match_count > 1) {
@@ -1810,7 +1810,7 @@ void editor_input_code_panel_scroll(int direction) {
 }
 
 static void editor_update_panel_frac_from_mouse(int x, int y) {
-    ReplCodePanelRuntimeState *code_panel_state = ui_state_code_panel_mut();
+    UiCodePanelRuntimeState *code_panel_state = ui_state_code_panel_mut();
     int layout = editor_input_code_panel_layout();
 
     if (layout == CODE_PANEL_LAYOUT_HIDDEN) {
@@ -1888,38 +1888,38 @@ static void motion_func(int x, int y) {
     }
 }
 
-ReplInputDispatchEffects editor_handle_key(unsigned char key, int x, int y) {
+EditorInputDispatchEffects editor_handle_key(unsigned char key, int x, int y) {
     editor_reset_input_effects();
     keyboard_func(key, x, y);
     return editor_take_input_effects();
 }
 
-ReplInputDispatchEffects editor_handle_special(int key, int x, int y) {
+EditorInputDispatchEffects editor_handle_special(int key, int x, int y) {
     editor_reset_input_effects();
     special_func(key, x, y);
     return editor_take_input_effects();
 }
 
-ReplInputDispatchEffects editor_handle_mouse(int button, int state, int x, int y) {
+EditorInputDispatchEffects editor_handle_mouse(int button, int state, int x, int y) {
     editor_reset_input_effects();
     mouse_func(button, state, x, y);
     return editor_take_input_effects();
 }
 
-ReplInputDispatchEffects editor_handle_motion(int x, int y) {
+EditorInputDispatchEffects editor_handle_motion(int x, int y) {
     editor_reset_input_effects();
     motion_func(x, y);
     return editor_take_input_effects();
 }
 
-ReplInputDispatchEffects editor_handle_passive_motion(int x, int y) {
+EditorInputDispatchEffects editor_handle_passive_motion(int x, int y) {
     editor_reset_input_effects();
     passive_motion_func(x, y);
     return editor_take_input_effects();
 }
 
 #ifndef USE_GLUT
-ReplInputDispatchEffects editor_handle_mousewheel(int wheel, int direction, int x, int y) {
+EditorInputDispatchEffects editor_handle_mousewheel(int wheel, int direction, int x, int y) {
     editor_reset_input_effects();
     mousewheel_func(wheel, direction, x, y);
     return editor_take_input_effects();

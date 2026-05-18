@@ -215,7 +215,7 @@ Test sources live under `tests/` and shared test-only helpers live under
 | `src/repl/state_views.h` | Read-only (by-value) state getters; safe to include from `scene_*` and `ui_*` |
 | `src/repl/state_owners.h` | Mutable `_mut()` accessors; owner modules and controller only |
 | `src/editor/input.c` | Editor's text-document controller: keyboard/mouse dispatch, cursor/scroll/selection/search/autocomplete navigation, clipboard, undo, commit orchestration, `feed_line`. Non-editor routing (replay, audio, config, save, camera) lives in `src/app/glr_ctrl.c` |
-| `src/editor/input.h` | Editor input dispatch entry points + `ReplInputDispatchEffects` typedef + `editor_input_active_modifiers` test seam |
+| `src/editor/input.h` | Editor input dispatch entry points + `EditorInputDispatchEffects` typedef + `editor_input_active_modifiers` test seam |
 | `src/editor/commit.c` | Editor-side commit transaction boundary: compile via `repl_compile`, undo snapshot, text-buffer write, REPL apply, dirty-state updates |
 | `src/editor/commit.h` | Commit orchestration API (`editor_commit_apply_external_change`, `try_commit_*` helpers) |
 | `src/editor/state.c` | Owns `EditorState`: editor buffer, cursor, selection, search, autocomplete, scroll, undo/redo, transformers, highlights, virtual lines |
@@ -685,7 +685,7 @@ Step-by-step execution visualization in `src/widgets/replay.c`:
 ### Undo/Redo
 
 Circular snapshot buffers in `src/editor/undo.c`:
-- `ReplUndoSnapshot` captures the full editor state: source commands,
+- `EditorUndoSnapshot` captures the full editor state: source commands,
   command count, cursor position, predefined variable values
 - Undo and redo rings (32 slots each) with head/count tracking
 - `editor_undo_push_snapshot()` called before any mutation (delete, paste,
@@ -748,7 +748,7 @@ Case-insensitive text search in `src/editor/search.c`:
 - Activated by Ctrl+F; query and state accessed via `editor_state_search()`
 - `editor_search_find_next_in_text()` finds substring matches across
   all visible lines (header, user code, footer)
-- `hit_line_idx`/`hit_char_idx` in `ReplSearchState` track current match position
+- `hit_line_idx`/`hit_char_idx` in `EditorSearchState` track current match position
 - Integrated with code panel rendering for match highlighting
 
 ### Config Menu

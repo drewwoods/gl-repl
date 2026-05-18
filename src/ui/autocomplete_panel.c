@@ -20,7 +20,7 @@
 
 void ui_autocomplete_panel_render(const UiRenderSnapshot *snap,
                                   int cursor_px, int cursor_py) {
-    ReplAutocompleteState           ac  = snap->autocomplete;
+    EditorAutocompleteState           ac  = snap->autocomplete;
 
     if (ac.match_count < 1) return;
 

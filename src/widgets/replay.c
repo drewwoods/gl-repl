@@ -327,7 +327,7 @@ static void replay_walk_apply_transform(const GLCmd *cmd, int *depth) {
     }
 }
 
-void replay_walk_tess_preview(const ReplTessPreviewCallbacks *cb,
+void replay_walk_tess_preview(const ReplayTessPreviewCallbacks *cb,
                                    void *user_data) {
     if (!cb) return;
 
@@ -438,8 +438,8 @@ static int replay_walk_block_matches_cursor(int begin_idx, int is_tess,
     return 0;
 }
 
-void replay_walk_user_vertices(const ReplVertexWalkContext *ctx,
-                             const ReplVertexWalkCallbacks *cb,
+void replay_walk_user_vertices(const ReplayVertexWalkContext *ctx,
+                             const ReplayVertexWalkCallbacks *cb,
                              void *user_data) {
     if (!ctx || !cb) return;
 
@@ -451,7 +451,7 @@ void replay_walk_user_vertices(const ReplVertexWalkContext *ctx,
     int          selected_block_only = ctx->selected_block_only;
     int         *stop_flag           = ctx->stop_flag;
 
-    ReplVertexWalkState state = {
+    ReplayVertexWalkState state = {
         .flat_cmd_idx        = -1,
         .src_cmd_idx         = -1,
         .primitive_mode      = 0,

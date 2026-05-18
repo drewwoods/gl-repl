@@ -86,7 +86,7 @@ static void test_apply_defaults(void) {
 
 static void test_cursor_actions(void) {
     glr_app_reset_all();
-    ReplCodePanelRuntimeState *cp = ui_state_code_panel_mut();
+    UiCodePanelRuntimeState *cp = ui_state_code_panel_mut();
     cp->cursor_visible = 0;
     cp->blink_tick = 100;
 
@@ -220,19 +220,19 @@ static void test_menu_actions(void) {
     glr_app_reset_all();
 
     /* File menu */
-    ASSERT_INT("File Load Scene", glr_action_menu_item_activate(GLR_MENU_FILE, REPL_FILE_ITEM_LOAD_SCENE), 1);
+    ASSERT_INT("File Load Scene", glr_action_menu_item_activate(GLR_MENU_FILE, GLR_FILE_ITEM_LOAD_SCENE), 1);
     /* No glr_ctrl_set_program_name() in tests -> default "gl-repl". */
     ASSERT_STR("Load Scene status", g_last_status,
                "Runtime load unsupported - relaunch gl-repl <file> "
                "or use Load Workspace");
     run_menu_action_in_temp_dir("File Save Workspace",
                                 GLR_MENU_FILE,
-                                REPL_FILE_ITEM_SAVE_WORKSPACE,
+                                GLR_FILE_ITEM_SAVE_WORKSPACE,
                                 0,
                                 1);
     run_menu_action_in_temp_dir("File Load Workspace",
                                 GLR_MENU_FILE,
-                                REPL_FILE_ITEM_LOAD_WORKSPACE,
+                                GLR_FILE_ITEM_LOAD_WORKSPACE,
                                 0,
                                 0);
 
@@ -248,7 +248,7 @@ static void test_menu_actions(void) {
     /* Scene actions now live in the File menu (Scene menu is a pure
      * selector). New Scene enters the transient lifecycle: it clears
      * both the active example and any active user slot. */
-    ASSERT_INT("File New Scene", glr_action_menu_item_activate(GLR_MENU_FILE, REPL_FILE_ITEM_NEW_SCENE), 1);
+    ASSERT_INT("File New Scene", glr_action_menu_item_activate(GLR_MENU_FILE, GLR_FILE_ITEM_NEW_SCENE), 1);
     ASSERT_INT("active example cleared", repl_state_scenes().active_example_idx, -1);
     ASSERT_INT("active user scene detached", repl_active_user_scene(), -1);
 
@@ -256,12 +256,12 @@ static void test_menu_actions(void) {
      * single-file save; run sandboxed so it cannot touch repo output.c. */
     run_menu_action_in_temp_dir("File Save Scene",
                                 GLR_MENU_FILE,
-                                REPL_FILE_ITEM_SAVE_SCENE,
+                                GLR_FILE_ITEM_SAVE_SCENE,
                                 1,
                                 0);
 
     /* Rename Scene with no active user scene -> guarded no-op. */
-    ASSERT_INT("File Rename Scene (none)", glr_action_menu_item_activate(GLR_MENU_FILE, REPL_FILE_ITEM_RENAME_SCENE), 1);
+    ASSERT_INT("File Rename Scene (none)", glr_action_menu_item_activate(GLR_MENU_FILE, GLR_FILE_ITEM_RENAME_SCENE), 1);
     ASSERT_STR("Rename status", g_last_status, "No active scene to rename");
 
     /* User scenes */

@@ -19,9 +19,9 @@
 /* Pinned button identifiers (right side of menu bar). Search and Replay
  * buttons that toggle their respective overlays. */
 enum {
-    REPL_MENU_BAR_PIN_SEARCH = 0,
-    REPL_MENU_BAR_PIN_REPLAY,
-    REPL_MENU_BAR_PIN_COUNT
+    UI_MENU_BAR_PIN_SEARCH = 0,
+    UI_MENU_BAR_PIN_REPLAY,
+    UI_MENU_BAR_PIN_COUNT
 };
 
 /* --- Rendering --- */

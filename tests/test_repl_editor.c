@@ -130,7 +130,7 @@ static int current_active_indent_chars(void) {
 #define VAR_TITLE_H_INTERNAL    20
 
 static void set_editor_input(const char *text) {
-    ReplEditorInputState *inp = editor_state_input_mut();
+    EditorInputState *inp = editor_state_input_mut();
     strncpy(inp->input, text, MAX_INPUT_LEN - 1);
     inp->input[MAX_INPUT_LEN - 1] = '\0';
     inp->input_len = (int)strlen(inp->input);
@@ -1131,7 +1131,7 @@ int main() {
     {
         glr_app_reset_all(); declare_test_vars();
         {
-            ReplEditorInputState *inp = editor_state_input_mut();
+            EditorInputState *inp = editor_state_input_mut();
             strcpy(inp->input, "n = 10.5");
             inp->input_len = (int)strlen(inp->input);
         }
@@ -1180,7 +1180,7 @@ int main() {
         repl_state_edit_line_set(1);
         editor_insert_mode_set(1);
         {
-            ReplEditorInputState *inp = editor_state_input_mut();
+            EditorInputState *inp = editor_state_input_mut();
             strcpy(inp->input, "x = 3.0");
             inp->input_len = (int)strlen(inp->input);
         }
@@ -1201,7 +1201,7 @@ int main() {
         repl_state_edit_line_set(0);
         editor_insert_mode_set(0);
         {
-            ReplEditorInputState *inp = editor_state_input_mut();
+            EditorInputState *inp = editor_state_input_mut();
             strcpy(inp->input, "n = 7.0");
             inp->input_len = (int)strlen(inp->input);
         }
@@ -1216,7 +1216,7 @@ int main() {
     {
         glr_app_reset_all(); declare_test_vars();
         {
-            ReplEditorInputState *inp = editor_state_input_mut();
+            EditorInputState *inp = editor_state_input_mut();
             strcpy(inp->input, "for(i, 0, 5) {");
             inp->input_len = (int)strlen(inp->input);
         }
@@ -1232,7 +1232,7 @@ int main() {
     {
         glr_app_reset_all();
         {
-            ReplEditorInputState *inp = editor_state_input_mut();
+            EditorInputState *inp = editor_state_input_mut();
             strcpy(inp->input, "for(i, 0, 10, 2) {");
             inp->input_len = (int)strlen(inp->input);
         }
@@ -1250,7 +1250,7 @@ int main() {
         glr_app_reset_all();
         /* Create an existing for-loop */
         {
-            ReplEditorInputState *inp = editor_state_input_mut();
+            EditorInputState *inp = editor_state_input_mut();
             strcpy(inp->input, "for(i, 0, 5) {");
             inp->input_len = (int)strlen(inp->input);
         }
@@ -1261,7 +1261,7 @@ int main() {
         repl_state_edit_line_set(0);
         editor_insert_mode_set(0);
         {
-            ReplEditorInputState *inp = editor_state_input_mut();
+            EditorInputState *inp = editor_state_input_mut();
             strcpy(inp->input, "for(i, 0, 10) {");
             inp->input_len = (int)strlen(inp->input);
         }
@@ -1278,7 +1278,7 @@ int main() {
     {
         glr_app_reset_all();
         {
-            ReplEditorInputState *inp = editor_state_input_mut();
+            EditorInputState *inp = editor_state_input_mut();
             strcpy(inp->input, "for(i, 0, 3) glVertex3f(i,0,0);");
             inp->input_len = (int)strlen(inp->input);
         }
@@ -1295,7 +1295,7 @@ int main() {
     {
         glr_app_reset_all(); declare_test_vars();
         {
-            ReplEditorInputState *inp = editor_state_input_mut();
+            EditorInputState *inp = editor_state_input_mut();
             strcpy(inp->input, "func0(x, y) {");
             inp->input_len = (int)strlen(inp->input);
         }
@@ -1311,7 +1311,7 @@ int main() {
     {
         glr_app_reset_all();
         {
-            ReplEditorInputState *inp = editor_state_input_mut();
+            EditorInputState *inp = editor_state_input_mut();
             strcpy(inp->input, "func1(a) {");
             inp->input_len = (int)strlen(inp->input);
         }
@@ -1322,7 +1322,7 @@ int main() {
         repl_state_edit_line_set(0);
         editor_insert_mode_set(0);
         {
-            ReplEditorInputState *inp = editor_state_input_mut();
+            EditorInputState *inp = editor_state_input_mut();
             strcpy(inp->input, "func1(a, b) {");
             inp->input_len = (int)strlen(inp->input);
         }
@@ -1338,7 +1338,7 @@ int main() {
     {
         glr_app_reset_all(); declare_test_vars();
         {
-            ReplEditorInputState *inp = editor_state_input_mut();
+            EditorInputState *inp = editor_state_input_mut();
             strcpy(inp->input, "if(x > 0) {");
             inp->input_len = (int)strlen(inp->input);
         }
@@ -1354,7 +1354,7 @@ int main() {
     {
         glr_app_reset_all(); declare_test_vars();
         {
-            ReplEditorInputState *inp = editor_state_input_mut();
+            EditorInputState *inp = editor_state_input_mut();
             strcpy(inp->input, "if(x > 0) {");
             inp->input_len = (int)strlen(inp->input);
         }
@@ -1364,7 +1364,7 @@ int main() {
         repl_state_edit_line_set(0);
         editor_insert_mode_set(0);
         {
-            ReplEditorInputState *inp = editor_state_input_mut();
+            EditorInputState *inp = editor_state_input_mut();
             strcpy(inp->input, "if(x < 0) {");
             inp->input_len = (int)strlen(inp->input);
         }
@@ -1380,7 +1380,7 @@ int main() {
         glr_app_reset_all(); declare_test_vars();
         editor_feed_line("for(i, 0, 1) {");
         {
-            ReplEditorInputState *inp = editor_state_input_mut();
+            EditorInputState *inp = editor_state_input_mut();
             strcpy(inp->input, "}");
             inp->input_len = (int)strlen(inp->input);
         }
@@ -1397,7 +1397,7 @@ int main() {
         glr_app_reset_all();
         /* Set up: for-loop with begin+end, enter inserting mode inside */
         {
-            ReplEditorInputState *inp = editor_state_input_mut();
+            EditorInputState *inp = editor_state_input_mut();
             strcpy(inp->input, "for(i, 0, 3) {");
             inp->input_len = (int)strlen(inp->input);
         }
@@ -1407,7 +1407,7 @@ int main() {
         ASSERT_INT("insert-close setup: edit_line=1", repl_state_edit_line(), 1);
 
         {
-            ReplEditorInputState *inp = editor_state_input_mut();
+            EditorInputState *inp = editor_state_input_mut();
             strcpy(inp->input, "}");
             inp->input_len = (int)strlen(inp->input);
         }
@@ -1421,14 +1421,14 @@ int main() {
     {
         glr_app_reset_all();
         {
-            ReplEditorInputState *inp = editor_state_input_mut();
+            EditorInputState *inp = editor_state_input_mut();
             strcpy(inp->input, "func2() {");
             inp->input_len = (int)strlen(inp->input);
         }
         try_commit_func_def();
         /* Now close the func with '}' */
         {
-            ReplEditorInputState *inp = editor_state_input_mut();
+            EditorInputState *inp = editor_state_input_mut();
             strcpy(inp->input, "}");
             inp->input_len = (int)strlen(inp->input);
         }
@@ -1442,14 +1442,14 @@ int main() {
     {
         glr_app_reset_all(); declare_test_vars();
         {
-            ReplEditorInputState *inp = editor_state_input_mut();
+            EditorInputState *inp = editor_state_input_mut();
             strcpy(inp->input, "if(x > 0) {");
             inp->input_len = (int)strlen(inp->input);
         }
         try_commit_if_block();
         /* Inserting inside if-block, close it */
         {
-            ReplEditorInputState *inp = editor_state_input_mut();
+            EditorInputState *inp = editor_state_input_mut();
             strcpy(inp->input, "}");
             inp->input_len = (int)strlen(inp->input);
         }
@@ -1463,7 +1463,7 @@ int main() {
     {
         glr_app_reset_all();
         {
-            ReplEditorInputState *inp = editor_state_input_mut();
+            EditorInputState *inp = editor_state_input_mut();
             strcpy(inp->input, "for(i, 0, 3) ;");
             inp->input_len = (int)strlen(inp->input);
         }
@@ -1478,7 +1478,7 @@ int main() {
     {
         glr_app_reset_all();
         {
-            ReplEditorInputState *inp = editor_state_input_mut();
+            EditorInputState *inp = editor_state_input_mut();
             strcpy(inp->input, "func3() {");
             inp->input_len = (int)strlen(inp->input);
         }
@@ -1510,7 +1510,7 @@ int main() {
 
         /* Simulate the interactive ';' key handler: editor_state_input().input has no ';' */
         {
-            ReplEditorInputState *inp = editor_state_input_mut();
+            EditorInputState *inp = editor_state_input_mut();
             strncpy(inp->input, "float tmp", MAX_INPUT_LEN - 1);
             inp->input[MAX_INPUT_LEN - 1] = '\0';
             inp->input_len = (int)strlen(inp->input);
@@ -1545,7 +1545,7 @@ int main() {
         glr_app_reset_all();
 
         {
-            ReplEditorInputState *inp = editor_state_input_mut();
+            EditorInputState *inp = editor_state_input_mut();
             strncpy(inp->input, "float tmp = 0", MAX_INPUT_LEN - 1);
             inp->input[MAX_INPUT_LEN - 1] = '\0';
             inp->input_len = (int)strlen(inp->input);
@@ -1585,7 +1585,7 @@ int main() {
         glr_app_reset_all();
 
         {
-            ReplEditorInputState *inp = editor_state_input_mut();
+            EditorInputState *inp = editor_state_input_mut();
             strncpy(inp->input, "float a, b, c", MAX_INPUT_LEN - 1);
             inp->input[MAX_INPUT_LEN - 1] = '\0';
             inp->input_len = (int)strlen(inp->input);
@@ -1661,7 +1661,7 @@ int main() {
         /* Simulate being on line 1 in overwrite mode when committing
          * a float decl through the ';' key (no trailing ';'). */
         {
-            ReplEditorInputState *inp = editor_state_input_mut();
+            EditorInputState *inp = editor_state_input_mut();
             strncpy(inp->input, "float radius = 3", MAX_INPUT_LEN - 1);
             inp->input[MAX_INPUT_LEN - 1] = '\0';
             inp->input_len = (int)strlen(inp->input);
@@ -1697,7 +1697,7 @@ int main() {
                     repl_eval_find_predef_var_idx("b") >= 0);
 
         {
-            ReplEditorInputState *inp = editor_state_input_mut();
+            EditorInputState *inp = editor_state_input_mut();
             strncpy(inp->input, "float a, c", MAX_INPUT_LEN - 1);
             inp->input[MAX_INPUT_LEN - 1] = '\0';
             inp->input_len = (int)strlen(inp->input);
@@ -1731,7 +1731,7 @@ int main() {
         ASSERT_INT("drop b: baseline cmd count", repl_state_document_count(), 2);
 
         {
-            ReplEditorInputState *inp = editor_state_input_mut();
+            EditorInputState *inp = editor_state_input_mut();
             strncpy(inp->input, "float n", MAX_INPUT_LEN - 1);
             inp->input[MAX_INPUT_LEN - 1] = '\0';
             inp->input_len = (int)strlen(inp->input);
@@ -1760,7 +1760,7 @@ int main() {
         ASSERT_INT("drop referenced b: baseline", repl_state_document_count(), 2);
 
         {
-            ReplEditorInputState *inp = editor_state_input_mut();
+            EditorInputState *inp = editor_state_input_mut();
             strncpy(inp->input, "float n", MAX_INPUT_LEN - 1);
             inp->input[MAX_INPUT_LEN - 1] = '\0';
             inp->input_len = (int)strlen(inp->input);
@@ -1998,7 +1998,7 @@ int main() {
         /* Overwrite decl to add d */
         extern int try_commit_float_decl(void);
         {
-            ReplEditorInputState *inp = editor_state_input_mut();
+            EditorInputState *inp = editor_state_input_mut();
             strncpy(inp->input, "float a, b, c, d", MAX_INPUT_LEN - 1);
             inp->input[MAX_INPUT_LEN - 1] = '\0';
             inp->input_len = (int)strlen(inp->input);
@@ -2310,7 +2310,7 @@ int main() {
         repl_state_edit_line_set(repl_state_document_count());
         editor_insert_mode_set(1);
         {
-            ReplEditorInputState *inp = editor_state_input_mut();
+            EditorInputState *inp = editor_state_input_mut();
             inp->input[0] = '\0';
             inp->input_len = 0;
         }

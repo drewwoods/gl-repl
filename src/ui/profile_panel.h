@@ -31,7 +31,7 @@ typedef enum {
 	PROFILE_PANEL_ON,
 	PROFILE_PANEL_DETAILS,
 	PROFILE_PANEL_MODE_COUNT
-} ProfilePanelMode;
+} UiProfilePanelMode;
 
 #include "snapshot.h"
 

@@ -188,7 +188,7 @@ int main(void) {
     printf("\n--- clipboard transitions ---\n");
     {
         editor_state_reset();
-        ReplClipboardState *cb = editor_state_clipboard_mut();
+        EditorClipboardState *cb = editor_state_clipboard_mut();
         ASSERT_INT("fresh kind = EMPTY", cb->kind, EDITOR_CLIPBOARD_EMPTY);
         ASSERT_INT("fresh line_count", cb->line_count, 0);
         ASSERT_INT("fresh input_text_len", cb->input_text_len, 0);
@@ -859,7 +859,7 @@ int main(void) {
     {
         glr_app_reset_all();
         /* Seed the LINES clipboard directly. */
-        ReplClipboardState *cb = editor_state_clipboard_mut();
+        EditorClipboardState *cb = editor_state_clipboard_mut();
         strcpy(cb->lines[0], "glVertex3f(9, 9, 9);");
         editor_state_clipboard_count_set(1);
         ASSERT_INT("seeded LINES kind",
@@ -876,7 +876,7 @@ int main(void) {
     printf("\n--- undo restore rebuilds input, clears anchor, preserves clipboard ---\n");
     {
         /* Undo's snapshot model intentionally does not capture
-         * ReplEditorInputState.input or ReplClipboardState (see Phase
+         * EditorInputState.input or EditorClipboardState (see Phase
          * A item 6 in done/editor-input-selection.md). After a
          * source-mutating commit, undo rewinds the source array and
          * editor_undo_snapshot_restore calls load_line_to_input to

@@ -335,7 +335,7 @@ int main(void) {
     {
         repl_state_edit_line_set(0);
         editor_insert_mode_set(0);
-        ReplEditorInputState *inp = editor_state_input_mut();
+        EditorInputState *inp = editor_state_input_mut();
         strcpy(inp->input, "foo = 5");
         inp->input_len = (int)strlen(inp->input);
         editor_cursor_pos_set(inp->input_len);
@@ -445,7 +445,7 @@ int main(void) {
     ASSERT_TRUE("enter at line start enters insert mode", editor_insert_mode() == 1);
     ASSERT_TRUE("enter at line start keeps insertion index", repl_state_edit_line() == 1);
     {
-        ReplEditorInputState *inp = editor_state_input_mut();
+        EditorInputState *inp = editor_state_input_mut();
         strcpy(inp->input, "glColor3f(1, 0, 0)");
         inp->input_len = (int)strlen(inp->input);
         editor_cursor_pos_set(inp->input_len);
@@ -862,7 +862,7 @@ int main(void) {
     glr_app_reset_all(); declare_test_vars();
     {
         char display[MAX_INPUT_LEN];
-        const EditorVirtualLineList *vlines;
+        const UiVirtualLineList *vlines;
 
         editor_feed_line("A[0] = 1;");
         editor_feed_line("A[0] = A[0] + 3;");
@@ -890,7 +890,7 @@ int main(void) {
         ASSERT_TRUE("scratch replay vertex annotation rows exist",
                     vlines != NULL && vlines->count >= 1);
         if (vlines && vlines->count >= 1) {
-            const EditorVirtualLine *eval_line = &vlines->items[vlines->count - 1];
+            const UiVirtualLine *eval_line = &vlines->items[vlines->count - 1];
             ASSERT_TRUE("scratch replay eval row style",
                         eval_line->style == VIRTUAL_STYLE_REPLAY_EVAL);
             ASSERT_STR("scratch replay vertex eval text",

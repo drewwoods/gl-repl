@@ -206,7 +206,7 @@ UiHit ui_color_picker_hit_test(const ColorPickerView *view,
     return h;
 }
 
-void ui_color_picker_render_swatch(const EditorTransformer *t,
+void ui_color_picker_render_swatch(const UiTransformer *t,
                                    int sx, int sy,
                                    int active_line) {
     if (!t || t->kind != TRANSFORMER_COLOR_PICKER)

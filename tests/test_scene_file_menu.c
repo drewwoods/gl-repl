@@ -48,7 +48,7 @@ static void test_new_scene_detaches_active(void) {
     ASSERT_TRUE("seeded active user scene", slot >= 0);
 
     int handled = glr_action_menu_item_activate(GLR_MENU_FILE,
-                                                REPL_FILE_ITEM_NEW_SCENE);
+                                                GLR_FILE_ITEM_NEW_SCENE);
     ASSERT_TRUE("New Scene handled", handled == 1);
     ASSERT_INT_EQ("New Scene detaches the user slot",
                   repl_active_user_scene(), -1);
@@ -79,7 +79,7 @@ static void test_save_scene_uses_scene_name(void) {
         ReplExportLayout layout;
         glr_ctrl_fill_export_layout(&layout);
         int handled = glr_action_menu_item_activate(GLR_MENU_FILE,
-                                                    REPL_FILE_ITEM_SAVE_SCENE);
+                                                    GLR_FILE_ITEM_SAVE_SCENE);
         ASSERT_TRUE("Save Scene handled", handled == 1);
         (void)layout;
     }
@@ -103,16 +103,16 @@ static void test_rename_scene_guard(void) {
     editor_inline_rename_cancel();
 
     int h1 = glr_action_menu_item_activate(GLR_MENU_FILE,
-                                           REPL_FILE_ITEM_RENAME_SCENE);
+                                           GLR_FILE_ITEM_RENAME_SCENE);
     ASSERT_TRUE("Rename Scene handled (active)", h1 == 1);
     ASSERT_TRUE("Rename Scene begins on an active scene",
                 editor_inline_rename_active());
     editor_inline_rename_cancel();
 
     /* After New Scene there is no active user scene -> no rename. */
-    glr_action_menu_item_activate(GLR_MENU_FILE, REPL_FILE_ITEM_NEW_SCENE);
+    glr_action_menu_item_activate(GLR_MENU_FILE, GLR_FILE_ITEM_NEW_SCENE);
     int h2 = glr_action_menu_item_activate(GLR_MENU_FILE,
-                                           REPL_FILE_ITEM_RENAME_SCENE);
+                                           GLR_FILE_ITEM_RENAME_SCENE);
     ASSERT_TRUE("Rename Scene handled (none)", h2 == 1);
     ASSERT_TRUE("Rename Scene no-ops with no active scene",
                 !editor_inline_rename_active());

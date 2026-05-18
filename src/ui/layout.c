@@ -9,8 +9,8 @@
  * check-controller-boundaries. Layout reads viewport size, panel
  * fraction, and the controller-mirrored layout_mode; all are UiState
  * chrome. */
-ReplViewportState         ui_state_viewport(void);
-ReplCodePanelRuntimeState ui_state_code_panel(void);
+UiViewportState         ui_state_viewport(void);
+UiCodePanelRuntimeState ui_state_code_panel(void);
 
 static int ui_layout_code_panel_layout_mode(void) {
     int layout = ui_state_code_panel().layout_mode;

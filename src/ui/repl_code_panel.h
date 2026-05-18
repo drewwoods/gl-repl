@@ -35,25 +35,25 @@ typedef enum {
     REPL_SYNTAX_CONSTANT,      /* PI, TAU, or a GL_* enum constant */
     REPL_SYNTAX_VARIABLE,      /* declared / predef / scratch / local var */
     REPL_SYNTAX_KIND_COUNT
-} ReplSyntaxKind;
+} UiSyntaxKind;
 
 typedef struct {
     int            start;  /* char offset into the line text */
     int            len;    /* span length in chars */
-    ReplSyntaxKind kind;
-} ReplSyntaxSpan;
+    UiSyntaxKind kind;
+} UiSyntaxSpan;
 
 /* Classify argument tokens in a single display line. Writes up to
  * max_spans ordered, non-overlapping spans and returns the count written.
  * Keyword / function-call names / operators / punctuation produce no span.
  * Pure: no global state, safe to call from tests. */
 int ui_repl_code_panel_classify_syntax(const char *text,
-                                        ReplSyntaxSpan *out, int max_spans);
+                                        UiSyntaxSpan *out, int max_spans);
 
 /* Final RGB (0..1) for a token kind: a brightness/saturation tier of the
  * command's class color (same hue, dimmer). Exposed for the contrast
  * regression test. */
-void ui_repl_code_panel_syntax_kind_rgb(ReplSyntaxKind kind,
+void ui_repl_code_panel_syntax_kind_rgb(UiSyntaxKind kind,
                                          CmdSyntaxCategory category,
                                          float out_rgb[3]);
 

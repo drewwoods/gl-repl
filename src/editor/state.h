@@ -3,8 +3,8 @@
 
 #include "limits.h"
 #include "repl/command.h"
-#include "ui/editor.h"  /* EditorTransformerList, EditorHighlightList,
-                         * EditorVirtualLineList, EditorLineOverrideList
+#include "ui/editor.h"  /* UiTransformerList, UiHighlightList,
+                         * UiVirtualLineList, UiLineOverrideList
                          * typedefs (live state) */
 
 /* EditorState owns the editable text-document session: canonical line text,
@@ -26,7 +26,7 @@
 typedef struct {
     char lines[MAX_COMMANDS][MAX_LINE_LEN];
     int  line_count;
-} ReplEditorBuffer;
+} EditorBuffer;
 
 /* Read-only view over the editor buffer: a const pointer to the
  * lines array plus the active count. Passed by value to REPL
@@ -62,7 +62,7 @@ typedef struct {
     int  pending_newline_capacity;
     int  pending_newline_len;
     int  insert_mode;
-} ReplEditorInputState;
+} EditorInputState;
 
 typedef struct {
     const char *input;
@@ -75,14 +75,14 @@ typedef struct {
     int         pending_newline_capacity;
     int         pending_newline_len;
     int         insert_mode;
-} ReplEditorInputView;
+} EditorInputView;
 
 /* Selection anchor pair: which source-line range is selected. The
  * canonical "no selection" state is anchor=-1, end=-1. */
 typedef struct {
     int anchor_idx;
     int end_idx;
-} ReplSelectionState;
+} EditorSelectionState;
 
 /* Editor clipboard. Text-only — paste re-parses each line through the
  * standard commit chain, so the clipboard never holds REPL-shaped
@@ -92,7 +92,7 @@ typedef struct {
  *   - EDITOR_CLIPBOARD_LINES: source lines (existing line-range copy).
  *     Paste feeds each line through the commit pipeline.
  *   - EDITOR_CLIPBOARD_INPUT_TEXT: a substring lifted from the active
- *     input buffer. Paste inserts text into ReplEditorInputState.input
+ *     input buffer. Paste inserts text into EditorInputState.input
  *     without going through feed_line.
  * `kind` always matches the populated payload:
  *   EMPTY       -> line_count == 0 && input_text_len == 0
@@ -113,7 +113,7 @@ typedef struct {
 
     char  input_text[MAX_INPUT_LEN];
     int   input_text_len;
-} ReplClipboardState;
+} EditorClipboardState;
 
 /* Search session state: the find-text query plus the current match
  * position the navigation has resolved to. */
@@ -126,7 +126,7 @@ typedef struct {
     int  hit_char_idx;
     int  hit_ordinal;
     int  match_count;
-} ReplSearchState;
+} EditorSearchState;
 
 /* Autocomplete model: the live match list, ghost-text suffix the
  * editor would insert on Tab, and parameter hint string. */
@@ -137,7 +137,7 @@ typedef struct {
     int         selected_idx;
     char        ghost[MAX_LINE_LEN];
     char        hint[MAX_LINE_LEN];
-} ReplAutocompleteState;
+} EditorAutocompleteState;
 
 /* Variable slider drag transaction: which variable is being dragged,
  * the variable name captured at drag-begin, the starting value, the
@@ -150,13 +150,13 @@ typedef struct {
     int   start_x;
     char  name[16];
     int   undo_snapshot_pushed;
-} ReplVariableDragState;
+} EditorVariableDragState;
 
 /* Editor scroll position: the doc-line index at the top of the
  * code-panel viewport, plus a flag the editor sets to request the
  * scroll follow cursor moves. The render-only chrome bits
  * (panel_frac, resizing_panel, cursor_visible / blink / px / py)
- * remain in ReplCodePanelRuntimeState which lives on UiState. The
+ * remain in UiCodePanelRuntimeState which lives on UiState. The
  * split is intentional: editor owns document scroll, UI owns panel
  * chrome and blink state. */
 typedef struct {
@@ -165,16 +165,16 @@ typedef struct {
 } EditorScrollState;
 
 typedef struct {
-    ReplEditorBuffer      buffer;
-    ReplEditorInputState  input;
-    ReplSelectionState    selection;
-    ReplClipboardState    clipboard;
-    ReplSearchState       search;
-    ReplAutocompleteState autocomplete;
-    EditorTransformerList  transformers;
-    EditorHighlightList    highlights;
-    EditorVirtualLineList  virtual_lines;
-    EditorLineOverrideList line_overrides;
+    EditorBuffer      buffer;
+    EditorInputState  input;
+    EditorSelectionState    selection;
+    EditorClipboardState    clipboard;
+    EditorSearchState       search;
+    EditorAutocompleteState autocomplete;
+    UiTransformerList  transformers;
+    UiHighlightList    highlights;
+    UiVirtualLineList  virtual_lines;
+    UiLineOverrideList line_overrides;
     /* variable_drag lives on the variable-panel peer. Callers use
      * variable_panel_drag / variable_panel_drag_mut /
      * variable_panel_handle_drag_* for that state. */
@@ -189,8 +189,8 @@ void editor_state_reset(void);
 /* Struct-level access to the live buffer. Low-level editor-owned call sites
  * that need the whole struct use `_mut`; most readers and writers should use
  * the slice-level API below. */
-const ReplEditorBuffer *editor_state_buffer(void);
-ReplEditorBuffer       *editor_state_buffer_mut(void);
+const EditorBuffer *editor_state_buffer(void);
+EditorBuffer       *editor_state_buffer_mut(void);
 
 /* Slice-level editor_buffer API. This is the preferred public surface for
  * line access and mutation; callers pair it with repl_command_store when a
@@ -264,8 +264,8 @@ const char *editor_buffer_view_line(EditorBufferView view, int idx);
  * with `edit_line_idx` populated from the document cursor (the
  * canonical edit-line index lives on ReplDocumentState, not on the
  * input slice itself). */
-ReplEditorInputView   editor_state_input(void);
-ReplEditorInputState *editor_state_input_mut(void);
+EditorInputView   editor_state_input(void);
+EditorInputState *editor_state_input_mut(void);
 void                  editor_state_input_reset(void);
 
 /* Editor-input convenience getters/setters. Implementations live in
@@ -319,8 +319,8 @@ void        editor_pending_newline_clear(void);
 
 /* Selection slice API. The canonical "no selection" state is
  * anchor=-1, end=-1. */
-ReplSelectionState  editor_state_selection(void);
-ReplSelectionState *editor_state_selection_mut(void);
+EditorSelectionState  editor_state_selection(void);
+EditorSelectionState *editor_state_selection_mut(void);
 void                editor_state_selection_clear(void);
 int                 editor_state_selection_anchor(void);
 int                 editor_state_selection_end_idx(void);
@@ -333,8 +333,8 @@ void                editor_state_selection_set(int anchor_idx, int end_idx);
  * any stale input_text; `_count_set(0)` resets to EMPTY. The
  * input-text helpers below set kind = INPUT_TEXT and clear the line
  * payload symmetrically. */
-ReplClipboardState  editor_state_clipboard(void);
-ReplClipboardState *editor_state_clipboard_mut(void);
+EditorClipboardState  editor_state_clipboard(void);
+EditorClipboardState *editor_state_clipboard_mut(void);
 void                editor_state_clipboard_clear(void);
 int                 editor_state_clipboard_count(void);
 void                editor_state_clipboard_count_set(int line_count);
@@ -350,34 +350,34 @@ int         editor_clipboard_input_text_len(void);
 
 /* Search slice API. _clear restores the slice to the post-init
  * default (no active query, hits invalidated). */
-ReplSearchState  editor_state_search(void);
-ReplSearchState *editor_state_search_mut(void);
+EditorSearchState  editor_state_search(void);
+EditorSearchState *editor_state_search_mut(void);
 void             editor_state_search_clear(void);
 
 /* Autocomplete slice API. The slice is editor-owned; production code outside
  * the registered completion provider should clear it via the provider seam
  * (editor_completion_clear), not by calling
  * editor_state_autocomplete_clear directly. */
-ReplAutocompleteState  editor_state_autocomplete(void);
-ReplAutocompleteState *editor_state_autocomplete_mut(void);
+EditorAutocompleteState  editor_state_autocomplete(void);
+EditorAutocompleteState *editor_state_autocomplete_mut(void);
 void                   editor_state_autocomplete_clear(void);
 
 /* Per-frame editor overlay snapshot lists. The controller refills
  * these each frame after flatten so UI renderers and input bridges
  * can iterate them without walking the document. */
-const EditorTransformerList *editor_state_transformers(void);
+const UiTransformerList *editor_state_transformers(void);
 void                         editor_state_transformers_clear(void);
-int                          editor_state_transformers_append(const EditorTransformer *transformer);
+int                          editor_state_transformers_append(const UiTransformer *transformer);
 
-const EditorHighlightList   *editor_state_highlights(void);
+const UiHighlightList   *editor_state_highlights(void);
 void                         editor_state_highlights_clear(void);
 int                          editor_state_highlights_append(int line_idx, int char_start,
-                                                            int char_end, HighlightKind kind);
+                                                            int char_end, UiHighlightKind kind);
 
-const EditorVirtualLineList *editor_state_virtual_lines(void);
+const UiVirtualLineList *editor_state_virtual_lines(void);
 void                         editor_state_virtual_lines_clear(void);
 int                          editor_state_virtual_lines_append(int after_line_idx,
-                                                               VirtualLineStyle style,
+                                                               UiVirtualLineStyle style,
                                                                const char *text,
                                                                const char *aux);
 /* Count virtual rows anchored after the given source line. Used by
@@ -389,7 +389,7 @@ int                          editor_state_virtual_lines_count_for(int after_line
  * frame for source lines whose displayed text should differ from the
  * buffer text (e.g., replay's expand_args annotations). Editor reads
  * via _for() with a buffer fallback. */
-const EditorLineOverrideList *editor_state_line_overrides(void);
+const UiLineOverrideList *editor_state_line_overrides(void);
 void                          editor_state_line_overrides_clear(void);
 int                           editor_state_line_overrides_append(int line_idx,
                                                                  const char *text);

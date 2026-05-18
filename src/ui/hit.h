@@ -100,7 +100,7 @@ typedef enum {
  *     line_idx = ordinal within the open submenu
  *
  *   UI_HIT_PIN_BUTTON
- *     item_idx = pin id (REPL_MENU_BAR_PIN_REPLAY / _SEARCH)
+ *     item_idx = pin id (UI_MENU_BAR_PIN_REPLAY / _SEARCH)
  *
  *   UI_HIT_VARIABLE_SLIDER
  *     cmd_idx  = predef-var slot

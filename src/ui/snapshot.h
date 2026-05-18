@@ -70,16 +70,16 @@ typedef struct {
 
 typedef struct UiRenderSnapshot {
     /* By-value state slices */
-    ReplViewportState           viewport;
-    ReplCodePanelRuntimeState   code_panel;
-    ReplHelpState               help;
+    UiViewportState           viewport;
+    UiCodePanelRuntimeState   code_panel;
+    UiHelpState               help;
     EditorHelpSession           help_session;
-    ReplVariablePanelState      variable_panel;
-    ReplProfilePanelState       profile_panel;
-    ReplStatusState             status;
-    ReplSearchState             search;
-    ReplAutocompleteState       autocomplete;
-    ReplPointerState            pointer;
+    UiVariablePanelState      variable_panel;
+    UiProfilePanelState       profile_panel;
+    UiStatusState             status;
+    EditorSearchState             search;
+    EditorAutocompleteState       autocomplete;
+    UiPointerState            pointer;
     GlrRenderState              render;
     ReplReplayRuntimeState      replay;
     ReplSceneRuntimeState       scenes;
@@ -87,7 +87,7 @@ typedef struct UiRenderSnapshot {
     ColorPickerView             color_picker;
 
     /* Pointer-shaped read-only views (storage owned by src/repl/state.c) */
-    ReplEditorInputView         editor_input;
+    EditorInputView         editor_input;
     ReplImportExportView        import_export;
 
     /* UI-facing variable rows. Names are copied into the snapshot; values
@@ -123,9 +123,9 @@ typedef struct UiRenderSnapshot {
     const struct UiOverlayContent *help_content;
 
     /* Per-frame editor overlay snapshots (controller-pushed). */
-    const EditorTransformerList *editor_transformers;
-    const EditorHighlightList   *editor_highlights;
-    const EditorVirtualLineList *editor_virtual_lines;
+    const UiTransformerList *editor_transformers;
+    const UiHighlightList   *editor_highlights;
+    const UiVirtualLineList *editor_virtual_lines;
 
     /* Selection range materialized once so the per-row branch in the
      * code panel does not call back into clipboard helpers. */

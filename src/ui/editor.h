@@ -14,13 +14,13 @@
 typedef enum {
     TRANSFORMER_COLOR_PICKER,
     TRANSFORMER_NUMERIC_SLIDER
-} TransformerKind;
+} UiTransformerKind;
 
 typedef struct {
     int             line_idx;
     int             char_start;
     int             char_end;
-    TransformerKind kind;
+    UiTransformerKind kind;
     union {
         struct {
             float r;
@@ -37,14 +37,14 @@ typedef struct {
             int   is_log;
         } numeric;
     } state;
-} EditorTransformer;
+} UiTransformer;
 
 #define MAX_TRANSFORMERS 64
 
 typedef struct {
-    EditorTransformer items[MAX_TRANSFORMERS];
+    UiTransformer items[MAX_TRANSFORMERS];
     int               count;
-} EditorTransformerList;
+} UiTransformerList;
 
 /* Cross-line highlight kinds. The controller pushes one entry per visible
  * highlight each frame; UI render code iterates the list rather than
@@ -55,21 +55,21 @@ typedef enum {
     HIGHLIGHT_REPLAY_PC,
     HIGHLIGHT_SEARCH_MATCH,
     HIGHLIGHT_SELECTION
-} HighlightKind;
+} UiHighlightKind;
 
 typedef struct {
     int           line_idx;
     int           char_start;  /* -1 = whole line */
     int           char_end;    /* -1 = whole line */
-    HighlightKind kind;
-} EditorHighlight;
+    UiHighlightKind kind;
+} UiHighlight;
 
 #define MAX_HIGHLIGHTS 256
 
 typedef struct {
-    EditorHighlight items[MAX_HIGHLIGHTS];
+    UiHighlight items[MAX_HIGHLIGHTS];
     int             count;
-} EditorHighlightList;
+} UiHighlightList;
 
 /* Virtual lines: editor-overlay rows the controller injects below a real
  * source line (e.g. replay annotations). Layout, scroll, and render all
@@ -78,24 +78,24 @@ typedef struct {
 typedef enum {
     VIRTUAL_STYLE_REPLAY_SUBST,
     VIRTUAL_STYLE_REPLAY_EVAL
-} VirtualLineStyle;
+} UiVirtualLineStyle;
 
 #define MAX_VIRTUAL_LINE_TEXT 256
 #define MAX_VIRTUAL_LINE_AUX  128
 
 typedef struct {
     int              after_line_idx;  /* render below this source line */
-    VirtualLineStyle style;
+    UiVirtualLineStyle style;
     char             text[MAX_VIRTUAL_LINE_TEXT];
     char             aux[MAX_VIRTUAL_LINE_AUX];  /* trailing comment text */
-} EditorVirtualLine;
+} UiVirtualLine;
 
 #define MAX_VIRTUAL_LINES 512
 
 typedef struct {
-    EditorVirtualLine items[MAX_VIRTUAL_LINES];
+    UiVirtualLine items[MAX_VIRTUAL_LINES];
     int               count;
-} EditorVirtualLineList;
+} UiVirtualLineList;
 
 /* Per-line text overrides. The controller may push a replacement
  * text for a source line (e.g., replay's variable-substituted form);
@@ -113,11 +113,11 @@ typedef struct {
 typedef struct {
     int  line_idx;
     char text[MAX_LINE_OVERRIDE_TEXT];
-} EditorLineOverride;
+} UiLineOverride;
 
 typedef struct {
-    EditorLineOverride items[MAX_LINE_OVERRIDES];
+    UiLineOverride items[MAX_LINE_OVERRIDES];
     int                count;
-} EditorLineOverrideList;
+} UiLineOverrideList;
 
 #endif /* UI_EDITOR_H */

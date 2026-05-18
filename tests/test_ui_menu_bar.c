@@ -124,7 +124,7 @@ static void test_top_level_hits(void) {
     my = menu_bar_center_my();
 
     ASSERT_INT_EQ("hit File menu button", ui_menu_bar_menu_hit(menu_mx, my), GLR_MENU_FILE);
-    ASSERT_INT_EQ("hit Replay pin", ui_menu_bar_pin_hit(pin_mx, my), REPL_MENU_BAR_PIN_REPLAY);
+    ASSERT_INT_EQ("hit Replay pin", ui_menu_bar_pin_hit(pin_mx, my), UI_MENU_BAR_PIN_REPLAY);
     ASSERT_INT_EQ("menu miss below bar", ui_menu_bar_menu_hit(menu_mx, my + 120), -1);
     ASSERT_INT_EQ("pin miss in menu region", ui_menu_bar_pin_hit(menu_mx, my), -1);
 }
@@ -146,11 +146,11 @@ static void test_dropdown_and_config_press(void) {
     reset_menu_bar_fixture(1000, 600);
 
     ASSERT_TRUE("found New Scene item point",
-                find_dropdown_item_point(GLR_MENU_FILE, REPL_FILE_ITEM_NEW_SCENE,
+                find_dropdown_item_point(GLR_MENU_FILE, GLR_FILE_ITEM_NEW_SCENE,
                                          &item_mx, &item_my));
     ASSERT_INT_EQ("hit New Scene item",
                   ui_menu_bar_dropdown_item_hit(item_mx, item_my),
-                  REPL_FILE_ITEM_NEW_SCENE);
+                  GLR_FILE_ITEM_NEW_SCENE);
 
     ui_menu_bar_close();
     ASSERT_INT_EQ("hit when closed", ui_menu_bar_dropdown_item_hit(item_mx, item_my), -1);
@@ -206,12 +206,12 @@ static void test_unified_hit_test(void) {
     ASSERT_INT_EQ("hit_test: menu button id", h.cmd_idx, GLR_MENU_FILE);
 
     ASSERT_TRUE("found dropdown point for hit_test",
-                find_dropdown_item_point(GLR_MENU_FILE, REPL_FILE_ITEM_NEW_SCENE,
+                find_dropdown_item_point(GLR_MENU_FILE, GLR_FILE_ITEM_NEW_SCENE,
                                          &item_mx, &item_my));
     h = ui_menu_bar_hit_test(item_mx, item_my);
     ASSERT_INT_EQ("hit_test: dropdown item kind", h.kind, UI_HIT_MENU_ITEM);
     ASSERT_INT_EQ("hit_test: dropdown item menu_id", h.cmd_idx, GLR_MENU_FILE);
-    ASSERT_INT_EQ("hit_test: dropdown item idx", h.item_idx, REPL_FILE_ITEM_NEW_SCENE);
+    ASSERT_INT_EQ("hit_test: dropdown item idx", h.item_idx, GLR_FILE_ITEM_NEW_SCENE);
 
     ASSERT_TRUE("found Scene tag point for hit_test",
                 find_dropdown_item_point(GLR_MENU_SCENE, 1,
@@ -224,7 +224,7 @@ static void test_unified_hit_test(void) {
     ui_menu_bar_close();
     h = ui_menu_bar_hit_test(pin_mx, my);
     ASSERT_INT_EQ("hit_test: pin kind", h.kind, UI_HIT_PIN_BUTTON);
-    ASSERT_INT_EQ("hit_test: pin id", h.item_idx, REPL_MENU_BAR_PIN_REPLAY);
+    ASSERT_INT_EQ("hit_test: pin id", h.item_idx, UI_MENU_BAR_PIN_REPLAY);
 }
 
 #ifdef GL_STUBS
@@ -475,7 +475,7 @@ static void test_render_paths_with_stubs(void) {
     ASSERT_TRUE("menu bar render covers replay done", gl_stub_counts[GL_STUB_glRectf] > 0);
 
     ASSERT_TRUE("found file dropdown point for render",
-                find_dropdown_item_point(GLR_MENU_FILE, REPL_FILE_ITEM_NEW_SCENE,
+                find_dropdown_item_point(GLR_MENU_FILE, GLR_FILE_ITEM_NEW_SCENE,
                                          &item_mx, &item_my));
     snap.pointer.mouse_x = item_mx;
     snap.pointer.mouse_y = item_my;

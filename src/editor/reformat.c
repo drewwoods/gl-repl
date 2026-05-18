@@ -30,7 +30,7 @@ void editor_reformat_commands(void) {
     repl_state_edit_line_clamp();
     editor_insert_mode_set(saved_inserting);
     if (saved_inserting) {
-        ReplEditorInputState *inp = editor_state_input_mut();
+        EditorInputState *inp = editor_state_input_mut();
         memcpy(inp->input, saved_input, sizeof(saved_input));
         inp->input_len = saved_input_len;
         editor_cursor_pos_set(saved_cursor_pos);

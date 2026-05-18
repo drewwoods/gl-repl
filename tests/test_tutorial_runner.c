@@ -50,7 +50,7 @@ static const char *trim_leading_ws(const char *text) {
 }
 
 static void set_input_text(const char *text) {
-    ReplEditorInputState *inp = editor_state_input_mut();
+    EditorInputState *inp = editor_state_input_mut();
     size_t len = text ? strlen(text) : 0;
 
     if (len >= MAX_INPUT_LEN)
@@ -280,7 +280,7 @@ static void test_shadow_text_populates_autocomplete_ghost(void) {
     /* The autocomplete provider mirrors tutorial shadow text into
      * autocomplete.ghost so the existing input-row ghost render path
      * draws it dimmed after the cursor. */
-    ReplAutocompleteState ac;
+    EditorAutocompleteState ac;
 
     reset_fixture();
     tutorial_start(0);
@@ -300,7 +300,7 @@ static void test_shadow_text_appears_immediately_on_start(void) {
     /* Regression: tutorial_start must poke editor_completion_update()
      * itself so the shadow ghost appears on the first frame instead
      * of waiting for the user's next keystroke. */
-    ReplAutocompleteState ac;
+    EditorAutocompleteState ac;
 
     reset_fixture();
     tutorial_start(0);
@@ -314,7 +314,7 @@ static void test_shadow_text_refreshes_on_advance(void) {
     /* Regression: tutorial_advance_after_successful_commit must
      * refresh autocomplete so the next step's shadow appears on the
      * very next frame, not after the user types again. */
-    ReplAutocompleteState ac;
+    EditorAutocompleteState ac;
 
     reset_fixture();
     tutorial_start(0);
@@ -329,7 +329,7 @@ static void test_shadow_text_refreshes_on_advance(void) {
 static void test_shadow_text_clears_on_exit(void) {
     /* Regression: tutorial_exit must refresh autocomplete so the
      * ghost from the in-progress step clears immediately. */
-    ReplAutocompleteState ac;
+    EditorAutocompleteState ac;
 
     reset_fixture();
     tutorial_start(0);
@@ -1070,7 +1070,7 @@ static void test_phase3_empty_input_silent_reject(void) {
     tutorial_start(0);
     repl_set_status("baseline");
 
-    ReplEditorInputState *inp = editor_state_input_mut();
+    EditorInputState *inp = editor_state_input_mut();
     inp->input[0] = '\0';
     inp->input_len = 0;
 

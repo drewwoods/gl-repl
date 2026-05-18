@@ -13,7 +13,7 @@ typedef enum {
 	CODE_PANEL_LAYOUT_BOTTOM,
 	CODE_PANEL_LAYOUT_HIDDEN,
 	CODE_PANEL_LAYOUT_COUNT
-} CodePanelLayout;
+} UiCodePanelLayout;
 
 void ui_layout_code_panel_rect(int *x, int *y, int *w, int *h);
 void ui_layout_scene_rect(int *x, int *y, int *w, int *h);
