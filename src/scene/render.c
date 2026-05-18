@@ -10,6 +10,7 @@
 #include "postprocess_filter.h"
 #include "render_types.h"
 #include "palette.h"
+#include "occluded_ghost.h"
 #include "render.h"
 #include "prof.h"
 #include "config.h"
@@ -387,10 +388,22 @@ static void scene_prepare_frame_context(SceneFrameRenderContext *ctx,
  * post_fill_fn body, which installs glBegin / glVertex / glEnd
  * callbacks. */
 
-/* Ground-plane crosshair gizmo at the orbit target. Visible only while the
- * camera is moving (during drag or while momentum carries it); fades out.
- * REPL-only - never exported. Styled to match the other scene helpers:
- * soft halo line under a bright core, alpha driven by g_cam_motion_glow. */
+/* Three orthogonal arms (X / Z ground plane + vertical Y) of the orbit
+ * gizmo, emitted between an active glBegin(GL_LINES)/glEnd(). The Y arm
+ * visualizes the axis that shift + right-drag pans the target along. */
+static void orbit_gizmo_axes(float tx, float ty, float tz, float r) {
+    glVertex3f(tx - r, ty, tz); glVertex3f(tx + r, ty, tz);
+    glVertex3f(tx, ty, tz - r); glVertex3f(tx, ty, tz + r);
+    glVertex3f(tx, ty - r, tz); glVertex3f(tx, ty + r, tz);
+}
+
+/* Crosshair gizmo at the orbit target. Visible only while the camera is
+ * moving (during drag or while momentum carries it); fades out. REPL-only -
+ * never exported. Styled to match the other scene helpers: soft halo line
+ * under a bright core, alpha driven by g_cam_motion_glow. Drawn in two
+ * passes so it is never fully hidden inside user geometry — pass 0 is a
+ * depth-disabled stippled ghost at reduced alpha, pass 1 is the solid
+ * depth-tested gizmo on top where it isn't occluded. */
 static void draw_orbit_target(const SceneFrameRenderContext *frame_ctx) {
     const SceneRenderConfig *config = &frame_ctx->config;
     float glow = config->cam_motion_glow;
@@ -399,7 +412,6 @@ static void draw_orbit_target(const SceneFrameRenderContext *frame_ctx) {
 
     scene_render_push_state();
     glDisable(GL_LIGHTING);
-    glEnable(GL_DEPTH_TEST);
     glDepthMask(GL_FALSE);
     if (config->line_smooth_enabled) glEnable(GL_LINE_SMOOTH);
     else glDisable(GL_LINE_SMOOTH);
@@ -409,29 +421,44 @@ static void draw_orbit_target(const SceneFrameRenderContext *frame_ctx) {
     float r = 0.08f * config->cam_dist;
     float tx = config->cam_tx, ty = config->cam_ty, tz = config->cam_tz;
 
-    /* Halo pass: wide, translucent warm amber under the crosshair */
-    glLineWidth(6.0f);
-    scene_clr_a(SCENE_CLR_ORBIT_GLOW_OUTER, 0.18f * glow);
-    glBegin(GL_LINES);
-    glVertex3f(tx - r, ty, tz); glVertex3f(tx + r, ty, tz);
-    glVertex3f(tx, ty, tz - r); glVertex3f(tx, ty, tz + r);
-    glEnd();
+    /* scene_render_push/pop_state brackets GL_ALL_ATTRIB_BITS, so the
+     * depth-test / stipple toggles below are restored by the outer pop. */
+    for (int pass = 0; pass < 2; pass++) {
+        float occ;
+        if (pass == 0) {
+            glDisable(GL_DEPTH_TEST);
+            glEnable(GL_LINE_STIPPLE);
+            glLineStipple(1, SCENE_OCCLUDED_GHOST_STIPPLE);
+            occ = SCENE_OCCLUDED_GHOST_ALPHA;
+        } else {
+            glEnable(GL_DEPTH_TEST);
+            glDisable(GL_LINE_STIPPLE);
+            occ = 1.0f;
+        }
 
-    /* Core pass: thin bright crosshair */
-    glLineWidth(1.5f);
-    scene_clr_a(SCENE_CLR_ORBIT_GLOW_MID, 0.90f * glow);
-    glBegin(GL_LINES);
-    glVertex3f(tx - r, ty, tz); glVertex3f(tx + r, ty, tz);
-    glVertex3f(tx, ty, tz - r); glVertex3f(tx, ty, tz + r);
-    glEnd();
+        /* Halo pass: wide, translucent warm amber under the crosshair */
+        glLineWidth(6.0f);
+        scene_clr_a(SCENE_CLR_ORBIT_GLOW_OUTER, 0.18f * glow * occ);
+        glBegin(GL_LINES);
+        orbit_gizmo_axes(tx, ty, tz, r);
+        glEnd();
+
+        /* Core pass: thin bright crosshair */
+        glLineWidth(1.5f);
+        scene_clr_a(SCENE_CLR_ORBIT_GLOW_MID, 0.90f * glow * occ);
+        glBegin(GL_LINES);
+        orbit_gizmo_axes(tx, ty, tz, r);
+        glEnd();
+
+        /* Center dot (stipple doesn't apply to GL_POINTS; the depth-off
+         * pass just leaves a faint always-visible marker). */
+        glPointSize(5.0f);
+        scene_clr_a(SCENE_CLR_ORBIT_GLOW_INNER, 0.95f * glow * occ);
+        glBegin(GL_POINTS);
+        glVertex3f(tx, ty, tz);
+        glEnd();
+    }
     glLineWidth(1.0f);
-
-    /* Center dot */
-    glPointSize(5.0f);
-    scene_clr_a(SCENE_CLR_ORBIT_GLOW_INNER, 0.95f * glow);
-    glBegin(GL_POINTS);
-    glVertex3f(tx, ty, tz);
-    glEnd();
     glPointSize(1.0f);
 
     glDepthMask(GL_TRUE);

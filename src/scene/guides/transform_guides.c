@@ -4,6 +4,7 @@
 #include "transform_guides.h"
 #include "transform_utils.h"
 #include "scene/palette.h"
+#include "scene/occluded_ghost.h"
 
 static void transform_guides_push_state(void) {
     glPushAttrib(GL_ALL_ATTRIB_BITS);
@@ -722,8 +723,8 @@ void scene_transform_guides_render_if_due(const SceneGuideSnapshot *snapshot,
         if (pass == 0) {
             glDisable(GL_DEPTH_TEST);
             glEnable(GL_LINE_STIPPLE);
-            glLineStipple(1, 0x0F0F);
-            g_guide_alpha_mul = 0.4f;
+            glLineStipple(1, SCENE_OCCLUDED_GHOST_STIPPLE);
+            g_guide_alpha_mul = SCENE_OCCLUDED_GHOST_ALPHA;
         } else {
             glEnable(GL_DEPTH_TEST);
             g_guide_alpha_mul = 1.0f;
