@@ -73,10 +73,10 @@ typedef struct {
     int          is_special;     /* 1 for GLUT special keys */
     /* GLUT_ACTIVE_* modifier bitmask the binding requires (0 = none).
      * Drives the displayed shortcut text (e.g. GLUT_ACTIVE_SHIFT ->
-     * "Ctrl+Shift+V"). A non-zero modifiers row is dispatched by its
-     * dedicated glr_ctrl router, NOT the generic key_code shortcut
-     * handler (which is modifier-agnostic so Ctrl+T / Ctrl+Shift+T can
-     * both reach one modifiers==0 row). */
+     * "Ctrl+Shift+V") and dispatch: glr_cfg_handle_ascii_shortcut does
+     * a two-pass match, preferring a Shift-requiring row when Shift is
+     * held and falling back to the modifiers==0 row otherwise (so
+     * Ctrl+T and Ctrl+Shift+T can both reach one modifiers==0 row). */
     int          modifiers;
     GlrConfigKey key;
     int          state_count;    /* 2 = toggle; >2 = cycle */

@@ -11,6 +11,7 @@
 #include "repl/core.h"
 #include "editor/input.h"
 #include "repl/examples.h"
+#include "keys.h"
 #include "support/test_harness.h"
 #include <stdlib.h>
 #include <stdio.h>
@@ -34,6 +35,10 @@ static const char *last_status_text(void) {
 }
 
 #define g_last_status (last_status_text())
+
+/* Controllable modifier state for glr_cfg_handle_ascii_shortcut tests. */
+static int g_test_mods = 0;
+static int test_mods_provider(void) { return g_test_mods; }
 
 static void run_menu_action_in_temp_dir(const char *label,
                                         int menu_id,
@@ -319,18 +324,18 @@ static void test_shortcuts(void) {
 }
 
 static void test_config_sections(void) {
-    /* g_cfg_items[] has six "### " sections. The section model must be
-     * data-faithful: only real headers counted, "---" excluded, the
+    /* g_cfg_items[] has seven "### " sections. The section model must
+     * be data-faithful: only real headers counted, "---" excluded, the
      * synthetic "All" view NOT counted here (plan Finding #2). */
     int n = glr_config_section_count();
-    ASSERT_INT("section count", n, 6);
+    ASSERT_INT("section count", n, 7);
 
     /* glr_config_section_label is data-faithful: it returns the raw
      * "### " label with the marker stripped (still UPPERCASE). The
      * leading-uppercase prettify is a menu-display concern applied in
      * menu_item_label, not here. */
     const char *expect[] = {
-        "RENDERING", "TIME & REPLAY", "OVERLAYS & SCENE",
+        "RENDERING", "TIME & REPLAY", "OVERLAYS & SCENE", "CAMERA",
         "GEOMETRY", "INTERFACE", "AUDIO",
     };
     for (int s = 0; s < n; s++)
@@ -375,6 +380,67 @@ static void test_config_sections(void) {
                headers + seps + items, CFG_ITEM_COUNT);
 }
 
+/* Two-pass modifier-aware dispatch in glr_cfg_handle_ascii_shortcut:
+ * a Shift-requiring row (modifiers & GLUT_ACTIVE_SHIFT) wins only when
+ * Shift is held; otherwise the modifiers==0 row matches — and a plain
+ * Ctrl key with no modifiers==0 row falls through (returns 0). */
+static void test_ascii_shortcut_modifiers(void) {
+    glr_app_reset_all();
+    editor_input_set_modifier_provider_for_test(test_mods_provider);
+
+    /* Plain Ctrl+O (no Shift) cycles Grid major; View mode untouched. */
+    g_test_mods = 0;
+    int gm0 = glr_config_get(GLR_CONFIG_GRID_MAJOR);
+    int ortho0 = glr_config_get(GLR_CONFIG_ORTHO_MODE);
+    ASSERT_INT("plain Ctrl+O handled", glr_cfg_handle_ascii_shortcut(KEY_CTRL_O), 1);
+    ASSERT_TRUE("plain Ctrl+O cycled Grid major",
+                glr_config_get(GLR_CONFIG_GRID_MAJOR) != gm0);
+    ASSERT_INT("plain Ctrl+O left View mode alone",
+               glr_config_get(GLR_CONFIG_ORTHO_MODE), ortho0);
+
+    /* Ctrl+Shift+O: the Shift-requiring Focus origin row shadows Grid
+     * major (which must NOT cycle); status proves Focus origin ran. */
+    g_test_mods = GLUT_ACTIVE_SHIFT;
+    int gm1 = glr_config_get(GLR_CONFIG_GRID_MAJOR);
+    repl_set_status("");
+    ASSERT_INT("Ctrl+Shift+O handled", glr_cfg_handle_ascii_shortcut(KEY_CTRL_O), 1);
+    ASSERT_INT("Ctrl+Shift+O did NOT cycle Grid major",
+               glr_config_get(GLR_CONFIG_GRID_MAJOR), gm1);
+    ASSERT_STR("Ctrl+Shift+O ran Focus origin", g_last_status,
+               "Camera: focus origin");
+
+    /* Ctrl+Shift+V toggles View mode (ordinary cycle row + Shift). */
+    int ortho1 = glr_config_get(GLR_CONFIG_ORTHO_MODE);
+    ASSERT_INT("Ctrl+Shift+V handled", glr_cfg_handle_ascii_shortcut(KEY_CTRL_V), 1);
+    ASSERT_TRUE("Ctrl+Shift+V toggled View mode",
+                glr_config_get(GLR_CONFIG_ORTHO_MODE) != ortho1);
+
+    /* Ctrl+Shift+C runs Reset camera. */
+    repl_set_status("");
+    ASSERT_INT("Ctrl+Shift+C handled", glr_cfg_handle_ascii_shortcut(KEY_CTRL_C), 1);
+    ASSERT_STR("Ctrl+Shift+C ran Reset camera", g_last_status,
+               "Camera: reset to default");
+
+    /* Plain Ctrl+V / Ctrl+C: no modifiers==0 row claims them, so the
+     * handler declines (controller then routes to editor paste/copy). */
+    g_test_mods = 0;
+    ASSERT_INT("plain Ctrl+V declined (-> editor paste)",
+               glr_cfg_handle_ascii_shortcut(KEY_CTRL_V), 0);
+    ASSERT_INT("plain Ctrl+C declined (-> editor copy)",
+               glr_cfg_handle_ascii_shortcut(KEY_CTRL_C), 0);
+
+    /* Ctrl+Shift+T quirk: no Shift-row for T, so it falls back to the
+     * modifiers==0 Auto time row, whose handler resets t on Shift. */
+    g_test_mods = GLUT_ACTIVE_SHIFT;
+    repl_set_status("");
+    ASSERT_INT("Ctrl+Shift+T handled", glr_cfg_handle_ascii_shortcut(KEY_CTRL_T), 1);
+    ASSERT_TRUE("Ctrl+Shift+T fell back to Auto time (reset t)",
+                strstr(g_last_status, "reset to 0") != NULL);
+
+    editor_input_set_modifier_provider_for_test(NULL);
+    g_test_mods = 0;
+}
+
 int main(void) {
     test_apply_defaults();
     test_cursor_actions();
@@ -384,6 +450,7 @@ int main(void) {
     test_config_parent_rows_inert();
     test_menu_actions();
     test_shortcuts();
+    test_ascii_shortcut_modifiers();
 
     return test_harness_report(&g_harness, "test_repl_actions");
 }
