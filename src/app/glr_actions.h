@@ -19,8 +19,6 @@
 #ifndef GLR_ACTIONS_H
 #define GLR_ACTIONS_H
 
-#include "app/glr_config.h"   /* GlrConfigKey (glr_cfg_cycle_key) */
-
 /* Top-level menu identifiers. Matches the menu bar structure (File / Scene /
  * Tutorials / Config) used by ui_menu_bar and by this module's dispatch. */
 typedef enum {
@@ -75,11 +73,6 @@ void glr_actions_install_export_cfg_bridge(void);
  * +1 to cycle forward, -1 to cycle backward. Wraps around at boundaries.
  * Called by keyboard shortcut handlers. */
 void glr_cfg_cycle_row(int row, int delta);
-
-/* Cycle the config row that owns `key` (delegates to glr_cfg_cycle_row
- * so status/replay-stop/UI-sync match a menu click). Returns 1 if a
- * row matched. For hidden shortcuts on items with no table key_code. */
-int  glr_cfg_cycle_key(GlrConfigKey key, int delta);
 
 /* Reset the code-panel cursor blink state after navigation moves the cursor. */
 void glr_action_cursor_blink_reset(void);

@@ -468,24 +468,44 @@ void glr_action_help_tab_prev(void) {
     }
 }
 
-int glr_cfg_handle_ascii_shortcut(unsigned char key) {
+/* Ctrl+<key> shortcut dispatch. GLUT delivers Ctrl+letter as the same
+ * control code with or without Shift, so Shift is read from the live
+ * modifier state and matched in two passes:
+ *
+ *   Pass A (only when Shift is held): prefer a row that *requires*
+ *     Shift (modifiers & GLUT_ACTIVE_SHIFT) — e.g. Ctrl+Shift+V/O/C.
+ *   Pass B (always): fall back to the modifier-agnostic row
+ *     (modifiers == 0). This keeps the deliberate quirk where one
+ *     modifiers==0 row answers both forms — Ctrl+T toggles time and
+ *     Ctrl+Shift+T resets it, both via the single Auto time row whose
+ *     handler then inspects Shift itself.
+ *
+ * So a Shift row shadows the plain row only when Shift is actually
+ * down; plain Ctrl+V still falls through to the editor (paste) because
+ * no modifiers==0 row claims it. The descriptor table is the single
+ * source of truth — no separate router. */
+static int cfg_match_row(unsigned char key, int want_shift) {
     for (int i = 0; i < CFG_ITEM_COUNT; i++) {
         const GlrConfigItem *item = glr_config_item_at(i);
-        /* modifiers != 0 rows are owned by a dedicated glr_ctrl router
-         * (it checks the modifier); this handler is modifier-agnostic
-         * so a modifiers==0 row still matches both Ctrl+X and
-         * Ctrl+Shift+X (e.g. Auto time / Ctrl+Shift+T reset). */
-        if (item && !item->section_header &&
-            !item->is_special &&
-            item->modifiers == 0 &&
-            item->key_code > 0 &&
-            item->key_code < 32 &&
-            item->key_code == key) {
-            glr_cfg_cycle_row(i, 1);
-            return 1;
-        }
+        if (!item || item->section_header || item->is_special)
+            continue;
+        if (item->key_code <= 0 || item->key_code >= 32 ||
+            item->key_code != key)
+            continue;
+        int row_shift = (item->modifiers & GLUT_ACTIVE_SHIFT) != 0;
+        if (row_shift != want_shift)
+            continue;
+        glr_cfg_cycle_row(i, 1);
+        return 1;
     }
     return 0;
+}
+
+int glr_cfg_handle_ascii_shortcut(unsigned char key) {
+    int shift = (editor_input_active_modifiers() & GLUT_ACTIVE_SHIFT) != 0;
+    if (shift && cfg_match_row(key, 1)) /* pass A: Shift-requiring row */
+        return 1;
+    return cfg_match_row(key, 0);       /* pass B: modifier-agnostic row */
 }
 
 int glr_cfg_handle_special_shortcut(int key) {
@@ -494,21 +514,6 @@ int glr_cfg_handle_special_shortcut(int key) {
         if (item && !item->section_header &&
             item->is_special && item->key_code == key) {
             glr_cfg_cycle_row(i, 1);
-            return 1;
-        }
-    }
-    return 0;
-}
-
-/* Cycle the row owning `key`, going through glr_cfg_cycle_row so the
- * status line, replay-stop, and UI-chrome sync all happen exactly as
- * for a menu click or F-key shortcut. Used by hidden Ctrl+Shift
- * shortcuts that target a config item without a table key_code. */
-int glr_cfg_cycle_key(GlrConfigKey key, int delta) {
-    for (int i = 0; i < CFG_ITEM_COUNT; i++) {
-        const GlrConfigItem *item = glr_config_item_at(i);
-        if (item && !item->section_header && item->key == key) {
-            glr_cfg_cycle_row(i, delta);
             return 1;
         }
     }
