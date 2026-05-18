@@ -1324,8 +1324,6 @@ static void repl_code_panel_draw_shift_glyph(int cx, int gy) {
     static const GLubyte shift_bits[13] = {
         0x00, 0x00, 0x00,  /* rows 0-2   (baseline / descent)        */
         0x3C,              /* row 3   stem foot   ..####..           */
-        0x24,              /* row 4   stem sides  ..#..#..           */
-        0x24,              /* row 5               ..#..#..           */
         0x24,              /* row 6               ..#..#..           */
         0x24,              /* row 7               ..#..#..           */
         0xE7,              /* row 8   shoulders   ###..###           */
