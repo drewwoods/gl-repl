@@ -11,6 +11,12 @@ buildability (state field before its `config_value_ptr` reference).
 - [x] Commit 4 — Step 4: gate chrome in code panel (feature live; `make sample` green)
 - [x] Commit 5 — Step 5: layout regression test (22/22 passed)
 
+**Verification (all green):** `make sample` per commit · `make check-c99`
+OK · `make test_repl_core_examples` 825/825 · `make check-state-ownership`
+exit 0 · `make test` 37/37 binaries, 5440/5440 assertions. Remaining:
+the manual in-app checks in the Verification section below (config menu
+visual, save/load `@cfg code_focus` round-trip) need a GL window.
+
 ## Context
 
 The code panel renders a full standalone-C view: workspace-header comments,
