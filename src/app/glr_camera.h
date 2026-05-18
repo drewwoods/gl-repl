@@ -54,6 +54,16 @@ void             glr_camera_ease_to(float rx, float ry, float dist,
                                     float tx, float ty, float tz);
 void             glr_camera_reset_default(void);
 
+/* Smoothly recenter the orbit target on the world origin, keeping the
+ * current orbit angles and zoom. Uses the same easing as
+ * glr_camera_ease_to so it is not an instant jump. */
+void             glr_camera_focus_origin(void);
+
+/* Smoothly return the whole camera pose to its built-in default and
+ * restore 3D control mode. The eased counterpart of
+ * glr_camera_reset_default (which snaps instantly). */
+void             glr_camera_ease_to_default(void);
+
 /* Capture/restore for state round-trip tests and undo paths. The
  * snapshot is a value copy of the camera struct; restoring overwrites
  * the live state. Pointer cache, target easing, and momentum velocities

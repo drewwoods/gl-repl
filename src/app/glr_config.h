@@ -46,6 +46,8 @@ typedef enum GlrConfigKey {
     GLR_CONFIG_BACKDROP,
     GLR_CONFIG_ORTHO_MODE,
     GLR_CONFIG_CAMERA_ROTATE,
+    GLR_CONFIG_FOCUS_ORIGIN,   /* action row: no state; eases target to origin */
+    GLR_CONFIG_RESET_CAMERA,   /* action row: no state; eases camera to default */
     GLR_CONFIG_AUTO_NORMALS,
     GLR_CONFIG_VERTEX_LABELS,
     GLR_CONFIG_NORMAL_VECTORS,

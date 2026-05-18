@@ -241,6 +241,18 @@ void glr_camera_reset_default(void) {
     g_camera = g_camera_defaults;
 }
 
+void glr_camera_focus_origin(void) {
+    glr_camera_ease_to(g_camera.rx, g_camera.ry, g_camera.dist,
+                       0.0f, 0.0f, 0.0f);
+}
+
+void glr_camera_ease_to_default(void) {
+    g_control_mode = GLR_CAMERA_CONTROL_3D;
+    glr_camera_ease_to(g_camera_defaults.rx, g_camera_defaults.ry,
+                       g_camera_defaults.dist, g_camera_defaults.tx,
+                       g_camera_defaults.ty, g_camera_defaults.tz);
+}
+
 void glr_camera_capture(GlrCameraState *out) {
     if (out) *out = g_camera;
 }

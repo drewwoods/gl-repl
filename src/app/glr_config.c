@@ -86,6 +86,8 @@ static int *config_value_ptr(GlrConfigKey key) {
     case GLR_CONFIG_BACKDROP:            return &glr_state_presentation_mut()->backdrop_mode;
     case GLR_CONFIG_ORTHO_MODE:          return &glr_state_presentation_mut()->ortho_mode;
     case GLR_CONFIG_CAMERA_ROTATE:       return &glr_camera_mut()->auto_rotate;
+    case GLR_CONFIG_FOCUS_ORIGIN:        return NULL; /* action row: no backing state */
+    case GLR_CONFIG_RESET_CAMERA:        return NULL; /* action row: no backing state */
     case GLR_CONFIG_AUTO_NORMALS:        return &glr_state_presentation_mut()->autonormal;
     case GLR_CONFIG_VERTEX_LABELS:       return &glr_state_presentation_mut()->show_vertex_labels;
     case GLR_CONFIG_NORMAL_VECTORS:      return &glr_state_presentation_mut()->show_normal_vectors;
