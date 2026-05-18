@@ -113,4 +113,41 @@ void glr_config_set(GlrConfigKey key, int value);
  * shortcuts and config menu cycling. */
 int  glr_config_cycle(GlrConfigKey key, int delta);
 
+/* ---- Section model over g_cfg_items[] -------------------------------- *
+ *
+ * Groups the flat descriptor table by its "### " header rows so the
+ * Config menu can present each section as a flyout submenu (mirroring
+ * the Scene menu's example-tag submenus).
+ *
+ * Data-faithful: this API counts ONLY real "### " header rows. The
+ * synthetic "All" view (the full flat list, chrome included) is a
+ * menu-layer concern and is deliberately NOT counted here — single
+ * ownership, no double-count (see config-menu-submenu-sections plan,
+ * Finding #2). "---" separator rows are excluded from every named
+ * section's item range. */
+
+/* Number of "### " section headers present in g_cfg_items[]. */
+int  glr_config_section_count(void);
+
+/* Display label for section `s` (0-based), with the "### " marker
+ * stripped so a parent menu row reads cleanly. NULL if out of range. */
+const char *glr_config_section_label(int section);
+
+/* Resolve section `s` to its contiguous run of actionable item rows in
+ * g_cfg_items[]: *start = index of the first item, *count = number of
+ * items (header and trailing "---" excluded). Returns 1 on success, 0
+ * if `section` is out of range. */
+int  glr_config_section_range(int section, int *start, int *count);
+
+/* Row classification for g_cfg_items[idx], used by the generic submenu
+ * provider so the "All" flyout (which spans the whole table) keeps
+ * header/separator rows as inert chrome (plan Finding #4). */
+typedef enum GlrConfigRowKind {
+    GLR_CFG_ROW_ITEM = 0,   /* an actionable toggle/cycle row */
+    GLR_CFG_ROW_HEADER,     /* a "### " section header */
+    GLR_CFG_ROW_SEPARATOR   /* a "---" separator */
+} GlrConfigRowKind;
+
+GlrConfigRowKind glr_config_row_kind(int idx);
+
 #endif /* GLR_CONFIG_H */
