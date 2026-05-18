@@ -758,10 +758,34 @@ Declarative toggle system in `src/app/glr_actions.c`:
   is_special, key, state_count, state_names[], section_header }`
 - Each item is a toggle (2 states, default OFF/ON) or cycle (>2 states
   with named entries, e.g. grid themes)
-- Rendered by the Config dropdown in `src/ui/menu_bar.c`; menu clicks and
+- **Section flyout menu.** `### ` rows in `g_cfg_items[]` define
+  sections; the Config dropdown shows one **parent row per section**
+  (label with `### ` stripped) plus a synthetic trailing **All** row,
+  each hover-opening a flyout of its items. The flyout engine is the
+  generic one shared with the Scene example submenu (one
+  `(menu_id, parent_row)` provider in `src/ui/menu_bar.c`:
+  `submenu_row_count/_label/_abs_index/_kind/_is_active`,
+  `menu_row_has_submenu`, `submenu_rect/_hit_test`,
+  `render_active_submenu`). The pure section model lives in
+  `src/app/glr_config.c` (`glr_config_section_count/_label/_range`,
+  `glr_config_row_kind`); it counts only real `### ` headers — the
+  `All` row is owned in the menu layer (`config_all_parent_row`), never
+  double-counted. The `All` flyout spans the whole table 1:1 with
+  `### `/`---` rows rendered as inert chrome (`GlrConfigRowKind`).
+- **Click semantics.** Section/All parent rows are inert on click
+  (hover-open only): the `GLR_MENU_CONFIG` branch of
+  `glr_action_menu_item_activate` is a no-op returning 0, mirroring the
+  `MENU_SCENE` tag-row guard. A flyout item click
+  (`UI_HIT_SUBMENU_ITEM`, `cmd_idx == GLR_MENU_CONFIG`,
+  `item_idx == absolute g_cfg_items[] index`) routes via
+  `route_submenu_item_hit` → `glr_cfg_cycle_row(idx, +1)` and keeps the
+  dropdown open; right-press over a flyout item cycles backward
+  (`ui_menu_bar_handle_config_right_press` → `submenu_hit_test`).
   F-key/Ctrl-key shortcuts dispatch through `src/app/glr_actions.c`
-- Adding a config item: append to `g_cfg_items[]` — count is
-  auto-computed via `sizeof`
+  unchanged.
+- Adding a config item: append to `g_cfg_items[]` (under the right
+  `### ` section) — count is auto-computed via `sizeof`; it joins its
+  section's flyout automatically
 
 ## Key Controls
 

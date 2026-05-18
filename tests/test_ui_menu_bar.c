@@ -261,14 +261,9 @@ static void test_msaa_label_dynamic(void) {
 }
 #endif
 
-#ifdef GL_STUBS
-static void make_test_ui_snapshot(UiRenderSnapshot *snap) {
-    memset(snap, 0, sizeof(*snap));
-    snap->viewport = ui_state_viewport();
-    snap->anim_time = 1.0f;
-    snap->user_scene_active_idx = repl_active_user_scene();
-}
-
+/* Pure geometry (no GL): a click point centered on submenu row
+ * `ordinal`. Used by both stub-gated render tests and the non-stub
+ * Config right-press test, so it lives outside the GL_STUBS guard. */
 static int submenu_row_point(int sx, int sy, int sw, int sh, int ordinal,
                              int *out_mx, int *out_my) {
     int ry;
@@ -280,6 +275,14 @@ static int submenu_row_point(int sx, int sy, int sw, int sh, int ordinal,
     if (out_my)
         *out_my = ui_state_viewport().window_h - ry;
     return 1;
+}
+
+#ifdef GL_STUBS
+static void make_test_ui_snapshot(UiRenderSnapshot *snap) {
+    memset(snap, 0, sizeof(*snap));
+    snap->viewport = ui_state_viewport();
+    snap->anim_time = 1.0f;
+    snap->user_scene_active_idx = repl_active_user_scene();
 }
 
 static void test_scene_submenu_with_stubs(void) {
@@ -359,6 +362,89 @@ static void test_scene_submenu_with_stubs(void) {
                                                                 &sw, &sh));
     ASSERT_TRUE("narrow submenu flips left of parent point", sx < tag_mx);
     ASSERT_TRUE("narrow submenu stays onscreen", sx + sw <= ui_state_viewport().window_w);
+}
+
+/* Step 9: positive Config-flyout coverage mirroring
+ * test_scene_submenu_with_stubs — open Config, hover section 0, assert
+ * the flyout rect/hit/render, and that the "All" flyout keeps its
+ * "### "/"---" chrome inert (Finding #4). */
+static void test_config_submenu_with_stubs(void) {
+    UiRenderSnapshot snap;
+    UiHit hit;
+    int parent_mx = -1, parent_my = -1;
+    int sx = 0, sy = 0, sw = 0, sh = 0;
+    int row_mx = -1, row_my = -1;
+    int start = 0, count = 0;
+    unsigned long long base_raster, hover_raster;
+
+    reset_menu_bar_fixture(1000, 600);
+    make_test_ui_snapshot(&snap);
+
+    ASSERT_TRUE("found Config section-0 parent point",
+                find_dropdown_item_point(GLR_MENU_CONFIG, 0,
+                                         &parent_mx, &parent_my));
+
+    snap.pointer.mouse_x = ui_state_viewport().window_w - 1;
+    snap.pointer.mouse_y = ui_state_viewport().window_h - 1;
+    gl_stub_counts_reset();
+    ui_menu_bar_render_example_dropdown(&snap);
+    base_raster = gl_stub_counts[GL_STUB_glRasterPos2f];
+
+    ASSERT_TRUE("Config section hover opens flyout",
+                ui_menu_bar_update_pointer_hover(parent_mx, parent_my,
+                                                 snap.anim_time));
+    ASSERT_TRUE("Config flyout rect available after hover",
+                ui_menu_bar_submenu_rect_for_test(GLR_MENU_CONFIG, 0,
+                                                  &sx, &sy, &sw, &sh));
+    ASSERT_TRUE("section 0 range resolves",
+                glr_config_section_range(0, &start, &count) && count > 0);
+
+    ASSERT_TRUE("Config flyout row 0 point computed",
+                submenu_row_point(sx, sy, sw, sh, 0, &row_mx, &row_my));
+    hit = ui_menu_bar_hit_test(row_mx, row_my);
+    ASSERT_INT_EQ("Config flyout row is a submenu hit",
+                  hit.kind, UI_HIT_SUBMENU_ITEM);
+    ASSERT_INT_EQ("Config flyout hit carries menu_id",
+                  hit.cmd_idx, GLR_MENU_CONFIG);
+    ASSERT_INT_EQ("Config flyout hit carries absolute g_cfg_items idx",
+                  hit.item_idx, start);
+    ASSERT_INT_EQ("Config flyout hit ordinal", hit.line_idx, 0);
+
+    snap.pointer.mouse_x = parent_mx;
+    snap.pointer.mouse_y = parent_my;
+    gl_stub_counts_reset();
+    ui_menu_bar_render_example_dropdown(&snap);
+    hover_raster = gl_stub_counts[GL_STUB_glRasterPos2f];
+    ASSERT_TRUE("Config section hover renders flyout rows",
+                hover_raster > base_raster);
+
+    /* "All" flyout (last parent row) spans the whole table; a point on
+     * its first row — a "### " HEADER — must be inert chrome, NOT a
+     * submenu hit. */
+    {
+        int all_row = glr_config_section_count();  /* synthetic All */
+        int amx = -1, amy = -1, asx = 0, asy = 0, asw = 0, ash = 0;
+        int hdr_mx = -1, hdr_my = -1;
+        UiHit ah;
+
+        ASSERT_TRUE("found All parent point",
+                    find_dropdown_item_point(GLR_MENU_CONFIG, all_row,
+                                             &amx, &amy));
+        ui_menu_bar_update_pointer_hover(amx, amy, snap.anim_time);
+        ASSERT_TRUE("All flyout rect available",
+                    ui_menu_bar_submenu_rect_for_test(GLR_MENU_CONFIG,
+                                                      all_row,
+                                                      &asx, &asy,
+                                                      &asw, &ash));
+        ASSERT_INT_EQ("All flyout row 0 is a HEADER",
+                      glr_config_row_kind(0), GLR_CFG_ROW_HEADER);
+        ASSERT_TRUE("All flyout header point computed",
+                    submenu_row_point(asx, asy, asw, ash, 0,
+                                      &hdr_mx, &hdr_my));
+        ah = ui_menu_bar_hit_test(hdr_mx, hdr_my);
+        ASSERT_TRUE("All flyout header is inert (no submenu hit)",
+                    ah.kind != UI_HIT_SUBMENU_ITEM);
+    }
 }
 
 static void test_render_paths_with_stubs(void) {
@@ -496,6 +582,7 @@ int main(void) {
     test_unified_hit_test();
 #ifdef GL_STUBS
     test_scene_submenu_with_stubs();
+    test_config_submenu_with_stubs();
     test_render_paths_with_stubs();
 #endif
 
