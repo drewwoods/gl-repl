@@ -2883,8 +2883,12 @@ int main() {
         g_mock_modifiers = saved_mods;
     }
 
-    /* Extra coverage: Help overlay scrolling */
+    /* Extra coverage: Help overlay scrolling. Use a small viewport so
+     * the active tab overflows — scroll is now clamped to the real
+     * content bounds, so a tab that fully fits would (correctly) pin
+     * at 0 and never increment. */
     {
+        ui_state_viewport_set_size(800, 360);
         ui_state_help_mut()->visible = 1;
         editor_help_session_set_scroll(0);
         editor_help_session_set_tab(0);
@@ -2908,6 +2912,7 @@ int main() {
         ASSERT_INT("help page up", editor_help_session_scroll(), 0);
 
         ui_state_help_mut()->visible = 0;
+        ui_state_viewport_set_size(1000, 1000);
     }
 
     /* Extra coverage: Escape key routes */
