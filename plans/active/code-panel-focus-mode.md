@@ -43,6 +43,24 @@ row, no `GlrConfigKey`, no `@cfg` persistence (session-only now).
   annotations), a `g_cfg_items[]` header note cataloguing the hidden
   toggles, `CLAUDE.md` Key Controls row.
 
+### Review fixes (P2 overlap, P3 dispatch test)
+
+- **P2:** the right cluster could overlap the left status text on
+  narrow/default panels (focus keycap ≈x194 vs left text ≈x210 at
+  0.45 left / 800px). Added `repl_code_panel_statusbar_left()` as the
+  single source for the left segments + their pixel right-edge (used
+  by both the renderer and the hints); `ReplStatusbarHints` now
+  carries `focus_visible` / `help_visible`, set false when a chip
+  would collide. Renderer skips the hidden chip and the hit-test
+  returns no toggle there — Ctrl+Shift+F / F1 still work. `draw_statusbar`
+  lost its `edit_line`/`insert_mode` params (derived from `snap` in
+  the shared helper). Regression test asserts focus is suppressed at
+  the default narrow width and present on a wide panel.
+- **P3:** the click test now routes through
+  `glr_ctrl_router_handle_code_panel_hit()` (the real dispatch
+  switch) for both keycaps instead of calling the toggle helpers
+  directly, so a future switch-wiring regression is caught (31/31).
+
 ### Second follow-up (this round)
 
 - The **"F1 help" keycap is now clickable** too. Shared

@@ -174,46 +174,81 @@ int main(void) {
                     glr_state_presentation().code_focus == 0);
     }
 
-    /* The statusbar "focus" and "F1 help" keycaps are clickable: some
-     * pixel in the code panel hit-tests as UI_HIT_CODE_FOCUS_TOGGLE /
-     * UI_HIT_HELP_TOGGLE, routed to the same shared toggles as
-     * Ctrl+Shift+F / F1. Scan the statusbar band (bottom-right first,
-     * where the keycaps are drawn). */
+    /* Regression: at the default left layout (800x260, panel_frac
+     * 0.45) the right cluster would collide with the left status text,
+     * so the focus keycap must be SUPPRESSED — no hit-test pixel
+     * returns UI_HIT_CODE_FOCUS_TOGGLE (no overlapping draw). The help
+     * chip sits further right and still fits. */
     {
         int found_focus = 0;
         int found_help = 0;
-        int help_was;
 
-        reset_doc_fixture();
+        reset_doc_fixture();              /* 800x260, LEFT, 0.45 */
         editor_feed_line("glBegin(GL_POINTS);");
         editor_feed_line("glEnd();");
         build_doc(&snap, &layout);
 
-        for (int my = 259; my >= 0 && !(found_focus && found_help); my--) {
+        for (int my = 259; my >= 0; my--) {
             for (int mx = 799; mx >= 0; mx--) {
                 UiHit hk = ui_repl_code_panel_hit_test(&snap, mx, my);
-                if (hk.kind == UI_HIT_CODE_FOCUS_TOGGLE)
-                    found_focus = 1;
-                else if (hk.kind == UI_HIT_HELP_TOGGLE)
-                    found_help = 1;
+                if (hk.kind == UI_HIT_CODE_FOCUS_TOGGLE) found_focus = 1;
+                else if (hk.kind == UI_HIT_HELP_TOGGLE)  found_help = 1;
             }
         }
-        ASSERT_TRUE("focus keycap is hit-testable", found_focus == 1);
-        ASSERT_TRUE("help keycap is hit-testable", found_help == 1);
+        ASSERT_TRUE("focus keycap suppressed at narrow default width",
+                    found_focus == 0);
+        ASSERT_TRUE("help keycap still fits at narrow default width",
+                    found_help == 1);
+    }
+
+    /* On a wide panel both keycaps render; a click on each routes
+     * THROUGH glr_ctrl_router_handle_code_panel_hit (the real dispatch
+     * switch, not the toggle helper directly) and flips the matching
+     * session state. */
+    {
+        int fx = -1, fy = -1, hx = -1, hy = -1;
+        int help_was;
+
+        reset_doc_fixture();
+        ui_state_viewport_set_size(1600, 300);   /* wide -> cluster fits */
+        editor_feed_line("glBegin(GL_POINTS);");
+        editor_feed_line("glEnd();");
+        build_doc(&snap, &layout);
+
+        for (int my = 299; my >= 0 && (fx < 0 || hx < 0); my--) {
+            for (int mx = 1599; mx >= 0; mx--) {
+                UiHit hk = ui_repl_code_panel_hit_test(&snap, mx, my);
+                if (hk.kind == UI_HIT_CODE_FOCUS_TOGGLE && fx < 0) {
+                    fx = mx; fy = my;
+                } else if (hk.kind == UI_HIT_HELP_TOGGLE && hx < 0) {
+                    hx = mx; hy = my;
+                }
+            }
+        }
+        ASSERT_TRUE("focus keycap hit-testable on wide panel", fx >= 0);
+        ASSERT_TRUE("help keycap hit-testable on wide panel", hx >= 0);
 
         glr_state_presentation_mut()->code_focus = 0;
         glr_ctrl_sync_ui_chrome();
-        glr_ctrl_toggle_code_focus();
-        ASSERT_TRUE("focus keycap click path toggles on",
+        {
+            UiHit fh = ui_hit_none();
+            fh.kind = UI_HIT_CODE_FOCUS_TOGGLE;
+            glr_ctrl_router_handle_code_panel_hit(fh, fx, fy);
+        }
+        ASSERT_TRUE("focus click routes through dispatch -> toggles on",
                     glr_state_presentation().code_focus == 1);
-        glr_ctrl_toggle_code_focus();
+        glr_ctrl_toggle_code_focus();    /* restore */
 
         help_was = ui_state_help().visible;
-        glr_ctrl_toggle_help();
-        ASSERT_TRUE("help keycap click path toggles overlay",
+        {
+            UiHit hh = ui_hit_none();
+            hh.kind = UI_HIT_HELP_TOGGLE;
+            glr_ctrl_router_handle_code_panel_hit(hh, hx, hy);
+        }
+        ASSERT_TRUE("help click routes through dispatch -> toggles overlay",
                     ui_state_help().visible == !help_was);
-        glr_ctrl_toggle_help();
-        ASSERT_TRUE("help toggle restores overlay",
+        glr_ctrl_toggle_help();          /* restore */
+        ASSERT_TRUE("help overlay restored",
                     ui_state_help().visible == help_was);
     }
 

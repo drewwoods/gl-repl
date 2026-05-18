@@ -1271,18 +1271,72 @@ static const char *k_statusbar_focus_lbl = "focus";
  * strlen (a UTF-8 "⇧" would mis-measure). */
 #define STATUSBAR_FOCUS_KBD_CELLS 3
 
+/* The left-aligned status segments ("N/M cmds", "Ln …", optional
+ * "AA …"), built once so the renderer (drawing) and the hints
+ * (collision test) share one width. `right_edge` is the window-x just
+ * past the last left glyph. STATUSBAR_SEP_W mirrors the two +8 nudges
+ * in repl_code_panel_statusbar_sep. */
+#define STATUSBAR_SEP_W 16
+
+typedef struct {
+    char cmds[48];
+    char line[64];
+    char aa[32];
+    int  has_aa;
+    int  right_edge;
+} ReplStatusbarLeft;
+
+static ReplStatusbarLeft repl_code_panel_statusbar_left(
+        const UiRenderSnapshot *snap, int sx) {
+    ReplStatusbarLeft L;
+    int tx = sx + CODE_MARGIN_X;
+    int edit_line = snap->edit_line;
+
+    snprintf(L.cmds, sizeof L.cmds, "%d/%d cmds",
+             snap->flat_program_count, MAX_COMMANDS);
+    tx += (int)strlen(L.cmds) * FONT_SMALL_W;
+    tx += STATUSBAR_SEP_W;
+
+    if (snap->editor_input.insert_mode)
+        snprintf(L.line, sizeof L.line, "Ln %d [INSERT]", edit_line + 1);
+    else if (snap->in_begin_block)
+        snprintf(L.line, sizeof L.line, "Ln %d  %s",
+                 edit_line + 1, repl_mode_name(snap->current_begin_mode));
+    else
+        snprintf(L.line, sizeof L.line, "Ln %d", edit_line + 1);
+    tx += (int)strlen(L.line) * FONT_SMALL_W;
+
+    L.has_aa = snap->render.use_accum ? 1 : 0;
+    if (L.has_aa) {
+        tx += STATUSBAR_SEP_W;
+        if (snap->render.accum_aa_enabled && snap->render.accum_samples > 1)
+            snprintf(L.aa, sizeof L.aa, "AA %dx", snap->render.accum_samples);
+        else
+            snprintf(L.aa, sizeof L.aa, "AA off");
+        tx += (int)strlen(L.aa) * FONT_SMALL_W;
+    } else {
+        L.aa[0] = '\0';
+    }
+    L.right_edge = tx;
+    return L;
+}
+
 typedef struct {
     int text_y;
     int help_kx, help_lbl_x, help_kw;
     int focus_kx, focus_lbl_x, focus_kw;
     int ky, kh;                 /* keycap box y / h (shared) */
+    int focus_visible;          /* 0 when it would collide with left text */
+    int help_visible;
 } ReplStatusbarHints;
 
-static ReplStatusbarHints repl_code_panel_statusbar_hints(int sx, int sy,
-                                                          int sw, int sh) {
+static ReplStatusbarHints repl_code_panel_statusbar_hints(
+        const UiRenderSnapshot *snap, int sx, int sy, int sw, int sh) {
     ReplStatusbarHints h;
     int help_lbl_w  = (int)strlen(k_statusbar_help_lbl)  * FONT_SMALL_W;
     int focus_lbl_w = (int)strlen(k_statusbar_focus_lbl) * FONT_SMALL_W;
+    int left_end    = repl_code_panel_statusbar_left(snap, sx).right_edge;
+    int gap         = FONT_SMALL_W;   /* one cell of breathing room */
 
     h.text_y     = sy + (sh - FONT_SMALL_H) / 2 + 1;
     h.ky         = sy + 3;
@@ -1295,6 +1349,14 @@ static ReplStatusbarHints repl_code_panel_statusbar_hints(int sx, int sy,
     h.focus_kw    = STATUSBAR_FOCUS_KBD_CELLS * FONT_SMALL_W + 10;
     h.focus_lbl_x = h.help_kx - 12 - focus_lbl_w;
     h.focus_kx    = h.focus_lbl_x - h.focus_kw - 6;
+
+    /* The right cluster is always drawn from the right edge; the left
+     * text from the left. On narrow/default panels they collide, so
+     * suppress whichever right chip the left text would reach (focus
+     * first — it sits inboard of help). Keyboard Ctrl+Shift+F / F1
+     * still work when a chip is hidden. */
+    h.help_visible  = (h.help_kx  >= left_end + gap);
+    h.focus_visible = (h.focus_kx >= left_end + gap);
     return h;
 }
 
@@ -1351,10 +1413,7 @@ static void repl_code_panel_draw_focus_kbd(int gx, int gy) {
 }
 
 static void repl_code_panel_draw_statusbar(const UiRenderSnapshot *snap,
-                                           const UiTextPanelRect *slot,
-                                           int edit_line,
-                                           int insert_mode) {
-    GlrRenderState render = snap->render;
+                                           const UiTextPanelRect *slot) {
     int sy;
     int sh;
     int cp_x;
@@ -1383,52 +1442,38 @@ static void repl_code_panel_draw_statusbar(const UiRenderSnapshot *snap,
 
     {
         ReplStatusbarHints h =
-            repl_code_panel_statusbar_hints(cp_x, sy, cp_w, sh);
+            repl_code_panel_statusbar_hints(snap, cp_x, sy, cp_w, sh);
+        ReplStatusbarLeft L = repl_code_panel_statusbar_left(snap, cp_x);
         int text_y = h.text_y;
         int tx = cp_x + CODE_MARGIN_X;
-        char cmds_buf[48];
-        char line_buf[64];
 
-        snprintf(cmds_buf, sizeof(cmds_buf), "%d/%d cmds",
-                 snap->flat_program_count, MAX_COMMANDS);
         ui_clr(UI_TOK_TEXT_PRIMARY);
-        gl2d_draw_string((float)tx, (float)text_y, cmds_buf, FONT_SMALL);
-        tx += (int)strlen(cmds_buf) * FONT_SMALL_W;
+        gl2d_draw_string((float)tx, (float)text_y, L.cmds, FONT_SMALL);
+        tx += (int)strlen(L.cmds) * FONT_SMALL_W;
 
         repl_code_panel_statusbar_sep(&tx, sy, sh);
 
-        if (insert_mode) {
-            snprintf(line_buf, sizeof(line_buf), "Ln %d [INSERT]", edit_line + 1);
-        } else if (snap->in_begin_block) {
-            snprintf(line_buf, sizeof(line_buf), "Ln %d  %s",
-                     edit_line + 1, repl_mode_name(snap->current_begin_mode));
-        } else {
-            snprintf(line_buf, sizeof(line_buf), "Ln %d", edit_line + 1);
-        }
         ui_clr(UI_TOK_TEXT_MUTED);
-        gl2d_draw_string((float)tx, (float)text_y, line_buf, FONT_SMALL);
-        tx += (int)strlen(line_buf) * FONT_SMALL_W;
+        gl2d_draw_string((float)tx, (float)text_y, L.line, FONT_SMALL);
+        tx += (int)strlen(L.line) * FONT_SMALL_W;
 
-        if (render.use_accum) {
-            char aa_buf[24];
-
+        if (L.has_aa) {
             repl_code_panel_statusbar_sep(&tx, sy, sh);
-            if (render.accum_aa_enabled && render.accum_samples > 1)
-                snprintf(aa_buf, sizeof(aa_buf), "AA %dx", render.accum_samples);
-            else
-                snprintf(aa_buf, sizeof(aa_buf), "AA off");
             ui_clr(UI_TOK_TEXT_MUTED);
-            gl2d_draw_string((float)tx, (float)text_y, aa_buf, FONT_SMALL);
-            tx += (int)strlen(aa_buf) * FONT_SMALL_W;
+            gl2d_draw_string((float)tx, (float)text_y, L.aa, FONT_SMALL);
+            tx += (int)strlen(L.aa) * FONT_SMALL_W;
         }
 
-        /* Focus keycap+label. The keycap glyphs use the same color as
-         * the "F1" keycap (TEXT_PRIMARY) so the two chips read
-         * identically; ON/OFF state is carried by the "focus" label
-         * (accent when ON, muted when OFF). The keycap box is the
-         * click target (UI_HIT_CODE_FOCUS_TOGGLE), hit-tested from the
-         * same hints geometry. */
-        {
+        /* Right cluster, drawn from the right edge. Each chip is
+         * suppressed when the left status text would collide with it
+         * (focus first — it sits inboard of help); the keyboard
+         * Ctrl+Shift+F / F1 paths still work when a chip is hidden. */
+        if (h.focus_visible) {
+            /* Keycap glyphs use the "F1"-keycap color (TEXT_PRIMARY)
+             * so the two chips read identically; ON/OFF state is
+             * carried by the "focus" label (accent on / muted off).
+             * The keycap box is the UI_HIT_CODE_FOCUS_TOGGLE target,
+             * hit-tested from this same hints geometry. */
             UiThemeToken focus_tok = snap->code_panel.code_focus
                 ? UI_TOK_ACCENT : UI_TOK_TEXT_MUTED;
             repl_code_panel_draw_keycap(h.focus_kx, h.ky, h.focus_kw, h.kh);
@@ -1439,14 +1484,15 @@ static void repl_code_panel_draw_statusbar(const UiRenderSnapshot *snap,
                              k_statusbar_focus_lbl, FONT_SMALL);
         }
 
-        /* Help keycap+label. */
-        repl_code_panel_draw_keycap(h.help_kx, h.ky, h.help_kw, h.kh);
-        ui_clr(UI_TOK_TEXT_PRIMARY);
-        gl2d_draw_string((float)(h.help_kx + 5), (float)(h.ky + 2),
-                         k_statusbar_help_kbd, FONT_SMALL);
-        ui_clr(UI_TOK_TEXT_MUTED);
-        gl2d_draw_string((float)h.help_lbl_x, (float)text_y,
-                         k_statusbar_help_lbl, FONT_SMALL);
+        if (h.help_visible) {
+            repl_code_panel_draw_keycap(h.help_kx, h.ky, h.help_kw, h.kh);
+            ui_clr(UI_TOK_TEXT_PRIMARY);
+            gl2d_draw_string((float)(h.help_kx + 5), (float)(h.ky + 2),
+                             k_statusbar_help_kbd, FONT_SMALL);
+            ui_clr(UI_TOK_TEXT_MUTED);
+            gl2d_draw_string((float)h.help_lbl_x, (float)text_y,
+                             k_statusbar_help_lbl, FONT_SMALL);
+        }
     }
 
     glDisable(GL_BLEND);
@@ -1493,9 +1539,7 @@ void ui_repl_code_panel_render(const UiRenderSnapshot *snap,
                                       builder.text_snap.cp_w,
                                       builder.text_snap.cp_y +
                                       builder.text_snap.cp_h);
-    repl_code_panel_draw_statusbar(snap, &text_out.statusbar_slot,
-                                   snap->edit_line,
-                                   snap->editor_input.insert_mode);
+    repl_code_panel_draw_statusbar(snap, &text_out.statusbar_slot);
     ui_color_picker_render(&snap->color_picker,
                            snap->viewport.window_w,
                            snap->viewport.window_h);
@@ -1568,16 +1612,18 @@ UiHit ui_repl_code_panel_hit_test(const UiRenderSnapshot *snap,
             /* Same hints geometry the renderer uses, so the click
              * targets line up exactly with the drawn keycaps. */
             ReplStatusbarHints h = repl_code_panel_statusbar_hints(
-                builder.text_snap.cp_x, builder.text_snap.cp_y,
+                snap, builder.text_snap.cp_x, builder.text_snap.cp_y,
                 builder.text_snap.cp_w, STATUSBAR_H);
-            if (gl_y >= h.ky && gl_y < h.ky + h.kh &&
+            if (h.focus_visible &&
+                gl_y >= h.ky && gl_y < h.ky + h.kh &&
                 mx >= h.focus_kx && mx < h.focus_kx + h.focus_kw) {
                 hit.kind = UI_HIT_CODE_FOCUS_TOGGLE;
                 hit.local_x = (float)(mx - builder.text_snap.cp_x);
                 hit.local_y = (float)(gl_y - builder.text_snap.cp_y);
                 return hit;
             }
-            if (gl_y >= h.ky && gl_y < h.ky + h.kh &&
+            if (h.help_visible &&
+                gl_y >= h.ky && gl_y < h.ky + h.kh &&
                 mx >= h.help_kx && mx < h.help_kx + h.help_kw) {
                 hit.kind = UI_HIT_HELP_TOGGLE;
                 hit.local_x = (float)(mx - builder.text_snap.cp_x);
