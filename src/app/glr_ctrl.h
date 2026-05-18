@@ -24,6 +24,14 @@ void glr_app_reset_all(void);
  * subsequent ui_layout_* / ui_panels_hit_test calls see the new
  * chrome state. */
 void glr_ctrl_sync_ui_chrome(void);
+
+/* Toggle the code-panel "focus" view (hide derived C boilerplate
+ * chrome). Shared by the Ctrl+Shift+F shortcut and the status-bar
+ * keycap click so both paths sync chrome, request follow-scroll, and
+ * post the same status line. Session-only state, like the F1 help
+ * overlay and the Ctrl+N post-filter — no Config row, no @cfg. */
+void glr_ctrl_toggle_code_focus(void);
+
 void glr_ctrl_build_ui_snapshot(UiRenderSnapshot *snap);
 void glr_ctrl_apply_code_panel_follow_scroll(
     const UiReplCodePanelLayout *layout);
@@ -82,6 +90,7 @@ int glr_ctrl_router_handle_replay_toggle_key(unsigned char key);    /* replay ke
 int glr_ctrl_router_handle_cfg_shortcut_key(unsigned char key);     /* glr_cfg_handle_ascii_shortcut */
 int glr_ctrl_router_handle_accum_samples_key(unsigned char key);    /* Ctrl+= / Ctrl+- */
 int glr_ctrl_router_handle_post_filter_key(unsigned char key);      /* Ctrl+N (experimental post-process) */
+int glr_ctrl_router_handle_code_focus_key(unsigned char key);       /* Ctrl+Shift+F (code-panel focus) */
 int glr_ctrl_router_handle_replay_special(int key);                 /* replay-active forwarding */
 int glr_ctrl_router_handle_cfg_special_shortcut(int key);           /* cfg shortcut on F-keys */
 int glr_ctrl_router_handle_horizontal_audio_special(int key);       /* Ctrl+Left/Right audio */

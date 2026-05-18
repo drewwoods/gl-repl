@@ -2363,6 +2363,32 @@ int glr_ctrl_router_handle_post_filter_key(unsigned char key) {
     return 1;
 }
 
+/* Shared by the Ctrl+Shift+F shortcut and the status-bar keycap click.
+ * Toggling collapses the chrome header rows from ~20 to 0 (and back);
+ * the follow-scroll request keeps the active edit row on screen, and
+ * the sync mirrors the new flag into the code-panel UI snapshot. */
+void glr_ctrl_toggle_code_focus(void) {
+    GlrPresentationState *p = glr_state_presentation_mut();
+    p->code_focus = !p->code_focus;
+    glr_ctrl_sync_ui_chrome();
+    editor_scroll_follow_cursor_set(1);
+    repl_set_status(p->code_focus ? "Code focus: ON" : "Code focus: OFF");
+}
+
+/* Ctrl+Shift+F: toggle the code-panel focus view. Ctrl+F (no Shift)
+ * stays the search shortcut handled downstream in editor_handle_key;
+ * the Shift modifier disambiguates, and this router runs ahead of the
+ * editor so search never sees the shifted form. Hidden shortcut only —
+ * no Config row, no @cfg (mirrors the Ctrl+N post-filter pattern). */
+int glr_ctrl_router_handle_code_focus_key(unsigned char key) {
+    if (key != KEY_CTRL_F)
+        return 0;
+    if (!(editor_input_active_modifiers() & GLUT_ACTIVE_SHIFT))
+        return 0;
+    glr_ctrl_toggle_code_focus();
+    return 1;
+}
+
 /* ---- Special-key router helpers --------------------------------------- */
 
 int glr_ctrl_router_handle_replay_special(int key) {
@@ -2852,6 +2878,16 @@ static int route_code_panel_chrome_hit(void) {
     return 1;
 }
 
+/* UI_HIT_CODE_FOCUS_TOGGLE: the statusbar "focus" keycap. Same action
+ * as the Ctrl+Shift+F shortcut — go through the shared toggle so both
+ * paths sync chrome, request follow-scroll, and post the status line. */
+static int route_code_focus_toggle_hit(void) {
+    glr_ctrl_toggle_code_focus();
+    glr_ctrl_router_reset_code_panel_drag();
+    editor_request_redraw();
+    return 1;
+}
+
 /* UI_HIT_INLINE_COLOR_SWATCH: toggle / open the floating color picker
  * for the swatch's source line. Undo capture is owned by the picker's
  * writeback path (color_picker_write_cmd → editor_commit_apply_external
@@ -3091,6 +3127,8 @@ int glr_ctrl_router_handle_code_panel_hit(UiHit hit, int x, int y) {
         consumed = route_code_gutter_hit(&hit); break;
     case UI_HIT_CODE_PANEL_CHROME:
         consumed = route_code_panel_chrome_hit(); break;
+    case UI_HIT_CODE_FOCUS_TOGGLE:
+        consumed = route_code_focus_toggle_hit(); break;
     case UI_HIT_CODE_PANEL_TAB:
         consumed = route_scene_tab_hit(&hit); break;
     case UI_HIT_HELP_PANEL:
@@ -3225,6 +3263,7 @@ void glr_ctrl_keyboard(unsigned char key, int x, int y) {
         glr_ctrl_router_handle_debug_dump_key(key) ||
         glr_ctrl_router_handle_accum_samples_key(key) ||
         glr_ctrl_router_handle_post_filter_key(key) ||
+        glr_ctrl_router_handle_code_focus_key(key) ||
         glr_ctrl_router_handle_quit_key(key)) {
         glr_ctrl_apply_input_effects(editor_take_input_effects());
         return;

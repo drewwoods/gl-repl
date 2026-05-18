@@ -15,6 +15,7 @@
 #include "ui/scene_tabs.h"
 #include "ui/text_layout.h"
 #include "ui/text_panel.h"
+#include "ui/theme.h"
 #include "widgets/tutorial.h"
 
 #include <ctype.h>
@@ -1247,12 +1248,64 @@ static void repl_code_panel_build_rows(ReplCodePanelBuilder *builder) {
 
 static void repl_code_panel_statusbar_sep(int *tx, int sy, int sh) {
     *tx += 8;
-    glColor4f(0.20f, 0.20f, 0.20f, 1.0f);
+    ui_clr(UI_TOK_DIVIDER);
     glBegin(GL_LINES);
     glVertex2f((float)*tx, (float)(sy + 4));
     glVertex2f((float)*tx, (float)(sy + sh - 4));
     glEnd();
     *tx += 8;
+}
+
+/* Right-aligned statusbar cluster: a "[focus] focus" keycap+label and
+ * the existing "[F1] help" keycap+label. The geometry is derived once
+ * here so the renderer and the hit-test agree on the clickable focus
+ * keycap box (window / GL coords, bottom-left origin), with no
+ * arithmetic duplicated across the two passes. */
+static const char *k_statusbar_help_kbd  = "F1";
+static const char *k_statusbar_help_lbl  = "help";
+static const char *k_statusbar_focus_kbd = "C-S-F";
+static const char *k_statusbar_focus_lbl = "focus";
+
+typedef struct {
+    int text_y;
+    int help_kx, help_lbl_x, help_kw;
+    int focus_kx, focus_lbl_x, focus_kw;
+    int ky, kh;                 /* keycap box y / h (shared) */
+} ReplStatusbarHints;
+
+static ReplStatusbarHints repl_code_panel_statusbar_hints(int sx, int sy,
+                                                          int sw, int sh) {
+    ReplStatusbarHints h;
+    int help_lbl_w  = (int)strlen(k_statusbar_help_lbl)  * FONT_SMALL_W;
+    int focus_lbl_w = (int)strlen(k_statusbar_focus_lbl) * FONT_SMALL_W;
+
+    h.text_y     = sy + (sh - FONT_SMALL_H) / 2 + 1;
+    h.ky         = sy + 3;
+    h.kh         = sh - 6;
+
+    h.help_kw    = (int)strlen(k_statusbar_help_kbd) * FONT_SMALL_W + 10;
+    h.help_lbl_x = sx + sw - CODE_MARGIN_X - help_lbl_w;
+    h.help_kx    = h.help_lbl_x - h.help_kw - 6;
+
+    h.focus_kw    = (int)strlen(k_statusbar_focus_kbd) * FONT_SMALL_W + 10;
+    h.focus_lbl_x = h.help_kx - 12 - focus_lbl_w;
+    h.focus_kx    = h.focus_lbl_x - h.focus_kw - 6;
+    return h;
+}
+
+/* A sunken keycap chip (box + divider border) using theme tokens. The
+ * caller draws the centred key glyphs afterwards with its own color so
+ * the focus chip can tint them by ON/OFF state. */
+static void repl_code_panel_draw_keycap(int kx, int ky, int kw, int kh) {
+    ui_clr(UI_TOK_SUNKEN);
+    glRectf((float)kx, (float)ky, (float)(kx + kw), (float)(ky + kh));
+    ui_clr(UI_TOK_DIVIDER);
+    glBegin(GL_LINE_LOOP);
+    glVertex2f((float)kx, (float)ky);
+    glVertex2f((float)(kx + kw), (float)ky);
+    glVertex2f((float)(kx + kw), (float)(ky + kh));
+    glVertex2f((float)kx, (float)(ky + kh));
+    glEnd();
 }
 
 static void repl_code_panel_draw_statusbar(const UiRenderSnapshot *snap,
@@ -1277,24 +1330,26 @@ static void repl_code_panel_draw_statusbar(const UiRenderSnapshot *snap,
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-    glColor4f(0.094f, 0.094f, 0.094f, 0.98f);
+    ui_clr_a(UI_TOK_SURFACE, 0.98f);
     glRectf((float)cp_x, (float)sy,
             (float)(cp_x + cp_w), (float)(sy + sh));
-    glColor4f(0.0f, 0.0f, 0.0f, 1.0f);
+    glColor4f(0.0f, 0.0f, 0.0f, 1.0f);   /* deliberate hard bottom edge */
     glBegin(GL_LINES);
     glVertex2f((float)cp_x, (float)(sy + sh));
     glVertex2f((float)(cp_x + cp_w), (float)(sy + sh));
     glEnd();
 
     {
-        int text_y = sy + (sh - FONT_SMALL_H) / 2 + 1;
+        ReplStatusbarHints h =
+            repl_code_panel_statusbar_hints(cp_x, sy, cp_w, sh);
+        int text_y = h.text_y;
         int tx = cp_x + CODE_MARGIN_X;
         char cmds_buf[48];
         char line_buf[64];
 
         snprintf(cmds_buf, sizeof(cmds_buf), "%d/%d cmds",
                  snap->flat_program_count, MAX_COMMANDS);
-        glColor3f(0.878f, 0.878f, 0.878f);
+        ui_clr(UI_TOK_TEXT_PRIMARY);
         gl2d_draw_string((float)tx, (float)text_y, cmds_buf, FONT_SMALL);
         tx += (int)strlen(cmds_buf) * FONT_SMALL_W;
 
@@ -1308,7 +1363,7 @@ static void repl_code_panel_draw_statusbar(const UiRenderSnapshot *snap,
         } else {
             snprintf(line_buf, sizeof(line_buf), "Ln %d", edit_line + 1);
         }
-        glColor3f(0.627f, 0.627f, 0.627f);
+        ui_clr(UI_TOK_TEXT_MUTED);
         gl2d_draw_string((float)tx, (float)text_y, line_buf, FONT_SMALL);
         tx += (int)strlen(line_buf) * FONT_SMALL_W;
 
@@ -1320,40 +1375,33 @@ static void repl_code_panel_draw_statusbar(const UiRenderSnapshot *snap,
                 snprintf(aa_buf, sizeof(aa_buf), "AA %dx", render.accum_samples);
             else
                 snprintf(aa_buf, sizeof(aa_buf), "AA off");
+            ui_clr(UI_TOK_TEXT_MUTED);
             gl2d_draw_string((float)tx, (float)text_y, aa_buf, FONT_SMALL);
             tx += (int)strlen(aa_buf) * FONT_SMALL_W;
         }
 
+        /* Focus keycap+label: accent when ON, muted when OFF. The
+         * keycap box is the click target (UI_HIT_CODE_FOCUS_TOGGLE),
+         * hit-tested from the same hints geometry. */
         {
-            const char *help_kbd = "F1";
-            const char *help_lbl = "help";
-            int kbd_w = (int)strlen(help_kbd) * FONT_SMALL_W + 10;
-            int lbl_w = (int)strlen(help_lbl) * FONT_SMALL_W;
-            int rx = cp_x + cp_w - CODE_MARGIN_X - lbl_w;
-            int kx;
-            int ky;
-            int kh;
-
-            glColor3f(0.627f, 0.627f, 0.627f);
-            gl2d_draw_string((float)rx, (float)text_y, help_lbl, FONT_SMALL);
-
-            kx = rx - kbd_w - 6;
-            ky = sy + 3;
-            kh = sh - 6;
-            glColor4f(0.078f, 0.078f, 0.078f, 1.0f);
-            glRectf((float)kx, (float)ky,
-                    (float)(kx + kbd_w), (float)(ky + kh));
-            glColor4f(0.20f, 0.20f, 0.20f, 1.0f);
-            glBegin(GL_LINE_LOOP);
-            glVertex2f((float)kx, (float)ky);
-            glVertex2f((float)(kx + kbd_w), (float)ky);
-            glVertex2f((float)(kx + kbd_w), (float)(ky + kh));
-            glVertex2f((float)kx, (float)(ky + kh));
-            glEnd();
-            glColor3f(0.733f, 0.733f, 0.733f);
-            gl2d_draw_string((float)(kx + 5), (float)(ky + 2),
-                             help_kbd, FONT_SMALL);
+            UiThemeToken focus_tok = snap->code_panel.code_focus
+                ? UI_TOK_ACCENT : UI_TOK_TEXT_MUTED;
+            repl_code_panel_draw_keycap(h.focus_kx, h.ky, h.focus_kw, h.kh);
+            ui_clr(focus_tok);
+            gl2d_draw_string((float)(h.focus_kx + 5), (float)(h.ky + 2),
+                             k_statusbar_focus_kbd, FONT_SMALL);
+            gl2d_draw_string((float)h.focus_lbl_x, (float)text_y,
+                             k_statusbar_focus_lbl, FONT_SMALL);
         }
+
+        /* Help keycap+label. */
+        repl_code_panel_draw_keycap(h.help_kx, h.ky, h.help_kw, h.kh);
+        ui_clr(UI_TOK_TEXT_PRIMARY);
+        gl2d_draw_string((float)(h.help_kx + 5), (float)(h.ky + 2),
+                         k_statusbar_help_kbd, FONT_SMALL);
+        ui_clr(UI_TOK_TEXT_MUTED);
+        gl2d_draw_string((float)h.help_lbl_x, (float)text_y,
+                         k_statusbar_help_lbl, FONT_SMALL);
     }
 
     glDisable(GL_BLEND);
@@ -1472,6 +1520,18 @@ UiHit ui_repl_code_panel_hit_test(const UiRenderSnapshot *snap,
         gl_y >= builder.text_snap.cp_y &&
         gl_y < builder.text_snap.cp_y + builder.text_snap.cp_h) {
         if (gl_y < builder.text_snap.cp_y + STATUSBAR_H) {
+            /* Same hints geometry the renderer uses, so the click
+             * target lines up exactly with the drawn focus keycap. */
+            ReplStatusbarHints h = repl_code_panel_statusbar_hints(
+                builder.text_snap.cp_x, builder.text_snap.cp_y,
+                builder.text_snap.cp_w, STATUSBAR_H);
+            if (mx >= h.focus_kx && mx < h.focus_kx + h.focus_kw &&
+                gl_y >= h.ky && gl_y < h.ky + h.kh) {
+                hit.kind = UI_HIT_CODE_FOCUS_TOGGLE;
+                hit.local_x = (float)(mx - builder.text_snap.cp_x);
+                hit.local_y = (float)(gl_y - builder.text_snap.cp_y);
+                return hit;
+            }
             hit.kind = UI_HIT_CODE_PANEL_CHROME;
             hit.local_x = (float)(mx - builder.text_snap.cp_x);
             hit.local_y = (float)(gl_y - builder.text_snap.cp_y);

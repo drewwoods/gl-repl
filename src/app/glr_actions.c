@@ -18,7 +18,6 @@
 #include "repl/scenes.h"
 #include "app/glr_config.h"
 #include "editor/input.h"
-#include "editor/state.h"      /* editor_scroll_follow_cursor_set */
 #include "editor/completion.h"
 #include "keys.h"
 #include "repl/tutorials.h"
@@ -92,6 +91,25 @@ static const char *audio_cfg_names[] = { "Pause", "Once", "Song", "All" };
 static const char *syntax_hl_names[] = { "Off", "On", "On+Bold" };
 static const char *view_mode_names[] = { "3D", "2D" };
 
+/* Hidden session toggles — intentionally NOT rows in this table (no
+ * menu entry, no keyboard-shortcut field here, no @cfg persistence).
+ * They are session-only state flipped by a dedicated router handler,
+ * mirroring the F1 help overlay. Listed here because g_cfg_items[] is
+ * the table a reader scans for "what config exists"; these live
+ * elsewhere on purpose:
+ *
+ *   Ctrl+N        post-processing filter cycle
+ *                 -> glr_ctrl_router_handle_post_filter_key
+ *                    (glr_ctrl.c); GlrPresentationState.post_filter_mode
+ *   Ctrl+Shift+F  code-panel focus (hide boilerplate chrome)
+ *                 -> glr_ctrl_router_handle_code_focus_key /
+ *                    glr_ctrl_toggle_code_focus (glr_ctrl.c);
+ *                    GlrPresentationState.code_focus; also surfaced as
+ *                    the clickable statusbar "focus" keycap
+ *                    (UI_HIT_CODE_FOCUS_TOGGLE) and the F1 help catalog
+ *                    (src/repl/help_text.c).
+ *
+ * Both Ctrl-key codes are defined/annotated in keys.h. */
 GlrConfigItem g_cfg_items[] = {
     { "### RENDERING",     0, 0,  GLR_CONFIG_NONE,               0, NULL,                 1 },
     { "MSAA",              KEY_CTRL_U, 0, GLR_CONFIG_MSAA,       2, NULL,                 0 },
@@ -132,7 +150,6 @@ GlrConfigItem g_cfg_items[] = {
     { "Code panel",        KEY_CTRL_B, 0, GLR_CONFIG_CODE_PANEL_LAYOUT, CODE_PANEL_LAYOUT_COUNT, code_panel_layout_names, 0 },
     { "Wrap at commas",    0, 0,  GLR_CONFIG_WRAP_AT_COMMA,       2, NULL,                 0 },
     { "Syntax highlight",  0, 0,  GLR_CONFIG_SYNTAX_HIGHLIGHT,    3, syntax_hl_names,      0 },
-    { "Code focus",        0, 0,  GLR_CONFIG_CODE_FOCUS,          2, NULL,                 0 },
     { "---",               0, 0,  GLR_CONFIG_NONE,               0, NULL,                 1 },
     { "### AUDIO",         0, 0,  GLR_CONFIG_NONE,               0, NULL,                 1 },
     { "Audio",             0, 0,  GLR_CONFIG_AUDIO_MODE,          4, audio_cfg_names,      0 },
@@ -393,15 +410,6 @@ void glr_cfg_cycle_row(int row, int delta) {
             "Audio: loop all",
         };
         repl_set_status(labels[mode]);
-    } else if (item->key == GLR_CONFIG_CODE_FOCUS) {
-        /* Toggling collapses the code panel's chrome header rows from
-         * ~20 to 0 (and back). The follow-scroll block in glr_ctrl only
-         * re-centers when scroll_follow_cursor is set, so without this
-         * the active edit row would scroll off-screen on toggle. */
-        editor_scroll_follow_cursor_set(1);
-        snprintf(cfg_status_buf, sizeof(cfg_status_buf), "Code focus: %s",
-                 new_value ? "ON" : "OFF");
-        repl_set_status(cfg_status_buf);
     } else if (item->state_names) {
         snprintf(cfg_status_buf, sizeof(cfg_status_buf), "%s: %s",
                  item->label, glr_config_state_name(item->key, new_value));

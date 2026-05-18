@@ -20,6 +20,7 @@ typedef enum {
     UI_HIT_CODE_INSERT_LINE,     /* code-panel "next line" past last commit */
     UI_HIT_CODE_GUTTER,          /* code-panel left margin / line numbers */
     UI_HIT_CODE_PANEL_CHROME,    /* non-text code-panel chrome (e.g. statusbar) */
+    UI_HIT_CODE_FOCUS_TOGGLE,    /* statusbar "focus" keycap — toggle code focus */
     UI_HIT_CODE_PANEL_TAB,       /* scene tab strip — a clickable scene tab */
     UI_HIT_INLINE_COLOR_SWATCH,  /* inline color swatch drawn in a code-panel row */
     UI_HIT_COLOR_SWATCH,         /* floating color picker slider control */
@@ -59,6 +60,10 @@ typedef enum {
 
  *   UI_HIT_CODE_PANEL_CHROME
  *     coordinates only, no line / row payload
+ *
+ *   UI_HIT_CODE_FOCUS_TOGGLE
+ *     coordinates only; controller routes it to
+ *     glr_ctrl_toggle_code_focus() (same action as Ctrl+Shift+F)
  *
  *   UI_HIT_CODE_PANEL_TAB
  *     item_idx = tab display index (into the snapshot scene_tabs list)
