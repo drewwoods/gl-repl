@@ -493,26 +493,23 @@ int ui_menu_bar_dropdown_item_hit(int gx, int gy) {
     return row;
 }
 
-/* Fill `h` with the per-menu hit payload for an open-submenu row.
- * (Step 3 unifies this onto UI_HIT_SUBMENU_ITEM carrying menu_id; for
- * now Scene keeps its existing UI_HIT_EXAMPLE_SUBMENU_ITEM contract so
- * this step stays behaviour-neutral.) */
+/* Fill `h` with the unified UI_HIT_SUBMENU_ITEM payload for an
+ * open-submenu row: cmd_idx = menu_id (the controller routes Scene vs.
+ * Config off this), item_idx = absolute target index (global example
+ * index / g_cfg_items[] index), line_idx = ordinal. Menu-agnostic. */
 static void submenu_fill_hit(UiHit *h, int menu_id, int parent_row,
                              int ordinal, int mx, int my,
                              int sx, int sy) {
     int ry = ui_state_viewport().window_h - my;
-    if (menu_id == MENU_SCENE) {
-        int tag = scene_tag_idx_for_parent_row(parent_row);
-        int example_idx = submenu_row_abs_index(menu_id, parent_row, ordinal);
-        if (example_idx < 0)
-            return;
-        h->kind = UI_HIT_EXAMPLE_SUBMENU_ITEM;
-        h->cmd_idx = tag;
-        h->item_idx = example_idx;
-        h->line_idx = ordinal;
-        h->local_x = (float)(mx - sx);
-        h->local_y = (float)(ry - sy);
-    }
+    int abs_idx = submenu_row_abs_index(menu_id, parent_row, ordinal);
+    if (abs_idx < 0)
+        return;
+    h->kind = UI_HIT_SUBMENU_ITEM;
+    h->cmd_idx = menu_id;
+    h->item_idx = abs_idx;
+    h->line_idx = ordinal;
+    h->local_x = (float)(mx - sx);
+    h->local_y = (float)(ry - sy);
 }
 
 static UiHit submenu_hit_test(int mx, int my) {

@@ -8,7 +8,7 @@ commit and updates this file's progress log below.
 
 - [x] Step 1 — Section model in `glr_config` (incl. `row_kind`)
 - [x] Step 2 — Generalize submenu plumbing (Scene-wired; Config stubbed)
-- [ ] Step 3 — `UiHit` contract rename
+- [x] Step 3 — `UiHit` contract rename
 - [ ] Step 4 — Config menu shape
 - [ ] Step 5 — Parent-row click guard
 - [ ] Step 6 — Controller routing
@@ -202,10 +202,18 @@ Order matters; each step builds + passes tests before the next.
      hit-test tests stay green verbatim.
    Verified: `make sample USE_GL_STUBS=1` clean; full suite
    `make test USE_GL_STUBS=1` → 43/43 binaries, 6024/6024 tests.
-3. **`UiHit` contract.** Rename `UI_HIT_EXAMPLE_SUBMENU_ITEM` →
-   `UI_HIT_SUBMENU_ITEM`; carry `cmd_idx = menu_id`, `item_idx =
-   absolute target index` (example idx or `g_cfg_items[]` idx),
-   `line_idx = ordinal`. Update `src/ui/hit.h` doc block.
+3. **`UiHit` contract.** ✅ **Done** (commit `Step 3`). Renamed
+   `UI_HIT_EXAMPLE_SUBMENU_ITEM` → `UI_HIT_SUBMENU_ITEM`; payload is now
+   `cmd_idx = menu_id`, `item_idx = absolute target index` (global
+   example idx / `g_cfg_items[]` idx), `line_idx = ordinal`.
+   `submenu_fill_hit()` collapsed to a single menu-agnostic fill (no
+   more Scene special-case). Updated `src/ui/hit.h` + `src/ui/menu_bar.h`
+   doc blocks and the `glr_ctrl.c` enum references (case label,
+   dismiss-guard, comment). `route_example_submenu_item_hit` keeps
+   working unchanged (it only reads `item_idx`); its rename + Config
+   `cmd_idx` branch is Step 6. Test updated:
+   `test_ui_menu_bar.c` now asserts `UI_HIT_SUBMENU_ITEM` and
+   `cmd_idx == GLR_MENU_SCENE`. Full suite 6024/6024.
 4. **Config menu shape.** In `src/ui/menu_bar.c`,
    `menu_item_count(MENU_CONFIG)` → `glr_config_section_count() + 1`,
    where the **menu layer owns the +1 synthetic All row** (the pure
