@@ -6,7 +6,7 @@ commit and updates this file's progress log below.
 
 ## Progress log
 
-- [ ] Step 1 — Section model in `glr_config`
+- [x] Step 1 — Section model in `glr_config` (incl. `row_kind`)
 - [ ] Step 2 — Generalize submenu plumbing
 - [ ] Step 3 — `UiHit` contract rename
 - [ ] Step 4 — Config menu shape
@@ -158,15 +158,24 @@ Steps.
 
 Order matters; each step builds + passes tests before the next.
 
-1. **Section model (no UI yet).** Add to `src/app/glr_config.{c,h}` a
-   pure helper enumerating **only the real sections present in the
-   data** (no synthetic All — that is a menu-layer concern, see Step 4):
-   `glr_config_section_count()` (count of `### ` headers),
-   `glr_config_section_label(s)`,
-   `glr_config_section_range(s, *start, *count)` (walks `### ` / `---`
-   rows; `count` covers the section's `ITEM` rows only). Ownership rule:
-   this accessor is data-faithful; the synthetic **All** row is
-   *never* counted here. Unit test in a core test (no GL).
+1. **Section model (no UI yet).** ✅ **Done** (commit `Step 1`).
+   Added to `src/app/glr_config.{c,h}` a pure helper enumerating **only
+   the real sections present in the data** (no synthetic All — that is
+   a menu-layer concern, see Step 4): `glr_config_section_count()`
+   (count of `### ` headers), `glr_config_section_label(s)` ("### "
+   marker stripped), `glr_config_section_range(s, *start, *count)`
+   (item rows only; header and trailing `---` excluded). Ownership
+   rule: this accessor is data-faithful; the synthetic **All** row is
+   *never* counted here.
+   **Deviation from sketch:** `glr_config_row_kind(idx) →
+   {ITEM,HEADER,SEPARATOR}` (originally slated for Step 2) landed here
+   too — it is pure config-domain row classification, so it belongs
+   beside the section model, not in the menu layer. Step 2's provider
+   now just *consumes* it.
+   Tests: `test_glr_actions.c::test_config_sections` — section
+   count/labels, range contiguity & item-only invariant, and that
+   header+separator+item kinds partition the whole table
+   (`build/release-gl-stubs/test_glr_actions` → 157/157).
 2. **Generalize submenu plumbing in `src/ui/menu_bar.c`.** Replace
    `g_scene_open_tag`/`g_scene_submenu_open_time` with a generic
    `{int open_menu_id; int open_parent_row; float open_time;}`.
