@@ -11,7 +11,7 @@ commit and updates this file's progress log below.
 - [x] Step 3 — `UiHit` contract rename
 - [x] Step 4 — Config menu shape (+ flyout state/shortcut render, pulled from Step 8)
 - [x] Step 5 — Parent-row click guard (option b; activate-layer)
-- [ ] Step 6 — Controller routing
+- [x] Step 6 — Controller routing
 - [ ] Step 7 — Right-click backward-cycle in flyouts
 - [ ] Step 8 — Render generalization
 - [ ] Step 9 — Tests + docs
@@ -272,13 +272,22 @@ Order matters; each step builds + passes tests before the next.
    `glr_cfg_cycle_row()` primitive (and asserts the parent-row path is
    inert); `test_glr_actions.c:278` comment corrected. Full suite
    6059/6059.
-6. **Controller routing.** Rename `route_example_submenu_item_hit` →
-   `route_submenu_item_hit`; branch on `hit->cmd_idx` (menu_id):
-   `MENU_SCENE` → `glr_scene_load_example(item_idx)` (unchanged);
-   `MENU_CONFIG` → `glr_action_menu_item_activate(GLR_MENU_CONFIG,
-   item_idx)` (the existing index-based leaf path — verify a Config
-   submenu click keeps the dropdown open for repeated toggles, matching
-   today's flat-list behavior; scene submenu closes on pick).
+6. **Controller routing.** ✅ **Done** (commit `Step 6`). Renamed
+   `route_example_submenu_item_hit` → `route_submenu_item_hit`;
+   branches on `hit->cmd_idx`: `GLR_MENU_CONFIG` →
+   `glr_cfg_cycle_row(item_idx, +1)` on the absolute `g_cfg_items[]`
+   index and **keeps** the dropdown + flyout open (repeated toggles);
+   default/`MENU_SCENE` → `glr_scene_load_example(item_idx)` then
+   `ui_menu_bar_close()`. **Plan correction:** the sketch said route
+   Config through `glr_action_menu_item_activate(GLR_MENU_CONFIG, …)`,
+   but Step 5 made that branch the inert parent-row guard — so the
+   leaf path deliberately calls `glr_cfg_cycle_row` directly instead
+   (the activate path would now no-op). `UI_HIT_SUBMENU_ITEM` is
+   already in the dropdown-dismiss keep-open allowlist (Step 3), so a
+   Config flyout click doesn't trip the outside-click preamble.
+   Dedicated Config-flyout hit/route tests (incl. the keep-open
+   assertion) are added in Step 9 with the Scene-mirrored submenu
+   tests; full suite stays 6059/6059.
 7. **Right-click backward-cycle in flyouts (Finding #3).**
    `ui_menu_bar_handle_config_right_press` (`src/ui/menu_bar.c:581`)
    today calls `ui_menu_bar_dropdown_item_hit` (flat dropdown) →
