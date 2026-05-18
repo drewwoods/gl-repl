@@ -88,6 +88,14 @@ int  ui_menu_bar_scene_example_submenu_rect_for_test(int tag_idx,
                                                      int *sx, int *sy,
                                                      int *sw, int *sh);
 
+/* Test helper: generic flyout-submenu rect for (menu_id, parent_row)
+ * while that menu is open. Ignores hover/open state. GL-space coords.
+ * Used by Config-flyout tests; the Scene helper above is the
+ * tag-indexed convenience wrapper over the same engine. */
+int  ui_menu_bar_submenu_rect_for_test(int menu_id, int parent_row,
+                                       int *sx, int *sy,
+                                       int *sw, int *sh);
+
 /* Refresh open-dropdown hover state from the current pointer. Returns 1 when
  * the hovered parent row or Scene example submenu changed. */
 int  ui_menu_bar_update_pointer_hover(int mx, int my, float now);

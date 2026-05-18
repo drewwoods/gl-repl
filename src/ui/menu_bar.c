@@ -531,6 +531,12 @@ static int submenu_rect(int menu_id, int parent_row,
     return 1;
 }
 
+int ui_menu_bar_submenu_rect_for_test(int menu_id, int parent_row,
+                                      int *sx, int *sy,
+                                      int *sw, int *sh) {
+    return submenu_rect(menu_id, parent_row, sx, sy, sw, sh);
+}
+
 int ui_menu_bar_scene_example_submenu_rect_for_test(int tag_idx,
                                                     int *sx, int *sy,
                                                     int *sw, int *sh) {
@@ -718,14 +724,20 @@ void ui_menu_bar_open_config(float now) {
 
 int ui_menu_bar_handle_config_right_press(int mx, int my) {
     if (g_open_menu != MENU_CONFIG) return 0;
-    /* Config top-level rows are section parents (no single item to
-     * cycle). Backward-cycling now lives in the open flyout — wired in
-     * Step 7 (config_submenu_hit + glr_cfg_cycle_row on its abs idx).
-     * Until then a right-press over the section list is a no-op rather
-     * than mis-cycling whatever g_cfg_items[] index a section row
-     * happens to alias. */
-    (void)mx; (void)my;
-    return 0;
+    /* Backward-cycle the Config flyout item under the cursor.
+     * submenu_hit_test only resolves actionable ITEM rows — chrome
+     * ("### "/"---" in the "All" flyout) is skipped via
+     * submenu_row_kind, and section/All parent rows own no submenu, so
+     * a right-press over the section list (or any non-item) is a
+     * no-op rather than mis-cycling a g_cfg_items[] index. The hit
+     * carries the absolute index in item_idx (plan Step 7,
+     * Finding #3). */
+    UiHit h = submenu_hit_test(mx, my);
+    if (h.kind != UI_HIT_SUBMENU_ITEM || h.cmd_idx != MENU_CONFIG ||
+        h.item_idx < 0)
+        return 0;
+    glr_cfg_cycle_row(h.item_idx, -1);
+    return 1;
 }
 
 void ui_menu_bar_note_search_opened(float now) {
