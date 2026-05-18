@@ -10,7 +10,7 @@ commit and updates this file's progress log below.
 - [x] Step 2 — Generalize submenu plumbing (Scene-wired; Config stubbed)
 - [x] Step 3 — `UiHit` contract rename
 - [x] Step 4 — Config menu shape (+ flyout state/shortcut render, pulled from Step 8)
-- [ ] Step 5 — Parent-row click guard
+- [x] Step 5 — Parent-row click guard (option b; activate-layer)
 - [ ] Step 6 — Controller routing
 - [ ] Step 7 — Right-click backward-cycle in flyouts
 - [ ] Step 8 — Render generalization
@@ -257,18 +257,21 @@ Order matters; each step builds + passes tests before the next.
      cycle); Step 5 generalizes that to *every* section/All row.
    Verified: `make sample USE_GL_STUBS=1` warning-free; full suite
    `make test USE_GL_STUBS=1` → 6020/6020.
-5. **Parent-row click guard (Finding #1).** Section/All rows must be
-   inert on click — the flyout opens on **hover**. Option (a) (hit-test
-   suppression) was ruled out in Step 4 (hover shares
-   `ui_menu_bar_dropdown_item_hit`). Implement **option (b)**: a Config
-   branch in `glr_action_menu_item_activate` that returns 0 (no-op,
-   menu stays open) when `item_idx` is a section/All **parent row**
-   rather than a real `g_cfg_items[]` item — mirroring the existing
-   `MENU_SCENE` tag-row guard. Currently it is only accidentally safe
-   for parent rows that alias a `### ` header; make it explicit for
-   all of them. Tests: clicking each Config section row (and All)
-   toggles nothing and keeps the menu open; tighten the
-   `test_ui_scene_tabs` assertions accordingly.
+5. **Parent-row click guard (Finding #1).** ✅ **Done** (commit
+   `Step 5`). Option (a) ruled out in Step 4 (hover shares
+   `ui_menu_bar_dropdown_item_hit`); implemented **option (b)**: the
+   `GLR_MENU_CONFIG` branch of `glr_action_menu_item_activate` is now
+   an explicit parent-row no-op — it never treats `item_idx` as a
+   `g_cfg_items[]` index, returns 0 (dropdown stays open), mirroring
+   the `MENU_SCENE` tag-row guard. Leaf config items will be activated
+   by the controller calling `glr_cfg_cycle_row()` on the absolute
+   index via the submenu route (Step 6), never through this branch.
+   Tests: new `test_glr_actions.c::test_config_parent_rows_inert`
+   asserts every section parent + the "All" row returns 0 and mutates
+   **no** config value; `test_repl_editor.c` retargeted to the
+   `glr_cfg_cycle_row()` primitive (and asserts the parent-row path is
+   inert); `test_glr_actions.c:278` comment corrected. Full suite
+   6059/6059.
 6. **Controller routing.** Rename `route_example_submenu_item_hit` →
    `route_submenu_item_hit`; branch on `hit->cmd_idx` (menu_id):
    `MENU_SCENE` → `glr_scene_load_example(item_idx)` (unchanged);

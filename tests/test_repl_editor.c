@@ -415,10 +415,18 @@ int main() {
         int row = cfg_row_for_key(GLR_CONFIG_CODE_PANEL_LAYOUT);
         ASSERT_TRUE("config menu action row exists", row >= 0);
         if (row >= 0) {
+            /* Config items are no longer activated through
+             * glr_action_menu_item_activate(GLR_MENU_CONFIG, …) — that
+             * path is now a parent-row no-op (plan Step 5). The Config
+             * flyout route invokes glr_cfg_cycle_row() on the absolute
+             * g_cfg_items[] index; exercise that primitive directly. */
             glr_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT; glr_ctrl_sync_ui_chrome();
-            int close_menu = glr_action_menu_item_activate(GLR_MENU_CONFIG, row);
-            ASSERT_INT("config menu action keeps menu open", close_menu, 0);
-            ASSERT_INT("config menu action cycles code panel",
+            ASSERT_INT("config parent-row activate is an inert no-op",
+                       glr_action_menu_item_activate(GLR_MENU_CONFIG, row), 0);
+            ASSERT_INT("parent-row activate does not cycle the item",
+                       glr_state_presentation().code_panel_layout, CODE_PANEL_LAYOUT_LEFT);
+            glr_cfg_cycle_row(row, 1);
+            ASSERT_INT("config flyout primitive cycles code panel",
                        glr_state_presentation().code_panel_layout, CODE_PANEL_LAYOUT_TOP);
         }
     }

@@ -274,8 +274,35 @@ static void test_menu_actions(void) {
     ASSERT_INT("Load user scene 0", glr_action_menu_item_activate(GLR_MENU_SCENE, tag_count + GLR_SCENE_OFF_SCENES), 1);
     ASSERT_INT("active user scene slot", repl_active_user_scene(), 0);
 
-    /* Config menu */
-    ASSERT_INT("Config row 1", glr_action_menu_item_activate(GLR_MENU_CONFIG, 1), 0); // 0 because toggles keep menu open
+    /* Config menu: top-level rows are section parents — activating
+     * one is an inert no-op that keeps the dropdown open (returns 0). */
+    ASSERT_INT("Config parent-row activate is inert (returns 0)",
+               glr_action_menu_item_activate(GLR_MENU_CONFIG, 1), 0);
+}
+
+/* Step 5 (Finding #1): every Config top-level row — each "### "
+ * section parent and the synthetic "All" row — must be inert on
+ * click: glr_action_menu_item_activate returns 0 (menu stays open)
+ * and NObody's config state changes (it must never be mis-read as a
+ * g_cfg_items[] index and cycled). */
+static void test_config_parent_rows_inert(void) {
+    glr_app_reset_all();
+
+    int parents = glr_config_section_count() + 1; /* sections + All */
+
+    /* Snapshot every config value. */
+    int before[GLR_CONFIG_COUNT];
+    for (int k = 1; k < GLR_CONFIG_COUNT; k++)
+        before[k] = glr_config_get((GlrConfigKey)k);
+
+    for (int row = 0; row < parents; row++) {
+        ASSERT_INT("parent-row activate returns 0 (menu open)",
+                   glr_action_menu_item_activate(GLR_MENU_CONFIG, row), 0);
+    }
+
+    for (int k = 1; k < GLR_CONFIG_COUNT; k++)
+        ASSERT_INT("config value unchanged by parent-row clicks",
+                   glr_config_get((GlrConfigKey)k), before[k]);
 }
 
 static void test_shortcuts(void) {
@@ -349,6 +376,7 @@ int main(void) {
     test_help_tab_actions();
     test_cfg_cycling();
     test_config_sections();
+    test_config_parent_rows_inert();
     test_menu_actions();
     test_shortcuts();
 
