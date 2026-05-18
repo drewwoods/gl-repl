@@ -12,7 +12,7 @@ commit and updates this file's progress log below.
 - [x] Step 4 — Config menu shape (+ flyout state/shortcut render, pulled from Step 8)
 - [x] Step 5 — Parent-row click guard (option b; activate-layer)
 - [x] Step 6 — Controller routing
-- [ ] Step 7 — Right-click backward-cycle in flyouts
+- [x] Step 7 — Right-click backward-cycle in flyouts
 - [ ] Step 8 — Render generalization
 - [ ] Step 9 — Tests + docs
 
@@ -288,17 +288,19 @@ Order matters; each step builds + passes tests before the next.
    Dedicated Config-flyout hit/route tests (incl. the keep-open
    assertion) are added in Step 9 with the Scene-mirrored submenu
    tests; full suite stays 6059/6059.
-7. **Right-click backward-cycle in flyouts (Finding #3).**
-   `ui_menu_bar_handle_config_right_press` (`src/ui/menu_bar.c:581`)
-   today calls `ui_menu_bar_dropdown_item_hit` (flat dropdown) →
-   `glr_cfg_cycle_row(item, -1)`. Once items live in flyouts, the
-   right-press must hit-test the **open submenu** instead: resolve the
-   submenu row under the cursor to its absolute `g_cfg_items[]` index
-   via the generic submenu hit-test, skip HEADER/SEPARATOR rows, then
-   `glr_cfg_cycle_row(abs_idx, -1)`. A right-press on a parent/All row
-   is a no-op (no item to cycle). Add explicit test coverage:
-   right-click a flyout item cycles it backward; right-click a section
-   row does nothing.
+7. **Right-click backward-cycle in flyouts (Finding #3).** ✅ **Done**
+   (commit `Step 7`). `ui_menu_bar_handle_config_right_press` now
+   calls the generic `submenu_hit_test(mx,my)` — which only resolves
+   actionable `ITEM` rows (chrome skipped via `submenu_row_kind`;
+   parent/All rows own no submenu) and carries the absolute
+   `g_cfg_items[]` index in `item_idx` — then `glr_cfg_cycle_row(idx,
+   -1)`. A right-press over the section list / chrome / closed menu is
+   a clean no-op. Added a public generic test accessor
+   `ui_menu_bar_submenu_rect_for_test(menu_id, parent_row, …)` (the
+   Scene tag-indexed helper now delegates to it). New
+   `test_ui_menu_bar.c::test_config_submenu_right_press`: flyout item
+   cycles backward; section parent row & closed menu are no-ops. Full
+   suite 6069/6069.
 8. **Render (verification/polish — core work pulled into Steps 2 & 4).**
    `render_scene_example_submenu` → `render_active_submenu(snap)` with
    unified fade landed in **Step 2**; HEADER/SEPARATOR inert chrome
