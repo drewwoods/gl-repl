@@ -1206,8 +1206,16 @@ typedef struct {
     ReplExampleTagMask tags;
 } ReplExampleEntry;
 
+/* REPL_EXAMPLE_TAG_ALL is a synthetic tag: every example is a member.
+ * It is not listed in any g_example_entries[] mask literal; instead
+ * repl_example_tag_mask() ORs its bit into every example's mask, so the
+ * whole tag query API (has_tag / count_for_tag / index_for_tag /
+ * visible_tag_*) — and therefore the Scene menu's "All" group and the
+ * F12 cycle — pick it up with no per-entry bookkeeping. Kept at index 0
+ * so "All" sorts first under "### EXAMPLES". */
 enum {
-    REPL_EXAMPLE_TAG_2D = 0,
+    REPL_EXAMPLE_TAG_ALL = 0,
+    REPL_EXAMPLE_TAG_2D,
     REPL_EXAMPLE_TAG_3D,
     REPL_EXAMPLE_TAG_POLYGONS,
     REPL_EXAMPLE_TAG_LINES,
@@ -1215,12 +1223,14 @@ enum {
 };
 
 #define EXAMPLE_TAG_BIT(tag) (1u << (tag))
+#define EXAMPLE_TAG_ALL      EXAMPLE_TAG_BIT(REPL_EXAMPLE_TAG_ALL)
 #define EXAMPLE_TAG_2D       EXAMPLE_TAG_BIT(REPL_EXAMPLE_TAG_2D)
 #define EXAMPLE_TAG_3D       EXAMPLE_TAG_BIT(REPL_EXAMPLE_TAG_3D)
 #define EXAMPLE_TAG_POLYGONS EXAMPLE_TAG_BIT(REPL_EXAMPLE_TAG_POLYGONS)
 #define EXAMPLE_TAG_LINES    EXAMPLE_TAG_BIT(REPL_EXAMPLE_TAG_LINES)
 
 static const char *const g_example_tag_labels[] = {
+    "All",
     "2D",
     "3D",
     "Polygons",
@@ -1305,7 +1315,9 @@ const char *repl_example_tag_label(int tag_idx) {
 unsigned int repl_example_tag_mask(int example_idx) {
     if (example_idx < 0 || example_idx >= repl_examples_count())
         return 0u;
-    return g_example_entries[example_idx].tags;
+    /* Fold in the synthetic "All" membership so every tag query derives
+     * it uniformly; entry literals stay free of an explicit ALL bit. */
+    return g_example_entries[example_idx].tags | EXAMPLE_TAG_ALL;
 }
 
 int repl_example_has_tag(int example_idx, int tag_idx) {
