@@ -331,7 +331,7 @@ static void test_walker_stop_flag_halts(void) {
  *
  * Direct unit test of the helper that the cursor-guide path uses to
  * fix up vertex_args before handing them to
- * geometry_guides_render_for_cursor. This is the actual fix for the
+ * scene_geometry_guides_render_for_cursor. This is the actual fix for the
  * "guide rendered at object center" bug: if someone reverts the helper
  * to just `return *snapshot`, this test fails.
  */

@@ -117,9 +117,9 @@ static void test_scene_projection_modes(void) {
 #endif
 }
 
-/* Build a test FrameRenderContext. */
-static FrameRenderContext make_test_frame_ctx(void) {
-    FrameRenderContext ctx = {0};
+/* Build a test SceneFrameRenderContext. */
+static SceneFrameRenderContext make_test_frame_ctx(void) {
+    SceneFrameRenderContext ctx = {0};
     ctx.config = make_test_config();
     ctx.focus.valid = 0;
     return ctx;
@@ -143,12 +143,12 @@ static void test_config_defaults(void) {
     ASSERT_FLOAT("anim_time default", cfg.anim_time, 0.0f);
 }
 
-/* --- Tests for FrameRenderContext ---------------------------------- */
+/* --- Tests for SceneFrameRenderContext ----------------------------- */
 
 static void test_frame_ctx_defaults(void) {
-    printf("--- FrameRenderContext defaults ---\n");
+    printf("--- SceneFrameRenderContext defaults ---\n");
 
-    FrameRenderContext ctx = make_test_frame_ctx();
+    SceneFrameRenderContext ctx = make_test_frame_ctx();
 
     ASSERT_INT("config has execute_fn", ctx.config.execute_fn != NULL, 1);
     ASSERT_INT("focus not valid by default", ctx.focus.valid, 0);
@@ -159,7 +159,7 @@ static void test_frame_ctx_defaults(void) {
 static void test_scene_grid_render(void) {
     printf("--- scene_grid_render ---\n");
 
-    FrameRenderContext ctx = make_test_frame_ctx();
+    SceneFrameRenderContext ctx = make_test_frame_ctx();
 
     /* Just ensure it doesn't crash with null/empty config. */
     scene_grid_render(&ctx);
@@ -177,7 +177,7 @@ static void test_scene_grid_render(void) {
 static void test_scene_axes_render(void) {
     printf("--- scene_axes_render ---\n");
 
-    FrameRenderContext ctx = make_test_frame_ctx();
+    SceneFrameRenderContext ctx = make_test_frame_ctx();
 
     scene_axes_render(&ctx);
     ASSERT_TRUE("scene_axes_render did not crash", 1);
@@ -193,7 +193,7 @@ static void test_scene_axes_render(void) {
 static void test_scene_backdrop_render(void) {
     printf("--- scene_backdrop_render ---\n");
 
-    FrameRenderContext ctx = make_test_frame_ctx();
+    SceneFrameRenderContext ctx = make_test_frame_ctx();
 
     scene_backdrop_render(&ctx);
     ASSERT_TRUE("scene_backdrop_render did not crash", 1);
@@ -209,7 +209,7 @@ static void test_scene_backdrop_render(void) {
 static void test_scene_lights(void) {
     printf("--- scene_lights_setup and scene_lights_render ---\n");
 
-    FrameRenderContext ctx = make_test_frame_ctx();
+    SceneFrameRenderContext ctx = make_test_frame_ctx();
 
     /* Setup. */
     scene_lights_setup(&ctx);
@@ -231,7 +231,7 @@ static void test_scene_lights(void) {
 static void test_scene_overlays(void) {
     printf("--- scene_overlays primitives + outlines ---\n");
 
-    FrameRenderContext ctx = make_test_frame_ctx();
+    SceneFrameRenderContext ctx = make_test_frame_ctx();
 
     /* All overlay rendering moved out of scene; the scene module now
      * exposes only per-vertex / per-cmd primitives. Outlines + vertex
@@ -250,7 +250,7 @@ static void test_scene_overlays(void) {
 static void test_anim_time_propagation(void) {
     printf("--- anim_time propagation ---\n");
 
-    FrameRenderContext ctx = make_test_frame_ctx();
+    SceneFrameRenderContext ctx = make_test_frame_ctx();
 
     /* Set animation time and ensure it's preserved through renderers. */
     ctx.config.anim_time = 2.5f;
@@ -269,7 +269,7 @@ static void test_anim_time_propagation(void) {
 static void test_focus_vertex_context(void) {
     printf("--- focus vertex in grid context ---\n");
 
-    FrameRenderContext ctx = make_test_frame_ctx();
+    SceneFrameRenderContext ctx = make_test_frame_ctx();
 
     /* With valid focus vertex. */
     ctx.focus.valid = 1;
@@ -287,7 +287,7 @@ static void test_focus_vertex_context(void) {
 static void test_lighting_array_access(void) {
     printf("--- lighting array in config ---\n");
 
-    FrameRenderContext ctx = make_test_frame_ctx();
+    SceneFrameRenderContext ctx = make_test_frame_ctx();
 
     /* Populate a light. */
     ctx.config.lights[0].pos[0] = 1.0f;
@@ -312,7 +312,7 @@ static void test_lighting_array_access(void) {
 static void test_grid_table_arrays(void) {
     printf("--- grid table arrays in config ---\n");
 
-    FrameRenderContext ctx = make_test_frame_ctx();
+    SceneFrameRenderContext ctx = make_test_frame_ctx();
 
     /* Populate grid tables. */
     for (int i = 0; i < GRID_MAJOR_COUNT; i++)
@@ -333,7 +333,7 @@ static void test_grid_table_arrays(void) {
 static void test_viewport_dimensions(void) {
     printf("--- viewport dimension handling ---\n");
 
-    FrameRenderContext ctx = make_test_frame_ctx();
+    SceneFrameRenderContext ctx = make_test_frame_ctx();
 
     /* Small viewport. */
     ctx.config.viewport_w = 100;
@@ -359,7 +359,7 @@ static void test_viewport_dimensions(void) {
 static void test_render_mode_toggles(void) {
     printf("--- render mode toggles ---\n");
 
-    FrameRenderContext ctx = make_test_frame_ctx();
+    SceneFrameRenderContext ctx = make_test_frame_ctx();
 
     /* Wireframe. */
     ctx.config.wireframe = 1;
@@ -408,7 +408,7 @@ static void test_vertex2f_guide_cursor_dot(void) {
     snap.vertex_filled[0] = snap.vertex_filled[1] = snap.vertex_filled[2] = 1;
     snap.vertex_n_filled = 3;
     gl_stub_counts_reset();
-    geometry_guides_render_for_cursor(&snap);
+    scene_geometry_guides_render_for_cursor(&snap);
     unsigned long long points3f = gl_stub_counts[GL_STUB_glBegin];
     ASSERT_TRUE("vertex3f(1,2,3): guide draws GL_POINTS", points3f > 0);
 
@@ -420,7 +420,7 @@ static void test_vertex2f_guide_cursor_dot(void) {
     snap.vertex_filled[2] = 0;
     snap.vertex_n_filled = 2;
     gl_stub_counts_reset();
-    geometry_guides_render_for_cursor(&snap);
+    scene_geometry_guides_render_for_cursor(&snap);
     ASSERT_TRUE("vertex2f(1,2): guide draws GL_POINTS (same as vertex3f)",
                 gl_stub_counts[GL_STUB_glBegin] > 0);
 
@@ -433,7 +433,7 @@ static void test_vertex2f_guide_cursor_dot(void) {
     snap.vertex_filled[1] = snap.vertex_filled[2] = 0;
     snap.vertex_n_filled = 1;
     gl_stub_counts_reset();
-    geometry_guides_render_for_cursor(&snap);
+    scene_geometry_guides_render_for_cursor(&snap);
     ASSERT_TRUE("vertex2f(1,): partial entry still draws a guide",
                 gl_stub_counts[GL_STUB_glBegin] > 0);
 #else
@@ -474,7 +474,7 @@ static void test_scene_grid_fog_matches_predicate(void) {
     for (int e = 0; e < GRID_EXTENT_COUNT; e++) {
         int is_far = (e == GRID_EXTENT_FAR);
         for (int th = GRID_THEME_OFF + 1; th < GRID_THEME_COUNT; th++) {
-            FrameRenderContext ctx = make_test_frame_ctx();
+            SceneFrameRenderContext ctx = make_test_frame_ctx();
             ctx.config.grid_theme = th;
             ctx.config.grid_extent_idx = e;
             ctx.config.grid_opacity = 1.0f;     /* steady: no transition fog */

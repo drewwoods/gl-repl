@@ -21,7 +21,7 @@ void scene_lights_init_global_ambient(void) {
 
 /* Set light properties only. User REPL commands still decide whether each
  * light is enabled during command execution. */
-void scene_lights_setup(const FrameRenderContext *frame_ctx) {
+void scene_lights_setup(const SceneFrameRenderContext *frame_ctx) {
     for (int i = 0; i < MAX_LIGHTS; i++) {
         const SceneLight *light = &frame_ctx->config.lights[i];
         glDisable(light->id);
@@ -32,7 +32,7 @@ void scene_lights_setup(const FrameRenderContext *frame_ctx) {
     }
 }
 
-void scene_lights_render(const FrameRenderContext *frame_ctx) {
+void scene_lights_render(const SceneFrameRenderContext *frame_ctx) {
     if (!frame_ctx->config.show_light_indicators) return;
     int g_user_lighting_enabled = frame_ctx->config.user_lighting_enabled;
 

@@ -13,6 +13,6 @@
 
 /* Render geometry guides for the cursor's current context. Called during the
  * scene's guide overlay phase when geometry guides are enabled. */
-void geometry_guides_render_for_cursor(const SceneGuideSnapshot *snapshot);
+void scene_geometry_guides_render_for_cursor(const SceneGuideSnapshot *snapshot);
 
 #endif /* SCENE_GEOMETRY_GUIDES_H */

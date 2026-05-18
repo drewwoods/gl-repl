@@ -303,7 +303,7 @@ static void scene_grid_apply_quality_config(const SceneRenderConfig *config) {
     else glDisable(GL_LINE_SMOOTH);
 }
 
-static void scene_grid_render_focus_theme(const FrameRenderContext *frame_ctx,
+static void scene_grid_render_focus_theme(const SceneFrameRenderContext *frame_ctx,
                                          const GridDrawContext *grid_ctx) {
     const SceneFocusVertex *focus = &frame_ctx->focus;
     float cx = focus->pos[0], cz = focus->pos[2];
@@ -363,7 +363,7 @@ static void scene_grid_render_focus_theme(const FrameRenderContext *frame_ctx,
 }
 
 static void scene_grid_render_ocean_theme(const GridDrawContext *grid_ctx,
-                                          const FrameRenderContext *frame_ctx,
+                                          const SceneFrameRenderContext *frame_ctx,
                                           float breath) {
     const float extent = grid_ctx->extent;
     const float major = grid_ctx->major;
@@ -680,7 +680,7 @@ int scene_grid_theme_uses_fog(int grid_theme) {
            grid_theme == GRID_THEME_OCEAN;
 }
 
-void scene_grid_render(const FrameRenderContext *frame_ctx) {
+void scene_grid_render(const SceneFrameRenderContext *frame_ctx) {
     const SceneRenderConfig *config = &frame_ctx->config;
     GridTheme grid_theme = (GridTheme)config->grid_theme;
     if (grid_theme == GRID_THEME_OFF) return;

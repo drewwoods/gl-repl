@@ -216,7 +216,7 @@ static void draw_axis_label_triplet(float len, float offset,
                     colors[SCENE_AXIS_Z].b);
 }
 
-void scene_axes_render(const FrameRenderContext *frame_ctx) {
+void scene_axes_render(const SceneFrameRenderContext *frame_ctx) {
     const SceneRenderConfig *config = &frame_ctx->config;
     AxesTheme axes_theme = (AxesTheme)config->axes_theme;
     if (axes_theme == AXES_THEME_OFF) return;
