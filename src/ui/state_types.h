@@ -1,35 +1,28 @@
 /*
- * ui/state_types.h - UI-chrome value types.
+ * ui/state_types.h - Small UI-chrome value types.
  *
- * The 2D editor chrome owns a handful of small structs (panel divider,
- * camera viewport pose, status bar, help overlay flag, etc.). They used
- * to live in src/repl/state_views.h alongside the REPL-domain slices, which
- * inverted ownership: every UI file pulled in a REPL header just to
- * reach a chrome typedef. Hoisting them here lets ui_*.c files include
- * a UI-owned header for UI-owned types.
+ * Defines the lightweight structs shared by `ui_state.h`, `UiRenderSnapshot`,
+ * and UI renderers: code-panel chrome, help/profile/status flags, pointer, and
+ * viewport size. These are UI-owned values even though several still carry the
+ * historical `Repl` prefix for compatibility.
  *
- * The names still carry the legacy `Repl` prefix because renaming
- * cascades through every member access. Renaming is a separate
- * cleanup; this header is purely a relocation.
- *
- * src/repl/state_views.h includes this header so existing transitive
- * consumers keep working.
+ * `src/repl/state_views.h` re-exports these types for older transitive
+ * consumers, but ownership lives here.
  */
 #ifndef UI_STATE_TYPES_H
 #define UI_STATE_TYPES_H
 
 #include "config.h"          /* REPL_STATUS_TEXT_MAX */
 
-/* Code-panel UI chrome: panel divider, cursor blink + pixel position
- * the renderer uses. The scroll fields used to live here too; Phase 1
- * commit 11 split them out into EditorState.scroll because scroll is
- * an editing-session concern, not a render-chrome one.
+/* Code-panel render chrome: panel divider, cursor blink, and per-frame mirrors
+ * of the presentation flags renderers need.
  *
  * `layout_mode` and `show_vertex_indices` are per-frame mirrors of
  * ReplPresentationState fields so ui_*.c renderers and hit-tests can
  * read them without crossing the repl_state_*() boundary; the controller
- * refreshes them in glr_ctrl_build_ui_snapshot. The source of truth
- * still lives on ReplPresentationState. */
+ * refreshes them in glr_ctrl_build_ui_snapshot. The source of truth still lives
+ * on app-side presentation state. Scroll state intentionally does not live here;
+ * it belongs to the editor session, not UI chrome. */
 typedef struct {
     float panel_frac;
     int   resizing_panel;
@@ -41,9 +34,8 @@ typedef struct {
     int   syntax_highlight;     /* mirror of presentation.syntax_highlight */
 } ReplCodePanelRuntimeState;
 
-/* Help-overlay chrome flag. The session-state fields (tab_idx, scroll)
- * moved to editor_help_session.c (Phase G commit 35); the renderer
- * reads them from a separate UiRenderSnapshot.help_session slot. */
+/* Help-overlay visibility. Tab selection and scroll live in the separate
+ * EditorHelpSession snapshot carried alongside this flag. */
 typedef struct {
     int visible;
 } ReplHelpState;
@@ -61,9 +53,8 @@ typedef struct {
     int  ttl;
 } ReplStatusState;
 
-/* ReplCameraState moved to glr_camera.h alongside its accessors and
- * the orbit/pan/zoom controls (see also UiState — the .camera field
- * is gone; consumers use glr_camera() / glr_camera_mut() directly). */
+/* Camera pose is intentionally not part of the UI chrome types. See
+ * glr_camera.h for the app-owned orbit/pan/zoom state. */
 
 typedef struct {
     int mouse_x;

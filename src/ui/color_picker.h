@@ -1,16 +1,12 @@
 /*
- * src/ui/color_picker.h - Floating color-picker renderer + hit-test.
+ * src/ui/color_picker.h - Floating color-picker renderer and hit-test.
  *
- * Pure UI layer over the `color_picker_state.h` peer. Receives state
- * via `ColorPickerView`; performs no live REPL/editor reads, no parser
- * or commit calls, no _mut() accessors.
- *
- * The narrow signatures below replace the snapshot-shaped API used
- * during the J-phase split: callers pass exactly the values the
- * renderer/hit-test need.
+ * Pure UI layer over the `ColorPickerView` peer snapshot plus controller-pushed
+ * transformer entries for inline swatches. The renderer and hit-test perform no
+ * live REPL/editor reads, no parse/commit work, and no `_mut()` access.
  *
  * The companion guard `check-color-picker-ui-isolation.sh` audits
- * `src/ui/color_picker.c` for forbidden mutators / state reads.
+ * `src/ui/color_picker.c` for forbidden mutators and state reads.
  */
 #ifndef UI_COLOR_PICKER_H
 #define UI_COLOR_PICKER_H

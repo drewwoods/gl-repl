@@ -1,13 +1,10 @@
 /*
- * ui_editor.h -- Per-frame editor-overlay snapshots pushed by the controller.
+ * ui_editor.h -- Per-frame editor overlay lists pushed by the controller.
  *
- * The controller refills these lists each frame after flatten so UI
- * renderers can draw inline affordances (swatches, sliders), highlights,
- * and virtual annotation lines without walking the document themselves.
- *
- * Currently defines the transformer family (color picker / numeric
- * slider). Steps 5 and 6 of the editor-owns-text redesign will add the
- * sibling highlight and virtual-line families to this header.
+ * The controller rebuilds these arrays each frame so UI renderers can draw
+ * inline affordances, highlights, virtual rows, and temporary line overrides
+ * without re-walking the document or recomputing editor semantics themselves.
+ * They are pure snapshot data consumed by `UiRenderSnapshot` and the UI layer.
  */
 #ifndef UI_EDITOR_H
 #define UI_EDITOR_H

@@ -1,29 +1,15 @@
 /*
- * ui_hit.h - Neutral hit-test result returned by UI input handlers.
+ * ui_hit.h - Neutral hit-test result returned by UI modules.
  *
- * Phase E contract:
+ * `UiHit` is the passive payload UI hit-testers return to the controller. It
+ * carries just enough context for routing: the kind of region that was hit plus
+ * optional line/row/char/item indices the owner needs to interpret that hit.
+ * UI code classifies; the controller routes; the owning subsystem implements the
+ * behavior.
  *
- *   UI hit-tests and renders.
- *   imrepl_ctrl routes hits to the owning subsystem.
- *   The owner (editor / variable_panel / replay / scene) implements
- *   the behaviour.
- *
- * `UiHit` is the passive payload UI files return from their input
- * handlers. It carries enough context for the controller to dispatch
- * to the right owner — the kind of region that was hit, plus optional
- * coordinate fields (line / row / char / cmd index) the owner uses to
- * interpret the hit. Some generic hit-testers leave adapter-owned
- * virtual rows unresolved; the adapter rewrites those hits before the
- * controller routes them.
- *
- * The struct is intentionally narrow. Click-driven UI elements that
- * still need richer state (e.g. color picker drag in progress) keep
- * their own per-module state; UiHit just classifies *where* the
- * pointer landed.
- *
- * UI files do not interpret hits. Routing happens in imrepl_ctrl,
- * which dispatches via `UiHit.kind` to the owning subsystem's
- * coarse handler.
+ * The struct is intentionally narrow. Widgets that need richer drag or modal
+ * state keep that state in their own peer subsystem; `UiHit` only describes
+ * where the pointer landed.
  */
 #ifndef UI_HIT_H
 #define UI_HIT_H

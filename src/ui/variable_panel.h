@@ -1,37 +1,15 @@
 /*
- * ui_variable_panel.h - Floating variable slider panel (renderer + hit-test).
+ * ui_variable_panel.h - Floating variable slider panel renderer and hit-test.
  *
- * Renders a floating panel listing every declared predefined variable
- * (float x, y, z, …) with current values. Each variable gets a draggable
- * slider row for interactive manipulation. Panel layout is compacted —
- * unused rows are skipped. Values are displayed both numerically and as
- * a slider position (linear or logarithmic scale).
+ * Draws the compact floating panel of declared predefined variables and classifies
+ * pointer hits on its slider rows. The panel is a read-only view over current
+ * variable values: visibility lives in the variable-panel peer subsystem, and
+ * drag/value mutation lives in `widgets/variable_panel_drag.h` plus controller
+ * routing. UI only renders and returns `UiHit`.
  *
- * Target contract (Phase E onward):
- *
- *   UI renders and reports `UiHit` (UI_HIT_VARIABLE_SLIDER with the
- *   variable row in `item_idx`). `glr_ctrl` routes the hit to the
- *   variable_panel peer subsystem (Phase F), which owns the visibility
- *   flag and drag transaction. The renderer reads only — it does not
- *   own input dispatch or mutation.
- *
- * Hit-test: ui_variable_panel_hit_test() returns UI_HIT_VARIABLE_SLIDER
- * with item_idx = row index when the panel is visible and the pointer
- * lands on a row.
- *
- * Geometry: Panel floats in the top-right area of the viewport,
- * non-modal (doesn't block interaction with the scene or code panel).
- * Each row has a fixed height with the name label on the left and a
- * draggable slider region on the right. Color coding highlights the
- * active drag row (via variable_panel_drag.c queries).
- *
- * Value mutation lives outside this module. Today variable_panel_drag.c
- * implements drag transactions and glr_ctrl forwards mouse events
- * — those will collapse into the variable_panel peer in Phase F.
- *
- * Visibility: Panel can be toggled on/off via the GLR_CONFIG_VARIABLE_PANEL
- * config item (F-key shortcut). When off, rendering and hit-testing
- * are no-ops.
+ * When visible, each declared variable gets one slider row with its current
+ * numeric value and slider position. Unused slots are skipped, and the active
+ * drag row is highlighted via the drag-state queries.
  */
 #ifndef UI_VARIABLE_PANEL_H
 #define UI_VARIABLE_PANEL_H
@@ -59,12 +37,10 @@ void ui_variable_panel_rect_for_count(int variable_count,
 int  ui_variable_panel_hit_for_count(int gx, int gy, int variable_count,
                                      int *out_row);
 
-/* Pure hit-test: classify (mx, my) as a UiHit for the variable panel.
- *
- * Phase E commit 29 entry. Returns UI_HIT_VARIABLE_SLIDER if the pointer
- * lands on a slider row; item_idx carries the row index. Returns UI_HIT_NONE
- * if the panel is hidden or the pointer is outside it. Reads layout / state
- * only; never mutates. */
+/* Pure hit-test: classify (mx, my) as a UiHit for the variable panel. Returns
+ * UI_HIT_VARIABLE_SLIDER if the pointer lands on a slider row; item_idx carries
+ * the row index. Returns UI_HIT_NONE if the panel is hidden or the pointer is
+ * outside it. Reads layout/state only; never mutates. */
 UiHit ui_variable_panel_hit_test(int mx, int my, int variable_count);
 
 #endif /* UI_VARIABLE_PANEL_H */

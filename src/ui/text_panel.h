@@ -1,23 +1,15 @@
 /*
- * text_panel.h - Generic REPL-free text panel contract.
+ * text_panel.h - Generic wrapped text-panel renderer and hit-test contract.
  *
- * Defines the data types and API for a generic text-panel renderer and
- * hit-tester that has no dependency on the REPL pipeline, editor state,
- * or app controller. The REPL-specific adapter (src/ui/repl_code_panel.h,
- * added in Phase 3) builds UiTextPanelSnapshot/Row values from REPL state
- * and delegates to these functions.
+ * Defines the row model and immutable snapshot the generic text-panel renderer
+ * consumes. It has no dependency on the REPL pipeline, editor session, or app
+ * controller; feature-specific adapters such as `src/ui/repl_code_panel.h`
+ * translate their source state into these rows and then delegate to this API.
  *
- * Constraints (enforced by make check-ui-text-panel-pure, Phase 7):
- *   - This file must not include higher-level REPL/editor headers.
- *   - This file must not mention command-model symbols.
- *
- * Row model:
- *   The adapter ships *logical* rows — one entry per source line, virtual
- *   annotation row, static chrome row, or input row — covering the entire
- *   document. The generic panel owns wrap iteration and visible-row clipping.
- *   The adapter does not pre-clip; it lets the renderer walk the full set.
- *
- * Added in Phase 1 of the editor-demo SRP split (feature/editor-demo.md).
+ * The purity contract is enforced by `check-ui-text-panel-pure`: this header and
+ * implementation stay free of higher-level REPL/editor symbols. The file was
+ * introduced during the editor-demo split, but its day-to-day purpose is simply
+ * “generic text panel, adapter-owned content”.
  */
 #ifndef UI_TEXT_PANEL_H
 #define UI_TEXT_PANEL_H

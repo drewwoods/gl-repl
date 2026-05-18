@@ -1,36 +1,17 @@
 /*
- * ui_panels.h - Code-panel rendering, scene status, and pointer hit-test.
+ * ui_panels.h - Code-panel rendering, scene status, and top-level UI hit-test.
  *
- * Contract (Phase J2 onward):
+ * This is the main 2D panel surface: it renders the code panel and scene status
+ * banner, and it classifies pointer locations into a neutral `UiHit` through
+ * `ui_panels_hit_test()`. The controller then routes that hit to the owning
+ * subsystem (editor, variable panel, replay, scene, color picker, menu). UI does
+ * not own input dispatch or mutation.
  *
- *   UI renders the code-panel / status banner and classifies pointer
- *   locations into a neutral `UiHit` via `ui_panels_hit_test`.
- *   `imrepl_ctrl` routes the hit to the owning subsystem (editor /
- *   variable_panel / replay / scene / color picker / menu) which
- *   implements the behavior. UI does not own input dispatch or
- *   mutation.
- *
- * Rendering:
- *   - ui_panels_render_code_panel(): Render the code panel with wrapped
- *     lines, syntax highlighting, overlays (cursor, selection, replay
- *     annotations).
- *   - ui_panels_render_scene_status(): Render the status banner below
- *     the scene (showing example name, status messages, etc.).
- *
- * Hit-test:
- *   - ui_panels_hit_test(): Pure classification of (mx, my) into a
- *     `UiHit`. Dispatches to the floating-overlay hit-testers in
- *     priority order (help > color picker > menu bar > variable
- *     panel > code panel > scene). Reads layout / state only. Sets
- *     line_idx / char_idx / cmd_idx / item_idx according to the
- *     per-kind contract documented in ui_hit.h.
- *
- * Right-click handler:
- *   - ui_panels_handle_right_press(): only thin wrapper that survives
- *     because right-click on the menu bar is treated as a Config-menu
- *     shortcut. Right-click hit-test classification is not yet on
- *     ui_panels_hit_test (deferred — the hit-test surface today is
- *     left-click oriented).
+ * `ui_panels_hit_test()` is pure classification over the frozen snapshot and
+ * layout state. It checks floating/priority surfaces in order and fills the
+ * per-kind fields documented in `ui/hit.h`. A small right-click wrapper remains
+ * because menu-bar right-click is still treated as a Config-menu shortcut rather
+ * than going through the same left-click hit surface.
  */
 #ifndef UI_PANELS_H
 #define UI_PANELS_H
@@ -52,8 +33,8 @@
  * `cursor_valid` is 0 when the active input row didn't render this
  * frame (code panel hidden, edit row scrolled offscreen). The
  * controller leaves any prior cursor coords undisturbed in that
- * case — same behaviour as the legacy mid-render publish, which
- * simply didn't fire in those frames. */
+ * case — the controller simply leaves any prior cursor coords untouched for
+ * that frame. */
 typedef struct UiCodePanelOutput {
     int cursor_px;
     int cursor_py;
