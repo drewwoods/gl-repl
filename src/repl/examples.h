@@ -57,7 +57,10 @@ const char *repl_examples_name(int idx);
 int repl_examples_count(void);
 
 /* Curated metadata tags used by the Scene menu. Examples keep their flat
- * identity; tags are only a secondary discovery index. */
+ * identity; tags are only a secondary discovery index. Tag index 0 is the
+ * synthetic "All" group — every example is a member (folded into the mask
+ * by repl_example_tag_mask), so the Scene menu's first example group lists
+ * every example once, matching the flat order the F12 cycle walks. */
 int repl_example_tag_count(void);
 const char *repl_example_tag_label(int tag_idx);
 unsigned int repl_example_tag_mask(int example_idx);
