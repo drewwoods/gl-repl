@@ -12,7 +12,6 @@
 #include "ui/layout.h"
 #include "ui/metrics.h"
 #include "ui/repl_code_panel.h"
-#include "app/glr_config.h"
 #include "support/test_harness.h"
 
 static TestHarness g_harness = TEST_HARNESS_INIT;
@@ -112,14 +111,14 @@ int main(void) {
         editor_feed_line("glColor3f(1, 0, 0);");
         editor_feed_line("glEnd();");
 
-        glr_config_set(GLR_CONFIG_CODE_FOCUS, 0);
+        glr_state_presentation_mut()->code_focus = 0;
         build_doc(&snap, &layout);
         base_header = layout.header_rows;
         base_footer = layout.footer_rows;
         ASSERT_TRUE("baseline has header chrome", base_header > 0);
         ASSERT_TRUE("baseline has footer chrome", base_footer > 0);
 
-        glr_config_set(GLR_CONFIG_CODE_FOCUS, 1);
+        glr_state_presentation_mut()->code_focus = 1;
         build_doc(&snap, &layout);
         ASSERT_TRUE("focus hides header chrome", layout.header_rows == 0);
         ASSERT_TRUE("focus hides footer chrome", layout.footer_rows == 0);
@@ -137,7 +136,7 @@ int main(void) {
             ASSERT_TRUE("focus maps to source row", on_insert == 0);
         }
 
-        glr_config_set(GLR_CONFIG_CODE_FOCUS, 0);
+        glr_state_presentation_mut()->code_focus = 0;
         build_doc(&snap, &layout);
         ASSERT_TRUE("toggling focus off restores header rows",
                     layout.header_rows == base_header);
@@ -145,10 +144,11 @@ int main(void) {
                     layout.footer_rows == base_footer);
     }
 
-    /* P1: after a focus toggle the header rows collapse from many to 0;
-     * the cycle-row handler requests follow-scroll so the active edit
-     * row stays visible. Simulate that follow request and assert the
-     * scroll math keeps the cursor on screen. */
+    /* P1: glr_ctrl_toggle_code_focus() (shared by Ctrl+Shift+F and the
+     * status-bar keycap click) flips code_focus, syncs chrome, and
+     * requests follow-scroll. After the toggle the header rows collapse
+     * from many to 0; assert the real toggle path keeps the active edit
+     * row on screen, and that it actually flips the flag. */
     {
         reset_doc_fixture();
         editor_feed_line("glBegin(GL_POINTS);");
@@ -156,19 +156,52 @@ int main(void) {
         editor_feed_line("glEnd();");
         editor_navigate_to_line(2);
 
-        glr_config_set(GLR_CONFIG_CODE_FOCUS, 0);
+        glr_state_presentation_mut()->code_focus = 0;
         editor_scroll_set(0);
         build_doc(&snap, &layout);
 
-        glr_config_set(GLR_CONFIG_CODE_FOCUS, 1);
-        editor_scroll_follow_cursor_set(1);   /* what glr_cfg_cycle_row does */
+        glr_ctrl_toggle_code_focus();
+        ASSERT_TRUE("toggle flips code_focus on",
+                    glr_state_presentation().code_focus == 1);
         build_doc(&snap, &layout);
         glr_ctrl_apply_code_panel_follow_scroll(&layout);
         ASSERT_TRUE("follow keeps cursor visible after focus toggle",
                     layout.follow_doc_line >= editor_scroll() &&
                     layout.follow_doc_line < editor_scroll() + layout.visible_lines);
 
-        glr_config_set(GLR_CONFIG_CODE_FOCUS, 0);
+        glr_ctrl_toggle_code_focus();
+        ASSERT_TRUE("toggle flips code_focus off",
+                    glr_state_presentation().code_focus == 0);
+    }
+
+    /* The statusbar "focus" keycap is clickable: some pixel in the
+     * code panel hit-tests as UI_HIT_CODE_FOCUS_TOGGLE, and the
+     * controller routes that to the same toggle as Ctrl+Shift+F.
+     * Scan bottom-right first (where the keycap is drawn) and bail on
+     * the first match so this stays cheap. */
+    {
+        int found = 0;
+
+        reset_doc_fixture();
+        editor_feed_line("glBegin(GL_POINTS);");
+        editor_feed_line("glEnd();");
+        build_doc(&snap, &layout);
+
+        for (int my = 259; my >= 0 && !found; my--) {
+            for (int mx = 799; mx >= 0 && !found; mx--) {
+                UiHit hk = ui_repl_code_panel_hit_test(&snap, mx, my);
+                if (hk.kind == UI_HIT_CODE_FOCUS_TOGGLE)
+                    found = 1;
+            }
+        }
+        ASSERT_TRUE("focus keycap is hit-testable", found == 1);
+
+        glr_state_presentation_mut()->code_focus = 0;
+        glr_ctrl_sync_ui_chrome();
+        glr_ctrl_toggle_code_focus();
+        ASSERT_TRUE("focus keycap click path toggles on",
+                    glr_state_presentation().code_focus == 1);
+        glr_ctrl_toggle_code_focus();
     }
 
     return test_harness_report(&g_harness, "repl_code_panel_document");

@@ -67,7 +67,6 @@ static int *config_value_ptr(GlrConfigKey key) {
     case GLR_CONFIG_WRAP_AT_COMMA:       return &glr_state_presentation_mut()->wrap_at_comma;
     case GLR_CONFIG_AUDIO_MODE:          return NULL; /* audio module owns this one */
     case GLR_CONFIG_SYNTAX_HIGHLIGHT:    return &glr_state_presentation_mut()->syntax_highlight;
-    case GLR_CONFIG_CODE_FOCUS:          return &glr_state_presentation_mut()->code_focus;
     case GLR_CONFIG_NONE:
     case GLR_CONFIG_COUNT:
     default:
