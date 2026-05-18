@@ -4,27 +4,18 @@
 #include "limits.h"
 #include "repl/command.h"
 #include "ui/editor.h"  /* EditorTransformerList, EditorHighlightList,
-                         * EditorVirtualLineList typedefs (live state) */
+                         * EditorVirtualLineList, EditorLineOverrideList
+                         * typedefs (live state) */
 
-/* EditorState owns editable text, cursor, selection, navigation, undo
- * transactions, and the rest of the code-editor session per the
- * three-layer ownership contract in MODULES.md and
- * done/editor-owns-text-completion.md.
+/* EditorState owns the editable text-document session: canonical line text,
+ * the live input row, selection, clipboard, search, autocomplete, per-frame
+ * overlay lists, and scroll. REPL state owns the parsed command/program
+ * model; UI state owns chrome and pointer/layout state. The editor is the
+ * text owner between those two layers.
  *
- * Phase 1 progress:
- *   commit 3: scaffold (placeholder struct).
- *   commit 4: editor_buffer slice (this commit).
- *
- * Slices still pending migration:
- *   commit 5: editor_input / cursor / edit_line / insert_mode / pending_newline
- *   commit 6: selection + clipboard + search + autocomplete
- *
- * `repl_state_capture/restore` no longer covers editor-owned slices; the
- * editor session has its own `editor_state_capture/restore` pair.
- * `repl_state_reset_all` drains EditorState for tests via
- * `editor_state_reset` so a single reset call still clears all three
- * structs.
- */
+ * Capture/restore/reset are editor-local for the same reason. Whole-app reset
+ * paths still call through one controller-owned entry point, but the editor's
+ * slices no longer piggyback on repl_state_capture/restore. */
 
 /* Per-line canonical text. One slot per source command, indexed by
  * source command index. Text is the user-typed form (no trailing ';',
@@ -43,15 +34,14 @@ typedef struct {
  * debug dumps, executor display text, flatten reparse helpers,
  * etc.) so they don't reach into editor globals. The view is
  * non-owning and stays valid as long as the editor buffer that
- * produced it. Phase B (Phase A-revised commit 15) introduces
- * the type; Phase B commits 15-16 thread it through call sites. */
+ * produced it. */
 typedef struct {
     const char (*lines)[MAX_LINE_LEN];
     int          line_count;
 } EditorBufferView;
 
 /* Live editor-input state: the typing buffer, cursor, insert mode, and
- * pending-newline scratch. Owned by EditorState (Phase 1 commit 5).
+ * pending-newline scratch.
  * `edit_line_idx` exists for view symmetry but is *not* the canonical
  * edit-line cursor — that lives on `document.edit_line_idx`; the view
  * builder copies it in for callers that consume the input view as a
@@ -167,7 +157,8 @@ typedef struct {
  * scroll follow cursor moves. The render-only chrome bits
  * (panel_frac, resizing_panel, cursor_visible / blink / px / py)
  * remain in ReplCodePanelRuntimeState which lives on UiState. The
- * split happened in Phase 1 commit 11. */
+ * split is intentional: editor owns document scroll, UI owns panel
+ * chrome and blink state. */
 typedef struct {
     int scroll;
     int scroll_follow_cursor;
@@ -184,9 +175,9 @@ typedef struct {
     EditorHighlightList    highlights;
     EditorVirtualLineList  virtual_lines;
     EditorLineOverrideList line_overrides;
-    /* variable_drag lives on the variable_panel peer (Phase F
-     * commit 31). Callers use variable_panel_drag /
-     * variable_panel_drag_mut / variable_panel_handle_drag_*. */
+    /* variable_drag lives on the variable-panel peer. Callers use
+     * variable_panel_drag / variable_panel_drag_mut /
+     * variable_panel_handle_drag_* for that state. */
     EditorScrollState      scroll;
 } EditorState;
 
@@ -195,17 +186,15 @@ void editor_state_capture(EditorState *snapshot);
 void editor_state_restore(const EditorState *snapshot);
 void editor_state_reset(void);
 
-/* Struct-level access to the live buffer. Callers that walk the buffer
- * directly (repl_command_store internals during the Phase 2 transition)
- * use `_mut`; readers that need the whole struct as `const` use the
- * non-mut form. Everyone else uses the slice-level API below. */
+/* Struct-level access to the live buffer. Low-level editor-owned call sites
+ * that need the whole struct use `_mut`; most readers and writers should use
+ * the slice-level API below. */
 const ReplEditorBuffer *editor_state_buffer(void);
 ReplEditorBuffer       *editor_state_buffer_mut(void);
 
-/* Slice-level editor_buffer API. This is the long-term surface; the
- * Phase B commit 17 mutation primitives (insert / replace / delete /
- * load) extend the same namespace and replace the previous text-aware
- * `repl_command_store_*_with_line[s]` overloads. */
+/* Slice-level editor_buffer API. This is the preferred public surface for
+ * line access and mutation; callers pair it with repl_command_store when a
+ * source-command change needs both text and GLCmd updates. */
 const char *editor_buffer_line(int idx);
 void        editor_buffer_set_line(int idx, const char *text);
 int         editor_buffer_count(void);
@@ -267,11 +256,8 @@ struct ReplCompiledChange_s;
  * orchestration drives both inside one undo transaction. */
 int editor_buffer_apply_compiled_change(const struct ReplCompiledChange_s *change);
 
-/* Slice-level read accessors that take a view explicitly. The view
- * variants are the long-term API; the global-state variants above
- * remain during the migration and will be removed once every reader
- * has converted (Phase B commit 18 closes that down with a hard
- * guard). */
+/* Slice-level read accessors that take a view explicitly. Prefer these for
+ * pure reads that should not reach through editor globals. */
 const char *editor_buffer_view_line(EditorBufferView view, int idx);
 
 /* Editor-input slice API. The view variant returns the input by-value
@@ -331,9 +317,8 @@ void        editor_pending_newline_len_set(int newline_len);
 void        editor_pending_newline_set_text(const char *text);
 void        editor_pending_newline_clear(void);
 
-/* Selection slice API. Field-level getters/setters mirror the
- * pre-migration editor_state_selection_* surface; the canonical
- * "no selection" state is anchor=-1, end=-1. */
+/* Selection slice API. The canonical "no selection" state is
+ * anchor=-1, end=-1. */
 ReplSelectionState  editor_state_selection(void);
 ReplSelectionState *editor_state_selection_mut(void);
 void                editor_state_selection_clear(void);
@@ -369,9 +354,8 @@ ReplSearchState  editor_state_search(void);
 ReplSearchState *editor_state_search_mut(void);
 void             editor_state_search_clear(void);
 
-/* Autocomplete slice API. The slice is editor-owned; production code
- * outside the registered EditorCompletionProvider (today
- * repl_autocomplete.c) should clear it via the provider seam
+/* Autocomplete slice API. The slice is editor-owned; production code outside
+ * the registered completion provider should clear it via the provider seam
  * (editor_completion_clear), not by calling
  * editor_state_autocomplete_clear directly. */
 ReplAutocompleteState  editor_state_autocomplete(void);

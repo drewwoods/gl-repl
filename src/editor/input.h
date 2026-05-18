@@ -1,14 +1,15 @@
 /*
  * editor_input.h - Editor input dispatch entry points.
  *
- * The editor owns text-document concerns only: cursor / selection /
- * scroll / search / autocomplete / clipboard / undo / commit chain.
- * Non-editor concerns (replay, audio, config, save, scene cycle,
- * variable panel drag, camera, scene press, scroll-wheel zoom) route
- * through imrepl_ctrl directly to their owning subsystem; the helper
- * bodies live in imrepl_ctrl.c. This file's surface is just the editor
- * dispatch entry points + the predicates the controller uses to decide
- * which subsystem owns a click.
+ * The editor owns text-document concerns only: cursor, selection, scroll,
+ * search, autocomplete, clipboard, undo, and the commit chain. Cross-domain
+ * routes such as replay, config, save/load, scene switching, camera, and
+ * variable-panel drag stay in glr_ctrl and are filtered before these entry
+ * points run.
+ *
+ * This header therefore exposes the editor dispatch surface plus the hit-test
+ * predicates and effect plumbing the controller uses when it needs to hand an
+ * event to the editor or replay editor-generated GLUT effects.
  */
 #ifndef EDITOR_INPUT_H
 #define EDITOR_INPUT_H
@@ -35,7 +36,7 @@ typedef struct ReplInputDispatchEffects {
 /* Editor dispatch entry points. Each handles editor-text-model
  * concerns only — text edit / cursor / selection / autocomplete /
  * commit / code-panel resize+drag+scroll. Non-editor concerns are
- * already filtered out by imrepl_ctrl before these run. Direct
+ * already filtered out by the controller before these run. Direct
  * callers (test fixtures) get the same shape: only editor routes
  * fire when these are invoked. */
 ReplInputDispatchEffects editor_handle_key(unsigned char key, int x, int y);
@@ -47,9 +48,9 @@ ReplInputDispatchEffects editor_handle_passive_motion(int x, int y);
 ReplInputDispatchEffects editor_handle_mousewheel(int wheel, int direction, int x, int y);
 #endif
 
-/* Effect accumulation API used by the editor dispatch entry points
- * and by the controller's router helpers (declared in imrepl_ctrl.h)
- * so both produce/consume the same ReplInputDispatchEffects struct. */
+/* Effect accumulation API used by the editor dispatch entry points and by the
+ * controller's router helpers so both produce and consume the same
+ * ReplInputDispatchEffects struct. */
 void                     editor_reset_input_effects(void);
 ReplInputDispatchEffects editor_take_input_effects(void);
 void                     editor_request_redraw(void);
@@ -61,7 +62,7 @@ int                      editor_get_modifiers(void);
 void editor_input_set_modifier_provider_for_test(ReplModifierProvider provider);
 int  editor_input_active_modifiers(void);
 
-/* Production hook: imrepl_ctrl calls this from glr_ctrl_init_gl
+/* Production hook: glr_ctrl calls this from glr_ctrl_init_gl
  * after glutInit so editor_get_modifiers() may safely call
  * glutGetModifiers(). Tests that don't install a modifier provider
  * skip this hook; modifier reads return 0 instead of aborting
@@ -81,7 +82,7 @@ void editor_input_enable_glut_modifier_reads(void);
  * translated form. */
 unsigned char editor_input_normalize_super_to_ctrl(unsigned char key);
 
-/* Hit-test predicates that imrepl_ctrl uses to decide which subsystem
+/* Hit-test predicates that the controller uses to decide which subsystem
  * owns a click. A click is editor's concern when it lands on the code
  * panel proper, on the divider, or while the example dropdown is open
  * (which conceptually extends the code panel). */
@@ -99,7 +100,7 @@ int editor_input_restore_hidden_code_panel(void);
 /* Editor-side scroll handler invoked by the controller when a scroll
  * wheel event lands inside the code panel rect. Other scroll-wheel
  * destinations (camera zoom, help overlay scroll) live in
- * imrepl_ctrl.c. */
+ * glr_ctrl.c. */
 void editor_input_code_panel_scroll(int direction);
 
 /* Move the active edit-line cursor to a source line and sync the input buffer

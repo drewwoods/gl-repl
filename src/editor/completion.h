@@ -1,25 +1,15 @@
 /*
  * editor_completion.h - Editor completion provider seam.
  *
- * Phase G commit 36 entry. The editor owns the autocomplete popup
- * state (ReplAutocompleteState lives on EditorState). What it does
- * NOT own is the semantic completion logic — that depends on the
- * REPL's grammar, command spec, and predefined-variable table.
+ * The editor owns the autocomplete popup state on EditorState, but it does
+ * not own the grammar-specific matching logic. This seam lets a provider
+ * register the three operations the editor needs: recompute matches, refresh
+ * the selected preview, and clear popup state.
  *
- * The seam: a provider registers a small set of callbacks; the
- * editor invokes them through editor_completion_update /
- * _update_selected_preview / _clear instead of calling
- * `update_autocomplete()` etc. directly. `repl_autocomplete` is the
- * default provider today. A future host could register a different
- * provider (Lisp REPL, language-server-driven, etc.) without
- * touching editor input dispatch.
- *
- * Lifecycle: registration must happen before the first input event.
- * `repl_autocomplete_register_provider()` runs from startup so
- * existing call sites keep working.
- *
- * No-op safety: if no provider is registered, the editor's
- * editor_completion_* calls are no-ops — popup state stays empty.
+ * In the full app build the provider is installed from glr_completion during
+ * startup, so editor input stays generic while REPL-specific completion logic
+ * lives outside the editor module. If no provider is registered, the
+ * editor_completion_* entry points are harmless no-ops.
  */
 #ifndef EDITOR_COMPLETION_H
 #define EDITOR_COMPLETION_H

@@ -1,22 +1,14 @@
 /*
  * editor_help_session.h - Read-only editor session for the help overlay.
  *
- * Phase G commit 35 entry. The help overlay is conceptually a
- * read-only editor session: scroll, cursor, eventually search and
- * selection over a document the user cannot edit. The session state
- * (tab_idx, scroll) lives here, alongside the editable code-panel
- * session in EditorState. `UiState.help.visible` stays put — that is
- * a chrome flag (whether the overlay is on screen) rather than a
- * property of the session itself.
+ * Stores the help overlay's session-local navigation state: active tab and
+ * scroll offset. This sits alongside the editable code-panel session, but it
+ * remains intentionally small because the help overlay is read-only.
  *
- * Content provider: ui_help_overlay.c renders the static help text
- * by walking compiled-in tables. Phase G commit 36 generalises the
- * provider seam (for completion); for now the help session points
- * at one specific content shape.
- *
- * Forward path: cursor and search bind to the session in later
- * commits so a single editor input model serves both editable
- * source and read-only help/preview sessions.
+ * Visibility is not part of this session state; that chrome flag still lives
+ * on UiState. The controller builds the overlay content separately and the UI
+ * renderer consumes this session state when drawing or scrolling the help
+ * view.
  */
 #ifndef EDITOR_HELP_SESSION_H
 #define EDITOR_HELP_SESSION_H
