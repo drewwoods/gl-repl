@@ -668,7 +668,7 @@ static void glr_ctrl_render_vertex_points(const OverlayWalkCtx *ctx) {
     if (ctx->replay_vertex_points)
         glColor4f(1.0f, 0.88f, 0.20f, 0.75f);
     else
-        glColor4f(0.05f, 0.05f, 0.10f, 0.80f);
+        glColor4f(0.85f, 0.85f, 0.90f, 0.80f);
 
     glPushMatrix();
     {
