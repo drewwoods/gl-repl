@@ -1,5 +1,10 @@
 /*
- * scene_guides_shared.h - shared guide snapshot/planning types.
+ * scene_guides_shared.h - Shared guide snapshot and planning types.
+ *
+ * The controller builds a SceneGuideSnapshot once per frame from the current
+ * editor/replay context, then guide renderers consume it without reaching back
+ * into editor or REPL globals. SceneTransformGuidePlan is the small per-frame
+ * cache transform guides use between prepare and render.
  */
 #ifndef SCENE_GUIDES_SHARED_H
 #define SCENE_GUIDES_SHARED_H

@@ -1,5 +1,9 @@
 /*
- * scene_render_types.h - shared render context types
+ * scene_render_types.h - Shared scene render context types.
+ *
+ * Defines the config snapshot scene_render.c and its helper renderers exchange:
+ * execute callbacks, light descriptors, camera/environment state, theme/fade
+ * inputs, and the per-frame derived context wrapper.
  */
 #ifndef SCENE_RENDER_TYPES_H
 #define SCENE_RENDER_TYPES_H
