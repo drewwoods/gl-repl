@@ -2927,9 +2927,11 @@ static int route_menu_item_hit(const UiHit *hit) {
     return 1;
 }
 
-/* UI_HIT_EXAMPLE_SUBMENU_ITEM: Scene menu tag submenu row. The hit payload
- * carries the global flat example index, so route directly through the shared
- * scene-load helper instead of reconstructing parent menu row offsets. */
+/* UI_HIT_SUBMENU_ITEM (Scene): Scene menu tag submenu row. The hit
+ * payload carries the global flat example index in item_idx, so route
+ * directly through the shared scene-load helper instead of
+ * reconstructing parent menu row offsets. (Step 6 generalizes this to
+ * branch on hit->cmd_idx == menu_id for the Config submenu too.) */
 static int route_example_submenu_item_hit(const UiHit *hit) {
     if (hit->item_idx < 0)
         return 0;
@@ -3038,14 +3040,14 @@ int glr_ctrl_router_handle_code_panel_hit(UiHit hit, int x, int y) {
         editor_inline_rename_cancel();
 
     /* A click outside the menu bar (anywhere that isn't UI_HIT_MENU_BUTTON,
-     * UI_HIT_MENU_ITEM, or UI_HIT_EXAMPLE_SUBMENU_ITEM) dismisses an open
+     * UI_HIT_MENU_ITEM, or UI_HIT_SUBMENU_ITEM) dismisses an open
      * dropdown — matches the legacy
      * "click outside dropdown closes it" behaviour from
      * ui_panels_handle_code_panel_press. */
     int dismissed_dropdown = 0;
     if (hit.kind != UI_HIT_MENU_BUTTON &&
         hit.kind != UI_HIT_MENU_ITEM &&
-        hit.kind != UI_HIT_EXAMPLE_SUBMENU_ITEM &&
+        hit.kind != UI_HIT_SUBMENU_ITEM &&
         hit.kind != UI_HIT_PIN_BUTTON &&
         hit.kind != UI_HIT_COLOR_SWATCH &&
         ui_menu_bar_menu_dropdown_is_open()) {
@@ -3065,7 +3067,7 @@ int glr_ctrl_router_handle_code_panel_hit(UiHit hit, int x, int y) {
         consumed = route_menu_button_hit(&hit); break;
     case UI_HIT_MENU_ITEM:
         consumed = route_menu_item_hit(&hit); break;
-    case UI_HIT_EXAMPLE_SUBMENU_ITEM:
+    case UI_HIT_SUBMENU_ITEM:
         consumed = route_example_submenu_item_hit(&hit); break;
     case UI_HIT_VARIABLE_SLIDER:
         consumed = route_variable_slider_hit(x, y); break;
