@@ -2121,16 +2121,29 @@ static void write_func_defs_as_c(FILE *f) {
         int param_count = 0;
         char param_names[MAX_EXPR_VARS][16];
         int fe = find_export_block_end(cmd_idx);
+        /* Emit the C function under the user's alias when one is
+         * registered (round-tripped via the `// @func N = name`
+         * directive), falling back to the bare `funcN` slot name. The
+         * call sites keep their canonical alias text, so defining the
+         * body under the same name is what keeps the standalone .c
+         * self-consistent and compilable. */
+        char fn_name[REPL_FUNC_NAME_MAX + 8];
         if (parse_repl_func_signature(export_document_text(cmd_idx), &parsed_fn,
                                       param_names, MAX_EXPR_VARS,
                                       &param_count) && param_count > 0) {
-            fprintf(f, "\nstatic void func%d(", parsed_fn);
+            const char *alias = repl_func_alias_get(parsed_fn);
+            if (alias) snprintf(fn_name, sizeof(fn_name), "%s", alias);
+            else       snprintf(fn_name, sizeof(fn_name), "func%d", parsed_fn);
+            fprintf(f, "\nstatic void %s(", fn_name);
             /* Emit function parameters. */
             for (int param_idx = 0; param_idx < param_count; param_idx++)
                 fprintf(f, "%sfloat %s", param_idx == 0 ? "" : ", ", param_names[param_idx]);
             fprintf(f, ") {\n");
         } else {
-            fprintf(f, "\nstatic void func%d(void) {\n", fn);
+            const char *alias = repl_func_alias_get(fn);
+            if (alias) snprintf(fn_name, sizeof(fn_name), "%s", alias);
+            else       snprintf(fn_name, sizeof(fn_name), "func%d", fn);
+            fprintf(f, "\nstatic void %s(void) {\n", fn_name);
         }
         write_render_body_range_as_c(f, cmd_idx + 1, fe, 0);
         fprintf(f, "}\n");
@@ -2591,14 +2604,34 @@ static int import_make_repl_for_header(const char *line, char *out, int out_sz) 
 static int import_make_repl_func_header(const char *line, char *out, int out_sz) {
     const char *p = line;
     while (*p && isspace((unsigned char)*p)) p++;
-    if (strncmp(p, "static void func", 16) != 0)
+    if (strncmp(p, "static void ", 12) != 0)
         return 0;
-    p += 16;
+    p += 12;
+    while (*p && isspace((unsigned char)*p)) p++;
 
-    if (*p < '0' || *p > '9')
+    /* The function name is either the bare `funcN` slot form or a
+     * user alias. Aliases are registered from the `// @func N = name`
+     * directive, which the importer parses before any function body
+     * (header comments precede definitions in the exported file), so
+     * the lookup resolves the slot here. */
+    int fn = -1;
+    if (strncmp(p, "func", 4) == 0 && p[4] >= '0' && p[4] <= '9' &&
+        !isalnum((unsigned char)p[5]) && p[5] != '_') {
+        fn = p[4] - '0';
+        p += 5;
+    } else if (isalpha((unsigned char)*p) || *p == '_') {
+        char ident[REPL_FUNC_NAME_MAX];
+        int ilen = 0;
+        while (*p && (isalnum((unsigned char)*p) || *p == '_') &&
+               ilen < REPL_FUNC_NAME_MAX - 1)
+            ident[ilen++] = *p++;
+        if (*p && (isalnum((unsigned char)*p) || *p == '_'))
+            return 0;
+        ident[ilen] = '\0';
+        fn = repl_func_alias_lookup_slot(ident);
+    }
+    if (fn < 0 || fn >= REPL_FUNC_SLOT_COUNT)
         return 0;
-    int fn = *p - '0';
-    p++;
 
     while (*p && isspace((unsigned char)*p)) p++;
     if (*p != '(')

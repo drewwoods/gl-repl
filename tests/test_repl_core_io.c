@@ -392,6 +392,65 @@ int main(void) {
         remove(alias_path);
     }
 
+    /* Aliased func with an expression-bearing call (regression).
+     *
+     * `parse_and_normalize` keeps the *raw* input text for calls whose
+     * args reference a predef var (so animated `t` expressions survive
+     * verbatim). The exported standalone C must therefore define the
+     * function body under the SAME alias name the call sites use, or
+     * the .c won't compile and an export->import->export round-trip
+     * drops the alias back to the bare `funcN` slot. The original
+     * drawCube case above only exercised a zero-arg call, which takes
+     * the canonical-text path and masked this. Distilled from the
+     * /tmp import-harness used to chase the examples-rework failure. */
+    {
+        const char *alias_path = "/tmp/repl_core_func_alias_expr_roundtrip.c";
+        glr_app_reset_all(); declare_test_vars();
+        editor_feed_line("spin(scale) {");
+        editor_feed_line("  glVertex3f(scale, t, 0);");
+        editor_feed_line("}");
+        editor_feed_line("spin(t*0.4);");
+        ASSERT_TRUE("expr-alias decl assigned slot 0",
+                    repl_func_alias_lookup_slot("spin") == 0);
+
+        repl_export_save_output(alias_path, source_document_view(), NULL);
+        {
+            char buf[16384];
+            read_text_file(alias_path, buf, sizeof(buf));
+            /* The C body is defined under the alias, not `funcN`, so
+             * the call sites resolve and the file compiles. */
+            ASSERT_TRUE("alias func def emitted under alias name",
+                        strstr(buf, "static void spin(float scale)") != NULL);
+            ASSERT_TRUE("no bare funcN def leaked",
+                        strstr(buf, "static void func0(") == NULL);
+            ASSERT_TRUE("expr-bearing aliased call preserved verbatim",
+                        strstr(buf, "spin(t*0.4);") != NULL);
+            ASSERT_TRUE("expr-alias workspace directive emitted",
+                        strstr(buf, "// @func 0 = spin") != NULL);
+        }
+
+        glr_app_reset_all(); declare_test_vars();
+        ASSERT_TRUE("load expr-alias output",
+                    repl_export_load_from_file(alias_path) == 1);
+        ASSERT_TRUE("expr-alias restored on import",
+                    repl_func_alias_lookup_slot("spin") == 0);
+
+        /* Re-export after the round-trip: the call must still carry the
+         * alias (the bug regressed it to `func0(t*0.4);` here). */
+        const char *alias_path2 = "/tmp/repl_core_func_alias_expr_roundtrip2.c";
+        repl_export_save_output(alias_path2, source_document_view(), NULL);
+        {
+            char buf[16384];
+            read_text_file(alias_path2, buf, sizeof(buf));
+            ASSERT_TRUE("re-exported aliased call still uses alias",
+                        strstr(buf, "spin(t*0.4);") != NULL);
+            ASSERT_TRUE("re-exported call did not regress to funcN",
+                        strstr(buf, "func0(t*0.4);") == NULL);
+        }
+        remove(alias_path);
+        remove(alias_path2);
+    }
+
     /* `if(...)` does not get hijacked into an alias even when it
      * shares the func-decl shape `IDENT(...) {`. The control-flow
      * keyword must fall through to editor_try_commit_if_block. */
