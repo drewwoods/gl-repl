@@ -84,35 +84,6 @@ static int find_dropdown_item_point(int menu_id, int target_item,
     return 0;
 }
 
-static int find_first_config_action_point(int *out_row, int *out_mx, int *out_my) {
-    int win_w = ui_state_viewport().window_w;
-    int win_h = ui_state_viewport().window_h;
-
-    ui_menu_bar_set_open_menu(GLR_MENU_CONFIG, 0.0f);
-    for (int my = 0; my < win_h; my++) {
-        for (int mx = 0; mx < win_w; mx++) {
-            int row = ui_menu_bar_dropdown_item_hit(mx, my);
-            const GlrConfigItem *item;
-
-            if (row < 0)
-                continue;
-            item = glr_config_item_at(row);
-            if (!item || item->section_header || item->key == GLR_CONFIG_NONE)
-                continue;
-
-            if (out_row)
-                *out_row = row;
-            if (out_mx)
-                *out_mx = mx;
-            if (out_my)
-                *out_my = my;
-            return 1;
-        }
-    }
-
-    return 0;
-}
-
 static void test_open_close_state(void) {
     reset_menu_bar_fixture(1000, 600);
 
@@ -200,22 +171,18 @@ static void test_dropdown_and_config_press(void) {
     ASSERT_INT_EQ("Scene tag row activation keeps menu open",
                   glr_action_menu_item_activate(GLR_MENU_SCENE, 1), 0);
 
-    ASSERT_TRUE("found config action point",
-                find_first_config_action_point(&cfg_row, &cfg_mx, &cfg_my));
-    item = glr_config_item_at(cfg_row);
-    before = glr_config_get(item->key);
-    expected = before - 1;
-    if (expected < 0)
-        expected = item->state_count - 1;
-
-    ASSERT_INT_EQ("handled config right-press",
-                  ui_menu_bar_handle_config_right_press(cfg_mx, cfg_my), 1);
-    ASSERT_INT_EQ("config right-press cycles backward",
-                  glr_config_get(item->key), expected);
-    ASSERT_INT_EQ("right-press miss while open", ui_menu_bar_handle_config_right_press(0, 0), 0);
-
+    /* Config is now a section/flyout menu (plan Step 4). Top-level
+     * rows are section parents, so right-press over the section list
+     * is a deliberate no-op; backward-cycle moves into the open flyout
+     * in Step 7 (covered by test_config_submenu_right_press there).
+     * Positive section/flyout coverage is added in Step 9. */
+    ui_menu_bar_set_open_menu(GLR_MENU_CONFIG, 0.0f);
+    ASSERT_INT_EQ("config right-press over section list is a no-op",
+                  ui_menu_bar_handle_config_right_press(cfg_mx, cfg_my), 0);
     ui_menu_bar_close();
-    ASSERT_INT_EQ("right-press when closed", ui_menu_bar_handle_config_right_press(cfg_mx, cfg_my), 0);
+    ASSERT_INT_EQ("right-press when closed",
+                  ui_menu_bar_handle_config_right_press(cfg_mx, cfg_my), 0);
+    (void)cfg_row; (void)item; (void)before; (void)expected;
 }
 
 static void test_unified_hit_test(void) {

@@ -250,29 +250,34 @@ static void test_dropdown_over_band_consumes(void) {
                     ok.kind == UI_HIT_CODE_PANEL_CHROME);
     }
 
-    /* Open Config; row 0 is "### RENDERING" (non-actionable header). */
+    /* Config is now a section/flyout menu (plan Step 4): row 0 is the
+     * "RENDERING" section *parent* row, not a literal "### " header.
+     * A click on it is classified as UI_HIT_MENU_ITEM and consumed by
+     * the menu layer (Config's activate keeps the dropdown open), so it
+     * still does NOT fall through to a scene tab underneath — the
+     * overlay-precedence invariant this regression guards. The
+     * general "section rows are inert" guarantee + dedicated coverage
+     * lands in Step 5. */
     ui_menu_bar_set_open_menu(GLR_MENU_CONFIG, 0.0f);
     ASSERT_TRUE("Config dropdown open",
                 ui_menu_bar_menu_dropdown_is_open());
 
     {
         UiHit mh = ui_menu_bar_hit_test(cfg_mx, my_click);
-        ASSERT_TRUE("menu hit-test consumes in-dropdown header as CHROME",
-                    mh.kind == UI_HIT_CODE_PANEL_CHROME);
+        ASSERT_TRUE("menu hit-test claims the section row",
+                    mh.kind == UI_HIT_MENU_ITEM);
     }
     {
         int active_before = repl_active_user_scene();
         UiHit hit = ui_panels_hit_test(&snap, cfg_mx, my_click, 0);
         int consumed;
 
-        ASSERT_TRUE("dropdown over band -> CHROME, not TAB",
-                    hit.kind == UI_HIT_CODE_PANEL_CHROME);
+        ASSERT_TRUE("dropdown over band -> MENU_ITEM, not TAB",
+                    hit.kind == UI_HIT_MENU_ITEM);
 
         consumed = glr_ctrl_router_handle_code_panel_hit(hit, cfg_mx,
                                                          my_click);
         ASSERT_TRUE("routed click consumed", consumed != 0);
-        ASSERT_TRUE("preamble closed the dropdown",
-                    !ui_menu_bar_menu_dropdown_is_open());
         ASSERT_INT_EQ("active scene unchanged underneath",
                       repl_active_user_scene(), active_before);
         ASSERT_TRUE("no rename triggered underneath",

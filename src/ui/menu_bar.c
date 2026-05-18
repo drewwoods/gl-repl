@@ -111,13 +111,20 @@ static int menu_item_count(int menu_id) {
                              + repl_user_scene_count();
     case MENU_TUTORIALS:
         return repl_tutorial_count() + (tutorial_active() ? 3 : 0);
-    case MENU_CONFIG: {
-        int count = 0;
-        glr_config_items(&count);
-        return count;
-    }
+    case MENU_CONFIG:
+        /* One parent row per "### " section, plus a synthetic "All"
+         * row whose flyout is the full flat list (chrome included).
+         * The +1 is owned here in the menu layer — the pure
+         * glr_config_section_count() never counts All (plan Finding
+         * #2). */
+        return glr_config_section_count() + 1;
     }
     return 0;
+}
+
+/* Index of the synthetic Config "All" parent row (last row). */
+static int config_all_parent_row(void) {
+    return glr_config_section_count();
 }
 
 static const char *menu_item_label(int menu_id, int i) {
@@ -158,9 +165,11 @@ static const char *menu_item_label(int menu_id, int i) {
         return NULL;
     }
     if (menu_id == MENU_CONFIG) {
-        const GlrConfigItem *item = glr_config_item_at(i);
-        if (item) return item->label;
-        return NULL;
+        /* Config top-level rows are section parents + "All"; the
+         * actual items live in each row's flyout. */
+        if (i == config_all_parent_row())
+            return "All";
+        return glr_config_section_label(i);
     }
     return NULL;
 }
@@ -170,42 +179,30 @@ static const char *menu_item_shortcut(int menu_id, int i) {
     if (menu_id == MENU_SCENE) return NULL;
     if (menu_id == MENU_TUTORIALS)
         return NULL;
-    if (menu_id == MENU_CONFIG) {
-        const GlrConfigItem *item = glr_config_item_at(i);
-        if (!item || item->section_header || item->key == GLR_CONFIG_NONE)
-            return NULL;
-        static char buf[16];
-        if (item->key_code == 0) return NULL;
-        if (item->is_special) {
-            snprintf(buf, sizeof(buf), "F%d", item->key_code - GLUT_KEY_F1 + 1);
-            return buf;
-        } else {
-            if (item->key_code > 0 && item->key_code <= 26) {
-                snprintf(buf, sizeof(buf), "Ctrl+%c", item->key_code - 1 + 'a');
-                return buf;
-            } else if (item->key_code == KEY_CTRL_BACKSLASH) {
-                return "Ctrl+\\";
-            } else {
-                snprintf(buf, sizeof(buf), "%c", item->key_code);
-                return buf;
-            }
-        }
-    }
+    /* Config: top-level rows are section parents — no shortcut at this
+     * level; the per-item shortcut renders inside the flyout (Step 8). */
     (void)i;
     return NULL;
 }
 
-static int menu_max_shortcut_px(int menu_id) {
-    int n = menu_item_count(menu_id);
-    int max_sc = 0;
-    for (int i = 0; i < n; i++) {
-        const char *sc = menu_item_shortcut(menu_id, i);
-        if (sc) {
-            int w = (int)strlen(sc) * FONT_SMALL_W;
-            if (w > max_sc) max_sc = w;
-        }
+/* Format the keyboard shortcut for a g_cfg_items[] entry, or NULL. */
+static const char *config_item_shortcut(const GlrConfigItem *item) {
+    static char buf[16];
+    if (!item || item->section_header || item->key == GLR_CONFIG_NONE)
+        return NULL;
+    if (item->key_code == 0) return NULL;
+    if (item->is_special) {
+        snprintf(buf, sizeof(buf), "F%d", item->key_code - GLUT_KEY_F1 + 1);
+        return buf;
     }
-    return max_sc;
+    if (item->key_code > 0 && item->key_code <= 26) {
+        snprintf(buf, sizeof(buf), "Ctrl+%c", item->key_code - 1 + 'a');
+        return buf;
+    }
+    if (item->key_code == KEY_CTRL_BACKSLASH)
+        return "Ctrl+\\";
+    snprintf(buf, sizeof(buf), "%c", item->key_code);
+    return buf;
 }
 
 #define CFG_STATE_MAX_CHARS 20
@@ -327,7 +324,7 @@ static int menu_dropdown_rect(int *dx, int *dy, int *dw, int *dh) {
     menubar_rects(menu_x, menu_w, pin_x, pin_w, &by, &bh);
     int n = menu_item_count(g_open_menu);
 
-    int max_lbl = 0, max_state = 0, max_sc = 0;
+    int max_lbl = 0, max_sc = 0;
     for (int i = 0; i < n; i++) {
         const char *lbl = menu_item_label(g_open_menu, i);
         const char *sc  = menu_item_shortcut(g_open_menu, i);
@@ -338,10 +335,9 @@ static int menu_dropdown_rect(int *dx, int *dy, int *dw, int *dh) {
             if (cw > max_sc) max_sc = cw;
         }
     }
-    if (g_open_menu == MENU_CONFIG)
-        max_state = cfg_max_state_chars() * FONT_SMALL_W;
+    /* Config's per-item state/shortcut columns live in the flyout
+     * now, not on the top-level section rows. */
     int max_w = max_lbl;
-    if (max_state > 0) max_w += max_state + 20;
     if (max_sc > 0)    max_w += max_sc + 16;
     if (max_w < 80) max_w = 80;
     int width  = max_w + 28;
@@ -365,18 +361,43 @@ static int point_in_rect_gl(int mx, int my, int x, int y, int w, int h) {
  * One engine, two menus. A submenu is keyed by (menu_id, parent_row);
  * the provider resolves that to a row list. Scene parent rows are
  * example-tag rows (the tag index is recovered from the row); Config
- * parent rows (sections / "All") arrive in Step 4 — until then the
- * Config side reports "no submenu" so this step is behaviour-neutral.
+ * parent rows are the "### " sections plus a synthetic "All" row whose
+ * flyout is the whole flat table (chrome included).
  *
- * submenu_row_kind() lets the (future) Config "All" flyout keep its
+ * submenu_row_kind() lets the Config "All" flyout keep its
  * "### "/"---" chrome inert; every Scene row is an ITEM. */
+
+/* Map a Config (parent_row, ordinal) to its absolute g_cfg_items[]
+ * index, or -1. Named section parents expose only their item rows;
+ * the "All" parent exposes the whole table 1:1. */
+static int config_submenu_abs_index(int parent_row, int ordinal) {
+    if (parent_row == config_all_parent_row()) {
+        if (ordinal < 0 || ordinal >= CFG_ITEM_COUNT)
+            return -1;
+        return ordinal;
+    }
+    int start = 0, count = 0;
+    if (!glr_config_section_range(parent_row, &start, &count))
+        return -1;
+    if (ordinal < 0 || ordinal >= count)
+        return -1;
+    return start + ordinal;
+}
 
 static int submenu_row_count(int menu_id, int parent_row) {
     if (menu_id == MENU_SCENE) {
         int tag = scene_tag_idx_for_parent_row(parent_row);
         return (tag >= 0) ? repl_example_count_for_tag(tag) : 0;
     }
-    return 0;   /* Config wired in Step 4 */
+    if (menu_id == MENU_CONFIG) {
+        if (parent_row == config_all_parent_row())
+            return CFG_ITEM_COUNT;
+        int start = 0, count = 0;
+        if (!glr_config_section_range(parent_row, &start, &count))
+            return 0;
+        return count;
+    }
+    return 0;
 }
 
 static const char *submenu_row_label(int menu_id, int parent_row,
@@ -387,11 +408,22 @@ static const char *submenu_row_label(int menu_id, int parent_row,
             return NULL;
         return repl_example_name(repl_example_index_for_tag(tag, ordinal));
     }
+    if (menu_id == MENU_CONFIG) {
+        int abs = config_submenu_abs_index(parent_row, ordinal);
+        const GlrConfigItem *item = glr_config_item_at(abs);
+        if (!item || !item->label)
+            return NULL;
+        /* "### X" headers in the "All" flyout render with the marker
+         * stripped, matching the old flat dropdown. */
+        if (glr_config_row_kind(abs) == GLR_CFG_ROW_HEADER)
+            return item->label + 4;
+        return item->label;
+    }
     return NULL;
 }
 
 /* Absolute target index the row activates: a global flat example index
- * for Scene, a g_cfg_items[] index for Config (Step 4). */
+ * for Scene, a g_cfg_items[] index for Config. */
 static int submenu_row_abs_index(int menu_id, int parent_row,
                                  int ordinal) {
     if (menu_id == MENU_SCENE) {
@@ -400,13 +432,41 @@ static int submenu_row_abs_index(int menu_id, int parent_row,
             return -1;
         return repl_example_index_for_tag(tag, ordinal);
     }
+    if (menu_id == MENU_CONFIG)
+        return config_submenu_abs_index(parent_row, ordinal);
     return -1;
 }
 
 static GlrConfigRowKind submenu_row_kind(int menu_id, int parent_row,
                                          int ordinal) {
-    (void)menu_id; (void)parent_row; (void)ordinal;
-    return GLR_CFG_ROW_ITEM;   /* Config "All" chrome handled in Step 4 */
+    if (menu_id == MENU_CONFIG)
+        return glr_config_row_kind(
+            config_submenu_abs_index(parent_row, ordinal));
+    (void)parent_row; (void)ordinal;
+    return GLR_CFG_ROW_ITEM;   /* Scene rows are all items */
+}
+
+/* Extra right-column px the Config flyout reserves for the per-item
+ * keyboard shortcut + state label. 0 for non-Config submenus (Scene
+ * rows are a bare label). */
+static int config_submenu_extra_w(int menu_id, int parent_row) {
+    if (menu_id != MENU_CONFIG)
+        return 0;
+    int count = submenu_row_count(menu_id, parent_row);
+    int max_sc = 0;
+    for (int o = 0; o < count; o++) {
+        const GlrConfigItem *it =
+            glr_config_item_at(config_submenu_abs_index(parent_row, o));
+        const char *sc = config_item_shortcut(it);
+        if (sc) {
+            int w = (int)strlen(sc) * FONT_SMALL_W;
+            if (w > max_sc) max_sc = w;
+        }
+    }
+    int extra = cfg_max_state_chars() * FONT_SMALL_W + 20;
+    if (max_sc > 0)
+        extra += max_sc + 16;
+    return extra;
 }
 
 /* Does dropdown row `row` of `menu_id` own a flyout submenu? */
@@ -444,7 +504,7 @@ static int submenu_rect(int menu_id, int parent_row,
     }
     if (max_lbl < 80)
         max_lbl = 80;
-    width = max_lbl + 28;
+    width = max_lbl + 28 + config_submenu_extra_w(menu_id, parent_row);
     height = count * LINE_H + 8;
 
     x = pdx + pdw;
@@ -658,10 +718,14 @@ void ui_menu_bar_open_config(float now) {
 
 int ui_menu_bar_handle_config_right_press(int mx, int my) {
     if (g_open_menu != MENU_CONFIG) return 0;
-    int item = ui_menu_bar_dropdown_item_hit(mx, my);
-    if (item < 0) return 0;
-    glr_cfg_cycle_row(item, -1);
-    return 1;
+    /* Config top-level rows are section parents (no single item to
+     * cycle). Backward-cycling now lives in the open flyout — wired in
+     * Step 7 (config_submenu_hit + glr_cfg_cycle_row on its abs idx).
+     * Until then a right-press over the section list is a no-op rather
+     * than mis-cycling whatever g_cfg_items[] index a section row
+     * happens to alias. */
+    (void)mx; (void)my;
+    return 0;
 }
 
 void ui_menu_bar_note_search_opened(float now) {
@@ -732,6 +796,13 @@ static int submenu_row_is_active(int menu_id, int parent_row, int ordinal,
                                                 ordinal);
         return example_idx >= 0 &&
                example_idx == snap->scenes.active_example_idx;
+    }
+    if (menu_id == MENU_CONFIG) {
+        int abs = submenu_row_abs_index(menu_id, parent_row, ordinal);
+        const GlrConfigItem *item = glr_config_item_at(abs);
+        if (!item || item->section_header || item->key == GLR_CONFIG_NONE)
+            return 0;
+        return glr_config_get(item->key) != 0;
     }
     return 0;
 }
@@ -872,6 +943,39 @@ static void render_active_submenu(const UiRenderSnapshot *snap) {
         }
 
         gl2d_draw_string((float)(sx + 14), (float)ey, name, FONT_SMALL);
+
+        /* Config item rows carry a right-aligned shortcut + state
+         * label (the columns the flat dropdown used to show). The
+         * shortcut sits at the far right; the state label is right-
+         * aligned just left of it. */
+        if (menu_id == MENU_CONFIG) {
+            int abs = config_submenu_abs_index(parent_row, ordinal);
+            const GlrConfigItem *item = glr_config_item_at(abs);
+            if (item && !item->section_header &&
+                item->key != GLR_CONFIG_NONE) {
+                char st_buf[CFG_STATE_MAX_CHARS + 1];
+                const char *st = cfg_state_str(abs, st_buf,
+                                               sizeof(st_buf));
+                int st_px = (int)strlen(st) * FONT_SMALL_W;
+                const char *scut = config_item_shortcut(item);
+                int right = sx + sw - 14;
+
+                if (scut) {
+                    int sc_px = (int)strlen(scut) * FONT_SMALL_W;
+                    ui_clr_a(UI_TOK_TEXT_MUTED, alpha);
+                    gl2d_draw_string((float)(right - sc_px),
+                                     (float)ey, scut, FONT_SMALL);
+                    right -= sc_px + 16;
+                }
+                if (glr_config_get(item->key))
+                    ui_clr_a(UI_TOK_ACCENT, alpha);
+                else
+                    ui_clr_a(UI_TOK_TEXT_MUTED, alpha);
+                gl2d_draw_string((float)(right - st_px),
+                                 (float)ey, st, FONT_SMALL);
+            }
+        }
+
         ey -= LINE_H;
     }
 }
@@ -1169,9 +1273,6 @@ void ui_menu_bar_render_example_dropdown(const UiRenderSnapshot *snap) {
         return;
     }
 
-    int max_sc_px = menu_max_shortcut_px(menu_id);
-    int state_right = dx + dw - 14;
-    if (max_sc_px > 0) state_right -= max_sc_px + 16;
 
     int ey = dy + dh - LINE_H + 1;
     for (int i = 0; i < n; i++) {
@@ -1233,20 +1334,8 @@ void ui_menu_bar_render_example_dropdown(const UiRenderSnapshot *snap) {
             gl2d_draw_string((float)(dx + dw - 14 - sc_px), (float)ey, sc, FONT_SMALL);
         }
 
-        if (menu_id == MENU_CONFIG) {
-            const GlrConfigItem *item = glr_config_item_at(i);
-            if (!item || item->section_header || item->key == GLR_CONFIG_NONE)
-                continue;
-            char st_buf[CFG_STATE_MAX_CHARS + 1];
-            const char *st = cfg_state_str(i, st_buf, sizeof(st_buf));
-            int st_px = (int)strlen(st) * FONT_SMALL_W;
-            int val = glr_config_get(item->key);
-            if (val)
-                ui_clr_a(UI_TOK_ACCENT, alpha);
-            else
-                ui_clr_a(UI_TOK_TEXT_MUTED, alpha);
-            gl2d_draw_string((float)(state_right - st_px), (float)ey, st, FONT_SMALL);
-        }
+        /* Config item state now renders inside each section's flyout
+         * (Step 8), not on the top-level section rows. */
 
         ey -= LINE_H;
     }
