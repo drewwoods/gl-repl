@@ -1263,8 +1263,13 @@ static void repl_code_panel_statusbar_sep(int *tx, int sy, int sh) {
  * arithmetic duplicated across the two passes. */
 static const char *k_statusbar_help_kbd  = "F1";
 static const char *k_statusbar_help_lbl  = "help";
-static const char *k_statusbar_focus_kbd = "C-S-F";
 static const char *k_statusbar_focus_lbl = "focus";
+
+/* The focus keycap reads "^⇧F". '^' and 'F' are font glyphs; the ⇧
+ * shift symbol has no bitmap-font glyph so it is line-drawn into the
+ * middle cell. Width is therefore a fixed 3-cell count rather than a
+ * strlen (a UTF-8 "⇧" would mis-measure). */
+#define STATUSBAR_FOCUS_KBD_CELLS 3
 
 typedef struct {
     int text_y;
@@ -1287,7 +1292,7 @@ static ReplStatusbarHints repl_code_panel_statusbar_hints(int sx, int sy,
     h.help_lbl_x = sx + sw - CODE_MARGIN_X - help_lbl_w;
     h.help_kx    = h.help_lbl_x - h.help_kw - 6;
 
-    h.focus_kw    = (int)strlen(k_statusbar_focus_kbd) * FONT_SMALL_W + 10;
+    h.focus_kw    = STATUSBAR_FOCUS_KBD_CELLS * FONT_SMALL_W + 10;
     h.focus_lbl_x = h.help_kx - 12 - focus_lbl_w;
     h.focus_kx    = h.focus_lbl_x - h.focus_kw - 6;
     return h;
@@ -1306,6 +1311,33 @@ static void repl_code_panel_draw_keycap(int kx, int ky, int kw, int kh) {
     glVertex2f((float)(kx + kw), (float)(ky + kh));
     glVertex2f((float)kx, (float)(ky + kh));
     glEnd();
+}
+
+/* The ⇧ shift symbol, outlined in one FONT_SMALL (8x13) glyph cell
+ * with its lower-left at (cx, gy) so it sits on the same baseline as
+ * the adjacent '^' and 'F' bitmap glyphs. Caller sets the color. */
+static void repl_code_panel_draw_shift_glyph(int cx, int gy) {
+    float x = (float)cx;
+    float y = (float)gy;
+    glBegin(GL_LINE_LOOP);
+    glVertex2f(x + 4.0f, y + 11.0f);  /* apex */
+    glVertex2f(x + 7.0f, y +  6.0f);  /* right shoulder */
+    glVertex2f(x + 5.0f, y +  6.0f);
+    glVertex2f(x + 5.0f, y +  1.0f);  /* right stem foot */
+    glVertex2f(x + 3.0f, y +  1.0f);  /* left stem foot */
+    glVertex2f(x + 3.0f, y +  6.0f);
+    glVertex2f(x + 1.0f, y +  6.0f);  /* left shoulder */
+    glEnd();
+}
+
+/* Draw the focus keycap glyphs "^⇧F" across three FONT_SMALL cells
+ * starting at (gx, gy). Color is set by the caller (state-tinted). */
+static void repl_code_panel_draw_focus_kbd(int gx, int gy) {
+    char ch[2] = { '^', 0 };
+    gl2d_draw_string((float)gx, (float)gy, ch, FONT_SMALL);
+    repl_code_panel_draw_shift_glyph(gx + FONT_SMALL_W, gy);
+    ch[0] = 'F';
+    gl2d_draw_string((float)(gx + 2 * FONT_SMALL_W), (float)gy, ch, FONT_SMALL);
 }
 
 static void repl_code_panel_draw_statusbar(const UiRenderSnapshot *snap,
@@ -1388,8 +1420,7 @@ static void repl_code_panel_draw_statusbar(const UiRenderSnapshot *snap,
                 ? UI_TOK_ACCENT : UI_TOK_TEXT_MUTED;
             repl_code_panel_draw_keycap(h.focus_kx, h.ky, h.focus_kw, h.kh);
             ui_clr(focus_tok);
-            gl2d_draw_string((float)(h.focus_kx + 5), (float)(h.ky + 2),
-                             k_statusbar_focus_kbd, FONT_SMALL);
+            repl_code_panel_draw_focus_kbd(h.focus_kx + 5, h.ky + 2);
             gl2d_draw_string((float)h.focus_lbl_x, (float)text_y,
                              k_statusbar_focus_lbl, FONT_SMALL);
         }
@@ -1521,13 +1552,20 @@ UiHit ui_repl_code_panel_hit_test(const UiRenderSnapshot *snap,
         gl_y < builder.text_snap.cp_y + builder.text_snap.cp_h) {
         if (gl_y < builder.text_snap.cp_y + STATUSBAR_H) {
             /* Same hints geometry the renderer uses, so the click
-             * target lines up exactly with the drawn focus keycap. */
+             * targets line up exactly with the drawn keycaps. */
             ReplStatusbarHints h = repl_code_panel_statusbar_hints(
                 builder.text_snap.cp_x, builder.text_snap.cp_y,
                 builder.text_snap.cp_w, STATUSBAR_H);
-            if (mx >= h.focus_kx && mx < h.focus_kx + h.focus_kw &&
-                gl_y >= h.ky && gl_y < h.ky + h.kh) {
+            if (gl_y >= h.ky && gl_y < h.ky + h.kh &&
+                mx >= h.focus_kx && mx < h.focus_kx + h.focus_kw) {
                 hit.kind = UI_HIT_CODE_FOCUS_TOGGLE;
+                hit.local_x = (float)(mx - builder.text_snap.cp_x);
+                hit.local_y = (float)(gl_y - builder.text_snap.cp_y);
+                return hit;
+            }
+            if (gl_y >= h.ky && gl_y < h.ky + h.kh &&
+                mx >= h.help_kx && mx < h.help_kx + h.help_kw) {
+                hit.kind = UI_HIT_HELP_TOGGLE;
                 hit.local_x = (float)(mx - builder.text_snap.cp_x);
                 hit.local_y = (float)(gl_y - builder.text_snap.cp_y);
                 return hit;

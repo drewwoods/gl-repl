@@ -2437,12 +2437,17 @@ int glr_ctrl_router_handle_help_scroll_special(int key) {
     }
 }
 
+/* Shared by the F1 key and the status-bar "F1 help" keycap click. */
+void glr_ctrl_toggle_help(void) {
+    ReplHelpState *help = ui_state_help_mut();
+    help->visible = !help->visible;
+    editor_help_session_set_tab(0);
+    editor_help_session_set_scroll(0);
+}
+
 int glr_ctrl_router_handle_help_toggle_special(int key) {
     if (key == GLUT_KEY_F1) {
-        ReplHelpState *help = ui_state_help_mut();
-        help->visible = !help->visible;
-        editor_help_session_set_tab(0);
-        editor_help_session_set_scroll(0);
+        glr_ctrl_toggle_help();
         return 1;
     }
     return 0;
@@ -2888,6 +2893,16 @@ static int route_code_focus_toggle_hit(void) {
     return 1;
 }
 
+/* UI_HIT_HELP_TOGGLE: the statusbar "F1 help" keycap. Same action as
+ * the F1 key — go through the shared toggle so the overlay tab/scroll
+ * reset identically. */
+static int route_help_toggle_hit(void) {
+    glr_ctrl_toggle_help();
+    glr_ctrl_router_reset_code_panel_drag();
+    editor_request_redraw();
+    return 1;
+}
+
 /* UI_HIT_INLINE_COLOR_SWATCH: toggle / open the floating color picker
  * for the swatch's source line. Undo capture is owned by the picker's
  * writeback path (color_picker_write_cmd → editor_commit_apply_external
@@ -3129,6 +3144,8 @@ int glr_ctrl_router_handle_code_panel_hit(UiHit hit, int x, int y) {
         consumed = route_code_panel_chrome_hit(); break;
     case UI_HIT_CODE_FOCUS_TOGGLE:
         consumed = route_code_focus_toggle_hit(); break;
+    case UI_HIT_HELP_TOGGLE:
+        consumed = route_help_toggle_hit(); break;
     case UI_HIT_CODE_PANEL_TAB:
         consumed = route_scene_tab_hit(&hit); break;
     case UI_HIT_HELP_PANEL:
