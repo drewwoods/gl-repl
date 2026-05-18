@@ -324,6 +324,10 @@ static void test_config_sections(void) {
     int n = glr_config_section_count();
     ASSERT_INT("section count", n, 6);
 
+    /* glr_config_section_label is data-faithful: it returns the raw
+     * "### " label with the marker stripped (still UPPERCASE). The
+     * leading-uppercase prettify is a menu-display concern applied in
+     * menu_item_label, not here. */
     const char *expect[] = {
         "RENDERING", "TIME & REPLAY", "OVERLAYS & SCENE",
         "GEOMETRY", "INTERFACE", "AUDIO",

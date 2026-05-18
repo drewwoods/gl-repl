@@ -374,6 +374,24 @@ render; both fixed (commit `flyout render fix`):
    rows like the original flat dropdown. Gate: 6084/6084 stubs,
    real-GL `make sample` clean.
 
+A second live review (commit `header case + arrow column`) added:
+
+3. **Section header casing (display-layer only).** The menu *heading*
+   rows should read leading-uppercase ("Rendering", "Time & replay").
+   Per user direction the `g_cfg_items[]` `### ` labels stay
+   **UPPERCASE** (single source of truth, data-faithful) and
+   `glr_config_section_label` still returns them verbatim
+   (`test_config_sections` unchanged); the prettify is applied only in
+   `menu_item_label(MENU_CONFIG, …)` for the top-level section parent
+   rows. The All-flyout chrome captions deliberately stay UPPERCASE,
+   matching the original flat dropdown.
+4. **Parent label vs `>` collision.** The Config dropdown width didn't
+   reserve space for the flyout-arrow glyph, so a long section name
+   ("Overlays & scene") ran into / clipped the `>`. `menu_dropdown_rect`
+   now adds a fixed `SUBMENU_ARROW_COL` (26 px) to the width when the
+   menu has any submenu parent row (Scene benefits too). Gate:
+   6084/6084 stubs, real-GL `make sample` clean.
+
 ## Open sub-questions for review
 
 - **All placement:** ✅ resolved — **last** row (after all sections),
