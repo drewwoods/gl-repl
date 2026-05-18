@@ -24,7 +24,7 @@ typedef enum {
     GRID_THEME_PLANES,
     GRID_THEME_RADAR,
     GRID_THEME_COUNT
-} GridTheme;
+} SceneGridTheme;
 
 typedef enum {
     AXES_THEME_OFF = 0,
@@ -35,7 +35,7 @@ typedef enum {
     AXES_THEME_GIZMO,
     AXES_THEME_RULER,
     AXES_THEME_COUNT
-} AxesTheme;
+} SceneAxesTheme;
 
 /* Grid major-tick spacing index. The actual float values live in a table
  * the controller passes through SceneRenderConfig.grid_major_steps. */
@@ -45,7 +45,7 @@ typedef enum {
     GRID_MAJOR_5,
     GRID_MAJOR_10,
     GRID_MAJOR_COUNT
-} GridMajorIdx;
+} SceneGridMajorIdx;
 
 /* Grid half-extent from origin along each axis. Values live in
  * SceneRenderConfig.grid_extents and must match this enum order. */
@@ -54,6 +54,6 @@ typedef enum {
     GRID_EXTENT_MID,
     GRID_EXTENT_FAR,
     GRID_EXTENT_COUNT
-} GridExtentIdx;
+} SceneGridExtentIdx;
 
 #endif /* SCENE_THEMES_H */
