@@ -804,6 +804,7 @@ Declarative toggle system in `src/app/glr_actions.c`:
 | Ctrl+Z | Undo |
 | Ctrl+R | Reformat all lines |
 | Ctrl+T | Toggle time variable `t` |
+| Ctrl+Shift+F | Toggle code focus (hide boilerplate chrome) — also the statusbar "focus" keycap |
 | F1 | Help overlay |
 | F2-F11 | Toggle visual overlays |
 | F12 | Cycle examples and user scenes |

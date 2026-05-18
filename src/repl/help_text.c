@@ -127,6 +127,7 @@ static const char *const k_tab_keys_base[] = {
     "",
     "Buffer Operations:",
     "  Ctrl+F               \tSearch source buffer",
+    "  Ctrl+Shift+F         \tToggle code focus (hide boilerplate chrome)",
     "  Ctrl+D               \tDelete line or selection",
     "  Ctrl+L               \tClear all commands",
     "  Ctrl+\\              \tReformat buffer",

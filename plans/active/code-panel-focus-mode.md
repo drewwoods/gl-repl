@@ -17,6 +17,32 @@ exit 0 · `make test` 37/37 binaries, 5440/5440 assertions. Remaining:
 the manual in-app checks in the Verification section below (config menu
 visual, save/load `@cfg code_focus` round-trip) need a GL window.
 
+## Follow-up: hidden shortcut + statusbar keycap (post-review request)
+
+The config-menu integration was replaced with a **hidden session
+toggle** (the F1-help / Ctrl+N post-filter pattern): no `g_cfg_items[]`
+row, no `GlrConfigKey`, no `@cfg` persistence (session-only now).
+
+- Shortcut **Ctrl+Shift+F** — `glr_ctrl_router_handle_code_focus_key`
+  (`KEY_CTRL_F` + `GLUT_ACTIVE_SHIFT`, intercepted before `editor_handle_key`
+  so plain Ctrl+F search is untouched). Shared `glr_ctrl_toggle_code_focus()`
+  does flag + chrome sync + follow-scroll + status.
+- Statusbar **"focus" keycap** in `repl_code_panel_draw_statusbar` —
+  accent when ON, muted when OFF. New `UI_HIT_CODE_FOCUS_TOGGLE`;
+  one `repl_code_panel_statusbar_hints()` geometry helper feeds both the
+  renderer and the hit-test so the click target matches the glyphs.
+  Controller routes via `route_code_focus_toggle_hit`.
+- `theme.h` adopted in the statusbar (text/divider/sunken/surface/accent
+  tokens replace the hardcoded greys; pure-black bottom edge kept as a
+  deliberate one-off).
+- Removed: `GLR_CONFIG_CODE_FOCUS` enum + `config_value_ptr` case +
+  `g_cfg_items[]` row + `glr_cfg_cycle_row` branch. Test now drives
+  `presentation.code_focus` / `glr_ctrl_toggle_code_focus()` directly
+  (26/26).
+- Docs: `help_text.c` (F1 catalog), `keys.h` (Ctrl+F / Ctrl+N
+  annotations), a `g_cfg_items[]` header note cataloguing the hidden
+  toggles, `CLAUDE.md` Key Controls row.
+
 ## Context
 
 The code panel renders a full standalone-C view: workspace-header comments,
