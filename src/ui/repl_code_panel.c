@@ -143,8 +143,19 @@ static int repl_code_panel_cursor_row(const UiRenderSnapshot *snap,
                                            out_start, out_len, out_x);
 }
 
+/* "Code focus" hides the derived C boilerplate stanzas (workspace
+ * header, includes, display() framing, render-state/camera/lights setup,
+ * init()/reshape() footer). Gating both the row-count and the emit paths
+ * with this single predicate keeps layout->header_rows/footer_rows
+ * consistent with what build_rows actually emits. */
+static int repl_code_panel_chrome_visible(const UiRenderSnapshot *snap) {
+    return !(snap && snap->code_panel.code_focus);
+}
+
 static int repl_code_panel_header_row_count(const UiRenderSnapshot *snap,
                                             int panel_w, int text_x) {
+    if (!repl_code_panel_chrome_visible(snap))
+        return 0;
     ReplImportExportView import_export = snap->import_export;
     int rows = 0;
 
@@ -183,6 +194,9 @@ static int repl_code_panel_footer_row_count(const UiRenderSnapshot *snap,
                                             int panel_w, int text_x) {
     int rows = 0;
     char line[MAX_LINE_LEN];
+
+    if (!repl_code_panel_chrome_visible(snap))
+        return 0;
 
     for (int i = 0; g_footer_pre_init[i]; i++) {
         if (strcmp(g_footer_pre_init[i],
@@ -1053,55 +1067,57 @@ static void repl_code_panel_build_rows(ReplCodePanelBuilder *builder) {
 
     snap = builder->snap;
 
-    for (int i = 0; i < snap->import_export.workspace_header_line_count; i++) {
+    if (repl_code_panel_chrome_visible(snap)) {
+        for (int i = 0; i < snap->import_export.workspace_header_line_count; i++) {
+            repl_code_panel_add_static_row(
+                builder,
+                snap->import_export.workspace_header_lines[i],
+                repl_code_panel_rgb(0.45f, 0.55f, 0.42f));
+        }
+        for (int i = 0; g_header_pre[i]; i++) {
+            repl_code_panel_add_static_row(
+                builder, g_header_pre[i],
+                repl_code_panel_static_line_color(g_header_pre[i],
+                                                  0.38f, 0.38f, 0.42f));
+        }
+        for (int i = 0; g_display_header[i]; i++) {
+            repl_code_panel_add_static_row(
+                builder, g_display_header[i],
+                repl_code_panel_static_line_color(g_display_header[i],
+                                                  0.38f, 0.38f, 0.42f));
+        }
+        /* Scratch decoration row: panel-only (the exporter emits the
+         * arrays as file-scope statics on demand instead). */
         repl_code_panel_add_static_row(
-            builder,
-            snap->import_export.workspace_header_lines[i],
-            repl_code_panel_rgb(0.45f, 0.55f, 0.42f));
-    }
-    for (int i = 0; g_header_pre[i]; i++) {
-        repl_code_panel_add_static_row(
-            builder, g_header_pre[i],
-            repl_code_panel_static_line_color(g_header_pre[i],
+            builder, REPL_CODE_PANEL_SCRATCH_DECL_LINE,
+            repl_code_panel_static_line_color(REPL_CODE_PANEL_SCRATCH_DECL_LINE,
                                               0.38f, 0.38f, 0.42f));
-    }
-    for (int i = 0; g_display_header[i]; i++) {
-        repl_code_panel_add_static_row(
-            builder, g_display_header[i],
-            repl_code_panel_static_line_color(g_display_header[i],
-                                              0.38f, 0.38f, 0.42f));
-    }
-    /* Scratch decoration row: panel-only (the exporter emits the
-     * arrays as file-scope statics on demand instead). */
-    repl_code_panel_add_static_row(
-        builder, REPL_CODE_PANEL_SCRATCH_DECL_LINE,
-        repl_code_panel_static_line_color(REPL_CODE_PANEL_SCRATCH_DECL_LINE,
-                                          0.38f, 0.38f, 0.42f));
-    for (int i = 0; i < RENDER_STATE_LINE_COUNT; i++) {
-        repl_code_panel_add_static_row(
-            builder,
-            snap->import_export.render_state_lines[i],
-            repl_code_panel_rgb(0.50f, 0.45f, 0.55f));
-    }
-    for (int i = 0; i < CAM_LINE_COUNT; i++) {
-        repl_code_panel_add_static_row(
-            builder,
-            snap->import_export.cam_lines[i],
-            repl_code_panel_rgb(0.50f, 0.45f, 0.55f));
-    }
-    for (int i = 0; i < repl_export_lights_display_line_count(); i++) {
-        char *line = repl_code_panel_next_generated_text(builder);
-        if (!line)
-            break;
-        repl_export_lights_display_line(i, line, MAX_LINE_LEN);
-        repl_code_panel_add_static_row(builder, line,
-                                       repl_code_panel_rgb(0.50f, 0.45f, 0.55f));
-    }
-    for (int i = 0; g_header_post[i]; i++) {
-        repl_code_panel_add_static_row(
-            builder, g_header_post[i],
-            repl_code_panel_static_line_color(g_header_post[i],
-                                              0.38f, 0.38f, 0.42f));
+        for (int i = 0; i < RENDER_STATE_LINE_COUNT; i++) {
+            repl_code_panel_add_static_row(
+                builder,
+                snap->import_export.render_state_lines[i],
+                repl_code_panel_rgb(0.50f, 0.45f, 0.55f));
+        }
+        for (int i = 0; i < CAM_LINE_COUNT; i++) {
+            repl_code_panel_add_static_row(
+                builder,
+                snap->import_export.cam_lines[i],
+                repl_code_panel_rgb(0.50f, 0.45f, 0.55f));
+        }
+        for (int i = 0; i < repl_export_lights_display_line_count(); i++) {
+            char *line = repl_code_panel_next_generated_text(builder);
+            if (!line)
+                break;
+            repl_export_lights_display_line(i, line, MAX_LINE_LEN);
+            repl_code_panel_add_static_row(builder, line,
+                                           repl_code_panel_rgb(0.50f, 0.45f, 0.55f));
+        }
+        for (int i = 0; g_header_post[i]; i++) {
+            repl_code_panel_add_static_row(
+                builder, g_header_post[i],
+                repl_code_panel_static_line_color(g_header_post[i],
+                                                  0.38f, 0.38f, 0.42f));
+        }
     }
 
     for (int i = 0; i < snap->document_count; i++) {
@@ -1190,38 +1206,40 @@ static void repl_code_panel_build_rows(ReplCodePanelBuilder *builder) {
                                             snap->trailing_indent_chars);
     }
 
-    for (int i = 0; g_footer_pre_init[i]; i++) {
-        if (strcmp(g_footer_pre_init[i],
-                   REPL_EXPORT_RESHAPE_PROJ_SENTINEL) == 0) {
-            /* Frame-frozen in the snapshot by the controller; its
-             * storage outlives this render, so add_static_row may hold
-             * the pointer directly (like the literal g_footer lines).
-             * Same block the row-count pass read, so they agree. */
-            for (int j = 0; j < snap->reshape_proj_count; j++)
-                repl_code_panel_add_static_row(
-                    builder, snap->reshape_proj_lines[j],
-                    repl_code_panel_static_line_color(
-                        snap->reshape_proj_lines[j], 0.38f, 0.38f, 0.42f));
-            continue;
+    if (repl_code_panel_chrome_visible(snap)) {
+        for (int i = 0; g_footer_pre_init[i]; i++) {
+            if (strcmp(g_footer_pre_init[i],
+                       REPL_EXPORT_RESHAPE_PROJ_SENTINEL) == 0) {
+                /* Frame-frozen in the snapshot by the controller; its
+                 * storage outlives this render, so add_static_row may hold
+                 * the pointer directly (like the literal g_footer lines).
+                 * Same block the row-count pass read, so they agree. */
+                for (int j = 0; j < snap->reshape_proj_count; j++)
+                    repl_code_panel_add_static_row(
+                        builder, snap->reshape_proj_lines[j],
+                        repl_code_panel_static_line_color(
+                            snap->reshape_proj_lines[j], 0.38f, 0.38f, 0.42f));
+                continue;
+            }
+            repl_code_panel_add_static_row(
+                builder, g_footer_pre_init[i],
+                repl_code_panel_static_line_color(g_footer_pre_init[i],
+                                                  0.38f, 0.38f, 0.42f));
         }
-        repl_code_panel_add_static_row(
-            builder, g_footer_pre_init[i],
-            repl_code_panel_static_line_color(g_footer_pre_init[i],
-                                              0.38f, 0.38f, 0.42f));
-    }
-    for (int i = 0; i < repl_export_init_section_line_count(); i++) {
-        char *line = repl_code_panel_next_generated_text(builder);
-        if (!line)
-            break;
-        repl_export_init_section_line(i, line, MAX_LINE_LEN);
-        repl_code_panel_add_static_row(builder, line,
-                                       repl_code_panel_rgb(0.38f, 0.38f, 0.42f));
-    }
-    for (int i = 0; g_footer_post_init[i]; i++) {
-        repl_code_panel_add_static_row(
-            builder, g_footer_post_init[i],
-            repl_code_panel_static_line_color(g_footer_post_init[i],
-                                              0.38f, 0.38f, 0.42f));
+        for (int i = 0; i < repl_export_init_section_line_count(); i++) {
+            char *line = repl_code_panel_next_generated_text(builder);
+            if (!line)
+                break;
+            repl_export_init_section_line(i, line, MAX_LINE_LEN);
+            repl_code_panel_add_static_row(builder, line,
+                                           repl_code_panel_rgb(0.38f, 0.38f, 0.42f));
+        }
+        for (int i = 0; g_footer_post_init[i]; i++) {
+            repl_code_panel_add_static_row(
+                builder, g_footer_post_init[i],
+                repl_code_panel_static_line_color(g_footer_post_init[i],
+                                                  0.38f, 0.38f, 0.42f));
+        }
     }
 
     builder->text_snap.row_count = builder->row_count;
