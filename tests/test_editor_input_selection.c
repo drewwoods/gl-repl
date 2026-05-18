@@ -868,7 +868,7 @@ int main(void) {
         int doc_before = editor_buffer_count();
         editor_input_clear();
         editor_handle_key(KEY_CTRL_V, 0, 0);
-        /* LINES paste runs feed_line — a new source command appears. */
+        /* LINES paste runs editor_feed_line — a new source command appears. */
         ASSERT_TRUE("LINES paste extended the document",
                     editor_buffer_count() > doc_before);
     }
@@ -879,7 +879,7 @@ int main(void) {
          * EditorInputState.input or EditorClipboardState (see Phase
          * A item 6 in done/editor-input-selection.md). After a
          * source-mutating commit, undo rewinds the source array and
-         * editor_undo_snapshot_restore calls load_line_to_input to
+         * editor_undo_snapshot_restore calls editor_load_line_to_input to
          * rebuild the active input from the restored source. This
          * test pins those two properties:
          *

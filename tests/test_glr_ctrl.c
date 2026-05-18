@@ -6,6 +6,7 @@
 #include <string.h>
 #include "editor/undo.h"
 #include "repl/core.h"
+#include "editor/input.h"
 #include "ui/layout.h"   /* CODE_PANEL_LAYOUT_* */
 #include "support/test_harness.h"
 

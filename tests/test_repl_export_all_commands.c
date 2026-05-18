@@ -7,6 +7,7 @@
  */
 #include "repl/command_spec.h"  /* cmd_type_name */
 #include "repl/core.h"
+#include "editor/input.h"
 #include "repl/core_internal.h"
 #include "repl/state.h"
 #include "repl/pipeline.h"

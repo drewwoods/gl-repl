@@ -8,7 +8,7 @@
  * need the gl_stub_counts[] counters to be live.
  *
  * For each program in the curated table the test:
- *   1. resets the REPL, feeds each line through feed_line(),
+ *   1. resets the REPL, feeds each line through editor_feed_line(),
  *      flattens, calls repl_execute_program(), and snapshots
  *      gl_stub_counts into repl_counts[];
  *   2. writes the program to a temp file via repl_export_save_output();
@@ -469,7 +469,7 @@ static void print_help(const char *argv0) {
 "per-symbol stub GL calls on both sides and asserting parity.\n"
 "\n"
 "For each program the test:\n"
-"  1. feeds source lines through feed_line(), flattens, snapshots\n"
+"  1. feeds source lines through editor_feed_line(), flattens, snapshots\n"
 "     gl_stub_counts[] around repl_execute_program();\n"
 "  2. calls repl_export_save_output() to a temp file, shells out to cc\n"
 "     to compile that file together with tests/export_trace_driver.c\n"

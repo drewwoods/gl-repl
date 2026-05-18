@@ -9,7 +9,7 @@
 #include "repl/command_store.h"
 #include "repl/core.h"
 #include "repl/core_internal.h"
-#include "repl/executor.h"        /* apply_state_cmd */
+#include "repl/executor.h"        /* repl_apply_state_cmd */
 #include "repl/parser.h"
 #include "repl/pipeline.h"
 #include "repl/source_scope.h"
@@ -557,9 +557,9 @@ typedef struct {
 } InitBootstrapEntry;
 
 /* Bootstrap commands are REPL lines that run once at startup through
- * apply_state_cmd. Each frame's glPushAttrib/glPopAttrib bracket then
+ * repl_apply_state_cmd. Each frame's glPushAttrib/glPopAttrib bracket then
  * preserves this state across user commands. Comment entries (// ...)
- * parse as CMD_COMMENT — apply_state_cmd no-ops them, but the editor
+ * parse as CMD_COMMENT — repl_apply_state_cmd no-ops them, but the editor
  * and exporter render them as section headers in the init() body. */
 static const InitBootstrapEntry g_init_bootstrap_repl[] = {
     { "// Background color used by glClear at the start of every frame.", NULL },
@@ -766,11 +766,11 @@ void repl_apply_init_bootstrap(void) {
                 disabled.args[1] = 1.0f;
                 disabled.args[2] = 0.0f;
                 disabled.args[3] = 0.0f;
-                apply_state_cmd(&disabled, 1.0f);
+                repl_apply_state_cmd(&disabled, 1.0f);
             }
             continue;
         }
-        apply_state_cmd(&g_init_bootstrap_cmds[bootstrap_idx].cmd, 1.0f);
+        repl_apply_state_cmd(&g_init_bootstrap_cmds[bootstrap_idx].cmd, 1.0f);
     }
 }
 
@@ -2326,7 +2326,7 @@ static int import_parse_declare_marker(const char *line, int *loaded,
     snprintf(decl_line + off, sizeof(decl_line) - (size_t)off, ";");
     cmd.var_decl_count = count;
 
-    /* Insert the command directly, bypassing try_commit_float_decl so we
+    /* Insert the command directly, bypassing editor_try_commit_float_decl so we
      * don't reject vars that are already registered.  Keep declarations in the
      * same leading zone used by interactive float declarations, even though
      * exported // @declare markers are encountered later in the snippet. */
@@ -2959,7 +2959,7 @@ static void import_feed_one_line(const char *line, int *loaded, int *warnings) {
         return;
 
     /* Step 5b: feed lines through the non-editor source-load API
-     * (repl_load_apply_line in src/repl/compile.c) instead of feed_line.
+     * (repl_load_apply_line in src/repl/compile.c) instead of editor_feed_line.
      * Same compile + apply, no editor input dispatch. */
     char load_err[256] = "";
     if (import_make_repl_for_header(line, repl_line, sizeof(repl_line))) {

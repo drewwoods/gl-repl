@@ -175,8 +175,8 @@ void repl_advance_time(float dt);
  * deterministic time origin. */
 void repl_reset_time_to_zero(void);
 
-/* --- Editor / navigation helpers called from outside src/repl/core.c ------- */
-void editor_navigate_to_line(int target);
+/* editor_navigate_to_line() / editor_feed_line() are editor-owned and
+ * declared in src/editor/input.h — src/repl/ no longer re-declares them. */
 void repl_load_initial_commands(const char *import_file);
 /* Pure REPL pass: walks every command and rewrites the canonical
  * line text + GLCmd in place. Does not save/restore editor input;
@@ -202,10 +202,5 @@ int  repl_find_feeding_color_cmd(int line_idx);
  * use `repl_state_init_defaults()` / `repl_state_reset_program()` from
  * src/repl/state_owners.h. The old single entry point disappeared in step 2 of
  * feature/decouple-repl-from-gl-repl-alt.md. */
-
-/* Public wrapper over the internal feed_line() so test code outside
- * src/repl/core_internal.h users can drive command commitment end-to-end.
- * Used by integration tests that validate parsing → commit → execute flows. */
-void editor_feed_line(const char *line);
 
 #endif /* REPL_CORE_H */

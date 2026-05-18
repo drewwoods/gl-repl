@@ -10,7 +10,7 @@
  *
  *  - `glr_completion_register_provider()` is called once at startup
  *    so the editor knows about the REPL grammar.
- *  - `accept_autocomplete()` is called by the editor input dispatch
+ *  - `glr_completion_accept_autocomplete()` is called by the editor input dispatch
  *    when the user accepts the current ghost (Tab / Enter on the
  *    popup). The acceptance behavior — append ghost text to the input
  *    buffer, advance the cursor, clear the popup — knows enough about
@@ -23,7 +23,7 @@
 
 /* Commit the current ghost (selected match suffix) into the editor
  * input buffer, advance the cursor, and clear the popup state. */
-void accept_autocomplete(void);
+void glr_completion_accept_autocomplete(void);
 
 /* Register glr_completion as the editor's EditorCompletionProvider.
  * Called once at startup before the editor processes input. */

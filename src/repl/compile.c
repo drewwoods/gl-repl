@@ -1735,7 +1735,7 @@ ReplCompileResult repl_compile_func_def(const char *input,
      * the same fn anywhere in the document means the new line is a
      * second definition that would shadow the first. The editor's
      * editor_compile_func_def has the same check (src/editor/commit.c
-     * lines 670-681) so feed_line rejects this; the lean loader path
+     * lines 670-681) so editor_feed_line rejects this; the lean loader path
      * needs to match.
      *
      * Note: this validator is the line-by-line load case, so we don't

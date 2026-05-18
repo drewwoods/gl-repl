@@ -388,7 +388,7 @@ static void update_autocomplete(void) {
     update_input_param_hint();
 }
 
-void accept_autocomplete(void) {
+void glr_completion_accept_autocomplete(void) {
     EditorAutocompleteState ac = editor_state_autocomplete();
 
     int ghost_len = (int)strlen(ac.ghost);

@@ -1,5 +1,6 @@
 #include "app/glr_ctrl.h"
 #include "repl/core_internal.h"
+#include "editor/input.h"
 #include "repl/parser.h"
 #include "repl/state.h"
 #include "ui/state.h"

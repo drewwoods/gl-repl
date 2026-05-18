@@ -124,7 +124,7 @@ typedef struct EditorCommitPostEffects_s {
     /* Drop the pending-newline scratch buffer. */
     int clear_pending_newline;
 
-    /* After the cursor target lands, call load_line_to_input(...)
+    /* After the cursor target lands, call editor_load_line_to_input(...)
      * to repopulate g_input from the new edit-line's text. */
     int load_line_after_apply;
 
@@ -208,7 +208,7 @@ ReplCompileResult editor_compile_if_block(const char *input,
  * NOTE: this entry handles validation + the header-replace branch
  * only (cursor sits on an existing CMD_FUNC_DEF in non-insert mode).
  * The new-def-with-comment-relocation branch stays inline in
- * try_commit_func_def for now — it needs a delete-before-insert
+ * editor_try_commit_func_def for now — it needs a delete-before-insert
  * field on EditorCommitPlan plus the function_decl_resume_delta
  * publish-side captured into post-effects, both of which are
  * deferred to a follow-up commit.
@@ -268,15 +268,15 @@ int  editor_commit_func_decl_resume_peek(void);
  * serves; the redundant declaration here was elided in the symbol
  * rename. */
 
-int try_commit_float_decl(void);
-int try_assign_variable(void);
-int try_commit_for_loop(void);
-int try_commit_func_def(void);
-int try_commit_if_block(void);
-int try_commit_close_brace(void);
-int try_commit_var_statements(void);
-int try_commit_block_structs(void);
-int try_commit_any(void);
-int try_commit_var_statements_then_insert(void);
+int editor_try_commit_float_decl(void);
+int editor_try_assign_variable(void);
+int editor_try_commit_for_loop(void);
+int editor_try_commit_func_def(void);
+int editor_try_commit_if_block(void);
+int editor_try_commit_close_brace(void);
+int editor_try_commit_var_statements(void);
+int editor_try_commit_block_structs(void);
+int editor_try_commit_any(void);
+int editor_try_commit_var_statements_then_insert(void);
 
 #endif /* EDITOR_COMMIT_H */

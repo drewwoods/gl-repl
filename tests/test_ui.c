@@ -6,6 +6,7 @@
 #include "repl/state.h"
 #include "widgets/replay_state.h"
 #include "repl/core.h"
+#include "editor/input.h"
 #include "editor/help_session.h"
 #include "ui/tabbed_overlay.h"
 #include "prof.h"
@@ -737,7 +738,7 @@ static void test_ui_panels_hit_test_code_text_cursor(void) {
 /* J2.1: in insert mode, clicking on the insertion virtual rows
  * (the extra "ghost" row above the edit-line where the user is
  * typing the next command) surfaces UI_HIT_CODE_INSERT_LINE — the
- * controller's route_code_insert_line_hit skips navigate_to_line
+ * controller's route_code_insert_line_hit skips editor_navigate_to_line
  * for these clicks, matching the legacy on_insert_line=1 path. */
 static void test_ui_panels_hit_test_insert_line(void) {
     glr_app_reset_all();

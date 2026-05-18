@@ -340,7 +340,7 @@ int main(void) {
         inp->input_len = (int)strlen(inp->input);
         editor_cursor_pos_set(inp->input_len);
         g_status[0] = '\0';
-        int consumed = try_assign_variable();
+        int consumed = editor_try_assign_variable();
         ASSERT_TRUE("cascade in-use rejection consumed", consumed == 1);
         ASSERT_TRUE("cascade in-use status names variable",
                     strstr(g_status, "foo") != NULL &&

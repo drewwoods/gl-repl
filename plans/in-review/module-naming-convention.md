@@ -1,5 +1,15 @@
 # Module Naming Convention Cleanup
 
+## Implementation Progress
+
+- **Phase 1 — DONE** (commit `naming(phase 1)`). All cross-module
+  type/enum/macro renames landed; build, 5468 tests,
+  check-state-ownership, check-c99, test-stubs all green. Guard
+  scripts + baseline prose + CLAUDE/MODULES/ARCHITECTURE docs updated.
+- **Phase 2 — pending.**
+- **Phase 3 — pending.**
+- **Phase 4 — pending.**
+
 ## Context
 
 Successive refactors moved code between modules without renaming its symbols.
@@ -203,6 +213,19 @@ user wants the cleanup landed without new gates.
   scope, then `gsed -i 's/\b<Old>\b/<New>/g'` on that file set (GNU sed
   is `gsed` on this macOS box). Word boundaries are required — e.g.
   `feed_line` must not catch `editor_feed_line`.
+- **Also sweep `scripts/` and `scripts/baselines/`** (discovered in
+  Phase 1, not in the original scope): several ownership guards
+  hardcode type names in their signature regexes
+  (`check-color-picker-ui-isolation.sh` matched
+  `EditorTransformer`, `check-repl-no-direct-editor.sh` matched
+  `ReplEditorBuffer`, `check-no-test-default-output.sh` matched
+  `REPL_FILE_ITEM`), and the `editor-ownership-budget.txt` /
+  `ui-returns-hits-only.txt` baselines reference the names in comment
+  prose. The Makefile may also reference symbols. Add these to the
+  per-phase scope or `make check-state-ownership` fails after the
+  code rename even though the build/tests pass.
+- `AGENTS.md` is a **symlink to `CLAUDE.md`** — editing `CLAUDE.md`
+  covers both; do not edit `AGENTS.md` separately.
 - Rename the `_s` tag and the typedef together where structs use
   `typedef struct X_s { ... } X;`.
 - Update doc/prose references in the same commit: `CLAUDE.md`,

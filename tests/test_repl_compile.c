@@ -22,6 +22,7 @@
 #include "repl/command_store.h"
 #include "repl/compile.h"
 #include "repl/core.h"
+#include "editor/input.h"
 #include "repl/core_internal.h"  /* try_commit_*, editor_commit_func_decl_resume_peek */
 #include "repl/eval.h"
 #include "repl/load.h"           /* repl_load_apply_line for [P2] dup-check test */
@@ -727,7 +728,7 @@ static void test_func_def_comment_relocation(void) {
      * forwards through editor_compile_func_def). */
     if (!ok.consumed) {
         /* Fall through to the legacy try_commit chain. */
-        try_commit_block_structs();
+        editor_try_commit_block_structs();
     }
 
     /* Post-commit doc shape:
@@ -751,7 +752,7 @@ static void test_func_def_comment_relocation(void) {
 
     /* The editor buffer mirrors the cmd-store with the same
      * content. */
-    /* Comment text retains the canonical indent from feed_line. */
+    /* Comment text retains the canonical indent from editor_feed_line. */
     ASSERT_TRUE("buffer line 0 contains 'descriptive'",
                 strstr(editor_buffer_line(0), "descriptive") != NULL);
     ASSERT_TRUE("buffer line 1 contains 'continuation'",
@@ -778,7 +779,7 @@ static void test_func_def_blank_line_relocation(void) {
                repl_state_document_cmds()[1].type, CMD_EMPTY);
 
     set_input("func0() {");
-    try_commit_block_structs();
+    editor_try_commit_block_structs();
 
     ASSERT_INT("post-funcdef blank relocation count",
                repl_state_document_count(), 6);
@@ -856,9 +857,9 @@ static void test_func_def_resume_publish_consumed_by_close_brace(void) {
     editor_feed_line("// about to define func");
 
     set_input("func0() {");
-    /* Drive the migration through try_commit_block_structs since
+    /* Drive the migration through editor_try_commit_block_structs since
      * func_def isn't in repl_compile_dispatch yet. */
-    try_commit_block_structs();
+    editor_try_commit_block_structs();
 
     /* After the migration, editor_commit_func_decl_resume_peek
      * should reflect the published delta. */
@@ -868,7 +869,7 @@ static void test_func_def_resume_publish_consumed_by_close_brace(void) {
     /* Close the func block. The compile reads the delta (peek);
      * since end_type is CMD_FUNC_END, take + advance fires. */
     set_input("}");
-    try_commit_close_brace();
+    editor_try_commit_close_brace();
 
     /* The global is consumed (cleared) on FUNC_END close. */
     int post_consume = editor_commit_func_decl_resume_peek();
@@ -936,7 +937,7 @@ int main(void) {
      * this check (src/editor/commit.c lines 670-681); the lean
      * validator was missing it, so an imported file with two
      * `func0() { ... }` blocks would have been accepted silently
-     * where feed_line() would have rejected the second. */
+     * where editor_feed_line() would have rejected the second. */
     {
         glr_app_reset_all();
         repl_func_alias_clear_all();

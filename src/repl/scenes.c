@@ -305,7 +305,7 @@ static void load_scene_from_slot(int idx) {
     repl_dispatch_insert_mode_off();
     /* Editor input buffer refresh is the controller's responsibility:
      * see check-no-load-line-to-input-in-pipeline. Controllers /
-     * editor wrappers call load_line_to_input(repl_state_edit_line())
+     * editor wrappers call editor_load_line_to_input(repl_state_edit_line())
      * after a scene-load API returns. */
     repl_mark_normals_dirty();
     s->last_touch       = next_user_scene_tick();

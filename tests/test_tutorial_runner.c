@@ -363,7 +363,7 @@ static void test_locked_comment_load_is_read_only(void) {
     tutorial_start(0);
     set_input_text("glEnd()");
 
-    load_line_to_input(0);
+    editor_load_line_to_input(0);
 
     ASSERT_INT("locked line load clears input len",
                editor_state_input().input_len, 0);
@@ -437,7 +437,7 @@ static void test_navigation_rejects_non_matching_input(void) {
     reset_fixture();
     tutorial_start(0);
     /* Commit step 0 first so there's a non-locked user line to navigate to;
-     * landing on a locked instruction would have load_line_to_input
+     * landing on a locked instruction would have editor_load_line_to_input
      * overwrite the precheck status. */
     set_input_text(tutorial_current_expected_text());
     (void)editor_handle_key(';', 0, 0);
@@ -487,7 +487,7 @@ static void test_enter_on_locked_line_shows_position_hint(void) {
     /* Regression: an earlier review flagged that
      * commit_current_input's unmodified+enter_mode branch could toggle
      * insert mode at a locked line. With the Phase 3 precheck,
-     * landing on a locked line first triggers load_line_to_input,
+     * landing on a locked line first triggers editor_load_line_to_input,
      * which clears the input and sets the read-only status; the
      * Enter that follows hits the precheck's empty-input silent
      * reject, so the read-only status stays visible. The step
@@ -558,7 +558,7 @@ static void test_tab_autofill_then_semicolon_advances(void) {
 }
 
 static void test_rejected_commit_does_not_advance_tutorial(void) {
-    /* Filling the document via feed_line (which intentionally
+    /* Filling the document via editor_feed_line (which intentionally
      * bypasses the tutorial precheck) leaves the editor cursor at
      * the trailing row while expected_commit_line still points at
      * the row immediately below the first instruction. The Phase 3
@@ -894,7 +894,7 @@ static void test_depth_tutorial_label_targeted_step_inserts_above_label(void) {
      * directly above its glBegin command rather than orphaning
      * them. Use editor_feed_line +
      * tutorial_advance_after_successful_commit since the Phase 3
-     * precheck has not landed yet and feed_line is the existing
+     * precheck has not landed yet and editor_feed_line is the existing
      * way these tests step through append commits. */
     int t_idx = depth_tutorial_idx();
     ASSERT_TRUE("Depth Test Triangle present in catalog", t_idx >= 0);
@@ -973,7 +973,7 @@ static void test_phase3_label_targeted_commit_inserts_above_label(void) {
      * user can actually commit the label-targeted step's expected
      * command at expected_commit_line and the runner advances.
      * Walks the depth-test tutorial via the real keyboard route
-     * (which exercises the precheck) rather than feed_line. */
+     * (which exercises the precheck) rather than editor_feed_line. */
     int t_idx = depth_tutorial_idx();
     if (t_idx < 0)
         return;

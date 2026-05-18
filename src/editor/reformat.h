@@ -4,7 +4,7 @@
  * The pure source-level rewrite (re-emit canonical text per command)
  * lives on the REPL pipeline as `repl_reformat_program()`. The wrapper
  * here adds the editor input save/restore and the post-pass
- * `load_line_to_input` refresh so the typed input buffer survives a
+ * `editor_load_line_to_input` refresh so the typed input buffer survives a
  * Ctrl+\ reformat.
  *
  * Pipeline TUs that need to canonicalize loaded text (post-load

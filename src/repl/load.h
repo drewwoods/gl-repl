@@ -19,9 +19,9 @@
 
 /* Compile + apply a single source line at a caller-chosen index.
  *
- * Replaces feed_line() for callers that don't want editor input
+ * Replaces editor_feed_line() for callers that don't want editor input
  * dispatch (cursor mutations, insert mode toggle, input buffer
- * writes). Dispatch order matches feed_line / try_commit_*:
+ * writes). Dispatch order matches editor_feed_line / try_commit_*:
  *   float decl → var assign (via repl_compile_dispatch)
  *   close_brace → for_loop → func_def → if_block (block validators)
  *   plain GL command (via repl_parse_and_normalize_strict)

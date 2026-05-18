@@ -2471,7 +2471,7 @@ static void cycle_example_or_user_scene(void) {
         for (int scene_idx = active_scene + 1; scene_idx < MAX_USER_SCENES; scene_idx++) {
             if (repl_user_scene_slot_used(scene_idx)) {
                 if (repl_load_user_scene_idx(scene_idx))
-                    load_line_to_input(repl_state_edit_line());
+                    editor_load_line_to_input(repl_state_edit_line());
                 return;
             }
         }
@@ -2491,7 +2491,7 @@ static void cycle_example_or_user_scene(void) {
     for (int scene_idx = 0; scene_idx < MAX_USER_SCENES; scene_idx++) {
         if (repl_user_scene_slot_used(scene_idx)) {
             if (repl_load_user_scene_idx(scene_idx))
-                load_line_to_input(repl_state_edit_line());
+                editor_load_line_to_input(repl_state_edit_line());
             return;
         }
     }
@@ -2765,7 +2765,7 @@ static void route_code_click_epilog(void) {
 void glr_ctrl_router_select_word_at(int line_idx, int char_idx) {
     if (line_idx < 0)
         return;
-    navigate_to_line(line_idx);
+    editor_navigate_to_line(line_idx);
 
     const char *text = editor_input_text();
     int len = editor_input_len();
@@ -2821,7 +2821,7 @@ static int route_code_text_hit(const UiHit *hit) {
     }
 
     if (hit->line_idx >= 0)
-        navigate_to_line(hit->line_idx);
+        editor_navigate_to_line(hit->line_idx);
     if (hit->char_idx >= 0)
         editor_cursor_pos_set(hit->char_idx);
     route_code_click_epilog();
@@ -2860,7 +2860,7 @@ static int route_code_insert_line_hit(const UiHit *hit) {
 static int route_code_gutter_hit(const UiHit *hit) {
     color_picker_close();
     if (hit->line_idx >= 0)
-        navigate_to_line(hit->line_idx);
+        editor_navigate_to_line(hit->line_idx);
     route_code_click_epilog();
     if (hit->line_idx >= 0 && hit->line_idx < repl_state_document_count()) {
         g_code_panel_drag_active = 1;
@@ -2938,7 +2938,7 @@ static int route_pin_button_hit(const UiHit *hit) {
         replay_handle_pin_clicked();
         break;
     case UI_MENU_BAR_PIN_SEARCH:
-        handle_search_key(KEY_CTRL_F);
+        editor_search_handle_key(KEY_CTRL_F);
         ui_menu_bar_note_search_opened(repl_state_variables().anim_time);
         break;
     default:
@@ -3221,7 +3221,7 @@ int glr_ctrl_router_handle_code_panel_drag(int x, int y) {
         g_code_panel_drag_moved = 1;
         editor_selection_start(g_code_panel_drag_anchor);
         editor_selection_set_end(target);
-        navigate_to_line(target);
+        editor_navigate_to_line(target);
         glr_action_cursor_blink_reset();
         editor_request_redraw();
     }

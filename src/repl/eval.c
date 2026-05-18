@@ -102,7 +102,7 @@ int repl_func_alias_name_is_valid(const char *name) {
      * PI/TAU, math funcs sin/cos/..., scratch A/B/C, type keywords). */
     if (repl_eval_is_reserved_ident(name)) return 0;
     /* Reject control-flow keywords. These have their own commit
-     * handlers (try_commit_for_loop, try_commit_if_block) and would
+     * handlers (editor_try_commit_for_loop, editor_try_commit_if_block) and would
      * otherwise hijack their syntax if a user typed `if(...)` after
      * accidentally declaring an alias by the same name. */
     static const char *const control_flow_kw[] = {

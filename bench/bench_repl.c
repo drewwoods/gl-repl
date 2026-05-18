@@ -17,7 +17,7 @@
  * Sub-benchmarks (names match the `--only` filter strings and the printed
  * labels):
  *   parse_lines       - repl_parse_command on every example line
- *   feed_examples     - full feed_line path on every example
+ *   feed_examples     - full editor_feed_line path on every example
  *   flatten_examples  - load each example then call repl_flatten_commands
  *   replay_examples   - start a replay and step it to completion
  *   replay_long       - feed a synthetic large scene and step replay to end
@@ -157,7 +157,7 @@ static long long total_example_lines(void) {
 /* ---- bench: parse single lines via repl_parse_command ------------------ */
 
 /* This bypasses the commit dispatch chain and exercises only the parser
- * path. It is meant to bracket how much of "feed_line cost" is parser vs.
+ * path. It is meant to bracket how much of "editor_feed_line cost" is parser vs.
  * everything else (normalization, var declaration, dirty marking, etc.). */
 static BenchResult bench_parse_lines(int iters) {
     /* Build a flat array of lines from every example so we touch every
@@ -206,7 +206,7 @@ static BenchResult bench_parse_lines(int iters) {
     return r;
 }
 
-/* ---- bench: full feed_line path on every example ---------------------- */
+/* ---- bench: full editor_feed_line path on every example ---------------------- */
 
 static BenchResult bench_feed_examples(int iters) {
     int n_examples = repl_examples_count();
@@ -243,7 +243,7 @@ static BenchResult bench_flatten_examples(int iters) {
                       .min_sec = 1e18 };
 
     /* Pre-load each example fresh so we are timing flatten alone, not
-     * feed_line plus flatten. We re-run flatten `inner` times per example
+     * editor_feed_line plus flatten. We re-run flatten `inner` times per example
      * to amortize the surrounding loop overhead. The timer is started
      * after the load so the flatten loop is the only thing being timed. */
     int inner = 32;
@@ -435,7 +435,7 @@ static BenchResult bench_replay_long(int iters) {
     BenchResult r = { .name = "replay_long", .unit = "steps",
                       .min_sec = 1e18 };
 
-    /* Load once outside the inner loop - feed_line is not what we are
+    /* Load once outside the inner loop - editor_feed_line is not what we are
      * measuring here. Re-using the same repl_state_document_cmds_mut()[] across iterations is
      * fine because replay only mutates the replay state, not the source
      * commands. We mark repl_state_flat_program_dirty() between iterations so replay_start()
@@ -708,7 +708,7 @@ static void usage(const char *prog) {
         "usage: %s [--iters N] [--csv] [--only NAME[,NAME...]]\n"
         "  Available sub-benchmarks:\n"
         "    parse_lines       repl_parse_command on every example line\n"
-        "    feed_examples     full feed_line path on every example\n"
+        "    feed_examples     full editor_feed_line path on every example\n"
         "    flatten_examples  repl_flatten_commands per example\n"
         "    replay_examples   step replay through every example\n"
         "    replay_long       synthetic 600-iter for-loop replay\n"
