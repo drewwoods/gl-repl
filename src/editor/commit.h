@@ -1,39 +1,23 @@
 /*
  * editor_commit.h - Editor-side orchestration for compile/apply commits.
  *
- * The orchestration shape is the dual of repl_compile():
+ * This layer owns the editor half of a commit transaction: ask the REPL
+ * compile/apply surface what source-command change should happen, preflight it,
+ * capture undo at the mutation boundary, write editor text, apply the REPL
+ * change, then replay any editor-only follow-up effects such as cursor moves or
+ * input clearing.
  *
- *   editor_commit_current_input(services)
- *       1. compile through services
- *       2. on compile failure: return diagnostic via result;
- *          no buffer/store/status/undo mutation
- *       3. on NO_CHANGE: return consumed=0; caller falls through
- *       4. on compile success:
- *            preflight via repl_apply_can_apply_compiled_change
- *            on preflight failure: return capacity_failed=1; no
- *              mutation
- *            on preflight success:
- *              capture undo pre-state (transaction boundary)
- *              services.apply_predef_ops(change)
- *              editor_buffer_apply_compiled_change(change)
- *              services.apply_repl_change(change)
- *              return mutated=1, commit_message_valid populated
+ * `editor_commit_current_input()` is the common path for the live input row.
+ * `editor_commit_apply_external_change()` and
+ * `editor_commit_apply_compiled_change()` are the lower-level entry points for
+ * callers that already hold a compiled change. Structured block commits that
+ * need extra editor-side effects use `EditorCommitPlan`, which keeps those
+ * effects alongside the REPL change without teaching the REPL pipeline about
+ * cursor or input mechanics.
  *
- *   editor_commit_apply_compiled_change(change)
- *       Lower-level helper used by legacy try_commit_* handlers
- *       during the migration. Same transaction shape as the steps
- *       inside editor_commit_current_input from preflight onward;
- *       does not run compile or capture undo. Migrating handlers
- *       move from this helper to editor_commit_current_input as
- *       Phase D commits 26a-26e land.
- *
- * The undo capture sits AFTER successful compile + preflight but
- * BEFORE the first mutation — it is a transaction boundary tied to
- * the act of mutating, not to "successful commit" which would risk
- * capturing post-state.
- *
- * Diagnostic / commit-message text uses explicit *_valid flags so
- * empty string is never a signal.
+ * Undo capture happens after successful compile and preflight but before the
+ * first mutation. Diagnostic and commit-message text use explicit `*_valid`
+ * flags so an empty string is never a control signal.
  */
 #ifndef EDITOR_COMMIT_H
 #define EDITOR_COMMIT_H
@@ -65,12 +49,9 @@ typedef struct {
  * Returns an EditorCommitResult describing what happened; never
  * calls set_status itself.
  *
- * Phase D commit 25 lands this entry; commit 26a routes ;-key /
- * Enter / feed_line through it for the already-migrated simple
- * commit paths (float-decl, var-assign). Structured commits
- * continue to use the legacy try_commit_* chain through
- * editor_commit_apply_compiled_change until commits 26b-26e
- * migrate them. */
+ * Simple commit grammars use this directly. Structured block paths that need
+ * extra cursor or insert-mode effects still compile into `EditorCommitPlan`
+ * and apply through the plan helper below. */
 EditorCommitResult editor_commit_current_input(const struct EditorServices_s *services);
 
 /* Apply a precompiled external change atomically. This is the
@@ -83,9 +64,10 @@ int editor_commit_apply_external_change(const struct ReplCompiledChange_s *chang
                                         int capture_undo);
 
 /* Apply a compiled change atomically. Lower-level helper used by
- * legacy try_commit_* handlers during the migration. Same
- * transaction shape as editor_commit_current_input from preflight
- * onward; does not run compile or capture undo.
+ * callers that already have a ReplCompiledChange and only need the
+ * shared preflight/apply transaction. Same transaction shape as
+ * editor_commit_current_input from preflight onward; does not run
+ * compile or capture undo.
  *
  *   Returns 1 if all three halves (predef-ops, editor buffer,
  *     cmd store) landed successfully.
@@ -114,9 +96,8 @@ int editor_commit_apply_compiled_change(const struct ReplCompiledChange_s *chang
  *   EditorCommitPlan         wraps both halves plus the success
  *                            commit_message.
  *
- * Editor-side compile functions (`editor_compile_close_brace`, and
- * the structured-block functions added in Phase D commits 26c-26e)
- * return `EditorCommitPlan`. `editor_commit_apply_plan` drives the
+ * Editor-side structured compile functions return `EditorCommitPlan`.
+ * `editor_commit_apply_plan` drives the
  * canonical transaction: preflight → undo capture → REPL apply →
  * editor-buffer apply → editor post-effects.
  *
@@ -150,12 +131,9 @@ typedef struct EditorCommitPostEffects_s {
     /* `apply_func_decl_resume` applies a stashed delta to edit_line
      * after a func-def's close-brace lands. The compile step
      * captures the delta here so apply doesn't rely on the
-     * `g_func_decl_resume_delta` global being read at apply time.
-     *
-     * The full eradication of the global lives in commit 26d
-     * (func_def migration); for close_brace the compile step
-     * reads the global as input and writes the value into this
-     * field, and apply consumes + clears the global. */
+        * shared func-decl-resume bookkeeping being reread at apply time.
+        * For the close-brace path the compile step snapshots the current
+        * resume delta here, and apply consumes and clears that bookkeeping. */
     int func_decl_resume_advance;
 
     /* CmdType-shaped value identifying the block kind. Used by
@@ -163,9 +141,8 @@ typedef struct EditorCommitPostEffects_s {
      * by status-message formatting. */
     int end_type;
 
-    /* Drop autocomplete model state (matches the legacy
-     * editor_completion_clear() side-effect on header-replace
-     * paths). */
+    /* Drop autocomplete model state when the commit should clear any
+     * stale popup/ghost preview. */
     int clear_autocomplete;
 
     /* Publish a value into the func-decl-resume bookkeeping. When
@@ -173,7 +150,7 @@ typedef struct EditorCommitPostEffects_s {
      * `func_decl_resume_publish_value` via
      * `editor_commit_func_decl_resume_set` so a subsequent
      * close-brace's compile reads it. The setter encapsulates the
-     * legacy `g_func_decl_resume_delta` global so it stops being a
+     * shared resume bookkeeping instead of exposing that state as a
      * cross-module protocol. */
     int func_decl_resume_publish;
     int func_decl_resume_publish_value;
@@ -194,8 +171,8 @@ void editor_commit_plan_init(EditorCommitPlan *plan);
 /* Publish a value into the func-decl-resume bookkeeping. Called
  * by editor_commit_apply_plan when
  * `effects.func_decl_resume_publish` is set. Encapsulates the
- * legacy g_func_decl_resume_delta global so callers stop poking
- * at it directly. */
+ * shared resume bookkeeping so callers stop poking at storage
+ * directly. */
 void editor_commit_func_decl_resume_set(int delta);
 
 /* Apply an EditorCommitPlan atomically:
@@ -240,7 +217,8 @@ ReplCompileResult editor_compile_if_block(const char *input,
  *   REPL_COMPILE_OK + REPLACE_ONE   header-replace plan ready
  *   REPL_COMPILE_OK + NO_CHANGE     not a func decl OR a func decl
  *                                   in non-overwrite context (caller
- *                                   should fall through to legacy)
+ *                                   should fall through to some other
+ *                                   commit route)
  *   REPL_COMPILE_ERROR              syntax / duplicate-name error;
  *                                   `err` filled */
 ReplCompileResult editor_compile_func_def(const char *input,
@@ -269,10 +247,6 @@ ReplCompileResult editor_compile_for_loop(const char *input,
                                           char *err, int err_size);
 
 /* ---- Commit dispatcher chain ----
- *
- * Phase H.5 commit 41: declarations moved here from
- * src/repl/core_internal.h. Bodies live in editor_commit.c (moved in
- * Phase H.5 commit 39 from repl_commit.c, which is now deleted).
  *
  * Each `try_commit_*` inspects the live editor input. Returns 1 if
  * it consumed the line (success or handled error), 0 if the input
