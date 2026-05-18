@@ -47,7 +47,9 @@
 #define KEY_CTRL_Q    0x11 /* save and quit (Ctrl+Q, == 17) */
 
 /* Search and navigation */
-#define KEY_CTRL_F    6    /* open search overlay (Ctrl+F) */
+#define KEY_CTRL_F    6    /* open search overlay (Ctrl+F; Shift: toggle
+                              code focus — hidden session toggle, see
+                              the g_cfg_items[] note in glr_actions.c) */
 #define KEY_CTRL_K    11   /* jump replay PC to cursor line (Ctrl+K) */
 
 /* Visualization and overlays */
@@ -55,7 +57,9 @@
 #define KEY_CTRL_T    20   /* toggle animated 't' time variable (Shift: reset to 0) */
 #define KEY_CTRL_U    21   /* toggle MSAA (Ctrl+U) */
 #define KEY_CTRL_O    15   /* cycle grid major spacing (Ctrl+O) */
-#define KEY_CTRL_N    14   /* cycle experimental post-processing filter (Ctrl+N) */
+#define KEY_CTRL_N    14   /* cycle experimental post-processing filter
+                              (Ctrl+N) — hidden session toggle, see the
+                              g_cfg_items[] note in glr_actions.c */
 #define KEY_CTRL_W    23   /* cycle CPU profile panel (Ctrl+W) */
 #define KEY_CTRL_DASH 31   /* decrement accum AA samples (Apple GLUT quirk, Ctrl+-) */
 
