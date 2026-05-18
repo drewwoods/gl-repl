@@ -449,10 +449,12 @@ static GlrConfigRowKind submenu_row_kind(int menu_id, int parent_row,
 /* Extra right-column px the Config flyout reserves for the per-item
  * keyboard shortcut + state label. 0 for non-Config submenus (Scene
  * rows are a bare label). */
-static int config_submenu_extra_w(int menu_id, int parent_row) {
-    if (menu_id != MENU_CONFIG)
-        return 0;
-    int count = submenu_row_count(menu_id, parent_row);
+/* Widest keyboard-shortcut label (px) across a Config flyout's rows.
+ * Constant per flyout — both the shortcut and the state-value column
+ * are aligned to fixed x's derived from it, so they don't jitter
+ * row-to-row (matching the original flat dropdown). */
+static int config_submenu_max_sc_px(int parent_row) {
+    int count = submenu_row_count(MENU_CONFIG, parent_row);
     int max_sc = 0;
     for (int o = 0; o < count; o++) {
         const GlrConfigItem *it =
@@ -463,6 +465,13 @@ static int config_submenu_extra_w(int menu_id, int parent_row) {
             if (w > max_sc) max_sc = w;
         }
     }
+    return max_sc;
+}
+
+static int config_submenu_extra_w(int menu_id, int parent_row) {
+    if (menu_id != MENU_CONFIG)
+        return 0;
+    int max_sc = config_submenu_max_sc_px(parent_row);
     int extra = cfg_max_state_chars() * FONT_SMALL_W + 20;
     if (max_sc > 0)
         extra += max_sc + 16;
@@ -799,8 +808,11 @@ static float ui_fade_alpha(float anim_time, float open_time) {
     return dt / UI_FADE_DURATION;
 }
 
-/* Render-time "this row reflects the active selection" highlight.
- * Scene: the active example. Config rows refine this in Step 8. */
+/* Render-time "this row reflects the active selection" highlight —
+ * tints the row LABEL with the accent colour. Only Scene uses it (the
+ * active example). Config deliberately does NOT: its label stays the
+ * normal primary colour like the original flat dropdown; its on/off
+ * is conveyed solely by the right-hand state-value column's colour. */
 static int submenu_row_is_active(int menu_id, int parent_row, int ordinal,
                                  const UiRenderSnapshot *snap) {
     if (menu_id == MENU_SCENE) {
@@ -808,13 +820,6 @@ static int submenu_row_is_active(int menu_id, int parent_row, int ordinal,
                                                 ordinal);
         return example_idx >= 0 &&
                example_idx == snap->scenes.active_example_idx;
-    }
-    if (menu_id == MENU_CONFIG) {
-        int abs = submenu_row_abs_index(menu_id, parent_row, ordinal);
-        const GlrConfigItem *item = glr_config_item_at(abs);
-        if (!item || item->section_header || item->key == GLR_CONFIG_NONE)
-            return 0;
-        return glr_config_get(item->key) != 0;
     }
     return 0;
 }
@@ -900,6 +905,17 @@ static void render_active_submenu(const UiRenderSnapshot *snap) {
     hover_ordinal = submenu_hover_ordinal(snap);
     alpha = ui_fade_alpha(snap->anim_time, g_submenu_open_time);
 
+    /* Fixed column x's for the Config flyout so the shortcut and the
+     * state value line up across every row (no per-row jitter). The
+     * shortcut is right-aligned at the flyout's right padding; the
+     * state value is right-aligned in a column to its left, sized by
+     * the widest shortcut in this flyout. */
+    int cfg_sc_right    = sx + sw - 14;
+    int cfg_max_sc      = (menu_id == MENU_CONFIG)
+                              ? config_submenu_max_sc_px(parent_row) : 0;
+    int cfg_state_right = cfg_sc_right
+                              - (cfg_max_sc > 0 ? cfg_max_sc + 16 : 0);
+
     ui_clr_a(UI_TOK_RAISED, 0.98f * alpha);
     glRectf((float)sx, (float)sy, (float)(sx + sw), (float)(sy + sh));
     ui_clr_a(UI_TOK_BORDER, alpha);
@@ -957,9 +973,8 @@ static void render_active_submenu(const UiRenderSnapshot *snap) {
         gl2d_draw_string((float)(sx + 14), (float)ey, name, FONT_SMALL);
 
         /* Config item rows carry a right-aligned shortcut + state
-         * label (the columns the flat dropdown used to show). The
-         * shortcut sits at the far right; the state label is right-
-         * aligned just left of it. */
+         * value in fixed columns (computed once above) so they stay
+         * column-aligned regardless of which rows have a shortcut. */
         if (menu_id == MENU_CONFIG) {
             int abs = config_submenu_abs_index(parent_row, ordinal);
             const GlrConfigItem *item = glr_config_item_at(abs);
@@ -970,20 +985,18 @@ static void render_active_submenu(const UiRenderSnapshot *snap) {
                                                sizeof(st_buf));
                 int st_px = (int)strlen(st) * FONT_SMALL_W;
                 const char *scut = config_item_shortcut(item);
-                int right = sx + sw - 14;
 
                 if (scut) {
                     int sc_px = (int)strlen(scut) * FONT_SMALL_W;
                     ui_clr_a(UI_TOK_TEXT_MUTED, alpha);
-                    gl2d_draw_string((float)(right - sc_px),
+                    gl2d_draw_string((float)(cfg_sc_right - sc_px),
                                      (float)ey, scut, FONT_SMALL);
-                    right -= sc_px + 16;
                 }
                 if (glr_config_get(item->key))
                     ui_clr_a(UI_TOK_ACCENT, alpha);
                 else
                     ui_clr_a(UI_TOK_TEXT_MUTED, alpha);
-                gl2d_draw_string((float)(right - st_px),
+                gl2d_draw_string((float)(cfg_state_right - st_px),
                                  (float)ey, st, FONT_SMALL);
             }
         }
