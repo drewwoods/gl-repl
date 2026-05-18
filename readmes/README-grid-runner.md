@@ -1,8 +1,7 @@
 <div align="center">
 
 <img src="assets/hero-immediate-mode-immediately.svg" alt="gl-repl — type GL commands, watch geometry render r9c" width="75%">
-<img src="assets/hero-immediate-mode-immediately-big.svg" alt="gl-repl — type GL commands, watch geometry render r9c" width="75%">
-<img src="assets/hero-immediate-mode-immediately-no-lerp.svg" alt="gl-repl — type GL commands, watch geometry render r9c" width="75%">
+<img src="assets/hero-immediate-mode-immediately-10fps.svg" alt="gl-repl — type GL commands, watch geometry render r9c" width="75%">
 
 <br>
 
