@@ -1993,6 +1993,7 @@ void glr_ctrl_sync_ui_chrome(void) {
     cp->show_vertex_indices = p.show_vertex_indices;
     cp->wrap_at_comma       = p.wrap_at_comma;
     cp->syntax_highlight    = p.syntax_highlight;
+    cp->code_focus          = p.code_focus;
 }
 
 void glr_ctrl_apply_code_panel_follow_scroll(
