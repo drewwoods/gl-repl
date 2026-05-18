@@ -10,7 +10,8 @@
  * Snapshot/restore is separate because tests, undo-like full-world captures,
  * and frame snapshot builders need to copy replay state alongside REPL/editor/UI
  * peers. Storage lives in a file-static here rather than in ReplRuntimeState,
- * which reflects the replay-peer split introduced in Phase F / Phase J7.
+ * reflecting the replay peer split that moved replay out of the core REPL
+ * runtime bundle.
  */
 #ifndef REPLAY_STATE_H
 #define REPLAY_STATE_H
@@ -23,23 +24,20 @@ void                     replay_state_capture(ReplReplayRuntimeState *snapshot);
 void                     replay_state_restore(const ReplReplayRuntimeState *snapshot);
 void                     replay_state_reset(void);
 
-/* Snapshot-build accessor: returns the full ReplReplayRuntimeState by
- * value. Use the narrow accessors below for individual fields;
- * replay_state_view exists primarily for the per-frame UiRenderSnapshot
- * fill in glr_ctrl_build_ui_snapshot, where the controller copies
- * the entire struct into the snapshot exactly once. */
+/* Snapshot-build accessor: returns the full ReplReplayRuntimeState by value.
+ * Use the narrow accessors below for individual fields; `replay_state_view()` is
+ * mainly for per-frame snapshot assembly and the few callers that genuinely need
+ * the whole struct at once. */
 ReplReplayRuntimeState   replay_state_view(void);
 
-/* Mutable accessor: still required for the few writers that update
- * multiple fields atomically (config-toggle pointers, repl_replay's
- * REPLAY_STATE macro). New writers should prefer narrow handlers. */
+/* Mutable accessor for the small set of writers that update multiple replay
+ * fields together. Most readers should stay on the by-value or narrow accessors. */
 ReplReplayRuntimeState  *replay_state_mut(void);
 
 /* --- Narrow read accessors ---
  *
  * Single-field queries for callers that only need one replay attribute. They
  * keep most readers from depending on the full ReplReplayRuntimeState layout.
- * Phase G added these to reduce unnecessary whole-struct traffic.
  */
 int    replay_active(void);          /* .active */
 int    replay_machine_state(void);   /* .state — REPLAY_OFF/PLAYING/PAUSED/DONE */

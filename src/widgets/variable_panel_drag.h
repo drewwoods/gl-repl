@@ -1,24 +1,16 @@
 /*
- * variable_panel_drag.h - Variable slider drag transaction (canonical
- *                         entry points live alongside the peer in
- *                         variable_panel.h).
+ * variable_panel_drag.h - Small shared types for variable-panel drag updates.
  *
- * Phase J7: the public drag API lives on variable_panel.h:
- *   variable_panel_drag_active() / _active_var() / _log_mode()
- *   variable_panel_handle_drag_begin() / _motion() / _reset()
- *
- * This header is currently a placeholder for the per-call value
- * struct typedef referenced by the canonical handler signature.
- * variable_panel_drag.c remains the implementation file (linear /
- * log scaling logic).
+ * The drag handlers themselves live on `variable_panel_state.h`; this header is
+ * just the neutral place for the per-call value-change payload they exchange.
+ * Keeping the typedef here avoids duplicate definitions while letting the peer
+ * state header and drag implementation share the same shape.
  */
 #ifndef VARIABLE_PANEL_DRAG_H
 #define VARIABLE_PANEL_DRAG_H
 
-/* Sole definition of the per-call value-change struct.
- * variable_panel_state.h includes this header rather than re-typedefing
- * it — a duplicate typedef is a C11 feature that
- * -std=c99 -pedantic-errors rejects. */
+/* Per-motion value request emitted by the drag math. `name` identifies the
+ * target predefined variable; `value` is the requested new numeric value. */
 typedef struct VariablePanelValueChange_s {
     char  name[16];
     float value;

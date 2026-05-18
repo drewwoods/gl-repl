@@ -1,31 +1,29 @@
 /*
- * replay.h - Step-by-step execution visualization and state machine.
+ * replay.h - Replay state machine, fade planning, and replay-side walkers.
  *
- * Replay mode lets users step through an expanded command stream one command
- * at a time (or with variable speed), seeing geometry appear progressively.
- * Toggle it with Ctrl+R or the Replay pin button.
+ * Replay lets the app step through the flat program one command at a time or at
+ * variable speed, showing geometry accumulate progressively. The controller uses
+ * this API to start/stop playback, seek to the cursor line, advance or rewind
+ * the program counter, and build the fade batches and overlay walks the render
+ * path needs.
  *
- * Execution model: The replay state machine (OFF/PLAYING/PAUSED/DONE) tracks
- * a program counter (PC) into the flat command array. During playback, the
- * executor only renders commands with index < replay_exec_limit() (the PC
- * clamped by replay speed/pause state). Geometry fades in/out as new geometry
- * appears via a ring buffer of fading geometry snapshots (ReplayFadeBatch).
+ * Execution model: the replay machine (OFF/PLAYING/PAUSED/DONE) tracks a
+ * program counter into the flat command array. During playback, the executor
+ * renders only commands with index `< replay_exec_limit()`. As the PC advances,
+ * older geometry is captured into fading batches so it can fade out while new
+ * geometry fades in.
  *
- * Controls (routed from repl_editor.c): Ctrl+R starts/stops replay; Ctrl+K
- * jumps to the cursor line; Space toggles play/pause (or restarts when done);
- * Left/Right step by one command; Up/Down or +/- adjust playback speed; M
- * switches vertex/polygon replay mode; E toggles argument expansion; Esc stops.
+ * Current controls forwarded by the controller/editor input chain:
+ *   - Ctrl+R starts replay when off and stops it when active.
+ *   - Ctrl+K jumps to the current edit line and pauses there.
+ *   - Space toggles play/pause or restarts from DONE.
+ *   - Left/Right step one replay unit; Up/Down and +/- adjust speed.
+ *   - M switches vertex/polygon replay mode; E toggles argument expansion.
+ *   - Esc stops replay.
  *
- * State preservation: When stepping back, the executor restores the baseline
- * predefined variable values (for 't' and slider variables) and re-executes
- * from the new PC. This allows "time travel" even when expressions are
- * time-dependent (e.g., objects rotating with sin(t*speed)).
- *
- * Fade batches: Old geometry (that was rendered in a previous frame) is
- * captured in a snapshot at execution time. As the PC advances, the old
- * snapshot fades out over several frames while new geometry fades in,
- * giving visual feedback about what's being added. The ring buffer holds up
- * to REPLAY_FADE_BATCH_MAX snapshots.
+ * Step-back / seek restore baseline predefined-variable and scratch-array state
+ * before re-executing from the new PC, so replay stays deterministic even when
+ * expressions depend on time or slider-controlled values.
  */
 #ifndef REPLAY_H
 #define REPLAY_H
@@ -213,7 +211,7 @@ void replay_restore_baseline_scratch_arrays(void);
 void replay_copy_baseline_scratch_arrays(
     float dst[REPL_SCRATCH_ARRAY_COUNT][REPL_SCRATCH_ARRAY_LEN]);
 
-/* --- Input routing (called from repl_editor.c) ----------------------- */
+/* --- Input routing (called from controller/editor dispatch) ----------- */
 
 int  replay_handle_key_impl(unsigned char key);
 int  replay_handle_special_key_impl(int key);

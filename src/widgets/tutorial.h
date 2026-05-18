@@ -1,5 +1,11 @@
 /*
- * tutorial.h - Tutorial runner and match helpers.
+ * tutorial.h - Tutorial runner, commit guards, and match helpers.
+ *
+ * Drives the built-in guided tutorials: start/exit lifecycle, per-step expected
+ * command matching, locked-line protection, fade bookkeeping, and autocomplete-
+ * style shadow text for the current step. The runner mutates
+ * `TutorialRuntimeState` and coordinates with the load/commit path so tutorial
+ * instruction comments and expected user edits stay aligned.
  */
 #ifndef TUTORIAL_H
 #define TUTORIAL_H
@@ -8,6 +14,7 @@
 
 #include "widgets/tutorial_state.h"
 
+/* Lifecycle and commit-path integration. */
 void                 tutorial_start(int idx);
 void                 tutorial_exit(void);
 int                  tutorial_handle_commit_attempt(const char *input,
@@ -40,6 +47,7 @@ void                 tutorial_note_expected_commit_applied(void);
  * tutorial_note_expected_commit_applied. */
 void                 tutorial_cancel_pending(void);
 
+/* Per-line fade/lock queries used by render and edit guards. */
 int                  tutorial_step_fade_front(int line_idx, int line_len,
                                               float now);
 float                tutorial_step_fade_alpha(int line_idx, int char_idx,
@@ -50,6 +58,8 @@ int                  tutorial_guard_source_change(int pos, int delete_count,
                                                   int insert_count);
 TutorialMatchResult  tutorial_match(const char *expected, const char *got);
 
+/* Autocomplete-style helper for showing the untyped suffix of the current
+ * expected command. */
 /* Compute the shadow-text suffix for the current step: the portion of the
  * expected command the user has not yet typed. Returns 1 and writes the
  * suffix into `out` when the tutorial is active and `input` is a strict

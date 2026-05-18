@@ -1,40 +1,31 @@
 /*
- * variable_panel.h - Variable slider panel peer subsystem.
+ * variable_panel_state.h - Variable-panel peer state and drag handlers.
  *
- * Phase F commit 31 entry. The variable panel is a peer alongside
- * editor / replay / scene rather than a slice of EditorState or
- * UiState. It owns the panel's visibility flag and the slider drag
- * transaction, with `imrepl_ctrl` routing UiHits (UI_HIT_VARIABLE_SLIDER)
- * to its handler functions.
+ * Owns the variable panel's persistent peer state: the visibility flag for the
+ * floating slider panel and the active drag transaction for a slider row. The
+ * UI layer renders and hit-tests that state; the controller routes slider hits
+ * and mouse motion into the handler API below.
  *
- * Storage migration: the visibility flag was on `UiState.variable_panel`
- * and the drag state was on `EditorState.variable_drag`. Both live
- * here. Phase J7 retired the legacy forwarders
- * (`ui_state_variable_panel*`, `editor_state_variable_drag*`,
- * `repl_var_drag_*`) — callers use `variable_panel_view` /
- * `variable_panel_drag` / `variable_panel_handle_drag_*` directly.
+ * Snapshot/restore is separate because full-world capture paths copy this peer
+ * alongside REPL/editor/UI state. Render snapshot assembly pulls
+ * `variable_panel_view()` and `variable_panel_drag()` directly into
+ * `UiRenderSnapshot`, while UI code typically uses the narrower visibility and
+ * active-drag queries.
  *
- * Snapshot/restore: tests and undo capture this state via
- * `variable_panel_state_capture` / `_restore` alongside the editor /
- * ui captures.
- *
- * Render path: glr_ctrl_build_ui_snapshot fills
- * `UiRenderSnapshot.variable_panel` from `variable_panel_view()` and
- * `UiRenderSnapshot.variable_drag` from `variable_panel_drag()`
- * directly. ui_variable_panel.c reads visibility through
- * `variable_panel_visible()` and the drag highlights through the
- * narrow `variable_panel_drag_active_var` / `_log_mode` queries.
+ * This peer split replaced older storage on UiState/EditorState and retired the
+ * legacy forwarders; the current public surface is the `variable_panel_*`
+ * family declared here plus the small value-change type in
+ * `variable_panel_drag.h`.
  */
 #ifndef VARIABLE_PANEL_H
 #define VARIABLE_PANEL_H
 
 #include "editor/state.h"
-#include "ui/state_types.h"  /* UI-chrome typedefs (CodePanel/Camera/Help/etc.) */
-#include "widgets/variable_panel_drag.h"  /* VariablePanelValueChange (sole def) */
+#include "ui/state_types.h"
+#include "widgets/variable_panel_drag.h"  /* VariablePanelValueChange */
 
-/* Composite peer state. The two slices are kept as their existing
- * typedefs so legacy accessors can return them by value without
- * reshaping the views layer. */
+/* Composite peer state. The two slices keep their existing value types so the
+ * accessors and snapshots can pass them by value without another wrapper API. */
 typedef struct {
     ReplVariablePanelState view;   /* visibility flag */
     ReplVariableDragState  drag;   /* slider drag transaction */
@@ -58,10 +49,9 @@ void variable_panel_set_visible(int visible);
 
 /* --- Drag transaction handler API ---
  *
- * Phase F commit 32 entry points. `imrepl_ctrl` routes
- * UI_HIT_VARIABLE_SLIDER hits through these handlers; the editor's
- * mouse handler calls them. Implementations live in
- * variable_panel_drag.c alongside the linear / log scaling logic.
+ * The controller routes `UI_HIT_VARIABLE_SLIDER` hits and follow-up mouse motion
+ * through these handlers. Implementations live in `variable_panel_drag.c`
+ * alongside the linear/log scaling math.
  */
 
 /* Query whether a drag transaction is currently active. */
