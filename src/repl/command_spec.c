@@ -110,7 +110,14 @@ static const ReplEnumEntry k_blend_dst_factors[] = {
     { NULL, 0 }
 };
 
+/* Help-overlay / autocomplete entries. Source order is load-bearing: it
+ * drives F1 help row order and Tab-completion priority, so entries are
+ * grouped by category (NOT alphabetized). Section banners below mark the
+ * existing contiguous runs — keep a new command inside the run it belongs
+ * to rather than appending at the end. The trailing REPL_HELP_GROUP_* is
+ * the separate F1 section bucket. */
 static const ReplFuncCompletion k_func_completions[] = {
+    /* --- Vertices, normals & color --- */
     { "glVertex3f(",         "glVertex3f(x, y, z)",                                      3, { "x", "y", "z" },
         "Specify a vertex position", REPL_HELP_GROUP_TOP },
     { "glVertex2f(",         "glVertex2f(x, y)",                                         2, { "x", "y" },
@@ -123,10 +130,12 @@ static const ReplFuncCompletion k_func_completions[] = {
         "Specify color with alpha", REPL_HELP_GROUP_TOP },
     { "glClearColor(",       "glClearColor(r, g, b, a)",                                 4, { "r", "g", "b", "a" },
         "Set the background clear color", REPL_HELP_GROUP_TOP },
+    /* --- Primitive blocks --- */
     { "glBegin(",            "glBegin(mode)",                                            1, { "mode" },
         "GL_TRIANGLES, GL_TRIANGLE_STRIP, GL_LINE_LOOP, ...", REPL_HELP_GROUP_TOP },
     { "glEnd()",             "glEnd()",                                                  0, { NULL },
         "End current primitive block", REPL_HELP_GROUP_TOP },
+    /* --- Render state --- */
     { "glEnable(",           "glEnable(cap)",                                            1, { "cap" },
         "Enable a GL capability\n"
         "GL_BLEND, GL_COLOR_MATERIAL, GL_CULL_FACE, GL_DEPTH_TEST\n"
@@ -141,6 +150,7 @@ static const ReplFuncCompletion k_func_completions[] = {
         "Rasterized point diameter", REPL_HELP_GROUP_TOP },
     { "glLineWidth(",        "glLineWidth(width)",                                       1, { "width" },
         "Rasterized line width", REPL_HELP_GROUP_TOP },
+    /* --- Raster position & bitmap text --- */
     { "glRasterPos3f(",      "glRasterPos3f(x, y, z)",                                   3, { "x", "y", "z" },
         "Set the current raster position (transformed through modelview/projection).\n"
         "Pair with label(...) to draw bitmap text at that point.",
@@ -151,11 +161,13 @@ static const ReplFuncCompletion k_func_completions[] = {
         "Up to 4 substitution args; format string limited to 64 chars.\n"
         "Forbidden in fmt: '//', '(', ')', ',', and any backslash.",
         REPL_HELP_GROUP_TOP },
+    /* --- Point parameters & blending --- */
     { "glPointParameterfv(", "glPointParameterfv(pname, a, b, c)",                       4, { "pname", "a", "b", "c" },
         "Distance attenuation: size *= 1/sqrt(const + linear*d + quadratic*d*d)",
         REPL_HELP_GROUP_TOP },
     { "glBlendFunc(",        "glBlendFunc(sfactor, dfactor)",                            2, { "sfactor", "dfactor" },
         "GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA / GL_ONE", REPL_HELP_GROUP_TOP },
+    /* --- Matrix transforms --- */
     { "glTranslatef(",       "glTranslatef(x, y, z)",                                    3, { "x", "y", "z" },
         "Translate the modelview matrix", REPL_HELP_GROUP_TOP },
     { "glScalef(",           "glScalef(x, y, z)",                                        3, { "x", "y", "z" },
@@ -168,6 +180,7 @@ static const ReplFuncCompletion k_func_completions[] = {
         "Pop matrix from stack", REPL_HELP_GROUP_TOP },
     { "glLoadIdentity()",    "glLoadIdentity()",                                         0, { NULL },
         "Reset the current matrix to identity", REPL_HELP_GROUP_TOP },
+    /* --- Depth & write-mask state --- */
     { "glFrontFace(",        "glFrontFace(mode)",                                        1, { "mode" },
         "GL_CW, GL_CCW", REPL_HELP_GROUP_TOP },
     { "glDepthFunc(",        "glDepthFunc(func)",                                        1, { "func" },
@@ -176,6 +189,7 @@ static const ReplFuncCompletion k_func_completions[] = {
         "GL_TRUE, GL_FALSE (depth-buffer writes)", REPL_HELP_GROUP_TOP },
     { "glColorMask(",        "glColorMask(red, green, blue, alpha)",                     4, { "red", "green", "blue", "alpha" },
         "Per-channel color write enable: GL_TRUE / GL_FALSE", REPL_HELP_GROUP_TOP },
+    /* --- Lighting & materials --- */
     { "glColorMaterial(",    "glColorMaterial(face, mode)",                              2, { "face", "mode" },
         "face: GL_FRONT, GL_BACK, or GL_FRONT_AND_BACK\n"
         "mode: GL_AMBIENT / GL_AMBIENT_AND_DIFFUSE / GL_DIFFUSE / GL_SPECULAR / GL_EMISSION",
@@ -186,6 +200,7 @@ static const ReplFuncCompletion k_func_completions[] = {
     { "glLightModeli(",      "glLightModeli(pname, param)",                              2, { "pname", "param" },
         "pname: GL_LIGHT_MODEL_TWO_SIDE, GL_LIGHT_MODEL_LOCAL_VIEWER",
         REPL_HELP_GROUP_LIGHTING },
+    /* --- GLUT solid shapes --- */
     { "glutSolidTorus(",     "glutSolidTorus(inner_r, outer_r, nsides, rings)",          4, { "inner_r", "outer_r", "nsides", "rings" },
         "", REPL_HELP_GROUP_GLUT_SHAPES },
     { "glutSolidCube(",      "glutSolidCube(size)",                                      1, { "size" },
@@ -196,6 +211,7 @@ static const ReplFuncCompletion k_func_completions[] = {
         "", REPL_HELP_GROUP_GLUT_SHAPES },
     { "glutSolidCone(",      "glutSolidCone(base, height, slices, stacks)",              4, { "base", "height", "slices", "stacks" },
         "", REPL_HELP_GROUP_GLUT_SHAPES },
+    /* --- GLU tessellation --- */
     { "gluBegin(GLU_POLYGON)", "gluBegin(GLU_POLYGON)",                                  0, { NULL },
         "Start a tessellated polygon", REPL_HELP_GROUP_GLU_TESS },
     { "gluBegin(GLU_CONTOUR)", "gluBegin(GLU_CONTOUR)",                                  0, { NULL },
@@ -208,6 +224,7 @@ static const ReplFuncCompletion k_func_completions[] = {
         "Set per-vertex color", REPL_HELP_GROUP_GLU_TESS },
     { "gluVertex(",          "gluVertex(x, y, z)",                                       3, { "x", "y", "z" },
         "Add vertex to current contour", REPL_HELP_GROUP_GLU_TESS },
+    /* --- Language constructs (help-skipped: no REPL_HELP_GROUP) --- */
     { "float ",              "float name",                                               0, { NULL } },
     { "for(",                "for(var, start, end[, step])",                             4, { "var", "start", "end", "step" } },
     { "if(",                 "if(expr)",                                                 1, { "expr" } },
@@ -244,6 +261,7 @@ static const ReplFuncCompletion k_func_completions[] = {
     { "A[",                  "A[index]",                                                 0, { NULL } },
     { "B[",                  "B[index]",                                                 0, { NULL } },
     { "C[",                  "C[index]",                                                 0, { NULL } },
+    /* --- Math functions & constants --- */
     { "sin(",                "sin(x)",                                                   1, { "x" },
         "Sine of x (radians)", REPL_HELP_GROUP_MATH },
     { "cos(",                "cos(x)",                                                   1, { "x" },
@@ -373,6 +391,10 @@ static const ReplStdCommandSpec k_std_command_specs[] = {
 #define CMD_TYPE_SPEC_NOT_IN_BEGIN(type_, semicolon_, block_indent_, category_) \
     [type_] = { #type_, (semicolon_), (block_indent_), (category_), 0 }
 
+/* Keyed by CmdType via [type_]= designated initializers, so row order is
+ * cosmetic (not load-bearing) — they track the CmdType enum order for
+ * readability. Adding a command: drop one CMD_TYPE_SPEC row next to its
+ * enum neighbours; a missing row is a zero-initialized (invalid) spec. */
 static const ReplCommandTypeSpec g_command_type_specs[CMD_TYPE_COUNT] = {
     CMD_TYPE_SPEC_NOT_IN_BEGIN(CMD_BEGIN,   1, 1, CMD_CAT_PRIMITIVE),
     CMD_TYPE_SPEC(CMD_END,                  1, 1, CMD_CAT_PRIMITIVE),
