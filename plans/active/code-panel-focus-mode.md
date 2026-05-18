@@ -52,14 +52,16 @@ row, no `GlrConfigKey`, no `@cfg` persistence (session-only now).
   `route_help_toggle_hit`.
 - Focus keycap label changed `C-S-F` → **`^⇧F`**. `^` and `F` are
   font glyphs; the ⇧ shift symbol has no bitmap-font glyph so it is
-  drawn as an **8×13 1bpp `glBitmap`** (`repl_code_panel_draw_shift_glyph`),
+  drawn as an **outlined 8×13 1bpp `glBitmap`** (`repl_code_panel_draw_shift_glyph`),
   using the same cell metrics / 2px-descent origin as
   `GLUT_BITMAP_8_BY_13` so it sits on the text baseline;
   `GL_UNPACK_ALIGNMENT` is set to 1 around the call (saved/restored via
   `glGetIntegerv`) since each row is one byte. Keycap width is a fixed
   `STATUSBAR_FOCUS_KBD_CELLS` (3) instead of a strlen (a UTF-8 "⇧"
   would mis-measure). GL stubs gained `glBitmap` / `glPixelStorei` +
-  `GL_UNPACK_ALIGNMENT` (both stub paths reverified).
+  `GL_UNPACK_ALIGNMENT` (both stub paths reverified). The keycap
+  glyphs `^⇧F` use `UI_TOK_TEXT_PRIMARY` (same as the "F1" keycap);
+  ON/OFF state moved to the "focus" label tint (accent / muted).
 - Test now also asserts the help keycap is hit-testable and that
   `glr_ctrl_toggle_help()` flips/restores `ui_state_help().visible`
   (29/29). Help-catalog Interface line + `CLAUDE.md` F1 row note the

@@ -1319,15 +1319,20 @@ static void repl_code_panel_draw_keycap(int kx, int ky, int kw, int kh) {
  * adjacent '^' and 'F' font glyphs. Caller sets the color. */
 static void repl_code_panel_draw_shift_glyph(int cx, int gy) {
     /* Rows are bottom-to-top (glBitmap scan order); bit 0x80 = leftmost
-     * pixel. Rows 0-2 are blank descent; the filled up-arrow occupies
-     * rows 3-12 (stem cols 2-5, head widening to full width). */
+     * pixel. Rows 0-2 are blank descent; an *outlined* up-arrow
+     * occupies rows 3-12 (hollow triangle head over a hollow stem). */
     static const GLubyte shift_bits[13] = {
-        0x00, 0x00, 0x00,             /* rows 0-2  (baseline / descent) */
-        0x3C, 0x3C, 0x3C, 0x3C, 0x3C, /* rows 3-7  stem  ..####.. */
-        0xFF, 0xFF,                   /* rows 8-9  head  ######## */
-        0x7E,                         /* row 10          .######. */
-        0x3C,                         /* row 11          ..####.. */
-        0x18                          /* row 12  apex    ...##... */
+        0x00, 0x00, 0x00,  /* rows 0-2   (baseline / descent)        */
+        0x3C,              /* row 3   stem foot   ..####..           */
+        0x24,              /* row 4   stem sides  ..#..#..           */
+        0x24,              /* row 5               ..#..#..           */
+        0x24,              /* row 6               ..#..#..           */
+        0x24,              /* row 7               ..#..#..           */
+        0xE7,              /* row 8   shoulders   ###..###           */
+        0x81,              /* row 9   head edge   #......#           */
+        0x42,              /* row 10              .#....#.           */
+        0x24,              /* row 11              ..#..#..           */
+        0x18               /* row 12  apex        ...##...           */
     };
     GLint prev_align = 4;
     glGetIntegerv(GL_UNPACK_ALIGNMENT, &prev_align);
@@ -1338,7 +1343,7 @@ static void repl_code_panel_draw_shift_glyph(int cx, int gy) {
 }
 
 /* Draw the focus keycap glyphs "^⇧F" across three FONT_SMALL cells
- * starting at (gx, gy). Color is set by the caller (state-tinted). */
+ * starting at (gx, gy). Color is set by the caller. */
 static void repl_code_panel_draw_focus_kbd(int gx, int gy) {
     char ch[2] = { '^', 0 };
     gl2d_draw_string((float)gx, (float)gy, ch, FONT_SMALL);
@@ -1419,15 +1424,19 @@ static void repl_code_panel_draw_statusbar(const UiRenderSnapshot *snap,
             tx += (int)strlen(aa_buf) * FONT_SMALL_W;
         }
 
-        /* Focus keycap+label: accent when ON, muted when OFF. The
-         * keycap box is the click target (UI_HIT_CODE_FOCUS_TOGGLE),
-         * hit-tested from the same hints geometry. */
+        /* Focus keycap+label. The keycap glyphs use the same color as
+         * the "F1" keycap (TEXT_PRIMARY) so the two chips read
+         * identically; ON/OFF state is carried by the "focus" label
+         * (accent when ON, muted when OFF). The keycap box is the
+         * click target (UI_HIT_CODE_FOCUS_TOGGLE), hit-tested from the
+         * same hints geometry. */
         {
             UiThemeToken focus_tok = snap->code_panel.code_focus
                 ? UI_TOK_ACCENT : UI_TOK_TEXT_MUTED;
             repl_code_panel_draw_keycap(h.focus_kx, h.ky, h.focus_kw, h.kh);
-            ui_clr(focus_tok);
+            ui_clr(UI_TOK_TEXT_PRIMARY);
             repl_code_panel_draw_focus_kbd(h.focus_kx + 5, h.ky + 2);
+            ui_clr(focus_tok);
             gl2d_draw_string((float)h.focus_lbl_x, (float)text_y,
                              k_statusbar_focus_lbl, FONT_SMALL);
         }
