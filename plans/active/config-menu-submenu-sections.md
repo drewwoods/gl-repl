@@ -392,6 +392,22 @@ A second live review (commit `header case + arrow column`) added:
    menu has any submenu parent row (Scene benefits too). Gate:
    6084/6084 stubs, real-GL `make sample` clean.
 
+A review finding [P2] (commit `flyout chrome inert-consume`) closed an
+overlay-precedence hole:
+
+5. **In-flyout chrome fell through.** `submenu_hit_test` returns
+   `UI_HIT_NONE` for the All flyout's `### `/`---` chrome rows, but the
+   inert-consume fallback in `ui_menu_bar_hit_test` only tested the
+   *parent* dropdown rect — the flyout is a separate rect beside it.
+   Clicking a visible header/separator therefore returned `UI_HIT_NONE`
+   → the controller dismissed the menu and routed the click to the
+   tabs/code/scene drawn beneath. Fix: after `submenu_hit_test` misses,
+   if the point is inside the open submenu rect, consume it as
+   `UI_HIT_CODE_PANEL_CHROME` (same inert treatment as parent-dropdown
+   chrome). `test_config_submenu_with_stubs` strengthened from "not a
+   submenu hit" to assert `UI_HIT_CODE_PANEL_CHROME`. Gate: 6084/6084
+   stubs, real-GL `make sample` clean.
+
 ## Open sub-questions for review
 
 - **All placement:** ✅ resolved — **last** row (after all sections),
