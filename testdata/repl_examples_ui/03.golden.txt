@@ -44,7 +44,7 @@ void display() {
   glTranslatef(-0.0000f, -0.0000f, -0.0000f);
 --- header_post ---
 --- source ---
-  func0(radius, sides, phase) {
+  polygon(radius, sides, phase) {
     glBegin(GL_TRIANGLE_FAN);
       glNormal3f(0, 0, 1);
       glColor3f(1, 1, 1);
@@ -60,12 +60,12 @@ void display() {
   glEnable(GL_NORMALIZE);
   glPushMatrix();
   glTranslatef(-2.4, 0, 0);
-  func0(0.9, 3, t*0.4);
+  polygon(0.9, 3, t*0.4);
   glPopMatrix();
   glPushMatrix();
-  func0(0.9, 6, -t*0.25);
+  polygon(0.9, 6, -t*0.25);
   glPopMatrix();
   glPushMatrix();
   glTranslatef(2.4, 0, 0);
-  func0(0.9, 10, t*0.15);
+  polygon(0.9, 10, t*0.15);
   glPopMatrix();

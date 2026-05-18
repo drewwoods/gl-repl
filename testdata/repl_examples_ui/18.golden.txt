@@ -38,32 +38,57 @@ void display() {
   glEnable(GL_MULTISAMPLE);
   glDisable(GL_LINE_SMOOTH);
 --- camera ---
-  glTranslatef(0.0000f, 0.0000f, -13.5000f);
-  glRotatef(0.0000f, 1.0f, 0.0f, 0.0f);
-  glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);
+  glTranslatef(0.0000f, 0.0000f, -5.5000f);
+  glRotatef(18.0000f, 1.0f, 0.0f, 0.0f);
+  glRotatef(32.0000f, 0.0f, 1.0f, 0.0f);
   glTranslatef(-0.0000f, -0.0000f, -0.0000f);
 --- header_post ---
 --- source ---
-  static float x, y;
-  static float xVel, yVel;
-  static float zColProp;
-  static float xVelMax = 0.5;
-  static float g = -1.5;
-  static float xMax = 12, yMax = 5, zMax = 10;
-  glClearColor(0.05, 0.05, 0.05, 1);
+  tri() {
+    glBegin(GL_TRIANGLES);
+      glNormal3f(0, 0, 1);
+      glVertex3f(-0.3, -0.3, 0);
+      glVertex3f(0.3, -0.3, 0);
+      glVertex3f(0, 0.4, 0);
+    glEnd();
+  }
+  glClearColor(0.08, 0.08, 0.1, 1);
   glEnable(GL_DEPTH_TEST);
-  glPointSize(10);
-  glBegin(GL_POINTS);
-    for(p, 0, 550) {
-      xVel = xVelMax * rand2(p, 1);
-      x = rem(xMax * rand2(p,4) + t * xVel, 2 * xMax);
-
-      yVel = g - rand(p, 2);
-      y = rem(yMax * rand2(p,3) + t * yVel, 2 * yMax);
-
-      zColProp = rand(p, 5); // z affects color and distance
-
-      glColor3f(0.5 + 0.5 * zColProp, 0.5 + 0.5 * zColProp, 0.5 + 0.5 * zColProp);
-      glVertex3f(x, y, zMax * zColProp);
-    }
-  glEnd();
+  glEnable(GL_LIGHTING);
+  glEnable(GL_LIGHT0);
+  glEnable(GL_NORMALIZE);
+  glEnable(GL_COLOR_MATERIAL);
+  glColor3f(1, 0.6, 0.3);
+  glPushMatrix();
+  glTranslatef(0, 0, 2);
+  glRotatef(45, 0, 1, 0);
+  glTranslatef(0, 0, -2);
+  tri();
+  glPopMatrix();
+  glColor3f(0.4, 0.9, 0.6);
+  glPushMatrix();
+  glTranslatef(-2, 0, 0);
+  glRotatef(3*t, 0, 1, 0);
+  glScalef(1.5, 0.5, 1);
+  tri();
+  glPopMatrix();
+  glColor3f(0.6, 0.7, 1);
+  for(i, 0, 6) {
+    glPushMatrix();
+    glRotatef(i*60, 0, 1, 0);
+    glTranslatef(2.5, 0, 0);
+    glScalef(0.6, 0.6, 0.6);
+    tri();
+    glPopMatrix();
+  }
+  glColor3f(1, 0.4, 0.8);
+  glPushMatrix();
+  glTranslatef(0, 2, 0);
+  glScalef(0.8, 0.8, 0.8);
+  tri();
+  glPopMatrix();
+  glColor3f(1, 1, 0.4);
+  glPushMatrix();
+  glRotatef(t*30, 0, 1, 0);
+  tri();
+  glPopMatrix();

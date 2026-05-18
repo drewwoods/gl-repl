@@ -45,7 +45,7 @@ void display() {
 --- header_post ---
 --- source ---
   // Recursive triangle tree: child calls shrink and rotate from the parent
-  func0(depth, size, spin) {
+  branch(depth, size, spin) {
     glColor3f(0.25 + depth*0.14, 0.45 + 0.2*sin(spin), 1 - depth*0.12);
     glBegin(GL_LINE_LOOP);
       glNormal3f(0, 0, 1);
@@ -66,17 +66,17 @@ void display() {
       glPushMatrix();
       glTranslatef(0, size*1.02, 0);
       glRotatef(18 + spin*14, 0, 0, 1);
-      func0(depth - 1, size*0.62, spin + 0.15);
+      branch(depth - 1, size*0.62, spin + 0.15);
       glPopMatrix();
       glPushMatrix();
       glTranslatef(-size*0.9, -size*0.38, 0);
       glRotatef(-30 - spin*12, 0, 0, 1);
-      func0(depth - 1, size*0.58, spin + 0.12);
+      branch(depth - 1, size*0.58, spin + 0.12);
       glPopMatrix();
       glPushMatrix();
       glTranslatef(size*0.9, -size*0.38, 0);
       glRotatef(30 + spin*12, 0, 0, 1);
-      func0(depth - 1, size*0.58, spin + 0.12);
+      branch(depth - 1, size*0.58, spin + 0.12);
       glPopMatrix();
     }
   }
@@ -84,4 +84,4 @@ void display() {
   glEnable(GL_DEPTH_TEST);
   glEnable(GL_NORMALIZE);
   glRotatef(sin(t*0.35)*12, 0, 0, 1);
-  func0(4, 1.05, sin(t*0.4));
+  branch(4, 1.05, sin(t*0.4));

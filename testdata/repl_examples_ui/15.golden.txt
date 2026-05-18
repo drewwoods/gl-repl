@@ -38,21 +38,27 @@ void display() {
   glEnable(GL_MULTISAMPLE);
   glDisable(GL_LINE_SMOOTH);
 --- camera ---
-  glTranslatef(0.0000f, 0.0000f, -7.5000f);
+  glTranslatef(0.0000f, 0.0000f, -3.5000f);
   glRotatef(0.0000f, 1.0f, 0.0f, 0.0f);
   glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);
-  glTranslatef(-0.0000f, -0.2500f, -0.0000f);
+  glTranslatef(-0.0000f, -0.1500f, -0.0000f);
 --- header_post ---
 --- source ---
-  static float dist, n, x, y, ang;
+  static float ripplephase, ripplewidth, rippledelta, rippleamp, x, y;
+  // Traveling ripple ring: nested for + fmod + conditional deformation
   glClearColor(0.1, 0.1, 0.1, 1);
-  dist = 1.4;
-  n = 400;
+  rippleamp = 0.1 * sin(t * TAU);
+  ripplephase = fmod(t / 3, TAU);
+  ripplewidth = PI / 8;
   glBegin(GL_LINE_LOOP);
-    for(i, 0, n) {
-      ang = TAU * i/n;
-      x = dist * cos(t*ang) + cos(ang);
-      y = dist * sin(t*ang) + sin(ang);
+    for(i, 0, 400) {
+      x = cos(TAU * i / 400);
+      y = sin(TAU * i / 400);
+      rippledelta = fmod(TAU * i / 400 - ripplephase + TAU, TAU);
+      if(rippledelta < ripplewidth) {
+        x = x + rippleamp * x * sin(rippledelta * TAU / ripplewidth);
+        y = y + rippleamp * y * sin(rippledelta * TAU / ripplewidth);
+      }
       glVertex3f(x, y, 0);
     }
   glEnd();
