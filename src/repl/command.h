@@ -29,6 +29,11 @@
 
 #include "repl/eval.h"
 
+/* Loosely grouped by kind (geometry, transforms, control flow, GLUT
+ * shapes, tess, attributes, ...). Switch dispatch in executor.c /
+ * flatten.c / parser.c / replay_annotations.c is keyed on these, so
+ * values are append-stable: place a new command next to its relatives
+ * rather than reordering existing entries. CMD_TYPE_COUNT stays last. */
 typedef enum {
     CMD_BEGIN, CMD_END,
     CMD_VERTEX3F, CMD_VERTEX2F,
