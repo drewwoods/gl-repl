@@ -221,8 +221,11 @@ static const char *config_item_shortcut(const GlrConfigItem *item) {
         snprintf(buf, sizeof(buf), "F%d", item->key_code - GLUT_KEY_F1 + 1);
         return buf;
     }
+    /* item->modifiers (GLUT_ACTIVE_* bitmask) inserts between the
+     * implied Ctrl and the letter, e.g. Shift -> "Ctrl+Shift+v". */
     if (item->key_code > 0 && item->key_code <= 26) {
-        snprintf(buf, sizeof(buf), "Ctrl+%c", item->key_code - 1 + 'a');
+        const char *mod = (item->modifiers & GLUT_ACTIVE_SHIFT) ? "Shift+" : "";
+        snprintf(buf, sizeof(buf), "Ctrl+%s%c", mod, item->key_code - 1 + 'a');
         return buf;
     }
     if (item->key_code == KEY_CTRL_BACKSLASH)

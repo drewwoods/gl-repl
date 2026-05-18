@@ -805,6 +805,9 @@ Declarative toggle system in `src/app/glr_actions.c`:
 | Ctrl+R | Reformat all lines |
 | Ctrl+T | Toggle time variable `t` |
 | Ctrl+Shift+F | Toggle code focus (hide boilerplate chrome) — also the statusbar "focus" keycap |
+| Ctrl+Shift+O | Focus origin — ease the orbit target to (0,0,0) |
+| Ctrl+Shift+C | Reset camera to default (eased) |
+| Ctrl+Shift+V | Toggle View mode (2D / 3D) |
 | F1 | Help overlay — also the clickable statusbar "F1 help" keycap |
 | F2-F11 | Toggle visual overlays |
 | F12 | Cycle examples and user scenes |
