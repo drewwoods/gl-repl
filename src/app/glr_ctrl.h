@@ -32,6 +32,11 @@ void glr_ctrl_sync_ui_chrome(void);
  * overlay and the Ctrl+N post-filter — no Config row, no @cfg. */
 void glr_ctrl_toggle_code_focus(void);
 
+/* Toggle the F1 help overlay. Shared by the F1 key and the status-bar
+ * "F1 help" keycap click so both reset the overlay tab/scroll
+ * identically. Session-only, like the code-focus toggle. */
+void glr_ctrl_toggle_help(void);
+
 void glr_ctrl_build_ui_snapshot(UiRenderSnapshot *snap);
 void glr_ctrl_apply_code_panel_follow_scroll(
     const UiReplCodePanelLayout *layout);

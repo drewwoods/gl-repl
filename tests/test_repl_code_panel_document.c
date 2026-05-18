@@ -174,27 +174,32 @@ int main(void) {
                     glr_state_presentation().code_focus == 0);
     }
 
-    /* The statusbar "focus" keycap is clickable: some pixel in the
-     * code panel hit-tests as UI_HIT_CODE_FOCUS_TOGGLE, and the
-     * controller routes that to the same toggle as Ctrl+Shift+F.
-     * Scan bottom-right first (where the keycap is drawn) and bail on
-     * the first match so this stays cheap. */
+    /* The statusbar "focus" and "F1 help" keycaps are clickable: some
+     * pixel in the code panel hit-tests as UI_HIT_CODE_FOCUS_TOGGLE /
+     * UI_HIT_HELP_TOGGLE, routed to the same shared toggles as
+     * Ctrl+Shift+F / F1. Scan the statusbar band (bottom-right first,
+     * where the keycaps are drawn). */
     {
-        int found = 0;
+        int found_focus = 0;
+        int found_help = 0;
+        int help_was;
 
         reset_doc_fixture();
         editor_feed_line("glBegin(GL_POINTS);");
         editor_feed_line("glEnd();");
         build_doc(&snap, &layout);
 
-        for (int my = 259; my >= 0 && !found; my--) {
-            for (int mx = 799; mx >= 0 && !found; mx--) {
+        for (int my = 259; my >= 0 && !(found_focus && found_help); my--) {
+            for (int mx = 799; mx >= 0; mx--) {
                 UiHit hk = ui_repl_code_panel_hit_test(&snap, mx, my);
                 if (hk.kind == UI_HIT_CODE_FOCUS_TOGGLE)
-                    found = 1;
+                    found_focus = 1;
+                else if (hk.kind == UI_HIT_HELP_TOGGLE)
+                    found_help = 1;
             }
         }
-        ASSERT_TRUE("focus keycap is hit-testable", found == 1);
+        ASSERT_TRUE("focus keycap is hit-testable", found_focus == 1);
+        ASSERT_TRUE("help keycap is hit-testable", found_help == 1);
 
         glr_state_presentation_mut()->code_focus = 0;
         glr_ctrl_sync_ui_chrome();
@@ -202,6 +207,14 @@ int main(void) {
         ASSERT_TRUE("focus keycap click path toggles on",
                     glr_state_presentation().code_focus == 1);
         glr_ctrl_toggle_code_focus();
+
+        help_was = ui_state_help().visible;
+        glr_ctrl_toggle_help();
+        ASSERT_TRUE("help keycap click path toggles overlay",
+                    ui_state_help().visible == !help_was);
+        glr_ctrl_toggle_help();
+        ASSERT_TRUE("help toggle restores overlay",
+                    ui_state_help().visible == help_was);
     }
 
     return test_harness_report(&g_harness, "repl_code_panel_document");
