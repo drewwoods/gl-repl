@@ -7,7 +7,7 @@ buildability (state field before its `config_value_ptr` reference).
 
 - [x] Commit 1 — Step 2: backing state field + default (`make sample` green)
 - [x] Commit 2 — Step 1: config key, descriptor, mapping, cycle-row branch (`make sample` green)
-- [ ] Commit 3 — Step 3: UI-snapshot mirror + sync
+- [x] Commit 3 — Step 3: UI-snapshot mirror + sync (`make sample` green)
 - [ ] Commit 4 — Step 4: gate chrome in code panel (feature live)
 - [ ] Commit 5 — Step 5: layout regression test
 

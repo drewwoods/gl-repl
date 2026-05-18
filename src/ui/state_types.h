@@ -32,6 +32,7 @@ typedef struct {
     int   show_vertex_indices;  /* mirror of presentation.show_vertex_indices */
     int   wrap_at_comma;        /* mirror of presentation.wrap_at_comma */
     int   syntax_highlight;     /* mirror of presentation.syntax_highlight */
+    int   code_focus;           /* mirror of presentation.code_focus */
 } ReplCodePanelRuntimeState;
 
 /* Help-overlay visibility. Tab selection and scroll live in the separate
