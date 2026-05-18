@@ -2415,6 +2415,60 @@ int glr_ctrl_router_handle_horizontal_audio_special(int key) {
     return 1;
 }
 
+/* Snapshot of the live help overlay for pure geometry queries
+ * (scroll clamp, click hit-test). Mirrors the per-frame state the
+ * renderer is handed in glr_ctrl_display_frame. */
+static UiOverlayState glr_ctrl_help_overlay_state(void) {
+    UiViewportState vp = ui_state_viewport();
+    EditorHelpSession s = editor_help_session_view();
+    UiOverlayState st = {
+        .visible    = ui_state_help().visible,
+        .tab_idx    = s.tab_idx,
+        .scroll     = s.scroll,
+        .viewport_w = vp.window_w,
+        .viewport_h = vp.window_h,
+        .content    = glr_ctrl_help_overlay_content(),
+    };
+    return st;
+}
+
+/* Scroll the help session, then clamp to the active tab's real
+ * bounds so the offset can't run past the end (which would otherwise
+ * have to be "unwound" before an upward scroll did anything). */
+void glr_ctrl_help_scroll_by(int delta) {
+    editor_help_session_scroll_by(delta);
+    UiOverlayState st = glr_ctrl_help_overlay_state();
+    int max_scroll = ui_tabbed_overlay_max_scroll(&st);
+    int scroll = editor_help_session_scroll();
+    if (scroll > max_scroll) scroll = max_scroll;
+    if (scroll < 0) scroll = 0;
+    editor_help_session_set_scroll(scroll);
+}
+
+/* Left-click routing while the modal help overlay is up: tab bar
+ * selects a tab, anywhere outside the panel dismisses, body clicks
+ * are swallowed (the overlay is modal). */
+int glr_ctrl_router_handle_help_click(int button, int state, int x, int y) {
+    if (button != GLUT_LEFT_BUTTON || state != GLUT_DOWN)
+        return 0;
+    if (!ui_state_help().visible)
+        return 0;
+    UiOverlayState st = glr_ctrl_help_overlay_state();
+    UiOverlayHit hit = ui_tabbed_overlay_hit_test(&st, x, y);
+    if (hit.kind == UI_OVERLAY_HIT_OUTSIDE) {
+        glr_ctrl_toggle_help();          /* click-away dismiss */
+        editor_request_redraw();
+        return 1;
+    }
+    if (hit.kind == UI_OVERLAY_HIT_TAB) {
+        editor_help_session_set_tab(hit.tab);
+        editor_help_session_set_scroll(0);
+        editor_request_redraw();
+        return 1;
+    }
+    return 1;                            /* modal: swallow body clicks */
+}
+
 int glr_ctrl_router_handle_help_tab_special(int key) {
     if (!ui_state_help().visible)
         return 0;
@@ -2433,10 +2487,10 @@ int glr_ctrl_router_handle_help_scroll_special(int key) {
     if (!ui_state_help().visible)
         return 0;
     switch (key) {
-    case GLUT_KEY_UP:        editor_help_session_scroll_by(-1); return 1;
-    case GLUT_KEY_DOWN:      editor_help_session_scroll_by(1);  return 1;
-    case GLUT_KEY_PAGE_UP:   editor_help_session_scroll_by(-5); return 1;
-    case GLUT_KEY_PAGE_DOWN: editor_help_session_scroll_by(5);  return 1;
+    case GLUT_KEY_UP:        glr_ctrl_help_scroll_by(-1); return 1;
+    case GLUT_KEY_DOWN:      glr_ctrl_help_scroll_by(1);  return 1;
+    case GLUT_KEY_PAGE_UP:   glr_ctrl_help_scroll_by(-5); return 1;
+    case GLUT_KEY_PAGE_DOWN: glr_ctrl_help_scroll_by(5);  return 1;
     default: return 0;
     }
 }
@@ -2653,7 +2707,7 @@ int glr_ctrl_router_handle_glut_scroll_wheel_button(int button, int state, int x
         return 0;
     int direction = (button == 3) ? -1 : 1;
     if (ui_state_help().visible) {
-        editor_help_session_scroll_by(direction);
+        glr_ctrl_help_scroll_by(direction);
     } else if (editor_input_point_in_code_panel(x, y)) {
         editor_input_code_panel_scroll(direction);
     } else {
@@ -3362,6 +3416,12 @@ void glr_ctrl_mouse(int button, int state, int x, int y) {
     }
 
     if (button == GLUT_LEFT_BUTTON) {
+        /* Modal help overlay intercepts left clicks first: tab
+         * select / click-away dismiss / swallow body. */
+        if (glr_ctrl_router_handle_help_click(button, state, x, y)) {
+            glr_ctrl_apply_input_effects(editor_take_input_effects());
+            return;
+        }
         /* J2.2: classify the click via the canonical hit-test, then
          * route by UiHit.kind to the owning subsystem. The hit-test
          * covers variable panel, color picker, menu bar, code panel
@@ -3485,7 +3545,7 @@ void glr_ctrl_mousewheel(int wheel, int direction, int x, int y) {
     (void)wheel;
     editor_reset_input_effects();
     if (ui_state_help().visible) {
-        editor_help_session_scroll_by(-direction);
+        glr_ctrl_help_scroll_by(-direction);
         editor_request_redraw();
         glr_ctrl_apply_input_effects(editor_take_input_effects());
         return;

@@ -14,24 +14,112 @@
 #include <stdio.h>
 #include <string.h>
 
+/* Layout geometry derived purely from viewport + active-tab line
+ * count. The renderer and the input hit-test/clamp helpers both go
+ * through overlay_compute_geom() so they can never disagree about
+ * where the panel, tab bar, and scroll bounds actually are. */
+typedef struct {
+    int hx, hy, hw, hh;       /* panel rect (GL bottom-left origin) */
+    int title_h, tab_bar_h;
+    int pad_top, pad_bot;
+    int content_h, visible_lines, max_scroll;
+    int num_tabs, n_lines;
+    int tab_y, tab_w;         /* tab-bar band + per-tab width */
+} OverlayGeom;
+
+static int overlay_active_tab_idx(const UiOverlayState *in) {
+    int num_tabs = in->content->tab_count;
+    int tab_idx = in->tab_idx;
+    if (tab_idx < 0) tab_idx = 0;
+    if (tab_idx >= num_tabs) tab_idx = num_tabs - 1;
+    return tab_idx;
+}
+
+static int overlay_compute_geom(const UiOverlayState *in, OverlayGeom *g) {
+    if (!in || !in->content || in->content->tab_count <= 0) return 0;
+    int num_tabs = in->content->tab_count;
+    const char *const *text =
+        in->content->tabs[overlay_active_tab_idx(in)].lines;
+    if (!text) return 0;
+
+    int n_lines = 0;
+    while (text[n_lines]) n_lines++;
+
+    int win_w = in->viewport_w;
+    int win_h = in->viewport_h;
+    g->hx = win_w / 6;     g->hy = win_h / 12;
+    g->hw = win_w * 2 / 3; g->hh = win_h * 5 / 6;
+    g->tab_bar_h = LINE_H + 2;
+    g->title_h   = LINE_H + 4;
+    g->pad_top   = g->title_h + g->tab_bar_h + 6;
+    g->pad_bot   = 20;
+    g->content_h = g->hh - g->pad_top - g->pad_bot;
+    g->visible_lines = g->content_h / LINE_H;
+    if (g->visible_lines < 1) g->visible_lines = 1;
+    g->max_scroll = n_lines - g->visible_lines;
+    if (g->max_scroll < 0) g->max_scroll = 0;
+    g->num_tabs = num_tabs;
+    g->n_lines  = n_lines;
+    g->tab_y = g->hy + g->hh - g->title_h - g->tab_bar_h;
+    g->tab_w = g->hw / num_tabs;
+    return 1;
+}
+
+int ui_tabbed_overlay_max_scroll(const UiOverlayState *in) {
+    OverlayGeom g;
+    if (!overlay_compute_geom(in, &g)) return 0;
+    return g.max_scroll;
+}
+
+UiOverlayHit ui_tabbed_overlay_hit_test(const UiOverlayState *in,
+                                        int mx, int my) {
+    UiOverlayHit hit = { UI_OVERLAY_HIT_OUTSIDE, -1, 0 };
+    OverlayGeom g;
+    if (!in || !in->visible) return hit;
+    if (!overlay_compute_geom(in, &g)) return hit;
+    hit.max_scroll = g.max_scroll;
+
+    /* GLUT mouse is top-left origin; the panel rect is GL y-up. */
+    int gy = in->viewport_h - my;
+    if (mx < g.hx || mx > g.hx + g.hw || gy < g.hy || gy > g.hy + g.hh)
+        return hit;
+
+    if (gy >= g.tab_y && gy <= g.tab_y + g.tab_bar_h && g.tab_w > 0) {
+        int t = (mx - g.hx) / g.tab_w;
+        if (t >= 0 && t < g.num_tabs) {
+            hit.kind = UI_OVERLAY_HIT_TAB;
+            hit.tab  = t;
+            return hit;
+        }
+    }
+    hit.kind = UI_OVERLAY_HIT_BODY;
+    return hit;
+}
+
 void ui_tabbed_overlay_render(const UiOverlayState *in) {
     if (!in || !in->visible) return;
     if (!in->content || in->content->tab_count <= 0) return;
 
     const UiOverlayContent *content = in->content;
-    int num_tabs = content->tab_count;
+    OverlayGeom g;
+    if (!overlay_compute_geom(in, &g)) return;
 
-    int tab_idx = in->tab_idx;
+    int tab_idx = overlay_active_tab_idx(in);
     int scroll  = in->scroll;
-    if (tab_idx < 0) tab_idx = 0;
-    if (tab_idx >= num_tabs) tab_idx = num_tabs - 1;
 
     const char *const *text = content->tabs[tab_idx].lines;
     if (!text) return;
 
-    /* Count total lines */
-    int n_lines = 0;
-    while (text[n_lines]) n_lines++;
+    int num_tabs      = g.num_tabs;
+    int n_lines       = g.n_lines;
+    int hx = g.hx, hy = g.hy, hw = g.hw, hh = g.hh;
+    int tab_bar_h     = g.tab_bar_h;
+    int title_h       = g.title_h;
+    int pad_top       = g.pad_top;
+    int pad_bot       = g.pad_bot;
+    int content_h     = g.content_h;
+    int visible_lines = g.visible_lines;
+    int max_scroll    = g.max_scroll;
 
     int win_w = in->viewport_w;
     int win_h = in->viewport_h;
@@ -39,19 +127,7 @@ void ui_tabbed_overlay_render(const UiOverlayState *in) {
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-    int hx = win_w / 6, hy = win_h / 12;
-    int hw = win_w * 2 / 3, hh = win_h * 5 / 6;
-    int tab_bar_h = LINE_H + 2;
-    int title_h   = LINE_H + 4;
-    int pad_top   = title_h + tab_bar_h + 6;
-    int pad_bot   = 20;
-    int content_h = hh - pad_top - pad_bot;
-    int visible_lines = content_h / LINE_H;
-    if (visible_lines < 1) visible_lines = 1;
-
-    /* Clamp scroll */
-    int max_scroll = n_lines - visible_lines;
-    if (max_scroll < 0) max_scroll = 0;
+    /* Clamp scroll for display (the session is clamped on input). */
     if (scroll > max_scroll) scroll = max_scroll;
     if (scroll < 0) scroll = 0;
 

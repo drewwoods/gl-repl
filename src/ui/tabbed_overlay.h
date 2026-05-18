@@ -41,4 +41,27 @@ typedef struct {
 
 void ui_tabbed_overlay_render(const UiOverlayState *in);
 
+/* Pure geometry queries sharing the renderer's layout math, so input
+ * routing clamps/hit-tests against exactly what was drawn. */
+
+typedef enum {
+    UI_OVERLAY_HIT_OUTSIDE = 0, /* point is outside the panel rect */
+    UI_OVERLAY_HIT_TAB,         /* point is on a tab; .tab is its index */
+    UI_OVERLAY_HIT_BODY         /* inside the panel, not on a tab */
+} UiOverlayHitKind;
+
+typedef struct {
+    UiOverlayHitKind kind;
+    int              tab;        /* valid when kind == UI_OVERLAY_HIT_TAB */
+    int              max_scroll; /* scroll clamp bound for the active tab */
+} UiOverlayHit;
+
+/* Largest valid scroll offset for the active tab (0 when content fits). */
+int ui_tabbed_overlay_max_scroll(const UiOverlayState *in);
+
+/* Classify a GLUT-space mouse point (top-left origin) against the
+ * overlay. Returns OUTSIDE when not visible or off the panel. */
+UiOverlayHit ui_tabbed_overlay_hit_test(const UiOverlayState *in,
+                                        int mx, int my);
+
 #endif /* UI_TABBED_OVERLAY_H */
