@@ -1,22 +1,20 @@
 /*
  * source_document.h - Neutral source-document port.
  *
- * Decouples the REPL pipeline from the editor text model. REPL TUs use
- * SourceTextView (read) and source_document_* (mutate) to access the
- * live source text. Hosts (full app, demo, tests) provide implementations
- * that adapt their underlying storage:
+ * This is the text boundary between REPL pipeline code and whatever host owns
+ * the live source lines. REPL modules read through SourceTextView and request
+ * text mutations through source_document_* without depending on EditorState or
+ * any app-specific storage.
  *
- *   Full app:     src/app/glr_source_document.c forwards to EditorState
- *   Demo:         tools/repl_demo/source_document.c (Phase 6) backs with
- *                 a tiny static line store, no editor link
- *   Tests:        link the full-app adapter OR a fixture under tests/support/
+ * Hosts provide the implementation that backs this contract:
+ *   Full app: src/app/glr_source_document.c adapts EditorState.
+ *   Demo: tools/repl_demo/source_document.c uses a tiny static line store.
+ *   Tests: link whichever adapter matches the scenario under test.
  *
- * The header includes only config.h — no REPL, editor, GL, or evaluator
- * headers. MAX_COMMANDS / MAX_LINE_LEN / MAX_COMMIT_CMDS live in config.h
- * for exactly this reason: a neutral boundary header can size its structs
- * without dragging in grammar types. The compile pipeline reuses the
- * same MAX_COMMIT_CMDS constant, so the translator from ReplCompiledChange
- * to SourceTextChange copies 1:1 without a silent bound mismatch. */
+ * The header intentionally includes only config.h so the port stays neutral.
+ * MAX_COMMANDS, MAX_LINE_LEN, and MAX_COMMIT_CMDS live there so these structs
+ * can be sized without pulling in REPL grammar or editor types.
+ */
 #ifndef SOURCE_DOCUMENT_H
 #define SOURCE_DOCUMENT_H
 
@@ -70,7 +68,7 @@ typedef struct {
 /* Read accessor. Implemented by the host. */
 SourceTextView source_document_view(void);
 
-/* Mutation accessors. Implemented by the host. Phase 2 wires them in. */
+/* Mutation accessors. Implemented by the host adapter. */
 int  source_document_apply_change(const SourceTextChange *change);
 int  source_document_insert_line(int pos, const char *line);
 int  source_document_replace_line(int pos, const char *line);

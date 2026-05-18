@@ -1,11 +1,13 @@
 /*
- * transform_utils.h - GL matrix transform helpers used by REPL-aware
- * controller code (imrepl_ctrl.c, transform_guides.c).
+ * transform_utils.h - Shared GL matrix transform helpers.
  *
- * Inline helpers for applying and unwinding GL matrix transforms.
- * Mirrors src/repl/executor.c functionality without requiring src/repl/executor.h.
- * Depends only on src/repl/command.h (GLCmd, CmdType). Lives at the repo root
- * because no src/scene/.c consumes it; only controller-layer helpers do.
+ * Inline helpers for applying and unwinding tracked transform commands while
+ * walking source or flat command arrays. The controller and transform-guide
+ * renderers use these so they can mirror executor-style matrix tracking without
+ * depending on src/repl/executor.h.
+ *
+ * The header depends only on repl/command.h and gl_includes.h, which keeps it
+ * usable from either app- or scene-adjacent helpers.
  */
 #ifndef TRANSFORM_UTILS_H
 #define TRANSFORM_UTILS_H
