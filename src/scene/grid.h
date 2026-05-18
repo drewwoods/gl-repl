@@ -2,7 +2,7 @@
  * scene_grid.h - Themeable reference-grid renderer.
  *
  * Draws the scene's optional reference grid using the effective theme, major
- * spacing, extent, and transition state already prepared in FrameRenderContext.
+ * spacing, extent, and transition state already prepared in SceneFrameRenderContext.
  * The controller chooses those settings; this module is responsible only for
  * rendering the requested grid style.
  */
@@ -13,7 +13,7 @@
 
 /* Render the grid floor for the current frame. `frame_ctx` carries the camera,
  * theme, transition opacity, and spacing tables the grid code needs. */
-void scene_grid_render(const FrameRenderContext *frame_ctx);
+void scene_grid_render(const SceneFrameRenderContext *frame_ctx);
 
 /* True for the themes whose own fog is incompatible with the
  * synthesized clear-color recede (EXP2: GRID_THEME_FOG, OCEAN). Under

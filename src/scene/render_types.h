@@ -161,9 +161,9 @@ typedef struct SceneRenderConfig {
 /* Derived state that helper renderers should consume instead of recomputing
  * from globals.  The focus vertex is prepared once per frame and passed into
  * the grid renderer when the focus theme is active. */
-typedef struct FrameRenderContext {
+typedef struct SceneFrameRenderContext {
     SceneRenderConfig config;
     SceneFocusVertex focus;
-} FrameRenderContext;
+} SceneFrameRenderContext;
 
 #endif /* SCENE_RENDER_TYPES_H */

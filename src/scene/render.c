@@ -369,7 +369,7 @@ static void scene_apply_wireframe_config(const SceneRenderConfig *config) {
         glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 }
 
-static void scene_prepare_frame_context(FrameRenderContext *ctx,
+static void scene_prepare_frame_context(SceneFrameRenderContext *ctx,
                                         const SceneRenderConfig *config) {
     ctx->config = *config;
     ctx->focus = config->focus;
@@ -390,7 +390,7 @@ static void scene_prepare_frame_context(FrameRenderContext *ctx,
  * camera is moving (during drag or while momentum carries it); fades out.
  * REPL-only - never exported. Styled to match the other scene helpers:
  * soft halo line under a bright core, alpha driven by g_cam_motion_glow. */
-static void draw_orbit_target(const FrameRenderContext *frame_ctx) {
+static void draw_orbit_target(const SceneFrameRenderContext *frame_ctx) {
     const SceneRenderConfig *config = &frame_ctx->config;
     float glow = config->cam_motion_glow;
     if (glow <= 0.0f) return;
@@ -453,7 +453,7 @@ static void scene_apply_clear_color(const float clear_color[4]) {
 static void render_3d_scene_pass(const SceneRenderConfig *config,
                                  float accum_jitter_x,
                                  float accum_jitter_y) {
-    FrameRenderContext frame_ctx;
+    SceneFrameRenderContext frame_ctx;
     scene_prepare_frame_context(&frame_ctx, config);
 
     prof_begin(PROF_SCENE_3D_SETUP);

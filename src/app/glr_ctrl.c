@@ -22,7 +22,7 @@
 #include "editor/search.h"
 #include "editor/state.h"
 #include "editor/undo.h"
-#include "scene/guides/geometry_guides.h" /* geometry_guides_render_for_cursor */
+#include "scene/guides/geometry_guides.h" /* scene_geometry_guides_render_for_cursor */
 #include "app/glr_actions.h"
 #include "app/glr_config.h"
 #include "app/glr_camera.h"
@@ -46,7 +46,7 @@
 #include "scene/overlays.h" /* scene_draw_vertex_number_label / _arrow primitives */
 #include "scene/postprocess_filter.h" /* ScenePostFilterMode, mode_name */
 #include "scene/render.h"
-#include "scene/guides/transform_guides.h" /* transform_guides_prepare / _render_if_due */
+#include "scene/guides/transform_guides.h" /* scene_transform_guides_prepare / _render_if_due */
 #include "transform_utils.h"  /* apply_tracked_transform / unwind_transform_stack */
 #include "ui/autocomplete_panel.h"
 #include "ui/editor.h"
@@ -809,12 +809,12 @@ static void on_cmd_render_cursor_guides(const ReplVertexWalkState *state,
         SceneGuideSnapshot snap =
             cursor_guide_snapshot_with_flat_args(ctx->snapshot, flat,
                                                  state->flat_cmd_idx);
-        geometry_guides_render_for_cursor(&snap);
+        scene_geometry_guides_render_for_cursor(&snap);
         ctx->geometry_guide_done = 1;
     }
 
     if (ctx->have_xform && !ctx->xform_plan.consumed) {
-        transform_guides_render_if_due(ctx->snapshot, &ctx->xform_plan,
+        scene_transform_guides_render_if_due(ctx->snapshot, &ctx->xform_plan,
                                        state->flat_cmd_idx, ctx->cam_view);
     }
 
@@ -836,10 +836,10 @@ static void glr_ctrl_render_cursor_guides(const SceneGuideSnapshot *snapshot) {
     ctx.snapshot = snapshot;
     ctx.geometry_guide_done = 0;
     ctx.early_stop = 0;
-    ctx.have_xform = transform_guides_prepare(snapshot, &ctx.xform_plan);
+    ctx.have_xform = scene_transform_guides_prepare(snapshot, &ctx.xform_plan);
 
     /* Previously this path took a fast exit (`return;`) when no transform
-     * guide was needed, calling geometry_guides_render_for_cursor with
+    * guide was needed, calling scene_geometry_guides_render_for_cursor with
      * the caller's modelview only. That broke the geometry guide for
      * cursors inside funcN call frames — the user's accumulated
      * transforms hadn't been applied yet, so the guide rendered at world

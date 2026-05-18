@@ -350,7 +350,7 @@ static void draw_starry_sky(float anim_time, int point_parameter_supported) {
     scene_backdrop_pop_state();
 }
 
-void scene_backdrop_render(const FrameRenderContext *frame_ctx) {
+void scene_backdrop_render(const SceneFrameRenderContext *frame_ctx) {
     switch (frame_ctx->config.backdrop_mode) {
     case 1:
         draw_cityscape(frame_ctx->config.anim_time);

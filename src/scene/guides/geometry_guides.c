@@ -306,7 +306,7 @@ static void draw_normal_guides(const SceneGuideSnapshot *snapshot) {
     geometry_guides_pop_state();
 }
 
-void geometry_guides_render_for_cursor(const SceneGuideSnapshot *snapshot) {
+void scene_geometry_guides_render_for_cursor(const SceneGuideSnapshot *snapshot) {
     if (!snapshot)
         return;
     draw_vertex_guides(snapshot);

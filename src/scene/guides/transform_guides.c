@@ -596,7 +596,7 @@ static int transform_source_unmodified(const SceneGuideSnapshot *snapshot,
             snapshot->input_len == 0);
 }
 
-int transform_guides_prepare(const SceneGuideSnapshot *snapshot,
+int scene_transform_guides_prepare(const SceneGuideSnapshot *snapshot,
                                    SceneTransformGuidePlan *plan) {
     if (!snapshot || !plan)
         return 0;
@@ -654,7 +654,7 @@ int transform_guides_prepare(const SceneGuideSnapshot *snapshot,
     return 1;
 }
 
-void transform_guides_render_if_due(const SceneGuideSnapshot *snapshot,
+void scene_transform_guides_render_if_due(const SceneGuideSnapshot *snapshot,
                                           SceneTransformGuidePlan *plan,
                                           int flat_cmd_idx,
                                           const float cam_view[16]) {
