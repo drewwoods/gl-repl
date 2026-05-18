@@ -17,14 +17,14 @@
 
 #define REPL_UNDO_DEPTH 32
 
-static ReplUndoSnapshot g_undo_buf[REPL_UNDO_DEPTH];
+static EditorUndoSnapshot g_undo_buf[REPL_UNDO_DEPTH];
 static int g_undo_head = 0;
 static int g_undo_count = 0;
-static ReplUndoSnapshot g_redo_buf[REPL_UNDO_DEPTH];
+static EditorUndoSnapshot g_redo_buf[REPL_UNDO_DEPTH];
 static int g_redo_head = 0;
 static int g_redo_count = 0;
 
-static const char *const *undo_snapshot_line_ptrs(const ReplUndoSnapshot *snapshot) {
+static const char *const *undo_snapshot_line_ptrs(const EditorUndoSnapshot *snapshot) {
     static const char *lines[MAX_COMMANDS];
 
     if (!snapshot)
@@ -34,7 +34,7 @@ static const char *const *undo_snapshot_line_ptrs(const ReplUndoSnapshot *snapsh
     return lines;
 }
 
-void editor_undo_snapshot_save(ReplUndoSnapshot *snapshot) {
+void editor_undo_snapshot_save(EditorUndoSnapshot *snapshot) {
     EditorBufferView text = editor_buffer_view();
     memcpy(snapshot->cmds, repl_state_document_cmds_mut(), (size_t)repl_state_document_count() * sizeof(GLCmd));
     for (int i = 0; i < repl_state_document_count(); i++)
@@ -59,7 +59,7 @@ void editor_undo_snapshot_save(ReplUndoSnapshot *snapshot) {
     }
 }
 
-void editor_undo_snapshot_restore(const ReplUndoSnapshot *snapshot) {
+void editor_undo_snapshot_restore(const EditorUndoSnapshot *snapshot) {
     ReplCommandStore store = repl_command_store_live();
     if (!repl_command_store_load(&store, snapshot->cmds,
                                  snapshot->num_cmds,
@@ -83,14 +83,14 @@ void editor_undo_snapshot_restore(const ReplUndoSnapshot *snapshot) {
     repl_mark_normals_dirty();
 }
 
-void editor_undo_ring_state_capture(ReplUndoRingState *state) {
+void editor_undo_ring_state_capture(EditorUndoRingState *state) {
     state->undo_head = g_undo_head;
     state->undo_count = g_undo_count;
     state->redo_head = g_redo_head;
     state->redo_count = g_redo_count;
 }
 
-void editor_undo_ring_state_restore(const ReplUndoRingState *state) {
+void editor_undo_ring_state_restore(const EditorUndoRingState *state) {
     g_undo_head = state->undo_head;
     g_undo_count = state->undo_count;
     g_redo_head = state->redo_head;

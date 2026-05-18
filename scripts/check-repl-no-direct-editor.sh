@@ -16,7 +16,7 @@
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 
-pattern='#include "editor/|#include "src/editor/|editor_buffer_|editor_state_|editor_cursor_|EditorBufferView|ReplEditorBuffer'
+pattern='#include "editor/|#include "src/editor/|editor_buffer_|editor_state_|editor_cursor_|EditorBufferView|EditorBuffer'
 
 shopt -s nullglob
 files=( repl_*.c repl_*.h )

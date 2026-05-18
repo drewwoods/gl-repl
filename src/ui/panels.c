@@ -85,7 +85,7 @@ void ui_panels_render_scene_status(const UiRenderSnapshot *snap) {
         return;
     }
 
-    ReplStatusState status = snap->status;
+    UiStatusState status = snap->status;
     if (status.ttl <= 0 || !status.text[0])
         return;
 

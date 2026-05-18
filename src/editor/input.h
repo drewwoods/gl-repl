@@ -19,19 +19,19 @@
  * code installs no provider — `editor_get_modifiers()` falls back to
  * glutGetModifiers() once `editor_input_enable_glut_modifier_reads()`
  * has been called. */
-typedef int (*ReplModifierProvider)(void);
+typedef int (*EditorModifierProvider)(void);
 
 /* Side-effects accumulated by editor input dispatch and replayed by
  * glr_ctrl_apply_input_effects (request_redraw → glutPostRedisplay,
  * set_cursor → glutSetCursor, schedule_timer → glutTimerFunc). */
-typedef struct ReplInputDispatchEffects {
+typedef struct EditorInputDispatchEffects {
     int request_redraw;
     int set_cursor;
     int cursor;
     int schedule_timer;
     unsigned int timer_millis;
     int timer_value;
-} ReplInputDispatchEffects;
+} EditorInputDispatchEffects;
 
 /* Editor dispatch entry points. Each handles editor-text-model
  * concerns only — text edit / cursor / selection / autocomplete /
@@ -39,27 +39,27 @@ typedef struct ReplInputDispatchEffects {
  * already filtered out by the controller before these run. Direct
  * callers (test fixtures) get the same shape: only editor routes
  * fire when these are invoked. */
-ReplInputDispatchEffects editor_handle_key(unsigned char key, int x, int y);
-ReplInputDispatchEffects editor_handle_special(int key, int x, int y);
-ReplInputDispatchEffects editor_handle_mouse(int button, int state, int x, int y);
-ReplInputDispatchEffects editor_handle_motion(int x, int y);
-ReplInputDispatchEffects editor_handle_passive_motion(int x, int y);
+EditorInputDispatchEffects editor_handle_key(unsigned char key, int x, int y);
+EditorInputDispatchEffects editor_handle_special(int key, int x, int y);
+EditorInputDispatchEffects editor_handle_mouse(int button, int state, int x, int y);
+EditorInputDispatchEffects editor_handle_motion(int x, int y);
+EditorInputDispatchEffects editor_handle_passive_motion(int x, int y);
 #ifndef USE_GLUT
-ReplInputDispatchEffects editor_handle_mousewheel(int wheel, int direction, int x, int y);
+EditorInputDispatchEffects editor_handle_mousewheel(int wheel, int direction, int x, int y);
 #endif
 
 /* Effect accumulation API used by the editor dispatch entry points and by the
  * controller's router helpers so both produce and consume the same
- * ReplInputDispatchEffects struct. */
+ * EditorInputDispatchEffects struct. */
 void                     editor_reset_input_effects(void);
-ReplInputDispatchEffects editor_take_input_effects(void);
+EditorInputDispatchEffects editor_take_input_effects(void);
 void                     editor_request_redraw(void);
 void                     editor_set_cursor(int cursor);
 void                     editor_schedule_timer(unsigned int millis, int value);
 int                      editor_get_modifiers(void);
 
 /* Test seam: drive editor input with a mocked modifier source. */
-void editor_input_set_modifier_provider_for_test(ReplModifierProvider provider);
+void editor_input_set_modifier_provider_for_test(EditorModifierProvider provider);
 int  editor_input_active_modifiers(void);
 
 /* Production hook: glr_ctrl calls this from glr_ctrl_init_gl

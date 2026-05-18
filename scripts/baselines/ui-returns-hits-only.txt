@@ -17,7 +17,7 @@
 # coordinates through ui_panels_render_code_panel's UiCodePanelOutput
 # parameter; the controller actualizes the value by passing it
 # directly to ui_autocomplete_panel_render. The cursor_px / cursor_py
-# fields on ReplCodePanelRuntimeState and the
+# fields on UiCodePanelRuntimeState and the
 # repl_action_set_cursor_pixel setter were deleted along with the
 # obsolete check-cursor-px-encapsulated guard, since the data was
 # rendering ephemera, not state.

@@ -174,7 +174,7 @@ to make the layer boundaries observable:
   static text. Proves the REPL pipeline has no hard dependency on
   editor input dispatch (`src/editor/input.c`), the controller
   (`src/app/glr_ctrl.c`), or the UI (`src/ui/`, `src/ui/replay_hud.c`). Per-line
-  text canonically lives on `src/editor/state.c`'s `ReplEditorBuffer`,
+  text canonically lives on `src/editor/state.c`'s `EditorBuffer`,
   so that one editor TU is in the link set by design. The
   `tools/repl_demo/stubs.c` file is the visible record of what the
   REPL pipeline pulls in beyond pure pipeline code. That list is now
@@ -312,9 +312,9 @@ text edit into a committed program change.
 
 | Module | Role |
 |--------|------|
-| `editor_input` | Editor's pure text-document controller. Receives key/mouse events from `glr_ctrl` only after the controller has already filtered out non-editor concerns (replay, audio, config, save, camera, variable panel, scene press, scroll-wheel zoom). Mutates `EditorState` directly: cursor, selection, scroll, search, autocomplete navigation, clipboard, undo. Also exposes hit-test predicates (`editor_input_point_in_code_panel`, etc.) and the `ReplInputDispatchEffects` accumulation API that the controller consumes. `repl_editor.{c,h}` is deleted; this module is the sole dispatch boundary |
+| `editor_input` | Editor's pure text-document controller. Receives key/mouse events from `glr_ctrl` only after the controller has already filtered out non-editor concerns (replay, audio, config, save, camera, variable panel, scene press, scroll-wheel zoom). Mutates `EditorState` directly: cursor, selection, scroll, search, autocomplete navigation, clipboard, undo. Also exposes hit-test predicates (`editor_input_point_in_code_panel`, etc.) and the `EditorInputDispatchEffects` accumulation API that the controller consumes. `repl_editor.{c,h}` is deleted; this module is the sole dispatch boundary |
 | `editor_commit` | Transaction boundary for commits: compile, undo snapshot, text-buffer write, REPL apply, dirty-state updates |
-| `editor_state` | Owns `EditorState`: canonical per-line text buffer, active input, cursor, edit line, insert mode, **input-buffer selection anchor (`anchor_pos` on `ReplEditorInputState`)**, line-range selection, search, autocomplete, scroll, undo/redo, transformers, highlights, virtual lines. The clipboard is a tagged union (`EditorClipboardKind`: EMPTY / LINES / INPUT_TEXT) so partial-line copy/cut and whole-line copy/cut share one slot. Single writer for editor buffer text |
+| `editor_state` | Owns `EditorState`: canonical per-line text buffer, active input, cursor, edit line, insert mode, **input-buffer selection anchor (`anchor_pos` on `EditorInputState`)**, line-range selection, search, autocomplete, scroll, undo/redo, transformers, highlights, virtual lines. The clipboard is a tagged union (`EditorClipboardKind`: EMPTY / LINES / INPUT_TEXT) so partial-line copy/cut and whole-line copy/cut share one slot. Single writer for editor buffer text |
 | `editor_services` | Default `EditorServices` dispatch table binding commit code to live REPL compile/apply |
 | `editor_undo` | Undo/redo transaction rings that restore editor text and REPL command state together |
 | `editor_clipboard` | Selection anchors plus copy/cut/paste payloads, including parallel text sidecars |
@@ -842,7 +842,7 @@ side-effect routing. As of that branch landing:
   `ui_panels_render_code_panel` fills and `glr_ctrl` actualizes
   by passing the coords directly to `ui_autocomplete_panel_render`.
   The `cursor_px` / `cursor_py` fields on
-  `ReplCodePanelRuntimeState`, the `glr_action_set_cursor_pixel`
+  `UiCodePanelRuntimeState`, the `glr_action_set_cursor_pixel`
   setter, and the `check-cursor-px-encapsulated` guard were deleted
   along with the data — it was rendering ephemera, not state.
 - **Code-panel press side effects: routed (Phase J2).**

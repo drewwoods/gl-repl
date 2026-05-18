@@ -69,7 +69,7 @@ void glr_ctrl_tick(void);
  * glr_ctrl from raw GLUT events to their owning subsystem. The
  * helpers below are exposed so test fixtures can drive a single
  * routing concern in isolation without applying GLUT effects (they
- * fill the editor_input ReplInputDispatchEffects struct via
+ * fill the editor_input EditorInputDispatchEffects struct via
  * editor_request_redraw etc., but glutPostRedisplay /
  * glutSetCursor / glutTimerFunc fire only inside
  * glr_ctrl_apply_input_effects, which the router-helper paths

@@ -37,7 +37,7 @@ int variable_panel_drag_log_mode(void) {
 
 void variable_panel_handle_drag_begin(int row, int log_mode, int x) {
     if (row < 0 || row >= g_num_predef_vars) return;
-    ReplVariableDragState *drag = variable_panel_drag_mut();
+    EditorVariableDragState *drag = variable_panel_drag_mut();
     drag->var_idx = row;
     drag->log_mode = log_mode ? 1 : 0;
     drag->start_value = g_predef_vars[row].value;
@@ -47,7 +47,7 @@ void variable_panel_handle_drag_begin(int row, int log_mode, int x) {
 }
 
 void variable_panel_handle_drag_reset(void) {
-    ReplVariableDragState *drag = variable_panel_drag_mut();
+    EditorVariableDragState *drag = variable_panel_drag_mut();
     drag->var_idx = -1;
     drag->log_mode = 0;
     drag->start_value = 0.0f;
@@ -57,7 +57,7 @@ void variable_panel_handle_drag_reset(void) {
 }
 
 int variable_panel_handle_drag_motion(int x, VariablePanelValueChange *out) {
-    ReplVariableDragState *drag = variable_panel_drag_mut();
+    EditorVariableDragState *drag = variable_panel_drag_mut();
     float new_val;
 
     if (out) {

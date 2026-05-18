@@ -93,7 +93,7 @@ static const CapRow rows[] = {
         + MAX_LINE_LEN * MAX_COMMANDS
         + (sizeof(float) + 16) * MAX_PREDEF_VARS
         + 96 /* approximate: name + scene_cfg + last_touch + edit_line + flags */,
-      "approx 1 UserScene = 1 ReplUndoSnapshot worth of bytes (file-private struct)" },
+      "approx 1 UserScene = 1 EditorUndoSnapshot worth of bytes (file-private struct)" },
 
     /* Compile-time temp arrays. Per-call only. */
     { "MAX_COMMIT_CMDS", MAX_COMMIT_CMDS,
@@ -107,7 +107,7 @@ static const CapRow rows[] = {
 
     /* Undo / redo ring depth. Multiplies the entire snapshot cost. */
     { "REPL_UNDO_DEPTH", UNDO_RING_DEPTH,
-      sizeof(ReplUndoSnapshot) * UNDO_REDO_RING_PAIRS,
+      sizeof(EditorUndoSnapshot) * UNDO_REDO_RING_PAIRS,
       "doubles the per-snapshot cost across both rings" },
 
     /* Replay fade ring. Per-batch cost depends on flat-program size. */
@@ -123,7 +123,7 @@ static const CapRow rows[] = {
     /* Autocomplete match list size. */
     { "MAX_AC_MATCHES", MAX_AC_MATCHES,
       sizeof(char *),
-      "ReplAutocompleteState.matches[] — pointers into static const strings" },
+      "EditorAutocompleteState.matches[] — pointers into static const strings" },
 
     /* Workspace header line cap. Each line is a full source-line-length string. */
     { "MAX_WORKSPACE_HEADER_LINES", MAX_WORKSPACE_HEADER_LINES,
@@ -150,14 +150,14 @@ int main(void) {
     printf("  GLCmd                     = %zu B\n", sizeof(GLCmd));
     printf("  ExprVar                   = %zu B\n", sizeof(ExprVar));
     printf("  ReplPredefView            = %zu B\n", sizeof(ReplPredefView));
-    printf("  ReplUndoSnapshot          = %zu B (%.2f MB)\n",
-           sizeof(ReplUndoSnapshot),
-           (double)sizeof(ReplUndoSnapshot) / (1024.0 * 1024.0));
+    printf("  EditorUndoSnapshot          = %zu B (%.2f MB)\n",
+           sizeof(EditorUndoSnapshot),
+           (double)sizeof(EditorUndoSnapshot) / (1024.0 * 1024.0));
     printf("  ReplCompiledChange        = %zu B (%.2f KB)\n",
            sizeof(ReplCompiledChange),
            (double)sizeof(ReplCompiledChange) / 1024.0);
     printf("  Undo+redo rings (64 snapshots) = %.2f MB\n",
-           (double)(sizeof(ReplUndoSnapshot) * UNDO_RING_DEPTH * UNDO_REDO_RING_PAIRS)
+           (double)(sizeof(EditorUndoSnapshot) * UNDO_RING_DEPTH * UNDO_REDO_RING_PAIRS)
                / (1024.0 * 1024.0));
     printf("\n");
 

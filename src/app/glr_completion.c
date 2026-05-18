@@ -10,7 +10,7 @@
  * Runtime storage (matches, ghost, hint) lives on EditorState and is
  * accessed through the typed autocomplete facade.
  */
-#include "editor/state.h"        /* EditorBufferView, ReplAutocompleteState, editor_state_* */
+#include "editor/state.h"        /* EditorBufferView, EditorAutocompleteState, editor_state_* */
 #include "repl/state_owners.h"
 #include "repl/core_internal.h"
 #include "repl/command_spec.h"
@@ -165,7 +165,7 @@ static void update_input_param_hint(void) {
     const char *input = editor_state_input().input;
     const char *after = NULL;
     const ReplFuncCompletion *builtin = find_builtin_completion_for_input(input, &after);
-    ReplAutocompleteState *ac = editor_state_autocomplete_mut();
+    EditorAutocompleteState *ac = editor_state_autocomplete_mut();
     if (builtin) {
         build_param_hint_text(builtin->params, builtin->param_count,
                               after, ac->hint, (int)sizeof(ac->hint));
@@ -186,8 +186,8 @@ static void update_input_param_hint(void) {
 }
 
 static void update_selected_autocomplete_preview(void) {
-    ReplEditorInputView inp = editor_state_input();
-    ReplAutocompleteState *ac = editor_state_autocomplete_mut();
+    EditorInputView inp = editor_state_input();
+    EditorAutocompleteState *ac = editor_state_autocomplete_mut();
 
     ac->ghost[0] = '\0';
     ac->hint[0] = '\0';
@@ -228,8 +228,8 @@ static void update_selected_autocomplete_preview(void) {
 }
 
 static void update_autocomplete(void) {
-    ReplEditorInputView inp = editor_state_input();
-    ReplAutocompleteState *ac = editor_state_autocomplete_mut();
+    EditorInputView inp = editor_state_input();
+    EditorAutocompleteState *ac = editor_state_autocomplete_mut();
     const char *raw_input = inp.input;
     int raw_input_len = inp.input_len;
 
@@ -389,11 +389,11 @@ static void update_autocomplete(void) {
 }
 
 void accept_autocomplete(void) {
-    ReplAutocompleteState ac = editor_state_autocomplete();
+    EditorAutocompleteState ac = editor_state_autocomplete();
 
     int ghost_len = (int)strlen(ac.ghost);
     {
-        ReplEditorInputState *inp = editor_state_input_mut();
+        EditorInputState *inp = editor_state_input_mut();
         if (inp->input_len + ghost_len < MAX_INPUT_LEN - 1) {
             strcat(inp->input, ac.ghost);
             inp->input_len += ghost_len;

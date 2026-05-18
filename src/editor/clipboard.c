@@ -73,7 +73,7 @@ void editor_selection_set_var_decl_action_status(const char *action) {
 }
 
 static void clipboard_copy_range(int start, int count) {
-    ReplClipboardState *clipboard = editor_state_clipboard_mut();
+    EditorClipboardState *clipboard = editor_state_clipboard_mut();
     EditorBufferView text = editor_buffer_view();
     int n = 0;
     for (int i = start; i < start + count && n < MAX_COMMANDS; i++) {
@@ -170,7 +170,7 @@ static int editor_clipboard_copy_input_selection(void) {
  * mutation lives on the active input buffer, not on source commands —
  * the line-range insert-mode guard doesn't apply.
  *
- * Intentionally does NOT push an undo snapshot. ReplUndoSnapshot does
+ * Intentionally does NOT push an undo snapshot. EditorUndoSnapshot does
  * not capture the input buffer (restore reloads input via
  * load_line_to_input from the committed source line), so a push here
  * cannot rewind the cut — it would only have the side effect of
@@ -214,7 +214,7 @@ static int editor_clipboard_paste_input_text(void) {
     int cur = editor_cursor_pos();
     int paste_len = editor_clipboard_input_text_len();
     const char *paste = editor_clipboard_input_text();
-    ReplEditorInputState *inp = editor_state_input_mut();
+    EditorInputState *inp = editor_state_input_mut();
     int existing = inp->input_len;
     int room = (MAX_INPUT_LEN - 1) - existing;
     if (room < 0)
@@ -374,7 +374,7 @@ void editor_clipboard_paste_current(void) {
      * any path that could mutate the clipboard mid-loop. */
     char buf[MAX_COMMANDS][MAX_LINE_LEN];
     {
-        const ReplClipboardState *cb = editor_state_clipboard_mut();
+        const EditorClipboardState *cb = editor_state_clipboard_mut();
         for (int i = 0; i < count; i++)
             repl_copy_string_fits(buf[i], MAX_LINE_LEN, cb->lines[i]);
     }

@@ -81,12 +81,12 @@ static UiTextPanelColor repl_code_panel_scaled_alpha(UiTextPanelColor base,
     return base;
 }
 
-static const EditorTransformer *repl_code_panel_find_color_transformer(
-    const EditorTransformerList *list, int line_idx) {
+static const UiTransformer *repl_code_panel_find_color_transformer(
+    const UiTransformerList *list, int line_idx) {
     if (!list)
         return NULL;
     for (int i = 0; i < list->count; i++) {
-        const EditorTransformer *transformer = &list->items[i];
+        const UiTransformer *transformer = &list->items[i];
         if (transformer->kind == TRANSFORMER_COLOR_PICKER &&
             transformer->line_idx == line_idx)
             return transformer;
@@ -466,7 +466,7 @@ static void repl_code_panel_find_highlight_rows(const UiRenderSnapshot *snap,
 
     if (snap && snap->editor_highlights) {
         for (int i = 0; i < snap->editor_highlights->count; i++) {
-            const EditorHighlight *highlight = &snap->editor_highlights->items[i];
+            const UiHighlight *highlight = &snap->editor_highlights->items[i];
             if (highlight->kind == HIGHLIGHT_FEEDING_NORMAL)
                 normal_idx = highlight->line_idx;
             else if (highlight->kind == HIGHLIGHT_FEEDING_COLOR)
@@ -598,7 +598,7 @@ static void repl_code_panel_set_vertex_label(UiTextPanelRow *row,
 static void repl_code_panel_set_right_action(UiTextPanelRow *row,
                                              const UiRenderSnapshot *snap,
                                              int line_idx) {
-    const EditorTransformer *transformer;
+    const UiTransformer *transformer;
 
     if (!row || !snap)
         return;
@@ -725,7 +725,7 @@ static float repl_clamp01(float v) {
     return v;
 }
 
-void ui_repl_code_panel_syntax_kind_rgb(ReplSyntaxKind kind,
+void ui_repl_code_panel_syntax_kind_rgb(UiSyntaxKind kind,
                                         CmdSyntaxCategory category,
                                         float out_rgb[3]) {
     float cr = 0.0f;
@@ -762,7 +762,7 @@ static int repl_syntax_is_ident_char(int c) {
 }
 
 int ui_repl_code_panel_classify_syntax(const char *text,
-                                       ReplSyntaxSpan *out, int max_spans) {
+                                       UiSyntaxSpan *out, int max_spans) {
     int n = 0;
     int i = 0;
 
@@ -782,7 +782,7 @@ int ui_repl_code_panel_classify_syntax(const char *text,
                 i++;
             if (text[i] == '"')
                 i++;
-            out[n++] = (ReplSyntaxSpan){ start, i - start, REPL_SYNTAX_LITERAL };
+            out[n++] = (UiSyntaxSpan){ start, i - start, REPL_SYNTAX_LITERAL };
             continue;
         }
 
@@ -805,7 +805,7 @@ int ui_repl_code_panel_classify_syntax(const char *text,
                 while (isdigit((unsigned char)text[i]))
                     i++;
             }
-            out[n++] = (ReplSyntaxSpan){ start, i - start, REPL_SYNTAX_LITERAL };
+            out[n++] = (UiSyntaxSpan){ start, i - start, REPL_SYNTAX_LITERAL };
             continue;
         }
 
@@ -838,20 +838,20 @@ int ui_repl_code_panel_classify_syntax(const char *text,
                 strncmp(name, "GL_", 3) == 0 ||
                 strncmp(name, "GLU_", 4) == 0 ||
                 strncmp(name, "GLUT_", 5) == 0) {
-                out[n++] = (ReplSyntaxSpan){ start, len,
+                out[n++] = (UiSyntaxSpan){ start, len,
                                              REPL_SYNTAX_CONSTANT };
             } else if (strcmp(name, "t") == 0 ||
                        repl_eval_scratch_array_index(name) >= 0 ||
                        repl_eval_find_predef_var_idx(name) >= 0) {
                 /* 't' is reserved but is the predefined animation var, so
                  * it must classify as a variable, not as structural. */
-                out[n++] = (ReplSyntaxSpan){ start, len,
+                out[n++] = (UiSyntaxSpan){ start, len,
                                              REPL_SYNTAX_VARIABLE };
             } else if (repl_eval_is_reserved_ident(name)) {
                 /* reserved keyword / math fn used bare — structural */
             } else {
                 /* loop var, funcN param, or otherwise-unknown ident */
-                out[n++] = (ReplSyntaxSpan){ start, len,
+                out[n++] = (UiSyntaxSpan){ start, len,
                                              REPL_SYNTAX_VARIABLE };
             }
             continue;
@@ -868,7 +868,7 @@ static void repl_code_panel_apply_syntax_segments(const char *text,
                                                   CmdType type,
                                                   int mode,
                                                   UiTextPanelRow *row) {
-    ReplSyntaxSpan spans[UI_TEXT_PANEL_MAX_COLOR_SEGMENTS];
+    UiSyntaxSpan spans[UI_TEXT_PANEL_MAX_COLOR_SEGMENTS];
     CmdSyntaxCategory cat;
     int count;
 
@@ -997,7 +997,7 @@ static void repl_code_panel_add_command_row(ReplCodePanelBuilder *builder,
 
 static void repl_code_panel_add_virtual_rows(ReplCodePanelBuilder *builder,
                                              int after_line_idx) {
-    const EditorVirtualLineList *virtual_lines;
+    const UiVirtualLineList *virtual_lines;
 
     if (!builder || !builder->snap)
         return;
@@ -1007,7 +1007,7 @@ static void repl_code_panel_add_virtual_rows(ReplCodePanelBuilder *builder,
         return;
 
     for (int i = 0; i < virtual_lines->count; i++) {
-        const EditorVirtualLine *virtual_line = &virtual_lines->items[i];
+        const UiVirtualLine *virtual_line = &virtual_lines->items[i];
         UiTextPanelRow *row;
         char *text;
         int main_len;

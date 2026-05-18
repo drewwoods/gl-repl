@@ -29,7 +29,7 @@ void ui_color_picker_render(const ColorPickerView *view,
  * entry. `active_line` is the open picker's source-cmd index (-1 when
  * closed) so the renderer can highlight the swatch whose picker is
  * currently active without consulting peer state. */
-void ui_color_picker_render_swatch(const EditorTransformer *t,
+void ui_color_picker_render_swatch(const UiTransformer *t,
                                    int sx, int sy,
                                    int active_line);
 

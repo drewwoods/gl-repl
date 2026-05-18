@@ -32,7 +32,7 @@
  * search-open path closes the help overlay as a side-effect; the
  * visibility flag lives on UiState while the session-state fields
  * (tab_idx, scroll) live on the editor_help_session peer. */
-ReplHelpState *ui_state_help_mut(void);
+UiHelpState *ui_state_help_mut(void);
 #include "help_session.h"
 
 static int search_row_is_live_input(int row_idx) {
@@ -75,7 +75,7 @@ int editor_search_row_for_cmd_index(int cmd_idx) {
 }
 
 static int search_row_match_count(int row_idx) {
-    ReplSearchState srch = editor_state_search();
+    EditorSearchState srch = editor_state_search();
     const char *text;
     int count = 0;
 
@@ -93,7 +93,7 @@ static int search_row_match_count(int row_idx) {
 }
 
 static int search_total_matches(void) {
-    ReplSearchState srch = editor_state_search();
+    EditorSearchState srch = editor_state_search();
     int total = 0;
 
     if (srch.query_len <= 0)
@@ -112,7 +112,7 @@ static int search_total_matches(void) {
 }
 
 static int search_hit_exists(int row_idx, int char_pos) {
-    ReplSearchState srch = editor_state_search();
+    EditorSearchState srch = editor_state_search();
     const char *text;
 
     if (srch.query_len <= 0)
@@ -125,7 +125,7 @@ static int search_hit_exists(int row_idx, int char_pos) {
 }
 
 static int search_row_occurrence_index(int row_idx, int char_pos) {
-    ReplSearchState srch = editor_state_search();
+    EditorSearchState srch = editor_state_search();
     const char *text;
     int occurrence = 0;
 
@@ -145,7 +145,7 @@ static int search_row_occurrence_index(int row_idx, int char_pos) {
 }
 
 static int search_char_for_row_occurrence(int row_idx, int occurrence_idx) {
-    ReplSearchState srch = editor_state_search();
+    EditorSearchState srch = editor_state_search();
     const char *text;
     int occurrence = 0;
 
@@ -166,7 +166,7 @@ static int search_char_for_row_occurrence(int row_idx, int occurrence_idx) {
 }
 
 static int search_ordinal_for_hit(int row_idx, int char_pos) {
-    ReplSearchState srch = editor_state_search();
+    EditorSearchState srch = editor_state_search();
     int ordinal = 1;
 
     if (!search_hit_exists(row_idx, char_pos))
@@ -190,7 +190,7 @@ static int search_ordinal_for_hit(int row_idx, int char_pos) {
 }
 
 static void search_clear_matches(void) {
-    ReplSearchState *srch = editor_state_search_mut();
+    EditorSearchState *srch = editor_state_search_mut();
     srch->hit_line_idx = -1;
     srch->hit_char_idx = -1;
     srch->hit_ordinal = 0;
@@ -198,7 +198,7 @@ static void search_clear_matches(void) {
 }
 
 static void search_store_hit(int row_idx, int char_pos) {
-    ReplSearchState *srch = editor_state_search_mut();
+    EditorSearchState *srch = editor_state_search_mut();
     if (!search_hit_exists(row_idx, char_pos)) {
         search_clear_matches();
         return;
@@ -211,7 +211,7 @@ static void search_store_hit(int row_idx, int char_pos) {
 }
 
 void search_clear_all(void) {
-    ReplSearchState *srch = editor_state_search_mut();
+    EditorSearchState *srch = editor_state_search_mut();
     srch->active = 0;
     srch->query[0] = '\0';
     srch->query_len = 0;
@@ -247,7 +247,7 @@ const char *editor_search_row_text(int row_idx) {
 
 static int search_find_forward(int start_row, int start_char,
                                int *out_row, int *out_char) {
-    ReplSearchState srch = editor_state_search();
+    EditorSearchState srch = editor_state_search();
     int row_count = editor_search_row_count();
 
     if (srch.query_len <= 0 || row_count <= 0)
@@ -280,7 +280,7 @@ static int search_find_forward(int start_row, int start_char,
 
 static int search_find_backward(int start_row, int start_char,
                                 int *out_row, int *out_char) {
-    ReplSearchState srch = editor_state_search();
+    EditorSearchState srch = editor_state_search();
     int row_count = editor_search_row_count();
 
     if (srch.query_len <= 0 || row_count <= 0)
@@ -343,7 +343,7 @@ static void search_apply_hit(int row, int char_pos) {
  * jumps to the nearest match from the cursor instead of chaining from
  * wherever the last match landed. */
 static void search_refresh_query(void) {
-    ReplSearchState *srch = editor_state_search_mut();
+    EditorSearchState *srch = editor_state_search_mut();
     int row;
     int char_pos;
 
@@ -369,7 +369,7 @@ static void search_refresh_query(void) {
  * If a hit is already active, we step one char past/before it; otherwise we
  * anchor the scan at repl_state_edit_line(). */
 static void search_navigate(int direction) {
-    ReplSearchState srch = editor_state_search();
+    EditorSearchState srch = editor_state_search();
     int row;
     int char_pos;
     int found;
@@ -397,7 +397,7 @@ static void search_navigate(int direction) {
 }
 
 static void search_open(void) {
-    ReplSearchState *srch = editor_state_search_mut();
+    EditorSearchState *srch = editor_state_search_mut();
     if (srch->active)
         return;
 
@@ -410,7 +410,7 @@ static void search_open(void) {
 }
 
 int handle_search_key(unsigned char key) {
-    ReplSearchState *srch = editor_state_search_mut();
+    EditorSearchState *srch = editor_state_search_mut();
     if (key == KEY_CTRL_F) {
         search_open();
         return 1;
@@ -455,7 +455,7 @@ int handle_search_key(unsigned char key) {
 }
 
 int handle_search_special(int key) {
-    ReplSearchState *srch = editor_state_search_mut();
+    EditorSearchState *srch = editor_state_search_mut();
     if (!srch->active)
         return 0;
 

@@ -1396,7 +1396,7 @@ int try_commit_var_statements_then_insert(void) {
     if (try_commit_float_decl()) {
         editor_insert_mode_set(1);
         {
-            ReplEditorInputState *inp = editor_state_input_mut();
+            EditorInputState *inp = editor_state_input_mut();
             inp->input[0] = '\0';
             inp->input_len = 0;
         }
@@ -1407,7 +1407,7 @@ int try_commit_var_statements_then_insert(void) {
     if (try_assign_variable()) {
         editor_insert_mode_set(1);
         {
-            ReplEditorInputState *inp = editor_state_input_mut();
+            EditorInputState *inp = editor_state_input_mut();
             inp->input[0] = '\0';
             inp->input_len = 0;
         }

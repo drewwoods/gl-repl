@@ -29,8 +29,8 @@
 #define REPLAY_H
 
 #include "repl/eval.h"
-#include "repl/flatten.h"    /* FlatProgramView used by ReplVertexWalkContext */
-#include <gl_includes.h>     /* GLenum for ReplVertexWalkState.primitive_mode */
+#include "repl/flatten.h"    /* FlatProgramView used by ReplayVertexWalkContext */
+#include <gl_includes.h>     /* GLenum for ReplayVertexWalkState.primitive_mode */
 
 #define REPLAY_FADE_BATCH_MAX 24
 
@@ -127,7 +127,7 @@ int  replay_prepare_frame(int full_flat_count);
  * GLCmd or know how to translate REPL command kinds into GL transforms.
  *
  * The walker is a pure function: program + cursor metadata are all passed
- * in via ReplVertexWalkContext, no global state is read. That keeps the
+ * in via ReplayVertexWalkContext, no global state is read. That keeps the
  * call testable in isolation and lets non-REPL callers (the standalone
  * teapot demo) skip the walker entirely without dragging in REPL state.
  *
@@ -138,7 +138,7 @@ int  replay_prepare_frame(int full_flat_count);
  *
  * Modelview state on entry is the caller's; the walker pushes/pops to
  * cover its own transform tracking and leaves the caller's state intact. */
-typedef struct ReplVertexWalkState {
+typedef struct ReplayVertexWalkState {
     int    flat_cmd_idx;       /* current flat-program index */
     int    src_cmd_idx;        /* source-line index of the current cmd */
     GLenum primitive_mode;     /* current BEGIN's mode (0 if not in a block) */
@@ -146,9 +146,9 @@ typedef struct ReplVertexWalkState {
     int    block_selected;     /* current block matches the cursor */
     int    vertex_idx_in_block;
     float  normal[3];          /* most recent CMD_NORMAL3F / CMD_TESS_NORMAL value */
-} ReplVertexWalkState;
+} ReplayVertexWalkState;
 
-typedef struct ReplVertexWalkContext {
+typedef struct ReplayVertexWalkContext {
     FlatProgramView program;
     int          edit_line_idx;
     int          cursor_block_begin;
@@ -161,25 +161,25 @@ typedef struct ReplVertexWalkContext {
      * callers (e.g. cursor-guide rendering) skip the rest of a huge
      * flat program once the work they care about has been done. */
     int         *stop_flag;
-} ReplVertexWalkContext;
+} ReplayVertexWalkContext;
 
-typedef struct ReplVertexWalkCallbacks {
+typedef struct ReplayVertexWalkCallbacks {
     /* Fires once per valid flat cmd before the walker dispatches the cmd
      * type or applies a transform. Lets callers insert per-position
      * actions (e.g. cursor-line guide rendering). Vertex / normal coords
      * on the state are not meaningful for this hook — only the
      * positional / cursor / block fields. */
-    void (*on_each_cmd)(const ReplVertexWalkState *state, void *user_data);
+    void (*on_each_cmd)(const ReplayVertexWalkState *state, void *user_data);
 
     /* Fires for every CMD_VERTEX2F / CMD_VERTEX3F / CMD_TESS_VERTEX hit
      * during the walk, with (vx, vy, vz) extracted from the cmd's args. */
-    void (*on_vertex)(const ReplVertexWalkState *state,
+    void (*on_vertex)(const ReplayVertexWalkState *state,
                       float vx, float vy, float vz,
                       void *user_data);
-} ReplVertexWalkCallbacks;
+} ReplayVertexWalkCallbacks;
 
-void replay_walk_user_vertices(const ReplVertexWalkContext *ctx,
-                             const ReplVertexWalkCallbacks *cb,
+void replay_walk_user_vertices(const ReplayVertexWalkContext *ctx,
+                             const ReplayVertexWalkCallbacks *cb,
                              void *user_data);
 
 /* --- Tess-preview walk (replay polygon-mode wireframe overlay) ----------
@@ -194,13 +194,13 @@ void replay_walk_user_vertices(const ReplVertexWalkContext *ctx,
  *
  * Modelview state on entry is the caller's; the walker pushes/pops to
  * cover its own transform tracking and leaves the caller's state intact. */
-typedef struct ReplTessPreviewCallbacks {
+typedef struct ReplayTessPreviewCallbacks {
     void (*begin_contour)(void *user_data);
     void (*vertex)(float x, float y, float z, void *user_data);
     void (*end_contour)(void *user_data);
-} ReplTessPreviewCallbacks;
+} ReplayTessPreviewCallbacks;
 
-void replay_walk_tess_preview(const ReplTessPreviewCallbacks *cb,
+void replay_walk_tess_preview(const ReplayTessPreviewCallbacks *cb,
                                    void *user_data);
 
 /* --- Variable state for step-back --------------------------------------- */

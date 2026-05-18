@@ -27,19 +27,19 @@ typedef enum {
     GLR_MENU_TUTORIALS,
     GLR_MENU_CONFIG,
     GLR_MENU_COUNT
-} ReplMenuId;
+} GlrMenuId;
 
 /* File menu item indices. Export/import single files, save/load workspace
- * directories. Item counts are implicit (REPL_FILE_ITEM_COUNT). */
+ * directories. Item counts are implicit (GLR_FILE_ITEM_COUNT). */
 enum {
-    REPL_FILE_ITEM_NEW_SCENE = 0,
-    REPL_FILE_ITEM_SAVE_SCENE,        /* Ctrl+S */
-    REPL_FILE_ITEM_LOAD_SCENE,        /* (was Import) — not implemented yet */
-    REPL_FILE_ITEM_RENAME_SCENE,
-    REPL_FILE_ITEM_SCENE_SEP,         /* "---" non-actionable divider row */
-    REPL_FILE_ITEM_SAVE_WORKSPACE,
-    REPL_FILE_ITEM_LOAD_WORKSPACE,
-    REPL_FILE_ITEM_COUNT
+    GLR_FILE_ITEM_NEW_SCENE = 0,
+    GLR_FILE_ITEM_SAVE_SCENE,        /* Ctrl+S */
+    GLR_FILE_ITEM_LOAD_SCENE,        /* (was Import) — not implemented yet */
+    GLR_FILE_ITEM_RENAME_SCENE,
+    GLR_FILE_ITEM_SCENE_SEP,         /* "---" non-actionable divider row */
+    GLR_FILE_ITEM_SAVE_WORKSPACE,
+    GLR_FILE_ITEM_LOAD_WORKSPACE,
+    GLR_FILE_ITEM_COUNT
 };
 
 /* Scene menu is a pure selector: "### EXAMPLES" + example rows, then
@@ -52,7 +52,7 @@ enum {
 enum {
     GLR_SCENE_OFF_HDR      = 1,   /* "### YOUR SCENES" at e + 1 */
     GLR_SCENE_OFF_SCENES   = 2,   /* first user scene row at e + 2 */
-    REPL_SCENE_FIXED_COUNT = 2    /* the two "###" header rows */
+    GLR_SCENE_FIXED_COUNT = 2    /* the two "###" header rows */
 };
 
 /* Default workspace directory for save/load operations. Can be overridden by

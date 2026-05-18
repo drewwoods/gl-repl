@@ -426,7 +426,7 @@ void glr_cfg_cycle_row(int row, int delta) {
 }
 
 void glr_action_cursor_blink_reset(void) {
-    ReplCodePanelRuntimeState *cp = ui_state_code_panel_mut();
+    UiCodePanelRuntimeState *cp = ui_state_code_panel_mut();
 
     cp->cursor_visible = 1;
     cp->blink_tick = 0;
@@ -477,7 +477,7 @@ int glr_cfg_handle_special_shortcut(int key) {
 
 int glr_action_menu_item_activate(int menu_id, int item_idx) {
     if (menu_id == GLR_MENU_FILE) {
-        if (item_idx == REPL_FILE_ITEM_LOAD_SCENE) {
+        if (item_idx == GLR_FILE_ITEM_LOAD_SCENE) {
             {
                 char msg[160];
                 snprintf(msg, sizeof(msg),
@@ -488,7 +488,7 @@ int glr_action_menu_item_activate(int menu_id, int item_idx) {
             }
             return 1;
         }
-        if (item_idx == REPL_FILE_ITEM_SAVE_WORKSPACE) {
+        if (item_idx == GLR_FILE_ITEM_SAVE_WORKSPACE) {
             const char *dir = repl_workspace_dir();
             if (!dir || !dir[0])
                 dir = GLR_DEFAULT_WORKSPACE_DIR;
@@ -497,7 +497,7 @@ int glr_action_menu_item_activate(int menu_id, int item_idx) {
             repl_save_workspace(dir, &layout);
             return 1;
         }
-        if (item_idx == REPL_FILE_ITEM_LOAD_WORKSPACE) {
+        if (item_idx == GLR_FILE_ITEM_LOAD_WORKSPACE) {
             const char *dir = repl_workspace_dir();
             if (!dir || !dir[0])
                 dir = GLR_DEFAULT_WORKSPACE_DIR;
@@ -508,7 +508,7 @@ int glr_action_menu_item_activate(int menu_id, int item_idx) {
             repl_load_workspace(dir);
             return 1;
         }
-        if (item_idx == REPL_FILE_ITEM_NEW_SCENE) {
+        if (item_idx == GLR_FILE_ITEM_NEW_SCENE) {
             /* Not the old Scene-New body verbatim: it left the active
              * user slot attached, so the new Save Scene would overwrite
              * that slot's <slug>.c with the emptied buffer. Detach the
@@ -523,13 +523,13 @@ int glr_action_menu_item_activate(int menu_id, int item_idx) {
             editor_undo_clear();
             return 1;
         }
-        if (item_idx == REPL_FILE_ITEM_SAVE_SCENE) {
+        if (item_idx == GLR_FILE_ITEM_SAVE_SCENE) {
             ReplExportLayout layout;
             glr_ctrl_fill_export_layout(&layout);
             repl_save_active_scene(&layout);
             return 1;
         }
-        if (item_idx == REPL_FILE_ITEM_RENAME_SCENE) {
+        if (item_idx == GLR_FILE_ITEM_RENAME_SCENE) {
             int slot = repl_active_user_scene();
             if (slot < 0) {
                 repl_set_status("No active scene to rename");
@@ -538,7 +538,7 @@ int glr_action_menu_item_activate(int menu_id, int item_idx) {
             editor_inline_rename_begin(slot);
             return 1;
         }
-        /* REPL_FILE_ITEM_SCENE_SEP is a non-actionable "---" row (the
+        /* GLR_FILE_ITEM_SCENE_SEP is a non-actionable "---" row (the
          * dropdown hit-test never returns it); no case needed. */
     } else if (menu_id == GLR_MENU_SCENE) {
         int tag_count = repl_example_visible_tag_count();

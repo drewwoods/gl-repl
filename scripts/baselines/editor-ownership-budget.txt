@@ -23,16 +23,16 @@
 #   - ui_state_camera_mut()->auto_rotate writes inside the two
 #     repl_state_presentation_reset_* helpers — the auto_rotate field
 #     is structurally part of the camera slice but conceptually a
-#     presentation toggle. Splitting that field out of ReplCameraState
+#     presentation toggle. Splitting that field out of GlrCameraState
 #     is a follow-up; until then these calls stay.
 # These are not forwarders. The ratchet still serves its role: the
 # count cannot grow past 3, so any new transitional forwarder fails
 # the check. Tightening the grep itself is a future refinement.
 #
 # The Phase 5 typedef migration landed: the UI-chrome typedefs
-# (ReplCodePanelRuntimeState / ReplHelpState / ReplVariablePanelState /
-# ReplProfilePanelState / ReplStatusState / ReplCameraState /
-# ReplPointerState / ReplViewportState) moved from repl_state_views.h
+# (UiCodePanelRuntimeState / UiHelpState / UiVariablePanelState /
+# UiProfilePanelState / UiStatusState / GlrCameraState /
+# UiPointerState / UiViewportState) moved from repl_state_views.h
 # to src/ui/state_types.h, and src/ui/state.h includes the ui-owned
 # header directly. The ratchet target reached 0.
 

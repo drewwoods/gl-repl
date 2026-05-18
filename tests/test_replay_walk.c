@@ -72,7 +72,7 @@ typedef struct {
     int    edit_line_idx;
 } Recorder;
 
-static void on_each_cmd_record(const ReplVertexWalkState *state, void *user) {
+static void on_each_cmd_record(const ReplayVertexWalkState *state, void *user) {
     Recorder *rec = (Recorder *)user;
     rec->cmd_visits++;
     if (state->src_cmd_idx == rec->edit_line_idx) {
@@ -89,7 +89,7 @@ static void on_each_cmd_record(const ReplVertexWalkState *state, void *user) {
     }
 }
 
-static void on_vertex_record(const ReplVertexWalkState *state,
+static void on_vertex_record(const ReplayVertexWalkState *state,
                              float vx, float vy, float vz, void *user) {
     Recorder *rec = (Recorder *)user;
     rec->vertex_visits++;
@@ -100,8 +100,8 @@ static void on_vertex_record(const ReplVertexWalkState *state,
     }
 }
 
-static ReplVertexWalkContext make_ctx(int edit_line_idx) {
-    ReplVertexWalkContext ctx = {
+static ReplayVertexWalkContext make_ctx(int edit_line_idx) {
+    ReplayVertexWalkContext ctx = {
         .program             = repl_state_flat_program_view(),
         .edit_line_idx       = edit_line_idx,
         .cursor_block_begin  = -1,
@@ -180,11 +180,11 @@ static void test_walker_resolves_funcn_args_at_cursor(void) {
     Recorder rec = {0};
     rec.edit_line_idx = cursor_line;
 
-    static const ReplVertexWalkCallbacks cb = {
+    static const ReplayVertexWalkCallbacks cb = {
         .on_each_cmd = on_each_cmd_record,
         .on_vertex   = on_vertex_record,
     };
-    ReplVertexWalkContext ctx = make_ctx(cursor_line);
+    ReplayVertexWalkContext ctx = make_ctx(cursor_line);
     replay_walk_user_vertices(&ctx, &cb, &rec);
 
     ASSERT_INT("walker reaches cursor at both call sites",
@@ -238,11 +238,11 @@ static void test_walker_fires_on_each_cmd_at_cursor(void) {
     Recorder rec = {0};
     rec.edit_line_idx = cursor_line;
 
-    static const ReplVertexWalkCallbacks cb = {
+    static const ReplayVertexWalkCallbacks cb = {
         .on_each_cmd = on_each_cmd_record,
         .on_vertex   = on_vertex_record,
     };
-    ReplVertexWalkContext ctx = make_ctx(cursor_line);
+    ReplayVertexWalkContext ctx = make_ctx(cursor_line);
     replay_walk_user_vertices(&ctx, &cb, &rec);
 
     ASSERT_TRUE("on_each_cmd fires at least once for cursor src",
@@ -282,14 +282,14 @@ static void test_walker_stop_flag_halts(void) {
     ASSERT_TRUE("found cursor line", cursor_line >= 0);
     repl_state_edit_line_set(cursor_line);
 
-    static const ReplVertexWalkCallbacks cb = {
+    static const ReplayVertexWalkCallbacks cb = {
         .on_each_cmd = on_each_cmd_record,
         .on_vertex   = on_vertex_record,
     };
 
     /* Baseline: no stop_flag → walker emits all three vertices. */
     Recorder rec_full = { .edit_line_idx = cursor_line };
-    ReplVertexWalkContext ctx_full = make_ctx(cursor_line);
+    ReplayVertexWalkContext ctx_full = make_ctx(cursor_line);
     replay_walk_user_vertices(&ctx_full, &cb, &rec_full);
     ASSERT_INT("baseline: walker emits all 3 vertices",
                rec_full.vertex_visits, 3);
@@ -297,7 +297,7 @@ static void test_walker_stop_flag_halts(void) {
     /* (a) Pre-set stop_flag=1: walker breaks before doing any work. */
     int stop = 1;
     Recorder rec_pre = { .edit_line_idx = cursor_line };
-    ReplVertexWalkContext ctx_pre = make_ctx(cursor_line);
+    ReplayVertexWalkContext ctx_pre = make_ctx(cursor_line);
     ctx_pre.stop_flag = &stop;
     replay_walk_user_vertices(&ctx_pre, &cb, &rec_pre);
     ASSERT_INT("stop_flag=1 emits zero vertices",
@@ -312,7 +312,7 @@ static void test_walker_stop_flag_halts(void) {
     int stop_b = 0;
     Recorder rec_b = { .edit_line_idx = cursor_line,
                        .stop_after_first_cursor = &stop_b };
-    ReplVertexWalkContext ctx_b = make_ctx(cursor_line);
+    ReplayVertexWalkContext ctx_b = make_ctx(cursor_line);
     ctx_b.stop_flag = &stop_b;
     replay_walk_user_vertices(&ctx_b, &cb, &rec_b);
 

@@ -142,7 +142,7 @@ static void seed_nondefault_example_presentation_state(void) {
 
 static int camera_pose_near(float rx, float ry, float dist,
                             float tx, float ty, float tz) {
-    ReplCameraState cam = glr_camera();
+    GlrCameraState cam = glr_camera();
     return fabsf(cam.rx - rx) < 1e-4f &&
            fabsf(cam.ry - ry) < 1e-4f &&
            fabsf(cam.dist - dist) < 1e-4f &&
@@ -799,9 +799,9 @@ int main(int argc, char **argv) {
             "glEnd();",
             NULL
         };
-        ReplCameraState before;
-        ReplCameraState after_load;
-        ReplCameraState after_tick;
+        GlrCameraState before;
+        GlrCameraState after_load;
+        GlrCameraState after_tick;
 
         glr_app_reset_all(); declare_test_vars();
         pin_code_panel_state();

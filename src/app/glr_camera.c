@@ -7,7 +7,7 @@
  * drag math reaching back into UiState; both halves merged here.
  *
  * Pointer tracking is internal — drag deltas come from the file-static
- * cache. `ui/state.h` (the global `ReplPointerState` for snapshot
+ * cache. `ui/state.h` (the global `UiPointerState` for snapshot
  * consumers) is updated by callers in glr_ctrl, not by this module,
  * so glr_camera stays free of UI dependencies.
  */
@@ -31,7 +31,7 @@
 #define CAM_DIST_MIN 0.5f
 #define CAM_DIST_MAX 50.0f
 
-/* Default values for ReplCameraState — the previous home was
+/* Default values for GlrCameraState — the previous home was
  * UI_STATE_INITIAL.camera in src/ui/state.c. */
 #define GLR_CAMERA_INITIAL                          \
     {                                               \
@@ -45,9 +45,9 @@
         .auto_rotate = CFG_DEFAULT_CAMERA_ROTATE,   \
     }
 
-static ReplCameraState       g_camera          = GLR_CAMERA_INITIAL;
-static const ReplCameraState g_camera_defaults = GLR_CAMERA_INITIAL;
-static ReplCameraState       g_camera_target   = GLR_CAMERA_INITIAL;
+static GlrCameraState       g_camera          = GLR_CAMERA_INITIAL;
+static const GlrCameraState g_camera_defaults = GLR_CAMERA_INITIAL;
+static GlrCameraState       g_camera_target   = GLR_CAMERA_INITIAL;
 static int                   g_camera_target_active = 0;
 static GlrCameraControlMode  g_control_mode    = GLR_CAMERA_CONTROL_3D;
 
@@ -74,7 +74,7 @@ static float clampf(float value, float lo, float hi) {
     return value;
 }
 
-static void clamp_camera_pitch(ReplCameraState *c) {
+static void clamp_camera_pitch(GlrCameraState *c) {
     if (c->rx > CAM_RX_MAX) {
         c->rx = CAM_RX_MAX;
         g_vel_rx = 0.0f;
@@ -85,7 +85,7 @@ static void clamp_camera_pitch(ReplCameraState *c) {
     }
 }
 
-static void clamp_camera_distance(ReplCameraState *c) {
+static void clamp_camera_distance(GlrCameraState *c) {
     if (c->dist < CAM_DIST_MIN) {
         c->dist = CAM_DIST_MIN;
         g_vel_zoom = 0.0f;
@@ -127,7 +127,7 @@ static float shortest_angle_delta(float from, float to) {
     return delta;
 }
 
-static int target_deltas_within_epsilon(const ReplCameraState *c) {
+static int target_deltas_within_epsilon(const GlrCameraState *c) {
     return fabsf(g_camera_target.rx - c->rx) < CAM_TARGET_ANGLE_EPS &&
            fabsf(shortest_angle_delta(c->ry, g_camera_target.ry)) <
                CAM_TARGET_ANGLE_EPS &&
@@ -148,7 +148,7 @@ static void snap_to_target(void) {
 }
 
 static void tick_target_ease(void) {
-    ReplCameraState *c = &g_camera;
+    GlrCameraState *c = &g_camera;
     float k = 1.0f - GLR_CAMERA_TARGET_DECAY;
     float dx = g_camera_target.tx - c->tx;
     float dy = g_camera_target.ty - c->ty;
@@ -171,8 +171,8 @@ static void tick_target_ease(void) {
 
 /* ---- Accessors ------------------------------------------------------ */
 
-ReplCameraState glr_camera(void)        { return g_camera; }
-ReplCameraState *glr_camera_mut(void)   { return &g_camera; }
+GlrCameraState glr_camera(void)        { return g_camera; }
+GlrCameraState *glr_camera_mut(void)   { return &g_camera; }
 GlrCameraControlMode glr_camera_control_mode(void) { return g_control_mode; }
 int glr_camera_target_active(void) { return g_camera_target_active; }
 
@@ -241,11 +241,11 @@ void glr_camera_reset_default(void) {
     g_camera = g_camera_defaults;
 }
 
-void glr_camera_capture(ReplCameraState *out) {
+void glr_camera_capture(GlrCameraState *out) {
     if (out) *out = g_camera;
 }
 
-void glr_camera_restore(const ReplCameraState *snap) {
+void glr_camera_restore(const GlrCameraState *snap) {
     if (snap) {
         cancel_target_ease();
         g_camera = *snap;
@@ -285,7 +285,7 @@ void glr_camera_add_zoom_velocity(float delta) {
 }
 
 void glr_camera_drag_motion(int x, int y) {
-    ReplCameraState *c = &g_camera;
+    GlrCameraState *c = &g_camera;
     int px = g_pointer_x;
     int py = g_pointer_y;
     int btn = g_pointer_button;
@@ -349,7 +349,7 @@ void glr_camera_drag_motion(int x, int y) {
 }
 
 void glr_camera_tick(void) {
-    ReplCameraState *c = &g_camera;
+    GlrCameraState *c = &g_camera;
 
     if (g_camera_target_active && g_pointer_button == -1) {
         tick_target_ease();

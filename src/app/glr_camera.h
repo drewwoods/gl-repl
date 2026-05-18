@@ -29,7 +29,7 @@ typedef struct {
     float tz;
     float motion_glow;
     int   auto_rotate;
-} ReplCameraState;
+} GlrCameraState;
 
 typedef enum {
     GLR_CAMERA_CONTROL_3D = 0,
@@ -38,8 +38,8 @@ typedef enum {
 
 /* ---- Accessors ------------------------------------------------------ */
 
-ReplCameraState  glr_camera(void);
-ReplCameraState *glr_camera_mut(void);
+GlrCameraState  glr_camera(void);
+GlrCameraState *glr_camera_mut(void);
 GlrCameraControlMode glr_camera_control_mode(void);
 int              glr_camera_target_active(void);
 void             glr_camera_set_control_mode(GlrCameraControlMode mode);
@@ -58,8 +58,8 @@ void             glr_camera_reset_default(void);
  * snapshot is a value copy of the camera struct; restoring overwrites
  * the live state. Pointer cache, target easing, and momentum velocities
  * are NOT part of the snapshot — those are transient session state. */
-void glr_camera_capture(ReplCameraState *out);
-void glr_camera_restore(const ReplCameraState *snapshot);
+void glr_camera_capture(GlrCameraState *out);
+void glr_camera_restore(const GlrCameraState *snapshot);
 
 /* ---- Controls (drag, momentum) -------------------------------------- */
 

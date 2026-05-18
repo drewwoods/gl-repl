@@ -403,7 +403,7 @@ static void test_variable_panel_motion_routes_through_compile_and_coalesces_undo
     int hit_row;
     int window_h;
     int var_idx;
-    ReplUndoRingState undo_state;
+    EditorUndoRingState undo_state;
 
     printf("--- imrepl_ctrl variable panel drag route ---\n");
 
@@ -471,7 +471,7 @@ static void test_variable_panel_motion_initializes_uninitialized_declaration(voi
     int hit_row;
     int window_h;
     int var_idx;
-    ReplUndoRingState undo_state;
+    EditorUndoRingState undo_state;
 
     printf("--- imrepl_ctrl variable panel initializes decl ---\n");
 
@@ -663,7 +663,7 @@ static void test_overlay_transition_machine_wiring(void) {
 }
 
 static void test_view_mode_projection_transition_wiring(void) {
-    ReplCameraState cam;
+    GlrCameraState cam;
     int projection_settle_ticks =
         (int)(GLR_VIEW_PROJECTION_TRANSITION_SECS / 0.016f) + 4;
 

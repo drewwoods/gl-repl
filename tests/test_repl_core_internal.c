@@ -399,8 +399,8 @@ int main() {
 
     /* 11. editor input/selection/clipboard state facade */
     {
-        ReplEditorInputState *input;
-        ReplClipboardState *clipboard;
+        EditorInputState *input;
+        EditorClipboardState *clipboard;
 
         glr_app_reset_all(); declare_test_vars();
 
@@ -451,9 +451,9 @@ int main() {
 
     /* 12. camera/pointer/viewport state facade */
     {
-        ReplCameraState *camera;
-        ReplPointerState *pointer;
-        ReplViewportState *viewport;
+        GlrCameraState *camera;
+        UiPointerState *pointer;
+        UiViewportState *viewport;
 
         glr_camera_set(11.0f, -22.0f, 7.5f,
                               1.0f, 2.0f, 3.0f, 0.25f);

@@ -190,7 +190,7 @@ int  repl_find_feeding_normal_cmd(int line_idx);
 int  repl_find_feeding_color_cmd(int line_idx);
 
 /* --- Input callback entry points -------------------------------------- */
-/* The ReplInputDispatchEffects typedef and the editor_handle_* /
+/* The EditorInputDispatchEffects typedef and the editor_handle_* /
  * editor_input_router_* dispatch APIs live in editor_input.h. The
  * legacy repl_*_func dispatch entry points were deleted in Phase J1
  * commit 49a. */

@@ -31,19 +31,19 @@ void variable_panel_state_reset(void) {
     g_variable_panel = g_variable_panel_defaults;
 }
 
-ReplVariablePanelState variable_panel_view(void) {
+UiVariablePanelState variable_panel_view(void) {
     return g_variable_panel.view;
 }
 
-ReplVariablePanelState *variable_panel_view_mut(void) {
+UiVariablePanelState *variable_panel_view_mut(void) {
     return &g_variable_panel.view;
 }
 
-ReplVariableDragState variable_panel_drag(void) {
+EditorVariableDragState variable_panel_drag(void) {
     return g_variable_panel.drag;
 }
 
-ReplVariableDragState *variable_panel_drag_mut(void) {
+EditorVariableDragState *variable_panel_drag_mut(void) {
     return &g_variable_panel.drag;
 }
 

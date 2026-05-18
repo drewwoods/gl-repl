@@ -24,8 +24,8 @@ static TestHarness g_harness = TEST_HARNESS_INIT;
 /* Exact whole-token lookup: return the first span whose text equals tok.
  * Safe because spans are only emitted for argument tokens (never for the
  * keyword / function-call name), so our test lines have no ambiguity. */
-static const ReplSyntaxSpan *find_tok(const char *text,
-                                      const ReplSyntaxSpan *spans, int n,
+static const UiSyntaxSpan *find_tok(const char *text,
+                                      const UiSyntaxSpan *spans, int n,
                                       const char *tok) {
     int len = (int)strlen(tok);
 
@@ -38,10 +38,10 @@ static const ReplSyntaxSpan *find_tok(const char *text,
 }
 
 static void check_line(const char *label, const char *text,
-                       const char *tok, ReplSyntaxKind expect_kind) {
-    ReplSyntaxSpan spans[MAX_SPANS];
+                       const char *tok, UiSyntaxKind expect_kind) {
+    UiSyntaxSpan spans[MAX_SPANS];
     int n = ui_repl_code_panel_classify_syntax(text, spans, MAX_SPANS);
-    const ReplSyntaxSpan *s = find_tok(text, spans, n, tok);
+    const UiSyntaxSpan *s = find_tok(text, spans, n, tok);
     char name[160];
 
     snprintf(name, sizeof(name), "%s: '%s' is kind %d", label, tok,
@@ -51,7 +51,7 @@ static void check_line(const char *label, const char *text,
 
 static void check_no_span(const char *label, const char *text,
                           const char *tok) {
-    ReplSyntaxSpan spans[MAX_SPANS];
+    UiSyntaxSpan spans[MAX_SPANS];
     int n = ui_repl_code_panel_classify_syntax(text, spans, MAX_SPANS);
     char name[160];
 
@@ -207,7 +207,7 @@ int main(void) {
                 float ratio;
                 char name[96];
 
-                ui_repl_code_panel_syntax_kind_rgb((ReplSyntaxKind)k,
+                ui_repl_code_panel_syntax_kind_rgb((UiSyntaxKind)k,
                                                    (CmdSyntaxCategory)c, rgb);
                 ratio = contrast_ratio(rgb, bg);
                 snprintf(name, sizeof(name),

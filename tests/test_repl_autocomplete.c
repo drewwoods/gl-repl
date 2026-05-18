@@ -39,7 +39,7 @@ static void declare_test_vars(void) {
 }
 
 static void set_input_text(const char *text) {
-    ReplEditorInputState *inp = editor_state_input_mut();
+    EditorInputState *inp = editor_state_input_mut();
     strcpy(inp->input, text);
     inp->input_len = (int)strlen(inp->input);
     editor_cursor_pos_set(inp->input_len);

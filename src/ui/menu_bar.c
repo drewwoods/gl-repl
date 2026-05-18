@@ -81,7 +81,7 @@ int ui_menu_bar_menu_dropdown_is_open(void) {
 int ui_menu_bar_example_dropdown_is_open(void) { return ui_menu_bar_menu_dropdown_is_open(); }
 
 
-enum { FILE_ITEM_COUNT = REPL_FILE_ITEM_COUNT };
+enum { FILE_ITEM_COUNT = GLR_FILE_ITEM_COUNT };
 
 /* SCENE menu layout (pure selector; actions are in the File menu):
  *   [0]                      "### EXAMPLES"
@@ -95,7 +95,7 @@ enum { FILE_ITEM_COUNT = REPL_FILE_ITEM_COUNT };
 enum {
     SCENE_OFF_HDR     = GLR_SCENE_OFF_HDR,
     SCENE_OFF_SCENES  = GLR_SCENE_OFF_SCENES,
-    SCENE_FIXED_COUNT = REPL_SCENE_FIXED_COUNT
+    SCENE_FIXED_COUNT = GLR_SCENE_FIXED_COUNT
 };
 
 static int scene_tag_idx_for_parent_row(int row) {
@@ -137,13 +137,13 @@ static int config_all_parent_row(void) {
 
 static const char *menu_item_label(int menu_id, int i) {
     if (menu_id == MENU_FILE) {
-        if (i == REPL_FILE_ITEM_NEW_SCENE)     return "New Scene";
-        if (i == REPL_FILE_ITEM_SAVE_SCENE)    return "Save Scene";
-        if (i == REPL_FILE_ITEM_LOAD_SCENE)    return "Load Scene";
-        if (i == REPL_FILE_ITEM_RENAME_SCENE)  return "Rename Scene";
-        if (i == REPL_FILE_ITEM_SCENE_SEP)     return "---";
-        if (i == REPL_FILE_ITEM_SAVE_WORKSPACE) return "Save Workspace";
-        if (i == REPL_FILE_ITEM_LOAD_WORKSPACE) return "Load Workspace";
+        if (i == GLR_FILE_ITEM_NEW_SCENE)     return "New Scene";
+        if (i == GLR_FILE_ITEM_SAVE_SCENE)    return "Save Scene";
+        if (i == GLR_FILE_ITEM_LOAD_SCENE)    return "Load Scene";
+        if (i == GLR_FILE_ITEM_RENAME_SCENE)  return "Rename Scene";
+        if (i == GLR_FILE_ITEM_SCENE_SEP)     return "---";
+        if (i == GLR_FILE_ITEM_SAVE_WORKSPACE) return "Save Workspace";
+        if (i == GLR_FILE_ITEM_LOAD_WORKSPACE) return "Load Workspace";
         return NULL;
     }
     if (menu_id == MENU_SCENE) {
@@ -201,7 +201,7 @@ static const char *menu_item_label(int menu_id, int i) {
 }
 
 static const char *menu_item_shortcut(int menu_id, int i) {
-    if (menu_id == MENU_FILE && i == REPL_FILE_ITEM_SAVE_SCENE) return "Ctrl+S";
+    if (menu_id == MENU_FILE && i == GLR_FILE_ITEM_SAVE_SCENE) return "Ctrl+S";
     if (menu_id == MENU_SCENE) return NULL;
     if (menu_id == MENU_TUTORIALS)
         return NULL;
@@ -802,7 +802,7 @@ void ui_menu_bar_note_search_opened(float now) {
     g_search_open_time = now;
 }
 
-static void code_panel_format_search_query(ReplSearchState srch,
+static void code_panel_format_search_query(EditorSearchState srch,
                                            char *out, int out_sz,
                                            int max_chars,
                                            int *out_cursor_col) {
@@ -1073,7 +1073,7 @@ static void draw_search_icon(float cx, float cy, float r) {
 
 void ui_menu_bar_render_search_overlay(const UiRenderSnapshot *snap,
                                        int cp_x, int panel_w, int panel_top) {
-    ReplSearchState srch = snap->search;
+    EditorSearchState srch = snap->search;
     char count_buf[32];
     char query_buf[128];
     int cursor_col = 0;

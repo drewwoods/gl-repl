@@ -19,7 +19,7 @@
 #   - repl_state_*( / editor_state_*(            (live state reads)
 #
 # Allowed: GL / gl2d_* drawing, ColorPickerView field access,
-# EditorTransformer field access, color_picker_hsv_to_rgb, ui_hit_*,
+# UiTransformer field access, color_picker_hsv_to_rgb, ui_hit_*,
 # src/ui/metrics.h / src/ui/layout.h constants, math / string helpers.
 
 set -euo pipefail
@@ -60,7 +60,7 @@ if [ -n "$violations" ]; then
 fi
 
 # Renderer signature shape: each ui_color_picker_*render* must take a
-# const ColorPickerView * (or EditorTransformer * for the swatch
+# const ColorPickerView * (or UiTransformer * for the swatch
 # helper).
 sig_bad=0
 for hdr in src/ui/color_picker.h; do
@@ -74,7 +74,7 @@ for hdr in src/ui/color_picker.h; do
         [ -z "$sig_line" ] && continue
         sig=${sig_line#*:*:}
         if ! printf '%s\n' "$sig" \
-             | grep -Eq '^\s*(void|UiHit)\s+'"$fn"'\s*\(\s*const\s+(ColorPickerView|EditorTransformer|Ui[A-Za-z0-9_]+(View|State|Snapshot))\s*\*'; then
+             | grep -Eq '^\s*(void|UiHit)\s+'"$fn"'\s*\(\s*const\s+(ColorPickerView|UiTransformer|Ui[A-Za-z0-9_]+(View|State|Snapshot))\s*\*'; then
             echo "ERROR: color-picker-ui renderer signature shape invalid for $fn" >&2
             echo "  found: $sig" >&2
             sig_bad=1

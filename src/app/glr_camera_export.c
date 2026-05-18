@@ -29,7 +29,7 @@
 /* ----- Save-side formatting ------------------------------------------- */
 
 static void cam_format_save_block(ReplExportCameraBlock *block) {
-    ReplCameraState cam = glr_camera();
+    GlrCameraState cam = glr_camera();
     snprintf(block->lines[0], REPL_EXPORT_CAMERA_LINE_MAX,
              "  glTranslatef(0.0000f, 0.0000f, %.4ff);", -cam.dist);
     snprintf(block->lines[1], REPL_EXPORT_CAMERA_LINE_MAX,
@@ -43,7 +43,7 @@ static void cam_format_save_block(ReplExportCameraBlock *block) {
 }
 
 static void cam_format_display_block(ReplExportCameraBlock *block) {
-    ReplCameraState cam = glr_camera();
+    GlrCameraState cam = glr_camera();
     snprintf(block->lines[0], REPL_EXPORT_CAMERA_LINE_MAX,
              "  glTranslatef(0.0000f, 0.0000f, %.4ff);", -cam.dist);
     snprintf(block->lines[1], REPL_EXPORT_CAMERA_LINE_MAX,
@@ -211,8 +211,8 @@ static int cam_consume_example_block_now(const ReplExportCameraBlock *block) {
 }
 
 static void cam_apply_example_block(const ReplExportCameraBlock *block) {
-    ReplCameraState start;
-    ReplCameraState target;
+    GlrCameraState start;
+    GlrCameraState target;
 
     if (!block || !block->present)
         return;
