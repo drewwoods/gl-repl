@@ -12,6 +12,7 @@
 #include "ui/layout.h"
 #include "ui/metrics.h"
 #include "ui/repl_code_panel.h"
+#include "app/glr_config.h"
 #include "support/test_harness.h"
 
 static TestHarness g_harness = TEST_HARNESS_INIT;
@@ -97,6 +98,78 @@ int main(void) {
     ASSERT_TRUE("follow line visible after apply",
                 layout.follow_doc_line >= editor_scroll() &&
                 layout.follow_doc_line < editor_scroll() + layout.visible_lines);
+
+    /* "Code focus" hides the derived C boilerplate stanzas: header and
+     * footer row counts collapse to 0, document rows stay, and the
+     * row-count/emit gating stays consistent so doc-line mapping holds
+     * (review findings P1/P2b). */
+    {
+        int base_header, base_footer;
+
+        reset_doc_fixture();
+        editor_feed_line("float r;");
+        editor_feed_line("glBegin(GL_POINTS);");
+        editor_feed_line("glColor3f(1, 0, 0);");
+        editor_feed_line("glEnd();");
+
+        glr_config_set(GLR_CONFIG_CODE_FOCUS, 0);
+        build_doc(&snap, &layout);
+        base_header = layout.header_rows;
+        base_footer = layout.footer_rows;
+        ASSERT_TRUE("baseline has header chrome", base_header > 0);
+        ASSERT_TRUE("baseline has footer chrome", base_footer > 0);
+
+        glr_config_set(GLR_CONFIG_CODE_FOCUS, 1);
+        build_doc(&snap, &layout);
+        ASSERT_TRUE("focus hides header chrome", layout.header_rows == 0);
+        ASSERT_TRUE("focus hides footer chrome", layout.footer_rows == 0);
+        ASSERT_TRUE("focus keeps document rows",
+                    layout.total_lines >= 4 && layout.cmd_main_rows[0] == 1);
+        {
+            /* Command 1 starts right after command 0, at doc line
+             * header_rows(==0) + cmd_main_rows[0]. */
+            int doc_line = layout.header_rows + layout.cmd_main_rows[0];
+            ASSERT_TRUE("focus doc-line mapping succeeds",
+                        ui_repl_code_panel_target_for_doc_line(
+                            &snap, doc_line, &layout, &target, &on_insert,
+                            &row_offset));
+            ASSERT_TRUE("focus maps to command 1", target == 1);
+            ASSERT_TRUE("focus maps to source row", on_insert == 0);
+        }
+
+        glr_config_set(GLR_CONFIG_CODE_FOCUS, 0);
+        build_doc(&snap, &layout);
+        ASSERT_TRUE("toggling focus off restores header rows",
+                    layout.header_rows == base_header);
+        ASSERT_TRUE("toggling focus off restores footer rows",
+                    layout.footer_rows == base_footer);
+    }
+
+    /* P1: after a focus toggle the header rows collapse from many to 0;
+     * the cycle-row handler requests follow-scroll so the active edit
+     * row stays visible. Simulate that follow request and assert the
+     * scroll math keeps the cursor on screen. */
+    {
+        reset_doc_fixture();
+        editor_feed_line("glBegin(GL_POINTS);");
+        editor_feed_line("glColor3f(1, 0, 0);");
+        editor_feed_line("glEnd();");
+        editor_navigate_to_line(2);
+
+        glr_config_set(GLR_CONFIG_CODE_FOCUS, 0);
+        editor_scroll_set(0);
+        build_doc(&snap, &layout);
+
+        glr_config_set(GLR_CONFIG_CODE_FOCUS, 1);
+        editor_scroll_follow_cursor_set(1);   /* what glr_cfg_cycle_row does */
+        build_doc(&snap, &layout);
+        glr_ctrl_apply_code_panel_follow_scroll(&layout);
+        ASSERT_TRUE("follow keeps cursor visible after focus toggle",
+                    layout.follow_doc_line >= editor_scroll() &&
+                    layout.follow_doc_line < editor_scroll() + layout.visible_lines);
+
+        glr_config_set(GLR_CONFIG_CODE_FOCUS, 0);
+    }
 
     return test_harness_report(&g_harness, "repl_code_panel_document");
 }
