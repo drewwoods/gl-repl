@@ -90,6 +90,10 @@ static char cfg_status_buf[256];
 static const char *audio_cfg_names[] = { "Pause", "Once", "Song", "All" };
 static const char *syntax_hl_names[] = { "Off", "On", "On+Bold" };
 static const char *view_mode_names[] = { "3D", "2D" };
+/* Accum AA is one cycle that collapses on/off + jitter-sample count:
+ * Off -> 2x -> 4x -> 8x -> 16x. The (enabled, samples) split behind it
+ * is reconciled in glr_config.c (mirrors the audio cfg collapse). */
+static const char *accum_aa_names[] = { "Off", "2x", "4x", "8x", "16x" };
 
 /* Hidden session toggles — intentionally NOT rows in this table (no
  * menu entry, no keyboard-shortcut field here, no @cfg persistence).
@@ -114,7 +118,7 @@ GlrConfigItem g_cfg_items[] = {
     { "### RENDERING",     0, 0,  GLR_CONFIG_NONE,               0, NULL,                 1 },
     { "MSAA",              KEY_CTRL_U, 0, GLR_CONFIG_MSAA,       2, NULL,                 0 },
     { "Line smooth",       0, 0,  GLR_CONFIG_LINE_SMOOTH,        2, NULL,                 0 },
-    { "Accum AA",          0, 0,  GLR_CONFIG_ACCUM_AA,           2, NULL,                 0 },
+    { "Accum AA",          0, 0,  GLR_CONFIG_ACCUM_AA,           5, accum_aa_names,       0 },
     { "Wireframe",         GLUT_KEY_F2, 1, GLR_CONFIG_WIREFRAME, 2, NULL,                 0 },
     { "Point attenuation",  0, 0,  GLR_CONFIG_POINT_ATTENUATION,  2, NULL,                 0 },
     { "---",               0, 0,  GLR_CONFIG_NONE,               0, NULL,                 1 },
