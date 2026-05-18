@@ -358,8 +358,9 @@ static void test_scene_submenu_with_stubs(void) {
 
     hit = ui_menu_bar_hit_test(sub_mx, sub_my);
     ASSERT_INT_EQ("hover update makes submenu hittable",
-                  hit.kind, UI_HIT_EXAMPLE_SUBMENU_ITEM);
-    ASSERT_INT_EQ("hit_test: submenu tag", hit.cmd_idx, tag_idx);
+                  hit.kind, UI_HIT_SUBMENU_ITEM);
+    ASSERT_INT_EQ("hit_test: submenu carries menu_id",
+                  hit.cmd_idx, GLR_MENU_SCENE);
     ASSERT_INT_EQ("hit_test: submenu example", hit.item_idx, example_idx);
     ASSERT_INT_EQ("hit_test: submenu ordinal", hit.line_idx, 0);
 

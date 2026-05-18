@@ -98,7 +98,7 @@ int  ui_menu_bar_update_pointer_hover(int mx, int my, float now);
  * The result kind is one of:
  *   UI_HIT_MENU_BUTTON — top-level menu button.
  *   UI_HIT_MENU_ITEM   — open-dropdown parent row.
- *   UI_HIT_EXAMPLE_SUBMENU_ITEM — Scene example submenu row.
+ *   UI_HIT_SUBMENU_ITEM — flyout submenu row (Scene example / Config item).
  *   UI_HIT_PIN_BUTTON  — pinned right-side button (Search/Replay).
  *                        item_idx carries the pin id.
  *   UI_HIT_NONE        — pointer is outside every menu-bar region.
