@@ -72,7 +72,7 @@ void ui_menu_bar_note_search_opened(float now);
 int  ui_menu_bar_menu_hit(int mx, int my);
 
 /* Hit-test a click on a pinned button (Search/Replay). Returns the button ID
- * (REPL_MENU_BAR_PIN_*) if hit, -1 if no button was clicked. mx, my are window
+ * (UI_MENU_BAR_PIN_*) if hit, -1 if no button was clicked. mx, my are window
  * coordinates. Called by ui_panels.c on left-click. */
 int  ui_menu_bar_pin_hit(int mx, int my);
 
