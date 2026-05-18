@@ -9,6 +9,7 @@
 #include "lights.h"
 #include "postprocess_filter.h"
 #include "render_types.h"
+#include "palette.h"
 #include "render.h"
 #include "prof.h"
 #include "config.h"
@@ -410,7 +411,7 @@ static void draw_orbit_target(const SceneFrameRenderContext *frame_ctx) {
 
     /* Halo pass: wide, translucent warm amber under the crosshair */
     glLineWidth(6.0f);
-    glColor4f(1.00f, 0.70f, 0.25f, 0.18f * glow);
+    scene_clr_a(SCENE_CLR_ORBIT_GLOW_OUTER, 0.18f * glow);
     glBegin(GL_LINES);
     glVertex3f(tx - r, ty, tz); glVertex3f(tx + r, ty, tz);
     glVertex3f(tx, ty, tz - r); glVertex3f(tx, ty, tz + r);
@@ -418,7 +419,7 @@ static void draw_orbit_target(const SceneFrameRenderContext *frame_ctx) {
 
     /* Core pass: thin bright crosshair */
     glLineWidth(1.5f);
-    glColor4f(1.00f, 0.90f, 0.55f, 0.90f * glow);
+    scene_clr_a(SCENE_CLR_ORBIT_GLOW_MID, 0.90f * glow);
     glBegin(GL_LINES);
     glVertex3f(tx - r, ty, tz); glVertex3f(tx + r, ty, tz);
     glVertex3f(tx, ty, tz - r); glVertex3f(tx, ty, tz + r);
@@ -427,7 +428,7 @@ static void draw_orbit_target(const SceneFrameRenderContext *frame_ctx) {
 
     /* Center dot */
     glPointSize(5.0f);
-    glColor4f(1.00f, 0.95f, 0.75f, 0.95f * glow);
+    scene_clr_a(SCENE_CLR_ORBIT_GLOW_INNER, 0.95f * glow);
     glBegin(GL_POINTS);
     glVertex3f(tx, ty, tz);
     glEnd();

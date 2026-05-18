@@ -525,6 +525,7 @@ TEST_BINS = \
 	test_repl_state \
 	test_repl_code_panel_layout \
 	test_ui_theme \
+	test_scene_palette \
 	test_repl_code_panel_document \
 	test_repl_code_panel_syntax \
 	test_scene_transition \
@@ -576,7 +577,7 @@ TEST_BINS += test_export_trace_parity
 TEST_BINS += test_replay_walk
 endif
 
-CORE_TEST_BINS = $(filter-out test_eval test_format test_repl_code_panel_layout test_ui_theme test_audio,$(TEST_BINS))
+CORE_TEST_BINS = $(filter-out test_eval test_format test_repl_code_panel_layout test_ui_theme test_scene_palette test_audio,$(TEST_BINS))
 
 # Benchmark binaries follow the same linking pattern as core test binaries
 # (they reuse CORE_TEST_OBJS so they work in both real-GL and stubs builds),
@@ -623,6 +624,11 @@ test_repl_code_panel_layout_RUN ?= $(BINDIR)/test_repl_code_panel_layout
 test_ui_theme_OBJS = $(OBJDIR)/$(TEST_DIR)/test_ui_theme.o
 test_ui_theme_LDLIBS =
 test_ui_theme_RUN ?= $(BINDIR)/test_ui_theme
+
+# Header-only: scene/palette.h pulls in no project objects.
+test_scene_palette_OBJS = $(OBJDIR)/$(TEST_DIR)/test_scene_palette.o
+test_scene_palette_LDLIBS =
+test_scene_palette_RUN ?= $(BINDIR)/test_scene_palette
 
 test_audio_OBJS = $(OBJDIR)/$(TEST_DIR)/test_audio.o $(OBJDIR)/audio.o
 test_audio_LDLIBS = $(GL_LDFLAGS)

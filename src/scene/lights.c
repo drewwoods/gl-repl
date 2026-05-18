@@ -2,6 +2,7 @@
  * scene_lights.c - scene light setup and visible light indicators.
  */
 #include "lights.h"
+#include "scene/palette.h"
 #include "config.h"
 #include <math.h>
 #include <stdio.h>
@@ -15,7 +16,10 @@ static void scene_lights_pop_state(void) {
 }
 
 void scene_lights_init_global_ambient(void) {
-    GLfloat lm_amb[] = { 0.15f, 0.15f, 0.20f, 1.0f };
+    /* Bucket-2 carve-out: a lighting *coefficient* (glLightModelfv),
+     * not a glColor* draw color, so it is intentionally a named local
+     * const and NOT a scene/palette.h token. */
+    static const GLfloat lm_amb[] = { 0.15f, 0.15f, 0.20f, 1.0f };
     glLightModelfv(GL_LIGHT_MODEL_AMBIENT, lm_amb);
 }
 
@@ -81,7 +85,7 @@ void scene_lights_render(const SceneFrameRenderContext *frame_ctx) {
 
             glPointSize(3.0f);
             glBegin(GL_POINTS);
-            glColor4f(1.0f, 1.0f, 1.0f, 0.9f * glow);
+            scene_clr_a(SCENE_CLR_LIGHT_CORE, 0.9f * glow);
             glVertex3f(lx, ly, lz);
             glEnd();
 
@@ -124,7 +128,7 @@ void scene_lights_render(const SceneFrameRenderContext *frame_ctx) {
         } else {
             glPointSize(6.0f);
             glBegin(GL_POINTS);
-            glColor4f(0.4f, 0.4f, 0.4f, 0.3f);
+            scene_clr_a(SCENE_CLR_LIGHT_OFF_DOT, 0.3f);
             glVertex3f(lx, ly, lz);
             glEnd();
 
@@ -133,7 +137,7 @@ void scene_lights_render(const SceneFrameRenderContext *frame_ctx) {
             glLineStipple(1, 0xAAAA);
             glLineWidth(1.0f);
             glBegin(GL_LINES);
-            glColor4f(0.7f, 0.2f, 0.2f, 0.45f);
+            scene_clr_a(SCENE_CLR_LIGHT_OFF_X, 0.45f);
             glVertex3f(lx - xsz, ly - xsz, lz);
             glVertex3f(lx + xsz, ly + xsz, lz);
             glVertex3f(lx - xsz, ly + xsz, lz);
@@ -143,7 +147,7 @@ void scene_lights_render(const SceneFrameRenderContext *frame_ctx) {
 
             char label[16];
             snprintf(label, sizeof(label), " L%d off", i);
-            glColor4f(0.5f, 0.3f, 0.3f, 0.45f);
+            scene_clr_a(SCENE_CLR_LIGHT_OFF_LABEL, 0.45f);
             glRasterPos3f(lx, ly, lz);
             for (const char *c = label; *c; c++)
                 glutBitmapCharacter(FONT_SMALL, (unsigned char)*c);

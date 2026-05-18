@@ -3,6 +3,7 @@
  */
 #include "transform_guides.h"
 #include "transform_utils.h"
+#include "scene/palette.h"
 
 static void transform_guides_push_state(void) {
     glPushAttrib(GL_ALL_ATTRIB_BITS);
@@ -24,6 +25,14 @@ static void tg_color4f(float r, float g, float b, float a) {
     if (a < 0.0f) a = 0.0f;
     if (a > 1.0f) a = 1.0f;
     glColor4f(r, g, b, a);
+}
+
+/* Palette token through the ghost-pass wrapper: scene_clr() would
+ * bypass g_guide_alpha_mul and break the two-pass, so route the
+ * SceneRgba through tg_color4f instead. */
+static void tg_color_tok(SceneColorToken t, float a) {
+    SceneRgba c = scene_rgba(t);
+    tg_color4f(c.r, c.g, c.b, c.a * a);
 }
 
 /* Cmds that emit geometry - hitting one of these means "something just got
@@ -309,7 +318,7 @@ static void draw_scale_guide(const SceneGuideSnapshot *snapshot,
 
         float tick = 0.08f;
         glLineWidth(2.0f);
-        tg_color4f(0.9f, 0.9f, 0.9f, 0.9f);
+        tg_color_tok(SCENE_CLR_GUIDE_REF_TICK, 0.9f);
         glBegin(GL_LINES);
         glVertex3f(p0[0]-tick, p0[1], p0[2]); glVertex3f(p0[0]+tick, p0[1], p0[2]);
         glVertex3f(p0[0], p0[1]-tick, p0[2]); glVertex3f(p0[0], p0[1]+tick, p0[2]);
@@ -317,7 +326,7 @@ static void draw_scale_guide(const SceneGuideSnapshot *snapshot,
         glEnd();
         glPointSize(6.0f);
         glBegin(GL_POINTS);
-        tg_color4f(0.95f, 0.95f, 0.95f, 1.0f);
+        tg_color_tok(SCENE_CLR_GUIDE_REF_POINT, 1.0f);
         glVertex3f(p0[0], p0[1], p0[2]);
         glEnd();
         glPointSize(1.0f);
@@ -358,6 +367,11 @@ static void draw_scale_guide(const SceneGuideSnapshot *snapshot,
         const float axes[3][3] = { {1,0,0}, {0,1,0}, {0,0,1} };
         const int perp_a[3] = { 1, 0, 0 };
         const int perp_b[3] = { 2, 2, 1 };
+        /* Bucket-3 local guide seed (see scene/palette.h): per-axis
+         * X/Y/Z base the scale guide both draws directly and
+         * arithmetically brightens (*0.6+0.4) for the arrowhead - same
+         * computed-from-a-base character as xform_axis_color(), so it
+         * stays local data, not palette tokens. */
         const float axis_rgb[3][3] = {
             {1.0f, 0.3f, 0.3f},
             {0.3f, 1.0f, 0.3f},
@@ -372,14 +386,14 @@ static void draw_scale_guide(const SceneGuideSnapshot *snapshot,
             const float *pb = axes[perp_b[a]];
 
             glLineWidth(1.5f);
-            tg_color4f(0.55f, 0.55f, 0.55f, fminf(0.45f * snapshot->alpha_scale, 1.0f));
+            tg_color_tok(SCENE_CLR_GUIDE_REF, fminf(0.45f * snapshot->alpha_scale, 1.0f));
             glBegin(GL_LINES);
             glVertex3f(0.0f, 0.0f, 0.0f);
             glVertex3f(ax[0], ax[1], ax[2]);
             glEnd();
 
             glLineWidth(2.0f);
-            tg_color4f(0.9f, 0.9f, 0.9f, 0.9f);
+            tg_color_tok(SCENE_CLR_GUIDE_REF_TICK, 0.9f);
             glBegin(GL_LINES);
             glVertex3f(ax[0] - pa[0]*tick, ax[1] - pa[1]*tick, ax[2] - pa[2]*tick);
             glVertex3f(ax[0] + pa[0]*tick, ax[1] + pa[1]*tick, ax[2] + pa[2]*tick);
@@ -388,7 +402,7 @@ static void draw_scale_guide(const SceneGuideSnapshot *snapshot,
             glEnd();
             glPointSize(5.0f);
             glBegin(GL_POINTS);
-            tg_color4f(0.95f, 0.95f, 0.95f, 1.0f);
+            tg_color_tok(SCENE_CLR_GUIDE_REF_POINT, 1.0f);
             glVertex3f(ax[0], ax[1], ax[2]);
             glEnd();
             glPointSize(1.0f);

@@ -44,6 +44,7 @@
 #include "widgets/tutorial_state.h"
 #include "ui/replay_hud.h"
 #include "scene/overlays.h" /* scene_draw_vertex_number_label / _arrow primitives */
+#include "scene/palette.h" /* scene_clr / scene_clr_a scene-space colors */
 #include "scene/postprocess_filter.h" /* ScenePostFilterMode, mode_name */
 #include "scene/render.h"
 #include "scene/guides/transform_guides.h" /* scene_transform_guides_prepare / _render_if_due */
@@ -292,8 +293,11 @@ static void glr_ctrl_render_replay_fade_batches(void) {
     glPushAttrib(GL_ALL_ATTRIB_BITS);
     glDisable(GL_LIGHTING);
     glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
-    GLfloat mspec[] = { 0.4f, 0.4f, 0.4f, 1.0f };
-    GLfloat mshin[] = { 30.0f };
+    /* Bucket-2 carve-out: material reflectance *coefficients*
+     * (glMaterialfv), not glColor* draw colors, so they stay named
+     * local consts and are NOT scene/palette.h tokens. */
+    static const GLfloat mspec[] = { 0.4f, 0.4f, 0.4f, 1.0f };
+    static const GLfloat mshin[] = { 30.0f };
     glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, mspec);
     glMaterialfv(GL_FRONT_AND_BACK, GL_SHININESS, mshin);
     glEnable(GL_BLEND);
@@ -309,7 +313,7 @@ static void glr_ctrl_render_replay_fade_batches(void) {
 
         prof_begin(PROF_SCENE_3D_FADE_BATCH_PREP);
         glr_ctrl_replay_restore_baseline(plan);
-        glColor4f(0.70f, 0.70f, 0.80f, alpha);
+        scene_clr_a(SCENE_CLR_REPLAY_FADE, alpha);
         glPushMatrix();
         prof_accum_end(PROF_SCENE_3D_FADE_BATCH_PREP);
 
@@ -343,7 +347,7 @@ static void glr_ctrl_render_replay_tess_preview(void) {
     glDisable(GL_DEPTH_TEST);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    glColor4f(0.30f, 0.95f, 0.75f, 0.80f);
+    scene_clr_a(SCENE_CLR_TESS_PREVIEW, 0.80f);
     glLineWidth(2.0f);
 
     replay_walk_tess_preview(&g_tess_preview_cb, NULL);
@@ -409,7 +413,7 @@ static void glr_ctrl_render_vertex_numbers(void) {
     glPushAttrib(GL_ALL_ATTRIB_BITS);
     glDisable(GL_LIGHTING);
     glDisable(GL_DEPTH_TEST);
-    glColor3f(1.0f, 1.0f, 0.30f);
+    scene_clr(SCENE_CLR_VERTEX_LABEL);
 
     static const ReplVertexWalkCallbacks cb = {
         .on_vertex = on_vertex_number_label,
@@ -424,7 +428,7 @@ static void glr_ctrl_render_normal_vectors(void) {
     glPushAttrib(GL_ALL_ATTRIB_BITS);
     glDisable(GL_LIGHTING);
     glDisable(GL_DEPTH_TEST);
-    glColor3f(0.80f, 0.80f, 0.30f);
+    scene_clr(SCENE_CLR_NORMAL_LABEL);
 
     static const ReplVertexWalkCallbacks cb = {
         .on_vertex = on_normal_vector_arrow,
@@ -568,9 +572,9 @@ static void glr_ctrl_render_outlines(const OverlayWalkCtx *ctx,
                 if (ctx->show_vertex_outlines || tess_poly_is_current) {
                     glLineWidth(1.5f);
                     if (tess_poly_is_current)
-                        glColor3f(0.0f, 0.9f, 0.9f);
+                        scene_clr(SCENE_CLR_OUTLINE_ACTIVE);
                     else
-                        glColor3f(0.55f, 0.20f, 0.70f);
+                        scene_clr(SCENE_CLR_OUTLINE);
                     glBegin(GL_LINE_LOOP);
                     tess_in_contour = 1;
                 }
@@ -599,10 +603,10 @@ static void glr_ctrl_render_outlines(const OverlayWalkCtx *ctx,
                                    outline_block_matches_cursor(i, 0, ctx);
                 if (block_is_current) {
                     glLineWidth(3.0f);
-                    glColor3f(0.0f, 0.9f, 0.9f);
+                    scene_clr(SCENE_CLR_OUTLINE_ACTIVE);
                 } else if (ctx->show_vertex_outlines && draw_outline) {
                     glLineWidth(1.2f);
-                    glColor3f(0.0f, 0.0f, 0.0f);
+                    scene_clr(SCENE_CLR_OUTLINE_EDGE);
                 } else {
                     in_begin = 0;
                     break;
@@ -616,7 +620,7 @@ static void glr_ctrl_render_outlines(const OverlayWalkCtx *ctx,
                     glEnd();
                     in_begin = 0;
                     glLineWidth(1.0f);
-                    glColor3f(0.0f, 0.0f, 0.0f);
+                    scene_clr(SCENE_CLR_OUTLINE_EDGE);
                 }
                 block_is_current = 0;
                 break;
@@ -666,9 +670,9 @@ static void glr_ctrl_render_vertex_points(const OverlayWalkCtx *ctx) {
     glHint(GL_POINT_SMOOTH_HINT, GL_NICEST);
 
     if (ctx->replay_vertex_points)
-        glColor4f(1.0f, 0.88f, 0.20f, 0.75f);
+        scene_clr_a(SCENE_CLR_VERTEX_POINT_REPLAY, 0.75f);
     else
-        glColor4f(0.85f, 0.85f, 0.90f, 0.80f);
+        scene_clr_a(SCENE_CLR_VERTEX_POINT, 0.80f);
 
     glPushMatrix();
     {
