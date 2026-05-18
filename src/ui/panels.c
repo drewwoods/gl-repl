@@ -190,6 +190,12 @@ UiHit ui_panels_hit_test(const UiRenderSnapshot *snap,
     gl_y = win_h - my;
 
     if (snap->help.visible) {
+        /* Help is modal, but keep the statusbar "F1 help" keycap live
+         * so a second click dismisses the overlay (mirrors pressing
+         * F1 again). Everything else stays captured by the panel. */
+        UiHit code_hit = ui_repl_code_panel_hit_test(snap, mx, my);
+        if (code_hit.kind == UI_HIT_HELP_TOGGLE)
+            return code_hit;
         hit.kind = UI_HIT_HELP_PANEL;
         hit.local_x = (float)mx;
         hit.local_y = (float)gl_y;
