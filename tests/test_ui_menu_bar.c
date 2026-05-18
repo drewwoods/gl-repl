@@ -429,12 +429,67 @@ static void test_render_paths_with_stubs(void) {
 }
 #endif
 
+/* Step 7 (Finding #3): right-press over a Config flyout item cycles
+ * it backward; right-press over a section parent row / closed menu is
+ * a no-op (never mis-cycles a g_cfg_items[] index). */
+static void test_config_submenu_right_press(void) {
+    int parent_mx = -1, parent_my = -1;
+    int sx = 0, sy = 0, sw = 0, sh = 0;
+    int row_mx = -1, row_my = -1;
+    int start = 0, count = 0;
+
+    reset_menu_bar_fixture(1000, 600);
+
+    /* Open Config and hover section row 0 ("RENDERING") so its flyout
+     * opens. */
+    ASSERT_TRUE("found Config section-0 parent point",
+                find_dropdown_item_point(GLR_MENU_CONFIG, 0,
+                                         &parent_mx, &parent_my));
+    ui_menu_bar_update_pointer_hover(parent_mx, parent_my, 0.0f);
+
+    ASSERT_TRUE("section 0 range resolves",
+                glr_config_section_range(0, &start, &count) && count > 0);
+    ASSERT_TRUE("Config flyout rect available",
+                ui_menu_bar_submenu_rect_for_test(GLR_MENU_CONFIG, 0,
+                                                  &sx, &sy, &sw, &sh));
+
+    const GlrConfigItem *item = glr_config_item_at(start); /* ordinal 0 */
+    ASSERT_TRUE("flyout item 0 is a real config item",
+                item && !item->section_header &&
+                item->key != GLR_CONFIG_NONE);
+
+    int sc = item->state_count;
+    int before = glr_config_get(item->key);
+    int expected = (before - 1 + sc) % sc;
+
+    ASSERT_TRUE("flyout row 0 point computed",
+                submenu_row_point(sx, sy, sw, sh, 0, &row_mx, &row_my));
+    ASSERT_INT_EQ("right-press on flyout item handled",
+                  ui_menu_bar_handle_config_right_press(row_mx, row_my), 1);
+    ASSERT_INT_EQ("right-press cycled the item backward",
+                  glr_config_get(item->key), expected);
+
+    /* Right-press over the section parent row itself (not the flyout)
+     * is a no-op and changes nothing. */
+    int v = glr_config_get(item->key);
+    ASSERT_INT_EQ("right-press on section parent row is a no-op",
+                  ui_menu_bar_handle_config_right_press(parent_mx,
+                                                        parent_my), 0);
+    ASSERT_INT_EQ("section parent right-press changed nothing",
+                  glr_config_get(item->key), v);
+
+    ui_menu_bar_close();
+    ASSERT_INT_EQ("right-press when Config closed is a no-op",
+                  ui_menu_bar_handle_config_right_press(row_mx, row_my), 0);
+}
+
 int main(void) {
     printf("--- ui_menu_bar tests ---\n");
 
     test_open_close_state();
     test_top_level_hits();
     test_dropdown_and_config_press();
+    test_config_submenu_right_press();
 #ifdef GL_STUBS
     test_msaa_label_dynamic();
 #endif
