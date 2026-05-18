@@ -664,6 +664,22 @@ UiHit ui_menu_bar_hit_test(int mx, int my) {
             UiHit submenu_hit = submenu_hit_test(mx, my);
             if (submenu_hit.kind != UI_HIT_NONE)
                 return submenu_hit;
+            /* Point is inside the open flyout but landed on inert
+             * chrome (Config "All" "### "/"---") or dead space:
+             * consume it like the parent dropdown's inert rows. The
+             * flyout is a separate rect beside the parent dropdown, so
+             * the parent-rect check below would miss it and the click
+             * would fall through to the scene tabs / code panel drawn
+             * beneath (overlay-precedence violation). */
+            int ssx, ssy, ssw, ssh;
+            if (submenu_rect(g_submenu_menu_id, g_submenu_parent_row,
+                             &ssx, &ssy, &ssw, &ssh) &&
+                point_in_rect_gl(mx, my, ssx, ssy, ssw, ssh)) {
+                h.kind = UI_HIT_CODE_PANEL_CHROME;
+                h.local_x = (float)mx;
+                h.local_y = (float)gl_y;
+                return h;
+            }
         }
 
         int row = ui_menu_bar_dropdown_item_hit(mx, my);

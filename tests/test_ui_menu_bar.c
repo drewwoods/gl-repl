@@ -442,8 +442,12 @@ static void test_config_submenu_with_stubs(void) {
                     submenu_row_point(asx, asy, asw, ash, 0,
                                       &hdr_mx, &hdr_my));
         ah = ui_menu_bar_hit_test(hdr_mx, hdr_my);
-        ASSERT_TRUE("All flyout header is inert (no submenu hit)",
-                    ah.kind != UI_HIT_SUBMENU_ITEM);
+        /* A header inside the flyout must be *consumed inertly*, not
+         * merely "not a submenu hit": returning UI_HIT_NONE would let
+         * the click fall through to the tabs/code/scene drawn beneath
+         * the flyout (overlay-precedence). */
+        ASSERT_INT_EQ("All flyout header is inert chrome",
+                      ah.kind, UI_HIT_CODE_PANEL_CHROME);
     }
 }
 
