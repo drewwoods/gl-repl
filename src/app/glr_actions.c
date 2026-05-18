@@ -9,6 +9,7 @@
 #include "app/glr_actions.h"
 #include "app/glr_ctrl.h"            /* glr_ctrl_sync_ui_chrome */
 #include "app/glr_state.h"           /* presentation/render storage (step 7a) */
+#include "app/glr_camera.h"          /* camera focus-origin / reset (eased) */
 #include "ui/layout.h"           /* CODE_PANEL_LAYOUT_* enum values */
 #include "widgets/color_picker_state.h"
 #include "audio.h"
@@ -137,9 +138,13 @@ GlrConfigItem g_cfg_items[] = {
     { "Xform guide mode",  0, 0,  GLR_CONFIG_XFORM_GUIDE_MODE,     2, xform_guide_mode_names, 0 },
     { "Light indicators",  GLUT_KEY_F10, 1, GLR_CONFIG_LIGHT_INDICATORS, 2, NULL,        0 },
     { "Backdrop",          0, 0,  GLR_CONFIG_BACKDROP,             4, backdrop_mode_names, 0 },
+    { "Auto-normals",      GLUT_KEY_F9, 1, GLR_CONFIG_AUTO_NORMALS, 2, NULL,              0 },
+    { "---",               0, 0,  GLR_CONFIG_NONE,               0, NULL,                 1 },
+    { "### CAMERA",        0, 0,  GLR_CONFIG_NONE,               0, NULL,                 1 },
     { "View mode",         GLUT_KEY_F7, 1,  GLR_CONFIG_ORTHO_MODE,           2, view_mode_names,      0 },
     { "Camera rotate",     GLUT_KEY_F11, 1, GLR_CONFIG_CAMERA_ROTATE, 2, NULL,            0 },
-    { "Auto-normals",      GLUT_KEY_F9, 1, GLR_CONFIG_AUTO_NORMALS, 2, NULL,              0 },
+    { "Focus origin",      0, 0,  GLR_CONFIG_FOCUS_ORIGIN,         0, NULL,                 0 },
+    { "Reset camera",      0, 0,  GLR_CONFIG_RESET_CAMERA,         0, NULL,                 0 },
     { "---",               0, 0,  GLR_CONFIG_NONE,               0, NULL,                 1 },
     { "### GEOMETRY",      0, 0,  GLR_CONFIG_NONE,               0, NULL,                 1 },
     { "Vertex labels",     GLUT_KEY_F5, 1, GLR_CONFIG_VERTEX_LABELS, 2, NULL,             0 },
@@ -208,6 +213,7 @@ static void glr_export_cfg_fill_all(ReplExportConfig *cfg) {
     for (int i = 0; i < n; i++) {
         const GlrConfigItem *item = &items[i];
         if (item->section_header || item->key == GLR_CONFIG_NONE) continue;
+        if (item->state_count <= 0) continue; /* action row: nothing to persist */
         char slug[REPL_EXPORT_CFG_KEY_MAX];
         cfg_slug_from_label(item->label, slug, sizeof(slug));
         repl_export_config_set_int(cfg, slug, glr_config_get(item->key));
@@ -361,6 +367,19 @@ void glr_cfg_cycle_row(int row, int delta) {
         } else {
             replay_start();
         }
+        return;
+    }
+
+    /* Camera action rows: momentary, no state to cycle. Both directions
+     * collapse to "do it". Easing keeps the move smooth, not jarring. */
+    if (item->key == GLR_CONFIG_FOCUS_ORIGIN) {
+        glr_camera_focus_origin();
+        repl_set_status("Camera: focus origin");
+        return;
+    }
+    if (item->key == GLR_CONFIG_RESET_CAMERA) {
+        glr_camera_ease_to_default();
+        repl_set_status("Camera: reset to default");
         return;
     }
 
