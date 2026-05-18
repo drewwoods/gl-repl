@@ -42,6 +42,7 @@ typedef struct {
     int wrap_at_comma;
     int code_panel_layout;
     int syntax_highlight;   /* 0 = off, 1 = on, 2 = on + fake-bold */
+    int code_focus;         /* 1 = hide derived C boilerplate chrome rows */
 } GlrPresentationState;
 
 /* App-owned render policy toggles. Runtime values emitted directly by user GL
