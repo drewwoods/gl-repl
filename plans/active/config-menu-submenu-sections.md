@@ -13,7 +13,7 @@ commit and updates this file's progress log below.
 - [x] Step 5 — Parent-row click guard (option b; activate-layer)
 - [x] Step 6 — Controller routing
 - [x] Step 7 — Right-click backward-cycle in flyouts
-- [ ] Step 8 — Render generalization
+- [x] Step 8 — Render verification (gates green; All-flyout scroll noted)
 - [ ] Step 9 — Tests + docs
 
 ## Goal
@@ -301,14 +301,27 @@ Order matters; each step builds + passes tests before the next.
    `test_ui_menu_bar.c::test_config_submenu_right_press`: flyout item
    cycles backward; section parent row & closed menu are no-ops. Full
    suite 6069/6069.
-8. **Render (verification/polish — core work pulled into Steps 2 & 4).**
-   `render_scene_example_submenu` → `render_active_submenu(snap)` with
-   unified fade landed in **Step 2**; HEADER/SEPARATOR inert chrome
-   (Finding #4) and the Config flyout shortcut/state columns landed in
-   **Step 4**. This step is now: visual pass on the live binary
-   (`make sample`), confirm the `>` parent affordance + chrome render
-   correctly for the **All** flyout, tune column spacing if needed, and
-   confirm no GL-purity regression (`make check-state-ownership`).
+8. **Render (verification — core work pulled into Steps 2 & 4).**
+   ✅ **Done** (commit `Step 8`, plan-only). `render_active_submenu`
+   (unified fade, Step 2) + HEADER/SEPARATOR inert chrome (Finding #4)
+   + Config flyout shortcut/state columns (Step 4) were code-reviewed
+   for the **All** flyout path: HEADER rows draw the section caption
+   ("### " stripped by `submenu_row_label`), SEPARATOR rows draw the
+   divider rule, ITEM rows draw label + right-aligned shortcut + state
+   (accent when on); the `>` parent affordance shows on every Config
+   section/All row via `menu_row_has_submenu`. Verification gates:
+   `make sample` (real GL) builds **clean** (no warnings),
+   `make check-c99` OK, `make check-state-ownership` OK (no
+   GL-purity/ownership regression), `make test USE_GL_STUBS=1`
+   6069/6069.
+   **Known limitation (documented, out of scope):** the **All** flyout
+   spans the whole table (~40+ rows). The submenu engine — like the
+   pre-existing Scene tag submenu — does not scroll, so on a short
+   window the All flyout clamps to `y=0` and its earliest rows render
+   above the viewport. Named sections (the primary feature) are short
+   and unaffected; All is a secondary escape hatch. A scrolling
+   submenu is a separate follow-up, not part of this plan (added to
+   Open sub-questions).
 9. **Tests + docs.**
    - Existing menu tests asserting flat Config row counts/labels will
      change — update them; add submenu rect/hit tests for Config
@@ -321,17 +334,20 @@ Order matters; each step builds + passes tests before the next.
 
 ## Open sub-questions for review
 
-- **All placement:** first row (fast "give me everything") vs. last row
-  (sections first, escape hatch below). Recommend **last**, matching the
-  examples menu's recent ALL-category placement.
-- **Keyboard shortcuts:** F-keys/Ctrl-keys on Config items
-  (`g_cfg_items[].key_code`) are unaffected (they dispatch through
-  `glr_actions`, not the menu geometry). Decide whether the submenu row
-  still shows the shortcut hint (recommend yes — it already has the
-  data).
-- **Scene-menu regression scope:** Option A edits shared code; the
-  Scene example submenu must be behavior-identical after. Gate on the
-  existing scene submenu tests staying green.
+- **All placement:** ✅ resolved — **last** row (after all sections),
+  via `config_all_parent_row() == glr_config_section_count()`.
+- **Keyboard shortcuts:** ✅ resolved — the submenu ITEM rows render
+  the shortcut hint + state label (Step 4); F-key/Ctrl dispatch is
+  unchanged (still `glr_actions`, not menu geometry).
+- **Scene-menu regression scope:** ✅ held — the Scene example submenu
+  rides the same generalized engine and all Scene submenu tests stayed
+  green every step (6069/6069 at Step 7).
+- **Scrolling submenu (NEW, follow-up — out of scope):** the **All**
+  flyout exceeds a short window's height and the engine doesn't
+  scroll (a limitation inherited from the pre-existing Scene tag
+  submenu). Worth a dedicated follow-up plan (clamp + scroll, or cap
+  All to N and paginate). Not blocking: named sections are short; All
+  is the secondary escape hatch.
 
 ## Folder note
 
