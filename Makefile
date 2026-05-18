@@ -531,6 +531,7 @@ TEST_BINS = \
 	test_repl_code_panel_syntax \
 	test_scene_transition \
 	test_ui_scene_tabs \
+	test_ui_tabbed_overlay \
 	test_scene_file_menu \
 	test_repl_core_parse \
 	test_repl_core_format \
