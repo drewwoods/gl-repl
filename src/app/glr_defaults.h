@@ -15,7 +15,7 @@
  * the transitive cost, keeping config.h dependency-free.
  *
  * Concept: compile-time defaults. User-toggleable runtime settings
- * (wireframe / grid theme / etc.) live on repl_config.h and the
+ * (wireframe / grid theme / etc.) live on glr_config.h and the
  * g_cfg_items[] descriptor table in glr_actions.c — different
  * concept, do not conflate.
  */

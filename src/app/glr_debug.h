@@ -1,5 +1,10 @@
 /*
- * repl_debug.h - Diagnostic dumps for CLI flags and tests.
+ * glr_debug.h - Debug dump helpers for the full app build.
+ *
+ * These helpers format editor text, flattened command state, and runtime
+ * layout details for CLI flags and tests. They are intentionally narrow:
+ * dump-only utilities that read the existing state models without owning
+ * any part of the runtime themselves.
  */
 #ifndef GLR_DEBUG_H
 #define GLR_DEBUG_H

@@ -1,31 +1,26 @@
 /*
- * repl_actions.h - Menu bar dispatch and configuration shortcut handling.
+ * glr_actions.h - App-shell menu dispatch and config shortcut handling.
  *
- * Bridges the menu UI with state mutations for the File, Scene, and Config
- * menus. The Scene dropdown starts with built-in examples, then the fixed
- * scene actions, then the dense user-scene list.
+ * Owns the non-editor actions surfaced through the menu bar and related
+ * keyboard shortcuts: scene/workspace load-save flows, scene rename,
+ * example and user-scene switching, help-tab cycling, cursor blink reset,
+ * and config item cycling.
  *
- * Menu structure: Three top-level menus (GLR_MENU_FILE, GLR_MENU_SCENE,
- * GLR_MENU_CONFIG). The Scene menu layout is split into an Examples section,
- * then the fixed scene rows, then user scenes; offsets in GLR_SCENE_OFF_*
- * are relative to the start of the Scene section after the examples block.
+ * This header is the bridge between UI/controller event routing and the
+ * app-owned action implementations. The menu bar and scene tabs report
+ * selections in terms of top-level menu ids and item indices; this module
+ * translates those into the corresponding scene/config operation.
  *
- * Config shortcut dispatch: Keyboard shortcuts (Ctrl+<key> and F-keys) trigger
- * config toggles/cycles via glr_cfg_handle_ascii_shortcut() and
- * glr_cfg_handle_special_shortcut(). These map key codes to config item indices
- * and call glr_cfg_cycle_row() to apply the change. The mapping is stable via
- * GlrConfigKey (repl_config.h), allowing the help overlay to display current
- * bindings.
- *
- * Default values: glr_actions_apply_defaults() applies initial config state
- * on startup, allowing examples to override via @cfg metadata.
+ * Config shortcut dispatch is part of the same surface because the key map
+ * is derived from the same GlrConfigKey-backed descriptor table exposed by
+ * glr_config.h. Startup defaults also live here: glr_actions_apply_defaults()
+ * seeds config state before examples or workspace metadata override it.
  */
 #ifndef GLR_ACTIONS_H
 #define GLR_ACTIONS_H
 
-/* Top-level menu identifiers. Corresponds to the menu bar structure (File /
- * Scene / Tutorials / Config). Used by the menu UI (ui_menu_bar.h) and this module's
- * dispatch to route actions. */
+/* Top-level menu identifiers. Matches the menu bar structure (File / Scene /
+ * Tutorials / Config) used by ui_menu_bar and by this module's dispatch. */
 typedef enum {
     GLR_MENU_FILE = 0,
     GLR_MENU_SCENE,
@@ -70,9 +65,8 @@ enum {
 void glr_actions_apply_defaults(void);
 
 /* Install the export-config bridge that lets src/repl/export.c emit/parse
- * @cfg headers and lets src/repl/scenes.c snapshot per-scene cfg without
- * referencing glr_config_*. Step 4 of the decouple plan. Called once
- * at app startup from glr_app_reset_all. */
+ * @cfg headers and lets src/repl/scenes.c snapshot per-scene config without
+ * referencing glr_config_* directly. Called once during app-service setup. */
 void glr_actions_install_export_cfg_bridge(void);
 
 /* Cycle a config item by delta steps. row is the config item index; delta is
@@ -89,14 +83,13 @@ void glr_action_help_tab_prev(void);
 
 /* Handle an ASCII key shortcut for config cycling. Maps key codes (Ctrl+<key>)
  * to config item indices and applies the cycle. Returns 1 if the key matched
- * a config shortcut, 0 otherwise. Called by the editor's key dispatcher
- * (repl_editor.c). */
+ * a config shortcut, 0 otherwise. Called by the controller's key router. */
 int  glr_cfg_handle_ascii_shortcut(unsigned char key);
 
 /* Handle a special key shortcut (F-keys, arrows) for config cycling. Maps GLUT
  * special key codes to config item indices and applies the cycle. Returns 1 if
- * the key matched a config shortcut, 0 otherwise. Called by the editor's key
- * dispatcher. */
+ * the key matched a config shortcut, 0 otherwise. Called by the controller's
+ * special-key router. */
 int  glr_cfg_handle_special_shortcut(int key);
 
 /* Dispatch a menu item activation. menu_id is the top-level menu (File/Scene/Config);

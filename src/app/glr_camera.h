@@ -1,17 +1,17 @@
 /*
- * glr_camera.h - Viewport camera state, accessors, and orbit/pan/zoom controls.
+ * glr_camera.h - Scene-camera state and orbit/pan/zoom controls.
  *
- * Owns the scene-camera struct (`ReplCameraState`) and the entirety of
- * its read/write surface. Drag handling, momentum decay, orbit/pan/zoom
- * math, and per-frame tick all live here too — what used to be split
- * between `src/ui/state.{c,h}` (storage + accessors) and
- * `repl_camera_controls.{c,h}` (drag math) is now one module.
+ * Owns the 3D camera pose used by scene rendering and the full mutation
+ * surface around it: direct setters, easing, drag handling, wheel/keyboard
+ * zoom velocity, momentum decay, and the per-frame tick.
  *
- * Pointer tracking: the module keeps its own internal pointer cache
- * for drag-delta computation. Callers that also want the global
- * `ReplPointerState` updated for snapshot consumers must call
- * `ui_state_pointer_set_*` themselves — `glr_camera` does not reach
- * into UI state.
+ * Pointer tracking stays local to this module. Callers that also want the
+ * frame snapshot's pointer state updated for UI consumers must write that
+ * separately through ui_state; glr_camera intentionally does not reach into
+ * UI state.
+ *
+ * Older storage/accessor and drag-math splits are now secondary history;
+ * callers should treat this as the single camera owner.
  */
 #ifndef GLR_CAMERA_H
 #define GLR_CAMERA_H
@@ -88,12 +88,12 @@ void glr_camera_drag_motion(int x, int y);
  * auto-rotate animation. */
 void glr_camera_tick(void);
 
-/* Step 4a of feature/decouple-repl-from-gl-repl-alt.md: install the
- * default ReplExportCameraBridge so src/repl/export.c can emit/parse the
- * `// camera` block + `static float g_angle = N.NNNNf;` preamble
- * without referencing glr_camera_*. The bridge implementation lives
- * in glr_camera_export.c. Called once at app startup from
- * glr_app_install_app_services. */
+/* Install the default ReplExportCameraBridge so src/repl/export.c can
+ * emit/parse the `// camera` block and `g_angle` preamble without
+ * referencing glr_camera_* directly. The bridge implementation lives
+ * in glr_camera_export.c and is installed once during app-service setup.
+ * The decouple-plan step number is historical detail, not the primary
+ * reason this API exists. */
 void glr_camera_export_install_bridge(void);
 
 #endif /* GLR_CAMERA_H */
