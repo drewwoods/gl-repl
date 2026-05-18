@@ -188,7 +188,9 @@ static const char *g_tab_keys[HELP_KEYS_MAX];
  * k_lang_sections_tail above. Buffer is sized for current spec entries
  * plus a few hundred-byte cushion; raise both if a new help-grouped
  * command runs out of room. */
-#define HELP_CMD_LINES_MAX 192
+/* Bumped from 192 when the single "Supported Commands" group was split
+ * into 7 sub-sections (+6 headers, +6 blank separators). */
+#define HELP_CMD_LINES_MAX 224
 #define HELP_CMD_LINE_BUF  120
 
 static char        g_cmd_strbuf[HELP_CMD_LINES_MAX][HELP_CMD_LINE_BUF];
@@ -199,7 +201,13 @@ static ReplHelpContent g_content;
 
 static const char *help_group_header(ReplHelpGroup g) {
     switch (g) {
-    case REPL_HELP_GROUP_TOP:         return "Supported Commands (type + ;):";
+    case REPL_HELP_GROUP_GEOMETRY:    return "Vertices, Normals & Color:";
+    case REPL_HELP_GROUP_PRIMITIVE:   return "Primitive Blocks:";
+    case REPL_HELP_GROUP_STATE:       return "Render State:";
+    case REPL_HELP_GROUP_RASTER:      return "Raster Position & Bitmap Text:";
+    case REPL_HELP_GROUP_BLEND:       return "Point Parameters & Blending:";
+    case REPL_HELP_GROUP_TRANSFORM:   return "Matrix Transforms:";
+    case REPL_HELP_GROUP_DEPTH_MASK:  return "Depth & Write-Mask State:";
     case REPL_HELP_GROUP_LIGHTING:    return "Lighting / Material:";
     case REPL_HELP_GROUP_GLUT_SHAPES: return "GLUT Solid Shapes:";
     case REPL_HELP_GROUP_GLU_TESS:    return "GLU Tessellator (concave / complex polygons):";
@@ -262,7 +270,13 @@ const ReplHelpContent *repl_help_text_build(void) {
     /* --- Commands tab: per-command sections from the spec, then the
      * hand-written language sections. --- */
     int nc = 0;
-    nc = cmd_emit_group(nc, REPL_HELP_GROUP_TOP);
+    nc = cmd_emit_group(nc, REPL_HELP_GROUP_GEOMETRY);
+    nc = cmd_emit_group(nc, REPL_HELP_GROUP_PRIMITIVE);
+    nc = cmd_emit_group(nc, REPL_HELP_GROUP_STATE);
+    nc = cmd_emit_group(nc, REPL_HELP_GROUP_RASTER);
+    nc = cmd_emit_group(nc, REPL_HELP_GROUP_BLEND);
+    nc = cmd_emit_group(nc, REPL_HELP_GROUP_TRANSFORM);
+    nc = cmd_emit_group(nc, REPL_HELP_GROUP_DEPTH_MASK);
     nc = cmd_emit_group(nc, REPL_HELP_GROUP_LIGHTING);
     nc = cmd_emit_group(nc, REPL_HELP_GROUP_GLUT_SHAPES);
     nc = cmd_emit_group(nc, REPL_HELP_GROUP_GLU_TESS);

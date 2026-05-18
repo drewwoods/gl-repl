@@ -91,7 +91,15 @@ typedef struct {
  * hand-written language sections of the overlay). */
 typedef enum {
     REPL_HELP_GROUP_NONE = 0,
-    REPL_HELP_GROUP_TOP,         /* "Supported Commands (type + ;):" */
+    /* The former single REPL_HELP_GROUP_TOP bucket, split into the same
+     * contiguous runs banner-labeled in k_func_completions[]. */
+    REPL_HELP_GROUP_GEOMETRY,    /* "Vertices, Normals & Color:" */
+    REPL_HELP_GROUP_PRIMITIVE,   /* "Primitive Blocks:" */
+    REPL_HELP_GROUP_STATE,       /* "Render State:" */
+    REPL_HELP_GROUP_RASTER,      /* "Raster Position & Bitmap Text:" */
+    REPL_HELP_GROUP_BLEND,       /* "Point Parameters & Blending:" */
+    REPL_HELP_GROUP_TRANSFORM,   /* "Matrix Transforms:" */
+    REPL_HELP_GROUP_DEPTH_MASK,  /* "Depth & Write-Mask State:" */
     REPL_HELP_GROUP_LIGHTING,    /* "Lighting / Material:" */
     REPL_HELP_GROUP_GLUT_SHAPES, /* "GLUT Solid Shapes:" */
     REPL_HELP_GROUP_GLU_TESS,    /* "GLU Tessellator (concave / complex polygons):" */
