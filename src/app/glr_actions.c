@@ -18,6 +18,7 @@
 #include "repl/scenes.h"
 #include "app/glr_config.h"
 #include "editor/input.h"
+#include "editor/state.h"      /* editor_scroll_follow_cursor_set */
 #include "editor/completion.h"
 #include "keys.h"
 #include "repl/tutorials.h"
@@ -131,6 +132,7 @@ GlrConfigItem g_cfg_items[] = {
     { "Code panel",        KEY_CTRL_B, 0, GLR_CONFIG_CODE_PANEL_LAYOUT, CODE_PANEL_LAYOUT_COUNT, code_panel_layout_names, 0 },
     { "Wrap at commas",    0, 0,  GLR_CONFIG_WRAP_AT_COMMA,       2, NULL,                 0 },
     { "Syntax highlight",  0, 0,  GLR_CONFIG_SYNTAX_HIGHLIGHT,    3, syntax_hl_names,      0 },
+    { "Code focus",        0, 0,  GLR_CONFIG_CODE_FOCUS,          2, NULL,                 0 },
     { "---",               0, 0,  GLR_CONFIG_NONE,               0, NULL,                 1 },
     { "### AUDIO",         0, 0,  GLR_CONFIG_NONE,               0, NULL,                 1 },
     { "Audio",             0, 0,  GLR_CONFIG_AUDIO_MODE,          4, audio_cfg_names,      0 },
@@ -391,6 +393,15 @@ void glr_cfg_cycle_row(int row, int delta) {
             "Audio: loop all",
         };
         repl_set_status(labels[mode]);
+    } else if (item->key == GLR_CONFIG_CODE_FOCUS) {
+        /* Toggling collapses the code panel's chrome header rows from
+         * ~20 to 0 (and back). The follow-scroll block in glr_ctrl only
+         * re-centers when scroll_follow_cursor is set, so without this
+         * the active edit row would scroll off-screen on toggle. */
+        editor_scroll_follow_cursor_set(1);
+        snprintf(cfg_status_buf, sizeof(cfg_status_buf), "Code focus: %s",
+                 new_value ? "ON" : "OFF");
+        repl_set_status(cfg_status_buf);
     } else if (item->state_names) {
         snprintf(cfg_status_buf, sizeof(cfg_status_buf), "%s: %s",
                  item->label, glr_config_state_name(item->key, new_value));
