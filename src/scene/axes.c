@@ -153,7 +153,7 @@ static const AxesThemeSpec g_axes_theme_specs[AXES_THEME_COUNT] = {
     },
 };
 
-static const AxesThemeSpec *axes_theme_spec(AxesTheme theme) {
+static const AxesThemeSpec *axes_theme_spec(SceneAxesTheme theme) {
     if (theme <= AXES_THEME_OFF || theme >= AXES_THEME_COUNT)
         return NULL;
     if (g_axes_theme_specs[theme].len <= 0.0f)
@@ -218,7 +218,7 @@ static void draw_axis_label_triplet(float len, float offset,
 
 void scene_axes_render(const SceneFrameRenderContext *frame_ctx) {
     const SceneRenderConfig *config = &frame_ctx->config;
-    AxesTheme axes_theme = (AxesTheme)config->axes_theme;
+    SceneAxesTheme axes_theme = (SceneAxesTheme)config->axes_theme;
     if (axes_theme == AXES_THEME_OFF) return;
 
     /* Transition fade: clamp defensively, then every gl_color in this

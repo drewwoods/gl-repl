@@ -8,8 +8,8 @@
  *
  * This is gl-repl app-shell logic — it knits together scene-render
  * enums and the editor's panel layout into a single set of "out of
- * the box" values. Pure rendering enums themselves (GridTheme,
- * AxesTheme, GridMajorIdx, GridExtentIdx) live in src/scene/themes.h;
+ * the box" values. Pure rendering enums themselves (SceneGridTheme,
+ * SceneAxesTheme, SceneGridMajorIdx, SceneGridExtentIdx) live in src/scene/themes.h;
  * the panel-layout enum lives in src/ui/layout.h. Including those
  * here is intentional — only callers that need these defaults pay
  * the transitive cost, keeping config.h dependency-free.

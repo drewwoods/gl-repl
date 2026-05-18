@@ -288,7 +288,7 @@ static const GridThemeSpec g_grid_theme_specs[GRID_THEME_COUNT] = {
     },
 };
 
-static const GridThemeSpec *grid_theme_spec(GridTheme theme) {
+static const GridThemeSpec *grid_theme_spec(SceneGridTheme theme) {
     if (theme <= GRID_THEME_OFF || theme >= GRID_THEME_COUNT)
         return NULL;
     if (!g_grid_theme_specs[theme].line_color)
@@ -682,7 +682,7 @@ int scene_grid_theme_uses_fog(int grid_theme) {
 
 void scene_grid_render(const SceneFrameRenderContext *frame_ctx) {
     const SceneRenderConfig *config = &frame_ctx->config;
-    GridTheme grid_theme = (GridTheme)config->grid_theme;
+    SceneGridTheme grid_theme = (SceneGridTheme)config->grid_theme;
     if (grid_theme == GRID_THEME_OFF) return;
 
     /* Transition fade: clamp defensively, then every gl_color in this
