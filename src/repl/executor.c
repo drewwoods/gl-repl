@@ -306,6 +306,9 @@ int repl_apply_state_cmd(const GLCmd *cmd, float alpha_scale) {
     case CMD_FRONT_FACE:
         glFrontFace((GLenum)cmd->args[0]);
         return 1;
+    case CMD_DEPTH_FUNC:
+        glDepthFunc((GLenum)cmd->args[0]);
+        return 1;
     case CMD_DEPTH_MASK:
         glDepthMask((GLboolean)cmd->args[0]);
         return 1;
@@ -492,6 +495,7 @@ void repl_execute_program(const ReplExecutionOptions *options) {
                 glVertex2f(flat_cmds[pc].args[0], flat_cmds[pc].args[1]);
             break;
         case CMD_FRONT_FACE:
+        case CMD_DEPTH_FUNC:
         case CMD_DEPTH_MASK:
         case CMD_COLOR_MASK:
             repl_apply_state_cmd(&flat_cmds[pc], g_execute_alpha_scale);
