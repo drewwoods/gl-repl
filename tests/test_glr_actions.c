@@ -290,11 +290,65 @@ static void test_shortcuts(void) {
      * which is handled by test_cfg_cycling with specific config items  */
 }
 
+static void test_config_sections(void) {
+    /* g_cfg_items[] has six "### " sections. The section model must be
+     * data-faithful: only real headers counted, "---" excluded, the
+     * synthetic "All" view NOT counted here (plan Finding #2). */
+    int n = glr_config_section_count();
+    ASSERT_INT("section count", n, 6);
+
+    const char *expect[] = {
+        "RENDERING", "TIME & REPLAY", "OVERLAYS & SCENE",
+        "GEOMETRY", "INTERFACE", "AUDIO",
+    };
+    for (int s = 0; s < n; s++)
+        ASSERT_STR("section label (### stripped)",
+                   glr_config_section_label(s), expect[s]);
+
+    ASSERT_TRUE("out-of-range label is NULL",
+                glr_config_section_label(n) == NULL);
+    ASSERT_TRUE("out-of-range range fails",
+                glr_config_section_range(n, NULL, NULL) == 0);
+
+    /* Every section range covers only actionable rows, contiguous, and
+     * the per-section item totals + chrome reconstruct the full table. */
+    int items_seen = 0;
+    for (int s = 0; s < n; s++) {
+        int start = -1, count = -1;
+        ASSERT_TRUE("section range ok",
+                    glr_config_section_range(s, &start, &count) == 1);
+        ASSERT_TRUE("section non-empty", count > 0);
+        for (int i = start; i < start + count; i++) {
+            const GlrConfigItem *it = glr_config_item_at(i);
+            ASSERT_TRUE("range row is an item",
+                        it && !it->section_header &&
+                        it->key != GLR_CONFIG_NONE);
+            ASSERT_INT("range row kind ITEM",
+                       glr_config_row_kind(i), GLR_CFG_ROW_ITEM);
+        }
+        items_seen += count;
+    }
+
+    int headers = 0, seps = 0, items = 0;
+    for (int i = 0; i < CFG_ITEM_COUNT; i++) {
+        switch (glr_config_row_kind(i)) {
+        case GLR_CFG_ROW_HEADER:    headers++; break;
+        case GLR_CFG_ROW_SEPARATOR: seps++;    break;
+        case GLR_CFG_ROW_ITEM:      items++;   break;
+        }
+    }
+    ASSERT_INT("row_kind headers == section count", headers, n);
+    ASSERT_INT("section ranges cover every item row", items_seen, items);
+    ASSERT_INT("kinds partition the table",
+               headers + seps + items, CFG_ITEM_COUNT);
+}
+
 int main(void) {
     test_apply_defaults();
     test_cursor_actions();
     test_help_tab_actions();
     test_cfg_cycling();
+    test_config_sections();
     test_menu_actions();
     test_shortcuts();
 

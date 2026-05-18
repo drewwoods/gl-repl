@@ -1,4 +1,5 @@
 #include "app/glr_config.h"
+#include <string.h>
 #include "audio.h"
 #include "app/glr_camera.h"
 #include "app/glr_state.h"           /* presentation + render storage (step 7a) */
@@ -140,4 +141,64 @@ int glr_config_cycle(GlrConfigKey key, int delta) {
         value += count;
     glr_config_set(key, value);
     return value;
+}
+
+/* ---- Section model over g_cfg_items[] -------------------------------- */
+
+static int row_is_section_header(int idx) {
+    const GlrConfigItem *it = &g_cfg_items[idx];
+    return it->label && strncmp(it->label, "### ", 4) == 0;
+}
+
+GlrConfigRowKind glr_config_row_kind(int idx) {
+    if (idx < 0 || idx >= CFG_ITEM_COUNT)
+        return GLR_CFG_ROW_ITEM;
+    if (row_is_section_header(idx))
+        return GLR_CFG_ROW_HEADER;
+    if (g_cfg_items[idx].section_header)
+        return GLR_CFG_ROW_SEPARATOR;   /* "---" (or any non-"### " chrome) */
+    return GLR_CFG_ROW_ITEM;
+}
+
+int glr_config_section_count(void) {
+    int n = 0;
+    for (int i = 0; i < CFG_ITEM_COUNT; i++)
+        if (row_is_section_header(i))
+            n++;
+    return n;
+}
+
+/* Index in g_cfg_items[] of the Nth "### " header, or -1. */
+static int section_header_index(int section) {
+    int seen = 0;
+    for (int i = 0; i < CFG_ITEM_COUNT; i++) {
+        if (row_is_section_header(i)) {
+            if (seen == section)
+                return i;
+            seen++;
+        }
+    }
+    return -1;
+}
+
+const char *glr_config_section_label(int section) {
+    int h = section_header_index(section);
+    if (h < 0)
+        return NULL;
+    return g_cfg_items[h].label + 4;   /* strip the "### " marker */
+}
+
+int glr_config_section_range(int section, int *start, int *count) {
+    int h = section_header_index(section);
+    if (h < 0)
+        return 0;
+
+    int s = h + 1;
+    int e = s;
+    while (e < CFG_ITEM_COUNT && !g_cfg_items[e].section_header)
+        e++;
+
+    if (start) *start = s;
+    if (count) *count = e - s;
+    return 1;
 }
