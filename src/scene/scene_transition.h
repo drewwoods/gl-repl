@@ -1,16 +1,15 @@
 /*
- * scene_transition.h - pure show/hide fade state machine for a scene
- * overlay (grid, axes). No GL, no globals — one instance per overlay.
+ * scene_transition.h - Pure show/hide transition machine for scene overlays.
  *
- * Model (plans/active/grid-axes-transitions.md): the controller diffs
- * the presentation theme and calls scene_xn_set(); each frame it calls
- * scene_xn_tick(dt). The controller owns `opacity` outright and is
- * history-agnostic — FADE_IN ramps toward 1, FADE_OUT toward 0, from
- * whatever opacity currently is. `current` only advances at the
- * opacity-0 crossing, so rapid cycling skips ephemeral themes;
- * returning to `current` mid-FADE_OUT just reverses. Renderer reads
- * {theme, opacity, phase} and scales overlay color alpha by opacity
- * (the `off` theme draws nothing regardless).
+ * The controller keeps one of these per fading overlay such as grid or axes.
+ * It owns the requested theme, calls scene_xn_set()/scene_xn_show() when that
+ * request changes, and advances the machine with scene_xn_tick(). Renderers
+ * then consume {current, opacity, phase} to decide what to draw.
+ *
+ * The machine is intentionally GL-free and history-light: fade-out keeps
+ * `current` authoritative until opacity reaches zero, so rapid cycling drops
+ * transient themes and reversing back to the current theme just flips the
+ * direction to FADE_IN.
  */
 #ifndef SCENE_TRANSITION_H
 #define SCENE_TRANSITION_H
@@ -42,7 +41,7 @@ void scene_xn_set(SceneXnState *s, int theme);
  * theme-index-agnostic; the controller calls this (instead of
  * scene_xn_set) when the current overlay is the "off" index, so
  * show-from-off skips the pointless OUT of an already-invisible
- * overlay (plans/active/grid-axes-transitions.md rule 6). */
+ * overlay. */
 void scene_xn_show(SceneXnState *s, int theme);
 
 /* Advance by dt seconds. in_secs/out_secs are the fade durations

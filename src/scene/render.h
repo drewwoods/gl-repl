@@ -1,33 +1,16 @@
 /*
- * scene_render.h - 3D scene rendering orchestration.
+ * scene_render.h - 3D scene rendering surface.
  *
- * Top-level entry points for scene rendering. Orchestrates the full rendering
- * pipeline: projection setup, camera transforms, user geometry execution,
- * replay fade passes, grid/axes, and visual overlays (polygon outlines, vertex
- * numbers, normal vectors, orbit target).
+ * Exposes the scene module's top-level render entry points. Callers build a
+ * SceneRenderConfig snapshot, apply the camera modelview with
+ * scene_apply_camera(), then call scene_render_3d_scene() for one pass. The
+ * scene module owns projection setup, clear, helper renderers (backdrop, grid,
+ * axes, lights), and the optional callback hooks that bracket the main geometry
+ * fill.
  *
- * Pipeline flow (per frame from display_func in src/repl/core.c):
- *   1. scene_render_init_gl() — one-time setup of GL state, display lists,
- *      shaders, tessellator
- *   2. Per-accum-sample (if AA enabled):
- *      - Set up projection with optional sub-pixel jitter
- *      - Apply camera transforms
- *      - Execute user commands (src/repl/executor.c)
- *      - Render grid, axes, orbit target
- *      - Render overlays (polygon outline, vertex guides, normals, etc.)
- *      - Accumulate into accumulation buffer
- *   3. scene_render_replay_fade_pass() — if replay active, render fading
- *      geometry snapshots (old geometry fades out as new appears)
- *
- * Rendering modes: The scene can display multiple visual elements toggled via
- * config (F3/F4 for grid/axes themes, F1-F11 for overlays). Grid and axes are
- * themeable; overlays include polygon outlines, vertex numbers, normal vectors,
- * vertex guides (cross-hairs), light indicators, and orbit target.
- *
- * Edit guides: The scene also renders edit-guide visualization when editing
- * (geometry guides show vertex/primitive context, transform guides show pending
- * matrix operations during step-through). These are controlled by scene_*_guides
- * modules.
+ * The public surface stays REPL-independent: user geometry and replay-specific
+ * overlay work enter through callbacks carried on SceneRenderConfig rather than
+ * direct reads from REPL globals.
  */
 #ifndef SCENE_RENDER_H
 #define SCENE_RENDER_H
@@ -46,9 +29,9 @@ void scene_render_init_gl(void);
 
 /* Apply the caller's camera as the modelview transform. The caller is
  * responsible for invoking this once per frame before scene_render_3d_scene;
- * the scene module no longer manages camera state. Mirrors the legacy
- * orbit transform: glTranslatef(0,0,-dist); glRotatef(rx,1,0,0);
- * glRotatef(ry,0,1,0); glTranslatef(-tx,-ty,-tz). */
+ * the scene module does not own camera state. The transform matches the app's
+ * orbit camera convention: translate by distance, apply pitch/yaw, then
+ * translate by the target offset. */
 void scene_apply_camera(float rx, float ry, float dist,
                         float tx, float ty, float tz);
 
@@ -66,15 +49,12 @@ void scene_apply_camera(float rx, float ry, float dist,
 int scene_render_3d_scene(const SceneRenderConfig *config);
 
 /* Canonical description of the projection the scene last applied this
- * frame. scene_apply_projection() caches it (Tenet 3: a render-time
- * discovery the controller actualizes back into GL-free state) so the
- * exporter / code panel can emit a faithful reshape() without re-deriving
- * the math or reaching into scene internals. The blend mid-transition is
- * snapped to whichever side the mix is closest to — exporters want a
- * discrete mode, not an interpolated matrix. ortho_top is the
- * aspect-independent half-height (callers multiply by their own aspect).
- * Read it through the controller-installed export projection bridge, not
- * directly from repl_*. */
+ * frame. scene_apply_projection() caches it so export/debug paths can emit a
+ * faithful reshape() description without re-deriving the math from scene
+ * internals. The blend mid-transition is snapped to whichever side the mix is
+ * closest to, because downstream callers want a discrete mode rather than an
+ * interpolated matrix. ortho_top is the aspect-independent half-height
+ * (callers multiply by their own aspect). */
 typedef struct SceneProjectionDesc {
     int    ortho;        /* 0 = perspective, 1 = orthographic */
     double fovy_deg;     /* perspective vertical field of view */
@@ -87,9 +67,8 @@ typedef struct SceneProjectionDesc {
 
 void scene_get_active_projection(SceneProjectionDesc *out);
 
-/* The replay-fade overlay pass used to live in src/scene/render.c and was
- * exposed here for benchmark use. It moved out to the REPL controller
- * (imrepl_ctrl.c) and now runs through SceneRenderConfig.post_fill_fn —
- * the scene module no longer has a notion of replay batches. */
+/* Replay-fade overlay work no longer has a public scene entry point. Callers
+ * that need it inject the pass through SceneRenderConfig.post_fill_fn, which
+ * keeps src/scene/ unaware of replay batching details. */
 
 #endif /* SCENE_RENDER_H */

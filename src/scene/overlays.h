@@ -1,36 +1,11 @@
 /*
- * scene_overlays.h - Visual overlays for geometry debugging and feedback.
+ * scene_overlays.h - Tiny per-vertex overlay primitives.
  *
- * Renders optional visual overlays on top of user geometry: polygon outlines
- * (highlighting current editing context), vertex numbers (for reference),
- * normal vectors (showing surface orientation), and vertex position guides
- * (cross-hairs at vertices). These overlays help users understand and debug
- * their geometry in real-time.
- *
- * Overlay types:
- *   - Polygon outlines: Wireframe edges of filled triangles/quads, color-coded
- *     by matrix stack depth (so geometry drawn under different transforms has
- *     distinct outline colors). Used to visualize polygon structure and
- *     transformation context.
- *   - Current block highlight: If a specific block (for-loop, function, etc.)
- *     is selected, outlines are brighter for geometry from that block,
- *     dimmer for others. Helps navigate the code while watching geometry
- *     appear/disappear.
- *   - Vertex numbers: Small text labels showing vertex index at each vertex
- *     position, useful for debugging index order and primitive winding.
- *   - Normal vectors: Colored lines extending from each vertex showing
- *     surface normal direction, color-coded by depth for visual clarity.
- *   - Vertex guides (F2): Cross-hairs at each vertex for precise alignment
- *     and measurement (not implemented in minimal builds).
- *
- * Replay integration: During replay (step-through mode), a special "tess preview"
- * mode highlights tessellation callback geometry being added, helping users
- * understand tessellation output.
- *
- * Visibility: Each overlay is toggleable via config (polygon outlines = F5,
- * vertex numbers = F6, normal vectors = F7, vertex guides = F2). Overlays
- * respect the depth-masking state so they don't interfere with orbit target
- * highlighting or other UI elements.
+ * These are the scene module's narrow overlay exports: draw one vertex-number
+ * label or one normal-vector arrow at an already-transformed position.
+ * Higher-level policy such as deciding whether overlays are enabled, walking
+ * the user's program, tracking transforms, or bracketing GL state belongs to
+ * the controller.
  */
 #ifndef SCENE_OVERLAYS_H
 #define SCENE_OVERLAYS_H
@@ -48,13 +23,9 @@ void scene_draw_normal_vector_arrow(float vx, float vy, float vz,
                                     float nx, float ny, float nz,
                                     float scale);
 
-/* Note: outlines and vertex-point overlays no longer live in this header.
- * They moved to imrepl_ctrl.c where they're implemented by re-executing
- * the user's program with glPolygonMode(GL_LINE) / GL_POINT respectively
- * — the gluTessCallback edge-flag handler in src/repl/executor.c keeps
- * triangulation interiors invisible in GL_LINE mode, so no GLCmd
- * iteration is needed. The visual style (currently black with lighting,
- * later stencil-based) is the controller's choice; the scene module is
- * not involved. */
+/* Outlines and vertex-point overlays are controller-owned passes, not scene
+ * primitives. src/app/glr_ctrl.c re-executes the user's geometry in GL_LINE or
+ * GL_POINT mode and chooses the surrounding GL state; src/scene/ only provides
+ * the per-vertex label/arrow helpers above. */
 
 #endif /* SCENE_OVERLAYS_H */

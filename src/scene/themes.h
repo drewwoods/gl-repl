@@ -1,14 +1,12 @@
 /*
- * src/scene/themes.h - scene rendering theme enums (grid + axes).
+ * src/scene/themes.h - Shared scene theme enums.
  *
- * These describe scene-side rendering modes (grid line theme, axes theme,
- * grid spacing / extent indices). They live in the scene/ tree because
- * the scene module owns the rendering; the REPL controller imports this
- * header to wire its config UI to scene values.
+ * This is the vocabulary app-side config code and scene renderers share for
+ * grid themes, axes themes, and the grid spacing/extent indices. The scene
+ * module owns the meanings; app/UI code imports the enums to present and store
+ * those choices.
  *
- * The label tables in repl_actions.c, src/scene/grid.c, and the custom
- * render paths in src/scene/grid.c / src/scene/axes.c must stay in sync
- * with these enums.
+ * Label tables and render data keyed by these enums must stay in enum order.
  */
 #ifndef SCENE_THEMES_H
 #define SCENE_THEMES_H
