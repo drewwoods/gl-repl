@@ -52,8 +52,14 @@ static const char *g_pin_btn_labels[NUM_PIN_BTNS] = {
 static int g_open_menu = -1;      /* index into g_menu_labels; -1 = none */
 
 static int g_menu_item_hover = -1;
-static int g_scene_open_tag = -1;
-static float g_scene_submenu_open_time = -1.0f;
+
+/* Generic flyout-submenu open state. A submenu is identified by the
+ * top-level menu it belongs to and the parent dropdown row that owns
+ * it — menu-agnostic, so Scene (example tags) and Config (sections)
+ * share one engine. -1 / -1 = no submenu open. */
+static int   g_submenu_menu_id    = -1;
+static int   g_submenu_parent_row = -1;
+static float g_submenu_open_time  = -1.0f;
 static float g_menu_open_time = -1.0f;   /* anim_time when current menu opened */
 static float g_search_open_time = -1.0f; /* anim_time when search opened */
 #define UI_FADE_DURATION 0.18f
@@ -354,10 +360,64 @@ static int point_in_rect_gl(int mx, int my, int x, int y, int w, int h) {
     return mx >= x && mx < x + w && ry >= y && ry < y + h;
 }
 
-static int scene_example_submenu_rect(int tag_idx,
-                                      int *sx, int *sy,
-                                      int *sw, int *sh) {
-    int parent_row;
+/* ---- Generic flyout-submenu provider --------------------------------- *
+ *
+ * One engine, two menus. A submenu is keyed by (menu_id, parent_row);
+ * the provider resolves that to a row list. Scene parent rows are
+ * example-tag rows (the tag index is recovered from the row); Config
+ * parent rows (sections / "All") arrive in Step 4 — until then the
+ * Config side reports "no submenu" so this step is behaviour-neutral.
+ *
+ * submenu_row_kind() lets the (future) Config "All" flyout keep its
+ * "### "/"---" chrome inert; every Scene row is an ITEM. */
+
+static int submenu_row_count(int menu_id, int parent_row) {
+    if (menu_id == MENU_SCENE) {
+        int tag = scene_tag_idx_for_parent_row(parent_row);
+        return (tag >= 0) ? repl_example_count_for_tag(tag) : 0;
+    }
+    return 0;   /* Config wired in Step 4 */
+}
+
+static const char *submenu_row_label(int menu_id, int parent_row,
+                                     int ordinal) {
+    if (menu_id == MENU_SCENE) {
+        int tag = scene_tag_idx_for_parent_row(parent_row);
+        if (tag < 0)
+            return NULL;
+        return repl_example_name(repl_example_index_for_tag(tag, ordinal));
+    }
+    return NULL;
+}
+
+/* Absolute target index the row activates: a global flat example index
+ * for Scene, a g_cfg_items[] index for Config (Step 4). */
+static int submenu_row_abs_index(int menu_id, int parent_row,
+                                 int ordinal) {
+    if (menu_id == MENU_SCENE) {
+        int tag = scene_tag_idx_for_parent_row(parent_row);
+        if (tag < 0)
+            return -1;
+        return repl_example_index_for_tag(tag, ordinal);
+    }
+    return -1;
+}
+
+static GlrConfigRowKind submenu_row_kind(int menu_id, int parent_row,
+                                         int ordinal) {
+    (void)menu_id; (void)parent_row; (void)ordinal;
+    return GLR_CFG_ROW_ITEM;   /* Config "All" chrome handled in Step 4 */
+}
+
+/* Does dropdown row `row` of `menu_id` own a flyout submenu? */
+static int menu_row_has_submenu(int menu_id, int row) {
+    if (row < 0)
+        return 0;
+    return submenu_row_count(menu_id, row) > 0;
+}
+
+static int submenu_rect(int menu_id, int parent_row,
+                        int *sx, int *sy, int *sw, int *sh) {
     int pdx, pdy, pdw, pdh;
     int count;
     int max_lbl = 0;
@@ -368,20 +428,16 @@ static int scene_example_submenu_rect(int tag_idx,
     int win_w = ui_state_viewport().window_w;
     int win_h = ui_state_viewport().window_h;
 
-    if (g_open_menu != MENU_SCENE || win_w <= 0 || win_h <= 0)
+    if (menu_id < 0 || g_open_menu != menu_id || win_w <= 0 || win_h <= 0)
         return 0;
-    if (repl_example_count_for_tag(tag_idx) <= 0)
-        return 0;
-    parent_row = scene_parent_row_for_tag(tag_idx);
-    if (parent_row < 0)
+    if (!menu_row_has_submenu(menu_id, parent_row))
         return 0;
     if (!menu_dropdown_rect(&pdx, &pdy, &pdw, &pdh))
         return 0;
 
-    count = repl_example_count_for_tag(tag_idx);
+    count = submenu_row_count(menu_id, parent_row);
     for (int ordinal = 0; ordinal < count; ordinal++) {
-        int example_idx = repl_example_index_for_tag(tag_idx, ordinal);
-        const char *name = repl_example_name(example_idx);
+        const char *name = submenu_row_label(menu_id, parent_row, ordinal);
         int w = (int)(name ? strlen(name) : 0) * FONT_SMALL_W;
         if (w > max_lbl)
             max_lbl = w;
@@ -418,7 +474,8 @@ static int scene_example_submenu_rect(int tag_idx,
 int ui_menu_bar_scene_example_submenu_rect_for_test(int tag_idx,
                                                     int *sx, int *sy,
                                                     int *sw, int *sh) {
-    return scene_example_submenu_rect(tag_idx, sx, sy, sw, sh);
+    return submenu_rect(MENU_SCENE, scene_parent_row_for_tag(tag_idx),
+                        sx, sy, sw, sh);
 }
 
 int ui_menu_bar_dropdown_item_hit(int gx, int gy) {
@@ -436,35 +493,55 @@ int ui_menu_bar_dropdown_item_hit(int gx, int gy) {
     return row;
 }
 
-static UiHit scene_example_submenu_hit_test(int mx, int my) {
+/* Fill `h` with the per-menu hit payload for an open-submenu row.
+ * (Step 3 unifies this onto UI_HIT_SUBMENU_ITEM carrying menu_id; for
+ * now Scene keeps its existing UI_HIT_EXAMPLE_SUBMENU_ITEM contract so
+ * this step stays behaviour-neutral.) */
+static void submenu_fill_hit(UiHit *h, int menu_id, int parent_row,
+                             int ordinal, int mx, int my,
+                             int sx, int sy) {
+    int ry = ui_state_viewport().window_h - my;
+    if (menu_id == MENU_SCENE) {
+        int tag = scene_tag_idx_for_parent_row(parent_row);
+        int example_idx = submenu_row_abs_index(menu_id, parent_row, ordinal);
+        if (example_idx < 0)
+            return;
+        h->kind = UI_HIT_EXAMPLE_SUBMENU_ITEM;
+        h->cmd_idx = tag;
+        h->item_idx = example_idx;
+        h->line_idx = ordinal;
+        h->local_x = (float)(mx - sx);
+        h->local_y = (float)(ry - sy);
+    }
+}
+
+static UiHit submenu_hit_test(int mx, int my) {
     UiHit h = ui_hit_none();
     int sx, sy, sw, sh;
     int ry;
     int ordinal;
-    int example_idx;
 
-    if (g_scene_open_tag < 0)
+    if (g_submenu_menu_id < 0 || g_submenu_parent_row < 0)
         return h;
-    if (!scene_example_submenu_rect(g_scene_open_tag, &sx, &sy, &sw, &sh))
+    if (!submenu_rect(g_submenu_menu_id, g_submenu_parent_row,
+                      &sx, &sy, &sw, &sh))
         return h;
     if (!point_in_rect_gl(mx, my, sx, sy, sw, sh))
         return h;
 
     ry = ui_state_viewport().window_h - my;
     ordinal = (sy + sh - 4 - ry) / LINE_H;
-    if (ordinal < 0 || ordinal >= repl_example_count_for_tag(g_scene_open_tag))
+    if (ordinal < 0 ||
+        ordinal >= submenu_row_count(g_submenu_menu_id, g_submenu_parent_row))
         return h;
 
-    example_idx = repl_example_index_for_tag(g_scene_open_tag, ordinal);
-    if (example_idx < 0)
+    /* Inert chrome rows (Config "All" "### "/"---") never produce a hit. */
+    if (submenu_row_kind(g_submenu_menu_id, g_submenu_parent_row,
+                         ordinal) != GLR_CFG_ROW_ITEM)
         return h;
 
-    h.kind = UI_HIT_EXAMPLE_SUBMENU_ITEM;
-    h.cmd_idx = g_scene_open_tag;
-    h.item_idx = example_idx;
-    h.line_idx = ordinal;
-    h.local_x = (float)(mx - sx);
-    h.local_y = (float)(ry - sy);
+    submenu_fill_hit(&h, g_submenu_menu_id, g_submenu_parent_row,
+                     ordinal, mx, my, sx, sy);
     return h;
 }
 
@@ -478,8 +555,8 @@ UiHit ui_menu_bar_hit_test(int mx, int my) {
      * carries the menu_id the row belongs to so the controller can
      * activate the action without reading ui_menu_bar state. */
     if (g_open_menu >= 0) {
-        if (g_open_menu == MENU_SCENE) {
-            UiHit submenu_hit = scene_example_submenu_hit_test(mx, my);
+        if (g_submenu_menu_id == g_open_menu) {
+            UiHit submenu_hit = submenu_hit_test(mx, my);
             if (submenu_hit.kind != UI_HIT_NONE)
                 return submenu_hit;
         }
@@ -551,11 +628,16 @@ int ui_menu_bar_open_menu_id(void) {
     return g_open_menu;
 }
 
+static void submenu_reset(void) {
+    g_submenu_menu_id    = -1;
+    g_submenu_parent_row = -1;
+    g_submenu_open_time  = -1.0f;
+}
+
 void ui_menu_bar_close(void) {
     g_open_menu = -1;
     g_menu_item_hover = -1;
-    g_scene_open_tag = -1;
-    g_scene_submenu_open_time = -1.0f;
+    submenu_reset();
 }
 
 void ui_menu_bar_set_open_menu(int menu_id, float now) {
@@ -566,8 +648,7 @@ void ui_menu_bar_set_open_menu(int menu_id, float now) {
     g_open_menu = menu_id;
     g_menu_open_time = now;
     g_menu_item_hover = -1;
-    g_scene_open_tag = -1;
-    g_scene_submenu_open_time = -1.0f;
+    submenu_reset();
 }
 
 void ui_menu_bar_open_config(float now) {
@@ -645,13 +726,26 @@ static float ui_fade_alpha(float anim_time, float open_time) {
     return dt / UI_FADE_DURATION;
 }
 
-static int scene_submenu_hover_ordinal(const UiRenderSnapshot *snap,
-                                       int tag_idx) {
+/* Render-time "this row reflects the active selection" highlight.
+ * Scene: the active example. Config rows refine this in Step 8. */
+static int submenu_row_is_active(int menu_id, int parent_row, int ordinal,
+                                 const UiRenderSnapshot *snap) {
+    if (menu_id == MENU_SCENE) {
+        int example_idx = submenu_row_abs_index(menu_id, parent_row,
+                                                ordinal);
+        return example_idx >= 0 &&
+               example_idx == snap->scenes.active_example_idx;
+    }
+    return 0;
+}
+
+static int submenu_hover_ordinal(const UiRenderSnapshot *snap) {
     int sx, sy, sw, sh;
     int ry;
     int ordinal;
 
-    if (!scene_example_submenu_rect(tag_idx, &sx, &sy, &sw, &sh))
+    if (!submenu_rect(g_submenu_menu_id, g_submenu_parent_row,
+                      &sx, &sy, &sw, &sh))
         return -1;
     if (!point_in_rect_gl(snap->pointer.mouse_x, snap->pointer.mouse_y,
                           sx, sy, sw, sh))
@@ -659,63 +753,72 @@ static int scene_submenu_hover_ordinal(const UiRenderSnapshot *snap,
 
     ry = snap->viewport.window_h - snap->pointer.mouse_y;
     ordinal = (sy + sh - 4 - ry) / LINE_H;
-    if (ordinal < 0 || ordinal >= repl_example_count_for_tag(tag_idx))
+    if (ordinal < 0 ||
+        ordinal >= submenu_row_count(g_submenu_menu_id,
+                                     g_submenu_parent_row))
         return -1;
     return ordinal;
 }
 
-static void update_scene_submenu_hover_at(int mx, int my, float now) {
-    int tag_idx;
+/* Open the submenu owned by the hovered parent row; keep an already-open
+ * one alive while the pointer is inside its flyout rect; otherwise close
+ * it. Menu-agnostic — driven entirely by menu_row_has_submenu(). */
+static void update_submenu_hover_at(int mx, int my, float now) {
     int sx, sy, sw, sh;
 
-    if (g_open_menu != MENU_SCENE) {
-        g_scene_open_tag = -1;
-        g_scene_submenu_open_time = -1.0f;
+    if (g_open_menu < 0) {
+        submenu_reset();
         return;
     }
 
-    tag_idx = scene_tag_idx_for_parent_row(g_menu_item_hover);
-    if (tag_idx >= 0) {
-        if (tag_idx != g_scene_open_tag)
-            g_scene_submenu_open_time = now;
-        g_scene_open_tag = tag_idx;
+    if (menu_row_has_submenu(g_open_menu, g_menu_item_hover)) {
+        if (g_submenu_menu_id != g_open_menu ||
+            g_submenu_parent_row != g_menu_item_hover)
+            g_submenu_open_time = now;
+        g_submenu_menu_id    = g_open_menu;
+        g_submenu_parent_row = g_menu_item_hover;
         return;
     }
 
-    if (g_scene_open_tag >= 0 &&
-        scene_example_submenu_rect(g_scene_open_tag, &sx, &sy, &sw, &sh) &&
+    if (g_submenu_menu_id == g_open_menu && g_submenu_parent_row >= 0 &&
+        submenu_rect(g_submenu_menu_id, g_submenu_parent_row,
+                     &sx, &sy, &sw, &sh) &&
         point_in_rect_gl(mx, my, sx, sy, sw, sh))
         return;
 
-    g_scene_open_tag = -1;
-    g_scene_submenu_open_time = -1.0f;
+    submenu_reset();
 }
 
 int ui_menu_bar_update_pointer_hover(int mx, int my, float now) {
-    int old_hover = g_menu_item_hover;
-    int old_open_tag = g_scene_open_tag;
+    int old_hover  = g_menu_item_hover;
+    int old_menu   = g_submenu_menu_id;
+    int old_parent = g_submenu_parent_row;
 
     g_menu_item_hover = ui_menu_bar_dropdown_item_hit(mx, my);
-    update_scene_submenu_hover_at(mx, my, now);
+    update_submenu_hover_at(mx, my, now);
 
-    return old_hover != g_menu_item_hover || old_open_tag != g_scene_open_tag;
+    return old_hover != g_menu_item_hover ||
+           old_menu != g_submenu_menu_id ||
+           old_parent != g_submenu_parent_row;
 }
 
-static void render_scene_example_submenu(const UiRenderSnapshot *snap) {
+static void render_active_submenu(const UiRenderSnapshot *snap) {
     int sx, sy, sw, sh;
+    int menu_id    = g_submenu_menu_id;
+    int parent_row = g_submenu_parent_row;
     int count;
     int hover_ordinal;
     int ey;
     float alpha;
 
-    if (g_open_menu != MENU_SCENE || g_scene_open_tag < 0)
+    if (menu_id != g_open_menu || parent_row < 0)
         return;
-    if (!scene_example_submenu_rect(g_scene_open_tag, &sx, &sy, &sw, &sh))
+    if (!submenu_rect(menu_id, parent_row, &sx, &sy, &sw, &sh))
         return;
 
-    count = repl_example_count_for_tag(g_scene_open_tag);
-    hover_ordinal = scene_submenu_hover_ordinal(snap, g_scene_open_tag);
-    alpha = ui_fade_alpha(snap->anim_time, g_scene_submenu_open_time);
+    count = submenu_row_count(menu_id, parent_row);
+    hover_ordinal = submenu_hover_ordinal(snap);
+    alpha = ui_fade_alpha(snap->anim_time, g_submenu_open_time);
 
     ui_clr_a(UI_TOK_RAISED, 0.98f * alpha);
     glRectf((float)sx, (float)sy, (float)(sx + sw), (float)(sy + sh));
@@ -729,12 +832,36 @@ static void render_scene_example_submenu(const UiRenderSnapshot *snap) {
 
     ey = sy + sh - LINE_H + 1;
     for (int ordinal = 0; ordinal < count; ordinal++) {
-        int example_idx = repl_example_index_for_tag(g_scene_open_tag, ordinal);
-        const char *name = repl_example_name(example_idx);
-        int is_active = (example_idx == snap->scenes.active_example_idx);
+        const char *name = submenu_row_label(menu_id, parent_row, ordinal);
+        GlrConfigRowKind kind = submenu_row_kind(menu_id, parent_row,
+                                                 ordinal);
+        int is_active;
 
-        if (!name)
+        if (!name) {
+            ey -= LINE_H;
             continue;
+        }
+
+        /* Config "All" chrome (header/separator) renders inert. */
+        if (kind == GLR_CFG_ROW_HEADER) {
+            ui_clr_a(UI_TOK_TEXT_SECTION, alpha);
+            gl2d_draw_string((float)(sx + 14), (float)ey,
+                             name, FONT_SMALL);
+            ey -= LINE_H;
+            continue;
+        }
+        if (kind == GLR_CFG_ROW_SEPARATOR) {
+            ui_clr_a(UI_TOK_DIVIDER, alpha);
+            glBegin(GL_LINES);
+            glVertex2f((float)(sx + 6),      (float)(ey + LINE_H / 2 - 2));
+            glVertex2f((float)(sx + sw - 6), (float)(ey + LINE_H / 2 - 2));
+            glEnd();
+            ey -= LINE_H;
+            continue;
+        }
+
+        is_active = submenu_row_is_active(menu_id, parent_row, ordinal,
+                                          snap);
 
         if (ordinal == hover_ordinal) {
             ui_clr_a(UI_TOK_DROPDOWN_ITEM_HOVER_BG, alpha);
@@ -1072,12 +1199,10 @@ void ui_menu_bar_render_example_dropdown(const UiRenderSnapshot *snap) {
         }
 
         int scene_hit = -1;
-        int scene_tag_idx = -1;
-        int is_open_tag = 0;
-        if (menu_id == MENU_SCENE && tag_count >= 0) {
-            scene_tag_idx = scene_tag_idx_for_parent_row(i);
-            is_open_tag = (scene_tag_idx >= 0 && scene_tag_idx == g_scene_open_tag);
-        }
+        int has_submenu = menu_row_has_submenu(menu_id, i);
+        int is_open_parent = (has_submenu &&
+                              menu_id == g_submenu_menu_id &&
+                              i == g_submenu_parent_row);
         if (menu_id == MENU_SCENE && tag_count >= 0) {
             int scene_n = i - (tag_count + SCENE_OFF_SCENES);
             if (scene_n >= 0 && scene_n < repl_user_scene_count())
@@ -1086,7 +1211,7 @@ void ui_menu_bar_render_example_dropdown(const UiRenderSnapshot *snap) {
         int is_active_scene   = (scene_hit >= 0 &&
                                  scene_hit == snap->user_scene_active_idx);
 
-        if (i == g_menu_item_hover || is_open_tag) {
+        if (i == g_menu_item_hover || is_open_parent) {
             ui_clr_a(UI_TOK_DROPDOWN_ITEM_HOVER_BG, alpha);
             glRectf((float)(dx + 1), (float)(ey - 2),
                       (float)(dx + 1) + (float)(dw - 2), (float)(ey - 2) + (float)LINE_H);
@@ -1099,7 +1224,7 @@ void ui_menu_bar_render_example_dropdown(const UiRenderSnapshot *snap) {
 
         gl2d_draw_string((float)(dx + 14), (float)ey, lbl, FONT_SMALL);
 
-        if (scene_tag_idx >= 0) {
+        if (has_submenu) {
             ui_clr_a(UI_TOK_TEXT_MUTED, alpha);
             gl2d_draw_string((float)(dx + dw - 20), (float)ey, ">", FONT_SMALL);
         }
@@ -1129,7 +1254,7 @@ void ui_menu_bar_render_example_dropdown(const UiRenderSnapshot *snap) {
         ey -= LINE_H;
     }
 
-    render_scene_example_submenu(snap);
+    render_active_submenu(snap);
 
     glDisable(GL_BLEND);
     gl2d_end();

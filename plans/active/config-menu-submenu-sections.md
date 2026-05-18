@@ -7,7 +7,7 @@ commit and updates this file's progress log below.
 ## Progress log
 
 - [x] Step 1 — Section model in `glr_config` (incl. `row_kind`)
-- [ ] Step 2 — Generalize submenu plumbing
+- [x] Step 2 — Generalize submenu plumbing (Scene-wired; Config stubbed)
 - [ ] Step 3 — `UiHit` contract rename
 - [ ] Step 4 — Config menu shape
 - [ ] Step 5 — Parent-row click guard
@@ -176,15 +176,32 @@ Order matters; each step builds + passes tests before the next.
    count/labels, range contiguity & item-only invariant, and that
    header+separator+item kinds partition the whole table
    (`build/release-gl-stubs/test_glr_actions` → 157/157).
-2. **Generalize submenu plumbing in `src/ui/menu_bar.c`.** Replace
-   `g_scene_open_tag`/`g_scene_submenu_open_time` with a generic
-   `{int open_menu_id; int open_parent_row; float open_time;}`.
-   Rewrite `scene_example_submenu_rect/_hit_test/render/_hover` to take
-   `(menu_id, parent_row)` and resolve rows through a small static
-   dispatch:
-   - `MENU_SCENE` → existing `repl_example_*_for_tag`
-   - `MENU_CONFIG` → `glr_config_section_*`
-   Keep the `_for_test` rect accessor; add a Config-parametrized twin.
+2. **Generalize submenu plumbing in `src/ui/menu_bar.c`.** ✅ **Done**
+   (commit `Step 2`). Replaced `g_scene_open_tag` /
+   `g_scene_submenu_open_time` with generic
+   `g_submenu_menu_id`/`g_submenu_parent_row`/`g_submenu_open_time`
+   (+ `submenu_reset()`). Rewrote the scene-specific functions into a
+   menu-agnostic engine — `submenu_rect`, `submenu_hit_test`,
+   `submenu_hover_ordinal`, `update_submenu_hover_at`,
+   `render_active_submenu` — driven by a small file-static provider
+   keyed by `(menu_id, parent_row)`: `submenu_row_count/_label/
+   _abs_index/_kind/_is_active` + `menu_row_has_submenu`. `MENU_SCENE`
+   resolves the parent row back to its tag and reuses
+   `repl_example_*_for_tag`; the render path now also handles
+   `GLR_CFG_ROW_HEADER`/`SEPARATOR` rows as inert chrome (for the
+   future Config "All" flyout). `_for_test` accessor kept (now maps
+   `tag → parent_row → submenu_rect`).
+   **Deviations from sketch (kept the step behaviour-neutral):**
+   - The Config side of the provider is *stubbed* (`submenu_row_count`
+     returns 0 for non-Scene) — the `glr_config_section_*` wiring lands
+     in Step 4 with the menu-shape change, so this commit cannot regress
+     Config.
+   - The `UiHit` contract is **not** renamed yet (that is Step 3). A
+     `submenu_fill_hit()` shim still emits the existing
+     `UI_HIT_EXAMPLE_SUBMENU_ITEM` payload for Scene, so existing
+     hit-test tests stay green verbatim.
+   Verified: `make sample USE_GL_STUBS=1` clean; full suite
+   `make test USE_GL_STUBS=1` → 43/43 binaries, 6024/6024 tests.
 3. **`UiHit` contract.** Rename `UI_HIT_EXAMPLE_SUBMENU_ITEM` →
    `UI_HIT_SUBMENU_ITEM`; carry `cmd_idx = menu_id`, `item_idx =
    absolute target index` (example idx or `g_cfg_items[]` idx),
