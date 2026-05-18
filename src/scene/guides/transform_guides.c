@@ -721,6 +721,8 @@ void scene_transform_guides_render_if_due(const SceneGuideSnapshot *snapshot,
     for (int pass = 0; pass < 2; pass++) {
         if (pass == 0) {
             glDisable(GL_DEPTH_TEST);
+            glEnable(GL_LINE_STIPPLE);
+            glLineStipple(1, 0x0F0F);
             g_guide_alpha_mul = 0.4f;
         } else {
             glEnable(GL_DEPTH_TEST);
@@ -733,6 +735,8 @@ void scene_transform_guides_render_if_due(const SceneGuideSnapshot *snapshot,
             draw_scale_guide(snapshot, live_cmd, guide_origin);
         else
             draw_rotate_guide(snapshot, live_cmd, guide_origin);
+
+        glDisable(GL_LINE_STIPPLE);
     }
     g_guide_alpha_mul = 1.0f;
     glPopAttrib();
