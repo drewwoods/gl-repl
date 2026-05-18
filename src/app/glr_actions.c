@@ -21,6 +21,7 @@
 #include "editor/input.h"
 #include "editor/completion.h"
 #include "keys.h"
+#include "repl/help_text.h"
 #include "repl/tutorials.h"
 #include "widgets/replay.h"
 #include "widgets/replay_state.h"
@@ -452,9 +453,18 @@ void glr_action_cursor_blink_reset(void) {
     cp->blink_tick = 0;
 }
 
+/* Highest valid help tab index, derived from the actual content so
+ * adding/removing a tab in help_text.c needs no edit here. */
+static int glr_help_max_tab_idx(void) {
+    const ReplHelpContent *help = repl_help_text_build();
+    if (!help || help->tab_count <= 0)
+        return 0;
+    return help->tab_count - 1;
+}
+
 void glr_action_help_tab_next(void) {
     int tab = editor_help_session_tab_idx();
-    if (tab < 1) {
+    if (tab < glr_help_max_tab_idx()) {
         editor_help_session_set_tab(tab + 1);
         editor_help_session_set_scroll(0);
     }

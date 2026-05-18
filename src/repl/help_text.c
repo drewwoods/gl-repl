@@ -19,6 +19,56 @@
 #define _HELP_STR2(x) #x
 #define _HELP_STR(x)  _HELP_STR2(x)
 
+/* Overview tab: orientation for a first-time user — what the program
+ * is, what each region of the window is, what the menu bar does, and
+ * where to look next. Static/immortal strings (handed to the renderer
+ * by pointer like k_lang_sections_tail). Same '\t' left/right column
+ * convention; section headers start in column 0, 4-space-indented
+ * lines render in the accent colour (used here for the example). */
+static const char *const k_tab_overview[] = {
+    "OpenGL Immediate-Mode REPL",
+    "",
+    "  Type classic OpenGL commands, press ; to run each one, and",
+    "  watch the geometry build up live in the 3D view. Every command",
+    "  stays in an editable code panel, so a scene is just a readable",
+    "  list of GL calls you can revisit, tweak, animate, replay",
+    "  step-by-step, and export as standalone C.",
+    "",
+    "What you're looking at:",
+    "  3D viewport        \tYour geometry, lit and rendered every frame",
+    "  Code panel         \tThe live, editable list of GL commands",
+    "  Status bar         \tMessages, AA / profile info, clickable keycaps",
+    "  Menu bar (top)     \tFile / Scene / Tutorials / Config dropdowns",
+    "  Scene tabs         \tSwitch between your saved scenes",
+    "",
+    "The menu bar:",
+    "  File               \tNew / Save / Load a scene or whole workspace",
+    "  Scene              \tLoad a built-in example or one of your scenes",
+    "  Tutorials          \tGuided, step-by-step lessons",
+    "  Config             \tToggle grid, axes, lighting, backdrop, etc.",
+    "  Replay (far right) \tStep through the scene one command at a time",
+    "  search...          \tFind text in the code buffer (also Ctrl+F)",
+    "",
+    "Getting started:",
+    "  Enter one command at a time, ending each with ;",
+    "    glBegin(GL_TRIANGLES)",
+    "    glVertex3f(0, 1, 0)",
+    "    glVertex3f(-1, -1, 0)",
+    "    glVertex3f(1, -1, 0)",
+    "    glEnd()",
+    "  Drag in the viewport to orbit; scroll to zoom.",
+    "  Press Ctrl+T to animate using the time variable 't'.",
+    "  Press F12 to cycle the built-in examples for ideas.",
+    "",
+    "Finding your way around:",
+    "  Open this help any time with F1 (or the 'F1 help' keycap).",
+    "  The Commands tab lists every GL command and the REPL language.",
+    "  The Keys tab is the full keyboard and mouse reference.",
+    "  Esc closes this overlay; click outside it to dismiss too.",
+    "",
+    NULL
+};
+
 /* '\t' marks the boundary between left column (command) and right
  * column (description). Lines without '\t' render in a single colour
  * based on indent level.
@@ -199,7 +249,7 @@ static const char *g_tab_keys[HELP_KEYS_MAX];
 static char        g_cmd_strbuf[HELP_CMD_LINES_MAX][HELP_CMD_LINE_BUF];
 static const char *g_tab_commands[HELP_CMD_LINES_MAX];
 
-static ReplHelpTab g_tabs[2];
+static ReplHelpTab g_tabs[3];
 static ReplHelpContent g_content;
 
 static const char *help_group_header(ReplHelpGroup g) {
@@ -334,13 +384,17 @@ const ReplHelpContent *repl_help_text_build(void) {
     g_tab_keys[nk++] = "";
     g_tab_keys[nk]   = NULL;
 
-    g_tabs[0].label = "Commands";
-    g_tabs[0].lines = g_tab_commands;
-    g_tabs[1].label = "Keys";
-    g_tabs[1].lines = g_tab_keys;
+    /* Overview leads so a first-time user lands on orientation, not
+     * the raw command dump. */
+    g_tabs[0].label = "Overview";
+    g_tabs[0].lines = k_tab_overview;
+    g_tabs[1].label = "Commands";
+    g_tabs[1].lines = g_tab_commands;
+    g_tabs[2].label = "Keys";
+    g_tabs[2].lines = g_tab_keys;
 
     g_content.title     = "HELP";
     g_content.tabs      = g_tabs;
-    g_content.tab_count = 2;
+    g_content.tab_count = 3;
     return &g_content;
 }
