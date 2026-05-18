@@ -14,7 +14,7 @@ commit and updates this file's progress log below.
 - [x] Step 6 — Controller routing
 - [x] Step 7 — Right-click backward-cycle in flyouts
 - [x] Step 8 — Render verification (gates green; All-flyout scroll noted)
-- [ ] Step 9 — Tests + docs
+- [x] Step 9 — Tests + docs (full gate green; CLAUDE.md + MODULES.md updated)
 
 ## Goal
 
@@ -322,15 +322,38 @@ Order matters; each step builds + passes tests before the next.
    and unaffected; All is a secondary escape hatch. A scrolling
    submenu is a separate follow-up, not part of this plan (added to
    Open sub-questions).
-9. **Tests + docs.**
-   - Existing menu tests asserting flat Config row counts/labels will
-     change — update them; add submenu rect/hit tests for Config
-     mirroring the Scene ones.
-   - `make test`, `make test-stubs`, `make sample USE_GL_STUBS=1`,
-     `make sample`, `make check-state-ownership` (UI-purity / boundary
-     guards — submenu render stays snapshot-pure).
-   - Update CLAUDE.md (Config Menu section) + MODULES.md if the menu
-     ownership notes change.
+9. **Tests + docs.** ✅ **Done** (commit `Step 9`).
+   - Flat-Config test churn was absorbed in the steps that changed the
+     behavior (4/5/7). Added positive coverage:
+     `test_config_submenu_with_stubs` (flyout rect/hit/render +
+     `All`-flyout HEADER stays inert chrome) mirroring
+     `test_scene_submenu_with_stubs`.
+   - **Gate fix (Step 7 latent issue, surfaced here):**
+     `submenu_row_point` was inside the `#ifdef GL_STUBS` block but the
+     non-stub `test_config_submenu_right_press` used it → real-GL
+     `make test` failed to compile. Moved the pure-geometry helper
+     outside the guard.
+   - Full gate green: `make test` 5436/5436, `make test-stubs`
+     6084/6084, `make sample` (real GL) clean, `make sample
+     USE_GL_STUBS=1` clean, `make check-state-ownership` clean.
+   - Docs: CLAUDE.md "Config Menu" rewritten (section flyouts, All,
+     shared engine, click/right-press semantics, add-an-item note);
+     MODULES.md `ui_menu_bar` row notes the shared submenu engine.
+
+## Outcome
+
+All nine steps landed as separate commits with the plan kept in lock-
+step. Option A (generalize) delivered: one `(menu_id, parent_row)`
+flyout engine now serves both the Scene example menu and the new
+Config section/All menu, with the four review findings closed
+(parent-row guard, single All ownership, right-press in flyout,
+row-kind chrome). Net deviations from the original sketch — all
+documented inline above — were forced by the "every step builds +
+passes" constraint: render columns pulled Step 8→4, the Step 4↔5
+coupling collapsed Step 5 to option (b), Step 6 routes Config leaves
+directly via `glr_cfg_cycle_row` (not the now-inert activate branch),
+and Step 8 became verification. One out-of-scope follow-up recorded:
+a scrolling submenu for the tall `All` flyout.
 
 ## Open sub-questions for review
 
