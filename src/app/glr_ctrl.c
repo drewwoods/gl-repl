@@ -2927,14 +2927,23 @@ static int route_menu_item_hit(const UiHit *hit) {
     return 1;
 }
 
-/* UI_HIT_SUBMENU_ITEM (Scene): Scene menu tag submenu row. The hit
- * payload carries the global flat example index in item_idx, so route
- * directly through the shared scene-load helper instead of
- * reconstructing parent menu row offsets. (Step 6 generalizes this to
- * branch on hit->cmd_idx == menu_id for the Config submenu too.) */
-static int route_example_submenu_item_hit(const UiHit *hit) {
+/* UI_HIT_SUBMENU_ITEM: a flyout row. cmd_idx is the owning menu_id;
+ * item_idx is the absolute target index the provider resolved.
+ *  - MENU_SCENE: item_idx = global flat example index → load it and
+ *    dismiss the menu (a scene pick is a one-shot action).
+ *  - MENU_CONFIG: item_idx = absolute g_cfg_items[] index → cycle the
+ *    item forward via glr_cfg_cycle_row (NOT through
+ *    glr_action_menu_item_activate, whose Config branch is the inert
+ *    parent-row guard from Step 5) and KEEP the dropdown + flyout open
+ *    so repeated toggles work, matching the old flat Config dropdown. */
+static int route_submenu_item_hit(const UiHit *hit) {
     if (hit->item_idx < 0)
         return 0;
+    if (hit->cmd_idx == GLR_MENU_CONFIG) {
+        glr_cfg_cycle_row(hit->item_idx, 1);
+        editor_request_redraw();
+        return 1;
+    }
     glr_scene_load_example(hit->item_idx);
     ui_menu_bar_close();
     editor_request_redraw();
@@ -3068,7 +3077,7 @@ int glr_ctrl_router_handle_code_panel_hit(UiHit hit, int x, int y) {
     case UI_HIT_MENU_ITEM:
         consumed = route_menu_item_hit(&hit); break;
     case UI_HIT_SUBMENU_ITEM:
-        consumed = route_example_submenu_item_hit(&hit); break;
+        consumed = route_submenu_item_hit(&hit); break;
     case UI_HIT_VARIABLE_SLIDER:
         consumed = route_variable_slider_hit(x, y); break;
     case UI_HIT_PANEL_DIVIDER:
