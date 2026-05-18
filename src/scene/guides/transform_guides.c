@@ -12,6 +12,20 @@ static void transform_guides_pop_state(void) {
     glPopAttrib();
 }
 
+/* Per-pass alpha multiplier. The render dispatcher draws each guide twice:
+ * a depth-test-off ghost pass at 0.4x so rotated geometry can't fully hide
+ * the guide, then a depth-tested solid pass at 1.0x on top. Every guide
+ * color routes through tg_color4f so the multiplier reaches the static
+ * arrowheads/points too, not just the alpha_scale-aware pulse elements. */
+static float g_guide_alpha_mul = 1.0f;
+
+static void tg_color4f(float r, float g, float b, float a) {
+    a *= g_guide_alpha_mul;
+    if (a < 0.0f) a = 0.0f;
+    if (a > 1.0f) a = 1.0f;
+    glColor4f(r, g, b, a);
+}
+
 /* Cmds that emit geometry - hitting one of these means "something just got
  * drawn with the current modelview", so further transforms shouldn't factor
  * into the cursor-line's guide. */
@@ -112,7 +126,7 @@ static void draw_pulse_segment(const SceneGuideSnapshot *snapshot,
     float as = snapshot->alpha_scale;
     glLineWidth(2.0f);
     glBegin(GL_LINES);
-    glColor4f(rgb[0], rgb[1], rgb[2], fminf(0.30f * as, 1.0f));
+    tg_color4f(rgb[0], rgb[1], rgb[2], fminf(0.30f * as, 1.0f));
     glVertex3f(a[0], a[1], a[2]);
     glVertex3f(b[0], b[1], b[2]);
     glEnd();
@@ -134,16 +148,16 @@ static void draw_pulse_segment(const SceneGuideSnapshot *snapshot,
 
     glLineWidth(3.5f);
     glBegin(GL_LINES);
-    glColor4f(rgb[0], rgb[1], rgb[2], fminf(0.05f * as, 1.0f));
+    tg_color4f(rgb[0], rgb[1], rgb[2], fminf(0.05f * as, 1.0f));
     glVertex3f(trail[0], trail[1], trail[2]);
-    glColor4f(rgb[0], rgb[1], rgb[2], fminf(glow * 0.75f * as, 1.0f));
+    tg_color4f(rgb[0], rgb[1], rgb[2], fminf(glow * 0.75f * as, 1.0f));
     glVertex3f(pos[0], pos[1], pos[2]);
     glEnd();
     glLineWidth(1.0f);
 
     glPointSize(8.0f);
     glBegin(GL_POINTS);
-    glColor4f(rgb[0], rgb[1], rgb[2], fminf(glow * as, 1.0f));
+    tg_color4f(rgb[0], rgb[1], rgb[2], fminf(glow * as, 1.0f));
     glVertex3f(pos[0], pos[1], pos[2]);
     glEnd();
     glPointSize(1.0f);
@@ -202,7 +216,7 @@ static void draw_translate_guide(const SceneGuideSnapshot *snapshot,
     draw_pulse_segment(snapshot, p0, base, rgb);
 
     glLineWidth(3.0f);
-    glColor4f(head_rgb[0], head_rgb[1], head_rgb[2], 0.95f);
+    tg_color4f(head_rgb[0], head_rgb[1], head_rgb[2], 0.95f);
     glBegin(GL_LINES);
     for (int i = 0; i < 4; i++) {
         float sx = (i == 0 ?  rx : i == 1 ? -rx : i == 2 ?  bx : -bx);
@@ -224,12 +238,12 @@ static void draw_translate_guide(const SceneGuideSnapshot *snapshot,
 
     glPointSize(6.0f);
     glBegin(GL_POINTS);
-    glColor4f(rgb[0], rgb[1], rgb[2], 0.7f);
+    tg_color4f(rgb[0], rgb[1], rgb[2], 0.7f);
     glVertex3f(p0[0], p0[1], p0[2]);
     glEnd();
     glPointSize(9.0f);
     glBegin(GL_POINTS);
-    glColor4f(head_rgb[0], head_rgb[1], head_rgb[2], 1.0f);
+    tg_color4f(head_rgb[0], head_rgb[1], head_rgb[2], 1.0f);
     glVertex3f(p1[0], p1[1], p1[2]);
     glEnd();
     glPointSize(1.0f);
@@ -295,7 +309,7 @@ static void draw_scale_guide(const SceneGuideSnapshot *snapshot,
 
         float tick = 0.08f;
         glLineWidth(2.0f);
-        glColor4f(0.9f, 0.9f, 0.9f, 0.9f);
+        tg_color4f(0.9f, 0.9f, 0.9f, 0.9f);
         glBegin(GL_LINES);
         glVertex3f(p0[0]-tick, p0[1], p0[2]); glVertex3f(p0[0]+tick, p0[1], p0[2]);
         glVertex3f(p0[0], p0[1]-tick, p0[2]); glVertex3f(p0[0], p0[1]+tick, p0[2]);
@@ -303,7 +317,7 @@ static void draw_scale_guide(const SceneGuideSnapshot *snapshot,
         glEnd();
         glPointSize(6.0f);
         glBegin(GL_POINTS);
-        glColor4f(0.95f, 0.95f, 0.95f, 1.0f);
+        tg_color4f(0.95f, 0.95f, 0.95f, 1.0f);
         glVertex3f(p0[0], p0[1], p0[2]);
         glEnd();
         glPointSize(1.0f);
@@ -329,13 +343,13 @@ static void draw_scale_guide(const SceneGuideSnapshot *snapshot,
             draw_pulse_segment(snapshot, p0, base, rgb);
 
             glLineWidth(3.0f);
-            glColor4f(head_rgb[0], head_rgb[1], head_rgb[2], 0.95f);
+            tg_color4f(head_rgb[0], head_rgb[1], head_rgb[2], 0.95f);
             draw_arrow_head(p1, dir, head_len);
             glLineWidth(1.0f);
 
             glPointSize(9.0f);
             glBegin(GL_POINTS);
-            glColor4f(head_rgb[0], head_rgb[1], head_rgb[2], 1.0f);
+            tg_color4f(head_rgb[0], head_rgb[1], head_rgb[2], 1.0f);
             glVertex3f(p1[0], p1[1], p1[2]);
             glEnd();
             glPointSize(1.0f);
@@ -358,14 +372,14 @@ static void draw_scale_guide(const SceneGuideSnapshot *snapshot,
             const float *pb = axes[perp_b[a]];
 
             glLineWidth(1.5f);
-            glColor4f(0.55f, 0.55f, 0.55f, fminf(0.45f * snapshot->alpha_scale, 1.0f));
+            tg_color4f(0.55f, 0.55f, 0.55f, fminf(0.45f * snapshot->alpha_scale, 1.0f));
             glBegin(GL_LINES);
             glVertex3f(0.0f, 0.0f, 0.0f);
             glVertex3f(ax[0], ax[1], ax[2]);
             glEnd();
 
             glLineWidth(2.0f);
-            glColor4f(0.9f, 0.9f, 0.9f, 0.9f);
+            tg_color4f(0.9f, 0.9f, 0.9f, 0.9f);
             glBegin(GL_LINES);
             glVertex3f(ax[0] - pa[0]*tick, ax[1] - pa[1]*tick, ax[2] - pa[2]*tick);
             glVertex3f(ax[0] + pa[0]*tick, ax[1] + pa[1]*tick, ax[2] + pa[2]*tick);
@@ -374,7 +388,7 @@ static void draw_scale_guide(const SceneGuideSnapshot *snapshot,
             glEnd();
             glPointSize(5.0f);
             glBegin(GL_POINTS);
-            glColor4f(0.95f, 0.95f, 0.95f, 1.0f);
+            tg_color4f(0.95f, 0.95f, 0.95f, 1.0f);
             glVertex3f(ax[0], ax[1], ax[2]);
             glEnd();
             glPointSize(1.0f);
@@ -399,7 +413,7 @@ static void draw_scale_guide(const SceneGuideSnapshot *snapshot,
             draw_pulse_segment(snapshot, from, base, axis_rgb[a]);
 
             glLineWidth(2.5f);
-            glColor4f(axis_rgb[a][0]*0.6f + 0.4f,
+            tg_color4f(axis_rgb[a][0]*0.6f + 0.4f,
                       axis_rgb[a][1]*0.6f + 0.4f,
                       axis_rgb[a][2]*0.6f + 0.4f, 0.95f);
             draw_arrow_head(tip, dir, head_len);
@@ -407,7 +421,7 @@ static void draw_scale_guide(const SceneGuideSnapshot *snapshot,
 
             glPointSize(7.0f);
             glBegin(GL_POINTS);
-            glColor4f(axis_rgb[a][0]*0.6f + 0.4f,
+            tg_color4f(axis_rgb[a][0]*0.6f + 0.4f,
                       axis_rgb[a][1]*0.6f + 0.4f,
                       axis_rgb[a][2]*0.6f + 0.4f, 1.0f);
             glVertex3f(tip[0], tip[1], tip[2]);
@@ -454,7 +468,7 @@ static void draw_rotate_guide(const SceneGuideSnapshot *snapshot,
     float axis_len = (plen > 0.5f ? plen : 0.5f) * 1.1f;
     float as = snapshot->alpha_scale;
     glLineWidth(2.0f);
-    glColor4f(rgb[0], rgb[1], rgb[2], fminf(0.55f * as, 1.0f));
+    tg_color4f(rgb[0], rgb[1], rgb[2], fminf(0.55f * as, 1.0f));
     glBegin(GL_LINES);
     glVertex3f(-ax*axis_len, -ay*axis_len, -az*axis_len);
     glVertex3f( ax*axis_len,  ay*axis_len,  az*axis_len);
@@ -511,7 +525,7 @@ static void draw_rotate_guide(const SceneGuideSnapshot *snapshot,
     }
 
     glLineWidth(2.0f);
-    glColor4f(rgb[0], rgb[1], rgb[2], fminf(0.30f * as, 1.0f));
+    tg_color4f(rgb[0], rgb[1], rgb[2], fminf(0.30f * as, 1.0f));
     glBegin(GL_LINE_STRIP);
     for (int i = 0; i <= segs; i++) glVertex3fv(arc[i]);
     glEnd();
@@ -541,33 +555,33 @@ static void draw_rotate_guide(const SceneGuideSnapshot *snapshot,
 
     glLineWidth(3.5f);
     glBegin(GL_LINE_STRIP);
-    glColor4f(rgb[0], rgb[1], rgb[2], fminf(0.05f * as, 1.0f));
+    tg_color4f(rgb[0], rgb[1], rgb[2], fminf(0.05f * as, 1.0f));
     glVertex3f(trail[0], trail[1], trail[2]);
     for (int i = i_tp + 1; i <= i_pos; i++) {
         float u = (float)(i - i_tp) / (float)(i_pos - i_tp + 1);
-        glColor4f(rgb[0], rgb[1], rgb[2], fminf((0.05f + (glow * 0.7f) * u) * as, 1.0f));
+        tg_color4f(rgb[0], rgb[1], rgb[2], fminf((0.05f + (glow * 0.7f) * u) * as, 1.0f));
         glVertex3fv(arc[i]);
     }
-    glColor4f(rgb[0], rgb[1], rgb[2], fminf(glow * 0.75f * as, 1.0f));
+    tg_color4f(rgb[0], rgb[1], rgb[2], fminf(glow * 0.75f * as, 1.0f));
     glVertex3f(pos[0], pos[1], pos[2]);
     glEnd();
     glLineWidth(1.0f);
 
     glPointSize(8.0f);
     glBegin(GL_POINTS);
-    glColor4f(bright[0], bright[1], bright[2], glow);
+    tg_color4f(bright[0], bright[1], bright[2], glow);
     glVertex3f(pos[0], pos[1], pos[2]);
     glEnd();
     glPointSize(1.0f);
 
     glPointSize(6.0f);
     glBegin(GL_POINTS);
-    glColor4f(rgb[0], rgb[1], rgb[2], 0.7f);
+    tg_color4f(rgb[0], rgb[1], rgb[2], 0.7f);
     glVertex3f(p_start[0], p_start[1], p_start[2]);
     glEnd();
     glPointSize(10.0f);
     glBegin(GL_POINTS);
-    glColor4f(bright[0], bright[1], bright[2], 0.95f);
+    tg_color4f(bright[0], bright[1], bright[2], 0.95f);
     glVertex3fv(arc[segs]);
     glEnd();
     glPointSize(1.0f);
@@ -682,12 +696,32 @@ void scene_transform_guides_render_if_due(const SceneGuideSnapshot *snapshot,
         compute_after_cursor_origin(snapshot, plan->after_flat_idx, guide_origin);
     }
 
-    if (live_cmd->type == CMD_TRANSLATE3F)
-        draw_translate_guide(snapshot, live_cmd, guide_origin);
-    else if (live_cmd->type == CMD_SCALEF)
-        draw_scale_guide(snapshot, live_cmd, guide_origin);
-    else
-        draw_rotate_guide(snapshot, live_cmd, guide_origin);
+    /* Pass 0: depth-test off, 0.4x alpha - a ghost the geometry can't hide
+     * (rotation guides in particular often sit inside the rotating mesh).
+     * Pass 1: depth-tested, full alpha, drawn over the ghost so the guide
+     * still reads crisply where it isn't occluded. The draw helpers each
+     * glPushAttrib(GL_ALL_ATTRIB_BITS), so they capture and restore
+     * whatever depth state we set here; the outer push/pop guards the
+     * caller's depth state across both passes. */
+    glPushAttrib(GL_DEPTH_BUFFER_BIT);
+    for (int pass = 0; pass < 2; pass++) {
+        if (pass == 0) {
+            glDisable(GL_DEPTH_TEST);
+            g_guide_alpha_mul = 0.4f;
+        } else {
+            glEnable(GL_DEPTH_TEST);
+            g_guide_alpha_mul = 1.0f;
+        }
+
+        if (live_cmd->type == CMD_TRANSLATE3F)
+            draw_translate_guide(snapshot, live_cmd, guide_origin);
+        else if (live_cmd->type == CMD_SCALEF)
+            draw_scale_guide(snapshot, live_cmd, guide_origin);
+        else
+            draw_rotate_guide(snapshot, live_cmd, guide_origin);
+    }
+    g_guide_alpha_mul = 1.0f;
+    glPopAttrib();
 
     glPopMatrix();
     plan->consumed = 1;
