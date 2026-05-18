@@ -260,7 +260,7 @@ void repl_executor_unwind_tracked_transform_stack(int *matrix_depth) {
     }
 }
 
-int apply_state_cmd(const GLCmd *cmd, float alpha_scale) {
+int repl_apply_state_cmd(const GLCmd *cmd, float alpha_scale) {
     if (!cmd)
         return 0;
 
@@ -485,7 +485,7 @@ void repl_execute_program(const ReplExecutionOptions *options) {
         case CMD_COLOR_MATERIAL:
         case CMD_MATERIALF:
         case CMD_LIGHT_MODEL_I:
-            apply_state_cmd(&flat_cmds[pc], g_execute_alpha_scale);
+            repl_apply_state_cmd(&flat_cmds[pc], g_execute_alpha_scale);
             break;
         case CMD_VERTEX2F:
             if (in_begin)
@@ -494,7 +494,7 @@ void repl_execute_program(const ReplExecutionOptions *options) {
         case CMD_FRONT_FACE:
         case CMD_DEPTH_MASK:
         case CMD_COLOR_MASK:
-            apply_state_cmd(&flat_cmds[pc], g_execute_alpha_scale);
+            repl_apply_state_cmd(&flat_cmds[pc], g_execute_alpha_scale);
             break;
         /* The CMD_*-not-in-begin block below relies on the parser
          * rejecting these commands inside glBegin/glEnd
@@ -509,7 +509,7 @@ void repl_execute_program(const ReplExecutionOptions *options) {
         case CMD_POINT_PARAMETER_FV:
         case CMD_BLEND_FUNC:
         case CMD_CLEAR_COLOR:
-            apply_state_cmd(&flat_cmds[pc], g_execute_alpha_scale);
+            repl_apply_state_cmd(&flat_cmds[pc], g_execute_alpha_scale);
             break;
         case CMD_GLUT_TORUS:
             glutSolidTorus((double)flat_cmds[pc].args[0],

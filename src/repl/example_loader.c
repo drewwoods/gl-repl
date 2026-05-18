@@ -449,7 +449,7 @@ static void load_example_lines(const char *const *lines) {
     /* Step 5b: examples are loaded via the lean
      * repl_load_apply_line, mirroring src/repl/export.c's importer.
      *
-     * Two passes match the editor's try_commit_func_def reorder
+     * Two passes match the editor's editor_try_commit_func_def reorder
      * behavior at load time: func_def blocks (with their leading
      * depth-0 comments) emit first, then everything else. The lean
      * loader auto-promotes `float X;` decls to the top of non-decl

@@ -209,15 +209,15 @@ Test sources live under `tests/` and shared test-only helpers live under
 | `src/repl/command_store.c` | Low-level `GLCmd` array mechanics: insert, delete, replace, bulk-load (no text-buffer writes) |
 | `src/repl/command_store.h` | Command-store public API (`repl_command_store_insert_one`, etc.) |
 | `src/repl/core.h` | Public API (parse, flatten, user scene + workspace); GLUT input-dispatch declarations |
-| `src/repl/core_internal.h` | Test-visible internals (normalize/commit pipeline, `feed_line`, `load_line_to_input`, `repl_promote_example_if_needed`) |
+| `src/repl/core_internal.h` | Test-visible internals (normalize/commit pipeline, `editor_feed_line`, `editor_load_line_to_input`, `repl_promote_example_if_needed`) |
 | `src/repl/state.c` | Owns `g_repl_state`, lifecycle, snapshot assembly (`repl_state_capture` / `repl_state_restore`) |
 | `src/repl/state.h` | Typed runtime-state facade, reset helpers, and focused accessors over the live REPL state |
 | `src/repl/state_views.h` | Read-only (by-value) state getters; safe to include from `scene_*` and `ui_*` |
 | `src/repl/state_owners.h` | Mutable `_mut()` accessors; owner modules and controller only |
-| `src/editor/input.c` | Editor's text-document controller: keyboard/mouse dispatch, cursor/scroll/selection/search/autocomplete navigation, clipboard, undo, commit orchestration, `feed_line`. Non-editor routing (replay, audio, config, save, camera) lives in `src/app/glr_ctrl.c` |
+| `src/editor/input.c` | Editor's text-document controller: keyboard/mouse dispatch, cursor/scroll/selection/search/autocomplete navigation, clipboard, undo, commit orchestration, `editor_feed_line`. Non-editor routing (replay, audio, config, save, camera) lives in `src/app/glr_ctrl.c` |
 | `src/editor/input.h` | Editor input dispatch entry points + `EditorInputDispatchEffects` typedef + `editor_input_active_modifiers` test seam |
 | `src/editor/commit.c` | Editor-side commit transaction boundary: compile via `repl_compile`, undo snapshot, text-buffer write, REPL apply, dirty-state updates |
-| `src/editor/commit.h` | Commit orchestration API (`editor_commit_apply_external_change`, `try_commit_*` helpers) |
+| `src/editor/commit.h` | Commit orchestration API (`editor_commit_apply_external_change`, `editor_try_commit_*` helpers) |
 | `src/editor/state.c` | Owns `EditorState`: editor buffer, cursor, selection, search, autocomplete, scroll, undo/redo, transformers, highlights, virtual lines |
 | `src/editor/state.h` | `EditorState` typed facade, `EditorBufferView`, `editor_state_input/search/autocomplete` accessors |
 | `src/editor/services.c` | Default `EditorServices` bound to live REPL (compile/apply seam used by commit code) |
@@ -467,20 +467,20 @@ The core data flow is **source commands → flat commands → GL calls**:
      the input buffer does NOT include the `;` — the keystroke triggers the
      commit but is not appended. Commit handlers must accept input
      without a trailing `;`.
-   - **`feed_line()`** (`src/editor/input.c`): copies the full line
+   - **`editor_feed_line()`** (`src/editor/input.c`): copies the full line
      (including `;`) into the input buffer, then runs the same dispatch chain.
      Used by file loading and example loading.
    - **Enter key** (insert mode): input may or may not have `;`
      depending on what the user typed.
-   The dispatch chain calls the consolidated `try_commit_*()` helpers
-   in `src/editor/commit.c` (`try_commit_var_statements`,
-   `try_commit_block_structs`, `try_commit_any`, plus the var-then-
+   The dispatch chain calls the consolidated `editor_try_commit_*()` helpers
+   in `src/editor/commit.c` (`editor_try_commit_var_statements`,
+   `editor_try_commit_block_structs`, `editor_try_commit_any`, plus the var-then-
    insert variant). Internally those run, in canonical order:
-   `try_commit_float_decl` → `try_assign_variable` → `try_commit_close_brace`
-   → `try_commit_for_loop` → `try_commit_func_def` → `try_commit_if_block`
+   `editor_try_commit_float_decl` → `editor_try_assign_variable` → `editor_try_commit_close_brace`
+   → `editor_try_commit_for_loop` → `editor_try_commit_func_def` → `editor_try_commit_if_block`
    → `repl_parse_and_normalize()` (general GL commands).
-   **Ordering matters**: `try_commit_float_decl` MUST run before
-   `try_assign_variable`, otherwise `float x` is misread as an
+   **Ordering matters**: `editor_try_commit_float_decl` MUST run before
+   `editor_try_assign_variable`, otherwise `float x` is misread as an
    assignment. Each handler returns 1 if it consumed the input
    (success or error with status message), 0 if it didn't match.
    If all handlers return 0, `parse_command()` in `src/repl/parser.c`
@@ -503,33 +503,33 @@ The core data flow is **source commands → flat commands → GL calls**:
 
 ### Commit Dispatch Sites
 
-The `try_commit_*` handler chain is consolidated into four helpers in
+The `editor_try_commit_*` handler chain is consolidated into four helpers in
 `src/editor/commit.c`:
-- `try_commit_var_statements()` — float decl, then assign
-- `try_commit_block_structs()` — close-brace, for, func, if
-- `try_commit_any()` — both groups in canonical order
-- `try_commit_var_statements_then_insert()` — var variant used by the
+- `editor_try_commit_var_statements()` — float decl, then assign
+- `editor_try_commit_block_structs()` — close-brace, for, func, if
+- `editor_try_commit_any()` — both groups in canonical order
+- `editor_try_commit_var_statements_then_insert()` — var variant used by the
   overwrite-mode Enter key, which must flip to insert mode on success
 
 Dispatch sites then call these helpers instead of open-coding the chain:
 1. **`;` key handler** — `key == ';'` block in `editor_handle_key()` calls
-   `try_commit_any()`
-2. **Enter key, insert mode** — calls `try_commit_var_statements()` and
-   `try_commit_block_structs()` to maintain the insert-mode behavior
+   `editor_try_commit_any()`
+2. **Enter key, insert mode** — calls `editor_try_commit_var_statements()` and
+   `editor_try_commit_block_structs()` to maintain the insert-mode behavior
 3. **Enter key, overwrite mode** — uses
-   `try_commit_var_statements_then_insert()` plus
-   `try_commit_block_structs()`
-4. **`feed_line()`** — the programmatic entry point calls
-   `try_commit_any()`
+   `editor_try_commit_var_statements_then_insert()` plus
+   `editor_try_commit_block_structs()`
+4. **`editor_feed_line()`** — the programmatic entry point calls
+   `editor_try_commit_any()`
 
 When adding a new handler, add it to the right helper rather than all
 call sites. Ordering inside each helper is load-bearing:
-`try_commit_float_decl` MUST run before `try_assign_variable`, otherwise
+`editor_try_commit_float_decl` MUST run before `editor_try_assign_variable`, otherwise
 `float x;` is misread as an assignment to an identifier named "float".
 
 ### Editing Existing Lines
 
-When the user navigates to an existing line, `load_line_to_input()` reads
+When the user navigates to an existing line, `editor_load_line_to_input()` reads
 the line text from the editor buffer view, strips the trailing `;` and
 whitespace, and loads it into the input buffer. This means re-committing
 the line goes through the no-semicolon path. Commit handlers that check
@@ -537,7 +537,7 @@ for `;` must also accept end-of-string as a valid terminator.
 
 ### Float Variable Declarations (`CMD_VAR_DECLARE`)
 
-`try_commit_float_decl()` in `src/editor/commit.c` handles `float name;`
+`editor_try_commit_float_decl()` in `src/editor/commit.c` handles `float name;`
 syntax. Current implementation supports multi-name (`float a, b, c;`)
 and initializers (`float x = 1;`), but there is an open design
 question about simplifying to single-name, no-initializer only.
@@ -566,7 +566,7 @@ Key details:
   outright (clipboard semantics — see commit 72be1dd).
 - C export writes `// @declare name` markers; import via
   `import_parse_declare_marker()` in `src/repl/export.c` reconstructs
-  the `CMD_VAR_DECLARE` commands, bypassing `try_commit_float_decl`
+  the `CMD_VAR_DECLARE` commands, bypassing `editor_try_commit_float_decl`
 - `src/repl/examples.c` has multi-name declarations (e.g. `"float n, x, y, z, j, k;"`)
   — if simplifying to single-name, these must be split into separate lines
 - Related helpers in `src/repl/eval.c`: `repl_eval_declare_predef_var()`,
@@ -665,7 +665,7 @@ changing example-metadata behavior.
   active user scene index.
 - **Import** (`repl_export_load_from_file()`): line-by-line scan parses camera state
   and workspace directives, detects function definitions (converts C
-  syntax back to REPL), and feeds geometry lines through `feed_line()`.
+  syntax back to REPL), and feeds geometry lines through `editor_feed_line()`.
   Pending scene-name and workspace-dir directives are read by the caller
   after `repl_export_load_from_file` returns so the importer can name the new slot
   and remember the workspace dir.

@@ -1,5 +1,6 @@
 #include "editor/state.h"
 #include "repl/core.h"
+#include "editor/input.h"
 #include "repl/state.h"
 #include "app/glr_ctrl.h"   /* glr_app_reset_all (end-to-end P1 test) */
 
@@ -115,29 +116,29 @@ static void test_transform_stack_edge_cases(void) {
 }
 
 static void test_apply_state_cmd_edge_cases(void) {
-    apply_state_cmd(NULL, 1.0f);
+    repl_apply_state_cmd(NULL, 1.0f);
 
     GLCmd cmd = { .type = CMD_GOTO_LABEL }; // not a state cmd
-    int ret = apply_state_cmd(&cmd, 1.0f);
+    int ret = repl_apply_state_cmd(&cmd, 1.0f);
     ASSERT_TRUE("Non-state cmd returns 0", ret == 0);
 
-    // Test all branches in apply_state_cmd
+    // Test all branches in repl_apply_state_cmd
     /* Enum-spec commands now use uniform args[] storage (no GLCmd.mode). */
-    cmd.type = CMD_ENABLE; cmd.args[0] = GL_BLEND; apply_state_cmd(&cmd, 1.0f);
-    cmd.type = CMD_DISABLE; cmd.args[0] = GL_BLEND; apply_state_cmd(&cmd, 1.0f);
-    cmd.type = CMD_SHADE_MODEL; cmd.args[0] = GL_FLAT; apply_state_cmd(&cmd, 1.0f);
-    cmd.type = CMD_COLOR_MATERIAL; cmd.args[0] = GL_FRONT; cmd.args[1] = GL_AMBIENT; apply_state_cmd(&cmd, 1.0f);
+    cmd.type = CMD_ENABLE; cmd.args[0] = GL_BLEND; repl_apply_state_cmd(&cmd, 1.0f);
+    cmd.type = CMD_DISABLE; cmd.args[0] = GL_BLEND; repl_apply_state_cmd(&cmd, 1.0f);
+    cmd.type = CMD_SHADE_MODEL; cmd.args[0] = GL_FLAT; repl_apply_state_cmd(&cmd, 1.0f);
+    cmd.type = CMD_COLOR_MATERIAL; cmd.args[0] = GL_FRONT; cmd.args[1] = GL_AMBIENT; repl_apply_state_cmd(&cmd, 1.0f);
 
     /* glMaterialf args[]: [0]=face, [1]=pname, [2..]=value(s). */
-    cmd.type = CMD_MATERIALF; cmd.args[0] = GL_FRONT; cmd.args[1] = GL_SHININESS; cmd.args[2] = 50; cmd.num_args = 3; apply_state_cmd(&cmd, 1.0f);
-    cmd.num_args = 6; apply_state_cmd(&cmd, 1.0f);
+    cmd.type = CMD_MATERIALF; cmd.args[0] = GL_FRONT; cmd.args[1] = GL_SHININESS; cmd.args[2] = 50; cmd.num_args = 3; repl_apply_state_cmd(&cmd, 1.0f);
+    cmd.num_args = 6; repl_apply_state_cmd(&cmd, 1.0f);
 
-    cmd.type = CMD_LIGHT_MODEL_I; cmd.args[0] = GL_LIGHT_MODEL_TWO_SIDE; cmd.args[1] = 1; apply_state_cmd(&cmd, 1.0f);
-    cmd.type = CMD_FRONT_FACE; cmd.args[0] = GL_CCW; apply_state_cmd(&cmd, 1.0f);
-    cmd.type = CMD_DEPTH_MASK; cmd.args[0] = 1; apply_state_cmd(&cmd, 1.0f);
+    cmd.type = CMD_LIGHT_MODEL_I; cmd.args[0] = GL_LIGHT_MODEL_TWO_SIDE; cmd.args[1] = 1; repl_apply_state_cmd(&cmd, 1.0f);
+    cmd.type = CMD_FRONT_FACE; cmd.args[0] = GL_CCW; repl_apply_state_cmd(&cmd, 1.0f);
+    cmd.type = CMD_DEPTH_MASK; cmd.args[0] = 1; repl_apply_state_cmd(&cmd, 1.0f);
     /* glPointParameterfv args[]: [0]=pname, [1..3]=coeffs. */
-    cmd.type = CMD_POINT_PARAMETER_FV; cmd.args[0] = GL_POINT_DISTANCE_ATTENUATION; cmd.num_args = 4; apply_state_cmd(&cmd, 1.0f);
-    cmd.type = CMD_BLEND_FUNC; cmd.args[0] = GL_SRC_ALPHA; cmd.args[1] = GL_ONE_MINUS_SRC_ALPHA; apply_state_cmd(&cmd, 1.0f);
+    cmd.type = CMD_POINT_PARAMETER_FV; cmd.args[0] = GL_POINT_DISTANCE_ATTENUATION; cmd.num_args = 4; repl_apply_state_cmd(&cmd, 1.0f);
+    cmd.type = CMD_BLEND_FUNC; cmd.args[0] = GL_SRC_ALPHA; cmd.args[1] = GL_ONE_MINUS_SRC_ALPHA; repl_apply_state_cmd(&cmd, 1.0f);
 }
 
 /* Regression net for the enum-arg storage migration: assert the actual
@@ -156,23 +157,23 @@ static void test_enum_arg_gl_trace(void) {
     memset(&cmd, 0, sizeof(cmd));
     cmd.type = CMD_BLEND_FUNC; cmd.num_args = 2;
     cmd.args[0] = GL_SRC_ALPHA; cmd.args[1] = GL_ONE_MINUS_SRC_ALPHA;
-    apply_state_cmd(&cmd, 1.0f);
+    repl_apply_state_cmd(&cmd, 1.0f);
 
     memset(&cmd, 0, sizeof(cmd));
     cmd.type = CMD_COLOR_MASK; cmd.num_args = 4;
     cmd.args[0] = GL_TRUE; cmd.args[1] = GL_FALSE;
     cmd.args[2] = GL_TRUE; cmd.args[3] = GL_FALSE;
-    apply_state_cmd(&cmd, 1.0f);
+    repl_apply_state_cmd(&cmd, 1.0f);
 
     memset(&cmd, 0, sizeof(cmd));
     cmd.type = CMD_DEPTH_MASK; cmd.num_args = 1;
     cmd.args[0] = GL_FALSE;
-    apply_state_cmd(&cmd, 1.0f);
+    repl_apply_state_cmd(&cmd, 1.0f);
 
     memset(&cmd, 0, sizeof(cmd));
     cmd.type = CMD_COLOR_MATERIAL; cmd.num_args = 2;
     cmd.args[0] = GL_FRONT_AND_BACK; cmd.args[1] = GL_AMBIENT_AND_DIFFUSE;
-    apply_state_cmd(&cmd, 1.0f);
+    repl_apply_state_cmd(&cmd, 1.0f);
 
     gl_stub_trace_close();
 
@@ -468,7 +469,7 @@ static void test_executor_camera_distance_source(void) {
      * camera-distance source to scale the visual fallback. */
     repl_executor_set_point_parameter_supported(0);
     gl_stub_counts_reset();
-    apply_state_cmd(&pp, 1.0f);
+    repl_apply_state_cmd(&pp, 1.0f);
     ASSERT_TRUE("unsupported: CMD_POINT_PARAMETER_FV does not call glPointParameterfv",
                 gl_stub_counts[GL_STUB_glPointParameterfv] == 0);
     g_test_camera_distance_calls = 0;
@@ -485,7 +486,7 @@ static void test_executor_camera_distance_source(void) {
      * through without consulting the camera-distance source. */
     repl_executor_set_point_parameter_supported(1);
     gl_stub_counts_reset();
-    apply_state_cmd(&pp, 1.0f);
+    repl_apply_state_cmd(&pp, 1.0f);
     ASSERT_TRUE("supported: CMD_POINT_PARAMETER_FV calls glPointParameterfv",
                 gl_stub_counts[GL_STUB_glPointParameterfv] == 1);
     g_test_camera_distance_calls = 0;

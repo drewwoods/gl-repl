@@ -51,7 +51,7 @@ int repl_load_apply_line(const char *line, char *err, int err_size) {
     if (!line) return 0;
     if (err && err_size > 0) err[0] = '\0';
 
-    /* Don't pre-skip empty/comment lines: feed_line preserves them as
+    /* Don't pre-skip empty/comment lines: editor_feed_line preserves them as
      * CMD_EMPTY / CMD_COMMENT source rows so editor/export round-trips
      * preserve line count. Flatten drops both from the executable stream. */
 
@@ -139,7 +139,7 @@ int repl_load_apply_line(const char *line, char *err, int err_size) {
     }
 
     /* (4) Plain GL command path — parse + insert via command store.
-     * Mirrors feed_line's plain-command tail but without writing the
+     * Mirrors editor_feed_line's plain-command tail but without writing the
      * editor input buffer. */
     int insert_idx = ctx.edit_line < ctx.document_count
                          ? ctx.edit_line : ctx.document_count;

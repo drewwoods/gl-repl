@@ -100,7 +100,7 @@ static const char *const SAMPLE_TRIANGLE[] = {
 };
 
 /* For-loop unrolls 4 vertices. The text-as-typed `for(i, 0, 4) { ... }`
- * flow goes through `try_commit_for_loop` in src/editor/commit.c, which
+ * flow goes through `editor_try_commit_for_loop` in src/editor/commit.c, which
  * we don't want to link. Instead we hand-construct the CMD_FOR_BEGIN /
  * body / CMD_FOR_END triplet directly so the demo can prove that
  * repl_flatten_program unrolls loops. */
@@ -525,7 +525,7 @@ static void print_help(const char *prog) {
 "     triangle through repl_parser_parse_command_ctx + the command store.\n"
 "  2  Hand-built for-loop: constructs a CMD_FOR_BEGIN/body/CMD_FOR_END\n"
 "     triplet directly so flatten unrolls 4 vertices without going\n"
-"     through src/editor/commit.c's try_commit_for_loop.\n"
+"     through src/editor/commit.c's editor_try_commit_for_loop.\n"
 "  3  Variable-driven re-evaluation: declares `r` via\n"
 "     repl_eval_declare_predef_var(), parses an expression that\n"
 "     references `r` and `t` with preserve_expr=1, then bumps `t` and\n"

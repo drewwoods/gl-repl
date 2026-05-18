@@ -11,15 +11,15 @@
  *
  *   src/repl/util.h            static inline format / copy helpers
  *   src/repl/scenes.h          scene promotion / capture / reset
- *   src/repl/executor.h        apply_state_cmd
+ *   src/repl/executor.h        repl_apply_state_cmd
  *   src/repl/command_spec.h    cmd_type_name (alias)
  *   src/repl/example_loader.h  repl_load_example_lines_for_test
  *   src/repl/export.h          code-panel debug dumps
  *   replay.h               bench fade hooks
- *   src/editor/input.h     feed_line, load_line_to_input, modifier
+ *   src/editor/input.h     editor_feed_line, editor_load_line_to_input, modifier
  *                          provider typedef, editor transient reset
  *   glr_completion.h       glr_completion_register_provider,
- *                          accept_autocomplete
+ *                          glr_completion_accept_autocomplete
  *
  * What remains: the normalize / commit pipeline entry points and the
  * parse / extract / format helpers callers use to build canonical

@@ -172,7 +172,7 @@ static int editor_clipboard_copy_input_selection(void) {
  *
  * Intentionally does NOT push an undo snapshot. EditorUndoSnapshot does
  * not capture the input buffer (restore reloads input via
- * load_line_to_input from the committed source line), so a push here
+ * editor_load_line_to_input from the committed source line), so a push here
  * cannot rewind the cut — it would only have the side effect of
  * tripping the example auto-promotion hook in
  * editor_undo_push_snapshot. This matches typed-char and backspace,
@@ -329,13 +329,13 @@ void editor_clipboard_cut_current(void) {
     }
 
     clipboard_copy_range(start, count);
-    delete_cmd_range(start, count, "Cut");
+    editor_delete_cmd_range(start, count, "Cut");
 }
 
 void editor_clipboard_paste_current(void) {
     /* INPUT_TEXT paste targets the active input buffer (replacing any
      * destination selection); LINES paste runs the existing
-     * feed_line() chain; EMPTY emits the same "Clipboard empty"
+     * editor_feed_line() chain; EMPTY emits the same "Clipboard empty"
      * status the count-based check below has always produced. */
     if (editor_clipboard_paste_input_text())
         return;
@@ -354,7 +354,7 @@ void editor_clipboard_paste_current(void) {
         }
     }
 
-    /* Single undo for the whole paste; feed_line() runs the commit
+    /* Single undo for the whole paste; editor_feed_line() runs the commit
      * chain per line but does not push undo itself, so structured
      * blocks (for / func / if / `}`) re-parse correctly as the
      * partial document grows. */
@@ -380,10 +380,10 @@ void editor_clipboard_paste_current(void) {
     }
 
     for (int i = 0; i < count; i++)
-        feed_line(buf[i]);
+        editor_feed_line(buf[i]);
 
     /* Land in edit mode on the line after the pasted block. We do NOT
-     * restore the entry insert mode: load_line_to_input mirrors a
+     * restore the entry insert mode: editor_load_line_to_input mirrors a
      * *committed* line into the input buffer for re-editing, which is
      * contradictory in insert mode — the panel renders an input row
      * *before* document_cmds[edit_line], so a pre-loaded following line
@@ -392,7 +392,7 @@ void editor_clipboard_paste_current(void) {
      * unmodified-line Enter leaves insert_mode set with no doc mutation,
      * so saved_insert was 1 and the following line got staged.) */
     editor_insert_mode_set(0);
-    load_line_to_input(repl_state_edit_line());
+    editor_load_line_to_input(repl_state_edit_line());
     repl_mark_normals_dirty();
 
     {

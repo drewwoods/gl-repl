@@ -8,6 +8,7 @@
 #include "repl/source_scope.h"
 #include "repl/state.h"
 #include "repl/core.h"
+#include "editor/input.h"
 #include "ui/state.h"
 #include "ui/layout.h"           /* CODE_PANEL_LAYOUT_* */
 #include "app/glr_defaults.h"   /* CFG_DEFAULT_* */

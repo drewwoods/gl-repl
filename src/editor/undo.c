@@ -79,7 +79,7 @@ void editor_undo_snapshot_restore(const EditorUndoSnapshot *snapshot) {
             repl_func_alias_set(slot, snapshot->func_aliases[slot]);
     }
     editor_insert_mode_set(0);
-    load_line_to_input(repl_state_edit_line());
+    editor_load_line_to_input(repl_state_edit_line());
     repl_mark_normals_dirty();
 }
 

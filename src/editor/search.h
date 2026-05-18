@@ -10,9 +10,9 @@
 #ifndef EDITOR_SEARCH_H
 #define EDITOR_SEARCH_H
 
-void search_clear_all(void);
-int  handle_search_key(unsigned char key);
-int  handle_search_special(int key);
+void editor_search_clear_all(void);
+int  editor_search_handle_key(unsigned char key);
+int  editor_search_handle_special(int key);
 
 int  editor_search_row_count(void);
 const char *editor_search_row_text(int row_idx);

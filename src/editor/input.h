@@ -105,7 +105,7 @@ void editor_input_code_panel_scroll(int direction);
 
 /* Move the active edit-line cursor to a source line and sync the input buffer
  * to that line's text. */
-void navigate_to_line(int target);
+void editor_navigate_to_line(int target);
 
 /* Rename-capture predicate. The inline rename overlay is a hard modal:
  * when active, every keystroke must land in the rename buffer ahead of
@@ -126,7 +126,7 @@ int editor_input_rename_capture_special(int key);
 /* Delete cmds[start..start+count) with a status-bar message describing
  * what was removed. Guards against removing a `float` decl whose
  * variable is still referenced elsewhere. */
-void delete_cmd_range(int start, int count, const char *what);
+void editor_delete_cmd_range(int start, int count, const char *what);
 
 /* Clear ALL commands unconditionally (same behavior as Ctrl+L). */
 void editor_clear_all_cmds(void);
@@ -134,7 +134,7 @@ void editor_clear_all_cmds(void);
 /* Sync the input buffer to the source line at `idx` (strips trailing
  * `;` and whitespace). Used by the editor when navigating to an
  * existing line and by reformat/scene-switch paths. */
-void load_line_to_input(int idx);
+void editor_load_line_to_input(int idx);
 
 /* Drop camera / menu / picker / code-panel-drag transient state in
  * addition to the editor commit transients. Called from
@@ -146,7 +146,7 @@ void editor_reset_transients(void);
  * `;`. Used by tests, the clipboard paste path, and editor-side
  * file/example loaders. Pipeline TUs use `repl_load_apply_line()` in
  * `src/repl/load.h` instead. */
-int feed_line(const char *line);
+int editor_feed_line(const char *line);
 
 /* If an input-buffer selection is active, delete [lo, hi) from input[],
  * place the cursor at lo, and clear the anchor. Returns 1 if anything

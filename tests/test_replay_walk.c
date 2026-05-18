@@ -29,6 +29,7 @@
 #include "app/glr_ctrl.h"
 #include "repl/command_spec.h"
 #include "repl/core.h"
+#include "editor/input.h"
 #include "repl/state_owners.h"
 #include "widgets/replay.h"
 #include "support/test_harness.h"

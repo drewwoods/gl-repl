@@ -733,7 +733,7 @@ is **4**: steps 1, 2, 3, and 4 have landed.
 | UI chrome mirror | `ui_state_code_panel_mut` | `repl_state_sync_ui_chrome()` mirrored presentation fields into `UiState.code_panel`; `repl_state_reset_all()` called it. | Yes, via reset. | Move chrome mirroring to the controller. | ✅ **Cleared (step 2, commit `310eca0`).** Body moved to `glr_ctrl_sync_ui_chrome()` in `src/app/glr_ctrl.c`. |
 | Compile dispatcher location | `repl_compile_dispatch` | `repl_compile_toggle_comment()` needed the float-decl / var-assign dispatcher, but the implementation lived in `src/editor/services.c`. | No; the demo does not toggle comments. The reference was still hard at link time. | Move the dispatcher into `src/repl/compile.c`. | ✅ **Cleared (step 1, commit `ef3fc09`).** Moved into `src/repl/compile.c`; declared in `src/repl/compile.h`. |
 | Status relay | `ui_state_status_set` | Legacy `src/repl/core.c::set_status()` forwarded diagnostics to UI status text. | Only on errors or helper paths that report status. | Replace `set_status()` body with a callback dispatch (`repl_set_status_sink`); controller installs `ui_state_status_set` as the sink at app startup. Demo doesn't install one, so set_status is a no-op there. | ✅ **Cleared (step 3, commit `5f1b8bc`).** Callback branch chosen over per-function out-params; ~15 pipeline-side set_status call sites remain as future per-TU cleanup but no longer drag the stub. |
-| Programmatic editor input | `feed_line`, `load_line_to_input` | `src/repl/export.c` imports exported files by feeding lines through the editor commit path; `src/repl/core.c` and scene activation paths also have legacy line-loading references. | No for the current static samples. | Extract pure structured-block validators (5a) and add a non-editor source-loader API (5b); move reformatter and scene cursor-restore out of REPL pipeline TUs (6). | Pending (steps 5a/5b/6). |
+| Programmatic editor input | `editor_feed_line`, `editor_load_line_to_input` | `src/repl/export.c` imports exported files by feeding lines through the editor commit path; `src/repl/core.c` and scene activation paths also have legacy line-loading references. | No for the current static samples. | Extract pure structured-block validators (5a) and add a non-editor source-loader API (5b); move reformatter and scene cursor-restore out of REPL pipeline TUs (6). | Pending (steps 5a/5b/6). |
 | Config descriptor table | `g_cfg_items`, `CFG_ITEM_COUNT` | `src/app/glr_config.c` iterated menu/action descriptors while parsing or applying config keys, but the table is defined in `src/app/glr_actions.c`. | Not for the current samples; relevant to `@cfg` metadata and export/import helpers. | Introduce a neutral `ReplExportConfig` bag in `src/repl/export.h` and a controller-installed bridge that fills/applies it; pipeline TUs (`src/repl/export.c`, `src/repl/scenes.c`) stop calling `glr_config_*`. | ✅ **Cleared (step 4, commit `b58cdef`).** Bridge installed in `glr_app_reset_all`; demo doesn't install one → @cfg is a no-op there. |
 | App-owned config storage | `audio_get_cfg_mode`, `audio_set_cfg_mode`, `ui_state_profile_panel_mut`, `variable_panel_view_mut` | `src/app/glr_config.c` mapped config keys directly to storage owned by audio, UI profile panel, and the variable-panel peer. | Not for the current samples. | Same fix as the descriptor table row: pipeline TUs go through the `ReplExportConfigBridge` instead of calling `glr_config_*`. `src/app/glr_config.c` falls out of the demo link set, so its references to audio / profile / variable_panel disappear. | ✅ **Cleared (step 4, commit `b58cdef`).** |
 | UI layout state | `ui_state_viewport`, `ui_state_code_panel` | `src/ui/layout.c` reads live `UiState`; `src/repl/export.c` uses layout helpers for export viewport sizing and code-panel visual dumps. | Not for the current samples. | Pass viewport/layout values to `repl_export` as explicit export inputs; move app-state slices to `src/app/glr_state.c`. | Pending (step 7). |
@@ -791,7 +791,7 @@ The full plan lives in `feature/decouple-repl-from-gl-repl-alt.md`
    convention shared by the file writer and the code panel.
 5. Step 5a/5b — Extract pure structured-block validators from
    `editor_compile_*`; add non-editor source-load/commit API so
-   examples and imports stop calling `feed_line`.
+   examples and imports stop calling `editor_feed_line`.
 6. Step 6 — Move reformatter and scene cursor-restore out of REPL
    pipeline TUs into editor/controller code.
 7. Step 7 — Move app-state slices (`presentation`, `render`) to a new
@@ -1177,7 +1177,7 @@ work can either close the gap or document the intentional behaviour.
 
 ### Documented but uncovered
 
-- **Func alias slot exhaustion.** `try_commit_func_def` (in
+- **Func alias slot exhaustion.** `editor_try_commit_func_def` (in
   `src/editor/commit.c`) calls `repl_func_alias_first_free_slot()`; when all
   10 slots are taken it returns the diagnostic
   `"no free function slots (max %d)"`. No test fires this path — adding the

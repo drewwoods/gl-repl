@@ -3,6 +3,7 @@
 #include "app/glr_state.h"
 #include "app/glr_ctrl.h"
 #include "repl/core.h"
+#include "editor/input.h"
 #include "repl/pipeline.h"
 #include "repl/state.h"
 #include "repl/export.h"
@@ -393,7 +394,7 @@ int main(void) {
 
     /* `if(...)` does not get hijacked into an alias even when it
      * shares the func-decl shape `IDENT(...) {`. The control-flow
-     * keyword must fall through to try_commit_if_block. */
+     * keyword must fall through to editor_try_commit_if_block. */
     {
         glr_app_reset_all(); declare_test_vars();
         editor_feed_line("if(1) {");

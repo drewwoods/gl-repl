@@ -3,7 +3,7 @@
 # Counts function-definition lines (lines with `^[a-zA-Z_].*(.*) {`)
 # and rejects any commit that increases the count past a baseline.
 #
-# After step 7e cleared the last stub (`feed_line`), the baseline is
+# After step 7e cleared the last stub (`editor_feed_line`), the baseline is
 # 0: stubs.c contains no function bodies, only the documentation
 # header. Any new pipeline reach-out that requires a stub here is a
 # regression on the decoupling endpoint and must be addressed at the

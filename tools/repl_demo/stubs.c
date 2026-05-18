@@ -16,12 +16,12 @@
  *   Step 4: g_cfg_items, CFG_ITEM_COUNT, audio_get_cfg_mode,
  *           audio_set_cfg_mode, variable_panel_view_mut,
  *           ui_state_profile_panel_mut (via ReplExportConfigBridge).
- *   Step 6: load_line_to_input (locked by
+ *   Step 6: editor_load_line_to_input (locked by
  *           check-no-load-line-to-input-in-pipeline).
  *   Step 7c: ui_state_viewport, ui_state_code_panel (via
  *           ReplExportLayout); src/ui/layout.c left
  *           REPL_DEMO_DEP_SRCS.
- *   Step 7e: feed_line (example loader migrated to
+ *   Step 7e: editor_feed_line (example loader migrated to
  *           repl_load_apply_line; locked by
  *           check-no-feed-line-in-pipeline);
  *           glr_camera_set_orbit/pan/distance (example loader

@@ -995,7 +995,7 @@ check-no-set-status-in-repl-parser: ## Ratchet set_status calls inside src/repl/
 check-no-set-status-in-compile-apply: ## Verify src/repl/compile.c / src/repl/apply.c never call set_status (Phase C purity).
 	@bash scripts/check-no-set-status-in-compile-apply.sh
 
-check-no-load-line-to-input-in-pipeline: ## Verify REPL pipeline TUs do not call editor-side load_line_to_input.
+check-no-load-line-to-input-in-pipeline: ## Verify REPL pipeline TUs do not call editor-side editor_load_line_to_input.
 	@bash scripts/check-no-load-line-to-input-in-pipeline.sh
 
 check-repl-state-no-glr-state: ## Verify REPL pipeline TUs do not include src/app/glr_state.h or reference GlrState symbols.

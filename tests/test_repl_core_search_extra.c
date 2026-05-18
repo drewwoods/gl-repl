@@ -83,7 +83,7 @@ int main(void) {
     ASSERT_TRUE("search state has query before clear", g_search_query_len == 6);
     ASSERT_TRUE("search state has hit line before clear", g_search_hit_line >= 0);
     ASSERT_TRUE("search state has hit char before clear", g_search_hit_char >= 0);
-    search_clear_all();
+    editor_search_clear_all();
     ASSERT_TRUE("search clear resets active", g_search_active == 0);
     ASSERT_TRUE("search clear resets query", g_search_query_len == 0);
     ASSERT_TRUE("search clear resets query string", g_search_query[0] == '\0');

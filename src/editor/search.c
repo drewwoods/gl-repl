@@ -210,7 +210,7 @@ static void search_store_hit(int row_idx, int char_pos) {
     srch->hit_ordinal = search_ordinal_for_hit(row_idx, char_pos);
 }
 
-void search_clear_all(void) {
+void editor_search_clear_all(void) {
     EditorSearchState *srch = editor_state_search_mut();
     srch->active = 0;
     srch->query[0] = '\0';
@@ -327,7 +327,7 @@ static void search_apply_hit(int row, int char_pos) {
     int nav_line = search_row_to_nav_line(row);
     if (nav_line >= 0) {
         editor_scroll_follow_cursor_set(1);
-        navigate_to_line(nav_line);
+        editor_navigate_to_line(nav_line);
         row = repl_state_edit_line();
         if (row_occurrence >= 0) {
             int remapped_char = search_char_for_row_occurrence(row, row_occurrence);
@@ -409,7 +409,7 @@ static void search_open(void) {
     editor_completion_clear();
 }
 
-int handle_search_key(unsigned char key) {
+int editor_search_handle_key(unsigned char key) {
     EditorSearchState *srch = editor_state_search_mut();
     if (key == KEY_CTRL_F) {
         search_open();
@@ -419,7 +419,7 @@ int handle_search_key(unsigned char key) {
         return 0;
 
     if (key == KEY_ESC) {
-        search_clear_all();
+        editor_search_clear_all();
         return 1;
     }
 
@@ -454,7 +454,7 @@ int handle_search_key(unsigned char key) {
     return 1;
 }
 
-int handle_search_special(int key) {
+int editor_search_handle_special(int key) {
     EditorSearchState *srch = editor_state_search_mut();
     if (!srch->active)
         return 0;

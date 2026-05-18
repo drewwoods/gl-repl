@@ -3,6 +3,7 @@
 #include "repl/core_internal.h"
 #include "repl/state.h"
 #include "repl/core.h"
+#include "editor/input.h"
 #include "src/editor/reformat.h"
 #include "support/test_harness.h"
 

@@ -92,7 +92,7 @@ void repl_execute_program(const ReplExecutionOptions *options);
  * model/blend func/etc.). Used inside the executor's own loop and by
  * the export fade pass to apply scene defaults without driving a full
  * program. `alpha_scale` multiplies any color alpha channel. */
-int  apply_state_cmd(const GLCmd *cmd, float alpha_scale);
+int  repl_apply_state_cmd(const GLCmd *cmd, float alpha_scale);
 
 /* Install a camera-distance source. The point-size fallback used when
  * the runtime GL context lacks glPointParameterfv needs the current

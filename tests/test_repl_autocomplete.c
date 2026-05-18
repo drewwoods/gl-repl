@@ -4,6 +4,7 @@
 #include "repl/core_internal.h"
 #include "repl/state.h"
 #include "repl/core.h"
+#include "editor/input.h"
 #include "editor/completion.h"
 #include "support/test_harness.h"
 
@@ -69,7 +70,7 @@ int main() {
         ASSERT_STR("ghost text", g_ac_ghost, "tex3f(");
         ASSERT_STR("hint text", g_ac_hint, "x, y, z)");
 
-        accept_autocomplete();
+        glr_completion_accept_autocomplete();
         ASSERT_STR("input after accept", editor_state_input().input, "glVertex3f(");
     }
 
@@ -86,7 +87,7 @@ int main() {
                    g_ac_insert_matches[0], "glVertex3f(");
         ASSERT_STR("post-assign ghost", g_ac_ghost, "tex3f(");
 
-        accept_autocomplete();
+        glr_completion_accept_autocomplete();
         ASSERT_STR("post-assign input after accept",
                    editor_state_input().input, "x = glVertex3f(");
     }
@@ -128,7 +129,7 @@ int main() {
         ASSERT_STR("first match", g_ac_insert_matches[0], "GL_TRIANGLES");
         ASSERT_STR("ghost text", g_ac_ghost, "ANGLES)");
 
-        accept_autocomplete();
+        glr_completion_accept_autocomplete();
         ASSERT_STR("input after accept", editor_state_input().input, "glBegin(GL_TRIANGLES)");
     }
 
@@ -140,14 +141,14 @@ int main() {
         editor_completion_update();
         ASSERT_STR("first match arg1", g_ac_insert_matches[0], "GL_FRONT");
         ASSERT_STR("ghost text arg1", g_ac_ghost, "ONT, ");
-        accept_autocomplete();
+        glr_completion_accept_autocomplete();
         ASSERT_STR("input after arg1", editor_state_input().input, "glColorMaterial(GL_FRONT, ");
 
         set_input_text("glColorMaterial(GL_FRONT, GL_AMB");
         editor_completion_update();
         ASSERT_STR("first match arg2", g_ac_insert_matches[0], "GL_AMBIENT");
         ASSERT_STR("ghost text arg2", g_ac_ghost, "IENT)");
-        accept_autocomplete();
+        glr_completion_accept_autocomplete();
         ASSERT_STR("input after arg2", editor_state_input().input, "glColorMaterial(GL_FRONT, GL_AMBIENT)");
 
         set_input_text("glColorMaterial(GL_FRONT, GL_SH");
@@ -163,7 +164,7 @@ int main() {
         editor_completion_update();
         ASSERT_STR("match", g_ac_insert_matches[0], "GL_POINT_DISTANCE_ATTENUATION");
         ASSERT_STR("ghost", g_ac_ghost, "ANCE_ATTENUATION, ");
-        accept_autocomplete();
+        glr_completion_accept_autocomplete();
         ASSERT_STR("input", editor_state_input().input, "glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION, ");
     }
 
@@ -180,7 +181,7 @@ int main() {
         editor_completion_update();
         ASSERT_STR("colormask slot4 match", g_ac_insert_matches[0], "GL_FALSE");
         ASSERT_STR("colormask slot4 ghost", g_ac_ghost, "LSE)");
-        accept_autocomplete();
+        glr_completion_accept_autocomplete();
         ASSERT_STR("colormask slot4 accept", editor_state_input().input,
                    "glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_FALSE)");
     }
@@ -211,7 +212,7 @@ int main() {
         ASSERT_STR("float match", g_ac_insert_matches[0], "float ");
         ASSERT_STR("float ghost", g_ac_ghost, "at ");
 
-        accept_autocomplete();
+        glr_completion_accept_autocomplete();
         ASSERT_STR("float input after accept", editor_state_input().input, "float ");
     }
 
@@ -247,7 +248,7 @@ int main() {
         ASSERT_TRUE("scratch array completion present", has_insert_match("A["));
         ASSERT_STR("scratch array ghost", g_ac_ghost, "[");
 
-        accept_autocomplete();
+        glr_completion_accept_autocomplete();
         ASSERT_STR("scratch array input after accept", editor_state_input().input, "A[");
     }
 

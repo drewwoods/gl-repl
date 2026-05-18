@@ -19,7 +19,7 @@
 
 /* Per-line canonical text. One slot per source command, indexed by
  * source command index. Text is the user-typed form (no trailing ';',
- * no leading whitespace) — the same shape `load_line_to_input` produces
+ * no leading whitespace) — the same shape `editor_load_line_to_input` produces
  * after stripping. The typedef lives in editor_state.h because
  * EditorState owns the buffer; src/repl/state_views.h no longer defines or
  * declares anything related to it. */
@@ -93,7 +93,7 @@ typedef struct {
  *     Paste feeds each line through the commit pipeline.
  *   - EDITOR_CLIPBOARD_INPUT_TEXT: a substring lifted from the active
  *     input buffer. Paste inserts text into EditorInputState.input
- *     without going through feed_line.
+ *     without going through editor_feed_line.
  * `kind` always matches the populated payload:
  *   EMPTY       -> line_count == 0 && input_text_len == 0
  *   LINES       -> line_count > 0

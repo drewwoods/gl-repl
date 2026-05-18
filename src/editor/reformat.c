@@ -4,7 +4,7 @@
  * `repl_reformat_program()` (REPL pipeline) walks every command and
  * rewrites the editor-buffer line + GLCmd in canonical form. The
  * wrapper here saves/restores the typed input buffer and refreshes it
- * via load_line_to_input() when the user is not in insert mode, so a
+ * via editor_load_line_to_input() when the user is not in insert mode, so a
  * Ctrl+\ reformat keeps the editor session intact.
  */
 #include <string.h>
@@ -13,7 +13,7 @@
 
 #include "repl/core.h"        /* repl_reformat_program */
 #include "repl/state.h"
-#include "src/editor/input.h" /* load_line_to_input */
+#include "src/editor/input.h" /* editor_load_line_to_input */
 #include "src/editor/state.h"
 
 void editor_reformat_commands(void) {
@@ -35,6 +35,6 @@ void editor_reformat_commands(void) {
         inp->input_len = saved_input_len;
         editor_cursor_pos_set(saved_cursor_pos);
     } else {
-        load_line_to_input(repl_state_edit_line());
+        editor_load_line_to_input(repl_state_edit_line());
     }
 }

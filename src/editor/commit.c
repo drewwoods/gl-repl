@@ -25,7 +25,7 @@
  *
  * The undo capture for migrated handlers still rides on
  * editor_undo_push_snapshot() pushed at the dispatch sites
- * (;-key, Enter, feed_line) in repl_editor.c. Phase D commit 25
+ * (;-key, Enter, editor_feed_line) in repl_editor.c. Phase D commit 25
  * replaces that with a per-commit transaction wrapping this
  * helper.
  */
@@ -199,7 +199,7 @@ static void apply_post_effects(const EditorCommitPostEffects *effects) {
         editor_pending_newline_clear();
 
     if (effects->load_line_after_apply)
-        load_line_to_input(repl_state_edit_line());
+        editor_load_line_to_input(repl_state_edit_line());
 
     if (effects->clear_autocomplete)
         editor_completion_clear();
@@ -227,7 +227,7 @@ int editor_commit_apply_plan(const EditorCommitPlan *plan) {
     }
 
     /* NOTE: undo capture is the caller's responsibility during the
-     * Phase D transition. The legacy ;-key / Enter / feed_line
+     * Phase D transition. The legacy ;-key / Enter / editor_feed_line
      * dispatch sites in repl_editor.c push a snapshot before
      * invoking try_commit_*; this helper deliberately does NOT
      * push a second snapshot to avoid double-capture. Once the
@@ -594,7 +594,7 @@ ReplCompileResult editor_compile_func_def(const char *input,
     char param_names[MAX_EXPR_VARS][16];
 
     /* Quick-reject inputs that look like func *calls* (have `(` and
-     * no `{`). The legacy guard returns 0 from try_commit_func_def
+     * no `{`). The legacy guard returns 0 from editor_try_commit_func_def
      * for those so the dispatch chain falls through to
      * parse_command, which classifies them as CMD_CALL. */
     const char *trimmed = input ? input : "";
@@ -1177,7 +1177,7 @@ void editor_commit_reset_transients(void) {
 
 /* --- Float-decl commit --- */
 
-int try_commit_float_decl(void) {
+int editor_try_commit_float_decl(void) {
     ReplCompileContext ctx = repl_compile_context_from_live(); ctx.insert_mode = editor_insert_mode();
     EditorCommitPlan plan;
     editor_commit_plan_init(&plan);
@@ -1224,7 +1224,7 @@ int try_commit_float_decl(void) {
 
 /* --- Var-assign commit --- */
 
-int try_assign_variable(void) {
+int editor_try_assign_variable(void) {
     ReplCompileContext ctx = repl_compile_context_from_live(); ctx.insert_mode = editor_insert_mode();
     EditorCommitPlan plan;
     editor_commit_plan_init(&plan);
@@ -1268,7 +1268,7 @@ int try_assign_variable(void) {
 /* --- Structured-block commits: each delegates to its editor_compile_*
  * partner and applies the resulting plan via editor_commit_apply_plan. --- */
 
-int try_commit_for_loop(void) {
+int editor_try_commit_for_loop(void) {
     ReplCompileContext ctx = repl_compile_context_from_live(); ctx.insert_mode = editor_insert_mode();
     EditorCommitPlan plan;
     char err[REPL_STATUS_TEXT_MAX];
@@ -1292,7 +1292,7 @@ int try_commit_for_loop(void) {
     return 1;
 }
 
-int try_commit_func_def(void) {
+int editor_try_commit_func_def(void) {
     ReplCompileContext ctx = repl_compile_context_from_live(); ctx.insert_mode = editor_insert_mode();
     EditorCommitPlan plan;
     char err[REPL_STATUS_TEXT_MAX];
@@ -1316,7 +1316,7 @@ int try_commit_func_def(void) {
     return 1;
 }
 
-int try_commit_if_block(void) {
+int editor_try_commit_if_block(void) {
     ReplCompileContext ctx = repl_compile_context_from_live(); ctx.insert_mode = editor_insert_mode();
     EditorCommitPlan plan;
     char err[REPL_STATUS_TEXT_MAX];
@@ -1340,7 +1340,7 @@ int try_commit_if_block(void) {
     return 1;
 }
 
-int try_commit_close_brace(void) {
+int editor_try_commit_close_brace(void) {
     ReplCompileContext ctx = repl_compile_context_from_live(); ctx.insert_mode = editor_insert_mode();
     EditorCommitPlan plan;
     char err[REPL_STATUS_TEXT_MAX];
@@ -1367,33 +1367,33 @@ int try_commit_close_brace(void) {
 /* --- Higher-order dispatchers --- */
 
 /* Block-structural commit handlers: `}`, `for(`, `funcN`, `if(`. */
-int try_commit_block_structs(void) {
-    if (try_commit_close_brace()) return 1;
-    if (try_commit_for_loop())    return 1;
-    if (try_commit_func_def())    return 1;
-    if (try_commit_if_block())    return 1;
+int editor_try_commit_block_structs(void) {
+    if (editor_try_commit_close_brace()) return 1;
+    if (editor_try_commit_for_loop())    return 1;
+    if (editor_try_commit_func_def())    return 1;
+    if (editor_try_commit_if_block())    return 1;
     return 0;
 }
 
 /* Statement-level commit handlers. float decl MUST precede assign so
  * that `float x` is not misread as an assignment to "float". */
-int try_commit_var_statements(void) {
-    if (try_commit_float_decl())  return 1;
-    if (try_assign_variable())    return 1;
+int editor_try_commit_var_statements(void) {
+    if (editor_try_commit_float_decl())  return 1;
+    if (editor_try_assign_variable())    return 1;
     return 0;
 }
 
-int try_commit_any(void) {
-    if (try_commit_var_statements()) return 1;
-    if (try_commit_block_structs())  return 1;
+int editor_try_commit_any(void) {
+    if (editor_try_commit_var_statements()) return 1;
+    if (editor_try_commit_block_structs())  return 1;
     return 0;
 }
 
 /* Overwrite-mode Enter variant: on successful var-statement commit,
  * enter insert mode and clear the input. Assign additionally
  * publishes "Insert mode" status and marks normals dirty. */
-int try_commit_var_statements_then_insert(void) {
-    if (try_commit_float_decl()) {
+int editor_try_commit_var_statements_then_insert(void) {
+    if (editor_try_commit_float_decl()) {
         editor_insert_mode_set(1);
         {
             EditorInputState *inp = editor_state_input_mut();
@@ -1404,7 +1404,7 @@ int try_commit_var_statements_then_insert(void) {
         editor_completion_clear();
         return 1;
     }
-    if (try_assign_variable()) {
+    if (editor_try_assign_variable()) {
         editor_insert_mode_set(1);
         {
             EditorInputState *inp = editor_state_input_mut();

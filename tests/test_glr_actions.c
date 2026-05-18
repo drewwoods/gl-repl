@@ -9,6 +9,7 @@
 #include "app/glr_config.h"
 #include "audio.h"
 #include "repl/core.h"
+#include "editor/input.h"
 #include "repl/examples.h"
 #include "support/test_harness.h"
 #include <stdlib.h>

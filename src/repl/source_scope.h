@@ -90,7 +90,7 @@ int repl_source_scope_block_extent(int line_idx,
 int repl_line_is_block_head(int line_idx);
 
 /* Returns 1 if the line at `line_idx` is a CMD_GOTO_LABEL row. Used by
- * load_line_to_input to format the input buffer differently for
+ * editor_load_line_to_input to format the input buffer differently for
  * label lines (preserves the leading `:`) without reading CmdType
  * directly. */
 int repl_line_is_label(int line_idx);

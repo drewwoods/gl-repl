@@ -1,7 +1,7 @@
 #!/bin/bash
-# Hard guard: REPL pipeline TUs do not call load_line_to_input.
+# Hard guard: REPL pipeline TUs do not call editor_load_line_to_input.
 #
-# load_line_to_input() rewrites the editor input buffer from the
+# editor_load_line_to_input() rewrites the editor input buffer from the
 # active source line — that is editor-input behavior and lives in
 # src/editor/input.c. Step 6 of the repl_demo decoupling plan moved
 # the only two pipeline call sites out: repl_reformat_commands() in
@@ -11,7 +11,7 @@
 # controller boundary after the scene-load API returns).
 #
 # This guard fails the build if a REPL pipeline TU starts calling
-# load_line_to_input again. It is intentionally narrow: src/editor/*
+# editor_load_line_to_input again. It is intentionally narrow: src/editor/*
 # and controller TUs (glr_ctrl.c, glr_actions.c) may still call it.
 
 set -euo pipefail
@@ -43,7 +43,7 @@ files=(
 
 # Match call shape only; skip lines that are inside C block comments
 # (leading `*`) or whose first non-whitespace tokens form a `//` prefix.
-violations=$(grep -nE '\bload_line_to_input\s*\(' "${files[@]}" 2>/dev/null \
+violations=$(grep -nE '\beditor_load_line_to_input\s*\(' "${files[@]}" 2>/dev/null \
     | grep -vE '^[^:]+:[0-9]+:[[:space:]]*(\*|//)' || true)
 
 if [ -z "$violations" ]; then
@@ -51,8 +51,8 @@ if [ -z "$violations" ]; then
     exit 0
 fi
 
-echo "ERROR: REPL pipeline TUs must not call load_line_to_input()." >&2
-echo "load_line_to_input is editor-input behavior (src/editor/input.c)." >&2
+echo "ERROR: REPL pipeline TUs must not call editor_load_line_to_input()." >&2
+echo "editor_load_line_to_input is editor-input behavior (src/editor/input.c)." >&2
 echo "Pipeline code that needs to refresh the input buffer should return" >&2
 echo "an effect/result and let the controller actualize the refresh." >&2
 echo "Hits:" >&2
