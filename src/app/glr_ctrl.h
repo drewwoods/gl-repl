@@ -3,6 +3,11 @@
 
 #include "ui/repl_code_panel.h"
 
+/* App-frame controller entrypoints. sample.c forwards raw GLUT
+ * callbacks here; this module owns frame orchestration, snapshot
+ * assembly, and cross-subsystem input routing between editor, UI,
+ * camera, replay, config, save/load, and help flows. */
+
 void glr_ctrl_init_gl(void);
 void glr_ctrl_bootstrap_repl(const char *input_file);
 
@@ -48,7 +53,7 @@ void glr_ctrl_tick(void);
  * Non-editor input concerns (replay forwarding, audio, config menu,
  * cfg shortcuts, save / debug / quit, scene cycle, help, variable
  * panel drag, scene press, camera, scroll-wheel zoom) are routed by
- * imrepl_ctrl from raw GLUT events to their owning subsystem. The
+ * glr_ctrl from raw GLUT events to their owning subsystem. The
  * helpers below are exposed so test fixtures can drive a single
  * routing concern in isolation without applying GLUT effects (they
  * fill the editor_input ReplInputDispatchEffects struct via
@@ -63,16 +68,17 @@ int glr_ctrl_router_handle_save_key(unsigned char key);             /* Ctrl+S */
 int glr_ctrl_router_handle_debug_dump_key(unsigned char key);       /* Ctrl+P */
 
 /* Fill a ReplExportLayout from current ui_layout_* / glr_state_*
- * values. The export pipeline reads layout as opaque integers
- * (step 7c of feature/decouple-repl-from-gl-repl-alt.md). Controllers
- * + tests building the export call site fill the struct via this
- * helper instead of inlining the reads. */
+ * values. The export pipeline reads layout as opaque integers, so
+ * controllers and full-app tests build the struct through this helper
+ * instead of duplicating the current layout/state reads. The
+ * decouple-plan note is secondary: this is the app-side adapter that
+ * keeps export.c from reaching into ui/layout or glr_state directly. */
 #include "repl/export.h"   /* ReplExportLayout */
 void glr_ctrl_fill_export_layout(ReplExportLayout *out);
 int glr_ctrl_router_handle_quit_key(unsigned char key);             /* Ctrl+Q */
 int glr_ctrl_router_handle_config_menu_key(unsigned char key);      /* backtick → config menu */
 int glr_ctrl_router_handle_active_replay_key(unsigned char key);    /* replay forwarding when active */
-int glr_ctrl_router_handle_replay_toggle_key(unsigned char key);    /* Ctrl+G + replay shortcuts */
+int glr_ctrl_router_handle_replay_toggle_key(unsigned char key);    /* replay key surface, including Ctrl+R */
 int glr_ctrl_router_handle_cfg_shortcut_key(unsigned char key);     /* glr_cfg_handle_ascii_shortcut */
 int glr_ctrl_router_handle_accum_samples_key(unsigned char key);    /* Ctrl+= / Ctrl+- */
 int glr_ctrl_router_handle_post_filter_key(unsigned char key);      /* Ctrl+N (experimental post-process) */
@@ -94,7 +100,7 @@ int glr_ctrl_router_handle_camera_motion(int x, int y);
 int glr_ctrl_router_handle_camera_pointer_set(int x, int y);
 int glr_ctrl_router_handle_glut_scroll_wheel_button(int button, int state, int x, int y);
 
-/* J2: dispatch a code-panel UiHit to the owning subsystem. Switch on
+/* Dispatch a code-panel UiHit to the owning subsystem. Switches on
  * hit.kind: code text / insert line / gutter / inline color swatch /
  * panel divider / pin button / menu button / menu item / variable
  * slider / floating color picker control. Returns 1 if the hit was
@@ -103,14 +109,14 @@ int glr_ctrl_router_handle_glut_scroll_wheel_button(int button, int state, int x
  * (e.g. color_picker_open expects screen-space my). */
 int glr_ctrl_router_handle_code_panel_hit(UiHit hit, int x, int y);
 
-/* J2: motion handler for an in-progress code-panel selection drag.
+/* Motion handler for an in-progress code-panel selection drag.
  * The controller owns the drag state (active / anchor / moved); this
  * helper re-runs ui_panels_hit_test on motion to derive the drag
  * target and updates the editor selection. Returns 1 if drag was
  * active (consumed), 0 otherwise. */
 int glr_ctrl_router_handle_code_panel_drag(int x, int y);
 
-/* J2: clear the controller's code-panel drag tracking state. Called
+/* Clear the controller's code-panel drag tracking state. Called
  * by the editor's reset_transients hook so a state reset (Ctrl+L,
  * example load) doesn't leave an orphaned mid-drag. */
 void glr_ctrl_router_reset_code_panel_drag(void);
@@ -149,12 +155,12 @@ struct UiOverlayContent;
 const struct UiOverlayContent *glr_ctrl_help_overlay_content(void);
 
 /* Publish a ReplReplayAnnotationOutput to editor_state_virtual_lines.
- * Phase 4 of feature/source-document-port.md uses the return-value
- * shape: replay_annotations_prepare() fills the output struct
- * and the caller (controller, panels.c, full-app-linked tests) calls
- * this helper to forward the rows to the editor's virtual-line list.
- * The standalone demo doesn't link this — it has no UI to render
- * annotations to. */
+ * replay_annotations_prepare() fills the output struct and the caller
+ * (controller, panels.c, full-app-linked tests) uses this helper to
+ * forward those rows to the editor's virtual-line list. The standalone
+ * demo doesn't link this path because it has no UI to render
+ * annotations to. The source-document migration note is secondary to
+ * that current contract. */
 #include "repl/replay_annotations.h" /* ReplReplayAnnotationOutput */
 void glr_publish_replay_annotations(const ReplReplayAnnotationOutput *out);
 

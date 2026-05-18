@@ -1,32 +1,21 @@
 /*
- * repl_config.h - Configuration item descriptors and keyed state access.
+ * glr_config.h - Config item descriptors and keyed state access.
  *
- * Declarative system for toggles and cycles (grid theme, axes, overlays,
- * rendering features, audio, etc.). Config items are immutable descriptors
- * (GlrConfigItem) registered in a table (g_cfg_items[]). The keyed facade
- * (GlrConfigKey enum) provides stable names for items across the codebase
- * (menu, help overlay, export/import, tests).
+ * Defines the stable config-key vocabulary used across the app shell for
+ * toggles and cycles such as grid theme, overlays, replay options, panel
+ * layout, audio mode, and render features. The descriptor table itself
+ * lives in glr_actions.c; this header exposes the keyed API the rest of
+ * the program uses to inspect, set, and cycle those items.
  *
- * Item types:
- *   - Toggles (state_count = 2): simple ON/OFF (MSAA, wireframe, auto-time, etc.)
- *   - Cycles (state_count > 2): rotate through N named states (grid themes,
- *     axes themes, replay mode, backdrop, audio mode, etc.). Each state has a
- *     display name (state_names[]).
- *   - Separators (section_header = 1): visual breaks in the Config menu.
+ * Export/import persists config by GlrConfigKey-backed names in `@cfg`
+ * headers rather than table indices, so examples and saved scenes survive
+ * descriptor reordering. Keyboard shortcuts also hang off the same
+ * descriptors: ASCII control keys and GLUT special keys map to config rows
+ * through the fields on GlrConfigItem.
  *
- * Keyboard bindings: Each item can have an ASCII key code (Ctrl+<key>) or GLUT
- * special key (is_special = 1). Used by repl_actions.c to dispatch keyboard
- * shortcuts (F1-F11 for overlays, Ctrl+U for MSAA, etc.).
- *
- * Export format: Export/import uses GlrConfigKey values in @cfg header lines
- * (e.g., "@cfg wireframe=1"), allowing examples and user scenes to override
- * defaults. Parsing rebuilds state from keys, not indices, so reordering items
- * doesn't break saved state.
- *
- * Adding an item: Append to GlrConfigKey enum (before GLR_CONFIG_COUNT),
- * then add a GlrConfigItem entry to g_cfg_items[] in repl_actions.c with
- * label, key binding, state_count, state_names[], and section_header flag.
- * CFG_ITEM_COUNT auto-computes via sizeof.
+ * When adding an item, extend GlrConfigKey and add the matching
+ * GlrConfigItem row in glr_actions.c. Keep the descriptor table as the
+ * single source of truth for labels, shortcuts, and state names.
  */
 #ifndef GLR_CONFIG_H
 #define GLR_CONFIG_H
@@ -86,8 +75,8 @@ typedef struct {
     int          section_header; /* 1 for separator/header rows */
 } GlrConfigItem;
 
-/* Exported config item table and count. g_cfg_items[] is a static array in
- * repl_actions.c; CFG_ITEM_COUNT is the count (auto-computed via sizeof). Used
+/* Exported config item table and count. g_cfg_items[] lives in
+ * glr_actions.c; CFG_ITEM_COUNT is the count (auto-computed via sizeof). Used
  * by the menu UI and config accessor functions to iterate items. */
 extern GlrConfigItem g_cfg_items[];
 extern const int CFG_ITEM_COUNT;
