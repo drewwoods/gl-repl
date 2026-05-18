@@ -81,6 +81,8 @@ typedef double GLclampd;
 #define GL_STENCIL_BUFFER_BIT 0x00000400
 #define GL_COLOR_BUFFER_BIT 0x00004000
 
+#define GL_UNPACK_ALIGNMENT 0x0CF5
+
 #define GL_CURRENT_BIT 0x00000001
 #define GL_POINT_BIT 0x00000002
 #define GL_LINE_BIT 0x00000004
@@ -203,6 +205,8 @@ typedef double GLclampd;
 static inline void glAccum(GLenum op, GLfloat value) { GL_STUB_TRACE_LINE("glAccum %u %g\n", (unsigned)op, (double)value); gl_stub_tick(GL_STUB_glAccum); }
 static inline void glBegin(GLenum mode) { GL_STUB_TRACE_LINE("glBegin %u\n", (unsigned)mode); gl_stub_tick(GL_STUB_glBegin); }
 static inline void glBindTexture(GLenum target, GLuint texture) { GL_STUB_TRACE_LINE("glBindTexture %u %u\n", (unsigned)target, (unsigned)texture); gl_stub_tick(GL_STUB_glBindTexture); }
+static inline void glBitmap(GLsizei w, GLsizei h, GLfloat xo, GLfloat yo, GLfloat xm, GLfloat ym, const GLubyte *bits) { GL_STUB_TRACE_LINE("glBitmap %d %d\n", (int)w, (int)h); gl_stub_tick(GL_STUB_glBitmap); (void)xo; (void)yo; (void)xm; (void)ym; (void)bits; }
+static inline void glPixelStorei(GLenum pname, GLint param) { GL_STUB_TRACE_LINE("glPixelStorei %u %d\n", (unsigned)pname, (int)param); gl_stub_tick(GL_STUB_glPixelStorei); }
 static inline void glOrtho(GLdouble l, GLdouble r, GLdouble b, GLdouble t, GLdouble n, GLdouble f) { GL_STUB_TRACE_LINE("glOrtho %g %g %g %g %g %g\n", (double)l, (double)r, (double)b, (double)t, (double)n, (double)f); gl_stub_tick(GL_STUB_glOrtho); }
 static inline void glGenTextures(GLsizei n, GLuint *textures) { GL_STUB_TRACE_LINE("glGenTextures %d\n", (int)n); gl_stub_tick(GL_STUB_glGenTextures); for (GLsizei i = 0; i < n; i++) textures[i] = 1; }
 static inline void glDeleteTextures(GLsizei n, const GLuint *textures) { GL_STUB_TRACE_LINE("glDeleteTextures %d\n", (int)n); gl_stub_tick(GL_STUB_glDeleteTextures); (void)textures; }

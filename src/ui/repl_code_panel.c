@@ -1313,21 +1313,28 @@ static void repl_code_panel_draw_keycap(int kx, int ky, int kw, int kh) {
     glEnd();
 }
 
-/* The ⇧ shift symbol, outlined in one FONT_SMALL (8x13) glyph cell
- * with its lower-left at (cx, gy) so it sits on the same baseline as
- * the adjacent '^' and 'F' bitmap glyphs. Caller sets the color. */
+/* The ⇧ shift symbol as an 8x13 1bpp bitmap, drawn with glBitmap at
+ * raster (cx, gy) using the same cell metrics and 2px descent origin
+ * as GLUT_BITMAP_8_BY_13 so it sits on the same baseline as the
+ * adjacent '^' and 'F' font glyphs. Caller sets the color. */
 static void repl_code_panel_draw_shift_glyph(int cx, int gy) {
-    float x = (float)cx;
-    float y = (float)gy;
-    glBegin(GL_LINE_LOOP);
-    glVertex2f(x + 4.0f, y + 11.0f);  /* apex */
-    glVertex2f(x + 7.0f, y +  6.0f);  /* right shoulder */
-    glVertex2f(x + 5.0f, y +  6.0f);
-    glVertex2f(x + 5.0f, y +  1.0f);  /* right stem foot */
-    glVertex2f(x + 3.0f, y +  1.0f);  /* left stem foot */
-    glVertex2f(x + 3.0f, y +  6.0f);
-    glVertex2f(x + 1.0f, y +  6.0f);  /* left shoulder */
-    glEnd();
+    /* Rows are bottom-to-top (glBitmap scan order); bit 0x80 = leftmost
+     * pixel. Rows 0-2 are blank descent; the filled up-arrow occupies
+     * rows 3-12 (stem cols 2-5, head widening to full width). */
+    static const GLubyte shift_bits[13] = {
+        0x00, 0x00, 0x00,             /* rows 0-2  (baseline / descent) */
+        0x3C, 0x3C, 0x3C, 0x3C, 0x3C, /* rows 3-7  stem  ..####.. */
+        0xFF, 0xFF,                   /* rows 8-9  head  ######## */
+        0x7E,                         /* row 10          .######. */
+        0x3C,                         /* row 11          ..####.. */
+        0x18                          /* row 12  apex    ...##... */
+    };
+    GLint prev_align = 4;
+    glGetIntegerv(GL_UNPACK_ALIGNMENT, &prev_align);
+    glRasterPos2f((float)cx, (float)gy);
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);   /* rows are 1 byte each */
+    glBitmap(8, 13, 0.0f, 2.0f, 0.0f, 0.0f, shift_bits);
+    glPixelStorei(GL_UNPACK_ALIGNMENT, prev_align);
 }
 
 /* Draw the focus keycap glyphs "^⇧F" across three FONT_SMALL cells

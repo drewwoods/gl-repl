@@ -27,6 +27,8 @@ extern "C" {
     X(glAccum)                         \
     X(glBegin)                         \
     X(glBindTexture)                   \
+    X(glBitmap)                        \
+    X(glPixelStorei)                   \
     X(glOrtho)                         \
     X(glGenTextures)                   \
     X(glDeleteTextures)                \
