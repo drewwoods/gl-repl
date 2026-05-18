@@ -549,10 +549,17 @@ int glr_action_menu_item_activate(int menu_id, int item_idx) {
         }
         return 1;
     } else if (menu_id == GLR_MENU_CONFIG) {
-        if (glr_config_item_at(item_idx) &&
-            !glr_config_item_at(item_idx)->section_header) {
-            glr_cfg_cycle_row(item_idx, 1);
-        }
+        /* Config top-level rows are section / "All" PARENT rows: they
+         * hover-open a flyout, and a click on the parent itself is
+         * inert (mirrors the MENU_SCENE tag-row guard above — plan
+         * Finding #1). `item_idx` here is a section parent row, NOT a
+         * g_cfg_items[] index, so it must never be cycled. Leaf
+         * config-item activation arrives via UI_HIT_SUBMENU_ITEM and
+         * is dispatched straight to glr_cfg_cycle_row() on the
+         * absolute g_cfg_items[] index (route_submenu_item_hit,
+         * Step 6) — it never reaches this branch. Return 0 so the
+         * dropdown stays open, matching the old per-toggle feel. */
+        (void)item_idx;
         return 0;
     }
 
