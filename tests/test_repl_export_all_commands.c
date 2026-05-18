@@ -71,6 +71,7 @@ static const CmdType expected_commands[] = {
     CMD_DISABLE,
     CMD_SHADE_MODEL,
     CMD_FRONT_FACE,
+    CMD_DEPTH_FUNC,
     CMD_POINT_SIZE,
     CMD_LINE_WIDTH,
     CMD_POINT_PARAMETER_FV,
@@ -203,6 +204,7 @@ int main(void) {
     editor_feed_line("glDisable(GL_DEPTH_TEST);");
     editor_feed_line("glShadeModel(GL_SMOOTH);");
     editor_feed_line("glFrontFace(GL_CCW);");
+    editor_feed_line("glDepthFunc(GL_LEQUAL);");
 
     /* Attribute commands */
     editor_feed_line("glPointSize(5);");

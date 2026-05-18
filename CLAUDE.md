@@ -842,6 +842,9 @@ glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA|GL_ONE)
 glColorMaterial(face, mode), glMaterialf(face, pname, value)
   glColorMaterial mode: GL_AMBIENT, GL_DIFFUSE, GL_SPECULAR, GL_EMISSION, GL_AMBIENT_AND_DIFFUSE
 glLightModeli(pname, param), glFrontFace(mode)
+glDepthFunc(func)
+  func: GL_NEVER, GL_LESS, GL_EQUAL, GL_LEQUAL, GL_GREATER,
+        GL_NOTEQUAL, GL_GEQUAL, GL_ALWAYS
 glDepthMask(GL_TRUE|GL_FALSE)
 glColorMask(red, green, blue, alpha)
   Each channel is GL_TRUE/GL_FALSE (or 0/1, canonicalized to the

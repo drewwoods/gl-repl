@@ -51,6 +51,18 @@ static const ReplEnumEntry k_front_face[] = {
     { NULL, 0 }
 };
 
+static const ReplEnumEntry k_depth_funcs[] = {
+    { "GL_NEVER",           GL_NEVER },
+    { "GL_LESS",            GL_LESS },
+    { "GL_EQUAL",           GL_EQUAL },
+    { "GL_LEQUAL",          GL_LEQUAL },
+    { "GL_GREATER",         GL_GREATER },
+    { "GL_NOTEQUAL",        GL_NOTEQUAL },
+    { "GL_GEQUAL",          GL_GEQUAL },
+    { "GL_ALWAYS",          GL_ALWAYS },
+    { NULL, 0 }
+};
+
 static const ReplEnumEntry k_material_params[] = {
     { "GL_AMBIENT",             GL_AMBIENT },
     { "GL_DIFFUSE",             GL_DIFFUSE },
@@ -158,6 +170,8 @@ static const ReplFuncCompletion k_func_completions[] = {
         "Reset the current matrix to identity", REPL_HELP_GROUP_TOP },
     { "glFrontFace(",        "glFrontFace(mode)",                                        1, { "mode" },
         "GL_CW, GL_CCW", REPL_HELP_GROUP_TOP },
+    { "glDepthFunc(",        "glDepthFunc(func)",                                        1, { "func" },
+        "GL_NEVER, GL_LESS, GL_EQUAL, GL_LEQUAL, GL_GREATER, GL_NOTEQUAL, GL_GEQUAL, GL_ALWAYS", REPL_HELP_GROUP_TOP },
     { "glDepthMask(",        "glDepthMask(flag)",                                        1, { "flag" },
         "GL_TRUE, GL_FALSE (depth-buffer writes)", REPL_HELP_GROUP_TOP },
     { "glColorMask(",        "glColorMask(red, green, blue, alpha)",                     4, { "red", "green", "blue", "alpha" },
@@ -303,6 +317,8 @@ static const ReplEnumCommandSpec k_enum_command_specs[] = {
     { "glColorMaterial", CMD_COLOR_MATERIAL, 2, "%sglColorMaterial(%s, %s);", 0,
         .args = { ENUM_SLOT_TOK(k_face_types, "face: GL_FRONT, GL_BACK, GL_FRONT_AND_BACK"),
                   ENUM_SLOT_TOK(k_color_material_modes, "mode: GL_AMBIENT, GL_DIFFUSE, GL_SPECULAR, GL_EMISSION, GL_AMBIENT_AND_DIFFUSE") } },
+    { "glDepthFunc",     CMD_DEPTH_FUNC,     1, "%sglDepthFunc(%s);",        0,
+        .args = { ENUM_SLOT_TOK(k_depth_funcs, "Try GL_LESS, GL_LEQUAL, GL_ALWAYS, ...") } },
     { "glDepthMask",     CMD_DEPTH_MASK,     1, "%sglDepthMask(%s);",        0,
         .args = { ENUM_SLOT_BOOL("Try GL_TRUE or GL_FALSE") } },
     { "glDisable",       CMD_DISABLE,        1, "%sglDisable(%s);",          0,
@@ -377,6 +393,7 @@ static const ReplCommandTypeSpec g_command_type_specs[CMD_TYPE_COUNT] = {
     CMD_TYPE_SPEC(CMD_COLOR_MATERIAL,       1, 1, CMD_CAT_COLOR),
     CMD_TYPE_SPEC(CMD_LIGHT_MODEL_I,        1, 1, CMD_CAT_STATE),
     CMD_TYPE_SPEC(CMD_FRONT_FACE,           1, 1, CMD_CAT_STATE),
+    CMD_TYPE_SPEC(CMD_DEPTH_FUNC,           1, 1, CMD_CAT_STATE),
     CMD_TYPE_SPEC(CMD_FOR_BEGIN,            1, 0, CMD_CAT_LOOP),
     CMD_TYPE_SPEC(CMD_FOR_END,              1, 0, CMD_CAT_LOOP),
     CMD_TYPE_SPEC(CMD_FUNC_DEF,             1, 0, CMD_CAT_FUNCTION),
