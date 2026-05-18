@@ -60,6 +60,14 @@ static int g_menu_item_hover = -1;
 static int   g_submenu_menu_id    = -1;
 static int   g_submenu_parent_row = -1;
 static float g_submenu_open_time  = -1.0f;
+
+/* Right-hand column a dropdown reserves for the ">" flyout-affordance
+ * glyph so a long parent label can't collide with it. */
+#define SUBMENU_ARROW_COL 26
+
+/* Defined with the submenu provider further down; menu_dropdown_rect
+ * (above it) needs the prototype to size the affordance column. */
+static int menu_row_has_submenu(int menu_id, int row);
 static float g_menu_open_time = -1.0f;   /* anim_time when current menu opened */
 static float g_search_open_time = -1.0f; /* anim_time when search opened */
 #define UI_FADE_DURATION 0.18f
@@ -166,10 +174,28 @@ static const char *menu_item_label(int menu_id, int i) {
     }
     if (menu_id == MENU_CONFIG) {
         /* Config top-level rows are section parents + "All"; the
-         * actual items live in each row's flyout. */
+         * actual items live in each row's flyout. The section model is
+         * data-faithful (UPPERCASE, as in g_cfg_items[]); the menu
+         * heading is shown leading-uppercase ("RENDERING" ->
+         * "Rendering", "TIME & REPLAY" -> "Time & replay"). */
         if (i == config_all_parent_row())
             return "All";
-        return glr_config_section_label(i);
+        const char *raw = glr_config_section_label(i);
+        if (!raw)
+            return NULL;
+        static char buf[48];
+        size_t k = 0;
+        for (; raw[k] && k < sizeof(buf) - 1; k++) {
+            char c = raw[k];
+            if (k == 0) {
+                if (c >= 'a' && c <= 'z') c = (char)(c - 32);
+            } else if (c >= 'A' && c <= 'Z') {
+                c = (char)(c + 32);
+            }
+            buf[k] = c;
+        }
+        buf[k] = '\0';
+        return buf;
     }
     return NULL;
 }
@@ -324,7 +350,7 @@ static int menu_dropdown_rect(int *dx, int *dy, int *dw, int *dh) {
     menubar_rects(menu_x, menu_w, pin_x, pin_w, &by, &bh);
     int n = menu_item_count(g_open_menu);
 
-    int max_lbl = 0, max_sc = 0;
+    int max_lbl = 0, max_sc = 0, has_submenu = 0;
     for (int i = 0; i < n; i++) {
         const char *lbl = menu_item_label(g_open_menu, i);
         const char *sc  = menu_item_shortcut(g_open_menu, i);
@@ -334,11 +360,18 @@ static int menu_dropdown_rect(int *dx, int *dy, int *dw, int *dh) {
             int cw = (int)strlen(sc) * FONT_SMALL_W;
             if (cw > max_sc) max_sc = cw;
         }
+        if (menu_row_has_submenu(g_open_menu, i))
+            has_submenu = 1;
     }
     /* Config's per-item state/shortcut columns live in the flyout
      * now, not on the top-level section rows. */
     int max_w = max_lbl;
     if (max_sc > 0)    max_w += max_sc + 16;
+    /* Reserve a right-hand column for the ">" flyout affordance so a
+     * long parent label (e.g. "Overlays & scene") never collides with
+     * it. The glyph is drawn at dx+dw-20; SUBMENU_ARROW_COL keeps a
+     * clear gap. */
+    if (has_submenu) max_w += SUBMENU_ARROW_COL;
     if (max_w < 80) max_w = 80;
     int width  = max_w + 28;
     int rows   = (n > 0) ? n : 1;  /* reserve one row for "(empty)" */
