@@ -2307,42 +2307,37 @@ int glr_ctrl_router_handle_cfg_shortcut_key(unsigned char key) {
     return glr_cfg_handle_ascii_shortcut(key);
 }
 
+/* Ctrl+= / Ctrl+- drive the *same* Off->2x->4x->8x->16x cycle the
+ * Config "Accum AA" menu row uses (clamped, no wrap), so the keyboard
+ * and the menu are one coherent model — no latent sample count behind
+ * an "Off" state. Still gated on use_accum: with --noaccum there is no
+ * accumulation buffer to enable. */
 int glr_ctrl_router_handle_accum_samples_key(unsigned char key) {
-    static const int g_accum_steps[] = { 1, 2, 4, 8, 16 };
     GlrRenderState *rs = glr_state_render_mut();
-    if (key == '=' || key == '+') {
-        if (!(editor_input_active_modifiers() & GLUT_ACTIVE_CTRL))
-            return 0;
-        if (rs->use_accum) {
-            for (int i = 0; i < ACCUM_STEP_COUNT - 1; i++) {
-                if (rs->accum_samples <= g_accum_steps[i]) {
-                    rs->accum_samples = g_accum_steps[i + 1];
-                    break;
-                }
-            }
-            char msg[64];
-            snprintf(msg, sizeof(msg), "Accum samples: %d", rs->accum_samples);
-            repl_set_status(msg);
-        }
-        return 1;
-    }
+    int is_up = (key == '=' || key == '+');
+    int is_down = (key == KEY_CTRL_DASH ||
+                   (key == '-' &&
+                    (editor_input_active_modifiers() & GLUT_ACTIVE_CTRL)));
 
-    if (key == KEY_CTRL_DASH ||
-        (key == '-' && (editor_input_active_modifiers() & GLUT_ACTIVE_CTRL))) {
-        if (rs->use_accum) {
-            for (int i = ACCUM_STEP_COUNT - 1; i > 0; i--) {
-                if (rs->accum_samples >= g_accum_steps[i]) {
-                    rs->accum_samples = g_accum_steps[i - 1];
-                    break;
-                }
-            }
-            char msg[64];
-            snprintf(msg, sizeof(msg), "Accum samples: %d", rs->accum_samples);
-            repl_set_status(msg);
-        }
-        return 1;
+    if (is_up && !(editor_input_active_modifiers() & GLUT_ACTIVE_CTRL))
+        return 0;
+    if (!is_up && !is_down)
+        return 0;
+
+    if (rs->use_accum) {
+        int n   = glr_config_state_count(GLR_CONFIG_ACCUM_AA);
+        int idx = glr_config_get(GLR_CONFIG_ACCUM_AA);
+        int next = idx + (is_up ? 1 : -1);
+        if (next < 0)     next = 0;
+        if (next > n - 1) next = n - 1;
+        if (next != idx)
+            glr_config_set(GLR_CONFIG_ACCUM_AA, next);
+        char msg[64];
+        snprintf(msg, sizeof(msg), "Accum AA: %s",
+                 glr_config_state_name(GLR_CONFIG_ACCUM_AA, next));
+        repl_set_status(msg);
     }
-    return 0;
+    return 1;
 }
 
 /* Ctrl+N: cycle the experimental scene post-processing filter. Hidden

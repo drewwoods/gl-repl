@@ -2744,36 +2744,54 @@ int main() {
         g_mock_modifiers = saved_mods;
     }
 
-    /* Extra coverage: accumulation samples toggle (Ctrl++ / Ctrl+-) */
+    /* Ctrl++ / Ctrl+- now drive the same Off->2x->4x->8x->16x cycle as
+     * the Config "Accum AA" menu row (clamped, no wrap), enabling /
+     * disabling accum AA at the ends — keyboard and menu are one
+     * model. Cycle index: 0=Off 1=2x 2=4x 3=8x 4=16x. */
     {
         int saved_mods = g_mock_modifiers;
         GlrRenderState *rs = glr_state_render_mut();
 
         glr_app_reset_all();
         rs->use_accum = 1;
-        rs->accum_samples = 2;
+        glr_config_set(GLR_CONFIG_ACCUM_AA, 1);   /* 2x */
 
         g_mock_modifiers = GLUT_ACTIVE_CTRL;
 
-        /* Increment */
+        /* Increment steps the cycle up and tracks accum_samples. */
         glr_ctrl_router_handle_accum_samples_key('+');
-        ASSERT_INT("accum toggle +: samples increased to 4", rs->accum_samples, 4);
+        ASSERT_INT("accum +: cycle 2x->4x", glr_config_get(GLR_CONFIG_ACCUM_AA), 2);
+        ASSERT_INT("accum +: samples = 4", rs->accum_samples, 4);
+        ASSERT_INT("accum +: AA enabled", rs->accum_aa_enabled, 1);
 
-        glr_ctrl_router_handle_accum_samples_key('='); /* some keyboards use = for + without shift */
-        ASSERT_INT("accum toggle =: samples increased to 8", rs->accum_samples, 8);
+        glr_ctrl_router_handle_accum_samples_key('='); /* '=' == '+' w/o shift */
+        ASSERT_INT("accum =: cycle 4x->8x", glr_config_get(GLR_CONFIG_ACCUM_AA), 3);
+        ASSERT_INT("accum =: samples = 8", rs->accum_samples, 8);
 
-        /* Decrement */
+        /* Decrement steps back down. */
         glr_ctrl_router_handle_accum_samples_key('-');
-        ASSERT_INT("accum toggle -: samples decreased to 4", rs->accum_samples, 4);
+        ASSERT_INT("accum -: cycle 8x->4x", glr_config_get(GLR_CONFIG_ACCUM_AA), 2);
+        ASSERT_INT("accum -: samples = 4", rs->accum_samples, 4);
 
-        /* Test limits */
-        rs->accum_samples = 16;
+        /* Top clamp: 16x + Ctrl++ stays 16x (no wrap to Off). */
+        glr_config_set(GLR_CONFIG_ACCUM_AA, 4);
         glr_ctrl_router_handle_accum_samples_key('+');
-        ASSERT_INT("accum toggle +: samples capped at 16", rs->accum_samples, 16);
+        ASSERT_INT("accum +: capped at 16x", glr_config_get(GLR_CONFIG_ACCUM_AA), 4);
+        ASSERT_INT("accum +: samples = 16", rs->accum_samples, 16);
 
-        rs->accum_samples = 1;
+        /* Bottom clamp: 2x + Ctrl+- -> Off (disables AA), stays Off. */
+        glr_config_set(GLR_CONFIG_ACCUM_AA, 1);
         glr_ctrl_router_handle_accum_samples_key('-');
-        ASSERT_INT("accum toggle -: samples floored at 1", rs->accum_samples, 1);
+        ASSERT_INT("accum -: 2x->Off", glr_config_get(GLR_CONFIG_ACCUM_AA), 0);
+        ASSERT_INT("accum -: AA disabled at Off", rs->accum_aa_enabled, 0);
+        glr_ctrl_router_handle_accum_samples_key('-');
+        ASSERT_INT("accum -: floored at Off", glr_config_get(GLR_CONFIG_ACCUM_AA), 0);
+
+        /* Off + Ctrl++ re-enables at 2x. */
+        glr_ctrl_router_handle_accum_samples_key('+');
+        ASSERT_INT("accum +: Off->2x", glr_config_get(GLR_CONFIG_ACCUM_AA), 1);
+        ASSERT_INT("accum +: AA re-enabled", rs->accum_aa_enabled, 1);
+        ASSERT_INT("accum +: samples = 2", rs->accum_samples, 2);
 
         g_mock_modifiers = saved_mods;
     }
