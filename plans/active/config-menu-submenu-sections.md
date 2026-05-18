@@ -355,6 +355,25 @@ directly via `glr_cfg_cycle_row` (not the now-inert activate branch),
 and Step 8 became verification. One out-of-scope follow-up recorded:
 a scrolling submenu for the tall `All` flyout.
 
+### Post-merge render fixes (visual review)
+
+A live-binary review caught two regressions in the Step-4 flyout
+render; both fixed (commit `flyout render fix`):
+
+1. **Item label colour.** Step 4's `submenu_row_is_active` tinted
+   *enabled* Config rows' labels with the accent colour, unlike the
+   original flat dropdown (label always primary; only the state value
+   is coloured). Dropped the Config branch of `submenu_row_is_active`
+   so Config labels stay `UI_TOK_TEXT_PRIMARY`; on/off is conveyed
+   solely by the right-hand state-value colour, matching the original.
+2. **Column alignment.** The shortcut/state were positioned per-row
+   (state placed relative to that row's own shortcut), so rows without
+   a shortcut pushed the state value into the shortcut column. Now the
+   flyout computes fixed `cfg_sc_right` / `cfg_state_right` x's once
+   (from `config_submenu_max_sc_px`), so both columns align across all
+   rows like the original flat dropdown. Gate: 6084/6084 stubs,
+   real-GL `make sample` clean.
+
 ## Open sub-questions for review
 
 - **All placement:** ✅ resolved — **last** row (after all sections),
