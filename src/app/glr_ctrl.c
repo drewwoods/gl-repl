@@ -2388,6 +2388,33 @@ int glr_ctrl_router_handle_code_focus_key(unsigned char key) {
     return 1;
 }
 
+/* Ctrl+Shift camera shortcuts:
+ *   Ctrl+Shift+C  eased camera reset to default
+ *   Ctrl+Shift+O  eased focus-origin (target -> 0,0,0)
+ *   Ctrl+Shift+V  toggle View mode (2D/3D); cycles the Config row so
+ *                 the projection blend + status fire as for a click
+ * The plain Ctrl forms stay bound elsewhere (Ctrl+C = editor copy,
+ * Ctrl+O = Grid major, Ctrl+V = paste); the Shift modifier
+ * disambiguates. Must be dispatched ahead of the cfg-shortcut chain
+ * and the editor so neither steals the shifted form. Hidden keyboard
+ * path mirroring Ctrl+Shift+F — no Config row key_code of its own. */
+int glr_ctrl_router_handle_camera_shortcut_key(unsigned char key) {
+    if (key != KEY_CTRL_C && key != KEY_CTRL_O && key != KEY_CTRL_V)
+        return 0;
+    if (!(editor_input_active_modifiers() & GLUT_ACTIVE_SHIFT))
+        return 0;
+    if (key == KEY_CTRL_C) {
+        glr_camera_ease_to_default();
+        repl_set_status("Camera: reset to default");
+    } else if (key == KEY_CTRL_O) {
+        glr_camera_focus_origin();
+        repl_set_status("Camera: focus origin");
+    } else {
+        glr_cfg_cycle_key(GLR_CONFIG_ORTHO_MODE, 1); /* sets its own status */
+    }
+    return 1;
+}
+
 /* ---- Special-key router helpers --------------------------------------- */
 
 int glr_ctrl_router_handle_replay_special(int key) {
@@ -3273,6 +3300,7 @@ void glr_ctrl_keyboard(unsigned char key, int x, int y) {
      * fire exactly where they did before. */
     if (glr_ctrl_router_handle_config_menu_key(key) ||
         glr_ctrl_router_handle_active_replay_key(key) ||
+        glr_ctrl_router_handle_camera_shortcut_key(key) ||
         glr_ctrl_router_handle_cfg_shortcut_key(key) ||
         glr_ctrl_router_handle_replay_toggle_key(key) ||
         glr_ctrl_router_handle_save_key(key) ||
