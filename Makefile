@@ -152,6 +152,7 @@ endif
 	check-glr-ctrl-not-editor-mirror \
 	check-glr-state-no-repl-mutators \
 	check-layer-coupling \
+	check-module-prefixes \
 	check-no-facade-include-in-views \
 	check-no-feed-line-in-pipeline \
 	check-no-load-line-to-input-in-pipeline \
@@ -936,6 +937,7 @@ check-state-ownership: ## Run state-ownership contract checks (new + tightened e
 		check-repl-demo-no-editor \
 		check-source-document-port-owners \
 		check-c99 \
+		check-module-prefixes \
 		check-no-test-default-output; do \
 		printf "  $(YELLOW)▶$(NC) $$target\n"; \
 		$(MAKE) --no-print-directory $$target 2>&1 | sed 's/^/    /' | sed $$'s/ OK / \033[0;32mOK\033[0m /g; s/ OK$$/ \033[0;32mOK\033[0m/' || exit $$?; \
@@ -1016,8 +1018,11 @@ check-repl-export-via-bridge: ## Verify src/repl/export.c pulls app/scene state 
 check-ui-no-export-resolver: ## Verify src/ui reads the snapshot-frozen reshape projection, never calls repl_export_reshape_projection_lines() live.
 	@bash scripts/check-ui-no-export-resolver.sh
 
-check-no-feed-line-in-pipeline: ## Verify REPL pipeline TUs do not call feed_line() (cleared by step 5b/7e).
+check-no-feed-line-in-pipeline: ## Verify REPL pipeline TUs do not call editor_feed_line() (cleared by step 5b/7e).
 	@bash scripts/check-no-feed-line-in-pipeline.sh
+
+check-module-prefixes: ## Verify stale pre-cleanup symbol prefixes have not reappeared under src/.
+	@bash scripts/check-module-prefixes.sh
 
 check-repl-demo-stubs-shrinking: ## Ratchet on tools/repl_demo/stubs.c — must not grow past 0 stubs.
 	@bash scripts/check-repl-demo-stubs-shrinking.sh

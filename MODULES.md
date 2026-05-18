@@ -211,6 +211,45 @@ that crosses a boundary either splits or moves. `audio` is the
 neutrally-named app-level service (formerly `repl_audio`); whether it
 gets a `glr_audio` rename is part of the open namespace audit.
 
+Types follow the same rule with the PascalCase form of the prefix:
+`Repl*` / `Editor*` / `Ui*` / `Scene*` / `Glr*` / `Replay*`,
+`UI_*` / `GLR_*` for macros/enumerators. The prefix follows the
+**owning directory**, not the concept the type models (e.g. the
+editor-overlay snapshot types in `src/ui/editor.h` are `Ui*`, not
+`Editor*`, because `src/ui/` owns that file).
+
+### Sanctioned naming exceptions
+
+These are intentional and must not be "fixed" by a future sweep:
+
+- **Legacy GL/eval domain types** in `src/repl/` (cross-domain,
+  deliberately un-prefixed): `GLCmd`, `CmdType`, `ExprVar`, `ExprCtx`,
+  `TessVertex`, `FlatCmdLocalVars`, `FlatProgramView`,
+  `CmdSyntaxCategory`, and the `cmd_type_name` thin alias.
+- **Root neutral helpers**: `cmd_format.h` `Fmt*`/`fmt_*`,
+  `include/gl_2d.h` `gl2d_*`, `transform_utils.h`
+  `apply_tracked_transform` / `unwind_transform_stack`, and
+  `src/ui/text_layout.h` `CodeLayout` / `CodeWrapIter` /
+  `code_layout_*` (a pure utility shared by UI, export dumps, tests).
+- **Intentional feature prefix**: `replay_ui_*` (e.g.
+  `replay_ui_hud_render`) — feature-owned UI that knows replay
+  concepts; audited by `check-replay-ui-isolation`.
+- **Borrowed cross-module API types** — a header *referencing* a type
+  another module owns is correct C design, not a defect:
+  `ReplCompileContext` / `ReplCompiledChange` in
+  `src/editor/services.h`; the `Repl*` snapshot fields in
+  `src/ui/snapshot.h`; the export / replay-annotation bridge types in
+  `src/app/glr_ctrl.h`; and `UiVariablePanelState` (UI-owned, surfaced
+  by value through `src/widgets/variable_panel_state.h`).
+
+`make check-module-prefixes` (a denylist of the exact stale names the
+naming cleanup removed; in the `check-state-ownership` aggregate) fails
+if any eliminated prefix reappears under `src/`. It is a removed-name
+denylist, not a blanket foreign-prefix sweep, so the borrowed-API
+types above keep passing. See
+`plans/in-review/module-naming-convention.md` for the full rename
+record.
+
 ## Adding Or Migrating An Owner Module
 
 1. Pick the owner first: REPL program state, editor session state, or UI

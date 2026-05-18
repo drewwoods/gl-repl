@@ -2,13 +2,31 @@
 
 ## Implementation Progress
 
-- **Phase 1 — DONE** (commit `naming(phase 1)`). All cross-module
-  type/enum/macro renames landed; build, 5468 tests,
-  check-state-ownership, check-c99, test-stubs all green. Guard
-  scripts + baseline prose + CLAUDE/MODULES/ARCHITECTURE docs updated.
-- **Phase 2 — pending.**
-- **Phase 3 — pending.**
-- **Phase 4 — pending.**
+Implemented on branch `module-naming-cleanup` (off `main`), one commit
+per phase, full gate (`make sample`/`test`/`check-state-ownership`/
+`check-c99`/`test-stubs`) green after each.
+
+- **Phase 1 — DONE** (`2bd12af`). All cross-module type/enum/macro
+  renames. Also fixed guard scripts that hardcoded old type names
+  (`check-color-picker-ui-isolation`, `check-repl-no-direct-editor`,
+  `check-no-test-default-output`) + baseline-comment prose + docs.
+- **Phase 2 — DONE** (`e03dbc5`). Orphan functions prefixed;
+  `feed_line`/`navigate_to_line` collapsed into single
+  `int editor_feed_line` / `void editor_navigate_to_line` with
+  canonical decls moved to `editor/input.h` and removed from
+  `repl/core.h`. 16 test TUs gained `#include "editor/input.h"`
+  (no `src/repl/` code ever called it — all refs were comments).
+  Guard scripts/Makefile prose updated.
+- **Phase 3 — DONE** (`13a3cc6`). Scene theme enums `Scene`-prefixed.
+- **Phase 4 — DONE**. Added `scripts/check-module-prefixes.sh`
+  (removed-name denylist) wired into the `check-state-ownership`
+  aggregate + `.PHONY` + leaf target; documented the convention and
+  Sanctioned Exceptions in MODULES.md. The guard caught one residual
+  stale comment (`REPL_MENU_BAR_PIN_*` in `src/ui/menu_bar.h`), which
+  was fixed — evidence the gate has teeth.
+
+Net: no behavior change; verified `make test` 5468/5468 at every
+phase. AGENTS.md is a symlink to CLAUDE.md (edited once via CLAUDE.md).
 
 ## Context
 
