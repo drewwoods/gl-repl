@@ -14,7 +14,7 @@
  *
  * NOTE: This file is for *compile-time* configuration. User-toggleable
  * runtime settings (wireframe / grid theme / etc.) live on
- * `repl_config.h` and the `g_cfg_items[]` descriptor table in
+ * `src/app/glr_config.h` and the `g_cfg_items[]` descriptor table in
  * `src/app/glr_actions.c` — different concept, do not conflate.
  */
 #ifndef CONFIG_H

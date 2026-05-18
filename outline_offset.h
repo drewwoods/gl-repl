@@ -1,16 +1,13 @@
 /*
- * outline_offset.h - polygon-offset depth-bias constants for the REPL's
- * outline-pass rendering trick.
+ * outline_offset.h - Polygon-offset depth-bias constants for the outline pass.
  *
- * Shared by:
- *   - imrepl_ctrl.c — live rendering: re-runs user geometry in
- *     glPolygonMode(GL_LINE) with these offsets to draw outlines on top
- *     of the filled pass without z-fighting.
- *   - src/repl/export.c — emits the same constants into the exported C file
- *     so the standalone binary draws outlines identically.
+ * Shared by the live app controller and the export path so both rendering modes
+ * use the same depth bias when drawing wire outlines over the filled pass.
+ * The live pass is in src/app/glr_ctrl.c; src/repl/export.c emits the same
+ * constants into exported standalone C so the visual result matches.
  *
- * Not under src/scene/ because no scene module consumes them — the
- * outline pass moved to the controller in the J-series guides hoist.
+ * This stays at the repo root because it is a tiny cross-layer constant header,
+ * not a scene-module API.
  */
 #ifndef OUTLINE_OFFSET_H
 #define OUTLINE_OFFSET_H

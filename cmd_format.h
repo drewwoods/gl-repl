@@ -1,11 +1,11 @@
 /*
- * cmd_format.h - Command indentation / depth computation
+ * cmd_format.h - Command indentation and depth computation.
  *
- * Pure functions that compute indentation from an abstract command sequence.
- * No OpenGL headers required; can be built standalone for testing.
+ * Pure formatting helpers that compute indentation from an abstract command
+ * sequence. They have no OpenGL dependency and are shared by both the main
+ * build and the formatter tests.
  *
- * Build (standalone test):
- *   gcc -Wall -std=c2x -I. -o test_format tests/test_format.c cmd_format.c -lm
+ * Standalone test builds should follow the project's C99 baseline.
  */
 #ifndef CMD_FORMAT_H
 #define CMD_FORMAT_H

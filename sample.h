@@ -1,8 +1,10 @@
 /*
- * sample.h - Shared types, macros, extern globals, and utility declarations
+ * sample.h - Minimal legacy compatibility header.
  *
- * Common header for the OpenGL REPL split across sample.c, scene_render.c,
- * scene_grid.c, scene_axes.c, and ui_panels.c.
+ * This root header now carries only the shared C/OpenGL includes and the
+ * `M_PI` fallback used by older translation units. Real runtime types and APIs
+ * have moved to their owning module headers under src/; callers should prefer
+ * those narrower headers when possible.
  */
 #ifndef SAMPLE_H
 #define SAMPLE_H
