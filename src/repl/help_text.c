@@ -164,6 +164,7 @@ static const char *const k_tab_keys_base[] = {
     "  Ctrl+B               \tToggle Accum AA",
     "",
     "Interface:",
+    "  Statusbar keycaps    \tClick 'F1 help' or 'focus' (= Ctrl+Shift+F) to toggle",
     "  `                    \tOpen Config menu",
     "  Left-click item      \tCycle config entry forward",
     "  Right-click item     \tCycle config entry backward",

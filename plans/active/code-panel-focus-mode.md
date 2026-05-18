@@ -43,6 +43,24 @@ row, no `GlrConfigKey`, no `@cfg` persistence (session-only now).
   annotations), a `g_cfg_items[]` header note cataloguing the hidden
   toggles, `CLAUDE.md` Key Controls row.
 
+### Second follow-up (this round)
+
+- The **"F1 help" keycap is now clickable** too. Shared
+  `glr_ctrl_toggle_help()` (factored out of the F1 special handler);
+  new `UI_HIT_HELP_TOGGLE` hit-tested from the same
+  `repl_code_panel_statusbar_hints()` geometry; controller route
+  `route_help_toggle_hit`.
+- Focus keycap label changed `C-S-F` → **`^⇧F`**. `^` and `F` are
+  font glyphs; the ⇧ shift symbol has no bitmap-font glyph so it is
+  line-drawn (`repl_code_panel_draw_shift_glyph`, a 7-point
+  `GL_LINE_LOOP` outline in one 8x13 cell). Keycap width is now a
+  fixed `STATUSBAR_FOCUS_KBD_CELLS` (3) instead of a strlen (a UTF-8
+  "⇧" would mis-measure).
+- Test now also asserts the help keycap is hit-testable and that
+  `glr_ctrl_toggle_help()` flips/restores `ui_state_help().visible`
+  (29/29). Help-catalog Interface line + `CLAUDE.md` F1 row note the
+  clickable keycaps.
+
 ## Context
 
 The code panel renders a full standalone-C view: workspace-header comments,
