@@ -12,6 +12,7 @@
 #include "ui/layout.h"
 #include "ui/metrics.h"
 #include "ui/repl_code_panel.h"
+#include "ui/panels.h"
 #include "support/test_harness.h"
 
 static TestHarness g_harness = TEST_HARNESS_INIT;
@@ -250,6 +251,21 @@ int main(void) {
         glr_ctrl_toggle_help();          /* restore */
         ASSERT_TRUE("help overlay restored",
                     ui_state_help().visible == help_was);
+
+        /* While help is open it is modal, but the "F1 help" keycap
+         * stays clickable so a second click dismisses it: panel
+         * hit-test passes the keycap pixel through as
+         * UI_HIT_HELP_TOGGLE while every other pixel stays
+         * UI_HIT_HELP_PANEL. */
+        ui_state_help_mut()->visible = 1;
+        build_doc(&snap, &layout);
+        ASSERT_TRUE("help keycap stays clickable through modal",
+                    ui_panels_hit_test(&snap, hx, hy, 0).kind
+                        == UI_HIT_HELP_TOGGLE);
+        ASSERT_TRUE("rest of screen stays modal under help",
+                    ui_panels_hit_test(&snap, 20, hy, 0).kind
+                        == UI_HIT_HELP_PANEL);
+        ui_state_help_mut()->visible = 0;
     }
 
     return test_harness_report(&g_harness, "repl_code_panel_document");

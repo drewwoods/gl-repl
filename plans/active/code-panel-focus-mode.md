@@ -61,6 +61,19 @@ row, no `GlrConfigKey`, no `@cfg` persistence (session-only now).
   switch) for both keycaps instead of calling the toggle helpers
   directly, so a future switch-wiring regression is caught (31/31).
 
+### Help keycap polish
+
+- Clicking the "F1 help" keycap **while the overlay is open now
+  dismisses it** (it previously only opened). `ui_panels_hit_test`
+  is modal when help is visible; it now lets a `UI_HIT_HELP_TOGGLE`
+  pixel through (every other pixel stays `UI_HIT_HELP_PANEL`), so the
+  existing route toggles it off — mirrors pressing F1 again.
+- The **"help" label gets the accent (green) tint while the overlay
+  is active**, muted otherwise — same active-state scheme as the
+  "focus" label.
+- Tests (33→ +2): keycap stays clickable through the modal while the
+  rest of the screen stays captured.
+
 ### Second follow-up (this round)
 
 - The **"F1 help" keycap is now clickable** too. Shared

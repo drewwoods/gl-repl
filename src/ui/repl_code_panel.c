@@ -1485,11 +1485,16 @@ static void repl_code_panel_draw_statusbar(const UiRenderSnapshot *snap,
         }
 
         if (h.help_visible) {
+            /* Same scheme as the focus chip: keycap glyphs stay
+             * TEXT_PRIMARY; the "help" label carries the active state
+             * (accent while the overlay is open, muted otherwise). */
+            UiThemeToken help_tok = snap->help.visible
+                ? UI_TOK_ACCENT : UI_TOK_TEXT_MUTED;
             repl_code_panel_draw_keycap(h.help_kx, h.ky, h.help_kw, h.kh);
             ui_clr(UI_TOK_TEXT_PRIMARY);
             gl2d_draw_string((float)(h.help_kx + 5), (float)(h.ky + 2),
                              k_statusbar_help_kbd, FONT_SMALL);
-            ui_clr(UI_TOK_TEXT_MUTED);
+            ui_clr(help_tok);
             gl2d_draw_string((float)h.help_lbl_x, (float)text_y,
                              k_statusbar_help_lbl, FONT_SMALL);
         }
