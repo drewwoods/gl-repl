@@ -1,5 +1,11 @@
 /*
- * tutorial_state.h - Tutorial peer subsystem ownership.
+ * tutorial_state.h - Tutorial peer runtime state and match results.
+ *
+ * Holds the runtime state for the guided tutorial subsystem: which tutorial and
+ * step are active, which source lines are locked or fading, where the next
+ * expected commit should land, and the status/result of the last attempted
+ * tutorial match. The runner in `tutorial.c` mutates this state; controller,
+ * editor, and UI-adjacent code read it through the narrow accessors below.
  */
 #ifndef TUTORIAL_STATE_H
 #define TUTORIAL_STATE_H
@@ -16,6 +22,9 @@ typedef enum {
     TUT_MISMATCH_ARG,
 } TutorialMatchKind;
 
+/* Result of matching the user's current input against the tutorial's expected
+ * command for the active step. `arg_index` is -1 unless a specific argument slot
+ * caused the mismatch. */
 typedef struct {
     TutorialMatchKind kind;
     int               arg_index;
@@ -34,6 +43,7 @@ typedef struct {
     int doc_count_before;
 } TutorialPendingCommit;
 
+/* Full runtime state for an active tutorial session. */
 typedef struct {
     int                   active;
     int                   tutorial_idx;
@@ -67,6 +77,7 @@ typedef struct {
     TutorialMatchResult   last_result;
 } TutorialRuntimeState;
 
+/* Read-only/by-pointer accessors plus a full reset helper. */
 TutorialRuntimeState  tutorial_state_view(void);
 TutorialRuntimeState *tutorial_state_mut(void);
 void                  tutorial_state_reset(void);

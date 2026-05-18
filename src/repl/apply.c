@@ -119,8 +119,8 @@ void repl_apply_predef_ops(const ReplCompiledChange *change) {
         if (slot < 0) continue;
         repl_eval_undeclare_predef_var(op->name);
         for (int cmd_idx = 0; cmd_idx < repl_state_document_count(); cmd_idx++) {
-            if (repl_state_document_cmds_mut()[cmd_idx].type == CMD_VAR_ASSIGN &&
-                repl_state_document_cmds_mut()[cmd_idx].num_args > slot)
+            if (repl_state_document_cmds()[cmd_idx].type == CMD_VAR_ASSIGN &&
+                repl_state_document_cmds()[cmd_idx].num_args > slot)
                 repl_state_document_cmds_mut()[cmd_idx].num_args--;
         }
     }

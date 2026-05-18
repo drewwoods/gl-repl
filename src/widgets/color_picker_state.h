@@ -1,16 +1,15 @@
 /*
- * color_picker_state.h - Floating color-picker peer (state + lifecycle + writeback).
+ * color_picker_state.h - Floating color-picker peer state and writeback API.
  *
- * The picker is a peer subsystem owned by the editor commit pipeline:
- * it holds the currently-edited line, slider state (HSV + alpha),
- * anchor geometry, and routes writebacks through
- * editor_commit_apply_external_change. The renderer + hit-test
- * (`src/ui/color_picker.c`) reads state through `ColorPickerView`
- * and never mutates.
+ * Owns the current picker session: which source line is being edited, the HSV/
+ * alpha slider state, cached geometry, and the writeback path that rewrites the
+ * underlying color command through the editor commit pipeline. The renderer and
+ * hit-test in `src/ui/color_picker.c` consume `ColorPickerView` and never
+ * mutate peer state directly.
  *
  * Public API:
  *   - color_picker_open / _close / _active_line / _can_edit_cmd
- *     for the controller's open/close orchestration.
+ *     for controller open/close orchestration.
  *   - color_picker_handle_press / _motion / _release for input
  *     dispatch. Each returns a ColorPickerInputResult so the
  *     controller can act on consumed-vs-closed-vs-changed without
