@@ -459,9 +459,9 @@ typedef struct OverlayWalkCtx {
     int             cursor_block_end;
     unsigned int    cursor_func_scope_mask;
     int             show_vertex_outlines;
-    int             show_current_poly;
+    int             highlight_current_poly;
     int             replay_tess_preview;
-    int             show_vpoints;
+    int             show_vertex_points;
     int             replay_vertex_points;
 } OverlayWalkCtx;
 
@@ -541,7 +541,7 @@ static void glr_ctrl_render_outlines(const OverlayWalkCtx *ctx,
                     REPL_OUTLINE_POLYGON_OFFSET_UNITS);
     glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 
-    if (ctx->show_vertex_outlines || ctx->show_current_poly) {
+    if (ctx->show_vertex_outlines || ctx->highlight_current_poly) {
         glPushMatrix();
         int in_begin = 0;
         int matrix_depth = 0;
@@ -595,7 +595,7 @@ static void glr_ctrl_render_outlines(const OverlayWalkCtx *ctx,
             case CMD_BEGIN: {
                 int draw_outline = outline_begin_mode_has_overlay((GLenum)cmds[i].args[0]);
                 if (in_begin) glEnd();
-                block_is_current = ctx->show_current_poly &&
+                block_is_current = ctx->highlight_current_poly &&
                                    outline_block_matches_cursor(i, 0, ctx);
                 if (block_is_current) {
                     glLineWidth(3.0f);
@@ -629,7 +629,7 @@ static void glr_ctrl_render_outlines(const OverlayWalkCtx *ctx,
                     glVertex2f(cmds[i].args[0], cmds[i].args[1]);
                 break;
             case CMD_TESS_BEGIN_POLYGON:
-                tess_poly_is_current = ctx->show_current_poly &&
+                tess_poly_is_current = ctx->highlight_current_poly &&
                                        outline_block_matches_cursor(i, 1, ctx);
                 break;
             default:
@@ -656,7 +656,7 @@ static void glr_ctrl_render_outlines(const OverlayWalkCtx *ctx,
 }
 
 static void glr_ctrl_render_vertex_points(const OverlayWalkCtx *ctx) {
-    if (!ctx->show_vpoints && !ctx->replay_vertex_points) return;
+    if (!ctx->show_vertex_points && !ctx->replay_vertex_points) return;
 
     glPushAttrib(GL_ALL_ATTRIB_BITS);
     glDisable(GL_LIGHTING);
@@ -878,9 +878,9 @@ static void glr_ctrl_post_overlays(void *user_data) {
         .cursor_block_end       = repl_state_flat_program_current_block_end(),
         .cursor_func_scope_mask = 0,  /* not currently surfaced via repl_state */
         .show_vertex_outlines   = presentation.show_vertex_outlines,
-        .show_current_poly      = presentation.highlight_current_poly && !replaying,
+        .highlight_current_poly = presentation.highlight_current_poly && !replaying,
         .replay_tess_preview    = replay_mode_vertex,
-        .show_vpoints           = presentation.show_vertex_points,
+        .show_vertex_points     = presentation.show_vertex_points,
         .replay_vertex_points   = replay_mode_vertex,
     };
 
