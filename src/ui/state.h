@@ -1,43 +1,29 @@
+/*
+ * ui_state.h - UI-owned transient chrome state and accessors.
+ *
+ * Owns the small pieces of 2D chrome that persist across frames: status/help
+ * visibility, profile panel mode, viewport size, pointer position, and code-panel
+ * render chrome. It does not own editor session state, variable-panel peer
+ * state, camera pose, or REPL behavior.
+ *
+ * The value types live in `state_types.h`, the UI-owned type header extracted
+ * from older REPL state declarations so UI modules can include UI types without
+ * reaching through REPL headers.
+ */
 #ifndef UI_STATE_H
 #define UI_STATE_H
 
-/* UI-chrome typedefs (Status / Help / VariablePanel / ProfilePanel /
- * Viewport / Pointer / CodePanel / Camera) used to live in
- * src/repl/state_views.h, which inverted ownership: every UI file pulled
- * in a REPL header just to reach a chrome typedef. They moved to
- * src/ui/state_types.h (Phase H typedef relocation), and ui_state.h
- * now includes the ui-owned header directly. */
 #include "state_types.h"
 
-/* UiState owns transient chrome, viewport, pointer, status text,
- * code-panel render chrome, and camera viewport pose.
- *
- * UI is a view/hit-test layer. It should render snapshots and return
- * UiHit results. imrepl_ctrl routes those hits to the owning
- * subsystem (editor, variable panel, replay, scene/viewport). UI
- * should not own editor behavior or mutate editor/REPL state
- * directly.
- *
- * See done/editor-text-model-controller.md and MODULES.md for the
- * authoritative contract. The forwarder block that previously kept
- * the legacy `repl_state_*` chrome accessors alive was deleted in
- * Phase A commit 14; non-allowlisted repl_*.c callers forward-
- * declare the few accessors they need, and the rest of the tree
- * uses the canonical `ui_state_*` API directly.
- */
+/* Live UI-owned chrome state captured into UiRenderSnapshot each frame. */
 
 typedef struct {
     ReplStatusState           status;
     ReplHelpState             help;
-    /* variable_panel visibility lives in variable_panel.c (Phase F
-     * commit 31). Callers use variable_panel_view /
-     * variable_panel_view_mut directly. */
     ReplProfilePanelState     profile_panel;
     ReplViewportState         viewport;
     ReplPointerState          pointer;
     ReplCodePanelRuntimeState code_panel;
-    /* Camera storage moved to glr_camera.c; consumers use
-     * glr_camera() / glr_camera_mut() directly. */
 } UiState;
 
 void ui_state_capture(UiState *snapshot);
@@ -79,7 +65,8 @@ ReplCodePanelRuntimeState  ui_state_code_panel(void);
 ReplCodePanelRuntimeState *ui_state_code_panel_mut(void);
 void                       ui_state_code_panel_reset(void);
 
-/* Camera state + accessors moved to glr_camera.{c,h}. Use
- * glr_camera() / glr_camera_mut() / glr_camera_set() etc. directly. */
+/* Camera pose is not part of UiState; use glr_camera.h for orbit/pan/zoom
+ * state and helpers, and variable_panel_state.h for variable-panel visibility
+ * and drag state. */
 
 #endif /* UI_STATE_H */

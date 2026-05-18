@@ -2,9 +2,9 @@
  * text_layout.h - Pure text layout for code-panel line wrapping.
  *
  * Stateless algorithms for wrapping source lines to a fixed panel width, with
- * support for hanging indentation and optional break points (commas). Used by the
- * code-panel renderer (ui_panels.c) to compute row heights and character positions,
- * and by tests to validate layout behavior without UI dependencies.
+ * support for hanging indentation and optional break points (commas). Used by
+ * code-panel render/layout code and by tests that validate wrapping behavior
+ * without any UI or controller dependency.
  *
  * Wrapping strategy: Lines longer than the panel width are broken at word
  * boundaries or operator commas, with continuation lines indented by a hanging
@@ -32,8 +32,8 @@
  * yielding position, length, and x-coordinate for each segment. Used by the renderer
  * to draw each wrapped line segment at the correct position.
  *
- * Moved from src/editor/code_layout.h in Phase 1 of the editor-demo SRP split.
- * This file has no dependency on repl, editor, or app headers.
+ * This file has no dependency on REPL, editor, or app headers. It was split out
+ * of the older editor-local header during the editor-demo refactor.
  *
  * Naming note: all public types and functions use the code_layout_* / CodeLayout
  * prefix rather than text_layout_* to minimise caller churn from the file rename.

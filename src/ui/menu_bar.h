@@ -1,44 +1,14 @@
 /*
- * ui_menu_bar.h - Top menu bar with File/Scene/Config dropdowns and pinned buttons.
+ * ui_menu_bar.h - Top menu bar with dropdowns and pinned buttons.
  *
- * Renders the top row of the UI: File/Scene/Config top-level menus on
- * the left, pinned action buttons (Search, Replay) on the right.
- * Implements dropdown menus with hierarchical item lists (e.g., File
- * menu has Export/Import/Workspace operations; Scene menu has New
- * Scene/Save/Rename plus user scene list; Config has toggles/cycles
- * for overlays and rendering features).
+ * Renders the File/Scene/Config menus on the left, Search/Replay pins on the
+ * right, and any open dropdown beneath them. This module owns menu-bar display
+ * state and hit classification; action execution happens outside the UI layer,
+ * after the controller routes the returned `UiHit` to the actions or scene code.
  *
- * Target contract (Phase E onward):
- *
- *   UI renders the menu bar and reports `UiHit` results from
- *   ui_menu_bar_hit_test() (UI_HIT_MENU_BUTTON for top-level buttons,
- *   UI_HIT_MENU_ITEM / UI_HIT_EXAMPLE_SUBMENU_ITEM for dropdown rows,
- *   UI_HIT_PIN_BUTTON for pinned buttons).
- *   `imrepl_ctrl` routes the hit; repl_actions.c performs the action.
- *   This module does not dispatch actions itself — `activate_dropdown_item`
- *   stays as a transitional helper that the controller calls.
- *
- * Menu structure: Three top-level menus. Only one dropdown is open at
- * a time. Search overlay is a special full-width text input below the
- * menu bar (Ctrl+F). Example dropdown is the F12 cycle menu.
- *
- * Pinned buttons: Search and Replay on the right side toggle their
- * overlays. They are always visible; they don't open dropdowns the
- * way top-level menu items do.
- *
- * Hit-test: ui_menu_bar_hit_test() classifies (mx, my). When a
- * dropdown is open, hits inside that dropdown win; otherwise hits
- * resolve to the top-level menu button or the pin button. The router
- * disambiguates top-level vs dropdown row via ui_menu_bar_open_menu_id().
- *
- * Legacy imperative path (transitional): `activate_dropdown_item`
- * still calls into repl_actions.c. That call site is tracked by
- * `check-ui-returns-hits-only`; the target is for `imrepl_ctrl` to
- * own activation once it routes by UiHit.kind.
- *
- * Search integration: note_search_opened() notifies the menu bar that
- * the search overlay is active so the Search pin highlights.
- * render_search_overlay() draws the search text input and matches.
+ * Search integration lives here too: the search pin highlight and the search
+ * overlay text field are part of the menu-bar chrome even though the search
+ * model itself lives elsewhere.
  */
 #ifndef UI_MENU_BAR_H
 #define UI_MENU_BAR_H
@@ -123,10 +93,8 @@ int  ui_menu_bar_scene_example_submenu_rect_for_test(int tag_idx,
 int  ui_menu_bar_update_pointer_hover(int mx, int my, float now);
 
 /* Pure hit-test: classify (mx, my) as a UiHit for menu-bar-related regions.
- *
- * Phase E commit 29 entry. Reports the menu-bar slice of the hit-test in
- * priority order: submenu row > open dropdown row > pin button >
- * top-level menu button.
+ * Reports the menu-bar slice of the hit-test in priority order: submenu row >
+ * open dropdown row > pin button > top-level menu button.
  * The result kind is one of:
  *   UI_HIT_MENU_BUTTON — top-level menu button.
  *   UI_HIT_MENU_ITEM   — open-dropdown parent row.

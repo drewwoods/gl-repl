@@ -1,27 +1,22 @@
 /*
- * ui_snapshot.h - frame-frozen UI render snapshot.
+ * ui_snapshot.h - Frame-frozen UI render bundle.
  *
- * The controller (`imrepl_ctrl.c`) builds one `UiRenderSnapshot` per frame
- * from `ReplRuntimeState` and passes it to every `ui_*_render()` entry
- * point. UI render code reads only from the snapshot; it does not call
- * `repl_state_*()` directly. This is the symmetric counterpart of
- * `SceneRenderConfig` for the 2D editor chrome.
+ * The controller builds one `UiRenderSnapshot` per frame and passes it to the
+ * `ui_*_render()` / hit-test entry points. UI code reads only from this frozen
+ * bundle rather than reaching back into live editor/REPL/app state. That makes
+ * the snapshot the 2D counterpart of `SceneRenderConfig` on the 3D side.
  *
- * Render-discovered state (cursor pixel position, hit rects) flows back to
- * the controller through `Ui*Output` structs; renderers never call
- * `_mut()` accessors directly.
- *
- * The snapshot embeds existing by-value `Repl*State` slices verbatim plus
- * pointer-style views (`ReplEditorInputView`, `ReplImportExportView`) whose
- * stable storage is owned by `src/repl/state.c`. Embedded pointers are valid for
- * the duration of the frame; the snapshot itself is `const` to the renderer.
+ * Render-discovered values such as cursor pixel position flow back out through
+ * `Ui*Output` structs instead of mid-render state mutation. By-value slices are
+ * copied into the snapshot; pointer-style views refer to backing storage owned
+ * by the source subsystem and remain valid for the duration of the frame.
  */
 #ifndef UI_SNAPSHOT_H
 #define UI_SNAPSHOT_H
 
-#include "editor/state.h"  /* ReplEditorInputView (Phase 1 commit 5) */
+#include "editor/state.h"      /* editor input/search/autocomplete view types */
 #include "editor/help_session.h"
-#include "app/glr_state.h"     /* GlrRenderState (step 7a) */
+#include "app/glr_state.h"     /* app-side render policy snapshot */
 #include "repl/state_views.h"
 #include "repl/eval.h"
 #include "editor.h"
@@ -46,10 +41,9 @@ typedef struct {
     int               count;
 } UiVariableList;
 
-/* Scene tab strip view. Both constants are hardcoded here, NOT derived from
- * repl macros — snapshot.h must stay free of repl-layer includes (UI-layer
- * purity). Equivalence to the repl source-of-truth is enforced by
- * STATIC_ASSERT in glr_ctrl.c (which already includes repl/core.h). */
+/* Scene tab strip view. These constants are repeated locally instead of pulling
+ * scene-slot policy macros into the snapshot contract. glr_ctrl.c asserts that
+ * they stay aligned with the scene source-of-truth. */
 enum { UI_SCENE_TAB_NAME_MAX = 64 };   /* == USER_SCENE_NAME_MAX */
 enum { UI_SCENE_TAB_CAP = 9 };         /* == MAX_USER_SCENES + 1 */
 

@@ -1,5 +1,8 @@
 /*
- * ui_metrics.h - Shared UI font, spacing, and color constants.
+ * ui_metrics.h - Shared UI geometry, font, and spacing constants.
+ *
+ * This header intentionally keeps only layout/spacing metrics. Palette tokens
+ * live in `theme.h`.
  */
 #ifndef UI_METRICS_H
 #define UI_METRICS_H
@@ -21,7 +24,7 @@
  * plan §3). Keeps the band visually uniform with the menu bar too. */
 #define TAB_STRIP_H LINE_H
 
-/* UI colors moved to theme.h. The accent (#6fb36f green) is now
- * UI_TOK_ACCENT, resolved via ui_clr(UI_TOK_ACCENT). */
+/* UI colors live in theme.h. Use `ui_clr(UI_TOK_*)` / `ui_clr_a(...)` for palette
+ * lookups instead of adding color constants here. */
 
 #endif /* UI_METRICS_H */
