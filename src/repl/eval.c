@@ -893,6 +893,9 @@ static float eval_term(ExprCtx *ctx) {
     float v = eval_primary(ctx);
     for (;;) {
         expr_skip_ws(ctx);
+        /* Divide/modulo by ~0 yields 0 rather than inf/NaN: the
+         * evaluator is kept total so a transient bad denominator
+         * during live editing can't poison the whole frame. */
         if (*ctx->p == '*') { ctx->p++; v *= eval_primary(ctx); }
         else if (*ctx->p == '/') {
             ctx->p++;
@@ -929,6 +932,7 @@ static float eval_comparison(ExprCtx *ctx) {
         } else if (ctx->p[0] == '<' && ctx->p[1] == '=') {
             ctx->p += 2; v = (v <= eval_additive(ctx)) ? 1.0f : 0.0f;
         } else if (ctx->p[0] == '=' && ctx->p[1] == '=') {
+            /* float == / != compare within a 1e-6 epsilon, not bitwise */
             ctx->p += 2; v = (fabsf(v - eval_additive(ctx)) < 1e-6f) ? 1.0f : 0.0f;
         } else if (ctx->p[0] == '!' && ctx->p[1] == '=') {
             ctx->p += 2; v = (fabsf(v - eval_additive(ctx)) >= 1e-6f) ? 1.0f : 0.0f;

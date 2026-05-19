@@ -2472,6 +2472,12 @@ static int import_copy_expr_until(const char **pp, char terminator,
     return 1;
 }
 
+/* Parse a C for-header `for (<t> i = START; i <op> END; i <step>)` back
+ * into REPL loop parts. Accepts op ∈ { <, <=, >, >= } and step forms
+ * i++ / i-- / i += Z / i -= Z. Outputs START/END/STEP expression text
+ * plus two flags: *include_end = 1 for <= / >= (inclusive bound),
+ * *is_greater = 1 for > / >= (descending loop). Returns 1 on a match,
+ * 0 if the line isn't a recognized C for-header. */
 static int import_extract_c_for_exprs(const char *line,
                                       char *start_expr, int start_sz,
                                       char *end_expr, int end_sz,
