@@ -86,7 +86,7 @@ enum { FILE_ITEM_COUNT = GLR_FILE_ITEM_COUNT };
 /* SCENE menu layout (pure selector; actions are in the File menu):
  *   [0]                      "### EXAMPLES"
  *   [1..t]                   tag names  (t = repl_example_visible_tag_count())
- *   [t + SCENE_OFF_HDR]      "### YOUR SCENES"
+ *   [t + SCENE_OFF_HDR]      "### MY SCENES"
  *   [t + SCENE_OFF_SCENES ..
  *      t + SCENE_OFF_SCENES + n - 1]  user scene names
  *                                     (n = repl_user_scene_count())
@@ -153,7 +153,7 @@ static const char *menu_item_label(int menu_id, int i) {
             int tag_idx = repl_example_visible_tag_at(i - 1);
             return repl_example_tag_label(tag_idx);
         }
-        if (i == tag_count + SCENE_OFF_HDR)                   return "### YOUR SCENES";
+        if (i == tag_count + SCENE_OFF_HDR)                   return "### MY SCENES";
         int scene_n = i - (tag_count + SCENE_OFF_SCENES);
         if (scene_n >= 0 && scene_n < repl_user_scene_count()) {
             int slot = glr_scene_menu_slot_for_dense_index(scene_n);

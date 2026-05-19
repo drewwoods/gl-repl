@@ -782,7 +782,7 @@ static void load_initial_commands(const char *import_file) {
         }
     }
 
-    /* Show example 0 as a starting demo, then anchor slot 0 ("Your Scene")
+    /* Show example 0 as a starting demo, then anchor slot 0 ("My Scene")
      * to the current live state so user edits accumulate there and persist
      * across example switches. The startup banner is the controller's
      * to emit (see glr_ctrl_bootstrap_repl); pipeline TUs do not own
