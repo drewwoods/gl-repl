@@ -4,6 +4,7 @@
 #include "lights.h"
 #include "scene/palette.h"
 #include "config.h"
+#include "occluded_ghost.h"  /* SCENE_OCCLUDED_GHOST_STIPPLE */
 #include <math.h>
 #include <stdio.h>
 
@@ -91,7 +92,7 @@ void scene_lights_render(const SceneFrameRenderContext *frame_ctx) {
 
             if (is_dir) {
                 glEnable(GL_LINE_STIPPLE);
-                glLineStipple(2, 0xAAAA);
+                glLineStipple(2, SCENE_OCCLUDED_GHOST_STIPPLE);
                 glLineWidth(1.0f);
                 glBegin(GL_LINES);
                 glColor4f(d[0], d[1], d[2], 0.35f * glow);
@@ -134,7 +135,7 @@ void scene_lights_render(const SceneFrameRenderContext *frame_ctx) {
 
             float xsz = 0.12f;
             glEnable(GL_LINE_STIPPLE);
-            glLineStipple(1, 0xAAAA);
+            glLineStipple(1, SCENE_OCCLUDED_GHOST_STIPPLE);
             glLineWidth(1.0f);
             glBegin(GL_LINES);
             scene_clr_a(SCENE_CLR_LIGHT_OFF_X, 0.45f);
