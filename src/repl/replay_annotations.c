@@ -661,7 +661,9 @@ next_pc:
  * Total cost: O(replay_pc), called once per frame during cache rebuild. */
 static void replay_build_predef_snapshots(void) {
     ReplReplayRuntimeState replay = replay_state_view();
-    float vals[MAX_PREDEF_VARS];
+    /* Zero-initialized so no later read can hit an indeterminate slot if a
+     * branch below fills only [0, g_num_predef_vars). */
+    float vals[MAX_PREDEF_VARS] = {0};
     float scratch[REPL_SCRATCH_ARRAY_COUNT][REPL_SCRATCH_ARRAY_LEN];
     int pc = 0, goto_count = 0;
     int target_pc = replay.pc;
@@ -777,7 +779,8 @@ snap_done:
 static int build_replay_assignment_inline_comment(int cmd_idx, int flat_idx,
                                                   char *out, int out_size) {
     ReplReplayRuntimeState replay = replay_state_view();
-    float predef_vals[MAX_PREDEF_VARS];
+    /* Zero-init: the fill helper writes only [0, g_num_predef_vars). */
+    float predef_vals[MAX_PREDEF_VARS] = {0};
     float scratch_vals[REPL_SCRATCH_ARRAY_COUNT][REPL_SCRATCH_ARRAY_LEN];
     ExprVar visible_vars[MAX_PREDEF_VARS + MAX_EXPR_VARS];
     char rhs_subst[MAX_LINE_LEN];
@@ -924,7 +927,8 @@ static int replay_build_subst_annotation(int cmd_idx, int flat_idx,
                                               char *subst, int subst_size,
                                               char *var_comment, int comment_size) {
     ReplReplayRuntimeState replay = replay_state_view();
-    float predef_vals[MAX_PREDEF_VARS];
+    /* Zero-init: the fill helper writes only [0, g_num_predef_vars). */
+    float predef_vals[MAX_PREDEF_VARS] = {0};
     float scratch_vals[REPL_SCRATCH_ARRAY_COUNT][REPL_SCRATCH_ARRAY_LEN];
     ExprVar visible_vars[MAX_PREDEF_VARS + MAX_EXPR_VARS];
     int nv;
@@ -961,7 +965,8 @@ static int replay_build_subst_annotation(int cmd_idx, int flat_idx,
 static int replay_build_eval_annotation(int cmd_idx, int flat_idx,
                                              char *eval_buf, int eval_size) {
     ReplReplayRuntimeState replay = replay_state_view();
-    float predef_vals[MAX_PREDEF_VARS];
+    /* Zero-init: the fill helper writes only [0, g_num_predef_vars). */
+    float predef_vals[MAX_PREDEF_VARS] = {0};
     float scratch_vals[REPL_SCRATCH_ARRAY_COUNT][REPL_SCRATCH_ARRAY_LEN];
     float saved_scratch[REPL_SCRATCH_ARRAY_COUNT][REPL_SCRATCH_ARRAY_LEN];
     ExprVar visible_vars[MAX_PREDEF_VARS + MAX_EXPR_VARS];
