@@ -5,29 +5,29 @@
  *
  *   editor_commit_apply_compiled_change(change)
  *       preflight repl_apply_can_apply_compiled_change(change)
- *       services.apply_predef_ops(change)         // predef-var cascade
- *       editor_buffer_apply_compiled_change(change)  // EditorState only
- *       services.apply_repl_change(change)        // ReplState only
+ *       services.apply_predef_ops(change)            // predef-var cascade
+ *       editor_buffer_apply_compiled_change(change)  // editor text buffer
+ *       services.apply_repl_change(change)           // ReplState only
  *
  * The mutating halves go through the EditorServices table so the
- * editor doesn't reach into `repl_apply_*` directly. Phase D commit
- * 25 grows this into the full `editor_commit_current_input` shape
- * (compile, undo, preflight, apply); for now this helper just
- * threads services through the apply path that already exists.
+ * editor doesn't reach into `repl_apply_*` directly.
+ * editor_commit_current_input() wraps this with the full
+ * compile → undo → preflight → apply transaction; the lower-level
+ * helpers here are for callers that already hold a compiled change.
  *
  * Preflight gives the helper an all-or-nothing atomicity guarantee:
  * if the cmd-store can't accept the change, none of the three
  * halves run, so predef-vars, editor buffer, and cmd-store stay in
  * sync. Without the preflight a capacity failure would leave
  * predef-vars declared and (potentially) editor text written but
- * no cmd-store entry — exactly the partial-commit state the Phase C
+ * no cmd-store entry — exactly the partial-commit state this
  * transaction shape exists to prevent.
  *
- * The undo capture for migrated handlers still rides on
- * editor_undo_push_snapshot() pushed at the dispatch sites
- * (;-key, Enter, editor_feed_line) in repl_editor.c. Phase D commit 25
- * replaces that with a per-commit transaction wrapping this
- * helper.
+ * Undo capture is owned by editor_commit_current_input() (it pushes
+ * one snapshot between successful compile/preflight and the first
+ * mutation). The bulk loader editor_feed_line() in
+ * src/editor/input.c deliberately skips per-line undo and brackets
+ * the whole load with a single snapshot instead.
  */
 
 #include "commit.h"
@@ -209,11 +209,9 @@ static void apply_post_effects(const EditorCommitPostEffects *effects) {
 }
 
 /* editor_commit_func_decl_resume_set: defined below alongside the
- * file-private g_func_decl_resume_delta storage. The Phase D
- * encapsulator that originally indirected through a separate
- * `_delta_set` cross-TU symbol collapsed when the resume bookkeeping
- * moved into editor_commit.c (Phase H.5 commit 39); the global is
- * file-private here now, so the wrapper layer is dead. */
+ * file-private g_func_decl_resume_delta storage. The resume
+ * bookkeeping is local to this file, so no cross-TU setter wrapper is
+ * needed. */
 
 int editor_commit_apply_plan(const EditorCommitPlan *plan) {
     if (!plan) return 0;
@@ -226,14 +224,11 @@ int editor_commit_apply_plan(const EditorCommitPlan *plan) {
         return 0;
     }
 
-    /* NOTE: undo capture is the caller's responsibility during the
-     * Phase D transition. The legacy ;-key / Enter / editor_feed_line
-     * dispatch sites in repl_editor.c push a snapshot before
-     * invoking try_commit_*; this helper deliberately does NOT
-     * push a second snapshot to avoid double-capture. Once the
-     * dispatch sites route through editor_commit_current_input
-     * (which owns the transaction boundary) we can drop the
-     * outer push and add it here. */
+    /* NOTE: undo capture is the caller's responsibility. The ;-key /
+     * Enter / editor_feed_line dispatch sites in src/editor/input.c
+     * push a snapshot before invoking the try_commit_* chain; this
+     * helper deliberately does NOT push a second snapshot, to avoid
+     * double-capture. */
 
     /* REPL halves. */
     repl_apply_predef_ops(&plan->change);
@@ -304,22 +299,17 @@ ReplCompileResult editor_compile_close_brace(const char *input,
         return REPL_COMPILE_OK;
     }
 
-    /* Read the func-decl resume delta. Important: the legacy
-     * close_brace only clears the global on CMD_FUNC_END (via
-     * apply_func_decl_resume's early-return for other end_types);
-     * we mirror that here with peek + conditional take so the
-     * delta survives across nested non-func close-braces.
-     *
-     * Phase D commit 26d folds the set side of the global into
-     * compile too, eliminating the global entirely. */
+    /* Read the func-decl resume delta. The delta is one-shot and only
+     * a CMD_FUNC_END close-brace consumes it; peek + conditional take
+     * lets it survive across nested non-func close-braces. */
     int resume_delta = editor_commit_func_decl_resume_peek();
 
     int keep_inserting = (resume_delta > 0 && end_type != CMD_FUNC_END);
 
-    /* Only CMD_FUNC_END consumes the delta. Take it (clear the
-     * global) so the apply path observes the same one-shot
-     * semantics as the legacy apply_func_decl_resume. For other
-     * end_types we leave the global alone and forget the value. */
+    /* Only CMD_FUNC_END consumes the delta: take it (clearing the
+     * file-private store) so the apply path sees the one-shot value.
+     * For other end_types we leave the store alone and forget the
+     * value locally. */
     if (end_type == CMD_FUNC_END)
         (void)editor_commit_func_decl_resume_take();
     else
@@ -526,8 +516,8 @@ ReplCompileResult editor_compile_if_block(const char *input,
 /* ---- editor_compile_func_def ------------------------------------ */
 
 /* Walk backward from `pos` collecting depth-0 comment/blank rows.
- * Mirrors the static function_leading_comment_start in repl_commit.c
- * but reads from the compile-time context instead of live state. */
+ * Compile-time variant: reads from the ReplCompileContext document
+ * snapshot instead of live REPL state. */
 static int compile_func_leading_comment_start(const ReplCompileContext *ctx,
                                               int pos) {
     int start = pos;
@@ -1053,9 +1043,9 @@ ReplCompileResult editor_compile_for_loop(const char *input,
     for (int var_idx = 0; var_idx < visible_nv && dvn < MAX_EXPR_VARS; var_idx++)
         dv[dvn++] = visible_vars[var_idx];
 
-    /* Phase H.5 commit 40 demo: feed the parser an err buffer so its
-     * specific diagnostic propagates to the caller rather than being
-     * lost behind a generic "Invalid for-loop body command" string. */
+    /* Feed the parser an err buffer so its specific diagnostic
+     * propagates to the caller rather than being lost behind a generic
+     * "Invalid for-loop body command" string. */
     char body_err[REPL_STATUS_TEXT_MAX];
     body_err[0] = '\0';
     ReplParseContext parse_ctx = {
@@ -1115,20 +1105,15 @@ int editor_commit_apply_compiled_change(const struct ReplCompiledChange_s *chang
 }
 
 /* ===========================================================================
- * Commit dispatcher chain (moved from repl_commit.c — Phase H.5 commit 39).
+ * Commit dispatcher chain.
  *
- * The corrected M/V/C+compiler+router contract has the editor attempt
- * a commit and the REPL act as a pure parser/validator. These
- * `try_commit_*` dispatchers decide which compile entry to call,
- * apply the resulting plan, and own the editor post-effect /
+ * The M/V/C + compiler + router contract has the editor attempt a
+ * commit and the REPL act as a pure parser/validator. These
+ * `editor_try_commit_*` dispatchers decide which compile entry to
+ * call, apply the resulting plan, and own the editor post-effect /
  * status fan-out — that is editor-side orchestration, not REPL
- * grammar.
- *
- * For commit 39 the bodies move verbatim. Commit 40 untangles
- * status-string side effects so parse failures return data instead
- * of poking set_status from inside the REPL path. Commit 41 deletes
- * `repl_commit.c` once the symbol-rename pass catches the public
- * `try_commit_*` names up to their `editor_*` destinations.
+ * grammar. Parse failures return data rather than calling set_status
+ * from inside the REPL path; callers surface the diagnostic.
  * ===========================================================================
  */
 

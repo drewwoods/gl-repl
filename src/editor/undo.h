@@ -3,12 +3,19 @@
  *
  * Implements undo/redo using circular snapshot buffers: one ring for undo
  * history (32 slots) and one for redo history (32 slots). Each snapshot
- * captures the complete editor state at a point in time.
+ * captures the editor's *document* state at a point in time — not the
+ * full session.
  *
- * Snapshot contents: source command array, command count, cursor position
- * (edit_line), predefined variable state (values and names for user-declared
- * floats). This allows reverting to any prior point with full state recovery,
- * including animations (t value) and user variables (x, y, z, etc.).
+ * Snapshot contents (see EditorUndoSnapshot): source command array +
+ * count, the per-line editor text buffer, cursor position (edit_line),
+ * predefined variable values + names, the A/B/C scratch arrays, and the
+ * funcN aliases. That is enough to recover the program and its runtime
+ * variables (including the animated `t` and user floats x/y/z).
+ *
+ * Deliberately NOT snapshotted: input-buffer text, selection, clipboard,
+ * search, autocomplete, and scroll position. Those are transient view /
+ * editing state; an undo restores the document, not the cursor's
+ * in-progress typing or what was selected.
  *
  * Lifecycle: editor_undo_push_snapshot() called before any mutation (delete,
  * paste, reformat, etc.) saves current state to the undo ring and clears the
@@ -36,9 +43,11 @@
 #include "repl/command.h"
 #include "repl/eval.h"
 
-/* A captured snapshot of complete editor state: source commands, cursor
- * position, and predefined variable state. Used by undo/redo history rings
- * and by import/export to preserve full state across save/load boundaries. */
+/* A captured snapshot of editor document state: source commands, the
+ * per-line text buffer, cursor position, predefined variables, scratch
+ * arrays, and funcN aliases (see the header comment for what is
+ * intentionally excluded). Used by the undo/redo history rings and by
+ * import/export to preserve document state across save/load boundaries. */
 typedef struct {
     GLCmd cmds[MAX_COMMANDS];
     char  editor_lines[MAX_COMMANDS][MAX_LINE_LEN];
@@ -52,9 +61,10 @@ typedef struct {
 } EditorUndoSnapshot;
 
 /* Ring state descriptors: exposed for test access to undo/redo ring pointers
- * without revealing the full history buffers. undo_head is the index of the
- * oldest snapshot still in the ring; undo_count is the number of snapshots.
- * Similarly for redo. Used by tests that verify undo/redo ordering. */
+ * without revealing the full history buffers. undo_head is the next write
+ * slot (one past the newest snapshot); a pop steps it back one and restores
+ * from there. undo_count is the number of live snapshots. Similarly for
+ * redo. Used by tests that verify undo/redo ordering. */
 typedef struct {
     int undo_head;
     int undo_count;
