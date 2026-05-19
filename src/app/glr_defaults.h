@@ -22,9 +22,6 @@
 #ifndef GLR_DEFAULTS_H
 #define GLR_DEFAULTS_H
 
-#include "scene/themes.h"   /* GRID_MAJOR_*, GRID_EXTENT_* enum values */
-#include "ui/layout.h"      /* CODE_PANEL_LAYOUT_* enum values */
-
 #define CFG_DEFAULT_WIREFRAME         0
 #define CFG_DEFAULT_GRID_THEME        8
 #define CFG_DEFAULT_GRID_MAJOR_IDX    GRID_MAJOR_1

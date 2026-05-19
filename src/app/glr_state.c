@@ -20,7 +20,6 @@
 
 #include <string.h>
 
-#include "config.h"          /* MAX_PREDEF_VARS, etc. (transitively) */
 #include "app/glr_defaults.h"    /* CFG_DEFAULT_* */
 #include "scene/themes.h"    /* GRID_MAJOR_*, GRID_EXTENT_*, SceneGridTheme defaults */
 #include "scene/postprocess_filter.h" /* SCENE_POST_FILTER_OFF */
