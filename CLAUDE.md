@@ -334,8 +334,8 @@ Test sources live under `tests/` and shared test-only helpers live under
 | `src/ui/panels.h` | Code-panel geometry, render, and hit-test declarations |
 | `src/repl/eval.c` | Expression evaluator (recursive descent), REPL<->C translators, for-loop parsers |
 | `src/repl/eval.h` | Evaluator types (`ExprVar`, `ExprCtx`), function declarations |
-| `cmd_format.c` | Pure indentation/depth computation (no GL dependency) |
-| `cmd_format.h` | Formatting types (`FmtCmd`, `FmtType`), indent functions |
+| `src/repl/format.c` | Pure indentation/depth computation (no GL dependency) |
+| `src/repl/format.h` | Formatting types (`ReplFmtCmd`, `ReplFmtType`), `repl_format_*` indent functions |
 | `include/gl_2d.h` | Header-only 2D OpenGL helper functions |
 | `tests/support/` | Shared test harness/setup helpers |
 | `tests/gl-stubs/` | No-op GL/GLU/GLUT headers used by `USE_GL_STUBS=1` builds |
