@@ -266,6 +266,7 @@ static void update_autocomplete(void) {
         int last_eq = -1;
         for (int i = 0; i < raw_input_len; i++) {
             if (raw_input[i] != '=') continue;
+            /* skip both chars of '==' so it isn't read as assignment */
             if (i + 1 < raw_input_len && raw_input[i + 1] == '=') { i++; continue; }
             if (i > 0 && (raw_input[i - 1] == '<' ||
                           raw_input[i - 1] == '>' ||

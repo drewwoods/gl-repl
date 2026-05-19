@@ -394,8 +394,6 @@ static void on_normal_vector_arrow(const ReplayVertexWalkState *state,
 }
 
 static ReplayVertexWalkContext glr_ctrl_build_vertex_walk_context(int selected_block_only) {
-    GlrPresentationState presentation = glr_state_presentation();
-    (void)presentation;  /* might be useful for future overlay variants */
 
     ReplayVertexWalkContext ctx = {
         .program                = repl_state_flat_program_view(),
@@ -1613,6 +1611,9 @@ void glr_ctrl_display_frame(void) {
     prof_end(PROF_SNAPSHOT_SCENE_CONFIG);
 
     prof_begin(PROF_SNAPSHOT_UI);
+    /* Build, let follow-scroll adjust editor scroll, then rebuild: the
+     * second build is intentional so the published snapshot reflects the
+     * post-follow-scroll offset (not a copy-paste). */
     glr_ctrl_build_ui_snapshot(&ui_snap);
     glr_ctrl_apply_code_panel_follow_scroll_for_snapshot(&ui_snap, NULL, NULL);
     glr_ctrl_build_ui_snapshot(&ui_snap);
@@ -3583,7 +3584,7 @@ void glr_ctrl_mousewheel(int wheel, int direction, int x, int y) {
  * Per-frame tick (16 ms): advance audio playlist, surface track-change
  * status, advance time variable, advance replay state, decay camera
  * momentum, blink the cursor, decay the status TTL. The body migrated
- * verbatim from repl_editor.c's timer_func.
+ * verbatim from the legacy editor's timer_func.
  *
  * The work is split from the GLUT scheduling so test fixtures (which
  * don't initialize GLUT) can drive a single tick by calling
