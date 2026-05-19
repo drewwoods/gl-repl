@@ -144,7 +144,12 @@ int editor_buffer_insert_line(int pos, const char *line) {
 
 int editor_buffer_replace_line(int pos, const char *line) {
     EditorBuffer *buf = &g_editor_state.buffer;
-    if (pos < 0 || pos >= MAX_COMMANDS) return 0;
+    /* Reject pos > line_count: replacing past the end would extend
+     * line_count over never-written, zeroed gap lines
+     * [line_count, pos-1]. The insert path (editor_buffer_insert_lines)
+     * already forecloses the same gap by clamping. pos == line_count is
+     * still allowed (a contiguous append of one line, no gap). */
+    if (pos < 0 || pos >= MAX_COMMANDS || pos > buf->line_count) return 0;
     editor_buffer_write_slot(buf->lines[pos], line ? line : "");
     if (buf->line_count <= pos)
         buf->line_count = pos + 1;
