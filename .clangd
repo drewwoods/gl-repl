@@ -1,2 +1,2 @@
 CompileFlags:
-  Add: [-Wall, -Wextra, -fblocks, -DGL_SILENCE_DEPRECATION, -std=c2x, -fblocks, -xc]
+  Add: [-Wall, -Wextra, -DGL_SILENCE_DEPRECATION, -xc]
