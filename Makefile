@@ -24,6 +24,10 @@ NC := \033[0m  # No Color
 
 UNAME_S := $(shell uname -s)
 
+# Declared (empty by default) so `make --warn-undefined-variables` stays
+# quiet; empty still fails the `ifeq ($(USE_GL_STUBS),1)` gates below.
+USE_GL_STUBS ?=
+
 ifeq ($(USE_GL_STUBS),1)
 GL_HEADER_CFLAGS = \
 	-I$(GL_STUB_INCLUDE) \
