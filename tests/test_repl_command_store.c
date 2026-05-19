@@ -280,6 +280,30 @@ static void test_repl_command_store_replace_one_with_explicit_line(void) {
                editor_buffer_line(0), "glVertex3f(0, 1, 0)");
 }
 
+/* Regression: editor_buffer_replace_line must reject pos > line_count
+ * rather than extending line_count over never-written zeroed gap lines
+ * (the latent corruption the insert path already forecloses). */
+static void test_editor_buffer_replace_line_rejects_gap(void) {
+    glr_app_reset_all();
+
+    editor_buffer_insert_line(0, "glVertex3f(1, 0, 0);");
+    ASSERT_INT("one line present", editor_buffer_view().line_count, 1);
+
+    ASSERT_INT("replace at pos > line_count rejected",
+               editor_buffer_replace_line(5, "x"), 0);
+    ASSERT_INT("rejected replace leaves line_count unchanged",
+               editor_buffer_view().line_count, 1);
+
+    ASSERT_INT("replace existing line ok",
+               editor_buffer_replace_line(0, "glVertex3f(0, 1, 0);"), 1);
+    ASSERT_STR("replace took effect",
+               editor_buffer_line(0), "glVertex3f(0, 1, 0);");
+    ASSERT_INT("append at pos == line_count ok",
+               editor_buffer_replace_line(1, "glVertex3f(0, 0, 1);"), 1);
+    ASSERT_INT("contiguous append grew line_count to 2",
+               editor_buffer_view().line_count, 2);
+}
+
 static void test_repl_command_store_delete_range(void) {
     glr_app_reset_all();
 
@@ -449,6 +473,7 @@ int main(void) {
     test_repl_command_store_insert_with_edit_line_adjustment();
     test_repl_command_store_replace_one();
     test_repl_command_store_replace_one_with_explicit_line();
+    test_editor_buffer_replace_line_rejects_gap();
     test_repl_command_store_delete_range();
     test_repl_command_store_load();
     test_repl_command_store_load_with_explicit_lines();
