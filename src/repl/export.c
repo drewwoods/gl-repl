@@ -5,7 +5,7 @@
  * references glr_camera_*. Camera state flows through the
  * controller-installed ReplExportCameraBridge (see src/repl/export.h).
  * glr_config.h was already dropped in step 4 for the same reason. */
-#include "outline_offset.h"
+#include "config.h"             /* REPL_OUTLINE_POLYGON_OFFSET_{FACTOR,UNITS} */
 #include "repl/command_store.h"
 #include "repl/core.h"
 #include "repl/core_internal.h"

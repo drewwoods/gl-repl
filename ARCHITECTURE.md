@@ -659,7 +659,7 @@ After controller extraction, ordinary `repl_*` model files should not include
 `scene_*.h`. `src/app/glr_ctrl.c` is the scene/UI frame-rendering exception.
 `check-controller-boundaries` enforces this; cross-layer constants used by
 both layers (e.g. `CFG_DEFAULT_MULTISAMPLE`, `REPL_OUTLINE_POLYGON_OFFSET_*`)
-live in neutral headers (`src/app/glr_defaults.h`, `outline_offset.h`,
+live in neutral headers (`src/app/glr_defaults.h`, `config.h`,
 `src/scene/render_types.h`) that both sides include via existing transitive
 paths.
 
