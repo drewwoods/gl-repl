@@ -183,6 +183,15 @@ static void compile_scope_indent(int pos, char *buf, int buf_sz) {
     repl_source_scope_cmd_indent(pos, buf, buf_sz);
 }
 
+/* Insert/replace position for ctx: the edit line in insert mode;
+ * otherwise the edit line clamped to document_count so a past-the-end
+ * edit line appends rather than opening a gap. */
+static int compile_insert_pos(const ReplCompileContext *ctx) {
+    return ctx->insert_mode ? ctx->edit_line :
+           (ctx->edit_line < ctx->document_count
+                ? ctx->edit_line : ctx->document_count);
+}
+
 static int compile_set_err(char *err, int err_size, const char *fmt, ...) {
     va_list ap;
     if (!err || err_size <= 0)
@@ -738,9 +747,7 @@ ReplCompileResult repl_compile_float_decl(const char *input,
      * references appear strictly after their declaration. Editing
      * an existing CMD_VAR_DECLARE row is the only case that
      * replaces in-place. */
-    int insert_idx = ctx->insert_mode ? ctx->edit_line :
-                     (ctx->edit_line < ctx->document_count
-                          ? ctx->edit_line : ctx->document_count);
+    int insert_idx = compile_insert_pos(ctx);
     int overwriting_decl = (!ctx->insert_mode &&
                             insert_idx < ctx->document_count &&
                             ctx->document_cmds[insert_idx].type == CMD_VAR_DECLARE);
@@ -844,9 +851,7 @@ ReplCompileResult repl_compile_var_assign(const char *input,
         }
     }
 
-    int insert_idx = ctx->insert_mode ? ctx->edit_line :
-                     (ctx->edit_line < ctx->document_count
-                          ? ctx->edit_line : ctx->document_count);
+    int insert_idx = compile_insert_pos(ctx);
 
     ExprVar vis[MAX_EXPR_VARS];
     int vis_n = collect_visible_vars(insert_idx, vis, MAX_EXPR_VARS, NULL);
@@ -1492,9 +1497,7 @@ ReplCompileResult repl_compile_close_brace(const char *input,
         return REPL_COMPILE_OK;
     }
 
-    int pos = ctx->insert_mode ? ctx->edit_line :
-              (ctx->edit_line < ctx->document_count
-                   ? ctx->edit_line : ctx->document_count);
+    int pos = compile_insert_pos(ctx);
 
     CmdType open_type = repl_source_scope_nearest_open_block_at(pos);
     CmdType end_type;
@@ -1544,9 +1547,7 @@ ReplCompileResult repl_compile_if_block(const char *input,
         return REPL_COMPILE_OK;
     }
 
-    int pos = ctx->insert_mode ? ctx->edit_line :
-              (ctx->edit_line < ctx->document_count
-                   ? ctx->edit_line : ctx->document_count);
+    int pos = compile_insert_pos(ctx);
 
     ExprVar visible_vars[MAX_EXPR_VARS];
     int visible_nv = collect_visible_vars(pos, visible_vars, MAX_EXPR_VARS, NULL);
@@ -1754,9 +1755,7 @@ ReplCompileResult repl_compile_func_def(const char *input,
         return REPL_COMPILE_ERROR;
     }
 
-    int pos = ctx->insert_mode ? ctx->edit_line :
-              (ctx->edit_line < ctx->document_count
-                   ? ctx->edit_line : ctx->document_count);
+    int pos = compile_insert_pos(ctx);
 
     char indent[32];
     repl_source_scope_cmd_indent(pos, indent, sizeof(indent));
@@ -1798,9 +1797,7 @@ ReplCompileResult repl_compile_for_loop(const char *input,
         return REPL_COMPILE_OK;
     }
 
-    int pos = ctx->insert_mode ? ctx->edit_line :
-              (ctx->edit_line < ctx->document_count
-                   ? ctx->edit_line : ctx->document_count);
+    int pos = compile_insert_pos(ctx);
 
     ExprVar visible_vars[MAX_EXPR_VARS];
     int visible_nv = collect_visible_vars(pos, visible_vars, MAX_EXPR_VARS, NULL);
