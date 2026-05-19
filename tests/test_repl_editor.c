@@ -167,6 +167,13 @@ static int code_panel_header_row_count(void) {
     int text_x = CODE_MARGIN_X + linenum_w + FONT_W + idx_col_w;
     int rows = 0;
 
+    /* Code focus hides every derived C-boilerplate stanza, so the
+     * production header row count collapses to 0 (see
+     * repl_code_panel_chrome_visible). Mirror that here, or the
+     * mouse-y math is off by the full-chrome height in focus mode. */
+    if (glr_state_presentation().code_focus)
+        return 0;
+
     ui_layout_code_panel_rect(NULL, NULL, &panel_w, NULL);
     refresh_workspace_header_lines();
     for (int i = 0; i < g_workspace_header_line_count; i++)
@@ -2481,9 +2488,19 @@ int main() {
         ASSERT_STR("nav auto-commit invalid append: return to end is empty", editor_state_input().input, "");
     }
 
-    /* Code-panel clicks use the same auto-commit path. */
-    {
+    /* Code-panel clicks use the same auto-commit path. Exercised under
+     * BOTH code-focus modes: the click-to-line geometry differs (focus
+     * hides the C-boilerplate chrome), so neither mode may be assumed.
+     * Regression guard for b472592, which flipped CFG_DEFAULT_CODE_FOCUS
+     * and silently broke this case because it relied on the old
+     * default. code_focus is set explicitly so the default can move
+     * again without re-breaking it. */
+    for (int cf = 0; cf <= 1; cf++) {
+        const char *mode = cf ? " [focus]" : " [full]";
+        char lbl[96];
+
         glr_app_reset_all();
+        glr_state_presentation_mut()->code_focus = cf; glr_ctrl_sync_ui_chrome();
         editor_feed_line("glVertex3f(0,0,0)");
         editor_feed_line("glVertex3f(1,1,1)");
         editor_feed_line("glVertex3f(2,2,2)");
@@ -2504,10 +2521,16 @@ int main() {
             glr_ctrl_router_handle_code_panel_hit(hit, mx, my);
         }
 
-        ASSERT_INT("mouse auto-commit valid edit: cursor moved", repl_state_edit_line(), 2);
-        ASSERT_TRUE("mouse auto-commit valid edit: x arg",
+        snprintf(lbl, sizeof lbl,
+                 "mouse auto-commit valid edit: cursor moved%s", mode);
+        ASSERT_INT(lbl, repl_state_edit_line(), 2);
+        snprintf(lbl, sizeof lbl,
+                 "mouse auto-commit valid edit: x arg%s", mode);
+        ASSERT_TRUE(lbl,
                     fabsf(repl_state_document_cmds_mut()[0].args[0] - 8.0f) < 1e-6f);
-        ASSERT_STR("mouse auto-commit valid edit: input loaded clicked", editor_state_input().input, "glVertex3f(2, 2, 2)");
+        snprintf(lbl, sizeof lbl,
+                 "mouse auto-commit valid edit: input loaded clicked%s", mode);
+        ASSERT_STR(lbl, editor_state_input().input, "glVertex3f(2, 2, 2)");
     }
 
     /* Autocomplete Up/Down keeps selection behavior and does not navigate. */

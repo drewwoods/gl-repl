@@ -781,87 +781,119 @@ static void test_ui_panels_hit_test_overwrite_row_kind(void) {
                 h.kind == UI_HIT_CODE_TEXT);
 }
 
-static void test_ui_panels_hit_test_trailing_blank_row_kind(void) {
+/* Scan the text column for the first on-screen row that hit-tests to
+ * UI_HIT_CODE_TEXT for `want_line`. When `want_char_neg1` is set the
+ * row must also report char_idx == -1 (the virtual-row marker, which
+ * distinguishes a virtual row from the real text row of the same
+ * source line). Scanning instead of hand-computing the target row's y
+ * makes the assertion independent of chrome height and the scroll
+ * clamp, so it holds whether code-focus is on or off. */
+static int find_code_panel_text_row(int want_line, int want_char_neg1,
+                                     UiHit *out, int *out_mx, int *out_my) {
     int cp_x, cp_y, cp_w, cp_h;
     int linenum_w = 4 * FONT_W;
     int idx_col_w = glr_state_presentation().show_vertex_indices ? (6 * FONT_W) : 0;
     int text_x = CODE_MARGIN_X + linenum_w + FONT_W + idx_col_w;
-    int trailing_doc_row;
-    int line_y_start;
-    int gl_y_mid;
     int mx;
-    int my;
-    UiReplCodePanelLayout layout;
-
-    glr_app_reset_all();
-    ui_state_viewport_set_size(800, 600);
-
-    editor_feed_line("glBegin(GL_POINTS);");
-    editor_feed_line("glEnd();");
-    repl_state_edit_line_set(0);
-    editor_insert_mode_set(0);
 
     ui_layout_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
-    build_test_code_panel_layout(&layout, cp_w, text_x, cp_h);
+    mx = cp_x + text_x + 2 * FONT_W;          /* mid-text: crosses every row */
+    for (int my = 0; my < ui_state_viewport().window_h; my++) {
+        UiHit h = ui_panels_hit_test_current_snapshot(mx, my, 0);
+        if (h.kind == UI_HIT_CODE_TEXT && h.line_idx == want_line &&
+            (!want_char_neg1 || h.char_idx == -1)) {
+            if (out)    *out = h;
+            if (out_mx) *out_mx = mx;
+            if (out_my) *out_my = my;
+            return 1;
+        }
+    }
+    return 0;
+}
 
-    trailing_doc_row = layout.header_rows;
-    for (int i = 0; i < repl_state_document_count(); i++)
-        trailing_doc_row += layout.cmd_main_rows[i] + layout.replay_extra_rows[i];
+static void test_ui_panels_hit_test_trailing_blank_row_kind(void) {
+    /* Both code-focus modes, pinned explicitly: the trailing blank row
+     * must resolve to UI_HIT_CODE_TEXT @ document_count regardless of
+     * CFG_DEFAULT_CODE_FOCUS. b472592 flipped that default and broke
+     * this — the row's y was hand-computed and the scroll clamps
+     * differently once focus collapses the header chrome. */
+    for (int cf = 0; cf <= 1; cf++) {
+        const char *mode = cf ? " [focus]" : " [full]";
+        char lbl[96];
+        int linenum_w = 4 * FONT_W;
+        int idx_col_w = glr_state_presentation().show_vertex_indices ? (6 * FONT_W) : 0;
+        int text_x = CODE_MARGIN_X + linenum_w + FONT_W + idx_col_w;
+        int cp_x, cp_y, cp_w, cp_h;
+        UiReplCodePanelLayout layout;
 
-    editor_scroll_set(trailing_doc_row);
+        glr_app_reset_all();
+        glr_state_presentation_mut()->code_focus = cf; glr_ctrl_sync_ui_chrome();
+        ui_state_viewport_set_size(800, 600);
+        editor_scroll_follow_cursor_set(0);
 
-    line_y_start = (cp_y + cp_h) - CODE_MARGIN_Y - 2 * LINE_H;
-    gl_y_mid = line_y_start - 3 + LINE_H / 2;
-    my = ui_state_viewport().window_h - gl_y_mid;
-    mx = cp_x + text_x + 2 * FONT_W;
+        editor_feed_line("glBegin(GL_POINTS);");
+        editor_feed_line("glEnd();");
+        repl_state_edit_line_set(0);
+        editor_insert_mode_set(0);
 
-    UiHit h = ui_panels_hit_test_current_snapshot(mx, my, 0);
-    ASSERT_TRUE("trailing blank row hit kind",
-                h.kind == UI_HIT_CODE_TEXT);
-    ASSERT_INT("trailing blank row line_idx == document_count",
-               h.line_idx, repl_state_document_count());
+        ui_layout_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
+        build_test_code_panel_layout(&layout, cp_w, text_x, cp_h);
+        editor_scroll_set(layout.header_rows);   /* skip chrome (0 in focus) */
+
+        snprintf(lbl, sizeof lbl,
+                 "trailing blank row -> CODE_TEXT @ document_count%s", mode);
+        ASSERT_TRUE(lbl,
+            find_code_panel_text_row(repl_state_document_count(), 0,
+                                     NULL, NULL, NULL));
+    }
 }
 
 static void test_ui_panels_hit_test_virtual_row_routes_to_source(void) {
-    int cp_x, cp_y, cp_w, cp_h;
-    int linenum_w = 4 * FONT_W;
-    int idx_col_w = glr_state_presentation().show_vertex_indices ? (6 * FONT_W) : 0;
-    int text_x = CODE_MARGIN_X + linenum_w + FONT_W + idx_col_w;
-    int virtual_row;
-    int line_y_start;
-    int gl_y_mid;
-    int mx;
-    int my;
-    UiReplCodePanelLayout layout;
+    /* Both code-focus modes, pinned explicitly (same b472592 hazard as
+     * the trailing-blank-row test above). */
+    for (int cf = 0; cf <= 1; cf++) {
+        const char *mode = cf ? " [focus]" : " [full]";
+        char lbl[96];
+        int linenum_w = 4 * FONT_W;
+        int idx_col_w = glr_state_presentation().show_vertex_indices ? (6 * FONT_W) : 0;
+        int text_x = CODE_MARGIN_X + linenum_w + FONT_W + idx_col_w;
+        int cp_x, cp_y, cp_w, cp_h;
+        UiReplCodePanelLayout layout;
+        UiHit h;
+        int mx = 0, my = 0;
+        int found;
 
-    glr_app_reset_all();
-    ui_state_viewport_set_size(800, 600);
+        glr_app_reset_all();
+        glr_state_presentation_mut()->code_focus = cf; glr_ctrl_sync_ui_chrome();
+        ui_state_viewport_set_size(800, 600);
+        editor_scroll_follow_cursor_set(0);
 
-    editor_feed_line("glBegin(GL_POINTS);");
-    editor_feed_line("glEnd();");
-    editor_state_virtual_lines_append(0, VIRTUAL_STYLE_REPLAY_EVAL,
-                                      "replay eval", "");
-    repl_state_edit_line_set(1);
+        editor_feed_line("glBegin(GL_POINTS);");
+        editor_feed_line("glEnd();");
+        editor_state_virtual_lines_append(0, VIRTUAL_STYLE_REPLAY_EVAL,
+                                          "replay eval", "");
+        repl_state_edit_line_set(1);
 
-    ui_layout_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
-    build_test_code_panel_layout(&layout, cp_w, text_x, cp_h);
+        ui_layout_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
+        build_test_code_panel_layout(&layout, cp_w, text_x, cp_h);
+        editor_scroll_set(layout.header_rows);   /* skip chrome (0 in focus) */
 
-    virtual_row = layout.header_rows + layout.cmd_main_rows[0];
-    editor_scroll_set(virtual_row);
+        /* line 0 + char_idx == -1 uniquely identifies the virtual row;
+         * the real glBegin row is line 0 with char_idx >= 0. This one
+         * predicate covers the old "hit kind", "rewrites to source
+         * line", and "clears char index" assertions. */
+        found = find_code_panel_text_row(0, 1, &h, &mx, &my);
+        snprintf(lbl, sizeof lbl,
+                 "virtual row -> CODE_TEXT, src line 0, char -1%s", mode);
+        ASSERT_TRUE(lbl, found);
 
-    line_y_start = (cp_y + cp_h) - CODE_MARGIN_Y - 2 * LINE_H;
-    gl_y_mid = line_y_start - 3 + LINE_H / 2;
-    my = ui_state_viewport().window_h - gl_y_mid;
-    mx = cp_x + text_x + 2 * FONT_W;
-
-    UiHit h = ui_panels_hit_test_current_snapshot(mx, my, 0);
-    ASSERT_TRUE("virtual row hit kind", h.kind == UI_HIT_CODE_TEXT);
-    ASSERT_TRUE("virtual row hit rewrites to source line", h.line_idx == 0);
-    ASSERT_TRUE("virtual row hit clears char index", h.char_idx == -1);
-
-    glr_ctrl_router_handle_code_panel_hit(h, mx, my);
-    ASSERT_TRUE("virtual row click navigates to source line",
-                repl_state_edit_line() == 0);
+        if (found) {
+            glr_ctrl_router_handle_code_panel_hit(h, mx, my);
+            snprintf(lbl, sizeof lbl,
+                     "virtual row click navigates to source line%s", mode);
+            ASSERT_TRUE(lbl, repl_state_edit_line() == 0);
+        }
+    }
 }
 
 /* Regression: glVertex2f commands should generate gutter vertex-index labels
