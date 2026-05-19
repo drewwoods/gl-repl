@@ -940,6 +940,16 @@ static void repl_code_panel_add_input_row(ReplCodePanelBuilder *builder,
     row->hit_eligible = 1;
     if (aux_label && aux_label[0])
         snprintf(row->left_aux_label, sizeof(row->left_aux_label), "%s", aux_label);
+
+    /* When the cursor sits on an existing committed line (edit-in-place,
+     * not insert) this input row stands in for that command's text row,
+     * so mirror its color swatch — otherwise navigating onto a glColor
+     * line makes the swatch vanish (add_command_row sets it; the input
+     * row did not). Insert / new-line input rows pass source_line_idx
+     * < 0 and have no committed color; set_right_action no-ops when the
+     * line has no color transformer. */
+    if (source_line_idx >= 0)
+        repl_code_panel_set_right_action(row, builder->snap, source_line_idx);
 }
 
 static void repl_code_panel_add_placeholder_row(ReplCodePanelBuilder *builder,
@@ -1431,6 +1441,19 @@ static void repl_code_panel_draw_statusbar(const UiRenderSnapshot *snap,
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
+    /* Hard backstop: clip every statusbar primitive to the panel slot.
+     * The left status text ("N/M cmds", "Ln …", "AA …") is laid out
+     * left-to-right with no width clamp, so on a narrow split-layout
+     * panel it would otherwise bleed past the panel's right edge onto
+     * the 3D scene. gl2d uses gluOrtho2D(0,w,0,h) over the full-window
+     * viewport, so slot coords map 1:1 to scissor window coords.
+     * GL_CURRENT_BIT does not save scissor state, so it is disabled
+     * explicitly below before the color picker (same gl2d pass) draws. */
+    if (cp_w > 0) {
+        glEnable(GL_SCISSOR_TEST);
+        glScissor(cp_x, sy, cp_w, sh);
+    }
+
     ui_clr_a(UI_TOK_SURFACE, 0.98f);
     glRectf((float)cp_x, (float)sy,
             (float)(cp_x + cp_w), (float)(sy + sh));
@@ -1500,6 +1523,7 @@ static void repl_code_panel_draw_statusbar(const UiRenderSnapshot *snap,
         }
     }
 
+    glDisable(GL_SCISSOR_TEST);
     glDisable(GL_BLEND);
     glPopAttrib();
 }
