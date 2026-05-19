@@ -16,6 +16,34 @@
 #define STAR_COUNT        2080
 #define STAR_SKY_RADIUS   30.0f
 
+/* Per-building deterministic RNG: bi * CITY_RNG_STRIDE seeds the hash so
+ * adjacent buildings don't share a low-bit pattern. */
+#define CITY_RNG_STRIDE   13u
+
+/* Linear distance fog, as a fraction of CITY_RADIUS: fog ramps from
+ * START_FRAC to END_FRAC of the ring radius so the far buildings recede
+ * into the clear color. */
+#define CITY_FOG_START_FRAC 0.60f
+#define CITY_FOG_END_FRAC   1.45f
+
+/* Building footprint/height = MIN + rng[0,1] * RANGE (world units). */
+#define CITY_BLDG_W_MIN   0.9f
+#define CITY_BLDG_W_RANGE 1.8f
+#define CITY_BLDG_D_MIN   0.55f
+#define CITY_BLDG_D_RANGE 0.90f
+#define CITY_BLDG_H_MIN   1.4f
+#define CITY_BLDG_H_RANGE 6.5f
+
+/* Starfield deterministic RNG: index * STAR_RNG_STRIDE + STAR_RNG_SEED. */
+#define STAR_RNG_STRIDE   7u
+#define STAR_RNG_SEED     0x5A7Eu
+
+/* Cumulative star-size band cutoffs as fractions of STAR_COUNT:
+ * small (0..57%), medium (57..80%), large (80..94%), bright (94..100%). */
+#define STAR_BAND_CUT_SMALL 0.57f
+#define STAR_BAND_CUT_MED   0.80f
+#define STAR_BAND_CUT_LARGE 0.94f
+
 static void scene_backdrop_push_state(void) {
     glPushAttrib(GL_ALL_ATTRIB_BITS);
 }
@@ -49,15 +77,13 @@ static void draw_cityscape(float anim_time) {
     glGetFloatv(GL_COLOR_CLEAR_VALUE, clear_col);
     glFogfv(GL_FOG_COLOR, clear_col);
     glEnable(GL_FOG);
-    // glFogi(GL_FOG_MODE, GL_EYE_PLANE_ABSOLUTE_NV);
-    // glFogf(GL_FOG_DENSITY, 0.02);
     glHint(GL_FOG_HINT, GL_NICEST);
     glFogi(GL_FOG_MODE, GL_LINEAR);
-    glFogf(GL_FOG_START, CITY_RADIUS * 0.60f);
-    glFogf(GL_FOG_END, CITY_RADIUS * 1.45f);
+    glFogf(GL_FOG_START, CITY_RADIUS * CITY_FOG_START_FRAC);
+    glFogf(GL_FOG_END, CITY_RADIUS * CITY_FOG_END_FRAC);
 
     for (int bi = 0; bi < CITY_BLDG_COUNT; bi++) {
-        unsigned int base = (unsigned int)bi * 13u;
+        unsigned int base = (unsigned int)bi * CITY_RNG_STRIDE;
 
         float h0 = city_rng(base + 1u);
         float h1 = city_rng(base + 2u);
@@ -73,9 +99,9 @@ static void draw_cityscape(float anim_time) {
         float cx = sinf(angle) * radius;
         float cz = cosf(angle) * radius;
 
-        float bw = 0.9f + h2 * 1.8f;
-        float bd = 0.55f + h3 * 0.90f;
-        float bh = 1.4f + h4 * 6.5f;
+        float bw = CITY_BLDG_W_MIN + h2 * CITY_BLDG_W_RANGE;
+        float bd = CITY_BLDG_D_MIN + h3 * CITY_BLDG_D_RANGE;
+        float bh = CITY_BLDG_H_MIN + h4 * CITY_BLDG_H_RANGE;
 
         int has_tier2 = (city_rng(base + 6u) > 0.60f);
         float t2_frac_h = 0.35f + city_rng(base + 7u) * 0.30f;
@@ -284,9 +310,9 @@ static void draw_starry_sky(float anim_time, int point_parameter_supported) {
     static const float band_sizes[4] = { 1.5f, 2.0f, 3.0f, 4.5f };
     const int band_cuts[5] = {
         0,
-        (int)(STAR_COUNT * 0.57f),
-        (int)(STAR_COUNT * 0.80f),
-        (int)(STAR_COUNT * 0.94f),
+        (int)(STAR_COUNT * STAR_BAND_CUT_SMALL),
+        (int)(STAR_COUNT * STAR_BAND_CUT_MED),
+        (int)(STAR_COUNT * STAR_BAND_CUT_LARGE),
         STAR_COUNT,
     };
 
@@ -295,7 +321,7 @@ static void draw_starry_sky(float anim_time, int point_parameter_supported) {
         glBegin(GL_POINTS);
 
         for (int i = band_cuts[bi]; i < band_cuts[bi + 1]; i++) {
-            unsigned int base = (unsigned int)(i * 7u + 0x5A7Eu);
+            unsigned int base = (unsigned int)(i * STAR_RNG_STRIDE + STAR_RNG_SEED);
 
             /* Spherical coords: theta all-around, phi mostly above horizon */
             float theta = city_rng(base + 1u) * 2.0f * (float)M_PI;
@@ -352,19 +378,20 @@ static void draw_starry_sky(float anim_time, int point_parameter_supported) {
 
 void scene_backdrop_render(const SceneFrameRenderContext *frame_ctx) {
     switch (frame_ctx->config.backdrop_mode) {
-    case 1:
+    case SCENE_BACKDROP_CITYSCAPE:
         draw_cityscape(frame_ctx->config.anim_time);
         break;
-    case 2:
+    case SCENE_BACKDROP_STARS:
         draw_starry_sky(frame_ctx->config.anim_time,
                         frame_ctx->config.point_parameter_supported);
         break;
-    case 3:
+    case SCENE_BACKDROP_CITY_AND_STARS:
         /* Stars first so city geometry writes depth over them. */
         draw_starry_sky(frame_ctx->config.anim_time,
                         frame_ctx->config.point_parameter_supported);
         draw_cityscape(frame_ctx->config.anim_time);
         break;
+    case SCENE_BACKDROP_OFF:
     default:
         break;
     }

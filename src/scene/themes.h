@@ -2,9 +2,9 @@
  * src/scene/themes.h - Shared scene theme enums.
  *
  * This is the vocabulary app-side config code and scene renderers share for
- * grid themes, axes themes, and the grid spacing/extent indices. The scene
- * module owns the meanings; app/UI code imports the enums to present and store
- * those choices.
+ * grid themes, axes themes, backdrop modes, and the grid spacing/extent
+ * indices. The scene module owns the meanings; app/UI code imports the enums
+ * to present and store those choices.
  *
  * Label tables and render data keyed by these enums must stay in enum order.
  */
@@ -36,6 +36,14 @@ typedef enum {
     AXES_THEME_RULER,
     AXES_THEME_COUNT
 } SceneAxesTheme;
+
+typedef enum {
+    SCENE_BACKDROP_OFF = 0,
+    SCENE_BACKDROP_CITYSCAPE,
+    SCENE_BACKDROP_STARS,
+    SCENE_BACKDROP_CITY_AND_STARS,
+    SCENE_BACKDROP_COUNT
+} SceneBackdropMode;
 
 /* Grid major-tick spacing index. The actual float values live in a table
  * the controller passes through SceneRenderConfig.grid_major_steps. */

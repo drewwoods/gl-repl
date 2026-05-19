@@ -123,7 +123,7 @@ typedef struct SceneRenderConfig {
     int        show_light_indicators;
 
     /* --- Environment --- */
-    int backdrop_mode;
+    SceneBackdropMode backdrop_mode;
     /* Runtime point-parameter (glPointParameterfv) capability, mirrored
      * from the REPL executor flag. Gates the star backdrop's direct
      * call. Non-REPL callers (scene_demo) leave this 0 via memset —
