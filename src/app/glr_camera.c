@@ -21,6 +21,9 @@
 #define M_PI 3.14159265358979323846
 #endif
 
+/* Orbit/pan momentum decay per frame. Deliberately independent of
+ * config.h's GLR_CAMERA_TARGET_DECAY (the ease-to-target decay) even
+ * though both currently default to 0.88f — they are different knobs. */
 #define CAM_DECAY 0.88f
 #define CAM_DECAY_ZOOM 0.65f
 #define CAM_TARGET_ANGLE_EPS 0.01f
@@ -144,7 +147,7 @@ static void snap_to_target(void) {
     g_camera.tx = g_camera_target.tx;
     g_camera.ty = g_camera_target.ty;
     g_camera.tz = g_camera_target.tz;
-    g_camera_target_active = 0;
+    cancel_target_ease();
 }
 
 static void tick_target_ease(void) {

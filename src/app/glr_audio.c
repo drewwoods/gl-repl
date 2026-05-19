@@ -1,5 +1,5 @@
 /*
- * repl_audio.c - miniaudio-backed playback for the immediate-mode REPL.
+ * glr_audio.c - miniaudio-backed playback for the immediate-mode REPL.
  *
  * This file owns the single `MINIAUDIO_IMPLEMENTATION` define for the
  * project; no other translation unit should define it. miniaudio is
@@ -143,7 +143,7 @@ static int             g_req_save = 0;         /* independent: periodic save */
 /* Path of the INI file, or empty string when disabled. */
 static char  g_state_file[GLR_AUDIO_MAX_PATH] = "";
 
-/* Opaque integer owned by repl_actions.c (maps to AUDIO_CFG_* enum).
+/* Opaque integer owned by glr_actions.c (maps to AUDIO_CFG_* enum).
  * Stored in the INI as cfg_mode= and handed back through
  * glr_audio_get_cfg_mode() so glr_actions_apply_defaults() can map it
  * to paused/loop state. -1 means "not yet loaded / not set". */
@@ -269,7 +269,7 @@ static void worker_save_state(void) {
         }
     }
     /* cfg_mode is the authoritative audio preference: encodes pause/loop
-     * policy in a single int owned by repl_actions.c (AUDIO_CFG_* enum).
+     * policy in a single int owned by glr_actions.c (AUDIO_CFG_* enum).
      * Only write it when the action layer has registered a value. */
     if (cfg_mode >= 0)
         fprintf(f, "cfg_mode=%d\n", cfg_mode);
@@ -289,7 +289,7 @@ static void worker_save_state(void) {
  * Synchronous on the caller thread: the INI is a small app-owned file
  * (never a media file), and glr_audio_play_playlist()'s cfg_mode side
  * effect must be visible to the immediately-following caller. cfg_mode
- * is stored in g_cfg_mode for repl_actions.c to pick up via
+ * is stored in g_cfg_mode for glr_actions.c to pick up via
  * glr_audio_get_cfg_mode(). Returns the playlist index of the saved track,
  * or -1 on failure. Sets *out_offset to the saved cursor in seconds. */
 static int load_state(float *out_offset) {
