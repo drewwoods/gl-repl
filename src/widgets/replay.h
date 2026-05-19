@@ -74,10 +74,9 @@ typedef enum {
     REPLAY_MODE_VERTEX
 } ReplayMode;
 
-/* ReplayFadeBatch / ReplayFadeBatchView / REPLAY_FADE_BATCH_MAX live in
- * src/scene/replay_types.h alongside the rest of the replay-fade rendering
- * data, and are pulled in via the include below. The REPL replay state
- * machine produces batches; the scene module consumes them. */
+/* ReplayFadeBatch / ReplayFadeBatchView / REPLAY_FADE_BATCH_MAX are
+ * defined above. The REPL replay state machine produces batches; the
+ * scene module consumes them. */
 
 /* --- State machine control -------------------------------------------- */
 

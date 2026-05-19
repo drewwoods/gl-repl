@@ -26,7 +26,20 @@ static float g_replay_baseline_scratch_arrays[REPL_SCRATCH_ARRAY_COUNT][REPL_SCR
 static int   g_replay_saved_t_playing = 1;
 static int   g_replay_last_src_line = -1;
 
+/* Batch lifetime cap (seconds). Pairs with the replay peer's
+ * fade_speed (replay_state.c, alpha/sec): alpha reaches 1.0 at
+ * age 1/fade_speed but the batch is culled at REPLAY_FADE_DURATION,
+ * so batches are intentionally removed before fully opaque. */
 #define REPLAY_FADE_DURATION   0.40f
+/* A fresh fade batch starts one ~60 Hz frame "aged" rather than at 0
+ * so it fades in smoothly instead of popping at full opacity. */
+#define REPLAY_FADE_INITIAL_AGE 0.016f
+/* Replay step-rate clamp (steps/sec) and the per-keystroke multipliers
+ * (0.67 ~= 1/1.5, so +/- are inverse steps). */
+#define REPLAY_SPEED_MIN       0.5f
+#define REPLAY_SPEED_MAX       200.0f
+#define REPLAY_SPEED_STEP_UP   1.5f
+#define REPLAY_SPEED_STEP_DOWN 0.67f
 
 static ReplayFadeBatch g_replay_fade_batches[REPLAY_FADE_BATCH_MAX];
 static int             g_replay_fade_batch_count = 0;
@@ -244,7 +257,7 @@ static void replay_push_fade_batch(int old_pc, int new_pc) {
     batch = &g_replay_fade_batches[g_replay_fade_batch_count++];
     batch->old_pc = old_pc;
     batch->new_pc = new_pc;
-    batch->age = 0.016f;
+    batch->age = REPLAY_FADE_INITIAL_AGE;
 }
 
 static void replay_clamp_fade_batches(int max_pc) {
@@ -888,8 +901,8 @@ int replay_exec_limit(void) {
 void replay_speed_adjust(float factor) {
     char msg[64];
     g_replay_speed *= factor;
-    if (g_replay_speed < 0.5f) g_replay_speed = 0.5f;
-    if (g_replay_speed > 200.0f) g_replay_speed = 200.0f;
+    if (g_replay_speed < REPLAY_SPEED_MIN) g_replay_speed = REPLAY_SPEED_MIN;
+    if (g_replay_speed > REPLAY_SPEED_MAX) g_replay_speed = REPLAY_SPEED_MAX;
     snprintf(msg, sizeof(msg), "Replay: %.1f step/s", g_replay_speed);
     repl_set_status(msg);
 }
@@ -1008,11 +1021,11 @@ int replay_handle_key_impl(unsigned char key) {
         return 1;
     }
     if (key == '+' || key == '=') {
-        replay_speed_adjust(1.5f);
+        replay_speed_adjust(REPLAY_SPEED_STEP_UP);
         return 1;
     }
     if (key == '-') {
-        replay_speed_adjust(0.67f);
+        replay_speed_adjust(REPLAY_SPEED_STEP_DOWN);
         return 1;
     }
     if (key == 'm' || key == 'M') {
@@ -1067,11 +1080,11 @@ int replay_handle_special_key_impl(int key) {
         return 1;
     }
     if (key == GLUT_KEY_UP) {
-        replay_speed_adjust(1.5f);
+        replay_speed_adjust(REPLAY_SPEED_STEP_UP);
         return 1;
     }
     if (key == GLUT_KEY_DOWN) {
-        replay_speed_adjust(0.67f);
+        replay_speed_adjust(REPLAY_SPEED_STEP_DOWN);
         return 1;
     }
 
