@@ -11,6 +11,31 @@ brief and goes deeper.
 
 GNU sed is available as `gsed` on macOS via Homebrew (`brew install gnu-sed`).
 
+## Linux / real-gcc verification (gracemont)
+
+Environment-specific to this dev setup (local: `drew` on macOS, the
+repo at `~/src/code/openGL/samples/gen-ai/gl-repl`; the macOS
+toolchain's `gcc` is Apple clang). The project targets old-gcc / Linux
+portability (`-std=c99`, the `make check-c99` ratchet), so changes that
+touch the build, sanitizer flags, or anything portability-sensitive
+should be cross-checked under real GCC on Ubuntu.
+
+- Host: `ssh gracemont` — Ubuntu 24.04, real `gcc` (13.x), GNU Make 4.x.
+- Repo path there: `~/code/openGL/samples/gen-ai/gl-repl` — i.e. the
+  same path **without the `src/` segment** the macOS checkout has.
+- Sync + verify:
+
+  ```bash
+  ssh gracemont 'cd ~/code/openGL/samples/gen-ai/gl-repl && \
+    git pull --ff-only origin main && \
+    make check-c99 && make test-stubs'
+  ```
+
+  `check-c99` is the real-gcc C99 ratchet; `test-stubs` builds and runs
+  the suite with the bundled GL stubs, so it needs **no GL dev libs**
+  on the headless box (and picks up the debug-default ASan+UBSan). Use
+  `make test` there only if GL/GLUT dev packages are installed.
+
 ## Build
 
 ```bash
