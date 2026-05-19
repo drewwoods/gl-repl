@@ -116,27 +116,25 @@ int glr_config_get(GlrConfigKey key) {
     return value ? *value : 0;
 }
 
+/* First g_cfg_items[] row whose key matches, or NULL. Section-header
+ * rows carry GLR_CONFIG_NONE so they never match a real key; callers
+ * still guard ->section_header (their miss return differs). */
+static const GlrConfigItem *find_item_by_key(GlrConfigKey key) {
+    for (int item_idx = 0; item_idx < CFG_ITEM_COUNT; item_idx++)
+        if (g_cfg_items[item_idx].key == key)
+            return &g_cfg_items[item_idx];
+    return NULL;
+}
+
 int glr_config_state_count(GlrConfigKey key) {
-    const GlrConfigItem *item = NULL;
-    for (int item_idx = 0; item_idx < CFG_ITEM_COUNT; item_idx++) {
-        if (g_cfg_items[item_idx].key == key) {
-            item = &g_cfg_items[item_idx];
-            break;
-        }
-    }
+    const GlrConfigItem *item = find_item_by_key(key);
     if (!item || item->section_header)
         return 0;
     return item->state_count;
 }
 
 const char *glr_config_state_name(GlrConfigKey key, int value) {
-    const GlrConfigItem *item = NULL;
-    for (int item_idx = 0; item_idx < CFG_ITEM_COUNT; item_idx++) {
-        if (g_cfg_items[item_idx].key == key) {
-            item = &g_cfg_items[item_idx];
-            break;
-        }
-    }
+    const GlrConfigItem *item = find_item_by_key(key);
     if (!item || item->section_header)
         return NULL;
 
