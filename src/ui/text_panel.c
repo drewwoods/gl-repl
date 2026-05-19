@@ -106,8 +106,8 @@ static void text_panel_draw_colored_span(const UiTextPanelSnapshot *snap,
     x = snap->cp_x + wrap_x + (span_start - wrap_start) * FONT_W;
 
     if (bold) {
-        /* EXPERIMENT: fake-bold. Solid centre pass, then 4 additive
-         * 1px-shifted passes at alpha 0.25 to fatten the glyphs. */
+        /* Fake-bold: solid centre pass, then 4 additive 1px-shifted
+         * passes at alpha 0.15 to fatten the glyphs. */
         static const int dx[4] = { -1, 1,  0, 0 };
         static const int dy[4] = {  0, 0, -1, 1 };
         GLboolean blend_was = glIsEnabled(GL_BLEND);
