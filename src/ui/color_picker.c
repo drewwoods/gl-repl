@@ -20,10 +20,13 @@ void ui_color_picker_render(const ColorPickerView *view,
                             int viewport_w, int viewport_h) {
     if (!view || !view->open) return;
 
-    /* Slider geometry constants reused by the renderer. The hit-test
+    /* Popup-frame sizing, sourced from the peer via the view (single
+     * source = color_picker_state.c's CP_GAP/CP_PREV_H) so this
+     * renderer no longer re-declares magic-twin literals. The hit-test
      * indexes view->rects directly; these only feed the popup
      * background, preview swatch, and alpha checkerboard sizing. */
-    enum { CP_GAP = 6, CP_PREV_H = 16 };
+    const int CP_GAP = view->gap;
+    const int CP_PREV_H = view->prev_h;
 
     int px = view->anchor_px;
     int py = view->anchor_py;

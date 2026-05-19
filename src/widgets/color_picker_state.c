@@ -267,6 +267,8 @@ ColorPickerView color_picker_view(void) {
     v.anchor_px   = g_cp_px;
     v.anchor_py   = g_cp_py;
     v.value_max   = g_cp_value_max;
+    v.gap         = CP_GAP;
+    v.prev_h      = CP_PREV_H;
     cp_compute_rects(&v.rects);
     return v;
 }
