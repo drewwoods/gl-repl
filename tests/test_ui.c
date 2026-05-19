@@ -384,46 +384,91 @@ static void test_menu_bar(void) {
 /* Phase E commit 28: ui_panels_hit_test classifies pointer location
  * as a UiHit without mutating state.
  *
- * Default code-panel layout is TOP at fraction 0.45 — at 800x600
- * that puts the panel at OpenGL rect (0, 330, 800, 270). In GLUT
- * (top-down) coords the panel occupies my in [0, 270]. */
+ * Layout-agnostic: every probe point is derived from the live
+ * ui_layout_*_rect() geometry (the code-text row is found by scanning,
+ * not hand-computed), and the layout + panel fraction are pinned
+ * explicitly. The test therefore does not depend on
+ * CFG_DEFAULT_CODE_PANEL_LAYOUT / CFG_DEFAULT_PANEL_FRAC and is run
+ * across all three split layouts so a defaults change can't silently
+ * shift the regions out from under it. */
 static void test_ui_panels_hit_test(void) {
-    glr_app_reset_all();
-    ui_state_viewport_set_size(800, 600);
+    const int layouts[3] = {
+        CODE_PANEL_LAYOUT_TOP,
+        CODE_PANEL_LAYOUT_BOTTOM,
+        CODE_PANEL_LAYOUT_LEFT,
+    };
 
-    /* Click in the scene region (below the panel, my > 270). */
-    UiHit h_scene = ui_panels_hit_test_current_snapshot(400, 400, 0);
-    ASSERT_TRUE("scene hit kind", h_scene.kind == UI_HIT_SCENE);
-
-    /* Click inside the code panel's text area. mx > gutter end
-     * (CODE_MARGIN_X + 4*FONT_W = ~40) and my within the panel. */
-    UiHit h_text = ui_panels_hit_test_current_snapshot(150, 100, 0);
-    ASSERT_TRUE("code-panel text hit kind",
-                h_text.kind == UI_HIT_CODE_TEXT);
-
-    /* Click in the gutter (line numbers, mx < ~40). */
-    UiHit h_gutter = ui_panels_hit_test_current_snapshot(20, 100, 0);
-    ASSERT_TRUE("code-panel gutter hit kind",
-                h_gutter.kind == UI_HIT_CODE_GUTTER);
-
-    {
+    for (int li = 0; li < 3; li++) {
+        const char *tag = layouts[li] == CODE_PANEL_LAYOUT_TOP    ? " [top]"
+                        : layouts[li] == CODE_PANEL_LAYOUT_BOTTOM ? " [bottom]"
+                                                                  : " [left]";
+        char lbl[80];
+        int linenum_w = 4 * FONT_W;
+        int idx_col_w = glr_state_presentation().show_vertex_indices ? (6 * FONT_W) : 0;
+        int text_x = CODE_MARGIN_X + linenum_w + FONT_W + idx_col_w;
+        int sx, sy, sw, sh;
         int cp_x, cp_y, cp_w, cp_h;
-        int my_status;
+        int win_h;
+        int row_my = -1;
+        UiReplCodePanelLayout layout;
+        UiHit h;
 
+        glr_app_reset_all();
+        glr_state_presentation_mut()->code_panel_layout = layouts[li];
+        glr_ctrl_sync_ui_chrome();
+        ui_state_viewport_set_size(800, 600);
+        ui_state_code_panel_mut()->panel_frac = 0.45f;
+        editor_scroll_follow_cursor_set(0);
+        editor_feed_line("glBegin(GL_POINTS);");
+
+        win_h = ui_state_viewport().window_h;
+        ui_layout_scene_rect(&sx, &sy, &sw, &sh);
         ui_layout_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
-        my_status = ui_state_viewport().window_h - (cp_y + STATUSBAR_H / 2);
-        UiHit h_status = ui_panels_hit_test_current_snapshot(cp_x + cp_w / 2,
-                                                             my_status, 0);
-        ASSERT_TRUE("code-panel statusbar consumes clicks",
-                    h_status.kind == UI_HIT_CODE_PANEL_CHROME);
-    }
+        build_test_code_panel_layout(&layout, cp_w, text_x, cp_h);
+        editor_scroll_set(layout.header_rows);     /* skip chrome */
 
-    /* Help overlay takes priority over everything. */
-    ui_state_help_mut()->visible = 1;
-    UiHit h_help = ui_panels_hit_test_current_snapshot(150, 100, 0);
-    ASSERT_TRUE("help overlay takes priority",
-                h_help.kind == UI_HIT_HELP_PANEL);
-    ui_state_help_mut()->visible = 0;
+        /* Scene: centre of the scene rect (GL -> GLUT my). */
+        snprintf(lbl, sizeof lbl, "scene hit kind%s", tag);
+        h = ui_panels_hit_test_current_snapshot(sx + sw / 2,
+                                                win_h - (sy + sh / 2), 0);
+        ASSERT_TRUE(lbl, h.kind == UI_HIT_SCENE);
+
+        /* Code text: first my (top-down) at the text column that the
+         * panel classifies as CODE_TEXT — found by scan so no row-y
+         * math leaks layout/scroll/chrome assumptions in. */
+        {
+            int mx = cp_x + text_x + 2 * FONT_W;
+            for (int my = 0; my < win_h; my++) {
+                h = ui_panels_hit_test_current_snapshot(mx, my, 0);
+                if (h.kind == UI_HIT_CODE_TEXT) { row_my = my; break; }
+            }
+        }
+        snprintf(lbl, sizeof lbl, "code-panel text hit kind%s", tag);
+        ASSERT_TRUE(lbl, row_my >= 0);
+
+        if (row_my >= 0) {
+            /* Gutter: same row, mx left of text_x. */
+            snprintf(lbl, sizeof lbl, "code-panel gutter hit kind%s", tag);
+            h = ui_panels_hit_test_current_snapshot(cp_x + CODE_MARGIN_X + 1,
+                                                    row_my, 0);
+            ASSERT_TRUE(lbl, h.kind == UI_HIT_CODE_GUTTER);
+
+            /* Help overlay takes priority over the same panel point. */
+            ui_state_help_mut()->visible = 1;
+            snprintf(lbl, sizeof lbl, "help overlay takes priority%s", tag);
+            h = ui_panels_hit_test_current_snapshot(cp_x + text_x + 2 * FONT_W,
+                                                    row_my, 0);
+            ASSERT_TRUE(lbl, h.kind == UI_HIT_HELP_PANEL);
+            ui_state_help_mut()->visible = 0;
+        }
+
+        /* Statusbar strip (bottom STATUSBAR_H of the panel) consumes
+         * clicks as panel chrome. */
+        snprintf(lbl, sizeof lbl, "statusbar consumes clicks%s", tag);
+        h = ui_panels_hit_test_current_snapshot(
+                cp_x + cp_w / 2, win_h - (cp_y + STATUSBAR_H / 2), 0);
+        ASSERT_TRUE(lbl, h.kind == UI_HIT_CODE_PANEL_CHROME);
+    }
 }
 
 /* Phase E commit 29: hit-test entry points for ui_menu_bar,
