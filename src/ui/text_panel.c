@@ -408,7 +408,6 @@ static int text_panel_draw_input_row(const UiTextPanelSnapshot *snap,
                 text_panel_draw_line_number(snap, *io_line_y,
                                             row->left_gutter_label);
                 text_panel_draw_left_aux(snap, row, *io_line_y);
-                text_panel_draw_right_action(snap, row, *io_line_y);
             }
 
             glEnable(GL_BLEND);
@@ -417,6 +416,13 @@ static int text_panel_draw_input_row(const UiTextPanelSnapshot *snap,
                     (float)(snap->cp_x + snap->cp_w),
                     (float)(*io_line_y - 3 + LINE_H));
             glDisable(GL_BLEND);
+
+            /* Paint the right-action color swatch AFTER the active-row
+             * tint. The 70%-opacity highlight spans the full row, so
+             * drawing the swatch before it darkens the swatch into
+             * invisibility whenever the cursor sits on a color line. */
+            if (wrap_row == 0)
+                text_panel_draw_right_action(snap, row, *io_line_y);
 
             if (wrap_row == 0)
                 text_panel_draw_indent(snap->cp_x + snap->text_x,
@@ -723,6 +729,20 @@ void ui_text_panel_render(const UiTextPanelSnapshot *snap,
     gl2d_begin(snap->vp_w, snap->vp_h);
     text_panel_draw_chrome(snap);
 
+    /* Clip the text rows to the panel interior. Rows are laid out
+     * left-to-right with no per-row width clamp, so a long unbroken
+     * line, the right-action swatch, or wide indented content would
+     * otherwise bleed past the panel's right edge onto the adjacent
+     * scene in split layouts. Chrome (background + the deliberately
+     * full-extent divider) is drawn above this, unclipped; the
+     * scrollbar is drawn after, unclipped (already within bounds).
+     * gl2d's gluOrtho2D(0,vp_w,0,vp_h) over the full-window viewport
+     * maps panel coords 1:1 to scissor window coords. cp_w/cp_h are
+     * > 0 here (guarded above). No glPushAttrib covers scissor state,
+     * so it is disabled explicitly after the loop. */
+    glEnable(GL_SCISSOR_TEST);
+    glScissor(snap->cp_x, snap->cp_y, snap->cp_w, snap->cp_h);
+
     panel_top = snap->cp_y + snap->cp_h;
     line_y = panel_top - CODE_MARGIN_Y - 2 * LINE_H - snap->top_chrome_h;
 
@@ -736,6 +756,8 @@ void ui_text_panel_render(const UiTextPanelSnapshot *snap,
             total_rows += text_panel_draw_regular_row(snap, row, visible_rows,
                                                       &cur, &line_y);
     }
+
+    glDisable(GL_SCISSOR_TEST);
 
     out->total_rows = total_rows;
     text_panel_draw_scrollbar(snap, total_rows, visible_rows);

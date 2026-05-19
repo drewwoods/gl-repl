@@ -45,6 +45,24 @@ static void build_doc(UiRenderSnapshot *snap, UiReplCodePanelLayout *layout) {
     ui_repl_code_panel_build_layout(snap, layout, cp_w, code_panel_text_x(), cp_h);
 }
 
+/* Mirror glr_ctrl_push_color_transformers() (which only runs inside a
+ * full display frame, not glr_ctrl_build_ui_snapshot) so build_doc's
+ * snapshot carries a color transformer for `line`. Without this the
+ * snapshot has no transformers, no inline swatch is ever produced, and
+ * the swatch row-builder path is untested. */
+static void seed_color_transformer(int line, float r, float g, float b) {
+    UiTransformer t = {
+        .line_idx   = line,
+        .char_start = -1,
+        .char_end   = -1,
+        .kind       = TRANSFORMER_COLOR_PICKER,
+        .state.color = { .r = r, .g = g, .b = b, .a = 1.0f,
+                         .has_alpha = 0, .is_clear = 0 },
+    };
+    editor_state_transformers_clear();
+    editor_state_transformers_append(&t);
+}
+
 int main(void) {
     UiRenderSnapshot snap;
     UiReplCodePanelLayout layout;
@@ -266,6 +284,61 @@ int main(void) {
                     ui_panels_hit_test(&snap, 20, hy, 0).kind
                         == UI_HIT_HELP_PANEL);
         ui_state_help_mut()->visible = 0;
+    }
+
+    /* Regression: the inline color swatch must stay visible AND
+     * hittable whether or not the cursor sits on the glColor line, in
+     * BOTH code-focus modes. Before the add_input_row fix the
+     * edit-in-place input row never set right_action, so moving the
+     * cursor onto a color line made the swatch (and its click target)
+     * silently vanish; a draw-order-only fix looked plausible but did
+     * nothing. code_focus is pinned explicitly so a CFG_DEFAULT_CODE_FOCUS
+     * flip can't mask this. Scroll is set past the (focus-aware)
+     * header so the color row is on screen in full mode too. */
+    for (int cf = 0; cf <= 1; cf++) {
+        const char *mode = cf ? " [focus]" : " [full]";
+
+        for (int cursor_on = 0; cursor_on <= 1; cursor_on++) {
+            const char *cur = cursor_on ? "/cursor-on" : "/cursor-off";
+            char lbl[96];
+            int cp_x, cp_w, win_h, found = 0, line = -1;
+
+            reset_doc_fixture();
+            glr_state_presentation_mut()->code_focus = cf;
+            glr_ctrl_sync_ui_chrome();
+            editor_feed_line("glBegin(GL_POINTS);");   /* cmd 0 */
+            editor_feed_line("glColor3f(1, 0, 0);");   /* cmd 1 (color) */
+            editor_feed_line("glEnd();");              /* cmd 2 */
+            seed_color_transformer(1, 1.0f, 0.0f, 0.0f);
+
+            /* cursor_on: edit-in-place input row vs plain command row. */
+            editor_navigate_to_line(cursor_on ? 1 : 0);
+
+            /* Build once for the focus-aware header_rows, scroll past
+             * the chrome (0 in focus), rebuild so the color row is at
+             * the top of the visible area in both modes. */
+            build_doc(&snap, &layout);
+            editor_scroll_set(layout.header_rows);
+            build_doc(&snap, &layout);
+
+            ui_layout_code_panel_rect(&cp_x, NULL, &cp_w, NULL);
+            win_h = ui_state_viewport().window_h;
+            for (int my = 0; my < win_h && !found; my++)
+                for (int mx = cp_x + cp_w - 1;
+                     mx >= cp_x + cp_w - CODE_MARGIN_X - 2 * FONT_W && !found;
+                     mx--) {
+                    UiHit hk = ui_repl_code_panel_hit_test(&snap, mx, my);
+                    if (hk.kind == UI_HIT_INLINE_COLOR_SWATCH) {
+                        found = 1;
+                        line  = hk.line_idx;
+                    }
+                }
+            snprintf(lbl, sizeof lbl, "swatch hittable%s%s", cur, mode);
+            ASSERT_TRUE(lbl, found);
+            snprintf(lbl, sizeof lbl,
+                     "swatch targets the glColor line%s%s", cur, mode);
+            ASSERT_TRUE(lbl, line == 1);
+        }
     }
 
     return test_harness_report(&g_harness, "repl_code_panel_document");
