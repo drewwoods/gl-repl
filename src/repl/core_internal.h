@@ -93,6 +93,11 @@ int  repl_extract_assignment_target_parts(const char *src,
                                           char *index_expr, int index_expr_sz,
                                           char *rhs, int rhs_sz);
 
+/* Hard cap on goto jumps while walking one flat program, shared by the
+ * executor and the replay-annotation walker. A program that exceeds this
+ * is treated as a runaway goto loop and bailed out with a status message. */
+#define REPL_GOTO_LOOP_LIMIT 100000
+
 /* ---- Visible-var collection ------------------------------------------- */
 
 /* Populate `vars` with every loop/function-local visible at source line

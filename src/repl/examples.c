@@ -1,6 +1,7 @@
 #include "repl/examples.h"
 
 #include <stddef.h>
+#include <c_compat.h>   /* STATIC_ASSERT (C99/C11 portable) */
 
 /* Each example is an array of source lines terminated by NULL.
  * Lines are processed sequentially:
@@ -1211,6 +1212,12 @@ static const char *const g_example_tag_labels[] = {
     "Polygons",
     "Lines",
 };
+/* Must stay 1:1 with the REPL_EXAMPLE_TAG_* enum: repl_example_tag_count()
+ * returns REPL_EXAMPLE_TAG_COUNT but repl_example_tag_label() indexes this
+ * table, so any drift is an out-of-bounds read. */
+STATIC_ASSERT((int)(sizeof(g_example_tag_labels) /
+                    sizeof(g_example_tag_labels[0])) == REPL_EXAMPLE_TAG_COUNT,
+              "g_example_tag_labels[] out of sync with REPL_EXAMPLE_TAG_COUNT");
 
 static const ReplExampleEntry g_example_entries[] = {
     { "Lit cube", g_example_cube,
