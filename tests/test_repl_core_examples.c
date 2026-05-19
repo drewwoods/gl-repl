@@ -10,6 +10,7 @@
 #include "repl/examples.h"
 #include "repl/state.h"
 #include "repl/core.h"
+#include "ui/layout.h"      /* CODE_PANEL_LAYOUT_* enum values */
 #include "ui/state.h"
 #include "scene/render.h"
 #include "app/glr_defaults.h"   /* CFG_DEFAULT_* */
