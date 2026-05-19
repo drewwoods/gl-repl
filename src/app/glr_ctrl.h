@@ -45,6 +45,12 @@ int glr_ctrl_code_panel_apply_scroll_follow_for_test(
     int *out_follow_doc_line,
     int *out_visible_lines);
 void glr_ctrl_set_accum(int enabled);
+
+/* Request a save-and-quit from a signal handler. Async-signal-safe
+ * (sets a sig_atomic_t flag only); the recovery save + exit happen on
+ * the normal path in glr_ctrl_tick(). Wired to SIGINT in main(). */
+void glr_ctrl_request_quit(void);
+
 void glr_ctrl_display_frame(void);
 void glr_ctrl_reshape(int w, int h);
 void glr_ctrl_keyboard(unsigned char key, int x, int y);
