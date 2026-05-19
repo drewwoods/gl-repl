@@ -67,8 +67,21 @@ for spec do
             FORCE_COLOR=$child_force_color
             export FORCE_COLOR
         fi
-        { time sh -c "$cmd" >"$log" 2>&1; } 2>"$time_file"
+        # Best-effort wall-clock timing. The external `time` utility is
+        # not guaranteed (e.g. dash with no /usr/bin/time), and the test
+        # result must not depend on it — capture rc from the command
+        # itself and treat timing as optional whole-second data.
+        _t_start=$(date +%s 2>/dev/null) || _t_start=
+        sh -c "$cmd" >"$log" 2>&1
         rc=$?
+        _t_end=$(date +%s 2>/dev/null) || _t_end=
+        if [ -n "$_t_start" ] && [ -n "$_t_end" ]; then
+            _t_elapsed=$((_t_end - _t_start))
+            [ "$_t_elapsed" -lt 0 ] && _t_elapsed=0
+            printf 'real 0m%d.000s\n' "$_t_elapsed" >"$time_file"
+        else
+            : >"$time_file"
+        fi
         printf '%d\n' "$rc" >"$status"
         exit 0
     ) &
