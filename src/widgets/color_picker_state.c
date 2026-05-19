@@ -23,6 +23,10 @@
 #define CP_ALPHA_W   18   /* alpha bar width (RGBA-shaped only) */
 #define CP_GAP        6   /* gap between elements */
 #define CP_PREV_H    16   /* preview strip height */
+#define CP_PANEL_OFFSET  8   /* px gap between the code panel and the picker */
+#define CP_SCREEN_MARGIN 4   /* px keep-on-screen margin at window edges */
+#define CP_HUE_MAX   0.999f  /* clamp hue < 1.0 so hsv_to_rgb's sextant
+                              * index (int)(h*6) never lands on the wrap */
 
 /* g_cp_line >= 0: picker is open for that source-cmd index */
 static int   g_cp_line       = -1;
@@ -210,16 +214,16 @@ void color_picker_open(int cmd_idx, int my) {
     int pw = CP_SV_SZ + CP_GAP + CP_HUE_W
            + (g_cp_has_alpha ? CP_GAP + CP_ALPHA_W : 0) + CP_GAP;
     int ph = CP_SV_SZ + CP_GAP + CP_PREV_H + CP_GAP;
-    int ppx = cp_x + cp_w + 8;
+    int ppx = cp_x + cp_w + CP_PANEL_OFFSET;
     int win_w = ui_state_viewport().window_w;
     int win_h = ui_state_viewport().window_h;
-    if (ppx + pw > win_w - 4) ppx = cp_x - pw - 4;
-    if (ppx < 4) ppx = 4;
-    if (ppx + pw > win_w - 4) ppx = win_w - pw - 4;
-    if (ppx < 4) ppx = 4;
+    if (ppx + pw > win_w - CP_SCREEN_MARGIN) ppx = cp_x - pw - CP_SCREEN_MARGIN;
+    if (ppx < CP_SCREEN_MARGIN) ppx = CP_SCREEN_MARGIN;
+    if (ppx + pw > win_w - CP_SCREEN_MARGIN) ppx = win_w - pw - CP_SCREEN_MARGIN;
+    if (ppx < CP_SCREEN_MARGIN) ppx = CP_SCREEN_MARGIN;
     int ppy = (win_h - my) + ph / 2;
-    if (ppy > win_h - 4) ppy = win_h - 4;
-    if (ppy - ph < 4)    ppy = ph + 4;
+    if (ppy > win_h - CP_SCREEN_MARGIN) ppy = win_h - CP_SCREEN_MARGIN;
+    if (ppy - ph < CP_SCREEN_MARGIN)    ppy = ph + CP_SCREEN_MARGIN;
     g_cp_px = ppx;
     g_cp_py = ppy;
 }
@@ -297,7 +301,7 @@ ColorPickerInputResult color_picker_handle_press(int mx, int my) {
         g_cp_drag = 2;
         g_cp_hue = 1.0f - (float)(gl_y - r.hue_y) / (float)r.hue_h;
         if (g_cp_hue < 0) g_cp_hue = 0;
-        if (g_cp_hue >= 1) g_cp_hue = 0.999f;
+        if (g_cp_hue >= 1) g_cp_hue = CP_HUE_MAX;
         res.changed = color_picker_write_cmd();
         res.consumed = 1;
         return res;
@@ -342,7 +346,7 @@ ColorPickerInputResult color_picker_handle_motion(int mx, int my) {
     } else if (g_cp_drag == 2) {
         g_cp_hue = 1.0f - (float)(gl_y - r.hue_y) / (float)r.hue_h;
         if (g_cp_hue < 0) g_cp_hue = 0;
-        if (g_cp_hue >= 1) g_cp_hue = 0.999f;
+        if (g_cp_hue >= 1) g_cp_hue = CP_HUE_MAX;
     } else if (g_cp_drag == 3) {
         g_cp_alpha = (float)(gl_y - r.alp_y) / (float)r.alp_h;
         if (g_cp_alpha < 0) g_cp_alpha = 0;
