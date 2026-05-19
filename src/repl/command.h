@@ -89,7 +89,9 @@ typedef struct {
      * round-trips losslessly. The absence of this field is the
      * compiler-enforced invariant — no grep guard needed. */
     float    args[8];
-    int      num_args;              /* Number of meaningful entries in args[] */
+    int      num_args;              /* Number of meaningful entries in args[]
+                                     * (exception: CMD_VAR_ASSIGN repurposes
+                                     * this as the predef-var index) */
     int      valid;                 /* Deleted commands remain allocated but skipped */
     int      is_auto;               /* Auto-generated helper, e.g. synthesized normals */
     int      has_vars;              /* Source must be preserved/re-evaluated from text */

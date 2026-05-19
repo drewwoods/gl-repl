@@ -257,7 +257,7 @@ static void replay_subst_scratch_reads(
     out[oi] = '\0';
 }
 
-static const char *skip_numeric_literal(const char *s) {
+static const char *replay_skip_number(const char *s) {
     const char *p = s;
     int saw_digits = 0;
 
@@ -304,7 +304,7 @@ static int expr_has_visible_vars(const char *s, const ExprVar *vars, int num_var
     while (s && *s) {
         const char *start;
         int len;
-        const char *num_end = skip_numeric_literal(s);
+        const char *num_end = replay_skip_number(s);
 
         if (num_end != s) {
             s = num_end;
@@ -436,7 +436,7 @@ static int subst_visible_vars(const char *source, char *out, int out_size,
     int oi = 0;
     const char *p = source;
     while (*p && oi < out_size - 20) {
-        const char *num_end = skip_numeric_literal(p);
+        const char *num_end = replay_skip_number(p);
 
         if (num_end != p) {
             int len = (int)(num_end - p);

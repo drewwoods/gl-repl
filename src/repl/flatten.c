@@ -500,8 +500,8 @@ static void flatten_range(FlattenContext *ctx,
          * was already invalid at commit time (it would have set
          * .valid=0), and the flatten pass falls back to copying the
          * original cmd through. Each parse gets its own scratch
-         * err_buf so 42b can drop the legacy set_status fallback
-         * without changing flatten behaviour. */
+         * err_buf; the parser writes diagnostics there and never
+         * calls set_status, so flatten stays side-effect-free. */
         char flatten_parse_err[REPL_STATUS_TEXT_MAX]; /* deliberately unread */
         flatten_parse_err[0] = '\0';
 

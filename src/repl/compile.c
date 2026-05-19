@@ -915,6 +915,9 @@ ReplCompileResult repl_compile_var_assign(const char *input,
         cmd.type     = CMD_VAR_ASSIGN;
         cmd.valid    = 1;
         cmd.args[0]  = val;
+        /* CMD_VAR_ASSIGN repurposes num_args as the predef-var index
+         * (not an args[] count); read back the same way in executor.c
+         * / flatten.c / core.c. See the num_args note in command.h. */
         cmd.num_args = var_idx;
         cmd.has_vars = has_rhs_vars;
 
