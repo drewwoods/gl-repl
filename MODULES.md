@@ -204,7 +204,7 @@ surface is GLUT bootstrap and a fixed orbit camera.
 | `glr_*` | Application router: GLUT callback registration, frame ordering, snapshot builders, raw-input → owning-subsystem dispatch (based on `UiHit.kind` / focus), diagnostic relay from REPL to editor + status |
 | `variable_panel_*` | Peer subsystem: variable-slider visibility + drag transaction + writeback policy. Owns its own state |
 | `replay_*` | Peer subsystem: replay state machine, PC, mode, fade batches |
-| `prof`, `cmd_format` | Generic utilities with no ownership of REPL/editor/UI state |
+| `prof` | Generic utility with no ownership of REPL/editor/UI state |
 
 Treat prefixes as ownership boundaries, not naming aesthetics. A file
 that crosses a boundary either splits or moves. `audio` is the
@@ -226,8 +226,8 @@ These are intentional and must not be "fixed" by a future sweep:
   deliberately un-prefixed): `GLCmd`, `CmdType`, `ExprVar`, `ExprCtx`,
   `TessVertex`, `FlatCmdLocalVars`, `FlatProgramView`,
   `CmdSyntaxCategory`, and the `cmd_type_name` thin alias.
-- **Root neutral helpers**: `cmd_format.h` `Fmt*`/`fmt_*`,
-  `include/gl_2d.h` `gl2d_*`, `transform_utils.h`
+- **REPL formatting**: `src/repl/format.h` `ReplFmt*`/`repl_format_*`
+- **Root neutral helpers**: `include/gl_2d.h` `gl2d_*`, `transform_utils.h`
   `apply_tracked_transform` / `unwind_transform_stack`, and
   `src/ui/text_layout.h` `CodeLayout` / `CodeWrapIter` /
   `code_layout_*` (a pure utility shared by UI, export dumps, tests).
@@ -339,7 +339,7 @@ commands.
 | `repl_flatten` | Builds the flat executable command stream from source commands, loops, functions, and `if` blocks |
 | `repl_executor` | Narrow live-GL boundary that executes flat user geometry |
 | `repl_eval` | Expression evaluator and predefined-variable lookup |
-| `cmd_format` | Pure text/indent/depth formatting helpers |
+| `src/repl/format` | Pure text/indent/depth formatting helpers (`repl_format_*`) |
 
 `GLCmd` is a parse-result record: type, args, flags, provenance. It does
 not carry source text. Per-line text belongs to `EditorState`.

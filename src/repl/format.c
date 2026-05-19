@@ -1,28 +1,28 @@
 /*
- * cmd_format.c - Command indentation / depth computation
+ * format.c - REPL command indentation / depth computation
  *
- * See cmd_format.h for the public API and documentation.
+ * See repl/format.h for the public API and documentation.
  */
-#include "cmd_format.h"
+#include "repl/format.h"
 #include <string.h>
 
-int fmt_tess_depth(const FmtCmd *cmds, int n) {
+int repl_format_tess_depth(const ReplFmtCmd *cmds, int n) {
     int depth = 0;
     for (int i = 0; i < n; i++) {
         if (!cmds[i].valid) continue;
-        if (cmds[i].type == FMT_TESS_BEGIN_POLYGON ||
-            cmds[i].type == FMT_TESS_BEGIN_CONTOUR) depth++;
-        else if (cmds[i].type == FMT_TESS_END) depth--;
+        if (cmds[i].type == REPL_FMT_TESS_BEGIN_POLYGON ||
+            cmds[i].type == REPL_FMT_TESS_BEGIN_CONTOUR) depth++;
+        else if (cmds[i].type == REPL_FMT_TESS_END) depth--;
     }
     return depth > 0 ? depth : 0;
 }
 
-int fmt_begin_depth(const FmtCmd *cmds, int n) {
+int repl_format_begin_depth(const ReplFmtCmd *cmds, int n) {
     int depth = 0;
     for (int i = 0; i < n; i++) {
         if (!cmds[i].valid) continue;
-        if (cmds[i].type == FMT_GL_BEGIN) depth++;
-        else if (cmds[i].type == FMT_GL_END) depth--;
+        if (cmds[i].type == REPL_FMT_GL_BEGIN) depth++;
+        else if (cmds[i].type == REPL_FMT_GL_END) depth--;
     }
     return depth > 0 ? depth : 0;
 }
@@ -35,35 +35,35 @@ static void fill_spaces(int n_spaces, char *buf, int buf_sz) {
     buf[n_spaces] = '\0';
 }
 
-void fmt_indent(const FmtCmd *cmds, int n, char *buf, int buf_sz) {
-    int td = fmt_tess_depth(cmds, n);
-    int bd = fmt_begin_depth(cmds, n);
+void repl_format_indent(const ReplFmtCmd *cmds, int n, char *buf, int buf_sz) {
+    int td = repl_format_tess_depth(cmds, n);
+    int bd = repl_format_begin_depth(cmds, n);
     fill_spaces(2 + 2 * td + 2 * bd, buf, buf_sz);
 }
 
-void fmt_end_indent(const FmtCmd *cmds, int n, char *buf, int buf_sz) {
-    int td = fmt_tess_depth(cmds, n);
+void repl_format_end_indent(const ReplFmtCmd *cmds, int n, char *buf, int buf_sz) {
+    int td = repl_format_tess_depth(cmds, n);
     fill_spaces(2 + 2 * td, buf, buf_sz);
 }
 
-void fmt_tess_end_indent(const FmtCmd *cmds, int n, char *buf, int buf_sz) {
-    int td = fmt_tess_depth(cmds, n);
+void repl_format_tess_end_indent(const ReplFmtCmd *cmds, int n, char *buf, int buf_sz) {
+    int td = repl_format_tess_depth(cmds, n);
     if (td > 0) td--;
     fill_spaces(2 + 2 * td, buf, buf_sz);
 }
 
-void fmt_tess_leaf_indent(const FmtCmd *cmds, int n, char *buf, int buf_sz) {
-    int td = fmt_tess_depth(cmds, n);
+void repl_format_tess_leaf_indent(const ReplFmtCmd *cmds, int n, char *buf, int buf_sz) {
+    int td = repl_format_tess_depth(cmds, n);
     fill_spaces(2 + 2 * td, buf, buf_sz);
 }
 
-void fmt_reindent_expr(const FmtCmd *cmds, int n,
+void repl_format_reindent_expr(const ReplFmtCmd *cmds, int n,
                        const char *raw_expr, char *out, int out_sz) {
     if (out_sz <= 0) return;
 
     /* Compute the correct indent for this position */
     char ind[64];
-    fmt_indent(cmds, n, ind, sizeof(ind));
+    repl_format_indent(cmds, n, ind, sizeof(ind));
 
     /* Strip leading whitespace from raw_expr */
     while (*raw_expr && (*raw_expr == ' ' || *raw_expr == '\t'))
@@ -81,7 +81,7 @@ void fmt_reindent_expr(const FmtCmd *cmds, int n,
     out[total] = '\0';
 }
 
-void fmt_reindent_from_parsed(const char *parsed_source, const char *raw_expr,
+void repl_format_reindent_from_parsed(const char *parsed_source, const char *raw_expr,
                                char *out, int out_sz) {
     if (out_sz <= 0) return;
 

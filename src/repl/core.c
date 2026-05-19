@@ -20,7 +20,7 @@
  */
 
 #include "repl/core.h"
-#include "cmd_format.h"
+#include "repl/format.h"
 #include "config.h" /* REPL_STATUS_TEXT_MAX */
 #include "source_document.h"
 #include "prof.h"
@@ -147,7 +147,7 @@ void repl_normalize_from_parsed(const char *parsed_source,
                                 char *out, int out_sz) {
     if (out_sz <= 0) return;
     char tmp[MAX_LINE_LEN];
-    fmt_reindent_from_parsed(parsed_source, raw_expr, tmp, sizeof(tmp));
+    repl_format_reindent_from_parsed(parsed_source, raw_expr, tmp, sizeof(tmp));
 
     int len = (int)strlen(tmp);
     while (len > 0 && isspace((unsigned char)tmp[len - 1]))
