@@ -112,6 +112,22 @@ void repl_source_scope_cmd_indent(int pos, char *buf, int buf_sz) {
     buf[spaces] = '\0';
 }
 
+/* glBegin/glEnd-style indent: 2 + 2*tess + 2*block, with begin-depth
+ * deliberately EXCLUDED (the glBegin/glEnd lines are not indented by
+ * the block they open). Uses the same public depth queries the parser
+ * previously open-coded at two sites, so it is byte-identical to the
+ * code it replaces. */
+void repl_source_scope_begin_indent(int pos, char *buf, int buf_sz) {
+    int td = repl_source_scope_tess_scope_depth_at(pos);
+    int kd = repl_source_scope_block_depth_at(pos);
+    int spaces = 2 + 2 * td + 2 * kd;
+    if (buf_sz <= 0) return;
+    if (spaces > buf_sz - 1) spaces = buf_sz - 1;
+    if (spaces < 0) spaces = 0;
+    memset(buf, ' ', (size_t)spaces);
+    buf[spaces] = '\0';
+}
+
 int repl_source_scope_cmd_indent_chars(int pos) {
     depth_cache_rebuild();
     if (pos < 0) pos = 0;

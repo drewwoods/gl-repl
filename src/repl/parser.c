@@ -398,13 +398,7 @@ static int parse_command(const char *line, GLCmd *cmd,
 
         char ind[32];
         if (def->indent_type == 1) {
-            /* glBegin-style indent: 2 + 2*tess + 2*block (begin depth excluded) */
-            int td = repl_source_scope_tess_scope_depth_at(source_line_idx);
-            int kd = repl_source_scope_block_depth_at(source_line_idx);
-            int spaces = 2 + 2 * td + 2 * kd;
-            if (spaces > (int)sizeof(ind) - 1) spaces = (int)sizeof(ind) - 1;
-            memset(ind, ' ', (size_t)spaces);
-            ind[spaces] = '\0';
+            repl_source_scope_begin_indent(source_line_idx, ind, sizeof(ind));
         } else {
             repl_source_scope_cmd_indent(source_line_idx, ind, sizeof(ind));
         }
@@ -436,13 +430,9 @@ static int parse_command(const char *line, GLCmd *cmd,
         cmd->type = CMD_END;
         cmd->valid = 1;
         {
-            int tess_depth = repl_source_scope_tess_scope_depth_at(source_line_idx);
-            int kd = repl_source_scope_block_depth_at(source_line_idx);
-            int spaces = 2 + 2 * tess_depth + 2 * kd;
             char end_ind[32];
-            if (spaces > (int)sizeof(end_ind) - 1) spaces = (int)sizeof(end_ind) - 1;
-            memset(end_ind, ' ', (size_t)spaces);
-            end_ind[spaces] = '\0';
+            repl_source_scope_begin_indent(source_line_idx, end_ind,
+                                           sizeof(end_ind));
             WRITE_TEXT("%sglEnd();", end_ind);
         }
         return 1;
