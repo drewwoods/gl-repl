@@ -238,7 +238,7 @@ void ui_profile_panel_render(const UiRenderSnapshot *snap) {
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     ui_clr_a(UI_TOK_SUNKEN, 0.91f);
-    glRectf((float)((float)panel_x), (float)((float)panel_y), (float)((float)panel_x)+(float)((float)PROF_PANEL_W), (float)((float)panel_y)+(float)panel_h);
+    glRectf((float)panel_x, (float)panel_y, (float)panel_x + (float)PROF_PANEL_W, (float)panel_y + (float)panel_h);
 
     /* Border */
     ui_clr_a(UI_TOK_BORDER, 0.85f);
