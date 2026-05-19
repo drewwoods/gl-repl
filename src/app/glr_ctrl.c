@@ -2295,11 +2295,13 @@ int glr_ctrl_router_handle_debug_dump_key(unsigned char key) {
 
 int glr_ctrl_router_handle_quit_key(unsigned char key) {
     if (key == KEY_CTRL_Q) {
+        /* Save and quit: persist through the same path as Ctrl+S /
+         * File > Save Scene (active named scene -> <workspace>/<slug>.c;
+         * example/transient -> ./output.c) rather than a throwaway
+         * /tmp file the user would never find. */
         ReplExportLayout layout;
         glr_ctrl_fill_export_layout(&layout);
-        repl_export_save_output("/tmp/temp-output.c", source_document_view(),
-                                &layout);
-        printf("Saved to %s\n", "/tmp/temp-output.c");
+        repl_save_active_scene(&layout);
         exit(0);
     }
     return 0;
