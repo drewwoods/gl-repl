@@ -1072,11 +1072,11 @@ test-stubs: check-gl-boundaries check-layer-coupling check-state-ownership ## Bu
 	$(MAKE) test USE_GL_STUBS=1
 
 test-full: ## Full gate: stub tests + checks + build sample, bench, repl_demo, scene_demo.
-	$(MAKE) --no-print-directory test-stubs
+	$(MAKE) --no-print-directory repl_demo USE_GL_STUBS=1
 	$(MAKE) --no-print-directory check
+	$(MAKE) --no-print-directory test-stubs
 	$(MAKE) --no-print-directory sample
 	$(MAKE) --no-print-directory bench
-	$(MAKE) --no-print-directory repl_demo
 	$(MAKE) --no-print-directory scene_demo
 
 # Benchmark targets ------------------------------------------------------
