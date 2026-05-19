@@ -68,6 +68,15 @@ static UiTextPanelColor repl_code_panel_rgb(float r, float g, float b) {
     return color;
 }
 
+/* Derived-C boilerplate sub-palette. Deliberately outside the theme
+ * tokens (this is the syntax / generated-code color domain, like
+ * k_category_colors / k_syntax_shade above): CHROME is the dim
+ * gray-blue of the static header/footer chrome lines; STATE is the
+ * slightly brighter tint of the synthesized render-state / camera /
+ * lights lines. Each expands to an r,g,b argument triple. */
+#define REPL_CODE_PANEL_CHROME_RGB 0.38f, 0.38f, 0.42f
+#define REPL_CODE_PANEL_STATE_RGB  0.50f, 0.45f, 0.55f
+
 static UiTextPanelColor repl_code_panel_rgba(float r, float g, float b, float a) {
     UiTextPanelColor color = { r, g, b, a, 1 };
     return color;
@@ -291,6 +300,11 @@ static int repl_code_panel_cursor_doc_line_from_layout(
     int panel_w, int text_x) {
     int cursor_doc_line = header_rows;
 
+    /* Three cases that differ ONLY in how many document lines precede the
+     * cursor row: insert mode and an in-range edit line both sum the first
+     * `edit_line` lines (insert mode additionally clamps to
+     * document_count); the out-of-range fallback sums every line. The
+     * trailing cursor-row add is deliberately identical in all three. */
     if (snap->editor_input.insert_mode) {
         for (int i = 0;
              i < snap->edit_line && i < snap->document_count;
@@ -1089,31 +1103,31 @@ static void repl_code_panel_build_rows(ReplCodePanelBuilder *builder) {
             repl_code_panel_add_static_row(
                 builder, g_header_pre[i],
                 repl_code_panel_static_line_color(g_header_pre[i],
-                                                  0.38f, 0.38f, 0.42f));
+                                                  REPL_CODE_PANEL_CHROME_RGB));
         }
         for (int i = 0; g_display_header[i]; i++) {
             repl_code_panel_add_static_row(
                 builder, g_display_header[i],
                 repl_code_panel_static_line_color(g_display_header[i],
-                                                  0.38f, 0.38f, 0.42f));
+                                                  REPL_CODE_PANEL_CHROME_RGB));
         }
         /* Scratch decoration row: panel-only (the exporter emits the
          * arrays as file-scope statics on demand instead). */
         repl_code_panel_add_static_row(
             builder, REPL_CODE_PANEL_SCRATCH_DECL_LINE,
             repl_code_panel_static_line_color(REPL_CODE_PANEL_SCRATCH_DECL_LINE,
-                                              0.38f, 0.38f, 0.42f));
+                                              REPL_CODE_PANEL_CHROME_RGB));
         for (int i = 0; i < RENDER_STATE_LINE_COUNT; i++) {
             repl_code_panel_add_static_row(
                 builder,
                 snap->import_export.render_state_lines[i],
-                repl_code_panel_rgb(0.50f, 0.45f, 0.55f));
+                repl_code_panel_rgb(REPL_CODE_PANEL_STATE_RGB));
         }
         for (int i = 0; i < CAM_LINE_COUNT; i++) {
             repl_code_panel_add_static_row(
                 builder,
                 snap->import_export.cam_lines[i],
-                repl_code_panel_rgb(0.50f, 0.45f, 0.55f));
+                repl_code_panel_rgb(REPL_CODE_PANEL_STATE_RGB));
         }
         for (int i = 0; i < repl_export_lights_display_line_count(); i++) {
             char *line = repl_code_panel_next_generated_text(builder);
@@ -1121,13 +1135,13 @@ static void repl_code_panel_build_rows(ReplCodePanelBuilder *builder) {
                 break;
             repl_export_lights_display_line(i, line, MAX_LINE_LEN);
             repl_code_panel_add_static_row(builder, line,
-                                           repl_code_panel_rgb(0.50f, 0.45f, 0.55f));
+                                           repl_code_panel_rgb(REPL_CODE_PANEL_STATE_RGB));
         }
         for (int i = 0; g_header_post[i]; i++) {
             repl_code_panel_add_static_row(
                 builder, g_header_post[i],
                 repl_code_panel_static_line_color(g_header_post[i],
-                                                  0.38f, 0.38f, 0.42f));
+                                                  REPL_CODE_PANEL_CHROME_RGB));
         }
     }
 
@@ -1229,13 +1243,13 @@ static void repl_code_panel_build_rows(ReplCodePanelBuilder *builder) {
                     repl_code_panel_add_static_row(
                         builder, snap->reshape_proj_lines[j],
                         repl_code_panel_static_line_color(
-                            snap->reshape_proj_lines[j], 0.38f, 0.38f, 0.42f));
+                            snap->reshape_proj_lines[j], REPL_CODE_PANEL_CHROME_RGB));
                 continue;
             }
             repl_code_panel_add_static_row(
                 builder, g_footer_pre_init[i],
                 repl_code_panel_static_line_color(g_footer_pre_init[i],
-                                                  0.38f, 0.38f, 0.42f));
+                                                  REPL_CODE_PANEL_CHROME_RGB));
         }
         for (int i = 0; i < repl_export_init_section_line_count(); i++) {
             char *line = repl_code_panel_next_generated_text(builder);
@@ -1243,13 +1257,13 @@ static void repl_code_panel_build_rows(ReplCodePanelBuilder *builder) {
                 break;
             repl_export_init_section_line(i, line, MAX_LINE_LEN);
             repl_code_panel_add_static_row(builder, line,
-                                           repl_code_panel_rgb(0.38f, 0.38f, 0.42f));
+                                           repl_code_panel_rgb(REPL_CODE_PANEL_CHROME_RGB));
         }
         for (int i = 0; g_footer_post_init[i]; i++) {
             repl_code_panel_add_static_row(
                 builder, g_footer_post_init[i],
                 repl_code_panel_static_line_color(g_footer_post_init[i],
-                                                  0.38f, 0.38f, 0.42f));
+                                                  REPL_CODE_PANEL_CHROME_RGB));
         }
     }
 

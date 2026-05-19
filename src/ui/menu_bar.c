@@ -1,5 +1,5 @@
 /*
- * repl_menu_bar.c -- Code-panel menu bar, dropdowns, and search slot.
+ * menu_bar.c -- Code-panel menu bar, dropdowns, and search slot.
  */
 #include "app/glr_actions.h"
 #include "repl/core.h"
@@ -1242,7 +1242,7 @@ void ui_menu_bar_render(const UiRenderSnapshot *snap) {
 
             if (i == PIN_SEARCH) {
                 if (snap->search.active) {
-                    /* render_code_panel_search_overlay() fills this slot */
+                    /* ui_menu_bar_render_search_overlay() fills this slot */
                     continue;
                 }
                 /* "search..." label in muted gray */
