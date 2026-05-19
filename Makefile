@@ -225,7 +225,7 @@ FORCE:
 
 SRCS = \
 	audio.c \
-	cmd_format.c \
+	src/repl/format.c \
 	prof.c \
 	sample.c \
 	src/app/glr_actions.c \
@@ -303,7 +303,7 @@ SRCS = \
 	tests/gl-stubs/gl_stub_counts.c
 HDRS = \
 	audio.h \
-	cmd_format.h \
+	src/repl/format.h \
 	outline_offset.h \
 	prof.h \
 	sample.h \
@@ -383,7 +383,7 @@ HDRS = \
 	src/widgets/variable_panel_state.h
 CORE_TEST_SRCS = \
 	audio.c \
-	cmd_format.c \
+	src/repl/format.c \
 	prof.c \
 	src/app/glr_actions.c \
 	src/app/glr_camera.c \
@@ -464,7 +464,7 @@ SCENE_SRCS = $(filter src/scene/%.c,$(SRCS))
 UI_SRCS = $(filter src/ui/%.c,$(SRCS))
 SCENE_HDRS = $(filter src/scene/%.h,$(HDRS))
 UI_HDRS = $(filter src/ui/%.h,$(HDRS))
-STATE_NEUTRAL_SRCS = cmd_format.c prof.c tests/gl-stubs/gl_stub_counts.c
+STATE_NEUTRAL_SRCS = src/repl/format.c prof.c tests/gl-stubs/gl_stub_counts.c
 
 # Object lists used to build the standalone scene_demo without dragging in
 # any REPL editor/controller code. Scene + prof — the scene module no
@@ -491,7 +491,7 @@ SCENE_DEMO_DEP_SRCS = $(SCENE_SRCS) prof.c
 # guards catch it). The dependency ledger lives in
 # feature/decouple-repl-from-gl-repl-alt.md and
 # feature/source-document-port.md.
-REPL_DEMO_DEP_SRCS = cmd_format.c \
+REPL_DEMO_DEP_SRCS = src/repl/format.c \
                      prof.c \
                      src/widgets/replay.c \
                      src/widgets/replay_state.c \
@@ -624,7 +624,7 @@ test_eval_OBJS = $(OBJDIR)/$(TEST_DIR)/test_eval.o $(OBJDIR)/src/repl/eval.o
 test_eval_LDLIBS = -lm -lpthread
 test_eval_RUN = $(BINDIR)/test_eval --run-tests
 
-test_format_OBJS = $(OBJDIR)/$(TEST_DIR)/test_format.o $(OBJDIR)/cmd_format.o
+test_format_OBJS = $(OBJDIR)/$(TEST_DIR)/test_format.o $(OBJDIR)/src/repl/format.o
 test_format_LDLIBS = -lm
 test_format_RUN ?= $(BINDIR)/test_format
 
