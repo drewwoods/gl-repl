@@ -14,6 +14,17 @@ static void transform_guides_pop_state(void) {
     glPopAttrib();
 }
 
+/* Shared arrowhead sizing, used by every translate/scale guide path:
+ * head length = clamp(segment_len * FRAC, MIN, MAX), fins are FIN_FRAC
+ * of the head length. TG_ARC_SEGS is the rotate-guide arc resolution;
+ * the arc vertex buffer is sized TG_ARC_SEGS + 1 so the two stay
+ * coupled by construction instead of by hand. */
+#define TG_HEAD_LEN_FRAC 0.22f
+#define TG_HEAD_LEN_MAX  0.25f
+#define TG_HEAD_LEN_MIN  0.06f
+#define TG_FIN_FRAC      0.45f
+#define TG_ARC_SEGS      48
+
 /* Per-pass alpha multiplier. The render dispatcher draws each guide twice:
  * a depth-test-off ghost pass at 0.4x so rotated geometry can't fully hide
  * the guide, then a depth-tested solid pass at 1.0x on top. Every guide
@@ -200,10 +211,10 @@ static void draw_translate_guide(const SceneGuideSnapshot *snapshot,
     float by = rz*dx - rx*dz;
     float bz = rx*dy - ry*dx;
 
-    float head_len = dlen * 0.22f;
-    if (head_len > 0.25f) head_len = 0.25f;
-    if (head_len < 0.06f) head_len = (dlen < 0.06f ? dlen * 0.5f : 0.06f);
-    float fin = head_len * 0.45f;
+    float head_len = dlen * TG_HEAD_LEN_FRAC;
+    if (head_len > TG_HEAD_LEN_MAX) head_len = TG_HEAD_LEN_MAX;
+    if (head_len < TG_HEAD_LEN_MIN) head_len = (dlen < TG_HEAD_LEN_MIN ? dlen * 0.5f : TG_HEAD_LEN_MIN);
+    float fin = head_len * TG_FIN_FRAC;
     float base[3] = {
         p1[0] - dx * head_len,
         p1[1] - dy * head_len,
@@ -282,7 +293,7 @@ static void draw_arrow_head(const float tip[3], const float dir[3], float head_l
         tip[1] - dir[1] * head_len,
         tip[2] - dir[2] * head_len
     };
-    float fin = head_len * 0.45f;
+    float fin = head_len * TG_FIN_FRAC;
     glBegin(GL_LINES);
     for (int k = 0; k < 4; k++) {
         float sx = (k == 0 ?  rx : k == 1 ? -rx : k == 2 ?  bx : -bx);
@@ -341,9 +352,9 @@ static void draw_scale_guide(const SceneGuideSnapshot *snapshot,
                 rgb[2]*0.6f + 0.4f
             };
             float dir[3] = { delta[0]/dlen, delta[1]/dlen, delta[2]/dlen };
-            float head_len = dlen * 0.22f;
-            if (head_len > 0.25f) head_len = 0.25f;
-            if (head_len < 0.06f) head_len = (dlen < 0.06f ? dlen * 0.5f : 0.06f);
+            float head_len = dlen * TG_HEAD_LEN_FRAC;
+            if (head_len > TG_HEAD_LEN_MAX) head_len = TG_HEAD_LEN_MAX;
+            if (head_len < TG_HEAD_LEN_MIN) head_len = (dlen < TG_HEAD_LEN_MIN ? dlen * 0.5f : TG_HEAD_LEN_MIN);
             float base[3] = {
                 p1[0] - dir[0] * head_len,
                 p1[1] - dir[1] * head_len,
@@ -416,7 +427,7 @@ static void draw_scale_guide(const SceneGuideSnapshot *snapshot,
             float dlen = sqrtf(delta[0]*delta[0] + delta[1]*delta[1] + delta[2]*delta[2]);
             float dir[3] = { delta[0]/dlen, delta[1]/dlen, delta[2]/dlen };
 
-            float head_len = dlen * 0.22f;
+            float head_len = dlen * TG_HEAD_LEN_FRAC;
             if (head_len > 0.2f) head_len = 0.2f;
             if (head_len < 0.05f) head_len = (dlen < 0.05f ? dlen * 0.5f : 0.05f);
             float base[3] = {
@@ -489,11 +500,11 @@ static void draw_rotate_guide(const SceneGuideSnapshot *snapshot,
     glVertex3f( ax*axis_len,  ay*axis_len,  az*axis_len);
     glEnd();
 
-    const int segs = 48;
+    const int segs = TG_ARC_SEGS;
     float angle_rad = angle_deg * (float)(M_PI / 180.0);
     int use_helix = (plen < 0.05f);
 
-    float arc[49][3];
+    float arc[TG_ARC_SEGS + 1][3];
     if (!use_helix) {
         for (int i = 0; i <= segs; i++) {
             float t = (float)i / (float)segs;

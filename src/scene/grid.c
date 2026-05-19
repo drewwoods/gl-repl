@@ -8,6 +8,16 @@
 #define M_PI 3.14159265358979323846
 #endif
 
+/* Shared grid geometry tunables. GRID_LINE_EPS is the float-stepping
+ * fudge: it both extends the inclusive loop bound (`v <= extent + EPS`)
+ * so the last line at exactly `extent` is not lost to rounding, and
+ * marks the "this is the origin axis, skip it" band (`fabsf(v) < EPS`).
+ * The minor step is the major cell split into 5, and a major line is
+ * detected within a quarter-minor-step tolerance. */
+#define GRID_LINE_EPS        0.01f
+#define GRID_MINOR_STEP_FRAC 0.2f   /* minor step = major * 1/5 */
+#define GRID_MAJOR_TOL_FRAC  0.25f  /* major-line tolerance = step * 1/4 */
+
 /* Returns non-zero when v is close enough to a multiple of `major`
  * to be treated as a major line. `tol` is derived from the minor
  * step so the check stays robust as the step changes. */
@@ -63,13 +73,13 @@ static SceneRgba rgba(float r, float g, float b, float a) {
  * uniformly, AFTER each call site's own alpha_scale clamp so the
  * controller-owned OUT is the hard ceiling (rule 3). 1.0 = shown.
  *
- * s_xn_opacity is the raw machine opacity; s_xn_alpha is the effective
+ * g_xn_opacity is the raw machine opacity; g_xn_alpha is the effective
  * color-alpha multiplier, which differs from opacity only under the
  * compile-time GRID_AXES_XN_FOG style (see config.h): there the alpha
  * stays at 1 until opacity drops past a knee, so the fog carries the
  * recede look and the alpha only guarantees a full vanish at the end. */
-static float s_xn_opacity = 1.0f;
-static float s_xn_alpha    = 1.0f;
+static float g_xn_opacity = 1.0f;
+static float g_xn_alpha    = 1.0f;
 
 /* FOG-style transition (config.h GRID_XN_STYLE). Only fog-less themes
  * recede into a synthesized clear-color fog as they hide. Themes that
@@ -77,7 +87,7 @@ static float s_xn_alpha    = 1.0f;
  * extent fall back to the plain alpha FADE for the transition (no
  * recede fog) — far simpler, and it sidesteps the discontinuity of
  * trying to blend two fog models. scene_grid_render decides per pass
- * which path applies and sets s_xn_alpha accordingly (alpha knee for
+ * which path applies and sets g_xn_alpha accordingly (alpha knee for
  * the recede, plain opacity for FADE / the FADE fallback). */
 
 #if GRID_XN_STYLE == GRID_AXES_XN_FOG
@@ -102,7 +112,7 @@ static void grid_xn_apply_transition_fog(float tf, float extent) {
 #endif
 
 static void gl_color(float r, float g, float b, float a) {
-    glColor4f(r, g, b, a * s_xn_alpha);
+    glColor4f(r, g, b, a * g_xn_alpha);
 }
 
 static void gl_color_rgba(SceneRgba c) {
@@ -147,8 +157,8 @@ static void draw_grid_standard_theme(const GridDrawContext *ctx,
         spec->begin_pass(ctx);
 
     glBegin(GL_LINES);
-    for (float v = -ctx->extent; v <= ctx->extent + 0.01f; v += ctx->step) {
-        if (fabsf(v) < 0.01f) continue;
+    for (float v = -ctx->extent; v <= ctx->extent + GRID_LINE_EPS; v += ctx->step) {
+        if (fabsf(v) < GRID_LINE_EPS) continue;
         int is_major = grid_is_major_line(v, ctx->major, ctx->major_tol);
         GridLineColors colors;
         spec->line_color(v, is_major, ctx, &colors);
@@ -311,9 +321,9 @@ static void scene_grid_render_focus_theme(const SceneFrameRenderContext *frame_c
     float as = grid_ctx->alpha_scale;
 
     glBegin(GL_LINES);
-    for (float v = -grid_ctx->extent; v <= grid_ctx->extent + 0.01f;
+    for (float v = -grid_ctx->extent; v <= grid_ctx->extent + GRID_LINE_EPS;
          v += grid_ctx->step) {
-        if (fabsf(v) < 0.01f) continue;
+        if (fabsf(v) < GRID_LINE_EPS) continue;
         int is_major = grid_is_major_line(v, grid_ctx->major,
                                           grid_ctx->major_tol);
         float base = is_major ? 0.18f : 0.06f;
@@ -355,7 +365,6 @@ static void scene_grid_render_focus_theme(const SceneFrameRenderContext *frame_c
         glVertex3f(cx - 0.3f, 0, cz);
         glVertex3f(cx + 0.3f, 0, cz);
         glVertex3f(cx, 0, cz - 0.3f);
-        glVertex3f(cx, 0, cz + 0.3f);
         glVertex3f(cx, 0, cz + 0.3f);
         glEnd();
         glLineWidth(1.0f);
@@ -403,8 +412,8 @@ static void scene_grid_render_ocean_theme(const GridDrawContext *grid_ctx,
     /* Ocean floor grid with animated caustic highlights */
     float as = grid_ctx->alpha_scale;
     glBegin(GL_LINES);
-    for (float v = -extent; v <= extent + 0.01f; v += step) {
-        if (fabsf(v) < 0.01f) continue;
+    for (float v = -extent; v <= extent + GRID_LINE_EPS; v += step) {
+        if (fabsf(v) < GRID_LINE_EPS) continue;
         int is_major  = grid_is_major_line(v, major, major_tol);
         float base_a  = is_major ? 0.55f : 0.28f;
 
@@ -452,9 +461,9 @@ static void scene_grid_render_ocean_theme(const GridDrawContext *grid_ctx,
     float surf_step = 0.75f;
     float surf_y    = 0.01f;   /* tiny offset above grid floor */
 
-    for (float sz = -extent; sz < extent - 0.01f; sz += surf_step) {
+    for (float sz = -extent; sz < extent - GRID_LINE_EPS; sz += surf_step) {
         glBegin(GL_TRIANGLE_STRIP);
-        for (float sx = -extent; sx <= extent + 0.01f; sx += surf_step) {
+        for (float sx = -extent; sx <= extent + GRID_LINE_EPS; sx += surf_step) {
             for (int row = 0; row < 2; row++) {
                 float zz = sz + row * surf_step;
 
@@ -492,8 +501,8 @@ static void scene_grid_render_xzruler_theme(const GridDrawContext *grid_ctx) {
 
     /* Non-origin grid lines with directional colour coding */
     glBegin(GL_LINES);
-    for (float v = -extent; v <= extent + 0.01f; v += step) {
-        if (fabsf(v) < 0.01f) continue;
+    for (float v = -extent; v <= extent + GRID_LINE_EPS; v += step) {
+        if (fabsf(v) < GRID_LINE_EPS) continue;
         int is_major = grid_is_major_line(v, major, major_tol);
         GridLineColors colors;
         grid_ruler_line_color(v, is_major, grid_ctx, &colors);
@@ -520,8 +529,8 @@ static void scene_grid_render_xzruler_theme(const GridDrawContext *grid_ctx) {
     /* Ruler tick marks at major-line intervals on both axes */
     float tick = 0.06f;
     glBegin(GL_LINES);
-    for (float v = -extent; v <= extent + 0.01f; v += major) {
-        if (fabsf(v) < 0.01f) continue;
+    for (float v = -extent; v <= extent + GRID_LINE_EPS; v += major) {
+        if (fabsf(v) < GRID_LINE_EPS) continue;
         float ta = (fabsf(v) <= major * 2.5f) ? 0.48f : 0.22f;
         ta = fminf(ta * as, 1.0f);
         /* Ticks crossing the X axis in the Z direction */
@@ -561,8 +570,8 @@ static void scene_grid_render_planes_theme(const SceneRenderConfig *config,
 
     /* --- Floor grid (XZ plane, always present) --- */
     glBegin(GL_LINES);
-    for (float v = -extent; v <= extent + 0.01f; v += step) {
-        if (fabsf(v) < 0.01f) continue;
+    for (float v = -extent; v <= extent + GRID_LINE_EPS; v += step) {
+        if (fabsf(v) < GRID_LINE_EPS) continue;
         int is_major  = grid_is_major_line(v, major, major_tol);
         float a = fminf((is_major ? 0.10f : 0.04f) * as, 1.0f);
         gl_color(0.50f, 0.52f, 0.65f, a);
@@ -582,8 +591,8 @@ static void scene_grid_render_planes_theme(const SceneRenderConfig *config,
     /* --- XY plane (z=0): visible when camera looks along Z axis --- */
     if (xy_w > 0.01f) {
         glBegin(GL_LINES);
-        for (float v = -extent; v <= extent + 0.01f; v += step) {
-            if (fabsf(v) < 0.01f) continue;
+        for (float v = -extent; v <= extent + GRID_LINE_EPS; v += step) {
+            if (fabsf(v) < GRID_LINE_EPS) continue;
             int is_major  = grid_is_major_line(v, major, major_tol);
             float base = is_major ? 0.14f : 0.05f;
             float a = fminf(base * xy_w * as, 1.0f);
@@ -606,8 +615,8 @@ static void scene_grid_render_planes_theme(const SceneRenderConfig *config,
     /* --- ZY plane (x=0): visible when camera looks along X axis --- */
     if (zy_w > 0.01f) {
         glBegin(GL_LINES);
-        for (float v = -extent; v <= extent + 0.01f; v += step) {
-            if (fabsf(v) < 0.01f) continue;
+        for (float v = -extent; v <= extent + GRID_LINE_EPS; v += step) {
+            if (fabsf(v) < GRID_LINE_EPS) continue;
             int is_major  = grid_is_major_line(v, major, major_tol);
             float base = is_major ? 0.14f : 0.05f;
             float a = fminf(base * zy_w * as, 1.0f);
@@ -639,7 +648,7 @@ static void scene_grid_render_radar_theme(const GridDrawContext *grid_ctx) {
     const float TAU    = 2.0f * (float)M_PI;
     const float GR = 0.20f, GG = 0.95f, GB = 0.45f;   /* radar green */
 
-    for (float r = major; r <= extent + 0.01f; r += major) {
+    for (float r = major; r <= extent + GRID_LINE_EPS; r += major) {
         gl_color(GR, GG, GB, fminf(0.06f * as, 1.0f));
         glBegin(GL_LINE_LOOP);
         for (int i = 0; i < SEG; i++) {
@@ -688,10 +697,10 @@ void scene_grid_render(const SceneFrameRenderContext *frame_ctx) {
     /* Transition fade: clamp defensively, then every gl_color in this
      * file multiplies through it (rule 4). Skip drawing entirely once
      * fully faded out so a 0-opacity pass costs nothing. */
-    s_xn_opacity = config->grid_opacity;
-    if (s_xn_opacity < 0.0f) s_xn_opacity = 0.0f;
-    if (s_xn_opacity > 1.0f) s_xn_opacity = 1.0f;
-    if (s_xn_opacity <= 0.0f) return;
+    g_xn_opacity = config->grid_opacity;
+    if (g_xn_opacity < 0.0f) g_xn_opacity = 0.0f;
+    if (g_xn_opacity > 1.0f) g_xn_opacity = 1.0f;
+    if (g_xn_opacity <= 0.0f) return;
 #if GRID_XN_STYLE == GRID_AXES_XN_FOG
     /* The EXP2-fog themes (FOG/OCEAN) fall back to the plain alpha
      * FADE: their fog is left as-is and the geometry just alpha-fades,
@@ -701,13 +710,13 @@ void scene_grid_render(const SceneFrameRenderContext *frame_ctx) {
      * synthesized clear-color recede + alpha knee. */
     int xn_uses_fog = scene_grid_theme_uses_fog(grid_theme);
     if (xn_uses_fog)
-        s_xn_alpha = s_xn_opacity;                       /* FADE fallback */
-    else if (s_xn_opacity >= GRID_XN_FOG_ALPHA_KNEE)
-        s_xn_alpha = 1.0f;                               /* fog does the work */
+        g_xn_alpha = g_xn_opacity;                       /* FADE fallback */
+    else if (g_xn_opacity >= GRID_XN_FOG_ALPHA_KNEE)
+        g_xn_alpha = 1.0f;                               /* fog does the work */
     else
-        s_xn_alpha = s_xn_opacity / GRID_XN_FOG_ALPHA_KNEE;  /* final vanish */
+        g_xn_alpha = g_xn_opacity / GRID_XN_FOG_ALPHA_KNEE;  /* final vanish */
 #else
-    s_xn_alpha = s_xn_opacity;
+    g_xn_alpha = g_xn_opacity;
 #endif
 
     scene_grid_push_state();
@@ -734,8 +743,8 @@ void scene_grid_render(const SceneFrameRenderContext *frame_ctx) {
     if (mj_i < 0 || mj_i >= GRID_MAJOR_COUNT) mj_i = GRID_MAJOR_1;
     float extent = frame_ctx->config.grid_extents[ex_i];
     float major  = frame_ctx->config.grid_major_steps[mj_i];
-    float step   = major * 0.2f;
-    float major_tol = step * 0.25f;
+    float step   = major * GRID_MINOR_STEP_FRAC;
+    float major_tol = step * GRID_MAJOR_TOL_FRAC;
     GridDrawContext grid_ctx = {
         .extent = extent,
         .major = major,
@@ -754,7 +763,7 @@ void scene_grid_render(const SceneFrameRenderContext *frame_ctx) {
      * FAR block's own fog (below) instead, so it isn't double-set /
      * overwritten. Fog-owning configs took the FADE fallback above. */
     if (!xn_uses_fog && !is_far)
-        grid_xn_apply_transition_fog(1.0f - s_xn_opacity, extent);
+        grid_xn_apply_transition_fog(1.0f - g_xn_opacity, extent);
 #endif
 
     if (is_far) {
@@ -767,7 +776,7 @@ void scene_grid_render(const SceneFrameRenderContext *frame_ctx) {
         float fog_end   = extent;
 #if GRID_XN_STYLE == GRID_AXES_XN_FOG
         if (!xn_uses_fog) {
-            float tf = 1.0f - s_xn_opacity;       /* 0 shown .. 1 hidden */
+            float tf = 1.0f - g_xn_opacity;       /* 0 shown .. 1 hidden */
             fog_end   = extent + (extent * 0.05f - extent) * tf;
             fog_start = fog_end * 0.7f;
         }

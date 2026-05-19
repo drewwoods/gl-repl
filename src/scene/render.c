@@ -22,6 +22,17 @@
 #define M_PI 3.14159265358979323846
 #endif
 
+/* Canonical scene projection. The steady 3D view is
+ * gluPerspective(SCENE_PROJ_FOVY_DEG, aspect, SCENE_PROJ_NEAR_Z,
+ * SCENE_PROJ_FAR_Z); the ortho path reuses the same near/far as its
+ * depth range. SCENE_PROJ_PROBE_BOX is the half-extent of the wide
+ * ortho box the eye-distance feedback probe renders through — kept
+ * == FAR_Z so nothing the real frustum can show is clipped. */
+#define SCENE_PROJ_FOVY_DEG  45.0
+#define SCENE_PROJ_NEAR_Z    0.1
+#define SCENE_PROJ_FAR_Z     200.0
+#define SCENE_PROJ_PROBE_BOX 200.0
+
 /* Sub-pixel jitter offsets (units: fraction of one pixel).
  * Table is ordered so the first N entries form a good N-sample set.
  * Supports 1, 2, 4, 8, or 16 samples. */
@@ -112,7 +123,8 @@ static double g_ortho_ref_dist = 0.0;
  * mirrors the steady 3D frustum so a getter call before the first frame
  * is still sane. */
 static SceneProjectionDesc g_active_projection = {
-    0, 45.0, 0.1, 200.0, 0.0, -200.0, 200.0
+    0, SCENE_PROJ_FOVY_DEG, SCENE_PROJ_NEAR_Z, SCENE_PROJ_FAR_Z,
+    0.0, -SCENE_PROJ_FAR_Z, SCENE_PROJ_FAR_Z
 };
 
 void scene_get_active_projection(SceneProjectionDesc *out) {
@@ -139,7 +151,7 @@ static double scene_probe_eye_dist(const SceneRenderConfig *config) {
     static GLfloat fb[96 * 1024]; /* ~384 KB; overflow -> cam_dist fallback */
     /* Probe-projection half-extent; >= far_z so nothing the real frustum
      * can show is clipped during the feedback pass. */
-    const double PROBE_BOX = 200.0;
+    const double PROBE_BOX = SCENE_PROJ_PROBE_BOX;
     GLint n;
     int i;
     double dmin = 0.0, dmax = 0.0;
@@ -245,12 +257,12 @@ static void scene_update_ortho_ref(const SceneRenderConfig *config) {
     g_ortho_ref_dist = ortho_now ? scene_probe_eye_dist(config) : 0.0;
 #else /* GLR_ORTHO_REF_FROZEN */
     {
-        static int s_ortho_active = 0;
-        if (ortho_now && !s_ortho_active)
+        static int g_ortho_active = 0;
+        if (ortho_now && !g_ortho_active)
             g_ortho_ref_dist = scene_probe_eye_dist(config);
-        else if (!ortho_now && s_ortho_active)
+        else if (!ortho_now && g_ortho_active)
             g_ortho_ref_dist = 0.0;
-        s_ortho_active = ortho_now;
+        g_ortho_active = ortho_now;
     }
 #endif
 }
@@ -263,9 +275,9 @@ static void scene_apply_projection(const SceneRenderConfig *config,
 
     /* Build a jitter-aware perspective frustum.  With zero jitter this is
      * identical to gluPerspective(45, aspect, 0.1, 200). */
-    double near_z = 0.1, far_z = 200.0;
+    double near_z = SCENE_PROJ_NEAR_Z, far_z = SCENE_PROJ_FAR_Z;
     double aspect  = (double)config->scene_w / (double)config->scene_h;
-    double persp_top   = near_z * tan(45.0 * M_PI / 360.0);
+    double persp_top   = near_z * tan(SCENE_PROJ_FOVY_DEG * M_PI / 360.0);
     double persp_right = persp_top * aspect;
     double persp_dx = (double)accum_jitter_x * 2.0 * persp_right /
                       (double)config->scene_w;
@@ -284,10 +296,11 @@ static void scene_apply_projection(const SceneRenderConfig *config,
                                ? g_ortho_ref_dist
                                : (double)config->cam_dist;
         g_active_projection.ortho      = (mix < 0.5f) ? 1 : 0;
-        g_active_projection.fovy_deg   = 45.0;
+        g_active_projection.fovy_deg   = SCENE_PROJ_FOVY_DEG;
         g_active_projection.near_z     = near_z;
         g_active_projection.far_z      = far_z;
-        g_active_projection.ortho_top  = ortho_ref * tan(45.0 * M_PI / 360.0);
+        g_active_projection.ortho_top  = ortho_ref *
+                                         tan(SCENE_PROJ_FOVY_DEG * M_PI / 360.0);
         g_active_projection.ortho_near = -far_z;
         g_active_projection.ortho_far  = far_z;
     }
@@ -484,7 +497,7 @@ static void scene_apply_clear_color(const float clear_color[4]) {
 }
 
 /* The replay-fade overlay pass used to live here; it has been moved out
- * to the REPL controller (imrepl_ctrl.c) and is invoked through the
+ * to the REPL controller (src/app/glr_ctrl.c) and is invoked through the
  * generic post_fill_fn hook on SceneRenderConfig. The scene module no
  * longer knows what's being drawn between the main fill and the
  * grid/axes/backdrop helpers — only that some caller-supplied function
@@ -559,7 +572,7 @@ static void render_3d_scene_pass(const SceneRenderConfig *config,
     /* Polygon outline overlay, vertex-point overlay, vertex-number /
      * normal-vector labels, and the cursor-edit guide stack all render
      * here through post_overlays_fn — none of them are scene-internal
-     * any more (see imrepl_ctrl.c for the bodies). post_overlays_fn
+     * any more (see src/app/glr_ctrl.c for the bodies). post_overlays_fn
      * fires after lights_render so its output sits on top of the
      * scene's helpers. */
     prof_begin(PROF_SCENE_3D_OVERLAYS);
