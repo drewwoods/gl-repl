@@ -3,8 +3,8 @@
  *
  * Editor input routing decides when copy/cut/paste happens; this file decides
  * which command range that means, preserves var-declaration guards, and
- * performs the actual clipboard mutation. Phase 2 keeps selection and
- * clipboard storage in src/repl/state.c while this module owns the behavior.
+ * performs the actual clipboard mutation. Selection and clipboard storage
+ * live in EditorState (src/editor/state.c); this module owns the behavior.
  */
 
 #include "state.h"
@@ -199,8 +199,9 @@ static int editor_clipboard_cut_input_selection(void) {
 }
 
 /* Paste of an INPUT_TEXT clipboard. If a destination input selection
- * is active, consume it first via the same Phase C primitive so paste
- * replaces the selected range instead of inserting beside it.
+ * is active, consume it first (same selection-consume primitive the
+ * cut path uses) so paste replaces the selected range instead of
+ * inserting beside it.
  *
  * No undo push here — same reasoning as cut above: the undo snapshot
  * doesn't capture input bytes, so it cannot rewind the paste, and

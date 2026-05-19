@@ -69,4 +69,12 @@
 /* Other */
 #define KEY_ESC       27   /* escape key (cancel overlays, etc.) */
 
+/* Printable 7-bit ASCII: space (32) through '~' (126), excluding DEL
+ * (127). Single source of truth for the "is this a typeable character"
+ * test in editor input / search / inline-rename so the raw 32/127
+ * bounds don't drift apart. App-neutral, like the rest of this header. */
+static inline int key_is_printable_ascii(int key) {
+    return key >= 32 && key < 127;
+}
+
 #endif /* KEYS_H */

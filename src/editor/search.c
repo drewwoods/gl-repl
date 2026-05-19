@@ -235,9 +235,8 @@ const char *editor_search_row_text(int row_idx) {
         return editor_state_input().input;
     if (editor_insert_mode() && row_idx > edit_line)
         row_idx--;
-    /* Source text lives in the editor buffer. Read through an
-     * EditorBufferView so the dependency is declared at function
-     * scope; Phase D will accept the view as a parameter. */
+    /* Source text lives in the editor buffer; read it through an
+     * EditorBufferView. */
     EditorBufferView text_view = editor_buffer_view();
     const char *text = editor_buffer_view_line(text_view, row_idx);
     if (text)
@@ -440,10 +439,10 @@ int editor_search_handle_key(unsigned char key) {
         return 1;
     }
 
-        if (key >= 32 && key < 127 && srch->query_len < MAX_INPUT_LEN - 2) {
+    if (key_is_printable_ascii(key) && srch->query_len < MAX_INPUT_LEN - 2) {
         memmove(&srch->query[srch->cursor_pos + 1],
-            &srch->query[srch->cursor_pos],
-            (size_t)(srch->query_len - srch->cursor_pos + 1));
+                &srch->query[srch->cursor_pos],
+                (size_t)(srch->query_len - srch->cursor_pos + 1));
         srch->query[srch->cursor_pos] = (char)key;
         srch->query_len++;
         srch->cursor_pos++;
