@@ -23,6 +23,14 @@
 #include "widgets/variable_panel_drag.h"
 #include "widgets/variable_panel_state.h"
 
+/* Drag-scaling tunables (the prose spec in the file header above is the
+ * authority — keep them in sync). VAR_DRAG_ZERO_EPS is the |start|
+ * threshold below which log drag falls back to the linear bootstrap. */
+#define VAR_DRAG_LINEAR_UNITS_PER_PX  0.05f   /* 1 px = 0.05 units */
+#define VAR_DRAG_PX_PER_DECADE        200.0f  /* 200 px = x10 / div10 */
+#define VAR_DRAG_ZERO_EPS             1e-6f
+#define VAR_DRAG_ZERO_BOOTSTRAP_RATE  0.001f  /* units/px while |start| ~ 0 */
+
 int variable_panel_drag_active(void) {
     return variable_panel_drag().var_idx >= 0;
 }
@@ -72,15 +80,16 @@ int variable_panel_handle_drag_motion(int x, VariablePanelValueChange *out) {
          * Preserves sign; near-zero start falls back to linear bootstrap. */
         float dx_total = (float)(x - drag->start_x);
         float mag = fabsf(drag->start_value);
-        if (mag < 1e-6f) {
+        if (mag < VAR_DRAG_ZERO_EPS) {
             /* Bootstrap from zero: treat first pixels as linear, then log. */
-            new_val = dx_total * 0.001f;
+            new_val = dx_total * VAR_DRAG_ZERO_BOOTSTRAP_RATE;
         } else {
             float sign = (drag->start_value >= 0.0f) ? 1.0f : -1.0f;
-            new_val = sign * mag * expf(dx_total * (logf(10.0f) / 200.0f));
+            new_val = sign * mag *
+                      expf(dx_total * (logf(10.0f) / VAR_DRAG_PX_PER_DECADE));
         }
     } else {
-        float delta = (float)(x - drag->start_x) * 0.05f;
+        float delta = (float)(x - drag->start_x) * VAR_DRAG_LINEAR_UNITS_PER_PX;
         new_val = drag->start_value + delta;
     }
 
