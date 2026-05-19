@@ -424,6 +424,9 @@ static void glr_ctrl_render_vertex_numbers(void) {
     glPopAttrib();
 }
 
+/* World-space length of the per-vertex normal-vector overlay arrows. */
+#define GLR_NORMAL_ARROW_SCALE 0.35f
+
 static void glr_ctrl_render_normal_vectors(void) {
     glPushAttrib(GL_ALL_ATTRIB_BITS);
     glDisable(GL_LIGHTING);
@@ -433,7 +436,7 @@ static void glr_ctrl_render_normal_vectors(void) {
     static const ReplayVertexWalkCallbacks cb = {
         .on_vertex = on_normal_vector_arrow,
     };
-    float scale = 0.35f;
+    float scale = GLR_NORMAL_ARROW_SCALE;
     ReplayVertexWalkContext ctx = glr_ctrl_build_vertex_walk_context(0);
     replay_walk_user_vertices(&ctx, &cb, &scale);
 
@@ -1319,10 +1322,14 @@ static void glr_ctrl_build_scene_config(SceneRenderConfig *config) {
     /* --- Focus marker --- */
     config->focus = glr_ctrl_build_focus_vertex();
 
-    /* Alpha scale boost for dark backgrounds */
-        bg_lum = 0.2126f * repl_render.clear_color[0]
-            + 0.7152f * repl_render.clear_color[1]
-            + 0.0722f * repl_render.clear_color[2];
+    /* Boost overlay alpha on dark backgrounds: bg_lum is the Rec. 709
+     * relative luminance of the clear color (0.2126/0.7152/0.0722 R/G/B
+     * weights); the reciprocal raises alpha as the background darkens,
+     * with +0.02 as a black-background guard and the result clamped to
+     * 1..3 below. */
+    bg_lum = 0.2126f * repl_render.clear_color[0]
+        + 0.7152f * repl_render.clear_color[1]
+        + 0.0722f * repl_render.clear_color[2];
     as_val = (0.10f + 0.02f) / fmaxf(bg_lum + 0.02f, 1e-4f);
     config->alpha_scale = as_val < 1.0f ? 1.0f : (as_val > 3.0f ? 3.0f : as_val);
 
@@ -1530,10 +1537,10 @@ void glr_ctrl_display_frame(void) {
     float live_predef_vals[MAX_PREDEF_VARS] = { 0 };
     float live_scratch_arrays[REPL_SCRATCH_ARRAY_COUNT][REPL_SCRATCH_ARRAY_LEN] = { { 0.0f } };
     FlatProgramView flat_program = repl_state_flat_program_view();
-    int g_num_flat_cmds = flat_program.cmd_count;
+    int num_flat_cmds = flat_program.cmd_count;
     /* Capture replay state once before replay_prepare_frame so the
      * HUD shows the per-frame "before-prepare" view (the contract that
-     * test_imrepl_ctrl pins). Per-field narrow accessors elsewhere in
+     * test_glr_ctrl pins). Per-field narrow accessors elsewhere in
      * the frame are reading post-prepare state, which is what they want. */
     ReplReplayRuntimeState frame_replay = replay_state_view();
     SceneRenderConfig scene_config;
@@ -1554,7 +1561,7 @@ void glr_ctrl_display_frame(void) {
         repl_state_flat_program_clear_dirty();
         prof_end(PROF_FLATTEN);
         flat_program = repl_state_flat_program_view();
-        g_num_flat_cmds = flat_program.cmd_count;
+        num_flat_cmds = flat_program.cmd_count;
     }
 
     /* Snapshot production: every per-frame list/snapshot the UI consumes
@@ -1592,7 +1599,7 @@ void glr_ctrl_display_frame(void) {
      * Wrapped in its own subsection so the SNAPSHOT_* subsections
      * sum to PROF_SNAPSHOT exactly. */
     prof_begin(PROF_SNAPSHOT_PREP);
-    saved_flat_count = g_num_flat_cmds;
+    saved_flat_count = num_flat_cmds;
     repl_copy_predef_values(live_predef_vals, MAX_PREDEF_VARS);
     repl_eval_copy_scratch_arrays(live_scratch_arrays);
     if (replay_active())
@@ -1628,7 +1635,7 @@ void glr_ctrl_display_frame(void) {
         static int warned = 0;
         if (!warned) {
             fprintf(stderr,
-                    "imrepl_ctrl: scene_render_3d_scene rejected config (errno=%d)\n",
+                    "glr_ctrl: scene_render_3d_scene rejected config (errno=%d)\n",
                     errno);
             warned = 1;
         }
@@ -1872,8 +1879,18 @@ static void glr_ctrl_seed_overlay_xn(void) {
     scene_xn_init(&g_axes_xn, p.axes_theme);
 }
 
+/* Fixed frame timestep (~60 Hz). The animation timer reschedules every
+ * GLR_FRAME_DT_MS ms; every per-frame advance (time var, replay fade,
+ * camera momentum, grid/axes fade, view transition) uses the matching
+ * GLR_FRAME_DT_SECS so motion speed stays decoupled from redraw rate.
+ * GLR_CURSOR_BLINK_TICKS is the cursor blink half-period counted in
+ * those ticks (~0.5 s). */
+#define GLR_FRAME_DT_MS       16
+#define GLR_FRAME_DT_SECS     0.016f
+#define GLR_CURSOR_BLINK_TICKS 30
+
 /* Per-frame diff + advance, called from glr_ctrl_tick (the animation
- * timer) with the same fixed 0.016f dt as repl_advance_time /
+ * timer) with the same fixed GLR_FRAME_DT_SECS dt as repl_advance_time /
  * replay_tick_fade_batches / glr_camera_tick. NOT the display path:
  * display fires on reshape/expose without the timer, which would
  * couple fade speed to redraw rate. Rule 6 off-source short-circuit:
@@ -1888,7 +1905,7 @@ static void glr_ctrl_tick_overlay_xn(void) {
         scene_xn_show(&g_grid_xn, p.grid_theme);
     else
         scene_xn_set(&g_grid_xn, p.grid_theme);
-    scene_xn_tick(&g_grid_xn, 0.016f,
+    scene_xn_tick(&g_grid_xn, GLR_FRAME_DT_SECS,
                   GRID_FADE_IN_SECS, GRID_FADE_OUT_SECS);
 
     if (p.axes_theme != g_axes_xn.current &&
@@ -1896,7 +1913,7 @@ static void glr_ctrl_tick_overlay_xn(void) {
         scene_xn_show(&g_axes_xn, p.axes_theme);
     else
         scene_xn_set(&g_axes_xn, p.axes_theme);
-    scene_xn_tick(&g_axes_xn, 0.016f,
+    scene_xn_tick(&g_axes_xn, GLR_FRAME_DT_SECS,
                   AXES_FADE_IN_SECS, AXES_FADE_OUT_SECS);
 }
 
@@ -2235,14 +2252,14 @@ void glr_ctrl_fill_export_layout(ReplExportLayout *out) {
 /* ===========================================================================
  * Router helpers: non-editor input concerns
  *
- * imrepl_ctrl is the controller — it owns routing of raw GLUT input to
+ * glr_ctrl is the controller — it owns routing of raw GLUT input to
  * the subsystem that owns each concern (replay, audio, config, save,
  * scene cycle, variable panel, scene press, camera, scroll wheel,
  * help). The editor's keyboard_func / special_func / mouse_func /
  * motion_func / mousewheel_func dispatchers see only editor-text
  * concerns: every helper below is run before the editor handler.
  *
- * Helpers are exported (declared in imrepl_ctrl.h) so test fixtures
+ * Helpers are exported (declared in glr_ctrl.h) so test fixtures
  * can drive a single routing concern without applying GLUT effects.
  * Helpers fill the editor_input EditorInputDispatchEffects via
  * editor_request_redraw etc.; glutPostRedisplay / glutSetCursor /
@@ -3598,16 +3615,16 @@ void glr_ctrl_tick(void) {
         }
     }
 
-    repl_advance_time(0.016f);
+    repl_advance_time(GLR_FRAME_DT_SECS);
 
     {
         ReplReplayRuntimeState *replay = replay_state_mut();
 
         if (replay->active)
-            replay_tick_fade_batches(0.016f);
+            replay_tick_fade_batches(GLR_FRAME_DT_SECS);
 
         if (replay->active && replay->state == REPLAY_PLAYING) {
-            replay->accum += replay->speed * 0.016f;
+            replay->accum += replay->speed * GLR_FRAME_DT_SECS;
             while (replay->accum >= 1.0f &&
                    replay->state == REPLAY_PLAYING) {
                 replay->accum -= 1.0f;
@@ -3616,14 +3633,14 @@ void glr_ctrl_tick(void) {
         }
     }
 
-    glr_ctrl_tick_view_transition(0.016f);
+    glr_ctrl_tick_view_transition(GLR_FRAME_DT_SECS);
     glr_camera_tick();
     glr_ctrl_tick_overlay_xn();
 
     {
         UiCodePanelRuntimeState *code_panel_state = ui_state_code_panel_mut();
         (code_panel_state->blink_tick)++;
-        if (code_panel_state->blink_tick >= 30) {
+        if (code_panel_state->blink_tick >= GLR_CURSOR_BLINK_TICKS) {
             code_panel_state->blink_tick = 0;
             code_panel_state->cursor_visible = !code_panel_state->cursor_visible;
         }
@@ -3643,5 +3660,5 @@ void glr_ctrl_timer(int value) {
     (void)value;
     glr_ctrl_tick();
     glutPostRedisplay();
-    glutTimerFunc(16, glr_ctrl_timer, 0);
+    glutTimerFunc(GLR_FRAME_DT_MS, glr_ctrl_timer, 0);
 }

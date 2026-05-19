@@ -1,5 +1,5 @@
 /*
- * repl_actions.c -- Side-effecting editor actions and config dispatch.
+ * glr_actions.c -- Side-effecting editor actions and config dispatch.
  *
  * Input modules decide which key or menu row was activated. UI modules decide
  * what was clicked. This module owns the mutation that follows: config-row
