@@ -205,16 +205,17 @@ ReplCompileResult editor_compile_if_block(const char *input,
 
 /* Editor-side compile for func definitions.
  *
- * NOTE: this entry handles validation + the header-replace branch
- * only (cursor sits on an existing CMD_FUNC_DEF in non-insert mode).
- * The new-def-with-comment-relocation branch stays inline in
- * editor_try_commit_func_def for now — it needs a delete-before-insert
- * field on EditorCommitPlan plus the function_decl_resume_delta
- * publish-side captured into post-effects, both of which are
- * deferred to a follow-up commit.
+ * Handles validation plus BOTH outcomes: the header-replace branch
+ * (cursor on an existing CMD_FUNC_DEF in non-insert mode) and the
+ * new-def-with-comment-relocation branch, the latter via the
+ * EditorCommitPlan delete_pos/delete_count fields and the
+ * func_decl_resume_publish post-effect. editor_try_commit_func_def
+ * is a thin wrapper that just applies the returned plan.
  *
  * Returns:
  *   REPL_COMPILE_OK + REPLACE_ONE   header-replace plan ready
+ *   REPL_COMPILE_OK + (insert plan) new-def plan ready (may carry a
+ *                                   delete range for comment relocation)
  *   REPL_COMPILE_OK + NO_CHANGE     not a func decl OR a func decl
  *                                   in non-overwrite context (caller
  *                                   should fall through to some other
