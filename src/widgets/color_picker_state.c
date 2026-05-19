@@ -273,6 +273,29 @@ ColorPickerView color_picker_view(void) {
     return v;
 }
 
+/* Apply the slider value for drag target `which` (1=SV, 2=hue,
+ * 3=alpha) from pointer (mx, gl_y) against rects r. Shared by press
+ * (after a region hit-test arms the target) and motion so the
+ * ratio/clamp/wrap math has one home. */
+static void cp_apply_drag_at(int which, int mx, int gl_y,
+                             const ColorPickerRects *r) {
+    if (which == 1) {
+        g_cp_sat = (float)(mx - r->sv_x) / (float)r->sv_sz;
+        g_cp_val = (float)(gl_y - r->sv_y) / (float)r->sv_sz;
+        if (g_cp_sat < 0) g_cp_sat = 0; if (g_cp_sat > 1) g_cp_sat = 1;
+        if (g_cp_val < 0) g_cp_val = 0; if (g_cp_val > 1) g_cp_val = 1;
+        if (g_cp_val > g_cp_value_max) g_cp_val = g_cp_value_max;
+    } else if (which == 2) {
+        g_cp_hue = 1.0f - (float)(gl_y - r->hue_y) / (float)r->hue_h;
+        if (g_cp_hue < 0) g_cp_hue = 0;
+        if (g_cp_hue >= 1) g_cp_hue = CP_HUE_MAX;
+    } else if (which == 3) {
+        g_cp_alpha = (float)(gl_y - r->alp_y) / (float)r->alp_h;
+        if (g_cp_alpha < 0) g_cp_alpha = 0;
+        if (g_cp_alpha > 1) g_cp_alpha = 1;
+    }
+}
+
 ColorPickerInputResult color_picker_handle_press(int mx, int my) {
     ColorPickerInputResult res = { 0, 0, 0 };
     const GLCmd *cmd;
@@ -288,11 +311,7 @@ ColorPickerInputResult color_picker_handle_press(int mx, int my) {
     if (mx >= r.sv_x && mx < r.sv_x + r.sv_sz &&
         gl_y >= r.sv_y && gl_y < r.sv_y + r.sv_sz) {
         g_cp_drag = 1;
-        g_cp_sat = (float)(mx - r.sv_x) / (float)r.sv_sz;
-        g_cp_val = (float)(gl_y - r.sv_y) / (float)r.sv_sz;
-        if (g_cp_sat < 0) g_cp_sat = 0; if (g_cp_sat > 1) g_cp_sat = 1;
-        if (g_cp_val < 0) g_cp_val = 0; if (g_cp_val > 1) g_cp_val = 1;
-        if (g_cp_val > g_cp_value_max) g_cp_val = g_cp_value_max;
+        cp_apply_drag_at(1, mx, gl_y, &r);
         res.changed = color_picker_write_cmd();
         res.consumed = 1;
         return res;
@@ -301,9 +320,7 @@ ColorPickerInputResult color_picker_handle_press(int mx, int my) {
     if (mx >= r.hue_x && mx < r.hue_x + r.hue_w &&
         gl_y >= r.hue_y && gl_y < r.hue_y + r.hue_h) {
         g_cp_drag = 2;
-        g_cp_hue = 1.0f - (float)(gl_y - r.hue_y) / (float)r.hue_h;
-        if (g_cp_hue < 0) g_cp_hue = 0;
-        if (g_cp_hue >= 1) g_cp_hue = CP_HUE_MAX;
+        cp_apply_drag_at(2, mx, gl_y, &r);
         res.changed = color_picker_write_cmd();
         res.consumed = 1;
         return res;
@@ -313,9 +330,7 @@ ColorPickerInputResult color_picker_handle_press(int mx, int my) {
         mx >= r.alp_x && mx < r.alp_x + r.alp_w &&
         gl_y >= r.alp_y && gl_y < r.alp_y + r.alp_h) {
         g_cp_drag = 3;
-        g_cp_alpha = (float)(gl_y - r.alp_y) / (float)r.alp_h;
-        if (g_cp_alpha < 0) g_cp_alpha = 0;
-        if (g_cp_alpha > 1) g_cp_alpha = 1;
+        cp_apply_drag_at(3, mx, gl_y, &r);
         res.changed = color_picker_write_cmd();
         res.consumed = 1;
         return res;
@@ -339,21 +354,7 @@ ColorPickerInputResult color_picker_handle_motion(int mx, int my) {
     if (!cmd) return res;
     int gl_y = ui_state_viewport().window_h - my;
     cp_compute_rects(&r);
-    if (g_cp_drag == 1) {
-        g_cp_sat = (float)(mx - r.sv_x) / (float)r.sv_sz;
-        g_cp_val = (float)(gl_y - r.sv_y) / (float)r.sv_sz;
-        if (g_cp_sat < 0) g_cp_sat = 0; if (g_cp_sat > 1) g_cp_sat = 1;
-        if (g_cp_val < 0) g_cp_val = 0; if (g_cp_val > 1) g_cp_val = 1;
-        if (g_cp_val > g_cp_value_max) g_cp_val = g_cp_value_max;
-    } else if (g_cp_drag == 2) {
-        g_cp_hue = 1.0f - (float)(gl_y - r.hue_y) / (float)r.hue_h;
-        if (g_cp_hue < 0) g_cp_hue = 0;
-        if (g_cp_hue >= 1) g_cp_hue = CP_HUE_MAX;
-    } else if (g_cp_drag == 3) {
-        g_cp_alpha = (float)(gl_y - r.alp_y) / (float)r.alp_h;
-        if (g_cp_alpha < 0) g_cp_alpha = 0;
-        if (g_cp_alpha > 1) g_cp_alpha = 1;
-    }
+    cp_apply_drag_at(g_cp_drag, mx, gl_y, &r);
     res.changed = color_picker_write_cmd();
     res.consumed = 1;
     return res;
