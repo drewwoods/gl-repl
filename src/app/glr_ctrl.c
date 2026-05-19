@@ -3361,7 +3361,15 @@ void glr_ctrl_keyboard(unsigned char key, int x, int y) {
         return;
     }
 
-    glr_ctrl_apply_input_effects(editor_handle_key(key, x, y));
+    /* Ctrl+F opens search downstream in editor_handle_key. Note the
+     * rising edge here so the search-overlay fade clock is driven from
+     * the controller — symmetric with the menu-pin path in
+     * route_pin_button_hit; the renderer no longer mutates it. */
+    int search_was_active = editor_state_search().active;
+    EditorInputDispatchEffects kb_effects = editor_handle_key(key, x, y);
+    if (!search_was_active && editor_state_search().active)
+        ui_menu_bar_note_search_opened(repl_state_variables().anim_time);
+    glr_ctrl_apply_input_effects(kb_effects);
 }
 
 void glr_ctrl_special(int key, int x, int y) {
