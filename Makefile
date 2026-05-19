@@ -200,12 +200,13 @@ endif
 	debug \
 	glut \
 	help \
+	help-details \
 	lines \
 	sample \
 	test \
 	test-detailed \
+	test-full \
 	test-stubs \
-	test_detailed \
 	FORCE
 
 all: sample
@@ -1063,10 +1064,16 @@ test-detailed: $(TEST_BINS) ## Run the full test suite with verbose example expo
 	TEST_JOBS="$(TEST_JOBS)" \
 	sh scripts/run-tests.sh $(TEST_RUNNER_CASES)
 
-test_detailed: test-detailed ## Alias for test-detailed.
-
 test-stubs: check-gl-boundaries check-layer-coupling check-state-ownership ## Build and run tests using local GL/GLU/GLUT stubs, without GL libs.
 	$(MAKE) test USE_GL_STUBS=1
+
+test-full: ## Full gate: stub tests + checks + build sample, bench, repl_demo, scene_demo.
+	$(MAKE) --no-print-directory test-stubs
+	$(MAKE) --no-print-directory check
+	$(MAKE) --no-print-directory sample
+	$(MAKE) --no-print-directory bench
+	$(MAKE) --no-print-directory repl_demo
+	$(MAKE) --no-print-directory scene_demo
 
 # Benchmark targets ------------------------------------------------------
 # Built and invoked separately from `make test` because timing is sensitive
@@ -1247,7 +1254,14 @@ callgraph-files: ## Generate file-level Mermaid dependency graph (optional ENTRY
 	fi
 	@echo "Visualize at: https://mermaid.live or with: npx @mermaid-js/mermaid-cli"
 
-help: ## Show available targets and build-mode notes.
+help: ## Show the common targets (run make help-details for the full list).
+	@printf "Immediate-mode REPL — common Make targets\n\n"
+	@awk 'BEGIN {FS = ":.*## "}; /^[a-zA-Z0-9_.-]+:.*## / {d[$$1]=$$2} \
+		END {split("sample clean test-stubs test-full help help-details",o," "); \
+		for (i=1;i<=6;i++) printf "  %-16s %s\n", o[i], d[o[i]]}' $(MAKEFILE_LIST)
+	@printf "\nRun 'make help-details' for all targets, build modes, and runtime/env notes.\n"
+
+help-details: ## Show available targets and build-mode notes.
 	@printf "Immediate-mode REPL Make targets\n\n"
 	@printf "Build modes:\n"
 	@printf "  common flags:  %s\n" "$(COMMON_CFLAGS)" | fold -s -w 100 | sed '1!s/^/                 /'
