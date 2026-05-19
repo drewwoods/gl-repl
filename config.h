@@ -173,4 +173,18 @@
 #define MAX_COMMIT_CMDS 16
 #endif
 
+/* Polygon-offset depth-bias constants for the outline pass. Shared by
+ * the live app controller (src/app/glr_ctrl.c) and the export path
+ * (src/repl/export.c) so both rendering modes use the same depth bias
+ * when drawing wire outlines over the filled pass. Dependency-free
+ * compile-time constants — folded here from the former
+ * outline_offset.h, matching this header's cross-layer-constant
+ * contract. */
+#ifndef REPL_OUTLINE_POLYGON_OFFSET_FACTOR
+#define REPL_OUTLINE_POLYGON_OFFSET_FACTOR (-0.01f)
+#endif
+#ifndef REPL_OUTLINE_POLYGON_OFFSET_UNITS
+#define REPL_OUTLINE_POLYGON_OFFSET_UNITS  (-100.0f)
+#endif
+
 #endif /* CONFIG_H */

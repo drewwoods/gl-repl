@@ -28,7 +28,6 @@
 #include "app/glr_camera.h"
 #include "app/glr_debug.h"
 #include "keys.h"
-#include "outline_offset.h" /* REPL_OUTLINE_POLYGON_OFFSET_{FACTOR,UNITS} */
 #include "prof.h"
 #include "repl/core.h"
 #include "repl/eval.h"
