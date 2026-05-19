@@ -89,8 +89,10 @@ extern "C" {
 
 static const char glut_bitmap_8_by_13_stub = 0;
 static const char glut_bitmap_9_by_15_stub = 0;
+static const char glut_bitmap_helvetica_12_stub = 0;
 #define GLUT_BITMAP_8_BY_13 ((void *)(uintptr_t)&glut_bitmap_8_by_13_stub)
 #define GLUT_BITMAP_9_BY_15 ((void *)(uintptr_t)&glut_bitmap_9_by_15_stub)
+#define GLUT_BITMAP_HELVETICA_12 ((void *)(uintptr_t)&glut_bitmap_helvetica_12_stub)
 
 typedef void (*GLUTdisplayCB)(void);
 typedef void (*GLUTreshapeCB)(int width, int height);

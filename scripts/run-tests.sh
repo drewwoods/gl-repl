@@ -48,6 +48,16 @@ else
 fi
 printf '%b\n' "$reset"
 
+# Detect a usable `time` once. The shell keyword (bash/ksh) yields
+# sub-second `real 0mX.XXXs` that parse_time_output already handles.
+# Under a shell where it is neither a keyword nor on PATH (dash with
+# no /usr/bin/time) it exits 127 — in that case timing is simply
+# dropped; the test result never depends on it.
+have_time=0
+if ( time : ) >/dev/null 2>&1; then
+    have_time=1
+fi
+
 active=0
 for spec do
     name=${spec%%:::*}
@@ -67,8 +77,15 @@ for spec do
             FORCE_COLOR=$child_force_color
             export FORCE_COLOR
         fi
-        { time sh -c "$cmd" >"$log" 2>&1; } 2>"$time_file"
-        rc=$?
+        # rc must come from the test command, never from `time`.
+        if [ "$have_time" -eq 1 ]; then
+            { time sh -c "$cmd" >"$log" 2>&1; } 2>"$time_file"
+            rc=$?
+        else
+            sh -c "$cmd" >"$log" 2>&1
+            rc=$?
+            : >"$time_file"
+        fi
         printf '%d\n' "$rc" >"$status"
         exit 0
     ) &
