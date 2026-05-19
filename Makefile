@@ -15,12 +15,17 @@ GL_STUB_INCLUDE := $(abspath tests/gl-stubs/include)
 TEST_DIR := tests
 BENCH_DIR := bench
 
-# Color codes for output
-RED := \033[0;31m
-GREEN := \033[0;32m
-YELLOW := \033[0;33m
-CYAN := \033[0;36m
-NC := \033[0m  # No Color
+# Color codes for output. ESC holds a real escape byte (not the two-char
+# "\033" text) so plain `echo` in recipes — macOS /bin/sh echo does not
+# interpret backslash escapes — emits real color, not literal "\033[...".
+# printf call sites are unaffected (a literal ESC in the format is fine).
+ESC := $(shell printf '\033')
+RED := $(ESC)[0;31m
+GREEN := $(ESC)[0;32m
+YELLOW := $(ESC)[0;33m
+CYAN := $(ESC)[0;36m
+# No Color
+NC := $(ESC)[0m
 
 UNAME_S := $(shell uname -s)
 
