@@ -69,8 +69,10 @@ static int g_execute_skip_geom_before_pc = 0;
 
 /* User-facing point-size emission. When the runtime lacks
  * glPointParameterfv, approximate its distance attenuation by scaling
- * every glPointSize call by 2/cam_dist (parity with the old
- * NO_POINT_PARAMETER fallback). Reads cam_dist from the
+ * every glPointSize call by 2 / (0.5 * cam_dist) — a reference scale
+ * of 2 at a reference distance of half the camera distance, i.e. an
+ * effective 4/cam_dist. The factored form is kept verbatim from the
+ * old NO_POINT_PARAMETER fallback for parity. Reads cam_dist from the
  * controller-installed source; with no source installed (the demo, or
  * any embedder without an app-shell camera) cam_dist defaults to 0
  * and `sz` passes through unchanged. When supported, emit `sz`
@@ -626,7 +628,7 @@ void repl_execute_program(const ReplExecutionOptions *options) {
             if (!repl_extract_goto_label(execution_flat_text(text, &flat_cmds[pc]),
                                          label_name, sizeof(label_name)))
                 break;
-            if (goto_count++ > 100000) {
+            if (goto_count++ > REPL_GOTO_LOOP_LIMIT) {
                 repl_set_status("goto: loop limit reached");
                 goto execute_done;
             }

@@ -626,7 +626,7 @@ static int replay_copy_runtime_state_before_flat_cmd(
             if (!repl_extract_goto_label(replay_flat_text(pc),
                                          label, sizeof(label)))
                 break;
-            if (goto_count++ > 100000)
+            if (goto_count++ > REPL_GOTO_LOOP_LIMIT)
                 return 0;
             for (int li = 0; li < repl_state_flat_program_count(); li++) {
                 char target_label[64];
@@ -746,7 +746,7 @@ static void replay_build_predef_snapshots(void) {
             if (!repl_extract_goto_label(replay_flat_text(pc),
                                          label, sizeof(label)))
                 break;
-            if (goto_count++ > 100000)
+            if (goto_count++ > REPL_GOTO_LOOP_LIMIT)
                 goto snap_done;
             for (int li = 0; li < repl_state_flat_program_count(); li++) {
                 char target_label[64];

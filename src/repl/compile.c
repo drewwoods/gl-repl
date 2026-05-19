@@ -54,6 +54,7 @@
 #include "repl/state_owners.h"
 
 #include <ctype.h>
+#include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -191,8 +192,6 @@ static int compile_set_err(char *err, int err_size, const char *fmt, ...) {
     va_end(ap);
     return REPL_COMPILE_ERROR;
 }
-
-#include <stdarg.h>
 
 static void compile_copy_leading_ws(const char *text, char *out, int out_sz) {
     int off = 0;

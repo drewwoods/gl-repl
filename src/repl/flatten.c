@@ -9,13 +9,20 @@
 
 #define MAX_FLATTEN_CALL_DEPTH 64
 #define MAX_FLATTEN_VISIT_BUDGET 200000
+/* Per-for-loop hard stop on unrolled iterations, separate from the
+ * whole-program MAX_FLATTEN_VISIT_BUDGET above: a single runaway loop
+ * bails at this many iterations even if the global budget has room. */
+#define MAX_FLATTEN_LOOP_ITERS 100000
+/* Bit width of GLCmd.func_scope_mask (an unsigned int). A function slot
+ * index must be < this to be representable as `1u << slot` in the mask. */
+#define FUNC_SCOPE_MASK_BITS 32
 
 /* Read the source text for command index `i` through the editor
  * buffer view threaded into the flatten context, falling back to ""
  * if unset. The view is supplied by `ReplFlattenOptions.text`; the
  * GLCmd parameter is unused (kept for symmetry with earlier helpers
  * before GLCmd carried no source text). */
-static const char *spike_text_for(SourceTextView text,
+static const char *flatten_src_text(SourceTextView text,
                                   const GLCmd *src_cmd, int i) {
     (void)src_cmd;
     const char *line = source_text_line(text, i);
@@ -51,7 +58,7 @@ static void flatten_fail(FlattenContext *ctx, const char *msg) {
 static void flatten_get_for_var_name(SourceTextView text,
                                      const GLCmd *cmd, int cmd_idx,
                                      char *var, int var_sz) {
-    const char *p = spike_text_for(text, cmd, cmd_idx);
+    const char *p = flatten_src_text(text, cmd, cmd_idx);
     while (*p && *p != '(') p++;
     if (*p) p++;
     while (*p && isspace((unsigned char)*p)) p++;
@@ -205,7 +212,7 @@ static void flatten_range(FlattenContext *ctx,
             float start_val = src_cmd->args[0];
             float end_val   = src_cmd->args[1];
             float step_val  = src_cmd->args[2];
-            const char *src_text = spike_text_for(ctx->text, src_cmd, i);
+            const char *src_text = flatten_src_text(ctx->text, src_cmd, i);
             flatten_get_for_var_name(ctx->text, src_cmd, i, var_name, sizeof(var_name));
 
             /* Re-evaluate for-loop bounds from source if they contain variables */
@@ -225,7 +232,7 @@ static void flatten_range(FlattenContext *ctx,
             if (fabsf(step_val) > 1e-9f &&
                 !((step_val > 0 && start_val >= end_val) ||
                   (step_val < 0 && start_val <= end_val))) {
-                int max_iters = 100000;
+                int max_iters = MAX_FLATTEN_LOOP_ITERS;
                 for (float val = start_val;
                      (step_val > 0) ? (val < end_val - 1e-6f) : (val > end_val + 1e-6f);
                      val += step_val) {
@@ -287,8 +294,8 @@ static void flatten_range(FlattenContext *ctx,
                     char arg_text[MAX_LINE_LEN];
                     float arg_vals[MAX_EXPR_VARS];
                     int arg_count = 0;
-                    const char *def_text = spike_text_for(ctx->text, def_cmd, k);
-                    const char *call_text = spike_text_for(ctx->text, src_cmd, i);
+                    const char *def_text = flatten_src_text(ctx->text, def_cmd, k);
+                    const char *call_text = flatten_src_text(ctx->text, src_cmd, i);
 
                     if (!parse_repl_func_signature(def_text, &def_fn,
                                                    param_names, MAX_EXPR_VARS,
@@ -322,7 +329,7 @@ static void flatten_range(FlattenContext *ctx,
                         lvars[lnv++] = vars[v];
 
                     unsigned int nested_func_mask = func_scope_mask;
-                    if (func_num >= 0 && func_num < 32)
+                    if (func_num >= 0 && func_num < FUNC_SCOPE_MASK_BITS)
                         nested_func_mask |= (1u << func_num);
                     int nested_root_call = (root_call_src_cmd_idx >= 0)
                                          ? root_call_src_cmd_idx : i;
@@ -364,7 +371,7 @@ static void flatten_range(FlattenContext *ctx,
              * frame. Goto support is already documented as partial. */
             int if_end = flatten_repl_source_scope_find_block_end(ctx, i);
             char cond_text[MAX_LINE_LEN];
-            const char *src_text = spike_text_for(ctx->text, src_cmd, i);
+            const char *src_text = flatten_src_text(ctx->text, src_cmd, i);
             float cond = src_cmd->args[0]; /* commit-time eval fallback */
 
             if (repl_extract_paren_payload(src_text, cond_text, sizeof(cond_text))) {
@@ -407,7 +414,7 @@ static void flatten_range(FlattenContext *ctx,
             float value = src_cmd->args[0];
             char rhs[MAX_LINE_LEN] = "";
             int local_rhs_vars = 0;
-            const char *src_text = spike_text_for(ctx->text, src_cmd, i);
+            const char *src_text = flatten_src_text(ctx->text, src_cmd, i);
 
             if (repl_extract_assignment_parts(src_text, NULL, 0,
                                               rhs, sizeof(rhs)) && rhs[0]) {
@@ -442,7 +449,7 @@ static void flatten_range(FlattenContext *ctx,
             char rhs[MAX_LINE_LEN] = "";
             int local_index_vars = 0;
             int local_rhs_vars = 0;
-            const char *src_text = spike_text_for(ctx->text, src_cmd, i);
+            const char *src_text = flatten_src_text(ctx->text, src_cmd, i);
 
             if (repl_extract_assignment_target_parts(src_text,
                                                     name, sizeof(name),
@@ -505,7 +512,7 @@ static void flatten_range(FlattenContext *ctx,
                 .err_buf = flatten_parse_err,
                 .err_sz  = (int)sizeof(flatten_parse_err),
             };
-            const char *text = spike_text_for(ctx->text, src_cmd, i);
+            const char *text = flatten_src_text(ctx->text, src_cmd, i);
             ReplParsedLine tmp_pl;
             if (repl_parser_parse_command_ctx(text, &tmp_pl, &parse_ctx)) {
                 GLCmd tmp = tmp_pl.cmd;
@@ -522,7 +529,7 @@ static void flatten_range(FlattenContext *ctx,
                 .err_buf = flatten_parse_err,
                 .err_sz  = (int)sizeof(flatten_parse_err),
             };
-            const char *text = spike_text_for(ctx->text, src_cmd, i);
+            const char *text = flatten_src_text(ctx->text, src_cmd, i);
             ReplParsedLine tmp_pl;
             if (repl_parser_parse_command_ctx(text, &tmp_pl, &parse_ctx)) {
                 GLCmd tmp = tmp_pl.cmd;
@@ -533,14 +540,14 @@ static void flatten_range(FlattenContext *ctx,
                     return;
             }
         } else {
-            /* Spike: re-parse the no-vars path too so we measure the
-             * worst-case cost of an editor-owned text model. */
+            /* Re-parse even the no-vars path so flat args always reflect
+             * the editor-owned source text (not a frozen parse). */
             ReplParseContext parse_ctx = {
                 .source_line_idx = i,
                 .err_buf = flatten_parse_err,
                 .err_sz  = (int)sizeof(flatten_parse_err),
             };
-            const char *text = spike_text_for(ctx->text, src_cmd, i);
+            const char *text = flatten_src_text(ctx->text, src_cmd, i);
             ReplParsedLine tmp_pl;
             if (repl_parser_parse_command_ctx(text, &tmp_pl, &parse_ctx)) {
                 GLCmd tmp = tmp_pl.cmd;
@@ -643,7 +650,7 @@ void repl_flatten_commands(void) {
 
 static unsigned int line_func_scope_mask(int line) {
     unsigned int mask = 0;
-    int stack[32];
+    int stack[FUNC_SCOPE_MASK_BITS];
     int depth = 0;
 
     if (line < 0) return 0;
@@ -654,7 +661,8 @@ static unsigned int line_func_scope_mask(int line) {
 
         if (repl_state_document_cmds_mut()[i].type == CMD_FUNC_DEF) {
             int fn = (int)repl_state_document_cmds_mut()[i].args[0];
-            if (fn >= 0 && fn < 32 && depth < (int)(sizeof(stack) / sizeof(stack[0]))) {
+            if (fn >= 0 && fn < FUNC_SCOPE_MASK_BITS &&
+                depth < (int)(sizeof(stack) / sizeof(stack[0]))) {
                 stack[depth++] = fn;
                 mask |= (1u << fn);
             }

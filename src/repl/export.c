@@ -2604,9 +2604,11 @@ static int import_make_repl_for_header(const char *line, char *out, int out_sz) 
 static int import_make_repl_func_header(const char *line, char *out, int out_sz) {
     const char *p = line;
     while (*p && isspace((unsigned char)*p)) p++;
-    if (strncmp(p, "static void ", 12) != 0)
+    static const char kFuncPrefix[] = "static void ";
+    int kFuncPrefixLen = (int)(sizeof(kFuncPrefix) - 1);
+    if (strncmp(p, kFuncPrefix, (size_t)kFuncPrefixLen) != 0)
         return 0;
-    p += 12;
+    p += kFuncPrefixLen;
     while (*p && isspace((unsigned char)*p)) p++;
 
     /* The function name is either the bare `funcN` slot form or a
@@ -2889,7 +2891,8 @@ static int import_make_repl_point_parameter_line(const char *line, char *out, in
 
     while (*p && isspace((unsigned char)*p))
         p++;
-    if (strncmp(p, "glPointParameterfv(", 19) != 0)
+    static const char kPointParamPrefix[] = "glPointParameterfv(";
+    if (strncmp(p, kPointParamPrefix, sizeof(kPointParamPrefix) - 1) != 0)
         return 0;
 
     open = strchr(p, '(');
@@ -3701,10 +3704,10 @@ void repl_dump_code_panel_text(FILE *out, SourceTextView text) {
     fflush(dst);
 }
 
-// Unused code for dumping the code panel's text with wrapping applied. It pulls
-// in editor code which crosses the intended independence boundary for src/repl.
-// I should probaby delete this and leave a note about how to re-apply the code panel's wrapping
-// logic if I need it again
+// Disabled: dumping the code panel's text with wrapping applied pulls in
+// ui/text_layout, which crosses src/repl's intended independence boundary.
+// Kept #if 0'd rather than deleted so the wrapping approach can be restored
+// from history if it's ever needed again.
 #if 0
 #include "ui/text_layout.h"
 static void dump_code_panel_wrapped_line(FILE *dst, const char *text,
