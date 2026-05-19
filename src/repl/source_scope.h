@@ -60,6 +60,10 @@ int  repl_source_scope_tess_scope_depth_at(int pos);
  * uses tess-aware depth for tessellation callback setup. Used by the formatter
  * and code-panel renderer. */
 void repl_source_scope_cmd_indent(int pos, char *buf, int buf_sz);
+
+/* glBegin/glEnd-style indent (2 + 2*tess + 2*block; begin-depth
+ * excluded). Used for the glBegin and matching glEnd lines. */
+void repl_source_scope_begin_indent(int pos, char *buf, int buf_sz);
 void repl_source_scope_cmd_tess_indent(int pos, char *buf, int buf_sz);
 
 /* Return the number of indentation characters (spaces) for a command at pos,
