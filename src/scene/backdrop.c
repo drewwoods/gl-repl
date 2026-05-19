@@ -352,19 +352,20 @@ static void draw_starry_sky(float anim_time, int point_parameter_supported) {
 
 void scene_backdrop_render(const SceneFrameRenderContext *frame_ctx) {
     switch (frame_ctx->config.backdrop_mode) {
-    case 1:
+    case SCENE_BACKDROP_CITYSCAPE:
         draw_cityscape(frame_ctx->config.anim_time);
         break;
-    case 2:
+    case SCENE_BACKDROP_STARS:
         draw_starry_sky(frame_ctx->config.anim_time,
                         frame_ctx->config.point_parameter_supported);
         break;
-    case 3:
+    case SCENE_BACKDROP_CITY_AND_STARS:
         /* Stars first so city geometry writes depth over them. */
         draw_starry_sky(frame_ctx->config.anim_time,
                         frame_ctx->config.point_parameter_supported);
         draw_cityscape(frame_ctx->config.anim_time);
         break;
+    case SCENE_BACKDROP_OFF:
     default:
         break;
     }

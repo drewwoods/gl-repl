@@ -54,7 +54,7 @@ static int g_show_indicators = 1;
 static int g_wireframe       = 0;
 static int g_grid_theme      = 1;
 static int g_axes_theme      = 1;
-static int g_backdrop_mode   = 0;
+static SceneBackdropMode g_backdrop_mode = SCENE_BACKDROP_OFF;
 static int g_show_hud        = 1;
 static int g_show_help       = 0;
 
@@ -162,7 +162,7 @@ static void build_config(SceneRenderConfig *cfg) {
     cfg->axes_opacity     = 1.0f;
 
     /* The grid renderer iterates `for (v = -extent; v <= extent; v += step)`
-     * with step = grid_major_steps[major_idx] * 0.2. If the tables are zero
+     * with step = grid_major_steps[major_idx] / 5. If the tables are zero
      * (the memset default) step is 0 and the loop never terminates, blocking
      * GLUT from ever calling idle. The REPL pulls these tables from
      * repl_state; we hard-code them here so the scene module's only runtime
@@ -344,7 +344,10 @@ static void keyboard_func(unsigned char key, int x, int y) {
         case '?': case '/': g_show_help      = !g_show_help; break;
         case 'g': case 'G': g_grid_theme     = (g_grid_theme    + 1) % 4; break;
         case 'x': case 'X': g_axes_theme     = (g_axes_theme    + 1) % 4; break;
-        case 'b': case 'B': g_backdrop_mode  = (g_backdrop_mode + 1) % 4; break;
+        case 'b': case 'B':
+            g_backdrop_mode =
+                (SceneBackdropMode)((g_backdrop_mode + 1) % SCENE_BACKDROP_COUNT);
+            break;
         case '1': g_lights_on[0] = !g_lights_on[0]; break;
         case '2': g_lights_on[1] = !g_lights_on[1]; break;
         case '3': g_lights_on[2] = !g_lights_on[2]; break;
