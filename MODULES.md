@@ -207,9 +207,9 @@ surface is GLUT bootstrap and a fixed orbit camera.
 | `prof` | Generic utility with no ownership of REPL/editor/UI state |
 
 Treat prefixes as ownership boundaries, not naming aesthetics. A file
-that crosses a boundary either splits or moves. `audio` is the
-neutrally-named app-level service (formerly `repl_audio`); whether it
-gets a `glr_audio` rename is part of the open namespace audit.
+that crosses a boundary either splits or moves. The app-level audio
+service is `src/app/glr_audio` with the `glr_audio_*` API (resolved
+from the former neutral `audio`/`repl_audio` name).
 
 Types follow the same rule with the PascalCase form of the prefix:
 `Repl*` / `Editor*` / `Ui*` / `Scene*` / `Glr*` / `Replay*`,
@@ -500,7 +500,7 @@ state.
 | Module | Role |
 |--------|------|
 | `repl_export` | Save/load, typed export scaffold, workspace headers, code-panel dumps. Takes `EditorBufferView` for source text |
-| `audio` | App-level playlist engine and persisted audio config (neutral name; `glr_audio` rename is open) |
+| `src/app/glr_audio` | App-level playlist engine and persisted audio config (`glr_audio_*`) |
 | `prof` | Project-wide CPU timing instrumentation |
 | `sample` *(future `glr`)* | Current `main()`, GLUT callback registration, buffer swap |
 | `gl_stub_counts` | `USE_GL_STUBS` symbol tracking for `tests/gl-stubs` headers |
@@ -574,7 +574,7 @@ flowchart LR
     end
 
     subgraph services["6. Services + lifecycle"]
-        audio["audio.c<br/>playlist"]
+        audio["glr_audio.c<br/>playlist"]
         prof["prof.c<br/>instrumentation"]
         export["src/repl/export.c<br/>save/load · takes EditorBufferView"]
     end
@@ -966,8 +966,8 @@ The deferred items still on the books:
   `src/ui/code_panel_layout.c` but its public functions are still
   prefixed `repl_code_panel_layout_*` / `repl_code_panel_wrap_iter_*`.
   The function names should follow the `ui_*` filename in a follow-up.
-- `audio` namespace audit (neutrally-named app service; revisit
-  when the namespace audit happens — likely future `glr_audio`).
+- `audio` namespace audit — resolved: app service is now
+  `src/app/glr_audio` with the `glr_audio_*` API.
 - `editor_reset_transients` symbol rename: the function lives in
   `src/editor/input.c` and resets editor + camera + menu + picker +
   code-panel-drag transients; the `repl_editor_*` prefix is leftover from

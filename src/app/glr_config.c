@@ -1,6 +1,6 @@
 #include "app/glr_config.h"
 #include <string.h>
-#include "audio.h"
+#include "app/glr_audio.h"
 #include "app/glr_camera.h"
 #include "app/glr_state.h"           /* presentation + render storage (step 7a) */
 #include "repl/state_owners.h"
@@ -108,7 +108,7 @@ static int *config_value_ptr(GlrConfigKey key) {
 
 int glr_config_get(GlrConfigKey key) {
     if (key == GLR_CONFIG_AUDIO_MODE)
-        return audio_get_cfg_mode();
+        return glr_audio_get_cfg_mode();
     if (key == GLR_CONFIG_ACCUM_AA)
         return accum_aa_get_cycle();
 
@@ -153,7 +153,7 @@ void glr_config_set(GlrConfigKey key, int value) {
         value = clamp_int(value, 0, state_count - 1);
 
     if (key == GLR_CONFIG_AUDIO_MODE) {
-        audio_set_cfg_mode(value);
+        glr_audio_set_cfg_mode(value);
         return;
     }
     if (key == GLR_CONFIG_ACCUM_AA) {

@@ -7,7 +7,7 @@
 #include "ui/state.h"
 #include "editor/help_session.h"
 #include "app/glr_config.h"
-#include "audio.h"
+#include "app/glr_audio.h"
 #include "repl/core.h"
 #include "editor/input.h"
 #include "repl/examples.h"
@@ -84,7 +84,7 @@ static void run_menu_action_in_temp_dir(const char *label,
 
 static void test_apply_defaults(void) {
     glr_app_reset_all();
-    /* glr_actions_apply_defaults pulls from audio_get_cfg_mode()
+    /* glr_actions_apply_defaults pulls from glr_audio_get_cfg_mode()
      * which defaults to AUDIO_CFG_ALL (3) if invalid. */
     glr_actions_apply_defaults();
     ASSERT_INT("default audio mode is ALL", glr_config_get(GLR_CONFIG_AUDIO_MODE), 3);
@@ -211,23 +211,23 @@ static void test_cfg_cycling(void) {
     glr_cfg_cycle_row(audio_row, 1); // -> Once
     ASSERT_INT("audio mode Once", glr_config_get(GLR_CONFIG_AUDIO_MODE), 1);
     ASSERT_STR("status audio Once", g_last_status, "Audio: play once");
-    ASSERT_INT("audio engine not paused", audio_is_paused(), 0);
-    ASSERT_INT("audio engine loop mode OFF", audio_get_loop_mode(), AUDIO_LOOP_OFF);
+    ASSERT_INT("audio engine not paused", glr_audio_is_paused(), 0);
+    ASSERT_INT("audio engine loop mode OFF", glr_audio_get_loop_mode(), GLR_AUDIO_LOOP_OFF);
 
     glr_cfg_cycle_row(audio_row, 1); // -> Song
     ASSERT_INT("audio mode Song", glr_config_get(GLR_CONFIG_AUDIO_MODE), 2);
     ASSERT_STR("status audio Song", g_last_status, "Audio: loop song");
-    ASSERT_INT("audio engine loop mode SONG", audio_get_loop_mode(), AUDIO_LOOP_SONG);
+    ASSERT_INT("audio engine loop mode SONG", glr_audio_get_loop_mode(), GLR_AUDIO_LOOP_SONG);
 
     glr_cfg_cycle_row(audio_row, 1); // -> All
     ASSERT_INT("audio mode All", glr_config_get(GLR_CONFIG_AUDIO_MODE), 3);
     ASSERT_STR("status audio All", g_last_status, "Audio: loop all");
-    ASSERT_INT("audio engine loop mode ALL", audio_get_loop_mode(), AUDIO_LOOP_ALL);
+    ASSERT_INT("audio engine loop mode ALL", glr_audio_get_loop_mode(), GLR_AUDIO_LOOP_ALL);
 
     glr_cfg_cycle_row(audio_row, 1); // -> Pause
     ASSERT_INT("audio mode Pause", glr_config_get(GLR_CONFIG_AUDIO_MODE), 0);
     ASSERT_STR("status audio Pause", g_last_status, "Audio: paused");
-    ASSERT_INT("audio engine paused", audio_is_paused(), 1);
+    ASSERT_INT("audio engine paused", glr_audio_is_paused(), 1);
 }
 
 static void test_menu_actions(void) {
