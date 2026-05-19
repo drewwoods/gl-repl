@@ -1244,16 +1244,26 @@ int editor_try_assign_variable(void) {
 }
 
 /* --- Structured-block commits: each delegates to its editor_compile_*
- * partner and applies the resulting plan via editor_commit_apply_plan. --- */
+ * partner and applies the resulting plan via editor_commit_apply_plan.
+ * The four wrappers differ only in which editor_compile_* they call, so
+ * the shared body lives in editor_try_commit_block(). --- */
 
-int editor_try_commit_for_loop(void) {
+/* Prototyped (not old-style) function-pointer typedef per the C99
+ * portability convention in CLAUDE.md. Matches every editor_compile_*
+ * structured-block signature in commit.h. */
+typedef ReplCompileResult (*EditorBlockCompileFn)(const char *input,
+                                                  const ReplCompileContext *ctx,
+                                                  EditorCommitPlan *out,
+                                                  char *err, int err_size);
+
+static int editor_try_commit_block(EditorBlockCompileFn compile) {
     ReplCompileContext ctx = repl_compile_context_from_live(); ctx.insert_mode = editor_insert_mode();
     EditorCommitPlan plan;
     char err[REPL_STATUS_TEXT_MAX];
 
-    ReplCompileResult r = editor_compile_for_loop(editor_state_input().input,
-                                                  &ctx, &plan,
-                                                  err, sizeof(err));
+    ReplCompileResult r = compile(editor_state_input().input,
+                                  &ctx, &plan,
+                                  err, sizeof(err));
     if (r == REPL_COMPILE_OK &&
         plan.change.kind == REPL_COMPILED_NO_CHANGE &&
         !plan.commit_message_valid)
@@ -1268,78 +1278,22 @@ int editor_try_commit_for_loop(void) {
     }
     repl_mark_normals_dirty();
     return 1;
+}
+
+int editor_try_commit_for_loop(void) {
+    return editor_try_commit_block(editor_compile_for_loop);
 }
 
 int editor_try_commit_func_def(void) {
-    ReplCompileContext ctx = repl_compile_context_from_live(); ctx.insert_mode = editor_insert_mode();
-    EditorCommitPlan plan;
-    char err[REPL_STATUS_TEXT_MAX];
-
-    ReplCompileResult r = editor_compile_func_def(editor_state_input().input,
-                                                  &ctx, &plan,
-                                                  err, sizeof(err));
-    if (r == REPL_COMPILE_OK &&
-        plan.change.kind == REPL_COMPILED_NO_CHANGE &&
-        !plan.commit_message_valid)
-        return 0;
-    if (r != REPL_COMPILE_OK) {
-        repl_set_status(err);
-        return 1;
-    }
-    if (!editor_commit_apply_plan(&plan)) {
-        repl_set_status("Command buffer full!");
-        return 1;
-    }
-    repl_mark_normals_dirty();
-    return 1;
+    return editor_try_commit_block(editor_compile_func_def);
 }
 
 int editor_try_commit_if_block(void) {
-    ReplCompileContext ctx = repl_compile_context_from_live(); ctx.insert_mode = editor_insert_mode();
-    EditorCommitPlan plan;
-    char err[REPL_STATUS_TEXT_MAX];
-
-    ReplCompileResult r = editor_compile_if_block(editor_state_input().input,
-                                                  &ctx, &plan,
-                                                  err, sizeof(err));
-    if (r == REPL_COMPILE_OK &&
-        plan.change.kind == REPL_COMPILED_NO_CHANGE &&
-        !plan.commit_message_valid)
-        return 0;
-    if (r != REPL_COMPILE_OK) {
-        repl_set_status(err);
-        return 1;
-    }
-    if (!editor_commit_apply_plan(&plan)) {
-        repl_set_status("Command buffer full!");
-        return 1;
-    }
-    repl_mark_normals_dirty();
-    return 1;
+    return editor_try_commit_block(editor_compile_if_block);
 }
 
 int editor_try_commit_close_brace(void) {
-    ReplCompileContext ctx = repl_compile_context_from_live(); ctx.insert_mode = editor_insert_mode();
-    EditorCommitPlan plan;
-    char err[REPL_STATUS_TEXT_MAX];
-
-    ReplCompileResult r = editor_compile_close_brace(editor_state_input().input,
-                                                     &ctx, &plan,
-                                                     err, sizeof(err));
-    if (r == REPL_COMPILE_OK &&
-        plan.change.kind == REPL_COMPILED_NO_CHANGE &&
-        !plan.commit_message_valid)
-        return 0;
-    if (r != REPL_COMPILE_OK) {
-        repl_set_status(err);
-        return 1;
-    }
-    if (!editor_commit_apply_plan(&plan)) {
-        repl_set_status("Command buffer full!");
-        return 1;
-    }
-    repl_mark_normals_dirty();
-    return 1;
+    return editor_try_commit_block(editor_compile_close_brace);
 }
 
 /* --- Higher-order dispatchers --- */
