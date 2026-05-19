@@ -355,18 +355,25 @@ void editor_clipboard_paste_current(void) {
         }
     }
 
+    int n = repl_state_document_count();
+    int edit = repl_state_edit_line();
+    int pos = editor_insert_mode() ? edit : (edit < n ? edit : n);
+
+    /* The tutorial read-only guard MUST run before the undo push: a
+     * rejected paste must not push a phantom undo entry, clear the redo
+     * ring, or auto-promote a loaded example to a user scene — all are
+     * side effects of editor_undo_push_snapshot(). This matches the
+     * guard-then-push ordering of every other mutation path (the cut
+     * path above, and editor_delete_cmd_range / editor_clear_all_cmds /
+     * the commit routes in input.c). */
+    if (!tutorial_guard_clipboard_change_or_status(pos, 0, count))
+        return;
+
     /* Single undo for the whole paste; editor_feed_line() runs the commit
      * chain per line but does not push undo itself, so structured
      * blocks (for / func / if / `}`) re-parse correctly as the
      * partial document grows. */
     editor_undo_push_snapshot();
-
-    int n = repl_state_document_count();
-    int edit = repl_state_edit_line();
-    int pos = editor_insert_mode() ? edit : (edit < n ? edit : n);
-
-    if (!tutorial_guard_clipboard_change_or_status(pos, 0, count))
-        return;
 
     repl_state_edit_line_set(pos);
     editor_insert_mode_set(1);
