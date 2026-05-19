@@ -48,6 +48,16 @@ else
 fi
 printf '%b\n' "$reset"
 
+# Detect a usable `time` once. The shell keyword (bash/ksh) yields
+# sub-second `real 0mX.XXXs` that parse_time_output already handles.
+# Under a shell where it is neither a keyword nor on PATH (dash with
+# no /usr/bin/time) it exits 127 — in that case timing is simply
+# dropped; the test result never depends on it.
+have_time=0
+if ( time : ) >/dev/null 2>&1; then
+    have_time=1
+fi
+
 active=0
 for spec do
     name=${spec%%:::*}
@@ -67,19 +77,13 @@ for spec do
             FORCE_COLOR=$child_force_color
             export FORCE_COLOR
         fi
-        # Best-effort wall-clock timing. The external `time` utility is
-        # not guaranteed (e.g. dash with no /usr/bin/time), and the test
-        # result must not depend on it — capture rc from the command
-        # itself and treat timing as optional whole-second data.
-        _t_start=$(date +%s 2>/dev/null) || _t_start=
-        sh -c "$cmd" >"$log" 2>&1
-        rc=$?
-        _t_end=$(date +%s 2>/dev/null) || _t_end=
-        if [ -n "$_t_start" ] && [ -n "$_t_end" ]; then
-            _t_elapsed=$((_t_end - _t_start))
-            [ "$_t_elapsed" -lt 0 ] && _t_elapsed=0
-            printf 'real 0m%d.000s\n' "$_t_elapsed" >"$time_file"
+        # rc must come from the test command, never from `time`.
+        if [ "$have_time" -eq 1 ]; then
+            { time sh -c "$cmd" >"$log" 2>&1; } 2>"$time_file"
+            rc=$?
         else
+            sh -c "$cmd" >"$log" 2>&1
+            rc=$?
             : >"$time_file"
         fi
         printf '%d\n' "$rc" >"$status"

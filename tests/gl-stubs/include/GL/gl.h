@@ -97,6 +97,7 @@ typedef double GLclampd;
 #define GL_LINE_BIT 0x00000004
 #define GL_POLYGON_BIT 0x00000008
 #define GL_LIGHTING_BIT 0x00000040
+#define GL_ENABLE_BIT 0x00002000
 #define GL_ALL_ATTRIB_BITS 0x000fffff
 
 #define GL_MODELVIEW 0x1700

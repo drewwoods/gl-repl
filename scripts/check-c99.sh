@@ -49,27 +49,49 @@ fi
 FILES="$(printf '%s\n' ${SAMPLE_FILES}; \
          find tools bench -name '*.c' 2>/dev/null | sort)"
 
-# Use the REAL GL/GLU/GLUT/freeglut headers (the superset that
+# Prefer the REAL GL/GLU/GLUT/freeglut headers (the superset that
 # declares every symbol scene_demo/bench/sample use) as -isystem, so
 # their own old-style decls don't fail the guard while our -I'd code
-# stays -I'd. NOT -DGL_STUBS: the minimal stub headers miss
-# real-GL symbols the demos use; the empty-TU fixes already keep the
-# GL_STUBS-gated files non-empty without it. Nonexistent dirs are
-# harmless (the compiler ignores them), so this stays portable across
-# macOS (homebrew/freeglut-fork) and Linux (system /usr/include).
+# stays -I'd. Nonexistent dirs are harmless (the compiler ignores
+# them), so this stays portable across macOS (homebrew/freeglut-fork)
+# and Linux (system /usr/include).
+#
+# Fallback: on a machine with NO system GL dev headers at all, use the
+# repo's vendored stub headers (-DGL_STUBS) instead of hard-failing on
+# a missing <GL/gl.h>. The stubs ship precisely for GL-devel-less
+# machines; running the guard against them still catches the genuine
+# C99 breakers (implicit decls, unknown symbols, C11-isms) it exists
+# for, which is strictly better than not running the guard at all.
 SYS_GL="-isystem /usr/include \
         -isystem /usr/local/include \
         -isystem /opt/homebrew/include \
         -isystem $HOME/src/freeglut-fork/include"
+GL_DEFS=""
+have_real_gl=0
+for d in /usr/include /usr/local/include /opt/homebrew/include \
+         "$HOME/src/freeglut-fork/include"; do
+    if [ -e "$d/GL/gl.h" ] || [ -e "$d/OpenGL/gl.h" ]; then
+        have_real_gl=1
+        break
+    fi
+done
+if [ "$have_real_gl" -eq 0 ]; then
+    SYS_GL="-isystem $ROOT/tests/gl-stubs/include"
+    GL_DEFS="-DGL_STUBS"
+fi
 
 fail=0
 while IFS= read -r f; do
     [ -n "$f" ] || continue
     # Non-pedantic by design (see header). OUR code -I; vendored GL
     # -isystem (a third-party header's old-style decl must not fail us).
+    # -D_GNU_SOURCE mirrors the real build (Makefile COMMON_CFLAGS):
+    # without it, strict -std=c99 hides POSIX decls like
+    # CLOCK_MONOTONIC, so the guard must compile the shipped sources
+    # the same way they are actually built.
     if ! "$CC" -std=c99 -fsyntax-only \
             -Wall -Wno-deprecated-declarations -Wfloat-conversion \
-            -DGL_SILENCE_DEPRECATION \
+            -D_GNU_SOURCE -DGL_SILENCE_DEPRECATION $GL_DEFS \
             -I"$ROOT" -I"$ROOT/src" -I"$ROOT/include" -I"$ROOT/tests" \
             $SYS_GL \
             "$f" 2>> "$LOG"; then
