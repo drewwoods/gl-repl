@@ -36,6 +36,16 @@
  * this default as the "Left" option. */
 #define CFG_DEFAULT_PANEL_FRAC 0.45f
 
+/* Code-panel divider drag clamps the panel fraction to this range so
+ * neither the panel nor the scene can be collapsed to nothing. */
+#define CFG_PANEL_FRAC_MIN 0.1f
+#define CFG_PANEL_FRAC_MAX 0.9f
+
+/* Code-panel input metrics: rows scrolled per PageUp/PageDown, and the
+ * pixel half-width of the resize-divider hit zone. */
+#define CP_PAGE_SCROLL_ROWS 5
+#define CP_DIVIDER_HIT_PX   10
+
 /* Max brightness (V in HSV) allowed for glClearColor channels.
  * Since max(r,g,b) == V, capping V caps all channels. */
 #define CP_CLEAR_MAX_V 0.1f

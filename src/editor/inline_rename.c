@@ -45,7 +45,7 @@ void editor_inline_rename_cancel(void) {
 /* Filesystem-unsafe chars and non-printables are rejected at input time
  * because scene names become file slugs on workspace export. */
 static int rename_char_ok(unsigned char c) {
-    if (c < 32 || c >= 127) return 0;
+    if (!key_is_printable_ascii(c)) return 0;
     if (c == '/' || c == '\\' || c == ':') return 0;
     return 1;
 }

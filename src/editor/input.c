@@ -5,7 +5,7 @@
  * search / autocomplete / clipboard / undo / commit chain / code-panel
  * mouse-and-resize / divider hover. Non-editor concerns (replay,
  * audio, config, save / debug / quit, scene cycle, variable panel,
- * scene press, camera, scroll-wheel zoom) live in imrepl_ctrl.c and
+ * scene press, camera, scroll-wheel zoom) live in src/app/glr_ctrl.c and
  * are routed there before the editor's keyboard_func / special_func /
  * mouse_func / motion_func / mousewheel_func / passive_motion_func
  * dispatchers run.
@@ -24,6 +24,13 @@
  *    code_panel_resize_cursor) used by the controller to decide who
  *    owns a click
  *  - editor_feed_line() programmatic commit entry
+ *
+ * Known boundary exception: editor_reset_transients() is an
+ * app-orchestration fan-out (it also resets camera / menu / color
+ * picker / controller drag state). It is called only from
+ * src/app/glr_ctrl.c and src/app/glr_actions.c and lives here purely
+ * for proximity to editor_commit_reset_transients(); it is not
+ * editor-owned state.
  */
 
 #include "state.h"
@@ -101,7 +108,7 @@ EditorInputDispatchEffects editor_take_input_effects(void) {
     return out;
 }
 
-/* Production sets this from imrepl_ctrl after glutInit so
+/* Production sets this from src/app/glr_ctrl.c after glutInit so
  * editor_get_modifiers() can safely call glutGetModifiers(). Tests
  * that don't install a modifier provider leave it at 0; the read
  * is suppressed and modifier checks see "no modifiers" rather than
@@ -870,9 +877,10 @@ void editor_navigate_to_line(int target) {
     navigate_to_line_raw_resolved(target);
 }
 
-/* Code-panel-hidden helpers used by both keyboard and special dispatch.
- * Until the special dispatch migrates (commit 45) these are exposed via
- * editor_input_code_panel_* declarations consumed by repl_editor.c. */
+/* Code-panel-hidden helpers used by both the keyboard and special
+ * dispatchers here, and exposed via editor_input_code_panel_*
+ * declarations so the controller (src/app/glr_ctrl.c) can decide who
+ * owns a click before routing it. */
 int editor_input_code_panel_layout(void) {
     if (glr_state_presentation().code_panel_layout < 0 || glr_state_presentation().code_panel_layout >= CODE_PANEL_LAYOUT_COUNT)
         return CODE_PANEL_LAYOUT_LEFT;
@@ -901,7 +909,7 @@ static int editor_key_restores_hidden_code_panel(unsigned char key, int mods) {
            key == '\t' ||
            key == '\r' ||
            key == '\n' ||
-           (key >= 32 && key < 127);
+           key_is_printable_ascii(key);
 }
 
 static void keyboard_begin_key(unsigned char key) {
@@ -1430,7 +1438,7 @@ int editor_input_consume_selection(void) {
 }
 
 static int handle_printable_input_key_route(unsigned char key) {
-    if (!(key >= 32 && key < 127))
+    if (!key_is_printable_ascii(key))
         return 0;
     /* Replace any active input selection with the typed char: the
      * insert proceeds on the post-consume buffer. */
@@ -1451,7 +1459,7 @@ static int handle_printable_input_key_route(unsigned char key) {
 
 /* Editor's keyboard dispatch. Non-editor concerns (config menu,
  * replay forwarding, cfg shortcut, replay toggle, accum samples,
- * save / debug / quit) are routed by imrepl_ctrl directly to their
+ * save / debug / quit) are routed by src/app/glr_ctrl.c directly to their
  * owning subsystem before this runs — they don't appear here. */
 static void keyboard_func(unsigned char key, int x, int y) {
     (void)x;
@@ -1488,6 +1496,20 @@ static void keyboard_func(unsigned char key, int x, int y) {
     (void)handle_printable_input_key_route(key);
 }
 
+/* Programmatic commit entry for file/example/workspace loading. Mirrors
+ * the keyboard ;-key path: load `line` into the input buffer, try the
+ * structured editor_try_commit_any() chain, and if that doesn't consume
+ * it, run the same general-command parse → command-store → editor-buffer
+ * tail used by the Enter/insert handler above (handle_enter_key_route).
+ *
+ * This tail is intentionally NOT routed through
+ * editor_commit_current_input(): loading replays many lines with no
+ * per-line undo snapshot, status message, or tutorial gating (callers
+ * bracket the whole load with one undo/clear). The transaction helper
+ * is the interactive single-commit boundary; this is the bulk-loader
+ * twin. The two share repl_parse_and_normalize_strict + the
+ * repl_command_store_* primitives so parse/apply semantics stay in
+ * lockstep even though the surrounding transaction policy differs. */
 int editor_feed_line(const char *line) {
     {
         EditorInputState *inp = editor_state_input_mut();
@@ -1566,7 +1588,7 @@ feed_line_done:
  *
  * Non-editor concerns (replay forwarding, cfg special shortcut,
  * Ctrl+Left/Right audio, help-tab toggle, help-overlay scroll, F1
- * help toggle, F12 scene cycle) live in imrepl_ctrl.c and never reach
+ * help toggle, F12 scene cycle) live in src/app/glr_ctrl.c and never reach
  * this dispatcher.
  * ===========================================================================
  */
@@ -1717,11 +1739,11 @@ static int handle_vertical_special_key_route(int key) {
 static int handle_page_scroll_special_key_route(int key) {
     switch (key) {
     case GLUT_KEY_PAGE_UP:
-        editor_scroll_set(editor_scroll() - 5);
+        editor_scroll_set(editor_scroll() - CP_PAGE_SCROLL_ROWS);
         editor_scroll_follow_cursor_set(0);
         return 1;
     case GLUT_KEY_PAGE_DOWN:
-        editor_scroll_set(editor_scroll() + 5);
+        editor_scroll_set(editor_scroll() + CP_PAGE_SCROLL_ROWS);
         editor_scroll_follow_cursor_set(0);
         return 1;
     default:
@@ -1732,7 +1754,7 @@ static int handle_page_scroll_special_key_route(int key) {
 /* Editor's special-key dispatch. Non-editor concerns (replay
  * forwarding, cfg special shortcut, audio prev/next, help tab,
  * help scroll, F1 help toggle, F12 scene cycle) are routed by
- * imrepl_ctrl directly to their owning subsystem before this runs.
+ * src/app/glr_ctrl.c directly to their owning subsystem before this runs.
  * The bare cursor moves, autocomplete cycle, selection navigation,
  * and code-panel page scroll stay here. */
 static void special_func(int key, int x, int y) {
@@ -1763,7 +1785,7 @@ static void special_func(int key, int x, int y) {
  * Non-editor concerns (variable-panel drag, scene press / color
  * picker, right-click config dropdown, camera orbit/pan/zoom, camera
  * pointer tracking, help-overlay scroll, scene-area zoom velocity)
- * live in imrepl_ctrl.c and never reach this dispatcher.
+ * live in src/app/glr_ctrl.c and never reach this dispatcher.
  * ===========================================================================
  */
 
@@ -1785,10 +1807,10 @@ int editor_input_point_on_code_panel_divider(int x, int y) {
         return 0;
     ui_layout_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
     if (layout == CODE_PANEL_LAYOUT_TOP)
-        return abs(gl_y - cp_y) < 10;
+        return abs(gl_y - cp_y) < CP_DIVIDER_HIT_PX;
     if (layout == CODE_PANEL_LAYOUT_BOTTOM)
-        return abs(gl_y - (cp_y + cp_h)) < 10;
-    return abs(x - (cp_x + cp_w)) < 10;
+        return abs(gl_y - (cp_y + cp_h)) < CP_DIVIDER_HIT_PX;
+    return abs(x - (cp_x + cp_w)) < CP_DIVIDER_HIT_PX;
 }
 
 int editor_input_code_panel_resize_cursor(void) {
@@ -1821,10 +1843,10 @@ static void editor_update_panel_frac_from_mouse(int x, int y) {
             code_panel_state->panel_frac = (float)x / (float)win_w;
     }
 
-    if (code_panel_state->panel_frac < 0.1f)
-        code_panel_state->panel_frac = 0.1f;
-    if (code_panel_state->panel_frac > 0.9f)
-        code_panel_state->panel_frac = 0.9f;
+    if (code_panel_state->panel_frac < CFG_PANEL_FRAC_MIN)
+        code_panel_state->panel_frac = CFG_PANEL_FRAC_MIN;
+    if (code_panel_state->panel_frac > CFG_PANEL_FRAC_MAX)
+        code_panel_state->panel_frac = CFG_PANEL_FRAC_MAX;
 }
 
 /* Editor-side mouse dispatch reduces to UP-only panel-resize end.
