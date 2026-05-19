@@ -1082,9 +1082,11 @@ void ui_menu_bar_render_search_overlay(const UiRenderSnapshot *snap,
     int cursor_col = 0;
     (void)cp_x; (void)panel_w; (void)panel_top;
 
-    static int prev_active = 0;
-    if (srch.active && !prev_active) g_search_open_time = snap->anim_time;
-    prev_active = srch.active;
+    /* The search-open fade clock (g_search_open_time) is driven by the
+     * controller via ui_menu_bar_note_search_opened() on both open
+     * paths (Ctrl+F in glr_ctrl_keyboard, menu pin in
+     * route_pin_button_hit). This renderer no longer detects the
+     * rising edge itself — render stays pure. */
 
     if (!srch.active)
         return;
