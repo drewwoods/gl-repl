@@ -44,6 +44,12 @@ typedef struct {
      * clamped lower for CMD_CLEAR_COLOR so renderers can shade the
      * out-of-range region without consulting the document. */
     float value_max;
+    /* Popup-frame sizing the renderer needs but ColorPickerRects
+     * doesn't carry: inter-element gap and preview-strip height.
+     * Single source = the peer's CP_GAP/CP_PREV_H, surfaced here so
+     * the renderer doesn't re-declare magic-twin literals. */
+    int   gap;
+    int   prev_h;
 } ColorPickerView;
 
 typedef struct {
