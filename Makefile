@@ -80,14 +80,28 @@ RELEASE_CFLAGS = \
 DEBUG_CFLAGS = \
 	$(COMMON_CFLAGS) \
 	-O0 \
-	-fsanitize=address -fno-omit-frame-pointer
+	-fsanitize=address -fno-omit-frame-pointer \
+	-fsanitize=undefined -fno-sanitize-recover=undefined
 
 COVERAGE_CFLAGS = \
 	$(COMMON_CFLAGS) \
 	-O0 \
 	--coverage -fprofile-arcs -ftest-coverage
 
-BUILD ?= release
+# Test targets build & run under the debug sanitizer build
+# (AddressSanitizer + UBSan) by default; sample, bench and the demos
+# stay release. An explicit `BUILD=...` on the command line or in the
+# environment always wins, so `make coverage` (BUILD=coverage) and
+# `make test BUILD=release` (fast unsanitized run) keep working.
+ifeq ($(origin BUILD),command line)
+# explicit BUILD — honor it
+else ifeq ($(origin BUILD),environment)
+# explicit BUILD — honor it
+else ifneq ($(filter test test-detailed test-stubs test-full,$(MAKECMDGOALS)),)
+BUILD := debug
+else
+BUILD := release
+endif
 
 ifeq ($(BUILD),debug)
 BUILD_CFLAGS = $(DEBUG_CFLAGS)

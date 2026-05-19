@@ -16,13 +16,20 @@ GNU sed is available as `gsed` on macOS via Homebrew (`brew install gnu-sed`).
 ```bash
 make sample          # Build main binary (freeglut)
 make glut            # Build with system GLUT (macOS framework)
-make test            # Build and run all tests
+make test            # Build and run all tests (debug: ASan + UBSan)
 make check-c99       # C99 ratchet (sample + demos + bench)
 make clean           # Remove binaries
 ```
 
-Requires: gcc with C99 support, OpenGL, GLUT/freeglut, AddressSanitizer
-enabled by default in debug builds.
+Requires: gcc with C99 support, OpenGL, GLUT/freeglut.
+
+The test targets (`test`, `test-detailed`, `test-stubs`, `test-full`)
+default to `BUILD=debug`, which compiles with **AddressSanitizer +
+UndefinedBehaviorSanitizer** (UB aborts: `-fno-sanitize-recover`).
+`make sample`/`bench`/the demos stay `BUILD=release`. An explicit
+`BUILD=...` on the command line or in the environment always wins, so
+`make coverage` (BUILD=coverage) and `make test BUILD=release` (a fast
+unsanitized run) keep working.
 
 ### C99 standard
 
