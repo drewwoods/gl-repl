@@ -38,7 +38,7 @@ void scene_lights_setup(const SceneFrameRenderContext *frame_ctx) {
 
 void scene_lights_render(const SceneFrameRenderContext *frame_ctx) {
     if (!frame_ctx->config.show_light_indicators) return;
-    int g_user_lighting_enabled = frame_ctx->config.user_lighting_enabled;
+    int user_lighting_enabled = frame_ctx->config.user_lighting_enabled;
 
     scene_lights_push_state();
     glDisable(GL_LIGHTING);
@@ -50,8 +50,8 @@ void scene_lights_render(const SceneFrameRenderContext *frame_ctx) {
 
     for (int i = 0; i < MAX_LIGHTS; i++) {
         const SceneLight *light = &frame_ctx->config.lights[i];
-        float *d = (float *)light->diffuse;
-        float *p = (float *)light->pos;
+        const float *d = light->diffuse;
+        const float *p = light->pos;
         int is_dir = (p[3] == 0.0f);
         int on = light->enabled;
 
@@ -157,6 +157,6 @@ void scene_lights_render(const SceneFrameRenderContext *frame_ctx) {
     glPointSize(1.0f);
     glDisable(GL_BLEND);
     glEnable(GL_DEPTH_TEST);
-    if (g_user_lighting_enabled) glEnable(GL_LIGHTING);
+    if (user_lighting_enabled) glEnable(GL_LIGHTING);
     scene_lights_pop_state();
 }

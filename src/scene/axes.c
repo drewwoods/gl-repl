@@ -20,6 +20,15 @@ typedef struct AxesThemeSpec {
     SceneRgba label[3];
 } AxesThemeSpec;
 
+/* AXES_THEME_NEON is intentionally NOT in g_axes_theme_specs[] below.
+ * The static spec carries one flat axis/label color per axis; NEON is a
+ * per-frame procedural look (a wide dim halo pass + a narrow bright core
+ * pass + glowing tip dots, every channel modulated by the breathing
+ * `glow` term) that a single SceneRgba triplet cannot express. It is
+ * handled inline in scene_axes_render's switch; only its axis length is
+ * a plain constant. */
+#define AXES_NEON_LEN 2.5f
+
 static void scene_axes_push_state(void) {
     glPushAttrib(GL_ALL_ATTRIB_BITS);
 }
@@ -40,14 +49,14 @@ static SceneRgba rgba(float r, float g, float b, float a) {
  * call site's own alpha_scale clamp so the controller-owned OUT is the
  * hard ceiling (rule 3). 1.0 = shown.
  *
- * s_xn_opacity is the raw machine opacity; s_xn_alpha is the effective
+ * g_xn_opacity is the raw machine opacity; g_xn_alpha is the effective
  * color-alpha multiplier, differing only under the compile-time
  * GRID_AXES_XN_FOG style (config.h). Axes sit near the origin where
  * distance fog barely bites, so for axes the FOG style is mostly the
  * alpha knee with a faint clear-color haze — an intentionally subtle
  * variant (the strong fog look is the grid's). */
-static float s_xn_opacity = 1.0f;
-static float s_xn_alpha    = 1.0f;
+static float g_xn_opacity = 1.0f;
+static float g_xn_alpha   = 1.0f;
 
 #if AXES_XN_STYLE == GRID_AXES_XN_FOG
 #define AXES_XN_FOG_ALPHA_KNEE 0.30f
@@ -70,7 +79,7 @@ static void axes_xn_apply_transition_fog(float tf, const float clear_col[4]) {
 #endif
 
 static void gl_color(float r, float g, float b, float a) {
-    glColor4f(r, g, b, a * s_xn_alpha);
+    glColor4f(r, g, b, a * g_xn_alpha);
 }
 
 static void gl_color_rgba(SceneRgba c) {
@@ -224,15 +233,15 @@ void scene_axes_render(const SceneFrameRenderContext *frame_ctx) {
     /* Transition fade: clamp defensively, then every gl_color in this
      * file multiplies through it (rule 4). Skip drawing entirely once
      * fully faded out so a 0-opacity pass costs nothing. */
-    s_xn_opacity = config->axes_opacity;
-    if (s_xn_opacity < 0.0f) s_xn_opacity = 0.0f;
-    if (s_xn_opacity > 1.0f) s_xn_opacity = 1.0f;
-    if (s_xn_opacity <= 0.0f) return;
+    g_xn_opacity = config->axes_opacity;
+    if (g_xn_opacity < 0.0f) g_xn_opacity = 0.0f;
+    if (g_xn_opacity > 1.0f) g_xn_opacity = 1.0f;
+    if (g_xn_opacity <= 0.0f) return;
 #if AXES_XN_STYLE == GRID_AXES_XN_FOG
-    s_xn_alpha = (s_xn_opacity >= AXES_XN_FOG_ALPHA_KNEE)
-               ? 1.0f : s_xn_opacity / AXES_XN_FOG_ALPHA_KNEE;
+    g_xn_alpha = (g_xn_opacity >= AXES_XN_FOG_ALPHA_KNEE)
+               ? 1.0f : g_xn_opacity / AXES_XN_FOG_ALPHA_KNEE;
 #else
-    s_xn_alpha = s_xn_opacity;
+    g_xn_alpha = g_xn_opacity;
 #endif
 
     scene_axes_push_state();
@@ -245,7 +254,7 @@ void scene_axes_render(const SceneFrameRenderContext *frame_ctx) {
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
 #if AXES_XN_STYLE == GRID_AXES_XN_FOG
-    axes_xn_apply_transition_fog(1.0f - s_xn_opacity, config->clear_color);
+    axes_xn_apply_transition_fog(1.0f - g_xn_opacity, config->clear_color);
 #endif
 
     float breath = sinf(frame_ctx->config.anim_time * 0.8f) * 0.5f + 0.5f; /* 0..1 */
@@ -311,7 +320,9 @@ void scene_axes_render(const SceneFrameRenderContext *frame_ctx) {
     }
 
     case AXES_THEME_NEON: {
-        float len = 2.5f;
+        /* Procedural theme — see the AXES_NEON_LEN note above for why
+         * this case is inline rather than table-driven. */
+        float len = AXES_NEON_LEN;
         float glow = 0.6f + breath * 0.4f;
         SceneRgba outer[3] = {
             rgba(1.0f, 0.1f, 0.1f, fminf(0.12f * glow * as, 1.0f)),
