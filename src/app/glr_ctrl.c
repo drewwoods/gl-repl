@@ -3,6 +3,7 @@
 #include <c_compat.h>  /* STATIC_ASSERT (C99/C11 portable) */
 #include <ctype.h>
 #include <errno.h>
+#include <signal.h>
 #include <gl_includes.h>
 #include "config.h"
 #include <stdio.h>
@@ -2293,15 +2294,34 @@ int glr_ctrl_router_handle_debug_dump_key(unsigned char key) {
     return 0;
 }
 
+/* Quit safeguard: Ctrl+Q and SIGINT (Ctrl+C) write a recovery copy to
+ * a DISTINCT, findable file — never the active scene/workspace. The
+ * point is to rescue an unintended exit / forgotten save without
+ * silently clobbering the user's real scene; reload it with
+ * `./sample quit-recovery.c`. (Not /tmp — the user would never find
+ * it; not the scene file — that would defeat the safeguard.) */
+#define GLR_QUIT_RECOVERY_FILE "quit-recovery.c"
+
+static volatile sig_atomic_t g_quit_requested = 0;
+
+/* Async-signal-safe: only sets a sig_atomic_t flag. The actual save +
+ * exit runs on the normal path in glr_ctrl_tick(). */
+void glr_ctrl_request_quit(void) {
+    g_quit_requested = 1;
+}
+
+static void glr_ctrl_save_quit_recovery(void) {
+    ReplExportLayout layout;
+    glr_ctrl_fill_export_layout(&layout);
+    repl_export_save_output(GLR_QUIT_RECOVERY_FILE, source_document_view(),
+                            &layout);
+    printf("Saved recovery copy to %s (reload: ./sample %s)\n",
+           GLR_QUIT_RECOVERY_FILE, GLR_QUIT_RECOVERY_FILE);
+}
+
 int glr_ctrl_router_handle_quit_key(unsigned char key) {
     if (key == KEY_CTRL_Q) {
-        /* Save and quit: persist through the same path as Ctrl+S /
-         * File > Save Scene (active named scene -> <workspace>/<slug>.c;
-         * example/transient -> ./output.c) rather than a throwaway
-         * /tmp file the user would never find. */
-        ReplExportLayout layout;
-        glr_ctrl_fill_export_layout(&layout);
-        repl_save_active_scene(&layout);
+        glr_ctrl_save_quit_recovery();
         exit(0);
     }
     return 0;
@@ -3601,6 +3621,14 @@ void glr_ctrl_mousewheel(int wheel, int direction, int x, int y) {
  * glr_ctrl_tick directly. The public timer entry adds
  * glutPostRedisplay + glutTimerFunc reschedule on top. */
 void glr_ctrl_tick(void) {
+    /* SIGINT (Ctrl+C) requested quit: the handler only set a flag;
+     * do the recovery save + exit here on the normal path so no
+     * stdio/file I/O runs inside the signal handler. */
+    if (g_quit_requested) {
+        glr_ctrl_save_quit_recovery();
+        exit(0);
+    }
+
     /* Advance the audio playlist if the current song reached its end
      * (no-op under loop=Song; see glr_audio_tick). */
     glr_audio_tick();

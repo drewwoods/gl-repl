@@ -5,6 +5,7 @@
 #include "app/glr_audio.h"
 
 #include <dirent.h>
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/time.h>
@@ -151,6 +152,14 @@ static void timer_func(int value) {
     glr_ctrl_timer(value);
 }
 
+/* Ctrl+C / terminal SIGINT: route to the same save-and-quit safeguard
+ * as Ctrl+Q. The handler only flips a flag (async-signal-safe); the
+ * recovery save + exit happen on the normal path in glr_ctrl_tick(). */
+static void on_sigint(int sig) {
+    (void)sig;
+    glr_ctrl_request_quit();
+}
+
 int main(int argc, char **argv) {
     glr_ctrl_set_program_name(argv[0]);
     const char *input_file = NULL;
@@ -254,6 +263,7 @@ int main(int argc, char **argv) {
     glutMouseWheelFunc(mousewheel_func);
 #endif
     glutTimerFunc(16, timer_func, 0);
+    signal(SIGINT, on_sigint);   /* Ctrl+C -> save-and-quit safeguard */
 
     glutMainLoop();
     return 0;
