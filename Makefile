@@ -224,7 +224,7 @@ all: sample
 FORCE:
 
 SRCS = \
-	audio.c \
+	src/app/glr_audio.c \
 	src/repl/format.c \
 	prof.c \
 	sample.c \
@@ -302,7 +302,7 @@ SRCS = \
 	src/widgets/variable_panel_state.c \
 	tests/gl-stubs/gl_stub_counts.c
 HDRS = \
-	audio.h \
+	src/app/glr_audio.h \
 	src/repl/format.h \
 	outline_offset.h \
 	prof.h \
@@ -382,7 +382,7 @@ HDRS = \
 	src/widgets/variable_panel_drag.h \
 	src/widgets/variable_panel_state.h
 CORE_TEST_SRCS = \
-	audio.c \
+	src/app/glr_audio.c \
 	src/repl/format.c \
 	prof.c \
 	src/app/glr_actions.c \
@@ -642,7 +642,7 @@ test_scene_palette_OBJS = $(OBJDIR)/$(TEST_DIR)/test_scene_palette.o
 test_scene_palette_LDLIBS =
 test_scene_palette_RUN ?= $(BINDIR)/test_scene_palette
 
-test_audio_OBJS = $(OBJDIR)/$(TEST_DIR)/test_audio.o $(OBJDIR)/audio.o
+test_audio_OBJS = $(OBJDIR)/$(TEST_DIR)/test_audio.o $(OBJDIR)/src/app/glr_audio.o
 test_audio_LDLIBS = $(GL_LDFLAGS)
 test_audio_RUN ?= $(BINDIR)/test_audio
 
@@ -1138,7 +1138,7 @@ coverage: ## Clean, rebuild tests with coverage, run suite, generate HTML report
 
 SANITIZER_CHECKERS ?= core,deadcode,unix,cplusplus,osx
 # Files to exclude from static analysis (e.g., third-party library includes)
-ANALYZE_EXCLUDE ?= audio.c
+ANALYZE_EXCLUDE ?= src/app/glr_audio.c
 ANALYZE_SRCS = $(filter-out $(ANALYZE_EXCLUDE),$(SRCS))
 
 analyze: ## Run static analyzer (clang on macOS, gcc on Linux).

@@ -132,7 +132,7 @@ audio-thread hitches (the kind seen on slow Linux disks):
   isolates whether `ma_engine_init()` (the one synchronous audio call
   on the `main()` path — it opens the OS audio device) is the cause.
 - **Worker hitch detector.** The audio worker thread
-  (`audio_worker_main` in `audio.c`) wakes from `pthread_cond_wait`,
+  (`audio_worker_main` in `src/app/glr_audio.c`) wakes from `pthread_cond_wait`,
   runs exactly one blocking lifecycle op, then sleeps again. The
   dispatch span is timed with `clock_gettime(CLOCK_MONOTONIC)` (after
   the mutex is released, so only the blocking work counts); any op
@@ -303,8 +303,8 @@ Test sources live under `tests/` and shared test-only helpers live under
 | `src/repl/export.c` | `repl_export_save_output` / `repl_export_load_from_file`, workspace header directives, `@scene-name` / `@workspace-dir` markers |
 | `src/repl/export.h` | Export/import public API and workspace-header pending-state types |
 | `src/repl/export_state.h` | Shared dimensions for import/export state text |
-| `audio.c` | App-level playlist engine and persisted audio config |
-| `audio.h` | Audio playback API |
+| `src/app/glr_audio.c` | App-level playlist engine and persisted audio config |
+| `src/app/glr_audio.h` | Audio playback API (`glr_audio_*`) |
 | `prof.c` | CPU wall-time profiling instrumentation (per-section accumulators, frame tick) |
 | `prof.h` | Profiling API (`prof_begin`, `prof_end`, `prof_frame_tick`, etc.); no UI dependency |
 | `src/scene/render_types.h` | Shared `SceneRgba` / `SceneRenderConfig` / `FrameRenderContext` types for scene helpers |
@@ -355,9 +355,10 @@ Test sources live under `tests/` and shared test-only helpers live under
   model modules, `editor_*` for text-document model/controller (under
   `src/editor/`), `glr_*` for app shell/controller/app-service code,
   `scene_*` for 3D rendering, `ui_*` for 2D view rendering, and neutral
-  names such as `prof` for generic utilities. `audio.c` is the neutrally-named
-  app-level service; whether it gets a `glr_audio` rename is part of the open
-  namespace audit. Don't introduce new top-level prefixes without a plan.
+  names such as `prof` for generic utilities. The app-level audio
+  service lives at `src/app/glr_audio.c` with the `glr_audio_*` API
+  (resolved from the former neutral `audio.c`). Don't introduce new
+  top-level prefixes without a plan.
 - Config toggles use the `ReplConfigItem` / `ReplConfigKey` pattern: add a
   descriptor entry to `g_cfg_items[]` in `src/app/glr_actions.c`; `CFG_ITEM_COUNT`
   auto-computes via `sizeof`

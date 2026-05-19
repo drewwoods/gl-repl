@@ -2,7 +2,7 @@
 #include "app/glr_actions.h"
 #include "app/glr_debug.h"
 #include "repl/executor.h"
-#include "audio.h"
+#include "app/glr_audio.h"
 
 #include <dirent.h>
 #include <stdio.h>
@@ -216,29 +216,29 @@ int main(int argc, char **argv) {
      * first track, shutdown on exit. Failures here are non-fatal: the
      * REPL keeps running without sound.
      * Skipped entirely when --no-audio was passed. */
-    if (!no_audio) init_trace("audio_init begin");
-    if (!no_audio && audio_init() == 0) {
-        init_trace("audio_init done");
-        audio_set_state_file(AUDIO_STATE_FILE);
+    if (!no_audio) init_trace("glr_audio_init begin");
+    if (!no_audio && glr_audio_init() == 0) {
+        init_trace("glr_audio_init done");
+        glr_audio_set_state_file(AUDIO_STATE_FILE);
         static char music_paths[AUDIO_MUSIC_MAX_PATHS]
                                [AUDIO_MUSIC_MAX_LEN];
         int n = scan_mp3_playlist(music_paths, AUDIO_MUSIC_MAX_PATHS);
         if (n > 0) {
             const char *ptrs[AUDIO_MUSIC_MAX_PATHS];
             for (int i = 0; i < n; i++) ptrs[i] = music_paths[i];
-            audio_set_playlist(ptrs, n);
-            audio_play_playlist();
+            glr_audio_set_playlist(ptrs, n);
+            glr_audio_play_playlist();
         } else {
             /* Back-compat: no .mp3 files found, fall back to the
              * legacy single-file default so existing setups that use
              * assets/song.mp3 keep working. */
-            audio_play_music(AUDIO_DEFAULT_MUSIC);
+            glr_audio_play_music(AUDIO_DEFAULT_MUSIC);
         }
         /* Apply saved audio cfg after play_playlist() so load_state() has
          * already populated g_cfg_mode. The action layer maps that UI config
          * value back onto the audio engine before the first frame. */
         glr_actions_apply_defaults();
-        atexit(audio_shutdown);
+        atexit(glr_audio_shutdown);
         init_trace("audio playlist started");
     }
 
