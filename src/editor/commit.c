@@ -763,20 +763,11 @@ ReplCompileResult editor_compile_func_def(const char *input,
         return REPL_COMPILE_ERROR;
     }
 
-    /* Build fd + fe before computing insert_pos so the indent
-     * reflects the doc state. fd lives at depth 0; the indent for
-     * a top-level decl is two spaces (legacy fill_scope_indent at a
-     * depth-0 position returns "  "). */
-    int insert_pos_pre_delete = -1;
-    {
-        /* Compute insert_pos as if no delete; used to fill `indent`
-         * via the source-scope helper at that pos. The result is
-         * post-delete via compile_function_decl_insert_pos_after_delete
-         * below, but the indent is the same either way (depth 0). */
-        insert_pos_pre_delete = 0;
-    }
+    /* A func decl always lives at depth 0, so its indent is the
+     * depth-0 indent regardless of the (post-delete) insert position
+     * computed below — query the source-scope helper at pos 0. */
     char indent[32];
-    repl_source_scope_cmd_indent(insert_pos_pre_delete, indent, sizeof(indent));
+    repl_source_scope_cmd_indent(0, indent, sizeof(indent));
 
     GLCmd fd;
     memset(&fd, 0, sizeof(fd));
@@ -1138,6 +1129,8 @@ void editor_commit_func_decl_resume_set(int delta) {
     g_func_decl_resume_delta = delta;
 }
 
+/* Side effect: consumes (zeroes) g_func_decl_resume_delta — it is a
+ * one-shot, applied to at most one exit-target resolution. */
 int editor_commit_resolve_insert_exit_target(int target) {
     if (!editor_insert_mode() ||
         g_func_decl_resume_delta <= 0 ||
