@@ -300,44 +300,24 @@ static int repl_code_panel_cursor_doc_line_from_layout(
     int panel_w, int text_x) {
     int cursor_doc_line = header_rows;
 
-    /* Three cases that differ ONLY in how many document lines precede the
-     * cursor row: insert mode and an in-range edit line both sum the first
-     * `edit_line` lines (insert mode additionally clamps to
-     * document_count); the out-of-range fallback sums every line. The
-     * trailing cursor-row add is deliberately identical in all three. */
-    if (snap->editor_input.insert_mode) {
-        for (int i = 0;
-             i < snap->edit_line && i < snap->document_count;
-             i++) {
-            cursor_doc_line += cmd_main_rows[i];
-            cursor_doc_line += replay_extra_rows[i];
-        }
-        cursor_doc_line += repl_code_panel_cursor_row(
-            snap,
-            snap->editor_input.input,
-            text_x + snap->active_indent_chars * FONT_W,
-            panel_w, snap->editor_input.cursor_pos, NULL, NULL, NULL);
-    } else if (snap->edit_line < snap->document_count) {
-        for (int i = 0; i < snap->edit_line; i++) {
-            cursor_doc_line += cmd_main_rows[i];
-            cursor_doc_line += replay_extra_rows[i];
-        }
-        cursor_doc_line += repl_code_panel_cursor_row(
-            snap,
-            snap->editor_input.input,
-            text_x + snap->active_indent_chars * FONT_W,
-            panel_w, snap->editor_input.cursor_pos, NULL, NULL, NULL);
-    } else {
-        for (int i = 0; i < snap->document_count; i++) {
-            cursor_doc_line += cmd_main_rows[i];
-            cursor_doc_line += replay_extra_rows[i];
-        }
-        cursor_doc_line += repl_code_panel_cursor_row(
-            snap,
-            snap->editor_input.input,
-            text_x + snap->active_indent_chars * FONT_W,
-            panel_w, snap->editor_input.cursor_pos, NULL, NULL, NULL);
+    /* The three former branches (insert mode / in-range edit line /
+     * out-of-range fallback) all summed the same prefix and then added
+     * the identical cursor-row term. The prefix length is the same in
+     * every case: min(edit_line, document_count) — insert mode clamps
+     * to both bounds; non-insert uses edit_line when it is
+     * < document_count, otherwise document_count, which is that same
+     * min. So the dispatch was redundant. */
+    int prefix = snap->edit_line < snap->document_count
+                     ? snap->edit_line : snap->document_count;
+    for (int i = 0; i < prefix; i++) {
+        cursor_doc_line += cmd_main_rows[i];
+        cursor_doc_line += replay_extra_rows[i];
     }
+    cursor_doc_line += repl_code_panel_cursor_row(
+        snap,
+        snap->editor_input.input,
+        text_x + snap->active_indent_chars * FONT_W,
+        panel_w, snap->editor_input.cursor_pos, NULL, NULL, NULL);
 
     return cursor_doc_line;
 }
