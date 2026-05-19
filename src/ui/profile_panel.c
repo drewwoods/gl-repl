@@ -133,37 +133,19 @@ static void fmt_us(char *buf, int buf_sz, double us) {
         snprintf(buf, (size_t)buf_sz, "%.2f ms", us / 1000.0);
 }
 
+/* A "detail" row is an indented child in section_label(): the label
+ * indentation reflects true prof-scope enclosure (e.g. PROF_SNAPSHOT_*
+ * nest inside PROF_SNAPSHOT, PROF_SCENE_3D_OVERLAY_* inside _OVERLAYS),
+ * so deriving detail from the label keeps the two from drifting and a
+ * new nested section is a one-line section_label() change.
+ *
+ * Behavior change vs the previous hand-maintained || list: that list
+ * omitted PROF_SNAPSHOT_PREP and PROF_SCENE_3D_OVERLAY_NORMALS, which
+ * ARE enclosed children (verified against prof_begin/prof_end
+ * nesting). They now fold as detail like their siblings — the
+ * intended classification. */
 static int is_detail_section(ProfSection s) {
-    return (s == PROF_SCENE_3D_SETUP ||
-            s == PROF_SCENE_3D_FILL ||
-            s == PROF_SCENE_3D_FADE ||
-            s == PROF_SCENE_3D_FADE_BATCH_PREP ||
-            s == PROF_SCENE_3D_FADE_BATCH_EXEC ||
-            s == PROF_SCENE_3D_FADE_BATCH_POST ||
-            s == PROF_SCENE_3D_HELPERS ||
-            s == PROF_SCENE_3D_BACKDROP ||
-            s == PROF_SCENE_3D_GRID ||
-            s == PROF_SCENE_3D_AXES ||
-            s == PROF_SCENE_3D_ORBIT_TARGET ||
-            s == PROF_SCENE_3D_OVERLAY_OUTLINES ||
-            s == PROF_SCENE_3D_OVERLAYS ||
-            s == PROF_SCENE_3D_OVERLAY_BUILD_GUIDES ||
-            s == PROF_SCENE_3D_OVERLAY_TRANSFORM_GUIDES ||
-            s == PROF_SCENE_3D_OVERLAY_VERTEX_NUMBERS ||
-            s == PROF_CODE_PANEL_LAYOUT ||
-            s == PROF_CODE_PANEL_CHROME ||
-            s == PROF_CODE_PANEL_LINES ||
-            s == PROF_CODE_PANEL_LINES_STATIC ||
-            s == PROF_CODE_PANEL_LINES_BODY ||
-            s == PROF_CODE_PANEL_LINES_BODY_CMDS ||
-            s == PROF_CODE_PANEL_LINES_BODY_NEWLINE ||
-            s == PROF_CODE_PANEL_LINES_FOOTER ||
-            s == PROF_CODE_PANEL_OVERLAYS ||
-            s == PROF_SNAPSHOT_TRANSFORMERS ||
-            s == PROF_SNAPSHOT_HIGHLIGHTS ||
-            s == PROF_SNAPSHOT_VIRTUAL_LINES ||
-            s == PROF_SNAPSHOT_SCENE_CONFIG ||
-            s == PROF_SNAPSHOT_UI);
+    return section_label(s)[0] == ' ';
 }
 
 /* Apply a green/yellow/red color based on section timing thresholds.
