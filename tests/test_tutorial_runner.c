@@ -6,6 +6,7 @@
 #include "editor/completion.h"
 #include "editor/input.h"
 #include "editor/state.h"
+#include "editor/undo.h"
 #include "keys.h"
 #include "repl/core.h"
 #include "repl/state_owners.h"
@@ -399,6 +400,7 @@ static void test_locked_comment_mutations_are_blocked(void) {
 
 static void test_paste_before_locked_prefix_is_blocked(void) {
     const char *expected;
+    EditorUndoRingState ring_before, ring_after;
 
     reset_fixture();
     tutorial_start(0);
@@ -409,12 +411,25 @@ static void test_paste_before_locked_prefix_is_blocked(void) {
     repl_state_edit_line_set(1);
     editor_clipboard_copy_current();
     repl_state_edit_line_set(0);
+
+    /* Regression: a guard-rejected paste must not touch the undo/redo
+     * rings. editor_undo_push_snapshot() (saves a snapshot, bumps
+     * undo_count, zeroes the redo ring) used to run BEFORE the
+     * read-only guard in editor_clipboard_paste_current(), so a blocked
+     * paste silently pushed a phantom undo and destroyed the redo
+     * stack with the document unchanged. */
+    editor_undo_ring_state_capture(&ring_before);
     editor_clipboard_paste_current();
+    editor_undo_ring_state_capture(&ring_after);
 
     ASSERT_INT("paste before locked prefix keeps line count",
                repl_state_document_count(), 3);
     ASSERT_STR("paste before locked prefix status",
                status_text(), "Tutorial comment is read-only");
+    ASSERT_INT("blocked paste pushes no phantom undo",
+               ring_after.undo_count, ring_before.undo_count);
+    ASSERT_INT("blocked paste does not clear redo ring",
+               ring_after.redo_count, ring_before.redo_count);
 }
 
 static void test_undo_redo_blocked_during_tutorial(void) {
