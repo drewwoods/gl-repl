@@ -20,6 +20,15 @@ typedef struct AxesThemeSpec {
     SceneRgba label[3];
 } AxesThemeSpec;
 
+/* AXES_THEME_NEON is intentionally NOT in g_axes_theme_specs[] below.
+ * The static spec carries one flat axis/label color per axis; NEON is a
+ * per-frame procedural look (a wide dim halo pass + a narrow bright core
+ * pass + glowing tip dots, every channel modulated by the breathing
+ * `glow` term) that a single SceneRgba triplet cannot express. It is
+ * handled inline in scene_axes_render's switch; only its axis length is
+ * a plain constant. */
+#define AXES_NEON_LEN 2.5f
+
 static void scene_axes_push_state(void) {
     glPushAttrib(GL_ALL_ATTRIB_BITS);
 }
@@ -311,7 +320,9 @@ void scene_axes_render(const SceneFrameRenderContext *frame_ctx) {
     }
 
     case AXES_THEME_NEON: {
-        float len = 2.5f;
+        /* Procedural theme — see the AXES_NEON_LEN note above for why
+         * this case is inline rather than table-driven. */
+        float len = AXES_NEON_LEN;
         float glow = 0.6f + breath * 0.4f;
         SceneRgba outer[3] = {
             rgba(1.0f, 0.1f, 0.1f, fminf(0.12f * glow * as, 1.0f)),
