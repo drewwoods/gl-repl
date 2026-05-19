@@ -3,6 +3,7 @@
  */
 #include "axes.h"
 #include "config.h"
+#include "occluded_ghost.h"  /* SCENE_OCCLUDED_GHOST_STIPPLE */
 #include <math.h>
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
@@ -383,7 +384,7 @@ void scene_axes_render(const SceneFrameRenderContext *frame_ctx) {
 
         /* Negative axes (stippled) */
         glEnable(GL_LINE_STIPPLE);
-        glLineStipple(2, 0xAAAA);
+        glLineStipple(2, SCENE_OCCLUDED_GHOST_STIPPLE);
         draw_axis_line_triplet(len, 2.0f, negative_axes, -1);
         glDisable(GL_LINE_STIPPLE);
 

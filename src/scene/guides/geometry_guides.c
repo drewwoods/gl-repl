@@ -3,6 +3,7 @@
  */
 #include "geometry_guides.h"
 #include "scene/palette.h"
+#include "scene/occluded_ghost.h"  /* SCENE_OCCLUDED_GHOST_STIPPLE */
 
 static void geometry_guides_push_state(void) {
     glPushAttrib(GL_ALL_ATTRIB_BITS);
@@ -271,7 +272,7 @@ static void draw_normal_guides(const SceneGuideSnapshot *snapshot) {
     }
 
     glEnable(GL_LINE_STIPPLE);
-    glLineStipple(1, 0xAAAA);
+    glLineStipple(1, SCENE_OCCLUDED_GHOST_STIPPLE);
     glLineWidth(4.0f);
 
     scene_clr_a(SCENE_CLR_GUIDE_NORMAL_DOUBLE, 0.75f);
