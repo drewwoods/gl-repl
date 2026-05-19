@@ -43,8 +43,12 @@ duplicated here.
 
 ## Stance
 
-- Behavior-preserving unless explicitly flagged (items 1 and 2 are
-  deliberate behavior decisions).
+- Behavior-preserving unless explicitly flagged. **Items 2 and 19**
+  require a product/behavior decision before any code (Ctrl+Q save
+  semantics; the `LOAD_SCENE` stub). **Item 1** carries a behavior
+  delta only on currently-unreachable input — a safe correctness
+  guard, no decision needed. This is the authoritative decision set;
+  the Sequencing section and the closing gate restate it identically.
 - Each followup names its in-tree idiom and its test surface.
 - Priority tiers: **P1** correctness-adjacent / latent, **P2**
   high-drift duplication (maintenance value), **P3** lower-value
@@ -177,9 +181,10 @@ ctx->document_count ? ctx->edit_line : ctx->document_count)` at ~6 sites
 comma/arg scanners (`write_for_begin_as_c` ~`:1097`, plus ~`:1188,
 :1223, :1356, :1395, :1531`, and `split_top_level_args` ~`:1583`).
 CLAUDE.md mandates `repl_scan_next_arg_delim()` (eval.h) for splitting a
-call's comma-separated args; it is used in exactly one place
-project-wide (`parser.c`). The export splitters reimplement the same
-paren-aware logic.
+call's comma-separated args; it is used in only two places today
+(`src/repl/parser.c:354` and `src/app/glr_ctrl.c:117`'s
+`parse_vertex_arg_slots`). The export splitters reimplement the same
+paren-aware logic instead of reusing it.
 
 **Approach.** Migrate to `repl_scan_next_arg_delim` / a single
 `split_top_level_args`. Some sites differ in string-literal handling —
@@ -351,6 +356,8 @@ Batch into small, independently-reviewable PRs (the established rhythm):
    against a triggering feature).
 
 Each PR: `make check-state-ownership` + `make test` green, behavior
-unchanged (except items 1/2/19 which carry an explicit, called-out
-behavior delta). Move this doc `plans/in-review → plans/active` when the
-first PR opens; check items off as they land.
+unchanged — except **item 1** (a guarded delta on currently-unreachable
+input, no decision needed) and **items 2 / 19** (which require the
+product decision called out in Stance and step 2 above). Move this doc
+`plans/in-review → plans/active` when the first PR opens; check items
+off as they land.
