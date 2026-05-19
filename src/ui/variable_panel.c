@@ -33,8 +33,9 @@ static const float k_var_handle_log[4]     = { 1.00f, 0.55f, 0.10f, 0.95f };
 static const float k_var_handle_linear[4]  = { 1.00f, 0.80f, 0.20f, 0.95f };
 static const float k_var_handle_idle[4]    = { 0.55f, 0.70f, 1.00f, 0.90f };
 
-/* Local copy of the layout-mode clamp.  Duplicated by repl_editor.c and
- * ui_panels.c; promoting to a shared header is a separate cleanup. */
+/* Local copy of the layout-mode clamp, also implemented as
+ * ui_layout_code_panel_layout_mode() in ui/layout.c; promoting to a
+ * shared header is a separate cleanup. */
 static int rvp_code_panel_layout_mode(void) {
     int layout = ui_state_code_panel().layout_mode;
     if (layout < 0 || layout >= CODE_PANEL_LAYOUT_COUNT)
