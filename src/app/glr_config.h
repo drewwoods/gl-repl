@@ -66,7 +66,7 @@ typedef enum GlrConfigKey {
  * label, keyboard shortcut (ASCII key code or GLUT_KEY_* with is_special flag),
  * the stable GlrConfigKey, state count (2 for toggle, >2 for cycle with named
  * states), state name labels, and whether this item is a section header/separator.
- * Registered in g_cfg_items[] in repl_actions.c; count auto-computes via sizeof. */
+ * Registered in g_cfg_items[] in glr_actions.c; count auto-computes via sizeof. */
 typedef struct {
     const char  *label;
     int          key_code;      /* ASCII ctrl key or GLUT_KEY_* */

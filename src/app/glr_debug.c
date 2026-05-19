@@ -1,5 +1,5 @@
 /*
- * repl_debug.c - Diagnostic dumps for CLI flags and tests.
+ * glr_debug.c - Diagnostic dumps for CLI flags and tests.
  */
 #include "app/glr_debug.h"
 
@@ -41,21 +41,21 @@ void glr_debug_dump_editor(FILE *out, SourceTextView text) {
 void glr_debug_dump_flat_commands(FILE *out, EditorBufferView text) {
     FILE *dst = out ? out : stdout;
     FlatProgramView flat_program = repl_state_flat_program_view();
-    const GLCmd *g_flat_cmds = flat_program.cmds;
-    int g_num_flat_cmds = flat_program.cmd_count;
+    const GLCmd *flat_cmds = flat_program.cmds;
+    int num_flat_cmds = flat_program.cmd_count;
 
     if (repl_state_flat_program_dirty()) {
         repl_flatten_commands();
         flat_program = repl_state_flat_program_view();
-        g_flat_cmds = flat_program.cmds;
-        g_num_flat_cmds = flat_program.cmd_count;
+        flat_cmds = flat_program.cmds;
+        num_flat_cmds = flat_program.cmd_count;
     }
 
     fprintf(dst, "=== REPL Flattened Commands Dump ===\n");
-    fprintf(dst, "num_flat_cmds=%d\n", g_num_flat_cmds);
+    fprintf(dst, "num_flat_cmds=%d\n", num_flat_cmds);
 
-    for (int flat_idx = 0; flat_idx < g_num_flat_cmds; flat_idx++) {
-        const GLCmd *cmd = &g_flat_cmds[flat_idx];
+    for (int flat_idx = 0; flat_idx < num_flat_cmds; flat_idx++) {
+        const GLCmd *cmd = &flat_cmds[flat_idx];
         const char *line_text = editor_buffer_view_line(text, cmd->src_cmd_idx);
         fprintf(dst,
                 "%4d | %-22s | valid=%d has_vars=%d src_idx=%d call_src_idx=%d root_call_src_idx=%d func_scope=0x%08x | %s\n",
