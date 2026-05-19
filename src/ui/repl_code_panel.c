@@ -307,7 +307,7 @@ static int repl_code_panel_cursor_doc_line_from_layout(
      * to both bounds; non-insert uses edit_line when it is
      * < document_count, otherwise document_count, which is that same
      * min. So the dispatch was redundant. */
-    int prefix = snap->edit_line < snap->document_count
+    int prefix = (snap->edit_line < snap->document_count)
                      ? snap->edit_line : snap->document_count;
     for (int i = 0; i < prefix; i++) {
         cursor_doc_line += cmd_main_rows[i];
