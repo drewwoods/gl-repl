@@ -29,14 +29,14 @@
  * open.
  *
  * load_state() stays synchronous on the caller: it reads the small
- * app-owned INI (never a media file), and audio_play_playlist()'s
+ * app-owned INI (never a media file), and glr_audio_play_playlist()'s
  * cfg_mode side effect must be visible to the immediately-following
  * caller (see tests/test_audio.c). Non-blocking control calls
  * (ma_sound_stop/start/set_looping, ma_engine volume) also stay on the
  * caller under the mutex.
  */
 
-#include "audio.h"
+#include "app/glr_audio.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -67,8 +67,8 @@
 /* Module state                                                        */
 /* ------------------------------------------------------------------ */
 
-#define AUDIO_MAX_TRACKS 64
-#define AUDIO_MAX_PATH   512
+#define GLR_AUDIO_MAX_TRACKS 64
+#define GLR_AUDIO_MAX_PATH   512
 
 static ma_engine g_engine;
 
@@ -89,14 +89,14 @@ static int g_paused       = 0;  /* paused: track loaded but stopped, cursor held
 static int g_gesture_done = 0;  /* have we satisfied browser autoplay policy? */
 
 /* Playlist: caller-registered tracks, in play order. */
-static char g_playlist[AUDIO_MAX_TRACKS][AUDIO_MAX_PATH];
+static char g_playlist[GLR_AUDIO_MAX_TRACKS][GLR_AUDIO_MAX_PATH];
 static int  g_playlist_count = 0;
 static int  g_playlist_pos   = 0;  /* index of the currently-loaded track */
 
-/* Default to AUDIO_LOOP_ALL so a folder of tracks just plays
+/* Default to GLR_AUDIO_LOOP_ALL so a folder of tracks just plays
  * through and repeats - the friendliest default, and it collapses to
  * "repeat forever" when there's only one file. */
-static int g_loop_mode = AUDIO_LOOP_ALL;
+static int g_loop_mode = GLR_AUDIO_LOOP_ALL;
 
 /* Native builds don't need a gesture. Emscripten does. */
 #if defined(__EMSCRIPTEN__)
@@ -141,11 +141,11 @@ static int             g_req_save = 0;         /* independent: periodic save */
 /* ------------------------------------------------------------------ */
 
 /* Path of the INI file, or empty string when disabled. */
-static char  g_state_file[AUDIO_MAX_PATH] = "";
+static char  g_state_file[GLR_AUDIO_MAX_PATH] = "";
 
 /* Opaque integer owned by repl_actions.c (maps to AUDIO_CFG_* enum).
  * Stored in the INI as cfg_mode= and handed back through
- * audio_get_cfg_mode() so glr_actions_apply_defaults() can map it
+ * glr_audio_get_cfg_mode() so glr_actions_apply_defaults() can map it
  * to paused/loop state. -1 means "not yet loaded / not set". */
 static int g_cfg_mode = -1;
 
@@ -209,8 +209,8 @@ static float cursor_seconds_locked(void) {
  * the seconds before a flush is a music-resume position, not worth a
  * stall (and this now runs off the render thread anyway). */
 static void worker_save_state(void) {
-    char state_file[AUDIO_MAX_PATH];
-    char cur_track[AUDIO_MAX_PATH] = "";
+    char state_file[GLR_AUDIO_MAX_PATH];
+    char cur_track[GLR_AUDIO_MAX_PATH] = "";
     int  have_track;
     float offset;
     int  cfg_mode;
@@ -230,7 +230,7 @@ static void worker_save_state(void) {
     cfg_mode = g_cfg_mode;
     unlock();
 
-    char tmp[AUDIO_MAX_PATH];
+    char tmp[GLR_AUDIO_MAX_PATH];
     if (snprintf(tmp, sizeof(tmp), ".%s.tmp", state_file) >= (int)sizeof(tmp))
         return;
 
@@ -246,15 +246,15 @@ static void worker_save_state(void) {
          * shutdown does not clobber a valid resume position. */
         FILE *existing = fopen(state_file, "r");
         if (existing) {
-            char line[AUDIO_MAX_PATH + 16];
-            char saved_track[AUDIO_MAX_PATH] = "";
+            char line[GLR_AUDIO_MAX_PATH + 16];
+            char saved_track[GLR_AUDIO_MAX_PATH] = "";
             float saved_offset = 0.0f;
             while (fgets(line, (int)sizeof(line), existing)) {
                 if (strncmp(line, "track=", 6) == 0) {
                     char *p = line + 6;
                     size_t len = strlen(p);
                     while (len > 0 && (p[len-1] == '\n' || p[len-1] == '\r')) len--;
-                    if (len >= AUDIO_MAX_PATH) len = AUDIO_MAX_PATH - 1;
+                    if (len >= GLR_AUDIO_MAX_PATH) len = GLR_AUDIO_MAX_PATH - 1;
                     memcpy(saved_track, p, len);
                     saved_track[len] = '\0';
                 } else if (strncmp(line, "offset=", 7) == 0) {
@@ -287,10 +287,10 @@ static void worker_save_state(void) {
 
 /* Loads persisted playback position and audio cfg from the state file.
  * Synchronous on the caller thread: the INI is a small app-owned file
- * (never a media file), and audio_play_playlist()'s cfg_mode side
+ * (never a media file), and glr_audio_play_playlist()'s cfg_mode side
  * effect must be visible to the immediately-following caller. cfg_mode
  * is stored in g_cfg_mode for repl_actions.c to pick up via
- * audio_get_cfg_mode(). Returns the playlist index of the saved track,
+ * glr_audio_get_cfg_mode(). Returns the playlist index of the saved track,
  * or -1 on failure. Sets *out_offset to the saved cursor in seconds. */
 static int load_state(float *out_offset) {
     *out_offset = 0.0f;
@@ -298,17 +298,17 @@ static int load_state(float *out_offset) {
     FILE *f = fopen(g_state_file, "r");
     if (!f) return -1;
 
-    char saved_track[AUDIO_MAX_PATH] = "";
+    char saved_track[GLR_AUDIO_MAX_PATH] = "";
     float offset  = 0.0f;
     int cfg_mode  = -1;   /* -1 = not found in file */
-    char line[AUDIO_MAX_PATH + 16];
+    char line[GLR_AUDIO_MAX_PATH + 16];
 
     while (fgets(line, (int)sizeof(line), f)) {
         if (strncmp(line, "track=", 6) == 0) {
             char *p = line + 6;
             size_t len = strlen(p);
             while (len > 0 && (p[len-1] == '\n' || p[len-1] == '\r')) len--;
-            if (len >= AUDIO_MAX_PATH) len = AUDIO_MAX_PATH - 1;
+            if (len >= GLR_AUDIO_MAX_PATH) len = GLR_AUDIO_MAX_PATH - 1;
             memcpy(saved_track, p, len);
             saved_track[len] = '\0';
         } else if (strncmp(line, "offset=", 7) == 0) {
@@ -358,7 +358,7 @@ static void worker_uninit_all(void) {
  * lock to publish it as the active slot and retire the old one.
  * Returns 0 on success, -1 on failure (slot left uninited). */
 static int worker_load(int idx, float seek_secs) {
-    char path[AUDIO_MAX_PATH];
+    char path[GLR_AUDIO_MAX_PATH];
     int  target, old, loop_song, paused;
 
     lock();
@@ -366,7 +366,7 @@ static int worker_load(int idx, float seek_secs) {
     memcpy(path, g_playlist[idx], sizeof(path));
     old       = g_active;
     target    = (g_active < 0) ? 0 : (1 - g_active);
-    loop_song = (g_loop_mode == AUDIO_LOOP_SONG);
+    loop_song = (g_loop_mode == GLR_AUDIO_LOOP_SONG);
     paused    = g_paused;
     g_loading = 1;
     unlock();
@@ -436,7 +436,7 @@ static int worker_load(int idx, float seek_secs) {
 
 /* Worker-only. The current track ended; advance per loop mode. Caps
  * attempts at playlist_count so a folder of broken files can't spin
- * forever (the skip-broken loop migrated here from audio_tick so it
+ * forever (the skip-broken loop migrated here from glr_audio_tick so it
  * no longer runs on the render thread). */
 static void worker_advance(void) {
     int pos, count, mode;
@@ -450,7 +450,7 @@ static void worker_advance(void) {
     while (attempts < count) {
         int next = pos + 1;
         if (next >= count) {
-            if (mode == AUDIO_LOOP_ALL) {
+            if (mode == GLR_AUDIO_LOOP_ALL) {
                 next = 0;
             } else {
                 worker_uninit_all();   /* OFF: end of playlist */
@@ -546,7 +546,7 @@ static int request_start(int idx, float seek) {
 /* Public API                                                          */
 /* ------------------------------------------------------------------ */
 
-int audio_init(void) {
+int glr_audio_init(void) {
     if (g_inited) return 0;
 
     ma_result r = ma_engine_init(NULL, &g_engine);
@@ -588,7 +588,7 @@ int audio_init(void) {
     return 0;
 }
 
-void audio_shutdown(void) {
+void glr_audio_shutdown(void) {
     if (!g_inited) return;
 
     if (g_worker_running) {
@@ -615,7 +615,7 @@ void audio_shutdown(void) {
     g_active       = -1;
 }
 
-int audio_set_playlist(const char *const *paths, int count) {
+int glr_audio_set_playlist(const char *const *paths, int count) {
     if (!paths || count < 0) return -1;
 
     /* Retire any current sound asynchronously; never block the caller. */
@@ -627,17 +627,17 @@ int audio_set_playlist(const char *const *paths, int count) {
     g_pending_start  = 0;
 
     int n = count;
-    if (n > AUDIO_MAX_TRACKS) {
+    if (n > GLR_AUDIO_MAX_TRACKS) {
         fprintf(stderr,
                 "repl_audio: playlist has %d tracks; truncating to %d\n",
-                count, AUDIO_MAX_TRACKS);
-        n = AUDIO_MAX_TRACKS;
+                count, GLR_AUDIO_MAX_TRACKS);
+        n = GLR_AUDIO_MAX_TRACKS;
     }
 
     for (int i = 0; i < n; i++) {
         const char *p = paths[i] ? paths[i] : "";
         size_t len = strlen(p);
-        if (len >= AUDIO_MAX_PATH) len = AUDIO_MAX_PATH - 1;
+        if (len >= GLR_AUDIO_MAX_PATH) len = GLR_AUDIO_MAX_PATH - 1;
         memcpy(g_playlist[i], p, len);
         g_playlist[i][len] = '\0';
     }
@@ -646,7 +646,7 @@ int audio_set_playlist(const char *const *paths, int count) {
     return n;
 }
 
-int audio_play_playlist(void) {
+int glr_audio_play_playlist(void) {
     if (!g_inited || g_playlist_count == 0) return -1;
 
     /* Resume from persisted state if possible. load_state() is
@@ -660,21 +660,21 @@ int audio_play_playlist(void) {
     return request_start(0, -1.0f);
 }
 
-int audio_play_music(const char *path) {
+int glr_audio_play_music(const char *path) {
     if (!path || !*path) return -1;
     const char *arr[1] = { path };
-    if (audio_set_playlist(arr, 1) < 0) return -1;
-    return audio_play_playlist();
+    if (glr_audio_set_playlist(arr, 1) < 0) return -1;
+    return glr_audio_play_playlist();
 }
 
-void audio_stop_music(void) {
+void glr_audio_stop_music(void) {
     lock();
     if (g_active >= 0)
         ma_sound_stop(&g_slot[g_active]);   /* non-blocking */
     unlock();
 }
 
-int audio_next_track(void) {
+int glr_audio_next_track(void) {
     if (!g_inited || g_playlist_count == 0) return -1;
     lock();
     int next = g_playlist_pos + 1;
@@ -683,7 +683,7 @@ int audio_next_track(void) {
     return request_start(next, -1.0f);
 }
 
-int audio_prev_track(void) {
+int glr_audio_prev_track(void) {
     if (!g_inited || g_playlist_count == 0) return -1;
     lock();
     int prev = g_playlist_pos - 1;
@@ -692,7 +692,7 @@ int audio_prev_track(void) {
     return request_start(prev, -1.0f);
 }
 
-void audio_tick(void) {
+void glr_audio_tick(void) {
     /* All work here is messaging the worker; with no worker nothing is
      * (or can be) playing, so there is nothing to do. */
     if (!g_inited || !g_worker_running) return;
@@ -712,7 +712,7 @@ void audio_tick(void) {
     /* In SONG mode miniaudio loops internally; there is no end to
      * detect. Otherwise, when the track has ended and nothing is
      * already loading/queued, ask the worker to advance. */
-    if (g_loop_mode != AUDIO_LOOP_SONG &&
+    if (g_loop_mode != GLR_AUDIO_LOOP_SONG &&
         g_active >= 0 && !g_loading && g_req == AWR_NONE &&
         ma_sound_at_end(&g_slot[g_active])) {
         g_req = AWR_ADVANCE;
@@ -721,23 +721,23 @@ void audio_tick(void) {
     unlock();
 }
 
-void audio_set_loop_mode(int mode) {
-    if (mode < AUDIO_LOOP_OFF)  mode = AUDIO_LOOP_OFF;
-    if (mode > AUDIO_LOOP_ALL)  mode = AUDIO_LOOP_ALL;
+void glr_audio_set_loop_mode(int mode) {
+    if (mode < GLR_AUDIO_LOOP_OFF)  mode = GLR_AUDIO_LOOP_OFF;
+    if (mode > GLR_AUDIO_LOOP_ALL)  mode = GLR_AUDIO_LOOP_ALL;
     lock();
     g_loop_mode = mode;
     if (g_active >= 0)
         ma_sound_set_looping(
             &g_slot[g_active],
-            (g_loop_mode == AUDIO_LOOP_SONG) ? MA_TRUE : MA_FALSE);
+            (g_loop_mode == GLR_AUDIO_LOOP_SONG) ? MA_TRUE : MA_FALSE);
     unlock();
 }
 
-int audio_get_loop_mode(void) {
+int glr_audio_get_loop_mode(void) {
     return g_loop_mode;
 }
 
-void audio_set_paused(int paused) {
+void glr_audio_set_paused(int paused) {
     int p = paused ? 1 : 0;
     lock();
     int was_paused = g_paused;
@@ -751,11 +751,11 @@ void audio_set_paused(int paused) {
     unlock();
 }
 
-int audio_is_paused(void) {
+int glr_audio_is_paused(void) {
     return g_paused;
 }
 
-void audio_set_muted(int muted) {
+void glr_audio_set_muted(int muted) {
     g_muted = muted ? 1 : 0;
     if (!g_inited) return;
     /* Engine-level volume is a non-blocking atomic store; safe on the
@@ -763,15 +763,15 @@ void audio_set_muted(int muted) {
     ma_engine_set_volume(&g_engine, g_muted ? 0.0f : 1.0f);
 }
 
-int audio_is_muted(void) {
+int glr_audio_is_muted(void) {
     return g_muted;
 }
 
-const char *audio_get_current_track(void) {
+const char *glr_audio_get_current_track(void) {
     /* Only the main thread calls this (status bar); copy under the
      * lock into a static buffer so a concurrent worker swap of
      * g_playlist_pos can't tear the read. Valid until the next call. */
-    static char buf[AUDIO_MAX_PATH];
+    static char buf[GLR_AUDIO_MAX_PATH];
     lock();
     if (!g_music_loaded ||
         g_playlist_pos < 0 || g_playlist_pos >= g_playlist_count) {
@@ -783,20 +783,20 @@ const char *audio_get_current_track(void) {
     return buf;
 }
 
-unsigned int audio_track_generation(void) {
+unsigned int glr_audio_track_generation(void) {
     lock();
     unsigned int v = g_track_generation;
     unlock();
     return v;
 }
 
-void audio_set_state_file(const char *path) {
+void glr_audio_set_state_file(const char *path) {
     lock();
     if (!path) {
         g_state_file[0] = '\0';
     } else {
         size_t len = strlen(path);
-        if (len >= AUDIO_MAX_PATH) len = AUDIO_MAX_PATH - 1;
+        if (len >= GLR_AUDIO_MAX_PATH) len = GLR_AUDIO_MAX_PATH - 1;
         memcpy(g_state_file, path, len);
         g_state_file[len] = '\0';
     }
@@ -804,7 +804,7 @@ void audio_set_state_file(const char *path) {
     unlock();
 }
 
-void audio_on_user_gesture(void) {
+void glr_audio_on_user_gesture(void) {
     if (!g_inited || g_gesture_done) return;
     g_gesture_done = 1;
 
@@ -819,13 +819,13 @@ void audio_on_user_gesture(void) {
     }
 }
 
-void audio_set_cfg_mode(int mode) {
+void glr_audio_set_cfg_mode(int mode) {
     lock();
     g_cfg_mode = mode;
     unlock();
 }
 
-int audio_get_cfg_mode(void) {
+int glr_audio_get_cfg_mode(void) {
     lock();
     int v = g_cfg_mode;
     unlock();

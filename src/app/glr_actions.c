@@ -12,7 +12,7 @@
 #include "app/glr_camera.h"          /* camera focus-origin / reset (eased) */
 #include "ui/layout.h"           /* CODE_PANEL_LAYOUT_* enum values */
 #include "widgets/color_picker_state.h"
-#include "audio.h"
+#include "app/glr_audio.h"
 #include "repl/core.h"
 #include "repl/core_internal.h"
 #include "repl/examples.h"
@@ -310,20 +310,20 @@ void glr_actions_install_export_cfg_bridge(void) {
 static void apply_audio_cfg_mode(int mode) {
     switch (mode) {
     case AUDIO_CFG_PAUSE:
-        audio_set_paused(1);
+        glr_audio_set_paused(1);
         break;
     case AUDIO_CFG_ONCE:
-        audio_set_paused(0);
-        audio_set_loop_mode(AUDIO_LOOP_OFF);
+        glr_audio_set_paused(0);
+        glr_audio_set_loop_mode(GLR_AUDIO_LOOP_OFF);
         break;
     case AUDIO_CFG_SONG:
-        audio_set_paused(0);
-        audio_set_loop_mode(AUDIO_LOOP_SONG);
+        glr_audio_set_paused(0);
+        glr_audio_set_loop_mode(GLR_AUDIO_LOOP_SONG);
         break;
     case AUDIO_CFG_ALL:
     default:
-        audio_set_paused(0);
-        audio_set_loop_mode(AUDIO_LOOP_ALL);
+        glr_audio_set_paused(0);
+        glr_audio_set_loop_mode(GLR_AUDIO_LOOP_ALL);
         break;
     }
 }
@@ -653,12 +653,12 @@ int glr_action_menu_item_activate(int menu_id, int item_idx) {
 
 void glr_actions_apply_defaults(void) {
     /* Restore the audio mode persisted from the previous session.
-     * audio_play_playlist() calls load_state() which stores the cfg_mode
+     * glr_audio_play_playlist() calls load_state() which stores the cfg_mode
      * in the audio module; pull it here so the UI config and the actual audio
      * engine agree before the first frame. */
-    int saved_mode = audio_get_cfg_mode();
+    int saved_mode = glr_audio_get_cfg_mode();
     if (saved_mode < AUDIO_CFG_PAUSE || saved_mode > AUDIO_CFG_ALL)
         saved_mode = AUDIO_CFG_ALL;
     apply_audio_cfg_mode(saved_mode);
-    audio_set_cfg_mode(saved_mode);
+    glr_audio_set_cfg_mode(saved_mode);
 }
