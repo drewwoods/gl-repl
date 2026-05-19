@@ -44,16 +44,60 @@ duplicated here.
 ## Stance
 
 - Behavior-preserving unless explicitly flagged. **Items 2 and 19**
-  require a product/behavior decision before any code (Ctrl+Q save
-  semantics; the `LOAD_SCENE` stub). **Item 1** carries a behavior
-  delta only on currently-unreachable input — a safe correctness
-  guard, no decision needed. This is the authoritative decision set;
-  the Sequencing section and the closing gate restate it identically.
+  required a product/behavior decision before code (Ctrl+Q save
+  semantics; the `LOAD_SCENE` stub) — both are now **decided** (see
+  "Decisions taken" under Status). **Item 1** carried a behavior delta
+  only on currently-unreachable input — a safe correctness guard, no
+  decision needed. This decision set is restated identically in the
+  Status section and the closing gate.
 - Each followup names its in-tree idiom and its test surface.
 - Priority tiers: **P1** correctness-adjacent / latent, **P2**
   high-drift duplication (maintenance value), **P3** lower-value
   dedup/consistency, **P4** large parallel-implementation hazards
   (flag-only, schedule when a triggering feature pays for it).
+
+---
+
+## Status (live)
+
+Worked as one-PR-per-item against this tracker. Test gate is
+`make check-state-ownership` + `make test` (+ `make test-stubs`); since
+the `BUILD=debug` default landed, `make test` runs under ASan+UBSan.
+
+| Item | State |
+|------|-------|
+| 1 — replace_line gap guard | **Merged** (#45, regression-tested) |
+| 3 — search fade clock off render | **Merged** (#46) |
+| 6 — `compile_insert_pos` | **Merged** (#47) |
+| 17 — `find_item_by_key` | **Merged** (#48) |
+| 5 — `editor_try_commit_block` | **Merged** (#49) |
+| 16 — `is_detail_section` from indent | **Merged** (#50, endorsed behavior fix) |
+| 11 — cursor-doc-line collapse | **Merged** (#52) |
+| 13 — `CP_GAP`/`CP_PREV_H` via view | **Merged** (#53) |
+| 2 — Ctrl+Q save semantics | **In review** (#55) — decision: see §2 |
+| 12+14, 15, 8, 9, 4, 7 | Not started (this order) |
+| 19 — `LOAD_SCENE` | Decided (see §19); **scheduled last** (largest) |
+| 10, 18, 20, 21 | Deferred per plan |
+
+Infra landed alongside: tests default to `BUILD=debug` + UBSan (#51);
+gracemont (Ubuntu/real-gcc) verification documented (#54).
+
+### Decisions taken (this engagement)
+
+- **Item 2** — the plan's "route Ctrl+Q through `repl_save_active_scene`
+  like Ctrl+S" was **rejected on review**: Ctrl+Q is a safeguard
+  against an unintended exit / forgotten save, so overwriting the real
+  scene defeats it. Final decision: write a recovery copy to a
+  **distinct, findable** file `quit-recovery.c` (never the
+  scene/workspace, never `/tmp`), and add a **SIGINT (Ctrl+C) trap**
+  to the same safeguard (flag-only async-signal-safe handler; the
+  save + exit run on the normal path in `glr_ctrl_tick()`).
+  Implemented in #55.
+- **Item 19** — *implement it*. Approach: reuse the status-bar inline
+  text-input mechanism (the one used for scene rename,
+  `editor_inline_rename_*`) to prompt for an import filename,
+  defaulting to `my_scene.c`, then run the existing file-import path.
+  Sequenced **last** (largest change of the set).
 
 ---
 
@@ -78,7 +122,7 @@ editor-state assertion for `pos > line_count`.
 **Risk & scope.** Very low — only changes behavior on input no caller
 produces today; aligns two siblings.
 
-### 2. Ctrl+Q "save and quit" writes a hardcoded `/tmp` path — Not started
+### 2. Ctrl+Q "save and quit" writes a hardcoded `/tmp` path — Done (#55)
 
 **Problem.** `src/app/glr_ctrl.c` (~`:2299`)
 `glr_ctrl_router_handle_quit_key` hardcodes
@@ -89,14 +133,20 @@ duplicated on two lines) while Ctrl+S
 throwaway `/tmp` file rather than the user's scene/workspace is a
 data-loss surprise; `keys.h` documents Ctrl+Q as "save and quit".
 
-**Approach.** **Decision required** (behavior): either route Ctrl+Q
-through the same `repl_save_active_scene` path as Ctrl+S, or — if the
-`/tmp` scratch behavior is intentional for crash-recovery — keep it but
-hoist the literal to one named constant and document why. Recommend
-matching Ctrl+S.
+**Decision (final).** The recommend-matching-Ctrl+S option was
+**rejected on review**: Ctrl+Q is a safeguard against an unintended
+exit / forgotten save, so routing it through `repl_save_active_scene`
+(overwriting the real scene) defeats the purpose. Implemented in #55:
+write a recovery copy to a **distinct, findable** file
+`GLR_QUIT_RECOVERY_FILE = "quit-recovery.c"` (cwd; never the
+scene/workspace, never `/tmp`), and trap **SIGINT (Ctrl+C)** into the
+same safeguard — the handler only sets a `sig_atomic_t` flag
+(async-signal-safe); `glr_ctrl_tick()` does the save + `exit` on the
+normal path.
 
-**Risk & scope.** Behavior change by design; small. Needs a product call
-before implementation.
+**Risk & scope.** Behavior change by design; small. No unit test (the
+path is process-exit + file write); covered by the build gate + the
+flag-only async-signal-safe design.
 
 ### 3. Render-time state mutation in the search overlay — Not started
 
@@ -300,12 +350,18 @@ into the eval/util layer (`eval.h` already hosts
 `repl_scan_next_arg_delim`). (The false-identity `skip_numeric_literal`
 was already resolved by rename in #41.)
 
-### 19. `GLR_FILE_ITEM_LOAD_SCENE` permanent stub — Not started
+### 19. `GLR_FILE_ITEM_LOAD_SCENE` permanent stub — Decided; scheduled last
 
 `glr_actions.h:~37` / `glr_actions.c:~540` wire a clickable File-menu
 row that can only ever print `"Runtime load unsupported - relaunch …"`.
-**Decision required**: implement runtime scene load, or remove the
-enum + menu row until it is real (don't let it linger).
+
+**Decision (final).** *Implement it.* Reuse the status-bar inline
+text-input mechanism already used for scene rename
+(`editor_inline_rename_*`) to prompt for an import filename,
+defaulting to `my_scene.c`, then run the existing file-import path
+(the one `./sample <file>` uses). Sequenced **last** — it is the
+largest change of the set (a new inline-input flow + wiring the menu
+action to the importer), so it lands after the dedup items.
 
 ---
 
@@ -337,27 +393,28 @@ drift check.
 
 ## Recommended sequencing
 
-Batch into small, independently-reviewable PRs (the established rhythm):
+Executed as **one PR per item** (chosen over the original A–E
+batching) so each is independently reviewable; see the Status table
+for live state. Order actually followed: 1, 3, 6, 17, 5, 16, 11, 13,
+2 (all done/in-review) → then the remaining dedup in this order:
 
-1. **PR A — P1 safe pair:** items 1 + 3 (latent corruption guard +
-   render-purity leak removal). Low risk, high signal.
-2. **Decisions:** items 2 and 19 need a product call before code —
-   surface, don't pre-implement.
-3. **PR B — mechanical dedup:** items 6 + 9 + 17 (insert-pos clamp,
-   clear-input, key-lookup). Pure, low-risk, big readability win.
-4. **PR C — commit-glue dedup:** item 5, then item 4 (in that order —
-   5 de-risks the helper shape 4 reuses). The highest-value structural
-   pair; full editor/commit/tutorial gate.
-5. **PR D — indent + arg-splitter unification:** items 8 then 7
-   (format/source_scope first, then the export scanners against the
-   round-trip test).
-6. **PR E — UI/widget dedup:** items 11, 12(+14), 13, 15, 16.
-7. **Deferred:** items 10, 18 (low value), 20, 21 (P4 — schedule
-   against a triggering feature).
+1. **12 (+14)** — color-picker drag math + the caveated checkerboard.
+2. **15** — `menu_bar` `### `/`---` chrome-row helper.
+3. **8** — shared indent helper (`format.c`/`source_scope.c`).
+4. **9 then 4** — `input.c` clear-input dedup, then the
+   parse-and-place extraction (sequential — both heavy in `input.c`,
+   so 4 rebases on 9 to stay conflict-free).
+5. **7** — `export.c` arg-splitters → `repl_scan_next_arg_delim`
+   (behavior-sensitive; the 30-command round-trip test is the net).
+6. **19** — `LOAD_SCENE` implementation **last** (largest; new
+   status-bar inline-input flow).
 
-Each PR: `make check-state-ownership` + `make test` green, behavior
-unchanged — except **item 1** (a guarded delta on currently-unreachable
-input, no decision needed) and **items 2 / 19** (which require the
-product decision called out in Stance and step 2 above). Move this doc
-`plans/in-review → plans/active` when the first PR opens; check items
-off as they land.
+**Deferred:** items 10, 18 (low value), 20, 21 (P4 — schedule against
+a triggering feature).
+
+Each PR: `make check-state-ownership` + `make test` green; since the
+`BUILD=debug` default landed, `make test`/`test-stubs` run under
+ASan+UBSan. Behavior unchanged except item 1 (guarded delta on
+currently-unreachable input) and items 2 / 19 (the decided behavior
+changes — see "Decisions taken" and §2/§19). Doc moved
+`plans/in-review → plans/active` as work is active.
