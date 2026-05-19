@@ -2,9 +2,9 @@
  * src/repl/eval.h - Expression evaluator, translators, and for-loop parsers.
  *
  * Recursive-descent expression evaluator for the REPL math layer. Supports
- * binary operators (+, -, *, /, %, ^), unary minus, parentheses, function
- * calls (sin, cos, tan, sqrt, abs, pow, min, max, floor, ceil, fmod, rand),
- * and constants (PI, TAU). All values are floats.
+ * binary operators (+, -, *, /, %), unary minus, parentheses, function
+ * calls (sin, cos, tan, sqrt, abs, pow, min, max, floor, ceil, fmod, rem,
+ * rand, rand2), and constants (PI, TAU). All values are floats.
  *
  * Predefined variables (float x, y, z, t, etc.) are declared via
  * repl_eval_declare_predef_var(). The time variable 't' is special: it
@@ -76,14 +76,14 @@
  *  - MAX_PREDEF_VARS caps how many global identifiers can exist at once.
  *  - MAX_EXPR_VARS caps how many identifiers a single expression's lexical scope can hold while it's being parsed.
  *
- *  The values are equal today only because the worst-case scope is "all 16
- *  predef vars visible plus zero locals" (the for-loop body inside zero nested
- *  scopes). But they're not the same constraint:
+ *  They are independent limits (MAX_PREDEF_VARS and MAX_EXPR_VARS need not
+ *  be equal — see the values below) and not the same constraint:
  *
  *  - MAX_EXPR_VARS actually needs to be MAX_PREDEF_VARS + worst-case nested
- *    locals to be fully correct. With 8-deep nested for-loops each declaring a
- *    fresh iterator name, you'd exceed 16 visible names. In
- *    practice the parser truncates the visible-list silently because the limit happens to be 16. (Not a great property, just hidden by the equal value.)
+ *    locals to be fully correct. With deeply nested for-loops each declaring
+ *    a fresh iterator name, the visible-name count can exceed MAX_EXPR_VARS;
+ *    the parser then truncates the visible-list silently. (Not a great
+ *    property, but the headroom between the two values hides it in practice.)
  *  - MAX_PREDEF_VARS is the user-facing "how many float x; can I have" limit.
  */
 #ifndef MAX_EXPR_VARS
@@ -222,7 +222,9 @@ int  repl_eval_validate_expression_idents(const char *src, const ExprVar *vars,
 /* ---- Expression evaluator (recursive descent) -------------------------- */
 
 /* Parse and evaluate a single expression from ctx->p. Advances ctx->p past
- * the expression; returns the computed float value. Errors logged to stderr. */
+ * the expression; returns the computed float value. Unknown identifiers
+ * evaluate to 0.0f; diagnostics are written to ctx->err when set, not
+ * to stderr. */
 float repl_eval_expr(ExprCtx *ctx);
 
 /* Parse a comma-separated list of expressions from string s. Evaluates each

@@ -202,7 +202,8 @@ static void save_scene_to_slot(int idx, const char *name) {
     s->num_predef_vars = g_num_predef_vars;
     for (int i = 0; i < g_num_predef_vars; i++) {
         s->predef_vals[i] = g_predef_vars[i].value;
-        memcpy(s->predef_names[i], g_predef_vars[i].name, 16);
+        memcpy(s->predef_names[i], g_predef_vars[i].name,
+               sizeof(s->predef_names[i]));
     }
     repl_eval_copy_scratch_arrays(s->scratch_arrays);
     for (int slot = 0; slot < REPL_FUNC_SLOT_COUNT; slot++) {
@@ -277,7 +278,8 @@ static void load_scene_from_slot(int idx) {
     g_num_predef_vars = s->num_predef_vars;
     for (int i = 0; i < s->num_predef_vars; i++) {
         g_predef_vars[i].value = s->predef_vals[i];
-        memcpy(g_predef_vars[i].name, s->predef_names[i], 16);
+        memcpy(g_predef_vars[i].name, s->predef_names[i],
+               sizeof(g_predef_vars[i].name));
     }
     repl_eval_restore_scratch_arrays(s->scratch_arrays);
     /* Restore the per-scene func-alias table. Each scene owns its own
@@ -365,7 +367,8 @@ static void install_scene_into_live(int slot) {
     g_num_predef_vars = s->num_predef_vars;
     for (int i = 0; i < s->num_predef_vars; i++) {
         g_predef_vars[i].value = s->predef_vals[i];
-        memcpy(g_predef_vars[i].name, s->predef_names[i], 16);
+        memcpy(g_predef_vars[i].name, s->predef_names[i],
+               sizeof(g_predef_vars[i].name));
     }
     repl_eval_restore_scratch_arrays(s->scratch_arrays);
     /* Apply the slot's saved per-scene cfg to live state. Without
@@ -397,7 +400,8 @@ static void stash_live_state(UserScene *dst, ReplExportConfig *cfg_out) {
     dst->num_predef_vars = g_num_predef_vars;
     for (int i = 0; i < g_num_predef_vars; i++) {
         dst->predef_vals[i] = g_predef_vars[i].value;
-        memcpy(dst->predef_names[i], g_predef_vars[i].name, 16);
+        memcpy(dst->predef_names[i], g_predef_vars[i].name,
+               sizeof(dst->predef_names[i]));
     }
     repl_eval_copy_scratch_arrays(dst->scratch_arrays);
     if (cfg_out) {
@@ -416,7 +420,8 @@ static void restore_live_from_stash(const UserScene *src,
     g_num_predef_vars = src->num_predef_vars;
     for (int i = 0; i < src->num_predef_vars; i++) {
         g_predef_vars[i].value = src->predef_vals[i];
-        memcpy(g_predef_vars[i].name, src->predef_names[i], 16);
+        memcpy(g_predef_vars[i].name, src->predef_names[i],
+               sizeof(g_predef_vars[i].name));
     }
     repl_eval_restore_scratch_arrays(src->scratch_arrays);
     if (cfg) {
