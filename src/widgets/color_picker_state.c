@@ -273,6 +273,15 @@ ColorPickerView color_picker_view(void) {
     return v;
 }
 
+/* Clamp v to [0, 1]. Replaces the inline `if (x<0) x=0; if (x>1) x=1;`
+ * pattern that kept tripping -Wmisleading-indentation (two statements
+ * per line). */
+static float cp_clamp01(float v) {
+    if (v < 0.0f) return 0.0f;
+    if (v > 1.0f) return 1.0f;
+    return v;
+}
+
 /* Apply the slider value for drag target `which` (1=SV, 2=hue,
  * 3=alpha) from pointer (mx, gl_y) against rects r. Shared by press
  * (after a region hit-test arms the target) and motion so the
@@ -280,19 +289,15 @@ ColorPickerView color_picker_view(void) {
 static void cp_apply_drag_at(int which, int mx, int gl_y,
                              const ColorPickerRects *r) {
     if (which == 1) {
-        g_cp_sat = (float)(mx - r->sv_x) / (float)r->sv_sz;
-        g_cp_val = (float)(gl_y - r->sv_y) / (float)r->sv_sz;
-        if (g_cp_sat < 0) g_cp_sat = 0; if (g_cp_sat > 1) g_cp_sat = 1;
-        if (g_cp_val < 0) g_cp_val = 0; if (g_cp_val > 1) g_cp_val = 1;
+        g_cp_sat = cp_clamp01((float)(mx - r->sv_x) / (float)r->sv_sz);
+        g_cp_val = cp_clamp01((float)(gl_y - r->sv_y) / (float)r->sv_sz);
         if (g_cp_val > g_cp_value_max) g_cp_val = g_cp_value_max;
     } else if (which == 2) {
-        g_cp_hue = 1.0f - (float)(gl_y - r->hue_y) / (float)r->hue_h;
-        if (g_cp_hue < 0) g_cp_hue = 0;
+        g_cp_hue = cp_clamp01(1.0f -
+                              (float)(gl_y - r->hue_y) / (float)r->hue_h);
         if (g_cp_hue >= 1) g_cp_hue = CP_HUE_MAX;
     } else if (which == 3) {
-        g_cp_alpha = (float)(gl_y - r->alp_y) / (float)r->alp_h;
-        if (g_cp_alpha < 0) g_cp_alpha = 0;
-        if (g_cp_alpha > 1) g_cp_alpha = 1;
+        g_cp_alpha = cp_clamp01((float)(gl_y - r->alp_y) / (float)r->alp_h);
     }
 }
 
