@@ -304,7 +304,6 @@ SRCS = \
 HDRS = \
 	src/app/glr_audio.h \
 	src/repl/format.h \
-	outline_offset.h \
 	prof.h \
 	sample.h \
 	source_document.h \

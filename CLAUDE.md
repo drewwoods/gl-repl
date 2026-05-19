@@ -234,7 +234,6 @@ Test sources live under `tests/` and shared test-only helpers live under
 | `src/app/glr_actions.h` | Actions public API (`glr_action_menu_item_activate`, etc.) |
 | `config.h` | Project-wide compile-time configuration constants |
 | `src/app/glr_defaults.h` | Controller-side scene/presentation defaults (`CFG_DEFAULT_*` macros) |
-| `outline_offset.h` | Polygon-offset depth-bias constants for the outline-pass rendering |
 | `src/ui/text_layout.c` | Pure code-panel wrapping, row counts, segment lookup, cursor-row mapping |
 | `src/ui/text_layout.h` | `CodeLayout` / `CodeWrapIter` API shared by UI, export dumps, tests |
 | `src/ui/repl_code_panel.c` | REPL-specific code-panel adapter: row building, scroll-follow layout, render/hit bridging |
