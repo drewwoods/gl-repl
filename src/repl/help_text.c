@@ -43,7 +43,7 @@ static const char *const k_tab_overview[] = {
     "",
     "The menu bar:",
     "  File               \tNew / Save / Load a scene or whole workspace",
-    "  Scene              \tLoad a built-in example or one of your scenes",
+    "  Scene              \tLoad a built-in example or one of my scenes",
     "  Tutorials          \tGuided, step-by-step lessons",
     "  Config             \tToggle grid, axes, lighting, backdrop, etc.",
     "  Replay (far right) \tStep through the scene one command at a time",

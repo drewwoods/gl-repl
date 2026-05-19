@@ -133,7 +133,7 @@ static void scene_cfg_reset_all(void) {
 #define WORKSPACE_DIR_MAX REPL_WORKSPACE_DIR_MAX
 
 /* Default home-scene name -- used when slot 0 is captured on first example load. */
-#define USER_SCENE_HOME_NAME "Your Scene"
+#define USER_SCENE_HOME_NAME "My Scene"
 
 static uint32_t next_user_scene_tick(void) {
     return ++g_user_scene_tick;

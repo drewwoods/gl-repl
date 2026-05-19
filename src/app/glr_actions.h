@@ -43,14 +43,14 @@ enum {
 };
 
 /* Scene menu is a pure selector: "### EXAMPLES" + example rows, then
- * "### YOUR SCENES" + user-scene rows. Both headers are always present
+ * "### MY SCENES" + user-scene rows. Both headers are always present
  * (fixed layout). Offsets are relative to the end of the examples block
  * (e = repl_example_count()): the second header sits at e + HDR and the
  * first user scene at e + SCENES. Lookup uses
  * glr_scene_menu_slot_for_dense_index() to map dense display index to
  * the actual user scene slot. Scene *actions* live in the File menu. */
 enum {
-    GLR_SCENE_OFF_HDR      = 1,   /* "### YOUR SCENES" at e + 1 */
+    GLR_SCENE_OFF_HDR      = 1,   /* "### MY SCENES" at e + 1 */
     GLR_SCENE_OFF_SCENES   = 2,   /* first user scene row at e + 2 */
     GLR_SCENE_FIXED_COUNT = 2    /* the two "###" header rows */
 };
