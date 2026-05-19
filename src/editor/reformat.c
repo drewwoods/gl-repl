@@ -9,12 +9,12 @@
  */
 #include <string.h>
 
-#include "src/editor/reformat.h"
+#include "reformat.h"
 
 #include "repl/core.h"        /* repl_reformat_program */
 #include "repl/state.h"
-#include "src/editor/input.h" /* editor_load_line_to_input */
-#include "src/editor/state.h"
+#include "input.h" /* editor_load_line_to_input */
+#include "state.h"
 
 void editor_reformat_commands(void) {
     int saved_edit_line = repl_state_edit_line();

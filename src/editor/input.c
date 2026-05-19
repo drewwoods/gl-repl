@@ -481,6 +481,10 @@ typedef struct {
     int newline_len;
 } CommitAttemptState;
 
+/* File-scope (not locals) only to keep these >1 MB structs — each
+ * embeds a full EditorUndoSnapshot — off the stack. They are
+ * captured and consumed within a single call, never retained
+ * across calls. */
 static CommitAttemptState g_commit_attempt_before;
 static CommitAttemptState g_navigation_commit_before;
 
@@ -524,6 +528,10 @@ static int input_matches_committed_line(int line) {
     }
 }
 
+/* The editor_try_commit_* chain returns 1 for BOTH a successful commit
+ * and a handled error, so "did anything actually change?" can't be read
+ * off the return value — it must be detected structurally by diffing
+ * the document/cursor/input against the pre-attempt snapshot. */
 static int commit_progressed_since(const CommitAttemptState *s) {
     EditorInputView inp = editor_state_input();
     if (repl_state_document_count() != s->undo.num_cmds ||

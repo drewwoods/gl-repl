@@ -178,6 +178,9 @@ static int search_ordinal_for_hit(int row_idx, int char_pos) {
         ordinal += search_row_match_count(row);
     }
 
+    /* Count matches strictly left of char_pos in this row, re-scanning
+     * from 0; stop once a match lands at/after char_pos (that one is
+     * the hit itself, already covered by ordinal's base of 1). */
     for (int pos = 0; pos < char_pos; ) {
         pos = editor_search_find_next_in_text(editor_search_row_text(row_idx), srch.query, pos);
         if (pos < 0 || pos >= char_pos)
