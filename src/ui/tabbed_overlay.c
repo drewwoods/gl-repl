@@ -168,8 +168,11 @@ void ui_tabbed_overlay_render(const UiOverlayState *in) {
 
     /* --- Tab bar --- */
     {
-        int tab_y  = hy + hh - title_h - tab_bar_h;
-        int tab_w  = hw / num_tabs;
+        /* Use the geom's tab band/width (same formula as
+         * overlay_compute_geom) so render and hit-test can't drift —
+         * the single-source-of-truth invariant in the OverlayGeom doc. */
+        int tab_y  = g.tab_y;
+        int tab_w  = g.tab_w;
 
         /* Tab bar background */
         ui_clr(UI_TOK_SUNKEN);

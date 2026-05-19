@@ -32,9 +32,8 @@
  *
  * `cursor_valid` is 0 when the active input row didn't render this
  * frame (code panel hidden, edit row scrolled offscreen). The
- * controller leaves any prior cursor coords undisturbed in that
- * case — the controller simply leaves any prior cursor coords untouched for
- * that frame. */
+ * controller leaves any prior cursor coords untouched for that
+ * frame. */
 typedef struct UiCodePanelOutput {
     int cursor_px;
     int cursor_py;

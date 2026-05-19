@@ -138,6 +138,7 @@ void replay_ui_hud_render(const UiReplayHudState *state) {
 
     /* Line 2 - compact kbd hints along the bottom in muted gray */
     snprintf(kbd_txt, sizeof(kbd_txt),
+             /* 0xAB / 0xBB = Latin-1 « / » step-direction arrows */
              "Space pause  |  +/- speed  |  m mode  |  e expand |  %c %c step |  Esc stop", 0xAB, 0xBB);
     ui_clr(UI_TOK_TEXT_MUTED);
     gl2d_draw_string((float)text_col_x,
