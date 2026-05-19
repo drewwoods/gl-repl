@@ -65,8 +65,12 @@ int main(void) {
     /* 6. ui_theme_select / ui_theme_active round-trip, and ui_rgba
      * reflects the active row. */
     {
-        ASSERT_TRUE("default active theme is GREEN",
-                    ui_theme_active() == UI_THEME_GREEN);
+        /* Tracks UI_THEME_DEFAULT (config.h, build-overridable) rather
+         * than hardcoding GREEN, so a -DUI_THEME_DEFAULT=N build does
+         * not trip this. The GREEN-specific table assertions above are
+         * intentionally fixed (they lock the GREEN row's values). */
+        ASSERT_TRUE("default active theme tracks UI_THEME_DEFAULT",
+                    ui_theme_active() == (UiTheme)UI_THEME_DEFAULT);
         ui_theme_select(UI_THEME_WARM);
         ASSERT_TRUE("active theme is WARM after select",
                     ui_theme_active() == UI_THEME_WARM);
