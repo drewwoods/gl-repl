@@ -589,6 +589,37 @@ int ui_menu_bar_scene_example_submenu_rect_for_test(int tag_idx,
                         sx, sy, sw, sh);
 }
 
+/* Classify a raw dropdown label as header / separator / item — the
+ * one place the "### "-prefix and "---" conventions are decoded, so
+ * the render paths and the hit-test agree (no more 3 hand-copied
+ * predicates). */
+static GlrConfigRowKind menu_chrome_kind(const char *label) {
+    if (!label) return GLR_CFG_ROW_ITEM;
+    if (strncmp(label, "### ", 4) == 0) return GLR_CFG_ROW_HEADER;
+    if (strcmp(label, "---") == 0)      return GLR_CFG_ROW_SEPARATOR;
+    return GLR_CFG_ROW_ITEM;
+}
+
+/* Draw one inert chrome row (section header text or "---" divider)
+ * at vertical position `ey`, spanning [x, x+w]. header_text must be
+ * the already-stripped section name (callers pass past the "### ").
+ * No-op for non-chrome kinds. Shared by both dropdown renderers. */
+static void menu_draw_chrome_row(GlrConfigRowKind kind, int x, int w,
+                                 int ey, const char *header_text,
+                                 float alpha) {
+    if (kind == GLR_CFG_ROW_HEADER) {
+        ui_clr_a(UI_TOK_TEXT_SECTION, alpha);
+        gl2d_draw_string((float)(x + 14), (float)ey, header_text,
+                         FONT_SMALL);
+    } else if (kind == GLR_CFG_ROW_SEPARATOR) {
+        ui_clr_a(UI_TOK_DIVIDER, alpha);
+        glBegin(GL_LINES);
+        glVertex2f((float)(x + 6),     (float)(ey + LINE_H / 2 - 2));
+        glVertex2f((float)(x + w - 6), (float)(ey + LINE_H / 2 - 2));
+        glEnd();
+    }
+}
+
 int ui_menu_bar_dropdown_item_hit(int gx, int gy) {
     if (g_open_menu < 0) return -1;
     int n = menu_item_count(g_open_menu);
@@ -600,7 +631,7 @@ int ui_menu_bar_dropdown_item_hit(int gx, int gy) {
     int row = (dy + dh - 4 - ry) / LINE_H;
     if (row < 0 || row >= n) return -1;
     const char *lbl = menu_item_label(g_open_menu, row);
-    if (!lbl || strncmp(lbl, "###", 3) == 0 || strcmp(lbl, "---") == 0) return -1;
+    if (!lbl || menu_chrome_kind(lbl) != GLR_CFG_ROW_ITEM) return -1;
     return row;
 }
 
@@ -991,19 +1022,8 @@ static void render_active_submenu(const UiRenderSnapshot *snap) {
         }
 
         /* Config "All" chrome (header/separator) renders inert. */
-        if (kind == GLR_CFG_ROW_HEADER) {
-            ui_clr_a(UI_TOK_TEXT_SECTION, alpha);
-            gl2d_draw_string((float)(sx + 14), (float)ey,
-                             name, FONT_SMALL);
-            ey -= LINE_H;
-            continue;
-        }
-        if (kind == GLR_CFG_ROW_SEPARATOR) {
-            ui_clr_a(UI_TOK_DIVIDER, alpha);
-            glBegin(GL_LINES);
-            glVertex2f((float)(sx + 6),      (float)(ey + LINE_H / 2 - 2));
-            glVertex2f((float)(sx + sw - 6), (float)(ey + LINE_H / 2 - 2));
-            glEnd();
+        if (kind == GLR_CFG_ROW_HEADER || kind == GLR_CFG_ROW_SEPARATOR) {
+            menu_draw_chrome_row(kind, sx, sw, ey, name, alpha);
             ey -= LINE_H;
             continue;
         }
@@ -1358,19 +1378,11 @@ void ui_menu_bar_render_example_dropdown(const UiRenderSnapshot *snap) {
         const char *lbl = menu_item_label(menu_id, i);
         if (!lbl) continue;
 
-        if (strncmp(lbl, "### ", 4) == 0) {
-            ui_clr_a(UI_TOK_TEXT_SECTION, alpha);
-            gl2d_draw_string((float)(dx + 14), (float)ey, lbl + 4, FONT_SMALL);
-            ey -= LINE_H;
-            continue;
-        }
-
-        if (strcmp(lbl, "---") == 0) {
-            ui_clr_a(UI_TOK_DIVIDER, alpha);
-            glBegin(GL_LINES);
-            glVertex2f((float)(dx + 6),       (float)(ey + LINE_H / 2 - 2));
-            glVertex2f((float)(dx + dw - 6),  (float)(ey + LINE_H / 2 - 2));
-            glEnd();
+        GlrConfigRowKind ck = menu_chrome_kind(lbl);
+        if (ck == GLR_CFG_ROW_HEADER || ck == GLR_CFG_ROW_SEPARATOR) {
+            menu_draw_chrome_row(ck, dx, dw, ey,
+                                 lbl + (ck == GLR_CFG_ROW_HEADER ? 4 : 0),
+                                 alpha);
             ey -= LINE_H;
             continue;
         }
