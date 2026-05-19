@@ -221,7 +221,7 @@ void ui_variable_panel_render(const UiRenderSnapshot *snap) {
 
     /* Background */
     ui_clr_a(UI_TOK_SUNKEN, 0.88f);
-    glRectf((float)((float)px), (float)((float)py), (float)((float)px)+(float)((float)pw), (float)((float)py)+(float)ph);
+    glRectf((float)px, (float)py, (float)px + (float)pw, (float)py + (float)ph);
 
     /* Border */
     ui_clr_a(UI_TOK_BORDER, 0.75f);

@@ -306,7 +306,7 @@ static void draw_starry_sky(float anim_time, int point_parameter_supported) {
         glLoadMatrixf(mv);
     }
 
-    /* Four point-size bands derived from STAR_COUNT: small(57%) med(23%) large(14%) bright(6%) */
+    /* Four point-size bands; cumulative cutoffs are the STAR_BAND_CUT_* above. */
     static const float band_sizes[4] = { 1.5f, 2.0f, 3.0f, 4.5f };
     const int band_cuts[5] = {
         0,
