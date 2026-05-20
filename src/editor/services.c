@@ -14,6 +14,7 @@
 
 #include "repl/apply.h"
 #include "repl/compile.h"
+#include "repl/parser.h"
 
 /* ---- Default service bindings ----------------------------------- */
 
@@ -55,6 +56,12 @@ static void default_apply_scratch_ops(const ReplCompiledChange *change,
     repl_apply_scratch_ops(change);
 }
 
+static int default_parse_command_ctx(const char *line, ReplParsedLine *out,
+                                     const ReplParseContext *ctx, void *user) {
+    (void)user;
+    return repl_parser_parse_command_ctx(line, out, ctx);
+}
+
 EditorServices editor_services_default(void) {
     EditorServices svc = {
         .context           = default_context,
@@ -62,6 +69,7 @@ EditorServices editor_services_default(void) {
         .apply_repl_change = default_apply_repl_change,
         .apply_predef_ops  = default_apply_predef_ops,
         .apply_scratch_ops = default_apply_scratch_ops,
+        .parse_command_ctx = default_parse_command_ctx,
         .user              = NULL,
     };
     return svc;

@@ -44,6 +44,7 @@
 #include "input.h"
 #include "reformat.h"
 #include "search.h"
+#include "services.h"
 #include "widgets/tutorial.h"
 #include "undo.h"
 
@@ -420,6 +421,7 @@ static void warn_if_scope_truncated(int vis_total) {
 
 static int parse_for_overwrite_enter(GLCmd *cmd, char *text_out, int text_sz,
                                      int insert_idx) {
+    EditorServices svc = editor_services_default();
     ExprVar vis_vars[MAX_EXPR_VARS];
     int vis_total = 0;
     int num_vis_vars = collect_visible_vars(insert_idx, vis_vars, MAX_EXPR_VARS, &vis_total);
@@ -437,7 +439,7 @@ static int parse_for_overwrite_enter(GLCmd *cmd, char *text_out, int text_sz,
             .err_sz  = (int)sizeof(editor_parse_err),
         };
         ReplParsedLine pl;
-        parsed = repl_parser_parse_command_ctx(editor_state_input().input, &pl, &parse_ctx);
+        parsed = svc.parse_command_ctx(editor_state_input().input, &pl, &parse_ctx, svc.user);
         if (parsed) {
             *cmd = pl.cmd;
             rewrite_source_text_with_indent(text_out, text_sz, insert_idx, 1);
@@ -449,7 +451,7 @@ static int parse_for_overwrite_enter(GLCmd *cmd, char *text_out, int text_sz,
             .err_sz  = (int)sizeof(editor_parse_err),
         };
         ReplParsedLine pl;
-        parsed = repl_parser_parse_command_ctx(editor_state_input().input, &pl, &parse_ctx);
+        parsed = svc.parse_command_ctx(editor_state_input().input, &pl, &parse_ctx, svc.user);
         if (parsed) {
             *cmd = pl.cmd;
             if (repl_eval_input_has_predef_vars(editor_state_input().input)) {
@@ -614,6 +616,7 @@ static int current_input_needs_navigation_commit(void) {
  * line-advance/insert-mode behavior for unchanged lines; navigation treats
  * unchanged input as a no-op and only uses this helper for modified text. */
 static CommitResult commit_current_input(int enter_mode) {
+    EditorServices svc = editor_services_default();
     if (!enter_mode && !current_input_needs_navigation_commit())
         return COMMIT_UNCHANGED;
 
@@ -695,7 +698,7 @@ static CommitResult commit_current_input(int enter_mode) {
                 if (editor_try_commit_var_statements())
                     return commit_progressed_since(before) ? COMMIT_OK : COMMIT_REJECTED;
                 ReplParsedLine pl;
-                parsed = repl_parser_parse_command_ctx(editor_state_input().input, &pl, &parse_ctx);
+                parsed = svc.parse_command_ctx(editor_state_input().input, &pl, &parse_ctx, svc.user);
                 if (parsed) {
                     cmd = pl.cmd;
                     rewrite_source_text_with_indent(cmd_text, sizeof(cmd_text),
@@ -708,7 +711,7 @@ static CommitResult commit_current_input(int enter_mode) {
                     .err_sz  = (int)sizeof(enter_parse_err),
                 };
                 ReplParsedLine pl;
-                parsed = repl_parser_parse_command_ctx(editor_state_input().input, &pl, &parse_ctx);
+                parsed = svc.parse_command_ctx(editor_state_input().input, &pl, &parse_ctx, svc.user);
                 if (parsed) {
                     cmd = pl.cmd;
                     repl_copy_string_fits(cmd_text, sizeof(cmd_text), pl.text);
