@@ -27,7 +27,8 @@ typedef enum {
     PROF_SCENE_3D_OVERLAY_TRANSFORM_GUIDES,  /* transform-editing gizmos (translate/rotate/scale) */
     PROF_SCENE_3D_OVERLAY_NORMALS,        /* normal vector labels */
     PROF_SCENE_3D_OVERLAY_VERTEX_NUMBERS,    /* vertex numbers labels */
-    PROF_SCENE_3D_LAST = PROF_SCENE_3D_OVERLAY_VERTEX_NUMBERS,
+    PROF_SCENE_3D_POST_PROCESS,   /* scene_postprocess_filter_render() */
+    PROF_SCENE_3D_LAST = PROF_SCENE_3D_POST_PROCESS,
     PROF_CODE_PANEL,    /* render_code_panel() */
     PROF_CODE_PANEL_LAYOUT,   /* render_code_panel() layout/precompute */
     PROF_CODE_PANEL_CHROME,   /* background, border, header/search chrome */
