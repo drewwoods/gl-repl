@@ -28,7 +28,7 @@
 
 #include <gl_includes.h>
 #include <c_compat.h>   /* STATIC_ASSERT (C99/C11 portable) */
-#include <config.h>     /* UI_THEME_DEFAULT (compile-time scheme select) */
+#include "config.h"     /* UI_THEME_DEFAULT (compile-time scheme select) */
 
 typedef float UiRgba[4];
 
