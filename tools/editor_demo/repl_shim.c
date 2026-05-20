@@ -14,22 +14,40 @@
  *   repl_state_edit_line() to populate the view's edit_line_idx
  *   field. The editor doesn't own its own edit-line cursor today;
  *   a follow-up phase moves edit-line ownership into EditorState
- *   so this stub goes away too.
+ *   so this stub goes away too. (Plan options A and B documented
+ *   under "What's still open" in plans/active/editor-demo.md.)
  *
- * Until that cleanup lands, the demo provides a single one-line
- * stub. This file is the visible record of "what generic editor
- * code still calls into REPL by name" -- currently a one-symbol
- * ledger. If a future change adds a second symbol, that's a
- * signal to consider whether the new dependency is a layering
- * regression to fix at the source, or whether it warrants its
- * own follow-up cleanup phase like the edit-line one.
+ * Phase 8b (multi-line + click): the shim's repl_state_edit_line()
+ * returns demo-local backing storage that the demo's input
+ * dispatcher writes through demo_edit_line_set(). That makes the
+ * demo a real multi-line editor today, while still leaving the
+ * underlying coupling (REPL owns edit-line) for the eventual
+ * cleanup phase.
+ *
+ * This file remains a one-symbol shim from the linker's
+ * perspective; any second `repl_*` entry is a layering-regression
+ * signal.
  */
 
-/* ---- Editor data-model leak: state.c reads the edit-line cursor
- * from REPL state today (rather than owning its own). Demo's
- * "current edit line" is always 0 -- we don't navigate between
- * buffer lines yet (out of v1 scope). ---- */
+#include <stddef.h>
+
+/* Demo-local edit-line cursor. The shim's repl_state_edit_line()
+ * returns this value; the demo's input dispatcher updates it via
+ * demo_edit_line_set() during Enter / up / down / click
+ * navigation. */
+static int g_demo_edit_line = 0;
 
 int repl_state_edit_line(void) {
-    return 0;
+    return g_demo_edit_line;
+}
+
+/* Demo-internal setter. Declared at the use sites in editor_demo.c
+ * and input.c via a `void demo_edit_line_set(int);` extern line
+ * (no header -- kept inline to avoid a new file for one symbol).
+ * Clamps negatives to zero; otherwise stores verbatim so callers
+ * can park the cursor on a "virtual" line past the last committed
+ * buffer entry (the snapshot builder handles that case). */
+void demo_edit_line_set(int n) {
+    if (n < 0) n = 0;
+    g_demo_edit_line = n;
 }

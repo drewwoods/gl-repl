@@ -24,4 +24,15 @@ void demo_input_handle_key(unsigned char key, int x, int y);
 /* Route a GLUT special key (arrows, Home, End, F-keys). */
 void demo_input_handle_special(int key, int x, int y);
 
+/* Cross-line navigation: commit the current input row to the
+ * buffer at the active edit_line, advance the edit_line to
+ * `target`, and load that buffer line's text into the input row
+ * (cursor parked at end of loaded text). `target` is clamped to
+ * [0, line_count] so callers can park on the "virtual" line one
+ * past the last committed buffer entry (the next Enter creates a
+ * fresh row there). Exposed so the demo's mouse-click handler can
+ * drive the same navigation primitive the Up / Down arrow keys
+ * use. */
+void demo_input_navigate_to(int target);
+
 #endif /* EDITOR_DEMO_INPUT_H */
