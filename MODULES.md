@@ -163,8 +163,8 @@ source-backed module.
 
 ## Standalone Demo Binaries (Layer Independence Proofs)
 
-Two binaries under `tools/` build with deliberately slim object lists
-to make the layer boundaries observable:
+Three binaries under `tools/` build with deliberately slim object
+lists to make the layer boundaries observable:
 
 - **`make teapot_demo`** (`tools/teapot_demo/teapot.c`) — drives
   `src/scene/` with a non-REPL geometry callback. Proves `scene_*`
@@ -183,15 +183,34 @@ to make the layer boundaries observable:
   into app/editor/UI owners at link time. See
   [`ARCHITECTURE.md`](ARCHITECTURE.md#standalone-repl-demo-coupling) for
   the detailed dependency table and removal plan.
+- **`make editor_demo`** (`tools/editor_demo/editor_demo.c`) — drives
+  `src/editor/` (input dispatch, commit, state, clipboard, undo,
+  search, completion) against a fake REPL semantics. Inverse of
+  `repl_demo`: proves the editor module set links without the REPL
+  pipeline (`src/repl/*`), the controller (`src/app/*`), or the
+  scene renderer (`src/scene/*`). The shim
+  (`tools/editor_demo/repl_shim.c`) is a dependency ledger against
+  `EditorServices` plus direct `repl_*` / `glr_*` / `ui_*` /
+  `tutorial_*` / `color_picker_*` stubs for the editor's
+  outside-REPL coupling. Per the "Scope decision" in
+  `plans/active/editor-demo.md`, UI chrome (menu bar, help overlay,
+  color picker, tutorial) is editor-inherent: the symbols are stubbed
+  in `repl_shim.c` only because the widget/UI `.c` files transitively
+  pull in REPL. Migrating any stub group into a coarser
+  `EditorServices` callback shrinks the shim and ratchets the
+  `check-editor-repl-surface` baseline down.
 
-Both demos default to `USE_GL_STUBS=1`-friendly object lists. Run
-`./repl_demo` for a parse/flatten summary of the built-in samples;
+All three demos default to `USE_GL_STUBS=1`-friendly object lists.
+Run `./repl_demo` for a parse/flatten summary of the built-in samples;
 `./repl_demo --execute` also runs the flat program against GL stubs.
 Build with real GL (`make repl_demo`) and run `./repl_demo --render`
 for an actual GLUT window — `1`/`2`/`3` cycle samples, space pauses
 the sample-3 animation, `q`/Esc quits. Render mode shares the
 parse/flatten/execute path with the headless mode; the only added
-surface is GLUT bootstrap and a fixed orbit camera.
+surface is GLUT bootstrap and a fixed orbit camera. `editor_demo`
+runs as a link-only smoke test under `USE_GL_STUBS=1`; the real-GL
+build opens a minimal window driven by `editor_handle_key` /
+`editor_handle_special`.
 
 ## Naming Conventions
 
