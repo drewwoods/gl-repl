@@ -154,13 +154,6 @@ void editor_reset_transients(void);
  * `src/repl/load.h` instead. */
 int editor_feed_line(const char *line);
 
-/* If an input-buffer selection is active, delete [lo, hi) from input[],
- * place the cursor at lo, and clear the anchor. Returns 1 if anything
- * was deleted, 0 if no selection was active. Used as the pre-step for
- * typed-char insertion, backspace/delete, and input-text paste so all
- * three "replace selection" cases share one mutation primitive. */
-int editor_input_consume_selection(void);
-
 /* Walk left/right from char_idx in (text, len) over the word-character
  * class [A-Za-z0-9_] and return the half-open range [out_start, out_end)
  * covering the word. If text[char_idx] is not a word character, or

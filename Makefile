@@ -170,6 +170,7 @@ endif
 	check-controller-boundaries \
 	check-domain-owner-encapsulation \
 	check-duplicate-api-decls \
+	check-edit-ops-pure \
 	check-editor-ownership-budget \
 	check-editor-repl-surface \
 	check-gl-boundaries \
@@ -255,6 +256,7 @@ SRCS = \
 	src/editor/clipboard.c \
 	src/editor/commit.c \
 	src/editor/completion.c \
+	src/editor/edit_ops.c \
 	src/editor/help_session.c \
 	src/editor/inline_file_prompt.c \
 	src/editor/inline_rename.c \
@@ -413,6 +415,7 @@ CORE_TEST_SRCS = \
 	src/editor/clipboard.c \
 	src/editor/commit.c \
 	src/editor/completion.c \
+	src/editor/edit_ops.c \
 	src/editor/help_session.c \
 	src/editor/inline_file_prompt.c \
 	src/editor/inline_rename.c \
@@ -550,6 +553,7 @@ REPL_DEMO_DEP_SRCS = src/repl/format.c \
 EDITOR_DEMO_DEP_SRCS = src/editor/clipboard.c \
                        src/editor/commit.c \
                        src/editor/completion.c \
+                       src/editor/edit_ops.c \
                        src/editor/help_session.c \
                        src/editor/inline_file_prompt.c \
                        src/editor/inline_rename.c \
@@ -1007,6 +1011,7 @@ check-state-ownership: ## Run state-ownership contract checks (new + tightened e
 		check-repl-no-direct-editor \
 		check-repl-demo-no-editor \
 		check-editor-repl-surface \
+		check-edit-ops-pure \
 		check-source-document-port-owners \
 		check-c99 \
 		check-module-prefixes \
@@ -1044,6 +1049,9 @@ check-ui-text-panel-pure: ## Verify src/ui/text_panel.* stays REPL/editor-free.
 
 check-editor-repl-surface: ## Ratchet direct repl_* call surface in src/editor/input.c and commit.c.
 	@bash scripts/check-editor-repl-surface.sh scripts/baselines/editor-repl-surface.txt
+
+check-edit-ops-pure: ## Verify src/editor/edit_ops.* stays REPL-free (Phase 8 generic-primitives invariant).
+	@bash scripts/check-edit-ops-pure.sh
 
 check-ui-panels-no-mutators: ## Hard guard: src/ui/panels.c references no input-dispatch mutators (Phase J2.2).
 	@bash scripts/check-ui-panels-no-mutators.sh

@@ -10,6 +10,7 @@
 #include "state.h"
 #include "clipboard.h"
 #include "completion.h"
+#include "edit_ops.h"
 #include "input.h"
 #include "undo.h"
 
@@ -166,7 +167,7 @@ static int editor_clipboard_copy_input_selection(void) {
 }
 
 /* Cut: copy step then delete the range via the shared
- * editor_input_consume_selection helper. Works in any mode because the
+ * edit_op_consume_input_selection helper. Works in any mode because the
  * mutation lives on the active input buffer, not on source commands —
  * the line-range insert-mode guard doesn't apply.
  *
@@ -187,7 +188,7 @@ static int editor_clipboard_cut_input_selection(void) {
     if (len <= 0)
         return 0;
     editor_clipboard_set_input_text(editor_input_text() + lo, len);
-    (void)editor_input_consume_selection();
+    (void)edit_op_consume_input_selection();
     editor_completion_update();
     {
         char msg[64];
@@ -210,7 +211,7 @@ static int editor_clipboard_cut_input_selection(void) {
 static int editor_clipboard_paste_input_text(void) {
     if (!editor_clipboard_has_input_text())
         return 0;
-    (void)editor_input_consume_selection();
+    (void)edit_op_consume_input_selection();
 
     int cur = editor_cursor_pos();
     int paste_len = editor_clipboard_input_text_len();
