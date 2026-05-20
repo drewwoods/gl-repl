@@ -39,14 +39,14 @@
 #include <stdlib.h>
 #include <string.h>
 
-/* Demo-local edit-line cursor: read via the shim's
- * repl_state_edit_line(), write via demo_edit_line_set(). Both
- * declared here so we don't have to pull repl/state.h transitively
- * (the shim's whole purpose is keeping repl/ headers out of the
- * demo's compilation unit). Storage lives in
- * tools/editor_demo/repl_shim.c. */
-int  repl_state_edit_line(void);
-void demo_edit_line_set(int n);
+/* Edit-line cursor through the editor accessor. Phase 3.5 of
+ * plans/in-review/edit-line-ownership.md switched the demo from
+ * the demo-local demo_edit_line_set / repl_state_edit_line shim
+ * pair to the canonical editor_state_edit_line / _set; the shim
+ * still backs the storage during Phases 2-3 (its
+ * repl_state_edit_line returns the demo-local int, and the editor
+ * forwarder routes both reads and writes there). Phase 4 flips
+ * storage into EditorState and Phase 5 deletes the shim. */
 
 static int key_is_printable_ascii(unsigned char key) {
     return key >= 32 && key < 127;
@@ -60,7 +60,7 @@ static int key_is_printable_ascii(unsigned char key) {
  * "virtual" line (edit_line == line_count) becomes a real entry on
  * commit. */
 static void demo_commit_input_to_buffer(void) {
-    int line = repl_state_edit_line();
+    int line = editor_state_edit_line();
     if (line < 0) line = 0;
     (void)editor_buffer_replace_line(line, editor_input_text());
 }
@@ -90,7 +90,7 @@ void demo_input_navigate_to(int target) {
     if (target > count) target = count;
 
     demo_commit_input_to_buffer();
-    demo_edit_line_set(target);
+    editor_state_edit_line_set(target);
     demo_load_buffer_line(target);
     editor_cursor_pos_set(editor_input_len());
 }
@@ -99,7 +99,7 @@ void demo_input_navigate_to(int target) {
  * current line; right half becomes a new line at edit_line+1; the
  * cursor lands at the start of the new line. */
 static void demo_handle_enter(void) {
-    int line = repl_state_edit_line();
+    int line = editor_state_edit_line();
     if (line < 0) line = 0;
 
     const char *text = editor_input_text();
@@ -125,7 +125,7 @@ static void demo_handle_enter(void) {
     (void)editor_buffer_replace_line(line, left);
     (void)editor_buffer_insert_line(line + 1, right);
 
-    demo_edit_line_set(line + 1);
+    editor_state_edit_line_set(line + 1);
     editor_input_set_text(right);
     editor_cursor_pos_set(0);
 }
@@ -169,7 +169,7 @@ void demo_input_handle_special(int key, int x, int y) {
     EditorInputView input = editor_state_input();
     int cur = input.cursor_pos;
     int len = input.input_len;
-    int line = repl_state_edit_line();
+    int line = editor_state_edit_line();
 
     switch (key) {
     case GLUT_KEY_LEFT:
