@@ -242,39 +242,42 @@ const char *editor_buffer_view_line(EditorBufferView view, int idx) {
     return view.lines[idx];
 }
 
-/* The canonical edit-line cursor lives on ReplDocumentState. The input
- * slice copies it into the view for callers that consume the input as
- * one bundle. Forward-declared rather than including src/repl/state_views.h
- * to keep editor_state.h independent of the REPL state facade.
- *
- * The other forward decls below cover entry points editor_state.c
- * implements that get called from sibling impls in this file (e.g.
+/* Forward decls cover entry points editor_state.c implements that
+ * get called from sibling impls in this file (e.g.
  * editor_state_input_reset reuses editor_input_clear). They are
- * the same symbols declared in src/repl/state_views.h / src/repl/state_owners.h;
- * the headers are not included here to keep editor_state.c free of the
- * REPL state facade. Phase 5's rename will fold these into the
- * editor_* namespace. */
-int  repl_state_edit_line(void);
-void repl_state_edit_line_set(int line);
-void repl_state_edit_line_clamp(void);
+ * declared in the same TU; the forward decls let mutually-recursive
+ * helpers compile cleanly without reshuffling the file.
+ *
+ * `repl_state_document_count` is declared here rather than including
+ * the REPL state facade — keeps editor_state.c off the REPL header
+ * web, mirroring the pre-Phase-4 setup that forward-declared
+ * `repl_state_edit_line*`. */
+int  repl_state_document_count(void);
 void editor_input_clear(void);
 void editor_pending_newline_clear(void);
 void editor_cursor_pos_set(int cursor_pos);
 
-/* Phase 2 of plans/in-review/edit-line-ownership.md: transitional
- * forwarders. The editor-side API exists now so Phase 3 callers
- * compile against the final shape, but the storage stays in
- * ReplState until the Phase 4 atomic flip. */
+/* Phase 4 of plans/in-review/edit-line-ownership.md: storage flip.
+ * The edit-line cursor now lives on g_editor_state.document.edit_line_idx;
+ * the editor accessors read/write the field directly. REPL pipeline
+ * code receives the value as an explicit function parameter or via
+ * the repl_dispatch_edit_line_get/_set sink — never by linking to
+ * editor_state_edit_line directly (β invariant). */
 int editor_state_edit_line(void) {
-    return repl_state_edit_line();
+    return g_editor_state.document.edit_line_idx;
 }
 
 void editor_state_edit_line_set(int line) {
-    repl_state_edit_line_set(line);
+    if (line < 0) line = 0;
+    g_editor_state.document.edit_line_idx = line;
+    editor_state_edit_line_clamp();
 }
 
 void editor_state_edit_line_clamp(void) {
-    repl_state_edit_line_clamp();
+    int *p = &g_editor_state.document.edit_line_idx;
+    if (*p < 0) *p = 0;
+    int count = repl_state_document_count();
+    if (*p > count) *p = count;
 }
 
 EditorDocumentView editor_state_document(void) {

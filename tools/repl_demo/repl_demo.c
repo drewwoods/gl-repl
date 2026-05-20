@@ -82,6 +82,23 @@
  * sample, bypassing the editor commit chain entirely.
  */
 
+/* --- Demo-local edit-line cursor ------------------------------------- */
+
+/* Phase 4 of plans/in-review/edit-line-ownership.md moved edit-line
+ * storage out of ReplState. The REPL pipeline reads/writes the
+ * cursor through a controller-installed host-effects sink; the
+ * demo backs the sink with a file-local int since it doesn't link
+ * src/editor/state.c (where the canonical EditorState storage lives). */
+static int g_demo_edit_line = 0;
+
+static int demo_edit_line_get(void) { return g_demo_edit_line; }
+static void demo_edit_line_set(int line) { g_demo_edit_line = line < 0 ? 0 : line; }
+
+static const ReplHostEffects g_demo_host_effects = {
+    .edit_line_get = demo_edit_line_get,
+    .edit_line_set = demo_edit_line_set,
+};
+
 /* --- Static sample programs ------------------------------------------ */
 
 /* Plain commands: no for-loops, no function defs, no var decls. Exercises
@@ -171,7 +188,7 @@ static void seed_for_loop_program(void) {
     ReplCommandStore store = repl_command_store_live();
     repl_command_store_load(&store, cmds, LINE_COUNT);
     /* Demo-local cursor policy: zero after a bulk load. */
-    repl_state_edit_line_set(0);
+    repl_dispatch_edit_line_set(0);
 }
 
 /* --- Program loaders -------------------------------------------------- */
@@ -206,7 +223,7 @@ static int load_text_lines(const char *const *lines) {
          * insert so the auto-advance behavior the demo's loader
          * depends on is preserved (each line appends after the
          * previous insertion). */
-        int edit_line = repl_state_edit_line();
+        int edit_line = repl_dispatch_edit_line_get();
         ReplStoreMutOpts opts = {
             .flags        = REPL_COMMAND_STORE_ADJUST_EDIT_LINE,
             .cursor_inout = &edit_line,
@@ -215,7 +232,7 @@ static int load_text_lines(const char *const *lines) {
             fprintf(stderr, "  command store full at line %d\n", loaded);
             return -1;
         }
-        repl_state_edit_line_set(edit_line);
+        repl_dispatch_edit_line_set(edit_line);
         source_document_insert_line(loaded, pl.text);
         loaded++;
     }
@@ -275,13 +292,13 @@ static void seed_variable_driven_program(void) {
             return;
         }
         ReplCommandStore store = repl_command_store_live();
-        int edit_line = repl_state_edit_line();
+        int edit_line = repl_dispatch_edit_line_get();
         ReplStoreMutOpts opts = {
             .flags        = REPL_COMMAND_STORE_ADJUST_EDIT_LINE,
             .cursor_inout = &edit_line,
         };
         repl_command_store_insert_one(&store, pos, &cmd, &opts);
-        repl_state_edit_line_set(edit_line);
+        repl_dispatch_edit_line_set(edit_line);
         source_document_insert_line(pos, text);
         pos++;
     }
@@ -314,7 +331,7 @@ static void tick_and_execute(float t_value) {
     int t_idx = repl_eval_find_predef_var_idx("t");
     g_predef_vars[t_idx].value = t_value;
     repl_state_mark_flat_dirty();
-    repl_flatten_commands(repl_state_edit_line());
+    repl_flatten_commands(repl_dispatch_edit_line_get());
     if (!headless_executor_safe())
         return;
     ReplExecutionOptions opts = {
@@ -344,7 +361,7 @@ static void print_source_summary(const char *label, int loaded) {
 }
 
 static void print_flat_summary(void) {
-    repl_flatten_commands(repl_state_edit_line());
+    repl_flatten_commands(repl_dispatch_edit_line_get());
     int n = repl_state_flat_program_count();
     FlatProgramView view = repl_state_flat_program_view();
     printf("  flat program: %d cmd(s)\n", n);
@@ -434,7 +451,7 @@ static void render_display_func(void) {
             g_predef_vars[t_idx].value = g_render_t;
         repl_state_mark_flat_dirty();
     }
-    repl_flatten_commands(repl_state_edit_line());
+    repl_flatten_commands(repl_dispatch_edit_line_get());
 
     ReplExecutionOptions opts = {
         .flat_cmd_count = repl_state_flat_program_count(),
@@ -487,6 +504,10 @@ static int run_render_mode(int argc, char **argv) {
     glutCreateWindow("repl_demo (real GL)");
 
     glEnable(GL_DEPTH_TEST);
+
+    /* Install the host-effects sink (same reason as main(), but
+     * render mode bypasses main()'s install above). */
+    repl_install_host_effects(&g_demo_host_effects);
 
     render_load_current_sample();
 
@@ -576,6 +597,12 @@ int main(int argc, char **argv) {
 
     if (run_render)
         return run_render_mode(argc, argv);
+
+    /* Install the host-effects sink so the REPL pipeline's
+     * repl_dispatch_edit_line_* calls land on the demo-local int.
+     * Without this, the loader's cursor reads return 0 and writes
+     * are dropped, which breaks the append-at-end semantics. */
+    repl_install_host_effects(&g_demo_host_effects);
 
     printf("=== sample 1: plain commands ===\n");
     int loaded = load_text_lines(SAMPLE_TRIANGLE);

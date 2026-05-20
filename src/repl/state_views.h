@@ -23,13 +23,17 @@
 #define USER_SCENE_NAME_MAX 64
 #endif
 
-/* Source document storage: canonical source commands, current edit-line index,
- * and the source-level auto-normal dirty flag. */
+/* Source document storage: canonical source commands and the
+ * source-level auto-normal dirty flag. The edit-line cursor lives
+ * on EditorState (Phase 4 of plans/in-review/edit-line-ownership.md);
+ * REPL pipeline code that needs the cursor reads it through
+ * function parameters (parse / compile / flatten / load) or
+ * through the repl_dispatch_edit_line_get/_set sink (scene save
+ * / restore). */
 typedef struct {
     GLCmd cmds[MAX_COMMANDS];
     int   cmd_count;
     int   capacity;
-    int   edit_line_idx;
     int   normals_dirty;
 } ReplDocumentState;
 
@@ -147,7 +151,9 @@ const GLCmd *repl_state_document_cmds(void);
 const GLCmd *repl_state_document_cmd_at(int cmd_idx);
 int          repl_state_document_count(void);
 int          repl_state_document_capacity(void);
-int          repl_state_edit_line(void);
+/* repl_state_edit_line deleted in Phase 4 of
+ * plans/in-review/edit-line-ownership.md. See state_owners.h for
+ * the migration note. */
 int          repl_state_normals_dirty(void);
 void         repl_state_document_reset(void);
 
