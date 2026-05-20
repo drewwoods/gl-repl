@@ -23,36 +23,50 @@ Picked from the two options the prior `editor-demo.md` plan named:
   zero; edit-line stays in `ReplState`. Faster, but doesn't fix
   the underlying layering. Not pursued.
 
-This plan revises an earlier draft after review. Key revisions
+This plan has been revised twice after review. Key points
 versus the first draft:
 
 1. **Layering invariant β is non-negotiable.** REPL pipeline
    code never calls into `EditorState`; it receives edit-line
    as an explicit parameter from the caller. No exception, no
    guard carve-out.
-2. **`ReplCommandStore` cursor coupling is Phase 1, not a
-   Phase 5 cleanup detail.** The store currently holds an
-   `int *edit_line` pointer into `ReplDocumentState`; that
-   pointer is the structural reason ownership can't move
-   atomically. The store has to stop owning cursor adjustment
-   *before* the storage flip.
-3. **Single source of truth, every phase.** No bidirectional
+2. **The existing β guard is a paper guard today.** Phase 0
+   fixes `check-repl-no-direct-editor.sh` to actually scan
+   `src/repl/` (it currently scans root-only, finds nothing,
+   and exits OK). Without this, every later phase's
+   verification can pass while β silently breaks.
+3. **`ReplCommandStore` + `repl_apply_compiled_change` cursor
+   coupling is Phase 1, not a Phase 5 cleanup detail.** The
+   store holds an `int *edit_line` pointer; the apply layer
+   above it packages `change->adjust_edit_line` into the store
+   flag. Both layers have to flip in the same phase — flipping
+   just the store leaves apply.c in a state where it can't
+   honor its own intent flag without violating β. Both end up
+   taking an optional `int *cursor_inout` parameter; the store
+   does the standard insert / delete math on the caller-owned
+   int, and apply just forwards the pointer through. No
+   global, no helper, no struct.
+4. **Single source of truth, every phase.** No bidirectional
    forwarders. The editor accessor reads from REPL during the
    transition (editor → REPL, a forward dep that's already
    allowed); after the atomic flip, the editor accessor reads
    from EditorState and the REPL function is deleted in the
    same commit.
-4. **`EditorInputView.edit_line_idx` is removed, not blessed.**
+5. **`EditorInputView.edit_line_idx` is removed, not blessed.**
    Edit-line is document-cursor state, not input-row state;
    `EditorDocumentState` is the right home. Putting it on the
    input view too muddles slices. The dead
    `EditorInputState.edit_line_idx` storage (never written) also
    goes.
-5. **REPL-side inventory expanded.** The earlier draft listed
-   only compile.c / flatten.c / parser.c / scenes.c; the actual
-   set also includes core.c, example_loader.c, export.c, plus
-   the load.h / state_views.h / state_owners.h headers and
-   command_store.c via the store's pointer.
+6. **REPL-side inventory.** Files touching `repl_state_edit_line*`
+   today: compile.c, flatten.c, parser.c, scenes.c, core.c,
+   example_loader.c, export.c, **load.c**, plus
+   command_store.c (via the store pointer, fixed in Phase 1)
+   and the load.h / state_views.h / state_owners.h headers.
+   `load.c` in particular needs explicit cursor-in / cursor-out
+   plumbing because it relies on `change.adjust_edit_line = 1`
+   for its append-at-end loop semantics (load.c:95). See
+   Phase 3.6.5.
 
 ## Context
 
@@ -82,15 +96,17 @@ migration:
 
 ## Layering invariant (β, non-negotiable)
 
-REPL pipeline code (`src/repl/*.c`) does not call
-`editor_state_edit_line()` or any other `editor_*` accessor.
-This is the existing `check-repl-no-direct-editor` invariant —
-this migration preserves it.
+REPL pipeline code (`src/repl/*.c` and `src/repl/*.h`) does not
+call `editor_state_edit_line()` or any other `editor_*` accessor.
 
 The mechanism: every REPL pipeline function that needs edit-line
-takes it as a parameter (typically `int edit_line_idx`). Callers
-above the pipeline boundary (controller, commit, glr_ctrl,
-editor) supply the value from the editor accessor.
+takes it as a parameter (typically `int edit_line_idx`). Functions
+that *mutate* the cursor take an `int *cursor_inout` parameter
+(see Phase 1); the store does the per-op insert / delete math
+on the caller-owned int. Callers above
+the pipeline boundary (controller, commit, glr_ctrl, editor)
+supply the read value from the editor accessor and apply any
+returned delta.
 
 This is what makes Phase 4's atomic flip simple: when the storage
 moves, no REPL-side code has to change. Only callers of the
@@ -98,29 +114,129 @@ deleted `repl_state_edit_line()` need to update — and after
 Phases 2 and 3, there are no callers of `repl_state_edit_line()`
 outside `src/repl/state.c` itself, where it gets deleted.
 
-## Phase 1 — `ReplCommandStore` cursor decoupling
+### Caveat: the existing `check-repl-no-direct-editor` guard is a
+### paper guard today
 
-The store currently exposes:
+`scripts/check-repl-no-direct-editor.sh` scans `repl_*.c` /
+`repl_*.h` *at the repo root*. The REPL code moved to `src/repl/`
+during the source-document-port work; the root-level files no
+longer exist, so the guard's `nullglob` finds zero files and exits
+"repl-no-direct-editor OK (no repl_* sources found)" *regardless
+of what's actually in `src/repl/`*. Verified by reading the
+script (lines 23–28).
 
-```c
-typedef struct {
-    GLCmd *cmds;
-    int   *count;
-    int    capacity;
-    int   *edit_line;        /* <-- the structural problem */
-} ReplCommandStore;
+That means right now `make check-state-ownership` passes even if
+REPL code calls editor accessors. The migration cannot rely on
+this guard until it actually scans the right directory. Phase 0
+below fixes the guard *before* Phase 1 starts, so every
+subsequent phase's verification step has real teeth.
+
+## Phase 0 — Fix `check-repl-no-direct-editor` to scan `src/repl/`
+
+Before any code moves. This phase has its own commit and lands
+on `main` ahead of the migration PR if at all possible (it's a
+strictly-improving guard tightening with zero behavior change to
+shipped code).
+
+### 0.1 — Audit current REPL → editor coupling
+
+Run a manual grep equivalent to what the fixed guard will scan:
+
+```
+grep -rnE '#include "(src/)?editor/|editor_buffer_|editor_state_|editor_cursor_|EditorBufferView|EditorBuffer' src/repl/
 ```
 
-and `repl_command_store_live()` returns a store with
-`.edit_line = &g_repl_state.document.edit_line_idx`. Mutating
-operations (`_insert_one`, `_insert_many`, `_delete_range`,
-`_load`) with `REPL_COMMAND_STORE_ADJUST_EDIT_LINE` adjust
-`*store->edit_line` automatically.
+Expected: zero hits. If anything turns up, that's pre-existing
+β coupling that the paper guard was silently allowing; resolve
+it before this phase lands (separate commit / PR if needed).
 
-After Phase 4 the storage moves to `EditorState`, so the pointer
-would either (a) point into editor state from REPL code (which
-violates β) or (b) need to be re-plumbed. The right answer per
-β is **(c) the store stops owning cursor adjustment**.
+### 0.2 — Update `scripts/check-repl-no-direct-editor.sh`
+
+Replace the root-level glob:
+
+```bash
+shopt -s nullglob
+files=( repl_*.c repl_*.h )
+```
+
+with the actual layout:
+
+```bash
+shopt -s globstar nullglob
+files=( src/repl/**/*.c src/repl/**/*.h )
+```
+
+(Or `find src/repl -name '*.c' -o -name '*.h'` if bash globstar
+isn't reliable in CI.) The "no files found" success path is
+removed since the directory is known-populated; if it ever
+empties, that's a real signal worth surfacing.
+
+### 0.3 — Verify the guard exits OK on current `main`
+
+After the script update, `make check-repl-no-direct-editor` must
+still pass on current main. If it doesn't, Step 0.1 missed
+something — fix the offending coupling before merging this phase.
+
+### 0.4 — Wire `check-repl-no-direct-editor` into
+### `check-state-ownership` (if not already)
+
+Already wired, per the Makefile audit during the editor-demo
+plan. Confirm during this phase.
+
+This phase is small (~10 lines of bash) but load-bearing — every
+later phase's verification implicitly depends on it.
+
+## Phase 1 — `ReplCommandStore` + `repl_apply_compiled_change` cursor decoupling
+
+### Why this phase has to cover two layers, not just the store
+
+The cursor adjustment goes through two stacked APIs in
+`src/repl/`:
+
+1. **`ReplCommandStore`** (`src/repl/command_store.c`). Holds an
+   `int *edit_line` pointer:
+
+   ```c
+   typedef struct {
+       GLCmd *cmds;
+       int   *count;
+       int    capacity;
+       int   *edit_line;        /* <-- the pointer */
+   } ReplCommandStore;
+   ```
+
+   Mutating ops with `REPL_COMMAND_STORE_ADJUST_EDIT_LINE`
+   adjust `*store->edit_line` automatically.
+
+2. **`repl_apply_compiled_change`** (`src/repl/apply.c:73`). The
+   transactional wrapper most callers actually use. It calls
+   `repl_command_store_live()`, packages
+   `change->adjust_edit_line` into the store flag, and forwards
+   the mutating op:
+
+   ```c
+   int repl_apply_compiled_change(const ReplCompiledChange *change) {
+       ReplCommandStore store = repl_command_store_live();
+       int flags = change->adjust_edit_line
+                       ? REPL_COMMAND_STORE_ADJUST_EDIT_LINE : 0;
+       /* ... switch on change->kind, call store ops with flags ... */
+   }
+   ```
+
+   After the store stops owning cursor writes (1.1 below), this
+   function has no way to honor `change->adjust_edit_line`
+   without either (a) calling editor (β violation — apply.c
+   lives in `src/repl/`) or (b) silently ignoring the flag
+   (behavior change for `load.c`, `commit.c`, `clipboard.c`,
+   `undo.c` callers).
+
+   The right answer: **apply also returns the cursor delta**,
+   propagating it to its caller. Apply doesn't touch the
+   cursor; it reports what the cursor *would* have changed by
+   if the old auto-adjust were still in effect.
+
+Both layers have to flip in the same phase or the codebase ends
+up in a state where `adjust_edit_line` is set but never applied.
 
 ### 1.1 — Drop the `edit_line` pointer from `ReplCommandStore`
 
@@ -135,77 +251,156 @@ typedef struct {
 `repl_command_store_live()` returns a store without the pointer.
 The `REPL_COMMAND_STORE_ADJUST_EDIT_LINE` flag is renamed (or kept
 as a no-op for source compatibility during transition) and the
-store no longer reads or writes the cursor.
+store no longer reads or writes any global cursor.
 
-### 1.2 — Return a cursor delta from mutating ops
+### 1.2 — Mutating ops take an `int *cursor_inout`
 
-The mutating operations gain an optional out-parameter:
+Every store mutating op gains an optional `int *cursor_inout`
+parameter. When non-NULL *and* the caller passes
+`ADJUST_EDIT_LINE`, the store applies the standard insert/delete
+math to the caller-owned int in place. When NULL, no cursor
+mutation — pure data op.
 
 ```c
-typedef struct {
-    int kind;       /* INSERT / DELETE / REPLACE / LOAD / CLEAR */
-    int pos;
-    int count;
-} ReplCommandStoreCursorDelta;
-
 int repl_command_store_insert_one(ReplCommandStore *store,
                                   int pos, const GLCmd *cmd,
                                   int flags,
-                                  ReplCommandStoreCursorDelta *out_delta);
-/* ... same for _insert_many, _delete_range, _replace_one, _load */
+                                  int *cursor_inout);
+int repl_command_store_insert_many(ReplCommandStore *store,
+                                   int pos, const GLCmd *cmds, int count,
+                                   int flags,
+                                   int *cursor_inout);
+int repl_command_store_delete_range(ReplCommandStore *store,
+                                    int start, int count,
+                                    int *cursor_inout);
+/* _replace_one and _load: see note on _load below. */
 ```
 
-When `out_delta` is non-NULL, the function fills in what happened
-so the caller can adjust whichever cursor it cares about.
-`out_delta == NULL` is allowed (caller doesn't care).
+The math lives in the store (it knows what each op means);
+ownership of the cursor itself lives with the caller (caller-owned
+stack int, editor field, or wherever). No global, no helper, no
+struct.
 
-### 1.3 — Editor-side delta apply helper
+Per-op math the store implements:
+- **INSERT at pos by `count`:** if `pos <= cursor`, `cursor += count`.
+- **DELETE at pos by `count`:** if `cursor` was inside the deleted
+  range, snap to `pos` (the new slot); if past it,
+  `cursor -= count`. Clamp to `[0, new line_count]`.
+- **REPLACE:** no cursor change. `cursor_inout` ignored even if
+  non-NULL.
 
-Add a single small function in `src/editor/state.c`:
+LOAD is the absolute-set case. The existing API:
 
 ```c
-/* Adjust the editor's edit-line cursor in response to a command
- * store mutation. Pure cursor-math; no REPL involvement. */
-void editor_state_edit_line_apply_store_delta(
-    const ReplCommandStoreCursorDelta *delta);
+int repl_command_store_load(ReplCommandStore *store,
+                            const GLCmd *cmds, int count,
+                            int edit_line);
 ```
 
-The math:
-- INSERT at pos: if `pos <= current_line`, `current_line += count`.
-- DELETE at pos: if `pos < current_line`, `current_line -=
-  min(count, current_line - pos)`. Clamp to [0, doc_count].
-- LOAD: caller passes the new edit_line as part of the load
-  call's separate `edit_line` parameter (existing pattern).
-- REPLACE / CLEAR: no cursor adjustment.
-
-This helper lives editor-side; callers in `src/editor/` use it,
-callers outside (none expected — the store's auto-adjust callers
-today are all editor-side commit / clipboard / undo code) update
-their own cursor however they like.
-
-### 1.4 — Migrate every `REPL_COMMAND_STORE_ADJUST_EDIT_LINE` caller
-
-Grep call sites (`src/editor/clipboard.c`, `commit.c`, `undo.c`,
-`input.c`, plus tests). Each becomes:
+stays *almost* as-is — the `edit_line` parameter has always been
+"the new absolute cursor." After Phase 1, the store doesn't write
+to a global; instead, the caller passes that value into
+`*cursor_inout` themselves *before or after* the call. To keep
+the call shape symmetric with the other mutators, add the same
+`int *cursor_inout` parameter:
 
 ```c
-ReplCommandStoreCursorDelta delta;
-repl_command_store_insert_one(store, pos, &cmd, flags, &delta);
-editor_state_edit_line_apply_store_delta(&delta);
+int repl_command_store_load(ReplCommandStore *store,
+                            const GLCmd *cmds, int count,
+                            int edit_line,
+                            int *cursor_inout);
+```
+
+The store, on success, writes `*cursor_inout = edit_line`
+(clamped to `[0, count]`). No "is_absolute" flag, no separate
+shape — LOAD's parameter already carries the absolute target.
+
+This shape is what the reviewer was reaching for with "the store
+should just return a delta": the store does the per-op math, the
+caller's int gets updated. No `ReplCommandStoreCursorDelta`
+struct, no kind enum, no editor-side helper.
+
+### 1.3 — `repl_apply_compiled_change` gets the same shape
+
+```c
+/* Before: */
+int  repl_apply_compiled_change(const ReplCompiledChange *change);
+
+/* After: */
+int  repl_apply_compiled_change(const ReplCompiledChange *change,
+                                int *cursor_inout);
+```
+
+Apply forwards `cursor_inout` to the store mutating ops it
+invokes, honoring `change->adjust_edit_line` as the gate (when
+the flag is off, apply passes NULL to the store regardless of
+what the caller supplied). The `change->adjust_edit_line` field
+stays — it's still the *intent* flag.
+
+Apply itself never reads or writes editor state. The cursor
+lives where the caller put it.
+
+### 1.4 — Migrate every direct store-mutator caller
+
+Grep direct call sites of the store ops (not via apply). Most
+editor code goes through `repl_apply_compiled_change`, but there
+are a handful of direct sites in `src/editor/clipboard.c`,
+`commit.c`, `undo.c`, `input.c`, plus tests. Each becomes:
+
+```c
+int cur = editor_state_edit_line();
+int ok = repl_command_store_insert_one(store, pos, &cmd, flags,
+                                        flags & ADJUST_EDIT_LINE ? &cur : NULL);
+if (ok && (flags & ADJUST_EDIT_LINE))
+    editor_state_edit_line_set(cur);
 ```
 
 For callers that don't care about the cursor (some test fixtures),
 pass `NULL`.
 
-### 1.5 — Verification
+### 1.5 — Migrate every `repl_apply_compiled_change` caller
+
+Grep:
+
+```
+grep -rn 'repl_apply_compiled_change\b' --include="*.c" --include="*.h" .
+```
+
+Expected sites:
+- `src/editor/commit.c` — main editor commit path.
+- `src/editor/clipboard.c` — paste path.
+- `src/editor/undo.c` — undo restore path.
+- `src/repl/load.c` — REPL-side line loader (β-bound;
+  see Phase 3.6.5).
+- Various tests.
+
+Editor-side sites become:
+
+```c
+int cur = editor_state_edit_line();
+int ok = repl_apply_compiled_change(&change,
+                                     change.adjust_edit_line ? &cur : NULL);
+if (ok && change.adjust_edit_line)
+    editor_state_edit_line_set(cur);
+```
+
+`src/repl/load.c` (which can't call editor) threads the cursor
+through its loop as a local int (`int running_edit_line`), passes
+`&running_edit_line` to apply, and returns the final value to
+its caller. See Phase 3.6.5.
+
+### 1.6 — Verification
 
 `make sample USE_GL_STUBS=1`, `make test-stubs`, full
-`check-state-ownership` clean. Behavior unchanged: every call
-site still adjusts the same cursor by the same amount, just
-through an explicit apply call instead of an auto-pointer.
+`check-state-ownership` clean (including the now-real
+`check-repl-no-direct-editor` from Phase 0). Behavior unchanged:
+every call site still adjusts the same cursor by the same
+amount, just through an explicit apply call instead of an
+auto-pointer.
 
-Commit message confirms: the store no longer holds a cursor
-pointer; ownership of cursor adjustment lives editor-side.
+Commit message confirms: neither `ReplCommandStore` nor
+`repl_apply_compiled_change` holds a cursor pointer; ownership
+of cursor adjustment lives editor-side.
 
 ## Phase 2 — Editor-side accessor that reads from REPL (transition adapter)
 
@@ -234,8 +429,16 @@ typedef struct {
 
 Add to `EditorState`:
 ```c
-EditorDocumentState document;
+EditorDocumentState document;  /* populated in Phase 4; reads
+                                * during Phases 2-3 still resolve
+                                * to ReplState via the forwarders. */
 ```
+
+The "currently unused" comment is important: the half-state
+where the field exists but isn't read from is intentional, lasts
+only for the duration of this PR (Phases 2-3), and is the
+deliberate cost of an atomic Phase 4 flip. A reviewer who lands
+on this struct between phases shouldn't think it's a mistake.
 
 ### 2.2 — Define the accessors
 
@@ -353,13 +556,30 @@ Files: `tools/editor_demo/{editor_demo,input,repl_shim}.c`,
 - `editor_demo.c:107`: `int edit_line = input.edit_line_idx;` →
   `int edit_line = editor_state_edit_line();`
 - `tools/editor_demo/input.c`: uses `repl_state_edit_line()`
-  through a forward declaration. Switch to the editor accessor.
-- `tools/editor_demo/repl_shim.c`: still provides
-  `repl_state_edit_line()` and `demo_edit_line_set()`. The
-  shim's `repl_state_edit_line()` returns demo-local storage;
-  the editor accessor's forwarder calls it. So the demo's
-  edit_line still works through the shim during transition.
-  Phase 5 deletes the shim entirely.
+  through a forward declaration. Switch reads to
+  `editor_state_edit_line()` and writes to
+  `editor_state_edit_line_set()`. The local
+  `demo_edit_line_set()` setter (declared by forward decl in
+  input.c) is removed from the demo's source — there's no need
+  for a demo-internal name once the editor accessor exists.
+- `tools/editor_demo/repl_shim.c`: during Phases 2-3 the
+  forwarder chain is:
+    - Read: `editor_demo` calls `editor_state_edit_line()` →
+      forwarder → `repl_state_edit_line()` (shim) →
+      `g_demo_edit_line` (shim's static int).
+    - Write: `editor_demo` calls `editor_state_edit_line_set(n)`
+      → forwarder → `repl_state_edit_line_set(n)` → ...
+  For reads and writes to land on the *same* storage, the shim
+  must provide BOTH `repl_state_edit_line` and
+  `repl_state_edit_line_set` (and `_clamp`). Add the setter and
+  the clamp to the shim as part of this chunk; both update
+  `g_demo_edit_line`. Without this, the demo's writes go
+  nowhere (or to a different copy) while reads return stale
+  values — the migration would silently break the demo's
+  multi-line editing.
+
+  Phase 5 deletes the shim entirely (storage moves to
+  EditorState in Phase 4).
 
 ### 3.6 — REPL pipeline (β: parameter passing)
 
@@ -394,9 +614,16 @@ These are load / import / lifecycle paths. They call
 after a load or scene switch. Per β, the *write* should happen
 editor-side too: these functions return "the cursor should land
 at line N" and the caller (controller / commit code) calls
-`editor_state_edit_line_set(N)`. Concretely: add an `int
-*out_new_edit_line` parameter to the load functions, or rely on
-the existing return shape if there's one. Specific sites:
+`editor_state_edit_line_set(N)`.
+
+**API shape pinned: return the new edit_line as an int.** For
+functions currently returning `void`, change the return type to
+`int`. For functions already returning a meaningful status
+(typically `int success`), add an `int *out_new_edit_line`
+parameter. Do NOT introduce a new `ReplLoadResult` struct for a
+single int — it's heavier than the migration warrants and would
+ripple into every caller for no extra information. Specific
+sites:
 
 - `src/repl/core.c:772, 777`: `repl_state_edit_line_set(repl_state_document_count())`
   — likely in an example/scene load. Return the value instead.
@@ -410,22 +637,93 @@ the existing return shape if there's one. Specific sites:
   edit_line. Save → read via parameter; restore → return value
   for caller to apply.
 
-**3.6.5 — `command_store.c`**. Phase 1 already removed the
-`*edit_line` pointer. This sub-step verifies no remaining
+**3.6.5 — `load.c`.** The REPL-side line loader is structurally
+similar to the editor commit path but lives in `src/repl/` and
+relies heavily on auto-advance — line 95's explicit
+`change.adjust_edit_line = 1` is exactly the
+"loader's append-at-end semantics, edit_line must auto-advance
+line-by-line so the next call sees insert_idx = document_count"
+pattern Phase 1 broke.
+
+With Phase 1's `int *cursor_inout` shape, the fix is
+straightforward:
+
+1. `repl_load_*` entry points add an `int *edit_line_inout`
+   parameter (caller's cursor; the loader threads it through
+   each per-line apply).
+2. The loop's per-line body becomes:
+   ```c
+   repl_apply_compiled_change(&change,
+                              change.adjust_edit_line ? edit_line_inout
+                                                      : NULL);
+   ```
+   Each iteration advances `*edit_line_inout` by the store's
+   standard math; no REPL → editor call, no struct, no helper.
+3. Existing internal references to `ctx.edit_line`
+   (load.c:144-145) migrate to dereferencing the running
+   `*edit_line_inout` instead.
+
+This is the most behaviorally-sensitive sub-step in Phase 3 — a
+silent off-by-one in the cursor accumulation will make
+multi-line loads land on the wrong row. Belt-and-suspenders:
+add a focused unit test (`tests/test_repl_core_io.c` or
+similar) that loads a 5-line file and asserts the post-load
+edit_line equals the expected value, before refactoring.
+
+**3.6.6 — `repl_state_capture` / `repl_state_restore`.** These
+copy/restore `g_repl_state` wholesale, which today includes
+`document.edit_line_idx`. After Phase 4 the field is gone from
+`ReplState`. Decide before Phase 3.6.6 starts:
+
+- Option (a) (preferred): `repl_state_capture` /
+  `repl_state_restore` simply stop touching edit_line — their
+  job becomes "snapshot REPL state only," edit_line is
+  EditorState concern. The single caller that uses these for
+  undo (in `src/editor/undo.c`) already snapshots editor state
+  separately; it threads edit_line through the editor snapshot
+  path.
+- Option (b): the functions gain `int *edit_line_inout` (in for
+  restore, out for capture). Simpler for callers but spreads
+  edit-line awareness across two snapshot mechanisms.
+
+(a) is cleaner: edit_line is editor-owned, so editor-side
+capture/restore handles it. Audit `editor_state_capture` /
+`editor_state_restore` (in `src/editor/state.c`) — they may
+already snapshot the new `EditorDocumentState` once Phase 2
+adds it.
+
+**3.6.7 — `command_store.c` audit.** Phase 1 already removed
+the `*edit_line` pointer. This sub-step verifies no remaining
 `repl_state_edit_line*` calls in command_store.c.
 
-**3.6.6 — Header cleanup.** `src/repl/load.h`,
+**3.6.8 — Header cleanup.** `src/repl/load.h`,
 `src/repl/state_views.h`, `src/repl/state_owners.h` no longer
 need to declare `repl_state_edit_line*`. Phase 4 will delete
 the declarations along with the definitions.
 
 By end of Phase 3: zero `repl_state_edit_line*` calls outside
-`src/repl/state.c` itself. `make check-repl-no-direct-editor`
-still passes (REPL never calls editor).
+`src/repl/state.c` itself, and zero REPL → editor symbol
+references (the fixed `check-repl-no-direct-editor` guard from
+Phase 0 enforces this).
 
-## Phase 4 — Atomic flip + EditorInputView.edit_line_idx removal
+## Phase 4 — Atomic flip
 
-Single commit. This is the moment the source of truth moves.
+**Two commits**, sequenced for bisect-friendliness:
+
+- **Commit 4a (4.1 + 4.2 + 4.3 + 4.5):** the storage flip.
+  Storage moves from `ReplState` to `EditorState`; editor
+  accessors stop forwarding; `repl_state_edit_line*` is deleted;
+  `repl_command_store_live()` no longer references the removed
+  REPL field.
+- **Commit 4b (4.4 alone):** remove `EditorInputView.edit_line_idx`
+  (Path 4-Remove). The dead `EditorInputState.edit_line_idx`
+  storage also goes.
+
+Splitting 4b out means if anything regresses after 4a, the bisect
+points at the storage move; if a regression shows up only after
+4b, it's because something *did* depend on the view field after
+Phase 3 supposedly migrated all readers, and that's a smaller
+search space to investigate.
 
 ### 4.1 — Move storage
 
@@ -592,21 +890,17 @@ coherent.
 ## Risk / open questions to pin before starting
 
 1. **`ReplCommandStore` API change blast radius.** Phase 1 adds
-   an out-parameter to the mutating ops. All callers update —
-   editor side is straightforward; tests need to migrate too.
-   Estimate ~30 call sites. The cursor-delta apply helper
-   centralizes the math so callers don't reimplement.
+   an optional `int *cursor_inout` parameter to the mutating ops
+   plus the same to `repl_apply_compiled_change`. All callers
+   update — editor side is straightforward; tests need to
+   migrate too. Estimate ~30 call sites. The per-op math lives
+   in the store; callers just pass a stack-local int through.
 
-2. **`example_loader.c` / `core.c` / `export.c` API shape.**
-   Phase 3.6.4 changes these from "calls
-   `repl_state_edit_line_set` internally" to "returns a target
-   line for the caller to set." Decide between (a) a new
-   `int *out_new_edit_line` parameter, (b) returning a struct
-   that already exists (e.g., `ReplLoadResult`) with an
-   `edit_line_after_load` field, or (c) just returning the value
-   from functions that currently return void or status int.
-   Pick (b) if there's a natural return struct, else (c) with a
-   small status struct.
+2. **`example_loader.c` / `core.c` / `export.c` / `scenes.c`
+   API shape.** Pinned: functions currently returning `void`
+   change to return `int` (the new edit_line); functions already
+   returning a status int gain an `int *out_new_edit_line`
+   parameter. No new result struct. See Phase 3.6.4.
 
 3. **`UiRenderSnapshot` and `SceneGuideSnapshot` field names.**
    These already use `edit_line_idx`. The name stays; only the
@@ -626,15 +920,25 @@ coherent.
 
 ## Landing strategy
 
-- Phase 1, 2, 3.x, 4, 5, 6 as separate commits on one PR. Each
-  commit leaves the tree buildable + tests green.
-- Sequence: 1 → 2 → 3.1 → 3.2 → 3.3 → 3.4 → 3.5 → 3.6 → 4 → 5 → 6 → 7.
-- The atomic flip (Phase 4) is the critical commit — easy to
-  revert if anything breaks. The Phase 3 chunks ahead of it are
-  all behavior-preserving forwarder migrations; reverting one is
-  cheap.
-- One PR for the whole migration. Partial landings would leave
-  the codebase in a forwarder state where editor accessors
-  forward to REPL accessors that still exist — that's
-  internally consistent (it's the Phase 2-3 transition state)
-  but not a useful long-term shape.
+- Phase 0 lands on `main` ahead of the migration PR if at all
+  possible (it's a strictly-improving guard fix with no behavior
+  change to shipped code). If timing doesn't permit, it's the
+  first commit on the migration PR.
+- Phase 1, 2, 3.x, 4a, 4b, 5, 6 as separate commits on one PR
+  after Phase 0. Each commit leaves the tree buildable + tests
+  green.
+- Sequence: 0 → 1 → 2 → 3.1 → 3.2 → 3.3 → 3.4 → 3.5 → 3.6.1 →
+  3.6.2 → 3.6.3 → 3.6.4 → 3.6.5 → 3.6.6 → 3.6.7 → 3.6.8 → 4a → 4b → 5 → 6 → 7.
+- Phase 6.4 (stale `plans/active/editor-demo.md` references)
+  folds into Phase 0's commit, since both are independent of
+  the migration itself.
+- The atomic flip is split into 4a (storage move + accessor
+  rewire) and 4b (Path 4-Remove on `EditorInputView.edit_line_idx`).
+  Splitting 4b out gives a cleaner bisect target if a regression
+  shows up post-storage-move vs. post-field-removal.
+- One PR for the whole migration (besides the optional Phase 0
+  precursor). Partial landings would leave the codebase in a
+  forwarder state where editor accessors forward to REPL
+  accessors that still exist — that's internally consistent
+  (it's the Phase 2-3 transition state) but not a useful
+  long-term shape.
