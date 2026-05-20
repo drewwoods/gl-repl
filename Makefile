@@ -562,6 +562,9 @@ EDITOR_DEMO_DEP_SRCS = src/editor/clipboard.c \
                        src/editor/search.c \
                        src/editor/state.c \
                        src/editor/undo.c \
+                       src/ui/text_layout.c \
+                       src/ui/text_panel.c \
+                       src/ui/text_search.c \
                        prof.c \
                        tests/gl-stubs/gl_stub_counts.c
 
