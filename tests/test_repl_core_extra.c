@@ -11,6 +11,7 @@
 #include "repl/executor.h"
 #include "repl/state.h"
 #include "ui/panels.h"
+#include "editor/inline_file_prompt.h"
 #include "editor/inline_rename.h"
 
 #define g_anim_time (repl_state_variables_mut()->anim_time)
@@ -551,6 +552,202 @@ void test_user_scene_rename_flow() {
                editor_inline_rename_begin(MAX_USER_SCENES - 1), 0);
 }
 
+void test_inline_file_prompt_flow() {
+    printf("--- Inline file-load prompt flow ---\n");
+
+    /* --- Lifecycle: begin seeds buffer; cancel clears it -------------- */
+    glr_app_reset_all(); declare_test_vars();
+    ASSERT_INT("prompt inactive at start",
+               editor_inline_file_prompt_active(), 0);
+    ASSERT_STR("buffer empty when inactive",
+               editor_inline_file_prompt_buffer(), "");
+
+    ASSERT_INT("begin succeeds with default",
+               editor_inline_file_prompt_begin("my_scene.c"), 1);
+    ASSERT_INT("active after begin",
+               editor_inline_file_prompt_active(), 1);
+    ASSERT_STR("buffer seeded with default name",
+               editor_inline_file_prompt_buffer(), "my_scene.c");
+
+    /* begin while active is a no-op (returns 0; buffer unchanged). */
+    ASSERT_INT("re-begin while active returns 0",
+               editor_inline_file_prompt_begin("other.c"), 0);
+    ASSERT_STR("re-begin leaves buffer untouched",
+               editor_inline_file_prompt_buffer(), "my_scene.c");
+
+    editor_inline_file_prompt_cancel();
+    ASSERT_INT("cancel clears active",
+               editor_inline_file_prompt_active(), 0);
+
+    /* --- Input filtering ---------------------------------------------- */
+    glr_app_reset_all(); declare_test_vars();
+    ASSERT_INT("begin (empty default)",
+               editor_inline_file_prompt_begin(""), 1);
+    /* Mix legal (incl. '.', '/') and rejected characters. */
+    const char *typed = "ws/sub.c\"<>|\\";
+    for (const char *p = typed; *p; p++)
+        editor_inline_file_prompt_handle_key((unsigned char)*p);
+    ASSERT_STR("filter accepts '.' and '/'; rejects shell-confusables",
+               editor_inline_file_prompt_buffer(), "ws/sub.c");
+    /* Backspace works. */
+    editor_inline_file_prompt_handle_key(8 /*BS*/);
+    ASSERT_STR("backspace deletes last char",
+               editor_inline_file_prompt_buffer(), "ws/sub.");
+    /* Esc cancels. */
+    editor_inline_file_prompt_handle_key(27 /*ESC*/);
+    ASSERT_INT("esc cancels",
+               editor_inline_file_prompt_active(), 0);
+
+    /* --- Specials are swallowed while active -------------------------- */
+    glr_app_reset_all(); declare_test_vars();
+    editor_inline_file_prompt_begin("");
+    /* The exact special-key codes don't matter; any non-zero key
+     * should be consumed (and any zero key still returns 1 because
+     * the prompt is the active modal). */
+    ASSERT_INT("special swallowed while active",
+               editor_inline_file_prompt_handle_special(101 /*F-key*/), 1);
+    ASSERT_INT("special returns 0 when inactive",
+               (editor_inline_file_prompt_cancel(),
+                editor_inline_file_prompt_handle_special(101)), 0);
+
+    /* --- Commit on empty path -> stays open, status set -------------- */
+    glr_app_reset_all(); declare_test_vars();
+    editor_inline_file_prompt_begin("");
+    editor_inline_file_prompt_handle_key('\r');
+    ASSERT_INT("empty commit keeps prompt open",
+               editor_inline_file_prompt_active(), 1);
+    editor_inline_file_prompt_cancel();
+
+    /* --- Regression: missing file surfaces error in-prompt + status -- */
+    /* Bug fix: previously the prompt stayed open silently when the
+     * file was missing. The strip occludes the regular status bar, so
+     * relying on repl_set_status alone left the user with no
+     * feedback. Now the error is mirrored into the in-prompt buffer
+     * AND repl_set_status, and the file is stat()'d BEFORE any state
+     * mutation so a missing-file commit cannot wipe the document. */
+    glr_app_reset_all(); declare_test_vars();
+    editor_feed_line("glVertex3f(11,22,33);");
+    repl_flatten_commands();
+    int verts_before_missing = repl_count_vertices();
+    int active_before_missing = repl_active_user_scene();
+
+    editor_inline_file_prompt_begin("/tmp/repl_item19_missing_xyz123.c");
+    editor_inline_file_prompt_handle_key('\r');
+    ASSERT_INT("missing file keeps prompt open",
+               editor_inline_file_prompt_active(), 1);
+    ASSERT_TRUE("missing-file error visible in prompt",
+                strstr(editor_inline_file_prompt_error(),
+                       "File not found") != NULL);
+    repl_flatten_commands();
+    ASSERT_INT("missing file does not wipe document",
+               repl_count_vertices(), verts_before_missing);
+    ASSERT_INT("missing file does not change active scene",
+               repl_active_user_scene(), active_before_missing);
+
+    /* Typing a char clears the stale error. */
+    editor_inline_file_prompt_handle_key('x');
+    ASSERT_STR("keystroke clears stale error",
+               editor_inline_file_prompt_error(), "");
+    editor_inline_file_prompt_cancel();
+
+    /* --- Commit on a directory -> stays open, no load ----------------- */
+    glr_app_reset_all(); declare_test_vars();
+    editor_feed_line("glVertex3f(7,8,9);");
+    repl_flatten_commands();
+    int verts_before_dir = repl_count_vertices();
+    editor_inline_file_prompt_begin("/tmp");  /* well-known dir */
+    editor_inline_file_prompt_handle_key('\r');
+    ASSERT_INT("directory keeps prompt open",
+               editor_inline_file_prompt_active(), 1);
+    repl_flatten_commands();
+    ASSERT_INT("directory commit does not replace document",
+               repl_count_vertices(), verts_before_dir);
+    editor_inline_file_prompt_cancel();
+
+    /* --- Happy path: export, then commit through the prompt ----------- */
+    {
+        const char *export_path = "/tmp/test_repl_inline_file_prompt.c";
+        glr_app_reset_all(); declare_test_vars();
+        editor_feed_line("glVertex3f(1,2,3);");
+        editor_feed_line("glVertex3f(4,5,6);");
+        repl_export_save_output(export_path, source_document_view(), NULL);
+
+        /* Reset to an empty document (the load must replace it). */
+        glr_app_reset_all(); declare_test_vars();
+        ASSERT_INT("doc empty before load",
+                   repl_count_vertices(), 0);
+
+        editor_inline_file_prompt_begin(export_path);
+        editor_inline_file_prompt_handle_key('\r');
+
+        ASSERT_INT("successful load closes prompt",
+                   editor_inline_file_prompt_active(), 0);
+        ASSERT_STR("no error after successful load",
+                   editor_inline_file_prompt_error(), "");
+        repl_flatten_commands();
+        ASSERT_INT("two vertices loaded via prompt",
+                   repl_count_vertices(), 2);
+
+        unlink(export_path);
+    }
+
+    /* --- Regression: load creates a NEW scene slot, doesn't replace -- */
+    /* Bug fix: previously the load REPLACED the current document
+     * in-place. The user expected the file to come in as a NEW user
+     * scene in the workspace so the previous scene stays accessible
+     * via the scene tabs / F12. */
+    {
+        const char *src_path = "/tmp/test_repl_inline_file_prompt_load.c";
+
+        /* Build source file: 2 vertices. */
+        glr_app_reset_all(); declare_test_vars();
+        editor_feed_line("glVertex3f(1,1,1);");
+        editor_feed_line("glVertex3f(2,2,2);");
+        repl_export_save_output(src_path, source_document_view(), NULL);
+
+        /* Build a CURRENT scene with different content (5 verts) and
+         * promote it so it occupies a real user scene slot rather
+         * than the transient state. */
+        glr_app_reset_all(); declare_test_vars();
+        if (repl_example_count() > 0) {
+            repl_load_example(0);
+            (void)repl_promote_example_if_needed();
+        }
+        int existing_count_before = repl_user_scene_count();
+        int prev_active = repl_active_user_scene();
+
+        /* Load the source file via the prompt. */
+        editor_inline_file_prompt_begin(src_path);
+        editor_inline_file_prompt_handle_key('\r');
+        repl_flatten_commands();
+
+        ASSERT_INT("load closes prompt on success",
+                   editor_inline_file_prompt_active(), 0);
+        /* New scene slot was created. */
+        ASSERT_TRUE("scene count grew by at least 1",
+                    repl_user_scene_count() > existing_count_before);
+        /* Active slot is now the new scene, not the previous one. */
+        int new_active = repl_active_user_scene();
+        ASSERT_TRUE("active scene changed to loaded slot",
+                    new_active >= 0 && new_active != prev_active);
+        /* Live document is now the loaded content (2 verts). */
+        ASSERT_INT("live document is the loaded scene (2 verts)",
+                   repl_count_vertices(), 2);
+
+        /* Load into an empty document still works. */
+        glr_app_reset_all(); declare_test_vars();
+        editor_inline_file_prompt_begin(src_path);
+        editor_inline_file_prompt_handle_key('\r');
+        repl_flatten_commands();
+        ASSERT_INT("load into empty doc closes prompt",
+                   editor_inline_file_prompt_active(), 0);
+        ASSERT_INT("load into empty doc loads 2 verts",
+                   repl_count_vertices(), 2);
+
+        unlink(src_path);
+    }
+}
+
 void test_activate_home_slot_no_duplicate_name() {
     printf("--- activate_home_slot produces no duplicate name ---\n");
     glr_app_reset_all(); declare_test_vars();
@@ -966,6 +1163,7 @@ int main(int argc, char **argv) {
     test_user_scene_promote_all_slots_full();
     test_user_scene_promote_lru_evict();
     test_user_scene_rename_flow();
+    test_inline_file_prompt_flow();
     test_workspace_round_trip();
     test_activate_home_slot_no_duplicate_name();
     test_my_scene_persists_edits_from_startup();

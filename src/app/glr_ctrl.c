@@ -18,6 +18,7 @@
 #include "editor/commit.h"
 #include "editor/completion.h"
 #include "editor/help_session.h"
+#include "editor/inline_file_prompt.h"
 #include "editor/inline_rename.h"
 #include "editor/input.h"
 #include "editor/search.h"
@@ -1494,6 +1495,12 @@ void glr_ctrl_build_ui_snapshot(UiRenderSnapshot *snap) {
     snap->rename_active = editor_inline_rename_active();
     snprintf(snap->rename_text, sizeof(snap->rename_text), "%s",
              editor_inline_rename_buffer());
+
+    snap->file_prompt_active = editor_inline_file_prompt_active();
+    snprintf(snap->file_prompt_text, sizeof(snap->file_prompt_text), "%s",
+             editor_inline_file_prompt_buffer());
+    snprintf(snap->file_prompt_error, sizeof(snap->file_prompt_error), "%s",
+             editor_inline_file_prompt_error());
 
     snap->help_content = glr_ctrl_help_overlay_content();
     snap->editor_transformers = editor_state_transformers();
@@ -3196,6 +3203,8 @@ int glr_ctrl_router_handle_code_panel_hit(UiHit hit, int x, int y) {
      * entry for the click that starts it — no self-cancel. */
     if (editor_inline_rename_active())
         editor_inline_rename_cancel();
+    if (editor_inline_file_prompt_active())
+        editor_inline_file_prompt_cancel();
 
     /* A click outside the menu bar (anywhere that isn't UI_HIT_MENU_BUTTON,
      * UI_HIT_MENU_ITEM, or UI_HIT_SUBMENU_ITEM) dismisses an open
@@ -3363,6 +3372,13 @@ void glr_ctrl_keyboard(unsigned char key, int x, int y) {
         return;
     }
 
+    /* File-prompt capture: same hard-modal contract as rename. */
+    if (editor_input_file_prompt_capture_key(key)) {
+        editor_reset_input_effects();
+        glr_ctrl_apply_input_effects(editor_take_input_effects());
+        return;
+    }
+
     editor_reset_input_effects();
 
     /* Controller-owned routes — order matches the legacy editor chain
@@ -3398,6 +3414,12 @@ void glr_ctrl_special(int key, int x, int y) {
     glr_ctrl_notify_audio_gesture_once();
 
     if (editor_input_rename_capture_special(key)) {
+        editor_reset_input_effects();
+        glr_ctrl_apply_input_effects(editor_take_input_effects());
+        return;
+    }
+
+    if (editor_input_file_prompt_capture_special(key)) {
         editor_reset_input_effects();
         glr_ctrl_apply_input_effects(editor_take_input_effects());
         return;

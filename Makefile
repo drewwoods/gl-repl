@@ -255,8 +255,9 @@ SRCS = \
 	src/editor/commit.c \
 	src/editor/completion.c \
 	src/editor/help_session.c \
-	src/editor/input.c \
+	src/editor/inline_file_prompt.c \
 	src/editor/inline_rename.c \
+	src/editor/input.c \
 	src/editor/reformat.c \
 	src/editor/search.c \
 	src/editor/services.c \
@@ -334,6 +335,7 @@ HDRS = \
 	src/editor/commit.h \
 	src/editor/completion.h \
 	src/editor/help_session.h \
+	src/editor/inline_file_prompt.h \
 	src/editor/inline_rename.h \
 	src/editor/input.h \
 	src/editor/reformat.h \
@@ -411,8 +413,9 @@ CORE_TEST_SRCS = \
 	src/editor/commit.c \
 	src/editor/completion.c \
 	src/editor/help_session.c \
-	src/editor/input.c \
+	src/editor/inline_file_prompt.c \
 	src/editor/inline_rename.c \
+	src/editor/input.c \
 	src/editor/reformat.c \
 	src/editor/search.c \
 	src/editor/services.c \

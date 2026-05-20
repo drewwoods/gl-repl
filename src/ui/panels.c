@@ -85,6 +85,64 @@ void ui_panels_render_scene_status(const UiRenderSnapshot *snap) {
         return;
     }
 
+    /* Inline file prompt reuses the rename modal's bar geometry +
+     * colors — same hard-modal contract, same display ownership; only
+     * the prompt text differs. */
+    if (snap->file_prompt_active) {
+        int sc_x, sc_y, sc_w, sc_h;
+        int bar_h, bar_y, text_y, tx, max_px, max_chars, n;
+        char msg[320];
+
+        ui_layout_scene_rect(&sc_x, &sc_y, &sc_w, &sc_h);
+        if (sc_w <= 0 || sc_h <= 0)
+            return;
+
+        bar_h = STATUSBAR_H;
+        bar_y = sc_y;
+
+        gl2d_begin(snap->viewport.window_w, snap->viewport.window_h);
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+        glColor4fv(k_rename_bar_bg);
+        glRectf((float)sc_x, (float)bar_y,
+                (float)(sc_x + sc_w), (float)(bar_y + bar_h));
+        glColor4fv(k_rename_bar_rule);
+        glBegin(GL_LINES);
+        glVertex2f((float)sc_x, (float)(bar_y + bar_h));
+        glVertex2f((float)(sc_x + sc_w), (float)(bar_y + bar_h));
+        glEnd();
+
+        text_y = bar_y + (bar_h - FONT_SMALL_H) / 2 + 1;
+        tx = sc_x + CODE_MARGIN_X;
+        max_px = sc_x + sc_w - CODE_MARGIN_X - tx;
+        max_chars = max_px / FONT_SMALL_W;
+        if (max_chars < 8)
+            max_chars = 8;
+        if (max_chars > (int)sizeof(msg) - 1)
+            max_chars = (int)sizeof(msg) - 1;
+        /* When the most recent commit failed, swap the hint for the
+         * error string. The prompt strip occludes the regular status
+         * bar, so this is the only place a user can see the failure
+         * reason without dismissing the prompt. */
+        if (snap->file_prompt_error[0])
+            n = snprintf(msg, sizeof(msg),
+                         "Load scene: %s_   %s   [Esc] cancel",
+                         snap->file_prompt_text, snap->file_prompt_error);
+        else
+            n = snprintf(msg, sizeof(msg),
+                         "Load scene: %s_   [Enter] load   [Esc] cancel",
+                         snap->file_prompt_text);
+        if (n > max_chars)
+            msg[max_chars] = '\0';
+        glColor4fv(k_rename_bar_text);
+        gl2d_draw_string((float)tx, (float)text_y, msg, FONT_SMALL);
+
+        glDisable(GL_BLEND);
+        gl2d_end();
+        return;
+    }
+
     UiStatusState status = snap->status;
     if (status.ttl <= 0 || !status.text[0])
         return;
