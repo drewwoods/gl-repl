@@ -66,8 +66,84 @@ Full regression: 6292/6292 tests across 45 binaries clean; full
 These are intentionally deferred from Phase 8 — each is a separate
 follow-up phase:
 
-- **Edit-line ownership cleanup.** Move edit-line out of REPL state
-  into `EditorState`. Removes the single remaining shim stub.
+- **Edit-line ownership cleanup.** The one remaining
+  `repl_shim.c` stub (`repl_state_edit_line`) is the visible tip of
+  a much larger coupling: `repl_state_edit_line` itself has **176
+  call sites across 33 files** as of 2026-05-20 (REPL pipeline,
+  editor, app shell, widgets, tests, demo). Two scope options have
+  been worked out; pick one when the time comes.
+
+  - **Option A — Full ownership migration.** Move edit-line state
+    out of `ReplState` into `EditorState`. Concretely:
+
+    1. Add storage and accessors on the editor side:
+       `editor_state_edit_line()` / `_set()` / `_clamp()` plus
+       backing storage on `EditorDocumentState` (or an extension
+       of `EditorInputState`).
+    2. Migrate every reader. The 176 sites split roughly by
+       owner: 8 editor controller files (`input.c`, `commit.c`,
+       `clipboard.c`, `undo.c`, `reformat.c`, `search.c`,
+       `state.c`, `inline_file_prompt.c`), 3 app-shell files
+       (`glr_ctrl.c`, `glr_actions.c`, `glr_debug.c`), 5 REPL
+       pipeline files (`compile.c`, `flatten.c`, `parser.c`,
+       `scenes.c`, `state.c`), 1 widget (`replay.c`), and ~10
+       test files plus the demo.
+    3. Decide what `repl_state_edit_line` / `_set` / `_clamp` in
+       `src/repl/state.c` become: deleted outright, or kept as
+       thin forwarders to the editor accessors.
+    4. Drop the shim stub; delete `tools/editor_demo/repl_shim.c`
+       (or keep it as a zero-stub ledger, the way
+       `tools/repl_demo/stubs.c` is).
+    5. Update MODULES.md / CLAUDE.md to reflect that edit-line is
+       editor-owned.
+
+    Cost: multi-day refactor. Touches all 33 files.
+
+    Open architectural question: the REPL pipeline currently
+    reads edit-line. After migration, those reads become a
+    backward dependency (REPL → editor). Either accept that
+    framing ("the REPL pipeline takes the editor's cursor
+    position as input") or push the reads up into the caller —
+    the controller / commit code that knows both states — and
+    pass edit-line through as a parameter. Pick one before
+    starting; that choice drives the call-site rewrites.
+
+    This is the architecturally pure answer; it also has the
+    largest blast radius and needs the design question pinned
+    down before execution.
+
+  - **Option B — Targeted view-field cleanup.** Smaller and
+    keeps edit-line where it is today. Concretely:
+
+    1. Delete `edit_line_idx` from `EditorInputView` (the
+       by-value snapshot returned by `editor_state_input()`).
+    2. `src/editor/state.c`'s view builder stops calling
+       `repl_state_edit_line()` — the field is gone, the call
+       isn't needed.
+    3. Anyone reading `input.edit_line_idx` migrates to calling
+       `repl_state_edit_line()` directly (it was always the
+       canonical source; the view field was a convenience copy).
+       Expected: ~5 call sites.
+    4. Drop the shim stub; delete `tools/editor_demo/repl_shim.c`.
+
+    Cost: 1-2 commits. No reorganization of edit-line storage —
+    it still lives in `ReplState`. The win is honest: the demo's
+    `state.c` link no longer requires a REPL stub, so the demo
+    is shim-free.
+
+    Honesty cost: this does **not** fix the underlying layering
+    (the REPL editor's controllers still read edit-line from
+    REPL state). It just removes the surface that the demo
+    happens to trip over. If "no shim file" is the goal, B
+    delivers it. If "edit-line is owned by the editor" is the
+    goal, B leaves that work undone.
+
+  Recommendation: pick B unless and until REPL→editor coupling
+  becomes a real concern (right now it isn't — the REPL pipeline
+  legitimately needs to know which line it's about to parse). A
+  is the right move if the project later decides EditorState
+  should own all editing cursors; B is the right move if "the
+  demo is shim-free" is the immediate target.
 - **Cross-line navigation.** Arrow up/down between lines, Enter to
   insert a new line. Needs new `edit_ops` primitives (or local
   demo logic) and decision on how the demo's edit-line cursor
