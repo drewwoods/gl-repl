@@ -60,21 +60,37 @@ versus the first draft:
    input view too muddles slices. The dead
    `EditorInputState.edit_line_idx` storage (never written) also
    goes.
-6. **REPL-side inventory.** Files touching `repl_state_edit_line*`
-   today: compile.c, flatten.c (3 distinct entry points — see
-   3.6.2), parser.c (single fallback site — see 3.6.3), scenes.c,
-   core.c, example_loader.c, export.c, **load.c**, **autonormal.c**
-   (β-bound direct store-mutator caller — see 3.6.0), plus
-   command_store.c (via the store pointer, fixed in Phase 1)
-   and the load.h / state_views.h / state_owners.h headers.
-   Additional direct store-mutator sites caught by review:
-   `tools/repl_demo/repl_demo.c` (3 sites; demo-local cursor),
-   `src/repl/state.c:279` (`repl_state_document_reset`'s zero-cursor
-   load), and `src/widgets/tutorial.c` (brackets
-   `repl_load_apply_line` with explicit edit-line writes —
-   see 3.3). `load.c` needs explicit cursor-in / cursor-out
-   plumbing because it relies on `change.adjust_edit_line = 1`
-   for its append-at-end loop semantics (load.c:107). The
+6. **Migration inventory.** Two distinct kinds of coupling:
+
+   **Direct `repl_state_edit_line*` accessor callers** (the
+   primary migration surface — Phase 3 chunks):
+
+   - REPL: `compile.c`, `flatten.c` (4 entry points — see 3.6.2),
+     `parser.c` (single fallback at line 251 — see 3.6.3 below;
+     confirmed dead code), `scenes.c`, `core.c`,
+     `example_loader.c`, `export.c`, `load.c`.
+   - Editor: `input.c`, `commit.c`, `clipboard.c`, `undo.c`,
+     `search.c`, `reformat.c`, `inline_file_prompt.c`, `state.c`
+     (view builder).
+   - Widget: `tutorial.c` (brackets `repl_load_apply_line` —
+     see 3.3).
+   - App: `glr_ctrl.c`, `glr_actions.c`, `glr_debug.c`.
+   - Headers carrying the declarations: `load.h`,
+     `state_views.h`, `state_owners.h`.
+
+   **Indirect `ReplCommandStore.edit_line` couplers** (the
+   pointer-into-state surface — Phase 1 inventory):
+
+   - `src/repl/autonormal.c` (β-bound, see 3.6.0).
+   - `src/repl/command_store.c` (the store itself).
+   - `src/repl/state.c:279` (zero-cursor reset load).
+   - `tools/repl_demo/repl_demo.c` (3 demo-local sites).
+   - Plus the direct-callers above whose flag use will be
+     remapped to `cursor_inout` (see Phase 1.4 table).
+
+   `load.c` needs explicit cursor-in / cursor-out plumbing
+   because it relies on `change.adjust_edit_line = 1` for its
+   append-at-end loop semantics (load.c:107). The
    `EditorServices.apply_repl_change` function-pointer signature
    also changes in lockstep with `repl_apply_compiled_change`
    (see 1.3.1).
@@ -101,8 +117,10 @@ migration:
 - REPL pipeline functions take edit-line as a parameter from the
   caller; no `repl_state_edit_line*` exists.
 - `ReplCommandStore` no longer holds an `int *edit_line`
-  pointer; mutating operations report a cursor delta that the
-  caller (always editor-side) applies.
+  pointer; cursor-shifting operations update a caller-owned
+  cursor pointer. Editor/app callers write the result back to
+  `EditorState`; β-bound REPL functions surface the result to
+  their own caller.
 - `tools/editor_demo/repl_shim.c` is gone.
 
 ## Layering invariant (β, non-negotiable)
@@ -182,6 +200,15 @@ isn't reliable in CI.) The "no files found" success path is
 removed since the directory is known-populated; if it ever
 empties, that's a real signal worth surfacing.
 
+**Preserve the existing comment-filter pipeline** (the script's
+current lines 37-39, `grep -vE ':[[:space:]]*\*|:[[:space:]]*//|:[[:space:]]*/\*'`).
+Several files under `src/repl/` (apply.c, state.c, compile.h,
+export.c, replay_annotations.c, command_store.h) have
+historical comment-only mentions of editor symbols; without
+the filter, the fixed guard would false-positive on them. The
+filter is the same logic the root-level version used; it
+applies unchanged to the new glob.
+
 ### 0.3 — Verify the guard exits OK on current `main`
 
 After the script update, `make check-repl-no-direct-editor` must
@@ -241,10 +268,10 @@ The cursor adjustment goes through two stacked APIs in
    (behavior change for `load.c`, `commit.c`, `clipboard.c`,
    `undo.c` callers).
 
-   The right answer: **apply also returns the cursor delta**,
-   propagating it to its caller. Apply doesn't touch the
-   cursor; it reports what the cursor *would* have changed by
-   if the old auto-adjust were still in effect.
+   The right answer: **apply also threads the caller-owned cursor
+   pointer**, propagating the store's cursor math to its caller.
+   Apply doesn't touch editor state; it updates only the optional
+   stack/local pointer the caller supplied.
 
 Both layers have to flip in the same phase or the codebase ends
 up in a state where `adjust_edit_line` is set but never applied.
@@ -264,13 +291,14 @@ The `REPL_COMMAND_STORE_ADJUST_EDIT_LINE` flag is renamed (or kept
 as a no-op for source compatibility during transition) and the
 store no longer reads or writes any global cursor.
 
-### 1.2 — Mutating ops take an `int *cursor_inout`
+### 1.2 — Cursor-shifting store ops take an `int *cursor_inout`
 
-Every store mutating op gains an optional `int *cursor_inout`
-parameter. When non-NULL *and* the caller passes
-`ADJUST_EDIT_LINE`, the store applies the standard insert/delete
-math to the caller-owned int in place. When NULL, no cursor
-mutation — pure data op.
+Only store ops whose array-size mutation can mechanically shift a
+cursor gain an optional `int *cursor_inout` parameter: inserts and
+deletes. When non-NULL *and* the caller passes `ADJUST_EDIT_LINE`
+for insert ops, the store applies the standard insert/delete math
+to the caller-owned int in place. When NULL, no cursor mutation —
+pure data op.
 
 ```c
 int repl_command_store_insert_one(ReplCommandStore *store,
@@ -284,7 +312,14 @@ int repl_command_store_insert_many(ReplCommandStore *store,
 int repl_command_store_delete_range(ReplCommandStore *store,
                                     int start, int count,
                                     int *cursor_inout);
-/* _replace_one and _load: see note on _load below. */
+
+int repl_command_store_replace_one(ReplCommandStore *store,
+                                   int pos, const GLCmd *cmd);
+
+int repl_command_store_load(ReplCommandStore *store,
+                            const GLCmd *cmds, int count);
+
+void repl_command_store_clear(ReplCommandStore *store);
 ```
 
 The math lives in the store (it knows what each op means);
@@ -294,14 +329,23 @@ struct.
 
 Per-op math the store implements:
 - **INSERT at pos by `count`:** if `pos <= cursor`, `cursor += count`.
+  (Existing behavior, migrated from the `*store->edit_line`
+  auto-adjust.)
 - **DELETE at pos by `count`:** three cases —
   (a) `cursor < pos`: no change (cursor is before the range);
   (b) `pos <= cursor < pos+count`: snap to `pos` (cursor was
   inside the deleted range);
   (c) `cursor >= pos+count`: `cursor -= count` (cursor was
   past the range). Clamp the result to `[0, new line_count]`.
-- **REPLACE:** no cursor change. `cursor_inout` ignored even if
-  non-NULL.
+  **Note: this is net-new store behavior.** Today's
+  `delete_range` takes no flags parameter and does zero cursor
+  work; callers that delete lines manage the cursor themselves
+  via explicit `repl_state_edit_line_set` calls. The new math
+  needs fresh tests — there is no existing store-level delete
+  cursor logic to validate against.
+- **REPLACE:** no cursor change. Signature unchanged.
+- **CLEAR:** no cursor change at the store layer. Signature
+  unchanged; reset/load callers own the target cursor policy.
 
 LOAD is the absolute-set case. Reviewer flagged the existing API:
 
@@ -380,6 +424,34 @@ The `change->adjust_edit_line` field stays — it's still the
 *intent* flag. LOAD_ALL is handled per 1.2.1 above (caller
 applies `change.pos` separately after a successful apply).
 
+**Forwarding policy for each store call inside apply:**
+
+- **Pre-insert delete** (`apply.c:82-86`, the optional
+  `change->delete_count > 0` path that fires before the
+  insert): **pass NULL** — preserve today's behavior where the
+  delete does not adjust cursor. Forwarding `cursor_inout` to
+  both delete and insert would change the composed cursor
+  delta. Example: cursor=5, delete at 3 (count=1), insert at 3
+  (count=1). Today: cursor→6 (delete silent, insert +1). With
+  both: cursor→5 (delete -1, insert +1). The "both" result is
+  arguably more correct for an in-place replace, but it changes
+  behavior for every compound-change code path (overwrite
+  replacements, toggle-comment batches). Pin the NULL policy
+  now; if the composed behavior is wanted later, audit affected
+  paths first.
+- **INSERT_ONE / INSERT_MANY**: pass `cursor_inout` when
+  `adjust_edit_line` is set, NULL otherwise.
+- **REPLACE_ONE**: no `cursor_inout` parameter (signature
+  unchanged).
+- **DELETE_RANGE** (standalone kind): pass `cursor_inout`
+  unconditionally (the NULL/non-NULL gate is the caller's
+  choice, not apply's). `adjust_edit_line` is not checked for
+  standalone deletes — it historically gates only inserts, and
+  delete callers that don't want cursor math pass NULL from the
+  call site.
+- **LOAD_ALL**: no `cursor_inout` parameter on `_load()`; the
+  caller applies `change.pos` post-apply (see 1.2.1).
+
 Apply itself never reads or writes editor state. The cursor
 lives where the caller put it.
 
@@ -414,6 +486,10 @@ inventory by file:
 |------|-------|---------------|
 | `src/editor/clipboard.c`, `commit.c`, `undo.c`, `input.c` | several | `editor_state_edit_line()` |
 | `src/repl/autonormal.c` (lines 71, 254) | 2 | β-bound — caller-passed `int *edit_line_inout` (see 3.6 below) |
+| `src/repl/load.c` (line 183 plain-command tail) | 1 | β-bound — use the loader's running `int *edit_line_inout` (see 3.6.5) |
+| `src/repl/export.c` (line 2320 injected decl) | 1 | β-bound — surface target cursor through import/export caller policy (see 3.6.4) |
+| `src/repl/scenes.c` (line 259 bulk load) | 1 | β-bound — `_load()` drops cursor arg; scene restore returns target cursor (see 3.6.4) |
+| `src/repl/example_loader.c` (line 416 reset load) | 1 | β-bound reset-to-zero policy; surface target cursor with loader result (see 3.6.4) |
 | `src/repl/state.c` (line 279, `repl_state_document_reset`) | 1 (via `_load(... 0)`) | reset always zeroes; passes `NULL` or local `int = 0` |
 | `tools/repl_demo/repl_demo.c` (lines 172, 203, 267) | 3 | demo-local stack int; demo doesn't share cursor with anything |
 | Tests | many | per-test; some `NULL`, some local int |
@@ -430,6 +506,15 @@ if (ok && (flags & ADJUST_EDIT_LINE))
 
 For callers that don't care about the cursor (some test fixtures
 and `_load(... 0)` reset paths), pass `NULL`.
+
+**`editor_place_parsed_command` (input.c:501-524)** is a
+notable exception: it calls `repl_command_store_insert_one`
+with **flags=0** (no `ADJUST_EDIT_LINE`) and manages cursor
+entirely through direct `repl_state_edit_line_set` calls
+afterward. Phase 1 doesn't affect this site (flags=0 means the
+store's cursor math never fires); Phase 3.1 migrates the manual
+`_set` calls to `editor_state_edit_line_set`. No `cursor_inout`
+plumbing needed here.
 
 `src/repl/autonormal.c` is β-bound — see Phase 3.6.0 below for
 its specific plumbing.
@@ -456,14 +541,24 @@ Editor-side sites become:
 int cur = editor_state_edit_line();
 int ok = repl_apply_compiled_change(&change,
                                      change.adjust_edit_line ? &cur : NULL);
-if (ok && change.adjust_edit_line)
-    editor_state_edit_line_set(cur);
+if (ok) {
+    if (change.kind == REPL_COMPILED_LOAD_ALL)
+        editor_state_edit_line_set(change.pos);
+    else if (change.adjust_edit_line)
+        editor_state_edit_line_set(cur);
+}
 ```
 
 `src/repl/load.c` (which can't call editor) threads the cursor
 through its loop as a local int (`int running_edit_line`), passes
 `&running_edit_line` to apply, and returns the final value to
 its caller. See Phase 3.6.5.
+
+Important: this snippet deliberately special-cases
+`REPL_COMPILED_LOAD_ALL` because Phase 1.2 removes the cursor
+argument from `_load()`; for LOAD_ALL, `change.pos` remains the
+absolute post-load target cursor and must be applied by the
+caller after a successful apply.
 
 ### 1.6 — Verification
 
@@ -657,9 +752,24 @@ about, not REPL pipeline), so it CAN call the editor accessor.
 
 ### 3.4 — Tests
 
-Files: ~10 test files using `repl_state_edit_line` / `_set` for
-setup. Mechanical rename to the editor accessor. Tests should
-pass unchanged once the forwarders are in place.
+Files using `repl_state_edit_line` / `_set` for setup
+(grep-confirmed; ~10 files concentrated in
+`test_repl_editor.c`):
+
+- `test_repl_editor.c` (heaviest — ~70 sites)
+- `test_repl_command_store.c`
+- `test_repl_compile.c`
+- `test_repl_core_commit.c`
+- `test_repl_core_internal.c`
+- `test_repl_core_parse.c`
+- `test_repl_core_search.c`
+- `test_repl_state.c`
+- `test_tutorial_runner.c`
+- `test_ui.c`
+- `test_editor_input_selection.c` (1 site)
+
+Mechanical rename to the editor accessor. Tests should pass
+unchanged once the forwarders are in place.
 
 ### 3.5 — Demo
 
@@ -731,23 +841,36 @@ and migrate callers (app shell / editor) to use it. Internal compile
 helpers already take `ReplCompileContext`, so no further plumbing
 beyond the context-builder change.
 
-**3.6.2 — `flatten.c` (largest sub-step).** 17 calls across
-**three distinct public-API entry points** (declared in
-`flatten.h`):
+**3.6.2 — `flatten.c` (largest sub-step).** 15 actual code calls
+(plus 2 comment mentions) across **four public-API entry
+points** — two declared in `flatten.h`, two in headers above it:
 
-- `repl_flatten_refresh_current_block_highlight()` (~6 calls
-  in `flatten.c:149-187`): block-range detection.
-- `repl_flat_cmd_matches_cursor()` (~10 calls in `flatten.c:685-791`):
-  cursor matching + func-scope resolution + attribute tracking.
-- `repl_flatten_program()` itself: 1 call site (often via the
-  two functions above as internal helpers).
+- `repl_flatten_refresh_current_block_highlight()` (4 calls at
+  `flatten.c:170, 172, 176, 186`): block-range detection.
+  Declared in `flatten.h:81`.
+- `repl_flat_cmd_matches_cursor()` (11 calls in
+  `flatten.c:685-791`): cursor matching + func-scope resolution
+  + attribute tracking. Declared in `core.h:214` (not
+  `flatten.h`).
+- `repl_flatten_program()` itself: 0 direct calls to the
+  accessor. Declared in `flatten.h:75`. The frame loop reaches
+  the cursor-aware functions above through
+  `repl_flatten_commands()` (next).
+- `repl_flatten_commands()`: the intermediary at `flatten.c:641`
+  that calls `repl_flatten_program` and then
+  `repl_flatten_refresh_current_block_highlight` at `:648`.
+  Declared in `pipeline.h:10` and `core.h:88`. Needs to gain
+  and forward an `int edit_line_idx` parameter so the
+  block-highlight call below it gets the value from the frame
+  loop above.
 
-All three gain an explicit `int edit_line_idx` parameter (they
-do not delegate to a shared internal). Callers (controller at
-`glr_ctrl.c:1212` and similar) supply the value. The single
-largest REPL-side sub-step — straightforward but tedious. Run
-the existing flatten-related tests after this chunk to confirm
-no behavior drift.
+All four gain an explicit `int edit_line_idx` parameter. Header
+inventory: `flatten.h`, `core.h`, `pipeline.h` all change.
+Frame-loop callers (`glr_ctrl.c:1212` and similar) supply the
+value from `editor_state_edit_line()`. The single largest
+REPL-side sub-step — straightforward but tedious. Run the
+existing flatten-related tests after this chunk to confirm no
+behavior drift.
 
 Per-call usage that originally read `repl_state_edit_line()` is
 replaced with the parameter directly; do not introduce a local
@@ -766,12 +889,12 @@ The fallback exists for legacy no-ctx wrapper paths. After
 accessor (forbidden in REPL files) is callable here.
 
 **Resolution pinned: remove the fallback; require a non-NULL
-context.** Audit `repl_parser_parse_command_ctx` callers; if any
-still pass `ctx == NULL`, migrate them to construct a context
-first. The legacy wrappers (`repl_parser_parse_command` /
-`_with_vars`) were already retired in earlier phases per the
-existing tree comment; the remaining `ctx ? :` ternary is a
-defensive vestige.
+context.** Audit `repl_parser_parse_command_ctx` callers — every
+production and test caller already constructs a context. The
+legacy wrappers (`repl_parser_parse_command` / `_with_vars`)
+were retired in earlier phases; the remaining `ctx ? :` ternary
+is **confirmed dead code**, not just a defensive vestige.
+Removing it is a no-op for behavior and a real cleanup.
 
 Add a runtime assert (`assert(ctx)`) at the top of
 `repl_parser_parse_command_ctx` to catch any stragglers loudly
@@ -824,7 +947,7 @@ straightforward:
 1. `repl_load_*` entry points add an `int *edit_line_inout`
    parameter (caller's cursor; the loader threads it through
    each per-line apply).
-2. The loop's per-line body becomes:
+2. The structured/change path's per-line body becomes:
    ```c
    repl_apply_compiled_change(&change,
                               change.adjust_edit_line ? edit_line_inout
@@ -832,7 +955,14 @@ straightforward:
    ```
    Each iteration advances `*edit_line_inout` by the store's
    standard math; no REPL → editor call, no struct, no helper.
-3. Existing internal references to `ctx.edit_line`
+3. The plain-command tail (`load.c:183`) passes the same running
+   cursor to the direct store insert:
+   ```c
+   repl_command_store_insert_one(&store, insert_idx, &cmd,
+                                 REPL_COMMAND_STORE_ADJUST_EDIT_LINE,
+                                 edit_line_inout);
+   ```
+4. Existing internal references to `ctx.edit_line`
    (load.c:144-145) migrate to dereferencing the running
    `*edit_line_inout` instead.
 
@@ -992,10 +1122,12 @@ Delete the file.
 `make editor_demo USE_GL_STUBS=1` clean. `make editor_demo` (real
 GL) clean. `./editor_demo` smoke runs.
 
-If `tools/editor_demo/repl_shim.c` is retained as a zero-stub
-ledger comment file (matching `tools/repl_demo/stubs.c`), update
-its content to reflect "no symbols needed; left as a record."
-Otherwise just delete.
+The shim file is **deleted**, not retained as a zero-stub
+ledger. The plan's stated goal in Summary line 19 is "the demo's
+shim drops to zero symbols" — deleting the file is the
+unambiguous way to achieve that. (`tools/repl_demo/stubs.c`
+exists as a ledger pattern but its retention is REPL-demo
+specific; `editor_demo` has no comparable need.)
 
 ## Phase 6 — Guards and documentation
 
@@ -1064,8 +1196,10 @@ they survived rebasing.
 ## Risk / open questions to pin before starting
 
 1. **`ReplCommandStore` API change blast radius.** Phase 1 adds
-   an optional `int *cursor_inout` parameter to the mutating ops
-   plus the same to `repl_apply_compiled_change`. All callers
+   an optional `int *cursor_inout` parameter to insert/delete
+   store ops plus the same to `repl_apply_compiled_change`.
+   `replace_one` / `clear` keep their existing signatures, and
+   `_load()` drops its old `edit_line` parameter. All callers
    update — editor side is straightforward; tests need to
    migrate too. Estimate ~30 call sites. The per-op math lives
    in the store; callers just pass a stack-local int through.
