@@ -600,6 +600,88 @@ static void test_example_tag_metadata(void) {
     }
 }
 
+/* Tag-based example default overrides. The 2D tag default sets grid=9
+ * (GRID_THEME_PLANES). Verify that:
+ *
+ *   1. A 2D example with no explicit grid `@cfg` lands at grid=9.
+ *   2. A multi-tag example that includes 2D also lands at grid=9 when
+ *      it doesn't override grid.
+ *   3. An example outside the 2D tag (3D-only) lands at the global
+ *      grid default (GRID_THEME_XZRULER) — no tag default applies.
+ *   4. An example tagged 2D but with its own `@cfg grid = N` keeps N
+ *      (example `@cfg` wins over the tag default).
+ *
+ * Precedence chain under test: example `@cfg` > tag default > global
+ * default. */
+static void test_example_tag_default_cfg(void) {
+    int ring_idx       = find_example_index_by_name("Animated ring (for + t)");
+    int cube_idx       = find_example_index_by_name("Lit cube");
+    int stress_idx     = find_example_index_by_name("Stress test (all features)");
+    int spirograph_idx =
+        find_example_index_by_name("Animated spirograph curve");
+
+    ASSERT_TRUE("ring example index found", ring_idx >= 0);
+    ASSERT_TRUE("cube example index found", cube_idx >= 0);
+    ASSERT_TRUE("stress example index found", stress_idx >= 0);
+    ASSERT_TRUE("spirograph example index found", spirograph_idx >= 0);
+
+    /* Sanity-check tag membership so the test isn't quietly invalidated
+     * if an example's tags are edited later. */
+    if (ring_idx >= 0) {
+        ASSERT_TRUE("ring is single-tag 2D bucket",
+                    repl_example_has_tag(ring_idx, REPL_EXAMPLE_TAG_2D));
+        ASSERT_TRUE("ring is not in 3D bucket",
+                    !repl_example_has_tag(ring_idx, REPL_EXAMPLE_TAG_3D));
+    }
+    if (cube_idx >= 0) {
+        ASSERT_TRUE("cube is not in 2D bucket",
+                    !repl_example_has_tag(cube_idx, REPL_EXAMPLE_TAG_2D));
+        ASSERT_TRUE("cube is in 3D bucket",
+                    repl_example_has_tag(cube_idx, REPL_EXAMPLE_TAG_3D));
+    }
+    if (stress_idx >= 0) {
+        ASSERT_TRUE("stress carries 2D bit (multi-tag)",
+                    repl_example_has_tag(stress_idx, REPL_EXAMPLE_TAG_2D));
+        ASSERT_TRUE("stress carries 3D bit (multi-tag)",
+                    repl_example_has_tag(stress_idx, REPL_EXAMPLE_TAG_3D));
+    }
+    if (spirograph_idx >= 0) {
+        ASSERT_TRUE("spirograph is in 2D bucket",
+                    repl_example_has_tag(spirograph_idx, REPL_EXAMPLE_TAG_2D));
+    }
+
+    /* (1) Single 2D-tag example, no own grid @cfg → grid_theme = 9. */
+    if (ring_idx >= 0) {
+        load_example_for_test(ring_idx);
+        ASSERT_TRUE("2D tag default applies grid=9 (single tag)",
+                    glr_state_presentation().grid_theme == 9);
+    }
+
+    /* (2) Multi-tag example including 2D, no own grid @cfg → grid_theme = 9.
+     * The spirograph example is 2D|LINES with no explicit grid override. */
+    if (spirograph_idx >= 0) {
+        load_example_for_test(spirograph_idx);
+        ASSERT_TRUE("2D tag default applies grid=9 (multi tag without override)",
+                    glr_state_presentation().grid_theme == 9);
+    }
+
+    /* (3) 3D-only example → global default, no tag override. */
+    if (cube_idx >= 0) {
+        load_example_for_test(cube_idx);
+        ASSERT_TRUE("non-2D example uses global grid default",
+                    glr_state_presentation().grid_theme ==
+                    CFG_DEFAULT_GRID_THEME);
+    }
+
+    /* (4) Multi-tag example that carries 2D but its own @cfg sets
+     * grid=7 → example wins over the 2D tag default. */
+    if (stress_idx >= 0) {
+        load_example_for_test(stress_idx);
+        ASSERT_TRUE("example @cfg grid overrides 2D tag default",
+                    glr_state_presentation().grid_theme == 7);
+    }
+}
+
 static void print_usage(const char *prog) {
     printf("Usage: %s [OPTIONS]\n\n", prog);
     printf("Options:\n");
@@ -688,6 +770,7 @@ int main(int argc, char **argv) {
 
     repl_eval_init_predef_vars();
     test_example_tag_metadata();
+    test_example_tag_default_cfg();
 
     {
         static const char *const no_cfg_reset_example[] = {

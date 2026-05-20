@@ -51,4 +51,14 @@
 #define CFG_DEFAULT_LINE_SMOOTH       0
 #define CFG_DEFAULT_ATTENUATE_POINTS  1
 
+/* Tag-keyed `@cfg` overrides applied during example loading, layered
+ * between the global presentation reset and the example's own leading
+ * `@cfg` metadata. Each entry is a `// @cfg slug = value` line fed
+ * through repl_state_parse_workspace_header_line, so it travels the
+ * same machinery as the example's own `@cfg`. Precedence:
+ *   example `@cfg` > tag default > global default.
+ * Multiple defaults per tag: define the macro as a brace-enclosed
+ * string-literal initializer; the controller iterates the entries. */
+#define GLR_TAG_DEFAULT_CFG_2D { "// @cfg grid = 9" }
+
 #endif /* GLR_DEFAULTS_H */
