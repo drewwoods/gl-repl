@@ -133,8 +133,10 @@ int demo_menu_handle_click(int mx, int my, int vp_w, int vp_h) {
             g_menu_open = !g_menu_open;
             return 1;
         }
-        /* Click elsewhere on the menu bar consumes the click but
-         * leaves the menu state unchanged. */
+        /* Click elsewhere on the menu bar is "outside the dropdown"
+         * per menu.h — close any open dropdown. Consume the click
+         * either way so it doesn't fall through to the code panel. */
+        g_menu_open = 0;
         return 1;
     }
 
