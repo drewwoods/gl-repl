@@ -255,12 +255,7 @@ void editor_clear_all_cmds(void) {
     repl_command_store_clear(&store);
     repl_state_edit_line_set(0);
     editor_insert_mode_set(0);
-    {
-        EditorInputState *inp = editor_state_input_mut();
-        inp->input[0] = '\0';
-        inp->input_len = 0;
-    }
-    editor_cursor_pos_set(0);
+    editor_input_clear();
     {
         EditorInputState *inp = editor_state_input_mut();
         inp->pending_newline[0] = '\0';
@@ -577,12 +572,7 @@ static CommitResult commit_current_input(int enter_mode) {
             if (editor_cursor_pos() > 0)
                 repl_state_edit_line_set(repl_state_edit_line() + 1);
             editor_insert_mode_set(1);
-            {
-                EditorInputState *inp = editor_state_input_mut();
-                inp->input[0] = '\0';
-                inp->input_len = 0;
-            }
-            editor_cursor_pos_set(0);
+            editor_input_clear();
             editor_completion_clear();
             repl_set_status("Insert mode");
             repl_mark_normals_dirty();
@@ -624,12 +614,7 @@ static CommitResult commit_current_input(int enter_mode) {
             }
             if (enter_mode)
                 repl_state_edit_line_set(insert_pos + 1);
-            {
-                EditorInputState *inp = editor_state_input_mut();
-                inp->input[0] = '\0';
-                inp->input_len = 0;
-            }
-            editor_cursor_pos_set(0);
+            editor_input_clear();
             repl_set_status(change.commit_message);
             return COMMIT_OK;
         }
@@ -688,12 +673,7 @@ static CommitResult commit_current_input(int enter_mode) {
                 }
                 editor_buffer_insert_line(insert_pos, cmd_text);
                 repl_state_edit_line_set(repl_state_edit_line() + 1);
-                {
-                    EditorInputState *inp = editor_state_input_mut();
-                    inp->input[0] = '\0';
-                    inp->input_len = 0;
-                }
-                editor_cursor_pos_set(0);
+                editor_input_clear();
                 repl_set_status("Inserted");
                 warn_if_scope_truncated(vis_total);
                 return COMMIT_OK;
@@ -747,12 +727,7 @@ static CommitResult commit_current_input(int enter_mode) {
         if (can_advance) {
             repl_state_edit_line_set(repl_state_edit_line() + 1);
             editor_insert_mode_set(1);
-            {
-                EditorInputState *inp = editor_state_input_mut();
-                inp->input[0] = '\0';
-                inp->input_len = 0;
-            }
-            editor_cursor_pos_set(0);
+            editor_input_clear();
             repl_set_status("Insert mode");
             return COMMIT_OK;
         }
@@ -776,14 +751,12 @@ static CommitResult commit_current_input(int enter_mode) {
         }
         repl_state_edit_line_set(repl_state_document_count());
         editor_insert_mode_set(1);
+        editor_input_clear();
         {
             EditorInputState *inp = editor_state_input_mut();
-            inp->input[0] = '\0';
-            inp->input_len = 0;
             inp->pending_newline[0] = '\0';
             inp->pending_newline_len = 0;
         }
-        editor_cursor_pos_set(0);
         repl_set_status(change.commit_message);
         return COMMIT_OK;
     }
@@ -804,12 +777,7 @@ static CommitResult commit_current_input(int enter_mode) {
             }
             editor_buffer_insert_line(insert_pos, cmd_text);
             repl_state_edit_line_set(repl_state_document_count());
-            {
-                EditorInputState *inp = editor_state_input_mut();
-                inp->input[0] = '\0';
-                inp->input_len = 0;
-            }
-            editor_cursor_pos_set(0);
+            editor_input_clear();
             {
                 EditorInputState *inp = editor_state_input_mut();
                 inp->pending_newline[0] = '\0';
@@ -977,12 +945,7 @@ static int handle_escape_key_route(unsigned char key) {
                 editor_load_line_to_input(repl_state_edit_line());
             repl_set_status("Insert mode exited");
         } else {
-            {
-                EditorInputState *inp = editor_state_input_mut();
-                inp->input[0] = '\0';
-                inp->input_len = 0;
-            }
-            editor_cursor_pos_set(0);
+            editor_input_clear();
             repl_set_status("Input cleared");
         }
         return 1;
@@ -1340,12 +1303,7 @@ static int handle_semicolon_commit_key_route(unsigned char key) {
                                                           &cmd, 0)) {
                             editor_buffer_insert_line(insert_pos, cmd_text);
                             repl_state_edit_line_set(repl_state_edit_line() + 1);
-                            {
-                                EditorInputState *inp = editor_state_input_mut();
-                                inp->input[0] = '\0';
-                                inp->input_len = 0;
-                            }
-                            editor_cursor_pos_set(0);
+                            editor_input_clear();
                             repl_set_status("Inserted");
                         } else {
                             repl_set_status("Command buffer full!");
@@ -1364,12 +1322,7 @@ static int handle_semicolon_commit_key_route(unsigned char key) {
                             editor_buffer_insert_line(insert_pos, cmd_text);
                             repl_state_edit_line_set(repl_state_document_count());
                             repl_set_status("OK");
-                            {
-                                EditorInputState *inp = editor_state_input_mut();
-                                inp->input[0] = '\0';
-                                inp->input_len = 0;
-                            }
-                            editor_cursor_pos_set(0);
+                            editor_input_clear();
                             {
                                 EditorInputState *inp = editor_state_input_mut();
                                 inp->pending_newline[0] = '\0';
@@ -1576,12 +1529,7 @@ int editor_feed_line(const char *line) {
             handled = 1;
         }
 feed_line_done:
-        {
-            EditorInputState *inp = editor_state_input_mut();
-            inp->input[0] = '\0';
-            inp->input_len = 0;
-        }
-        editor_cursor_pos_set(0);
+        editor_input_clear();
         warn_if_scope_truncated(vis_total);
         return handled;
     }
