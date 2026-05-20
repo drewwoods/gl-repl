@@ -96,6 +96,7 @@ static const char *section_label(ProfSection s) {
     case PROF_SCENE_3D_OVERLAY_TRANSFORM_GUIDES: return "    xform guides";
     case PROF_SCENE_3D_OVERLAY_NORMALS: return "    normals";
     case PROF_SCENE_3D_OVERLAY_VERTEX_NUMBERS: return "    vertex nums";
+    case PROF_SCENE_3D_POST_PROCESS:     return "  postprocess FX";
     case PROF_CODE_PANEL:  return "Code Panel";
     case PROF_CODE_PANEL_LAYOUT:   return "  layout";
     case PROF_CODE_PANEL_CHROME:   return "  chrome";

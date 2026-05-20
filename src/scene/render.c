@@ -627,9 +627,12 @@ int scene_render_3d_scene(const SceneRenderConfig *config) {
 
     /* Once per frame, on the fully resolved scene image (covers both
      * the accum and non-accum branches), before any 2D overlay. */
-    if (config->post_filter_mode > SCENE_POST_FILTER_OFF)
+    if (config->post_filter_mode > SCENE_POST_FILTER_OFF) {
+        prof_begin(PROF_SCENE_3D_POST_PROCESS);
         scene_postprocess_filter_render(config->post_filter_mode,
                                         config->scene_x, config->scene_y,
                                         config->scene_w, config->scene_h);
+        prof_accum_end(PROF_SCENE_3D_POST_PROCESS);
+    }
     return 0;
 }
