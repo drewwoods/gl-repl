@@ -18,14 +18,14 @@
  * buffer is discarded.
  *
  * Input filtering: filenames legitimately need '.' and '/' (for paths
- * like `workspace/scene.c`), so the rename module's '/' / '\\' / ':'
- * blacklist does not apply. The filter accepts printable ASCII except
- * shell-confusables that have no business in a runtime-typed path
- * (newline already excluded by the printable-ASCII check; we also
- * reject quotes and pipe/redirect/escape characters as a small
- * defense-in-depth measure against shell-paste accidents — the import
- * path itself does not invoke a shell, but a buffer containing those
- * characters is almost certainly user error).
+ * like `workspace/scene.c`), so the rename module's '/' and ':'
+ * blacklist does not apply. '\\' stays rejected — it's not a POSIX
+ * path separator and is almost certainly user error or shell paste.
+ * The filter additionally rejects quotes (", ', `) and shell
+ * redirect characters (|, <, >) as a small defense-in-depth measure
+ * against pasted shell snippets — the import path itself does not
+ * invoke a shell, but a buffer containing those characters is almost
+ * certainly user error.
  *
  * Status reporting: errors (file missing, parse failure, path is a
  * directory) set a status line and keep the prompt open so the user

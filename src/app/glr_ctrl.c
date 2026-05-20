@@ -1994,6 +1994,11 @@ void glr_app_reset_all(void) {
     tutorial_state_reset();
     editor_help_session_reset();
     editor_reset_transients();
+    /* Inline modals are transient editor state too: a post-reset
+     * world should not still be hosting a half-typed rename or
+     * file-load prompt. */
+    editor_inline_rename_cancel();
+    editor_inline_file_prompt_cancel();
     /* Register the default editor completion provider. Editor input
      * dispatch calls editor_completion_* without knowing about
      * glr_completion; the registration here installs the
