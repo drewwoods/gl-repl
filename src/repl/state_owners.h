@@ -20,9 +20,12 @@ GLCmd       *repl_state_document_cmd_at_mut(int cmd_idx);
 int          repl_state_document_count(void);
 void         repl_state_document_count_set(int cmd_count);
 int          repl_state_document_capacity(void);
-int          repl_state_edit_line(void);
-void         repl_state_edit_line_set(int edit_line_idx);
-void         repl_state_edit_line_clamp(void);
+/* repl_state_edit_line / _set / _clamp deleted in Phase 4 of
+ * plans/in-review/edit-line-ownership.md. Use
+ * editor_state_edit_line / _set / _clamp from src/editor/state.h
+ * (editor / app / widget / test callers) or the
+ * repl_dispatch_edit_line_get / _set sink in src/repl/core.h
+ * (REPL pipeline callers that can't reach editor headers). */
 int          repl_state_normals_dirty(void);
 void         repl_state_normals_dirty_clear(void);
 void         repl_state_document_reset(void);

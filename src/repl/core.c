@@ -117,6 +117,17 @@ void repl_dispatch_follow_cursor(int follow) {
         g_host_effects->follow_cursor(follow);
 }
 
+int repl_dispatch_edit_line_get(void) {
+    if (g_host_effects && g_host_effects->edit_line_get)
+        return g_host_effects->edit_line_get();
+    return 0;
+}
+
+void repl_dispatch_edit_line_set(int line) {
+    if (g_host_effects && g_host_effects->edit_line_set)
+        g_host_effects->edit_line_set(line);
+}
+
 const char *repl_mode_name(GLenum mode) {
     return repl_begin_mode_name(mode);
 }

@@ -16,6 +16,7 @@
 #include "repl/apply.h"
 #include "repl/command_store.h"
 #include "repl/compile.h"
+#include "repl/core.h"           /* repl_dispatch_edit_line_get / _set */
 #include "repl/core_internal.h"  /* collect_visible_vars, repl_format_fits, etc. */
 #include "repl/eval.h"
 #include "repl/parser.h"
@@ -61,15 +62,16 @@ int repl_load_apply_line(const char *line, char *err, int err_size,
      * supplies the insertion position; the per-line apply
      * advances it as the document grows. A NULL pointer is
      * permitted — the loader falls back to a stack-local int
-     * mirroring the REPL-state cursor (read at entry, written
-     * back at exit). This preserves legacy behavior for tests
-     * and callers that rely on `repl_state_edit_line()` /
-     * `_set()` for ambient cursor positioning instead of
-     * threading the parameter explicitly. */
+     * mirroring the host's cursor through the
+     * repl_dispatch_edit_line_get / _set sink (Phase 4 of
+     * plans/in-review/edit-line-ownership.md). The sink routes to
+     * EditorState in real builds and to a demo-local int in the
+     * REPL demo; pure REPL tests with no sink installed see the
+     * default zero. */
     int local_edit_line;
     int wrote_local = 0;
     if (edit_line_inout == NULL) {
-        local_edit_line = repl_state_edit_line();
+        local_edit_line = repl_dispatch_edit_line_get();
         edit_line_inout = &local_edit_line;
         wrote_local = 1;
     }
@@ -159,7 +161,7 @@ int repl_load_apply_line(const char *line, char *err, int err_size,
          * the append-at-end semantics. */
         int ok = repl_apply_compiled_change(&change, edit_line_inout);
         if (ok && wrote_local)
-            repl_state_edit_line_set(*edit_line_inout);
+            repl_dispatch_edit_line_set(*edit_line_inout);
         return ok ? 1 : 0;
     }
 
@@ -224,6 +226,6 @@ int repl_load_apply_line(const char *line, char *err, int err_size,
         return 0;
     }
     if (wrote_local)
-        repl_state_edit_line_set(*edit_line_inout);
+        repl_dispatch_edit_line_set(*edit_line_inout);
     return 1;
 }

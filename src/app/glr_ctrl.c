@@ -1936,6 +1936,8 @@ static const ReplHostEffects g_glr_host_effects = {
     .insert_mode_off            = glr_app_editor_insert_mode_off,
     .scroll_to_line             = glr_app_scroll_to_line,
     .follow_cursor              = glr_app_follow_cursor,
+    .edit_line_get              = editor_state_edit_line,
+    .edit_line_set              = editor_state_edit_line_set,
 };
 
 /* Rule 8: seed both machines to the current presentation theme at full

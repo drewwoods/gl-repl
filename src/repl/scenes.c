@@ -267,7 +267,7 @@ static int load_commands_into_live(const GLCmd *cmds,
      * repl_state_edit_line_set happens in Phase 4 alongside the
      * storage flip, where this site moves to using a controller-
      * threaded value. */
-    repl_state_edit_line_set(edit_line);
+    repl_dispatch_edit_line_set(edit_line);
     return 1;
 }
 
@@ -315,7 +315,7 @@ static void load_scene_from_slot(int idx) {
     repl_dispatch_insert_mode_off();
     /* Editor input buffer refresh is the controller's responsibility:
      * see check-no-load-line-to-input-in-pipeline. Controllers /
-     * editor wrappers call editor_load_line_to_input(repl_state_edit_line())
+     * editor wrappers call editor_load_line_to_input(repl_dispatch_edit_line_get())
      * after a scene-load API returns. */
     repl_mark_normals_dirty();
     s->last_touch       = next_user_scene_tick();
@@ -327,14 +327,14 @@ static void load_scene_from_slot(int idx) {
 }
 
 static void save_user_scene(void) {
-    save_scene_to_slot(0, USER_SCENE_HOME_NAME, repl_state_edit_line());
+    save_scene_to_slot(0, USER_SCENE_HOME_NAME, repl_dispatch_edit_line_get());
 }
 
 void repl_scenes_save_active_scene_if_any(void) {
     if (g_active_user_scene >= 0 && g_active_user_scene < MAX_USER_SCENES) {
         save_scene_to_slot(g_active_user_scene,
                            g_user_scenes[g_active_user_scene].name,
-                           repl_state_edit_line());
+                           repl_dispatch_edit_line_get());
     }
 }
 
@@ -405,7 +405,7 @@ static void stash_live_state(UserScene *dst, ReplExportConfig *cfg_out) {
         repl_copy_string_fits(dst->lines[i], MAX_LINE_LEN,
                               source_text_line(text, i));
     dst->num_cmds        = repl_state_document_count();
-    dst->edit_line       = repl_state_edit_line();
+    dst->edit_line       = repl_dispatch_edit_line_get();
     dst->num_predef_vars = g_num_predef_vars;
     for (int i = 0; i < g_num_predef_vars; i++) {
         dst->predef_vals[i] = g_predef_vars[i].value;
@@ -482,7 +482,7 @@ int repl_save_workspace(const char *dir, const ReplExportLayout *layout) {
     if (g_active_user_scene >= 0 && g_active_user_scene < MAX_USER_SCENES) {
         save_scene_to_slot(g_active_user_scene,
                            g_user_scenes[g_active_user_scene].name,
-                           repl_state_edit_line());
+                           repl_dispatch_edit_line_get());
     }
 
     snprintf(g_workspace_dir, WORKSPACE_DIR_MAX, "%s", dir);
@@ -583,7 +583,7 @@ static int load_scene_file_into_slot(const char *path) {
 
     char unique[USER_SCENE_NAME_MAX];
     derive_unique_scene_name(unique, sizeof(unique), scene_name, -1);
-    save_scene_to_slot(slot, unique, repl_state_edit_line());
+    save_scene_to_slot(slot, unique, repl_dispatch_edit_line_get());
     return slot;
 }
 
@@ -844,7 +844,7 @@ int repl_promote_example_if_needed(void) {
     char unique[USER_SCENE_NAME_MAX];
     derive_unique_scene_name(unique, sizeof(unique),
                              example_name ? example_name : "Scene", -1);
-    save_scene_to_slot(slot, unique, repl_state_edit_line());
+    save_scene_to_slot(slot, unique, repl_dispatch_edit_line_get());
     g_active_user_scene = slot;
     g_example_idx       = -1;
 
@@ -947,7 +947,7 @@ void repl_scenes_activate_home_slot(void) {
     /* Drop any pending example sandbox: workspace import / explicit
      * home activation establishes a fresh user-controlled state. */
     restore_pre_example_cfg_if_valid();
-    save_scene_to_slot(0, unique, repl_state_edit_line());
+    save_scene_to_slot(0, unique, repl_dispatch_edit_line_get());
     g_active_user_scene = 0;
     g_example_idx       = -1;
 }

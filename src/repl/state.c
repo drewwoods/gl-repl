@@ -101,7 +101,8 @@ static const ReplRuntimeState *repl_state_get_defaults(void) {
 
 #define g_cmds                      (g_repl_state.document.cmds)
 #define g_num_cmds                  (g_repl_state.document.cmd_count)
-#define g_edit_line                 (g_repl_state.document.edit_line_idx)
+/* g_edit_line removed; edit-line cursor moved to EditorState in
+ * Phase 4 of plans/in-review/edit-line-ownership.md. */
 #define g_normals_dirty             (g_repl_state.document.normals_dirty)
 #define g_flat_cmds                 (g_repl_state.flat_program.cmds)
 #define g_flat_cmd_local_vars       (g_repl_state.flat_program.local_vars)
@@ -250,21 +251,12 @@ int repl_state_document_capacity(void) {
     return MAX_COMMANDS;
 }
 
-int repl_state_edit_line(void) {
-    return g_edit_line;
-}
-
-void repl_state_edit_line_set(int edit_line_idx) {
-    g_edit_line = edit_line_idx;
-    repl_state_edit_line_clamp();
-}
-
-void repl_state_edit_line_clamp(void) {
-    if (g_edit_line < 0)
-        g_edit_line = 0;
-    if (g_edit_line > g_num_cmds)
-        g_edit_line = g_num_cmds;
-}
+/* repl_state_edit_line / _set / _clamp were deleted in Phase 4 of
+ * plans/in-review/edit-line-ownership.md. Edit-line cursor storage
+ * moved to EditorState; editor code uses
+ * editor_state_edit_line / _set / _clamp directly, and REPL pipeline
+ * code receives the cursor as a function parameter or via the
+ * repl_dispatch_edit_line_get / _set sink. */
 
 int repl_state_normals_dirty(void) {
     return g_normals_dirty;
@@ -277,7 +269,9 @@ void repl_state_normals_dirty_clear(void) {
 void repl_state_document_reset(void) {
     ReplCommandStore store = repl_command_store_live();
     repl_command_store_load(&store, NULL, 0);
-    repl_state_edit_line_set(0);
+    /* Cursor reset on a wholesale document reset is caller policy
+     * — typically the controller calls editor_state_edit_line_set(0)
+     * after this returns. */
     source_document_clear();
 }
 

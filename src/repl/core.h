@@ -143,6 +143,20 @@ typedef struct {
     void (*scroll_to_line)(int target);
     /* Toggle cursor-follow during replay. */
     void (*follow_cursor)(int follow);
+    /* Read/write the edit-line cursor. Phase 4 of
+     * plans/in-review/edit-line-ownership.md moves cursor storage
+     * to EditorState; REPL code that previously called
+     * repl_state_edit_line() / _set() goes through these hooks so
+     * the β invariant (REPL → editor symbol references forbidden)
+     * stays intact. Higher-level pipeline entry points (scenes.c)
+     * use this; the parse / compile / flatten / load layers take
+     * cursor as an explicit parameter instead (see Phase 3.6.x).
+     *
+     * Default behavior when the hook is NULL: edit_line_get
+     * returns 0; edit_line_set is a no-op. The demo / pure REPL
+     * tests run unchanged. */
+    int  (*edit_line_get)(void);
+    void (*edit_line_set)(int line);
 } ReplHostEffects;
 
 void                   repl_install_host_effects(const ReplHostEffects *effects);
@@ -156,6 +170,8 @@ void        repl_dispatch_input_reset(void);
 void        repl_dispatch_insert_mode_off(void);
 void        repl_dispatch_scroll_to_line(int target);
 void        repl_dispatch_follow_cursor(int follow);
+int         repl_dispatch_edit_line_get(void);
+void        repl_dispatch_edit_line_set(int line);
 
 const char *repl_mode_name(GLenum mode);
 GLenum      repl_current_begin_mode(void);
