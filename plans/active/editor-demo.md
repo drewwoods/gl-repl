@@ -4,6 +4,108 @@
 
 Three steps: (1) split the code-panel UI into a generic text-panel renderer plus a REPL-specific adapter; (2) decouple `src/editor/input.c` and `src/editor/commit.c` from the REPL pipeline by **extending** the existing `EditorServices` seam (`src/editor/services.h`, today scoped to compile/apply via `commit.c`) so the editor module set can link without the full REPL. UI chrome (menu bar, help overlay, color picker, tutorial) is treated as **editor-inherent**: any standalone editor binary needs equivalents of those modules, so the editor depends on `src/ui/` and `src/widgets/` directly rather than abstracting them behind a second service table. The residual upward `glr_*` reach (~3-4 sites: camera reset, code-panel presentation, panel-drag router) is small enough to stub as direct symbols rather than abstract; (3) add `editor_demo` as the forcing function that proves the split. Like `scene_demo` (which keeps `src/scene/` honest about its REPL dependencies) and `repl_demo`, `editor_demo` is a second binary that fails to link if the split regresses, turning "the module is independent" from a claim into a checkable invariant. The near-term implementation can stop after Phases 0-4 (plus the relevant Phase 7 docs/guards): that still completes the SRP cleanup for `ui/panels.c`. Phases 5 and 6 are deferred draft work and need a fresh review before implementation.
 
+## Current state (2026-05-20) — paused for review
+
+Resumption work on Phases 5, 6, 7b is on branch
+`editor-repl-decoupling` (pushed). The demo binary links and runs;
+the iterative peeling of `repl_shim.c` and the real-GL rendering
+wire-up are paused for review before continuing.
+
+### Landed
+
+| Commit | Phase | What |
+|--------|-------|------|
+| `456c4aa` | (rescope) | Plan moved to `plans/active/`. `EditorChromeServices` dropped: chrome is editor-inherent, residual `glr_*` reach stubbed as direct symbols. |
+| `c1247bf` | Phase 5 entry | Surfaces re-measured against current tree: input.c=22, commit.c=30 unique `repl_*` symbols. input.c `glr_*` reach=6 (vs draft "~3-4", below the 8-symbol reopen threshold). Service-surface refinement note added. |
+| `a5b6388` | Phase 5 step | `parse_command_ctx` routed through `EditorServices` — 5 call sites migrated as the worked example of the migration pattern. Builds clean; `test_repl_core_commit` (296/296) and `test_repl_core_parse` (260/260) green. |
+| `b6250bc` | **Phase 6** | `tools/editor_demo/editor_demo.c` skeleton + `tools/editor_demo/repl_shim.c` (~85 direct stubs). Builds clean under both `USE_GL_STUBS=1` (link-check + smoke) and real GL. |
+| `01c60d3` | **Phase 7b** | `scripts/check-editor-repl-surface.sh` ratchet + `scripts/baselines/editor-repl-surface.txt` baseline (input.c=22, commit.c=30). Wired into `make check` and `make check-state-ownership`. |
+| `d5a0407` | **Phase 7b** | `MODULES.md` documents the `editor_demo` binary alongside `repl_demo` and `scene_demo`. |
+
+Full regression: 6292/6292 tests across 45 binaries clean; full
+`make check-state-ownership` clean.
+
+### What the demo currently is — and isn't
+
+The real-GL `editor_demo` build opens a minimal GLUT window wired to
+`editor_handle_key` / `editor_handle_special`, but the display
+callback **only clears and swaps**. It does not yet build a
+`UiTextPanelSnapshot` or call `ui_text_panel_render`, so the window
+shows nothing meaningful — keystrokes flow into the editor state but
+nothing comes back out visually. That makes the current proof weaker
+than intended: "the editor module set links without REPL" is solid,
+but "the editor module set actually drives a text panel without REPL"
+is unproven.
+
+The `repl_shim.c` ledger is also larger than the long-term target.
+It currently stubs:
+- ~30 `repl_*` symbols (state, command store, compile, apply, eval,
+  func_alias, source_scope, line predicates, misc).
+- 4 editor-internal helpers defined in `src/repl/core.c` but called
+  from `src/editor/commit.c`.
+- 10 `tutorial_*` symbols (chrome is editor-inherent but
+  `src/widgets/tutorial.c` transitively pulls in REPL, so the demo
+  stubs the API surface instead of linking the module).
+- 11 `ui_*` symbols (same transitive-REPL reason).
+- 6 `glr_*` symbols (genuinely upward chrome reach).
+- 1 `color_picker_*` symbol.
+
+Total: ~85 unique shim symbols. The plan's "Draft Total Shim Surface"
+estimated ~40; the gap is mostly the tutorial / ui chrome surface
+that the chrome-stays-direct decision *would* have linked directly
+if those modules didn't transitively need REPL. That's a finding,
+not a regression: the next iteration either (a) shrinks those
+widget/UI modules' transitive REPL deps so they can link in the
+demo, or (b) keeps stubbing them and accepts the larger shim.
+
+### Next-up work — needs review before continuing
+
+1. **Wire real-GL `editor_demo` to actually render** (the user's
+   chosen next direction).
+   - Build a `UiTextPanelSnapshot` from `EditorState` in the demo's
+     `demo_display_func` and call `ui_text_panel_render`.
+   - This will surface more undefined symbols (the rendering path
+     pulls in additional `ui_*` and possibly `repl_*` calls). Each
+     becomes a new stub or a new service-callback decision.
+   - Acts as the second forcing function: the link succeeds *and*
+     the demo renders text and updates as the user types.
+
+2. **Iteratively peel `repl_shim.c`** by migrating high-value direct
+   stub groups into `EditorServices` callbacks. Best candidates,
+   ordered by stub-shrink:
+   - **Command store mutators** (~5 stubs → 4 service fields:
+     `command_store_clear / _insert_one / _replace_one / _load`).
+   - **Func-alias mutators** (~6 stubs → 1-2 coarsened service
+     fields per plan: `func_alias_lookup_or_alloc`, `func_alias_set`).
+   - **Source-scope queries** (~5 stubs → 4 service fields).
+   - Each migration drops the `check-editor-repl-surface` baseline
+     by the number of unique symbols removed from the editor source
+     files.
+
+3. **Tutorial / UI / color picker stub group** (~22 stubs combined).
+   Trickiest because these are editor-inherent in principle — the
+   plan deliberately did not abstract them. The current shim is
+   working around their transitive REPL deps. Two paths to evaluate:
+   - Audit `src/widgets/tutorial.c`, `src/ui/menu_bar.c`,
+     `src/widgets/color_picker_state.c` etc. to see which REPL deps
+     can be removed (turning each into a true downward link
+     candidate).
+   - Or accept the stub footprint and document it as the cost of
+     keeping the chrome-stays-direct decision honest.
+
+### Open question for the review
+
+The chrome-stays-direct decision rested on the claim that linking
+UI / widgets directly costs less than abstracting them. The current
+shim shows ~22 symbols stubbed because those modules pull REPL in
+transitively — that's a *hidden* cost the decision didn't anticipate.
+Worth confirming the decision still holds, or whether a narrow
+`EditorChromeServices` (covering just the tutorial / menu / picker
+entry points the editor actually calls, not the full 9-field draft)
+would shrink the shim with less effort than fixing the widget
+modules' REPL coupling. Either choice is defensible; the data is
+new and warrants a fresh look.
+
 ## Phase 0 — Baseline And Invariants
 
 - Record current behavior before refactor:
