@@ -30,7 +30,17 @@ int edit_op_buffer_insert_char_at_cursor(char c) {
             (size_t)(inp->input_len - cur + 1));
     inp->input[cur] = c;
     inp->input_len++;
-    editor_cursor_pos_set(cur + 1);
+    /* Buffer primitive: keep the anchor in place per the contract
+     * in edit_ops.h. The default editor_cursor_pos_set clears the
+     * anchor; that's the right policy for handlers that want a
+     * fresh cursor (Phase B default), but it contradicts the
+     * "anchor (if any) is left untouched" promise these
+     * buffer-only primitives make. Selection-aware callers go
+     * through edit_op_type_char / edit_op_backspace, which consume
+     * the selection up front via edit_op_consume_input_selection
+     * (whose end-of-function editor_cursor_pos_set clears the
+     * anchor as expected). */
+    editor_cursor_pos_set_keep_anchor(cur + 1);
     return 1;
 }
 
@@ -44,7 +54,10 @@ int edit_op_buffer_delete_left_of_cursor(void) {
     memmove(&inp->input[cur - 1], &inp->input[cur],
             (size_t)(inp->input_len - cur + 1));
     inp->input_len--;
-    editor_cursor_pos_set(cur - 1);
+    /* Buffer primitive: see comment in
+     * edit_op_buffer_insert_char_at_cursor about why this uses the
+     * anchor-preserving cursor setter. */
+    editor_cursor_pos_set_keep_anchor(cur - 1);
     return 1;
 }
 
