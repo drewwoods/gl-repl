@@ -8,6 +8,7 @@
 #include "editor/help_session.h"
 #include "editor/inline_file_prompt.h"
 #include "app/glr_config.h"
+#include "config.h"                  /* DEFAULT_SCENE_FILE */
 #include "app/glr_audio.h"
 #include "repl/core.h"
 #include "editor/input.h"
@@ -242,7 +243,7 @@ static void test_menu_actions(void) {
     ASSERT_INT("Load Scene opens prompt",
                editor_inline_file_prompt_active(), 1);
     ASSERT_STR("Load Scene prompt seeded with default",
-               editor_inline_file_prompt_buffer(), "my_scene.c");
+               editor_inline_file_prompt_buffer(), DEFAULT_SCENE_FILE);
     editor_inline_file_prompt_cancel();
     run_menu_action_in_temp_dir("File Save Workspace",
                                 GLR_MENU_FILE,

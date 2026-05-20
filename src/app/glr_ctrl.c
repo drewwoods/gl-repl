@@ -2311,8 +2311,8 @@ int glr_ctrl_router_handle_debug_dump_key(unsigned char key) {
  * point is to rescue an unintended exit / forgotten save without
  * silently clobbering the user's real scene; reload it with
  * `./sample quit-recovery.c`. (Not /tmp — the user would never find
- * it; not the scene file — that would defeat the safeguard.) */
-#define GLR_QUIT_RECOVERY_FILE "quit-recovery.c"
+ * it; not the scene file — that would defeat the safeguard.) The
+ * filename lives in config.h as QUIT_RECOVERY_FILE. */
 
 static volatile sig_atomic_t g_quit_requested = 0;
 
@@ -2325,10 +2325,10 @@ void glr_ctrl_request_quit(void) {
 static void glr_ctrl_save_quit_recovery(void) {
     ReplExportLayout layout;
     glr_ctrl_fill_export_layout(&layout);
-    repl_export_save_output(GLR_QUIT_RECOVERY_FILE, source_document_view(),
+    repl_export_save_output(QUIT_RECOVERY_FILE, source_document_view(),
                             &layout);
     printf("Saved recovery copy to %s (reload: ./sample %s)\n",
-           GLR_QUIT_RECOVERY_FILE, GLR_QUIT_RECOVERY_FILE);
+           QUIT_RECOVERY_FILE, QUIT_RECOVERY_FILE);
 }
 
 int glr_ctrl_router_handle_quit_key(unsigned char key) {

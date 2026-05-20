@@ -1,9 +1,13 @@
+#define _DEFAULT_SOURCE  /* mkdtemp() */
 #include "editor/state.h"
 #include "app/glr_camera.h"
 #include "app/glr_state.h"
 #include "app/glr_ctrl.h"
+#include "config.h"      /* QUIT_RECOVERY_FILE */
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 #include "editor/undo.h"
 #include "repl/core.h"
 #include "editor/input.h"
@@ -742,6 +746,39 @@ static void test_view_mode_projection_transition_wiring(void) {
                 glr_camera().ry > 0.0f);
 }
 
+/* QUIT_RECOVERY_FILE is the filename Ctrl+Q / SIGINT writes a recovery
+ * copy to. Verify the constant value and that the save helper actually
+ * lands a file by that name in the current directory. */
+static void test_quit_recovery_file(void) {
+    char cwd[1024];
+    char temp_dir[] = "/tmp/test_glr_ctrl_recovery.XXXXXX";
+    char *made_dir;
+    int have_cwd;
+
+    printf("--- imrepl_ctrl quit recovery file ---\n");
+
+    ASSERT_STR("QUIT_RECOVERY_FILE value", QUIT_RECOVERY_FILE,
+               "quit-recovery.c");
+
+    glr_app_reset_all();
+    editor_feed_line("glVertex3f(1, 2, 3);");
+
+    made_dir = mkdtemp(temp_dir);
+    have_cwd = getcwd(cwd, sizeof(cwd)) != NULL;
+    ASSERT_TRUE("mkdtemp recovery dir", made_dir != NULL);
+    ASSERT_TRUE("getcwd before recovery save", have_cwd);
+    if (!made_dir || !have_cwd)
+        return;
+
+    ASSERT_INT("chdir recovery dir", chdir(made_dir), 0);
+    glr_ctrl_save_quit_recovery();
+    ASSERT_INT("recovery save wrote QUIT_RECOVERY_FILE",
+               access(QUIT_RECOVERY_FILE, F_OK), 0);
+    unlink(QUIT_RECOVERY_FILE);
+    ASSERT_INT("restore cwd after recovery save", chdir(cwd), 0);
+    rmdir(made_dir);
+}
+
 int main(void) {
     printf("--- imrepl_ctrl tests ---\n");
 
@@ -753,6 +790,7 @@ int main(void) {
     test_pointer_state_tracks_controller_mouse_routes();
     test_overlay_transition_machine_wiring();
     test_view_mode_projection_transition_wiring();
+    test_quit_recovery_file();
 
     printf("\n");
     return test_harness_report(&g_harness, "test_imrepl_ctrl");

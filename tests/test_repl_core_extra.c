@@ -2,6 +2,7 @@
 #include "app/glr_ctrl.h"
 #define _DEFAULT_SOURCE
 #include "app/glr_config.h"
+#include "config.h"                  /* DEFAULT_SCENE_FILE */
 #include "repl/command_spec.h"  /* cmd_type_name */
 #include "repl/core.h"
 #include "editor/input.h"
@@ -564,17 +565,17 @@ void test_inline_file_prompt_flow() {
                editor_inline_file_prompt_buffer(), "");
 
     ASSERT_INT("begin succeeds with default",
-               editor_inline_file_prompt_begin("my_scene.c"), 1);
+               editor_inline_file_prompt_begin(DEFAULT_SCENE_FILE), 1);
     ASSERT_INT("active after begin",
                editor_inline_file_prompt_active(), 1);
     ASSERT_STR("buffer seeded with default name",
-               editor_inline_file_prompt_buffer(), "my_scene.c");
+               editor_inline_file_prompt_buffer(), DEFAULT_SCENE_FILE);
 
     /* begin while active is a no-op (returns 0; buffer unchanged). */
     ASSERT_INT("re-begin while active returns 0",
                editor_inline_file_prompt_begin("other.c"), 0);
     ASSERT_STR("re-begin leaves buffer untouched",
-               editor_inline_file_prompt_buffer(), "my_scene.c");
+               editor_inline_file_prompt_buffer(), DEFAULT_SCENE_FILE);
 
     editor_inline_file_prompt_cancel();
     ASSERT_INT("cancel clears active",
