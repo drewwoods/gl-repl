@@ -7,8 +7,9 @@
  * readable and provide a single place to check for conflicts when adding
  * new bindings.
  *
- * Lives at the repo root with no REPL/UI semantic content so any layer
- * (editor input, ui_*, controller) can include it without crossing
+ * Lives under include/ alongside the other zero-dependency portability
+ * headers (c_compat.h, gl_includes.h) so any layer (editor input, ui_*,
+ * controller) can include it via `#include <keys.h>` without crossing
  * boundaries. Comments below describe what each key triggers in the
  * current app (e.g., KEY_CTRL_S = save to output.c) but the constants
  * themselves are app-neutral.

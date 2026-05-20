@@ -28,7 +28,7 @@
 #include "app/glr_config.h"
 #include "app/glr_camera.h"
 #include "app/glr_debug.h"
-#include "keys.h"
+#include <keys.h>
 #include "prof.h"
 #include "repl/core.h"
 #include "repl/eval.h"

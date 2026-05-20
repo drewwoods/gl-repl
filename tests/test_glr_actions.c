@@ -11,7 +11,7 @@
 #include "repl/core.h"
 #include "editor/input.h"
 #include "repl/examples.h"
-#include "keys.h"
+#include <keys.h>
 #include "support/test_harness.h"
 #include <stdlib.h>
 #include <stdio.h>
