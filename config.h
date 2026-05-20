@@ -187,7 +187,7 @@
  * (File menu → Load Scene, src/app/glr_actions.c). Also the seed value
  * the prompt's inline-file-prompt module documents in its header. */
 #ifndef DEFAULT_SCENE_FILE
-#define DEFAULT_SCENE_FILE "my_scene.c"
+#define DEFAULT_SCENE_FILE "my-scene.c"
 #endif
 
 /* Quit-safeguard recovery filename. On Ctrl+Q (or SIGINT) the controller
