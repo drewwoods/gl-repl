@@ -194,6 +194,7 @@ static const char *const k_tab_keys_base[] = {
     "  Scroll wheel         \tZoom (viewport) / Scroll (code panel)",
     "  Ctrl+Shift+O         \tFocus origin (ease target to 0,0,0)",
     "  Ctrl+Shift+C         \tReset camera to default (eased)",
+    "  Ctrl+Shift+R         \tToggle camera auto-rotate",
     "  Ctrl+Shift+V         \tToggle View mode (2D / 3D)",
     "",
     "Time & Replay:",
@@ -357,10 +358,11 @@ const ReplHelpContent *repl_help_text_build(void) {
     snprintf(g_fkey_strbuf[0], sizeof(g_fkey_strbuf[0]), "  F1   \tHelp overlay");
     g_tab_keys[nk++] = g_fkey_strbuf[0];
 
-    /* F2-F11 - pulled from the config descriptor table by matching
-     * key_code (GLUT_KEY_Fn == n). */
+    /* F2-F10 - pulled from the config descriptor table by matching
+     * key_code (GLUT_KEY_Fn == n). F11 and F12 are not in g_cfg_items;
+     * they drive the example/scene cycle directly. */
     int di = 1;
-    for (int fn = 2; fn <= 11 && di < HELP_FKEY_MAX - 1; fn++) {
+    for (int fn = 2; fn <= 10 && di < HELP_FKEY_MAX - 1; fn++) {
         int cfg_count = 0;
         const GlrConfigItem *items = glr_config_items(&cfg_count);
         for (int ci = 0; ci < cfg_count; ci++) {
@@ -376,9 +378,14 @@ const ReplHelpContent *repl_help_text_build(void) {
         }
     }
 
+    /* F11 - not in g_cfg_items */
+    snprintf(g_fkey_strbuf[di], sizeof(g_fkey_strbuf[di]),
+             "  F11  \tPrevious example / scene");
+    g_tab_keys[nk++] = g_fkey_strbuf[di++];
+
     /* F12 - not in g_cfg_items */
     snprintf(g_fkey_strbuf[di], sizeof(g_fkey_strbuf[di]),
-             "  F12  \tCycle examples");
+             "  F12  \tNext example / scene");
     g_tab_keys[nk++] = g_fkey_strbuf[di];
 
     g_tab_keys[nk++] = "";

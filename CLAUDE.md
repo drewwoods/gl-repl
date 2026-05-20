@@ -841,10 +841,12 @@ Declarative toggle system in `src/app/glr_actions.c`:
 | Ctrl+Shift+F | Toggle code focus (hide boilerplate chrome) — also the statusbar "focus" keycap |
 | Ctrl+Shift+O | Focus origin — ease the orbit target to (0,0,0) |
 | Ctrl+Shift+C | Reset camera to default (eased) |
+| Ctrl+Shift+R | Toggle camera auto-rotate |
 | Ctrl+Shift+V | Toggle View mode (2D / 3D) |
 | F1 | Help overlay — also the clickable statusbar "F1 help" keycap |
-| F2-F11 | Toggle visual overlays |
-| F12 | Cycle examples and user scenes |
+| F2-F10 | Toggle visual overlays |
+| F11 | Previous example / scene |
+| F12 | Next example / scene |
 
 When an input-buffer (character-range) selection is active,
 `Ctrl+C` / `Ctrl+X` copy or cut the substring into a separate

@@ -153,7 +153,7 @@ GlrConfigItem g_cfg_items[] = {
     { "---",               0, 0, 0, GLR_CONFIG_NONE,               0, NULL,                 1 },
     { "### CAMERA",        0, 0, 0, GLR_CONFIG_NONE,               0, NULL,                 1 },
     { "View mode",         KEY_CTRL_V, 0, GLUT_ACTIVE_SHIFT, GLR_CONFIG_ORTHO_MODE,   2, view_mode_names, 0 },
-    { "Camera rotate",     GLUT_KEY_F11, 1, 0, GLR_CONFIG_CAMERA_ROTATE, 2, NULL,          0 },
+    { "Camera rotate",     KEY_CTRL_R, 0, GLUT_ACTIVE_SHIFT, GLR_CONFIG_CAMERA_ROTATE, 2, NULL,          0 },
     { "Focus origin",      KEY_CTRL_O, 0, GLUT_ACTIVE_SHIFT, GLR_CONFIG_FOCUS_ORIGIN, 0, NULL, 0 },
     { "Reset camera",      KEY_CTRL_C, 0, GLUT_ACTIVE_SHIFT, GLR_CONFIG_RESET_CAMERA, 0, NULL, 0 },
     { "---",               0, 0, 0, GLR_CONFIG_NONE,               0, NULL,                 1 },

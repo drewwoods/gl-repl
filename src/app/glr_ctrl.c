@@ -2667,9 +2667,56 @@ static void cycle_example_or_user_scene(void) {
         repl_load_example(0);
 }
 
+/* Reverse counterpart to cycle_example_or_user_scene. Walks the same
+ * sequence — [examples 0..N-1, occupied user slots 0..M-1] — backwards,
+ * wrapping at the start to the last occupied user slot, then the last
+ * example. Symmetric structure with the forward cycle: same transient
+ * cleanup and undo-clear, just inverted index walks. */
+static void cycle_example_or_user_scene_prev(void) {
+    editor_reset_transients();
+    editor_undo_clear();
+    int count = repl_example_count();
+    int active_scene = repl_active_user_scene();
+
+    if (active_scene >= 0) {
+        for (int scene_idx = active_scene - 1; scene_idx >= 0; scene_idx--) {
+            if (repl_user_scene_slot_used(scene_idx)) {
+                if (repl_load_user_scene_idx(scene_idx))
+                    editor_load_line_to_input(repl_state_edit_line());
+                return;
+            }
+        }
+        if (count > 0)
+            repl_load_example(count - 1);
+        return;
+    }
+
+    if (count > 0) {
+        int prev = repl_state_scenes().active_example_idx - 1;
+        if (prev >= 0) {
+            repl_load_example(prev);
+            return;
+        }
+    }
+
+    for (int scene_idx = MAX_USER_SCENES - 1; scene_idx >= 0; scene_idx--) {
+        if (repl_user_scene_slot_used(scene_idx)) {
+            if (repl_load_user_scene_idx(scene_idx))
+                editor_load_line_to_input(repl_state_edit_line());
+            return;
+        }
+    }
+    if (count > 0)
+        repl_load_example(count - 1);
+}
+
 int glr_ctrl_router_handle_scene_cycle_special(int key) {
     if (key == GLUT_KEY_F12) {
         cycle_example_or_user_scene();
+        return 1;
+    }
+    if (key == GLUT_KEY_F11) {
+        cycle_example_or_user_scene_prev();
         return 1;
     }
     return 0;
