@@ -2317,9 +2317,17 @@ static int import_parse_declare_marker(const char *line, int *loaded,
             if (warnings) (*warnings)++;
             return 1;
         }
+        /* Caller-owned cursor: read the edit-line, pass &edit_line
+         * to the store via opts, write back on success. Phase 1 of
+         * plans/in-review/edit-line-ownership.md dropped the store's
+         * auto-pointer. */
+        int edit_line = repl_state_edit_line();
+        ReplStoreMutOpts opts = {
+            .flags        = REPL_COMMAND_STORE_ADJUST_EDIT_LINE,
+            .cursor_inout = &edit_line,
+        };
         if (!repl_command_store_insert_one(
-                &store, decl_pos, &cmd,
-                REPL_COMMAND_STORE_ADJUST_EDIT_LINE)) {
+                &store, decl_pos, &cmd, &opts)) {
             SourceTextChange rollback = {
                 .kind         = SOURCE_TEXT_DELETE_RANGE,
                 .pos          = decl_pos,
@@ -2333,6 +2341,7 @@ static int import_parse_declare_marker(const char *line, int *loaded,
             if (warnings) (*warnings)++;
             return 1;
         }
+        repl_state_edit_line_set(edit_line);
         (*loaded)++;
     }
     (void)warnings;

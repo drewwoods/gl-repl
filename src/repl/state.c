@@ -276,7 +276,8 @@ void repl_state_normals_dirty_clear(void) {
 
 void repl_state_document_reset(void) {
     ReplCommandStore store = repl_command_store_live();
-    repl_command_store_load(&store, NULL, 0, 0);
+    repl_command_store_load(&store, NULL, 0);
+    repl_state_edit_line_set(0);
     source_document_clear();
 }
 

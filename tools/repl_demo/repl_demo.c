@@ -169,7 +169,9 @@ static void seed_for_loop_program(void) {
     cmds[6].valid = 1;
 
     ReplCommandStore store = repl_command_store_live();
-    repl_command_store_load(&store, cmds, LINE_COUNT, 0);
+    repl_command_store_load(&store, cmds, LINE_COUNT);
+    /* Demo-local cursor policy: zero after a bulk load. */
+    repl_state_edit_line_set(0);
 }
 
 /* --- Program loaders -------------------------------------------------- */
@@ -200,11 +202,20 @@ static int load_text_lines(const char *const *lines) {
             return -1;
         }
         ReplCommandStore store = repl_command_store_live();
-        if (!repl_command_store_insert_one(&store, loaded, &pl.cmd,
-                                           REPL_COMMAND_STORE_ADJUST_EDIT_LINE)) {
+        /* Demo-local cursor: thread the edit-line through the
+         * insert so the auto-advance behavior the demo's loader
+         * depends on is preserved (each line appends after the
+         * previous insertion). */
+        int edit_line = repl_state_edit_line();
+        ReplStoreMutOpts opts = {
+            .flags        = REPL_COMMAND_STORE_ADJUST_EDIT_LINE,
+            .cursor_inout = &edit_line,
+        };
+        if (!repl_command_store_insert_one(&store, loaded, &pl.cmd, &opts)) {
             fprintf(stderr, "  command store full at line %d\n", loaded);
             return -1;
         }
+        repl_state_edit_line_set(edit_line);
         source_document_insert_line(loaded, pl.text);
         loaded++;
     }
@@ -264,8 +275,13 @@ static void seed_variable_driven_program(void) {
             return;
         }
         ReplCommandStore store = repl_command_store_live();
-        repl_command_store_insert_one(&store, pos, &cmd,
-                                      REPL_COMMAND_STORE_ADJUST_EDIT_LINE);
+        int edit_line = repl_state_edit_line();
+        ReplStoreMutOpts opts = {
+            .flags        = REPL_COMMAND_STORE_ADJUST_EDIT_LINE,
+            .cursor_inout = &edit_line,
+        };
+        repl_command_store_insert_one(&store, pos, &cmd, &opts);
+        repl_state_edit_line_set(edit_line);
         source_document_insert_line(pos, text);
         pos++;
     }

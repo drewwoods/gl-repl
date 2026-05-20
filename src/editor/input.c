@@ -503,7 +503,7 @@ static EditorPlaceResult editor_place_parsed_command(int insert_idx,
                                                      const char *cmd_text) {
     ReplCommandStore store = repl_command_store_live();
     if (editor_insert_mode()) {
-        if (!repl_command_store_insert_one(&store, insert_idx, cmd, 0))
+        if (!repl_command_store_insert_one(&store, insert_idx, cmd, NULL))
             return EDITOR_PLACE_BUFFER_FULL;
         editor_buffer_insert_line(insert_idx, cmd_text);
         repl_state_edit_line_set(insert_idx + 1);
@@ -516,7 +516,7 @@ static EditorPlaceResult editor_place_parsed_command(int insert_idx,
         return EDITOR_PLACE_REPLACED;
     }
     /* append: insert_idx == doc_count */
-    if (!repl_command_store_insert_one(&store, insert_idx, cmd, 0))
+    if (!repl_command_store_insert_one(&store, insert_idx, cmd, NULL))
         return EDITOR_PLACE_BUFFER_FULL;
     editor_buffer_insert_line(insert_idx, cmd_text);
     repl_state_edit_line_set(repl_state_document_count());

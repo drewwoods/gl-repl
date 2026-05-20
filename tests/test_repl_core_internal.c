@@ -366,15 +366,19 @@ int main() {
         repl_state_normals_dirty_clear();
         ASSERT_INT("document normals dirty clear",
                    repl_state_normals_dirty(), 0);
+        /* _load no longer touches the cursor (Phase 1 of
+         * plans/in-review/edit-line-ownership.md); cursor adjustment
+         * post-load is caller policy. Set explicitly here to mirror
+         * the previous test's intent (clamp to count). */
         ASSERT_INT("command_store_load ok",
-                   repl_command_store_load(&store, loaded, 2, 99), 1);
+                   repl_command_store_load(&store, loaded, 2), 1);
+        if (repl_state_edit_line() > repl_state_document_count())
+            repl_state_edit_line_set(repl_state_document_count());
         editor_buffer_load_lines(loaded_lines, 2);
         ASSERT_INT("command_store_load count", repl_state_document_count(), 2);
         ASSERT_INT("command_store_load state count",
                    repl_state_document_count(), 2);
         ASSERT_INT("command_store_load edit clamp", repl_state_edit_line(), 2);
-        ASSERT_INT("command_store_load state edit clamp",
-                   repl_state_edit_line(), 2);
         ASSERT_STR("command_store_load source", editor_buffer_line(1),
                    "glColor3f(1, 0, 0);");
         ASSERT_STR("command_store_load state source",
@@ -386,16 +390,15 @@ int main() {
                    repl_source_scope_block_depth_at(1), 0);
 
         ASSERT_INT("command_store_load rejects missing cmds",
-                   repl_command_store_load(&store, NULL, 1, 0), 0);
+                   repl_command_store_load(&store, NULL, 1), 0);
         ASSERT_INT("command_store_load reject keeps count", repl_state_document_count(), 2);
         ASSERT_INT("command_store_load rejects overflow",
                    repl_command_store_load(&store, loaded,
-                                           MAX_COMMANDS + 1, 0), 0);
+                                           MAX_COMMANDS + 1), 0);
         ASSERT_INT("command_store_load overflow keeps count", repl_state_document_count(), 2);
         ASSERT_INT("command_store_load empty ok",
-                   repl_command_store_load(&store, NULL, 0, -5), 1);
+                   repl_command_store_load(&store, NULL, 0), 1);
         ASSERT_INT("command_store_load empty count", repl_state_document_count(), 0);
-        ASSERT_INT("command_store_load empty edit clamp", repl_state_edit_line(), 0);
     }
 
     /* 11. editor input/selection/clipboard state facade */

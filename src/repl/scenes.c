@@ -256,10 +256,14 @@ static int load_commands_into_live(const GLCmd *cmds,
     if (!source_document_load_lines(scene_line_ptrs(lines, num_cmds), num_cmds))
         return 0;
     ReplCommandStore store = repl_command_store_live();
-    if (!repl_command_store_load(&store, cmds, num_cmds, edit_line)) {
+    if (!repl_command_store_load(&store, cmds, num_cmds)) {
         source_document_clear();
         return 0;
     }
+    /* The store no longer writes the cursor on load (Phase 1 of
+     * plans/in-review/edit-line-ownership.md). Caller policy
+     * applied here: scenes restore the saved edit-line. */
+    repl_state_edit_line_set(edit_line);
     return 1;
 }
 

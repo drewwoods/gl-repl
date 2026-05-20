@@ -39,7 +39,7 @@ static void test_repl_command_store_live(void) {
     ASSERT_TRUE("live store has cmds pointer", store.cmds != NULL);
     ASSERT_TRUE("live store has count pointer", store.count != NULL);
     ASSERT_INT("live store has capacity", store.capacity, MAX_COMMANDS);
-    ASSERT_TRUE("live store has edit_line pointer", store.edit_line != NULL);
+    /* No edit_line pointer post Phase 1 — cursor is caller-owned. */
 }
 
 static void test_repl_command_store_count(void) {
@@ -49,7 +49,7 @@ static void test_repl_command_store_count(void) {
     ASSERT_INT("empty store count", repl_command_store_count(&store), 0);
 
     GLCmd cmd = make_cmd(CMD_VERTEX3F, "glVertex3f(0, 0, 0);");
-    repl_command_store_insert_one(&store, 0, &cmd, 0);
+    repl_command_store_insert_one(&store, 0, &cmd, NULL);
     ASSERT_INT("store count after insert", repl_command_store_count(&store), 1);
 
     ASSERT_INT("count with NULL store", repl_command_store_count(NULL), 0);
@@ -78,7 +78,7 @@ static void test_repl_command_store_can_insert(void) {
     ASSERT_FALSE("cannot insert with NULL store",
                  repl_command_store_can_insert(NULL, 1));
 
-    ReplCommandStore bad_store = {NULL, store.count, store.capacity, store.edit_line};
+    ReplCommandStore bad_store = {NULL, store.count, store.capacity};
     ASSERT_FALSE("cannot insert with NULL cmds",
                  repl_command_store_can_insert(&bad_store, 1));
 }
@@ -93,15 +93,15 @@ static void test_repl_command_store_first_non_decl(void) {
     GLCmd decl = make_cmd(CMD_VAR_DECLARE, "float x;");
     GLCmd vertex = make_cmd(CMD_VERTEX3F, "glVertex3f(0, 0, 0);");
 
-    repl_command_store_insert_one(&store, 0, &decl, 0);
+    repl_command_store_insert_one(&store, 0, &decl, NULL);
     ASSERT_INT("first_non_decl with one decl",
                repl_command_store_first_non_decl(&store), 1);
 
-    repl_command_store_insert_one(&store, 0, &decl, 0);
+    repl_command_store_insert_one(&store, 0, &decl, NULL);
     ASSERT_INT("first_non_decl with two decls",
                repl_command_store_first_non_decl(&store), 2);
 
-    repl_command_store_insert_one(&store, 1, &vertex, 0);
+    repl_command_store_insert_one(&store, 1, &vertex, NULL);
     ASSERT_INT("first_non_decl with decl then vertex",
                repl_command_store_first_non_decl(&store), 1);
 
@@ -114,9 +114,9 @@ static void test_repl_command_store_normalize_range(void) {
 
     ReplCommandStore store = repl_command_store_live();
     GLCmd cmd = make_cmd(CMD_VERTEX3F, "glVertex3f(0, 0, 0);");
-    repl_command_store_insert_one(&store, 0, &cmd, 0);
-    repl_command_store_insert_one(&store, 1, &cmd, 0);
-    repl_command_store_insert_one(&store, 2, &cmd, 0);
+    repl_command_store_insert_one(&store, 0, &cmd, NULL);
+    repl_command_store_insert_one(&store, 1, &cmd, NULL);
+    repl_command_store_insert_one(&store, 2, &cmd, NULL);
 
     int out_start, out_count;
     ASSERT_INT("normalize valid range",
@@ -149,22 +149,22 @@ static void test_repl_command_store_insert_one(void) {
     GLCmd cmd2 = make_cmd(CMD_VERTEX3F, "glVertex3f(0, 1, 0);");
 
     ASSERT_INT("insert to empty store",
-               repl_command_store_insert_one(&store, 0, &cmd1, 0), 1);
+               repl_command_store_insert_one(&store, 0, &cmd1, NULL), 1);
     ASSERT_INT("count after insert", repl_command_store_count(&store), 1);
     /* source text now lives in editor buffer; verify type only */
     ASSERT_INT("inserted cmd type", repl_state_document_cmd_at(0)->type, CMD_VERTEX3F);
 
     ASSERT_INT("insert at beginning with clamp",
-               repl_command_store_insert_one(&store, -5, &cmd2, 0), 1);
+               repl_command_store_insert_one(&store, -5, &cmd2, NULL), 1);
     ASSERT_INT("count after insert", repl_command_store_count(&store), 2);
     ASSERT_INT("first command type after insert",
                repl_state_document_cmd_at(0)->type, CMD_VERTEX3F);
 
     ASSERT_INT("insert rejects NULL store",
-               repl_command_store_insert_one(NULL, 0, &cmd1, 0), 0);
+               repl_command_store_insert_one(NULL, 0, &cmd1, NULL), 0);
 
     ASSERT_INT("insert rejects NULL cmd",
-               repl_command_store_insert_one(&store, 0, NULL, 0), 0);
+               repl_command_store_insert_one(&store, 0, NULL, NULL), 0);
 }
 
 static void test_repl_command_store_insert_one_with_explicit_line(void) {
@@ -175,7 +175,7 @@ static void test_repl_command_store_insert_one_with_explicit_line(void) {
     const char *line = "glVertex3f(1, 0, 0)";
 
     ASSERT_INT("insert one with explicit line",
-               repl_command_store_insert_one(&store, 0, &cmd, 0), 1);
+               repl_command_store_insert_one(&store, 0, &cmd, NULL), 1);
     editor_buffer_insert_line(0, line);
     ASSERT_STR("editor buffer uses explicit line",
                editor_buffer_line(0), "glVertex3f(1, 0, 0)");
@@ -192,20 +192,20 @@ static void test_repl_command_store_insert_many(void) {
     };
 
     ASSERT_INT("insert many to empty",
-               repl_command_store_insert_many(&store, 0, cmds, 3, 0), 1);
+               repl_command_store_insert_many(&store, 0, cmds, 3, NULL), 1);
     ASSERT_INT("count after insert many", repl_command_store_count(&store), 3);
 
     ASSERT_INT("insert many rejects NULL store",
-               repl_command_store_insert_many(NULL, 0, cmds, 1, 0), 0);
+               repl_command_store_insert_many(NULL, 0, cmds, 1, NULL), 0);
 
     ASSERT_INT("insert many rejects NULL cmds",
-               repl_command_store_insert_many(&store, 0, NULL, 1, 0), 0);
+               repl_command_store_insert_many(&store, 0, NULL, 1, NULL), 0);
 
     ASSERT_INT("insert many rejects zero count",
-               repl_command_store_insert_many(&store, 0, cmds, 0, 0), 0);
+               repl_command_store_insert_many(&store, 0, cmds, 0, NULL), 0);
 
     ASSERT_INT("insert many rejects negative count",
-               repl_command_store_insert_many(&store, 0, cmds, -1, 0), 0);
+               repl_command_store_insert_many(&store, 0, cmds, -1, NULL), 0);
 }
 
 static void test_repl_command_store_insert_with_edit_line_adjustment(void) {
@@ -216,20 +216,28 @@ static void test_repl_command_store_insert_with_edit_line_adjustment(void) {
     GLCmd cmd2 = make_cmd(CMD_VERTEX3F, "glVertex3f(0, 1, 0);");
     GLCmd cmd3 = make_cmd(CMD_VERTEX3F, "glVertex3f(0, 0, 1);");
 
-    repl_command_store_insert_one(&store, 0, &cmd1, 0);
-    *store.edit_line = 1;
+    repl_command_store_insert_one(&store, 0, &cmd1, NULL);
 
-    ASSERT_INT("edit line before insert with flag", *store.edit_line, 1);
-
+    /* Caller-owned cursor (Phase 1 of edit-line-ownership.md): the
+     * store applies insert math to *opts.cursor_inout when the
+     * ADJUST_EDIT_LINE flag is set. */
+    int cur = 1;
+    ReplStoreMutOpts adjust_opts = {
+        .flags        = REPL_COMMAND_STORE_ADJUST_EDIT_LINE,
+        .cursor_inout = &cur,
+    };
     ASSERT_INT("insert at 0 with adjust flag",
-               repl_command_store_insert_one(&store, 0, &cmd2,
-                                             REPL_COMMAND_STORE_ADJUST_EDIT_LINE), 1);
-    ASSERT_INT("edit line adjusted after insert before", *store.edit_line, 2);
+               repl_command_store_insert_one(&store, 0, &cmd2, &adjust_opts), 1);
+    ASSERT_INT("cursor adjusted after insert before", cur, 2);
 
-    *store.edit_line = 0;
-    ASSERT_INT("insert before edit_line without adjust",
-               repl_command_store_insert_one(&store, 0, &cmd3, 0), 1);
-    ASSERT_INT("edit line not adjusted without flag", *store.edit_line, 0);
+    cur = 0;
+    ReplStoreMutOpts no_adjust_opts = {
+        .flags        = 0,
+        .cursor_inout = &cur,
+    };
+    ASSERT_INT("insert before cursor without adjust flag",
+               repl_command_store_insert_one(&store, 0, &cmd3, &no_adjust_opts), 1);
+    ASSERT_INT("cursor not adjusted without flag", cur, 0);
 }
 
 static void test_repl_command_store_replace_one(void) {
@@ -239,7 +247,7 @@ static void test_repl_command_store_replace_one(void) {
     GLCmd cmd1 = make_cmd(CMD_VERTEX3F, "glVertex3f(1, 0, 0);");
     GLCmd cmd2 = make_cmd(CMD_VERTEX3F, "glVertex3f(0, 1, 0);");
 
-    repl_command_store_insert_one(&store, 0, &cmd1, 0);
+    repl_command_store_insert_one(&store, 0, &cmd1, NULL);
     editor_buffer_insert_line(0, "glVertex3f(1, 0, 0);");
     ASSERT_STR("before replace",
                editor_buffer_line(0), "glVertex3f(1, 0, 0);");
@@ -271,7 +279,7 @@ static void test_repl_command_store_replace_one_with_explicit_line(void) {
     GLCmd cmd1 = make_cmd(CMD_VERTEX3F, "glVertex3f(1, 0, 0);");
     GLCmd cmd2 = make_cmd(CMD_VERTEX3F, "  glVertex3f(0, 1, 0);");
 
-    repl_command_store_insert_one(&store, 0, &cmd1, 0);
+    repl_command_store_insert_one(&store, 0, &cmd1, NULL);
 
     ASSERT_INT("replace with explicit line",
                repl_command_store_replace_one(&store, 0, &cmd2), 1);
@@ -310,21 +318,21 @@ static void test_repl_command_store_delete_range(void) {
     ReplCommandStore store = repl_command_store_live();
     GLCmd cmd = make_cmd(CMD_VERTEX3F, "glVertex3f(0, 0, 0);");
 
-    repl_command_store_insert_one(&store, 0, &cmd, 0);
-    repl_command_store_insert_one(&store, 1, &cmd, 0);
-    repl_command_store_insert_one(&store, 2, &cmd, 0);
+    repl_command_store_insert_one(&store, 0, &cmd, NULL);
+    repl_command_store_insert_one(&store, 1, &cmd, NULL);
+    repl_command_store_insert_one(&store, 2, &cmd, NULL);
 
     ASSERT_INT("delete single command",
-               repl_command_store_delete_range(&store, 0, 1), 1);
+               repl_command_store_delete_range(&store, 0, 1, NULL), 1);
     ASSERT_INT("count after delete one", repl_command_store_count(&store), 2);
 
     ASSERT_INT("delete remaining range",
-               repl_command_store_delete_range(&store, 0, 2), 1);
+               repl_command_store_delete_range(&store, 0, 2, NULL), 1);
     ASSERT_INT("count after delete all", repl_command_store_count(&store), 0);
 
-    repl_command_store_insert_one(&store, 0, &cmd, 0);
+    repl_command_store_insert_one(&store, 0, &cmd, NULL);
     ASSERT_INT("delete rejects invalid range",
-               repl_command_store_delete_range(&store, 0, 0), 0);
+               repl_command_store_delete_range(&store, 0, 0, NULL), 0);
 }
 
 static void test_repl_command_store_load(void) {
@@ -340,8 +348,11 @@ static void test_repl_command_store_load(void) {
         "glColor3f(1, 0, 0);"
     };
 
+    /* _load no longer touches the cursor (Phase 1 of
+     * plans/in-review/edit-line-ownership.md); cursor policy is
+     * the caller's. */
     ASSERT_INT("load commands",
-               repl_command_store_load(&store, cmds, 2, 0), 1);
+               repl_command_store_load(&store, cmds, 2), 1);
     editor_buffer_load_lines(lines, 2);
     ASSERT_INT("count after load", repl_command_store_count(&store), 2);
     ASSERT_STR("first loaded command",
@@ -349,25 +360,21 @@ static void test_repl_command_store_load(void) {
     ASSERT_STR("second loaded command",
                editor_buffer_line(1), "glColor3f(1, 0, 0);");
 
-    ASSERT_INT("load clamps edit_line to count",
-               repl_state_edit_line(), 0);
-
-    ASSERT_INT("load with edit_line > count",
-               repl_command_store_load(&store, cmds, 2, 99), 1);
-    ASSERT_INT("edit_line clamped", repl_state_edit_line(), 2);
+    ASSERT_INT("second load succeeds",
+               repl_command_store_load(&store, cmds, 2), 1);
 
     ASSERT_INT("load empty valid",
-               repl_command_store_load(&store, NULL, 0, -5), 1);
+               repl_command_store_load(&store, NULL, 0), 1);
     ASSERT_INT("count after load empty", repl_command_store_count(&store), 0);
 
     ASSERT_INT("load rejects overflow",
-               repl_command_store_load(&store, cmds, MAX_COMMANDS + 1, 0), 0);
+               repl_command_store_load(&store, cmds, MAX_COMMANDS + 1), 0);
 
     ASSERT_INT("load rejects NULL cmds with count > 0",
-               repl_command_store_load(&store, NULL, 1, 0), 0);
+               repl_command_store_load(&store, NULL, 1), 0);
 
     ASSERT_INT("load rejects NULL store",
-               repl_command_store_load(NULL, cmds, 1, 0), 0);
+               repl_command_store_load(NULL, cmds, 1), 0);
 }
 
 static void test_repl_command_store_load_with_explicit_lines(void) {
@@ -384,7 +391,7 @@ static void test_repl_command_store_load_with_explicit_lines(void) {
     };
 
     ASSERT_INT("load with explicit lines",
-               repl_command_store_load(&store, cmds, 2, 0), 1);
+               repl_command_store_load(&store, cmds, 2), 1);
     editor_buffer_load_lines(lines, 2);
     ASSERT_STR("load line 0 preserved",
                editor_buffer_line(0), "glVertex3f(1, 0, 0)");
@@ -398,8 +405,8 @@ static void test_repl_command_store_clear(void) {
     ReplCommandStore store = repl_command_store_live();
     GLCmd cmd = make_cmd(CMD_VERTEX3F, "glVertex3f(0, 0, 0);");
 
-    repl_command_store_insert_one(&store, 0, &cmd, 0);
-    repl_command_store_insert_one(&store, 1, &cmd, 0);
+    repl_command_store_insert_one(&store, 0, &cmd, NULL);
+    repl_command_store_insert_one(&store, 1, &cmd, NULL);
 
     ASSERT_INT("count before clear", repl_command_store_count(&store), 2);
     repl_command_store_clear(&store);
@@ -415,18 +422,18 @@ static void test_repl_command_store_delete_from_middle(void) {
     ReplCommandStore store = repl_command_store_live();
     GLCmd cmd = make_cmd(CMD_VERTEX3F, "glVertex3f(0, 0, 0);");
 
-    repl_command_store_insert_one(&store, 0, &cmd, 0);
-    repl_command_store_insert_one(&store, 1, &cmd, 0);
-    repl_command_store_insert_one(&store, 2, &cmd, 0);
+    repl_command_store_insert_one(&store, 0, &cmd, NULL);
+    repl_command_store_insert_one(&store, 1, &cmd, NULL);
+    repl_command_store_insert_one(&store, 2, &cmd, NULL);
 
     ASSERT_INT("count before delete", repl_command_store_count(&store), 3);
 
     ASSERT_INT("delete from middle",
-               repl_command_store_delete_range(&store, 1, 1), 1);
+               repl_command_store_delete_range(&store, 1, 1, NULL), 1);
     ASSERT_INT("count after delete middle", repl_command_store_count(&store), 2);
 
     ASSERT_INT("delete from end",
-               repl_command_store_delete_range(&store, 1, 1), 1);
+               repl_command_store_delete_range(&store, 1, 1, NULL), 1);
     ASSERT_INT("count after delete end", repl_command_store_count(&store), 1);
 }
 
@@ -436,26 +443,62 @@ static void test_repl_command_store_insert_at_end(void) {
     ReplCommandStore store = repl_command_store_live();
     GLCmd cmd = make_cmd(CMD_VERTEX3F, "glVertex3f(0, 0, 0);");
 
-    repl_command_store_insert_one(&store, 0, &cmd, 0);
+    repl_command_store_insert_one(&store, 0, &cmd, NULL);
     ASSERT_INT("insert at position 0", repl_command_store_count(&store), 1);
 
     ASSERT_INT("insert at end (clamped from out of bounds)",
-               repl_command_store_insert_one(&store, 100, &cmd, 0), 1);
+               repl_command_store_insert_one(&store, 100, &cmd, NULL), 1);
     ASSERT_INT("count after insert at end", repl_command_store_count(&store), 2);
 }
 
-static void test_repl_command_store_load_with_negative_edit_line(void) {
+/* Phase 1 of plans/in-review/edit-line-ownership.md: cursor-aware
+ * delete is net-new store behavior. Verify the three cases in the
+ * cursor-shift math (before / inside / past the deleted range). */
+static void test_repl_command_store_delete_cursor_math(void) {
     glr_app_reset_all();
 
     ReplCommandStore store = repl_command_store_live();
-    GLCmd cmds[2] = {
-        make_cmd(CMD_VERTEX3F, "glVertex3f(1, 0, 0);"),
-        make_cmd(CMD_COLOR3F, "glColor3f(1, 0, 0);")
-    };
+    GLCmd cmd = make_cmd(CMD_VERTEX3F, "glVertex3f(0, 0, 0);");
 
-    ASSERT_INT("load with negative edit_line",
-               repl_command_store_load(&store, cmds, 2, -10), 1);
-    ASSERT_INT("edit_line clamped to 0", repl_state_edit_line(), 0);
+    /* Seed 5 commands: [0, 1, 2, 3, 4]. Delete [1..3) — count 2 —
+     * leaves [0, 3, 4]. Cursors land per the three-case math. */
+    repl_command_store_insert_one(&store, 0, &cmd, NULL);
+    repl_command_store_insert_one(&store, 1, &cmd, NULL);
+    repl_command_store_insert_one(&store, 2, &cmd, NULL);
+    repl_command_store_insert_one(&store, 3, &cmd, NULL);
+    repl_command_store_insert_one(&store, 4, &cmd, NULL);
+
+    /* Cursor before the deleted range — unchanged. */
+    int cur_before = 0;
+    ReplStoreMutOpts before_opts = { .flags = 0, .cursor_inout = &cur_before };
+    ASSERT_INT("delete with cursor before range",
+               repl_command_store_delete_range(&store, 1, 2, &before_opts), 1);
+    ASSERT_INT("cursor before deleted range unchanged", cur_before, 0);
+    ASSERT_INT("count after first delete", repl_command_store_count(&store), 3);
+
+    /* Reset to 5 entries for the next case. */
+    repl_command_store_insert_one(&store, 1, &cmd, NULL);
+    repl_command_store_insert_one(&store, 2, &cmd, NULL);
+    ASSERT_INT("count back to 5", repl_command_store_count(&store), 5);
+
+    /* Cursor inside the deleted range — snaps to range start. */
+    int cur_inside = 2;
+    ReplStoreMutOpts inside_opts = { .flags = 0, .cursor_inout = &cur_inside };
+    ASSERT_INT("delete with cursor inside range",
+               repl_command_store_delete_range(&store, 1, 2, &inside_opts), 1);
+    ASSERT_INT("cursor inside snaps to range start", cur_inside, 1);
+
+    /* Reset to 5 entries again. */
+    repl_command_store_insert_one(&store, 1, &cmd, NULL);
+    repl_command_store_insert_one(&store, 2, &cmd, NULL);
+    ASSERT_INT("count back to 5 (again)", repl_command_store_count(&store), 5);
+
+    /* Cursor past the deleted range — shifts left by count. */
+    int cur_past = 4;
+    ReplStoreMutOpts past_opts = { .flags = 0, .cursor_inout = &cur_past };
+    ASSERT_INT("delete with cursor past range",
+               repl_command_store_delete_range(&store, 1, 2, &past_opts), 1);
+    ASSERT_INT("cursor past range shifted left by count", cur_past, 2);
 }
 
 int main(void) {
@@ -480,7 +523,7 @@ int main(void) {
     test_repl_command_store_clear();
     test_repl_command_store_delete_from_middle();
     test_repl_command_store_insert_at_end();
-    test_repl_command_store_load_with_negative_edit_line();
+    test_repl_command_store_delete_cursor_math();
 
     printf("\n");
     return test_harness_report(&g_harness, "test_repl_command_store");

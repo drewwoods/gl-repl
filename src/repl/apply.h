@@ -45,6 +45,22 @@ int  repl_apply_can_apply_compiled_change(const ReplCompiledChange *change);
  * command array. Returns 1 on success, 0 on capacity failure or
  * out-of-bounds. NO_CHANGE is a no-op success.
  *
+ * `cursor_inout` is an optional caller-owned cursor pointer. When
+ * non-NULL and `change->adjust_edit_line` is set, INSERT_ONE /
+ * INSERT_MANY pass it through to the store so the standard insert
+ * math shifts the caller's int. DELETE_RANGE passes it
+ * unconditionally (gating is a caller choice — pass NULL when no
+ * cursor math is desired). Pre-insert deletes (the optional
+ * `delete_count > 0` path that runs before INSERT_*) pass NULL to
+ * preserve the historical behavior where the pre-delete did not
+ * shift the cursor. REPLACE_ONE and LOAD_ALL have no cursor
+ * parameter — replace never shifts, and LOAD_ALL's target cursor
+ * is caller policy (apply `change->pos` separately after a
+ * successful apply if desired).
+ *
+ * Apply itself never reads or writes editor state. The cursor
+ * lives where the caller put it.
+ *
  * Callers that drive the full transaction shape (predef-ops +
  * editor-buffer + cmd-store) should preflight with
  * `repl_apply_can_apply_compiled_change()` before any mutation;
@@ -52,7 +68,8 @@ int  repl_apply_can_apply_compiled_change(const ReplCompiledChange *change);
  * editor text without their matching cmd-store entry. The
  * preflight + apply pair is wrapped by
  * `editor_commit_apply_compiled_change()`. */
-int  repl_apply_compiled_change(const ReplCompiledChange *change);
+int  repl_apply_compiled_change(const ReplCompiledChange *change,
+                                int *cursor_inout);
 
 /* Replay the predef-variable side-effects in `change` against the
  * shared eval table. UNDECLARE entries fire first (and cascade
