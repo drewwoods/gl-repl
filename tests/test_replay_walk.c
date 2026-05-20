@@ -172,7 +172,7 @@ static void test_walker_resolves_funcn_args_at_cursor(void) {
     editor_feed_line("glPopMatrix();");
 
     repl_state_mark_flat_dirty();
-    repl_flatten_commands();
+    repl_flatten_commands(editor_state_edit_line());
 
     int cursor_line = find_source_line("glVertex3f");
     ASSERT_TRUE("found a CMD_VERTEX3F to use as cursor", cursor_line >= 0);
@@ -230,7 +230,7 @@ static void test_walker_fires_on_each_cmd_at_cursor(void) {
     editor_feed_line("glPopMatrix();");
 
     repl_state_mark_flat_dirty();
-    repl_flatten_commands();
+    repl_flatten_commands(editor_state_edit_line());
 
     int cursor_line = find_source_line("glVertex3f");
     ASSERT_TRUE("found cursor line", cursor_line >= 0);
@@ -277,7 +277,7 @@ static void test_walker_stop_flag_halts(void) {
     editor_feed_line("glPopMatrix();");
 
     repl_state_mark_flat_dirty();
-    repl_flatten_commands();
+    repl_flatten_commands(editor_state_edit_line());
 
     int cursor_line = find_source_line("glVertex3f");
     ASSERT_TRUE("found cursor line", cursor_line >= 0);

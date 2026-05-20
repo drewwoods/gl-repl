@@ -2081,7 +2081,7 @@ int main() {
         glr_app_reset_all(); declare_test_vars();
         editor_feed_line("glVertex3f(0, 0, 0);");
         editor_feed_line("glVertex3f(1, 0, 0);");
-        repl_flatten_commands();
+        repl_flatten_commands(editor_state_edit_line());
 
         ASSERT_INT("replay key ctrl-r consumed",
                    replay_handle_key(KEY_CTRL_R), 1);
@@ -2141,7 +2141,7 @@ int main() {
             snprintf(line, sizeof(line), "glVertex3f(%d, 0, 0);", i);
             editor_feed_line(line);
         }
-        repl_flatten_commands();
+        repl_flatten_commands(editor_state_edit_line());
 
 
         ui_state_viewport_set_size(800, 230);
@@ -2195,7 +2195,7 @@ int main() {
         editor_feed_line("gluVertex(0, 1, 0);");
         editor_feed_line("gluEnd();");
         editor_feed_line("gluEnd();");
-        repl_flatten_commands();
+        repl_flatten_commands(editor_state_edit_line());
 
         replay_mode = REPLAY_MODE_VERTEX;
         replay_start();
@@ -2227,7 +2227,7 @@ int main() {
         editor_feed_line("glVertex3f(0, 0, 0);");
         editor_feed_line("glVertex3f(x, y, z);");
         editor_feed_line("glVertex3f(2, 0, 0);");
-        repl_flatten_commands();
+        repl_flatten_commands(editor_state_edit_line());
 
 
         ui_state_viewport_set_size(800, 230);
@@ -2966,7 +2966,7 @@ int main() {
         glr_app_reset_all();
         editor_feed_line("glVertex3f(0,0,0);");
         editor_feed_line("glVertex3f(1,1,1);");
-        repl_flatten_commands();
+        repl_flatten_commands(editor_state_edit_line());
 
         /* 1. Status TTL decrement */
         ui_state_status_mut()->ttl = 10;

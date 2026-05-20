@@ -335,7 +335,7 @@ static ParityResult run_one_case(const TraceProgram *prog) {
     for (int li = 0; prog->lines[li]; li++) {
         editor_feed_line(prog->lines[li]);
     }
-    repl_flatten_commands();
+    repl_flatten_commands(editor_state_edit_line());
 
     /* Init+destroy bracket the executor's gluNewTess / gluTessCallback /
      * gluDeleteTess setup — these are REPL-internal, not user-emitted GL,

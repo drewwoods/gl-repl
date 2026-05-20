@@ -212,11 +212,14 @@ void repl_compiled_change_rollback_alias(const ReplCompiledChange *change);
 void repl_compiled_change_to_text_change(const ReplCompiledChange *in,
                                          SourceTextChange *out);
 
-/* Build a compile context from the live REPL state. Convenience
- * helper for callers in transition; once the editor commit
- * orchestration owns this, the caller will assemble the context
- * directly from EditorState + ReplState handles. */
-ReplCompileContext repl_compile_context_from_live(void);
+/* Build a compile context from the live REPL state + a
+ * caller-supplied edit-line index. The caller passes the value
+ * because β forbids REPL pipeline code from calling
+ * editor_state_edit_line(); callers above the boundary
+ * (controllers, editor commit code, tests) read the cursor and
+ * pass it in. Phase 3.6.1 of
+ * plans/in-review/edit-line-ownership.md. */
+ReplCompileContext repl_compile_context_from_live(int edit_line_idx);
 
 /* Compile a `float name[, name2 ...][ = expr];` declaration into a
  * ReplCompiledChange describing the source change + predef ops.

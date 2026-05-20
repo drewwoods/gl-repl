@@ -160,16 +160,20 @@ void repl_compiled_change_to_text_change(const ReplCompiledChange *in,
     }
 }
 
-ReplCompileContext repl_compile_context_from_live(void) {
+ReplCompileContext repl_compile_context_from_live(int edit_line_idx) {
     /* insert_mode defaults to 0 (overwrite mode). The non-editor load
      * path (src/repl/load.c, demo, parse tests) always appends at the
      * end, so 0 is correct. The editor-side callers (glr_ctrl.c
      * variable-panel commit, editor commit pipeline) overwrite
      * ctx.insert_mode = editor_insert_mode() after this returns —
      * insert mode is editor state, not REPL state, so the REPL
-     * pipeline doesn't reach for it. */
+     * pipeline doesn't reach for it.
+     *
+     * edit_line_idx is supplied by the caller (β: REPL pipeline does
+     * not reach into editor_state_* for the cursor). Phase 3.6.1 of
+     * plans/in-review/edit-line-ownership.md. */
     ReplCompileContext ctx = {
-        .edit_line       = repl_state_edit_line(),
+        .edit_line       = edit_line_idx,
         .document_count  = repl_state_document_count(),
         .insert_mode     = 0,
         .text            = source_document_view(),

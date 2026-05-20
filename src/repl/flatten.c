@@ -142,11 +142,15 @@ static int flatten_source_cmd_is_flat_omitted(CmdType type) {
 }
 
 /* Determine which flat-command range corresponds to the innermost
- * glBegin/glEnd block containing repl_state_edit_line(). The result is stored in
- * g_current_block_begin / g_current_block_end and used by
+ * glBegin/glEnd block containing edit_line_idx. The result is stored
+ * in g_current_block_begin / g_current_block_end and used by
  * repl_flat_cmd_matches_cursor() to highlight the active geometry
- * batch in the 3D view. */
-void repl_flatten_refresh_current_block_highlight(void) {
+ * batch in the 3D view.
+ *
+ * edit_line_idx is supplied by the caller (β: REPL pipeline does not
+ * call editor_state_*). Phase 3.6.2 of
+ * plans/in-review/edit-line-ownership.md. */
+void repl_flatten_refresh_current_block_highlight(int edit_line_idx) {
     const GLCmd *flat_cmds = repl_state_flat_program_cmds();
     int flat_cmd_count = repl_state_flat_program_count();
     int current_block_begin = -1;
@@ -154,7 +158,7 @@ void repl_flatten_refresh_current_block_highlight(void) {
 
     /* Scan repl_state_document_cmds_mut() alongside g_flat_cmds to find the
      * innermost BEGIN/END block (in flat-cmd indices) that contains
-     * repl_state_edit_line() in source-cmd space. Skips structural and
+     * edit_line_idx in source-cmd space. Skips structural and
      * document-only rows that don't appear in the flat stream. */
     {
         int begin_src = -1, begin_flat = -1;
@@ -167,13 +171,13 @@ void repl_flatten_refresh_current_block_highlight(void) {
             while (fcur < flat_cmd_count && !flat_cmds[fcur].valid) fcur++;
             if (fcur >= flat_cmd_count) break;
             if (repl_state_document_cmds_mut()[ci].type == CMD_BEGIN) {
-                if (ci <= repl_state_edit_line()) { begin_src = ci; begin_flat = fcur; }
+                if (ci <= edit_line_idx) { begin_src = ci; begin_flat = fcur; }
             } else if (repl_state_document_cmds_mut()[ci].type == CMD_END) {
-                if (begin_src >= 0 && ci > repl_state_edit_line()) {
+                if (begin_src >= 0 && ci > edit_line_idx) {
                     current_block_begin = begin_flat;
                     current_block_end = fcur;
                     break;
-                } else if (begin_src >= 0 && ci <= repl_state_edit_line()) {
+                } else if (begin_src >= 0 && ci <= edit_line_idx) {
                     begin_src = -1; begin_flat = -1;
                 }
             }
@@ -183,7 +187,7 @@ void repl_flatten_refresh_current_block_highlight(void) {
 
     repl_state_flat_program_set_current_block(current_block_begin,
                                               current_block_end,
-                                              repl_state_edit_line());
+                                              edit_line_idx);
 }
 
 /* Recursively expand source_commands[start..end_idx) into the destination
@@ -624,7 +628,7 @@ int repl_flatten_program(const ReplFlattenOptions *options,
     return result->ok;
 }
 
-void repl_flatten_commands(void) {
+void repl_flatten_commands(int edit_line_idx) {
     ReplFlatProgramState *flat_program = repl_state_flat_program_mut();
     ReplFlattenOptions options = {
         .source_cmds = repl_state_document_cmds_mut(),
@@ -645,7 +649,7 @@ void repl_flatten_commands(void) {
     if (result.status[0])
         repl_set_status(result.status);
 
-    repl_flatten_refresh_current_block_highlight();
+    repl_flatten_refresh_current_block_highlight(edit_line_idx);
 }
 
 static unsigned int line_func_scope_mask(int line) {
@@ -682,7 +686,10 @@ static unsigned int line_func_scope_mask(int line) {
     return mask;
 }
 
-int repl_flat_cmd_matches_cursor(int flat_idx) {
+/* edit_line_idx is supplied by the caller (β: REPL pipeline does
+ * not call editor_state_*). Phase 3.6.2 of
+ * plans/in-review/edit-line-ownership.md. */
+int repl_flat_cmd_matches_cursor(int flat_idx, int edit_line_idx) {
     const GLCmd *flat_cmds = repl_state_flat_program_cmds();
     int flat_cmd_count = repl_state_flat_program_count();
     int current_block_begin = repl_state_flat_program_current_block_begin();
@@ -690,21 +697,21 @@ int repl_flat_cmd_matches_cursor(int flat_idx) {
     int current_block_line = repl_state_flat_program_current_block_source_line();
 
     if (flat_idx < 0 || flat_idx >= flat_cmd_count) return 0;
-    if (repl_state_edit_line() < 0 || repl_state_edit_line() >= repl_state_document_count()) return 0;
+    if (edit_line_idx < 0 || edit_line_idx >= repl_state_document_count()) return 0;
     if (!flat_cmds[flat_idx].valid) return 0;
-    if (current_block_line != repl_state_edit_line())
-        repl_flatten_refresh_current_block_highlight();
+    if (current_block_line != edit_line_idx)
+        repl_flatten_refresh_current_block_highlight(edit_line_idx);
 
     const GLCmd *cmd = &flat_cmds[flat_idx];
-    const GLCmd *cursor_cmd = &repl_state_document_cmds_mut()[repl_state_edit_line()];
+    const GLCmd *cursor_cmd = &repl_state_document_cmds_mut()[edit_line_idx];
 
     if (cursor_cmd->valid && cursor_cmd->type == CMD_CALL) {
-        return cmd->call_src_cmd_idx == repl_state_edit_line() ||
-               cmd->root_call_src_cmd_idx == repl_state_edit_line();
+        return cmd->call_src_cmd_idx == edit_line_idx ||
+               cmd->root_call_src_cmd_idx == edit_line_idx;
     }
 
     {
-        unsigned int cursor_func_mask = line_func_scope_mask(repl_state_edit_line());
+        unsigned int cursor_func_mask = line_func_scope_mask(edit_line_idx);
         if (cursor_func_mask != 0)
             return (cmd->func_scope_mask & cursor_func_mask) != 0;
     }
@@ -730,7 +737,7 @@ int repl_flat_cmd_matches_cursor(int flat_idx) {
                     flat_cmds[i].type == CMD_COLOR4F)
                     last_color_src = flat_cmds[i].src_cmd_idx;
             }
-            if (last_color_src == repl_state_edit_line())
+            if (last_color_src == edit_line_idx)
                 return 1;
         }
         break;
@@ -747,7 +754,7 @@ int repl_flat_cmd_matches_cursor(int flat_idx) {
                 if (flat_cmds[i].type == CMD_NORMAL3F)
                     last_normal_src = flat_cmds[i].src_cmd_idx;
             }
-            if (last_normal_src == repl_state_edit_line())
+            if (last_normal_src == edit_line_idx)
                 return 1;
         }
         break;
@@ -763,7 +770,7 @@ int repl_flat_cmd_matches_cursor(int flat_idx) {
                 if (flat_cmds[i].type == CMD_TESS_COLOR)
                     last_tess_color_src = flat_cmds[i].src_cmd_idx;
             }
-            if (last_tess_color_src == repl_state_edit_line())
+            if (last_tess_color_src == edit_line_idx)
                 return 1;
         }
         break;
@@ -779,7 +786,7 @@ int repl_flat_cmd_matches_cursor(int flat_idx) {
                 if (flat_cmds[i].type == CMD_TESS_NORMAL)
                     last_tess_normal_src = flat_cmds[i].src_cmd_idx;
             }
-            if (last_tess_normal_src == repl_state_edit_line())
+            if (last_tess_normal_src == edit_line_idx)
                 return 1;
         }
         break;
@@ -788,5 +795,5 @@ int repl_flat_cmd_matches_cursor(int flat_idx) {
         break;
     }
 
-    return cmd->src_cmd_idx == repl_state_edit_line();
+    return cmd->src_cmd_idx == edit_line_idx;
 }

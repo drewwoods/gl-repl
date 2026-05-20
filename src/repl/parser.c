@@ -253,9 +253,17 @@ static int resolve_enum_arg_slot(const char *raw,
 static int parse_command(const char *line, GLCmd *cmd,
                          char *text_out, int text_sz,
                          const ReplParseContext *ctx) {
-    int source_line_idx = ctx ? ctx->source_line_idx : repl_state_edit_line();
-    ExprVar *vars = ctx ? ctx->vars : NULL;
-    int num_vars = ctx ? ctx->num_vars : 0;
+    /* All production / test callers pass a non-NULL context (the
+     * legacy no-ctx wrappers were retired earlier). Phase 3.6.3 of
+     * plans/in-review/edit-line-ownership.md removed the
+     * `repl_state_edit_line()` fallback that lived here — it was
+     * confirmed dead code, and keeping it would force the parser to
+     * reach into REPL-state for cursor info that has no business
+     * being parser-internal. */
+    if (!ctx) return 0;
+    int source_line_idx = ctx->source_line_idx;
+    ExprVar *vars = ctx->vars;
+    int num_vars = ctx->num_vars;
     char buf[MAX_LINE_LEN];
 
     /* Null-safe text helpers: write to text_out when provided */

@@ -187,7 +187,7 @@ int main() {
         vars_arr[tmp_idx].value  = 0.0f;
         vars_arr[tmp2_idx].value = 0.0f;
 
-        repl_flatten_commands();
+        repl_flatten_commands(editor_state_edit_line());
         ReplExecutionOptions opts = {0};
         opts.flat_cmd_count = repl_state_flat_program_count();
         opts.program = repl_state_flat_program_view();
@@ -228,7 +228,7 @@ int main() {
          * repl_execute_program here — the source contains glBegin/
          * glVertex3f/glEnd, and the live test runs without a GL
          * context (this binary links real libGL, not the stubs). */
-        repl_flatten_commands();
+        repl_flatten_commands(editor_state_edit_line());
 
         ASSERT_TRUE("if-true: tmp2 incremented once",
                     vars_arr[tmp2_idx].value == 1.0f);
@@ -259,7 +259,7 @@ int main() {
         ExprVar *vars_arr = repl_state_variables_mut()->predef_vars;
         vars_arr[tmp2_idx].value = 0.0f;
 
-        repl_flatten_commands();
+        repl_flatten_commands(editor_state_edit_line());
         ReplExecutionOptions opts = {0};
         opts.flat_cmd_count = repl_state_flat_program_count();
         opts.program = repl_state_flat_program_view();
@@ -286,7 +286,7 @@ int main() {
         editor_feed_line("  glVertex3f(r, 0, 0);");
         editor_feed_line("}");
         editor_feed_line("func0(2);");
-        repl_flatten_commands();
+        repl_flatten_commands(editor_state_edit_line());
         live_count = repl_state_flat_program_count();
         live_first = repl_state_flat_program_cmds()[0];
 

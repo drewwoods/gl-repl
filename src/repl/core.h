@@ -85,7 +85,7 @@ void repl_set_workspace_dir(const char *dir);
 /* Rebuild the live flat program from the current source commands (idempotent).
  * Expansion honors the laziness flag set by mark_normals_dirty(); call this
  * once per frame before execution if the source array changed. */
-void repl_flatten_commands(void);
+void repl_flatten_commands(int edit_line_idx);
 
 /* Recompute auto-normals for every glBegin/glEnd batch in the source
  * array. Called automatically when source commands are modified.
@@ -95,7 +95,8 @@ void repl_flatten_commands(void);
  * feature/decouple-repl-from-gl-repl-alt.md); callers pass the value
  * explicitly because `src/repl/autonormal.c` is a REPL pipeline TU and
  * cannot reach into glr_state. Pass 0 for an unconditional no-op. */
-void repl_recompute_autonormals(int autonormal_enabled);
+void repl_recompute_autonormals(int autonormal_enabled,
+                                int *edit_line_inout);
 
 /* Shared status/document helpers surfaced outside src/repl/core.c. */
 void        repl_set_status(const char *msg);
@@ -219,7 +220,7 @@ void repl_load_initial_commands(const char *import_file);
 void repl_reformat_program(void);
 
 /* --- Cursor / feed queries --------------------------------------------- */
-int  repl_flat_cmd_matches_cursor(int flat_idx);
+int  repl_flat_cmd_matches_cursor(int flat_idx, int edit_line_idx);
 int  repl_find_feeding_normal_cmd(int line_idx);
 int  repl_find_feeding_color_cmd(int line_idx);
 

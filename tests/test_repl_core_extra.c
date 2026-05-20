@@ -100,14 +100,14 @@ void test_utils() {
     editor_feed_line("glBegin(GL_TRIANGLES);");
     editor_feed_line("glVertex3f(0,0,0);");
     editor_feed_line("glVertex3f(1,0,0);");
-    repl_flatten_commands();
+    repl_flatten_commands(editor_state_edit_line());
 
     ASSERT_INT("count_vertices after 2 vtx", repl_count_vertices(), 2);
     ASSERT_INT("current_begin_mode in block", repl_current_begin_mode(), GL_TRIANGLES);
     ASSERT_INT("in_begin_block in block", repl_source_scope_in_begin_block(), 1);
 
     editor_feed_line("glEnd();");
-    repl_flatten_commands();
+    repl_flatten_commands(editor_state_edit_line());
     ASSERT_INT("current_begin_mode after end", repl_current_begin_mode(), GL_TRIANGLES);
     ASSERT_INT("in_begin_block after end", repl_source_scope_in_begin_block(), 0);
 
@@ -130,7 +130,7 @@ void test_repl_replay_advanced() {
     editor_feed_line("glVertex3f(0,0,0);");
     editor_feed_line("glVertex3f(1,1,1);");
     editor_feed_line("glVertex3f(2,2,2);");
-    repl_flatten_commands();
+    repl_flatten_commands(editor_state_edit_line());
 
     int full_flat_count = repl_state_flat_program_count();
     FlatProgramView live_program = repl_flat_program_view_live();
@@ -181,7 +181,7 @@ void test_io() {
 
     int r = repl_export_load_from_file(tmpf);
     ASSERT_INT("load_from_file return", r, 1);
-    repl_flatten_commands();
+    repl_flatten_commands(editor_state_edit_line());
     ASSERT_INT("count_vertices after load", repl_count_vertices(), 1);
 
     unlink(tmpf);
@@ -198,7 +198,7 @@ void test_execution() {
     printf("--- Execution functions ---\n");
     glr_app_reset_all(); declare_test_vars();
     editor_feed_line("n = 1;");
-    repl_flatten_commands();
+    repl_flatten_commands(editor_state_edit_line());
 
     repl_execute_commands();
 }
@@ -230,7 +230,7 @@ void test_user_scene() {
 
     /* Home slot stays populated after restore in the multi-scene model. */
     repl_load_user_scene();
-    repl_flatten_commands();
+    repl_flatten_commands(editor_state_edit_line());
     ASSERT_INT("count_vertices after restore", repl_count_vertices(), 1);
     ASSERT_INT("user_scene_valid after restore", repl_user_scene_valid(), 1);
     ASSERT_INT("active user scene == 0 after restore",
@@ -250,12 +250,12 @@ void test_user_scene_persists_across_example_switch() {
     ASSERT_INT("active user scene after restore", repl_active_user_scene(), 0);
 
     editor_feed_line("glVertex3f(2,2,2);");
-    repl_flatten_commands();
+    repl_flatten_commands(editor_state_edit_line());
     ASSERT_INT("edited home scene vertex count", repl_count_vertices(), 2);
 
     repl_load_example(0);
     repl_load_user_scene();
-    repl_flatten_commands();
+    repl_flatten_commands(editor_state_edit_line());
     ASSERT_INT("persisted home scene vertex count", repl_count_vertices(), 2);
 }
 
@@ -630,7 +630,7 @@ void test_inline_file_prompt_flow() {
      * cannot wipe the document. */
     glr_app_reset_all(); declare_test_vars();
     editor_feed_line("glVertex3f(11,22,33);");
-    repl_flatten_commands();
+    repl_flatten_commands(editor_state_edit_line());
     int verts_before_missing = repl_count_vertices();
     int active_before_missing = repl_active_user_scene();
 
@@ -650,7 +650,7 @@ void test_inline_file_prompt_flow() {
     ASSERT_TRUE("missing-file error visible in prompt",
                 strstr(editor_inline_file_prompt_error(),
                        "File not found") != NULL);
-    repl_flatten_commands();
+    repl_flatten_commands(editor_state_edit_line());
     ASSERT_INT("missing file does not wipe document",
                repl_count_vertices(), verts_before_missing);
     ASSERT_INT("missing file does not change active scene",
@@ -672,13 +672,13 @@ void test_inline_file_prompt_flow() {
     /* --- Commit on a directory -> stays open, no load ----------------- */
     glr_app_reset_all(); declare_test_vars();
     editor_feed_line("glVertex3f(7,8,9);");
-    repl_flatten_commands();
+    repl_flatten_commands(editor_state_edit_line());
     int verts_before_dir = repl_count_vertices();
     editor_inline_file_prompt_begin("/tmp");  /* well-known dir */
     editor_inline_file_prompt_handle_key('\r');
     ASSERT_INT("directory keeps prompt open",
                editor_inline_file_prompt_active(), 1);
-    repl_flatten_commands();
+    repl_flatten_commands(editor_state_edit_line());
     ASSERT_INT("directory commit does not replace document",
                repl_count_vertices(), verts_before_dir);
     editor_inline_file_prompt_cancel();
@@ -703,7 +703,7 @@ void test_inline_file_prompt_flow() {
                    editor_inline_file_prompt_active(), 0);
         ASSERT_STR("no error after successful load",
                    editor_inline_file_prompt_error(), "");
-        repl_flatten_commands();
+        repl_flatten_commands(editor_state_edit_line());
         ASSERT_INT("two vertices loaded via prompt",
                    repl_count_vertices(), 2);
 
@@ -738,7 +738,7 @@ void test_inline_file_prompt_flow() {
         /* Load the source file via the prompt. */
         editor_inline_file_prompt_begin(src_path);
         editor_inline_file_prompt_handle_key('\r');
-        repl_flatten_commands();
+        repl_flatten_commands(editor_state_edit_line());
 
         ASSERT_INT("load closes prompt on success",
                    editor_inline_file_prompt_active(), 0);
@@ -759,7 +759,7 @@ void test_inline_file_prompt_flow() {
         glr_app_reset_all(); declare_test_vars();
         editor_inline_file_prompt_begin(src_path);
         editor_inline_file_prompt_handle_key('\r');
-        repl_flatten_commands();
+        repl_flatten_commands(editor_state_edit_line());
         ASSERT_INT("load into empty doc closes prompt",
                    editor_inline_file_prompt_active(), 0);
         ASSERT_INT("load into empty doc loads 2 verts",
@@ -909,7 +909,7 @@ void test_my_scene_persists_edits_from_startup() {
 
     /* User adds a vertex in "My Scene". */
     editor_feed_line("glVertex3f(9,9,9);");
-    repl_flatten_commands();
+    repl_flatten_commands(editor_state_edit_line());
     ASSERT_INT("vertex present in My Scene", repl_count_vertices(), 1);
 
     /* Switch to example 0 -- this auto-saves slot 0 before overwriting. */
@@ -919,7 +919,7 @@ void test_my_scene_persists_edits_from_startup() {
 
     /* Return to My Scene -- should have exactly the user's vertex. */
     repl_load_user_scene_idx(0);
-    repl_flatten_commands();
+    repl_flatten_commands(editor_state_edit_line());
     ASSERT_INT("vertex restored after returning to My Scene",
                repl_count_vertices(), 1);
     ASSERT_INT("slot 0 active again", repl_active_user_scene(), 0);
@@ -1014,7 +1014,7 @@ void test_debug_dump_flat_commands() {
 
     /* Empty state: header, count=0, end marker - and no crash on NULL out. */
     glr_app_reset_all(); declare_test_vars();
-    repl_flatten_commands();
+    repl_flatten_commands(editor_state_edit_line());
     char *empty = capture_flat_dump();
     ASSERT_TRUE("empty dump captured", empty != NULL);
     if (empty) {
@@ -1063,7 +1063,7 @@ void test_debug_dump_flat_commands() {
     editor_feed_line("glVertex3f(1,0,0);");
     editor_feed_line("glVertex3f(0,1,0);");
     editor_feed_line("glEnd();");
-    repl_flatten_commands();
+    repl_flatten_commands(editor_state_edit_line());
 
     char *basic = capture_flat_dump();
     ASSERT_TRUE("basic dump captured", basic != NULL);
@@ -1118,7 +1118,7 @@ void test_debug_dump_flat_commands() {
     editor_feed_line("for(i, 0, 3) {");
     editor_feed_line("glVertex3f(i,0,0);");
     editor_feed_line("}");
-    repl_flatten_commands();
+    repl_flatten_commands(editor_state_edit_line());
 
     int vertex_flats = 0;
     for (int i = 0; i < repl_state_flat_program_count(); i++)
@@ -1150,7 +1150,7 @@ void test_debug_dump_flat_commands() {
     editor_feed_line("glVertex3f(0,0,0);");
     editor_feed_line("}");
     editor_feed_line("func0();");
-    repl_flatten_commands();
+    repl_flatten_commands(editor_state_edit_line());
 
     int scoped_hits = 0;
     for (int i = 0; i < repl_state_flat_program_count(); i++) {

@@ -48,7 +48,7 @@ static void test_replay_basic_controls(void) {
     add_mock_cmd(0, CMD_COLOR3F);
     add_mock_cmd(1, CMD_VERTEX3F);
     repl_state_mark_flat_dirty();
-    repl_flatten_commands();
+    repl_flatten_commands(editor_state_edit_line());
 
     ASSERT_TRUE("not active initially", !g_replay_active);
 
@@ -81,7 +81,7 @@ static void test_replay_stepping(void) {
     add_mock_cmd(2, CMD_VERTEX3F);
     add_mock_cmd(3, CMD_END);
     repl_state_mark_flat_dirty();
-    repl_flatten_commands();
+    repl_flatten_commands(editor_state_edit_line());
 
     replay_start();
     g_replay_state = REPLAY_PAUSED;
@@ -111,7 +111,7 @@ static void test_replay_tessellation_stepping(void) {
     add_mock_cmd(3, CMD_TESS_END);
     add_mock_cmd(4, CMD_TESS_END);
     repl_state_mark_flat_dirty();
-    repl_flatten_commands();
+    repl_flatten_commands(editor_state_edit_line());
 
     replay_start();
     g_replay_mode = REPLAY_MODE_POLYGON;
@@ -131,7 +131,7 @@ static void test_replay_fade_batches(void) {
     glr_app_reset_all();
     add_mock_cmd(0, CMD_VERTEX3F);
     repl_state_mark_flat_dirty();
-    repl_flatten_commands();
+    repl_flatten_commands(editor_state_edit_line());
 
     replay_start();
     replay_push_fade_batch(0, 1);
@@ -156,7 +156,7 @@ static void test_replay_input(void) {
     glr_app_reset_all();
     add_mock_cmd(0, CMD_VERTEX3F);
     repl_state_mark_flat_dirty();
-    repl_flatten_commands();
+    repl_flatten_commands(editor_state_edit_line());
 
     // When off
     replay_handle_key(KEY_CTRL_R);
@@ -189,7 +189,7 @@ static void test_replay_modifiers(void) {
     glr_app_reset_all();
     add_mock_cmd(0, CMD_VERTEX3F);
     repl_state_mark_flat_dirty();
-    repl_flatten_commands();
+    repl_flatten_commands(editor_state_edit_line());
     replay_start();
 
 #ifndef USE_GLUT
@@ -210,7 +210,7 @@ static void test_bench_helpers(void) {
     add_mock_cmd(1, CMD_VERTEX3F);
     add_mock_cmd(2, CMD_VERTEX3F);
     repl_state_mark_flat_dirty();
-    repl_flatten_commands();
+    repl_flatten_commands(editor_state_edit_line());
 
     int old_pcs[] = {0, 1};
     int new_pcs[] = {1, 2};
@@ -225,7 +225,7 @@ static void test_misc_helpers(void) {
     glr_app_reset_all();
     add_mock_cmd(0, CMD_VERTEX3F);
     repl_state_mark_flat_dirty();
-    repl_flatten_commands();
+    repl_flatten_commands(editor_state_edit_line());
     replay_start();
 
     int limit = replay_exec_limit();
@@ -280,7 +280,7 @@ static void test_replay_var_assign_uses_flatten_args(void) {
     ASSERT_TRUE("u predef declared", u_idx >= 0);
 
     repl_state_mark_flat_dirty();
-    repl_flatten_commands();
+    repl_flatten_commands(editor_state_edit_line());
     /* Clear dirty so replay_start does NOT re-flatten with the mutated
      * t below — we want args[0]=5 frozen at this flatten. */
     repl_state_flat_program_clear_dirty();

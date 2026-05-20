@@ -55,7 +55,11 @@ int repl_load_apply_line(const char *line, char *err, int err_size) {
      * CMD_EMPTY / CMD_COMMENT source rows so editor/export round-trips
      * preserve line count. Flatten drops both from the executable stream. */
 
-    ReplCompileContext ctx = repl_compile_context_from_live();
+    /* β: REPL pipeline files can't call editor_state_*. Phase 3.6.5
+     * hoists this to a repl_load_apply_line(int *edit_line_inout)
+     * parameter; for now use the REPL-state accessor (REPL→REPL is
+     * allowed) and pass the value into the context. */
+    ReplCompileContext ctx = repl_compile_context_from_live(repl_state_edit_line());
     ReplCompiledChange change;
     repl_compiled_change_init(&change);
     int failed = 0;
