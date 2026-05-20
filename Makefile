@@ -551,9 +551,12 @@ REPL_DEMO_DEP_SRCS = src/repl/format.c \
 # (text_panel, text_layout, text_search). The REPL-flavored
 # controllers are not linked at all; the demo provides its own
 # generic input dispatcher (tools/editor_demo/input.c) and File menu
-# (tools/editor_demo/menu.c). repl_shim.c is a one-symbol ledger
-# (repl_state_edit_line) for the acknowledged state.c edit-line leak;
-# the rest of the prior ~85-stub shim is gone with the controller files.
+# (tools/editor_demo/menu.c). Phase 5 of
+# plans/in-review/edit-line-ownership.md deleted the former
+# tools/editor_demo/repl_shim.c — the prior ~85-stub shim went away
+# with the controller files (Phase 8.7 of editor-demo.md) and the
+# residual edit-line forwarder went away with the storage flip
+# (Phase 4 of edit-line-ownership.md).
 EDITOR_DEMO_DEP_SRCS = src/editor/edit_ops.c \
                        src/editor/state.c \
                        src/ui/text_layout.c \
@@ -755,12 +758,11 @@ repl_demo: FORCE $(REPL_DEMO_BIN) ## Build the standalone REPL pipeline demo.
 # stand in for the REPL-flavored controller files
 # (src/editor/{input,commit,clipboard,undo,reformat,search,completion}.c
 # and the inline overlays), which Phase 8.7 dropped from this link
-# set entirely. tools/editor_demo/repl_shim.c is a one-symbol ledger
-# for the residual state.c edit-line leak (Phase 8 "Editor files
-# that aren't yet generic"); any second entry signals a layering
-# regression worth investigating.
+# set entirely. Phase 5 of plans/in-review/edit-line-ownership.md
+# deleted the former tools/editor_demo/repl_shim.c — after Phase 4
+# moved edit-line storage to EditorState, the shim's
+# repl_state_edit_line stubs had no remaining callers.
 EDITOR_DEMO_OBJS = $(OBJDIR)/tools/editor_demo/editor_demo.o \
-                   $(OBJDIR)/tools/editor_demo/repl_shim.o \
                    $(OBJDIR)/tools/editor_demo/menu.o \
                    $(OBJDIR)/tools/editor_demo/input.o \
                    $(addprefix $(OBJDIR)/,$(EDITOR_DEMO_DEP_SRCS:.c=.o))

@@ -17,16 +17,14 @@
  *   - prof.c                 : profiling.
  *   - tools/editor_demo/input.c : the demo's own generic key dispatcher.
  *   - tools/editor_demo/menu.c  : the demo's own File menu.
- *   - tools/editor_demo/repl_shim.c : one-symbol ledger
- *                                     (repl_state_edit_line; the acknowledged
- *                                     state.c leak named in the plan's
- *                                     "Editor files that aren't yet generic"
- *                                     inventory).
  *
  * What does NOT link: anything under src/repl, src/app, src/scene, or
  * src/widgets, plus the REPL-flavored editor controller files listed
- * above. There is no fake EditorServices instance and no per-symbol
- * REPL / glr / ui / tutorial stub block in the shim.
+ * above. There is no fake EditorServices instance, no per-symbol
+ * REPL / glr / ui / tutorial stub block, and (since Phase 4 of
+ * plans/done/edit-line-ownership.md flipped storage and Phase 5
+ * deleted the shim file) no repl_shim.c either — the editor now
+ * owns its edit-line cursor on EditorState.document.edit_line_idx.
  *
  * v1 behavior: type characters into the input row, backspace to delete,
  * arrow keys / Home / End to move within the row, click the File menu
@@ -64,13 +62,9 @@ static int  g_demo_scroll = 0;
 /* Build a UiTextPanelSnapshot from EditorState. One TEXT row per
  * buffer line plus one INPUT row at the active edit position.
  * Caller-owned rows[] storage stays valid for the duration of the
- * render/hit-test call.
- *
- * The demo does not (yet) own its own edit-line cursor; it reads
- * the editor's current edit-line through the EditorInputView, which
- * itself reads `repl_state_edit_line` via the shim. A follow-up
- * phase moves edit-line ownership into EditorState so the demo
- * doesn't need that shim stub. */
+ * render/hit-test call. Edit-line lives on EditorState.document
+ * (Phase 4 of plans/done/edit-line-ownership.md); read it via
+ * editor_state_edit_line(). */
 static void demo_fill_text_row(UiTextPanelRow *row, const char *text,
                                int line_idx) {
     memset(row, 0, sizeof(*row));
