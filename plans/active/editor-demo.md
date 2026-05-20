@@ -58,53 +58,131 @@ not a regression: the next iteration either (a) shrinks those
 widget/UI modules' transitive REPL deps so they can link in the
 demo, or (b) keeps stubbing them and accepts the larger shim.
 
-### Next-up work — needs review before continuing
+## Updated direction (2026-05-20) — generic text editor demo + shared edit_ops
 
-1. **Wire real-GL `editor_demo` to actually render** (the user's
-   chosen next direction).
-   - Build a `UiTextPanelSnapshot` from `EditorState` in the demo's
-     `demo_display_func` and call `ui_text_panel_render`.
-   - This will surface more undefined symbols (the rendering path
-     pulls in additional `ui_*` and possibly `repl_*` calls). Each
-     becomes a new stub or a new service-callback decision.
-   - Acts as the second forcing function: the link succeeds *and*
-     the demo renders text and updates as the user types.
+Review surfaced a sharper architectural cleavage than the original
+plan named. Restating the goal in the new framing:
 
-2. **Iteratively peel `repl_shim.c`** by migrating high-value direct
-   stub groups into `EditorServices` callbacks. Best candidates,
-   ordered by stub-shrink:
-   - **Command store mutators** (~5 stubs → 4 service fields:
-     `command_store_clear / _insert_one / _replace_one / _load`).
-   - **Func-alias mutators** (~6 stubs → 1-2 coarsened service
-     fields per plan: `func_alias_lookup_or_alloc`, `func_alias_set`).
-   - **Source-scope queries** (~5 stubs → 4 service fields).
-   - Each migration drops the `check-editor-repl-surface` baseline
-     by the number of unique symbols removed from the editor source
-     files.
+- **`src/editor/input.c` is the *REPL editor input dispatcher*, not
+  a generic editor controller.** Most of its key handlers are
+  REPL-specific (`;` commit, Tab GL-autocomplete, Ctrl+R reformat,
+  tutorial guards, comment toggle) and most of its dispatch reaches
+  into REPL machinery (command store, compile, source scope).
+- **`src/editor/{commit,clipboard,undo,reformat}.c` are similarly
+  REPL-flavored controllers.** They orchestrate REPL parse →
+  compile → apply, validate `CMD_VAR_DECLARE` ranges in clipboard
+  ops, snapshot REPL predef vars + scratch arrays in undo, etc.
+- **`src/editor/state.c` and `src/editor/search.c` *are* genuinely
+  generic** — text buffer + cursor + selection + undo-ring storage
+  and case-insensitive text find. These are the editor data model.
 
-3. **Tutorial / UI / color picker stub group** (~22 stubs combined).
-   Trickiest because these are editor-inherent in principle — the
-   plan deliberately did not abstract them. The current shim is
-   working around their transitive REPL deps. Two paths to evaluate:
-   - Audit `src/widgets/tutorial.c`, `src/ui/menu_bar.c`,
-     `src/widgets/color_picker_state.c` etc. to see which REPL deps
-     can be removed (turning each into a true downward link
-     candidate).
-   - Or accept the stub footprint and document it as the cost of
-     keeping the chrome-stays-direct decision honest.
+The cleaner factoring the review converged on:
 
-### Open question for the review
+| Module | Role |
+|--------|------|
+| `src/editor/state.c` (existing) | Data model: text buffer, cursor, selection, undo storage. **Generic.** |
+| `src/editor/search.c` (existing) | Case-insensitive text find. **Generic.** |
+| `src/editor/edit_ops.{c,h}` (**new**) | Generic text-editing primitives extracted from `input.c`: cursor moves, character insert/delete, selection extend/clear, text-only clipboard, search-overlay input. The shared library both consumers use. |
+| `src/editor/input.c` (existing, relabelled) | **REPL editor input dispatcher** — REPL key bindings + REPL-specific orchestration on top of `edit_ops` primitives. Stays where it is; demo does *not* link it. |
+| `tools/editor_demo/input.c` (**new**) | **Generic editor input dispatcher** — plain-text key bindings on top of the same `edit_ops` primitives. No REPL. |
 
-The chrome-stays-direct decision rested on the claim that linking
-UI / widgets directly costs less than abstracting them. The current
-shim shows ~22 symbols stubbed because those modules pull REPL in
-transitively — that's a *hidden* cost the decision didn't anticipate.
-Worth confirming the decision still holds, or whether a narrow
-`EditorChromeServices` (covering just the tutorial / menu / picker
-entry points the editor actually calls, not the full 9-field draft)
-would shrink the shim with less effort than fixing the widget
-modules' REPL coupling. Either choice is defensible; the data is
-new and warrants a fresh look.
+This is the right answer to the question the demo was forcing.
+"Chrome stays direct" was right for *truly editor-inherent* chrome
+(code panel, file save/load menu, search overlay) — those modules
+genuinely don't need REPL. It was wrong for the REPL-feature widgets
+(tutorial, color picker for GL color literals, variable panel for
+predef-vars, replay): those *are* REPL-specific, not editor-inherent,
+and the demo correctly should not link them. The previous shim
+stubbed their APIs because `src/editor/input.c` calls them directly;
+once the demo stops linking input.c, those stubs go away with it.
+
+### Generic editor demo — locked scope
+
+What `editor_demo` is:
+
+- A plain text editor in a GLUT window.
+- Renders text via `src/ui/text_panel.c` (the generic renderer from
+  Phase 2). Built from a `UiTextPanelSnapshot` constructed in the
+  demo's display callback from `EditorState`.
+- Generic input dispatch in `tools/editor_demo/input.c` —
+  character insertion, backspace/delete, arrow keys + word jumps,
+  Home/End, Shift+arrow selection, double-click word select,
+  drag selection, Ctrl+A/C/X/V (text only), Ctrl+Z/Y undo/redo,
+  Ctrl+F find overlay, scroll wheel.
+- A **menu bar with a File menu**. Load/Save items render and are
+  hit-testable but their *handlers can be unimplemented* initially
+  (status messages or no-ops). The point is to exercise the
+  ability to *create* menu items in a generic editor — the
+  semantics come later.
+- A **search overlay** if the find input is shared with the
+  REPL editor cleanly.
+
+What `editor_demo` is NOT:
+
+- **No status bar.** The current statusbar is entwined with REPL
+  status sinks / `repl_set_status` / scene status banners; not
+  worth refitting for the demo. Drop the chrome flag.
+- **No tutorial.** REPL-feature; the demo doesn't link
+  `src/widgets/tutorial.c` and doesn't need its API stubs.
+- **No color picker.** Picker exists to edit `glColor3f` / `glColor4f`
+  literals — REPL-feature.
+- **No variable panel / slider.** Predef-var sliders — REPL-feature.
+- **No replay HUD / annotations.** REPL-feature.
+- **No GL grammar autocomplete.** No grammar to suggest from. The
+  completion provider seam stays unregistered (the existing
+  early-return path handles this cleanly).
+- **No `;` commit semantics.** A text-editor "commit" just inserts
+  a newline / advances to the next row. The REPL's parse → compile
+  → apply pipeline never runs.
+
+### Why this is cleaner
+
+1. **Honest layering.** `edit_ops` is the named, testable boundary
+   for "generic text editing." `input.c` is the named boundary for
+   "REPL editing." Each module has one job.
+2. **The forcing function works the right way.** Anything the
+   generic demo needs *must* be in `edit_ops`. If a primitive is
+   missing, the demo can't compile without it — extraction
+   pressure points are obvious.
+3. **The shim shrinks dramatically.** Demo stops linking
+   `src/editor/{input,commit,clipboard,undo,reformat,completion}.c`
+   — the files that call most of the REPL surface. The remaining
+   shim is whatever `state.c` / `search.c` / new `edit_ops.c`
+   still call into REPL, which should be near-zero.
+4. **Code reuse is real, not notional.** Both the REPL app and the
+   demo call the same `edit_ops` primitives, so the library has
+   two consumers exercising it.
+5. **Better testability.** Unit-testing `edit_ops` primitives
+   without going through the full REPL commit chain becomes
+   straightforward.
+
+Trade-off: there are now two input dispatchers to maintain
+(`src/editor/input.c` for REPL key bindings, `tools/editor_demo/input.c`
+for generic). Each is shorter than today's input.c because the
+primitive logic moved to `edit_ops`. Net more lines of code overall
+but each module is simpler. The right answer at the architectural
+level.
+
+### Effect on prior plan content
+
+- **Phase 5 (EditorServices migrations)** is largely superseded.
+  The migration of `parse_command_ctx` (commit `a5b6388`) still
+  stands as a worked example for the REPL editor's own
+  testability, but Phase 5's primary goal — shrinking the demo's
+  shim by routing through services — is now met by *not linking
+  the controller files at all*. Remaining Phase 5 migrations are
+  optional REPL-editor quality improvements, not load-bearing
+  for the demo.
+- **Phase 6 (editor demo)** stands but the link set changes
+  substantially under Phase 8: drop `src/editor/{input,commit,
+  clipboard,undo,reformat,completion}.c`; add
+  `src/editor/edit_ops.c`, `tools/editor_demo/input.c`, plus the
+  generic-render UI modules (`text_panel.c`, `text_layout.c`,
+  `text_search.c`, menu helpers as needed).
+- **Phase 7b ratchet** stays useful for the REPL editor (input.c /
+  commit.c shouldn't *grow* their REPL coupling), but the demo no
+  longer drives the ratchet down by extraction — it drives the
+  shim down by changing the link set.
 
 ## Phase 0 — Baseline And Invariants
 
@@ -641,6 +719,194 @@ These items are gated on Phase 5 (surface guards) and Phase 6 (editor demo binar
 2. Add root-level `editor_demo` symlink alongside `sample` / `repl_demo` so `./editor_demo` runs the binary from the repo root. **Depends on Phase 6.**
 3. Extend the `MODULES.md` update from 7a to also note that `tools/editor_demo/repl_shim.c` is a dependency ledger against `EditorServices` (plus a handful of direct `glr_*` stubs for the residual upward reach and direct REPL stubs for the smaller editor files), not production architecture. **Depends on Phase 6.**
 - Code touched (when unblocked): `Makefile`, `MODULES.md`, docs.
+
+## Phase 8 — Demo refit: generic text editor + shared `edit_ops` (in progress)
+
+Implements the "Updated direction" decision: extract generic
+text-editing primitives into a shared library and rebuild the demo
+as a real generic text editor, dropping the REPL-flavored controller
+files from the demo's link set.
+
+This phase is incremental — each step is independently committable
+and leaves the tree green.
+
+### 8.1 — Lock scope and update MODULES.md (this commit)
+
+- Plan update (this section) records the direction.
+- Subsequent MODULES.md edits land alongside the implementation steps.
+
+### 8.2 — Inventory primitives to extract
+
+Walk every key handler in `src/editor/input.c` and identify the
+generic primitive operations underneath. Examples:
+
+- Cursor: move-left, move-right, move-up, move-down,
+  word-left, word-right, line-home, line-end.
+- Edit: insert-char, delete-left, delete-right, delete-word-left,
+  delete-word-right.
+- Selection: extend-selection-by-cursor-move, select-word-at-cursor,
+  select-line, clear-selection.
+- Clipboard (text-only): copy-selected-text, cut-selected-text,
+  paste-text-at-cursor.
+- Search: open-find-overlay, advance-to-next-match,
+  advance-to-prev-match, close-find-overlay.
+
+Record the list in this file or a sidecar `plans/active/edit_ops-inventory.md`.
+Each primitive should be:
+- Pure with respect to REPL state (no `repl_*` calls).
+- A reusable unit that both `src/editor/input.c` and the demo's
+  dispatcher call.
+- Testable in isolation.
+
+### 8.3 — Extract `src/editor/edit_ops.{c,h}` incrementally
+
+For each primitive identified in 8.2:
+
+- Add the function to `edit_ops.{c,h}`.
+- Migrate the corresponding inline logic in `src/editor/input.c` to
+  call the new primitive (in-place — same behavior, no demo
+  dependency yet).
+- Add a focused unit test in `tests/test_edit_ops.c` (or similar)
+  that exercises the primitive against `EditorState` directly.
+- Verify `make test-stubs` and `make check-state-ownership` stay
+  green.
+
+Order: extract the primitives the generic dispatcher will need
+*first* so 8.4 can land soonest. Cursor / character-edit / selection
+come before clipboard / search.
+
+### 8.4 — Build `tools/editor_demo/input.c` (generic dispatcher)
+
+- New file. Hooks `glutKeyboardFunc` / `glutSpecialFunc` /
+  `glutMouseFunc` / `glutMotionFunc` / `glutMouseWheelFunc` /
+  `glutPassiveMotionFunc`.
+- For each key: call the corresponding `edit_ops` primitive against
+  `EditorState`. No `repl_*` calls; no `tutorial_*`; no
+  `color_picker_*`.
+- Cursor blink timer if needed.
+
+### 8.5 — Wire the UI code panel into the demo's display callback
+
+- Build a `UiTextPanelSnapshot` in `demo_display_func` from
+  `EditorState` (`editor_state_buffer_view()`, current cursor,
+  selection, scroll, search hit).
+- Call `ui_text_panel_render`.
+- Statusbar chrome flag stays *off* (`UI_TEXT_PANEL_CHROME_STATUSBAR`
+  not set) — explicitly out of scope.
+- Link `src/ui/{text_panel,text_layout,text_search}.c` into the
+  demo's source list. These are REPL-free; should not introduce
+  new shim stubs.
+
+### 8.6 — Add the demo's File menu
+
+Two acceptable implementations:
+
+1. **Reuse `src/ui/menu_bar.c`** if it's REPL-free (audit needed).
+   Build the menu model in the demo and pass it through.
+2. **Demo-local minimal menu** in `tools/editor_demo/menu.c`:
+   click-to-open, render a vertical list of items, hit-test,
+   call-the-callback-on-click. Bounded ~100 lines.
+
+Menu items:
+- File → Load (handler: status message "load not implemented yet"
+  or a no-op; can be wired to `editor_buffer_load_lines` later
+  against a hardcoded path).
+- File → Save (handler: same — print path or no-op).
+- File → Quit (calls `exit(0)`).
+
+The scope explicitly allows these handlers to be unimplemented at
+first; the proof is that menu items can be *created* and
+hit-tested in a generic editor without REPL.
+
+### 8.7 — Drop the demo's link of REPL-flavored controller files
+
+Update `EDITOR_DEMO_DEP_SRCS` in the Makefile:
+
+**Remove:**
+- `src/editor/clipboard.c`, `commit.c`, `completion.c`,
+  `help_session.c`, `inline_file_prompt.c`, `inline_rename.c`,
+  `input.c`, `reformat.c`, `undo.c`.
+
+**Keep:**
+- `src/editor/state.c`, `search.c`.
+- `src/editor/edit_ops.c` (new).
+
+**Add:**
+- `tools/editor_demo/input.c` (new).
+- `tools/editor_demo/menu.c` (new, if option 2 in 8.6).
+- `src/ui/text_panel.c`, `text_layout.c`, `text_search.c`.
+- `src/ui/menu_bar.c` (if option 1 in 8.6).
+
+### 8.8 — Shrink `tools/editor_demo/repl_shim.c`
+
+Remove every stub that was only needed because `src/editor/input.c`
+or its siblings called the symbol. Expected casualties:
+
+- All `tutorial_*` stubs (10) — `src/widgets/tutorial.c` no longer
+  referenced.
+- `color_picker_close` stub (1) — picker no longer called.
+- Most `repl_command_store_*` stubs (5) — only state.c's pure-read
+  callers may remain.
+- Most `repl_compile_*` stubs (6) — compile path no longer
+  referenced from the demo's link set.
+- All `repl_apply_*` stubs (4) — apply path gone.
+- All `repl_eval_parse_*` / `repl_eval_validate_*` /
+  `repl_func_alias_*` / `repl_source_scope_*` / editor-internal
+  helper stubs — controller-side callers gone.
+- All `ui_state_*` / `ui_layout_*` / `ui_menu_bar_close` /
+  `glr_completion_accept_autocomplete` /
+  `glr_state_presentation*` / `glr_ctrl_*` / `glr_camera_*`
+  stubs that were only there because `input.c` / `commit.c`
+  called them.
+
+Likely-remaining shim surface (best-guess pre-implementation):
+- Whatever `state.c` / `search.c` / `edit_ops.c` still call into
+  REPL (should be tiny — `state.c` has 1 REPL call today;
+  `search.c` is generic; `edit_ops.c` will be designed REPL-free).
+- A handful of `ui_*` symbols if the menu / code-panel rendering
+  paths touch global UI state. Could be near zero.
+
+Re-measure post-8.7 and update the shim accordingly. Target: well
+under 20 unique symbols.
+
+### 8.9 — Update the surface ratchet
+
+`scripts/baselines/editor-repl-surface.txt` continues to track
+`src/editor/input.c` / `commit.c` for the REPL editor's own
+ratchet. It does *not* drop those baselines (the REPL editor still
+calls REPL by design); the demo's leverage point is now the
+*Makefile link set*, not the in-file ratchet.
+
+Add an optional `scripts/check-edit-ops-pure.sh` (modeled on
+`check-ui-text-panel-pure.sh`) that fails if
+`src/editor/edit_ops.*` includes `repl/` or references REPL symbols
+— locks in the generic-primitive purity invariant.
+
+### 8.10 — Update MODULES.md
+
+- Add a row for `src/editor/edit_ops` — "generic text-editing
+  primitives (cursor moves, char edit, selection, text clipboard,
+  search input). Library shared by `src/editor/input.c` (REPL
+  dispatcher) and `tools/editor_demo/input.c` (generic dispatcher)."
+- Relabel `src/editor/input.c` row to "REPL editor input
+  dispatcher" (or similar) — explicit about its REPL flavor.
+- Update the `editor_demo` standalone-demo entry to describe the
+  new link set and the generic-dispatcher pattern.
+
+### Verification for Phase 8
+
+- `make sample USE_GL_STUBS=1` — REPL editor builds clean.
+- `make editor_demo USE_GL_STUBS=1` — generic editor builds clean
+  with the shrunk shim.
+- `make editor_demo` — opens a window with rendered text and a
+  working File menu (handlers may no-op).
+- `make test-stubs` — full regression green (existing tests pass;
+  new `test_edit_ops` covers the extracted primitives).
+- `make check-state-ownership` — clean, including the new
+  `check-edit-ops-pure` if added.
+- `tools/editor_demo/repl_shim.c` — substantially smaller; the
+  shim file itself acts as the new ledger of "what generic-editor
+  code still needs to call into REPL," which should be near-zero.
 
 ## Test Plan
 
