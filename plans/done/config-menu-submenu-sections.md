@@ -1,8 +1,9 @@
 # Config menu → flyout submenu sections (+ "All")
 
-Status: **active** — direction chosen: **Option A** (generalize the
-submenu engine). Implementing step-by-step; each step lands as its own
-commit and updates this file's progress log below.
+Status: **done** — Option A delivered: one generalized flyout-submenu
+engine serves the Scene example menu and the Config section / All menu.
+The tall All-flyout scrolling limitation is documented as an out-of-scope
+follow-up.
 
 ## Progress log
 
