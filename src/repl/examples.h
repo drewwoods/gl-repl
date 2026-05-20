@@ -60,7 +60,22 @@ int repl_examples_count(void);
  * identity; tags are only a secondary discovery index. Tag index 0 is the
  * synthetic "All" group — every example is a member (folded into the mask
  * by repl_example_tag_mask), so the Scene menu's first example group lists
- * every example once, matching the flat order the F12 cycle walks. */
+ * every example once, matching the flat order the F12 cycle walks.
+ *
+ * The enum is in the header so app-layer code (the example-presentation
+ * reset bridge in src/app/glr_ctrl.c) can name tags symbolically when
+ * deciding which tag-default cfg overrides to apply. The bit-shifted
+ * EXAMPLE_TAG_* macros used inside g_example_entries[] stay private to
+ * examples.c. */
+enum {
+    REPL_EXAMPLE_TAG_ALL = 0,
+    REPL_EXAMPLE_TAG_2D,
+    REPL_EXAMPLE_TAG_3D,
+    REPL_EXAMPLE_TAG_POLYGONS,
+    REPL_EXAMPLE_TAG_LINES,
+    REPL_EXAMPLE_TAG_COUNT
+};
+
 int repl_example_tag_count(void);
 const char *repl_example_tag_label(int tag_idx);
 unsigned int repl_example_tag_mask(int example_idx);

@@ -159,13 +159,18 @@ static int try_apply_example_camera_header(const char *const *lines) {
     return 1;
 }
 
-static void reset_example_presentation_defaults(void) {
+static void reset_example_presentation_defaults(unsigned int tag_mask) {
     /* presentation slice moved to glr_state.c in step 7a; the
      * controller-installed sink does the actual reset. The demo
      * leaves the sink unset and ships without example presentation
      * resets, which is fine because the demo doesn't load examples
-     * via this loader. */
-    repl_dispatch_example_presentation_reset();
+     * via this loader.
+     *
+     * `tag_mask` is forwarded opaquely to the host; the loader does
+     * not interpret tag bits. The controller layers tag-specific
+     * `@cfg` defaults on top of the global reset before the example's
+     * own `@cfg` metadata is consumed below. */
+    repl_dispatch_example_presentation_reset(tag_mask);
 }
 
 static int example_cfg_extract_slug(const char *text,
@@ -408,7 +413,8 @@ static void emit_example_body_two_pass(const char *const *body) {
     }
 }
 
-static void load_example_lines(const char *const *lines) {
+static void load_example_lines(const char *const *lines,
+                               unsigned int tag_mask) {
     const char *const *body = lines;
     ReplCommandStore store = repl_command_store_live();
 
@@ -430,7 +436,7 @@ static void load_example_lines(const char *const *lines) {
     /* Examples use bare funcN; clear any user-aliased names from the
      * outgoing scene so funcN free-slot allocation starts fresh. */
     repl_func_alias_clear_all();
-    reset_example_presentation_defaults();
+    reset_example_presentation_defaults(tag_mask);
 
     if (body)
         body += consume_example_cfg_header(body);
@@ -484,7 +490,7 @@ static void load_example(int idx) {
      * cfg toggles before applying the destination's saved cfg. */
     repl_scenes_capture_pre_example_cfg_if_entering();
 
-    load_example_lines(lines);
+    load_example_lines(lines, repl_example_tag_mask(idx));
     repl_state_scenes_mut()->active_example_idx = idx;
     repl_scenes_mark_example_active();
     char msg[128];
@@ -506,5 +512,8 @@ void repl_load_example(int idx) {
 }
 
 void repl_load_example_lines_for_test(const char *const *lines) {
-    load_example_lines(lines);
+    /* Test/bench harness has no example-index context, so pass a zero
+     * tag mask — the controller's reset still applies global defaults,
+     * just no tag-default overrides. */
+    load_example_lines(lines, 0u);
 }

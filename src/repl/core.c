@@ -92,9 +92,9 @@ void repl_set_status(const char *msg) {
         g_host_effects->status(msg);
 }
 
-void repl_dispatch_example_presentation_reset(void) {
+void repl_dispatch_example_presentation_reset(unsigned int tag_mask) {
     if (g_host_effects && g_host_effects->example_presentation_reset)
-        g_host_effects->example_presentation_reset();
+        g_host_effects->example_presentation_reset(tag_mask);
 }
 
 void repl_dispatch_input_reset(void) {

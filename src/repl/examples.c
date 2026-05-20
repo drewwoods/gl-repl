@@ -614,7 +614,6 @@ static const char *const g_example_spirograph_curve[] = {
  * modulo-selected radial wave, exercising fmod math and conditional edits. */
 static const char *const g_example_traveling_ripple_ring[] = {
     "// @cfg vertex_outlines = 0",
-    "// @cfg grid = 9",
     "// @cfg vertex_points = 0",
     "// camera",
     "glTranslatef(0.0f, 0.0f, -3.5f);",
@@ -649,7 +648,6 @@ static const char *const g_example_bezier[] = {
     "// @cfg vertex_points = 0",
     "// @cfg light_indicators = 0",
     "// @cfg poly_highlight = 0",
-    "// @cfg grid = 9",
     "// @cfg msaa = 0",
     "// @cfg line_smooth = 1",
     "// camera",
@@ -1189,15 +1187,7 @@ typedef struct {
  * whole tag query API (has_tag / count_for_tag / index_for_tag /
  * visible_tag_*) — and therefore the Scene menu's "All" group and the
  * F12 cycle — pick it up with no per-entry bookkeeping. Kept at index 0
- * so "All" sorts first under "### EXAMPLES". */
-enum {
-    REPL_EXAMPLE_TAG_ALL = 0,
-    REPL_EXAMPLE_TAG_2D,
-    REPL_EXAMPLE_TAG_3D,
-    REPL_EXAMPLE_TAG_POLYGONS,
-    REPL_EXAMPLE_TAG_LINES,
-    REPL_EXAMPLE_TAG_COUNT
-};
+ * so "All" sorts first under "### EXAMPLES". Enum lives in examples.h. */
 
 #define EXAMPLE_TAG_BIT(tag) (1u << (tag))
 #define EXAMPLE_TAG_ALL      EXAMPLE_TAG_BIT(REPL_EXAMPLE_TAG_ALL)

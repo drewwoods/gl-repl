@@ -32,6 +32,7 @@
 #include <keys.h>
 #include "prof.h"
 #include "repl/core.h"
+#include "repl/examples.h"          /* REPL_EXAMPLE_TAG_* */
 #include "repl/eval.h"
 #include "repl/executor.h"
 #include "repl/export.h"
@@ -1737,11 +1738,32 @@ void glr_ctrl_reshape(int w, int h) {
  * camera auto-rotate toggle. The cfg bridge handles per-scene cfg in
  * the scene_cfg snapshot, but the example loader's pre-cfg baseline
  * reset still wants both flipped to defaults. Step 7a wired this
- * through a sink because the example loader is a REPL pipeline TU. */
-static void glr_app_reset_example_chrome(void) {
+ * through a sink because the example loader is a REPL pipeline TU.
+ *
+ * `tag_mask` carries REPL_EXAMPLE_TAG_* bits for the example being
+ * loaded. After the global reset, tag-specific `@cfg` overrides
+ * (GLR_TAG_DEFAULT_CFG_*) feed through the same workspace-header
+ * parser the example's own `@cfg` lines use, so the live cfg bridge
+ * and the import accumulator both observe them. The example's own
+ * `@cfg` runs next and wins because `repl_export_config_set` replaces
+ * by key. */
+static void glr_app_apply_tag_default_cfg_lines(const char *const *lines,
+                                                int n) {
+    for (int i = 0; i < n; i++)
+        repl_state_parse_workspace_header_line(lines[i]);
+}
+
+static void glr_app_reset_example_chrome(unsigned int tag_mask) {
     glr_state_presentation_reset_example_defaults();
     glr_camera_mut()->auto_rotate = CFG_DEFAULT_CAMERA_ROTATE;
     variable_panel_view_mut()->visible = CFG_DEFAULT_VARIABLE_PANEL;
+
+    if (tag_mask & repl_example_tag_bit(REPL_EXAMPLE_TAG_2D)) {
+        static const char *const k_2d_defaults[] = GLR_TAG_DEFAULT_CFG_2D;
+        glr_app_apply_tag_default_cfg_lines(
+            k_2d_defaults,
+            (int)(sizeof(k_2d_defaults) / sizeof(k_2d_defaults[0])));
+    }
 }
 
 /* Adapter for repl_executor_install_camera_distance_source. The

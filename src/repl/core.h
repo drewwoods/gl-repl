@@ -124,8 +124,16 @@ typedef struct {
     /* Refresh scene-bound presentation defaults (wireframe, grid,
      * axes, vertex overlays, backdrop) before each example load. The
      * `presentation` slice lives on glr_state, out of the REPL
-     * pipeline's reach. */
-    void (*example_presentation_reset)(void);
+     * pipeline's reach.
+     *
+     * `tag_mask` is the bitmask of REPL_EXAMPLE_TAG_* bits for the
+     * example being loaded (0 for non-example loads such as the test
+     * line-feed entrypoint). The controller applies the global
+     * defaults first, then layers tag-specific `@cfg` overrides on
+     * top before the example's own leading `@cfg` metadata runs.
+     * Order of precedence: example `@cfg` > tag default > global
+     * default. */
+    void (*example_presentation_reset)(unsigned int tag_mask);
     /* Clear the editor input buffer. */
     void (*input_reset)(void);
     /* Force the editor out of insert mode. */
@@ -142,7 +150,7 @@ const ReplHostEffects *repl_host_effects(void);
 /* Pipeline-side dispatchers — invoked by the loader / scene-switch /
  * snippet-import / replay paths. Each is a no-op when the bridge is
  * unset or the matching callback is NULL. */
-void        repl_dispatch_example_presentation_reset(void);
+void        repl_dispatch_example_presentation_reset(unsigned int tag_mask);
 void        repl_dispatch_input_reset(void);
 void        repl_dispatch_insert_mode_off(void);
 void        repl_dispatch_scroll_to_line(int target);
