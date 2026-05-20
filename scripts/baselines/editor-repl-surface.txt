@@ -1,0 +1,15 @@
+# Baseline for scripts/check-editor-repl-surface.sh.
+#
+# Counts unique `repl_*(` symbols called from each editor file.
+# These are the direct REPL coupling that tools/editor_demo/repl_shim.c
+# has to stub. Phase 6 landed the demo with the larger initial shim
+# ledger; subsequent phases ratchet this surface down by migrating
+# call sites through coarser EditorServices callbacks.
+#
+# Recorded 2026-05-20 (post-Phase 6, post-parse_command_ctx migration).
+#
+# Ratchet down as migrations land. The plan target
+# (plans/active/editor-demo.md) is ~5 per file.
+
+input_c: 22
+commit_c: 30
