@@ -20,7 +20,7 @@
 #include "app/glr_config.h"
 #include "editor/input.h"
 #include "editor/completion.h"
-#include "keys.h"
+#include <keys.h>
 #include "repl/help_text.h"
 #include "repl/tutorials.h"
 #include "widgets/replay.h"

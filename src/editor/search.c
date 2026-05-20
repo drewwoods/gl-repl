@@ -23,7 +23,7 @@
 #include "search.h"
 #include "ui/text_search.h"
 
-#include "keys.h"
+#include <keys.h>
 #include "repl/state_views.h"
 #include "ui/state_types.h"
 

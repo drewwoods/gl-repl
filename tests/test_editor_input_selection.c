@@ -22,7 +22,7 @@
 #include "editor/input.h"
 #include "editor/clipboard.h"
 #include "app/glr_ctrl.h"
-#include "keys.h"
+#include <keys.h>
 #include "repl/core.h"
 #include "repl/state_owners.h"
 #include "ui/hit.h"

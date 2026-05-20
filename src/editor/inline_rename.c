@@ -10,7 +10,7 @@
  * here ahead of its own routing while rename is active.
  */
 #include "inline_rename.h"
-#include "keys.h"
+#include <keys.h>
 
 #include "repl/core.h"
 

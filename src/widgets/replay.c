@@ -4,7 +4,7 @@
 #include "widgets/replay.h"
 #include "repl/core_internal.h"
 #include "repl/pipeline.h"
-#include "keys.h"
+#include <keys.h>
 #include "repl/core.h"
 #include "repl/state_owners.h"
 #include "widgets/replay_state.h"
