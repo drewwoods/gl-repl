@@ -135,7 +135,17 @@ int repl_load_apply_line(const char *line, char *err, int err_size) {
         }
         repl_apply_predef_ops(&change);
         repl_apply_scratch_ops(&change);
-        return repl_apply_compiled_change(&change) ? 1 : 0;
+        /* Caller-owned cursor: thread the edit-line through apply
+         * and write it back so the next call sees insert_idx =
+         * document_count for the append-at-end semantics. Phase 1
+         * of plans/in-review/edit-line-ownership.md dropped the
+         * store's auto-pointer; Phase 3.6.5 hoists this to a
+         * repl_load_apply_line parameter. */
+        int edit_line = repl_state_edit_line();
+        int ok = repl_apply_compiled_change(&change, &edit_line);
+        if (ok)
+            repl_state_edit_line_set(edit_line);
+        return ok ? 1 : 0;
     }
 
     /* (4) Plain GL command path — parse + insert via command store.
@@ -180,8 +190,14 @@ int repl_load_apply_line(const char *line, char *err, int err_size) {
         return 0;
     }
     ReplCommandStore store = repl_command_store_live();
-    if (!repl_command_store_insert_one(&store, insert_idx, &cmd,
-                                       REPL_COMMAND_STORE_ADJUST_EDIT_LINE)) {
+    /* Caller-owned cursor for the plain-command tail; mirrors the
+     * structured-change path above. */
+    int edit_line = repl_state_edit_line();
+    ReplStoreMutOpts opts = {
+        .flags        = REPL_COMMAND_STORE_ADJUST_EDIT_LINE,
+        .cursor_inout = &edit_line,
+    };
+    if (!repl_command_store_insert_one(&store, insert_idx, &cmd, &opts)) {
         SourceTextChange rollback = {
             .kind         = SOURCE_TEXT_DELETE_RANGE,
             .pos          = insert_idx,
@@ -192,5 +208,6 @@ int repl_load_apply_line(const char *line, char *err, int err_size) {
         source_document_apply_change(&rollback);
         return 0;
     }
+    repl_state_edit_line_set(edit_line);
     return 1;
 }

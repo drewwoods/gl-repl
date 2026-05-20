@@ -62,9 +62,12 @@ void editor_undo_snapshot_save(EditorUndoSnapshot *snapshot) {
 void editor_undo_snapshot_restore(const EditorUndoSnapshot *snapshot) {
     ReplCommandStore store = repl_command_store_live();
     if (!repl_command_store_load(&store, snapshot->cmds,
-                                 snapshot->num_cmds,
-                                 snapshot->edit_line))
+                                 snapshot->num_cmds))
         return;
+    /* The store no longer writes the cursor on load (Phase 1 of
+     * plans/in-review/edit-line-ownership.md); undo policy is to
+     * restore the snapshotted edit-line. */
+    repl_state_edit_line_set(snapshot->edit_line);
     editor_buffer_load_lines(undo_snapshot_line_ptrs(snapshot),
                              snapshot->num_cmds);
     g_num_predef_vars = snapshot->num_predef_vars;

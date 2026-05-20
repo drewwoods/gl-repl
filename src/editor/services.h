@@ -44,8 +44,14 @@ typedef struct EditorServices_s {
      * change. Returns 1 on success, 0 on capacity / range error.
      * Callers preflight via `repl_apply_can_apply_compiled_change`
      * before this fires; passing the preflight is the orchestration
-     * contract. */
-    int  (*apply_repl_change)(const ReplCompiledChange *change, void *user);
+     * contract.
+     *
+     * `cursor_inout` is an optional caller-owned cursor pointer
+     * forwarded into the cmd-store; see
+     * `repl_apply_compiled_change()` in `src/repl/apply.h` for the
+     * full forwarding policy. NULL skips all cursor math. */
+    int  (*apply_repl_change)(const ReplCompiledChange *change,
+                              int *cursor_inout, void *user);
 
     /* Replay the change's predef-variable side-effects against the
      * eval table. UNDECLARE first (cascading var_assign num_args

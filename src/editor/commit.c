@@ -109,11 +109,17 @@ EditorCommitResult editor_commit_current_input(const struct EditorServices_s *se
      * mutation has run yet. Capture undo here. */
     editor_undo_push_snapshot();
 
-    /* Past the preflight every apply call below succeeds. */
+    /* Past the preflight every apply call below succeeds.
+     * Caller-owned cursor (Phase 1 of edit-line-ownership.md):
+     * thread the edit-line through apply, write back on success. */
     services->apply_predef_ops(&change, services->user);
     services->apply_scratch_ops(&change, services->user);
     editor_buffer_apply_compiled_change(&change);
-    services->apply_repl_change(&change, services->user);
+    {
+        int edit_line = repl_state_edit_line();
+        if (services->apply_repl_change(&change, &edit_line, services->user))
+            repl_state_edit_line_set(edit_line);
+    }
 
     result.consumed = 1;
     result.mutated = 1;
@@ -142,7 +148,11 @@ int editor_commit_apply_external_change(const struct ReplCompiledChange_s *chang
     svc.apply_predef_ops(change, svc.user);
     svc.apply_scratch_ops(change, svc.user);
     editor_buffer_apply_compiled_change(change);
-    svc.apply_repl_change(change, svc.user);
+    {
+        int edit_line = repl_state_edit_line();
+        if (svc.apply_repl_change(change, &edit_line, svc.user))
+            repl_state_edit_line_set(edit_line);
+    }
     return 1;
 }
 
@@ -230,11 +240,20 @@ int editor_commit_apply_plan(const EditorCommitPlan *plan) {
      * helper deliberately does NOT push a second snapshot, to avoid
      * double-capture. */
 
-    /* REPL halves. */
+    /* REPL halves. Caller-owned cursor: read the edit-line into a
+     * local int, pass &local to apply so insert cursor math lands
+     * there, write back on success. Phase 1 of
+     * plans/in-review/edit-line-ownership.md dropped the store's
+     * auto-pointer; Phase 3.1 will switch the read/write to
+     * editor_state_edit_line()/_set(). */
     repl_apply_predef_ops(&plan->change);
     repl_apply_scratch_ops(&plan->change);
     editor_buffer_apply_compiled_change(&plan->change);
-    repl_apply_compiled_change(&plan->change);
+    {
+        int edit_line = repl_state_edit_line();
+        if (repl_apply_compiled_change(&plan->change, &edit_line))
+            repl_state_edit_line_set(edit_line);
+    }
 
     /* Editor post-effects. */
     apply_post_effects(&plan->effects);

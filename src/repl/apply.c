@@ -70,18 +70,30 @@ int repl_apply_can_apply_compiled_change(const ReplCompiledChange *change) {
     return 0;
 }
 
-int repl_apply_compiled_change(const ReplCompiledChange *change) {
+int repl_apply_compiled_change(const ReplCompiledChange *change,
+                               int *cursor_inout) {
     if (!change) return 0;
 
     ReplCommandStore store = repl_command_store_live();
-    int flags = change->adjust_edit_line ? REPL_COMMAND_STORE_ADJUST_EDIT_LINE : 0;
+    ReplStoreMutOpts insert_opts = {
+        .flags        = change->adjust_edit_line
+                            ? REPL_COMMAND_STORE_ADJUST_EDIT_LINE : 0,
+        .cursor_inout = change->adjust_edit_line ? cursor_inout : NULL,
+    };
 
     /* Optional pre-insert delete fires first so `change->pos` —
      * which is interpreted in post-delete coordinates — refers to
-     * the right slot when the insert lands. */
+     * the right slot when the insert lands.
+     *
+     * Pass NULL opts for the pre-delete to preserve the historical
+     * behavior where the delete did not shift the cursor.
+     * Forwarding the caller pointer to both delete and insert
+     * would change the composed cursor delta for in-place replace
+     * paths (overwrite replacements, toggle-comment batches). See
+     * plans/in-review/edit-line-ownership.md §1.3 for the rationale. */
     if (change->delete_count > 0) {
         if (!repl_command_store_delete_range(&store, change->delete_pos,
-                                             change->delete_count))
+                                             change->delete_count, NULL))
             return 0;
     }
 
@@ -90,19 +102,32 @@ int repl_apply_compiled_change(const ReplCompiledChange *change) {
         return 1;
     case REPL_COMPILED_INSERT_ONE:
         return repl_command_store_insert_one(&store, change->pos,
-                                             &change->cmds[0], flags);
+                                             &change->cmds[0], &insert_opts);
     case REPL_COMPILED_INSERT_MANY:
         return repl_command_store_insert_many(&store, change->pos,
                                               change->cmds, change->count,
-                                              flags);
+                                              &insert_opts);
     case REPL_COMPILED_REPLACE_ONE:
         return repl_command_store_replace_one(&store, change->pos,
                                               &change->cmds[0]);
-    case REPL_COMPILED_DELETE_RANGE:
-        return repl_command_store_delete_range(&store, change->pos, change->count);
+    case REPL_COMPILED_DELETE_RANGE: {
+        /* Standalone delete: forward cursor unconditionally; the
+         * adjust_edit_line flag historically gates inserts only.
+         * Callers that don't want cursor math pass NULL from their
+         * own caller site. */
+        ReplStoreMutOpts delete_opts = {
+            .flags        = 0,
+            .cursor_inout = cursor_inout,
+        };
+        return repl_command_store_delete_range(&store, change->pos,
+                                               change->count, &delete_opts);
+    }
     case REPL_COMPILED_LOAD_ALL:
-        return repl_command_store_load(&store, change->cmds, change->count,
-                                       change->pos);
+        /* LOAD_ALL has no cursor argument — its target cursor is
+         * caller policy. Callers apply `change->pos` separately
+         * via their own cursor-set call after a successful apply
+         * if they want the post-load cursor to land there. */
+        return repl_command_store_load(&store, change->cmds, change->count);
     }
     return 0;
 }

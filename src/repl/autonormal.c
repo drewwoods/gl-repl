@@ -68,8 +68,18 @@ static void insert_cmd_at(int pos, const GLCmd *cmd,
      * matching GLCmd. */
     if (!source_document_insert_line(pos, line))
         return;
-    if (!repl_command_store_insert_one(&store, pos, cmd,
-                                       REPL_COMMAND_STORE_ADJUST_EDIT_LINE)) {
+    /* Caller-owned cursor: read the edit-line into a local int,
+     * pass &local to the store via opts, write it back. Phase 1 of
+     * plans/in-review/edit-line-ownership.md dropped the store's
+     * auto-pointer; Phase 3.6.0 threads the cursor through
+     * repl_recompute_autonormals's signature so the read/write
+     * lives at the caller above. */
+    int edit_line = repl_state_edit_line();
+    ReplStoreMutOpts opts = {
+        .flags        = REPL_COMMAND_STORE_ADJUST_EDIT_LINE,
+        .cursor_inout = &edit_line,
+    };
+    if (!repl_command_store_insert_one(&store, pos, cmd, &opts)) {
         SourceTextChange rollback = {
             .kind         = SOURCE_TEXT_DELETE_RANGE,
             .pos          = pos,
@@ -78,7 +88,9 @@ static void insert_cmd_at(int pos, const GLCmd *cmd,
             .delete_count = 0,
         };
         source_document_apply_change(&rollback);
+        return;
     }
+    repl_state_edit_line_set(edit_line);
 }
 
 static void apply_front_face_to_normal(GLenum front_face, float *n) {

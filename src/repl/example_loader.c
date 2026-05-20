@@ -419,7 +419,13 @@ static void load_example_lines(const char *const *lines,
     ReplCommandStore store = repl_command_store_live();
 
     tutorial_state_reset();
-    repl_command_store_load(&store, NULL, 0, 0);
+    repl_command_store_load(&store, NULL, 0);
+    /* The store no longer writes the cursor on load (Phase 1 of
+     * plans/in-review/edit-line-ownership.md); example load policy
+     * zeroes the cursor pre-emptively. The post-load
+     * `repl_state_edit_line_set(repl_state_document_count())` near
+     * the bottom of this function still applies. */
+    repl_state_edit_line_set(0);
     source_document_clear();
     repl_state_flat_program_set_count(0);
     /* Editor-input cleanup (insert mode off, input buffer wipe, cursor

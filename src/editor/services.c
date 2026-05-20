@@ -39,9 +39,9 @@ static ReplCompileResult default_compile(const char *text,
 }
 
 static int default_apply_repl_change(const ReplCompiledChange *change,
-                                     void *user) {
+                                     int *cursor_inout, void *user) {
     (void)user;
-    return repl_apply_compiled_change(change);
+    return repl_apply_compiled_change(change, cursor_inout);
 }
 
 static void default_apply_predef_ops(const ReplCompiledChange *change,
