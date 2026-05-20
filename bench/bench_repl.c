@@ -398,23 +398,26 @@ static BenchResult bench_replay_examples(int iters) {
 
 /* ---- bench: long-running replay (synthetic large scene) --------------- */
 
-/* Build a single scene that flattens to a very large repl_state_flat_program_cmds_mut()[] so we
+/* Build a single scene that flattens to a large flat-cmd stream so we
  * get a longer-running replay test that is comparable across machines.
  *
- * We use one outer for-loop that emits a triangle per iteration. The
- * iteration count is capped at MAX_FLATTEN_VISITS (100k) inside
- * flatten_range, but repl_state_flat_program_cmds_mut()[] itself is bounded by MAX_COMMANDS
- * (typically 4096), so in practice we get around (MAX_COMMANDS / per-iter
- * cmds) iterations expanded. The benchmark adapts: it reads
- * repl_state_flat_program_count() after flatten and reports the actual flat-cmd count,
- * stepping replay over all of them. */
+ * Sized to fit within MAX_COMMANDS (4096) after expansion: when flatten
+ * would exceed that, flatten_append_cmd sets ctx->abort=1 and
+ * repl_flatten_program then resets flat_count to 0 (capacity overflow
+ * is treated as a hard failure, not a soft cap). The outer for-loop
+ * emits 12 flat cmds per iteration, with 3 setup cmds before it
+ * (two CMD_VAR_DECLARE rows are flatten-omitted): 12*340 + 3 = 4083.
+ *
+ * Iteration count was 600 before MAX_COMMANDS dropped from 8192 to 4096
+ * on 2026-04-30 (commit 804d794 "config: reduce max commands"); the
+ * 7203-cmd expansion that used to fit no longer does. */
 static const char *const k_long_replay_scene[] = {
     "glClearColor(0.05, 0.05, 0.05, 1);",
     "glEnable(GL_DEPTH_TEST);",
     "glEnable(GL_LIGHTING);",
     "float a;",
     "float b;",
-    "for(i, 0, 600) {",
+    "for(i, 0, 340) {",
         "a = i * 0.05;",
         "b = sin(a) * cos(a);",
         "glPushMatrix();",
@@ -502,16 +505,20 @@ static BenchResult bench_replay_long(int iters) {
 
 /* Scene built to emit a long flat-command stream of many small primitives
  * so we can exercise the fade-batch rendering pass with large old_pc
- * indices. We unroll a for-loop that emits one triangle per iteration;
- * flatten caps us at MAX_COMMANDS flat cmds regardless of the iteration
- * count, which is what we want for this benchmark - we just need a large
- * repl_state_flat_program_count(). */
+ * indices. We unroll a for-loop that emits one triangle per iteration.
+ * Sized to fit within MAX_COMMANDS (4096): exceeding it makes flatten
+ * abort and discard the partial flat stream (flat_count → 0). The loop
+ * body emits 11 flat cmds per iter with 2 setup cmds before it
+ * (CMD_VAR_DECLARE rows are flatten-omitted): 11*370 + 2 = 4072.
+ *
+ * Iteration count was 600 before MAX_COMMANDS dropped from 8192 to 4096
+ * on 2026-04-30 (commit 804d794 "config: reduce max commands"). */
 static const char *const k_fade_bench_scene[] = {
     "glEnable(GL_DEPTH_TEST);",
     "glEnable(GL_LIGHTING);",
     "float a;",
     "float b;",
-    "for(i, 0, 600) {",
+    "for(i, 0, 370) {",
         "a = i * 0.01;",
         "b = sin(a);",
         "glPushMatrix();",
