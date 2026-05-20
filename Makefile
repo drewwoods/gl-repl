@@ -765,6 +765,7 @@ repl_demo: FORCE $(REPL_DEMO_BIN) ## Build the standalone REPL pipeline demo.
 EDITOR_DEMO_OBJS = $(OBJDIR)/tools/editor_demo/editor_demo.o \
                    $(OBJDIR)/tools/editor_demo/repl_shim.o \
                    $(OBJDIR)/tools/editor_demo/menu.o \
+                   $(OBJDIR)/tools/editor_demo/input.o \
                    $(addprefix $(OBJDIR)/,$(EDITOR_DEMO_DEP_SRCS:.c=.o))
 
 $(EDITOR_DEMO_BIN): $(EDITOR_DEMO_OBJS)
