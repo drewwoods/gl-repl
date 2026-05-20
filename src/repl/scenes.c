@@ -629,6 +629,42 @@ int repl_load_workspace(const char *dir) {
     return loaded;
 }
 
+int repl_load_scene_as_new_slot(const char *path) {
+    if (!path || !*path) return -1;
+
+    /* Persist the currently-active scene's live state INTO its slot
+     * before we let load_scene_file_into_slot wipe live state. Without
+     * this, switching back via scene tabs would show the slot's stale
+     * snapshot rather than what the user was actually editing. */
+    if (g_active_user_scene >= 0)
+        save_user_scene();
+
+    /* Stash so we can restore on failure (load_scene_file_into_slot
+     * clears live state as its first step, so a parse failure or
+     * full-slots condition would otherwise leave the document blank
+     * with the active-scene pointer dangling). */
+    UserScene stash;
+    ReplExportConfig stash_cfg;
+    stash_live_state(&stash, &stash_cfg);
+    int stash_example = g_example_idx;
+    int stash_active  = g_active_user_scene;
+
+    int slot = load_scene_file_into_slot(path);
+    if (slot < 0) {
+        restore_live_from_stash(&stash, &stash_cfg);
+        g_example_idx       = stash_example;
+        g_active_user_scene = stash_active;
+        return -1;
+    }
+
+    /* load_scene_file_into_slot left live state == the loaded scene
+     * and stored a copy in the slot. Activate the slot so subsequent
+     * edits accumulate there and scene tabs reflect the new active. */
+    g_active_user_scene = slot;
+    g_example_idx       = -1;
+    return slot;
+}
+
 static int evict_scene_to_workspace(int slot) {
     if (slot <= 0 || slot >= MAX_USER_SCENES) return 0;
     if (!g_user_scenes[slot].used)            return 0;

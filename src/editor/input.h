@@ -115,6 +115,12 @@ void editor_navigate_to_line(int target);
 int editor_input_rename_capture_key(unsigned char key);
 int editor_input_rename_capture_special(int key);
 
+/* File-prompt capture predicate. Same hard-modal contract as rename:
+ * when the inline file prompt is open every keystroke must land in
+ * the prompt buffer ahead of the controller-side router. */
+int editor_input_file_prompt_capture_key(unsigned char key);
+int editor_input_file_prompt_capture_special(int key);
+
 /* Editor-side command-store / input-buffer operations.
  *
  * These mutate editor state directly (command store, input buffer,

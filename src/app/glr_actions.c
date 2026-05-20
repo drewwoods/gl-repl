@@ -33,6 +33,7 @@
 #include "ui/menu_bar.h"
 #include "ui/profile_panel.h"
 #include "ui/state.h"
+#include "editor/inline_file_prompt.h"
 #include "editor/inline_rename.h"
 #include "editor/undo.h"
 #include "scene/themes.h"
@@ -540,14 +541,7 @@ int glr_cfg_handle_special_shortcut(int key) {
 int glr_action_menu_item_activate(int menu_id, int item_idx) {
     if (menu_id == GLR_MENU_FILE) {
         if (item_idx == GLR_FILE_ITEM_LOAD_SCENE) {
-            {
-                char msg[160];
-                snprintf(msg, sizeof(msg),
-                         "Runtime load unsupported - relaunch %s <file> "
-                         "or use Load Workspace",
-                         glr_ctrl_program_name());
-                repl_set_status(msg);
-            }
+            editor_inline_file_prompt_begin("my_scene.c");
             return 1;
         }
         if (item_idx == GLR_FILE_ITEM_SAVE_WORKSPACE) {
