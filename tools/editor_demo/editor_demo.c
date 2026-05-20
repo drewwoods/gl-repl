@@ -182,15 +182,48 @@ static void demo_display_func(void) {
     glutSwapBuffers();
 }
 
+/* Route a code-panel click to cursor placement. snap is built fresh
+ * with the current EditorState so the hit-tester sees the same
+ * geometry the renderer just used. */
+static void demo_handle_code_panel_click(int mx, int my) {
+    UiTextPanelRow      rows[DEMO_MAX_ROWS];
+    UiTextPanelSnapshot snap;
+    demo_build_snapshot(rows, DEMO_MAX_ROWS, &snap);
+    UiHit hit = ui_text_panel_hit_test(&snap, mx, my);
+
+    switch (hit.kind) {
+    case UI_HIT_CODE_TEXT:
+        /* Click on a committed text row -- navigate edit_line to
+         * it, then place the cursor at the hit char. */
+        if (hit.line_idx >= 0) {
+            demo_input_navigate_to(hit.line_idx);
+            if (hit.char_idx >= 0)
+                editor_cursor_pos_set(hit.char_idx);
+        }
+        break;
+    case UI_HIT_CODE_INSERT_LINE:
+        /* Click on the active input row -- just place the cursor. */
+        if (hit.char_idx >= 0)
+            editor_cursor_pos_set(hit.char_idx);
+        break;
+    default:
+        /* Gutter / chrome / outside-panel hits ignored. */
+        break;
+    }
+}
+
 static void demo_mouse_func(int button, int state, int x, int y) {
     if (button != GLUT_LEFT_BUTTON || state != GLUT_DOWN)
         return;
     /* GLUT delivers top-left coords; convert to bottom-left. */
     int my = g_demo_vp_h - y;
-    if (demo_menu_handle_click(x, my, g_demo_vp_w, g_demo_vp_h))
+    if (demo_menu_handle_click(x, my, g_demo_vp_w, g_demo_vp_h)) {
         glutPostRedisplay();
-    /* No code-panel mouse handling in v1 — clicking outside the menu
-     * just closes any open dropdown. */
+        return;
+    }
+    /* Click landed below the menu bar -- treat as code panel. */
+    demo_handle_code_panel_click(x, my);
+    glutPostRedisplay();
 }
 
 static void demo_reshape_func(int w, int h) {
