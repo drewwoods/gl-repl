@@ -1741,16 +1741,53 @@ void glr_ctrl_reshape(int w, int h) {
  * through a sink because the example loader is a REPL pipeline TU.
  *
  * `tag_mask` carries REPL_EXAMPLE_TAG_* bits for the example being
- * loaded. After the global reset, tag-specific `@cfg` overrides
- * (GLR_TAG_DEFAULT_CFG_*) feed through the same workspace-header
- * parser the example's own `@cfg` lines use, so the live cfg bridge
- * and the import accumulator both observe them. The example's own
- * `@cfg` runs next and wins because `repl_export_config_set` replaces
- * by key. */
-static void glr_app_apply_tag_default_cfg_lines(const char *const *lines,
-                                                int n) {
-    for (int i = 0; i < n; i++)
-        repl_state_parse_workspace_header_line(lines[i]);
+ * loaded. After the global reset, the controller applies typed
+ * tag-default overrides via glr_config_set() — no parser syntax, no
+ * slug strings, no magic enum values. The example's own `@cfg` is
+ * parsed later in load_example_lines and wins because both paths
+ * mutate the same backing field. */
+static const GlrExampleTagDefault k_example_tag_defaults[] =
+    GLR_EXAMPLE_TAG_DEFAULTS;
+
+int glr_ctrl_apply_tag_defaults(unsigned int tag_mask,
+                                 const GlrExampleTagDefault *table,
+                                 int n) {
+    /* Track GlrConfigKey values already set during this call so we can
+     * surface policy collisions. The shipped table has one entry; the
+     * cap covers an order-of-magnitude expansion plus any synthetic
+     * test policies. Iteration order is the table's declaration order;
+     * later entries that target the same key overwrite earlier ones
+     * (matches glr_config_set's last-write-wins semantics) and bump
+     * the returned collision count. */
+    enum { SEEN_CAP = 32 };
+    GlrConfigKey seen[SEEN_CAP];
+    int seen_count = 0;
+    int collisions = 0;
+
+    if (!table || n <= 0) return 0;
+
+    for (int i = 0; i < n; i++) {
+        const GlrExampleTagDefault *d = &table[i];
+        if (!(tag_mask & repl_example_tag_bit(d->tag_idx)))
+            continue;
+
+        int seen_idx = -1;
+        for (int j = 0; j < seen_count; j++) {
+            if (seen[j] == d->key) { seen_idx = j; break; }
+        }
+        if (seen_idx >= 0) {
+            fprintf(stderr,
+                    "glr_ctrl: tag-default collision on key=%d at "
+                    "table index %d (later entry wins)\n",
+                    (int)d->key, i);
+            collisions++;
+        } else if (seen_count < SEEN_CAP) {
+            seen[seen_count++] = d->key;
+        }
+
+        glr_config_set(d->key, d->value);
+    }
+    return collisions;
 }
 
 static void glr_app_reset_example_chrome(unsigned int tag_mask) {
@@ -1758,12 +1795,10 @@ static void glr_app_reset_example_chrome(unsigned int tag_mask) {
     glr_camera_mut()->auto_rotate = CFG_DEFAULT_CAMERA_ROTATE;
     variable_panel_view_mut()->visible = CFG_DEFAULT_VARIABLE_PANEL;
 
-    if (tag_mask & repl_example_tag_bit(REPL_EXAMPLE_TAG_2D)) {
-        static const char *const k_2d_defaults[] = GLR_TAG_DEFAULT_CFG_2D;
-        glr_app_apply_tag_default_cfg_lines(
-            k_2d_defaults,
-            (int)(sizeof(k_2d_defaults) / sizeof(k_2d_defaults[0])));
-    }
+    glr_ctrl_apply_tag_defaults(
+        tag_mask, k_example_tag_defaults,
+        (int)(sizeof(k_example_tag_defaults) /
+              sizeof(k_example_tag_defaults[0])));
 }
 
 /* Adapter for repl_executor_install_camera_distance_source. The
