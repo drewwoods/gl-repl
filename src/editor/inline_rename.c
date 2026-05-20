@@ -10,6 +10,7 @@
  * here ahead of its own routing while rename is active.
  */
 #include "inline_rename.h"
+#include "inline_file_prompt.h"   /* mutual-exclusion cancel */
 #include <keys.h>
 
 #include "repl/core.h"
@@ -29,6 +30,9 @@ const char *editor_inline_rename_buffer(void) {
 int editor_inline_rename_begin(int slot) {
     if (slot < 0 || slot >= MAX_USER_SCENES) return 0;
     if (!repl_user_scene_slot_used(slot))    return 0;
+    /* Mutual exclusion: at most one inline modal at a time. See the
+     * symmetric note in editor_inline_file_prompt_begin. */
+    editor_inline_file_prompt_cancel();
     g_rename_slot = slot;
     const char *cur = repl_user_scene_name(slot);
     snprintf(g_rename_buf, sizeof(g_rename_buf), "%s", cur ? cur : "");
