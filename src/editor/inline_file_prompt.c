@@ -13,12 +13,13 @@
  * pipeline `./sample <file>` uses at startup.
  */
 #include "inline_file_prompt.h"
-#include "keys.h"
+#include "inline_rename.h"        /* mutual-exclusion cancel */
+#include "input.h"                /* editor_load_line_to_input */
+#include <keys.h>
 #include "undo.h"
 
 #include "repl/core.h"
-
-#include <sys/stat.h>
+#include "repl/state.h"           /* repl_state_edit_line */
 
 /* Capacity holds full workspace paths comfortably (PATH_MAX is 4096 on
  * Linux). The status-bar render truncates by pixel width so any
@@ -49,6 +50,13 @@ const char *editor_inline_file_prompt_error(void) {
 
 int editor_inline_file_prompt_begin(const char *default_name) {
     if (g_prompt_active) return 0;
+    /* At most one inline modal is up at a time. If the user had a
+     * scene-rename in progress and somehow triggered Load Scene (via
+     * a future shortcut, etc.), cancel rename rather than have both
+     * modals quietly active — the controller's keyboard route checks
+     * rename first, so the file prompt would otherwise be invisible
+     * to keystrokes while still drawing in the snapshot. */
+    editor_inline_rename_cancel();
     g_prompt_active = 1;
     if (default_name && default_name[0]) {
         snprintf(g_prompt_buf, sizeof(g_prompt_buf), "%s", default_name);
@@ -89,54 +97,66 @@ static void prompt_set_err(const char *msg) {
     if (msg && msg[0]) repl_set_status(msg);
 }
 
+/* Translate a load-error reason from repl_load_scene_as_new_slot
+ * into a user-visible string. Keeps the editor module free of
+ * filesystem probing (stat() lives in repl/scenes.c) and centralizes
+ * the message wording so the renderer's truncation math stays
+ * predictable. */
+static void format_load_err(ReplSceneLoadStatus reason,
+                            const char *path,
+                            char *out, int out_sz) {
+    switch (reason) {
+    case REPL_SCENE_LOAD_ERR_EMPTY_PATH:
+        snprintf(out, (size_t)out_sz, "File path is empty");
+        break;
+    case REPL_SCENE_LOAD_ERR_NOT_FOUND:
+        snprintf(out, (size_t)out_sz, "File not found: %s", path);
+        break;
+    case REPL_SCENE_LOAD_ERR_IS_DIR:
+        snprintf(out, (size_t)out_sz,
+                 "Path is a directory — use Load Workspace: %s", path);
+        break;
+    case REPL_SCENE_LOAD_ERR_PARSE:
+        snprintf(out, (size_t)out_sz,
+                 "Failed to load (parse error): %s", path);
+        break;
+    case REPL_SCENE_LOAD_ERR_NO_SLOT:
+        snprintf(out, (size_t)out_sz,
+                 "All scene slots full — save workspace to free a slot");
+        break;
+    default:
+        snprintf(out, (size_t)out_sz, "Failed to load: %s", path);
+        break;
+    }
+}
+
 /* Run the load. On success, set a confirmation status and close the
  * prompt; on failure, set the in-prompt error and keep the prompt
  * open so the user can correct the path without re-typing from
  * scratch. */
 static void prompt_commit_path(void) {
-    if (g_prompt_len == 0) {
-        prompt_set_err("File path is empty");
-        return;
-    }
-
-    /* stat() before touching state so a missing-file or directory
-     * commit cannot wipe the user's current document. The generic
-     * "cannot open" branch covers permission errors and other stat()
-     * oddities. */
-    struct stat st;
-    if (stat(g_prompt_buf, &st) != 0) {
-        char msg[FILE_PROMPT_ERR_MAX];
-        snprintf(msg, sizeof(msg),
-                 "File not found: %s", g_prompt_buf);
-        prompt_set_err(msg);
-        return;
-    }
-    if (S_ISDIR(st.st_mode)) {
-        char msg[FILE_PROMPT_ERR_MAX];
-        snprintf(msg, sizeof(msg),
-                 "Path is a directory — use Load Workspace: %s",
-                 g_prompt_buf);
-        prompt_set_err(msg);
-        return;
-    }
-
-    /* Load the file as a NEW user-scene slot. The previously-active
-     * scene is preserved in its own slot (still accessible via scene
-     * tabs / F12); the loaded file becomes the active scene. Drop the
-     * undo ring — a post-load Ctrl+Z must not pull a snapshot from
-     * the previous scene into the newly loaded one (same invariant
-     * as Load Workspace / F12 in src/app/glr_actions.c). */
-    editor_undo_clear();
-
-    int new_slot = repl_load_scene_as_new_slot(g_prompt_buf);
+    /* Note: do NOT call editor_undo_clear before the load. The REPL
+     * function preserves the live document on any failure, but the
+     * undo ring is the user's edit history — clearing it preemptively
+     * would discard that history even when the load fails. Clear it
+     * only after a confirmed successful slot allocation, mirroring
+     * how Load Workspace / F12 sequence the clear right next to the
+     * commit point. */
+    ReplSceneLoadStatus reason = REPL_SCENE_LOAD_OK;
+    int new_slot = repl_load_scene_as_new_slot(g_prompt_buf, &reason);
     if (new_slot < 0) {
         char msg[FILE_PROMPT_ERR_MAX];
-        snprintf(msg, sizeof(msg),
-                 "Failed to load (parse error or slots full): %s",
-                 g_prompt_buf);
+        format_load_err(reason, g_prompt_buf, msg, (int)sizeof(msg));
         prompt_set_err(msg);
         return;
     }
+
+    editor_undo_clear();
+    /* Loaded scene's edit_line points to its end; refresh the input
+     * buffer from the new line so any stale typed text the user had
+     * is dropped — matches glr_scene_load_user_slot in glr_actions.c
+     * which is the sibling 'switch active slot' path. */
+    editor_load_line_to_input(repl_state_edit_line());
 
     char msg[FILE_PROMPT_ERR_MAX];
     snprintf(msg, sizeof(msg),

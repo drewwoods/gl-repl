@@ -66,7 +66,7 @@ void ui_panels_render_scene_status(const UiRenderSnapshot *snap) {
 
         text_y = bar_y + (bar_h - FONT_SMALL_H) / 2 + 1;
         tx = sc_x + CODE_MARGIN_X;
-        max_px = sc_x + sc_w - CODE_MARGIN_X - tx;
+        max_px = sc_w - 2 * CODE_MARGIN_X;
         max_chars = max_px / FONT_SMALL_W;
         if (max_chars < 8)
             max_chars = 8;
@@ -115,7 +115,7 @@ void ui_panels_render_scene_status(const UiRenderSnapshot *snap) {
 
         text_y = bar_y + (bar_h - FONT_SMALL_H) / 2 + 1;
         tx = sc_x + CODE_MARGIN_X;
-        max_px = sc_x + sc_w - CODE_MARGIN_X - tx;
+        max_px = sc_w - 2 * CODE_MARGIN_X;
         max_chars = max_px / FONT_SMALL_W;
         if (max_chars < 8)
             max_chars = 8;

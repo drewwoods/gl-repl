@@ -629,31 +629,127 @@ int repl_load_workspace(const char *dir) {
     return loaded;
 }
 
-int repl_load_scene_as_new_slot(const char *path) {
-    if (!path || !*path) return -1;
+static int evict_scene_to_workspace(int slot);  /* defined below */
+static int pick_lru_user_scene_slot(void);      /* defined below */
 
-    /* Persist the currently-active scene's live state INTO its slot
-     * before we let load_scene_file_into_slot wipe live state. Without
-     * this, switching back via scene tabs would show the slot's stale
-     * snapshot rather than what the user was actually editing. */
-    if (g_active_user_scene >= 0)
-        save_user_scene();
+/* Attempt LRU eviction to free a slot. Returns the evicted slot
+ * index on success (caller can restore that slot if a subsequent
+ * operation fails), -1 if no eviction was needed (a free slot
+ * already existed), -2 if eviction was needed but couldn't run
+ * (no workspace bound, no eligible victim, or evict_scene_to_workspace
+ * itself failed).
+ *
+ * On a successful eviction `*out_stash` and `*out_cfg_stash` receive
+ * snapshots of the victim's in-memory entry so the caller can
+ * restore the scene tab if needed; the on-disk file written by the
+ * eviction is left in place either way (the user's data is preserved
+ * both in-memory after restore AND on disk via Load Workspace). */
+static int try_evict_lru(UserScene *out_stash, ReplExportConfig *out_cfg_stash) {
+    if (find_free_user_scene_slot() >= 0 || !g_user_scenes[0].used)
+        return -1;
+    if (!g_workspace_dir[0]) return -2;
+    int victim = pick_lru_user_scene_slot();
+    if (victim < 0) return -2;
 
-    /* Stash so we can restore on failure (load_scene_file_into_slot
-     * clears live state as its first step, so a parse failure or
-     * full-slots condition would otherwise leave the document blank
-     * with the active-scene pointer dangling). */
+    /* Snapshot the victim's in-memory entry BEFORE evict_scene_to_workspace
+     * runs — that helper marks the slot unused and clears its cfg as its
+     * last step, so without this capture a subsequent parse failure would
+     * leave the user staring at a missing tab. */
+    memcpy(out_stash, &g_user_scenes[victim], sizeof(UserScene));
+    memcpy(out_cfg_stash, &g_scene_cfg[victim], sizeof(ReplExportConfig));
+
+    /* evict_scene_to_workspace clobbers live state via install_scene_into_live;
+     * wrap in its own stash/restore so the caller's outer live stash stays
+     * the user's actual document, not the evicted scene's content. */
+    UserScene live_temp;
+    ReplExportConfig live_temp_cfg;
+    stash_live_state(&live_temp, &live_temp_cfg);
+    int ok = evict_scene_to_workspace(victim);
+    restore_live_from_stash(&live_temp, &live_temp_cfg);
+    if (!ok) return -2;
+    return victim;
+}
+
+/* Restore a slot snapshot taken by try_evict_lru. Reinstates both
+ * the in-memory entry (so the scene tab reappears) and its
+ * ReplExportConfig (so its cfg toggles survive). No-op if `slot < 0`
+ * (the "no eviction happened" sentinel from try_evict_lru). */
+static void restore_evicted_slot(int slot,
+                                 const UserScene *stash,
+                                 const ReplExportConfig *cfg_stash) {
+    if (slot < 0) return;
+    memcpy(&g_user_scenes[slot], stash, sizeof(UserScene));
+    memcpy(&g_scene_cfg[slot], cfg_stash, sizeof(ReplExportConfig));
+}
+
+int repl_load_scene_as_new_slot(const char *path,
+                                ReplSceneLoadStatus *out_reason) {
+    if (out_reason) *out_reason = REPL_SCENE_LOAD_OK;
+
+    if (!path || !*path) {
+        if (out_reason) *out_reason = REPL_SCENE_LOAD_ERR_EMPTY_PATH;
+        return -1;
+    }
+
+    /* Filesystem probing happens here (not in editor/) so the editor
+     * stays a pure modal text controller. Distinguish missing-file
+     * vs directory so the caller can render the right error message
+     * without re-stat()ing. */
+    struct stat st;
+    if (stat(path, &st) != 0) {
+        if (out_reason) *out_reason = REPL_SCENE_LOAD_ERR_NOT_FOUND;
+        return -1;
+    }
+    if (S_ISDIR(st.st_mode)) {
+        if (out_reason) *out_reason = REPL_SCENE_LOAD_ERR_IS_DIR;
+        return -1;
+    }
+
+    /* Persist the currently-active scene into ITS slot (not slot 0!)
+     * before load_scene_file_into_slot wipes live state. Using
+     * save_user_scene() here would clobber the home slot ("My Scene")
+     * any time the active scene was at slot 1+, losing the user's
+     * in-progress edits when they switched back via tabs / F12. */
+    repl_scenes_save_active_scene_if_any();
+
+    /* Stash so a parse failure or slots-full restore leaves the live
+     * document intact. load_scene_file_into_slot clears live state as
+     * its first step, so we must capture before that point. */
     UserScene stash;
     ReplExportConfig stash_cfg;
     stash_live_state(&stash, &stash_cfg);
     int stash_example = g_example_idx;
     int stash_active  = g_active_user_scene;
 
+    /* Eviction is transactional with the load: snapshot the victim
+     * slot's in-memory entry so a subsequent parse failure can
+     * restore the tab. Without this, a bad-syntax file would silently
+     * drop the LRU tab from the user's workspace. */
+    UserScene evicted_stash;
+    ReplExportConfig evicted_cfg_stash;
+    int evicted_slot = try_evict_lru(&evicted_stash, &evicted_cfg_stash);
+    if (evicted_slot == -2) {
+        restore_live_from_stash(&stash, &stash_cfg);
+        g_example_idx       = stash_example;
+        g_active_user_scene = stash_active;
+        if (out_reason) *out_reason = REPL_SCENE_LOAD_ERR_NO_SLOT;
+        return -1;
+    }
+    /* evicted_slot == -1 means no eviction was needed (a free slot
+     * already existed); >=0 means we evicted and snapshotted. */
+
     int slot = load_scene_file_into_slot(path);
     if (slot < 0) {
         restore_live_from_stash(&stash, &stash_cfg);
         g_example_idx       = stash_example;
         g_active_user_scene = stash_active;
+        /* Roll back the eviction's in-memory mutation. The on-disk
+         * file written by evict_scene_to_workspace is left in place —
+         * it's a faithful copy of the scene's pre-eviction state, so
+         * after restore_evicted_slot the in-memory tab and the disk
+         * file agree, and the user has lost nothing. */
+        restore_evicted_slot(evicted_slot, &evicted_stash, &evicted_cfg_stash);
+        if (out_reason) *out_reason = REPL_SCENE_LOAD_ERR_PARSE;
         return -1;
     }
 

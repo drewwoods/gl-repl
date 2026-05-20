@@ -45,15 +45,31 @@ void repl_save_active_scene(const ReplExportLayout *layout);
 int  repl_save_workspace(const char *dir, const ReplExportLayout *layout);
 int  repl_load_workspace(const char *dir);
 
+/* Reasons repl_load_scene_as_new_slot can fail. Callers (status-bar
+ * prompts, menu wiring) translate these into user-visible messages
+ * without needing to do filesystem probing themselves. */
+typedef enum {
+    REPL_SCENE_LOAD_OK = 0,         /* succeeded; slot index returned */
+    REPL_SCENE_LOAD_ERR_EMPTY_PATH, /* empty / NULL path */
+    REPL_SCENE_LOAD_ERR_NOT_FOUND,  /* stat() failed (no such file, EACCES, ...) */
+    REPL_SCENE_LOAD_ERR_IS_DIR,     /* path resolved to a directory */
+    REPL_SCENE_LOAD_ERR_PARSE,      /* repl_export_load_from_file rejected it */
+    REPL_SCENE_LOAD_ERR_NO_SLOT     /* slots full and no workspace bound to evict to */
+} ReplSceneLoadStatus;
+
 /* Runtime "load file as new scene": loads `path` into a freshly-
- * allocated user-scene slot (or slot 0 if it's empty), makes that
- * slot the active scene, and leaves any previously-active scene in
- * its own slot for later retrieval via the scene tabs / F12. Returns
- * the new slot index on success, -1 on failure (file missing, parse
- * error, all slots full and no workspace bound for eviction). On
- * failure the previously-active scene is restored — the live document
- * is preserved. */
-int  repl_load_scene_as_new_slot(const char *path);
+ * allocated user-scene slot (slot allocation is delegated to the
+ * shared load_scene_file_into_slot helper, which also covers the
+ * workspace-load path), makes that slot the active scene, and leaves
+ * any previously-active scene in its own slot for later retrieval
+ * via the scene tabs / F12. Returns the new slot index on success,
+ * -1 on failure. *out_reason (when non-NULL) receives a distinguished
+ * failure reason so callers can render the right error without
+ * re-probing the path. The live document AND the undo ring are
+ * preserved on failure regardless of reason — only the caller
+ * controls when to clear the undo ring (typically only on success). */
+int  repl_load_scene_as_new_slot(const char *path,
+                                 ReplSceneLoadStatus *out_reason);
 
 /* Query/set the bound workspace directory (persisted across save/load).
  * repl_workspace_dir() returns "" if not bound. repl_set_workspace_dir(NULL)

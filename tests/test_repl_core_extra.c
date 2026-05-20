@@ -13,6 +13,7 @@
 #include "ui/panels.h"
 #include "editor/inline_file_prompt.h"
 #include "editor/inline_rename.h"
+#include "editor/undo.h"
 
 #define g_anim_time (repl_state_variables_mut()->anim_time)
 
@@ -623,13 +624,23 @@ void test_inline_file_prompt_flow() {
      * file was missing. The strip occludes the regular status bar, so
      * relying on repl_set_status alone left the user with no
      * feedback. Now the error is mirrored into the in-prompt buffer
-     * AND repl_set_status, and the file is stat()'d BEFORE any state
-     * mutation so a missing-file commit cannot wipe the document. */
+     * AND repl_set_status, and stat() runs BEFORE any state mutation
+     * (inside repl_load_scene_as_new_slot) so a missing-file commit
+     * cannot wipe the document. */
     glr_app_reset_all(); declare_test_vars();
     editor_feed_line("glVertex3f(11,22,33);");
     repl_flatten_commands();
     int verts_before_missing = repl_count_vertices();
     int active_before_missing = repl_active_user_scene();
+
+    /* Stage an undo snapshot so we can verify the failed load does
+     * NOT clear the undo ring (C1: undo_clear must happen on success
+     * only, not preemptively before the load). */
+    editor_undo_push_snapshot();
+    EditorUndoRingState ring_before_missing;
+    editor_undo_ring_state_capture(&ring_before_missing);
+    ASSERT_TRUE("undo ring has at least one snapshot before failed load",
+                ring_before_missing.undo_count > 0);
 
     editor_inline_file_prompt_begin("/tmp/repl_item19_missing_xyz123.c");
     editor_inline_file_prompt_handle_key('\r');
@@ -643,6 +654,13 @@ void test_inline_file_prompt_flow() {
                repl_count_vertices(), verts_before_missing);
     ASSERT_INT("missing file does not change active scene",
                repl_active_user_scene(), active_before_missing);
+
+    /* Regression (C1): undo ring must survive a failed load. */
+    EditorUndoRingState ring_after_missing;
+    editor_undo_ring_state_capture(&ring_after_missing);
+    ASSERT_INT("failed load preserves undo ring (regression C1)",
+               ring_after_missing.undo_count,
+               ring_before_missing.undo_count);
 
     /* Typing a char clears the stale error. */
     editor_inline_file_prompt_handle_key('x');
@@ -734,7 +752,9 @@ void test_inline_file_prompt_flow() {
         ASSERT_INT("live document is the loaded scene (2 verts)",
                    repl_count_vertices(), 2);
 
-        /* Load into an empty document still works. */
+        /* Load into an empty document still works AND allocates a
+         * real slot (T1: previously the empty-doc subcase didn't
+         * verify the slot was allocated). */
         glr_app_reset_all(); declare_test_vars();
         editor_inline_file_prompt_begin(src_path);
         editor_inline_file_prompt_handle_key('\r');
@@ -743,8 +763,111 @@ void test_inline_file_prompt_flow() {
                    editor_inline_file_prompt_active(), 0);
         ASSERT_INT("load into empty doc loads 2 verts",
                    repl_count_vertices(), 2);
+        ASSERT_TRUE("load into empty doc allocates a real slot (T1)",
+                    repl_active_user_scene() >= 0);
 
         unlink(src_path);
+    }
+
+    /* --- Regression: eviction + parse failure preserves the tab ----- */
+    /* Bug P1 (round 2): when all slots are full and a workspace is
+     * bound, the load path LRU-evicts a tab to disk. If the
+     * subsequent parse failed, the in-memory slot was permanently
+     * gone from the tabs (the data was still on disk, but the user
+     * would see a tab disappear despite the "Failed to load" error).
+     * Fix: snapshot the victim slot before evicting and restore it
+     * on parse failure. */
+    {
+        /* Fill all MAX_USER_SCENES slots and bind a workspace dir. */
+        glr_app_reset_all(); declare_test_vars();
+        char ws_dir[] = "/tmp/test_repl_evict_restore_XXXXXX";
+        const char *made_dir = mkdtemp(ws_dir);
+        ASSERT_TRUE("mkdtemp eviction workspace", made_dir != NULL);
+        if (made_dir) {
+            repl_set_workspace_dir(made_dir);
+            /* Synthesize MAX_USER_SCENES scenes by repeatedly loading
+             * an example and promoting it. */
+            for (int i = 0; i < MAX_USER_SCENES && repl_example_count() > 0; i++) {
+                if (repl_user_scene_count() >= MAX_USER_SCENES) break;
+                repl_load_example(0);
+                editor_feed_line("glVertex3f(0,0,0);");  /* mutate to force promote */
+                repl_promote_example_if_needed();
+            }
+            int filled_count = repl_user_scene_count();
+            ASSERT_TRUE("workspace filled to capacity (or close)",
+                        filled_count > 0);
+
+            /* Write a *.c file that will fail to parse. */
+            const char *bad_path = "/tmp/test_repl_evict_bad.c";
+            FILE *f = fopen(bad_path, "w");
+            ASSERT_TRUE("opened bad file for write", f != NULL);
+            if (f) {
+                fputs("this is not a valid REPL scene file\n", f);
+                fclose(f);
+            }
+
+            /* Attempt the load — expect parse failure. */
+            ReplSceneLoadStatus reason = REPL_SCENE_LOAD_OK;
+            int new_slot = repl_load_scene_as_new_slot(bad_path, &reason);
+            ASSERT_INT("bad-syntax load fails", new_slot, -1);
+
+            /* If we evicted (only matters when all slots were full),
+             * the tab count must be unchanged after failure. When the
+             * synth couldn't quite fill capacity, this is still a
+             * useful invariant: a failed parse never reduces tab count. */
+            ASSERT_INT("failed-parse load preserves tab count (P1)",
+                       repl_user_scene_count(), filled_count);
+
+            unlink(bad_path);
+            repl_set_workspace_dir(NULL);
+            /* Best-effort cleanup of the temp workspace dir + files. */
+            DIR *d = opendir(made_dir);
+            if (d) {
+                struct dirent *ent;
+                while ((ent = readdir(d))) {
+                    if (ent->d_name[0] == '.') continue;
+                    char p[1024];
+                    snprintf(p, sizeof(p), "%s/%s", made_dir, ent->d_name);
+                    unlink(p);
+                }
+                closedir(d);
+            }
+            rmdir(made_dir);
+        }
+    }
+
+    /* --- Mutual exclusion: at most one inline modal at a time (C2) -- */
+    /* Bug fix: previously, begin'ing one modal while the other was
+     * active left both active. The controller's keyboard route checks
+     * rename first, so the file prompt would be invisible to
+     * keystrokes while still drawing in the snapshot. Fix: each
+     * _begin cancels the other modal first. */
+    glr_app_reset_all(); declare_test_vars();
+    if (repl_example_count() > 0) {
+        repl_load_example(0);
+        int rename_slot = repl_promote_example_if_needed();
+        if (rename_slot >= 0) {
+            ASSERT_INT("rename begins",
+                       editor_inline_rename_begin(rename_slot), 1);
+            ASSERT_INT("rename active",
+                       editor_inline_rename_active(), 1);
+            /* Opening the file prompt cancels rename. */
+            ASSERT_INT("file prompt begins from active rename",
+                       editor_inline_file_prompt_begin("x.c"), 1);
+            ASSERT_INT("rename cancelled by file prompt begin",
+                       editor_inline_rename_active(), 0);
+            ASSERT_INT("file prompt now active",
+                       editor_inline_file_prompt_active(), 1);
+
+            /* Symmetric: rename begin cancels file prompt. */
+            ASSERT_INT("rename begins from active file prompt",
+                       editor_inline_rename_begin(rename_slot), 1);
+            ASSERT_INT("file prompt cancelled by rename begin",
+                       editor_inline_file_prompt_active(), 0);
+            ASSERT_INT("rename now active",
+                       editor_inline_rename_active(), 1);
+            editor_inline_rename_cancel();
+        }
     }
 }
 
