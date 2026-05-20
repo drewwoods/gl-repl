@@ -246,8 +246,10 @@ Test sources live under `tests/` and shared test-only helpers live under
 | `src/repl/state.h` | Typed runtime-state facade, reset helpers, and focused accessors over the live REPL state |
 | `src/repl/state_views.h` | Read-only (by-value) state getters; safe to include from `scene_*` and `ui_*` |
 | `src/repl/state_owners.h` | Mutable `_mut()` accessors; owner modules and controller only |
-| `src/editor/input.c` | Editor's text-document controller: keyboard/mouse dispatch, cursor/scroll/selection/search/autocomplete navigation, clipboard, undo, commit orchestration, `editor_feed_line`. Non-editor routing (replay, audio, config, save, camera) lives in `src/app/glr_ctrl.c` |
+| `src/editor/input.c` | **REPL editor input dispatcher**: REPL key bindings (`;` commit, Tab autocomplete, Ctrl+R reformat, tutorial guards, comment toggle) + REPL-flavored orchestration on top of `edit_ops` primitives. Non-editor routing (replay, audio, config, save, camera) lives in `src/app/glr_ctrl.c`. The generic counterpart for `editor_demo` is `tools/editor_demo/input.c`. |
 | `src/editor/input.h` | Editor input dispatch entry points + `EditorInputDispatchEffects` typedef + `editor_input_active_modifiers` test seam |
+| `src/editor/edit_ops.c` | Generic text-editing primitives shared by `src/editor/input.c` (REPL dispatcher) and `tools/editor_demo/input.c` (generic dispatcher): char insert/delete at cursor, input-selection consume, type-char and backspace (selection-aware). REPL-free; locked by `check-edit-ops-pure`. |
+| `src/editor/edit_ops.h` | `edit_op_*` primitive declarations |
 | `src/editor/commit.c` | Editor-side commit transaction boundary: compile via `repl_compile`, undo snapshot, text-buffer write, REPL apply, dirty-state updates |
 | `src/editor/commit.h` | Commit orchestration API (`editor_commit_apply_external_change`, `editor_try_commit_*` helpers) |
 | `src/editor/state.c` | Owns `EditorState`: editor buffer, cursor, selection, search, autocomplete, scroll, undo/redo, transformers, highlights, virtual lines |

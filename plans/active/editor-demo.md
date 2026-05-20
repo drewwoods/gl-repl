@@ -16,26 +16,74 @@ UI split. Phases 5, 6, 7b describe the EditorServices/large-shim
 approach that the "Updated direction" pivot replaced; treat their
 service-table designs and shim-shrinkage targets as historical.
 
-## Current state (2026-05-20) — paused for review
+## Current state (2026-05-21) — Phase 8 v1 landed
 
-Resumption work on Phases 5, 6, 7b is on branch
-`editor-repl-decoupling` (pushed). The demo binary links and runs;
-the iterative peeling of `repl_shim.c` and the real-GL rendering
-wire-up are paused for review before continuing.
+Phase 8 v1 is implemented and pushed on branch
+`editor-repl-decoupling`. The generic editor demo binary builds,
+renders text via `ui_text_panel`, dispatches its own keys via a
+generic dispatcher, and ships with a working File menu — all
+without linking any REPL-flavored editor controller files.
 
 ### Landed
 
 | Commit | Phase | What |
 |--------|-------|------|
 | `456c4aa` | (rescope) | Plan moved to `plans/active/`. `EditorChromeServices` dropped: chrome is editor-inherent, residual `glr_*` reach stubbed as direct symbols. |
-| `c1247bf` | Phase 5 entry | Surfaces re-measured against current tree: input.c=22, commit.c=30 unique `repl_*` symbols. input.c `glr_*` reach=6 (vs draft "~3-4", below the 8-symbol reopen threshold). Service-surface refinement note added. |
-| `a5b6388` | Phase 5 step | `parse_command_ctx` routed through `EditorServices` — 5 call sites migrated as the worked example of the migration pattern. Builds clean; `test_repl_core_commit` (296/296) and `test_repl_core_parse` (260/260) green. |
-| `b6250bc` | **Phase 6** | `tools/editor_demo/editor_demo.c` skeleton + `tools/editor_demo/repl_shim.c` (~85 direct stubs). Builds clean under both `USE_GL_STUBS=1` (link-check + smoke) and real GL. |
-| `01c60d3` | **Phase 7b** | `scripts/check-editor-repl-surface.sh` ratchet + `scripts/baselines/editor-repl-surface.txt` baseline (input.c=22, commit.c=30). Wired into `make check` and `make check-state-ownership`. |
+| `c1247bf` | Phase 5 entry | Surfaces re-measured against current tree: input.c=22, commit.c=30 unique `repl_*` symbols. input.c `glr_*` reach=6 (vs draft "~3-4", below the 8-symbol reopen threshold). |
+| `a5b6388` | Phase 5 step | `parse_command_ctx` routed through `EditorServices` — 5 call sites migrated as the worked example of the migration pattern. Kept as a worked example for the REPL editor's own testability; not load-bearing for the demo. |
+| `b6250bc` | **Phase 6** | `tools/editor_demo/editor_demo.c` skeleton + `tools/editor_demo/repl_shim.c` (~85 direct stubs at the time). |
+| `01c60d3` | **Phase 7b** | `scripts/check-editor-repl-surface.sh` ratchet + baseline (input.c=22, commit.c=30). Wired into `make check` and `make check-state-ownership`. |
 | `d5a0407` | **Phase 7b** | `MODULES.md` documents the `editor_demo` binary alongside `repl_demo` and `scene_demo`. |
+| `4ef3761` | (review) | Plan update: recorded current state, named next steps, paused for review. |
+| `ff0b073` | (pivot) | Plan refit: generic text editor demo + shared `edit_ops` library; Phase 8 scope locked. |
+| `1a88444` | (review fixes) | Marked historical sections superseded; narrowed v1 scope (no undo, no search, no status bar); made `check-edit-ops-pure` required. |
+| `28fccb7` | **Phase 8.3** | New `src/editor/edit_ops.{c,h}` library with 5 primitives (buffer insert/delete, selection consume, type-char, backspace). `editor_input_consume_selection` moved into `edit_ops` as `edit_op_consume_input_selection`. Two `src/editor/input.c` handlers (printable, text-delete) migrated. `scripts/check-edit-ops-pure.sh` wired into `make check` + `check-state-ownership`. |
+| `d114512` | **Phase 8.5** | `editor_demo` display callback builds a `UiTextPanelSnapshot` from `EditorState` and calls `ui_text_panel_render`. Adds `text_panel`/`text_layout`/`text_search` to demo link set. |
+| `0c83781` | **Phase 8.6** | `tools/editor_demo/menu.{c,h}` — minimal File menu (Load / Save / Quit). Load/Save are unimplemented; Quit calls exit. |
+| `5c3020d` | **Phase 8.4** | `tools/editor_demo/input.{c,h}` — generic input dispatcher. Demo's GLUT keyboard callbacks route through `demo_input_handle_key` / `demo_input_handle_special` instead of `editor_handle_key`. v1 covers printable ASCII, backspace, Escape, and cursor-within-line nav. |
+| `61407e4` | **Phase 8.7+8.8** | `EDITOR_DEMO_DEP_SRCS` reduced to **6 source files**: `edit_ops.c`, `state.c`, `text_layout.c`, `text_panel.c`, `text_search.c`, `prof.c` (+ `gl_stub_counts.c`). All REPL-flavored controller files dropped. `repl_shim.c` shrunk from ~85 stubs to **1**: `repl_state_edit_line` (the acknowledged `state.c` leak). |
 
 Full regression: 6292/6292 tests across 45 binaries clean; full
 `make check-state-ownership` clean.
+
+### Phase 8 outcome vs. plan
+
+- Demo link set: target was "well under 20" unique shim symbols
+  (8.8). Actual: **1**. The one remaining stub is exactly the
+  acknowledged `state.c` edit-line leak called out in the
+  "Editor files that aren't yet generic" inventory.
+- `tools/editor_demo/repl_shim.c` is now an honest one-symbol
+  ledger. Any second entry is a layering-regression signal.
+- `check-edit-ops-pure` is wired and required, locking the
+  edit_ops boundary against silent regression.
+- `MODULES.md` and `CLAUDE.md` updated (Phase 8.10): `input.c`
+  relabelled as the REPL editor input dispatcher; new `edit_ops`
+  entry added; `editor_demo` description updated to describe the
+  current link set + the v1 generic-editor behavior.
+
+### What's still open (not v1 scope)
+
+These are intentionally deferred from Phase 8 — each is a separate
+follow-up phase:
+
+- **Edit-line ownership cleanup.** Move edit-line out of REPL state
+  into `EditorState`. Removes the single remaining shim stub.
+- **Cross-line navigation.** Arrow up/down between lines, Enter to
+  insert a new line. Needs new `edit_ops` primitives (or local
+  demo logic) and decision on how the demo's edit-line cursor
+  advances.
+- **Undo/redo for the demo.** Generic text-only undo ring inside
+  `EditorState`, separate from `src/editor/undo.c`'s REPL-flavored
+  predef-var / scratch-array snapshotter.
+- **Find/search for the demo.** Generic text find primitive in
+  `edit_ops` (separate from `src/editor/search.c`'s REPL-state
+  coupling).
+- **Word jumps / Shift+arrow selection / Ctrl+A/C/X/V / scroll
+  wheel.** Each is a small dispatcher extension once the
+  corresponding primitive lands in `edit_ops`.
+- **File menu Load/Save handlers.** Currently unimplemented per
+  locked v1 scope; can be wired against `editor_buffer_load_lines`
+  / a path-prompt overlay.
 
 ### What the demo currently is — and isn't
 

@@ -183,22 +183,27 @@ lists to make the layer boundaries observable:
   into app/editor/UI owners at link time. See
   [`ARCHITECTURE.md`](ARCHITECTURE.md#standalone-repl-demo-coupling) for
   the detailed dependency table and removal plan.
-- **`make editor_demo`** (`tools/editor_demo/editor_demo.c`) — drives
-  `src/editor/` (input dispatch, commit, state, clipboard, undo,
-  search, completion) against a fake REPL semantics. Inverse of
-  `repl_demo`: proves the editor module set links without the REPL
-  pipeline (`src/repl/*`), the controller (`src/app/*`), or the
-  scene renderer (`src/scene/*`). The shim
-  (`tools/editor_demo/repl_shim.c`) is a dependency ledger against
-  `EditorServices` plus direct `repl_*` / `glr_*` / `ui_*` /
-  `tutorial_*` / `color_picker_*` stubs for the editor's
-  outside-REPL coupling. Per the "Scope decision" in
-  `plans/active/editor-demo.md`, UI chrome (menu bar, help overlay,
-  color picker, tutorial) is editor-inherent: the symbols are stubbed
-  in `repl_shim.c` only because the widget/UI `.c` files transitively
-  pull in REPL. Migrating any stub group into a coarser
-  `EditorServices` callback shrinks the shim and ratchets the
-  `check-editor-repl-surface` baseline down.
+- **`make editor_demo`** (`tools/editor_demo/`) — a generic
+  plain-text editor demo driven by its *own* input dispatcher
+  (`tools/editor_demo/input.c`) and its *own* File menu
+  (`tools/editor_demo/menu.c`). Per the Phase 8 cleavage in
+  `plans/active/editor-demo.md`, `src/editor/input.c` is recognized
+  as the **REPL editor's input dispatcher** (REPL key bindings +
+  REPL-flavored controller), not a generic editor controller; the
+  demo therefore does *not* link it. Same goes for `commit.c`,
+  `clipboard.c`, `undo.c`, `reformat.c`, `search.c`, `completion.c`
+  and the inline overlays — all REPL-flavored controllers, none
+  linked by the demo. What *is* linked: `src/editor/state.c` (text
+  buffer + cursor + selection data model),
+  `src/editor/edit_ops.c` (generic primitives — char insert/delete,
+  selection consume, used by both `src/editor/input.c` and
+  `tools/editor_demo/input.c`), `src/ui/text_panel.c` + its layout
+  / search helpers, `prof.c`. The shim
+  (`tools/editor_demo/repl_shim.c`) is a one-symbol ledger:
+  `repl_state_edit_line`, the last acknowledged leak in
+  `state.c`'s `EditorInputView` builder, will go away when a
+  follow-up phase moves edit-line ownership into `EditorState`.
+  Any second shim entry is a layering-regression signal.
 
 All three demos default to `USE_GL_STUBS=1`-friendly object lists.
 Run `./repl_demo` for a parse/flatten summary of the built-in samples;
@@ -209,8 +214,10 @@ the sample-3 animation, `q`/Esc quits. Render mode shares the
 parse/flatten/execute path with the headless mode; the only added
 surface is GLUT bootstrap and a fixed orbit camera. `editor_demo`
 runs as a link-only smoke test under `USE_GL_STUBS=1`; the real-GL
-build opens a minimal window driven by `editor_handle_key` /
-`editor_handle_special`.
+build opens a minimal text-editor window: typing inserts characters
+via `edit_op_type_char`, backspace via `edit_op_backspace`, arrow
+keys move the cursor within the input row, and the File menu shows
+Load / Save (unimplemented v1 handlers — they just log) plus Quit.
 
 ## Naming Conventions
 
@@ -564,7 +571,8 @@ flowchart LR
     end
 
     subgraph editor["2. Editor (text model + controller)"]
-        einput["src/editor/input.c<br/>text-doc input dispatch<br/>(cursor / scroll / select / search)<br/>(repl_editor.{c,h} deleted in J1)"]
+        einput["src/editor/input.c<br/>REPL editor input dispatcher<br/>(REPL key bindings + REPL-flavored<br/>orchestration on top of edit_ops)"]
+        eedops["src/editor/edit_ops.c<br/>generic text-editing primitives<br/>(char insert / delete / selection consume)<br/>(shared by REPL input.c and tools/editor_demo/input.c)"]
         ecommit["src/editor/commit.c<br/>commit transaction<br/>(compile + undo + buffer + apply)"]
         estate["src/editor/state.c<br/>EditorState storage<br/>(buffer · cursor · scroll · selection ·<br/>autocomplete · search · transformers)"]
         eservices["src/editor/services.c<br/>commit-services dispatch table"]
