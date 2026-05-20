@@ -538,6 +538,28 @@ REPL_DEMO_DEP_SRCS = src/repl/format.c \
 # only path that touches cfg state, and that lives in src/app/glr_actions.c
 # (not in the demo link set).
 
+# Object list for the standalone editor_demo. Proves the editor module
+# set links without the REPL pipeline, the controller, or the scene
+# renderer. Per the "Scope decision" in plans/active/editor-demo.md,
+# UI chrome (menu bar, help overlay, color picker, tutorial) is
+# editor-inherent and links directly; src/repl/* and src/app/* are
+# replaced by tools/editor_demo/repl_shim.c. src/editor/services.c is
+# *excluded* — the shim's editor_services_default() takes its place,
+# so the demo gets demo-local bindings for compile / apply / parse.
+EDITOR_DEMO_DEP_SRCS = src/editor/clipboard.c \
+                       src/editor/commit.c \
+                       src/editor/completion.c \
+                       src/editor/help_session.c \
+                       src/editor/inline_file_prompt.c \
+                       src/editor/inline_rename.c \
+                       src/editor/input.c \
+                       src/editor/reformat.c \
+                       src/editor/search.c \
+                       src/editor/state.c \
+                       src/editor/undo.c \
+                       prof.c \
+                       tests/gl-stubs/gl_stub_counts.c
+
 OBJDIR = build/$(BUILD)$(if $(filter 1,$(USE_GL_STUBS)),-gl-stubs,)
 BINDIR = $(OBJDIR)
 OBJ_CFLAGS = $(BUILD_CFLAGS) $(CFLAGS)
@@ -613,13 +635,14 @@ CORE_TEST_BINS = $(filter-out test_eval test_format test_repl_code_panel_layout 
 # them — benchmarks are timing-sensitive and should be invoked explicitly.
 BENCH_BINS = bench_repl
 
-ROOT_BIN_LINKS = sample scene_demo repl_demo
+ROOT_BIN_LINKS = sample scene_demo repl_demo editor_demo
 
 .PHONY: $(ROOT_BIN_LINKS) $(TEST_BINS) $(BENCH_BINS)
 
 SAMPLE_BIN = $(BINDIR)/sample
 SCENE_DEMO_BIN = $(BINDIR)/scene_demo
 REPL_DEMO_BIN = $(BINDIR)/repl_demo
+EDITOR_DEMO_BIN = $(BINDIR)/editor_demo
 
 define core_test_binary
 $(1)_OBJS = $$(OBJDIR)/$$(TEST_DIR)/$(1).o $$(CORE_TEST_OBJS)
@@ -721,6 +744,26 @@ $(REPL_DEMO_BIN): $(REPL_DEMO_OBJS)
 
 repl_demo: FORCE $(REPL_DEMO_BIN) ## Build the standalone REPL pipeline demo.
 	ln -sfn $(REPL_DEMO_BIN) $@
+
+# Standalone editor demo. Inverse of repl_demo: proves the editor
+# module set (src/editor/*, plus the UI / widgets / prof modules it
+# legitimately depends on downward) links without src/repl/*,
+# src/app/*, or src/scene/*. tools/editor_demo/repl_shim.c provides
+# editor_services_default() with no-op bindings plus direct stubs
+# for the repl_* / glr_* symbols the editor still calls by name.
+# Adding a new direct call site in the editor that grows the shim
+# is a regression; the check-editor-repl-surface gate (Phase 7b)
+# catches it.
+EDITOR_DEMO_OBJS = $(OBJDIR)/tools/editor_demo/editor_demo.o \
+                   $(OBJDIR)/tools/editor_demo/repl_shim.o \
+                   $(addprefix $(OBJDIR)/,$(EDITOR_DEMO_DEP_SRCS:.c=.o))
+
+$(EDITOR_DEMO_BIN): $(EDITOR_DEMO_OBJS)
+	@mkdir -p $(dir $@)
+	$(CC) $(OBJ_CFLAGS) -o $@ $(EDITOR_DEMO_OBJS) $(GL_LDFLAGS)
+
+editor_demo: FORCE $(EDITOR_DEMO_BIN) ## Build the standalone editor demo.
+	ln -sfn $(EDITOR_DEMO_BIN) $@
 
 .SECONDEXPANSION:
 
@@ -1173,7 +1216,7 @@ else
 endif
 
 clean: ## Remove built binaries and object files.
-	rm -rf $(ROOT_BIN_LINKS) sample.dSYM scene_demo.dSYM repl_demo.dSYM \
+	rm -rf $(ROOT_BIN_LINKS) sample.dSYM scene_demo.dSYM repl_demo.dSYM editor_demo.dSYM \
 		$(TEST_BINS) $(addsuffix .dSYM,$(TEST_BINS)) \
 		$(BENCH_BINS) $(addsuffix .dSYM,$(BENCH_BINS)) \
 		build/coverage/lcov.info build/coverage/html \
