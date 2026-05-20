@@ -16,7 +16,7 @@ UI split. Phases 5, 6, 7b describe the EditorServices/large-shim
 approach that the "Updated direction" pivot replaced; treat their
 service-table designs and shim-shrinkage targets as historical.
 
-## Current state (2026-05-21) — Phase 8 v1 landed
+## Current state (2026-05-20) — Phase 8 v1 landed
 
 Phase 8 v1 is implemented and pushed on branch
 `editor-repl-decoupling`. The generic editor demo binary builds,
@@ -181,9 +181,12 @@ What `editor_demo` v1 is:
   demo's display callback from `EditorState`.
 - Generic input dispatch in `tools/editor_demo/input.c` covering
   the primitives that have a clean extraction path:
-  character insertion, backspace/delete, arrow keys + word jumps,
-  Home/End, Shift+arrow selection, double-click word select,
-  drag selection, Ctrl+A/C/X/V (text only), scroll wheel.
+  printable ASCII insertion, backspace/delete, bare Left/Right and
+  Home/End within the input row, Escape to quit. Word jumps,
+  Shift+arrow selection, double-click word select, drag selection,
+  Ctrl+A/C/X/V, and scroll wheel are listed in "What's still open"
+  below — they need additional `edit_ops` primitives or cross-line
+  navigation support and are explicitly *not* in v1.
 - A **menu bar with a File menu**. Load/Save items render and are
   hit-testable but their *handlers can be unimplemented* initially
   (status messages or no-ops). The point is to exercise the
@@ -1050,7 +1053,12 @@ silently in the next refactor, defeating the forcing function.
 - `make editor_demo` — opens a window with rendered text and a
   working File menu (handlers may no-op).
 - `make test-stubs` — full regression green (existing tests pass;
-  new `test_edit_ops` covers the extracted primitives).
+  `test_editor_input_selection` already exercises
+  `edit_op_consume_input_selection` against `EditorState`. A focused
+  `test_edit_ops` for the `buffer_insert_char_at_cursor` /
+  `buffer_delete_left_of_cursor` / `type_char` / `backspace`
+  primitives is deferred — file as a follow-up if a regression
+  motivates it).
 - `make check-state-ownership` — clean, including the required
   `check-edit-ops-pure` guard.
 - `tools/editor_demo/repl_shim.c` — substantially smaller; the

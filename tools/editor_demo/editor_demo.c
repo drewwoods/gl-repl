@@ -228,7 +228,7 @@ static int run_demo(int argc, char **argv) {
     glutSpecialFunc(demo_special_func);
     glutMouseFunc(demo_mouse_func);
 
-    printf("editor_demo: q / Esc to quit\n");
+    printf("editor_demo: Esc to quit (q is a text character)\n");
     glutMainLoop();
     return 0;
 }
