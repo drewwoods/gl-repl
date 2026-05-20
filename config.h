@@ -113,11 +113,11 @@
  * GLR_VIEW_PROJECTION_TRANSITION_SECS controls the orthographic <->
  * perspective matrix blend duration once its sequential phase starts. */
 #ifndef GLR_CAMERA_TARGET_DECAY
-#define GLR_CAMERA_TARGET_DECAY 0.88f
+#define GLR_CAMERA_TARGET_DECAY 0.93f
 #endif
 
 #ifndef GLR_VIEW_PROJECTION_TRANSITION_SECS
-#define GLR_VIEW_PROJECTION_TRANSITION_SECS 2.50f
+#define GLR_VIEW_PROJECTION_TRANSITION_SECS 2.00f
 #endif
 
 /* 2D ortho scale reference.
