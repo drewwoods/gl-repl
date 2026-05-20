@@ -44,6 +44,7 @@
 
 #include "editor/input.h"
 #include "editor/state.h"
+#include "ui/text_panel.h"
 
 #include <gl_includes.h>
 
@@ -52,19 +53,114 @@
 
 #define DEMO_WINDOW_W 800
 #define DEMO_WINDOW_H 600
+#define DEMO_MAX_ROWS  (MAX_COMMANDS + 1)
+
+static int  g_demo_vp_w = DEMO_WINDOW_W;
+static int  g_demo_vp_h = DEMO_WINDOW_H;
+static int  g_demo_scroll = 0;
+
+/* Build a UiTextPanelSnapshot from EditorState. One TEXT row per
+ * buffer line plus one INPUT row at the active edit position.
+ * Caller-owned rows[] storage stays valid for the duration of the
+ * render/hit-test call.
+ *
+ * The demo does not (yet) own its own edit-line cursor; it reads
+ * the editor's current edit-line through the EditorInputView, which
+ * itself reads `repl_state_edit_line` via the shim. A follow-up
+ * phase moves edit-line ownership into EditorState so the demo
+ * doesn't need that shim stub. */
+static int demo_build_snapshot(UiTextPanelRow *rows, int rows_cap,
+                               UiTextPanelSnapshot *snap) {
+    EditorBufferView buf = editor_buffer_view();
+    EditorInputView  input = editor_state_input();
+
+    int n = 0;
+    int edit_line = input.edit_line_idx;
+    if (edit_line < 0) edit_line = 0;
+
+    for (int i = 0; i < buf.line_count && n < rows_cap; i++) {
+        if (i == edit_line)
+            continue;  /* INPUT row replaces the active line below */
+        UiTextPanelRow row = {0};
+        row.text              = editor_buffer_view_line(buf, i);
+        if (!row.text) row.text = "";
+        row.kind              = UI_TEXT_PANEL_ROW_TEXT;
+        row.left_gutter_label = i + 1;
+        row.source_line_idx   = i;
+        row.hit_target_line_idx = -1;
+        row.search_row_idx    = -1;
+        row.color.r = 0.85f; row.color.g = 0.88f; row.color.b = 0.92f;
+        row.color.a = 1.0f;  row.color.has_alpha = 0;
+        row.hit_eligible      = 1;
+        rows[n++] = row;
+    }
+
+    /* Active edit row (INPUT). Always present so the user has somewhere
+     * to type even when the buffer is empty. */
+    if (n < rows_cap) {
+        UiTextPanelRow row = {0};
+        row.text              = "";  /* INPUT rows ignore text */
+        row.kind              = UI_TEXT_PANEL_ROW_INPUT;
+        row.left_gutter_label = edit_line + 1;
+        row.source_line_idx   = edit_line;
+        row.hit_target_line_idx = -1;
+        row.search_row_idx    = -1;
+        row.color.r = 0.95f; row.color.g = 0.95f; row.color.b = 1.0f;
+        row.color.a = 1.0f;  row.color.has_alpha = 0;
+        row.hit_eligible      = 1;
+        rows[n++] = row;
+    }
+
+    snap->vp_w           = g_demo_vp_w;
+    snap->vp_h           = g_demo_vp_h;
+    snap->cp_x           = 0;
+    snap->cp_y           = 0;
+    snap->cp_w           = g_demo_vp_w;
+    snap->cp_h           = g_demo_vp_h;
+    snap->text_x         = 48;            /* leave room for line numbers */
+    snap->wrap_at_comma  = 0;
+    snap->top_chrome_h   = 0;
+    snap->rows           = rows;
+    snap->row_count      = n;
+    snap->scroll         = g_demo_scroll;
+    snap->chrome_flags   = UI_TEXT_PANEL_CHROME_LINE_NUMS;
+
+    snap->input.input          = input.input ? input.input : "";
+    snap->input.input_len      = input.input_len;
+    snap->input.cursor         = input.cursor_pos;
+    snap->input.anchor         = (input.anchor_pos >= 0) ? input.anchor_pos
+                                                         : input.cursor_pos;
+    snap->input.ghost          = "";
+    snap->input.hint           = "";
+    snap->input.cursor_visible = 1;
+
+    snap->search.active    = 0;
+    snap->search.query     = "";
+    snap->search.query_len = 0;
+    snap->search.hit_row   = -1;
+    snap->search.hit_char  = -1;
+
+    return n;
+}
 
 #ifndef GL_STUBS
 
 static void demo_display_func(void) {
     glClearColor(0.10f, 0.10f, 0.13f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-    /* TODO: drive ui_text_panel render against EditorState once shim
-     * is far enough along to populate a snapshot. For now the
-     * skeleton just shows the link works. */
+
+    UiTextPanelRow      rows[DEMO_MAX_ROWS];
+    UiTextPanelSnapshot snap;
+    UiTextPanelOutput   out = {0};
+    demo_build_snapshot(rows, DEMO_MAX_ROWS, &snap);
+    ui_text_panel_render(&snap, &out);
+
     glutSwapBuffers();
 }
 
 static void demo_reshape_func(int w, int h) {
+    g_demo_vp_w = w;
+    g_demo_vp_h = h;
     glViewport(0, 0, w, h);
     glutPostRedisplay();
 }
@@ -105,11 +201,17 @@ static int run_demo(int argc, char **argv) {
 
 static int run_demo(int argc, char **argv) {
     (void)argc; (void)argv;
-    /* Stub build is link-check only. Initialize editor state so we
-     * exercise at least one editor entry point at runtime. */
+    /* Stub build is link-check only, but we still exercise the
+     * snapshot build path so it stays compiled and used (avoids
+     * an unused-function warning and catches snapshot-shape
+     * regressions in CI before the real-GL render touches them). */
     editor_state_reset();
+    UiTextPanelRow      rows[DEMO_MAX_ROWS];
+    UiTextPanelSnapshot snap;
+    int n = demo_build_snapshot(rows, DEMO_MAX_ROWS, &snap);
     printf("editor_demo: stub build (link check only). "
-           "Rebuild without USE_GL_STUBS=1 to open a window.\n");
+           "Snapshot built with %d row(s). "
+           "Rebuild without USE_GL_STUBS=1 to open a window.\n", n);
     return 0;
 }
 

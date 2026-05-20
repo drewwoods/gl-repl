@@ -424,20 +424,6 @@ UiViewportState ui_state_viewport(void) {
     UiViewportState v = {0};
     return v;
 }
-int  ui_text_find_next_in_text(const char *hay, int from, const char *needle, int *out_pos) {
-    (void)hay; (void)from; (void)needle;
-    if (out_pos) *out_pos = -1;
-    return 0;
-}
-int  ui_text_find_prev_in_text(const char *hay, int from, const char *needle, int *out_pos) {
-    (void)hay; (void)from; (void)needle;
-    if (out_pos) *out_pos = -1;
-    return 0;
-}
-int  ui_text_matches_at(const char *hay, int pos, const char *needle) {
-    (void)hay; (void)pos; (void)needle; return 0;
-}
-
 /* ---- glr_* (no controller / app shell in demo) ------------------ */
 
 void glr_camera_controls_reset(void)                         { }
