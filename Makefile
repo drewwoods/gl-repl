@@ -171,6 +171,7 @@ endif
 	check-domain-owner-encapsulation \
 	check-duplicate-api-decls \
 	check-editor-ownership-budget \
+	check-editor-repl-surface \
 	check-gl-boundaries \
 	check-glr-ctrl-not-editor-mirror \
 	check-glr-state-no-repl-mutators \
@@ -1005,6 +1006,7 @@ check-state-ownership: ## Run state-ownership contract checks (new + tightened e
 		check-repl-demo-stubs-shrinking \
 		check-repl-no-direct-editor \
 		check-repl-demo-no-editor \
+		check-editor-repl-surface \
 		check-source-document-port-owners \
 		check-c99 \
 		check-module-prefixes \
@@ -1039,6 +1041,9 @@ check-ui-returns-hits-only: ## Verify ui_*.c input helpers do not call REPL/edit
 
 check-ui-text-panel-pure: ## Verify src/ui/text_panel.* stays REPL/editor-free.
 	@bash scripts/check-ui-text-panel-pure.sh
+
+check-editor-repl-surface: ## Ratchet direct repl_* call surface in src/editor/input.c and commit.c.
+	@bash scripts/check-editor-repl-surface.sh scripts/baselines/editor-repl-surface.txt
 
 check-ui-panels-no-mutators: ## Hard guard: src/ui/panels.c references no input-dispatch mutators (Phase J2.2).
 	@bash scripts/check-ui-panels-no-mutators.sh
