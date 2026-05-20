@@ -22,6 +22,8 @@
 #ifndef GLR_DEFAULTS_H
 #define GLR_DEFAULTS_H
 
+#include "app/glr_config.h"  /* GlrConfigKey (used by GlrExampleTagDefault) */
+
 #define CFG_DEFAULT_WIREFRAME         0
 #define CFG_DEFAULT_GRID_THEME        GRID_THEME_XZRULER
 #define CFG_DEFAULT_GRID_MAJOR_IDX    GRID_MAJOR_1
@@ -51,14 +53,36 @@
 #define CFG_DEFAULT_LINE_SMOOTH       0
 #define CFG_DEFAULT_ATTENUATE_POINTS  1
 
-/* Tag-keyed `@cfg` overrides applied during example loading, layered
- * between the global presentation reset and the example's own leading
- * `@cfg` metadata. Each entry is a `// @cfg slug = value` line fed
- * through repl_state_parse_workspace_header_line, so it travels the
- * same machinery as the example's own `@cfg`. Precedence:
- *   example `@cfg` > tag default > global default.
- * Multiple defaults per tag: define the macro as a brace-enclosed
- * string-literal initializer; the controller iterates the entries. */
-#define GLR_TAG_DEFAULT_CFG_2D { "// @cfg grid = 9" }
+/* Tag-keyed presentation defaults applied during example loading,
+ * layered between the global reset and the example's own leading
+ * `@cfg` metadata. Each entry is a (tag, GlrConfigKey, value) tuple;
+ * the controller applies them via glr_config_set() so the typed
+ * config machinery — not a parser path — owns the change.
+ *
+ * Precedence: example `@cfg` > tag default > global default.
+ *
+ * Initialize a table with the GLR_EXAMPLE_TAG_DEFAULTS macro:
+ *   static const GlrExampleTagDefault entries[] = GLR_EXAMPLE_TAG_DEFAULTS;
+ * The macro is guarded by `#ifndef` so a translation unit can pre-
+ * define its own version (e.g., a test injecting a synthetic policy
+ * via a unity-include of glr_ctrl.c) before this header is included.
+ *
+ * If two entries that match the same example's tag mask target the
+ * same GlrConfigKey, the later entry wins and the controller logs a
+ * one-line warning to stderr. Order the table so the preferred entry
+ * is last among colliding rows. */
+typedef struct {
+    int          tag_idx;  /* REPL_EXAMPLE_TAG_* */
+    GlrConfigKey key;
+    int          value;
+} GlrExampleTagDefault;
+
+#ifndef GLR_EXAMPLE_TAG_DEFAULTS
+#define GLR_EXAMPLE_TAG_DEFAULTS {                                         \
+    { .tag_idx = REPL_EXAMPLE_TAG_2D,                                      \
+      .key     = GLR_CONFIG_GRID_THEME,                                    \
+      .value   = GRID_THEME_PLANES },                                      \
+}
+#endif
 
 #endif /* GLR_DEFAULTS_H */

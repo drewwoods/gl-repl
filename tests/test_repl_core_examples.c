@@ -600,14 +600,15 @@ static void test_example_tag_metadata(void) {
     }
 }
 
-/* Tag-based example default overrides. The 2D tag default sets grid=9
- * (GRID_THEME_PLANES). Verify that:
+/* Tag-based example default overrides. The 2D tag default sets the
+ * grid theme to GRID_THEME_PLANES. Verify that:
  *
- *   1. A 2D example with no explicit grid `@cfg` lands at grid=9.
- *   2. A multi-tag example that includes 2D also lands at grid=9 when
- *      it doesn't override grid.
+ *   1. A 2D example with no explicit grid `@cfg` lands at
+ *      GRID_THEME_PLANES.
+ *   2. A multi-tag example that includes 2D also lands at
+ *      GRID_THEME_PLANES when it doesn't override grid.
  *   3. An example outside the 2D tag (3D-only) lands at the global
- *      grid default (GRID_THEME_XZRULER) — no tag default applies.
+ *      grid default (CFG_DEFAULT_GRID_THEME) — no tag default applies.
  *   4. An example tagged 2D but with its own `@cfg grid = N` keeps N
  *      (example `@cfg` wins over the tag default).
  *
@@ -650,19 +651,20 @@ static void test_example_tag_default_cfg(void) {
                     repl_example_has_tag(spirograph_idx, REPL_EXAMPLE_TAG_2D));
     }
 
-    /* (1) Single 2D-tag example, no own grid @cfg → grid_theme = 9. */
+    /* (1) Single 2D-tag example, no own grid @cfg → GRID_THEME_PLANES. */
     if (ring_idx >= 0) {
         load_example_for_test(ring_idx);
-        ASSERT_TRUE("2D tag default applies grid=9 (single tag)",
-                    glr_state_presentation().grid_theme == 9);
+        ASSERT_TRUE("2D tag default applies GRID_THEME_PLANES (single tag)",
+                    glr_state_presentation().grid_theme == GRID_THEME_PLANES);
     }
 
-    /* (2) Multi-tag example including 2D, no own grid @cfg → grid_theme = 9.
-     * The spirograph example is 2D|LINES with no explicit grid override. */
+    /* (2) Multi-tag example including 2D, no own grid @cfg →
+     * GRID_THEME_PLANES. The spirograph example is 2D|LINES with no
+     * explicit grid override. */
     if (spirograph_idx >= 0) {
         load_example_for_test(spirograph_idx);
-        ASSERT_TRUE("2D tag default applies grid=9 (multi tag without override)",
-                    glr_state_presentation().grid_theme == 9);
+        ASSERT_TRUE("2D tag default applies GRID_THEME_PLANES (multi tag)",
+                    glr_state_presentation().grid_theme == GRID_THEME_PLANES);
     }
 
     /* (3) 3D-only example → global default, no tag override. */
@@ -674,11 +676,134 @@ static void test_example_tag_default_cfg(void) {
     }
 
     /* (4) Multi-tag example that carries 2D but its own @cfg sets
-     * grid=7 → example wins over the 2D tag default. */
+     * grid=7 (GRID_THEME_OCEAN) → example wins over the 2D tag
+     * default. */
     if (stress_idx >= 0) {
         load_example_for_test(stress_idx);
         ASSERT_TRUE("example @cfg grid overrides 2D tag default",
-                    glr_state_presentation().grid_theme == 7);
+                    glr_state_presentation().grid_theme == GRID_THEME_OCEAN);
+    }
+}
+
+/* Exercise the tag-defaults dispatch with synthetic policies so the
+ * shipped table can stay a single conflict-free row while we still
+ * lock in the iteration semantics:
+ *
+ *   - Multiple entries targeting DIFFERENT keys all apply (independent
+ *     stacking).
+ *   - Multiple entries targeting the SAME key resolve last-wins, and
+ *     the function returns a non-zero collision count so the warning
+ *     surfaces a misconfigured policy.
+ *   - Entries whose tag bit is not in the mask are skipped.
+ *
+ * The test calls glr_ctrl_apply_tag_defaults directly with a synthetic
+ * table — no example loaded, no @cfg in play — so the only thing
+ * mutating state here is the helper itself. glr_app_reset_all
+ * normalizes presentation to global defaults before each subcase. */
+static void test_example_tag_default_dispatch(void) {
+    /* (A) Two entries, distinct keys, both tags present → both apply. */
+    {
+        static const GlrExampleTagDefault table[] = {
+            { .tag_idx = REPL_EXAMPLE_TAG_2D,
+              .key     = GLR_CONFIG_GRID_THEME,
+              .value   = GRID_THEME_PLANES },
+            { .tag_idx = REPL_EXAMPLE_TAG_LINES,
+              .key     = GLR_CONFIG_LINE_SMOOTH,
+              .value   = 1 },
+        };
+        unsigned int mask = repl_example_tag_bit(REPL_EXAMPLE_TAG_2D) |
+                            repl_example_tag_bit(REPL_EXAMPLE_TAG_LINES);
+
+        glr_app_reset_all(); declare_test_vars();
+        int collisions = glr_ctrl_apply_tag_defaults(mask, table, 2);
+        ASSERT_TRUE("distinct-key stack: no collision",
+                    collisions == 0);
+        ASSERT_TRUE("distinct-key stack: first entry applied",
+                    glr_state_presentation().grid_theme == GRID_THEME_PLANES);
+        ASSERT_TRUE("distinct-key stack: second entry applied",
+                    glr_state_render().line_smooth_enabled == 1);
+    }
+
+    /* (B) Two entries colliding on the same key for the same tag →
+     * later entry wins, collision count == 1. */
+    {
+        static const GlrExampleTagDefault table[] = {
+            { .tag_idx = REPL_EXAMPLE_TAG_2D,
+              .key     = GLR_CONFIG_GRID_THEME,
+              .value   = GRID_THEME_TRON },
+            { .tag_idx = REPL_EXAMPLE_TAG_2D,
+              .key     = GLR_CONFIG_GRID_THEME,
+              .value   = GRID_THEME_OCEAN },
+        };
+        unsigned int mask = repl_example_tag_bit(REPL_EXAMPLE_TAG_2D);
+
+        glr_app_reset_all(); declare_test_vars();
+        int collisions = glr_ctrl_apply_tag_defaults(mask, table, 2);
+        ASSERT_TRUE("same-key collision counted",
+                    collisions == 1);
+        ASSERT_TRUE("same-key collision: later entry wins",
+                    glr_state_presentation().grid_theme == GRID_THEME_OCEAN);
+    }
+
+    /* (C) Two entries colliding on the same key but for DIFFERENT tags
+     * — both tag bits set in the mask → still a collision (the mask
+     * picks both up). Same-key second-write wins. */
+    {
+        static const GlrExampleTagDefault table[] = {
+            { .tag_idx = REPL_EXAMPLE_TAG_2D,
+              .key     = GLR_CONFIG_GRID_THEME,
+              .value   = GRID_THEME_PLANES },
+            { .tag_idx = REPL_EXAMPLE_TAG_LINES,
+              .key     = GLR_CONFIG_GRID_THEME,
+              .value   = GRID_THEME_FAINT },
+        };
+        unsigned int mask = repl_example_tag_bit(REPL_EXAMPLE_TAG_2D) |
+                            repl_example_tag_bit(REPL_EXAMPLE_TAG_LINES);
+
+        glr_app_reset_all(); declare_test_vars();
+        int collisions = glr_ctrl_apply_tag_defaults(mask, table, 2);
+        ASSERT_TRUE("cross-tag same-key collision counted",
+                    collisions == 1);
+        ASSERT_TRUE("cross-tag same-key collision: later wins",
+                    glr_state_presentation().grid_theme == GRID_THEME_FAINT);
+    }
+
+    /* (D) Two entries colliding on the same key but the mask matches
+     * only ONE of them → no collision, the matching entry applies. */
+    {
+        static const GlrExampleTagDefault table[] = {
+            { .tag_idx = REPL_EXAMPLE_TAG_2D,
+              .key     = GLR_CONFIG_GRID_THEME,
+              .value   = GRID_THEME_PLANES },
+            { .tag_idx = REPL_EXAMPLE_TAG_3D,
+              .key     = GLR_CONFIG_GRID_THEME,
+              .value   = GRID_THEME_FAINT },
+        };
+        unsigned int mask = repl_example_tag_bit(REPL_EXAMPLE_TAG_3D);
+
+        glr_app_reset_all(); declare_test_vars();
+        int collisions = glr_ctrl_apply_tag_defaults(mask, table, 2);
+        ASSERT_TRUE("mask filters non-matching: no collision",
+                    collisions == 0);
+        ASSERT_TRUE("mask filters non-matching: only matching applied",
+                    glr_state_presentation().grid_theme == GRID_THEME_FAINT);
+    }
+
+    /* (E) Empty mask → nothing applied, no collisions. */
+    {
+        static const GlrExampleTagDefault table[] = {
+            { .tag_idx = REPL_EXAMPLE_TAG_2D,
+              .key     = GLR_CONFIG_GRID_THEME,
+              .value   = GRID_THEME_PLANES },
+        };
+        int prev_grid;
+
+        glr_app_reset_all(); declare_test_vars();
+        prev_grid = glr_state_presentation().grid_theme;
+        int collisions = glr_ctrl_apply_tag_defaults(0u, table, 1);
+        ASSERT_TRUE("empty mask: no collision", collisions == 0);
+        ASSERT_TRUE("empty mask: state unchanged",
+                    glr_state_presentation().grid_theme == prev_grid);
     }
 }
 
@@ -771,6 +896,7 @@ int main(int argc, char **argv) {
     repl_eval_init_predef_vars();
     test_example_tag_metadata();
     test_example_tag_default_cfg();
+    test_example_tag_default_dispatch();
 
     {
         static const char *const no_cfg_reset_example[] = {

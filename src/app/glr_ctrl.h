@@ -1,6 +1,7 @@
 #ifndef GLR_CTRL_H
 #define GLR_CTRL_H
 
+#include "app/glr_defaults.h"  /* GlrExampleTagDefault */
 #include "ui/repl_code_panel.h"
 
 /* App-frame controller entrypoints. sample.c forwards raw GLUT
@@ -10,6 +11,19 @@
 
 void glr_ctrl_init_gl(void);
 void glr_ctrl_bootstrap_repl(const char *input_file);
+
+/* Apply tag-keyed presentation defaults from a (table, n) policy.
+ * For each entry whose tag bit is set in `tag_mask`, call glr_config_set
+ * in declaration order; if two entries target the same GlrConfigKey for
+ * this mask the later one wins and a warning is logged to stderr.
+ * Returns the collision count (0 when the policy is conflict-free, >0
+ * when at least one key was overwritten — the policy is misconfigured
+ * and the warning surfaces it). The controller's example-reset hook
+ * passes the shipped k_example_tag_defaults policy; tests pass synthetic
+ * tables to exercise the collision path without modifying shipped data. */
+int glr_ctrl_apply_tag_defaults(unsigned int tag_mask,
+                                 const GlrExampleTagDefault *table,
+                                 int n);
 
 /* Full-world reset: REPL state + editor + UI + peer subsystems +
  * autocomplete provider registration + UI chrome mirror. Production
