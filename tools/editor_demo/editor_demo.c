@@ -184,12 +184,17 @@ static void demo_display_func(void) {
 
 /* Route a code-panel click to cursor placement. snap is built fresh
  * with the current EditorState so the hit-tester sees the same
- * geometry the renderer just used. */
-static void demo_handle_code_panel_click(int mx, int my) {
+ * geometry the renderer just used.
+ *
+ * ui_text_panel_hit_test expects raw GLUT window coordinates
+ * (top-left origin) -- it does its own `vp_h - my` conversion to
+ * bottom-left internally. Caller passes `y` straight through from
+ * the GLUT mouse callback. */
+static void demo_handle_code_panel_click(int mx, int glut_y) {
     UiTextPanelRow      rows[DEMO_MAX_ROWS];
     UiTextPanelSnapshot snap;
     demo_build_snapshot(rows, DEMO_MAX_ROWS, &snap);
-    UiHit hit = ui_text_panel_hit_test(&snap, mx, my);
+    UiHit hit = ui_text_panel_hit_test(&snap, mx, glut_y);
 
     switch (hit.kind) {
     case UI_HIT_CODE_TEXT:
@@ -215,14 +220,17 @@ static void demo_handle_code_panel_click(int mx, int my) {
 static void demo_mouse_func(int button, int state, int x, int y) {
     if (button != GLUT_LEFT_BUTTON || state != GLUT_DOWN)
         return;
-    /* GLUT delivers top-left coords; convert to bottom-left. */
-    int my = g_demo_vp_h - y;
-    if (demo_menu_handle_click(x, my, g_demo_vp_w, g_demo_vp_h)) {
+    /* The menu handler expects bottom-left coords (OpenGL); the
+     * text-panel hit-tester expects raw top-left GLUT coords and
+     * flips internally. Convert once for the menu, pass `y`
+     * straight through for the panel. */
+    int my_bl = g_demo_vp_h - y;
+    if (demo_menu_handle_click(x, my_bl, g_demo_vp_w, g_demo_vp_h)) {
         glutPostRedisplay();
         return;
     }
     /* Click landed below the menu bar -- treat as code panel. */
-    demo_handle_code_panel_click(x, my);
+    demo_handle_code_panel_click(x, y);
     glutPostRedisplay();
 }
 
