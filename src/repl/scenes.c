@@ -189,7 +189,7 @@ static void derive_unique_scene_name(char *out, size_t out_sz,
     snprintf(out, out_sz, "%s", candidate);
 }
 
-static void save_scene_to_slot(int idx, const char *name) {
+static void save_scene_to_slot(int idx, const char *name, int edit_line) {
     if (idx < 0 || idx >= MAX_USER_SCENES) return;
     UserScene *s = &g_user_scenes[idx];
     SourceTextView text = source_document_view();
@@ -198,7 +198,7 @@ static void save_scene_to_slot(int idx, const char *name) {
         repl_copy_string_fits(s->lines[i], MAX_LINE_LEN,
                               source_text_line(text, i));
     s->num_cmds        = repl_state_document_count();
-    s->edit_line       = repl_state_edit_line();
+    s->edit_line       = edit_line;
     s->num_predef_vars = g_num_predef_vars;
     for (int i = 0; i < g_num_predef_vars; i++) {
         s->predef_vals[i] = g_predef_vars[i].value;
@@ -261,8 +261,12 @@ static int load_commands_into_live(const GLCmd *cmds,
         return 0;
     }
     /* The store no longer writes the cursor on load (Phase 1 of
-     * plans/in-review/edit-line-ownership.md). Caller policy
-     * applied here: scenes restore the saved edit-line. */
+     * plans/in-review/edit-line-ownership.md). Scene/workspace
+     * restore policy: stamp the snapshot's saved cursor. β-bound
+     * call (REPL → REPL); the cleanup that deletes
+     * repl_state_edit_line_set happens in Phase 4 alongside the
+     * storage flip, where this site moves to using a controller-
+     * threaded value. */
     repl_state_edit_line_set(edit_line);
     return 1;
 }
@@ -323,13 +327,14 @@ static void load_scene_from_slot(int idx) {
 }
 
 static void save_user_scene(void) {
-    save_scene_to_slot(0, USER_SCENE_HOME_NAME);
+    save_scene_to_slot(0, USER_SCENE_HOME_NAME, repl_state_edit_line());
 }
 
 void repl_scenes_save_active_scene_if_any(void) {
     if (g_active_user_scene >= 0 && g_active_user_scene < MAX_USER_SCENES) {
         save_scene_to_slot(g_active_user_scene,
-                           g_user_scenes[g_active_user_scene].name);
+                           g_user_scenes[g_active_user_scene].name,
+                           repl_state_edit_line());
     }
 }
 
@@ -476,7 +481,8 @@ int repl_save_workspace(const char *dir, const ReplExportLayout *layout) {
 
     if (g_active_user_scene >= 0 && g_active_user_scene < MAX_USER_SCENES) {
         save_scene_to_slot(g_active_user_scene,
-                           g_user_scenes[g_active_user_scene].name);
+                           g_user_scenes[g_active_user_scene].name,
+                           repl_state_edit_line());
     }
 
     snprintf(g_workspace_dir, WORKSPACE_DIR_MAX, "%s", dir);
@@ -577,7 +583,7 @@ static int load_scene_file_into_slot(const char *path) {
 
     char unique[USER_SCENE_NAME_MAX];
     derive_unique_scene_name(unique, sizeof(unique), scene_name, -1);
-    save_scene_to_slot(slot, unique);
+    save_scene_to_slot(slot, unique, repl_state_edit_line());
     return slot;
 }
 
@@ -838,7 +844,7 @@ int repl_promote_example_if_needed(void) {
     char unique[USER_SCENE_NAME_MAX];
     derive_unique_scene_name(unique, sizeof(unique),
                              example_name ? example_name : "Scene", -1);
-    save_scene_to_slot(slot, unique);
+    save_scene_to_slot(slot, unique, repl_state_edit_line());
     g_active_user_scene = slot;
     g_example_idx       = -1;
 
@@ -941,7 +947,7 @@ void repl_scenes_activate_home_slot(void) {
     /* Drop any pending example sandbox: workspace import / explicit
      * home activation establishes a fresh user-controlled state. */
     restore_pre_example_cfg_if_valid();
-    save_scene_to_slot(0, unique);
+    save_scene_to_slot(0, unique, repl_state_edit_line());
     g_active_user_scene = 0;
     g_example_idx       = -1;
 }

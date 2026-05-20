@@ -353,7 +353,7 @@ void glr_scene_load_example(int example_idx) {
      * so the new scene starts from a clean controller state. */
     editor_reset_transients();
     editor_undo_clear();
-    repl_load_example(example_idx);
+    editor_state_edit_line_set(repl_load_example(example_idx));
 }
 
 void glr_scene_load_user_slot(int slot) {

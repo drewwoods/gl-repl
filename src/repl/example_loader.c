@@ -320,7 +320,8 @@ static int example_line_brace_delta(const char *line) {
     return delta;
 }
 
-static void emit_example_body_two_pass(const char *const *body) {
+static void emit_example_body_two_pass(const char *const *body,
+                                       int *edit_line_inout) {
     if (!body) return;
 
     char err[128] = "";
@@ -395,37 +396,31 @@ static void emit_example_body_two_pass(const char *const *body) {
      * before func bodies that reference them compile). */
     for (int i = 0; i < n; i++) {
         if (kinds[i] != EXAMPLE_KIND_VAR_DECL) continue;
-        if (!repl_load_apply_line(body[i], err, sizeof(err)))
+        if (!repl_load_apply_line(body[i], err, sizeof(err), edit_line_inout))
             err[0] = '\0';  /* soft-fail: keep going on parse errors */
     }
     /* Pass 2: func_def blocks (with leading comments). */
     for (int i = 0; i < n; i++) {
         if (kinds[i] != EXAMPLE_KIND_FUNC_BLOCK) continue;
-        if (!repl_load_apply_line(body[i], err, sizeof(err)))
+        if (!repl_load_apply_line(body[i], err, sizeof(err), edit_line_inout))
             err[0] = '\0';
     }
     /* Pass 3: everything else (setup commands, function calls,
      * non-leading comments). */
     for (int i = 0; i < n; i++) {
         if (kinds[i] != EXAMPLE_KIND_OTHER) continue;
-        if (!repl_load_apply_line(body[i], err, sizeof(err)))
+        if (!repl_load_apply_line(body[i], err, sizeof(err), edit_line_inout))
             err[0] = '\0';
     }
 }
 
-static void load_example_lines(const char *const *lines,
-                               unsigned int tag_mask) {
+static int load_example_lines(const char *const *lines,
+                              unsigned int tag_mask) {
     const char *const *body = lines;
     ReplCommandStore store = repl_command_store_live();
 
     tutorial_state_reset();
     repl_command_store_load(&store, NULL, 0);
-    /* The store no longer writes the cursor on load (Phase 1 of
-     * plans/in-review/edit-line-ownership.md); example load policy
-     * zeroes the cursor pre-emptively. The post-load
-     * `repl_state_edit_line_set(repl_state_document_count())` near
-     * the bottom of this function still applies. */
-    repl_state_edit_line_set(0);
     source_document_clear();
     repl_state_flat_program_set_count(0);
     /* Editor-input cleanup (insert mode off, input buffer wipe, cursor
@@ -466,26 +461,35 @@ static void load_example_lines(const char *const *lines,
      * depth-0 comments) emit first, then everything else. The lean
      * loader auto-promotes `float X;` decls to the top of non-decl
      * code regardless of emission order, so two passes are enough
-     * to produce the canonical layout the existing fixtures pin. */
-    emit_example_body_two_pass(body);
+     * to produce the canonical layout the existing fixtures pin.
+     *
+     * Caller-owned cursor (Phase 3.6.4 / 3.6.5 of
+     * plans/in-review/edit-line-ownership.md): the loader threads
+     * the cursor through each per-line apply via a local int
+     * starting at 0 (load policy: cursor begins at the top before
+     * the body emits). The post-load value is returned to the
+     * caller, which lands it on EditorState above the β boundary. */
+    int loader_edit_line = 0;
+    emit_example_body_two_pass(body, &loader_edit_line);
 
     /* Post-load editor cleanup mirrors the pre-load sink dispatch so a
-     * stale input line or cursor doesn't survive the loaded body.
-     * repl_state_edit_line_set is REPL-state, not editor — it stays. */
+     * stale input line or cursor doesn't survive the loaded body. */
     repl_dispatch_input_reset();
-    repl_state_edit_line_set(repl_state_document_count());
     repl_mark_normals_dirty();
+    /* Return the canonical post-load cursor: document end. The
+     * caller applies this via editor_state_edit_line_set(). */
+    return repl_state_document_count();
 }
 
-static void load_example(int idx) {
+static int load_example(int idx) {
     int count = repl_examples_count();
     const char *const *lines;
     const char *name;
 
-    if (idx < 0 || idx >= count) return;
+    if (idx < 0 || idx >= count) return 0;
     lines = repl_examples_lines(idx);
     name = repl_examples_name(idx);
-    if (!lines || !name) return;
+    if (!lines || !name) return 0;
 
     /* Preserve the user's work (once, into slot 0) before overwriting with
      * an example. Subsequent example loads leave the home slot untouched. */
@@ -496,13 +500,14 @@ static void load_example(int idx) {
      * cfg toggles before applying the destination's saved cfg. */
     repl_scenes_capture_pre_example_cfg_if_entering();
 
-    load_example_lines(lines, repl_example_tag_mask(idx));
+    int new_edit_line = load_example_lines(lines, repl_example_tag_mask(idx));
     repl_state_scenes_mut()->active_example_idx = idx;
     repl_scenes_mark_example_active();
     char msg[128];
     snprintf(msg, sizeof(msg), "Example %d/%d: %s (F12 for next)",
              idx + 1, count, name);
     repl_set_status(msg);
+    return new_edit_line;
 }
 
 int repl_example_count(void) {
@@ -513,13 +518,13 @@ const char *repl_example_name(int idx) {
     return repl_examples_name(idx);
 }
 
-void repl_load_example(int idx) {
-    load_example(idx);
+int repl_load_example(int idx) {
+    return load_example(idx);
 }
 
-void repl_load_example_lines_for_test(const char *const *lines) {
+int repl_load_example_lines_for_test(const char *const *lines) {
     /* Test/bench harness has no example-index context, so pass a zero
      * tag mask — the controller's reset still applies global defaults,
      * just no tag-default overrides. */
-    load_example_lines(lines, 0u);
+    return load_example_lines(lines, 0u);
 }

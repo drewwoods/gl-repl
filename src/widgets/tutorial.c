@@ -144,13 +144,15 @@ static int tutorial_emit_instruction_comment(const char *comment,
      * tracked indices. */
     tutorial_shift_tracked_lines_from(instruction_line, 1);
 
-    /* repl_load_apply_line caller contract (src/repl/load.h): set
-     * edit_line to the desired insertion index in
-     * [0, document_count]; clear insert mode; mark flat/normals
-     * dirty after loading. */
-    editor_state_edit_line_set(instruction_line);
+    /* repl_load_apply_line caller contract (src/repl/load.h):
+     * supply the insertion index via &edit_line_inout; clear
+     * insert mode; mark flat/normals dirty after loading. The
+     * second `editor_state_edit_line_set(expected_commit_line)`
+     * below overrides any post-load cursor advance, so the value
+     * threaded here is purely for the insert position. */
+    int loader_edit_line = instruction_line;
     editor_insert_mode_set(0);
-    if (!repl_load_apply_line(comment, err, (int)sizeof(err))) {
+    if (!repl_load_apply_line(comment, err, (int)sizeof(err), &loader_edit_line)) {
         /* Loader failed — undo the speculative shift so tracked
          * indices stay consistent with the unchanged document. */
         tutorial_shift_tracked_lines_from(instruction_line, -1);

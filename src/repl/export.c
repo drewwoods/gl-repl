@@ -2204,7 +2204,7 @@ static int import_parse_predef_decl(const char *line) {
  * Vars not yet registered are declared.
  * Returns 1 if the line was a @declare marker (handled), 0 otherwise. */
 static int import_parse_declare_marker(const char *line, int *loaded,
-                                       int *warnings) {
+                                       int *warnings, int *edit_line_inout) {
     const char *p = line;
     while (*p && isspace((unsigned char)*p)) p++;
     if (p[0] != '/' || p[1] != '/') return 0;
@@ -2317,14 +2317,11 @@ static int import_parse_declare_marker(const char *line, int *loaded,
             if (warnings) (*warnings)++;
             return 1;
         }
-        /* Caller-owned cursor: read the edit-line, pass &edit_line
-         * to the store via opts, write back on success. Phase 1 of
-         * plans/in-review/edit-line-ownership.md dropped the store's
-         * auto-pointer. */
-        int edit_line = repl_state_edit_line();
+        /* Caller-owned cursor threaded through ImportState (Phase
+         * 3.6.4 of plans/in-review/edit-line-ownership.md). */
         ReplStoreMutOpts opts = {
             .flags        = REPL_COMMAND_STORE_ADJUST_EDIT_LINE,
-            .cursor_inout = &edit_line,
+            .cursor_inout = edit_line_inout,
         };
         if (!repl_command_store_insert_one(
                 &store, decl_pos, &cmd, &opts)) {
@@ -2341,7 +2338,6 @@ static int import_parse_declare_marker(const char *line, int *loaded,
             if (warnings) (*warnings)++;
             return 1;
         }
-        repl_state_edit_line_set(edit_line);
         (*loaded)++;
     }
     (void)warnings;
@@ -2954,14 +2950,15 @@ static int import_make_repl_glut_bitmap_string(const char *line,
                             fmt, post_repl[0] ? ", " : "", post_repl);
 }
 
-static void import_feed_one_line(const char *line, int *loaded, int *warnings) {
+static void import_feed_one_line(const char *line, int *loaded, int *warnings,
+                                 int *edit_line_inout) {
     char repl_line[MAX_LINE_LEN];
     int before = repl_state_document_count();
     int handled = 0;
 
     /* @declare markers are written by write_canonical_cmd_as_c() for
      * CMD_VAR_DECLARE and must be handled before the generic C-to-REPL path. */
-    if (import_parse_declare_marker(line, loaded, warnings))
+    if (import_parse_declare_marker(line, loaded, warnings, edit_line_inout))
         return;
 
     /* Step 5b: feed lines through the non-editor source-load API
@@ -2969,15 +2966,18 @@ static void import_feed_one_line(const char *line, int *loaded, int *warnings) {
      * Same compile + apply, no editor input dispatch. */
     char load_err[256] = "";
     if (import_make_repl_for_header(line, repl_line, sizeof(repl_line))) {
-        handled = repl_load_apply_line(repl_line, load_err, (int)sizeof(load_err));
+        handled = repl_load_apply_line(repl_line, load_err, (int)sizeof(load_err),
+                                       edit_line_inout);
     } else if (import_make_repl_tess_line(line, repl_line, sizeof(repl_line)) ||
                import_make_repl_point_parameter_line(line, repl_line, sizeof(repl_line)) ||
                import_make_repl_label(line, repl_line, sizeof(repl_line)) ||
                import_make_repl_glut_bitmap_string(line, repl_line, sizeof(repl_line))) {
-        handled = repl_load_apply_line(repl_line, load_err, (int)sizeof(load_err));
+        handled = repl_load_apply_line(repl_line, load_err, (int)sizeof(load_err),
+                                       edit_line_inout);
     } else {
         repl_eval_c_expr_to_repl(line, repl_line, sizeof(repl_line));
-        handled = repl_load_apply_line(repl_line, load_err, (int)sizeof(load_err));
+        handled = repl_load_apply_line(repl_line, load_err, (int)sizeof(load_err),
+                                       edit_line_inout);
     }
 
     if (repl_state_document_count() > before) *loaded += (repl_state_document_count() - before);
@@ -3401,6 +3401,7 @@ typedef struct {
     int func_depth;                   /* depth inside a function definition */
     int loaded;
     int warnings;
+    int edit_line;                    /* caller-owned cursor (Phase 3.6.4) */
     char pending_comments[IMPORT_MAX_PENDING_COMMENTS][MAX_LINE_LEN];
     int  pending_comment_count;
     int  pending_blank_run;
@@ -3412,6 +3413,7 @@ static void import_state_init(ImportState *s) {
     s->func_depth = 0;
     s->loaded = 0;
     s->warnings = 0;
+    s->edit_line = 0;
     s->pending_comment_count = 0;
     s->pending_blank_run = 0;
 }
@@ -3457,7 +3459,7 @@ static int import_try_camera(const char *p) {
 
 static int import_try_function_body(ImportState *s, const char *p) {
     if (s->func_depth <= 0) return 0;
-    import_feed_one_line(p, &s->loaded, &s->warnings);
+    import_feed_one_line(p, &s->loaded, &s->warnings, &s->edit_line);
     for (const char *bp = p; *bp; bp++) {
         if      (*bp == '{') s->func_depth++;
         else if (*bp == '}') s->func_depth--;
@@ -3472,11 +3474,12 @@ static int import_try_function_header(ImportState *s, const char *p, const char 
     import_flush_pending_blank_run(s);
     /* Feed accumulated pending comments before the function header. */
     for (int comment_idx = 0; comment_idx < s->pending_comment_count; comment_idx++)
-        import_feed_one_line(s->pending_comments[comment_idx], &s->loaded, &s->warnings);
+        import_feed_one_line(s->pending_comments[comment_idx], &s->loaded, &s->warnings, &s->edit_line);
     import_reset_pending_function_prelude(s);
     int before = repl_state_document_count();
     char load_err[256] = "";
-    int handled = repl_load_apply_line(repl_func_line, load_err, (int)sizeof(load_err));
+    int handled = repl_load_apply_line(repl_func_line, load_err, (int)sizeof(load_err),
+                                       &s->edit_line);
     if (repl_state_document_count() > before) s->loaded += (repl_state_document_count() - before);
     if (!handled) {
         fprintf(stderr, "Warning: could not parse line: %s\n", raw);
@@ -3490,11 +3493,11 @@ static int import_try_snippet_start(ImportState *s, const char *p) {
     if (strncmp(p, "// Snippet start", 16) != 0) return 0;
     import_reset_pending_function_prelude(s);
     s->in_snippet = 1;
-    /* Function/header import may leave the editor cursor in an insertion slot
+    /* Function/header import may leave the import cursor in an insertion slot
      * inside existing commands.  Force snippet lines to start appending from
      * the end of the command list. */
     repl_dispatch_insert_mode_off();
-    repl_state_edit_line_set(repl_state_document_count());
+    s->edit_line = repl_state_document_count();
     return 1;
 }
 
@@ -3525,7 +3528,7 @@ static int import_try_blank(ImportState *s, const char *p) {
     if (*p != '\0')
         return 0;
 
-    import_feed_one_line(p, &s->loaded, &s->warnings);
+    import_feed_one_line(p, &s->loaded, &s->warnings, &s->edit_line);
     return 1;
 }
 
@@ -3534,7 +3537,7 @@ static int import_try_predef_decl(const char *p) {
 }
 
 static int import_try_snippet_body_line(ImportState *s, const char *p) {
-    import_feed_one_line(p, &s->loaded, &s->warnings);
+    import_feed_one_line(p, &s->loaded, &s->warnings, &s->edit_line);
     return 1;
 }
 

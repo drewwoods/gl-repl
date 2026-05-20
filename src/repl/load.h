@@ -31,8 +31,15 @@
  * imported/example lines, then mark the flat program and auto-normal state dirty
  * once at the end of the batch.
  *
+ * `edit_line_inout` supplies the insertion index; the function
+ * advances it as the document grows so successive calls in a loop
+ * see the canonical insert position. Passing NULL falls back to a
+ * function-local int initialized to the current document count
+ * (append-at-end semantics), which suits ad-hoc callers and tests
+ * that don't care about cursor placement.
+ *
  * Caller responsibilities:
- *   - Set repl_state_edit_line to the desired insertion index, which
+ *   - Initialize *edit_line_inout to the desired insertion index, which
  *     must be in [0, repl_state_document_count()]. The line is
  *     inserted at that index; document_count means append-at-end and
  *     any smaller value inserts in the middle of the document.
@@ -42,6 +49,7 @@
  *   - Clear editor_insert_mode (the loader does not consult it).
  *   - Call repl_state_mark_flat_dirty / repl_state_mark_normals_dirty
  *     after the load loop completes. */
-int repl_load_apply_line(const char *line, char *err, int err_size);
+int repl_load_apply_line(const char *line, char *err, int err_size,
+                         int *edit_line_inout);
 
 #endif /* REPL_LOAD_H */

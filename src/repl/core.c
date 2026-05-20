@@ -764,20 +764,21 @@ static void scroll_to_display_function(void) {
     repl_dispatch_scroll_to_line(target);
 }
 
-static void load_initial_commands(const char *import_file) {
+static int load_initial_commands(const char *import_file) {
+    /* Returns the post-load cursor target. Caller (controller above
+     * the β boundary) applies via editor_state_edit_line_set. Phase
+     * 3.6.4 of plans/in-review/edit-line-ownership.md. */
     if (import_file) {
         struct stat st;
         if (stat(import_file, &st) == 0 && S_ISDIR(st.st_mode)) {
             if (repl_load_workspace(import_file) > 0) {
-                repl_state_edit_line_set(repl_state_document_count());
                 scroll_to_display_function();
-                return;
+                return repl_state_document_count();
             }
         } else if (repl_export_load_from_file(import_file)) {
-            repl_state_edit_line_set(repl_state_document_count());
             repl_scenes_activate_home_slot();
             scroll_to_display_function();
-            return;
+            return repl_state_document_count();
         }
     }
 
@@ -786,17 +787,18 @@ static void load_initial_commands(const char *import_file) {
      * across example switches. The startup banner is the controller's
      * to emit (see glr_ctrl_bootstrap_repl); pipeline TUs do not own
      * display-string side effects. */
-    repl_load_example(0);
+    int example_edit_line = repl_load_example(0);
     repl_scenes_activate_home_slot();
     scroll_to_display_function();
+    return example_edit_line;
 }
 
 void repl_save_default_output(const ReplExportLayout *layout) {
     repl_export_save_output(outfile, source_document_view(), layout);
 }
 
-void repl_load_initial_commands(const char *import_file) {
-    load_initial_commands(import_file);
+int repl_load_initial_commands(const char *import_file) {
+    return load_initial_commands(import_file);
 }
 
 void repl_advance_time(float dt) {

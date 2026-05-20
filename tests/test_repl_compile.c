@@ -947,7 +947,7 @@ int main(void) {
          * document. */
         char err[128] = "";
         ASSERT_TRUE("[P2] first func0 def loads cleanly",
-                    repl_load_apply_line("func0() {", err, sizeof(err)));
+                    repl_load_apply_line("func0() {", err, sizeof(err), NULL));
         ASSERT_TRUE("[P2] first func0 def populated err is empty",
                     err[0] == '\0');
 
@@ -1017,7 +1017,7 @@ int main(void) {
 
         char err[128] = "";
         ASSERT_TRUE("[P1 editor] original aliased func loads",
-                    repl_load_apply_line("drawCube() {", err, sizeof(err)));
+                    repl_load_apply_line("drawCube() {", err, sizeof(err), NULL));
         ASSERT_INT("[P1 editor] drawCube starts in slot 0",
                    repl_func_alias_lookup_slot("drawCube"), 0);
 
@@ -1055,7 +1055,7 @@ int main(void) {
          * but already occupied at the document level. */
         char err[128] = "";
         ASSERT_TRUE("[P2 editor] bare func0 loads cleanly",
-                    repl_load_apply_line("func0() {", err, sizeof(err)));
+                    repl_load_apply_line("func0() {", err, sizeof(err), NULL));
 
         /* Compile a NEW alias whose pre-step would target slot 0
          * (first free) but whose dup check fails because fn=0
@@ -1090,25 +1090,24 @@ int main(void) {
         editor_state_input_reset();
 
         char err[128] = "";
-        editor_state_edit_line_set(repl_state_document_count());
+        int el = repl_state_document_count();
         editor_insert_mode_set(0);
         ASSERT_TRUE("[Phase 0] seed line a loads",
-                    repl_load_apply_line("glColor3f(1, 0, 0)", err, sizeof(err)));
-        editor_state_edit_line_set(repl_state_document_count());
+                    repl_load_apply_line("glColor3f(1, 0, 0)", err, sizeof(err), &el));
         editor_insert_mode_set(0);
         ASSERT_TRUE("[Phase 0] seed line b loads",
-                    repl_load_apply_line("glColor3f(0, 1, 0)", err, sizeof(err)));
+                    repl_load_apply_line("glColor3f(0, 1, 0)", err, sizeof(err), &el));
         ASSERT_INT("[Phase 0] seeded doc has 2 lines",
                    repl_state_document_count(), 2);
 
         /* Mid-document insert at index 1: between the two color
          * commands. The widened contract allows edit_line in
          * [0, document_count]. */
-        editor_state_edit_line_set(1);
+        el = 1;
         editor_insert_mode_set(0);
         err[0] = '\0';
         int ok = repl_load_apply_line("// inserted in the middle",
-                                      err, sizeof(err));
+                                      err, sizeof(err), &el);
         ASSERT_TRUE("[Phase 0] mid-document comment insert succeeds", ok);
         ASSERT_INT("[Phase 0] doc grew by exactly one row",
                    repl_state_document_count(), 3);
@@ -1126,12 +1125,12 @@ int main(void) {
 
         /* And a plain GL command mid-document at index 0 — the
          * widened contract allows insertion at the very top. */
-        editor_state_edit_line_set(0);
+        el = 0;
         editor_insert_mode_set(0);
         err[0] = '\0';
         ASSERT_TRUE("[Phase 0] top-of-doc insert succeeds",
                     repl_load_apply_line("glColor3f(0, 0, 1)",
-                                         err, sizeof(err)));
+                                         err, sizeof(err), &el));
         ASSERT_INT("[Phase 0] doc grew to 4 rows",
                    repl_state_document_count(), 4);
         view = editor_buffer_view();
@@ -1156,7 +1155,7 @@ int main(void) {
         *store.count = capacity;
 
         char err[128] = "";
-        int ok = repl_load_apply_line("float fooLeak;", err, sizeof(err));
+        int ok = repl_load_apply_line("float fooLeak;", err, sizeof(err), NULL);
 
         /* Restore count BEFORE asserting so the asserts can clean up
          * gracefully and subsequent tests inherit a clean slate. */
@@ -1184,7 +1183,7 @@ int main(void) {
 
         char err[128] = "";
         int ok = repl_load_apply_line("leakOnFail() {",
-                                      err, sizeof(err));
+                                      err, sizeof(err), NULL);
         int slot = repl_func_alias_lookup_slot("leakOnFail");
 
         *store.count = saved_count;

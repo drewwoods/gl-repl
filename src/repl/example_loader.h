@@ -19,7 +19,13 @@
  * array of source lines; the loader runs the same body-emission
  * pipeline as the production path (parse + insert + auto-normal +
  * flatten) without the controller-side cleanup (presentation reset,
- * editor input wipe). */
-void repl_load_example_lines_for_test(const char *const *lines);
+ * editor input wipe).
+ *
+ * Returns the post-load cursor target (= document line count after
+ * the example body emits). Callers that care about cursor placement
+ * apply the value via editor_state_edit_line_set() above the β
+ * boundary; tests that just want the body loaded can ignore the
+ * return. Phase 3.6.4 of plans/in-review/edit-line-ownership.md. */
+int repl_load_example_lines_for_test(const char *const *lines);
 
 #endif /* REPL_EXAMPLE_LOADER_H */
