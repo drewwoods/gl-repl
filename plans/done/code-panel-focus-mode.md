@@ -1,5 +1,9 @@
 # Plan: Code-panel "focus" toggle — hide boilerplate chrome
 
+Status: **done** — final shipped shape is the hidden session toggle
+documented below (Ctrl+Shift+F plus the statusbar "focus" keycap), not
+the earlier Config-row / `@cfg` persistence sketch.
+
 ## Progress
 
 Branch `feat/code-panel-focus-mode`. Commits ordered for per-commit
@@ -13,9 +17,10 @@ buildability (state field before its `config_value_ptr` reference).
 
 **Verification (all green):** `make sample` per commit · `make check-c99`
 OK · `make test_repl_core_examples` 825/825 · `make check-state-ownership`
-exit 0 · `make test` 37/37 binaries, 5440/5440 assertions. Remaining:
-the manual in-app checks in the Verification section below (config menu
-visual, save/load `@cfg code_focus` round-trip) need a GL window.
+exit 0 · `make test` 37/37 binaries, 5440/5440 assertions. Current
+focused re-check: `test_repl_code_panel_document` 41/41 under GL stubs.
+The older Config-menu / `@cfg code_focus` manual checks below are
+obsolete after the post-review session-only pivot.
 
 ## Follow-up: hidden shortcut + statusbar keycap (post-review request)
 
