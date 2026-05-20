@@ -44,7 +44,10 @@
 
 #include "editor/input.h"
 #include "editor/state.h"
+#include "ui/gl_2d.h"
 #include "ui/text_panel.h"
+
+#include "menu.h"
 
 #include <gl_includes.h>
 
@@ -116,7 +119,7 @@ static int demo_build_snapshot(UiTextPanelRow *rows, int rows_cap,
     snap->cp_x           = 0;
     snap->cp_y           = 0;
     snap->cp_w           = g_demo_vp_w;
-    snap->cp_h           = g_demo_vp_h;
+    snap->cp_h           = g_demo_vp_h - DEMO_MENU_BAR_H;
     snap->text_x         = 48;            /* leave room for line numbers */
     snap->wrap_at_comma  = 0;
     snap->top_chrome_h   = 0;
@@ -155,7 +158,25 @@ static void demo_display_func(void) {
     demo_build_snapshot(rows, DEMO_MAX_ROWS, &snap);
     ui_text_panel_render(&snap, &out);
 
+    /* The text panel pushes/pops its own 2D ortho via gl2d_begin/end.
+     * Push a fresh one for menu chrome so the menu's draw state
+     * doesn't depend on whatever the panel last set. */
+    gl2d_begin(g_demo_vp_w, g_demo_vp_h);
+    demo_menu_render(g_demo_vp_w, g_demo_vp_h);
+    gl2d_end();
+
     glutSwapBuffers();
+}
+
+static void demo_mouse_func(int button, int state, int x, int y) {
+    if (button != GLUT_LEFT_BUTTON || state != GLUT_DOWN)
+        return;
+    /* GLUT delivers top-left coords; convert to bottom-left. */
+    int my = g_demo_vp_h - y;
+    if (demo_menu_handle_click(x, my, g_demo_vp_w, g_demo_vp_h))
+        glutPostRedisplay();
+    /* No code-panel mouse handling in v1 — clicking outside the menu
+     * just closes any open dropdown. */
 }
 
 static void demo_reshape_func(int w, int h) {
@@ -191,6 +212,7 @@ static int run_demo(int argc, char **argv) {
     glutReshapeFunc(demo_reshape_func);
     glutKeyboardFunc(demo_keyboard_func);
     glutSpecialFunc(demo_special_func);
+    glutMouseFunc(demo_mouse_func);
 
     printf("editor_demo: q / Esc to quit\n");
     glutMainLoop();
