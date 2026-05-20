@@ -20,4 +20,5 @@ callgrind.out*
 *.swp
 *.swo
 *.DS_Store
-your_scene.c
+my-scene.c
+quit-recovery.c
