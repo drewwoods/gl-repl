@@ -42,11 +42,11 @@
  *   ./editor_demo
  */
 
-#include "editor/input.h"
 #include "editor/state.h"
 #include "ui/gl_2d.h"
 #include "ui/text_panel.h"
 
+#include "input.h"
 #include "menu.h"
 
 #include <gl_includes.h>
@@ -187,16 +187,16 @@ static void demo_reshape_func(int w, int h) {
 }
 
 static void demo_keyboard_func(unsigned char key, int x, int y) {
-    if (key == 27 || key == 'q')
-        exit(0);
-    /* Route through editor input dispatch -- the actual proof of
-     * decoupling. */
-    editor_handle_key(key, x, y);
+    /* The demo's own generic dispatcher — does not route through
+     * src/editor/input.c (the REPL editor's dispatcher). v1 covers
+     * printable chars, backspace, and ESC; see
+     * tools/editor_demo/input.c for the full key map. */
+    demo_input_handle_key(key, x, y);
     glutPostRedisplay();
 }
 
 static void demo_special_func(int key, int x, int y) {
-    editor_handle_special(key, x, y);
+    demo_input_handle_special(key, x, y);
     glutPostRedisplay();
 }
 
