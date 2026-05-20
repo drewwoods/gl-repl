@@ -314,7 +314,7 @@ static void tick_and_execute(float t_value) {
     int t_idx = repl_eval_find_predef_var_idx("t");
     g_predef_vars[t_idx].value = t_value;
     repl_state_mark_flat_dirty();
-    repl_flatten_commands();
+    repl_flatten_commands(repl_state_edit_line());
     if (!headless_executor_safe())
         return;
     ReplExecutionOptions opts = {
@@ -344,7 +344,7 @@ static void print_source_summary(const char *label, int loaded) {
 }
 
 static void print_flat_summary(void) {
-    repl_flatten_commands();
+    repl_flatten_commands(repl_state_edit_line());
     int n = repl_state_flat_program_count();
     FlatProgramView view = repl_state_flat_program_view();
     printf("  flat program: %d cmd(s)\n", n);
@@ -434,7 +434,7 @@ static void render_display_func(void) {
             g_predef_vars[t_idx].value = g_render_t;
         repl_state_mark_flat_dirty();
     }
-    repl_flatten_commands();
+    repl_flatten_commands(repl_state_edit_line());
 
     ReplExecutionOptions opts = {
         .flat_cmd_count = repl_state_flat_program_count(),

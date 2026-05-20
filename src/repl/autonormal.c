@@ -58,7 +58,8 @@ static void make_auto_normal_text(int insert_pos, float nx, float ny, float nz,
 }
 
 static void insert_cmd_at(int pos, const GLCmd *cmd,
-                           float nx, float ny, float nz) {
+                           float nx, float ny, float nz,
+                           int *edit_line_inout) {
     ReplCommandStore store = repl_command_store_live();
     char line[MAX_LINE_LEN];
 
@@ -68,16 +69,13 @@ static void insert_cmd_at(int pos, const GLCmd *cmd,
      * matching GLCmd. */
     if (!source_document_insert_line(pos, line))
         return;
-    /* Caller-owned cursor: read the edit-line into a local int,
-     * pass &local to the store via opts, write it back. Phase 1 of
-     * plans/in-review/edit-line-ownership.md dropped the store's
-     * auto-pointer; Phase 3.6.0 threads the cursor through
-     * repl_recompute_autonormals's signature so the read/write
-     * lives at the caller above. */
-    int edit_line = repl_state_edit_line();
+    /* Caller-owned cursor: threaded down from
+     * repl_recompute_autonormals's edit_line_inout parameter so the
+     * read/write lives at the controller (β: REPL files do not call
+     * editor_state_*). */
     ReplStoreMutOpts opts = {
         .flags        = REPL_COMMAND_STORE_ADJUST_EDIT_LINE,
-        .cursor_inout = &edit_line,
+        .cursor_inout = edit_line_inout,
     };
     if (!repl_command_store_insert_one(&store, pos, cmd, &opts)) {
         SourceTextChange rollback = {
@@ -88,9 +86,7 @@ static void insert_cmd_at(int pos, const GLCmd *cmd,
             .delete_count = 0,
         };
         source_document_apply_change(&rollback);
-        return;
     }
-    repl_state_edit_line_set(edit_line);
 }
 
 static void apply_front_face_to_normal(GLenum front_face, float *n) {
@@ -186,7 +182,8 @@ static void compute_block_normals(GLenum mode, GLenum front_face,
  * autonormal pass is a REPL pipeline TU and cannot include
  * `glr_state.h`, so the caller (controller / tests) gates the call
  * by passing the toggle explicitly. */
-void repl_recompute_autonormals(int autonormal_enabled) {
+void repl_recompute_autonormals(int autonormal_enabled,
+                                int *edit_line_inout) {
     if (!autonormal_enabled) return;
 
     int i = 0;
@@ -270,7 +267,7 @@ void repl_recompute_autonormals(int autonormal_enabled) {
             }
 
             GLCmd nc = make_auto_normal(nx, ny, nz, vidx);
-            insert_cmd_at(vidx, &nc, nx, ny, nz);
+            insert_cmd_at(vidx, &nc, nx, ny, nz, edit_line_inout);
             offset++;
             block_end++;
         }

@@ -37,6 +37,7 @@
 #define _DEFAULT_SOURCE
 #define _POSIX_C_SOURCE 200809L
 
+#include "editor/state.h"         /* editor_state_edit_line */
 #include "repl/core.h"
 #include "repl/core_internal.h"
 #include "repl/eval.h"
@@ -274,13 +275,13 @@ static BenchResult bench_flatten_examples(int iters) {
                  * dwarfed by flatten itself. */
                 for (int i = 0; i < saved_n; i++)
                     g_predef_vars[i].value = saved_vals[i];
-                /* repl_flatten_commands() -> flatten_commands() rebuilds
+                /* repl_flatten_commands(editor_state_edit_line()) -> flatten_commands() rebuilds
                  * unconditionally (resets repl_state_flat_program_count() and walks
                  * repl_state_document_cmds_mut()[]), so we don't need to toggle any dirty flag
                  * here - doing so would just add unrelated side effects
                  * (repl_state_normals_dirty(), depth cache invalidation) into the
                  * timed region. */
-                repl_flatten_commands();
+                repl_flatten_commands(editor_state_edit_line());
             }
             iter_sec += now_seconds() - t0;
         }
@@ -314,7 +315,7 @@ static BenchResult bench_spike_flatten_largest(int iters) {
      * flat commands, and that's what flatten actually walks. */
     for (int e = 0; e < n_examples; e++) {
         repl_load_example_lines_for_test(repl_examples_lines(e));
-        repl_flatten_commands();
+        repl_flatten_commands(editor_state_edit_line());
         int n = repl_state_flat_program_count();
         if (n > worst_flat) {
             worst_flat = n;
@@ -344,7 +345,7 @@ static BenchResult bench_spike_flatten_largest(int iters) {
         for (int k = 0; k < inner; k++) {
             for (int i = 0; i < saved_n; i++)
                 g_predef_vars[i].value = saved_vals[i];
-            repl_flatten_commands();
+            repl_flatten_commands(editor_state_edit_line());
         }
         double dt = now_seconds() - t0;
         if (dt < r.min_sec) r.min_sec = dt;
@@ -369,8 +370,8 @@ static BenchResult bench_replay_examples(int iters) {
                       .min_sec = 1e18 };
 
     /* load_example_lines() leaves repl_state_flat_program_dirty()=1, and replay_start() will
-     * flatten once on its own - calling repl_flatten_commands() explicitly
-     * beforehand would flatten twice, because repl_flatten_commands() does
+     * flatten once on its own - calling repl_flatten_commands(editor_state_edit_line()) explicitly
+     * beforehand would flatten twice, because repl_flatten_commands(editor_state_edit_line()) does
      * NOT clear repl_state_flat_program_dirty() (see src/repl/core.c:4462-4464 vs. :3265-3269). */
     for (int it = 0; it < iters; it++) {
         long long steps = 0;
@@ -445,7 +446,7 @@ static BenchResult bench_replay_long(int iters) {
      * does a fresh flatten each time - that matches "what happens the
      * first time you press play". Note: replay_start() handles the
      * flatten itself and clears repl_state_flat_program_dirty(), so calling
-     * repl_flatten_commands() explicitly here would flatten twice. */
+     * repl_flatten_commands(editor_state_edit_line()) explicitly here would flatten twice. */
     repl_load_example_lines_for_test(k_long_replay_scene);
 
     /* Warm up via replay_start/replay_stop (not a bare
@@ -636,7 +637,7 @@ static BenchResult bench_fade_batches(int iters) {
      * (replay's clamp might still be in effect otherwise - we observed
      * flat_cmds via the post-start snapshot above). */
     repl_mark_normals_dirty();
-    repl_flatten_commands();
+    repl_flatten_commands(editor_state_edit_line());
     flat_cmds = repl_state_flat_program_count();
 
     /* 32 batches mirrors a typical in-flight count at the default 30fps

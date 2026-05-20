@@ -277,7 +277,7 @@ int main(void) {
     ASSERT_TRUE("roundtrip blank line text preserved",
                 strcmp(editor_buffer_line(2), "") == 0);
 
-    repl_flatten_commands();
+    repl_flatten_commands(editor_state_edit_line());
     ASSERT_TRUE("flatten produced cmds", repl_state_flat_program_count() > 0);
 
     glr_app_reset_all(); declare_test_vars();
@@ -560,7 +560,7 @@ int main(void) {
         ASSERT_TRUE("param func roundtrip has func call", have_call == 1);
     }
 
-    repl_flatten_commands();
+    repl_flatten_commands(editor_state_edit_line());
     ASSERT_TRUE("param func flatten count", repl_state_flat_program_count() >= 2);
     ASSERT_TRUE("param func flatten vertex type", repl_state_flat_program_cmds_mut()[repl_state_flat_program_count() - 1].type == CMD_VERTEX3F);
     ASSERT_TRUE("param func flatten x",
@@ -596,7 +596,7 @@ int main(void) {
         }
         ASSERT_TRUE("loaded param loop keeps function param bound", have_bound == 1);
     }
-    repl_flatten_commands();
+    repl_flatten_commands(editor_state_edit_line());
     {
         int vertex_count = 0;
         for (int i = 0; i < repl_state_flat_program_count(); i++)

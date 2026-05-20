@@ -42,7 +42,7 @@ static void test_degenerate_normal(void) {
     editor_feed_line("glVertex3f(1, 0, 0);");
     editor_feed_line("glVertex3f(2, 0, 0);");
     editor_feed_line("glEnd();");
-    repl_recompute_autonormals(1);
+    repl_recompute_autonormals(1, NULL);
 
     /* An auto-normal should be inserted before each vertex */
     ASSERT_INT("degenerate: cmd count", repl_state_document_count(), 8);
@@ -67,7 +67,7 @@ static void test_triangle_strip(void) {
     editor_feed_line("glVertex3f(0, 1, 0);");
     editor_feed_line("glVertex3f(1, 1, 0);");
     editor_feed_line("glEnd();");
-    repl_recompute_autonormals(1);
+    repl_recompute_autonormals(1, NULL);
 
     /* 4 vertices + 4 auto normals + BEGIN + END */
     ASSERT_INT("strip: cmd count", repl_state_document_count(), 10);
@@ -93,7 +93,7 @@ static void test_triangle_fan(void) {
     editor_feed_line("glVertex3f(0, 1, 0);");
     editor_feed_line("glVertex3f(-1, 0, 0);");
     editor_feed_line("glEnd();");
-    repl_recompute_autonormals(1);
+    repl_recompute_autonormals(1, NULL);
 
     /* 4 vertices + 4 auto normals + BEGIN + END */
     ASSERT_INT("fan: cmd count", repl_state_document_count(), 10);
@@ -117,7 +117,7 @@ static void test_quads(void) {
     editor_feed_line("glVertex3f(1, 1, 0);");
     editor_feed_line("glVertex3f(0, 1, 0);");
     editor_feed_line("glEnd();");
-    repl_recompute_autonormals(1);
+    repl_recompute_autonormals(1, NULL);
 
     /* 4 vertices + 4 auto normals + BEGIN + END */
     ASSERT_INT("quads: cmd count", repl_state_document_count(), 10);
@@ -141,7 +141,7 @@ static void test_quad_strip(void) {
     editor_feed_line("glVertex3f(0, 1, 0);");
     editor_feed_line("glVertex3f(1, 1, 0);");
     editor_feed_line("glEnd();");
-    repl_recompute_autonormals(1);
+    repl_recompute_autonormals(1, NULL);
 
     /* 4 vertices + 4 auto normals + BEGIN + END */
     ASSERT_INT("quad_strip: cmd count", repl_state_document_count(), 10);
@@ -165,7 +165,7 @@ static void test_polygon(void) {
     editor_feed_line("glVertex3f(1, 1, 0);");
     editor_feed_line("glVertex3f(0, 1, 0);");
     editor_feed_line("glEnd();");
-    repl_recompute_autonormals(1);
+    repl_recompute_autonormals(1, NULL);
 
     /* 4 vertices + 4 auto normals + BEGIN + END */
     ASSERT_INT("polygon: cmd count", repl_state_document_count(), 10);
@@ -187,7 +187,7 @@ static void test_unsupported_mode(void) {
     editor_feed_line("glVertex3f(0, 0, 0);");
     editor_feed_line("glVertex3f(1, 0, 0);");
     editor_feed_line("glEnd();");
-    repl_recompute_autonormals(1);
+    repl_recompute_autonormals(1, NULL);
 
     /* compute_block_normals default branch leaves all norms at zero,
      * but recompute_autonormals still inserts (0,0,0) auto-normals */
@@ -216,7 +216,7 @@ static void test_block_skipping(void) {
     editor_feed_line("glVertex3f(0, 1, 0);");
     editor_feed_line("glEnd();");
     int cmds_before = repl_state_document_count();
-    repl_recompute_autonormals(1);
+    repl_recompute_autonormals(1, NULL);
 
     /* 3 normals inserted into the glBegin block; for-loop was skipped */
     ASSERT_INT("for-skip: cmds added", repl_state_document_count(), cmds_before + 3);
@@ -232,7 +232,7 @@ static void test_block_skipping(void) {
     editor_feed_line("glVertex3f(0, 1, 0);");
     editor_feed_line("glEnd();");
     cmds_before = repl_state_document_count();
-    repl_recompute_autonormals(1);
+    repl_recompute_autonormals(1, NULL);
 
     ASSERT_INT("func-skip: cmds added", repl_state_document_count(), cmds_before + 3);
 
@@ -247,7 +247,7 @@ static void test_block_skipping(void) {
     editor_feed_line("glVertex3f(0, 1, 0);");
     editor_feed_line("glEnd();");
     cmds_before = repl_state_document_count();
-    repl_recompute_autonormals(1);
+    repl_recompute_autonormals(1, NULL);
 
     ASSERT_INT("if-skip: cmds added", repl_state_document_count(), cmds_before + 3);
 }
@@ -265,7 +265,7 @@ static void test_autonormal_disabled(void) {
     editor_feed_line("glVertex3f(1, 0, 0);");
     editor_feed_line("glVertex3f(0, 1, 0);");
     editor_feed_line("glEnd();");
-    repl_recompute_autonormals(0);  /* disabled — no normals inserted */
+    repl_recompute_autonormals(0, NULL);  /* disabled — no normals inserted */
     ASSERT_INT("disabled: no cmds added", repl_state_document_count(), 5);
 }
 
@@ -282,7 +282,7 @@ static void test_gl_triangles(void) {
     editor_feed_line("glVertex3f(1, 0, 0);");
     editor_feed_line("glVertex3f(0, 1, 0);");
     editor_feed_line("glEnd();");
-    repl_recompute_autonormals(1);
+    repl_recompute_autonormals(1, NULL);
     ASSERT_TRUE("autonormal inserts before each triangle vertex", repl_state_document_count() == 8);
     ASSERT_TRUE("autonormal default front-face first cmd type", repl_state_document_cmds_mut()[1].type == CMD_NORMAL3F);
     ASSERT_TRUE("autonormal default front-face first cmd auto", repl_state_document_cmds_mut()[1].is_auto == 1);
@@ -295,14 +295,14 @@ static void test_gl_triangles(void) {
     editor_feed_line("glVertex3f(1, 0, 0);");
     editor_feed_line("glVertex3f(0, 1, 0);");
     editor_feed_line("glEnd();");
-    repl_recompute_autonormals(1);
+    repl_recompute_autonormals(1, NULL);
     ASSERT_TRUE("autonormal front-face cw inserts before each triangle vertex", repl_state_document_count() == 9);
     ASSERT_TRUE("autonormal front-face cw first cmd type", repl_state_document_cmds_mut()[2].type == CMD_NORMAL3F);
     ASSERT_TRUE("autonormal front-face cw first cmd auto", repl_state_document_cmds_mut()[2].is_auto == 1);
     ASSERT_TRUE("autonormal front-face cw flips z", fabsf(repl_state_document_cmds_mut()[2].args[2] - (-1.0f)) < 1e-6f);
 
     repl_state_document_cmds_mut()[0].args[0] = GL_CCW;
-    repl_recompute_autonormals(1);
+    repl_recompute_autonormals(1, NULL);
     ASSERT_TRUE("autonormal front-face update flips auto normal back", fabsf(repl_state_document_cmds_mut()[2].args[2] - 1.0f) < 1e-6f);
 
 }
@@ -343,7 +343,7 @@ static void test_autonormal_inside_funcn_literal_coords(void) {
     editor_feed_line("glEnd();");
     editor_feed_line("}");
     int cmds_before = repl_state_document_count();
-    repl_recompute_autonormals(1);
+    repl_recompute_autonormals(1, NULL);
 
     /* Three auto-normals inserted, one per vertex. */
     ASSERT_INT("funcN literal: cmds added",
@@ -396,7 +396,7 @@ static void test_autonormal_inside_funcn_var_args_skipped(void) {
     editor_feed_line("glEnd();");
     editor_feed_line("}");
     int cmds_before = repl_state_document_count();
-    repl_recompute_autonormals(1);
+    repl_recompute_autonormals(1, NULL);
 
     /* Vars-bearing vertices → no auto-normals inserted. */
     ASSERT_INT("funcN with vars: cmds unchanged",

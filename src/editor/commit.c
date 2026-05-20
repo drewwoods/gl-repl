@@ -1176,7 +1176,7 @@ void editor_commit_reset_transients(void) {
 /* --- Float-decl commit --- */
 
 int editor_try_commit_float_decl(void) {
-    ReplCompileContext ctx = repl_compile_context_from_live(); ctx.insert_mode = editor_insert_mode();
+    ReplCompileContext ctx = repl_compile_context_from_live(editor_state_edit_line()); ctx.insert_mode = editor_insert_mode();
     EditorCommitPlan plan;
     editor_commit_plan_init(&plan);
     char err[REPL_STATUS_TEXT_MAX];
@@ -1223,7 +1223,7 @@ int editor_try_commit_float_decl(void) {
 /* --- Var-assign commit --- */
 
 int editor_try_assign_variable(void) {
-    ReplCompileContext ctx = repl_compile_context_from_live(); ctx.insert_mode = editor_insert_mode();
+    ReplCompileContext ctx = repl_compile_context_from_live(editor_state_edit_line()); ctx.insert_mode = editor_insert_mode();
     EditorCommitPlan plan;
     editor_commit_plan_init(&plan);
     char err[REPL_STATUS_TEXT_MAX];
@@ -1277,7 +1277,7 @@ typedef ReplCompileResult (*EditorBlockCompileFn)(const char *input,
                                                   char *err, int err_size);
 
 static int editor_try_commit_block(EditorBlockCompileFn compile) {
-    ReplCompileContext ctx = repl_compile_context_from_live(); ctx.insert_mode = editor_insert_mode();
+    ReplCompileContext ctx = repl_compile_context_from_live(editor_state_edit_line()); ctx.insert_mode = editor_insert_mode();
     EditorCommitPlan plan;
     char err[REPL_STATUS_TEXT_MAX];
 

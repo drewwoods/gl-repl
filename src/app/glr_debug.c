@@ -45,7 +45,7 @@ void glr_debug_dump_flat_commands(FILE *out, EditorBufferView text) {
     int num_flat_cmds = flat_program.cmd_count;
 
     if (repl_state_flat_program_dirty()) {
-        repl_flatten_commands();
+        repl_flatten_commands(editor_state_edit_line());
         flat_program = repl_state_flat_program_view();
         flat_cmds = flat_program.cmds;
         num_flat_cmds = flat_program.cmd_count;

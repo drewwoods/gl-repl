@@ -226,7 +226,7 @@ static void test_enum_arg_end_to_end_trace(void) {
     editor_feed_line("glDepthMask(1);");
     editor_feed_line("glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);");
     editor_feed_line("glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);");
-    repl_flatten_commands();
+    repl_flatten_commands(editor_state_edit_line());
     repl_execute_commands();
 
     gl_stub_trace_close();

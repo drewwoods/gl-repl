@@ -220,7 +220,7 @@ void editor_delete_cmd_range(int start, int count, const char *what) {
     if (!tutorial_guard_source_change_or_status(start, count, 0))
         return;
 
-    ctx = repl_compile_context_from_live();
+    ctx = repl_compile_context_from_live(editor_state_edit_line());
     err[0] = '\0';
 
     if (repl_compile_delete_range(start, count, &ctx, &change,
@@ -656,7 +656,7 @@ static CommitResult commit_current_input(int enter_mode) {
 
     if (editor_insert_mode()) {
         if (editor_state_input().input_len == 0) {
-            ReplCompileContext ctx = repl_compile_context_from_live();
+            ReplCompileContext ctx = repl_compile_context_from_live(editor_state_edit_line());
             ReplCompiledChange change;
             char err[REPL_STATUS_TEXT_MAX] = "";
             int insert_pos = editor_state_edit_line();
@@ -790,7 +790,7 @@ static CommitResult commit_current_input(int enter_mode) {
     }
 
     if (enter_mode && editor_state_input().input_len == 0) {
-        ReplCompileContext ctx = repl_compile_context_from_live();
+        ReplCompileContext ctx = repl_compile_context_from_live(editor_state_edit_line());
         ReplCompiledChange change;
         char err[REPL_STATUS_TEXT_MAX] = "";
         int insert_pos = repl_state_document_count();
@@ -1132,7 +1132,7 @@ static int handle_comment_toggle_key_route(unsigned char key) {
     if (!tutorial_guard_source_change_or_status(line, 1, 1))
         return 1;
 
-    ctx = repl_compile_context_from_live();
+    ctx = repl_compile_context_from_live(editor_state_edit_line());
     err[0] = '\0';
 
     if (repl_compile_toggle_comment(line, prefix, &ctx, &change,

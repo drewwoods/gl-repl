@@ -1210,7 +1210,7 @@ static void glr_ctrl_build_scene_config(SceneRenderConfig *config) {
     float as_val;
 
     /* Refresh cursor block highlight before reading cursor state */
-    repl_flatten_refresh_current_block_highlight();
+    repl_flatten_refresh_current_block_highlight(editor_state_edit_line());
 
     /* --- Execute hook --- */
     config->execute_fn = scene_execute_adapter;
@@ -1557,13 +1557,19 @@ void glr_ctrl_display_frame(void) {
 
     if (repl_state_normals_dirty()) {
         prof_begin(PROF_AUTONORMAL);
-        repl_recompute_autonormals(glr_state_presentation().autonormal);
+        /* Caller-owned cursor (Phase 3.6.0 of edit-line-ownership.md):
+         * read edit-line into a local int, pass &local so the
+         * pipeline never reaches into editor_state_* (β). */
+        int edit_line = editor_state_edit_line();
+        repl_recompute_autonormals(glr_state_presentation().autonormal,
+                                   &edit_line);
+        editor_state_edit_line_set(edit_line);
         repl_state_normals_dirty_clear();
         prof_end(PROF_AUTONORMAL);
     }
     if (repl_state_flat_program_dirty()) {
         prof_begin(PROF_FLATTEN);
-        repl_flatten_commands();
+        repl_flatten_commands(editor_state_edit_line());
         repl_state_flat_program_clear_dirty();
         prof_end(PROF_FLATTEN);
         flat_program = repl_state_flat_program_view();
@@ -2811,8 +2817,8 @@ static int glr_ctrl_apply_variable_panel_value_change(
     if (g_predef_vars[var_idx].value == value_change->value)
         return 1;
 
-    ctx = repl_compile_context_from_live();
-    /* repl_compile_context_from_live() defaults insert_mode to 0
+    ctx = repl_compile_context_from_live(editor_state_edit_line());
+    /* repl_compile_context_from_live(editor_state_edit_line()) defaults insert_mode to 0
      * (non-editor convention); the editor-side caller knows the live
      * value and overrides. */
     ctx.insert_mode = editor_insert_mode();

@@ -7,8 +7,9 @@
 #ifndef REPL_PIPELINE_H
 #define REPL_PIPELINE_H
 
-void repl_flatten_commands(void);
-void repl_recompute_autonormals(int autonormal_enabled);
+void repl_flatten_commands(int edit_line_idx);
+void repl_recompute_autonormals(int autonormal_enabled,
+                                int *edit_line_inout);
 void repl_refresh_camera_lines(void);
 void repl_refresh_render_state_strings(void);
 void repl_ensure_init_bootstrap_ready(void);

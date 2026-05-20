@@ -105,7 +105,7 @@ static void test_compile_float_decl_failure_is_pure(void) {
     /* Establish a non-trivial pre-state: declare a variable, set
      * status, push a buffer line. */
     set_input("float existing;");
-    ReplCompileContext ctx = repl_compile_context_from_live();
+    ReplCompileContext ctx = repl_compile_context_from_live(editor_state_edit_line());
     ReplCompiledChange change;
     char err[REPL_STATUS_TEXT_MAX];
     repl_compile_float_decl("float existing;", &ctx, &change, err, sizeof(err));
@@ -117,7 +117,7 @@ static void test_compile_float_decl_failure_is_pure(void) {
 
     /* Trigger compile failure: redeclaring an existing name. */
     set_input("float existing;");
-    ctx = repl_compile_context_from_live();
+    ctx = repl_compile_context_from_live(editor_state_edit_line());
     ReplCompileResult r = repl_compile_float_decl(
         "float existing;", &ctx, &change, err, sizeof(err));
     ASSERT_INT("redeclare returns ERROR", r, REPL_COMPILE_ERROR);
@@ -134,7 +134,7 @@ static void test_compile_var_assign_failure_is_pure(void) {
     glr_app_reset_all();
 
     set_input("float a;");
-    ReplCompileContext ctx = repl_compile_context_from_live();
+    ReplCompileContext ctx = repl_compile_context_from_live(editor_state_edit_line());
     ReplCompiledChange change;
     char err[REPL_STATUS_TEXT_MAX];
     repl_compile_float_decl("float a;", &ctx, &change, err, sizeof(err));
@@ -145,7 +145,7 @@ static void test_compile_var_assign_failure_is_pure(void) {
 
     /* Compile failure: assigning to undeclared name. */
     set_input("nonexistent = 1");
-    ctx = repl_compile_context_from_live();
+    ctx = repl_compile_context_from_live(editor_state_edit_line());
     ReplCompileResult r = repl_compile_var_assign(
         "nonexistent = 1", &ctx, &change, err, sizeof(err));
     ASSERT_INT("undeclared assign returns ERROR", r, REPL_COMPILE_ERROR);
@@ -163,7 +163,7 @@ static void test_compile_no_change_leaves_state(void) {
     ui_state_status_set("baseline status");
     ComputeFingerprint before = capture_fingerprint();
 
-    ReplCompileContext ctx = repl_compile_context_from_live();
+    ReplCompileContext ctx = repl_compile_context_from_live(editor_state_edit_line());
     ReplCompiledChange change;
     char err[REPL_STATUS_TEXT_MAX];
     err[0] = 'x';  /* sentinel: ensure compile doesn't write err on NO_CHANGE */
@@ -190,7 +190,7 @@ static void test_compile_apply_updates_both(void) {
     glr_app_reset_all();
 
     set_input("float energy;");
-    ReplCompileContext ctx = repl_compile_context_from_live();
+    ReplCompileContext ctx = repl_compile_context_from_live(editor_state_edit_line());
     ReplCompiledChange change;
     char err[REPL_STATUS_TEXT_MAX];
 
@@ -228,7 +228,7 @@ static void test_compile_apply_var_assign_updates_value(void) {
 
     /* Set up a declared variable. */
     set_input("float k;");
-    ReplCompileContext ctx = repl_compile_context_from_live();
+    ReplCompileContext ctx = repl_compile_context_from_live(editor_state_edit_line());
     ReplCompiledChange change;
     char err[REPL_STATUS_TEXT_MAX];
     repl_compile_float_decl("float k;", &ctx, &change, err, sizeof(err));
@@ -241,7 +241,7 @@ static void test_compile_apply_var_assign_updates_value(void) {
 
     /* Compile + apply assignment. */
     set_input("k = 7");
-    ctx = repl_compile_context_from_live();
+    ctx = repl_compile_context_from_live(editor_state_edit_line());
     ReplCompileResult r = repl_compile_var_assign(
         "k = 7", &ctx, &change, err, sizeof(err));
     ASSERT_INT("k = 7 compile OK", r, REPL_COMPILE_OK);
@@ -270,7 +270,7 @@ static void test_overwrite_decl_with_assign_preserves_set_value(void) {
 
     /* Declare X with an initializer of 5. */
     set_input("float X = 5;");
-    ctx = repl_compile_context_from_live();
+    ctx = repl_compile_context_from_live(editor_state_edit_line());
     ASSERT_INT("seed float X = 5 compile OK",
                repl_compile_float_decl("float X = 5;", &ctx, &change, err, sizeof(err)),
                REPL_COMPILE_OK);
@@ -279,7 +279,7 @@ static void test_overwrite_decl_with_assign_preserves_set_value(void) {
 
     /* Declare Y (no initializer, no users — eligible for overwrite). */
     set_input("float Y;");
-    ctx = repl_compile_context_from_live();
+    ctx = repl_compile_context_from_live(editor_state_edit_line());
     ASSERT_INT("seed float Y compile OK",
                repl_compile_float_decl("float Y;", &ctx, &change, err, sizeof(err)),
                REPL_COMPILE_OK);
@@ -309,7 +309,7 @@ static void test_overwrite_decl_with_assign_preserves_set_value(void) {
 
     /* Compile + apply `X = 42` overwriting the `float Y;` row. */
     set_input("X = 42");
-    ctx = repl_compile_context_from_live();
+    ctx = repl_compile_context_from_live(editor_state_edit_line());
     ReplCompileResult r = repl_compile_var_assign(
         "X = 42", &ctx, &change, err, sizeof(err));
     ASSERT_INT("X = 42 over decl-row compile OK", r, REPL_COMPILE_OK);
@@ -347,11 +347,11 @@ static void test_capacity_failure_is_atomic(void) {
     /* Establish a small pre-state: one declared variable, one
      * assignment line. */
     set_input("float anchor;");
-    ctx = repl_compile_context_from_live();
+    ctx = repl_compile_context_from_live(editor_state_edit_line());
     repl_compile_float_decl("float anchor;", &ctx, &change, err, sizeof(err));
     editor_commit_apply_compiled_change(&change);
     set_input("anchor = 9");
-    ctx = repl_compile_context_from_live();
+    ctx = repl_compile_context_from_live(editor_state_edit_line());
     repl_compile_var_assign("anchor = 9", &ctx, &change, err, sizeof(err));
     editor_commit_apply_compiled_change(&change);
 
@@ -447,13 +447,13 @@ static void test_reformat_keeps_buffer_and_store_aligned(void) {
 
     /* Build a small program. */
     set_input("float a;");
-    ReplCompileContext ctx = repl_compile_context_from_live();
+    ReplCompileContext ctx = repl_compile_context_from_live(editor_state_edit_line());
     ReplCompiledChange change;
     char err[REPL_STATUS_TEXT_MAX];
     repl_compile_float_decl("float a;", &ctx, &change, err, sizeof(err));
     editor_commit_apply_compiled_change(&change);
     set_input("a = 1");
-    ctx = repl_compile_context_from_live();
+    ctx = repl_compile_context_from_live(editor_state_edit_line());
     repl_compile_var_assign("a = 1", &ctx, &change, err, sizeof(err));
     editor_commit_apply_compiled_change(&change);
 
@@ -483,7 +483,7 @@ static void test_set_predef_value_prefers_last_literal_assign(void) {
     editor_feed_line("x = y + 1;");
     editor_feed_line("x = 3;");
 
-    ReplCompileContext ctx = repl_compile_context_from_live();
+    ReplCompileContext ctx = repl_compile_context_from_live(editor_state_edit_line());
     ReplCompiledChange change;
     char err[REPL_STATUS_TEXT_MAX];
 
@@ -515,7 +515,7 @@ static void test_set_predef_value_rewrites_declaration_initializer(void) {
 
     editor_feed_line("float a = 1, x = 2, y; // vars");
 
-    ReplCompileContext ctx = repl_compile_context_from_live();
+    ReplCompileContext ctx = repl_compile_context_from_live(editor_state_edit_line());
     ReplCompiledChange change;
     char err[REPL_STATUS_TEXT_MAX];
 
@@ -544,7 +544,7 @@ static void test_set_predef_value_adds_declaration_initializer(void) {
 
     editor_feed_line("float x;");
 
-    ReplCompileContext ctx = repl_compile_context_from_live();
+    ReplCompileContext ctx = repl_compile_context_from_live(editor_state_edit_line());
     ReplCompiledChange change;
     char err[REPL_STATUS_TEXT_MAX];
 
@@ -568,7 +568,7 @@ static void test_set_predef_value_keeps_expression_sources(void) {
     editor_feed_line("float y;");
     editor_feed_line("x = y + 1;");
 
-    ReplCompileContext ctx = repl_compile_context_from_live();
+    ReplCompileContext ctx = repl_compile_context_from_live(editor_state_edit_line());
     ReplCompiledChange change;
     char err[REPL_STATUS_TEXT_MAX];
 
@@ -595,7 +595,7 @@ static void test_set_predef_value_keeps_expression_sources(void) {
 static void test_set_predef_value_live_only_without_source(void) {
     glr_app_reset_all();
 
-    ReplCompileContext ctx = repl_compile_context_from_live();
+    ReplCompileContext ctx = repl_compile_context_from_live(editor_state_edit_line());
     ReplCompiledChange change;
     char err[REPL_STATUS_TEXT_MAX];
 
@@ -915,7 +915,7 @@ int main(void) {
          * fails on the param list (`123` is not a valid identifier).
          * Pre-fix, the alias `badRoll` would leak to the global
          * alias table even though no CMD_FUNC_DEF was created. */
-        ReplCompileContext ctx = repl_compile_context_from_live();
+        ReplCompileContext ctx = repl_compile_context_from_live(editor_state_edit_line());
         ReplCompiledChange change;
         char err[128] = "";
         ReplCompileResult r = repl_compile_func_def(
@@ -966,7 +966,7 @@ int main(void) {
         /* Now try a second func0 def. repl_compile_func_def directly
          * (not through the loader, since the loader's append-at-end
          * semantics would still produce the duplicate). */
-        ReplCompileContext ctx = repl_compile_context_from_live();
+        ReplCompileContext ctx = repl_compile_context_from_live(editor_state_edit_line());
         ReplCompiledChange change;
         err[0] = '\0';
         ReplCompileResult r = repl_compile_func_def(
@@ -991,7 +991,7 @@ int main(void) {
         glr_app_reset_all();
         repl_func_alias_clear_all();
 
-        ReplCompileContext ctx = repl_compile_context_from_live();
+        ReplCompileContext ctx = repl_compile_context_from_live(editor_state_edit_line());
         EditorCommitPlan plan;
         editor_commit_plan_init(&plan);
         char err[128] = "";
@@ -1024,7 +1024,7 @@ int main(void) {
         editor_state_edit_line_set(0);
         editor_insert_mode_set(0);
 
-        ReplCompileContext ctx = repl_compile_context_from_live();
+        ReplCompileContext ctx = repl_compile_context_from_live(editor_state_edit_line());
         EditorCommitPlan plan;
         editor_commit_plan_init(&plan);
         err[0] = '\0';
@@ -1060,7 +1060,7 @@ int main(void) {
         /* Compile a NEW alias whose pre-step would target slot 0
          * (first free) but whose dup check fails because fn=0
          * already has a CMD_FUNC_DEF in the document. */
-        ReplCompileContext ctx = repl_compile_context_from_live();
+        ReplCompileContext ctx = repl_compile_context_from_live(editor_state_edit_line());
         EditorCommitPlan plan;
         editor_commit_plan_init(&plan);
         err[0] = '\0';
