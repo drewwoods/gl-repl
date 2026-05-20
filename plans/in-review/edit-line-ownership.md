@@ -12,7 +12,9 @@ explicit input to its parse / flatten / compile / load / export work.
 Picked from the two options the prior `editor-demo.md` plan named:
 
 - **Option A (this plan):** full ownership migration. Multi-day
-  refactor touching ~176 call sites across the codebase. The
+  refactor touching ~142 call sites in `src/` (~293 incl. tests).
+  Concentrated in `test_repl_editor.c` (~70), `input.c` (~49),
+  and `flatten.c` (~17). The
   architecturally clean answer — edit-line lives where it
   conceptually belongs, the demo's shim drops to zero symbols,
   the existing `check-repl-no-direct-editor` invariant stays
@@ -23,7 +25,7 @@ Picked from the two options the prior `editor-demo.md` plan named:
   zero; edit-line stays in `ReplState`. Faster, but doesn't fix
   the underlying layering. Not pursued.
 
-This plan has been revised twice after review. Key points
+This plan has been revised three times after review. Key points
 versus the first draft:
 
 1. **Layering invariant β is non-negotiable.** REPL pipeline
@@ -59,14 +61,23 @@ versus the first draft:
    `EditorInputState.edit_line_idx` storage (never written) also
    goes.
 6. **REPL-side inventory.** Files touching `repl_state_edit_line*`
-   today: compile.c, flatten.c, parser.c, scenes.c, core.c,
-   example_loader.c, export.c, **load.c**, plus
+   today: compile.c, flatten.c (3 distinct entry points — see
+   3.6.2), parser.c (single fallback site — see 3.6.3), scenes.c,
+   core.c, example_loader.c, export.c, **load.c**, **autonormal.c**
+   (β-bound direct store-mutator caller — see 3.6.0), plus
    command_store.c (via the store pointer, fixed in Phase 1)
    and the load.h / state_views.h / state_owners.h headers.
-   `load.c` in particular needs explicit cursor-in / cursor-out
+   Additional direct store-mutator sites caught by review:
+   `tools/repl_demo/repl_demo.c` (3 sites; demo-local cursor),
+   `src/repl/state.c:279` (`repl_state_document_reset`'s zero-cursor
+   load), and `src/widgets/tutorial.c` (brackets
+   `repl_load_apply_line` with explicit edit-line writes —
+   see 3.3). `load.c` needs explicit cursor-in / cursor-out
    plumbing because it relies on `change.adjust_edit_line = 1`
-   for its append-at-end loop semantics (load.c:95). See
-   Phase 3.6.5.
+   for its append-at-end loop semantics (load.c:107). The
+   `EditorServices.apply_repl_change` function-pointer signature
+   also changes in lockstep with `repl_apply_compiled_change`
+   (see 1.3.1).
 
 ## Context
 
@@ -283,13 +294,16 @@ struct.
 
 Per-op math the store implements:
 - **INSERT at pos by `count`:** if `pos <= cursor`, `cursor += count`.
-- **DELETE at pos by `count`:** if `cursor` was inside the deleted
-  range, snap to `pos` (the new slot); if past it,
-  `cursor -= count`. Clamp to `[0, new line_count]`.
+- **DELETE at pos by `count`:** three cases —
+  (a) `cursor < pos`: no change (cursor is before the range);
+  (b) `pos <= cursor < pos+count`: snap to `pos` (cursor was
+  inside the deleted range);
+  (c) `cursor >= pos+count`: `cursor -= count` (cursor was
+  past the range). Clamp the result to `[0, new line_count]`.
 - **REPLACE:** no cursor change. `cursor_inout` ignored even if
   non-NULL.
 
-LOAD is the absolute-set case. The existing API:
+LOAD is the absolute-set case. Reviewer flagged the existing API:
 
 ```c
 int repl_command_store_load(ReplCommandStore *store,
@@ -297,28 +311,56 @@ int repl_command_store_load(ReplCommandStore *store,
                             int edit_line);
 ```
 
-stays *almost* as-is — the `edit_line` parameter has always been
-"the new absolute cursor." After Phase 1, the store doesn't write
-to a global; instead, the caller passes that value into
-`*cursor_inout` themselves *before or after* the call. To keep
-the call shape symmetric with the other mutators, add the same
-`int *cursor_inout` parameter:
+The `edit_line` parameter was only ever meaningful *because of*
+the `*store->edit_line` pointer — the store wrote that value
+through. After Phase 1, the store no longer holds a cursor.
+
+**API decision pinned: drop the `edit_line` parameter from
+`_load()` entirely.** Callers set their own cursor before/after
+the call. Concretely:
 
 ```c
 int repl_command_store_load(ReplCommandStore *store,
-                            const GLCmd *cmds, int count,
-                            int edit_line,
-                            int *cursor_inout);
+                            const GLCmd *cmds, int count);
 ```
 
-The store, on success, writes `*cursor_inout = edit_line`
-(clamped to `[0, count]`). No "is_absolute" flag, no separate
-shape — LOAD's parameter already carries the absolute target.
+This is cleaner than threading the value through `cursor_inout`
+because the store has no concept of "the load's target cursor" —
+that was always caller policy. Sites that previously passed a
+specific value (e.g., `scenes.c:259` passing the scene's saved
+edit_line, `state.c:279` passing 0 for reset) now do:
 
-This shape is what the reviewer was reaching for with "the store
-should just return a delta": the store does the per-op math, the
-caller's int gets updated. No `ReplCommandStoreCursorDelta`
-struct, no kind enum, no editor-side helper.
+```c
+ok = repl_command_store_load(&store, cmds, count);
+if (ok) editor_state_edit_line_set(target);  /* caller policy */
+```
+
+In β-bound REPL files that can't call editor (autonormal, load,
+scenes restore paths), the caller's "target" lives in an
+`int *out_new_edit_line` parameter the function surfaces to its
+own caller — see 3.6.4 and 3.6.5.
+
+### 1.2.1 — LOAD_ALL gate semantics in `repl_apply_compiled_change`
+
+`apply.c:103` invokes `repl_command_store_load` for the
+`REPL_COMPILED_LOAD_ALL` kind. Today, that path forwards
+`change->pos` (used as the absolute cursor target) into the
+store, which writes through `*store->edit_line` *unconditionally*
+— the `adjust_edit_line` flag is irrelevant for LOAD_ALL today
+because the store always sets the cursor when loading.
+
+Reviewer flagged: after Phase 1 the gating logic in 1.3 below
+("apply passes NULL to the store when `change->adjust_edit_line`
+is false") could silently drop the LOAD cursor-target.
+
+**Resolution:** with `_load()` no longer taking an edit_line
+parameter (above), there's no cursor in the load path for apply
+to gate. The `change->pos` field for LOAD_ALL becomes a
+caller-policy hint that the caller may apply with its own
+`editor_state_edit_line_set(change.pos)` after a successful
+apply. Phase 1.5 caller migration explicitly handles this — the
+editor's apply wrapper for LOAD_ALL changes is two calls:
+`apply` then `set`. Other kinds don't need the post-step.
 
 ### 1.3 — `repl_apply_compiled_change` gets the same shape
 
@@ -332,31 +374,65 @@ int  repl_apply_compiled_change(const ReplCompiledChange *change,
 ```
 
 Apply forwards `cursor_inout` to the store mutating ops it
-invokes, honoring `change->adjust_edit_line` as the gate (when
-the flag is off, apply passes NULL to the store regardless of
-what the caller supplied). The `change->adjust_edit_line` field
-stays — it's still the *intent* flag.
+invokes, honoring `change->adjust_edit_line` as the gate
+(INSERT_ONE / INSERT_MANY pass NULL when the flag is off).
+The `change->adjust_edit_line` field stays — it's still the
+*intent* flag. LOAD_ALL is handled per 1.2.1 above (caller
+applies `change.pos` separately after a successful apply).
 
 Apply itself never reads or writes editor state. The cursor
 lives where the caller put it.
 
-### 1.4 — Migrate every direct store-mutator caller
+### 1.3.1 — `EditorServices.apply_repl_change` function-pointer
 
-Grep direct call sites of the store ops (not via apply). Most
-editor code goes through `repl_apply_compiled_change`, but there
-are a handful of direct sites in `src/editor/clipboard.c`,
-`commit.c`, `undo.c`, `input.c`, plus tests. Each becomes:
+The seam at `src/editor/services.h:48` and the default binding
+at `src/editor/services.c:41` must also gain the `int *cursor_inout`
+parameter. The current shape:
 
 ```c
-int cur = editor_state_edit_line();
+int (*apply_repl_change)(const ReplCompiledChange *change, void *user);
+```
+
+becomes:
+
+```c
+int (*apply_repl_change)(const ReplCompiledChange *change,
+                         int *cursor_inout, void *user);
+```
+
+`editor_services_default()` updates accordingly. Editor commit
+code already calls `repl_apply_compiled_change` directly in some
+sites (commit.c:237), but the services seam is the test-double
+boundary — both signatures must stay in sync.
+
+### 1.4 — Migrate every direct store-mutator caller
+
+Grep direct call sites of the store ops (not via apply). Full
+inventory by file:
+
+| File | Sites | Cursor source |
+|------|-------|---------------|
+| `src/editor/clipboard.c`, `commit.c`, `undo.c`, `input.c` | several | `editor_state_edit_line()` |
+| `src/repl/autonormal.c` (lines 71, 254) | 2 | β-bound — caller-passed `int *edit_line_inout` (see 3.6 below) |
+| `src/repl/state.c` (line 279, `repl_state_document_reset`) | 1 (via `_load(... 0)`) | reset always zeroes; passes `NULL` or local `int = 0` |
+| `tools/repl_demo/repl_demo.c` (lines 172, 203, 267) | 3 | demo-local stack int; demo doesn't share cursor with anything |
+| Tests | many | per-test; some `NULL`, some local int |
+
+Editor-side and `repl_demo` sites become:
+
+```c
+int cur = editor_state_edit_line();   /* or demo-local */
 int ok = repl_command_store_insert_one(store, pos, &cmd, flags,
                                         flags & ADJUST_EDIT_LINE ? &cur : NULL);
 if (ok && (flags & ADJUST_EDIT_LINE))
-    editor_state_edit_line_set(cur);
+    editor_state_edit_line_set(cur);   /* or write demo-local */
 ```
 
-For callers that don't care about the cursor (some test fixtures),
-pass `NULL`.
+For callers that don't care about the cursor (some test fixtures
+and `_load(... 0)` reset paths), pass `NULL`.
+
+`src/repl/autonormal.c` is β-bound — see Phase 3.6.0 below for
+its specific plumbing.
 
 ### 1.5 — Migrate every `repl_apply_compiled_change` caller
 
@@ -439,6 +515,18 @@ where the field exists but isn't read from is intentional, lasts
 only for the duration of this PR (Phases 2-3), and is the
 deliberate cost of an atomic Phase 4 flip. A reviewer who lands
 on this struct between phases shouldn't think it's a mistake.
+
+**Capture/restore invariant during transition.** Because
+`editor_state_capture` / `_restore` (existing functions at
+`src/editor/state.c:60, 66`) memcpy the whole `EditorState`,
+they'll snapshot the unwritten `document.edit_line_idx = 0`
+during Phases 2-3 and write it back on restore. The forwarders
+mask this (reads route through REPL accessors that ignore the
+editor field) but it would silently activate if anything reads
+the field directly before Phase 4. Mitigation: keep the field
+strictly forwarder-only until Phase 4a; do not introduce
+direct field reads in Phase 3. Phase 4a flip is the moment
+direct reads become safe.
 
 ### 2.2 — Define the accessors
 
@@ -534,13 +622,38 @@ of the value changes.
 
 ### 3.3 — Widgets
 
-Files: `src/widgets/replay.c`.
+Files: `src/widgets/replay.c`, `src/widgets/tutorial.c`.
 
-`replay_walk_*` functions already take edit_line as a snapshot
-field, not by direct accessor call. The snapshot population sites
-(in app shell, covered by 3.2) are where the change happens. This
-chunk is small or empty depending on whether `replay.c` itself
-calls `repl_state_edit_line` (audit during chunk).
+**`replay.c`:** `replay_walk_*` functions already take edit_line
+as a snapshot field, not by direct accessor call. The snapshot
+population sites (in app shell, covered by 3.2) are where the
+change happens. This is small or empty depending on whether
+`replay.c` itself has direct calls (audit during chunk).
+
+**`tutorial.c`:** brackets `repl_load_apply_line` with explicit
+`repl_state_edit_line_set` calls — line 151 sets the cursor to
+the instruction line before loading, line 179 sets it back
+afterward. Phase 3.6.5 changes `repl_load_apply_line` to take
+`int *edit_line_inout`; the tutorial migration is:
+
+```c
+/* Before: */
+repl_state_edit_line_set(instruction_line);
+repl_load_apply_line(comment, err, sizeof(err));
+/* ... */
+repl_state_edit_line_set(state->expected_commit_line);
+
+/* After: */
+int line = instruction_line;
+repl_load_apply_line(comment, err, sizeof(err), &line);
+/* tutorial doesn't need the post-load cursor value here; the
+ * second set call replaces it anyway. */
+editor_state_edit_line_set(state->expected_commit_line);
+```
+
+`tutorial.c` is editor-inherent (it's a widget the editor knows
+about, not REPL pipeline), so it CAN call the editor accessor.
+β invariant unaffected.
 
 ### 3.4 — Tests
 
@@ -588,6 +701,28 @@ plus the `src/repl/{load,state_owners,state_views}.h` headers.
 
 This chunk is the architecturally interesting one. Sub-steps:
 
+**3.6.0 — `autonormal.c`.** β-bound REPL caller that today
+free-rides on the store's auto-adjust flag (autonormal.c:71
+inserts with `REPL_COMMAND_STORE_ADJUST_EDIT_LINE`; line 254
+replaces, no adjust). After Phase 1 the store can't auto-adjust
+on its own, and autonormal can't fetch the cursor itself
+(β-bound, in `src/repl/`).
+
+Fix:
+```c
+/* Before: */
+void repl_recompute_autonormals(int autonormal_enabled);
+/* After: */
+void repl_recompute_autonormals(int autonormal_enabled,
+                                int *edit_line_inout);
+```
+
+Caller plumbing: `src/app/glr_ctrl.c:1559` (the one frame-loop
+site) already has `editor_state_edit_line()` available; pass
+`&local_edit_line` and write it back via
+`editor_state_edit_line_set(local_edit_line)` after the call.
+Other callers (if any — audit) pass a stack-local int through.
+
 **3.6.1 — `compile.c`.** `repl_compile_context_from_live()` populates
 `.edit_line` from `repl_state_edit_line()`. Replace with a function
 that takes `int edit_line_idx` as a parameter — or, more conservatively,
@@ -596,17 +731,51 @@ and migrate callers (app shell / editor) to use it. Internal compile
 helpers already take `ReplCompileContext`, so no further plumbing
 beyond the context-builder change.
 
-**3.6.2 — `flatten.c`.** `repl_state_edit_line()` is called in
-multiple places: cursor highlight tracking, block range
-detection, autonormal staleness. The cleanest path: add an
-explicit `int edit_line_idx` parameter to `repl_flatten_program()`
-and its internal helpers. The controller calls
-`repl_flatten_program(editor_state_edit_line())`. Inside
-`flatten.c`, no `repl_state_edit_line` calls remain.
+**3.6.2 — `flatten.c` (largest sub-step).** 17 calls across
+**three distinct public-API entry points** (declared in
+`flatten.h`):
 
-**3.6.3 — `parser.c`.** Audit; if there's a direct call (likely
-in `ReplParseContext.source_line_idx` defaulting), switch to
-the value already on `ReplParseContext` — the caller provides it.
+- `repl_flatten_refresh_current_block_highlight()` (~6 calls
+  in `flatten.c:149-187`): block-range detection.
+- `repl_flat_cmd_matches_cursor()` (~10 calls in `flatten.c:685-791`):
+  cursor matching + func-scope resolution + attribute tracking.
+- `repl_flatten_program()` itself: 1 call site (often via the
+  two functions above as internal helpers).
+
+All three gain an explicit `int edit_line_idx` parameter (they
+do not delegate to a shared internal). Callers (controller at
+`glr_ctrl.c:1212` and similar) supply the value. The single
+largest REPL-side sub-step — straightforward but tedious. Run
+the existing flatten-related tests after this chunk to confirm
+no behavior drift.
+
+Per-call usage that originally read `repl_state_edit_line()` is
+replaced with the parameter directly; do not introduce a local
+helper that hides the parameter as global state — that would
+defeat β.
+
+**3.6.3 — `parser.c`.** Single site at `parser.c:251`:
+
+```c
+int source_line_idx = ctx ? ctx->source_line_idx
+                          : repl_state_edit_line();
+```
+
+The fallback exists for legacy no-ctx wrapper paths. After
+β migration, neither the REPL accessor (deleted) nor the editor
+accessor (forbidden in REPL files) is callable here.
+
+**Resolution pinned: remove the fallback; require a non-NULL
+context.** Audit `repl_parser_parse_command_ctx` callers; if any
+still pass `ctx == NULL`, migrate them to construct a context
+first. The legacy wrappers (`repl_parser_parse_command` /
+`_with_vars`) were already retired in earlier phases per the
+existing tree comment; the remaining `ctx ? :` ternary is a
+defensive vestige.
+
+Add a runtime assert (`assert(ctx)`) at the top of
+`repl_parser_parse_command_ctx` to catch any stragglers loudly
+during the migration. Remove the ternary on line 251.
 
 **3.6.4 — `scenes.c`, `core.c`, `example_loader.c`, `export.c`.**
 These are load / import / lifecycle paths. They call
@@ -626,7 +795,11 @@ ripple into every caller for no extra information. Specific
 sites:
 
 - `src/repl/core.c:772, 777`: `repl_state_edit_line_set(repl_state_document_count())`
-  — likely in an example/scene load. Return the value instead.
+  — example/scene load via the
+  `glr_ctrl.c:2233 → core.c:798 (load_initial_commands) →
+  core.c:789 (repl_load_example) → core.c:772/777` chain.
+  Each frame needs to forward the target cursor; the outermost
+  controller call site applies via `editor_state_edit_line_set`.
 - `src/repl/example_loader.c:462, 464`: same pattern; comment
   acknowledges `repl_state_edit_line_set` "stays" REPL-state.
   Update the comment and surface the new edit_line through the
@@ -639,7 +812,7 @@ sites:
 
 **3.6.5 — `load.c`.** The REPL-side line loader is structurally
 similar to the editor commit path but lives in `src/repl/` and
-relies heavily on auto-advance — line 95's explicit
+relies heavily on auto-advance — line 107's explicit
 `change.adjust_edit_line = 1` is exactly the
 "loader's append-at-end semantics, edit_line must auto-advance
 line-by-line so the next call sees insert_idx = document_count"
@@ -696,10 +869,16 @@ adds it.
 the `*edit_line` pointer. This sub-step verifies no remaining
 `repl_state_edit_line*` calls in command_store.c.
 
-**3.6.8 — Header cleanup.** `src/repl/load.h`,
-`src/repl/state_views.h`, `src/repl/state_owners.h` no longer
-need to declare `repl_state_edit_line*`. Phase 4 will delete
-the declarations along with the definitions.
+**3.6.8 — Header inventory check.** `src/repl/load.h`,
+`src/repl/state_views.h`, `src/repl/state_owners.h` are the
+remaining declaration sites for `repl_state_edit_line*`. Verify
+no other header re-declares them (grep). The deletion itself
+happens in Phase 4a (4.3 below).
+
+Also at Phase 4a: the forward declaration at
+`src/editor/state.c:257` (`int repl_state_edit_line(void);`)
+becomes unnecessary once the editor accessor no longer
+forwards. Delete it then.
 
 By end of Phase 3: zero `repl_state_edit_line*` calls outside
 `src/repl/state.c` itself, and zero REPL → editor symbol
@@ -852,21 +1031,16 @@ Update the baseline.
   about edit-line cleanup gets a one-line update pointing at
   this plan's done location.
 
-### 6.4 — Stale path references (cleanup carried in this PR's first commit)
+### 6.4 — Stale path references (already cleaned)
 
-Pre-existing references to `plans/active/editor-demo.md` in the
-codebase need updating to `plans/done/editor-demo.md`. Locations
-flagged in review:
-
-- `Makefile` (around line 545).
-- `MODULES.md` (around line 190).
-- `tools/editor_demo/editor_demo.c` (lines 4 and 35).
-- `tools/editor_demo/repl_shim.c` (line 18 — this file may
-  itself be deleted by Phase 5; the reference only matters if
-  the zero-stub-ledger variant is kept).
-
-These are P3; folded into the migration PR so the docs stay
-coherent.
+A previous review round flagged `plans/active/editor-demo.md`
+references in `Makefile`, `MODULES.md`,
+`tools/editor_demo/editor_demo.c`, and
+`tools/editor_demo/repl_shim.c`. Those references were already
+updated to `plans/done/editor-demo.md` in the
+`plan-edit-line-migration` branch's first commit. Re-grep at
+PR start to confirm; this sub-step is conditional on whether
+they survived rebasing.
 
 ## Phase 7 — Full verification
 
@@ -927,8 +1101,10 @@ coherent.
 - Phase 1, 2, 3.x, 4a, 4b, 5, 6 as separate commits on one PR
   after Phase 0. Each commit leaves the tree buildable + tests
   green.
-- Sequence: 0 → 1 → 2 → 3.1 → 3.2 → 3.3 → 3.4 → 3.5 → 3.6.1 →
-  3.6.2 → 3.6.3 → 3.6.4 → 3.6.5 → 3.6.6 → 3.6.7 → 3.6.8 → 4a → 4b → 5 → 6 → 7.
+- Sequence: 0 → 1 → 2 → 3.1 → 3.2 → 3.3 → 3.4 → 3.5 → 3.6.0 →
+  3.6.1 → 3.6.2 → 3.6.3 → 3.6.4 → 3.6.5 → 3.6.6 → 3.6.7 → 3.6.8 →
+  4a → 4b → 5 → 6 → 7. (3.6.0 is autonormal.c, added after
+  the latest review.)
 - Phase 6.4 (stale `plans/active/editor-demo.md` references)
   folds into Phase 0's commit, since both are independent of
   the migration itself.
