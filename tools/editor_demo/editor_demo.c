@@ -1,40 +1,39 @@
 /*
- * tools/editor_demo/editor_demo.c -- Standalone editor demo binary.
+ * tools/editor_demo/editor_demo.c -- Standalone generic text editor demo.
  *
- * Drives src/editor (input, commit, clipboard, undo, ...) against a
- * fake REPL semantics (via tools/editor_demo/repl_shim.c) to prove
- * the editor module set can link without the full REPL pipeline.
- * Mirror of repl_demo (REPL pipeline without editor) and scene_demo
- * (scene without REPL).
+ * Per the Phase 8 cleavage in plans/active/editor-demo.md, this demo
+ * does NOT reuse the REPL editor's controller (src/editor/input.c,
+ * commit.c, clipboard.c, undo.c, reformat.c, search.c, completion.c,
+ * and the inline overlays — all REPL-flavored). It runs entirely on:
  *
- * What links:
- *   - src/editor (input, commit, clipboard, undo, state, search,
- *     completion, reformat, help_session, inline_rename,
- *     inline_file_prompt) -- minus services.c, which the shim
- *     replaces with demo-local EditorServices bindings.
- *   - src/ui -- text panel, code panel adapter, menu bar, etc.
- *     The plan's "chrome is editor-inherent" decision means these
- *     link directly rather than being abstracted.
- *   - src/widgets -- tutorial, color picker state, variable panel,
- *     replay state. Their default state is inactive; in the demo
- *     they no-op.
- *   - prof.c -- profiling instrumentation.
- *   - tools/editor_demo/repl_shim.c -- fake EditorServices bindings
- *     plus direct stubs for the repl_/glr_ symbols input.c and
- *     commit.c still call by name.
+ *   - src/editor/state.c     : text buffer + cursor + selection data model.
+ *   - src/editor/edit_ops.c  : generic text-editing primitives shared with
+ *                              src/editor/input.c (REPL dispatcher).
+ *   - src/ui/text_panel.c    : generic wrapped text renderer.
+ *   - src/ui/text_layout.c   : wrap math.
+ *   - src/ui/text_search.c   : case-insensitive text find (linked for the
+ *                              text_panel's search-row machinery — find is
+ *                              not bound to a key in v1).
+ *   - prof.c                 : profiling.
+ *   - tools/editor_demo/input.c : the demo's own generic key dispatcher.
+ *   - tools/editor_demo/menu.c  : the demo's own File menu.
+ *   - tools/editor_demo/repl_shim.c : one-symbol ledger
+ *                                     (repl_state_edit_line; the acknowledged
+ *                                     state.c leak named in the plan's
+ *                                     "Editor files that aren't yet generic"
+ *                                     inventory).
  *
- * What does NOT link:
- *   - src/repl -- fully stubbed by repl_shim.c.
- *   - src/app -- controller / app shell; the demo runs its own
- *     minimal app loop. repl_shim.c stubs the handful of glr_
- *     symbols input.c calls directly (camera reset, presentation,
- *     router).
- *   - src/scene -- no 3D rendering.
+ * What does NOT link: anything under src/repl, src/app, src/scene, or
+ * src/widgets, plus the REPL-flavored editor controller files listed
+ * above. There is no fake EditorServices instance and no per-symbol
+ * REPL / glr / ui / tutorial stub block in the shim.
  *
- * The demo is a plain text editor -- not a GL grammar editor. The
- * shim's compile() returns NO_CHANGE, so user input becomes
- * comment-style text in the editor buffer rather than being parsed
- * as GL commands.
+ * v1 behavior: type characters into the input row, backspace to delete,
+ * arrow keys / Home / End to move within the row, click the File menu
+ * for Load / Save (unimplemented handlers) / Quit. Cross-line nav, undo,
+ * find, word jumps, selection clipboard, and File menu handlers are
+ * deferred to follow-up phases — see plans/active/editor-demo.md "What's
+ * still open".
  *
  * Run:
  *   make editor_demo USE_GL_STUBS=1   # link check only (no GL needed)
@@ -72,6 +71,33 @@ static int  g_demo_scroll = 0;
  * itself reads `repl_state_edit_line` via the shim. A follow-up
  * phase moves edit-line ownership into EditorState so the demo
  * doesn't need that shim stub. */
+static void demo_fill_text_row(UiTextPanelRow *row, const char *text,
+                               int line_idx) {
+    memset(row, 0, sizeof(*row));
+    row->text                = text ? text : "";
+    row->kind                = UI_TEXT_PANEL_ROW_TEXT;
+    row->left_gutter_label   = line_idx + 1;
+    row->source_line_idx     = line_idx;
+    row->hit_target_line_idx = -1;
+    row->search_row_idx      = -1;
+    row->color.r = 0.85f; row->color.g = 0.88f; row->color.b = 0.92f;
+    row->color.a = 1.0f;
+    row->hit_eligible        = 1;
+}
+
+static void demo_fill_input_row(UiTextPanelRow *row, int line_idx) {
+    memset(row, 0, sizeof(*row));
+    row->text                = "";  /* INPUT rows ignore text */
+    row->kind                = UI_TEXT_PANEL_ROW_INPUT;
+    row->left_gutter_label   = line_idx + 1;
+    row->source_line_idx     = line_idx;
+    row->hit_target_line_idx = -1;
+    row->search_row_idx      = -1;
+    row->color.r = 0.95f; row->color.g = 0.95f; row->color.b = 1.0f;
+    row->color.a = 1.0f;
+    row->hit_eligible        = 1;
+}
+
 static int demo_build_snapshot(UiTextPanelRow *rows, int rows_cap,
                                UiTextPanelSnapshot *snap) {
     EditorBufferView buf = editor_buffer_view();
@@ -80,38 +106,26 @@ static int demo_build_snapshot(UiTextPanelRow *rows, int rows_cap,
     int n = 0;
     int edit_line = input.edit_line_idx;
     if (edit_line < 0) edit_line = 0;
+    int input_emitted = 0;
 
+    /* Walk the buffer in document order, substituting an INPUT row
+     * for the active edit line so it lands in the right vertical
+     * position even when the buffer has committed lines after it. */
     for (int i = 0; i < buf.line_count && n < rows_cap; i++) {
-        if (i == edit_line)
-            continue;  /* INPUT row replaces the active line below */
-        UiTextPanelRow row = {0};
-        row.text              = editor_buffer_view_line(buf, i);
-        if (!row.text) row.text = "";
-        row.kind              = UI_TEXT_PANEL_ROW_TEXT;
-        row.left_gutter_label = i + 1;
-        row.source_line_idx   = i;
-        row.hit_target_line_idx = -1;
-        row.search_row_idx    = -1;
-        row.color.r = 0.85f; row.color.g = 0.88f; row.color.b = 0.92f;
-        row.color.a = 1.0f;  row.color.has_alpha = 0;
-        row.hit_eligible      = 1;
-        rows[n++] = row;
+        if (i == edit_line) {
+            demo_fill_input_row(&rows[n++], i);
+            input_emitted = 1;
+            continue;
+        }
+        demo_fill_text_row(&rows[n++], editor_buffer_view_line(buf, i), i);
     }
 
-    /* Active edit row (INPUT). Always present so the user has somewhere
-     * to type even when the buffer is empty. */
-    if (n < rows_cap) {
-        UiTextPanelRow row = {0};
-        row.text              = "";  /* INPUT rows ignore text */
-        row.kind              = UI_TEXT_PANEL_ROW_INPUT;
-        row.left_gutter_label = edit_line + 1;
-        row.source_line_idx   = edit_line;
-        row.hit_target_line_idx = -1;
-        row.search_row_idx    = -1;
-        row.color.r = 0.95f; row.color.g = 0.95f; row.color.b = 1.0f;
-        row.color.a = 1.0f;  row.color.has_alpha = 0;
-        row.hit_eligible      = 1;
-        rows[n++] = row;
+    /* If the edit line is past the end of the buffer (empty buffer
+     * or cursor parked on a virtual row beyond the last committed
+     * line), emit the INPUT row last so the user always has
+     * somewhere to type. */
+    if (!input_emitted && n < rows_cap) {
+        demo_fill_input_row(&rows[n++], edit_line);
     }
 
     snap->vp_w           = g_demo_vp_w;

@@ -542,14 +542,18 @@ REPL_DEMO_DEP_SRCS = src/repl/format.c \
 # only path that touches cfg state, and that lives in src/app/glr_actions.c
 # (not in the demo link set).
 
-# Object list for the standalone editor_demo. Proves the editor module
-# set links without the REPL pipeline, the controller, or the scene
-# renderer. Per the "Scope decision" in plans/active/editor-demo.md,
-# UI chrome (menu bar, help overlay, color picker, tutorial) is
-# editor-inherent and links directly; src/repl/* and src/app/* are
-# replaced by tools/editor_demo/repl_shim.c. src/editor/services.c is
-# *excluded* — the shim's editor_services_default() takes its place,
-# so the demo gets demo-local bindings for compile / apply / parse.
+# Object list for the standalone editor_demo. Phase 8 refit
+# (plans/active/editor-demo.md) split the editor module into a generic
+# half (state.c data model + edit_ops.c primitives) and a REPL-flavored
+# controller half (input.c, commit.c, clipboard.c, undo.c, reformat.c,
+# search.c, completion.c, plus the inline overlays). The demo links
+# only the generic half plus the REPL-free UI render layer
+# (text_panel, text_layout, text_search). The REPL-flavored
+# controllers are not linked at all; the demo provides its own
+# generic input dispatcher (tools/editor_demo/input.c) and File menu
+# (tools/editor_demo/menu.c). repl_shim.c is a one-symbol ledger
+# (repl_state_edit_line) for the acknowledged state.c edit-line leak;
+# the rest of the prior ~85-stub shim is gone with the controller files.
 EDITOR_DEMO_DEP_SRCS = src/editor/edit_ops.c \
                        src/editor/state.c \
                        src/ui/text_layout.c \
@@ -743,15 +747,18 @@ $(REPL_DEMO_BIN): $(REPL_DEMO_OBJS)
 repl_demo: FORCE $(REPL_DEMO_BIN) ## Build the standalone REPL pipeline demo.
 	ln -sfn $(REPL_DEMO_BIN) $@
 
-# Standalone editor demo. Inverse of repl_demo: proves the editor
-# module set (src/editor/*, plus the UI / widgets / prof modules it
-# legitimately depends on downward) links without src/repl/*,
-# src/app/*, or src/scene/*. tools/editor_demo/repl_shim.c provides
-# editor_services_default() with no-op bindings plus direct stubs
-# for the repl_* / glr_* symbols the editor still calls by name.
-# Adding a new direct call site in the editor that grows the shim
-# is a regression; the check-editor-repl-surface gate (Phase 7b)
-# catches it.
+# Standalone generic text editor demo. Inverse of repl_demo: proves
+# that the editor data model (src/editor/state.c) and the generic
+# text-editing primitives (src/editor/edit_ops.c) link cleanly into a
+# non-REPL controller. The demo's own dispatcher
+# (tools/editor_demo/input.c) and File menu (tools/editor_demo/menu.c)
+# stand in for the REPL-flavored controller files
+# (src/editor/{input,commit,clipboard,undo,reformat,search,completion}.c
+# and the inline overlays), which Phase 8.7 dropped from this link
+# set entirely. tools/editor_demo/repl_shim.c is a one-symbol ledger
+# for the residual state.c edit-line leak (Phase 8 "Editor files
+# that aren't yet generic"); any second entry signals a layering
+# regression worth investigating.
 EDITOR_DEMO_OBJS = $(OBJDIR)/tools/editor_demo/editor_demo.o \
                    $(OBJDIR)/tools/editor_demo/repl_shim.o \
                    $(OBJDIR)/tools/editor_demo/menu.o \
@@ -1143,8 +1150,9 @@ test-detailed: $(TEST_BINS) ## Run the full test suite with verbose example expo
 test-stubs: check-gl-boundaries check-layer-coupling check-state-ownership ## Build and run tests using local GL/GLU/GLUT stubs, without GL libs.
 	$(MAKE) test USE_GL_STUBS=1
 
-test-full: ## Full gate: stub tests + checks + build sample, bench, repl_demo, scene_demo.
+test-full: ## Full gate: stub tests + checks + build sample, bench, repl_demo, scene_demo, editor_demo.
 	$(MAKE) --no-print-directory repl_demo USE_GL_STUBS=1
+	$(MAKE) --no-print-directory editor_demo USE_GL_STUBS=1
 	$(MAKE) --no-print-directory check
 	$(MAKE) --no-print-directory test-stubs
 	$(MAKE) --no-print-directory sample
