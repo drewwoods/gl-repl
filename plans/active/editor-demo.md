@@ -188,19 +188,49 @@ The demo handles them with direct symbol stubs, the same way
 `repl_shim.c` already plans to stub the smaller editor files' direct
 REPL reach.
 
-### Motivation — measurement table (2026-05-13)
+### Motivation — measurement table (verified 2026-05-20)
 
-REPL-symbol surface of each `src/editor/*.c` file:
+REPL-symbol surface of each `src/editor/*.c` file (re-counted at Phase 5
+entry):
 
 | File | REPL functions called | Notes |
 |------|----------------------|-------|
 | `state.c` | 1 (`repl_state_edit_line`) | One-line stub. Per-file stub growth — fine. |
 | `clipboard.c` | ~10 (command_store, source_scope, status) | Moderate; mutators are no-ops in the demo. |
 | `undo.c` | ~10 (command_store, func_alias, eval, promote_example) | Moderate; `repl_promote_example_if_needed` is the only REPL-semantics call. |
-| `input.c` | **23** (parse + compile + command_store + status) | **This phase reduces this to ~5.** Also has chrome reach (`ui_*`, `color_picker_*`, `tutorial_*`) — kept direct as editor-inherent. Residual upward `glr_*` reach (~3-4 sites) stays direct; the demo stubs it. |
-| `commit.c` | **33** (compile / apply / func_alias / eval / source_scope) | **This phase reduces this to ~5.** Already routes some calls through `EditorServices` today — extension target. |
+| `input.c` | **23** (parse + compile + command_store + status) | **This phase reduces this to ~5.** Also has chrome reach (`ui_*`, `color_picker_*`, `tutorial_*`) — kept direct as editor-inherent. Residual upward `glr_*` reach (**6 sites verified 2026-05-20**, vs draft "~3-4") stays direct; the demo stubs it. Six is below the 8-symbol reopen threshold. |
+| `commit.c` | **33** (compile / apply / func_alias / eval / source_scope) | **This phase reduces this to ~5.** Already routes some calls through `EditorServices` today — extension target. No chrome reach at all. |
 
 `code_panel_document.c` is **not in this table** — it was split during Phases 1 and 3 (pure half → `src/ui/text_layout`; REPL-aware half → `src/ui/repl_code_panel.c`) and no longer exists in `src/editor/` by the time Phase 5 starts.
+
+**Verified 2026-05-20 — `glr_*` reach in `input.c` (6 unique symbols):**
+`glr_camera_controls_reset`, `glr_completion_accept_autocomplete`,
+`glr_ctrl_router_reset_code_panel_drag`, `glr_ctrl_sync_ui_chrome`,
+`glr_state_presentation`, `glr_state_presentation_mut`. All stay direct;
+six stubs in `repl_shim.c` is comfortably under the EditorChromeServices
+reopen threshold.
+
+**Service-surface refinement note.** The draft 13-field extension
+covers the structured surface (parser/store/func_alias/eval/source_scope),
+but the actual REPL reach also includes ~10 pure-read helpers
+(`repl_state_edit_line`, `repl_state_document_count`,
+`repl_line_is_block_head`/`_label`, `repl_format_fits`,
+`repl_copy_string_fits`, `repl_compiled_change_init`,
+`repl_apply_can_apply_compiled_change`,
+`repl_func_alias_first_free_slot`/`_lookup_slot`/`_name_is_valid`/`_get`,
+`repl_func_signature`, `repl_source_scope_in_begin_block_at`,
+`repl_eval_input_has_predef_vars`). Per the rule already documented in
+`src/editor/services.h` ("pure reads stay direct; only mutating
+operations and context construction live in the table"), these stay
+direct and become direct stubs in `repl_shim.c`. Additional mutating
+reach to fold into the service table during implementation:
+`repl_command_store_clear`, `repl_state_edit_line_set`,
+`repl_compile_delete_range`/`_empty_line`/`_toggle_comment` (likely
+coarsened into a single `compile_command` callback),
+`repl_compiled_change_rollback_alias`, `repl_eval_init_predef_vars`,
+`repl_parse_and_normalize_strict`. Estimate: ~17-20 final service
+fields, ~47-50 total unique symbols in `repl_shim.c`. Slightly above
+the draft 45-symbol cap; revisit the cap during step 5 implementation.
 
 Sum today: **~77 REPL function calls across the five remaining files**. The
 old "~12-15" shim target was aspirational and is no longer the operative
