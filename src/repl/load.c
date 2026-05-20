@@ -47,7 +47,8 @@ static int load_try_block(ReplCompileResult (*compile)(const char *,
     return out->kind != REPL_COMPILED_NO_CHANGE;
 }
 
-int repl_load_apply_line(const char *line, char *err, int err_size) {
+int repl_load_apply_line(const char *line, char *err, int err_size,
+                         int *edit_line_inout) {
     if (!line) return 0;
     if (err && err_size > 0) err[0] = '\0';
 
@@ -55,11 +56,24 @@ int repl_load_apply_line(const char *line, char *err, int err_size) {
      * CMD_EMPTY / CMD_COMMENT source rows so editor/export round-trips
      * preserve line count. Flatten drops both from the executable stream. */
 
-    /* β: REPL pipeline files can't call editor_state_*. Phase 3.6.5
-     * hoists this to a repl_load_apply_line(int *edit_line_inout)
-     * parameter; for now use the REPL-state accessor (REPL→REPL is
-     * allowed) and pass the value into the context. */
-    ReplCompileContext ctx = repl_compile_context_from_live(repl_state_edit_line());
+    /* Caller-owned cursor (Phase 3.6.5 of
+     * plans/in-review/edit-line-ownership.md). edit_line_inout
+     * supplies the insertion position; the per-line apply
+     * advances it as the document grows. A NULL pointer is
+     * permitted — the loader falls back to a stack-local int
+     * mirroring the REPL-state cursor (read at entry, written
+     * back at exit). This preserves legacy behavior for tests
+     * and callers that rely on `repl_state_edit_line()` /
+     * `_set()` for ambient cursor positioning instead of
+     * threading the parameter explicitly. */
+    int local_edit_line;
+    int wrote_local = 0;
+    if (edit_line_inout == NULL) {
+        local_edit_line = repl_state_edit_line();
+        edit_line_inout = &local_edit_line;
+        wrote_local = 1;
+    }
+    ReplCompileContext ctx = repl_compile_context_from_live(*edit_line_inout);
     ReplCompiledChange change;
     repl_compiled_change_init(&change);
     int failed = 0;
@@ -139,16 +153,13 @@ int repl_load_apply_line(const char *line, char *err, int err_size) {
         }
         repl_apply_predef_ops(&change);
         repl_apply_scratch_ops(&change);
-        /* Caller-owned cursor: thread the edit-line through apply
-         * and write it back so the next call sees insert_idx =
-         * document_count for the append-at-end semantics. Phase 1
-         * of plans/in-review/edit-line-ownership.md dropped the
-         * store's auto-pointer; Phase 3.6.5 hoists this to a
-         * repl_load_apply_line parameter. */
-        int edit_line = repl_state_edit_line();
-        int ok = repl_apply_compiled_change(&change, &edit_line);
-        if (ok)
-            repl_state_edit_line_set(edit_line);
+        /* Apply mutates *edit_line_inout in place via the store
+         * (Phase 1 + Phase 3.6.5). The cursor advance is what
+         * makes the next call see insert_idx = document_count for
+         * the append-at-end semantics. */
+        int ok = repl_apply_compiled_change(&change, edit_line_inout);
+        if (ok && wrote_local)
+            repl_state_edit_line_set(*edit_line_inout);
         return ok ? 1 : 0;
     }
 
@@ -194,12 +205,12 @@ int repl_load_apply_line(const char *line, char *err, int err_size) {
         return 0;
     }
     ReplCommandStore store = repl_command_store_live();
-    /* Caller-owned cursor for the plain-command tail; mirrors the
-     * structured-change path above. */
-    int edit_line = repl_state_edit_line();
+    /* Plain-command tail: thread the caller's cursor pointer
+     * directly so the post-insert cursor lands on
+     * `*edit_line_inout`. Mirrors the structured-change path. */
     ReplStoreMutOpts opts = {
         .flags        = REPL_COMMAND_STORE_ADJUST_EDIT_LINE,
-        .cursor_inout = &edit_line,
+        .cursor_inout = edit_line_inout,
     };
     if (!repl_command_store_insert_one(&store, insert_idx, &cmd, &opts)) {
         SourceTextChange rollback = {
@@ -212,6 +223,7 @@ int repl_load_apply_line(const char *line, char *err, int err_size) {
         source_document_apply_change(&rollback);
         return 0;
     }
-    repl_state_edit_line_set(edit_line);
+    if (wrote_local)
+        repl_state_edit_line_set(*edit_line_inout);
     return 1;
 }

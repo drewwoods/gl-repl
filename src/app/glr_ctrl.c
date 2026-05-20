@@ -2293,7 +2293,7 @@ void glr_ctrl_bootstrap_repl(const char *input_file) {
             break;
         }
     }
-    repl_load_initial_commands(input_file);
+    editor_state_edit_line_set(repl_load_initial_commands(input_file));
     /* Startup banner. Step 3 of feature/decouple-repl-from-gl-repl-alt.md
      * moved this out of src/repl/core.c so pipeline TUs don't own
      * display-string side effects. */
@@ -2650,14 +2650,14 @@ static void cycle_example_or_user_scene(void) {
             }
         }
         if (count > 0)
-            repl_load_example(0);
+            editor_state_edit_line_set(repl_load_example(0));
         return;
     }
 
     if (count > 0) {
         int next = repl_state_scenes().active_example_idx + 1;
         if (next < count) {
-            repl_load_example(next);
+            editor_state_edit_line_set(repl_load_example(next));
             return;
         }
     }
@@ -2670,7 +2670,7 @@ static void cycle_example_or_user_scene(void) {
         }
     }
     if (count > 0)
-        repl_load_example(0);
+        editor_state_edit_line_set(repl_load_example(0));
 }
 
 /* Reverse counterpart to cycle_example_or_user_scene. Walks the same

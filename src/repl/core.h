@@ -175,7 +175,11 @@ void        repl_mark_normals_dirty(void);
  * user scene on first edit (via repl_promote_example_if_needed()). */
 int  repl_example_count(void);
 const char *repl_example_name(int idx);
-void repl_load_example(int idx);
+/* Returns the post-load cursor target (= document line count after
+ * the example body emits). Caller applies the value via
+ * editor_state_edit_line_set() above the β boundary. Phase 3.6.4 of
+ * plans/in-review/edit-line-ownership.md. */
+int  repl_load_example(int idx);
 
 /* User scenes: persistent named snapshots (up to MAX_USER_SCENES slots).
  * Slot 0 is the "home" scene (captured on first example load) and is never
@@ -212,7 +216,10 @@ void repl_reset_time_to_zero(void);
 
 /* editor_navigate_to_line() / editor_feed_line() are editor-owned and
  * declared in src/editor/input.h — src/repl/ no longer re-declares them. */
-void repl_load_initial_commands(const char *import_file);
+/* Returns the post-load cursor target. Caller applies the value
+ * via editor_state_edit_line_set() above the β boundary. Phase
+ * 3.6.4 of plans/in-review/edit-line-ownership.md. */
+int repl_load_initial_commands(const char *import_file);
 /* Pure REPL pass: walks every command and rewrites the canonical
  * line text + GLCmd in place. Does not save/restore editor input;
  * the editor's Ctrl+\ wrapper (`editor_reformat_commands`) layers
