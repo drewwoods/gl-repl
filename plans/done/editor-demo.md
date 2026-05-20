@@ -66,12 +66,12 @@ Full regression: 6292/6292 tests across 45 binaries clean; full
 These are intentionally deferred from Phase 8 — each is a separate
 follow-up phase:
 
-- **Edit-line ownership cleanup.** The one remaining
-  `repl_shim.c` stub (`repl_state_edit_line`) is the visible tip of
-  a much larger coupling: `repl_state_edit_line` itself has **176
-  call sites across 33 files** as of 2026-05-20 (REPL pipeline,
-  editor, app shell, widgets, tests, demo). Two scope options have
-  been worked out; pick one when the time comes.
+- **Edit-line ownership cleanup. DONE 2026-05-21** — see
+  `plans/done/edit-line-ownership.md`. Option A landed in 7 phases
+  (storage flip + accessor migration + scenes/load.c via a
+  controller-installed host-effects sink + shim deletion). The
+  options below are retained as historical context for the
+  decision.
 
   - **Option A — Full ownership migration.** Move edit-line state
     out of `ReplState` into `EditorState`. Concretely:
