@@ -195,7 +195,7 @@ static int tutorial_guard_pending_input_commit_or_status(int enter_mode) {
     if (!tutorial_active())
         return 1;
 
-    pos = repl_state_edit_line();
+    pos = editor_state_edit_line();
     if (editor_insert_mode() || pos >= repl_state_document_count()) {
         if (editor_insert_mode() || enter_mode || editor_state_input().input_len > 0)
             insert_count = 1;
@@ -241,10 +241,10 @@ void editor_delete_cmd_range(int start, int count, const char *what) {
         return;
     }
 
-    repl_state_edit_line_set(change.pos);
-    if (repl_state_edit_line() > repl_state_document_count())
-        repl_state_edit_line_set(repl_state_document_count());
-    editor_load_line_to_input(repl_state_edit_line());
+    editor_state_edit_line_set(change.pos);
+    if (editor_state_edit_line() > repl_state_document_count())
+        editor_state_edit_line_set(repl_state_document_count());
+    editor_load_line_to_input(editor_state_edit_line());
     repl_mark_normals_dirty();
     editor_clipboard_clear_selection();
     repl_set_status(change.commit_message);
@@ -257,7 +257,7 @@ void editor_clear_all_cmds(void) {
     editor_undo_push_snapshot();
     ReplCommandStore store = repl_command_store_live();
     repl_command_store_clear(&store);
-    repl_state_edit_line_set(0);
+    editor_state_edit_line_set(0);
     editor_insert_mode_set(0);
     editor_input_clear();
     {
@@ -358,13 +358,13 @@ static int normalize_navigation_target(int target) {
 }
 
 static void navigate_to_line_raw_resolved(int target) {
-    if (target == repl_state_edit_line() && !editor_insert_mode())
+    if (target == editor_state_edit_line() && !editor_insert_mode())
         return;
 
-    if (repl_state_edit_line() == repl_state_document_count() && !editor_insert_mode())
+    if (editor_state_edit_line() == repl_state_document_count() && !editor_insert_mode())
         save_newline_buf();
 
-    repl_state_edit_line_set(target);
+    editor_state_edit_line_set(target);
     editor_insert_mode_set(0);
     editor_load_line_to_input(target);
     editor_completion_clear();
@@ -478,7 +478,7 @@ static int parse_for_overwrite_enter(GLCmd *cmd, char *text_out, int text_sz,
  *   - else → at doc_count (append at end)
  * Used by every commit site that runs the parse-and-place tail. */
 static int editor_resolve_insert_idx(void) {
-    int edit = repl_state_edit_line();
+    int edit = editor_state_edit_line();
     int count = repl_state_document_count();
     if (editor_insert_mode()) return edit;
     if (edit < count)         return edit;
@@ -506,20 +506,20 @@ static EditorPlaceResult editor_place_parsed_command(int insert_idx,
         if (!repl_command_store_insert_one(&store, insert_idx, cmd, NULL))
             return EDITOR_PLACE_BUFFER_FULL;
         editor_buffer_insert_line(insert_idx, cmd_text);
-        repl_state_edit_line_set(insert_idx + 1);
+        editor_state_edit_line_set(insert_idx + 1);
         return EDITOR_PLACE_INSERTED;
     }
     if (insert_idx < repl_state_document_count()) {
         if (repl_command_store_replace_one(&store, insert_idx, cmd))
             editor_buffer_replace_line(insert_idx, cmd_text);
-        repl_state_edit_line_set(insert_idx + 1);
+        editor_state_edit_line_set(insert_idx + 1);
         return EDITOR_PLACE_REPLACED;
     }
     /* append: insert_idx == doc_count */
     if (!repl_command_store_insert_one(&store, insert_idx, cmd, NULL))
         return EDITOR_PLACE_BUFFER_FULL;
     editor_buffer_insert_line(insert_idx, cmd_text);
-    repl_state_edit_line_set(repl_state_document_count());
+    editor_state_edit_line_set(repl_state_document_count());
     return EDITOR_PLACE_APPENDED;
 }
 
@@ -587,7 +587,7 @@ static int input_matches_committed_line(int line) {
 static int commit_progressed_since(const CommitAttemptState *s) {
     EditorInputView inp = editor_state_input();
     if (repl_state_document_count() != s->undo.num_cmds ||
-        repl_state_edit_line() != s->undo.edit_line ||
+        editor_state_edit_line() != s->undo.edit_line ||
         editor_insert_mode() != s->inserting ||
         inp.input_len != s->input_len ||
         editor_cursor_pos() != s->cursor_pos)
@@ -607,8 +607,8 @@ static int commit_progressed_since(const CommitAttemptState *s) {
 static int current_input_needs_navigation_commit(void) {
     if (editor_state_input().input_len <= 0 && !editor_insert_mode())
         return 0;
-    if (!editor_insert_mode() && repl_state_edit_line() < repl_state_document_count() &&
-        input_matches_committed_line(repl_state_edit_line()))
+    if (!editor_insert_mode() && editor_state_edit_line() < repl_state_document_count() &&
+        input_matches_committed_line(editor_state_edit_line()))
         return 0;
     return 1;
 }
@@ -621,14 +621,14 @@ static CommitResult commit_current_input(int enter_mode) {
     if (!enter_mode && !current_input_needs_navigation_commit())
         return COMMIT_UNCHANGED;
 
-    if (!editor_insert_mode() && repl_state_edit_line() < repl_state_document_count()) {
+    if (!editor_insert_mode() && editor_state_edit_line() < repl_state_document_count()) {
         int unmodified = (editor_state_input().input_len == 0 ||
-                          input_matches_committed_line(repl_state_edit_line()));
+                          input_matches_committed_line(editor_state_edit_line()));
         if (unmodified) {
             if (!enter_mode)
                 return COMMIT_UNCHANGED;
             if (editor_cursor_pos() > 0)
-                repl_state_edit_line_set(repl_state_edit_line() + 1);
+                editor_state_edit_line_set(editor_state_edit_line() + 1);
             editor_insert_mode_set(1);
             editor_input_clear();
             editor_completion_clear();
@@ -643,13 +643,13 @@ static CommitResult commit_current_input(int enter_mode) {
 
     if (editor_state_input().input_len > 0 ||
         editor_insert_mode() ||
-        (enter_mode && repl_state_edit_line() >= repl_state_document_count()))
+        (enter_mode && editor_state_edit_line() >= repl_state_document_count()))
         editor_undo_push_snapshot();
 
     CommitAttemptState *before = &g_commit_attempt_before;
     capture_commit_attempt_state(before);
 
-    if ((editor_insert_mode() || repl_state_edit_line() >= repl_state_document_count()) &&
+    if ((editor_insert_mode() || editor_state_edit_line() >= repl_state_document_count()) &&
         editor_state_input().input_len > 0 && editor_try_commit_block_structs()) {
         return commit_progressed_since(before) ? COMMIT_OK : COMMIT_REJECTED;
     }
@@ -659,7 +659,7 @@ static CommitResult commit_current_input(int enter_mode) {
             ReplCompileContext ctx = repl_compile_context_from_live();
             ReplCompiledChange change;
             char err[REPL_STATUS_TEXT_MAX] = "";
-            int insert_pos = repl_state_edit_line();
+            int insert_pos = editor_state_edit_line();
 
             if (repl_compile_empty_line(insert_pos, &ctx, &change,
                                         err, sizeof(err)) != REPL_COMPILE_OK) {
@@ -671,7 +671,7 @@ static CommitResult commit_current_input(int enter_mode) {
                 return COMMIT_REJECTED;
             }
             if (enter_mode)
-                repl_state_edit_line_set(insert_pos + 1);
+                editor_state_edit_line_set(insert_pos + 1);
             editor_input_clear();
             repl_set_status(change.commit_message);
             return COMMIT_OK;
@@ -680,7 +680,7 @@ static CommitResult commit_current_input(int enter_mode) {
         if (editor_state_input().input_len > 0) {
             GLCmd cmd;
             int parsed;
-            int insert_idx = repl_state_edit_line();
+            int insert_idx = editor_state_edit_line();
             ExprVar vis_vars[MAX_EXPR_VARS];
             int vis_total = 0;
             int num_vis_vars = collect_visible_vars(insert_idx, vis_vars, MAX_EXPR_VARS, &vis_total);
@@ -739,14 +739,14 @@ static CommitResult commit_current_input(int enter_mode) {
 
         if (enter_mode) {
             editor_insert_mode_set(0);
-            if (repl_state_edit_line() <= repl_state_document_count())
-                editor_load_line_to_input(repl_state_edit_line());
+            if (editor_state_edit_line() <= repl_state_document_count())
+                editor_load_line_to_input(editor_state_edit_line());
             return COMMIT_OK;
         }
         return COMMIT_UNCHANGED;
     }
 
-    if (repl_state_edit_line() < repl_state_document_count()) {
+    if (editor_state_edit_line() < repl_state_document_count()) {
         int can_advance = 1;
 
         if (editor_state_input().input_len > 0) {
@@ -757,7 +757,7 @@ static CommitResult commit_current_input(int enter_mode) {
              * past a half-edited block. The CmdType-specific dispatch
              * collapses into one chain because each try_commit_*
              * already validates input shape internally. */
-            if (repl_line_is_block_head(repl_state_edit_line())) {
+            if (repl_line_is_block_head(editor_state_edit_line())) {
                 if (editor_try_commit_block_structs())
                     return commit_progressed_since(before) ? COMMIT_OK : COMMIT_REJECTED;
                 can_advance = 0;
@@ -768,10 +768,10 @@ static CommitResult commit_current_input(int enter_mode) {
             GLCmd cmd;
             char cmd_text[MAX_LINE_LEN] = "";
             int parsed = parse_for_overwrite_enter(&cmd, cmd_text, sizeof(cmd_text),
-                                                   repl_state_edit_line());
+                                                   editor_state_edit_line());
             if (parsed) {
                 ReplCommandStore store = repl_command_store_live();
-                int replace_idx = repl_state_edit_line();
+                int replace_idx = editor_state_edit_line();
                 if (repl_command_store_replace_one(&store, replace_idx, &cmd))
                     editor_buffer_replace_line(replace_idx, cmd_text);
             } else {
@@ -780,7 +780,7 @@ static CommitResult commit_current_input(int enter_mode) {
         }
 
         if (can_advance) {
-            repl_state_edit_line_set(repl_state_edit_line() + 1);
+            editor_state_edit_line_set(editor_state_edit_line() + 1);
             editor_insert_mode_set(1);
             editor_input_clear();
             repl_set_status("Insert mode");
@@ -804,7 +804,7 @@ static CommitResult commit_current_input(int enter_mode) {
             repl_set_status("Command buffer full!");
             return COMMIT_REJECTED;
         }
-        repl_state_edit_line_set(repl_state_document_count());
+        editor_state_edit_line_set(repl_state_document_count());
         editor_insert_mode_set(1);
         editor_input_clear();
         {
@@ -889,11 +889,11 @@ static CommitResult commit_before_navigation(void) {
 
 void editor_navigate_to_line(int target) {
     target = normalize_navigation_target(target);
-    if (target == repl_state_edit_line() && !editor_insert_mode())
+    if (target == editor_state_edit_line() && !editor_insert_mode())
         return;
 
-    if (target != repl_state_edit_line()) {
-        int inserted_at = repl_state_edit_line();
+    if (target != editor_state_edit_line()) {
+        int inserted_at = editor_state_edit_line();
         int doc_before  = repl_state_document_count();
         (void)commit_before_navigation();
         if (repl_state_document_count() > doc_before && target > inserted_at)
@@ -998,8 +998,8 @@ static int handle_escape_key_route(unsigned char key) {
             editor_completion_clear();
         } else if (editor_insert_mode()) {
             editor_insert_mode_set(0);
-            if (repl_state_edit_line() <= repl_state_document_count())
-                editor_load_line_to_input(repl_state_edit_line());
+            if (editor_state_edit_line() <= repl_state_document_count())
+                editor_load_line_to_input(editor_state_edit_line());
             repl_set_status("Insert mode exited");
         } else {
             editor_input_clear();
@@ -1044,8 +1044,8 @@ static int handle_line_delete_key_route(unsigned char key) {
     if (key == KEY_CTRL_D) {
         if (editor_insert_mode()) {
             editor_insert_mode_set(0);
-            if (repl_state_edit_line() <= repl_state_document_count())
-                editor_load_line_to_input(repl_state_edit_line());
+            if (editor_state_edit_line() <= repl_state_document_count())
+                editor_load_line_to_input(editor_state_edit_line());
             repl_set_status("Insert mode exited");
         } else if (editor_clipboard_sel_active()) {
             int start = editor_clipboard_sel_lo();
@@ -1053,8 +1053,8 @@ static int handle_line_delete_key_route(unsigned char key) {
             if (hi >= repl_state_document_count())
                 hi = repl_state_document_count() - 1;
             editor_delete_cmd_range(start, hi - start + 1, "Deleted");
-        } else if (repl_state_edit_line() < repl_state_document_count()) {
-            editor_delete_cmd_range(repl_state_edit_line(), 1, "Deleted");
+        } else if (editor_state_edit_line() < repl_state_document_count()) {
+            editor_delete_cmd_range(editor_state_edit_line(), 1, "Deleted");
         }
         return 1;
     }
@@ -1126,7 +1126,7 @@ static int handle_comment_toggle_key_route(unsigned char key) {
     if (editor_insert_mode())
         return 1;
 
-    line = repl_state_edit_line();
+    line = editor_state_edit_line();
     if (line < 0 || line >= repl_state_document_count())
         return 1;
     if (!tutorial_guard_source_change_or_status(line, 1, 1))
@@ -1151,7 +1151,7 @@ static int handle_comment_toggle_key_route(unsigned char key) {
         return 1;
     }
 
-    editor_load_line_to_input(repl_state_edit_line());
+    editor_load_line_to_input(editor_state_edit_line());
     repl_mark_normals_dirty();
     repl_set_status(change.commit_message);
     return 1;
@@ -1233,7 +1233,7 @@ static int tutorial_precheck_current_input(void) {
     /* The matched commit must land on the current expected line.
      * Anywhere else risks overwriting prior progress or drifting
      * tracked-line indices. */
-    if (repl_state_edit_line() != tutorial_expected_commit_line()) {
+    if (editor_state_edit_line() != tutorial_expected_commit_line()) {
         repl_set_status("Move cursor to the tutorial insertion line");
         editor_completion_clear();
         return 0;
@@ -1350,7 +1350,7 @@ static int handle_semicolon_commit_key_route(unsigned char key) {
                         repl_set_status("Inserted");
                     } else if (res == EDITOR_PLACE_REPLACED) {
                         repl_set_status("Line updated");
-                        editor_load_line_to_input(repl_state_edit_line());
+                        editor_load_line_to_input(editor_state_edit_line());
                     } else if (res == EDITOR_PLACE_APPENDED) {
                         repl_set_status("OK");
                         editor_input_clear();
@@ -1634,7 +1634,7 @@ static int handle_vertical_special_key_route(int key) {
             editor_completion_update_selected_preview();
         } else if (editor_get_modifiers() & GLUT_ACTIVE_SHIFT) {
             if (!editor_clipboard_sel_active()) {
-                editor_selection_start(repl_state_edit_line());
+                editor_selection_start(editor_state_edit_line());
             }
             int selection_end = editor_selection_end();
             if (selection_end > 0)
@@ -1643,7 +1643,7 @@ static int handle_vertical_special_key_route(int key) {
             editor_navigate_to_line(selection_end);
         } else {
             editor_clipboard_clear_selection();
-            editor_navigate_to_line(repl_state_edit_line() - 1);
+            editor_navigate_to_line(editor_state_edit_line() - 1);
         }
         return 1;
     case GLUT_KEY_DOWN:
@@ -1652,7 +1652,7 @@ static int handle_vertical_special_key_route(int key) {
             editor_completion_update_selected_preview();
         } else if (editor_get_modifiers() & GLUT_ACTIVE_SHIFT) {
             if (!editor_clipboard_sel_active()) {
-                editor_selection_start(repl_state_edit_line());
+                editor_selection_start(editor_state_edit_line());
             }
             int selection_end = editor_selection_end();
             if (selection_end < repl_state_document_count())
@@ -1661,7 +1661,7 @@ static int handle_vertical_special_key_route(int key) {
             editor_navigate_to_line(selection_end);
         } else {
             editor_clipboard_clear_selection();
-            editor_navigate_to_line(repl_state_edit_line() + 1);
+            editor_navigate_to_line(editor_state_edit_line() + 1);
         }
         return 1;
     default:

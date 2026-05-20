@@ -116,9 +116,9 @@ EditorCommitResult editor_commit_current_input(const struct EditorServices_s *se
     services->apply_scratch_ops(&change, services->user);
     editor_buffer_apply_compiled_change(&change);
     {
-        int edit_line = repl_state_edit_line();
+        int edit_line = editor_state_edit_line();
         if (services->apply_repl_change(&change, &edit_line, services->user))
-            repl_state_edit_line_set(edit_line);
+            editor_state_edit_line_set(edit_line);
     }
 
     result.consumed = 1;
@@ -149,9 +149,9 @@ int editor_commit_apply_external_change(const struct ReplCompiledChange_s *chang
     svc.apply_scratch_ops(change, svc.user);
     editor_buffer_apply_compiled_change(change);
     {
-        int edit_line = repl_state_edit_line();
+        int edit_line = editor_state_edit_line();
         if (svc.apply_repl_change(change, &edit_line, svc.user))
-            repl_state_edit_line_set(edit_line);
+            editor_state_edit_line_set(edit_line);
     }
     return 1;
 }
@@ -181,7 +181,7 @@ static void apply_post_effects(const EditorCommitPostEffects *effects) {
         if (target < 0) target = 0;
         if (target > repl_state_document_count())
             target = repl_state_document_count();
-        repl_state_edit_line_set(target);
+        editor_state_edit_line_set(target);
     }
 
     /* Func-decl resume advance. The compile step captured the
@@ -191,10 +191,10 @@ static void apply_post_effects(const EditorCommitPostEffects *effects) {
      * folding the read into compile-time entirely). */
     if (effects->end_type == (int)CMD_FUNC_END &&
         effects->func_decl_resume_advance > 0) {
-        repl_state_edit_line_set(repl_state_edit_line() +
+        editor_state_edit_line_set(editor_state_edit_line() +
                                  effects->func_decl_resume_advance);
-        if (repl_state_edit_line() > repl_state_document_count())
-            repl_state_edit_line_set(repl_state_document_count());
+        if (editor_state_edit_line() > repl_state_document_count())
+            editor_state_edit_line_set(repl_state_document_count());
     }
 
     if (effects->insert_mode_target != EDITOR_COMMIT_NO_INSERT_MODE_CHANGE)
@@ -209,7 +209,7 @@ static void apply_post_effects(const EditorCommitPostEffects *effects) {
         editor_pending_newline_clear();
 
     if (effects->load_line_after_apply)
-        editor_load_line_to_input(repl_state_edit_line());
+        editor_load_line_to_input(editor_state_edit_line());
 
     if (effects->clear_autocomplete)
         editor_completion_clear();
@@ -250,9 +250,9 @@ int editor_commit_apply_plan(const EditorCommitPlan *plan) {
     repl_apply_scratch_ops(&plan->change);
     editor_buffer_apply_compiled_change(&plan->change);
     {
-        int edit_line = repl_state_edit_line();
+        int edit_line = editor_state_edit_line();
         if (repl_apply_compiled_change(&plan->change, &edit_line))
-            repl_state_edit_line_set(edit_line);
+            editor_state_edit_line_set(edit_line);
     }
 
     /* Editor post-effects. */
@@ -1154,12 +1154,12 @@ void editor_commit_func_decl_resume_set(int delta) {
 int editor_commit_resolve_insert_exit_target(int target) {
     if (!editor_insert_mode() ||
         g_func_decl_resume_delta <= 0 ||
-        repl_state_edit_line() < 0 ||
-        repl_state_edit_line() >= repl_state_document_count() ||
-        repl_state_document_cmds_mut()[repl_state_edit_line()].type != CMD_FUNC_END)
+        editor_state_edit_line() < 0 ||
+        editor_state_edit_line() >= repl_state_document_count() ||
+        repl_state_document_cmds_mut()[editor_state_edit_line()].type != CMD_FUNC_END)
         return target;
 
-    if (target == repl_state_edit_line()) {
+    if (target == editor_state_edit_line()) {
         target += g_func_decl_resume_delta;
         if (target > repl_state_document_count())
             target = repl_state_document_count();

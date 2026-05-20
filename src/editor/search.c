@@ -3,7 +3,7 @@
  *
  * A "row" is one visible line in the code panel. It usually maps 1:1 to a
  * GLCmd in repl_state_document_cmds_mut()[], except while inserting: an extra synthetic row holds
- * the live g_input at repl_state_edit_line(), and real repl_state_document_cmds_mut()[] entries at or beyond
+ * the live g_input at editor_state_edit_line(), and real repl_state_document_cmds_mut()[] entries at or beyond
  * that index are shifted down by one row.
  *
  *   row_count = repl_state_document_count()         (overwrite mode)
@@ -38,7 +38,7 @@ UiHelpState *ui_state_help_mut(void);
 static int search_row_is_live_input(int row_idx) {
     if (row_idx < 0 || row_idx >= editor_search_row_count())
         return 0;
-    return row_idx == repl_state_edit_line();
+    return row_idx == editor_state_edit_line();
 }
 
 static int search_row_to_nav_line(int row_idx) {
@@ -47,9 +47,9 @@ static int search_row_to_nav_line(int row_idx) {
     if (search_row_is_live_input(row_idx)) {
         if (editor_insert_mode())
             return -1;
-        return repl_state_edit_line();
+        return editor_state_edit_line();
     }
-    if (editor_insert_mode() && row_idx > repl_state_edit_line())
+    if (editor_insert_mode() && row_idx > editor_state_edit_line())
         return row_idx - 1;
     return row_idx;
 }
@@ -65,7 +65,7 @@ int editor_search_find_prev_in_text(const char *text, const char *query,
 }
 
 int editor_search_row_for_cmd_index(int cmd_idx) {
-    int edit_line = repl_state_edit_line();
+    int edit_line = editor_state_edit_line();
 
     if (cmd_idx < 0 || cmd_idx >= editor_buffer_count())
         return -1;
@@ -224,13 +224,13 @@ void editor_search_clear_all(void) {
 
 int editor_search_row_count(void) {
     int num_lines = editor_buffer_count();
-    if (editor_insert_mode() || repl_state_edit_line() == num_lines)
+    if (editor_insert_mode() || editor_state_edit_line() == num_lines)
         return num_lines + 1;
     return num_lines;
 }
 
 const char *editor_search_row_text(int row_idx) {
-    int edit_line = repl_state_edit_line();
+    int edit_line = editor_state_edit_line();
 
     if (row_idx < 0 || row_idx >= editor_search_row_count())
         return "";
@@ -330,7 +330,7 @@ static void search_apply_hit(int row, int char_pos) {
     if (nav_line >= 0) {
         editor_scroll_follow_cursor_set(1);
         editor_navigate_to_line(nav_line);
-        row = repl_state_edit_line();
+        row = editor_state_edit_line();
         if (row_occurrence >= 0) {
             int remapped_char = search_char_for_row_occurrence(row, row_occurrence);
             if (remapped_char >= 0)
@@ -341,7 +341,7 @@ static void search_apply_hit(int row, int char_pos) {
 }
 
 /* Re-seed the search after the query text changed. Always anchors to
- * repl_state_edit_line() rather than the previous hit, so typing another character
+ * editor_state_edit_line() rather than the previous hit, so typing another character
  * jumps to the nearest match from the cursor instead of chaining from
  * wherever the last match landed. */
 static void search_refresh_query(void) {
@@ -360,7 +360,7 @@ static void search_refresh_query(void) {
         return;
     }
 
-    if (!search_find_forward(repl_state_edit_line(), 0, &row, &char_pos)) {
+    if (!search_find_forward(editor_state_edit_line(), 0, &row, &char_pos)) {
         search_clear_matches();
         return;
     }
@@ -369,7 +369,7 @@ static void search_refresh_query(void) {
 
 /* Jump to the next (+1) or previous (-1) match, wrapping at document ends.
  * If a hit is already active, we step one char past/before it; otherwise we
- * anchor the scan at repl_state_edit_line(). */
+ * anchor the scan at editor_state_edit_line(). */
 static void search_navigate(int direction) {
     EditorSearchState srch = editor_state_search();
     int row;
@@ -381,11 +381,11 @@ static void search_navigate(int direction) {
         return;
 
     if (direction < 0) {
-        int start_row  = have_hit ? srch.hit_line_idx      : repl_state_edit_line();
+        int start_row  = have_hit ? srch.hit_line_idx      : editor_state_edit_line();
         int start_char = have_hit ? srch.hit_char_idx - 1  : MAX_INPUT_LEN;
         found = search_find_backward(start_row, start_char, &row, &char_pos);
     } else {
-        int start_row  = have_hit ? srch.hit_line_idx      : repl_state_edit_line();
+        int start_row  = have_hit ? srch.hit_line_idx      : editor_state_edit_line();
         int start_char = have_hit ? srch.hit_char_idx + 1  : 0;
         found = search_find_forward(start_row, start_char, &row, &char_pos);
     }

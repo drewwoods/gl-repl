@@ -80,7 +80,7 @@ static int glr_ctrl_cmd_is_focus_vertex(const GLCmd *cmd) {
 
 static SceneFocusVertex glr_ctrl_build_focus_vertex(void) {
     SceneFocusVertex focus = { .valid = 0 };
-    int edit_line = repl_state_edit_line();
+    int edit_line = editor_state_edit_line();
 
     if (edit_line >= 0 && edit_line < repl_state_document_count() &&
         glr_ctrl_cmd_is_focus_vertex(&repl_state_document_cmds_mut()[edit_line])) {
@@ -188,7 +188,7 @@ static SceneGuideSnapshot glr_ctrl_build_guide_snapshot(const SceneRenderConfig 
     GlrPresentationState presentation = glr_state_presentation();
     ReplVariableView vars = repl_state_variables();
     EditorInputView input = editor_state_input();
-    int edit_line = repl_state_edit_line();
+    int edit_line = editor_state_edit_line();
 
     SceneGuideSnapshot snapshot = {
         .show_guides = presentation.show_vertex_guides,
@@ -400,7 +400,7 @@ static ReplayVertexWalkContext glr_ctrl_build_vertex_walk_context(int selected_b
 
     ReplayVertexWalkContext ctx = {
         .program                = repl_state_flat_program_view(),
-        .edit_line_idx          = repl_state_edit_line(),
+        .edit_line_idx          = editor_state_edit_line(),
         .cursor_block_begin     = repl_state_flat_program_current_block_begin(),
         .cursor_block_end       = repl_state_flat_program_current_block_end(),
         .cursor_func_scope_mask = 0,  /* not currently exposed via repl_state */
@@ -880,7 +880,7 @@ static void glr_ctrl_post_overlays(void *user_data) {
 
     OverlayWalkCtx walk = {
         .program                = repl_state_flat_program_view(),
-        .edit_line_idx          = repl_state_edit_line(),
+        .edit_line_idx          = editor_state_edit_line(),
         .cursor_block_begin     = repl_state_flat_program_current_block_begin(),
         .cursor_block_end       = repl_state_flat_program_current_block_end(),
         .cursor_func_scope_mask = 0,  /* not currently surfaced via repl_state */
@@ -923,7 +923,7 @@ static void glr_ctrl_push_highlights(void) {
     editor_state_highlights_clear();
 
     int doc_count = repl_state_document_count();
-    int edit_line = repl_state_edit_line();
+    int edit_line = editor_state_edit_line();
     int insert_mode = editor_insert_mode();
 
     if (!insert_mode && edit_line >= 0 && edit_line < doc_count) {
@@ -1378,7 +1378,7 @@ static int glr_ctrl_leading_ws_chars(const char *text) {
 }
 
 static int glr_ctrl_active_indent_chars(void) {
-    int edit_line = repl_state_edit_line();
+    int edit_line = editor_state_edit_line();
     int document_count = repl_state_document_count();
 
     if (editor_insert_mode())
@@ -1485,7 +1485,7 @@ void glr_ctrl_build_ui_snapshot(UiRenderSnapshot *snap) {
 
     snap->document_cmds       = repl_state_document_cmds();
     snap->document_count      = repl_state_document_count();
-    snap->edit_line           = repl_state_edit_line();
+    snap->edit_line           = editor_state_edit_line();
 
     snap->flat_program_count  = flat_program.cmd_count;
     snap->anim_time           = repl_state_variables().anim_time;
@@ -2639,7 +2639,7 @@ static void cycle_example_or_user_scene(void) {
         for (int scene_idx = active_scene + 1; scene_idx < MAX_USER_SCENES; scene_idx++) {
             if (repl_user_scene_slot_used(scene_idx)) {
                 if (repl_load_user_scene_idx(scene_idx))
-                    editor_load_line_to_input(repl_state_edit_line());
+                    editor_load_line_to_input(editor_state_edit_line());
                 return;
             }
         }
@@ -2659,7 +2659,7 @@ static void cycle_example_or_user_scene(void) {
     for (int scene_idx = 0; scene_idx < MAX_USER_SCENES; scene_idx++) {
         if (repl_user_scene_slot_used(scene_idx)) {
             if (repl_load_user_scene_idx(scene_idx))
-                editor_load_line_to_input(repl_state_edit_line());
+                editor_load_line_to_input(editor_state_edit_line());
             return;
         }
     }
@@ -2682,19 +2682,19 @@ static void cycle_example_or_user_scene_prev(void) {
         for (int scene_idx = active_scene - 1; scene_idx >= 0; scene_idx--) {
             if (repl_user_scene_slot_used(scene_idx)) {
                 if (repl_load_user_scene_idx(scene_idx))
-                    editor_load_line_to_input(repl_state_edit_line());
+                    editor_load_line_to_input(editor_state_edit_line());
                 return;
             }
         }
         if (count > 0)
-            repl_load_example(count - 1);
+            editor_state_edit_line_set(repl_load_example(count - 1));
         return;
     }
 
     if (count > 0) {
         int prev = repl_state_scenes().active_example_idx - 1;
         if (prev >= 0) {
-            repl_load_example(prev);
+            editor_state_edit_line_set(repl_load_example(prev));
             return;
         }
     }
@@ -2702,12 +2702,12 @@ static void cycle_example_or_user_scene_prev(void) {
     for (int scene_idx = MAX_USER_SCENES - 1; scene_idx >= 0; scene_idx--) {
         if (repl_user_scene_slot_used(scene_idx)) {
             if (repl_load_user_scene_idx(scene_idx))
-                editor_load_line_to_input(repl_state_edit_line());
+                editor_load_line_to_input(editor_state_edit_line());
             return;
         }
     }
     if (count > 0)
-        repl_load_example(count - 1);
+        editor_state_edit_line_set(repl_load_example(count - 1));
 }
 
 int glr_ctrl_router_handle_scene_cycle_special(int key) {
@@ -2951,7 +2951,7 @@ int glr_ctrl_router_apply_input_row_drag(int target_line, int target_char) {
         return 0;
     if (target_line != g_code_panel_drag_anchor)
         return 0;
-    if (target_line != repl_state_edit_line())
+    if (target_line != editor_state_edit_line())
         return 0;
     if (target_char < 0)
         return 0;
@@ -3291,7 +3291,7 @@ static int code_panel_target_from_hit(UiHit hit) {
     case UI_HIT_CODE_GUTTER:
         return hit.line_idx;
     case UI_HIT_CODE_INSERT_LINE: {
-        int target = hit.line_idx; /* set to repl_state_edit_line() in J2.1 */
+        int target = hit.line_idx; /* set to editor_state_edit_line() in J2.1 */
         int doc_count = repl_state_document_count();
         if (target >= doc_count)
             target = doc_count - 1;

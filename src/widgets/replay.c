@@ -2,6 +2,7 @@
  * replay.c - Replay state machine, fade batches, and replay input.
  */
 #include "widgets/replay.h"
+#include "editor/state.h"       /* editor_state_edit_line */
 #include "repl/core_internal.h"
 #include "repl/pipeline.h"
 #include <keys.h>
@@ -972,7 +973,7 @@ int replay_handle_key_impl(unsigned char key) {
             return 1;
         }
         if (key == KEY_CTRL_K) {
-            int target_line = repl_state_edit_line();
+            int target_line = editor_state_edit_line();
             replay_start();
             if (g_replay_active) {
                 int landed = replay_seek_to_src_line(target_line);
@@ -996,7 +997,7 @@ int replay_handle_key_impl(unsigned char key) {
         return 1;
     }
     if (key == KEY_CTRL_K) {
-        int landed = replay_seek_to_src_line(repl_state_edit_line());
+        int landed = replay_seek_to_src_line(editor_state_edit_line());
         if (landed < 0) {
             repl_set_status("Jump: no geometry at or after cursor");
         } else {

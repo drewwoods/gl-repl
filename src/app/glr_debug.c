@@ -19,7 +19,7 @@ void glr_debug_dump_editor(FILE *out, SourceTextView text) {
     fprintf(dst, "=== REPL Editor Dump ===\n");
     fprintf(dst,
             "num_cmds=%d edit_line=%d inserting=%d flat_dirty=%d normals_dirty=%d\n",
-            repl_state_document_count(), repl_state_edit_line(),
+            repl_state_document_count(), editor_state_edit_line(),
             editor_insert_mode(), repl_state_flat_program_dirty(),
             repl_state_normals_dirty());
 

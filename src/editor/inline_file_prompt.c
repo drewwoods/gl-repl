@@ -15,11 +15,11 @@
 #include "inline_file_prompt.h"
 #include "inline_rename.h"        /* mutual-exclusion cancel */
 #include "input.h"                /* editor_load_line_to_input */
+#include "state.h"                /* editor_state_edit_line */
 #include <keys.h>
 #include "undo.h"
 
 #include "repl/core.h"
-#include "repl/state.h"           /* repl_state_edit_line */
 
 /* Capacity holds full workspace paths comfortably (PATH_MAX is 4096 on
  * Linux). The status-bar render truncates by pixel width so any
@@ -156,7 +156,7 @@ static void prompt_commit_path(void) {
      * buffer from the new line so any stale typed text the user had
      * is dropped — matches glr_scene_load_user_slot in glr_actions.c
      * which is the sibling 'switch active slot' path. */
-    editor_load_line_to_input(repl_state_edit_line());
+    editor_load_line_to_input(editor_state_edit_line());
 
     /* Sized to fit the full path (FILE_PROMPT_BUF_MAX) plus the format
      * chrome. The literal below mirrors the format string verbatim with

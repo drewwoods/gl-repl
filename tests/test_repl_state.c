@@ -52,7 +52,7 @@ static void populate_runtime_snapshot_fixture(const char *scene_hint) {
     editor_input_set_text("glVertex3f(1, 2, 3)");
     editor_cursor_pos_set(6);
     repl_state_document_count_set(2);
-    repl_state_edit_line_set(1);
+    editor_state_edit_line_set(1);
     doc_cmds = repl_state_document_cmds_mut();
     doc_cmds[0].type = CMD_BEGIN;
     doc_cmds[0].valid = 1;
@@ -254,7 +254,7 @@ static void test_capture_restore_round_trip(void) {
                "glVertex3f(1, 2, 3)");
     ASSERT_INT("cursor restored", editor_cursor_pos(), 6);
     ASSERT_INT("document count restored", repl_state_document_count(), 2);
-    ASSERT_INT("edit line restored", repl_state_edit_line(), 1);
+    ASSERT_INT("edit line restored", editor_state_edit_line(), 1);
     ASSERT_INT("document cmd type restored", repl_state_document_cmds()[0].type, CMD_BEGIN);
     ASSERT_STR("document cmd source restored",
                editor_buffer_line(0),

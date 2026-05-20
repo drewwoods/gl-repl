@@ -42,7 +42,7 @@ void editor_undo_snapshot_save(EditorUndoSnapshot *snapshot) {
                               MAX_LINE_LEN,
                               editor_buffer_view_line(text, i));
     snapshot->num_cmds = repl_state_document_count();
-    snapshot->edit_line = repl_state_edit_line();
+    snapshot->edit_line = editor_state_edit_line();
     snapshot->num_predef_vars = g_num_predef_vars;
     for (int i = 0; i < g_num_predef_vars; i++) {
         snapshot->predef_vals[i] = g_predef_vars[i].value;
@@ -67,7 +67,7 @@ void editor_undo_snapshot_restore(const EditorUndoSnapshot *snapshot) {
     /* The store no longer writes the cursor on load (Phase 1 of
      * plans/in-review/edit-line-ownership.md); undo policy is to
      * restore the snapshotted edit-line. */
-    repl_state_edit_line_set(snapshot->edit_line);
+    editor_state_edit_line_set(snapshot->edit_line);
     editor_buffer_load_lines(undo_snapshot_line_ptrs(snapshot),
                              snapshot->num_cmds);
     g_num_predef_vars = snapshot->num_predef_vars;
@@ -82,7 +82,7 @@ void editor_undo_snapshot_restore(const EditorUndoSnapshot *snapshot) {
             repl_func_alias_set(slot, snapshot->func_aliases[slot]);
     }
     editor_insert_mode_set(0);
-    editor_load_line_to_input(repl_state_edit_line());
+    editor_load_line_to_input(editor_state_edit_line());
     repl_mark_normals_dirty();
 }
 

@@ -148,7 +148,7 @@ static int tutorial_emit_instruction_comment(const char *comment,
      * edit_line to the desired insertion index in
      * [0, document_count]; clear insert mode; mark flat/normals
      * dirty after loading. */
-    repl_state_edit_line_set(instruction_line);
+    editor_state_edit_line_set(instruction_line);
     editor_insert_mode_set(0);
     if (!repl_load_apply_line(comment, err, (int)sizeof(err))) {
         /* Loader failed — undo the speculative shift so tracked
@@ -176,7 +176,7 @@ static int tutorial_emit_instruction_comment(const char *comment,
      * insert mode iff that row is mid-document — otherwise it's the
      * trailing row and append mode is correct. */
     state->expected_commit_line = instruction_line + 1;
-    repl_state_edit_line_set(state->expected_commit_line);
+    editor_state_edit_line_set(state->expected_commit_line);
     editor_insert_mode_set(state->expected_commit_line <
                            repl_state_document_count());
     return 1;

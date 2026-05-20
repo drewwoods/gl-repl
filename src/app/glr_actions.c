@@ -359,7 +359,7 @@ void glr_scene_load_example(int example_idx) {
 void glr_scene_load_user_slot(int slot) {
     editor_undo_clear();
     if (repl_load_user_scene_idx(slot))
-        editor_load_line_to_input(repl_state_edit_line());
+        editor_load_line_to_input(editor_state_edit_line());
 }
 
 void glr_cfg_cycle_row(int row, int delta) {

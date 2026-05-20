@@ -176,7 +176,7 @@ static void test_walker_resolves_funcn_args_at_cursor(void) {
 
     int cursor_line = find_source_line("glVertex3f");
     ASSERT_TRUE("found a CMD_VERTEX3F to use as cursor", cursor_line >= 0);
-    repl_state_edit_line_set(cursor_line);
+    editor_state_edit_line_set(cursor_line);
 
     Recorder rec = {0};
     rec.edit_line_idx = cursor_line;
@@ -234,7 +234,7 @@ static void test_walker_fires_on_each_cmd_at_cursor(void) {
 
     int cursor_line = find_source_line("glVertex3f");
     ASSERT_TRUE("found cursor line", cursor_line >= 0);
-    repl_state_edit_line_set(cursor_line);
+    editor_state_edit_line_set(cursor_line);
 
     Recorder rec = {0};
     rec.edit_line_idx = cursor_line;
@@ -281,7 +281,7 @@ static void test_walker_stop_flag_halts(void) {
 
     int cursor_line = find_source_line("glVertex3f");
     ASSERT_TRUE("found cursor line", cursor_line >= 0);
-    repl_state_edit_line_set(cursor_line);
+    editor_state_edit_line_set(cursor_line);
 
     static const ReplayVertexWalkCallbacks cb = {
         .on_each_cmd = on_each_cmd_record,

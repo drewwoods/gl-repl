@@ -232,7 +232,7 @@ static void assert_float_decl_rejected_atomic(const char *label,
     int old_num_predef_vars = g_num_predef_vars;
 
     set_editor_input(src);
-    repl_state_edit_line_set(repl_state_document_count());
+    editor_state_edit_line_set(repl_state_document_count());
     editor_insert_mode_set(0);
 
     int result = editor_try_commit_float_decl();
@@ -265,7 +265,7 @@ int main() {
     {
         glr_app_reset_all();
         set_editor_input("float chain_order;");
-        repl_state_edit_line_set(0);
+        editor_state_edit_line_set(0);
         editor_insert_mode_set(0);
 
         int result = editor_try_commit_any();
@@ -791,10 +791,10 @@ int main() {
         glr_app_reset_all();
         editor_feed_line("glVertex3f(0,0,0)");
         editor_feed_line("glVertex3f(1,1,1)");
-        repl_state_edit_line_set(2);  /* beyond last cmd */
+        editor_state_edit_line_set(2);  /* beyond last cmd */
         editor_delete_cmd_range(1, 1, "elclamp");
-        /* repl_state_edit_line() should be clamped to repl_state_document_count() (1) */
-        ASSERT_INT("delete edit_line clamp: edit_line<=num_cmds", repl_state_edit_line() <= repl_state_document_count(), 1);
+        /* editor_state_edit_line() should be clamped to repl_state_document_count() (1) */
+        ASSERT_INT("delete edit_line clamp: edit_line<=num_cmds", editor_state_edit_line() <= repl_state_document_count(), 1);
     }
 
     /* 8a. editor_delete_cmd_range - interior multi-line block */
@@ -812,7 +812,7 @@ int main() {
         ASSERT_INT("delete block: leaves 2 cmds", repl_state_document_count(), 2);
         ASSERT_STR("delete block: first survives", editor_buffer_line(0), "  glVertex3f(0, 0, 0);");
         ASSERT_STR("delete block: last survives", editor_buffer_line(1), "  glVertex3f(4, 4, 4);");
-        ASSERT_INT("delete block: edit_line at deletion start", repl_state_edit_line(), 1);
+        ASSERT_INT("delete block: edit_line at deletion start", editor_state_edit_line(), 1);
         ASSERT_STR("delete block: input reloaded", editor_state_input().input, "glVertex3f(4, 4, 4)");
         ASSERT_TRUE("delete block: selection cleared", !editor_clipboard_sel_active());
         assert_status_contains("delete block: status line count", "Deleted 3 lines");
@@ -827,14 +827,14 @@ int main() {
         editor_feed_line("glVertex3f(3,3,3)");
         editor_feed_line("glVertex3f(4,4,4)");
         editor_state_selection_set(4, 2);
-        repl_state_edit_line_set(4);
+        editor_state_edit_line_set(4);
 
         editor_handle_key(8, 0, 0);
 
         ASSERT_INT("backspace reversed selection: leaves 2 cmds", repl_state_document_count(), 2);
         ASSERT_STR("backspace reversed selection: first survives", editor_buffer_line(0), "  glVertex3f(0, 0, 0);");
         ASSERT_STR("backspace reversed selection: second survives", editor_buffer_line(1), "  glVertex3f(1, 1, 1);");
-        ASSERT_INT("backspace reversed selection: edit_line", repl_state_edit_line(), 2);
+        ASSERT_INT("backspace reversed selection: edit_line", editor_state_edit_line(), 2);
         ASSERT_TRUE("backspace reversed selection: selection cleared", !editor_clipboard_sel_active());
     }
 
@@ -847,14 +847,14 @@ int main() {
         editor_feed_line("glVertex3f(3,3,3)");
         editor_feed_line("glVertex3f(4,4,4)");
         editor_state_selection_set(3, 1);
-        repl_state_edit_line_set(3);
+        editor_state_edit_line_set(3);
 
         editor_handle_key(4, 0, 0);
 
         ASSERT_INT("ctrl-d selection: leaves 2 cmds", repl_state_document_count(), 2);
         ASSERT_STR("ctrl-d selection: first survives", editor_buffer_line(0), "  glVertex3f(0, 0, 0);");
         ASSERT_STR("ctrl-d selection: last survives", editor_buffer_line(1), "  glVertex3f(4, 4, 4);");
-        ASSERT_INT("ctrl-d selection: edit_line", repl_state_edit_line(), 1);
+        ASSERT_INT("ctrl-d selection: edit_line", editor_state_edit_line(), 1);
         ASSERT_TRUE("ctrl-d selection: selection cleared", !editor_clipboard_sel_active());
         assert_status_contains("ctrl-d selection: status", "Deleted 3 lines");
     }
@@ -898,7 +898,7 @@ int main() {
         ASSERT_STR("copy block: second copied", editor_state_clipboard_mut()->lines[1], "    glVertex3f(1, 1, 1);");
         ASSERT_TRUE("copy block: selection cleared", !editor_clipboard_sel_active());
 
-        repl_state_edit_line_set(5);
+        editor_state_edit_line_set(5);
         editor_insert_mode_set(0);
         editor_handle_key(22, 0, 0);
         ASSERT_INT("paste block: cmd count", repl_state_document_count(), 9);
@@ -907,7 +907,7 @@ int main() {
         ASSERT_STR("paste block: second inserted", editor_buffer_line(6), "    glVertex3f(1, 1, 1);");
         ASSERT_STR("paste block: original body shifted", editor_buffer_line(7), "    glColor3f(1, 0, 0);");
         ASSERT_STR("paste block: close brace preserved", editor_buffer_line(8), "  }");
-        ASSERT_INT("paste block: edit_line after pasted block", repl_state_edit_line(), 7);
+        ASSERT_INT("paste block: edit_line after pasted block", editor_state_edit_line(), 7);
         ASSERT_STR("paste block: input reloaded after paste", editor_state_input().input, "glColor3f(1, 0, 0)");
         assert_status_contains("paste block: status", "Pasted 2 lines");
 
@@ -955,7 +955,7 @@ int main() {
         editor_feed_line("for(i, 0, 2) {");
         editor_feed_line("glVertex3f(i,0,0);");
         editor_feed_line("}");
-        repl_state_edit_line_set(0);
+        editor_state_edit_line_set(0);
 
         editor_handle_key(3, 0, 0);
         ASSERT_INT("copy for block: clipboard count", editor_state_clipboard_count(), 3);
@@ -969,7 +969,7 @@ int main() {
         editor_feed_line("for(i, 0, 2) {");
         editor_feed_line("glVertex3f(i,0,0);");
         editor_feed_line("}");
-        repl_state_edit_line_set(0);
+        editor_state_edit_line_set(0);
 
         editor_handle_key(24, 0, 0);
         ASSERT_INT("cut for block: clipboard count", editor_state_clipboard_count(), 3);
@@ -978,7 +978,7 @@ int main() {
         ASSERT_TRUE("cut for block: last line closes block",
                     strstr(editor_state_clipboard_mut()->lines[2], "}") != NULL);
         ASSERT_INT("cut for block: buffer empty", repl_state_document_count(), 0);
-        ASSERT_INT("cut for block: edit line at start", repl_state_edit_line(), 0);
+        ASSERT_INT("cut for block: edit line at start", editor_state_edit_line(), 0);
     }
 
     /* 8g. Paste with empty clipboard */
@@ -1023,7 +1023,7 @@ int main() {
         repl_copy_string_fits(editor_state_clipboard_mut()->lines[0], MAX_LINE_LEN,
                               editor_buffer_line(1));
         editor_state_clipboard_count_set(1);
-        repl_state_edit_line_set(0);
+        editor_state_edit_line_set(0);
 
         editor_handle_key(3, 0, 0);
 
@@ -1042,7 +1042,7 @@ int main() {
                               editor_buffer_line(1));
         editor_state_clipboard_count_set(1);
         editor_state_selection_set(0, 1);
-        repl_state_edit_line_set(1);
+        editor_state_edit_line_set(1);
         editor_insert_mode_set(1);
 
         editor_handle_key(3, 0, 0);
@@ -1066,7 +1066,7 @@ int main() {
         editor_feed_line("glVertex3f(1,1,1)");
         editor_feed_line("glVertex3f(2,2,2)");
         editor_state_selection_set(0, 1);
-        repl_state_edit_line_set(1);
+        editor_state_edit_line_set(1);
         editor_insert_mode_set(1);
         set_editor_input("abcd");
         editor_cursor_pos_set(3);
@@ -1123,7 +1123,7 @@ int main() {
         glr_app_reset_all();
         editor_feed_line("glVertex3f(1,1,1)");
         editor_navigate_to_line(-5);
-        ASSERT_INT("editor_navigate_to_line neg: edit_line=0", repl_state_edit_line(), 0);
+        ASSERT_INT("editor_navigate_to_line neg: edit_line=0", editor_state_edit_line(), 0);
     }
 
     /* 11. editor_navigate_to_line - clamp target > repl_state_document_count() */
@@ -1131,7 +1131,7 @@ int main() {
         glr_app_reset_all();
         editor_feed_line("glVertex3f(1,1,1)");
         editor_navigate_to_line(999);
-        ASSERT_INT("editor_navigate_to_line over: edit_line=repl_state_document_count()", repl_state_edit_line(), repl_state_document_count());
+        ASSERT_INT("editor_navigate_to_line over: edit_line=repl_state_document_count()", editor_state_edit_line(), repl_state_document_count());
     }
 
     /* 12. editor_try_assign_variable - append to end (existing tests cover this) */
@@ -1161,14 +1161,14 @@ int main() {
         editor_handle_key('\r', 0, 0);
 
         ASSERT_INT("blank line setup: insert mode entered", editor_insert_mode(), 1);
-        ASSERT_INT("blank line setup: edit line moved below current", repl_state_edit_line(), 2);
+        ASSERT_INT("blank line setup: edit line moved below current", editor_state_edit_line(), 2);
 
         editor_handle_key('\r', 0, 0);
 
         ASSERT_INT("blank line inserted: doc count grows", repl_state_document_count(), 4);
         ASSERT_INT("blank line inserted: cmd type", repl_state_document_cmds_mut()[2].type, CMD_EMPTY);
         ASSERT_STR("blank line inserted: source text empty", editor_buffer_line(2), "");
-        ASSERT_INT("blank line inserted: edit line advances", repl_state_edit_line(), 3);
+        ASSERT_INT("blank line inserted: edit line advances", editor_state_edit_line(), 3);
         ASSERT_INT("blank line inserted: stays in insert mode", editor_insert_mode(), 1);
 
         editor_navigate_to_line(2);
@@ -1184,7 +1184,7 @@ int main() {
         editor_feed_line("glVertex3f(1,1,1)");
         editor_feed_line("glVertex3f(2,2,2)");
         /* Put cursor at line 1, inserting mode */
-        repl_state_edit_line_set(1);
+        editor_state_edit_line_set(1);
         editor_insert_mode_set(1);
         {
             EditorInputState *inp = editor_state_input_mut();
@@ -1205,7 +1205,7 @@ int main() {
         editor_feed_line("n = 1.0");
         editor_feed_line("glVertex3f(1,1,1)");
         /* Navigate to the assignment line and overwrite */
-        repl_state_edit_line_set(0);
+        editor_state_edit_line_set(0);
         editor_insert_mode_set(0);
         {
             EditorInputState *inp = editor_state_input_mut();
@@ -1216,7 +1216,7 @@ int main() {
         int r = editor_try_assign_variable();
         ASSERT_INT("overwrite assign returns 1", r, 1);
         ASSERT_STR("overwrite assign: new source", editor_buffer_line(0), "  n = 7.0;");
-        ASSERT_INT("overwrite assign: edit_line advanced", repl_state_edit_line(), 1);
+        ASSERT_INT("overwrite assign: edit_line advanced", editor_state_edit_line(), 1);
     }
 
     /* 15. Committing for loops - basic open brace form */
@@ -1265,7 +1265,7 @@ int main() {
         ASSERT_INT("setup: 2 cmds", repl_state_document_count(), 2);
 
         /* Navigate back to line 0 and update the for header */
-        repl_state_edit_line_set(0);
+        editor_state_edit_line_set(0);
         editor_insert_mode_set(0);
         {
             EditorInputState *inp = editor_state_input_mut();
@@ -1326,7 +1326,7 @@ int main() {
         ASSERT_INT("func update setup: 2 cmds", repl_state_document_count(), 2);
 
         /* Navigate back and update the func-def header */
-        repl_state_edit_line_set(0);
+        editor_state_edit_line_set(0);
         editor_insert_mode_set(0);
         {
             EditorInputState *inp = editor_state_input_mut();
@@ -1368,7 +1368,7 @@ int main() {
         editor_try_commit_if_block();
 
         /* Navigate back and update the if condition */
-        repl_state_edit_line_set(0);
+        editor_state_edit_line_set(0);
         editor_insert_mode_set(0);
         {
             EditorInputState *inp = editor_state_input_mut();
@@ -1391,7 +1391,7 @@ int main() {
             strcpy(inp->input, "}");
             inp->input_len = (int)strlen(inp->input);
         }
-        repl_state_edit_line_set(1);
+        editor_state_edit_line_set(1);
 
         int r = editor_try_commit_close_brace();
         ASSERT_INT("editor_try_commit_close_brace returns 1", r, 1);
@@ -1409,9 +1409,9 @@ int main() {
             inp->input_len = (int)strlen(inp->input);
         }
         editor_try_commit_for_loop();
-        /* repl_state_edit_line()=1, editor_insert_mode()=1 - we're inside the loop */
+        /* editor_state_edit_line()=1, editor_insert_mode()=1 - we're inside the loop */
         ASSERT_INT("insert-close setup: in inserting", editor_insert_mode(), 1);
-        ASSERT_INT("insert-close setup: edit_line=1", repl_state_edit_line(), 1);
+        ASSERT_INT("insert-close setup: edit_line=1", editor_state_edit_line(), 1);
 
         {
             EditorInputState *inp = editor_state_input_mut();
@@ -1523,7 +1523,7 @@ int main() {
             inp->input_len = (int)strlen(inp->input);
             editor_cursor_pos_set(inp->input_len);
         }
-        repl_state_edit_line_set(repl_state_document_count());
+        editor_state_edit_line_set(repl_state_document_count());
         editor_insert_mode_set(0);
 
         int result = editor_try_commit_float_decl();
@@ -1558,7 +1558,7 @@ int main() {
             inp->input_len = (int)strlen(inp->input);
             editor_cursor_pos_set(inp->input_len);
         }
-        repl_state_edit_line_set(repl_state_document_count());
+        editor_state_edit_line_set(repl_state_document_count());
         editor_insert_mode_set(0);
 
         int result = editor_try_commit_float_decl();
@@ -1598,7 +1598,7 @@ int main() {
             inp->input_len = (int)strlen(inp->input);
             editor_cursor_pos_set(inp->input_len);
         }
-        repl_state_edit_line_set(repl_state_document_count());
+        editor_state_edit_line_set(repl_state_document_count());
         editor_insert_mode_set(0);
 
         int result = editor_try_commit_float_decl();
@@ -1674,7 +1674,7 @@ int main() {
             inp->input_len = (int)strlen(inp->input);
             editor_cursor_pos_set(inp->input_len);
         }
-        repl_state_edit_line_set(1);
+        editor_state_edit_line_set(1);
         editor_insert_mode_set(0);
 
         int result = editor_try_commit_float_decl();
@@ -1710,7 +1710,7 @@ int main() {
             inp->input_len = (int)strlen(inp->input);
             editor_cursor_pos_set(inp->input_len);
         }
-        repl_state_edit_line_set(0);
+        editor_state_edit_line_set(0);
         editor_insert_mode_set(0);
 
         int result = editor_try_commit_float_decl();
@@ -1744,7 +1744,7 @@ int main() {
             inp->input_len = (int)strlen(inp->input);
             editor_cursor_pos_set(inp->input_len);
         }
-        repl_state_edit_line_set(0);
+        editor_state_edit_line_set(0);
         editor_insert_mode_set(0);
 
         int result = editor_try_commit_float_decl();
@@ -1773,7 +1773,7 @@ int main() {
             inp->input_len = (int)strlen(inp->input);
             editor_cursor_pos_set(inp->input_len);
         }
-        repl_state_edit_line_set(0);
+        editor_state_edit_line_set(0);
         editor_insert_mode_set(0);
 
         int result = editor_try_commit_float_decl();
@@ -1817,7 +1817,7 @@ int main() {
         repl_copy_string_fits(editor_state_clipboard_mut()->lines[0], MAX_LINE_LEN,
                               editor_buffer_line(1));
         editor_state_clipboard_count_set(1);
-        repl_state_edit_line_set(0);
+        editor_state_edit_line_set(0);
 
         editor_handle_key(24, 0, 0);
 
@@ -1887,7 +1887,7 @@ int main() {
     {
         glr_app_reset_all();
         set_editor_input("float v0, v1, v2, v3, v4, v5, v6, v7, v8");
-        repl_state_edit_line_set(repl_state_document_count());
+        editor_state_edit_line_set(repl_state_document_count());
         editor_insert_mode_set(0);
 
         int result = editor_try_commit_float_decl();
@@ -1935,7 +1935,7 @@ int main() {
         ASSERT_INT("decl table full setup: all slots used", g_num_predef_vars, MAX_PREDEF_VARS);
 
         set_editor_input("float overflow");
-        repl_state_edit_line_set(repl_state_document_count());
+        editor_state_edit_line_set(repl_state_document_count());
         editor_insert_mode_set(0);
         int result = editor_try_commit_float_decl();
 
@@ -2011,7 +2011,7 @@ int main() {
             inp->input_len = (int)strlen(inp->input);
             editor_cursor_pos_set(inp->input_len);
         }
-        repl_state_edit_line_set(0);
+        editor_state_edit_line_set(0);
         editor_insert_mode_set(0);
 
         int result = editor_try_commit_float_decl();
@@ -2066,7 +2066,7 @@ int main() {
         ASSERT_TRUE("overlong assign: test input fits",
                     repl_format_fits(input, sizeof(input), "n = %s", big_rhs));
         set_editor_input(input);
-        repl_state_edit_line_set(repl_state_document_count());
+        editor_state_edit_line_set(repl_state_document_count());
         editor_insert_mode_set(0);
 
         int r = editor_try_assign_variable();
@@ -2175,7 +2175,7 @@ int main() {
         ASSERT_TRUE("replay follow line after scroll",
                     follow_doc_line >= g_scroll &&
                     follow_doc_line < g_scroll + visible_lines);
-        ASSERT_INT("replay follow leaves edit line alone", repl_state_edit_line(), 0);
+        ASSERT_INT("replay follow leaves edit line alone", editor_state_edit_line(), 0);
         ASSERT_STR("replay follow leaves input alone", editor_state_input().input, "glVertex3f(0, 0, 0)");
 
         replay_active = 0;
@@ -2273,7 +2273,7 @@ int main() {
     }
 
     /* Regression: pressing Enter on the last existing command must enter
-     * insert mode at repl_state_edit_line() == repl_state_document_count().  Before the fix the
+     * insert mode at editor_state_edit_line() == repl_state_document_count().  Before the fix the
      * cursor was invisible because the renderer guarded the active-input
      * row with !editor_insert_mode(), so the slot drew a dimmed placeholder instead
      * of the cursor. */
@@ -2283,13 +2283,13 @@ int main() {
         editor_feed_line("glVertex3f(1,1,1)");
         editor_feed_line("glVertex3f(2,2,2)");
         editor_navigate_to_line(2);
-        ASSERT_INT("enter-at-last: setup edit_line", repl_state_edit_line(), 2);
+        ASSERT_INT("enter-at-last: setup edit_line", editor_state_edit_line(), 2);
         ASSERT_INT("enter-at-last: setup not inserting", editor_insert_mode(), 0);
 
         editor_handle_key('\r', 0, 0);
 
         ASSERT_INT("enter-at-last: now inserting", editor_insert_mode(), 1);
-        ASSERT_INT("enter-at-last: edit_line == num_cmds", repl_state_edit_line(), repl_state_document_count());
+        ASSERT_INT("enter-at-last: edit_line == num_cmds", editor_state_edit_line(), repl_state_document_count());
     }
 
     /* Regression: scroll follow for insert-at-end must track the cursor
@@ -2314,7 +2314,7 @@ int main() {
         glr_state_presentation_mut()->show_vertex_indices = 0; glr_ctrl_sync_ui_chrome();
         replay_active = 0;
 
-        repl_state_edit_line_set(repl_state_document_count());
+        editor_state_edit_line_set(repl_state_document_count());
         editor_insert_mode_set(1);
         {
             EditorInputState *inp = editor_state_input_mut();
@@ -2329,7 +2329,7 @@ int main() {
                     follow_insert >= g_scroll &&
                     follow_insert < g_scroll + visible_lines);
 
-        repl_state_edit_line_set(repl_state_document_count());
+        editor_state_edit_line_set(repl_state_document_count());
         editor_insert_mode_set(0);
         g_scroll = 0;
         g_scroll_follow_cursor = 1;
@@ -2409,7 +2409,7 @@ int main() {
 
         editor_handle_special(GLUT_KEY_DOWN, 0, 0);
 
-        ASSERT_INT("nav auto-commit valid edit: cursor moved", repl_state_edit_line(), 1);
+        ASSERT_INT("nav auto-commit valid edit: cursor moved", editor_state_edit_line(), 1);
         ASSERT_INT("nav auto-commit valid edit: first cmd type",
                    repl_state_document_cmds_mut()[0].type, CMD_VERTEX3F);
         ASSERT_TRUE("nav auto-commit valid edit: x arg",
@@ -2437,7 +2437,7 @@ int main() {
                    repl_state_document_count(), old_num_cmds);
         ASSERT_STR("nav auto-commit invalid edit: source reverted",
                    editor_buffer_line(0), old_source);
-        ASSERT_INT("nav auto-commit invalid edit: cursor moved", repl_state_edit_line(), 1);
+        ASSERT_INT("nav auto-commit invalid edit: cursor moved", editor_state_edit_line(), 1);
         ASSERT_STR("nav auto-commit invalid edit: input loaded next", editor_state_input().input, "glVertex3f(1, 1, 1)");
         assert_status_contains("nav auto-commit invalid edit: status",
                                "Incomplete command");
@@ -2454,7 +2454,7 @@ int main() {
         editor_handle_special(GLUT_KEY_UP, 0, 0);
 
         ASSERT_INT("nav auto-commit append: cmd count", repl_state_document_count(), 3);
-        ASSERT_INT("nav auto-commit append: cursor moved up", repl_state_edit_line(), 1);
+        ASSERT_INT("nav auto-commit append: cursor moved up", editor_state_edit_line(), 1);
         ASSERT_INT("nav auto-commit append: new cmd type",
                    repl_state_document_cmds_mut()[2].type, CMD_VERTEX3F);
         ASSERT_TRUE("nav auto-commit append: x arg",
@@ -2477,7 +2477,7 @@ int main() {
         ASSERT_INT("nav auto-commit invalid append: cmd count unchanged",
                    repl_state_document_count(), old_num_cmds);
         ASSERT_INT("nav auto-commit invalid append: cursor moved up",
-                   repl_state_edit_line(), 1);
+                   editor_state_edit_line(), 1);
         ASSERT_STR("nav auto-commit invalid append: input loaded target", editor_state_input().input, "glVertex3f(1, 1, 1)");
         assert_status_contains("nav auto-commit invalid append: status",
                                "Incomplete command");
@@ -2523,7 +2523,7 @@ int main() {
 
         snprintf(lbl, sizeof lbl,
                  "mouse auto-commit valid edit: cursor moved%s", mode);
-        ASSERT_INT(lbl, repl_state_edit_line(), 2);
+        ASSERT_INT(lbl, editor_state_edit_line(), 2);
         snprintf(lbl, sizeof lbl,
                  "mouse auto-commit valid edit: x arg%s", mode);
         ASSERT_TRUE(lbl,
@@ -2546,7 +2546,7 @@ int main() {
         editor_handle_special(GLUT_KEY_DOWN, 0, 0);
 
         ASSERT_INT("autocomplete down changes selection", g_ac_sel, 1);
-        ASSERT_INT("autocomplete down does not navigate", repl_state_edit_line(), 0);
+        ASSERT_INT("autocomplete down does not navigate", editor_state_edit_line(), 0);
         ASSERT_TRUE("autocomplete down does not commit edit",
                     fabsf(repl_state_document_cmds_mut()[0].args[0] - 0.0f) < 1e-6f);
     }
@@ -2576,7 +2576,7 @@ int main() {
 
         editor_clear_all_cmds();
         ASSERT_INT("clear_all: num_cmds is 0", repl_state_document_count(), 0);
-        ASSERT_INT("clear_all: edit_line is 0", repl_state_edit_line(), 0);
+        ASSERT_INT("clear_all: edit_line is 0", editor_state_edit_line(), 0);
         ASSERT_INT("clear_all: inserting is 0", editor_insert_mode(), 0);
         ASSERT_INT("clear_all: input is empty", editor_state_input().input[0], 0);
         ASSERT_INT("clear_all: predef var count restored",
@@ -2605,7 +2605,7 @@ int main() {
                    repl_state_document_cmds_mut()[1].type, CMD_VAR_ASSIGN);
 
         /* Comment the assignment with Ctrl+/. */
-        repl_state_edit_line_set(1);
+        editor_state_edit_line_set(1);
         editor_insert_mode_set(0);
         g_status[0] = '\0';
         g_mock_modifiers = GLUT_ACTIVE_CTRL;
@@ -2618,7 +2618,7 @@ int main() {
 
         /* Uncomment with Ctrl+/ again.  Fallback path must rebuild the
          * CMD_VAR_ASSIGN in place, not reject with "not a valid command". */
-        repl_state_edit_line_set(1);
+        editor_state_edit_line_set(1);
         editor_insert_mode_set(0);
         g_status[0] = '\0';
         editor_handle_key('/', 0, 0);
@@ -2645,7 +2645,7 @@ int main() {
         ASSERT_TRUE("comment-decl setup: x declared",
                     repl_eval_find_predef_var_idx("comment_x") >= 0);
 
-        repl_state_edit_line_set(0);
+        editor_state_edit_line_set(0);
         editor_insert_mode_set(0);
         g_status[0] = '\0';
         g_mock_modifiers = GLUT_ACTIVE_CTRL;
@@ -2670,7 +2670,7 @@ int main() {
         editor_feed_line("float refed_y;");
         editor_feed_line("refed_y = 5;");
 
-        repl_state_edit_line_set(0);
+        editor_state_edit_line_set(0);
         editor_insert_mode_set(0);
         g_status[0] = '\0';
         g_mock_modifiers = GLUT_ACTIVE_CTRL;
@@ -2747,7 +2747,7 @@ int main() {
 
         glr_app_reset_all();
         editor_feed_line("glVertex3f(0, 0, 0);");
-        repl_state_edit_line_set(0);
+        editor_state_edit_line_set(0);
         editor_insert_mode_set(0);
         g_status[0] = '\0';
         g_mock_modifiers = GLUT_ACTIVE_CTRL;
@@ -2757,7 +2757,7 @@ int main() {
         /* Replace the comment body with nonsense so the re-parse fails. */
         editor_buffer_set_line(0, "// !@#$not a command$@#!");
         g_status[0] = '\0';
-        repl_state_edit_line_set(0);
+        editor_state_edit_line_set(0);
         editor_handle_key('/', 0, 0);
         ASSERT_INT("uncomment genuinely bad: stays a comment",
                    repl_state_document_cmds_mut()[0].type, CMD_COMMENT);
@@ -3201,12 +3201,12 @@ int main() {
         int saved_mods = g_mock_modifiers;
         g_mock_modifiers = GLUT_ACTIVE_CTRL;
 
-        repl_state_edit_line_set(0);
+        editor_state_edit_line_set(0);
         editor_insert_mode_set(0);
         editor_handle_key('/', 0, 0);
         ASSERT_INT("comment if-begin", repl_state_document_cmds_mut()[0].type, CMD_COMMENT);
 
-        repl_state_edit_line_set(2);
+        editor_state_edit_line_set(2);
         editor_handle_key('/', 0, 0);
         ASSERT_INT("comment if-end", repl_state_document_cmds_mut()[2].type, CMD_COMMENT);
 
@@ -3224,7 +3224,7 @@ int main() {
         int saved_mods = g_mock_modifiers;
         g_mock_modifiers = GLUT_ACTIVE_CTRL;
 
-        repl_state_edit_line_set(0);
+        editor_state_edit_line_set(0);
         editor_insert_mode_set(0);
         editor_handle_key('/', 0, 0);
 
@@ -3257,7 +3257,7 @@ int main() {
         int saved_mods = g_mock_modifiers;
         g_mock_modifiers = GLUT_ACTIVE_CTRL;
 
-        repl_state_edit_line_set(2);  /* on FOR_END */
+        editor_state_edit_line_set(2);  /* on FOR_END */
         editor_insert_mode_set(0);
         editor_handle_key('/', 0, 0);
 
@@ -3282,7 +3282,7 @@ int main() {
         int saved_mods = g_mock_modifiers;
         g_mock_modifiers = GLUT_ACTIVE_CTRL;
 
-        repl_state_edit_line_set(0);
+        editor_state_edit_line_set(0);
         editor_insert_mode_set(0);
         editor_handle_key('/', 0, 0);
 
@@ -3303,7 +3303,7 @@ int main() {
 
         glr_app_reset_all();
         editor_feed_line("glVertex3f(0, 0, 0);");
-        repl_state_edit_line_set(0);
+        editor_state_edit_line_set(0);
         editor_insert_mode_set(0);
         g_status[0] = '\0';
         g_mock_modifiers = GLUT_ACTIVE_CTRL;
@@ -3313,7 +3313,7 @@ int main() {
 
         editor_buffer_set_line(0, "// !@#$not a command$@#!");
         g_status[0] = '\0';
-        repl_state_edit_line_set(0);
+        editor_state_edit_line_set(0);
         editor_handle_key('/', 0, 0);  /* uncomment fails */
         assert_status_contains("toggle framing: editor wraps as 'Toggle failed:'",
                                "Toggle failed");
@@ -3332,7 +3332,7 @@ int main() {
         editor_feed_line("glVertex3f(0, 0, 0);");
         editor_set_line_comment_prefix(NULL);
 
-        repl_state_edit_line_set(0);
+        editor_state_edit_line_set(0);
         editor_insert_mode_set(0);
         g_status[0] = '\0';
         g_mock_modifiers = GLUT_ACTIVE_CTRL;

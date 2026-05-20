@@ -333,7 +333,7 @@ int main(void) {
     ASSERT_TRUE("cascade fixture line 1 is assign",
                 repl_state_document_cmds_mut()[1].type == CMD_VAR_ASSIGN);
     {
-        repl_state_edit_line_set(0);
+        editor_state_edit_line_set(0);
         editor_insert_mode_set(0);
         EditorInputState *inp = editor_state_input_mut();
         strcpy(inp->input, "foo = 5");
@@ -443,7 +443,7 @@ int main(void) {
     editor_cursor_pos_set(0);
     editor_handle_key('\r', 0, 0);
     ASSERT_TRUE("enter at line start enters insert mode", editor_insert_mode() == 1);
-    ASSERT_TRUE("enter at line start keeps insertion index", repl_state_edit_line() == 1);
+    ASSERT_TRUE("enter at line start keeps insertion index", editor_state_edit_line() == 1);
     {
         EditorInputState *inp = editor_state_input_mut();
         strcpy(inp->input, "glColor3f(1, 0, 0)");
@@ -461,7 +461,7 @@ int main(void) {
     editor_navigate_to_line(0);
     editor_cursor_pos_set(editor_input_len());
     editor_handle_key('\r', 0, 0);
-    ASSERT_TRUE("enter away from line start still inserts after", editor_insert_mode() == 1 && repl_state_edit_line() == 1);
+    ASSERT_TRUE("enter away from line start still inserts after", editor_insert_mode() == 1 && editor_state_edit_line() == 1);
 
     glr_app_reset_all(); declare_test_vars();
     editor_feed_line("glBegin(GL_POINTS);");
@@ -481,19 +481,19 @@ int main(void) {
         glr_ctrl_router_handle_code_panel_hit(hit, CODE_MARGIN_X + 1,
                                                  code_panel_mouse_y_for_cmd(0));
     }
-    ASSERT_TRUE("mouse press selects current line for edit", repl_state_edit_line() == 0);
+    ASSERT_TRUE("mouse press selects current line for edit", editor_state_edit_line() == 0);
     ASSERT_TRUE("mouse press starts with no selection", !editor_clipboard_sel_active());
     glr_ctrl_router_handle_code_panel_drag(CODE_MARGIN_X + 1,
                                               code_panel_mouse_y_for_cmd(2));
     ASSERT_TRUE("mouse drag activates selection", editor_clipboard_sel_active());
     ASSERT_TRUE("mouse drag selection low", editor_clipboard_sel_lo() == 0);
     ASSERT_TRUE("mouse drag selection high", editor_clipboard_sel_hi() == 2);
-    ASSERT_TRUE("mouse drag navigates to drag end", repl_state_edit_line() == 2);
+    ASSERT_TRUE("mouse drag navigates to drag end", editor_state_edit_line() == 2);
     glr_ctrl_router_reset_code_panel_drag();
     editor_handle_key(8, 0, 0);
     ASSERT_TRUE("backspace deletes selected lines", repl_state_document_count() == 0);
     ASSERT_TRUE("backspace clears selection after delete", !editor_clipboard_sel_active());
-    ASSERT_TRUE("backspace keeps edit line at start after delete", repl_state_edit_line() == 0);
+    ASSERT_TRUE("backspace keeps edit line at start after delete", editor_state_edit_line() == 0);
 
     glr_app_reset_all(); declare_test_vars();
     editor_feed_line("glBegin(GL_POINTS);");
@@ -512,7 +512,7 @@ int main(void) {
                     hit.line_idx == repl_state_document_count());
         glr_ctrl_router_handle_code_panel_hit(hit, mx, my);
         ASSERT_TRUE("clicking trailing blank row navigates to document end",
-                    repl_state_edit_line() == repl_state_document_count());
+                    editor_state_edit_line() == repl_state_document_count());
     }
 
     glr_app_reset_all(); declare_test_vars();
@@ -532,7 +532,7 @@ int main(void) {
         ASSERT_TRUE("clicking indented active line keeps cursor at first char",
                     editor_cursor_pos() == 0);
         ASSERT_TRUE("clicking indented active line selects correct line",
-                    repl_state_edit_line() == 1);
+                    editor_state_edit_line() == 1);
     }
 
     glr_app_reset_all(); declare_test_vars();
@@ -699,28 +699,28 @@ int main(void) {
     ASSERT_TRUE("nested func scope mask includes both", (repl_state_flat_program_cmds_mut()[1].func_scope_mask & 0x3u) == 0x3u);
     {
         int matched = 0;
-        repl_state_edit_line_set(8);
+        editor_state_edit_line_set(8);
         for (int i = 0; i < repl_state_flat_program_count(); i++)
             matched += repl_flat_cmd_matches_cursor(i);
         ASSERT_TRUE("nested func call line highlights one invocation", matched == 3);
     }
     {
         int matched = 0;
-        repl_state_edit_line_set(6);
+        editor_state_edit_line_set(6);
         for (int i = 0; i < repl_state_flat_program_count(); i++)
             matched += repl_flat_cmd_matches_cursor(i);
         ASSERT_TRUE("nested inner call line highlights all invocations", matched == 6);
     }
     {
         int matched = 0;
-        repl_state_edit_line_set(2);
+        editor_state_edit_line_set(2);
         for (int i = 0; i < repl_state_flat_program_count(); i++)
             matched += repl_flat_cmd_matches_cursor(i);
         ASSERT_TRUE("nested function body highlights all invocations", matched == 6);
     }
     {
         int matched = 0;
-        repl_state_edit_line_set(5);
+        editor_state_edit_line_set(5);
         for (int i = 0; i < repl_state_flat_program_count(); i++)
             matched += repl_flat_cmd_matches_cursor(i);
         ASSERT_TRUE("outer function header highlights nested invocations", matched == 6);
@@ -1012,7 +1012,7 @@ int main(void) {
     repl_flatten_commands();
     {
         int matched = 0;
-        repl_state_edit_line_set(0);
+        editor_state_edit_line_set(0);
         for (int i = 0; i < repl_state_flat_program_count(); i++)
             if (repl_state_flat_program_cmds_mut()[i].type == CMD_VERTEX3F)
                 matched += repl_flat_cmd_matches_cursor(i);
@@ -1020,7 +1020,7 @@ int main(void) {
     }
     {
         int matched = 0;
-        repl_state_edit_line_set(5);
+        editor_state_edit_line_set(5);
         for (int i = 0; i < repl_state_flat_program_count(); i++)
             if (repl_state_flat_program_cmds_mut()[i].type == CMD_VERTEX3F)
                 matched += repl_flat_cmd_matches_cursor(i);
@@ -1043,7 +1043,7 @@ int main(void) {
     repl_flatten_commands();
     {
         int matched = 0;
-        repl_state_edit_line_set(0);
+        editor_state_edit_line_set(0);
         for (int i = 0; i < repl_state_flat_program_count(); i++)
             if (repl_state_flat_program_cmds_mut()[i].type == CMD_VERTEX3F)
                 matched += repl_flat_cmd_matches_cursor(i);
@@ -1051,7 +1051,7 @@ int main(void) {
     }
     {
         int matched = 0;
-        repl_state_edit_line_set(5);
+        editor_state_edit_line_set(5);
         for (int i = 0; i < repl_state_flat_program_count(); i++)
             if (repl_state_flat_program_cmds_mut()[i].type == CMD_VERTEX3F)
                 matched += repl_flat_cmd_matches_cursor(i);
@@ -1175,7 +1175,7 @@ int main(void) {
     editor_feed_line("func0 {");
     editor_feed_line("glVertex3f(1, 2, 3);");
     editor_feed_line("}");
-    repl_state_edit_line_set(0);
+    editor_state_edit_line_set(0);
     editor_insert_mode_set(0);
     g_status[0] = '\0';
     editor_feed_line("func0(z) {");

@@ -657,7 +657,7 @@ int main(void) {
          * committed row. */
         editor_feed_line("glVertex3f(1, 2, 3);");
         editor_navigate_to_line(0);
-        ASSERT_INT("baseline edit line", repl_state_edit_line(), 0);
+        ASSERT_INT("baseline edit line", editor_state_edit_line(), 0);
 
         /* Synthesize a UI_HIT_CODE_TEXT press at char 11 ("1" inside
          * the parens). The router uses the hit directly; it doesn't
