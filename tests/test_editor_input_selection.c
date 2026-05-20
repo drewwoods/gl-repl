@@ -18,6 +18,7 @@
  *     the input_text payload, not leave it stranded behind kind=EMPTY.
  */
 
+#include "editor/edit_ops.h"
 #include "editor/state.h"
 #include "editor/input.h"
 #include "editor/clipboard.h"
@@ -282,7 +283,7 @@ int main(void) {
         ASSERT_INT("selection [2,7) active",
                    editor_input_selection_lo(), 2);
 
-        int consumed = editor_input_consume_selection();
+        int consumed = edit_op_consume_input_selection();
         ASSERT_INT("consume returns 1", consumed, 1);
         ASSERT_STR("consume deletes [lo,hi)",
                    editor_input_text(), "abhij");
@@ -290,7 +291,7 @@ int main(void) {
         ASSERT_INT("consume clears anchor", editor_input_anchor(), -1);
 
         /* No-op when no selection. */
-        consumed = editor_input_consume_selection();
+        consumed = edit_op_consume_input_selection();
         ASSERT_INT("consume on inactive returns 0", consumed, 0);
         ASSERT_STR("consume no-op leaves buffer",
                    editor_input_text(), "abhij");

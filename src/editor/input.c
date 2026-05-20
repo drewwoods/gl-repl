@@ -38,6 +38,7 @@
 #include "clipboard.h"
 #include "commit.h"
 #include "completion.h"
+#include "edit_ops.h"
 #include "help_session.h"
 #include "inline_file_prompt.h"
 #include "inline_rename.h"
@@ -1163,7 +1164,7 @@ static int handle_text_delete_key_route(unsigned char key) {
          * standard editor behavior. Works in insert mode too — the
          * line-range guard below only matters when no input selection
          * is active. */
-        if (editor_input_consume_selection()) {
+        if (edit_op_consume_input_selection()) {
             editor_completion_update();
             return 1;
         }
@@ -1175,17 +1176,8 @@ static int handle_text_delete_key_route(unsigned char key) {
             editor_delete_cmd_range(start, hi - start + 1, "Deleted");
             return 1;
         }
-        {
-            int cur = editor_cursor_pos();
-            EditorInputState *inp = editor_state_input_mut();
-            if (cur > 0 && inp->input_len > 0) {
-                memmove(&inp->input[cur - 1], &inp->input[cur],
-                        (size_t)(inp->input_len - cur + 1));
-                inp->input_len--;
-                editor_cursor_pos_set(cur - 1);
-                editor_completion_update();
-            }
-        }
+        if (edit_op_buffer_delete_left_of_cursor())
+            editor_completion_update();
         return 1;
     }
     return 0;
@@ -1412,45 +1404,10 @@ void editor_input_word_bounds_at(const char *text, int len, int char_idx,
     if (out_end)   *out_end   = end;
 }
 
-int editor_input_consume_selection(void) {
-    if (!editor_input_selection_active())
-        return 0;
-
-    int lo = editor_input_selection_lo();
-    int hi = editor_input_selection_hi();
-    EditorInputState *inp = editor_state_input_mut();
-    int len = inp->input_len;
-
-    if (lo < 0 || hi <= lo || hi > len) {
-        /* Defensive: derived view inconsistent with buffer length.
-         * Drop the anchor and bail rather than scribbling on input[]. */
-        editor_input_anchor_clear();
-        return 0;
-    }
-
-    int tail = len - hi;
-    memmove(&inp->input[lo], &inp->input[hi], (size_t)tail);
-    inp->input_len = len - (hi - lo);
-    inp->input[inp->input_len] = '\0';
-    /* Default cursor-set clears the anchor as a side effect. */
-    editor_cursor_pos_set(lo);
-    return 1;
-}
-
 static int handle_printable_input_key_route(unsigned char key) {
     if (!key_is_printable_ascii(key))
         return 0;
-    /* Replace any active input selection with the typed char: the
-     * insert proceeds on the post-consume buffer. */
-    (void)editor_input_consume_selection();
-    int cur = editor_cursor_pos();
-    EditorInputState *inp = editor_state_input_mut();
-    if (inp->input_len < MAX_INPUT_LEN - 2) {
-        memmove(&inp->input[cur + 1], &inp->input[cur],
-                (size_t)(inp->input_len - cur + 1));
-        inp->input[cur] = (char)key;
-        inp->input_len++;
-        editor_cursor_pos_set(cur + 1);
+    if (edit_op_type_char((char)key)) {
         editor_completion_update();
         return 1;
     }
