@@ -302,7 +302,6 @@ EditorInputView editor_state_input(void) {
         .input_len = in->input_len,
         .cursor_pos = in->cursor_pos,
         .anchor_pos = in->anchor_pos,
-        .edit_line_idx = editor_state_edit_line(),  /* same value via forwarder */
         .pending_newline = in->pending_newline,
         .pending_newline_capacity = MAX_INPUT_LEN,
         .pending_newline_len = in->pending_newline_len,

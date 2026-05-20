@@ -40,12 +40,10 @@ typedef struct {
     int          line_count;
 } EditorBufferView;
 
-/* Live editor-input state: the typing buffer, cursor, insert mode, and
- * pending-newline scratch.
- * `edit_line_idx` exists for view symmetry but is *not* the canonical
- * edit-line cursor — that lives on `document.edit_line_idx`; the view
- * builder copies it in for callers that consume the input view as a
- * single struct. */
+/* Live editor-input state: the typing buffer, cursor, insert mode,
+ * and pending-newline scratch. The edit-line cursor lives on
+ * EditorState.document.edit_line_idx and is read via
+ * editor_state_edit_line(); it is not duplicated here. */
 typedef struct {
     char input[MAX_INPUT_LEN];
     int  input_capacity;
@@ -57,7 +55,6 @@ typedef struct {
     * selection (anchor_pos == cursor_pos) is not allowed and collapses
     * to -1; see done/editor-input-selection.md. */
     int  anchor_pos;
-    int  edit_line_idx;
     char pending_newline[MAX_INPUT_LEN];
     int  pending_newline_capacity;
     int  pending_newline_len;
@@ -70,7 +67,6 @@ typedef struct {
     int         input_len;
     int         cursor_pos;
     int         anchor_pos;
-    int         edit_line_idx;
     const char *pending_newline;
     int         pending_newline_capacity;
     int         pending_newline_len;
