@@ -1,7 +1,7 @@
 /*
  * tools/editor_demo/editor_demo.c -- Standalone generic text editor demo.
  *
- * Per the Phase 8 cleavage in plans/active/editor-demo.md, this demo
+ * Per the Phase 8 cleavage in plans/done/editor-demo.md, this demo
  * does NOT reuse the REPL editor's controller (src/editor/input.c,
  * commit.c, clipboard.c, undo.c, reformat.c, search.c, completion.c,
  * and the inline overlays — all REPL-flavored). It runs entirely on:
@@ -32,7 +32,7 @@
  * arrow keys / Home / End to move within the row, click the File menu
  * for Load / Save (unimplemented handlers) / Quit. Cross-line nav, undo,
  * find, word jumps, selection clipboard, and File menu handlers are
- * deferred to follow-up phases — see plans/active/editor-demo.md "What's
+ * deferred to follow-up phases — see plans/done/editor-demo.md "What's
  * still open".
  *
  * Run:

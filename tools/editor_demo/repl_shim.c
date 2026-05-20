@@ -15,7 +15,9 @@
  *   field. The editor doesn't own its own edit-line cursor today;
  *   a follow-up phase moves edit-line ownership into EditorState
  *   so this stub goes away too. (Plan options A and B documented
- *   under "What's still open" in plans/active/editor-demo.md.)
+ *   under "What's still open" in plans/done/editor-demo.md; the
+ *   in-progress migration plan lives in
+ *   plans/in-review/edit-line-ownership.md.)
  *
  * Phase 8b (multi-line + click): the shim's repl_state_edit_line()
  * returns demo-local backing storage that the demo's input

@@ -187,7 +187,7 @@ lists to make the layer boundaries observable:
   plain-text editor demo driven by its *own* input dispatcher
   (`tools/editor_demo/input.c`) and its *own* File menu
   (`tools/editor_demo/menu.c`). Per the Phase 8 cleavage in
-  `plans/active/editor-demo.md`, `src/editor/input.c` is recognized
+  `plans/done/editor-demo.md`, `src/editor/input.c` is recognized
   as the **REPL editor's input dispatcher** (REPL key bindings +
   REPL-flavored controller), not a generic editor controller; the
   demo therefore does *not* link it. Same goes for `commit.c`,

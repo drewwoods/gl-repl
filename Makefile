@@ -543,7 +543,7 @@ REPL_DEMO_DEP_SRCS = src/repl/format.c \
 # (not in the demo link set).
 
 # Object list for the standalone editor_demo. Phase 8 refit
-# (plans/active/editor-demo.md) split the editor module into a generic
+# (plans/done/editor-demo.md) split the editor module into a generic
 # half (state.c data model + edit_ops.c primitives) and a REPL-flavored
 # controller half (input.c, commit.c, clipboard.c, undo.c, reformat.c,
 # search.c, completion.c, plus the inline overlays). The demo links
