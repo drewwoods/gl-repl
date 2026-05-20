@@ -218,7 +218,7 @@ static void test_replace_existing_line_does_not_advance(void) {
      * commit the current step's expected text. The precheck must reject the
      * non-append commit so the user does not overwrite prior progress while
      * also advancing. */
-    repl_state_edit_line_set(1);
+    editor_state_edit_line_set(1);
     expected = tutorial_current_expected_text();
     set_input_text(expected);
     (void)editor_handle_key(';', 0, 0);
@@ -377,7 +377,7 @@ static void test_locked_comment_load_is_read_only(void) {
 static void test_locked_comment_mutations_are_blocked(void) {
     reset_fixture();
     tutorial_start(0);
-    repl_state_edit_line_set(0);
+    editor_state_edit_line_set(0);
 
     (void)editor_handle_key(KEY_CTRL_D, 0, 0);
     ASSERT_INT("ctrl-d keeps locked comment row",
@@ -408,9 +408,9 @@ static void test_paste_before_locked_prefix_is_blocked(void) {
     set_input_text(expected);
     (void)editor_handle_key(';', 0, 0);
 
-    repl_state_edit_line_set(1);
+    editor_state_edit_line_set(1);
     editor_clipboard_copy_current();
-    repl_state_edit_line_set(0);
+    editor_state_edit_line_set(0);
 
     /* Regression: a guard-rejected paste must not touch the undo/redo
      * rings. editor_undo_push_snapshot() (saves a snapshot, bumps
@@ -964,7 +964,7 @@ static void test_depth_tutorial_label_targeted_step_inserts_above_label(void) {
     ASSERT_INT("expected_commit_line lands directly below new instruction",
                tutorial_state_view().expected_commit_line, 1);
     ASSERT_TRUE("editor cursor moved to expected commit line",
-                repl_state_edit_line() ==
+                editor_state_edit_line() ==
                     tutorial_state_view().expected_commit_line);
     ASSERT_TRUE("editor in insert mode since expected row is mid-document",
                 editor_insert_mode() != 0);
@@ -1062,7 +1062,7 @@ static void test_phase3_correct_input_at_wrong_line_does_not_insert(void) {
 
     /* Move the cursor off the expected line (to the trailing row)
      * but keep input correct. The precheck should reject. */
-    repl_state_edit_line_set(repl_state_document_count());
+    editor_state_edit_line_set(repl_state_document_count());
     editor_insert_mode_set(0);
     set_input_text("glEnable(GL_DEPTH_TEST)");
     (void)editor_handle_key(';', 0, 0);
@@ -1116,7 +1116,7 @@ static void test_phase3_pending_clears_after_match_failure(void) {
      * REJECTED branch (or the ;-route's REJECTED case) is supposed
      * to clear the pending record. */
     int expected_line = tutorial_state_view().expected_commit_line;
-    repl_state_edit_line_set(expected_line);
+    editor_state_edit_line_set(expected_line);
     editor_insert_mode_set(expected_line < repl_state_document_count());
     set_input_text(tutorial_current_expected_text());
     (void)editor_handle_key(';', 0, 0);
@@ -1292,9 +1292,9 @@ static void test_phase3_paste_above_locked_still_blocked(void) {
     set_input_text(tutorial_current_expected_text());
     (void)editor_handle_key(';', 0, 0);
 
-    repl_state_edit_line_set(1);
+    editor_state_edit_line_set(1);
     editor_clipboard_copy_current();
-    repl_state_edit_line_set(0);
+    editor_state_edit_line_set(0);
     editor_clipboard_paste_current();
     ASSERT_STR("paste above locked still rejected",
                status_text(), "Tutorial comment is read-only");

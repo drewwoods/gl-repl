@@ -67,7 +67,7 @@ typedef struct {
 static ComputeFingerprint capture_fingerprint(void) {
     ComputeFingerprint fp = {0};
     fp.cmd_count       = repl_state_document_count();
-    fp.edit_line       = repl_state_edit_line();
+    fp.edit_line       = editor_state_edit_line();
     fp.insert_mode     = editor_insert_mode();
     fp.num_predef_vars = g_num_predef_vars;
 
@@ -304,7 +304,7 @@ static void test_overwrite_decl_with_assign_preserves_set_value(void) {
     }
     ASSERT_TRUE("located float Y; row", y_row >= 0);
 
-    repl_state_edit_line_set(y_row);
+    editor_state_edit_line_set(y_row);
     editor_insert_mode_set(0);
 
     /* Compile + apply `X = 42` overwriting the `float Y;` row. */
@@ -1021,7 +1021,7 @@ int main(void) {
         ASSERT_INT("[P1 editor] drawCube starts in slot 0",
                    repl_func_alias_lookup_slot("drawCube"), 0);
 
-        repl_state_edit_line_set(0);
+        editor_state_edit_line_set(0);
         editor_insert_mode_set(0);
 
         ReplCompileContext ctx = repl_compile_context_from_live();
@@ -1090,11 +1090,11 @@ int main(void) {
         editor_state_input_reset();
 
         char err[128] = "";
-        repl_state_edit_line_set(repl_state_document_count());
+        editor_state_edit_line_set(repl_state_document_count());
         editor_insert_mode_set(0);
         ASSERT_TRUE("[Phase 0] seed line a loads",
                     repl_load_apply_line("glColor3f(1, 0, 0)", err, sizeof(err)));
-        repl_state_edit_line_set(repl_state_document_count());
+        editor_state_edit_line_set(repl_state_document_count());
         editor_insert_mode_set(0);
         ASSERT_TRUE("[Phase 0] seed line b loads",
                     repl_load_apply_line("glColor3f(0, 1, 0)", err, sizeof(err)));
@@ -1104,7 +1104,7 @@ int main(void) {
         /* Mid-document insert at index 1: between the two color
          * commands. The widened contract allows edit_line in
          * [0, document_count]. */
-        repl_state_edit_line_set(1);
+        editor_state_edit_line_set(1);
         editor_insert_mode_set(0);
         err[0] = '\0';
         int ok = repl_load_apply_line("// inserted in the middle",
@@ -1126,7 +1126,7 @@ int main(void) {
 
         /* And a plain GL command mid-document at index 0 — the
          * widened contract allows insertion at the very top. */
-        repl_state_edit_line_set(0);
+        editor_state_edit_line_set(0);
         editor_insert_mode_set(0);
         err[0] = '\0';
         ASSERT_TRUE("[Phase 0] top-of-doc insert succeeds",

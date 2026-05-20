@@ -50,7 +50,7 @@ static int parse_for_test(const char *line, GLCmd *cmd) {
     char err_buf[REPL_STATUS_TEXT_MAX];
     err_buf[0] = '\0';
     ReplParseContext ctx = {
-        .source_line_idx = repl_state_edit_line(),
+        .source_line_idx = editor_state_edit_line(),
         .err_buf = err_buf,
         .err_sz  = (int)sizeof(err_buf),
     };
@@ -66,7 +66,7 @@ static int parse_for_test_with_vars(const char *line, GLCmd *cmd,
     char err_buf[REPL_STATUS_TEXT_MAX];
     err_buf[0] = '\0';
     ReplParseContext ctx = {
-        .source_line_idx = repl_state_edit_line(),
+        .source_line_idx = editor_state_edit_line(),
         .vars = vars, .num_vars = num_vars,
         .err_buf = err_buf,
         .err_sz  = (int)sizeof(err_buf),
@@ -214,7 +214,7 @@ int main(void) {
         glr_app_reset_all();
         declare_test_vars();
         editor_feed_line("glBegin(GL_TRIANGLES);");
-        repl_state_edit_line_set(0);
+        editor_state_edit_line_set(0);
 
         GLCmd cmd;
         ReplParseContext ctx = { repl_state_document_count(), NULL, 0, 0 };
@@ -223,14 +223,14 @@ int main(void) {
         ASSERT_TRUE("context parse ok", ok == 1);
         ASSERT_TRUE("context parse uses source line indent",
                     leading_spaces(pl.text) == 4);
-        ASSERT_TRUE("context parse leaves edit line alone", repl_state_edit_line() == 0);
+        ASSERT_TRUE("context parse leaves edit line alone", editor_state_edit_line() == 0);
 
         memset(&cmd, 0, sizeof(cmd));
         ok = repl_parse_and_normalize("glColor3f(1, 0, 0)", repl_state_document_count(),
                                       NULL, 0, 0, &cmd, NULL, 0);
         ASSERT_TRUE("normalize explicit line ok", ok == 1);
         ASSERT_TRUE("normalize explicit line leaves edit line alone",
-                    repl_state_edit_line() == 0);
+                    editor_state_edit_line() == 0);
     }
 
     {
@@ -263,7 +263,7 @@ int main(void) {
     {
         glr_app_reset_all();
         declare_test_vars();
-        repl_state_edit_line_set(0);
+        editor_state_edit_line_set(0);
         GLCmd cmd;
         memset(&cmd, 0, sizeof(cmd));
         int ok = parse_for_test("glBegin(GL_TRIANGLES)", &cmd);
@@ -274,7 +274,7 @@ int main(void) {
     {
         glr_app_reset_all();
         declare_test_vars();
-        repl_state_edit_line_set(0);
+        editor_state_edit_line_set(0);
         GLCmd cmd;
         char cmd_text[MAX_LINE_LEN] = "";
         memset(&cmd, 0, sizeof(cmd));

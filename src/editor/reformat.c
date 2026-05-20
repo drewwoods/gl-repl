@@ -17,7 +17,7 @@
 #include "state.h"
 
 void editor_reformat_commands(void) {
-    int saved_edit_line = repl_state_edit_line();
+    int saved_edit_line = editor_state_edit_line();
     int saved_inserting = editor_insert_mode();
     char saved_input[MAX_INPUT_LEN];
     int saved_input_len = editor_state_input().input_len;
@@ -26,8 +26,8 @@ void editor_reformat_commands(void) {
 
     repl_reformat_program();
 
-    repl_state_edit_line_set(saved_edit_line);
-    repl_state_edit_line_clamp();
+    editor_state_edit_line_set(saved_edit_line);
+    editor_state_edit_line_clamp();
     editor_insert_mode_set(saved_inserting);
     if (saved_inserting) {
         EditorInputState *inp = editor_state_input_mut();
@@ -35,6 +35,6 @@ void editor_reformat_commands(void) {
         inp->input_len = saved_input_len;
         editor_cursor_pos_set(saved_cursor_pos);
     } else {
-        editor_load_line_to_input(repl_state_edit_line());
+        editor_load_line_to_input(editor_state_edit_line());
     }
 }

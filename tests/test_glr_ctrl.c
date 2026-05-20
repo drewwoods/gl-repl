@@ -185,7 +185,7 @@ static void prepare_display_fixture(void) {
              0.2f, 0.4f, 0.6f);
     repl_state_document_count_set(2);
     repl_state_flat_program_set_count(2);
-    repl_state_edit_line_set(repl_state_document_count());
+    editor_state_edit_line_set(repl_state_document_count());
     editor_input_set_text("glColor3f(0.2, 0.4, 0.6);");
     editor_cursor_pos_set(7);
 

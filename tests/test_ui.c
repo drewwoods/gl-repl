@@ -792,7 +792,7 @@ static void test_ui_panels_hit_test_insert_line(void) {
     /* Commit one line so insert mode at edit_line=0 produces an
      * insertion ghost row above it. */
     editor_feed_line("glBegin(GL_POINTS);");
-    repl_state_edit_line_set(0);
+    editor_state_edit_line_set(0);
     editor_insert_mode_set(1);
 
     /* The insert ghost row sits at doc_line == header_rows (the
@@ -805,7 +805,7 @@ static void test_ui_panels_hit_test_insert_line(void) {
     ASSERT_TRUE("insert-mode ghost row hit kind",
                 h.kind == UI_HIT_CODE_INSERT_LINE);
     ASSERT_INT("insert-line line_idx == edit_line",
-               h.line_idx, repl_state_edit_line());
+               h.line_idx, editor_state_edit_line());
 
     editor_insert_mode_set(0);
 }
@@ -815,7 +815,7 @@ static void test_ui_panels_hit_test_overwrite_row_kind(void) {
     ui_state_viewport_set_size(800, 600);
 
     editor_feed_line("glBegin(GL_POINTS);");
-    repl_state_edit_line_set(0);
+    editor_state_edit_line_set(0);
     editor_insert_mode_set(0);
 
     int mx, my;
@@ -878,7 +878,7 @@ static void test_ui_panels_hit_test_trailing_blank_row_kind(void) {
 
         editor_feed_line("glBegin(GL_POINTS);");
         editor_feed_line("glEnd();");
-        repl_state_edit_line_set(0);
+        editor_state_edit_line_set(0);
         editor_insert_mode_set(0);
 
         ui_layout_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
@@ -917,7 +917,7 @@ static void test_ui_panels_hit_test_virtual_row_routes_to_source(void) {
         editor_feed_line("glEnd();");
         editor_state_virtual_lines_append(0, VIRTUAL_STYLE_REPLAY_EVAL,
                                           "replay eval", "");
-        repl_state_edit_line_set(1);
+        editor_state_edit_line_set(1);
 
         ui_layout_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
         build_test_code_panel_layout(&layout, cp_w, text_x, cp_h);
@@ -936,7 +936,7 @@ static void test_ui_panels_hit_test_virtual_row_routes_to_source(void) {
             glr_ctrl_router_handle_code_panel_hit(h, mx, my);
             snprintf(lbl, sizeof lbl,
                      "virtual row click navigates to source line%s", mode);
-            ASSERT_TRUE(lbl, repl_state_edit_line() == 0);
+            ASSERT_TRUE(lbl, editor_state_edit_line() == 0);
         }
     }
 }
@@ -962,7 +962,7 @@ static void test_vertex2f_gutter_labels(void) {
     editor_feed_line("glVertex2f(1, 2);");
     editor_feed_line("glEnd();");
     /* Cursor on glEnd so glVertex2f is a non-edit row with a visible gutter */
-    repl_state_edit_line_set(2);
+    editor_state_edit_line_set(2);
 
     /* The workspace header can be many rows long in builds with full REPL
      * state (e.g. stubs with bootstrap commands), so scroll=0 may not show
@@ -1002,7 +1002,7 @@ static void test_vertex2f_gutter_labels(void) {
     editor_feed_line("glBegin(GL_TRIANGLES);");
     editor_feed_line("glVertex3f(1, 2, 0);");
     editor_feed_line("glEnd();");
-    repl_state_edit_line_set(2);
+    editor_state_edit_line_set(2);
 
     editor_scroll_follow_cursor_set(1);
     {

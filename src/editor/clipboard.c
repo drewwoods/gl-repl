@@ -105,10 +105,10 @@ static int current_copy_range(int *out_start, int *out_count,
     int block_start;
     int block_count;
 
-    if (repl_state_edit_line() >= repl_state_document_count())
+    if (editor_state_edit_line() >= repl_state_document_count())
         return 0;
 
-    start = repl_state_edit_line();
+    start = editor_state_edit_line();
     if (repl_source_scope_block_extent(start, &block_start, &block_count)) {
         start = block_start;
         count = block_count;
@@ -131,10 +131,10 @@ static int current_cut_range(int *out_start, int *out_count) {
     if (editor_clipboard_sel_active())
         return selected_cmd_range(out_start, out_count);
 
-    if (repl_state_edit_line() >= repl_state_document_count())
+    if (editor_state_edit_line() >= repl_state_document_count())
         return 0;
 
-    start = repl_state_edit_line();
+    start = editor_state_edit_line();
     if (repl_source_scope_block_extent(start, &block_start, &block_count)) {
         start = block_start;
         count = block_count;
@@ -273,7 +273,7 @@ void editor_clipboard_copy_current(void) {
                      editor_state_clipboard_count() > 1 ? "s" : "");
             repl_set_status(msg);
         }
-    } else if (repl_state_edit_line() < repl_state_document_count()) {
+    } else if (editor_state_edit_line() < repl_state_document_count()) {
         int start;
         int count;
         int copying_block = 0;
@@ -357,7 +357,7 @@ void editor_clipboard_paste_current(void) {
     }
 
     int n = repl_state_document_count();
-    int edit = repl_state_edit_line();
+    int edit = editor_state_edit_line();
     int pos = editor_insert_mode() ? edit : (edit < n ? edit : n);
 
     /* The tutorial read-only guard MUST run before the undo push: a
@@ -376,7 +376,7 @@ void editor_clipboard_paste_current(void) {
      * partial document grows. */
     editor_undo_push_snapshot();
 
-    repl_state_edit_line_set(pos);
+    editor_state_edit_line_set(pos);
     editor_insert_mode_set(1);
 
     /* Snapshot the clipboard text before feeding — defensive against
@@ -401,7 +401,7 @@ void editor_clipboard_paste_current(void) {
      * unmodified-line Enter leaves insert_mode set with no doc mutation,
      * so saved_insert was 1 and the following line got staged.) */
     editor_insert_mode_set(0);
-    editor_load_line_to_input(repl_state_edit_line());
+    editor_load_line_to_input(editor_state_edit_line());
     repl_mark_normals_dirty();
 
     {

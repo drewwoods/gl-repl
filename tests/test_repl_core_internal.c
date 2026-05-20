@@ -372,13 +372,13 @@ int main() {
          * the previous test's intent (clamp to count). */
         ASSERT_INT("command_store_load ok",
                    repl_command_store_load(&store, loaded, 2), 1);
-        if (repl_state_edit_line() > repl_state_document_count())
-            repl_state_edit_line_set(repl_state_document_count());
+        if (editor_state_edit_line() > repl_state_document_count())
+            editor_state_edit_line_set(repl_state_document_count());
         editor_buffer_load_lines(loaded_lines, 2);
         ASSERT_INT("command_store_load count", repl_state_document_count(), 2);
         ASSERT_INT("command_store_load state count",
                    repl_state_document_count(), 2);
-        ASSERT_INT("command_store_load edit clamp", repl_state_edit_line(), 2);
+        ASSERT_INT("command_store_load edit clamp", editor_state_edit_line(), 2);
         ASSERT_STR("command_store_load source", editor_buffer_line(1),
                    "glColor3f(1, 0, 0);");
         ASSERT_STR("command_store_load state source",
