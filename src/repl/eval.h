@@ -244,6 +244,14 @@ int   repl_eval_parse_exprs(const char *s, float *out, int max,
  * the next slot. */
 const char *repl_scan_next_arg_delim(const char *s);
 
+/* Given p pointing INSIDE an open paren (i.e., one past `(`), advance to
+ * the matching `)`. Internal commas at the same paren depth are treated
+ * as part of the payload (use repl_scan_next_arg_delim for arg-splitting
+ * instead). Returns p at the matching `)` on success, or at the
+ * end-of-string when the paren was unmatched — callers test `*p == ')'`
+ * to distinguish. */
+const char *repl_scan_to_matching_paren(const char *p);
+
 /* ---- Expression translation: REPL <-> C syntax ----------------------- */
 
 /* Translate REPL expression (sin, cos, etc.) to C (sinf, cosf, etc.).
