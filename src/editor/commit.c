@@ -847,6 +847,7 @@ ReplCompileResult editor_compile_for_loop(const char *input,
                                           char *err, int err_size) {
     if (!ctx || !out) return REPL_COMPILE_ERROR;
 
+    EditorServices svc = editor_services_default();
     editor_commit_plan_init(out);
 
     const char *p = input ? input : "";
@@ -1048,7 +1049,7 @@ ReplCompileResult editor_compile_for_loop(const char *input,
         .err_sz          = (int)sizeof(body_err),
     };
     ReplParsedLine body_pl;
-    if (!repl_parser_parse_command_ctx(body, &body_pl, &parse_ctx)) {
+    if (!svc.parse_command_ctx(body, &body_pl, &parse_ctx, svc.user)) {
         if (body_err[0])
             snprintf(err, (size_t)err_size, "for-loop body: %s", body_err);
         else

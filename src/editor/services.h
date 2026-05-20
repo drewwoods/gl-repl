@@ -23,6 +23,7 @@
 #define EDITOR_SERVICES_H
 
 #include "repl/compile.h"
+#include "repl/parser.h"
 
 typedef struct EditorServices_s {
     /* Build a ReplCompileContext snapshot for the current frame.
@@ -54,6 +55,14 @@ typedef struct EditorServices_s {
     /* Replay scratch-array side-effects against the evaluator's bound
      * scratch storage. */
     void (*apply_scratch_ops)(const ReplCompiledChange *change, void *user);
+
+    /* Pure parser entry. Routed through services because the demo
+     * shim needs a no-op alternative — there's no trivial inline
+     * stub for "parse a GL command line." Returns 1 on success
+     * (out->cmd + out->text populated), 0 on parse error (diagnostic
+     * written to ctx->err_buf when provided). */
+    int  (*parse_command_ctx)(const char *line, ReplParsedLine *out,
+                              const ReplParseContext *ctx, void *user);
 
     void *user;
 } EditorServices;
