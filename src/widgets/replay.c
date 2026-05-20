@@ -2,7 +2,6 @@
  * replay.c - Replay state machine, fade batches, and replay input.
  */
 #include "widgets/replay.h"
-#include "editor/state.h"       /* editor_state_edit_line */
 #include "repl/core_internal.h"
 #include "repl/pipeline.h"
 #include <keys.h>
@@ -755,7 +754,7 @@ int replay_seek_to_src_line(int target_line) {
         float live_scratch_arrays[REPL_SCRATCH_ARRAY_COUNT][REPL_SCRATCH_ARRAY_LEN] = { { 0.0f } };
         repl_copy_predef_values(live_predef_vals, MAX_PREDEF_VARS);
         repl_eval_copy_scratch_arrays(live_scratch_arrays);
-        repl_flatten_commands(editor_state_edit_line());
+        repl_flatten_commands(repl_dispatch_edit_line_get());
         repl_state_flat_program_clear_dirty();
         repl_restore_predef_values(live_predef_vals, MAX_PREDEF_VARS);
         repl_eval_restore_scratch_arrays(live_scratch_arrays);
@@ -804,7 +803,7 @@ void replay_start(void) {
     repl_copy_predef_values(live_predef_vals, MAX_PREDEF_VARS);
     repl_eval_copy_scratch_arrays(live_scratch_arrays);
     if (repl_state_flat_program_dirty()) {
-        repl_flatten_commands(editor_state_edit_line());
+        repl_flatten_commands(repl_dispatch_edit_line_get());
         repl_state_flat_program_clear_dirty();
         repl_restore_predef_values(live_predef_vals, MAX_PREDEF_VARS);
         repl_eval_restore_scratch_arrays(live_scratch_arrays);
@@ -973,7 +972,7 @@ int replay_handle_key_impl(unsigned char key) {
             return 1;
         }
         if (key == KEY_CTRL_K) {
-            int target_line = editor_state_edit_line();
+            int target_line = repl_dispatch_edit_line_get();
             replay_start();
             if (g_replay_active) {
                 int landed = replay_seek_to_src_line(target_line);
@@ -997,7 +996,7 @@ int replay_handle_key_impl(unsigned char key) {
         return 1;
     }
     if (key == KEY_CTRL_K) {
-        int landed = replay_seek_to_src_line(editor_state_edit_line());
+        int landed = replay_seek_to_src_line(repl_dispatch_edit_line_get());
         if (landed < 0) {
             repl_set_status("Jump: no geometry at or after cursor");
         } else {

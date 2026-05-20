@@ -2,14 +2,17 @@
 #
 # Counts unique `repl_*(` symbols called from each editor file.
 # These are the direct REPL coupling that tools/editor_demo/repl_shim.c
-# has to stub. Phase 6 landed the demo with the larger initial shim
-# ledger; subsequent phases ratchet this surface down by migrating
-# call sites through coarser EditorServices callbacks.
+# used to have to stub (the shim was deleted in Phase 5 of
+# plans/done/edit-line-ownership.md after the storage flip removed
+# its last forwarders). Subsequent phases ratchet this surface down
+# by migrating call sites through coarser EditorServices callbacks.
 #
-# Recorded 2026-05-20 (post-Phase 6, post-parse_command_ctx migration).
+# Recorded 2026-05-21 (post Phase 5 of edit-line-ownership.md — the
+# storage flip dropped input.c from 22→20 and commit.c from 30→28
+# by removing repl_state_edit_line / _set references).
 #
 # Ratchet down as migrations land. The plan target
-# (plans/active/editor-demo.md) is ~5 per file.
+# (plans/done/editor-demo.md) is ~5 per file.
 
-input_c: 22
-commit_c: 30
+input_c: 20
+commit_c: 28

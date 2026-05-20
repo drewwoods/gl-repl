@@ -194,16 +194,16 @@ lists to make the layer boundaries observable:
   `clipboard.c`, `undo.c`, `reformat.c`, `search.c`, `completion.c`
   and the inline overlays — all REPL-flavored controllers, none
   linked by the demo. What *is* linked: `src/editor/state.c` (text
-  buffer + cursor + selection data model),
+  buffer + cursor + selection + document data model),
   `src/editor/edit_ops.c` (generic primitives — char insert/delete,
   selection consume, used by both `src/editor/input.c` and
   `tools/editor_demo/input.c`), `src/ui/text_panel.c` + its layout
-  / search helpers, `prof.c`. The shim
-  (`tools/editor_demo/repl_shim.c`) is a one-symbol ledger:
-  `repl_state_edit_line`, the last acknowledged leak in
-  `state.c`'s `EditorInputView` builder, will go away when a
-  follow-up phase moves edit-line ownership into `EditorState`.
-  Any second shim entry is a layering-regression signal.
+  / search helpers, `prof.c`. The demo is shim-free as of
+  `plans/done/edit-line-ownership.md` Phase 5 — edit-line ownership
+  moved to `EditorState.document.edit_line_idx`, the
+  `tools/editor_demo/repl_shim.c` ledger file is gone, and the
+  demo's input dispatcher reaches edit-line through
+  `editor_state_edit_line` / `_set` like the REPL editor does.
 
 All three demos default to `USE_GL_STUBS=1`-friendly object lists.
 Run `./repl_demo` for a parse/flatten summary of the built-in samples;
