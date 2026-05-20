@@ -38,13 +38,15 @@ void display() {
   glEnable(GL_MULTISAMPLE);
   glDisable(GL_LINE_SMOOTH);
 --- camera ---
-  glTranslatef(0.0000f, 0.0000f, -5.5000f);
-  glRotatef(18.0000f, 1.0f, 0.0f, 0.0f);
-  glRotatef(32.0000f, 0.0f, 1.0f, 0.0f);
+  glTranslatef(0.0000f, 0.0000f, -5.0000f);
+  glRotatef(20.0000f, 1.0f, 0.0f, 0.0f);
+  glRotatef(30.0000f, 0.0f, 1.0f, 0.0f);
   glTranslatef(-0.0000f, -0.0000f, -0.0000f);
 --- header_post ---
 --- source ---
   static float n, b, x, y, z, a;
+
+  // @cfg vertex_points = 0
   glClearColor(0.1, 0.1, 0.1, 1);
   // Waves: nested for-loops + math
   glEnable(GL_DEPTH_TEST);

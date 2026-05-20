@@ -38,12 +38,13 @@ void display() {
   glEnable(GL_MULTISAMPLE);
   glDisable(GL_LINE_SMOOTH);
 --- camera ---
-  glTranslatef(0.0000f, 0.0000f, -5.5000f);
-  glRotatef(18.0000f, 1.0f, 0.0f, 0.0f);
-  glRotatef(32.0000f, 0.0f, 1.0f, 0.0f);
+  glTranslatef(0.0000f, 0.0000f, -6.0000f);
+  glRotatef(10.0000f, 1.0f, 0.0f, 0.0f);
+  glRotatef(10.0000f, 0.0f, 1.0f, 0.0f);
   glTranslatef(-0.0000f, -0.0000f, -0.0000f);
 --- header_post ---
 --- source ---
+
   glClearColor(0.1, 0.1, 0.1, 1);
   glEnable(GL_DEPTH_TEST);
   glBegin(GL_LINE_LOOP);

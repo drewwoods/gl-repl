@@ -33,6 +33,12 @@
 
 /* Example 0: Lit cube (default) */
 static const char *const g_example_cube[] = {
+    "// camera",
+    "glTranslatef(0.0f, 0.0f, -6.0f);",
+    "glRotatef(20.0f, 1.0f, 0.0f, 0.0f);",
+    "glRotatef(35.0f, 0.0f, 1.0f, 0.0f);",
+    "glTranslatef(0.0f, 0.0f, 0.0f);",
+    "",
     "glClearColor(0.1, 0.1, 0.1, 1.0);",
     "glEnable(GL_DEPTH_TEST);",
     "glEnable(GL_LIGHTING);",
@@ -69,6 +75,12 @@ static const char *const g_example_cube[] = {
 
 /* Example 1: Animated ring - for-loop + t variable */
 static const char *const g_example_ring[] = {
+    "// camera",
+    "glTranslatef(0.0f, 0.0f, -6.0f);",
+    "glRotatef(10.0f, 1.0f, 0.0f, 0.0f);",
+    "glRotatef(10.0f, 0.0f, 1.0f, 0.0f);",
+    "glTranslatef(0.0f, 0.0f, 0.0f);",
+    "",
     "glClearColor(0.1, 0.1, 0.1, 1.0);",
     "glEnable(GL_DEPTH_TEST);",
     "glBegin(GL_LINE_LOOP);",
@@ -91,6 +103,11 @@ static const char *const g_example_ring[] = {
 /* Example 2: Function demo - define a named reusable function (alias for a
  * funcN slot), call it repeatedly with transforms between calls. */
 static const char *const g_example_func[] = {
+    "// camera",
+    "glTranslatef(0.0f, 0.0f, -3.0f);",
+    "glRotatef(0.0f, 1.0f, 0.0f, 0.0f);",
+    "glRotatef(0.0f, 0.0f, 1.0f, 0.0f);",
+    "glTranslatef(0.0f, 0.0f, 0.0f);",
     "// @cfg vertex_points = 0",
     "glClearColor(0.1, 0.1, 0.1, 1.0);",
     "glEnable(GL_DEPTH_TEST);",
@@ -115,6 +132,11 @@ static const char *const g_example_func[] = {
 
 /* Example 3: Parametric polygon helper - function args driving local for-loops */
 static const char *const g_example_func_loop[] = {
+    "// camera",
+    "glTranslatef(0.0f, 0.0f, -4.0f);",
+    "glRotatef(0.0f, 1.0f, 0.0f, 0.0f);",
+    "glRotatef(0.0f, 0.0f, 1.0f, 0.0f);",
+    "glTranslatef(0.0f, 0.0f, 0.0f);",
     "glClearColor(0.1, 0.1, 0.1, 1.0);",
     "glEnable(GL_DEPTH_TEST);",
     "glEnable(GL_NORMALIZE);",
@@ -145,6 +167,11 @@ static const char *const g_example_func_loop[] = {
 
 /* Example 4: Branching helper - function args driving local if-blocks */
 static const char *const g_example_func_if[] = {
+    "// camera",
+    "glTranslatef(0.0f, 0.0f, -4.0f);",
+    "glRotatef(0.0f, 1.0f, 0.0f, 0.0f);",
+    "glRotatef(0.0f, 0.0f, 1.0f, 0.0f);",
+    "glTranslatef(0.0f, 0.0f, 0.0f);",
     "glClearColor(0.1, 0.1, 0.1, 1.0);",
     "glEnable(GL_DEPTH_TEST);",
     "glEnable(GL_NORMALIZE);",
@@ -187,6 +214,12 @@ static const char *const g_example_func_if[] = {
 static const char *const g_example_func_recurse[] = {
     "// @cfg vertex_outlines = 0",
     "// @cfg vertex_points = 0",
+    "// camera",
+    "glTranslatef(0.0f, 0.0f, -6.0f);",
+    "glRotatef(0.0f, 1.0f, 0.0f, 0.0f);",
+    "glRotatef(0.0f, 0.0f, 1.0f, 0.0f);",
+    "glTranslatef(0.0f, 0.0f, 0.0f);",
+    "",
     "glClearColor(0.1, 0.1, 0.1, 1.0);",
     "glEnable(GL_DEPTH_TEST);",
     "glEnable(GL_NORMALIZE);",
@@ -233,6 +266,11 @@ static const char *const g_example_func_recurse[] = {
 
 /* Example 6: Conditional colors - if-blocks + t variable */
 static const char *const g_example_cond[] = {
+    "// camera",
+    "glTranslatef(0.0f, 0.0f, -6.0f);",
+    "glRotatef(20.0f, 1.0f, 0.0f, 0.0f);",
+    "glRotatef(35.0f, 0.0f, 1.0f, 0.0f);",
+    "glTranslatef(0.0f, 0.0f, 0.0f);",
     "glClearColor(0.1, 0.1, 0.1, 1.0);",
     "glEnable(GL_DEPTH_TEST);",
     "glEnable(GL_NORMALIZE);",
@@ -266,6 +304,12 @@ static const char *const g_example_cond[] = {
 
 /* Example 7: Parametric torus - nested for-loops */
 static const char *const g_example_torus[] = {
+    "// camera",
+    "glTranslatef(0.0f, 0.0f, -8.0f);",
+    "glRotatef(20.0f, 1.0f, 0.0f, 0.0f);",
+    "glRotatef(35.0f, 0.0f, 1.0f, 0.0f);",
+    "glTranslatef(0.0f, 0.0f, 0.0f);",
+    "",
     "glClearColor(0.1, 0.1, 0.1, 1.0);",
     "glEnable(GL_DEPTH_TEST);",
     "//glEnable(GL_LIGHTING);",
@@ -287,6 +331,12 @@ static const char *const g_example_torus[] = {
 
 /* Example 8: GLU tessellator - concave arrow polygon with per-vertex color */
 static const char *const g_example_tess[] = {
+    "// camera",
+    "glTranslatef(0.0f, 0.0f, -6.0f);",
+    "glRotatef(10.0f, 1.0f, 0.0f, 0.0f);",
+    "glRotatef(15.0f, 0.0f, 1.0f, 0.0f);",
+    "glTranslatef(0.0f, 0.0f, 0.0f);",
+    "",
     "glClearColor(0.1, 0.1, 0.1, 1.0);",
     "glEnable(GL_DEPTH_TEST);",
     "glEnable(GL_LIGHTING);",
@@ -320,6 +370,12 @@ static const char *const g_example_tess[] = {
 
 /* Example 9: GLU tessellator - concave arrow polygon cutout */
 static const char *const g_example_tess_cutout[] = {
+    "// camera",
+    "glTranslatef(0.0f, 0.0f, -6.0f);",
+    "glRotatef(10.0f, 1.0f, 0.0f, 0.0f);",
+    "glRotatef(15.0f, 0.0f, 1.0f, 0.0f);",
+    "glTranslatef(0.0f, 0.0f, 0.0f);",
+    "",
     "static float z;",
     "glClearColor(0.1, 0.1, 0.1, 1.0);",
     "glEnable(GL_DEPTH_TEST);",
@@ -331,7 +387,7 @@ static const char *const g_example_tess_cutout[] = {
     "glFrontFace(GL_CW);",
     "z = -0.55;",
     "glRotatef(10*t, 0, 0, 1);",
-    "glScalef(0.5, 0.5, 0.5);",
+    "// glScalef(0.5, 0.5, 0.5);",
     "// Arrow shape - concave, tessellated with per-vertex color",
     "gluBegin(GLU_POLYGON);",
     "  gluBegin(GLU_CONTOUR);",
@@ -447,6 +503,11 @@ static const char *const g_example_tess_cutout[] = {
  * top-level only, not replay-safe, and not suitable for variable-driven
  * geometry loops. Keep coverage in tests/docs instead of F12 examples. */
 static const char *const g_example_assign_2d[] = {
+    "// camera",
+    "glTranslatef(0.0f, 0.0f, -2.5f);",
+    "glRotatef(0.0f, 1.0f, 0.0f, 0.0f);",
+    "glRotatef(0.0f, 0.0f, 1.0f, 0.0f);",
+    "glTranslatef(0.0f, 0.0f, 0.0f);",
     "static float x, y;",
     "glClearColor(0.1, 0.1, 0.1, 1.0);",
     "// 2D assignment sketch: tests runtime variable assignment without goto",
@@ -467,6 +528,13 @@ static const char *const g_example_assign_2d[] = {
 static const char *const g_example_glow_particles[] = {
     "// @cfg vertex_outlines = 0",
     "// @cfg vertex_points = 0",
+    "// @cfg grid = 4",
+    "// camera",
+    "glTranslatef(0.0f, 0.0f, -5.0f);",
+    "glRotatef(15.0f, 1.0f, 0.0f, 0.0f);",
+    "glRotatef(10.0f, 0.0f, 1.0f, 0.0f);",
+    "glTranslatef(0.0f, 0.0f, 0.0f);",
+    "",
     "static float n, x, y, z, j, k;",
     "glClearColor(0.1, 0.1, 0.1, 1.0);",
     "// Glow sprites: additive blend + distance-attenuated point size",
@@ -503,41 +571,47 @@ static const char *const g_example_glow_particles[] = {
  * smooth-shaded. */
 
 static const char *const g_example_random_surface[] = {
-  "static float n, i, j, k;",
-    "glClearColor(0.1, 0.1, 0.1, 1.0);",
-  "glEnable(GL_DEPTH_TEST);",
-  "glEnable(GL_LIGHTING);",
-  "glEnable(GL_NORMALIZE);",
-  "glShadeModel(GL_SMOOTH);",
-  "glEnable(GL_LIGHT3);",
-  "// glEnable(GL_LIGHT1)",
-  "glEnable(GL_LIGHT0);",
-  "//glEnable(GL_LINE_SMOOTH)",
-  "// glDisable(GL_LIGHTING)",
-  "glPointSize(4);",
-  "glEnable(GL_BLEND);",
-  "glColor4f(0.176, 0.51392, 0.88, 0.713333);",
-  "n = 10;",
-  "glTranslatef(0, -0.25, 0);",
-  "for (x, -n, n) {",
-  "  glBegin(GL_QUAD_STRIP);",
-  "    for (z, -n, n) {",
-  "      i = rand(x,z);",
-  "      j = rand(x+1,z);",
-  "      k = 0.25 * sin((100+t/2) * (z/200+4));",
-  "      if(fmod(x, 2) == 0) {",
-  "        i = i + k;",
-  "        j = j + k;",
-  "      }",
-  "      if(abs(fmod(x,2)) == 1) {",
-  "        j = j + k;",
-  "        i = i +k;",
-  "      }",
-  "      glVertex3f(x, i, z);",
-  "      glVertex3f(x+1, j, z);",
-  "    }",
-  "  glEnd();",
-  "}",
+    "// camera",
+    "glTranslatef(0.0f, 0.0f, -12.0f);",
+    "glRotatef(30.0f, 1.0f, 0.0f, 0.0f);",
+    "glRotatef(0.0f, 0.0f, 1.0f, 0.0f);",
+    "glTranslatef(0.0f, 0.0f, 0.0f);",
+    "",
+    "static float n, i, j, k;",
+      "glClearColor(0.1, 0.1, 0.1, 1.0);",
+    "glEnable(GL_DEPTH_TEST);",
+    "glEnable(GL_LIGHTING);",
+    "glEnable(GL_NORMALIZE);",
+    "glShadeModel(GL_SMOOTH);",
+    "glEnable(GL_LIGHT3);",
+    "// glEnable(GL_LIGHT1)",
+    "glEnable(GL_LIGHT0);",
+    "//glEnable(GL_LINE_SMOOTH)",
+    "// glDisable(GL_LIGHTING)",
+    "glPointSize(4);",
+    "glEnable(GL_BLEND);",
+    "glColor4f(0.176, 0.51392, 0.88, 0.713333);",
+    "n = 10;",
+    "glTranslatef(0, -0.25, 0);",
+    "for (x, -n, n) {",
+    "  glBegin(GL_QUAD_STRIP);",
+    "    for (z, -n, n) {",
+    "      i = rand(x,z);",
+    "      j = rand(x+1,z);",
+    "      k = 0.25 * sin((100+t/2) * (z/200+4));",
+    "      if(fmod(x, 2) == 0) {",
+    "        i = i + k;",
+    "        j = j + k;",
+    "      }",
+    "      if(abs(fmod(x,2)) == 1) {",
+    "        j = j + k;",
+    "        i = i +k;",
+    "      }",
+    "      glVertex3f(x, i, z);",
+    "      glVertex3f(x+1, j, z);",
+    "    }",
+    "  glEnd();",
+    "}",
     NULL
 };
 
@@ -549,6 +623,12 @@ static const char *const g_example_random_surface[] = {
  * position and t for a shifting iridescent look. */
 
 static const char *const g_example_waves[] = {
+    "// camera",
+    "glTranslatef(0.0f, 0.0f, -5.0f);",
+    "glRotatef(20.0f, 1.0f, 0.0f, 0.0f);",
+    "glRotatef(30.0f, 0.0f, 1.0f, 0.0f);",
+    "glTranslatef(0.0f, 0.0f, 0.0f);",
+    "",
     "// @cfg vertex_points = 0",
     "static float n, b, x, y, z, a;",
     "glClearColor(0.1, 0.1, 0.1, 1.0);",
@@ -594,7 +674,7 @@ static const char *const g_example_spirograph_curve[] = {
     "glTranslatef(0.0f, 0.0f, -7.5f);",
     "glRotatef(0.0f, 1.0f, 0.0f, 0.0f);",
     "glRotatef(0.0f, 0.0f, 1.0f, 0.0f);",
-    "glTranslatef(0.0f, -0.25f, 0.0f);",
+    "glTranslatef(0.0f, 0.0f, 0.0f);",
     "static float dist, n, x, y, ang;",
     "glClearColor(0.1, 0.1, 0.1, 1.0);",
     "dist = 1.4;",
@@ -619,7 +699,7 @@ static const char *const g_example_traveling_ripple_ring[] = {
     "glTranslatef(0.0f, 0.0f, -3.5f);",
     "glRotatef(0.0f, 1.0f, 0.0f, 0.0f);",
     "glRotatef(0.0f, 0.0f, 1.0f, 0.0f);",
-    "glTranslatef(0.0f, -0.15f, 0.0f);",
+    "glTranslatef(0.0f, 0.0f, 0.0f);",
     "// Traveling ripple ring: nested for + fmod + conditional deformation",
     "static float phase, width, delta, amp, x, y;",
     "glClearColor(0.1, 0.1, 0.1, 1.0);",
@@ -977,6 +1057,12 @@ static const char *const g_example_stress[] = {
  * unrolling, function scopes, and scale-of-origin (3-axis gizmo fallback).
  * Park the cursor on any transform line to see its guide overlay. */
 static const char *const g_example_xform_stress[] = {
+    "// camera",
+    "glTranslatef(0.0f, 0.0f, -5.0f);",
+    "glRotatef(00.0f, 1.0f, 0.0f, 0.0f);",
+    "glRotatef(0.0f, 0.0f, 1.0f, 0.0f);",
+    "glTranslatef(0.0f, -0.8f, 0.0f);",
+    "",
     "glClearColor(0.08, 0.08, 0.1, 1);",
     "glEnable(GL_DEPTH_TEST);",
     "glEnable(GL_LIGHTING);",
@@ -1033,10 +1119,11 @@ static const char *const g_example_xform_stress[] = {
  * in-place interpolation step using ordinary expression math. */
 static const char *const g_example_scratch_casteljau[] = {
     "// camera",
-    "glTranslatef(0.0f, 0.0f, -10.0f);",
-    "glRotatef(18.0f, 1.0f, 0.0f, 0.0f);",
-    "glRotatef(-18.0f, 0.0f, 1.0f, 0.0f);",
-    "glTranslatef(-0.0f, -0.0f, -0.0f);",
+    "glTranslatef(0.0f, 0.0f, -8.0f);",
+    "glRotatef(0.0f, 1.0f, 0.0f, 0.0f);",
+    "glRotatef(0.0f, 0.0f, 1.0f, 0.0f);",
+    "glTranslatef(0.0f, 0.0f, 0.0f);",
+    "",
     "glClearColor(0.07, 0.08, 0.12, 1);",
     "glEnable(GL_DEPTH_TEST);",
     "glDisable(GL_LIGHTING);",
@@ -1112,7 +1199,6 @@ static const char *const g_example_annotated_orbit_plot[] = {
     "// @cfg vertex_outlines = 0",
     "// @cfg vertex_points = 0",
     "// @cfg light_indicators = 0",
-    "// @cfg grid = 9",
     "// camera",
     "glTranslatef(0.0f, 0.0f, -6.0f);",
     "glRotatef(0.0f, 1.0f, 0.0f, 0.0f);",
@@ -1214,7 +1300,7 @@ static const ReplExampleEntry g_example_entries[] = {
     { "Lit cube", g_example_cube,
       EXAMPLE_TAG_3D | EXAMPLE_TAG_POLYGONS },
     { "Animated ring (for + t)", g_example_ring,
-      EXAMPLE_TAG_2D | EXAMPLE_TAG_LINES },
+      EXAMPLE_TAG_3D | EXAMPLE_TAG_LINES },
     { "Function demo (named func)", g_example_func,
       EXAMPLE_TAG_2D | EXAMPLE_TAG_LINES },
     { "Function polygons (args + for)", g_example_func_loop,
@@ -1228,7 +1314,7 @@ static const ReplExampleEntry g_example_entries[] = {
     { "Parametric torus (nested for)", g_example_torus,
       EXAMPLE_TAG_3D | EXAMPLE_TAG_POLYGONS },
     { "GLU tessellator (concave arrow)", g_example_tess,
-      EXAMPLE_TAG_2D | EXAMPLE_TAG_POLYGONS },
+      EXAMPLE_TAG_3D | EXAMPLE_TAG_POLYGONS },
     { "GLU tessellator (concave arrow cutout)", g_example_tess_cutout,
       EXAMPLE_TAG_3D | EXAMPLE_TAG_POLYGONS },
     { "2D assignment sketch (vars only)", g_example_assign_2d,
