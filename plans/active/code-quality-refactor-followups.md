@@ -74,8 +74,14 @@ the `BUILD=debug` default landed, `make test` runs under ASan+UBSan.
 | 16 — `is_detail_section` from indent | **Merged** (#50, endorsed behavior fix) |
 | 11 — cursor-doc-line collapse | **Merged** (#52) |
 | 13 — `CP_GAP`/`CP_PREV_H` via view | **Merged** (#53) |
-| 2 — Ctrl+Q save semantics | **In review** (#55) — decision: see §2 |
-| 12+14, 15, 8, 9, 4, 7 | Not started (this order) |
+| 2 — Ctrl+Q save semantics | **Merged** (#55) — decision: see §2 |
+| 12 — color-picker drag math | **Merged** (#57) |
+| 15 — menu-bar chrome-row helper | **Merged** (#58) |
+| 8 — shared `begin_indent` helper | **Merged** (#59) |
+| 9 — `editor_input_clear()` migration | **Merged** (#60) |
+| 4 — parse-and-place dedup | **Merged** (#61) |
+| 7 — `export.c` paren scanners → `repl_scan_*` | **In review** (#62) |
+| 14 — color-picker checkerboard | Deferred-with-reason (Y-origin math differs; documented in #57) |
 | 19 — `LOAD_SCENE` | Decided (see §19); **scheduled last** (largest) |
 | 10, 18, 20, 21 | Deferred per plan |
 
