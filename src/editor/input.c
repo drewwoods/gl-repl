@@ -39,6 +39,7 @@
 #include "commit.h"
 #include "completion.h"
 #include "help_session.h"
+#include "inline_file_prompt.h"
 #include "inline_rename.h"
 #include "input.h"
 #include "reformat.h"
@@ -957,6 +958,11 @@ int editor_input_rename_capture_key(unsigned char key) {
     return editor_inline_rename_handle_key(key);
 }
 
+int editor_input_file_prompt_capture_key(unsigned char key) {
+    /* File-prompt overlay: same hard-modal contract as rename. */
+    return editor_inline_file_prompt_handle_key(key);
+}
+
 static void restore_hidden_code_panel_for_key(unsigned char key) {
     if (editor_input_code_panel_hidden()) {
         int key_mods = editor_get_modifiers();
@@ -1571,6 +1577,11 @@ int editor_input_rename_capture_special(int key) {
     /* Rename captures arrows and F-keys ahead of replay/search/navigation so
      * modal text entry cannot leak actions into the editor. */
     return editor_inline_rename_handle_special(key);
+}
+
+int editor_input_file_prompt_capture_special(int key) {
+    /* File-prompt overlay: same hard-modal contract as rename. */
+    return editor_inline_file_prompt_handle_special(key);
 }
 
 static int editor_special_restores_hidden_code_panel(int key, int mods) {

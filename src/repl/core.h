@@ -45,6 +45,16 @@ void repl_save_active_scene(const ReplExportLayout *layout);
 int  repl_save_workspace(const char *dir, const ReplExportLayout *layout);
 int  repl_load_workspace(const char *dir);
 
+/* Runtime "load file as new scene": loads `path` into a freshly-
+ * allocated user-scene slot (or slot 0 if it's empty), makes that
+ * slot the active scene, and leaves any previously-active scene in
+ * its own slot for later retrieval via the scene tabs / F12. Returns
+ * the new slot index on success, -1 on failure (file missing, parse
+ * error, all slots full and no workspace bound for eviction). On
+ * failure the previously-active scene is restored — the live document
+ * is preserved. */
+int  repl_load_scene_as_new_slot(const char *path);
+
 /* Query/set the bound workspace directory (persisted across save/load).
  * repl_workspace_dir() returns "" if not bound. repl_set_workspace_dir(NULL)
  * clears the binding. String is copied internally. */

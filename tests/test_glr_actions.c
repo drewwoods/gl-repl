@@ -6,6 +6,7 @@
 #include "widgets/replay_state.h"
 #include "ui/state.h"
 #include "editor/help_session.h"
+#include "editor/inline_file_prompt.h"
 #include "app/glr_config.h"
 #include "app/glr_audio.h"
 #include "repl/core.h"
@@ -235,10 +236,14 @@ static void test_menu_actions(void) {
 
     /* File menu */
     ASSERT_INT("File Load Scene", glr_action_menu_item_activate(GLR_MENU_FILE, GLR_FILE_ITEM_LOAD_SCENE), 1);
-    /* No glr_ctrl_set_program_name() in tests -> default "gl-repl". */
-    ASSERT_STR("Load Scene status", g_last_status,
-               "Runtime load unsupported - relaunch gl-repl <file> "
-               "or use Load Workspace");
+    /* LOAD_SCENE now opens the inline file prompt seeded with the
+     * default filename. The prompt becomes the input modal until the
+     * user commits or cancels. */
+    ASSERT_INT("Load Scene opens prompt",
+               editor_inline_file_prompt_active(), 1);
+    ASSERT_STR("Load Scene prompt seeded with default",
+               editor_inline_file_prompt_buffer(), "my_scene.c");
+    editor_inline_file_prompt_cancel();
     run_menu_action_in_temp_dir("File Save Workspace",
                                 GLR_MENU_FILE,
                                 GLR_FILE_ITEM_SAVE_WORKSPACE,

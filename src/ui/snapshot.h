@@ -118,6 +118,17 @@ typedef struct UiRenderSnapshot {
     int                         rename_active;
     char                        rename_text[UI_SCENE_TAB_NAME_MAX];
 
+    /* Inline file-load prompt. Same display-ownership contract as
+     * rename, but sourced from editor_inline_file_prompt_buffer().
+     * file_prompt_text holds the typed path; file_prompt_error holds
+     * a non-empty string after a failed commit so the renderer can
+     * surface the reason without using the regular status bar (which
+     * this prompt strip occludes). Larger text cap because file
+     * paths can include subdirectories. */
+    int                         file_prompt_active;
+    char                        file_prompt_text[256];
+    char                        file_prompt_error[192];
+
     /* F1 help overlay text content (controller-adapted from REPL help
      * text; the renderer is tabbed-overlay-shaped and feature-agnostic). */
     const struct UiOverlayContent *help_content;
