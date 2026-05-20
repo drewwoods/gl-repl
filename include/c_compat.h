@@ -23,7 +23,8 @@
 #  define STATIC_ASSERT__CAT(a, b)  STATIC_ASSERT__CAT2(a, b)
 #  define STATIC_ASSERT(expr, msg)                                       \
      typedef char STATIC_ASSERT__CAT(c_compat_static_assert_at_line_,     \
-                                     __LINE__)[(expr) ? 1 : -1]
+                                     __LINE__)[(expr) ? 1 : -1]           \
+         __attribute__((unused))
 #endif
 
 #endif /* C_COMPAT_H */
