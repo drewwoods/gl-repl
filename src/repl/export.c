@@ -1093,12 +1093,7 @@ static void write_for_begin_as_c(FILE *f, const GLCmd *cmd,
         while (*hp && *hp != ')' && nargs < 3) {
             while (*hp && isspace((unsigned char)*hp)) hp++;
             const char *as = hp;
-            int depth = 0;
-            while (*hp && !(*hp == ',' && depth == 0) && !(*hp == ')' && depth == 0)) {
-                if (*hp == '(') depth++;
-                else if (*hp == ')') depth--;
-                hp++;
-            }
+            hp = repl_scan_next_arg_delim(hp);
             int alen = (int)(hp - as);
             while (alen > 0 && isspace((unsigned char)as[alen - 1])) alen--;
             if (alen > dsizes[nargs] - 1) alen = dsizes[nargs] - 1;
@@ -1183,13 +1178,8 @@ int repl_extract_paren_payload(const char *src, char *out, int out_sz) {
     if (!p) return 0;
     p++;
     const char *start = p;
-    int depth = 1;
-    while (*p && depth > 0) {
-        if (*p == '(') depth++;
-        else if (*p == ')') depth--;
-        if (depth > 0) p++;
-    }
-    if (depth != 0) return 0;
+    p = repl_scan_to_matching_paren(p);
+    if (*p != ')') return 0;
     int n = (int)(p - start);
     if (n > out_sz - 1) n = out_sz - 1;
     memcpy(out, start, (size_t)n);
@@ -1218,15 +1208,7 @@ int extract_for_args_text(const char *src,
     p++;
 
     const char *start = p;
-    int depth = 0;
-    while (*p) {
-        if (*p == '(') depth++;
-        else if (*p == ')') {
-            if (depth == 0) break;
-            depth--;
-        }
-        p++;
-    }
+    p = repl_scan_to_matching_paren(p);
     if (*p != ')') return 0;
 
     int n = (int)(p - start);
@@ -1351,13 +1333,8 @@ int parse_repl_func_signature(const char *src, int *fn,
     if (*p != '(') return 0;
 
     const char *payload_start = ++p;
-    int depth = 1;
-    while (*p && depth > 0) {
-        if (*p == '(') depth++;
-        else if (*p == ')') depth--;
-        if (depth > 0) p++;
-    }
-    if (depth != 0) return 0;
+    p = repl_scan_to_matching_paren(p);
+    if (*p != ')') return 0;
 
     char payload[MAX_LINE_LEN];
     int n = (int)(p - payload_start);
@@ -1390,13 +1367,8 @@ int extract_func_call_args_text(const char *src, int *fn,
     if (*p != '(') return 0;
     p++;
     const char *start = p;
-    int depth = 1;
-    while (*p && depth > 0) {
-        if (*p == '(') depth++;
-        else if (*p == ')') depth--;
-        if (depth > 0) p++;
-    }
-    if (depth != 0) return 0;
+    p = repl_scan_to_matching_paren(p);
+    if (*p != ')') return 0;
 
     int n = (int)(p - start);
     if (n > args_sz - 1) n = args_sz - 1;
@@ -1593,19 +1565,7 @@ static int split_top_level_args(const char *src, char args[][MAX_LINE_LEN], int 
             return -1;
 
         const char *start = p;
-        int depth = 0;
-        while (*p) {
-            if (*p == '(')
-                depth++;
-            else if (*p == ')') {
-                if (depth == 0)
-                    break;
-                depth--;
-            } else if (*p == ',' && depth == 0) {
-                break;
-            }
-            p++;
-        }
+        p = repl_scan_next_arg_delim(p);
 
         int n = (int)(p - start);
         if (n > MAX_LINE_LEN - 1)
@@ -2646,13 +2606,8 @@ static int import_make_repl_func_header(const char *line, char *out, int out_sz)
         return 0;
     p++;
     const char *start = p;
-    int depth = 1;
-    while (*p && depth > 0) {
-        if (*p == '(') depth++;
-        else if (*p == ')') depth--;
-        if (depth > 0) p++;
-    }
-    if (depth != 0)
+    p = repl_scan_to_matching_paren(p);
+    if (*p != ')')
         return 0;
 
     char payload[MAX_LINE_LEN];

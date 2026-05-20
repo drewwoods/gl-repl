@@ -988,6 +988,17 @@ const char *repl_scan_next_arg_delim(const char *s) {
     return s;
 }
 
+const char *repl_scan_to_matching_paren(const char *p) {
+    while (*p) {
+        p = repl_scan_next_arg_delim(p);
+        if (*p == ')' || *p == '\0') break;
+        /* *p == ',' — internal top-level comma; skip and continue
+         * scanning. The matching close lies past further commas. */
+        p++;
+    }
+    return p;
+}
+
 /* ========================================================================= */
 /* Expression translation: REPL <-> C                                         */
 /* ========================================================================= */
