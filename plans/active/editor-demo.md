@@ -87,36 +87,30 @@ follow-up phase:
 
 ### What the demo currently is — and isn't
 
-The real-GL `editor_demo` build opens a minimal GLUT window wired to
-`editor_handle_key` / `editor_handle_special`, but the display
-callback **only clears and swaps**. It does not yet build a
-`UiTextPanelSnapshot` or call `ui_text_panel_render`, so the window
-shows nothing meaningful — keystrokes flow into the editor state but
-nothing comes back out visually. That makes the current proof weaker
-than intended: "the editor module set links without REPL" is solid,
-but "the editor module set actually drives a text panel without REPL"
-is unproven.
+The real-GL `editor_demo` build opens a GLUT window driven by the
+demo's own generic dispatcher (`tools/editor_demo/input.c`) and
+File menu (`tools/editor_demo/menu.c`). The display callback
+builds a `UiTextPanelSnapshot` from `EditorState` (one TEXT row per
+buffer line, an INPUT row at `edit_line`) and renders through
+`ui_text_panel_render`. Typing inserts characters via
+`edit_op_type_char`, backspace via `edit_op_backspace`, arrow keys
+move the cursor within the input row, and the File menu opens to
+Load / Save / Quit (Load and Save are unimplemented v1 handlers
+that log; Quit calls exit). No `editor_handle_key` /
+`editor_handle_special` from the REPL editor is involved.
 
-The `repl_shim.c` ledger is also larger than the long-term target.
-It currently stubs:
-- ~30 `repl_*` symbols (state, command store, compile, apply, eval,
-  func_alias, source_scope, line predicates, misc).
-- 4 editor-internal helpers defined in `src/repl/core.c` but called
-  from `src/editor/commit.c`.
-- 10 `tutorial_*` symbols (chrome is editor-inherent but
-  `src/widgets/tutorial.c` transitively pulls in REPL, so the demo
-  stubs the API surface instead of linking the module).
-- 11 `ui_*` symbols (same transitive-REPL reason).
-- 6 `glr_*` symbols (genuinely upward chrome reach).
-- 1 `color_picker_*` symbol.
+The `repl_shim.c` ledger is **one symbol**:
+- `repl_state_edit_line` — the acknowledged `state.c`
+  `EditorInputView` leak. A follow-up phase moves edit-line
+  ownership into `EditorState` and the stub vanishes.
 
-Total: ~85 unique shim symbols. The plan's "Draft Total Shim Surface"
-estimated ~40; the gap is mostly the tutorial / ui chrome surface
-that the chrome-stays-direct decision *would* have linked directly
-if those modules didn't transitively need REPL. That's a finding,
-not a regression: the next iteration either (a) shrinks those
-widget/UI modules' transitive REPL deps so they can link in the
-demo, or (b) keeps stubbing them and accepts the larger shim.
+The prior shim's ~85 symbols (REPL state / command_store / compile /
+apply / eval / func_alias / source_scope / line predicates, plus
+tutorial / color_picker / ui_* / glr_*) are gone — those stubs
+existed to satisfy the REPL-flavored editor controller files
+(`input.c`, `commit.c`, `clipboard.c`, `undo.c`, `reformat.c`,
+`search.c`, `completion.c`, and the inline overlays), which Phase
+8.7 dropped from the demo's link set entirely.
 
 ## Updated direction (2026-05-20) — generic text editor demo + shared edit_ops
 
