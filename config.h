@@ -183,6 +183,21 @@
 #define MAX_COMMIT_CMDS 16
 #endif
 
+/* Default filename suggested by the "Load Scene…" file prompt
+ * (File menu → Load Scene, src/app/glr_actions.c). Also the seed value
+ * the prompt's inline-file-prompt module documents in its header. */
+#ifndef DEFAULT_SCENE_FILE
+#define DEFAULT_SCENE_FILE "my_scene.c"
+#endif
+
+/* Quit-safeguard recovery filename. On Ctrl+Q (or SIGINT) the controller
+ * writes a recovery copy of the live scene here so an unintended exit
+ * never silently clobbers the user's real scene. Reload with
+ * `./sample quit-recovery.c`. See src/app/glr_ctrl.c. */
+#ifndef QUIT_RECOVERY_FILE
+#define QUIT_RECOVERY_FILE "quit-recovery.c"
+#endif
+
 /* Polygon-offset depth-bias constants for the outline pass. Shared by
  * the live app controller (src/app/glr_ctrl.c) and the export path
  * (src/repl/export.c) so both rendering modes use the same depth bias

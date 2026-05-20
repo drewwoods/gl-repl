@@ -41,7 +41,7 @@
 int  editor_inline_file_prompt_active(void);
 
 /* Open the file prompt and seed it with `default_name` (e.g.
- * "my_scene.c"). Returns 1 on success; 0 only if the module is already
+ * DEFAULT_SCENE_FILE from config.h). Returns 1 on success; 0 only if the module is already
  * active (begin while open is a no-op rather than a reset, mirroring
  * the conservative rename idiom). */
 int  editor_inline_file_prompt_begin(const char *default_name);

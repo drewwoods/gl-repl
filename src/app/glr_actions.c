@@ -7,6 +7,7 @@
  * item actions that touch scenes, files, replay, audio, or presentation state.
  */
 #include "app/glr_actions.h"
+#include "config.h"                  /* DEFAULT_SCENE_FILE */
 #include "app/glr_ctrl.h"            /* glr_ctrl_sync_ui_chrome */
 #include "app/glr_state.h"           /* presentation/render storage (step 7a) */
 #include "app/glr_camera.h"          /* camera focus-origin / reset (eased) */
@@ -541,7 +542,7 @@ int glr_cfg_handle_special_shortcut(int key) {
 int glr_action_menu_item_activate(int menu_id, int item_idx) {
     if (menu_id == GLR_MENU_FILE) {
         if (item_idx == GLR_FILE_ITEM_LOAD_SCENE) {
-            editor_inline_file_prompt_begin("my_scene.c");
+            editor_inline_file_prompt_begin(DEFAULT_SCENE_FILE);
             return 1;
         }
         if (item_idx == GLR_FILE_ITEM_SAVE_WORKSPACE) {
