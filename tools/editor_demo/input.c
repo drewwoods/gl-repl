@@ -39,14 +39,11 @@
 #include <stdlib.h>
 #include <string.h>
 
-/* Edit-line cursor through the editor accessor. Phase 3.5 of
- * plans/in-review/edit-line-ownership.md switched the demo from
- * the demo-local demo_edit_line_set / repl_state_edit_line shim
- * pair to the canonical editor_state_edit_line / _set; the shim
- * still backs the storage during Phases 2-3 (its
- * repl_state_edit_line returns the demo-local int, and the editor
- * forwarder routes both reads and writes there). Phase 4 flips
- * storage into EditorState and Phase 5 deletes the shim. */
+/* Edit-line cursor lives on EditorState.document.edit_line_idx
+ * (Phase 4 of plans/done/edit-line-ownership.md). The demo reads /
+ * writes it through editor_state_edit_line / _set — the same API
+ * the REPL editor uses; the shim that previously backed this is
+ * gone (Phase 5). */
 
 static int key_is_printable_ascii(unsigned char key) {
     return key >= 32 && key < 127;

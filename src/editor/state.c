@@ -244,15 +244,7 @@ const char *editor_buffer_view_line(EditorBufferView view, int idx) {
 
 /* Forward decls cover entry points editor_state.c implements that
  * get called from sibling impls in this file (e.g.
- * editor_state_input_reset reuses editor_input_clear). They are
- * declared in the same TU; the forward decls let mutually-recursive
- * helpers compile cleanly without reshuffling the file.
- *
- * `repl_state_document_count` is declared here rather than including
- * the REPL state facade — keeps editor_state.c off the REPL header
- * web, mirroring the pre-Phase-4 setup that forward-declared
- * `repl_state_edit_line*`. */
-int  repl_state_document_count(void);
+ * editor_state_input_reset reuses editor_input_clear). */
 void editor_input_clear(void);
 void editor_pending_newline_clear(void);
 void editor_cursor_pos_set(int cursor_pos);
@@ -268,15 +260,26 @@ int editor_state_edit_line(void) {
 }
 
 void editor_state_edit_line_set(int line) {
+    /* Clamp negatives but leave the upper bound to explicit
+     * _clamp() calls. Test fixtures that populate document /
+     * buffer counts out of order (count set before lines are
+     * inserted) rely on _set storing the requested value verbatim;
+     * the pre-Phase-4 REPL implementation only clamped against
+     * the document count it happened to see, which gave the same
+     * effective "store verbatim" behavior in the lockstep case. */
     if (line < 0) line = 0;
     g_editor_state.document.edit_line_idx = line;
-    editor_state_edit_line_clamp();
 }
 
 void editor_state_edit_line_clamp(void) {
     int *p = &g_editor_state.document.edit_line_idx;
     if (*p < 0) *p = 0;
-    int count = repl_state_document_count();
+    /* Clamp upper bound from the editor's own buffer, not from
+     * REPL state, so the demo (which doesn't link src/repl/state.c)
+     * resolves cleanly. The REPL document and editor buffer track
+     * the same line count in lockstep under the editor commit
+     * pipeline; this clamp is conservative either way. */
+    int count = g_editor_state.buffer.line_count;
     if (*p > count) *p = count;
 }
 
