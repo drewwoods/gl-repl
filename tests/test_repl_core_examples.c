@@ -615,24 +615,24 @@ static void test_example_tag_metadata(void) {
  * Precedence chain under test: example `@cfg` > tag default > global
  * default. */
 static void test_example_tag_default_cfg(void) {
-    int ring_idx       = find_example_index_by_name("Animated ring (for + t)");
+    int bezier_idx     = find_example_index_by_name("Bezier curve with guides");
     int cube_idx       = find_example_index_by_name("Lit cube");
     int stress_idx     = find_example_index_by_name("Stress test (all features)");
     int spirograph_idx =
         find_example_index_by_name("Animated spirograph curve");
 
-    ASSERT_TRUE("ring example index found", ring_idx >= 0);
+    ASSERT_TRUE("bezier example index found", bezier_idx >= 0);
     ASSERT_TRUE("cube example index found", cube_idx >= 0);
     ASSERT_TRUE("stress example index found", stress_idx >= 0);
     ASSERT_TRUE("spirograph example index found", spirograph_idx >= 0);
 
     /* Sanity-check tag membership so the test isn't quietly invalidated
      * if an example's tags are edited later. */
-    if (ring_idx >= 0) {
-        ASSERT_TRUE("ring is single-tag 2D bucket",
-                    repl_example_has_tag(ring_idx, REPL_EXAMPLE_TAG_2D));
-        ASSERT_TRUE("ring is not in 3D bucket",
-                    !repl_example_has_tag(ring_idx, REPL_EXAMPLE_TAG_3D));
+    if (bezier_idx >= 0) {
+        ASSERT_TRUE("bezier is in 2D bucket",
+                    repl_example_has_tag(bezier_idx, REPL_EXAMPLE_TAG_2D));
+        ASSERT_TRUE("bezier is not in 3D bucket",
+                    !repl_example_has_tag(bezier_idx, REPL_EXAMPLE_TAG_3D));
     }
     if (cube_idx >= 0) {
         ASSERT_TRUE("cube is not in 2D bucket",
@@ -651,10 +651,12 @@ static void test_example_tag_default_cfg(void) {
                     repl_example_has_tag(spirograph_idx, REPL_EXAMPLE_TAG_2D));
     }
 
-    /* (1) Single 2D-tag example, no own grid @cfg → GRID_THEME_PLANES. */
-    if (ring_idx >= 0) {
-        load_example_for_test(ring_idx);
-        ASSERT_TRUE("2D tag default applies GRID_THEME_PLANES (single tag)",
+    /* (1) 2D-only-bucket example (in 2D, not in 3D), no own grid @cfg
+     * → GRID_THEME_PLANES. The bezier example has @cfg lines for
+     * other slugs but no `@cfg grid`. */
+    if (bezier_idx >= 0) {
+        load_example_for_test(bezier_idx);
+        ASSERT_TRUE("2D tag default applies GRID_THEME_PLANES (2D-only)",
                     glr_state_presentation().grid_theme == GRID_THEME_PLANES);
     }
 

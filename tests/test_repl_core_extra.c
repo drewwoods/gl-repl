@@ -374,7 +374,7 @@ void test_workspace_round_trip() {
     if (ring_slot >= 0) {
         ASSERT_INT("load animated ring scene", repl_load_user_scene_idx(ring_slot), 1);
         ASSERT_INT("animated ring command count after workspace load",
-                   repl_state_document_count(), 16);
+                   repl_state_document_count(), 17);
     }
 
     /* Clean up scratch dir. */
