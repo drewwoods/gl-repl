@@ -550,18 +550,8 @@ REPL_DEMO_DEP_SRCS = src/repl/format.c \
 # replaced by tools/editor_demo/repl_shim.c. src/editor/services.c is
 # *excluded* — the shim's editor_services_default() takes its place,
 # so the demo gets demo-local bindings for compile / apply / parse.
-EDITOR_DEMO_DEP_SRCS = src/editor/clipboard.c \
-                       src/editor/commit.c \
-                       src/editor/completion.c \
-                       src/editor/edit_ops.c \
-                       src/editor/help_session.c \
-                       src/editor/inline_file_prompt.c \
-                       src/editor/inline_rename.c \
-                       src/editor/input.c \
-                       src/editor/reformat.c \
-                       src/editor/search.c \
+EDITOR_DEMO_DEP_SRCS = src/editor/edit_ops.c \
                        src/editor/state.c \
-                       src/editor/undo.c \
                        src/ui/text_layout.c \
                        src/ui/text_panel.c \
                        src/ui/text_search.c \
