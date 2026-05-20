@@ -255,9 +255,41 @@ const char *editor_buffer_view_line(EditorBufferView view, int idx) {
  * REPL state facade. Phase 5's rename will fold these into the
  * editor_* namespace. */
 int  repl_state_edit_line(void);
+void repl_state_edit_line_set(int line);
+void repl_state_edit_line_clamp(void);
 void editor_input_clear(void);
 void editor_pending_newline_clear(void);
 void editor_cursor_pos_set(int cursor_pos);
+
+/* Phase 2 of plans/in-review/edit-line-ownership.md: transitional
+ * forwarders. The editor-side API exists now so Phase 3 callers
+ * compile against the final shape, but the storage stays in
+ * ReplState until the Phase 4 atomic flip. */
+int editor_state_edit_line(void) {
+    return repl_state_edit_line();
+}
+
+void editor_state_edit_line_set(int line) {
+    repl_state_edit_line_set(line);
+}
+
+void editor_state_edit_line_clamp(void) {
+    repl_state_edit_line_clamp();
+}
+
+EditorDocumentView editor_state_document(void) {
+    return (EditorDocumentView){
+        .edit_line_idx = editor_state_edit_line(),
+    };
+}
+
+EditorDocumentState *editor_state_document_mut(void) {
+    return &g_editor_state.document;
+}
+
+void editor_state_document_reset(void) {
+    editor_state_edit_line_set(0);
+}
 
 EditorInputView editor_state_input(void) {
     const EditorInputState *in = &g_editor_state.input;
@@ -267,7 +299,7 @@ EditorInputView editor_state_input(void) {
         .input_len = in->input_len,
         .cursor_pos = in->cursor_pos,
         .anchor_pos = in->anchor_pos,
-        .edit_line_idx = repl_state_edit_line(),
+        .edit_line_idx = editor_state_edit_line(),  /* same value via forwarder */
         .pending_newline = in->pending_newline,
         .pending_newline_capacity = MAX_INPUT_LEN,
         .pending_newline_len = in->pending_newline_len,
