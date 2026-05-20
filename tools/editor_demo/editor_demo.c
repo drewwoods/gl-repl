@@ -104,7 +104,7 @@ static int demo_build_snapshot(UiTextPanelRow *rows, int rows_cap,
     EditorInputView  input = editor_state_input();
 
     int n = 0;
-    int edit_line = input.edit_line_idx;
+    int edit_line = editor_state_edit_line();
     if (edit_line < 0) edit_line = 0;
     int input_emitted = 0;
 
