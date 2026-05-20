@@ -212,7 +212,12 @@ static int resolve_enum_arg_slot(const char *raw,
             return 0;
         }
         *out_val = fv;
-        snprintf(emit, (size_t)emit_sz, "%s", raw);
+        /* %.*s precision (not bare %s) so -Wformat-truncation sees the
+         * bound made explicit at the format level. snprintf already
+         * truncates to emit_sz-1, but GCC's analyzer can't tell from
+         * %s alone when raw is traced back through inlining to a
+         * larger source-line buffer. */
+        snprintf(emit, (size_t)emit_sz, "%.*s", emit_sz - 1, raw);
         if (input_has_any_visible_vars(raw, vars, num_vars))
             *any_vars = 1;
         return 1;

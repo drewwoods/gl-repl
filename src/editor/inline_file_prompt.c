@@ -158,7 +158,11 @@ static void prompt_commit_path(void) {
      * which is the sibling 'switch active slot' path. */
     editor_load_line_to_input(repl_state_edit_line());
 
-    char msg[FILE_PROMPT_ERR_MAX];
+    /* Sized to fit the full path (FILE_PROMPT_BUF_MAX) plus the format
+     * chrome. The literal below mirrors the format string verbatim with
+     * INT_MIN substituted for %d, so sizeof() yields the worst-case
+     * chrome width at compile time — edit the format, edit the literal. */
+    char msg[FILE_PROMPT_BUF_MAX + sizeof("Loaded scene from:  (slot -2147483648)")];
     snprintf(msg, sizeof(msg),
              "Loaded scene from: %s (slot %d)",
              g_prompt_buf, new_slot);
