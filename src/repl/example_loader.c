@@ -426,13 +426,15 @@ static int load_example_lines(const char *const *lines,
     /* Editor-input cleanup (insert mode off, input buffer wipe, cursor
      * home, pending newline clear) routes through the controller-
      * installed sink so the REPL pipeline doesn't reach into
-     * EditorState. Phase 3 of feature/source-document-port.md. */
+     * EditorState (implemented in Phase 3 of
+     * feature/source-document-port.md). */
     repl_dispatch_input_reset();
     /* Editor-side transient reset (camera drag / menu / picker /
      * code-panel-drag) is the controller's responsibility — see
      * cycle_example_or_user_scene in glr_ctrl.c and the
-     * example-load menu handler in glr_actions.c. Step 2 of the
-     * decouple plan moved the call out of this REPL-side loader. */
+     * example-load menu handler in glr_actions.c. The call moved out
+     * of this REPL-side loader (implemented in step 2 of the decouple
+     * plan). */
     repl_eval_init_predef_vars();
     /* Examples use bare funcN; clear any user-aliased names from the
      * outgoing scene so funcN free-slot allocation starts fresh. */
@@ -443,8 +445,9 @@ static int load_example_lines(const char *const *lines,
         body += consume_example_cfg_header(body);
     /* Drain the @cfg accumulator: the leading example metadata is
      * parsed into the bag by parse_workspace_header_line; the bridge
-     * applies it to live state. Step 4 of the decouple plan moved
-     * this out of an inline glr_config_set chain. */
+     * applies it to live state. This moved out of an inline
+     * glr_config_set chain (implemented in step 4 of the decouple
+     * plan). */
     repl_export_apply_pending_cfg();
 
     if (body && body[0] && strcmp(body[0], "// camera") == 0) {
@@ -453,8 +456,8 @@ static int load_example_lines(const char *const *lines,
             body++;
     }
 
-    /* Step 5b: examples are loaded via the lean
-     * repl_load_apply_line, mirroring src/repl/export.c's importer.
+    /* Examples are loaded via the lean repl_load_apply_line,
+     * mirroring src/repl/export.c's importer.
      *
      * Two passes match the editor's editor_try_commit_func_def reorder
      * behavior at load time: func_def blocks (with their leading
@@ -463,12 +466,13 @@ static int load_example_lines(const char *const *lines,
      * code regardless of emission order, so two passes are enough
      * to produce the canonical layout the existing fixtures pin.
      *
-     * Caller-owned cursor (Phase 3.6.4 / 3.6.5 of
-     * plans/in-review/edit-line-ownership.md): the loader threads
+     * Caller-owned cursor: the loader threads
      * the cursor through each per-line apply via a local int
      * starting at 0 (load policy: cursor begins at the top before
      * the body emits). The post-load value is returned to the
-     * caller, which lands it on EditorState above the β boundary. */
+     * caller, which lands it on EditorState above the β boundary
+     * (implemented as step 5b and in phase 3.6.4 / 3.6.5; see the
+     * edit-line-ownership plan doc). */
     int loader_edit_line = 0;
     emit_example_body_two_pass(body, &loader_edit_line);
 

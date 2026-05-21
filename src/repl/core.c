@@ -1,8 +1,8 @@
 /*
  * src/repl/core.c - Residual REPL helpers awaiting redistribution.
  *
- * This translation unit is being dissolved into its natural owners (see the
- * R10 plan in ARCHITECTURE.md). What still lives here:
+ * This translation unit is being dissolved into its natural owners.
+ * What still lives here (per the R10 plan in ARCHITECTURE.md):
  *
  *   - repl_parse_and_normalize() / parse_and_normalize_impl() — until the
  *     parser absorbs them.
@@ -67,8 +67,7 @@ static void get_for_var_name_from_text(const char *text, char *var, int var_sz);
  * is what the demo and tests want (they leave it unset, clearing the
  * ui_state_status_set / editor stubs from tools/repl_demo/stubs.c).
  *
- * Step 3 of feature/decouple-repl-from-gl-repl-alt.md introduced these
- * as individual callbacks; the six installers were consolidated into
+ * These started as individual callbacks; the six installers were consolidated into
  * one struct per plans/partial/src-repl-simplicity-review.md item 2.
  *
  * The status callback's long-term preferred shape is still per-function
@@ -76,7 +75,8 @@ static void get_for_var_name_from_text(const char *text, char *var, int var_sz);
  * The callback is the "or a callback" branch the decouple plan allows,
  * chosen because the alternative is 48+ test call-site updates for
  * high-traffic public APIs (export_save_output, save_workspace, etc.).
- * Bundling it in the bridge doesn't block that migration. */
+ * Bundling it in the bridge doesn't block that migration (introduced in
+ * step 3 of feature/decouple-repl-from-gl-repl-alt.md). */
 static const ReplHostEffects *g_host_effects = NULL;
 
 void repl_install_host_effects(const ReplHostEffects *effects) {
@@ -786,8 +786,9 @@ static void scroll_to_display_function(void) {
 
 static int load_initial_commands(const char *import_file) {
     /* Returns the post-load cursor target. Caller (controller above
-     * the β boundary) applies via editor_state_edit_line_set. Phase
-     * 3.6.4 of plans/in-review/edit-line-ownership.md. */
+     * the β boundary) applies via editor_state_edit_line_set
+     * (implemented in phase 3.6.4; see the edit-line-ownership
+     * plan doc). */
     if (import_file) {
         struct stat st;
         if (stat(import_file, &st) == 0 && S_ISDIR(st.st_mode)) {

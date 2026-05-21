@@ -69,11 +69,11 @@ static const TutorialStep g_tutorial_color_transform_steps[] = {
     STEP_SENTINEL,
 };
 
-/* Phase 2 worked label-targeted tutorial: the user first draws a
+/* This label-targeted tutorial first has the user draw a
  * triangle (five append steps), then a sixth step splices
  * glEnable(GL_DEPTH_TEST) above the original glBegin so the
  * batch renders with depth testing already enabled. The label
- * "triangle_begin" anchors the insertion. */
+ * "triangle_begin" anchors the insertion (implemented in Phase 2). */
 static const TutorialStep g_tutorial_depth_triangle_steps[] = {
     STEP_APPEND("triangle_begin",
         "// Start the triangle batch; the label here anchors a later insert.",

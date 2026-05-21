@@ -270,9 +270,9 @@ static int load_commands_into_live(const GLCmd *cmds,
      * REPL); once repl_state_edit_line_set is deleted alongside the
      * storage flip, this site moves to using a controller-threaded
      * value.
-     * (Store stopped writing the cursor in Phase 1 of
-     * plans/in-review/edit-line-ownership.md; the storage flip and
-     * edit_line_set cleanup land in Phase 4.) */
+     * (Store stopped writing the cursor in phase 1 of the
+     * edit-line-ownership plan; storage flip and
+     * edit_line_set cleanup landed in phase 4.) */
     repl_dispatch_edit_line_set(edit_line);
     return 1;
 }
@@ -362,8 +362,8 @@ void repl_scenes_reset_for_transient(void) {
      * reset, so the cursor goes back to 0 alongside the document
      * clear; routes through the host-effects sink for the same β
      * reason repl_dispatch_input_reset does.
-     * (Storage moved out of ReplState in Phase 4 of
-     * plans/done/edit-line-ownership.md.) */
+     * (Storage moved out of ReplState in phase 4 of the
+     * edit-line-ownership plan.) */
     repl_dispatch_edit_line_set(0);
     repl_state_flat_program_set_count(0);
     repl_dispatch_input_reset();

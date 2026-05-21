@@ -7,9 +7,9 @@
  * bench drivers that want the same example body loading without the surrounding
  * controller choreography.
  *
- * Phase 5 of feature/source-document-port.md split this out of
- * src/repl/core_internal.h so the catch-all internal header could shrink toward
- * parse-only helpers.
+ * This was split out of src/repl/core_internal.h so the catch-all
+ * internal header could shrink toward parse-only helpers (implemented
+ * in Phase 5 of feature/source-document-port.md).
  */
 #ifndef REPL_EXAMPLE_LOADER_H
 #define REPL_EXAMPLE_LOADER_H
@@ -25,7 +25,8 @@
  * the example body emits). Callers that care about cursor placement
  * apply the value via editor_state_edit_line_set() above the β
  * boundary; tests that just want the body loaded can ignore the
- * return. Phase 3.6.4 of plans/in-review/edit-line-ownership.md. */
+ * return (implemented in phase 3.6.4; see the edit-line-ownership
+ * plan doc). */
 int repl_load_example_lines_for_test(const char *const *lines);
 
 #endif /* REPL_EXAMPLE_LOADER_H */

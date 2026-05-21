@@ -2,22 +2,22 @@
  * src/repl/compile.h - Pure validators that compile proposed source text
  * into ReplCompiledChange.
  *
- * Phase C contract:
+ * Contract:
  *   ReplCompileResult repl_compile_*(...);
  *       Pure. No editor mutation. No command-store mutation. No status
  *       mutation. No undo entry. Returns ReplCompiledChange on success
  *       or fills `err` with a diagnostic on failure.
  *
  *   void repl_apply_compiled_change(const ReplCompiledChange *change);
- *       (Phase C commit 20.) Mutates ReplState command arrays only.
+ *       Mutates ReplState command arrays only.
  *       Does not touch editor text. Does not touch status.
  *
  *   void editor_buffer_apply_compiled_change(const ReplCompiledChange *change);
- *       (Phase C commit 20.) Mutates EditorState text only. Does not
+ *       Mutates EditorState text only. Does not
  *       touch ReplState. Does not touch status.
  *
- * The editor commit orchestration (Phase C commit 21) drives all three
- * inside one undo transaction.
+ * The editor commit orchestration drives all three inside one undo
+ * transaction (implemented in Phase C commits 20-21).
  *
  * ReplCompiledChange is a *source-command* description, not a flat
  * program. Flattening still happens downstream in src/repl/flatten.c.
@@ -217,8 +217,8 @@ void repl_compiled_change_to_text_change(const ReplCompiledChange *in,
  * because β forbids REPL pipeline code from calling
  * editor_state_edit_line(); callers above the boundary
  * (controllers, editor commit code, tests) read the cursor and
- * pass it in. Phase 3.6.1 of
- * plans/in-review/edit-line-ownership.md. */
+ * pass it in (implemented in phase 3.6.1; see the
+ * edit-line-ownership plan doc). */
 ReplCompileContext repl_compile_context_from_live(int edit_line_idx);
 
 /* Compile a `float name[, name2 ...][ = expr];` declaration into a

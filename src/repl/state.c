@@ -12,12 +12,13 @@
 
 #include <string.h>  /* snprintf for cam_lines init */
 
-/* Step 7a of feature/decouple-repl-from-gl-repl-alt.md: presentation +
- * render slices moved to glr_state.c, dropping the last `glr_camera.h`
+/* Presentation + render slices moved to glr_state.c, dropping the
+ * last `glr_camera.h`
  * include from this TU. The previous `glr_camera_mut()->auto_rotate`
  * resets in `_presentation_reset_*` are gone — `auto_rotate` is part
  * of the per-scene cfg snapshot and the cfg bridge's `apply` callback
- * restores it during scene switches. */
+ * restores it during scene switches (implemented as step 7a of
+ * feature/decouple-repl-from-gl-repl-alt.md). */
 
 static ReplRuntimeState g_repl_state;  /* BSS zero-initialised */
 
@@ -101,8 +102,8 @@ static const ReplRuntimeState *repl_state_get_defaults(void) {
 
 #define g_cmds                      (g_repl_state.document.cmds)
 #define g_num_cmds                  (g_repl_state.document.cmd_count)
-/* g_edit_line removed; edit-line cursor moved to EditorState in
- * Phase 4 of plans/in-review/edit-line-ownership.md. */
+/* g_edit_line removed; edit-line cursor moved to EditorState
+ * (implemented in Phase 4 of plans/in-review/edit-line-ownership.md). */
 #define g_normals_dirty             (g_repl_state.document.normals_dirty)
 #define g_flat_cmds                 (g_repl_state.flat_program.cmds)
 #define g_flat_cmd_local_vars       (g_repl_state.flat_program.local_vars)
@@ -251,12 +252,12 @@ int repl_state_document_capacity(void) {
     return MAX_COMMANDS;
 }
 
-/* repl_state_edit_line / _set / _clamp were deleted in Phase 4 of
- * plans/in-review/edit-line-ownership.md. Edit-line cursor storage
+/* repl_state_edit_line / _set / _clamp were deleted. Edit-line cursor storage
  * moved to EditorState; editor code uses
  * editor_state_edit_line / _set / _clamp directly, and REPL pipeline
  * code receives the cursor as a function parameter or via the
- * repl_dispatch_edit_line_get / _set sink. */
+ * repl_dispatch_edit_line_get / _set sink (implemented in phase 4 of
+ * the edit-line-ownership plan). */
 
 int repl_state_normals_dirty(void) {
     return g_normals_dirty;
@@ -268,7 +269,7 @@ void repl_state_normals_dirty_clear(void) {
 
 /* Clears the source-command array and the source-text document.
  * Does NOT touch the edit-line cursor — that storage moved to
- * EditorState in Phase 4 of plans/done/edit-line-ownership.md and
+ * EditorState and
  * sits on the other side of the β boundary from this TU.
  *
  * Wholesale-reset callers must position the cursor themselves at
@@ -277,7 +278,8 @@ void repl_state_normals_dirty_clear(void) {
  * route through repl_dispatch_edit_line_set(0). The "reset-and-
  * reposition" pair is what repl_scenes_reset_for_transient() does
  * for transient scene switches; editor_clear_all_cmds() does the
- * same dance for the editor-side Clear All. */
+ * same dance for the editor-side Clear All (implemented in phase 4 of
+ * the edit-line-ownership plan). */
 void repl_state_document_reset(void) {
     ReplCommandStore store = repl_command_store_live();
     repl_command_store_load(&store, NULL, 0);
@@ -475,10 +477,11 @@ void repl_state_render_reset_defaults(void) {
     g_repl_state.render = repl_state_get_defaults()->render;
 }
 
-/* Phase J7: the legacy `repl_state_replay` / `_mut` / `_reset`
- * forwarders are gone. Callers use `replay_state_view` /
+/* The legacy `repl_state_replay` / `_mut` / `_reset` forwarders are
+ * gone. Callers use `replay_state_view` /
  * `replay_state_mut` / `replay_state_reset` directly. The
- * `check-replay-forwarders` ratchet is at 0/0. */
+ * `check-replay-forwarders` ratchet is at 0/0 (implemented in
+ * phase J7). */
 
 ReplSceneRuntimeState repl_state_scenes(void) {
     return g_repl_state.scenes;

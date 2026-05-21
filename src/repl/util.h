@@ -7,9 +7,10 @@
  * narrow header lets consumers get safe fixed-buffer helpers without pulling in
  * the broader src/repl/core_internal.h surface.
  *
- * Phase 5 of feature/source-document-port.md split these out of
- * src/repl/core_internal.h. The latter still includes this header for
- * back-compat, so existing consumers see no behavioural change.
+ * These were split out of src/repl/core_internal.h; the latter still
+ * includes this header for back-compat, so existing consumers see no
+ * behavioural change (implemented in Phase 5 of
+ * feature/source-document-port.md).
  */
 #ifndef REPL_UTIL_H
 #define REPL_UTIL_H
