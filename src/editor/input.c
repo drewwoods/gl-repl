@@ -257,13 +257,13 @@ void editor_clear_all_cmds(void) {
     editor_undo_push_snapshot();
     ReplCommandStore store = repl_command_store_live();
     repl_command_store_clear(&store);
-    /* Editor owns text (Phase 4 of plans/done/edit-line-ownership.md):
-     * the source-text buffer is the editor's authoritative storage,
-     * not just a UI mirror of the REPL command-store. A wholesale
-     * "clear all cmds" has to drop the buffer too, otherwise the
-     * cleared command-array and the surviving editor text drift
-     * out of lockstep — the user sees the old lines in the code
-     * panel while every commit acts on an empty cmd-store. */
+    /* Editor owns the source-text buffer, not just a UI mirror of
+     * the REPL command-store. A wholesale "clear all cmds" has to
+     * drop the buffer too, otherwise the cleared command-array and
+     * the surviving editor text drift out of lockstep — the user
+     * sees the old lines in the code panel while every commit acts
+     * on an empty cmd-store (implemented in Phase 4 of
+     * plans/done/edit-line-ownership.md). */
     editor_buffer_clear();
     editor_state_edit_line_set(0);
     editor_insert_mode_set(0);
@@ -1593,7 +1593,7 @@ static int handle_horizontal_special_key_route(int key) {
      * the anchor on the first extending press (when no selection is
      * active yet) and then grows or shrinks the range. The unshifted
      * cases keep the plain editor_cursor_pos_set, which clears the
-     * anchor as part of the Phase B default cursor-move policy. */
+     * anchor as part of the default cursor-move policy (Phase B). */
     int shift = (editor_get_modifiers() & GLUT_ACTIVE_SHIFT) != 0;
     int input_len = editor_state_input().input_len;
     int cur = editor_cursor_pos();
