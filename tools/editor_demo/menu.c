@@ -10,6 +10,8 @@
 
 #include "menu.h"
 
+#include "input.h"          /* demo_input_commit_to_buffer */
+#include "editor/state.h"   /* editor_buffer_* and editor_input_* */
 #include "ui/gl_2d.h"
 
 #include <gl_includes.h>
@@ -31,12 +33,80 @@
 
 typedef void (*DemoMenuAction)(void);
 
-static void demo_action_load(void) {
-    fprintf(stderr, "[demo-menu] Load: not implemented yet\n");
-}
+/* Demo's persistence path. Relative to the cwd the demo was
+ * launched from — keeps the demo self-contained (no /tmp pollution,
+ * no platform-specific user-data dirs). Round-trip workflow:
+ * "Save" writes here; later runs "Load" the same file. The status
+ * messages print the full path the user typed so it's obvious
+ * where the file landed. */
+#define DEMO_SAVE_PATH "editor_demo.txt"
 
 static void demo_action_save(void) {
-    fprintf(stderr, "[demo-menu] Save: not implemented yet\n");
+    /* Flush in-progress input first so the on-disk content matches
+     * what the user sees (the input row is the live edit-line; it
+     * only lands in the buffer on Enter / Up / Down navigation or
+     * an explicit commit). */
+    demo_input_commit_to_buffer();
+
+    FILE *f = fopen(DEMO_SAVE_PATH, "w");
+    if (!f) {
+        fprintf(stderr, "[demo-menu] Save: could not open '%s' for write\n",
+                DEMO_SAVE_PATH);
+        return;
+    }
+    EditorBufferView buf = editor_buffer_view();
+    int n = buf.line_count;
+    for (int i = 0; i < n; i++) {
+        const char *text = editor_buffer_view_line(buf, i);
+        fprintf(f, "%s\n", text ? text : "");
+    }
+    fclose(f);
+    fprintf(stderr, "[demo-menu] Saved %d line(s) to %s\n", n, DEMO_SAVE_PATH);
+}
+
+static void demo_action_load(void) {
+    FILE *f = fopen(DEMO_SAVE_PATH, "r");
+    if (!f) {
+        fprintf(stderr, "[demo-menu] Load: could not open '%s'\n",
+                DEMO_SAVE_PATH);
+        return;
+    }
+    /* Static storage so the const char *[] passed to
+     * editor_buffer_load_lines stays valid for the duration of the
+     * call. MAX_COMMANDS is the buffer's row capacity; any
+     * additional lines in the file are dropped with a warning. */
+    static char lines[MAX_COMMANDS][MAX_LINE_LEN];
+    const char *ptrs[MAX_COMMANDS];
+    int n = 0;
+    while (n < MAX_COMMANDS && fgets(lines[n], MAX_LINE_LEN, f) != NULL) {
+        size_t len = strlen(lines[n]);
+        while (len > 0 &&
+               (lines[n][len - 1] == '\n' || lines[n][len - 1] == '\r'))
+            lines[n][--len] = '\0';
+        ptrs[n] = lines[n];
+        n++;
+    }
+    int truncated = (n == MAX_COMMANDS) &&
+                    (fgetc(f) != EOF);  /* probe one past the limit */
+    fclose(f);
+
+    (void)editor_buffer_load_lines(ptrs, n);
+    /* Park the cursor on the virtual past-the-end row so the next
+     * keystroke types into a fresh line below the loaded content.
+     * Clear the input buffer so stale typed text from the previous
+     * session doesn't survive the load. */
+    editor_state_edit_line_set(n);
+    editor_input_clear();
+    editor_cursor_pos_set(0);
+
+    if (truncated) {
+        fprintf(stderr,
+                "[demo-menu] Loaded %d line(s) from %s (truncated at MAX_COMMANDS=%d)\n",
+                n, DEMO_SAVE_PATH, MAX_COMMANDS);
+    } else {
+        fprintf(stderr, "[demo-menu] Loaded %d line(s) from %s\n",
+                n, DEMO_SAVE_PATH);
+    }
 }
 
 static void demo_action_quit(void) {
