@@ -206,6 +206,10 @@ int replay_compute_fade_skip_limits(int *out_limits, int max_count) {
     int max_old_pc = fade_batches.batches[batch_limit - 1].old_pc;
     if (max_old_pc > g_num_flat_cmds) max_old_pc = g_num_flat_cmds;
 
+    /* Each skip limit must rewind to the opener of any primitive that
+     * still spans old_pc, so the fade redraw can replay a balanced
+     * glBegin/glEnd or tess polygon block rather than starting in the
+     * middle of one. */
     for (int pc = 0; pc <= max_old_pc; pc++) {
         while (batch_idx < batch_limit &&
                fade_batches.batches[batch_idx].old_pc <= pc) {
@@ -354,8 +358,10 @@ void replay_walk_tess_preview(const ReplayTessPreviewCallbacks *cb,
         if (!cmd->valid) continue;
 
         if (repl_cmd_is_transform(cmd->type)) {
-            /* Skip transforms while inside a contour — the contour's
-             * vertex coordinates are emitted in the surrounding frame. */
+            /* Contour vertices are stored in polygon-local coordinates;
+             * transform commands between BEGIN_CONTOUR and END still
+             * belong to the surrounding polygon frame, so only apply
+             * them while not walking a live contour payload. */
             if (!in_contour)
                 replay_walk_apply_transform(cmd, &matrix_depth);
             continue;
@@ -601,6 +607,10 @@ static int replay_next_polygon_limit(int start, int *fade_begin, int *fade_end) 
             *fade_end = flat_idx;
             return flat_idx + 1;
         case CMD_TESS_BEGIN_POLYGON: {
+            /* Depth model: 1 = inside polygon but between contours,
+             * 2 = inside the active contour payload. The polygon-mode
+             * fade unit is the full polygon block, so return at the
+             * matching END that closes depth 1. */
             int tess_depth = 1;
             for (int tess_idx = flat_idx + 1; tess_idx < g_num_flat_cmds; tess_idx++) {
                 if (!g_flat_cmds[tess_idx].valid) continue;
@@ -636,6 +646,9 @@ static int replay_next_polygon_limit(int start, int *fade_begin, int *fade_end) 
 static int replay_next_vertex_limit(int start, int *fade_begin, int *fade_end) {
     REPLAY_FLAT_STATE;
     int open_begin = replay_find_open_begin_before(start);
+    /* Depth model matches replay_next_polygon_limit:
+     * 0 = outside tess polygon, 1 = inside polygon between contours,
+     * 2 = inside a contour body. */
     int tess_depth = 0;
     int open_tess_poly = replay_find_open_tess_polygon_before(start, &tess_depth);
     int saw_meaningful = 0;
@@ -671,6 +684,10 @@ static int replay_next_vertex_limit(int start, int *fade_begin, int *fade_end) {
             if (tess_depth == 2) {
                 tess_depth = 1;
             } else if (tess_depth == 1) {
+                /* Vertex replay reveals tessellation one contour vertex
+                 * at a time, but the fade begin still has to rewind to
+                 * the polygon opener so replayed state sees the full
+                 * enclosing tess block. */
                 *fade_begin = (open_tess_poly >= 0) ? open_tess_poly : start;
                 *fade_end = flat_idx;
                 return flat_idx + 1;
@@ -682,6 +699,8 @@ static int replay_next_vertex_limit(int start, int *fade_begin, int *fade_end) {
             *fade_end = flat_idx;
             return flat_idx + 1;
         case CMD_TESS_VERTEX:
+            /* Same rewind rule as CMD_TESS_END above: emit one vertex,
+             * but keep the fade range anchored at the polygon opener. */
             *fade_begin = (open_tess_poly >= 0) ? open_tess_poly : start;
             *fade_end = flat_idx;
             return flat_idx + 1;
