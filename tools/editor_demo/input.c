@@ -224,6 +224,13 @@ static void demo_search_rescan(void) {
 }
 
 static void demo_search_begin(void) {
+    /* Flush any in-progress input row to the buffer first. Without
+     * this, content the user typed on the active edit_line is
+     * invisible to the find scan (which walks committed buffer
+     * lines only). Same rationale as the Save action — what the
+     * user sees on screen is what they expect Find to search. */
+    demo_input_commit_to_buffer();
+
     g_demo_search.active = 1;
     g_demo_search.query[0] = '\0';
     g_demo_search.query_len = 0;
@@ -376,22 +383,29 @@ void demo_input_handle_key(unsigned char key, int x, int y) {
         return;
     }
 
-    /* Clipboard shortcuts: both Ctrl+letter (Linux / Windows /
-     * X11 GLUT) and Cmd+letter (macOS GLUT) trip the same paths.
-     * Two code paths arrive here:
+    /* Clipboard / find shortcuts: both Ctrl+letter (Linux /
+     * Windows / X11 GLUT) and Cmd+letter (macOS freeglut) trip
+     * the same paths.
      *
      *   - real Ctrl: GLUT delivers the ASCII control byte
-     *     (Ctrl+A = 0x01, Ctrl+C = 0x03, Ctrl+V = 0x16,
-     *     Ctrl+X = 0x18). glutGetModifiers reports CTRL.
-     *   - macOS Cmd: Apple's GLUT maps Cmd to CTRL in
-     *     glutGetModifiers but delivers the *letter* byte
-     *     ('a'/'c'/'v'/'x'), so the modifier check is what
-     *     distinguishes Cmd+letter from a plain typed letter.
+     *     (Ctrl+A = 0x01, Ctrl+C = 0x03, Ctrl+F = 0x06,
+     *     Ctrl+G = 0x07, Ctrl+V = 0x16, Ctrl+X = 0x18).
+     *     glutGetModifiers reports GLUT_ACTIVE_CTRL.
+     *   - macOS Cmd: the freeglut-fork reports Cmd as
+     *     GLUT_ACTIVE_SUPER (NOT CTRL) and delivers the *letter*
+     *     byte ('a'/'c'/'f'/'g'/'v'/'x'). Check both bits so
+     *     either real Ctrl or Cmd fires the shortcut; gate on
+     *     the modifier so a bare typed letter isn't treated as
+     *     a shortcut. The production editor's editor_get_modifiers
+     *     in src/editor/input.c uses the same SUPER-as-CTRL alias.
      *
-     * Gating the letter form on the CTRL modifier prevents a bare
-     * 'c' / 'x' from triggering the shortcut. Ctrl+H (0x08) is
-     * already handled above as backspace. */
-    int ctrl_or_cmd = (glutGetModifiers() & GLUT_ACTIVE_CTRL) != 0;
+     * Ctrl+H (0x08) is already handled above as backspace. */
+    int mods = glutGetModifiers();
+#ifdef GLUT_ACTIVE_SUPER
+    int ctrl_or_cmd = (mods & (GLUT_ACTIVE_CTRL | GLUT_ACTIVE_SUPER)) != 0;
+#else
+    int ctrl_or_cmd = (mods & GLUT_ACTIVE_CTRL) != 0;
+#endif
     if (key == 1  || (ctrl_or_cmd && (key == 'a' || key == 'A'))) {
         demo_handle_select_all(); return;
     }
