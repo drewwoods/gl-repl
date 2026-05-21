@@ -61,6 +61,7 @@ typedef struct {
     int                     file_line;
     int                     highlight_normal_idx;
     int                     highlight_color_idx;
+    int                     highlight_tutorial_insertion_idx;
 } ReplCodePanelBuilder;
 
 static UiTextPanelColor repl_code_panel_rgb(float r, float g, float b) {
@@ -462,9 +463,11 @@ int ui_repl_code_panel_target_for_doc_line(const UiRenderSnapshot *snap,
 
 static void repl_code_panel_find_highlight_rows(const UiRenderSnapshot *snap,
                                                 int *out_normal_idx,
-                                                int *out_color_idx) {
+                                                int *out_color_idx,
+                                                int *out_tutorial_insertion_idx) {
     int normal_idx = -1;
     int color_idx = -1;
+    int tutorial_insertion_idx = -1;
 
     if (snap && snap->editor_highlights) {
         for (int i = 0; i < snap->editor_highlights->count; i++) {
@@ -473,11 +476,14 @@ static void repl_code_panel_find_highlight_rows(const UiRenderSnapshot *snap,
                 normal_idx = highlight->line_idx;
             else if (highlight->kind == HIGHLIGHT_FEEDING_COLOR)
                 color_idx = highlight->line_idx;
+            else if (highlight->kind == HIGHLIGHT_TUTORIAL_INSERTION)
+                tutorial_insertion_idx = highlight->line_idx;
         }
     }
 
     if (out_normal_idx) *out_normal_idx = normal_idx;
     if (out_color_idx) *out_color_idx = color_idx;
+    if (out_tutorial_insertion_idx) *out_tutorial_insertion_idx = tutorial_insertion_idx;
 }
 
 static int repl_code_panel_init_builder(ReplCodePanelBuilder *builder,
@@ -498,7 +504,8 @@ static int repl_code_panel_init_builder(ReplCodePanelBuilder *builder,
     builder->file_line = 1;
     repl_code_panel_find_highlight_rows(snap,
                                         &builder->highlight_normal_idx,
-                                        &builder->highlight_color_idx);
+                                        &builder->highlight_color_idx,
+                                        &builder->highlight_tutorial_insertion_idx);
 
     ui_layout_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
     if (cp_w <= 0 || cp_h <= 0)
@@ -623,6 +630,16 @@ static void repl_code_panel_set_right_action(UiTextPanelRow *row,
         snap->color_picker.active_line == transformer->line_idx;
 }
 
+static void repl_code_panel_apply_tutorial_insertion_marker(
+    ReplCodePanelBuilder *builder, int target_line_idx, UiTextPanelRow *row) {
+    if (!builder || !row || target_line_idx < 0)
+        return;
+    if (target_line_idx != builder->highlight_tutorial_insertion_idx)
+        return;
+    row->left_marker_active = 1;
+    row->left_marker_color = repl_code_panel_rgba(0.95f, 0.45f, 0.85f, 0.90f);
+}
+
 static void repl_code_panel_apply_command_overlays(ReplCodePanelBuilder *builder,
                                                    int line_idx,
                                                    UiTextPanelRow *row) {
@@ -654,6 +671,9 @@ static void repl_code_panel_apply_command_overlays(ReplCodePanelBuilder *builder
         row->left_marker_active = 1;
         row->left_marker_color = repl_code_panel_rgba(0.95f, 0.85f, 0.30f, 0.85f);
     }
+    /* Tutorial-insertion marker wins over feeding-normal/color so the
+     * user's next step is always the dominant affordance. */
+    repl_code_panel_apply_tutorial_insertion_marker(builder, line_idx, row);
 }
 
 static void repl_code_panel_apply_fade_segments(int line_idx, const char *text,
@@ -984,6 +1004,8 @@ static void repl_code_panel_add_input_row(ReplCodePanelBuilder *builder,
     row->hit_eligible = 1;
     if (aux_label && aux_label[0])
         snprintf(row->left_aux_label, sizeof(row->left_aux_label), "%s", aux_label);
+    repl_code_panel_apply_tutorial_insertion_marker(builder, hit_target_line_idx,
+                                                    row);
 
     /* When the cursor sits on an existing committed line (edit-in-place,
      * not insert) this input row stands in for that command's text row,
@@ -1012,6 +1034,8 @@ static void repl_code_panel_add_placeholder_row(ReplCodePanelBuilder *builder,
     row->indent_chars = indent_chars;
     row->hit_eligible = 1;
     row->color = repl_code_panel_rgb(0.28f, 0.28f, 0.35f);
+    repl_code_panel_apply_tutorial_insertion_marker(builder, hit_target_line_idx,
+                                                    row);
 }
 
 static void repl_code_panel_add_command_row(ReplCodePanelBuilder *builder,

@@ -945,6 +945,13 @@ static void glr_ctrl_push_highlights(void) {
     if (replay_active() && src_line >= 0)
         editor_state_highlights_append(src_line, -1, -1,
                                             HIGHLIGHT_REPLAY_PC);
+
+    if (tutorial_active()) {
+        int insertion_line = tutorial_expected_commit_line();
+        if (insertion_line >= 0)
+            editor_state_highlights_append(insertion_line, -1, -1,
+                                                HIGHLIGHT_TUTORIAL_INSERTION);
+    }
 }
 
 /* Push per-line text overrides for source lines whose displayed text
