@@ -409,14 +409,16 @@ void glr_completion_accept_autocomplete(void) {
 
 /* --- EditorCompletionProvider hookup ---
  *
- * Phase G commit 36. Editor input dispatch invokes
- * editor_completion_update / _update_selected_preview / _clear; we
- * register the existing glr_completion entry points here so the
- * editor stays decoupled from REPL grammar specifics.
+ * Editor input dispatch invokes editor_completion_update /
+ * _update_selected_preview / _clear; we register the existing
+ * glr_completion entry points here so the editor stays decoupled from
+ * REPL grammar specifics.
  *
  * editor_completion_clear() owns the slice wipe (it lives on
  * EditorState), so this provider hook only resets the
- * provider-private statics. */
+ * provider-private statics.
+ *
+ * (Wired in Phase G commit 36.) */
 
 static void glr_completion_provider_clear(void) {
     g_ac_mode = AC_MODE_NONE;

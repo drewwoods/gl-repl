@@ -295,9 +295,9 @@ static void glr_ctrl_render_replay_fade_batches(void) {
     glPushAttrib(GL_ALL_ATTRIB_BITS);
     glDisable(GL_LIGHTING);
     glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
-    /* Bucket-2 carve-out: material reflectance *coefficients*
-     * (glMaterialfv), not glColor* draw colors, so they stay named
-     * local consts and are NOT scene/palette.h tokens. */
+    /* Material reflectance *coefficients* (glMaterialfv) — not glColor*
+     * draw colors — so they stay named local consts and are NOT
+     * scene/palette.h tokens. */
     static const GLfloat mspec[] = { 0.4f, 0.4f, 0.4f, 1.0f };
     static const GLfloat mshin[] = { 30.0f };
     glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, mspec);
@@ -1006,7 +1006,7 @@ static void glr_ctrl_push_color_transformers(void) {
 /* Browser autoplay policy: the Web Audio context stays suspended until
  * a user gesture. The very first key / mouse / special event after
  * startup fires glr_audio_on_user_gesture; native builds make this a
- * no-op. Phase J1 commit 48a relocated this from editor_input.c. */
+ * no-op. (Relocated from editor_input.c in Phase J1 commit 48a.) */
 static int g_audio_gesture_sent = 0;
 
 static void glr_ctrl_notify_audio_gesture_once(void) {
@@ -1557,9 +1557,10 @@ void glr_ctrl_display_frame(void) {
 
     if (repl_state_normals_dirty()) {
         prof_begin(PROF_AUTONORMAL);
-        /* Caller-owned cursor (Phase 3.6.0 of edit-line-ownership.md):
-         * read edit-line into a local int, pass &local so the
-         * pipeline never reaches into editor_state_* (β). */
+        /* Caller-owned cursor: read edit-line into a local int, pass
+         * &local so the pipeline never reaches into editor_state_*.
+         * (Convention introduced in Phase 3.6.0 of
+         * edit-line-ownership.md.) */
         int edit_line = editor_state_edit_line();
         repl_recompute_autonormals(glr_state_presentation().autonormal,
                                    &edit_line);
@@ -1593,10 +1594,10 @@ void glr_ctrl_display_frame(void) {
     /* Prepare replay annotations + push the virtual-line list and
      * the per-line text-override list. Layout reads both as snapshot
      * data; the editor is agnostic to which feature pushed them.
-     * Phase 4 of feature/source-document-port.md: prepare() now
-     * fills an output struct and the controller publishes via
-     * glr_publish_replay_annotations so REPL code doesn't reach
-     * directly into editor_state_virtual_lines. */
+     * prepare() fills an output struct and the controller publishes
+     * via glr_publish_replay_annotations so REPL code doesn't reach
+     * directly into editor_state_virtual_lines. (Indirection added in
+     * Phase 4 of feature/source-document-port.md.) */
     prof_begin(PROF_SNAPSHOT_VIRTUAL_LINES);
     ReplReplayAnnotationOutput replay_annotations;
     replay_annotations_prepare(source_document_view(),
@@ -1737,14 +1738,16 @@ void glr_ctrl_reshape(int w, int h) {
  * loads/exports REPL state — including the dump-only CLI paths
  * (--dump-code / --dump-flat) that bypass glr_ctrl_init_gl. Idempotent;
  * called from glr_app_reset_all and from glr_ctrl_bootstrap_repl.
- * Step 4 [P2] fix: previously these two installs lived only in
- * glr_app_reset_all, so the dump CLI ran without them and dropped
- * @cfg from imported files. */
+ * (Bootstrapping the dump CLI paths through this installer was the
+ * Step 4 [P2] fix in feature/decouple-repl-from-gl-repl-alt.md;
+ * previously these installs lived only in glr_app_reset_all, so the
+ * dump CLI ran without them and dropped @cfg from imported files.) */
 /* Bundles the example-defaults reset for presentation chrome plus the
  * camera auto-rotate toggle. The cfg bridge handles per-scene cfg in
  * the scene_cfg snapshot, but the example loader's pre-cfg baseline
- * reset still wants both flipped to defaults. Step 7a wired this
- * through a sink because the example loader is a REPL pipeline TU.
+ * reset still wants both flipped to defaults. This goes through a sink
+ * because the example loader is a REPL pipeline TU. (Sink wired as
+ * step 7a of feature/decouple-repl-from-gl-repl-alt.md.)
  *
  * `tag_mask` carries REPL_EXAMPLE_TAG_* bits for the example being
  * loaded. After the global reset, the controller applies typed
@@ -1845,10 +1848,11 @@ static const ReplExportProjectionBridge g_export_projection_bridge_impl = {
     glr_app_export_reshape_projection
 };
 
-/* Phase 3 of feature/source-document-port.md: editor-input cleanup
- * the REPL loaders used to do inline now routes through callback
- * sinks. The two helpers below are the full-app implementations the
- * controller installs at startup; the demo leaves both unset. */
+/* Editor-input cleanup that the REPL loaders used to do inline now
+ * routes through callback sinks. The two helpers below are the
+ * full-app implementations the controller installs at startup; the
+ * demo leaves both unset. (Indirection added in Phase 3 of
+ * feature/source-document-port.md.) */
 static void glr_app_editor_input_reset(void) {
     editor_insert_mode_set(0);
     EditorInputState *inp = editor_state_input_mut();
@@ -1863,8 +1867,9 @@ static void glr_app_editor_insert_mode_off(void) {
     editor_insert_mode_set(0);
 }
 
-/* Phase 6 of feature/source-document-port.md: route the residual
- * editor scroll/follow writes through host-effect sinks. */
+/* Route the residual editor scroll/follow writes through host-effect
+ * sinks. (Indirection added in Phase 6 of
+ * feature/source-document-port.md.) */
 static void glr_app_scroll_to_line(int target) {
     editor_scroll_set(target);
     editor_scroll_follow_cursor_set(0);
@@ -1941,12 +1946,13 @@ static const ReplHostEffects g_glr_host_effects = {
     .edit_line_set              = editor_state_edit_line_set,
 };
 
-/* Rule 8: seed both machines to the current presentation theme at full
+/* Seed both fade machines to the current presentation theme at full
  * opacity, STEADY — a zero-init machine would diff OFF -> the non-off
  * default grid and animate it in on frame 1, and animate stale prior
  * themes after a world reset. Folded into glr_app_install_app_services
  * (idempotent, called from both program init and glr_app_reset_all)
- * so it runs AFTER glr_state_presentation_reset_defaults(). */
+ * so it runs AFTER glr_state_presentation_reset_defaults().
+ * (Codified as Rule 8 of plans/.../grid-axes-transitions.md.) */
 static void glr_ctrl_seed_overlay_xn(void) {
     GlrPresentationState p = glr_state_presentation();
     scene_xn_init(&g_grid_xn, p.grid_theme);
@@ -1993,9 +1999,10 @@ static void glr_ctrl_tick_overlay_xn(void) {
 
 static void glr_app_install_app_services(void) {
     /* Install the host-effect bridge (status sink + example-
-     * presentation-reset + the four editor effects). Consolidated from
-     * six individual repl_install_*_sink calls per
-     * plans/partial/src-repl-simplicity-review.md item 2. */
+     * presentation-reset + the four editor effects). Single consolidated
+     * call in place of the previous six individual repl_install_*_sink
+     * calls. (Consolidation per item 2 of
+     * plans/partial/src-repl-simplicity-review.md.) */
     repl_install_host_effects(&g_glr_host_effects);
     /* Install the export-config bridge so src/repl/export.c can emit/parse
      * @cfg headers and src/repl/scenes.c can snapshot per-scene cfg
@@ -2004,36 +2011,39 @@ static void glr_app_install_app_services(void) {
      * g_cfg_items / CFG_ITEM_COUNT / audio_* / ui_state_profile_panel_mut
      * / variable_panel_view_mut stubs). */
     glr_actions_install_export_cfg_bridge();
-    /* Install the export-camera bridge (step 4a) so src/repl/export.c can
-     * emit/parse the `// camera` block + g_angle preamble without
+    /* Install the export-camera bridge so src/repl/export.c can emit
+     * and parse the `// camera` block + g_angle preamble without
      * referencing glr_camera_*. Camera state still pulls glr_camera.c
-     * into the demo link set via src/repl/state.c (auto_rotate reset) and
-     * src/repl/example_loader.c (example camera presets); step 7 closes
-     * those last two doors. */
+     * into the demo link set via src/repl/state.c (auto_rotate reset)
+     * and src/repl/example_loader.c (example camera presets). (Bridge
+     * was step 4a of feature/decouple-repl-from-gl-repl-alt.md;
+     * step 7 closes the remaining doors.) */
     glr_camera_export_install_bridge();
-    /* Step 7e: install the executor's camera-distance source. The
-     * point-size fallback (taken at runtime when the GL context lacks
+    /* Install the executor's camera-distance source. The point-size
+     * fallback (taken at runtime when the GL context lacks
      * glPointParameterfv) needs the current camera distance to scale
      * glPointSize calls; routing it through a controller-installed
      * callback keeps glr_camera.c out of the REPL pipeline. The demo
      * doesn't install — the fallback then passes glPointSize through
-     * unscaled. */
+     * unscaled. (Step 7e of feature/decouple-repl-from-gl-repl-alt.md.) */
     repl_executor_install_camera_distance_source(glr_app_camera_distance);
     /* Reshape-projection bridge: lets the GL-free exporter / code panel
      * emit a reshape() that matches the scene's live projection
      * (perspective in 3D, ortho in 2D). Demo/tests don't install, so the
      * canonical perspective default is used there. */
     repl_export_install_projection_bridge(&g_export_projection_bridge_impl);
-    /* Rule 8 seed. In glr_app_reset_all this runs after the
-     * presentation reset (line ordering above); at bootstrap it reads
-     * the static CFG_DEFAULT_* presentation. Idempotent. */
+    /* Seed the grid/axes fade machines (see glr_ctrl_seed_overlay_xn
+     * comment for the steady-at-current-theme invariant). In
+     * glr_app_reset_all this runs after the presentation reset (line
+     * ordering above); at bootstrap it reads the static CFG_DEFAULT_*
+     * presentation. Idempotent. */
     glr_ctrl_seed_overlay_xn();
 }
 
-/* Full-world reset entry point. Step 2 of
- * feature/decouple-repl-from-gl-repl-alt.md split this out of
- * src/repl/state.c so the REPL pipeline (and tools/repl_demo) does not
- * have to link / stub the peer / editor / UI reset symbols. */
+/* Full-world reset entry point. Lives on the controller side so the
+ * REPL pipeline (and tools/repl_demo) does not have to link / stub the
+ * peer / editor / UI reset symbols. (Split out of src/repl/state.c as
+ * step 2 of feature/decouple-repl-from-gl-repl-alt.md.) */
 void glr_app_reset_all(void) {
     /* Drop the undo/redo rings first: the live REPL document is about
      * to be replaced wholesale, and a leftover snapshot would let a
@@ -2041,11 +2051,13 @@ void glr_app_reset_all(void) {
      * the new one. */
     editor_undo_clear();
     repl_state_reset_program();
-    /* Step 7a: GlrState owns presentation + render-config toggles.
-     * Reset them alongside the REPL halves so callers see a coherent
-     * post-reset world. The camera reset moved off the REPL-side
-     * presentation reset (was wiring `glr_camera_mut()->auto_rotate
-     * = CFG_DEFAULT_CAMERA_ROTATE`); the camera resets itself here. */
+    /* GlrState owns presentation + render-config toggles. Reset them
+     * alongside the REPL halves so callers see a coherent post-reset
+     * world. The camera reset moved off the REPL-side presentation
+     * reset (was wiring `glr_camera_mut()->auto_rotate
+     * = CFG_DEFAULT_CAMERA_ROTATE`); the camera resets itself here.
+     * (Ownership relocated as step 7a of
+     * feature/decouple-repl-from-gl-repl-alt.md.) */
     glr_state_presentation_reset_defaults();
     glr_state_render_reset_defaults();
     glr_camera_reset_default();
@@ -2282,12 +2294,14 @@ const char *glr_ctrl_program_name(void) {
 }
 
 void glr_ctrl_bootstrap_repl(const char *input_file) {
-    /* Step 4 [P2] fix: dump-only CLI paths (--dump-code / --dump-flat)
-     * call this without going through glr_ctrl_init_gl, so the status
-     * sink and export-config bridge would otherwise be missing here
-     * and any @cfg in imported files would be silently dropped.
+    /* Dump-only CLI paths (--dump-code / --dump-flat) call this without
+     * going through glr_ctrl_init_gl, so the status sink and
+     * export-config bridge would otherwise be missing here and any
+     * @cfg in imported files would be silently dropped.
      * glr_app_install_app_services is idempotent so the windowed path
-     * (which already installed via glr_app_reset_all) is unaffected. */
+     * (which already installed via glr_app_reset_all) is unaffected.
+     * (Originally the Step 4 [P2] fix in
+     * feature/decouple-repl-from-gl-repl-alt.md.) */
     glr_app_install_app_services();
     repl_eval_init_predef_vars();
     for (int i = 0; i < g_num_predef_vars; i++) {
@@ -2297,9 +2311,10 @@ void glr_ctrl_bootstrap_repl(const char *input_file) {
         }
     }
     editor_state_edit_line_set(repl_load_initial_commands(input_file));
-    /* Startup banner. Step 3 of feature/decouple-repl-from-gl-repl-alt.md
-     * moved this out of src/repl/core.c so pipeline TUs don't own
-     * display-string side effects. */
+    /* Startup banner. Lives on the controller side so pipeline TUs
+     * don't own display-string side effects. (Moved out of
+     * src/repl/core.c as step 3 of
+     * feature/decouple-repl-from-gl-repl-alt.md.) */
     repl_set_status("Ready - type GL commands, press ; to execute. F1 for help. F12 for examples.");
 }
 
@@ -2634,8 +2649,9 @@ static void cycle_example_or_user_scene(void) {
      * Active example moves to the next example, then first user scene.
      * Active user scene moves to the next occupied user slot, then example 0. */
     /* Clear editor / camera / menu / picker / code-panel-drag transients
-     * so the new scene starts from a clean controller state. Step 2 of
-     * the decouple plan moved this out of src/repl/example_loader.c. */
+     * so the new scene starts from a clean controller state. (Moved out
+     * of src/repl/example_loader.c as step 2 of the decouple plan,
+     * feature/decouple-repl-from-gl-repl-alt.md.) */
     editor_reset_transients();
     /* F12 cycles through wholesale scene replacements — drop the undo
      * ring so a post-cycle Ctrl+Z can't bleed the previous scene's
@@ -2886,7 +2902,8 @@ int glr_ctrl_router_handle_glut_scroll_wheel_button(int button, int state, int x
 #endif
 }
 
-/* ---- Code-panel UiHit dispatch (Phase J2.2) -------------------------- */
+/* ---- Code-panel UiHit dispatch --------------------------------------- *
+ * (Introduced in Phase J2.2 of feature/decouple-repl-from-gl-repl-alt.md.) */
 
 /* Code-panel selection drag tracking. Press handlers set the anchor
  * to the clicked source-cmd row; motion re-runs ui_panels_hit_test
@@ -3058,8 +3075,9 @@ static int route_code_text_hit(const UiHit *hit) {
         /* Record the press column so a drag that stays on the active
          * edit row can build a per-character input-buffer selection.
          * The press itself moved the cursor to hit->char_idx (and
-         * cleared any anchor as the Phase B default), so on the first
-         * drag-motion the extend helper pins this column. */
+         * cleared any anchor as the Phase B default of the
+         * editor-input-selection plan), so on the first drag-motion
+         * the extend helper pins this column. */
         g_code_panel_drag_char_anchor = hit->char_idx;
     } else {
         glr_ctrl_router_reset_code_panel_drag();
@@ -3209,8 +3227,9 @@ static int route_menu_item_hit(const UiHit *hit) {
  *  - MENU_CONFIG: item_idx = absolute g_cfg_items[] index → cycle the
  *    item forward via glr_cfg_cycle_row (NOT through
  *    glr_action_menu_item_activate, whose Config branch is the inert
- *    parent-row guard from Step 5) and KEEP the dropdown + flyout open
- *    so repeated toggles work, matching the old flat Config dropdown. */
+ *    parent-row guard) and KEEP the dropdown + flyout open so repeated
+ *    toggles work, matching the old flat Config dropdown. (Parent-row
+ *    guard added in Step 5 of config-menu-submenu-sections.md.) */
 static int route_submenu_item_hit(const UiHit *hit) {
     if (hit->item_idx < 0)
         return 0;
@@ -3409,11 +3428,10 @@ int glr_ctrl_router_handle_code_panel_drag(int x, int y) {
     /* Input-row drag is sticky: once the press armed the char anchor
      * (g_code_panel_drag_char_anchor >= 0), motion that wanders off
      * the row is absorbed as a no-op rather than switching to
-     * line-range selection. The plan calls this out explicitly: input
-     * text selection is single-line, so dragging downward shouldn't
-     * silently re-target the selection model. The user has to release
-     * and re-press in the gutter (or on a non-edit row) to start a
-     * line-range drag. */
+     * line-range selection. Input text selection is single-line by
+     * design, so dragging downward shouldn't silently re-target the
+     * selection model. The user has to release and re-press in the
+     * gutter (or on a non-edit row) to start a line-range drag. */
     if (g_code_panel_drag_char_anchor >= 0)
         return 1;
 
@@ -3610,13 +3628,14 @@ void glr_ctrl_mouse(int button, int state, int x, int y) {
             glr_ctrl_apply_input_effects(editor_take_input_effects());
             return;
         }
-        /* J2.2: classify the click via the canonical hit-test, then
-         * route by UiHit.kind to the owning subsystem. The hit-test
-         * covers variable panel, color picker, menu bar, code panel
-         * (including divider + inline swatch + insert line) and pin
-         * buttons. Only kinds that don't apply (UI_HIT_SCENE,
-         * UI_HIT_NONE, UI_HIT_HELP_PANEL) fall through to scene
-         * press / camera. */
+        /* Classify the click via the canonical hit-test, then route by
+         * UiHit.kind to the owning subsystem. The hit-test covers
+         * variable panel, color picker, menu bar, code panel (including
+         * divider + inline swatch + insert line) and pin buttons. Only
+         * kinds that don't apply (UI_HIT_SCENE, UI_HIT_NONE,
+         * UI_HIT_HELP_PANEL) fall through to scene press / camera.
+         * (Introduced as Phase J2.2 of
+         * feature/decouple-repl-from-gl-repl-alt.md.) */
         UiRenderSnapshot ui_snap;
         glr_ctrl_build_ui_snapshot(&ui_snap);
         UiHit hit = ui_panels_hit_test(&ui_snap, x, y,
@@ -3750,17 +3769,17 @@ void glr_ctrl_mousewheel(int wheel, int direction, int x, int y) {
 #endif
 }
 
-/* Phase J1 commit 48b — timer dispatch inlined.
- *
- * Per-frame tick (16 ms): advance audio playlist, surface track-change
+/* Per-frame tick (16 ms): advance audio playlist, surface track-change
  * status, advance time variable, advance replay state, decay camera
- * momentum, blink the cursor, decay the status TTL. The body migrated
- * verbatim from the legacy editor's timer_func.
+ * momentum, blink the cursor, decay the status TTL.
  *
  * The work is split from the GLUT scheduling so test fixtures (which
  * don't initialize GLUT) can drive a single tick by calling
  * glr_ctrl_tick directly. The public timer entry adds
- * glutPostRedisplay + glutTimerFunc reschedule on top. */
+ * glutPostRedisplay + glutTimerFunc reschedule on top.
+ *
+ * (Inlined here from the legacy editor's timer_func in
+ * Phase J1 commit 48b.) */
 void glr_ctrl_tick(void) {
     /* SIGINT (Ctrl+C) requested quit: the handler only set a flag;
      * do the recovery save + exit here on the normal path so no
