@@ -8,7 +8,9 @@
  *
  * v1.1 surface (Phase 8b):
  *   - Printable ASCII -> edit_op_type_char.
- *   - Backspace / Delete -> edit_op_backspace.
+ *   - Backspace / Delete -> edit_op_backspace; at cursor
+ *     column 0 with no selection, merges the input row into the
+ *     end of the previous buffer line (inverse of Enter's split).
  *   - Cursor Left / Right / Home / End within the active line ->
  *     EditorState primitives. Shift extends a character-range
  *     selection in the input row via editor_cursor_pos_extend_selection.
@@ -140,6 +142,61 @@ static void demo_handle_enter(void) {
     editor_state_edit_line_set(line + 1);
     editor_input_set_text(right);
     editor_cursor_pos_set(0);
+}
+
+/* Backspace pressed at column 0: merge the input row's content
+ * into the end of the previous buffer line and remove the current
+ * row. Inverse of demo_handle_enter (which splits a line at the
+ * cursor). No-op at the top of the buffer (no previous line to
+ * merge into). Caller has already verified cursor == 0 and that
+ * no input-row selection is active — otherwise the regular
+ * edit_op_backspace handles it. */
+static void demo_handle_backspace_at_line_start(void) {
+    int line = editor_state_edit_line();
+    if (line <= 0) return;
+
+    int prev = line - 1;
+    int count = editor_buffer_count();
+    EditorBufferView buf = editor_buffer_view();
+
+    /* Capture current input text first — the input buffer is
+     * shared storage with the input row, and the merge below
+     * overwrites that storage when it sets the merged text back. */
+    char curr_text[MAX_LINE_LEN];
+    int curr_len = editor_input_len();
+    if (curr_len < 0) curr_len = 0;
+    if (curr_len >= (int)sizeof(curr_text)) curr_len = (int)sizeof(curr_text) - 1;
+    memcpy(curr_text, editor_input_text(), (size_t)curr_len);
+    curr_text[curr_len] = '\0';
+
+    /* Read previous line's text from the buffer view; null-safe. */
+    const char *prev_text = editor_buffer_view_line(buf, prev);
+    int prev_len = prev_text ? (int)strlen(prev_text) : 0;
+
+    /* Build merged = prev + curr, clamped to MAX_LINE_LEN - 1 so
+     * the null terminator fits. The join point (where the cursor
+     * will land) is prev_len, clamped to whatever survived the
+     * clamp on the merged buffer. */
+    char merged[MAX_LINE_LEN];
+    int prev_copy = prev_len;
+    if (prev_copy >= (int)sizeof(merged)) prev_copy = (int)sizeof(merged) - 1;
+    memcpy(merged, prev_text, (size_t)prev_copy);
+    int curr_capacity = (int)sizeof(merged) - 1 - prev_copy;
+    int curr_copy = curr_len < curr_capacity ? curr_len : curr_capacity;
+    memcpy(merged + prev_copy, curr_text, (size_t)curr_copy);
+    int merged_len = prev_copy + curr_copy;
+    merged[merged_len] = '\0';
+
+    /* Write the merged line back. Only delete the current row from
+     * the buffer if it's a real committed row (line < count); a
+     * virtual past-the-end row has no buffer entry to remove. */
+    (void)editor_buffer_replace_line(prev, merged);
+    if (line < count)
+        (void)editor_buffer_delete_range(line, 1);
+
+    editor_state_edit_line_set(prev);
+    editor_input_set_text(merged);
+    editor_cursor_pos_set(prev_copy);
 }
 
 /* ---- Find / search --------------------------------------------- */
@@ -374,12 +431,17 @@ void demo_input_handle_key(unsigned char key, int x, int y) {
         return;
     }
 
-    /* Backspace (8) and Delete (127). Both map to backspace
-     * semantics in v1: delete one character to the left of the
-     * cursor (or consume the active input selection). Forward
-     * delete is a separate primitive — deferred. */
+    /* Backspace (8) and Delete (127). Selection-active or
+     * non-zero cursor: defer to edit_op_backspace (consumes
+     * selection / deletes one char left). Cursor at column 0
+     * with no selection: merge the input row into the end of
+     * the previous buffer line — inverse of demo_handle_enter.
+     * Forward delete is a separate primitive — deferred. */
     if (key == 8 || key == 127) {
-        (void)edit_op_backspace();
+        if (editor_cursor_pos() == 0 && !editor_input_selection_active())
+            demo_handle_backspace_at_line_start();
+        else
+            (void)edit_op_backspace();
         return;
     }
 
