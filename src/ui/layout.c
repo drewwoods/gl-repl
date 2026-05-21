@@ -31,6 +31,9 @@ void ui_layout_code_panel_rect(int *x, int *y, int *w, int *h) {
     int win_w = ui_state_viewport().window_w;
     int win_h = ui_state_viewport().window_h;
 
+    /* Callers can pass any subset of outputs. Every visible code-panel
+     * layout anchors at x = 0; y/h vary by mode, and the hidden layout
+     * zeros the whole rect. */
     if (layout == CODE_PANEL_LAYOUT_HIDDEN) {
         if (x) *x = 0;
         if (y) *y = 0;
