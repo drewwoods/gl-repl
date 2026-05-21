@@ -660,6 +660,9 @@ static void repl_code_panel_apply_fade_segments(int line_idx, const char *text,
                                                 float now, UiTextPanelRow *row) {
     int line_len;
     int front;
+    int settled_end;
+    int i;
+    float base_a;
 
     if (!row || !text)
         return;
@@ -672,26 +675,63 @@ static void repl_code_panel_apply_fade_segments(int line_idx, const char *text,
     if (front < 0)
         return;
 
+    base_a = row->color.has_alpha ? row->color.a : 1.0f;
+
     row->color_segment_count = 0;
-    if (front > 0) {
+
+    /* Chars 0..settled_end-1 have completed the settle phase and sit
+     * at the base color. Chars settled_end..front-1 are still easing
+     * from bright white toward the base color and each get a
+     * dedicated gradient segment. */
+    settled_end = front - TUTORIAL_FADE_SETTLE_CHARS;
+    if (settled_end < 0)
+        settled_end = 0;
+
+    if (settled_end > 0 &&
+        row->color_segment_count < UI_TEXT_PANEL_MAX_COLOR_SEGMENTS) {
         row->color_segments[row->color_segment_count++] =
             (UiTextPanelColorSegment){
                 .char_start = 0,
-                .char_count = front,
+                .char_count = settled_end,
                 .color = repl_code_panel_scaled_alpha(row->color, 1.0f),
             };
     }
+
+    for (i = settled_end; i < front; i++) {
+        float s;
+        UiTextPanelColor c;
+        if (row->color_segment_count >= UI_TEXT_PANEL_MAX_COLOR_SEGMENTS)
+            break;
+        s = tutorial_step_fade_settle(line_idx, i, line_len, now);
+        c.r = 1.0f + (row->color.r - 1.0f) * s;
+        c.g = 1.0f + (row->color.g - 1.0f) * s;
+        c.b = 1.0f + (row->color.b - 1.0f) * s;
+        c.a = base_a;
+        c.has_alpha = 1;
+        row->color_segments[row->color_segment_count++] =
+            (UiTextPanelColorSegment){
+                .char_start = i,
+                .char_count = 1,
+                .color = c,
+            };
+    }
+
+    /* The actively-revealing head character: bright white, alpha
+     * ramping 0 → 1 across its slot. */
     if (front < line_len &&
         row->color_segment_count < UI_TEXT_PANEL_MAX_COLOR_SEGMENTS) {
+        UiTextPanelColor highlight = { 1.0f, 1.0f, 1.0f, base_a, 1 };
         row->color_segments[row->color_segment_count++] =
             (UiTextPanelColorSegment){
                 .char_start = front,
                 .char_count = 1,
                 .color = repl_code_panel_scaled_alpha(
-                    row->color,
+                    highlight,
                     tutorial_step_fade_alpha(line_idx, front, line_len, now)),
             };
     }
+
+    /* Not-yet-revealed tail. */
     if (front + 1 < line_len &&
         row->color_segment_count < UI_TEXT_PANEL_MAX_COLOR_SEGMENTS) {
         row->color_segments[row->color_segment_count++] =

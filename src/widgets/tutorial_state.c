@@ -9,7 +9,7 @@ static void tutorial_state_init_defaults(TutorialRuntimeState *s) {
     s->locked_line_count = 0;
     s->fade_line_idx = -1;
     s->fade_start_t = 0.0f;
-    s->fade_duration = 0.5f;
+    s->fade_duration = 0.9f;
     s->expected_commit_line = -1;
     s->pending.step_idx = -1;
     s->pending.commit_line = -1;

@@ -702,13 +702,26 @@ static void test_fade_alpha_math(void) {
     ASSERT_TRUE("line is fading at start",
                 tutorial_line_is_fading(0, state.fade_start_t + 0.01f));
     ASSERT_INT("fade line idx is first row", state.fade_line_idx, 0);
-    ASSERT_INT("fade duration half second", (int)(state.fade_duration * 10.0f), 5);
+    ASSERT_INT("fade duration nine tenths of a second",
+               (int)(state.fade_duration * 10.0f), 9);
     TEST_ASSERT_FLOAT_DEFAULT(&g_harness, "char zero starts transparent",
                               tutorial_step_fade_alpha(0, 0, line_len, state.fade_start_t),
                               0.0f);
     TEST_ASSERT_FLOAT_DEFAULT(&g_harness, "last char finishes opaque",
                               tutorial_step_fade_alpha(0, line_len - 1, line_len,
                                                        state.fade_start_t + state.fade_duration),
+                              1.0f);
+    /* Settle factor lags behind the reveal: at fade_start_t a char is
+     * just appearing in bright white (settle=0) and the last char's
+     * settle finishes exactly at fade_start_t + fade_duration. */
+    TEST_ASSERT_FLOAT_DEFAULT(&g_harness, "char zero settle starts at white",
+                              tutorial_step_fade_settle(0, 0, line_len,
+                                                        state.fade_start_t),
+                              0.0f);
+    TEST_ASSERT_FLOAT_DEFAULT(&g_harness, "last char settle finishes at base",
+                              tutorial_step_fade_settle(0, line_len - 1, line_len,
+                                                        state.fade_start_t +
+                                                            state.fade_duration),
                               1.0f);
     ASSERT_TRUE("line stops fading after duration",
                 !tutorial_line_is_fading(0, state.fade_start_t + state.fade_duration));
