@@ -211,20 +211,78 @@ static void demo_handle_code_panel_click(int mx, int glut_y) {
     }
 }
 
+/* Single-line drag-selection bookkeeping. The active line is read
+ * from editor_state_edit_line at the moment of the initial mouse
+ * down (after demo_handle_code_panel_click navigates to it), so
+ * the drag stays clamped to the line the user clicked on — cross-
+ * line drag would need either snap-to-start-line or a buffer-line-
+ * range selection mode, both deferred. */
+static int g_demo_drag_active = 0;
+
+/* Extend the input-row character-range selection to the hit
+ * position under (mx, glut_y), clamped to the active line. The
+ * extend primitive pins the pre-move cursor as the anchor on first
+ * call, then grows / shrinks in place. */
+static void demo_handle_code_panel_drag(int mx, int glut_y) {
+    UiTextPanelRow      rows[DEMO_MAX_ROWS];
+    UiTextPanelSnapshot snap;
+    demo_build_snapshot(rows, DEMO_MAX_ROWS, &snap);
+    UiHit hit = ui_text_panel_hit_test(&snap, mx, glut_y);
+
+    int active_line = editor_state_edit_line();
+    int target;
+
+    /* The active edit line is rendered as a single INPUT row.
+     * Dragging within that row gives a clean char hit on the
+     * INPUT_LINE kind. Dragging above / below the row clamps to
+     * the row's bounds — the visible selection stays on the line
+     * where the drag started. */
+    if (hit.kind == UI_HIT_CODE_INSERT_LINE && hit.char_idx >= 0) {
+        target = hit.char_idx;
+    } else if (hit.kind == UI_HIT_CODE_TEXT &&
+               hit.line_idx >= 0 && hit.char_idx >= 0 &&
+               hit.line_idx == active_line) {
+        target = hit.char_idx;
+    } else if (hit.kind == UI_HIT_CODE_TEXT &&
+               hit.line_idx >= 0 && hit.line_idx < active_line) {
+        target = 0;
+    } else {
+        target = editor_input_len();
+    }
+
+    editor_cursor_pos_extend_selection(target);
+}
+
 static void demo_mouse_func(int button, int state, int x, int y) {
-    if (button != GLUT_LEFT_BUTTON || state != GLUT_DOWN)
+    if (button != GLUT_LEFT_BUTTON) return;
+
+    if (state == GLUT_UP) {
+        g_demo_drag_active = 0;
         return;
-    /* The menu handler expects bottom-left coords (OpenGL); the
-     * text-panel hit-tester expects raw top-left GLUT coords and
-     * flips internally. Convert once for the menu, pass `y`
-     * straight through for the panel. */
+    }
+
+    /* state == GLUT_DOWN below. The menu handler expects bottom-
+     * left coords (OpenGL); the text-panel hit-tester expects raw
+     * top-left GLUT coords and flips internally. Convert once for
+     * the menu, pass `y` straight through for the panel. */
     int my_bl = g_demo_vp_h - y;
     if (demo_menu_handle_click(x, my_bl, g_demo_vp_w, g_demo_vp_h)) {
         glutPostRedisplay();
         return;
     }
-    /* Click landed below the menu bar -- treat as code panel. */
+    /* Click landed below the menu bar -- treat as code panel.
+     * demo_handle_code_panel_click sets the cursor and clears any
+     * existing anchor; arming drag-active here means the first
+     * subsequent motion event extends a fresh selection from the
+     * click position. */
     demo_handle_code_panel_click(x, y);
+    g_demo_drag_active = 1;
+    glutPostRedisplay();
+}
+
+static void demo_motion_func(int x, int y) {
+    if (!g_demo_drag_active) return;
+    demo_handle_code_panel_drag(x, y);
     glutPostRedisplay();
 }
 
@@ -262,6 +320,12 @@ static int run_demo(int argc, char **argv) {
     glutKeyboardFunc(demo_keyboard_func);
     glutSpecialFunc(demo_special_func);
     glutMouseFunc(demo_mouse_func);
+    /* glutMotionFunc fires only while a button is held — exactly
+     * the "drag" event. demo_motion_func gates on g_demo_drag_active
+     * (set by mouse-down on the code panel, cleared on mouse-up)
+     * so non-code-panel drags (a click that landed on the menu
+     * bar) don't accidentally extend a selection. */
+    glutMotionFunc(demo_motion_func);
 
     printf("editor_demo: Esc to quit (q is a text character)\n");
     glutMainLoop();
