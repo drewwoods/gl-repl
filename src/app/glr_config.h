@@ -132,8 +132,8 @@ int  glr_config_cycle(GlrConfigKey key, int delta);
  * synthetic "All" view (the full flat list, chrome included) is a
  * menu-layer concern and is deliberately NOT counted here — single
  * ownership, no double-count. "---" separator rows are excluded from
- * every named section's item range. (Rationale: Finding #2 of the
- * config-menu-submenu-sections plan.) */
+ * every named section's item range (see finding #2 in the
+ * config-menu-submenu-sections plan). */
 
 /* Number of "### " section headers present in g_cfg_items[]. */
 int  glr_config_section_count(void);
@@ -150,8 +150,8 @@ int  glr_config_section_range(int section, int *start, int *count);
 
 /* Row classification for g_cfg_items[idx], used by the generic submenu
  * provider so the "All" flyout (which spans the whole table) keeps
- * header/separator rows as inert chrome. (Rationale: Finding #4 of
- * the config-menu-submenu-sections plan.) */
+ * header/separator rows as inert chrome (see finding #4 in the
+ * config-menu-submenu-sections plan). */
 typedef enum GlrConfigRowKind {
     GLR_CFG_ROW_ITEM = 0,   /* an actionable toggle/cycle row */
     GLR_CFG_ROW_HEADER,     /* a "### " section header */

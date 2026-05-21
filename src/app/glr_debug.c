@@ -73,9 +73,9 @@ void glr_debug_dump_runtime_state_layout(FILE *out) {
 
 /* The runtime-state layout dump no longer includes ReplReplayRuntimeState,
  * the presentation slice, or render-config toggles: those moved off
- * ReplRuntimeState to replay_state.c and glr_state.c respectively. (Replay
- * migration was Phase F commit 33; presentation/render relocation was
- * step 7a of feature/decouple-repl-from-gl-repl-alt.md.) */
+ * ReplRuntimeState to replay_state.c and glr_state.c respectively
+ * (replay migration: Phase F, commit 33; presentation/render
+ * relocation: step 7a of feature/decouple-repl-from-gl-repl-alt.md). */
 #define REPL_RUNTIME_STATE_FIELDS(X)                                                               \
     X(ReplDocumentState, document)                                                                 \
     X(ReplFlatProgramState, flat_program)                                                          \

@@ -18,7 +18,7 @@
  * before the g_angle placeholder; the import parser tolerates either
  * form so existing saved files keep working.
  *
- * (Bridge introduced as step 4a of
+ * (Bridge introduced in step 4a of
  * feature/decouple-repl-from-gl-repl-alt.md.)
  */
 #include "repl/export.h"

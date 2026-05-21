@@ -181,8 +181,8 @@ const int CFG_ITEM_COUNT = (int)(sizeof(g_cfg_items) / sizeof(g_cfg_items[0]));
  *
  * Lets src/repl/export.c emit/parse @cfg header lines without touching
  * glr_config_* directly; src/repl/scenes.c uses the same bridge for
- * per-scene cfg snapshots. (Originally step 4 of
- * feature/decouple-repl-from-gl-repl-alt.md.) */
+ * per-scene cfg snapshots (originally added in step 4 of
+ * feature/decouple-repl-from-gl-repl-alt.md). */
 
 #include "repl/export.h"
 
