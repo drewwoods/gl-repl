@@ -66,7 +66,7 @@ static float city_night_factor(float angle, float anim_time) {
     return 0.5f + 0.5f * cosf(local_t * 2.0f * (float)M_PI);
 }
 
-static void draw_cityscape(float anim_time) {
+static void draw_cityscape(float anim_time, int nv_fog_distance_supported) {
     scene_backdrop_push_state();
     glDisable(GL_LIGHTING);
     glEnable(GL_DEPTH_TEST);
@@ -79,6 +79,13 @@ static void draw_cityscape(float anim_time) {
     glEnable(GL_FOG);
     glHint(GL_FOG_HINT, GL_NICEST);
     glFogi(GL_FOG_MODE, GL_LINEAR);
+    /* When GL_NV_fog_distance is available, fog by true radial eye
+     * distance instead of eye-plane depth so the ring's side buildings
+     * stop popping in and out at the fringes as the camera orbits.
+     * Confined to this pass by the GL_ALL_ATTRIB_BITS (GL_FOG_BIT)
+     * push/pop bracketing draw_cityscape. */
+    if (nv_fog_distance_supported)
+        glFogi(GL_FOG_DISTANCE_MODE_NV, GL_EYE_RADIAL_NV);
     glFogf(GL_FOG_START, CITY_RADIUS * CITY_FOG_START_FRAC);
     glFogf(GL_FOG_END, CITY_RADIUS * CITY_FOG_END_FRAC);
 
@@ -384,7 +391,8 @@ static void draw_starry_sky(float anim_time, int point_parameter_supported) {
 void scene_backdrop_render(const SceneFrameRenderContext *frame_ctx) {
     switch (frame_ctx->config.backdrop_mode) {
     case SCENE_BACKDROP_CITYSCAPE:
-        draw_cityscape(frame_ctx->config.anim_time);
+        draw_cityscape(frame_ctx->config.anim_time,
+                       frame_ctx->config.nv_fog_distance_supported);
         break;
     case SCENE_BACKDROP_STARS:
         draw_starry_sky(frame_ctx->config.anim_time,
@@ -394,7 +402,8 @@ void scene_backdrop_render(const SceneFrameRenderContext *frame_ctx) {
         /* Stars first so city geometry writes depth over them. */
         draw_starry_sky(frame_ctx->config.anim_time,
                         frame_ctx->config.point_parameter_supported);
-        draw_cityscape(frame_ctx->config.anim_time);
+        draw_cityscape(frame_ctx->config.anim_time,
+                       frame_ctx->config.nv_fog_distance_supported);
         break;
     case SCENE_BACKDROP_OFF:
     default:

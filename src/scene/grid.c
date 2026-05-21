@@ -807,6 +807,13 @@ void scene_grid_render(const SceneFrameRenderContext *frame_ctx) {
         break;
 
     case GRID_THEME_OCEAN:
+        /* Opt into radial eye-distance fog when available, so the fog
+         * closes in by true distance rather than eye-plane depth and the
+         * fringes stop swimming as the camera orbits. The grid pass's
+         * GL_ALL_ATTRIB_BITS (GL_FOG_BIT) push/pop confines it to this
+         * theme; the eye-plane-tuned themes above never see it. */
+        if (config->nv_fog_distance_supported)
+            glFogi(GL_FOG_DISTANCE_MODE_NV, GL_EYE_RADIAL_NV);
         scene_grid_render_ocean_theme(&grid_ctx, frame_ctx, breath);
         break;
 
@@ -819,6 +826,11 @@ void scene_grid_render(const SceneFrameRenderContext *frame_ctx) {
         break;
 
     case GRID_THEME_RADAR:
+        /* Same radial-fog opt-in as Ocean (see above): the radar rings
+         * read the shared FAR-extent distance fog, which swims at the
+         * fringes under the eye-plane default. */
+        if (config->nv_fog_distance_supported)
+            glFogi(GL_FOG_DISTANCE_MODE_NV, GL_EYE_RADIAL_NV);
         scene_grid_render_radar_theme(&grid_ctx);
         break;
 

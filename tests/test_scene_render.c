@@ -507,6 +507,62 @@ static void test_scene_grid_fog_matches_predicate(void) {
 #endif
 }
 
+/* GL_NV_fog_distance radial fog is *scoped*. With the capability flag set,
+ * exactly the opted-in passes — the city backdrop and the Ocean/Radar grid
+ * themes — emit one extra glFogi (the GL_EYE_RADIAL_NV distance-mode
+ * switch) over the flag-off baseline; an eye-plane-tuned theme (Classic)
+ * emits none. This locks the scoping so a global
+ * glFogi(GL_FOG_DISTANCE_MODE_NV, ...) — which fogged out every tuned
+ * theme — can't quietly come back. The stub glFogi only counts calls, so
+ * the assertion is the +1 differential, not the enum argument. */
+static void test_nv_fog_distance_radial_optin(void) {
+    printf("--- GL_NV_fog_distance radial opt-in is scoped ---\n");
+#ifdef GL_STUBS
+    const int   themes[3]  = { GRID_THEME_OCEAN, GRID_THEME_RADAR, GRID_THEME_CLASSIC };
+    const int   delta[3]   = { 1, 1, 0 };
+    const char *names[3]   = { "Ocean", "Radar", "Classic" };
+    for (int i = 0; i < 3; i++) {
+        SceneFrameRenderContext ctx = make_test_frame_ctx();
+        ctx.config.grid_theme = themes[i];
+        ctx.config.grid_extent_idx = GRID_EXTENT_MID;   /* non-FAR */
+        ctx.config.grid_opacity = 1.0f;                 /* steady */
+
+        ctx.config.nv_fog_distance_supported = 0;
+        gl_stub_counts_reset();
+        scene_grid_render(&ctx);
+        unsigned long long off = gl_stub_counts[GL_STUB_glFogi];
+
+        ctx.config.nv_fog_distance_supported = 1;
+        gl_stub_counts_reset();
+        scene_grid_render(&ctx);
+        unsigned long long on = gl_stub_counts[GL_STUB_glFogi];
+
+        char lbl[80];
+        snprintf(lbl, sizeof lbl, "%s radial glFogi delta", names[i]);
+        ASSERT_INT(lbl, (int)(on - off), delta[i]);
+    }
+
+    {
+        SceneFrameRenderContext ctx = make_test_frame_ctx();
+        ctx.config.backdrop_mode = SCENE_BACKDROP_CITYSCAPE;
+
+        ctx.config.nv_fog_distance_supported = 0;
+        gl_stub_counts_reset();
+        scene_backdrop_render(&ctx);
+        unsigned long long off = gl_stub_counts[GL_STUB_glFogi];
+
+        ctx.config.nv_fog_distance_supported = 1;
+        gl_stub_counts_reset();
+        scene_backdrop_render(&ctx);
+        unsigned long long on = gl_stub_counts[GL_STUB_glFogi];
+
+        ASSERT_INT("Cityscape radial glFogi delta", (int)(on - off), 1);
+    }
+#else
+    ASSERT_TRUE("nv fog radial opt-in scoped (GL stubs only)", 1);
+#endif
+}
+
 int main(int argc, char **argv) {
 #ifdef GL_STUBS
     /* In stub mode these are no-ops, but keeping the calls preserves coverage
@@ -550,6 +606,7 @@ int main(int argc, char **argv) {
     test_vertex2f_overlay_parity();
     test_vertex2f_guide_cursor_dot();
     test_scene_grid_fog_matches_predicate();
+    test_nv_fog_distance_radial_optin();
 
     printf("\ntest_scene_render: %d/%d passed\n", g_harness.passed, g_harness.run);
     return (g_harness.passed == g_harness.run) ? 0 : 1;
