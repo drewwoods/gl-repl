@@ -8,9 +8,9 @@
  * a full reset should discard scene state. Slot queries such as count/name/load
  * stay on src/repl/core.h.
  *
- * Phase 5 of feature/source-document-port.md split these hooks out of
- * src/repl/core_internal.h so the remaining internal header could focus on
- * parse/normalize helpers.
+ * These hooks were split out of src/repl/core_internal.h so the remaining
+ * internal header could focus on parse/normalize helpers. (Implemented as
+ * Phase 5 of feature/source-document-port.md.)
  */
 #ifndef REPL_SCENES_H
 #define REPL_SCENES_H

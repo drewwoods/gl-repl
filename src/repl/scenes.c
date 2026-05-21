@@ -23,16 +23,19 @@
 #define g_pending_scene_name (IMPORT_EXPORT_STATE->pending_scene_name)
 #define g_pending_workspace_dir (IMPORT_EXPORT_STATE->pending_workspace_dir)
 
-/* Step 4 of feature/decouple-repl-from-gl-repl-alt.md replaced the
- * static N_SCENE_CFG_KEYS subset list with a controller-installed
- * bridge (ReplExportConfigBridge.fill_scene_subset / .apply). The
- * controller knows which slugs belong in the per-scene snapshot
- * because it owns glr_config_*; src/repl/scenes.c just stores the bag
- * and round-trips it through the bridge.
+/* The per-scene cfg subset is selected by a controller-installed
+ * bridge (ReplExportConfigBridge.fill_scene_subset / .apply) rather
+ * than a static slug list. The controller knows which slugs belong
+ * in the per-scene snapshot because it owns glr_config_*;
+ * src/repl/scenes.c just stores the bag and round-trips it through
+ * the bridge.
  *
  * camera_rotate footgun: the slug is included in the bridge's
  * scene-subset fill, so per-scene snapshots still capture/restore it
- * without src/repl/scenes.c having to call glr_config_*. */
+ * without src/repl/scenes.c having to call glr_config_*.
+ * (Bridge introduced in Step 4 of
+ * feature/decouple-repl-from-gl-repl-alt.md, which replaced the
+ * former static N_SCENE_CFG_KEYS subset list.) */
 
 /* User scene slots for the workspace / example-promotion system.
  *
@@ -47,19 +50,20 @@
  *   on every access (load/save/rename) so LRU eviction can pick the
  *   coldest slot when the 9th scene is needed.
  *
- * Step 7b of feature/decouple-repl-from-gl-repl-alt.md split the
- * per-scene cfg snapshot off of UserScene into a parallel storage
- * indexed by the same slot. The cfg bag's contents are opaque to
- * this TU — only the controller-installed bridge interprets the
- * slugs — but the storage shape is just a few global arrays of
- * `ReplExportConfig` bags. After the 7d follow-up the storage lives
- * here in src/repl/scenes.c as file-statics so the demo link set has
- * no app-prefixed (`glr_*`) dependency carrying it; this file is
- * the sole consumer. The lifecycle invariant is unchanged: every
- * site that flips g_user_scenes[X].used = 0 also calls
- * scene_cfg_clear(X) to keep the parallel array in sync, and
- * repl_scenes_reset pairs the slot-array memset with
- * scene_cfg_reset_all(). */
+ * The per-scene cfg snapshot lives in a parallel storage indexed by
+ * the same slot, not embedded on UserScene. The cfg bag's contents
+ * are opaque to this TU — only the controller-installed bridge
+ * interprets the slugs — but the storage shape is just a few global
+ * arrays of `ReplExportConfig` bags. Storage lives here in
+ * src/repl/scenes.c as file-statics so the demo link set has no
+ * app-prefixed (`glr_*`) dependency carrying it; this file is the
+ * sole consumer. The lifecycle invariant: every site that flips
+ * g_user_scenes[X].used = 0 also calls scene_cfg_clear(X) to keep
+ * the parallel array in sync, and repl_scenes_reset pairs the
+ * slot-array memset with scene_cfg_reset_all().
+ * (Snapshot split out in Step 7b of
+ * feature/decouple-repl-from-gl-repl-alt.md, with the file-static
+ * relocation landing in the 7d follow-up.) */
 typedef struct {
     int      used;
     char     name[USER_SCENE_NAME_MAX];
@@ -260,13 +264,15 @@ static int load_commands_into_live(const GLCmd *cmds,
         source_document_clear();
         return 0;
     }
-    /* The store no longer writes the cursor on load (Phase 1 of
-     * plans/in-review/edit-line-ownership.md). Scene/workspace
-     * restore policy: stamp the snapshot's saved cursor. β-bound
-     * call (REPL → REPL); the cleanup that deletes
-     * repl_state_edit_line_set happens in Phase 4 alongside the
-     * storage flip, where this site moves to using a controller-
-     * threaded value. */
+    /* Scene/workspace restore policy: stamp the snapshot's saved
+     * cursor. The store itself no longer writes the cursor on load,
+     * so this is the explicit policy hook. β-bound call (REPL →
+     * REPL); once repl_state_edit_line_set is deleted alongside the
+     * storage flip, this site moves to using a controller-threaded
+     * value.
+     * (Store stopped writing the cursor in Phase 1 of
+     * plans/in-review/edit-line-ownership.md; the storage flip and
+     * edit_line_set cleanup land in Phase 4.) */
     repl_dispatch_edit_line_set(edit_line);
     return 1;
 }
@@ -350,13 +356,14 @@ void repl_scenes_enter_transient_scene(void) {
 
 void repl_scenes_reset_for_transient(void) {
     repl_state_document_reset();
-    /* repl_state_document_reset doesn't touch the edit-line cursor
-     * (Phase 4 of plans/done/edit-line-ownership.md moved storage
-     * out of ReplState — see the helper's contract in state.c).
-     * The transient-scene boundary is a wholesale reset, so the
-     * cursor goes back to 0 alongside the document clear; routes
-     * through the host-effects sink for the same β reason
-     * repl_dispatch_input_reset does. */
+    /* repl_state_document_reset doesn't touch the edit-line cursor —
+     * storage now lives outside ReplState (see the helper's contract
+     * in state.c). The transient-scene boundary is a wholesale
+     * reset, so the cursor goes back to 0 alongside the document
+     * clear; routes through the host-effects sink for the same β
+     * reason repl_dispatch_input_reset does.
+     * (Storage moved out of ReplState in Phase 4 of
+     * plans/done/edit-line-ownership.md.) */
     repl_dispatch_edit_line_set(0);
     repl_state_flat_program_set_count(0);
     repl_dispatch_input_reset();
@@ -400,11 +407,13 @@ static void install_scene_into_live(int slot) {
         bridge->apply(scene_cfg(slot));
 }
 
-/* Step 7b paired stash with a sibling ReplExportConfig parameter
- * because the cfg snapshot moved off UserScene into the file-static
- * parallel storage above; the stash still needs to capture / restore
- * live cfg so install_scene_into_live can be undone. Callers
- * allocate both on the stack. */
+/* The stash is paired with a sibling ReplExportConfig parameter
+ * because the cfg snapshot lives in the file-static parallel storage
+ * above (not on UserScene); the stash still needs to capture /
+ * restore live cfg so install_scene_into_live can be undone. Callers
+ * allocate both on the stack.
+ * (Pairing introduced in Step 7b of
+ * feature/decouple-repl-from-gl-repl-alt.md.) */
 static void stash_live_state(UserScene *dst, ReplExportConfig *cfg_out) {
     SourceTextView text = source_document_view();
     memset(dst, 0, sizeof(*dst));
