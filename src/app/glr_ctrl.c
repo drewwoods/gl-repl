@@ -1132,6 +1132,22 @@ static void glr_ctrl_handle_view_mode_target_change(void) {
     glr_ctrl_sync_camera_control_mode();
 }
 
+void glr_ctrl_view_record_external_3d_pose(float rx, float ry, float tz) {
+    if (!g_view_mode_target_ortho)
+        return;
+    /* Seed the snapshot when we've never been in 3D this session
+     * (e.g. workspace loaded with ortho_mode=1): without this, the
+     * 2D->3D restoration early-returns and the camera is left wherever
+     * the previous example put it. */
+    if (!g_saved_3d_camera_valid) {
+        g_saved_3d_camera = glr_camera();
+        g_saved_3d_camera_valid = 1;
+    }
+    g_saved_3d_camera.rx = rx;
+    g_saved_3d_camera.ry = ry;
+    g_saved_3d_camera.tz = tz;
+}
+
 static int glr_ctrl_step_projection_toward(float target, float dt) {
     float step;
 

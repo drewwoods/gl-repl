@@ -204,4 +204,13 @@ void glr_publish_replay_annotations(const ReplReplayAnnotationOutput *out);
 void        glr_ctrl_set_program_name(const char *argv0);
 const char *glr_ctrl_program_name(void);
 
+/* Report that an external caller (e.g. an example's `// camera` block
+ * applied via the camera bridge) has set the camera to a new 3D pose.
+ * While the user is dwelling in 2D, the saved-3D snapshot used to
+ * restore the camera on 2D->3D otherwise stays at the pose captured at
+ * 2D entry, so a later return to 3D would override the example's
+ * intended angle. In 3D mode this is a no-op (the live camera is
+ * authoritative). */
+void glr_ctrl_view_record_external_3d_pose(float rx, float ry, float tz);
+
 #endif /* GLR_CTRL_H */
