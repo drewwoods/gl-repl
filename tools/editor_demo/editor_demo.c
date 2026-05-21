@@ -73,7 +73,12 @@ static void demo_fill_text_row(UiTextPanelRow *row, const char *text,
     row->left_gutter_label   = line_idx + 1;
     row->source_line_idx     = line_idx;
     row->hit_target_line_idx = -1;
-    row->search_row_idx      = -1;
+    /* search_row_idx == line index in the demo's flat model. The
+     * text_panel highlights any row whose search_row_idx >= 0
+     * when snap->search.active and query matches; the row whose
+     * (search_row_idx, char) equals (snap->search.hit_row, hit_char)
+     * gets the brighter "current hit" accent. */
+    row->search_row_idx      = line_idx;
     row->color.r = 0.85f; row->color.g = 0.88f; row->color.b = 0.92f;
     row->color.a = 1.0f;
     row->hit_eligible        = 1;
@@ -145,16 +150,54 @@ static int demo_build_snapshot(UiTextPanelRow *rows, int rows_cap,
     snap->input.hint           = "";
     snap->input.cursor_visible = 1;
 
-    snap->search.active    = 0;
-    snap->search.query     = "";
-    snap->search.query_len = 0;
-    snap->search.hit_row   = -1;
-    snap->search.hit_char  = -1;
+    /* Find/search state flows in from the demo's input dispatcher.
+     * When active, text_panel highlights every match in rows whose
+     * search_row_idx >= 0; the row matching (hit_row, hit_char)
+     * gets the brighter "current hit" accent. The find-bar itself
+     * is drawn separately as a top overlay (text_panel doesn't
+     * render the bar — only the highlights). */
+    snap->search.active    = demo_search_active();
+    snap->search.query     = demo_search_query();
+    snap->search.query_len = demo_search_query_len();
+    snap->search.hit_row   = demo_search_hit_line();
+    snap->search.hit_char  = demo_search_hit_char();
 
     return n;
 }
 
 #ifndef GL_STUBS
+
+/* Tiny find-bar overlay drawn just below the menu bar when search
+ * is active. text_panel handles the in-line match highlights, but
+ * not the bar showing the live query — that's a demo concern. */
+static void demo_render_find_bar(void) {
+    if (!demo_search_active()) return;
+
+    float bar_y_top = (float)(g_demo_vp_h - DEMO_MENU_BAR_H);
+    float bar_h     = 22.0f;
+    float bar_y_bot = bar_y_top - bar_h;
+
+    glColor3f(0.16f, 0.16f, 0.20f);
+    glRectf(0, bar_y_bot, (float)g_demo_vp_w, bar_y_top);
+
+    /* "Find: <query>" — Esc to cancel, Enter to accept hint on
+     * the right. Hit-count "no match" indicator when query is
+     * non-empty but no match found. */
+    char buf[DEMO_SEARCH_QUERY_MAX + 32];
+    const char *suffix =
+        demo_search_query_len() == 0       ? "" :
+        demo_search_hit_line() < 0         ? "  (no match)" : "";
+    snprintf(buf, sizeof(buf), "Find: %s%s",
+             demo_search_query(), suffix);
+    glColor3f(0.92f, 0.94f, 0.96f);
+    gl2d_draw_string(10.0f, bar_y_bot + 6.0f, buf, GLUT_BITMAP_9_BY_15);
+
+    glColor3f(0.55f, 0.60f, 0.70f);
+    const char *hint = "Enter: go to match   Esc: cancel   F3 / Cmd-G: next";
+    int hint_x = g_demo_vp_w - (int)strlen(hint) * 9 - 10;
+    gl2d_draw_string((float)hint_x, bar_y_bot + 6.0f, hint,
+                     GLUT_BITMAP_9_BY_15);
+}
 
 static void demo_display_func(void) {
     glClearColor(0.10f, 0.10f, 0.13f, 1.0f);
@@ -167,10 +210,11 @@ static void demo_display_func(void) {
     ui_text_panel_render(&snap, &out);
 
     /* The text panel pushes/pops its own 2D ortho via gl2d_begin/end.
-     * Push a fresh one for menu chrome so the menu's draw state
+     * Push a fresh one for menu chrome + find bar so their draw state
      * doesn't depend on whatever the panel last set. */
     gl2d_begin(g_demo_vp_w, g_demo_vp_h);
     demo_menu_render(g_demo_vp_w, g_demo_vp_h);
+    demo_render_find_bar();
     gl2d_end();
 
     glutSwapBuffers();

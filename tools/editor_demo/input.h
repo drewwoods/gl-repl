@@ -42,4 +42,15 @@ void demo_input_navigate_to(int target);
  * or Up/Down. */
 void demo_input_commit_to_buffer(void);
 
+/* Demo-local find/search accessors. The dispatcher owns the state;
+ * editor_demo.c reads it to fill the text_panel snapshot's search
+ * fields and to render a small find-bar overlay above the code
+ * panel when active. */
+#define DEMO_SEARCH_QUERY_MAX 128
+int         demo_search_active(void);
+const char *demo_search_query(void);
+int         demo_search_query_len(void);
+int         demo_search_hit_line(void);  /* -1 = no match */
+int         demo_search_hit_char(void);
+
 #endif /* EDITOR_DEMO_INPUT_H */

@@ -26,17 +26,25 @@
  *     row's character-range selection through EditorClipboardState
  *     (input-text payload). Demo-local only; no system clipboard
  *     integration.
- *   - Escape -> exit.
+ *   - Ctrl+F / Cmd+F -> open find bar; typing edits the query,
+ *     Esc cancels, Enter accepts (navigates cursor to current
+ *     hit). Ctrl+G / Cmd+G / F3 = find next; Cmd+Shift+G /
+ *     Shift+F3 = find prev. Uses ui_text_search primitives;
+ *     match highlights are drawn by text_panel via snap->search.
+ *   - Escape -> exit (unless search mode is active, in which case
+ *     Esc cancels the find bar — the search dispatcher intercepts
+ *     before the exit path).
  *
  * Out of scope (deferred): word jumps, scroll wheel, undo/redo,
- * find overlay, multi-line / line-range copy, system clipboard
- * (NSPasteboard / X11 selections).
+ * multi-line / line-range copy, system clipboard
+ * (NSPasteboard / X11 selections), find-and-replace.
  */
 
 #include "input.h"
 
 #include "editor/edit_ops.h"
 #include "editor/state.h"
+#include "ui/text_search.h"
 
 #include <gl_includes.h>
 
@@ -134,6 +142,167 @@ static void demo_handle_enter(void) {
     editor_cursor_pos_set(0);
 }
 
+/* ---- Find / search --------------------------------------------- */
+
+/* Demo-local search state. Lives in input.c rather than on
+ * EditorState so the demo can prove the generic ui_text_search
+ * primitives + text_panel's highlight rendering work without
+ * linking the REPL editor's src/editor/search.c controller. The
+ * editor's own EditorSearchState slot on EditorState stays empty
+ * in the demo. DEMO_SEARCH_QUERY_MAX is in input.h so the
+ * editor_demo render-bar code can size its formatted-buffer the
+ * same way. */
+
+static struct {
+    int  active;
+    char query[DEMO_SEARCH_QUERY_MAX];
+    int  query_len;
+    int  hit_line;  /* -1 = no match */
+    int  hit_char;
+} g_demo_search;
+
+int demo_search_active(void) {
+    return g_demo_search.active;
+}
+const char *demo_search_query(void) {
+    return g_demo_search.query;
+}
+int demo_search_query_len(void) {
+    return g_demo_search.query_len;
+}
+int demo_search_hit_line(void) {
+    return g_demo_search.hit_line;
+}
+int demo_search_hit_char(void) {
+    return g_demo_search.hit_char;
+}
+
+/* Scan committed buffer lines for the first occurrence of the
+ * current query at or after (start_line, start_char), wrapping
+ * past end-of-buffer back to (0, 0). Stores the result in
+ * g_demo_search.hit_* (or clears them if no match exists).
+ * `direction` is +1 for next, -1 for previous; the prev path
+ * uses ui_text_find_prev_in_text on each line in reverse order
+ * starting at start_char. */
+static void demo_search_step(int start_line, int start_char, int direction) {
+    g_demo_search.hit_line = -1;
+    g_demo_search.hit_char = -1;
+    if (g_demo_search.query_len <= 0) return;
+
+    int n = editor_buffer_count();
+    if (n <= 0) return;
+    EditorBufferView buf = editor_buffer_view();
+
+    /* Normalize start_line into [0, n) so the modulo arithmetic
+     * for wrap-around stays positive. */
+    if (start_line < 0)  start_line = 0;
+    if (start_line >= n) start_line = n - 1;
+
+    for (int step = 0; step <= n; step++) {
+        int li = direction > 0
+            ? (start_line + step) % n
+            : ((start_line - step) % n + n) % n;
+        const char *line = editor_buffer_view_line(buf, li);
+        int from = (step == 0) ? start_char : (direction > 0 ? 0 : -1);
+        int pos = direction > 0
+            ? ui_text_find_next_in_text(line, g_demo_search.query, from)
+            : ui_text_find_prev_in_text(line, g_demo_search.query,
+                                        from < 0 ? (int)strlen(line)
+                                                 : from);
+        if (pos >= 0) {
+            g_demo_search.hit_line = li;
+            g_demo_search.hit_char = pos;
+            return;
+        }
+    }
+}
+
+/* On every query mutation, rescan from the top of the buffer so
+ * the highlight tracks the live query. */
+static void demo_search_rescan(void) {
+    demo_search_step(0, 0, 1);
+}
+
+static void demo_search_begin(void) {
+    g_demo_search.active = 1;
+    g_demo_search.query[0] = '\0';
+    g_demo_search.query_len = 0;
+    g_demo_search.hit_line = -1;
+    g_demo_search.hit_char = -1;
+}
+
+static void demo_search_cancel(void) {
+    g_demo_search.active = 0;
+    g_demo_search.query[0] = '\0';
+    g_demo_search.query_len = 0;
+    g_demo_search.hit_line = -1;
+    g_demo_search.hit_char = -1;
+}
+
+/* Accept the current hit: navigate the edit-line cursor to it and
+ * exit search mode. No-op on no-match (the bar just closes). */
+static void demo_search_accept(void) {
+    if (g_demo_search.hit_line >= 0 && g_demo_search.hit_char >= 0) {
+        demo_input_navigate_to(g_demo_search.hit_line);
+        editor_cursor_pos_set(g_demo_search.hit_char);
+    }
+    g_demo_search.active = 0;
+    /* Keep the query in g_demo_search.query so a subsequent F3 can
+     * resume cycling from the new cursor without retyping. */
+}
+
+/* F3 / Cmd+G: find next from one char past the current hit (or
+ * from the cursor position if no current hit). Re-arms search
+ * mode if it had been closed via Enter on a prior match so the
+ * highlight comes back. */
+static void demo_search_next(int direction) {
+    if (g_demo_search.query_len <= 0) return;
+    int line = g_demo_search.hit_line;
+    int chr  = g_demo_search.hit_char;
+    if (line < 0) {
+        line = editor_state_edit_line();
+        chr  = editor_cursor_pos();
+    } else {
+        chr += (direction > 0) ? 1 : -1;
+    }
+    g_demo_search.active = 1;
+    demo_search_step(line, chr, direction);
+}
+
+/* Search-mode keystroke handler. Returns 1 if the key was
+ * consumed, 0 if the regular dispatch should continue (e.g. for
+ * keys that aren't meaningful in search mode and should fall
+ * through). */
+static int demo_search_handle_key(unsigned char key) {
+    if (!g_demo_search.active) return 0;
+    if (key == 27) {           /* Esc */
+        demo_search_cancel();
+        return 1;
+    }
+    if (key == '\r' || key == '\n') {
+        demo_search_accept();
+        return 1;
+    }
+    if (key == 8 || key == 127) {  /* Backspace / Delete */
+        if (g_demo_search.query_len > 0) {
+            g_demo_search.query[--g_demo_search.query_len] = '\0';
+            demo_search_rescan();
+        }
+        return 1;
+    }
+    if (key_is_printable_ascii(key) &&
+        g_demo_search.query_len < DEMO_SEARCH_QUERY_MAX - 1) {
+        g_demo_search.query[g_demo_search.query_len++] = (char)key;
+        g_demo_search.query[g_demo_search.query_len]   = '\0';
+        demo_search_rescan();
+        return 1;
+    }
+    /* Other keys (modifier-only events, control bytes besides those
+     * above) are swallowed while search is up — typing in the
+     * editor body while a search bar is open would be confusing. */
+    return 1;
+}
+
 /* ---- Clipboard ------------------------------------------------- */
 
 /* Select-all: anchor at start, extend cursor to end. Sets up the
@@ -180,6 +349,15 @@ static void demo_handle_paste(void) {
 void demo_input_handle_key(unsigned char key, int x, int y) {
     (void)x; (void)y;
 
+    /* Search mode intercepts the keyboard whole — typing edits
+     * the query, Enter accepts, Esc cancels. Stays first so a
+     * stray Esc doesn't exit the demo while the user thinks
+     * they're cancelling a find. */
+    if (g_demo_search.active) {
+        (void)demo_search_handle_key(key);
+        return;
+    }
+
     if (key == 27) {  /* Escape */
         exit(0);
     }
@@ -219,6 +397,15 @@ void demo_input_handle_key(unsigned char key, int x, int y) {
     }
     if (key == 3  || (ctrl_or_cmd && (key == 'c' || key == 'C'))) {
         demo_handle_copy(); return;
+    }
+    if (key == 6  || (ctrl_or_cmd && (key == 'f' || key == 'F'))) {
+        demo_search_begin(); return;
+    }
+    if (key == 7  || (ctrl_or_cmd && (key == 'g' || key == 'G'))) {
+        /* Cmd+G next, Cmd+Shift+G prev — mainstream macOS find-
+         * again convention. Cmd+Shift+G arrives as 'G' (capital)
+         * via the shift modifier, hence the case-letter split. */
+        demo_search_next(key == 'G' ? -1 : +1); return;
     }
     if (key == 22 || (ctrl_or_cmd && (key == 'v' || key == 'V'))) {
         demo_handle_paste(); return;
@@ -277,6 +464,12 @@ void demo_input_handle_special(int key, int x, int y) {
         break;
     case GLUT_KEY_DOWN:
         demo_input_navigate_to(line + 1);
+        break;
+    case GLUT_KEY_F3:
+        /* F3 / Shift+F3: cycle through search matches. Mirrors the
+         * Ctrl+G / Cmd+Shift+G shortcuts in the regular keyboard
+         * dispatcher for users used to the F3 convention. */
+        demo_search_next((glutGetModifiers() & GLUT_ACTIVE_SHIFT) ? -1 : +1);
         break;
     default:
         /* Other special keys ignored in v1. */
