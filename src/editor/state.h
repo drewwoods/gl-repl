@@ -349,7 +349,7 @@ void        editor_pending_newline_clear(void);
  * host-effects sink in `src/repl/core.h` (scene save/restore, the
  * load.c NULL-fallback). β invariant: REPL files do not call editor
  * accessors (storage moved off `ReplState.document.edit_line_idx` in
- * Phase 4 of plans/done/edit-line-ownership.md). */
+ * plans/done/edit-line-ownership.md, Phase 4). */
 int                  editor_state_edit_line(void);
 void                 editor_state_edit_line_set(int line);
 void                 editor_state_edit_line_clamp(void);

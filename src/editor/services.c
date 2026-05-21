@@ -23,7 +23,7 @@ static ReplCompileContext default_context(void *user) {
     /* Editor-side context: repl_compile_context_from_live(editor_state_edit_line()) defaults
      * insert_mode to 0 (the non-editor convention); fill in the live
      * value here so editor compile picks INSERT_ONE / REPLACE_ONE
-     * correctly. Phase 6 of feature/source-document-port.md. */
+     * correctly (feature/source-document-port.md, Phase 6). */
     ReplCompileContext ctx = repl_compile_context_from_live(editor_state_edit_line());
     ctx.insert_mode = editor_insert_mode();
     return ctx;
