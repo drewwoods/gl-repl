@@ -350,6 +350,34 @@ static void test_shadow_ghost_falls_through_off_expected_line(void) {
                 strcmp(ac.ghost, "glBegin(GL_TRIANGLES)") != 0);
 }
 
+static void test_ghost_reappears_on_return_to_expected_line(void) {
+    /* Navigating to a non-tutorial line clears the shadow ghost so
+     * stale text doesn't follow the cursor. Navigating back to the
+     * expected commit line should restore the ghost without
+     * requiring the user to type. */
+    EditorAutocompleteState ac;
+    int expected_line;
+
+    reset_fixture();
+    tutorial_start(0);
+    expected_line = tutorial_expected_commit_line();
+    ASSERT_TRUE("expected_commit_line off line zero", expected_line != 0);
+
+    ac = editor_state_autocomplete();
+    ASSERT_STR("ghost shows on the expected line at start",
+               ac.ghost, "glBegin(GL_TRIANGLES)");
+
+    editor_navigate_to_line(0);
+    ac = editor_state_autocomplete();
+    ASSERT_STR("ghost clears after navigating off-line",
+               ac.ghost, "");
+
+    editor_navigate_to_line(expected_line);
+    ac = editor_state_autocomplete();
+    ASSERT_STR("ghost restored after returning to expected line",
+               ac.ghost, "glBegin(GL_TRIANGLES)");
+}
+
 static void test_tab_skips_tutorial_autofill_off_expected_line(void) {
     /* Tab on the expected commit line autofills the next expected
      * step. On any other line Tab should defer to normal autocomplete
@@ -1448,6 +1476,7 @@ int main(void) {
     test_shadow_text_appears_immediately_on_start();
     test_shadow_text_refreshes_on_advance();
     test_shadow_ghost_falls_through_off_expected_line();
+    test_ghost_reappears_on_return_to_expected_line();
     test_tab_skips_tutorial_autofill_off_expected_line();
     test_shadow_text_clears_on_exit();
     test_tutorial_start_sets_step_progress_status();
