@@ -31,12 +31,11 @@
  * functions (CMD_FUNC_DEF); default 0 for back-compat with reformatting
  * and test paths that re-parse already-committed lines.
  *
- * Phase H.5 commit 40: err_buf / err_sz invert the diagnostic flow.
- * When err_buf is non-NULL, the parser writes any error message into
+ * err_buf / err_sz invert the diagnostic flow. When err_buf is
+ * non-NULL, the parser writes any error message into
  * the buffer instead of calling set_status() directly, so the editor
  * (or whatever orchestrates the commit) decides whether and how to
- * surface the diagnostic. Legacy callers that leave err_buf NULL keep
- * the old set_status() side effect during the migration. */
+ * surface the diagnostic (introduced in phase H.5 commit 40). */
 typedef struct {
     int source_line_idx;
     ExprVar *vars;
@@ -58,12 +57,12 @@ typedef struct {
  * (NULL returns 0 immediately): every caller — flatten.c parsing
  * source commands at a known index, replay.c doing a step-back
  * parse, editor commit, the lean loader, tests — already
- * constructs a context. Phase 3.6.3 of
- * plans/done/edit-line-ownership.md removed the former NULL
+ * constructs a context. The former NULL
  * fallback (which read repl_state_edit_line() for source_line_idx)
  * since β forbids REPL pipeline code from reaching back into the
  * cursor accessor; the fallback was confirmed dead code, not just
- * a defensive vestige.
+ * a defensive vestige (implemented in phase 3.6.3; see the
+ * edit-line-ownership plan doc).
  *
  * Returns 1 on success, 0 on parse error or NULL ctx. On success,
  * out->cmd holds the parsed command and out->text holds the

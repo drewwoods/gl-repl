@@ -25,11 +25,12 @@
 
 /* Source document storage: canonical source commands and the
  * source-level auto-normal dirty flag. The edit-line cursor lives
- * on EditorState (Phase 4 of plans/in-review/edit-line-ownership.md);
+ * on EditorState;
  * REPL pipeline code that needs the cursor reads it through
  * function parameters (parse / compile / flatten / load) or
  * through the repl_dispatch_edit_line_get/_set sink (scene save
- * / restore). */
+ * / restore), implemented in phase 4 (see the
+ * edit-line-ownership plan doc). */
 typedef struct {
     GLCmd cmds[MAX_COMMANDS];
     int   cmd_count;
@@ -87,10 +88,10 @@ typedef struct {
  * - UI chrome types live in src/ui/state_types.h
  * - app-owned presentation policy and render-config toggles live in glr_state.h
  *
- * Phase 1 of the state split and step 7a of
- * feature/decouple-repl-from-gl-repl-alt.md moved those declarations to their
+ * Those declarations moved to their
  * owning modules. This header keeps only the REPL-owned render tail that the
- * executor mutates directly. */
+ * executor mutates directly (implemented in phase 1 of the state split
+ * and step 7a of feature/decouple-repl-from-gl-repl-alt.md). */
 /* REPL-owned render tail: mutable per-light state and clear color written by
  * user GL commands. Policy toggles such as msaa, line smoothing, point
  * attenuation enablement, and grid/axes visibility are app-owned in glr_state. */
@@ -151,9 +152,9 @@ const GLCmd *repl_state_document_cmds(void);
 const GLCmd *repl_state_document_cmd_at(int cmd_idx);
 int          repl_state_document_count(void);
 int          repl_state_document_capacity(void);
-/* repl_state_edit_line deleted in Phase 4 of
- * plans/in-review/edit-line-ownership.md. See state_owners.h for
- * the migration note. */
+/* repl_state_edit_line deleted. See state_owners.h for
+ * the migration note (implemented in phase 4; see the
+ * edit-line-ownership plan doc). */
 int          repl_state_normals_dirty(void);
 void         repl_state_document_reset(void);
 
@@ -173,7 +174,8 @@ ReplVariableView repl_state_variables(void);
  * `glr_state.h` for presentation policy/render config and grid tables,
  * `editor_state.h` for input/buffer/selection/search/autocomplete/overlay
  * lists, and `ui_state.h` for code-panel/help/status/pointer/viewport state.
- * Phase 1 and step 7a removed the old `repl_state_*` forwarders. */
+ * The old `repl_state_*` forwarders were removed (implemented in
+ * phase 1 and step 7a). */
 
 ReplSceneRuntimeState     repl_state_scenes(void);
 const char *repl_state_workspace_dir(void);

@@ -17,14 +17,11 @@
 #include <stdarg.h>
 #include <stdlib.h>  /* strtod (strict bool-slot numeric literal) */
 
-/* Phase H.5 commit 40 introduced the err_buf seam. Phase I commit
- * 42a migrated every caller to provide a buffer. Commit 42b (this
- * one) drops the legacy set_status fallback: the parser writes to
- * ctx->err_buf when available, and otherwise no-ops. Diagnostics
- * never leave the parser as side effects on REPL state.
- *
- * Commit 42c adds a hard guard so set_status calls cannot return
- * to src/repl/parser.c. */
+/* The parser writes diagnostics to ctx->err_buf when available, and
+ * otherwise no-ops; diagnostics never leave the parser as side effects
+ * on REPL state. A hard guard prevents set_status calls from returning
+ * to src/repl/parser.c (implemented across phase H.5 commit 40 and
+ * phase I commits 42a/42b/42c). */
 static void parser_emit_error_v(const ReplParseContext *ctx,
                                 const char *fmt, va_list ap) {
     if (!ctx || !ctx->err_buf || ctx->err_sz <= 0) {
@@ -254,12 +251,12 @@ static int parse_command(const char *line, GLCmd *cmd,
                          char *text_out, int text_sz,
                          const ReplParseContext *ctx) {
     /* All production / test callers pass a non-NULL context (the
-     * legacy no-ctx wrappers were retired earlier). Phase 3.6.3 of
-     * plans/in-review/edit-line-ownership.md removed the
+     * legacy no-ctx wrappers were retired earlier). The
      * `repl_state_edit_line()` fallback that lived here — it was
      * confirmed dead code, and keeping it would force the parser to
      * reach into REPL-state for cursor info that has no business
-     * being parser-internal. */
+     * being parser-internal (implemented in phase 3.6.3; see the
+     * edit-line-ownership plan doc). */
     if (!ctx) return 0;
     int source_line_idx = ctx->source_line_idx;
     ExprVar *vars = ctx->vars;

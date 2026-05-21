@@ -2,7 +2,7 @@
  * src/repl/compile.c -- Pure source-text validators that produce
  *                   ReplCompiledChange descriptors.
  *
- * Phase C contract: every entry point in this file is pure. It
+ * Contract: every entry point in this file is pure. It
  * reads the editor buffer view + REPL state read-only handles
  * passed in via ReplCompileContext, parses + validates the user's
  * input, and writes a ReplCompiledChange describing the source
@@ -18,9 +18,8 @@
  * diagnostic.
  *
  * Apply-side mutations (predef declare / undeclare, command-store
- * shift, editor-buffer write) are performed by src/repl/apply.c (Phase
- * C commit 20) and orchestrated by editor_commit (Phase C commit
- * 21).
+ * shift, editor-buffer write) are performed by src/repl/apply.c and
+ * orchestrated by editor_commit (implemented in Phase C commits 20-21).
  *
  * Reading guide — entry points and what they emit:
  *   repl_compile_float_decl         INSERT_ONE / REPLACE_ONE  +
@@ -78,10 +77,10 @@ ReplCompileResult repl_compile_dispatch(const char *text,
 
     /* Structured-block syntax (close_brace / if_block / func_def /
      * for_loop) is currently routed through the editor-side
-     * `editor_compile_*` chain. Step 5a of the decouple plan extracts
-     * pure variants into this module; until then this dispatcher
+     * `editor_compile_*` chain. Pure variants are extracted into this
+     * module; until then this dispatcher
      * returns NO_CHANGE for those inputs and the caller falls
-     * through. */
+     * through (implemented as step 5a of the decouple plan). */
 
     out->kind = REPL_COMPILED_NO_CHANGE;
     return REPL_COMPILE_OK;
@@ -170,8 +169,8 @@ ReplCompileContext repl_compile_context_from_live(int edit_line_idx) {
      * pipeline doesn't reach for it.
      *
      * edit_line_idx is supplied by the caller (β: REPL pipeline does
-     * not reach into editor_state_* for the cursor). Phase 3.6.1 of
-     * plans/in-review/edit-line-ownership.md. */
+     * not reach into editor_state_* for the cursor), implemented in
+     * phase 3.6.1 of plans/in-review/edit-line-ownership.md. */
     ReplCompileContext ctx = {
         .edit_line       = edit_line_idx,
         .document_count  = repl_state_document_count(),
@@ -1452,7 +1451,8 @@ ReplCompileResult repl_compile_toggle_comment(int line_idx,
     }
 }
 
-/* ===== Pure structured-block validators (step 5a of the decouple plan) =====
+/* ===== Pure structured-block validators =====
+ * (implemented as step 5a of the decouple plan)
  *
  * These are the REPL-pipeline-side counterparts to the editor's
  * editor_compile_close_brace / _if_block / _func_def / _for_loop in

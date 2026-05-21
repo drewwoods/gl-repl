@@ -10,9 +10,9 @@
  * The split from src/repl/compile.c matters because compile.c is the pure
  * validator layer: it returns ReplCompiledChange descriptors and must not write
  * command-store, editor-buffer, or predefined-variable state. This module owns
- * the apply orchestration. That separation became explicit in step 5b of
- * feature/decouple-repl-from-gl-repl-alt.md after a review finding on compile
- * purity.
+ * the apply orchestration. That separation became explicit after a review
+ * finding on compile purity (implemented in step 5b of
+ * feature/decouple-repl-from-gl-repl-alt.md).
  */
 #ifndef REPL_LOAD_H
 #define REPL_LOAD_H
@@ -35,11 +35,11 @@
  * advances it as the document grows so successive calls in a loop
  * see the canonical insert position. Passing NULL falls back to
  * operating on the ambient host cursor through
- * repl_dispatch_edit_line_get / _set (Phase 4 of
- * plans/done/edit-line-ownership.md): the value is read at entry,
+ * repl_dispatch_edit_line_get / _set: the value is read at entry,
  * advanced across the per-line apply, and written back on success.
  * Ad-hoc callers / tests get the pre-migration behavior where the
- * loader's cursor advance was visible to the next caller.
+ * loader's cursor advance was visible to the next caller (implemented
+ * in Phase 4 of plans/done/edit-line-ownership.md).
  *
  * Caller responsibilities:
  *   - Initialize *edit_line_inout to the desired insertion index, which

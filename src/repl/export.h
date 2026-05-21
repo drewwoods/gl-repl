@@ -129,8 +129,8 @@ void repl_export_apply_pending_cfg(void);
  * Export writes these raw GL lines into saved files and the code-panel preview;
  * import and example loading feed the same text back to the controller bridge.
  * src/repl/export.c treats the block as opaque strings, while the bridge in
- * src/app/glr_camera_export.c owns the actual camera parsing and mutation.
- * This neutral block was introduced in step 4a of the decouple plan. */
+ * src/app/glr_camera_export.c owns the actual camera parsing and mutation
+ * (introduced in step 4a of the decouple plan). */
 #define REPL_EXPORT_CAMERA_LINES        4
 #define REPL_EXPORT_CAMERA_LINE_MAX     96
 #define REPL_EXPORT_CAMERA_PREAMBLE_MAX 64
@@ -245,8 +245,8 @@ extern const char  *g_footer_post_init[];
  * The exporter needs a few geometry and wrapping values to format saved output
  * and preview text, but it should not query UI or app state directly. Callers
  * compute the numbers once per export and pass them in here as opaque integers.
- * Step 7c of feature/decouple-repl-from-gl-repl-alt.md moved this data flow out
- * of hidden ui/glr state reads.
+ * This data flow was moved out of hidden ui/glr state reads (implemented in
+ * step 7c of feature/decouple-repl-from-gl-repl-alt.md).
  *
  * Callers that do not have a viewport on hand (LRU evict in
  * src/repl/scenes.c, headless tests, the standalone repl_demo which does

@@ -20,12 +20,12 @@ GLCmd       *repl_state_document_cmd_at_mut(int cmd_idx);
 int          repl_state_document_count(void);
 void         repl_state_document_count_set(int cmd_count);
 int          repl_state_document_capacity(void);
-/* repl_state_edit_line / _set / _clamp deleted in Phase 4 of
- * plans/in-review/edit-line-ownership.md. Use
+/* repl_state_edit_line / _set / _clamp deleted. Use
  * editor_state_edit_line / _set / _clamp from src/editor/state.h
  * (editor / app / widget / test callers) or the
  * repl_dispatch_edit_line_get / _set sink in src/repl/core.h
- * (REPL pipeline callers that can't reach editor headers). */
+ * (REPL pipeline callers that can't reach editor headers),
+ * implemented in Phase 4 of plans/in-review/edit-line-ownership.md. */
 int          repl_state_normals_dirty(void);
 void         repl_state_normals_dirty_clear(void);
 /* Clears the source-command array + source-text document only.
@@ -71,11 +71,11 @@ void                     repl_state_time_reset_to_zero(void);
  * - `variable_panel_state.h` / variable-panel drag helpers for variable drag
  * - `glr_state.h` for presentation policy, render config, and grid tables
  *
- * Phase 1 of the state split and step 7a of
- * feature/decouple-repl-from-gl-repl-alt.md removed the older
+ * The older
  * `repl_state_*` forwarders for those owners. REPL pipeline TUs still avoid
  * including `glr_state.h`; controller/editor/UI/scene callers can include it
- * directly. */
+ * directly (implemented in Phase 1 of the state split and step 7a of
+ * feature/decouple-repl-from-gl-repl-alt.md). */
 
 /* Runtime-mutated render tail only: executor writes `lights[]` and
  * `clear_color[]` in response to user GL commands, so those bytes remain

@@ -4,8 +4,8 @@
  * Drives compile (via repl_compile_*) → predef apply → editor-buffer
  * apply → command-store apply, mirroring the REPL halves of
  * editor_commit_apply_plan but without editor effects (cursor target,
- * insert-mode toggle, input buffer writes). Step 5b of the decouple
- * plan.
+ * insert-mode toggle, input buffer writes), implemented as step 5b of
+ * the decouple plan.
  *
  * Lives in its own module so src/repl/compile.c can stay a pure validator
  * (per the file's contract: never writes the editor buffer / command
@@ -57,18 +57,18 @@ int repl_load_apply_line(const char *line, char *err, int err_size,
      * CMD_EMPTY / CMD_COMMENT source rows so editor/export round-trips
      * preserve line count. Flatten drops both from the executable stream. */
 
-    /* Caller-owned cursor (Phase 3.6.5 of
-     * plans/done/edit-line-ownership.md). edit_line_inout supplies
+    /* Caller-owned cursor. edit_line_inout supplies
      * the insertion position; the per-line apply advances it as
      * the document grows. A NULL pointer falls back to operating
      * on the ambient host cursor through repl_dispatch_edit_line_get
-     * / _set (Phase 4 of the same plan): the loader reads the
+     * / _set: the loader reads the
      * current value at entry, advances it across the per-line
      * apply, and writes the post-load value back on success. This
      * preserves the pre-migration behavior where ad-hoc loader
      * callers (the editor's load-file path, the tutorial runner,
      * mid-test commit chains) saw the cursor advance as a side
-     * effect of repl_load_apply_line. */
+     * effect of repl_load_apply_line (implemented in phase 3.6.5 and
+     * phase 4 of plans/done/edit-line-ownership.md). */
     int local_edit_line;
     int wrote_local = 0;
     if (edit_line_inout == NULL) {
@@ -156,10 +156,11 @@ int repl_load_apply_line(const char *line, char *err, int err_size,
         }
         repl_apply_predef_ops(&change);
         repl_apply_scratch_ops(&change);
-        /* Apply mutates *edit_line_inout in place via the store
-         * (Phase 1 + Phase 3.6.5). The cursor advance is what
+        /* Apply mutates *edit_line_inout in place via the store.
+         * The cursor advance is what
          * makes the next call see insert_idx = document_count for
-         * the append-at-end semantics. */
+         * the append-at-end semantics (implemented in phase 1 +
+         * phase 3.6.5). */
         int ok = repl_apply_compiled_change(&change, edit_line_inout);
         if (ok && wrote_local)
             repl_dispatch_edit_line_set(*edit_line_inout);
