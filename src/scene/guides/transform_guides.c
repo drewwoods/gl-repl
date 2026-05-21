@@ -631,6 +631,9 @@ static int transform_source_unmodified(const SceneGuideSnapshot *snapshot,
         source_len--;
     }
 
+    /* Keep guides live only while the edit buffer still matches the last
+     * committed source form for this row (ignoring outer whitespace and the
+     * commit semicolon that editor input omits). */
     return ((source_len == snapshot->input_len &&
              strncmp(snapshot->input, source, (size_t)source_len) == 0) ||
             snapshot->input_len == 0);
@@ -668,6 +671,7 @@ int scene_transform_guides_prepare(const SceneGuideSnapshot *snapshot,
 
     const GLCmd *flat_cmds = snapshot->flat_program.cmds;
     int flat_cmd_count = snapshot->flat_program.cmd_count;
+    /* First emitted flat command originating from the cursor row. */
     for (int flat_cmd_idx = 0; flat_cmd_idx < flat_cmd_count; flat_cmd_idx++) {
         if (!flat_cmds[flat_cmd_idx].valid)
             continue;
@@ -679,6 +683,8 @@ int scene_transform_guides_prepare(const SceneGuideSnapshot *snapshot,
     if (plan->cursor_flat_idx < 0)
         return 0;
 
+    /* First flat command after the cursor row, used for after-cursor anchoring
+     * in world mode; if absent, anchor after the program tail. */
     for (int flat_cmd_idx = plan->cursor_flat_idx + 1;
          flat_cmd_idx < flat_cmd_count;
          flat_cmd_idx++) {

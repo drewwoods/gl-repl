@@ -201,6 +201,9 @@ static void draw_cityscape(float anim_time) {
         float face_ox = in_x * (hd + protrude);
         float face_oz = in_z * (hd + protrude);
 
+        /* Per-building palette warmth plus coarse (building) and fine
+         * (window) phase offsets spread the day/night cycle so facades
+         * do not pulse in lockstep. */
         float warmth = city_rng(base + 200u);
         float tz = angle / (2.0f * (float)M_PI);
         float bldg_phase = (city_rng(base + 50u) - 0.5f) * 0.06f;
@@ -216,6 +219,8 @@ static void draw_cityscape(float anim_time) {
                                  1.0f);
                 if (lt < 0.0f) lt += 1.0f;
 
+                /* Squaring keeps twilight transitions soft while still giving
+                 * an emphatic nighttime "on" window band. */
                 float raw = 0.5f + 0.5f * cosf(lt * 2.0f * (float)M_PI);
                 float night_sq = raw * raw;
                 float thresh = 0.20f + city_rng(wid + 11u) * 0.52f;
