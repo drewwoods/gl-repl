@@ -12,10 +12,10 @@
  * `UiRenderSnapshot`, while UI code typically uses the narrower visibility and
  * active-drag queries.
  *
- * This peer split replaced older storage on UiState/EditorState and retired the
- * legacy forwarders; the current public surface is the `variable_panel_*`
- * family declared here plus the small value-change type in
- * `variable_panel_drag.h`.
+ * The current public surface is the `variable_panel_*` family declared here
+ * plus the small value-change type in `variable_panel_drag.h` (the peer split
+ * replaced older UiState/EditorState storage and retired the legacy
+ * forwarders).
  */
 #ifndef VARIABLE_PANEL_H
 #define VARIABLE_PANEL_H
