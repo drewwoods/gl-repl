@@ -123,8 +123,8 @@ static int menu_item_count(int menu_id) {
         /* One parent row per "### " section, plus a synthetic "All"
          * row whose flyout is the full flat list (chrome included).
          * The +1 is owned here in the menu layer — the pure
-         * glr_config_section_count() never counts All (plan Finding
-         * #2). */
+         * glr_config_section_count() never counts All (implemented per
+         * plan Finding #2). */
         return glr_config_section_count() + 1;
     }
     return 0;
@@ -324,6 +324,8 @@ int ui_menu_bar_menu_hit(int gx, int gy) {
     int menu_x[NUM_MENUS], menu_w[NUM_MENUS];
     int pin_x[NUM_PIN_BTNS], pin_w[NUM_PIN_BTNS];
     int by, bh;
+    /* Window events arrive with a top-down y; UI hit rects use the
+     * bottom-up OpenGL space tracked in UiViewportState. */
     int ry = ui_state_viewport().window_h - gy;
     menubar_rects(menu_x, menu_w, pin_x, pin_w, &by, &bh);
     if (ry < by || ry >= by + bh) return -1;
@@ -336,6 +338,8 @@ int ui_menu_bar_pin_hit(int gx, int gy) {
     int menu_x[NUM_MENUS], menu_w[NUM_MENUS];
     int pin_x[NUM_PIN_BTNS], pin_w[NUM_PIN_BTNS];
     int by, bh;
+    /* Window events arrive with a top-down y; UI hit rects use the
+     * bottom-up OpenGL space tracked in UiViewportState. */
     int ry = ui_state_viewport().window_h - gy;
     menubar_rects(menu_x, menu_w, pin_x, pin_w, &by, &bh);
     if (ry < by || ry >= by + bh) return -1;
@@ -822,8 +826,8 @@ int ui_menu_bar_handle_config_right_press(int mx, int my) {
      * submenu_row_kind, and section/All parent rows own no submenu, so
      * a right-press over the section list (or any non-item) is a
      * no-op rather than mis-cycling a g_cfg_items[] index. The hit
-     * carries the absolute index in item_idx (plan Step 7,
-     * Finding #3). */
+     * carries the absolute index in item_idx (implemented per plan
+     * Step 7, Finding #3). */
     UiHit h = submenu_hit_test(mx, my);
     if (h.kind != UI_HIT_SUBMENU_ITEM || h.cmd_idx != MENU_CONFIG ||
         h.item_idx < 0)

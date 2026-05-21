@@ -1565,7 +1565,8 @@ void ui_repl_code_panel_render(const UiRenderSnapshot *snap,
     gl2d_begin(snap->viewport.window_w, snap->viewport.window_h);
     /* Draw the scene tab strip before the menu bar so the closed menu row
      * stays the topmost chrome; the example dropdown is a later controller
-     * overlay pass (glr_ctrl.c) and still overpaints both. (Plan §4.) */
+     * overlay pass (glr_ctrl.c) and still overpaints both (implemented
+     * per plan §4). */
     ui_scene_tabs_render(snap);
     ui_menu_bar_render(snap);
     ui_menu_bar_render_search_overlay(snap, builder.text_snap.cp_x,
