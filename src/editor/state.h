@@ -166,14 +166,13 @@ typedef struct {
  * cursor as explicit input to its parse / flatten / compile / load
  * / export work).
  *
- * Canonical storage as of Phase 4 of
- * plans/done/edit-line-ownership.md. The editor accessors
- * editor_state_edit_line / _set / _clamp read and write this field
- * directly; REPL pipeline code receives the cursor as an explicit
- * parameter (parse / compile / flatten / load) or routes through
- * the repl_dispatch_edit_line_get / _set host-effects sink (scene
- * save/restore, the load.c NULL-fallback). REPL files do not
- * link `editor_state_*` symbols (β invariant). */
+ * The editor accessors editor_state_edit_line / _set / _clamp read
+ * and write this field directly; REPL pipeline code receives the
+ * cursor as an explicit parameter (parse / compile / flatten / load)
+ * or routes through the repl_dispatch_edit_line_get / _set
+ * host-effects sink (scene save/restore, the load.c NULL-fallback).
+ * REPL files do not link `editor_state_*` symbols (β invariant;
+ * storage moved here in Phase 4 of plans/done/edit-line-ownership.md). */
 typedef struct {
     int edit_line_idx;
 } EditorDocumentState;
@@ -197,9 +196,9 @@ typedef struct {
      * variable_panel_drag / variable_panel_drag_mut /
      * variable_panel_handle_drag_* for that state. */
     EditorScrollState      scroll;
-    /* Phase 2 placeholder for the Phase 4 storage flip; the value is
-     * not yet read (accessors forward to ReplState). See
-     * EditorDocumentState above. */
+    /* Editor-owned document cursor storage. Kept adjacent to the
+     * source buffer and scroll state because editor-side callers
+     * move through the text document as one unit. */
     EditorDocumentState    document;
 } EditorState;
 
@@ -342,17 +341,15 @@ void        editor_pending_newline_clear(void);
 /* Document-cursor slice API. The canonical edit-line index over the
  * source-text document.
  *
- * Phase 4 of plans/done/edit-line-ownership.md flipped storage from
- * `ReplState.document.edit_line_idx` to
- * `EditorState.document.edit_line_idx`. These accessors read and
- * write the editor field directly (no forwarder layer).
- *
- * Editor / app / widget code calls these directly. REPL pipeline
- * functions take edit-line as an explicit parameter (parse /
- * compile / flatten / load entry points) or route through the
- * repl_dispatch_edit_line_get / _set host-effects sink in
- * `src/repl/core.h` (scene save/restore, the load.c NULL-fallback).
- * β invariant: REPL files do not call editor accessors. */
+ * These accessors read and write `EditorState.document.edit_line_idx`
+ * directly (no forwarder layer). Editor / app / widget code calls
+ * these directly. REPL pipeline functions take edit-line as an
+ * explicit parameter (parse / compile / flatten / load entry points)
+ * or route through the repl_dispatch_edit_line_get / _set
+ * host-effects sink in `src/repl/core.h` (scene save/restore, the
+ * load.c NULL-fallback). β invariant: REPL files do not call editor
+ * accessors (storage moved off `ReplState.document.edit_line_idx` in
+ * Phase 4 of plans/done/edit-line-ownership.md). */
 int                  editor_state_edit_line(void);
 void                 editor_state_edit_line_set(int line);
 void                 editor_state_edit_line_clamp(void);

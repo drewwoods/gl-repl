@@ -110,8 +110,9 @@ EditorCommitResult editor_commit_current_input(const struct EditorServices_s *se
     editor_undo_push_snapshot();
 
     /* Past the preflight every apply call below succeeds.
-     * Caller-owned cursor (Phase 1 of edit-line-ownership.md):
-     * thread the edit-line through apply, write back on success. */
+     * Caller-owned cursor: thread the edit-line through apply,
+     * then write it back on success (implemented in Phase 1 of
+     * edit-line-ownership.md). */
     services->apply_predef_ops(&change, services->user);
     services->apply_scratch_ops(&change, services->user);
     editor_buffer_apply_compiled_change(&change);
@@ -242,10 +243,10 @@ int editor_commit_apply_plan(const EditorCommitPlan *plan) {
 
     /* REPL halves. Caller-owned cursor: read the edit-line into a
      * local int, pass &local to apply so insert cursor math lands
-     * there, write back on success. Phase 1 of
-     * plans/in-review/edit-line-ownership.md dropped the store's
-     * auto-pointer; Phase 3.1 will switch the read/write to
-     * editor_state_edit_line()/_set(). */
+     * there, then write back on success. Keeping the local mirrors
+     * the apply API's cursor-inout contract and avoids touching the
+     * live editor state until apply succeeds (cursor ownership moved
+     * editor-side in Phase 1 of plans/in-review/edit-line-ownership.md). */
     repl_apply_predef_ops(&plan->change);
     repl_apply_scratch_ops(&plan->change);
     editor_buffer_apply_compiled_change(&plan->change);

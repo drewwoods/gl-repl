@@ -249,12 +249,12 @@ void editor_input_clear(void);
 void editor_pending_newline_clear(void);
 void editor_cursor_pos_set(int cursor_pos);
 
-/* Phase 4 of plans/in-review/edit-line-ownership.md: storage flip.
- * The edit-line cursor now lives on g_editor_state.document.edit_line_idx;
- * the editor accessors read/write the field directly. REPL pipeline
- * code receives the value as an explicit function parameter or via
- * the repl_dispatch_edit_line_get/_set sink — never by linking to
- * editor_state_edit_line directly (β invariant). */
+/* The edit-line cursor lives on g_editor_state.document.edit_line_idx;
+ * the editor accessors read and write the field directly. REPL
+ * pipeline code receives the value as an explicit function parameter
+ * or via the repl_dispatch_edit_line_get/_set sink — never by
+ * linking to editor_state_edit_line directly (β invariant;
+ * storage moved here in Phase 4 of plans/in-review/edit-line-ownership.md). */
 int editor_state_edit_line(void) {
     return g_editor_state.document.edit_line_idx;
 }
@@ -264,7 +264,7 @@ void editor_state_edit_line_set(int line) {
      * _clamp() calls. Test fixtures that populate document /
      * buffer counts out of order (count set before lines are
      * inserted) rely on _set storing the requested value verbatim;
-     * the pre-Phase-4 REPL implementation only clamped against
+     * the earlier REPL-side implementation only clamped against
      * the document count it happened to see, which gave the same
      * effective "store verbatim" behavior in the lockstep case. */
     if (line < 0) line = 0;
@@ -344,9 +344,10 @@ void editor_input_len_set(int input_len) {
     /* The trailing default-policy cursor_pos_set clears the anchor as
      * a side effect, which also satisfies the
      * "anchor_pos in [0, input_len]" invariant when the buffer shrinks.
-     * Anchor-preserving callers (Phase E shift handlers) drive the
-     * buffer through narrower primitives and route through
-     * editor_cursor_pos_set_keep_anchor themselves. */
+     * Anchor-preserving callers drive the buffer through narrower
+     * primitives and route through
+     * editor_cursor_pos_set_keep_anchor themselves (for example the
+     * Phase E shift handlers). */
     editor_cursor_pos_set(g_editor_state.input.cursor_pos);
 }
 
@@ -735,9 +736,9 @@ const char *editor_state_line_override_for(int line_idx) {
     return NULL;
 }
 
-/* Phase J7: the legacy `editor_state_variable_drag` / `_mut` /
- * `_reset` forwarders are gone. Callers use `variable_panel_drag` /
- * `_mut` / `variable_panel_handle_drag_reset` directly. */
+/* The legacy `editor_state_variable_drag` / `_mut` / `_reset`
+ * forwarders are gone. Callers use `variable_panel_drag` / `_mut` /
+ * `variable_panel_handle_drag_reset` directly (removed in Phase J7). */
 
 EditorScrollState editor_state_scroll(void) {
     return g_editor_state.scroll;
