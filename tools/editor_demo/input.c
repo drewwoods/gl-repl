@@ -21,10 +21,11 @@
  *     so callers can park on the "virtual" line one past the last
  *     committed buffer entry (where the next Enter creates a fresh
  *     row).
- *   - Ctrl+A / Ctrl+C / Ctrl+X / Ctrl+V -> select-all input,
- *     copy / cut / paste the input row's character-range selection
- *     through EditorClipboardState (input-text payload). Demo-local
- *     only; no system clipboard integration.
+ *   - Ctrl+A / Ctrl+C / Ctrl+X / Ctrl+V (and Cmd+letter on
+ *     macOS) -> select-all input, copy / cut / paste the input
+ *     row's character-range selection through EditorClipboardState
+ *     (input-text payload). Demo-local only; no system clipboard
+ *     integration.
  *   - Escape -> exit.
  *
  * Out of scope (deferred): word jumps, scroll wheel, undo/redo,
@@ -195,14 +196,34 @@ void demo_input_handle_key(unsigned char key, int x, int y) {
         return;
     }
 
-    /* Ctrl+letter byte map: GLUT delivers the ASCII control byte
-     * (Ctrl+A = 0x01, Ctrl+C = 0x03, Ctrl+V = 0x16, Ctrl+X = 0x18),
-     * so no modifier check is needed. Ctrl+H (0x08) is already
-     * handled above as backspace. */
-    if (key == 1)  { demo_handle_select_all(); return; }
-    if (key == 3)  { demo_handle_copy();       return; }
-    if (key == 22) { demo_handle_paste();      return; }
-    if (key == 24) { demo_handle_cut();        return; }
+    /* Clipboard shortcuts: both Ctrl+letter (Linux / Windows /
+     * X11 GLUT) and Cmd+letter (macOS GLUT) trip the same paths.
+     * Two code paths arrive here:
+     *
+     *   - real Ctrl: GLUT delivers the ASCII control byte
+     *     (Ctrl+A = 0x01, Ctrl+C = 0x03, Ctrl+V = 0x16,
+     *     Ctrl+X = 0x18). glutGetModifiers reports CTRL.
+     *   - macOS Cmd: Apple's GLUT maps Cmd to CTRL in
+     *     glutGetModifiers but delivers the *letter* byte
+     *     ('a'/'c'/'v'/'x'), so the modifier check is what
+     *     distinguishes Cmd+letter from a plain typed letter.
+     *
+     * Gating the letter form on the CTRL modifier prevents a bare
+     * 'c' / 'x' from triggering the shortcut. Ctrl+H (0x08) is
+     * already handled above as backspace. */
+    int ctrl_or_cmd = (glutGetModifiers() & GLUT_ACTIVE_CTRL) != 0;
+    if (key == 1  || (ctrl_or_cmd && (key == 'a' || key == 'A'))) {
+        demo_handle_select_all(); return;
+    }
+    if (key == 3  || (ctrl_or_cmd && (key == 'c' || key == 'C'))) {
+        demo_handle_copy(); return;
+    }
+    if (key == 22 || (ctrl_or_cmd && (key == 'v' || key == 'V'))) {
+        demo_handle_paste(); return;
+    }
+    if (key == 24 || (ctrl_or_cmd && (key == 'x' || key == 'X'))) {
+        demo_handle_cut(); return;
+    }
 
     if (key_is_printable_ascii(key)) {
         (void)edit_op_type_char((char)key);
