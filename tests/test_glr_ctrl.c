@@ -746,6 +746,92 @@ static void test_view_mode_projection_transition_wiring(void) {
                 glr_camera().ry > 0.0f);
 }
 
+/* The controller's saved-3D snapshot drives the 2D->3D restoration.
+ * Without an external refresh, switching examples while dwelling in 2D
+ * leaves the snapshot pointing at the pose captured on 2D entry — so
+ * pressing 3D restores the *previous* example's angle, not the one
+ * currently loaded. The bridge call into
+ * glr_ctrl_view_record_external_3d_pose lets the example loader keep
+ * the snapshot aligned. */
+static void tick_until_view_settled(int max_iters) {
+    /* The view-mode transition runs projection and camera in sequence;
+     * tick until both finish so this test stays oblivious to whichever
+     * order the controller chains them in. */
+    for (int i = 0; i < max_iters; i++) {
+        glr_ctrl_tick();
+        if (glr_camera_target_active())
+            continue;
+        glr_ctrl_display_frame();
+        float mix = g_last_scene_config.projection_mix;
+        if (mix == 0.0f || mix == 1.0f)
+            return;
+    }
+}
+
+static void test_view_record_external_3d_pose_tracks_in_ortho(void) {
+    GlrCameraState cam;
+
+    printf("--- imrepl_ctrl saved 3d pose refresh ---\n");
+    prepare_display_fixture();
+    replay_state_mut()->active = 0;
+    replay_state_mut()->state = REPLAY_OFF;
+    glr_ctrl_display_frame();
+
+    /* 1) Enter 2D from a non-flat 3D pose; saved snapshot is the
+     *    pre-ortho camera (rx=11, ry=22 from prepare_display_fixture). */
+    glr_state_presentation_mut()->ortho_mode = 1;
+    tick_until_view_settled(400);
+    cam = glr_camera();
+    ASSERT_FLOAT("camera flattened to rx=0", cam.rx, 0.0f);
+    ASSERT_FLOAT("camera flattened to ry=0", cam.ry, 0.0f);
+
+    /* 2) An example load (via the camera bridge) reports the new 3D
+     *    target pose while we're still in 2D. */
+    glr_ctrl_view_record_external_3d_pose(35.0f, 70.0f, 0.0f);
+
+    /* 3) Returning to 3D should ease toward the reported pose, not the
+     *    snapshot captured on 2D entry. */
+    glr_state_presentation_mut()->ortho_mode = 0;
+    tick_until_view_settled(400);
+    cam = glr_camera();
+    ASSERT_FLOAT("camera-to-3d uses refreshed rx", cam.rx, 35.0f);
+    ASSERT_FLOAT("camera-to-3d uses refreshed ry", cam.ry, 70.0f);
+}
+
+/* In 3D mode the live camera is authoritative, so an external 3D-pose
+ * report (a stale callback firing outside the ortho window) must not
+ * smear the saved snapshot. */
+static void test_view_record_external_3d_pose_noop_in_perspective(void) {
+    GlrCameraState cam_before;
+    GlrCameraState cam_after;
+
+    printf("--- imrepl_ctrl saved 3d pose noop in 3d ---\n");
+    prepare_display_fixture();
+    replay_state_mut()->active = 0;
+    replay_state_mut()->state = REPLAY_OFF;
+    glr_ctrl_display_frame();
+
+    /* Seed a saved snapshot by entering and leaving 2D. */
+    glr_state_presentation_mut()->ortho_mode = 1;
+    tick_until_view_settled(400);
+    glr_state_presentation_mut()->ortho_mode = 0;
+    tick_until_view_settled(400);
+    cam_before = glr_camera();
+
+    /* Fire the bridge while in 3D — the saved snapshot must be ignored. */
+    glr_ctrl_view_record_external_3d_pose(99.0f, 99.0f, 99.0f);
+
+    glr_state_presentation_mut()->ortho_mode = 1;
+    tick_until_view_settled(400);
+    glr_state_presentation_mut()->ortho_mode = 0;
+    tick_until_view_settled(400);
+    cam_after = glr_camera();
+
+    ASSERT_FLOAT("noop in 3d: rx unchanged", cam_after.rx, cam_before.rx);
+    ASSERT_FLOAT("noop in 3d: ry unchanged", cam_after.ry, cam_before.ry);
+    ASSERT_FLOAT("noop in 3d: tz unchanged", cam_after.tz, cam_before.tz);
+}
+
 /* QUIT_RECOVERY_FILE is the filename Ctrl+Q / SIGINT writes a recovery
  * copy to. Verify the constant value and that the save helper actually
  * lands a file by that name in the current directory. */
@@ -790,6 +876,8 @@ int main(void) {
     test_pointer_state_tracks_controller_mouse_routes();
     test_overlay_transition_machine_wiring();
     test_view_mode_projection_transition_wiring();
+    test_view_record_external_3d_pose_tracks_in_ortho();
+    test_view_record_external_3d_pose_noop_in_perspective();
     test_quit_recovery_file();
 
     printf("\n");

@@ -23,6 +23,7 @@
  */
 #include "repl/export.h"
 #include "app/glr_camera.h"
+#include "app/glr_ctrl.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -230,6 +231,13 @@ static void cam_apply_example_block(const ReplExportCameraBlock *block) {
     glr_camera_restore(&start);
     glr_camera_ease_to(target.rx, target.ry, target.dist,
                        target.tx, target.ty, target.tz);
+    /* Keep the controller's saved-3D snapshot aligned with the example
+     * the user is now looking at: if we're dwelling in 2D, the visible
+     * camera will ease to this pose under ortho, but without this hook
+     * the 2D->3D restoration would still land on the pose captured at
+     * 2D entry (typically stale, sometimes flat) instead of the
+     * currently-loaded example's intended angle. */
+    glr_ctrl_view_record_external_3d_pose(target.rx, target.ry, target.tz);
 }
 
 /* ----- Bridge install ------------------------------------------------- */
