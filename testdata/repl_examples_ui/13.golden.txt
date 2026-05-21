@@ -44,11 +44,15 @@ void display() {
   glTranslatef(-0.0000f, -0.0000f, -0.0000f);
 --- header_post ---
 --- source ---
-  static float n, b, x, y, z, a;
+  static float grid, extent, x, y, z, invGradMag; // strip cell index, world extent, vertex coords, 1/|gradient|
+  static float amp = 0.4; // wave amplitude (peak |y|)
+  static float freq = 2.5; // spatial frequency along x and z
+  static float zPhase = 0.7; // z-axis time phase: z evolves slower than x (<1)
 
   // @cfg vertex_points = 0
   glClearColor(0.1, 0.1, 0.1, 1);
-  // Waves: nested for-loops + math
+  // Animated surface: y = sin(freq*x + t) * cos(freq*z + zPhase*t) * amp
+  // Drawn as a triangle strip per row with analytic per-vertex normals.
   glEnable(GL_DEPTH_TEST);
   glEnable(GL_LIGHTING);
   glEnable(GL_NORMALIZE);
@@ -57,22 +61,26 @@ void display() {
   glEnable(GL_LIGHT1);
   glEnable(GL_LIGHT0);
   glShadeModel(GL_SMOOTH);
-  n = 16;
-  b = 3.0; // breath
-  for(i, 0, n) {
+  grid = 16; // rows/cols of strip cells
+  extent = 3.0; // total surface width along x and z
+  for(i, 0, grid) {
     glBegin(GL_TRIANGLE_STRIP);
-      for(j, 0, n+1) {
-        x = -b/2 + b*j/n;
-        z = -b/2 + b*i/n;
-        y = sin(x*2.5 + t)*cos(z*2.5 + t*0.7)*0.4;
-        a = 1.0/sqrt(1 + 0.4*0.4*6.25*(cos(x*2.5 + t)*cos(x*2.5 + t)*cos(z*2.5 + t*0.7)*cos(z*2.5 + t*0.7) + sin(x*2.5 + t)*sin(x*2.5 + t)*sin(z*2.5 + t*0.7)*sin(z*2.5 + t*0.7)));
-        glNormal3f(-0.4*2.5*cos(x*2.5 + t)*cos(z*2.5 + t*0.7)*a, a, 0.4*2.5*sin(x*2.5 + t)*sin(z*2.5 + t*0.7)*a);
+      for(j, 0, grid+1) {
+        // row i (z fixed), step j across x; emit two vertices per j to feed the strip
+        x = -extent/2 + extent*j/grid;
+        z = -extent/2 + extent*i/grid;
+        y = sin(x*freq + t)*cos(z*freq + zPhase*t)*amp;
+        // gradient = (dy/dx, 0, dy/dz); normal = (-dy/dx, 1, -dy/dz) / |...|.
+        // invGradMag = 1 / sqrt(1 + amp^2 * freq^2 * (cos^2*cos^2 + sin^2*sin^2)).
+        invGradMag = 1.0/sqrt(1 + amp*amp*freq*freq*(cos(x*freq + t)*cos(x*freq + t)*cos(z*freq + zPhase*t)*cos(z*freq + zPhase*t) + sin(x*freq + t)*sin(x*freq + t)*sin(z*freq + zPhase*t)*sin(z*freq + zPhase*t)));
+        glNormal3f(-amp*freq*cos(x*freq + t)*cos(z*freq + zPhase*t)*invGradMag, invGradMag, amp*freq*sin(x*freq + t)*sin(z*freq + zPhase*t)*invGradMag);
         glColor3f(0.35 + 0.35*sin(x + t), 0.5 + 0.3*cos(z + t*0.5), 0.65 + 0.25*sin(x*z + t));
         glVertex3f(x, y, z);
-        z = -b/2 + b*(i + 1)/n;
-        y = sin(x*2.5 + t)*cos(z*2.5 + t*0.7)*0.4;
-        a = 1.0/sqrt(1 + 0.4*0.4*6.25*(cos(x*2.5 + t)*cos(x*2.5 + t)*cos(z*2.5 + t*0.7)*cos(z*2.5 + t*0.7) + sin(x*2.5 + t)*sin(x*2.5 + t)*sin(z*2.5 + t*0.7)*sin(z*2.5 + t*0.7)));
-        glNormal3f(-0.4*2.5*cos(x*2.5 + t)*cos(z*2.5 + t*0.7)*a, a, 0.4*2.5*sin(x*2.5 + t)*sin(z*2.5 + t*0.7)*a);
+        // second strip vertex: same x, but z stepped to row i+1
+        z = -extent/2 + extent*(i + 1)/grid;
+        y = sin(x*freq + t)*cos(z*freq + zPhase*t)*amp;
+        invGradMag = 1.0/sqrt(1 + amp*amp*freq*freq*(cos(x*freq + t)*cos(x*freq + t)*cos(z*freq + zPhase*t)*cos(z*freq + zPhase*t) + sin(x*freq + t)*sin(x*freq + t)*sin(z*freq + zPhase*t)*sin(z*freq + zPhase*t)));
+        glNormal3f(-amp*freq*cos(x*freq + t)*cos(z*freq + zPhase*t)*invGradMag, invGradMag, amp*freq*sin(x*freq + t)*sin(z*freq + zPhase*t)*invGradMag);
         glColor3f(0.35 + 0.35*sin(x + t), 0.5 + 0.3*cos(z + t*0.5), 0.65 + 0.25*sin(x*z + t));
         glVertex3f(x, y, z);
       }
