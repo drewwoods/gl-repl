@@ -5,15 +5,14 @@
 #include <stddef.h>
 #include <string.h>
 
-/* Defaults preserve the legacy behavior the pre-migration
+/* Defaults preserve the behavior the pre-migration
  * src/repl/state_defaults.inc enshrined: pointer button starts at -1
  * (no button held); cursor starts visible so the renderer's blink
  * phase begins ON; camera faces the same orbit/distance the example
  * loader expects on a fresh session; other slices zeroed.
  *
- * variable_panel visibility lives on the variable_panel peer
- * (Phase F commit 31); callers use variable_panel_view /
- * variable_panel_view_mut directly. */
+ * variable_panel visibility lives on the variable_panel peer; callers
+ * use variable_panel_view / variable_panel_view_mut directly. */
 #define UI_STATE_INITIAL                                              \
     {                                                                 \
         .status = { .text = "", .ttl = 0, .kind = UI_STATUS_INFO },   \
@@ -97,9 +96,8 @@ void ui_state_help_reset(void) {
     g_ui_state.help = g_ui_state_defaults.help;
 }
 
-/* Phase J7: the legacy `ui_state_variable_panel` / `_mut`
- * forwarders are gone. Callers use `variable_panel_view` /
- * `variable_panel_view_mut` directly. */
+/* Variable-panel accessors live on the variable_panel peer:
+ * use `variable_panel_view` / `variable_panel_view_mut` directly. */
 
 UiProfilePanelState ui_state_profile_panel(void) {
     return g_ui_state.profile_panel;
@@ -160,8 +158,6 @@ void ui_state_code_panel_reset(void) {
 /* Camera accessors moved to glr_camera.c. Storage lives there too;
  * the UiState.camera field is gone (see src/ui/state.h). */
 
-/* Legacy `repl_state_*` forwarders for the slices migrated in Phase 1
- * commit 8 (and the code_panel slice migrated in Phase A commit 12)
- * are defined in src/repl/state.c rather than here so the
- * check-state-boundaries guard's "no repl_state_*_mut from ui_*.c"
- * rule keeps working. */
+/* The `repl_state_*` forwarders for these UI slices are defined in
+ * src/repl/state.c rather than here so the check-state-boundaries
+ * guard's "no repl_state_*_mut from ui_*.c" rule keeps working. */

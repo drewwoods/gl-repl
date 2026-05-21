@@ -5,8 +5,8 @@
  * renderer, hit-testing, search/cursor positioning, tests, and visual text
  * dumps. Keep wrapping math here so those paths do not grow separate copies.
  *
- * Moved from src/editor/code_layout.c in Phase 1 of the editor-demo SRP split.
- * This file has no dependency on repl, editor, or app headers.
+ * No dependency on repl, editor, or app headers (originally lived in
+ * src/editor/code_layout.c; moved here for the editor-demo SRP split).
  */
 #include "ui/text_layout.h"
 
