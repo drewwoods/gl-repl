@@ -34,6 +34,7 @@ void ui_state_reset(void);
 UiStatusState  ui_state_status(void);
 UiStatusState *ui_state_status_mut(void);
 void             ui_state_status_set(const char *message);
+void             ui_state_status_set_error(const char *message);
 void             ui_state_status_clear(void);
 void             ui_state_status_tick(void);
 

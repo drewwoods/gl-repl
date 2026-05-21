@@ -476,14 +476,14 @@ static void scene_name_from_filename(const char *path,
 
 int repl_save_workspace(const char *dir, const ReplExportLayout *layout) {
     if (!dir || !*dir) {
-        repl_set_status("Workspace save: no folder provided");
+        repl_set_status_error("Workspace save: no folder provided");
         return -1;
     }
 
     if (mkdir(dir, 0755) != 0 && errno != EEXIST) {
         char msg[256];
         snprintf(msg, sizeof(msg), "Workspace save: cannot create %s", dir);
-        repl_set_status(msg);
+        repl_set_status_error(msg);
         return -1;
     }
 
@@ -544,7 +544,7 @@ void repl_save_active_scene(const ReplExportLayout *layout) {
             char emsg[WORKSPACE_DIR_MAX + 48];
             snprintf(emsg, sizeof(emsg),
                      "Save scene: cannot create %s", g_workspace_dir);
-            repl_set_status(emsg);
+            repl_set_status_error(emsg);
             return;
         }
         snprintf(path, sizeof(path), "%s/%s.c", g_workspace_dir, slug);
@@ -610,7 +610,7 @@ int repl_load_workspace(const char *dir) {
     if (!d) {
         char msg[256];
         snprintf(msg, sizeof(msg), "Workspace load: cannot open %s", dir);
-        repl_set_status(msg);
+        repl_set_status_error(msg);
         return -1;
     }
 
@@ -843,7 +843,7 @@ int repl_promote_example_if_needed(void) {
             }
         }
         if (slot < 0) {
-            repl_set_status("All user scene slots full -- save workspace to free a slot");
+            repl_set_status_error("All user scene slots full -- save workspace to free a slot");
             return -1;
         }
     }

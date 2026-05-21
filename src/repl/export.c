@@ -3358,7 +3358,7 @@ void repl_export_save_output(const char *filename, SourceTextView text,
                              const ReplExportLayout *layout) {
     FILE *f = fopen(filename, "w");
     if (!f) {
-        repl_set_status("Error: cannot write output.c");
+        repl_set_status_error("Error: cannot write output.c");
         return;
     }
 

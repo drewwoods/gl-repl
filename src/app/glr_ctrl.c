@@ -1931,6 +1931,7 @@ void glr_publish_replay_annotations(const ReplReplayAnnotationOutput *out) {
  * (clearing the ui_state_status_set / editor stubs). */
 static const ReplHostEffects g_glr_host_effects = {
     .status                     = ui_state_status_set,
+    .status_error               = ui_state_status_set_error,
     .example_presentation_reset = glr_app_reset_example_chrome,
     .input_reset                = glr_app_editor_input_reset,
     .insert_mode_off            = glr_app_editor_insert_mode_off,
@@ -2827,13 +2828,13 @@ static int glr_ctrl_apply_variable_panel_value_change(
     if (repl_compile_set_predef_value(value_change->name, value_change->value,
                                       &ctx, &compiled,
                                       err, sizeof(err)) != REPL_COMPILE_OK) {
-        repl_set_status(err[0] ? err : "Variable update failed");
+        repl_set_status_error(err[0] ? err : "Variable update failed");
         return 1;
     }
 
     capture_undo = !variable_panel_drag_undo_snapshot_pushed();
     if (!editor_commit_apply_external_change(&compiled, capture_undo)) {
-        repl_set_status("Command buffer full!");
+        repl_set_status_error("Command buffer full!");
         return 1;
     }
     if (capture_undo)

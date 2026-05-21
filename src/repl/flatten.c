@@ -647,7 +647,7 @@ void repl_flatten_commands(int edit_line_idx) {
     repl_state_flat_program_set_user_lighting_enabled(
         result.user_lighting_enabled);
     if (result.status[0])
-        repl_set_status(result.status);
+        repl_set_status_error(result.status);
 
     repl_flatten_refresh_current_block_highlight(edit_line_idx);
 }

@@ -100,6 +100,11 @@ void repl_recompute_autonormals(int autonormal_enabled,
 
 /* Shared status/document helpers surfaced outside src/repl/core.c. */
 void        repl_set_status(const char *msg);
+/* Error variant: dispatches through `status_error` so the UI renders
+ * the status bar in red. Falls back to `status` when the host bridge
+ * does not provide an error hook (so demo / test harnesses still see
+ * the text). */
+void        repl_set_status_error(const char *msg);
 
 /* Controller-installed side-effect hooks for pipeline-only code paths.
  *
@@ -122,6 +127,12 @@ typedef struct {
     /* Surface a diagnostic/status message. The controller routes this
      * to UiState; pipeline TUs call repl_set_status() unchanged. */
     void (*status)(const char *msg);
+    /* Same as `status` but tags the message as an error so the
+     * controller can render it in the red-palette status bar. NULL is
+     * permitted — `repl_set_status_error()` then falls back to the
+     * info path so test harnesses without a host bridge still see the
+     * message text. */
+    void (*status_error)(const char *msg);
     /* Refresh scene-bound presentation defaults (wireframe, grid,
      * axes, vertex overlays, backdrop) before each example load. The
      * `presentation` slice lives on glr_state, out of the REPL

@@ -94,7 +94,7 @@ static int prompt_char_ok(unsigned char c) {
  * see the same message. */
 static void prompt_set_err(const char *msg) {
     snprintf(g_prompt_err, sizeof(g_prompt_err), "%s", msg ? msg : "");
-    if (msg && msg[0]) repl_set_status(msg);
+    if (msg && msg[0]) repl_set_status_error(msg);
 }
 
 /* Translate a load-error reason from repl_load_scene_as_new_slot

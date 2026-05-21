@@ -124,7 +124,7 @@ void editor_undo_push_snapshot(void) {
 
 void editor_undo_pop_snapshot(void) {
     if (tutorial_active()) {
-        repl_set_status("Undo disabled during tutorial");
+        repl_set_status_error("Undo disabled during tutorial");
         return;
     }
 
@@ -148,7 +148,7 @@ void editor_undo_pop_snapshot(void) {
 
 void editor_undo_do_redo(void) {
     if (tutorial_active()) {
-        repl_set_status("Undo disabled during tutorial");
+        repl_set_status_error("Undo disabled during tutorial");
         return;
     }
 

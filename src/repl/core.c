@@ -92,6 +92,15 @@ void repl_set_status(const char *msg) {
         g_host_effects->status(msg);
 }
 
+void repl_set_status_error(const char *msg) {
+    if (!g_host_effects || !msg || !msg[0])
+        return;
+    if (g_host_effects->status_error)
+        g_host_effects->status_error(msg);
+    else if (g_host_effects->status)
+        g_host_effects->status(msg);
+}
+
 void repl_dispatch_example_presentation_reset(unsigned int tag_mask) {
     if (g_host_effects && g_host_effects->example_presentation_reset)
         g_host_effects->example_presentation_reset(tag_mask);
@@ -421,7 +430,7 @@ static int parse_and_normalize_impl(const char *line, int pos,
     ReplParsedLine pl;
     int parsed = repl_parser_parse_command_ctx(line, &pl, &parse_ctx);
     if (!parsed && normalize_parse_err[0])
-        repl_set_status(normalize_parse_err);
+        repl_set_status_error(normalize_parse_err);
 
     if (!parsed) return 0;
     *out_cmd = pl.cmd;

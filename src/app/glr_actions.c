@@ -589,7 +589,7 @@ int glr_action_menu_item_activate(int menu_id, int item_idx) {
         if (item_idx == GLR_FILE_ITEM_RENAME_SCENE) {
             int slot = repl_active_user_scene();
             if (slot < 0) {
-                repl_set_status("No active scene to rename");
+                repl_set_status_error("No active scene to rename");
                 return 1;
             }
             editor_inline_rename_begin(slot);
