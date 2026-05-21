@@ -10,7 +10,8 @@
  *   - Printable ASCII -> edit_op_type_char.
  *   - Backspace / Delete -> edit_op_backspace.
  *   - Cursor Left / Right / Home / End within the active line ->
- *     EditorState primitives.
+ *     EditorState primitives. Shift extends a character-range
+ *     selection in the input row via editor_cursor_pos_extend_selection.
  *   - Enter (\r or \n) -> split current input at cursor; commit
  *     left half to the buffer at edit_line, push right half into
  *     a new line at edit_line+1, advance edit_line, load the new
@@ -20,12 +21,15 @@
  *     so callers can park on the "virtual" line one past the last
  *     committed buffer entry (where the next Enter creates a fresh
  *     row).
+ *   - Ctrl+A / Ctrl+C / Ctrl+X / Ctrl+V -> select-all input,
+ *     copy / cut / paste the input row's character-range selection
+ *     through EditorClipboardState (input-text payload). Demo-local
+ *     only; no system clipboard integration.
  *   - Escape -> exit.
  *
- * Out of scope (deferred): word jumps, Shift+arrow selection,
- * Ctrl+A/C/X/V, scroll wheel, undo/redo, find overlay. Each is its
- * own follow-up step once the corresponding edit_ops primitive
- * lands.
+ * Out of scope (deferred): word jumps, scroll wheel, undo/redo,
+ * find overlay, multi-line / line-range copy, system clipboard
+ * (NSPasteboard / X11 selections).
  */
 
 #include "input.h"
@@ -127,6 +131,47 @@ static void demo_handle_enter(void) {
     editor_cursor_pos_set(0);
 }
 
+/* ---- Clipboard ------------------------------------------------- */
+
+/* Select-all: anchor at start, extend cursor to end. Sets up the
+ * input row so Ctrl+C immediately copies the whole row. */
+static void demo_handle_select_all(void) {
+    int len = editor_input_len();
+    if (len <= 0) return;
+    editor_cursor_pos_set(0);
+    editor_cursor_pos_extend_selection(len);
+}
+
+/* Copy: stash the active selection into EditorClipboardState's
+ * input-text payload. No-op if no selection. */
+static void demo_handle_copy(void) {
+    if (!editor_input_selection_active()) return;
+    int lo = editor_input_selection_lo();
+    int hi = editor_input_selection_hi();
+    editor_clipboard_set_input_text(editor_input_text() + lo, hi - lo);
+}
+
+/* Cut: copy, then drop the selection from the input buffer. */
+static void demo_handle_cut(void) {
+    if (!editor_input_selection_active()) return;
+    demo_handle_copy();
+    (void)edit_op_consume_input_selection();
+}
+
+/* Paste: drop any active selection, then splice the clipboard's
+ * input-text payload in at the (now collapsed) cursor. Insert one
+ * char at a time so the existing cursor/anchor invariants on the
+ * buffer-only primitive stay intact; stop early on buffer-full. */
+static void demo_handle_paste(void) {
+    if (!editor_clipboard_has_input_text()) return;
+    (void)edit_op_consume_input_selection();
+    const char *clip = editor_clipboard_input_text();
+    int n = editor_clipboard_input_text_len();
+    for (int i = 0; i < n; i++) {
+        if (!edit_op_buffer_insert_char_at_cursor(clip[i])) break;
+    }
+}
+
 /* ---- Key dispatch ---------------------------------------------- */
 
 void demo_input_handle_key(unsigned char key, int x, int y) {
@@ -150,13 +195,22 @@ void demo_input_handle_key(unsigned char key, int x, int y) {
         return;
     }
 
+    /* Ctrl+letter byte map: GLUT delivers the ASCII control byte
+     * (Ctrl+A = 0x01, Ctrl+C = 0x03, Ctrl+V = 0x16, Ctrl+X = 0x18),
+     * so no modifier check is needed. Ctrl+H (0x08) is already
+     * handled above as backspace. */
+    if (key == 1)  { demo_handle_select_all(); return; }
+    if (key == 3)  { demo_handle_copy();       return; }
+    if (key == 22) { demo_handle_paste();      return; }
+    if (key == 24) { demo_handle_cut();        return; }
+
     if (key_is_printable_ascii(key)) {
         (void)edit_op_type_char((char)key);
         return;
     }
 
-    /* Other control bytes (Tab, Ctrl+letter) intentionally fall
-     * through as no-ops. Adding bindings here is the natural
+    /* Other control bytes (Tab, remaining Ctrl+letter) intentionally
+     * fall through as no-ops. Adding bindings here is the natural
      * extension point. */
 }
 
@@ -167,19 +221,33 @@ void demo_input_handle_special(int key, int x, int y) {
     int cur = input.cursor_pos;
     int len = input.input_len;
     int line = editor_state_edit_line();
+    /* Shift extends a character-range selection via the editor's
+     * extend-selection primitive (pins the anchor on first
+     * extension; subsequent moves grow / shrink in place). Plain
+     * arrow moves clear any active anchor — both behaviors are
+     * what mainstream editors do. */
+    int shift = (glutGetModifiers() & GLUT_ACTIVE_SHIFT) != 0;
 
     switch (key) {
     case GLUT_KEY_LEFT:
-        if (cur > 0) editor_cursor_pos_set(cur - 1);
+        if (cur > 0) {
+            if (shift) editor_cursor_pos_extend_selection(cur - 1);
+            else       editor_cursor_pos_set(cur - 1);
+        }
         break;
     case GLUT_KEY_RIGHT:
-        if (cur < len) editor_cursor_pos_set(cur + 1);
+        if (cur < len) {
+            if (shift) editor_cursor_pos_extend_selection(cur + 1);
+            else       editor_cursor_pos_set(cur + 1);
+        }
         break;
     case GLUT_KEY_HOME:
-        editor_cursor_pos_set(0);
+        if (shift) editor_cursor_pos_extend_selection(0);
+        else       editor_cursor_pos_set(0);
         break;
     case GLUT_KEY_END:
-        editor_cursor_pos_set(len);
+        if (shift) editor_cursor_pos_extend_selection(len);
+        else       editor_cursor_pos_set(len);
         break;
     case GLUT_KEY_UP:
         demo_input_navigate_to(line - 1);

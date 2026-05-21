@@ -16,7 +16,7 @@
 
 static const GLfloat k_clr_input_text[3]     = { 0.95f, 0.95f, 0.90f };
 static const GLfloat k_clr_active_row_bg[4]  = { 0.15f, 0.18f, 0.28f, 0.70f };
-static const GLfloat k_clr_selection_band[4] = { 0.20f, 0.30f, 0.50f, 0.55f };
+static const GLfloat k_clr_selection_band[4] = { 0.35f, 0.55f, 0.95f, 0.75f };
 static const GLfloat k_clr_search_match[4]   = { 0.25f, 0.45f, 0.85f, 0.30f };
 static const GLfloat k_clr_search_hit[4]     = { 0.95f, 0.65f, 0.18f, 0.55f };
 static const GLfloat k_clr_ghost_text[4]     = { 0.50f, 0.55f, 0.65f, 0.55f };
