@@ -194,9 +194,17 @@ static void seed_for_loop_program(void) {
 /* --- Program loaders -------------------------------------------------- */
 
 static int load_text_lines(const char *const *lines) {
-    /* Reset state before each program so the two samples don't smear. */
+    /* Reset state before each program so the two samples don't smear.
+     * Includes the demo-local host cursor: repl_state_init_defaults +
+     * source_document_clear zero the REPL document and the source
+     * lines, but the host cursor (file-static g_demo_edit_line backing
+     * the dispatcher) is independent of both. Without resetting it
+     * here, the previous sample's final cursor value would leak into
+     * the new sample's load loop and onward into flatten / highlight
+     * focus when the user cycles between samples. */
     repl_state_init_defaults();
     source_document_clear();
+    repl_dispatch_edit_line_set(0);
 
     int loaded = 0;
     for (int i = 0; lines[i]; i++) {
@@ -254,6 +262,10 @@ static int load_text_lines(const char *const *lines) {
  * No editor commit path involved. */
 static void seed_variable_driven_program(void) {
     source_document_clear();
+    /* Reset the demo-local host cursor (see load_text_lines for the
+     * rationale — the cursor is independent of REPL document /
+     * source_document storage). */
+    repl_dispatch_edit_line_set(0);
 
     /* `t` is created by repl_state_init_defaults() -> ... ->
      * repl_eval_init_predef_vars(). Add `r`. */
