@@ -9,6 +9,7 @@ bench_repl
 /scene_demo
 /repl_demo
 /editor_demo
+/editor_demo.txt
 .cache/
 compile_commands.json
 coverage.lcov
