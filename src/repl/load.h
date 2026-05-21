@@ -33,10 +33,13 @@
  *
  * `edit_line_inout` supplies the insertion index; the function
  * advances it as the document grows so successive calls in a loop
- * see the canonical insert position. Passing NULL falls back to a
- * function-local int initialized to the current document count
- * (append-at-end semantics), which suits ad-hoc callers and tests
- * that don't care about cursor placement.
+ * see the canonical insert position. Passing NULL falls back to
+ * operating on the ambient host cursor through
+ * repl_dispatch_edit_line_get / _set (Phase 4 of
+ * plans/done/edit-line-ownership.md): the value is read at entry,
+ * advanced across the per-line apply, and written back on success.
+ * Ad-hoc callers / tests get the pre-migration behavior where the
+ * loader's cursor advance was visible to the next caller.
  *
  * Caller responsibilities:
  *   - Initialize *edit_line_inout to the desired insertion index, which

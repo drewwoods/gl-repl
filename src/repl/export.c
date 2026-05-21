@@ -3618,6 +3618,14 @@ int repl_export_load_from_file(const char *filename) {
     if (state.loaded > 0) {
         repl_source_scope_depth_cache_invalidate();
         repl_reformat_program();
+        /* Publish the post-import cursor to the host. Without this,
+         * downstream callers (e.g. repl_load_scene_as_new_slot, which
+         * snapshots via repl_dispatch_edit_line_get right after this
+         * returns) see the pre-import value — leaving Load Scene From
+         * File parked at line 0 with insert mode off, so the next
+         * commit replaces the first imported command instead of
+         * appending. Phase 4 of plans/done/edit-line-ownership.md. */
+        repl_dispatch_edit_line_set(state.edit_line);
         char msg[256];
         if (state.warnings > 0)
             snprintf(msg, sizeof(msg),

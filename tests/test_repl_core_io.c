@@ -30,6 +30,10 @@ static TestHarness g_harness = TEST_HARNESS_INIT;
     TEST_ASSERT_TRUE(&g_harness, label, cond); \
 } while (0)
 
+#define ASSERT_INT(label, got, expected) do { \
+    TEST_ASSERT_INT(&g_harness, label, got, expected); \
+} while (0)
+
 static void declare_test_vars(void) {
     char err[128];
     repl_eval_declare_predef_var("x", err, sizeof(err));
@@ -1020,6 +1024,60 @@ int main(void) {
                     strstr(buf, "#undef tgamma") != NULL);
 
         remove(math_collision_path);
+    }
+
+    /* (F) Post-import host cursor publication.
+     *
+     * Phase 4 of plans/done/edit-line-ownership.md moved cursor
+     * storage out of ReplState. repl_export_load_from_file threads
+     * cursor through ImportState.edit_line internally; review
+     * finding [P1] noted that the final value wasn't being
+     * published to the host sink, leaving downstream callers
+     * (notably repl_load_scene_as_new_slot, which snapshots via
+     * repl_dispatch_edit_line_get right after the import returns)
+     * to see 0 instead of the post-import row. Pin the contract
+     * here so the next person touching the import flow doesn't
+     * silently regress it. */
+    {
+        const char *import_cursor_path = "/tmp/repl_core_import_cursor.c";
+
+        /* (1) Build a small program and export it. */
+        glr_app_reset_all(); declare_test_vars();
+        editor_feed_line("glBegin(GL_TRIANGLES);");
+        editor_feed_line("glVertex3f(0, 0, 0);");
+        editor_feed_line("glVertex3f(1, 0, 0);");
+        editor_feed_line("glVertex3f(0, 1, 0);");
+        editor_feed_line("glEnd();");
+        repl_export_save_output(import_cursor_path,
+                                source_document_view(), NULL);
+
+        /* (2) Reset to a clean slate (cursor → 0). */
+        glr_app_reset_all(); declare_test_vars();
+        ASSERT_INT("pre-import cursor is 0",
+                   editor_state_edit_line(), 0);
+
+        /* (3) Re-import. */
+        ASSERT_TRUE("import succeeded",
+                    repl_export_load_from_file(import_cursor_path) == 1);
+
+        /* (4) The post-import cursor must reflect the import's final
+         *     ImportState.edit_line — i.e., the next-line slot above
+         *     the last imported command, not the pre-import 0. Without
+         *     the [P1] fix the cursor would still be 0 here, causing
+         *     a subsequent commit to replace the first imported row
+         *     instead of appending. */
+        ASSERT_TRUE("post-import cursor advanced past 0",
+                    editor_state_edit_line() > 0);
+        /* Tighter pin: the importer lands the cursor at the row
+         * one past the last imported command (the canonical "next
+         * append slot"). The exact value depends on the exported
+         * file's prologue (header / @cfg / @declare markers, blank
+         * runs), so anchor against the import's own bookkeeping —
+         * document_count after import is the unambiguous reference. */
+        ASSERT_INT("post-import cursor at document end",
+                   editor_state_edit_line(), repl_state_document_count());
+
+        remove(import_cursor_path);
     }
 
     printf("repl_core_io: %d/%d passed\n", g_harness.passed, g_harness.run);
