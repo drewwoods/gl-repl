@@ -58,16 +58,17 @@ int repl_load_apply_line(const char *line, char *err, int err_size,
      * preserve line count. Flatten drops both from the executable stream. */
 
     /* Caller-owned cursor (Phase 3.6.5 of
-     * plans/in-review/edit-line-ownership.md). edit_line_inout
-     * supplies the insertion position; the per-line apply
-     * advances it as the document grows. A NULL pointer is
-     * permitted — the loader falls back to a stack-local int
-     * mirroring the host's cursor through the
-     * repl_dispatch_edit_line_get / _set sink (Phase 4 of
-     * plans/in-review/edit-line-ownership.md). The sink routes to
-     * EditorState in real builds and to a demo-local int in the
-     * REPL demo; pure REPL tests with no sink installed see the
-     * default zero. */
+     * plans/done/edit-line-ownership.md). edit_line_inout supplies
+     * the insertion position; the per-line apply advances it as
+     * the document grows. A NULL pointer falls back to operating
+     * on the ambient host cursor through repl_dispatch_edit_line_get
+     * / _set (Phase 4 of the same plan): the loader reads the
+     * current value at entry, advances it across the per-line
+     * apply, and writes the post-load value back on success. This
+     * preserves the pre-migration behavior where ad-hoc loader
+     * callers (the editor's load-file path, the tutorial runner,
+     * mid-test commit chains) saw the cursor advance as a side
+     * effect of repl_load_apply_line. */
     int local_edit_line;
     int wrote_local = 0;
     if (edit_line_inout == NULL) {
