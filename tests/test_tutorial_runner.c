@@ -327,6 +327,50 @@ static void test_shadow_text_refreshes_on_advance(void) {
                ac.ghost, "glVertex3f(0, 0.8, 0)");
 }
 
+static void test_shadow_ghost_falls_through_off_expected_line(void) {
+    /* On the expected commit line, the tutorial shadow suffix takes
+     * over autocomplete. On any other line the user is editing
+     * unrelated code, so normal autocomplete should run. */
+    EditorAutocompleteState ac;
+    int expected_line;
+
+    reset_fixture();
+    tutorial_start(0);
+    expected_line = tutorial_expected_commit_line();
+    ASSERT_TRUE("expected_commit_line off line zero", expected_line != 0);
+
+    editor_state_edit_line_set(0);
+    set_input_text("glC");
+    editor_completion_update();
+
+    ac = editor_state_autocomplete();
+    ASSERT_TRUE("normal autocomplete produces matches off-line",
+                ac.match_count > 0);
+    ASSERT_TRUE("ghost is not the tutorial expected text",
+                strcmp(ac.ghost, "glBegin(GL_TRIANGLES)") != 0);
+}
+
+static void test_tab_skips_tutorial_autofill_off_expected_line(void) {
+    /* Tab on the expected commit line autofills the next expected
+     * step. On any other line Tab should defer to normal autocomplete
+     * instead of overwriting the user's unrelated input. */
+    int expected_line;
+
+    reset_fixture();
+    tutorial_start(0);
+    expected_line = tutorial_expected_commit_line();
+    ASSERT_TRUE("expected_commit_line off line zero", expected_line != 0);
+
+    editor_state_edit_line_set(0);
+    set_input_text("glC");
+
+    (void)editor_handle_key('\t', 0, 0);
+
+    ASSERT_TRUE("tab did not autofill expected on off-line",
+                strcmp(editor_state_input().input,
+                       "glBegin(GL_TRIANGLES)") != 0);
+}
+
 static void test_shadow_text_clears_on_exit(void) {
     /* Regression: tutorial_exit must refresh autocomplete so the
      * ghost from the in-progress step clears immediately. */
@@ -1390,6 +1434,8 @@ int main(void) {
     test_shadow_text_populates_autocomplete_ghost();
     test_shadow_text_appears_immediately_on_start();
     test_shadow_text_refreshes_on_advance();
+    test_shadow_ghost_falls_through_off_expected_line();
+    test_tab_skips_tutorial_autofill_off_expected_line();
     test_shadow_text_clears_on_exit();
     test_tutorial_start_sets_step_progress_status();
     test_tutorial_advance_updates_step_progress_status();

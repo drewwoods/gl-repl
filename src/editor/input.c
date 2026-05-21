@@ -1202,7 +1202,8 @@ static int handle_tab_key_route(unsigned char key) {
          * first. */
         editor_input_anchor_clear();
         expected = tutorial_current_expected_text();
-        if (tutorial_active() && expected) {
+        if (tutorial_active() && expected &&
+            editor_state_edit_line() == tutorial_expected_commit_line()) {
             EditorInputState *inp = editor_state_input_mut();
 
             strncpy(inp->input, expected, MAX_INPUT_LEN - 1);
