@@ -11,8 +11,14 @@
 # storage flip dropped input.c from 22→20 and commit.c from 30→28
 # by removing repl_state_edit_line / _set references).
 #
+# 2026-05-21: bumped both by +1 to admit repl_set_status_error, the
+# error sibling of repl_set_status (which is already in the surface).
+# Adding a mediated `status_error` to EditorServices would let both
+# drop by 2, but that refactor is independent of the red-status work
+# that introduced the new symbol.
+#
 # Ratchet down as migrations land. The plan target
 # (plans/done/editor-demo.md) is ~5 per file.
 
-input_c: 20
-commit_c: 28
+input_c: 21
+commit_c: 29

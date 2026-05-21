@@ -1186,7 +1186,7 @@ int editor_try_commit_float_decl(void) {
     if (result == REPL_COMPILE_OK && plan.change.kind == REPL_COMPILED_NO_CHANGE)
         return 0;
     if (result != REPL_COMPILE_OK) {
-        repl_set_status(err);
+        repl_set_status_error(err);
         return 1;
     }
 
@@ -1213,7 +1213,7 @@ int editor_try_commit_float_decl(void) {
     }
 
     if (!editor_commit_apply_plan(&plan)) {
-        repl_set_status("Command buffer full!");
+        repl_set_status_error("Command buffer full!");
         return 1;
     }
     repl_mark_normals_dirty();
@@ -1233,7 +1233,7 @@ int editor_try_assign_variable(void) {
     if (result == REPL_COMPILE_OK && plan.change.kind == REPL_COMPILED_NO_CHANGE)
         return 0;
     if (result != REPL_COMPILE_OK) {
-        repl_set_status(err);
+        repl_set_status_error(err);
         return 1;
     }
 
@@ -1256,7 +1256,7 @@ int editor_try_assign_variable(void) {
     }
 
     if (!editor_commit_apply_plan(&plan)) {
-        repl_set_status("Command buffer full!");
+        repl_set_status_error("Command buffer full!");
         return 1;
     }
     repl_mark_normals_dirty();
@@ -1289,11 +1289,11 @@ static int editor_try_commit_block(EditorBlockCompileFn compile) {
         !plan.commit_message_valid)
         return 0;
     if (r != REPL_COMPILE_OK) {
-        repl_set_status(err);
+        repl_set_status_error(err);
         return 1;
     }
     if (!editor_commit_apply_plan(&plan)) {
-        repl_set_status("Command buffer full!");
+        repl_set_status_error("Command buffer full!");
         return 1;
     }
     repl_mark_normals_dirty();

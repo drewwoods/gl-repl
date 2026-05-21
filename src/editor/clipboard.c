@@ -26,7 +26,7 @@ static int tutorial_guard_clipboard_change_or_status(int pos,
                                                      int insert_count) {
     if (tutorial_guard_source_change(pos, delete_count, insert_count))
         return 1;
-    repl_set_status("Tutorial comment is read-only");
+    repl_set_status_error("Tutorial comment is read-only");
     return 0;
 }
 
@@ -70,7 +70,7 @@ int editor_selection_normalize_cmd_range(int start, int count,
 void editor_selection_set_var_decl_action_status(const char *action) {
     char msg[96];
     snprintf(msg, sizeof(msg), "Cannot %s float declarations", action);
-    repl_set_status(msg);
+    repl_set_status_error(msg);
 }
 
 static void clipboard_copy_range(int start, int count) {
@@ -351,7 +351,7 @@ void editor_clipboard_paste_current(void) {
     {
         ReplCommandStore store = repl_command_store_live();
         if (!repl_command_store_can_insert(&store, count)) {
-            repl_set_status("Command buffer full!");
+            repl_set_status_error("Command buffer full!");
             return;
         }
     }

@@ -28,6 +28,12 @@ static const float k_rename_bar_text[4] = { 0.780f, 0.870f, 1.000f, 1.0f };
 static const float k_status_bar_bg[3]   = { 0.227f, 0.165f, 0.063f };
 static const float k_status_bar_edge[3] = { 0.102f, 0.071f, 0.031f };
 static const float k_status_bar_fg[3]   = { 0.941f, 0.753f, 0.439f };
+/* Parallel red palette for UI_STATUS_ERROR. Same luminance band as the
+ * amber set above so the bar still reads against the scene background;
+ * only the hue differs. */
+static const float k_status_bar_bg_err[3]   = { 0.290f, 0.078f, 0.078f };
+static const float k_status_bar_edge_err[3] = { 0.137f, 0.027f, 0.027f };
+static const float k_status_bar_fg_err[3]   = { 1.000f, 0.557f, 0.494f };
 
 void ui_panels_render_code_panel(const UiRenderSnapshot *snap,
                                  UiCodePanelOutput *out) {
@@ -164,6 +170,9 @@ void ui_panels_render_scene_status(const UiRenderSnapshot *snap) {
         int max_chars;
         char msg[256];
         int n;
+        const float *bg;
+        const float *edge;
+        const float *fg;
 
         ui_layout_scene_rect(&sc_x, &sc_y, &sc_w, &sc_h);
         if (sc_w <= 0 || sc_h <= 0)
@@ -173,16 +182,24 @@ void ui_panels_render_scene_status(const UiRenderSnapshot *snap) {
         bar_y = sc_y;
         alpha = status.ttl > 60 ? 1.0f : (float)status.ttl / 60.0f;
 
+        if (status.kind == UI_STATUS_ERROR) {
+            bg   = k_status_bar_bg_err;
+            edge = k_status_bar_edge_err;
+            fg   = k_status_bar_fg_err;
+        } else {
+            bg   = k_status_bar_bg;
+            edge = k_status_bar_edge;
+            fg   = k_status_bar_fg;
+        }
+
         gl2d_begin(snap->viewport.window_w, snap->viewport.window_h);
         glEnable(GL_BLEND);
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-        glColor4f(k_status_bar_bg[0], k_status_bar_bg[1], k_status_bar_bg[2],
-                  0.92f * alpha);
+        glColor4f(bg[0], bg[1], bg[2], 0.92f * alpha);
         glRectf((float)sc_x, (float)bar_y,
                 (float)(sc_x + sc_w), (float)(bar_y + bar_h));
-        glColor4f(k_status_bar_edge[0], k_status_bar_edge[1],
-                  k_status_bar_edge[2], alpha);
+        glColor4f(edge[0], edge[1], edge[2], alpha);
         glBegin(GL_LINES);
         glVertex2f((float)sc_x, (float)(bar_y + bar_h));
         glVertex2f((float)(sc_x + sc_w), (float)(bar_y + bar_h));
@@ -192,8 +209,7 @@ void ui_panels_render_scene_status(const UiRenderSnapshot *snap) {
         badge_d = 14;
         badge_x = sc_x + CODE_MARGIN_X;
         badge_y = bar_y + (bar_h - badge_d) / 2;
-        glColor4f(k_status_bar_fg[0], k_status_bar_fg[1], k_status_bar_fg[2],
-                  alpha);
+        glColor4f(fg[0], fg[1], fg[2], alpha);
         glBegin(GL_LINE_LOOP);
         for (int i = 0; i < 16; i++) {
             float angle = (float)i * (6.2831853f / 16.0f);
@@ -217,8 +233,7 @@ void ui_panels_render_scene_status(const UiRenderSnapshot *snap) {
             snprintf(msg, sizeof(msg), "%.*s...", max_chars - 3, status.text);
         else
             snprintf(msg, sizeof(msg), "%s", status.text);
-        glColor4f(k_status_bar_fg[0], k_status_bar_fg[1], k_status_bar_fg[2],
-                  alpha);
+        glColor4f(fg[0], fg[1], fg[2], alpha);
         gl2d_draw_string((float)tx, (float)text_y, msg, FONT_SMALL);
 
         glDisable(GL_BLEND);

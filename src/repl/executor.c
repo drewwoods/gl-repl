@@ -629,7 +629,7 @@ void repl_execute_program(const ReplExecutionOptions *options) {
                                          label_name, sizeof(label_name)))
                 break;
             if (goto_count++ > REPL_GOTO_LOOP_LIMIT) {
-                repl_set_status("goto: loop limit reached");
+                repl_set_status_error("goto: loop limit reached");
                 goto execute_done;
             }
             for (int label_idx = 0; label_idx < flat_cmd_count; label_idx++) {

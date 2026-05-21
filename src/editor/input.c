@@ -183,7 +183,7 @@ static int tutorial_guard_source_change_or_status(int pos,
                                                   int insert_count) {
     if (tutorial_guard_source_change(pos, delete_count, insert_count))
         return 1;
-    repl_set_status("Tutorial comment is read-only");
+    repl_set_status_error("Tutorial comment is read-only");
     return 0;
 }
 
@@ -225,7 +225,7 @@ void editor_delete_cmd_range(int start, int count, const char *what) {
 
     if (repl_compile_delete_range(start, count, &ctx, &change,
                                   err, sizeof(err)) != REPL_COMPILE_OK) {
-        if (err[0]) repl_set_status(err);
+        if (err[0]) repl_set_status_error(err);
         return;
     }
     if (change.kind == REPL_COMPILED_NO_CHANGE)
@@ -237,7 +237,7 @@ void editor_delete_cmd_range(int start, int count, const char *what) {
              what, change.count, change.count > 1 ? "s" : "");
 
     if (!editor_commit_apply_external_change(&change, /*capture_undo=*/1)) {
-        repl_set_status("Command buffer error");
+        repl_set_status_error("Command buffer error");
         return;
     }
 
@@ -289,7 +289,7 @@ void editor_load_line_to_input(int idx) {
         if (tutorial_line_is_locked(idx)) {
             editor_input_clear();
             editor_cursor_pos_set(0);
-            repl_set_status("Tutorial instruction is read-only");
+            repl_set_status_error("Tutorial instruction is read-only");
             return;
         }
 
@@ -425,7 +425,7 @@ static void warn_if_scope_truncated(int vis_total) {
     snprintf(msg, sizeof(msg),
              "scope has %d loop vars (max %d); deepest iterator vars may appear undeclared",
              vis_total, MAX_EXPR_VARS);
-    repl_set_status(msg);
+    repl_set_status_error(msg);
 }
 
 static int parse_for_overwrite_enter(GLCmd *cmd, char *text_out, int text_sz,
@@ -474,7 +474,7 @@ static int parse_for_overwrite_enter(GLCmd *cmd, char *text_out, int text_sz,
         }
     }
     if (!parsed && editor_parse_err[0])
-        repl_set_status(editor_parse_err);
+        repl_set_status_error(editor_parse_err);
     warn_if_scope_truncated(vis_total);
     return parsed;
 }
@@ -1148,14 +1148,14 @@ static int handle_comment_toggle_key_route(unsigned char key) {
         char msg[REPL_STATUS_TEXT_MAX];
         snprintf(msg, sizeof(msg), "Toggle failed: %s",
                  err[0] ? err : "not a valid command");
-        repl_set_status(msg);
+        repl_set_status_error(msg);
         return 1;
     }
     if (change.kind == REPL_COMPILED_NO_CHANGE)
         return 1;
 
     if (!editor_commit_apply_external_change(&change, /*capture_undo=*/1)) {
-        repl_set_status("Command buffer error");
+        repl_set_status_error("Command buffer error");
         return 1;
     }
 

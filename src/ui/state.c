@@ -16,7 +16,7 @@
  * variable_panel_view_mut directly. */
 #define UI_STATE_INITIAL                                              \
     {                                                                 \
-        .status = { .text = "", .ttl = 0 },                           \
+        .status = { .text = "", .ttl = 0, .kind = UI_STATUS_INFO },   \
         .help = { .visible = 0 },                                     \
         .profile_panel = { .mode = PROFILE_PANEL_OFF },               \
         .viewport = { .window_w = 0, .window_h = 0 },                 \
@@ -56,18 +56,28 @@ UiStatusState *ui_state_status_mut(void) {
     return &g_ui_state.status;
 }
 
-void ui_state_status_set(const char *message) {
+static void ui_state_status_set_kind(const char *message, int kind) {
     if (!message)
         message = "";
     strncpy(g_ui_state.status.text, message,
             sizeof(g_ui_state.status.text) - 1);
     g_ui_state.status.text[sizeof(g_ui_state.status.text) - 1] = '\0';
     g_ui_state.status.ttl = REPL_STATUS_MESSAGE_TTL;
+    g_ui_state.status.kind = kind;
+}
+
+void ui_state_status_set(const char *message) {
+    ui_state_status_set_kind(message, UI_STATUS_INFO);
+}
+
+void ui_state_status_set_error(const char *message) {
+    ui_state_status_set_kind(message, UI_STATUS_ERROR);
 }
 
 void ui_state_status_clear(void) {
     g_ui_state.status.text[0] = '\0';
     g_ui_state.status.ttl = 0;
+    g_ui_state.status.kind = UI_STATUS_INFO;
 }
 
 void ui_state_status_tick(void) {

@@ -49,9 +49,18 @@ typedef struct {
     int mode;
 } UiProfilePanelState;
 
+/* Status banner severity. Renderer picks the palette from this. INFO is
+ * the historical amber; ERROR is a red palette so failures (flatten
+ * limit, command-buffer full, parse errors) are unmissable. */
+typedef enum {
+    UI_STATUS_INFO = 0,
+    UI_STATUS_ERROR
+} UiStatusKind;
+
 typedef struct {
     char text[REPL_STATUS_TEXT_MAX];
     int  ttl;
+    int  kind;  /* UiStatusKind; default INFO since enum starts at 0 */
 } UiStatusState;
 
 /* Camera pose is intentionally not part of the UI chrome types. See

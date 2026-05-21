@@ -66,7 +66,7 @@ int editor_inline_rename_handle_key(unsigned char key) {
          * names at the API boundary.  A 0 return means reject-and-retry
          * (keep the overlay open); non-zero means success and we close. */
         if (!repl_user_scene_rename(g_rename_slot, g_rename_buf)) {
-            repl_set_status("Scene name cannot be empty");
+            repl_set_status_error("Scene name cannot be empty");
             return 1;
         }
         char msg[128];
