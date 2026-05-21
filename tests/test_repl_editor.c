@@ -23,6 +23,7 @@
 #include "repl/export.h"
 #include "repl/source_scope.h"
 #include "repl/state_owners.h"
+#include "source_document.h"   /* source_document_view */
 #include "widgets/replay.h"
 #include "widgets/replay_state.h"
 #include "ui/layout.h" /* CODE_PANEL_LAYOUT_* */
@@ -2576,6 +2577,13 @@ int main() {
 
         editor_clear_all_cmds();
         ASSERT_INT("clear_all: num_cmds is 0", repl_state_document_count(), 0);
+        /* Editor owns the text buffer (Phase 4 of
+         * plans/done/edit-line-ownership.md). A clear-all has to drop
+         * the editor's source text in lockstep with the command store
+         * — otherwise the user sees the old lines in the code panel
+         * while every commit acts on an empty cmd-store. */
+        ASSERT_INT("clear_all: source_document line count is 0",
+                   source_document_view().line_count, 0);
         ASSERT_INT("clear_all: edit_line is 0", editor_state_edit_line(), 0);
         ASSERT_INT("clear_all: inserting is 0", editor_insert_mode(), 0);
         ASSERT_INT("clear_all: input is empty", editor_state_input().input[0], 0);

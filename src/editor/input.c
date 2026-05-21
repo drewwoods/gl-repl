@@ -257,6 +257,14 @@ void editor_clear_all_cmds(void) {
     editor_undo_push_snapshot();
     ReplCommandStore store = repl_command_store_live();
     repl_command_store_clear(&store);
+    /* Editor owns text (Phase 4 of plans/done/edit-line-ownership.md):
+     * the source-text buffer is the editor's authoritative storage,
+     * not just a UI mirror of the REPL command-store. A wholesale
+     * "clear all cmds" has to drop the buffer too, otherwise the
+     * cleared command-array and the surviving editor text drift
+     * out of lockstep — the user sees the old lines in the code
+     * panel while every commit acts on an empty cmd-store. */
+    editor_buffer_clear();
     editor_state_edit_line_set(0);
     editor_insert_mode_set(0);
     editor_input_clear();

@@ -54,17 +54,22 @@ typedef struct {
     char  text[MAX_LINE_LEN];
 } ReplParsedLine;
 
-/* Context-aware parser entrypoint. Pass a ReplParseContext from
- * internal callers when the parse position is not the active editor
- * line (e.g., flatten.c parsing a source command at a different
- * index, or replay.c doing a step-back parse). Pass NULL to fall
- * back to the legacy edit-line behavior used by the no-ctx wrappers.
+/* Context-aware parser entrypoint. The ReplParseContext is required
+ * (NULL returns 0 immediately): every caller — flatten.c parsing
+ * source commands at a known index, replay.c doing a step-back
+ * parse, editor commit, the lean loader, tests — already
+ * constructs a context. Phase 3.6.3 of
+ * plans/done/edit-line-ownership.md removed the former NULL
+ * fallback (which read repl_state_edit_line() for source_line_idx)
+ * since β forbids REPL pipeline code from reaching back into the
+ * cursor accessor; the fallback was confirmed dead code, not just
+ * a defensive vestige.
  *
- * Returns 1 on success, 0 on parse error. On success, out->cmd holds
- * the parsed command and out->text holds the editor-buffer form of
- * the normalized source. On failure, parse diagnostics are written
- * to `ctx->err_buf` when provided; the parser core never calls
- * set_status itself. */
+ * Returns 1 on success, 0 on parse error or NULL ctx. On success,
+ * out->cmd holds the parsed command and out->text holds the
+ * editor-buffer form of the normalized source. On failure, parse
+ * diagnostics are written to `ctx->err_buf` when provided; the
+ * parser core never calls set_status itself. */
 int repl_parser_parse_command_ctx(const char *line, ReplParsedLine *out,
                                   const ReplParseContext *ctx);
 
