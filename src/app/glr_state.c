@@ -1,13 +1,13 @@
 /*
  * glr_state.c -- Storage and accessors for app-frame presentation/render
- * state. Step 7a of feature/decouple-repl-from-gl-repl-alt.md.
+ * state.
  *
  * The fields here used to live on `ReplRuntimeState.{presentation,render}`.
- * Step 4 had already routed every workspace-header read/write through the
- * cfg bridge (`ReplExportConfigBridge`) and per-scene snapshots through
- * the same opaque bag, so the storage relocation is mechanical: the
- * bridge keeps using `glr_config_get/set`, which now points at this
- * struct via `glr_config.c::config_value_ptr`.
+ * Workspace-header read/write already routed through the cfg bridge
+ * (`ReplExportConfigBridge`) and per-scene snapshots through the same
+ * opaque bag, so the storage relocation is mechanical: the bridge keeps
+ * using `glr_config_get/set`, which now points at this struct via
+ * `glr_config.c::config_value_ptr`.
  *
  * Defaults come from `glr_defaults.h` (CFG_DEFAULT_*) which already
  * documents itself as controller-side scene/presentation defaults.
@@ -15,6 +15,10 @@
  * `src/repl/state.c` no longer owns these fields and no longer references
  * `glr_camera`; the `auto_rotate` reset moved to the camera bridge's
  * `apply` callback (driven via the bridge during scene-cfg restore).
+ *
+ * (Cfg-bridge routing landed as step 4 of the decouple plan;
+ * this storage relocation is step 7a of
+ * feature/decouple-repl-from-gl-repl-alt.md.)
  */
 #include "app/glr_state.h"
 

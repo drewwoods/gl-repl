@@ -9,8 +9,10 @@
  *
  * That ownership boundary is enforced by `check-repl-state-no-glr-state`: REPL
  * pipeline TUs do not include this header, while app-shell, editor, UI, and
- * scene files may. Step 7a of feature/decouple-repl-from-gl-repl-alt.md records
- * the move from the old mixed ReplRuntimeState layout into this app-side owner.
+ * scene files may.
+ *
+ * (Relocated from the old mixed ReplRuntimeState layout into this app-side
+ * owner as step 7a of feature/decouple-repl-from-gl-repl-alt.md.)
  */
 #ifndef GLR_STATE_H
 #define GLR_STATE_H

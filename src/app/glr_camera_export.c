@@ -1,10 +1,9 @@
 /*
  * glr_camera_export.c -- ReplExportCameraBridge implementation.
  *
- * Step 4a of feature/decouple-repl-from-gl-repl-alt.md: the camera-block
- * format owner (this file) translates between camera state and the 4-line
- * `// camera` block + `static float g_angle = N.NNNNf;` preamble that
- * appear in saved files. src/repl/export.c sees only the neutral
+ * The camera-block format owner: translates between camera state and the
+ * 4-line `// camera` block + `static float g_angle = N.NNNNf;` preamble
+ * that appear in saved files. src/repl/export.c sees only the neutral
  * ReplExportCameraBlock + a single try_consume_import_line entry point;
  * it does not parse or format glRotatef/glTranslatef strings.
  *
@@ -18,6 +17,9 @@
  * Older exports also wrote a literal `glRotatef(ry_value, 0,1,0)` line
  * before the g_angle placeholder; the import parser tolerates either
  * form so existing saved files keep working.
+ *
+ * (Bridge introduced as step 4a of
+ * feature/decouple-repl-from-gl-repl-alt.md.)
  */
 #include "repl/export.h"
 #include "app/glr_camera.h"

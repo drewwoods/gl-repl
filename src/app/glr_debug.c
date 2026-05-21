@@ -71,10 +71,11 @@ void glr_debug_dump_flat_commands(FILE *out, EditorBufferView text) {
 void glr_debug_dump_runtime_state_layout(FILE *out) {
     FILE *dst = out ? out : stdout;
 
-/* ReplReplayRuntimeState moved to replay_state.c (Phase F commit 33);
- * presentation slice + render-config toggles moved to glr_state.c
- * (step 7a of feature/decouple-repl-from-gl-repl-alt.md); the runtime
- * state layout dump no longer includes those rows. */
+/* The runtime-state layout dump no longer includes ReplReplayRuntimeState,
+ * the presentation slice, or render-config toggles: those moved off
+ * ReplRuntimeState to replay_state.c and glr_state.c respectively. (Replay
+ * migration was Phase F commit 33; presentation/render relocation was
+ * step 7a of feature/decouple-repl-from-gl-repl-alt.md.) */
 #define REPL_RUNTIME_STATE_FIELDS(X)                                                               \
     X(ReplDocumentState, document)                                                                 \
     X(ReplFlatProgramState, flat_program)                                                          \
