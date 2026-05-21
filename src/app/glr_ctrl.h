@@ -103,9 +103,8 @@ int glr_ctrl_router_handle_debug_dump_key(unsigned char key);       /* Ctrl+P */
 /* Fill a ReplExportLayout from current ui_layout_* / glr_state_*
  * values. The export pipeline reads layout as opaque integers, so
  * controllers and full-app tests build the struct through this helper
- * instead of duplicating the current layout/state reads. The
- * decouple-plan note is secondary: this is the app-side adapter that
- * keeps export.c from reaching into ui/layout or glr_state directly. */
+ * instead of duplicating the current layout/state reads. Keeps export.c
+ * from reaching into ui/layout or glr_state directly. */
 #include "repl/export.h"   /* ReplExportLayout */
 void glr_ctrl_fill_export_layout(ReplExportLayout *out);
 int glr_ctrl_router_handle_quit_key(unsigned char key);             /* Ctrl+Q */

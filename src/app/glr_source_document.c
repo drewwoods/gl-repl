@@ -2,13 +2,16 @@
  * glr_source_document.c -- Full-app adapter for the neutral source-document port.
  *
  * Bridges source_document.h (used by REPL pipeline TUs) to the
- * EditorState text buffer (owned by src/editor/state.c). The full app
- * composes both layers through this file; the standalone repl_demo
- * links the same adapter today (a tiny editor-free implementation
- * ships with Phase 6).
+ * EditorState text buffer (owned by src/editor/state.c). Exposes both
+ * the read view and the full mutation port (insert/replace/load/clear
+ * and the combined apply_change variant) so REPL pipeline TUs never
+ * reach into editor state directly. The full app composes both layers
+ * through this file; the standalone repl_demo links the same adapter
+ * today (a tiny editor-free implementation ships separately).
  *
- * Phase 1 added source_document_view(); Phase 2 wires the mutation
- * port (insert/replace/load/clear and the apply_change variant). */
+ * (Introduced as Phase 1 of the source-document port, with the mutation
+ * surface wired in Phase 2 and the editor-free demo implementation in
+ * Phase 6.) */
 
 #include "source_document.h"
 

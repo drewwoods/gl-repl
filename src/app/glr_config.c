@@ -2,7 +2,7 @@
 #include <string.h>
 #include "app/glr_audio.h"
 #include "app/glr_camera.h"
-#include "app/glr_state.h"           /* presentation + render storage (step 7a) */
+#include "app/glr_state.h"           /* presentation + render storage */
 #include "repl/state_owners.h"
 #include "ui/state_types.h"
 

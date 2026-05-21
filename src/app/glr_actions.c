@@ -9,7 +9,7 @@
 #include "app/glr_actions.h"
 #include "config.h"                  /* DEFAULT_SCENE_FILE */
 #include "app/glr_ctrl.h"            /* glr_ctrl_sync_ui_chrome */
-#include "app/glr_state.h"           /* presentation/render storage (step 7a) */
+#include "app/glr_state.h"           /* presentation/render storage */
 #include "app/glr_camera.h"          /* camera focus-origin / reset (eased) */
 #include "ui/layout.h"           /* CODE_PANEL_LAYOUT_* enum values */
 #include "widgets/color_picker_state.h"
@@ -177,7 +177,12 @@ GlrConfigItem g_cfg_items[] = {
 
 const int CFG_ITEM_COUNT = (int)(sizeof(g_cfg_items) / sizeof(g_cfg_items[0]));
 
-/* ---- Export-config bridge (step 4 of the decouple plan) ---------------- */
+/* ---- Export-config bridge --------------------------------------------- *
+ *
+ * Lets src/repl/export.c emit/parse @cfg header lines without touching
+ * glr_config_* directly; src/repl/scenes.c uses the same bridge for
+ * per-scene cfg snapshots. (Originally step 4 of
+ * feature/decouple-repl-from-gl-repl-alt.md.) */
 
 #include "repl/export.h"
 
@@ -192,10 +197,10 @@ static void cfg_slug_from_label(const char *label, char *out, size_t out_sz) {
     if (out_sz > 0) out[out_idx] = '\0';
 }
 
-/* Subset of cfg keys saved per-scene (mirrors what the pre-step-4
- * k_scene_cfg_keys list covered, including camera_rotate). The
- * subset includes presentation toggles plus camera_rotate; the
- * controller owns this knowledge so src/repl/scenes.c stays neutral. */
+/* Subset of cfg keys saved per-scene: presentation toggles plus
+ * camera_rotate. The controller owns this knowledge so src/repl/scenes.c
+ * stays neutral. (Mirrors the keys covered by the pre-step-4
+ * k_scene_cfg_keys list.) */
 static int cfg_key_in_scene_subset(GlrConfigKey key) {
     switch (key) {
     case GLR_CONFIG_WIREFRAME:
@@ -631,14 +636,14 @@ int glr_action_menu_item_activate(int menu_id, int item_idx) {
     } else if (menu_id == GLR_MENU_CONFIG) {
         /* Config top-level rows are section / "All" PARENT rows: they
          * hover-open a flyout, and a click on the parent itself is
-         * inert (mirrors the MENU_SCENE tag-row guard above — plan
-         * Finding #1). `item_idx` here is a section parent row, NOT a
-         * g_cfg_items[] index, so it must never be cycled. Leaf
-         * config-item activation arrives via UI_HIT_SUBMENU_ITEM and
-         * is dispatched straight to glr_cfg_cycle_row() on the
-         * absolute g_cfg_items[] index (route_submenu_item_hit,
-         * Step 6) — it never reaches this branch. Return 0 so the
-         * dropdown stays open, matching the old per-toggle feel. */
+         * inert (mirrors the MENU_SCENE tag-row guard above). `item_idx`
+         * here is a section parent row, NOT a g_cfg_items[] index, so
+         * it must never be cycled. Leaf config-item activation arrives
+         * via UI_HIT_SUBMENU_ITEM and is dispatched straight to
+         * glr_cfg_cycle_row() on the absolute g_cfg_items[] index
+         * (route_submenu_item_hit) — it never reaches this branch.
+         * Return 0 so the dropdown stays open, matching the old
+         * per-toggle feel. */
         (void)item_idx;
         return 0;
     }
