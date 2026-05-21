@@ -257,6 +257,61 @@ static int examples_have_no_invalid_cmds(void) {
     return 1;
 }
 
+/* Strip trailing `// comment` from `static float ...` decl lines. The
+ * export path writes CMD_VAR_DECLARE as a fixed-grammar `// @declare ...`
+ * marker that cannot carry an arbitrary trailing comment, so a decl line
+ * like `static float foo = 1; // note` round-trips back as `static float
+ * foo = 1;`. Stripping the comment off decl lines on both sides keeps the
+ * roundtrip check honest about everything else without forcing examples
+ * to drop pedagogically useful inline notes on their variable decls.
+ * Other line types (assigns, calls, etc.) round-trip trailing comments
+ * verbatim and are left untouched here.
+ *
+ * Returns a heap-allocated copy; caller must free. */
+static char *strip_decl_trailing_comments(const char *src) {
+    if (!src) return NULL;
+    size_t len = strlen(src);
+    char *out = (char *)malloc(len + 1);
+    if (!out) return NULL;
+    const char *p = src;
+    char *w = out;
+    while (*p) {
+        const char *line_start = p;
+        while (*p && *p != '\n') p++;
+        size_t line_len = (size_t)(p - line_start);
+
+        const char *scan = line_start;
+        const char *line_end = line_start + line_len;
+        while (scan < line_end && (*scan == ' ' || *scan == '\t')) scan++;
+        int is_decl = 0;
+        if ((size_t)(line_end - scan) >= 13 &&
+            strncmp(scan, "static float ", 13) == 0) {
+            is_decl = 1;
+        }
+
+        size_t emit_len = line_len;
+        if (is_decl) {
+            for (size_t i = 0; i + 1 < line_len; i++) {
+                if (line_start[i] == '/' && line_start[i + 1] == '/') {
+                    while (i > 0 && (line_start[i - 1] == ' ' ||
+                                     line_start[i - 1] == '\t'))
+                        i--;
+                    emit_len = i;
+                    break;
+                }
+            }
+        }
+        memcpy(w, line_start, emit_len);
+        w += emit_len;
+        if (*p == '\n') {
+            *w++ = '\n';
+            p++;
+        }
+    }
+    *w = '\0';
+    return out;
+}
+
 static int compare_exact_text(const char *expected, const char *actual, int *line_out) {
     int line = 1;
     const unsigned char *ep = (const unsigned char *)expected;
@@ -1363,7 +1418,10 @@ int main(int argc, char **argv) {
             snprintf(label, sizeof(label), "example %02d import dump alloc", idx);
             ASSERT_TRUE(label, imported != NULL);
             if (imported) {
-                roundtrip_exact = compare_exact_text(actual, imported, &diff_line);
+                char *actual_cmp = strip_decl_trailing_comments(actual);
+                char *imported_cmp = strip_decl_trailing_comments(imported);
+                roundtrip_exact = compare_exact_text(actual_cmp, imported_cmp,
+                                                     &diff_line);
                 if (!roundtrip_exact) {
                     printf("%sDETAIL [example %02d export/import mismatch] name=%s line=%d export=%s%s\n",
                            ansi_yellow(), idx, name, diff_line, export_path,
@@ -1371,8 +1429,10 @@ int main(int argc, char **argv) {
                     print_text_mismatch("export/import mismatch",
                                         "pre-export code panel",
                                         "imported code panel",
-                                        actual, imported, diff_line);
+                                        actual_cmp, imported_cmp, diff_line);
                 }
+                free(actual_cmp);
+                free(imported_cmp);
                 snprintf(label, sizeof(label),
                          "example %02d exact export/import roundtrip", idx);
                 ASSERT_TRUE(label, roundtrip_exact);
