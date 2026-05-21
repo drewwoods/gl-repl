@@ -43,6 +43,7 @@
 #include "repl/state_owners.h"
 #include "widgets/replay.h"
 #include "widgets/replay_state.h"
+#include "widgets/tutorial.h"
 #include "widgets/tutorial_state.h"
 #include "ui/replay_hud.h"
 #include "scene/overlays.h" /* scene_draw_vertex_number_label / _arrow primitives */
@@ -3009,7 +3010,14 @@ int glr_ctrl_router_apply_input_row_drag(int target_line, int target_char) {
  * ui_panels_handle_code_panel_click tail. */
 static void route_code_click_epilog(void) {
     glr_action_cursor_blink_reset();
-    editor_completion_clear();
+    /* On a click that landed the cursor on the tutorial's expected
+     * commit line, refresh autocomplete so the shadow ghost
+     * reappears; anywhere else, clear to drop stale completions. */
+    if (tutorial_active() &&
+        editor_state_edit_line() == tutorial_expected_commit_line())
+        editor_completion_update();
+    else
+        editor_completion_clear();
     editor_clipboard_clear_selection();
     editor_request_redraw();
 }

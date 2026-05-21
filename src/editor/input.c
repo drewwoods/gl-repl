@@ -375,7 +375,13 @@ static void navigate_to_line_raw_resolved(int target) {
     editor_state_edit_line_set(target);
     editor_insert_mode_set(0);
     editor_load_line_to_input(target);
-    editor_completion_clear();
+    /* Land back on the tutorial's expected commit line → re-show the
+     * shadow ghost. Anywhere else, navigation clears so stale
+     * completions from the previous row don't linger. */
+    if (tutorial_active() && target == tutorial_expected_commit_line())
+        editor_completion_update();
+    else
+        editor_completion_clear();
 }
 
 /* Rewrite the canonical source text for g_input with proper indentation.

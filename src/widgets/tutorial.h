@@ -14,6 +14,27 @@
 
 #include "widgets/tutorial_state.h"
 
+/* Tunable constants for the per-character fade-in animation that
+ * reveals tutorial instruction comments. Both are #ifndef-guarded so
+ * config.h (or a -D flag) can override the defaults at build time
+ * without touching this header. */
+
+/* Total wall-clock duration of the reveal animation, in seconds. */
+#ifndef TUTORIAL_FADE_DURATION_SECS
+#define TUTORIAL_FADE_DURATION_SECS 0.9f
+#endif
+
+/* Width of the white→base-color "settle" wave that trails the fade-in
+ * head. Each character becomes bright white the instant it is fully
+ * revealed and eases back to the line's base color over this many
+ * character-slots of time. Used by the renderer to size the per-char
+ * gradient segments and by tutorial.c's timing math; kept comfortably
+ * below UI_TEXT_PANEL_MAX_COLOR_SEGMENTS so the gradient always fits
+ * in a row's segment budget. */
+#ifndef TUTORIAL_FADE_SETTLE_CHARS
+#define TUTORIAL_FADE_SETTLE_CHARS 6
+#endif
+
 /* Lifecycle and commit-path integration. */
 void                 tutorial_start(int idx);
 void                 tutorial_exit(void);
@@ -46,15 +67,6 @@ void                 tutorial_note_expected_commit_applied(void);
  * any commit-rejection path that bypasses
  * tutorial_note_expected_commit_applied. */
 void                 tutorial_cancel_pending(void);
-
-/* Width of the white→base-color "settle" wave that trails the fade-in
- * head. Each character becomes bright white the instant it is fully
- * revealed and eases back to the line's base color over this many
- * character-slots of time. Used by the renderer to size the per-char
- * gradient segments and by tutorial.c's timing math; kept comfortably
- * below UI_TEXT_PANEL_MAX_COLOR_SEGMENTS so the gradient always fits
- * in a row's segment budget. */
-#define TUTORIAL_FADE_SETTLE_CHARS 6
 
 /* Per-line fade/lock queries used by render and edit guards. */
 int                  tutorial_step_fade_front(int line_idx, int line_len,
