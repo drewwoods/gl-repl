@@ -82,6 +82,14 @@ static UiTextPanelColor repl_code_panel_rgba(float r, float g, float b, float a)
     return color;
 }
 
+/* Line-range selection band (shift+up/down or shift+click selecting
+ * whole rows). Deliberately the muted blue from the editor sub-palette
+ * — distinct from text_panel.c's brighter k_clr_selection_band, which
+ * marks the in-input character-range selection. The two highlights
+ * coexist in the same panel; keeping them visually distinct makes
+ * it clear which selection mode is active. */
+static const float k_clr_line_selection_band[4] = { 0.20f, 0.30f, 0.50f, 0.55f };
+
 static UiTextPanelColor repl_code_panel_scaled_alpha(UiTextPanelColor base,
                                                      float alpha) {
     float base_alpha = base.has_alpha ? base.a : 1.0f;
@@ -634,7 +642,9 @@ static void repl_code_panel_apply_command_overlays(ReplCodePanelBuilder *builder
         line_idx >= builder->snap->selection_lo &&
         line_idx <= builder->snap->selection_hi) {
         row->background_active = 1;
-        row->background_color = repl_code_panel_rgba(0.20f, 0.30f, 0.50f, 0.55f);
+        row->background_color = repl_code_panel_rgba(
+            k_clr_line_selection_band[0], k_clr_line_selection_band[1],
+            k_clr_line_selection_band[2], k_clr_line_selection_band[3]);
     }
 
     if (line_idx == builder->highlight_normal_idx) {
