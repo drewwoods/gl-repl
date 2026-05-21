@@ -47,11 +47,27 @@ void                 tutorial_note_expected_commit_applied(void);
  * tutorial_note_expected_commit_applied. */
 void                 tutorial_cancel_pending(void);
 
+/* Width of the white→base-color "settle" wave that trails the fade-in
+ * head. Each character becomes bright white the instant it is fully
+ * revealed and eases back to the line's base color over this many
+ * character-slots of time. Used by the renderer to size the per-char
+ * gradient segments and by tutorial.c's timing math; kept comfortably
+ * below UI_TEXT_PANEL_MAX_COLOR_SEGMENTS so the gradient always fits
+ * in a row's segment budget. */
+#define TUTORIAL_FADE_SETTLE_CHARS 6
+
 /* Per-line fade/lock queries used by render and edit guards. */
 int                  tutorial_step_fade_front(int line_idx, int line_len,
                                               float now);
 float                tutorial_step_fade_alpha(int line_idx, int char_idx,
                                               int line_len, float now);
+/* Returns 0..1 describing how far a character has eased from its
+ * just-revealed bright-white highlight back to the line's base
+ * (comment) color. 0 = freshly revealed (full white); 1 = fully
+ * settled (base color). Returns 1 when the line is not currently
+ * animating. */
+float                tutorial_step_fade_settle(int line_idx, int char_idx,
+                                               int line_len, float now);
 int                  tutorial_line_is_fading(int line_idx, float now);
 int                  tutorial_line_is_locked(int line_idx);
 int                  tutorial_guard_source_change(int pos, int delete_count,

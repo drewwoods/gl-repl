@@ -1062,7 +1062,12 @@ static void test_tutorial_fade_render_uses_per_char_path(void) {
     {
         UiRenderSnapshot s;
         make_test_ui_snapshot(&s);
-        s.anim_time = tutorial.fade_start_t + 0.01f;
+        /* Sample mid-fade so the reveal head, the white→base settle
+         * window, and any fully-settled prefix all contribute
+         * per-char segments. Sampling at +0.01s would only show the
+         * actively-revealing head char on the slower default
+         * fade_duration. */
+        s.anim_time = tutorial.fade_start_t + tutorial.fade_duration * 0.5f;
         gl_stub_counts_reset();
         ui_panels_render_code_panel(&s, NULL);
         fading_raster_calls = gl_stub_counts[GL_STUB_glRasterPos2f];
@@ -1143,7 +1148,7 @@ static void test_tutorial_fade_handles_wrapped_lines(void) {
     {
         UiRenderSnapshot s;
         make_test_ui_snapshot(&s);
-        s.anim_time = tutorial.fade_start_t + 0.01f;
+        s.anim_time = tutorial.fade_start_t + tutorial.fade_duration * 0.5f;
         gl_stub_counts_reset();
         ui_panels_render_code_panel(&s, NULL);
         fading_raster_calls = gl_stub_counts[GL_STUB_glRasterPos2f];
