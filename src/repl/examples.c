@@ -326,6 +326,8 @@ static const char *const g_example_torus[] = {
     "glEnable(GL_LIGHT3);",
     "glEnable(GL_LIGHT2);",
     "glShadeModel(GL_SMOOTH);",
+    "n = floor(n); // keep an an integer",
+    "n = min(25, max(n, 3)); // clamp to reasonable range",
     "for(i, 0, n) {",
         "glBegin(GL_QUAD_STRIP);",
         "for(j, 0, n+1) {",
