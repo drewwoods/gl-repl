@@ -28,6 +28,11 @@ int          repl_state_document_capacity(void);
  * (REPL pipeline callers that can't reach editor headers). */
 int          repl_state_normals_dirty(void);
 void         repl_state_normals_dirty_clear(void);
+/* Clears the source-command array + source-text document only.
+ * The edit-line cursor lives on EditorState and is NOT touched
+ * here — wholesale-reset callers must reposition the cursor at
+ * the same boundary (via editor_state_edit_line_set above β, or
+ * repl_dispatch_edit_line_set from REPL pipeline files). */
 void         repl_state_document_reset(void);
 
 ReplFlatProgramState       *repl_state_flat_program_mut(void);

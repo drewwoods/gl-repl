@@ -266,12 +266,21 @@ void repl_state_normals_dirty_clear(void) {
     g_normals_dirty = 0;
 }
 
+/* Clears the source-command array and the source-text document.
+ * Does NOT touch the edit-line cursor — that storage moved to
+ * EditorState in Phase 4 of plans/done/edit-line-ownership.md and
+ * sits on the other side of the β boundary from this TU.
+ *
+ * Wholesale-reset callers must position the cursor themselves at
+ * the same boundary. Above the β boundary use
+ * editor_state_edit_line_set(0) directly; from REPL pipeline files
+ * route through repl_dispatch_edit_line_set(0). The "reset-and-
+ * reposition" pair is what repl_scenes_reset_for_transient() does
+ * for transient scene switches; editor_clear_all_cmds() does the
+ * same dance for the editor-side Clear All. */
 void repl_state_document_reset(void) {
     ReplCommandStore store = repl_command_store_live();
     repl_command_store_load(&store, NULL, 0);
-    /* Cursor reset on a wholesale document reset is caller policy
-     * — typically the controller calls editor_state_edit_line_set(0)
-     * after this returns. */
     source_document_clear();
 }
 

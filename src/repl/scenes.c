@@ -350,6 +350,14 @@ void repl_scenes_enter_transient_scene(void) {
 
 void repl_scenes_reset_for_transient(void) {
     repl_state_document_reset();
+    /* repl_state_document_reset doesn't touch the edit-line cursor
+     * (Phase 4 of plans/done/edit-line-ownership.md moved storage
+     * out of ReplState — see the helper's contract in state.c).
+     * The transient-scene boundary is a wholesale reset, so the
+     * cursor goes back to 0 alongside the document clear; routes
+     * through the host-effects sink for the same β reason
+     * repl_dispatch_input_reset does. */
+    repl_dispatch_edit_line_set(0);
     repl_state_flat_program_set_count(0);
     repl_dispatch_input_reset();
     repl_eval_init_predef_vars();
