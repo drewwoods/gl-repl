@@ -1066,6 +1066,13 @@ static void scene_execute_adapter(const SceneExecuteContext *ctx,
  * machines and the renderer draws the effective {theme, opacity}. */
 static SceneXnState g_grid_xn;
 static SceneXnState g_axes_xn;
+
+/* Runtime GL_NV_fog_distance capability, probed once in glr_ctrl_init_gl
+ * (the GL context is current there) and mirrored into each frame's
+ * SceneRenderConfig. Lets the city backdrop and ocean/radar grid themes
+ * opt into radial fog. 0 until detection runs — the safe default. */
+static int g_nv_fog_distance_supported = 0;
+
 static float g_projection_mix = 1.0f; /* 0 = ortho, 1 = perspective */
 typedef enum {
     GLR_VIEW_XN_IDLE = 0,
@@ -1317,6 +1324,9 @@ static void glr_ctrl_build_scene_config(SceneRenderConfig *config) {
      * Lets the star backdrop's direct glPointParameterfv call be gated
      * the same way the executor's is. */
     config->point_parameter_supported = repl_executor_point_parameter_supported();
+    /* Scoped radial fog: probed once in glr_ctrl_init_gl. Only the city
+     * backdrop and ocean/radar grid passes act on it. */
+    config->nv_fog_distance_supported = g_nv_fog_distance_supported;
 
     /* --- Grid and axes ---
      * Effective theme/opacity come from the transition machines (ticked
@@ -2258,6 +2268,17 @@ void glr_ctrl_init_gl(void) {
                 gl_ver ? gl_ver : "unknown");
     }
     repl_executor_set_point_parameter_supported(point_param_ok);
+
+    /* Scoped radial fog (GL_NV_fog_distance). The city backdrop and the
+     * ocean/radar grid themes draw distance fog over geometry that wraps
+     * around the camera, where the default eye-plane (|z|) metric makes
+     * the fringes pop in and out as the camera orbits. When the NV
+     * extension is present, those passes switch to true radial eye
+     * distance; every other (eye-plane-tuned) theme is left alone.
+     * Mirrored into SceneRenderConfig per frame and applied per-pass —
+     * NOT set globally, which would fog out the tuned grid themes. */
+    g_nv_fog_distance_supported =
+        glutExtensionSupported("GL_NV_fog_distance") ? 1 : 0;
 
     repl_apply_init_bootstrap();
 

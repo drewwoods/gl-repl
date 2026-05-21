@@ -12,6 +12,20 @@
 #include "scene_transition.h"  /* SceneXnPhase for the overlay fade fields */
 #include <gl_includes.h>     /* GLenum for SceneLight.id */
 
+/* GL_NV_fog_distance tokens — present in glext.h (Linux/Homebrew and the
+ * macOS SDK) but not on the Apple-GLUT framework path (gl_includes.h pulls
+ * only OpenGL/gl.h there) nor in the bundled GL stubs. Define the registry
+ * values when absent; guarded so a real glext.h still wins. Consumed by the
+ * scene passes that opt into radial fog via
+ * SceneRenderConfig.nv_fog_distance_supported (city backdrop, ocean/radar
+ * grids). */
+#ifndef GL_FOG_DISTANCE_MODE_NV
+#define GL_FOG_DISTANCE_MODE_NV 0x855A
+#endif
+#ifndef GL_EYE_RADIAL_NV
+#define GL_EYE_RADIAL_NV 0x855B
+#endif
+
 #define MAX_LIGHTS 4
 
 typedef struct {
@@ -130,6 +144,16 @@ typedef struct SceneRenderConfig {
      * the safe default: never call the entry point unless a caller has
      * confirmed support. */
     int point_parameter_supported;
+    /* Runtime GL_NV_fog_distance capability, detected once in
+     * glr_ctrl_init_gl and mirrored here. When set, the passes whose
+     * distance fog wraps geometry around the camera — the city backdrop
+     * and the ocean/radar grid themes — switch to true radial eye distance
+     * (GL_EYE_RADIAL_NV) so their fringes stop swimming as the camera
+     * orbits. Scoped per-pass and confined by each pass's
+     * GL_ALL_ATTRIB_BITS (GL_FOG_BIT) push/pop, so the eye-plane-tuned
+     * themes are untouched. 0 for non-detecting callers (scene_demo) via
+     * memset — the safe default. */
+    int nv_fog_distance_supported;
     /* Experimental scene-viewport post-processing (ScenePostFilterMode).
      * Runtime-only (Ctrl+N); never persisted via @cfg. */
     int post_filter_mode;
