@@ -3,16 +3,20 @@
 # their direct REPL-symbol surface. Counts unique `repl_*(` symbols
 # called from each file and compares to a baseline.
 #
-# The editor's REPL coupling is what tools/editor_demo/repl_shim.c
-# has to stub. Every new `repl_*` call site in the editor either
-# needs a service callback added to EditorServices and a shim
-# implementation, or a direct stub in repl_shim.c. The check fails
-# loudly if either file gains a unique symbol since the baseline,
-# forcing the new dependency to be considered explicitly.
+# Editor → REPL coupling is the architectural debt this guard
+# tracks. Every new `repl_*` call site in the editor needs a service
+# callback added to EditorServices instead, so the editor's
+# dependency on REPL stays narrow and the editor_demo (which links
+# the editor data model without REPL) keeps working. The check
+# fails loudly if either file gains a unique symbol since the
+# baseline, forcing the new dependency to be considered explicitly.
 #
 # Ratchet down as new EditorServices callbacks land and call sites
-# migrate. The plan target (plans/active/editor-demo.md) is ~5 per
-# file; current baseline reflects post-Phase-6 reality.
+# migrate. The plan target (plans/done/editor-demo.md) is ~5 per
+# file; current baseline reflects post-edit-line-ownership reality
+# (Phase 5 of plans/done/edit-line-ownership.md deleted the former
+# tools/editor_demo/repl_shim.c after the storage flip removed its
+# last forwarders).
 
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"

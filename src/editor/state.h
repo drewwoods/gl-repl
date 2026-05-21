@@ -166,13 +166,14 @@ typedef struct {
  * cursor as explicit input to its parse / flatten / compile / load
  * / export work).
  *
- * Phase 2 of plans/in-review/edit-line-ownership.md adds the slice
- * shape; storage stays on `ReplState.document.edit_line_idx` until
- * the Phase 4 atomic flip, with editor accessors forwarding to
- * `repl_state_edit_line()` during the transition. The
- * `document.edit_line_idx` field on EditorState exists in this phase
- * as the destination for the Phase 4 flip — it is NOT read while
- * the forwarders are in effect. */
+ * Canonical storage as of Phase 4 of
+ * plans/done/edit-line-ownership.md. The editor accessors
+ * editor_state_edit_line / _set / _clamp read and write this field
+ * directly; REPL pipeline code receives the cursor as an explicit
+ * parameter (parse / compile / flatten / load) or routes through
+ * the repl_dispatch_edit_line_get / _set host-effects sink (scene
+ * save/restore, the load.c NULL-fallback). REPL files do not
+ * link `editor_state_*` symbols (β invariant). */
 typedef struct {
     int edit_line_idx;
 } EditorDocumentState;
@@ -281,10 +282,10 @@ int editor_buffer_apply_compiled_change(const struct ReplCompiledChange_s *chang
  * pure reads that should not reach through editor globals. */
 const char *editor_buffer_view_line(EditorBufferView view, int idx);
 
-/* Editor-input slice API. The view variant returns the input by-value
- * with `edit_line_idx` populated from the document cursor (the
- * canonical edit-line index lives on ReplDocumentState, not on the
- * input slice itself). */
+/* Editor-input slice API. The view variant returns the input row's
+ * own state by value; the document cursor is a separate slice
+ * (see EditorDocumentState above) and is read via
+ * editor_state_edit_line(). */
 EditorInputView   editor_state_input(void);
 EditorInputState *editor_state_input_mut(void);
 void                  editor_state_input_reset(void);
@@ -341,16 +342,17 @@ void        editor_pending_newline_clear(void);
 /* Document-cursor slice API. The canonical edit-line index over the
  * source-text document.
  *
- * Phase 2 of plans/in-review/edit-line-ownership.md added these
- * accessors as transitional forwarders to `repl_state_edit_line()` /
- * `_set()` / `_clamp()`. Phase 4 will move storage from
+ * Phase 4 of plans/done/edit-line-ownership.md flipped storage from
  * `ReplState.document.edit_line_idx` to
- * `EditorState.document.edit_line_idx` and rewire these to read /
- * write the editor field directly.
+ * `EditorState.document.edit_line_idx`. These accessors read and
+ * write the editor field directly (no forwarder layer).
  *
- * Editor / app / widget code should use these going forward; REPL
- * pipeline functions take the value as an explicit parameter (β
- * invariant: REPL files do not call editor accessors). */
+ * Editor / app / widget code calls these directly. REPL pipeline
+ * functions take edit-line as an explicit parameter (parse /
+ * compile / flatten / load entry points) or route through the
+ * repl_dispatch_edit_line_get / _set host-effects sink in
+ * `src/repl/core.h` (scene save/restore, the load.c NULL-fallback).
+ * β invariant: REPL files do not call editor accessors. */
 int                  editor_state_edit_line(void);
 void                 editor_state_edit_line_set(int line);
 void                 editor_state_edit_line_clamp(void);
