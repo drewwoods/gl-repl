@@ -20,8 +20,9 @@
 
 /* Scene tab strip height. MUST equal LINE_H: the visible-row count is
  * integer division by LINE_H, so only an exact-LINE_H reserve drops the
- * count by exactly one when the band is present (see tabbed-code-panel
- * plan §3). Keeps the band visually uniform with the menu bar too. */
+ * count by exactly one when the band is present. Keeps the band
+ * visually uniform with the menu bar too (implemented per
+ * tabbed-code-panel plan §3). */
 #define TAB_STRIP_H LINE_H
 
 /* UI colors live in theme.h. Use `ui_clr(UI_TOK_*)` / `ui_clr_a(...)` for palette
