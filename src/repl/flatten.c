@@ -148,8 +148,8 @@ static int flatten_source_cmd_is_flat_omitted(CmdType type) {
  * batch in the 3D view.
  *
  * edit_line_idx is supplied by the caller (β: REPL pipeline does not
- * call editor_state_*). Phase 3.6.2 of
- * plans/in-review/edit-line-ownership.md. */
+ * call editor_state_*), implemented in phase 3.6.2 (see the
+ * edit-line-ownership plan doc). */
 void repl_flatten_refresh_current_block_highlight(int edit_line_idx) {
     const GLCmd *flat_cmds = repl_state_flat_program_cmds();
     int flat_cmd_count = repl_state_flat_program_count();
@@ -687,8 +687,8 @@ static unsigned int line_func_scope_mask(int line) {
 }
 
 /* edit_line_idx is supplied by the caller (β: REPL pipeline does
- * not call editor_state_*). Phase 3.6.2 of
- * plans/in-review/edit-line-ownership.md. */
+ * not call editor_state_*), implemented in phase 3.6.2 (see the
+ * edit-line-ownership plan doc). */
 int repl_flat_cmd_matches_cursor(int flat_idx, int edit_line_idx) {
     const GLCmd *flat_cmds = repl_state_flat_program_cmds();
     int flat_cmd_count = repl_state_flat_program_count();

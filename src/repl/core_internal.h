@@ -6,8 +6,9 @@
  * canonical-text builders, and visible-variable collection. It no longer owns
  * scene loading, export, editor-input shims, or controller hooks.
  *
- * Phase 5 of feature/source-document-port.md shrank the old catch-all header to
- * this parse-focused subset. The pieces that moved out now live in:
+ * The old catch-all header was shrunk to this parse-focused subset.
+ * The pieces that moved out now live in (implemented in Phase 5 of
+ * feature/source-document-port.md):
  *
  *   src/repl/util.h            static inline format / copy helpers
  *   src/repl/scenes.h          scene promotion / capture / reset

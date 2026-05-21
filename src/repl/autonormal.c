@@ -177,11 +177,11 @@ static void compute_block_normals(GLenum mode, GLenum front_face,
     }
 }
 
-/* Step 7a of feature/decouple-repl-from-gl-repl-alt.md: the
- * `autonormal` toggle moved out of REPL state onto `glr_state`. The
+/* The `autonormal` toggle moved out of REPL state onto `glr_state`. The
  * autonormal pass is a REPL pipeline TU and cannot include
  * `glr_state.h`, so the caller (controller / tests) gates the call
- * by passing the toggle explicitly. */
+ * by passing the toggle explicitly (implemented as step 7a of
+ * feature/decouple-repl-from-gl-repl-alt.md). */
 void repl_recompute_autonormals(int autonormal_enabled,
                                 int *edit_line_inout) {
     if (!autonormal_enabled) return;

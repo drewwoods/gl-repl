@@ -154,14 +154,14 @@ typedef struct {
     void (*scroll_to_line)(int target);
     /* Toggle cursor-follow during replay. */
     void (*follow_cursor)(int follow);
-    /* Read/write the edit-line cursor. Phase 4 of
-     * plans/in-review/edit-line-ownership.md moves cursor storage
+    /* Read/write the edit-line cursor. Cursor storage moved
      * to EditorState; REPL code that previously called
      * repl_state_edit_line() / _set() goes through these hooks so
      * the β invariant (REPL → editor symbol references forbidden)
      * stays intact. Higher-level pipeline entry points (scenes.c)
      * use this; the parse / compile / flatten / load layers take
-     * cursor as an explicit parameter instead (see Phase 3.6.x).
+     * cursor as an explicit parameter instead (see phase 3.6.x;
+     * implemented in phase 4 of plans/in-review/edit-line-ownership.md).
      *
      * Default behavior when the hook is NULL: edit_line_get
      * returns 0; edit_line_set is a no-op. The demo / pure REPL
@@ -204,8 +204,8 @@ int  repl_example_count(void);
 const char *repl_example_name(int idx);
 /* Returns the post-load cursor target (= document line count after
  * the example body emits). Caller applies the value via
- * editor_state_edit_line_set() above the β boundary. Phase 3.6.4 of
- * plans/in-review/edit-line-ownership.md. */
+ * editor_state_edit_line_set() above the β boundary (implemented in
+ * phase 3.6.4 of plans/in-review/edit-line-ownership.md). */
 int  repl_load_example(int idx);
 
 /* User scenes: persistent named snapshots (up to MAX_USER_SCENES slots).
@@ -244,8 +244,8 @@ void repl_reset_time_to_zero(void);
 /* editor_navigate_to_line() / editor_feed_line() are editor-owned and
  * declared in src/editor/input.h — src/repl/ no longer re-declares them. */
 /* Returns the post-load cursor target. Caller applies the value
- * via editor_state_edit_line_set() above the β boundary. Phase
- * 3.6.4 of plans/in-review/edit-line-ownership.md. */
+ * via editor_state_edit_line_set() above the β boundary (implemented
+ * in phase 3.6.4 of plans/in-review/edit-line-ownership.md). */
 int repl_load_initial_commands(const char *import_file);
 /* Pure REPL pass: walks every command and rewrites the canonical
  * line text + GLCmd in place. Does not save/restore editor input;

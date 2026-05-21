@@ -9,8 +9,8 @@
  * stay on src/repl/core.h.
  *
  * These hooks were split out of src/repl/core_internal.h so the remaining
- * internal header could focus on parse/normalize helpers. (Implemented as
- * Phase 5 of feature/source-document-port.md.)
+ * internal header could focus on parse/normalize helpers (implemented as
+ * phase 5 of feature/source-document-port.md).
  */
 #ifndef REPL_SCENES_H
 #define REPL_SCENES_H

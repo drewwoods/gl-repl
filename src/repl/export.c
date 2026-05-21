@@ -255,10 +255,10 @@ typedef struct { char name[16]; float value; } DeferredVar;
 static DeferredVar g_deferred_var_values[MAX_DEFERRED_VAR_VALUES];
 static int         g_deferred_var_count = 0;
 
-/* Step 4 of the decouple plan moved workspace_slug_from_name out of
- * src/repl/export.c. The bridge implementation in glr_export.c owns slug
- * derivation now; src/repl/export.c just emits/parses the (slug, value)
- * pairs the bridge produces. */
+/* workspace_slug_from_name moved out of src/repl/export.c. The bridge
+ * implementation in glr_export.c owns slug derivation now; src/repl/export.c
+ * just emits/parses the (slug, value) pairs the bridge produces
+ * (implemented in step 4 of the decouple plan). */
 
 static void workspace_format_float(char *buf, size_t n, float v) {
     snprintf(buf, n, "%g", (double)v);
@@ -864,7 +864,7 @@ static void emit_export_init_section_to_file(FILE *f, int include_tess) {
 }
 
 static void emit_export_header_pre(FILE *f) {
-    /* Step 4a: ask the camera bridge for the g_angle preamble line.
+    /* Ask the camera bridge for the g_angle preamble line.
      * Without a bridge installed (the demo case) we emit the
      * placeholder unchanged so the file is still valid C. */
     char angle_line[REPL_EXPORT_CAMERA_PREAMBLE_MAX];
@@ -892,9 +892,10 @@ static void emit_export_header_pre(FILE *f) {
 }
 
 static void emit_export_cam_lines(FILE *f) {
-    /* Step 4a: the bridge owns the camera-line format. Without a
+    /* The bridge owns the camera-line format. Without a
      * bridge (demo case) the // camera block is omitted from the
-     * exported file — that's fine, the demo doesn't export. */
+     * exported file — that's fine, the demo doesn't export
+     * (implemented in step 4a of the decouple plan). */
     if (!g_export_camera_bridge || !g_export_camera_bridge->fill_save_block)
         return;
     ReplExportCameraBlock block;
@@ -908,11 +909,12 @@ static void emit_export_cam_lines(FILE *f) {
 }
 
 void repl_refresh_render_state_strings(void) {
-    /* Step 7a: render-config toggles moved to glr_state. Read them
+    /* Render-config toggles moved to glr_state. Read them
      * via the bridge's slug-keyed get_int — same opaque path the rest
      * of the export pipeline uses for cfg state. The demo doesn't
      * install a bridge, so the toggles fall back to "Enable" /
-     * "Disable" defaults below; the demo never exports anyway. */
+     * "Disable" defaults below; the demo never exports anyway
+     * (implemented in step 7a). */
     int msaa_on        = g_export_cfg_bridge && g_export_cfg_bridge->get_int
                          ? g_export_cfg_bridge->get_int("msaa", 1)
                          : 1;
@@ -927,9 +929,10 @@ void repl_refresh_render_state_strings(void) {
              line_smooth_on ? "Enable" : "Disable");
 }
 
-/* Step 4a: the camera-block parser state machine moved to the bridge
+/* The camera-block parser state machine moved to the bridge
  * implementation (glr_camera_export.c). src/repl/export.c just delegates
- * import-side line consumption and reset to the bridge. */
+ * import-side line consumption and reset to the bridge (implemented in
+ * step 4a). */
 void import_cam_parser_reset(void) {
     if (g_export_camera_bridge && g_export_camera_bridge->reset_import)
         g_export_camera_bridge->reset_import();
@@ -2317,8 +2320,9 @@ static int import_parse_declare_marker(const char *line, int *loaded,
             if (warnings) (*warnings)++;
             return 1;
         }
-        /* Caller-owned cursor threaded through ImportState (Phase
-         * 3.6.4 of plans/in-review/edit-line-ownership.md). */
+        /* Caller-owned cursor threaded through ImportState
+         * (implemented in phase 3.6.4; see the
+         * edit-line-ownership plan doc). */
         ReplStoreMutOpts opts = {
             .flags        = REPL_COMMAND_STORE_ADJUST_EDIT_LINE,
             .cursor_inout = edit_line_inout,
@@ -2961,9 +2965,10 @@ static void import_feed_one_line(const char *line, int *loaded, int *warnings,
     if (import_parse_declare_marker(line, loaded, warnings, edit_line_inout))
         return;
 
-    /* Step 5b: feed lines through the non-editor source-load API
-     * (repl_load_apply_line in src/repl/compile.c) instead of editor_feed_line.
-     * Same compile + apply, no editor input dispatch. */
+    /* Feed lines through the non-editor source-load API
+     * (repl_load_apply_line in src/repl/compile.c) instead of
+     * editor_feed_line. Same compile + apply, no editor input dispatch
+     * (implemented in step 5b). */
     char load_err[256] = "";
     if (import_make_repl_for_header(line, repl_line, sizeof(repl_line))) {
         handled = repl_load_apply_line(repl_line, load_err, (int)sizeof(load_err),
@@ -3135,10 +3140,11 @@ static void emit_export_display_begin(FILE *f) {
 }
 
 static void emit_export_display_geometry(FILE *f) {
-    /* Step 7a: presentation toggles moved to glr_state. Read them via
+    /* Presentation toggles moved to glr_state. Read them via
      * the bridge — same opaque path as the rest of the export
      * pipeline. Demo case (no bridge installed) falls back to "off",
-     * which is fine because the demo doesn't export. */
+     * which is fine because the demo doesn't export (implemented in
+     * step 7a). */
     int outlines_on = g_export_cfg_bridge && g_export_cfg_bridge->get_int
                       ? g_export_cfg_bridge->get_int("vertex_outlines", 0)
                       : 0;
@@ -3196,8 +3202,8 @@ static void emit_export_display_tail(FILE *f, const ExportNeeds *needs,
     /* Use the actual scene rect so the exported window preserves the REPL
      * viewport's aspect ratio and geometry is never clipped. Fall back to
      * 800x600 when dimensions aren't available (headless / demo export).
-     * Step 7c: read from the explicit ReplExportLayout struct rather
-     * than calling ui_layout_scene_rect directly. */
+     * Read from the explicit ReplExportLayout struct rather than
+     * calling ui_layout_scene_rect directly (implemented in step 7c). */
     int sw = layout ? layout->scene_w : 0;
     int sh = layout ? layout->scene_h : 0;
     if (sw <= 0) sw = 800;
@@ -3450,10 +3456,10 @@ static void import_flush_pending_blank_run(ImportState *s) {
 /* --- pre-snippet handlers (camera, workspace header, function bodies) ----- */
 
 static int import_try_camera(const char *p) {
-    /* Step 4a: both the g_angle preamble and the body lines flow
+    /* Both the g_angle preamble and the body lines flow
      * through a single bridge entry point. The bridge's stateful
      * parser dispatches internally based on which line shape it
-     * sees. */
+     * sees (implemented in step 4a). */
     return import_parse_cam_line(p);
 }
 
@@ -3624,7 +3630,8 @@ int repl_export_load_from_file(const char *filename) {
          * returns) see the pre-import value — leaving Load Scene From
          * File parked at line 0 with insert mode off, so the next
          * commit replaces the first imported command instead of
-         * appending. Phase 4 of plans/done/edit-line-ownership.md. */
+         * appending (implemented in phase 4; see the
+         * edit-line-ownership plan doc). */
         repl_dispatch_edit_line_set(state.edit_line);
         char msg[256];
         if (state.warnings > 0)
@@ -3694,8 +3701,8 @@ void repl_dump_code_panel_text(FILE *out, SourceTextView text) {
 static void dump_code_panel_wrapped_line(FILE *dst, const char *text,
                                          int first_x, int panel_w,
                                          int wrap_at_comma) {
-    /* Step 7c: wrap_at_comma is threaded explicitly from the
-     * ReplExportLayout struct that the controller built. */
+    /* wrap_at_comma is threaded explicitly from the ReplExportLayout
+     * struct that the controller built (implemented in step 7c). */
     const char *src = text ? text : "";
     CodeLayout layout =
         code_layout_make(panel_w, first_x, FONT_W, wrap_at_comma);
@@ -3713,7 +3720,7 @@ void repl_dump_code_panel_visual_text(FILE *out, SourceTextView text,
                                       const ReplExportLayout *layout,
                                       int code_margin_x) {
     FILE *dst = out ? out : stdout;
-    /* Step 7c: panel width + presentation flags come in opaquely
+    /* Panel width + presentation flags come in opaquely
      * through the layout struct. The controller computes them via
      * `ui_layout_*` / `glr_state_presentation()` before calling.
      *
@@ -3722,7 +3729,7 @@ void repl_dump_code_panel_visual_text(FILE *out, SourceTextView text,
      * with the editor running): code_panel_w = 0 (which disables
      * wrap), show_vertex_indices = 1, wrap_at_comma = 1. The full
      * fallback contract lives on `ReplExportLayout`'s declaration
-     * in src/repl/export.h. */
+     * in src/repl/export.h (implemented in step 7c). */
     int panel_w       = layout ? layout->code_panel_w        : 0;
     int show_indices  = layout ? layout->show_vertex_indices : 1;
     int wrap_at_comma = layout ? layout->wrap_at_comma       : 1;
