@@ -346,8 +346,8 @@ void editor_input_len_set(int input_len) {
      * "anchor_pos in [0, input_len]" invariant when the buffer shrinks.
      * Anchor-preserving callers drive the buffer through narrower
      * primitives and route through
-     * editor_cursor_pos_set_keep_anchor themselves (for example the
-     * Phase E shift handlers). */
+     * editor_cursor_pos_set_keep_anchor themselves (for example, the
+     * shift handlers added in Phase E). */
     editor_cursor_pos_set(g_editor_state.input.cursor_pos);
 }
 
