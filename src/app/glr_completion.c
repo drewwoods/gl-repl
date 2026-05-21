@@ -239,13 +239,17 @@ static void update_autocomplete(void) {
     g_ac_input_offset = 0;
     g_ac_suffix[0] = '\0';
 
-    /* While a tutorial is active, autocomplete matches/hints would
-     * compete with the tutorial UI. Suppress normal completion and
-     * emit the expected-command shadow text as the ghost suffix
-     * instead — the active-input renderer already draws ghost in
-     * dimmed color after the cursor. Empty input + tutorial active
-     * yields the full expected line as the ghost. */
-    if (tutorial_active()) {
+    /* While a tutorial is active AND the cursor sits on the expected
+     * commit line, autocomplete matches/hints would compete with the
+     * tutorial UI. Suppress normal completion and emit the
+     * expected-command shadow text as the ghost suffix instead — the
+     * active-input renderer already draws ghost in dimmed color
+     * after the cursor. Empty input + tutorial active yields the
+     * full expected line as the ghost. On any other line the user
+     * is editing unrelated code, so fall through to the normal
+     * autocomplete path. */
+    if (tutorial_active() &&
+        editor_state_edit_line() == tutorial_expected_commit_line()) {
         tutorial_shadow_suffix(raw_input, ac->ghost, sizeof(ac->ghost));
         return;
     }
