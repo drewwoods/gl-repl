@@ -6,6 +6,7 @@
  * controller. Adds a small interactive shell:
  *
  *   - mouse drag (orbit / pan) + wheel (zoom)
+ *   - V toggles perspective / orthographic projection with an eased blend
  *   - keyboard toggles for lighting, wireframe, grid / axes / backdrop
  *   - per-light enable on number keys
  *   - bitmap HUD with the current state and a help panel
@@ -16,6 +17,7 @@
  *   build_cfg() { cfg.execute_fn = my_scene; cfg.cam_* = ...; ... }
  */
 #include <gl_includes.h>
+#include "config.h"
 #include "scene/render.h"
 #include "scene/render_types.h"
 
@@ -55,8 +57,36 @@ static int g_wireframe       = 0;
 static int g_grid_theme      = 1;
 static int g_axes_theme      = 1;
 static SceneBackdropMode g_backdrop_mode = SCENE_BACKDROP_OFF;
+static float g_projection_mix = 1.0f;
+static float g_projection_mix_target = 1.0f;
 static int g_show_hud        = 1;
 static int g_show_help       = 0;
+
+static float smoothstep01(float t) {
+    if (t < 0.0f) t = 0.0f;
+    if (t > 1.0f) t = 1.0f;
+    return t * t * (3.0f - 2.0f * t);
+}
+
+static void step_projection_mix(float dt) {
+    float step;
+
+    if (GLR_VIEW_PROJECTION_TRANSITION_SECS <= 0.0f) {
+        g_projection_mix = g_projection_mix_target;
+        return;
+    }
+
+    step = dt / GLR_VIEW_PROJECTION_TRANSITION_SECS;
+    if (g_projection_mix < g_projection_mix_target) {
+        g_projection_mix += step;
+        if (g_projection_mix > g_projection_mix_target)
+            g_projection_mix = g_projection_mix_target;
+    } else if (g_projection_mix > g_projection_mix_target) {
+        g_projection_mix -= step;
+        if (g_projection_mix < g_projection_mix_target)
+            g_projection_mix = g_projection_mix_target;
+    }
+}
 
 /* --- Scene callback ---------------------------------------------------- */
 
@@ -152,7 +182,7 @@ static void build_config(SceneRenderConfig *cfg) {
     cfg->wireframe     = g_wireframe;
 
     cfg->grid_theme       = g_grid_theme;
-    cfg->grid_extent_idx  = GRID_EXTENT_MID;
+    cfg->grid_extent_idx  = GRID_EXTENT_FAR;
     cfg->grid_major_idx   = GRID_MAJOR_1;
     cfg->axes_theme       = g_axes_theme;
     /* No transition machine in the demo: draw overlays fully opaque.
@@ -184,6 +214,9 @@ static void build_config(SceneRenderConfig *cfg) {
     cfg->line_smooth_enabled = 1;
 
     cfg->alpha_scale = 1.0f;
+
+    /* 1.0 = fully perspective projection, 0.0 = orthographic */
+    cfg->projection_mix = smoothstep01(g_projection_mix);
 }
 
 /* --- HUD rendering ----------------------------------------------------- */
@@ -191,7 +224,7 @@ static void build_config(SceneRenderConfig *cfg) {
 static void draw_text(int x, int y, const char *s) {
     glRasterPos2i(x, y);
     while (*s) {
-        glutBitmapCharacter(GLUT_BITMAP_HELVETICA_12, (int)(unsigned char)*s);
+        glutBitmapCharacter(GLUT_BITMAP_8_BY_13, (int)(unsigned char)*s);
         s++;
     }
 }
@@ -227,7 +260,7 @@ static void render_hud(void) {
     int y = g_window_h - 20;
 
     /* Status panel (always on while HUD is on). */
-    int panel_h = line_h * 5 + 10;
+    int panel_h = line_h * 6 + 10;
     draw_panel_bg(8, y - panel_h + line_h, 360, panel_h);
 
     glColor4f(0.95f, 0.95f, 1.00f, 1.0f);
@@ -254,6 +287,11 @@ static void render_hud(void) {
              g_show_indicators ? "on" : "off");
     draw_text(14, y, buf); y -= line_h;
     snprintf(buf, sizeof buf,
+             "View    proj=%s  mix=%4.2f",
+             (g_projection_mix_target < 0.5f) ? "ortho" : "persp",
+             smoothstep01(g_projection_mix));
+    draw_text(14, y, buf); y -= line_h;
+    snprintf(buf, sizeof buf,
              "Themes  grid=%d  axes=%d  backdrop=%d",
              g_grid_theme, g_axes_theme, g_backdrop_mode);
     draw_text(14, y, buf); y -= line_h + 6;
@@ -267,8 +305,9 @@ static void render_hud(void) {
             "Arrows          orbit (Shift = pan)",
             "1 2 3 4         toggle lights",
             "L  lighting    W  wireframe   I  indicators",
-            "G  grid theme  X  axes theme  B  backdrop",
-            "R  auto-rotate H  toggle HUD  ?  toggle help",
+            "V  projection  G  grid theme  X  axes theme",
+            "B  backdrop    R  auto-rotate",
+            "H  toggle HUD  ?  toggle help",
             "Q or Esc        quit",
         };
         int n = (int)(sizeof help / sizeof help[0]);
@@ -320,6 +359,7 @@ static void reshape_func(int w, int h) {
 
 static void idle_func(void) {
     g_anim_t += 0.016f;
+    step_projection_mix(0.016f);
     glutPostRedisplay();
 }
 
@@ -337,13 +377,17 @@ static void keyboard_func(unsigned char key, int x, int y) {
             if (g_cam_dist > 100.0f) g_cam_dist = 100.0f;
             break;
         case 'l': case 'L': g_lighting_on    = !g_lighting_on; break;
+        case 'v': case 'V':
+            g_projection_mix_target =
+                (g_projection_mix_target < 0.5f) ? 1.0f : 0.0f;
+            break;
         case 'w': case 'W': g_wireframe      = !g_wireframe; break;
         case 'i': case 'I': g_show_indicators = !g_show_indicators; break;
         case 'r': case 'R': g_auto_rotate    = !g_auto_rotate; break;
         case 'h': case 'H': g_show_hud       = !g_show_hud; break;
         case '?': case '/': g_show_help      = !g_show_help; break;
-        case 'g': case 'G': g_grid_theme     = (g_grid_theme    + 1) % 4; break;
-        case 'x': case 'X': g_axes_theme     = (g_axes_theme    + 1) % 4; break;
+        case 'g': case 'G': g_grid_theme     = (g_grid_theme    + 1) % GRID_THEME_COUNT; break;
+        case 'x': case 'X': g_axes_theme     = (g_axes_theme    + 1) % AXES_THEME_COUNT; break;
         case 'b': case 'B':
             g_backdrop_mode =
                 (SceneBackdropMode)((g_backdrop_mode + 1) % SCENE_BACKDROP_COUNT);
