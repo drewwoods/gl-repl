@@ -60,8 +60,10 @@ static int key_is_printable_ascii(unsigned char key) {
  * at the active edit line. editor_buffer_replace_line auto-extends
  * line_count if edit_line was past the end, so a freshly-navigated
  * "virtual" line (edit_line == line_count) becomes a real entry on
- * commit. */
-static void demo_commit_input_to_buffer(void) {
+ * commit. Non-static — exposed as demo_input_commit_to_buffer so
+ * the Save menu action can flush in-progress input before writing
+ * the buffer to disk. */
+void demo_input_commit_to_buffer(void) {
     int line = editor_state_edit_line();
     if (line < 0) line = 0;
     (void)editor_buffer_replace_line(line, editor_input_text());
@@ -91,7 +93,7 @@ void demo_input_navigate_to(int target) {
     if (target < 0)     target = 0;
     if (target > count) target = count;
 
-    demo_commit_input_to_buffer();
+    demo_input_commit_to_buffer();
     editor_state_edit_line_set(target);
     demo_load_buffer_line(target);
     editor_cursor_pos_set(editor_input_len());

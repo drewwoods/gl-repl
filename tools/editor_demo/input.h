@@ -35,4 +35,11 @@ void demo_input_handle_special(int key, int x, int y);
  * use. */
 void demo_input_navigate_to(int target);
 
+/* Commit the current input row's text into the buffer at the
+ * active edit_line (without changing edit_line). Exposed for the
+ * Save menu action so on-disk content matches what the user sees,
+ * including any in-progress typed text not yet committed via Enter
+ * or Up/Down. */
+void demo_input_commit_to_buffer(void);
+
 #endif /* EDITOR_DEMO_INPUT_H */
