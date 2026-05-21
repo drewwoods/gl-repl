@@ -2,23 +2,19 @@
  * variable_panel_drag.c -- Variable slider drag-state implementation
  *                    (peer-owned by variable_panel).
  *
- * Status: implementation-behind-variable_panel.
- *
- * Phase F commit 31 moved the drag-state bytes into the variable_panel
- * peer module (variable_panel.c). This file is the implementation
- * behind the peer's variable_panel_handle_drag_* surface — it reads /
- * writes via variable_panel_drag_mut() and supplies the value-mapping
- * logic (linear / log scaling) for controller-routed external edits.
- *
- * Phase J7 retired the legacy repl_var_drag_* aliases — the bodies
- * here are exposed under their canonical variable_panel_* /
- * variable_panel_handle_* names directly. The motion path returns a
- * requested value change instead of mutating REPL/editor state.
+ * Implements the variable_panel_handle_drag_* surface: reads / writes
+ * peer-owned drag state via variable_panel_drag_mut() and maps pointer
+ * motion into requested value changes without mutating REPL/editor
+ * state directly.
  *
  * Linear drag: 1 pixel = 0.05 units.
  * Log drag:    200 pixels = one decade (x10 / ÷10), sign preserved.
  *              Near-zero start value falls back to a linear bootstrap
  *              so the slider can walk off zero.
+ *
+ * Historical note: the drag-state bytes moved into the variable_panel
+ * peer in Phase F commit 31, and the legacy repl_var_drag_* aliases
+ * were retired in Phase J7.
  */
 #include "widgets/variable_panel_drag.h"
 #include "widgets/variable_panel_state.h"
@@ -77,7 +73,9 @@ int variable_panel_handle_drag_motion(int x, VariablePanelValueChange *out) {
 
     if (drag->log_mode) {
         /* Logarithmic drag: ×10 / ÷10 per 200 pixels.
-         * Preserves sign; near-zero start falls back to linear bootstrap. */
+         * Preserves sign; near-zero start falls back to a linear
+         * bootstrap because the exponential path needs a non-zero
+         * magnitude to scale from. */
         float dx_total = (float)(x - drag->start_x);
         float mag = fabsf(drag->start_value);
         if (mag < VAR_DRAG_ZERO_EPS) {

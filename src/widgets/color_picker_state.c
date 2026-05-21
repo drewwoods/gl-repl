@@ -210,7 +210,9 @@ void color_picker_open(int cmd_idx, int my) {
     if (g_cp_val > g_cp_value_max)
         g_cp_val = g_cp_value_max;
 
-    /* Position to the right of the panel, near the click y. */
+    /* Prefer to the right of the code panel, then flip left if that
+     * would run off-screen; the final clamp keeps a too-wide popup
+     * usable even in narrow windows. */
     int pw = CP_SV_SZ + CP_GAP + CP_HUE_W
            + (g_cp_has_alpha ? CP_GAP + CP_ALPHA_W : 0) + CP_GAP;
     int ph = CP_SV_SZ + CP_GAP + CP_PREV_H + CP_GAP;
@@ -221,6 +223,8 @@ void color_picker_open(int cmd_idx, int my) {
     if (ppx < CP_SCREEN_MARGIN) ppx = CP_SCREEN_MARGIN;
     if (ppx + pw > win_w - CP_SCREEN_MARGIN) ppx = win_w - pw - CP_SCREEN_MARGIN;
     if (ppx < CP_SCREEN_MARGIN) ppx = CP_SCREEN_MARGIN;
+    /* Center vertically around the trigger point, then clamp so the
+     * popup stays fully on-screen in OpenGL's y-up coordinates. */
     int ppy = (win_h - my) + ph / 2;
     if (ppy > win_h - CP_SCREEN_MARGIN) ppy = win_h - CP_SCREEN_MARGIN;
     if (ppy - ph < CP_SCREEN_MARGIN)    ppy = ph + CP_SCREEN_MARGIN;

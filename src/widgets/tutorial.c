@@ -42,6 +42,9 @@ static void tutorial_set_expected_message(TutorialMatchResult *result,
     snprintf(result->message, sizeof(result->message), "expected: %s", expected);
 }
 
+/* Canonicalize a tutorial command for shape-only comparison: trim outer
+ * whitespace, ignore a trailing semicolon, then remove all remaining
+ * whitespace so formatting differences do not affect matching. */
 static void tutorial_normalize_text(const char *src, char *dst, size_t dst_size) {
     size_t out = 0;
     const char *start = src ? src : "";
@@ -92,14 +95,15 @@ static void tutorial_set_step_status(int tutorial_idx, int step) {
 }
 
 /* Shift any tutorial-tracked line at-or-after `pos` by `delta`. Used
- * before a runner-driven instruction-comment insert and (in Phase 3)
- * after a user's matched expected-command insert. Deliberately does
- * NOT touch pending.commit_line — that field is the immutable
+ * before a runner-driven instruction-comment insert and after a
+ * matched expected-command insert. Deliberately does NOT touch
+ * pending.commit_line — that field is the immutable
  * snapshot of where the in-flight commit attempt targets, and the
  * success bookkeeping relies on reading it back unchanged after the
- * shift pass. */
+ * shift pass (the matched-commit path was added in Phase 3). */
 static void tutorial_shift_tracked_lines_from(int pos, int delta) {
     TutorialRuntimeState *state = tutorial_state_mut();
+    int skip_expected_commit_shift;
 
     if (delta == 0)
         return;
@@ -107,16 +111,17 @@ static void tutorial_shift_tracked_lines_from(int pos, int delta) {
         if (state->locked_lines[i] >= pos)
             state->locked_lines[i] += delta;
     }
+    skip_expected_commit_shift = (state->pending.step_idx >= 0 &&
+                                  pos == state->pending.commit_line);
     if (state->fade_line_idx >= pos)
         state->fade_line_idx += delta;
     if (state->expected_commit_line >= 0 &&
         state->expected_commit_line >= pos &&
-        /* Skip the insertion described by `pending`: the in-flight
-         * user commit lands at pending.commit_line and the matched
-         * expected_commit_line tracks it; bumping it would double-
-         * shift the user row. */
-        !(state->pending.step_idx >= 0 &&
-          pos == state->pending.commit_line)) {
+        /* `expected_commit_line` already names the row the in-flight
+         * user commit will occupy. When the shift is describing that
+         * exact insert, leave the row untouched so we do not
+         * double-shift the pending target. */
+        !skip_expected_commit_shift) {
         state->expected_commit_line += delta;
     }
     for (int i = 0; i < TUTORIAL_LOCKED_LINE_MAX; i++) {
