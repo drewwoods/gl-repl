@@ -4,6 +4,7 @@
  */
 #include "ui/panels.h"
 
+#include "config.h"
 #include "ui/color_picker.h"
 #include "ui/gl_2d.h"
 #include "ui/layout.h"
@@ -180,7 +181,9 @@ void ui_panels_render_scene_status(const UiRenderSnapshot *snap) {
 
         bar_h = STATUSBAR_H;
         bar_y = sc_y;
-        alpha = status.ttl > 60 ? 1.0f : (float)status.ttl / 60.0f;
+        alpha = status.ttl > REPL_STATUS_FADE_FRAMES
+                    ? 1.0f
+                    : (float)status.ttl / (float)REPL_STATUS_FADE_FRAMES;
 
         if (status.kind == UI_STATUS_ERROR) {
             bg   = k_status_bar_bg_err;

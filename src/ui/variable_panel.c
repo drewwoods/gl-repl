@@ -87,6 +87,11 @@ static float val_to_slider_t(float val, float scale) {
 #define VAR_PANEL_BASE_Y 8
 /* Extra gap above REPLAY_HUD_BOTTOM_Y while replay HUD is active. */
 #define VAR_REPLAY_CLEARANCE 10
+/* Per-frame easing fraction the replay-lift converges by, and the pixel
+ * gap below which it snaps to the target. Feel tunables for the lift
+ * animation (cf. config.h's GLR_CAMERA_TARGET_DECAY). */
+#define VAR_PANEL_LIFT_EASE 0.22f
+#define VAR_PANEL_LIFT_SNAP_PX 0.25f
 
 static float g_var_panel_replay_lift_px = 0.0f;
 static float g_var_panel_lift_update_time = -1.0f;
@@ -115,8 +120,8 @@ static void var_panel_replay_lift_tick(float anim_time) {
     g_var_panel_lift_update_target = target;
 
     /* Exponential-decay style easing toward target (and back to 0 when replay ends). */
-    g_var_panel_replay_lift_px += (target - g_var_panel_replay_lift_px) * 0.22f;
-    if (fabsf(target - g_var_panel_replay_lift_px) < 0.25f)
+    g_var_panel_replay_lift_px += (target - g_var_panel_replay_lift_px) * VAR_PANEL_LIFT_EASE;
+    if (fabsf(target - g_var_panel_replay_lift_px) < VAR_PANEL_LIFT_SNAP_PX)
         g_var_panel_replay_lift_px = target;
 }
 

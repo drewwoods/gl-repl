@@ -13,6 +13,9 @@
 #define CODE_MARGIN_X   10
 #define CODE_MARGIN_Y   8
 
+/* Left inset from a menu/dropdown/overlay chrome edge to its row text. */
+#define MENU_TEXT_INSET_X 14
+
 /* Height of the amber status strip along the bottom of the scene - used by
  * both ui_panels.c (var panel lift, code panel statusbar) and scene_render.c
  * (replay HUD lift) so the HUD clears the strip. */

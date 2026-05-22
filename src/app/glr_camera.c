@@ -34,6 +34,26 @@
 #define CAM_DIST_MIN 0.5f
 #define CAM_DIST_MAX 50.0f
 
+/* Drag-to-motion conversion (pointer-pixel deltas → world/camera units)
+ * and the orbit/pan momentum coupling. CAM_ROT_SENSITIVITY (degrees per
+ * pixel of left-drag) and CAM_MOMENTUM_COUPLE (fraction of the same delta
+ * fed into velocity) are distinct knobs that merely share a default today. */
+#define CAM_PAN_SCALE 0.005f          /* world units / pixel, scaled by dist */
+#define CAM_ZOOM_SCALE 0.02f          /* dist units / pixel (middle-drag)     */
+#define CAM_ROT_SENSITIVITY 0.5f      /* degrees / pixel (left-drag orbit)    */
+#define CAM_MOMENTUM_COUPLE 0.5f      /* pan delta → velocity fraction        */
+#define CAM_ROT_MOMENTUM_COUPLE 0.25f /* orbit delta → velocity fraction      */
+
+/* Motion-glow gizmo brightness (0..1): full while actively dragging, a
+ * lower level while momentum/ease coasts the target, decayed each frame and
+ * snapped to 0 below the floor. Only lights up once pan velocity clears the
+ * threshold. */
+#define CAM_GLOW_ACTIVE 1.0f
+#define CAM_GLOW_COAST 0.6f
+#define CAM_GLOW_DECAY 0.94f
+#define CAM_GLOW_FLOOR 0.005f
+#define CAM_GLOW_VEL_THRESHOLD 0.01f
+
 /* Default values for GlrCameraState — the previous home was
  * UI_STATE_INITIAL.camera in src/ui/state.c. */
 #define GLR_CAMERA_INITIAL                          \
@@ -165,8 +185,8 @@ static void tick_target_ease(void) {
     c->tz += dz * k;
 
     if (fabsf(dx) + fabsf(dy) + fabsf(dz) > CAM_TARGET_POS_EPS &&
-        c->motion_glow < 0.6f)
-        c->motion_glow = 0.6f;
+        c->motion_glow < CAM_GLOW_COAST)
+        c->motion_glow = CAM_GLOW_COAST;
 
     if (target_deltas_within_epsilon(c))
         snap_to_target();
@@ -309,35 +329,35 @@ void glr_camera_drag_motion(int x, int y) {
 
     if (g_control_mode == GLR_CAMERA_CONTROL_2D &&
         (btn == GLUT_LEFT_BUTTON || btn == GLUT_RIGHT_BUTTON)) {
-        float scale = 0.005f * c->dist;
+        float scale = CAM_PAN_SCALE * c->dist;
         float dtx = -(float)dx * scale;
         float dty =  (float)dy * scale;
         c->tx += dtx;
         c->ty += dty;
         g_vel_tx *= CAM_DECAY;
         g_vel_ty *= CAM_DECAY;
-        g_vel_tx += dtx * 0.5f;
-        g_vel_ty += dty * 0.5f;
-        c->motion_glow = 1.0f;
+        g_vel_tx += dtx * CAM_MOMENTUM_COUPLE;
+        g_vel_ty += dty * CAM_MOMENTUM_COUPLE;
+        c->motion_glow = CAM_GLOW_ACTIVE;
     } else if (btn == GLUT_LEFT_BUTTON) {
-        c->ry += (float)dx * 0.5f;
-        c->rx += (float)dy * 0.5f;
+        c->ry += (float)dx * CAM_ROT_SENSITIVITY;
+        c->rx += (float)dy * CAM_ROT_SENSITIVITY;
         c->ry = fmodf(c->ry, 360.0f);
         c->rx = clampf(c->rx, CAM_RX_MIN, CAM_RX_MAX);
         g_vel_rx *= CAM_DECAY;
         g_vel_ry *= CAM_DECAY;
-        g_vel_ry += (float)dx * 0.25f;
-        g_vel_rx += (float)dy * 0.25f;
+        g_vel_ry += (float)dx * CAM_ROT_MOMENTUM_COUPLE;
+        g_vel_rx += (float)dy * CAM_ROT_MOMENTUM_COUPLE;
     } else if (btn == GLUT_RIGHT_BUTTON) {
-        float scale = 0.005f * c->dist;
+        float scale = CAM_PAN_SCALE * c->dist;
         float fdy = (float)dy;
         if (g_mouse_mods & GLUT_ACTIVE_SHIFT) {
             /* Shift + right-drag: pan the orbit target along world Y. */
             float wdy = -fdy * scale;
             c->ty -= wdy;
             g_vel_ty *= CAM_DECAY;
-            g_vel_ty += wdy * 0.5f;
-            c->motion_glow = 1.0f;
+            g_vel_ty += wdy * CAM_MOMENTUM_COUPLE;
+            c->motion_glow = CAM_GLOW_ACTIVE;
         } else {
             /* Pan along world XZ ground plane. */
             float ry_rad = c->ry * (float)M_PI / 180.0f;
@@ -350,12 +370,12 @@ void glr_camera_drag_motion(int x, int y) {
             c->tz -= wdz;
             g_vel_tx *= CAM_DECAY;
             g_vel_tz *= CAM_DECAY;
-            g_vel_tx += wdx * 0.5f;
-            g_vel_tz += wdz * 0.5f;
-            c->motion_glow = 1.0f;
+            g_vel_tx += wdx * CAM_MOMENTUM_COUPLE;
+            g_vel_tz += wdz * CAM_MOMENTUM_COUPLE;
+            c->motion_glow = CAM_GLOW_ACTIVE;
         }
     } else if (btn == GLUT_MIDDLE_BUTTON) {
-        c->dist += (float)dy * 0.02f;
+        c->dist += (float)dy * CAM_ZOOM_SCALE;
         c->dist = clampf(c->dist, CAM_DIST_MIN, CAM_DIST_MAX);
     }
 
@@ -389,10 +409,10 @@ void glr_camera_tick(void) {
 
     /* Gizmo lit while pan momentum carries the target. */
     float pan_vel = fabsf(g_vel_tx) + fabsf(g_vel_ty) + fabsf(g_vel_tz);
-    if (pan_vel > 0.01f && c->motion_glow < 0.6f)
-        c->motion_glow = 0.6f;
-    c->motion_glow *= 0.94f;
-    if (c->motion_glow < 0.005f)
+    if (pan_vel > CAM_GLOW_VEL_THRESHOLD && c->motion_glow < CAM_GLOW_COAST)
+        c->motion_glow = CAM_GLOW_COAST;
+    c->motion_glow *= CAM_GLOW_DECAY;
+    if (c->motion_glow < CAM_GLOW_FLOOR)
         c->motion_glow = 0.0f;
 
     if (!g_camera_target_active &&

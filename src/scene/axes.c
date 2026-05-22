@@ -258,7 +258,7 @@ void scene_axes_render(const SceneFrameRenderContext *frame_ctx) {
     axes_xn_apply_transition_fog(1.0f - g_xn_opacity, config->clear_color);
 #endif
 
-    float breath = sinf(frame_ctx->config.anim_time * 0.8f) * 0.5f + 0.5f; /* 0..1 */
+    float breath = sinf(frame_ctx->config.anim_time * SCENE_BREATH_FREQ) * 0.5f + 0.5f; /* 0..1 */
     float as = config->alpha_scale;
 
     switch (axes_theme) {
