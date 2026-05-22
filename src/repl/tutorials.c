@@ -99,8 +99,12 @@ static const TutorialStep g_tutorial_depth_triangle_steps[] = {
 
 static const TutorialEntry g_tutorials[] = {
     {
-        .name  = "First Triangle",
-        .steps = g_tutorial_first_triangle_steps,
+        .name      = "First Triangle",
+        .steps     = g_tutorial_first_triangle_steps,
+        /* A flat triangle in the z=0 plane: present it in true 2D so a
+         * first-time user sees the shape head-on without perspective
+         * foreshortening or accidental orbit. */
+        .view_mode = TUTORIAL_VIEW_2D,
     },
     {
         .name  = "Color & Transform",
@@ -179,6 +183,11 @@ const char *repl_tutorial_step_label(int idx, int step_idx) {
 const char *repl_tutorial_step_target_label(int idx, int step_idx) {
     const TutorialStep *step = tutorial_step_at(idx, step_idx);
     return step ? step->target_label : NULL;
+}
+
+TutorialViewMode repl_tutorial_view_mode(int idx) {
+    const TutorialEntry *entry = tutorial_entry_at(idx);
+    return entry ? entry->view_mode : TUTORIAL_VIEW_INHERIT;
 }
 
 static int label_is_empty(const char *s) {

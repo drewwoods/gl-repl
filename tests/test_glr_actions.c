@@ -13,6 +13,9 @@
 #include "repl/core.h"
 #include "editor/input.h"
 #include "repl/examples.h"
+#include "repl/tutorials.h"
+#include "widgets/tutorial.h"
+#include "widgets/tutorial_state.h"
 #include <keys.h>
 #include "support/test_harness.h"
 #include <stdlib.h>
@@ -455,6 +458,59 @@ static void test_ascii_shortcut_modifiers(void) {
     g_test_mods = 0;
 }
 
+static int find_tutorial_idx_by_name(const char *name) {
+    for (int i = 0; i < repl_tutorial_count(); i++) {
+        const char *n = repl_tutorial_name(i);
+        if (n && strcmp(n, name) == 0)
+            return i;
+    }
+    return -1;
+}
+
+/* Activating a tutorial through the Tutorials menu applies its declared
+ * view-mode preference (sticky): "First Triangle" forces 2D even from the
+ * 3D default and the mode is NOT restored on exit; an inherit tutorial
+ * leaves whatever mode is current. View-mode application is the app layer's
+ * job (glr_start_tutorial reads the catalog and calls glr_config_set), so it
+ * is exercised here through the menu, not the REPL-side tutorial_start. */
+static void test_tutorial_start_applies_view_mode(void) {
+    int first = find_tutorial_idx_by_name("First Triangle");
+    int color = find_tutorial_idx_by_name("Color & Transform");
+    ASSERT_TRUE("First Triangle in catalog", first >= 0);
+    ASSERT_TRUE("Color & Transform in catalog", color >= 0);
+
+    /* (A) A 2D tutorial forces ortho even from the 3D default. */
+    glr_app_reset_all();
+    ASSERT_INT("view mode starts 3D", glr_config_get(GLR_CONFIG_ORTHO_MODE), 0);
+    if (first >= 0) {
+        ASSERT_INT("First Triangle declares 2D",
+                   repl_tutorial_view_mode(first), TUTORIAL_VIEW_2D);
+        ASSERT_INT("menu start First Triangle handled",
+                   glr_action_menu_item_activate(GLR_MENU_TUTORIALS, first), 1);
+        ASSERT_INT("First Triangle tutorial active", tutorial_active(), 1);
+        ASSERT_INT("First Triangle forced 2D view",
+                   glr_config_get(GLR_CONFIG_ORTHO_MODE), 1);
+        /* Sticky: exiting does not restore the prior 3D view. */
+        tutorial_exit();
+        ASSERT_INT("view mode stays 2D after tutorial exit",
+                   glr_config_get(GLR_CONFIG_ORTHO_MODE), 1);
+    }
+
+    /* (B) An inherit tutorial leaves whatever mode is current (here 2D). */
+    glr_app_reset_all();
+    glr_config_set(GLR_CONFIG_ORTHO_MODE, 1);
+    if (color >= 0) {
+        ASSERT_INT("Color & Transform inherits view mode",
+                   repl_tutorial_view_mode(color), TUTORIAL_VIEW_INHERIT);
+        ASSERT_INT("menu start Color & Transform handled",
+                   glr_action_menu_item_activate(GLR_MENU_TUTORIALS, color), 1);
+        ASSERT_INT("inherit tutorial active", tutorial_active(), 1);
+        ASSERT_INT("inherit tutorial leaves view mode at 2D",
+                   glr_config_get(GLR_CONFIG_ORTHO_MODE), 1);
+        tutorial_exit();
+    }
+}
+
 int main(void) {
     test_apply_defaults();
     test_cursor_actions();
@@ -465,6 +521,7 @@ int main(void) {
     test_menu_actions();
     test_shortcuts();
     test_ascii_shortcut_modifiers();
+    test_tutorial_start_applies_view_mode();
 
     return test_harness_report(&g_harness, "test_repl_actions");
 }

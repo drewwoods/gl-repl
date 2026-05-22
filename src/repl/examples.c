@@ -518,6 +518,7 @@ static const char *const g_example_tess_cutout[] = {
  * top-level only, not replay-safe, and not suitable for variable-driven
  * geometry loops. Keep coverage in tests/docs instead of F12 examples. */
 static const char *const g_example_assign_2d[] = {
+    "// @cfg view_mode = 1",
     "// camera",
     "glTranslatef(0.0f, 0.0f, -2.5f);",
     "glRotatef(0.0f, 1.0f, 0.0f, 0.0f);",

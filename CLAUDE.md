@@ -327,8 +327,8 @@ Test sources live under `tests/` and shared test-only helpers live under
 | `src/editor/completion.h` | `EditorCompletionProvider` struct + `editor_completion_register/update/clear` API |
 | `src/repl/examples.c` | Predefined example data (`g_examples[]`, `g_example_names[]`) |
 | `src/repl/examples.h` | Example query API (`repl_examples_count/name/lines`) |
-| `src/repl/tutorials.c` | Built-in tutorial catalog: per-tutorial null-terminated `comments[]` / `expected[]` parallel arrays + name. Starter set: "First Triangle", "Color & Transform" |
-| `src/repl/tutorials.h` | Catalog query API (`repl_tutorial_count/name/step_count/step_comment/step_expected`) + `TutorialEntry` typedef |
+| `src/repl/tutorials.c` | Built-in tutorial catalog: per-tutorial null-terminated `comments[]` / `expected[]` parallel arrays + name + optional `view_mode` (2D/3D) preference. Starter set: "First Triangle" (2D), "Color & Transform" |
+| `src/repl/tutorials.h` | Catalog query API (`repl_tutorial_count/name/step_count/step_comment/step_expected/view_mode`) + `TutorialEntry` / `TutorialViewMode` typedefs |
 | `src/widgets/tutorial_state.c` | Tutorial peer subsystem: owns `TutorialRuntimeState` (active flag, step, locked_lines, fade timing, last match result) |
 | `src/widgets/tutorial_state.h` | Peer-subsystem facade (`tutorial_state_view/_mut/_reset`, `tutorial_active`), `TutorialMatchKind/Result` types |
 | `src/widgets/tutorial.c` | Tutorial runner: starts/exits/advances, emits instruction comments via `repl_load_apply_line`, whitespace-tolerant match, locked-line guard, fade-alpha math |
@@ -660,7 +660,12 @@ these scene-presentation slugs:
 
 `wireframe`, `grid`, `grid_major`, `grid_extent`, `axes`,
 `vertex_labels`, `normal_vectors`, `vertex_outlines`, `vertex_points`,
-`vertex_guides`, `light_indicators`, `backdrop`, `camera_rotate`, `variable_panel`.
+`vertex_guides`, `light_indicators`, `backdrop`, `view_mode`,
+`camera_rotate`, `variable_panel`.
+
+`view_mode` is the 2D/3D projection toggle (slug for the "View mode"
+config row → `GLR_CONFIG_ORTHO_MODE`): `0` = 3D perspective, `1` = 2D
+ortho. Like the camera it is *sticky* — see the reset rules below.
 
 Non-leading `@cfg` lines are not metadata — they stay as ordinary
 comments.
@@ -672,6 +677,11 @@ comments.
   `@cfg` metadata. Prevents stale state leaking across examples.
 - Camera is intentionally excluded from that reset. Examples inherit
   the current camera unless they supply an explicit `// camera` header.
+- `view_mode` is likewise excluded from the reset (it is camera-grouped,
+  not in `glr_state_presentation_reset_example_defaults`'s subset): an
+  example changes the 2D/3D view only when it declares `@cfg view_mode`,
+  and the choice carries across to the next example until something
+  declares otherwise.
 - `restore_user_scene()` restores commands and predefined variables
   only. Leaving an example does not restore camera or other
   presentation state.

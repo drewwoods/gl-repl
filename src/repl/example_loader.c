@@ -225,6 +225,7 @@ static int example_cfg_slug_allowed(const char *slug) {
         "vertex_guides",
         "light_indicators",
         "backdrop",
+        "view_mode",
         "camera_rotate",
         "variable_panel",
         NULL
