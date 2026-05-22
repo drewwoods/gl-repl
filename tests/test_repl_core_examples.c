@@ -1055,6 +1055,53 @@ int main(int argc, char **argv) {
     }
 
     {
+        /* view_mode is example-settable via @cfg: the slug maps to
+         * GLR_CONFIG_ORTHO_MODE through the cfg bridge. Unlike the
+         * scene-presentation subset it is NOT reset per example load —
+         * it is sticky (camera-like), so an example changes it only when
+         * it explicitly declares @cfg view_mode. */
+        static const char *const view_mode_2d_example[] = {
+            "// @cfg view_mode = 1",
+            "glBegin(GL_LINE_STRIP);",
+            "glVertex3f(0, 0, 0);",
+            "glVertex3f(1, 1, 0);",
+            "glEnd();",
+            NULL
+        };
+        static const char *const no_view_mode_example[] = {
+            "glBegin(GL_POINTS);",
+            "glVertex3f(0, 0, 0);",
+            "glEnd();",
+            NULL
+        };
+        static const char *const view_mode_3d_example[] = {
+            "// @cfg view_mode = 0",
+            "glBegin(GL_POINTS);",
+            "glVertex3f(0, 0, 0);",
+            "glEnd();",
+            NULL
+        };
+
+        glr_app_reset_all(); declare_test_vars();
+        ASSERT_TRUE("view_mode starts at 3D default after reset",
+                    glr_state_presentation().ortho_mode == 0);
+
+        repl_load_example_lines_for_test(view_mode_2d_example);
+        ASSERT_TRUE("@cfg view_mode = 1 applies 2D (ortho)",
+                    glr_state_presentation().ortho_mode == 1);
+
+        /* Sticky: a later example with no @cfg view_mode does not reset it. */
+        repl_load_example_lines_for_test(no_view_mode_example);
+        ASSERT_TRUE("view_mode inherits across example load (sticky)",
+                    glr_state_presentation().ortho_mode == 1);
+
+        /* An explicit @cfg view_mode = 0 returns to 3D. */
+        repl_load_example_lines_for_test(view_mode_3d_example);
+        ASSERT_TRUE("@cfg view_mode = 0 returns to 3D",
+                    glr_state_presentation().ortho_mode == 0);
+    }
+
+    {
         static const char *const easing_camera_example[] = {
             "// camera",
             "glTranslatef(0.0f, 0.0f, -10.0f);",

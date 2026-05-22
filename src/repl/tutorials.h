@@ -32,6 +32,18 @@ typedef enum {
     TUTORIAL_STEP_LABEL,
 } TutorialStepPlacementKind;
 
+/* Optional per-tutorial view-mode (2D/3D) preference. INHERIT (the
+ * zero value, so existing catalog entries keep it by default) means
+ * "leave the current view mode untouched" — view mode is sticky, like
+ * the camera. A tutorial that names 2D/3D applies it once at start via
+ * the app layer (glr_actions.c reads repl_tutorial_view_mode and calls
+ * glr_config_set on GLR_CONFIG_ORTHO_MODE); it is not restored on exit. */
+typedef enum {
+    TUTORIAL_VIEW_INHERIT = 0,
+    TUTORIAL_VIEW_3D,
+    TUTORIAL_VIEW_2D,
+} TutorialViewMode;
+
 typedef struct {
     const char               *label;
     const char               *comment;
@@ -43,6 +55,7 @@ typedef struct {
 typedef struct {
     const char         *name;
     const TutorialStep *steps;
+    TutorialViewMode    view_mode;  /* INHERIT = keep current view mode */
 } TutorialEntry;
 
 int                       repl_tutorial_count(void);
@@ -53,6 +66,10 @@ const char               *repl_tutorial_step_expected(int idx, int step_idx);
 TutorialStepPlacementKind repl_tutorial_step_placement(int idx, int step_idx);
 const char               *repl_tutorial_step_label(int idx, int step_idx);
 const char               *repl_tutorial_step_target_label(int idx, int step_idx);
+
+/* The tutorial's declared view-mode preference, or TUTORIAL_VIEW_INHERIT
+ * (the default) when it expresses none. Out-of-range idx → INHERIT. */
+TutorialViewMode          repl_tutorial_view_mode(int idx);
 
 /* Validate a tutorial catalog entry. Returns 1 on success. On failure
  * returns 0 and writes a short diagnostic into `err` (when err_size > 0).
