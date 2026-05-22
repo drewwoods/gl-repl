@@ -120,7 +120,8 @@ Consequences:
 
 | State | Owns | Does not own |
 |---|---|---|
-| `ReplState` | Parsed command array, flat program, REPL variable state (scalar predefined vars plus fixed scratch arrays `A/B/C` of `REPL_SCRATCH_ARRAY_LEN` floats and the `func0..func9` user-alias table), scenes, import/export metadata, persistent render/presentation config | Replay runtime state (peer), variable-panel state (peer), help-session state (peer), color-picker state (peer), editable text, cursor, selection, search query, UI visibility, pointer/viewport chrome |
+| `ReplState` | Parsed command array, flat program, REPL variable state (scalar predefined vars plus fixed scratch arrays `A/B/C` of `REPL_SCRATCH_ARRAY_LEN` floats and the `func0..func9` user-alias table), scenes, import/export metadata | Render/presentation config (now `glr_state`, app layer), replay runtime state (peer), variable-panel state (peer), help-session state (peer), color-picker state (peer), editable text, cursor, selection, search query, UI visibility, pointer/viewport chrome |
+| `glr_state` (app) | App-level presentation/render toggles (grid/axes themes, wireframe, overlays, backdrop, post-process filter, camera-rotate, etc.). Relocated off `ReplRuntimeState.{presentation,render}`; defaults from `glr_defaults.h` (`CFG_DEFAULT_*`). Read/written through the `glr_config` keyed bridge and per-scene snapshots | Program model, editable text, REPL grammar |
 | `EditorState` | Editable text buffer, active input, cursor/edit-line, insert mode, selection, clipboard, search/autocomplete, scroll, **cursor blink** (the editor controls cursor visibility/blink — UI just renders), undo/redo, editor transactions | Variable-panel drag (now on the variable_panel peer), parsed command semantics, GL execution, menu chrome, transient status banners, render-output pixel coordinates |
 | `UiState` | Viewport, pointer, status text TTL, help-overlay visibility (chrome flag), profile-panel visibility, panel-divider geometry (panel_frac + resizing_panel), camera viewport pose | Help-session tab/scroll (peer), variable-panel state (peer), program model, editable text, command validation, cursor blink (editor owns), per-frame render-output (uses `Ui*Output`) |
 | `variable_panel` peer | Variable-panel visibility flag + slider drag transaction (var_idx, log_mode, start_value, start_x). Storage in `src/widgets/variable_panel_state.c`. | Editor text behavior, REPL grammar |
@@ -173,10 +174,12 @@ lists to make the layer boundaries observable:
   REPL pipeline (parse → command store → flatten → execute) from
   static text. Proves the REPL pipeline has no hard dependency on
   editor input dispatch (`src/editor/input.c`), the controller
-  (`src/app/glr_ctrl.c`), or the UI (`src/ui/`, `src/ui/replay_hud.c`). Per-line
-  text canonically lives on `src/editor/state.c`'s `EditorBuffer`,
-  so that one editor TU is in the link set by design. The
-  `tools/repl_demo/stubs.c` file is the visible record of what the
+  (`src/app/glr_ctrl.c`), or the UI (`src/ui/`, `src/ui/replay_hud.c`). The
+  demo now backs the source lines with its own editor-free
+  `source_document` implementation (`tools/repl_demo/source_document.c`,
+  a tiny static line store) instead of linking `src/editor/state.c`'s
+  `EditorBuffer` — the source-document port made that substitution
+  possible. The `tools/repl_demo/stubs.c` file is the visible record of what the
   REPL pipeline pulls in beyond pure pipeline code. That list is now
   large enough to treat as a cleanup ledger, not a success condition:
   reset fan-out, status, config, import, and layout helpers still cross
@@ -360,7 +363,8 @@ commands.
 | `repl_command_spec` | Declarative command descriptors for fixed-arity GL-like commands |
 | `repl_parser` | Parses one source line into `ReplParsedLine { GLCmd cmd; char text[] }`; no storage ownership |
 | `repl_source_scope` | Computes source depth, indentation, and block context used by compile/format paths |
-| `repl_compile` | Pure validation layer. Converts proposed editor text + context into parsed command changes or diagnostics. Never mutates state |
+| `repl_compile` | Pure validation layer. Converts proposed source text + context into parsed command changes or diagnostics. Never mutates state. Reads existing source through the read-only `source_document` view |
+| `repl_load` | Non-editor apply orchestration: compile → predef apply → source-document apply → command-store apply, mirroring the REPL halves of `editor_commit_apply_plan` without editor effects (cursor, insert mode, input buffer). Callers: save-file importer, example loader, tutorial comment injector, tests. Keeps `repl_compile` a pure validator |
 | `repl_command_store` | Low-level `GLCmd` array mechanics only: insert, replace, delete, load. No text-buffer writes |
 | `repl_flatten` | Builds the flat executable command stream from source commands, loops, functions, and `if` blocks |
 | `repl_executor` | Narrow live-GL boundary that executes flat user geometry |
@@ -386,6 +390,8 @@ text edit into a committed program change.
 | `editor_search` | Search query, match tracking, row/char hits, next/previous navigation |
 | `src/app/glr_completion.c` | REPL-side completion provider. Walks command spec, predef-var table, and source `CMD_FUNC_DEF` entries; produces matches, ghost text, parameter hints. Registers itself with `editor_completion` at startup; the editor only invokes the provider, it does not know about variables or GL command names directly |
 | `editor_inline_rename` | Inline scene-name edit buffer and validation |
+| `editor_inline_file_prompt` | Inline status-bar save/load filename prompt (parallel to `inline_rename`). Enter clears the undo ring and runs the file-import path (`repl_load_scene_runtime`) — same pipeline `./sample <file>` uses at startup |
+| `editor_reformat` | Whole-document reindent (Ctrl+R) over the editor buffer |
 | `editor_help_session` | Read-only editor session backed by a help-text content provider. Uses the same scroll/search/cursor model as code editing; no commit path. Help visibility flag stays on `UiState` |
 
 If accepting a keystroke can change line text, cursor position, scroll,
@@ -435,9 +441,11 @@ Program-side state that is not the source command array itself.
 | `replay_annotations` | Replay annotation cache and virtual-line production; takes `EditorBufferView` explicitly |
 | `repl_debug` | Program/debug dump helpers; takes editor text views when it needs source text |
 
-These modules may consume editor text through explicit
-`EditorBufferView` parameters. They must not discover or mutate editor
-state globally.
+These modules may consume editor text through the neutral
+`source_document` port (`SourceTextView` reads and `source_document_*`
+mutations, backed by `glr_source_document.c` over `EditorState`) or, for
+the few remaining direct readers, explicit `EditorBufferView`
+parameters. They must not discover or mutate editor state globally.
 
 ### 4. 3D scene rendering
 
@@ -454,6 +462,8 @@ never read `ReplState`, `EditorState`, or `UiState` directly.
 | `src/scene/backdrop` | Backdrop/environment rendering |
 | `src/scene/lights` | Baseline lighting and light indicators |
 | `src/scene/overlays` | Tiny per-vertex GL primitives (vertex-number labels, normal arrows). REPL-walking overlays moved out to `src/app/glr_ctrl.c`. |
+| `src/scene/postprocess_filter` | Optional full-frame post-process pass (e.g. chromatic aberration): captures the scene rect to a texture and redraws channel-offset passes. Pure fixed-function GL; driven once per frame by `src/scene/render` |
+| `src/scene/themes` | Shared scene theme enums (grid/axes themes, backdrop modes, grid spacing/extent) — the vocabulary app/UI config code and scene renderers share (header-only) |
 | `src/scene/guides/geometry_guides.c` | Vertex/primitive guide rendering from a `SceneGuideSnapshot`. The controller fills the snapshot's cursor args from the flat program (funcN-local resolution) before calling in — see CLAUDE.md "Cursor Edit Guides" |
 | `src/scene/guides/transform_guides.c` | Transform-guide rendering from a `SceneGuideSnapshot` (REPL-aware) |
 | `glr_camera` | Camera/view transform helpers — orbit/pan/zoom drag state machine. `glr_ctrl_router_handle_camera_mouse` drives input; scene consumes final camera state through `SceneRenderConfig`. (Future `scene_camera_controls` move is still possible if the scene/viewport split lands.) |
@@ -481,15 +491,16 @@ allowlists. The contract is enforced by a per-feature lighter guard:
 
 | Module | Role |
 |--------|------|
-| `ui_state` | Owns `UiState`: viewport, pointer, status text TTL, panel visibility, panel-divider geometry, camera viewport pose. *Not* cursor blink (that's editor) |
+| `ui_state` | Owns `UiState`: viewport, pointer, status text TTL, panel visibility, panel-divider geometry, camera viewport pose. *Not* cursor blink (that's editor). Small chrome value types live in `ui_state_types` (re-exported by `repl_state_views` for older consumers) |
 | `ui_snapshot` | Defines `UiRenderSnapshot`, the read-only bundle passed to every UI renderer |
 | `ui_editor` | Editor-overlay snapshot types: transformers, highlights, virtual lines |
 | `ui_hit` | Defines `UiHitKind` + `UiHit`, the passive UI → controller contract. UI hit-test functions return `UiHit`; `glr_ctrl` dispatches on it |
 | `ui_panels` | Top-level panel bridge: delegates code-panel rendering/hit-test to `ui_repl_code_panel`, renders the scene status banner, and prioritizes overlay/menu hit-tests before returning `UiHit` |
 | `ui_text_panel` | Generic text-panel renderer and hit-tester over `UiTextPanelSnapshot`; owns wrapping, row drawing, cursor/search visuals, and generic text hit mapping. REPL/editor-free, guarded by `check-ui-text-panel-pure` |
+| `ui_text_search` | Pure case-insensitive substring search helpers (`ui_text_matches_at`, `ui_text_find_next_in_text`). REPL/editor-free; used by `editor_search` |
 | `ui_repl_code_panel` | REPL-aware adapter over `ui_text_panel`: builds rows from `UiRenderSnapshot`, editor buffer/virtual-line views, command metadata, tutorial fade, replay annotations, and color-transformer state; rewrites generic hits back to source-line targets |
 | `ui_layout` | Pure scene/code-panel rectangle geometry |
-| `ui_code_panel_layout` | Pure text wrapping and visual-line iteration |
+| `ui_text_layout` (`src/ui/text_layout.c`, was `code_panel_layout`) | Pure text wrapping and visual-line iteration (`CodeLayout` / `CodeWrapIter`). Symbol prefix is still `repl_code_panel_layout_*` pending the deferred rename |
 | `ui_menu_bar` | Menu bar, dropdowns, pinned buttons, search entry, and menu hit-testing. One generic `(menu_id, parent_row)` flyout-submenu engine shared by the Scene example-tag menu and the Config section/All menu (provider resolves Scene→`repl_example_*`, Config→`glr_config_section_*`) |
 | `ui_scene_tabs` | Scene tab strip below the menu bar: snapshot-pure render + whole-band hit-test; tab set derived each frame from scene state, no persistent model. Geometry via the shared `ui_layout_code_panel_rect()` like `ui_menu_bar` |
 | `src/ui/color_picker.c` | **Feature-UI** (color-picker peer): pure renderer + hit-test over `ColorPickerView`. State, lifecycle, and source-line writeback live on the `src/widgets/color_picker_state.c` peer; the UI side is mutator- and live-state-free, audited by `check-color-picker-ui-isolation` |
@@ -525,7 +536,10 @@ state.
 
 | Module | Role |
 |--------|------|
-| `repl_export` | Save/load, typed export scaffold, workspace headers, code-panel dumps. Takes `EditorBufferView` for source text |
+| `repl_export` | Save/load, typed export scaffold, workspace headers, code-panel dumps. Reads source via the `source_document` view; camera/cfg formatting delegated to app-side bridges |
+| `src/app/glr_camera_export` | Camera-block format owner: translates camera state ↔ the `// camera` block + `glRotatef`/`glTranslatef` text in saved files. Implements `ReplExportCameraBridge` so `repl_export` never parses/formats GL strings |
+| `src/app/glr_source_document` | Full-app adapter binding the neutral `source_document` port (read view + insert/replace/load/clear/apply) to the `EditorState` text buffer, so REPL pipeline TUs never reach into editor state directly |
+| `src/app/glr_state` | Storage + accessors for app-level presentation/render state relocated off `ReplRuntimeState`; reached through the `glr_config` keyed bridge |
 | `src/app/glr_audio` | App-level playlist engine and persisted audio config (`glr_audio_*`) |
 | `prof` | Project-wide CPU timing instrumentation |
 | `sample` *(future `glr`)* | Current `main()`, GLUT callback registration, buffer swap |
@@ -557,12 +571,16 @@ flowchart LR
 
     sample["sample.c<br/>GLUT callback wiring · buffer swap"]
 
-    subgraph app["0. App router"]
+    subgraph app["0. App shell (router · bridges · app state)"]
         ctrl["src/app/glr_ctrl.c<br/>raw input router · frame/snapshot coordinator<br/>non-editor router helpers · timer tick<br/>does NOT drive editor behavior"]
+        glrstate["src/app/glr_state.c<br/>app presentation/render state<br/>(moved off ReplState)"]
+        glrsrcdoc["src/app/glr_source_document.c<br/>source_document port → EditorState"]
+        glrcamexport["src/app/glr_camera_export.c<br/>camera ↔ export-text bridge"]
     end
 
     subgraph repl_pipeline["1. REPL compiler/program pipeline"]
         compile["src/repl/compile.c<br/>pure validation → ReplCompiledChange"]
+        load["src/repl/load.c<br/>non-editor load apply<br/>(compile → apply, no editor effects)"]
         parser["src/repl/parser.c<br/>line parser"]
         scope["src/repl/source_scope.c<br/>depth · indent · context"]
         flatten["src/repl/flatten.c<br/>source-to-flat builder"]
@@ -583,6 +601,8 @@ flowchart LR
         ecompl["src/editor/completion.c<br/>completion-provider registry"]
         ehelpsess["src/editor/help_session.c<br/>read-only editor session<br/>(carved from ui_help_overlay state)"]
         erename["src/editor/inline_rename.c<br/>rename buffer"]
+        efileprompt["src/editor/inline_file_prompt.c<br/>inline save/load file prompt"]
+        ereformat["src/editor/reformat.c<br/>whole-document reindent"]
     end
 
     subgraph peers["2b. Peer subsystems (own state + controller)"]
@@ -603,7 +623,7 @@ flowchart LR
     subgraph services["6. Services + lifecycle"]
         audio["glr_audio.c<br/>playlist"]
         prof["prof.c<br/>instrumentation"]
-        export["src/repl/export.c<br/>save/load · takes EditorBufferView"]
+        export["src/repl/export.c<br/>save/load · reads source_document view"]
     end
 
     subgraph ui_layer["5. 2D UI rendering + hit-test"]
@@ -612,6 +632,7 @@ flowchart LR
         uipanels["src/ui/panels.c<br/>panel bridge · statusbar<br/>(returns UiHit)"]
         uireplcp["src/ui/repl_code_panel.c<br/>REPL code-panel adapter"]
         uitextpanel["src/ui/text_panel.c<br/>generic text panel"]
+        uitextsearch["src/ui/text_search.c<br/>pure substring search"]
         uimenu["src/ui/menu_bar.c<br/>menubar + dropdowns<br/>(returns UiHit)"]
         uiscenetabs["src/ui/scene_tabs.c<br/>scene tab strip<br/>(returns UiHit)"]
         uicolor["src/ui/color_picker.c<br/>color picker render + hit-test<br/>(feature-UI · reads ColorPickerView)"]
@@ -621,7 +642,7 @@ flowchart LR
         uiprof["src/ui/profile_panel.c<br/>timing HUD"]
         uirhud["src/ui/replay_hud.c<br/>replay HUD (feature-UI)"]
         uilayout["src/ui/layout.c<br/>rect geometry"]
-        uicplay["src/ui/code_panel_layout.c<br/>wrap iterator"]
+        uicplay["src/ui/text_layout.c<br/>wrap iterator (was code_panel_layout.c)"]
     end
 
     subgraph scene_layer["4. 3D scene rendering"]
@@ -633,6 +654,7 @@ flowchart LR
         sbackdrop["src/scene/backdrop.c<br/>backdrop"]
         slights["src/scene/lights.c<br/>lights"]
         soverlays["src/scene/overlays.c<br/>overlay primitives"]
+        spost["src/scene/postprocess_filter.c<br/>post-process pass<br/>(chromatic aberration)"]
     end
 
     %% sample.c hands raw GLUT events to the controller
@@ -664,7 +686,11 @@ flowchart LR
     einput e3@==> esearch
     einput e4@==> eac
     einput e5@==> eclip
+    einput i41@--> efileprompt
+    einput i42@--> ereformat
+    efileprompt -.-> scenes
     eac -.-> ecompl
+    esearch -.-> uitextsearch
 
     %% Editor commit transaction is the only path crossing into REPL.
     einput i12@--> ecommit
@@ -687,11 +713,33 @@ flowchart LR
     cpicker i15@--> ecommit
     ctrl i34@--> cpicker
 
-    %% REPL compile is pure (no edges OUT to state).
+    %% REPL compile is pure (no mutation edges OUT). It may read the
+    %% read-only source-document view through the port.
     compile -.-> parser
     compile -.-> scope
     parser -.-> scope
     store -.-> state
+
+    %% Source-document port: the neutral REPL <-> editor text seam.
+    %% REPL pipeline TUs read/write source lines through source_document_*
+    %% (backed by glr_source_document.c, which adapts EditorState) instead
+    %% of touching editor state directly. repl_load drives the non-editor
+    %% apply path (compile -> apply) used by file/example/tutorial loads.
+    glrsrcdoc e11@==> estate
+    compile -.-> glrsrcdoc
+    scenes -.-> glrsrcdoc
+    export -.-> glrsrcdoc
+    load i35@--> compile
+    load i36@--> store
+    load i37@--> glrsrcdoc
+    tutorial_sys i38@--> load
+
+    %% App-owned presentation/render state (relocated off ReplState) and
+    %% the camera<->export-text bridge.
+    ctrl -.-> glrstate
+    sceneR -.-> glrstate
+    export i39@--> glrcamexport
+    glrcamexport -.-> camera
 
     %% Render fan-out from controller.
     ctrl i16@--> sceneR
@@ -722,6 +770,7 @@ flowchart LR
     sceneR i28@--> soverlays
     sceneR i29@--> sgrid
     sceneR i30@--> saxes
+    sceneR i40@--> spost
     sceneR -.-> camera
     sceneR -.-> replay_sys
 
@@ -748,8 +797,8 @@ flowchart LR
     classDef animateE stroke:#f50,stroke-dasharray: 9\,5,stroke-dashoffset: 900,animation: dash 90s linear infinite;
     classDef animateF stroke:#5f0,stroke-dasharray: 9\,5,stroke-dashoffset: 900,animation: dash 90s linear infinite;
 
-    class e1,e2,e3,e4,e5,e6,e7,e8,e9,e10 animateE
-    class i1,i2,i3,i4,i5,i6,i7,i8,i9,i10,i11,i12,i13,i14,i15,i16,i17,i18,i19,i20,i21,i22,i23,i24,i25,i26,i27,i28,i29,i30,i31,i32,i33,i34 animateF
+    class e1,e2,e3,e4,e5,e6,e7,e8,e9,e10,e11 animateE
+    class i1,i2,i3,i4,i5,i6,i7,i8,i9,i10,i11,i12,i13,i14,i15,i16,i17,i18,i19,i20,i21,i22,i23,i24,i25,i26,i27,i28,i29,i30,i31,i32,i33,i34,i35,i36,i37,i38,i39,i40,i41,i42 animateF
 ```
 
 Reading the diagram:
@@ -763,11 +812,19 @@ Reading the diagram:
 - `editor_commit` is the only path that crosses into REPL via
   `repl_compile`. On success it updates undo + buffer + cmd-store as
   one transaction. On failure nothing mutates.
-- `repl_compile` is pure: incoming dotted edges only (reads parser +
-  scope), no outgoing mutation edges. `repl_command_store` mutates
-  command arrays only; `editor_buffer` mutates line text only.
-- `replay_annotations` and `repl_export` receive
-  `EditorBufferView`; they do not reach into editor state.
+- `repl_compile` is pure: no outgoing mutation edges. It reads parser +
+  scope and the read-only `source_document` view (`glr_source_document`).
+  `repl_command_store` mutates command arrays only; line-text writes
+  from REPL TUs go through the `source_document` port, whose full-app
+  adapter (`glr_source_document`) delegates to `editor_buffer` (still
+  the single underlying writer).
+- `repl_load` is the non-editor apply path: it drives compile → apply
+  through the `source_document` port and command store, with no editor
+  effects.
+- `repl_export` reads source through the `source_document` view and
+  delegates camera/cfg text formatting to the app-side bridges
+  (`glr_camera_export`); `replay_annotations` still receives an explicit
+  `EditorBufferView`. Neither reaches into editor state.
 - UI render is read-only. UI input is hit-test-and-return.
 
 ## Boundary Rules
@@ -897,6 +954,18 @@ side-effect routing. As of that branch landing:
 - **`EditorBufferView` for REPL readers: done.** Hard-guarded by
   `check-repl-no-direct-buffer-read` with an allowlist for
   transitional readers.
+- **`source_document` port: landed (in-flight decouple plan).** The
+  neutral `source_document` port (`SourceTextView` + `source_document_*`)
+  is the text seam between REPL pipeline TUs and the host. The full app
+  binds it to `EditorState` through `glr_source_document.c`; the standalone
+  `repl_demo` links a tiny editor-free implementation. `repl_load.c` owns
+  the non-editor apply path so `repl_compile.c` stays a pure validator.
+- **Presentation/render state off `ReplState`: landed.** The fields
+  that lived on `ReplRuntimeState.{presentation,render}` moved to the
+  app-level `glr_state.c`, reached through the `glr_config` keyed
+  bridge. Camera/cfg export formatting moved to the
+  `glr_camera_export.c` / cfg bridges so `repl_export.c` no longer parses
+  or formats GL strings.
 - **Input routing: done.** `ui_panels_hit_test`, `ui_menu_bar_hit_test`,
   `ui_color_picker_hit_test`, `ui_variable_panel_hit_test` produce
 
@@ -986,11 +1055,11 @@ side-effect routing. As of that branch landing:
 
 The deferred items still on the books:
 
-- `ui_layout` / `ui_code_panel_layout` parameterization so geometry
+- `ui_layout` / `ui_text_layout` parameterization so geometry
   helpers stop reading `repl_state_presentation()` (currently
   allowlisted under `check-no-facade-include-in-views`).
-- `ui_code_panel_layout` symbol rename: the file lives at
-  `src/ui/code_panel_layout.c` but its public functions are still
+- `ui_text_layout` symbol rename: the file was renamed to
+  `src/ui/text_layout.c` but its public functions are still
   prefixed `repl_code_panel_layout_*` / `repl_code_panel_wrap_iter_*`.
   The function names should follow the `ui_*` filename in a follow-up.
 - `audio` namespace audit — resolved: app service is now
