@@ -97,6 +97,10 @@ static void apply_front_face_to_normal(GLenum front_face, float *n) {
     }
 }
 
+/* For each primitive in the glBegin block, compute one flat face normal
+ * and copy it to every vertex of that primitive (so the whole face shades
+ * flat). `vi` maps local vertex index -> source-cmd index; `norms` is the
+ * parallel per-vertex output. */
 static void compute_block_normals(GLenum mode, GLenum front_face,
                                   int *vi, int nv, float norms[][3]) {
     for (int idx = 0; idx < nv; idx++)
@@ -109,12 +113,14 @@ static void compute_block_normals(GLenum mode, GLenum front_face,
             face_normal(repl_state_document_cmds_mut()[vi[idx]].args, repl_state_document_cmds_mut()[vi[idx+1]].args,
                         repl_state_document_cmds_mut()[vi[idx+2]].args, n);
             apply_front_face_to_normal(front_face, n);
-            for (int component_idx = 0; component_idx < 3; component_idx++)
-                memcpy(norms[idx+component_idx], n, sizeof(n));
+            for (int face_vert = 0; face_vert < 3; face_vert++)
+                memcpy(norms[idx+face_vert], n, sizeof(n));
         }
         break;
     case GL_TRIANGLE_STRIP:
         for (int idx = 0; idx + 2 < nv; idx++) {
+            /* Strips alternate winding: every other triangle swaps its
+             * 2nd/3rd vertices so all faces end up wound consistently. */
             if (idx % 2 == 0)
                 face_normal(repl_state_document_cmds_mut()[vi[idx]].args, repl_state_document_cmds_mut()[vi[idx+1]].args,
                             repl_state_document_cmds_mut()[vi[idx+2]].args, n);
@@ -146,8 +152,8 @@ static void compute_block_normals(GLenum mode, GLenum front_face,
             face_normal(repl_state_document_cmds_mut()[vi[idx]].args, repl_state_document_cmds_mut()[vi[idx+1]].args,
                         repl_state_document_cmds_mut()[vi[idx+2]].args, n);
             apply_front_face_to_normal(front_face, n);
-            for (int component_idx = 0; component_idx < 4; component_idx++)
-                memcpy(norms[idx+component_idx], n, sizeof(n));
+            for (int face_vert = 0; face_vert < 4; face_vert++)
+                memcpy(norms[idx+face_vert], n, sizeof(n));
         }
         break;
     case GL_QUAD_STRIP:

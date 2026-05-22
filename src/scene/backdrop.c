@@ -52,6 +52,9 @@ static void scene_backdrop_pop_state(void) {
     glPopAttrib();
 }
 
+/* xorshift-multiply integer bit-mixing hash (the well-known "hash
+ * without modulo" construction). Deterministic per seed; returns a
+ * stable value in [0,1) used to scatter per-building / per-window detail. */
 static float city_rng(unsigned int s) {
     s = ((s >> 16) ^ s) * 0x45d9f3bu;
     s = ((s >> 16) ^ s) * 0x45d9f3bu;

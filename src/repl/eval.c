@@ -160,6 +160,13 @@ int repl_eval_scratch_array_index(const char *name) {
     return -1;
 }
 
+/* A/B/C scratch arrays are single uppercase letters; map the char
+ * directly instead of rebuilding a 1-char string at each call site. */
+static int scratch_char_index(char c) {
+    char nm[2] = { c, '\0' };
+    return repl_eval_scratch_array_index(nm);
+}
+
 static int scratch_elem_in_range(int elem_idx) {
     return elem_idx >= 0 && elem_idx < REPL_SCRATCH_ARRAY_LEN;
 }
@@ -300,9 +307,7 @@ static void expr_rewrite_scratch_subscripts_to_c(const char *src,
 
             int id_len = (int)(p - id_start);
             int is_scratch_name = id_len == 1 &&
-                repl_eval_scratch_array_index(*id_start == 'A' ? "A" :
-                                              (*id_start == 'B' ? "B" :
-                                               (*id_start == 'C' ? "C" : ""))) >= 0;
+                                  scratch_char_index(*id_start) >= 0;
 
             if (is_scratch_name && *p == '[') {
                 const char *close = find_matching_square(p, NULL);
@@ -373,9 +378,7 @@ static void expr_rewrite_scratch_subscripts_to_repl(const char *src,
 
             int id_len = (int)(p - id_start);
             int is_scratch_name = id_len == 1 &&
-                repl_eval_scratch_array_index(*id_start == 'A' ? "A" :
-                                              (*id_start == 'B' ? "B" :
-                                               (*id_start == 'C' ? "C" : ""))) >= 0;
+                                  scratch_char_index(*id_start) >= 0;
 
             if (is_scratch_name && *p == '[') {
                 const char *close = find_matching_square(p, NULL);

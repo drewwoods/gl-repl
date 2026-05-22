@@ -233,10 +233,15 @@ static void flatten_range(FlattenContext *ctx,
                 }
             }
 
+            /* Skip degenerate/empty loops: a near-zero step would never
+             * advance, and a range already satisfied at the start (e.g.
+             * for(i,5,0) with a positive step) has zero iterations. */
             if (fabsf(step_val) > 1e-9f &&
                 !((step_val > 0 && start_val >= end_val) ||
                   (step_val < 0 && start_val <= end_val))) {
                 int max_iters = MAX_FLATTEN_LOOP_ITERS;
+                /* The 1e-6 fudge on the bound keeps float accumulation
+                 * from running one extra iteration past `end`. */
                 for (float val = start_val;
                      (step_val > 0) ? (val < end_val - 1e-6f) : (val > end_val + 1e-6f);
                      val += step_val) {
