@@ -731,7 +731,7 @@ void scene_grid_render(const SceneFrameRenderContext *frame_ctx) {
     glPushMatrix();
     glTranslatef(0, -0.002f, 0);
 
-    float breath = sinf(frame_ctx->config.anim_time * 0.8f) * 0.5f + 0.5f; /* 0..1 */
+    float breath = sinf(frame_ctx->config.anim_time * SCENE_BREATH_FREQ) * 0.5f + 0.5f; /* 0..1 */
 
     /* Configurable extent / major-tick spacing. Minor step is the
      * major cell divided into 5 subdivisions, which keeps the look

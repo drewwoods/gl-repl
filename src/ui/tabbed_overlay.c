@@ -157,7 +157,7 @@ void ui_tabbed_overlay_render(const UiOverlayState *in) {
         /* Title text - dim, left-aligned like config menu section headers */
         const char *title = content->title ? content->title : "";
         ui_clr(UI_TOK_TEXT_SECTION);
-        gl2d_draw_string((float)(hx + 14), (float)(title_y + 4), title, FONT_SMALL);
+        gl2d_draw_string((float)(hx + MENU_TEXT_INSET_X), (float)(title_y + 4), title, FONT_SMALL);
 
         /* Tab switch hint right-aligned */
         const char *nav_hint = "Left/Right: switch tabs";

@@ -613,7 +613,7 @@ static void menu_draw_chrome_row(GlrConfigRowKind kind, int x, int w,
                                  float alpha) {
     if (kind == GLR_CFG_ROW_HEADER) {
         ui_clr_a(UI_TOK_TEXT_SECTION, alpha);
-        gl2d_draw_string((float)(x + 14), (float)ey, header_text,
+        gl2d_draw_string((float)(x + MENU_TEXT_INSET_X), (float)ey, header_text,
                          FONT_SMALL);
     } else if (kind == GLR_CFG_ROW_SEPARATOR) {
         ui_clr_a(UI_TOK_DIVIDER, alpha);
@@ -1046,7 +1046,7 @@ static void render_active_submenu(const UiRenderSnapshot *snap) {
             ui_clr_a(UI_TOK_TEXT_PRIMARY, alpha);
         }
 
-        gl2d_draw_string((float)(sx + 14), (float)ey, name, FONT_SMALL);
+        gl2d_draw_string((float)(sx + MENU_TEXT_INSET_X), (float)ey, name, FONT_SMALL);
 
         /* Config item rows carry a right-aligned shortcut + state
          * value in fixed columns (computed once above) so they stay
@@ -1370,7 +1370,7 @@ void ui_menu_bar_render_example_dropdown(const UiRenderSnapshot *snap) {
     if (n == 0) {
         int ey = dy + dh - LINE_H + 1;
         ui_clr_a(UI_TOK_TEXT_SECTION, alpha);
-        gl2d_draw_string((float)(dx + 14), (float)ey, "(empty)", FONT_SMALL);
+        gl2d_draw_string((float)(dx + MENU_TEXT_INSET_X), (float)ey, "(empty)", FONT_SMALL);
         glDisable(GL_BLEND);
         gl2d_end();
         return;
@@ -1415,7 +1415,7 @@ void ui_menu_bar_render_example_dropdown(const UiRenderSnapshot *snap) {
             ui_clr_a(UI_TOK_TEXT_PRIMARY, alpha);
         }
 
-        gl2d_draw_string((float)(dx + 14), (float)ey, lbl, FONT_SMALL);
+        gl2d_draw_string((float)(dx + MENU_TEXT_INSET_X), (float)ey, lbl, FONT_SMALL);
 
         if (has_submenu) {
             ui_clr_a(UI_TOK_TEXT_MUTED, alpha);

@@ -62,6 +62,11 @@
  * (plans/in-review/status-message-history.md). */
 #define REPL_STATUS_MESSAGE_TTL 360
 
+/* Width of the status-bar message's alpha fade ramp at the ends of its
+ * life, in frames. A sibling of the TTL above (the full lifetime); kept
+ * here so the lifetime and its fade share a home. */
+#define REPL_STATUS_FADE_FRAMES 60
+
 /* Grid/axes show/hide transitions (see
  * plans/done/grid-axes-transitions.md). The two overlays are fully
  * independent: each has its own in/out durations (seconds; the
@@ -101,6 +106,15 @@
 #endif
 #ifndef AXES_XN_STYLE
 #define AXES_XN_STYLE      GRID_AXES_XN_FADE
+#endif
+
+/* Frequency multiplier on anim_time for the shared grid/axes "breathing"
+ * glow oscillation: sinf(anim_time * SCENE_BREATH_FREQ) * 0.5 + 0.5. Used by
+ * the grid themes (src/scene/grid.c) and the animated axes themes
+ * (src/scene/axes.c) so both pulse in lockstep. The light-indicator glow in
+ * src/scene/lights.c intentionally keeps its own, faster rate. */
+#ifndef SCENE_BREATH_FREQ
+#define SCENE_BREATH_FREQ 0.8f
 #endif
 
 /* View-mode transitions.
