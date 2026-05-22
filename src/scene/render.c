@@ -335,6 +335,13 @@ static void scene_apply_projection(const SceneRenderConfig *config,
                     -ortho_top   + ortho_dy, ortho_top   + ortho_dy,
                     ortho_near, ortho_far);
         } else {
+            /* GL can't blend two projection *modes*, so build the glOrtho
+             * and glFrustum matrices by hand and lerp them element-wise by
+             * `mix` (1 = pure perspective, 0 = pure ortho, between = the
+             * 2D<->3D transition). The o-prefixed and p-prefixed locals are
+             * the ortho / perspective frustum edges (left/right/bottom/top);
+             * the indexed writes are the standard column-major glOrtho /
+             * glFrustum terms. */
             GLfloat ortho[16] = { 0.0f };
             GLfloat persp[16] = { 0.0f };
             GLfloat blended[16];

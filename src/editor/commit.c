@@ -270,6 +270,8 @@ int editor_commit_apply_plan(const EditorCommitPlan *plan) {
 static void close_brace_indent(int pos, char *buf, int buf_sz) {
     repl_source_scope_cmd_indent(pos, buf, buf_sz);
     int len = (int)strlen(buf);
+    /* Dedent one level (2 spaces) so the closing `}` lines up under its
+     * block opener rather than under the block body. */
     if (len >= 2)
         len -= 2;
     else

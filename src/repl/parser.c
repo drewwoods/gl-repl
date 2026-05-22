@@ -641,26 +641,32 @@ static int parse_command(const char *line, GLCmd *cmd,
 
     /* glMaterialf(face, pname, param) */
     if (strcmp(func, "glMaterialf") == 0) {
-        char a1[64] = "", a2[64] = "", a3[MAX_LINE_LEN] = "";
+        char face_arg[64] = "", pname_arg[64] = "", val_arg[MAX_LINE_LEN] = "";
         char *comma1 = strchr(args, ',');
         char *comma2 = comma1 ? strchr(comma1 + 1, ',') : NULL;
 
         if (!comma1 || !comma2) { parser_emit_error_static(ctx, "Usage: glMaterialf(face, pname, params...)"); return 0; }
 
-        int l1 = (int)(comma1 - args);
-        if (l1 >= (int)sizeof(a1)) l1 = (int)sizeof(a1) - 1;
-        strncpy(a1, args, l1); a1[l1] = '\0';
+        /* Split "face, pname, params..." on its two commas into the three
+         * raw argument buffers. */
+        int face_len = (int)(comma1 - args);
+        if (face_len >= (int)sizeof(face_arg)) face_len = (int)sizeof(face_arg) - 1;
+        strncpy(face_arg, args, face_len); face_arg[face_len] = '\0';
 
-        int l2 = (int)(comma2 - (comma1 + 1));
-        if (l2 >= (int)sizeof(a2)) l2 = (int)sizeof(a2) - 1;
-        strncpy(a2, comma1 + 1, l2); a2[l2] = '\0';
+        int pname_len = (int)(comma2 - (comma1 + 1));
+        if (pname_len >= (int)sizeof(pname_arg)) pname_len = (int)sizeof(pname_arg) - 1;
+        strncpy(pname_arg, comma1 + 1, pname_len); pname_arg[pname_len] = '\0';
 
-        strncpy(a3, comma2 + 1, sizeof(a3) - 1);
+        strncpy(val_arg, comma2 + 1, sizeof(val_arg) - 1);
 
-        char *p1 = a1; while (*p1 == ' ') p1++;
-        int e1 = (int)strlen(p1); while (e1 > 0 && p1[e1-1] == ' ') p1[--e1] = '\0';
-        char *p2 = a2; while (*p2 == ' ') p2++;
-        int e2 = (int)strlen(p2); while (e2 > 0 && p2[e2-1] == ' ') p2[--e2] = '\0';
+        /* Trim leading + trailing spaces around the face / pname tokens so
+         * they compare cleanly against the enum tables below. */
+        char *face_str = face_arg; while (*face_str == ' ') face_str++;
+        int face_end = (int)strlen(face_str);
+        while (face_end > 0 && face_str[face_end-1] == ' ') face_str[--face_end] = '\0';
+        char *pname_str = pname_arg; while (*pname_str == ' ') pname_str++;
+        int pname_end = (int)strlen(pname_str);
+        while (pname_end > 0 && pname_str[pname_end-1] == ' ') pname_str[--pname_end] = '\0';
 
         GLenum face = 0, pname = 0;
         int found1 = 0, found2 = 0;
@@ -668,10 +674,10 @@ static int parse_command(const char *line, GLCmd *cmd,
         const ReplEnumEntry *face_types = repl_face_type_entries();
         const ReplEnumEntry *material_params = repl_material_param_entries();
         for (int i = 0; face_types[i].name; i++) {
-            if (strcmp(p1, face_types[i].name) == 0) { face = face_types[i].value; found1 = 1; break; }
+            if (strcmp(face_str, face_types[i].name) == 0) { face = face_types[i].value; found1 = 1; break; }
         }
         for (int i = 0; material_params[i].name; i++) {
-            if (strcmp(p2, material_params[i].name) == 0) { pname = material_params[i].value; found2 = 1; break; }
+            if (strcmp(pname_str, material_params[i].name) == 0) { pname = material_params[i].value; found2 = 1; break; }
         }
 
         if (!found1) { parser_emit_error_static(ctx, "face: GL_FRONT, GL_BACK, GL_FRONT_AND_BACK"); return 0; }
@@ -679,12 +685,12 @@ static int parse_command(const char *line, GLCmd *cmd,
 
         {
             char verr[128];
-            if (!repl_eval_validate_expression_idents(a3, vars, num_vars, verr, sizeof(verr))) {
+            if (!repl_eval_validate_expression_idents(val_arg, vars, num_vars, verr, sizeof(verr))) {
                 parser_emit_error_static(ctx, verr); return 0;
             }
         }
         float parsed_args[8];
-        int num_parsed = repl_eval_parse_exprs(a3, parsed_args, 8, vars, num_vars);
+        int num_parsed = repl_eval_parse_exprs(val_arg, parsed_args, 8, vars, num_vars);
         if (num_parsed != 1 && num_parsed != 4) {
             parser_emit_error_static(ctx, "Expected 1 or 4 float values");
             return 0;
@@ -699,13 +705,13 @@ static int parse_command(const char *line, GLCmd *cmd,
         cmd->args[1] = (float)pname;
         for (int k = 0; k < num_parsed; k++) cmd->args[k + 2] = parsed_args[k];
         cmd->num_args = num_parsed + 2;
-        cmd->has_vars = input_has_any_visible_vars(a3, vars, num_vars);
+        cmd->has_vars = input_has_any_visible_vars(val_arg, vars, num_vars);
 
         if (num_parsed == 1) {
-            WRITE_TEXT("%sglMaterialf(%s, %s, %g);", indent, p1, p2, parsed_args[0]);
+            WRITE_TEXT("%sglMaterialf(%s, %s, %g);", indent, face_str, pname_str, parsed_args[0]);
         } else {
             WRITE_TEXT("%sglMaterialfv(%s, %s, (GLfloat[]){%g, %g, %g, %g});",
-                       indent, p1, p2, parsed_args[0], parsed_args[1], parsed_args[2], parsed_args[3]);
+                       indent, face_str, pname_str, parsed_args[0], parsed_args[1], parsed_args[2], parsed_args[3]);
         }
 
         return 1;
