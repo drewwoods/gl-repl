@@ -1,6 +1,9 @@
 # REPL Architecture
 
-> For the quick module map, see [`MODULES.md`](MODULES.md). For the
+> For the quick module map, see [`MODULES.md`](MODULES.md). Each
+> `src/` subsystem also carries its own `README.md`
+> (`src/repl/`, `src/editor/`, `src/app/`, `src/scene/`, `src/ui/`,
+> `src/widgets/`) with the layer-local ownership notes. For the
 > staged controller-extraction history (now landed), see
 > [`done/push-architecture-refinement.md`](done/push-architecture-refinement.md).
 
@@ -26,8 +29,11 @@ allowlisted view-layer state mutations.
 ```text
 repl_*        = language, source model, flat program, replay model, input/model controllers
 glr_*         = app-shell namespace: app router (glr_ctrl), camera (glr_camera),
-                menu/config actions (glr_actions, glr_config), CLI debug dumps (glr_debug)
-editor_*      = text-document model + controller (under src/editor/)
+                menu/config actions (glr_actions, glr_config), app-frame
+                presentation/render-policy state (glr_state), source-document
+                adapter (glr_source_document), CLI debug dumps (glr_debug)
+editor_*      = text-document model + controller (under src/editor/), incl. the
+                document cursor (edit-line) and the editable line buffer
 scene_*       = 3D stage: camera, projection, frame setup, decorators, 3D overlays
 ui_*          = 2D editor chrome: code panel, menus, overlays, popups, HUDs
 sample.c/h    = current GLUT entry point and legacy shared header
@@ -36,10 +42,12 @@ sample.c/h    = current GLUT entry point and legacy shared header
 
 The prefix is an ownership signal, not a generic sample prefix. New `repl_*`
 modules should own REPL language, editor, source, workspace, replay, or command
-model behavior. App-shell services belong under `glr_*`. Generic infrastructure
-keeps neutral names such as `prof`. `audio` (formerly `repl_audio`) and
-`sample` are the remaining names that fall outside this scheme; both are slated
-for the namespace audit rather than serving as precedents.
+model behavior. App-shell services belong under `glr_*` — the audio service
+moved into this scheme as `src/app/glr_audio.c` (`glr_audio_*`), resolving the
+former neutral `audio.c` / `repl_audio` name. Generic infrastructure keeps
+neutral names such as `prof`. `sample.c/h` is the one remaining name outside
+the scheme; it is slated for the R8 namespace rename rather than serving as a
+precedent.
 
 The main design rule:
 
@@ -59,9 +67,13 @@ globals or call `repl_state_*` APIs directly during rendering.
 
 When a module starts owning mutable REPL state, follow the Stage-1 template:
 
-1. Put the live bytes in `ReplRuntimeState` unless the state is intentionally a
-   sidecar such as undo rings or user-scene slots. If it is a sidecar, call
-   that out explicitly instead of describing it as runtime-state migration.
+1. Put the live bytes in `ReplRuntimeState` only if the state is genuinely
+   REPL-language/program state. App-frame presentation and render policy
+   belongs on `glr_state` (`src/app/glr_state.c`), editor document/session
+   state on `EditorState`, and intentional sidecars (undo rings,
+   user-scene slots) stay separate — call those out explicitly instead of
+   describing them as runtime-state migration. REPL-pipeline TUs must not
+   reach `glr_state` (`check-repl-state-no-glr-state`).
 2. Add a named runtime slice in `src/repl/state.h`, wire it into
    `static ReplRuntimeState g_repl_state;`, and say whether the read path is
    currently `facade-backed`, `direct-runtime`, or `value-getter`.
@@ -171,29 +183,80 @@ Flattened commands are the execution, replay, export, and 3D annotation model.
 Code outside the command pipeline should use `FlatProgramView` or a snapshot
 derived from it instead of poking raw global arrays.
 
-### Editor-owned text (post `feature/editor-owns-text.md`)
+### Editor-owned text (post `feature/editor-owns-text.md` + `feature/source-document-port.md`)
 
 `GLCmd` is a pure parse-result struct: `type`, `args[]`, validity / vars
 flags, and provenance fields (`src_cmd_idx`, `call_src_cmd_idx`, etc.).
-There is no `source[]` member. Per-line text lives in
-`EditorBuffer.lines[MAX_COMMANDS][MAX_LINE_LEN]` inside
-`ReplRuntimeState`. The parser returns both the `GLCmd` and the
-canonical text in `ReplParsedLine { GLCmd cmd; char text[MAX_LINE_LEN] }`;
-commit code passes both to text-aware command-store APIs
-(`repl_command_store_*_with_line[s]`) so the editor buffer moves in
-lockstep with the command array.
+There is no `source[]` member. Per-line canonical text lives in
+`EditorBuffer.lines[MAX_COMMANDS][MAX_LINE_LEN]` inside **`EditorState`**
+(`src/editor/state.c`), the editor's writable document model — *not* in
+`ReplRuntimeState`. The parser returns both the `GLCmd` and the canonical
+text in `ReplParsedLine { GLCmd cmd; char text[MAX_LINE_LEN] }`; commit
+code passes both to text-aware command-store APIs
+(`repl_command_store_*_with_line[s]`) so the text buffer moves in lockstep
+with the command array.
+
+**The neutral source-document port.** The REPL pipeline must not depend on
+`EditorState`, so it never touches the editor buffer directly. Instead it
+reads and mutates source text through the neutral port in
+`source_document.h`:
+
+* Reads go through `source_document_view()` → `SourceTextView` (a
+  `const char (*lines)[MAX_LINE_LEN]` + count), sliced by
+  `source_text_line(view, idx)` (out-of-range returns `""`). Consumers:
+  `executor.c` (display text), `export.c`, `flatten.c`/`core.c` (reparse),
+  `compile.c`, `replay_annotations.c`.
+* Mutations go through `source_document_apply_change()` /
+  `source_document_insert_line()` / `_replace_line()` / `_load_lines()` /
+  `_clear()`, driven by a `SourceTextChange` descriptor.
+
+Hosts provide the backing implementation by link-time symbol resolution,
+not a runtime callback table:
+
+| Host | Backing implementation |
+|---|---|
+| Full app | `src/app/glr_source_document.c` — forwards to `EditorState` |
+| Standalone `repl_demo` | `tools/repl_demo/source_document.c` — tiny editor-free line store |
+| Tests | whichever adapter the scenario links |
+
+`check-repl-no-direct-editor`, `check-repl-no-direct-buffer-read`,
+`check-no-store-text-api`, and `check-source-document-port-owners` (all in
+the `check-state-ownership` gate) enforce that `src/repl/*` reaches text
+only through this port.
 
 Persistence sidecars carry parallel `lines[][]` arrays:
 
 | Persisted form | Module |
 |---|---|
-| Undo / redo snapshots | `repl_undo` (`EditorUndoSnapshot.editor_lines`) |
+| Undo / redo snapshots | `editor_undo` (`EditorUndoSnapshot.editor_lines`) |
 | User-scene slots | `repl_scenes` (workspace save / load + LRU eviction) |
 | Clipboard cmds | `EditorClipboardState.lines` |
-| Single-file / workspace export | `repl_export` (no extra sidecar; export reads `editor_buffer`) |
+| Single-file / workspace export | `repl_export` (no extra sidecar; reads the source-document port) |
 
-Flat commands have no text of their own. `repl_flat_cmd_text(flat_cmd)`
-maps a flat command to its source-buffer line via `src_cmd_idx`.
+Flat commands have no text of their own. A flat command maps to its
+source line through `src_cmd_idx`, resolved via
+`source_text_line(source_document_view(), src_cmd_idx)`.
+
+### Document cursor ownership (post `feature/edit-line-ownership.md`)
+
+The active edit-line cursor is **editor-owned**: it lives in
+`EditorState.document.edit_line_idx` (`EditorDocumentState`) and is read
+and written through `editor_state_edit_line()` / `_set()` / `_clamp()`.
+There is no `repl_state_edit_line()` and no cursor pointer inside
+`ReplCommandStore`. The REPL pipeline never reaches into editor cursor
+storage:
+
+* The parse / compile / flatten / load layers take the cursor as an
+  **explicit `int` parameter** (and cursor-shifting store/apply ops update
+  a caller-owned `int *cursor_inout`).
+* Higher-level pipeline entry points that genuinely need to move the
+  cursor (e.g. `scenes.c`) go through the `ReplHostEffects`
+  `edit_line_get` / `edit_line_set` hooks (`repl_dispatch_edit_line_*`),
+  which are no-ops when no host bridge is installed.
+
+This keeps invariant β (REPL → editor symbol references forbidden) intact;
+`check-repl-no-direct-editor` is the build guard. See
+[`done/edit-line-ownership.md`](done/edit-line-ownership.md).
 
 ## Controller-Pushed Editor Snapshots
 
@@ -431,12 +494,12 @@ when a stall happens.
   wall-clock seconds (`gettimeofday`, not the per-platform timebase in
   `prof.c` — ms granularity is enough and this stays portable/C99)
   elapsed since the first call. Phases: window create, GL init, REPL
-  bootstrap, `audio_init` begin/done, playlist start, main loop. The
+  bootstrap, `glr_audio_init` begin/done, playlist start, main loop. The
   only synchronous audio work on the `main()` path is
   `ma_engine_init()` (it opens the OS audio device); `--no-audio`
   isolates it.
 
-* **Worker hitch detector** (`audio.c`). The audio worker
+* **Worker hitch detector** (`src/app/glr_audio.c`). The audio worker
   (`audio_worker_main`) is event-driven: it sleeps on
   `pthread_cond_wait`, wakes to run exactly one blocking lifecycle op
   (`worker_load` → `ma_sound_init_from_file`; `worker_uninit_all` →
@@ -516,11 +579,17 @@ signature for audited renderers.
 
 `UiRenderSnapshot` carries:
 
-* by-value `Repl*State` slices (presentation, code_panel, render, replay,
-  search, autocomplete, status, …) — small structs cheap to copy
+* by-value value-type slices (code_panel, replay, search, autocomplete,
+  status, …) — small structs cheap to copy. Note that
+  scene-presentation policy and most render config now live **app-side**
+  on `glr_state` (`src/app/glr_state.c`), not on `ReplRuntimeState`; the
+  controller reads them from there when filling the snapshot. Only the
+  REPL-owned render *tail* (`ReplRenderState`: per-light state + clear
+  color) remains a REPL slice.
 * pointer-shaped read-only views (`ReplVariableView`, `EditorInputView`,
   `ReplImportExportView`, `FlatProgramView`, `ReplPredefView`)
-* document/flat metadata (`document_cmds`, `document_count`, `edit_line`,
+* document/flat metadata (`document_cmds`, `document_count`, `edit_line`
+  — sourced editor-side via `editor_state_edit_line()`,
   `flat_program_count`, …)
 * user-scene names + slot-used flags
 * the controller-pushed editor snapshot pointers
@@ -712,96 +781,94 @@ REPL library. It proves that the core path it drives directly
 parse -> command store -> flatten -> execute
 ```
 
-can run without `src/app/glr_ctrl.c`, `src/editor/input.c`, `src/ui/*.c` renderers,
-or `src/ui/replay_hud.c`. It does **not** yet prove that the REPL pipeline has a
-stub-free link boundary. The current `REPL_DEMO_DEP_SRCS` object list still
-pulls in several app/editor/UI-adjacent translation units, and
-`tools/repl_demo/stubs.c` supplies the missing symbols when those owners are
-intentionally left out.
+builds and runs **without** `src/app/glr_ctrl.c`, `src/editor/*`,
+`src/ui/*` renderers, or any app-owned state — and, since the decoupling
+landed, with a **stub-free link boundary**.
 
-Treat `tools/repl_demo/stubs.c` as a dependency ledger. The execution
-plan in `feature/decouple-repl-from-gl-repl-alt.md` ratchets this
-ledger from 17 stubs to 0 across seven steps. The current count
-(verified via `nm` on `build/release-gl-stubs/tools/repl_demo/stubs.o`)
-is **4**: steps 1, 2, 3, and 4 have landed.
+### Status: 17 → 0 stubs (complete)
 
-### Stubbed Couplings
+`feature/decouple-repl-from-gl-repl-alt.md` (7 steps) and
+`feature/source-document-port.md` (8 phases) both shipped.
+`tools/repl_demo/stubs.c` — once a dependency ledger of 17 externally
+visible symbols — is now **empty** (a documentation-only, intentionally
+non-empty TU). It stays in the build as a *canary*: adding a new stub
+there is the visible signal that a REPL-pipeline TU has acquired a fresh
+app/editor/UI symbol dependency. `check-repl-demo-stubs-shrinking`
+ratchets the count and `check-repl-demo-no-editor` forbids editor/UI/app
+symbols in the demo link set.
 
-| Coupling root | Stubbed symbols | Why the link reaches it | Demo exercises it? | Removal path | Status |
-|---|---|---|---|---|---|
-| Global lifecycle reset | `ui_state_reset`, `variable_panel_state_reset`, `editor_help_session_reset`, `editor_reset_transients` | (Historically) `repl_state_init_defaults()` called `repl_state_reset_all()`, which reset every app singleton / peer, not just `ReplState`. | Yes, every sample reset entered this path. | Split into pure `repl_state_reset_program()` and app-level `glr_app_reset_all()`. | ✅ **Cleared (step 2, commit `310eca0`).** Reset renamed; full-world reset moved to `src/app/glr_ctrl.c`. |
-| UI chrome mirror | `ui_state_code_panel_mut` | `repl_state_sync_ui_chrome()` mirrored presentation fields into `UiState.code_panel`; `repl_state_reset_all()` called it. | Yes, via reset. | Move chrome mirroring to the controller. | ✅ **Cleared (step 2, commit `310eca0`).** Body moved to `glr_ctrl_sync_ui_chrome()` in `src/app/glr_ctrl.c`. |
-| Compile dispatcher location | `repl_compile_dispatch` | `repl_compile_toggle_comment()` needed the float-decl / var-assign dispatcher, but the implementation lived in `src/editor/services.c`. | No; the demo does not toggle comments. The reference was still hard at link time. | Move the dispatcher into `src/repl/compile.c`. | ✅ **Cleared (step 1, commit `ef3fc09`).** Moved into `src/repl/compile.c`; declared in `src/repl/compile.h`. |
-| Status relay | `ui_state_status_set` | Legacy `src/repl/core.c::set_status()` forwarded diagnostics to UI status text. | Only on errors or helper paths that report status. | Replace `set_status()` body with a callback dispatch (`repl_set_status_sink`); controller installs `ui_state_status_set` as the sink at app startup. Demo doesn't install one, so set_status is a no-op there. | ✅ **Cleared (step 3, commit `5f1b8bc`).** Callback branch chosen over per-function out-params; ~15 pipeline-side set_status call sites remain as future per-TU cleanup but no longer drag the stub. |
-| Programmatic editor input | `editor_feed_line`, `editor_load_line_to_input` | `src/repl/export.c` imports exported files by feeding lines through the editor commit path; `src/repl/core.c` and scene activation paths also have legacy line-loading references. | No for the current static samples. | Extract pure structured-block validators (5a) and add a non-editor source-loader API (5b); move reformatter and scene cursor-restore out of REPL pipeline TUs (6). | Pending (steps 5a/5b/6). |
-| Config descriptor table | `g_cfg_items`, `CFG_ITEM_COUNT` | `src/app/glr_config.c` iterated menu/action descriptors while parsing or applying config keys, but the table is defined in `src/app/glr_actions.c`. | Not for the current samples; relevant to `@cfg` metadata and export/import helpers. | Introduce a neutral `ReplExportConfig` bag in `src/repl/export.h` and a controller-installed bridge that fills/applies it; pipeline TUs (`src/repl/export.c`, `src/repl/scenes.c`) stop calling `glr_config_*`. | ✅ **Cleared (step 4, commit `b58cdef`).** Bridge installed in `glr_app_reset_all`; demo doesn't install one → @cfg is a no-op there. |
-| App-owned config storage | `audio_get_cfg_mode`, `audio_set_cfg_mode`, `ui_state_profile_panel_mut`, `variable_panel_view_mut` | `src/app/glr_config.c` mapped config keys directly to storage owned by audio, UI profile panel, and the variable-panel peer. | Not for the current samples. | Same fix as the descriptor table row: pipeline TUs go through the `ReplExportConfigBridge` instead of calling `glr_config_*`. `src/app/glr_config.c` falls out of the demo link set, so its references to audio / profile / variable_panel disappear. | ✅ **Cleared (step 4, commit `b58cdef`).** |
-| UI layout state | `ui_state_viewport`, `ui_state_code_panel` | `src/ui/layout.c` reads live `UiState`; `src/repl/export.c` uses layout helpers for export viewport sizing and code-panel visual dumps. | Not for the current samples. | Pass viewport/layout values to `repl_export` as explicit export inputs; move app-state slices to `src/app/glr_state.c`. | Pending (step 7). |
+The current `REPL_DEMO_DEP_SRCS` link set is REPL-pipeline-only:
+`src/repl/*` (parser, command_store, compile, apply, flatten, executor,
+eval, export, scenes, example_loader, load, autonormal, command_spec,
+source_scope, replay_annotations, core, state, format) plus the replay /
+tutorial peer-state TUs, `prof.c`, the GL stub counters, and crucially
+**`tools/repl_demo/source_document.c`** — the editor-free backend for the
+source-document port. No `src/editor/*`, no `src/ui/*`, no `src/app/*`.
 
-### Non-stubbed But Still Non-pipeline Link Dependencies
+### The four boundary mechanisms that achieve zero stubs
 
-These objects are linked into `repl_demo` rather than stubbed:
+Every former stub was an edge from the REPL pipeline into another owner.
+Each was cut by routing the dependency through a neutral seam that the
+full app fills and the demo leaves unset:
 
-| Object(s) | Why present | Removal path |
-|---|---|---|
-| `src/editor/state.c`, `src/editor/completion.c` | Per-line canonical text currently lives in `EditorState`; `repl_state_init_defaults()` also registers the REPL autocomplete provider with the editor completion registry. | Keeping editor-owned text makes this dependency intentional. Removing it means introducing a neutral source-document/text store owned by the REPL command document, then making the editor a controller/view over that store. That is feasible but large, because it cuts across commit, undo, scenes, clipboard, export, and tests. Autocomplete registration is easier: move it to app/editor startup instead of REPL state reset. |
-| `src/widgets/replay.c`, `src/widgets/replay_state.c`, `src/repl/replay_annotations.c` | Replay is a peer subsystem, but reset and annotation helpers are still in the demo link set through broad REPL object selection. | Split app reset from REPL reset and keep annotation preparation out of the minimal demo object list unless the demo explicitly exercises replay. Medium effort. |
-| `src/repl/export.c`, `src/repl/example_loader.c`, `src/repl/scenes.c`, `src/app/glr_camera.c`, `src/app/glr_config.c`, `src/ui/layout.c` | `src/repl/core.c` is still a residual helper bucket, and export/import/workspace/camera helpers sit behind it. The demo uses only a small subset (`repl_parse_and_normalize`, `cmd_type_name`), but the whole translation unit graph comes along. | Continue dissolving `src/repl/core.c`: move normalization into parser/format code, move startup/workspace helpers to scene/export owners, and split export generation from import and code-panel dump helpers. Medium effort, with high payoff for a clean demo link boundary. |
-| `src/app/glr_completion.c`, `src/repl/help_text.c` | REPL state initialization registers the completion provider, and help text is part of the broad demo object list. | Treat completion/help as optional app/editor services. Low to medium effort if reset is split first. |
+1. **Source-document port** (`source_document.h`). Source-text reads /
+   mutations go through `source_document_*`; the full app links
+   `glr_source_document.c` (→ `EditorState`), the demo links
+   `tools/repl_demo/source_document.c`. This cleared `editor_feed_line` /
+   `editor_load_line_to_input` from the pipeline (alongside
+   `repl_load_apply_line`, below) and let `src/editor/state.c` *leave* the
+   demo link set entirely. See *Editor-owned text* above.
 
-### Practical Decoupling Sequence
+2. **`ReplHostEffects` bridge** (`src/repl/core.h`). A single
+   controller-installed table of host callbacks — `status`,
+   `status_error`, `example_presentation_reset`, `input_reset`,
+   `insert_mode_off`, `scroll_to_line`, `follow_cursor`, `edit_line_get`,
+   `edit_line_set`. Pipeline TUs call `repl_set_status()` /
+   `repl_dispatch_*()`; the controller installs the table at startup. The
+   demo leaves it unset, so every dispatcher is a no-op. This consolidated
+   the old per-effect installers (the `set_status` sink, the autocomplete
+   registration, the UI-chrome sync) into one struct and cleared
+   `ui_state_status_set`, `ui_state_code_panel_mut`, and the reset stubs.
 
-The full plan lives in `feature/decouple-repl-from-gl-repl-alt.md`
-(7 steps, stub trajectory 17 → 0). At a glance:
+3. **Export bridges + layout input** (`src/repl/export.h`). `export.c` is
+   GL-free and app-free; app/scene-derived values arrive through
+   controller-installed bridges: `ReplExportConfigBridge` (`@cfg`
+   emission/parse), `ReplExportCameraBridge` (camera blocks — used by both
+   the importer *and* the example loader), `ReplExportProjectionBridge`
+   (the dynamic `reshape()` body — see *Dynamic Reshape Projection*), and
+   the `ReplExportLayout` struct (viewport / code-panel geometry passed as
+   an explicit export input instead of calling `ui_layout_*`). The demo
+   installs none, so `@cfg` / camera / projection are no-ops there and
+   `src/app/glr_config.c`, `src/app/glr_camera.c`, `src/ui/layout.c` all
+   leave the demo link set. `check-repl-export-via-bridge` /
+   `check-repl-export-no-ui-layout` guard this.
 
-1. ✅ **Step 1 — Move `repl_compile_dispatch()` out of `src/editor/services.c`** (commit `ef3fc09`).
-2. ✅ **Step 2 — Split `repl_state_reset_all()` into program-only reset
-   and app-wide reset; move autocomplete registration and UI chrome
-   sync to the app side** (commit `310eca0`).
-3. ✅ **Step 3 — Route pipeline `set_status()` through a controller-
-   installed callback sink; move startup banner to the controller**
-   (commit `5f1b8bc`). Callback branch chosen over per-function
-   out-params for cost reasons; per-TU conversion remains a future
-   opportunity.
-4. ✅ **Step 4 — Introduce neutral `ReplExportConfig` bag and bridge;
-   make `src/repl/export.c` and `src/repl/scenes.c` opaque to cfg semantics**
-   (commit `b58cdef`). Bridge installed by the controller; demo
-   doesn't install one → @cfg path is a no-op there. `src/app/glr_config.c`
-   falls out of the demo link set.
-4a. ✅ **Step 4a — Camera-block neutralization** (commit `f23d866`).
-   Same shape as the cfg bridge: `ReplExportCameraBlock` (4-line
-   block) + `ReplExportCameraBridge` (fill_save_block /
-   fill_display_block / fill_save_preamble / try_consume_import_line /
-   reset_import). Bridge implementation lives in `src/app/glr_camera_export.c`.
-   `src/repl/export.c` no longer references `glr_camera_*` — verified via
-   `nm build/release-gl-stubs/repl_export.o`. Architectural cleanup
-   only; no stub change. `src/app/glr_camera.c` stays in the demo link set
-   until step 7 closes the last two doors (auto_rotate reset in
-   `src/repl/state.c` + example camera presets in
-   `src/repl/example_loader.c`).
-4b. ✅ **Step 4b — Reshape-projection neutralization.** Same shape as
-   the camera block: `ReplExportProjectionBlock` (≤4-line block) +
-   `ReplExportProjectionBridge` (`fill_reshape_block`), installed in
-   `glr_ctrl.c`. `src/repl/export.c` keeps no projection math — it
-   resolves the dynamic `reshape()` body through
-   `repl_export_reshape_projection_lines()` (bridge if installed, else
-   the canonical perspective default). Scene side is the cached
-   `SceneProjectionDesc` from `scene_get_active_projection()` (Tenet 3).
-   See *Dynamic Reshape Projection* above for the sentinel/refresh
-   convention shared by the file writer and the code panel.
-5. Step 5a/5b — Extract pure structured-block validators from
-   `editor_compile_*`; add non-editor source-load/commit API so
-   examples and imports stop calling `editor_feed_line`.
-6. Step 6 — Move reformatter and scene cursor-restore out of REPL
-   pipeline TUs into editor/controller code.
-7. Step 7 — Move app-state slices (`presentation`, `render`) to a new
-   `src/app/glr_state.c`; pass viewport/layout to `repl_export` as explicit
-   export inputs.
-6. Decide whether editor-owned text remains an explicit dependency. If the
-   goal is a reusable standalone REPL library, create a neutral source-document
-   owner and adapt the editor around it. If this remains a one-frontend sample,
-   keeping `src/editor/state.c` in the demo link set is a defensible tradeoff
-   as long as it is documented as intentional.
+4. **Split lifecycle reset + dispatcher relocation.**
+   `repl_state_reset_program()` (REPL-only) is separated from
+   `glr_app_reset_all()` (full-world, in `src/app/`), and
+   `repl_compile_dispatch()` moved from `src/editor/services.c` into
+   `src/repl/compile.c`. Pure structured-block validators were extracted
+   from the editor compile wrappers, and the non-editor
+   `repl_load_apply_line()` (`src/repl/load.c`) replaced `editor_feed_line`
+   on the example/import/tutorial paths.
+
+### App-frame state moved out of the REPL
+
+Step 7 of the decouple plan relocated the scene-presentation policy and
+most render config out of `ReplRuntimeState` into the app-side owner
+`src/app/glr_state.c` (`glr_state.h`). REPL-pipeline TUs do not include
+`glr_state.h` (`check-repl-state-no-glr-state`); app / editor / UI / scene
+code may. Only the REPL-owned render *tail* (`ReplRenderState`: per-light
+state + clear color) stayed a REPL slice.
+
+### Guards that keep the boundary closed
+
+All in the `check-state-ownership` gate: `check-repl-demo-no-editor`,
+`check-repl-demo-stubs-shrinking`, `check-source-document-port-owners`,
+`check-repl-no-direct-editor` (invariant β), `check-repl-no-direct-buffer-read`,
+`check-no-store-text-api`, `check-no-feed-line-in-pipeline`,
+`check-no-load-line-to-input-in-pipeline`, `check-repl-state-no-glr-state`,
+`check-repl-export-via-bridge`.
 
 ## Where To Put New Code
 
@@ -1012,9 +1079,10 @@ unused-parameter warnings with `(void)`, no real rendering.
 ### 7. Save/load round-trip — verify byte-for-byte and behavior parity
 
 Most commands round-trip automatically: `src/repl/export.c` writes the
-editor-buffer line text (`editor_buffer_view_line(view, cmd_idx)` —
-`GLCmd.source[]` was removed in the editor-owns-text refactor) verbatim
-into the exported `display()` body, and `repl_export_load_from_file`
+source-document line text (`source_text_line(view, cmd_idx)` via the
+neutral port — `GLCmd.source[]` was removed in the editor-owns-text
+refactor, and `export.c` no longer reaches into `EditorState` directly)
+verbatim into the exported `display()` body, and `repl_export_load_from_file`
 feeds those lines back through the commit pipeline. You only need to
 touch `src/repl/export.c` for commands with non-source-text encoding —
 declarations (`@declare`), tess blocks, REPL primitives that need a
@@ -1100,8 +1168,11 @@ Completed (Phase 1 + most of Phase 2):
     spec entry now auto-populates F1.
   - All `ui_*.c` files have zero `_mut()` calls
     (`check-ui-returns-hits-only` baseline 0/0).
-- ✅ **R3** — `repl_layout.c` / `repl_layout.h` own `ui_layout_scene_rect` /
-  `ui_layout_code_panel_rect`; non-UI callers include `repl_layout.h`.
+- ✅ **R3** — layout geometry (`ui_layout_scene_rect` /
+  `ui_layout_code_panel_rect`) owns its own module; it has since settled at
+  `src/ui/layout.c` / `src/ui/layout.h`, and `repl_export` takes
+  viewport/panel geometry as an explicit `ReplExportLayout` input rather
+  than calling the layout helpers (see *Standalone REPL Demo Coupling*).
 - ✅ **R4** — `src/app/glr_ctrl.c` no longer includes `src/repl/core_internal.h`;
   `src/repl/pipeline.h` exists; `repl_eval_predef_view()` hides
   `g_predef_vars`. R4d (public-API audit) landed; only `bench_repl.c`
@@ -1125,13 +1196,17 @@ Still open:
   no longer reachable can be removed, and anything still in use can
   move to a more specific home (`editor_input.h` for editor input,
   `src/app/glr_ctrl.h` for controller routing).
-- ❌ **R10-phase2..phase5** — Dissolve `src/repl/core.c` (~663 lines): move
+- ❌ **R10-phase2..phase5** — Dissolve `src/repl/core.c` (~840 lines; it
+  grew with the `ReplHostEffects` install/dispatch surface): move
   `repl_parse_and_normalize*` / `normalize_with_indent` /
   `parse_and_normalize_impl` to `src/repl/parser.c`; move `collect_visible_vars`
-  to `src/repl/source_scope.c`; extract `repl_reformat.c`; move
+  to `src/repl/source_scope.c`; finish the reformatter split (the editor-side
+  wrapper `editor_reformat_commands` already lives in `src/editor/reformat.c`,
+  but the pure `repl_reformat_program()` pass still sits in `core.c`); move
   `load_initial_commands` / `scroll_to_display_function` to `src/repl/scenes.c`;
   move `current_begin_mode` / `count_vertices` to `src/repl/executor.c`; move
-  debug dumps to `src/repl/state.c` or `repl_debug.c`.
+  debug dumps to `src/repl/state.c` or `repl_debug.c`. The `ReplHostEffects`
+  install/dispatch layer is a candidate for its own small TU.
 - ❌ **R11 (tail)** — Shrink the surviving allowlists, mainly the
   `bench_repl.c` exception for `src/repl/core_internal.h`.
 - ❌ **R12** — Consolidate truly public REPL APIs into one concise public
@@ -1168,6 +1243,22 @@ The `feature/editor-owns-text.md` track (Steps 2–6) is complete:
 
 The deferred sub-task is the color-scheme + syntax-keyword extraction
 (also Step 6); revisit when a configurable theme has a real consumer.
+
+Three further decoupling tracks have since landed and are reflected
+throughout this document:
+
+* **`feature/edit-line-ownership.md`** — the document cursor moved from
+  `ReplState` to `EditorState.document.edit_line_idx`; the REPL pipeline
+  takes edit-line as an explicit parameter or via the `ReplHostEffects`
+  `edit_line_get`/`_set` hooks. See *Document cursor ownership* above.
+* **`feature/source-document-port.md`** — REPL source-text access is now
+  the neutral `source_document.h` port; `glr_source_document.c` backs it
+  in the full app and `tools/repl_demo/source_document.c` in the demo. See
+  *Editor-owned text* above.
+* **`feature/decouple-repl-from-gl-repl-alt.md`** — `repl_demo` reached a
+  stub-free link boundary (17 → 0). See *Standalone REPL Demo Coupling*
+  above. Step 7 also relocated app-frame presentation/render policy out of
+  `ReplRuntimeState` into `src/app/glr_state.c`.
 
 ## Known REPL Corner Cases & Coverage Gaps
 
