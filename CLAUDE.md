@@ -985,8 +985,12 @@ glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION, const, linear, quadratic)
     glPointParameterfv or GLR_NO_POINT_PARAMETER is set (see the
     GLR_NO_POINT_PARAMETER section under Run).
 glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA|GL_ONE)
-glColorMaterial(face, mode), glMaterialf(face, pname, value)
+glColorMaterial(face, mode), glMaterialfv(face, pname, (GLfloat[]){r, g, b, a})
   glColorMaterial mode: GL_AMBIENT, GL_DIFFUSE, GL_SPECULAR, GL_EMISSION, GL_AMBIENT_AND_DIFFUSE
+  glMaterialfv accepts either the (GLfloat[]){...} compound literal (the
+  canonical form, with 1 element for GL_SHININESS or 4 for RGBA) or
+  the flat input shorthand "face, pname, r, g, b, a" / "face, pname,
+  shininess", which the parser rewrites to the compound-literal form.
 glLightModeli(pname, param), glFrontFace(mode)
 glDepthFunc(func)
   func: GL_NEVER, GL_LESS, GL_EQUAL, GL_LEQUAL, GL_GREATER,

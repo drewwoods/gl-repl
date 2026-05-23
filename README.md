@@ -19,7 +19,7 @@ The REPL accepts fixed-function material state in the display body:
 
 ```c
 glColorMaterial(face, mode);
-glMaterialf(face, pname, value);
+glMaterialfv(face, pname, (GLfloat[]){r, g, b, a});  // or {value} for GL_SHININESS
 ```
 
 `glColorMaterial` supports `GL_FRONT`, `GL_BACK`, and

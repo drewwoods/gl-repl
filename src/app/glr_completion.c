@@ -53,6 +53,10 @@ static void build_param_hint_text(const char *const *params, int param_count,
     if (!after || !params || param_count <= 0)
         return;
 
+    /* Single combined depth covers (), {}, and []: a comma counts as
+     * an arg separator only at top level, so compound literals like
+     * `(GLfloat[]){r, g, b, a}` and nested function calls like
+     * `cos(t + phase)` don't mis-advance the slot pointer. */
     for (const char *p = after; *p; p++) {
         unsigned char ch = (unsigned char)*p;
 
@@ -64,8 +68,8 @@ static void build_param_hint_text(const char *const *params, int param_count,
             continue;
         }
 
-        if (ch == '(') depth++;
-        else if (ch == ')' && depth > 0) depth--;
+        if (ch == '(' || ch == '{' || ch == '[')      depth++;
+        else if ((ch == ')' || ch == '}' || ch == ']') && depth > 0) depth--;
 
         if (!isspace(ch))
             arg_has_text = 1;
@@ -330,7 +334,7 @@ static void update_autocomplete(void) {
      * being completed is the trailing segment after the last comma.
      * Matches come from def->args[slot].enums; the accept suffix is
      * ")" for the last enum slot, ", " otherwise. abs(num_args) is the
-     * slot count so the custom glMaterialf row (num_args -2) still
+     * slot count so the custom glMaterialfv row (num_args -2) still
      * offers face/param completion even though the parser skips it. */
     const ReplEnumCommandSpec *enum_cmds = repl_enum_command_specs();
     for (int i = 0; enum_cmds[i].name; i++) {
@@ -353,8 +357,17 @@ static void update_autocomplete(void) {
         for (const char *q = after; *q; q++) {
             if (*q == ',') { slot++; seg = q + 1; }
         }
-        if (slot >= nargs)
-            return; /* cursor is past the last enum slot */
+        if (slot >= nargs) {
+            /* Past the last enum slot. For positive num_args the call
+             * is done (no more args to suggest). For custom-parser
+             * rows (negative num_args) there are still trailing args
+             * the func-prefix param-hint walker can describe — fall
+             * through to it so e.g. glMaterialfv(GL_FRONT, GL_AMBIENT,
+             * still shows the compound-literal hint. */
+            if (enum_cmds[i].num_args < 0)
+                update_input_param_hint();
+            return;
+        }
         while (*seg == ' ') seg++;
         int seg_len = input_len - (int)(seg - input);
         if (seg_len < 0) seg_len = 0;
@@ -372,8 +385,15 @@ static void update_autocomplete(void) {
         if (ac->match_count > 0) {
             g_ac_mode = AC_MODE_ENUM_SLOT;
             g_ac_token_len = seg_len;
+            /* Negative num_args (custom-parser rows like glMaterialfv,
+             * num_args = -2) means the function has *more* args after
+             * the last enum slot (e.g. the compound literal). Always
+             * use ", " as the accept suffix for those — closing with
+             * ")" would strand the user mid-call. Positive num_args
+             * are exhaustive: the last enum slot IS the last arg. */
+            int more_args_after = (enum_cmds[i].num_args < 0);
             snprintf(g_ac_suffix, sizeof(g_ac_suffix), "%s",
-                     (slot + 1 == nargs) ? ")" : ", ");
+                     (slot + 1 == nargs && !more_args_after) ? ")" : ", ");
             update_selected_autocomplete_preview();
         }
         return;

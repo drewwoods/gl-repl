@@ -80,7 +80,7 @@ static const CmdType expected_commands[] = {
     CMD_DEPTH_MASK,
     CMD_COLOR_MASK,
     CMD_COLOR_MATERIAL,
-    CMD_MATERIALF,
+    CMD_MATERIALFV,
     CMD_LIGHT_MODEL_I,
     CMD_GLUT_SPHERE,
     CMD_GLUT_CUBE,
@@ -219,7 +219,7 @@ int main(void) {
 
     /* Material/lighting commands */
     editor_feed_line("glColorMaterial(GL_FRONT, GL_DIFFUSE);");
-    editor_feed_line("glMaterialf(GL_FRONT, GL_SHININESS, 128);");
+    editor_feed_line("glMaterialfv(GL_FRONT, GL_SHININESS, 128);");
     editor_feed_line("glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);");
 
     /* GLUT solid shapes */

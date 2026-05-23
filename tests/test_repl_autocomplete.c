@@ -186,6 +186,49 @@ int main() {
                    "glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_FALSE)");
     }
 
+    /* 4c. glMaterialfv - custom-parser row (num_args = -2). The two
+     * enum slots are face / pname, but a third arg (the compound
+     * literal) still needs typing, so the pname slot's accept suffix
+     * must be ", " (not ")"). The function-prefix hint shows the 3-arg
+     * canonical form with the compound literal as the trailing param. */
+    {
+        glr_app_reset_all(); declare_test_vars();
+
+        /* Typed "glMaterialfv" — function-prefix hint shows the
+         * 3-arg canonical form rather than the misleading
+         * 6-distinct-arg form the old glMaterialf spec rendered. */
+        set_input_text("glMaterialfv");
+        editor_completion_update();
+        ASSERT_STR("glMaterialfv func hint",
+                   g_ac_hint, "face, pname, (GLfloat[]){r, g, b, a})");
+
+        /* Slot 1 (face) ends with ", " — same as any non-final slot. */
+        set_input_text("glMaterialfv(GL_FR");
+        editor_completion_update();
+        ASSERT_STR("glMaterialfv slot1 match", g_ac_insert_matches[0], "GL_FRONT");
+        ASSERT_STR("glMaterialfv slot1 ghost", g_ac_ghost, "ONT, ");
+
+        /* Slot 2 (pname) is the LAST enum slot but NOT the last arg of
+         * the call — bug fix: suffix must be ", " (custom-parser row
+         * with trailing compound literal), not ")". */
+        set_input_text("glMaterialfv(GL_FRONT, GL_AMB");
+        editor_completion_update();
+        ASSERT_STR("glMaterialfv slot2 match", g_ac_insert_matches[0], "GL_AMBIENT");
+        ASSERT_STR("glMaterialfv slot2 ghost stays open for next arg",
+                   g_ac_ghost, "IENT, ");
+        glr_completion_accept_autocomplete();
+        ASSERT_STR("glMaterialfv slot2 accept doesn't close call",
+                   editor_state_input().input,
+                   "glMaterialfv(GL_FRONT, GL_AMBIENT, ");
+
+        /* Once the user starts the third arg, the param hint takes
+         * over and offers the compound literal. */
+        set_input_text("glMaterialfv(GL_FRONT, GL_AMBIENT, ");
+        editor_completion_update();
+        ASSERT_STR("glMaterialfv 3rd arg hint",
+                   g_ac_hint, "(GLfloat[]){r, g, b, a})");
+    }
+
     /* 5. User-defined function completion */
     {
         glr_app_reset_all(); declare_test_vars();
