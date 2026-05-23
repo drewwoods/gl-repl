@@ -722,6 +722,15 @@ static int parse_command(const char *line, GLCmd *cmd,
             memcpy(interior_buf, istart, ilen);
             interior_buf[ilen] = '\0';
             to_parse = interior_buf;
+            /* Reject anything (other than whitespace) past the closing
+             * '}': inputs like `(GLfloat[]){1,2,3,4}, 99` would
+             * otherwise parse silently and drop the trailing args. */
+            const char *tail = q + 1;
+            while (*tail && isspace((unsigned char)*tail)) tail++;
+            if (*tail != '\0') {
+                parser_emit_error_static(ctx, "Trailing content after (GLfloat[]){...} compound literal");
+                return 0;
+            }
         } else {
             to_parse = vp;
         }
@@ -736,6 +745,17 @@ static int parse_command(const char *line, GLCmd *cmd,
         int num_parsed = repl_eval_parse_exprs(to_parse, parsed_args, 8, vars, num_vars);
         if (num_parsed != 1 && num_parsed != 4) {
             parser_emit_error_static(ctx, "Expected 1 or 4 float values");
+            return 0;
+        }
+        /* GL semantics: only GL_SHININESS takes a single scalar; the
+         * RGBA pnames (GL_AMBIENT / GL_DIFFUSE / GL_SPECULAR /
+         * GL_EMISSION / GL_AMBIENT_AND_DIFFUSE) all need 4 floats.
+         * Without this guard, a scalar input for an RGBA pname would
+         * canonicalize to `(GLfloat[]){x}` — exported standalone C
+         * would then read past the 1-element array as the GL driver
+         * dereferences four floats. */
+        if (num_parsed == 1 && pname != GL_SHININESS) {
+            parser_emit_error_static(ctx, "Only GL_SHININESS takes 1 float; other pnames need 4 RGBA floats");
             return 0;
         }
 
