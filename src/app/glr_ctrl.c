@@ -3292,7 +3292,7 @@ static void numeric_swatch_restore_cursor_near_literal(
     if (hi > len) hi = len;
     for (i = lo; i <= hi && i + lit_len <= len; i++) {
         if (memcmp(in.input + i, literal, (size_t)lit_len) == 0) {
-            editor_cursor_pos_set(i + lit_len);
+            editor_cursor_pos_set(i);
             return;
         }
     }
