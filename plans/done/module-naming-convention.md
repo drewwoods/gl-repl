@@ -1,5 +1,23 @@
 # Module Naming Convention Cleanup
 
+## Status — DONE (2026-05-23 audit)
+
+All four phases shipped on `main`; landed commits (run `git log --oneline
+<sha>` to inspect):
+
+- Phase 1 — `2325ce2` ("naming(phase 1): rename stale cross-module type prefixes")
+- Phase 2 — `5fbca20` ("naming(phase 2): prefix orphan functions; collapse feed_line shim")
+- Phase 3 — `87b1da4` ("naming(phase 3): Scene-prefix the scene theme enums")
+- Phase 4 — `4c92081` ("naming(phase 4): add check-module-prefixes guard + document convention")
+
+Verified at audit time: `scripts/check-module-prefixes.sh` exists and
+`make check-module-prefixes` prints `module-prefixes OK`. The renamed
+`SceneGridTheme` / `SceneAxesTheme` enums are live in `src/scene/`.
+
+(Original commit shas the doc tracked — `2bd12af`/`e03dbc5`/`13a3cc6` —
+are the worktree-local commits; the on-main equivalents are listed
+above.)
+
 ## Implementation Progress
 
 Implemented on branch `module-naming-cleanup` (off `main`), one commit

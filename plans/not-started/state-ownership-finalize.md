@@ -1,5 +1,24 @@
 # State Ownership: Finalize Headers, Helpers, and Capture Docs
 
+## Status — NOT STARTED (2026-05-23 audit)
+
+The "Provenance" stages 0–5 have all landed (that's the section
+below). The "Remaining work" items A/B/C are all untouched:
+
+- **A — `state_views.h` / `state_owners.h` rename or keep.** Both
+  headers still exist with their original names (`src/repl/state_views.h`
+  and `src/repl/state_owners.h`). No rename commit yet.
+- **B — Domain-helper audit.** No focused commit found in `git log`.
+  Pass-through wrappers may still exist in `src/app/glr_actions.c`,
+  `src/app/glr_state.c`, and the `repl_state_*_set_*` family.
+- **C — Capture/restore boundary docs.** No "Capture/restore
+  boundaries" subsection in `ARCHITECTURE.md`; the only reference is
+  the stale-plan pointer at line 1224.
+
+ARCHITECTURE.md still calls out this plan as the home for the residual
+items (lines 1219–1230), so leaving the file in `not-started/`
+keeps that link valid.
+
 ## Provenance
 
 This is the residual content from `feature/gold-standard-state-ownership.md`,

@@ -1,5 +1,48 @@
 # Plan: Editor as a Generic Text Editor
 
+## Status — DONE (2026-05-23 audit)
+
+All seven phases landed; the named V1–V5 violations are closed. Spot
+checks against current code:
+
+- **Phase 1 — Comment-prefix config seam.** `editor_set_line_comment_prefix`
+  and `editor_line_comment_prefix` live in `src/editor/state.{h,c}` (state.h:458–459,
+  state.c:773–777). Controller registers `"// "` at
+  `src/app/glr_ctrl.c:2317`.
+- **Phase 2 — `repl_compile_toggle_comment`.** Declared
+  `src/repl/compile.h:397`, implemented `src/repl/compile.c:1290`.
+- **Phase 3 — Handler rewrite.** `handle_comment_toggle_key_route` at
+  `src/editor/input.c:1127–1172` matches the plan body almost line for
+  line: prefix lookup → `repl_compile_toggle_comment` →
+  `editor_commit_apply_external_change`. No `CMD_*` reads, no inline
+  `GLCmd` construction, no `g_predef_vars[]` writes, no
+  `repl_eval_*`/`repl_command_store_*` in the toggle path.
+- **Phase 4 — Verification (comment-toggle scope).** Confirmed:
+  `grep -nE "CMD_VAR_ASSIGN|CMD_VAR_DECLARE|CMD_COMMENT|CMD_FOR_BEGIN|
+  CMD_FOR_END" src/editor/input.c` → 0 hits. **Caveat:** the two
+  broader greps (`repl_eval_*`/`repl_command_store_*` in
+  `editor_input.c` as a whole) still have hits, but only in the
+  canonical type-and-Enter commit path (`editor_place_parsed_command`,
+  `editor_clear_all_cmds`, overwrite-mode Enter), which the plan's
+  "Inventory of remaining violations" never enumerated. That broader
+  cleanup is a separate scope (would require routing the editor's own
+  commit pipeline through the apply seam too) and lives outside this
+  plan.
+- **Phase 5 — Replay-annotation consumer audit.** Clean:
+  `grep -rn replay_annotations src/editor src/ui` → 0 hits. The
+  `editor_code_panel_document.c` referenced in the plan was already
+  reshaped into `src/ui/repl_code_panel.c`, which does not include
+  `repl_replay_annotations.h`.
+- **Phase 6 — Inline rename audit.** Marked LANDED in-doc 2026-05-08;
+  re-verified `src/editor/inline_rename.c` only touches the
+  `repl_user_scene_*` API.
+- **Phase 7 — Search line-count source.** Done: `src/editor/search.c`
+  uses `editor_buffer_view()`; the only `repl_state_document_count()`
+  appearances are doc-comments at lines 9–10.
+
+V2 (clipboard) was handled by the sibling
+`done/repl-agnostic-clipboard.md` as the plan documented.
+
 ## Status
 
 Not started. Branch: `feature/source-tree-reorg`.
