@@ -5,6 +5,8 @@
 #include <stdio.h>
 #include <string.h>
 
+#include <c_compat.h>   /* STATIC_ASSERT for the tag-label table */
+
 #define STEP_APPEND(label, c, e) \
     { (label), (c), (e), TUTORIAL_STEP_APPEND, NULL, \
       TUTORIAL_STEP_KIND_COMMAND, NULL, 0 }
@@ -172,24 +174,56 @@ static const char *const g_tutorial_feature_tour_cfg[] = {
     NULL,
 };
 
+/* REPL_TUTORIAL_TAG_ALL is a synthetic tag: every tutorial is a member.
+ * It is not listed in any g_tutorials[] mask literal; instead
+ * repl_tutorial_tag_mask() ORs its bit into every entry's mask, so the
+ * whole tag query API picks it up with no per-entry bookkeeping. Kept at
+ * index 0 so "All" sorts first in the Tutorials menu. Enum lives in
+ * tutorials.h. */
+
+#define TUTORIAL_TAG_BIT(tag)         (1u << (tag))
+#define TUTORIAL_TAG_ALL              TUTORIAL_TAG_BIT(REPL_TUTORIAL_TAG_ALL)
+#define TUTORIAL_TAG_GEOMETRY         TUTORIAL_TAG_BIT(REPL_TUTORIAL_TAG_GEOMETRY)
+#define TUTORIAL_TAG_COLOR_TRANSFORMS TUTORIAL_TAG_BIT(REPL_TUTORIAL_TAG_COLOR_TRANSFORMS)
+#define TUTORIAL_TAG_DEPTH_LIGHTING   TUTORIAL_TAG_BIT(REPL_TUTORIAL_TAG_DEPTH_LIGHTING)
+#define TUTORIAL_TAG_ANIMATION        TUTORIAL_TAG_BIT(REPL_TUTORIAL_TAG_ANIMATION)
+
+static const char *const g_tutorial_tag_labels[] = {
+    "All",
+    "Geometry",
+    "Color & Transforms",
+    "Depth & Lighting",
+    "Animation",
+};
+/* Must stay 1:1 with the REPL_TUTORIAL_TAG_* enum: repl_tutorial_tag_count()
+ * returns REPL_TUTORIAL_TAG_COUNT but repl_tutorial_tag_label() indexes this
+ * table, so any drift is an out-of-bounds read. */
+STATIC_ASSERT((int)(sizeof(g_tutorial_tag_labels) /
+                    sizeof(g_tutorial_tag_labels[0])) == REPL_TUTORIAL_TAG_COUNT,
+              "g_tutorial_tag_labels[] out of sync with REPL_TUTORIAL_TAG_COUNT");
+
 static const TutorialEntry g_tutorials[] = {
     {
         .name  = "First Triangle",
         .steps = g_tutorial_first_triangle_steps,
         .cfg   = g_tutorial_first_triangle_cfg,
+        .tags  = TUTORIAL_TAG_GEOMETRY,
     },
     {
         .name  = "Color & Transform",
         .steps = g_tutorial_color_transform_steps,
+        .tags  = TUTORIAL_TAG_COLOR_TRANSFORMS,
     },
     {
         .name  = "Depth Test Triangle",
         .steps = g_tutorial_depth_triangle_steps,
+        .tags  = TUTORIAL_TAG_GEOMETRY | TUTORIAL_TAG_DEPTH_LIGHTING,
     },
     {
         .name  = "Feature Tour",
         .steps = g_tutorial_feature_tour_steps,
         .cfg   = g_tutorial_feature_tour_cfg,
+        .tags  = TUTORIAL_TAG_GEOMETRY,
     },
 };
 
@@ -281,6 +315,77 @@ int repl_tutorial_step_cfg_value(int idx, int step_idx) {
 const char *const *repl_tutorial_cfg_lines(int idx) {
     const TutorialEntry *entry = tutorial_entry_at(idx);
     return entry ? entry->cfg : NULL;
+}
+
+int repl_tutorial_tag_count(void) {
+    return REPL_TUTORIAL_TAG_COUNT;
+}
+
+const char *repl_tutorial_tag_label(int tag_idx) {
+    if (tag_idx < 0 || tag_idx >= repl_tutorial_tag_count())
+        return NULL;
+    return g_tutorial_tag_labels[tag_idx];
+}
+
+unsigned int repl_tutorial_tag_mask(int tutorial_idx) {
+    if (tutorial_idx < 0 || tutorial_idx >= repl_tutorial_count())
+        return 0u;
+    /* Fold in the synthetic "All" membership so every tag query derives
+     * it uniformly; entry literals stay free of an explicit ALL bit. */
+    return g_tutorials[tutorial_idx].tags | TUTORIAL_TAG_ALL;
+}
+
+int repl_tutorial_has_tag(int tutorial_idx, int tag_idx) {
+    unsigned int bit = repl_tutorial_tag_bit(tag_idx);
+    if (!bit)
+        return 0;
+    return (repl_tutorial_tag_mask(tutorial_idx) & bit) != 0u;
+}
+
+int repl_tutorial_count_for_tag(int tag_idx) {
+    int count = 0;
+    if (!repl_tutorial_tag_bit(tag_idx))
+        return 0;
+    for (int idx = 0; idx < repl_tutorial_count(); idx++)
+        if (repl_tutorial_has_tag(idx, tag_idx))
+            count++;
+    return count;
+}
+
+int repl_tutorial_index_for_tag(int tag_idx, int ordinal) {
+    int seen = 0;
+    if (ordinal < 0 || !repl_tutorial_tag_bit(tag_idx))
+        return -1;
+    for (int idx = 0; idx < repl_tutorial_count(); idx++) {
+        if (!repl_tutorial_has_tag(idx, tag_idx))
+            continue;
+        if (seen == ordinal)
+            return idx;
+        seen++;
+    }
+    return -1;
+}
+
+int repl_tutorial_visible_tag_count(void) {
+    int count = 0;
+    for (int tag_idx = 0; tag_idx < repl_tutorial_tag_count(); tag_idx++)
+        if (repl_tutorial_count_for_tag(tag_idx) > 0)
+            count++;
+    return count;
+}
+
+int repl_tutorial_visible_tag_at(int dense_idx) {
+    int seen = 0;
+    if (dense_idx < 0)
+        return -1;
+    for (int tag_idx = 0; tag_idx < repl_tutorial_tag_count(); tag_idx++) {
+        if (repl_tutorial_count_for_tag(tag_idx) <= 0)
+            continue;
+        if (seen == dense_idx)
+            return tag_idx;
+        seen++;
+    }
+    return -1;
 }
 
 static int label_is_empty(const char *s) {

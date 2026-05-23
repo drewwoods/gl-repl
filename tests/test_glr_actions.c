@@ -489,12 +489,14 @@ static void test_tutorial_start_applies_cfg(void) {
         ASSERT_INT("First Triangle tutorial active", tutorial_active(), 1);
         ASSERT_INT("First Triangle cfg applied 2D view",
                    glr_config_get(GLR_CONFIG_ORTHO_MODE), 1);
-        /* tutorial_exit doesn't revert presentation, so the 2D from
-         * the tutorial's @cfg persists across exit (the next example
-         * or tutorial load would reset it again). */
+        /* tutorial_exit runs tutorial_teardown, which restores the
+         * cfg baseline captured at tutorial_start — see the bag-restore
+         * lifecycle added in the REQUIRE/SET commit (8fefa82). The
+         * baseline here was the post-reset 3D default, so exit reverts
+         * the tutorial's 2D back to 3D. */
         tutorial_exit();
-        ASSERT_INT("view mode stays 2D after tutorial exit",
-                   glr_config_get(GLR_CONFIG_ORTHO_MODE), 1);
+        ASSERT_INT("tutorial_exit restores view mode to pre-start baseline",
+                   glr_config_get(GLR_CONFIG_ORTHO_MODE), 0);
     }
 
     /* (B) A tutorial with no cfg (Color & Transform) still gets the
@@ -509,7 +511,16 @@ static void test_tutorial_start_applies_cfg(void) {
         ASSERT_INT("no-cfg tutorial active", tutorial_active(), 1);
         ASSERT_INT("no-cfg tutorial resets view to 3D default",
                    glr_config_get(GLR_CONFIG_ORTHO_MODE), 0);
+        /* tutorial_teardown's baseline only captures slugs the tutorial
+         * itself references (via @cfg / SET / REQUIRE); Color & Transform
+         * references no presentation slugs, so the manual 2D was wiped
+         * by the per-start presentation_reset and isn't restored on exit
+         * — it stays at the post-reset 3D. (Bug or feature of the
+         * baseline-capture lifecycle in 8fefa82, not a tag concern;
+         * just documenting actual behavior here.) */
         tutorial_exit();
+        ASSERT_INT("no-cfg tutorial exit leaves view mode at reset default",
+                   glr_config_get(GLR_CONFIG_ORTHO_MODE), 0);
     }
 }
 

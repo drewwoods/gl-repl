@@ -472,7 +472,16 @@ void tutorial_start(int idx) {
      * state regardless of what the user was looking at before. Tag
      * mask 0 means no example-tag defaults are layered in. Both calls
      * degrade to no-ops when no host-effects sink / config bridge is
-     * installed (some narrow REPL test environments). */
+     * installed (some narrow REPL test environments).
+     *
+     * Do NOT pass `repl_tutorial_tag_mask(idx)` here: the sink
+     * (glr_app_reset_example_chrome) consumes `REPL_EXAMPLE_TAG_*`
+     * indices, while the tutorial mask is over the disjoint
+     * `REPL_TUTORIAL_TAG_*` namespace. Cross-pumping would silently
+     * fire example tag-default cfg policies against unrelated tutorial
+     * tags (bits at the same index ≠ same meaning). If per-tag
+     * tutorial defaults become a real policy, add a dedicated
+     * repl_dispatch_tutorial_presentation_reset + sink. */
     repl_dispatch_example_presentation_reset(0);
 
     const char *const *cfg = repl_tutorial_cfg_lines(idx);
