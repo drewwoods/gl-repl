@@ -114,8 +114,31 @@ static void print_usage(const char *prog) {
 }
 
 static void display_func(void) {
+    /* Trace the first two frames separately. The first frame pays
+     * one-shot costs (GLUT solid-shape display-list compile, macOS
+     * first-drawable wait, GL stack lazy init / SW-fallback chatter)
+     * that frame 2 reveals as gone. A side-by-side frame-1 vs.
+     * frame-2 gap proves the spend was first-frame-only and not a
+     * steady-state regression. */
+    static int frames_traced = 0;
+    int trace_this = (frames_traced < 2);
+    int frame_num = frames_traced + 1;
+    char buf[64];
+    if (trace_this) {
+        snprintf(buf, sizeof(buf), "frame %d display callback", frame_num);
+        init_trace(buf);
+    }
     glr_ctrl_display_frame();
+    if (trace_this) {
+        snprintf(buf, sizeof(buf), "frame %d render done", frame_num);
+        init_trace(buf);
+    }
     glutSwapBuffers();
+    if (trace_this) {
+        snprintf(buf, sizeof(buf), "frame %d swap done", frame_num);
+        init_trace(buf);
+        frames_traced++;
+    }
 }
 
 static void reshape_func(int w, int h) {
@@ -208,6 +231,7 @@ int main(int argc, char **argv) {
 
     init_trace("start");
     glutInit(&argc, argv);
+    init_trace("glutInit done");
     glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGBA | GLUT_DEPTH | GLUT_MULTISAMPLE |
                         (use_accum ? GLUT_ACCUM : 0));
     glutInitWindowSize(window_w, window_h);
@@ -232,6 +256,13 @@ int main(int argc, char **argv) {
         static char music_paths[AUDIO_MUSIC_MAX_PATHS]
                                [AUDIO_MUSIC_MAX_LEN];
         int n = scan_mp3_playlist(music_paths, AUDIO_MUSIC_MAX_PATHS);
+        /* opendir/readdir on assets/. Cheap when the dir is local;
+         * worth timing when the working directory lives on iCloud. */
+        {
+            char buf[64];
+            snprintf(buf, sizeof(buf), "playlist scan done (%d tracks)", n);
+            init_trace(buf);
+        }
         if (n > 0) {
             const char *ptrs[AUDIO_MUSIC_MAX_PATHS];
             for (int i = 0; i < n; i++) ptrs[i] = music_paths[i];
@@ -243,6 +274,11 @@ int main(int argc, char **argv) {
              * assets/song.mp3 keep working. */
             glr_audio_play_music(AUDIO_DEFAULT_MUSIC);
         }
+        /* play_playlist() reads audio_state.ini synchronously on the
+         * caller (see glr_audio.c header comment) before posting the
+         * slow media-open request to the worker. The actual sound load
+         * runs off-thread so it never lands here. */
+        init_trace("playlist start requested");
         /* Apply saved audio cfg after play_playlist() so load_state() has
          * already populated g_cfg_mode. The action layer maps that UI config
          * value back onto the audio engine before the first frame. */
