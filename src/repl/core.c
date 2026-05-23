@@ -523,10 +523,10 @@ void repl_reformat_program(void) {
                 snprintf(fmt_text, sizeof(fmt_text), "%sfor(%s, %s) {", ind_s, var, args);
                 fmt.has_vars = 1;
             } else if (orig.args[2] != 1.0f) {
-                snprintf(fmt_text, sizeof(fmt_text), "%sfor(%s, %g, %g, %g) {",
+                snprintf(fmt_text, sizeof(fmt_text), "%sfor(%s, %.9g, %.9g, %.9g) {",
                          ind_s, var, orig.args[0], orig.args[1], orig.args[2]);
             } else {
-                snprintf(fmt_text, sizeof(fmt_text), "%sfor(%s, %g, %g) {",
+                snprintf(fmt_text, sizeof(fmt_text), "%sfor(%s, %.9g, %.9g) {",
                          ind_s, var, orig.args[0], orig.args[1]);
             }
             repl_core_replace_formatted_cmd(&store, cmd_idx, &fmt, fmt_text);
@@ -821,7 +821,7 @@ static int load_initial_commands(const char *import_file) {
 }
 
 void repl_save_default_output(const ReplExportLayout *layout) {
-    repl_export_save_output(outfile, source_document_view(), layout);
+    (void)repl_export_save_output(outfile, source_document_view(), layout);
 }
 
 int repl_load_initial_commands(const char *import_file) {

@@ -292,7 +292,7 @@ static int         g_deferred_var_count = 0;
  * (implemented in step 4 of the decouple plan). */
 
 static void workspace_format_float(char *buf, size_t n, float v) {
-    snprintf(buf, n, "%g", (double)v);
+    snprintf(buf, n, "%.9g", (double)v);
 }
 
 /* Per-call editor-text view, set by the public entry points
@@ -1026,7 +1026,8 @@ void repl_refresh_camera_lines(void) {
  *
  * The same text appears in the editor's code panel and the exported C.
  * Format uses inline `(GLfloat[]){...}` literals matching the bootstrap
- * REPL commands' rendered C; %g strips trailing zeros so 0.10 → 0.1. */
+ * REPL commands' rendered C; `%.9g` keeps float32 round-trip safety
+ * while still trimming redundant trailing zeros. */
 
 static const char *const k_light_names[MAX_LIGHTS] = {
     "GL_LIGHT0", "GL_LIGHT1", "GL_LIGHT2", "GL_LIGHT3"
@@ -1073,17 +1074,17 @@ void repl_export_lights_init_line(int i, char *buf, size_t n) {
     switch (sub_idx) {
     case 0:
         snprintf(buf, n,
-                 "  glLightfv(%s, GL_DIFFUSE,  (GLfloat[]){%g, %g, %g, %g});",
+                 "  glLightfv(%s, GL_DIFFUSE,  (GLfloat[]){%.9g, %.9g, %.9g, %.9g});",
                  ln, l->diffuse[0], l->diffuse[1], l->diffuse[2], l->diffuse[3]);
         break;
     case 1:
         snprintf(buf, n,
-                 "  glLightfv(%s, GL_AMBIENT,  (GLfloat[]){%g, %g, %g, %g});",
+                 "  glLightfv(%s, GL_AMBIENT,  (GLfloat[]){%.9g, %.9g, %.9g, %.9g});",
                  ln, l->ambient[0], l->ambient[1], l->ambient[2], l->ambient[3]);
         break;
     case 2:
         snprintf(buf, n,
-                 "  glLightfv(%s, GL_SPECULAR, (GLfloat[]){%g, %g, %g, %g});",
+                 "  glLightfv(%s, GL_SPECULAR, (GLfloat[]){%.9g, %.9g, %.9g, %.9g});",
                  ln, l->specular[0], l->specular[1], l->specular[2], l->specular[3]);
         break;
     case 3:
@@ -1111,7 +1112,7 @@ void repl_export_lights_display_line(int i, char *buf, size_t n) {
     const SceneLight *l = &render.lights[i];
     const char *ln = k_light_names[i];
     snprintf(buf, n,
-             "  glLightfv(%s, GL_POSITION, (GLfloat[]){%g, %g, %g, %g});",
+             "  glLightfv(%s, GL_POSITION, (GLfloat[]){%.9g, %.9g, %.9g, %.9g});",
              ln, l->pos[0], l->pos[1], l->pos[2], l->pos[3]);
 }
 
@@ -1181,16 +1182,16 @@ static void write_for_begin_as_c(FILE *f, const GLCmd *cmd,
     if (repl_eval_parse_for_header(p, var_name, sizeof(var_name),
                          &start_v, &end_v, &step_v, &body)) {
         if (step_v == 1.0f) {
-            fprintf(f, "%sfor (float %s = %g; %s < %g; %s += 1.0f) {\n",
+            fprintf(f, "%sfor (float %s = %.9g; %s < %.9g; %s += 1.0f) {\n",
                     ind, var_name, start_v, var_name, end_v, var_name);
         } else if (step_v == -1.0f) {
-            fprintf(f, "%sfor (float %s = %g; %s > %g; %s -= 1.0f) {\n",
+            fprintf(f, "%sfor (float %s = %.9g; %s > %.9g; %s -= 1.0f) {\n",
                     ind, var_name, start_v, var_name, end_v, var_name);
         } else if (step_v > 0) {
-            fprintf(f, "%sfor (float %s = %g; %s < %g; %s += %gf) {\n",
+            fprintf(f, "%sfor (float %s = %.9g; %s < %.9g; %s += %.9gf) {\n",
                     ind, var_name, start_v, var_name, end_v, var_name, step_v);
         } else {
-            fprintf(f, "%sfor (float %s = %g; %s > %g; %s += %gf) {\n",
+            fprintf(f, "%sfor (float %s = %.9g; %s > %.9g; %s += %.9gf) {\n",
                     ind, var_name, start_v, var_name, end_v, var_name, step_v);
         }
     } else {
@@ -1809,7 +1810,7 @@ static void write_canonical_cmd_as_c(FILE *f, const GLCmd *cmd, int cmd_idx,
         int off = fprintf(f, "  // @declare");
         for (int di = 0; di < cmd->var_decl_count; di++) {
             if (has_init[di])
-                off += fprintf(f, " %s=%g", cmd->var_names[di], inits[di]);
+                off += fprintf(f, " %s=%.9g", cmd->var_names[di], inits[di]);
             else
                 off += fprintf(f, " %s", cmd->var_names[di]);
         }
@@ -1851,13 +1852,13 @@ static void write_canonical_cmd_as_c(FILE *f, const GLCmd *cmd, int cmd_idx,
         break;
     case CMD_TESS_NORMAL:
         if (!write_tess_source_as_c(f, cmd, source_text)) {
-            fprintf(f, "      { _tn[0]=%g; _tn[1]=%g; _tn[2]=%g; }\n",
+            fprintf(f, "      { _tn[0]=%.9g; _tn[1]=%.9g; _tn[2]=%.9g; }\n",
                     cmd->args[0], cmd->args[1], cmd->args[2]);
         }
         break;
     case CMD_TESS_COLOR:
         if (!write_tess_source_as_c(f, cmd, source_text)) {
-            fprintf(f, "      { _tc[0]=%g; _tc[1]=%g; _tc[2]=%g; _tc[3]=%g; }\n",
+            fprintf(f, "      { _tc[0]=%.9g; _tc[1]=%.9g; _tc[2]=%.9g; _tc[3]=%.9g; }\n",
                     cmd->args[0], cmd->args[1], cmd->args[2], cmd->args[3]);
         }
         break;
@@ -1865,7 +1866,7 @@ static void write_canonical_cmd_as_c(FILE *f, const GLCmd *cmd, int cmd_idx,
         if (!write_tess_source_as_c(f, cmd, source_text)) {
             fprintf(f,
                     "      { TessVertex *_v=&_tv[_tv_n++];"
-                    " _v->pos[0]=%g;_v->pos[1]=%g;_v->pos[2]=%g;"
+                    " _v->pos[0]=%.9g;_v->pos[1]=%.9g;_v->pos[2]=%.9g;"
                     " memcpy(_v->normal,_tn,24); memcpy(_v->color,_tc,32);"
                     " gluTessVertex(g_tess,_v->pos,_v); }\n",
                     cmd->args[0], cmd->args[1], cmd->args[2]);
@@ -2003,7 +2004,7 @@ static void write_predef_var_globals(FILE *f) {
             /* `t` is overwritten each frame in display() from glutGet. */
             fprintf(f, "static float %s = 0.0f;\n", name);
         } else {
-            fprintf(f, "static float %s = %g;\n",
+            fprintf(f, "static float %s = %.9g;\n",
                     name, g_predef_vars[var_idx].value);
         }
     }
@@ -2341,7 +2342,7 @@ static int import_parse_declare_marker(const char *line, int *loaded,
                         count == 0 ? " %.*s" : ", %.*s", len, start);
         if (has_init)
             off += snprintf(decl_line + off, sizeof(decl_line) - (size_t)off,
-                            " = %g", init_val);
+                            " = %.9g", init_val);
         count++;
     }
     if (count == 0) {
@@ -2607,7 +2608,7 @@ static int import_make_repl_for_header(const char *line, char *out, int out_sz) 
             n = snprintf(out, (size_t)out_sz, "for(%s, %s, %s, %s) {",
                          var, start_expr, end_expr, step_expr);
         } else if (step_v != 1.0f) {
-            n = snprintf(out, (size_t)out_sz, "for(%s, %s, %s, %g) {",
+            n = snprintf(out, (size_t)out_sz, "for(%s, %s, %s, %.9g) {",
                          var, start_expr, end_expr, step_v);
         } else {
             n = snprintf(out, (size_t)out_sz, "for(%s, %s, %s) {",
@@ -2619,10 +2620,10 @@ static int import_make_repl_for_header(const char *line, char *out, int out_sz) 
     }
 
     if (step_v != 1.0f)
-        snprintf(out, out_sz, "for(%s, %g, %g, %g) {",
+        snprintf(out, out_sz, "for(%s, %.9g, %.9g, %.9g) {",
                  var, start_v, end_v, step_v);
     else
-        snprintf(out, out_sz, "for(%s, %g, %g) {",
+        snprintf(out, out_sz, "for(%s, %.9g, %.9g) {",
                  var, start_v, end_v);
     return 1;
 }
@@ -2807,7 +2808,7 @@ static int import_make_repl_tess_line(const char *line, char *out, int out_sz) {
             nv[component_idx] = repl_eval_expr(&ctx);
             np = ctx.p;
         }
-        snprintf(out, out_sz, "gluNormal(%g, %g, %g);", nv[0], nv[1], nv[2]);
+        snprintf(out, out_sz, "gluNormal(%.9g, %.9g, %.9g);", nv[0], nv[1], nv[2]);
         return 1;
     }
 
@@ -2848,7 +2849,7 @@ static int import_make_repl_tess_line(const char *line, char *out, int out_sz) {
             cv[component_idx] = repl_eval_expr(&ctx);
             cp = ctx.p;
         }
-        snprintf(out, out_sz, "gluColor(%g, %g, %g, %g);",
+        snprintf(out, out_sz, "gluColor(%.9g, %.9g, %.9g, %.9g);",
                  cv[0], cv[1], cv[2], cv[3]);
         return 1;
     }
@@ -2885,7 +2886,7 @@ static int import_make_repl_tess_line(const char *line, char *out, int out_sz) {
             vv[component_idx] = repl_eval_expr(&ctx);
             vp = ctx.p;
         }
-        snprintf(out, out_sz, "gluVertex(%g, %g, %g);",
+        snprintf(out, out_sz, "gluVertex(%.9g, %.9g, %.9g);",
                  vv[0], vv[1], vv[2]);
         return 1;
     }
@@ -3411,12 +3412,14 @@ static void emit_export_scaffold(FILE *f, const ExportScaffoldContext *ctx) {
     }
 }
 
-void repl_export_save_output(const char *filename, SourceTextView text,
-                             const ReplExportLayout *layout) {
+int repl_export_save_output(const char *filename, SourceTextView text,
+                            const ReplExportLayout *layout) {
     FILE *f = fopen(filename, "w");
     if (!f) {
-        repl_set_status_error("Error: cannot write output.c");
-        return;
+        char msg[512];
+        snprintf(msg, sizeof(msg), "Error: cannot write %s", filename);
+        repl_set_status_error(msg);
+        return 0;
     }
 
     s_export_text_view = text;
@@ -3432,11 +3435,19 @@ void repl_export_save_output(const char *filename, SourceTextView text,
 
     emit_export_scaffold(f, &scaffold);
 
-    fclose(f);
+    int had_error = ferror(f);
+    int close_failed = fclose(f) != 0;
+    if (had_error || close_failed) {
+        char msg[512];
+        snprintf(msg, sizeof(msg), "Error: cannot write %s", filename);
+        repl_set_status_error(msg);
+        return 0;
+    }
 
     char msg[128];
     snprintf(msg, sizeof(msg), "Saved to output.c (%d commands)", repl_state_document_count());
     repl_set_status(msg);
+    return 1;
 }
 
 /* ========================================================================= */
@@ -3641,10 +3652,23 @@ int repl_export_load_from_file(const char *filename) {
     ImportState state;
     import_state_init(&state);
     import_cam_parser_reset();
+    repl_func_alias_clear_all();
 
     char line[MAX_LINE_LEN];
+    int truncated_line = 0;
     while (fgets(line, sizeof(line), f)) {
-        int len = (int)strlen(line);
+        size_t raw_len = strlen(line);
+        if (raw_len > 0 &&
+            line[raw_len - 1] != '\n' &&
+            line[raw_len - 1] != '\r' &&
+            !feof(f)) {
+            int ch;
+            while ((ch = fgetc(f)) != '\n' && ch != EOF) {}
+            truncated_line = 1;
+            break;
+        }
+
+        int len = (int)raw_len;
         while (len > 0 && (line[len - 1] == '\n' || line[len - 1] == '\r'))
             line[--len] = '\0';
         const char *p = line;
@@ -3652,7 +3676,14 @@ int repl_export_load_from_file(const char *filename) {
         import_process_line(&state, p, line);
     }
 
-    fclose(f);
+    if (fclose(f) != 0)
+        return 0;
+    if (truncated_line) {
+        char msg[256];
+        snprintf(msg, sizeof(msg), "Import failed: line too long in %s", filename);
+        repl_set_status_error(msg);
+        return 0;
+    }
 
     /* Re-apply deferred @var values.  // @declare markers in the snippet may
      * have undeclared and re-declared variables (creating CMD_VAR_DECLARE

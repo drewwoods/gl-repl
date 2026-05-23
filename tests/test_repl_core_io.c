@@ -5,6 +5,7 @@
 #include "repl/core.h"
 #include "editor/input.h"
 #include "repl/pipeline.h"
+#include "repl/scenes.h"
 #include "repl/state.h"
 #include "repl/export.h"
 #include "repl/executor.h"
@@ -17,6 +18,7 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <unistd.h>
 
 #define g_render_state_lines    (repl_state_import_export().render_state_lines)
 /* Render-config toggles moved to glr_state.render in step 7a. */
@@ -394,6 +396,40 @@ int main(void) {
         ASSERT_TRUE("alias name matches on reload",
                     post_import && strcmp(post_import, "drawCube") == 0);
         remove(alias_path);
+    }
+
+    /* Direct file import should reset the alias table before reading
+     * @func directives from the new file. Otherwise an aliased import
+     * followed by a plain import leaves the old alias live even though
+     * the second file never declared it. */
+    {
+        const char *alias_path = "/tmp/repl_core_direct_import_alias.c";
+        const char *plain_path = "/tmp/repl_core_direct_import_plain.c";
+
+        glr_app_reset_all(); declare_test_vars();
+        editor_feed_line("drawCube {");
+        editor_feed_line("  glVertex3f(0, 0, 0);");
+        editor_feed_line("}");
+        editor_feed_line("drawCube();");
+        repl_export_save_output(alias_path, source_document_view(), NULL);
+
+        glr_app_reset_all(); declare_test_vars();
+        editor_feed_line("glVertex3f(1, 2, 3);");
+        repl_export_save_output(plain_path, source_document_view(), NULL);
+
+        glr_app_reset_all(); declare_test_vars();
+        ASSERT_TRUE("direct import aliased file succeeds",
+                    repl_export_load_from_file(alias_path) == 1);
+        ASSERT_TRUE("alias present after direct aliased import",
+                    repl_func_alias_lookup_slot("drawCube") == 0);
+
+        ASSERT_TRUE("direct import plain file succeeds",
+                    repl_export_load_from_file(plain_path) == 1);
+        ASSERT_TRUE("plain direct import clears stale alias",
+                    repl_func_alias_lookup_slot("drawCube") == -1);
+
+        remove(alias_path);
+        remove(plain_path);
     }
 
     /* Aliased func with an expression-bearing call (regression).
@@ -1024,6 +1060,110 @@ int main(void) {
                     strstr(buf, "#undef tgamma") != NULL);
 
         remove(math_collision_path);
+    }
+
+    /* Float persistence should round-trip float32 values without the
+     * 6-digit loss from bare %g. Pin both header metadata and a
+     * generated numeric for-loop line. */
+    {
+        const char *precision_path = "/tmp/repl_core_precision_roundtrip.c";
+        const float precise_x = 0.1234567f;
+        const float loop_start = 0.1234567f;
+        const float loop_end = 0.2234567f;
+        const float loop_step = 0.0001234567f;
+        char expected_var[128];
+        char expected_loop[256];
+        char buf[16384];
+
+        glr_app_reset_all(); declare_test_vars();
+        int x_idx = repl_eval_find_predef_var_idx("x");
+        ASSERT_TRUE("precision test var exists", x_idx >= 0);
+        g_predef_vars[x_idx].value = precise_x;
+        editor_feed_line("for(i, 0.1234567, 0.2234567, 0.0001234567) {");
+        editor_feed_line("glVertex3f(i, 0, 0);");
+        editor_feed_line("}");
+
+        repl_export_save_output(precision_path, source_document_view(), NULL);
+        read_text_file(precision_path, buf, sizeof(buf));
+
+        snprintf(expected_var, sizeof(expected_var),
+                 "// @var x = %.9g", (double)precise_x);
+        ASSERT_TRUE("workspace header uses float-safe precision",
+                    strstr(buf, expected_var) != NULL);
+
+        snprintf(expected_loop, sizeof(expected_loop),
+                 "for (float i = %.9g; i < %.9g; i += %.9gf) {",
+                 (double)loop_start, (double)loop_end, (double)loop_step);
+        ASSERT_TRUE("generated loop uses float-safe precision",
+                    strstr(buf, expected_loop) != NULL);
+
+        glr_app_reset_all(); declare_test_vars();
+        ASSERT_TRUE("precision export re-imports",
+                    repl_export_load_from_file(precision_path) == 1);
+        x_idx = repl_eval_find_predef_var_idx("x");
+        ASSERT_TRUE("re-imported header value round-trips exactly",
+                    x_idx >= 0 && g_predef_vars[x_idx].value == precise_x);
+        ASSERT_TRUE("re-imported loop start round-trips exactly",
+                    repl_state_document_cmds_mut()[0].args[0] == loop_start);
+        ASSERT_TRUE("re-imported loop end round-trips exactly",
+                    repl_state_document_cmds_mut()[0].args[1] == loop_end);
+        ASSERT_TRUE("re-imported loop step round-trips exactly",
+                    repl_state_document_cmds_mut()[0].args[2] == loop_step);
+
+        remove(precision_path);
+    }
+
+    /* A physical line longer than MAX_LINE_LEN-1 must not be split into
+     * two logical imports. Pre-fix the overflow tail was parsed as a
+     * second line, which could smuggle in a command. */
+    {
+        const char *trunc_path = "/tmp/repl_core_import_truncated_line.c";
+        FILE *f = fopen(trunc_path, "w");
+        ASSERT_TRUE("truncated-line fixture fopen", f != NULL);
+        if (f) {
+            fprintf(f, "static void render_repl_geometry(void) {\n");
+            fprintf(f, "  // Snippet start\n");
+            for (int i = 0; i < 300; i++)
+                fputc(' ', f);
+            fprintf(f, "glVertex3f(1, 2, 3);\n");
+            fprintf(f, "  // Snippet end\n");
+            fprintf(f, "}\n");
+            fclose(f);
+        }
+
+        glr_app_reset_all(); declare_test_vars();
+        ASSERT_TRUE("truncated physical line fails import",
+                    repl_export_load_from_file(trunc_path) == 0);
+        ASSERT_INT("truncated physical line loads no commands",
+                   repl_state_document_count(), 0);
+        remove(trunc_path);
+    }
+
+    /* Scene/workspace callers must preserve export write failures. Use a
+     * regular file as the "workspace dir" so mkdir() sees EEXIST but the
+     * subsequent scene export path cannot be opened for writing. */
+    {
+        const char *bad_workspace = "/tmp/repl_core_workspace_save_failure";
+        FILE *f = fopen(bad_workspace, "w");
+        ASSERT_TRUE("bad workspace fixture fopen", f != NULL);
+        if (f)
+            fclose(f);
+
+        glr_app_reset_all(); declare_test_vars();
+        repl_load_example(0);
+        ASSERT_TRUE("promotion for failing workspace save",
+                    repl_promote_example_if_needed() >= 1);
+
+        ASSERT_INT("workspace save surfaces export failure",
+                   repl_save_workspace(bad_workspace, NULL), -1);
+        UiStatusState status = ui_state_status();
+        ASSERT_TRUE("workspace save keeps write error status",
+                    strstr(status.text, "cannot write") != NULL);
+        ASSERT_TRUE("workspace save does not overwrite with success",
+                    strstr(status.text, "Saved ") == NULL);
+
+        unlink(bad_workspace);
+        repl_set_workspace_dir("");
     }
 
     /* (F) Post-import host cursor publication.

@@ -1878,14 +1878,14 @@ ReplCompileResult repl_compile_for_loop(const char *input,
             }
         } else if (step != 1.0f) {
             if (!repl_format_fits(fb_text, sizeof(fb_text),
-                                  "%sfor(%s, %g, %g, %g) {",
+                                  "%sfor(%s, %.9g, %.9g, %.9g) {",
                                   indent, var_name, start, end, step)) {
                 snprintf(err, (size_t)err_size, "Command too long");
                 return REPL_COMPILE_ERROR;
             }
         } else {
             if (!repl_format_fits(fb_text, sizeof(fb_text),
-                                  "%sfor(%s, %g, %g) {",
+                                  "%sfor(%s, %.9g, %.9g) {",
                                   indent, var_name, start, end)) {
                 snprintf(err, (size_t)err_size, "Command too long");
                 return REPL_COMPILE_ERROR;
