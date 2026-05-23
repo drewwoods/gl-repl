@@ -3272,25 +3272,6 @@ static int route_inline_color_swatch_hit(const UiHit *hit, int my) {
     return 1;
 }
 
-static void numeric_swatch_restore_cursor_near_literal(
-    const char *literal, int hint_start) {
-    EditorInputView in = editor_state_input();
-    int len = (int)strlen(in.input);
-    int lit_len = (int)strlen(literal);
-    int lo = hint_start - 4;
-    int hi = hint_start + 16;
-    int i;
-    if (lo < 0) lo = 0;
-    if (hi > len) hi = len;
-    for (i = lo; i <= hi && i + lit_len <= len; i++) {
-        if (memcmp(in.input + i, literal, (size_t)lit_len) == 0) {
-            editor_cursor_pos_set(i);
-            return;
-        }
-    }
-    editor_cursor_pos_set(hint_start < len ? hint_start : len);
-}
-
 static int route_numeric_swatch_hit(const UiHit *hit) {
     int edit_line = editor_state_edit_line();
     EditorInputView in = editor_state_input();
@@ -3348,7 +3329,12 @@ static int route_numeric_swatch_hit(const UiHit *hit) {
 
     if (editor_commit_apply_external_change(&change, 1)) {
         editor_load_line_to_input(edit_line);
-        numeric_swatch_restore_cursor_near_literal(buf, d.arg_start);
+        {
+            EditorInputView reloaded = editor_state_input();
+            int pos = d.arg_start < reloaded.input_len
+                          ? d.arg_start : reloaded.input_len;
+            editor_cursor_pos_set(pos);
+        }
         editor_completion_update();
         editor_request_redraw();
     }
