@@ -8,7 +8,7 @@
  * No dependency on repl, editor, or app headers (originally lived in
  * src/editor/code_layout.c; moved here for the editor-demo SRP split).
  */
-#include "ui/text_layout.h"
+#include "ui/core/text_layout.h"
 
 #include <ctype.h>
 #include <string.h>

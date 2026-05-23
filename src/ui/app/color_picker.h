@@ -1,19 +1,19 @@
 /*
- * src/ui/color_picker.h - Floating color-picker renderer and hit-test.
+ * src/ui/app/color_picker.h - Floating color-picker renderer and hit-test.
  *
  * Pure UI layer over the `ColorPickerView` peer snapshot plus controller-pushed
  * transformer entries for inline swatches. The renderer and hit-test perform no
  * live REPL/editor reads, no parse/commit work, and no `_mut()` access.
  *
  * The companion guard `check-color-picker-ui-isolation.sh` audits
- * `src/ui/color_picker.c` for forbidden mutators and state reads.
+ * `src/ui/app/color_picker.c` for forbidden mutators and state reads.
  */
 #ifndef UI_COLOR_PICKER_H
 #define UI_COLOR_PICKER_H
 
 #include "subsystems/color_picker/color_picker_state.h"
-#include "ui/editor.h"
-#include "ui/hit.h"
+#include "ui/app/editor.h"
+#include "ui/core/hit.h"
 
 /* Width of inline color-swatch boxes (shown in code panel). */
 #define UI_COLOR_SWATCH_W 12

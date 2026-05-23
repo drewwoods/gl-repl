@@ -46,7 +46,7 @@
 
 #include "editor/edit_ops.h"
 #include "editor/state.h"
-#include "ui/text_search.h"
+#include "ui/core/text_search.h"
 
 #include <gl_includes.h>
 

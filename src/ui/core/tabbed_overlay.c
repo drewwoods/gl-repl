@@ -4,10 +4,10 @@
  * Generic two-column tabbed reference card. See ui_tabbed_overlay.h
  * for the input struct and column-split convention.
  */
-#include "tabbed_overlay.h"
-#include "gl_2d.h"
-#include "metrics.h"
-#include "theme.h"
+#include "ui/core/tabbed_overlay.h"
+#include "ui/core/gl_2d.h"
+#include "ui/core/metrics.h"
+#include "ui/core/theme.h"
 
 #include "config.h"
 

@@ -94,4 +94,4 @@ applies a scene-local frustum shift for jitter.
 
 **Boundary:** scene code renders. It does **not** parse, edit, save, or
 dispatch UI actions, and `scene_*` / `ui_*` do not include each other's
-headers — shared types live in `render_types.h` / `src/ui/snapshot.h`.
+headers — shared types live in `render_types.h` / `src/ui/app/snapshot.h`.

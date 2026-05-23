@@ -13,7 +13,7 @@
 #ifndef UI_STATE_H
 #define UI_STATE_H
 
-#include "state_types.h"
+#include "ui/app/state_types.h"
 
 /* Live UI-owned chrome state captured into UiRenderSnapshot each frame. */
 

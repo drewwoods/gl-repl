@@ -14,7 +14,7 @@
 #include "repl/tutorials.h"
 #include "source_document.h"
 #include "support/test_harness.h"
-#include "ui/state.h"
+#include "ui/app/state.h"
 #include "subsystems/tutorial/tutorial.h"
 #include "subsystems/tutorial/tutorial_state.h"
 

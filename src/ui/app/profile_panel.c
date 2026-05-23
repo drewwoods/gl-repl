@@ -1,12 +1,12 @@
 /*
  * ui_profile_panel.c - per-section wall-time profiling overlay panel.
  */
-#include "profile_panel.h"
-#include "gl_2d.h"
-#include "layout.h"
-#include "metrics.h"
-#include "theme.h"
-#include "variable_panel.h"
+#include "ui/app/profile_panel.h"
+#include "ui/core/gl_2d.h"
+#include "ui/core/layout.h"
+#include "ui/core/metrics.h"
+#include "ui/core/theme.h"
+#include "ui/app/variable_panel.h"
 #include "support/prof.h"
 
 #include <stdio.h>

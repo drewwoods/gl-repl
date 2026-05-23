@@ -4,7 +4,7 @@
  * Owns the current picker session: which source line is being edited, the HSV/
  * alpha slider state, cached geometry, and the writeback path that rewrites the
  * underlying color command through the editor commit pipeline. The renderer and
- * hit-test in `src/ui/color_picker.c` consume `ColorPickerView` and never
+ * hit-test in `src/ui/app/color_picker.c` consume `ColorPickerView` and never
  * mutate peer state directly.
  *
  * Public API:

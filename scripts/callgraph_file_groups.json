@@ -72,24 +72,23 @@
         "src/scene/overlays.c",
         "src/scene/guides/geometry_guides.c",
         "src/scene/guides/transform_guides.c",
-        "src/ui/replay_hud.c"
+        "src/ui/app/replay_hud.c"
       ]
     },
     {
       "id": "ui_rendering",
       "label": "5. 2D UI rendering",
       "files": [
-        "src/ui/state.c",
-        "src/ui/panels.c",
-        "src/ui/layout.c",
-        "src/ui/menu_bar.c",
-        "src/ui/color_picker.c",
-        "src/ui/variable_panel.c",
-        "src/ui/autocomplete_panel.c",
-        "src/ui/profile_panel.c",
-        "src/ui/code_panel_layout.c",
-        "src/ui/tabbed_overlay.c",
-        "src/editor/code_panel_document.c"
+        "src/ui/app/state.c",
+        "src/ui/app/panels.c",
+        "src/ui/core/layout.c",
+        "src/ui/app/menu_bar.c",
+        "src/ui/app/color_picker.c",
+        "src/ui/app/variable_panel.c",
+        "src/ui/app/autocomplete_panel.c",
+        "src/ui/app/profile_panel.c",
+        "src/ui/app/repl_code_panel.c",
+        "src/ui/core/tabbed_overlay.c"
       ]
     },
     {

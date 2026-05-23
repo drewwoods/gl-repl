@@ -11,7 +11,7 @@
  * `make gl-tests` locally.
  */
 #include <gl_includes.h>
-#include "ui/gl_2d.h"
+#include "ui/core/gl_2d.h"
 #include "support/test_harness.h"
 
 #include <stdio.h>

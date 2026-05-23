@@ -21,11 +21,11 @@
 #include "input.h"
 #include "completion.h"
 #include "search.h"
-#include "ui/text_search.h"
+#include "ui/core/text_search.h"
 
 #include <keys.h>
 #include "repl/state_views.h"
-#include "ui/state_types.h"
+#include "ui/app/state_types.h"
 
 /* ui_state_help_mut is forward-declared here because repl_*.c is not
  * allowed to include ui_state.h per check-controller-boundaries. The

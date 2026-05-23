@@ -1,9 +1,9 @@
 #ifdef GL_STUBS
 #include "support/test_harness.h"
 #include "config.h"
-#include "ui/metrics.h"
-#include "ui/text_layout.h"
-#include "ui/text_panel.h"
+#include "ui/core/metrics.h"
+#include "ui/core/text_layout.h"
+#include "ui/core/text_panel.h"
 #include <GL/gl_stub_counts.h>
 #endif
 

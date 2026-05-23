@@ -19,7 +19,7 @@
  *   Step 6: editor_load_line_to_input (locked by
  *           check-no-load-line-to-input-in-pipeline).
  *   Step 7c: ui_state_viewport, ui_state_code_panel (via
- *           ReplExportLayout); src/ui/layout.c left
+ *           ReplExportLayout); src/ui/core/layout.c left
  *           REPL_DEMO_DEP_SRCS.
  *   Step 7e: editor_feed_line (example loader migrated to
  *           repl_load_apply_line; locked by

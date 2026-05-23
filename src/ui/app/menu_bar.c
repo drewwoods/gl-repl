@@ -10,12 +10,12 @@
 #include "repl/state_views.h"
 #include "subsystems/replay/replay.h"   /* ReplayState (PLAYING / PAUSED / DONE) enum values */
 #include "subsystems/tutorial/tutorial_state.h"
-#include "state.h"
-#include "menu_bar.h"
-#include "metrics.h"
-#include "theme.h"
-#include "layout.h"
-#include "gl_2d.h"
+#include "ui/app/state.h"
+#include "ui/app/menu_bar.h"
+#include "ui/core/metrics.h"
+#include "ui/core/theme.h"
+#include "ui/core/layout.h"
+#include "ui/core/gl_2d.h"
 
 /* Menu bar - styled after Header Wireframes v2.
  * Left: top-level menus (File, Scene, Tutorials, Config).

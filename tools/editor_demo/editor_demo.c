@@ -9,9 +9,9 @@
  *   - src/editor/state.c     : text buffer + cursor + selection data model.
  *   - src/editor/edit_ops.c  : generic text-editing primitives shared with
  *                              src/editor/input.c (REPL dispatcher).
- *   - src/ui/text_panel.c    : generic wrapped text renderer.
- *   - src/ui/text_layout.c   : wrap math.
- *   - src/ui/text_search.c   : case-insensitive text find (linked for the
+ *   - src/ui/core/text_panel.c    : generic wrapped text renderer.
+ *   - src/ui/core/text_layout.c   : wrap math.
+ *   - src/ui/core/text_search.c   : case-insensitive text find (linked for the
  *                              text_panel's search-row machinery — find is
  *                              not bound to a key in v1).
  *   - src/support/prof.c     : profiling.
@@ -40,8 +40,8 @@
  */
 
 #include "editor/state.h"
-#include "ui/gl_2d.h"
-#include "ui/text_panel.h"
+#include "ui/core/gl_2d.h"
+#include "ui/core/text_panel.h"
 
 #include "input.h"
 #include "menu.h"

@@ -2,10 +2,10 @@
 #include "app/glr_ctrl.h"
 #include "repl/state.h"
 #include "editor/state.h"
-#include "ui/state.h"
+#include "ui/app/state.h"
 #include "app/glr_camera.h"
-#include "ui/profile_panel.h"
-#include "ui/layout.h"            /* CODE_PANEL_LAYOUT_* enum values */
+#include "ui/app/profile_panel.h"
+#include "ui/core/layout.h"            /* CODE_PANEL_LAYOUT_* enum values */
 #include "subsystems/variable_panel/variable_panel_state.h"
 #include "subsystems/replay/replay.h"               /* REPLAY_PAUSED, REPLAY_MODE_* enums */
 #include "subsystems/replay/replay_state.h"

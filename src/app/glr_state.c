@@ -27,7 +27,7 @@
 #include "app/glr_defaults.h"    /* CFG_DEFAULT_* */
 #include "scene/themes.h"    /* GRID_MAJOR_*, GRID_EXTENT_*, SceneGridTheme defaults */
 #include "scene/postprocess_filter.h" /* SCENE_POST_FILTER_OFF */
-#include "ui/layout.h"       /* CODE_PANEL_LAYOUT_* */
+#include "ui/core/layout.h"       /* CODE_PANEL_LAYOUT_* */
 
 static const float g_grid_major_steps[GRID_MAJOR_COUNT] = {
     [GRID_MAJOR_1]  = 1.0f,

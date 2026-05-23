@@ -13,9 +13,9 @@
 #include "app/glr_ctrl.h"
 #include "app/glr_state.h"
 #include "editor/help_session.h"
-#include "ui/metrics.h"
-#include "ui/state.h"
-#include "ui/tabbed_overlay.h"
+#include "ui/core/metrics.h"
+#include "ui/app/state.h"
+#include "ui/core/tabbed_overlay.h"
 #include "support/test_harness.h"
 
 #include <stdio.h>

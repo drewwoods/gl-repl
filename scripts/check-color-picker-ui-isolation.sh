@@ -1,6 +1,6 @@
 #!/bin/bash
 # Strict feature-UI guard for the floating color picker's UI surface
-# (`src/ui/color_picker.c`).
+# (`src/ui/app/color_picker.c`).
 #
 # Stricter than `check-replay-ui-isolation.sh`: where the replay HUD
 # legitimately reads replay snapshots and routes via replay_handle_*,
@@ -10,7 +10,7 @@
 # and should not write status. The peer `color_picker_state.c` owns
 # the state, lifecycle, and writeback.
 #
-# Forbidden in `src/ui/color_picker.c`:
+# Forbidden in `src/ui/app/color_picker.c`:
 #   - repl_command_store_*( / editor_buffer_*(   (mutators)
 #   - editor_commit_*( / editor_commit_apply_external_change(
 #   - repl_compile_*( / repl_apply_*( / repl_parser_*(
@@ -20,7 +20,7 @@
 #
 # Allowed: GL / gl2d_* drawing, ColorPickerView field access,
 # UiTransformer field access, color_picker_hsv_to_rgb, ui_hit_*,
-# src/ui/metrics.h / src/ui/layout.h constants, math / string helpers.
+# src/ui/core/metrics.h / src/ui/core/layout.h constants, math / string helpers.
 
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
@@ -28,7 +28,7 @@ cd "$(git rev-parse --show-toplevel)"
 shopt -s nullglob
 
 targets=()
-for candidate in src/ui/color_picker.c; do
+for candidate in src/ui/app/color_picker.c; do
     [ -f "$candidate" ] && targets+=("$candidate")
 done
 
@@ -50,7 +50,7 @@ for f in "${targets[@]}"; do
 done
 
 if [ -n "$violations" ]; then
-    echo "ERROR: src/ui/color_picker.c references a forbidden mutator or live state read." >&2
+    echo "ERROR: src/ui/app/color_picker.c references a forbidden mutator or live state read." >&2
     echo "The picker UI is a pure renderer + hit-test over ColorPickerView." >&2
     echo "Mutations belong on the peer (color_picker_state.c); live state reads" >&2
     echo "should flow through the snapshot field UiRenderSnapshot.color_picker." >&2
@@ -63,14 +63,14 @@ fi
 # const ColorPickerView * (or UiTransformer * for the swatch
 # helper).
 sig_bad=0
-for hdr in src/ui/color_picker.h; do
+for hdr in src/ui/app/color_picker.h; do
     [ -e "$hdr" ] || continue
     while IFS= read -r line; do
         fn=$(printf '%s\n' "$line" \
              | grep -oE 'ui_color_picker_(render|render_swatch|hit_test)' \
              | head -n1 || true)
         [ -z "$fn" ] && continue
-        sig_line=$(grep -nE "^\s*(void|UiHit)\s+${fn}\s*\(" src/ui/color_picker.h src/ui/color_picker.c 2>/dev/null | head -n1 || true)
+        sig_line=$(grep -nE "^\s*(void|UiHit)\s+${fn}\s*\(" src/ui/app/color_picker.h src/ui/app/color_picker.c 2>/dev/null | head -n1 || true)
         [ -z "$sig_line" ] && continue
         sig=${sig_line#*:*:}
         if ! printf '%s\n' "$sig" \

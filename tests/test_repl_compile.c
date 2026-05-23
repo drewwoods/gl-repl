@@ -27,7 +27,7 @@
 #include "repl/eval.h"
 #include "repl/load.h"           /* repl_load_apply_line for [P2] dup-check test */
 #include "repl/state.h"
-#include "ui/state.h"
+#include "ui/app/state.h"
 #include "support/test_harness.h"
 
 #include <stdio.h>

@@ -8,7 +8,7 @@
  * repl_cmd_type_category() rather than a rendered row.
  */
 #include "repl/command_spec.h"
-#include "ui/repl_code_panel.h"
+#include "ui/app/repl_code_panel.h"
 #include "support/test_harness.h"
 
 #include <math.h>
@@ -192,7 +192,7 @@ int main(void) {
 
     /* Optional contrast guard: every (kind x class) final color that can
      * actually render must stay legible against the code-panel background
-     * (src/ui/text_panel.c, glColor4f(0.06, 0.06, 0.10, ...)). Threshold
+     * (src/ui/core/text_panel.c, glColor4f(0.06, 0.06, 0.10, ...)). Threshold
      * 3.0 ~= WCAG AA large text; guards future palette tweaks. CMD_CAT_COMMENT
      * is skipped — the wiring never emits syntax spans on comment rows. */
     {

@@ -8,7 +8,7 @@
 #include "repl/state.h"
 #include "repl/export.h"
 #include "repl/executor.h"
-#include "ui/state.h"
+#include "ui/app/state.h"
 
 #include "support/test_harness.h"
 #include <errno.h>

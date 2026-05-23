@@ -8,7 +8,7 @@
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 
-violations=$(grep -nE '#[[:space:]]*include[[:space:]]+"ui/layout\.h"|\bui_layout_[a-z_]+\s*\(|\bui_state_viewport\s*\(|\bui_state_code_panel\s*\(|\bCODE_PANEL_LAYOUT_|"top_code_panel"|"code_panel"' src/repl/export.c 2>/dev/null \
+violations=$(grep -nE '#[[:space:]]*include[[:space:]]+"ui/core/layout\.h"|\bui_layout_[a-z_]+\s*\(|\bui_state_viewport\s*\(|\bui_state_code_panel\s*\(|\bCODE_PANEL_LAYOUT_|"top_code_panel"|"code_panel"' src/repl/export.c 2>/dev/null \
     | grep -vE '^[^:]+:[0-9]+:[[:space:]]*(\*|//)' || true)
 
 if [ -z "$violations" ]; then

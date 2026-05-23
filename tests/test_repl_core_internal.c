@@ -9,8 +9,8 @@
 #include "repl/state.h"
 #include "repl/core.h"
 #include "editor/input.h"
-#include "ui/state.h"
-#include "ui/layout.h"           /* CODE_PANEL_LAYOUT_* */
+#include "ui/app/state.h"
+#include "ui/core/layout.h"           /* CODE_PANEL_LAYOUT_* */
 #include "app/glr_defaults.h"   /* CFG_DEFAULT_* */
 #include "support/test_harness.h"
 #include "scene/render.h"

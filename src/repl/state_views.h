@@ -85,7 +85,7 @@ typedef struct {
 /* State declared elsewhere:
  * - editor-owned input/buffer/selection/search/autocomplete and editor overlay
  *   list types live in editor_state.h
- * - UI chrome types live in src/ui/state_types.h
+ * - UI chrome types live in src/ui/app/state_types.h
  * - app-owned presentation policy and render-config toggles live in glr_state.h
  *
  * Those declarations moved to their

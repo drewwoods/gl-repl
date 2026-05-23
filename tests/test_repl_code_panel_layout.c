@@ -1,4 +1,4 @@
-#include "ui/text_layout.h"
+#include "ui/core/text_layout.h"
 #include "support/test_harness.h"
 
 #include <stdio.h>
@@ -25,7 +25,7 @@ static CodeLayout test_layout(int panel_w, int first_x,
  * parameters the renderer uses at runtime.
  *
  * FONT_W = 9              (include/ui/gl_2d.h)
- * CODE_MARGIN_X = 10      (src/ui/metrics.h)
+ * CODE_MARGIN_X = 10      (src/ui/core/metrics.h)
  * linenum column = 4 chars
  * index column   = 6 chars (when vertex indices enabled)
  * 1-char gap between linenum and index/text columns              */

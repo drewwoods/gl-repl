@@ -11,12 +11,12 @@
  * the input line stay in ui_panels.c where the code panel's row
  * layout has the surrounding context.
  */
-#include "autocomplete_panel.h"
-#include "layout.h"
-#include "metrics.h"
-#include "theme.h"
+#include "ui/app/autocomplete_panel.h"
+#include "ui/core/layout.h"
+#include "ui/core/metrics.h"
+#include "ui/core/theme.h"
 
-#include "gl_2d.h"
+#include "ui/core/gl_2d.h"
 
 void ui_autocomplete_panel_render(const UiRenderSnapshot *snap,
                                   int cursor_px, int cursor_py) {

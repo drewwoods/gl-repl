@@ -2,7 +2,7 @@
 #define GLR_CTRL_H
 
 #include "app/glr_defaults.h"  /* GlrExampleTagDefault */
-#include "ui/repl_code_panel.h"
+#include "ui/app/repl_code_panel.h"
 
 /* App-frame controller entrypoints. sample.c forwards raw GLUT
  * callbacks here; this module owns frame orchestration, snapshot

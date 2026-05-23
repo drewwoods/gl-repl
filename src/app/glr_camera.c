@@ -55,7 +55,7 @@
 #define CAM_GLOW_VEL_THRESHOLD 0.01f
 
 /* Default values for GlrCameraState — the previous home was
- * UI_STATE_INITIAL.camera in src/ui/state.c. */
+ * UI_STATE_INITIAL.camera in src/ui/app/state.c. */
 #define GLR_CAMERA_INITIAL                          \
     {                                               \
         .rx          = 20.0f,                       \
