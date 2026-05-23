@@ -2,7 +2,7 @@
  * prof.c - CPU overhead profiling instrumentation.
  */
 #define _POSIX_C_SOURCE 200809L
-#include "prof.h"
+#include "support/prof.h"
 
 #include <time.h>
 #include <stdio.h>

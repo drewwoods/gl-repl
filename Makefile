@@ -242,7 +242,7 @@ FORCE:
 SRCS = \
 	src/app/glr_audio.c \
 	src/repl/format.c \
-	prof.c \
+	src/support/prof.c \
 	sample.c \
 	src/app/glr_actions.c \
 	src/app/glr_camera.c \
@@ -322,7 +322,7 @@ SRCS = \
 HDRS = \
 	src/app/glr_audio.h \
 	src/repl/format.h \
-	prof.h \
+	src/support/prof.h \
 	sample.h \
 	source_document.h \
 	transform_utils.h \
@@ -402,7 +402,7 @@ HDRS = \
 CORE_TEST_SRCS = \
 	src/app/glr_audio.c \
 	src/repl/format.c \
-	prof.c \
+	src/support/prof.c \
 	src/app/glr_actions.c \
 	src/app/glr_camera.c \
 	src/app/glr_camera_export.c \
@@ -484,14 +484,14 @@ SCENE_SRCS = $(filter src/scene/%.c,$(SRCS))
 UI_SRCS = $(filter src/ui/%.c,$(SRCS))
 SCENE_HDRS = $(filter src/scene/%.h,$(HDRS))
 UI_HDRS = $(filter src/ui/%.h,$(HDRS))
-STATE_NEUTRAL_SRCS = src/repl/format.c prof.c tests/gl-stubs/gl_stub_counts.c
+STATE_NEUTRAL_SRCS = src/repl/format.c src/support/prof.c tests/gl-stubs/gl_stub_counts.c
 
 # Object lists used to build the standalone scene_demo without dragging in
 # any REPL editor/controller code. Scene + prof — the scene module no
 # longer touches repl_eval (replay-baseline restore is dispatched through a
 # function pointer the controller installs; geometry-guide arg parsing is
 # done in the controller before snapshot is built).
-SCENE_DEMO_DEP_SRCS = $(SCENE_SRCS) prof.c
+SCENE_DEMO_DEP_SRCS = $(SCENE_SRCS) src/support/prof.c
 
 # Object list for the standalone repl_demo (the inverse of scene_demo:
 # proves the REPL pipeline links without editor input dispatch
@@ -512,7 +512,7 @@ SCENE_DEMO_DEP_SRCS = $(SCENE_SRCS) prof.c
 # feature/decouple-repl-from-gl-repl-alt.md and
 # feature/source-document-port.md.
 REPL_DEMO_DEP_SRCS = src/repl/format.c \
-                     prof.c \
+                     src/support/prof.c \
                      src/widgets/replay.c \
                      src/widgets/replay_state.c \
                      src/widgets/tutorial_state.c \
@@ -562,7 +562,7 @@ EDITOR_DEMO_DEP_SRCS = src/editor/edit_ops.c \
                        src/ui/text_layout.c \
                        src/ui/text_panel.c \
                        src/ui/text_search.c \
-                       prof.c \
+                       src/support/prof.c \
                        tests/gl-stubs/gl_stub_counts.c
 
 OBJDIR = build/$(BUILD)$(if $(filter 1,$(USE_GL_STUBS)),-gl-stubs,)
