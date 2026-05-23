@@ -325,7 +325,7 @@ HDRS = \
 	src/support/prof.h \
 	sample.h \
 	source_document.h \
-	transform_utils.h \
+	src/scene/guides/transform_utils.h \
 	src/app/glr_actions.h \
 	src/app/glr_camera.h \
 	src/app/glr_completion.h \

@@ -51,7 +51,7 @@
 #include "scene/postprocess_filter.h" /* ScenePostFilterMode, mode_name */
 #include "scene/render.h"
 #include "scene/guides/transform_guides.h" /* scene_transform_guides_prepare / _render_if_due */
-#include "transform_utils.h"  /* apply_tracked_transform / unwind_transform_stack */
+#include "scene/guides/transform_utils.h"  /* apply_tracked_transform / unwind_transform_stack */
 #include "ui/autocomplete_panel.h"
 #include "ui/editor.h"
 #include "ui/layout.h"
@@ -456,9 +456,9 @@ static void glr_ctrl_render_normal_vectors(void) {
  * SceneRenderConfig (for multisample / line_smooth quality flags).
  *
  * The walks call apply_tracked_transform / unwind_transform_stack
- * — tiny inline GLCmd→GL helpers in scene/transform_utils.h. Pending
- * follow-up: relocate that header to REPL territory so this dependency
- * goes away. */
+ * — tiny inline GLCmd→GL helpers in scene/guides/transform_utils.h.
+ * Pending follow-up: relocate that header to REPL territory so this
+ * dependency goes away. */
 
 typedef struct OverlayWalkCtx {
     FlatProgramView program;

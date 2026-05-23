@@ -2,7 +2,7 @@
  * scene_transform_guides.c - transform edit-guide planning/rendering.
  */
 #include "transform_guides.h"
-#include "transform_utils.h"
+#include "scene/guides/transform_utils.h"
 #include "scene/palette.h"
 #include "scene/occluded_ghost.h"
 
