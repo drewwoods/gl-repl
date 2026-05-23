@@ -658,6 +658,52 @@ int main(void) {
         ASSERT_TRUE("old glMaterialf name no longer parses", ok == 0);
     }
 
+    /* Scalar input is only valid for GL_SHININESS: the RGBA pnames
+     * expect 4 floats, and a 1-element compound literal would let the
+     * GL driver read past the array in exported standalone C. */
+    {
+        glr_app_reset_all();
+        GLCmd cmd;
+        memset(&cmd, 0, sizeof(cmd));
+        int ok = parse_for_test("glMaterialfv(GL_FRONT, GL_DIFFUSE, 0.5)", &cmd);
+        ASSERT_TRUE("scalar for GL_DIFFUSE rejected", ok == 0);
+        ASSERT_TRUE("scalar-for-non-shininess status",
+                    strstr(g_status, "Only GL_SHININESS") != NULL);
+    }
+    {
+        glr_app_reset_all();
+        GLCmd cmd;
+        memset(&cmd, 0, sizeof(cmd));
+        int ok = parse_for_test(
+            "glMaterialfv(GL_FRONT, GL_AMBIENT, (GLfloat[]){0.5})", &cmd);
+        ASSERT_TRUE("scalar compound for GL_AMBIENT rejected", ok == 0);
+    }
+
+    /* Trailing tokens after the compound literal's closing brace are
+     * silently dropped without this guard — reject so the user sees
+     * the typo. */
+    {
+        glr_app_reset_all();
+        GLCmd cmd;
+        memset(&cmd, 0, sizeof(cmd));
+        int ok = parse_for_test(
+            "glMaterialfv(GL_FRONT, GL_DIFFUSE, (GLfloat[]){1, 2, 3, 4}, 99)",
+            &cmd);
+        ASSERT_TRUE("trailing arg after compound literal rejected", ok == 0);
+        ASSERT_TRUE("trailing arg status",
+                    strstr(g_status, "Trailing content after") != NULL);
+    }
+    {
+        glr_app_reset_all();
+        GLCmd cmd;
+        memset(&cmd, 0, sizeof(cmd));
+        int ok = parse_for_test(
+            "glMaterialfv(GL_FRONT, GL_DIFFUSE, (GLfloat[]){1, 2, 3, 4} junk)",
+            &cmd);
+        ASSERT_TRUE("trailing junk no-comma after compound literal rejected",
+                    ok == 0);
+    }
+
     /* glPointParameterfv */
     {
         glr_app_reset_all();
