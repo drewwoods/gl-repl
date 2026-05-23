@@ -592,6 +592,9 @@ int repl_save_workspace(const char *dir, const ReplExportLayout *layout) {
                            repl_dispatch_edit_line_get());
     }
 
+    char prev_workspace_dir[WORKSPACE_DIR_MAX];
+    snprintf(prev_workspace_dir, sizeof(prev_workspace_dir), "%s",
+             g_workspace_dir);
     snprintf(g_workspace_dir, WORKSPACE_DIR_MAX, "%s", dir);
 
     UserScene stash;
@@ -613,6 +616,8 @@ int repl_save_workspace(const char *dir, const ReplExportLayout *layout) {
         if (!repl_export_save_output(path, source_document_view(), layout)) {
             g_export_scene_name_hint = NULL;
             restore_live_from_stash(&stash, &stash_cfg);
+            snprintf(g_workspace_dir, WORKSPACE_DIR_MAX, "%s",
+                     prev_workspace_dir);
             return -1;
         }
         g_export_scene_name_hint = NULL;
