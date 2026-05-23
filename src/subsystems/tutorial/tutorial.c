@@ -49,30 +49,6 @@ static void tutorial_cfg_baseline_clear(void) {
     g_tut_cfg_baseline_valid = 0;
 }
 
-/* Parse `// @cfg <slug> = <val>` and write the slug to `out`. Returns 1
- * on success, 0 if the line doesn't have the expected shape. Tolerates
- * the same surface variations the export-side parse_cfg does
- * (whitespace, `// ` prefix). */
-static int tutorial_extract_cfg_slug(const char *line, char *out, size_t out_sz) {
-    if (!line || !out || out_sz == 0) return 0;
-    const char *p = line;
-    while (*p && isspace((unsigned char)*p)) p++;
-    if (p[0] != '/' || p[1] != '/') return 0;
-    p += 2;
-    while (*p && isspace((unsigned char)*p)) p++;
-    if (*p != '@') return 0;
-    p++;
-    if (strncmp(p, "cfg", 3) != 0) return 0;
-    p += 3;
-    if (!isspace((unsigned char)*p)) return 0;
-    while (*p && isspace((unsigned char)*p)) p++;
-    size_t out_i = 0;
-    while (*p && (isalnum((unsigned char)*p) || *p == '_') && out_i + 1 < out_sz)
-        out[out_i++] = *p++;
-    out[out_i] = '\0';
-    return out_i > 0;
-}
-
 /* Helper: add (slug, current_value) to the baseline bag iff the bridge
  * recognises the slug. The bag's `set_int` already dedups by slug, so
  * unioning the scene-subset capture with tutorial-specific slugs is
@@ -100,7 +76,7 @@ static void tutorial_capture_cfg_baseline(int idx) {
     char slug[REPL_EXPORT_CFG_KEY_MAX];
     const char *const *cfg = repl_tutorial_cfg_lines(idx);
     for (int i = 0; cfg && cfg[i]; i++) {
-        if (tutorial_extract_cfg_slug(cfg[i], slug, sizeof slug))
+        if (repl_export_extract_cfg_slug(cfg[i], slug, sizeof slug))
             tutorial_cfg_baseline_record_one(slug);
     }
     int n = repl_tutorial_step_count(idx);
@@ -429,7 +405,7 @@ static int tutorial_validate_slugs(int idx, char *err, int err_size) {
     char slug[REPL_EXPORT_CFG_KEY_MAX];
     const char *const *cfg = repl_tutorial_cfg_lines(idx);
     for (int i = 0; cfg && cfg[i]; i++) {
-        if (!tutorial_extract_cfg_slug(cfg[i], slug, sizeof slug))
+        if (!repl_export_extract_cfg_slug(cfg[i], slug, sizeof slug))
             continue;  /* mal-shaped @cfg line — repl parser will diag */
         if (!repl_cfg_known(slug)) {
             if (err_size > 0)
