@@ -29,9 +29,10 @@ click re-derives, applies one discrete step, and commits.
 
 ## User-Confirmed Design Choices
 
-- **Placement:** right of the literal — two stacked 16×12px buttons
-  (▲ on top, ▼ below) anchored 4px right of the numeric arg,
-  vertically centered on the row.
+- **Placement:** right edge of the code panel — two stacked 16×12px
+  buttons (▲ on top, ▼ below) anchored at the panel's right margin,
+  vertically centered on the input row. Avoids overlap with adjacent
+  argument text that the original "right of literal" placement caused.
 - **Detection:** pure literal only. `5`, `-0.5`, `1e3` qualify. Skip
   `45*t`, `cos(phase)`, `(5)`, `1+2`. Rewriting expressions would
   mangle them.
@@ -95,12 +96,12 @@ in insert mode, the swatch hides.
        src/editor/commit.h                                       │
         editor_commit_apply_external_change(_,capture_undo=1)    │
               │                                                  │
-              │ uses pixel anchor resolved by                    │
+              │ uses input-row y resolved by                     │
               ▼                                                  │
        src/ui/app/repl_code_panel.{c,h}                         │
-        ui_repl_code_panel_input_offset_pixel(snap, off) ───────┘
+        ui_repl_code_panel_input_row_y(snap) ───────────────────┘
               (builds the same rows as render/hit-test; delegates
-               math to a pure text-panel helper over a snapshot+row)
+               y-math to a pure text-panel helper over a snapshot+row)
 ```
 
 No new file under `src/subsystems/`. The widget owns zero state.
@@ -171,44 +172,43 @@ typedef struct {
     int   arg_end;
     float value;       /* for the renderer (e.g. tooltip in future) */
     float step;        /* for the renderer */
-    float anchor_x;    /* pixel anchor: right edge of the literal */
+    float anchor_x;    /* pixel anchor: right edge of code panel minus margin */
     float anchor_y;    /* row baseline (input-row pixel y) */
 } UiNumericSwatchSnapshot;
 ```
 
-### 3. Shared pixel-anchor helpers (`src/ui/core/text_panel.{c,h}` +
+### 3. Input-row pixel-y helper (`src/ui/core/text_panel.{c,h}` +
 `src/ui/app/repl_code_panel.{c,h}`)
 
-The naive `FONT_SMALL_W * arg_end` math from the draft is wrong on
-wrapped, scrolled, or indented rows. The input renderer in
-`src/ui/core/text_panel.c` already does wrap+scroll+indent layout. Add a
-pure core helper that takes the same snapshot data the renderer sees:
+With the swatch anchored at the panel's right edge, `anchor_x` is
+trivially `cp_x + cp_w - SWATCH_TOTAL_W - margin` — no character-offset
+math needed. `anchor_y` still requires resolving the input row's pixel
+baseline through the same wrap+scroll+indent layout the renderer uses.
+Add a pure core helper:
 
 ```c
-/* Resolve `char_offset` in the active input buffer to the pixel
- * coordinates used by the input-row renderer. `input_row_idx` is an
- * index into snap->rows. Honors wrap, scroll, top chrome, row indent,
- * and visibility. No live-state reads. */
-int ui_text_panel_input_offset_pixel(const UiTextPanelSnapshot *snap,
-                                     int input_row_idx,
-                                     int char_offset,
-                                     int *out_px, int *out_py);
+/* Return the pixel baseline y-coordinate of the input row identified by
+ * `input_row_idx` (index into snap->rows).  Honors wrap, scroll, top
+ * chrome, and row indent.  Writes *out_py and returns 1 on success;
+ * returns 0 if the row is scrolled off-screen.  No live-state reads. */
+int ui_text_panel_input_row_y(const UiTextPanelSnapshot *snap,
+                              int input_row_idx,
+                              int *out_py);
 ```
 
 Then add the REPL adapter wrapper:
 
 ```c
-int ui_repl_code_panel_input_offset_pixel(const UiRenderSnapshot *snap,
-                                          int char_offset,
-                                          float *out_px, float *out_py);
+int ui_repl_code_panel_input_row_y(const UiRenderSnapshot *snap,
+                                   float *out_py);
 ```
 
 The wrapper builds the same `ReplCodePanelBuilder` rows as
 `ui_repl_code_panel_render()` / `ui_repl_code_panel_hit_test()`, finds the
-active input row, and delegates to `ui_text_panel_input_offset_pixel`.
-Returns 0 if `char_offset` is invalid or the row/offset is scrolled off.
-Used by `glr_ctrl_populate_numeric_swatch()` so the swatch anchors
-exactly where the literal appears on screen without UI code reading live
+active input row, and delegates to `ui_text_panel_input_row_y`.
+Returns 0 if the input row is scrolled off-screen.
+Used by `glr_ctrl_populate_numeric_swatch()` so the swatch's vertical
+anchor tracks the input row exactly without UI code reading live
 editor/REPL state.
 
 ### 4. Controller fill (`src/app/glr_ctrl.c`)
@@ -223,6 +223,22 @@ New `glr_ctrl_populate_numeric_swatch(UiRenderSnapshot *)` called from
    - `editor_state_edit_line() < 0 ||
      editor_state_edit_line() >= repl_state_document_count()` — no committed
      target row. (`< 0` is defensive; in practice the setter clamps.)
+   - `repl_state_document_cmds()[edit_line].type == CMD_COMMENT` — the
+     committed line is a comment. Stepping a number inside a commented-out
+     GL call would change the comment text with no scene effect and burn
+     an undo slot.
+   - The input row carries an inline color swatch
+     (`right_action.active != 0` on the `UiTextPanelRow` for the edit
+     line — the same field `repl_code_panel_set_right_action` fills).
+     The color swatch takes precedence; showing both on the same row
+     is redundant (the color picker already handles those args).
+     Implementation: the row builder runs before
+     `glr_ctrl_populate_numeric_swatch`, so the adapter can expose a
+     `ui_repl_code_panel_input_row_has_color_swatch(snap)` query, or the
+     controller can check `color_picker_view()->visible` as a coarser
+     gate (suppresses whenever the picker popup is open on any line).
+     Prefer the per-row check — it's more precise and has no ordering
+     dependency on the picker subsystem.
    - `editor_state_autocomplete().match_count > 0` — popup conflict
      (ghost/hint alone do NOT suppress; only the visible match list).
    - `editor_inline_rename_active()` — rename owns keys.
@@ -233,11 +249,12 @@ New `glr_ctrl_populate_numeric_swatch(UiRenderSnapshot *)` called from
    - Try parsing the current input as a single REPL command with
      `repl_parser_parse_command_ctx` (same parser shape the color picker
      writeback uses, not `repl_compile_dispatch`, which only covers float
-     declarations / assignments). If parse fails, set `visible=0`.
-   - Fill snapshot, calling
-     `ui_repl_code_panel_input_offset_pixel(snap, arg_end, &anchor_x,
-     &anchor_y)`. If the helper returns 0 (offset scrolled off), set
-     `visible=0`.
+     declarations / assignments). If parse fails or
+     `pl.cmd.type == CMD_COMMENT`, set `visible=0`.
+   - Fill snapshot: `anchor_x = cp_x + cp_w - SWATCH_TOTAL_W - 4`
+     (right edge of code panel); `anchor_y` via
+     `ui_repl_code_panel_input_row_y(snap, &anchor_y)`. If the helper
+     returns 0 (input row scrolled off), set `visible=0`.
 
 ### 5. Renderer + hit-test (new `src/ui/app/numeric_swatch.{c,h}`)
 
@@ -251,9 +268,9 @@ UiHit ui_numeric_swatch_hit_test(const UiNumericSwatchSnapshot *view,
                                  int x, int y);
 ```
 
-Geometry per user choice "right of the literal": two stacked 16×12px
-buttons (up on top, down below), 1px border, anchored 4px right of
-`anchor_x`, vertically centered on `anchor_y`. Draw the arrows as tiny GL
+Geometry: two stacked 16×12px buttons (up on top, down below), 1px
+border, positioned at `anchor_x` (panel right edge), vertically centered
+on `anchor_y` (input-row baseline). Draw the arrows as tiny GL
 triangles or ASCII `^`/`v`; do not rely on UTF-8 `▲`/`▼` through
 `glutBitmapCharacter`, which consumes bytes rather than Unicode codepoints.
 Hit test returns `UI_HIT_NUMERIC_SWATCH` with `item_idx = +1` (increment)
@@ -301,6 +318,25 @@ UI_HIT_NUMERIC_SWATCH
 inside `glr_ctrl_router_handle_code_panel_hit` (`glr_ctrl.c:3410`):
 
 ```c
+/* After commit + editor_load_line_to_input, the cursor is at the end of
+ * the reloaded input.  Put it back on (or just past) the rewritten
+ * literal so a rapid repeat click still lands inside the same arg.
+ *
+ * Algorithm:
+ * 1. Search the reloaded input for `literal` starting near `hint_start`
+ *    (the pre-commit arg_start offset).  Canonical reformatting may
+ *    shift whitespace, so scan forward from max(0, hint_start - 4)
+ *    through hint_start + 16.  Use strstr on successive sub-offsets.
+ * 2. If found, set cursor to match_pos + strlen(literal) — the caret
+ *    sits at the literal's right edge, so the next detection sees the
+ *    same slot.
+ * 3. If not found (e.g. heavy reformat), fall back to
+ *    min(hint_start, input_len).
+ *
+ * Declared static in glr_ctrl.c; not exported. */
+static void numeric_swatch_restore_cursor_near_literal(
+    const char *literal, int hint_start);
+
 static int route_numeric_swatch_hit(const UiHit *hit) {
     int edit_line = editor_state_edit_line();
     EditorInputView in = editor_state_input();
@@ -341,28 +377,31 @@ static int route_numeric_swatch_hit(const UiHit *hit) {
         return 1;
     }
 
+    /* Reject comments — stepping a number inside "// glVertex3f(5,...)"
+     * would change comment text with no scene effect. */
+    if (pl.cmd.type == CMD_COMMENT) return 1;
+
     ReplCompiledChange change;
     repl_compiled_change_init(&change);
     change.kind = REPL_COMPILED_REPLACE_ONE;
     change.pos = edit_line;
     change.count = 1;
     change.cmds[0] = pl.cmd;
-    snprintf(change.text[0], sizeof change.text[0], "%s", pl.text);
+    /* Match color_picker_state.c:170-173 — explicit length + memcpy. */
+    int text_len = (int)strlen(pl.text);
+    if (text_len >= MAX_LINE_LEN) text_len = MAX_LINE_LEN - 1;
+    memcpy(change.text[0], pl.text, (size_t)text_len);
+    change.text[0][text_len] = '\0';
 
     if (editor_commit_apply_external_change(&change, /*capture_undo=*/1)) {
         /* External-change apply updates the source buffer and command
          * store, but it does not refresh the live input row. Reload it
-         * so the active row shows the committed value, then put the
-         * cursor back inside/at the end of the rewritten literal so
-         * rapid repeat clicks keep working. Prefer finding `buf` near
-         * the old arg_start after canonical reformat; fall back to a
-         * clamped old-offset cursor. */
+         * so the active row shows the committed value, then restore
+         * cursor position so rapid repeat clicks keep working. */
         editor_load_line_to_input(edit_line);
         numeric_swatch_restore_cursor_near_literal(buf, d.arg_start);
         editor_completion_update();
         editor_request_redraw();
-        /* The committed command store is already dirty, so the next
-         * frame rebuilds/replays and the scene shows the new value. */
     }
     return 1;
 }
@@ -376,11 +415,12 @@ ghost text stay consistent with the new input text.
 
 - `src/repl/eval.{c,h}` — three new helpers
 - `src/ui/core/text_panel.{c,h}` — new pure
-  `ui_text_panel_input_offset_pixel` helper over `UiTextPanelSnapshot`
+  `ui_text_panel_input_row_y` helper over `UiTextPanelSnapshot`
   + input-row index
 - `src/ui/app/repl_code_panel.{c,h}` — new
-  `ui_repl_code_panel_input_offset_pixel` adapter wrapper plus render call
-  inside `ui_repl_code_panel_render` (`:1599`)
+  `ui_repl_code_panel_input_row_y` adapter wrapper +
+  `ui_repl_code_panel_input_row_has_color_swatch` query, plus render
+  call inside `ui_repl_code_panel_render` (`:1599`)
 - `src/ui/app/snapshot.h` — new `UiNumericSwatchSnapshot` field
 - `src/app/glr_ctrl.c` — populate fn + route handler, hooked into
   `glr_ctrl_build_ui_snapshot()` and the dispatch inside
@@ -392,7 +432,8 @@ ghost text stay consistent with the new input text.
 - `src/ui/core/hit.h` — new `UI_HIT_NUMERIC_SWATCH` kind + doc block
 - `Makefile` — add `src/ui/app/numeric_swatch.o` to the UI app sources
   list AND register the new test executables (`test_eval_numeric_arg`,
-  `test_numeric_swatch_route`) alongside existing test target rules
+  `test_numeric_swatch_route`, `test_text_panel_input_row_y`) alongside
+  existing test target rules
 
 ## What NOT to Do
 
@@ -443,7 +484,24 @@ ghost text stay consistent with the new input text.
      `visible == 0`.
    - Suppression: typing on fresh input (`edit_line < 0`), assert
      `visible == 0`.
+   - Suppression: comment line (`"// glVertex3f(5, 0, 0);"` committed
+     as `CMD_COMMENT`, cursor on `5`) → `visible == 0`.
+   - Suppression: color line (`"glColor3f(1, 0, 0);"`, cursor on `1`)
+     → input row has color swatch → `visible == 0`.
+   - Route handler on comment: feed a
+     `UiHit{kind=UI_HIT_NUMERIC_SWATCH, item_idx=+1}` while editing a
+     comment line — assert the source line is unchanged (CMD_COMMENT
+     guard rejects).
    - `Ctrl+Z` after a click restores the prior committed value.
+
+3. `tests/test_text_panel_input_row_y.c` (new — add to Makefile):
+   - Build a `UiTextPanelSnapshot` with a few rows and an input row at
+     a known index; call `ui_text_panel_input_row_y` and assert the
+     returned y matches expected `cp_y + cp_h - top_chrome_h -
+     statusbar_h - (visual_row - scroll) * LINE_H`.
+   - Wrapping: add a long preceding row that wraps to 2 visual lines;
+     assert the input row's y shifts down by one `LINE_H`.
+   - Scrolled off: set scroll past the input row; assert returns 0.
 
 **Gates** (`make check-state-ownership`):
 - `check-c99` — `powf`/`log10f`/`floorf` are C99 + need `<math.h>` and
@@ -454,11 +512,16 @@ ghost text stay consistent with the new input text.
 
 1. Load `Lit cube` example, navigate to a line containing a numeric
    arg (e.g. `glRotatef(45, 0, 1, 0)`), put cursor on the `45` —
-   swatch ▲▼ should appear to its right.
+   swatch ▲▼ should appear at the right edge of the code panel,
+   vertically aligned with the input row.
 2. Click ▲ → number commits to `45.05`, scene rotates accordingly, the
    swatch stays visible (cursor stays inside the new literal).
 3. Move cursor off the number → swatch disappears.
 4. Move cursor into `45*t` (an expression) — swatch does NOT appear.
-5. `Ctrl+Z` — last click reverted, scene re-renders at prior value.
-6. Open autocomplete with Tab/ghost — swatch hides while the match
+5. Navigate to a `glColor3f(...)` line, cursor on a number — swatch
+   does NOT appear (color swatch takes precedence).
+6. Navigate to a `// commented-out` line with numbers — swatch does
+   NOT appear.
+7. `Ctrl+Z` — last click reverted, scene re-renders at prior value.
+8. Open autocomplete with Tab/ghost — swatch hides while the match
    list is open.
