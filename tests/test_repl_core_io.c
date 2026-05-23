@@ -1144,12 +1144,14 @@ int main(void) {
      * subsequent scene export path cannot be opened for writing. */
     {
         const char *bad_workspace = "/tmp/repl_core_workspace_save_failure";
+        const char *prev_workspace = "/tmp/repl_core_previous_workspace";
         FILE *f = fopen(bad_workspace, "w");
         ASSERT_TRUE("bad workspace fixture fopen", f != NULL);
         if (f)
             fclose(f);
 
         glr_app_reset_all(); declare_test_vars();
+        repl_set_workspace_dir(prev_workspace);
         repl_load_example(0);
         ASSERT_TRUE("promotion for failing workspace save",
                     repl_promote_example_if_needed() >= 1);
@@ -1161,6 +1163,8 @@ int main(void) {
                     strstr(status.text, "cannot write") != NULL);
         ASSERT_TRUE("workspace save does not overwrite with success",
                     strstr(status.text, "Saved ") == NULL);
+        ASSERT_TRUE("workspace save preserves previous workspace binding",
+                    strcmp(repl_workspace_dir(), prev_workspace) == 0);
 
         unlink(bad_workspace);
         repl_set_workspace_dir("");
