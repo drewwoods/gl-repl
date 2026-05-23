@@ -258,7 +258,7 @@ void ui_tabbed_overlay_render(const UiOverlayState *in) {
             /* Section header - dim gray-blue like config menu */
             ui_clr(UI_TOK_TEXT_SECTION);
             gl2d_draw_string((float)tx, (float)ty, text[i], FONT_SMALL);
-        } else if (text[i][2] == ' ' && text[i][3] == ' ') {
+        } else if (text[i][1] == ' ' && text[i][2] == ' ' && text[i][3] == ' ') {
             /* 4+ space indent - code example, accent */
             ui_clr_a(UI_TOK_ACCENT, 0.90f);
             gl2d_draw_string((float)tx, (float)ty, text[i], FONT_SMALL);

@@ -11,6 +11,8 @@
  * the input line stay in ui_panels.c where the code panel's row
  * layout has the surrounding context.
  */
+#include <string.h>
+
 #include "ui/app/autocomplete_panel.h"
 #include "ui/core/layout.h"
 #include "ui/core/metrics.h"

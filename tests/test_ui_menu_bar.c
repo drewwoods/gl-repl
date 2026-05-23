@@ -185,10 +185,10 @@ static void test_dropdown_and_config_press(void) {
      * Positive section/flyout coverage is added in Step 9. */
     ui_menu_bar_set_open_menu(GLR_MENU_CONFIG, 0.0f);
     ASSERT_INT_EQ("config right-press over section list is a no-op",
-                  ui_menu_bar_handle_config_right_press(cfg_mx, cfg_my), 0);
+                  ui_menu_bar_handle_config_right_press(cfg_mx, cfg_my).kind, UI_HIT_NONE);
     ui_menu_bar_close();
     ASSERT_INT_EQ("right-press when closed",
-                  ui_menu_bar_handle_config_right_press(cfg_mx, cfg_my), 0);
+                  ui_menu_bar_handle_config_right_press(cfg_mx, cfg_my).kind, UI_HIT_NONE);
     (void)cfg_row; (void)item; (void)before; (void)expected;
 }
 
@@ -579,8 +579,14 @@ static void test_config_submenu_right_press(void) {
 
     ASSERT_TRUE("flyout row 0 point computed",
                 submenu_row_point(sx, sy, sw, sh, 0, &row_mx, &row_my));
-    ASSERT_INT_EQ("right-press on flyout item handled",
-                  ui_menu_bar_handle_config_right_press(row_mx, row_my), 1);
+    UiHit hit = ui_menu_bar_handle_config_right_press(row_mx, row_my);
+    ASSERT_INT_EQ("right-press on flyout item kind",
+                  hit.kind, UI_HIT_SUBMENU_ITEM);
+    ASSERT_INT_EQ("right-press on flyout item index",
+                  hit.item_idx, start);
+    if (hit.kind == UI_HIT_SUBMENU_ITEM && hit.cmd_idx == GLR_MENU_CONFIG && hit.item_idx >= 0) {
+        glr_cfg_cycle_row(hit.item_idx, -1);
+    }
     ASSERT_INT_EQ("right-press cycled the item backward",
                   glr_config_get(item->key), expected);
 
@@ -589,13 +595,13 @@ static void test_config_submenu_right_press(void) {
     int v = glr_config_get(item->key);
     ASSERT_INT_EQ("right-press on section parent row is a no-op",
                   ui_menu_bar_handle_config_right_press(parent_mx,
-                                                        parent_my), 0);
+                                                        parent_my).kind, UI_HIT_NONE);
     ASSERT_INT_EQ("section parent right-press changed nothing",
                   glr_config_get(item->key), v);
 
     ui_menu_bar_close();
     ASSERT_INT_EQ("right-press when Config closed is a no-op",
-                  ui_menu_bar_handle_config_right_press(row_mx, row_my), 0);
+                  ui_menu_bar_handle_config_right_press(row_mx, row_my).kind, UI_HIT_NONE);
 }
 
 int main(void) {

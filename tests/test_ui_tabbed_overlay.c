@@ -156,11 +156,39 @@ static void test_help_scroll_clamp_regression(void) {
                   editor_help_session_scroll(), 0);
 }
 
+#ifdef GL_STUBS
+static void test_short_lines_render_no_overflow(void) {
+    const char *short_lines[] = {
+        "",
+        " ",
+        "  ",
+        "   ",
+        "    ",
+        "\t",
+        "left\tright",
+        0
+    };
+    UiOverlayTab tab[1] = { { "Short", short_lines } };
+    UiOverlayContent content = make_content(tab, 1);
+    UiOverlayState st = {
+        .visible = 1, .tab_idx = 0, .scroll = 0,
+        .viewport_w = 800, .viewport_h = 600, .content = &content,
+    };
+
+    /* Call render - under ASan/UBSan this will crash if we read past the NUL terminator. */
+    ui_tabbed_overlay_render(&st);
+    ASSERT_TRUE("rendered short lines without crash", 1);
+}
+#endif
+
 int main(void) {
     printf("--- ui_tabbed_overlay tests ---\n");
     init_synthetic_lines();
     test_max_scroll_bounds();
     test_hit_test_regions();
     test_help_scroll_clamp_regression();
+#ifdef GL_STUBS
+    test_short_lines_render_no_overflow();
+#endif
     return test_harness_report(&g_harness, "ui_tabbed_overlay");
 }

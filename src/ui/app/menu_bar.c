@@ -983,8 +983,8 @@ void ui_menu_bar_open_config(float now) {
     ui_menu_bar_set_open_menu(MENU_CONFIG, now);
 }
 
-int ui_menu_bar_handle_config_right_press(int mx, int my) {
-    if (g_open_menu != MENU_CONFIG) return 0;
+UiHit ui_menu_bar_handle_config_right_press(int mx, int my) {
+    if (g_open_menu != MENU_CONFIG) return ui_hit_none();
     /* Backward-cycle the Config flyout item under the cursor.
      * submenu_hit_test only resolves actionable ITEM rows — chrome
      * ("### "/"---" in the "All" flyout) is skipped via
@@ -996,9 +996,8 @@ int ui_menu_bar_handle_config_right_press(int mx, int my) {
     UiHit h = submenu_hit_test(mx, my);
     if (h.kind != UI_HIT_SUBMENU_ITEM || h.cmd_idx != MENU_CONFIG ||
         h.item_idx < 0)
-        return 0;
-    glr_cfg_cycle_row(h.item_idx, -1);
-    return 1;
+        return ui_hit_none();
+    return h;
 }
 
 void ui_menu_bar_note_search_opened(float now) {
@@ -1522,9 +1521,7 @@ void ui_menu_bar_render_example_dropdown(const UiRenderSnapshot *snap) {
     int dx, dy, dw, dh;
     if (!menu_dropdown_rect(&dx, &dy, &dw, &dh)) return;
 
-    ui_menu_bar_update_pointer_hover(snap->pointer.mouse_x,
-                                     snap->pointer.mouse_y,
-                                     snap->anim_time);
+
 
     float alpha = ui_fade_alpha(snap->anim_time, g_menu_open_time);
 

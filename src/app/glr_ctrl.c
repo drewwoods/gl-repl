@@ -2880,7 +2880,9 @@ int glr_ctrl_router_handle_variable_panel_drag_release(int state) {
 int glr_ctrl_router_handle_right_config_press(int button, int state, int x, int y) {
     if (state != GLUT_DOWN || button != GLUT_RIGHT_BUTTON)
         return 0;
-    if (ui_panels_handle_right_press(x, y)) {
+    UiHit hit = ui_panels_handle_right_press(x, y);
+    if (hit.kind == UI_HIT_SUBMENU_ITEM && hit.cmd_idx == GLR_MENU_CONFIG && hit.item_idx >= 0) {
+        glr_cfg_cycle_row(hit.item_idx, -1);
         editor_request_redraw();
         return 1;
     }
