@@ -1,11 +1,11 @@
 /*
  * tools/repl_demo/stubs.c -- No-op shims for editor/UI/controller
- * entry points that the REPL pipeline used to reach for. After step
- * 7e, the file is empty: every stub the decoupling plan listed has
- * been cleared. It stays in the build (linked into repl_demo) as the
- * visible "no stubs needed" sentinel — adding a new stub here is the
- * canary that a pipeline TU has acquired a fresh app/editor/UI
- * dependency. See feature/decouple-repl-from-gl-repl-alt.md.
+ * entry points that the REPL pipeline used to reach for. The file is
+ * empty: every stub the decoupling plan listed has been cleared. It
+ * stays in the build (linked into repl_demo) as the visible "no stubs
+ * needed" sentinel — adding a new stub here is the canary that a
+ * pipeline TU has acquired a fresh app/editor/UI/peer dependency. See
+ * feature/decouple-repl-from-gl-repl-alt.md.
  *
  * History (each step cleared the listed stubs):
  *   Step 1: repl_compile_dispatch.
@@ -28,30 +28,20 @@
  *           migrated to ReplExportCameraBridge); glr_camera.c
  *           left REPL_DEMO_DEP_SRCS.
  *
- * Re-added since 7e:
- *   tutorial_teardown — the tutorial runner exposes a teardown
- *   that the REPL pipeline TUs (example_loader.c, scenes.c) call
- *   before any wholesale state replacement. The full runner lives
- *   in src/subsystems/tutorial/tutorial.c and includes editor/
- *   headers (completion + state), which the demo deliberately
- *   excludes. tutorial_teardown is a no-op when no tutorial is
- *   active — and the demo never starts one — so stubbing it is
- *   semantically identical to running the real function. A
- *   bridge-style hand-off (à la ReplExportConfigBridge) would
- *   re-clear this stub; not worth the surface area today.
+ *   Step 8: tutorial_teardown moved behind ReplHostEffects as
+ *           repl_dispatch_tutorial_teardown; locked by
+ *           check-repl-no-direct-tutorial-runner.
  *
  * Demo-side architectural choices that keep this file lean:
  *   - Pipeline diagnostics flow through the ReplHostEffects bridge
- *     (status callback). The demo leaves the bridge unset →
- *     set_status() is a silent no-op.
+ *     (status callback). The demo installs only edit-line hooks, so
+ *     status remains unset → set_status() is a silent no-op.
  *   - Cfg state flows through repl_export_install_config_bridge.
  *     The demo doesn't install a bridge → @cfg emission/parsing is a
  *     no-op → no glr_config / audio / peer / profile reach-in.
  *   - Camera state flows through repl_export_install_camera_bridge
  *     (used by both the importer and the example loader). Demo
  *     leaves the bridge unset → camera blocks parse but apply nothing.
+ *   - Tutorial teardown requests flow through ReplHostEffects. The
+ *     demo leaves that hook unset → no tutorial subsystem is linked.
  */
-
-/* No-op stub: the demo never starts a tutorial, so teardown is a
- * silent return. See the "Re-added since 7e" note above. */
-void tutorial_teardown(void) { /* no tutorial runner linked */ }

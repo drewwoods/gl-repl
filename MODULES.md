@@ -179,13 +179,14 @@ lists to make the layer boundaries observable:
   `source_document` implementation (`tools/repl_demo/source_document.c`,
   a tiny static line store) instead of linking `src/editor/state.c`'s
   `EditorBuffer` — the source-document port made that substitution
-  possible. The `tools/repl_demo/stubs.c` file is the visible record of what the
-  REPL pipeline pulls in beyond pure pipeline code. That list is now
-  large enough to treat as a cleanup ledger, not a success condition:
-  reset fan-out, status, config, import, and layout helpers still cross
-  into app/editor/UI owners at link time. See
+  possible. The `tools/repl_demo/stubs.c` file is now an empty,
+  documentation-only canary: if a pipeline TU reaches back into
+  app/editor/UI/peer code, the stub count guard fails instead of letting
+  the dependency hide. Host effects, export bridges, source-document, and
+  tutorial teardown dispatch keep reset fan-out, status, config, import,
+  layout, and tutorial lifecycle edges out of the demo link set. See
   [`ARCHITECTURE.md`](ARCHITECTURE.md#standalone-repl-demo-coupling) for
-  the detailed dependency table and removal plan.
+  the detailed dependency table and guard list.
 - **`make editor_demo`** (`tools/editor_demo/`) — a generic
   plain-text editor demo driven by its *own* input dispatcher
   (`tools/editor_demo/input.c`) and its *own* File menu
@@ -1139,17 +1140,17 @@ side-effect routing. As of that branch landing:
   `repl_actions` → `glr_actions`. The `glr_*` namespace covers the
   app-shell (router + camera + menu/config actions); the previously
   noted deferrals have landed.
-- **Hard guards: 33 in place.** `make check-state-ownership` runs
-  31 sub-targets (the `check-cursor-px-encapsulated` migration
-  guard was retired alongside the `cursor_px/cursor_py` state in
-  Phase J4); `make check` adds `check-gl-boundaries` and
-  `check-layer-coupling` for 33 hard guards total.
-  `check-public-api-usage` is informational. The most recent
-  additions are `check-color-picker-ui-isolation` (the picker peer
-  split — `src/ui/app/color_picker.c` is renderer + hit-test only, no
-  state reads / mutations / parser / commit) and
-  `check-replay-ui-isolation` (Phase J3.1, the feature-UI prefix
-  discipline). `check-output-actualization` actively scans
+- **Hard guards: in place.** `make check-state-ownership` runs the
+  ownership/boundary ratchets, while `make check` also adds
+  `check-gl-boundaries` and `check-layer-coupling`.
+  `check-public-api-usage` is informational. Recent guards include
+  `check-color-picker-ui-isolation` (the picker peer split —
+  `src/ui/app/color_picker.c` is renderer + hit-test only, no state
+  reads / mutations / parser / commit), `check-replay-ui-isolation`
+  (Phase J3.1, the feature-UI prefix discipline), and
+  `check-repl-no-direct-tutorial-runner` (REPL pipeline files request
+  tutorial cleanup through `ReplHostEffects`, keeping `repl_demo`
+  stub-free). `check-output-actualization` actively scans
   `UiCodePanelOutput` and verifies `src/app/glr_ctrl.c` reads every
   field.
 - **Migration ratchets: all at 0/0.** `check-ui-returns-hits-only`,

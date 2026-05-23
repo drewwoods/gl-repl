@@ -9,7 +9,6 @@
 #include "repl/core.h"
 #include "repl/state_owners.h"
 #include "source_document.h"     /* source_document_clear */
-#include "subsystems/tutorial/tutorial.h"
 
 static const char *example_cam_skip_ws(const char *text) {
     while (*text && isspace((unsigned char)*text))
@@ -420,11 +419,10 @@ static int load_example_lines(const char *const *lines,
     const char *const *body = lines;
     ReplCommandStore store = repl_command_store_live();
 
-    /* tutorial_teardown (not _reset) so an active tutorial's cfg
-     * baseline is restored before the new example overwrites
-     * presentation cfg — keeps the example load non-destructive
-     * with respect to anything the tutorial mutated. */
-    tutorial_teardown();
+    /* Ask the host to restore tutorial-mutated cfg before the example
+     * overwrites presentation cfg. The standalone demo leaves this bridge
+     * unset because it never starts tutorials. */
+    repl_dispatch_tutorial_teardown();
     repl_command_store_load(&store, NULL, 0);
     source_document_clear();
     repl_state_flat_program_set_count(0);

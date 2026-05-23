@@ -1963,11 +1963,12 @@ void glr_publish_replay_annotations(const ReplReplayAnnotationOutput *out) {
 
 /* The host-effect bridge the controller installs into the REPL
  * pipeline. Status routes pipeline diagnostics to UiState; the rest
- * actualize loader / scene-switch / replay effects on the editor.
+ * actualize loader / scene-switch / replay effects on the editor and
+ * peer subsystems.
  * This file is where editor coupling concentrates, so the editor-
- * neutral names in core.h resolve to glr_app_* here. The demo does
- * not install this bridge, so every dispatch is a no-op there
- * (clearing the ui_state_status_set / editor stubs). */
+ * neutral names in core.h resolve to glr_app_* here. The demo installs
+ * its own edit-line-only bridge, so these app/editor/tutorial effects
+ * stay out of its link set. */
 static const ReplHostEffects g_glr_host_effects = {
     .status                     = ui_state_status_set,
     .status_error               = ui_state_status_set_error,
@@ -1976,6 +1977,7 @@ static const ReplHostEffects g_glr_host_effects = {
     .insert_mode_off            = glr_app_editor_insert_mode_off,
     .scroll_to_line             = glr_app_scroll_to_line,
     .follow_cursor              = glr_app_follow_cursor,
+    .tutorial_teardown          = tutorial_teardown,
     .edit_line_get              = editor_state_edit_line,
     .edit_line_set              = editor_state_edit_line_set,
 };
@@ -2032,10 +2034,10 @@ static void glr_ctrl_tick_overlay_xn(void) {
 }
 
 static void glr_app_install_app_services(void) {
-    /* Install the host-effect bridge (status sink + example-
-     * presentation-reset + the four editor effects). Single consolidated
-     * call in place of the previous six individual repl_install_*_sink
-     * calls. (Consolidation per item 2 of
+    /* Install the host-effect bridge (status sink, example-
+     * presentation-reset, editor effects, and tutorial teardown).
+     * Single consolidated call in place of the previous individual
+     * repl_install_*_sink calls. (Consolidation per item 2 of
      * plans/partial/src-repl-simplicity-review.md.) */
     repl_install_host_effects(&g_glr_host_effects);
     /* Install the export-config bridge so src/repl/export.c can emit/parse

@@ -197,6 +197,7 @@ endif
 	check-repl-export-via-bridge \
 	check-repl-no-direct-buffer-read \
 	check-repl-no-direct-editor \
+	check-repl-no-direct-tutorial-runner \
 	check-repl-scenes-cfg-clear-paired \
 	check-repl-state-no-glr-state \
 	check-renderer-no-direct-mutators \
@@ -1011,6 +1012,7 @@ check-state-ownership: ## Run state-ownership contract checks (new + tightened e
 		check-repl-export-via-bridge \
 		check-ui-no-export-resolver \
 		check-no-feed-line-in-pipeline \
+		check-repl-no-direct-tutorial-runner \
 		check-repl-demo-stubs-shrinking \
 		check-repl-no-direct-editor \
 		check-repl-demo-no-editor \
@@ -1108,6 +1110,9 @@ check-ui-no-export-resolver: ## Verify src/ui reads the snapshot-frozen reshape 
 
 check-no-feed-line-in-pipeline: ## Verify REPL pipeline TUs do not call editor_feed_line() (cleared by step 5b/7e).
 	@bash scripts/check-no-feed-line-in-pipeline.sh
+
+check-repl-no-direct-tutorial-runner: ## Verify REPL pipeline TUs request tutorial teardown through ReplHostEffects.
+	@bash scripts/check-repl-no-direct-tutorial-runner.sh
 
 check-module-prefixes: ## Verify stale pre-cleanup symbol prefixes have not reappeared under src/.
 	@bash scripts/check-module-prefixes.sh
