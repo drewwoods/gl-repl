@@ -7,6 +7,7 @@
 #include "editor/completion.h"
 #include "editor/state.h"
 #include "repl/core.h"
+#include "repl/export.h"   /* repl_state_parse_workspace_header_line for @cfg */
 #include "repl/load.h"
 #include "repl/scenes.h"
 #include "repl/state_owners.h"
@@ -294,6 +295,19 @@ void tutorial_start(int idx) {
     repl_scenes_reset_for_transient();
     editor_completion_clear();
     tutorial_state_reset();
+
+    /* Reset scene-presentation chrome to defaults, then apply any
+     * tutorial leading `@cfg` lines through the export-config bridge —
+     * same vocabulary and ordering the example loader uses, so a
+     * tutorial is a self-contained scenario with predictable visual
+     * state regardless of what the user was looking at before. Tag
+     * mask 0 means no example-tag defaults are layered in. Both calls
+     * degrade to no-ops when no host-effects sink / config bridge is
+     * installed (some narrow REPL test environments). */
+    repl_dispatch_example_presentation_reset(0);
+    const char *const *cfg = repl_tutorial_cfg_lines(idx);
+    for (int i = 0; cfg && cfg[i]; i++)
+        repl_state_parse_workspace_header_line(cfg[i]);
 
     TutorialRuntimeState *state = tutorial_state_mut();
     state->active = 1;

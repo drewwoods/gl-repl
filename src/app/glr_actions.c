@@ -544,25 +544,6 @@ int glr_cfg_handle_special_shortcut(int key) {
     return 0;
 }
 
-/* Start a tutorial, then apply its declared view-mode preference once.
- * View mode is sticky (like the camera): a tutorial only flips 2D/3D when
- * it explicitly asks — TUTORIAL_VIEW_INHERIT, the catalog default, leaves
- * the current mode alone — and the mode is not restored on exit. Guarded on
- * the start actually taking effect so a validation-rejected start can't flip
- * the view. This is the app-layer seam: tutorial_start lives REPL-side and
- * must not reach glr_config_*, so the controller reads the catalog field and
- * applies it. */
-static void glr_start_tutorial(int idx) {
-    tutorial_start(idx);
-    if (!tutorial_active() || tutorial_state_view().tutorial_idx != idx)
-        return;
-    switch (repl_tutorial_view_mode(idx)) {
-    case TUTORIAL_VIEW_2D:      glr_config_set(GLR_CONFIG_ORTHO_MODE, 1); break;
-    case TUTORIAL_VIEW_3D:      glr_config_set(GLR_CONFIG_ORTHO_MODE, 0); break;
-    case TUTORIAL_VIEW_INHERIT: break;
-    }
-}
-
 int glr_action_menu_item_activate(int menu_id, int item_idx) {
     if (menu_id == GLR_MENU_FILE) {
         if (item_idx == GLR_FILE_ITEM_LOAD_SCENE) {
@@ -638,13 +619,13 @@ int glr_action_menu_item_activate(int menu_id, int item_idx) {
     } else if (menu_id == GLR_MENU_TUTORIALS) {
         int tutorial_count = repl_tutorial_count();
         if (item_idx < tutorial_count) {
-            glr_start_tutorial(item_idx);
+            tutorial_start(item_idx);
             return 1;
         }
         if (tutorial_active() && item_idx == tutorial_count + 1) {
             TutorialRuntimeState tutorial = tutorial_state_view();
             if (tutorial.tutorial_idx >= 0)
-                glr_start_tutorial(tutorial.tutorial_idx);
+                tutorial_start(tutorial.tutorial_idx);
             return 1;
         }
         if (tutorial_active() && item_idx == tutorial_count + 2) {

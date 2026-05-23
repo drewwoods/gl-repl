@@ -327,8 +327,8 @@ Test sources live under `tests/` and shared test-only helpers live under
 | `src/editor/completion.h` | `EditorCompletionProvider` struct + `editor_completion_register/update/clear` API |
 | `src/repl/examples.c` | Predefined example data (`g_examples[]`, `g_example_names[]`) |
 | `src/repl/examples.h` | Example query API (`repl_examples_count/name/lines`) |
-| `src/repl/tutorials.c` | Built-in tutorial catalog: per-tutorial null-terminated `comments[]` / `expected[]` parallel arrays + name + optional `view_mode` (2D/3D) preference. Starter set: "First Triangle" (2D), "Color & Transform" |
-| `src/repl/tutorials.h` | Catalog query API (`repl_tutorial_count/name/step_count/step_comment/step_expected/view_mode`) + `TutorialEntry` / `TutorialViewMode` typedefs |
+| `src/repl/tutorials.c` | Built-in tutorial catalog: per-tutorial null-terminated `comments[]` / `expected[]` parallel arrays + name + optional leading `@cfg` line array (same slug vocabulary as example `@cfg`). Starter set: "First Triangle" (`@cfg view_mode = 1`), "Color & Transform" |
+| `src/repl/tutorials.h` | Catalog query API (`repl_tutorial_count/name/step_count/step_comment/step_expected/cfg_lines`) + `TutorialEntry` typedef |
 | `src/widgets/tutorial_state.c` | Tutorial peer subsystem: owns `TutorialRuntimeState` (active flag, step, locked_lines, fade timing, last match result) |
 | `src/widgets/tutorial_state.h` | Peer-subsystem facade (`tutorial_state_view/_mut/_reset`, `tutorial_active`), `TutorialMatchKind/Result` types |
 | `src/widgets/tutorial.c` | Tutorial runner: starts/exits/advances, emits instruction comments via `repl_load_apply_line`, whitespace-tolerant match, locked-line guard, fade-alpha math |
