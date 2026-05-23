@@ -6,12 +6,32 @@
 #include <string.h>
 
 #define STEP_APPEND(label, c, e) \
-    { (label), (c), (e), TUTORIAL_STEP_APPEND, NULL }
+    { (label), (c), (e), TUTORIAL_STEP_APPEND, NULL, \
+      TUTORIAL_STEP_KIND_COMMAND, NULL, 0 }
 
 #define STEP_AT(label, c, e, target) \
-    { (label), (c), (e), TUTORIAL_STEP_LABEL, (target) }
+    { (label), (c), (e), TUTORIAL_STEP_LABEL, (target), \
+      TUTORIAL_STEP_KIND_COMMAND, NULL, 0 }
 
-#define STEP_SENTINEL { NULL, NULL, NULL, TUTORIAL_STEP_APPEND, NULL }
+/* Showcase step: on entry apply cfg_slug=cfg_value so the user sees the
+ * effect, show a "press Enter to continue" prompt, advance on ack key.
+ * `expected` is NULL — there is no command to type. */
+#define STEP_SET(label, c, slug, val) \
+    { (label), (c), NULL, TUTORIAL_STEP_APPEND, NULL, \
+      TUTORIAL_STEP_KIND_SET, (slug), (val) }
+
+/* Check step: advance when the user themselves makes cfg_slug == cfg_value
+ * (via F-key/menu/etc.). Auto-advances if already satisfied on entry.
+ * `expected` is NULL. */
+#define STEP_REQUIRE(label, c, slug, val) \
+    { (label), (c), NULL, TUTORIAL_STEP_APPEND, NULL, \
+      TUTORIAL_STEP_KIND_REQUIRE, (slug), (val) }
+
+/* Sentinel: comment == NULL is the only field the terminator scan reads
+ * (SET/REQUIRE legitimately have NULL `expected`, so the old
+ * comment&&expected check would misread the first SET as a sentinel). */
+#define STEP_SENTINEL { NULL, NULL, NULL, TUTORIAL_STEP_APPEND, NULL, \
+                        TUTORIAL_STEP_KIND_COMMAND, NULL, 0 }
 
 static const TutorialStep g_tutorial_first_triangle_steps[] = {
     STEP_APPEND(NULL,
@@ -105,6 +125,53 @@ static const char *const g_tutorial_first_triangle_cfg[] = {
     NULL,
 };
 
+/* "Feature Tour" — exercises the new step kinds:
+ *   1) Five COMMAND steps draw a triangle in 3D.
+ *   2) One REQUIRE step asks the user to enable vertex outlines (F7) so
+ *      they see how the feature changes the rendering.
+ *   3) Two SET steps showcase Radar (10) and Focus (6) grid themes;
+ *      the user presses Enter/Tab/Space to advance through them.
+ *
+ * The entry-level `@cfg` block guarantees a known baseline (3D view,
+ * grid off, vertex outlines off) so the REQUIRE step has the intended
+ * teaching effect rather than auto-advancing immediately. Integer grid
+ * values used directly (the catalog is repl-layer and must not include
+ * src/scene/themes.h); see grid_theme_names in src/app/glr_actions.c. */
+static const TutorialStep g_tutorial_feature_tour_steps[] = {
+    STEP_APPEND(NULL,
+        "// Open a triangle batch.",
+        "glBegin(GL_TRIANGLES)"),
+    STEP_APPEND(NULL,
+        "// Top vertex.",
+        "glVertex3f(0, 0.7, 0)"),
+    STEP_APPEND(NULL,
+        "// Lower-left vertex.",
+        "glVertex3f(-0.7, -0.5, 0)"),
+    STEP_APPEND(NULL,
+        "// Lower-right vertex.",
+        "glVertex3f(0.7, -0.5, 0)"),
+    STEP_APPEND(NULL,
+        "// Close the batch — the filled triangle appears.",
+        "glEnd()"),
+    STEP_REQUIRE(NULL,
+        "// Press F7 to turn on vertex outlines; they trace each edge.",
+        "vertex_outlines", 1),
+    STEP_SET(NULL,
+        "// The Radar grid backdrop looks like this.",
+        "grid", 10 /* GRID_THEME_RADAR */),
+    STEP_SET(NULL,
+        "// And the Focus grid backdrop looks like this.",
+        "grid", 6 /* GRID_THEME_FOCUS */),
+    STEP_SENTINEL,
+};
+
+static const char *const g_tutorial_feature_tour_cfg[] = {
+    "// @cfg view_mode = 0",        /* 3D — depth gives the grid themes context */
+    "// @cfg vertex_outlines = 0",  /* baseline: REQUIRE will ask the user to turn this on */
+    "// @cfg grid = 0",             /* baseline: SET steps will showcase Radar then Focus */
+    NULL,
+};
+
 static const TutorialEntry g_tutorials[] = {
     {
         .name  = "First Triangle",
@@ -118,6 +185,11 @@ static const TutorialEntry g_tutorials[] = {
     {
         .name  = "Depth Test Triangle",
         .steps = g_tutorial_depth_triangle_steps,
+    },
+    {
+        .name  = "Feature Tour",
+        .steps = g_tutorial_feature_tour_steps,
+        .cfg   = g_tutorial_feature_tour_cfg,
     },
 };
 
@@ -133,11 +205,12 @@ static const TutorialStep *tutorial_step_at(int idx, int step_idx) {
     if (!entry || !entry->steps || step_idx < 0)
         return NULL;
 
-    /* Walk to step_idx, treating the first step with NULL comment AND
-     * NULL expected as the terminator. */
+    /* Sentinel keyed on `comment` alone: SET/REQUIRE steps legitimately
+     * have NULL `expected`, so the old comment&&expected check would
+     * misread them as the terminator. */
     for (int i = 0; i <= step_idx; i++) {
         const TutorialStep *step = &entry->steps[i];
-        if (!step->comment && !step->expected)
+        if (!step->comment)
             return NULL;
         if (i == step_idx)
             return step;
@@ -160,7 +233,7 @@ int repl_tutorial_step_count(int idx) {
         return 0;
 
     int count = 0;
-    while (entry->steps[count].comment && entry->steps[count].expected)
+    while (entry->steps[count].comment)
         count++;
     return count;
 }
@@ -188,6 +261,21 @@ const char *repl_tutorial_step_label(int idx, int step_idx) {
 const char *repl_tutorial_step_target_label(int idx, int step_idx) {
     const TutorialStep *step = tutorial_step_at(idx, step_idx);
     return step ? step->target_label : NULL;
+}
+
+TutorialStepKind repl_tutorial_step_kind(int idx, int step_idx) {
+    const TutorialStep *step = tutorial_step_at(idx, step_idx);
+    return step ? step->kind : TUTORIAL_STEP_KIND_COMMAND;
+}
+
+const char *repl_tutorial_step_cfg_slug(int idx, int step_idx) {
+    const TutorialStep *step = tutorial_step_at(idx, step_idx);
+    return step ? step->cfg_slug : NULL;
+}
+
+int repl_tutorial_step_cfg_value(int idx, int step_idx) {
+    const TutorialStep *step = tutorial_step_at(idx, step_idx);
+    return step ? step->cfg_value : 0;
 }
 
 const char *const *repl_tutorial_cfg_lines(int idx) {
@@ -315,11 +403,12 @@ int repl_tutorial_validate_entry(const TutorialEntry *entry,
 
     /* Walk steps, validating each as we go. Forward references are
      * rejected naturally because target_label can only match a label
-     * we have already seen. */
+     * we have already seen. Sentinel is `comment == NULL` alone — SET
+     * and REQUIRE steps legitimately leave `expected` NULL. */
     int step_count = 0;
     for (int i = 0;; i++) {
         const TutorialStep *step = &entry->steps[i];
-        if (!step->comment && !step->expected) {
+        if (!step->comment) {
             /* sentinel */
             break;
         }
@@ -331,15 +420,48 @@ int repl_tutorial_validate_entry(const TutorialEntry *entry,
                          TUTORIAL_LOCKED_LINE_MAX);
             return 0;
         }
-        if (!step->comment || !step->expected) {
+        /* Kind-aware shape check. Slug *validity* (is the bridge aware
+         * of this slug?) is a runtime check at tutorial_start because
+         * it depends on the controller-installed config bridge. */
+        if (step->kind == TUTORIAL_STEP_KIND_COMMAND) {
+            if (!step->expected) {
+                if (err_size > 0)
+                    snprintf(err, (size_t)err_size,
+                             "tutorial '%s' step %d COMMAND missing expected",
+                             entry->name ? entry->name : "?", i);
+                return 0;
+            }
+            if (!expected_is_single_command(step->expected, err, err_size))
+                return 0;
+        } else if (step->kind == TUTORIAL_STEP_KIND_SET ||
+                   step->kind == TUTORIAL_STEP_KIND_REQUIRE) {
+            if (step->expected) {
+                if (err_size > 0)
+                    snprintf(err, (size_t)err_size,
+                             "tutorial '%s' step %d %s must leave "
+                             "expected NULL",
+                             entry->name ? entry->name : "?", i,
+                             step->kind == TUTORIAL_STEP_KIND_SET
+                                 ? "SET" : "REQUIRE");
+                return 0;
+            }
+            if (label_is_empty(step->cfg_slug)) {
+                if (err_size > 0)
+                    snprintf(err, (size_t)err_size,
+                             "tutorial '%s' step %d %s needs non-empty "
+                             "cfg_slug",
+                             entry->name ? entry->name : "?", i,
+                             step->kind == TUTORIAL_STEP_KIND_SET
+                                 ? "SET" : "REQUIRE");
+                return 0;
+            }
+        } else {
             if (err_size > 0)
                 snprintf(err, (size_t)err_size,
-                         "tutorial '%s' step %d missing comment or expected",
+                         "tutorial '%s' step %d unknown kind",
                          entry->name ? entry->name : "?", i);
             return 0;
         }
-        if (!expected_is_single_command(step->expected, err, err_size))
-            return 0;
 
         /* Unique non-empty labels. */
         if (!label_is_empty(step->label)) {

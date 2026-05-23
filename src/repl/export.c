@@ -94,6 +94,37 @@ const ReplExportConfigBridge *repl_export_config_bridge(void) {
     return g_export_cfg_bridge;
 }
 
+/* Typed live-cfg helpers for repl/widget consumers (e.g. tutorial SET/REQUIRE
+ * steps). All three delegate to the controller-installed config bridge — no
+ * direct scene_* / glr_* calls, no scene/app includes (so
+ * check-repl-export-via-bridge stays green). No-op / return fallback when no
+ * bridge is installed (demo / some tests). */
+int repl_cfg_get_int(const char *slug, int fallback) {
+    const ReplExportConfigBridge *b = g_export_cfg_bridge;
+    if (!slug || !b || !b->get_int) return fallback;
+    return b->get_int(slug, fallback);
+}
+
+void repl_cfg_set_int(const char *slug, int value) {
+    const ReplExportConfigBridge *b = g_export_cfg_bridge;
+    if (!slug || !b || !b->apply) return;
+    /* One-item bag, same pattern as parse_cfg's live-apply path. */
+    ReplExportConfig single;
+    repl_export_config_clear(&single);
+    repl_export_config_set_int(&single, slug, value);
+    b->apply(&single);
+}
+
+/* Two-probe known-slug test: a known slug returns its stored value regardless
+ * of `fallback`, so two probes with different fallbacks produce equal results.
+ * An unknown slug returns the fallback verbatim, so the probes differ.
+ * Avoids adding a third bridge method just to detect typos. */
+int repl_cfg_known(const char *slug) {
+    const ReplExportConfigBridge *b = g_export_cfg_bridge;
+    if (!slug || !b || !b->get_int) return 0;
+    return b->get_int(slug, 0) == b->get_int(slug, 1) ? 1 : 0;
+}
+
 /* Camera bridge — same shape as the cfg bridge. Step 4a moved camera-block
  * emission and parsing through this interface so src/repl/export.c no longer
  * references glr_camera_*. The default bridge is installed by

@@ -5,6 +5,7 @@
 #include "app/glr_state.h"           /* presentation + render storage */
 #include "repl/state_owners.h"
 #include "ui/state_types.h"
+#include "widgets/tutorial.h"        /* tutorial_notify_state_changed */
 
 /* Camera, profile_panel slices live on UiState; variable_panel
  * visibility lives on the variable_panel peer; replay state lives
@@ -152,18 +153,22 @@ void glr_config_set(GlrConfigKey key, int value) {
 
     if (key == GLR_CONFIG_AUDIO_MODE) {
         glr_audio_set_cfg_mode(value);
-        return;
-    }
-    if (key == GLR_CONFIG_ACCUM_AA) {
+    } else if (key == GLR_CONFIG_ACCUM_AA) {
         accum_aa_set_cycle(value);
-        return;
+    } else {
+        int *target = config_value_ptr(key);
+        if (!target)
+            return;  /* unknown key — nothing changed, no notify */
+        *target = value;
     }
 
-    int *target = config_value_ptr(key);
-    if (!target)
-        return;
-
-    *target = value;
+    /* REQUIRE-step listener — slug-scoped and inactive-checked, so this
+     * is a no-op except when a tutorial is waiting on this key's slug.
+     * Placing the hook in the lowest-level setter catches every write
+     * path (glr_cfg_cycle_row's normal AND early-return branches, the
+     * direct accum-AA set in glr_ctrl.c's Ctrl+=/- handler, and the
+     * config-bridge's apply during @cfg / example / workspace load). */
+    tutorial_notify_state_changed();
 }
 
 int glr_config_cycle(GlrConfigKey key, int delta) {

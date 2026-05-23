@@ -38,10 +38,42 @@
 /* Lifecycle and commit-path integration. */
 void                 tutorial_start(int idx);
 void                 tutorial_exit(void);
+/* Restore the cfg baseline captured at tutorial_start and reset the runtime
+ * state. Called by tutorial_exit, tutorial completion, AND every external
+ * teardown path that previously called tutorial_state_reset() directly
+ * (workspace/scene/example load, glr_app_reset_all) so the workspace-load
+ * stash never enshrines tutorial-mutated cfg as the new baseline.
+ * Idempotent — no-op when no tutorial is active. */
+void                 tutorial_teardown(void);
 int                  tutorial_handle_commit_attempt(const char *input,
                                                     TutorialMatchResult *out);
 void                 tutorial_advance_after_successful_commit(void);
 const char          *tutorial_current_expected_text(void);
+
+/* Kind of the current step (TUTORIAL_STEP_KIND_COMMAND when inactive — a
+ * safe default that lets callers branch on "is the document writable?"
+ * without first checking active). */
+TutorialStepKind     tutorial_current_step_kind(void);
+
+/* REQUIRE-step hook: every cfg write should notify so the runner can
+ * advance when the watched slug reaches its target value. Slug-scoped
+ * and inactive-checked, so calling it after every glr_config_set is
+ * cheap and safe. */
+void                 tutorial_notify_state_changed(void);
+
+/* SET-step ack: if the current step is SET and `key` is Enter / Tab /
+ * Space, advance to the next step and return 1 (consumed); else return
+ * 0 (not consumed — caller continues its dispatch chain). */
+int                  tutorial_handle_ack_key(unsigned char key);
+
+/* Editor precheck helper: when the current step is SET or REQUIRE,
+ * set a kind-appropriate status hint ("Press Enter / Tab / Space …" for
+ * SET; "Set <slug> = <value> …" for REQUIRE) and return 1 to tell the
+ * editor to reject the commit. Returns 0 for COMMAND / inactive (let the
+ * normal commit path run). Lives in tutorial.c so input.c gains zero
+ * new direct repl_* calls — check-editor-repl-surface stays at its
+ * baseline of 21 unique repl_* symbols. */
+int                  tutorial_block_noncommand_commit(void);
 
 /* The source row the next user commit should land on. -1 when no
  * step is currently waiting for a user commit. */

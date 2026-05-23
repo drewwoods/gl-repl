@@ -856,11 +856,14 @@ static void test_catalog_cfg_lines(void) {
         }
     }
 
+    /* Tutorials that opt into entry-level @cfg list them by name here; the
+     * rest must leave cfg NULL so the field stays genuinely opt-in. */
     for (int i = 0; i < repl_tutorial_count(); i++) {
         const char *name = repl_tutorial_name(i);
-        if (name && strcmp(name, "First Triangle") == 0)
+        if (name && (strcmp(name, "First Triangle") == 0 ||
+                     strcmp(name, "Feature Tour") == 0))
             continue;
-        ASSERT_TRUE("other tutorials have no cfg",
+        ASSERT_TRUE("tutorials without an entry-level @cfg have NULL cfg",
                     repl_tutorial_cfg_lines(i) == NULL);
     }
 
@@ -1500,6 +1503,241 @@ static void test_start_rejects_out_of_range_idx(void) {
                status_text(), "Tutorial index out of range");
 }
 
+/* ------------------------------------------------------------------------- */
+/* New step kinds (SET / REQUIRE), cfg notify hook, mutation guard,          */
+/* restore-on-teardown.                                                      */
+/* ------------------------------------------------------------------------- */
+
+static int find_tutorial_idx(const char *name) {
+    for (int i = 0; i < repl_tutorial_count(); i++) {
+        const char *n = repl_tutorial_name(i);
+        if (n && strcmp(n, name) == 0) return i;
+    }
+    return -1;
+}
+
+/* Drive one COMMAND step's commit via the ; key route. Returns 1 on success
+ * (step advanced), 0 otherwise. */
+static int commit_command_step(int idx, int step) {
+    const char *expected = repl_tutorial_step_expected(idx, step);
+    if (!expected) return 0;
+    set_input_text(expected);
+    editor_handle_key(';', 0, 0);
+    return tutorial_state_view().step > step;
+}
+
+/* Walk the Feature Tour up through its 5 COMMAND steps so the runner lands
+ * on step 5 (the REQUIRE vertex_outlines step). Returns the tutorial idx
+ * on success, -1 if the catalog doesn't contain Feature Tour. */
+static int start_feature_tour_and_walk_commands(void) {
+    int idx = find_tutorial_idx("Feature Tour");
+    if (idx < 0) return -1;
+    tutorial_start(idx);
+    for (int s = 0; s < 5; s++)
+        if (!commit_command_step(idx, s)) return -1;
+    return idx;
+}
+
+/* Regression for the cursor-park bug the user hit in interactive testing:
+ * after a COMMAND commit advances into a SET or REQUIRE step, the runner
+ * must park the editor cursor PAST the just-emitted locked instruction
+ * comment. Otherwise the editor renders the empty input-buffer overlay on
+ * top of the comment row and the instruction is invisible until any key
+ * moves the cursor. */
+static void test_set_and_require_step_park_cursor_past_comment(void) {
+    reset_fixture();
+    int idx = start_feature_tour_and_walk_commands();
+    ASSERT_TRUE("feature tour walks 5 commands", idx >= 0);
+    ASSERT_TRUE("tutorial still active at REQUIRE", tutorial_active());
+
+    TutorialRuntimeState st = tutorial_state_view();
+    ASSERT_INT("on REQUIRE step (step 5)", st.step, 5);
+    ASSERT_INT("REQUIRE step kind",
+               (int)tutorial_current_step_kind(),
+               (int)TUTORIAL_STEP_KIND_REQUIRE);
+    int instr_line = st.instruction_line_for_step[5];
+    ASSERT_TRUE("REQUIRE instruction line recorded", instr_line >= 0);
+    /* Cursor must NOT be on the instruction-comment row; the runner
+     * parks it at instruction_line + 1 (the virtual trailing row). */
+    ASSERT_INT("cursor parked past REQUIRE comment row",
+               editor_state_edit_line(), instr_line + 1);
+
+    /* Advance past REQUIRE by setting vertex_outlines (the notify hook
+     * in glr_config_set drives this). The next step is SET grid=10. */
+    glr_config_set(GLR_CONFIG_VERTEX_OUTLINES, 1);
+    st = tutorial_state_view();
+    ASSERT_INT("REQUIRE advanced to SET grid=Radar", st.step, 6);
+    ASSERT_INT("SET step kind",
+               (int)tutorial_current_step_kind(),
+               (int)TUTORIAL_STEP_KIND_SET);
+    int set_instr = st.instruction_line_for_step[6];
+    ASSERT_TRUE("SET instruction line recorded", set_instr >= 0);
+    ASSERT_INT("cursor parked past SET comment row",
+               editor_state_edit_line(), set_instr + 1);
+}
+
+/* SET step applies its cfg on entry, then advances on Enter via the
+ * controller-level ack router. Covers both the cfg-write side and the
+ * keyboard-router wiring in glr_ctrl. */
+static void test_set_step_applies_cfg_and_advances_on_ack(void) {
+    reset_fixture();
+    int idx = start_feature_tour_and_walk_commands();
+    ASSERT_TRUE("walked into REQUIRE", idx >= 0);
+    /* Drive through REQUIRE to reach the first SET (grid = Radar = 10). */
+    glr_config_set(GLR_CONFIG_VERTEX_OUTLINES, 1);
+    ASSERT_INT("entered SET grid=Radar", tutorial_state_view().step, 6);
+    ASSERT_INT("cfg grid applied to Radar",
+               repl_cfg_get_int("grid", -1), 10);
+
+    /* Ack via the controller router; SET advances to next SET (Focus = 6). */
+    glr_ctrl_keyboard('\r', 0, 0);
+    ASSERT_INT("ack key advanced to SET grid=Focus",
+               tutorial_state_view().step, 7);
+    ASSERT_INT("cfg grid applied to Focus",
+               repl_cfg_get_int("grid", -1), 6);
+
+    /* One more ack: past the final SET → tutorial completes. */
+    glr_ctrl_keyboard('\r', 0, 0);
+    ASSERT_TRUE("final ack completes the tutorial", !tutorial_active());
+}
+
+/* REQUIRE advances when the watched slug reaches its target, but NOT when
+ * an unrelated config is toggled. Covers the slug-scoped predicate inside
+ * the notify hook. */
+static void test_require_ignores_unrelated_config_changes(void) {
+    reset_fixture();
+    int idx = start_feature_tour_and_walk_commands();
+    ASSERT_TRUE("walked into REQUIRE", idx >= 0);
+    int step_before = tutorial_state_view().step;
+
+    /* Toggle backdrop — REQUIRE step watches vertex_outlines, must not
+     * advance. */
+    glr_config_set(GLR_CONFIG_BACKDROP, 1);
+    ASSERT_INT("unrelated config change does not advance REQUIRE",
+               tutorial_state_view().step, step_before);
+
+    /* The actual target advances. */
+    glr_config_set(GLR_CONFIG_VERTEX_OUTLINES, 1);
+    ASSERT_TRUE("matching config change advances",
+                tutorial_state_view().step > step_before);
+}
+
+/* Validator: SET / REQUIRE shape rules. The STEP_* macros live in
+ * src/repl/tutorials.c (file-scope, catalog-only); test fixtures use
+ * designated initializers — same convention as the existing label tests. */
+static void test_validate_accepts_set_and_require_steps(void) {
+    static const TutorialStep steps[] = {
+        { NULL, "// type the begin", "glBegin(GL_TRIANGLES)",
+          TUTORIAL_STEP_APPEND, NULL,
+          TUTORIAL_STEP_KIND_COMMAND, NULL, 0 },
+        { NULL, "// turn on outlines", NULL,
+          TUTORIAL_STEP_APPEND, NULL,
+          TUTORIAL_STEP_KIND_REQUIRE, "vertex_outlines", 1 },
+        { NULL, "// showcase radar", NULL,
+          TUTORIAL_STEP_APPEND, NULL,
+          TUTORIAL_STEP_KIND_SET, "grid", 10 },
+        { NULL, NULL, NULL, TUTORIAL_STEP_APPEND, NULL,
+          TUTORIAL_STEP_KIND_COMMAND, NULL, 0 },
+    };
+    TutorialEntry entry = { .name = "mixed_ok", .steps = steps };
+    char err[160] = "";
+    ASSERT_TRUE("mixed COMMAND+SET+REQUIRE validates",
+                repl_tutorial_validate_entry(&entry, err, sizeof(err)));
+    ASSERT_STR("err empty on success", err, "");
+    /* Step count must include the non-command steps too — sentinel is
+     * keyed on `comment` alone now. */
+    int n = 0;
+    while (steps[n].comment) n++;
+    ASSERT_INT("mixed entry has 3 steps", n, 3);
+}
+
+static void test_validate_rejects_set_with_empty_slug(void) {
+    static const TutorialStep steps[] = {
+        { NULL, "// missing slug", NULL,
+          TUTORIAL_STEP_APPEND, NULL,
+          TUTORIAL_STEP_KIND_SET, "", 0 },
+        { NULL, NULL, NULL, TUTORIAL_STEP_APPEND, NULL,
+          TUTORIAL_STEP_KIND_COMMAND, NULL, 0 },
+    };
+    TutorialEntry entry = { .name = "set_bad_slug", .steps = steps };
+    char err[160] = "";
+    ASSERT_TRUE("SET with empty slug rejected",
+                !repl_tutorial_validate_entry(&entry, err, sizeof(err)));
+    ASSERT_TRUE("error mentions cfg_slug",
+                err[0] != '\0' && strstr(err, "cfg_slug") != NULL);
+}
+
+static void test_validate_rejects_require_with_expected(void) {
+    /* Hand-build a malformed REQUIRE step: macros enforce NULL
+     * `expected`, so use a designated initializer to bypass them. */
+    static const TutorialStep steps[] = {
+        { NULL, "// require with bogus expected", "glBegin(GL_TRIANGLES)",
+          TUTORIAL_STEP_APPEND, NULL,
+          TUTORIAL_STEP_KIND_REQUIRE, "vertex_outlines", 1 },
+        { NULL, NULL, NULL, TUTORIAL_STEP_APPEND, NULL,
+          TUTORIAL_STEP_KIND_COMMAND, NULL, 0 },
+    };
+    TutorialEntry entry = { .name = "require_with_expected", .steps = steps };
+    char err[160] = "";
+    ASSERT_TRUE("REQUIRE with non-NULL expected rejected",
+                !repl_tutorial_validate_entry(&entry, err, sizeof(err)));
+    ASSERT_TRUE("error mentions expected",
+                err[0] != '\0' && strstr(err, "expected") != NULL);
+}
+
+/* SET/REQUIRE steps must reject typed commits with a kind-appropriate hint
+ * — not the misleading "Move cursor to the tutorial insertion line". */
+static void test_commit_blocked_with_hint_during_set_step(void) {
+    reset_fixture();
+    int idx = start_feature_tour_and_walk_commands();
+    ASSERT_TRUE("walked into REQUIRE", idx >= 0);
+    glr_config_set(GLR_CONFIG_VERTEX_OUTLINES, 1);
+    int step_before = tutorial_state_view().step;
+    ASSERT_INT("at SET step", step_before, 6);
+
+    /* Attempt to commit arbitrary text — the precheck must reject with
+     * the SET hint. */
+    set_input_text("glPointSize(2)");
+    editor_handle_key(';', 0, 0);
+
+    ASSERT_INT("step unchanged after rejected SET commit",
+               tutorial_state_view().step, step_before);
+    ASSERT_STR("SET hint shown (not the cursor-position hint)",
+               status_text(), "Press Enter / Tab / Space to continue");
+}
+
+/* Load-bearing regression: workspace load during an active tutorial must
+ * restore the tutorial's cfg baseline BEFORE the workspace stash captures
+ * the pre-load cfg. Otherwise the tutorial-mutated cfg gets enshrined as
+ * the new "pre-workspace" baseline. */
+static void test_workspace_load_during_tutorial_restores_baseline(void) {
+    char temp_dir[] = "/tmp/test_tutorial_restore.XXXXXX";
+
+    reset_fixture();
+    /* Establish a baseline OUTSIDE the tutorial: grid OFF. */
+    glr_config_set(GLR_CONFIG_GRID_THEME, 0);
+    int baseline = repl_cfg_get_int("grid", -1);
+    ASSERT_INT("baseline grid is OFF", baseline, 0);
+
+    int idx = start_feature_tour_and_walk_commands();
+    ASSERT_TRUE("walked into REQUIRE", idx >= 0);
+    glr_config_set(GLR_CONFIG_VERTEX_OUTLINES, 1);  /* advances past REQUIRE */
+    ASSERT_INT("now on SET grid=Radar", tutorial_state_view().step, 6);
+    ASSERT_INT("grid is RADAR mid-tutorial", repl_cfg_get_int("grid", -1), 10);
+
+    /* Trigger the workspace-load teardown path — empty dir, but the
+     * teardown helper must run the cfg restore before the load. */
+    char *made_dir = mkdtemp(temp_dir);
+    ASSERT_TRUE("mkdtemp restore-test workspace", made_dir != NULL);
+    if (!made_dir) return;
+    (void)repl_load_workspace(made_dir);
+    ASSERT_TRUE("workspace load exits tutorial", !tutorial_active());
+    /* The whole point: grid is back to baseline, not stuck at RADAR. */
+    ASSERT_INT("grid restored to baseline after workspace load",
+               repl_cfg_get_int("grid", -1), baseline);
+    rmdir(made_dir);
+}
+
 int main(void) {
     test_start_enters_transient_tutorial_scene();
     test_catalog_includes_color_transform_tutorial();
@@ -1557,5 +1795,14 @@ int main(void) {
     test_phase4_depth_tutorial_catalog_shape();
     test_phase4_full_walk_places_setup_before_batch();
     test_review_guard_blocks_expected_commit_line_without_pending();
+    /* New step kinds (SET / REQUIRE), cfg notify, mutation guard, restore. */
+    test_set_and_require_step_park_cursor_past_comment();
+    test_set_step_applies_cfg_and_advances_on_ack();
+    test_require_ignores_unrelated_config_changes();
+    test_validate_accepts_set_and_require_steps();
+    test_validate_rejects_set_with_empty_slug();
+    test_validate_rejects_require_with_expected();
+    test_commit_blocked_with_hint_during_set_step();
+    test_workspace_load_during_tutorial_restores_baseline();
     return test_harness_report(&g_harness, "test_tutorial_runner");
 }

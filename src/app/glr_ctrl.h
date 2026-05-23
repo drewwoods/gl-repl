@@ -115,6 +115,7 @@ int glr_ctrl_router_handle_cfg_shortcut_key(unsigned char key);     /* glr_cfg_h
 int glr_ctrl_router_handle_accum_samples_key(unsigned char key);    /* Ctrl+= / Ctrl+- */
 int glr_ctrl_router_handle_post_filter_key(unsigned char key);      /* Ctrl+N (experimental post-process) */
 int glr_ctrl_router_handle_code_focus_key(unsigned char key);       /* Ctrl+Shift+F (code-panel focus) */
+int glr_ctrl_router_handle_tutorial_ack_key(unsigned char key);     /* Enter/Tab/Space ack during tutorial SET steps */
 int glr_ctrl_router_handle_replay_special(int key);                 /* replay-active forwarding */
 int glr_ctrl_router_handle_cfg_special_shortcut(int key);           /* cfg shortcut on F-keys */
 int glr_ctrl_router_handle_horizontal_audio_special(int key);       /* Ctrl+Left/Right audio */
