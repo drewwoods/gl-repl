@@ -648,6 +648,122 @@ int main(void) {
         ASSERT_TRUE("glMaterialfv bad face returns 0", ok == 0);
     }
 
+    /* Positive coverage: the four valid input shapes the parser
+     * accepts (scalar flat, vector flat, scalar compound literal,
+     * vector compound literal) were exercised above for the
+     * GL_FRONT × {GL_SHININESS, GL_DIFFUSE} corner. Broaden the
+     * positive surface so a future change can't quietly drop a face
+     * type, pname, expression evaluator path, or whitespace-handling
+     * concern — each pulled out as its own ASSERT so a regression
+     * names what it broke. */
+
+    /* Each face token resolves through the enum table. */
+    {
+        const char *const cases[] = {
+            "glMaterialfv(GL_FRONT, GL_DIFFUSE, 1, 0, 0, 1)",
+            "glMaterialfv(GL_BACK, GL_DIFFUSE, 1, 0, 0, 1)",
+            "glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, 1, 0, 0, 1)",
+        };
+        for (int i = 0; i < (int)(sizeof cases / sizeof cases[0]); i++) {
+            glr_app_reset_all();
+            GLCmd cmd;
+            memset(&cmd, 0, sizeof(cmd));
+            int ok = parse_for_test(cases[i], &cmd);
+            ASSERT_TRUE("glMaterialfv: face variant parses", ok == 1);
+            ASSERT_TRUE("glMaterialfv: face variant num_args",
+                        cmd.num_args == 6);
+        }
+    }
+
+    /* Each RGBA material pname accepts the 4-float vector form. The
+     * scalar-only GL_SHININESS path is covered separately above. */
+    {
+        const char *const cases[] = {
+            "glMaterialfv(GL_FRONT, GL_AMBIENT, 0.1, 0.1, 0.1, 1)",
+            "glMaterialfv(GL_FRONT, GL_SPECULAR, 1, 1, 1, 1)",
+            "glMaterialfv(GL_FRONT, GL_EMISSION, 0, 0, 0, 1)",
+            "glMaterialfv(GL_FRONT, GL_AMBIENT_AND_DIFFUSE, 0.5, 0.5, 0.5, 1)",
+        };
+        for (int i = 0; i < (int)(sizeof cases / sizeof cases[0]); i++) {
+            glr_app_reset_all();
+            GLCmd cmd;
+            memset(&cmd, 0, sizeof(cmd));
+            int ok = parse_for_test(cases[i], &cmd);
+            ASSERT_TRUE("glMaterialfv: pname variant parses", ok == 1);
+            ASSERT_TRUE("glMaterialfv: pname variant num_args",
+                        cmd.num_args == 6);
+        }
+    }
+
+    /* Expressions inside the compound literal exercise both the
+     * brace-aware unwrap (don't truncate at the inner ')') and the
+     * full expression evaluator. The has_vars flag must propagate so
+     * the executor re-evaluates per frame. */
+    {
+        glr_app_reset_all();
+        declare_test_vars();
+        GLCmd cmd;
+        char cmd_text[MAX_LINE_LEN] = "";
+        memset(&cmd, 0, sizeof(cmd));
+        int ok = parse_cmd_with_text(
+            "glMaterialfv(GL_FRONT, GL_DIFFUSE, (GLfloat[]){0.5 + 0.5*sin(t), 0.3, 0.4, 1})",
+            &cmd, cmd_text, sizeof(cmd_text));
+        ASSERT_TRUE("glMaterialfv compound w/ expr: parse ok", ok == 1);
+        ASSERT_TRUE("glMaterialfv compound w/ expr: num_args", cmd.num_args == 6);
+        ASSERT_TRUE("glMaterialfv compound w/ expr: has_vars (t)", cmd.has_vars == 1);
+    }
+
+    /* Variable references on the flat path also flag has_vars. */
+    {
+        glr_app_reset_all();
+        declare_test_vars();
+        GLCmd cmd;
+        memset(&cmd, 0, sizeof(cmd));
+        int ok = parse_for_test(
+            "glMaterialfv(GL_FRONT, GL_DIFFUSE, x, y, z, 1)", &cmd);
+        ASSERT_TRUE("glMaterialfv flat w/ vars: parse ok", ok == 1);
+        ASSERT_TRUE("glMaterialfv flat w/ vars: has_vars", cmd.has_vars == 1);
+    }
+
+    /* Whitespace tolerance: extra padding inside the call AND inside
+     * the compound literal, plus the no-whitespace minimal form,
+     * should all canonicalize to the same compound-literal emit. */
+    {
+        const char *const cases[] = {
+            "glMaterialfv(GL_FRONT,GL_DIFFUSE,0.8,0.2,0.2,1)",
+            "glMaterialfv(  GL_FRONT  ,  GL_DIFFUSE  ,  0.8 , 0.2 , 0.2 , 1  )",
+            "glMaterialfv(GL_FRONT, GL_DIFFUSE, (GLfloat[]){ 0.8, 0.2, 0.2, 1 })",
+        };
+        for (int i = 0; i < (int)(sizeof cases / sizeof cases[0]); i++) {
+            glr_app_reset_all();
+            GLCmd cmd;
+            char cmd_text[MAX_LINE_LEN] = "";
+            memset(&cmd, 0, sizeof(cmd));
+            int ok = parse_cmd_with_text(cases[i], &cmd, cmd_text, sizeof(cmd_text));
+            ASSERT_TRUE("glMaterialfv whitespace variant parses", ok == 1);
+            ASSERT_TRUE("glMaterialfv whitespace variant canonical form",
+                        strstr(cmd_text,
+                               "glMaterialfv(GL_FRONT, GL_DIFFUSE, (GLfloat[]){0.8, 0.2, 0.2, 1})")
+                            != NULL);
+        }
+    }
+
+    /* Trailing ';' is part of the line text users type interactively;
+     * the canonical emit always supplies its own, so an input ';'
+     * must not double up or break parsing. */
+    {
+        glr_app_reset_all();
+        GLCmd cmd;
+        char cmd_text[MAX_LINE_LEN] = "";
+        memset(&cmd, 0, sizeof(cmd));
+        int ok = parse_cmd_with_text(
+            "glMaterialfv(GL_FRONT, GL_SHININESS, (GLfloat[]){30});",
+            &cmd, cmd_text, sizeof(cmd_text));
+        ASSERT_TRUE("glMaterialfv with trailing ';' parses", ok == 1);
+        ASSERT_TRUE("glMaterialfv with trailing ';' canonical ends with ');'",
+                    strstr(cmd_text, ");") != NULL);
+    }
+
     /* Regression: 6-arg flat input form
      * (`glMaterialfv(face, pname, r, g, b, a)`) must parse, populate
      * args[2..5] from the four RGBA floats, AND canonicalize to the
