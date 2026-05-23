@@ -48,23 +48,34 @@ the suite covers only multi-arg shapes.
 
 **Fix:** Add `case 1: snprintf(out+oi, out_size-oi, fmt, cmd->args[0]); break;`.
 
-### 2. `stash_live_state` / `restore_live_from_stash` skip `func_aliases`
+### 2. Live-state shuttles and workspace import leak `func_aliases`
 
-**Where:** `src/repl/scenes.c:416-457` (vs. `save_scene_to_slot` at
-L195-240, `load_scene_from_slot` at L283-332)
+**Where:** `src/repl/scenes.c:384-407`, L416-457, L576-603,
+L612-658 (vs. `save_scene_to_slot` at L195-240,
+`load_scene_from_slot` at L283-332), plus
+`src/repl/export.c:3628-3673`
 
 **Smell:** Save/load capture and restore `func_aliases` (L212-218,
-L300-304). The stash/restore variants — used by `repl_save_workspace`,
-`repl_load_workspace`, `repl_promote_example_if_needed`,
-`repl_load_scene_as_new_slot`, and `install_scene_into_live` — do not.
+L300-304). The live-state shuttle variants — used by
+`repl_save_workspace`, `repl_load_workspace`,
+`repl_promote_example_if_needed`, `repl_load_scene_as_new_slot`, and
+LRU eviction — do not. Workspace import has the same additive-state
+shape: `load_scene_file_into_slot()` loads each file into the live alias
+table, while `repl_export_load_from_file()` only adds aliases from
+`// @func` directives and never clears aliases absent from the file.
 
 **Why it matters:** Workspace iteration calls `install_scene_into_live`
-per slot. The first slot's aliases leak into the live alias table the
-next slot's export sees, so `// @func N = name` lines in saved files are
-wrong for every slot after the first.
+per slot. Without alias restore there, the wrong `// @func N = name`
+lines can be emitted for later slots. During workspace load, a scene
+with no `// @func` can inherit the previous imported file's aliases
+before `save_scene_to_slot()` captures it, so the bad mapping becomes
+part of the in-memory scene.
 
 **Fix:** Add the same `func_aliases[]` capture/restore in
-`stash_live_state` / `restore_live_from_stash` / `install_scene_into_live`.
+`stash_live_state` / `restore_live_from_stash` / `install_scene_into_live`,
+and make per-file import start from a clean alias table (or explicitly
+snapshot/restore aliases around each import). Add a workspace regression
+with one aliased scene followed by one unaliased scene.
 
 ### 3. `g_search_*` / `g_ac_*` macros reference fields that no longer exist
 
@@ -117,10 +128,15 @@ same as expr-form — surface `verr`.
 commands)"` is posted regardless of write errors.
 
 **Why it matters:** ENOSPC / EIO produces "success" on a half-written
-file.
+file. This cannot be fixed fully inside the callee alone because the
+function returns `void`: `repl_save_workspace()` increments `written`
+after every call, and `repl_save_active_scene()` overwrites the callee's
+status with its own success message.
 
 **Fix:** Check `ferror(f)` before fclose; surface via
-`repl_set_status_error`.
+`repl_set_status_error`; change `repl_export_save_output` to return
+success/failure and make all callers preserve failure status instead of
+posting a later success.
 
 ### 7. `%g` everywhere — lossy float round-trip
 
@@ -147,7 +163,9 @@ rendered C.
 **Smell:** A line longer than `MAX_LINE_LEN-1` is split across two
 reads; each half is processed as if it were a complete line.
 
-**Fix:** Detect "buffer full but no newline" and warn/skip.
+**Fix:** Detect "buffer full but no newline", drain through the next
+newline/EOF so the remainder is not parsed as a second logical line,
+and warn/skip or fail the import consistently.
 
 ### 9. Tutorial teardown fires before input validation
 
@@ -170,16 +188,25 @@ teardown.
 **Fix:** Move `repl_dispatch_tutorial_teardown()` after the validity
 guards.
 
-### 10. `derive_unique_scene_name` can return a colliding name
+### 10. Workspace scene filename slugs can collide
 
-**Where:** `src/repl/scenes.c:179-190`
+**Where:** `src/repl/scenes.c:169-190`, L459-470, L515-522,
+L546-564
 
-**Smell:** After 999 tries the loop breaks and the function returns
-`candidate` regardless of uniqueness. Silent collision; the slot
-filename slug collides on disk too.
+**Smell:** `derive_unique_scene_name` only checks display-name
+uniqueness. `scene_filename_slug()` normalizes distinct names to the
+same path stem (`"A B"`, `"A-B"`, and `"A_B"` all become `a_b`). The
+old "after 999 tries" concern is not the practical failure mode under
+the default `MAX_USER_SCENES == 8`; the real collision is display names
+that are unique but normalize to the same filename.
 
-**Fix:** Report failure via the status sink, or bump the suffix width
-and keep iterating.
+**Why it matters:** `repl_save_workspace()` writes each scene to
+`<workspace>/<slug>.c`. A later slot can overwrite an earlier one, and
+loading the workspace back loses a scene.
+
+**Fix:** Make workspace path generation slug-unique too (for example,
+dedupe slugs with a numeric suffix or include the slot id), and report
+any skipped/failed write.
 
 ### 11. `repl_load_workspace` never clears existing slots
 
@@ -279,12 +306,14 @@ L869-886 (`eval_primary` dispatch)
 
 **Smell:** Comment says "Keep in sync with `eval_primary()`'s function
 dispatch below". Enforced by nothing. Bonus footgun: `args[3]` at L846
-silently truncates 4-arg calls (the bounds check skips storing past 3,
-but `arg_count` still increments, so the 4-arg call "succeeds" with
-garbage).
+silently accepts extra function arguments past the storage capacity.
+Fixed-arity functions usually fall through to `0.0f` when arity does
+not match, but variadic-ish functions such as `rand` / `rand2` ignore
+the extras because they only consult `args[0]` and `args[1]`.
 
 **Fix:** One `{name, arity_min, arity_max, fn_ptr}` table that drives
-both reserved-idents and dispatch.
+both reserved-idents and dispatch, rejects unsupported arity, and caps
+argument storage explicitly.
 
 ### 18. Six independent identifier tokenizers in `eval.c`
 
@@ -661,8 +690,10 @@ dependency is explicit.
 
 1. **#1** — `format_evaluated_cmd` missing case 1 (single-arg shape
    replay bug). Surgical add of one case arm.
-2. **#2** — `func_aliases` stash hole. Add three lines in two
-   functions; mirror what `save_scene_to_slot` already does.
+2. **#2** — `func_aliases` stash/import hole. Mirror what
+   `save_scene_to_slot` already does for live stash/install/restore,
+   and add the per-file import clear/restore so unaliased scenes do not
+   inherit previous aliases.
 3. **#3** — Delete the `g_search_*` / `g_ac_*` landmine macros.
 4. **#4** — `glPointParameterfv` `has_vars`. One line.
 5. **#5** — Const-value branch error surfacing. Two-line swap.
