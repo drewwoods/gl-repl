@@ -216,7 +216,9 @@ static int cfg_key_in_scene_subset(GlrConfigKey key) {
     case GLR_CONFIG_XFORM_GUIDE_MODE:
     case GLR_CONFIG_LIGHT_INDICATORS:
     case GLR_CONFIG_BACKDROP:
+    case GLR_CONFIG_ORTHO_MODE:
     case GLR_CONFIG_CAMERA_ROTATE:
+    case GLR_CONFIG_VARIABLE_PANEL:
         return 1;
     default:
         return 0;
@@ -262,10 +264,32 @@ static void glr_export_cfg_normalize_legacy_alias(const char **slug, int *val,
     }
 }
 
-static void glr_export_cfg_apply(const ReplExportConfig *cfg) {
-    if (!cfg) return;
+static const GlrConfigItem *glr_export_cfg_find_item_by_slug(const char *slug) {
+    if (!slug)
+        return NULL;
+
+    int dummy_val = 1;
+    char normalized_slug[REPL_EXPORT_CFG_KEY_MAX];
+    glr_export_cfg_normalize_legacy_alias(&slug, &dummy_val,
+                                          normalized_slug,
+                                          sizeof(normalized_slug));
+
     int n = 0;
     const GlrConfigItem *items = glr_config_items(&n);
+    for (int i = 0; i < n; i++) {
+        const GlrConfigItem *item = &items[i];
+        if (item->section_header || item->key == GLR_CONFIG_NONE)
+            continue;
+        char item_slug[REPL_EXPORT_CFG_KEY_MAX];
+        cfg_slug_from_label(item->label, item_slug, sizeof(item_slug));
+        if (strcmp(item_slug, slug) == 0)
+            return item;
+    }
+    return NULL;
+}
+
+static void glr_export_cfg_apply(const ReplExportConfig *cfg) {
+    if (!cfg) return;
     for (int idx = 0; idx < cfg->count; idx++) {
         const char *slug = cfg->items[idx].key;
         int val = (int)strtol(cfg->items[idx].value, NULL, 10);
@@ -273,34 +297,28 @@ static void glr_export_cfg_apply(const ReplExportConfig *cfg) {
         glr_export_cfg_normalize_legacy_alias(&slug, &val,
                                               normalized_slug,
                                               sizeof(normalized_slug));
-        for (int i = 0; i < n; i++) {
-            const GlrConfigItem *item = &items[i];
-            if (item->section_header || item->key == GLR_CONFIG_NONE) continue;
-            char item_slug[REPL_EXPORT_CFG_KEY_MAX];
-            cfg_slug_from_label(item->label, item_slug, sizeof(item_slug));
-            if (strcmp(item_slug, slug) == 0) {
-                glr_config_set(item->key, val);
-                break;
-            }
-        }
+        const GlrConfigItem *item = glr_export_cfg_find_item_by_slug(slug);
+        if (item)
+            glr_config_set(item->key, val);
         /* Unknown slugs silently ignored — same behaviour as the pre-bridge
          * parse_cfg path: drop unrecognised cfg keys. */
     }
 }
 
 static int glr_export_cfg_get_int(const char *slug, int fallback) {
-    if (!slug) return fallback;
-    int n = 0;
-    const GlrConfigItem *items = glr_config_items(&n);
-    for (int i = 0; i < n; i++) {
-        const GlrConfigItem *item = &items[i];
-        if (item->section_header || item->key == GLR_CONFIG_NONE) continue;
-        char item_slug[REPL_EXPORT_CFG_KEY_MAX];
-        cfg_slug_from_label(item->label, item_slug, sizeof(item_slug));
-        if (strcmp(item_slug, slug) == 0)
-            return glr_config_get(item->key);
-    }
+    const GlrConfigItem *item = glr_export_cfg_find_item_by_slug(slug);
+    if (item)
+        return glr_config_get(item->key);
     return fallback;
+}
+
+static int glr_export_cfg_is_known(const char *slug) {
+    return glr_export_cfg_find_item_by_slug(slug) ? 1 : 0;
+}
+
+static int glr_export_cfg_slug_is_scene_subset(const char *slug) {
+    const GlrConfigItem *item = glr_export_cfg_find_item_by_slug(slug);
+    return item && cfg_key_in_scene_subset(item->key) ? 1 : 0;
 }
 
 const ReplExportConfigBridge g_glr_export_cfg_bridge = {
@@ -308,6 +326,8 @@ const ReplExportConfigBridge g_glr_export_cfg_bridge = {
     .fill_scene_subset = glr_export_cfg_fill_scene_subset,
     .apply             = glr_export_cfg_apply,
     .get_int           = glr_export_cfg_get_int,
+    .is_known          = glr_export_cfg_is_known,
+    .slug_is_scene_subset = glr_export_cfg_slug_is_scene_subset,
 };
 
 void glr_actions_install_export_cfg_bridge(void) {

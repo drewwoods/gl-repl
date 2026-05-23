@@ -19,12 +19,8 @@
 
 /* Read the source text for command index `i` through the editor
  * buffer view threaded into the flatten context, falling back to ""
- * if unset. The view is supplied by `ReplFlattenOptions.text`; the
- * GLCmd parameter is unused (kept for symmetry with earlier helpers
- * before GLCmd carried no source text). */
-static const char *flatten_src_text(SourceTextView text,
-                                  const GLCmd *src_cmd, int i) {
-    (void)src_cmd;
+ * if unset. The view is supplied by `ReplFlattenOptions.text`. */
+static const char *flatten_src_text(SourceTextView text, int i) {
     const char *line = source_text_line(text, i);
     return (line && line[0]) ? line : "";
 }
@@ -58,7 +54,8 @@ static void flatten_fail(FlattenContext *ctx, const char *msg) {
 static void flatten_get_for_var_name(SourceTextView text,
                                      const GLCmd *cmd, int cmd_idx,
                                      char *var, int var_sz) {
-    const char *p = flatten_src_text(text, cmd, cmd_idx);
+    (void)cmd;
+    const char *p = flatten_src_text(text, cmd_idx);
     while (*p && *p != '(') p++;
     if (*p) p++;
     while (*p && isspace((unsigned char)*p)) p++;
@@ -70,7 +67,7 @@ static void flatten_get_for_var_name(SourceTextView text,
 
 /* Tag a flat command with its origin so cursor-highlighting, replay, and
  * debug dumps can trace each expanded command back to:
- *   src_cmd_idx          -- the repl_state_document_cmds_mut()[] line this command came from
+ *   src_cmd_idx          -- the repl_state_document_cmds()[] line this command came from
  *   call_src_cmd_idx     -- the funcN() call site that triggered expansion
  *                          (-1 if top-level)
  *   root_call_src_cmd_idx-- the outermost call site in nested func calls
@@ -156,23 +153,24 @@ void repl_flatten_refresh_current_block_highlight(int edit_line_idx) {
     int current_block_begin = -1;
     int current_block_end = -1;
 
-    /* Scan repl_state_document_cmds_mut() alongside g_flat_cmds to find the
+    /* Scan repl_state_document_cmds() alongside g_flat_cmds to find the
      * innermost BEGIN/END block (in flat-cmd indices) that contains
      * edit_line_idx in source-cmd space. Skips structural and
      * document-only rows that don't appear in the flat stream. */
     {
         int begin_src = -1, begin_flat = -1;
         int fcur = 0;
+        const GLCmd *document_cmds = repl_state_document_cmds();
         for (int ci = 0; ci < repl_state_document_count() && fcur < flat_cmd_count; ci++) {
-            if (!repl_state_document_cmds_mut()[ci].valid) continue;
-            CmdType ct = repl_state_document_cmds_mut()[ci].type;
+            if (!document_cmds[ci].valid) continue;
+            CmdType ct = document_cmds[ci].type;
             if (flatten_source_cmd_is_flat_omitted(ct))
                 continue;
             while (fcur < flat_cmd_count && !flat_cmds[fcur].valid) fcur++;
             if (fcur >= flat_cmd_count) break;
-            if (repl_state_document_cmds_mut()[ci].type == CMD_BEGIN) {
+            if (document_cmds[ci].type == CMD_BEGIN) {
                 if (ci <= edit_line_idx) { begin_src = ci; begin_flat = fcur; }
-            } else if (repl_state_document_cmds_mut()[ci].type == CMD_END) {
+            } else if (document_cmds[ci].type == CMD_END) {
                 if (begin_src >= 0 && ci > edit_line_idx) {
                     current_block_begin = begin_flat;
                     current_block_end = fcur;
@@ -216,7 +214,7 @@ static void flatten_range(FlattenContext *ctx,
             float start_val = src_cmd->args[0];
             float end_val   = src_cmd->args[1];
             float step_val  = src_cmd->args[2];
-            const char *src_text = flatten_src_text(ctx->text, src_cmd, i);
+            const char *src_text = flatten_src_text(ctx->text, i);
             flatten_get_for_var_name(ctx->text, src_cmd, i, var_name, sizeof(var_name));
 
             /* Re-evaluate for-loop bounds from source if they contain variables */
@@ -303,8 +301,8 @@ static void flatten_range(FlattenContext *ctx,
                     char arg_text[MAX_LINE_LEN];
                     float arg_vals[MAX_EXPR_VARS];
                     int arg_count = 0;
-                    const char *def_text = flatten_src_text(ctx->text, def_cmd, k);
-                    const char *call_text = flatten_src_text(ctx->text, src_cmd, i);
+                    const char *def_text = flatten_src_text(ctx->text, k);
+                    const char *call_text = flatten_src_text(ctx->text, i);
 
                     if (!parse_repl_func_signature(def_text, &def_fn,
                                                    param_names, MAX_EXPR_VARS,
@@ -380,7 +378,7 @@ static void flatten_range(FlattenContext *ctx,
              * frame. Goto support is already documented as partial. */
             int if_end = flatten_repl_source_scope_find_block_end(ctx, i);
             char cond_text[MAX_LINE_LEN];
-            const char *src_text = flatten_src_text(ctx->text, src_cmd, i);
+            const char *src_text = flatten_src_text(ctx->text, i);
             float cond = src_cmd->args[0]; /* commit-time eval fallback */
 
             if (repl_extract_paren_payload(src_text, cond_text, sizeof(cond_text))) {
@@ -423,7 +421,7 @@ static void flatten_range(FlattenContext *ctx,
             float value = src_cmd->args[0];
             char rhs[MAX_LINE_LEN] = "";
             int local_rhs_vars = 0;
-            const char *src_text = flatten_src_text(ctx->text, src_cmd, i);
+            const char *src_text = flatten_src_text(ctx->text, i);
 
             if (repl_extract_assignment_parts(src_text, NULL, 0,
                                               rhs, sizeof(rhs)) && rhs[0]) {
@@ -458,7 +456,7 @@ static void flatten_range(FlattenContext *ctx,
             char rhs[MAX_LINE_LEN] = "";
             int local_index_vars = 0;
             int local_rhs_vars = 0;
-            const char *src_text = flatten_src_text(ctx->text, src_cmd, i);
+            const char *src_text = flatten_src_text(ctx->text, i);
 
             if (repl_extract_assignment_target_parts(src_text,
                                                     name, sizeof(name),
@@ -521,7 +519,7 @@ static void flatten_range(FlattenContext *ctx,
                 .err_buf = flatten_parse_err,
                 .err_sz  = (int)sizeof(flatten_parse_err),
             };
-            const char *text = flatten_src_text(ctx->text, src_cmd, i);
+            const char *text = flatten_src_text(ctx->text, i);
             ReplParsedLine tmp_pl;
             if (repl_parser_parse_command_ctx(text, &tmp_pl, &parse_ctx)) {
                 GLCmd tmp = tmp_pl.cmd;
@@ -538,7 +536,7 @@ static void flatten_range(FlattenContext *ctx,
                 .err_buf = flatten_parse_err,
                 .err_sz  = (int)sizeof(flatten_parse_err),
             };
-            const char *text = flatten_src_text(ctx->text, src_cmd, i);
+            const char *text = flatten_src_text(ctx->text, i);
             ReplParsedLine tmp_pl;
             if (repl_parser_parse_command_ctx(text, &tmp_pl, &parse_ctx)) {
                 GLCmd tmp = tmp_pl.cmd;
@@ -556,7 +554,7 @@ static void flatten_range(FlattenContext *ctx,
                 .err_buf = flatten_parse_err,
                 .err_sz  = (int)sizeof(flatten_parse_err),
             };
-            const char *text = flatten_src_text(ctx->text, src_cmd, i);
+            const char *text = flatten_src_text(ctx->text, i);
             ReplParsedLine tmp_pl;
             if (repl_parser_parse_command_ctx(text, &tmp_pl, &parse_ctx)) {
                 GLCmd tmp = tmp_pl.cmd;
@@ -636,7 +634,7 @@ int repl_flatten_program(const ReplFlattenOptions *options,
 void repl_flatten_commands(int edit_line_idx) {
     ReplFlatProgramState *flat_program = repl_state_flat_program_mut();
     ReplFlattenOptions options = {
-        .source_cmds = repl_state_document_cmds_mut(),
+        .source_cmds = repl_state_document_cmds(),
         .source_cmd_count = repl_state_document_count(),
         .flat_cmds = flat_program->cmds,
         .flat_local_vars = flat_program->local_vars,
@@ -661,15 +659,16 @@ static unsigned int line_func_scope_mask(int line) {
     unsigned int mask = 0;
     int stack[FUNC_SCOPE_MASK_BITS];
     int depth = 0;
+    const GLCmd *document_cmds = repl_state_document_cmds();
 
     if (line < 0) return 0;
     if (line >= repl_state_document_count()) line = repl_state_document_count() - 1;
 
     for (int i = 0; i <= line && i < repl_state_document_count(); i++) {
-        if (!repl_state_document_cmds_mut()[i].valid) continue;
+        if (!document_cmds[i].valid) continue;
 
-        if (repl_state_document_cmds_mut()[i].type == CMD_FUNC_DEF) {
-            int fn = (int)repl_state_document_cmds_mut()[i].args[0];
+        if (document_cmds[i].type == CMD_FUNC_DEF) {
+            int fn = (int)document_cmds[i].args[0];
             if (fn >= 0 && fn < FUNC_SCOPE_MASK_BITS &&
                 depth < (int)(sizeof(stack) / sizeof(stack[0]))) {
                 stack[depth++] = fn;
@@ -678,7 +677,7 @@ static unsigned int line_func_scope_mask(int line) {
             continue;
         }
 
-        if (repl_state_document_cmds_mut()[i].type == CMD_FUNC_END) {
+        if (document_cmds[i].type == CMD_FUNC_END) {
             if (i == line)
                 return mask;
             if (depth > 0) {
@@ -708,7 +707,7 @@ int repl_flat_cmd_matches_cursor(int flat_idx, int edit_line_idx) {
         repl_flatten_refresh_current_block_highlight(edit_line_idx);
 
     const GLCmd *cmd = &flat_cmds[flat_idx];
-    const GLCmd *cursor_cmd = &repl_state_document_cmds_mut()[edit_line_idx];
+    const GLCmd *cursor_cmd = &repl_state_document_cmds()[edit_line_idx];
 
     if (cursor_cmd->valid && cursor_cmd->type == CMD_CALL) {
         return cmd->call_src_cmd_idx == edit_line_idx ||

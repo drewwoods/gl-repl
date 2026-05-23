@@ -60,6 +60,7 @@ int  repl_parse_and_normalize_strict(const char *line, int pos,
 /* ---- Text / expression parsing helpers -------------------------------- */
 
 void trim_in_place(char *s);
+void repl_format_source_float(char *out, int out_sz, float v);
 int  extract_for_args_text(const char *src,
                            char *var, int var_sz,
                            char *args, int args_sz);
@@ -93,6 +94,8 @@ int  repl_extract_assignment_target_parts(const char *src,
                                           char *name, int name_sz,
                                           char *index_expr, int index_expr_sz,
                                           char *rhs, int rhs_sz);
+int  split_top_level_args(const char *src,
+                          char args[][MAX_LINE_LEN], int max_args);
 
 /* Hard cap on goto jumps while walking one flat program, shared by the
  * executor and the replay-annotation walker. A program that exceeds this

@@ -86,6 +86,12 @@ int repl_export_config_at(const ReplExportConfig *cfg, int idx,
  * NULL bridge = no @cfg emission/parsing, which is what the demo wants. */
 static const ReplExportConfigBridge *g_export_cfg_bridge = NULL;
 
+static const char k_cfg_slug_point_attenuation[] = "point_attenuation";
+static const char k_cfg_slug_msaa[] = "msaa";
+static const char k_cfg_slug_line_smooth[] = "line_smooth";
+static const char k_cfg_slug_vertex_outlines[] = "vertex_outlines";
+static const char k_cfg_slug_vertex_points[] = "vertex_points";
+
 void repl_export_install_config_bridge(const ReplExportConfigBridge *bridge) {
     g_export_cfg_bridge = bridge;
 }
@@ -121,8 +127,8 @@ void repl_cfg_set_int(const char *slug, int value) {
  * Avoids adding a third bridge method just to detect typos. */
 int repl_cfg_known(const char *slug) {
     const ReplExportConfigBridge *b = g_export_cfg_bridge;
-    if (!slug || !b || !b->get_int) return 0;
-    return b->get_int(slug, 0) == b->get_int(slug, 1) ? 1 : 0;
+    if (!slug || !b || !b->is_known) return 0;
+    return b->is_known(slug);
 }
 
 /* Camera bridge — same shape as the cfg bridge. Step 4a moved camera-block
@@ -293,6 +299,10 @@ static int         g_deferred_var_count = 0;
 
 static void workspace_format_float(char *buf, size_t n, float v) {
     snprintf(buf, n, "%.9g", (double)v);
+}
+
+static void export_format_decl_float(char *buf, size_t n, float v) {
+    repl_format_source_float(buf, (int)n, v);
 }
 
 /* Per-call editor-text view, set by the public entry points
@@ -479,15 +489,22 @@ int repl_export_extract_cfg_slug(const char *line, char *out, size_t out_sz) {
     if (!line || !out || out_sz == 0) return 0;
     const char *p = line;
     while (*p && isspace((unsigned char)*p)) p++;
-    if (p[0] != '/' || p[1] != '/') return 0;
-    p += 2;
-    while (*p && isspace((unsigned char)*p)) p++;
-    if (*p != '@') return 0;
-    p++;
-    if (strncmp(p, "cfg", 3) != 0) return 0;
-    p += 3;
-    if (!isspace((unsigned char)*p)) return 0;
-    while (*p && isspace((unsigned char)*p)) p++;
+    if (p[0] == '/' && p[1] == '/') {
+        p += 2;
+        while (*p && isspace((unsigned char)*p)) p++;
+        if (*p != '@') return 0;
+        p++;
+        if (strncmp(p, "cfg", 3) != 0) return 0;
+        p += 3;
+        if (!isspace((unsigned char)*p)) return 0;
+        while (*p && isspace((unsigned char)*p)) p++;
+    } else if (*p == '@') {
+        p++;
+        if (strncmp(p, "cfg", 3) != 0) return 0;
+        p += 3;
+        if (!isspace((unsigned char)*p)) return 0;
+        while (*p && isspace((unsigned char)*p)) p++;
+    }
     size_t out_i = 0;
     while (*p && (isalnum((unsigned char)*p) || *p == '_') && out_i + 1 < out_sz)
         out[out_i++] = *p++;
@@ -496,13 +513,12 @@ int repl_export_extract_cfg_slug(const char *line, char *out, size_t out_sz) {
 }
 
 static int parse_cfg(const char *args) {
-    const char *p = args;
     char slug[32];
-    int slug_char_idx = 0;
-    while (*p && (isalnum((unsigned char)*p) || *p == '_') &&
-           slug_char_idx < (int)sizeof(slug) - 1)
-        slug[slug_char_idx++] = *p++;
-    slug[slug_char_idx] = '\0';
+    if (!repl_export_extract_cfg_slug(args, slug, sizeof(slug)))
+        return 0;
+    const char *p = args;
+    while (*p && (isalnum((unsigned char)*p) || *p == '_'))
+        p++;
     while (*p && isspace((unsigned char)*p)) p++;
     if (*p != '=') return 0;
     p++;
@@ -628,9 +644,9 @@ static const InitBootstrapEntry g_init_bootstrap_repl[] = {
     { "// Blending: standard src-over for translucent geometry.", NULL },
     { "glEnable(GL_BLEND);", NULL },
     { "glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);", NULL },
-    { "// Point attenuation: distance-based point-size falloff.", "point_attenuation" },
+        { "// Point attenuation: distance-based point-size falloff.", k_cfg_slug_point_attenuation },
     { "glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION, 1.0, 0.0, 0.02);",
-      "point_attenuation" },
+            k_cfg_slug_point_attenuation },
 };
 
 /* Helper: look up a cfg toggle via the installed bridge. Returns the
@@ -654,7 +670,7 @@ static int init_bootstrap_toggle_get(const char *slug, int fallback) {
  * at all. */
 static int init_bootstrap_entry_unsupported(const InitBootstrapEntry *entry) {
     return entry->toggle_slug
-        && strcmp(entry->toggle_slug, "point_attenuation") == 0
+    && strcmp(entry->toggle_slug, k_cfg_slug_point_attenuation) == 0
         && !repl_executor_point_parameter_supported();
 }
 #define NUM_INIT_BOOTSTRAP \
@@ -967,10 +983,10 @@ void repl_refresh_render_state_strings(void) {
      * "Disable" defaults below; the demo never exports anyway
      * (implemented in step 7a). */
     int msaa_on        = g_export_cfg_bridge && g_export_cfg_bridge->get_int
-                         ? g_export_cfg_bridge->get_int("msaa", 1)
+                         ? g_export_cfg_bridge->get_int(k_cfg_slug_msaa, 1)
                          : 1;
     int line_smooth_on = g_export_cfg_bridge && g_export_cfg_bridge->get_int
-                         ? g_export_cfg_bridge->get_int("line_smooth", 0)
+                         ? g_export_cfg_bridge->get_int(k_cfg_slug_line_smooth, 0)
                          : 0;
     snprintf(g_render_state_lines[0], sizeof(g_render_state_lines[0]),
              "  gl%s(GL_MULTISAMPLE);",
@@ -1219,431 +1235,6 @@ static int export_uses_tess_commands(void) {
     return 0;
 }
 
-void trim_in_place(char *s) {
-    int start = 0;
-    int len = (int)strlen(s);
-    while (start < len && isspace((unsigned char)s[start])) start++;
-    while (len > start && isspace((unsigned char)s[len - 1])) len--;
-    if (start > 0) memmove(s, s + start, (size_t)(len - start));
-    s[len - start] = '\0';
-}
-
-int repl_extract_paren_payload(const char *src, char *out, int out_sz) {
-    const char *p = strchr(src, '(');
-    if (!p) return 0;
-    p++;
-    const char *start = p;
-    p = repl_scan_to_matching_paren(p);
-    if (*p != ')') return 0;
-    int n = (int)(p - start);
-    if (n > out_sz - 1) n = out_sz - 1;
-    memcpy(out, start, (size_t)n);
-    out[n] = '\0';
-    trim_in_place(out);
-    return 1;
-}
-
-int extract_for_args_text(const char *src,
-                          char *var, int var_sz,
-                          char *args, int args_sz) {
-    const char *p = strchr(src, '(');
-    if (!p) return 0;
-    p++;
-
-    while (*p && isspace((unsigned char)*p)) p++;
-
-    int vi = 0;
-    while (*p && (isalnum((unsigned char)*p) || *p == '_') && vi < var_sz - 1)
-        var[vi++] = *p++;
-    var[vi] = '\0';
-    if (vi == 0) return 0;
-
-    while (*p && isspace((unsigned char)*p)) p++;
-    if (*p != ',') return 0;
-    p++;
-
-    const char *start = p;
-    p = repl_scan_to_matching_paren(p);
-    if (*p != ')') return 0;
-
-    int n = (int)(p - start);
-    if (n > args_sz - 1) n = args_sz - 1;
-    memcpy(args, start, (size_t)n);
-    args[n] = '\0';
-    trim_in_place(args);
-    return 1;
-}
-
-static int parse_identifier_list(const char *src,
-                                 char names[][16], int max_names) {
-    const char *p = src;
-    int count = 0;
-
-    while (*p) {
-        while (*p && isspace((unsigned char)*p)) p++;
-        if (!*p) break;
-        if (count >= max_names) return -1;
-        if (!isalpha((unsigned char)*p) && *p != '_') return -1;
-
-        int ni = 0;
-        while (*p && (isalnum((unsigned char)*p) || *p == '_')) {
-            if (ni >= 15) return -1;
-            names[count][ni++] = *p++;
-        }
-        names[count][ni] = '\0';
-        count++;
-
-        while (*p && isspace((unsigned char)*p)) p++;
-        if (!*p) break;
-        if (*p != ',') return -1;
-        p++;
-    }
-
-    return count;
-}
-
-int parse_expr_list_exact(const char *src, float *out_vals, int max_vals,
-                          ExprVar *vars, int num_vars, int *out_count) {
-    const char *p = src;
-    int count = 0;
-
-    while (*p && isspace((unsigned char)*p)) p++;
-    if (!*p) {
-        if (out_count) *out_count = 0;
-        return 1;
-    }
-
-    for (;;) {
-        ExprCtx ctx = { p, vars, num_vars };
-        float value = repl_eval_expr(&ctx);
-        if (ctx.p == p) return 0;
-        if (count >= max_vals) return 0;
-        if (out_vals) out_vals[count] = value;
-        count++;
-
-        p = ctx.p;
-        while (*p && isspace((unsigned char)*p)) p++;
-        if (!*p) break;
-        if (*p != ',') return 0;
-        p++;
-        while (*p && isspace((unsigned char)*p)) p++;
-        if (!*p) return 0;
-    }
-
-    if (out_count) *out_count = count;
-    return 1;
-}
-
-/* Parse a leading function name token into its slot index. Returns 1
- * and writes *fn on success; returns 0 on no match.
- *
- * Accepts the bare slot form `funcN` (N=0..9) plus any alias name
- * registered through repl_func_alias_set. Advances *p_inout past the
- * matched identifier on success. */
-static int parse_func_name_token(const char **p_inout, int *fn) {
-    const char *p = *p_inout;
-    while (*p && isspace((unsigned char)*p)) p++;
-    /* Bare funcN form. */
-    if (strncmp(p, "func", 4) == 0 &&
-        p[4] >= '0' && p[4] <= '9' &&
-        !isalnum((unsigned char)p[5]) && p[5] != '_') {
-        if (fn) *fn = p[4] - '0';
-        p += 5;
-        *p_inout = p;
-        return 1;
-    }
-    /* Alias form: pull a C identifier and look it up. */
-    if (!isalpha((unsigned char)*p) && *p != '_') return 0;
-    char ident[REPL_FUNC_NAME_MAX];
-    int len = 0;
-    const char *id_start = p;
-    while (*p && (isalnum((unsigned char)*p) || *p == '_') &&
-           len < REPL_FUNC_NAME_MAX - 1) {
-        ident[len++] = *p++;
-    }
-    /* If the identifier overflowed the alias-name buffer, the rest
-     * couldn't possibly be a registered alias. */
-    if (*p && (isalnum((unsigned char)*p) || *p == '_')) return 0;
-    ident[len] = '\0';
-    if (len == 0) return 0;
-    int slot = repl_func_alias_lookup_slot(ident);
-    if (slot < 0) return 0;
-    if (fn) *fn = slot;
-    *p_inout = p;
-    (void)id_start;
-    return 1;
-}
-
-int parse_repl_func_signature(const char *src, int *fn,
-                              char param_names[][16], int max_params,
-                              int *param_count) {
-    const char *p = src;
-    if (!parse_func_name_token(&p, fn)) return 0;
-
-    while (*p && isspace((unsigned char)*p)) p++;
-    if (*p == '{' || *p == '\0') {
-        if (param_count) *param_count = 0;
-        return 1;
-    }
-    if (*p != '(') return 0;
-
-    const char *payload_start = ++p;
-    p = repl_scan_to_matching_paren(p);
-    if (*p != ')') return 0;
-
-    char payload[MAX_LINE_LEN];
-    int n = (int)(p - payload_start);
-    if (n > (int)sizeof(payload) - 1) n = (int)sizeof(payload) - 1;
-    memcpy(payload, payload_start, (size_t)n);
-    payload[n] = '\0';
-    trim_in_place(payload);
-
-    while (*p == ')') p++;
-    while (*p && isspace((unsigned char)*p)) p++;
-    if (*p != '{' && *p != '\0') return 0;
-
-    if (!payload[0]) {
-        if (param_count) *param_count = 0;
-        return 1;
-    }
-
-    int count = parse_identifier_list(payload, param_names, max_params);
-    if (count < 0) return 0;
-    if (param_count) *param_count = count;
-    return 1;
-}
-
-int extract_func_call_args_text(const char *src, int *fn,
-                                char *args, int args_sz) {
-    const char *p = src;
-    if (!parse_func_name_token(&p, fn)) return 0;
-
-    while (*p && isspace((unsigned char)*p)) p++;
-    if (*p != '(') return 0;
-    p++;
-    const char *start = p;
-    p = repl_scan_to_matching_paren(p);
-    if (*p != ')') return 0;
-
-    int n = (int)(p - start);
-    if (n > args_sz - 1) n = args_sz - 1;
-    memcpy(args, start, (size_t)n);
-    args[n] = '\0';
-    trim_in_place(args);
-
-    p++;
-    while (*p && isspace((unsigned char)*p)) p++;
-    if (*p != '\0' && *p != ';') return 0;
-    return 1;
-}
-
-void format_func_header(char *out, int out_sz, const char *indent,
-                        int fn, char param_names[][16], int param_count) {
-    /* Prefer the user's alias (from the func-alias table) over the bare
-     * funcN form so the canonical source text reflects what the user
-     * typed. Falls back to funcN when no alias is registered. */
-    const char *alias = repl_func_alias_get(fn);
-    int written = alias
-        ? snprintf(out, out_sz, "%s%s", indent, alias)
-        : snprintf(out, out_sz, "%sfunc%d", indent, fn);
-    if (written < 0 || written >= out_sz) {
-        if (out_sz > 0) out[out_sz - 1] = '\0';
-        return;
-    }
-    /* Always emit `()` — even for zero-arg decls — so the canonical
-     * form mirrors C function syntax. The bare `funcN {` shape that
-     * older saves used still parses (parse_repl_func_signature
-     * accepts it) but reformat normalises to `funcN() {`. */
-    if (written < out_sz)
-        written += snprintf(out + written, out_sz - written, "(");
-    for (int param_idx = 0; param_idx < param_count && written < out_sz; param_idx++) {
-        written += snprintf(out + written, out_sz - written, "%s%s",
-                            param_idx == 0 ? "" : ", ", param_names[param_idx]);
-    }
-    if (written < out_sz)
-        written += snprintf(out + written, out_sz - written, ")");
-    if (written < out_sz)
-        snprintf(out + written, out_sz - written, " {");
-}
-
-int input_has_expr_vars(const char *s, ExprVar *vars, int num_vars) {
-    while (*s) {
-        if (!isalpha((unsigned char)*s) && *s != '_') { s++; continue; }
-        const char *start = s;
-        while (*s && (isalnum((unsigned char)*s) || *s == '_')) s++;
-        int len = (int)(s - start);
-        for (int var_idx = 0; var_idx < num_vars; var_idx++) {
-            int nlen = (int)strlen(vars[var_idx].name);
-            if (nlen == len && strncmp(start, vars[var_idx].name, len) == 0)
-                return 1;
-        }
-    }
-    return 0;
-}
-
-int input_has_any_visible_vars(const char *s, ExprVar *vars, int num_vars) {
-    return repl_eval_input_has_predef_vars(s) || input_has_expr_vars(s, vars, num_vars);
-}
-
-int repl_extract_label_name(const char *src, char *name, int name_sz) {
-    const char *p = src;
-    while (*p && isspace((unsigned char)*p)) p++;
-    if (*p == ':') p++;
-    int n = 0;
-    while (*p && (isalnum((unsigned char)*p) || *p == '_') && n < name_sz - 1)
-        name[n++] = *p++;
-    name[n] = '\0';
-    return n > 0;
-}
-
-int repl_extract_goto_label(const char *src, char *name, int name_sz) {
-    const char *p = strstr(src, "goto");
-    if (!p) p = src;
-    else p += 4;
-    while (*p && isspace((unsigned char)*p)) p++;
-    int n = 0;
-    while (*p && *p != ';' && !isspace((unsigned char)*p) &&
-           (isalnum((unsigned char)*p) || *p == '_') && n < name_sz - 1)
-        name[n++] = *p++;
-    name[n] = '\0';
-    return n > 0;
-}
-
-int repl_extract_assignment_parts(const char *src,
-                                  char *name, int name_sz,
-                                  char *rhs, int rhs_sz) {
-    char index_expr[MAX_LINE_LEN];
-
-    if (!repl_extract_assignment_target_parts(src,
-                                              name, name_sz,
-                                              index_expr, sizeof(index_expr),
-                                              rhs, rhs_sz))
-        return 0;
-    return index_expr[0] == '\0';
-}
-
-int repl_extract_assignment_target_parts(const char *src,
-                                         char *name, int name_sz,
-                                         char *index_expr, int index_expr_sz,
-                                         char *rhs, int rhs_sz) {
-    const char *p = src;
-    const char *index_start = NULL;
-    const char *index_end = NULL;
-    const char *rhs_start;
-    const char *rhs_end;
-    const char *comment_start;
-    int n = 0;
-
-    while (*p && isspace((unsigned char)*p)) p++;
-    while (*p && (isalnum((unsigned char)*p) || *p == '_')) {
-        if (name && n < name_sz - 1)
-            name[n] = *p;
-        n++;
-        p++;
-    }
-    if (name && name_sz > 0)
-        name[n < name_sz - 1 ? n : name_sz - 1] = '\0';
-    if (n == 0)
-        return 0;
-
-    if (index_expr && index_expr_sz > 0)
-        index_expr[0] = '\0';
-
-    while (*p && isspace((unsigned char)*p)) p++;
-    if (*p == '[') {
-        int depth = 1;
-        index_start = ++p;
-        while (*p && depth > 0) {
-            if (*p == '[')
-                depth++;
-            else if (*p == ']')
-                depth--;
-            if (depth > 0)
-                p++;
-        }
-        if (depth != 0 || !*p)
-            return 0;
-        index_end = p;
-        p++;
-
-        if (index_expr && index_expr_sz > 0) {
-            int idx_len = (int)(index_end - index_start);
-            if (idx_len > index_expr_sz - 1)
-                idx_len = index_expr_sz - 1;
-            memcpy(index_expr, index_start, (size_t)idx_len);
-            index_expr[idx_len] = '\0';
-            trim_in_place(index_expr);
-            if (!index_expr[0])
-                return 0;
-        }
-    }
-
-    while (*p && isspace((unsigned char)*p)) p++;
-    if (*p != '=' || p[1] == '=')
-        return 0;
-    p++;
-    while (*p && isspace((unsigned char)*p)) p++;
-    if (!*p)
-        return 0;
-
-    rhs_start = p;
-    rhs_end = src + strlen(src);
-    comment_start = strstr(rhs_start, "//");
-    if (comment_start && comment_start < rhs_end)
-        rhs_end = comment_start;
-    while (rhs_end > rhs_start && isspace((unsigned char)rhs_end[-1])) rhs_end--;
-    if (rhs_end > rhs_start && rhs_end[-1] == ';') rhs_end--;
-    while (rhs_end > rhs_start && isspace((unsigned char)rhs_end[-1])) rhs_end--;
-    if (rhs_end <= rhs_start)
-        return 0;
-
-    if (rhs && rhs_sz > 0) {
-        int rn = (int)(rhs_end - rhs_start);
-        if (rn > rhs_sz - 1) rn = rhs_sz - 1;
-        memcpy(rhs, rhs_start, (size_t)rn);
-        rhs[rn] = '\0';
-        trim_in_place(rhs);
-    }
-    return 1;
-}
-
-static int split_top_level_args(const char *src, char args[][MAX_LINE_LEN], int max_args) {
-    const char *p = src;
-    int count = 0;
-
-    while (*p) {
-        while (*p && isspace((unsigned char)*p))
-            p++;
-        if (!*p)
-            break;
-        if (count >= max_args)
-            return -1;
-
-        const char *start = p;
-        p = repl_scan_next_arg_delim(p);
-
-        int n = (int)(p - start);
-        if (n > MAX_LINE_LEN - 1)
-            n = MAX_LINE_LEN - 1;
-        memcpy(args[count], start, (size_t)n);
-        args[count][n] = '\0';
-        trim_in_place(args[count]);
-        count++;
-
-        while (*p && isspace((unsigned char)*p))
-            p++;
-        if (*p == ',') {
-            p++;
-            continue;
-        }
-        if (*p == '\0')
-            break;
-        return -1;
-    }
-
-    return count;
-}
-
 static int write_tess_source_as_c(FILE *f, const GLCmd *cmd,
                                   const char *source_text) {
     char payload[MAX_LINE_LEN];
@@ -1809,9 +1400,11 @@ static void write_canonical_cmd_as_c(FILE *f, const GLCmd *cmd, int cmd_idx,
         }
         int off = fprintf(f, "  // @declare");
         for (int di = 0; di < cmd->var_decl_count; di++) {
-            if (has_init[di])
-                off += fprintf(f, " %s=%.9g", cmd->var_names[di], inits[di]);
-            else
+            if (has_init[di]) {
+                char vbuf[32];
+                export_format_decl_float(vbuf, sizeof(vbuf), inits[di]);
+                off += fprintf(f, " %s=%s", cmd->var_names[di], vbuf);
+            } else
                 off += fprintf(f, " %s", cmd->var_names[di]);
         }
         (void)off;
@@ -1971,8 +1564,8 @@ static void write_render_body_range_as_c(FILE *f, int start, int end_idx,
 static int export_count_enabled_passes(void) {
     int count = 1;
     if (g_export_cfg_bridge && g_export_cfg_bridge->get_int) {
-        if (g_export_cfg_bridge->get_int("vertex_outlines", 0)) count++;
-        if (g_export_cfg_bridge->get_int("vertex_points", 0)) count++;
+        if (g_export_cfg_bridge->get_int(k_cfg_slug_vertex_outlines, 0)) count++;
+        if (g_export_cfg_bridge->get_int(k_cfg_slug_vertex_points, 0)) count++;
     }
     return count;
 }
@@ -2004,8 +1597,10 @@ static void write_predef_var_globals(FILE *f) {
             /* `t` is overwritten each frame in display() from glutGet. */
             fprintf(f, "static float %s = 0.0f;\n", name);
         } else {
-            fprintf(f, "static float %s = %.9g;\n",
-                    name, g_predef_vars[var_idx].value);
+            char vbuf[32];
+            export_format_decl_float(vbuf, sizeof(vbuf),
+                                     g_predef_vars[var_idx].value);
+            fprintf(f, "static float %s = %s;\n", name, vbuf);
         }
     }
 }
@@ -2340,9 +1935,12 @@ static int import_parse_declare_marker(const char *line, int *loaded,
         }
         off += snprintf(decl_line + off, sizeof(decl_line) - (size_t)off,
                         count == 0 ? " %.*s" : ", %.*s", len, start);
-        if (has_init)
+        if (has_init) {
+            char vbuf[32];
+            export_format_decl_float(vbuf, sizeof(vbuf), init_val);
             off += snprintf(decl_line + off, sizeof(decl_line) - (size_t)off,
-                            " = %.9g", init_val);
+                            " = %s", vbuf);
+        }
         count++;
     }
     if (count == 0) {
@@ -2608,8 +2206,10 @@ static int import_make_repl_for_header(const char *line, char *out, int out_sz) 
             n = snprintf(out, (size_t)out_sz, "for(%s, %s, %s, %s) {",
                          var, start_expr, end_expr, step_expr);
         } else if (step_v != 1.0f) {
-            n = snprintf(out, (size_t)out_sz, "for(%s, %s, %s, %.9g) {",
-                         var, start_expr, end_expr, step_v);
+            char step_buf[32];
+            repl_format_source_float(step_buf, sizeof(step_buf), step_v);
+            n = snprintf(out, (size_t)out_sz, "for(%s, %s, %s, %s) {",
+                         var, start_expr, end_expr, step_buf);
         } else {
             n = snprintf(out, (size_t)out_sz, "for(%s, %s, %s) {",
                          var, start_expr, end_expr);
@@ -2619,12 +2219,23 @@ static int import_make_repl_for_header(const char *line, char *out, int out_sz) 
         return 1;
     }
 
-    if (step_v != 1.0f)
-        snprintf(out, out_sz, "for(%s, %.9g, %.9g, %.9g) {",
-                 var, start_v, end_v, step_v);
-    else
-        snprintf(out, out_sz, "for(%s, %.9g, %.9g) {",
-                 var, start_v, end_v);
+    if (step_v != 1.0f) {
+        char start_buf[32];
+        char end_buf[32];
+        char step_buf[32];
+        repl_format_source_float(start_buf, sizeof(start_buf), start_v);
+        repl_format_source_float(end_buf, sizeof(end_buf), end_v);
+        repl_format_source_float(step_buf, sizeof(step_buf), step_v);
+        snprintf(out, out_sz, "for(%s, %s, %s, %s) {",
+                 var, start_buf, end_buf, step_buf);
+    } else {
+        char start_buf[32];
+        char end_buf[32];
+        repl_format_source_float(start_buf, sizeof(start_buf), start_v);
+        repl_format_source_float(end_buf, sizeof(end_buf), end_v);
+        snprintf(out, out_sz, "for(%s, %s, %s) {",
+                 var, start_buf, end_buf);
+    }
     return 1;
 }
 
@@ -3198,10 +2809,10 @@ static void emit_export_display_geometry(FILE *f) {
      * which is fine because the demo doesn't export (implemented in
      * step 7a). */
     int outlines_on = g_export_cfg_bridge && g_export_cfg_bridge->get_int
-                      ? g_export_cfg_bridge->get_int("vertex_outlines", 0)
+                      ? g_export_cfg_bridge->get_int(k_cfg_slug_vertex_outlines, 0)
                       : 0;
     int vpoints_on  = g_export_cfg_bridge && g_export_cfg_bridge->get_int
-                      ? g_export_cfg_bridge->get_int("vertex_points", 0)
+                      ? g_export_cfg_bridge->get_int(k_cfg_slug_vertex_points, 0)
                       : 0;
     const ExportDisplayPassSpec passes[] = {
         { "Vertex Fill Pass",    1,               NULL },
@@ -3774,91 +3385,3 @@ void repl_dump_code_panel_text(FILE *out, SourceTextView text) {
     fflush(dst);
 }
 
-// Disabled: dumping the code panel's text with wrapping applied pulls in
-// ui/text_layout, which crosses src/repl's intended independence boundary.
-// Kept #if 0'd rather than deleted so the wrapping approach can be restored
-// from history if it's ever needed again.
-#if 0
-#include "ui/core/text_layout.h"
-static void dump_code_panel_wrapped_line(FILE *dst, const char *text,
-                                         int first_x, int panel_w,
-                                         int wrap_at_comma) {
-    /* wrap_at_comma is threaded explicitly from the ReplExportLayout
-     * struct that the controller built (implemented in step 7c). */
-    const char *src = text ? text : "";
-    CodeLayout layout =
-        code_layout_make(panel_w, first_x, FONT_W, wrap_at_comma);
-    CodeWrapIter it;
-    int start, len, x;
-
-    code_layout_wrap_iter_init(&it, src, &layout);
-    while (code_layout_wrap_iter_next(&it, &start, &len, &x)) {
-        int prefix_chars = (x - first_x) / FONT_W;
-        fprintf(dst, "%*s%.*s\n", prefix_chars, "", len, src + start);
-    }
-}
-
-void repl_dump_code_panel_visual_text(FILE *out, SourceTextView text,
-                                      const ReplExportLayout *layout,
-                                      int code_margin_x) {
-    FILE *dst = out ? out : stdout;
-    /* Panel width + presentation flags come in opaquely
-     * through the layout struct. The controller computes them via
-     * `ui_layout_*` / `glr_state_presentation()` before calling.
-     *
-     * NULL falls back to defensive defaults skewed toward a typical
-     * interactive layout (so dumps remain readable when re-loaded
-     * with the editor running): code_panel_w = 0 (which disables
-     * wrap), show_vertex_indices = 1, wrap_at_comma = 1. The full
-     * fallback contract lives on `ReplExportLayout`'s declaration
-     * in src/repl/export.h (implemented in step 7c). */
-    int panel_w       = layout ? layout->code_panel_w        : 0;
-    int show_indices  = layout ? layout->show_vertex_indices : 1;
-    int wrap_at_comma = layout ? layout->wrap_at_comma       : 1;
-    int linenum_w = 4 * FONT_W;
-    int idx_col_w = show_indices ? (6 * FONT_W) : 0;
-    int margin_x = code_margin_x >= 0 ? code_margin_x : 0;
-    int idx_x = margin_x + linenum_w + FONT_W;
-    int text_x = idx_x + idx_col_w;
-
-    s_export_text_view = text;
-
-    repl_refresh_render_state_strings();
-    repl_refresh_camera_lines();
-
-    fprintf(dst, "--- header_pre ---\n");
-    /* Dump pre-header lines with code panel wrapping. */
-    for (int line_idx = 0; g_header_pre[line_idx]; line_idx++)
-        dump_code_panel_wrapped_line(dst, g_header_pre[line_idx], text_x, panel_w, wrap_at_comma);
-
-    fprintf(dst, "--- display_header ---\n");
-    /* Dump display() opening lines with code panel wrapping. */
-    for (int line_idx = 0; g_display_header[line_idx]; line_idx++)
-        dump_code_panel_wrapped_line(dst, g_display_header[line_idx], text_x, panel_w, wrap_at_comma);
-    dump_code_panel_wrapped_line(dst, REPL_CODE_PANEL_SCRATCH_DECL_LINE, text_x, panel_w, wrap_at_comma);
-
-    fprintf(dst, "--- render_state ---\n");
-    /* Dump render state with code panel wrapping. */
-    for (int state_line_idx = 0; state_line_idx < RENDER_STATE_LINE_COUNT; state_line_idx++)
-        dump_code_panel_wrapped_line(dst, g_render_state_lines[state_line_idx], text_x, panel_w, wrap_at_comma);
-
-    fprintf(dst, "--- camera ---\n");
-    /* Dump camera lines with code panel wrapping. */
-    for (int cam_line_idx = 0; cam_line_idx < CAM_LINE_COUNT; cam_line_idx++)
-        dump_code_panel_wrapped_line(dst, g_cam_lines[cam_line_idx], text_x, panel_w, wrap_at_comma);
-
-    fprintf(dst, "--- header_post ---\n");
-    /* Dump post-header lines with code panel wrapping. */
-    for (int line_idx = 0; g_header_post[line_idx]; line_idx++)
-        dump_code_panel_wrapped_line(dst, g_header_post[line_idx], text_x, panel_w, wrap_at_comma);
-
-    fprintf(dst, "--- source ---\n");
-    /* Dump all valid user commands with code panel wrapping. */
-    for (int cmd_idx = 0; cmd_idx < repl_state_document_count(); cmd_idx++) {
-        if (!repl_state_document_cmds_mut()[cmd_idx].valid) continue;
-        dump_code_panel_wrapped_line(dst, export_document_text(cmd_idx), text_x, panel_w, wrap_at_comma);
-    }
-
-    fflush(dst);
-}
-#endif

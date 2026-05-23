@@ -63,7 +63,6 @@ typedef enum {
     REPL_COMPILED_REPLACE_ONE,
     REPL_COMPILED_INSERT_MANY,
     REPL_COMPILED_DELETE_RANGE,
-    REPL_COMPILED_LOAD_ALL,
 } ReplCompiledChangeKind;
 
 /* The maximum number of cmds a single compile call can describe.

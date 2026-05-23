@@ -72,7 +72,7 @@ static const char *replay_flat_text(int flat_idx) {
     if (flat_idx < 0 || flat_idx >= repl_state_flat_program_count())
         return "";
 
-    flat_cmd = &repl_state_flat_program_cmds_mut()[flat_idx];
+    flat_cmd = &repl_state_flat_program_cmds()[flat_idx];
     if (flat_cmd->src_cmd_idx < 0 || flat_cmd->src_cmd_idx >= repl_state_document_count())
         return "";
 
@@ -81,13 +81,14 @@ static const char *replay_flat_text(int flat_idx) {
 
 static void replay_annotations_rebuild_cache(void) {
     ReplReplayRuntimeState replay = replay_state_view();
+    const GLCmd *flat_cmds = repl_state_flat_program_cmds();
     memset(s_replay_flat_map, 0xff, sizeof(int) * (size_t)repl_state_document_count());
 
     /* Backward pass: first match per src_cmd_idx = most recent execution */
     for (int j = replay.pc - 1; j >= 0; j--) {
-        int src = repl_state_flat_program_cmds_mut()[j].src_cmd_idx;
+        int src = flat_cmds[j].src_cmd_idx;
         if (src >= 0 && src < repl_state_document_count() &&
-            s_replay_flat_map[src] == -1 && repl_state_flat_program_cmds_mut()[j].valid)
+            s_replay_flat_map[src] == -1 && flat_cmds[j].valid)
             s_replay_flat_map[src] = j;
     }
 
@@ -108,6 +109,7 @@ static void replay_annotations_invalidate(void) {
 /* Find the most recent flat command for a source line, at or before replay_pc */
 static int replay_annotation_flat_cmd_for_source(int src_line) {
     ReplReplayRuntimeState replay = replay_state_view();
+    const GLCmd *flat_cmds = repl_state_flat_program_cmds();
 
     if (replay.pc <= 0) return -1;
     /* Use per-frame cache when available */
@@ -115,7 +117,7 @@ static int replay_annotation_flat_cmd_for_source(int src_line) {
         src_line >= 0 && src_line < repl_state_document_count())
         return s_replay_flat_map[src_line];
     for (int j = replay.pc - 1; j >= 0; j--) {
-        if (repl_state_flat_program_cmds_mut()[j].src_cmd_idx == src_line && repl_state_flat_program_cmds_mut()[j].valid)
+        if (flat_cmds[j].src_cmd_idx == src_line && flat_cmds[j].valid)
             return j;
     }
     return -1;
@@ -180,7 +182,6 @@ static void replay_subst_scratch_reads(
     if (!out || out_size <= 0) {
         return;
     }
-    out[0] = '\0';
     if (!source)
         return;
 
@@ -341,16 +342,17 @@ static int visible_var_index(const ExprVar *vars, int num_vars, const char *name
 static int replay_flat_cmd_context_matches(int flat_idx, int current_flat_idx) {
     const FlatCmdLocalVars *flat_vars;
     const FlatCmdLocalVars *cur_vars;
+    const GLCmd *flat_cmds = repl_state_flat_program_cmds();
 
     if (flat_idx < 0 || current_flat_idx < 0)
         return 1;
 
-    if (repl_state_flat_program_cmds_mut()[flat_idx].func_scope_mask !=
-        repl_state_flat_program_cmds_mut()[current_flat_idx].func_scope_mask)
+    if (flat_cmds[flat_idx].func_scope_mask !=
+        flat_cmds[current_flat_idx].func_scope_mask)
         return 0;
 
-    flat_vars = &repl_state_flat_program_local_vars_mut()[flat_idx];
-    cur_vars = &repl_state_flat_program_local_vars_mut()[current_flat_idx];
+    flat_vars = &repl_state_flat_program_local_vars()[flat_idx];
+    cur_vars = &repl_state_flat_program_local_vars()[current_flat_idx];
 
     for (int i = 0; i < flat_vars->num_vars; i++) {
         int ci = visible_var_index(cur_vars->vars, cur_vars->num_vars,
@@ -366,6 +368,7 @@ static int replay_flat_cmd_context_matches(int flat_idx, int current_flat_idx) {
 static int find_replay_assignment_flat_cmd(int src_line) {
     ReplReplayRuntimeState replay = replay_state_view();
     int current_flat_idx = replay_current_flat_cmd();
+    const GLCmd *flat_cmds = repl_state_flat_program_cmds();
 
     if (replay.pc <= 0)
         return -1;
@@ -383,7 +386,7 @@ static int find_replay_assignment_flat_cmd(int src_line) {
 
     /* Fallback: full scan (only for context mismatch in function bodies) */
     for (int j = replay.pc - 1; j >= 0; j--) {
-        if (repl_state_flat_program_cmds_mut()[j].src_cmd_idx != src_line || !repl_state_flat_program_cmds_mut()[j].valid)
+        if (flat_cmds[j].src_cmd_idx != src_line || !flat_cmds[j].valid)
             continue;
         if (current_flat_idx < 0 ||
             j == current_flat_idx ||
@@ -403,7 +406,7 @@ static int build_visible_vars_from_predef_values(int flat_idx,
         return 0;
 
     if (flat_idx >= 0 && flat_idx < repl_state_flat_program_count()) {
-        const FlatCmdLocalVars *lcvars = &repl_state_flat_program_local_vars_mut()[flat_idx];
+        const FlatCmdLocalVars *lcvars = &repl_state_flat_program_local_vars()[flat_idx];
         for (int i = 0; i < lcvars->num_vars && nv < max_out; i++)
             out[nv++] = lcvars->vars[i];
     }
@@ -547,6 +550,7 @@ static int replay_copy_runtime_state_before_flat_cmd(
     int max_vals,
     float out_scratch[REPL_SCRATCH_ARRAY_COUNT][REPL_SCRATCH_ARRAY_LEN]) {
     ReplReplayRuntimeState replay = replay_state_view();
+    const GLCmd *flat_cmds = repl_state_flat_program_cmds();
     int pc = 0;
     int goto_count = 0;
 
@@ -570,12 +574,12 @@ static int replay_copy_runtime_state_before_flat_cmd(
         target_pc = repl_state_flat_program_count();
 
     while (pc < target_pc) {
-        if (!repl_state_flat_program_cmds_mut()[pc].valid) {
+        if (!flat_cmds[pc].valid) {
             pc++;
             continue;
         }
 
-        switch (repl_state_flat_program_cmds_mut()[pc].type) {
+        switch (flat_cmds[pc].type) {
         case CMD_VAR_ASSIGN: {
             /* Mirror executor.c CMD_VAR_ASSIGN: flatten owns the eval
              * and stores the result in args[0]. Re-evaluating here
@@ -583,8 +587,8 @@ static int replay_copy_runtime_state_before_flat_cmd(
              * re-flatten, so args[0] is the value the live executor
              * keeps applying) and also double-apply self-referential
              * assignments like `tmp2 = tmp2 + 1`. */
-            int vi = repl_state_flat_program_cmds_mut()[pc].num_args;
-            float value = repl_state_flat_program_cmds_mut()[pc].args[0];
+            int vi = flat_cmds[pc].num_args;
+            float value = flat_cmds[pc].args[0];
             if (vi >= 0 && vi < g_num_predef_vars)
                 out_vals[vi] = value;
             break;
@@ -592,9 +596,9 @@ static int replay_copy_runtime_state_before_flat_cmd(
         case CMD_SCRATCH_ASSIGN: {
             /* Same model as CMD_VAR_ASSIGN — apply the precomputed
              * (array, index, value) triple flatten stored. */
-            int array_idx = (int)repl_state_flat_program_cmds_mut()[pc].args[0];
-            int elem_idx = (int)repl_state_flat_program_cmds_mut()[pc].args[1];
-            float value = repl_state_flat_program_cmds_mut()[pc].args[2];
+            int array_idx = (int)flat_cmds[pc].args[0];
+            int elem_idx = (int)flat_cmds[pc].args[1];
+            float value = flat_cmds[pc].args[2];
 
             if (out_scratch && array_idx >= 0 && array_idx < REPL_SCRATCH_ARRAY_COUNT &&
                 elem_idx >= 0 && elem_idx < REPL_SCRATCH_ARRAY_LEN)
@@ -602,8 +606,8 @@ static int replay_copy_runtime_state_before_flat_cmd(
             break;
         }
         case CMD_IF_BEGIN: {
-            float cond = repl_state_flat_program_cmds_mut()[pc].args[0];
-            if (repl_state_flat_program_cmds_mut()[pc].has_vars) {
+            float cond = flat_cmds[pc].args[0];
+            if (flat_cmds[pc].has_vars) {
                 char cond_text[MAX_LINE_LEN];
                 if (repl_extract_paren_payload(replay_flat_text(pc),
                                                cond_text, sizeof(cond_text)) &&
@@ -615,8 +619,8 @@ static int replay_copy_runtime_state_before_flat_cmd(
             if (cond == 0.0f) {
                 int depth = 1;
                 while (depth > 0 && ++pc < target_pc) {
-                    if (repl_state_flat_program_cmds_mut()[pc].type == CMD_IF_BEGIN) depth++;
-                    else if (repl_state_flat_program_cmds_mut()[pc].type == CMD_IF_END) depth--;
+                    if (flat_cmds[pc].type == CMD_IF_BEGIN) depth++;
+                    else if (flat_cmds[pc].type == CMD_IF_END) depth--;
                 }
             }
             break;
@@ -630,8 +634,8 @@ static int replay_copy_runtime_state_before_flat_cmd(
                 return 0;
             for (int li = 0; li < repl_state_flat_program_count(); li++) {
                 char target_label[64];
-                if (repl_state_flat_program_cmds_mut()[li].valid &&
-                    repl_state_flat_program_cmds_mut()[li].type == CMD_GOTO_LABEL &&
+                if (flat_cmds[li].valid &&
+                    flat_cmds[li].type == CMD_GOTO_LABEL &&
                     repl_extract_label_name(replay_flat_text(li),
                                             target_label,
                                             sizeof(target_label)) &&
@@ -661,6 +665,7 @@ next_pc:
  * Total cost: O(replay_pc), called once per frame during cache rebuild. */
 static void replay_build_predef_snapshots(void) {
     ReplReplayRuntimeState replay = replay_state_view();
+    const GLCmd *flat_cmds = repl_state_flat_program_cmds();
     /* Zero-initialized so no later read can hit an indeterminate slot if a
      * branch below fills only [0, g_num_predef_vars). */
     float vals[MAX_PREDEF_VARS] = {0};
@@ -684,7 +689,7 @@ static void replay_build_predef_snapshots(void) {
 
     /* Macro: snapshot predef vals for a flat position's source command */
     #define SNAP_IF_MAPPED(flat_pc) do {                                    \
-        int _src = repl_state_flat_program_cmds_mut()[flat_pc].src_cmd_idx;                        \
+        int _src = flat_cmds[(flat_pc)].src_cmd_idx;                                               \
         if (_src >= 0 && _src < repl_state_document_count() &&                               \
             s_replay_flat_map[_src] == (flat_pc) &&                         \
             !s_replay_predef_snap_valid[_src]) {                            \
@@ -699,22 +704,22 @@ static void replay_build_predef_snapshots(void) {
     while (pc < target_pc) {
         SNAP_IF_MAPPED(pc);
 
-        if (!repl_state_flat_program_cmds_mut()[pc].valid) { pc++; continue; }
+        if (!flat_cmds[pc].valid) { pc++; continue; }
 
-        switch (repl_state_flat_program_cmds_mut()[pc].type) {
+        switch (flat_cmds[pc].type) {
         case CMD_VAR_ASSIGN: {
             /* Mirror executor.c — apply args[0] directly (see the
              * matching comment in replay_copy_runtime_state_before_flat_cmd). */
-            int vi = repl_state_flat_program_cmds_mut()[pc].num_args;
-            float value = repl_state_flat_program_cmds_mut()[pc].args[0];
+            int vi = flat_cmds[pc].num_args;
+            float value = flat_cmds[pc].args[0];
             if (vi >= 0 && vi < g_num_predef_vars)
                 vals[vi] = value;
             break;
         }
         case CMD_SCRATCH_ASSIGN: {
-            int array_idx = (int)repl_state_flat_program_cmds_mut()[pc].args[0];
-            int elem_idx = (int)repl_state_flat_program_cmds_mut()[pc].args[1];
-            float value = repl_state_flat_program_cmds_mut()[pc].args[2];
+            int array_idx = (int)flat_cmds[pc].args[0];
+            int elem_idx = (int)flat_cmds[pc].args[1];
+            float value = flat_cmds[pc].args[2];
 
             if (array_idx >= 0 && array_idx < REPL_SCRATCH_ARRAY_COUNT &&
                 elem_idx >= 0 && elem_idx < REPL_SCRATCH_ARRAY_LEN)
@@ -722,8 +727,8 @@ static void replay_build_predef_snapshots(void) {
             break;
         }
         case CMD_IF_BEGIN: {
-            float cond = repl_state_flat_program_cmds_mut()[pc].args[0];
-            if (repl_state_flat_program_cmds_mut()[pc].has_vars) {
+            float cond = flat_cmds[pc].args[0];
+            if (flat_cmds[pc].has_vars) {
                 char cond_text[MAX_LINE_LEN];
                 if (repl_extract_paren_payload(replay_flat_text(pc),
                                                cond_text, sizeof(cond_text)) &&
@@ -735,8 +740,8 @@ static void replay_build_predef_snapshots(void) {
                 int depth = 1;
                 while (depth > 0 && ++pc < target_pc) {
                     SNAP_IF_MAPPED(pc);
-                    if (repl_state_flat_program_cmds_mut()[pc].type == CMD_IF_BEGIN) depth++;
-                    else if (repl_state_flat_program_cmds_mut()[pc].type == CMD_IF_END) depth--;
+                    if (flat_cmds[pc].type == CMD_IF_BEGIN) depth++;
+                    else if (flat_cmds[pc].type == CMD_IF_END) depth--;
                 }
             }
             break;
@@ -750,8 +755,8 @@ static void replay_build_predef_snapshots(void) {
                 goto snap_done;
             for (int li = 0; li < repl_state_flat_program_count(); li++) {
                 char target_label[64];
-                if (repl_state_flat_program_cmds_mut()[li].valid &&
-                    repl_state_flat_program_cmds_mut()[li].type == CMD_GOTO_LABEL &&
+                if (flat_cmds[li].valid &&
+                    flat_cmds[li].type == CMD_GOTO_LABEL &&
                     repl_extract_label_name(replay_flat_text(li),
                                             target_label,
                                             sizeof(target_label)) &&
@@ -813,7 +818,7 @@ static int build_replay_assignment_inline_comment(int cmd_idx, int flat_idx,
     nv = build_visible_vars_from_predef_values(flat_idx, predef_vals,
                                                visible_vars,
                                                (int)(sizeof(visible_vars) / sizeof(visible_vars[0])));
-    type = repl_state_document_cmds_mut()[cmd_idx].type;
+    type = repl_state_document_cmds()[cmd_idx].type;
     if (type == CMD_VAR_ASSIGN) {
         if (!repl_extract_assignment_parts(replay_document_text(cmd_idx),
                                            name, sizeof(name),
@@ -822,7 +827,7 @@ static int build_replay_assignment_inline_comment(int cmd_idx, int flat_idx,
             return 0;
 
         {
-            float value = repl_state_flat_program_cmds_mut()[flat_idx].args[0];
+            float value = repl_state_flat_program_cmds()[flat_idx].args[0];
             subst_visible_vars(rhs, rhs_subst, sizeof(rhs_subst),
                                NULL, 0, visible_vars, nv);
             replay_eval_expr_with_state(flat_idx, rhs, predef_vals, scratch_vals,
@@ -852,8 +857,8 @@ static int build_replay_assignment_inline_comment(int cmd_idx, int flat_idx,
         return 0;
 
     {
-        float resolved_index = repl_state_flat_program_cmds_mut()[flat_idx].args[1];
-        float value = repl_state_flat_program_cmds_mut()[flat_idx].args[2];
+        float resolved_index = repl_state_flat_program_cmds()[flat_idx].args[1];
+        float value = repl_state_flat_program_cmds()[flat_idx].args[2];
         char rhs_with_scratch[MAX_LINE_LEN];
         replay_subst_scratch_reads(flat_idx, rhs, rhs_with_scratch,
                                    sizeof(rhs_with_scratch),
@@ -870,12 +875,12 @@ static int build_replay_assignment_inline_comment(int cmd_idx, int flat_idx,
             strcmp(skip_leading_ws(rhs_subst), skip_leading_ws(rhs)) != 0 &&
             !expr_has_visible_vars(rhs_subst, visible_vars, nv)) {
             snprintf(out, out_size, " // %s[%d] = %s = %g",
-                     name[0] ? name : replay_scratch_name((int)repl_state_flat_program_cmds_mut()[flat_idx].args[0]),
+                     name[0] ? name : replay_scratch_name((int)repl_state_flat_program_cmds()[flat_idx].args[0]),
                      (int)resolved_index,
                      skip_leading_ws(rhs_subst), value);
         } else {
             snprintf(out, out_size, " // %s[%d] = %g",
-                     name[0] ? name : replay_scratch_name((int)repl_state_flat_program_cmds_mut()[flat_idx].args[0]),
+                     name[0] ? name : replay_scratch_name((int)repl_state_flat_program_cmds()[flat_idx].args[0]),
                      (int)resolved_index, value);
         }
         return 1;
@@ -903,11 +908,11 @@ int replay_code_panel_get_command_display_text(SourceTextView text,
 
     if (!replay.active ||
         !replay.expand_args ||
-        !repl_state_document_cmds_mut()[cmd_idx].has_vars)
+        !repl_state_document_cmds()[cmd_idx].has_vars)
         return 1;
 
-    if (repl_state_document_cmds_mut()[cmd_idx].type != CMD_VAR_ASSIGN &&
-        repl_state_document_cmds_mut()[cmd_idx].type != CMD_SCRATCH_ASSIGN)
+    if (repl_state_document_cmds()[cmd_idx].type != CMD_VAR_ASSIGN &&
+        repl_state_document_cmds()[cmd_idx].type != CMD_SCRATCH_ASSIGN)
         return 1;
 
     flat_idx = find_replay_assignment_flat_cmd(cmd_idx);

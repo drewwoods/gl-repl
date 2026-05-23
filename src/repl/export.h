@@ -110,6 +110,11 @@ typedef struct {
      * if "point_attenuation" toggle is on). Returns `fallback` when
      * the slug is unknown or the bridge isn't installed. */
     int  (*get_int)(const char *slug, int fallback);
+    /* Explicit known-slug query for import/export validation. */
+    int  (*is_known)(const char *slug);
+    /* True when a slug is part of the scene-local cfg subset that built-in
+     * examples are allowed to apply in their leading @cfg metadata. */
+    int  (*slug_is_scene_subset)(const char *slug);
 } ReplExportConfigBridge;
 
 /* Install or read the process-wide cfg bridge used by export/import and scene
@@ -249,33 +254,22 @@ extern const char  *g_footer_post_init[];
     "B[" REPL_EXPORT_STRINGIFY(REPL_SCRATCH_ARRAY_LEN) "], " \
     "C[" REPL_EXPORT_STRINGIFY(REPL_SCRATCH_ARRAY_LEN) "];"
 
-/* Controller-owned layout snapshot used by export and code-panel dumps.
+/* Controller-owned layout snapshot used by export.
  *
- * The exporter needs a few geometry and wrapping values to format saved output
- * and preview text, but it should not query UI or app state directly. Callers
- * compute the numbers once per export and pass them in here as opaque integers.
- * This data flow was moved out of hidden ui/glr state reads (implemented in
- * step 7c of feature/decouple-repl-from-gl-repl-alt.md).
+ * The exporter needs scene geometry to preserve aspect ratio in saved output,
+ * but it should not query UI or app state directly. Callers compute the
+ * numbers once per export and pass them in here as opaque integers. This data
+ * flow was moved out of hidden ui/glr state reads (implemented in step 7c of
+ * feature/decouple-repl-from-gl-repl-alt.md).
  *
  * Callers that do not have a viewport on hand (LRU evict in
  * src/repl/scenes.c, headless tests, the standalone repl_demo which does
  * not export) may pass NULL. The export call sites then use
  * defensive defaults: scene_w / scene_h fall back to 800x600 in the
- * exported display() boilerplate, code_panel_w defaults to 0 (which
- * disables wrap), wrap_at_comma defaults to 1, and
- * show_vertex_indices defaults to 1. The defaults are deliberately
- * skewed toward "matches a typical interactive layout" so saved
- * files remain readable when re-loaded with the editor running. */
+ * exported display() boilerplate. */
 typedef struct {
-    int viewport_w;          /* ui_state_viewport().window_w */
-    int viewport_h;          /* ui_state_viewport().window_h */
-    int scene_x;             /* ui_layout_scene_rect — geometry preserved in export */
-    int scene_y;
     int scene_w;
     int scene_h;
-    int code_panel_w;        /* ui_layout_code_panel_rect width — used by dump wrap */
-    int wrap_at_comma;       /* glr_state_presentation().wrap_at_comma */
-    int show_vertex_indices; /* glr_state_presentation().show_vertex_indices */
 } ReplExportLayout;
 
 /* Export current REPL state to a C source file. Writes header metadata (@var, @cfg,
@@ -332,16 +326,5 @@ int  repl_export_lights_init_line_count(void);
 void repl_export_lights_init_line(int i, char *buf, size_t n);
 int  repl_export_lights_display_line_count(void);
 void repl_export_lights_display_line(int i, char *buf, size_t n);
-
-#if 0
-/* Visual dump consumes the explicit layout snapshot so the REPL pipeline does
- * not reach into ui_state / glr_state for panel width or presentation flags.
- * The plain text dump above doesn't need the struct because it doesn't measure
- * or wrap. `code_margin_x` is passed by the caller so this helper still stays
- * free of UI metric ownership. Step 7c documented that dependency cut. */
-void repl_dump_code_panel_visual_text(FILE *out, SourceTextView text,
-                                      const ReplExportLayout *layout,
-                                      int code_margin_x);
-#endif
 
 #endif

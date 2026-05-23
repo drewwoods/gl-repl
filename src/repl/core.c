@@ -149,9 +149,10 @@ const char *repl_mode_name(GLenum mode) {
 
 GLenum repl_current_begin_mode(void) {
     GLenum mode = GL_TRIANGLES;
+    const GLCmd *document_cmds = repl_state_document_cmds();
     for (int cmd_idx = 0; cmd_idx < repl_state_document_count(); cmd_idx++)
-        if (repl_state_document_cmds_mut()[cmd_idx].valid && repl_state_document_cmds_mut()[cmd_idx].type == CMD_BEGIN)
-            mode = (GLenum)repl_state_document_cmds_mut()[cmd_idx].args[0];
+        if (document_cmds[cmd_idx].valid && document_cmds[cmd_idx].type == CMD_BEGIN)
+            mode = (GLenum)document_cmds[cmd_idx].args[0];
     return mode;
 }
 
@@ -491,6 +492,7 @@ static void repl_core_replace_formatted_cmd(ReplCommandStore *store,
 void repl_reformat_program(void) {
     prof_begin(PROF_REFORMAT);
     ReplCommandStore store = repl_command_store_live();
+    const GLCmd *document_cmds = repl_state_document_cmds();
     /* Source text reads route through a SourceTextView so the
      * dependency is declared at function scope rather than via a
      * scattered global accessor. Phase D will replace this entry-time
@@ -498,9 +500,9 @@ void repl_reformat_program(void) {
     SourceTextView text = source_document_view();
 
     for (int cmd_idx = 0; cmd_idx < repl_state_document_count(); cmd_idx++) {
-        if (!repl_state_document_cmds_mut()[cmd_idx].valid) continue;
+        if (!document_cmds[cmd_idx].valid) continue;
 
-        GLCmd orig = repl_state_document_cmds_mut()[cmd_idx];
+        GLCmd orig = document_cmds[cmd_idx];
         GLCmd fmt = orig;
         char fmt_text[MAX_LINE_LEN] = "";
 
@@ -523,11 +525,21 @@ void repl_reformat_program(void) {
                 snprintf(fmt_text, sizeof(fmt_text), "%sfor(%s, %s) {", ind_s, var, args);
                 fmt.has_vars = 1;
             } else if (orig.args[2] != 1.0f) {
-                snprintf(fmt_text, sizeof(fmt_text), "%sfor(%s, %.9g, %.9g, %.9g) {",
-                         ind_s, var, orig.args[0], orig.args[1], orig.args[2]);
+                char start_buf[32];
+                char end_buf[32];
+                char step_buf[32];
+                repl_format_source_float(start_buf, sizeof(start_buf), orig.args[0]);
+                repl_format_source_float(end_buf, sizeof(end_buf), orig.args[1]);
+                repl_format_source_float(step_buf, sizeof(step_buf), orig.args[2]);
+                snprintf(fmt_text, sizeof(fmt_text), "%sfor(%s, %s, %s, %s) {",
+                         ind_s, var, start_buf, end_buf, step_buf);
             } else {
-                snprintf(fmt_text, sizeof(fmt_text), "%sfor(%s, %.9g, %.9g) {",
-                         ind_s, var, orig.args[0], orig.args[1]);
+                char start_buf[32];
+                char end_buf[32];
+                repl_format_source_float(start_buf, sizeof(start_buf), orig.args[0]);
+                repl_format_source_float(end_buf, sizeof(end_buf), orig.args[1]);
+                snprintf(fmt_text, sizeof(fmt_text), "%sfor(%s, %s, %s) {",
+                         ind_s, var, start_buf, end_buf);
             }
             repl_core_replace_formatted_cmd(&store, cmd_idx, &fmt, fmt_text);
             break;
@@ -720,9 +732,10 @@ int collect_visible_vars(int pos, ExprVar *vars, int max_vars, int *total_out) {
      * view as a parameter once collect_visible_vars is folded into
      * the editor commit path. */
     SourceTextView text = source_document_view();
+    const GLCmd *document_cmds = repl_state_document_cmds();
 
     for (int cmd_idx = 0; cmd_idx < pos && cmd_idx < repl_state_document_count(); cmd_idx++) {
-        CmdType t = repl_state_document_cmds_mut()[cmd_idx].type;
+        CmdType t = document_cmds[cmd_idx].type;
         if (repl_cmd_is_block_head(t)) {
             if (depth >= (int)(sizeof(frames) / sizeof(frames[0])))
                 break;
@@ -737,7 +750,7 @@ int collect_visible_vars(int pos, ExprVar *vars, int max_vars, int *total_out) {
                 repl_copy_string_fits(frames[depth].vars[0].name,
                                       sizeof(frames[depth].vars[0].name),
                                       vn);
-                frames[depth].vars[0].value = repl_state_document_cmds_mut()[cmd_idx].args[0];
+                frames[depth].vars[0].value = document_cmds[cmd_idx].args[0];
                 frames[depth].count = 1;
             } else if (t == CMD_FUNC_DEF) {
                 int fn = -1;
