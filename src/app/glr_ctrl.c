@@ -1491,7 +1491,6 @@ static void glr_ctrl_populate_numeric_swatch(UiRenderSnapshot *snap) {
     float anchor_y;
     int cp_x, cp_w;
     char parse_err[128] = "";
-    ReplParseContext parse_ctx;
     ReplParsedLine pl;
 
     snap->numeric_swatch.visible = 0;
@@ -1510,10 +1509,14 @@ static void glr_ctrl_populate_numeric_swatch(UiRenderSnapshot *snap) {
     d = repl_eval_numeric_arg_at_cursor(in.input, in.cursor_pos);
     if (!d.found) return;
 
-    parse_ctx.source_line_idx = edit_line;
-    parse_ctx.err_buf = parse_err;
-    parse_ctx.err_sz = (int)sizeof parse_err;
-    if (!repl_parser_parse_command_ctx(in.input, &pl, &parse_ctx)) return;
+    {
+        ReplParseContext parse_ctx = {
+            .source_line_idx = edit_line,
+            .err_buf = parse_err,
+            .err_sz = (int)sizeof parse_err,
+        };
+        if (!repl_parser_parse_command_ctx(in.input, &pl, &parse_ctx)) return;
+    }
     if (pl.cmd.type == CMD_COMMENT) return;
 
     ui_layout_code_panel_rect(&cp_x, NULL, &cp_w, NULL);
@@ -3308,13 +3311,16 @@ static int route_numeric_swatch_hit(const UiHit *hit) {
     char new_line[MAX_LINE_LEN];
     int n;
     char parse_err[REPL_STATUS_TEXT_MAX] = "";
-    ReplParseContext parse_ctx;
     ReplParsedLine pl;
     ReplCompiledChange change;
     int text_len;
 
     if (editor_insert_mode() ||
         edit_line < 0 || edit_line >= repl_state_document_count())
+        return 1;
+
+    if (tutorial_active() &&
+        !tutorial_guard_source_change(edit_line, 1, 1))
         return 1;
 
     d = repl_eval_numeric_arg_at_cursor(in.input, in.cursor_pos);
@@ -3328,12 +3334,16 @@ static int route_numeric_swatch_hit(const UiHit *hit) {
                  d.arg_start, in.input, buf, in.input + d.arg_end);
     if (n < 0 || n >= (int)sizeof new_line) return 1;
 
-    parse_ctx.source_line_idx = edit_line;
-    parse_ctx.err_buf = parse_err;
-    parse_ctx.err_sz = (int)sizeof parse_err;
-    if (!repl_parser_parse_command_ctx(new_line, &pl, &parse_ctx)) {
-        if (parse_err[0]) repl_set_status(parse_err);
-        return 1;
+    {
+        ReplParseContext parse_ctx = {
+            .source_line_idx = edit_line,
+            .err_buf = parse_err,
+            .err_sz = (int)sizeof parse_err,
+        };
+        if (!repl_parser_parse_command_ctx(new_line, &pl, &parse_ctx)) {
+            if (parse_err[0]) repl_set_status(parse_err);
+            return 1;
+        }
     }
     if (pl.cmd.type == CMD_COMMENT) return 1;
 
