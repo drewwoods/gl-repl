@@ -330,8 +330,25 @@ static void test_scene_submenu_with_stubs(void) {
 
     example_idx = repl_example_index_for_tag(tag_idx, 0);
     ASSERT_TRUE("first submenu example exists", example_idx >= 0);
-    ASSERT_TRUE("submenu row point computed",
-                submenu_row_point(sx, sy, sw, sh, 0, &sub_mx, &sub_my));
+
+    /* Walk submenu ordinals to find the first ITEM row. Subheading
+     * HEADER chrome rows may precede the first example (e.g. "### Basics"
+     * before "Lit cube" in the All flyout); skip them so this test
+     * stays robust to catalog grouping changes. */
+    int first_item_ord = -1;
+    for (int o = 0; o < 64; o++) {
+        int mx, my;
+        if (!submenu_row_point(sx, sy, sw, sh, o, &mx, &my))
+            break;
+        UiHit probe = ui_menu_bar_hit_test(mx, my);
+        if (probe.kind == UI_HIT_SUBMENU_ITEM) {
+            first_item_ord = o;
+            sub_mx = mx;
+            sub_my = my;
+            break;
+        }
+    }
+    ASSERT_TRUE("found first submenu ITEM row", first_item_ord >= 0);
 
     hit = ui_menu_bar_hit_test(sub_mx, sub_my);
     ASSERT_INT_EQ("hover update makes submenu hittable",
@@ -339,7 +356,8 @@ static void test_scene_submenu_with_stubs(void) {
     ASSERT_INT_EQ("hit_test: submenu carries menu_id",
                   hit.cmd_idx, GLR_MENU_SCENE);
     ASSERT_INT_EQ("hit_test: submenu example", hit.item_idx, example_idx);
-    ASSERT_INT_EQ("hit_test: submenu ordinal", hit.line_idx, 0);
+    ASSERT_INT_EQ("hit_test: submenu ordinal",
+                  hit.line_idx, first_item_ord);
 
     snap.pointer.mouse_x = tag_mx;
     snap.pointer.mouse_y = tag_my;

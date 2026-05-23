@@ -85,6 +85,14 @@ int repl_example_index_for_tag(int tag_idx, int ordinal);
 int repl_example_visible_tag_count(void);
 int repl_example_visible_tag_at(int dense_idx);
 
+/* Subheading API — mirrors repl_tutorial_subheading. Returns the example's
+ * free-form section label or NULL (no subheading / out-of-range idx). The
+ * Scene menu uses this to group entries within a tag flyout: consecutive
+ * examples sharing a non-NULL subheading render under one `### subheading`
+ * chrome row. Catalog authors must keep same-subheading entries contiguous
+ * per tag (enforced by test_example_subheading_metadata). */
+const char *repl_example_subheading(int example_idx);
+
 static inline unsigned int repl_example_tag_bit(int tag_idx) {
     if (tag_idx < 0 || tag_idx >= repl_example_tag_count() ||
         tag_idx >= (int)(sizeof(unsigned int) * CHAR_BIT))

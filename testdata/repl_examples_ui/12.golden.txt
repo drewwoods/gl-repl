@@ -38,45 +38,27 @@ void display() {
   glEnable(GL_MULTISAMPLE);
   glDisable(GL_LINE_SMOOTH);
 --- camera ---
-  glTranslatef(0.0000f, 0.0000f, -12.0000f);
-  glRotatef(30.0000f, 1.0f, 0.0f, 0.0f);
+  glTranslatef(0.0000f, 0.0000f, -3.5000f);
+  glRotatef(0.0000f, 1.0f, 0.0f, 0.0f);
   glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);
   glTranslatef(-0.0000f, -0.0000f, -0.0000f);
 --- header_post ---
 --- source ---
-  static float halfExtent, h0, h1, ripple; // grid half-extent; QUAD_STRIP column-pair heights; animated row delta
-
+  static float phase, width, delta, amp, x, y;
+  // Traveling ripple ring: nested for + fmod + conditional deformation
   glClearColor(0.1, 0.1, 0.1, 1);
-  glEnable(GL_DEPTH_TEST);
-  glEnable(GL_LIGHTING);
-  glEnable(GL_NORMALIZE);
-  glShadeModel(GL_SMOOTH);
-  glEnable(GL_LIGHT3);
-  glEnable(GL_LIGHT0);
-  glPointSize(4);
-  glEnable(GL_BLEND);
-  glColor4f(0.176, 0.51392, 0.88, 0.713333);
-  halfExtent = 10; // grid spans [-halfExtent, halfExtent] on x and z
-  glTranslatef(0, -0.25, 0);
-  for(x, -halfExtent, halfExtent) {
-    glBegin(GL_QUAD_STRIP);
-      for(z, -halfExtent, halfExtent) {
-        // sample two random heights for the (x, z) and (x+1, z) corners
-        h0 = rand(x, z);
-        h1 = rand(x+1, z);
-        ripple = 0.25 * sin((100+t/2) * (z/200+4));
-        // NOTE: both branches add ripple to both heights, so the conditional is
-        //       currently dead. Likely intent: alternate which corner moves.
-        if(fmod(x, 2) == 0) {
-          h0 = h0 + ripple;
-          h1 = h1 + ripple;
-        }
-        if(abs(fmod(x, 2)) == 1) {
-          h1 = h1 + ripple;
-          h0 = h0 + ripple;
-        }
-        glVertex3f(x, h0, z);
-        glVertex3f(x+1, h1, z);
+  amp = 0.1 * sin(t * TAU);
+  phase = fmod(t / 3, TAU);
+  width = PI / 8;
+  glBegin(GL_LINE_LOOP);
+    for(i, 0, 400) {
+      x = cos(TAU * i / 400);
+      y = sin(TAU * i / 400);
+      delta = fmod(TAU * i / 400 - phase + TAU, TAU);
+      if(delta < width) {
+        x = x + amp * x * sin(delta * TAU / width);
+        y = y + amp * y * sin(delta * TAU / width);
       }
-    glEnd();
-  }
+      glVertex3f(x, y, 0);
+    }
+  glEnd();
