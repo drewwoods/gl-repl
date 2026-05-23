@@ -6,7 +6,7 @@
 #include "repl/examples.h"
 #include "repl/tutorials.h"
 #include "app/glr_config.h"
-#include <keys.h>
+#include "keys.h"
 #include "repl/state_views.h"
 #include "subsystems/replay/replay.h"   /* ReplayState (PLAYING / PAUSED / DONE) enum values */
 #include "subsystems/tutorial/tutorial_state.h"

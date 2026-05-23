@@ -1019,6 +1019,7 @@ check-state-ownership: ## Run state-ownership contract checks (new + tightened e
 		check-source-document-port-owners \
 		check-c99 \
 		check-module-prefixes \
+		check-include-style \
 		check-no-test-default-output; do \
 		printf "  $(YELLOW)▶$(NC) $$target\n"; \
 		$(MAKE) --no-print-directory $$target 2>&1 | sed 's/^/    /' | sed $$'s/ OK / \033[0;32mOK\033[0m /g; s/ OK$$/ \033[0;32mOK\033[0m/' || exit $$?; \
@@ -1113,6 +1114,9 @@ check-module-prefixes: ## Verify stale pre-cleanup symbol prefixes have not reap
 
 check-repl-demo-stubs-shrinking: ## Ratchet on tools/repl_demo/stubs.c — must not grow past 0 stubs.
 	@bash scripts/check-repl-demo-stubs-shrinking.sh
+
+check-include-style: ## Hard guard: project-local headers must use "X.h", not <X.h>.
+	@bash scripts/check-include-style.sh
 
 check-c99: ## C99 build guard: gl-repl + bench + demo sources must syntax-check under gcc -std=c99 (non-pedantic; tests excluded; in the standard gate).
 	@C99_SRCS='$(SRCS)' bash scripts/check-c99.sh

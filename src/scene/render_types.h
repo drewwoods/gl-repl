@@ -10,7 +10,7 @@
 
 #include "themes.h"
 #include "scene_transition.h"  /* SceneXnPhase for the overlay fade fields */
-#include <gl_includes.h>     /* GLenum for SceneLight.id */
+#include "gl_includes.h"     /* GLenum for SceneLight.id */
 
 /* GL_NV_fog_distance tokens — present in glext.h (Linux/Homebrew and the
  * macOS SDK) but not on the Apple-GLUT framework path (gl_includes.h pulls

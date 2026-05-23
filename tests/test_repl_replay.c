@@ -6,7 +6,7 @@
 #include "subsystems/replay/replay.c"
 #include "repl/replay_annotations.h"
 #include "source_document.h"
-#include <keys.h>
+#include "keys.h"
 #include "support/test_harness.h"
 #include <stdio.h>
 #include <string.h>

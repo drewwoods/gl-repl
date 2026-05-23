@@ -185,9 +185,9 @@ int main(void) {
                     strstr(buf, "static void render_repl_geometry(void)") != NULL);
         ASSERT_TRUE("scaffold metadata before includes",
                     appears_before(buf, "// @workspace:",
-                                   "#include <gl_includes.h>"));
+                                   "#include \"gl_includes.h\""));
         ASSERT_TRUE("scaffold header before globals",
-                    appears_before(buf, "#include <gl_includes.h>",
+                    appears_before(buf, "#include \"gl_includes.h\"",
                                    "static float t = 0.0f;"));
         /* Predef-var initializer carries the export-time snapshot value
          * (replaces the role reset_repl_vars used to play). */

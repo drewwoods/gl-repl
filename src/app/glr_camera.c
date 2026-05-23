@@ -14,7 +14,7 @@
 #include "app/glr_camera.h"
 #include "app/glr_defaults.h"  /* CFG_DEFAULT_CAMERA_ROTATE */
 
-#include <gl_includes.h>      /* GLUT_*BUTTON constants */
+#include "gl_includes.h"      /* GLUT_*BUTTON constants */
 #include "config.h"
 #include <math.h>
 #ifndef M_PI

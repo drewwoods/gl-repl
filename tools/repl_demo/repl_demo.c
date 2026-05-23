@@ -49,7 +49,7 @@
 #include "repl/state_owners.h"
 #include "source_document.h"      /* source_document_load_lines / _insert_line / _clear / _view */
 
-#include <gl_includes.h>          /* GLUT bootstrap for --render mode */
+#include "gl_includes.h"          /* GLUT bootstrap for --render mode */
 
 #include <stdio.h>
 #include <string.h>

@@ -8,7 +8,7 @@
 #ifndef REPL_COMMAND_H
 #define REPL_COMMAND_H
 
-#include <gl_includes.h>
+#include "gl_includes.h"
 
 #include "config.h"  /* MAX_COMMANDS, MAX_LINE_LEN */
 

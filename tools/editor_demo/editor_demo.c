@@ -46,7 +46,7 @@
 #include "input.h"
 #include "menu.h"
 
-#include <gl_includes.h>
+#include "gl_includes.h"
 
 #include <stdio.h>
 #include <string.h>

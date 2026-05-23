@@ -61,7 +61,7 @@
  * context before running sub-benchmarks that emit draw calls. The
  * stub headers deliberately do NOT get included here - the Makefile
  * picks between stub and system GL headers via -I ordering. */
-#include <gl_includes.h>
+#include "gl_includes.h"
 #endif
 
 /* ---- Timekeeping ------------------------------------------------------- */

@@ -1,10 +1,10 @@
 #include "app/glr_ctrl.h"
 
-#include <c_compat.h>  /* STATIC_ASSERT (C99/C11 portable) */
+#include "c_compat.h"  /* STATIC_ASSERT (C99/C11 portable) */
 #include <ctype.h>
 #include <errno.h>
 #include <signal.h>
-#include <gl_includes.h>
+#include "gl_includes.h"
 #include "config.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -29,7 +29,7 @@
 #include "app/glr_config.h"
 #include "app/glr_camera.h"
 #include "app/glr_debug.h"
-#include <keys.h>
+#include "keys.h"
 #include "support/prof.h"
 #include "repl/core.h"
 #include "repl/examples.h"          /* REPL_EXAMPLE_TAG_* */

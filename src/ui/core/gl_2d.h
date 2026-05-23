@@ -1,6 +1,6 @@
 #ifndef GL_2D_H
 #define GL_2D_H
-#include <gl_includes.h>
+#include "gl_includes.h"
 
 /* Push a 2D ortho projection sized to (0,0)-(w,h) and disable depth +
  * lighting via glPushAttrib so the corresponding gl2d_end() restores

@@ -54,7 +54,7 @@
 #include "app/glr_state.h"
 #include "app/glr_camera.h"
 #include "app/glr_ctrl.h"
-#include <keys.h>
+#include "keys.h"
 #include "repl/command_store.h"
 #include "repl/core.h"
 #include "repl/core_internal.h"

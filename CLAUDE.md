@@ -102,9 +102,30 @@ machine-enforced by the non-pedantic guard, but follow them):
 
 `include/gl_includes.h` is vendored alongside the source — the Makefile adds
 `-Iinclude` to `COMMON_CFLAGS` so every translation unit can resolve it via
-`#include <gl_includes.h>`. Source-backed modules keep paired `.c/.h` files at
+`#include "gl_includes.h"`. Source-backed modules keep paired `.c/.h` files at
 the repo root; `include/` is for header-only helpers and vendored single-header
 dependencies.
+
+#### `#include` style
+
+Project-local headers use quoted form; system / vendored headers use angle
+brackets. `make check-include-style` (in `check-state-ownership`) enforces
+this for the project-local set:
+
+```c
+#include <stdio.h>          // system / standard library  — angle
+#include <GL/gl.h>           // system GL                  — angle
+#include <miniaudio.h>       // vendored third-party       — angle
+#include "keys.h"            // project-local              — quoted
+#include "gl_includes.h"     // project-local (in include/) — quoted
+#include "c_compat.h"        // project-local (in include/) — quoted
+#include "support/prof.h"    // project-local subdir       — quoted
+```
+
+The rule is mechanical: anything that lives in this tree uses `""`. The
+guard tracks the bare-name set (`c_compat.h`, `gl_includes.h`, `keys.h`,
+`gl_2d.h`) because those are the ones that ambiguously could be resolved
+either way (they sit on `-I.` / `-Iinclude`).
 
 ### Local GL Stub Headers
 
@@ -389,7 +410,7 @@ Test sources live under `tests/` and shared test-only helpers live under
 | `src/repl/eval.h` | Evaluator types (`ExprVar`, `ExprCtx`), function declarations |
 | `src/repl/format.c` | Pure indentation/depth computation (no GL dependency) |
 | `src/repl/format.h` | Formatting types (`ReplFmtCmd`, `ReplFmtType`), `repl_format_*` indent functions |
-| `include/gl_2d.h` | Header-only 2D OpenGL helper functions |
+| `src/ui/core/gl_2d.h` | Header-only 2D OpenGL helper functions |
 | `tests/support/` | Shared test harness/setup helpers |
 | `tests/gl-stubs/` | No-op GL/GLU/GLUT headers used by `USE_GL_STUBS=1` builds |
 | `MODULES.md` | One-page layered overview, ownership diagram, current boundaries, open edges |

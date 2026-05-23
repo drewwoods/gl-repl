@@ -15,7 +15,7 @@
 #include "support/test_harness.h"
 #include <stdio.h>
 #include <string.h>
-#include <gl_includes.h>
+#include "gl_includes.h"
 
 static TestHarness g_harness = TEST_HARNESS_INIT;
 

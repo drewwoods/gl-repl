@@ -11,7 +11,7 @@
 
 #include <stddef.h>
 
-#include <c_compat.h>  /* STATIC_ASSERT (C99/C11 portable) */
+#include "c_compat.h"  /* STATIC_ASSERT (C99/C11 portable) */
 
 void glr_debug_dump_editor(FILE *out, SourceTextView text) {
     FILE *dst = out ? out : stdout;

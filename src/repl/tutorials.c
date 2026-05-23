@@ -5,7 +5,7 @@
 #include <stdio.h>
 #include <string.h>
 
-#include <c_compat.h>   /* STATIC_ASSERT for the tag-label table */
+#include "c_compat.h"   /* STATIC_ASSERT for the tag-label table */
 
 #define STEP_APPEND(label, c, e) \
     { (label), (c), (e), TUTORIAL_STEP_APPEND, NULL, \
