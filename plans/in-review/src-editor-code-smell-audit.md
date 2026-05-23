@@ -38,6 +38,23 @@
 > test-call count was undercounted (21 calls, not 5); afternoon
 > sequencing now names the real churn so "build-safe" stays true.
 >
+> **Revision 4 (2026-05-23):** Third reviewer pass. Fixed: #4's
+> "success check" was ambiguous — `repl_load_workspace()` returns the
+> file count, 0 for empty, -1 on I/O error; the audit now specifies
+> the recommended `>= 0` predicate and flags the empty-workspace
+> behavior as a product decision. #11's interim doc-fix only covered
+> the four `editor_compile_*` entry points; `repl_compile_var_assign`
+> (`compile.c:858`) also calls live `collect_visible_vars` and was
+> added to the doc-fix scope. #13's "static const ReplCompileFn
+> k_var_statement_chain[]" was wrong (a `static` table isn't shareable
+> across TUs) — reframed as a shared kind enum with per-TU dispatch
+> tables. #16's "three apply-block sites" stops being true after
+> #27 lands in the afternoon — finding now carries the conditional
+> framing. #29's call-site count corrected (19, not 21 — the extra 2
+> were doc-comments). #27's call-site list corrected (L621 was a
+> doc-comment, not a call; the 5 actual calls are L630/L639/L662/L679/
+> L724). Afternoon sequencing items 2, 3, and 8 updated to match.
+>
 > Scope: every file under `src/editor/`. Tests under `tests/` were
 > read where they document a contract, but not audited.
 >
@@ -148,8 +165,22 @@ upfront.
 **Why it matters:** Mismatched user contract: try-to-load-bad-file
 loses undo for one entry point but not the other.
 
-**Fix:** Move `editor_undo_clear()` after the
-`repl_load_workspace(dir)` success check.
+**Fix (predicate matters):** Move `editor_undo_clear()` after
+the `repl_load_workspace(dir)` call and gate it on the return
+value. `repl_load_workspace()` returns the number of files
+loaded, **0 for an empty directory argument**, or **-1 on I/O
+error** (`src/repl/core.h:52`). A truthy C check (`if (n)`)
+would still clear undo on -1; a `> 0` check would skip
+empty-workspace cases that *do* mutate live state before
+returning 0. The intended predicate depends on whether
+"workspace exists but contained no scenes" should reset undo
+(arguably yes — the live state was overwritten) or preserve
+it (arguably no — nothing was actually loaded). Audit's
+recommendation: `if (n >= 0) editor_undo_clear();` — i.e.
+clear on success **and** on empty, only preserve on I/O error.
+But this is a product decision, not a mechanical fix; document
+the intended empty-workspace behavior in the
+`repl_load_workspace` docstring at the same time.
 
 ### 5. `editor_state_capture` skips the lazy-init that fixes selection sentinels
 
@@ -351,13 +382,22 @@ A proper extraction needs all three migrated together:
 `source_scope_*_view(...)`, `collect_visible_vars_view(view,
 pos, ...)`, and the compile.c live-scope readers.
 
-The cheap interim is to **document** the contract loudly at each
-of the four `editor_compile_*` entry points: "context-pure for
-document data, live-state-coupled for scope queries and
-visible-var collection — callers must apply the change to the
-live document before the next scope-dependent or visible-vars
-call." That's a one-doc-comment change today, with the full
-extraction queued as its own week of work.
+The cheap interim is to **document** the contract loudly at
+**every entry point that takes a `ReplCompileContext *` but
+secretly reads live state**:
+
+- the four `editor_compile_*` entry points in `commit.c`;
+- **also `repl_compile_var_assign` in `src/repl/compile.c:858`**,
+  which also calls live `collect_visible_vars` and is reached
+  from both the editor commit path and the file-load path via
+  `load_try_block`.
+
+Doc-comment at each: "context-pure for document data,
+live-state-coupled for scope queries and visible-var
+collection — callers must apply the change to the live
+document before the next scope-dependent or visible-vars
+call." That's a one-pass doc-comment change today, with the
+full extraction queued as its own week of work.
 
 ### 12. README claims `EditorState` owns "cursor blink"; `state.h` disclaims it
 
@@ -409,13 +449,16 @@ in the insert-mode flip and input clear that overwrite-Enter
 depends on.
 
 The actual fix has two viable shapes; pick one based on appetite:
-1. **Keep the wrappers, share the ordering table only.** Extract
-   a `static const ReplCompileFn k_var_statement_chain[] = {
-   repl_compile_float_decl, repl_compile_var_assign };` table
-   used by *both* `repl_compile_dispatch` and the editor wrappers
-   (each editor wrapper still owns its own `EditorCommitPlan`
-   effects). One source of truth for ordering; zero behavior
-   change.
+1. **Share a kind list, map locally to handlers.** Define a
+   single ordered enum (`enum ReplVarStmtKind { VAR_STMT_FLOAT_DECL,
+   VAR_STMT_ASSIGN }`) in a shared header. `compile.c` keeps
+   its own `static const ReplCompileFn` table mapping kinds to
+   pure compilers; `commit.c` keeps its own `static` table
+   mapping kinds to editor wrappers. Both iterate the kind list
+   in order. One source of truth for ordering; each TU keeps its
+   per-kind dispatch table local (a `static` table isn't
+   shareable across TUs, and the editor side needs per-handler
+   post-effects with different shapes anyway).
 2. **Adapter that preserves post-effects.** Introduce a
    `editor_compile_var_statement(...)` that calls
    `repl_compile_dispatch` for the compile step then layers the
@@ -488,7 +531,7 @@ the simpler convergence is "everyone sets status through a
 testable sink." But (2) is internally consistent if you want the
 typed return.
 
-### 16. Three apply-block call sites reach the primitives through three different surfaces
+### 16. Apply-block call sites reach the primitives through different surfaces
 
 **Where:** `src/editor/commit.c:116-123, 148-156, 250-257`
 
@@ -501,11 +544,27 @@ But each reaches the underlying primitives differently — one via
 passed-in `services`, one via a fresh `svc =
 editor_services_default()`, one via direct `repl_apply_*`.
 
-**Why it matters:** A fix to the apply sequence needs three
-coordinated changes.
+**Why it matters:** A fix to the apply sequence needs coordinated
+changes across the call sites.
 
-**Fix:** Extract `apply_compiled_three_halves(const ReplCompiledChange *)`;
-call from all three.
+**Fix (conditional — depends on #27):** This is "three call sites"
+*only* if `editor_commit_current_input` is still alive. The
+afternoon sequence deletes it via #27, dropping the count to two
+(`editor_commit_apply_external_change` and
+`editor_commit_apply_plan`). Two viable framings:
+
+1. **If #27 lands first (recommended):** rewrite this finding as
+   "dedupe the two remaining apply paths
+   (`editor_commit_apply_external_change` and
+   `editor_commit_apply_plan`) — both still reach
+   `repl_apply_*` differently after services dismantle."
+2. **If #27 is dropped:** keep the three-site extraction
+   (`apply_compiled_three_halves`), but read #15's keep-#15 branch
+   first — `EditorCommitResult` survives and the three sites stay
+   asymmetric on diagnostic shape too.
+
+Either way the fix is "extract one canonical four-step apply
+helper"; the count just changes based on what else lands.
 
 ### 17. Editor undo reaches into `g_predef_vars` / `g_num_predef_vars` directly
 
@@ -693,9 +752,10 @@ entirely).
 
 **Where:** `src/editor/commit.c:65-130` (definition);
 `commit.h:55` (declaration). Verified: only
-`tests/test_repl_compile.c` calls it, but **across 5 call sites**
-in that one file (L630, L639, L662, L679, L724) — they exercise
-the compile-failure, NO_CHANGE, and success paths.
+`tests/test_repl_compile.c` calls it — **5 call sites at L630,
+L639, L662, L679, L724** (the doc-comment block at L621 referenced
+the function name without calling it). They exercise the
+compile-failure, NO_CHANGE, and success paths.
 
 **Smell:** Documented as "the common path for the live input row"
 in `commit.h:10`, but the four real production dispatch sites all
@@ -754,16 +814,16 @@ production sites.
 
 **Where:** `src/editor/commit.c:1117-1119`, declared at
 `commit.h:79`. Verified: only `tests/test_repl_compile.c` calls
-it — but **across 21 call sites** in that one file. Production
-code uses `editor_commit_apply_external_change(change, 0)`
-directly.
+it — **19 call sites** (plus 2 doc-comment references; the
+21-match `grep` count includes both). Production code uses
+`editor_commit_apply_external_change(change, 0)` directly.
 
 **Smell:** Public wrapper with the body
-`editor_commit_apply_external_change(change, 0)`. 21 test
+`editor_commit_apply_external_change(change, 0)`. 19 test
 references couple the test cluster to the wrapper shape rather
 than to the underlying API.
 
-**Fix:** Delete the wrapper; rewrite the 21 test sites to call
+**Fix:** Delete the wrapper; rewrite the 19 test sites to call
 `editor_commit_apply_external_change(change, 0)` directly. The
 rewrite is mechanical search-and-replace, but the LOC churn is
 non-trivial — name it in the sequencing so "build-safe" stays
@@ -1086,11 +1146,18 @@ implementation checklist.
 1. **#1** + **#2** — Move the 2 MB and 1 MB stack allocations to
    file-scope statics or heap. Each is a 2-line change at a single
    site.
-2. **#3** — Either fill `err` for the stray-`}` case in
-   `editor_compile_close_brace`, or drop the unused parameters
-   (and split the typedef).
-3. **#4** — Move `editor_undo_clear()` after the
-   `repl_load_workspace` success check.
+2. **#3** — Either fill `err` for the stray-`}` case in **both**
+   `editor_compile_close_brace` (`commit.c:285`) **and**
+   `repl_compile_close_brace` (`compile.c:1485`), or drop the
+   unused parameters in both (and split the typedef). The REPL
+   variant is reached via `load_try_block` (`load.c:94`), so
+   editor-only fix preserves the file-load diagnostic gap.
+3. **#4** — Add `editor_undo_clear()` after the
+   `repl_load_workspace(dir)` call, gated on the return value.
+   Recommended: `if (n >= 0) editor_undo_clear();` (clear on
+   success and on empty workspace; preserve only on I/O error).
+   But this is a product call on empty-workspace semantics —
+   read finding #4 for the predicate options.
 4. **#5** — Make `editor_state_capture()` call
    `editor_state_get_defaults()` (idempotent after first call) so
    captured state always has the correct sentinels.
@@ -1108,13 +1175,15 @@ implementation checklist.
    draft proposed adding new helpers; the helpers already exist
    publicly.
 8. **#27** + **#29** — Delete two test-only API shapes:
-   - `editor_commit_current_input`: 5 calls in
-     `tests/test_repl_compile.c` (L621, L630, L639, L662, L679,
-     L724) — rewrite each to exercise the live dispatch sites.
-   - `editor_commit_apply_compiled_change`: **21 calls in the
-     same test file** — rewrite each to call
+   - `editor_commit_current_input`: **5 calls** in
+     `tests/test_repl_compile.c` at **L630, L639, L662, L679,
+     L724** (the doc-comment at L621 references the function
+     name but does not call it). Rewrite each test to exercise
+     the live dispatch sites.
+   - `editor_commit_apply_compiled_change`: **19 calls** in the
+     same test file — rewrite each to call
      `editor_commit_apply_external_change(change, 0)` directly.
-     Mechanical search-and-replace but ~21 LOC churn.
+     Mechanical search-and-replace but ~19 LOC churn.
 
    **NB:** #27 is paired with **#28**'s migration in the week
    pass — leaving `editor_commit_current_input` in place keeps
@@ -1184,8 +1253,14 @@ The dominant work is **closing the layering inversion**,
   `editor_compile_var_statement(...)` adapter that calls
   dispatch then layers per-kind post-effects — bigger, only
   worth it if #28's services dismantle is in the same change.
-- **#16** — Extract `apply_compiled_three_halves` and use across
-  all three apply-block sites.
+- **#16** — *Site count depends on #27.* If #27 lands in the
+  afternoon (audit recommendation), `editor_commit_current_input`
+  is already gone and this becomes a two-site dedupe between
+  `editor_commit_apply_external_change` and
+  `editor_commit_apply_plan`. If #27 is dropped, it stays a
+  three-site extraction. Either way: extract one canonical
+  four-step apply helper. Read the finding for the conditional
+  framing.
 - **#17** — Add `repl_eval_predef_copy` seam; route undo through
   it.
 - **#18** — *Preserve strict/permissive semantics.* Extract a
