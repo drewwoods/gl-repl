@@ -101,7 +101,7 @@ typedef struct {
 } ReplRenderState;
 
 /* Replay snapshot shape shared with the replay peer subsystem. Storage lives in
- * src/widgets/replay_state.c; this value type stays here so snapshots and UI
+ * src/subsystems/replay/replay_state.c; this value type stays here so snapshots and UI
  * bundles can pass replay state by value without depending on the peer's API. */
 typedef struct {
     int   active;

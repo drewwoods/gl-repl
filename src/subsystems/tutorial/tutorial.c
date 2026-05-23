@@ -1,4 +1,4 @@
-#include "widgets/tutorial.h"
+#include "subsystems/tutorial/tutorial.h"
 
 #include <ctype.h>
 #include <stdio.h>

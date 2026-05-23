@@ -22,7 +22,7 @@ echo "Scanning for potentially unused public APIs..."
 
 # Headers to audit. Curated to module public surfaces. Internal /
 # types-only / forwarder-only headers are excluded explicitly.
-headers=$(find src/repl src/editor src/widgets -maxdepth 2 -name '*.h' \
+headers=$(find src/repl src/editor src/subsystems -maxdepth 2 -name '*.h' \
     -not -name 'core_internal.h' \
     -not -name 'state_views.h' \
     -not -name 'state_owners.h' \

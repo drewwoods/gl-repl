@@ -18,7 +18,7 @@ echo "Scanning for duplicate API declarations..."
 # Same header set as check-unused-apis.sh — keep the two scripts in
 # sync so a function moved out of the curated set vanishes from both
 # audits together.
-headers=$(find src/repl src/editor src/widgets -maxdepth 2 -name '*.h' \
+headers=$(find src/repl src/editor src/subsystems -maxdepth 2 -name '*.h' \
     -not -name 'core_internal.h' \
     -not -name 'state_views.h' \
     -not -name 'state_owners.h' \

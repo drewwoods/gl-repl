@@ -8,8 +8,8 @@
 #include "app/glr_config.h"
 #include <keys.h>
 #include "repl/state_views.h"
-#include "widgets/replay.h"   /* ReplayState (PLAYING / PAUSED / DONE) enum values */
-#include "widgets/tutorial_state.h"
+#include "subsystems/replay/replay.h"   /* ReplayState (PLAYING / PAUSED / DONE) enum values */
+#include "subsystems/tutorial/tutorial_state.h"
 #include "state.h"
 #include "menu_bar.h"
 #include "metrics.h"

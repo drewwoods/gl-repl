@@ -6,8 +6,8 @@
 #include "repl/core.h"
 #include "repl/core_internal.h"
 #include "repl/state_owners.h"
-#include "widgets/replay.h"
-#include "widgets/replay_state.h"
+#include "subsystems/replay/replay.h"
+#include "subsystems/replay/replay_state.h"
 
 /* Camera-distance source for the point-size fallback used when the
  * runtime GL context lacks glPointParameterfv. The executor used to

@@ -12,7 +12,7 @@
 #include "app/glr_state.h"           /* presentation/render storage */
 #include "app/glr_camera.h"          /* camera focus-origin / reset (eased) */
 #include "ui/layout.h"           /* CODE_PANEL_LAYOUT_* enum values */
-#include "widgets/color_picker_state.h"
+#include "subsystems/color_picker/color_picker_state.h"
 #include "app/glr_audio.h"
 #include "repl/core.h"
 #include "repl/core_internal.h"
@@ -24,10 +24,10 @@
 #include <keys.h>
 #include "repl/help_text.h"
 #include "repl/tutorials.h"
-#include "widgets/replay.h"
-#include "widgets/replay_state.h"
-#include "widgets/tutorial.h"
-#include "widgets/tutorial_state.h"
+#include "subsystems/replay/replay.h"
+#include "subsystems/replay/replay_state.h"
+#include "subsystems/tutorial/tutorial.h"
+#include "subsystems/tutorial/tutorial_state.h"
 #include "editor/help_session.h"
 #include "repl/pipeline.h"
 #include "repl/state_owners.h"

@@ -1,4 +1,4 @@
-#include "widgets/tutorial.h"
+#include "subsystems/tutorial/tutorial.h"
 #include "support/test_harness.h"
 
 static TestHarness g_harness = TEST_HARNESS_INIT;

@@ -19,7 +19,7 @@ talk to it, not to each other).
 `src/app` is that layer. Its hub, `glr_ctrl.c`, is deliberately *thin*: it
 **routes** input and **coordinates** frames, but it does **not** implement
 editor behavior, parse the language, or draw widgets. The subsystems it wires
-together (`src/repl`, `src/editor`, `src/ui`, `src/scene`, `src/widgets`) do
+together (`src/repl`, `src/editor`, `src/ui`, `src/scene`, `src/subsystems`) do
 not depend on it — the dependency arrows run one way, from `glr_ctrl` to the
 subsystems, never back.
 Alongside the router live the app-level services that are genuinely

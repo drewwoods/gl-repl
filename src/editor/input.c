@@ -46,10 +46,10 @@
 #include "reformat.h"
 #include "search.h"
 #include "services.h"
-#include "widgets/tutorial.h"
+#include "subsystems/tutorial/tutorial.h"
 #include "undo.h"
 
-#include "widgets/color_picker_state.h"
+#include "subsystems/color_picker/color_picker_state.h"
 #include "app/glr_completion.h"
 #include "app/glr_state.h"
 #include "app/glr_camera.h"

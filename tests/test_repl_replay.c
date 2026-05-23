@@ -1,9 +1,9 @@
 #include "app/glr_ctrl.h"
 #include "repl/core.h"
 #include "editor/input.h"
-#include "widgets/replay.h"
+#include "subsystems/replay/replay.h"
 #include "repl/state.h"
-#include "widgets/replay.c"
+#include "subsystems/replay/replay.c"
 #include "repl/replay_annotations.h"
 #include "source_document.h"
 #include <keys.h>

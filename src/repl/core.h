@@ -227,7 +227,7 @@ int  repl_load_user_scene_idx(int slot);  /* load slot, returns 1 on success */
 int  repl_active_user_scene(void);        /* current slot index, -1 if none */
 
 /* --- Replay ------------------------------------------------------------ */
-/* replay_start / replay_stop live in src/widgets/replay.h —
+/* replay_start / replay_stop live in src/subsystems/replay/replay.h —
  * include that header directly to use them. */
 
 /* --- Timekeeping ------------------------------------------------------- */

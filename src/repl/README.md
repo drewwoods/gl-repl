@@ -123,5 +123,5 @@ workspace I/O in `export.c`, replay source annotations, and the neutral F1
 | `replay_annotations.c` / `.h` | Replay-time source annotations / virtual lines |
 
 **Boundary:** `src/repl` owns the program model and compiler. It does **not**
-own editor state, UI state, replay *runtime* state (a `src/widgets` peer), or
+own editor state, UI state, replay *runtime* state (a `src/subsystems/` peer), or
 live input dispatch. The only live GL in this layer is `executor.c`.

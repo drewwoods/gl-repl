@@ -311,13 +311,13 @@ SRCS = \
 	src/ui/text_panel.c \
 	src/ui/text_search.c \
 	src/ui/variable_panel.c \
-	src/widgets/color_picker_state.c \
-	src/widgets/replay.c \
-	src/widgets/replay_state.c \
-	src/widgets/tutorial.c \
-	src/widgets/tutorial_state.c \
-	src/widgets/variable_panel_drag.c \
-	src/widgets/variable_panel_state.c \
+	src/subsystems/color_picker/color_picker_state.c \
+	src/subsystems/replay/replay.c \
+	src/subsystems/replay/replay_state.c \
+	src/subsystems/tutorial/tutorial.c \
+	src/subsystems/tutorial/tutorial_state.c \
+	src/subsystems/variable_panel/variable_panel_drag.c \
+	src/subsystems/variable_panel/variable_panel_state.c \
 	tests/gl-stubs/gl_stub_counts.c
 HDRS = \
 	src/app/glr_audio.h \
@@ -392,13 +392,13 @@ HDRS = \
 	src/ui/text_search.h \
 	src/ui/theme.h \
 	src/ui/variable_panel.h \
-	src/widgets/color_picker_state.h \
-	src/widgets/replay.h \
-	src/widgets/replay_state.h \
-	src/widgets/tutorial.h \
-	src/widgets/tutorial_state.h \
-	src/widgets/variable_panel_drag.h \
-	src/widgets/variable_panel_state.h
+	src/subsystems/color_picker/color_picker_state.h \
+	src/subsystems/replay/replay.h \
+	src/subsystems/replay/replay_state.h \
+	src/subsystems/tutorial/tutorial.h \
+	src/subsystems/tutorial/tutorial_state.h \
+	src/subsystems/variable_panel/variable_panel_drag.h \
+	src/subsystems/variable_panel/variable_panel_state.h
 CORE_TEST_SRCS = \
 	src/app/glr_audio.c \
 	src/repl/format.c \
@@ -470,13 +470,13 @@ CORE_TEST_SRCS = \
 	src/ui/text_panel.c \
 	src/ui/text_search.c \
 	src/ui/variable_panel.c \
-	src/widgets/color_picker_state.c \
-	src/widgets/replay.c \
-	src/widgets/replay_state.c \
-	src/widgets/tutorial.c \
-	src/widgets/tutorial_state.c \
-	src/widgets/variable_panel_drag.c \
-	src/widgets/variable_panel_state.c \
+	src/subsystems/color_picker/color_picker_state.c \
+	src/subsystems/replay/replay.c \
+	src/subsystems/replay/replay_state.c \
+	src/subsystems/tutorial/tutorial.c \
+	src/subsystems/tutorial/tutorial_state.c \
+	src/subsystems/variable_panel/variable_panel_drag.c \
+	src/subsystems/variable_panel/variable_panel_state.c \
 	tests/gl-stubs/gl_stub_counts.c
 
 REPL_SRCS = $(filter src/repl/%.c,$(SRCS))
@@ -513,9 +513,9 @@ SCENE_DEMO_DEP_SRCS = $(SCENE_SRCS) src/support/prof.c
 # feature/source-document-port.md.
 REPL_DEMO_DEP_SRCS = src/repl/format.c \
                      src/support/prof.c \
-                     src/widgets/replay.c \
-                     src/widgets/replay_state.c \
-                     src/widgets/tutorial_state.c \
+                     src/subsystems/replay/replay.c \
+                     src/subsystems/replay/replay_state.c \
+                     src/subsystems/tutorial/tutorial_state.c \
 					 src/repl/apply.c \
                      src/repl/autonormal.c \
                      src/repl/command_spec.c \
@@ -697,7 +697,7 @@ test_glr_ctrl_OBJS = $(OBJDIR)/$(TEST_DIR)/test_glr_ctrl.o $(filter-out $(OBJDIR
 
 test_repl_executor_OBJS = $(OBJDIR)/$(TEST_DIR)/test_repl_executor.o $(filter-out $(OBJDIR)/src/repl/executor.o,$(CORE_TEST_OBJS))
 
-test_repl_replay_OBJS = $(OBJDIR)/$(TEST_DIR)/test_repl_replay.o $(filter-out $(OBJDIR)/src/widgets/replay.o,$(CORE_TEST_OBJS))
+test_repl_replay_OBJS = $(OBJDIR)/$(TEST_DIR)/test_repl_replay.o $(filter-out $(OBJDIR)/src/subsystems/replay/replay.o,$(CORE_TEST_OBJS))
 
 # test_replay_walk includes app/glr_ctrl.c as a translation unit to reach
 # the static cursor_guide_snapshot_with_flat_args helper, so the object

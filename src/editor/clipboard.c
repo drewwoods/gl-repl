@@ -19,7 +19,7 @@
 #include "repl/core_internal.h"
 #include "repl/source_scope.h"
 #include "repl/state_owners.h"
-#include "widgets/tutorial.h"
+#include "subsystems/tutorial/tutorial.h"
 
 static int tutorial_guard_clipboard_change_or_status(int pos,
                                                      int delete_count,

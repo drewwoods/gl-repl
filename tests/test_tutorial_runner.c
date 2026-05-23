@@ -15,8 +15,8 @@
 #include "source_document.h"
 #include "support/test_harness.h"
 #include "ui/state.h"
-#include "widgets/tutorial.h"
-#include "widgets/tutorial_state.h"
+#include "subsystems/tutorial/tutorial.h"
+#include "subsystems/tutorial/tutorial_state.h"
 
 #include <stdlib.h>
 #include <string.h>

@@ -10,7 +10,7 @@
 #include <stdlib.h>
 
 #include "app/glr_audio.h"
-#include "widgets/color_picker_state.h"
+#include "subsystems/color_picker/color_picker_state.h"
 #include "editor/clipboard.h"
 #include "app/glr_completion.h"
 #include "app/glr_defaults.h"        /* CFG_DEFAULT_* */
@@ -41,10 +41,10 @@
 #include "repl/replay_annotations.h"
 #include "repl/source_scope.h"
 #include "repl/state_owners.h"
-#include "widgets/replay.h"
-#include "widgets/replay_state.h"
-#include "widgets/tutorial.h"
-#include "widgets/tutorial_state.h"
+#include "subsystems/replay/replay.h"
+#include "subsystems/replay/replay_state.h"
+#include "subsystems/tutorial/tutorial.h"
+#include "subsystems/tutorial/tutorial_state.h"
 #include "ui/replay_hud.h"
 #include "scene/overlays.h" /* scene_draw_vertex_number_label / _arrow primitives */
 #include "scene/palette.h" /* scene_clr / scene_clr_a scene-space colors */
@@ -64,8 +64,8 @@
 #include "ui/state_types.h" /* UI-chrome typedefs (CodePanel/Camera/Help/etc.) */
 #include "ui/tabbed_overlay.h"
 #include "ui/variable_panel.h"
-#include "widgets/variable_panel_drag.h"
-#include "widgets/variable_panel_state.h"
+#include "subsystems/variable_panel/variable_panel_drag.h"
+#include "subsystems/variable_panel/variable_panel_state.h"
 
 static int glr_ctrl_apply_code_panel_follow_scroll_for_snapshot(
     const UiRenderSnapshot *snap,

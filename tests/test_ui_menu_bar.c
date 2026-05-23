@@ -6,7 +6,7 @@
 #include "repl/core.h"
 #include "repl/examples.h"
 #include "repl/state_owners.h"
-#include "widgets/replay.h"
+#include "subsystems/replay/replay.h"
 #include "ui/state.h"
 #include "ui/layout.h"
 #include "ui/metrics.h"

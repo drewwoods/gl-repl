@@ -19,7 +19,7 @@
  *   - tools/editor_demo/menu.c  : the demo's own File menu.
  *
  * What does NOT link: anything under src/repl, src/app, src/scene, or
- * src/widgets, plus the REPL-flavored editor controller files listed
+ * src/subsystems, plus the REPL-flavored editor controller files listed
  * above. There is no fake EditorServices instance, no per-symbol
  * REPL / glr / ui / tutorial stub block, and (since Phase 4 of
  * plans/done/edit-line-ownership.md flipped storage and Phase 5

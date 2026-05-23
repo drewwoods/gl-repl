@@ -45,8 +45,8 @@
 #include "repl/examples.h"
 #include "repl/executor.h"
 #include "repl/parser.h"
-#include "widgets/replay.h"
-#include "widgets/replay_state.h"
+#include "subsystems/replay/replay.h"
+#include "subsystems/replay/replay_state.h"
 #include "app/glr_ctrl.h"
 
 #include <stdio.h>
