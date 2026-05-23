@@ -23,7 +23,7 @@
 #include "repl/format.h"
 #include "config.h" /* REPL_STATUS_TEXT_MAX */
 #include "source_document.h"
-#include "prof.h"
+#include "support/prof.h"
 #include "repl/command_spec.h"
 #include "repl/command_store.h"
 #include "repl/core_internal.h"

@@ -6,10 +6,11 @@
  * instantaneous last-frame time and a smoothed exponential average for trend
  * analysis. Used for real-time performance monitoring and bottleneck detection.
  *
- * Profiling infrastructure: The underlying measurement is in prof.c/prof.h,
- * which uses platform timers (gettimeofday or equivalent) to bracket code
- * sections via prof_begin/prof_end. This module reads those measurements and
- * renders them as an overlay (top-left corner by default, position is
+ * Profiling infrastructure: The underlying measurement is in
+ * src/support/prof.c / src/support/prof.h, which uses platform timers
+ * (gettimeofday or equivalent) to bracket code sections via
+ * prof_begin/prof_end. This module reads those measurements and renders
+ * them as an overlay (top-left corner by default, position is
  * configurable).
  *
  * Visibility: Panel can be toggled on/off via Ctrl+W or the config menu
@@ -36,8 +37,8 @@ typedef enum {
 #include "snapshot.h"
 
 /* Render the CPU profile panel overlay once per frame from the supplied
- * snapshot. Reads measurements from prof.c and displays per-section CPU
- * times. Renders nothing if the profile panel is disabled. */
+ * snapshot. Reads measurements from src/support/prof.c and displays
+ * per-section CPU times. Renders nothing if the profile panel is disabled. */
 void ui_profile_panel_render(const UiRenderSnapshot *snap);
 
 #endif /* UI_PROFILE_PANEL_H */

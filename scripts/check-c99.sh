@@ -43,7 +43,7 @@ LOG=/tmp/check-c99.log
 if [ -n "${C99_SRCS:-}" ]; then
     SAMPLE_FILES="${C99_SRCS}"
 else
-    SAMPLE_FILES="$(printf '%s ' audio.c cmd_format.c prof.c sample.c \
+    SAMPLE_FILES="$(printf '%s ' audio.c cmd_format.c sample.c \
         tests/gl-stubs/gl_stub_counts.c; find src -name '*.c')"
 fi
 FILES="$(printf '%s\n' ${SAMPLE_FILES}; \

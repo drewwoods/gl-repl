@@ -9,7 +9,7 @@
 #include "editor/input.h"
 #include "editor/help_session.h"
 #include "ui/tabbed_overlay.h"
-#include "prof.h"
+#include "support/prof.h"
 #include "ui/profile_panel.h"
 #include "widgets/color_picker_state.h"
 #include "ui/color_picker.h"

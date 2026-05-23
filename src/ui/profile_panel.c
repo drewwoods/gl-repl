@@ -7,7 +7,7 @@
 #include "metrics.h"
 #include "theme.h"
 #include "variable_panel.h"
-#include "prof.h"
+#include "support/prof.h"
 
 #include <stdio.h>
 #include <string.h>

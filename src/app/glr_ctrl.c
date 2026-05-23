@@ -30,7 +30,7 @@
 #include "app/glr_camera.h"
 #include "app/glr_debug.h"
 #include <keys.h>
-#include "prof.h"
+#include "support/prof.h"
 #include "repl/core.h"
 #include "repl/examples.h"          /* REPL_EXAMPLE_TAG_* */
 #include "repl/eval.h"
