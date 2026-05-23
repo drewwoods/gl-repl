@@ -1003,6 +1003,102 @@ const char *repl_scan_to_matching_paren(const char *p) {
 }
 
 /* ========================================================================= */
+/* Inline numeric swatch helpers                                              */
+/* ========================================================================= */
+
+static int is_pure_numeric_literal(const char *s, int len) {
+    int i = 0;
+    if (i < len && (s[i] == '+' || s[i] == '-')) i++;
+    if (i >= len) return 0;
+    int has_digit = 0;
+    while (i < len && (s[i] >= '0' && s[i] <= '9')) { has_digit = 1; i++; }
+    if (i < len && s[i] == '.') {
+        i++;
+        while (i < len && (s[i] >= '0' && s[i] <= '9')) { has_digit = 1; i++; }
+    }
+    if (!has_digit) return 0;
+    if (i < len && (s[i] == 'e' || s[i] == 'E')) {
+        i++;
+        if (i < len && (s[i] == '+' || s[i] == '-')) i++;
+        if (i >= len || s[i] < '0' || s[i] > '9') return 0;
+        while (i < len && (s[i] >= '0' && s[i] <= '9')) i++;
+    }
+    return i == len;
+}
+
+ReplNumericArgAtCursor repl_eval_numeric_arg_at_cursor(const char *src,
+                                                       int cursor) {
+    ReplNumericArgAtCursor result = { 0, 0, 0, 0.0f };
+    if (!src || cursor < 0) return result;
+    int len = (int)strlen(src);
+    if (cursor > len) return result;
+
+    /* Find innermost enclosing '(' by scanning left. */
+    int depth = 0;
+    int paren_pos = -1;
+    int i;
+    for (i = cursor - 1; i >= 0; i--) {
+        if (src[i] == ')') depth++;
+        else if (src[i] == '(') {
+            if (depth == 0) { paren_pos = i; break; }
+            depth--;
+        }
+    }
+    if (paren_pos < 0) return result;
+
+    /* Walk top-level slots from paren_pos+1 using repl_scan_next_arg_delim. */
+    const char *base = src;
+    const char *p = base + paren_pos + 1;
+    while (*p && *p != ')') {
+        const char *slot_start = p;
+        const char *delim = repl_scan_next_arg_delim(p);
+        int s_off = (int)(slot_start - base);
+        int e_off = (int)(delim - base);
+
+        if (cursor >= s_off && cursor < e_off) {
+            /* Trim whitespace. */
+            int lo = s_off, hi = e_off;
+            while (lo < hi && isspace((unsigned char)base[lo])) lo++;
+            while (hi > lo && isspace((unsigned char)base[hi - 1])) hi--;
+            if (lo >= hi) return result;
+
+            if (!is_pure_numeric_literal(base + lo, hi - lo))
+                return result;
+
+            ExprCtx ctx;
+            const char *ep = base + lo;
+            ctx.p = ep;
+            ctx.vars = NULL;
+            ctx.num_vars = 0;
+            ctx.err = NULL;
+            ctx.err_sz = 0;
+            float val = repl_eval_expr(&ctx);
+
+            result.found = 1;
+            result.arg_start = lo;
+            result.arg_end = hi;
+            result.value = val;
+            return result;
+        }
+
+        if (*delim == ',') p = delim + 1;
+        else break;
+    }
+    return result;
+}
+
+float repl_eval_swatch_step(float value) {
+    float mag = fabsf(value);
+    float exp10 = (mag < 10.0f) ? 0.0f : floorf(log10f(mag));
+    return 0.05f * powf(10.0f, exp10);
+}
+
+void repl_eval_format_swatch_number(float v, char *out, int out_sz) {
+    if (out_sz <= 0) return;
+    snprintf(out, (size_t)out_sz, "%.6g", (double)v);
+}
+
+/* ========================================================================= */
 /* Expression translation: REPL <-> C                                         */
 /* ========================================================================= */
 

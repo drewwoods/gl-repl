@@ -301,6 +301,7 @@ SRCS = \
 	src/ui/app/color_picker.c \
 	src/ui/core/layout.c \
 	src/ui/app/menu_bar.c \
+	src/ui/app/numeric_swatch.c \
 	src/ui/app/panels.c \
 	src/ui/app/profile_panel.c \
 	src/ui/app/repl_code_panel.c \
@@ -380,6 +381,7 @@ HDRS = \
 	src/ui/app/color_picker.h \
 	src/ui/core/layout.h \
 	src/ui/app/menu_bar.h \
+	src/ui/app/numeric_swatch.h \
 	src/ui/app/panels.h \
 	src/ui/app/profile_panel.h \
 	src/ui/app/repl_code_panel.h \
@@ -460,6 +462,7 @@ CORE_TEST_SRCS = \
 	src/ui/app/color_picker.c \
 	src/ui/core/layout.c \
 	src/ui/app/menu_bar.c \
+	src/ui/app/numeric_swatch.c \
 	src/ui/app/panels.c \
 	src/ui/app/profile_panel.c \
 	src/ui/app/repl_code_panel.c \

@@ -252,6 +252,20 @@ const char *repl_scan_next_arg_delim(const char *s);
  * to distinguish. */
 const char *repl_scan_to_matching_paren(const char *p);
 
+/* ---- Inline numeric swatch helpers ------------------------------------- */
+
+typedef struct {
+    int   found;       /* 1 if cursor sits in a pure numeric literal arg */
+    int   arg_start;   /* offset of first char (incl. leading sign) */
+    int   arg_end;     /* offset one past last digit/decimal/exponent */
+    float value;       /* parsed via repl_eval_expr */
+} ReplNumericArgAtCursor;
+
+ReplNumericArgAtCursor repl_eval_numeric_arg_at_cursor(const char *src,
+                                                       int cursor);
+float repl_eval_swatch_step(float value);
+void  repl_eval_format_swatch_number(float v, char *out, int out_sz);
+
 /* ---- Expression translation: REPL <-> C syntax ----------------------- */
 
 /* Translate REPL expression (sin, cos, etc.) to C (sinf, cosf, etc.).
