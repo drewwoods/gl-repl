@@ -648,6 +648,51 @@ int main(void) {
         ASSERT_TRUE("glMaterialfv bad face returns 0", ok == 0);
     }
 
+    /* Regression: 6-arg flat input form
+     * (`glMaterialfv(face, pname, r, g, b, a)`) must parse, populate
+     * args[2..5] from the four RGBA floats, AND canonicalize to the
+     * compound-literal emit that re-parses unchanged. This is the
+     * shape interactive users type most often, and the original
+     * glMaterialf bug silently dropped the round-trip — locking it in. */
+    {
+        glr_app_reset_all();
+        GLCmd cmd;
+        char cmd_text[MAX_LINE_LEN] = "";
+        memset(&cmd, 0, sizeof(cmd));
+        int ok = parse_cmd_with_text(
+            "glMaterialfv(GL_FRONT, GL_DIFFUSE, 0.8, 0.2, 0.2, 1.0)",
+            &cmd, cmd_text, sizeof(cmd_text));
+        ASSERT_TRUE("glMaterialfv 6-arg flat: parse ok", ok == 1);
+        ASSERT_TRUE("glMaterialfv 6-arg flat: type", cmd.type == CMD_MATERIALFV);
+        ASSERT_TRUE("glMaterialfv 6-arg flat: num_args 6 (face+pname+4)",
+                    cmd.num_args == 6);
+        ASSERT_TRUE("glMaterialfv 6-arg flat: r preserved",
+                    cmd.args[2] > 0.799f && cmd.args[2] < 0.801f);
+        ASSERT_TRUE("glMaterialfv 6-arg flat: g preserved",
+                    cmd.args[3] > 0.199f && cmd.args[3] < 0.201f);
+        ASSERT_TRUE("glMaterialfv 6-arg flat: b preserved",
+                    cmd.args[4] > 0.199f && cmd.args[4] < 0.201f);
+        ASSERT_TRUE("glMaterialfv 6-arg flat: a preserved",
+                    cmd.args[5] > 0.999f && cmd.args[5] < 1.001f);
+        ASSERT_TRUE("glMaterialfv 6-arg flat: canonical emits compound literal",
+                    strstr(cmd_text,
+                           "glMaterialfv(GL_FRONT, GL_DIFFUSE, (GLfloat[]){0.8, 0.2, 0.2, 1})")
+                        != NULL);
+
+        /* Round-trip: feed the canonical emit back through the parser
+         * and confirm the resulting GLCmd is identical. */
+        glr_app_reset_all();
+        GLCmd cmd2;
+        char cmd_text2[MAX_LINE_LEN] = "";
+        memset(&cmd2, 0, sizeof(cmd2));
+        int ok2 = parse_cmd_with_text(cmd_text, &cmd2, cmd_text2, sizeof(cmd_text2));
+        ASSERT_TRUE("glMaterialfv 6-arg flat: canonical re-parses", ok2 == 1);
+        ASSERT_TRUE("glMaterialfv 6-arg flat: round-trip num_args",
+                    cmd2.num_args == 6);
+        ASSERT_TRUE("glMaterialfv 6-arg flat: round-trip canonical text matches",
+                    strcmp(cmd_text, cmd_text2) == 0);
+    }
+
     /* The old glMaterialf name is no longer recognized — clean rename,
      * no transition aliasing. */
     {

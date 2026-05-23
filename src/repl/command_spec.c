@@ -221,8 +221,14 @@ static const ReplFuncCompletion k_func_completions[] = {
         "End contour or polygon", REPL_HELP_GROUP_GLU_TESS },
     { "gluNormal(",          "gluNormal(nx, ny, nz)",                                    3, { "nx", "ny", "nz" },
         "Set per-vertex normal", REPL_HELP_GROUP_GLU_TESS },
-    { "gluColor(",           "gluColor(r, g, b, a)",                                     4, { "r", "g", "b", "a" },
-        "Set per-vertex color", REPL_HELP_GROUP_GLU_TESS },
+    /* gluColor accepts 3 or 4 floats — the parser defaults alpha to
+     * 1.0 when omitted. The param-hint walker enumerates everything
+     * in `params[]` as mandatory, so we list only the 3 required
+     * positions there; the trailing `[, a]` in display_text signals
+     * the optional alpha in the popup match list. */
+    { "gluColor(",           "gluColor(r, g, b[, a])",                                   3, { "r", "g", "b" },
+        "Set per-vertex color (alpha defaults to 1.0 when omitted)",
+        REPL_HELP_GROUP_GLU_TESS },
     { "gluVertex(",          "gluVertex(x, y, z)",                                       3, { "x", "y", "z" },
         "Add vertex to current contour", REPL_HELP_GROUP_GLU_TESS },
     /* --- Language constructs (help-skipped: no REPL_HELP_GROUP) --- */

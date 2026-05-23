@@ -229,6 +229,23 @@ int main() {
                    g_ac_hint, "(GLfloat[]){r, g, b, a})");
     }
 
+    /* 4d. gluColor - hint must reflect that alpha is optional. The
+     * parser accepts 3 or 4 floats (alpha defaults to 1.0 when
+     * omitted), so the param-hint walker is configured with only 3
+     * mandatory params (r, g, b). The display_text carries "[, a]"
+     * separately for popup-list discoverability of the optional arg. */
+    {
+        glr_app_reset_all(); declare_test_vars();
+
+        set_input_text("gluColor");
+        editor_completion_update();
+        ASSERT_STR("gluColor func hint stops at b)", g_ac_hint, "r, g, b)");
+
+        set_input_text("gluColor(1, 0, ");
+        editor_completion_update();
+        ASSERT_STR("gluColor third-arg hint", g_ac_hint, "b)");
+    }
+
     /* 5. User-defined function completion */
     {
         glr_app_reset_all(); declare_test_vars();
