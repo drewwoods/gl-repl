@@ -53,6 +53,14 @@ void                 tutorial_exit(void);
 void                 tutorial_teardown(void);
 int                  tutorial_handle_commit_attempt(const char *input,
                                                     TutorialMatchResult *out);
+/* Called by the completion provider on every input-change update while
+ * the cursor sits on the expected commit line: when `input` is a
+ * complete match for the active COMMAND step's expected text (Tab
+ * accepted the ghost or the user finished typing), refresh the status
+ * bar with a "press Enter or ';' to commit" reminder. No-op for
+ * inactive, SET / REQUIRE, or partial input — those let the prior
+ * status fade naturally. */
+void                 tutorial_refresh_input_hint(const char *input);
 void                 tutorial_advance_after_successful_commit(void);
 const char          *tutorial_current_expected_text(void);
 

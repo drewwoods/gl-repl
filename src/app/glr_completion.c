@@ -251,6 +251,12 @@ static void update_autocomplete(void) {
     if (tutorial_active() &&
         editor_state_edit_line() == tutorial_expected_commit_line()) {
         tutorial_shadow_suffix(raw_input, ac->ghost, sizeof(ac->ghost));
+        /* Sibling of the shadow suffix: when the typed input fully
+         * matches the expected command, refresh the status bar with a
+         * "press Enter or ';' to commit" reminder so the user knows the
+         * line is ready. No-op while still typing or off the COMMAND
+         * step. */
+        tutorial_refresh_input_hint(raw_input);
         return;
     }
 
