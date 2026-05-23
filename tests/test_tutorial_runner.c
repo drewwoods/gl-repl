@@ -2076,7 +2076,122 @@ static void test_workspace_load_during_tutorial_restores_baseline(void) {
     rmdir(made_dir);
 }
 
+/* Regression for finding 1: exiting on a REQUIRE step must not let the
+ * baseline restore advance the tutorial. The notify hook in
+ * glr_config_set fires per slug; if the runtime state is still
+ * active=1 when restore writes the slug to a value matching the
+ * REQUIRE target, the tutorial advances mid-teardown and runs the
+ * next step's SET side effects. The fix resets state BEFORE the
+ * restore. */
+static void test_exit_on_require_does_not_autoadvance(void) {
+    reset_fixture();
+
+    /* Pre-tutorial baseline that COINCIDES with the REQUIRE target
+     * (vertex_outlines == 1) — the worst-case input that exposed the
+     * bug. Grid baseline is OFF so the post-fix path leaves grid at
+     * 0, not the SET-step's RADAR=10. */
+    glr_config_set(GLR_CONFIG_VERTEX_OUTLINES, 1);
+    glr_config_set(GLR_CONFIG_GRID_THEME, 0);
+    int outlines_baseline = repl_cfg_get_int("vertex_outlines", -1);
+    int grid_baseline     = repl_cfg_get_int("grid", -1);
+    ASSERT_INT("vertex_outlines baseline 1", outlines_baseline, 1);
+    ASSERT_INT("grid baseline OFF", grid_baseline, 0);
+
+    int idx = start_feature_tour_and_walk_commands();
+    ASSERT_TRUE("walked into REQUIRE", idx >= 0);
+    ASSERT_INT("on REQUIRE step", tutorial_state_view().step, 5);
+    ASSERT_INT("REQUIRE kind",
+               (int)tutorial_current_step_kind(),
+               (int)TUTORIAL_STEP_KIND_REQUIRE);
+    /* presentation_reset wiped vertex_outlines back to its default
+     * (0) — the REQUIRE is unsatisfied, which is the precondition for
+     * the bug: a restore write of 1 (the baseline) would match. */
+    ASSERT_INT("REQUIRE unsatisfied at exit", repl_cfg_get_int("vertex_outlines", -1), 0);
+
+    tutorial_exit();
+    ASSERT_TRUE("tutorial inactive after exit", !tutorial_active());
+    ASSERT_INT("vertex_outlines restored to baseline",
+               repl_cfg_get_int("vertex_outlines", -1), outlines_baseline);
+    /* The whole point: the next-step SET (grid = RADAR = 10) must NOT
+     * have fired during the restore. Pre-fix, the notify hook saw a
+     * matching REQUIRE on the vertex_outlines write and auto-advanced,
+     * stamping grid=10 after grid had already been restored. */
+    ASSERT_INT("next-step SET did NOT fire during teardown",
+               repl_cfg_get_int("grid", -1), grid_baseline);
+}
+
+/* Regression for finding 2: starting a new tutorial while one is
+ * active must restore the prior tutorial's baseline before capturing
+ * a new one. Otherwise the just-mutated cfg gets enshrined as the
+ * "pre-tutorial" state, and the final exit restores tutorial-mutated
+ * values instead of the user's true original. */
+static void test_restart_during_tutorial_preserves_original_baseline(void) {
+    reset_fixture();
+
+    /* True pre-tutorial baseline: grid OFF. */
+    glr_config_set(GLR_CONFIG_GRID_THEME, 0);
+    int baseline = repl_cfg_get_int("grid", -1);
+    ASSERT_INT("baseline grid OFF", baseline, 0);
+
+    /* Walk Feature Tour past REQUIRE so the SET grid=RADAR(10) fires. */
+    int idx1 = start_feature_tour_and_walk_commands();
+    ASSERT_TRUE("walked tour 1 into REQUIRE", idx1 >= 0);
+    glr_config_set(GLR_CONFIG_VERTEX_OUTLINES, 1); /* advances REQUIRE → SET */
+    ASSERT_INT("grid mutated to RADAR mid-tutorial 1",
+               repl_cfg_get_int("grid", -1), 10);
+    ASSERT_TRUE("tutorial 1 still active", tutorial_active());
+
+    /* Start tutorial 2 without exiting tutorial 1. Pre-fix: the new
+     * tutorial's baseline capture saw grid=10 and enshrined it; the
+     * final exit would restore grid=10. Post-fix: the inner teardown
+     * restores grid=0 first, the new baseline captures grid=0. */
+    int idx2 = find_tutorial_idx("First Triangle");
+    ASSERT_TRUE("found First Triangle", idx2 >= 0);
+    tutorial_start(idx2);
+    ASSERT_TRUE("tutorial 2 active", tutorial_active());
+    ASSERT_INT("tutorial 2 idx", tutorial_state_view().tutorial_idx, idx2);
+
+    /* Exit tutorial 2: its baseline (captured after teardown of tour 1)
+     * must equal the original user baseline. */
+    tutorial_exit();
+    ASSERT_TRUE("tutorial 2 inactive after exit", !tutorial_active());
+    ASSERT_INT("grid restored to ORIGINAL baseline (not tour-1 mutated)",
+               repl_cfg_get_int("grid", -1), baseline);
+}
+
+/* Regression for finding 3: the baseline must capture view_mode
+ * (GLR_CONFIG_ORTHO_MODE) unconditionally. presentation_reset always
+ * touches it, but it's deliberately outside fill_scene_subset (it's a
+ * global, not per-scene). A tutorial whose @cfg / SET / REQUIRE steps
+ * never name view_mode would otherwise leak the
+ * presentation_reset(→3D) past teardown. */
+static void test_baseline_captures_view_mode_even_when_unreferenced(void) {
+    reset_fixture();
+
+    /* Pre-tutorial: 2D (ortho_mode = 1). */
+    glr_config_set(GLR_CONFIG_ORTHO_MODE, 1);
+    ASSERT_INT("baseline view_mode 2D", repl_cfg_get_int("view_mode", -1), 1);
+
+    /* Color & Transform has no .cfg block and no SET/REQUIRE steps —
+     * it never names view_mode, so the bug case is exactly this. */
+    int idx = find_tutorial_idx("Color & Transform");
+    ASSERT_TRUE("found Color & Transform", idx >= 0);
+    tutorial_start(idx);
+    ASSERT_TRUE("color-transform active", tutorial_active());
+    /* presentation_reset → CFG_DEFAULT_ORTHO_MODE = 0 (3D) */
+    ASSERT_INT("view_mode reset to 3D inside tutorial",
+               repl_cfg_get_int("view_mode", -1), 0);
+
+    tutorial_exit();
+    ASSERT_TRUE("color-transform inactive after exit", !tutorial_active());
+    ASSERT_INT("view_mode restored to pre-tutorial 2D",
+               repl_cfg_get_int("view_mode", -1), 1);
+}
+
 int main(void) {
+    test_exit_on_require_does_not_autoadvance();
+    test_restart_during_tutorial_preserves_original_baseline();
+    test_baseline_captures_view_mode_even_when_unreferenced();
     test_start_enters_transient_tutorial_scene();
     test_catalog_includes_color_transform_tutorial();
     test_color_transform_walkthrough();
