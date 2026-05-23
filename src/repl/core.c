@@ -64,8 +64,9 @@ static void get_for_var_name_from_text(const char *text, char *var, int var_sz);
 /* Host-effect bridge: a single file-static pointer the controller
  * installs at startup, mirroring export.c's g_export_cfg_bridge /
  * g_export_camera_bridge. NULL bridge = every dispatch no-ops, which
- * is what the demo and tests want (they leave it unset, clearing the
- * ui_state_status_set / editor stubs from tools/repl_demo/stubs.c).
+ * is what tests want when they leave it unset. The standalone demo installs
+ * only edit-line hooks, clearing the ui_state_status_set / editor / tutorial
+ * stubs from tools/repl_demo/stubs.c.
  *
  * These started as individual callbacks; the six installers were consolidated into
  * one struct per plans/partial/src-repl-simplicity-review.md item 2.
@@ -124,6 +125,11 @@ void repl_dispatch_scroll_to_line(int target) {
 void repl_dispatch_follow_cursor(int follow) {
     if (g_host_effects && g_host_effects->follow_cursor)
         g_host_effects->follow_cursor(follow);
+}
+
+void repl_dispatch_tutorial_teardown(void) {
+    if (g_host_effects && g_host_effects->tutorial_teardown)
+        g_host_effects->tutorial_teardown();
 }
 
 int repl_dispatch_edit_line_get(void) {

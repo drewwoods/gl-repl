@@ -8,7 +8,6 @@
 #include "repl/export.h"   /* ReplExportConfig + bridge for per-scene cfg */
 #include "repl/state_owners.h"
 #include "source_document.h" /* source_document_load_lines */
-#include "subsystems/tutorial/tutorial.h"
 
 #include <dirent.h>
 #include <errno.h>
@@ -611,12 +610,9 @@ static int has_dot_c_ext(const char *name) {
 }
 
 int repl_load_workspace(const char *dir) {
-    /* tutorial_teardown (not _reset): the workspace-load path stashes
-     * the current live cfg below as the pre-workspace snapshot; running
-     * the tutorial cfg restore FIRST keeps that snapshot tutorial-free
-     * so an empty workspace doesn't enshrine tutorial-mutated cfg as
-     * the new baseline (the load-bearing regression case in the plan). */
-    tutorial_teardown();
+    /* Ask the host to restore tutorial-mutated cfg before this path
+     * stashes live cfg as the pre-workspace snapshot. */
+    repl_dispatch_tutorial_teardown();
 
     if (!dir || !*dir) return 0;
 
@@ -900,10 +896,9 @@ const char *repl_user_scene_name(int slot) {
 }
 
 int repl_load_user_scene_idx(int slot) {
-    /* tutorial_teardown so the user-scene's cfg restore (in
-     * restore_user_scene) doesn't see tutorial-mutated cfg as the
-     * "live" state it must overwrite. */
-    tutorial_teardown();
+    /* Ask the host to restore tutorial-mutated cfg before the user-scene
+     * cfg restore observes live state. */
+    repl_dispatch_tutorial_teardown();
 
     if (slot < 0 || slot >= MAX_USER_SCENES) return 0;
     if (!g_user_scenes[slot].used) return 0;

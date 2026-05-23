@@ -3,21 +3,15 @@
 # Counts function-definition lines (lines with `^[a-zA-Z_].*(.*) {`)
 # and rejects any commit that increases the count past a baseline.
 #
-# After step 7e cleared the last stub (`editor_feed_line`), the baseline
-# was 0: stubs.c contained no function bodies, only the documentation
-# header. The tutorial work then introduced `tutorial_teardown` calls
-# in example_loader.c and scenes.c that the demo can't reach — so
-# baseline is 1 today. The proper follow-up is a
-# ReplTutorialTeardownBridge analogous to ReplExportConfigBridge: the
-# full app installs a real teardown fn, the demo installs nothing, and
-# this stub goes away. Tracked as a follow-up to the src/ restructure
-# work in plans/active/src-shuffle-final.md.
+# After step 8 moved tutorial teardown requests behind ReplHostEffects,
+# the baseline is back to 0: stubs.c contains no function bodies, only
+# the documentation header.
 
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 
 file="tools/repl_demo/stubs.c"
-baseline=1
+baseline=0
 
 if [ ! -f "$file" ]; then
     echo "repl-demo-stubs-shrinking OK (no stubs.c)"

@@ -842,13 +842,16 @@ full app fills and the demo leaves unset:
 2. **`ReplHostEffects` bridge** (`src/repl/core.h`). A single
    controller-installed table of host callbacks — `status`,
    `status_error`, `example_presentation_reset`, `input_reset`,
-   `insert_mode_off`, `scroll_to_line`, `follow_cursor`, `edit_line_get`,
-   `edit_line_set`. Pipeline TUs call `repl_set_status()` /
+   `insert_mode_off`, `scroll_to_line`, `follow_cursor`,
+   `tutorial_teardown`, `edit_line_get`, `edit_line_set`. Pipeline TUs call
+   `repl_set_status()` /
    `repl_dispatch_*()`; the controller installs the table at startup. The
-   demo leaves it unset, so every dispatcher is a no-op. This consolidated
+   demo installs only its edit-line hooks and leaves the status/editor/
+   tutorial hooks unset, so those dispatchers are no-ops. This consolidated
    the old per-effect installers (the `set_status` sink, the autocomplete
    registration, the UI-chrome sync) into one struct and cleared
-   `ui_state_status_set`, `ui_state_code_panel_mut`, and the reset stubs.
+   `ui_state_status_set`, `ui_state_code_panel_mut`, the reset stubs, and
+   the former `tutorial_teardown` demo stub.
 
 3. **Export bridges + layout input** (`src/repl/export.h`). `export.c` is
    GL-free and app-free; app/scene-derived values arrive through
@@ -891,7 +894,8 @@ All in the `check-state-ownership` gate: `check-repl-demo-no-editor`,
 `check-repl-demo-stubs-shrinking`, `check-source-document-port-owners`,
 `check-repl-no-direct-editor` (invariant β), `check-repl-no-direct-buffer-read`,
 `check-no-store-text-api`, `check-no-feed-line-in-pipeline`,
-`check-no-load-line-to-input-in-pipeline`, `check-repl-state-no-glr-state`,
+`check-no-load-line-to-input-in-pipeline`,
+`check-repl-no-direct-tutorial-runner`, `check-repl-state-no-glr-state`,
 `check-repl-export-via-bridge`.
 
 ## Where To Put New Code
@@ -1280,9 +1284,11 @@ throughout this document:
   in the full app and `tools/repl_demo/source_document.c` in the demo. See
   *Editor-owned text* above.
 * **`feature/decouple-repl-from-gl-repl-alt.md`** — `repl_demo` reached a
-  stub-free link boundary (17 → 0). See *Standalone REPL Demo Coupling*
-  above. Step 7 also relocated app-frame presentation/render policy out of
-  `ReplRuntimeState` into `src/app/glr_state.c`.
+  stub-free link boundary (17 → 0); the later tutorial teardown edge was
+  routed through `ReplHostEffects` to keep that boundary at zero. See
+  *Standalone REPL Demo Coupling* above. Step 7 also relocated app-frame
+  presentation/render policy out of `ReplRuntimeState` into
+  `src/app/glr_state.c`.
 
 ## Known REPL Corner Cases & Coverage Gaps
 

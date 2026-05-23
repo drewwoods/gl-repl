@@ -116,9 +116,11 @@ void        repl_set_status_error(const char *msg);
  *
  * Loader, scene-switch, snippet-import, and replay code in src/repl call
  * through this table when they need a host action such as clearing editor
- * input, scrolling the code panel, or resetting example presentation state.
- * The demo and most pure REPL tests leave the table unset, so every dispatcher
- * below becomes a no-op.
+ * input, scrolling the code panel, tearing down tutorial state before source
+ * replacement, or resetting example presentation state.
+ * Most pure REPL tests leave the table unset; the standalone demo installs
+ * only its edit-line hooks. Any unset callback makes the matching dispatcher
+ * a no-op.
  *
  * This mirrors the export cfg/camera bridges: the REPL asks for an effect by
  * purpose, without naming editor/UI implementation details. Phases 3 + 6 of
@@ -160,6 +162,11 @@ typedef struct {
     void (*scroll_to_line)(int target);
     /* Toggle cursor-follow during replay. */
     void (*follow_cursor)(int follow);
+    /* Tear down any active tutorial before wholesale source replacement.
+     * The tutorial runner is a peer subsystem; routing this through the
+     * host bridge keeps src/repl from linking tutorial.c just to request
+     * its idempotent cleanup. NULL = no tutorial host, so no-op. */
+    void (*tutorial_teardown)(void);
     /* Read/write the edit-line cursor. Cursor storage moved
      * to EditorState; REPL code that previously called
      * repl_state_edit_line() / _set() goes through these hooks so
@@ -187,6 +194,7 @@ void        repl_dispatch_input_reset(void);
 void        repl_dispatch_insert_mode_off(void);
 void        repl_dispatch_scroll_to_line(int target);
 void        repl_dispatch_follow_cursor(int follow);
+void        repl_dispatch_tutorial_teardown(void);
 int         repl_dispatch_edit_line_get(void);
 void        repl_dispatch_edit_line_set(int line);
 
