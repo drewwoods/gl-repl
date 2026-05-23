@@ -73,6 +73,15 @@ static void tutorial_capture_cfg_baseline(int idx) {
     if (b && b->fill_scene_subset)
         b->fill_scene_subset(&g_tut_cfg_baseline_bag);
 
+    /* `presentation_reset_example_defaults` (called for every tutorial
+     * start) always touches `view_mode`/ortho_mode, but view_mode is
+     * intentionally outside the scene-subset (it's a global, not a
+     * per-scene property). Without an explicit record, a tutorial whose
+     * @cfg / SET steps don't mention view_mode silently leaks the
+     * presentation_reset(→3D) past teardown — e.g. starting "Color &
+     * Transform" from 2D would exit in 3D. Capture it unconditionally. */
+    tutorial_cfg_baseline_record_one("view_mode");
+
     char slug[REPL_EXPORT_CFG_KEY_MAX];
     const char *const *cfg = repl_tutorial_cfg_lines(idx);
     for (int i = 0; cfg && cfg[i]; i++) {
@@ -89,10 +98,13 @@ static void tutorial_capture_cfg_baseline(int idx) {
 }
 
 /* Apply the captured bag back through the bridge, then clear it. The
- * cfg-write notify hook in glr_config_set fires per slug, but every
- * call hits its early returns (current step is not REQUIRE during
- * teardown, and we clear after restoring), so this is a quiet bulk
- * apply with no spurious tutorial advance. */
+ * per-write `tutorial_notify_state_changed()` hook in glr_config_set
+ * runs unconditionally per slug, but tutorial_teardown clears the
+ * runtime state BEFORE calling this — so `tutorial_active()` returns
+ * 0 inside the notify and short-circuits before checking step kind.
+ * Without that ordering, restoring a slug to a value that happens to
+ * match an active REQUIRE step's target would auto-advance the
+ * tutorial mid-teardown (and run the next step's SET side effects). */
 static void tutorial_cfg_baseline_restore(void) {
     if (!g_tut_cfg_baseline_valid) return;
     const ReplExportConfigBridge *b = repl_export_config_bridge();
@@ -455,6 +467,17 @@ void tutorial_start(int idx) {
         return;
     }
 
+    /* If another tutorial is already active (Restart or a fresh flyout
+     * pick while mid-tutorial), tear it down first so its baseline is
+     * restored to the user's true original cfg BEFORE we snapshot a
+     * new baseline. Without this, capturing the "pre-tutorial" cfg
+     * actually records the prior tutorial's mutated state — and the
+     * eventual exit then restores tutorial state instead of the
+     * user's. Mid-Feature-Tour restart capturing grid=10 as the
+     * baseline is the symptom this guards against. */
+    if (tutorial_active())
+        tutorial_teardown();
+
     /* Snapshot the user's true pre-tutorial cfg BEFORE any
      * tutorial-initiated mutation (transient-scene entry can flip cfg
      * via restore_pre_example_cfg_if_valid; presentation_reset(0) resets
@@ -506,8 +529,17 @@ void tutorial_start(int idx) {
 void tutorial_teardown(void) {
     if (!tutorial_active())
         return;
-    tutorial_cfg_baseline_restore();
+    /* Reset state BEFORE restoring cfg so the per-slug notify hook in
+     * glr_config_set sees `active == 0` and bails out before it can
+     * compare the just-written value to any step's REQUIRE target.
+     * Bug fix: exiting / restarting / switching tutorials during a
+     * REQUIRE step could otherwise advance the tutorial during the
+     * restore writes themselves — e.g. Feature Tour exit restoring
+     * vertex_outlines=1 (the pre-tutorial default) coincides with the
+     * REQUIRE target and triggers the next step's SET grid=10 side
+     * effect after grid was already restored. */
     tutorial_state_reset();
+    tutorial_cfg_baseline_restore();
 }
 
 void tutorial_exit(void) {
