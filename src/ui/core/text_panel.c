@@ -690,6 +690,53 @@ int ui_text_panel_visible_lines_for_height(int panel_h, int chrome_flags,
     return available / LINE_H + 1;
 }
 
+int ui_text_panel_input_row_y(const UiTextPanelSnapshot *snap,
+                              int input_row_idx,
+                              int *out_py) {
+    int visible_rows, statusbar_h, panel_top, line_y, cur;
+    if (!snap || !out_py || input_row_idx < 0 ||
+        input_row_idx >= snap->row_count)
+        return 0;
+
+    visible_rows = ui_text_panel_visible_lines_for_height(
+        snap->cp_h, snap->chrome_flags, snap->top_chrome_h);
+    statusbar_h = text_panel_statusbar_h(snap);
+    (void)statusbar_h;
+
+    panel_top = snap->cp_y + snap->cp_h;
+    line_y = panel_top - CODE_MARGIN_Y - 2 * LINE_H - snap->top_chrome_h;
+    cur = 0;
+
+    for (int i = 0; i < snap->row_count; i++) {
+        const UiTextPanelRow *row = &snap->rows[i];
+        const char *text;
+        CodeLayout layout;
+        int visual_rows;
+
+        if (row->kind == UI_TEXT_PANEL_ROW_INPUT)
+            text = snap->input.input ? snap->input.input : "";
+        else
+            text = row->text ? row->text : "";
+
+        if (row->kind == UI_TEXT_PANEL_ROW_PLACEHOLDER && text[0] == '\0')
+            visual_rows = 1;
+        else {
+            layout = text_panel_row_layout(snap, row);
+            visual_rows = code_layout_row_count_for_text(text, &layout);
+            if (visual_rows < 1) visual_rows = 1;
+        }
+
+        if (i == input_row_idx) {
+            if (cur < snap->scroll || cur >= snap->scroll + visible_rows)
+                return 0;
+            *out_py = line_y - (cur - snap->scroll) * LINE_H;
+            return 1;
+        }
+        cur += visual_rows;
+    }
+    return 0;
+}
+
 void ui_text_panel_render(const UiTextPanelSnapshot *snap,
                           UiTextPanelOutput         *out) {
     int panel_top;

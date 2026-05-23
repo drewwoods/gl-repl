@@ -24,6 +24,7 @@ typedef enum {
     UI_HIT_HELP_TOGGLE,          /* statusbar "F1 help" keycap — toggle help overlay */
     UI_HIT_CODE_PANEL_TAB,       /* scene tab strip — a clickable scene tab */
     UI_HIT_INLINE_COLOR_SWATCH,  /* inline color swatch drawn in a code-panel row */
+    UI_HIT_NUMERIC_SWATCH,       /* inline numeric stepper (item_idx = +1 / -1) */
     UI_HIT_COLOR_SWATCH,         /* floating color picker slider control */
     UI_HIT_MENU_BUTTON,          /* top-level menu-bar button (open / switch / dismiss) */
     UI_HIT_MENU_ITEM,            /* open menu dropdown row */
@@ -105,6 +106,11 @@ typedef enum {
  *   UI_HIT_VARIABLE_SLIDER
  *     cmd_idx  = predef-var slot
  *     item_idx = row index
+ *
+ *   UI_HIT_NUMERIC_SWATCH
+ *     item_idx = direction (+1 = increment, -1 = decrement)
+ *     All other fields unused (-1). Route handler re-derives the arg
+ *     offsets from live editor state.
  *
  *   UI_HIT_SCENE / UI_HIT_HELP_PANEL — coordinates only.
  */

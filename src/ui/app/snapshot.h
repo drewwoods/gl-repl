@@ -86,6 +86,17 @@ typedef struct UiRenderSnapshot {
     EditorScrollState           scroll;
     ColorPickerView             color_picker;
 
+    /* Inline numeric swatch (stateless — rebuilt every frame) */
+    struct {
+        int   visible;
+        int   arg_start;
+        int   arg_end;
+        float value;
+        float step;
+        float anchor_x;
+        float anchor_y;
+    }                           numeric_swatch;
+
     /* Pointer-shaped read-only views (storage owned by src/repl/state.c) */
     EditorInputView         editor_input;
     ReplImportExportView        import_export;

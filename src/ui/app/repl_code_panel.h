@@ -89,4 +89,9 @@ void ui_repl_code_panel_render(const UiRenderSnapshot *snap,
 UiHit ui_repl_code_panel_hit_test(const UiRenderSnapshot *snap,
                                   int mx, int my);
 
+int  ui_repl_code_panel_input_row_y(const UiRenderSnapshot *snap,
+                                    float *out_py);
+int  ui_repl_code_panel_input_row_has_color_swatch(
+         const UiRenderSnapshot *snap);
+
 #endif /* UI_REPL_CODE_PANEL_H */

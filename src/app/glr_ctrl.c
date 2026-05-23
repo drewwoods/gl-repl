@@ -34,6 +34,7 @@
 #include "repl/core.h"
 #include "repl/examples.h"          /* REPL_EXAMPLE_TAG_* */
 #include "repl/eval.h"
+#include "repl/parser.h"
 #include "repl/executor.h"
 #include "repl/export.h"
 #include "repl/help_text.h"
@@ -57,7 +58,9 @@
 #include "ui/core/layout.h"
 #include "ui/app/menu_bar.h"
 #include "ui/core/metrics.h"
+#include "ui/app/numeric_swatch.h"
 #include "ui/app/panels.h"
+#include "ui/app/repl_code_panel.h"
 #include "ui/app/profile_panel.h"
 #include "ui/app/snapshot.h"
 #include "ui/app/state.h"
@@ -1481,6 +1484,51 @@ static void glr_ctrl_build_scene_tabs(UiSceneTabList *out) {
     out->count = n;
 }
 
+static void glr_ctrl_populate_numeric_swatch(UiRenderSnapshot *snap) {
+    EditorInputView in;
+    int edit_line;
+    ReplNumericArgAtCursor d;
+    float anchor_y;
+    int cp_x, cp_w;
+    char parse_err[128] = "";
+    ReplParseContext parse_ctx;
+    ReplParsedLine pl;
+
+    snap->numeric_swatch.visible = 0;
+
+    if (editor_insert_mode()) return;
+    edit_line = editor_state_edit_line();
+    if (edit_line < 0 || edit_line >= repl_state_document_count()) return;
+    if (repl_state_document_cmds()[edit_line].type == CMD_COMMENT) return;
+    if (ui_repl_code_panel_input_row_has_color_swatch(snap)) return;
+    in = editor_state_input();
+    if (in.cursor_pos < 0 || !in.input || !in.input[0]) return;
+    if (editor_state_autocomplete().match_count > 0) return;
+    if (editor_inline_rename_active()) return;
+    if (tutorial_active() && tutorial_block_noncommand_commit()) return;
+
+    d = repl_eval_numeric_arg_at_cursor(in.input, in.cursor_pos);
+    if (!d.found) return;
+
+    parse_ctx.source_line_idx = edit_line;
+    parse_ctx.err_buf = parse_err;
+    parse_ctx.err_sz = (int)sizeof parse_err;
+    if (!repl_parser_parse_command_ctx(in.input, &pl, &parse_ctx)) return;
+    if (pl.cmd.type == CMD_COMMENT) return;
+
+    ui_layout_code_panel_rect(&cp_x, NULL, &cp_w, NULL);
+    if (!ui_repl_code_panel_input_row_y(snap, &anchor_y)) return;
+
+    snap->numeric_swatch.visible   = 1;
+    snap->numeric_swatch.arg_start = d.arg_start;
+    snap->numeric_swatch.arg_end   = d.arg_end;
+    snap->numeric_swatch.value     = d.value;
+    snap->numeric_swatch.step      = repl_eval_swatch_step(d.value);
+    snap->numeric_swatch.anchor_x  = (float)(cp_x + cp_w -
+                                     UI_NUMERIC_SWATCH_BTN_W - 4);
+    snap->numeric_swatch.anchor_y  = anchor_y;
+}
+
 void glr_ctrl_build_ui_snapshot(UiRenderSnapshot *snap) {
     FlatProgramView flat_program;
     ReplPredefView predef;
@@ -1570,6 +1618,8 @@ void glr_ctrl_build_ui_snapshot(UiRenderSnapshot *snap) {
                      UI_RESHAPE_PROJ_LINE_MAX, "%s", proj[i]);
         snap->reshape_proj_count = pn;
     }
+
+    glr_ctrl_populate_numeric_swatch(snap);
 }
 
 void glr_ctrl_display_frame(void) {
@@ -3230,6 +3280,82 @@ static int route_inline_color_swatch_hit(const UiHit *hit, int my) {
     return 1;
 }
 
+static void numeric_swatch_restore_cursor_near_literal(
+    const char *literal, int hint_start) {
+    EditorInputView in = editor_state_input();
+    int len = (int)strlen(in.input);
+    int lit_len = (int)strlen(literal);
+    int lo = hint_start - 4;
+    int hi = hint_start + 16;
+    int i;
+    if (lo < 0) lo = 0;
+    if (hi > len) hi = len;
+    for (i = lo; i <= hi && i + lit_len <= len; i++) {
+        if (memcmp(in.input + i, literal, (size_t)lit_len) == 0) {
+            editor_cursor_pos_set(i + lit_len);
+            return;
+        }
+    }
+    editor_cursor_pos_set(hint_start < len ? hint_start : len);
+}
+
+static int route_numeric_swatch_hit(const UiHit *hit) {
+    int edit_line = editor_state_edit_line();
+    EditorInputView in = editor_state_input();
+    ReplNumericArgAtCursor d;
+    float step, new_value;
+    char buf[32];
+    char new_line[MAX_LINE_LEN];
+    int n;
+    char parse_err[REPL_STATUS_TEXT_MAX] = "";
+    ReplParseContext parse_ctx;
+    ReplParsedLine pl;
+    ReplCompiledChange change;
+    int text_len;
+
+    if (editor_insert_mode() ||
+        edit_line < 0 || edit_line >= repl_state_document_count())
+        return 1;
+
+    d = repl_eval_numeric_arg_at_cursor(in.input, in.cursor_pos);
+    if (!d.found) return 1;
+
+    step = repl_eval_swatch_step(d.value);
+    new_value = d.value + (hit->item_idx > 0 ? step : -step);
+    repl_eval_format_swatch_number(new_value, buf, sizeof buf);
+
+    n = snprintf(new_line, sizeof new_line, "%.*s%s%s",
+                 d.arg_start, in.input, buf, in.input + d.arg_end);
+    if (n < 0 || n >= (int)sizeof new_line) return 1;
+
+    parse_ctx.source_line_idx = edit_line;
+    parse_ctx.err_buf = parse_err;
+    parse_ctx.err_sz = (int)sizeof parse_err;
+    if (!repl_parser_parse_command_ctx(new_line, &pl, &parse_ctx)) {
+        if (parse_err[0]) repl_set_status(parse_err);
+        return 1;
+    }
+    if (pl.cmd.type == CMD_COMMENT) return 1;
+
+    repl_compiled_change_init(&change);
+    change.kind = REPL_COMPILED_REPLACE_ONE;
+    change.pos = edit_line;
+    change.count = 1;
+    change.cmds[0] = pl.cmd;
+    text_len = (int)strlen(pl.text);
+    if (text_len >= MAX_LINE_LEN) text_len = MAX_LINE_LEN - 1;
+    memcpy(change.text[0], pl.text, (size_t)text_len);
+    change.text[0][text_len] = '\0';
+
+    if (editor_commit_apply_external_change(&change, 1)) {
+        editor_load_line_to_input(edit_line);
+        numeric_swatch_restore_cursor_near_literal(buf, d.arg_start);
+        editor_completion_update();
+        editor_request_redraw();
+    }
+    return 1;
+}
+
 /* UI_HIT_COLOR_SWATCH: floating picker slider control press. The
  * picker has its own internal hit-test for SV/hue/alpha regions and
  * starts a drag on press. */
@@ -3444,6 +3570,8 @@ int glr_ctrl_router_handle_code_panel_hit(UiHit hit, int x, int y) {
         consumed = route_color_picker_control_hit(x, y); break;
     case UI_HIT_INLINE_COLOR_SWATCH:
         consumed = route_inline_color_swatch_hit(&hit, y); break;
+    case UI_HIT_NUMERIC_SWATCH:
+        consumed = route_numeric_swatch_hit(&hit); break;
     case UI_HIT_PIN_BUTTON:
         consumed = route_pin_button_hit(&hit); break;
     case UI_HIT_MENU_BUTTON:

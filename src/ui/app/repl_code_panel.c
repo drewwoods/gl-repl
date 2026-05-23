@@ -7,6 +7,7 @@
 #include "repl/export.h"
 #include "repl/state_views.h"
 #include "ui/app/color_picker.h"
+#include "ui/app/numeric_swatch.h"
 #include "ui/core/gl_2d.h"
 #include "ui/core/layout.h"
 #include "ui/app/menu_bar.h"
@@ -1641,6 +1642,7 @@ void ui_repl_code_panel_render(const UiRenderSnapshot *snap,
     ui_color_picker_render(&snap->color_picker,
                            snap->viewport.window_w,
                            snap->viewport.window_h);
+    ui_numeric_swatch_render(snap);
     gl2d_end();
 }
 
@@ -1740,4 +1742,37 @@ UiHit ui_repl_code_panel_hit_test(const UiRenderSnapshot *snap,
         hit.local_y = (float)(gl_y - builder.text_snap.cp_y);
     }
     return hit;
+}
+
+int ui_repl_code_panel_input_row_y(const UiRenderSnapshot *snap,
+                                   float *out_py) {
+    ReplCodePanelBuilder builder;
+    int i, py;
+    if (!snap || !out_py || !repl_code_panel_init_builder(&builder, snap))
+        return 0;
+    repl_code_panel_build_rows(&builder);
+    for (i = 0; i < builder.row_count; i++) {
+        if (builder.text_snap.rows[i].kind == UI_TEXT_PANEL_ROW_INPUT) {
+            if (ui_text_panel_input_row_y(&builder.text_snap, i, &py)) {
+                *out_py = (float)py;
+                return 1;
+            }
+            return 0;
+        }
+    }
+    return 0;
+}
+
+int ui_repl_code_panel_input_row_has_color_swatch(
+    const UiRenderSnapshot *snap) {
+    ReplCodePanelBuilder builder;
+    int i;
+    if (!snap || !repl_code_panel_init_builder(&builder, snap))
+        return 0;
+    repl_code_panel_build_rows(&builder);
+    for (i = 0; i < builder.row_count; i++) {
+        if (builder.text_snap.rows[i].kind == UI_TEXT_PANEL_ROW_INPUT)
+            return builder.text_snap.rows[i].right_action.active != 0;
+    }
+    return 0;
 }

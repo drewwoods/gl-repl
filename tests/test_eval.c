@@ -1062,6 +1062,91 @@ static void run_tests(void) {
         }
     }
 
+    /* ---- numeric_arg_at_cursor ---- */
+    printf("numeric_arg_at_cursor:\n");
+    {
+        ReplNumericArgAtCursor r;
+
+        r = repl_eval_numeric_arg_at_cursor("glVertex3f(1.0, 2.5, 3.0)", 12);
+        ASSERT_TRUE("vertex arg0 found", r.found);
+        ASSERT_TRUE("vertex arg0 start", r.arg_start == 11);
+        ASSERT_TRUE("vertex arg0 end",   r.arg_end   == 14);
+        TEST_ASSERT_FLOAT(&g_harness, "vertex arg0 value", r.value, 1.0f, 1e-4f);
+
+        r = repl_eval_numeric_arg_at_cursor("glVertex3f(1.0, 2.5, 3.0)", 17);
+        ASSERT_TRUE("vertex arg1 found", r.found);
+        TEST_ASSERT_FLOAT(&g_harness, "vertex arg1 value", r.value, 2.5f, 1e-4f);
+
+        r = repl_eval_numeric_arg_at_cursor("glVertex3f(1.0, 2.5, 3.0)", 23);
+        ASSERT_TRUE("vertex arg2 found", r.found);
+        TEST_ASSERT_FLOAT(&g_harness, "vertex arg2 value", r.value, 3.0f, 1e-4f);
+
+        r = repl_eval_numeric_arg_at_cursor("glColor3f(0.8, 0.2, 0.5)", 11);
+        ASSERT_TRUE("color arg found", r.found);
+        TEST_ASSERT_FLOAT(&g_harness, "color arg value", r.value, 0.8f, 1e-4f);
+
+        r = repl_eval_numeric_arg_at_cursor("glVertex3f(1+2, 3.0, 4.0)", 12);
+        ASSERT_TRUE("expr arg not found", !r.found);
+
+        r = repl_eval_numeric_arg_at_cursor("glVertex3f(sin(1), 3.0, 4.0)", 14);
+        ASSERT_TRUE("func call arg not found", !r.found);
+
+        r = repl_eval_numeric_arg_at_cursor("glVertex3f(t, 3.0, 4.0)", 12);
+        ASSERT_TRUE("variable arg not found", !r.found);
+
+        r = repl_eval_numeric_arg_at_cursor("glPointSize(5.0)", 13);
+        ASSERT_TRUE("single-arg found", r.found);
+        TEST_ASSERT_FLOAT(&g_harness, "single-arg value", r.value, 5.0f, 1e-4f);
+
+        r = repl_eval_numeric_arg_at_cursor("glVertex3f(-2.5, 3.0, 4.0)", 12);
+        ASSERT_TRUE("negative arg found", r.found);
+        TEST_ASSERT_FLOAT(&g_harness, "negative arg value", r.value, -2.5f, 1e-4f);
+
+        r = repl_eval_numeric_arg_at_cursor("hello world", 3);
+        ASSERT_TRUE("no parens not found", !r.found);
+
+        r = repl_eval_numeric_arg_at_cursor("glVertex3f(1.0, 2.0, 3.0)", 0);
+        ASSERT_TRUE("cursor before paren not found", !r.found);
+    }
+
+    /* ---- swatch_step ---- */
+    printf("swatch_step:\n");
+    {
+        TEST_ASSERT_FLOAT(&g_harness, "step(0)", repl_eval_swatch_step(0.0f), 0.05f, 1e-6f);
+        TEST_ASSERT_FLOAT(&g_harness, "step(0.3)", repl_eval_swatch_step(0.3f), 0.05f, 1e-6f);
+        TEST_ASSERT_FLOAT(&g_harness, "step(1.0)", repl_eval_swatch_step(1.0f), 0.05f, 1e-6f);
+        TEST_ASSERT_FLOAT(&g_harness, "step(5.0)", repl_eval_swatch_step(5.0f), 0.05f, 1e-6f);
+        TEST_ASSERT_FLOAT(&g_harness, "step(10.0)", repl_eval_swatch_step(10.0f), 0.5f, 1e-6f);
+        TEST_ASSERT_FLOAT(&g_harness, "step(50.0)", repl_eval_swatch_step(50.0f), 0.5f, 1e-6f);
+        TEST_ASSERT_FLOAT(&g_harness, "step(100.0)", repl_eval_swatch_step(100.0f), 5.0f, 1e-4f);
+        TEST_ASSERT_FLOAT(&g_harness, "step(-3.0)", repl_eval_swatch_step(-3.0f), 0.05f, 1e-6f);
+        TEST_ASSERT_FLOAT(&g_harness, "step(-25.0)", repl_eval_swatch_step(-25.0f), 0.5f, 1e-6f);
+    }
+
+    /* ---- format_swatch_number ---- */
+    printf("format_swatch_number:\n");
+    {
+        char buf[32];
+
+        repl_eval_format_swatch_number(1.0f, buf, sizeof(buf));
+        ASSERT_TRUE("fmt 1", strcmp(buf, "1") == 0);
+
+        repl_eval_format_swatch_number(0.5f, buf, sizeof(buf));
+        ASSERT_TRUE("fmt 0.5", strcmp(buf, "0.5") == 0);
+
+        repl_eval_format_swatch_number(0.05f, buf, sizeof(buf));
+        ASSERT_TRUE("fmt 0.05", strcmp(buf, "0.05") == 0);
+
+        repl_eval_format_swatch_number(-2.5f, buf, sizeof(buf));
+        ASSERT_TRUE("fmt -2.5", strcmp(buf, "-2.5") == 0);
+
+        repl_eval_format_swatch_number(10.0f, buf, sizeof(buf));
+        ASSERT_TRUE("fmt 10", strcmp(buf, "10") == 0);
+
+        repl_eval_format_swatch_number(0.0f, buf, sizeof(buf));
+        ASSERT_TRUE("fmt 0", strcmp(buf, "0") == 0);
+    }
+
     /* ---- Summary ---- */
     printf("\n%d / %d tests passed", g_harness.passed, g_harness.run);
     if (g_harness.passed == g_harness.run)

@@ -6,6 +6,7 @@
 
 #include "config.h"
 #include "ui/app/color_picker.h"
+#include "ui/app/numeric_swatch.h"
 #include "ui/core/gl_2d.h"
 #include "ui/core/layout.h"
 #include "ui/app/menu_bar.h"
@@ -305,6 +306,12 @@ UiHit ui_panels_hit_test(const UiRenderSnapshot *snap,
         UiHit variable_hit = ui_variable_panel_hit_test(mx, my, variable_count);
         if (variable_hit.kind != UI_HIT_NONE)
             return variable_hit;
+    }
+
+    {
+        UiHit swatch_hit = ui_numeric_swatch_hit_test(snap, mx, my);
+        if (swatch_hit.kind != UI_HIT_NONE)
+            return swatch_hit;
     }
 
     {
