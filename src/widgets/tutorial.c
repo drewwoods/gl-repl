@@ -274,6 +274,18 @@ static int tutorial_emit_instruction_comment(const char *comment,
     repl_state_mark_normals_dirty();
     state->fade_line_idx = instruction_line;
     state->fade_start_t = repl_state_variables().anim_time;
+    /* Per-line duration at a fixed chars-per-second rate so every
+     * instruction reveals at the same readable pace, regardless of
+     * length. (line_len + SETTLE_CHARS) total slots / rate seconds —
+     * the +SETTLE_CHARS pad keeps the trailing settle wave within the
+     * animation window the renderer queries. */
+    {
+        int n = (int)strlen(comment);
+        if (n < 1) n = 1;
+        state->fade_duration =
+            (float)(n + TUTORIAL_FADE_SETTLE_CHARS) /
+            TUTORIAL_FADE_CHARS_PER_SEC;
+    }
     tutorial_append_locked_line(instruction_line);
 
     /* Record where this step's instruction comment landed so a

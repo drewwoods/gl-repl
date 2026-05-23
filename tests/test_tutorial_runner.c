@@ -730,8 +730,20 @@ static void test_fade_alpha_math(void) {
     ASSERT_TRUE("line is fading at start",
                 tutorial_line_is_fading(0, state.fade_start_t + 0.01f));
     ASSERT_INT("fade line idx is first row", state.fade_line_idx, 0);
-    ASSERT_INT("fade duration nine tenths of a second",
-               (int)(state.fade_duration * 10.0f), 9);
+    /* Duration is now derived from the comment's length at a fixed
+     * chars-per-second rate. Use the catalog's comment string (the same
+     * input the emit code measures) — `source_text_line` may differ by
+     * a couple chars after loader normalisation, which would skew the
+     * comparison. Round to milliseconds for a stable integer check. */
+    {
+        const char *cmt = repl_tutorial_step_comment(0, 0);
+        int n = cmt ? (int)strlen(cmt) : 1;
+        float expected = (float)(n + TUTORIAL_FADE_SETTLE_CHARS) /
+                         TUTORIAL_FADE_CHARS_PER_SEC;
+        ASSERT_INT("fade duration follows chars-per-sec rate",
+                   (int)(state.fade_duration * 1000.0f),
+                   (int)(expected * 1000.0f));
+    }
     TEST_ASSERT_FLOAT_DEFAULT(&g_harness, "char zero starts transparent",
                               tutorial_step_fade_alpha(0, 0, line_len, state.fade_start_t),
                               0.0f);
