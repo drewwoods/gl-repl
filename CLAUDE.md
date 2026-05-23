@@ -923,7 +923,10 @@ alongside `.cfg` (see the file-layout table for the shipped catalog).
   flyout — `test_catalog_subheading_metadata` enforces this per tag and
   fails on interleaving (e.g., catalog order "Beginner, Intermediate,
   Beginner" would render two "Beginner" headers in the Geometry
-  flyout). The walker lives in `src/ui/app/menu_bar.c::tutorial_flyout_row_at`.
+  flyout). The walker is the generic `src/ui/app/menu_bar.c::catalog_flyout_row_at`
+  + `CatalogFlyoutOps` vtable, shared with the Scene example flyout
+  (`ReplExampleEntry` carries the same `.subheading` field — see
+  `test_example_subheading_metadata`).
 
 ## Key Controls
 
