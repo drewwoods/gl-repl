@@ -31,12 +31,27 @@ controller**: keeping rendering and hit-testing free of policy is what lets
 the same panel serve code editing, the help overlay, and the demos without
 each one leaking into the view code.
 
-A few modules are explicitly *generic* (REPL-free, guarded as such):
-`text_panel.c` (a reusable text panel), `tabbed_overlay.c` (a modal paged
-reference card), `layout.c` and `text_layout.c` (pure geometry / wrapping).
-A few are *feature-UI* (allowed to know one feature's vocabulary):
-`replay_hud.c` and `color_picker.c` carry the `replay_ui_*` /
-color-picker discipline and route hits to their owning peer.
+This split is reflected on the filesystem with two subdirectories:
+
+- **`core/`** — REPL-/editor-/peer-agnostic primitives. `text_panel.c`
+  (reusable text panel), `tabbed_overlay.c` (modal paged reference
+  card), `layout.c` and `text_layout.c` (pure geometry / wrapping),
+  `text_search.c` (case-insensitive find), plus the header-only
+  helpers (`gl_2d.h`, `metrics.h`, `theme.h`, `hit.h`). These TUs are
+  guarded against picking up REPL / editor knowledge and are linked
+  into the standalone `editor_demo` to prove they work without the
+  full app.
+- **`app/`** — feature-UI that knows REPL / editor / peer concepts.
+  The code-panel adapter (`repl_code_panel.c`), the floating panels
+  (`color_picker.c`, `variable_panel.c`, `autocomplete_panel.c`,
+  `profile_panel.c`), the chrome (`menu_bar.c`, `scene_tabs.c`,
+  `panels.c`), the feature HUDs (`replay_hud.c`), and the UI runtime
+  state itself (`state.{c,h}`, `state_types.h`, `snapshot.h`,
+  `editor.h`). All of these read frame snapshots and may carry
+  one-feature vocabulary (e.g. `replay_ui_*` in `replay_hud.c`).
+
+Dependencies are strictly one-way: `app/` may include from `core/`;
+`core/` never includes from `app/`.
 
 ## How it is exercised
 
@@ -70,24 +85,25 @@ source-line targets.
 
 | File | Responsibility |
 |---|---|
-| `state.c` / `.h`, `state_types.h` | Owns `UiState` (chrome/viewport/pointer/status TTL only) |
-| `snapshot.h` | `UiRenderSnapshot` — the read-only per-frame bundle every renderer takes |
-| `hit.h` | `UiHit` / `UiHitKind` — the passive UI → controller result |
-| `panels.c` / `.h` | Top-level panel bridge: code panel + status banner, prioritizes overlay/menu hits |
-| `text_panel.c` / `.h`, `text_search.c` | Generic text-panel renderer + hit-test + search visuals (REPL-free) |
-| `repl_code_panel.c` / `.h` | REPL-aware adapter: builds rows from snapshots, maps hits to source lines |
-| `text_layout.c` / `.h` | Pure wrapping, row counts, cursor-row mapping (`CodeLayout`) |
-| `layout.c` / `.h` | Pure scene / code-panel rectangle geometry |
-| `menu_bar.c` / `.h` | Menu bar, dropdowns, flyout submenus, search slot |
-| `scene_tabs.c` / `.h` | Scene tab strip (snapshot-pure render + whole-band hit-test) |
-| `variable_panel.c` / `.h` | Variable-slider panel chrome (the peer owns drag/visibility) |
-| `autocomplete_panel.c` / `.h` | Completion popup renderer |
-| `tabbed_overlay.c` / `.h` | Generic modal tabbed text overlay (the F1 help shell) |
-| `color_picker.c` / `.h` | Feature-UI: color-picker renderer + hit-test over `ColorPickerView` |
-| `replay_hud.c` / `.h` | Feature-UI: 2D replay HUD (reads the replay peer snapshot) |
-| `profile_panel.c` / `.h` | CPU profiling overlay |
-| `editor.h` | `Ui*` editor-overlay snapshot types (swatches, sliders, highlights) |
-| `metrics.h`, `theme.h`, `gl_2d.h` | Shared layout metrics, colors, header-only 2D GL helpers |
+| `core/text_panel.c` / `.h`, `core/text_search.c` | Generic text-panel renderer + hit-test + search visuals (REPL-free) |
+| `core/text_layout.c` / `.h` | Pure wrapping, row counts, cursor-row mapping (`CodeLayout`) |
+| `core/layout.c` / `.h` | Pure scene / code-panel rectangle geometry |
+| `core/tabbed_overlay.c` / `.h` | Generic modal tabbed text overlay (the F1 help shell) |
+| `core/gl_2d.h` | Header-only 2D OpenGL helpers |
+| `core/hit.h` | `UiHit` / `UiHitKind` — the passive UI → controller result |
+| `core/metrics.h`, `core/theme.h` | Shared layout metrics + colors |
+| `app/state.c` / `.h`, `app/state_types.h` | Owns `UiState` (chrome/viewport/pointer/status TTL only) |
+| `app/snapshot.h` | `UiRenderSnapshot` — the read-only per-frame bundle every renderer takes |
+| `app/panels.c` / `.h` | Top-level panel bridge: code panel + status banner, prioritizes overlay/menu hits |
+| `app/repl_code_panel.c` / `.h` | REPL-aware adapter: builds rows from snapshots, maps hits to source lines |
+| `app/menu_bar.c` / `.h` | Menu bar, dropdowns, flyout submenus, search slot |
+| `app/scene_tabs.c` / `.h` | Scene tab strip (snapshot-pure render + whole-band hit-test) |
+| `app/variable_panel.c` / `.h` | Variable-slider panel chrome (the peer owns drag/visibility) |
+| `app/autocomplete_panel.c` / `.h` | Completion popup renderer |
+| `app/color_picker.c` / `.h` | Feature-UI: color-picker renderer + hit-test over `ColorPickerView` |
+| `app/replay_hud.c` / `.h` | Feature-UI: 2D replay HUD (reads the replay peer snapshot) |
+| `app/profile_panel.c` / `.h` | CPU profiling overlay |
+| `app/editor.h` | `Ui*` editor-overlay snapshot types (swatches, sliders, highlights) |
 
 **Boundary:** a UI renderer draws; a UI input handler hit-tests and returns a
 `UiHit`. Neither directly mutates REPL / editor / peer state, and `ui_*` does

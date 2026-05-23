@@ -5,7 +5,7 @@ Runtime data for the REPL sample. The audio backend (`repl_audio.c` via
 
 ## Music
 
-`sample.c` scans this folder at startup for files matching `*.mp3`,
+`gl_repl.c` scans this folder at startup for files matching `*.mp3`,
 sorts them by filename, and plays them as a playlist. Drop one file,
 drop ten — the REPL just picks them up in alphabetical order.
 

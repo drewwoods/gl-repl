@@ -3,7 +3,7 @@
 > For the quick module map, see [`MODULES.md`](MODULES.md). Each
 > `src/` subsystem also carries its own `README.md`
 > (`src/repl/`, `src/editor/`, `src/app/`, `src/scene/`, `src/ui/`,
-> `src/widgets/`) with the layer-local ownership notes. For the
+> `src/subsystems/`) with the layer-local ownership notes. For the
 > staged controller-extraction history (now landed), see
 > [`done/push-architecture-refinement.md`](done/push-architecture-refinement.md).
 
@@ -36,7 +36,7 @@ editor_*      = text-document model + controller (under src/editor/), incl. the
                 document cursor (edit-line) and the editable line buffer
 scene_*       = 3D stage: camera, projection, frame setup, decorators, 3D overlays
 ui_*          = 2D editor chrome: code panel, menus, overlays, popups, HUDs
-sample.c/h    = current GLUT entry point and legacy shared header
+gl_repl.c/h    = current GLUT entry point and legacy shared header
                 (rename to a `glr_*`-namespaced shell is on the open list)
 ```
 
@@ -45,7 +45,7 @@ modules should own REPL language, editor, source, workspace, replay, or command
 model behavior. App-shell services belong under `glr_*` — the audio service
 moved into this scheme as `src/app/glr_audio.c` (`glr_audio_*`), resolving the
 former neutral `audio.c` / `repl_audio` name. Generic infrastructure keeps
-neutral names such as `prof`. `sample.c/h` is the one remaining name outside
+neutral names such as `prof`. `gl_repl.c/h` is the one remaining name outside
 the scheme; it is slated for the R8 namespace rename rather than serving as a
 precedent.
 
@@ -104,7 +104,7 @@ When a module starts owning mutable REPL state, follow the Stage-1 template:
    UI inputs from REPL state, calls the scene renderer, then calls UI renderers.
    This role belongs in `src/app/glr_ctrl.c`.
 6. **Replay is REPL policy.** Replay state machine, PC, mode, baseline values,
-   and fade/highlight decisions belong in `src/widgets/replay.c` or follow-up replay
+   and fade/highlight decisions belong in `src/subsystems/replay/replay.c` or follow-up replay
    planning code. Any scene use of replay data should be via snapshots or
    documented transitional helpers.
 
@@ -113,8 +113,8 @@ When a module starts owning mutable REPL state, follow the Stage-1 template:
 Top-level frame orchestration belongs in the controller:
 
 ```text
-sample.c GLUT display callback (future `glr` shell)
-  -> glr_ctrl_display_frame          (sample.c calls controller directly; no shim)
+gl_repl.c GLUT display callback (future `glr` shell)
+  -> glr_ctrl_display_frame          (gl_repl.c calls controller directly; no shim)
         -> tick profiling
         -> rebuild autonormals if dirty
         -> rebuild flat program if dirty                          [PROF_FLATTEN]
@@ -135,7 +135,7 @@ sample.c GLUT display callback (future `glr` shell)
 Profile sections wrap each producer so snapshot construction time is
 visible: `PROF_SNAPSHOT` is the aggregate, with sub-sections for
 transformers, highlights, virtual lines, scene config, and ui snapshot
-(see `prof.h`).
+(see `src/support/prof.h`).
 
 The scene frame consumes the explicit config:
 
@@ -262,7 +262,7 @@ This keeps invariant β (REPL → editor symbol references forbidden) intact;
 
 The controller treats per-frame UI overlay data as snapshots it builds
 once and the UI consumes read-only. The snapshot family lives in
-`src/ui/editor.h`:
+`src/ui/app/editor.h`:
 
 | List | Push helper | What it carries |
 |---|---|---|
@@ -330,10 +330,10 @@ Responsibilities:
 `src/app/glr_ctrl.c` may include both REPL headers and scene/UI headers. Ordinary REPL
 model modules should not.
 
-`sample.c` and `sample.h` still carry the app entry point and shared legacy
+`gl_repl.c` and `gl_repl.h` still carry the app entry point and shared legacy
 types/constants. A future `glr_*`-namespaced rename of the shell is open work
 (see R8 in *Open Refactor Edges* below); it is intentionally a separate
-mechanical cleanup after controller extraction, because `sample.h` is included
+mechanical cleanup after controller extraction, because `gl_repl.h` is included
 broadly.
 
 ### Runtime GL Capability Detection
@@ -433,7 +433,7 @@ the snapshot shape below, not the `g_angle` shape.
 **Dynamic-footer sentinel mechanism.** `g_footer_pre_init[]` is iterated
 verbatim by three consumers (the file writer in `src/repl/export.c` and
 the code panel's row-count *and* render passes in
-`src/ui/repl_code_panel.c`). A line whose count or text is dynamic is
+`src/ui/app/repl_code_panel.c`). A line whose count or text is dynamic is
 stored as a unique sentinel constant
 (`REPL_EXPORT_RESHAPE_PROJ_SENTINEL`); every consumer special-cases it.
 Per the rule above:
@@ -489,10 +489,10 @@ project's one-line-stderr convention (same as the point-parameter log
 above); neither is gated off by default — the point is to see them
 when a stall happens.
 
-* **Init trace** (`sample.c`). `main()` calls `init_trace(<phase>)` at
+* **Init trace** (`gl_repl.c`). `main()` calls `init_trace(<phase>)` at
   each startup phase; it prints `[init +N.NNNs] <phase>` with
   wall-clock seconds (`gettimeofday`, not the per-platform timebase in
-  `prof.c` — ms granularity is enough and this stays portable/C99)
+  `src/support/prof.c` — ms granularity is enough and this stays portable/C99)
   elapsed since the first call. Two granularity levels share one
   stream:
 
@@ -591,7 +591,7 @@ Responsibilities:
 * status banners and other screen-space overlays
 
 UI renderers draw from a single per-frame `UiRenderSnapshot` (defined in
-`src/ui/snapshot.h`) that the controller builds once via
+`src/ui/app/snapshot.h`) that the controller builds once via
 `glr_ctrl_build_ui_snapshot()` and passes to every `ui_*_render*()`
 entry point. Render code does not call `repl_state_*()` directly. The
 `check-ui-no-repl-state-read` Makefile guard enforces the snapshot-shaped
@@ -656,7 +656,7 @@ pointer is the next layer of cleanup.
 
 ### UI Color Theming
 
-All 2D UI chrome resolves color through `src/ui/theme.h` (header-only,
+All 2D UI chrome resolves color through `src/ui/core/theme.h` (header-only,
 the `gl_2d.h` pattern) instead of scattered `glColor*` literals. It
 defines ~19 semantic `UI_TOK_*` tokens and a
 `g_ui_theme_table[UiTheme][UI_TOK_COUNT]` with six rows (green default,
@@ -687,7 +687,7 @@ Color falls into three buckets:
 single compile-time knob: a bare integer (`0` green … `5` mono — kept
 type-free so `config.h` stays clear of UI types per its dependency
 note) used to initialize `g_ui_theme`. It is `#ifndef`-guarded and
-build-overridable, e.g. `make sample CPPFLAGS=-DUI_THEME_DEFAULT=1`;
+build-overridable, e.g. `make gl-repl CPPFLAGS=-DUI_THEME_DEFAULT=1`;
 `theme.h` `STATIC_ASSERT`s the value is in range against the `UiTheme`
 enum. The `ui_theme_select()` / `ui_theme_active()` seam keeps call
 sites stable for a future runtime switcher (e.g. a `GlrConfigKey`
@@ -708,7 +708,7 @@ R1 target from `done/push-architecture-refinement.md` (landed):
 * scene iterates the snapshot and owns the GL pass orchestration without
   calling `replay_*` or `repl_state_*`
 * accumulation-AA settings are `SceneRenderConfig` fields set by the controller
-* 2D replay HUD lives in `src/ui/replay_hud.c`, driven by config fields
+* 2D replay HUD lives in `src/ui/app/replay_hud.c`, driven by config fields
 * `scene_*.c` files contain no `repl_state_*` or `replay_*` calls; once
   the relevant Phase 2 slice is complete, Makefile checks keep that true
 
@@ -722,7 +722,7 @@ Allowed:
 scene_*.c
 ui_*.c
 src/repl/executor.c
-sample.c        GLUT/window lifecycle and buffer swap; future `glr` shell
+gl_repl.c        GLUT/window lifecycle and buffer swap; future `glr` shell
 ```
 
 Avoid live GL calls in all other `repl_*` files. Text emission of GL command
@@ -733,7 +733,7 @@ names in parser/export/example/spec code is not a live GL call.
 Allowed:
 
 ```text
-sample.c        GLUT callback registration, glutInit, buffer swap
+gl_repl.c        GLUT callback registration, glutInit, buffer swap
                 (the future `glr` shell takes over after the R8 rename)
 src/app/glr_ctrl.c      GLUT modifier reads + cross-layer input routing
                 (took over from the deleted repl_editor.c in Phase J1)
@@ -821,7 +821,7 @@ The current `REPL_DEMO_DEP_SRCS` link set is REPL-pipeline-only:
 `src/repl/*` (parser, command_store, compile, apply, flatten, executor,
 eval, export, scenes, example_loader, load, autonormal, command_spec,
 source_scope, replay_annotations, core, state, format) plus the replay /
-tutorial peer-state TUs, `prof.c`, the GL stub counters, and crucially
+tutorial peer-state TUs, `src/support/prof.c`, the GL stub counters, and crucially
 **`tools/repl_demo/source_document.c`** — the editor-free backend for the
 source-document port. No `src/editor/*`, no `src/ui/*`, no `src/app/*`.
 
@@ -855,7 +855,7 @@ full app fills and the demo leaves unset:
    controller-installed bridges: `ReplExportConfigBridge` (`@cfg`
    emission/parse — also fronted by the typed live-cfg wrappers
    `repl_cfg_get_int` / `_set_int` / `_known` in `src/repl/export.c`, used
-   by `src/widgets/tutorial.c` for SET-step apply / REQUIRE-step probe /
+   by `src/subsystems/tutorial/tutorial.c` for SET-step apply / REQUIRE-step probe /
    cfg-baseline snapshot/restore), `ReplExportCameraBridge` (camera
    blocks — used by both the importer *and* the example loader),
    `ReplExportProjectionBridge` (the dynamic `reshape()` body — see
@@ -863,7 +863,7 @@ full app fills and the demo leaves unset:
    (viewport / code-panel geometry passed as an explicit export input
    instead of calling `ui_layout_*`). The demo installs none, so `@cfg` /
    camera / projection are no-ops there and `src/app/glr_config.c`,
-   `src/app/glr_camera.c`, `src/ui/layout.c` all leave the demo link set.
+   `src/app/glr_camera.c`, `src/ui/core/layout.c` all leave the demo link set.
    `check-repl-export-via-bridge` / `check-repl-export-no-ui-layout`
    guard this.
 
@@ -905,7 +905,7 @@ All in the `check-state-ownership` gate: `check-repl-demo-no-editor`,
 * New 2D UI: `ui_*` renderer plus `repl_*` model/action code if mutation is
   required.
 * New per-frame scene/UI wiring: `src/app/glr_ctrl.c`.
-* New app lifecycle/window wiring: `sample.c` for now, future `glr` shell
+* New app lifecycle/window wiring: `gl_repl.c` for now, future `glr` shell
   after the R8 rename.
 * New command mutation: `repl_command_store_*`.
 
@@ -969,7 +969,7 @@ and 6 do not apply to math functions.
 
 Add a new `CmdType` enum entry in the `CMD_*` block, adjacent to related
 commands. The enum drives switch dispatch everywhere. (`CmdType` lives in
-`src/repl/command.h`; `sample.h` only re-exports it transitively via
+`src/repl/command.h`; `gl_repl.h` only re-exports it transitively via
 `#include "repl/command.h"`.)
 
 ```c
@@ -1152,15 +1152,15 @@ When emitting a custom helper (`label`, `rand2`, scratch arrays, tess):
 ### 8. Verify
 
 ```bash
-make sample           # must be clean (no new warnings)
+make gl-repl           # must be clean (no new warnings)
 make test-stubs       # all tests must pass
-make sample USE_GL_STUBS=1   # verify stub build still links if step 6 changed
+make gl-repl USE_GL_STUBS=1   # verify stub build still links if step 6 changed
 
 # Spot-check the new command end-to-end:
 # - F1 overlay shows it with description in the expected group
 # - Type the prefix; Tab fills the rest and the parameter hint shows
 # - Replay (Ctrl+G) shows the command annotated correctly
-# - Save (Ctrl+S) → reload (./sample output.c) → command appears identical
+# - Save (Ctrl+S) → reload (./gl-repl output.c) → command appears identical
 # - For commands with a custom export helper: gcc -c output.c against
 #   vanilla freeglut succeeds, and on-screen output matches the REPL
 ```
@@ -1171,20 +1171,20 @@ Completed (Phase 1 + most of Phase 2):
 
 - ✅ Controller extraction, explicit `SceneRenderConfig` handoff,
   focus/guide snapshot construction, scene-local accumulation jitter, and
-  app-shell shim removal (`sample.c` calls `glr_ctrl_*` directly).
+  app-shell shim removal (`gl_repl.c` calls `glr_ctrl_*` directly).
 - ✅ **R1** — Replay/HUD migration: controller builds `ReplayFadePlan`; scene
-  iterates it; 2D HUD lives in `src/ui/replay_hud.c`. Scene files contain zero
+  iterates it; 2D HUD lives in `src/ui/app/replay_hud.c`. Scene files contain zero
   `replay_*` and `repl_state_*` calls.
 - ✅ **R2** — UI → REPL mutation holes closed end-to-end:
-  - `src/ui/panels.c` is hit-test only (`check-ui-panels-no-mutators`).
-  - The color picker now lives across `src/widgets/color_picker_state.c` (peer state +
+  - `src/ui/app/panels.c` is hit-test only (`check-ui-panels-no-mutators`).
+  - The color picker now lives across `src/subsystems/color_picker/color_picker_state.c` (peer state +
     lifecycle + writeback through `editor_commit_apply_external_change`)
-    and `src/ui/color_picker.c` (pure renderer + hit-test over a
+    and `src/ui/app/color_picker.c` (pure renderer + hit-test over a
     `ColorPickerView`); the picker UI carries no live state reads, no
     parser/compile/apply, no `set_status`. Locked in by
     `check-color-picker-ui-isolation`.
   - The legacy `ui_help_overlay` is gone — split into the generic
-    `src/ui/tabbed_overlay.c` renderer (knows nothing about REPL), the
+    `src/ui/core/tabbed_overlay.c` renderer (knows nothing about REPL), the
     REPL-side `src/repl/help_text.c` producer that walks
     `k_func_completions[]` to assemble the F1 overlay's per-command
     rows, and the `glr_ctrl` adapter that maps that neutral data to
@@ -1194,7 +1194,7 @@ Completed (Phase 1 + most of Phase 2):
     (`check-ui-returns-hits-only` baseline 0/0).
 - ✅ **R3** — layout geometry (`ui_layout_scene_rect` /
   `ui_layout_code_panel_rect`) owns its own module; it has since settled at
-  `src/ui/layout.c` / `src/ui/layout.h`, and `repl_export` takes
+  `src/ui/core/layout.c` / `src/ui/core/layout.h`, and `repl_export` takes
   viewport/panel geometry as an explicit `ReplExportLayout` input rather
   than calling the layout helpers (see *Standalone REPL Demo Coupling*).
 - ✅ **R4** — `src/app/glr_ctrl.c` no longer includes `src/repl/core_internal.h`;
@@ -1235,7 +1235,7 @@ Still open:
   `bench_repl.c` exception for `src/repl/core_internal.h`.
 - ❌ **R12** — Consolidate truly public REPL APIs into one concise public
   header, grouped by implementation owner; keep internals out.
-- ❌ **R8** — Rename `sample.c` / `sample.h` into the `glr_*` shell
+- ❌ **R8** — Rename `gl_repl.c` / `gl_repl.h` into the `glr_*` shell
   namespace (mechanical; last). The exact target name (`glr.c/h`,
   `glr_shell.c/h`, etc.) is open.
 - ❌ **R9** — Optional: split `src/repl/export.c`.

@@ -9,7 +9,7 @@ their respective layers.
 
 ## Contents
 
-- `prof.{c,h}` — CPU wall-time profiling instrumentation
+- `src/support/prof.{c,h}` — CPU wall-time profiling instrumentation
   (per-section accumulators, frame tick). Public API: `prof_begin`,
   `prof_accum_end`, `prof_end`, `prof_frame_tick`, etc. Used by every
   layer that wants to measure work; the UI panel that visualises it
