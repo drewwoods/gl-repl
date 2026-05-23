@@ -339,8 +339,8 @@ Test sources live under `tests/` and shared test-only helpers live under
 | `src/editor/completion.h` | `EditorCompletionProvider` struct + `editor_completion_register/update/clear` API |
 | `src/repl/examples.c` | Predefined example data (`g_examples[]`, `g_example_names[]`) |
 | `src/repl/examples.h` | Example query API (`repl_examples_count/name/lines`) |
-| `src/repl/tutorials.c` | Built-in tutorial catalog: per-tutorial null-terminated `TutorialStep[]` array + name + optional leading `@cfg` line array (same slug vocabulary as example `@cfg`). Each step carries a `TutorialStepKind`: COMMAND (type the expected GL call), SET (apply `cfg_slug = cfg_value` on entry, advance on Enter/Tab/Space), or REQUIRE (advance when the user sets the slug to the target value). Sentinel is `comment == NULL`. Starter set: "First Triangle" (`@cfg view_mode = 1`), "Color & Transform", "Depth Test Triangle", "Feature Tour" (mixes COMMAND + REQUIRE + SET to teach gl-repl features) |
-| `src/repl/tutorials.h` | Catalog query API (`repl_tutorial_count/name/step_count/step_comment/step_expected/step_kind/step_cfg_slug/step_cfg_value/cfg_lines`) + `TutorialEntry` + `TutorialStepKind` typedefs |
+| `src/repl/tutorials.c` | Built-in tutorial catalog: per-tutorial null-terminated `TutorialStep[]` array + name + optional leading `@cfg` line array (same slug vocabulary as example `@cfg`) + `tags` bitmask (private `TUTORIAL_TAG_*` macros + `g_tutorial_tag_labels[]`). Each step carries a `TutorialStepKind`: COMMAND (type the expected GL call), SET (apply `cfg_slug = cfg_value` on entry, advance on Enter/Tab/Space), or REQUIRE (advance when the user sets the slug to the target value). Sentinel is `comment == NULL`. Starter set: First Triangle (`@cfg view_mode = 1`; tag `GEOMETRY`), Color & Transform (`COLOR_TRANSFORMS`), Depth Test Triangle (`GEOMETRY \| DEPTH_LIGHTING`), Feature Tour (`GEOMETRY`; mixes COMMAND + REQUIRE + SET to teach gl-repl features) |
+| `src/repl/tutorials.h` | Catalog query API (`repl_tutorial_count/name/step_count/step_comment/step_expected/step_kind/step_cfg_slug/step_cfg_value/cfg_lines`) + tag query API (`repl_tutorial_tag_count/_label/_mask/_has_tag/_count_for_tag/_index_for_tag/_visible_tag_count/_visible_tag_at`, inline `_tag_bit`) + `TutorialEntry` + `TutorialStepKind` + `ReplTutorialTagMask` typedefs + `REPL_TUTORIAL_TAG_*` enum (synthetic `ALL` folded into every entry's mask) |
 | `src/widgets/tutorial_state.c` | Tutorial peer subsystem: owns `TutorialRuntimeState` (active flag, step, locked_lines, fade timing, pending commit, instruction-line map, last match result). `fade_duration` is set per-line at emit time from `TUTORIAL_FADE_CHARS_PER_SEC`, not held as a constant |
 | `src/widgets/tutorial_state.h` | Peer-subsystem facade (`tutorial_state_view/_mut/_reset`, `tutorial_active`), `TutorialMatchKind/Result` types |
 | `src/widgets/tutorial.c` | Tutorial runner: starts/exits/advances, emits instruction comments via `repl_load_apply_line`, whitespace-tolerant match, locked-line guard, per-character fade-in at a fixed chars-per-second rate. Iterative advance loop handles SET/REQUIRE without recursion. Captures a pre-tutorial cfg baseline (`fill_scene_subset` + tutorial-specific slugs via `repl_cfg_get_int`) and restores it via `tutorial_teardown` at every active-tutorial teardown path (exit, completion, workspace/scene/example load, `glr_app_reset_all`) so the tutorial is non-destructive. `tutorial_guard_source_change` hard-rejects ALL mutations while a non-COMMAND step is active |
@@ -846,6 +846,40 @@ Declarative toggle system in `src/app/glr_actions.c`:
 - Adding a config item: append to `g_cfg_items[]` (under the right
   `### ` section) — count is auto-computed via `sizeof`; it joins its
   section's flyout automatically
+
+### Tutorials Menu
+
+Tag-grouped flyouts driven by the same submenu engine as Scene and
+Config. The tag system mirrors examples one-for-one
+(`REPL_TUTORIAL_TAG_*` enum + `ReplTutorialTagMask` + private
+`TUTORIAL_TAG_*` macros + `g_tutorial_tag_labels[]`, all in
+`src/repl/tutorials.{c,h}`); the synthetic `ALL` is folded into every
+entry's mask by `repl_tutorial_tag_mask`, so entry literals stay free
+of it. Each tutorial declares a `.tags = TUTORIAL_TAG_X | …` mask
+alongside `.cfg` (see the file-layout table for the shipped catalog).
+
+- **Top-level layout.** `[0..t-1]` tag rows
+  (`t = repl_tutorial_visible_tag_count()` — unused tags are hidden,
+  matching how `ANIMATION` is currently filtered out). When a tutorial
+  is active, `[t]` = `---`, `[t+1]` = "Restart Tutorial", `[t+2]` =
+  "Exit Tutorial". No leading `### TUTORIALS` chrome header — it is a
+  single-section menu.
+- **Click semantics.** Tag rows are inert hover-only, mirroring the
+  Scene tag-row guard: the `GLR_MENU_TUTORIALS` branch of
+  `glr_action_menu_item_activate` returns 0 for any `item_idx <
+  tag_count`. Restart/Exit are handled there at the trailing indices.
+  Tutorial activation flows through `route_submenu_item_hit` in
+  `src/app/glr_ctrl.c`: a `UI_HIT_SUBMENU_ITEM` with
+  `cmd_idx == GLR_MENU_TUTORIALS` and `item_idx == absolute tutorial
+  index` calls `tutorial_start(item_idx)` directly and dismisses the
+  menu — symmetric with how Scene flyout hits call
+  `glr_scene_load_example`.
+- **Tagging a new tutorial.** Add the entry to `g_tutorials[]` with a
+  `.tags = TUTORIAL_TAG_X | …` mask. The metadata test
+  (`test_catalog_tag_metadata` in `tests/test_tutorial_runner.c`)
+  enforces `mask != 0` and "only known bits", so a forgotten `tags`
+  initializer fails CI rather than silently dropping the tutorial out
+  of every flyout.
 
 ## Key Controls
 
