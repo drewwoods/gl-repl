@@ -289,8 +289,12 @@ int repl_apply_state_cmd(const GLCmd *cmd, float alpha_scale) {
     case CMD_COLOR_MATERIAL:
         glColorMaterial((GLenum)cmd->args[0], (GLenum)cmd->args[1]);
         return 1;
-    case CMD_MATERIALF:
-        /* args[0]=face, args[1]=pname, args[2..]=value(s). */
+    case CMD_MATERIALFV:
+        /* args[0]=face, args[1]=pname, args[2..]=value(s). The source
+         * always carries the compound-literal form `(GLfloat[]){...}`,
+         * but the executor dispatches to the scalar / vector GL entry
+         * point that matches the unpacked count, since GL_SHININESS
+         * conceptually takes one float and the RGBA pnames take four. */
         if (cmd->num_args == 3) {
             glMaterialf((GLenum)cmd->args[0], (GLenum)cmd->args[1],
                         cmd->args[2]);
@@ -488,7 +492,7 @@ void repl_execute_program(const ReplExecutionOptions *options) {
         case CMD_DISABLE:
         case CMD_SHADE_MODEL:
         case CMD_COLOR_MATERIAL:
-        case CMD_MATERIALF:
+        case CMD_MATERIALFV:
         case CMD_LIGHT_MODEL_I:
             repl_apply_state_cmd(&flat_cmds[pc], g_execute_alpha_scale);
             break;

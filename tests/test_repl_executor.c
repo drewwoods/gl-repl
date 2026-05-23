@@ -129,8 +129,8 @@ static void test_apply_state_cmd_edge_cases(void) {
     cmd.type = CMD_SHADE_MODEL; cmd.args[0] = GL_FLAT; repl_apply_state_cmd(&cmd, 1.0f);
     cmd.type = CMD_COLOR_MATERIAL; cmd.args[0] = GL_FRONT; cmd.args[1] = GL_AMBIENT; repl_apply_state_cmd(&cmd, 1.0f);
 
-    /* glMaterialf args[]: [0]=face, [1]=pname, [2..]=value(s). */
-    cmd.type = CMD_MATERIALF; cmd.args[0] = GL_FRONT; cmd.args[1] = GL_SHININESS; cmd.args[2] = 50; cmd.num_args = 3; repl_apply_state_cmd(&cmd, 1.0f);
+    /* glMaterialfv args[]: [0]=face, [1]=pname, [2..]=value(s). */
+    cmd.type = CMD_MATERIALFV; cmd.args[0] = GL_FRONT; cmd.args[1] = GL_SHININESS; cmd.args[2] = 50; cmd.num_args = 3; repl_apply_state_cmd(&cmd, 1.0f);
     cmd.num_args = 6; repl_apply_state_cmd(&cmd, 1.0f);
 
     cmd.type = CMD_LIGHT_MODEL_I; cmd.args[0] = GL_LIGHT_MODEL_TWO_SIDE; cmd.args[1] = 1; repl_apply_state_cmd(&cmd, 1.0f);

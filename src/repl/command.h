@@ -67,7 +67,7 @@ typedef enum {
     CMD_TESS_NORMAL,
     CMD_TESS_COLOR,
     CMD_TESS_VERTEX,
-    CMD_MATERIALF,
+    CMD_MATERIALFV,
     CMD_POINT_SIZE,
     CMD_LINE_WIDTH,
     CMD_POINT_PARAMETER_FV,
@@ -83,7 +83,7 @@ typedef enum {
 typedef struct {
     CmdType  type;
     /* No `mode` field: every enum-backed command (table-driven *and*
-     * the custom glMaterialf / glPointParameterfv branches) stores its
+     * the custom glMaterialfv / glPointParameterfv branches) stores its
      * GL enum arguments in args[] alongside numeric args. GLenums fit
      * float32 exactly (all in use are < 2^24), so (GLenum)args[i]
      * round-trips losslessly. The absence of this field is the

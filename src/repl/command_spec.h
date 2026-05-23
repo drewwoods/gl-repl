@@ -142,7 +142,7 @@ typedef enum {
     CMD_CAT_PRIMITIVE,      /* glBegin / glEnd */
     CMD_CAT_VERTEX,         /* glVertex* / gluVertex */
     CMD_CAT_NORMAL,         /* glNormal3f / gluNormal */
-    CMD_CAT_COLOR,          /* glColor* / glClearColor / glColorMaterial / glMaterialf / gluColor */
+    CMD_CAT_COLOR,          /* glColor* / glClearColor / glColorMaterial / glMaterialfv / gluColor */
     CMD_CAT_TRANSFORM,      /* glTranslate / glScale / glRotate / glPushMatrix / glPopMatrix */
     CMD_CAT_STATE,          /* glEnable / glDisable / glShadeModel / glLineWidth / glPointSize / glBlendFunc / glDepthMask / glLightModeli / glFrontFace / glPointParameterfv */
     CMD_CAT_LOOP,           /* for { ... } */
@@ -183,7 +183,7 @@ typedef struct {
     const char *name;
     CmdType     type;
     /* Declared argument count. Positive: parsed by the generalized
-     * N-arg enum loop. Negative (e.g. glMaterialf -2): a custom parser
+     * N-arg enum loop. Negative (e.g. glMaterialfv -2): a custom parser
      * branch handles parsing; abs(num_args) is still the slot count for
      * autocomplete, which reads args[].enums. */
     int         num_args;
@@ -256,7 +256,7 @@ const ReplStdCommandSpec *repl_std_command_specs(void);
 const ReplFuncCompletion *repl_func_completions(void);
 
 /* Query enumeration tables for GL constants used in command arguments. Provides
- * suggestions for glColorMaterial face parameter, glMaterialf parameter names,
+ * suggestions for glColorMaterial face parameter, glMaterialfv parameter names,
  * and glPointParameterfv pname values. Used by autocomplete to populate
  * parameter suggestions. */
 const ReplEnumEntry *repl_face_type_entries(void);

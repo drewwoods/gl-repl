@@ -1315,7 +1315,7 @@ int main(void) {
             { "glNormal3f(0, 0, 1);",                       "glNormal3f",   CMD_NORMAL3F },
             { "glColor3f(1, 0, 0);",                        "glColor3f",    CMD_COLOR3F },
             { "glColor4f(1, 0, 0, 1);",                     "glColor4f",    CMD_COLOR4F },
-            { "glMaterialf(GL_FRONT, GL_SHININESS, 32);",   "glMaterialf",  CMD_MATERIALF },
+            { "glMaterialfv(GL_FRONT, GL_SHININESS, 32);",  "glMaterialfv", CMD_MATERIALFV },
         };
         int case_count = (int)(sizeof(in_begin_cases) / sizeof(in_begin_cases[0]));
         for (int i = 0; i < case_count; i++) {

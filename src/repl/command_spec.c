@@ -194,8 +194,9 @@ static const ReplFuncCompletion k_func_completions[] = {
         "face: GL_FRONT, GL_BACK, or GL_FRONT_AND_BACK\n"
         "mode: GL_AMBIENT / GL_AMBIENT_AND_DIFFUSE / GL_DIFFUSE / GL_SPECULAR / GL_EMISSION",
         REPL_HELP_GROUP_LIGHTING },
-    { "glMaterialf(",        "glMaterialf(face, pname, value[, g, b, a])",               6, { "face", "pname", "value", "g", "b", "a" },
-        "Per-face material: GL_AMBIENT / GL_DIFFUSE / GL_SPECULAR / GL_SHININESS",
+    { "glMaterialfv(",       "glMaterialfv(face, pname, (GLfloat[]){r, g, b, a})",       3, { "face", "pname", "(GLfloat[]){r, g, b, a}" },
+        "Per-face material: GL_AMBIENT / GL_DIFFUSE / GL_SPECULAR / GL_SHININESS.\n"
+        "The compound literal carries 4 RGBA floats, or a single scalar (e.g. (GLfloat[]){30.0}) for GL_SHININESS.",
         REPL_HELP_GROUP_LIGHTING },
     { "glLightModeli(",      "glLightModeli(pname, param)",                              2, { "pname", "param" },
         "pname: GL_LIGHT_MODEL_TWO_SIDE, GL_LIGHT_MODEL_LOCAL_VIEWER",
@@ -348,10 +349,12 @@ static const ReplEnumCommandSpec k_enum_command_specs[] = {
     { "glLightModeli",   CMD_LIGHT_MODEL_I,  2, "%sglLightModeli(%s, %s);",  0,
         .args = { ENUM_SLOT_TOK(k_light_model_params, "pname: GL_LIGHT_MODEL_TWO_SIDE, GL_LIGHT_MODEL_LOCAL_VIEWER"),
                   ENUM_SLOT(k_bool_vals, "param: GL_TRUE, GL_FALSE, or integer", REPL_ENUM_SLOT_ENUM_OR_EXPR) } },
-    /* glMaterialf is parsed by a custom branch (num_args -2). args[] is
+    /* glMaterialfv is parsed by a custom branch (num_args -2). args[] is
      * kept only so slot-indexed autocomplete still offers face/param
-     * tokens; abs(num_args) == 2 is the autocomplete slot count. */
-    { "glMaterialf",     CMD_MATERIALF,     -2, NULL,                        0,
+     * tokens; abs(num_args) == 2 is the autocomplete slot count. The
+     * third arg (the (GLfloat[]){...} compound literal) is handled by
+     * the custom parser, not the generalized enum loop. */
+    { "glMaterialfv",    CMD_MATERIALFV,    -2, NULL,                        0,
         .args = { ENUM_SLOT_TOK(k_face_types, "face: GL_FRONT, GL_BACK, GL_FRONT_AND_BACK"),
                   ENUM_SLOT_TOK(k_material_params, "pname: GL_DIFFUSE, GL_AMBIENT, GL_SPECULAR, GL_SHININESS") } },
     { "glShadeModel",    CMD_SHADE_MODEL,    1, "%sglShadeModel(%s);",       0,
@@ -441,7 +444,7 @@ static const ReplCommandTypeSpec g_command_type_specs[CMD_TYPE_COUNT] = {
     CMD_TYPE_SPEC(CMD_TESS_NORMAL,          1, 1, CMD_CAT_NORMAL),
     CMD_TYPE_SPEC(CMD_TESS_COLOR,           1, 1, CMD_CAT_COLOR),
     CMD_TYPE_SPEC(CMD_TESS_VERTEX,          1, 1, CMD_CAT_VERTEX),
-    CMD_TYPE_SPEC(CMD_MATERIALF,            1, 1, CMD_CAT_COLOR),
+    CMD_TYPE_SPEC(CMD_MATERIALFV,           1, 1, CMD_CAT_COLOR),
     CMD_TYPE_SPEC_NOT_IN_BEGIN(CMD_POINT_SIZE,         1, 1, CMD_CAT_STATE),
     CMD_TYPE_SPEC_NOT_IN_BEGIN(CMD_LINE_WIDTH,         1, 1, CMD_CAT_STATE),
     CMD_TYPE_SPEC_NOT_IN_BEGIN(CMD_POINT_PARAMETER_FV, 1, 1, CMD_CAT_STATE),

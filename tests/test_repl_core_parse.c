@@ -573,37 +573,89 @@ int main(void) {
         ASSERT_TRUE("glLightModeli var sets has_vars", cmd.has_vars == 1);
     }
 
-    /* glMaterialf - scalar and vector (4-value) forms */
+    /* glMaterialfv - scalar (1-float) and vector (4-float) forms;
+     * accepts flat-float input AND the compound-literal form, canonical
+     * emit always wraps the values in (GLfloat[]){...}. */
     {
         glr_app_reset_all();
         GLCmd cmd;
         char cmd_text[MAX_LINE_LEN] = "";
         memset(&cmd, 0, sizeof(cmd));
-        int ok = parse_cmd_with_text("glMaterialf(GL_FRONT, GL_SHININESS, 64)",
+        int ok = parse_cmd_with_text("glMaterialfv(GL_FRONT, GL_SHININESS, 64)",
                                       &cmd, cmd_text, sizeof(cmd_text));
-        ASSERT_TRUE("glMaterialf scalar parse ok", ok == 1);
-        ASSERT_TRUE("glMaterialf scalar type", cmd.type == CMD_MATERIALF);
-        ASSERT_TRUE("glMaterialf scalar source has SHININESS",
+        ASSERT_TRUE("glMaterialfv scalar parse ok (flat)", ok == 1);
+        ASSERT_TRUE("glMaterialfv scalar type", cmd.type == CMD_MATERIALFV);
+        ASSERT_TRUE("glMaterialfv scalar source has SHININESS",
                     strstr(cmd_text, "GL_SHININESS") != NULL);
+        ASSERT_TRUE("glMaterialfv scalar canonical emits compound literal",
+                    strstr(cmd_text, "(GLfloat[]){64}") != NULL);
     }
 
     {
         glr_app_reset_all();
         GLCmd cmd;
+        char cmd_text[MAX_LINE_LEN] = "";
         memset(&cmd, 0, sizeof(cmd));
-        int ok = parse_for_test("glMaterialf(GL_FRONT, GL_DIFFUSE, 0.8, 0.2, 0.2, 1.0)", &cmd);
-        ASSERT_TRUE("glMaterialf vector parse ok", ok == 1);
-        ASSERT_TRUE("glMaterialf vector type", cmd.type == CMD_MATERIALF);
-        ASSERT_TRUE("glMaterialf vector num_args", cmd.num_args == 6); /* face + pname + 4 vals */
+        int ok = parse_cmd_with_text(
+            "glMaterialfv(GL_FRONT, GL_DIFFUSE, 0.8, 0.2, 0.2, 1.0)",
+            &cmd, cmd_text, sizeof(cmd_text));
+        ASSERT_TRUE("glMaterialfv vector parse ok (flat 4)", ok == 1);
+        ASSERT_TRUE("glMaterialfv vector type", cmd.type == CMD_MATERIALFV);
+        ASSERT_TRUE("glMaterialfv vector num_args",
+                    cmd.num_args == 6); /* face + pname + 4 vals */
+        ASSERT_TRUE("glMaterialfv vector canonical emits compound literal",
+                    strstr(cmd_text, "(GLfloat[]){0.8, 0.2, 0.2, 1}") != NULL);
     }
 
-    /* glMaterialf - bad face name */
+    /* Compound-literal input round-trips through the parser without
+     * losing args or changing function name. */
+    {
+        glr_app_reset_all();
+        GLCmd cmd;
+        char cmd_text[MAX_LINE_LEN] = "";
+        memset(&cmd, 0, sizeof(cmd));
+        int ok = parse_cmd_with_text(
+            "glMaterialfv(GL_FRONT, GL_DIFFUSE, (GLfloat[]){0.8, 0.2, 0.2, 1.0})",
+            &cmd, cmd_text, sizeof(cmd_text));
+        ASSERT_TRUE("glMaterialfv compound-literal parse ok", ok == 1);
+        ASSERT_TRUE("glMaterialfv compound-literal num_args",
+                    cmd.num_args == 6);
+        ASSERT_TRUE("glMaterialfv compound-literal source preserves form",
+                    strstr(cmd_text, "(GLfloat[]){0.8, 0.2, 0.2, 1}") != NULL);
+    }
+
+    {
+        glr_app_reset_all();
+        GLCmd cmd;
+        char cmd_text[MAX_LINE_LEN] = "";
+        memset(&cmd, 0, sizeof(cmd));
+        int ok = parse_cmd_with_text(
+            "glMaterialfv(GL_FRONT, GL_SHININESS, (GLfloat[]){42.0})",
+            &cmd, cmd_text, sizeof(cmd_text));
+        ASSERT_TRUE("glMaterialfv scalar compound-literal parse ok", ok == 1);
+        ASSERT_TRUE("glMaterialfv scalar compound num_args",
+                    cmd.num_args == 3);
+        ASSERT_TRUE("glMaterialfv scalar compound canonical form",
+                    strstr(cmd_text, "(GLfloat[]){42}") != NULL);
+    }
+
+    /* glMaterialfv - bad face name */
     {
         glr_app_reset_all();
         GLCmd cmd;
         memset(&cmd, 0, sizeof(cmd));
-        int ok = parse_for_test("glMaterialf(FRONT, GL_DIFFUSE, 0.5)", &cmd);
-        ASSERT_TRUE("glMaterialf bad face returns 0", ok == 0);
+        int ok = parse_for_test("glMaterialfv(FRONT, GL_DIFFUSE, 0.5)", &cmd);
+        ASSERT_TRUE("glMaterialfv bad face returns 0", ok == 0);
+    }
+
+    /* The old glMaterialf name is no longer recognized — clean rename,
+     * no transition aliasing. */
+    {
+        glr_app_reset_all();
+        GLCmd cmd;
+        memset(&cmd, 0, sizeof(cmd));
+        int ok = parse_for_test("glMaterialf(GL_FRONT, GL_SHININESS, 64)", &cmd);
+        ASSERT_TRUE("old glMaterialf name no longer parses", ok == 0);
     }
 
     /* glPointParameterfv */
@@ -1044,9 +1096,9 @@ int main(void) {
         glr_app_reset_all();
         GLCmd cmd;
         memset(&cmd, 0, sizeof(cmd));
-        int ok = parse_for_test("glMaterialf(GL_FRONT, GL_AMBIENT, 0.1, 0.2, 0.3)", &cmd);
-        ASSERT_TRUE("glMaterialf 3-float vector invalid", ok == 0);
-        ASSERT_TRUE("glMaterialf 3-float status", strstr(g_status, "Expected 1 or 4 float values") != NULL);
+        int ok = parse_for_test("glMaterialfv(GL_FRONT, GL_AMBIENT, 0.1, 0.2, 0.3)", &cmd);
+        ASSERT_TRUE("glMaterialfv 3-float vector invalid", ok == 0);
+        ASSERT_TRUE("glMaterialfv 3-float status", strstr(g_status, "Expected 1 or 4 float values") != NULL);
     }
 
     {

@@ -138,7 +138,7 @@ int main(void) {
     ASSERT_TRUE("init has material specular bootstrap",
                 find_init_line_substr("glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR") >= 0);
     ASSERT_TRUE("init has material shininess bootstrap",
-                find_init_line_substr("glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS") >= 0);
+                find_init_line_substr("glMaterialfv(GL_FRONT_AND_BACK, GL_SHININESS") >= 0);
     ASSERT_TRUE("init has two-side bootstrap",
                 find_init_line_substr("glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);") >= 0);
     ASSERT_TRUE("init has blend enable bootstrap",
