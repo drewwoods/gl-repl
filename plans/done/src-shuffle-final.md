@@ -1,5 +1,33 @@
 # `src/` restructure: subsystems split, ui core/app split, prof + transform_utils relocations, sample → gl-repl rename
 
+## Completion — 2026-05-23
+
+Done. Landed as 8 commits on `main` (a8b360e → e988e7d):
+
+- 57bdfff — Phase A: `prof.{c,h}` → `src/support/`
+- 2371aa8 — Phase B: `transform_utils.h` → `src/scene/guides/`
+- 95a971a — Phase C: `src/widgets/` → `src/subsystems/<feature>/`
+- 010b35a — Phase D: `src/ui/` split into `core/` and `app/`
+- 978ca79 — Phase F: `sample` → `gl-repl` (binary + source files)
+- c023ce9 — Phase E: doc refresh (CLAUDE.md / MODULES.md / ARCHITECTURE.md / AGENTS.md / per-subdir READMEs)
+- b75be61 — Phase G (added late, user-requested): project-local includes consistency — `<X.h>` → `"X.h"` for `c_compat.h` / `gl_includes.h` / `keys.h` / `gl_2d.h`, plus a new `scripts/check-include-style.sh` wired into `check-state-ownership`.
+- e988e7d — fix: stub `tutorial_teardown` in `tools/repl_demo/stubs.c` so `make test-full` links (pre-existing on `main`; the tutorial work introduced a call from REPL pipeline TUs that the demo can't satisfy without dragging in editor/). Baseline bumped 0 → 1 with a note pointing at the proper `ReplTutorialTeardownBridge` follow-up.
+
+Gates all green on macOS:
+- `make check-c99 && make check-state-ownership` — clean
+- `make test-stubs` — 6510/45 (no regression)
+- `make test-full` — 6510/45 + all 4 demos build (gl-repl, bench_repl, scene_demo, editor_demo)
+
+Cross-checked on `gracemont` (Ubuntu 24.04, gcc 13.x) per CLAUDE.md:
+- `make check-c99` — OK
+- `make check-state-ownership` — OK (incl. new `check-include-style`)
+- `make test-stubs` — 6510/45
+- `make gl-repl USE_GL_STUBS=1` — links
+
+### Open follow-up
+
+- `ReplTutorialTeardownBridge` — analogous to the existing `ReplExportConfigBridge` / `ReplExportCameraBridge`. The full app installs a real `tutorial_teardown` callback; the demo installs nothing → silent no-op → the one-line stub at `tools/repl_demo/stubs.c` can go away and the ratchet baseline drops back to 0. Not blocking; scoped as a future PR.
+
 ## Context
 
 The Layer view in `MODULES.md` already calls out a peer-subsystems node
