@@ -1,10 +1,22 @@
 /*
- * src/repl/core.h - Public REPL facade.
+ * src/repl/core.h - REPL pipeline facade.
  *
- * Exposes the source/flat command model, persistence helpers, replay hooks,
- * example and user-scene management, and the input callback wrappers that the
- * controller forwards to. Runtime storage lives in src/repl/state.c and is accessed
- * through src/repl/state.h; scene/workspace persistence lives in src/repl/scenes.c.
+ * Exposes the command-pipeline entry points (parse-and-normalize, flatten,
+ * reformat, autonormal recompute), the host-effects bridge through which
+ * pipeline TUs surface status / cursor / input effects to the controller,
+ * scene/workspace persistence wrappers, cursor/feed queries, and timekeeping
+ * for the predefined `t` variable.
+ *
+ * Sibling headers callers may need to include directly:
+ *   src/repl/state.h           — read-only state views
+ *   src/repl/state_owners.h    — mutable accessors + reset helpers
+ *   src/repl/export.h          — save/load file I/O
+ *   src/repl/flatten.h         — flatten primitives
+ *   src/subsystems/replay/replay.h — replay state machine
+ *   src/editor/input.h         — editor commit / navigation entry points
+ *
+ * Many functions formerly declared here moved out as the pipeline grew its
+ * own narrower owners; this file no longer re-declares or re-documents them.
  */
 #ifndef REPL_CORE_H
 #define REPL_CORE_H
@@ -31,9 +43,6 @@ void repl_save_default_output(const ReplExportLayout *layout);
  * if needed and sets its own status naming the real file (the
  * underlying writer hardcodes an output.c message). */
 void repl_save_active_scene(const ReplExportLayout *layout);
-
-/* repl_export_load_from_file / repl_export_save_output live in
- * src/repl/export.h — include that header directly to use them. */
 
 /* Workspace I/O: save every occupied user-scene slot to `<dir>/<slug>.c`.
  * Each slot is flushed with its own @scene-name header. Both functions
@@ -78,9 +87,6 @@ const char *repl_workspace_dir(void);
 void repl_set_workspace_dir(const char *dir);
 
 /* --- Command pipeline -------------------------------------------------- */
-
-/* repl_flatten_program lives in src/repl/flatten.h — include that
- * header directly to use it. */
 
 /* Rebuild the live flat program from the current source commands (idempotent).
  * Expansion honors the laziness flag set by mark_normals_dirty(); call this
@@ -226,10 +232,6 @@ int  repl_user_scene_rename(int slot, const char *new_name);
 int  repl_load_user_scene_idx(int slot);  /* load slot, returns 1 on success */
 int  repl_active_user_scene(void);        /* current slot index, -1 if none */
 
-/* --- Replay ------------------------------------------------------------ */
-/* replay_start / replay_stop live in src/subsystems/replay/replay.h —
- * include that header directly to use them. */
-
 /* --- Timekeeping ------------------------------------------------------- */
 
 /* Advance the predefined `t` variable by `dt` seconds. The controller's
@@ -241,8 +243,6 @@ void repl_advance_time(float dt);
  * deterministic time origin. */
 void repl_reset_time_to_zero(void);
 
-/* editor_navigate_to_line() / editor_feed_line() are editor-owned and
- * declared in src/editor/input.h — src/repl/ no longer re-declares them. */
 /* Returns the post-load cursor target. Caller applies the value
  * via editor_state_edit_line_set() above the β boundary (implemented
  * in phase 3.6.4 of plans/in-review/edit-line-ownership.md). */
@@ -257,19 +257,5 @@ void repl_reformat_program(void);
 int  repl_flat_cmd_matches_cursor(int flat_idx, int edit_line_idx);
 int  repl_find_feeding_normal_cmd(int line_idx);
 int  repl_find_feeding_color_cmd(int line_idx);
-
-/* --- Input callback entry points -------------------------------------- */
-/* The EditorInputDispatchEffects typedef and the editor_handle_* /
- * editor_input_router_* dispatch APIs live in editor_input.h. The
- * legacy repl_*_func dispatch entry points were deleted in Phase J1
- * commit 49a. */
-
-/* --- Test helpers ------------------------------------------------------ */
-
-/* There is no public full-world `repl_reset_state()` anymore. Callers that need
- * app + REPL reset use `glr_app_reset_all()` from glr_ctrl.h; REPL-only callers
- * use `repl_state_init_defaults()` / `repl_state_reset_program()` from
- * src/repl/state_owners.h. The old single entry point disappeared in step 2 of
- * feature/decouple-repl-from-gl-repl-alt.md. */
 
 #endif /* REPL_CORE_H */
