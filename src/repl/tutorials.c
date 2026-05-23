@@ -202,28 +202,47 @@ STATIC_ASSERT((int)(sizeof(g_tutorial_tag_labels) /
                     sizeof(g_tutorial_tag_labels[0])) == REPL_TUTORIAL_TAG_COUNT,
               "g_tutorial_tag_labels[] out of sync with REPL_TUTORIAL_TAG_COUNT");
 
+/* Subheading labels here are catalog-author choices, not a fixed
+ * vocabulary — the menu just emits `### subheading` chrome rows when
+ * the subheading changes. "Beginner" / "Intermediate" suit the current
+ * 4-tutorial catalog; future catalogs (e.g. a REPL-vs-OpenGL split)
+ * can use any labels that group sensibly within each tag flyout.
+ *
+ * Catalog order matters: entries sharing a subheading should be
+ * contiguous within every tag they share, so the per-tag flyout walker
+ * emits each header exactly once. test_catalog_subheading_metadata
+ * enforces this. The Beginner run is placed before the Intermediate
+ * entry so all three tag flyouts (Geometry, Color & Transforms, All)
+ * see the Beginner group first. */
+
 static const TutorialEntry g_tutorials[] = {
     {
-        .name  = "First Triangle",
-        .steps = g_tutorial_first_triangle_steps,
-        .cfg   = g_tutorial_first_triangle_cfg,
-        .tags  = TUTORIAL_TAG_GEOMETRY,
+        .name       = "First Triangle",
+        .steps      = g_tutorial_first_triangle_steps,
+        .cfg        = g_tutorial_first_triangle_cfg,
+        .tags       = TUTORIAL_TAG_GEOMETRY,
+        .subheading = "Beginner",
     },
     {
-        .name  = "Color & Transform",
-        .steps = g_tutorial_color_transform_steps,
-        .tags  = TUTORIAL_TAG_COLOR_TRANSFORMS,
+        .name       = "Color & Transform",
+        .steps      = g_tutorial_color_transform_steps,
+        .tags       = TUTORIAL_TAG_COLOR_TRANSFORMS,
+        .subheading = "Beginner",
     },
     {
-        .name  = "Depth Test Triangle",
-        .steps = g_tutorial_depth_triangle_steps,
-        .tags  = TUTORIAL_TAG_GEOMETRY | TUTORIAL_TAG_DEPTH_LIGHTING,
+        .name       = "Feature Tour",
+        .steps      = g_tutorial_feature_tour_steps,
+        .cfg        = g_tutorial_feature_tour_cfg,
+        .tags       = TUTORIAL_TAG_GEOMETRY,
+        .subheading = "Beginner",
     },
     {
-        .name  = "Feature Tour",
-        .steps = g_tutorial_feature_tour_steps,
-        .cfg   = g_tutorial_feature_tour_cfg,
-        .tags  = TUTORIAL_TAG_GEOMETRY,
+        .name       = "Depth Test Triangle",
+        .steps      = g_tutorial_depth_triangle_steps,
+        .tags       = TUTORIAL_TAG_GEOMETRY | TUTORIAL_TAG_DEPTH_LIGHTING,
+        /* Intermediate: introduces depth-testing as a new GL concept
+         * (the previous tutorials were pure geometry/color/transform). */
+        .subheading = "Intermediate",
     },
 };
 
@@ -386,6 +405,11 @@ int repl_tutorial_visible_tag_at(int dense_idx) {
         seen++;
     }
     return -1;
+}
+
+const char *repl_tutorial_subheading(int tutorial_idx) {
+    const TutorialEntry *entry = tutorial_entry_at(tutorial_idx);
+    return entry ? entry->subheading : NULL;
 }
 
 static int label_is_empty(const char *s) {

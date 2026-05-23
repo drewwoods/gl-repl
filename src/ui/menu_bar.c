@@ -130,6 +130,64 @@ static int tutorial_parent_row_for_tag(int tag_idx) {
     return -1;
 }
 
+/* True if two subheadings are equivalent for grouping purposes: same
+ * pointer (covers both NULL), or non-NULL strings with equal contents. */
+static int tutorial_subheadings_equal(const char *a, const char *b) {
+    if (a == b)
+        return 1;
+    if (!a || !b)
+        return 0;
+    return strcmp(a, b) == 0;
+}
+
+/* Resolve the ordinal'th row within a Tutorials per-tag flyout to its
+ * kind, absolute target index, and label. Logical row layout per tag
+ * flyout: walk the tutorials in catalog order (filtered to the tag);
+ * whenever a tutorial's non-NULL subheading differs from the previous
+ * emitted one, emit a HEADER row (label = subheading, abs_idx = -1)
+ * before its ITEM row. Tutorials with NULL subheading don't trigger a
+ * header. Catalog authors are expected to group same-subheading entries
+ * contiguously per tag (enforced by test_catalog_subheading_metadata),
+ * so each header is emitted exactly once per flyout.
+ *
+ * Returns 1 on hit; 0 if ordinal is out of range or parent_row doesn't
+ * map to a visible tutorial tag. Out-params are write-only — pass NULL
+ * to skip any field. Centralised here so the four flyout providers
+ * (count / label / abs_index / kind) share one walk. */
+static int tutorial_flyout_row_at(int parent_row, int ordinal,
+                                  GlrConfigRowKind *kind_out,
+                                  int *abs_idx_out,
+                                  const char **label_out) {
+    int tag = tutorial_tag_idx_for_parent_row(parent_row);
+    if (tag < 0 || ordinal < 0)
+        return 0;
+    int row = 0;
+    const char *prev_sub = NULL;
+    int n = repl_tutorial_count_for_tag(tag);
+    for (int o = 0; o < n; o++) {
+        int tut_idx = repl_tutorial_index_for_tag(tag, o);
+        const char *sub = repl_tutorial_subheading(tut_idx);
+        if (sub && !tutorial_subheadings_equal(sub, prev_sub)) {
+            if (row == ordinal) {
+                if (kind_out)    *kind_out    = GLR_CFG_ROW_HEADER;
+                if (abs_idx_out) *abs_idx_out = -1;
+                if (label_out)   *label_out   = sub;
+                return 1;
+            }
+            row++;
+        }
+        if (row == ordinal) {
+            if (kind_out)    *kind_out    = GLR_CFG_ROW_ITEM;
+            if (abs_idx_out) *abs_idx_out = tut_idx;
+            if (label_out)   *label_out   = repl_tutorial_name(tut_idx);
+            return 1;
+        }
+        row++;
+        prev_sub = sub;
+    }
+    return 0;
+}
+
 static int menu_item_count(int menu_id) {
     switch (menu_id) {
     case MENU_FILE:   return FILE_ITEM_COUNT;
@@ -456,8 +514,25 @@ static int submenu_row_count(int menu_id, int parent_row) {
         return (tag >= 0) ? repl_example_count_for_tag(tag) : 0;
     }
     if (menu_id == MENU_TUTORIALS) {
+        /* Walk the tag's tutorials in catalog order; each tutorial
+         * contributes 1 ITEM row and (when its subheading is non-NULL
+         * and differs from the previous one) 1 HEADER row before it.
+         * Matches tutorial_flyout_row_at's emit rule. */
         int tag = tutorial_tag_idx_for_parent_row(parent_row);
-        return (tag >= 0) ? repl_tutorial_count_for_tag(tag) : 0;
+        if (tag < 0)
+            return 0;
+        int total = 0;
+        const char *prev_sub = NULL;
+        int n = repl_tutorial_count_for_tag(tag);
+        for (int o = 0; o < n; o++) {
+            int tut_idx = repl_tutorial_index_for_tag(tag, o);
+            const char *sub = repl_tutorial_subheading(tut_idx);
+            if (sub && !tutorial_subheadings_equal(sub, prev_sub))
+                total++;
+            total++;
+            prev_sub = sub;
+        }
+        return total;
     }
     if (menu_id == MENU_CONFIG) {
         if (parent_row == config_all_parent_row())
@@ -479,10 +554,12 @@ static const char *submenu_row_label(int menu_id, int parent_row,
         return repl_example_name(repl_example_index_for_tag(tag, ordinal));
     }
     if (menu_id == MENU_TUTORIALS) {
-        int tag = tutorial_tag_idx_for_parent_row(parent_row);
-        if (tag < 0)
-            return NULL;
-        return repl_tutorial_name(repl_tutorial_index_for_tag(tag, ordinal));
+        /* Subheading rows are HEADER chrome (label = the subheading
+         * string); tutorial rows are ITEM (label = tutorial name).
+         * tutorial_flyout_row_at resolves both uniformly. */
+        const char *label = NULL;
+        tutorial_flyout_row_at(parent_row, ordinal, NULL, NULL, &label);
+        return label;
     }
     if (menu_id == MENU_CONFIG) {
         int abs = config_submenu_abs_index(parent_row, ordinal);
@@ -499,8 +576,8 @@ static const char *submenu_row_label(int menu_id, int parent_row,
 }
 
 /* Absolute target index the row activates: a global flat example index
- * for Scene, a global tutorial index for Tutorials, a g_cfg_items[]
- * index for Config. */
+ * for Scene, a global tutorial index for Tutorials (-1 for in-flyout
+ * subheading header rows), a g_cfg_items[] index for Config. */
 static int submenu_row_abs_index(int menu_id, int parent_row,
                                  int ordinal) {
     if (menu_id == MENU_SCENE) {
@@ -510,10 +587,9 @@ static int submenu_row_abs_index(int menu_id, int parent_row,
         return repl_example_index_for_tag(tag, ordinal);
     }
     if (menu_id == MENU_TUTORIALS) {
-        int tag = tutorial_tag_idx_for_parent_row(parent_row);
-        if (tag < 0)
-            return -1;
-        return repl_tutorial_index_for_tag(tag, ordinal);
+        int abs_idx = -1;
+        tutorial_flyout_row_at(parent_row, ordinal, NULL, &abs_idx, NULL);
+        return abs_idx;
     }
     if (menu_id == MENU_CONFIG)
         return config_submenu_abs_index(parent_row, ordinal);
@@ -525,6 +601,11 @@ static GlrConfigRowKind submenu_row_kind(int menu_id, int parent_row,
     if (menu_id == MENU_CONFIG)
         return glr_config_row_kind(
             config_submenu_abs_index(parent_row, ordinal));
+    if (menu_id == MENU_TUTORIALS) {
+        GlrConfigRowKind kind = GLR_CFG_ROW_ITEM;
+        tutorial_flyout_row_at(parent_row, ordinal, &kind, NULL, NULL);
+        return kind;
+    }
     (void)parent_row; (void)ordinal;
     return GLR_CFG_ROW_ITEM;   /* Scene rows are all items */
 }
@@ -961,6 +1042,9 @@ static int submenu_row_is_active(int menu_id, int parent_row, int ordinal,
     if (menu_id == MENU_TUTORIALS) {
         if (!tutorial_active())
             return 0;
+        /* submenu_row_abs_index returns -1 for subheading header rows
+         * (and any out-of-range ordinal), so the `>= 0` check is the
+         * single guard that skips them. */
         int tutorial_idx = submenu_row_abs_index(menu_id, parent_row,
                                                  ordinal);
         return tutorial_idx >= 0 &&

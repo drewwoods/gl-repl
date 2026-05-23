@@ -110,6 +110,15 @@ typedef struct {
      * entry literals stay free of it. Zero mask = visible only under
      * "All" — flagged by the metadata test. */
     ReplTutorialTagMask tags;
+    /* Optional in-flyout section subheading. Free-form display string
+     * (e.g. "Beginner", "Grids", "Lighting") — the menu groups
+     * consecutive tutorials sharing the same subheading under a chrome
+     * `### subheading` header. NULL = no section header (the tutorial
+     * appears under whichever header preceded it in catalog order, or
+     * at the top with no header). Convention enforced by the metadata
+     * test: per tag, each non-NULL subheading must appear in a single
+     * contiguous run — interleaving causes duplicate headers. */
+    const char         *subheading;
 } TutorialEntry;
 
 int                       repl_tutorial_count(void);
@@ -148,6 +157,12 @@ static inline unsigned int repl_tutorial_tag_bit(int tag_idx) {
         return 0u;
     return 1u << (unsigned int)tag_idx;
 }
+
+/* Subheading API. Returns the tutorial's free-form section label or NULL
+ * (no subheading / out-of-range idx). The Tutorials menu uses this to
+ * group entries within a tag flyout — see TutorialEntry.subheading and
+ * the contiguous-runs convention noted there. */
+const char               *repl_tutorial_subheading(int tutorial_idx);
 
 /* Validate a tutorial catalog entry. Returns 1 on success. On failure
  * returns 0 and writes a short diagnostic into `err` (when err_size > 0).
