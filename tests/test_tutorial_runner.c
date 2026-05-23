@@ -1002,6 +1002,118 @@ static void test_catalog_tag_metadata(void) {
     }
 }
 
+/* Subheading axis: each tutorial declares an optional free-form section
+ * label (`TutorialEntry.subheading`); the Tutorials menu groups
+ * consecutive tutorials sharing a subheading under a `### subheading`
+ * chrome row in the per-tag flyout. Test invariants:
+ *   - Every subheading is either NULL or a non-empty string (the menu
+ *     stripping logic would render an empty string as zero-width chrome).
+ *   - The getter returns NULL for out-of-range indices.
+ *   - Per tag, every non-NULL subheading appears in a single contiguous
+ *     run of tutorials (matches the menu walker's emit rule — one
+ *     header per group; interleaving would render duplicate headers).
+ *   - At least one shipped tutorial has a non-NULL subheading so the
+ *     menu walker's HEADER path is actually exercised in production.
+ *   - The known multi-tag entry (Depth Test Triangle) shows up in
+ *     every one of its tag flyouts under the same subheading. */
+static void test_catalog_subheading_metadata(void) {
+    int tag_count = repl_tutorial_tag_count();
+    int tutorial_count = repl_tutorial_count();
+
+    /* Every subheading is either NULL or non-empty. */
+    for (int idx = 0; idx < tutorial_count; idx++) {
+        char label[128];
+        const char *sub = repl_tutorial_subheading(idx);
+        snprintf(label, sizeof(label),
+                 "tutorial %d subheading is NULL or non-empty", idx);
+        ASSERT_TRUE(label, !sub || sub[0] != '\0');
+    }
+    ASSERT_TRUE("out-of-range tutorial subheading is NULL",
+                repl_tutorial_subheading(tutorial_count) == NULL);
+    ASSERT_TRUE("negative tutorial subheading is NULL",
+                repl_tutorial_subheading(-1) == NULL);
+
+    /* At least one tutorial in the shipped catalog declares a
+     * subheading — otherwise the menu's HEADER path is dead code. */
+    int has_any_subheading = 0;
+    for (int idx = 0; idx < tutorial_count; idx++) {
+        if (repl_tutorial_subheading(idx)) { has_any_subheading = 1; break; }
+    }
+    ASSERT_TRUE("catalog ships at least one subheading", has_any_subheading);
+
+    /* Per tag: walk in catalog order, count distinct non-NULL
+     * subheadings (set semantics) vs the number of subheading-change
+     * transitions the menu walker would emit. Equality means each
+     * distinct subheading appears in a single contiguous run; a
+     * mismatch means an interleaved subheading would render its
+     * header twice (e.g. catalog order "Beginner, Intermediate,
+     * Beginner" would emit two "Beginner" rows). */
+    for (int t = 0; t < tag_count; t++) {
+        char label[128];
+        const char *seen[16];
+        int seen_count = 0;
+        const char *prev = NULL;
+        int transitions = 0;
+        int n = repl_tutorial_count_for_tag(t);
+        for (int o = 0; o < n; o++) {
+            int tut_idx = repl_tutorial_index_for_tag(t, o);
+            const char *sub = repl_tutorial_subheading(tut_idx);
+            if (!sub)
+                continue;
+            int already_seen = 0;
+            for (int s = 0; s < seen_count; s++) {
+                if (strcmp(seen[s], sub) == 0) { already_seen = 1; break; }
+            }
+            if (!already_seen &&
+                seen_count < (int)(sizeof(seen) / sizeof(seen[0]))) {
+                seen[seen_count++] = sub;
+            }
+            int header_here = !prev || strcmp(prev, sub) != 0;
+            if (header_here)
+                transitions++;
+            prev = sub;
+        }
+        snprintf(label, sizeof(label),
+                 "tag %d subheadings are contiguous (no interleaving)", t);
+        ASSERT_INT(label, transitions, seen_count);
+    }
+
+    /* Known multi-tag entry: Depth Test Triangle. Its subheading must
+     * be non-NULL (we currently ship "Intermediate") and the same
+     * value must surface under every tag it carries. */
+    int depth_idx = -1;
+    for (int i = 0; i < tutorial_count; i++) {
+        const char *name = repl_tutorial_name(i);
+        if (name && strcmp(name, "Depth Test Triangle") == 0) {
+            depth_idx = i;
+            break;
+        }
+    }
+    ASSERT_TRUE("Depth Test Triangle in catalog", depth_idx >= 0);
+    if (depth_idx >= 0) {
+        const char *expected_sub = repl_tutorial_subheading(depth_idx);
+        ASSERT_TRUE("Depth Test Triangle has a subheading",
+                    expected_sub != NULL);
+        for (int t = 0; t < tag_count; t++) {
+            if (!repl_tutorial_has_tag(depth_idx, t))
+                continue;
+            int n = repl_tutorial_count_for_tag(t);
+            int found = 0;
+            for (int o = 0; o < n; o++) {
+                int tut_idx = repl_tutorial_index_for_tag(t, o);
+                if (tut_idx != depth_idx)
+                    continue;
+                const char *sub = repl_tutorial_subheading(tut_idx);
+                if (sub && expected_sub && strcmp(sub, expected_sub) == 0)
+                    found = 1;
+                break;
+            }
+            ASSERT_TRUE("multi-tag entry has same subheading in every tag",
+                        found);
+        }
+    }
+}
+
 static void test_catalog_validation_passes_for_all_tutorials(void) {
     /* Phase 1: every shipped catalog entry must validate. */
     for (int t = 0; t < repl_tutorial_count(); t++) {
@@ -1906,6 +2018,7 @@ int main(void) {
     test_catalog_starter_steps_are_append();
     test_catalog_cfg_lines();
     test_catalog_tag_metadata();
+    test_catalog_subheading_metadata();
     test_catalog_validation_passes_for_all_tutorials();
     test_catalog_rejects_out_of_range_index();
     test_validate_rejects_duplicate_label();
