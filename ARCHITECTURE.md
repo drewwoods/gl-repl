@@ -833,15 +833,19 @@ full app fills and the demo leaves unset:
 3. **Export bridges + layout input** (`src/repl/export.h`). `export.c` is
    GL-free and app-free; app/scene-derived values arrive through
    controller-installed bridges: `ReplExportConfigBridge` (`@cfg`
-   emission/parse), `ReplExportCameraBridge` (camera blocks — used by both
-   the importer *and* the example loader), `ReplExportProjectionBridge`
-   (the dynamic `reshape()` body — see *Dynamic Reshape Projection*), and
-   the `ReplExportLayout` struct (viewport / code-panel geometry passed as
-   an explicit export input instead of calling `ui_layout_*`). The demo
-   installs none, so `@cfg` / camera / projection are no-ops there and
-   `src/app/glr_config.c`, `src/app/glr_camera.c`, `src/ui/layout.c` all
-   leave the demo link set. `check-repl-export-via-bridge` /
-   `check-repl-export-no-ui-layout` guard this.
+   emission/parse — also fronted by the typed live-cfg wrappers
+   `repl_cfg_get_int` / `_set_int` / `_known` in `src/repl/export.c`, used
+   by `src/widgets/tutorial.c` for SET-step apply / REQUIRE-step probe /
+   cfg-baseline snapshot/restore), `ReplExportCameraBridge` (camera
+   blocks — used by both the importer *and* the example loader),
+   `ReplExportProjectionBridge` (the dynamic `reshape()` body — see
+   *Dynamic Reshape Projection*), and the `ReplExportLayout` struct
+   (viewport / code-panel geometry passed as an explicit export input
+   instead of calling `ui_layout_*`). The demo installs none, so `@cfg` /
+   camera / projection are no-ops there and `src/app/glr_config.c`,
+   `src/app/glr_camera.c`, `src/ui/layout.c` all leave the demo link set.
+   `check-repl-export-via-bridge` / `check-repl-export-no-ui-layout`
+   guard this.
 
 4. **Split lifecycle reset + dispatcher relocation.**
    `repl_state_reset_program()` (REPL-only) is separated from
