@@ -394,6 +394,11 @@ static void install_scene_into_live(int slot) {
                sizeof(g_predef_vars[i].name));
     }
     repl_eval_restore_scratch_arrays(s->scratch_arrays);
+    repl_func_alias_clear_all();
+    for (int alias_slot = 0; alias_slot < REPL_FUNC_SLOT_COUNT; alias_slot++) {
+        if (s->func_aliases[alias_slot][0])
+            repl_func_alias_set(alias_slot, s->func_aliases[alias_slot]);
+    }
     /* Apply the slot's saved per-scene cfg to live state. Without
      * this, repl_save_workspace / evict_scene_to_workspace would
      * export the scene with whichever cfg happened to be live when
@@ -429,6 +434,13 @@ static void stash_live_state(UserScene *dst, ReplExportConfig *cfg_out) {
                sizeof(dst->predef_names[i]));
     }
     repl_eval_copy_scratch_arrays(dst->scratch_arrays);
+    for (int slot = 0; slot < REPL_FUNC_SLOT_COUNT; slot++) {
+        const char *alias = repl_func_alias_get(slot);
+        if (alias)
+            snprintf(dst->func_aliases[slot], REPL_FUNC_NAME_MAX, "%s", alias);
+        else
+            dst->func_aliases[slot][0] = '\0';
+    }
     if (cfg_out) {
         repl_export_config_clear(cfg_out);
         const ReplExportConfigBridge *bridge = repl_export_config_bridge();
@@ -449,6 +461,11 @@ static void restore_live_from_stash(const UserScene *src,
                sizeof(g_predef_vars[i].name));
     }
     repl_eval_restore_scratch_arrays(src->scratch_arrays);
+    repl_func_alias_clear_all();
+    for (int slot = 0; slot < REPL_FUNC_SLOT_COUNT; slot++) {
+        if (src->func_aliases[slot][0])
+            repl_func_alias_set(slot, src->func_aliases[slot]);
+    }
     if (cfg) {
         const ReplExportConfigBridge *bridge = repl_export_config_bridge();
         if (bridge && bridge->apply)
@@ -468,6 +485,36 @@ static void scene_filename_slug(const char *name, char *out, size_t out_sz) {
     if (j == 0 && out_sz > 0) out[j++] = 's';
     if (j >= out_sz) j = out_sz - 1;
     out[j] = '\0';
+}
+
+static void scene_filename_slug_for_slot(int slot, char *out, size_t out_sz) {
+    if (!out || out_sz == 0) return;
+    if (slot < 0 || slot >= MAX_USER_SCENES || !g_user_scenes[slot].used) {
+        out[0] = '\0';
+        return;
+    }
+
+    char base[USER_SCENE_NAME_MAX];
+    scene_filename_slug(g_user_scenes[slot].name, base, sizeof(base));
+
+    int collision = 0;
+    for (int other = 0; other < MAX_USER_SCENES; other++) {
+        if (other == slot || !g_user_scenes[other].used)
+            continue;
+
+        char other_slug[USER_SCENE_NAME_MAX];
+        scene_filename_slug(g_user_scenes[other].name,
+                            other_slug, sizeof(other_slug));
+        if (strcmp(other_slug, base) == 0) {
+            collision = 1;
+            break;
+        }
+    }
+
+    if (collision)
+        snprintf(out, out_sz, "%s_%d", base, slot);
+    else
+        snprintf(out, out_sz, "%s", base);
 }
 
 static void scene_name_from_filename(const char *path,
@@ -513,7 +560,7 @@ int repl_save_workspace(const char *dir, const ReplExportLayout *layout) {
         install_scene_into_live(s);
 
         char slug[USER_SCENE_NAME_MAX];
-        scene_filename_slug(g_user_scenes[s].name, slug, sizeof(slug));
+        scene_filename_slug_for_slot(s, slug, sizeof(slug));
 
         char path[WORKSPACE_DIR_MAX + USER_SCENE_NAME_MAX + 8];
         snprintf(path, sizeof(path), "%s/%s.c", dir, slug);
@@ -544,7 +591,7 @@ void repl_save_active_scene(const ReplExportLayout *layout) {
     }
 
     char slug[USER_SCENE_NAME_MAX];
-    scene_filename_slug(g_user_scenes[slot].name, slug, sizeof(slug));
+    scene_filename_slug_for_slot(slot, slug, sizeof(slug));
 
     char path[WORKSPACE_DIR_MAX + USER_SCENE_NAME_MAX + 8];
     if (g_workspace_dir[0]) {
@@ -581,6 +628,7 @@ static int load_scene_file_into_slot(const char *path) {
      * reference `t`, because `@var t = ...` cannot re-declare a reserved
      * built-in name. */
     repl_eval_init_predef_vars();
+    repl_func_alias_clear_all();
 
     if (!repl_export_load_from_file(path)) return -1;
 
@@ -610,11 +658,11 @@ static int has_dot_c_ext(const char *name) {
 }
 
 int repl_load_workspace(const char *dir) {
+    if (!dir || !*dir) return 0;
+
     /* Ask the host to restore tutorial-mutated cfg before this path
      * stashes live cfg as the pre-workspace snapshot. */
     repl_dispatch_tutorial_teardown();
-
-    if (!dir || !*dir) return 0;
 
     DIR *d = opendir(dir);
     if (!d) {
@@ -628,7 +676,10 @@ int repl_load_workspace(const char *dir) {
     ReplExportConfig stash_cfg;
     stash_live_state(&stash, &stash_cfg);
     int stash_example = g_example_idx;
-    int stash_active  = g_active_user_scene;
+
+    /* Replace the existing workspace contents rather than merging the
+     * imported files into whatever slots were already in memory. */
+    repl_scenes_reset();
 
     int loaded = 0;
     struct dirent *ent;
@@ -646,7 +697,7 @@ int repl_load_workspace(const char *dir) {
 
     restore_live_from_stash(&stash, &stash_cfg);
     g_example_idx       = stash_example;
-    g_active_user_scene = stash_active;
+    g_active_user_scene = -1;
 
     snprintf(g_workspace_dir, WORKSPACE_DIR_MAX, "%s", dir);
 
@@ -799,7 +850,7 @@ static int evict_scene_to_workspace(int slot) {
     install_scene_into_live(slot);
 
     char slug[USER_SCENE_NAME_MAX];
-    scene_filename_slug(g_user_scenes[slot].name, slug, sizeof(slug));
+    scene_filename_slug_for_slot(slot, slug, sizeof(slug));
 
     char path[WORKSPACE_DIR_MAX + USER_SCENE_NAME_MAX + 8];
     snprintf(path, sizeof(path), "%s/%s.c", g_workspace_dir, slug);
@@ -896,12 +947,13 @@ const char *repl_user_scene_name(int slot) {
 }
 
 int repl_load_user_scene_idx(int slot) {
+    if (slot < 0 || slot >= MAX_USER_SCENES) return 0;
+    if (!g_user_scenes[slot].used) return 0;
+
     /* Ask the host to restore tutorial-mutated cfg before the user-scene
      * cfg restore observes live state. */
     repl_dispatch_tutorial_teardown();
 
-    if (slot < 0 || slot >= MAX_USER_SCENES) return 0;
-    if (!g_user_scenes[slot].used) return 0;
     load_scene_from_slot(slot);
     return 1;
 }

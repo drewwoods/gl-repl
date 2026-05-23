@@ -1095,6 +1095,9 @@ static int format_evaluated_cmd(const GLCmd *cmd, const char *orig_source,
     if (!fmt || nargs < 1) return 0;
 
     switch (nargs) {
+    case 1:
+        snprintf(out + oi, out_size - oi, fmt, cmd->args[0]);
+        break;
     case 2:
         snprintf(out + oi, out_size - oi, fmt,
                  cmd->args[0], cmd->args[1]);

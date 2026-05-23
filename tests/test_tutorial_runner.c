@@ -813,6 +813,22 @@ static void test_loading_workspace_exits_tutorial(void) {
     rmdir(made_dir);
 }
 
+static void test_invalid_workspace_load_does_not_exit_tutorial(void) {
+    reset_fixture();
+    tutorial_start(0);
+
+    ASSERT_INT("null workspace load fails", repl_load_workspace(NULL), 0);
+    ASSERT_TRUE("tutorial survives invalid workspace load", tutorial_active());
+}
+
+static void test_invalid_user_scene_load_does_not_exit_tutorial(void) {
+    reset_fixture();
+    tutorial_start(0);
+
+    ASSERT_INT("invalid scene load fails", repl_load_user_scene_idx(-1), 0);
+    ASSERT_TRUE("tutorial survives invalid scene load", tutorial_active());
+}
+
 static void test_fade_alpha_math(void) {
     SourceTextView doc;
     TutorialRuntimeState state;
@@ -2225,6 +2241,8 @@ int main(void) {
     test_feed_line_alone_does_not_advance_tutorial();
     test_loading_example_exits_tutorial();
     test_loading_workspace_exits_tutorial();
+    test_invalid_workspace_load_does_not_exit_tutorial();
+    test_invalid_user_scene_load_does_not_exit_tutorial();
     test_fade_alpha_math();
     test_complete_and_menu_actions();
     test_start_captures_home_for_unsaved_buffer();
