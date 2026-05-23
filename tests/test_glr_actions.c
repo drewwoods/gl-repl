@@ -467,46 +467,48 @@ static int find_tutorial_idx_by_name(const char *name) {
     return -1;
 }
 
-/* Activating a tutorial through the Tutorials menu applies its declared
- * view-mode preference (sticky): "First Triangle" forces 2D even from the
- * 3D default and the mode is NOT restored on exit; an inherit tutorial
- * leaves whatever mode is current. View-mode application is the app layer's
- * job (glr_start_tutorial reads the catalog and calls glr_config_set), so it
- * is exercised here through the menu, not the REPL-side tutorial_start. */
-static void test_tutorial_start_applies_view_mode(void) {
+/* Activating a tutorial through the Tutorials menu runs the same
+ * reset-then-apply pipeline examples do: presentation chrome is reset
+ * to defaults, then the tutorial's leading `@cfg` lines (if any) layer
+ * overrides on top. The reset and bridge apply both live REPL-side in
+ * tutorial_start; this test exercises the menu activation path. */
+static void test_tutorial_start_applies_cfg(void) {
     int first = find_tutorial_idx_by_name("First Triangle");
     int color = find_tutorial_idx_by_name("Color & Transform");
     ASSERT_TRUE("First Triangle in catalog", first >= 0);
     ASSERT_TRUE("Color & Transform in catalog", color >= 0);
 
-    /* (A) A 2D tutorial forces ortho even from the 3D default. */
+    /* (A) First Triangle ships `@cfg view_mode = 1`: a 2D ortho view. */
     glr_app_reset_all();
     ASSERT_INT("view mode starts 3D", glr_config_get(GLR_CONFIG_ORTHO_MODE), 0);
     if (first >= 0) {
-        ASSERT_INT("First Triangle declares 2D",
-                   repl_tutorial_view_mode(first), TUTORIAL_VIEW_2D);
+        ASSERT_TRUE("First Triangle has cfg lines",
+                    repl_tutorial_cfg_lines(first) != NULL);
         ASSERT_INT("menu start First Triangle handled",
                    glr_action_menu_item_activate(GLR_MENU_TUTORIALS, first), 1);
         ASSERT_INT("First Triangle tutorial active", tutorial_active(), 1);
-        ASSERT_INT("First Triangle forced 2D view",
+        ASSERT_INT("First Triangle cfg applied 2D view",
                    glr_config_get(GLR_CONFIG_ORTHO_MODE), 1);
-        /* Sticky: exiting does not restore the prior 3D view. */
+        /* tutorial_exit doesn't revert presentation, so the 2D from
+         * the tutorial's @cfg persists across exit (the next example
+         * or tutorial load would reset it again). */
         tutorial_exit();
         ASSERT_INT("view mode stays 2D after tutorial exit",
                    glr_config_get(GLR_CONFIG_ORTHO_MODE), 1);
     }
 
-    /* (B) An inherit tutorial leaves whatever mode is current (here 2D). */
+    /* (B) A tutorial with no cfg (Color & Transform) still gets the
+     * per-start presentation reset, so a prior 2D doesn't leak in. */
     glr_app_reset_all();
     glr_config_set(GLR_CONFIG_ORTHO_MODE, 1);
     if (color >= 0) {
-        ASSERT_INT("Color & Transform inherits view mode",
-                   repl_tutorial_view_mode(color), TUTORIAL_VIEW_INHERIT);
+        ASSERT_TRUE("Color & Transform has no cfg",
+                    repl_tutorial_cfg_lines(color) == NULL);
         ASSERT_INT("menu start Color & Transform handled",
                    glr_action_menu_item_activate(GLR_MENU_TUTORIALS, color), 1);
-        ASSERT_INT("inherit tutorial active", tutorial_active(), 1);
-        ASSERT_INT("inherit tutorial leaves view mode at 2D",
-                   glr_config_get(GLR_CONFIG_ORTHO_MODE), 1);
+        ASSERT_INT("no-cfg tutorial active", tutorial_active(), 1);
+        ASSERT_INT("no-cfg tutorial resets view to 3D default",
+                   glr_config_get(GLR_CONFIG_ORTHO_MODE), 0);
         tutorial_exit();
     }
 }
@@ -521,7 +523,7 @@ int main(void) {
     test_menu_actions();
     test_shortcuts();
     test_ascii_shortcut_modifiers();
-    test_tutorial_start_applies_view_mode();
+    test_tutorial_start_applies_cfg();
 
     return test_harness_report(&g_harness, "test_repl_actions");
 }

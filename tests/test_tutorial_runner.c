@@ -833,33 +833,41 @@ static void test_catalog_starter_steps_are_append(void) {
     }
 }
 
-static void test_catalog_view_mode_preference(void) {
-    /* First Triangle declares a 2D view; every other shipped tutorial
-     * inherits (the catalog default = TUTORIAL_VIEW_INHERIT), leaving the
-     * current view mode untouched. Out-of-range indices report INHERIT. */
+static void test_catalog_cfg_lines(void) {
+    /* First Triangle ships a leading `@cfg view_mode = 1` so the flat
+     * triangle renders in true 2D; every other shipped tutorial omits
+     * cfg (NULL = no presentation overrides). Out-of-range idx → NULL. */
     int first = -1;
     for (int i = 0; i < repl_tutorial_count(); i++) {
         const char *name = repl_tutorial_name(i);
         if (name && strcmp(name, "First Triangle") == 0) { first = i; break; }
     }
     ASSERT_TRUE("First Triangle is in catalog", first >= 0);
-    if (first >= 0)
-        ASSERT_INT("First Triangle declares 2D view",
-                   repl_tutorial_view_mode(first), TUTORIAL_VIEW_2D);
+    if (first >= 0) {
+        const char *const *cfg = repl_tutorial_cfg_lines(first);
+        ASSERT_TRUE("First Triangle has cfg lines", cfg != NULL);
+        if (cfg) {
+            ASSERT_TRUE("First Triangle cfg first line is view_mode = 1",
+                        cfg[0] != NULL &&
+                        strstr(cfg[0], "view_mode") != NULL &&
+                        strstr(cfg[0], "1") != NULL);
+            ASSERT_TRUE("First Triangle cfg is NULL-terminated after 1 line",
+                        cfg[1] == NULL);
+        }
+    }
 
     for (int i = 0; i < repl_tutorial_count(); i++) {
         const char *name = repl_tutorial_name(i);
         if (name && strcmp(name, "First Triangle") == 0)
             continue;
-        ASSERT_INT("other tutorials inherit view mode",
-                   repl_tutorial_view_mode(i), TUTORIAL_VIEW_INHERIT);
+        ASSERT_TRUE("other tutorials have no cfg",
+                    repl_tutorial_cfg_lines(i) == NULL);
     }
 
-    ASSERT_INT("out-of-range tutorial view mode is inherit",
-               repl_tutorial_view_mode(repl_tutorial_count()),
-               TUTORIAL_VIEW_INHERIT);
-    ASSERT_INT("negative tutorial view mode is inherit",
-               repl_tutorial_view_mode(-1), TUTORIAL_VIEW_INHERIT);
+    ASSERT_TRUE("out-of-range tutorial cfg is NULL",
+                repl_tutorial_cfg_lines(repl_tutorial_count()) == NULL);
+    ASSERT_TRUE("negative tutorial cfg is NULL",
+                repl_tutorial_cfg_lines(-1) == NULL);
 }
 
 static void test_catalog_validation_passes_for_all_tutorials(void) {
@@ -1529,7 +1537,7 @@ int main(void) {
     test_start_captures_home_for_unsaved_buffer();
     test_start_rejects_out_of_range_idx();
     test_catalog_starter_steps_are_append();
-    test_catalog_view_mode_preference();
+    test_catalog_cfg_lines();
     test_catalog_validation_passes_for_all_tutorials();
     test_catalog_rejects_out_of_range_index();
     test_validate_rejects_duplicate_label();
