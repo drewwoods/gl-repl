@@ -8,6 +8,20 @@
 > check `git log` on the cited files before acting if this doc has
 > aged.
 >
+> **Revision 2 (2026-05-23):** Corrections applied after reviewer
+> feedback. The first draft had: severity inflation in the 🔴 bucket
+> (#3 and #7 moved to 🟡, where "naming hazards and ambiguous-intent
+> code" now lives); two stale "add a new helper" fixes for helpers
+> that already exist publicly (#44, #46); a boundary-violating fix
+> for undo-clear (#23); an under-scoped fix for context-purity (#11);
+> a contract bug understated as just docstring drift (#39); a wrong
+> symbol name (#10's Enter helper is the static `commit_current_input`,
+> not `editor_commit_current_input`); a too-loose "pick one parse API"
+> recommendation that would drop strict-refs semantics (#18); and an
+> afternoon sequencing item (`EditorServices` delete) that has four
+> production callers and is actually a multi-step week-pass refactor.
+> All corrected inline.
+>
 > Scope: every file under `src/editor/`. Tests under `tests/` were
 > read where they document a contract, but not audited.
 >
@@ -23,11 +37,13 @@
 Severity grouping mirrors the previous two audits:
 
 - **🔴 Actual bugs / hazards (verified)** — correctness or
-  memory-safety issues with a concrete failure mode. Pick these up
-  first.
+  memory-safety issues with a concrete failure mode that exists in
+  current production code. Pick these up first.
 - **🟡 Drift / boundary hazards** — parallel structures, layering
-  inversions, dispatch reorderings, contract mismatches. Working
-  today; one-side edit will silently diverge.
+  inversions, dispatch reorderings, contract mismatches, naming
+  hazards, and ambiguous-intent code that works today but is one
+  edit away from misbehaving. Working today; one-side edit will
+  silently diverge.
 - **🟢 Dead code / dead fields** — code with no callers, unused
   parameters, redundant wrappers. Pure surface reduction.
 - **🔵 Structural concerns** — long functions, misnamed entry
@@ -74,27 +90,7 @@ deployments; ASan flags it.
 **Fix:** Size by `count` (`char (*buf)[MAX_LINE_LEN] = malloc(count * MAX_LINE_LEN)`)
 or impose a small `MAX_CLIPBOARD_PASTE` cap.
 
-### 3. `editor_clipboard_clear_selection` does **not** clear the clipboard
-
-**Where:** `src/editor/clipboard.c:33-35`, `clipboard.h:30`
-
-**Smell:** The name says "clipboard clear selection", but the body
-is exactly one line: `editor_state_selection_clear()` — it clears
-the line-range *selection* anchors only. The clipboard payload is
-untouched. A sibling function `editor_state_clipboard_clear()`
-*does* clear the payload, so the file has two near-identical names
-with opposite behaviors.
-
-**Why it matters:** This function is called from 10+ sites
-(`src/app/glr_ctrl.c`, `clipboard.c`, `input.c`) — every reader
-parses the wrong intent. Verified: every caller wants the selection
-cleared and does not expect the payload cleared, so today nothing
-breaks; the smell is purely a footgun for the next change.
-
-**Fix:** Rename to `editor_selection_clear_line_range()` (or
-similar without `clipboard_` prefix); update the 10 call sites.
-
-### 4. `editor_compile_close_brace` accepts `err` / `err_size` then ignores them
+### 3. `editor_compile_close_brace` accepts `err` / `err_size` then ignores them
 
 **Where:** `src/editor/commit.c:285-290`
 
@@ -111,7 +107,7 @@ brace-mismatch issues will require re-plumbing the err buffer.
 case, or remove `err`/`err_size` from the signature and split the
 typedef.
 
-### 5. Workspace-load wipes undo *before* validating; per-file load preserves it on failure
+### 4. Workspace-load wipes undo *before* validating; per-file load preserves it on failure
 
 **Where:** `src/app/glr_actions.c:569-570` vs.
 `src/editor/inline_file_prompt.c:138-144` (cautionary comment)
@@ -130,24 +126,52 @@ loses undo for one entry point but not the other.
 **Fix:** Move `editor_undo_clear()` after the
 `repl_load_workspace(dir)` success check.
 
-### 6. `g_search_*` / `g_ac_*` sentinel initialization missed by `editor_state_capture`
+### 5. `editor_state_capture` skips the lazy-init that fixes selection sentinels
 
 **Where:** `src/editor/state.c:27-38, 60-64`
 
-**Smell:** First call to `_get_defaults()` (inside `_reset` /
-`_search_clear` / `_autocomplete_clear`) patches both `defaults`
-and `g_editor_state` with `anchor_pos = -1` and other sentinels.
-`editor_state_capture()` skips that side-effect entirely.
+**Smell:** `editor_state_get_defaults()` already self-guards with an
+`inited` flag (L27-38) — it patches `g_editor_state` with the
+non-zero sentinels (`anchor_pos = -1`, etc.) the *first time* it's
+called. The first call is inside `_reset` / `_search_clear` /
+`_autocomplete_clear`. `editor_state_capture()` (L60-64) skips
+that lazy-init call and copies BSS-zero state.
 
 **Why it matters:** A test or early-startup caller running
 `editor_state_capture(&snap)` before any reset/clear captures
-BSS-zero state — `anchor_pos = 0` instead of `-1` — which makes
+`anchor_pos = 0` instead of `-1`, which makes
 `editor_input_selection_active()` (`anchor_pos >= 0`) erroneously
 report an active selection.
 
-**Fix:** Move sentinel application to an explicit
-`editor_state_init()` the controller runs at startup; or have
-`_get_defaults()` no-op once initialized.
+**Fix:** Either call `editor_state_get_defaults()` (which is
+idempotent after the first call) at the top of
+`editor_state_capture()`, or introduce a real
+`editor_state_init()` the controller / tests must call at startup
+and remove the lazy-init pattern entirely.
+
+## 🟡 Drift / boundary hazards
+
+### 6. `editor_clipboard_clear_selection` does **not** clear the clipboard
+
+**Where:** `src/editor/clipboard.c:33-35`, `clipboard.h:30`
+
+**Smell:** The name says "clipboard clear selection", but the body
+is exactly one line: `editor_state_selection_clear()` — it clears
+the line-range *selection* anchors only. The clipboard payload is
+untouched. A sibling function `editor_state_clipboard_clear()`
+*does* clear the payload, so the file has two near-identical names
+with opposite behaviors.
+
+**Why it matters:** Nothing breaks today — every caller of
+`editor_clipboard_clear_selection` actually wants the selection
+cleared and does not expect the payload cleared. But it's a
+classic naming-vs-behavior footgun: the next contributor who reads
+the name will write code that wrongly assumes the payload gets
+cleared too, or wrongly omits a payload clear that they thought
+this call provided.
+
+**Fix:** Rename to `editor_selection_clear_line_range()` (or
+similar without `clipboard_` prefix); update the 10 call sites.
 
 ### 7. `KEY_BACKSPACE` and `KEY_DELETE` collapsed to one behavior
 
@@ -155,17 +179,21 @@ report an active selection.
 
 **Smell:** Every site mentioning one mentions the other with `||`.
 `edit_op_buffer_delete_left_of_cursor` ignores the distinction —
-Delete behaves as Backspace.
+Delete behaves as Backspace. No comment in the source acknowledges
+the conflation. Could be intentional (the missing
+`delete_right_of_cursor` primitive is a deferred feature) or a
+silent bug.
 
-**Why it matters:** Either intentional and the missing
-`delete_right_of_cursor` primitive is a deferred feature, or a
-silent bug. No comment in the source acknowledges the conflation.
+**Why it matters:** Intent is unknown — the audit cannot
+classify this as a verified bug without a product decision. But
+the code reads as if a future contributor will assume Delete is
+broken and "fix" it (changing behavior), or assume the conflation
+is deliberate and propagate it further.
 
-**Fix:** Confirm intent. If Delete *should* delete-right, add
-`edit_op_buffer_delete_right_of_cursor` and dispatch on key. If
-intentional, document at the dispatch site.
-
-## 🟡 Drift / boundary hazards
+**Fix:** Confirm intent first. If Delete *should* delete-right
+(standard editor semantics), add `edit_op_buffer_delete_right_of_cursor`
+and dispatch on key. If intentional, add a one-line comment at
+each dispatch site explaining why.
 
 ### 8. Editor reaches up into `app/glr_*` (layering inversion)
 
@@ -218,25 +246,42 @@ tests) has no `accept` hook to register.
 
 **Where:** CLAUDE.md says the chain is
 `float_decl → assign → close_brace → for → func → if → parse`.
-`editor_try_commit_any` (`commit.c`) matches that. But
-`editor_commit_current_input` for Enter (`input.c:667`) runs
-`editor_try_commit_block_structs()` *first*, then
-`editor_try_commit_var_statements()` deeper at L713. Overwrite
-Enter (L775) likewise runs block-structs first.
+`editor_try_commit_any` (`commit.c`) matches that. But the static
+`commit_current_input(int enter_mode)` in `src/editor/input.c:633`
+(used by both insert-mode Enter at L880 and overwrite-mode Enter at
+L1315) runs `editor_try_commit_block_structs()` *first*, then
+calls `editor_try_commit_var_statements_then_insert()` (overwrite)
+or `editor_try_commit_var_statements()` (insert) deeper. The
+overwrite path uses the `_then_insert` variant specifically for its
+post-effects — flipping into insert mode and clearing the input
+buffer after a successful var commit (`commit.c:1350`,
+`input.c:779`).
 
-**Smell:** Two parallel encodings of the load-bearing order. The
-canonical doc applies to the `;` and `editor_feed_line` paths but
-not the two Enter paths.
+**Smell:** The "canonical chain" mental model isn't preserved by
+`commit_current_input`. Two of the four dispatch sites
+(`;` key and `editor_feed_line`) use the canonical ordering;
+the two Enter sites use a block-first variant.
 
-**Why it matters:** The README explicitly says ordering is
-load-bearing and warns against drift; this is exactly the drift.
-The empty-line branch sits between the two halves under Enter,
-breaking the "canonical chain" mental model.
+**Why it matters:** The README and CLAUDE.md flag ordering as
+load-bearing — but the load-bearing claim only really applies to
+the var-statement pair (`float_decl` before `assign`). The
+block-vs-var top-level reordering under Enter is genuinely
+intentional (so a `}` on Enter closes the block instead of being
+misread as a free-floating var statement). What's missing is the
+*written* invariant that explains the variant.
 
-**Fix:** Restructure so Enter paths use `editor_try_commit_any`
-(removing the empty-line carve-out, or moving it into the helper),
-or document explicitly that Enter has a block-first variant and
-why it's safe.
+**Fix:** *Not* "replace with `editor_try_commit_any`" — that loses
+the `_var_statements_then_insert` post-effects (insert-mode flip,
+input clear) the overwrite path depends on. Instead: (a) document
+the block-first variant inline at `commit_current_input` with a
+comment naming the two ordering invariants (load-bearing
+`float_decl → assign` *within* var-statements; intentional
+`block_structs → var_statements` *under Enter*), and (b) add a
+unit test that exercises both Enter helpers and pins their
+ordering. If you want a single canonical helper, the cleaner
+shape is `editor_try_commit_block_structs_then_var_statements_insert()`
+that wraps the existing pair and is called from both Enter sites,
+keeping the post-effects intact.
 
 ### 11. `editor_compile_*` functions advertised as context-pure but read live state
 
@@ -256,10 +301,24 @@ state, not the context snapshot.
 synthetic context but skip live-state setup will silently misbehave
 (the live REPL document is empty / out-of-sync with the context).
 
-**Fix:** Take a `repl_source_scope_view` reading from
-`ctx->document_cmds`, or document loudly that these are
-"context-pure for document data, live-state-coupled for scope
-queries."
+**Fix (under-scoped — read first):** A proper fix is a real
+extraction, not a small refactor. `src/repl/source_scope.h:73` and
+`source_scope.c:153` currently expose only live-state queries
+(they read from the live `g_repl_state` document); adding a
+"view" variant means duplicating each query to take a
+`const GLCmd *cmds, int n` (or a `SourceTextView`) and routing
+the live versions through it. Similar live-scope reads already
+exist in `src/repl/compile.c` (e.g. `repl_compile_close_brace`)
+and would need to be migrated in the same pass for consistency.
+
+The cheap interim is to **document** the contract loudly at each
+of the four `editor_compile_*` entry points: "context-pure for
+document data, live-state-coupled for scope queries — callers
+must apply the change to the live document before the next
+scope-dependent call." That's a one-doc-comment change today,
+with the full extraction queued behind a `source_scope_view`
+refactor that's bigger than the rest of this audit's afternoon
+passes combined.
 
 ### 12. README claims `EditorState` owns "cursor blink"; `state.h` disclaims it
 
@@ -373,20 +432,31 @@ through it.
 ### 18. Five near-identical "collect-visible-vars → parse → place" sequences
 
 **Where:** `src/editor/input.c:437-486, 694-751, 1351-1394,
-1496-1538`; also commit_current_input's overwrite branch at L763-803
+1496-1538`; also `commit_current_input`'s overwrite branch at
+L763-803
 
 **Smell:** Same shape — `collect_visible_vars(insert_idx, ...)` →
 `parse_command_ctx`-or-`repl_parse_and_normalize_strict` two-branch
 → `editor_place_parsed_command` → status — replicated 4-5×. Two
-different parse APIs (`svc.parse_command_ctx` vs.
-`repl_parse_and_normalize_strict`) are used across them with no
-documented reason.
+different parse APIs are used across them.
 
 **Why it matters:** Any tweak to the parse policy needs to be
-replicated 4-5×.
+replicated 4-5×. **But the two parse APIs are not interchangeable.**
+`repl_parse_and_normalize_strict` (`src/repl/core.c:421, 475`)
+sets `strict_refs` and preserves variable expressions through
+`parse_and_normalize_impl`; the strict path is what rejects
+undefined top-level function calls (see `core_internal.h:50`).
+The plain `parse_command_ctx` path doesn't. The audit cannot
+recommend "pick one parse entry point" — that would silently drop
+strict-mode rejections from the affected dispatch sites.
 
 **Fix:** Extract `parse_for_commit(insert_idx, GLCmd *out, char
-*text_out, size_t)`; pick one parse entry point.
+*text_out, size_t, /* policy: */ int strict_refs, int preserve_var_exprs)`
+that takes the strict/permissive and preserve-expression flags
+**as inputs**, not as a hard-coded choice; each caller still names
+its own policy. Audit the 4-5 call sites first to enumerate which
+combination each currently uses (the audit didn't determine this);
+the helper signature is the documentation contract.
 
 ### 19. Three open-coded "skip leading whitespace, then trim trailing `;`/whitespace"
 
@@ -470,10 +540,18 @@ wholesale replacement"; nothing checks it. Failure mode is silent
 new "Reset to default scene" button) must remember to call it; the
 README repeatedly flags it as load-bearing.
 
-**Fix:** Either bump a generation counter on replacement and have
-`editor_undo_pop_snapshot` refuse cross-generation pops, or move
-the calls *into* `repl_load_workspace` / `_load_user_scene_idx` /
-`_load_example` so callers can't forget.
+**Fix:** Bump a generation counter on the editor side at every
+wholesale-replacement call site; have `editor_undo_pop_snapshot`
+refuse cross-generation pops (snapshot captures its generation,
+pop compares to current). If `repl_load_*` needs a "this is a
+wholesale replacement" signal, surface it through the existing
+host-effects bridge (the same seam used for status messages) — do
+**not** make `src/repl/` call `editor_undo_*` directly. The
+editor / REPL boundary in `src/editor/README.md:72` is that
+`commit.c` is the *only* path that crosses into REPL; the inverse
+(REPL into editor) is not sanctioned. The original audit
+suggestion of "move the calls into `repl_load_*`" violates that
+boundary and is withdrawn.
 
 ### 24. Three sites hardcode `name[16]` instead of a shared constant
 
@@ -521,20 +599,30 @@ entirely).
 
 **Where:** `src/editor/commit.c:65-130` (definition);
 `commit.h:55` (declaration). Verified: only
-`tests/test_repl_compile.c:621` calls it.
+`tests/test_repl_compile.c` calls it, but **across 5 call sites**
+in that one file (L630, L639, L662, L679, L724) — they exercise
+the compile-failure, NO_CHANGE, and success paths.
 
 **Smell:** Documented as "the common path for the live input row"
-in `commit.h:10`, but the four real dispatch sites all bypass it
-and go through `editor_try_commit_*` + the open-coded
+in `commit.h:10`, but the four real production dispatch sites all
+bypass it and go through `editor_try_commit_*` + the open-coded
 `repl_parse_and_normalize_strict` tail. The whole `EditorServices`
 indirection (#28) exists primarily for this function.
 
-**Fix:** Delete it (and the `services` indirection it requires),
-or route the four dispatch sites through it.
+**Fix:** Delete the function (and the `services` indirection it
+requires) and update the 5 test call sites — they're a small
+cluster in one file and each test currently asserts something
+about the wrapper's return shape rather than the underlying
+behavior, so the tests should be rewritten to exercise the live
+dispatch sites instead. Or, alternatively, route the four
+production dispatch sites through it (the harder direction, since
+those sites have post-effects the wrapper currently doesn't model).
 
-### 28. `EditorServices` is a one-implementation abstraction
+### 28. `EditorServices` is a one-implementation abstraction (with production callers — not pure cleanup)
 
-**Where:** `src/editor/services.h:28-74`, `services.c:65-76`
+**Where:** `src/editor/services.h:28-74`, `services.c:65-76`.
+Production callers verified at `src/editor/commit.c:148`,
+`commit.c:872`, `input.c:439`, `input.c:634`.
 
 **Smell:** `editor_services_default()` is the only `EditorServices`
 factory in the tree. The header at L6-9 admits: "gives the
@@ -543,11 +631,30 @@ implementations" — no such substitution exists in `src/` or
 `tests/`.
 
 **Why it matters:** Adds context churn (svc construction,
-`void *user` plumbing) for no substitution benefit.
+`void *user` plumbing) for no substitution benefit. **But unlike
+#27, this is not a self-contained delete** — the four production
+call sites use the services struct's function pointers; ripping
+the struct out means migrating each of them to the direct
+underlying calls (`repl_compile_dispatch`,
+`repl_parser_parse_command_ctx`, etc.) at the same time.
 
-**Fix:** Drop the services table; call `repl_compile_dispatch`,
-`repl_apply_*`, `repl_parser_parse_command_ctx` directly from
-`commit.c`. Paired with #27.
+**Fix (multi-step, not afternoon-safe):**
+1. Migrate `commit.c:148` (in `editor_commit_apply_external_change`)
+   to call `repl_apply_*` directly — it's the simplest, no parser
+   involvement.
+2. Migrate `commit.c:872` (in `editor_compile_for_loop`) per
+   finding #26 — replace `svc.parse_command_ctx(body, ...)` with
+   `repl_parser_parse_command_ctx(body, ...)` directly.
+3. Migrate `input.c:439, 634` together — these are the
+   parse-and-place sites that finding #18 also touches; do them
+   in the same change as the strict/permissive helper extraction.
+4. Only then delete `EditorServices` + `editor_services_default`
+   + the `user`-pointer plumbing in `commit.h`.
+
+This sequence preserves the build at every step. The audit's
+original framing as "delete in an afternoon" was incorrect —
+it's a week-pass refactor that touches #26, #18, and the four
+production sites.
 
 ### 29. `editor_commit_apply_compiled_change` is a test-only wrapper
 
@@ -668,19 +775,34 @@ look for a "modern" path that doesn't exist.
 **Fix:** Search-and-replace "legacy" → "current" / "live"; or
 delete the comments.
 
-### 39. `apply_post_effects` docstring is out of date
+### 39. `editor_commit_apply_plan` header says it captures undo; the body explicitly disclaims it
 
-**Where:** `src/editor/commit.c:175-220` vs. `commit.h:178-188`
+**Where:** `src/editor/commit.h:178` vs. `commit.c:238`
 
-**Smell:** Header says the effect order is `cursor_target → resume
-→ insert_mode_target → clear_input → clear_pending_newline →
-load_line_after_apply → status`. Actual order adds
-`clear_autocomplete → func_decl_resume_publish` between
-`load_line_after_apply` and the externally-applied status, and
-status is in the caller (`editor_commit_apply_plan:262`), not here.
+**Smell:** The header lists step 2 of `editor_commit_apply_plan`
+as "Capture undo pre-state." The body says the opposite:
+> "NOTE: undo capture is the caller's responsibility. The ;-key
+> / Enter / `editor_feed_line` dispatch sites in
+> `src/editor/input.c` push a snapshot before invoking the
+> try_commit_* chain; this helper deliberately does NOT push a
+> second snapshot, to avoid double-capture."
 
-**Fix:** Update the docstring to list all 8 effects and note where
-status is applied.
+This is a **false transaction contract** in the public-facing
+docstring. Any new caller reading the header will assume the apply
+function handles undo, will skip their own undo push, and silently
+won't get undo. Past the docstring drift, the post-effect order
+also has additional steps (`clear_autocomplete →
+func_decl_resume_publish`) the header doesn't list, and the
+"status" step is in the caller (`editor_commit_apply_plan:262`),
+not in `apply_post_effects` itself.
+
+**Fix:** Strike "Capture undo pre-state" from the header
+description; replace with "Undo capture is the caller's
+responsibility (see body comment for rationale)." While editing,
+expand the post-effect list to all 8 effects and note where status
+is applied. **Then** add a new finding-of-its-own (or fold into
+#23): every call site that doesn't push a snapshot before
+`editor_commit_apply_plan` is a latent undo-skip bug.
 
 ### 40. `apply_compiled_change` cluster has 3 distinct context constructions for the same payload
 
@@ -736,15 +858,20 @@ uncommented; future-edit hazard.
 **Fix:** Add `/* -2: reserve one byte for the leading ':' below */`;
 or compute via `MAX_INPUT_LEN - 1 /* NUL */ - 1 /* leading ':' */`.
 
-### 44. Four hand-written `pending_newline` clears
+### 44. Four hand-written `pending_newline` clears bypass the existing helper
 
 **Where:** `src/editor/input.c:273-274, 826-827, 849-850,
-1385-1386`
+1385-1386`. Helper already exists at `src/editor/state.h:339`
+(declaration) and `state.c:493` (definition); it's `void
+editor_pending_newline_clear(void)`.
 
-**Smell:** `inp->pending_newline[0] = '\0'; inp->pending_newline_len = 0;`
-repeated four times.
+**Smell:** Four sites open-code `inp->pending_newline[0] = '\0';
+inp->pending_newline_len = 0;` while the canonical helper has
+existed publicly the whole time. `state.c` itself uses the helper
+(L319).
 
-**Fix:** `static void editor_pending_newline_clear(void)` helper.
+**Fix:** Replace the four open-coded clears in `input.c` with
+calls to `editor_pending_newline_clear()`.
 
 ### 45. `is_word_char` re-implements the project's identifier predicate
 
@@ -758,18 +885,19 @@ has the same predicate inlined in 6 places. The `src-repl` audit
 **Fix:** Add `int repl_is_ident_continue(unsigned char c)` to
 `src/repl/eval.h`; use from both.
 
-### 46. Tutorial-Tab branch hand-writes the input buffer
+### 46. Tutorial-Tab branch hand-writes the input buffer instead of using the existing helper
 
-**Where:** `src/editor/input.c:1213-1222`
+**Where:** `src/editor/input.c:1213-1222`. Helper already exists
+at `src/editor/state.h:299` (declaration) and `state.c:352`
+(definition); it's `void editor_input_set_text(const char *text)`.
 
-**Smell:** Open-codes a `strncpy + input_len = strlen +
-cursor_pos_set` sequence directly on
-`editor_state_input_mut()->input`. Every other code path that
-replaces the input buffer with a known string uses
-`editor_input_clear()` + `editor_feed_line()`-ish helpers.
+**Smell:** The Tab handler open-codes a `strncpy + input_len =
+strlen + cursor_pos_set` sequence directly on
+`editor_state_input_mut()->input` while the canonical
+`editor_input_set_text` helper has existed the whole time.
 
-**Fix:** Add `editor_input_set_text(const char *)` helper;
-call it here.
+**Fix:** Replace the open-coded sequence with a single
+`editor_input_set_text(text)` call.
 
 ### 47. Tutorial-locked guard messages drift in wording
 
@@ -845,44 +973,91 @@ missing declaration to explain).
 
 ## Sequencing
 
-### One-afternoon pass
+The sequencing below has been corrected from the audit's first
+draft. Findings that originally lived in the afternoon pass but
+turned out to be either not self-contained, or to recommend fixes
+that would break the build / invert the boundary, have been moved
+or rewritten. Read every item before treating this as an
+implementation checklist.
+
+### One-afternoon pass — truly self-contained, build-safe
 
 1. **#1** + **#2** — Move the 2 MB and 1 MB stack allocations to
    file-scope statics or heap. Each is a 2-line change at a single
    site.
-2. **#3** — Rename `editor_clipboard_clear_selection` to
-   `editor_selection_clear_line_range` (or similar); update the
-   10 call sites. Mechanical.
-3. **#4** — Either fill `err` for the stray-`}` case in
-   `editor_compile_close_brace`, or drop the unused parameters.
-4. **#5** — Move `editor_undo_clear()` after the
+2. **#3** — Either fill `err` for the stray-`}` case in
+   `editor_compile_close_brace`, or drop the unused parameters
+   (and split the typedef).
+3. **#4** — Move `editor_undo_clear()` after the
    `repl_load_workspace` success check.
-5. **#14** — Rename `editor_try_assign_variable` →
-   `editor_try_commit_assign_variable`. 11 references.
-6. **#7** — Decide whether Delete should delete-right; if yes, add
-   the primitive. If no, document at the dispatch site.
-7. **#27** + **#28** + **#29** — Delete the unused
-   `editor_commit_current_input` + `EditorServices` indirection +
-   `editor_commit_apply_compiled_change` cluster, or wire them up.
-   Together this is ~150 LOC.
-8. **#30** + **#31** + **#33** + **#34** + **#36** + **#37** —
+4. **#5** — Make `editor_state_capture()` call
+   `editor_state_get_defaults()` (idempotent after first call) so
+   captured state always has the correct sentinels.
+5. **#6** — Rename `editor_clipboard_clear_selection` to
+   `editor_selection_clear_line_range` (or similar without
+   `clipboard_` prefix); update the 10 call sites. Mechanical.
+6. **#14** — Rename `editor_try_assign_variable` →
+   `editor_try_commit_assign_variable`. 11 references across src/
+   and tests/.
+7. **#44** + **#46** — Replace the four open-coded
+   `pending_newline` clears with the existing
+   `editor_pending_newline_clear()` (state.h:339); replace the
+   tutorial-Tab open-coded buffer write with the existing
+   `editor_input_set_text()` (state.h:299). The audit's first
+   draft proposed adding new helpers; the helpers already exist
+   publicly.
+8. **#27** + **#29** — Delete `editor_commit_current_input` (5
+   test call sites in `tests/test_repl_compile.c` — L621, L630,
+   L639, L662, L679, L724 — rewrite to exercise the live
+   dispatch sites instead) and the test-only
+   `editor_commit_apply_compiled_change` wrapper.
+   **NB**: this delete is paired with **#28**'s migration in the
+   week pass — leaving `editor_commit_current_input` in place
+   keeps `EditorServices` alive in production for its sake.
+   Order: do the test rewrite first, then the delete, then start
+   the week-pass services migration.
+9. **#30** + **#31** + **#33** + **#34** + **#36** + **#37** —
    Dead-field and naming cleanup. All mechanical.
+10. **#38** + **#39** (docstring half only) + **#51** —
+    Documentation fixes: replace "legacy" comments, strike
+    "Capture undo pre-state" from `editor_commit_apply_plan`'s
+    header (#39's full fix continues in the week pass), drop the
+    stale line-number reference in `commit.h:267-270`.
 
-### One-week pass
+### One-week pass — multi-site refactors
 
-The dominant work is **closing the layering inversion** and
-**resolving dispatch-chain drift**:
+The dominant work is **closing the layering inversion**,
+**resolving dispatch-chain drift**, and **dismantling the
+`EditorServices` indirection without breaking the build**.
 
+- **#7** — *Product decision first.* Decide whether Delete should
+  delete-right. If yes, add `edit_op_buffer_delete_right_of_cursor`
+  and dispatch on key. If no, document the conflation at each of
+  the three dispatch sites. Either way, the audit cannot proceed
+  without a product call.
 - **#8** + **#9** — Hoist `editor_reset_transients` and
-  `editor_input_restore_hidden_code_panel` into `src/app/glr_ctrl.c`;
-  add `accept` to `EditorCompletionProvider`. Together they remove
-  the four `app/` includes from `editor/input.c`.
-- **#10** — Restructure the two Enter paths to use
-  `editor_try_commit_any`, removing the block-first carve-out (or
-  documenting it explicitly with the safety rationale).
-- **#11** — Take a `repl_source_scope_view` reading from the
-  context's `document_cmds` in the four `editor_compile_*`
-  structured handlers.
+  `editor_input_restore_hidden_code_panel` into
+  `src/app/glr_ctrl.c`; add `accept` to
+  `EditorCompletionProvider`. Together they remove the four
+  `app/` includes from `editor/input.c`.
+- **#10** — Do **not** "replace with `editor_try_commit_any`" as
+  the first-draft fix said — that would lose the
+  `_var_statements_then_insert` post-effects the overwrite Enter
+  path depends on. Instead, add an inline comment at
+  `commit_current_input` (`input.c:633`) naming both ordering
+  invariants (the load-bearing `float_decl → assign` and the
+  intentional `block_structs → var_statements` under Enter), and
+  add a unit test that exercises both Enter helpers and pins
+  their ordering. Optionally extract
+  `editor_try_commit_block_structs_then_var_statements_insert()`
+  as a single canonical helper that both Enter sites call.
+- **#11** — *Larger than first stated.* `source_scope.h` exposes
+  only live-state queries today; adding a "view" variant is a
+  real extraction across `src/repl/source_scope.{c,h}` plus
+  similar live reads in `src/repl/compile.c`. Two-stage approach:
+  (a) document the live-state coupling at each
+  `editor_compile_*` entry point (one-pass doc fix); (b) queue
+  the `source_scope_view` extraction as its own week.
 - **#13** — Route var-statement dispatch through
   `repl_compile_dispatch`; remove direct calls to
   `repl_compile_float_decl` / `_var_assign`.
@@ -890,11 +1065,35 @@ The dominant work is **closing the layering inversion** and
   all three apply-block sites.
 - **#17** — Add `repl_eval_predef_copy` seam; route undo through
   it.
-- **#18** + **#19** — Extract `parse_for_commit` and the canonical
-  strip helper.
-- **#23** — Either bump a generation counter on wholesale
-  replacements and enforce in undo pop, or push
-  `editor_undo_clear()` into the load APIs.
+- **#18** — *Preserve strict/permissive semantics.* Extract a
+  `parse_for_commit(..., int strict_refs, int preserve_var_exprs)`
+  helper that takes the policy as flags. Audit the 4-5 call sites
+  first to enumerate which combination each currently uses; the
+  helper signature is the documentation contract. Do **not**
+  silently collapse to a single parse API.
+- **#19** — Extract the canonical strip helper (probably in
+  `src/repl/`).
+- **#23** — Bump a generation counter on the editor side at
+  every wholesale-replacement call site; have
+  `editor_undo_pop_snapshot` refuse cross-generation pops. Do
+  **not** move `editor_undo_clear()` calls into `repl_load_*` —
+  that inverts the editor / REPL boundary. If `repl_load_*`
+  needs a "this is a wholesale replacement" signal, route it
+  through the existing host-effects bridge.
+- **#28** — *Multi-step `EditorServices` dismantling.* Order:
+  (1) migrate `commit.c:148` to call `repl_apply_*` directly;
+  (2) migrate `commit.c:872` (#26: replace `svc.parse_command_ctx`
+  with `repl_parser_parse_command_ctx`); (3) migrate `input.c:439,
+  634` together with the #18 helper extraction; (4) only then
+  delete `EditorServices` + `editor_services_default` + the
+  `user`-pointer plumbing. The build stays green at every step.
+  Prerequisite: #27 + #29 must land first (afternoon pass) so
+  `editor_commit_current_input` doesn't pin the services struct
+  alive.
+- **#39** (full fix) — Once the docstring is corrected
+  (afternoon), audit every call site of
+  `editor_commit_apply_plan` that doesn't push an undo snapshot
+  beforehand. Each is a latent undo-skip bug.
 
 ### Out of scope
 
