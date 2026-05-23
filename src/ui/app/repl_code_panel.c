@@ -1625,7 +1625,6 @@ void ui_repl_code_panel_render(const UiRenderSnapshot *snap,
                                UiCodePanelOutput *out) {
     ReplCodePanelBuilder builder;
     UiTextPanelOutput text_out;
-    UiReplCodePanelLayout layout;
 
     if (out) {
         out->cursor_px = 0;
@@ -1637,9 +1636,6 @@ void ui_repl_code_panel_render(const UiRenderSnapshot *snap,
 
     glViewport(0, 0, snap->viewport.window_w, snap->viewport.window_h);
 
-    ui_repl_code_panel_build_layout(snap, &layout, builder.text_snap.cp_w,
-                                    builder.text_snap.text_x,
-                                    builder.text_snap.cp_h);
     repl_code_panel_build_rows(&builder);
 
     memset(&text_out, 0, sizeof(text_out));
@@ -1658,10 +1654,7 @@ void ui_repl_code_panel_render(const UiRenderSnapshot *snap,
      * per plan §4). */
     ui_scene_tabs_render(snap);
     ui_menu_bar_render(snap);
-    ui_menu_bar_render_search_overlay(snap, builder.text_snap.cp_x,
-                                      builder.text_snap.cp_w,
-                                      builder.text_snap.cp_y +
-                                      builder.text_snap.cp_h);
+    ui_menu_bar_render_search_overlay(snap);
     repl_code_panel_draw_statusbar(snap, &text_out.statusbar_slot);
     ui_color_picker_render(&snap->color_picker,
                            snap->viewport.window_w,

@@ -78,7 +78,7 @@ int ui_menu_bar_menu_dropdown_is_open(void) {
     return g_open_menu >= 0 &&
            ui_menu_bar_panel_visible();
 }
-int ui_menu_bar_example_dropdown_is_open(void) { return ui_menu_bar_menu_dropdown_is_open(); }
+
 
 
 enum { FILE_ITEM_COUNT = GLR_FILE_ITEM_COUNT };
@@ -104,7 +104,7 @@ static int scene_tag_idx_for_parent_row(int row) {
     return repl_example_visible_tag_at(row - 1);
 }
 
-static int scene_parent_row_for_tag(int tag_idx) {
+int ui_menu_bar_scene_parent_row_for_tag(int tag_idx) {
     int visible_count = repl_example_visible_tag_count();
     for (int dense_idx = 0; dense_idx < visible_count; dense_idx++)
         if (repl_example_visible_tag_at(dense_idx) == tag_idx)
@@ -122,7 +122,7 @@ static int tutorial_tag_idx_for_parent_row(int row) {
     return repl_tutorial_visible_tag_at(row);
 }
 
-static int tutorial_parent_row_for_tag(int tag_idx) {
+int ui_menu_bar_tutorial_parent_row_for_tag(int tag_idx) {
     int visible_count = repl_tutorial_visible_tag_count();
     for (int dense_idx = 0; dense_idx < visible_count; dense_idx++)
         if (repl_tutorial_visible_tag_at(dense_idx) == tag_idx)
@@ -446,7 +446,7 @@ static void menubar_rects(int menu_x[NUM_MENUS], int menu_w[NUM_MENUS],
     pin_x[PIN_SEARCH] = pin_x[PIN_REPLAY] - search_w;
 }
 
-int ui_menu_bar_menu_hit(int gx, int gy) {
+static int ui_menu_bar_menu_hit(int gx, int gy) {
     int menu_x[NUM_MENUS], menu_w[NUM_MENUS];
     int pin_x[NUM_PIN_BTNS], pin_w[NUM_PIN_BTNS];
     int by, bh;
@@ -460,7 +460,7 @@ int ui_menu_bar_menu_hit(int gx, int gy) {
     return -1;
 }
 
-int ui_menu_bar_pin_hit(int gx, int gy) {
+static int ui_menu_bar_pin_hit(int gx, int gy) {
     int menu_x[NUM_MENUS], menu_w[NUM_MENUS];
     int pin_x[NUM_PIN_BTNS], pin_w[NUM_PIN_BTNS];
     int by, bh;
@@ -744,20 +744,6 @@ int ui_menu_bar_submenu_rect_for_test(int menu_id, int parent_row,
     return submenu_rect(menu_id, parent_row, sx, sy, sw, sh);
 }
 
-int ui_menu_bar_scene_example_submenu_rect_for_test(int tag_idx,
-                                                    int *sx, int *sy,
-                                                    int *sw, int *sh) {
-    return submenu_rect(MENU_SCENE, scene_parent_row_for_tag(tag_idx),
-                        sx, sy, sw, sh);
-}
-
-int ui_menu_bar_tutorial_submenu_rect_for_test(int tag_idx,
-                                               int *sx, int *sy,
-                                               int *sw, int *sh) {
-    return submenu_rect(MENU_TUTORIALS, tutorial_parent_row_for_tag(tag_idx),
-                        sx, sy, sw, sh);
-}
-
 /* Classify a raw dropdown label as header / separator / item — the
  * one place the "### "-prefix and "---" conventions are decoded, so
  * the render paths and the hit-test agree (no more 3 hand-copied
@@ -789,7 +775,7 @@ static void menu_draw_chrome_row(GlrConfigRowKind kind, int x, int w,
     }
 }
 
-int ui_menu_bar_dropdown_item_hit(int gx, int gy) {
+static int ui_menu_bar_dropdown_item_hit(int gx, int gy) {
     if (g_open_menu < 0) return -1;
     int n = menu_item_count(g_open_menu);
     if (n == 0) return -1;
@@ -1273,13 +1259,11 @@ static void draw_search_icon(float cx, float cy, float r) {
     glEnd();
 }
 
-void ui_menu_bar_render_search_overlay(const UiRenderSnapshot *snap,
-                                       int cp_x, int panel_w, int panel_top) {
+void ui_menu_bar_render_search_overlay(const UiRenderSnapshot *snap) {
     EditorSearchState srch = snap->search;
     char count_buf[32];
     char query_buf[128];
     int cursor_col = 0;
-    (void)cp_x; (void)panel_w; (void)panel_top;
 
     /* The search-open fade clock (g_search_open_time) is driven by the
      * controller via ui_menu_bar_note_search_opened() on both open

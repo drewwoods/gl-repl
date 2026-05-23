@@ -348,20 +348,6 @@ static void text_panel_draw_search_highlights(const UiTextPanelSnapshot *snap,
         glDisable(GL_BLEND);
 }
 
-static void text_panel_draw_indent(int x, int y, int indent_chars) {
-    char spaces[32];
-    int draw_indent = indent_chars;
-
-    if (draw_indent <= 0)
-        return;
-    if (draw_indent > (int)sizeof(spaces) - 1)
-        draw_indent = (int)sizeof(spaces) - 1;
-
-    memset(spaces, ' ', (size_t)draw_indent);
-    spaces[draw_indent] = '\0';
-    glColor3fv(k_panel_dim);
-    gl2d_draw_string((float)x, (float)y, spaces, FONT_MONO);
-}
 
 static int text_panel_draw_input_row(const UiTextPanelSnapshot *snap,
                                      const UiTextPanelRow *row,
@@ -423,10 +409,6 @@ static int text_panel_draw_input_row(const UiTextPanelSnapshot *snap,
              * invisibility whenever the cursor sits on a color line. */
             if (wrap_row == 0)
                 text_panel_draw_right_action(snap, row, *io_line_y);
-
-            if (wrap_row == 0)
-                text_panel_draw_indent(snap->cp_x + snap->text_x,
-                                       *io_line_y, row->indent_chars);
 
             text_panel_draw_search_highlights(snap, row, input,
                                               wrap_start, wrap_len,
@@ -523,8 +505,6 @@ static int text_panel_draw_regular_row(const UiTextPanelSnapshot *snap,
             text_panel_draw_line_number(snap, *io_line_y, row->left_gutter_label);
             text_panel_draw_left_aux(snap, row, *io_line_y);
             text_panel_draw_right_action(snap, row, *io_line_y);
-            text_panel_draw_indent(snap->cp_x + snap->text_x,
-                                   *io_line_y, row->indent_chars);
             *io_line_y -= LINE_H;
         }
         (*io_cur)++;

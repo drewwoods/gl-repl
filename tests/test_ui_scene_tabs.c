@@ -231,7 +231,8 @@ static void test_dropdown_over_band_consumes(void) {
      * there and overlaps the tab band's top row). */
     cfg_mx = -1;
     for (int x = cp_x + CODE_MARGIN_X; x < cp_x + cp_w; x++) {
-        if (ui_menu_bar_menu_hit(x, menu_my) == GLR_MENU_CONFIG) {
+        UiHit hit = ui_menu_bar_hit_test(x, menu_my);
+        if (hit.kind == UI_HIT_MENU_BUTTON && hit.cmd_idx == GLR_MENU_CONFIG) {
             cfg_mx = x + 2;
             break;
         }
