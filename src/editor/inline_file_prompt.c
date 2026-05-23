@@ -16,7 +16,7 @@
 #include "inline_rename.h"        /* mutual-exclusion cancel */
 #include "input.h"                /* editor_load_line_to_input */
 #include "state.h"                /* editor_state_edit_line */
-#include <keys.h>
+#include "keys.h"
 #include "undo.h"
 
 #include "repl/core.h"

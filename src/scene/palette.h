@@ -45,8 +45,8 @@
 #ifndef SCENE_PALETTE_H
 #define SCENE_PALETTE_H
 
-#include <gl_includes.h>
-#include <c_compat.h>          /* STATIC_ASSERT (C99/C11 portable) */
+#include "gl_includes.h"
+#include "c_compat.h"          /* STATIC_ASSERT (C99/C11 portable) */
 #include "render_types.h"      /* SceneRgba */
 
 typedef enum {

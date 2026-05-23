@@ -1,7 +1,7 @@
 #include "repl/examples.h"
 
 #include <stddef.h>
-#include <c_compat.h>   /* STATIC_ASSERT (C99/C11 portable) */
+#include "c_compat.h"   /* STATIC_ASSERT (C99/C11 portable) */
 
 /* Each example is an array of source lines terminated by NULL.
  * Lines are processed sequentially:

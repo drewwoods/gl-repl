@@ -241,7 +241,7 @@ const char *g_header_pre[] = {
     "#define gamma _gamma",
     "#define lgamma _lgamma",
     "#define tgamma _tgamma",
-    "#include <gl_includes.h>",
+    "#include \"gl_includes.h\"",
     "#include <math.h>",
     "#include <stdlib.h>",
     "#undef j0",

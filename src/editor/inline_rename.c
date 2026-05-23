@@ -11,7 +11,7 @@
  */
 #include "inline_rename.h"
 #include "inline_file_prompt.h"   /* mutual-exclusion cancel */
-#include <keys.h>
+#include "keys.h"
 
 #include "repl/core.h"
 

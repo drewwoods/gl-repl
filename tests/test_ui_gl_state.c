@@ -10,7 +10,7 @@
  * Needs a display, so this is NOT part of `make test` / CI — run via
  * `make gl-tests` locally.
  */
-#include <gl_includes.h>
+#include "gl_includes.h"
 #include "ui/core/gl_2d.h"
 #include "support/test_harness.h"
 

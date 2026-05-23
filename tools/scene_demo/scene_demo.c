@@ -16,7 +16,7 @@
  *   my_scene(...) { glEnable(GL_LIGHTING); ...; glutSolidTeapot(1.0); }
  *   build_cfg() { cfg.execute_fn = my_scene; cfg.cam_* = ...; ... }
  */
-#include <gl_includes.h>
+#include "gl_includes.h"
 #include "config.h"
 #include "scene/render.h"
 #include "scene/render_types.h"

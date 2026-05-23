@@ -14,7 +14,7 @@
 #include "editor/state.h"   /* editor_buffer_* and editor_input_* */
 #include "ui/core/gl_2d.h"
 
-#include <gl_includes.h>
+#include "gl_includes.h"
 
 #include <stdio.h>
 #include <stdlib.h>

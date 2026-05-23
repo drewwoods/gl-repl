@@ -7,7 +7,7 @@
  */
 #include "postprocess_filter.h"
 
-#include <gl_includes.h>
+#include "gl_includes.h"
 
 /* One owned texture, sized to the largest scene rect seen so far. */
 static GLuint g_filter_tex = 0;

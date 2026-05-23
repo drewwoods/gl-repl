@@ -7,7 +7,7 @@
 #include "editor/input.h"
 #include "editor/state.h"
 #include "editor/undo.h"
-#include <keys.h>
+#include "keys.h"
 #include "repl/core.h"
 #include "repl/state_owners.h"
 #include "repl/state_views.h"
