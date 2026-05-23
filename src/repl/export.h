@@ -124,6 +124,15 @@ const ReplExportConfigBridge *repl_export_config_bridge(void);
  * batch-shaped handoff for callers that want the full bag at once. */
 void repl_export_apply_pending_cfg(void);
 
+/* Extract the slug from a `// @cfg <slug> [= ...]` line, ignoring any value
+ * and side-effect-free. Writes the NUL-terminated slug to out[] and returns 1
+ * on success; returns 0 (out left empty) when the line doesn't match the
+ * `// @cfg <slug>` shape or the slug doesn't fit. Tolerates leading whitespace
+ * and the `// ` comment prefix the same way the import-side cfg parser does.
+ * Shared seam: the tutorial runner uses this to discover which slugs an
+ * entry's `@cfg` lines touch (for baseline capture) without applying them. */
+int  repl_export_extract_cfg_slug(const char *line, char *out, size_t out_sz);
+
 /* Opaque 4-line camera transform block used by export, import, and examples.
  *
  * Export writes these raw GL lines into saved files and the code-panel preview;

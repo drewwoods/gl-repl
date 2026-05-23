@@ -475,6 +475,26 @@ static void emit_func_aliases(int *n) {
 
 /* --- cfg ------------------------------------------------------------------- */
 
+int repl_export_extract_cfg_slug(const char *line, char *out, size_t out_sz) {
+    if (!line || !out || out_sz == 0) return 0;
+    const char *p = line;
+    while (*p && isspace((unsigned char)*p)) p++;
+    if (p[0] != '/' || p[1] != '/') return 0;
+    p += 2;
+    while (*p && isspace((unsigned char)*p)) p++;
+    if (*p != '@') return 0;
+    p++;
+    if (strncmp(p, "cfg", 3) != 0) return 0;
+    p += 3;
+    if (!isspace((unsigned char)*p)) return 0;
+    while (*p && isspace((unsigned char)*p)) p++;
+    size_t out_i = 0;
+    while (*p && (isalnum((unsigned char)*p) || *p == '_') && out_i + 1 < out_sz)
+        out[out_i++] = *p++;
+    out[out_i] = '\0';
+    return out_i > 0;
+}
+
 static int parse_cfg(const char *args) {
     const char *p = args;
     char slug[32];
