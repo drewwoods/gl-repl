@@ -2439,7 +2439,7 @@ int glr_ctrl_router_handle_debug_dump_key(unsigned char key) {
  * a DISTINCT, findable file — never the active scene/workspace. The
  * point is to rescue an unintended exit / forgotten save without
  * silently clobbering the user's real scene; reload it with
- * `./sample quit-recovery.c`. (Not /tmp — the user would never find
+ * `./gl-repl quit-recovery.c`. (Not /tmp — the user would never find
  * it; not the scene file — that would defeat the safeguard.) The
  * filename lives in config.h as QUIT_RECOVERY_FILE. */
 

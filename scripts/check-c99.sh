@@ -2,7 +2,7 @@
 # C99 build guard for the shipped/real artifacts (non-pedantic).
 #
 # The whole project builds -std=c99 so it runs on old machines / old
-# GCC. This guard syntax-checks the shipped/real sources — the sample
+# GCC. This guard syntax-checks the shipped/real sources — the gl-repl
 # plus the demo drivers and bench harness — under `gcc -std=c99` to
 # catch genuine C99-portability breakers early.
 #
@@ -34,23 +34,23 @@ ROOT=$(pwd)
 LOG=/tmp/check-c99.log
 : > "$LOG"
 
-# Ratchet source set: sample object set ($(SRCS), passed in as
+# Ratchet source set: gl-repl object set ($(SRCS), passed in as
 # C99_SRCS so it can't drift from what the build compiles) PLUS the
 # demo drivers and bench harness under tools/ and bench/. Tests
 # (tests/*.c, tests/support/) are deliberately NOT included. $(SRCS)
 # already contains tests/gl-stubs/gl_stub_counts.c (linked into the
-# sample); the find adds tools/** and bench/**.
+# gl-repl); the find adds tools/** and bench/**.
 if [ -n "${C99_SRCS:-}" ]; then
     SAMPLE_FILES="${C99_SRCS}"
 else
-    SAMPLE_FILES="$(printf '%s ' audio.c cmd_format.c sample.c \
+    SAMPLE_FILES="$(printf '%s ' audio.c cmd_format.c gl_repl.c \
         tests/gl-stubs/gl_stub_counts.c; find src -name '*.c')"
 fi
 FILES="$(printf '%s\n' ${SAMPLE_FILES}; \
          find tools bench -name '*.c' 2>/dev/null | sort)"
 
 # Prefer the REAL GL/GLU/GLUT/freeglut headers (the superset that
-# declares every symbol scene_demo/bench/sample use) as -isystem, so
+# declares every symbol scene_demo/bench/gl-repl use) as -isystem, so
 # their own old-style decls don't fail the guard while our -I'd code
 # stays -I'd. Nonexistent dirs are harmless (the compiler ignores
 # them), so this stays portable across macOS (homebrew/freeglut-fork)
@@ -103,7 +103,7 @@ EOF
 
 if [ "$fail" -ne 0 ]; then
     echo "ERROR: a shipped/real source does not build under 'gcc -std=c99'" >&2
-    echo "(sample + demo + bench). The project targets C99 for old" >&2
+    echo "(gl-repl + demo + bench). The project targets C99 for old" >&2
     echo "machines. Usual genuine breakers: a C11-ism unknown to old GCC" >&2
     echo "(use STATIC_ASSERT from include/c_compat.h, not raw" >&2
     echo "_Static_assert), or an implicit function declaration / unknown" >&2
@@ -114,4 +114,4 @@ if [ "$fail" -ne 0 ]; then
 fi
 rm -f "$LOG"
 
-echo "c99 build guard (sample + demos + bench, gcc -std=c99) OK"
+echo "c99 build guard (gl-repl + demos + bench, gcc -std=c99) OK"

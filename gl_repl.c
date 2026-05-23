@@ -39,7 +39,7 @@ static void init_trace_detail(const char *phase) {
     if (g_detailed_prof) init_trace(phase);
 }
 
-/* Music assets live here. Relative to the sample's working directory
+/* Music assets live here. Relative to gl-repl's working directory
  * on native, and to the Emscripten virtual FS mount point set up by
  * --preload-file in emscripten/build.sh. Any *.mp3 files dropped into
  * this folder are picked up in filename order as a playlist. */
@@ -106,7 +106,7 @@ static int scan_mp3_playlist(char out_paths[][AUDIO_MUSIC_MAX_LEN],
 }
 
 static void print_usage(const char *prog) {
-    const char *name = (prog && prog[0]) ? prog : "sample";
+    const char *name = (prog && prog[0]) ? prog : "gl-repl";
 
     fprintf(stdout,
             "Usage: %s [options] [input.c | workspace]\n"

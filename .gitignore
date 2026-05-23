@@ -1,7 +1,7 @@
 *.o
 *.dSYM
 *.ini
-sample
+gl-repl
 output.c
 build/
 workspace/

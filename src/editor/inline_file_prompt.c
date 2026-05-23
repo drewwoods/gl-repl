@@ -10,7 +10,7 @@
  * The Enter path clears the undo ring (wholesale state replacement,
  * same invariant as Load Workspace / F12 cycle) and runs the existing
  * file-import path via repl_load_scene_runtime — i.e., the same
- * pipeline `./sample <file>` uses at startup.
+ * pipeline `./gl-repl <file>` uses at startup.
  */
 #include "inline_file_prompt.h"
 #include "inline_rename.h"        /* mutual-exclusion cancel */

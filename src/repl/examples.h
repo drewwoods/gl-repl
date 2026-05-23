@@ -19,7 +19,7 @@
  * example resets non-camera scene-presentation settings to defaults, applies
  * the example's @cfg metadata, and feeds the example lines through the commit
  * pipeline. Camera is inherited (not reset) unless the example supplies an
- * explicit // camera block. Built-in defaults (CFG_DEFAULT_* macros in sample.h)
+ * explicit // camera block. Built-in defaults (CFG_DEFAULT_* macros in gl_repl.h)
  * define the reset baseline, ensuring consistent starting state across example
  * transitions.
  *

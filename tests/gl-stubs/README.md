@@ -7,11 +7,11 @@ Use:
 
 ```sh
 make test-stubs
-make sample USE_GL_STUBS=1
+make gl-repl USE_GL_STUBS=1
 ```
 
 The stubs are compilation and non-rendering test support only. They do not
-create a window, draw pixels, or provide a real GL context. If the sample starts
+create a window, draw pixels, or provide a real GL context. If gl-repl starts
 calling a new GL/GLU/GLUT symbol, extend the matching stub header under
 `tests/gl-stubs/include/`.
 
