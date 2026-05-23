@@ -493,11 +493,31 @@ when a stall happens.
   each startup phase; it prints `[init +N.NNNs] <phase>` with
   wall-clock seconds (`gettimeofday`, not the per-platform timebase in
   `prof.c` — ms granularity is enough and this stays portable/C99)
-  elapsed since the first call. Phases: window create, GL init, REPL
-  bootstrap, `glr_audio_init` begin/done, playlist start, main loop. The
-  only synchronous audio work on the `main()` path is
+  elapsed since the first call. Two granularity levels share one
+  stream:
+
+  *Baseline phases* (always emitted): `start`, `glutInit begin`,
+  `window created`, `GL init done`, `REPL bootstrap done`,
+  `glr_audio_init begin/done`, `audio playlist started`, `entering
+  main loop`. The only synchronous audio work on the `main()` path is
   `ma_engine_init()` (it opens the OS audio device); `--no-audio`
   isolates it.
+
+  *Detailed phases* (gated on the `--detailed-prof` CLI flag or
+  `GLR_DETAILED_PROF` env var, any non-empty value; default off):
+  `glutInit done` (splits the glutInit runtime), `playlist scan done
+  (N tracks)` (opendir/readdir over `assets/`), `playlist start
+  requested` (after the synchronous `load_state` INI read and worker
+  poke), and the post-`glutMainLoop` `frame N display callback` /
+  `frame N render done` / `frame N swap done` triples from
+  `display_func` for the first two frames. The frame-1 triple splits
+  the otherwise-invisible time between `glutMainLoop()` and the OS
+  showing pixels (GLUT solid-shape display-list compilation, macOS
+  first-drawable wait, GL stack lazy init); the frame-2 triple is the
+  steady-state control that reveals whether spending was first-frame-
+  only (the expected case) or a real regression. Gated via
+  `init_trace_detail()` plus inline flag checks on the snprintf-using
+  sites so the default boot does zero extra work for these phases.
 
 * **Worker hitch detector** (`src/app/glr_audio.c`). The audio worker
   (`audio_worker_main`) is event-driven: it sleeps on
