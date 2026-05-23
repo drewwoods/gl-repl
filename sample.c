@@ -184,7 +184,6 @@ static void on_sigint(int sig) {
 }
 
 int main(int argc, char **argv) {
-    glr_ctrl_set_program_name(argv[0]);
     const char *input_file = NULL;
     int dump_code = 0;
     int dump_flat = 0;
@@ -193,6 +192,10 @@ int main(int argc, char **argv) {
     int use_accum = 1;
     int window_w  = 1200;
     int window_h  = 800;
+
+    init_trace("start");
+    glr_ctrl_set_program_name(argv[0]);
+
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "-h") == 0 || strcmp(argv[i], "--help") == 0) {
             print_usage(argv[0]);
@@ -229,7 +232,7 @@ int main(int argc, char **argv) {
         return 0;
     }
 
-    init_trace("start");
+    init_trace("glutInit begin");
     glutInit(&argc, argv);
     init_trace("glutInit done");
     glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGBA | GLUT_DEPTH | GLUT_MULTISAMPLE |
