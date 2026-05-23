@@ -19,9 +19,15 @@
  * config.h (or a -D flag) can override the defaults at build time
  * without touching this header. */
 
-/* Total wall-clock duration of the reveal animation, in seconds. */
-#ifndef TUTORIAL_FADE_DURATION_SECS
-#define TUTORIAL_FADE_DURATION_SECS 0.9f
+/* Rate at which the reveal animation writes characters, in chars per
+ * second. Per-line total duration is computed at emit time as
+ * (line_len + TUTORIAL_FADE_SETTLE_CHARS) / TUTORIAL_FADE_CHARS_PER_SEC,
+ * so short instructions reveal quickly and long ones take longer at
+ * the same readable pace — instead of every line racing through a
+ * fixed wall-clock budget (previously TUTORIAL_FADE_DURATION_SECS,
+ * which made 80-char lines appear ~4x faster than 20-char ones). */
+#ifndef TUTORIAL_FADE_CHARS_PER_SEC
+#define TUTORIAL_FADE_CHARS_PER_SEC 50.0f
 #endif
 
 /* Width of the white→base-color "settle" wave that trails the fade-in
