@@ -655,6 +655,105 @@ static void test_example_tag_metadata(void) {
     }
 }
 
+/* Mirror of test_catalog_subheading_metadata in tests/test_tutorial_runner.c.
+ * Each example declares an optional free-form section label
+ * (`ReplExampleEntry.subheading`); the Scene menu groups consecutive
+ * examples sharing a subheading under a `### subheading` chrome row in the
+ * per-tag flyout. Invariants:
+ *   - Every subheading is either NULL or a non-empty string (the menu
+ *     stripping logic would render an empty string as zero-width chrome).
+ *   - The getter returns NULL for out-of-range indices.
+ *   - Per tag, every non-NULL subheading appears in a single contiguous
+ *     run of examples (matches the menu walker's emit rule — one header
+ *     per group; interleaving would render duplicate headers).
+ *   - At least one shipped example has a non-NULL subheading so the
+ *     menu walker's HEADER path is exercised in production. */
+static void test_example_subheading_metadata(void) {
+    int tag_count = repl_example_tag_count();
+    int example_count = repl_example_count();
+
+    for (int idx = 0; idx < example_count; idx++) {
+        char label[128];
+        const char *sub = repl_example_subheading(idx);
+        snprintf(label, sizeof(label),
+                 "example %d subheading is NULL or non-empty", idx);
+        ASSERT_TRUE(label, !sub || sub[0] != '\0');
+    }
+    ASSERT_TRUE("out-of-range example subheading is NULL",
+                repl_example_subheading(example_count) == NULL);
+    ASSERT_TRUE("negative example subheading is NULL",
+                repl_example_subheading(-1) == NULL);
+
+    int has_any_subheading = 0;
+    for (int idx = 0; idx < example_count; idx++) {
+        if (repl_example_subheading(idx)) { has_any_subheading = 1; break; }
+    }
+    ASSERT_TRUE("catalog ships at least one subheading", has_any_subheading);
+
+    /* Per tag: contiguity check — count distinct non-NULL subheadings
+     * (set semantics) vs the number of subheading-change transitions
+     * the menu walker would emit. Equality means each distinct
+     * subheading appears in a single contiguous run; a mismatch means
+     * an interleaved subheading would render its header twice. */
+    for (int t = 0; t < tag_count; t++) {
+        char label[128];
+        const char *seen[16];
+        int seen_count = 0;
+        const char *prev = NULL;
+        int transitions = 0;
+        int n = repl_example_count_for_tag(t);
+        for (int o = 0; o < n; o++) {
+            int ex_idx = repl_example_index_for_tag(t, o);
+            const char *sub = repl_example_subheading(ex_idx);
+            if (!sub)
+                continue;
+            int already_seen = 0;
+            for (int s = 0; s < seen_count; s++) {
+                if (strcmp(seen[s], sub) == 0) { already_seen = 1; break; }
+            }
+            if (!already_seen &&
+                seen_count < (int)(sizeof(seen) / sizeof(seen[0]))) {
+                seen[seen_count++] = sub;
+            }
+            int header_here = !prev || strcmp(prev, sub) != 0;
+            if (header_here)
+                transitions++;
+            prev = sub;
+        }
+        snprintf(label, sizeof(label),
+                 "tag %d subheadings are contiguous (no interleaving)", t);
+        ASSERT_TRUE(label, transitions == seen_count);
+    }
+
+    /* Known multi-tag entry: Stress test. Its subheading must be
+     * non-NULL and the same value must surface under every tag it
+     * carries (catalog authoring rule: a single entry cannot rename
+     * itself per tag). */
+    int stress_idx = find_example_index_by_name("Stress test (all features)");
+    ASSERT_TRUE("Stress test in catalog", stress_idx >= 0);
+    if (stress_idx >= 0) {
+        const char *expected_sub = repl_example_subheading(stress_idx);
+        ASSERT_TRUE("Stress test has a subheading", expected_sub != NULL);
+        for (int t = 0; t < tag_count; t++) {
+            if (!repl_example_has_tag(stress_idx, t))
+                continue;
+            int n = repl_example_count_for_tag(t);
+            int found = 0;
+            for (int o = 0; o < n; o++) {
+                int ex_idx = repl_example_index_for_tag(t, o);
+                if (ex_idx != stress_idx)
+                    continue;
+                const char *sub = repl_example_subheading(ex_idx);
+                if (sub && expected_sub && strcmp(sub, expected_sub) == 0)
+                    found = 1;
+                break;
+            }
+            ASSERT_TRUE("multi-tag entry has same subheading in every tag",
+                        found);
+        }
+    }
+}
+
 /* Tag-based example default overrides. The 2D tag default sets the
  * grid theme to GRID_THEME_PLANES. Verify that:
  *
@@ -952,6 +1051,7 @@ int main(int argc, char **argv) {
 
     repl_eval_init_predef_vars();
     test_example_tag_metadata();
+    test_example_subheading_metadata();
     test_example_tag_default_cfg();
     test_example_tag_default_dispatch();
 

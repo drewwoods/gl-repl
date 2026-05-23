@@ -336,7 +336,19 @@ void test_workspace_round_trip() {
     int p1 = repl_promote_example_if_needed();
     ASSERT_TRUE("first promotion ok", p1 >= 1);
 
-    repl_load_example(1);
+    /* Load a known example by name (Animated ring) so this test
+     * isn't coupled to catalog ordering; the round-trip assertion
+     * below looks for that scene by name after reload. */
+    int ring_example = -1;
+    for (int i = 0; i < repl_example_count(); i++) {
+        const char *n = repl_example_name(i);
+        if (n && strcmp(n, "Animated ring (for + t)") == 0) {
+            ring_example = i;
+            break;
+        }
+    }
+    ASSERT_TRUE("animated ring example present", ring_example >= 0);
+    repl_load_example(ring_example);
     int p2 = repl_promote_example_if_needed();
     ASSERT_TRUE("second promotion ok", p2 >= 1 && p2 != p1);
 

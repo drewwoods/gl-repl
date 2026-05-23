@@ -1297,6 +1297,14 @@ typedef struct {
     const char *name;
     const char *const *lines;
     ReplExampleTagMask tags;
+    /* Optional in-flyout section subheading. Free-form display string
+     * (e.g. "Basics", "Functions") — the Scene menu groups consecutive
+     * examples sharing the same subheading under a chrome `### subheading`
+     * header. NULL = no header. Convention enforced by
+     * test_example_subheading_metadata: per tag, each non-NULL subheading
+     * must appear in a single contiguous run — interleaving causes
+     * duplicate headers. */
+    const char *subheading;
 } ReplExampleEntry;
 
 /* REPL_EXAMPLE_TAG_ALL is a synthetic tag: every example is a member.
@@ -1328,51 +1336,84 @@ STATIC_ASSERT((int)(sizeof(g_example_tag_labels) /
                     sizeof(g_example_tag_labels[0])) == REPL_EXAMPLE_TAG_COUNT,
               "g_example_tag_labels[] out of sync with REPL_EXAMPLE_TAG_COUNT");
 
+/* Catalog order matters: the Scene menu groups consecutive same-subheading
+ * entries into one `### subheading` header per per-tag flyout, so each
+ * subheading must run contiguously within every tag it surfaces under.
+ * test_example_subheading_metadata enforces this — see the per-tag walk
+ * notes in g_example_tag_labels above. Lit cube intentionally stays first
+ * (F12's default scene). */
 static const ReplExampleEntry g_example_entries[] = {
     { "Lit cube", g_example_cube,
-      EXAMPLE_TAG_3D | EXAMPLE_TAG_POLYGONS },
-    { "Animated ring (for + t)", g_example_ring,
-      EXAMPLE_TAG_3D | EXAMPLE_TAG_LINES },
-    { "Function demo (named func)", g_example_func,
-      EXAMPLE_TAG_2D | EXAMPLE_TAG_LINES },
-    { "Function polygons (args + for)", g_example_func_loop,
-      EXAMPLE_TAG_2D | EXAMPLE_TAG_POLYGONS },
-    { "Function branching (args + if)", g_example_func_if,
-      EXAMPLE_TAG_2D | EXAMPLE_TAG_POLYGONS },
-    { "Recursive triangle tree (func + recursion)", g_example_func_recurse,
-      EXAMPLE_TAG_2D | EXAMPLE_TAG_LINES },
-    { "Conditional colors (if + t)", g_example_cond,
-      EXAMPLE_TAG_3D | EXAMPLE_TAG_POLYGONS },
-    { "Parametric torus (nested for)", g_example_torus,
-      EXAMPLE_TAG_3D | EXAMPLE_TAG_POLYGONS },
-    { "GLU tessellator (concave arrow)", g_example_tess,
-      EXAMPLE_TAG_3D | EXAMPLE_TAG_POLYGONS },
-    { "GLU tessellator (concave arrow cutout)", g_example_tess_cutout,
-      EXAMPLE_TAG_3D | EXAMPLE_TAG_POLYGONS },
+      EXAMPLE_TAG_3D | EXAMPLE_TAG_POLYGONS,
+      "Basics" },
     { "2D assignment sketch (vars only)", g_example_assign_2d,
-      EXAMPLE_TAG_2D | EXAMPLE_TAG_LINES },
-    { "Glow sprites (blend + point attenuation)", g_example_glow_particles,
-      EXAMPLE_TAG_3D },
-    { "Procedural terrain (rand grid + sin ripple)", g_example_random_surface,
-      EXAMPLE_TAG_3D | EXAMPLE_TAG_POLYGONS },
+      EXAMPLE_TAG_2D | EXAMPLE_TAG_LINES,
+      "Basics" },
+    { "Animated ring (for + t)", g_example_ring,
+      EXAMPLE_TAG_3D | EXAMPLE_TAG_LINES,
+      "Basics" },
+    { "Conditional colors (if + t)", g_example_cond,
+      EXAMPLE_TAG_3D | EXAMPLE_TAG_POLYGONS,
+      "Basics" },
+
+    { "Function demo (named func)", g_example_func,
+      EXAMPLE_TAG_2D | EXAMPLE_TAG_LINES,
+      "Functions" },
+    { "Function polygons (args + for)", g_example_func_loop,
+      EXAMPLE_TAG_2D | EXAMPLE_TAG_POLYGONS,
+      "Functions" },
+    { "Function branching (args + if)", g_example_func_if,
+      EXAMPLE_TAG_2D | EXAMPLE_TAG_POLYGONS,
+      "Functions" },
+    { "Recursive triangle tree (func + recursion)", g_example_func_recurse,
+      EXAMPLE_TAG_2D | EXAMPLE_TAG_LINES,
+      "Functions" },
+
+    { "Parametric torus (nested for)", g_example_torus,
+      EXAMPLE_TAG_3D | EXAMPLE_TAG_POLYGONS,
+      "Curves & surfaces" },
     { "Animated wave surface (analytic normals)", g_example_waves,
-      EXAMPLE_TAG_3D | EXAMPLE_TAG_POLYGONS },
+      EXAMPLE_TAG_3D | EXAMPLE_TAG_POLYGONS,
+      "Curves & surfaces" },
+    { "Procedural terrain (rand grid + sin ripple)", g_example_random_surface,
+      EXAMPLE_TAG_3D | EXAMPLE_TAG_POLYGONS,
+      "Curves & surfaces" },
     { "Animated spirograph curve", g_example_spirograph_curve,
-      EXAMPLE_TAG_2D | EXAMPLE_TAG_LINES },
+      EXAMPLE_TAG_2D | EXAMPLE_TAG_LINES,
+      "Curves & surfaces" },
     { "Traveling ripple ring", g_example_traveling_ripple_ring,
-      EXAMPLE_TAG_2D | EXAMPLE_TAG_LINES },
+      EXAMPLE_TAG_2D | EXAMPLE_TAG_LINES,
+      "Curves & surfaces" },
     { "Bezier curve with guides", g_example_bezier,
-      EXAMPLE_TAG_2D | EXAMPLE_TAG_LINES },
-    { "Snowfall demo (550 particles)", g_example_snowfall,
-      EXAMPLE_TAG_3D },
-    { "Transform stress (translate/rotate/scale guides)", g_example_xform_stress,
-      EXAMPLE_TAG_3D | EXAMPLE_TAG_LINES },
-    { "Stress test (all features)", g_example_stress,
-      EXAMPLE_TAG_2D | EXAMPLE_TAG_3D | EXAMPLE_TAG_POLYGONS | EXAMPLE_TAG_LINES },
+      EXAMPLE_TAG_2D | EXAMPLE_TAG_LINES,
+      "Curves & surfaces" },
     { "Scratch arrays (de Casteljau curve)", g_example_scratch_casteljau,
-      EXAMPLE_TAG_2D | EXAMPLE_TAG_LINES },
+      EXAMPLE_TAG_2D | EXAMPLE_TAG_LINES,
+      "Curves & surfaces" },
+
+    { "Glow sprites (blend + point attenuation)", g_example_glow_particles,
+      EXAMPLE_TAG_3D,
+      "Effects" },
+    { "Snowfall demo (550 particles)", g_example_snowfall,
+      EXAMPLE_TAG_3D,
+      "Effects" },
+    { "Transform stress (translate/rotate/scale guides)", g_example_xform_stress,
+      EXAMPLE_TAG_3D | EXAMPLE_TAG_LINES,
+      "Effects" },
+
+    { "GLU tessellator (concave arrow)", g_example_tess,
+      EXAMPLE_TAG_3D | EXAMPLE_TAG_POLYGONS,
+      "Tessellation" },
+    { "GLU tessellator (concave arrow cutout)", g_example_tess_cutout,
+      EXAMPLE_TAG_3D | EXAMPLE_TAG_POLYGONS,
+      "Tessellation" },
+
+    { "Stress test (all features)", g_example_stress,
+      EXAMPLE_TAG_2D | EXAMPLE_TAG_3D | EXAMPLE_TAG_POLYGONS | EXAMPLE_TAG_LINES,
+      "Showcase" },
     { "Annotated orbit plot (labels)", g_example_annotated_orbit_plot,
-      EXAMPLE_TAG_3D | EXAMPLE_TAG_LINES },
+      EXAMPLE_TAG_3D | EXAMPLE_TAG_LINES,
+      "Showcase" },
 };
 
 int repl_examples_count(void) {
@@ -1460,4 +1501,10 @@ int repl_example_visible_tag_at(int dense_idx) {
         seen++;
     }
     return -1;
+}
+
+const char *repl_example_subheading(int example_idx) {
+    if (example_idx < 0 || example_idx >= repl_examples_count())
+        return NULL;
+    return g_example_entries[example_idx].subheading;
 }
