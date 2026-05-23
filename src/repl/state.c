@@ -153,20 +153,6 @@ static const ReplRuntimeState *repl_state_get_defaults(void) {
  * lives on g_ui_state.status in ui_state.c.
  * g_cursor_px / g_cursor_py macros removed (Phase A commit 12); the
  * code_panel slice lives on g_ui_state.code_panel in ui_state.c. */
-#define g_search_active             (g_repl_state.search.active)
-#define g_search_query              (g_repl_state.search.query)
-#define g_search_query_len          (g_repl_state.search.query_len)
-#define g_search_cursor_pos         (g_repl_state.search.cursor_pos)
-#define g_search_hit_line           (g_repl_state.search.hit_line_idx)
-#define g_search_hit_char           (g_repl_state.search.hit_char_idx)
-#define g_search_hit_ordinal        (g_repl_state.search.hit_ordinal)
-#define g_search_match_count        (g_repl_state.search.match_count)
-#define g_ac_matches                (g_repl_state.autocomplete.matches)
-#define g_ac_insert_matches         (g_repl_state.autocomplete.insert_matches)
-#define g_ac_count                  (g_repl_state.autocomplete.match_count)
-#define g_ac_sel                    (g_repl_state.autocomplete.selected_idx)
-#define g_ac_ghost                  (g_repl_state.autocomplete.ghost)
-#define g_ac_hint                   (g_repl_state.autocomplete.hint)
 /* g_replay_* macros removed (Phase F commit 33); replay state lives
  * on the replay peer (replay_state.c). Callers use replay_state_view
  * / replay_state_mut directly (Phase J7 retired the legacy

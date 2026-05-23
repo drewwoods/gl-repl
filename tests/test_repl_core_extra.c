@@ -411,16 +411,22 @@ void test_workspace_round_trip() {
 void test_workspace_save_slug_collisions() {
     printf("--- Workspace save slug collisions ---\n");
     glr_app_reset_all(); declare_test_vars();
-    if (repl_example_count() < 1) return;
+    if (repl_example_count() < 2) return;
 
     repl_load_example(0);
     int promoted = repl_promote_example_if_needed();
     ASSERT_TRUE("promotion succeeded", promoted >= 1);
 
+    repl_load_example(1);
+    int promoted2 = repl_promote_example_if_needed();
+    ASSERT_TRUE("second promotion succeeded", promoted2 >= 2);
+
     ASSERT_INT("rename slot 0 with space",
                repl_user_scene_rename(0, "A B"), 1);
     ASSERT_INT("rename promoted slot with hyphen",
                repl_user_scene_rename(promoted, "A-B"), 1);
+    ASSERT_INT("rename promoted slot with natural suffix",
+               repl_user_scene_rename(promoted2, "A_B_0"), 1);
 
     char dir_template[] = "/tmp/repl_workspace_slug_collision.XXXXXX";
     char *made_dir = mkdtemp(dir_template);
@@ -429,18 +435,28 @@ void test_workspace_save_slug_collisions() {
         return;
 
     int written = repl_save_workspace(made_dir, NULL);
-    ASSERT_INT("save_workspace writes both colliding scenes", written, 2);
+    ASSERT_INT("save_workspace writes all colliding scenes", written, 3);
 
     DIR *d = opendir(made_dir);
     int file_count = 0;
+    int saw_a_b = 0;
+    int saw_a_b_0 = 0;
+    int saw_a_b_0_0 = 0;
     if (d) {
         struct dirent *ent;
         while ((ent = readdir(d)) != NULL) {
             if (ent->d_name[0] == '.')
                 continue;
             size_t len = strlen(ent->d_name);
-            if (len > 2 && strcmp(ent->d_name + len - 2, ".c") == 0)
+            if (len > 2 && strcmp(ent->d_name + len - 2, ".c") == 0) {
                 file_count++;
+                if (strcmp(ent->d_name, "a_b.c") == 0)
+                    saw_a_b = 1;
+                else if (strcmp(ent->d_name, "a_b_0.c") == 0)
+                    saw_a_b_0 = 1;
+                else if (strcmp(ent->d_name, "a_b_0_0.c") == 0)
+                    saw_a_b_0_0 = 1;
+            }
 
             char path[256];
             snprintf(path, sizeof(path), "%s/%s", made_dir, ent->d_name);
@@ -449,8 +465,97 @@ void test_workspace_save_slug_collisions() {
         closedir(d);
     }
 
-    ASSERT_INT("colliding scene names still produce two files",
-               file_count, 2);
+    ASSERT_INT("colliding scene names still produce three files",
+               file_count, 3);
+    ASSERT_TRUE("base slug kept", saw_a_b == 1);
+    ASSERT_TRUE("slot suffix slug kept", saw_a_b_0 == 1);
+    ASSERT_TRUE("natural suffix name disambiguated again", saw_a_b_0_0 == 1);
+    rmdir(made_dir);
+    repl_set_workspace_dir("");
+}
+
+void test_workspace_save_max_slug_collisions() {
+    printf("--- Workspace save max slug collisions ---\n");
+    glr_app_reset_all(); declare_test_vars();
+    if (repl_example_count() < 2) return;
+
+    repl_load_example(0);
+    int promoted = repl_promote_example_if_needed();
+    ASSERT_TRUE("max-slug promotion succeeded", promoted >= 1);
+
+    repl_load_example(1);
+    int promoted2 = repl_promote_example_if_needed();
+    ASSERT_TRUE("max-slug second promotion succeeded", promoted2 >= 2);
+
+    char max_slug_lower[USER_SCENE_NAME_MAX];
+    char max_slug_upper[USER_SCENE_NAME_MAX];
+    char max_slug_suffix[USER_SCENE_NAME_MAX];
+    memset(max_slug_lower, 'a', USER_SCENE_NAME_MAX - 1);
+    max_slug_lower[USER_SCENE_NAME_MAX - 1] = '\0';
+    memset(max_slug_upper, 'A', USER_SCENE_NAME_MAX - 1);
+    max_slug_upper[USER_SCENE_NAME_MAX - 1] = '\0';
+    memset(max_slug_suffix, 'a', USER_SCENE_NAME_MAX - 3);
+    max_slug_suffix[USER_SCENE_NAME_MAX - 3] = '_';
+    max_slug_suffix[USER_SCENE_NAME_MAX - 2] = '0';
+    max_slug_suffix[USER_SCENE_NAME_MAX - 1] = '\0';
+
+    ASSERT_INT("rename slot 0 with max lowercase slug",
+               repl_user_scene_rename(0, max_slug_lower), 1);
+    ASSERT_INT("rename promoted slot with max uppercase slug",
+               repl_user_scene_rename(promoted, max_slug_upper), 1);
+    ASSERT_INT("rename promoted slot with max natural suffix slug",
+               repl_user_scene_rename(promoted2, max_slug_suffix), 1);
+
+    char dir_template[] = "/tmp/repl_workspace_max_slug_collision.XXXXXX";
+    char *made_dir = mkdtemp(dir_template);
+    ASSERT_TRUE("mkdtemp max-slug workspace", made_dir != NULL);
+    if (!made_dir)
+        return;
+
+    int written = repl_save_workspace(made_dir, NULL);
+    ASSERT_INT("save_workspace writes all max-slug collisions", written, 3);
+
+    char expect_base[USER_SCENE_NAME_MAX + 4];
+    char expect_suffix_0[USER_SCENE_NAME_MAX + 4];
+    char expect_suffix_0_0[USER_SCENE_NAME_MAX + 4];
+    snprintf(expect_base, sizeof(expect_base), "%s.c", max_slug_lower);
+    snprintf(expect_suffix_0, sizeof(expect_suffix_0), "%.*s_0.c",
+             USER_SCENE_NAME_MAX - 3, max_slug_lower);
+    snprintf(expect_suffix_0_0, sizeof(expect_suffix_0_0), "%.*s_0_0.c",
+             USER_SCENE_NAME_MAX - 5, max_slug_lower);
+
+    DIR *d = opendir(made_dir);
+    int file_count = 0;
+    int saw_base = 0;
+    int saw_suffix_0 = 0;
+    int saw_suffix_0_0 = 0;
+    if (d) {
+        struct dirent *ent;
+        while ((ent = readdir(d)) != NULL) {
+            if (ent->d_name[0] == '.')
+                continue;
+            size_t len = strlen(ent->d_name);
+            if (len > 2 && strcmp(ent->d_name + len - 2, ".c") == 0) {
+                file_count++;
+                if (strcmp(ent->d_name, expect_base) == 0)
+                    saw_base = 1;
+                else if (strcmp(ent->d_name, expect_suffix_0) == 0)
+                    saw_suffix_0 = 1;
+                else if (strcmp(ent->d_name, expect_suffix_0_0) == 0)
+                    saw_suffix_0_0 = 1;
+            }
+
+            char path[256];
+            snprintf(path, sizeof(path), "%s/%s", made_dir, ent->d_name);
+            unlink(path);
+        }
+        closedir(d);
+    }
+
+    ASSERT_INT("max slug collisions still produce three files", file_count, 3);
+    ASSERT_TRUE("max slug base kept", saw_base == 1);
+    ASSERT_TRUE("max slug collision gets _0 suffix", saw_suffix_0 == 1);
+    ASSERT_TRUE("max slug natural suffix disambiguated again", saw_suffix_0_0 == 1);
     rmdir(made_dir);
     repl_set_workspace_dir("");
 }
@@ -1446,6 +1551,7 @@ int main(int argc, char **argv) {
     test_inline_file_prompt_flow();
     test_workspace_round_trip();
     test_workspace_save_slug_collisions();
+    test_workspace_save_max_slug_collisions();
     test_scene_load_clears_func_aliases_and_saved_workspace_stays_clean();
     test_activate_home_slot_no_duplicate_name();
     test_my_scene_persists_edits_from_startup();

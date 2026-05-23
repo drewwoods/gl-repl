@@ -487,6 +487,41 @@ static void scene_filename_slug(const char *name, char *out, size_t out_sz) {
     out[j] = '\0';
 }
 
+static int scene_slug_used(const char used[][USER_SCENE_NAME_MAX],
+                           int used_count,
+                           const char *slug) {
+    for (int i = 0; i < used_count; i++) {
+        if (strcmp(used[i], slug) == 0)
+            return 1;
+    }
+    return 0;
+}
+
+static void scene_slug_with_collision_depth(const char *base_slug,
+                                            int collision_depth,
+                                            char *out,
+                                            size_t out_sz) {
+    if (!out || out_sz == 0) return;
+    if (!base_slug) base_slug = "s";
+
+    size_t max_len = out_sz - 1;
+    size_t suffix_len = (size_t)collision_depth * 2u;
+    if (suffix_len > max_len)
+        suffix_len = max_len;
+
+    size_t prefix_len = strlen(base_slug);
+    if (prefix_len > max_len - suffix_len)
+        prefix_len = max_len - suffix_len;
+
+    memcpy(out, base_slug, prefix_len);
+    size_t pos = prefix_len;
+    for (int i = 0; i < collision_depth && pos + 2 <= max_len; i++) {
+        out[pos++] = '_';
+        out[pos++] = '0';
+    }
+    out[pos] = '\0';
+}
+
 static void scene_filename_slug_for_slot(int slot, char *out, size_t out_sz) {
     if (!out || out_sz == 0) return;
     if (slot < 0 || slot >= MAX_USER_SCENES || !g_user_scenes[slot].used) {
@@ -494,27 +529,36 @@ static void scene_filename_slug_for_slot(int slot, char *out, size_t out_sz) {
         return;
     }
 
-    char base[USER_SCENE_NAME_MAX];
-    scene_filename_slug(g_user_scenes[slot].name, base, sizeof(base));
+    char used[MAX_USER_SCENES][USER_SCENE_NAME_MAX];
+    int used_count = 0;
 
-    int collision = 0;
-    for (int other = 0; other < MAX_USER_SCENES; other++) {
-        if (other == slot || !g_user_scenes[other].used)
+    for (int scene_slot = 0; scene_slot < MAX_USER_SCENES; scene_slot++) {
+        if (!g_user_scenes[scene_slot].used)
             continue;
 
-        char other_slug[USER_SCENE_NAME_MAX];
-        scene_filename_slug(g_user_scenes[other].name,
-                            other_slug, sizeof(other_slug));
-        if (strcmp(other_slug, base) == 0) {
-            collision = 1;
-            break;
+        char base_slug[USER_SCENE_NAME_MAX];
+        char candidate[USER_SCENE_NAME_MAX];
+        scene_filename_slug(g_user_scenes[scene_slot].name,
+                            base_slug, sizeof(base_slug));
+        int collision_depth = 0;
+        scene_slug_with_collision_depth(base_slug, collision_depth,
+                                        candidate, sizeof(candidate));
+        while (scene_slug_used(used, used_count, candidate)) {
+            collision_depth++;
+            scene_slug_with_collision_depth(base_slug, collision_depth,
+                                            candidate, sizeof(candidate));
         }
+
+        if (scene_slot == slot) {
+            snprintf(out, out_sz, "%s", candidate);
+            return;
+        }
+
+        snprintf(used[used_count], sizeof(used[used_count]), "%s", candidate);
+        used_count++;
     }
 
-    if (collision)
-        snprintf(out, out_sz, "%s_%d", base, slot);
-    else
-        snprintf(out, out_sz, "%s", base);
+    out[0] = '\0';
 }
 
 static void scene_name_from_filename(const char *path,
@@ -566,7 +610,11 @@ int repl_save_workspace(const char *dir, const ReplExportLayout *layout) {
         snprintf(path, sizeof(path), "%s/%s.c", dir, slug);
 
         g_export_scene_name_hint = g_user_scenes[s].name;
-        repl_export_save_output(path, source_document_view(), layout);
+        if (!repl_export_save_output(path, source_document_view(), layout)) {
+            g_export_scene_name_hint = NULL;
+            restore_live_from_stash(&stash, &stash_cfg);
+            return -1;
+        }
         g_export_scene_name_hint = NULL;
         written++;
     }
@@ -608,7 +656,10 @@ void repl_save_active_scene(const ReplExportLayout *layout) {
     }
 
     g_export_scene_name_hint = g_user_scenes[slot].name;
-    repl_export_save_output(path, source_document_view(), layout);
+    if (!repl_export_save_output(path, source_document_view(), layout)) {
+        g_export_scene_name_hint = NULL;
+        return;
+    }
     g_export_scene_name_hint = NULL;
 
     /* repl_export_save_output hardcodes its success status to
@@ -860,7 +911,10 @@ static int evict_scene_to_workspace(int slot) {
      * (called from editor_undo_push_snapshot). The user isn't actively
      * saving here, so the layout struct is unavailable — pass NULL and
      * accept the 800x600 fallback in the exported display(). */
-    repl_export_save_output(path, source_document_view(), NULL);
+    if (!repl_export_save_output(path, source_document_view(), NULL)) {
+        g_export_scene_name_hint = NULL;
+        return 0;
+    }
     g_export_scene_name_hint = NULL;
 
     g_user_scenes[slot].used = 0;

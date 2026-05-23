@@ -2456,11 +2456,12 @@ void glr_ctrl_request_quit(void) {
 static void glr_ctrl_save_quit_recovery(void) {
     ReplExportLayout layout;
     glr_ctrl_fill_export_layout(&layout);
-    repl_export_save_output(QUIT_RECOVERY_FILE, source_document_view(),
-                            &layout);
-    printf("Saved recovery copy to %s (reload: ./%s %s)\n",
-           QUIT_RECOVERY_FILE, glr_ctrl_program_name(),
-           QUIT_RECOVERY_FILE);
+    if (repl_export_save_output(QUIT_RECOVERY_FILE, source_document_view(),
+                                &layout)) {
+        printf("Saved recovery copy to %s (reload: ./%s %s)\n",
+               QUIT_RECOVERY_FILE, glr_ctrl_program_name(),
+               QUIT_RECOVERY_FILE);
+    }
 }
 
 int glr_ctrl_router_handle_quit_key(unsigned char key) {

@@ -289,8 +289,8 @@ typedef struct {
  * than reaching into globals. `layout` carries the viewport /
  * scene rect / code-panel width / wrap toggle the controller built;
  * `src/repl/export.c` consumes it as opaque integers. */
-void repl_export_save_output(const char *filename, SourceTextView text,
-                             const ReplExportLayout *layout);
+int repl_export_save_output(const char *filename, SourceTextView text,
+                            const ReplExportLayout *layout);
 
 /* Code-panel dumps used by debug output and test fixtures. */
 void repl_dump_code_panel_text(FILE *out, SourceTextView text);
