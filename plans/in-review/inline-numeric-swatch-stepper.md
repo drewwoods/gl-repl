@@ -57,15 +57,19 @@ either no-op or wipe the entire in-progress line.
 `editor_commit_apply_external_change(&change, capture_undo=1)`
 (`src/editor/commit.h:63`, used at
 `src/subsystems/color_picker/color_picker_state.c:175`). Each click
-synthesizes a rewritten source line, compiles it, and applies the
-compiled change through the commit pipeline. Undo is captured per
-click (no coalescing — clicks are discrete by definition).
+synthesizes a rewritten source line, parses it as one REPL command,
+builds a `REPL_COMPILED_REPLACE_ONE`, and applies that change through
+the commit pipeline immediately. The scene sees the adjusted command on
+the next redraw after the same click. Undo is captured per click (no
+coalescing — clicks are discrete by definition).
 
 **Gating consequence:** the swatch only makes sense on a parseable
-committed line. Show only when `editor_state_edit_line() >= 0`
-(`src/editor/state.h:177`) AND the input parses without error.
-While the user is typing fresh input on the input row (no committed
-line yet), the swatch hides.
+committed line. Show only when the editor is in overwrite/edit mode:
+`!editor_insert_mode()` AND `editor_state_edit_line() <
+repl_state_document_count()`. Do **not** use `edit_line >= 0` as the
+fresh-input test; `editor_state_edit_line_set()` clamps negatives to
+zero (`src/editor/state.c:262`). While the user is typing fresh input
+in insert mode, the swatch hides.
 
 ## Architecture
 
@@ -86,16 +90,17 @@ line yet), the swatch hides.
 │  - route_numeric_swatch_hit()│         │    ui_repl_code_panel_render │
 └──────────────────────────────┘         │  - hit emission near :1681   │
               │ on click:                └──────────────────────────────┘
-              │ synthesize line text → compile → commit          ▲
+              │ synthesize line text → parse → REPLACE_ONE commit ▲
               ▼                                                  │
        src/editor/commit.h                                       │
         editor_commit_apply_external_change(_,capture_undo=1)    │
               │                                                  │
               │ uses pixel anchor resolved by                    │
               ▼                                                  │
-       src/ui/core/text_panel.c                                  │
-        new helper: input_offset_to_pixel(buf,off) ──────────────┘
-              (same wrap+scroll+indent math as the renderer)
+       src/ui/app/repl_code_panel.{c,h}                         │
+        ui_repl_code_panel_input_offset_pixel(snap, off) ───────┘
+              (builds the same rows as render/hit-test; delegates
+               math to a pure text-panel helper over a snapshot+row)
 ```
 
 No new file under `src/subsystems/`. The widget owns zero state.
@@ -171,23 +176,40 @@ typedef struct {
 } UiNumericSwatchSnapshot;
 ```
 
-### 3. Shared pixel-anchor helper (`src/ui/core/text_panel.{c,h}`)
+### 3. Shared pixel-anchor helpers (`src/ui/core/text_panel.{c,h}` +
+`src/ui/app/repl_code_panel.{c,h}`)
 
 The naive `FONT_SMALL_W * arg_end` math from the draft is wrong on
 wrapped, scrolled, or indented rows. The input renderer in
-`src/ui/core/text_panel.c` already does wrap+scroll+indent layout. Add
-a shared helper that mirrors that math:
+`src/ui/core/text_panel.c` already does wrap+scroll+indent layout. Add a
+pure core helper that takes the same snapshot data the renderer sees:
 
 ```c
-/* Resolve a char offset in the input buffer to the pixel coordinates
- * the input-row renderer uses, honoring wrap, scroll, and indent. */
-int ui_text_panel_input_offset_pixel(int char_offset,
-                                     float *out_px, float *out_py);
+/* Resolve `char_offset` in the active input buffer to the pixel
+ * coordinates used by the input-row renderer. `input_row_idx` is an
+ * index into snap->rows. Honors wrap, scroll, top chrome, row indent,
+ * and visibility. No live-state reads. */
+int ui_text_panel_input_offset_pixel(const UiTextPanelSnapshot *snap,
+                                     int input_row_idx,
+                                     int char_offset,
+                                     int *out_px, int *out_py);
 ```
 
-Returns 0 if `char_offset` is outside the rendered range (e.g.
-scrolled off). Used by `glr_ctrl_populate_numeric_swatch()` so the
-swatch anchors exactly where the literal appears on screen.
+Then add the REPL adapter wrapper:
+
+```c
+int ui_repl_code_panel_input_offset_pixel(const UiRenderSnapshot *snap,
+                                          int char_offset,
+                                          float *out_px, float *out_py);
+```
+
+The wrapper builds the same `ReplCodePanelBuilder` rows as
+`ui_repl_code_panel_render()` / `ui_repl_code_panel_hit_test()`, finds the
+active input row, and delegates to `ui_text_panel_input_offset_pixel`.
+Returns 0 if `char_offset` is invalid or the row/offset is scrolled off.
+Used by `glr_ctrl_populate_numeric_swatch()` so the swatch anchors
+exactly where the literal appears on screen without UI code reading live
+editor/REPL state.
 
 ### 4. Controller fill (`src/app/glr_ctrl.c`)
 
@@ -196,8 +218,11 @@ New `glr_ctrl_populate_numeric_swatch(UiRenderSnapshot *)` called from
 
 1. `editor_state_input()` for cursor + input text.
 2. Suppress (set `visible=0`) when **any** is true:
-   - `editor_state_edit_line() < 0` — not editing a committed line
-     (commit-on-click requires a target row).
+   - `editor_insert_mode()` — fresh/insertion input, not an overwrite edit
+     of a committed row.
+   - `editor_state_edit_line() < 0 ||
+     editor_state_edit_line() >= repl_state_document_count()` — no committed
+     target row. (`< 0` is defensive; in practice the setter clamps.)
    - `editor_state_autocomplete().match_count > 0` — popup conflict
      (ghost/hint alone do NOT suppress; only the visible match list).
    - `editor_inline_rename_active()` — rename owns keys.
@@ -205,11 +230,14 @@ New `glr_ctrl_populate_numeric_swatch(UiRenderSnapshot *)` called from
      tutorial guard would reject the mutation (`tutorial.h:107`).
    - Empty input or `cursor_pos < 0`.
 3. Else call `repl_eval_numeric_arg_at_cursor`. If `found`:
-   - Try compiling the current input as-is (no rewrite); if it doesn't
-     parse, set `visible=0` (commit would fail anyway).
-   - Fill snapshot, calling `ui_text_panel_input_offset_pixel(arg_end,
-     &anchor_x, &anchor_y)`. If the helper returns 0 (offset scrolled
-     off), set `visible=0`.
+   - Try parsing the current input as a single REPL command with
+     `repl_parser_parse_command_ctx` (same parser shape the color picker
+     writeback uses, not `repl_compile_dispatch`, which only covers float
+     declarations / assignments). If parse fails, set `visible=0`.
+   - Fill snapshot, calling
+     `ui_repl_code_panel_input_offset_pixel(snap, arg_end, &anchor_x,
+     &anchor_y)`. If the helper returns 0 (offset scrolled off), set
+     `visible=0`.
 
 ### 5. Renderer + hit-test (new `src/ui/app/numeric_swatch.{c,h}`)
 
@@ -224,10 +252,13 @@ UiHit ui_numeric_swatch_hit_test(const UiNumericSwatchSnapshot *view,
 ```
 
 Geometry per user choice "right of the literal": two stacked 16×12px
-buttons (▲ on top, ▼ below), 1px border, anchored 4px right of
-`anchor_x`, vertically centered on `anchor_y`. Hit test returns
-`UI_HIT_NUMERIC_SWATCH` with `item_idx = +1` (▲) or `-1` (▼) and no
-other payload (route handler re-derives all offsets from live state).
+buttons (up on top, down below), 1px border, anchored 4px right of
+`anchor_x`, vertically centered on `anchor_y`. Draw the arrows as tiny GL
+triangles or ASCII `^`/`v`; do not rely on UTF-8 `▲`/`▼` through
+`glutBitmapCharacter`, which consumes bytes rather than Unicode codepoints.
+Hit test returns `UI_HIT_NUMERIC_SWATCH` with `item_idx = +1` (increment)
+or `-1` (decrement) and no other payload (route handler re-derives all
+offsets from live state).
 
 ### 6. Wiring into the code-panel render + hit pipeline
 
@@ -271,7 +302,13 @@ inside `glr_ctrl_router_handle_code_panel_hit` (`glr_ctrl.c:3410`):
 
 ```c
 static int route_numeric_swatch_hit(const UiHit *hit) {
+    int edit_line = editor_state_edit_line();
     EditorInputView in = editor_state_input();
+
+    if (editor_insert_mode() ||
+        edit_line < 0 || edit_line >= repl_state_document_count())
+        return 1;
+
     ReplNumericArgAtCursor d =
         repl_eval_numeric_arg_at_cursor(in.input, in.cursor_pos);
     if (!d.found) return 1;  /* cursor moved off mid-click */
@@ -282,22 +319,51 @@ static int route_numeric_swatch_hit(const UiHit *hit) {
     repl_eval_format_swatch_number(new_value, buf, sizeof buf);
 
     /* Splice the rewritten literal into the line. */
-    char new_line[REPL_INPUT_MAX_LEN];
+    char new_line[MAX_LINE_LEN];
     int n = snprintf(new_line, sizeof new_line, "%.*s%s%s",
                      d.arg_start, in.input, buf, in.input + d.arg_end);
     if (n < 0 || n >= (int)sizeof new_line) return 1;
 
-    /* Compile + commit through the same path the color picker uses
-     * (color_picker_state.c:175). Captures undo, updates source array,
-     * refreshes editor buffer, marks flat-cmd dirty so the next frame
-     * re-renders the scene with the new value. */
-    /* ... build ReplCompileContext for the current edit line ...
-     * ReplCompileResult res = repl_compile(...);
-     * if (!res.ok) return 1;
-     * editor_commit_apply_external_change(&res.change, /*capture_undo=*/1);
-     * editor_completion_update();
-     * editor_request_redraw();
-     */
+    /* Parse + commit through the same shape the color picker uses:
+     * parse the rewritten single command, build a REPLACE_ONE change,
+     * and send it through editor_commit_apply_external_change().
+     * Do NOT use repl_compile_dispatch here; it only handles float
+     * declarations and assignments, not ordinary GL calls. */
+    char parse_err[REPL_STATUS_TEXT_MAX] = "";
+    ReplParseContext parse_ctx = {
+        .source_line_idx = edit_line,
+        .err_buf = parse_err,
+        .err_sz = (int)sizeof parse_err,
+    };
+    ReplParsedLine pl;
+    if (!repl_parser_parse_command_ctx(new_line, &pl, &parse_ctx)) {
+        if (parse_err[0]) repl_set_status(parse_err);
+        return 1;
+    }
+
+    ReplCompiledChange change;
+    repl_compiled_change_init(&change);
+    change.kind = REPL_COMPILED_REPLACE_ONE;
+    change.pos = edit_line;
+    change.count = 1;
+    change.cmds[0] = pl.cmd;
+    snprintf(change.text[0], sizeof change.text[0], "%s", pl.text);
+
+    if (editor_commit_apply_external_change(&change, /*capture_undo=*/1)) {
+        /* External-change apply updates the source buffer and command
+         * store, but it does not refresh the live input row. Reload it
+         * so the active row shows the committed value, then put the
+         * cursor back inside/at the end of the rewritten literal so
+         * rapid repeat clicks keep working. Prefer finding `buf` near
+         * the old arg_start after canonical reformat; fall back to a
+         * clamped old-offset cursor. */
+        editor_load_line_to_input(edit_line);
+        numeric_swatch_restore_cursor_near_literal(buf, d.arg_start);
+        editor_completion_update();
+        editor_request_redraw();
+        /* The committed command store is already dirty, so the next
+         * frame rebuilds/replays and the scene shows the new value. */
+    }
     return 1;
 }
 ```
@@ -309,16 +375,18 @@ ghost text stay consistent with the new input text.
 ## Critical Files
 
 - `src/repl/eval.{c,h}` — three new helpers
-- `src/ui/core/text_panel.{c,h}` — new `ui_text_panel_input_offset_pixel`
-  helper (shared with the renderer)
+- `src/ui/core/text_panel.{c,h}` — new pure
+  `ui_text_panel_input_offset_pixel` helper over `UiTextPanelSnapshot`
+  + input-row index
+- `src/ui/app/repl_code_panel.{c,h}` — new
+  `ui_repl_code_panel_input_offset_pixel` adapter wrapper plus render call
+  inside `ui_repl_code_panel_render` (`:1599`)
 - `src/ui/app/snapshot.h` — new `UiNumericSwatchSnapshot` field
 - `src/app/glr_ctrl.c` — populate fn + route handler, hooked into
   `glr_ctrl_build_ui_snapshot()` and the dispatch inside
   `glr_ctrl_router_handle_code_panel_hit` (`glr_ctrl.c:3410`)
 - `src/ui/app/numeric_swatch.{c,h}` — **new** pure renderer + hit-test
   (mirror `src/ui/app/color_picker.c` shape)
-- `src/ui/app/repl_code_panel.c` — add render call inside
-  `ui_repl_code_panel_render` (`:1599`)
 - `src/ui/app/panels.c` — add hit-test call inside `ui_panels_hit_test`
   (`:251`)
 - `src/ui/core/hit.h` — new `UI_HIT_NUMERIC_SWATCH` kind + doc block
