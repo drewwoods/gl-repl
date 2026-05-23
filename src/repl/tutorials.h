@@ -35,6 +35,8 @@
 #ifndef REPL_TUTORIALS_H
 #define REPL_TUTORIALS_H
 
+#include <limits.h>
+
 /* Maximum tutorial step count and tracked-line cap. Lives here
  * (rather than in widgets/tutorial_state.h) so the catalog
  * validator can use it without taking a dependency on widget
@@ -69,6 +71,30 @@ typedef struct {
     int                       cfg_value;
 } TutorialStep;
 
+/* Curated metadata tags used by the Tutorials menu. Tutorials keep their
+ * flat identity; tags are only a secondary discovery index. Tag index 0
+ * is the synthetic "All" group — every tutorial is a member (folded into
+ * the mask by repl_tutorial_tag_mask), so the menu's first flyout lists
+ * every tutorial once.
+ *
+ * The enum is in the header so app-layer code (e.g. an eventual tutorial
+ * tag-default bridge) can name tags symbolically. The bit-shifted
+ * TUTORIAL_TAG_* macros used inside g_tutorials[] stay private to
+ * tutorials.c. Taxonomy is topic-based: GEOMETRY / COLOR_TRANSFORMS /
+ * DEPTH_LIGHTING covers the shipped catalog; reserved ANIMATION is
+ * filtered out by repl_tutorial_visible_tag_count() until something
+ * carries it. */
+enum {
+    REPL_TUTORIAL_TAG_ALL = 0,
+    REPL_TUTORIAL_TAG_GEOMETRY,
+    REPL_TUTORIAL_TAG_COLOR_TRANSFORMS,
+    REPL_TUTORIAL_TAG_DEPTH_LIGHTING,
+    REPL_TUTORIAL_TAG_ANIMATION,
+    REPL_TUTORIAL_TAG_COUNT
+};
+
+typedef unsigned int ReplTutorialTagMask;
+
 typedef struct {
     const char         *name;
     const TutorialStep *steps;
@@ -78,6 +104,12 @@ typedef struct {
      * bridge (see CLAUDE.md). NULL = no scene-presentation overrides
      * (the default; existing catalog entries get this implicitly). */
     const char *const  *cfg;
+    /* Tag bitmask for menu grouping (REPL_TUTORIAL_TAG_* bits OR-ed
+     * via the private TUTORIAL_TAG_* macros in tutorials.c). The
+     * synthetic ALL bit is folded in by repl_tutorial_tag_mask() so
+     * entry literals stay free of it. Zero mask = visible only under
+     * "All" — flagged by the metadata test. */
+    ReplTutorialTagMask tags;
 } TutorialEntry;
 
 int                       repl_tutorial_count(void);
@@ -95,6 +127,27 @@ int                       repl_tutorial_step_cfg_value(int idx, int step_idx);
 /* The tutorial's leading `@cfg` strings (NULL-terminated array), or NULL
  * when it has none. Out-of-range idx → NULL. */
 const char *const        *repl_tutorial_cfg_lines(int idx);
+
+/* Tag query API — mirrors the example tag API in src/repl/examples.h.
+ * `tag_count` includes the synthetic ALL at index 0. `tag_mask` ORs the
+ * ALL bit into the entry's stored mask so every query (has_tag,
+ * count_for_tag, index_for_tag, visible_tag_*) sees the ALL membership
+ * uniformly. Out-of-range / invalid inputs return 0 / NULL / -1. */
+int                       repl_tutorial_tag_count(void);
+const char               *repl_tutorial_tag_label(int tag_idx);
+unsigned int              repl_tutorial_tag_mask(int tutorial_idx);
+int                       repl_tutorial_has_tag(int tutorial_idx, int tag_idx);
+int                       repl_tutorial_count_for_tag(int tag_idx);
+int                       repl_tutorial_index_for_tag(int tag_idx, int ordinal);
+int                       repl_tutorial_visible_tag_count(void);
+int                       repl_tutorial_visible_tag_at(int dense_idx);
+
+static inline unsigned int repl_tutorial_tag_bit(int tag_idx) {
+    if (tag_idx < 0 || tag_idx >= repl_tutorial_tag_count() ||
+        tag_idx >= (int)(sizeof(unsigned int) * CHAR_BIT))
+        return 0u;
+    return 1u << (unsigned int)tag_idx;
+}
 
 /* Validate a tutorial catalog entry. Returns 1 on success. On failure
  * returns 0 and writes a short diagnostic into `err` (when err_size > 0).

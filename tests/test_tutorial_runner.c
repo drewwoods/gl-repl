@@ -885,6 +885,113 @@ static void test_catalog_cfg_lines(void) {
                 repl_tutorial_cfg_lines(-1) == NULL);
 }
 
+/* Mirror of test_example_tag_metadata in tests/test_repl_core_examples.c.
+ * Sanity-checks the tutorial tag system end-to-end: tag count, label table,
+ * mask/has_tag/count_for_tag/index_for_tag mutual agreement, bounds, the
+ * visible-tag count, and that every shipped catalog entry carries a
+ * non-zero mask whose bits all map to known tags. Also asserts that the
+ * known multi-tag entry ("Depth Test Triangle" → GEOMETRY|DEPTH_LIGHTING)
+ * is reachable under each of its tags via index_for_tag — the equivalent
+ * of examples' Stress-test multi-tag assertion. */
+static void test_catalog_tag_metadata(void) {
+    int tag_count = repl_tutorial_tag_count();
+    int tutorial_count = repl_tutorial_count();
+    unsigned int known_tag_bits = 0u;
+
+    ASSERT_TRUE("tutorial tag count positive", tag_count > 0);
+    for (int tag_idx = 0; tag_idx < tag_count; tag_idx++) {
+        char label[128];
+        const char *tag_label = repl_tutorial_tag_label(tag_idx);
+        int count;
+
+        snprintf(label, sizeof(label), "tutorial tag %d label", tag_idx);
+        ASSERT_TRUE(label, tag_label != NULL && tag_label[0] != '\0');
+        known_tag_bits |= repl_tutorial_tag_bit(tag_idx);
+
+        count = repl_tutorial_count_for_tag(tag_idx);
+        for (int ordinal = 0; ordinal < count; ordinal++) {
+            int tutorial_idx = repl_tutorial_index_for_tag(tag_idx, ordinal);
+            snprintf(label, sizeof(label), "tag %d ordinal %d maps valid",
+                     tag_idx, ordinal);
+            ASSERT_TRUE(label,
+                        tutorial_idx >= 0 && tutorial_idx < tutorial_count);
+            snprintf(label, sizeof(label), "tag %d ordinal %d has tag",
+                     tag_idx, ordinal);
+            ASSERT_TRUE(label, repl_tutorial_has_tag(tutorial_idx, tag_idx));
+        }
+    }
+
+    ASSERT_TRUE("invalid negative tag bit", repl_tutorial_tag_bit(-1) == 0u);
+    ASSERT_TRUE("invalid high tag bit",
+                repl_tutorial_tag_bit(repl_tutorial_tag_count()) == 0u);
+    ASSERT_TRUE("visible tag count within tag count",
+                repl_tutorial_visible_tag_count() <= tag_count);
+    for (int dense_idx = 0;
+         dense_idx < repl_tutorial_visible_tag_count();
+         dense_idx++) {
+        char label[128];
+        int tag_idx = repl_tutorial_visible_tag_at(dense_idx);
+        snprintf(label, sizeof(label), "visible tag %d maps valid", dense_idx);
+        ASSERT_TRUE(label, tag_idx >= 0 && tag_idx < tag_count);
+        snprintf(label, sizeof(label), "visible tag %d has tutorials",
+                 dense_idx);
+        ASSERT_TRUE(label, repl_tutorial_count_for_tag(tag_idx) > 0);
+    }
+
+    for (int idx = 0; idx < tutorial_count; idx++) {
+        char label[160];
+        unsigned int mask = repl_tutorial_tag_mask(idx);
+
+        /* Every entry has at least the synthetic ALL bit folded in, so
+         * an accidentally zero-mask entry (the most likely regression
+         * when adding new tutorials) still surfaces here. */
+        snprintf(label, sizeof(label), "tutorial %d tag mask nonzero", idx);
+        ASSERT_TRUE(label, mask != 0u);
+        snprintf(label, sizeof(label), "tutorial %d tag mask known bits", idx);
+        ASSERT_TRUE(label, (mask & ~known_tag_bits) == 0u);
+        for (int tag_idx = 0; tag_idx < tag_count; tag_idx++) {
+            int expected = (mask & repl_tutorial_tag_bit(tag_idx)) != 0u;
+            snprintf(label, sizeof(label), "tutorial %d tag %d agreement",
+                     idx, tag_idx);
+            ASSERT_TRUE(label,
+                        repl_tutorial_has_tag(idx, tag_idx) == expected);
+        }
+    }
+
+    /* Known multi-tag entry: Depth Test Triangle ships under both
+     * GEOMETRY and DEPTH_LIGHTING. Must be discoverable from each. */
+    int depth_idx = -1;
+    for (int i = 0; i < tutorial_count; i++) {
+        const char *name = repl_tutorial_name(i);
+        if (name && strcmp(name, "Depth Test Triangle") == 0) {
+            depth_idx = i;
+            break;
+        }
+    }
+    ASSERT_TRUE("known multi-tag tutorial found", depth_idx >= 0);
+    if (depth_idx >= 0) {
+        int hits = 0;
+        for (int tag_idx = 0; tag_idx < tag_count; tag_idx++) {
+            int found_under_tag = 0;
+            if (!repl_tutorial_has_tag(depth_idx, tag_idx))
+                continue;
+            hits++;
+            for (int ordinal = 0;
+                 ordinal < repl_tutorial_count_for_tag(tag_idx);
+                 ordinal++) {
+                if (repl_tutorial_index_for_tag(tag_idx, ordinal) == depth_idx) {
+                    found_under_tag = 1;
+                    break;
+                }
+            }
+            ASSERT_TRUE("multi-tag tutorial discoverable under assigned tag",
+                        found_under_tag);
+        }
+        /* hits counts ALL + GEOMETRY + DEPTH_LIGHTING = 3 minimum. */
+        ASSERT_TRUE("multi-tag tutorial has multiple tags", hits > 1);
+    }
+}
+
 static void test_catalog_validation_passes_for_all_tutorials(void) {
     /* Phase 1: every shipped catalog entry must validate. */
     for (int t = 0; t < repl_tutorial_count(); t++) {
@@ -1788,6 +1895,7 @@ int main(void) {
     test_start_rejects_out_of_range_idx();
     test_catalog_starter_steps_are_append();
     test_catalog_cfg_lines();
+    test_catalog_tag_metadata();
     test_catalog_validation_passes_for_all_tutorials();
     test_catalog_rejects_out_of_range_index();
     test_validate_rejects_duplicate_label();
