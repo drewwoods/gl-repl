@@ -614,7 +614,7 @@ flowchart TB
     %% Editor commit is the only path crossing INTO the REPL pipeline.
     %% REPL apply / command_store mutates the program model.
     editor i9@--> repl
-    repl e1@==> models
+    repl e2@==> models
 
     %% Peers write back through the editor (color_picker rewrites a
     %% source line via editor_commit_apply_external_change; the
@@ -627,7 +627,7 @@ flowchart TB
     %% editor buffer — editor stays the single underlying writer.
     repl -.-> srcdoc
     services -.-> srcdoc
-    app e2@==> srcdoc
+    app e3@==> srcdoc
 
     %% Render is read-only: scene and UI consume snapshots of program /
     %% editor / peer / app state. They never mutate.
@@ -645,7 +645,7 @@ flowchart TB
     classDef animateE stroke:#f50,stroke-dasharray: 9\,5,stroke-dashoffset: 900,animation: dash 90s linear infinite;
     classDef animateF stroke:#5f0,stroke-dasharray: 9\,5,stroke-dashoffset: 900,animation: dash 90s linear infinite;
 
-    class e1,e2 animateE
+    class e1,e2,e3 animateE
     class i1,i2,i3,i4,i5,i6,i7,i8,i9,i10 animateF
 ```
 
