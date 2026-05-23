@@ -119,7 +119,8 @@ static void test_color_transform_walkthrough(void) {
     ASSERT_INT("color-transform tutorial idx",
                tutorial_state_view().tutorial_idx, 1);
     ASSERT_STR("color-transform start status",
-               status_text(), "Tutorial: step 1/11");
+               status_text(),
+               "Tutorial: step 1/11 - type the command or press Tab to autocomplete");
 
     total_steps = repl_tutorial_step_count(1);
     for (idx = 0; idx < total_steps; idx++) {
@@ -416,7 +417,8 @@ static void test_tutorial_start_sets_step_progress_status(void) {
     reset_fixture();
     tutorial_start(0);
     ASSERT_STR("start sets step 1 status",
-               status_text(), "Tutorial: step 1/5");
+               status_text(),
+               "Tutorial: step 1/5 - type the command or press Tab to autocomplete");
 }
 
 static void test_tutorial_advance_updates_step_progress_status(void) {
@@ -428,7 +430,48 @@ static void test_tutorial_advance_updates_step_progress_status(void) {
     set_input_text(expected);
     (void)editor_handle_key(';', 0, 0);
     ASSERT_STR("advance sets step 2 status",
-               status_text(), "Tutorial: step 2/5");
+               status_text(),
+               "Tutorial: step 2/5 - type the command or press Tab to autocomplete");
+}
+
+/* tutorial_refresh_input_hint flips the status to the "ready to commit"
+ * reminder when the input fully matches the expected command, and is a
+ * no-op for inactive / partial input. The completion provider calls it
+ * on every input-change refresh while the cursor is on the expected
+ * commit line; here we exercise it directly. */
+static void test_tutorial_refresh_input_hint_on_full_match(void) {
+    const char *expected;
+
+    /* Active: empty input is a no-op (status keeps the entry hint). */
+    reset_fixture();
+    tutorial_start(0);
+    tutorial_refresh_input_hint("");
+    ASSERT_STR("empty input does not overwrite entry status",
+               status_text(),
+               "Tutorial: step 1/5 - type the command or press Tab to autocomplete");
+
+    /* Active: a strict prefix of expected is also a no-op. */
+    expected = tutorial_current_expected_text();
+    ASSERT_TRUE("expected exists", expected != NULL);
+    set_input_text("glBeg");
+    tutorial_refresh_input_hint("glBeg");
+    ASSERT_STR("partial input does not overwrite entry status",
+               status_text(),
+               "Tutorial: step 1/5 - type the command or press Tab to autocomplete");
+
+    /* Active: full match refreshes status with the commit reminder. */
+    set_input_text(expected);
+    tutorial_refresh_input_hint(expected);
+    ASSERT_STR("full match sets commit reminder",
+               status_text(),
+               "Tutorial: step 1/5 - press Enter or ';' to commit");
+
+    /* Inactive: never writes. Park a sentinel status, exit the tutorial,
+     * and confirm the call leaves it intact. */
+    tutorial_exit();
+    repl_set_status("sentinel");
+    tutorial_refresh_input_hint("glBegin(GL_TRIANGLES)");
+    ASSERT_STR("inactive call is a no-op", status_text(), "sentinel");
 }
 
 static void test_locked_comment_load_is_read_only(void) {
@@ -567,7 +610,8 @@ static void test_navigation_advances_on_matching_input(void) {
                doc.line_count, 5);
     ASSERT_INT("step advanced via navigation", tutorial_state_view().step, 2);
     ASSERT_STR("navigation advance sets step 3 status",
-               status_text(), "Tutorial: step 3/5");
+               status_text(),
+               "Tutorial: step 3/5 - type the command or press Tab to autocomplete");
 }
 
 static void test_enter_on_locked_line_shows_position_hint(void) {
@@ -1997,6 +2041,7 @@ int main(void) {
     test_shadow_text_clears_on_exit();
     test_tutorial_start_sets_step_progress_status();
     test_tutorial_advance_updates_step_progress_status();
+    test_tutorial_refresh_input_hint_on_full_match();
     test_locked_comment_load_is_read_only();
     test_locked_comment_mutations_are_blocked();
     test_paste_before_locked_prefix_is_blocked();

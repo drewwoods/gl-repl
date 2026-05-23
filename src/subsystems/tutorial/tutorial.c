@@ -189,13 +189,21 @@ static int tutorial_append_locked_line(int line_idx) {
     return 1;
 }
 
+/* Status emitted on COMMAND-step entry. The trailing affordance hint
+ * teaches the user that they can either type the expected command or
+ * Tab-accept the ghost suffix the autocomplete provider already shows
+ * on the input row. The full message rides the standard status TTL
+ * (REPL_STATUS_MESSAGE_TTL frames, ~6s), so the reminder fades on its
+ * own once the user starts engaging with the step. */
 static void tutorial_set_step_status(int tutorial_idx, int step) {
     int total = repl_tutorial_step_count(tutorial_idx);
-    char msg[64];
+    char msg[128];
 
     if (total <= 0)
         return;
-    snprintf(msg, sizeof(msg), "Tutorial: step %d/%d", step + 1, total);
+    snprintf(msg, sizeof(msg),
+             "Tutorial: step %d/%d - type the command or press Tab to autocomplete",
+             step + 1, total);
     repl_set_status(msg);
 }
 
@@ -536,6 +544,43 @@ int tutorial_handle_commit_attempt(const char *input, TutorialMatchResult *out) 
     result = tutorial_match(expected, input);
     tutorial_store_result(out, result);
     return result.kind == TUT_MATCH_OK;
+}
+
+/* When a COMMAND step's input is a complete match for the expected
+ * command (Tab-accepted or fully typed), refresh the status to remind
+ * the user how to commit. Called from the completion provider on every
+ * input change while the cursor is on the expected commit line, so the
+ * hint keeps its TTL fresh as long as the user holds at the matched
+ * state. No-op for inactive / SET / REQUIRE / partial-input — those
+ * paths let any existing status fade naturally. Uses the same
+ * tutorial_match normalization the commit path uses, so trailing
+ * whitespace or an extra ';' on the input still counts as matched. */
+void tutorial_refresh_input_hint(const char *input) {
+    TutorialRuntimeState state;
+    const char *expected;
+    TutorialMatchResult r;
+    int total;
+    char msg[128];
+
+    if (!tutorial_active())
+        return;
+    state = tutorial_state_view();
+    if (repl_tutorial_step_kind(state.tutorial_idx, state.step) !=
+        TUTORIAL_STEP_KIND_COMMAND)
+        return;
+    expected = tutorial_current_expected_text();
+    if (!expected)
+        return;
+    r = tutorial_match(expected, input ? input : "");
+    if (r.kind != TUT_MATCH_OK)
+        return;
+    total = repl_tutorial_step_count(state.tutorial_idx);
+    if (total <= 0)
+        return;
+    snprintf(msg, sizeof(msg),
+             "Tutorial: step %d/%d - press Enter or ';' to commit",
+             state.step + 1, total);
+    repl_set_status(msg);
 }
 
 /* Enter the step at the CURRENT state->step. The advance loop owns the
