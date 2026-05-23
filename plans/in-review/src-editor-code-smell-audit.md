@@ -22,6 +22,22 @@
 > production callers and is actually a multi-step week-pass refactor.
 > All corrected inline.
 >
+> **Revision 3 (2026-05-23):** Second reviewer pass. Fixed: #13's
+> "route through dispatch" recipe would have silently dropped every
+> `EditorCommitPlan` post-effect (clear_input, cursor_target,
+> commit_message, normals_dirty, and the `_var_statements_then_insert`
+> insert-mode flip); reframed as two viable shapes (shared ordering
+> table vs. adapter). #11 also missed `collect_visible_vars` at
+> `core.c:721`, which has its own live-state reads — full extraction
+> spans three modules. #15 conflicted with #27 (delete the only
+> production user of `EditorCommitResult`) — picked direction (delete
+> the type; reframe #15 around status-side-effect testability). #3
+> covered only `editor_compile_close_brace` while the same ignored-err
+> issue exists in `repl_compile_close_brace` (`compile.c:1485`) and
+> propagates through `load_try_block` — fix now requires both. #29's
+> test-call count was undercounted (21 calls, not 5); afternoon
+> sequencing now names the real churn so "build-safe" stays true.
+>
 > Scope: every file under `src/editor/`. Tests under `tests/` were
 > read where they document a contract, but not audited.
 >
@@ -90,22 +106,31 @@ deployments; ASan flags it.
 **Fix:** Size by `count` (`char (*buf)[MAX_LINE_LEN] = malloc(count * MAX_LINE_LEN)`)
 or impose a small `MAX_CLIPBOARD_PASTE` cap.
 
-### 3. `editor_compile_close_brace` accepts `err` / `err_size` then ignores them
+### 3. Close-brace compile functions accept `err` / `err_size` then ignore them
 
 **Where:** `src/editor/commit.c:285-290`
+(`editor_compile_close_brace`) AND `src/repl/compile.c:1485-1490`
+(`repl_compile_close_brace`). The latter is called via
+`load_try_block` at `src/repl/load.c:94`, so the import path is
+affected too.
 
-**Smell:** Signature is `ReplCompileResult editor_compile_close_brace(... char *err, int err_size)` with `(void)err; (void)err_size;` as the first statements. The sibling structured-compile functions
-(`editor_compile_if_block`, `_func_def`, `_for_loop`) use them; the
-shared signature requires them. Close-brace *can* fail (stray `}`
-with no open block returns NO_CHANGE silently).
+**Smell:** Both signatures take `char *err, int err_size` with
+`(void)err; (void)err_size;` as the first statements. The sibling
+structured-compile functions (`if_block`, `_func_def`, `_for_loop`)
+in both modules use them. Close-brace *can* fail (stray `}` with
+no open block returns NO_CHANGE silently).
 
 **Why it matters:** Callers who want "why didn't close-brace
-match?" can't — the diagnostic is unreachable. Future debugging of
-brace-mismatch issues will require re-plumbing the err buffer.
+match?" can't — the diagnostic is unreachable from interactive
+commit *and* from file load. Future debugging of brace-mismatch
+issues will require re-plumbing both err buffers.
 
-**Fix:** Drop the `(void)` casts and fill `err` for the stray-`}`
-case, or remove `err`/`err_size` from the signature and split the
-typedef.
+**Fix:** Fix both functions together. Either drop the `(void)`
+casts and fill `err` for the stray-`}` case in both, or remove
+`err`/`err_size` from both signatures and split each typedef. Do
+**not** fix only the editor side — that leaves
+`repl_compile_close_brace` in the same shape and
+`load_try_block`'s diagnostic still discarded.
 
 ### 4. Workspace-load wipes undo *before* validating; per-file load preserves it on failure
 
@@ -302,23 +327,37 @@ synthetic context but skip live-state setup will silently misbehave
 (the live REPL document is empty / out-of-sync with the context).
 
 **Fix (under-scoped — read first):** A proper fix is a real
-extraction, not a small refactor. `src/repl/source_scope.h:73` and
-`source_scope.c:153` currently expose only live-state queries
-(they read from the live `g_repl_state` document); adding a
-"view" variant means duplicating each query to take a
-`const GLCmd *cmds, int n` (or a `SourceTextView`) and routing
-the live versions through it. Similar live-scope reads already
-exist in `src/repl/compile.c` (e.g. `repl_compile_close_brace`)
-and would need to be migrated in the same pass for consistency.
+extraction, not a small refactor. The live-state coupling is
+broader than just `source_scope_*`:
+
+- `src/repl/source_scope.h:73` and `source_scope.c:153` currently
+  expose only live-state queries (they read from the live
+  `g_repl_state` document); adding a "view" variant means
+  duplicating each query to take a `const GLCmd *cmds, int n` (or
+  a `SourceTextView`) and routing the live versions through it.
+- `collect_visible_vars` (`src/repl/core.c:721`, declared at
+  `src/repl/core_internal.h:110`) reads `source_document_view()`,
+  `repl_state_document_cmds()`, and `repl_state_document_count()`
+  directly. `editor_compile_if_block` (`commit.c:404`) and
+  `editor_compile_for_loop` (`commit.c:887`) call it. A
+  `source_scope_view` extraction alone won't make these
+  functions context-pure. The author of `collect_visible_vars`
+  already left a comment at `core.c:732` acknowledging it should
+  take a view parameter.
+- Similar live-scope reads exist in `src/repl/compile.c` (e.g.
+  `repl_compile_close_brace`).
+
+A proper extraction needs all three migrated together:
+`source_scope_*_view(...)`, `collect_visible_vars_view(view,
+pos, ...)`, and the compile.c live-scope readers.
 
 The cheap interim is to **document** the contract loudly at each
 of the four `editor_compile_*` entry points: "context-pure for
-document data, live-state-coupled for scope queries — callers
-must apply the change to the live document before the next
-scope-dependent call." That's a one-doc-comment change today,
-with the full extraction queued behind a `source_scope_view`
-refactor that's bigger than the rest of this audit's afternoon
-passes combined.
+document data, live-state-coupled for scope queries and
+visible-var collection — callers must apply the change to the
+live document before the next scope-dependent or visible-vars
+call." That's a one-doc-comment change today, with the full
+extraction queued as its own week of work.
 
 ### 12. README claims `EditorState` owns "cursor blink"; `state.h` disclaims it
 
@@ -356,8 +395,38 @@ each of which calls `repl_compile_float_decl` /
 requires touching two unrelated functions; the load-bearing
 ordering comment in CLAUDE.md only covers one.
 
-**Fix:** Route `editor_try_commit_var_statements` through
-`repl_compile_dispatch`; remove the direct calls.
+**Fix (carefully scoped — read first):** Do **not** "route through
+`repl_compile_dispatch`" naively. `repl_compile_dispatch`
+(`compile.c:60`) only returns a bare `ReplCompiledChange`. The
+two editor handlers do considerably more than compile:
+`editor_try_commit_float_decl` (`commit.c:1181`) builds an
+`EditorCommitPlan` with `clear_input`, `cursor_target`,
+`load_line_after_apply`, a `commit_message`, and ends with
+`repl_mark_normals_dirty()`. `editor_try_assign_variable`
+(`commit.c:1228`) does the same plus assign-specific effects.
+The `_var_statements_then_insert` variant (`commit.c:1350`) layers
+in the insert-mode flip and input clear that overwrite-Enter
+depends on.
+
+The actual fix has two viable shapes; pick one based on appetite:
+1. **Keep the wrappers, share the ordering table only.** Extract
+   a `static const ReplCompileFn k_var_statement_chain[] = {
+   repl_compile_float_decl, repl_compile_var_assign };` table
+   used by *both* `repl_compile_dispatch` and the editor wrappers
+   (each editor wrapper still owns its own `EditorCommitPlan`
+   effects). One source of truth for ordering; zero behavior
+   change.
+2. **Adapter that preserves post-effects.** Introduce a
+   `editor_compile_var_statement(...)` that calls
+   `repl_compile_dispatch` for the compile step then layers the
+   right post-effects per kind. Bigger move; only worth it if
+   you're also doing #28's `EditorServices` dismantle in the
+   same change.
+
+Either way, the audit's first-draft "route through dispatch and
+remove the direct calls" recipe is **wrong** — it silently drops
+every `EditorCommitPlan` effect listed above and breaks overwrite
+Enter's insert-mode flip.
 
 ### 14. `editor_try_assign_variable` breaks the `editor_try_commit_*` naming convention
 
@@ -391,8 +460,33 @@ module.
 status side-effect. Hard to test the chain handlers in isolation
 because they have a hidden status dependency.
 
-**Fix:** Pick one (return-the-result is cleaner given
-`EditorCommitResult` already exists); route everyone through it.
+**Fix (interacts with #27 — read both before acting):** The
+first-draft "converge on `EditorCommitResult`" recipe conflicts
+with #27, which deletes `editor_commit_current_input` (the only
+production API returning that result shape). Pick one:
+
+1. **Keep #27's delete; reframe #15 around the status-side-effect
+   policy.** With `editor_commit_current_input` gone,
+   `EditorCommitResult` has no production user. The remaining
+   handlers all share the `repl_set_status_error(err)` pattern;
+   the smell becomes "status side-effect is hidden — tests
+   can't observe it without a status capture." Fix: route every
+   handler's status set through a host-effects bridge / sink so
+   tests can capture the message. The `EditorCommitResult` type
+   gets deleted alongside #27.
+2. **Keep #15's "converge on the result type"; drop #27.** Wire
+   the four production dispatch sites through
+   `editor_commit_current_input` so they all return
+   `EditorCommitResult`, and migrate the dispatchers to capture
+   the diagnostic from the result rather than relying on
+   `repl_set_status_error` side-effects. Bigger move; only
+   worth it if you actually want a value-typed commit API.
+
+The audit's recommended direction is (1) — `EditorCommitResult`
+was scaffolding for an architecture that didn't fully land, and
+the simpler convergence is "everyone sets status through a
+testable sink." But (2) is internally consistent if you want the
+typed return.
 
 ### 16. Three apply-block call sites reach the primitives through three different surfaces
 
@@ -659,14 +753,21 @@ production sites.
 ### 29. `editor_commit_apply_compiled_change` is a test-only wrapper
 
 **Where:** `src/editor/commit.c:1117-1119`, declared at
-`commit.h:79`
+`commit.h:79`. Verified: only `tests/test_repl_compile.c` calls
+it — but **across 21 call sites** in that one file. Production
+code uses `editor_commit_apply_external_change(change, 0)`
+directly.
 
-**Smell:** Defined in production but only `tests/test_repl_compile.c`
-calls it. Production code uses
-`editor_commit_apply_external_change(change, 0)` directly.
+**Smell:** Public wrapper with the body
+`editor_commit_apply_external_change(change, 0)`. 21 test
+references couple the test cluster to the wrapper shape rather
+than to the underlying API.
 
-**Fix:** Delete (have tests call the canonical form), or make
-the canonical form private.
+**Fix:** Delete the wrapper; rewrite the 21 test sites to call
+`editor_commit_apply_external_change(change, 0)` directly. The
+rewrite is mechanical search-and-replace, but the LOC churn is
+non-trivial — name it in the sequencing so "build-safe" stays
+true.
 
 ### 30. `EditorInputState.input_capacity` and `pending_newline_capacity` are write-only
 
@@ -1006,16 +1107,24 @@ implementation checklist.
    `editor_input_set_text()` (state.h:299). The audit's first
    draft proposed adding new helpers; the helpers already exist
    publicly.
-8. **#27** + **#29** — Delete `editor_commit_current_input` (5
-   test call sites in `tests/test_repl_compile.c` — L621, L630,
-   L639, L662, L679, L724 — rewrite to exercise the live
-   dispatch sites instead) and the test-only
-   `editor_commit_apply_compiled_change` wrapper.
-   **NB**: this delete is paired with **#28**'s migration in the
-   week pass — leaving `editor_commit_current_input` in place
-   keeps `EditorServices` alive in production for its sake.
-   Order: do the test rewrite first, then the delete, then start
-   the week-pass services migration.
+8. **#27** + **#29** — Delete two test-only API shapes:
+   - `editor_commit_current_input`: 5 calls in
+     `tests/test_repl_compile.c` (L621, L630, L639, L662, L679,
+     L724) — rewrite each to exercise the live dispatch sites.
+   - `editor_commit_apply_compiled_change`: **21 calls in the
+     same test file** — rewrite each to call
+     `editor_commit_apply_external_change(change, 0)` directly.
+     Mechanical search-and-replace but ~21 LOC churn.
+
+   **NB:** #27 is paired with **#28**'s migration in the week
+   pass — leaving `editor_commit_current_input` in place keeps
+   `EditorServices` alive in production for its sake. Order: do
+   the test rewrites first, then the deletes, then start the
+   week-pass services migration. Decision needed on
+   `EditorCommitResult` per #15 before the delete lands —
+   keeping #27 (audit's recommended direction) means
+   `EditorCommitResult` is also unused production code; either
+   delete the type or reframe #15.
 9. **#30** + **#31** + **#33** + **#34** + **#36** + **#37** —
    Dead-field and naming cleanup. All mechanical.
 10. **#38** + **#39** (docstring half only) + **#51** —
@@ -1051,16 +1160,30 @@ The dominant work is **closing the layering inversion**,
   their ordering. Optionally extract
   `editor_try_commit_block_structs_then_var_statements_insert()`
   as a single canonical helper that both Enter sites call.
-- **#11** — *Larger than first stated.* `source_scope.h` exposes
-  only live-state queries today; adding a "view" variant is a
-  real extraction across `src/repl/source_scope.{c,h}` plus
-  similar live reads in `src/repl/compile.c`. Two-stage approach:
+- **#11** — *Larger than first stated.* The live-state coupling
+  spans three modules, not one: `source_scope.h` exposes only
+  live-state queries today; `collect_visible_vars`
+  (`src/repl/core.c:721`) reads the live document directly and
+  is called from `editor_compile_if_block` /
+  `editor_compile_for_loop`; similar reads exist in
+  `src/repl/compile.c`. Two-stage approach:
   (a) document the live-state coupling at each
-  `editor_compile_*` entry point (one-pass doc fix); (b) queue
-  the `source_scope_view` extraction as its own week.
-- **#13** — Route var-statement dispatch through
-  `repl_compile_dispatch`; remove direct calls to
-  `repl_compile_float_decl` / `_var_assign`.
+  `editor_compile_*` entry point (one-pass doc fix);
+  (b) queue the full extraction (`source_scope_*_view`,
+  `collect_visible_vars_view`, and the compile.c migration)
+  as its own week.
+- **#13** — *Do not naively route through `repl_compile_dispatch`*
+  — `repl_compile_dispatch` only returns `ReplCompiledChange`,
+  while the editor wrappers build `EditorCommitPlan` effects
+  (clear_input, cursor_target, load_line_after_apply,
+  commit_message, normals dirty) plus the
+  `_var_statements_then_insert` insert-mode flip. Two viable
+  shapes: (a) extract a shared ordering table
+  (`k_var_statement_chain[]`) used by both dispatch and the
+  editor wrappers — zero behavior change; (b) introduce
+  `editor_compile_var_statement(...)` adapter that calls
+  dispatch then layers per-kind post-effects — bigger, only
+  worth it if #28's services dismantle is in the same change.
 - **#16** — Extract `apply_compiled_three_halves` and use across
   all three apply-block sites.
 - **#17** — Add `repl_eval_predef_copy` seam; route undo through
