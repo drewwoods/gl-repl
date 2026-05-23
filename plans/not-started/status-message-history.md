@@ -4,6 +4,17 @@ Status: **in-review** — feasible and low-risk to build, but the trigger
 and surface are UX forks not yet decided. Do not implement until a
 direction is chosen and the file moves to `not-started/`.
 
+## 2026-05-23 audit
+
+Not implemented: no `UiStatusHistory`/`UiStatusEntry`/`status_history`
+symbols in `src/ui/` or `src/app/`; no `tests/test_ui_status_history.c`.
+
+**Folder mismatch noted:** the header above declares
+`Status: **in-review**` but the file lives in `plans/not-started/`.
+The plan content is decision-pending (UX forks 1–4 unresolved), which
+matches `in-review/` semantics; consider moving it back. Out of scope
+for this audit pass.
+
 ## Context
 
 Status messages (errors, "Saved …", "Runtime load unsupported …",

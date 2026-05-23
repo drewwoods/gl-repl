@@ -1,5 +1,10 @@
 # Float-Returning REPL Functions
 
+## Status — NOT STARTED (2026-05-23 audit)
+
+No `CMD_RETURN` in the command model; user functions remain
+`static void`-shaped at export. Stays in `not-started/`.
+
 ## Summary
 Implement `return expr;` inside REPL functions and make every user function conceptually return a `float`, defaulting to `0.0f` when no explicit return is reached. Existing statement calls like `func0(...);` keep working and ignore the return value. New expression calls like `glVertex3f(func0(4), 0, 0);` and `x = func0(n);` evaluate through a scalar function evaluator. Expression-called functions are scalar-only: if evaluation reaches a GL/render/state command before returning, flatten/evaluation fails with a status error instead of silently skipping side effects.
 

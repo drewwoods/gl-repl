@@ -1,5 +1,24 @@
 # Tutorial replay system design
 
+## Status — NOT STARTED (2026-05-23 audit)
+
+A simpler tutorial system shipped instead and now lives in
+`src/repl/tutorials.{c,h}` + `src/widgets/tutorial*.{c,h}`. Its
+`TutorialStep` is shaped around `TUTORIAL_STEP_APPEND` /
+`TUTORIAL_STEP_LABEL` (a "next command to type" walkthrough,
+match-and-advance), **not** the snapshot/replay/callout step types
+this plan envisioned (`TUTORIAL_STEP_APPLY_SNAPSHOT`,
+`TUTORIAL_STEP_REPLAY_TO_LINE`, `TUTORIAL_STEP_TWEEN_CAMERA`,
+`TUTORIAL_STEP_SHOW_CALLOUT`, `TUTORIAL_STEP_WAIT_FOR_KEY`, etc.).
+No `ReplTutorialSnapshot` / `repl_tutorial_capture_snapshot` /
+`repl_tutorial_player` modules exist.
+
+The existing walkthrough tutorial is functionally distinct from this
+plan's snapshot/replay vision. Stays in `not-started/`; before
+implementing, reconcile against the now-shipped walkthrough system
+(does the snapshot path replace it, complement it, or share the
+catalog?).
+
 ## Question
 
 > in src/immediate-mode-repl/claude4.6-opus-thinking i would like to design a global state capture system to implement tutorials by replaying state to demonstrate certain features.  Assume repl-state-phase2-sketch.md is completed, how would you do this and how much effort would be involved? 

@@ -1,5 +1,15 @@
 ## Scoped Local Variable Reassignment Feature Note
 
+## Status — NOT STARTED (2026-05-23 audit)
+
+`repl_compile_var_assign` (src/repl/compile.c:825) still rejects any
+target that isn't a predef-var or scratch-array slot — see line 908:
+`int var_idx = repl_eval_find_predef_var_idx(name);` followed by
+"undeclared variable '%s' - use 'float %s;' first". Loop vars /
+function-param locals are visible to the validator (`vis_vars`,
+line 859) for read-side identifier validation but never become valid
+assignment targets. Stays in `not-started/`.
+
 ### Summary
 Add a new proposal doc at `feature/writable-scoped-locals.md` using the same structure as `feature/bounded-global-arrays.md`.
 

@@ -1,5 +1,12 @@
 # Smooth Autonormals Plan
 
+## Status — NOT STARTED (2026-05-23 audit)
+
+`src/repl/autonormal.c` still runs pre-flatten on source commands and
+skips block heads (the existing behavior the conversation notes
+diagnose). No `smooth_*` helpers, no capture/render two-pass exporter,
+no crease-angle constants in the tree. Stays in `not-started/`.
+
 ## Summary
 Implement smooth autonormals as a post-flatten, CPU-side geometry pass. Do not use OpenGL feedback and do not export fully flattened loops. Preserve compact user loops in export by generating a two-pass capture/render helper that computes normals at runtime from the same vertex expressions.
 

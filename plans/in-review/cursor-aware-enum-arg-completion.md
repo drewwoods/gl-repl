@@ -6,6 +6,22 @@ input" assumption. How far to relax that assumption is a scope fork not
 yet decided. Do not implement until a direction is chosen and the file
 moves to `not-started/`.
 
+## 2026-05-23 audit
+
+- **Cross-plan dependency landed.** `glcolormask-gl-bool-tokens.md`
+  shipped (it now sits in `plans/done/`). `src/app/glr_completion.c`
+  uses the unified `AC_MODE_ENUM_SLOT` (line 25) and pulls candidates
+  from `def->args[slot].enums` (line 356). The legacy
+  `enums1`/`enums2` / `AC_MODE_ENUM_ARG1/2` shape this plan cites is
+  gone — re-derive the file/line references before implementing.
+- **The cursor-aware piece is NOT done.** The end-of-input guard
+  (`if (editor_cursor_pos() != raw_input_len) return;`) still sits at
+  `src/app/glr_completion.c:260` — mid-line completion remains
+  impossible. No `cursor_arg_slot` or `tail_is_only_trailing_args`
+  helper exists.
+
+No decision recorded on which scope fork to pursue; stays in `in-review/`.
+
 Dependency note: this is **separate** from
 `plans/in-review/glcolormask-gl-bool-tokens.md`. The glColorMask Path C
 work must make ordinary end-of-input enum completion N-slot aware as

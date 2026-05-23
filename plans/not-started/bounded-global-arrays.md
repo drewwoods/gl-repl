@@ -1,5 +1,19 @@
 ## Bounded Global Arrays and Deterministic `rand()` for the Immediate-Mode REPL
 
+## Status — NOT STARTED (2026-05-23 audit)
+
+No `CMD_ARRAY_DEF` / `CMD_ARRAY_SET` in the command model; no
+`MAX_REPL_ARRAYS` / `MAX_REPL_ARRAY_LEN` constants; no
+`array name(size);` syntax. A different, smaller feature shipped
+instead — the fixed scratch arrays `A[8]`/`B[8]`/`C[8]` (see CLAUDE.md
+"Math"), backed by `CMD_SCRATCH_ASSIGN`. That covers part of the
+user-particle-loop motivation with much less surface area.
+
+`rand()` also exists today but in a different shape than this plan
+proposed: it is `rand(seed[, iter])` / `rand2(...)` (deterministic per
+seed/iter), not the zero-arg + session-seeded form here. Any future
+implementation of this plan would need to reconcile the two designs.
+
 ### Summary
 Add first-class bounded global float arrays plus a deterministic `rand()` function to `src/immediate-mode-repl/claude4.6-opus-thinking` so particle-style state can be authored directly in REPL code without unbounded memory or hidden allocation.
 

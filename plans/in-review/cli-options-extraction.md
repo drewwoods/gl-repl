@@ -4,6 +4,13 @@ Status: **in-review** — competing options, no decision yet. This folder is
 for plans whose *direction* is still contested; do not implement until a
 direction is chosen and the file is moved to `not-started/` (or dropped).
 
+## 2026-05-23 audit
+
+Current code matches **Option C (status quo)**: `sample.c:96` still
+defines `print_usage`; the flag loop and `glr_ctrl_set_program_name(argv[0])`
+call sit in `main()` (lines 164, 175+). No `src/app/glr_cli.{c,h}` exists.
+No decision recorded, so the file stays in `in-review/`.
+
 ## Context
 
 `sample.c::main()` currently does three things: (1) parse CLI flags

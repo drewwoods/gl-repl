@@ -1,5 +1,13 @@
 # Close-scene capability (deferred — design brief)
 
+## 2026-05-23 audit
+
+No "Close active scene" item in the File menu (`GLR_FILE_ITEM_*` enum
+in `src/app/glr_actions.h:33–42` is still NEW / SAVE / LOAD / RENAME /
+SAVE_WORKSPACE / LOAD_WORKSPACE). No close/evict API in
+`src/repl/scenes.c`. Open questions 1–4 below are unresolved. Stays
+deferred in `not-started/`.
+
 ## Context
 
 There is currently no way to remove a user scene from the in-memory

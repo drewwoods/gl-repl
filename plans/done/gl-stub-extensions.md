@@ -1,5 +1,23 @@
 ## GL Stub Extensions: Printf Trace for Per-Call Argument Diffs
 
+## Status — DONE (2026-05-23 audit)
+
+The trace facility shipped. Spot checks:
+
+- `GL_STUB_TRACE_LINE` macro is invoked 103× across
+  `tests/gl-stubs/include/` (every stubbed call has its argument line).
+- Storage definition `FILE *gl_stub_trace_fp = NULL;` lives at
+  `tests/gl-stubs/gl_stub_counts.c:24`; the env-var open helper is at
+  lines 48–54 of the same file.
+- `tests/test_export_trace_parity.c` consumes the new trace pathway —
+  `--keep-traces` flag at line 234, `/tmp/test_trace_*.repl.tr`
+  filename template at line 325, and the child compile cmd at line
+  246 wires in the trace stub source.
+
+The two "Out of Scope" carve-outs at the bottom of this plan
+(pointer-array args, programmatic ring buffers) remain explicitly
+deferred and shouldn't block done-ness.
+
 ### Summary
 The stub layer at `tests/gl-stubs/include/GL/*` currently records only a
 per-symbol call count (`gl_stub_counts[GL_STUB_*]`). That's enough for
