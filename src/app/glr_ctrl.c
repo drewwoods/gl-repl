@@ -2428,21 +2428,10 @@ void glr_ctrl_set_accum(int enabled) {
 void glr_ctrl_fill_export_layout(ReplExportLayout *out) {
     if (!out) return;
     int sx = 0, sy = 0, sw = 0, sh = 0;
-    int cx = 0, cy = 0, cw = 0, ch = 0;
     ui_layout_scene_rect(&sx, &sy, &sw, &sh);
-    ui_layout_code_panel_rect(&cx, &cy, &cw, &ch);
-    GlrPresentationState p = glr_state_presentation();
-    UiViewportState    v = ui_state_viewport();
     *out = (ReplExportLayout){
-        .viewport_w          = v.window_w,
-        .viewport_h          = v.window_h,
-        .scene_x             = sx,
-        .scene_y             = sy,
-        .scene_w             = sw,
-        .scene_h             = sh,
-        .code_panel_w        = cw,
-        .wrap_at_comma       = p.wrap_at_comma,
-        .show_vertex_indices = p.show_vertex_indices,
+        .scene_w = sw,
+        .scene_h = sh,
     };
 }
 

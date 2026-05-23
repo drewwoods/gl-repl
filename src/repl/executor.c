@@ -215,12 +215,6 @@ static void repl_executor_apply_transform_cmd(const GLCmd *cmd) {
     case CMD_ROTATEF:
         glRotatef(cmd->args[0], cmd->args[1], cmd->args[2], cmd->args[3]);
         break;
-    case CMD_PUSH_MATRIX:
-        glPushMatrix();
-        break;
-    case CMD_POP_MATRIX:
-        glPopMatrix();
-        break;
     case CMD_LOAD_IDENTITY:
         glLoadIdentity();
         break;

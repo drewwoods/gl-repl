@@ -280,6 +280,10 @@ const GLCmd *repl_state_flat_program_cmds(void) {
     return g_repl_state.flat_program.cmds;
 }
 
+const FlatCmdLocalVars *repl_state_flat_program_local_vars(void) {
+    return g_repl_state.flat_program.local_vars;
+}
+
 GLCmd *repl_state_flat_program_cmds_mut(void) {
     return g_repl_state.flat_program.cmds;
 }

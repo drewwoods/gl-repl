@@ -286,6 +286,7 @@ SRCS = \
 	src/repl/scenes.c \
 	src/repl/source_scope.c \
 	src/repl/state.c \
+	src/repl/text_helpers.c \
 	src/repl/tutorials.c \
 	src/scene/axes.c \
 	src/scene/backdrop.c \
@@ -357,6 +358,7 @@ HDRS = \
 	src/repl/eval.h \
 	src/repl/example_loader.h \
 	src/repl/examples.h \
+	src/repl/export.h \
 	src/repl/help_text.h \
 	src/repl/parser.h \
 	src/repl/pipeline.h \
@@ -447,6 +449,7 @@ CORE_TEST_SRCS = \
 	src/repl/scenes.c \
 	src/repl/source_scope.c \
 	src/repl/state.c \
+	src/repl/text_helpers.c \
 	src/repl/tutorials.c \
 	src/scene/axes.c \
 	src/scene/backdrop.c \
@@ -538,6 +541,7 @@ REPL_DEMO_DEP_SRCS = src/repl/format.c \
                      src/repl/scenes.c \
                      src/repl/source_scope.c \
                      src/repl/state.c \
+					 src/repl/text_helpers.c \
                      tools/repl_demo/source_document.c \
                      tests/gl-stubs/gl_stub_counts.c
 # src/app/glr_config.c removed in step 4 of the decouple plan: pipeline TUs

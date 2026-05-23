@@ -211,30 +211,10 @@ static int example_cfg_extract_slug(const char *text,
 }
 
 static int example_cfg_slug_allowed(const char *slug) {
-    static const char *const allowed_slugs[] = {
-        "wireframe",
-        "grid",
-        "grid_major",
-        "grid_extent",
-        "axes",
-        "vertex_labels",
-        "normal_vectors",
-        "vertex_outlines",
-        "vertex_points",
-        "vertex_guides",
-        "light_indicators",
-        "backdrop",
-        "view_mode",
-        "camera_rotate",
-        "variable_panel",
-        NULL
-    };
-
-    for (int i = 0; allowed_slugs[i]; i++) {
-        if (strcmp(allowed_slugs[i], slug) == 0)
-            return 1;
-    }
-    return 0;
+    const ReplExportConfigBridge *bridge = repl_export_config_bridge();
+    return bridge && bridge->slug_is_scene_subset
+        ? bridge->slug_is_scene_subset(slug)
+        : 0;
 }
 
 static int consume_example_cfg_header(const char *const *lines) {

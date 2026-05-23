@@ -222,8 +222,6 @@ int editor_buffer_apply_compiled_change(const struct ReplCompiledChange_s *chang
         return editor_buffer_replace_line(change->pos, change->text[0]);
     case REPL_COMPILED_DELETE_RANGE:
         return editor_buffer_delete_range(change->pos, change->count);
-    case REPL_COMPILED_LOAD_ALL:
-        return editor_buffer_load_lines(line_ptrs, change->count);
     }
     return 0;
 }

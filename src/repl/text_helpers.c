@@ -1,0 +1,456 @@
+#include "repl/core_internal.h"
+
+#include <ctype.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
+
+void trim_in_place(char *s) {
+    int start = 0;
+    int len = (int)strlen(s);
+    while (start < len && isspace((unsigned char)s[start])) start++;
+    while (len > start && isspace((unsigned char)s[len - 1])) len--;
+    if (start > 0) memmove(s, s + start, (size_t)(len - start));
+    s[len - start] = '\0';
+}
+
+void repl_format_source_float(char *out, int out_sz, float v) {
+    if (!out || out_sz <= 0)
+        return;
+    if (v == 0.0f) {
+        snprintf(out, (size_t)out_sz, "0");
+        return;
+    }
+
+    for (int prec = 0; prec <= 9; prec++) {
+        char candidate[64];
+        char *dot;
+        char *end = NULL;
+
+        snprintf(candidate, sizeof(candidate), "%.*f", prec, (double)v);
+        dot = strchr(candidate, '.');
+        if (dot) {
+            char *tail = candidate + strlen(candidate) - 1;
+            while (tail > dot && *tail == '0') {
+                *tail = '\0';
+                tail--;
+            }
+            if (*tail == '.')
+                *tail = '\0';
+        }
+        if (strtof(candidate, &end) == v && end && *end == '\0') {
+            snprintf(out, (size_t)out_sz, "%s", candidate);
+            return;
+        }
+    }
+
+    for (int prec = 1; prec <= 9; prec++) {
+        char candidate[32];
+        char *end = NULL;
+
+        snprintf(candidate, sizeof(candidate), "%.*g", prec, (double)v);
+        if (strtof(candidate, &end) == v && end && *end == '\0') {
+            snprintf(out, (size_t)out_sz, "%s", candidate);
+            return;
+        }
+    }
+
+    snprintf(out, (size_t)out_sz, "%.9g", (double)v);
+}
+
+int repl_extract_paren_payload(const char *src, char *out, int out_sz) {
+    const char *p = strchr(src, '(');
+    if (!p) return 0;
+    p++;
+    const char *start = p;
+    p = repl_scan_to_matching_paren(p);
+    if (*p != ')') return 0;
+    int n = (int)(p - start);
+    if (n > out_sz - 1) n = out_sz - 1;
+    memcpy(out, start, (size_t)n);
+    out[n] = '\0';
+    trim_in_place(out);
+    return 1;
+}
+
+int extract_for_args_text(const char *src,
+                          char *var, int var_sz,
+                          char *args, int args_sz) {
+    const char *p = strchr(src, '(');
+    if (!p) return 0;
+    p++;
+
+    while (*p && isspace((unsigned char)*p)) p++;
+
+    int vi = 0;
+    while (*p && (isalnum((unsigned char)*p) || *p == '_') && vi < var_sz - 1)
+        var[vi++] = *p++;
+    var[vi] = '\0';
+    if (vi == 0) return 0;
+
+    while (*p && isspace((unsigned char)*p)) p++;
+    if (*p != ',') return 0;
+    p++;
+
+    const char *start = p;
+    p = repl_scan_to_matching_paren(p);
+    if (*p != ')') return 0;
+
+    int n = (int)(p - start);
+    if (n > args_sz - 1) n = args_sz - 1;
+    memcpy(args, start, (size_t)n);
+    args[n] = '\0';
+    trim_in_place(args);
+    return 1;
+}
+
+static int parse_identifier_list(const char *src,
+                                 char names[][16], int max_names) {
+    const char *p = src;
+    int count = 0;
+
+    while (*p) {
+        while (*p && isspace((unsigned char)*p)) p++;
+        if (!*p) break;
+        if (count >= max_names) return -1;
+        if (!isalpha((unsigned char)*p) && *p != '_') return -1;
+
+        int ni = 0;
+        while (*p && (isalnum((unsigned char)*p) || *p == '_')) {
+            if (ni >= 15) return -1;
+            names[count][ni++] = *p++;
+        }
+        names[count][ni] = '\0';
+        count++;
+
+        while (*p && isspace((unsigned char)*p)) p++;
+        if (!*p) break;
+        if (*p != ',') return -1;
+        p++;
+    }
+
+    return count;
+}
+
+int parse_expr_list_exact(const char *src, float *out_vals, int max_vals,
+                          ExprVar *vars, int num_vars, int *out_count) {
+    const char *p = src;
+    int count = 0;
+
+    while (*p && isspace((unsigned char)*p)) p++;
+    if (!*p) {
+        if (out_count) *out_count = 0;
+        return 1;
+    }
+
+    for (;;) {
+        ExprCtx ctx = { p, vars, num_vars };
+        float value = repl_eval_expr(&ctx);
+        if (ctx.p == p) return 0;
+        if (count >= max_vals) return 0;
+        if (out_vals) out_vals[count] = value;
+        count++;
+
+        p = ctx.p;
+        while (*p && isspace((unsigned char)*p)) p++;
+        if (!*p) break;
+        if (*p != ',') return 0;
+        p++;
+        while (*p && isspace((unsigned char)*p)) p++;
+        if (!*p) return 0;
+    }
+
+    if (out_count) *out_count = count;
+    return 1;
+}
+
+static int parse_func_name_token(const char **p_inout, int *fn) {
+    const char *p = *p_inout;
+    while (*p && isspace((unsigned char)*p)) p++;
+    if (strncmp(p, "func", 4) == 0 &&
+        p[4] >= '0' && p[4] <= '9' &&
+        !isalnum((unsigned char)p[5]) && p[5] != '_') {
+        if (fn) *fn = p[4] - '0';
+        p += 5;
+        *p_inout = p;
+        return 1;
+    }
+    if (!isalpha((unsigned char)*p) && *p != '_') return 0;
+    char ident[REPL_FUNC_NAME_MAX];
+    int len = 0;
+    while (*p && (isalnum((unsigned char)*p) || *p == '_') &&
+           len < REPL_FUNC_NAME_MAX - 1) {
+        ident[len++] = *p++;
+    }
+    if (*p && (isalnum((unsigned char)*p) || *p == '_')) return 0;
+    ident[len] = '\0';
+    if (len == 0) return 0;
+    int slot = repl_func_alias_lookup_slot(ident);
+    if (slot < 0) return 0;
+    if (fn) *fn = slot;
+    *p_inout = p;
+    return 1;
+}
+
+int parse_repl_func_signature(const char *src, int *fn,
+                              char param_names[][16], int max_params,
+                              int *param_count) {
+    const char *p = src;
+    if (!parse_func_name_token(&p, fn)) return 0;
+
+    while (*p && isspace((unsigned char)*p)) p++;
+    if (*p == '{' || *p == '\0') {
+        if (param_count) *param_count = 0;
+        return 1;
+    }
+    if (*p != '(') return 0;
+
+    const char *payload_start = ++p;
+    p = repl_scan_to_matching_paren(p);
+    if (*p != ')') return 0;
+
+    char payload[MAX_LINE_LEN];
+    int n = (int)(p - payload_start);
+    if (n > (int)sizeof(payload) - 1) n = (int)sizeof(payload) - 1;
+    memcpy(payload, payload_start, (size_t)n);
+    payload[n] = '\0';
+    trim_in_place(payload);
+
+    while (*p == ')') p++;
+    while (*p && isspace((unsigned char)*p)) p++;
+    if (*p != '{' && *p != '\0') return 0;
+
+    if (!payload[0]) {
+        if (param_count) *param_count = 0;
+        return 1;
+    }
+
+    int count = parse_identifier_list(payload, param_names, max_params);
+    if (count < 0) return 0;
+    if (param_count) *param_count = count;
+    return 1;
+}
+
+int extract_func_call_args_text(const char *src, int *fn,
+                                char *args, int args_sz) {
+    const char *p = src;
+    if (!parse_func_name_token(&p, fn)) return 0;
+
+    while (*p && isspace((unsigned char)*p)) p++;
+    if (*p != '(') return 0;
+    p++;
+    const char *start = p;
+    p = repl_scan_to_matching_paren(p);
+    if (*p != ')') return 0;
+
+    int n = (int)(p - start);
+    if (n > args_sz - 1) n = args_sz - 1;
+    memcpy(args, start, (size_t)n);
+    args[n] = '\0';
+    trim_in_place(args);
+
+    p++;
+    while (*p && isspace((unsigned char)*p)) p++;
+    if (*p != '\0' && *p != ';') return 0;
+    return 1;
+}
+
+void format_func_header(char *out, int out_sz, const char *indent,
+                        int fn, char param_names[][16], int param_count) {
+    const char *alias = repl_func_alias_get(fn);
+    int written = alias
+        ? snprintf(out, out_sz, "%s%s", indent, alias)
+        : snprintf(out, out_sz, "%sfunc%d", indent, fn);
+    if (written < 0 || written >= out_sz) {
+        if (out_sz > 0) out[out_sz - 1] = '\0';
+        return;
+    }
+    if (written < out_sz)
+        written += snprintf(out + written, out_sz - written, "(");
+    for (int param_idx = 0; param_idx < param_count && written < out_sz; param_idx++) {
+        written += snprintf(out + written, out_sz - written, "%s%s",
+                            param_idx == 0 ? "" : ", ", param_names[param_idx]);
+    }
+    if (written < out_sz)
+        written += snprintf(out + written, out_sz - written, ")");
+    if (written < out_sz)
+        snprintf(out + written, out_sz - written, " {");
+}
+
+int input_has_expr_vars(const char *s, ExprVar *vars, int num_vars) {
+    while (*s) {
+        if (!isalpha((unsigned char)*s) && *s != '_') { s++; continue; }
+        const char *start = s;
+        while (*s && (isalnum((unsigned char)*s) || *s == '_')) s++;
+        int len = (int)(s - start);
+        for (int var_idx = 0; var_idx < num_vars; var_idx++) {
+            int nlen = (int)strlen(vars[var_idx].name);
+            if (nlen == len && strncmp(start, vars[var_idx].name, len) == 0)
+                return 1;
+        }
+    }
+    return 0;
+}
+
+int input_has_any_visible_vars(const char *s, ExprVar *vars, int num_vars) {
+    return repl_eval_input_has_predef_vars(s) || input_has_expr_vars(s, vars, num_vars);
+}
+
+int repl_extract_label_name(const char *src, char *name, int name_sz) {
+    const char *p = src;
+    while (*p && isspace((unsigned char)*p)) p++;
+    if (*p == ':') p++;
+    int n = 0;
+    while (*p && (isalnum((unsigned char)*p) || *p == '_') && n < name_sz - 1)
+        name[n++] = *p++;
+    name[n] = '\0';
+    return n > 0;
+}
+
+int repl_extract_goto_label(const char *src, char *name, int name_sz) {
+    const char *p = strstr(src, "goto");
+    if (!p) p = src;
+    else p += 4;
+    while (*p && isspace((unsigned char)*p)) p++;
+    int n = 0;
+    while (*p && *p != ';' && !isspace((unsigned char)*p) &&
+           (isalnum((unsigned char)*p) || *p == '_') && n < name_sz - 1)
+        name[n++] = *p++;
+    name[n] = '\0';
+    return n > 0;
+}
+
+int repl_extract_assignment_parts(const char *src,
+                                  char *name, int name_sz,
+                                  char *rhs, int rhs_sz) {
+    char index_expr[MAX_LINE_LEN];
+
+    if (!repl_extract_assignment_target_parts(src,
+                                              name, name_sz,
+                                              index_expr, sizeof(index_expr),
+                                              rhs, rhs_sz))
+        return 0;
+    return index_expr[0] == '\0';
+}
+
+int repl_extract_assignment_target_parts(const char *src,
+                                         char *name, int name_sz,
+                                         char *index_expr, int index_expr_sz,
+                                         char *rhs, int rhs_sz) {
+    const char *p = src;
+    const char *index_start = NULL;
+    const char *index_end = NULL;
+    const char *rhs_start;
+    const char *rhs_end;
+    const char *comment_start;
+    int n = 0;
+
+    while (*p && isspace((unsigned char)*p)) p++;
+    while (*p && (isalnum((unsigned char)*p) || *p == '_')) {
+        if (name && n < name_sz - 1)
+            name[n] = *p;
+        n++;
+        p++;
+    }
+    if (name && name_sz > 0)
+        name[n < name_sz - 1 ? n : name_sz - 1] = '\0';
+    if (n == 0)
+        return 0;
+
+    if (index_expr && index_expr_sz > 0)
+        index_expr[0] = '\0';
+
+    while (*p && isspace((unsigned char)*p)) p++;
+    if (*p == '[') {
+        int depth = 1;
+        index_start = ++p;
+        while (*p && depth > 0) {
+            if (*p == '[')
+                depth++;
+            else if (*p == ']')
+                depth--;
+            if (depth > 0)
+                p++;
+        }
+        if (depth != 0 || !*p)
+            return 0;
+        index_end = p;
+        p++;
+
+        if (index_expr && index_expr_sz > 0) {
+            int idx_len = (int)(index_end - index_start);
+            if (idx_len > index_expr_sz - 1)
+                idx_len = index_expr_sz - 1;
+            memcpy(index_expr, index_start, (size_t)idx_len);
+            index_expr[idx_len] = '\0';
+            trim_in_place(index_expr);
+            if (!index_expr[0])
+                return 0;
+        }
+    }
+
+    while (*p && isspace((unsigned char)*p)) p++;
+    if (*p != '=' || p[1] == '=')
+        return 0;
+    p++;
+    while (*p && isspace((unsigned char)*p)) p++;
+    if (!*p)
+        return 0;
+
+    rhs_start = p;
+    rhs_end = src + strlen(src);
+    comment_start = strstr(rhs_start, "//");
+    if (comment_start && comment_start < rhs_end)
+        rhs_end = comment_start;
+    while (rhs_end > rhs_start && isspace((unsigned char)rhs_end[-1])) rhs_end--;
+    if (rhs_end > rhs_start && rhs_end[-1] == ';') rhs_end--;
+    while (rhs_end > rhs_start && isspace((unsigned char)rhs_end[-1])) rhs_end--;
+    if (rhs_end <= rhs_start)
+        return 0;
+
+    if (rhs && rhs_sz > 0) {
+        int rn = (int)(rhs_end - rhs_start);
+        if (rn > rhs_sz - 1) rn = rhs_sz - 1;
+        memcpy(rhs, rhs_start, (size_t)rn);
+        rhs[rn] = '\0';
+        trim_in_place(rhs);
+    }
+    return 1;
+}
+
+int split_top_level_args(const char *src, char args[][MAX_LINE_LEN], int max_args) {
+    const char *p = src;
+    int count = 0;
+
+    while (*p) {
+        while (*p && isspace((unsigned char)*p))
+            p++;
+        if (!*p)
+            break;
+        if (count >= max_args)
+            return -1;
+
+        const char *start = p;
+        p = repl_scan_next_arg_delim(p);
+
+        int n = (int)(p - start);
+        if (n > MAX_LINE_LEN - 1)
+            n = MAX_LINE_LEN - 1;
+        memcpy(args[count], start, (size_t)n);
+        args[count][n] = '\0';
+        trim_in_place(args[count]);
+        count++;
+
+        while (*p && isspace((unsigned char)*p))
+            p++;
+        if (*p == ',') {
+            p++;
+            continue;
+        }
+        if (*p == '\0')
+            break;
+        return -1;
+    }
+
+    return count;
+}

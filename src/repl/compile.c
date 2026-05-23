@@ -123,7 +123,6 @@ void repl_compiled_change_to_text_change(const ReplCompiledChange *in,
     case REPL_COMPILED_REPLACE_ONE: out->kind = SOURCE_TEXT_REPLACE_ONE; break;
     case REPL_COMPILED_INSERT_MANY: out->kind = SOURCE_TEXT_INSERT_MANY; break;
     case REPL_COMPILED_DELETE_RANGE:out->kind = SOURCE_TEXT_DELETE_RANGE;break;
-    case REPL_COMPILED_LOAD_ALL:    out->kind = SOURCE_TEXT_LOAD_ALL;    break;
     }
     out->pos          = in->pos;
     out->count        = in->count;   /* DELETE_RANGE: rows to delete, may exceed MAX_COMMIT_CMDS */
@@ -141,7 +140,6 @@ void repl_compiled_change_to_text_change(const ReplCompiledChange *in,
         copy_n = 1;
         break;
     case REPL_COMPILED_INSERT_MANY:
-    case REPL_COMPILED_LOAD_ALL:
         copy_n = in->count;
         if (copy_n < 0) copy_n = 0;
         if (copy_n > MAX_COMMIT_CMDS) copy_n = MAX_COMMIT_CMDS;
@@ -1405,8 +1403,7 @@ ReplCompileResult repl_compile_toggle_comment(int line_idx,
 
         /* Coerce dispatch / parser result to REPLACE_ONE at line_idx. */
         if (out->kind == REPL_COMPILED_INSERT_MANY ||
-            out->kind == REPL_COMPILED_DELETE_RANGE ||
-            out->kind == REPL_COMPILED_LOAD_ALL)
+            out->kind == REPL_COMPILED_DELETE_RANGE)
             return compile_set_err(err, err_size,
                                    "Cannot uncomment into multi-line construct");
         out->kind = REPL_COMPILED_REPLACE_ONE;
@@ -1877,16 +1874,26 @@ ReplCompileResult repl_compile_for_loop(const char *input,
                 return REPL_COMPILE_ERROR;
             }
         } else if (step != 1.0f) {
+            char start_buf[32];
+            char end_buf[32];
+            char step_buf[32];
+            repl_format_source_float(start_buf, sizeof(start_buf), start);
+            repl_format_source_float(end_buf, sizeof(end_buf), end);
+            repl_format_source_float(step_buf, sizeof(step_buf), step);
             if (!repl_format_fits(fb_text, sizeof(fb_text),
-                                  "%sfor(%s, %.9g, %.9g, %.9g) {",
-                                  indent, var_name, start, end, step)) {
+                                  "%sfor(%s, %s, %s, %s) {",
+                                  indent, var_name, start_buf, end_buf, step_buf)) {
                 snprintf(err, (size_t)err_size, "Command too long");
                 return REPL_COMPILE_ERROR;
             }
         } else {
+            char start_buf[32];
+            char end_buf[32];
+            repl_format_source_float(start_buf, sizeof(start_buf), start);
+            repl_format_source_float(end_buf, sizeof(end_buf), end);
             if (!repl_format_fits(fb_text, sizeof(fb_text),
-                                  "%sfor(%s, %.9g, %.9g) {",
-                                  indent, var_name, start, end)) {
+                                  "%sfor(%s, %s, %s) {",
+                                  indent, var_name, start_buf, end_buf)) {
                 snprintf(err, (size_t)err_size, "Command too long");
                 return REPL_COMPILE_ERROR;
             }

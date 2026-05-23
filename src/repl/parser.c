@@ -883,7 +883,6 @@ static int parse_command(const char *line, GLCmd *cmd,
      * the load-bearing identity stored on the resulting CMD_CALL; the
      * alias is purely a parser/display layer. */
     int fn = -1;
-    int matched_alias = 0;
     if (strncmp(func, "func", 4) == 0 && func[4] >= '0' && func[4] <= '9' &&
         func[5] == '\0') {
         fn = func[4] - '0';
@@ -891,7 +890,6 @@ static int parse_command(const char *line, GLCmd *cmd,
         int alias_slot = repl_func_alias_lookup_slot(func);
         if (alias_slot >= 0) {
             fn = alias_slot;
-            matched_alias = 1;
         }
     }
     if (fn >= 0 && open_p && close_p) {
@@ -915,10 +913,11 @@ static int parse_command(const char *line, GLCmd *cmd,
          * are still allowed so mutual recursion keeps working. */
         if (ctx && ctx->strict_refs && repl_source_scope_block_depth_at(source_line_idx) == 0) {
             int def_exists = 0;
+            const GLCmd *document_cmds = repl_state_document_cmds();
             for (int di = 0; di < repl_state_document_count(); di++) {
-                if (!repl_state_document_cmds_mut()[di].valid) continue;
-                if (repl_state_document_cmds_mut()[di].type != CMD_FUNC_DEF) continue;
-                if ((int)repl_state_document_cmds_mut()[di].args[0] != fn) continue;
+                if (!document_cmds[di].valid) continue;
+                if (document_cmds[di].type != CMD_FUNC_DEF) continue;
+                if ((int)document_cmds[di].args[0] != fn) continue;
                 def_exists = 1;
                 break;
             }
@@ -960,7 +959,6 @@ static int parse_command(const char *line, GLCmd *cmd,
             snprintf(fn_token, sizeof(fn_token), "%s", alias);
         else
             snprintf(fn_token, sizeof(fn_token), "func%d", fn);
-        (void)matched_alias;
         if (text_out && text_sz > 0) {
             if (arg_count > 0) {
                 if (!repl_format_fits(text_out, (size_t)text_sz,

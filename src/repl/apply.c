@@ -61,11 +61,6 @@ int repl_apply_can_apply_compiled_change(const ReplCompiledChange *change) {
         return repl_command_store_normalize_range(&store, change->pos,
                                                   change->count, &s, &c);
     }
-    case REPL_COMPILED_LOAD_ALL:
-        if (delete_count > 0) return 0;  /* LOAD_ALL replaces the entire document */
-        return change->count >= 0 &&
-               change->count <= capacity &&
-               change->count <= MAX_COMMIT_CMDS;
     }
     return 0;
 }
@@ -122,12 +117,6 @@ int repl_apply_compiled_change(const ReplCompiledChange *change,
         return repl_command_store_delete_range(&store, change->pos,
                                                change->count, &delete_opts);
     }
-    case REPL_COMPILED_LOAD_ALL:
-        /* LOAD_ALL has no cursor argument — its target cursor is
-         * caller policy. Callers apply `change->pos` separately
-         * via their own cursor-set call after a successful apply
-         * if they want the post-load cursor to land there. */
-        return repl_command_store_load(&store, change->cmds, change->count);
     }
     return 0;
 }
