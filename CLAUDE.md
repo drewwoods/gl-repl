@@ -224,7 +224,7 @@ Test sources live under `tests/` and shared test-only helpers live under
 | `sample.h` | Minimal legacy header: standard includes and `M_PI`; types/defaults moved out to dedicated headers |
 | `src/app/glr_ctrl.c` | App-frame controller: `glr_ctrl_display_frame`, `glr_ctrl_reshape`, `glr_ctrl_init_gl`; builds `SceneRenderConfig`, calls scene/UI renderers |
 | `src/app/glr_ctrl.h` | Controller public surface: display, reshape, init-GL entrypoints |
-| `src/app/glr_config.c` | Config key implementation and descriptor table helpers |
+| `src/app/glr_config.c` | Config key implementation and descriptor table helpers. The tail of `glr_config_set` notifies the tutorial runner (`tutorial_notify_state_changed`) so REQUIRE steps observe every write path — direct setters (e.g. accum-AA Ctrl+=/-), `glr_cfg_cycle_row`'s early-return branches, and the bridge's `apply` during `@cfg` / example / workspace load |
 | `src/app/glr_config.h` | `ReplConfigKey` / `ReplConfigItem` descriptor API for keyed config access |
 | `src/repl/command.h` | Core command model types: `CmdType` enum, `GLCmd` struct (pure parse-result: type, args, flags, provenance — no `source[]` field) |
 | `src/repl/compile.c` | Pure source-text validators that produce `ReplCompiledChange` descriptors; never mutates state |
@@ -245,7 +245,7 @@ Test sources live under `tests/` and shared test-only helpers live under
 | `src/repl/state.c` | Owns `g_repl_state`, lifecycle, snapshot assembly (`repl_state_capture` / `repl_state_restore`) |
 | `src/repl/state.h` | Typed runtime-state facade, reset helpers, and focused accessors over the live REPL state |
 | `src/repl/state_views.h` | Read-only (by-value) state getters; safe to include from `scene_*` and `ui_*` |
-| `src/repl/state_owners.h` | Mutable `_mut()` accessors; owner modules and controller only |
+| `src/repl/state_owners.h` | Mutable `_mut()` accessors; owner modules and controller only. Also declares the typed live-cfg wrappers `repl_cfg_get_int` / `_set_int` / `_known` — single-slug bridge accessors used by `src/widgets/tutorial.c` (SET / REQUIRE / cfg-baseline restore) |
 | `src/editor/input.c` | **REPL editor input dispatcher**: REPL key bindings (`;` commit, Tab autocomplete, Ctrl+R reformat, tutorial guards, comment toggle) + REPL-flavored orchestration on top of `edit_ops` primitives. Non-editor routing (replay, audio, config, save, camera) lives in `src/app/glr_ctrl.c`. The generic counterpart for `editor_demo` is `tools/editor_demo/input.c`. |
 | `src/editor/input.h` | Editor input dispatch entry points + `EditorInputDispatchEffects` typedef + `editor_input_active_modifiers` test seam |
 | `src/editor/edit_ops.c` | Generic text-editing primitives shared by `src/editor/input.c` (REPL dispatcher) and `tools/editor_demo/input.c` (generic dispatcher): char insert/delete at cursor, input-selection consume, type-char and backspace (selection-aware). REPL-free; locked by `check-edit-ops-pure`. |
@@ -327,13 +327,13 @@ Test sources live under `tests/` and shared test-only helpers live under
 | `src/editor/completion.h` | `EditorCompletionProvider` struct + `editor_completion_register/update/clear` API |
 | `src/repl/examples.c` | Predefined example data (`g_examples[]`, `g_example_names[]`) |
 | `src/repl/examples.h` | Example query API (`repl_examples_count/name/lines`) |
-| `src/repl/tutorials.c` | Built-in tutorial catalog: per-tutorial null-terminated `comments[]` / `expected[]` parallel arrays + name + optional leading `@cfg` line array (same slug vocabulary as example `@cfg`). Starter set: "First Triangle" (`@cfg view_mode = 1`), "Color & Transform" |
-| `src/repl/tutorials.h` | Catalog query API (`repl_tutorial_count/name/step_count/step_comment/step_expected/cfg_lines`) + `TutorialEntry` typedef |
-| `src/widgets/tutorial_state.c` | Tutorial peer subsystem: owns `TutorialRuntimeState` (active flag, step, locked_lines, fade timing, last match result) |
+| `src/repl/tutorials.c` | Built-in tutorial catalog: per-tutorial null-terminated `TutorialStep[]` array + name + optional leading `@cfg` line array (same slug vocabulary as example `@cfg`). Each step carries a `TutorialStepKind`: COMMAND (type the expected GL call), SET (apply `cfg_slug = cfg_value` on entry, advance on Enter/Tab/Space), or REQUIRE (advance when the user sets the slug to the target value). Sentinel is `comment == NULL`. Starter set: "First Triangle" (`@cfg view_mode = 1`), "Color & Transform", "Depth Test Triangle", "Feature Tour" (mixes COMMAND + REQUIRE + SET to teach gl-repl features) |
+| `src/repl/tutorials.h` | Catalog query API (`repl_tutorial_count/name/step_count/step_comment/step_expected/step_kind/step_cfg_slug/step_cfg_value/cfg_lines`) + `TutorialEntry` + `TutorialStepKind` typedefs |
+| `src/widgets/tutorial_state.c` | Tutorial peer subsystem: owns `TutorialRuntimeState` (active flag, step, locked_lines, fade timing, pending commit, instruction-line map, last match result). `fade_duration` is set per-line at emit time from `TUTORIAL_FADE_CHARS_PER_SEC`, not held as a constant |
 | `src/widgets/tutorial_state.h` | Peer-subsystem facade (`tutorial_state_view/_mut/_reset`, `tutorial_active`), `TutorialMatchKind/Result` types |
-| `src/widgets/tutorial.c` | Tutorial runner: starts/exits/advances, emits instruction comments via `repl_load_apply_line`, whitespace-tolerant match, locked-line guard, fade-alpha math |
-| `src/widgets/tutorial.h` | Runner API (`tutorial_start/_exit/_handle_commit_attempt/_advance_after_successful_commit/_current_expected_text/_line_is_locked/_line_is_fading/_step_fade_alpha/_guard_source_change/_match`) |
-| `src/repl/export.c` | `repl_export_save_output` / `repl_export_load_from_file`, workspace header directives, `@scene-name` / `@workspace-dir` markers |
+| `src/widgets/tutorial.c` | Tutorial runner: starts/exits/advances, emits instruction comments via `repl_load_apply_line`, whitespace-tolerant match, locked-line guard, per-character fade-in at a fixed chars-per-second rate. Iterative advance loop handles SET/REQUIRE without recursion. Captures a pre-tutorial cfg baseline (`fill_scene_subset` + tutorial-specific slugs via `repl_cfg_get_int`) and restores it via `tutorial_teardown` at every active-tutorial teardown path (exit, completion, workspace/scene/example load, `glr_app_reset_all`) so the tutorial is non-destructive. `tutorial_guard_source_change` hard-rejects ALL mutations while a non-COMMAND step is active |
+| `src/widgets/tutorial.h` | Runner API: `tutorial_start/_exit/_teardown/_handle_commit_attempt/_advance_after_successful_commit/_current_expected_text/_current_step_kind/_notify_state_changed/_handle_ack_key/_block_noncommand_commit/_line_is_locked/_line_is_fading/_step_fade_alpha/_guard_source_change/_match`. Knobs: `TUTORIAL_FADE_CHARS_PER_SEC` (reveal rate), `TUTORIAL_FADE_SETTLE_CHARS` (settle-wave width) |
+| `src/repl/export.c` | `repl_export_save_output` / `repl_export_load_from_file`, workspace header directives, `@scene-name` / `@workspace-dir` markers. Also implements the typed live-cfg wrappers `repl_cfg_get_int` / `_set_int` / `_known` over the installed config bridge (bridge-only — no `scene_*`/`glr_*` calls; `check-repl-export-via-bridge` stays green) |
 | `src/repl/export.h` | Export/import public API and workspace-header pending-state types |
 | `src/repl/export_state.h` | Shared dimensions for import/export state text |
 | `src/app/glr_audio.c` | App-level playlist engine and persisted audio config |
@@ -437,10 +437,13 @@ Test sources live under `tests/` and shared test-only helpers live under
 - Keyboard bindings: `editor_handle_key()` for ASCII keys (Ctrl+X
   produces ASCII X & 0x1F via standard GLUT), `editor_handle_special()`
   for F-keys/arrows. Cross-subsystem routing (replay / save / config /
-  audio / camera) lives in `src/app/glr_ctrl.c::glr_ctrl_router_*`
+  audio / camera / tutorial-ack) lives in `src/app/glr_ctrl.c::glr_ctrl_router_*`
   helpers, called from `glr_ctrl_keyboard` before delegating to
-  `editor_handle_key`. macOS Cmd+letter is normalized to its
-  control-character form by `editor_input_normalize_super_to_ctrl`,
+  `editor_handle_key`. `glr_ctrl_router_handle_tutorial_ack_key` consumes
+  Enter / Tab / Space during a tutorial SET (showcase) step and is a
+  no-op for COMMAND / REQUIRE / inactive — scope it strictly there so it
+  doesn't swallow keys outside that window. macOS Cmd+letter is normalized
+  to its control-character form by `editor_input_normalize_super_to_ctrl`,
   called at the top of `glr_ctrl_keyboard` so every downstream
   dispatcher sees Cmd+B identically to Ctrl+B.
 - Expression variables: `ExprVar` struct in `src/repl/eval.h`, predefined set
