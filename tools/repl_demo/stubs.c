@@ -28,7 +28,19 @@
  *           migrated to ReplExportCameraBridge); glr_camera.c
  *           left REPL_DEMO_DEP_SRCS.
  *
- * Demo-side architectural choices that keep this file empty:
+ * Re-added since 7e:
+ *   tutorial_teardown — the tutorial runner exposes a teardown
+ *   that the REPL pipeline TUs (example_loader.c, scenes.c) call
+ *   before any wholesale state replacement. The full runner lives
+ *   in src/subsystems/tutorial/tutorial.c and includes editor/
+ *   headers (completion + state), which the demo deliberately
+ *   excludes. tutorial_teardown is a no-op when no tutorial is
+ *   active — and the demo never starts one — so stubbing it is
+ *   semantically identical to running the real function. A
+ *   bridge-style hand-off (à la ReplExportConfigBridge) would
+ *   re-clear this stub; not worth the surface area today.
+ *
+ * Demo-side architectural choices that keep this file lean:
  *   - Pipeline diagnostics flow through the ReplHostEffects bridge
  *     (status callback). The demo leaves the bridge unset →
  *     set_status() is a silent no-op.
@@ -40,8 +52,6 @@
  *     leaves the bridge unset → camera blocks parse but apply nothing.
  */
 
-/* This file is intentionally documentation-only (the demo's "stubs"
- * are achieved by simply not installing optional bridges). Keep it a
- * non-empty translation unit so the -std=c99 -pedantic-errors ratchet
- * doesn't reject it (-Wempty-translation-unit). Behavior-neutral. */
-typedef int repl_demo_stubs_tu_nonempty_t;
+/* No-op stub: the demo never starts a tutorial, so teardown is a
+ * silent return. See the "Re-added since 7e" note above. */
+void tutorial_teardown(void) { /* no tutorial runner linked */ }
