@@ -641,6 +641,14 @@ static void repl_code_panel_apply_tutorial_insertion_marker(
     row->left_marker_color = repl_code_panel_rgba(0.95f, 0.45f, 0.85f, 0.90f);
 }
 
+typedef enum {
+    MARKER_PRIORITY_NONE = 0,
+    MARKER_PRIORITY_REPLAY,
+    MARKER_PRIORITY_FEEDING_NORMAL,
+    MARKER_PRIORITY_FEEDING_COLOR,
+    MARKER_PRIORITY_TUTORIAL_INSERTION
+} MarkerPriority;
+
 static void repl_code_panel_apply_command_overlays(ReplCodePanelBuilder *builder,
                                                    int line_idx,
                                                    UiTextPanelRow *row) {
@@ -652,8 +660,6 @@ static void repl_code_panel_apply_command_overlays(ReplCodePanelBuilder *builder
         line_idx == builder->snap->replay.src_line_idx) {
         row->background_active = 1;
         row->background_color = repl_code_panel_rgba(0.10f, 0.35f, 0.15f, 0.55f);
-        row->left_marker_active = 1;
-        row->left_marker_color = repl_code_panel_rgba(0.20f, 0.90f, 0.30f, 0.85f);
     }
 
     if (builder->snap->selection_active &&
@@ -665,16 +671,39 @@ static void repl_code_panel_apply_command_overlays(ReplCodePanelBuilder *builder
             k_clr_line_selection_band[2], k_clr_line_selection_band[3]);
     }
 
-    if (line_idx == builder->highlight_normal_idx) {
-        row->left_marker_active = 1;
-        row->left_marker_color = repl_code_panel_rgba(0.40f, 0.80f, 0.95f, 0.85f);
-    } else if (line_idx == builder->highlight_color_idx) {
-        row->left_marker_active = 1;
-        row->left_marker_color = repl_code_panel_rgba(0.95f, 0.85f, 0.30f, 0.85f);
+    MarkerPriority priority = MARKER_PRIORITY_NONE;
+    UiTextPanelColor color = {0};
+
+    if (builder->snap->replay.active &&
+        builder->snap->replay.src_line_idx >= 0 &&
+        line_idx == builder->snap->replay.src_line_idx) {
+        priority = MARKER_PRIORITY_REPLAY;
+        color = repl_code_panel_rgba(0.20f, 0.90f, 0.30f, 0.85f);
     }
-    /* Tutorial-insertion marker wins over feeding-normal/color so the
-     * user's next step is always the dominant affordance. */
-    repl_code_panel_apply_tutorial_insertion_marker(builder, line_idx, row);
+
+    if (line_idx == builder->highlight_normal_idx) {
+        if (MARKER_PRIORITY_FEEDING_NORMAL > priority) {
+            priority = MARKER_PRIORITY_FEEDING_NORMAL;
+            color = repl_code_panel_rgba(0.40f, 0.80f, 0.95f, 0.85f);
+        }
+    } else if (line_idx == builder->highlight_color_idx) {
+        if (MARKER_PRIORITY_FEEDING_COLOR > priority) {
+            priority = MARKER_PRIORITY_FEEDING_COLOR;
+            color = repl_code_panel_rgba(0.95f, 0.85f, 0.30f, 0.85f);
+        }
+    }
+
+    if (line_idx >= 0 && line_idx == builder->highlight_tutorial_insertion_idx) {
+        if (MARKER_PRIORITY_TUTORIAL_INSERTION > priority) {
+            priority = MARKER_PRIORITY_TUTORIAL_INSERTION;
+            color = repl_code_panel_rgba(0.95f, 0.45f, 0.85f, 0.90f);
+        }
+    }
+
+    if (priority > MARKER_PRIORITY_NONE) {
+        row->left_marker_active = 1;
+        row->left_marker_color = color;
+    }
 }
 
 static void repl_code_panel_apply_fade_segments(int line_idx, const char *text,
@@ -1008,15 +1037,10 @@ static void repl_code_panel_add_input_row(ReplCodePanelBuilder *builder,
     repl_code_panel_apply_tutorial_insertion_marker(builder, hit_target_line_idx,
                                                     row);
 
-    /* When the cursor sits on an existing committed line (edit-in-place,
-     * not insert) this input row stands in for that command's text row,
-     * so mirror its color swatch — otherwise navigating onto a glColor
-     * line makes the swatch vanish (add_command_row sets it; the input
-     * row did not). Insert / new-line input rows pass source_line_idx
-     * < 0 and have no committed color; set_right_action no-ops when the
-     * line has no color transformer. */
-    if (source_line_idx >= 0)
+    if (source_line_idx >= 0) {
+        repl_code_panel_apply_command_overlays(builder, source_line_idx, row);
         repl_code_panel_set_right_action(row, builder->snap, source_line_idx);
+    }
 }
 
 static void repl_code_panel_add_placeholder_row(ReplCodePanelBuilder *builder,

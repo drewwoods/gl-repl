@@ -245,7 +245,7 @@ void ui_panels_render_scene_status(const UiRenderSnapshot *snap) {
     }
 }
 
-int ui_panels_handle_right_press(int mx, int my) {
+UiHit ui_panels_handle_right_press(int mx, int my) {
     return ui_menu_bar_handle_config_right_press(mx, my);
 }
 

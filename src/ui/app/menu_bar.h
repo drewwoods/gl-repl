@@ -121,11 +121,7 @@ int  ui_menu_bar_update_pointer_hover(int mx, int my, float now);
  * Reads layout / state only; never mutates. */
 UiHit ui_menu_bar_hit_test(int mx, int my);
 
-/* Handle right-click on menu bar region: open Config menu if clicked on menu
- * button area, otherwise no-op. Returns 1 if Config menu was opened, 0 if
- * right-click was in pinned button area or elsewhere. mx, my are window
- * coordinates. Called by ui_panels.c on right-click. */
-int  ui_menu_bar_handle_config_right_press(int mx, int my);
+UiHit ui_menu_bar_handle_config_right_press(int mx, int my);
 
 /* --- State queries --- */
 

@@ -52,7 +52,7 @@ void ui_panels_render_scene_status(const UiRenderSnapshot *snap);
 /* Handle right-click in non-code-panel areas: open Config menu if clicked on
  * menu bar region. Returns 1 if consumed, 0 otherwise. mx, my are window
  * coordinates. */
-int  ui_panels_handle_right_press(int mx, int my);
+UiHit ui_panels_handle_right_press(int mx, int my);
 
 /* Pure hit-test: classify the pointer at (mx, my) as a `UiHit`.
  * glr_ctrl_router_handle_code_panel_hit is the canonical consumer — it
