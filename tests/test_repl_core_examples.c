@@ -1056,10 +1056,11 @@ int main(int argc, char **argv) {
 
     {
         /* view_mode is example-settable via @cfg: the slug maps to
-         * GLR_CONFIG_ORTHO_MODE through the cfg bridge. Unlike the
-         * scene-presentation subset it is NOT reset per example load —
-         * it is sticky (camera-like), so an example changes it only when
-         * it explicitly declares @cfg view_mode. */
+         * GLR_CONFIG_ORTHO_MODE through the cfg bridge, and like other
+         * scene-presentation toggles it is reset to its default per
+         * example load before any leading @cfg is applied — so a 3D
+         * example never silently renders in 2D just because the prior
+         * example set ortho. */
         static const char *const view_mode_2d_example[] = {
             "// @cfg view_mode = 1",
             "glBegin(GL_LINE_STRIP);",
@@ -1084,20 +1085,24 @@ int main(int argc, char **argv) {
 
         glr_app_reset_all(); declare_test_vars();
         ASSERT_TRUE("view_mode starts at 3D default after reset",
-                    glr_state_presentation().ortho_mode == 0);
+                    glr_state_presentation().ortho_mode == CFG_DEFAULT_ORTHO_MODE);
 
         repl_load_example_lines_for_test(view_mode_2d_example);
         ASSERT_TRUE("@cfg view_mode = 1 applies 2D (ortho)",
                     glr_state_presentation().ortho_mode == 1);
 
-        /* Sticky: a later example with no @cfg view_mode does not reset it. */
+        /* The reset is the load-bearing assertion: a later example with
+         * no @cfg view_mode reverts to default 3D, NOT inherited 2D. */
         repl_load_example_lines_for_test(no_view_mode_example);
-        ASSERT_TRUE("view_mode inherits across example load (sticky)",
-                    glr_state_presentation().ortho_mode == 1);
+        ASSERT_TRUE("view_mode resets to default on example load",
+                    glr_state_presentation().ortho_mode == CFG_DEFAULT_ORTHO_MODE);
 
-        /* An explicit @cfg view_mode = 0 returns to 3D. */
+        /* @cfg still wins over the per-load reset. */
+        repl_load_example_lines_for_test(view_mode_2d_example);
+        ASSERT_TRUE("@cfg view_mode = 1 still applies after a reset",
+                    glr_state_presentation().ortho_mode == 1);
         repl_load_example_lines_for_test(view_mode_3d_example);
-        ASSERT_TRUE("@cfg view_mode = 0 returns to 3D",
+        ASSERT_TRUE("@cfg view_mode = 0 overrides any prior 2D",
                     glr_state_presentation().ortho_mode == 0);
     }
 

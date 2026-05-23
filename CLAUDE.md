@@ -665,7 +665,9 @@ these scene-presentation slugs:
 
 `view_mode` is the 2D/3D projection toggle (slug for the "View mode"
 config row → `GLR_CONFIG_ORTHO_MODE`): `0` = 3D perspective, `1` = 2D
-ortho. Like the camera it is *sticky* — see the reset rules below.
+ortho. It is reset per example load like the other scene-presentation
+toggles (not sticky), so a 3D example loaded after a 2D one snaps back
+to 3D unless it declares otherwise.
 
 Non-leading `@cfg` lines are not metadata — they stay as ordinary
 comments.
@@ -673,15 +675,14 @@ comments.
 **Reset and restore rules:**
 
 - Every example load resets the allowed non-camera scene-presentation
-  settings to built-in defaults *before* applying the example's leading
-  `@cfg` metadata. Prevents stale state leaking across examples.
+  settings (including `view_mode`) to built-in defaults *before*
+  applying the example's leading `@cfg` metadata. Prevents stale state
+  leaking across examples.
 - Camera is intentionally excluded from that reset. Examples inherit
   the current camera unless they supply an explicit `// camera` header.
-- `view_mode` is likewise excluded from the reset (it is camera-grouped,
-  not in `glr_state_presentation_reset_example_defaults`'s subset): an
-  example changes the 2D/3D view only when it declares `@cfg view_mode`,
-  and the choice carries across to the next example until something
-  declares otherwise.
+  (`view_mode` used to share this carve-out because it lives under the
+  CAMERA menu section; it was moved into the reset set so the F12 cycle
+  doesn't strand 3D examples in ortho after visiting a 2D one.)
 - `restore_user_scene()` restores commands and predefined variables
   only. Leaving an example does not restore camera or other
   presentation state.
