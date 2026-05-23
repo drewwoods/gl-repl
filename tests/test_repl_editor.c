@@ -24,8 +24,8 @@
 #include "repl/source_scope.h"
 #include "repl/state_owners.h"
 #include "source_document.h"   /* source_document_view */
-#include "widgets/replay.h"
-#include "widgets/replay_state.h"
+#include "subsystems/replay/replay.h"
+#include "subsystems/replay/replay_state.h"
 #include "ui/layout.h" /* CODE_PANEL_LAYOUT_* */
 #include "ui/layout.h"
 #include "ui/metrics.h"
@@ -124,8 +124,8 @@ static int current_active_indent_chars(void) {
     return snap.active_indent_chars;
 }
 
-#include "widgets/variable_panel_state.h"
-#include "widgets/variable_panel_drag.h"
+#include "subsystems/variable_panel/variable_panel_state.h"
+#include "subsystems/variable_panel/variable_panel_drag.h"
 
 #define VAR_PANEL_PAD_INTERNAL   6
 #define VAR_TITLE_H_INTERNAL    20

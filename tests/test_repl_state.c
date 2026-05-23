@@ -6,9 +6,9 @@
 #include "app/glr_camera.h"
 #include "ui/profile_panel.h"
 #include "ui/layout.h"            /* CODE_PANEL_LAYOUT_* enum values */
-#include "widgets/variable_panel_state.h"
-#include "widgets/replay.h"               /* REPLAY_PAUSED, REPLAY_MODE_* enums */
-#include "widgets/replay_state.h"
+#include "subsystems/variable_panel/variable_panel_state.h"
+#include "subsystems/replay/replay.h"               /* REPLAY_PAUSED, REPLAY_MODE_* enums */
+#include "subsystems/replay/replay_state.h"
 #include "editor/help_session.h"
 #include "app/glr_defaults.h"    /* CFG_DEFAULT_* macros */
 

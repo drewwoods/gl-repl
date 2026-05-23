@@ -13,7 +13,7 @@
 #include "repl/core.h"
 #include "repl/core_internal.h"
 #include "repl/state_owners.h"
-#include "widgets/tutorial_state.h"
+#include "subsystems/tutorial/tutorial_state.h"
 
 #define REPL_UNDO_DEPTH 32
 

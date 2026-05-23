@@ -4,7 +4,7 @@
  * Owns the transient playback state that should not live in the REPL document
  * model: replay on/off, machine state, program counter, playback speed, source
  * line tracking, and annotation expansion mode. The main replay logic in
- * src/widgets/replay.c writes this state; controller/UI code reads it for
+ * src/subsystems/replay/replay.c writes this state; controller/UI code reads it for
  * buttons, shortcuts, and per-frame snapshots.
  *
  * Snapshot/restore is separate because tests, undo-like full-world captures,

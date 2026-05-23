@@ -16,7 +16,7 @@
  * flat program, predefined variables, runtime-mutated render state, scene
  * bookkeeping, and import/export buffers. App-owned presentation state now
  * lives in glr_state.{c,h}, and replay runtime state lives in
- * src/widgets/replay_state.c; callers that need a full-world snapshot pair
+ * src/subsystems/replay/replay_state.c; callers that need a full-world snapshot pair
  * those owners' capture helpers with this one. The slice split came from step
  * 7a of feature/decouple-repl-from-gl-repl-alt.md and the replay peer move.
  */

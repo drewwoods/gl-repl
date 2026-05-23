@@ -4,7 +4,7 @@
  * Draws the compact floating panel of declared predefined variables and classifies
  * pointer hits on its slider rows. The panel is a read-only view over current
  * variable values: visibility lives in the variable-panel peer subsystem, and
- * drag/value mutation lives in `widgets/variable_panel_drag.h` plus controller
+ * drag/value mutation lives in `subsystems/variable_panel/variable_panel_drag.h` plus controller
  * routing. UI only renders and returns `UiHit`.
  *
  * When visible, each declared variable gets one slider row with its current

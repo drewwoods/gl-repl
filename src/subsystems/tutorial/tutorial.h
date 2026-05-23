@@ -12,7 +12,7 @@
 
 #include <stddef.h>  /* size_t */
 
-#include "widgets/tutorial_state.h"
+#include "subsystems/tutorial/tutorial_state.h"
 
 /* Tunable constants for the per-character fade-in animation that
  * reveals tutorial instruction comments. Both are #ifndef-guarded so

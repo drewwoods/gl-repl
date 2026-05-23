@@ -5,7 +5,7 @@
 # renamed every exported symbol so its prefix follows the owning
 # directory (src/repl -> repl_/Repl, src/editor -> editor_/Editor,
 # src/ui -> ui_/Ui, src/app -> glr_/Glr, src/scene -> scene_/Scene,
-# src/widgets/replay -> replay_/Replay). This guard is a denylist of the
+# src/subsystems/replay -> replay_/Replay). This guard is a denylist of the
 # exact stale names that were eliminated: if any reappears anywhere
 # under src/ it is a regression (a refactor that moved code without
 # re-prefixing, or a revert).
@@ -16,7 +16,7 @@
 # ReplCompiledChange in src/editor/services.h, the Repl* snapshot
 # fields in src/ui/snapshot.h, the export/replay-annotation bridge
 # types in src/app/glr_ctrl.h, and UiVariablePanelState surfaced by
-# src/widgets/variable_panel_state.h. None of those are in the list
+# src/subsystems/variable_panel/variable_panel_state.h. None of those are in the list
 # below, so they are not flagged.
 
 set -euo pipefail

@@ -16,8 +16,8 @@
  * peer in Phase F commit 31, and the legacy repl_var_drag_* aliases
  * were retired in Phase J7.
  */
-#include "widgets/variable_panel_drag.h"
-#include "widgets/variable_panel_state.h"
+#include "subsystems/variable_panel/variable_panel_drag.h"
+#include "subsystems/variable_panel/variable_panel_state.h"
 
 /* Drag-scaling tunables (the prose spec in the file header above is the
  * authority — keep them in sync). VAR_DRAG_ZERO_EPS is the |start|

@@ -5,7 +5,7 @@
 #include "app/glr_state.h"           /* presentation + render storage */
 #include "repl/state_owners.h"
 #include "ui/state_types.h"
-#include "widgets/tutorial.h"        /* tutorial_notify_state_changed */
+#include "subsystems/tutorial/tutorial.h"        /* tutorial_notify_state_changed */
 
 /* Camera, profile_panel slices live on UiState; variable_panel
  * visibility lives on the variable_panel peer; replay state lives

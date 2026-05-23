@@ -16,7 +16,7 @@
 #include "ui/text_layout.h"
 #include "ui/text_panel.h"
 #include "ui/theme.h"
-#include "widgets/tutorial.h"
+#include "subsystems/tutorial/tutorial.h"
 
 #include <ctype.h>
 #include <stdio.h>

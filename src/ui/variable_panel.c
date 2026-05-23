@@ -16,10 +16,10 @@
 #include "layout.h"
 #include "metrics.h"
 #include "theme.h"
-#include "widgets/replay_state.h"
+#include "subsystems/replay/replay_state.h"
 #include "ui/replay_hud.h"
 #include "state.h"
-#include "widgets/variable_panel_state.h"
+#include "subsystems/variable_panel/variable_panel_state.h"
 
 /* Variable-row data presentation + drag-state indicators. Deliberately
  * NOT theme tokens (theme.h "named constant" bucket): the green-name /

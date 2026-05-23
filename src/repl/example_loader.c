@@ -9,7 +9,7 @@
 #include "repl/core.h"
 #include "repl/state_owners.h"
 #include "source_document.h"     /* source_document_clear */
-#include "widgets/tutorial.h"
+#include "subsystems/tutorial/tutorial.h"
 
 static const char *example_cam_skip_ws(const char *text) {
     while (*text && isspace((unsigned char)*text))

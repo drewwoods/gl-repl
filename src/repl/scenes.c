@@ -8,7 +8,7 @@
 #include "repl/export.h"   /* ReplExportConfig + bridge for per-scene cfg */
 #include "repl/state_owners.h"
 #include "source_document.h" /* source_document_load_lines */
-#include "widgets/tutorial.h"
+#include "subsystems/tutorial/tutorial.h"
 
 #include <dirent.h>
 #include <errno.h>

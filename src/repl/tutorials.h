@@ -38,7 +38,7 @@
 #include <limits.h>
 
 /* Maximum tutorial step count and tracked-line cap. Lives here
- * (rather than in widgets/tutorial_state.h) so the catalog
+ * (rather than in subsystems/tutorial/tutorial_state.h) so the catalog
  * validator can use it without taking a dependency on widget
  * runtime state — the catalog defines the upper bound and the
  * widget-side state arrays consume it. */

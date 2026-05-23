@@ -25,7 +25,7 @@ The architecturally important part is the **strict view/controller split**:
   Replay button") and hands it back. It does **not** decide what that means
   or call into the editor/REPL.
 
-The owning subsystem (the editor, or a `src/widgets` peer) then interprets
+The owning subsystem (the editor, or a `src/subsystems/` peer) then interprets
 the `UiHit`. This is the classic lesson that a **view should not be a
 controller**: keeping rendering and hit-testing free of policy is what lets
 the same panel serve code editing, the help overlay, and the demos without

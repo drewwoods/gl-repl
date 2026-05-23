@@ -8,7 +8,7 @@
 #include "editor/input.h"
 #include "repl/core_internal.h"
 #include "app/glr_debug.h"
-#include "widgets/replay.h"
+#include "subsystems/replay/replay.h"
 #include "repl/executor.h"
 #include "repl/state.h"
 #include "ui/panels.h"

@@ -3,7 +3,7 @@
 #include "app/glr_ctrl.h"
 #include "app/glr_actions.h"
 #include "repl/state.h"
-#include "widgets/replay_state.h"
+#include "subsystems/replay/replay_state.h"
 #include "ui/state.h"
 #include "editor/help_session.h"
 #include "editor/inline_file_prompt.h"
@@ -14,8 +14,8 @@
 #include "editor/input.h"
 #include "repl/examples.h"
 #include "repl/tutorials.h"
-#include "widgets/tutorial.h"
-#include "widgets/tutorial_state.h"
+#include "subsystems/tutorial/tutorial.h"
+#include "subsystems/tutorial/tutorial_state.h"
 #include <keys.h>
 #include "support/test_harness.h"
 #include <stdlib.h>

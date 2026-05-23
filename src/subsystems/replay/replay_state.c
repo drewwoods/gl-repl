@@ -1,8 +1,8 @@
 /*
  * replay_state.c - Replay peer subsystem ownership.
  */
-#include "widgets/replay_state.h"
-#include "widgets/replay.h"
+#include "subsystems/replay/replay_state.h"
+#include "subsystems/replay/replay.h"
 
 #define REPLAY_STATE_INITIAL                              \
     {                                                     \

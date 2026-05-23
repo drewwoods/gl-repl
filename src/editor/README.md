@@ -102,5 +102,5 @@ without the editor at all (see `repl_demo`).
 
 **Boundary:** the editor owns text behavior and the commit transaction. It
 does **not** own GL execution, menu/HUD chrome, the variable-panel/replay
-peers (those are `src/widgets`), or parsed-command semantics (that's
+peers (those are `src/subsystems`), or parsed-command semantics (that's
 `src/repl`).

@@ -31,7 +31,7 @@
 #include "repl/core.h"
 #include "editor/input.h"
 #include "repl/state_owners.h"
-#include "widgets/replay.h"
+#include "subsystems/replay/replay.h"
 #include "support/test_harness.h"
 
 #include <stdio.h>
