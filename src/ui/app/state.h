@@ -35,13 +35,10 @@ UiStatusState  ui_state_status(void);
 UiStatusState *ui_state_status_mut(void);
 void             ui_state_status_set(const char *message);
 void             ui_state_status_set_error(const char *message);
-void             ui_state_status_clear(void);
-void             ui_state_status_tick(void);
 
 /* Help overlay visibility. */
 UiHelpState  ui_state_help(void);
 UiHelpState *ui_state_help_mut(void);
-void           ui_state_help_reset(void);
 
 /* Profile panel mode. */
 UiProfilePanelState  ui_state_profile_panel(void);
@@ -57,14 +54,12 @@ UiPointerState  ui_state_pointer(void);
 UiPointerState *ui_state_pointer_mut(void);
 void              ui_state_pointer_set(int mouse_x, int mouse_y, int mouse_button);
 void              ui_state_pointer_set_pos(int mouse_x, int mouse_y);
-void              ui_state_pointer_set_button(int mouse_button);
 
 /* Code-panel render chrome: panel divider, cursor blink, cursor px/py.
  * The editor-session bits (scroll / scroll_follow_cursor) live on
  * EditorState.scroll instead. */
 UiCodePanelRuntimeState  ui_state_code_panel(void);
 UiCodePanelRuntimeState *ui_state_code_panel_mut(void);
-void                       ui_state_code_panel_reset(void);
 
 /* Camera pose is not part of UiState; use glr_camera.h for orbit/pan/zoom
  * state and helpers, and variable_panel_state.h for variable-panel visibility

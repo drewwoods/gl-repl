@@ -493,7 +493,7 @@ int main() {
         ui_state_pointer_set_pos(30, 40);
         ASSERT_INT("state pointer pos x", ui_state_pointer().mouse_x, 30);
         ASSERT_INT("state pointer pos y", ui_state_pointer().mouse_y, 40);
-        ui_state_pointer_set_button(-1);
+        ui_state_pointer_mut()->mouse_button = -1;
         ASSERT_INT("state pointer button set", ui_state_pointer().mouse_button, -1);
 
         pointer = ui_state_pointer_mut();

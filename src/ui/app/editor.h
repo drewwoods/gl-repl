@@ -28,7 +28,6 @@ typedef struct {
             float b;
             float a;
             int   has_alpha;
-            int   is_clear;
         } color;
         struct {
             float min;

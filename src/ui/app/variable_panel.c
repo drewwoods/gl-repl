@@ -98,8 +98,6 @@ static float val_to_slider_t(float val, float scale) {
 #define VAR_PANEL_LIFT_SNAP_PX 0.25f
 
 static float g_var_panel_replay_lift_px = 0.0f;
-static float g_var_panel_lift_update_time = -1.0f;
-static float g_var_panel_lift_update_target = -1.0f;
 
 static float var_panel_replay_target_lift_px(void) {
     float target = (float)((REPLAY_HUD_BOTTOM_Y + VAR_REPLAY_CLEARANCE)
@@ -109,19 +107,12 @@ static float var_panel_replay_target_lift_px(void) {
 }
 
 /* Advance the easing toward the current target. Called from
- * ui_variable_panel_render once per frame, with the snapshot's anim_time
- * as the clock — keeps the per-frame anim_time
- * read out of the hit-test path. */
-static void var_panel_replay_lift_tick(float anim_time) {
+ * ui_variable_panel_render once per frame — keeps the per-frame
+ * check out of the hit-test path. */
+static void var_panel_replay_lift_tick(void) {
     float target = 0.0f;
     if (replay_active())
         target = var_panel_replay_target_lift_px();
-
-    if (g_var_panel_lift_update_time == anim_time &&
-        g_var_panel_lift_update_target == target)
-        return;
-    g_var_panel_lift_update_time = anim_time;
-    g_var_panel_lift_update_target = target;
 
     /* Exponential-decay style easing toward target (and back to 0 when replay ends). */
     g_var_panel_replay_lift_px += (target - g_var_panel_replay_lift_px) * VAR_PANEL_LIFT_EASE;
@@ -219,7 +210,7 @@ void ui_variable_panel_render(const UiRenderSnapshot *snap) {
     const UiVariableList *vars = &snap->variable_panel_vars;
     int var_count = ui_variable_count(vars);
 
-    var_panel_replay_lift_tick(snap->anim_time);
+    var_panel_replay_lift_tick();
 
     int px, py, pw, ph;
     ui_variable_panel_rect_for_count(var_count, &px, &py, &pw, &ph);

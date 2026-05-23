@@ -1006,7 +1006,6 @@ static void glr_ctrl_push_color_transformers(void) {
                 .b = cmd->args[2],
                 .a = has_alpha ? cmd->args[3] : 1.0f,
                 .has_alpha = has_alpha,
-                .is_clear = (cmd->type == CMD_CLEAR_COLOR),
             },
         };
         if (!editor_state_transformers_append(&t))

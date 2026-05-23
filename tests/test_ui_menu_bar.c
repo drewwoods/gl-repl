@@ -71,7 +71,8 @@ static int find_dropdown_item_point(int menu_id, int target_item,
     ui_menu_bar_set_open_menu(menu_id, 0.0f);
     for (int my = 0; my < win_h; my++) {
         for (int mx = 0; mx < win_w; mx++) {
-            if (ui_menu_bar_dropdown_item_hit(mx, my) == target_item) {
+            UiHit hit = ui_menu_bar_hit_test(mx, my);
+            if (hit.kind == UI_HIT_MENU_ITEM && hit.item_idx == target_item) {
                 if (out_mx)
                     *out_mx = mx;
                 if (out_my)
@@ -93,7 +94,7 @@ static void test_open_close_state(void) {
     ui_menu_bar_set_open_menu(GLR_MENU_FILE, 0.0f);
     ASSERT_INT_EQ("open File menu", ui_menu_bar_open_menu_id(), GLR_MENU_FILE);
     ASSERT_TRUE("File dropdown open", ui_menu_bar_menu_dropdown_is_open());
-    ASSERT_TRUE("example dropdown mirrors open menu", ui_menu_bar_example_dropdown_is_open());
+    ASSERT_TRUE("example dropdown mirrors open menu", ui_menu_bar_menu_dropdown_is_open());
 
     ui_menu_bar_set_open_menu(GLR_MENU_SCENE, 0.0f);
     ASSERT_INT_EQ("switch to Scene menu", ui_menu_bar_open_menu_id(), GLR_MENU_SCENE);
@@ -110,7 +111,7 @@ static void test_open_close_state(void) {
     glr_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_HIDDEN; glr_ctrl_sync_ui_chrome();
     ui_menu_bar_set_open_menu(GLR_MENU_FILE, 0.0f);
     ASSERT_TRUE("hidden code panel suppresses dropdown", !ui_menu_bar_menu_dropdown_is_open());
-    ASSERT_TRUE("hidden code panel suppresses example dropdown", !ui_menu_bar_example_dropdown_is_open());
+    ASSERT_TRUE("hidden code panel suppresses example dropdown", !ui_menu_bar_menu_dropdown_is_open());
 }
 
 static void test_top_level_hits(void) {
@@ -123,10 +124,17 @@ static void test_top_level_hits(void) {
     pin_mx = replay_pin_mx();
     my = menu_bar_center_my();
 
-    ASSERT_INT_EQ("hit File menu button", ui_menu_bar_menu_hit(menu_mx, my), GLR_MENU_FILE);
-    ASSERT_INT_EQ("hit Replay pin", ui_menu_bar_pin_hit(pin_mx, my), UI_MENU_BAR_PIN_REPLAY);
-    ASSERT_INT_EQ("menu miss below bar", ui_menu_bar_menu_hit(menu_mx, my + 120), -1);
-    ASSERT_INT_EQ("pin miss in menu region", ui_menu_bar_pin_hit(menu_mx, my), -1);
+    UiHit h_menu = ui_menu_bar_hit_test(menu_mx, my);
+    ASSERT_INT_EQ("hit File menu button", h_menu.kind == UI_HIT_MENU_BUTTON ? h_menu.cmd_idx : -1, GLR_MENU_FILE);
+    
+    UiHit h_pin = ui_menu_bar_hit_test(pin_mx, my);
+    ASSERT_INT_EQ("hit Replay pin", h_pin.kind == UI_HIT_PIN_BUTTON ? h_pin.item_idx : -1, UI_MENU_BAR_PIN_REPLAY);
+    
+    UiHit h_menu_miss = ui_menu_bar_hit_test(menu_mx, my + 120);
+    ASSERT_INT_EQ("menu miss below bar", h_menu_miss.kind == UI_HIT_MENU_BUTTON ? h_menu_miss.cmd_idx : -1, -1);
+    
+    UiHit h_pin_miss = ui_menu_bar_hit_test(menu_mx, my);
+    ASSERT_INT_EQ("pin miss in menu region", h_pin_miss.kind == UI_HIT_PIN_BUTTON ? h_pin_miss.item_idx : -1, -1);
 }
 
 static void test_dropdown_and_config_press(void) {
@@ -148,12 +156,14 @@ static void test_dropdown_and_config_press(void) {
     ASSERT_TRUE("found New Scene item point",
                 find_dropdown_item_point(GLR_MENU_FILE, GLR_FILE_ITEM_NEW_SCENE,
                                          &item_mx, &item_my));
+    UiHit h_new_scene = ui_menu_bar_hit_test(item_mx, item_my);
     ASSERT_INT_EQ("hit New Scene item",
-                  ui_menu_bar_dropdown_item_hit(item_mx, item_my),
+                  h_new_scene.kind == UI_HIT_MENU_ITEM ? h_new_scene.item_idx : -1,
                   GLR_FILE_ITEM_NEW_SCENE);
 
     ui_menu_bar_close();
-    ASSERT_INT_EQ("hit when closed", ui_menu_bar_dropdown_item_hit(item_mx, item_my), -1);
+    UiHit h_closed = ui_menu_bar_hit_test(item_mx, item_my);
+    ASSERT_INT_EQ("hit when closed", h_closed.kind == UI_HIT_MENU_ITEM ? h_closed.item_idx : -1, -1);
 
     /* MENU_TUTORIALS top-level row 0 was a tutorial item before Phase B
      * (the flat dropdown); after Phase B it is the first tag row (tutorial
@@ -163,8 +173,9 @@ static void test_dropdown_and_config_press(void) {
     ASSERT_TRUE("found first tutorial tag row point",
                 find_dropdown_item_point(GLR_MENU_TUTORIALS, 0,
                                          &tutorial_mx, &tutorial_my));
+    UiHit h_tut = ui_menu_bar_hit_test(tutorial_mx, tutorial_my);
     ASSERT_INT_EQ("hit first tutorial tag row",
-                  ui_menu_bar_dropdown_item_hit(tutorial_mx, tutorial_my),
+                  h_tut.kind == UI_HIT_MENU_ITEM ? h_tut.item_idx : -1,
                   0);
     ASSERT_INT_EQ("Tutorials tag row activation keeps menu open",
                   glr_action_menu_item_activate(GLR_MENU_TUTORIALS, 0), 0);
@@ -172,8 +183,9 @@ static void test_dropdown_and_config_press(void) {
     ASSERT_TRUE("found first Scene tag row point",
                 find_dropdown_item_point(GLR_MENU_SCENE, 1,
                                          &scene_tag_mx, &scene_tag_my));
+    UiHit h_scene = ui_menu_bar_hit_test(scene_tag_mx, scene_tag_my);
     ASSERT_INT_EQ("hit first Scene tag row",
-                  ui_menu_bar_dropdown_item_hit(scene_tag_mx, scene_tag_my),
+                  h_scene.kind == UI_HIT_MENU_ITEM ? h_scene.item_idx : -1,
                   1);
     ASSERT_INT_EQ("Scene tag row activation keeps menu open",
                   glr_action_menu_item_activate(GLR_MENU_SCENE, 1), 0);
@@ -324,9 +336,10 @@ static void test_scene_submenu_with_stubs(void) {
     ASSERT_TRUE("Scene tag hover update opens submenu",
                 ui_menu_bar_update_pointer_hover(tag_mx, tag_my, snap.anim_time));
     ASSERT_TRUE("Scene submenu rect available after hover update",
-                ui_menu_bar_scene_example_submenu_rect_for_test(tag_idx,
-                                                                &sx, &sy,
-                                                                &sw, &sh));
+                ui_menu_bar_submenu_rect_for_test(GLR_MENU_SCENE,
+                                                  ui_menu_bar_scene_parent_row_for_tag(tag_idx),
+                                                  &sx, &sy,
+                                                  &sw, &sh));
 
     example_idx = repl_example_index_for_tag(tag_idx, 0);
     ASSERT_TRUE("first submenu example exists", example_idx >= 0);
@@ -382,9 +395,10 @@ static void test_scene_submenu_with_stubs(void) {
     ASSERT_TRUE("found narrow Scene tag point",
                 find_dropdown_item_point(GLR_MENU_SCENE, 1, &tag_mx, &tag_my));
     ASSERT_TRUE("narrow submenu rect available",
-                ui_menu_bar_scene_example_submenu_rect_for_test(tag_idx,
-                                                                &sx, &sy,
-                                                                &sw, &sh));
+                ui_menu_bar_submenu_rect_for_test(GLR_MENU_SCENE,
+                                                  ui_menu_bar_scene_parent_row_for_tag(tag_idx),
+                                                  &sx, &sy,
+                                                  &sw, &sh));
     ASSERT_TRUE("narrow submenu flips left of parent point", sx < tag_mx);
     ASSERT_TRUE("narrow submenu stays onscreen", sx + sw <= ui_state_viewport().window_w);
 }
@@ -522,7 +536,7 @@ static void test_render_paths_with_stubs(void) {
     ui_menu_bar_note_search_opened(0.0f);
     snap.search.active = 1;
     gl_stub_counts_reset();
-    ui_menu_bar_render_search_overlay(&snap, 0, 400, 20);
+    ui_menu_bar_render_search_overlay(&snap);
     ASSERT_TRUE("search overlay renders placeholder", gl_stub_counts[GL_STUB_glRasterPos2f] > 0);
 
     snprintf(snap.search.query, sizeof(snap.search.query),
@@ -532,14 +546,14 @@ static void test_render_paths_with_stubs(void) {
     snap.search.match_count = 0;
     snap.anim_time = 2.0f;
     gl_stub_counts_reset();
-    ui_menu_bar_render_search_overlay(&snap, 0, 180, 20);
+    ui_menu_bar_render_search_overlay(&snap);
     ASSERT_TRUE("search overlay renders zero matches", gl_stub_counts[GL_STUB_glRasterPos2f] > 0);
 
     snap.search.match_count = 9;
     snap.search.hit_ordinal = 3;
     snap.code_panel.cursor_visible = 1;
     gl_stub_counts_reset();
-    ui_menu_bar_render_search_overlay(&snap, 0, 180, 20);
+    ui_menu_bar_render_search_overlay(&snap);
     ASSERT_TRUE("search overlay renders cursor and count", gl_stub_counts[GL_STUB_glRectf] > 0);
 }
 #endif

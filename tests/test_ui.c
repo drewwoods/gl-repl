@@ -276,7 +276,7 @@ static void test_color_picker(void) {
             .kind = TRANSFORMER_COLOR_PICKER,
             .state.color = {
                 .r = 0.5f, .g = 0.5f, .b = 0.5f, .a = 1.0f,
-                .has_alpha = 0, .is_clear = 0,
+                .has_alpha = 0,
             },
         };
         ui_color_picker_render_swatch(&t, 100, 100, color_picker_active_line());
@@ -350,11 +350,11 @@ static void test_menu_bar(void) {
     ASSERT_GL_CALLS("menu bar render -> draws text", GL_STUB_glRasterPos2f, 2);
 
     /* Test hits */
-    ASSERT_TRUE("menu hit", ui_menu_bar_menu_hit(20, 10) >= 0);
+    ASSERT_TRUE("menu hit", ui_menu_bar_hit_test(20, 10).kind == UI_HIT_MENU_BUTTON);
     /* Pins are on the right side of the code panel.
      * With CP LEFT and frac 0.5, cp_w = 400.
      */
-    ASSERT_TRUE("pin hit", ui_menu_bar_pin_hit(380, 10) >= 0);
+    ASSERT_TRUE("pin hit", ui_menu_bar_hit_test(380, 10).kind == UI_HIT_PIN_BUTTON);
 
     /* Test dropdown */
     ui_menu_bar_set_open_menu(0, 0.0f); // File menu
@@ -365,7 +365,7 @@ static void test_menu_bar(void) {
     ASSERT_GL_CALLS("dropdown render -> draws quads", GL_STUB_glBegin, 1);
 
     /* Dropdown item hit */
-    ASSERT_TRUE("dropdown item hit", ui_menu_bar_dropdown_item_hit(20, 100) >= 0);
+    ASSERT_TRUE("dropdown item hit", ui_menu_bar_hit_test(20, 100).kind == UI_HIT_MENU_ITEM);
 
     /* Test config menu */
     ui_menu_bar_open_config(0.0f);
@@ -374,7 +374,7 @@ static void test_menu_bar(void) {
     /* Test search overlay */
     editor_state_search_mut()->active = 1;
     gl_stub_counts_reset();
-    { UiRenderSnapshot s; make_test_ui_snapshot(&s); ui_menu_bar_render_search_overlay(&s, 0, 400, 600); }
+    { UiRenderSnapshot s; make_test_ui_snapshot(&s); ui_menu_bar_render_search_overlay(&s); }
     ASSERT_GL_CALLS("search overlay -> draws quads", GL_STUB_glBegin, 1);
 
     ui_menu_bar_close();

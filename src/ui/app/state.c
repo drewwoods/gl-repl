@@ -73,16 +73,6 @@ void ui_state_status_set_error(const char *message) {
     ui_state_status_set_kind(message, UI_STATUS_ERROR);
 }
 
-void ui_state_status_clear(void) {
-    g_ui_state.status.text[0] = '\0';
-    g_ui_state.status.ttl = 0;
-    g_ui_state.status.kind = UI_STATUS_INFO;
-}
-
-void ui_state_status_tick(void) {
-    if (g_ui_state.status.ttl > 0)
-        g_ui_state.status.ttl--;
-}
 
 UiHelpState ui_state_help(void) {
     return g_ui_state.help;
@@ -92,9 +82,6 @@ UiHelpState *ui_state_help_mut(void) {
     return &g_ui_state.help;
 }
 
-void ui_state_help_reset(void) {
-    g_ui_state.help = g_ui_state_defaults.help;
-}
 
 /* Variable-panel accessors live on the variable_panel peer:
  * use `variable_panel_view` / `variable_panel_view_mut` directly. */
@@ -139,9 +126,6 @@ void ui_state_pointer_set_pos(int mouse_x, int mouse_y) {
     g_ui_state.pointer.mouse_y = mouse_y;
 }
 
-void ui_state_pointer_set_button(int mouse_button) {
-    g_ui_state.pointer.mouse_button = mouse_button;
-}
 
 UiCodePanelRuntimeState ui_state_code_panel(void) {
     return g_ui_state.code_panel;
@@ -151,9 +135,6 @@ UiCodePanelRuntimeState *ui_state_code_panel_mut(void) {
     return &g_ui_state.code_panel;
 }
 
-void ui_state_code_panel_reset(void) {
-    g_ui_state.code_panel = g_ui_state_defaults.code_panel;
-}
 
 /* Camera accessors moved to glr_camera.c. Storage lives there too;
  * the UiState.camera field is gone (see src/ui/app/state.h). */

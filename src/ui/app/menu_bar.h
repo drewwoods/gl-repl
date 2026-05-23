@@ -34,8 +34,7 @@ void ui_menu_bar_render(const UiRenderSnapshot *snap);
 /* Render the search overlay text input and matches (below menu bar, full width).
  * cp_x is code-panel x-coordinate; panel_w is width; panel_top is y-coordinate
  * of menu bar bottom. Reads from the supplied snapshot. */
-void ui_menu_bar_render_search_overlay(const UiRenderSnapshot *snap,
-                                       int cp_x, int panel_w, int panel_top);
+void ui_menu_bar_render_search_overlay(const UiRenderSnapshot *snap);
 
 /* Render the example dropdown (F12 cycle menu showing built-in examples + user
  * scenes). Reads from the supplied snapshot. */
@@ -66,39 +65,14 @@ void ui_menu_bar_note_search_opened(float now);
 
 /* --- Hit-testing and interaction --- */
 
-/* Hit-test a click on a top-level menu button (File/Scene/Config). Returns the
- * menu ID if hit, -1 if no menu button was clicked. mx, my are window
- * coordinates. Called by ui_panels.c on left-click. */
-int  ui_menu_bar_menu_hit(int mx, int my);
 
-/* Hit-test a click on a pinned button (Search/Replay). Returns the button ID
- * (UI_MENU_BAR_PIN_*) if hit, -1 if no button was clicked. mx, my are window
- * coordinates. Called by ui_panels.c on left-click. */
-int  ui_menu_bar_pin_hit(int mx, int my);
 
-/* Hit-test a click within an open dropdown menu. Returns the item index if a
- * menu item was clicked, -1 if not. mx, my are window coordinates. Called by
- * ui_panels.c on left-click while a dropdown is open. */
-int  ui_menu_bar_dropdown_item_hit(int mx, int my);
-
-/* Test helper: return the Scene example submenu rect for a visible tag while
- * the Scene menu is open. Ignores the current hover/open-tag state. Rect
- * coordinates are in GL space (origin at bottom-left). */
-int  ui_menu_bar_scene_example_submenu_rect_for_test(int tag_idx,
-                                                     int *sx, int *sy,
-                                                     int *sw, int *sh);
-
-/* Test helper: return the Tutorials submenu rect for a visible tutorial
- * tag while the Tutorials menu is open. Same shape as the Scene helper
- * above; ignores hover/open-tag state. */
-int  ui_menu_bar_tutorial_submenu_rect_for_test(int tag_idx,
-                                                int *sx, int *sy,
-                                                int *sw, int *sh);
+int  ui_menu_bar_scene_parent_row_for_tag(int tag_idx);
+int  ui_menu_bar_tutorial_parent_row_for_tag(int tag_idx);
 
 /* Test helper: generic flyout-submenu rect for (menu_id, parent_row)
  * while that menu is open. Ignores hover/open state. GL-space coords.
- * Used by Config-flyout tests; the Scene helper above is the
- * tag-indexed convenience wrapper over the same engine. */
+ * Used by Config-flyout tests. */
 int  ui_menu_bar_submenu_rect_for_test(int menu_id, int parent_row,
                                        int *sx, int *sy,
                                        int *sw, int *sh);
@@ -130,9 +104,6 @@ UiHit ui_menu_bar_handle_config_right_press(int mx, int my);
  * prioritize input routing in ui_panels.c. */
 int  ui_menu_bar_menu_dropdown_is_open(void);
 
-/* Query whether the example dropdown (F12 cycle menu) is currently open. Returns
- * 1 if open, 0 if not. Used to prioritize input routing and determine if
- * keyboard input should go to example menu instead of code panel. */
-int  ui_menu_bar_example_dropdown_is_open(void);
+
 
 #endif /* UI_MENU_BAR_H */

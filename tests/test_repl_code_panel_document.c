@@ -57,7 +57,7 @@ static void seed_color_transformer(int line, float r, float g, float b) {
         .char_end   = -1,
         .kind       = TRANSFORMER_COLOR_PICKER,
         .state.color = { .r = r, .g = g, .b = b, .a = 1.0f,
-                         .has_alpha = 0, .is_clear = 0 },
+                         .has_alpha = 0 },
     };
     editor_state_transformers_clear();
     editor_state_transformers_append(&t);
