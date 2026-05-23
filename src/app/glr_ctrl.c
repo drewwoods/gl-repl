@@ -3289,6 +3289,10 @@ static int route_menu_item_hit(const UiHit *hit) {
  * item_idx is the absolute target index the provider resolved.
  *  - MENU_SCENE: item_idx = global flat example index → load it and
  *    dismiss the menu (a scene pick is a one-shot action).
+ *  - MENU_TUTORIALS: item_idx = global tutorial index → start it via
+ *    tutorial_start (REPL-side; sidesteps glr_action_menu_item_activate,
+ *    whose MENU_TUTORIALS branch only owns the top-level tag-row /
+ *    Restart / Exit dispatch) and dismiss the menu.
  *  - MENU_CONFIG: item_idx = absolute g_cfg_items[] index → cycle the
  *    item forward via glr_cfg_cycle_row (NOT through
  *    glr_action_menu_item_activate, whose Config branch is the inert
@@ -3300,6 +3304,12 @@ static int route_submenu_item_hit(const UiHit *hit) {
         return 0;
     if (hit->cmd_idx == GLR_MENU_CONFIG) {
         glr_cfg_cycle_row(hit->item_idx, 1);
+        editor_request_redraw();
+        return 1;
+    }
+    if (hit->cmd_idx == GLR_MENU_TUTORIALS) {
+        tutorial_start(hit->item_idx);
+        ui_menu_bar_close();
         editor_request_redraw();
         return 1;
     }

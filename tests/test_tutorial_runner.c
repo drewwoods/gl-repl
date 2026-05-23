@@ -769,19 +769,23 @@ static void test_fade_alpha_math(void) {
 
 static void test_complete_and_menu_actions(void) {
     const char *expected;
-    int tutorial_count;
+    int tag_count;
 
     reset_fixture();
-    tutorial_count = repl_tutorial_count();
-    ASSERT_TRUE("tutorial menu action starts tutorial",
-                glr_action_menu_item_activate(GLR_MENU_TUTORIALS, 0) == 1);
-    ASSERT_TRUE("tutorial active from menu action", tutorial_active());
+    /* After Phase B's hierarchical menu, top-level MENU_TUTORIALS rows
+     * are tag rows (inert) + trailing Restart/Exit; tutorial activation
+     * itself flows through route_submenu_item_hit → tutorial_start,
+     * which is REPL-side and tested directly here. The menu-action
+     * route only owns Restart/Exit at the top level. */
+    tutorial_start(0);
+    ASSERT_TRUE("tutorial active after tutorial_start", tutorial_active());
 
     expected = tutorial_current_expected_text();
     editor_feed_line(expected);
     tutorial_advance_after_successful_commit();
+    tag_count = repl_tutorial_visible_tag_count();
     ASSERT_TRUE("restart menu item restarts tutorial",
-                glr_action_menu_item_activate(GLR_MENU_TUTORIALS, tutorial_count + 1) == 1);
+                glr_action_menu_item_activate(GLR_MENU_TUTORIALS, tag_count + 1) == 1);
     ASSERT_INT("restart resets step", tutorial_state_view().step, 0);
 
     while (tutorial_active()) {
@@ -793,8 +797,14 @@ static void test_complete_and_menu_actions(void) {
 
     ASSERT_STR("completion status set", status_text(), "Tutorial complete");
 
+    /* After completion no tutorial is active, so the trailing Restart/Exit
+     * rows don't exist. The MENU_TUTORIALS activation handler still has a
+     * catch-all `return 1` at the bottom, so out-of-range indices report
+     * "handled" (the original behavior — preserved for non-regression). */
     ASSERT_TRUE("exit menu item accepted when inactive",
-                glr_action_menu_item_activate(GLR_MENU_TUTORIALS, tutorial_count + 2) == 1);
+                glr_action_menu_item_activate(
+                    GLR_MENU_TUTORIALS,
+                    repl_tutorial_visible_tag_count() + 2) == 1);
 }
 
 static void test_start_captures_home_for_unsaved_buffer(void) {

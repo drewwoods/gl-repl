@@ -617,18 +617,25 @@ int glr_action_menu_item_activate(int menu_id, int item_idx) {
         }
         return 1;
     } else if (menu_id == GLR_MENU_TUTORIALS) {
-        int tutorial_count = repl_tutorial_count();
-        if (item_idx < tutorial_count) {
-            tutorial_start(item_idx);
-            return 1;
-        }
-        if (tutorial_active() && item_idx == tutorial_count + 1) {
+        /* Top-level Tutorials rows after the Phase-B hierarchical menu:
+         *   [0..t-1]   tag rows (inert hover-only, like Scene tag rows
+         *              — the actual tutorial flyout-item activation
+         *              flows through route_submenu_item_hit which
+         *              dispatches directly to tutorial_start, NOT
+         *              through this function).
+         *   [t]        "---" (chrome row, filtered before activation).
+         *   [t+1]      "Restart Tutorial" (only when tutorial_active).
+         *   [t+2]      "Exit Tutorial"    (only when tutorial_active). */
+        int tag_count = repl_tutorial_visible_tag_count();
+        if (item_idx < tag_count)
+            return 0;   /* tag row → keep menu open, no action */
+        if (tutorial_active() && item_idx == tag_count + 1) {
             TutorialRuntimeState tutorial = tutorial_state_view();
             if (tutorial.tutorial_idx >= 0)
                 tutorial_start(tutorial.tutorial_idx);
             return 1;
         }
-        if (tutorial_active() && item_idx == tutorial_count + 2) {
+        if (tutorial_active() && item_idx == tag_count + 2) {
             tutorial_exit();
             return 1;
         }

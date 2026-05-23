@@ -467,11 +467,14 @@ static int find_tutorial_idx_by_name(const char *name) {
     return -1;
 }
 
-/* Activating a tutorial through the Tutorials menu runs the same
- * reset-then-apply pipeline examples do: presentation chrome is reset
- * to defaults, then the tutorial's leading `@cfg` lines (if any) layer
- * overrides on top. The reset and bridge apply both live REPL-side in
- * tutorial_start; this test exercises the menu activation path. */
+/* Starting a tutorial runs the reset-then-apply pipeline examples use:
+ * presentation chrome resets to defaults, then the tutorial's leading
+ * `@cfg` lines (if any) layer overrides on top. Both live REPL-side in
+ * tutorial_start. After Phase B's hierarchical menu, the menu's top-level
+ * MENU_TUTORIALS rows are tag rows (inert) + trailing Restart/Exit;
+ * tutorial activation itself flows through route_submenu_item_hit →
+ * tutorial_start. This test calls tutorial_start directly (unit-level)
+ * since simulating a submenu-item hit would be integration-level. */
 static void test_tutorial_start_applies_cfg(void) {
     int first = find_tutorial_idx_by_name("First Triangle");
     int color = find_tutorial_idx_by_name("Color & Transform");
@@ -484,8 +487,7 @@ static void test_tutorial_start_applies_cfg(void) {
     if (first >= 0) {
         ASSERT_TRUE("First Triangle has cfg lines",
                     repl_tutorial_cfg_lines(first) != NULL);
-        ASSERT_INT("menu start First Triangle handled",
-                   glr_action_menu_item_activate(GLR_MENU_TUTORIALS, first), 1);
+        tutorial_start(first);
         ASSERT_INT("First Triangle tutorial active", tutorial_active(), 1);
         ASSERT_INT("First Triangle cfg applied 2D view",
                    glr_config_get(GLR_CONFIG_ORTHO_MODE), 1);
@@ -506,8 +508,7 @@ static void test_tutorial_start_applies_cfg(void) {
     if (color >= 0) {
         ASSERT_TRUE("Color & Transform has no cfg",
                     repl_tutorial_cfg_lines(color) == NULL);
-        ASSERT_INT("menu start Color & Transform handled",
-                   glr_action_menu_item_activate(GLR_MENU_TUTORIALS, color), 1);
+        tutorial_start(color);
         ASSERT_INT("no-cfg tutorial active", tutorial_active(), 1);
         ASSERT_INT("no-cfg tutorial resets view to 3D default",
                    glr_config_get(GLR_CONFIG_ORTHO_MODE), 0);
@@ -524,6 +525,49 @@ static void test_tutorial_start_applies_cfg(void) {
     }
 }
 
+/* Phase B: top-level MENU_TUTORIALS rows behave like Scene tag rows —
+ * clicking a tag row is inert (returns 0, keeps menu open), and Restart /
+ * Exit work via their new positions (tag_count + 1 / + 2). Activation
+ * of an actual tutorial flows through route_submenu_item_hit (not this
+ * function); the dispatch contract here only covers tag rows + the
+ * trailing Restart/Exit. */
+static void test_tutorial_menu_dispatch(void) {
+    int first = find_tutorial_idx_by_name("First Triangle");
+    glr_app_reset_all();
+    ASSERT_TRUE("First Triangle in catalog", first >= 0);
+
+    int tag_count = repl_tutorial_visible_tag_count();
+    ASSERT_TRUE("at least one visible tutorial tag", tag_count > 0);
+
+    /* Tag rows: inert (return 0, no tutorial started). */
+    ASSERT_INT("tag row 0 is inert (returns 0)",
+               glr_action_menu_item_activate(GLR_MENU_TUTORIALS, 0), 0);
+    ASSERT_INT("tag row 0 did not start a tutorial",
+               tutorial_active(), 0);
+
+    /* Start a tutorial out-of-band (this is what route_submenu_item_hit
+     * would do for a flyout-item click) so the Restart/Exit assertions
+     * have something to act on. */
+    if (first >= 0)
+        tutorial_start(first);
+    ASSERT_INT("tutorial active for restart/exit checks",
+               tutorial_active(), 1);
+
+    /* Restart at tag_count + 1: re-enters step 0. */
+    ASSERT_INT("Restart row handled",
+               glr_action_menu_item_activate(GLR_MENU_TUTORIALS,
+                                             tag_count + 1), 1);
+    ASSERT_INT("Restart returns step to 0",
+               tutorial_state_view().step, 0);
+
+    /* Exit at tag_count + 2: ends the tutorial. */
+    ASSERT_INT("Exit row handled",
+               glr_action_menu_item_activate(GLR_MENU_TUTORIALS,
+                                             tag_count + 2), 1);
+    ASSERT_INT("Exit ends the tutorial",
+               tutorial_active(), 0);
+}
+
 int main(void) {
     test_apply_defaults();
     test_cursor_actions();
@@ -535,6 +579,7 @@ int main(void) {
     test_shortcuts();
     test_ascii_shortcut_modifiers();
     test_tutorial_start_applies_cfg();
+    test_tutorial_menu_dispatch();
 
     return test_harness_report(&g_harness, "test_repl_actions");
 }
