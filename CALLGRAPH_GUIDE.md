@@ -73,7 +73,7 @@ make callgraph-files ENTRY=imrepl_ctrl_display_frame
 
 ```bash
 # Profile execution and generate call graph
-make callgraph-profile PROG="./sample output.c"
+make callgraph-profile PROG="./gl-repl output.c"
 ```
 
 **Why choose this:**
@@ -377,7 +377,7 @@ make callgraph-static-entry ENTRY=repl_execute_program      # Execution engine
 ### Performance Analysis
 Profile a specific scenario to find hot paths:
 ```bash
-make callgraph-profile PROG="./sample examples/animated_ring.c"
+make callgraph-profile PROG="./gl-repl examples/animated_ring.c"
 ```
 
 ### Code Review
