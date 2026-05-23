@@ -3929,6 +3929,21 @@ void glr_ctrl_tick(void) {
         UiStatusState *status = ui_state_status_mut();
         if (status->ttl > 0)
             status->ttl--;
+
+        /* Tutorial COMMAND-step hint persistence: while a COMMAND step
+         * is active, keep the affordance hint visible by re-emitting it
+         * each frame — but only when the status slot is empty (TTL has
+         * fully expired) or already shows one of our hint variants
+         * (recognised by the "Tutorial: step " prefix via
+         * tutorial_status_is_hint). Non-tutorial messages (parse
+         * errors, save confirmations, etc.) keep their full TTL window
+         * uncontested; once they fade, the next tick brings the hint
+         * back. */
+        char hint[REPL_STATUS_TEXT_MAX];
+        if (tutorial_status_hint(hint, sizeof hint) &&
+            (status->ttl <= 0 || tutorial_status_is_hint(status->text))) {
+            ui_state_status_set(hint);
+        }
     }
 }
 

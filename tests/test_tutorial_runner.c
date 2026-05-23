@@ -434,6 +434,59 @@ static void test_tutorial_advance_updates_step_progress_status(void) {
                "Tutorial: step 2/5 - type the command or press Tab to autocomplete");
 }
 
+/* tutorial_status_hint computes which COMMAND-step hint variant the
+ * controller's per-frame refresh should keep visible. Inactive +
+ * non-COMMAND steps return 0 (the slot is free for other status
+ * messages); COMMAND steps return 1 with the entry hint by default and
+ * the commit reminder when the input on the expected commit line is a
+ * full match. tutorial_status_is_hint recognises any "Tutorial: step "
+ * prefix so the controller can distinguish "my hint" from foreign
+ * status writes. */
+static void test_tutorial_status_hint_variants(void) {
+    char buf[REPL_STATUS_TEXT_MAX];
+    int got;
+
+    /* Inactive: returns 0 with empty out. */
+    reset_fixture();
+    buf[0] = 'x';
+    got = tutorial_status_hint(buf, sizeof buf);
+    ASSERT_INT("inactive returns 0", got, 0);
+    ASSERT_STR("inactive clears out", buf, "");
+
+    /* COMMAND step entry: returns the entry hint variant. */
+    tutorial_start(0);
+    got = tutorial_status_hint(buf, sizeof buf);
+    ASSERT_INT("COMMAND entry returns 1", got, 1);
+    ASSERT_STR("COMMAND entry uses 'type or Tab' variant",
+               buf,
+               "Tutorial: step 1/5 - type the command or press Tab to autocomplete");
+
+    /* COMMAND step, full match on expected line: commit reminder. */
+    set_input_text(tutorial_current_expected_text());
+    got = tutorial_status_hint(buf, sizeof buf);
+    ASSERT_INT("COMMAND match returns 1", got, 1);
+    ASSERT_STR("COMMAND match uses commit reminder",
+               buf,
+               "Tutorial: step 1/5 - press Enter or ';' to commit");
+
+    /* tutorial_status_is_hint recognises the prefix on either variant
+     * and rejects unrelated text. */
+    ASSERT_INT("entry hint recognised",
+               tutorial_status_is_hint(
+                   "Tutorial: step 1/5 - type the command or press Tab to autocomplete"),
+               1);
+    ASSERT_INT("commit hint recognised",
+               tutorial_status_is_hint(
+                   "Tutorial: step 1/5 - press Enter or ';' to commit"),
+               1);
+    ASSERT_INT("non-tutorial status not recognised",
+               tutorial_status_is_hint("Saved to output.c"),
+               0);
+    ASSERT_INT("NULL not recognised",
+               tutorial_status_is_hint(NULL),
+               0);
+}
+
 /* tutorial_refresh_input_hint flips the status to the "ready to commit"
  * reminder when the input fully matches the expected command, and is a
  * no-op for inactive / partial input. The completion provider calls it
@@ -2041,6 +2094,7 @@ int main(void) {
     test_shadow_text_clears_on_exit();
     test_tutorial_start_sets_step_progress_status();
     test_tutorial_advance_updates_step_progress_status();
+    test_tutorial_status_hint_variants();
     test_tutorial_refresh_input_hint_on_full_match();
     test_locked_comment_load_is_read_only();
     test_locked_comment_mutations_are_blocked();
