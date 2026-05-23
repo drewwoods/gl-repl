@@ -201,7 +201,7 @@
  * (File menu → Load Scene, src/app/glr_actions.c). Also the seed value
  * the prompt's inline-file-prompt module documents in its header. */
 #ifndef DEFAULT_SCENE_FILE
-#define DEFAULT_SCENE_FILE "my-scene.c"
+#define DEFAULT_SCENE_FILE "my_scene.c"
 #endif
 
 /* Quit-safeguard recovery filename. On Ctrl+Q (or SIGINT) the controller
@@ -209,7 +209,7 @@
  * never silently clobbers the user's real scene. Reload with
  * `./sample quit-recovery.c`. See src/app/glr_ctrl.c. */
 #ifndef QUIT_RECOVERY_FILE
-#define QUIT_RECOVERY_FILE "quit-recovery.c"
+#define QUIT_RECOVERY_FILE "quit_recovery.c"
 #endif
 
 /* Polygon-offset depth-bias constants for the outline pass. Shared by
