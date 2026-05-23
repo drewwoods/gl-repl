@@ -343,6 +343,47 @@ static void test_replay_var_assign_uses_flatten_args(void) {
     replay_stop();
 }
 
+/* Regression: single-argument GLUT shapes must still emit an EVAL
+ * annotation row during replay. The bug dropped CMD_GLUT_CUBE and
+ * CMD_GLUT_TEAPOT because the formatter only handled nargs 2..6. */
+static void test_replay_single_arg_shape_gets_eval_annotation(void) {
+    int t_idx;
+
+    glr_app_reset_all();
+
+    t_idx = repl_eval_find_predef_var_idx("t");
+    ASSERT_TRUE("t predef exists", t_idx >= 0);
+    g_predef_vars[t_idx].value = 0.25f;
+
+    editor_feed_line("glutSolidCube(t);");
+
+    repl_state_mark_flat_dirty();
+    repl_flatten_commands(editor_state_edit_line());
+    repl_state_flat_program_clear_dirty();
+
+    replay_start();
+    ASSERT_TRUE("replay started for single-arg shape", g_replay_active);
+
+    while (g_replay_pc < g_replay_total_flat)
+        replay_advance();
+
+    SourceTextView text = source_document_view();
+    ReplReplayAnnotationOutput out;
+    replay_annotations_prepare(text, &out);
+
+    int eval_found = 0;
+    for (int i = 0; i < out.count; i++) {
+        if (out.items[i].kind != REPL_REPLAY_ANNOTATION_KIND_EVAL)
+            continue;
+        eval_found = 1;
+        ASSERT_TRUE("single-arg shape eval text present",
+                    strstr(out.items[i].text, "glutSolidCube(0.25);") != NULL);
+    }
+    ASSERT_TRUE("single-arg shape produced eval annotation", eval_found);
+
+    replay_stop();
+}
+
 int main(void) {
     test_replay_basic_controls();
     test_replay_stepping();
@@ -353,6 +394,7 @@ int main(void) {
     test_bench_helpers();
     test_misc_helpers();
     test_replay_var_assign_uses_flatten_args();
+    test_replay_single_arg_shape_gets_eval_annotation();
 
     printf("test_repl_replay: %d/%d passed\n", g_harness.passed, g_harness.run);
     return (g_harness.run == g_harness.passed) ? 0 : 1;

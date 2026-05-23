@@ -869,10 +869,13 @@ int main(void) {
     {
         glr_app_reset_all();
         GLCmd cmd;
+        ExprVar vars[1] = { { "radius", 1.0f } };
         memset(&cmd, 0, sizeof(cmd));
-        int ok = parse_for_test("glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION, 1, 0, 0)", &cmd);
+        int ok = parse_for_test_with_vars("glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION, 1, 0, 0)",
+                                          &cmd, vars, 1);
         ASSERT_TRUE("glPointParameterfv parse ok", ok == 1);
         ASSERT_TRUE("glPointParameterfv type", cmd.type == CMD_POINT_PARAMETER_FV);
+        ASSERT_TRUE("glPointParameterfv literal has_vars false", cmd.has_vars == 0);
     }
 
     /* Incomplete commands should not be reported as unknown commands. */
@@ -1043,6 +1046,15 @@ int main(void) {
          * collapse under flatten/replay/export). */
         int ok = parse_for_test("glDepthMask(x)", &cmd);
         ASSERT_TRUE("glDepthMask(var) rejected", ok == 0);
+    }
+    {
+        glr_app_reset_all();
+        GLCmd cmd;
+        memset(&cmd, 0, sizeof(cmd));
+        int ok = parse_for_test("glDepthMask(undef_var)", &cmd);
+        ASSERT_TRUE("glDepthMask(undef_var) rejected", ok == 0);
+        assert_status_contains("glDepthMask(undef_var) undeclared status",
+                               "undeclared variable 'undef_var'");
     }
     {
         glr_app_reset_all();

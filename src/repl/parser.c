@@ -156,8 +156,11 @@ static int resolve_enum_arg_slot(const char *raw,
     case REPL_ENUM_SLOT_ENUM_OR_CONST_VALUE: {
         char verr[128];
         if (!repl_eval_validate_expression_idents(raw, vars, num_vars,
-                                                  verr, sizeof(verr)) ||
-            input_has_any_visible_vars(raw, vars, num_vars)) {
+                                                  verr, sizeof(verr))) {
+            parser_emit_error_static(ctx, verr);
+            return 0;
+        }
+        if (input_has_any_visible_vars(raw, vars, num_vars)) {
             parser_emit_error_static(ctx, as->usage);
             return 0;
         }
@@ -839,7 +842,7 @@ static int parse_command(const char *line, GLCmd *cmd,
         cmd->args[2] = parsed_args[1];
         cmd->args[3] = parsed_args[2];
         cmd->num_args = 4;
-        cmd->has_vars = (num_vars > 0);
+        cmd->has_vars = input_has_any_visible_vars(rest, vars, num_vars);
 
         {
             char ind[32]; repl_source_scope_cmd_indent(source_line_idx, ind, sizeof(ind));

@@ -366,6 +366,10 @@ void test_workspace_round_trip() {
     glr_app_reset_all(); declare_test_vars();
     ASSERT_INT("slots cleared by reset", repl_user_scene_count(), 0);
 
+    repl_load_example(0);
+    int preexisting = repl_promote_example_if_needed();
+    ASSERT_TRUE("preexisting scene promoted", preexisting >= 1);
+
     int loaded = repl_load_workspace(dir);
     ASSERT_INT("load_workspace produced original count",
                loaded, slots_before);
@@ -402,6 +406,146 @@ void test_workspace_round_trip() {
         closedir(d);
         rmdir(dir);
     }
+}
+
+void test_workspace_save_slug_collisions() {
+    printf("--- Workspace save slug collisions ---\n");
+    glr_app_reset_all(); declare_test_vars();
+    if (repl_example_count() < 1) return;
+
+    repl_load_example(0);
+    int promoted = repl_promote_example_if_needed();
+    ASSERT_TRUE("promotion succeeded", promoted >= 1);
+
+    ASSERT_INT("rename slot 0 with space",
+               repl_user_scene_rename(0, "A B"), 1);
+    ASSERT_INT("rename promoted slot with hyphen",
+               repl_user_scene_rename(promoted, "A-B"), 1);
+
+    char dir_template[] = "/tmp/repl_workspace_slug_collision.XXXXXX";
+    char *made_dir = mkdtemp(dir_template);
+    ASSERT_TRUE("mkdtemp slug-collision workspace", made_dir != NULL);
+    if (!made_dir)
+        return;
+
+    int written = repl_save_workspace(made_dir, NULL);
+    ASSERT_INT("save_workspace writes both colliding scenes", written, 2);
+
+    DIR *d = opendir(made_dir);
+    int file_count = 0;
+    if (d) {
+        struct dirent *ent;
+        while ((ent = readdir(d)) != NULL) {
+            if (ent->d_name[0] == '.')
+                continue;
+            size_t len = strlen(ent->d_name);
+            if (len > 2 && strcmp(ent->d_name + len - 2, ".c") == 0)
+                file_count++;
+
+            char path[256];
+            snprintf(path, sizeof(path), "%s/%s", made_dir, ent->d_name);
+            unlink(path);
+        }
+        closedir(d);
+    }
+
+    ASSERT_INT("colliding scene names still produce two files",
+               file_count, 2);
+    rmdir(made_dir);
+    repl_set_workspace_dir("");
+}
+
+void test_scene_load_clears_func_aliases_and_saved_workspace_stays_clean() {
+    printf("--- Scene load clears function aliases ---\n");
+    char input_dir_template[] = "/tmp/repl_alias_leak_in.XXXXXX";
+    char output_dir_template[] = "/tmp/repl_alias_leak_out.XXXXXX";
+    char *input_dir = mkdtemp(input_dir_template);
+    char *output_dir = mkdtemp(output_dir_template);
+    ASSERT_TRUE("mkdtemp alias input workspace", input_dir != NULL);
+    ASSERT_TRUE("mkdtemp alias output workspace", output_dir != NULL);
+    if (!input_dir || !output_dir)
+        return;
+
+    char alias_path[256];
+    char plain_path[256];
+    char plain_out_path[256];
+    snprintf(alias_path, sizeof(alias_path), "%s/alias_scene.c", input_dir);
+    snprintf(plain_path, sizeof(plain_path), "%s/plain_scene.c", input_dir);
+    snprintf(plain_out_path, sizeof(plain_out_path), "%s/plain_scene.c", output_dir);
+
+    glr_app_reset_all(); declare_test_vars();
+    editor_feed_line("drawCube {");
+    editor_feed_line("  glVertex3f(0, 0, 0);");
+    editor_feed_line("}");
+    editor_feed_line("drawCube();");
+    repl_export_save_output(alias_path, source_document_view(), NULL);
+
+    glr_app_reset_all(); declare_test_vars();
+    editor_feed_line("glVertex3f(1, 2, 3);");
+    repl_export_save_output(plain_path, source_document_view(), NULL);
+
+    glr_app_reset_all(); declare_test_vars();
+    ReplSceneLoadStatus reason = REPL_SCENE_LOAD_OK;
+    int alias_slot = repl_load_scene_as_new_slot(alias_path, &reason);
+    ASSERT_TRUE("alias scene loaded", alias_slot >= 0);
+    ASSERT_INT("alias load reason ok", reason, REPL_SCENE_LOAD_OK);
+    ASSERT_INT("alias registered after load",
+               repl_func_alias_lookup_slot("drawCube"), 0);
+
+    int plain_slot = repl_load_scene_as_new_slot(plain_path, &reason);
+    ASSERT_TRUE("plain scene loaded", plain_slot >= 0);
+    ASSERT_INT("plain load reason ok", reason, REPL_SCENE_LOAD_OK);
+    ASSERT_INT("plain scene cleared alias table",
+               repl_func_alias_lookup_slot("drawCube"), -1);
+
+    ASSERT_INT("rename alias slot",
+               repl_user_scene_rename(alias_slot, "Aliased Scene"), 1);
+    ASSERT_INT("rename plain slot",
+               repl_user_scene_rename(plain_slot, "Plain Scene"), 1);
+
+    int written = repl_save_workspace(output_dir, NULL);
+    ASSERT_INT("workspace save wrote two scene files", written, 2);
+
+    FILE *f = fopen(plain_out_path, "r");
+    ASSERT_TRUE("plain scene export exists", f != NULL);
+    if (f) {
+        char buf[16384];
+        size_t nread = fread(buf, 1, sizeof(buf) - 1, f);
+        buf[nread] = '\0';
+        fclose(f);
+        ASSERT_TRUE("plain scene export stayed alias-free",
+                    strstr(buf, "// @func 0 = drawCube") == NULL);
+        ASSERT_TRUE("plain scene export has no alias name",
+                    strstr(buf, "drawCube") == NULL);
+    }
+
+    DIR *d = opendir(input_dir);
+    if (d) {
+        struct dirent *ent;
+        while ((ent = readdir(d)) != NULL) {
+            if (ent->d_name[0] == '.')
+                continue;
+            char path[256];
+            snprintf(path, sizeof(path), "%s/%s", input_dir, ent->d_name);
+            unlink(path);
+        }
+        closedir(d);
+    }
+    d = opendir(output_dir);
+    if (d) {
+        struct dirent *ent;
+        while ((ent = readdir(d)) != NULL) {
+            if (ent->d_name[0] == '.')
+                continue;
+            char path[256];
+            snprintf(path, sizeof(path), "%s/%s", output_dir, ent->d_name);
+            unlink(path);
+        }
+        closedir(d);
+    }
+    rmdir(input_dir);
+    rmdir(output_dir);
+    repl_set_workspace_dir("");
 }
 
 void test_user_scene_preserves_scratch_state(void) {
@@ -1301,6 +1445,8 @@ int main(int argc, char **argv) {
     test_user_scene_rename_flow();
     test_inline_file_prompt_flow();
     test_workspace_round_trip();
+    test_workspace_save_slug_collisions();
+    test_scene_load_clears_func_aliases_and_saved_workspace_stays_clean();
     test_activate_home_slot_no_duplicate_name();
     test_my_scene_persists_edits_from_startup();
     test_scene_cfg_persists_across_example_switch();
