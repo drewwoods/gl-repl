@@ -60,7 +60,7 @@ static const GlrState g_glr_state_defaults = {
         .backdrop_mode          = CFG_DEFAULT_BACKDROP_MODE,
         .post_filter_mode       = SCENE_POST_FILTER_OFF,
         .highlight_current_poly = 1,
-        .ortho_mode             = 0,
+        .ortho_mode             = CFG_DEFAULT_ORTHO_MODE,
         .wrap_at_comma          = CFG_DEFAULT_WRAP_AT_COMMA,
         .code_panel_layout      = CFG_DEFAULT_CODE_PANEL_LAYOUT,
         .syntax_highlight       = CFG_DEFAULT_SYNTAX_HIGHLIGHT,
@@ -102,10 +102,14 @@ void glr_state_presentation_reset_defaults(void) {
 }
 
 void glr_state_presentation_reset_example_defaults(void) {
-    /* Reset only the scene-bound subset. Mirrors the cfg-bridge
-     * `fill_scene_subset` whitelist in glr_actions.c. Fields outside
-     * the subset (autonormal, code_panel_layout, wrap_at_comma,
-     * highlight_current_poly, ortho_mode) keep their current values
+    /* Reset the scene-bound subset plus ortho_mode. The scene-subset
+     * roster mirrors the cfg-bridge `fill_scene_subset` whitelist in
+     * glr_actions.c; ortho_mode is reset alongside it (rather than in
+     * the subset proper) so the 2D/3D view doesn't leak across example
+     * loads in the F12 cycle — an example whose @cfg omits `view_mode`
+     * gets the default 3D, not whatever the prior example set.
+     * Fields outside this reset (autonormal, code_panel_layout,
+     * wrap_at_comma, highlight_current_poly) keep their current values
      * across example switches. */
     GlrPresentationState *p = &g_glr_state.presentation;
     p->wireframe             = CFG_DEFAULT_WIREFRAME;
@@ -122,6 +126,7 @@ void glr_state_presentation_reset_example_defaults(void) {
     p->xform_guide_mode      = CFG_DEFAULT_XFORM_GUIDE_MODE;
     p->show_light_indicators = CFG_DEFAULT_LIGHT_INDICATORS;
     p->backdrop_mode         = CFG_DEFAULT_BACKDROP_MODE;
+    p->ortho_mode            = CFG_DEFAULT_ORTHO_MODE;
 }
 
 void glr_state_render_reset_defaults(void) {
