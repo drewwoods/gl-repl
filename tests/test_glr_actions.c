@@ -512,16 +512,18 @@ static void test_tutorial_start_applies_cfg(void) {
         ASSERT_INT("no-cfg tutorial active", tutorial_active(), 1);
         ASSERT_INT("no-cfg tutorial resets view to 3D default",
                    glr_config_get(GLR_CONFIG_ORTHO_MODE), 0);
-        /* tutorial_teardown's baseline only captures slugs the tutorial
-         * itself references (via @cfg / SET / REQUIRE); Color & Transform
-         * references no presentation slugs, so the manual 2D was wiped
-         * by the per-start presentation_reset and isn't restored on exit
-         * — it stays at the post-reset 3D. (Bug or feature of the
-         * baseline-capture lifecycle in 8fefa82, not a tag concern;
-         * just documenting actual behavior here.) */
+        /* tutorial_capture_cfg_baseline now records view_mode
+         * unconditionally (not just when the tutorial's
+         * @cfg / SET / REQUIRE references it), so the per-start
+         * presentation_reset → 3D no longer leaks past teardown.
+         * Color & Transform names no presentation slugs, but the
+         * captured baseline still holds the pre-start 2D and exit
+         * restores it. See test_tutorial_runner.c's
+         * test_baseline_captures_view_mode_even_when_unreferenced
+         * for the dedicated regression. */
         tutorial_exit();
-        ASSERT_INT("no-cfg tutorial exit leaves view mode at reset default",
-                   glr_config_get(GLR_CONFIG_ORTHO_MODE), 0);
+        ASSERT_INT("no-cfg tutorial exit restores view mode to pre-start baseline",
+                   glr_config_get(GLR_CONFIG_ORTHO_MODE), 1);
     }
 }
 
