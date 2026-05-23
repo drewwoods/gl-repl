@@ -155,12 +155,19 @@ static void test_dropdown_and_config_press(void) {
     ui_menu_bar_close();
     ASSERT_INT_EQ("hit when closed", ui_menu_bar_dropdown_item_hit(item_mx, item_my), -1);
 
-    ASSERT_TRUE("found tutorial item point",
+    /* MENU_TUTORIALS top-level row 0 was a tutorial item before Phase B
+     * (the flat dropdown); after Phase B it is the first tag row (tutorial
+     * activation moved to per-tag flyouts via route_submenu_item_hit).
+     * Hit-test still returns 0 either way — row index is row index — but
+     * activation is now inert (mirrors the Scene tag-row guard below). */
+    ASSERT_TRUE("found first tutorial tag row point",
                 find_dropdown_item_point(GLR_MENU_TUTORIALS, 0,
                                          &tutorial_mx, &tutorial_my));
-    ASSERT_INT_EQ("hit first tutorial item",
+    ASSERT_INT_EQ("hit first tutorial tag row",
                   ui_menu_bar_dropdown_item_hit(tutorial_mx, tutorial_my),
                   0);
+    ASSERT_INT_EQ("Tutorials tag row activation keeps menu open",
+                  glr_action_menu_item_activate(GLR_MENU_TUTORIALS, 0), 0);
 
     ASSERT_TRUE("found first Scene tag row point",
                 find_dropdown_item_point(GLR_MENU_SCENE, 1,

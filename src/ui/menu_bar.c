@@ -112,13 +112,37 @@ static int scene_parent_row_for_tag(int tag_idx) {
     return -1;
 }
 
+/* Tutorials menu mirror of the scene helpers above. Tag rows occupy
+ * [0..t-1] (no leading "### TUTORIALS" header — single-section menu).
+ * The trailing "---" / Restart / Exit rows when a tutorial is active
+ * are owned by menu_item_label, not these helpers. */
+static int tutorial_tag_idx_for_parent_row(int row) {
+    if (row < 0 || row >= repl_tutorial_visible_tag_count())
+        return -1;
+    return repl_tutorial_visible_tag_at(row);
+}
+
+static int tutorial_parent_row_for_tag(int tag_idx) {
+    int visible_count = repl_tutorial_visible_tag_count();
+    for (int dense_idx = 0; dense_idx < visible_count; dense_idx++)
+        if (repl_tutorial_visible_tag_at(dense_idx) == tag_idx)
+            return dense_idx;
+    return -1;
+}
+
 static int menu_item_count(int menu_id) {
     switch (menu_id) {
     case MENU_FILE:   return FILE_ITEM_COUNT;
     case MENU_SCENE:  return repl_example_visible_tag_count() + SCENE_FIXED_COUNT
                              + repl_user_scene_count();
     case MENU_TUTORIALS:
-        return repl_tutorial_count() + (tutorial_active() ? 3 : 0);
+        /* Tag rows + (when a tutorial is active) "---" / Restart / Exit.
+         * Tutorial selection itself happens through the per-tag flyouts
+         * (route_submenu_item_hit dispatches MENU_TUTORIALS submenu
+         * items to tutorial_start directly), so the top-level rows
+         * here are tag rows (inert hover-only) plus the trailing
+         * Restart/Exit actions — mirroring Scene's tag-row pattern. */
+        return repl_tutorial_visible_tag_count() + (tutorial_active() ? 3 : 0);
     case MENU_CONFIG:
         /* One parent row per "### " section, plus a synthetic "All"
          * row whose flyout is the full flat list (chrome included).
@@ -162,14 +186,16 @@ static const char *menu_item_label(int menu_id, int i) {
         return NULL;
     }
     if (menu_id == MENU_TUTORIALS) {
-        int tutorial_count = repl_tutorial_count();
-        if (i >= 0 && i < tutorial_count)
-            return repl_tutorial_name(i);
+        int tag_count = repl_tutorial_visible_tag_count();
+        if (i >= 0 && i < tag_count) {
+            int tag_idx = repl_tutorial_visible_tag_at(i);
+            return repl_tutorial_tag_label(tag_idx);
+        }
         if (!tutorial_active())
             return NULL;
-        if (i == tutorial_count) return "---";
-        if (i == tutorial_count + 1) return "Restart Tutorial";
-        if (i == tutorial_count + 2) return "Exit Tutorial";
+        if (i == tag_count)     return "---";
+        if (i == tag_count + 1) return "Restart Tutorial";
+        if (i == tag_count + 2) return "Exit Tutorial";
         return NULL;
     }
     if (menu_id == MENU_CONFIG) {
@@ -429,6 +455,10 @@ static int submenu_row_count(int menu_id, int parent_row) {
         int tag = scene_tag_idx_for_parent_row(parent_row);
         return (tag >= 0) ? repl_example_count_for_tag(tag) : 0;
     }
+    if (menu_id == MENU_TUTORIALS) {
+        int tag = tutorial_tag_idx_for_parent_row(parent_row);
+        return (tag >= 0) ? repl_tutorial_count_for_tag(tag) : 0;
+    }
     if (menu_id == MENU_CONFIG) {
         if (parent_row == config_all_parent_row())
             return CFG_ITEM_COUNT;
@@ -448,6 +478,12 @@ static const char *submenu_row_label(int menu_id, int parent_row,
             return NULL;
         return repl_example_name(repl_example_index_for_tag(tag, ordinal));
     }
+    if (menu_id == MENU_TUTORIALS) {
+        int tag = tutorial_tag_idx_for_parent_row(parent_row);
+        if (tag < 0)
+            return NULL;
+        return repl_tutorial_name(repl_tutorial_index_for_tag(tag, ordinal));
+    }
     if (menu_id == MENU_CONFIG) {
         int abs = config_submenu_abs_index(parent_row, ordinal);
         const GlrConfigItem *item = glr_config_item_at(abs);
@@ -463,7 +499,8 @@ static const char *submenu_row_label(int menu_id, int parent_row,
 }
 
 /* Absolute target index the row activates: a global flat example index
- * for Scene, a g_cfg_items[] index for Config. */
+ * for Scene, a global tutorial index for Tutorials, a g_cfg_items[]
+ * index for Config. */
 static int submenu_row_abs_index(int menu_id, int parent_row,
                                  int ordinal) {
     if (menu_id == MENU_SCENE) {
@@ -471,6 +508,12 @@ static int submenu_row_abs_index(int menu_id, int parent_row,
         if (tag < 0)
             return -1;
         return repl_example_index_for_tag(tag, ordinal);
+    }
+    if (menu_id == MENU_TUTORIALS) {
+        int tag = tutorial_tag_idx_for_parent_row(parent_row);
+        if (tag < 0)
+            return -1;
+        return repl_tutorial_index_for_tag(tag, ordinal);
     }
     if (menu_id == MENU_CONFIG)
         return config_submenu_abs_index(parent_row, ordinal);
@@ -590,6 +633,13 @@ int ui_menu_bar_scene_example_submenu_rect_for_test(int tag_idx,
                                                     int *sx, int *sy,
                                                     int *sw, int *sh) {
     return submenu_rect(MENU_SCENE, scene_parent_row_for_tag(tag_idx),
+                        sx, sy, sw, sh);
+}
+
+int ui_menu_bar_tutorial_submenu_rect_for_test(int tag_idx,
+                                               int *sx, int *sy,
+                                               int *sw, int *sh) {
+    return submenu_rect(MENU_TUTORIALS, tutorial_parent_row_for_tag(tag_idx),
                         sx, sy, sw, sh);
 }
 
@@ -907,6 +957,14 @@ static int submenu_row_is_active(int menu_id, int parent_row, int ordinal,
                                                 ordinal);
         return example_idx >= 0 &&
                example_idx == snap->scenes.active_example_idx;
+    }
+    if (menu_id == MENU_TUTORIALS) {
+        if (!tutorial_active())
+            return 0;
+        int tutorial_idx = submenu_row_abs_index(menu_id, parent_row,
+                                                 ordinal);
+        return tutorial_idx >= 0 &&
+               tutorial_idx == tutorial_state_view().tutorial_idx;
     }
     return 0;
 }

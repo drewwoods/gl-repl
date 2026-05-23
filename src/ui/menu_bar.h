@@ -88,6 +88,13 @@ int  ui_menu_bar_scene_example_submenu_rect_for_test(int tag_idx,
                                                      int *sx, int *sy,
                                                      int *sw, int *sh);
 
+/* Test helper: return the Tutorials submenu rect for a visible tutorial
+ * tag while the Tutorials menu is open. Same shape as the Scene helper
+ * above; ignores hover/open-tag state. */
+int  ui_menu_bar_tutorial_submenu_rect_for_test(int tag_idx,
+                                                int *sx, int *sy,
+                                                int *sw, int *sh);
+
 /* Test helper: generic flyout-submenu rect for (menu_id, parent_row)
  * while that menu is open. Ignores hover/open state. GL-space coords.
  * Used by Config-flyout tests; the Scene helper above is the
