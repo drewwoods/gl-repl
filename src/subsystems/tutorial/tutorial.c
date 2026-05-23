@@ -189,21 +189,42 @@ static int tutorial_append_locked_line(int line_idx) {
     return 1;
 }
 
+/* The two COMMAND-step status hint variants share a "Tutorial: step "
+ * prefix; the controller's per-frame tick uses that prefix as a
+ * sentinel to recognise "this status is ours and may be refreshed."
+ * Both variants are taught to the user passively — the entry variant
+ * names the affordances (type vs. Tab), the commit variant names the
+ * keys that commit a fully-typed line. */
+#define TUTORIAL_STATUS_PREFIX "Tutorial: step "
+
+static void format_step_entry_hint(int step, int total,
+                                   char *out, size_t out_size) {
+    snprintf(out, out_size,
+             TUTORIAL_STATUS_PREFIX
+             "%d/%d - type the command or press Tab to autocomplete",
+             step + 1, total);
+}
+
+static void format_step_commit_hint(int step, int total,
+                                    char *out, size_t out_size) {
+    snprintf(out, out_size,
+             TUTORIAL_STATUS_PREFIX
+             "%d/%d - press Enter or ';' to commit",
+             step + 1, total);
+}
+
 /* Status emitted on COMMAND-step entry. The trailing affordance hint
- * teaches the user that they can either type the expected command or
- * Tab-accept the ghost suffix the autocomplete provider already shows
- * on the input row. The full message rides the standard status TTL
- * (REPL_STATUS_MESSAGE_TTL frames, ~6s), so the reminder fades on its
- * own once the user starts engaging with the step. */
+ * teaches the user the two ways to fill the input row (type, or Tab-
+ * accept the autocomplete ghost). The controller's per-frame tick
+ * keeps this visible by re-emitting it while no other status owns the
+ * slot — see tutorial_status_hint and the glr_ctrl_tick refresh. */
 static void tutorial_set_step_status(int tutorial_idx, int step) {
     int total = repl_tutorial_step_count(tutorial_idx);
     char msg[128];
 
     if (total <= 0)
         return;
-    snprintf(msg, sizeof(msg),
-             "Tutorial: step %d/%d - type the command or press Tab to autocomplete",
-             step + 1, total);
+    format_step_entry_hint(step, total, msg, sizeof msg);
     repl_set_status(msg);
 }
 
@@ -577,10 +598,63 @@ void tutorial_refresh_input_hint(const char *input) {
     total = repl_tutorial_step_count(state.tutorial_idx);
     if (total <= 0)
         return;
-    snprintf(msg, sizeof(msg),
-             "Tutorial: step %d/%d - press Enter or ';' to commit",
-             state.step + 1, total);
+    format_step_commit_hint(state.step, total, msg, sizeof msg);
     repl_set_status(msg);
+}
+
+/* Compute the COMMAND-step status hint the controller should keep
+ * visible right now. Returns 1 (with the hint written into `out`) when
+ * an active COMMAND step wants a hint; 0 (with `out` cleared) for
+ * inactive / SET / REQUIRE. Picks the commit-reminder variant when the
+ * cursor sits on the expected commit line AND the input fully matches
+ * the expected command; picks the entry "type or Tab" variant
+ * otherwise. The line-aware check keeps the commit reminder from
+ * appearing while the user is on an unrelated row whose buffer
+ * coincidentally matches. */
+int tutorial_status_hint(char *out, size_t out_size) {
+    TutorialRuntimeState state;
+    const char *expected;
+    int total;
+
+    if (out && out_size > 0)
+        out[0] = '\0';
+    if (!out || out_size == 0)
+        return 0;
+    if (!tutorial_active())
+        return 0;
+    state = tutorial_state_view();
+    if (repl_tutorial_step_kind(state.tutorial_idx, state.step) !=
+        TUTORIAL_STEP_KIND_COMMAND)
+        return 0;
+    expected = tutorial_current_expected_text();
+    if (!expected)
+        return 0;
+    total = repl_tutorial_step_count(state.tutorial_idx);
+    if (total <= 0)
+        return 0;
+
+    int show_commit = 0;
+    if (state.expected_commit_line >= 0 &&
+        editor_state_edit_line() == state.expected_commit_line) {
+        EditorInputView inp = editor_state_input();
+        TutorialMatchResult r = tutorial_match(expected, inp.input);
+        show_commit = (r.kind == TUT_MATCH_OK);
+    }
+    if (show_commit)
+        format_step_commit_hint(state.step, total, out, out_size);
+    else
+        format_step_entry_hint(state.step, total, out, out_size);
+    return 1;
+}
+
+/* Sentinel-prefix predicate the controller uses to decide whether the
+ * current status text is owned by the tutorial hint system (entry or
+ * commit variant) and therefore safe to refresh. */
+int tutorial_status_is_hint(const char *text) {
+    if (!text)
+        return 0;
+    return strncmp(text, TUTORIAL_STATUS_PREFIX,
+                   sizeof TUTORIAL_STATUS_PREFIX - 1) == 0;
 }
 
 /* Enter the step at the CURRENT state->step. The advance loop owns the

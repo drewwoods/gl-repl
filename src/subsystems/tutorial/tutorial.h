@@ -61,6 +61,23 @@ int                  tutorial_handle_commit_attempt(const char *input,
  * inactive, SET / REQUIRE, or partial input — those let the prior
  * status fade naturally. */
 void                 tutorial_refresh_input_hint(const char *input);
+
+/* Per-frame controller hook: compute the COMMAND-step status hint that
+ * should be visible right now. Returns 1 with the hint in `out` for
+ * active COMMAND steps (commit-reminder variant when the input fully
+ * matches the expected command on the expected commit line; otherwise
+ * the "type or Tab" entry variant). Returns 0 with `out` cleared for
+ * inactive, SET, or REQUIRE. Paired with tutorial_status_is_hint to
+ * let the controller re-emit the hint each frame without trampling
+ * non-tutorial status messages — see glr_ctrl_tick. */
+int                  tutorial_status_hint(char *out, size_t out_size);
+
+/* Returns 1 when `text` is one of the COMMAND-step status hints
+ * tutorial_status_hint emits (any "Tutorial: step …" prefix), letting
+ * the controller distinguish "this status is mine — refresh it" from
+ * "another subsystem owns the slot — let its TTL run out." */
+int                  tutorial_status_is_hint(const char *text);
+
 void                 tutorial_advance_after_successful_commit(void);
 const char          *tutorial_current_expected_text(void);
 
