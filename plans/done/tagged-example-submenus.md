@@ -1,5 +1,48 @@
 # Tagged Example Submenus
 
+## Status — DONE (2026-05-23 audit)
+
+All eleven steps are implemented in the tree; spot checks:
+
+- **Step 1/2 — Registry + tag API.** `ReplExampleEntry` /
+  `ReplExampleTagMask` / `g_example_entries[]` live in
+  `src/repl/examples.c:1294–1331`. The full query surface is exposed
+  in `src/repl/examples.h:71–89`: `REPL_EXAMPLE_TAG_*` enum
+  (`ALL/2D/3D/POLYGONS/LINES/COUNT`), `repl_example_tag_count`,
+  `repl_example_tag_label`, `repl_example_tag_mask`,
+  `repl_example_visible_tag_count`, `repl_example_visible_tag_at`,
+  `repl_example_tag_bit` (the inline mask helper added per the plan).
+  A synthetic `REPL_EXAMPLE_TAG_ALL` tag was added beyond the plan's
+  original four — a clean extension.
+- **Step 3 — Loader surface.** `glr_scene_load_example(int)` at
+  `src/app/glr_actions.c:356` is the shared example-load entry point.
+- **Steps 4/6 — Scene parent rows + render.** Driven by the
+  visible-tag layer (`repl_example_visible_tag_at` etc.) in both
+  `src/ui/menu_bar.c` and `src/app/glr_actions.c`.
+- **Steps 5/7 — Submenu state + hit-test.** Implemented in
+  `src/ui/menu_bar.c`; the plan's `UI_HIT_EXAMPLE_SUBMENU_ITEM`
+  generalized into a single `UI_HIT_SUBMENU_ITEM`
+  (`src/ui/hit.h:30`) that also serves the Config flyout — a strict
+  improvement over the plan. Test seam
+  `ui_menu_bar_scene_example_submenu_rect_for_test`
+  (`src/ui/menu_bar.h:87`, `src/ui/menu_bar.c:589`) is in place.
+- **Step 8 — Controller routing.** `route_submenu_item_hit` at
+  `src/app/glr_ctrl.c:3285–3293` dispatches to
+  `glr_scene_load_example`; dropdown-dismiss guard at line 3407
+  whitelists `UI_HIT_SUBMENU_ITEM`.
+- **Step 9 — Legacy parent-activation safety.** Tag-row no-op branch
+  at `src/app/glr_actions.c:644` is annotated with the route comment
+  the plan recommended.
+- **Step 10 — Tests.** `tests/test_repl_core_examples.c` (lines
+  577–771) exercises the tag API, `repl_example_tag_bit`, visible-tag
+  layer, and multi-tag examples. `tests/test_ui_menu_bar.c` (lines
+  291–406) drives the submenu render → hit-test sequence via the
+  test seam and asserts `UI_HIT_SUBMENU_ITEM` payloads.
+
+The implementation cleanly absorbed the related Config-flyout submenu
+feature by unifying the hit kind, which is why the on-disk class is
+`UI_HIT_SUBMENU_ITEM` rather than the plan's `UI_HIT_EXAMPLE_SUBMENU_ITEM`.
+
 **Summary**
 Add Windows-2000-style Scene submenus for built-in examples. Examples keep
 their existing flat load identity for F12 cycling and import/export behavior,
