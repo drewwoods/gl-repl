@@ -561,6 +561,113 @@ Relationship kinds:
 - `i1@-->` — invoke/route/dataflow path (raw event routing or
   function-call invocation across subsystem boundaries).
 
+### Layer view
+
+This high-level view groups every module into its responsibility layer
+and shows the dominant cross-layer relationships. Within each layer the
+controller mutates its own state — those self-loops are left implicit.
+Use this view to orient; use the file-level diagram below to see who
+talks to whom.
+
+```mermaid
+flowchart TB
+    subgraph legend["Edge meaning"]
+        lmut_a["controller mutates"] e1@==> lmut_b["owned state / writer"]
+        lread_a["reads / renders"] -.-> lread_b["query / model / helper"]
+        lflow_a["routes / invokes"] i1@--> lflow_b["callback / dispatch / pass"]
+    end
+
+    sample["sample.c<br/>(GLUT entry · callback wiring · buffer swap)"]
+
+    app["<b>0. App shell</b><br/>glr_ctrl router · glr_state ·<br/>glr_source_document · glr_camera_export ·<br/>glr_audio · glr_actions · glr_config<br/>(owns app presentation/render state)"]
+
+    editor["<b>2. Editor</b><br/>input · commit · buffer · undo · selection ·<br/>search · autocomplete · reformat · clipboard ·<br/>inline_rename · inline_file_prompt · help_session<br/>(owns EditorState)"]
+
+    peers["<b>2b. Peer subsystems</b><br/>replay · variable_panel · color_picker ·<br/>tutorial · camera<br/>(each owns its own state)"]
+
+    repl["<b>1. REPL pipeline</b> (pure compiler/program)<br/>compile · apply · load · parser ·<br/>source_scope · command_spec · command_store ·<br/>flatten · executor · eval"]
+
+    models["<b>3. REPL domain models</b><br/>ReplState · scenes · examples ·<br/>example_loader · autonormal · replay_annotations"]
+
+    srcdoc["<b>source_document port</b><br/>(neutral REPL ↔ host text seam;<br/>full-app impl = glr_source_document)"]
+
+    ui["<b>5. 2D UI</b> (render + hit-test)<br/>panels · menu_bar · scene_tabs · text_panel ·<br/>text_layout · text_search · color_picker render ·<br/>variable_panel · autocomplete_panel ·<br/>profile_panel · replay_hud · tabbed_overlay<br/>(snapshots in, UiHit out — never mutates)"]
+
+    scene["<b>4. 3D scene</b> (render)<br/>render · grid · axes · backdrop · lights ·<br/>overlays · postprocess_filter · guides ·<br/>scene_transition"]
+
+    services["<b>6. Services + lifecycle</b><br/>repl_export · glr_audio · prof"]
+
+    %% Raw input flow: sample hands GLUT events to the app shell. UI
+    %% hit-tests are passive — they compute a UiHit and hand it back to
+    %% the controller for dispatch.
+    sample i2@--> app
+    ui i3@--> app
+
+    %% App shell routes raw input to the owning subsystem, drives the
+    %% frame, and calls UI/scene/services.
+    app i4@--> editor
+    app i5@--> peers
+    app i6@--> scene
+    app i7@--> ui
+    app i8@--> services
+
+    %% Editor commit is the only path crossing INTO the REPL pipeline.
+    %% REPL apply / command_store mutates the program model.
+    editor i9@--> repl
+    repl e1@==> models
+
+    %% Peers write back through the editor (color_picker rewrites a
+    %% source line via editor_commit_apply_external_change; the
+    %% variable_panel drag rewrites a numeric token the same way).
+    peers i10@--> editor
+
+    %% Source-document port: REPL pipeline reads/writes source text
+    %% through the neutral port, and services read source through it
+    %% too. The full-app adapter (app layer) delegates writes to the
+    %% editor buffer — editor stays the single underlying writer.
+    repl -.-> srcdoc
+    services -.-> srcdoc
+    app e2@==> srcdoc
+
+    %% Render is read-only: scene and UI consume snapshots of program /
+    %% editor / peer / app state. They never mutate.
+    scene -.-> models
+    scene -.-> peers
+    scene -.-> app
+    ui -.-> editor
+    ui -.-> models
+    ui -.-> peers
+    ui -.-> app
+
+    %% Services read program and editor state to persist/replay.
+    services -.-> models
+
+    classDef animateE stroke:#f50,stroke-dasharray: 9\,5,stroke-dashoffset: 900,animation: dash 90s linear infinite;
+    classDef animateF stroke:#5f0,stroke-dasharray: 9\,5,stroke-dashoffset: 900,animation: dash 90s linear infinite;
+
+    class e1,e2 animateE
+    class i1,i2,i3,i4,i5,i6,i7,i8,i9,i10 animateF
+```
+
+Reading the layer view:
+
+- Input flows one way: GLUT → `sample.c` → app shell → owning
+  subsystem. UI's role on the input side is passive: it computes a
+  `UiHit` and hands it back.
+- The editor and peer subsystems are each their own controller. The
+  only path that crosses into the REPL pipeline is `editor → repl`
+  (commit transaction).
+- The REPL pipeline is a pure compiler/program layer: it mutates the
+  REPL domain models but never reads editor or UI state directly.
+- Source text crosses the REPL/host boundary through the
+  `source_document` port. The app shell provides the
+  `EditorState`-backed adapter; the editor remains the single
+  underlying writer.
+- Scene and UI render are read-only — they consume snapshots and
+  never mutate.
+
+### File-level view
+
 ```mermaid
 flowchart LR
     subgraph legend["Edge meaning"]
