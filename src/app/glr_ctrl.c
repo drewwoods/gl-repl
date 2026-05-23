@@ -45,25 +45,25 @@
 #include "subsystems/replay/replay_state.h"
 #include "subsystems/tutorial/tutorial.h"
 #include "subsystems/tutorial/tutorial_state.h"
-#include "ui/replay_hud.h"
+#include "ui/app/replay_hud.h"
 #include "scene/overlays.h" /* scene_draw_vertex_number_label / _arrow primitives */
 #include "scene/palette.h" /* scene_clr / scene_clr_a scene-space colors */
 #include "scene/postprocess_filter.h" /* ScenePostFilterMode, mode_name */
 #include "scene/render.h"
 #include "scene/guides/transform_guides.h" /* scene_transform_guides_prepare / _render_if_due */
 #include "scene/guides/transform_utils.h"  /* apply_tracked_transform / unwind_transform_stack */
-#include "ui/autocomplete_panel.h"
-#include "ui/editor.h"
-#include "ui/layout.h"
-#include "ui/menu_bar.h"
-#include "ui/metrics.h"
-#include "ui/panels.h"
-#include "ui/profile_panel.h"
-#include "ui/snapshot.h"
-#include "ui/state.h"
-#include "ui/state_types.h" /* UI-chrome typedefs (CodePanel/Camera/Help/etc.) */
-#include "ui/tabbed_overlay.h"
-#include "ui/variable_panel.h"
+#include "ui/app/autocomplete_panel.h"
+#include "ui/app/editor.h"
+#include "ui/core/layout.h"
+#include "ui/app/menu_bar.h"
+#include "ui/core/metrics.h"
+#include "ui/app/panels.h"
+#include "ui/app/profile_panel.h"
+#include "ui/app/snapshot.h"
+#include "ui/app/state.h"
+#include "ui/app/state_types.h" /* UI-chrome typedefs (CodePanel/Camera/Help/etc.) */
+#include "ui/core/tabbed_overlay.h"
+#include "ui/app/variable_panel.h"
 #include "subsystems/variable_panel/variable_panel_drag.h"
 #include "subsystems/variable_panel/variable_panel_state.h"
 

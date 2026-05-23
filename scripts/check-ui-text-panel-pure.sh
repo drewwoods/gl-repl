@@ -4,12 +4,12 @@ cd "$(git rev-parse --show-toplevel)"
 
 violations=$(grep -nE \
     '^[[:space:]]*#include[[:space:]]+["<](src/)?(editor|repl)/|GLCmd|CmdType|CMD_[A-Za-z0-9_]*' \
-    src/ui/text_panel.c src/ui/text_panel.h 2>/dev/null \
+    src/ui/core/text_panel.c src/ui/core/text_panel.h 2>/dev/null \
     || true)
 
 if [ -n "$violations" ]; then
-    echo "ERROR: src/ui/text_panel.* picked up a REPL/editor dependency or command-model symbol." >&2
-    echo "src/ui/text_panel.* must stay generic; the REPL adapter owns higher-level rows and routing." >&2
+    echo "ERROR: src/ui/core/text_panel.* picked up a REPL/editor dependency or command-model symbol." >&2
+    echo "src/ui/core/text_panel.* must stay generic; the REPL adapter owns higher-level rows and routing." >&2
     echo "Hits:" >&2
     printf '%s\n' "$violations" >&2
     exit 1

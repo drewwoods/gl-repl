@@ -4,7 +4,7 @@
 #include "app/glr_actions.h"
 #include "repl/state.h"
 #include "subsystems/replay/replay_state.h"
-#include "ui/state.h"
+#include "ui/app/state.h"
 #include "editor/help_session.h"
 #include "editor/inline_file_prompt.h"
 #include "app/glr_config.h"

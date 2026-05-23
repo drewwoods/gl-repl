@@ -1,26 +1,24 @@
 # View files still allowed to include repl_state*.h during migration.
-# src/ui/snapshot.h is the unified UI render snapshot bundle; it embeds the
+# src/ui/app/snapshot.h is the unified UI render snapshot bundle; it embeds the
 # Repl*State value types defined in repl_state_views.h, so the include is
 # legitimate (snapshot is the read boundary, not a per-renderer facade).
-# src/ui/state.h embeds the same Repl*State value types as fields on the
+# src/ui/app/state.h embeds the same Repl*State value types as fields on the
 # UiState struct (Phase 1 commit 8); the include is the typedef source,
 # not a state-mutator facade. Phase 5's rename folds the typedefs into
 # editor/ui state headers and this exception goes away.
 #
-# Phase H commit 38: src/ui/layout.c (formerly repl_layout.c) and
-# src/ui/code_panel_layout.c (formerly repl_code_panel_layout.c) read
+# Phase H commit 38: src/ui/core/layout.c (formerly repl_layout.c) reads
 # repl_state_presentation() for code_panel_layout. The proper fix is
 # to pass the layout in as a parameter so geometry helpers become
 # pure functions; that's a Phase I cleanup. Until then, the rename
 # would otherwise immediately fail this check.
-src/ui/snapshot.h
-src/ui/state.h
-src/ui/autocomplete_panel.c
+src/ui/app/snapshot.h
+src/ui/app/state.h
+src/ui/app/autocomplete_panel.c
 ui_color_picker.c
 ui_help_overlay.c
-src/ui/menu_bar.c
-src/ui/panels.c
-src/ui/profile_panel.c
-src/ui/variable_panel.c
-src/ui/layout.c
-src/ui/code_panel_layout.c
+src/ui/app/menu_bar.c
+src/ui/app/panels.c
+src/ui/app/profile_panel.c
+src/ui/app/variable_panel.c
+src/ui/core/layout.c

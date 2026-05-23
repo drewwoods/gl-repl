@@ -39,7 +39,7 @@
 #include "repl/pipeline.h"
 #include "repl/state.h"
 #include "source_document.h"
-#include "ui/state.h"
+#include "ui/app/state.h"
 
 #include <GL/gl_stub_counts.h>
 

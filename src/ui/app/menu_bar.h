@@ -13,8 +13,8 @@
 #ifndef UI_MENU_BAR_H
 #define UI_MENU_BAR_H
 
-#include "hit.h"
-#include "snapshot.h"
+#include "ui/core/hit.h"
+#include "ui/app/snapshot.h"
 
 /* Pinned button identifiers (right side of menu bar). Search and Replay
  * buttons that toggle their respective overlays. */

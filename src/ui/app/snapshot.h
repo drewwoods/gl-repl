@@ -19,10 +19,10 @@
 #include "app/glr_state.h"     /* app-side render policy snapshot */
 #include "repl/state_views.h"
 #include "repl/eval.h"
-#include "editor.h"
+#include "ui/app/editor.h"
 #include "subsystems/color_picker/color_picker_state.h"
 
-#include "state_types.h"
+#include "ui/app/state_types.h"
 
 /* Forward decl: snapshot only carries a pointer; the full type lives
  * in ui_tabbed_overlay.h and is included by the controller (which

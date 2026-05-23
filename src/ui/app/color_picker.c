@@ -1,5 +1,5 @@
 /*
- * src/ui/color_picker.c -- Floating color picker renderer + hit-test.
+ * src/ui/app/color_picker.c -- Floating color picker renderer + hit-test.
  *
  * Pure UI layer over the `color_picker_state.h` peer. Reads a
  * frame-shaped `ColorPickerView` for popup geometry/state and a
@@ -10,9 +10,9 @@
  * that surface — anything mutating must live on the peer
  * (color_picker_state.c) or another module the controller routes to.
  */
-#include "color_picker.h"
+#include "ui/app/color_picker.h"
 
-#include "gl_2d.h"
+#include "ui/core/gl_2d.h"
 
 #include <math.h>
 

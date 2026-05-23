@@ -10,7 +10,7 @@
 # pushes, peer-state writes) belongs in editor / imrepl_ctrl /
 # peer-subsystem handlers, not inside ui_*.c.
 #
-# Tracked patterns (in `ui_*.c`, excluding `src/ui/state.c` which is the
+# Tracked patterns (in `ui_*.c`, excluding `src/ui/app/state.c` which is the
 # legitimate owner of `ui_state_*_mut`):
 #
 #   - `repl_action_*(`               — REPL action dispatch

@@ -4,12 +4,12 @@
  * This file has no dependency on repl, editor, or app headers.
  */
 #include "config.h"
-#include "ui/gl_2d.h"
-#include "ui/text_layout.h"
-#include "ui/text_search.h"
-#include "ui/text_panel.h"
-#include "ui/metrics.h"
-#include "ui/theme.h"
+#include "ui/core/gl_2d.h"
+#include "ui/core/text_layout.h"
+#include "ui/core/text_search.h"
+#include "ui/core/text_panel.h"
+#include "ui/core/metrics.h"
+#include "ui/core/theme.h"
 
 #include <stdio.h>
 #include <string.h>

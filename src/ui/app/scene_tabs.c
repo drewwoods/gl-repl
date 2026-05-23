@@ -7,13 +7,13 @@
  * chrome geometry, exactly as menu_bar.c uses it). No state.h, no
  * repl-layer or editor-layer headers — reads/mutates no REPL/editor state.
  */
-#include "ui/scene_tabs.h"
+#include "ui/app/scene_tabs.h"
 
 #include "config.h"        /* FONT_SMALL, FONT_SMALL_W */
-#include "ui/gl_2d.h"
-#include "ui/layout.h"
-#include "ui/metrics.h"
-#include "ui/theme.h"
+#include "ui/core/gl_2d.h"
+#include "ui/core/layout.h"
+#include "ui/core/metrics.h"
+#include "ui/core/theme.h"
 
 #include <math.h>
 #include <string.h>

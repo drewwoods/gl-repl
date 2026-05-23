@@ -11,7 +11,7 @@
 #include "app/glr_ctrl.h"            /* glr_ctrl_sync_ui_chrome */
 #include "app/glr_state.h"           /* presentation/render storage */
 #include "app/glr_camera.h"          /* camera focus-origin / reset (eased) */
-#include "ui/layout.h"           /* CODE_PANEL_LAYOUT_* enum values */
+#include "ui/core/layout.h"           /* CODE_PANEL_LAYOUT_* enum values */
 #include "subsystems/color_picker/color_picker_state.h"
 #include "app/glr_audio.h"
 #include "repl/core.h"
@@ -31,9 +31,9 @@
 #include "editor/help_session.h"
 #include "repl/pipeline.h"
 #include "repl/state_owners.h"
-#include "ui/menu_bar.h"
-#include "ui/profile_panel.h"
-#include "ui/state.h"
+#include "ui/app/menu_bar.h"
+#include "ui/app/profile_panel.h"
+#include "ui/app/state.h"
 #include "editor/inline_file_prompt.h"
 #include "editor/inline_rename.h"
 #include "editor/undo.h"

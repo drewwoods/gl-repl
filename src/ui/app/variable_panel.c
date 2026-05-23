@@ -11,14 +11,14 @@
  * The replay-lift easing state is panel-local animation (not
  * variable mutation) and stays here.
  */
-#include "variable_panel.h"
-#include "gl_2d.h"
-#include "layout.h"
-#include "metrics.h"
-#include "theme.h"
+#include "ui/app/variable_panel.h"
+#include "ui/core/gl_2d.h"
+#include "ui/core/layout.h"
+#include "ui/core/metrics.h"
+#include "ui/core/theme.h"
 #include "subsystems/replay/replay_state.h"
-#include "ui/replay_hud.h"
-#include "state.h"
+#include "ui/app/replay_hud.h"
+#include "ui/app/state.h"
 #include "subsystems/variable_panel/variable_panel_state.h"
 
 /* Variable-row data presentation + drag-state indicators. Deliberately

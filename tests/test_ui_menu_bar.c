@@ -1,17 +1,17 @@
 #include "app/glr_state.h"
 #include "app/glr_ctrl.h"
-#include "ui/menu_bar.h"
+#include "ui/app/menu_bar.h"
 #include "app/glr_actions.h"
 #include "app/glr_config.h"
 #include "repl/core.h"
 #include "repl/examples.h"
 #include "repl/state_owners.h"
 #include "subsystems/replay/replay.h"
-#include "ui/state.h"
-#include "ui/layout.h"
-#include "ui/metrics.h"
+#include "ui/app/state.h"
+#include "ui/core/layout.h"
+#include "ui/core/metrics.h"
 #include "support/test_harness.h"
-#include <ui/gl_2d.h>
+#include <ui/core/gl_2d.h>
 #ifdef GL_STUBS
 #include <GL/gl_stub_counts.h>
 #endif

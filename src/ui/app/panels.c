@@ -2,17 +2,17 @@
  * ui_panels.c - Code-panel delegation, scene status banner, and top-level
  * overlay-priority hit routing.
  */
-#include "ui/panels.h"
+#include "ui/app/panels.h"
 
 #include "config.h"
-#include "ui/color_picker.h"
-#include "ui/gl_2d.h"
-#include "ui/layout.h"
-#include "ui/menu_bar.h"
-#include "ui/metrics.h"
-#include "ui/repl_code_panel.h"
-#include "ui/scene_tabs.h"
-#include "ui/variable_panel.h"
+#include "ui/app/color_picker.h"
+#include "ui/core/gl_2d.h"
+#include "ui/core/layout.h"
+#include "ui/app/menu_bar.h"
+#include "ui/core/metrics.h"
+#include "ui/app/repl_code_panel.h"
+#include "ui/app/scene_tabs.h"
+#include "ui/app/variable_panel.h"
 
 #include <math.h>
 #include <stdio.h>

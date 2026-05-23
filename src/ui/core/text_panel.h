@@ -3,7 +3,7 @@
  *
  * Defines the row model and immutable snapshot the generic text-panel renderer
  * consumes. It has no dependency on the REPL pipeline, editor session, or app
- * controller; feature-specific adapters such as `src/ui/repl_code_panel.h`
+ * controller; feature-specific adapters such as `src/ui/app/repl_code_panel.h`
  * translate their source state into these rows and then delegate to this API.
  *
  * The purity contract is enforced by `check-ui-text-panel-pure`: this header and
@@ -14,7 +14,7 @@
 #ifndef UI_TEXT_PANEL_H
 #define UI_TEXT_PANEL_H
 
-#include "ui/hit.h"          /* UiHit return type for hit_test */
+#include "ui/core/hit.h"          /* UiHit return type for hit_test */
 
 #define UI_TEXT_PANEL_RIGHT_ACTION_W 12
 

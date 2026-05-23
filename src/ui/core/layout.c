@@ -1,8 +1,8 @@
 /*
  * ui_layout.c - pure window layout geometry.
  */
-#include "layout.h"
-#include "state_types.h"
+#include "ui/core/layout.h"
+#include "ui/app/state_types.h"
 
 /* ui_state_viewport / ui_state_code_panel are forward-declared here
  * because repl_*.c is not allowed to include ui_state.h per

@@ -5,7 +5,7 @@
  * test_repl_code_panel_layout). The STATIC_ASSERTs in theme.h already
  * guard the enum/row counts at compile time; this exercises the data.
  */
-#include "ui/theme.h"
+#include "ui/core/theme.h"
 #include "support/test_harness.h"
 
 #include <stdio.h>

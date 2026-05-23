@@ -3728,7 +3728,7 @@ void repl_dump_code_panel_text(FILE *out, SourceTextView text) {
 // Kept #if 0'd rather than deleted so the wrapping approach can be restored
 // from history if it's ever needed again.
 #if 0
-#include "ui/text_layout.h"
+#include "ui/core/text_layout.h"
 static void dump_code_panel_wrapped_line(FILE *dst, const char *text,
                                          int first_x, int panel_w,
                                          int wrap_at_comma) {

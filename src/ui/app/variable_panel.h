@@ -14,8 +14,8 @@
 #ifndef UI_VARIABLE_PANEL_H
 #define UI_VARIABLE_PANEL_H
 
-#include "hit.h"
-#include "snapshot.h"
+#include "ui/core/hit.h"
+#include "ui/app/snapshot.h"
 
 /* Render the variable panel with all declared variables and current values.
  * Reads only from the supplied snapshot. Rows are compacted (unused slots

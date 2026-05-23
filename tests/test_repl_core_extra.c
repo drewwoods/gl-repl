@@ -11,7 +11,7 @@
 #include "subsystems/replay/replay.h"
 #include "repl/executor.h"
 #include "repl/state.h"
-#include "ui/panels.h"
+#include "ui/app/panels.h"
 #include "editor/inline_file_prompt.h"
 #include "editor/inline_rename.h"
 #include "editor/undo.h"

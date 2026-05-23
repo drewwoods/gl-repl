@@ -3,7 +3,7 @@
 
 #include "limits.h"
 #include "repl/command.h"
-#include "ui/editor.h"  /* UiTransformerList, UiHighlightList,
+#include "ui/app/editor.h"  /* UiTransformerList, UiHighlightList,
                          * UiVirtualLineList, UiLineOverrideList
                          * typedefs (live state) */
 

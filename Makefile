@@ -296,21 +296,21 @@ SRCS = \
 	src/scene/overlays.c \
 	src/scene/render.c \
 	src/scene/scene_transition.c \
-	src/ui/autocomplete_panel.c \
-	src/ui/color_picker.c \
-	src/ui/layout.c \
-	src/ui/menu_bar.c \
-	src/ui/panels.c \
-	src/ui/profile_panel.c \
-	src/ui/repl_code_panel.c \
-	src/ui/replay_hud.c \
-	src/ui/scene_tabs.c \
-	src/ui/state.c \
-	src/ui/tabbed_overlay.c \
-	src/ui/text_layout.c \
-	src/ui/text_panel.c \
-	src/ui/text_search.c \
-	src/ui/variable_panel.c \
+	src/ui/app/autocomplete_panel.c \
+	src/ui/app/color_picker.c \
+	src/ui/core/layout.c \
+	src/ui/app/menu_bar.c \
+	src/ui/app/panels.c \
+	src/ui/app/profile_panel.c \
+	src/ui/app/repl_code_panel.c \
+	src/ui/app/replay_hud.c \
+	src/ui/app/scene_tabs.c \
+	src/ui/app/state.c \
+	src/ui/core/tabbed_overlay.c \
+	src/ui/core/text_layout.c \
+	src/ui/core/text_panel.c \
+	src/ui/core/text_search.c \
+	src/ui/app/variable_panel.c \
 	src/subsystems/color_picker/color_picker_state.c \
 	src/subsystems/replay/replay.c \
 	src/subsystems/replay/replay_state.c \
@@ -375,23 +375,23 @@ HDRS = \
 	src/scene/render.h \
 	src/scene/scene_transition.h \
 	src/scene/render_types.h \
-	src/ui/autocomplete_panel.h \
-	src/ui/color_picker.h \
-	src/ui/layout.h \
-	src/ui/menu_bar.h \
-	src/ui/panels.h \
-	src/ui/profile_panel.h \
-	src/ui/repl_code_panel.h \
-	src/ui/replay_hud.h \
-	src/ui/scene_tabs.h \
-	src/ui/state.h \
-	src/ui/state_types.h \
-	src/ui/tabbed_overlay.h \
-	src/ui/text_layout.h \
-	src/ui/text_panel.h \
-	src/ui/text_search.h \
-	src/ui/theme.h \
-	src/ui/variable_panel.h \
+	src/ui/app/autocomplete_panel.h \
+	src/ui/app/color_picker.h \
+	src/ui/core/layout.h \
+	src/ui/app/menu_bar.h \
+	src/ui/app/panels.h \
+	src/ui/app/profile_panel.h \
+	src/ui/app/repl_code_panel.h \
+	src/ui/app/replay_hud.h \
+	src/ui/app/scene_tabs.h \
+	src/ui/app/state.h \
+	src/ui/app/state_types.h \
+	src/ui/core/tabbed_overlay.h \
+	src/ui/core/text_layout.h \
+	src/ui/core/text_panel.h \
+	src/ui/core/text_search.h \
+	src/ui/core/theme.h \
+	src/ui/app/variable_panel.h \
 	src/subsystems/color_picker/color_picker_state.h \
 	src/subsystems/replay/replay.h \
 	src/subsystems/replay/replay_state.h \
@@ -455,21 +455,21 @@ CORE_TEST_SRCS = \
 	src/scene/overlays.c \
 	src/scene/render.c \
 	src/scene/scene_transition.c \
-	src/ui/autocomplete_panel.c \
-	src/ui/color_picker.c \
-	src/ui/layout.c \
-	src/ui/menu_bar.c \
-	src/ui/panels.c \
-	src/ui/profile_panel.c \
-	src/ui/repl_code_panel.c \
-	src/ui/replay_hud.c \
-	src/ui/scene_tabs.c \
-	src/ui/state.c \
-	src/ui/tabbed_overlay.c \
-	src/ui/text_layout.c \
-	src/ui/text_panel.c \
-	src/ui/text_search.c \
-	src/ui/variable_panel.c \
+	src/ui/app/autocomplete_panel.c \
+	src/ui/app/color_picker.c \
+	src/ui/core/layout.c \
+	src/ui/app/menu_bar.c \
+	src/ui/app/panels.c \
+	src/ui/app/profile_panel.c \
+	src/ui/app/repl_code_panel.c \
+	src/ui/app/replay_hud.c \
+	src/ui/app/scene_tabs.c \
+	src/ui/app/state.c \
+	src/ui/core/tabbed_overlay.c \
+	src/ui/core/text_layout.c \
+	src/ui/core/text_panel.c \
+	src/ui/core/text_search.c \
+	src/ui/app/variable_panel.c \
 	src/subsystems/color_picker/color_picker_state.c \
 	src/subsystems/replay/replay.c \
 	src/subsystems/replay/replay_state.c \
@@ -481,9 +481,9 @@ CORE_TEST_SRCS = \
 
 REPL_SRCS = $(filter src/repl/%.c,$(SRCS))
 SCENE_SRCS = $(filter src/scene/%.c,$(SRCS))
-UI_SRCS = $(filter src/ui/%.c,$(SRCS))
+UI_SRCS = $(filter src/ui/core/%.c src/ui/app/%.c,$(SRCS))
 SCENE_HDRS = $(filter src/scene/%.h,$(HDRS))
-UI_HDRS = $(filter src/ui/%.h,$(HDRS))
+UI_HDRS = $(filter src/ui/core/%.h src/ui/app/%.h,$(HDRS))
 STATE_NEUTRAL_SRCS = src/repl/format.c src/support/prof.c tests/gl-stubs/gl_stub_counts.c
 
 # Object lists used to build the standalone scene_demo without dragging in
@@ -496,7 +496,7 @@ SCENE_DEMO_DEP_SRCS = $(SCENE_SRCS) src/support/prof.c
 # Object list for the standalone repl_demo (the inverse of scene_demo:
 # proves the REPL pipeline links without editor input dispatch
 # (src/editor/input.c), the controller (src/app/glr_ctrl.c + glr_ctrl_router_*),
-# the UI (src/ui/*, src/ui/replay_hud.c), or — as of Phase 6 of
+# the UI (src/ui/*, src/ui/app/replay_hud.c), or — as of Phase 6 of
 # feature/source-document-port.md — the editor text store
 # (src/editor/state.c). Per-line text comes from
 # src/editor/state.c, a standalone static line store
@@ -559,9 +559,9 @@ REPL_DEMO_DEP_SRCS = src/repl/format.c \
 # (Phase 4 of edit-line-ownership.md).
 EDITOR_DEMO_DEP_SRCS = src/editor/edit_ops.c \
                        src/editor/state.c \
-                       src/ui/text_layout.c \
-                       src/ui/text_panel.c \
-                       src/ui/text_search.c \
+                       src/ui/core/text_layout.c \
+                       src/ui/core/text_panel.c \
+                       src/ui/core/text_search.c \
                        src/support/prof.c \
                        tests/gl-stubs/gl_stub_counts.c
 
@@ -672,7 +672,7 @@ test_format_OBJS = $(OBJDIR)/$(TEST_DIR)/test_format.o $(OBJDIR)/src/repl/format
 test_format_LDLIBS = -lm
 test_format_RUN ?= $(BINDIR)/test_format
 
-test_repl_code_panel_layout_OBJS = $(OBJDIR)/$(TEST_DIR)/test_repl_code_panel_layout.o $(OBJDIR)/src/ui/text_layout.o
+test_repl_code_panel_layout_OBJS = $(OBJDIR)/$(TEST_DIR)/test_repl_code_panel_layout.o $(OBJDIR)/src/ui/core/text_layout.o
 test_repl_code_panel_layout_LDLIBS =
 test_repl_code_panel_layout_RUN ?= $(BINDIR)/test_repl_code_panel_layout
 
@@ -1048,7 +1048,7 @@ check-glr-ctrl-not-editor-mirror: ## Verify imrepl_ctrl does not grow per-field 
 check-ui-returns-hits-only: ## Verify ui_*.c input helpers do not call REPL/editor mutators (ratchet down only).
 	@bash scripts/check-ui-returns-hits-only.sh scripts/baselines/ui-returns-hits-only.txt
 
-check-ui-text-panel-pure: ## Verify src/ui/text_panel.* stays REPL/editor-free.
+check-ui-text-panel-pure: ## Verify src/ui/core/text_panel.* stays REPL/editor-free.
 	@bash scripts/check-ui-text-panel-pure.sh
 
 check-editor-repl-surface: ## Ratchet direct repl_* call surface in src/editor/input.c and commit.c.
@@ -1057,13 +1057,13 @@ check-editor-repl-surface: ## Ratchet direct repl_* call surface in src/editor/i
 check-edit-ops-pure: ## Verify src/editor/edit_ops.* stays REPL-free (Phase 8 generic-primitives invariant).
 	@bash scripts/check-edit-ops-pure.sh
 
-check-ui-panels-no-mutators: ## Hard guard: src/ui/panels.c references no input-dispatch mutators (Phase J2.2).
+check-ui-panels-no-mutators: ## Hard guard: src/ui/app/panels.c references no input-dispatch mutators (Phase J2.2).
 	@bash scripts/check-ui-panels-no-mutators.sh
 
 check-replay-ui-isolation: ## Hard guard: replay_ui_*.c is feature-UI — no editor / REPL mutators or parser/compile/apply calls.
 	@bash scripts/check-replay-ui-isolation.sh
 
-check-color-picker-ui-isolation: ## Strict guard: src/ui/color_picker.c is pure renderer/hit-test over ColorPickerView — no mutators, no live state reads, no parser/compile/apply.
+check-color-picker-ui-isolation: ## Strict guard: src/ui/app/color_picker.c is pure renderer/hit-test over ColorPickerView — no mutators, no live state reads, no parser/compile/apply.
 	@bash scripts/check-color-picker-ui-isolation.sh
 
 check-variable-panel-forwarders: ## Ratchet legacy variable_panel forwarder API uses (editor_state_variable_drag*, ui_state_variable_panel*, repl_var_drag_*).
@@ -1370,7 +1370,7 @@ help-details: ## Show available targets and build-mode notes.
 	@printf "Build options:   UI_THEME_DEFAULT=N picks the compile-time UI color scheme\n"
 	@printf "                 (0 green default, 1 warm, 2 cyan, 3 amber, 4 violet, 5 mono),\n"
 	@printf "                 e.g. make sample CPPFLAGS=-DUI_THEME_DEFAULT=1. Defined in\n"
-	@printf "                 config.h, range-checked in src/ui/theme.h. See\n"
+	@printf "                 config.h, range-checked in src/ui/core/theme.h. See\n"
 	@printf "                 ARCHITECTURE.md > UI Color Theming.\n"
 	@printf "User CFLAGS are appended to the selected build mode.\n\n"
 	@printf "Tests:           make test runs test binaries in parallel; set TEST_JOBS=N to limit jobs.\n\n"

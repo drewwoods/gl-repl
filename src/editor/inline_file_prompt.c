@@ -3,7 +3,7 @@
  *
  * Parallel to inline_rename.c: owns the modal text buffer, the
  * input filter, and the Enter/Escape commit path. The renderer is
- * shared with rename via the snapshot field in src/ui/snapshot.h;
+ * shared with rename via the snapshot field in src/ui/app/snapshot.h;
  * the controller routes keystrokes here ahead of normal dispatch
  * while the prompt is active.
  *

@@ -1,8 +1,8 @@
 #define _DEFAULT_SOURCE  /* mkdtemp() */
-#include "ui/gl_2d.h"
+#include "ui/core/gl_2d.h"
 #include "editor/clipboard.h"
-#include "ui/repl_code_panel.h"
-#include "ui/text_layout.h"
+#include "ui/app/repl_code_panel.h"
+#include "ui/core/text_layout.h"
 #include "editor/commit.h"
 #include "editor/help_session.h"
 #include "editor/inline_rename.h"
@@ -26,12 +26,12 @@
 #include "source_document.h"   /* source_document_view */
 #include "subsystems/replay/replay.h"
 #include "subsystems/replay/replay_state.h"
-#include "ui/layout.h" /* CODE_PANEL_LAYOUT_* */
-#include "ui/layout.h"
-#include "ui/metrics.h"
-#include "ui/panels.h"
-#include "ui/state.h"
-#include "ui/variable_panel.h"
+#include "ui/core/layout.h" /* CODE_PANEL_LAYOUT_* */
+#include "ui/core/layout.h"
+#include "ui/core/metrics.h"
+#include "ui/app/panels.h"
+#include "ui/app/state.h"
+#include "ui/app/variable_panel.h"
 
 #define g_status     (ui_state_status_mut()->text)
 #define g_scroll     (editor_state_scroll_mut()->scroll)

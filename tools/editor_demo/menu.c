@@ -12,7 +12,7 @@
 
 #include "input.h"          /* demo_input_commit_to_buffer */
 #include "editor/state.h"   /* editor_buffer_* and editor_input_* */
-#include "ui/gl_2d.h"
+#include "ui/core/gl_2d.h"
 
 #include <gl_includes.h>
 

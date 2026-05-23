@@ -21,7 +21,7 @@
 #define VARIABLE_PANEL_H
 
 #include "editor/state.h"
-#include "ui/state_types.h"
+#include "ui/app/state_types.h"
 #include "subsystems/variable_panel/variable_panel_drag.h"  /* VariablePanelValueChange */
 
 /* Composite peer state. The two slices keep their existing value types so the

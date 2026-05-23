@@ -1,7 +1,7 @@
 /*
  * text_search.c - Pure case-insensitive substring search helpers.
  */
-#include "ui/text_search.h"
+#include "ui/core/text_search.h"
 
 #include <ctype.h>
 #include <string.h>

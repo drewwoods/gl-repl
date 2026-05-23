@@ -1,18 +1,18 @@
 #include "editor/state.h"
 #include "app/glr_state.h"
 #include "app/glr_ctrl.h"
-#include "ui/gl_2d.h"
+#include "ui/core/gl_2d.h"
 #include "editor/input.h"
 #include <stdio.h>
 #include <string.h>
 
-#include "ui/state.h"
+#include "ui/app/state.h"
 #include "repl/core.h"
 #include "repl/state.h"
-#include "ui/layout.h"
-#include "ui/metrics.h"
-#include "ui/repl_code_panel.h"
-#include "ui/panels.h"
+#include "ui/core/layout.h"
+#include "ui/core/metrics.h"
+#include "ui/app/repl_code_panel.h"
+#include "ui/app/panels.h"
 #include "support/test_harness.h"
 
 static TestHarness g_harness = TEST_HARNESS_INIT;

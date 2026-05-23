@@ -1,6 +1,6 @@
-#include "state.h"
-#include "profile_panel.h"
-#include "layout.h"  /* CFG_DEFAULT_PANEL_FRAC */
+#include "ui/app/state.h"
+#include "ui/app/profile_panel.h"
+#include "ui/core/layout.h"  /* CFG_DEFAULT_PANEL_FRAC */
 
 #include <stddef.h>
 #include <string.h>
@@ -156,7 +156,7 @@ void ui_state_code_panel_reset(void) {
 }
 
 /* Camera accessors moved to glr_camera.c. Storage lives there too;
- * the UiState.camera field is gone (see src/ui/state.h). */
+ * the UiState.camera field is gone (see src/ui/app/state.h). */
 
 /* The `repl_state_*` forwarders for these UI slices are defined in
  * src/repl/state.c rather than here so the check-state-boundaries

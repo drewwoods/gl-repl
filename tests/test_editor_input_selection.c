@@ -26,7 +26,7 @@
 #include <keys.h>
 #include "repl/core.h"
 #include "repl/state_owners.h"
-#include "ui/hit.h"
+#include "ui/core/hit.h"
 #include "support/test_harness.h"
 
 #include <stdio.h>

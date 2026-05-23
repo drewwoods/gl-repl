@@ -14,7 +14,7 @@
 #include "repl/examples.h"
 #include "repl/scenes.h"
 #include "repl/state_views.h"
-#include "ui/state.h"
+#include "ui/app/state.h"
 #include "support/test_harness.h"
 
 #include <stdio.h>

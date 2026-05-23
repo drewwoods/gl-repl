@@ -11,8 +11,8 @@
 
 #include "config.h"
 #include "repl/command_spec.h"
-#include "ui/hit.h"
-#include "ui/snapshot.h"
+#include "ui/core/hit.h"
+#include "ui/app/snapshot.h"
 
 struct UiCodePanelOutput;
 

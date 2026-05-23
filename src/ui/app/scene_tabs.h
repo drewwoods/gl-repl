@@ -8,7 +8,7 @@
  * examples does not change here. Click-to-switch and double-click-to-rename
  * are routed by the controller (route_scene_tab_hit in glr_ctrl.c).
  *
- * Contract (mirrors src/ui/menu_bar.h):
+ * Contract (mirrors src/ui/app/menu_bar.h):
  *
  *   UI renders the strip and reports `UiHit` results from
  *   ui_scene_tabs_hit_test():
@@ -39,8 +39,8 @@
 #ifndef UI_SCENE_TABS_H
 #define UI_SCENE_TABS_H
 
-#include "hit.h"
-#include "snapshot.h"
+#include "ui/core/hit.h"
+#include "ui/app/snapshot.h"
 
 /* Render the scene tab strip. No-op when the derived tab set is empty or
  * the panel is hidden. Draws into the caller's open gl2d block (same as

@@ -10,13 +10,13 @@
 #include "repl/state.h"
 #include "subsystems/replay/replay.h"
 #include "subsystems/replay/replay_state.h"
-#include "ui/state.h"
+#include "ui/app/state.h"
 #include "repl/replay_annotations.h"
-#include "ui/panels.h"
-#include "ui/layout.h"
-#include "ui/metrics.h"
-#include "ui/gl_2d.h"
-#include "ui/repl_code_panel.h"
+#include "ui/app/panels.h"
+#include "ui/core/layout.h"
+#include "ui/core/metrics.h"
+#include "ui/core/gl_2d.h"
+#include "ui/app/repl_code_panel.h"
 
 #define g_status  (ui_state_status_mut()->text)
 #define g_scroll  (editor_state_scroll_mut()->scroll)
