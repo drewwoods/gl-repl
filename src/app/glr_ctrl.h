@@ -4,7 +4,7 @@
 #include "app/glr_defaults.h"  /* GlrExampleTagDefault */
 #include "ui/app/repl_code_panel.h"
 
-/* App-frame controller entrypoints. sample.c forwards raw GLUT
+/* App-frame controller entrypoints. gl_repl.c forwards raw GLUT
  * callbacks here; this module owns frame orchestration, snapshot
  * assembly, and cross-subsystem input routing between editor, UI,
  * camera, replay, config, save/load, and help flows. */

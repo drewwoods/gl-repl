@@ -27,7 +27,7 @@ app-specific: the camera, the audio playlist, the config/menu tables, and the
 completion provider.
 
 (The literal `main()` and the GLUT callback registration live in the
-root-level `sample.c`, which forwards directly to `glr_ctrl_*` — there is no
+root-level `gl_repl.c`, which forwards directly to `glr_ctrl_*` — there is no
 shim in between.)
 
 ## How it is exercised — the inverse of the demos

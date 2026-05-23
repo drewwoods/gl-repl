@@ -6,7 +6,7 @@
  * `repl_export_load_from_file` import path on commit (Enter). Triggered
  * by the File-menu "Load Scene…" row (GLR_FILE_ITEM_LOAD_SCENE) so the
  * user can swap in a saved scene at runtime instead of having to
- * relaunch with `./sample <file>`.
+ * relaunch with `./gl-repl <file>`.
  *
  * Lifecycle: editor_inline_file_prompt_begin(default_name) seeds the
  * buffer with the suggested filename and enters modal mode. While

@@ -1,7 +1,7 @@
 /*
  * scene_render.c - 3D scene rendering (frame prep, edit guides)
  *
- * Extracted from sample.c for maintainability.
+ * Extracted from gl_repl.c for maintainability.
  */
 #include "axes.h"
 #include "backdrop.h"

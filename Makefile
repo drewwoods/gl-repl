@@ -45,10 +45,10 @@ GL_HEADER_CFLAGS = \
 endif
 
 # Language standard: C99, project-wide, no exceptions. Everything
-# (sample, tests, demos, bench, CI) compiles -std=c99 so the project
+# (gl-repl, tests, demos, bench, CI) compiles -std=c99 so the project
 # runs on old machines / old GCC. Non-pedantic by default — GNU
 # extensions GCC accepts in -std=c99 are fine; the goal is "old gcc
-# compiles it", not pure ISO C99. The shipped/real binaries (sample,
+# compiles it", not pure ISO C99. The shipped/real binaries (gl-repl,
 # bench, demos) are additionally held to -pedantic-errors by the
 # `make check-c99` ratchet (syntax-only, in the standard gate); tests are
 # plain -std=c99 (the pedantic delta there is real work, not a no-op,
@@ -89,7 +89,7 @@ COVERAGE_CFLAGS = \
 	--coverage -fprofile-arcs -ftest-coverage
 
 # Test targets build & run under the debug sanitizer build
-# (AddressSanitizer + UBSan) by default; sample, bench and the demos
+# (AddressSanitizer + UBSan) by default; gl-repl, bench and the demos
 # stay release. An explicit `BUILD=...` on the command line or in the
 # environment always wins, so `make coverage` (BUILD=coverage) and
 # `make test BUILD=release` (fast unsanitized run) keep working.
@@ -227,14 +227,14 @@ endif
 	help \
 	help-details \
 	lines \
-	sample \
+	gl-repl \
 	test \
 	test-detailed \
 	test-full \
 	test-stubs \
 	FORCE
 
-all: sample
+all: gl-repl
 
 # Used to force rebuild if you list as a prerequisite, e.g. `test_eval: FORCE $(test_eval_OBJS)`.
 FORCE:
@@ -243,7 +243,7 @@ SRCS = \
 	src/app/glr_audio.c \
 	src/repl/format.c \
 	src/support/prof.c \
-	sample.c \
+	gl_repl.c \
 	src/app/glr_actions.c \
 	src/app/glr_camera.c \
 	src/app/glr_camera_export.c \
@@ -323,7 +323,7 @@ HDRS = \
 	src/app/glr_audio.h \
 	src/repl/format.h \
 	src/support/prof.h \
-	sample.h \
+	gl_repl.h \
 	source_document.h \
 	src/scene/guides/transform_utils.h \
 	src/app/glr_actions.h \
@@ -640,11 +640,11 @@ CORE_TEST_BINS = $(filter-out test_eval test_format test_repl_code_panel_layout 
 # them — benchmarks are timing-sensitive and should be invoked explicitly.
 BENCH_BINS = bench_repl
 
-ROOT_BIN_LINKS = sample scene_demo repl_demo editor_demo
+ROOT_BIN_LINKS = gl-repl scene_demo repl_demo editor_demo
 
 .PHONY: $(ROOT_BIN_LINKS) $(TEST_BINS) $(BENCH_BINS)
 
-SAMPLE_BIN = $(BINDIR)/sample
+SAMPLE_BIN = $(BINDIR)/gl-repl
 SCENE_DEMO_BIN = $(BINDIR)/scene_demo
 REPL_DEMO_BIN = $(BINDIR)/repl_demo
 EDITOR_DEMO_BIN = $(BINDIR)/editor_demo
@@ -722,7 +722,7 @@ $(SAMPLE_BIN): $(SAMPLE_OBJS)
 	@mkdir -p $(dir $@)
 	$(CC) $(OBJ_CFLAGS) -o $@ $(SAMPLE_OBJS) $(GL_LDFLAGS)
 
-sample: FORCE $(SAMPLE_BIN) ## Build the main REPL sample using release flags by default.
+gl-repl: FORCE $(SAMPLE_BIN) ## Build the main gl-repl binary using release flags by default.
 	ln -sfn $(SAMPLE_BIN) $@
 
 # Standalone demo binary that drives the scene module with a teapot callback.
@@ -814,8 +814,8 @@ gl-tests: $(addprefix $(BINDIR)/,$(GL_TEST_BINS)) ## Run real-GL UI state tests 
 check-gl-boundaries: ## Verify GL/GLUT calls are isolated to allowed files.
 	@echo "    Checking GL/GLU drawing calls isolation..."
 	@! grep -nE '\b(gl[A-Z]|glu[A-Z])[A-Za-z0-9]*[[:space:]]*\(' $(REPL_SRCS) | grep -v '^src/repl/executor\.c:' | grep -vE '^([^:]+:)?[0-9]+:[[:space:]]*(/\*|\*|//)' | grep -vE '"' || (echo "    $(RED)ERROR: GL/GLU calls found outside src/repl/executor.c$(NC)" && exit 1)
-	@echo "    Checking GL/GLU calls in sample.h..."
-	@! grep -nE '\b(gl[A-Z]|glu[A-Z])[A-Za-z0-9]*[[:space:]]*\(' sample.h src/app/glr_defaults.h | grep -vE '^([^:]+:)?[0-9]+:[[:space:]]*(/\*|\*|//)' | grep -vE '"' || (echo "    $(RED)ERROR: GL/GLU calls found in sample.h$(NC)" && exit 1)
+	@echo "    Checking GL/GLU calls in gl_repl.h..."
+	@! grep -nE '\b(gl[A-Z]|glu[A-Z])[A-Za-z0-9]*[[:space:]]*\(' gl_repl.h src/app/glr_defaults.h | grep -vE '^([^:]+:)?[0-9]+:[[:space:]]*(/\*|\*|//)' | grep -vE '"' || (echo "    $(RED)ERROR: GL/GLU calls found in gl_repl.h$(NC)" && exit 1)
 	@echo "    Checking GLUT input/feedback calls isolation..."
 	@! grep -nE '\bglut[A-Z][A-Za-z0-9]*[[:space:]]*\(' $(REPL_SRCS) | grep -vE '^src/repl/executor\.c:' | grep -vE '^([^:]+:)?[0-9]+:[[:space:]]*(/\*|\*|//)' | grep -vE '"' || (echo "    $(RED)ERROR: GLUT calls found outside src/repl/executor.c$(NC)" && exit 1)
 	@echo "    GL/GLUT boundaries $(GREEN)OK$(NC)"
@@ -1114,7 +1114,7 @@ check-module-prefixes: ## Verify stale pre-cleanup symbol prefixes have not reap
 check-repl-demo-stubs-shrinking: ## Ratchet on tools/repl_demo/stubs.c — must not grow past 0 stubs.
 	@bash scripts/check-repl-demo-stubs-shrinking.sh
 
-check-c99: ## C99 build guard: sample + bench + demo sources must syntax-check under gcc -std=c99 (non-pedantic; tests excluded; in the standard gate).
+check-c99: ## C99 build guard: gl-repl + bench + demo sources must syntax-check under gcc -std=c99 (non-pedantic; tests excluded; in the standard gate).
 	@C99_SRCS='$(SRCS)' bash scripts/check-c99.sh
 
 check-no-test-default-output: ## Hard guard: tests may not call repl_save_default_output() (writes ./output.c in repo root).
@@ -1152,12 +1152,12 @@ test-detailed: $(TEST_BINS) ## Run the full test suite with verbose example expo
 test-stubs: check-gl-boundaries check-layer-coupling check-state-ownership ## Build and run tests using local GL/GLU/GLUT stubs, without GL libs.
 	$(MAKE) test USE_GL_STUBS=1
 
-test-full: ## Full gate: stub tests + checks + build sample, bench, repl_demo, scene_demo, editor_demo.
+test-full: ## Full gate: stub tests + checks + build gl-repl, bench, repl_demo, scene_demo, editor_demo.
 	$(MAKE) --no-print-directory repl_demo USE_GL_STUBS=1
 	$(MAKE) --no-print-directory editor_demo USE_GL_STUBS=1
 	$(MAKE) --no-print-directory check
 	$(MAKE) --no-print-directory test-stubs
-	$(MAKE) --no-print-directory sample
+	$(MAKE) --no-print-directory gl-repl
 	$(MAKE) --no-print-directory bench
 	$(MAKE) --no-print-directory scene_demo
 
@@ -1234,7 +1234,7 @@ else
 endif
 
 clean: ## Remove built binaries and object files.
-	rm -rf $(ROOT_BIN_LINKS) sample.dSYM scene_demo.dSYM repl_demo.dSYM editor_demo.dSYM \
+	rm -rf $(ROOT_BIN_LINKS) gl-repl.dSYM scene_demo.dSYM repl_demo.dSYM editor_demo.dSYM \
 		$(TEST_BINS) $(addsuffix .dSYM,$(TEST_BINS)) \
 		$(BENCH_BINS) $(addsuffix .dSYM,$(BENCH_BINS)) \
 		build/coverage/lcov.info build/coverage/html \
@@ -1271,7 +1271,7 @@ callgraph-static-entry: ## Generate call graph from specific entry point (ENTRY=
 	@cflow -m $(ENTRY) $(SRCS) 2>/dev/null | python3 scripts/cflow_to_mermaid.py > callgraph-$(ENTRY).mmd
 	@echo "Call graph saved to callgraph-$(ENTRY).mmd"
 
-callgraph-profile: sample ## Generate profile-based call graph using Valgrind callgrind.
+callgraph-profile: gl-repl ## Generate profile-based call graph using Valgrind callgrind.
 	@if ! command -v valgrind &> /dev/null; then \
 		echo "ERROR: valgrind not found. Install with: brew install valgrind"; exit 1; \
 	fi
@@ -1279,8 +1279,8 @@ callgraph-profile: sample ## Generate profile-based call graph using Valgrind ca
 		echo "ERROR: callgrind_annotate not found (part of valgrind)"; exit 1; \
 	fi
 	@if [ -z "$(PROG)" ]; then \
-		echo "Running sample with no args for default 5 seconds..."; \
-		PROG="./sample"; \
+		echo "Running gl-repl with no args for default 5 seconds..."; \
+		PROG="./gl-repl"; \
 		timeout 5 valgrind --tool=callgrind --callgrind-out-file=callgrind.out $$PROG 2>/dev/null || true; \
 	else \
 		echo "Running: $$PROG"; \
@@ -1343,7 +1343,7 @@ callgraph-files: ## Generate file-level Mermaid dependency graph (optional ENTRY
 help: ## Show the common targets (run make help-details for the full list).
 	@printf "Immediate-mode REPL — common Make targets\n\n"
 	@awk 'BEGIN {FS = ":.*## "}; /^[a-zA-Z0-9_.-]+:.*## / {d[$$1]=$$2} \
-		END {split("sample clean test-stubs test-full help help-details",o," "); \
+		END {split("gl-repl clean test-stubs test-full help help-details",o," "); \
 		for (i=1;i<=6;i++) printf "  %-16s %s\n", o[i], d[o[i]]}' $(MAKEFILE_LIST)
 	@printf "\nRun 'make help-details' for all targets, build modes, and runtime/env notes.\n"
 
@@ -1355,21 +1355,21 @@ help-details: ## Show available targets and build-mode notes.
 	@printf "  debug:         \$$(common_flags) %s \n" "$(filter-out $(COMMON_CFLAGS),$(DEBUG_CFLAGS))"
 	@printf "  coverage:      \$$(common_flags) %s \n\n" "$(filter-out $(COMMON_CFLAGS),$(COVERAGE_CFLAGS))"
 	@printf "GL stubs:        make test-stubs, or add USE_GL_STUBS=1 to any target.\n"
-	@printf "Runtime env:     GLR_NO_POINT_PARAMETER=1 ./sample forces the no-glPointParameterfv\n"
+	@printf "Runtime env:     GLR_NO_POINT_PARAMETER=1 ./gl-repl forces the no-glPointParameterfv\n"
 	@printf "                 path (camera-distance glPointSize fallback). Support is otherwise\n"
 	@printf "                 auto-detected from the GL context at startup; there is no build\n"
 	@printf "                 flag. See ARCHITECTURE.md > Runtime GL Capability Detection.\n"
-	@printf "                 GLR_AUDIO_HITCH_MS=N ./sample sets the audio-worker hitch\n"
+	@printf "                 GLR_AUDIO_HITCH_MS=N ./gl-repl sets the audio-worker hitch\n"
 	@printf "                 threshold (default 50ms; 0 disables). --no-audio skips audio\n"
 	@printf "                 init to isolate startup stalls; startup prints an [init +Ns]\n"
 	@printf "                 trace per phase.\n"
-	@printf "                 GLR_DETAILED_PROF=1 ./sample (or --detailed-prof) promotes\n"
+	@printf "                 GLR_DETAILED_PROF=1 ./gl-repl (or --detailed-prof) promotes\n"
 	@printf "                 the optional fine-grained init-trace phases (glutInit split,\n"
 	@printf "                 audio playlist sub-steps, first-two-frames triple); default\n"
 	@printf "                 off. See ARCHITECTURE.md > Startup & Audio-Worker Diagnostics.\n"
 	@printf "Build options:   UI_THEME_DEFAULT=N picks the compile-time UI color scheme\n"
 	@printf "                 (0 green default, 1 warm, 2 cyan, 3 amber, 4 violet, 5 mono),\n"
-	@printf "                 e.g. make sample CPPFLAGS=-DUI_THEME_DEFAULT=1. Defined in\n"
+	@printf "                 e.g. make gl-repl CPPFLAGS=-DUI_THEME_DEFAULT=1. Defined in\n"
 	@printf "                 config.h, range-checked in src/ui/core/theme.h. See\n"
 	@printf "                 ARCHITECTURE.md > UI Color Theming.\n"
 	@printf "User CFLAGS are appended to the selected build mode.\n\n"

@@ -132,7 +132,7 @@ static const char *const k_lang_sections_tail[] = {
     "",
     "Save / Load:",
     "  Click Save C or press Ctrl+S to export output.c",
-    "  Reload a saved file:  ./sample output.c",
+    "  Reload a saved file:  ./gl-repl output.c",
     "  (Commands between // Snippet start/end are imported)",
     "",
     "Time variable 't':",
