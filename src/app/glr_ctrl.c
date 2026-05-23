@@ -2103,7 +2103,10 @@ void glr_app_reset_all(void) {
     ui_state_reset();
     variable_panel_state_reset();
     replay_state_reset();
-    tutorial_state_reset();
+    /* tutorial_teardown (rather than tutorial_state_reset) so an active
+     * tutorial's cfg baseline gets restored before any presentation cfg
+     * that follows this reset locks the tutorial-mutated state in. */
+    tutorial_teardown();
     editor_help_session_reset();
     editor_reset_transients();
     /* Inline modals are transient editor state too: a post-reset
@@ -2464,6 +2467,16 @@ int glr_ctrl_router_handle_quit_key(unsigned char key) {
         exit(0);
     }
     return 0;
+}
+
+/* SET-step ack: while a tutorial SET (showcase) step is waiting, Enter /
+ * Tab / Space advances. Scoped strictly to SET steps inside
+ * tutorial_handle_ack_key so REQUIRE / COMMAND steps never have their
+ * keys swallowed here. Runs AFTER the existing controller routes (so
+ * Ctrl-keys, replay, cfg shortcuts, save, quit keep priority) and
+ * BEFORE editor_handle_key — see the chain in glr_ctrl_keyboard. */
+int glr_ctrl_router_handle_tutorial_ack_key(unsigned char key) {
+    return tutorial_handle_ack_key(key);
 }
 
 int glr_ctrl_router_handle_config_menu_key(unsigned char key) {
@@ -3583,6 +3596,7 @@ void glr_ctrl_keyboard(unsigned char key, int x, int y) {
         glr_ctrl_router_handle_accum_samples_key(key) ||
         glr_ctrl_router_handle_post_filter_key(key) ||
         glr_ctrl_router_handle_code_focus_key(key) ||
+        glr_ctrl_router_handle_tutorial_ack_key(key) ||
         glr_ctrl_router_handle_quit_key(key)) {
         glr_ctrl_apply_input_effects(editor_take_input_effects());
         return;

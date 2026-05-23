@@ -1236,6 +1236,17 @@ static int tutorial_precheck_current_input(void) {
     if (!tutorial_active())
         return 1;
 
+    /* SET/REQUIRE steps don't accept typed commits — block here with a
+     * kind-appropriate hint and let the SET-step ack key (Enter / Tab /
+     * Space, handled in glr_ctrl_keyboard's router) drive advancement
+     * instead. Routing the hint through a tutorial_* widget call keeps
+     * input.c's direct repl_* surface frozen at its baseline (the
+     * check-editor-repl-surface ratchet). */
+    if (tutorial_block_noncommand_commit()) {
+        editor_completion_clear();
+        return 0;
+    }
+
     /* Empty-input silent reject: the cursor lands on
      * expected_commit_line in insert mode at start, and we don't
      * want to spam "expected: ..." before the user has typed
