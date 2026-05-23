@@ -13,8 +13,16 @@
 /* Startup stall diagnostic. Each phase logs wall-clock seconds elapsed
  * since main() started so a slow phase (e.g. ma_engine_init opening the
  * audio device) is visible in the terminal. gettimeofday keeps this
- * portable/C99 without the per-platform timebase branching in prof.c. */
+ * portable/C99 without the per-platform timebase branching in prof.c.
+ *
+ * Two granularity levels:
+ *  - init_trace()          always emits — the baseline boot phases.
+ *  - init_trace_detail()   emits only when --detailed-prof or the
+ *                          GLR_DETAILED_PROF env var is set; covers
+ *                          the finer-grained phases (glutInit split,
+ *                          audio playlist sub-steps, first two frames). */
 static double g_init_t0 = -1.0;
+static int    g_detailed_prof = 0;
 
 static double init_now(void) {
     struct timeval tv;
@@ -25,6 +33,10 @@ static double init_now(void) {
 static void init_trace(const char *phase) {
     if (g_init_t0 < 0.0) g_init_t0 = init_now();
     fprintf(stderr, "[init +%6.3fs] %s\n", init_now() - g_init_t0, phase);
+}
+
+static void init_trace_detail(const char *phase) {
+    if (g_detailed_prof) init_trace(phase);
 }
 
 /* Music assets live here. Relative to the sample's working directory
@@ -106,6 +118,8 @@ static void print_usage(const char *prog) {
             "  --dump-code  Load the session and print the editor buffer\n"
             "  --dump-flat  Load the session and print flattened commands\n"
             "  --dump-state-layout  Print ReplRuntimeState field layout\n"
+            "  --detailed-prof  Emit finer-grained startup init traces\n"
+            "               (also via GLR_DETAILED_PROF env var)\n"
             "\n"
             "Arguments:\n"
             "  input.c      Optional saved session to load at startup\n"
@@ -114,14 +128,15 @@ static void print_usage(const char *prog) {
 }
 
 static void display_func(void) {
-    /* Trace the first two frames separately. The first frame pays
-     * one-shot costs (GLUT solid-shape display-list compile, macOS
-     * first-drawable wait, GL stack lazy init / SW-fallback chatter)
-     * that frame 2 reveals as gone. A side-by-side frame-1 vs.
-     * frame-2 gap proves the spend was first-frame-only and not a
-     * steady-state regression. */
+    /* Trace the first two frames separately (gated on g_detailed_prof
+     * — see --detailed-prof / GLR_DETAILED_PROF). The first frame
+     * pays one-shot costs (GLUT solid-shape display-list compile,
+     * macOS first-drawable wait, GL stack lazy init / SW-fallback
+     * chatter) that frame 2 reveals as gone. A side-by-side frame-1
+     * vs. frame-2 gap proves the spend was first-frame-only and not
+     * a steady-state regression. */
     static int frames_traced = 0;
-    int trace_this = (frames_traced < 2);
+    int trace_this = g_detailed_prof && (frames_traced < 2);
     int frame_num = frames_traced + 1;
     char buf[64];
     if (trace_this) {
@@ -196,6 +211,16 @@ int main(int argc, char **argv) {
     init_trace("start");
     glr_ctrl_set_program_name(argv[0]);
 
+    /* GLR_DETAILED_PROF (any non-empty value) is the env-var twin of
+     * --detailed-prof; either one promotes the optional fine-grained
+     * init_trace_detail() phases (glutInit split, audio playlist
+     * sub-steps, first-two-frames triple) to stderr. Default off so
+     * a normal start emits only the baseline boot-phase set. */
+    {
+        const char *env = getenv("GLR_DETAILED_PROF");
+        if (env && *env) g_detailed_prof = 1;
+    }
+
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "-h") == 0 || strcmp(argv[i], "--help") == 0) {
             print_usage(argv[0]);
@@ -210,6 +235,8 @@ int main(int argc, char **argv) {
             dump_flat = 1;
         else if (strcmp(argv[i], "--dump-state-layout") == 0)
             dump_state_layout = 1;
+        else if (strcmp(argv[i], "--detailed-prof") == 0)
+            g_detailed_prof = 1;
         else if (!input_file)
             input_file = argv[i];
     }
@@ -234,7 +261,7 @@ int main(int argc, char **argv) {
 
     init_trace("glutInit begin");
     glutInit(&argc, argv);
-    init_trace("glutInit done");
+    init_trace_detail("glutInit done");
     glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGBA | GLUT_DEPTH | GLUT_MULTISAMPLE |
                         (use_accum ? GLUT_ACCUM : 0));
     glutInitWindowSize(window_w, window_h);
@@ -261,7 +288,7 @@ int main(int argc, char **argv) {
         int n = scan_mp3_playlist(music_paths, AUDIO_MUSIC_MAX_PATHS);
         /* opendir/readdir on assets/. Cheap when the dir is local;
          * worth timing when the working directory lives on iCloud. */
-        {
+        if (g_detailed_prof) {
             char buf[64];
             snprintf(buf, sizeof(buf), "playlist scan done (%d tracks)", n);
             init_trace(buf);
@@ -281,7 +308,7 @@ int main(int argc, char **argv) {
          * caller (see glr_audio.c header comment) before posting the
          * slow media-open request to the worker. The actual sound load
          * runs off-thread so it never lands here. */
-        init_trace("playlist start requested");
+        init_trace_detail("playlist start requested");
         /* Apply saved audio cfg after play_playlist() so load_state() has
          * already populated g_cfg_mode. The action layer maps that UI config
          * value back onto the audio engine before the first frame. */
