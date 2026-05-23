@@ -158,11 +158,23 @@ Two always-on stderr diagnostics help locate startup stalls and
 audio-thread hitches (the kind seen on slow Linux disks):
 
 - **Init trace.** `main()` in `sample.c` logs a wall-clock line per
-  startup phase (`[init +N.NNNs] <phase>`: window create, GL init,
-  REPL bootstrap, audio_init, playlist start, main loop) via
-  `gettimeofday`. A large gap names the slow phase; `--no-audio`
-  isolates whether `ma_engine_init()` (the one synchronous audio call
-  on the `main()` path — it opens the OS audio device) is the cause.
+  startup phase (`[init +N.NNNs] <phase>`) via `gettimeofday`. Phases:
+  `start`, `glutInit done` (Cocoa NSApp init), `window created`,
+  `GL init done`, `REPL bootstrap done`, `glr_audio_init begin/done`,
+  `playlist scan done (N tracks)` (opendir/readdir on `assets/`),
+  `playlist start requested` (after the synchronous `load_state` read
+  of `audio_state.ini` and the worker poke), `audio playlist started`,
+  `entering main loop`, and the post-loop `frame N display callback`
+  / `frame N render done` / `frame N swap done` triples from
+  `display_func` for the first two frames. A large gap names the slow
+  phase; `--no-audio` isolates whether `ma_engine_init()` (the one
+  synchronous audio call on the `main()` path — it opens the OS audio
+  device) is the cause. The frame-1 triple splits the otherwise-
+  invisible time between `glutMainLoop()` and the OS showing pixels
+  (GLUT solid-shape display-list compilation, macOS first-drawable
+  wait, GL stack lazy init); the frame-2 triple is the side-by-side
+  control that reveals whether spending was first-frame-only (the
+  expected case) or a steady-state regression.
 - **Worker hitch detector.** The audio worker thread
   (`audio_worker_main` in `src/app/glr_audio.c`) wakes from `pthread_cond_wait`,
   runs exactly one blocking lifecycle op, then sleeps again. The
