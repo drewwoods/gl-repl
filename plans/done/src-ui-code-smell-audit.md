@@ -144,7 +144,7 @@ findings remain.
 
 ## 🔴 Actual bugs (verified)
 
-### 1. `tabbed_overlay.c` reads past NUL on short lines
+### 1. `tabbed_overlay.c` reads past NUL on short lines (done in `fd70b4e`)
 
 **Where:** `src/ui/core/tabbed_overlay.c:261`
 
@@ -164,7 +164,7 @@ filters `'\0'` at position [0] but not "single space" or "two spaces".
 `text[i][1] == ' ' && text[i][2] == ' ' && text[i][3] != '\0' && text[i][3] == ' '`,
 or call `strlen(text[i]) >= 4` first.
 
-### 2. `variable_panel.c` calls math/string functions without their headers
+### 2. `variable_panel.c` calls math/string functions without their headers (done in `fd70b4e`)
 
 **Where:** `src/ui/app/variable_panel.c:65, 76-77, 124, 160, 249, 287`
 (plus `src/ui/app/autocomplete_panel.c:37`)
@@ -181,7 +181,7 @@ targets old-gcc.
 
 **Fix:** Add the explicit includes.
 
-### 3. Renderer mutates state during render (`menu_bar`)
+### 3. Renderer mutates state during render (`menu_bar`) (done in `fd70b4e`)
 
 **Where:** `src/ui/app/menu_bar.c:1525-1527` inside
 `ui_menu_bar_render_example_dropdown`
@@ -199,7 +199,7 @@ couples render to mutation.
 
 **Fix:** Delete lines 1525-1527; trust the input-time hover refresh.
 
-### 4. Hit-test handler mutates subsystem state
+### 4. Hit-test handler mutates subsystem state (done in `fd70b4e`)
 
 **Where:** `src/ui/app/menu_bar.c:986-1002` (forwarded one-line from
 `src/ui/app/panels.c:247-249`)
@@ -216,7 +216,7 @@ UI module shouldn't know `glr_cfg_cycle_row` exists.
 **Fix:** Surface as a `UI_HIT_SUBMENU_ITEM` flavor (or include a
 direction hint); let `glr_ctrl` call `glr_cfg_cycle_row`.
 
-### 5. Replay / selection / feeding-normal / color overlays silently disappear on the edit row
+### 5. Replay / selection / feeding-normal / color overlays silently disappear on the edit row (done in `fd70b4e`)
 
 **Where:** `src/ui/app/repl_code_panel.c:1065`
 (`repl_code_panel_apply_command_overlays` called only from
@@ -236,7 +236,7 @@ or not.
 `add_input_row` when `source_line_idx >= 0` (edit-in-place); keep
 insert-row (-1) unaffected.
 
-### 6. Marker-color priority is decided by silent assignment order
+### 6. Marker-color priority is decided by silent assignment order (done in `fd70b4e`)
 
 **Where:** `src/ui/app/repl_code_panel.c:649-676`
 
@@ -256,7 +256,7 @@ computed in one place, assigned once.
 
 ## 🟡 Drift / boundary hazards
 
-### 7. `core/layout.c` includes `ui/app/state_types.h` (core→app boundary leak)
+### 7. `core/layout.c` includes `ui/app/state_types.h` (core→app boundary leak) (done in original closeout)
 
 **Where:** `src/ui/core/layout.c:5` (`#include "ui/app/state_types.h"`)
 + forward-declares `ui_state_viewport()` / `ui_state_code_panel()`
@@ -276,7 +276,7 @@ concern), or refactor to take
 `(panel_frac, layout_mode, win_w, win_h)` as args and let the
 caller plumb them. Extend the purity guard to cover `layout.c`.
 
-### 8. `core/hit.h` enumerates 16 app-specific `UiHitKind` values
+### 8. `core/hit.h` enumerates 16 app-specific `UiHitKind` values (done in original closeout)
 
 **Where:** `src/ui/core/hit.h` —
 `UI_HIT_REPLAY_BUTTON`, `UI_HIT_HELP_TOGGLE`, `UI_HIT_HELP_PANEL`,
@@ -300,7 +300,7 @@ docs.
 kinds to `src/ui/app/hit.h` extending `UiHitKind` via a numeric
 carve-out, or use an opaque int.
 
-### 9. `core/metrics.h` defines `STATUSBAR_H` / `TAB_STRIP_H` (feature heights leaking into "shared" header)
+### 9. `core/metrics.h` defines `STATUSBAR_H` / `TAB_STRIP_H` (feature heights leaking into "shared" header) (done in original closeout)
 
 **Where:** `src/ui/core/metrics.h`
 
@@ -316,7 +316,7 @@ banner reserve it has no banner for.
 (symmetric with the existing `top_chrome_h`); remove `STATUSBAR_H`
 and `TAB_STRIP_H` from `core/metrics.h`.
 
-### 10. `core/text_panel.h` doc comments name editor-private symbols
+### 10. `core/text_panel.h` doc comments name editor-private symbols (done in original closeout)
 
 **Where:** `src/ui/core/text_panel.h:138-141, 206`
 
@@ -328,7 +328,7 @@ even comment-level coupling forces co-edits.
 **Fix:** Re-document as "opaque adapter-defined IDs compared for
 equality only"; drop the editor symbol reference.
 
-### 11. Code-panel renderer reaches past the snapshot for live per-line text
+### 11. Code-panel renderer reaches past the snapshot for live per-line text (done in original closeout)
 
 **Where:** `src/ui/app/repl_code_panel.c:263-265, 578-584`
 (`repl_code_panel_command_main_rows`, `_display_text`)
@@ -344,7 +344,7 @@ disagree with the snapshot's `document_cmds[]`.
 **Fix:** Thread an `editor_buffer_view` + `editor_line_overrides`
 slice through `UiRenderSnapshot`; drop the live reads.
 
-### 12. Virtual-line list read inconsistently — once from snapshot, once from live state
+### 12. Virtual-line list read inconsistently — once from snapshot, once from live state (done in original closeout)
 
 **Where:** `src/ui/app/repl_code_panel.c:281` (precompute, live read)
 vs. L1083 (add rows, snapshot read)
@@ -355,7 +355,7 @@ can silently disagree with what `add_virtual_rows` actually emits.
 **Fix:** Count virtual lines from `builder->snap->editor_virtual_lines`
 in `precompute_layout_rows`.
 
-### 13. Syntax classifier advertised as pure but reads live predef-var table
+### 13. Syntax classifier advertised as pure but reads live predef-var table (done in original closeout)
 
 **Where:** `src/ui/app/repl_code_panel.c:909`
 (`ui_repl_code_panel_classify_syntax`)
@@ -370,7 +370,7 @@ predef table.
 **Fix:** Take a variable-name set as parameter; declare the existing
 function impure in the header.
 
-### 14. Tutorial fade pulled live per fading row
+### 14. Tutorial fade pulled live per fading row (done in original closeout)
 
 **Where:** `src/ui/app/repl_code_panel.c:694, 725, 750, 1066`
 
@@ -384,7 +384,7 @@ field for tutorial fade exists.
 `{active, line_idx, line_len, fade_start_t, fade_duration}`;
 derive front/alpha/settle from snapshot fields.
 
-### 15. Header/footer row-count and emit paths call live REPL/export state
+### 15. Header/footer row-count and emit paths call live REPL/export state (done in original closeout)
 
 **Where:** `src/ui/app/repl_code_panel.c:186, 191, 201-205, 232-237`
 (row-count) and L1174-1199, L1289-1320 (build)
@@ -398,7 +398,7 @@ the same live data; a mid-frame config change can desync them.
 **Fix:** Pre-materialize the lights and init-section lines into the
 snapshot (mirror `import_export.render_state_lines` / `cam_lines`).
 
-### 16. Menu-bar renderer reads ~51 live values vs ~17 snapshot reads
+### 16. Menu-bar renderer reads ~51 live values vs ~17 snapshot reads (done in original closeout)
 
 **Where:** `src/ui/app/menu_bar.c:1247, 1077, 1085, 1232, 1520, 1571,
 1577, 1578` and submenu_rect / menu_dropdown_rect
@@ -416,7 +416,7 @@ complex.
 **Fix:** Push `cfg_states[]`, `active_tutorial_idx`, resolved
 per-row "scene slot" and "is active" booleans into the snapshot.
 
-### 17. `UiState` carries cursor blink (CLAUDE.md violation)
+### 17. `UiState` carries cursor blink (CLAUDE.md violation) (done in original closeout)
 
 **Where:** `src/ui/app/state_types.h:29-30` and `state.c:26-27`
 
@@ -445,7 +445,7 @@ read peer file-statics; `visible` is already on
 visibility; surface drag state via a new `UiVariableDragView` slice
 on the snapshot.
 
-### 19. "Shared flyout engine" has 21 menu-id branches and three classifiers
+### 19. "Shared flyout engine" has 21 menu-id branches and three classifiers (done in original closeout)
 
 **Where:** `src/ui/app/menu_bar.c:553-645, 765-770, 625-645, 803`
 
@@ -468,7 +468,7 @@ cheap; in practice every new menu has to be added to ~4 switches.
 `glr_config_section_range` / `glr_config_row_kind` internally.
 Collapse the 3-way switches to ops-table dispatch.
 
-### 20. Color picker bypasses theme tokens
+### 20. Color picker bypasses theme tokens (done in original closeout)
 
 **Where:** `src/ui/app/color_picker.c:45, 47, 174`
 
@@ -485,7 +485,7 @@ consistently with its neighbors.
 **Fix:** Replace with `ui_clr_a(UI_TOK_SUNKEN, 0.94f)` /
 `ui_clr_a(UI_TOK_BORDER, 0.80f)` / `ui_clr(UI_TOK_BORDER)`.
 
-### 21. Cross-panel layout coupling: `variable_panel` includes `replay_hud.h`
+### 21. Cross-panel layout coupling: `variable_panel` includes `replay_hud.h` (done in original closeout)
 
 **Where:** `src/ui/app/variable_panel.c:20, 88, 101`
 
@@ -503,7 +503,7 @@ knows both rects) and pass on the snapshot as
 `snap->variable_panel.replay_lift_px`. Remove the
 `#include "ui/app/replay_hud.h"`.
 
-### 22. Render-order coupling via file-static lift
+### 22. Render-order coupling via file-static lift (done in original closeout)
 
 **Where:** `src/ui/app/variable_panel.c:96-97, 160`,
 `src/ui/app/profile_panel.c:62-65`
@@ -518,7 +518,7 @@ silently desyncs the profile panel's anchor.
 **Fix:** Compute the lift in the snapshot phase
 (controller-driven); store on `UiRenderSnapshot`.
 
-### 23. Three duplicate copies of the `panel_y` clamp around statusbar
+### 23. Three duplicate copies of the `panel_y` clamp around statusbar (done in original closeout)
 
 **Where:** `src/ui/app/variable_panel.c:161-170`,
 `profile_panel.c:42-49`, `replay_hud.c:33-48`
@@ -531,7 +531,7 @@ scene if `CODE_PANEL_LAYOUT_TOP`" detail.
 **Fix:** Add `ui_clamp_panel_y(scene_rect, panel_h, requested_y,
 layout_mode)` in `ui/core/layout.{c,h}`.
 
-### 24. Every floating panel hand-rolls its own bg + border frame
+### 24. Every floating panel hand-rolls its own bg + border frame (done in original closeout)
 
 **Where:**
 `src/ui/app/{variable_panel,profile_panel,replay_hud,autocomplete_panel,color_picker}.c`
@@ -556,7 +556,7 @@ autocomplete), `(const ColorPickerView *, int, int)`
 `const UiRenderSnapshot *` (or take the replay-state view
 explicitly); collapse to one shape.
 
-### 26. Menu-bar top math duplicated in `scene_tabs.c`
+### 26. Menu-bar top math duplicated in `scene_tabs.c` (done in original closeout)
 
 **Where:** `src/ui/app/menu_bar.c:419-420`,
 `src/ui/app/scene_tabs.c:62-63`
@@ -566,7 +566,7 @@ explicitly); collapse to one shape.
 **Fix:** Add `ui_layout_menu_bar_rect(...)` to
 `src/ui/core/layout.h`; call from both.
 
-### 27. Geometry duplicated: `idx_x` / `linenum_w` formula across `init_builder` and `glr_ctrl.c`
+### 27. Geometry duplicated: `idx_x` / `linenum_w` formula across `init_builder` and `glr_ctrl.c` (done in original closeout)
 
 **Where:** `src/ui/app/repl_code_panel.c:495-515`,
 `src/app/glr_ctrl.c:2190-2200`
@@ -579,7 +579,7 @@ linenum_w + FONT_W; text_x = idx_x + idx_col_w;` from scratch.
 `ui_repl_code_panel_compute_text_x(const UiRenderSnapshot *)` into
 `repl_code_panel.h`; call from both sites.
 
-### 28. Color-swatch hit math hand-duplicated from text_panel draw math
+### 28. Color-swatch hit math hand-duplicated from text_panel draw math (done in original closeout)
 
 **Where:** `src/ui/app/repl_code_panel.c:1676-1678` vs.
 `src/ui/core/text_panel.c:246`
@@ -616,7 +616,7 @@ BLEND once.
 **Fix:** Pass the row-level "blend is on" bool down; remove the
 per-segment query.
 
-### 31. `tolower` is locale-dependent in `text_layout.c`
+### 31. `tolower` is locale-dependent in `text_layout.c` (done in original closeout)
 
 **Where:** `src/ui/core/text_layout.c:24`
 
@@ -630,7 +630,7 @@ or document the ASCII assumption at the file top.
 
 ## 🟢 Dead code / dead fields
 
-### 32. `ui_repl_code_panel_render` builds a `UiReplCodePanelLayout` it never uses
+### 32. `ui_repl_code_panel_render` builds a `UiReplCodePanelLayout` it never uses (done in original closeout)
 
 **Where:** `src/ui/app/repl_code_panel.c:1603, 1615-1617`
 
@@ -642,7 +642,7 @@ math + per-command wrap rows). Pure dead work per frame.
 **Fix:** Delete the call. (Legitimate use is in `glr_ctrl.c:2206`,
 separate.)
 
-### 33. `text_panel_draw_indent` is a visual no-op
+### 33. `text_panel_draw_indent` is a visual no-op (done in original closeout)
 
 **Where:** `src/ui/core/text_panel.c:351-364`
 
@@ -654,7 +654,7 @@ discarded.
 **Fix:** Delete the function and both call sites, or implement
 dotted indent guides if that was the intent.
 
-### 34. Stale public API: three `int`-returning hit-test entry points plus the `UiHit` one
+### 34. Stale public API: three `int`-returning hit-test entry points plus the `UiHit` one (done in original closeout)
 
 **Where:** `src/ui/app/menu_bar.h:72, 77, 82` /
 `menu_bar.c:449, 463, 792`
@@ -669,7 +669,7 @@ the int variants only serve tests + internals.
 `ui_menu_bar_hit_test`; remove the stale "Called by ui_panels.c"
 comments.
 
-### 35. `ui_menu_bar_example_dropdown_is_open()` is a single-line alias used only by tests
+### 35. `ui_menu_bar_example_dropdown_is_open()` is a single-line alias used only by tests (done in original closeout)
 
 **Where:** `src/ui/app/menu_bar.c:81`, `menu_bar.h:140`
 
@@ -679,7 +679,7 @@ tests.
 
 **Fix:** Delete; have tests call the canonical name.
 
-### 36. Two near-duplicate test-helper rect getters
+### 36. Two near-duplicate test-helper rect getters (done in original closeout)
 
 **Where:** `src/ui/app/menu_bar.h:87-96` / `menu_bar.c:747-759`
 
@@ -701,7 +701,7 @@ with identical signature.
 
 **Fix:** Delete the wrappers; call `ui_text_*` directly.
 
-### 38. Five exported `ui_state_*` functions have zero callers
+### 38. Five exported `ui_state_*` functions have zero callers (done in original closeout)
 
 **Where:** `src/ui/app/state.c:76-85, 95-97, 142-144, 154-156`
 
@@ -713,7 +713,7 @@ inlines the equivalent of `status_tick` via direct `_mut()`.
 **Fix:** Delete the unused exports (or wire `glr_ctrl_tick` through
 `ui_state_status_tick` so it gets coverage).
 
-### 39. `is_clear` field on `UiTransformer.color` is write-only
+### 39. `is_clear` field on `UiTransformer.color` is write-only (done in original closeout)
 
 **Where:** `src/ui/app/editor.h:31`
 
@@ -723,7 +723,7 @@ no reader anywhere.
 
 **Fix:** Delete the field.
 
-### 40. `var_panel_replay_lift_tick` cache guard is dead
+### 40. `var_panel_replay_lift_tick` cache guard is dead (done in original closeout)
 
 **Where:** `src/ui/app/variable_panel.c:116-120`
 
@@ -736,7 +736,7 @@ exist to power a no-op check.
 **Fix:** Delete the guard + the two statics; the unconditional
 easing step at L122-125 is cheap and idempotent.
 
-### 41. `repl_code_panel_static_line_color` does an unconditional `strcmp` for every chrome line
+### 41. `repl_code_panel_static_line_color` does an unconditional `strcmp` for every chrome line (done in original closeout)
 
 **Where:** `src/ui/app/repl_code_panel.c:133-140, 159, 165, 197,
 232, 1299, 1305, 1319`
@@ -750,7 +750,7 @@ scratch line is only present in one emit site
 use plain `repl_code_panel_rgb(REPL_CODE_PANEL_CHROME_RGB)`
 everywhere else.
 
-### 42. `ui_menu_bar_render_search_overlay` has three unused parameters
+### 42. `ui_menu_bar_render_search_overlay` has three unused parameters (done in original closeout)
 
 **Where:** `src/ui/app/menu_bar.c:1277-1283`
 
@@ -761,7 +761,7 @@ them.
 
 **Fix:** Drop the three int parameters; update tests.
 
-### 43. `UiVariablePanelState` typedef lives in the wrong header
+### 43. `UiVariablePanelState` typedef lives in the wrong header (done in original closeout)
 
 **Where:** `src/ui/app/state_types.h:44-46`
 
@@ -793,12 +793,7 @@ through to `hit_target_line_idx`.
 
 ## 🔵 Structural concerns
 
-> Closeout note (2026-05-24): unless individually marked otherwise,
-> findings in this section are **Tier C — deferred**. The exceptions
-> are #56, #57, #59, #60, #61, #62, which were closed in the original
-> pass (see the Closeout block at the top).
-
-### 45. `ui_menu_bar_render` is 140 lines mixing 6 jobs
+### 45. `ui_menu_bar_render` is 140 lines mixing 6 jobs (Tier C — deferred)
 
 **Where:** `src/ui/app/menu_bar.c:1375-1514`
 
@@ -811,7 +806,7 @@ Search-vs-Replay-vs-default branching), and the bottom hairline.
 **Fix:** Break into `paint_strip_bg`, `paint_menu_labels(hover)`,
 `paint_pin_buttons(hover, replay)`; precompute hover from snap.
 
-### 46. `render_active_submenu` is 106 lines combining layout / paint / hit / kind / fade / Config-special-case columns
+### 46. `render_active_submenu` is 106 lines combining layout / paint / hit / kind / fade / Config-special-case columns (Tier C — deferred)
 
 **Where:** `src/ui/app/menu_bar.c:1153-1258`
 
@@ -824,7 +819,7 @@ function isn't menu-agnostic.
 let each provider expose an optional "draw row right-decoration"
 hook.
 
-### 47. `ui_menu_bar_hit_test` is 87 lines with duplicate chrome branches
+### 47. `ui_menu_bar_hit_test` is 87 lines with duplicate chrome branches (Tier C — deferred)
 
 **Where:** `src/ui/app/menu_bar.c:856-942`
 
@@ -834,7 +829,7 @@ L905-912) repeat the same overlay-precedence logic.
 **Fix:** Factor "inside dropdown rect but not on item" into one
 helper returning a chrome-or-item discriminator.
 
-### 48. `ui_repl_code_panel_render` is misnamed — it renders chrome too
+### 48. `ui_repl_code_panel_render` is misnamed — it renders chrome too (Tier C — deferred)
 
 **Where:** `src/ui/app/repl_code_panel.c:1599-1645`
 
@@ -847,7 +842,7 @@ last.
 split into `ui_repl_code_panel_render_chrome(...)` and have
 `panels.c` orchestrate.
 
-### 49. Hit-test rebuilds the entire row set already built by render
+### 49. Hit-test rebuilds the entire row set already built by render (Tier C — deferred)
 
 **Where:** `src/ui/app/repl_code_panel.c:1690-1702`
 
@@ -863,7 +858,7 @@ ticked between them.
 pointer + row layout dims; expose a `rebuild_rows()` call the
 controller makes once per frame.
 
-### 50. Magic spacing constants scattered across menu render code
+### 50. Magic spacing constants scattered across menu render code (Tier C — deferred)
 
 **Where:** `src/ui/app/menu_bar.c:428, 438, 502, 507, 509, 511,
 724, 786-787, 1176, 1180, 1414, 1452, 1491, 1598, 1605` and
@@ -878,7 +873,7 @@ and submenu.
 `DROPDOWN_ROW_TOP_OFFSET`, `DROPDOWN_INNER_BORDER` to `metrics.h`;
 extract `row_for_y(top, h, gl_y)` shared helper.
 
-### 51. `menu_dropdown_rect` / `submenu_rect` re-measure all rows every call
+### 51. `menu_dropdown_rect` / `submenu_rect` re-measure all rows every call (Tier C — deferred)
 
 **Where:** `src/ui/app/menu_bar.c:484-498, 705-715`
 
@@ -889,7 +884,7 @@ hit-test, every test helper.
 **Fix:** Cache per-frame keyed on open menu + open submenu;
 invalidate on open / close / hover-change.
 
-### 52. `menu_item_label` returns a `static char buf[48]` overwritten on each call
+### 52. `menu_item_label` returns a `static char buf[48]` overwritten on each call (Tier C — deferred)
 
 **Where:** `src/ui/app/menu_bar.c:312-324`
 (same pattern in `config_item_shortcut`, L341-361)
@@ -903,7 +898,7 @@ would break the moment a future change saves the pointer. Also a
 **Fix:** Pass `out_buf, out_sz` (mirrors `cfg_state_str`); or
 title-case at config-section-table init.
 
-### 53. Hand-rolled ASCII title-case in render-time hot path
+### 53. Hand-rolled ASCII title-case in render-time hot path (Tier C — deferred)
 
 **Where:** `src/ui/app/menu_bar.c:313-323`
 
@@ -916,7 +911,7 @@ the UI layer when it could live next to
 **Fix:** Pre-compute display labels once in `glr_config.c`
 (or expose `glr_config_section_display_label`); UI just renders.
 
-### 54. `repl_code_panel_newline_rows` is misnamed
+### 54. `repl_code_panel_newline_rows` is misnamed (Tier C — deferred)
 
 **Where:** `src/ui/app/repl_code_panel.c:294-304`
 
@@ -928,7 +923,7 @@ not a "newline."
 or split into `_trailing_input_rows` / `_trailing_placeholder_rows`
 + thin selector.
 
-### 55. `ui_panels_render_scene_status` has two ~45-line near-identical bar blocks
+### 55. `ui_panels_render_scene_status` has two ~45-line near-identical bar blocks (Tier C — deferred)
 
 **Where:** `src/ui/app/panels.c:49-92` (rename modal) and L98-151
 (file prompt). The amber/red status banner at L157-244 shares the
@@ -941,7 +936,7 @@ message format and msg buffer size differ.
 **Fix:** Extract
 `draw_scene_status_strip(snap, bg, rule, fg, msg, max_msg_chars)`.
 
-### 56. `STATIC_ASSERT` missing on tutorial-fade segment count
+### 56. `STATIC_ASSERT` missing on tutorial-fade segment count (done in original closeout)
 
 **Where:** `src/ui/app/repl_code_panel.c:720-737`
 
@@ -954,7 +949,7 @@ corrupt the fade.
 **Fix:** `STATIC_ASSERT(TUTORIAL_FADE_SETTLE_CHARS + 3 <=
 UI_TEXT_PANEL_MAX_COLOR_SEGMENTS, …)`.
 
-### 57. Defensive `if (!snap)` after `init_builder` already validated it
+### 57. Defensive `if (!snap)` after `init_builder` already validated it (done in original closeout)
 
 **Where:** `src/ui/app/repl_code_panel.c:1144, 646, 1080, 612, 600`
 
@@ -964,7 +959,7 @@ builder. The duplicate guards exist on every helper.
 
 **Fix:** Drop the redundant guards; keep only `init_builder`'s.
 
-### 58. `(int)strlen(text)` repeated for the same row text within a frame
+### 58. `(int)strlen(text)` repeated for the same row text within a frame (Tier C — deferred)
 
 **Where:** `src/ui/app/repl_code_panel.c:690, 1118-1119, 1543, 1549,
 1555`
@@ -976,7 +971,7 @@ virtual-row build, statusbar layout. `UiTextPanelRow` could cache
 **Fix:** Precompute `text_len` inside `repl_code_panel_push_row`
 (or the segment-emit helpers).
 
-### 59. `ui_state_status_set` writes empty strings; only `repl_set_status` filters them
+### 59. `ui_state_status_set` writes empty strings; only `repl_set_status` filters them (done in original closeout)
 
 **Where:** `src/ui/app/state.c:58-66` vs. `src/repl/core.c:91-94`
 
@@ -988,7 +983,7 @@ produces a visible-but-empty banner.
 **Fix:** Pull the empty-message guard into
 `ui_state_status_set_kind`.
 
-### 60. Duplicate static `code_panel_layout_mode` helper (acknowledged in comment)
+### 60. Duplicate static `code_panel_layout_mode` helper (acknowledged in comment) (done in original closeout)
 
 **Where:** `src/ui/app/variable_panel.c:36-44` vs.
 `src/ui/core/layout.c:15-21`
@@ -1001,7 +996,7 @@ a shared header is a separate cleanup."
 **Fix:** Promote `ui_layout_code_panel_layout_mode` to
 `ui/core/layout.h`; delete `rvp_code_panel_layout_mode`.
 
-### 61. `tabbed_overlay.c:223` uses raw literal `14` where `MENU_TEXT_INSET_X` exists
+### 61. `tabbed_overlay.c:223` uses raw literal `14` where `MENU_TEXT_INSET_X` exists (done in original closeout)
 
 **Where:** `src/ui/core/tabbed_overlay.c:223`
 
@@ -1010,7 +1005,7 @@ named constant used at L160 of the same file.
 
 **Fix:** `int tx = hx + MENU_TEXT_INSET_X;`.
 
-### 62. `text_panel.c:832-835` over-indented block
+### 62. `text_panel.c:832-835` over-indented block (done in original closeout)
 
 **Where:** `src/ui/core/text_panel.c:832-835`
 
@@ -1020,7 +1015,7 @@ block above (12 spaces vs. 15).
 **Fix:** Re-indent. Cosmetic, but a hint that the file isn't being
 auto-formatted under the purity guard.
 
-### 63. `text_panel_row_layout` called 5× across `_input_row`, `_regular_row`, `_row_wrap_count`
+### 63. `text_panel_row_layout` called 5× across `_input_row`, `_regular_row`, `_row_wrap_count` (Tier C — deferred)
 
 **Where:** `src/ui/core/text_panel.c` (lines 638 vs. 645 inside
 `text_panel_row_wrap_count` declare it twice in the same function
