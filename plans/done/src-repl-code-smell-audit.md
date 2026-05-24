@@ -9,6 +9,81 @@
 > verbatim data). Tests under `tests/` were read where they document a
 > contract, but not audited.
 
+## Backlog closeout (2026-05-24)
+
+The original audit's afternoon + one-week passes shipped on the dates
+shown below. A follow-up review on 2026-05-24 sorted the remaining
+unimplemented items into action tiers (see *Tier system* below);
+**Tiers A and B landed in commits `f5d0c50` / `cbe73d2` / `17a574b` /
+`783d7e3`** on branch `audit-tier-ab-cleanup`. Verified clean against
+`make check-c99` and `make test-stubs` (45/45 binaries, 6815/6815
+tests).
+
+Status by finding:
+
+- **🔴 Bugs:** all 11 (#1–#11) done in the original passes.
+- **🟡 Drift hazards:** all 12 (#12–#23) done.
+- **🟢 Dead code:** all 12 (#24–#35) done.
+- **🔵 Structural:** #36 already done before the audit ran (the
+  declared mutator had moved to `state_owners.h`); #37, #38 done in
+  the original passes; **#41 + #42 + #43 + #45 + #46 done in the
+  closeout** (Tier A/B — see below); **#39, #40 deferred** (high cost,
+  marked Out of scope); **#44 done in the closeout** (Tier B).
+
+### Tier system
+
+Used during the 2026-05-24 backlog review to triage what was left:
+
+- **Tier A — small, real fix, near-zero risk.** 5–30 line changes
+  with no architectural exposure. Always worth doing once they're
+  identified; no reason to defer.
+- **Tier B — moderate effort, clear value.** 50–200 line changes,
+  one or two files of churn, a real test impact. Worth doing when
+  next in the area, or as a focused pass.
+- **Tier C — defer (high cost, low payoff).** Real wins but touch
+  a wide surface; the audit's own "Out of scope" cluster lives here.
+  Revisit if the surrounding code is being reworked anyway.
+- **Tier D — keep deferred.** Findings the audit landed wrong, or
+  where the original intent (a kept-on-purpose trampoline, a
+  test-pinned bug) makes "fixing" them worse than living with them.
+
+### Findings by tier
+
+- **Tier A (done — commit `f5d0c50`):**
+  - **#42** — Add `GLCmd.var_idx`, stop overloading `num_args` for
+    `CMD_VAR_ASSIGN`. Closes a documented foot-gun.
+  - **#43** — Add `display_name` to `ReplCommandTypeSpec`; replace
+    the 14-case `cmd_display_name_for_begin_error` switch.
+  - **#45** — Rename `repl_state_mark_normals_dirty` →
+    `_mark_source_dirty` (and the `repl_mark_*` wrapper). The
+    function invalidates more than normals; the new name says so.
+  - **#46** — Move `repl_copy_predef_values` / `_restore_predef_values`
+    from `executor.c` to `eval.c` (executor never touched them).
+- **Tier B (done — commits `cbe73d2` and `17a574b`):**
+  - **#41** — Build `func_def_idx[REPL_FUNC_SLOT_COUNT]` once per
+    flatten so CMD_CALL handlers index directly instead of scanning
+    `source_cmds[]` per call. (`cbe73d2`)
+  - **#44** — Embed `ReplExportConfig cfg` in `UserScene`; fold
+    `g_pre_example_cfg`/`g_pre_example_valid` into one wrapped struct.
+    Kills the parallel-array invariant. (`17a574b`)
+- **Tier C (deferred — explicitly marked Out of scope in the
+  Sequencing section):**
+  - **#39** — `parse_command` extraction (870-line function).
+  - **#40** — `flatten_range` extraction (380-line god-function).
+- **Tier D:** none from this audit (the equivalent in
+  `src-ui-code-smell-audit.md` is #37, kept as a deliberate
+  namespace-boundary marker).
+- **Already done before the audit ran:**
+  - **#36** — `repl_state_document_reset` is in `state_owners.h:36`,
+    not `state_views.h`.
+
+The 🔵 cluster's outstanding work was always small enough to fit in
+a one-afternoon pass; the audit just hadn't gotten around to it. The
+"out of scope" Tier C entries remain real wins for the day someone
+opens the relevant files for unrelated work — both `parse_command`
+and `flatten_range` would shed ~200-400 lines under a per-handler
+extraction.
+
 ## How to read this
 
 Findings are grouped by severity, not by file:
@@ -522,7 +597,7 @@ table-driven path.
 
 ## 🔵 Structural / boundary concerns
 
-### 36. `state_views.h` declares a mutator
+### 36. `state_views.h` declares a mutator (already done before audit)
 
 **Where:** `src/repl/state_views.h:159`
 
@@ -574,7 +649,7 @@ heaviest file in the directory. Moving them out drops `export.c` by
 **Fix:** Move to a new `src/repl/text_helpers.c` (or merge into
 `parser.c`).
 
-### 39. `parse_command` is 870 lines mixing parsing, validation, formatting, and clamping
+### 39. `parse_command` is 870 lines mixing parsing, validation, formatting, and clamping (Tier C — deferred)
 
 **Where:** `src/repl/parser.c:250-1121`
 
@@ -591,7 +666,7 @@ sub-bugs of this.
 with a uniform `(line, args, cmd, text_out, text_sz, ctx) → int`
 signature.
 
-### 40. `flatten_range` is a 380-line god-function
+### 40. `flatten_range` is a 380-line god-function (Tier C — deferred)
 
 **Where:** `src/repl/flatten.c:198-576`
 
@@ -604,7 +679,7 @@ Three near-identical re-parse branches at L517-572 differ only in
 `flatten_if`) and a `flatten_reparse_line()` for the tail; let the
 loop be a dispatch table.
 
-### 41. Linear `CMD_FUNC_DEF` lookup per `CMD_CALL`
+### 41. Linear `CMD_FUNC_DEF` lookup per `CMD_CALL` (done — Tier B, commit `cbe73d2`)
 
 **Where:** `src/repl/flatten.c:294-352`
 
@@ -615,7 +690,7 @@ unrolled iterations × M source cmds, that's K*N*M scans per frame.
 **Fix:** Build a `func_def_idx[REPL_FUNC_SLOT_COUNT]` lookup once per
 flatten.
 
-### 42. `GLCmd.num_args` is overloaded for `CMD_VAR_ASSIGN`
+### 42. `GLCmd.num_args` is overloaded for `CMD_VAR_ASSIGN` (done — Tier A, commit `f5d0c50`)
 
 **Where:** `src/repl/flatten.c:422`, `src/repl/executor.c:695`;
 `src/repl/command.h:93` documents it as an exception.
@@ -626,7 +701,7 @@ arg-count assertions to the executor will silently corrupt VAR_ASSIGN.
 
 **Fix:** Add a dedicated `GLCmd.var_idx` field (or tagged union).
 
-### 43. `cmd_display_name_for_begin_error` is a manual switch parallel to the spec tables
+### 43. `cmd_display_name_for_begin_error` is a manual switch parallel to the spec tables (done — Tier A, commit `f5d0c50`)
 
 **Where:** `src/repl/parser.c:1127-1147`
 
@@ -640,7 +715,7 @@ identifier.
 **Fix:** Add a `display_name` field to `ReplCommandTypeSpec` or
 reverse-lookup the spec tables by type.
 
-### 44. Per-slot cfg storage parallel to user-scene array
+### 44. Per-slot cfg storage parallel to user-scene array (done — Tier B, commit `17a574b`)
 
 **Where:** `src/repl/scenes.c:81-92`
 
@@ -654,7 +729,7 @@ convention-only (today, one call site: L815-816). Same for
 roll `g_pre_example_valid` into a discriminator field on
 `ReplExportConfig`.
 
-### 45. Hidden cache-coupling: depth invalidation rides on `mark_normals_dirty`
+### 45. Hidden cache-coupling: depth invalidation rides on `mark_normals_dirty` (done — Tier A, commit `f5d0c50`)
 
 **Where:** `src/repl/state.c:367-371`
 
@@ -673,7 +748,7 @@ answers.
 wire `command_store_invalidate_after_mutation` directly so the
 dependency is explicit.
 
-### 46. `repl_copy_predef_values` / `_restore_predef_values` live in `executor.c` but never called by it
+### 46. `repl_copy_predef_values` / `_restore_predef_values` live in `executor.c` but never called by it (done — Tier A, commit `f5d0c50`)
 
 **Where:** `src/repl/executor.c:177-197`
 
@@ -734,7 +809,9 @@ That's ~7 small commits, all with focused scope.
 - `parse_command` extraction (#39) and `flatten_range` extraction (#40)
   are real wins but touch a wide surface and every new command spec
   landed since the last refactor has copy-pasted into them. High cost
-  per finding compared to the rest of the list.
+  per finding compared to the rest of the list. (Sorted into **Tier C**
+  by the 2026-05-24 backlog review — see the closeout at the top of
+  this file.)
 
 ## Method note
 
