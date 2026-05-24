@@ -14,7 +14,7 @@
 
 #include "config.h"          /* REPL_STATUS_TEXT_MAX */
 
-/* Code-panel render chrome: panel divider, cursor blink, and per-frame mirrors
+/* Code-panel render chrome: panel divider and per-frame mirrors
  * of the presentation flags renderers need.
  *
  * `layout_mode` and `show_vertex_indices` are per-frame mirrors of

@@ -199,7 +199,6 @@ static void update_selected_autocomplete_preview(void) {
 
     if (g_ac_mode == AC_MODE_FUNC_PREFIX) {
         const char *after = NULL;
-        const char *params[MAX_EXPR_VARS];
         char param_storage[MAX_EXPR_VARS][16];
         int param_count = 0;
 
