@@ -350,6 +350,48 @@ int main(void) {
         ASSERT_INT("delete clears anchor", editor_input_anchor(), -1);
     }
 
+    /* Audit #7: with no selection, Backspace deletes the character to
+     * the LEFT of the cursor (cursor moves back); Delete deletes the
+     * character UNDER the cursor (cursor stays). The two used to
+     * collapse to delete-left until edit_op_buffer_delete_right_of_cursor
+     * landed. */
+    printf("\n--- backspace deletes left of cursor (no selection) ---\n");
+    {
+        editor_state_reset();
+        load_input("abcde");
+        editor_cursor_pos_set(3);     /* cursor between c and d */
+
+        editor_handle_key(KEY_BACKSPACE, 0, 0);
+        ASSERT_STR("backspace removed char before cursor",
+                   editor_input_text(), "abde");
+        ASSERT_INT("backspace cursor moved left", editor_cursor_pos(), 2);
+    }
+
+    printf("\n--- delete deletes right of cursor (no selection) ---\n");
+    {
+        editor_state_reset();
+        load_input("abcde");
+        editor_cursor_pos_set(2);     /* cursor between b and c */
+
+        editor_handle_key(KEY_DELETE, 0, 0);
+        ASSERT_STR("delete removed char under cursor",
+                   editor_input_text(), "abde");
+        ASSERT_INT("delete left cursor in place", editor_cursor_pos(), 2);
+    }
+
+    printf("\n--- delete at end-of-buffer is no-op ---\n");
+    {
+        editor_state_reset();
+        load_input("xyz");
+        editor_cursor_pos_set(3);     /* cursor at end */
+
+        editor_handle_key(KEY_DELETE, 0, 0);
+        ASSERT_STR("delete at EOL leaves text unchanged",
+                   editor_input_text(), "xyz");
+        ASSERT_INT("delete at EOL leaves cursor unchanged",
+                   editor_cursor_pos(), 3);
+    }
+
     printf("\n--- semicolon commits, anchor clears, no delete ---\n");
     {
         editor_state_reset();
