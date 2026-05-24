@@ -1906,3 +1906,41 @@ int ui_repl_code_panel_input_row_has_color_swatch(
     }
     return 0;
 }
+
+/* Test-only: clear the render→hit-test row builder cache. Lets a test
+ * exercise the cache from a known-empty initial state so a regression
+ * that fails to refresh the cache becomes observable. */
+void ui_repl_code_panel_invalidate_row_cache_for_test(void) {
+    g_builder_cache.valid = 0;
+    g_builder_cache.snap  = NULL;
+}
+
+/* Test-only: after a render or hit-test populates the row builder,
+ * return the left-marker color for the row representing `source_line_idx`.
+ * Returns 1 if a row was found and `out_rgba`/`out_active` were written;
+ * 0 if no matching row exists. Used by the marker-priority cascade
+ * regression test in tests/test_ui.c. */
+int ui_repl_code_panel_row_marker_for_test(int source_line_idx,
+                                           int *out_active,
+                                           float out_rgba[4]) {
+    if (!g_builder_cache.valid)
+        return 0;
+    for (int i = 0; i < g_builder_cache.builder.text_snap.row_count; i++) {
+        const UiTextPanelRow *row = &g_repl_code_panel_rows[i];
+        if (row->source_line_idx != source_line_idx)
+            continue;
+        if (row->kind != UI_TEXT_PANEL_ROW_TEXT &&
+            row->kind != UI_TEXT_PANEL_ROW_INPUT)
+            continue;
+        if (out_active)
+            *out_active = row->left_marker_active;
+        if (out_rgba) {
+            out_rgba[0] = row->left_marker_color.r;
+            out_rgba[1] = row->left_marker_color.g;
+            out_rgba[2] = row->left_marker_color.b;
+            out_rgba[3] = row->left_marker_color.a;
+        }
+        return 1;
+    }
+    return 0;
+}

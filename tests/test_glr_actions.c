@@ -639,6 +639,45 @@ static void test_cfg_cycle_stops_replay(void) {
                replay_active(), 0);
 }
 
+/* Audit #59 (Tier B, closeout) regression: ui_state_status_set_kind must
+ * drop empty messages, not stamp them with full TTL. Without this guard
+ * a stray repl_set_status("") (or any caller passing "") would overwrite
+ * the live amber banner with a blank rect held for REPL_STATUS_MESSAGE_TTL
+ * ticks. Reverting the early-return would silently regress because no
+ * caller asserts on the banner contents after an empty set. */
+static void test_status_set_drops_empty_message(void) {
+    UiStatusState *status;
+
+    glr_app_reset_all();
+    status = ui_state_status_mut();
+
+    /* Baseline: seed a real INFO message. */
+    ui_state_status_set("real message");
+    ASSERT_STR("seeded text", status->text, "real message");
+    ASSERT_TRUE("seeded ttl positive", status->ttl > 0);
+    ASSERT_INT("seeded kind INFO", status->kind, UI_STATUS_INFO);
+
+    /* Empty set must not stamp; text and ttl unchanged. */
+    int prior_ttl = status->ttl;
+    ui_state_status_set("");
+    ASSERT_STR("empty INFO does not overwrite text", status->text, "real message");
+    ASSERT_INT("empty INFO leaves ttl unchanged", status->ttl, prior_ttl);
+
+    /* Symmetric for ERROR: previously-set message survives an empty error. */
+    ui_state_status_set_error("oops");
+    ASSERT_STR("error text seeded", status->text, "oops");
+    ASSERT_INT("error kind ERROR", status->kind, UI_STATUS_ERROR);
+    prior_ttl = status->ttl;
+    ui_state_status_set_error("");
+    ASSERT_STR("empty ERROR does not overwrite text", status->text, "oops");
+    ASSERT_INT("empty ERROR leaves ttl unchanged", status->ttl, prior_ttl);
+    ASSERT_INT("empty ERROR leaves kind unchanged", status->kind, UI_STATUS_ERROR);
+
+    /* NULL is also a no-op (the function's outer guard). */
+    ui_state_status_set(NULL);
+    ASSERT_STR("NULL message does not overwrite text", status->text, "oops");
+}
+
 int main(void) {
     test_apply_defaults();
     test_cursor_actions();
@@ -654,6 +693,7 @@ int main(void) {
     test_audio_config_direct_set();
     test_menu_out_of_range_indices();
     test_cfg_cycle_stops_replay();
+    test_status_set_drops_empty_message();
 
     return test_harness_report(&g_harness, "test_repl_actions");
 }

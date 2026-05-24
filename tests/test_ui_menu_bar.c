@@ -490,6 +490,56 @@ static void test_config_submenu_with_stubs(void) {
     }
 }
 
+/* Audit #3 (Bug, fd70b4e) regression: ui_menu_bar_render_example_dropdown
+ * must be free of side-effects on g_menu_item_hover / g_submenu_*. The
+ * pre-fix code called ui_menu_bar_update_pointer_hover() from inside the
+ * render path, double-mutating hover state with whatever the snapshot's
+ * pointer.{mouse_x,mouse_y} happened to be. Probe by seeding hover at A,
+ * rendering with snap.pointer at a different point B, then re-seeding at
+ * A — the return value (changed?) is the observable signal. */
+static void test_render_does_not_mutate_hover(void) {
+    UiRenderSnapshot snap;
+    int item_a_mx = -1, item_a_my = -1;
+    int item_b_mx = -1, item_b_my = -1;
+    int reseed_changed;
+
+    reset_menu_bar_fixture(1000, 600);
+    make_test_ui_snapshot(&snap);
+
+    /* Pick two distinct dropdown items so seed-A vs render-pointer-B
+     * cannot accidentally coincide. */
+    ASSERT_TRUE("found file item A point",
+                find_dropdown_item_point(GLR_MENU_FILE, GLR_FILE_ITEM_NEW_SCENE,
+                                         &item_a_mx, &item_a_my));
+    ASSERT_TRUE("found file item B point",
+                find_dropdown_item_point(GLR_MENU_FILE, GLR_FILE_ITEM_SAVE_SCENE,
+                                         &item_b_mx, &item_b_my));
+    ASSERT_TRUE("A and B distinct rows",
+                item_a_my != item_b_my);
+
+    /* Seed: hover at A. First call changes state (returns 1); second is
+     * stable (returns 0). */
+    ASSERT_TRUE("seed hover at A returns changed",
+                ui_menu_bar_update_pointer_hover(item_a_mx, item_a_my,
+                                                  snap.anim_time));
+    ASSERT_TRUE("re-seed at A returns unchanged",
+                !ui_menu_bar_update_pointer_hover(item_a_mx, item_a_my,
+                                                   snap.anim_time));
+
+    /* Render with snap.pointer pointing at B. A pure render leaves
+     * hover at A; a mutating render writes hover=B. */
+    snap.pointer.mouse_x = item_b_mx;
+    snap.pointer.mouse_y = item_b_my;
+    ui_menu_bar_render_example_dropdown(&snap);
+
+    /* Re-seed at A. If render kept hover at A, this returns 0 (no
+     * change). If render mutated to B, going B→A returns 1. */
+    reseed_changed = ui_menu_bar_update_pointer_hover(item_a_mx, item_a_my,
+                                                       snap.anim_time);
+    ASSERT_TRUE("render did not mutate hover (re-seed unchanged)",
+                !reseed_changed);
+}
+
 static void test_render_paths_with_stubs(void) {
     UiRenderSnapshot snap;
     int item_mx = -1;
@@ -636,6 +686,66 @@ static void test_dropdown_geometry_pinned(void) {
                 sh >= count * LINE_H);
 }
 
+/* Audit #50/#51 (Tier C) cache-correctness regression: the menu dropdown
+ * rect is now cached keyed on (open_menu, window_size). Verify the cache
+ * returns stable values within the same open menu, and invalidates when
+ * the window size changes. The pre-cache test only asserted shape (>0).
+ * Cache regressions would silently serve stale rects after resize. */
+static void test_dropdown_geometry_cache_invariants(void) {
+    int sx_a1, sy_a1, sw_a1, sh_a1;
+    int sx_a2, sy_a2, sw_a2, sh_a2;
+    int sx_a3, sy_a3, sw_a3, sh_a3;
+    int parent_mx = -1, parent_my = -1;
+    int start = 0, count = 0;
+
+    reset_menu_bar_fixture(1000, 600);
+
+    /* Open Config + hover section 0 to open its flyout. */
+    ASSERT_TRUE("Config section-0 parent point found (1000x600)",
+                find_dropdown_item_point(GLR_MENU_CONFIG, 0,
+                                         &parent_mx, &parent_my));
+    ASSERT_TRUE("Config section hover opens flyout (1000x600)",
+                ui_menu_bar_update_pointer_hover(parent_mx, parent_my, 0.0f));
+    ASSERT_TRUE("flyout rect (1000x600)",
+                ui_menu_bar_submenu_rect_for_test(GLR_MENU_CONFIG, 0,
+                                                  &sx_a1, &sy_a1, &sw_a1, &sh_a1));
+
+    /* Tight pin: flyout height equals section's item count × LINE_H plus
+     * the dropdown padding constants. Use the exact value the cache
+     * returns the first time so a stale-cache regression would surface
+     * a mismatch on subsequent calls. */
+    ASSERT_TRUE("section 0 range resolves",
+                glr_config_section_range(0, &start, &count) && count > 0);
+
+    /* Second call: cache hit should return identical rect. */
+    ASSERT_TRUE("flyout rect (1000x600) second call",
+                ui_menu_bar_submenu_rect_for_test(GLR_MENU_CONFIG, 0,
+                                                  &sx_a2, &sy_a2, &sw_a2, &sh_a2));
+    ASSERT_INT_EQ("flyout x stable across calls", sx_a2, sx_a1);
+    ASSERT_INT_EQ("flyout y stable across calls", sy_a2, sy_a1);
+    ASSERT_INT_EQ("flyout w stable across calls", sw_a2, sw_a1);
+    ASSERT_INT_EQ("flyout h stable across calls", sh_a2, sh_a1);
+
+    /* Resize window: dropdown_rect cache is keyed on (menu, win_w, win_h)
+     * and submenu_rect's geometry derives from the dropdown rect's x/y.
+     * A regression that ignores the window-size key would serve A1's
+     * rect even at 600x400, so y (top-anchored from win_h) would not
+     * match the new viewport. */
+    ui_state_viewport_set_size(600, 400);
+    /* Re-hover at the new (rebuilt) parent point so the cache refreshes
+     * its parent-row mapping under the new viewport. */
+    ASSERT_TRUE("Config section-0 parent point found (600x400)",
+                find_dropdown_item_point(GLR_MENU_CONFIG, 0,
+                                         &parent_mx, &parent_my));
+    ASSERT_TRUE("Config section hover opens flyout (600x400)",
+                ui_menu_bar_update_pointer_hover(parent_mx, parent_my, 0.0f));
+    ASSERT_TRUE("flyout rect (600x400)",
+                ui_menu_bar_submenu_rect_for_test(GLR_MENU_CONFIG, 0,
+                                                  &sx_a3, &sy_a3, &sw_a3, &sh_a3));
+    ASSERT_TRUE("flyout y differs after window resize",
+                sy_a3 != sy_a1);
+}
+
 /* #47 regression: pin that Scene tag rows (hover-only) stay inert when
  * activated, and that clicks inside an open dropdown on non-actionable
  * regions don't fall through. This guards the two UI_HIT_CODE_PANEL_CHROME
@@ -730,12 +840,14 @@ int main(void) {
 #ifdef GL_STUBS
     test_msaa_label_dynamic();
     test_dropdown_geometry_pinned();
+    test_dropdown_geometry_cache_invariants();
     test_dropdown_inert_chrome_hit();
 #endif
     test_unified_hit_test();
 #ifdef GL_STUBS
     test_scene_submenu_with_stubs();
     test_config_submenu_with_stubs();
+    test_render_does_not_mutate_hover();
     test_render_paths_with_stubs();
 #endif
 

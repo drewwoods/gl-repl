@@ -1175,6 +1175,207 @@ static void test_tutorial_fade_handles_wrapped_lines(void) {
                 fading_alpha_calls > 0);
 }
 
+/* Audit #49 (Tier C, commit f9abd33) regression: ui_repl_code_panel_hit_test
+ * caches the row builder from the prior ui_repl_code_panel_render_with_chrome
+ * call, keyed on the snapshot pointer. A stale cache (or a cache that
+ * doesn't refresh after the document mutates) would silently miss-route
+ * clicks. Sweep clicks across the panel after render(A), record which
+ * source lines are hit-testable, then add a new line + re-render + re-sweep
+ * — the new line must be hit-testable (proves the cache refreshed). */
+static int hit_lines_bitmap(const UiRenderSnapshot *snap, int mx) {
+    int found_mask = 0;
+    for (int my = 0; my < ui_state_viewport().window_h; my++) {
+        UiHit h = ui_repl_code_panel_hit_test(snap, mx, my);
+        if (h.kind == UI_HIT_CODE_TEXT && h.line_idx >= 0 && h.line_idx < 16)
+            found_mask |= (1 << h.line_idx);
+    }
+    return found_mask;
+}
+
+static void test_render_then_hit_test_row_consistency(void) {
+    UiRenderSnapshot snap;
+    int mx, my;
+    int mask_a, mask_b;
+
+    glr_app_reset_all();
+    ui_state_viewport_set_size(800, 600);
+    glr_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
+    glr_ctrl_sync_ui_chrome();
+    ui_state_code_panel_mut()->panel_frac = 0.45f;
+    editor_scroll_follow_cursor_set(0);
+    /* Force the row builder cache empty so render(A) is the first call
+     * that populates it — without this, prior tests may leave
+     * g_builder_cache.snap pointing at a stale stack address that
+     * happens to mismatch &snap, causing every hit-test below to take
+     * the rebuild path instead of exercising the cache. */
+    ui_repl_code_panel_invalidate_row_cache_for_test();
+
+    /* State A: two short source lines. Few rows means the cache from A
+     * leaves later row indices unreachable if it doesn't refresh on
+     * render B. */
+    editor_feed_line("glBegin(GL_POINTS);");
+    editor_feed_line("glEnd();");
+
+    /* Use the existing helper to find a known text-row click; that sets
+     * editor_scroll to skip chrome and returns mx in the text column. */
+    code_panel_first_row_text_click(&mx, &my);
+    (void)my;
+
+    /* Render populates the row builder cache for &snap. */
+    make_test_ui_snapshot(&snap);
+    ui_repl_code_panel_render_with_chrome(&snap, NULL);
+
+    /* Hit-test sweeps reach the same builder via the cache. Both source
+     * lines (0, 1) must appear. */
+    mask_a = hit_lines_bitmap(&snap, mx);
+    ASSERT_TRUE("render-then-hit-test: line 0 hit-testable after A",
+                (mask_a & (1 << 0)) != 0);
+    ASSERT_TRUE("render-then-hit-test: line 1 hit-testable after A",
+                (mask_a & (1 << 1)) != 0);
+
+    /* State B: insert several new source lines between the existing
+     * ones so the total row count grows by enough that a stale cache
+     * (row_count frozen at A's value) would miss the later lines. */
+    editor_navigate_to_line(1);
+    editor_feed_line("glColor3f(0.2, 0.4, 0.6);");
+    editor_feed_line("glVertex3f(0, 0, 0);");
+    editor_feed_line("glVertex3f(1, 0, 0);");
+    editor_feed_line("glVertex3f(0, 1, 0);");
+    editor_feed_line("glVertex3f(0, 0, 1);");
+    editor_feed_line("glVertex3f(1, 1, 0);");
+    editor_feed_line("glVertex3f(0, 1, 1);");
+    editor_feed_line("glColor3f(0.9, 0.1, 0.1);");
+
+    /* Reuse the same `snap` variable so the cache compares the same
+     * pointer — render must overwrite the cache with B's larger row
+     * set or hit-test will miss the later rows. */
+    make_test_ui_snapshot(&snap);
+    ui_repl_code_panel_render_with_chrome(&snap, NULL);
+
+    /* The newly-inserted source lines occupy indices 1..8. If the
+     * cache is stale (row_count frozen at A's count, which was 2
+     * source + chrome), hit-test won't walk rows past that count and
+     * the later lines (say line 8) will not appear. */
+    mask_b = hit_lines_bitmap(&snap, mx);
+    ASSERT_TRUE("render-then-hit-test: last new line hit-testable after B",
+                (mask_b & (1 << 8)) != 0);
+    ASSERT_TRUE("render-then-hit-test: middle new line hit-testable after B",
+                (mask_b & (1 << 5)) != 0);
+}
+
+/* Audit #6 (Bug, fd70b4e) regression: the gutter left-marker color used to
+ * depend on the silent ORDER of `if (highlight_*) marker = color;` blocks.
+ * The fix introduced an explicit MarkerPriority enum
+ * (TUTORIAL_INSERTION > FEEDING_COLOR > FEEDING_NORMAL > REPLAY). Walk
+ * the priority matrix: for each pair of overlapping signals on the same
+ * line, the marker color must match the higher-priority signal. A revert
+ * to assignment-order would silently flip pairs and break this. */
+static int rgba_eq(const float a[4], float r, float g, float b, float al) {
+    const float eps = 1e-3f;
+    return (a[0] > r - eps && a[0] < r + eps) &&
+           (a[1] > g - eps && a[1] < g + eps) &&
+           (a[2] > b - eps && a[2] < b + eps) &&
+           (a[3] > al - eps && a[3] < al + eps);
+}
+
+static void marker_for_line(int source_line_idx, int *active, float rgba[4]) {
+    UiRenderSnapshot snap;
+    ui_repl_code_panel_invalidate_row_cache_for_test();
+    make_test_ui_snapshot(&snap);
+    ui_repl_code_panel_render_with_chrome(&snap, NULL);
+    *active = 0;
+    ui_repl_code_panel_row_marker_for_test(source_line_idx, active, rgba);
+}
+
+static void test_marker_priority_cascade(void) {
+    int active;
+    float rgba[4];
+
+    /* The four marker colors from repl_code_panel_apply_command_overlays. */
+    const float c_replay[4]    = {0.20f, 0.90f, 0.30f, 0.85f};
+    const float c_normal[4]    = {0.40f, 0.80f, 0.95f, 0.85f};
+    const float c_color[4]     = {0.95f, 0.85f, 0.30f, 0.85f};
+    const float c_tutorial[4]  = {0.95f, 0.45f, 0.85f, 0.90f};
+
+    glr_app_reset_all();
+    ui_state_viewport_set_size(800, 600);
+    glr_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
+    glr_ctrl_sync_ui_chrome();
+    ui_state_code_panel_mut()->panel_frac = 0.45f;
+    editor_scroll_follow_cursor_set(0);
+    editor_feed_line("glBegin(GL_POINTS);");
+    editor_feed_line("glColor3f(1, 0, 0);");
+    editor_feed_line("glEnd();");
+
+    /* Each sub-case clears highlights, sets exactly the signals under
+     * test, renders, and asserts the resulting marker color. */
+
+    /* REPLAY alone → green marker. */
+    editor_state_highlights_clear();
+    replay_state_mut()->active = 1;
+    replay_state_mut()->src_line_idx = 1;
+    marker_for_line(1, &active, rgba);
+    ASSERT_TRUE("REPLAY alone: marker active", active);
+    ASSERT_TRUE("REPLAY alone: green color",
+                rgba_eq(rgba, c_replay[0], c_replay[1], c_replay[2], c_replay[3]));
+
+    /* REPLAY + FEEDING_NORMAL → blue (NORMAL wins over REPLAY). */
+    editor_state_highlights_clear();
+    editor_state_highlights_append(1, -1, -1, HIGHLIGHT_FEEDING_NORMAL);
+    replay_state_mut()->active = 1;
+    replay_state_mut()->src_line_idx = 1;
+    marker_for_line(1, &active, rgba);
+    ASSERT_TRUE("REPLAY+NORMAL: marker active", active);
+    ASSERT_TRUE("REPLAY+NORMAL: NORMAL wins (blue)",
+                rgba_eq(rgba, c_normal[0], c_normal[1], c_normal[2], c_normal[3]));
+
+    /* REPLAY + FEEDING_COLOR → yellow (COLOR wins). NORMAL is
+     * exclusive-or with COLOR in apply_command_overlays (an
+     * `else if`), so we set COLOR alone here. */
+    editor_state_highlights_clear();
+    editor_state_highlights_append(1, -1, -1, HIGHLIGHT_FEEDING_COLOR);
+    replay_state_mut()->active = 1;
+    replay_state_mut()->src_line_idx = 1;
+    marker_for_line(1, &active, rgba);
+    ASSERT_TRUE("REPLAY+COLOR: marker active", active);
+    ASSERT_TRUE("REPLAY+COLOR: COLOR wins (yellow)",
+                rgba_eq(rgba, c_color[0], c_color[1], c_color[2], c_color[3]));
+
+    /* All three (REPLAY + COLOR + TUTORIAL_INSERTION) → pink. */
+    editor_state_highlights_clear();
+    editor_state_highlights_append(1, -1, -1, HIGHLIGHT_FEEDING_COLOR);
+    editor_state_highlights_append(1, -1, -1, HIGHLIGHT_TUTORIAL_INSERTION);
+    replay_state_mut()->active = 1;
+    replay_state_mut()->src_line_idx = 1;
+    marker_for_line(1, &active, rgba);
+    ASSERT_TRUE("REPLAY+COLOR+TUTORIAL: marker active", active);
+    ASSERT_TRUE("REPLAY+COLOR+TUTORIAL: TUTORIAL wins (pink)",
+                rgba_eq(rgba, c_tutorial[0], c_tutorial[1], c_tutorial[2], c_tutorial[3]));
+
+    /* TUTORIAL alone (no REPLAY/FEEDING) → pink. Confirms tutorial wins
+     * even without lower-priority signals also being set. */
+    editor_state_highlights_clear();
+    editor_state_highlights_append(1, -1, -1, HIGHLIGHT_TUTORIAL_INSERTION);
+    replay_state_mut()->active = 0;
+    replay_state_mut()->src_line_idx = -1;
+    marker_for_line(1, &active, rgba);
+    ASSERT_TRUE("TUTORIAL alone: marker active", active);
+    ASSERT_TRUE("TUTORIAL alone: pink color",
+                rgba_eq(rgba, c_tutorial[0], c_tutorial[1], c_tutorial[2], c_tutorial[3]));
+
+    /* No signals → marker inactive. */
+    editor_state_highlights_clear();
+    replay_state_mut()->active = 0;
+    replay_state_mut()->src_line_idx = -1;
+    marker_for_line(1, &active, rgba);
+    ASSERT_TRUE("no signals: marker inactive", !active);
+
+    /* Reset for follow-on tests. */
+    editor_state_highlights_clear();
+    replay_state_mut()->active = 0;
+    replay_state_mut()->src_line_idx = -1;
+}
+
 int main(void) {
 #ifndef GL_STUBS
     printf("This test requires GL stubs (USE_GL_STUBS=1)\n");
@@ -1203,6 +1404,8 @@ int main(void) {
     test_vertex2f_gutter_labels();
     test_tutorial_fade_render_uses_per_char_path();
     test_tutorial_fade_handles_wrapped_lines();
+    test_render_then_hit_test_row_consistency();
+    test_marker_priority_cascade();
 
     printf("\nUI Tests: %d/%d passed\n", g_harness.passed, g_harness.run);
     return (g_harness.passed == g_harness.run) ? 0 : 1;

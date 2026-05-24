@@ -97,4 +97,17 @@ int  ui_repl_code_panel_input_row_y(const UiRenderSnapshot *snap,
 int  ui_repl_code_panel_input_row_has_color_swatch(
          const UiRenderSnapshot *snap);
 
+/* Test-only: clear the row builder cache shared by render and hit-test.
+ * Lets tests start from a deterministic empty cache so a regression that
+ * fails to refresh the cache after a snapshot change becomes observable. */
+void ui_repl_code_panel_invalidate_row_cache_for_test(void);
+
+/* Test-only: after a render call populates the row buffer, return the
+ * left-marker color of the row representing `source_line_idx`. Returns 1
+ * on hit (writing `out_active` / `out_rgba`), 0 if no matching row. Used
+ * by the marker-priority cascade regression test. */
+int ui_repl_code_panel_row_marker_for_test(int source_line_idx,
+                                           int *out_active,
+                                           float out_rgba[4]);
+
 #endif /* UI_REPL_CODE_PANEL_H */
