@@ -59,7 +59,7 @@ static void profile_panel_rect_for_height(const UiRenderSnapshot *snap, int pane
         panel_y = scene_y + scene_h - panel_h - PROF_PANEL_MARGIN;
     } else {
         int var_x, var_y, var_w, var_h;
-        ui_variable_panel_rect_for_count(snap->variable_panel_vars.count,
+        ui_variable_panel_rect_for_count(snap, snap->variable_panel_vars.count,
                                          &var_x, &var_y, &var_w, &var_h);
         panel_x = var_x + var_w - PROF_PANEL_W;
         panel_y = var_y;

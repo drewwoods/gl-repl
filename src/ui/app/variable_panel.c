@@ -96,8 +96,8 @@ static float val_to_slider_t(float val, float scale) {
 #define VAR_PANEL_LIFT_EASE 0.22f
 #define VAR_PANEL_LIFT_SNAP_PX 0.25f
 
-static float var_panel_replay_lift(void) {
-    return variable_panel_view().replay_lift_px;
+static float var_panel_replay_lift(const UiRenderSnapshot *snap) {
+    return snap ? snap->variable_panel.replay_lift_px : variable_panel_view().replay_lift_px;
 }
 
 static int ui_variable_panel_clamp_count(int var_count) {
@@ -109,7 +109,8 @@ static int ui_variable_panel_clamp_count(int var_count) {
 }
 
 /* Geometry in render coords (y=0 at bottom). */
-void ui_variable_panel_rect_for_count(int variable_count,
+void ui_variable_panel_rect_for_count(const UiRenderSnapshot *snap,
+                                      int variable_count,
                                       int *px, int *py,
                                       int *pw, int *ph) {
     int sc_x, sc_y, sc_w, sc_h;
@@ -124,7 +125,7 @@ void ui_variable_panel_rect_for_count(int variable_count,
     if (panel_x < sc_x + 4) panel_x = sc_x + 4;
 
     panel_y = sc_y + VAR_PANEL_BASE_Y + STATUSBAR_H
-            + (int)lroundf(var_panel_replay_lift());
+            + (int)lroundf(var_panel_replay_lift(snap));
     min_y = sc_y + STATUSBAR_H + 4;
     max_y = sc_y + sc_h - panel_h - 4;
     if (max_y >= min_y) {
@@ -143,11 +144,12 @@ void ui_variable_panel_rect_for_count(int variable_count,
 }
 
 /* Return 1 if GLUT screen coord (gx, gy) is in the panel; sets *out_row. */
-int ui_variable_panel_hit_for_count(int gx, int gy, int variable_count,
+int ui_variable_panel_hit_for_count(const UiRenderSnapshot *snap,
+                                    int gx, int gy, int variable_count,
                                     int *out_row) {
     int px, py, pw, ph;
     variable_count = ui_variable_panel_clamp_count(variable_count);
-    ui_variable_panel_rect_for_count(variable_count, &px, &py, &pw, &ph);
+    ui_variable_panel_rect_for_count(snap, variable_count, &px, &py, &pw, &ph);
     int ry = ui_state_viewport().window_h - gy;
     if (gx < px || gx >= px + pw || ry < py || ry >= py + ph) return 0;
     int inner_top = py + ph - VAR_PANEL_PAD - VAR_TITLE_H;
@@ -157,16 +159,16 @@ int ui_variable_panel_hit_for_count(int gx, int gy, int variable_count,
     return 1;
 }
 
-UiHit ui_variable_panel_hit_test(int mx, int my, int variable_count) {
+UiHit ui_variable_panel_hit_test(const UiRenderSnapshot *snap, int mx, int my, int variable_count) {
     UiHit h = ui_hit_none();
     if (!variable_panel_visible()) return h;
     int win_h = ui_state_viewport().window_h;
     if (win_h <= 0) return h;
     int row = -1;
-    if (!ui_variable_panel_hit_for_count(mx, my, variable_count, &row)) return h;
+    if (!ui_variable_panel_hit_for_count(snap, mx, my, variable_count, &row)) return h;
 
     int px, py, pw, ph;
-    ui_variable_panel_rect_for_count(variable_count, &px, &py, &pw, &ph);
+    ui_variable_panel_rect_for_count(snap, variable_count, &px, &py, &pw, &ph);
     int gl_y = win_h - my;
 
     h.kind = UI_HIT_VARIABLE_SLIDER;
@@ -183,7 +185,7 @@ void ui_variable_panel_render(const UiRenderSnapshot *snap) {
     int var_count = ui_variable_count(vars);
 
     int px, py, pw, ph;
-    ui_variable_panel_rect_for_count(var_count, &px, &py, &pw, &ph);
+    ui_variable_panel_rect_for_count(snap, var_count, &px, &py, &pw, &ph);
 
     gl2d_begin(snap->viewport.window_w, snap->viewport.window_h);
     glEnable(GL_BLEND);

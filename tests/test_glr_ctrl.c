@@ -421,14 +421,14 @@ static void test_variable_panel_motion_routes_through_compile_and_coalesces_undo
     ASSERT_TRUE("testvar declared", var_idx >= 0);
     ASSERT_FLOAT("testvar starts at 1", g_predef_vars[var_idx].value, 1.0f);
 
-    ui_variable_panel_rect_for_count(g_num_predef_vars, &px, &py, &pw, &ph);
+    ui_variable_panel_rect_for_count(NULL, g_num_predef_vars, &px, &py, &pw, &ph);
     window_h = ui_state_viewport().window_h;
     click_x = px + pw / 2;
     click_y = -1;
     for (int gl_y = py; gl_y < py + ph; gl_y++) {
         int candidate_y = window_h - gl_y;
         hit_row = -1;
-        if (ui_variable_panel_hit_for_count(click_x, candidate_y,
+        if (ui_variable_panel_hit_for_count(NULL, click_x, candidate_y,
                                             g_num_predef_vars, &hit_row)
                 && hit_row == var_idx) {
             click_y = candidate_y;
@@ -490,14 +490,14 @@ static void test_variable_panel_motion_initializes_uninitialized_declaration(voi
     ASSERT_FLOAT("uninitialized testvar starts at 0",
                  g_predef_vars[var_idx].value, 0.0f);
 
-    ui_variable_panel_rect_for_count(g_num_predef_vars, &px, &py, &pw, &ph);
+    ui_variable_panel_rect_for_count(NULL, g_num_predef_vars, &px, &py, &pw, &ph);
     window_h = ui_state_viewport().window_h;
     click_x = px + pw / 2;
     click_y = -1;
     for (int gl_y = py; gl_y < py + ph; gl_y++) {
         int candidate_y = window_h - gl_y;
         hit_row = -1;
-        if (ui_variable_panel_hit_for_count(click_x, candidate_y,
+        if (ui_variable_panel_hit_for_count(NULL, click_x, candidate_y,
                                             g_num_predef_vars, &hit_row)
                 && hit_row == var_idx) {
             click_y = candidate_y;

@@ -17,6 +17,7 @@
 #include "editor/state.h"      /* editor input/search/autocomplete view types */
 #include "editor/help_session.h"
 #include "app/glr_state.h"     /* app-side render policy snapshot */
+#include "app/glr_config.h"    /* GLR_CONFIG_COUNT */
 #include "repl/state_views.h"
 #include "repl/eval.h"
 #include "ui/app/editor.h"
@@ -191,6 +192,16 @@ typedef struct UiRenderSnapshot {
     enum { UI_INIT_SECTION_MAX = 32 };
     char                        init_section_lines[UI_INIT_SECTION_MAX][MAX_LINE_LEN];
     int                         init_section_count;
+
+    /* Snapshot purity additions for config, tutorials, and examples */
+    int                         config_values[GLR_CONFIG_COUNT];
+    struct {
+        int active;
+        int tutorial_idx;
+        int visible_tag_count;
+    }                           tutorial;
+    int                         example_visible_tag_count;
+    int                         user_scene_count;
 } UiRenderSnapshot;
 
 #endif /* UI_SNAPSHOT_H */

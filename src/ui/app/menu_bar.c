@@ -230,19 +230,25 @@ static int catalog_flyout_row_at(const CatalogFlyoutOps *ops,
     return 0;
 }
 
-static int menu_item_count(int menu_id) {
+static int menu_item_count(int menu_id, const UiRenderSnapshot *snap) {
     switch (menu_id) {
     case MENU_FILE:   return FILE_ITEM_COUNT;
-    case MENU_SCENE:  return repl_example_visible_tag_count() + SCENE_FIXED_COUNT
-                             + repl_user_scene_count();
-    case MENU_TUTORIALS:
+    case MENU_SCENE:  {
+        int tag_count = snap ? snap->example_visible_tag_count : repl_example_visible_tag_count();
+        int user_count = snap ? snap->user_scene_count : repl_user_scene_count();
+        return tag_count + SCENE_FIXED_COUNT + user_count;
+    }
+    case MENU_TUTORIALS: {
+        int tag_count = snap ? snap->tutorial.visible_tag_count : repl_tutorial_visible_tag_count();
+        int active = snap ? snap->tutorial.active : tutorial_active();
         /* Tag rows + (when a tutorial is active) "---" / Restart / Exit.
          * Tutorial selection itself happens through the per-tag flyouts
          * (route_submenu_item_hit dispatches MENU_TUTORIALS submenu
          * items to tutorial_start directly), so the top-level rows
          * here are tag rows (inert hover-only) plus the trailing
          * Restart/Exit actions — mirroring Scene's tag-row pattern. */
-        return repl_tutorial_visible_tag_count() + (tutorial_active() ? 3 : 0);
+        return tag_count + (active ? 3 : 0);
+    }
     case MENU_CONFIG:
         /* One parent row per "### " section, plus a synthetic "All"
          * row whose flyout is the full flat list (chrome included).
@@ -364,11 +370,12 @@ static const char *config_item_shortcut(const GlrConfigItem *item) {
 
 /* Fills `out` with the current state label, truncated to CFG_STATE_MAX_CHARS
  * (with a trailing ellipsis). Returns `out`. */
-static const char *cfg_state_str(int i, char *out, int out_size) {
+static const char *cfg_state_str(const UiRenderSnapshot *snap, int i, char *out, int out_size) {
     const char *s = "";
     const GlrConfigItem *item = glr_config_item_at(i);
     if (item && !item->section_header && item->key != GLR_CONFIG_NONE) {
-        s = glr_config_state_name(item->key, glr_config_get(item->key));
+        int val = snap ? snap->config_values[item->key] : glr_config_get(item->key);
+        s = glr_config_state_name(item->key, val);
         if (!s)
             s = "";
     }
@@ -481,7 +488,7 @@ static int menu_dropdown_rect(int *dx, int *dy, int *dw, int *dh) {
     int pin_x[NUM_PIN_BTNS], pin_w[NUM_PIN_BTNS];
     int by, bh;
     menubar_rects(menu_x, menu_w, pin_x, pin_w, &by, &bh);
-    int n = menu_item_count(g_open_menu);
+    int n = menu_item_count(g_open_menu, NULL);
 
     int max_lbl = 0, max_sc = 0, has_submenu = 0;
     for (int i = 0; i < n; i++) {
@@ -830,7 +837,7 @@ static void menu_draw_chrome_row(GlrConfigRowKind kind, int x, int w,
 
 static int ui_menu_bar_dropdown_item_hit(int gx, int gy) {
     if (g_open_menu < 0) return -1;
-    int n = menu_item_count(g_open_menu);
+    int n = menu_item_count(g_open_menu, NULL);
     if (n == 0) return -1;
     int dx, dy, dw, dh;
     if (!menu_dropdown_rect(&dx, &dy, &dw, &dh)) return -1;
@@ -1112,7 +1119,7 @@ static int submenu_row_is_active(int menu_id, int parent_row, int ordinal,
                example_idx == snap->scenes.active_example_idx;
     }
     if (menu_id == MENU_TUTORIALS) {
-        if (!tutorial_active())
+        if (!snap || !snap->tutorial.active)
             return 0;
         /* submenu_row_abs_index returns -1 for subheading header rows
          * (and any out-of-range ordinal), so the `>= 0` check is the
@@ -1120,7 +1127,7 @@ static int submenu_row_is_active(int menu_id, int parent_row, int ordinal,
         int tutorial_idx = submenu_row_abs_index(menu_id, parent_row,
                                                  ordinal);
         return tutorial_idx >= 0 &&
-               tutorial_idx == tutorial_state_view().tutorial_idx;
+               tutorial_idx == snap->tutorial.tutorial_idx;
     }
     return 0;
 }
@@ -1271,7 +1278,7 @@ static void render_active_submenu(const UiRenderSnapshot *snap) {
             if (item && !item->section_header &&
                 item->key != GLR_CONFIG_NONE) {
                 char st_buf[CFG_STATE_MAX_CHARS + 1];
-                const char *st = cfg_state_str(abs, st_buf,
+                const char *st = cfg_state_str(snap, abs, st_buf,
                                                sizeof(st_buf));
                 int st_px = (int)strlen(st) * FONT_SMALL_W;
                 const char *scut = config_item_shortcut(item);
@@ -1282,7 +1289,8 @@ static void render_active_submenu(const UiRenderSnapshot *snap) {
                     gl2d_draw_string((float)(cfg_sc_right - sc_px),
                                      (float)ey, scut, FONT_SMALL);
                 }
-                if (glr_config_get(item->key))
+                int val = snap ? snap->config_values[item->key] : glr_config_get(item->key);
+                if (val)
                     ui_clr_a(UI_TOK_ACCENT, alpha);
                 else
                     ui_clr_a(UI_TOK_TEXT_MUTED, alpha);
@@ -1552,8 +1560,8 @@ void ui_menu_bar_render(const UiRenderSnapshot *snap) {
 void ui_menu_bar_render_example_dropdown(const UiRenderSnapshot *snap) {
     if (g_open_menu < 0) return;
     int menu_id = g_open_menu;
-    int n  = menu_item_count(menu_id);
-    int tag_count = (menu_id == MENU_SCENE) ? repl_example_visible_tag_count() : -1;
+    int n  = menu_item_count(menu_id, snap);
+    int tag_count = (menu_id == MENU_SCENE) ? (snap ? snap->example_visible_tag_count : repl_example_visible_tag_count()) : -1;
 
     int dx, dy, dw, dh;
     if (!menu_dropdown_rect(&dx, &dy, &dw, &dh)) return;

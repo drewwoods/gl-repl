@@ -303,7 +303,7 @@ UiHit ui_panels_hit_test(const UiRenderSnapshot *snap,
     }
 
     {
-        UiHit variable_hit = ui_variable_panel_hit_test(mx, my, variable_count);
+        UiHit variable_hit = ui_variable_panel_hit_test(snap, mx, my, variable_count);
         if (variable_hit.kind != UI_HIT_NONE)
             return variable_hit;
     }

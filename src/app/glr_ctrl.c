@@ -42,6 +42,7 @@
 #include "repl/replay_annotations.h"
 #include "repl/source_scope.h"
 #include "repl/state_owners.h"
+#include "repl/tutorials.h"
 #include "subsystems/replay/replay.h"
 #include "subsystems/replay/replay_state.h"
 #include "subsystems/tutorial/tutorial.h"
@@ -1631,7 +1632,17 @@ void glr_ctrl_build_ui_snapshot(UiRenderSnapshot *snap) {
         snap->tutorial_fade.fade_line_idx = tut.fade_line_idx;
         snap->tutorial_fade.fade_start_t = tut.fade_start_t;
         snap->tutorial_fade.fade_duration = tut.fade_duration;
+
+        snap->tutorial.active = tut.active;
+        snap->tutorial.tutorial_idx = tut.tutorial_idx;
+        snap->tutorial.visible_tag_count = repl_tutorial_visible_tag_count();
     }
+
+    for (int i = 0; i < GLR_CONFIG_COUNT; i++) {
+        snap->config_values[i] = glr_config_get((GlrConfigKey)i);
+    }
+    snap->example_visible_tag_count = repl_example_visible_tag_count();
+    snap->user_scene_count = repl_user_scene_count();
 
     {
         int lc = repl_export_lights_display_line_count();
@@ -2885,7 +2896,7 @@ int glr_ctrl_router_handle_variable_panel_drag_begin(int button, int state, int 
     if (button != GLUT_LEFT_BUTTON && button != GLUT_RIGHT_BUTTON)
         return 0;
     int row_idx;
-    if (!ui_variable_panel_hit_for_count(x, y, repl_eval_predef_view().count,
+    if (!ui_variable_panel_hit_for_count(NULL, x, y, repl_eval_predef_view().count,
                                          &row_idx))
         return 0;
     if (replay_active())
