@@ -10,10 +10,9 @@
  *       services.apply_repl_change(change)           // ReplState only
  *
  * The mutating halves go through the EditorServices table so the
- * editor doesn't reach into `repl_apply_*` directly.
- * editor_commit_current_input() wraps this with the full
- * compile → undo → preflight → apply transaction; the lower-level
- * helpers here are for callers that already hold a compiled change.
+ * editor doesn't reach into `repl_apply_*` directly. Typed input
+ * runs through the editor_try_commit_* chain; each handler owns
+ * its own compile/preflight/apply transaction and surfaces status.
  *
  * Preflight gives the helper an all-or-nothing atomicity guarantee:
  * if the cmd-store can't accept the change, none of the three
@@ -23,11 +22,11 @@
  * no cmd-store entry — exactly the partial-commit state this
  * transaction shape exists to prevent.
  *
- * Undo capture is owned by editor_commit_current_input() (it pushes
- * one snapshot between successful compile/preflight and the first
- * mutation). The bulk loader editor_feed_line() in
- * src/editor/input.c deliberately skips per-line undo and brackets
- * the whole load with a single snapshot instead.
+ * Undo capture is owned by the dispatch sites in src/editor/input.c
+ * (the ;-key / Enter routes push one snapshot before invoking the
+ * try_commit_* chain). The bulk loader editor_feed_line() in the
+ * same file deliberately skips per-line undo and brackets the whole
+ * load with a single snapshot instead.
  */
 
 #include "commit.h"
@@ -48,86 +47,6 @@
 #include <ctype.h>
 #include <stdio.h>
 #include <string.h>
-
-static void result_set_diagnostic(EditorCommitResult *result, const char *msg) {
-    if (!result || !msg) return;
-    snprintf(result->diagnostic, sizeof(result->diagnostic), "%s", msg);
-    result->diagnostic_valid = 1;
-}
-
-static void result_set_commit_message(EditorCommitResult *result,
-                                      const char *msg) {
-    if (!result || !msg) return;
-    snprintf(result->commit_message, sizeof(result->commit_message), "%s", msg);
-    result->commit_message_valid = 1;
-}
-
-EditorCommitResult editor_commit_current_input(const struct EditorServices_s *services) {
-    EditorCommitResult result = {0};
-    if (!services) return result;
-
-    const char *text = editor_input_text();
-
-    ReplCompileContext ctx = services->context(services->user);
-    ReplCompiledChange change;
-    char err[REPL_STATUS_TEXT_MAX];
-    err[0] = '\0';
-
-    ReplCompileResult cr = services->compile(text, &ctx, &change,
-                                             err, sizeof(err),
-                                             services->user);
-
-    if (cr == REPL_COMPILE_ERROR) {
-        /* Diagnostic flows through the result; no mutation. */
-        result.consumed = 1;
-        result_set_diagnostic(&result, err);
-        return result;
-    }
-
-    if (change.kind == REPL_COMPILED_NO_CHANGE) {
-        /* Caller falls through to the live try_commit_* chain
-         * (or treats as unrecognized). */
-        result.consumed = 0;
-        return result;
-    }
-
-    /* Preflight before mutation. */
-    if (!repl_apply_can_apply_compiled_change(&change)) {
-        /* Roll back the speculative alias registration that compile
-         * may have performed during its pre-step. Without this, a
-         * capacity-failed func def leaves the alias name pointing at
-         * a slot with no matching CMD_FUNC_DEF, and subsequent
-         * `name()` calls would resolve but execute nothing. [P1]
-         * regression. */
-        repl_compiled_change_rollback_alias(&change);
-        result.consumed = 1;
-        result.capacity_failed = 1;
-        return result;
-    }
-
-    /* Transaction boundary: compile + preflight succeeded, no
-     * mutation has run yet. Capture undo here. */
-    editor_undo_push_snapshot();
-
-    /* Past the preflight every apply call below succeeds.
-     * Caller-owned cursor: thread the edit-line through apply,
-     * then write it back on success (implemented in Phase 1 of
-     * edit-line-ownership.md). */
-    services->apply_predef_ops(&change, services->user);
-    services->apply_scratch_ops(&change, services->user);
-    editor_buffer_apply_compiled_change(&change);
-    {
-        int edit_line = editor_state_edit_line();
-        if (services->apply_repl_change(&change, &edit_line, services->user))
-            editor_state_edit_line_set(edit_line);
-    }
-
-    result.consumed = 1;
-    result.mutated = 1;
-    if (change.commit_message[0])
-        result_set_commit_message(&result, change.commit_message);
-    return result;
-}
 
 int editor_commit_apply_external_change(const struct ReplCompiledChange_s *change,
                                         int capture_undo) {

@@ -1460,12 +1460,12 @@ static void keyboard_func(unsigned char key, int x, int y) {
  * it, run the same general-command parse → command-store → editor-buffer
  * tail used by the Enter/insert handler above (handle_enter_key_route).
  *
- * This tail is intentionally NOT routed through
- * editor_commit_current_input(): loading replays many lines with no
- * per-line undo snapshot, status message, or tutorial gating (callers
- * bracket the whole load with one undo/clear). The transaction helper
- * is the interactive single-commit boundary; this is the bulk-loader
- * twin. The two share repl_parse_and_normalize_strict + the
+ * This tail is intentionally distinct from the interactive ;-key /
+ * Enter route: loading replays many lines with no per-line undo
+ * snapshot, status message, or tutorial gating (callers bracket the
+ * whole load with one undo/clear). Those interactive paths push
+ * undo per commit; this is the bulk-loader twin. The two share
+ * repl_parse_and_normalize_strict + the
  * repl_command_store_* primitives so parse/apply semantics stay in
  * lockstep even though the surrounding transaction policy differs. */
 int editor_feed_line(const char *line) {

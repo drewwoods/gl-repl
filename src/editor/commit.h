@@ -7,61 +7,34 @@
  * change, then replay any editor-only follow-up effects such as cursor moves or
  * input clearing.
  *
- * `editor_commit_current_input()` is the common path for the live input row.
- * `editor_commit_apply_external_change()` is the lower-level entry point for
- * callers that already hold a compiled change. Structured block commits that
- * need extra editor-side effects use `EditorCommitPlan`, which keeps those
- * effects alongside the REPL change without teaching the REPL pipeline about
- * cursor or input mechanics.
- *
- * Undo capture happens after successful compile and preflight but before the
- * first mutation. Diagnostic and commit-message text use explicit `*_valid`
- * flags so an empty string is never a control signal.
+ * Typed user input commits through the `editor_try_commit_*` chain
+ * (`editor_try_commit_any` walks the canonical ordering); the chain
+ * handlers each run compile + preflight + apply internally and
+ * surface status through `repl_set_status` / `_set_status_error`.
+ * Callers that already hold a precompiled change use
+ * `editor_commit_apply_external_change()` for the shared
+ * preflight/apply transaction. Structured block commits that need
+ * extra editor-side effects use `EditorCommitPlan`, which keeps
+ * those effects alongside the REPL change without teaching the REPL
+ * pipeline about cursor or input mechanics.
  */
 #ifndef EDITOR_COMMIT_H
 #define EDITOR_COMMIT_H
 
 #include "repl/compile.h"     /* ReplCompiledChange, ReplCompileContext, ReplCompileResult */
-#include "repl/state_views.h" /* REPL_STATUS_TEXT_MAX */
 
 struct EditorServices_s;
 
-/* Result of an editor commit attempt. The booleans say what
- * happened; the strings carry diagnostic / commit-message text.
- * Empty string is NEVER a signal — check the matching `*_valid`
- * flag. */
-typedef struct {
-    int  consumed;             /* dispatcher recognized the input */
-    int  mutated;              /* state changed; undo entry pushed */
-    int  capacity_failed;      /* preflight rejected on capacity */
-    int  diagnostic_valid;     /* diagnostic[] holds a compile error */
-    int  commit_message_valid; /* commit_message[] holds a success msg */
-    char diagnostic[REPL_STATUS_TEXT_MAX];
-    char commit_message[REPL_STATUS_TEXT_MAX];
-} EditorCommitResult;
-
-/* Run one commit attempt against the live editor input.
+/* Apply a precompiled external change atomically. The caller already
+ * has a ReplCompiledChange and only needs the shared preflight/apply
+ * transaction. When `capture_undo` is non-zero the helper captures
+ * one undo snapshot immediately before the first mutation; when zero
+ * it leaves undo ownership to the caller.
  *
- * Reads the editor's current input buffer, asks services to
- * compile + apply, and captures undo at the transaction boundary
- * (between successful compile/preflight and the first mutation).
- * Returns an EditorCommitResult describing what happened; never
- * calls set_status itself.
- *
- * Simple commit grammars use this directly. Structured block paths that need
- * extra cursor or insert-mode effects still compile into `EditorCommitPlan`
- * and apply through the plan helper below. */
-EditorCommitResult editor_commit_current_input(const struct EditorServices_s *services);
-
-/* Apply a precompiled external change atomically. This is the
- * controller-facing companion to editor_commit_current_input: the
- * caller already has a ReplCompiledChange and only needs the shared
- * preflight/apply transaction. When `capture_undo` is non-zero the
- * helper captures one undo snapshot immediately before the first
- * mutation; when zero it leaves undo ownership to the caller.
- *
- * Same transaction shape as editor_commit_current_input from
- * preflight onward; does not run compile.
+ * The live dispatch path for typed input uses the
+ * `editor_try_commit_*` chain below — each handler runs its own
+ * compile + preflight + apply transaction and surfaces status text
+ * through `repl_set_status` / `_set_status_error`.
  *
  *   Returns 1 if all three halves (predef-ops, editor buffer,
  *     cmd store) landed successfully.
@@ -98,8 +71,9 @@ int editor_commit_apply_external_change(const struct ReplCompiledChange_s *chang
  *
  * Pure-REPL handlers (float-decl, var-assign) keep returning
  * `ReplCompiledChange`; their minimal post-mutation housekeeping
- * (clear input, reset cursor pos) is covered by
- * `editor_commit_current_input`. They don't need the plan wrapper.
+ * (clear input, reset cursor pos) is handled inline by the
+ * matching `editor_try_commit_*` wrapper. They don't need the plan
+ * wrapper.
  */
 
 #define EDITOR_COMMIT_NO_CURSOR_CHANGE      (-1)
