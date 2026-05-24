@@ -90,6 +90,64 @@
 >
 > Headings below are marked ✅ (done) or ⏳ (deferred).
 
+## Backlog closeout (2026-05-24)
+
+The 2026-05-24 backlog pass that swept the sibling
+`src-repl-code-smell-audit.md` and `src-ui-code-smell-audit.md`
+classified their remaining findings by **Tier A/B/C/D** (see those
+docs for definitions, reproduced below). Applying the same system
+to this audit shows almost nothing left to bite off:
+
+- **Tier A — small, real fix, near-zero risk.** None outstanding;
+  the original afternoon pass already absorbed every Tier-A-sized
+  item that could land safely. (Several Tier C items below are
+  *individually* small but were deferred for cross-audit or product
+  reasons — see notes per finding.)
+- **Tier B — moderate effort, clear value.** None outstanding;
+  the original week pass closed the layering inversions and
+  dispatch-chain drift.
+- **Tier C — defer (high cost or cross-cutting).** The 4 ⏳-marked
+  items (#13, #18, #23, #28) plus 19 unmarked findings that were
+  triaged-skipped during the original closeout but aren't worth a
+  dedicated pass on their own. Most are real wins; they wait for
+  the surrounding code to be reworked. See individual headings.
+- **Tier D — keep deferred.** #25 — the
+  `editor_search_find_{next,prev}_in_text` pass-through wrappers,
+  same call as `src-ui` #37 (also Tier D), kept to preserve the
+  `editor_*` ↔ `ui_text_*` prefix boundary. Deleting them would
+  force editor-namespaced callers to reach across.
+
+### Tier system
+
+Used during the 2026-05-24 backlog review to triage what was left:
+
+- **Tier A — small, real fix, near-zero risk.** 5–30 line changes
+  with no architectural exposure. Always worth doing once identified.
+- **Tier B — moderate effort, clear value.** 50–200 line changes,
+  one or two files of churn, a real test impact. Worth doing as a
+  focused pass when next in the area.
+- **Tier C — defer (high cost, low payoff).** Real wins but touch a
+  wide surface, or need cross-audit/product coordination; revisit
+  when the surrounding code is being reworked anyway.
+- **Tier D — keep deferred.** Findings the audit landed wrong, or
+  where the original intent (a kept-on-purpose trampoline, a
+  test-pinned bug) makes "fixing" them worse than living with them.
+
+### Headline take
+
+This audit is the most-closed of the four 2026-05-23 audits — 32 of
+51 findings already done in the original passes. The remaining 19
+are mostly "doc/comment fix or small helper extraction that depends
+on a decision the original closeout deferred." None are bugs. They
+sit in Tier C waiting for either (a) the relevant area being touched
+for other reasons, or (b) the cross-audit work that resolves their
+upstream dependency (e.g., #45 waits on `src-repl` #18, which is
+done — so #45 is unblocked but still cheap enough to skip until
+someone opens `input.c` again).
+
+Headings below carry either ✅ / ⏳ (from the original closeout) or
+**Tier C / D** (from this backlog pass).
+
 ## How to read this
 
 Severity grouping mirrors the previous two audits:
@@ -426,7 +484,7 @@ document before the next scope-dependent or visible-vars
 call." That's a one-pass doc-comment change today, with the
 full extraction queued as its own week of work.
 
-### 12. README claims `EditorState` owns "cursor blink"; `state.h` disclaims it
+### 12. [Tier C — deferred] README claims `EditorState` owns "cursor blink"; `state.h` disclaims it
 
 **Where:** `src/editor/README.md:88` vs. `src/editor/state.h:152-157`,
 write sites at `src/editor/input.c:959, 1557`
@@ -446,7 +504,7 @@ make the README claim correct after the fact.)
 ownership line until the `UiState` carve-out is resolved. See
 `src-ui-code-smell-audit.md` #17 for the resolution.
 
-### 13. ⏳ Two parallel encodings of `float_decl → var_assign` order
+### 13. ⏳ [Tier C — deferred] Two parallel encodings of `float_decl → var_assign` order
 
 **Where:** `src/repl/compile.c:60-87` (in `repl_compile_dispatch`)
 vs. `src/editor/commit.c:1335-1339` (in
@@ -514,7 +572,7 @@ this one.
 
 **Fix:** Rename to `editor_try_commit_assign_variable`.
 
-### 15. Error reporting drifts across handlers
+### 15. [Tier C — deferred] Error reporting drifts across handlers
 
 **Where:** `src/editor/commit.c:83` vs. L1192, L1219, L1239,
 L1262, L1295, L1299
@@ -609,7 +667,7 @@ silently breaks. The seam pattern is already established next to it
 `_restore` seam (mirror the scratch-array helpers); route undo
 through it.
 
-### 18. ⏳ Five near-identical "collect-visible-vars → parse → place" sequences
+### 18. ⏳ [Tier C — deferred] Five near-identical "collect-visible-vars → parse → place" sequences
 
 **Where:** `src/editor/input.c:437-486, 694-751, 1351-1394,
 1496-1538`; also `commit_current_input`'s overwrite branch at
@@ -650,7 +708,7 @@ shared helper.
 **Fix:** Extract a single helper (probably in `src/repl/`, given
 `parser.c` also has canonical-form duties).
 
-### 20. Tutorial commit-gating helpers live in `input.c` as file-locals
+### 20. [Tier C — deferred] Tutorial commit-gating helpers live in `input.c` as file-locals
 
 **Where:** `src/editor/input.c:1233-1299`, call sites at L875,
 L1277, L1294-1297, L1312-1322, L1335-1346, L1396-1397
@@ -671,7 +729,7 @@ policy that should live in the tutorial subsystem.
 `tutorial_after_commit(result)`); call from `input.c` through the
 public API.
 
-### 21. Tagged-union `EditorClipboardKind` is never consulted via switch
+### 21. [Tier C — deferred] Tagged-union `EditorClipboardKind` is never consulted via switch
 
 **Where:** `src/editor/state.c:534-595`, `clipboard.c:212,
 245-413`
@@ -687,7 +745,7 @@ and is invisible to the compiler — no `-Wswitch` safety net.
 **Fix:** Switch read sites to `switch (kind)` for exhaustiveness,
 or drop the enum and use the two-flag invariant explicitly.
 
-### 22. `EditorInputView.input` aliases live storage with no documented liveness
+### 22. [Tier C — deferred] `EditorInputView.input` aliases live storage with no documented liveness
 
 **Where:** `src/editor/state.h:64-74`, `state.c:300-313`
 
@@ -705,7 +763,7 @@ someone stashes the view.
 `pending_newline[]` into fixed-size buffers), or document the
 aliasing in the typedef comment.
 
-### 23. ⏳ `editor_undo_clear` is contract-required but compile-unenforced
+### 23. ⏳ [Tier C — deferred] `editor_undo_clear` is contract-required but compile-unenforced
 
 **Where:** `src/editor/undo.h:97-102`, call sites at
 `src/app/glr_actions.c:360, 365, 569, 585`,
@@ -733,7 +791,7 @@ editor / REPL boundary in `src/editor/README.md:72` is that
 suggestion of "move the calls into `repl_load_*`" violates that
 boundary and is withdrawn.
 
-### 24. Three sites hardcode `name[16]` instead of a shared constant
+### 24. [Tier C — deferred] Three sites hardcode `name[16]` instead of a shared constant
 
 **Where:** `src/editor/undo.h:58`, `src/editor/state.h:147`,
 `src/repl/eval.h:133`
@@ -744,7 +802,7 @@ the same finding as `src-repl` audit #28 and `src-ui` not-applicable.
 **Fix:** `#define REPL_PREDEF_NAME_MAX 16` in `eval.h` (the upstream
 source); reference everywhere.
 
-### 25. Wrapped editor search functions are pass-throughs to `ui_text_*`
+### 25. [Tier D — kept on purpose] Wrapped editor search functions are pass-throughs to `ui_text_*`
 
 **Where:** `src/editor/search.c:57-65`
 
@@ -758,7 +816,7 @@ directly.
 `ui_text_*` directly, or inline them as `static` inside
 `search.c`. (Same as the `src/ui/` audit's #37.)
 
-### 26. `editor_compile_for_loop` is the only structured-compile that uses `EditorServices`
+### 26. [Tier C — deferred] `editor_compile_for_loop` is the only structured-compile that uses `EditorServices`
 
 **Where:** `src/editor/commit.c:872`
 
@@ -799,7 +857,7 @@ dispatch sites instead. Or, alternatively, route the four
 production dispatch sites through it (the harder direction, since
 those sites have post-effects the wrapper currently doesn't model).
 
-### 28. ⏳ `EditorServices` is a one-implementation abstraction (with production callers — not pure cleanup)
+### 28. ⏳ [Tier C — deferred] `EditorServices` is a one-implementation abstraction (with production callers — not pure cleanup)
 
 **Where:** `src/editor/services.h:28-74`, `services.c:65-76`.
 Production callers verified at `src/editor/commit.c:148`,
@@ -879,7 +937,7 @@ variable-panel peer. Yet the typedef still sits in
 **Fix:** Move the typedef to
 `src/subsystems/variable_panel/variable_panel_state.h`.
 
-### 32. Two pointless one-liner route wrappers in input.c
+### 32. [Tier C — deferred] Two pointless one-liner route wrappers in input.c
 
 **Where:** `src/editor/input.c:992-994, 1594-1596`
 
@@ -913,7 +971,7 @@ in behavior; both go through the same test seam.
 **Fix:** Pick `editor_input_active_modifiers` (matches file's prefix
 convention); delete the wrapper.
 
-### 35. `editor_state_search()` returns a 1 KB struct by value per call
+### 35. [Tier C — deferred] `editor_state_search()` returns a 1 KB struct by value per call
 
 **Where:** `src/editor/state.c:597-599`; callers at
 `src/app/glr_ctrl.c:1505, 2485, 3621-3623` and
@@ -992,7 +1050,7 @@ is applied. **Then** add a new finding-of-its-own (or fold into
 #23): every call site that doesn't push a snapshot before
 `editor_commit_apply_plan` is a latent undo-skip bug.
 
-### 40. `apply_compiled_change` cluster has 3 distinct context constructions for the same payload
+### 40. [Tier C — deferred] `apply_compiled_change` cluster has 3 distinct context constructions for the same payload
 
 **Where:** `src/editor/commit.c:1182, 1229, 1283`
 
@@ -1007,7 +1065,7 @@ This duplicates the body of `default_context()` in
 
 ## 🔵 Structural concerns
 
-### 41. `editor_clipboard_paste_current` decision logic is opaque
+### 41. [Tier C — deferred] `editor_clipboard_paste_current` decision logic is opaque
 
 **Where:** `src/editor/clipboard.c:245-413`
 
@@ -1021,7 +1079,7 @@ case.
 **Fix:** Extract `paste_input_text(state)`, `paste_lines(state)`,
 `finalize_after_paste(...)`; let the entry point be ~10 lines.
 
-### 42. `mouse_func` signature has 3 silenced unused parameters
+### 42. [Tier C — deferred] `mouse_func` signature has 3 silenced unused parameters
 
 **Where:** `src/editor/input.c:1823-1832`
 
@@ -1033,7 +1091,7 @@ signature is required by GLUT shape; legitimate, but un-commented.
 **Fix:** Add `/* GLUT callback shape; only state == GLUT_UP is
 editor-relevant. */`; lay the casts out one per line.
 
-### 43. Edit-line override path edge: `MAX_INPUT_LEN - 2` vs `- 1` is silently load-bearing
+### 43. [Tier C — deferred] Edit-line override path edge: `MAX_INPUT_LEN - 2` vs `- 1` is silently load-bearing
 
 **Where:** `src/editor/input.c:305-336`
 (`editor_load_line_to_input`)
@@ -1061,7 +1119,7 @@ existed publicly the whole time. `state.c` itself uses the helper
 **Fix:** Replace the four open-coded clears in `input.c` with
 calls to `editor_pending_newline_clear()`.
 
-### 45. `is_word_char` re-implements the project's identifier predicate
+### 45. [Tier C — deferred] `is_word_char` re-implements the project's identifier predicate
 
 **Where:** `src/editor/input.c:1407-1410`
 
@@ -1087,7 +1145,7 @@ strlen + cursor_pos_set` sequence directly on
 **Fix:** Replace the open-coded sequence with a single
 `editor_input_set_text(text)` call.
 
-### 47. Tutorial-locked guard messages drift in wording
+### 47. [Tier C — deferred] Tutorial-locked guard messages drift in wording
 
 **Where:** `src/editor/input.c:186, 292`, `clipboard.c:29`
 
@@ -1098,7 +1156,7 @@ show up next to each other in status text.
 **Fix:** Pick one phrasing; ideally a shared
 `repl_set_status_tutorial_locked()` helper.
 
-### 48. `EditorState` carries ~1.2 MB of per-frame transient overlay lists
+### 48. [Tier C — deferred] `EditorState` carries ~1.2 MB of per-frame transient overlay lists
 
 **Where:** `src/editor/state.h:191-194`
 
@@ -1117,7 +1175,7 @@ struct (e.g., `EditorOverlaySnapshot`) the controller refills
 directly; or document that `editor_state_capture()` deliberately
 covers them.
 
-### 49. `state.c:248-250` exposes `EditorClipboardKind` setter without payload-validity guarantee
+### 49. [Tier C — deferred] `state.c:248-250` exposes `EditorClipboardKind` setter without payload-validity guarantee
 
 **Where:** `src/editor/state.c:545-563`
 (`editor_state_clipboard_count_set`)
@@ -1134,7 +1192,7 @@ can be undefined if a future caller forgets to populate.
 **Fix:** Make this private; or take
 `(const char *const *lines, int count)` and write both inside.
 
-### 50. Reformat saves five fields; the doc claim is broader
+### 50. [Tier C — deferred] Reformat saves five fields; the doc claim is broader
 
 **Where:** `src/editor/reformat.c:19-40`, `reformat.h:1-14`
 
