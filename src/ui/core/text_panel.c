@@ -838,6 +838,12 @@ UiHit ui_text_panel_hit_test(const UiTextPanelSnapshot *snap,
                               ? row->source_line_idx
                               : row->hit_target_line_idx;
 
+            /* Virtual rows arrive with source_line_idx == -1; the
+             * adapter (e.g. ui_repl_code_panel) rewrites the hit to
+             * substitute the real line before consumers see it.
+             * Keeping line_idx == -1 here is the documented "leave
+             * unresolved" contract for ui_text_panel_hit_test (and
+             * the test in test_ui_text_panel.c that enforces it). */
             if (row->kind == UI_TEXT_PANEL_ROW_VIRTUAL)
                 resolved_line = row->source_line_idx;
 
@@ -852,8 +858,8 @@ UiHit ui_text_panel_hit_test(const UiTextPanelSnapshot *snap,
                 return h;
             }
 
-              if ((row->kind == UI_TEXT_PANEL_ROW_PLACEHOLDER &&
-                  row->source_line_idx < 0) ||
+            if ((row->kind == UI_TEXT_PANEL_ROW_PLACEHOLDER &&
+                 row->source_line_idx < 0) ||
                 (row->kind == UI_TEXT_PANEL_ROW_INPUT &&
                  row->source_line_idx < 0)) {
                 h.kind = UI_HIT_CODE_INSERT_LINE;

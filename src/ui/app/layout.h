@@ -24,4 +24,7 @@ void ui_layout_scene_rect(int *x, int *y, int *w, int *h);
 void ui_layout_menu_bar_rect(int *x, int *y, int *w, int *h);
 int  ui_clamp_panel_y(int scene_y, int scene_h, int panel_h, int requested_y, int layout_mode, int statusbar_h);
 
+/* Currently-installed code-panel layout, clamped to a known enumerator. */
+int  ui_layout_code_panel_layout_mode(void);
+
 #endif /* UI_LAYOUT_H */

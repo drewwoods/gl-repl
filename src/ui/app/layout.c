@@ -13,7 +13,7 @@
 UiViewportState         ui_state_viewport(void);
 UiCodePanelRuntimeState ui_state_code_panel(void);
 
-static int ui_layout_code_panel_layout_mode(void) {
+int ui_layout_code_panel_layout_mode(void) {
     int layout = ui_state_code_panel().layout_mode;
     if (layout < 0 || layout >= CODE_PANEL_LAYOUT_COUNT)
         return CODE_PANEL_LAYOUT_LEFT;

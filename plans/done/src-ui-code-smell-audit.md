@@ -32,6 +32,64 @@ Severity grouping mirrors the `src-repl` audit:
 Each finding cites file + line, names the smell, says why it matters,
 and suggests a one-line fix.
 
+## Closeout (2026-05-24)
+
+The audit has been closed out across five commits and a small final
+gap-fix pass. Status per finding (numbers reference the headings
+below):
+
+**🔴 Bugs (all done in `fd70b4e`):** #1, #2, #3, #4, #5, #6.
+
+**🟡 Drift / boundary hazards:**
+
+- *Done:* #7, #8, #9, #10, #11, #12, #13, #14, #15, #16, #17, #19, #20,
+  #21, #22, #23, #24, #26, #27, #28, #29 (across `a8c911a`, `7f5f782`,
+  `4a33445`). #31 done in the closeout commit (locale-safe
+  `ascii_tolower` in `text_search.c`).
+- *Partial:* #18 — visibility and replay-active are snapshot-driven,
+  but drag state (`variable_panel_drag_active_var` /
+  `_drag_log_mode`) is still read live inside
+  `ui_variable_panel_render`. Plumbing a `UiVariableDragView` slice is
+  a separate refactor; left for a follow-up.
+- *Deferred:* #25 (replay HUD still takes its own `UiReplayHudState`
+  rather than `UiRenderSnapshot *` — non-trivial signature change),
+  #30 (`glIsEnabled(GL_BLEND)` save/restore in the fake-bold per-segment
+  loop — needs a row-level boolean threaded down).
+
+**🟢 Dead code / dead fields:**
+
+- *Done:* #32, #33, #34, #35, #36, #38, #39, #40, #41, #42, #43 (across
+  `cf6157c` and `4a33445`).
+- *Deferred:* #37 — `editor_search_find_{next,prev}_in_text` pass-through
+  wrappers were kept on purpose so editor-namespaced callers (search.c
+  itself, `test_repl_core_search_extra.c`) don't reach across the
+  `editor_*` ↔ `ui_text_*` prefix boundary.
+- *Claim incorrect:* #44 — the conditional `resolved_line` override
+  for `UI_TEXT_PANEL_ROW_VIRTUAL` is load-bearing, not dead. Dropping
+  it makes `test_ui_text_panel.c:190` ("virtual row keeps line_idx
+  unresolved in generic hit") fail because the adapter relies on the
+  generic hit-tester returning `-1` so it can rewrite the line. The
+  override now carries a comment explaining why; finding stands but the
+  fix doesn't.
+
+**🔵 Structural concerns:**
+
+- *Done:* #57 (defensive `!snap` guards collapsed in `cf6157c`), #61
+  (`MENU_TEXT_INSET_X` substitution). Closeout-commit fixes: #56
+  (`STATIC_ASSERT` linking `TUTORIAL_FADE_SETTLE_CHARS` to the
+  color-segment budget), #59 (empty-message guard in
+  `ui_state_status_set_kind`), #60 (promoted
+  `ui_layout_code_panel_layout_mode` to `layout.h`, deleted the
+  variable-panel duplicate), #62 (re-indented stray two-space block in
+  `text_panel.c`).
+- *Deferred:* #45, #46, #47, #48, #49, #50, #51, #52, #53, #54, #55,
+  #58, #63. These are the long-function / row-cache / hot-path-static-
+  buffer refactors. Each is a real follow-up but the cost-per-finding
+  is high relative to the rest of the list. None are bugs.
+
+Verification: `make check-c99`, `make check-state-ownership`, and
+`make test-stubs` all clean (45 / 45 binaries, 6776 / 6776 tests).
+
 ## 🔴 Actual bugs (verified)
 
 ### 1. `tabbed_overlay.c` reads past NUL on short lines
@@ -923,60 +981,70 @@ walked).
 
 ### One-afternoon pass
 
-1. **#1** — `tabbed_overlay.c` NUL read past short lines. Single
+- [x] **#1** — `tabbed_overlay.c` NUL read past short lines. Single
    conditional, surgical fix.
-2. **#2** — Add missing `<math.h>` / `<string.h>` / `<stdio.h>`
+- [x] **#2** — Add missing `<math.h>` / `<string.h>` / `<stdio.h>`
    includes to `variable_panel.c` + `autocomplete_panel.c`. Two-line
    change per file.
-3. **#3** — Delete the render-time hover-mutation in
+- [x] **#3** — Delete the render-time hover-mutation in
    `menu_bar_render_example_dropdown` (lines 1525-1527).
-4. **#5** + **#6** — Wire `apply_command_overlays` into
+- [x] **#5** + **#6** — Wire `apply_command_overlays` into
    `add_input_row` and replace the marker-color cascade with an
    explicit priority enum.
-5. **#32** + **#33** + **#42** + **#34** + **#35** + **#36** —
+- [x] **#32** + **#33** + **#42** + **#34** + **#35** + **#36** —
    Delete dead work: the unused `UiReplCodePanelLayout` build, the
    `text_panel_draw_indent` no-op, the three unused
    `search_overlay` params, the three stale `int`-returning hit-test
    entry points, the test-only alias, the duplicate test rect
    helpers. All mechanical.
-6. **#38** + **#39** + **#40** — Delete the five orphan
+- [x] **#38** + **#39** + **#40** — Delete the five orphan
    `ui_state_*` exports, `UiTransformer.color.is_clear`, the dead
    var-panel lift cache.
-
-That's ~8-10 surgical commits. Total LOC reduction in the
-neighborhood of 200-300.
 
 ### One-week pass
 
 The dominant work is **closing the snapshot boundary**:
 
-- **#11** + **#12** + **#13** + **#14** + **#15** + **#16** + **#18**
-  + **#25** — Push `editor_buffer_view`, `editor_line_overrides`,
+- [x] **#11** + **#12** + **#13** + **#14** + **#15** + **#16**
+   — Push `editor_buffer_view`, `editor_line_overrides`,
   `tutorial_fade`, `init_section_lines`, resolved cfg states, replay
-  state, variable-panel state into `UiRenderSnapshot`. Each is a
-  small diff; the cumulative effect is `ui/app/` reading only
-  snapshots. Add a `check-ui-renderer-snapshot-pure` ratchet keyed
-  on cross-module live-state symbols.
+  state into `UiRenderSnapshot`. (`#18` partial — drag-state slice
+  not yet on snapshot; `#25` deferred — replay HUD keeps own state
+  struct.)
 
 Then **the core/app boundary**:
 
-- **#7** + **#8** + **#9** + **#10** — Move `layout.c` out of
-  `core/` (or refactor to argument-passing). Split `hit.h` into
-  `core` + `app` halves. Push `STATUSBAR_H` / `TAB_STRIP_H` out of
-  `metrics.h`. Extend the purity guard.
+- [x] **#7** + **#8** + **#9** + **#10** — Move `layout.c` out of
+  `core/`, split `hit.h` into `core` + `app` halves, push
+  `STATUSBAR_H` / `TAB_STRIP_H` out of `metrics.h`, refresh
+  `text_panel.h` docs.
 
 Then **the flyout-engine debt**:
 
-- **#19** — Extend `CatalogFlyoutOps` to cover Config; collapse the
-  21 menu-id branches. Single chrome classifier.
+- [x] **#19** — Extend `CatalogFlyoutOps` to cover Config; collapse
+  the 21 menu-id branches via `FlyoutProvider` polymorphism.
 
 Then **the panel-frame chrome layer**:
 
-- **#23** + **#24** + **#26** + **#27** + **#28** — Extract
+- [x] **#23** + **#24** + **#26** + **#27** + **#28** — Extract
   `gl2d_panel_frame`, `ui_clamp_panel_y`,
   `ui_layout_menu_bar_rect`, `ui_text_panel_right_action_rect`,
   `ui_repl_code_panel_compute_text_x`. Each is a tiny helper that
   removes a duplicated copy.
+
+### Closeout pass (2026-05-24)
+
+- [x] **#31** — `tolower` → `ascii_tolower` in `text_search.c`
+  (locale-independent ASCII fold).
+- [x] **#56** — `STATIC_ASSERT` linking `TUTORIAL_FADE_SETTLE_CHARS`
+  to `UI_TEXT_PANEL_MAX_COLOR_SEGMENTS` so future bumps don't
+  silently corrupt the fade.
+- [x] **#59** — Empty-message guard in `ui_state_status_set_kind`
+  (drop empty banner instead of stamping full TTL).
+- [x] **#60** — Promote `ui_layout_code_panel_layout_mode` to
+  `layout.h`; delete the `rvp_code_panel_layout_mode` duplicate.
+- [x] **#62** — Re-indent the stray two-space `if` block in
+  `text_panel.c::ui_text_panel_hit_test`.
 
 ### Out of scope
 
