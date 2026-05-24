@@ -74,6 +74,9 @@ static GlrCameraState       g_camera_target;
 static int                   g_camera_target_active = 0;
 static GlrCameraControlMode  g_control_mode    = GLR_CAMERA_CONTROL_3D;
 
+static GlrCameraState       g_scene_camera_default;
+static int                   g_scene_camera_default_set = 0;
+
 /* Internal pointer cache: where the mouse is + which button is held.
  * Used only for drag-delta computation. Snapshot consumers who need
  * the "global" pointer position read UiState.pointer, which callers
@@ -262,6 +265,7 @@ void glr_camera_reset_default(void) {
     reset_velocities();
     g_control_mode = GLR_CAMERA_CONTROL_3D;
     g_camera = g_camera_defaults;
+    g_scene_camera_default_set = 0;
 }
 
 void glr_camera_focus_origin(void) {
@@ -270,10 +274,11 @@ void glr_camera_focus_origin(void) {
 }
 
 void glr_camera_ease_to_default(void) {
+    const GlrCameraState *d = g_scene_camera_default_set
+                                  ? &g_scene_camera_default
+                                  : &g_camera_defaults;
     g_control_mode = GLR_CAMERA_CONTROL_3D;
-    glr_camera_ease_to(g_camera_defaults.rx, g_camera_defaults.ry,
-                       g_camera_defaults.dist, g_camera_defaults.tx,
-                       g_camera_defaults.ty, g_camera_defaults.tz);
+    glr_camera_ease_to(d->rx, d->ry, d->dist, d->tx, d->ty, d->tz);
 }
 
 void glr_camera_capture(GlrCameraState *out) {
@@ -287,6 +292,17 @@ void glr_camera_restore(const GlrCameraState *snap) {
         reset_velocities();
         g_pointer_button = -1;
     }
+}
+
+void glr_camera_set_scene_default(const GlrCameraState *pose) {
+    if (pose) {
+        g_scene_camera_default = *pose;
+        g_scene_camera_default_set = 1;
+    }
+}
+
+void glr_camera_clear_scene_default(void) {
+    g_scene_camera_default_set = 0;
 }
 
 /* ---- Controls ------------------------------------------------------- */

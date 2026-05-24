@@ -59,10 +59,18 @@ void             glr_camera_reset_default(void);
  * glr_camera_ease_to so it is not an instant jump. */
 void             glr_camera_focus_origin(void);
 
-/* Smoothly return the whole camera pose to its built-in default and
- * restore 3D control mode. The eased counterpart of
+/* Smoothly return the camera to its scene default pose (set by example
+ * camera blocks), or the built-in default if no scene pose is set.
+ * Restores 3D control mode. The eased counterpart of
  * glr_camera_reset_default (which snaps instantly). */
 void             glr_camera_ease_to_default(void);
+
+/* Record / clear the per-scene camera default. When set,
+ * glr_camera_ease_to_default uses this pose instead of the built-in
+ * default. Set by example camera blocks; cleared on scene transitions
+ * and full resets. */
+void glr_camera_set_scene_default(const GlrCameraState *pose);
+void glr_camera_clear_scene_default(void);
 
 /* Capture/restore for state round-trip tests and undo paths. The
  * snapshot is a value copy of the camera struct; restoring overwrites

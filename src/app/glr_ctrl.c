@@ -1058,6 +1058,7 @@ int glr_ctrl_restore_hidden_code_panel(void) {
 void glr_app_reset_transients(void) {
     editor_commit_reset_transients();
     glr_camera_controls_reset();
+    glr_camera_clear_scene_default();
     ui_menu_bar_close();
     color_picker_close();
     glr_ctrl_router_reset_code_panel_drag();
