@@ -143,6 +143,27 @@ int main() {
             ASSERT_TRUE("cfg_mode rt: final re-init", glr_audio_init() == 0);
             glr_audio_shutdown();
         }
+        /* Audit #7/#4: state-file path edge cases — shutdown must not
+         * crash when the state file path has a nonexistent directory
+         * component or is otherwise unwritable. */
+        {
+            ASSERT_TRUE("edge: re-init for path tests", glr_audio_init() == 0);
+
+            glr_audio_set_state_file("nonexistent_subdir/audio_state.ini");
+            glr_audio_set_cfg_mode(1);
+            glr_audio_shutdown();
+            ASSERT_TRUE("survived shutdown with bad dir path", 1);
+
+            ASSERT_TRUE("edge: re-init after bad dir", glr_audio_init() == 0);
+            glr_audio_set_state_file("/nonexistent/deep/path/state.ini");
+            glr_audio_set_cfg_mode(2);
+            glr_audio_shutdown();
+            ASSERT_TRUE("survived shutdown with deep bad path", 1);
+
+            ASSERT_TRUE("edge: re-init after deep bad path", glr_audio_init() == 0);
+            glr_audio_set_state_file(NULL);
+            glr_audio_shutdown();
+        }
     } else {
         printf("Skipping engine-active tests as init failed.\n");
     }

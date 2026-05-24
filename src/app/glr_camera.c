@@ -284,6 +284,8 @@ void glr_camera_restore(const GlrCameraState *snap) {
     if (snap) {
         cancel_target_ease();
         g_camera = *snap;
+        reset_velocities();
+        g_pointer_button = -1;
     }
 }
 

@@ -3,6 +3,7 @@
 #include "app/glr_ctrl.h"
 #include "app/glr_actions.h"
 #include "repl/state.h"
+#include "subsystems/replay/replay.h"
 #include "subsystems/replay/replay_state.h"
 #include "ui/app/state.h"
 #include "editor/help_session.h"
@@ -16,6 +17,7 @@
 #include "repl/tutorials.h"
 #include "subsystems/tutorial/tutorial.h"
 #include "subsystems/tutorial/tutorial_state.h"
+#include "source_document.h"
 #include "keys.h"
 #include "support/test_harness.h"
 #include <stdlib.h>
@@ -270,10 +272,12 @@ static void test_menu_actions(void) {
 
     /* Scene actions now live in the File menu (Scene menu is a pure
      * selector). New Scene enters the transient lifecycle: it clears
-     * both the active example and any active user slot. */
+     * both the active example and any active user slot. (Audit #13) */
     ASSERT_INT("File New Scene", glr_action_menu_item_activate(GLR_MENU_FILE, GLR_FILE_ITEM_NEW_SCENE), 1);
     ASSERT_INT("active example cleared", repl_state_scenes().active_example_idx, -1);
     ASSERT_INT("active user scene detached", repl_active_user_scene(), -1);
+    ASSERT_INT("New Scene clears document",
+               source_document_view().line_count, 0);
 
     /* Save Scene with no active named scene falls back to the default
      * single-file save; run sandboxed so it cannot touch repo output.c. */
@@ -570,6 +574,71 @@ static void test_tutorial_menu_dispatch(void) {
                tutorial_active(), 0);
 }
 
+/* Audit #20: glr_config_set(GLR_CONFIG_AUDIO_MODE, ...) routes through
+ * the audio module's cfg_mode setter, not a raw pointer write. */
+static void test_audio_config_direct_set(void) {
+    glr_app_reset_all();
+
+    glr_config_set(GLR_CONFIG_AUDIO_MODE, 2);
+    ASSERT_INT("direct-set audio mode 2", glr_audio_get_cfg_mode(), 2);
+
+    glr_config_set(GLR_CONFIG_AUDIO_MODE, 0);
+    ASSERT_INT("direct-set audio mode 0", glr_audio_get_cfg_mode(), 0);
+
+    glr_config_set(GLR_CONFIG_AUDIO_MODE, 99);
+    ASSERT_INT("direct-set clamps to max valid",
+               glr_audio_get_cfg_mode(), glr_config_state_count(GLR_CONFIG_AUDIO_MODE) - 1);
+}
+
+/* Audit #38: out-of-range menu indices must not crash or mutate state. */
+static void test_menu_out_of_range_indices(void) {
+    glr_app_reset_all();
+
+    int before[GLR_CONFIG_COUNT];
+    for (int k = 1; k < GLR_CONFIG_COUNT; k++)
+        before[k] = glr_config_get((GlrConfigKey)k);
+
+    ASSERT_INT("FILE out-of-range consumed",
+               glr_action_menu_item_activate(GLR_MENU_FILE, 999), 1);
+    ASSERT_INT("SCENE negative consumed",
+               glr_action_menu_item_activate(GLR_MENU_SCENE, -1), 1);
+    ASSERT_INT("TUTORIALS out-of-range consumed",
+               glr_action_menu_item_activate(GLR_MENU_TUTORIALS, 999), 1);
+    ASSERT_INT("CONFIG out-of-range returns 0 (menu stays open)",
+               glr_action_menu_item_activate(GLR_MENU_CONFIG, 999), 0);
+
+    for (int k = 1; k < GLR_CONFIG_COUNT; k++)
+        ASSERT_INT("config unchanged after out-of-range activations",
+                   glr_config_get((GlrConfigKey)k), before[k]);
+}
+
+/* Audit #19: cycling a non-replay config row while replay is active
+ * stops the replay as a side effect. */
+static void test_cfg_cycle_stops_replay(void) {
+    glr_app_reset_all();
+
+    editor_feed_line("glBegin(GL_POINTS);");
+    editor_feed_line("glVertex3f(0,0,0);");
+    editor_feed_line("glEnd();");
+
+    replay_start();
+    ASSERT_INT("replay active after start", replay_active(), 1);
+
+    int wireframe_row = -1;
+    for (int i = 0; i < CFG_ITEM_COUNT; i++) {
+        const GlrConfigItem *item = glr_config_item_at(i);
+        if (item && item->key == GLR_CONFIG_WIREFRAME) {
+            wireframe_row = i;
+            break;
+        }
+    }
+    ASSERT_TRUE("found wireframe row", wireframe_row >= 0);
+
+    glr_cfg_cycle_row(wireframe_row, 1);
+    ASSERT_INT("replay stopped after non-replay cfg cycle",
+               replay_active(), 0);
+}
+
 int main(void) {
     test_apply_defaults();
     test_cursor_actions();
@@ -582,6 +651,9 @@ int main(void) {
     test_ascii_shortcut_modifiers();
     test_tutorial_start_applies_cfg();
     test_tutorial_menu_dispatch();
+    test_audio_config_direct_set();
+    test_menu_out_of_range_indices();
+    test_cfg_cycle_stops_replay();
 
     return test_harness_report(&g_harness, "test_repl_actions");
 }
