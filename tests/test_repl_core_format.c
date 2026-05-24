@@ -193,5 +193,24 @@ int main(void) {
                                    "  static float a = max(1, 2), b, c = abs(-3); // vars") == 0);
     }
 
+    glr_app_reset_all();
+    editor_feed_line("func0() {");
+    editor_feed_line("glVertex3f(0, 0, 0);");
+    editor_feed_line("}");
+    editor_feed_line("gluBegin(GLU_POLYGON);");
+    editor_feed_line("func0();");
+    editor_feed_line("gluEnd();");
+    {
+        int n = repl_state_document_count();
+        ASSERT_TRUE("tess+func cmd count", n == 6);
+        ASSERT_TRUE("tess+func call type",
+                     repl_state_document_cmds_mut()[4].type == CMD_CALL);
+        const char *call_line = editor_buffer_line(4);
+        ASSERT_TRUE("funcN call inside tess block includes tess indent",
+                     call_line && strncmp(call_line, "    ", 4) == 0);
+        ASSERT_TRUE("funcN call inside tess block not over-indented",
+                     call_line && call_line[4] != ' ');
+    }
+
     return test_harness_report(&g_harness, "repl_core_format");
 }

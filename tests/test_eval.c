@@ -770,6 +770,11 @@ static void run_tests(void) {
     ASSERT_FLOAT("pow(2)", 0.0f);                      /* needs 2 args */
     ASSERT_FLOAT("min(3)", 0.0f);
     ASSERT_FLOAT("max(7)", 0.0f);
+    ASSERT_FLOAT("fmod(1)", 0.0f);                     /* needs 2 args */
+    ASSERT_FLOAT("sin(1,2)", 0.0f);                    /* too many args */
+    ASSERT_FLOAT("cos(1,2)", 0.0f);
+    ASSERT_FLOAT("floor(1,2)", 0.0f);
+    ASSERT_FLOAT("abs(1,2)", 0.0f);
 
     /* ---- declare_predef_var error paths ---- */
     printf("declare_predef_var (error paths):\n");
