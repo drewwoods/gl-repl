@@ -7,6 +7,32 @@
 > File:line references are exact at the time of writing — check `git
 > log` on the cited files before acting if this doc has aged.
 >
+> **Revision 2 (2026-05-24):** Reviewer corrections applied. Fixed:
+> #1's proposed "snapshot under lock, unlock, call miniaudio" fix would
+> race with the worker's off-lock slot teardown
+> (`worker_uninit_all`/`worker_load` both release the lock before
+> `ma_sound_uninit`) — use-after-uninit risk; finding now rejects that
+> unsafe shape and calls out the slot-lifetime constraint explicitly.
+> #20's "make `glr_audio_set_cfg_mode` apply pause/loop semantics" fix
+> contradicts the header contract at `glr_audio.h:112` (the cfg_mode
+> integer is explicitly opaque, owned by the action/config layer); fix
+> now routes through an action-layer apply helper instead. #42
+> withdrawn as a false positive — the `< 0.0` clamp only fires for
+> negative env values; `GLR_AUDIO_HITCH_MS=0` correctly caches as 0.0
+> on first read. #39's heading corrected: the display frame builds the
+> snapshot *twice*, not three times (the body always said "doubled").
+> Sequencing updated to match.
+>
+> **Revision 3 (2026-05-24):** Implementation direction clarified.
+> For #1, prefer a low-churn path first: keep active-slot miniaudio
+> calls protected by the module mutex, make the lock discipline
+> unconditional, rename/comment the lock as the slot-lifetime guard, and
+> document the accepted miniaudio-under-lock risk. A recursive mutex can
+> be used as an implementation detail if it simplifies nested helper
+> calls, but it is not the correctness argument for miniaudio/device lock
+> ordering. Also, old numeric-then-`g_angle` camera imports are no longer
+> a compatibility target; #11/#12 now explicitly remove that legacy shape.
+>
 > Scope: every file under `src/app/`. Tests under `tests/` were read
 > where they document a contract, but not audited.
 >
@@ -69,9 +95,24 @@ device callback also holds, audio-callback → miniaudio internal → main
 holds `g_mtx` and waits for the same internal → deadlock. Same family
 as #2 / #3.
 
-**Fix:** Snapshot `g_active` + a slot pointer under the lock, release,
-then call the miniaudio op. Or add a code comment cross-referencing
-the miniaudio doc lines that confirm lock-freedom for each op used.
+**Fix:** The naive "snapshot `g_active` + slot pointer under the lock,
+unlock, then call miniaudio" is **not safe on its own** — it races
+with the worker's off-lock slot teardown
+(`worker_uninit_all` at `:343-354` and `worker_load` at `:428+` both
+release the lock *before* calling `ma_sound_uninit` on a slot). A
+setter holding a snapshotted slot pointer can call into a slot the
+worker has just torn down (use-after-uninit).
+
+Low-churn path: keep the current "active slot calls happen while
+holding the module mutex" shape, make that mutex unconditional (#2),
+rename/wrap it as the slot-lifetime guard, and add an explicit comment
+that these miniaudio calls are intentionally kept under the guard to
+protect `g_slot[]` lifetime. A recursive mutex is fine if it simplifies
+future nested helper calls, but it does **not** solve external
+miniaudio/device lock ordering; don't use it as the proof that #1 is
+fixed. If this ever turns into a real stall/deadlock, then graduate to
+worker-routed control requests (`AWR_SET_LOOPING`, `AWR_SET_PAUSED`,
+`AWR_STOP`) so the worker owns all active-slot mutations.
 
 ### 2. Audio module's lock helpers no-op when the worker isn't running
 
@@ -93,7 +134,7 @@ unsynchronized.
 **Fix:** Initialize `g_mtx` unconditionally (use
 `PTHREAD_MUTEX_INITIALIZER` or always call `pthread_mutex_init` in
 `glr_audio_init`); lock unconditionally. Uncontended mutex ops are
-negligible. This single change also tightens #3, #4, and #11.
+negligible. This single change also tightens #3 and #24.
 
 ### 3. Several audio public APIs touch shared state without the lock
 
@@ -287,9 +328,12 @@ machine is misaligned.
 silently leaks into user code AND leaves the state machine expecting
 the wrong line shape for the camera-target translate.
 
-**Fix:** Decide explicitly: either consume-and-discard (return 1 after
-setting state=4) or reject-the-block (return 0 without bumping state).
-Update the misleading comment regardless.
+**Fix:** Delete the legacy state-3 path entirely. State 2 should accept
+either `glRotatef(g_angle, 0,1,0)` (saved-file format) or numeric
+`glRotatef(ry, 0,1,0)` (display/example format), then advance directly
+to state 4. A later numeric-then-`g_angle` 5-line camera block is old
+compatibility we are intentionally dropping; add/adjust tests around
+the two current 4-line shapes.
 
 ### 12. `cam_consume_example_block_now` fabricates a synthetic `g_angle` line
 
@@ -310,10 +354,10 @@ the state-3 → state-4 transition.
 bridge abstraction was meant to remove. The two block representations
 and the import state machine are out of shape with each other.
 
-**Fix:** Unify the block representation (state 2 accepts either
-`g_angle` or numeric `ry` without a separate state 3) or expose a
-dedicated `apply_block_directly()` entry point that bypasses the
-line-stream parser.
+**Fix:** Unify the block representation: state 2 accepts either
+`g_angle` or numeric `ry` and then expects target translate. Delete the
+synthetic line in `cam_consume_example_block_now`; examples and display
+blocks should feed their four real lines only.
 
 ### 13. `editor_clear_all_cmds()` inside NEW_SCENE posts wrong status and is otherwise redundant
 
@@ -489,9 +533,15 @@ to actually apply the semantics.
 silently fails to take effect. `fill_all` (full workspace cfg snapshots)
 includes audio; `cfg_key_in_scene_subset` excludes it. Latent bug.
 
-**Fix:** Have `glr_audio_set_cfg_mode` itself call the equivalent of
-`apply_audio_cfg_mode` (or have `glr_config_set` call both). The
-two paths merge.
+**Fix:** Do **not** push the apply logic into `glr_audio_set_cfg_mode`
+— the header at `glr_audio.h:112-117` explicitly documents
+`cfg_mode` as "Opaque audio-config integer owned by the action/config
+layer," and `glr_audio.c` deliberately doesn't know the `AUDIO_CFG_*`
+enum. Instead, expose `apply_audio_cfg_mode` (currently file-static in
+`glr_actions.c`) as `glr_actions_apply_audio_cfg_mode(int mode)` and
+have the GLR_CONFIG_AUDIO_MODE branch of `glr_config_set` (or a small
+adapter in the bridge install) call it. Single apply path; the
+opaque-storage contract on `glr_audio.c` stays intact.
 
 ### 21. Naming drift: `GLR_CONFIG_XFORM_GUIDES` ↔ `show_vertex_guides`
 
@@ -522,10 +572,9 @@ field (`show_xform_guides`) so all three converge.
 `glr_defaults.h`'s file-comment says its job is to be the single source
 of truth for these.
 
-**Why it matters:** Exactly the brittleness the project's own MEMORY
-warns about (`config_default_test_brittleness`): tests pin a value and
-silently diverge from the shipped default. Two places to update on
-every shipped-default tweak.
+**Why it matters:** Tests and shipped defaults can silently diverge:
+one path pins a numeric value while another path changes the user-facing
+default. Two places to update on every shipped-default tweak.
 
 **Fix:** Add `CFG_DEFAULT_AUTONORMAL`, `CFG_DEFAULT_HIGHLIGHT_CURRENT_POLY`,
 `CFG_DEFAULT_USE_ACCUM`, `CFG_DEFAULT_ACCUM_*`, `CFG_DEFAULT_MSAA_SAMPLES`
@@ -839,7 +888,7 @@ inexplicably, not a visible warning.
 `item_idx` (keeps menu open), or convert to `switch` so missing cases
 get `-Wswitch` warnings.
 
-### 39. Snapshot is built three times per display frame
+### 39. Snapshot is built twice per display frame
 
 **Where:** `src/app/glr_ctrl.c:1720-1722`
 
@@ -855,10 +904,11 @@ dancing around a missing invariant: snapshot depends on scroll, scroll
 is computed from layout that needs the snapshot.
 
 **Why it matters:** Per-frame cost doubled for 25+ fields that didn't
-change. The workaround pattern repeats elsewhere — `glr_ctrl_mouse`
-(`:3832`) builds the snapshot on each left-button press; the
-selection-drag motion path (`glr_ctrl.c:3603-3664`) rebuilds it once or
-twice per mouse-move (see #40).
+change between the two builds. The pattern also repeats off the
+display path — `glr_ctrl_mouse` (`:3832`) builds the snapshot on each
+left-button press; the selection-drag motion path
+(`glr_ctrl.c:3603-3664`) rebuilds it once or twice per mouse-move
+(see #40).
 
 **Fix:** Split snapshot construction into "stable fields built once"
 and "scroll-dependent fields fixed up after follow-scroll runs". Or
@@ -903,27 +953,24 @@ int direction)` in either `src/editor/` (treated as an editor service)
 or a new `src/subsystems/numeric_swatch/` peer subsystem matching the
 color-picker pattern. The router becomes 5 lines.
 
-### 42. Hitch-threshold env cache defeats `GLR_AUDIO_HITCH_MS=0`
+### 42. ~~Hitch-threshold env cache defeats `GLR_AUDIO_HITCH_MS=0`~~ (withdrawn — false positive)
 
 **Where:** `src/app/glr_audio.c:179-187`
 
-**Smell:**
-```c
-static double worker_hitch_threshold_ms(void) {
-    static double cached = -1.0;
-    if (cached < 0.0) { ... }
-    return cached;
-}
-```
-The `< 0.0` check is used as the cache-empty sentinel. The clamp
-`if (cached < 0.0) cached = 0.0` then makes "user set 0 to disable"
-overlap with "cache hasn't been populated" — the function re-reads the
-env on every call.
+**Original claim:** The `< 0.0` cache-empty sentinel was thought to
+re-run the env read when `GLR_AUDIO_HITCH_MS=0` because the clamp
+"makes 0 indistinguishable from uninitialized."
 
-**Why it matters:** Defeats the cache for precisely the value people
-will test with ("0 disables").
+**Why it's false:** The clamp `if (cached < 0.0) cached = 0.0;` only
+fires when the env var was set to a *negative* value (e.g. `-5`).
+`atof("0")` returns `0.0` directly without going through the clamp;
+on the next call `cached < 0.0` is false and the cached `0.0` is
+returned without re-reading the env. The cache works correctly for
+`GLR_AUDIO_HITCH_MS=0`.
 
-**Fix:** Use a separate `static int cached_valid = 0;` sentinel.
+A separate `cached_valid` sentinel would be harmless but doesn't fix
+a real bug. Left in the audit as a withdrawal note so a future
+re-reviewer doesn't re-flag the same pattern.
 
 ## 🟢 Dead code / dead fields
 
@@ -993,7 +1040,7 @@ observed.
 **Fix:** Drop the initializer (leave BSS-zeroed) — removes the
 misleading suggestion that the initial value matters.
 
-### 48. Stack zero-init arrays fully overwritten on the next line
+### 48. Stack zero-init arrays are partly redundant, but the predef claim needs care
 
 **Where:** `src/app/glr_ctrl.c:1630-1631` then `:1703-1704`
 
@@ -1002,14 +1049,20 @@ misleading suggestion that the initial value matters.
 float live_predef_vals[MAX_PREDEF_VARS] = { 0 };
 float live_scratch_arrays[REPL_SCRATCH_ARRAY_COUNT][REPL_SCRATCH_ARRAY_LEN] = { { 0.0f } };
 ...
-repl_copy_predef_values(live_predef_vals);
+repl_copy_predef_values(live_predef_vals, MAX_PREDEF_VARS);
 repl_eval_copy_scratch_arrays(live_scratch_arrays);
 ```
-The `= { 0 }` initializer is wasted CPU per frame; the contract of
-`repl_copy_predef_values` is "fills every slot".
+The scratch-array initializer is redundant: `repl_eval_copy_scratch_arrays`
+`memcpy`s the whole fixed-size array. The predef initializer is probably
+also redundant in this frame path, but **not** because
+`repl_copy_predef_values` fills every slot; it only copies
+`g_num_predef_vars` active entries, and `repl_restore_predef_values`
+restores that same active range. So the dead-code claim is narrower than
+the original framing.
 
-**Fix:** Drop the initializers. If they must stay, add a one-line
-comment.
+**Fix:** Drop the scratch-array initializer. Drop the predef initializer
+only with a short comment pinning the active-count copy/restore contract,
+or leave it alone as harmless defensive zeroing.
 
 ### 49. Dead defensive `if (scenes->active_example_idx >= 0)` guard
 
@@ -1225,17 +1278,21 @@ Negligible at keystroke rate but inconsistent with the snapshot's
 **Fix:** Cache the `UiOverlayContent *` once. Or read from
 `snap->help_content` (requires a snapshot — see #39's broader fix).
 
-### 64. `static const ReplayTessPreviewCallbacks` uses `g_` prefix instead of `k_`
+### 64. ~~`static const ReplayTessPreviewCallbacks` uses `g_` prefix instead of `k_`~~ (withdrawn — local convention allows it)
 
 **Where:** `src/app/glr_ctrl.c:250`, `:1934` (`g_export_projection_bridge_impl`),
 `:2025` (`g_glr_host_effects`)
 
-**Smell:** CLAUDE.md convention: `g_` is for *mutable* file-scope
-state. Read-only constant tables use `k_` (e.g.,
-`k_example_tag_defaults` at `:1845`).
+**Original claim:** CLAUDE.md convention was read as "`g_` is for
+mutable file-scope state; read-only constant tables should use `k_`."
 
-**Fix:** Rename to `k_tess_preview_cb`, `k_export_projection_bridge_impl`,
-`k_glr_host_effects`.
+**Why it's false:** CLAUDE.md says "File-private statics use `g_`
+prefix"; it does not restrict `g_` to mutable state. The nearby
+`k_example_tag_defaults` name is a local choice, not an enforced
+project rule.
+
+**Fix:** No action unless the project first adopts a real `k_` convention
+for file-private `static const` objects.
 
 ### 65. Comment-mass overwhelms code in several `glr_ctrl.c` sections
 
@@ -1257,18 +1314,18 @@ reproduced inline; many describe historical migrations. Hard to skim.
 2. **#17** — Delete the `scenes->active_example_idx = -1` reach-through.
    3-line delete.
 3. **#45** + **#46** + **#47** + **#48** + **#49** — Mechanical dead-code
-   removal in completion / camera / display path.
+   removal in completion / camera / display path, with #48 limited to
+   the verified redundant initializer(s).
 4. **#28** — Stale plan/phase comment sweep. Pure delete.
 5. **#33** — Fix the wrong decay-value comment in `glr_camera.c:25` and
    `config.h:123`.
 6. **#23** — Drop the forward-decl block in `glr_config.c` (include the
    real headers). Removes an obsolete justification comment too.
 7. **#44** — `glr_ctrl_apply_variable_panel_value_change` → `void`.
-8. **#64** — Rename three `g_*` constant tables to `k_*`.
-9. **#55** — Add direct `<math.h>`/`<ctype.h>`/`<string.h>`/`<stdlib.h>`
+8. **#55** — Add direct `<math.h>`/`<ctype.h>`/`<string.h>`/`<stdlib.h>`
    includes where currently transitive.
 
-That's ~9 surgical commits; total LOC reduction in the
+That's ~8 surgical commits; total LOC reduction in the
 50-100 range and one real bug closed (#13).
 
 ### One-week pass — the audio bug cluster
@@ -1276,28 +1333,38 @@ That's ~9 surgical commits; total LOC reduction in the
 This is the highest-leverage block: most of the **🔴** bucket is here
 and the fixes are well-contained.
 
-- **#2** (lock unconditionally) + **#24** (consistent locking
-  discipline) + **#3** (lock the bare-access getters/setters) — all
-  one PR. Removes the "no-worker-no-lock" silent degradation and
-  closes three torn-read windows.
-- **#1** (snapshot `g_active` + slot pointer under the lock; call
-  miniaudio unlocked) — separate PR, mechanical but touches every
-  setter and `cursor_seconds_locked`.
-- **#5** (sticky `AWR_QUIT` in `worker_post`) — one-liner with one
-  test.
-- **#4** (`fflush`/`fclose` error handling in `worker_save_state`) —
-  small.
-- **#6** (back out engine on mutex/cond failure in `init`) — small.
-- **#7** (fix `tmp` filename prefix for paths with a directory) —
-  small.
-- **#27** (move audio-gesture flag to `glr_audio.c`) — small; removes
-  a hidden invariant from the controller.
-- **#42** (hitch-threshold env-cache sentinel) — one-liner.
-- **#25** (in-flight `set_playlist` race) — slightly larger; needs a
-  cancel flag.
+Order matters — do the cheap structural fixes first; for #1 take the
+low-churn documented-lock path first, and only introduce worker-routed
+control requests if the documented risk turns into an observed stall or
+deadlock.
 
-After this PR set, the audio module's `🔴` findings are closed and the
-lock discipline is uniform.
+1. **#2** (lock unconditionally) + **#24** (consistent locking
+   discipline) + **#3** (lock the bare-access getters/setters) — all
+   one PR. Removes the "no-worker-no-lock" silent degradation and
+   closes three torn-read windows.
+2. **#5** (sticky `AWR_QUIT` in `worker_post`) — one-liner with one
+   test.
+3. **#4** (`fflush`/`fclose` error handling in `worker_save_state`) —
+   small.
+4. **#6** (back out engine on mutex/cond failure in `init`) — small.
+5. **#7** (fix `tmp` filename prefix for paths with a directory) —
+   small.
+6. **#27** (move audio-gesture flag to `glr_audio.c`) — small;
+   removes a hidden invariant from the controller.
+7. **#25** (in-flight `set_playlist` race) — slightly larger; needs
+   a cancel flag.
+8. **#1** (documented slot-lifetime lock discipline) — keep active-slot
+   miniaudio calls under the now-unconditional module mutex, rename/wrap
+   the helper so the lifetime role is obvious, and add the in-code note
+   explaining why we are accepting miniaudio calls under that guard. A
+   recursive mutex is acceptable only as an implementation detail for
+   same-thread helper re-entry; it is not a substitute for the lock-order
+   comment. **Do not ship the original "snapshot + unlock" shape** — it
+   use-after-uninits against the worker's off-lock teardown.
+
+After this PR set, the audio module's concrete `🔴` bugs are closed,
+and the remaining miniaudio-under-lock risk is explicit rather than
+accidental.
 
 ### One-week pass — closing the controller's rendering layer
 
@@ -1319,9 +1386,10 @@ The structural smell that swallows most of `glr_ctrl.c`'s size:
 
 Then **the camera-export seam**:
 
-- **#11** + **#12** — Pick a shape for the camera block (state-2
-  accepts either `g_angle` or numeric `ry`) and delete the synthetic
-  line and the misleading fall-through comment.
+- **#11** + **#12** — Remove legacy numeric-then-`g_angle` import
+  support. State 2 accepts either `g_angle` or numeric `ry`, advances
+  directly to target translate, and the synthetic example `g_angle`
+  line disappears.
 - **#34** — Either add `glr_camera_export.h` or roll the bridge back
   into `glr_camera.c`.
 
@@ -1331,8 +1399,10 @@ Then **the cycle/menu-action layer**:
   per-key chain out of `glr_cfg_cycle_row`.
 - **#19** — Narrow the replay-stop side effect to keys that actually
   invalidate replay state (or add an `invalidates_replay : 1` bit).
-- **#20** — Have `glr_audio_set_cfg_mode` itself apply the pause/loop
-  semantics; collapse the two paths.
+- **#20** — Expose `glr_actions_apply_audio_cfg_mode(int)` (currently
+  file-static `apply_audio_cfg_mode`) and have the cfg-set path call
+  it. Do **not** push the apply logic into `glr_audio_set_cfg_mode`
+  — the header documents that integer as opaque.
 - **#26** — Delete `labels[]` audio shadow array; use
   `state_names` formatter.
 - **#52** — Collapse the four near-duplicate function pairs.
