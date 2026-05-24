@@ -18,6 +18,8 @@ static void editor_state_apply_sentinels(EditorState *s) {
     s->selection.anchor_idx           = -1;
     s->selection.end_idx              = -1;
     s->clipboard.kind                 = EDITOR_CLIPBOARD_EMPTY;
+    s->cursor_blink.cursor_visible    = 1;
+    s->cursor_blink.blink_tick        = 0;
 }
 
 /* Lazily-initialised defaults — avoids embedding a 3.2 MB const copy
@@ -737,6 +739,14 @@ const char *editor_state_line_override_for(int line_idx) {
 /* The legacy `editor_state_variable_drag` / `_mut` / `_reset`
  * forwarders are gone. Callers use `variable_panel_drag` / `_mut` /
  * `variable_panel_handle_drag_reset` directly (removed in Phase J7). */
+
+EditorCursorBlinkState editor_state_cursor_blink(void) {
+    return g_editor_state.cursor_blink;
+}
+
+EditorCursorBlinkState *editor_state_cursor_blink_mut(void) {
+    return &g_editor_state.cursor_blink;
+}
 
 EditorScrollState editor_state_scroll(void) {
     return g_editor_state.scroll;

@@ -75,11 +75,11 @@ static void build_param_hint_text(const char *const *params, int param_count,
             arg_has_text = 1;
     }
 
-    if (arg_index < 0 || arg_index > param_count)
+    if (arg_index > param_count)
         return;
 
     int next_param = arg_has_text ? arg_index + 1 : arg_index;
-    if (next_param < 0 || next_param > param_count)
+    if (next_param > param_count)
         return;
 
     if (next_param == param_count) {
@@ -116,7 +116,6 @@ static const ReplFuncCompletion *find_builtin_completion_for_input(const char *i
 }
 
 static int find_defined_func_call_params(const char *input, const char **after_out,
-                                         const char *params_out[MAX_EXPR_VARS],
                                          int *count_out,
                                          char param_storage[MAX_EXPR_VARS][16]) {
     const char *p = input;
@@ -155,8 +154,6 @@ static int find_defined_func_call_params(const char *input, const char **after_o
         }
         if (parsed_fn != fn || param_count <= 0)
             continue;
-        for (int j = 0; j < param_count; j++)
-            params_out[j] = param_storage[j];
         if (count_out)
             *count_out = param_count;
         return 1;
@@ -177,12 +174,13 @@ static void update_input_param_hint(void) {
     }
 
     {
-        const char *params[MAX_EXPR_VARS];
         char param_storage[MAX_EXPR_VARS][16];
         int param_count = 0;
 
-        if (find_defined_func_call_params(input, &after, params,
-                                          &param_count, param_storage)) {
+        if (find_defined_func_call_params(input, &after, &param_count, param_storage)) {
+            const char *params[MAX_EXPR_VARS];
+            for (int j = 0; j < param_count; j++)
+                params[j] = param_storage[j];
             build_param_hint_text(params, param_count, after,
                                   ac->hint, (int)sizeof(ac->hint));
         }
@@ -215,8 +213,10 @@ static void update_selected_autocomplete_preview(void) {
             build_param_hint_text(g_ac_func_matches[ac->selected_idx]->params,
                                   g_ac_func_matches[ac->selected_idx]->param_count,
                                   "", ac->hint, (int)sizeof(ac->hint));
-        } else if (find_defined_func_call_params(inp.input, &after, params,
-                                                 &param_count, param_storage)) {
+        } else if (find_defined_func_call_params(inp.input, &after, &param_count, param_storage)) {
+            const char *params[MAX_EXPR_VARS];
+            for (int j = 0; j < param_count; j++)
+                params[j] = param_storage[j];
             ac->ghost[0] = '\0';
             build_param_hint_text(params, param_count, after,
                                   ac->hint, (int)sizeof(ac->hint));

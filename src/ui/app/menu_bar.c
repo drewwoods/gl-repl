@@ -1405,7 +1405,7 @@ void ui_menu_bar_render_search_overlay(const UiRenderSnapshot *snap) {
         ui_clr_a(UI_TOK_TEXT_MUTED, alpha);
     gl2d_draw_string((float)count_x, (float)text_y, count_buf, FONT_SMALL);
 
-    if (snap->code_panel.cursor_visible && srch.query_len > 0) {
+    if (snap->cursor_blink.cursor_visible && srch.query_len > 0) {
         int cursor_x = query_x + cursor_col * FONT_SMALL_W;
         ui_clr_a(UI_TOK_CARET, 0.85f * alpha);
         glRectf((float)cursor_x, (float)(text_y - 2), (float)cursor_x + 2.0f,

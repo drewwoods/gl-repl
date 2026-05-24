@@ -24,6 +24,11 @@
 #include "ui/app/state_types.h"
 #include "subsystems/variable_panel/variable_panel_drag.h"  /* VariablePanelValueChange */
 
+typedef struct {
+    int   visible;
+    float replay_lift_px;
+} UiVariablePanelState;
+
 /* Composite peer state. The two slices keep their existing value types so the
  * accessors and snapshots can pass them by value without another wrapper API. */
 typedef struct {

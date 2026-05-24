@@ -22,6 +22,7 @@
 #include "repl/eval.h"
 #include "ui/app/editor.h"
 #include "subsystems/color_picker/color_picker_state.h"
+#include "subsystems/variable_panel/variable_panel_state.h"
 
 #include "ui/app/state_types.h"
 
@@ -85,6 +86,7 @@ typedef struct UiRenderSnapshot {
     ReplReplayRuntimeState      replay;
     ReplSceneRuntimeState       scenes;
     EditorScrollState           scroll;
+    EditorCursorBlinkState      cursor_blink;
     ColorPickerView             color_picker;
 
     /* Inline numeric swatch (stateless — rebuilt every frame) */

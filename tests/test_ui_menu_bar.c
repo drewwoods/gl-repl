@@ -551,7 +551,7 @@ static void test_render_paths_with_stubs(void) {
 
     snap.search.match_count = 9;
     snap.search.hit_ordinal = 3;
-    snap.code_panel.cursor_visible = 1;
+    snap.cursor_blink.cursor_visible = 1;
     gl_stub_counts_reset();
     ui_menu_bar_render_search_overlay(&snap);
     ASSERT_TRUE("search overlay renders cursor and count", gl_stub_counts[GL_STUB_glRectf] > 0);

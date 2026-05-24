@@ -97,13 +97,13 @@ static void test_apply_defaults(void) {
 
 static void test_cursor_actions(void) {
     glr_app_reset_all();
-    UiCodePanelRuntimeState *cp = ui_state_code_panel_mut();
-    cp->cursor_visible = 0;
-    cp->blink_tick = 100;
+    EditorCursorBlinkState *cb = editor_state_cursor_blink_mut();
+    cb->cursor_visible = 0;
+    cb->blink_tick = 100;
 
     glr_action_cursor_blink_reset();
-    ASSERT_INT("cursor visible after reset", cp->cursor_visible, 1);
-    ASSERT_INT("blink tick reset", cp->blink_tick, 0);
+    ASSERT_INT("cursor visible after reset", editor_state_cursor_blink().cursor_visible, 1);
+    ASSERT_INT("blink tick reset", editor_state_cursor_blink().blink_tick, 0);
 }
 
 static void test_help_tab_actions(void) {

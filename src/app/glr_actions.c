@@ -481,10 +481,10 @@ void glr_cfg_cycle_row(int row, int delta) {
 }
 
 void glr_action_cursor_blink_reset(void) {
-    UiCodePanelRuntimeState *cp = ui_state_code_panel_mut();
+    EditorCursorBlinkState *cb = editor_state_cursor_blink_mut();
 
-    cp->cursor_visible = 1;
-    cp->blink_tick = 0;
+    cb->cursor_visible = 1;
+    cb->blink_tick = 0;
 }
 
 /* Highest valid help tab index, derived from the actual content so
@@ -596,9 +596,6 @@ int glr_action_menu_item_activate(int menu_id, int item_idx) {
              * that slot's <slug>.c with the emptied buffer. Detach the
              * scene fully (transient lifecycle) and drop the undo ring
              * (wholesale document replacement, same as F12 / load). */
-            ReplSceneRuntimeState *scenes = repl_state_scenes_mut();
-            if (scenes->active_example_idx >= 0)
-                scenes->active_example_idx = -1;
             repl_scenes_enter_transient_scene();
             repl_scenes_reset_for_transient();
             editor_clear_all_cmds();
