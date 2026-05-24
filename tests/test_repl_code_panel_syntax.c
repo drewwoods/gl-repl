@@ -40,7 +40,7 @@ static const UiSyntaxSpan *find_tok(const char *text,
 static void check_line(const char *label, const char *text,
                        const char *tok, UiSyntaxKind expect_kind) {
     UiSyntaxSpan spans[MAX_SPANS];
-    int n = ui_repl_code_panel_classify_syntax(text, spans, MAX_SPANS);
+    int n = ui_repl_code_panel_classify_syntax(NULL, text, spans, MAX_SPANS);
     const UiSyntaxSpan *s = find_tok(text, spans, n, tok);
     char name[160];
 
@@ -52,7 +52,7 @@ static void check_line(const char *label, const char *text,
 static void check_no_span(const char *label, const char *text,
                           const char *tok) {
     UiSyntaxSpan spans[MAX_SPANS];
-    int n = ui_repl_code_panel_classify_syntax(text, spans, MAX_SPANS);
+    int n = ui_repl_code_panel_classify_syntax(NULL, text, spans, MAX_SPANS);
     char name[160];
 
     snprintf(name, sizeof(name), "%s: '%s' has no span", label, tok);

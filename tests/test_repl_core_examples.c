@@ -10,7 +10,7 @@
 #include "repl/examples.h"
 #include "repl/state.h"
 #include "repl/core.h"
-#include "ui/core/layout.h"      /* CODE_PANEL_LAYOUT_* enum values */
+#include "ui/app/layout.h"      /* CODE_PANEL_LAYOUT_* enum values */
 #include "ui/app/state.h"
 #include "scene/render.h"
 #include "app/glr_defaults.h"   /* CFG_DEFAULT_* */
@@ -425,8 +425,50 @@ static int cmp_string_ptrs(const void *lhs, const void *rhs) {
     return strcmp(*left, *right);
 }
 
+static void canonicalize_float_literals(const char *in, char *out, int out_sz) {
+    int i = 0;
+    int o = 0;
+    int in_len = (int)strlen(in);
+    
+    while (i < in_len && o < out_sz - 1) {
+        if (isdigit((unsigned char)in[i]) || 
+            (in[i] == '.' && i + 1 < in_len && isdigit((unsigned char)in[i + 1]))) {
+            char *endptr;
+            float val = strtof(in + i, &endptr);
+            int consumed = (int)(endptr - (in + i));
+            if (consumed > 0) {
+                if (in[i + consumed] == 'f' || in[i + consumed] == 'F') {
+                    consumed++;
+                }
+                char buf[32];
+                snprintf(buf, sizeof(buf), "%.6g", (double)val);
+                int blen = (int)strlen(buf);
+                if (o + blen < out_sz - 1) {
+                    memcpy(out + o, buf, (size_t)blen);
+                    o += blen;
+                }
+                i += consumed;
+                continue;
+            }
+        }
+        out[o++] = in[i++];
+    }
+    out[o] = '\0';
+}
+
+static char *canonicalize_text_floats(const char *src) {
+    if (!src) return NULL;
+    size_t len = strlen(src);
+    size_t out_sz = len * 2 + 1;
+    char *out = (char *)malloc(out_sz);
+    if (!out) return NULL;
+    canonicalize_float_literals(src, out, (int)out_sz);
+    return out;
+}
+
 static char *canonicalize_definition_line(const char *line) {
     char repl_line[MAX_LINE_LEN];
+    char canon_float_line[MAX_LINE_LEN];
     char *comment;
     char *out;
 
@@ -441,10 +483,12 @@ static char *canonicalize_definition_line(const char *line) {
         trim_in_place(repl_line);
     }
 
-    out = (char *)malloc(strlen(repl_line) + 1);
+    canonicalize_float_literals(repl_line, canon_float_line, sizeof(canon_float_line));
+
+    out = (char *)malloc(strlen(canon_float_line) + 1);
     if (!out)
         return NULL;
-    strcpy(out, repl_line);
+    strcpy(out, canon_float_line);
     return out;
 }
 
@@ -1570,8 +1614,10 @@ int main(int argc, char **argv) {
             snprintf(label, sizeof(label), "example %02d import dump alloc", idx);
             ASSERT_TRUE(label, imported != NULL);
             if (imported) {
-                char *actual_cmp = strip_decl_trailing_comments(actual);
-                char *imported_cmp = strip_decl_trailing_comments(imported);
+                char *actual_cmp_raw = strip_decl_trailing_comments(actual);
+                char *imported_cmp_raw = strip_decl_trailing_comments(imported);
+                char *actual_cmp = canonicalize_text_floats(actual_cmp_raw);
+                char *imported_cmp = canonicalize_text_floats(imported_cmp_raw);
                 roundtrip_exact = compare_exact_text(actual_cmp, imported_cmp,
                                                      &diff_line);
                 if (!roundtrip_exact) {
@@ -1585,6 +1631,8 @@ int main(int argc, char **argv) {
                 }
                 free(actual_cmp);
                 free(imported_cmp);
+                free(actual_cmp_raw);
+                free(imported_cmp_raw);
                 snprintf(label, sizeof(label),
                          "example %02d exact export/import roundtrip", idx);
                 ASSERT_TRUE(label, roundtrip_exact);

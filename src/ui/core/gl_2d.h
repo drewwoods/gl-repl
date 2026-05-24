@@ -1,6 +1,7 @@
 #ifndef GL_2D_H
 #define GL_2D_H
 #include "gl_includes.h"
+#include "ui/core/theme.h"
 
 /* Push a 2D ortho projection sized to (0,0)-(w,h) and disable depth +
  * lighting via glPushAttrib so the corresponding gl2d_end() restores
@@ -39,6 +40,24 @@ static inline void gl2d_draw_string(float x, float y, const char *s,
                                     void *font) {
     glRasterPos2f(x, y);
     for (; *s; s++) glutBitmapCharacter(font, (unsigned char)*s);
+}
+
+/* Draw a floating-panel frame: filled background rect + 1px border line loop.
+ * Expects blending already enabled; caller sets up gl2d_begin beforehand.
+ * bg_tok / border_tok are UiThemeToken values; bg_alpha / border_alpha
+ * are per-draw alpha multipliers fed through ui_clr_a(). */
+static inline void gl2d_panel_frame(float x, float y, float w, float h,
+                                     int bg_tok, float bg_alpha,
+                                     int border_tok, float border_alpha) {
+    ui_clr_a((UiThemeToken)bg_tok, bg_alpha);
+    glRectf(x, y, x + w, y + h);
+    ui_clr_a((UiThemeToken)border_tok, border_alpha);
+    glBegin(GL_LINE_LOOP);
+    glVertex2f(x,     y);
+    glVertex2f(x + w, y);
+    glVertex2f(x + w, y + h);
+    glVertex2f(x,     y + h);
+    glEnd();
 }
 
 #endif /* GL_2D_H */

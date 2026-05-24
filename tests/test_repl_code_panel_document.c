@@ -9,7 +9,7 @@
 #include "ui/app/state.h"
 #include "repl/core.h"
 #include "repl/state.h"
-#include "ui/core/layout.h"
+#include "ui/app/layout.h"
 #include "ui/core/metrics.h"
 #include "ui/app/repl_code_panel.h"
 #include "ui/app/panels.h"

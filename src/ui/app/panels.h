@@ -17,7 +17,7 @@
 #define UI_PANELS_H
 
 #include "ui/app/snapshot.h"
-#include "ui/core/hit.h"
+#include "ui/app/hit.h"
 
 /* --- Rendering --- */
 

@@ -13,7 +13,7 @@
 
 #include "subsystems/color_picker/color_picker_state.h"
 #include "ui/app/editor.h"
-#include "ui/core/hit.h"
+#include "ui/app/hit.h"
 
 /* Width of inline color-swatch boxes (shown in code panel). */
 #define UI_COLOR_SWATCH_W 12

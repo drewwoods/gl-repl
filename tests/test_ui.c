@@ -1,6 +1,7 @@
 #include "editor/state.h"
 #include "app/glr_state.h"
 #include "app/glr_ctrl.h"
+#define STATUSBAR_H 22
 #include "ui/core/metrics.h"
 #include "ui/app/state.h"
 #include "repl/state.h"
@@ -19,7 +20,7 @@
 #include "ui/app/menu_bar.h"
 #include "ui/app/panels.h"
 #include "ui/app/snapshot.h"
-#include "ui/core/layout.h"
+#include "ui/app/layout.h"
 #include "ui/app/repl_code_panel.h"
 #include "subsystems/variable_panel/variable_panel_state.h"
 #include "subsystems/variable_panel/variable_panel_drag.h"

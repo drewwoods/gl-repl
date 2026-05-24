@@ -19,22 +19,8 @@ typedef enum {
     UI_HIT_CODE_TEXT,            /* committed code-panel text row */
     UI_HIT_CODE_INSERT_LINE,     /* code-panel "next line" past last commit */
     UI_HIT_CODE_GUTTER,          /* code-panel left margin / line numbers */
-    UI_HIT_CODE_PANEL_CHROME,    /* non-text code-panel chrome (e.g. statusbar) */
-    UI_HIT_CODE_FOCUS_TOGGLE,    /* statusbar "focus" keycap — toggle code focus */
-    UI_HIT_HELP_TOGGLE,          /* statusbar "F1 help" keycap — toggle help overlay */
-    UI_HIT_CODE_PANEL_TAB,       /* scene tab strip — a clickable scene tab */
-    UI_HIT_INLINE_COLOR_SWATCH,  /* inline color swatch drawn in a code-panel row */
-    UI_HIT_NUMERIC_SWATCH,       /* inline numeric stepper (item_idx = +1 / -1) */
-    UI_HIT_COLOR_SWATCH,         /* floating color picker slider control */
-    UI_HIT_MENU_BUTTON,          /* top-level menu-bar button (open / switch / dismiss) */
-    UI_HIT_MENU_ITEM,            /* open menu dropdown row */
-    UI_HIT_SUBMENU_ITEM,         /* flyout submenu row (Scene example / Config item) */
-    UI_HIT_PIN_BUTTON,           /* pinned right-side button (search / replay) */
-    UI_HIT_VARIABLE_SLIDER,      /* variable panel slider row */
-    UI_HIT_REPLAY_BUTTON,        /* replay HUD play/pause/step button */
-    UI_HIT_HELP_PANEL,           /* help overlay (read-only editor session) */
     UI_HIT_PANEL_DIVIDER,        /* draggable code-panel ↔ scene divider */
-    UI_HIT_SCENE,                /* 3D viewport (scene/camera region) */
+    UI_HIT_CORE_COUNT
 } UiHitKind;
 
 /* Per-kind field semantics. The struct shape is a flat union of optional
@@ -59,63 +45,11 @@ typedef enum {
  *     line_idx = committed source-cmd row
  *     visual_row = wrap-row offset
  *     cmd_idx = logical text-panel row index
-
- *   UI_HIT_CODE_PANEL_CHROME
- *     coordinates only, no line / row payload
- *
- *   UI_HIT_CODE_FOCUS_TOGGLE
- *     coordinates only; controller routes it to
- *     glr_ctrl_toggle_code_focus() (same action as Ctrl+Shift+F)
- *
- *   UI_HIT_HELP_TOGGLE
- *     coordinates only; controller routes it to glr_ctrl_toggle_help()
- *     (same action as the F1 key)
- *
- *   UI_HIT_CODE_PANEL_TAB
- *     item_idx = tab display index (into the snapshot scene_tabs list)
- *     local_x / local_y = offset within the tab strip band
  *
  *   UI_HIT_PANEL_DIVIDER  — coordinates only, no line / row payload
- *
- *   UI_HIT_INLINE_COLOR_SWATCH
- *     line_idx = source-cmd row (the swatch's row)
- *     cmd_idx  = same as line_idx (kept for callers that prefer it)
- *
- *   UI_HIT_COLOR_SWATCH (floating picker control)
- *     line_idx = active picker source-cmd row
- *     cmd_idx  = same
- *     item_idx = picker region (1=SV, 2=hue, 3=alpha)
- *
- *   UI_HIT_MENU_BUTTON
- *     cmd_idx  = menu_id
- *
- *   UI_HIT_MENU_ITEM
- *     cmd_idx  = menu_id (the menu the dropdown belongs to)
- *     item_idx = dropdown row index
- *
- *   UI_HIT_SUBMENU_ITEM
- *     cmd_idx  = menu_id the submenu belongs to (the controller routes
- *                Scene → load-example, Config → config activate)
- *     item_idx = absolute target index: a global flat example index
- *                for MENU_SCENE, a g_cfg_items[] index for MENU_CONFIG
- *     line_idx = ordinal within the open submenu
- *
- *   UI_HIT_PIN_BUTTON
- *     item_idx = pin id (UI_MENU_BAR_PIN_REPLAY / _SEARCH)
- *
- *   UI_HIT_VARIABLE_SLIDER
- *     cmd_idx  = predef-var slot
- *     item_idx = row index
- *
- *   UI_HIT_NUMERIC_SWATCH
- *     item_idx = direction (+1 = increment, -1 = decrement)
- *     All other fields unused (-1). Route handler re-derives the arg
- *     offsets from live editor state.
- *
- *   UI_HIT_SCENE / UI_HIT_HELP_PANEL — coordinates only.
  */
 typedef struct {
-    UiHitKind kind;
+    int kind; /* int kind to allow enum extension by ui/app/hit.h */
 
     /* Source-command line targeted by the hit. -1 when not
      * applicable, including generic text-panel virtual rows before the

@@ -17,11 +17,10 @@
 
 #include "ui/app/variable_panel.h"
 #include "ui/core/gl_2d.h"
-#include "ui/core/layout.h"
+#include "ui/app/layout.h"
 #include "ui/core/metrics.h"
 #include "ui/core/theme.h"
 #include "subsystems/replay/replay_state.h"
-#include "ui/app/replay_hud.h"
 #include "ui/app/state.h"
 #include "subsystems/variable_panel/variable_panel_state.h"
 
@@ -97,35 +96,8 @@ static float val_to_slider_t(float val, float scale) {
 #define VAR_PANEL_LIFT_EASE 0.22f
 #define VAR_PANEL_LIFT_SNAP_PX 0.25f
 
-static float g_var_panel_replay_lift_px = 0.0f;
-
-static float var_panel_replay_target_lift_px(void) {
-    float target = (float)((REPLAY_HUD_BOTTOM_Y + VAR_REPLAY_CLEARANCE)
-                         - VAR_PANEL_BASE_Y);
-    if (target < 0.0f) target = 0.0f;
-    return target;
-}
-
-/* Advance the easing toward the current target. Called from
- * ui_variable_panel_render once per frame — keeps the per-frame
- * check out of the hit-test path. */
-static void var_panel_replay_lift_tick(void) {
-    float target = 0.0f;
-    if (replay_active())
-        target = var_panel_replay_target_lift_px();
-
-    /* Exponential-decay style easing toward target (and back to 0 when replay ends). */
-    g_var_panel_replay_lift_px += (target - g_var_panel_replay_lift_px) * VAR_PANEL_LIFT_EASE;
-    if (fabsf(target - g_var_panel_replay_lift_px) < VAR_PANEL_LIFT_SNAP_PX)
-        g_var_panel_replay_lift_px = target;
-}
-
-/* Read-only lift, used by both render and hit-test geometry. The
- * cached value is the last value the render path's tick set; hit-test
- * intentionally does NOT tick (no anim_time available, and the panel
- * position should match what was last rendered anyway). */
 static float var_panel_replay_lift(void) {
-    return g_var_panel_replay_lift_px;
+    return variable_panel_view().replay_lift_px;
 }
 
 static int ui_variable_panel_clamp_count(int var_count) {
@@ -210,8 +182,6 @@ void ui_variable_panel_render(const UiRenderSnapshot *snap) {
     const UiVariableList *vars = &snap->variable_panel_vars;
     int var_count = ui_variable_count(vars);
 
-    var_panel_replay_lift_tick();
-
     int px, py, pw, ph;
     ui_variable_panel_rect_for_count(var_count, &px, &py, &pw, &ph);
 
@@ -219,18 +189,9 @@ void ui_variable_panel_render(const UiRenderSnapshot *snap) {
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-    /* Background */
-    ui_clr_a(UI_TOK_SUNKEN, 0.88f);
-    glRectf((float)px, (float)py, (float)px + (float)pw, (float)py + (float)ph);
-
-    /* Border */
-    ui_clr_a(UI_TOK_BORDER, 0.75f);
-    glBegin(GL_LINE_LOOP);
-    glVertex2f((float)px,        (float)py);
-    glVertex2f((float)(px + pw), (float)py);
-    glVertex2f((float)(px + pw), (float)(py + ph));
-    glVertex2f((float)px,        (float)(py + ph));
-    glEnd();
+    /* Background + Border */
+    gl2d_panel_frame((float)px, (float)py, (float)pw, (float)ph,
+                     UI_TOK_SUNKEN, 0.88f, UI_TOK_BORDER, 0.75f);
 
     /* Title */
     ui_clr(UI_TOK_TEXT_PRIMARY);

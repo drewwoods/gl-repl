@@ -135,7 +135,7 @@ typedef struct {
  *                      rows and the adapter rewrites it before returning
  *                      the hit to callers. -1 for non-hit-testable
  *                      virtual rows.
- *   search_row_idx   - Row index in the editor search row space, or -1
+ *   search_row_idx   - Row index in the adapter search row space, or -1
  *                      for rows outside the search model (static chrome,
  *                      non-searchable virtual rows). Compared with
  *                      UiTextPanelSearch.hit_row for match highlighting.
@@ -187,7 +187,7 @@ typedef struct {
  * pre-resolved NUL-terminated strings from the autocomplete subsystem —
  * the text panel treats them as opaque display strings and does not
  * interpret their grammar. Pass empty strings ("") when not needed
- * (e.g. editor demo with no grammar to suggest from). */
+ * (e.g. standalone demo with no grammar to suggest from). */
 typedef struct {
     const char *input;          /* input buffer text (NUL-terminated) */
     int         input_len;      /* cached strlen(input) */
@@ -202,9 +202,8 @@ typedef struct {
  * Search state
  * ---------------------------------------------------------------------- */
 
-/* Search highlight state. hit_row is in the editor search row space
- * (see editor_search_row_for_cmd_index); compared against each row's
- * search_row_idx field when drawing match highlights. */
+/* Search highlight state. hit_row is in the adapter-defined search row space;
+ * compared against each row's search_row_idx field when drawing match highlights. */
 typedef struct {
     int         active;         /* non-zero when search overlay is visible */
     const char *query;          /* search query string (NUL-terminated) */
@@ -259,6 +258,10 @@ typedef struct {
      * visible-row count so rows/scrollbar/scroll math clear it. Stays
      * REPL-free: just an int (the adapter computes the value). */
     int top_chrome_h;
+
+    /* Height of the status bar along the bottom of the text panel.
+     * Replaces the former global statusbar metrics dependency. */
+    int statusbar_h;
 
     /* Logical row array — one entry per source / chrome / virtual / input
      * line. The renderer iterates all rows and wraps each one internally. */
@@ -317,9 +320,9 @@ typedef struct {
  * ---------------------------------------------------------------------- */
 
 /* Compute how many visual rows fit in a panel of height panel_h pixels for
- * the supplied UI_TEXT_PANEL_CHROME_* bitmask. Pure geometry — does not read
+ * the supplied statusbar height. Pure geometry — does not read
  * any global state. */
-int  ui_text_panel_visible_lines_for_height(int panel_h, int chrome_flags,
+int  ui_text_panel_visible_lines_for_height(int panel_h, int statusbar_h,
                                              int top_chrome_h);
 
 /* Return the pixel baseline y-coordinate of the logical row at
@@ -347,5 +350,9 @@ void ui_text_panel_render(const UiTextPanelSnapshot *snap,
  * owning source line before controller routing. */
 UiHit ui_text_panel_hit_test(const UiTextPanelSnapshot *snap,
                               int mx, int my);
+
+int  ui_text_panel_right_action_rect(const UiTextPanelSnapshot *snap,
+                                    int line_y,
+                                    int *out_sx, int *out_sy, int *out_sw);
 
 #endif /* UI_TEXT_PANEL_H */

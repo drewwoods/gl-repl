@@ -7,7 +7,7 @@
 #ifndef UI_NUMERIC_SWATCH_H
 #define UI_NUMERIC_SWATCH_H
 
-#include "ui/core/hit.h"
+#include "ui/app/hit.h"
 #include "ui/app/snapshot.h"
 
 #define UI_NUMERIC_SWATCH_BTN_W  16

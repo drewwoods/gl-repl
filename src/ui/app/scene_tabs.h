@@ -39,8 +39,11 @@
 #ifndef UI_SCENE_TABS_H
 #define UI_SCENE_TABS_H
 
-#include "ui/core/hit.h"
+#include "ui/app/hit.h"
 #include "ui/app/snapshot.h"
+#include "ui/core/metrics.h"
+
+#define TAB_STRIP_H LINE_H
 
 /* Render the scene tab strip. No-op when the derived tab set is empty or
  * the panel is hidden. Draws into the caller's open gl2d block (same as

@@ -172,6 +172,25 @@ typedef struct UiRenderSnapshot {
     char                        reshape_proj_lines[UI_RESHAPE_PROJ_LINES]
                                                   [UI_RESHAPE_PROJ_LINE_MAX];
     int                         reshape_proj_count;
+
+    /* One-week pass: snapshot purity boundary extensions */
+    EditorBufferView            editor_buffer;
+    UiLineOverrideList          line_overrides;
+    
+    struct {
+        int   active;
+        int   fade_line_idx;
+        float fade_start_t;
+        float fade_duration;
+    }                           tutorial_fade;
+
+    enum { UI_LIGHTS_DISPLAY_MAX = 8 };
+    char                        lights_display_lines[UI_LIGHTS_DISPLAY_MAX][MAX_LINE_LEN];
+    int                         lights_display_count;
+
+    enum { UI_INIT_SECTION_MAX = 32 };
+    char                        init_section_lines[UI_INIT_SECTION_MAX][MAX_LINE_LEN];
+    int                         init_section_count;
 } UiRenderSnapshot;
 
 #endif /* UI_SNAPSHOT_H */

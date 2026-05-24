@@ -1,6 +1,6 @@
 #include "ui/app/state.h"
 #include "ui/app/profile_panel.h"
-#include "ui/core/layout.h"  /* CFG_DEFAULT_PANEL_FRAC */
+#include "ui/app/layout.h"  /* CFG_DEFAULT_PANEL_FRAC */
 
 #include <stddef.h>
 #include <string.h>

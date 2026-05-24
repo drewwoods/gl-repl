@@ -11,7 +11,7 @@
 #include "editor/undo.h"
 #include "repl/core.h"
 #include "editor/input.h"
-#include "ui/core/layout.h"   /* CODE_PANEL_LAYOUT_* */
+#include "ui/app/layout.h"   /* CODE_PANEL_LAYOUT_* */
 #include "support/test_harness.h"
 
 static TestHarness g_harness = TEST_HARNESS_INIT;

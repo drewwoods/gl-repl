@@ -9,7 +9,7 @@
 #include "repl/compile.h"
 #include "repl/core.h"             /* set_status, MAX_LINE_LEN */
 #include "repl/parser.h"
-#include "ui/core/layout.h"
+#include "ui/app/layout.h"
 #include "ui/app/state.h"
 
 #include <math.h>

@@ -14,7 +14,7 @@
 #ifndef UI_VARIABLE_PANEL_H
 #define UI_VARIABLE_PANEL_H
 
-#include "ui/core/hit.h"
+#include "ui/app/hit.h"
 #include "ui/app/snapshot.h"
 
 /* Render the variable panel with all declared variables and current values.

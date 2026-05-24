@@ -3,7 +3,7 @@
  */
 #include "ui/app/profile_panel.h"
 #include "ui/core/gl_2d.h"
-#include "ui/core/layout.h"
+#include "ui/app/layout.h"
 #include "ui/core/metrics.h"
 #include "ui/core/theme.h"
 #include "ui/app/variable_panel.h"
@@ -217,20 +217,12 @@ void ui_profile_panel_render(const UiRenderSnapshot *snap) {
 
     gl2d_begin(snap->viewport.window_w, snap->viewport.window_h);
 
-    /* Background */
+    /* Background + Border */
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    ui_clr_a(UI_TOK_SUNKEN, 0.91f);
-    glRectf((float)panel_x, (float)panel_y, (float)panel_x + (float)PROF_PANEL_W, (float)panel_y + (float)panel_h);
-
-    /* Border */
-    ui_clr_a(UI_TOK_BORDER, 0.85f);
-    glBegin(GL_LINE_LOOP);
-    glVertex2f((float)panel_x,                   (float)panel_y);
-    glVertex2f((float)(panel_x + PROF_PANEL_W),  (float)panel_y);
-    glVertex2f((float)(panel_x + PROF_PANEL_W),  (float)(panel_y + panel_h));
-    glVertex2f((float)panel_x,                   (float)(panel_y + panel_h));
-    glEnd();
+    gl2d_panel_frame((float)panel_x, (float)panel_y,
+                     (float)PROF_PANEL_W, (float)panel_h,
+                     UI_TOK_SUNKEN, 0.91f, UI_TOK_BORDER, 0.85f);
     glDisable(GL_BLEND);
 
     int tx = panel_x + 8;
