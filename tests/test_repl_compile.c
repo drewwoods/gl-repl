@@ -388,7 +388,7 @@ static void test_overwrite_earlier_decl_with_later_assign_rebases_slot(void) {
     ASSERT_INT("Y = 42 over earlier decl plans REPLACE_ONE",
                change.kind, REPL_COMPILED_REPLACE_ONE);
     ASSERT_INT("compiled slot rebased before apply",
-               change.cmds[0].num_args, y_slot - 1);
+               change.cmds[0].var_idx, y_slot - 1);
 
     ASSERT_INT("Y = 42 over earlier decl apply OK",
                editor_commit_apply_external_change(&change, 0), 1);
@@ -403,7 +403,7 @@ static void test_overwrite_earlier_decl_with_later_assign_rebases_slot(void) {
     ASSERT_INT("replacement row is var assign",
                repl_state_document_cmds_mut()[x_row].type, CMD_VAR_ASSIGN);
     ASSERT_INT("replacement row slot matches live Y slot",
-               repl_state_document_cmds_mut()[x_row].num_args, y_slot);
+               repl_state_document_cmds_mut()[x_row].var_idx, y_slot);
 }
 
 /* Forced cmd-store capacity failure leaves predef-vars, editor
