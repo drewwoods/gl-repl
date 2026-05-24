@@ -1472,6 +1472,9 @@ typedef struct {
     char cmds[48];
     char line[64];
     char aa[32];
+    int  cmds_w;
+    int  line_w;
+    int  aa_w;
     int  has_aa;
     int  right_edge;
 } ReplStatusbarLeft;
@@ -1484,7 +1487,8 @@ static ReplStatusbarLeft repl_code_panel_statusbar_left(
 
     snprintf(L.cmds, sizeof L.cmds, "%d/%d cmds",
              snap->flat_program_count, MAX_COMMANDS);
-    tx += (int)strlen(L.cmds) * FONT_SMALL_W;
+    L.cmds_w = (int)strlen(L.cmds) * FONT_SMALL_W;
+    tx += L.cmds_w;
     tx += STATUSBAR_SEP_W;
 
     if (snap->editor_input.insert_mode)
@@ -1494,7 +1498,8 @@ static ReplStatusbarLeft repl_code_panel_statusbar_left(
                  edit_line + 1, repl_mode_name(snap->current_begin_mode));
     else
         snprintf(L.line, sizeof L.line, "Ln %d", edit_line + 1);
-    tx += (int)strlen(L.line) * FONT_SMALL_W;
+    L.line_w = (int)strlen(L.line) * FONT_SMALL_W;
+    tx += L.line_w;
 
     L.has_aa = snap->render.use_accum ? 1 : 0;
     if (L.has_aa) {
@@ -1503,9 +1508,11 @@ static ReplStatusbarLeft repl_code_panel_statusbar_left(
             snprintf(L.aa, sizeof L.aa, "AA %dx", snap->render.accum_samples);
         else
             snprintf(L.aa, sizeof L.aa, "AA off");
-        tx += (int)strlen(L.aa) * FONT_SMALL_W;
+        L.aa_w = (int)strlen(L.aa) * FONT_SMALL_W;
+        tx += L.aa_w;
     } else {
         L.aa[0] = '\0';
+        L.aa_w = 0;
     }
     L.right_edge = tx;
     return L;
@@ -1652,19 +1659,19 @@ static void repl_code_panel_draw_statusbar(const UiRenderSnapshot *snap,
 
         ui_clr(UI_TOK_TEXT_PRIMARY);
         gl2d_draw_string((float)tx, (float)text_y, L.cmds, FONT_SMALL);
-        tx += (int)strlen(L.cmds) * FONT_SMALL_W;
+        tx += L.cmds_w;
 
         repl_code_panel_statusbar_sep(&tx, sy, sh);
 
         ui_clr(UI_TOK_TEXT_MUTED);
         gl2d_draw_string((float)tx, (float)text_y, L.line, FONT_SMALL);
-        tx += (int)strlen(L.line) * FONT_SMALL_W;
+        tx += L.line_w;
 
         if (L.has_aa) {
             repl_code_panel_statusbar_sep(&tx, sy, sh);
             ui_clr(UI_TOK_TEXT_MUTED);
             gl2d_draw_string((float)tx, (float)text_y, L.aa, FONT_SMALL);
-            tx += (int)strlen(L.aa) * FONT_SMALL_W;
+            tx += L.aa_w;
         }
 
         /* Right cluster, drawn from the right edge. Each chip is
