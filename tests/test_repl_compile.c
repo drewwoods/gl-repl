@@ -110,7 +110,7 @@ static void test_compile_float_decl_failure_is_pure(void) {
     char err[REPL_STATUS_TEXT_MAX];
     repl_compile_float_decl("float existing;", &ctx, &change, err, sizeof(err));
     /* Apply the success change so the state is non-trivial. */
-    editor_commit_apply_compiled_change(&change);
+    editor_commit_apply_external_change(&change, 0);
     ui_state_status_set("baseline status");
 
     ComputeFingerprint before = capture_fingerprint();
@@ -138,7 +138,7 @@ static void test_compile_var_assign_failure_is_pure(void) {
     ReplCompiledChange change;
     char err[REPL_STATUS_TEXT_MAX];
     repl_compile_float_decl("float a;", &ctx, &change, err, sizeof(err));
-    editor_commit_apply_compiled_change(&change);
+    editor_commit_apply_external_change(&change, 0);
     ui_state_status_set("baseline status");
 
     ComputeFingerprint before = capture_fingerprint();
@@ -207,7 +207,7 @@ static void test_compile_apply_updates_both(void) {
     ASSERT_INT("pre-apply predef registered",
                repl_eval_find_predef_var_idx("energy"), -1);
 
-    int ok = editor_commit_apply_compiled_change(&change);
+    int ok = editor_commit_apply_external_change(&change, 0);
     ASSERT_INT("apply returns 1 on success", ok, 1);
 
     /* Post-apply: both halves match. */
@@ -232,7 +232,7 @@ static void test_compile_apply_var_assign_updates_value(void) {
     ReplCompiledChange change;
     char err[REPL_STATUS_TEXT_MAX];
     repl_compile_float_decl("float k;", &ctx, &change, err, sizeof(err));
-    editor_commit_apply_compiled_change(&change);
+    editor_commit_apply_external_change(&change, 0);
 
     /* Snapshot: k is registered with value 0. */
     int slot = repl_eval_find_predef_var_idx("k");
@@ -247,7 +247,7 @@ static void test_compile_apply_var_assign_updates_value(void) {
     ASSERT_INT("k = 7 compile OK", r, REPL_COMPILE_OK);
     ASSERT_INT("k = 7 INSERT_ONE", change.kind, REPL_COMPILED_INSERT_ONE);
 
-    int ok = editor_commit_apply_compiled_change(&change);
+    int ok = editor_commit_apply_external_change(&change, 0);
     ASSERT_INT("apply returns 1", ok, 1);
     ASSERT_TRUE("k value is 7", g_predef_vars[slot].value == 7.0f);
     ASSERT_INT("doc has decl + assign", repl_state_document_count(), 2);
@@ -275,7 +275,7 @@ static void test_overwrite_decl_with_assign_preserves_set_value(void) {
                repl_compile_float_decl("float X = 5;", &ctx, &change, err, sizeof(err)),
                REPL_COMPILE_OK);
     ASSERT_INT("seed float X = 5 apply OK",
-               editor_commit_apply_compiled_change(&change), 1);
+               editor_commit_apply_external_change(&change, 0), 1);
 
     /* Declare Y (no initializer, no users — eligible for overwrite). */
     set_input("float Y;");
@@ -284,7 +284,7 @@ static void test_overwrite_decl_with_assign_preserves_set_value(void) {
                repl_compile_float_decl("float Y;", &ctx, &change, err, sizeof(err)),
                REPL_COMPILE_OK);
     ASSERT_INT("seed float Y apply OK",
-               editor_commit_apply_compiled_change(&change), 1);
+               editor_commit_apply_external_change(&change, 0), 1);
 
     int x_slot = repl_eval_find_predef_var_idx("X");
     int y_slot = repl_eval_find_predef_var_idx("Y");
@@ -316,7 +316,7 @@ static void test_overwrite_decl_with_assign_preserves_set_value(void) {
     ASSERT_INT("X = 42 over decl-row plans REPLACE_ONE",
                change.kind, REPL_COMPILED_REPLACE_ONE);
 
-    int ok = editor_commit_apply_compiled_change(&change);
+    int ok = editor_commit_apply_external_change(&change, 0);
     ASSERT_INT("X = 42 over decl-row apply OK", ok, 1);
 
     /* Sanity: Y was undeclared (its UNDECLARE op did run). */
@@ -423,11 +423,11 @@ static void test_capacity_failure_is_atomic(void) {
     set_input("float anchor;");
     ctx = repl_compile_context_from_live(editor_state_edit_line());
     repl_compile_float_decl("float anchor;", &ctx, &change, err, sizeof(err));
-    editor_commit_apply_compiled_change(&change);
+    editor_commit_apply_external_change(&change, 0);
     set_input("anchor = 9");
     ctx = repl_compile_context_from_live(editor_state_edit_line());
     repl_compile_var_assign("anchor = 9", &ctx, &change, err, sizeof(err));
-    editor_commit_apply_compiled_change(&change);
+    editor_commit_apply_external_change(&change, 0);
 
     /* Snapshot pre-state. */
     int pre_doc_count    = repl_state_document_count();
@@ -468,7 +468,7 @@ static void test_capacity_failure_is_atomic(void) {
     int can = repl_apply_can_apply_compiled_change(&change);
     ASSERT_INT("preflight rejects out-of-range insert", can, 0);
 
-    int ok = editor_commit_apply_compiled_change(&change);
+    int ok = editor_commit_apply_external_change(&change, 0);
     ASSERT_INT("apply returns 0 on preflight failure", ok, 0);
 
     /* All three surfaces unchanged. */
@@ -502,7 +502,7 @@ static void test_capacity_failure_is_atomic(void) {
 
     can = repl_apply_can_apply_compiled_change(&change);
     ASSERT_INT("preflight rejects over-capacity insert_many", can, 0);
-    ok = editor_commit_apply_compiled_change(&change);
+    ok = editor_commit_apply_external_change(&change, 0);
     ASSERT_INT("apply returns 0 on insert_many capacity failure", ok, 0);
     ASSERT_INT("doc count still unchanged",
                repl_state_document_count(), pre_doc_count);
@@ -512,7 +512,7 @@ static void test_capacity_failure_is_atomic(void) {
                repl_eval_find_predef_var_idx("phantom"), -1);
 }
 
-/* Reformat-the-document path: the legacy reformat loop calls
+/* Reformat-the-document path: the live reformat loop calls
  * repl_command_store_replace_one + editor_buffer_replace_line for
  * every line. Verify that after a reformat (run via the existing
  * try_commit dispatcher path), buffer + store remain in sync. */
@@ -525,11 +525,11 @@ static void test_reformat_keeps_buffer_and_store_aligned(void) {
     ReplCompiledChange change;
     char err[REPL_STATUS_TEXT_MAX];
     repl_compile_float_decl("float a;", &ctx, &change, err, sizeof(err));
-    editor_commit_apply_compiled_change(&change);
+    editor_commit_apply_external_change(&change, 0);
     set_input("a = 1");
     ctx = repl_compile_context_from_live(editor_state_edit_line());
     repl_compile_var_assign("a = 1", &ctx, &change, err, sizeof(err));
-    editor_commit_apply_compiled_change(&change);
+    editor_commit_apply_external_change(&change, 0);
 
     int doc_count = repl_state_document_count();
     int buf_count = editor_buffer_count();
@@ -573,7 +573,7 @@ static void test_set_predef_value_prefers_last_literal_assign(void) {
                REPL_PREDEF_OP_SET_VALUE);
 
     ASSERT_INT("set_predef literal apply OK",
-               editor_commit_apply_compiled_change(&change), 1);
+               editor_commit_apply_external_change(&change, 0), 1);
     ASSERT_STR("set_predef literal buffer line updated",
                editor_buffer_line(3), "  x = 4.5;");
     {
@@ -602,7 +602,7 @@ static void test_set_predef_value_rewrites_declaration_initializer(void) {
                change.text[0], "  static float a = 1, x = 2.5, y; // vars");
 
     ASSERT_INT("set_predef decl apply OK",
-               editor_commit_apply_compiled_change(&change), 1);
+               editor_commit_apply_external_change(&change, 0), 1);
     ASSERT_STR("set_predef decl buffer line updated",
                editor_buffer_line(0), "  static float a = 1, x = 2.5, y; // vars");
     {
@@ -630,7 +630,7 @@ static void test_set_predef_value_adds_declaration_initializer(void) {
     ASSERT_STR("set_predef add init text", change.text[0], "  static float x = 2.5;");
 
     ASSERT_INT("set_predef add init apply OK",
-               editor_commit_apply_compiled_change(&change), 1);
+               editor_commit_apply_external_change(&change, 0), 1);
     ASSERT_STR("set_predef add init buffer line updated",
                editor_buffer_line(0), "  static float x = 2.5;");
 }
@@ -653,7 +653,7 @@ static void test_set_predef_value_keeps_expression_sources(void) {
                REPL_COMPILED_NO_CHANGE);
 
     ASSERT_INT("set_predef expr apply OK",
-               editor_commit_apply_compiled_change(&change), 1);
+               editor_commit_apply_external_change(&change, 0), 1);
     ASSERT_STR("set_predef expr formula preserved",
                editor_buffer_line(2), "  x = y + 1;");
     ASSERT_STR("set_predef expr decl preserved",
@@ -681,7 +681,7 @@ static void test_set_predef_value_live_only_without_source(void) {
     ASSERT_INT("set_predef live-only predef op count", change.predef_op_count, 1);
 
     ASSERT_INT("set_predef live-only apply OK",
-               editor_commit_apply_compiled_change(&change), 1);
+               editor_commit_apply_external_change(&change, 0), 1);
     ASSERT_INT("set_predef live-only buffer count unchanged",
                editor_buffer_count(), 0);
     {
@@ -798,10 +798,10 @@ static void test_func_def_comment_relocation(void) {
     EditorCommitResult ok = editor_commit_current_input(&svc);
     /* func_def isn't in repl_compile_dispatch yet (it's an
      * editor-side compile), so editor_commit_current_input returns
-     * NO_CHANGE. Use the legacy try_commit dispatcher (which
+     * NO_CHANGE. Use the live try_commit dispatcher (which
      * forwards through editor_compile_func_def). */
     if (!ok.consumed) {
-        /* Fall through to the legacy try_commit chain. */
+        /* Fall through to the live try_commit chain. */
         editor_try_commit_block_structs();
     }
 

@@ -16,7 +16,7 @@
 
 /* Test seam: editor input reads modifiers through this hook so tests
  * can simulate Ctrl/Shift/Alt without a real GLUT context. Production
- * code installs no provider — `editor_get_modifiers()` falls back to
+ * code installs no provider — `editor_input_active_modifiers()` falls back to
  * glutGetModifiers() once `editor_input_enable_glut_modifier_reads()`
  * has been called. */
 typedef int (*EditorModifierProvider)(void);
@@ -56,14 +56,13 @@ EditorInputDispatchEffects editor_take_input_effects(void);
 void                     editor_request_redraw(void);
 void                     editor_set_cursor(int cursor);
 void                     editor_schedule_timer(unsigned int millis, int value);
-int                      editor_get_modifiers(void);
+int                      editor_input_active_modifiers(void);
 
 /* Test seam: drive editor input with a mocked modifier source. */
 void editor_input_set_modifier_provider_for_test(EditorModifierProvider provider);
-int  editor_input_active_modifiers(void);
 
 /* Production hook: glr_ctrl calls this from glr_ctrl_init_gl
- * after glutInit so editor_get_modifiers() may safely call
+ * after glutInit so editor_input_active_modifiers() may safely call
  * glutGetModifiers(). Tests that don't install a modifier provider
  * skip this hook; modifier reads return 0 instead of aborting
  * freeglut for being called pre-init. */

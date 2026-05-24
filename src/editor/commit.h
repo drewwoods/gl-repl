@@ -264,13 +264,9 @@ int  editor_commit_resolve_insert_exit_target(int target);
  * `_take`, read-only inspection with `_peek`. */
 int  editor_commit_func_decl_resume_take(void);
 int  editor_commit_func_decl_resume_peek(void);
-/* editor_commit_func_decl_resume_set is declared at line 190
- * alongside the apply_plan / post-effects API, where it primarily
- * serves; the redundant declaration here was elided in the symbol
- * rename. */
 
 int editor_try_commit_float_decl(void);
-int editor_try_assign_variable(void);
+int editor_try_commit_assign_variable(void);
 int editor_try_commit_for_loop(void);
 int editor_try_commit_func_def(void);
 int editor_try_commit_if_block(void);

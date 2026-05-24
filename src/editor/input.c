@@ -113,7 +113,7 @@ EditorInputDispatchEffects editor_take_input_effects(void) {
 }
 
 /* Production sets this from src/app/glr_ctrl.c after glutInit so
- * editor_get_modifiers() can safely call glutGetModifiers(). Tests
+ * editor_input_active_modifiers() can safely call glutGetModifiers(). Tests
  * that don't install a modifier provider leave it at 0; the read
  * is suppressed and modifier checks see "no modifiers" rather than
  * aborting freeglut for being called pre-init. */
@@ -131,13 +131,13 @@ unsigned char editor_input_normalize_super_to_ctrl(unsigned char key) {
      * KEY_CTRL_* constants (= 1..26). Without the translation, Cmd+B
      * would arrive as 'b' (0x62) and miss KEY_CTRL_B (0x02). */
     if (((key >= 'a' && key <= 'z') || (key >= 'A' && key <= 'Z')) &&
-        (editor_get_modifiers() & GLUT_ACTIVE_SUPER)) {
+        (editor_input_active_modifiers() & GLUT_ACTIVE_SUPER)) {
         return (unsigned char)(key & 0x1F);
     }
     return key;
 }
 
-int editor_get_modifiers(void) {
+int editor_input_active_modifiers(void) {
     int mods;
     if (g_modifier_provider_for_test)
         mods = g_modifier_provider_for_test();
@@ -169,10 +169,6 @@ void editor_schedule_timer(unsigned int millis, int value) {
     g_pending_input_effects.schedule_timer = 1;
     g_pending_input_effects.timer_millis = millis;
     g_pending_input_effects.timer_value = value;
-}
-
-int editor_input_active_modifiers(void) {
-    return editor_get_modifiers();
 }
 
 static int tutorial_precheck_current_input(void);
@@ -246,7 +242,7 @@ void editor_delete_cmd_range(int start, int count, const char *what) {
         editor_state_edit_line_set(repl_state_document_count());
     editor_load_line_to_input(editor_state_edit_line());
     repl_mark_normals_dirty();
-    editor_clipboard_clear_selection();
+    editor_selection_clear_line_range();
     repl_set_status(change.commit_message);
 }
 
@@ -268,11 +264,7 @@ void editor_clear_all_cmds(void) {
     editor_state_edit_line_set(0);
     editor_insert_mode_set(0);
     editor_input_clear();
-    {
-        EditorInputState *inp = editor_state_input_mut();
-        inp->pending_newline[0] = '\0';
-        inp->pending_newline_len = 0;
-    }
+    editor_pending_newline_clear();
     repl_eval_init_predef_vars();
     repl_mark_normals_dirty();
     repl_set_status("All commands cleared");
@@ -821,11 +813,7 @@ static CommitResult commit_current_input(int enter_mode) {
         editor_state_edit_line_set(repl_state_document_count());
         editor_insert_mode_set(1);
         editor_input_clear();
-        {
-            EditorInputState *inp = editor_state_input_mut();
-            inp->pending_newline[0] = '\0';
-            inp->pending_newline_len = 0;
-        }
+        editor_pending_newline_clear();
         repl_set_status(change.commit_message);
         return COMMIT_OK;
     }
@@ -844,11 +832,7 @@ static CommitResult commit_current_input(int enter_mode) {
                 return COMMIT_REJECTED;
             }
             editor_input_clear();
-            {
-                EditorInputState *inp = editor_state_input_mut();
-                inp->pending_newline[0] = '\0';
-                inp->pending_newline_len = 0;
-            }
+            editor_pending_newline_clear();
             repl_set_status("OK");
             return COMMIT_OK;
         }
@@ -963,7 +947,7 @@ static void keyboard_begin_key(unsigned char key) {
      * selection; everything else clears it before processing the key. */
     if (key != KEY_CTRL_C && key != KEY_CTRL_D && key != KEY_BACKSPACE &&
         key != KEY_CTRL_X && key != KEY_DELETE)
-        editor_clipboard_clear_selection();
+        editor_selection_clear_line_range();
 
     editor_scroll_follow_cursor_set(1);
 }
@@ -983,7 +967,7 @@ int editor_input_file_prompt_capture_key(unsigned char key) {
 
 static void restore_hidden_code_panel_for_key(unsigned char key) {
     if (editor_input_code_panel_hidden()) {
-        int key_mods = editor_get_modifiers();
+        int key_mods = editor_input_active_modifiers();
         if (editor_key_restores_hidden_code_panel(key, key_mods))
             editor_input_restore_hidden_code_panel();
     }
@@ -1040,7 +1024,7 @@ static int handle_cursor_endpoint_key_route(unsigned char key) {
 
 static int handle_undo_redo_key_route(unsigned char key) {
     if (key == KEY_CTRL_Z) {
-        if (editor_get_modifiers() & GLUT_ACTIVE_SHIFT)
+        if (editor_input_active_modifiers() & GLUT_ACTIVE_SHIFT)
             editor_undo_do_redo();
         else
             editor_undo_pop_snapshot();
@@ -1131,7 +1115,7 @@ static int handle_comment_toggle_key_route(unsigned char key) {
     ReplCompiledChange change;
     char err[REPL_STATUS_TEXT_MAX];
 
-    if (key != '/' || !(editor_get_modifiers() & GLUT_ACTIVE_CTRL))
+    if (key != '/' || !(editor_input_active_modifiers() & GLUT_ACTIVE_CTRL))
         return 0;
 
     prefix = editor_line_comment_prefix();
@@ -1210,12 +1194,7 @@ static int handle_tab_key_route(unsigned char key) {
         expected = tutorial_current_expected_text();
         if (tutorial_active() && expected &&
             editor_state_edit_line() == tutorial_expected_commit_line()) {
-            EditorInputState *inp = editor_state_input_mut();
-
-            strncpy(inp->input, expected, MAX_INPUT_LEN - 1);
-            inp->input[MAX_INPUT_LEN - 1] = '\0';
-            inp->input_len = (int)strlen(inp->input);
-            editor_cursor_pos_set(inp->input_len);
+            editor_input_set_text(expected);
             editor_completion_clear();
             repl_set_status(
                 "Replaced input with expected tutorial command; press ; to commit");
@@ -1380,11 +1359,7 @@ static int handle_semicolon_commit_key_route(unsigned char key) {
                     } else if (res == EDITOR_PLACE_APPENDED) {
                         repl_set_status("OK");
                         editor_input_clear();
-                        {
-                            EditorInputState *inp = editor_state_input_mut();
-                            inp->pending_newline[0] = '\0';
-                            inp->pending_newline_len = 0;
-                        }
+                        editor_pending_newline_clear();
                     } else {
                         /* EDITOR_PLACE_BUFFER_FULL */
                         repl_set_status("Command buffer full!");
@@ -1551,8 +1526,7 @@ int editor_feed_line(const char *line) {
  * ===========================================================================
  */
 
-static void special_begin_key(int key) {
-    (void)key;
+static void special_begin_key(void) {
     EditorCursorBlinkState *cb = editor_state_cursor_blink_mut();
     cb->cursor_visible = 1;
     cb->blink_tick = 0;
@@ -1585,7 +1559,7 @@ static int editor_special_restores_hidden_code_panel(int key, int mods) {
 
 static void restore_hidden_code_panel_for_special(int key) {
     if (editor_input_code_panel_hidden()) {
-        int key_mods = editor_get_modifiers();
+        int key_mods = editor_input_active_modifiers();
         if (editor_special_restores_hidden_code_panel(key, key_mods))
             editor_input_restore_hidden_code_panel();
     }
@@ -1605,7 +1579,7 @@ static int handle_horizontal_special_key_route(int key) {
      * active yet) and then grows or shrinks the range. The unshifted
      * cases keep the plain editor_cursor_pos_set, which clears the
      * anchor as part of the default cursor-move policy (Phase B). */
-    int shift = (editor_get_modifiers() & GLUT_ACTIVE_SHIFT) != 0;
+    int shift = (editor_input_active_modifiers() & GLUT_ACTIVE_SHIFT) != 0;
     int input_len = editor_state_input().input_len;
     int cur = editor_cursor_pos();
 
@@ -1658,7 +1632,7 @@ static int handle_vertical_special_key_route(int key) {
         if (ac->match_count > 1) {
             ac->selected_idx = (ac->selected_idx - 1 + ac->match_count) % ac->match_count;
             editor_completion_update_selected_preview();
-        } else if (editor_get_modifiers() & GLUT_ACTIVE_SHIFT) {
+        } else if (editor_input_active_modifiers() & GLUT_ACTIVE_SHIFT) {
             if (!editor_clipboard_sel_active()) {
                 editor_selection_start(editor_state_edit_line());
             }
@@ -1668,7 +1642,7 @@ static int handle_vertical_special_key_route(int key) {
             editor_selection_set_end(selection_end);
             editor_navigate_to_line(selection_end);
         } else {
-            editor_clipboard_clear_selection();
+            editor_selection_clear_line_range();
             editor_navigate_to_line(editor_state_edit_line() - 1);
         }
         return 1;
@@ -1676,7 +1650,7 @@ static int handle_vertical_special_key_route(int key) {
         if (ac->match_count > 1) {
             ac->selected_idx = (ac->selected_idx + 1) % ac->match_count;
             editor_completion_update_selected_preview();
-        } else if (editor_get_modifiers() & GLUT_ACTIVE_SHIFT) {
+        } else if (editor_input_active_modifiers() & GLUT_ACTIVE_SHIFT) {
             if (!editor_clipboard_sel_active()) {
                 editor_selection_start(editor_state_edit_line());
             }
@@ -1686,7 +1660,7 @@ static int handle_vertical_special_key_route(int key) {
             editor_selection_set_end(selection_end);
             editor_navigate_to_line(selection_end);
         } else {
-            editor_clipboard_clear_selection();
+            editor_selection_clear_line_range();
             editor_navigate_to_line(editor_state_edit_line() + 1);
         }
         return 1;
@@ -1724,7 +1698,7 @@ static void special_func(int key, int x, int y) {
     (void)x;
     (void)y;
 
-    special_begin_key(key);
+    special_begin_key();
 
     if (editor_input_rename_capture_special(key)) return;
 

@@ -1136,7 +1136,7 @@ int main() {
         ASSERT_INT("editor_navigate_to_line over: edit_line=repl_state_document_count()", editor_state_edit_line(), repl_state_document_count());
     }
 
-    /* 12. editor_try_assign_variable - append to end (existing tests cover this) */
+    /* 12. editor_try_commit_assign_variable - append to end (existing tests cover this) */
     {
         glr_app_reset_all(); declare_test_vars();
         {
@@ -1145,8 +1145,8 @@ int main() {
             inp->input_len = (int)strlen(inp->input);
         }
 
-        int r = editor_try_assign_variable();
-        ASSERT_INT("editor_try_assign_variable returns 1", r, 1);
+        int r = editor_try_commit_assign_variable();
+        ASSERT_INT("editor_try_commit_assign_variable returns 1", r, 1);
         ASSERT_INT("num_cmds 1 after assign", repl_state_document_count(), 1);
         ASSERT_STR("assigned cmd source", editor_buffer_line(0), "  n = 10.5;");
     }
@@ -1180,7 +1180,7 @@ int main() {
                    repl_source_scope_cmd_indent_chars(2));
     }
 
-    /* 13. editor_try_assign_variable - inserting mode (inserts before cursor) */
+    /* 13. editor_try_commit_assign_variable - inserting mode (inserts before cursor) */
     {
         glr_app_reset_all(); declare_test_vars();
         editor_feed_line("glVertex3f(1,1,1)");
@@ -1194,14 +1194,14 @@ int main() {
             inp->input_len = (int)strlen(inp->input);
         }
 
-        int r = editor_try_assign_variable();
+        int r = editor_try_commit_assign_variable();
         ASSERT_INT("insert assign returns 1", r, 1);
         ASSERT_INT("insert assign: 3 cmds", repl_state_document_count(), 3);
         /* The assignment should appear at index 1 */
         ASSERT_INT("insert assign: cmd 1 is VAR_ASSIGN", repl_state_document_cmds_mut()[1].type, CMD_VAR_ASSIGN);
     }
 
-    /* 14. editor_try_assign_variable - overwrite existing cmd */
+    /* 14. editor_try_commit_assign_variable - overwrite existing cmd */
     {
         glr_app_reset_all(); declare_test_vars();
         editor_feed_line("n = 1.0");
@@ -1215,7 +1215,7 @@ int main() {
             inp->input_len = (int)strlen(inp->input);
         }
 
-        int r = editor_try_assign_variable();
+        int r = editor_try_commit_assign_variable();
         ASSERT_INT("overwrite assign returns 1", r, 1);
         ASSERT_STR("overwrite assign: new source", editor_buffer_line(0), "  n = 7.0;");
         ASSERT_INT("overwrite assign: edit_line advanced", editor_state_edit_line(), 1);
@@ -2049,7 +2049,7 @@ int main() {
         ASSERT_INT("expand decl: assign c slot correct", repl_state_document_cmds_mut()[3].num_args, ci);
     }
 
-    /* editor_try_assign_variable - overlong formatted source is rejected with
+    /* editor_try_commit_assign_variable - overlong formatted source is rejected with
      * "Command too long" and does not mutate repl_state_document_cmds_mut() / repl_state_document_count(). */
     {
         glr_app_reset_all(); declare_test_vars();
@@ -2071,7 +2071,7 @@ int main() {
         editor_state_edit_line_set(repl_state_document_count());
         editor_insert_mode_set(0);
 
-        int r = editor_try_assign_variable();
+        int r = editor_try_commit_assign_variable();
         ASSERT_INT("overlong assign: handler consumed input", r, 1);
         ASSERT_INT("overlong assign: num_cmds unchanged",
                    repl_state_document_count(), old_num_cmds);
