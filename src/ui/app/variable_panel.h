@@ -25,7 +25,8 @@ void ui_variable_panel_render(const UiRenderSnapshot *snap);
 /* Query the variable panel's bounding rectangle (in window/screen coordinates).
  * Outputs panel position (px, py) and size (pw, ph). The caller supplies the
  * visible variable count so UI code does not read the live REPL variable table. */
-void ui_variable_panel_rect_for_count(int variable_count,
+void ui_variable_panel_rect_for_count(const UiRenderSnapshot *snap,
+                                      int variable_count,
                                       int *px, int *py, int *pw, int *ph);
 
 /* Hit-test a click in the variable panel. gx, gy are window/screen coordinates.
@@ -34,13 +35,14 @@ void ui_variable_panel_rect_for_count(int variable_count,
  * is filled with the row index on success. Called by ui_panels.c on mouse
  * clicks; glr_ctrl then calls variable_panel_handle_drag_begin() with the
  * row index to start dragging. */
-int  ui_variable_panel_hit_for_count(int gx, int gy, int variable_count,
+int  ui_variable_panel_hit_for_count(const UiRenderSnapshot *snap,
+                                     int gx, int gy, int variable_count,
                                      int *out_row);
 
 /* Pure hit-test: classify (mx, my) as a UiHit for the variable panel. Returns
  * UI_HIT_VARIABLE_SLIDER if the pointer lands on a slider row; item_idx carries
  * the row index. Returns UI_HIT_NONE if the panel is hidden or the pointer is
  * outside it. Reads layout/state only; never mutates. */
-UiHit ui_variable_panel_hit_test(int mx, int my, int variable_count);
+UiHit ui_variable_panel_hit_test(const UiRenderSnapshot *snap, int mx, int my, int variable_count);
 
 #endif /* UI_VARIABLE_PANEL_H */

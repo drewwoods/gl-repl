@@ -433,13 +433,27 @@ static void canonicalize_float_literals(const char *in, char *out, int out_sz) {
     while (i < in_len && o < out_sz - 1) {
         if (isdigit((unsigned char)in[i]) || 
             (in[i] == '.' && i + 1 < in_len && isdigit((unsigned char)in[i + 1]))) {
+            /* Preceding token boundary check */
+            if (i > 0 && (isalnum((unsigned char)in[i - 1]) || in[i - 1] == '_')) {
+                out[o++] = in[i++];
+                continue;
+            }
             char *endptr;
             float val = strtof(in + i, &endptr);
             int consumed = (int)(endptr - (in + i));
             if (consumed > 0) {
+                int suffix_len = 0;
                 if (in[i + consumed] == 'f' || in[i + consumed] == 'F') {
-                    consumed++;
+                    suffix_len = 1;
                 }
+                /* Trailing token boundary check */
+                int next_char_idx = i + consumed + suffix_len;
+                if (next_char_idx < in_len && (isalnum((unsigned char)in[next_char_idx]) || in[next_char_idx] == '_')) {
+                    out[o++] = in[i++];
+                    continue;
+                }
+                
+                int total_consumed = consumed + suffix_len;
                 char buf[32];
                 snprintf(buf, sizeof(buf), "%.6g", (double)val);
                 int blen = (int)strlen(buf);
@@ -447,7 +461,7 @@ static void canonicalize_float_literals(const char *in, char *out, int out_sz) {
                     memcpy(out + o, buf, (size_t)blen);
                     o += blen;
                 }
-                i += consumed;
+                i += total_consumed;
                 continue;
             }
         }

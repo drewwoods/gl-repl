@@ -328,13 +328,13 @@ static void test_variable_panel(void) {
     int row = -1;
     ui_state_viewport_set_size(800, 600);
     int px, py, pw, ph;
-    ui_variable_panel_rect_for_count(1, &px, &py, &pw, &ph);
+    ui_variable_panel_rect_for_count(NULL, 1, &px, &py, &pw, &ph);
     ASSERT_TRUE("hit test in panel",
-                ui_variable_panel_hit_for_count(
+                ui_variable_panel_hit_for_count(NULL,
                     px + 10, ui_state_viewport().window_h - (py + 10),
                     1, &row));
     ASSERT_TRUE("hit test outside panel",
-                !ui_variable_panel_hit_for_count(0, 0, 1, &row));
+                !ui_variable_panel_hit_for_count(NULL, 0, 0, 1, &row));
 }
 
 static void test_menu_bar(void) {
@@ -573,7 +573,7 @@ static void test_ui_variable_panel_hit_test(void) {
 
     /* Panel hidden -> always miss. */
     variable_panel_view_mut()->visible = 0;
-    UiHit h_off = ui_variable_panel_hit_test(700, 100, 0);
+    UiHit h_off = ui_variable_panel_hit_test(NULL, 700, 100, 0);
     ASSERT_TRUE("hidden panel -> NONE", h_off.kind == UI_HIT_NONE);
 
     /* Visible panel with one declared variable. */
@@ -583,16 +583,16 @@ static void test_ui_variable_panel_hit_test(void) {
     g_predef_vars[0].value = 1.0f;
 
     int px, py, pw, ph;
-    ui_variable_panel_rect_for_count(1, &px, &py, &pw, &ph);
+    ui_variable_panel_rect_for_count(NULL, 1, &px, &py, &pw, &ph);
     int my = ui_state_viewport().window_h - (py + 10);
 
-    UiHit h_row = ui_variable_panel_hit_test(px + 10, my, 1);
+    UiHit h_row = ui_variable_panel_hit_test(NULL, px + 10, my, 1);
     ASSERT_TRUE("row hit kind", h_row.kind == UI_HIT_VARIABLE_SLIDER);
     ASSERT_TRUE("row item_idx populated",
                 h_row.item_idx >= 0 && h_row.item_idx < g_num_predef_vars);
 
     /* Click outside the panel rect -> NONE. */
-    UiHit h_out = ui_variable_panel_hit_test(0, 0, 1);
+    UiHit h_out = ui_variable_panel_hit_test(NULL, 0, 0, 1);
     ASSERT_TRUE("outside panel -> NONE", h_out.kind == UI_HIT_NONE);
 }
 
@@ -612,7 +612,7 @@ static void test_ui_panels_hit_test_dispatch(void) {
     strcpy(g_predef_vars[0].name, "x");
     g_predef_vars[0].value = 1.0f;
     int px, py, pw, ph;
-    ui_variable_panel_rect_for_count(1, &px, &py, &pw, &ph);
+    ui_variable_panel_rect_for_count(NULL, 1, &px, &py, &pw, &ph);
     int my_var = ui_state_viewport().window_h - (py + 10);
     UiHit h_var = ui_panels_hit_test_current_snapshot(px + 10, my_var, 1);
     ASSERT_TRUE("var panel routed via panels_hit_test",
