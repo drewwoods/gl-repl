@@ -1215,6 +1215,39 @@ int ui_menu_bar_update_pointer_hover(int mx, int my, float now) {
            old_parent != g_submenu_parent_row;
 }
 
+static void paint_config_row_columns(const UiRenderSnapshot *snap,
+                                     int parent_row, int ordinal,
+                                     int ey, int cfg_state_right,
+                                     int cfg_sc_right, float alpha) {
+    int abs = config_submenu_abs_index(parent_row, ordinal);
+    const GlrConfigItem *item = glr_config_item_at(abs);
+    char st_buf[CFG_STATE_MAX_CHARS + 1];
+    const char *st;
+    int st_px, val;
+    const char *scut;
+
+    if (!item || item->section_header || item->key == GLR_CONFIG_NONE)
+        return;
+
+    st = cfg_state_str(snap, abs, st_buf, sizeof(st_buf));
+    st_px = (int)strlen(st) * FONT_SMALL_W;
+    scut = config_item_shortcut(item);
+
+    if (scut) {
+        int sc_px = (int)strlen(scut) * FONT_SMALL_W;
+        ui_clr_a(UI_TOK_TEXT_MUTED, alpha);
+        gl2d_draw_string((float)(cfg_sc_right - sc_px),
+                         (float)ey, scut, FONT_SMALL);
+    }
+    val = snap ? snap->config_values[item->key] : glr_config_get(item->key);
+    if (val)
+        ui_clr_a(UI_TOK_ACCENT, alpha);
+    else
+        ui_clr_a(UI_TOK_TEXT_MUTED, alpha);
+    gl2d_draw_string((float)(cfg_state_right - st_px),
+                     (float)ey, st, FONT_SMALL);
+}
+
 static void render_active_submenu(const UiRenderSnapshot *snap) {
     int sx, sy, sw, sh;
     int menu_id    = g_submenu_menu_id;
@@ -1289,35 +1322,10 @@ static void render_active_submenu(const UiRenderSnapshot *snap) {
 
         gl2d_draw_string((float)(sx + MENU_TEXT_INSET_X), (float)ey, name, FONT_SMALL);
 
-        /* Config item rows carry a right-aligned shortcut + state
-         * value in fixed columns (computed once above) so they stay
-         * column-aligned regardless of which rows have a shortcut. */
-        if (menu_id == MENU_CONFIG) {
-            int abs = config_submenu_abs_index(parent_row, ordinal);
-            const GlrConfigItem *item = glr_config_item_at(abs);
-            if (item && !item->section_header &&
-                item->key != GLR_CONFIG_NONE) {
-                char st_buf[CFG_STATE_MAX_CHARS + 1];
-                const char *st = cfg_state_str(snap, abs, st_buf,
-                                               sizeof(st_buf));
-                int st_px = (int)strlen(st) * FONT_SMALL_W;
-                const char *scut = config_item_shortcut(item);
-
-                if (scut) {
-                    int sc_px = (int)strlen(scut) * FONT_SMALL_W;
-                    ui_clr_a(UI_TOK_TEXT_MUTED, alpha);
-                    gl2d_draw_string((float)(cfg_sc_right - sc_px),
-                                     (float)ey, scut, FONT_SMALL);
-                }
-                int val = snap ? snap->config_values[item->key] : glr_config_get(item->key);
-                if (val)
-                    ui_clr_a(UI_TOK_ACCENT, alpha);
-                else
-                    ui_clr_a(UI_TOK_TEXT_MUTED, alpha);
-                gl2d_draw_string((float)(cfg_state_right - st_px),
-                                 (float)ey, st, FONT_SMALL);
-            }
-        }
+        if (menu_id == MENU_CONFIG)
+            paint_config_row_columns(snap, parent_row, ordinal,
+                                     ey, cfg_state_right,
+                                     cfg_sc_right, alpha);
 
         ey -= LINE_H;
     }
