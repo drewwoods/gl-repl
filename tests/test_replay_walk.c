@@ -579,6 +579,22 @@ static void test_predicate_category_agreement(void) {
     }
 }
 
+static void test_display_name_for_not_in_begin(void) {
+    for (int t_int = 0; t_int < CMD_TYPE_COUNT; t_int++) {
+        CmdType t = (CmdType)t_int;
+        const ReplCommandTypeSpec *spec = repl_command_type_spec(t);
+        if (!spec)
+            continue;
+        if (spec->valid_in_begin)
+            continue;
+        char label[128];
+        snprintf(label, sizeof(label),
+                 "type=%d (%s): not-in-begin command has display_name",
+                 t_int, spec->name);
+        ASSERT_TRUE(label, spec->display_name != NULL);
+    }
+}
+
 int main(void) {
     test_walker_resolves_funcn_args_at_cursor();
     test_walker_fires_on_each_cmd_at_cursor();
@@ -586,6 +602,7 @@ int main(void) {
     test_cursor_guide_snapshot_override();
     test_parse_vertex_arg_slots_nested_parens();
     test_predicate_category_agreement();
+    test_display_name_for_not_in_begin();
 
     printf("test_replay_walk: %d/%d passed\n",
            g_harness.passed, g_harness.run);
