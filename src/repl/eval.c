@@ -211,6 +211,79 @@ static const char *skip_numeric_literal(const char *s) {
     return end;
 }
 
+const char *repl_eval_eat_identifier(const char *p, const char **out_start) {
+    if (!p || (!isalpha((unsigned char)*p) && *p != '_'))
+        return NULL;
+    if (out_start)
+        *out_start = p;
+    do {
+        p++;
+    } while (*p && (isalnum((unsigned char)*p) || *p == '_'));
+    return p;
+}
+
+typedef float (*ExprBuiltinFn)(const float *args);
+
+typedef struct {
+    const char    *name;
+    int            arity_min;
+    int            arity_max;
+    ExprBuiltinFn  eval;
+} ExprBuiltin;
+
+static float expr_rand01(float seed, float iter);
+static float expr_rand_signed(float seed, float iter);
+
+static float builtin_sin(const float *args)   { return sinf(args[0]); }
+static float builtin_cos(const float *args)   { return cosf(args[0]); }
+static float builtin_tan(const float *args)   { return tanf(args[0]); }
+static float builtin_sqrt(const float *args)  { return sqrtf(fabsf(args[0])); }
+static float builtin_abs(const float *args)   { return fabsf(args[0]); }
+static float builtin_pow(const float *args)   { return powf(args[0], args[1]); }
+static float builtin_min(const float *args)   { return args[0] < args[1] ? args[0] : args[1]; }
+static float builtin_max(const float *args)   { return args[0] > args[1] ? args[0] : args[1]; }
+static float builtin_floor(const float *args) { return floorf(args[0]); }
+static float builtin_ceil(const float *args)  { return ceilf(args[0]); }
+static float builtin_fmod(const float *args)  { return fmodf(args[0], args[1]); }
+static float builtin_rem(const float *args)   { return remainderf(args[0], args[1]); }
+static float builtin_rand(const float *args)  { return expr_rand01(args[0], args[1]); }
+static float builtin_rand2(const float *args) { return expr_rand_signed(args[0], args[1]); }
+
+static const ExprBuiltin k_expr_builtins[] = {
+    { "sin",   1, 1, builtin_sin   },
+    { "cos",   1, 1, builtin_cos   },
+    { "tan",   1, 1, builtin_tan   },
+    { "sqrt",  1, 1, builtin_sqrt  },
+    { "abs",   1, 1, builtin_abs   },
+    { "pow",   2, 2, builtin_pow   },
+    { "min",   2, 2, builtin_min   },
+    { "max",   2, 2, builtin_max   },
+    { "floor", 1, 1, builtin_floor },
+    { "ceil",  1, 1, builtin_ceil  },
+    { "fmod",  2, 2, builtin_fmod  },
+    { "rem",   2, 2, builtin_rem   },
+    { "rand",  1, 2, builtin_rand  },
+    { "rand2", 1, 2, builtin_rand2 },
+};
+
+static const char *const k_reserved_identifiers[] = {
+    "t", "PI", "TAU", "float", "var", "A", "B", "C", NULL
+};
+
+static const ExprBuiltin *find_expr_builtin(const char *name) {
+    for (size_t builtin_idx = 0;
+         builtin_idx < sizeof(k_expr_builtins) / sizeof(k_expr_builtins[0]);
+         builtin_idx++) {
+        if (strcmp(name, k_expr_builtins[builtin_idx].name) == 0)
+            return &k_expr_builtins[builtin_idx];
+    }
+    return NULL;
+}
+
+int repl_eval_is_builtin_function(const char *name) {
+    return name && find_expr_builtin(name) != NULL;
+}
+
 void repl_eval_init_predef_vars(void) {
     g_num_predef_vars = 1;
     strncpy(g_predef_vars[0].name, "t", sizeof(g_predef_vars[0].name) - 1);
@@ -224,15 +297,6 @@ int repl_eval_find_predef_var_idx(const char *name) {
             return i;
     return -1;
 }
-
-/* Keep in sync with eval_primary()'s function dispatch below */
-static const char *s_reserved_idents[] = {
-    "t", "PI", "TAU", "float", "var",
-    "sin", "cos", "tan", "sqrt", "abs", "pow",
-    "min", "max", "floor", "ceil", "fmod", "rem", "rand", "rand2",
-    "A", "B", "C",
-    NULL
-};
 
 static void expr_write_err(ExprCtx *ctx, const char *fmt, ...) {
     va_list ap;
@@ -299,20 +363,17 @@ static void expr_rewrite_scratch_subscripts_to_c(const char *src,
         return;
 
     while (*p && out < end) {
-        if (isalpha((unsigned char)*p) || *p == '_') {
-            const char *id_start = p;
-
-            while (*p && (isalnum((unsigned char)*p) || *p == '_'))
-                p++;
-
-            int id_len = (int)(p - id_start);
+        const char *id_start = NULL;
+        const char *id_end = repl_eval_eat_identifier(p, &id_start);
+        if (id_end) {
+            int id_len = (int)(id_end - id_start);
             int is_scratch_name = id_len == 1 &&
                                   scratch_char_index(*id_start) >= 0;
 
-            if (is_scratch_name && *p == '[') {
-                const char *close = find_matching_square(p, NULL);
+            if (is_scratch_name && *id_end == '[') {
+                const char *close = find_matching_square(id_end, NULL);
                 if (close) {
-                    int inner_len = (int)(close - (p + 1));
+                    int inner_len = (int)(close - (id_end + 1));
                     char inner[MAX_LINE_LEN];
                     char inner_c[MAX_LINE_LEN];
                     size_t avail;
@@ -320,7 +381,7 @@ static void expr_rewrite_scratch_subscripts_to_c(const char *src,
 
                     if (inner_len >= (int)sizeof(inner))
                         inner_len = (int)sizeof(inner) - 1;
-                    memcpy(inner, p + 1, (size_t)inner_len);
+                    memcpy(inner, id_end + 1, (size_t)inner_len);
                     inner[inner_len] = '\0';
 
                     expr_rewrite_scratch_subscripts_to_c(inner, inner_c, sizeof(inner_c));
@@ -350,6 +411,7 @@ static void expr_rewrite_scratch_subscripts_to_c(const char *src,
                 break;
             memcpy(out, id_start, (size_t)id_len);
             out += id_len;
+            p = id_end;
             continue;
         }
 
@@ -370,21 +432,18 @@ static void expr_rewrite_scratch_subscripts_to_repl(const char *src,
         return;
 
     while (*p && out < end) {
-        if (isalpha((unsigned char)*p) || *p == '_') {
-            const char *id_start = p;
-
-            while (*p && (isalnum((unsigned char)*p) || *p == '_'))
-                p++;
-
-            int id_len = (int)(p - id_start);
+        const char *id_start = NULL;
+        const char *id_end = repl_eval_eat_identifier(p, &id_start);
+        if (id_end) {
+            int id_len = (int)(id_end - id_start);
             int is_scratch_name = id_len == 1 &&
                                   scratch_char_index(*id_start) >= 0;
 
-            if (is_scratch_name && *p == '[') {
-                const char *close = find_matching_square(p, NULL);
+            if (is_scratch_name && *id_end == '[') {
+                const char *close = find_matching_square(id_end, NULL);
                 if (close) {
-                    int inner_len = (int)(close - (p + 1));
-                    const char *inner_src = p + 1;
+                    int inner_len = (int)(close - (id_end + 1));
+                    const char *inner_src = id_end + 1;
                     char inner[MAX_LINE_LEN];
                     char inner_repl[MAX_LINE_LEN];
                     size_t avail;
@@ -429,6 +488,7 @@ static void expr_rewrite_scratch_subscripts_to_repl(const char *src,
                 break;
             memcpy(out, id_start, (size_t)id_len);
             out += id_len;
+            p = id_end;
             continue;
         }
 
@@ -455,15 +515,14 @@ static int expr_range_has_runtime_values(const char *src, const char *end,
             }
         }
 
-        if (!isalpha((unsigned char)*s) && *s != '_') {
+        const char *start = NULL;
+        const char *ident_end = repl_eval_eat_identifier(s, &start);
+        if (!ident_end) {
             s++;
             continue;
         }
 
-        const char *start = s;
-        while (*s && (!end || s < end) &&
-               (isalnum((unsigned char)*s) || *s == '_'))
-            s++;
+        s = ident_end;
 
         int len = (int)(s - start);
         char name[16];
@@ -511,15 +570,14 @@ static int validate_expression_idents_range(const char *src, const char *end,
             }
         }
 
-        if (!isalpha((unsigned char)*s) && *s != '_') {
+        const char *start = NULL;
+        const char *ident_end = repl_eval_eat_identifier(s, &start);
+        if (!ident_end) {
             s++;
             continue;
         }
 
-        const char *start = s;
-        while (*s && (!end || s < end) &&
-               (isalnum((unsigned char)*s) || *s == '_'))
-            s++;
+        s = ident_end;
 
         int len = (int)(s - start);
         char name[16];
@@ -612,8 +670,14 @@ static int validate_expression_idents_range(const char *src, const char *end,
 }
 
 int repl_eval_is_reserved_ident(const char *name) {
-    for (const char **r = s_reserved_idents; *r; r++)
-        if (strcmp(name, *r) == 0) return 1;
+    if (repl_eval_is_builtin_function(name))
+        return 1;
+    for (const char *const *reserved = k_reserved_identifiers;
+         *reserved;
+         reserved++) {
+        if (strcmp(name, *reserved) == 0)
+            return 1;
+    }
     return 0;
 }
 
@@ -685,9 +749,10 @@ int repl_eval_source_uses_ident(const char *src, const char *name) {
             const char *end = skip_numeric_literal(s);
             if (end != s) { s = end; continue; }
         }
-        if (!isalpha((unsigned char)*s) && *s != '_') { s++; continue; }
-        const char *start = s;
-        while (*s && (isalnum((unsigned char)*s) || *s == '_')) s++;
+        const char *start = NULL;
+        const char *ident_end = repl_eval_eat_identifier(s, &start);
+        if (!ident_end) { s++; continue; }
+        s = ident_end;
         int len = (int)(s - start);
         if (len == nlen && strncmp(start, name, nlen) == 0)
             return 1;
@@ -705,9 +770,10 @@ int repl_eval_input_has_predef_vars(const char *s) {
     while (*s) {
         if (s[0] == '/' && s[1] == '/')
             break;
-        if (!isalpha((unsigned char)*s) && *s != '_') { s++; continue; }
-        const char *start = s;
-        while (*s && (isalnum((unsigned char)*s) || *s == '_')) s++;
+        const char *start = NULL;
+        const char *ident_end = repl_eval_eat_identifier(s, &start);
+        if (!ident_end) { s++; continue; }
+        s = ident_end;
         int len = (int)(s - start);
         if (len == 1 && (*start == 'A' || *start == 'B' || *start == 'C'))
             return 1;
@@ -783,12 +849,16 @@ static float eval_primary(ExprCtx *ctx) {
     }
 
     /* Identifier: constant, variable, or function */
-    if (isalpha((unsigned char)*ctx->p) || *ctx->p == '_') {
+    {
+        const char *name_start = NULL;
+        const char *name_end = repl_eval_eat_identifier(ctx->p, &name_start);
+        if (name_end) {
         char name[32];
-        int name_len = 0;
-        while ((isalnum((unsigned char)*ctx->p) || *ctx->p == '_') &&
-               name_len < (int)sizeof(name) - 1)
-            name[name_len++] = *ctx->p++;
+        int name_len = (int)(name_end - name_start);
+        ctx->p = name_end;
+        if (name_len >= (int)sizeof(name))
+            return 0.0f;
+        memcpy(name, name_start, (size_t)name_len);
         name[name_len] = '\0';
         const char *q = skip_ws_ptr(ctx->p);
 
@@ -843,8 +913,10 @@ static float eval_primary(ExprCtx *ctx) {
 
         /* Functions (consume opening paren) */
         if (*q == '(') {
-            float args[3] = { 0.0f, 0.0f, 0.0f };
+            const ExprBuiltin *builtin = find_expr_builtin(name);
+            float args[2] = { 0.0f, 0.0f };
             int arg_count = 0;
+            int arg_overflow = 0;
 
             ctx->p = q + 1;
             expr_skip_ws(ctx);
@@ -853,6 +925,8 @@ static float eval_primary(ExprCtx *ctx) {
                     float arg = repl_eval_expr(ctx);
                     if (arg_count < (int)(sizeof(args) / sizeof(args[0])))
                         args[arg_count] = arg;
+                    else
+                        arg_overflow = 1;
                     arg_count++;
 
                     expr_skip_ws(ctx);
@@ -866,27 +940,23 @@ static float eval_primary(ExprCtx *ctx) {
             if (*ctx->p == ')')
                 ctx->p++;
 
-            if (strcmp(name, "sin") == 0 && arg_count == 1)  return sinf(args[0]);
-            if (strcmp(name, "cos") == 0 && arg_count == 1)  return cosf(args[0]);
-            if (strcmp(name, "tan") == 0 && arg_count == 1)  return tanf(args[0]);
-            if (strcmp(name, "sqrt") == 0 && arg_count == 1) return sqrtf(fabsf(args[0]));
-            if (strcmp(name, "abs") == 0 && arg_count == 1)  return fabsf(args[0]);
-            if (strcmp(name, "pow") == 0 && arg_count == 2) return powf(args[0], args[1]);
-            if (strcmp(name, "min") == 0 && arg_count == 2) return args[0] < args[1] ? args[0] : args[1];
-            if (strcmp(name, "max") == 0 && arg_count == 2) return args[0] > args[1] ? args[0] : args[1];
-            if (strcmp(name, "floor") == 0 && arg_count == 1) return floorf(args[0]);
-            if (strcmp(name, "ceil") == 0 && arg_count == 1)  return ceilf(args[0]);
-            if (strcmp(name, "fmod") == 0 && arg_count == 2) return fmodf(args[0], args[1]);
-            if (strcmp(name, "rem") == 0 && arg_count == 2) return remainderf(args[0], args[1]);
-            if (strcmp(name, "rand") == 0)
-                return arg_count >= 2 ? expr_rand01(args[0], args[1])
-                                      : (arg_count == 1 ? expr_rand01(args[0], 0.0f) : 0.0f);
-            if (strcmp(name, "rand2") == 0)
-                return arg_count >= 2 ? expr_rand_signed(args[0], args[1])
-                                      : (arg_count == 1 ? expr_rand_signed(args[0], 0.0f) : 0.0f);
+            if (!builtin)
+                return 0.0f;
+            if (arg_overflow ||
+                arg_count < builtin->arity_min ||
+                arg_count > builtin->arity_max) {
+                expr_write_err(ctx, "unsupported arity for '%s'", name);
+                return 0.0f;
+            }
+            if (builtin->arity_min == 1 && builtin->arity_max == 2 &&
+                arg_count == 1) {
+                args[1] = 0.0f;
+            }
+            return builtin->eval(args);
         }
 
         return 0.0f;   /* unknown identifier */
+        }
     }
 
     return 0.0f;
@@ -1127,10 +1197,10 @@ void repl_eval_expr_to_c(const char *in, char *out, int out_sz) {
     char *end = out + out_sz - 1;
 
     while (*p && dst < end) {
-        if (isalpha((unsigned char)*p) || *p == '_') {
-            const char *id_start = p;
-            while (*p && (isalnum((unsigned char)*p) || *p == '_')) p++;
-            int id_len = (int)(p - id_start);
+        const char *id_start = NULL;
+        const char *id_end = repl_eval_eat_identifier(p, &id_start);
+        if (id_end) {
+            int id_len = (int)(id_end - id_start);
             int found = 0;
             for (int i = 0; i < nmap; i++) {
                 if ((int)strlen(map[i].from) == id_len &&
@@ -1150,6 +1220,7 @@ void repl_eval_expr_to_c(const char *in, char *out, int out_sz) {
                     dst += id_len;
                 }
             }
+            p = id_end;
         } else {
             *dst++ = *p++;
         }
@@ -1296,10 +1367,10 @@ void repl_eval_c_expr_to_repl(const char *in, char *out, int out_sz) {
     char *end = out + out_sz - 1;
 
     while (*p && dst < end) {
-        if (isalpha((unsigned char)*p) || *p == '_') {
-            const char *id_start = p;
-            while (*p && (isalnum((unsigned char)*p) || *p == '_')) p++;
-            int id_len = (int)(p - id_start);
+        const char *id_start = NULL;
+        const char *id_end = repl_eval_eat_identifier(p, &id_start);
+        if (id_end) {
+            int id_len = (int)(id_end - id_start);
             int found = 0;
             for (int i = 0; i < nmap; i++) {
                 if ((int)strlen(map[i].from) == id_len &&
@@ -1319,6 +1390,7 @@ void repl_eval_c_expr_to_repl(const char *in, char *out, int out_sz) {
                     dst += id_len;
                 }
             }
+            p = id_end;
         } else {
             *dst++ = *p++;
         }

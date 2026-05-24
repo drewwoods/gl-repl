@@ -167,14 +167,6 @@ static const ReplRuntimeState *repl_state_get_defaults(void) {
 #define g_pending_scene_name        (g_repl_state.import_export.pending_scene_name)
 #define g_pending_workspace_dir     (g_repl_state.import_export.pending_workspace_dir)
 
-ExprVar *repl_state_predef_vars_storage(int *capacity, int **count_ptr) {
-    if (capacity)
-        *capacity = MAX_PREDEF_VARS;
-    if (count_ptr)
-        *count_ptr = &g_repl_state.variables.predef_var_count;
-    return g_repl_state.variables.predef_vars;
-}
-
 static void repl_state_bind_eval_predef_storage(void) {
     repl_eval_bind_predef_storage(g_repl_state.variables.predef_vars,
                                   &g_repl_state.variables.predef_var_count);
@@ -384,13 +376,6 @@ ReplVariableView repl_state_variables(void) {
 
 ReplVariableState *repl_state_variables_mut(void) {
     return &g_repl_state.variables;
-}
-
-void repl_state_variables_reset(void) {
-    repl_state_bind_eval_predef_storage();
-    g_repl_state.variables = repl_state_get_defaults()->variables;
-    repl_eval_init_predef_vars();
-    g_t_var_idx = repl_eval_find_predef_var_idx("t");
 }
 
 void repl_state_time_advance(float dt) {

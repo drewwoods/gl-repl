@@ -32,7 +32,7 @@ the fix out across separate PRs.
 
 ## 🔴 Actual bugs (verified)
 
-### 1. `format_evaluated_cmd` silently drops single-arg shape annotations
+### 1. `format_evaluated_cmd` silently drops single-arg shape annotations (done)
 
 **Where:** `src/repl/replay_annotations.c:1093-1122`
 
@@ -48,7 +48,7 @@ the suite covers only multi-arg shapes.
 
 **Fix:** Add `case 1: snprintf(out+oi, out_size-oi, fmt, cmd->args[0]); break;`.
 
-### 2. Live-state shuttles and workspace import leak `func_aliases`
+### 2. Live-state shuttles and workspace import leak `func_aliases` (done)
 
 **Where:** `src/repl/scenes.c:384-407`, L416-457, L576-603,
 L612-658 (vs. `save_scene_to_slot` at L195-240,
@@ -77,7 +77,7 @@ and make per-file import start from a clean alias table (or explicitly
 snapshot/restore aliases around each import). Add a workspace regression
 with one aliased scene followed by one unaliased scene.
 
-### 3. `g_search_*` / `g_ac_*` macros reference fields that no longer exist
+### 3. `g_search_*` / `g_ac_*` macros reference fields that no longer exist (done)
 
 **Where:** `src/repl/state.c:156-169`
 
@@ -91,7 +91,7 @@ an opaque struct-member error, not a missing-symbol error.
 
 **Fix:** Delete the macros.
 
-### 4. `glPointParameterfv` parsing sets `has_vars` from wrong scope
+### 4. `glPointParameterfv` parsing sets `has_vars` from wrong scope (done)
 
 **Where:** `src/repl/parser.c:842`
 
@@ -106,7 +106,7 @@ source-preservation; spurious "true" can prevent normalization.
 
 **Fix:** Replace with `input_has_any_visible_vars(rest, vars, num_vars)`.
 
-### 5. `validate_expression_idents` error gets discarded in const-value branch
+### 5. `validate_expression_idents` error gets discarded in const-value branch (done)
 
 **Where:** `src/repl/parser.c:158-163` (vs. L200-205)
 
@@ -120,7 +120,7 @@ was an undeclared ident.
 **Fix:** In the const-value branch, treat undeclared-ident failure the
 same as expr-form — surface `verr`.
 
-### 6. `repl_export_save_output` ignores fclose / ferror
+### 6. `repl_export_save_output` ignores fclose / ferror (done)
 
 **Where:** `src/repl/export.c:3414-3440`
 
@@ -138,7 +138,7 @@ status with its own success message.
 success/failure and make all callers preserve failure status instead of
 posting a later success.
 
-### 7. `%g` everywhere — lossy float round-trip
+### 7. `%g` everywhere — lossy float round-trip (done)
 
 **Where:** `src/repl/export.c` — 25+ sites use bare `%g` for float
 persistence. Sample: L295, L1076, L1081, L1086, L1114, L1184-L1193,
@@ -156,7 +156,7 @@ rendered C.
 **Fix:** Use `%.9g` for float32-safe round-trip in the save path
 (rendered-C cases that justify trimming can keep bare `%g`).
 
-### 8. `fgets` truncation in load is silent
+### 8. `fgets` truncation in load is silent (done)
 
 **Where:** `src/repl/export.c:3645-3653`
 
@@ -167,7 +167,7 @@ reads; each half is processed as if it were a complete line.
 newline/EOF so the remainder is not parsed as a second logical line,
 and warn/skip or fail the import consistently.
 
-### 9. Tutorial teardown fires before input validation
+### 9. Tutorial teardown fires before input validation (done)
 
 **Where:** `src/repl/scenes.c:615-617` (`repl_load_workspace`), L898-907
 (`repl_load_user_scene_idx`)
@@ -188,7 +188,7 @@ teardown.
 **Fix:** Move `repl_dispatch_tutorial_teardown()` after the validity
 guards.
 
-### 10. Workspace scene filename slugs can collide
+### 10. Workspace scene filename slugs can collide (done)
 
 **Where:** `src/repl/scenes.c:169-190`, L459-470, L515-522,
 L546-564
@@ -208,7 +208,7 @@ loading the workspace back loses a scene.
 dedupe slugs with a numeric suffix or include the slot id), and report
 any skipped/failed write.
 
-### 11. `repl_load_workspace` never clears existing slots
+### 11. `repl_load_workspace` never clears existing slots (done)
 
 **Where:** `src/repl/scenes.c:612-658`
 
@@ -227,7 +227,7 @@ N files: slots full".
 
 ## 🟡 Drift hazards (parallel structures, no enforcement)
 
-### 12. Tag/subheading API is byte-duplicated between examples and tutorials
+### 12. Tag/subheading API is byte-duplicated between examples and tutorials (done)
 
 **Where:** `src/repl/tutorials.c:184-203, 339-413` vs.
 `src/repl/examples.c:1318-1337, 1419-1510`
@@ -245,7 +245,7 @@ catch test. The menu side already proves the abstraction works
 
 **Fix:** Hoist a generic `CatalogTagOps` vtable + one set of walkers.
 
-### 13. `replay_simulate`-shaped walker is duplicated
+### 13. `replay_simulate`-shaped walker is duplicated (done)
 
 **Where:** `src/repl/replay_annotations.c:544-655` and L662-777
 
@@ -260,7 +260,7 @@ callback_for_each_pc_before_step, vals*, scratch*)` walker; the
 snapshot path supplies a snapshot callback, the copy path supplies a
 no-op.
 
-### 14. `// @cfg` slug parsing has three vocabularies
+### 14. `// @cfg` slug parsing has three vocabularies (done)
 
 **Where:** `src/repl/export.c:478-496`
 (`repl_export_extract_cfg_slug`), L498-525 (`parse_cfg`),
@@ -280,7 +280,7 @@ from workspace saves.
 (`bridge->slug_is_scene_subset(slug)`); have `parse_cfg` call
 `repl_export_extract_cfg_slug`.
 
-### 15. Three `funcN`-token parsers
+### 15. Three `funcN`-token parsers (done)
 
 **Where:** `src/repl/export.c:436-461` (`parse_func_alias`),
 L1342-1374 (`parse_func_name_token`), L2646-2660 (inline in
@@ -289,7 +289,7 @@ L1342-1374 (`parse_func_name_token`), L2646-2660 (inline in
 **Fix:** Have `import_make_repl_func_header` call
 `parse_func_name_token`.
 
-### 16. Two identifier-list parsers
+### 16. Two identifier-list parsers (done)
 
 **Where:** `src/repl/export.c:1276-1302` (`parse_identifier_list`)
 vs. L2690-2714 (inline `float name1, name2` walker in
@@ -299,7 +299,7 @@ instead of `sizeof(name)-1`.
 **Fix:** Extract a shared helper that accepts an optional
 leading-keyword sentinel.
 
-### 17. `eval_primary` dispatch is hand-coded `strcmp` chain with parallel reserved-idents table
+### 17. `eval_primary` dispatch is hand-coded `strcmp` chain with parallel reserved-idents table (done)
 
 **Where:** `src/repl/eval.c:228-234` (`s_reserved_idents[]`) and
 L869-886 (`eval_primary` dispatch)
@@ -315,7 +315,7 @@ the extras because they only consult `args[0]` and `args[1]`.
 both reserved-idents and dispatch, rejects unsupported arity, and caps
 argument storage explicitly.
 
-### 18. Six independent identifier tokenizers in `eval.c`
+### 18. Six independent identifier tokenizers in `eval.c` (done)
 
 **Where:** `src/repl/eval.c:302, 373, 786, 1034, 1203` and
 `src/repl/export.c:1470`
@@ -326,7 +326,7 @@ advance while `isalnum || _`" tokenizer.
 **Fix:** One `static const char *eat_identifier(const char *p, const
 char **out_start)` at the top of `eval.c`.
 
-### 19. Indent formula duplicated three times in `parser.c`
+### 19. Indent formula duplicated three times in `parser.c` (done)
 
 **Where:** `src/repl/parser.c:942-948, 1006-1011, 1062-1067`
 
@@ -339,7 +339,7 @@ inside `gluBegin(...) { ... }` gets wrongly indented.
 `repl_source_scope_cmd_indent(source_line_idx, ind, sizeof(ind))`;
 `gluEnd` should grow a `repl_source_scope_tess_close_indent()` helper.
 
-### 20. Std-command emit ladder switches on `def->num_args`
+### 20. Std-command emit ladder switches on `def->num_args` (done)
 
 **Where:** `src/repl/parser.c:485-510`
 
@@ -350,7 +350,7 @@ walks the same ladder again.
 
 **Fix:** Extract `format_def_args(def, args, out, out_sz)`.
 
-### 21. Slug strings hard-coded in `export.c` despite "opaque bag" contract
+### 21. Slug strings hard-coded in `export.c` despite "opaque bag" contract (done)
 
 **Where:** `src/repl/export.c` — `"point_attenuation"` (L631/633/657),
 `"msaa"` (L970), `"line_smooth"` (L973), `"vertex_outlines"`
@@ -365,7 +365,7 @@ functions and must stay consistent.
 or push the gating decisions into the bridge
 (`bridge->geometry_passes_enabled(...)`).
 
-### 22. `repl_cfg_known` uses a fragile two-probe trick
+### 22. `repl_cfg_known` uses a fragile two-probe trick (done)
 
 **Where:** `src/repl/export.c:125`
 
@@ -375,7 +375,7 @@ bridge returning `fallback` for an "off-but-known" key silently lies.
 
 **Fix:** Add explicit `bridge->is_known(slug)`.
 
-### 23. `@declare` import bypasses the workspace-directive table
+### 23. `@declare` import bypasses the workspace-directive table (done)
 
 **Where:** `src/repl/export.c:547-554` (`WORKSPACE_DIRECTIVES[]`)
 vs. L2260 (inline `@declare` parse) and L1809 (inline `@declare` emit)
@@ -389,7 +389,7 @@ handler kind, or move `@declare` to its own marker table.
 
 ## 🟢 Dead code / dead fields (verified)
 
-### 24. `REPL_COMPILED_LOAD_ALL` has zero producers
+### 24. `REPL_COMPILED_LOAD_ALL` has zero producers (done)
 
 **Where:** `src/repl/compile.h:66`; consumer cases in `src/repl/apply.c:64,125`,
 `src/repl/compile.c:126,144,1409`, `src/editor/state.c:225`.
@@ -401,7 +401,7 @@ declaration, switch arm, or doc reference. Nothing sets
 **Fix:** Either wire it up (the command_store side already supports
 load) or delete the enum value, the cases, and the doc references.
 
-### 25. `needs_block_indent` field has no readers
+### 25. `needs_block_indent` field has no readers (done)
 
 **Where:** `src/repl/command_spec.c:483` (accessor),
 `src/repl/command_spec.h:172` (field). Verified: zero call sites for
@@ -412,7 +412,7 @@ field for nothing.
 
 **Fix:** Delete the field, accessor, and prototype.
 
-### 26. `g_for_depth_prefix` is computed but never queried
+### 26. `g_for_depth_prefix` is computed but never queried (done)
 
 **Where:** `src/repl/source_scope.c:12, 34, 40, 66`
 
@@ -422,7 +422,7 @@ array. The consumer that ever existed was unified into
 
 **Fix:** Delete the array and the four lines that touch it.
 
-### 27. `repl_state_predef_vars_storage` has no declarations or callers
+### 27. `repl_state_predef_vars_storage` has no declarations or callers (done)
 
 **Where:** `src/repl/state.c:184-190`
 
@@ -431,7 +431,7 @@ anywhere.
 
 **Fix:** Delete.
 
-### 28. `repl_state_variables_reset` has no callers and is buggy
+### 28. `repl_state_variables_reset` has no callers and is buggy (done)
 
 **Where:** `src/repl/state.c:399-404`
 
@@ -443,13 +443,13 @@ with `repl_state_reset_program` which marks both.
 
 **Fix:** Delete; or, if kept, append the dirty-marks.
 
-### 29. `matched_alias` is set but only read via `(void)matched_alias;`
+### 29. `matched_alias` is set but only read via `(void)matched_alias;` (done)
 
 **Where:** `src/repl/parser.c:883, 891, 960`
 
 **Fix:** Delete the variable and the `(void)` line.
 
-### 30. `flatten_src_text`'s `GLCmd *src_cmd` parameter is unused
+### 30. `flatten_src_text`'s `GLCmd *src_cmd` parameter is unused (done)
 
 **Where:** `src/repl/flatten.c:25-30`
 
@@ -458,7 +458,7 @@ earlier helpers" confess dead weight.
 
 **Fix:** Delete the parameter; update the ~10 call sites.
 
-### 31. Unreachable PUSH/POP cases in `repl_executor_apply_transform_cmd`
+### 31. Unreachable PUSH/POP cases in `repl_executor_apply_transform_cmd` (done)
 
 **Where:** `src/repl/executor.c:218-223`
 
@@ -469,7 +469,7 @@ intercepts those before falling through.
 **Fix:** Delete the two cases (or `assert(0)` in default), and rename
 the static to `_apply_non_stack_transform_cmd`.
 
-### 32. UNDECLARE/SET_VALUE stash dance is built on a false premise
+### 32. UNDECLARE/SET_VALUE stash dance is built on a false premise (done)
 
 **Where:** `src/repl/compile.c:993-1029`
 
@@ -482,7 +482,7 @@ DECLARE/SET_VALUE. Cross-kind ordering doesn't matter.
 **Fix:** Delete the `pending_set` juggling; just append UNDECLAREs
 after the parked SET_VALUE.
 
-### 33. `repl_dump_code_panel_visual_text` is `#if 0`-blocked, with 7 dead public fields
+### 33. `repl_dump_code_panel_visual_text` is `#if 0`-blocked, with 7 dead public fields (done)
 
 **Where:** `src/repl/export.c:3750-3833` (function),
 `src/repl/export.h:270-278` (`ReplExportLayout` fields:
@@ -496,7 +496,7 @@ be restored from history" is what `git log` is for.
 **Fix:** Delete the `#if 0` block and the 7 dead fields, or restore the
 function.
 
-### 34. Stale `x = ` / `y = ` … autocompletions
+### 34. Stale `x = ` / `y = ` … autocompletions (done)
 
 **Where:** `src/repl/command_spec.c:260-267`
 
@@ -509,7 +509,7 @@ commit with "undeclared variable".
 
 **Fix:** Keep only `t = `, or gate via the live predef table.
 
-### 35. `funcN` boilerplate hand-rolled 20× in command_spec
+### 35. `funcN` boilerplate hand-rolled 20× in command_spec (done)
 
 **Where:** `src/repl/command_spec.c:239-259`
 
@@ -532,7 +532,7 @@ table-driven path.
 
 **Fix:** Move to `state_owners.h`.
 
-### 37. `_mut()` accessors used for reads
+### 37. `_mut()` accessors used for reads (done)
 
 **Where:** Hot spots:
 - `src/repl/replay_annotations.c` (~39 sites — pure annotation module
@@ -549,7 +549,7 @@ is declared in `state_views.h`.
 **Fix:** Replace with the const variant. Add a `check-state-ownership`
 ratchet to prevent regression.
 
-### 38. ~10 generic REPL helpers live in `export.c`
+### 38. ~10 generic REPL helpers live in `export.c` (done)
 
 **Where:** `src/repl/export.c` — non-`static`, declared in
 `core_internal.h`:
@@ -688,37 +688,37 @@ dependency is explicit.
 
 ### One-afternoon pass
 
-1. **#1** — `format_evaluated_cmd` missing case 1 (single-arg shape
-   replay bug). Surgical add of one case arm.
-2. **#2** — `func_aliases` stash/import hole. Mirror what
-   `save_scene_to_slot` already does for live stash/install/restore,
-   and add the per-file import clear/restore so unaliased scenes do not
-   inherit previous aliases.
-3. **#3** — Delete the `g_search_*` / `g_ac_*` landmine macros.
-4. **#4** — `glPointParameterfv` `has_vars`. One line.
-5. **#5** — Const-value branch error surfacing. Two-line swap.
-6. **#29** + **#30** + **#31** — Delete dead variables / unused
-   parameters / unreachable cases.
-7. **#24** — Delete `REPL_COMPILED_LOAD_ALL` (one enum value + six
-   switch arms across four files; check no tests guard the empty
-   "load-all" branch first).
+- [x] **#1** — `format_evaluated_cmd` missing case 1 (single-arg shape
+  replay bug). Surgical add of one case arm.
+- [x] **#2** — `func_aliases` stash/import hole. Mirror what
+  `save_scene_to_slot` already does for live stash/install/restore,
+  and add the per-file import clear/restore so unaliased scenes do not
+  inherit previous aliases.
+- [x] **#3** — Delete the `g_search_*` / `g_ac_*` landmine macros.
+- [x] **#4** — `glPointParameterfv` `has_vars`. One line.
+- [x] **#5** — Const-value branch error surfacing. Two-line swap.
+- [x] **#29** + **#30** + **#31** — Delete dead variables / unused
+  parameters / unreachable cases.
+- [x] **#24** — Delete `REPL_COMPILED_LOAD_ALL` (one enum value + six
+  switch arms across four files; check no tests guard the empty
+  "load-all" branch first).
 
 That's ~7 small commits, all with focused scope.
 
 ### One-week pass
 
-- **#37** — `_mut()` for reads in `replay_annotations.c` (~39 sites in
+- [x] **#37** — `_mut()` for reads in `replay_annotations.c` (~39 sites in
   one TU, easy to do in one commit).
-- **#38** — Move the ~10 generic helpers out of `export.c`. Biggest
+- [x] **#38** — Move the ~10 generic helpers out of `export.c`. Biggest
   single file-size reduction in the directory.
-- **#33** — Delete `repl_dump_code_panel_visual_text` and its 7 dead
+- [x] **#33** — Delete `repl_dump_code_panel_visual_text` and its 7 dead
   `ReplExportLayout` fields; remove the `glr_ctrl.c` population code.
-- **#21** + **#22** — Add `bridge->is_known(slug)` and clean up the
+- [x] **#21** + **#22** — Add `bridge->is_known(slug)` and clean up the
   hardcoded slugs in `export.c`.
-- **#14** — Single source of truth for the `@cfg` slug allow-list
+- [x] **#14** — Single source of truth for the `@cfg` slug allow-list
   (push into the bridge).
-- **#12** — Hoist `CatalogTagOps` for examples/tutorials tag duplication.
-- **#13** — Extract `replay_simulate` from the twin walkers.
+- [x] **#12** — Hoist `CatalogTagOps` for examples/tutorials tag duplication.
+- [x] **#13** — Extract `replay_simulate` from the twin walkers.
 
 ### Out of scope
 

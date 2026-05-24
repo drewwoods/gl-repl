@@ -61,6 +61,9 @@ int  repl_parse_and_normalize_strict(const char *line, int pos,
 
 void trim_in_place(char *s);
 void repl_format_source_float(char *out, int out_sz, float v);
+int  repl_parse_identifier_list(const char *src, const char *leading_keyword,
+                                char names[][16], int max_names);
+int  repl_parse_func_name_token(const char **p_inout, int *fn);
 int  extract_for_args_text(const char *src,
                            char *var, int var_sz,
                            char *args, int args_sz);

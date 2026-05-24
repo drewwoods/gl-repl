@@ -228,6 +228,49 @@ static int resolve_enum_arg_slot(const char *raw,
     return 0;
 }
 
+static void format_std_command_text(char *out, int out_sz,
+                                    const char *indent,
+                                    const ReplStdCommandSpec *def,
+                                    const float *args) {
+    int off;
+
+    if (!out || out_sz <= 0 || !def || !def->fmt)
+        return;
+
+    off = snprintf(out, (size_t)out_sz, "%s", indent ? indent : "");
+    if (off < 0 || off >= out_sz)
+        return;
+
+    switch (def->num_args) {
+    case 1:
+        snprintf(out + off, (size_t)(out_sz - off), def->fmt, args[0]);
+        break;
+    case 2:
+        snprintf(out + off, (size_t)(out_sz - off),
+                 def->fmt, args[0], args[1]);
+        break;
+    case 3:
+        snprintf(out + off, (size_t)(out_sz - off),
+                 def->fmt, args[0], args[1], args[2]);
+        break;
+    case 4:
+        snprintf(out + off, (size_t)(out_sz - off),
+                 def->fmt, args[0], args[1], args[2], args[3]);
+        break;
+    case 5:
+        snprintf(out + off, (size_t)(out_sz - off),
+                 def->fmt, args[0], args[1], args[2], args[3], args[4]);
+        break;
+    case 6:
+        snprintf(out + off, (size_t)(out_sz - off),
+                 def->fmt, args[0], args[1], args[2],
+                 args[3], args[4], args[5]);
+        break;
+    default:
+        break;
+    }
+}
+
 /*
  * parse_command - Convert a single REPL text line into a GLCmd.
  *
@@ -482,36 +525,9 @@ static int parse_command(const char *line, GLCmd *cmd,
                 cmd->has_vars = input_has_any_visible_vars(args, vars, num_vars);
 
                 const char *ind = def->is_tess ? tess_indent : indent;
-                if (text_out && text_sz > 0) {
-                    snprintf(text_out, (size_t)text_sz, "%s", ind);
-                    size_t current_len = strlen(text_out);
-                    switch (def->num_args) {
-                    case 1:
-                        snprintf(text_out + current_len, (size_t)(text_sz - (int)current_len),
-                                 def->fmt, cmd->args[0]);
-                        break;
-                    case 2:
-                        snprintf(text_out + current_len, (size_t)(text_sz - (int)current_len),
-                                 def->fmt, cmd->args[0], cmd->args[1]);
-                        break;
-                    case 3:
-                        snprintf(text_out + current_len, (size_t)(text_sz - (int)current_len),
-                                 def->fmt, cmd->args[0], cmd->args[1], cmd->args[2]);
-                        break;
-                    case 4:
-                        snprintf(text_out + current_len, (size_t)(text_sz - (int)current_len),
-                                 def->fmt, cmd->args[0], cmd->args[1], cmd->args[2], cmd->args[3]);
-                        break;
-                    case 5:
-                        snprintf(text_out + current_len, (size_t)(text_sz - (int)current_len),
-                                 def->fmt, cmd->args[0], cmd->args[1], cmd->args[2], cmd->args[3], cmd->args[4]);
-                        break;
-                    case 6:
-                        snprintf(text_out + current_len, (size_t)(text_sz - (int)current_len),
-                                 def->fmt, cmd->args[0], cmd->args[1], cmd->args[2], cmd->args[3], cmd->args[4], cmd->args[5]);
-                        break;
-                    }
-                }
+                if (text_out && text_sz > 0)
+                    format_std_command_text(text_out, text_sz, ind, def,
+                                            cmd->args);
                 /* glClearColor: clamp each RGB channel and rebuild text */
                 if (def->type == CMD_CLEAR_COLOR) {
                     int clamped = 0;
@@ -522,13 +538,9 @@ static int parse_command(const char *line, GLCmd *cmd,
                         }
                     }
                     if (clamped) {
-                        if (text_out && text_sz > 0) {
-                            snprintf(text_out, (size_t)text_sz, "%s", ind);
-                            size_t cl = strlen(text_out);
-                            snprintf(text_out + cl, (size_t)(text_sz - (int)cl),
-                                     def->fmt, cmd->args[0], cmd->args[1],
-                                     cmd->args[2], cmd->args[3]);
-                        }
+                        if (text_out && text_sz > 0)
+                            format_std_command_text(text_out, text_sz, ind,
+                                                    def, cmd->args);
                         if (!cmd->has_vars)
                             parser_emit_error_static(ctx, "glClearColor: channels clamped to 0.15 max");
                     }
@@ -883,16 +895,10 @@ static int parse_command(const char *line, GLCmd *cmd,
      * the load-bearing identity stored on the resulting CMD_CALL; the
      * alias is purely a parser/display layer. */
     int fn = -1;
-    if (strncmp(func, "func", 4) == 0 && func[4] >= '0' && func[4] <= '9' &&
-        func[5] == '\0') {
-        fn = func[4] - '0';
-    } else {
-        int alias_slot = repl_func_alias_lookup_slot(func);
-        if (alias_slot >= 0) {
-            fn = alias_slot;
-        }
-    }
-    if (fn >= 0 && open_p && close_p) {
+    {
+        const char *func_cursor = func;
+        if (repl_parse_func_name_token(&func_cursor, &fn) &&
+            *func_cursor == '\0' && open_p && close_p) {
         float dummy_vals[MAX_EXPR_VARS];
         int arg_count = 0;
         if (args[0] != '\0') {
@@ -941,13 +947,9 @@ static int parse_command(const char *line, GLCmd *cmd,
         cmd->num_args = arg_count;
         cmd->has_vars = input_has_any_visible_vars(args, vars, num_vars);
 
-        int fdepth = repl_source_scope_block_depth_at(source_line_idx);
-        int bb = repl_source_scope_in_begin_block_at(source_line_idx);
-        int ind_v = (bb ? 4 : 2) + fdepth * 2;
         char ind_str[32];
-        if (ind_v > (int)sizeof(ind_str) - 1) ind_v = (int)sizeof(ind_str) - 1;
-        memset(ind_str, ' ', ind_v);
-        ind_str[ind_v] = '\0';
+        repl_source_scope_cmd_indent(source_line_idx, ind_str,
+                         (int)sizeof(ind_str));
 
         char raw_args[MAX_LINE_LEN];
         strncpy(raw_args, args, sizeof(raw_args) - 1);
@@ -973,6 +975,7 @@ static int parse_command(const char *line, GLCmd *cmd,
             }
         }
         return 1;
+        }
     }
 
     /* gluBegin(GLU_POLYGON) - start a tessellated polygon */
@@ -1002,14 +1005,9 @@ static int parse_command(const char *line, GLCmd *cmd,
         cmd->type = CMD_TESS_END;
         cmd->valid = 1;
         {
-            int td = repl_source_scope_tess_scope_depth_at(source_line_idx);
-            if (td > 0) td--;
-            int kd = repl_source_scope_block_depth_at(source_line_idx);
-            int spaces = 2 + 2 * td + 2 * kd;
             char close_ind[32];
-            if (spaces > (int)sizeof(close_ind) - 1) spaces = (int)sizeof(close_ind) - 1;
-            memset(close_ind, ' ', (size_t)spaces);
-            close_ind[spaces] = '\0';
+            repl_source_scope_tess_close_indent(source_line_idx, close_ind,
+                                                (int)sizeof(close_ind));
             WRITE_TEXT("%sgluEnd();", close_ind);
         }
         return 1;
@@ -1060,12 +1058,9 @@ static int parse_command(const char *line, GLCmd *cmd,
             cmd->type = CMD_GOTO;
             cmd->valid = 1;
             {
-                int fdepth = repl_source_scope_block_depth_at(source_line_idx);
-                int bb_v = repl_source_scope_in_begin_block_at(source_line_idx);
-                int ind_v = (bb_v ? 4 : 2) + fdepth * 2;
                 char ind_str[32];
-                if (ind_v > (int)sizeof(ind_str) - 1) ind_v = (int)sizeof(ind_str) - 1;
-                memset(ind_str, ' ', ind_v); ind_str[ind_v] = '\0';
+                repl_source_scope_cmd_indent(source_line_idx, ind_str,
+                                             (int)sizeof(ind_str));
                 WRITE_TEXT("%sgoto %s;", ind_str, clean_lname);
             }
             return 1;

@@ -9,13 +9,12 @@
  * etc. with enumeration tables) and standard specs (vertex/normal/color/transform
  * commands with simple float arguments). Control structures (for, func, if, close
  * block) are represented as ReplCommandTypeSpec entries: metadata about whether
- * they need semicolons and block indentation.
+ * they need semicolons plus their syntax-highlighting category.
  *
  * Usage: the parser uses these specs to validate argument counts and format
  * parameter hints (argument name, type). The autocomplete system uses specs to
- * populate parameter hints and completion suggestions. The formatter uses
- * needs_block_indent to determine how to indent closing braces. The code-panel
- * renderer uses format strings to display canonical command text.
+ * populate parameter hints and completion suggestions. The code-panel renderer
+ * uses format strings to display canonical command text.
  *
  * Enum tables: each enum-backed command declares an array of positional
  * ReplEnumArgSpec slots (args[]), each carrying its enum token table,
@@ -157,9 +156,8 @@ typedef enum {
 } CmdSyntaxCategory;
 
 /* Metadata for control structures and command-type properties. Describes whether
- * a command type needs a trailing semicolon (e.g., float decl, assignment) and
- * whether it needs block-based indentation (for, func, if blocks). The category
- * field drives the code-panel renderer's syntax highlighting.
+ * a command type needs a trailing semicolon (e.g., float decl, assignment). The
+ * category field drives the code-panel renderer's syntax highlighting.
  *
  * valid_in_begin: 1 if the command may appear between glBegin and glEnd. 0 marks
  * commands real GL would reject with GL_INVALID_OPERATION inside a begin block
@@ -169,7 +167,6 @@ typedef enum {
 typedef struct {
     const char *name;
     int needs_semicolon;
-    int needs_block_indent;
     CmdSyntaxCategory category;
     int valid_in_begin;
 } ReplCommandTypeSpec;
@@ -210,8 +207,8 @@ typedef struct {
 } ReplStdCommandSpec;
 
 /* Query metadata for a command type (control structure or GL command). Returns
- * a spec describing the command's name, whether it needs a semicolon, and
- * whether it needs block indentation. Used by the formatter and code-panel UI. */
+ * a spec describing the command's name and whether it needs a semicolon. Used
+ * by the parser and code-panel UI. */
 const ReplCommandTypeSpec *repl_command_type_spec(CmdType type);
 
 /* Query the human-readable name for a command type (e.g., "glVertex3f",
@@ -225,10 +222,6 @@ const char *cmd_type_name(CmdType type);
 /* Query whether a command type requires a trailing semicolon. Used by the
  * formatter and commit validation. */
 int repl_cmd_type_needs_semicolon(CmdType type);
-
-/* Query whether a command type requires block-based indentation (e.g., for/func/if
- * blocks). Used by the formatter to determine indentation rules. */
-int repl_cmd_type_needs_block_indent(CmdType type);
 
 /* Query the syntax-highlighting category for a command type. Used by the
  * code-panel renderer to pick the row color. Returns CMD_CAT_DEFAULT

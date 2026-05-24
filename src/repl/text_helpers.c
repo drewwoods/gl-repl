@@ -104,14 +104,23 @@ int extract_for_args_text(const char *src,
     return 1;
 }
 
-static int parse_identifier_list(const char *src,
-                                 char names[][16], int max_names) {
+int repl_parse_identifier_list(const char *src, const char *leading_keyword,
+                               char names[][16], int max_names) {
     const char *p = src;
     int count = 0;
+    size_t keyword_len = (leading_keyword && leading_keyword[0])
+        ? strlen(leading_keyword) : 0;
 
     while (*p) {
         while (*p && isspace((unsigned char)*p)) p++;
         if (!*p) break;
+        if (keyword_len > 0) {
+            if (strncmp(p, leading_keyword, keyword_len) != 0 ||
+                !isspace((unsigned char)p[keyword_len]))
+                return -1;
+            p += keyword_len;
+            while (*p && isspace((unsigned char)*p)) p++;
+        }
         if (count >= max_names) return -1;
         if (!isalpha((unsigned char)*p) && *p != '_') return -1;
 
@@ -164,7 +173,7 @@ int parse_expr_list_exact(const char *src, float *out_vals, int max_vals,
     return 1;
 }
 
-static int parse_func_name_token(const char **p_inout, int *fn) {
+int repl_parse_func_name_token(const char **p_inout, int *fn) {
     const char *p = *p_inout;
     while (*p && isspace((unsigned char)*p)) p++;
     if (strncmp(p, "func", 4) == 0 &&
@@ -196,7 +205,7 @@ int parse_repl_func_signature(const char *src, int *fn,
                               char param_names[][16], int max_params,
                               int *param_count) {
     const char *p = src;
-    if (!parse_func_name_token(&p, fn)) return 0;
+    if (!repl_parse_func_name_token(&p, fn)) return 0;
 
     while (*p && isspace((unsigned char)*p)) p++;
     if (*p == '{' || *p == '\0') {
@@ -225,7 +234,8 @@ int parse_repl_func_signature(const char *src, int *fn,
         return 1;
     }
 
-    int count = parse_identifier_list(payload, param_names, max_params);
+    int count = repl_parse_identifier_list(payload, NULL,
+                                           param_names, max_params);
     if (count < 0) return 0;
     if (param_count) *param_count = count;
     return 1;
@@ -234,7 +244,7 @@ int parse_repl_func_signature(const char *src, int *fn,
 int extract_func_call_args_text(const char *src, int *fn,
                                 char *args, int args_sz) {
     const char *p = src;
-    if (!parse_func_name_token(&p, fn)) return 0;
+    if (!repl_parse_func_name_token(&p, fn)) return 0;
 
     while (*p && isspace((unsigned char)*p)) p++;
     if (*p != '(') return 0;

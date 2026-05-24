@@ -59,7 +59,6 @@ FlatProgramView   repl_state_flat_program_view(void);
 
 ReplVariableView         repl_state_variables(void);
 ReplVariableState       *repl_state_variables_mut(void);
-void                     repl_state_variables_reset(void);
 void                     repl_state_time_advance(float dt);
 void                     repl_state_time_reset_to_zero(void);
 
