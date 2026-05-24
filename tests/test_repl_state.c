@@ -1,5 +1,6 @@
 #include "app/glr_state.h"
 #include "app/glr_ctrl.h"
+#include "app/glr_actions.h"
 #include "repl/state.h"
 #include "editor/state.h"
 #include "ui/app/state.h"
@@ -594,6 +595,59 @@ static void test_camera_clear_scene_default_falls_back(void) {
                 fabsf(cam.dist - 5.0f) < 0.5f);
 }
 
+static void test_example_load_sets_scene_camera_default(void) {
+    glr_app_reset_all();
+
+    glr_scene_load_example(0);
+
+    for (int i = 0; i < 500; i++)
+        glr_camera_tick();
+
+    GlrCameraState after_load = glr_camera();
+    ASSERT_TRUE("example 0 camera dist ~6",
+                fabsf(after_load.dist - 6.0f) < 0.5f);
+    ASSERT_TRUE("example 0 camera rx ~20",
+                fabsf(after_load.rx - 20.0f) < 0.5f);
+
+    glr_camera_set(0.0f, 0.0f, 2.0f, 0.0f, 0.0f, 0.0f, 0.0f);
+
+    glr_camera_ease_to_default();
+
+    for (int i = 0; i < 500; i++)
+        glr_camera_tick();
+
+    GlrCameraState cam = glr_camera();
+    ASSERT_TRUE("Ctrl+Shift+C reaches example dist (6), not built-in (5)",
+                fabsf(cam.dist - 6.0f) < 0.5f);
+    ASSERT_TRUE("Ctrl+Shift+C reaches example rx (20)",
+                fabsf(cam.rx - 20.0f) < 0.5f);
+    ASSERT_TRUE("Ctrl+Shift+C reaches example ry (35)",
+                fabsf(cam.ry - 35.0f) < 0.5f);
+}
+
+static void test_user_scene_load_clears_scene_camera_default(void) {
+    glr_app_reset_all();
+
+    glr_scene_load_example(0);
+    for (int i = 0; i < 500; i++)
+        glr_camera_tick();
+
+    glr_scene_load_user_slot(0);
+
+    glr_camera_set(0.0f, 0.0f, 2.0f, 0.0f, 0.0f, 0.0f, 0.0f);
+    glr_camera_ease_to_default();
+    for (int i = 0; i < 500; i++)
+        glr_camera_tick();
+
+    GlrCameraState cam = glr_camera();
+    ASSERT_TRUE("after user-scene load, falls back to built-in dist (5)",
+                fabsf(cam.dist - 5.0f) < 0.5f);
+    ASSERT_TRUE("after user-scene load, falls back to built-in rx (20)",
+                fabsf(cam.rx - 20.0f) < 0.5f);
+    ASSERT_TRUE("after user-scene load, falls back to built-in ry (30)",
+                fabsf(cam.ry - 30.0f) < 0.5f);
+}
+
 int main(void) {
     printf("--- repl_state tests ---\n");
     test_capture_restore_round_trip();
@@ -604,6 +658,8 @@ int main(void) {
     test_source_document_apply_change_combined();
     test_camera_ease_to_default_uses_scene_default();
     test_camera_clear_scene_default_falls_back();
+    test_example_load_sets_scene_camera_default();
+    test_user_scene_load_clears_scene_camera_default();
     printf("%d / %d tests passed\n", g_harness.passed, g_harness.run);
     return g_harness.passed == g_harness.run ? 0 : 1;
 }
