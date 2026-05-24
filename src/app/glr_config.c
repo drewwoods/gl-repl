@@ -230,6 +230,36 @@ const char *glr_config_section_label(int section) {
     return g_cfg_items[h].label + 4;   /* strip the "### " marker */
 }
 
+const char *glr_config_section_display_label(int section) {
+    static char labels[16][48];
+    static int computed;
+    int n;
+    if (!computed) {
+        n = glr_config_section_count();
+        if (n > 16) n = 16;
+        for (int s = 0; s < n; s++) {
+            const char *raw = glr_config_section_label(s);
+            if (!raw) { labels[s][0] = '\0'; continue; }
+            size_t k = 0;
+            for (; raw[k] && k < sizeof(labels[0]) - 1; k++) {
+                char c = raw[k];
+                if (k == 0) {
+                    if (c >= 'a' && c <= 'z') c = (char)(c - 32);
+                } else if (c >= 'A' && c <= 'Z') {
+                    c = (char)(c + 32);
+                }
+                labels[s][k] = c;
+            }
+            labels[s][k] = '\0';
+        }
+        computed = 1;
+    }
+    n = glr_config_section_count();
+    if (section < 0 || section >= n || section >= 16)
+        return NULL;
+    return labels[section];
+}
+
 int glr_config_section_range(int section, int *start, int *count) {
     int h = section_header_index(section);
     if (h < 0)

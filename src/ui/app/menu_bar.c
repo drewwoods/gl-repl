@@ -305,29 +305,9 @@ static const char *menu_item_label(int menu_id, int i) {
         return NULL;
     }
     if (menu_id == MENU_CONFIG) {
-        /* Config top-level rows are section parents + "All"; the
-         * actual items live in each row's flyout. The section model is
-         * data-faithful (UPPERCASE, as in g_cfg_items[]); the menu
-         * heading is shown leading-uppercase ("RENDERING" ->
-         * "Rendering", "TIME & REPLAY" -> "Time & replay"). */
         if (i == config_all_parent_row())
             return "All";
-        const char *raw = glr_config_section_label(i);
-        if (!raw)
-            return NULL;
-        static char buf[48];
-        size_t k = 0;
-        for (; raw[k] && k < sizeof(buf) - 1; k++) {
-            char c = raw[k];
-            if (k == 0) {
-                if (c >= 'a' && c <= 'z') c = (char)(c - 32);
-            } else if (c >= 'A' && c <= 'Z') {
-                c = (char)(c + 32);
-            }
-            buf[k] = c;
-        }
-        buf[k] = '\0';
-        return buf;
+        return glr_config_section_display_label(i);
     }
     return NULL;
 }

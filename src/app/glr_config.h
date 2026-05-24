@@ -138,9 +138,16 @@ int  glr_config_cycle(GlrConfigKey key, int delta);
 /* Number of "### " section headers present in g_cfg_items[]. */
 int  glr_config_section_count(void);
 
-/* Display label for section `s` (0-based), with the "### " marker
- * stripped so a parent menu row reads cleanly. NULL if out of range. */
+/* Raw label for section `s` (0-based), with the "### " marker
+ * stripped. UPPERCASE as authored in g_cfg_items[]. NULL if out of
+ * range. */
 const char *glr_config_section_label(int section);
+
+/* Title-cased display label: "RENDERING" → "Rendering",
+ * "TIME & REPLAY" → "Time & replay". Pre-computed once; the UI layer
+ * renders this directly without per-frame string work. NULL if out of
+ * range. */
+const char *glr_config_section_display_label(int section);
 
 /* Resolve section `s` to its contiguous run of actionable item rows in
  * g_cfg_items[]: *start = index of the first item, *count = number of

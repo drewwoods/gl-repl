@@ -558,12 +558,8 @@ static void test_render_paths_with_stubs(void) {
 }
 #endif
 
-/* #52/#53 regression: pin Config section label content and count so the
- * title-case refactor in menu_item_label doesn't silently change dropdown
- * labels or lose sections. The title-case transform itself is static in
- * menu_bar.c, but this test pins its inputs (raw section labels from
- * glr_config_section_label) and the section count that drives the
- * dropdown layout. */
+/* #52/#53: pin Config section labels (raw and display) so the
+ * pre-computed title-case path stays correct. */
 static void test_config_section_labels(void) {
     static const char *expected_raw[] = {
         "RENDERING",
@@ -574,6 +570,15 @@ static void test_config_section_labels(void) {
         "INTERFACE",
         "AUDIO",
     };
+    static const char *expected_display[] = {
+        "Rendering",
+        "Time & replay",
+        "Overlays & scene",
+        "Camera",
+        "Geometry",
+        "Interface",
+        "Audio",
+    };
     int n = glr_config_section_count();
     ASSERT_INT_EQ("section count", n, 7);
     for (int i = 0; i < n && i < 7; i++) {
@@ -581,9 +586,16 @@ static void test_config_section_labels(void) {
         ASSERT_TRUE("section label not null", label != NULL);
         if (label)
             ASSERT_TRUE(expected_raw[i], strcmp(label, expected_raw[i]) == 0);
+        const char *disp = glr_config_section_display_label(i);
+        ASSERT_TRUE("display label not null", disp != NULL);
+        if (disp)
+            ASSERT_TRUE(expected_display[i],
+                        strcmp(disp, expected_display[i]) == 0);
     }
     ASSERT_TRUE("past-end section label is null",
                 glr_config_section_label(n) == NULL);
+    ASSERT_TRUE("past-end display label is null",
+                glr_config_section_display_label(n) == NULL);
 }
 
 #ifdef GL_STUBS
