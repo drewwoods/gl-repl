@@ -7,7 +7,7 @@
  *
  *   - repl_compile_*() never mutates editor buffer, command store,
  *     status, or undo on either success or failure.
- *   - apply (driven by editor_commit_apply_compiled_change) updates
+ *   - apply (driven by editor_commit_apply_external_change) updates
  *     editor text and command store together.
  *   - On compile failure, set_status from the wrapper IS allowed
  *     (Phase C transition); the strong invariant is checked at the
@@ -350,7 +350,7 @@ static void test_overwrite_earlier_decl_with_later_assign_rebases_slot(void) {
                repl_compile_float_decl("float X;", &ctx, &change, err, sizeof(err)),
                REPL_COMPILE_OK);
     ASSERT_INT("seed float X apply OK",
-               editor_commit_apply_compiled_change(&change), 1);
+               editor_commit_apply_external_change(&change, 0), 1);
 
     set_input("float Y = 5;");
     ctx = repl_compile_context_from_live(editor_state_edit_line());
@@ -358,7 +358,7 @@ static void test_overwrite_earlier_decl_with_later_assign_rebases_slot(void) {
                repl_compile_float_decl("float Y = 5;", &ctx, &change, err, sizeof(err)),
                REPL_COMPILE_OK);
     ASSERT_INT("seed float Y apply OK",
-               editor_commit_apply_compiled_change(&change), 1);
+               editor_commit_apply_external_change(&change, 0), 1);
 
     int x_slot = repl_eval_find_predef_var_idx("X");
     int y_slot = repl_eval_find_predef_var_idx("Y");
@@ -391,7 +391,7 @@ static void test_overwrite_earlier_decl_with_later_assign_rebases_slot(void) {
                change.cmds[0].num_args, y_slot - 1);
 
     ASSERT_INT("Y = 42 over earlier decl apply OK",
-               editor_commit_apply_compiled_change(&change), 1);
+               editor_commit_apply_external_change(&change, 0), 1);
 
     ASSERT_INT("X undeclared after overwrite",
                repl_eval_find_predef_var_idx("X"), -1);
@@ -408,7 +408,7 @@ static void test_overwrite_earlier_decl_with_later_assign_rebases_slot(void) {
 
 /* Forced cmd-store capacity failure leaves predef-vars, editor
  * buffer, and command store all unchanged. The preflight inside
- * editor_commit_apply_compiled_change is the load-bearing
+ * editor_commit_apply_external_change is the load-bearing
  * mechanism: without it the predef-op cascade would mutate while
  * the cmd-store insert silently fails. */
 static void test_capacity_failure_is_atomic(void) {

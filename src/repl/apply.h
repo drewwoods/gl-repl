@@ -36,7 +36,7 @@
  * replace) within the current cmd-count bounds. Returns 0 if the
  * apply would fail. Reads ReplState; never mutates.
  *
- * `editor_commit_apply_compiled_change` calls this before doing
+ * `editor_commit_apply_external_change` calls this before doing
  * any mutation so a single capacity failure can't leave predef-vars
  * declared with the cmd-store / editor-buffer untouched. */
 int  repl_apply_can_apply_compiled_change(const ReplCompiledChange *change);
@@ -65,7 +65,7 @@ int  repl_apply_can_apply_compiled_change(const ReplCompiledChange *change);
  * otherwise a partial commit can leave predef declarations or
  * editor text without their matching cmd-store entry. The
  * preflight + apply pair is wrapped by
- * `editor_commit_apply_compiled_change()`. */
+ * `editor_commit_apply_external_change()`. */
 int  repl_apply_compiled_change(const ReplCompiledChange *change,
                                 int *cursor_inout);
 

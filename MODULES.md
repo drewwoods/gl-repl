@@ -1119,7 +1119,7 @@ side-effect routing. As of that branch landing:
 - **Commit dispatch is editor-side: done.** `editor_try_commit_*`
   dispatchers live in `src/editor/commit.c`. `repl_commit.c` is deleted
   and hard-guarded against return (Phase H.5). `editor_try_commit_float_decl`
-  and `editor_try_assign_variable` now route through
+  and `editor_try_commit_assign_variable` now route through
   `editor_commit_apply_plan`.
 - **Parser diagnostic flow: data, not side effects.** `src/repl/parser.c`
   writes diagnostics to `ReplParseContext.err_buf`. The parser core

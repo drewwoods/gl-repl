@@ -12,9 +12,7 @@ static EditorState g_editor_state;   /* zero-initialised by BSS */
 /* Writes the handful of non-zero sentinel values that distinguish a
  * valid default EditorState from a raw zero-fill. */
 static void editor_state_apply_sentinels(EditorState *s) {
-    s->input.input_capacity          = MAX_INPUT_LEN;
-    s->input.anchor_pos              = -1;
-    s->input.pending_newline_capacity = MAX_INPUT_LEN;
+    s->input.anchor_pos               = -1;
     s->selection.anchor_idx           = -1;
     s->selection.end_idx              = -1;
     s->clipboard.kind                 = EDITOR_CLIPBOARD_EMPTY;
