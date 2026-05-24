@@ -82,6 +82,12 @@ typedef struct {
 
 static const char *repl_code_panel_display_text(const UiRenderSnapshot *snap, int line_idx);
 
+static struct {
+    const UiRenderSnapshot *snap;
+    ReplCodePanelBuilder    builder;
+    int                     valid;
+} g_builder_cache;
+
 static UiTextPanelColor repl_code_panel_rgb(float r, float g, float b) {
     UiTextPanelColor color = { r, g, b, 1.0f, 0 };
     return color;
@@ -1732,6 +1738,11 @@ void ui_repl_code_panel_render_with_chrome(const UiRenderSnapshot *snap,
 
     repl_code_panel_build_rows(&builder);
 
+    g_builder_cache.snap    = snap;
+    g_builder_cache.builder = builder;
+    g_builder_cache.builder.text_snap.rows = g_repl_code_panel_rows;
+    g_builder_cache.valid   = 1;
+
     memset(&text_out, 0, sizeof(text_out));
     ui_text_panel_render(&builder.text_snap, &text_out);
 
@@ -1807,10 +1818,17 @@ UiHit ui_repl_code_panel_hit_test(const UiRenderSnapshot *snap,
     UiHit hit;
     int gl_y;
 
-    if (!snap || !repl_code_panel_init_builder(&builder, snap))
+    if (!snap)
         return ui_hit_none();
 
-    repl_code_panel_build_rows(&builder);
+    if (g_builder_cache.valid && g_builder_cache.snap == snap) {
+        builder = g_builder_cache.builder;
+        builder.text_snap.rows = g_repl_code_panel_rows;
+    } else {
+        if (!repl_code_panel_init_builder(&builder, snap))
+            return ui_hit_none();
+        repl_code_panel_build_rows(&builder);
+    }
     hit = ui_text_panel_hit_test(&builder.text_snap, mx, my);
     if (hit.kind != UI_HIT_NONE)
         return repl_code_panel_rewrite_hit(&builder, mx, hit);
