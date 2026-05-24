@@ -227,6 +227,92 @@ static void test_alpha_text_enables_blending(void) {
                 gl_stub_counts[GL_STUB_glBlendFunc] > opaque_blend_func);
 }
 
+/* #30 regression: bold segments query blend state per-span via
+ * glIsEnabled(GL_BLEND). Pin the call count so the refactor that threads
+ * a blend_on bool keeps the same GL output. */
+static void test_bold_segment_blend_query(void) {
+    UiTextPanelRow row = {
+        .text = "bold text here",
+        .kind = UI_TEXT_PANEL_ROW_TEXT,
+        .left_gutter_label = 1,
+        .source_line_idx = 0,
+        .search_row_idx = 0,
+        .hit_eligible = 1,
+        .color = { 0.8f, 0.9f, 1.0f, 1.0f, 0 },
+    };
+    UiTextPanelSnapshot snap = make_snapshot(&row, 1, 0, 0, 220, 140, 0);
+    UiTextPanelOutput out = {0};
+    unsigned long long no_bold_is_enabled;
+    unsigned long long bold_is_enabled;
+    unsigned long long bold_blend_enable;
+
+    gl_stub_counts_reset();
+    ui_text_panel_render(&snap, &out);
+    no_bold_is_enabled = gl_stub_counts[GL_STUB_glIsEnabled];
+
+    row.color_segments[0] = (UiTextPanelColorSegment){
+        .char_start = 0,
+        .char_count = 4,
+        .color = { 0.8f, 0.9f, 1.0f, 1.0f, 0 },
+        .bold = 1,
+    };
+    row.color_segments[1] = (UiTextPanelColorSegment){
+        .char_start = 4,
+        .char_count = 10,
+        .color = { 0.8f, 0.9f, 1.0f, 1.0f, 0 },
+        .bold = 0,
+    };
+    row.color_segment_count = 2;
+
+    gl_stub_counts_reset();
+    ui_text_panel_render(&snap, &out);
+    bold_is_enabled = gl_stub_counts[GL_STUB_glIsEnabled];
+    bold_blend_enable = gl_stub_counts[GL_STUB_glEnable];
+
+    ASSERT_TRUE("bold segment queries glIsEnabled",
+                bold_is_enabled > no_bold_is_enabled);
+    ASSERT_TRUE("bold segment enables blend",
+                bold_blend_enable > 0);
+    ASSERT_TRUE("bold segment draws glyphs",
+                gl_stub_counts[GL_STUB_glutBitmapCharacter] > 0);
+}
+
+/* #63 regression: text_panel_row_layout() is called per-row; pin that
+ * it returns consistent results for the same row+snapshot so a future
+ * caching refactor doesn't change behavior. We verify this indirectly by
+ * checking wrap count and hit-test agree. */
+static void test_row_layout_consistency(void) {
+    static const char *k_long =
+        "glVertex3f(111111, 222222, 333333, 444444, 555555, 666666)";
+    UiTextPanelRow row = {
+        .text = k_long,
+        .kind = UI_TEXT_PANEL_ROW_TEXT,
+        .left_gutter_label = 1,
+        .source_line_idx = 0,
+        .search_row_idx = 0,
+        .hit_eligible = 1,
+        .color = { 1.0f, 1.0f, 1.0f, 1.0f, 0 },
+    };
+    UiTextPanelSnapshot snap = make_snapshot(&row, 1, 0, 0, 160, 200, 0);
+    UiTextPanelOutput out1 = {0};
+    UiTextPanelOutput out2 = {0};
+
+    ui_text_panel_render(&snap, &out1);
+    ui_text_panel_render(&snap, &out2);
+
+    ASSERT_INT_EQ("repeated render: same total_rows",
+                  out1.total_rows, out2.total_rows);
+    ASSERT_INT_EQ("repeated render: same visible_rows",
+                  out1.visible_rows, out2.visible_rows);
+    ASSERT_TRUE("long text wraps", out1.total_rows > 1);
+
+    UiHit hit = ui_text_panel_hit_test(&snap,
+                                       snap.cp_x + snap.text_x + FONT_W,
+                                       my_for_visual_row(&snap, 0));
+    ASSERT_INT_EQ("hit-test agrees with render on wrapped row",
+                  hit.kind, UI_HIT_CODE_TEXT);
+}
+
 static void test_color_segments_enable_blending(void) {
     UiTextPanelRow row = {
         .text = "segment fade",
@@ -282,6 +368,8 @@ int main(void) {
     test_wrap_and_hit_are_panel_local();
     test_virtual_row_keeps_hit_target_out_of_generic_hit();
     test_alpha_text_enables_blending();
+    test_bold_segment_blend_query();
+    test_row_layout_consistency();
     test_color_segments_enable_blending();
 
     printf("\n");
