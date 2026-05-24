@@ -124,7 +124,7 @@ int repl_apply_compiled_change(const ReplCompiledChange *change,
 void repl_apply_predef_ops(const ReplCompiledChange *change) {
     if (!change) return;
 
-    /* UNDECLARE first so the var_assign num_args cascade observes
+    /* UNDECLARE first so the var_assign var_idx cascade observes
      * the correct pre-removal slot indices. */
     for (int op_idx = 0; op_idx < change->predef_op_count; op_idx++) {
         const ReplPredefOp *op = &change->predef_ops[op_idx];
@@ -134,8 +134,8 @@ void repl_apply_predef_ops(const ReplCompiledChange *change) {
         repl_eval_undeclare_predef_var(op->name);
         for (int cmd_idx = 0; cmd_idx < repl_state_document_count(); cmd_idx++) {
             if (repl_state_document_cmds()[cmd_idx].type == CMD_VAR_ASSIGN &&
-                repl_state_document_cmds()[cmd_idx].num_args > slot)
-                repl_state_document_cmds_mut()[cmd_idx].num_args--;
+                repl_state_document_cmds()[cmd_idx].var_idx > slot)
+                repl_state_document_cmds_mut()[cmd_idx].var_idx--;
         }
     }
 

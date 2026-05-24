@@ -2108,9 +2108,9 @@ int main() {
                         g_predef_vars[di].value == 0.0f);
 
         /* CMD_VAR_ASSIGN slot refs must still point to the right variables */
-        ASSERT_INT("expand decl: assign a slot correct", repl_state_document_cmds_mut()[1].num_args, ai);
-        ASSERT_INT("expand decl: assign b slot correct", repl_state_document_cmds_mut()[2].num_args, bi);
-        ASSERT_INT("expand decl: assign c slot correct", repl_state_document_cmds_mut()[3].num_args, ci);
+        ASSERT_INT("expand decl: assign a slot correct", repl_state_document_cmds_mut()[1].var_idx, ai);
+        ASSERT_INT("expand decl: assign b slot correct", repl_state_document_cmds_mut()[2].var_idx, bi);
+        ASSERT_INT("expand decl: assign c slot correct", repl_state_document_cmds_mut()[3].var_idx, ci);
     }
 
     /* editor_try_commit_assign_variable - overlong formatted source is rejected with

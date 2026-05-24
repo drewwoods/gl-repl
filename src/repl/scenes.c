@@ -322,7 +322,7 @@ static void load_scene_from_slot(int idx) {
      * see check-no-load-line-to-input-in-pipeline. Controllers /
      * editor wrappers call editor_load_line_to_input(repl_dispatch_edit_line_get())
      * after a scene-load API returns. */
-    repl_mark_normals_dirty();
+    repl_mark_source_dirty();
     s->last_touch       = next_user_scene_tick();
     g_active_user_scene = idx;
     g_example_idx       = -1;

@@ -1197,32 +1197,6 @@ unknown_command:
 #undef WRITE_TEXT
 }
 
-/* User-facing name for commands the begin-scope rejection might surface.
- * The std/enum spec tables already carry these names but they're indexed
- * by string-search rather than CmdType; this small switch is the smallest
- * thing that makes the error message read naturally. */
-static const char *cmd_display_name_for_begin_error(CmdType type) {
-    switch (type) {
-        case CMD_BEGIN:               return "glBegin";
-        case CMD_POINT_SIZE:          return "glPointSize";
-        case CMD_LINE_WIDTH:          return "glLineWidth";
-        case CMD_POINT_PARAMETER_FV:  return "glPointParameterfv";
-        case CMD_BLEND_FUNC:          return "glBlendFunc";
-        case CMD_CLEAR_COLOR:         return "glClearColor";
-        case CMD_DEPTH_MASK:          return "glDepthMask";
-        case CMD_COLOR_MASK:          return "glColorMask";
-        case CMD_GLUT_TORUS:          return "glutSolidTorus";
-        case CMD_GLUT_CUBE:           return "glutSolidCube";
-        case CMD_GLUT_SPHERE:         return "glutSolidSphere";
-        case CMD_GLUT_TEAPOT:         return "glutSolidTeapot";
-        case CMD_GLUT_CONE:           return "glutSolidCone";
-        case CMD_RASTER_POS3F:        return "glRasterPos3f";
-        case CMD_LABEL:               return "label";
-        case CMD_TESS_BEGIN_POLYGON:  return "gluTessBeginPolygon";
-        default:                      return repl_cmd_type_name(type);
-    }
-}
-
 int repl_parser_parse_command_ctx(const char *line, ReplParsedLine *out,
                            const ReplParseContext *ctx) {
     if (!out) return 0;
@@ -1238,7 +1212,7 @@ int repl_parser_parse_command_ctx(const char *line, ReplParsedLine *out,
     if (ctx && !repl_cmd_type_valid_in_begin(out->cmd.type) &&
         repl_source_scope_in_begin_block_at(ctx->source_line_idx)) {
         parser_emit_error(ctx, "%s not valid inside glBegin/glEnd",
-                          cmd_display_name_for_begin_error(out->cmd.type));
+                          repl_cmd_type_display_name(out->cmd.type));
         return 0;
     }
     return 1;

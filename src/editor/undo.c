@@ -79,7 +79,7 @@ void editor_undo_snapshot_restore(const EditorUndoSnapshot *snapshot) {
     }
     editor_insert_mode_set(0);
     editor_load_line_to_input(editor_state_edit_line());
-    repl_mark_normals_dirty();
+    repl_mark_source_dirty();
 }
 
 void editor_undo_ring_state_capture(EditorUndoRingState *state) {

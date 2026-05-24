@@ -228,7 +228,7 @@ static int compile_find_last_literal_assign(const ReplCompileContext *ctx,
         const GLCmd *cmd = &ctx->document_cmds[cmd_idx];
         if (!cmd->valid || cmd->type != CMD_VAR_ASSIGN)
             continue;
-        if (cmd->num_args != var_idx || cmd->has_vars)
+        if (cmd->var_idx != var_idx || cmd->has_vars)
             continue;
         found = cmd_idx;
     }
@@ -244,7 +244,7 @@ static int compile_has_any_assign(const ReplCompileContext *ctx,
         const GLCmd *cmd = &ctx->document_cmds[cmd_idx];
         if (!cmd->valid || cmd->type != CMD_VAR_ASSIGN)
             continue;
-        if (cmd->num_args == var_idx)
+        if (cmd->var_idx == var_idx)
             return 1;
     }
     return 0;
@@ -953,10 +953,8 @@ ReplCompileResult repl_compile_var_assign(const char *input,
         cmd.type     = CMD_VAR_ASSIGN;
         cmd.valid    = 1;
         cmd.args[0]  = val;
-        /* CMD_VAR_ASSIGN repurposes num_args as the predef-var index
-         * (not an args[] count); read back the same way in executor.c
-         * / flatten.c / core.c. See the num_args note in command.h. */
-        cmd.num_args = var_idx;
+        cmd.num_args = 1;       /* args[0] holds the assigned value */
+        cmd.var_idx  = var_idx; /* predef slot the executor will write */
         cmd.has_vars = has_rhs_vars;
 
         if (out->predef_op_count < MAX_PREDEF_OPS_PER_COMMIT) {
@@ -1043,12 +1041,12 @@ ReplCompileResult repl_compile_var_assign(const char *input,
     out->predef_op_count = op_count;
     if (cmd.type == CMD_VAR_ASSIGN && overwriting_decl) {
         int rebased_slot = compile_rebase_var_assign_slot_after_undeclares(
-            name, cmd.num_args, out);
+            name, cmd.var_idx, out);
         if (rebased_slot < 0)
             return compile_set_err(err, err_size,
                                    "cannot overwrite declaration of '%s' with assignment",
                                    name);
-        cmd.num_args = rebased_slot;
+        cmd.var_idx = rebased_slot;
     }
     out->cmds[0] = cmd;
 

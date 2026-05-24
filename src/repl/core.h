@@ -210,7 +210,11 @@ const char *repl_dispatch_host_input_get(void);
 const char *repl_mode_name(GLenum mode);
 GLenum      repl_current_begin_mode(void);
 int         repl_count_vertices(void);
-void        repl_mark_normals_dirty(void);
+/* Mark the source program dirty: invalidates the auto-normal pass, the
+ * flat program, and the source-scope depth cache. Every source mutation
+ * goes through here. Was named repl_mark_normals_dirty until the audit
+ * pointed out it does much more than that. */
+void        repl_mark_source_dirty(void);
 
 /* --- Example library & user scene -------------------------------------- */
 #ifndef MAX_USER_SCENES

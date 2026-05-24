@@ -408,20 +408,31 @@ static const ReplStdCommandSpec k_std_command_specs[] = {
 };
 
 #define CMD_TYPE_SPEC(type_, semicolon_, category_) \
-    [type_] = { #type_, (semicolon_), (category_), 1 }
+    [type_] = { #type_, NULL, (semicolon_), (category_), 1 }
+
+/* Same as CMD_TYPE_SPEC but provides a user-facing display name (the GL
+ * function name, e.g. "glBegin") used by error messages. The symbolic
+ * `#type_` name is still kept on .name for dumps. */
+#define CMD_TYPE_SPEC_NAMED(type_, display_, semicolon_, category_) \
+    [type_] = { #type_, (display_), (semicolon_), (category_), 1 }
 
 /* Same as CMD_TYPE_SPEC but marks the command as illegal inside a glBegin
  * block. The parser rejects these at commit time; the executor no longer
  * defensively auto-closes the begin block for them. */
 #define CMD_TYPE_SPEC_NOT_IN_BEGIN(type_, semicolon_, category_) \
-    [type_] = { #type_, (semicolon_), (category_), 0 }
+    [type_] = { #type_, NULL, (semicolon_), (category_), 0 }
+
+/* Combined: not-in-begin + display_name. Used by the GL commands whose
+ * error message uses the GL name (glPointSize, glRasterPos3f, glutSolid*). */
+#define CMD_TYPE_SPEC_NAMED_NOT_IN_BEGIN(type_, display_, semicolon_, category_) \
+    [type_] = { #type_, (display_), (semicolon_), (category_), 0 }
 
 /* Keyed by CmdType via [type_]= designated initializers, so row order is
  * cosmetic (not load-bearing) — they track the CmdType enum order for
  * readability. Adding a command: drop one CMD_TYPE_SPEC row next to its
  * enum neighbours; a missing row is a zero-initialized (invalid) spec. */
 static const ReplCommandTypeSpec g_command_type_specs[CMD_TYPE_COUNT] = {
-    CMD_TYPE_SPEC_NOT_IN_BEGIN(CMD_BEGIN,           1, CMD_CAT_PRIMITIVE),
+    CMD_TYPE_SPEC_NAMED_NOT_IN_BEGIN(CMD_BEGIN, "glBegin", 1, CMD_CAT_PRIMITIVE),
     CMD_TYPE_SPEC(CMD_END,                          1, CMD_CAT_PRIMITIVE),
     CMD_TYPE_SPEC(CMD_VERTEX3F,                     1, CMD_CAT_VERTEX),
     CMD_TYPE_SPEC(CMD_VERTEX2F,                     1, CMD_CAT_VERTEX),
@@ -455,12 +466,12 @@ static const ReplCommandTypeSpec g_command_type_specs[CMD_TYPE_COUNT] = {
     CMD_TYPE_SPEC(CMD_VAR_DECLARE,                  0, CMD_CAT_VARIABLE),
     CMD_TYPE_SPEC(CMD_GOTO_LABEL,                   0, CMD_CAT_LABEL),
     CMD_TYPE_SPEC(CMD_GOTO,                         1, CMD_CAT_LABEL),
-    CMD_TYPE_SPEC_NOT_IN_BEGIN(CMD_GLUT_TORUS,      1, CMD_CAT_GLUT_SHAPE),
-    CMD_TYPE_SPEC_NOT_IN_BEGIN(CMD_GLUT_CUBE,       1, CMD_CAT_GLUT_SHAPE),
-    CMD_TYPE_SPEC_NOT_IN_BEGIN(CMD_GLUT_SPHERE,     1, CMD_CAT_GLUT_SHAPE),
-    CMD_TYPE_SPEC_NOT_IN_BEGIN(CMD_GLUT_TEAPOT,     1, CMD_CAT_GLUT_SHAPE),
-    CMD_TYPE_SPEC_NOT_IN_BEGIN(CMD_GLUT_CONE,       1, CMD_CAT_GLUT_SHAPE),
-    CMD_TYPE_SPEC_NOT_IN_BEGIN(CMD_TESS_BEGIN_POLYGON, 1, CMD_CAT_TESS_BLOCK),
+    CMD_TYPE_SPEC_NAMED_NOT_IN_BEGIN(CMD_GLUT_TORUS,  "glutSolidTorus",  1, CMD_CAT_GLUT_SHAPE),
+    CMD_TYPE_SPEC_NAMED_NOT_IN_BEGIN(CMD_GLUT_CUBE,   "glutSolidCube",   1, CMD_CAT_GLUT_SHAPE),
+    CMD_TYPE_SPEC_NAMED_NOT_IN_BEGIN(CMD_GLUT_SPHERE, "glutSolidSphere", 1, CMD_CAT_GLUT_SHAPE),
+    CMD_TYPE_SPEC_NAMED_NOT_IN_BEGIN(CMD_GLUT_TEAPOT, "glutSolidTeapot", 1, CMD_CAT_GLUT_SHAPE),
+    CMD_TYPE_SPEC_NAMED_NOT_IN_BEGIN(CMD_GLUT_CONE,   "glutSolidCone",   1, CMD_CAT_GLUT_SHAPE),
+    CMD_TYPE_SPEC_NAMED_NOT_IN_BEGIN(CMD_TESS_BEGIN_POLYGON, "gluTessBeginPolygon", 1, CMD_CAT_TESS_BLOCK),
     CMD_TYPE_SPEC(CMD_TESS_BEGIN_CONTOUR,           1, CMD_CAT_TESS_BLOCK),
     CMD_TYPE_SPEC(CMD_TESS_END,                     1, CMD_CAT_TESS_BLOCK),
     CMD_TYPE_SPEC(CMD_TESS_NORMAL,                  1, CMD_CAT_NORMAL),
@@ -468,15 +479,15 @@ static const ReplCommandTypeSpec g_command_type_specs[CMD_TYPE_COUNT] = {
     CMD_TYPE_SPEC(CMD_TESS_VERTEX,                  1, CMD_CAT_VERTEX),
     CMD_TYPE_SPEC(CMD_MATERIALFV,                   1, CMD_CAT_COLOR),
     CMD_TYPE_SPEC(CMD_MATERIALF,                    1, CMD_CAT_COLOR),
-    CMD_TYPE_SPEC_NOT_IN_BEGIN(CMD_POINT_SIZE,      1, CMD_CAT_STATE),
-    CMD_TYPE_SPEC_NOT_IN_BEGIN(CMD_LINE_WIDTH,      1, CMD_CAT_STATE),
-    CMD_TYPE_SPEC_NOT_IN_BEGIN(CMD_POINT_PARAMETER_FV, 1, CMD_CAT_STATE),
-    CMD_TYPE_SPEC_NOT_IN_BEGIN(CMD_BLEND_FUNC,      1, CMD_CAT_STATE),
-    CMD_TYPE_SPEC_NOT_IN_BEGIN(CMD_CLEAR_COLOR,     1, CMD_CAT_COLOR),
-    CMD_TYPE_SPEC_NOT_IN_BEGIN(CMD_DEPTH_MASK,      1, CMD_CAT_STATE),
-    CMD_TYPE_SPEC_NOT_IN_BEGIN(CMD_COLOR_MASK,      1, CMD_CAT_STATE),
-    CMD_TYPE_SPEC_NOT_IN_BEGIN(CMD_RASTER_POS3F,    1, CMD_CAT_STATE),
-    CMD_TYPE_SPEC_NOT_IN_BEGIN(CMD_LABEL,           1, CMD_CAT_GLUT_SHAPE),
+    CMD_TYPE_SPEC_NAMED_NOT_IN_BEGIN(CMD_POINT_SIZE,         "glPointSize",         1, CMD_CAT_STATE),
+    CMD_TYPE_SPEC_NAMED_NOT_IN_BEGIN(CMD_LINE_WIDTH,         "glLineWidth",         1, CMD_CAT_STATE),
+    CMD_TYPE_SPEC_NAMED_NOT_IN_BEGIN(CMD_POINT_PARAMETER_FV, "glPointParameterfv",  1, CMD_CAT_STATE),
+    CMD_TYPE_SPEC_NAMED_NOT_IN_BEGIN(CMD_BLEND_FUNC,         "glBlendFunc",         1, CMD_CAT_STATE),
+    CMD_TYPE_SPEC_NAMED_NOT_IN_BEGIN(CMD_CLEAR_COLOR,        "glClearColor",        1, CMD_CAT_COLOR),
+    CMD_TYPE_SPEC_NAMED_NOT_IN_BEGIN(CMD_DEPTH_MASK,         "glDepthMask",         1, CMD_CAT_STATE),
+    CMD_TYPE_SPEC_NAMED_NOT_IN_BEGIN(CMD_COLOR_MASK,         "glColorMask",         1, CMD_CAT_STATE),
+    CMD_TYPE_SPEC_NAMED_NOT_IN_BEGIN(CMD_RASTER_POS3F,       "glRasterPos3f",       1, CMD_CAT_STATE),
+    CMD_TYPE_SPEC_NAMED_NOT_IN_BEGIN(CMD_LABEL,              "label",               1, CMD_CAT_GLUT_SHAPE),
 };
 
 const ReplCommandTypeSpec *repl_command_type_spec(CmdType type) {
@@ -489,6 +500,13 @@ const ReplCommandTypeSpec *repl_command_type_spec(CmdType type) {
 
 const char *repl_cmd_type_name(CmdType type) {
     const ReplCommandTypeSpec *spec = repl_command_type_spec(type);
+    return spec ? spec->name : "CMD_UNKNOWN";
+}
+
+const char *repl_cmd_type_display_name(CmdType type) {
+    const ReplCommandTypeSpec *spec = repl_command_type_spec(type);
+    if (spec && spec->display_name)
+        return spec->display_name;
     return spec ? spec->name : "CMD_UNKNOWN";
 }
 

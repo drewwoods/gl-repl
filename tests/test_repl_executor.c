@@ -322,7 +322,7 @@ static void test_execute_all_commands(void) {
     cmds[count].src_cmd_idx = 0; count++;
     cmds[count].type = CMD_IF_END; cmds[count].valid = 1; count++;
 
-    cmds[count].type = CMD_VAR_ASSIGN; cmds[count].valid = 1; cmds[count].has_vars = 1; cmds[count].num_args = 0;
+    cmds[count].type = CMD_VAR_ASSIGN; cmds[count].valid = 1; cmds[count].has_vars = 1; cmds[count].var_idx = 0;
     cmds[count].src_cmd_idx = 1; count++;
 
     // Add GOTO to jump over a command

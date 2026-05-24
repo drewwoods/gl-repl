@@ -346,7 +346,16 @@ void repl_state_mark_flat_dirty(void) {
     g_flat_dirty = 1;
 }
 
-void repl_state_mark_normals_dirty(void) {
+void repl_state_mark_source_dirty(void) {
+    /* Source changed: every cache derived from it must be invalidated.
+     * - The auto-normal pass rebuilds on demand.
+     * - The flat program rebuilds on demand.
+     * - The source-scope depth cache (block depths, indent) rebuilds
+     *   on demand.
+     *
+     * Don't try to invalidate caches independently — every source
+     * mutation goes through here, and that's the contract callers rely
+     * on. */
     g_normals_dirty = 1;
     g_flat_dirty = 1;
     repl_source_scope_depth_cache_invalidate();
@@ -549,5 +558,5 @@ void repl_state_reset_program(void) {
     reset_time_state();
     repl_source_scope_depth_cache_invalidate();
     repl_state_mark_flat_dirty();
-    repl_state_mark_normals_dirty();
+    repl_state_mark_source_dirty();
 }

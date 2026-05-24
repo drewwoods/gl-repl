@@ -50,7 +50,7 @@
  *     instruction comments above earlier labeled commands; the
  *     append case is still what example/workspace loaders use.)
  *   - Clear editor_insert_mode (the loader does not consult it).
- *   - Call repl_state_mark_flat_dirty / repl_state_mark_normals_dirty
+ *   - Call repl_state_mark_flat_dirty / repl_state_mark_source_dirty
  *     after the load loop completes. */
 int repl_load_apply_line(const char *line, char *err, int err_size,
                          int *edit_line_inout);

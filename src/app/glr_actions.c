@@ -450,7 +450,7 @@ void glr_cfg_cycle_row(int row, int delta) {
         }
     } else if (item->key == GLR_CONFIG_AUTO_NORMALS) {
         if (glr_state_presentation().autonormal) {
-            repl_mark_normals_dirty();
+            repl_mark_source_dirty();
             repl_set_status("Auto-normals: ON");
         } else {
             repl_set_status("Auto-normals: OFF (existing normals kept)");

@@ -165,7 +165,12 @@ typedef enum {
  * rejects them at commit time so the executor doesn't have to defensively close
  * the active begin block. */
 typedef struct {
-    const char *name;
+    const char *name;          /* Symbolic CmdType name (e.g. "CMD_BEGIN");
+                                * used for dumps, debug output, fallback. */
+    const char *display_name;  /* User-facing GL name (e.g. "glBegin"); used
+                                * in error messages. NULL falls back to `name`.
+                                * Set only for cmds whose symbolic name doesn't
+                                * read naturally to a user (most GL commands). */
     int needs_semicolon;
     CmdSyntaxCategory category;
     int valid_in_begin;
@@ -214,6 +219,12 @@ const ReplCommandTypeSpec *repl_command_type_spec(CmdType type);
 /* Query the human-readable name for a command type (e.g., "glVertex3f",
  * "for", "if"). Used by error messages, autocomplete hints, and UI display. */
 const char *repl_cmd_type_name(CmdType type);
+
+/* Query the user-facing display name (e.g., "glBegin", "glPointSize"). Falls
+ * back to repl_cmd_type_name when the spec doesn't carry a distinct display
+ * name. Used in parser error messages where the symbolic CMD_* identifier
+ * would read poorly. */
+const char *repl_cmd_type_display_name(CmdType type);
 
 /* Thin alias used by tests and the demo for the unprefixed identifier
  * (cmd_type_name(CmdType)). Forwards to repl_cmd_type_name. */

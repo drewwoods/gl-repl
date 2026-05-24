@@ -3,9 +3,9 @@
  *
  * Single source of truth for 2D UI chrome colors. Replaces scattered
  * glColor3f/4f literals with semantic tokens resolved against an active
- * theme row. Header-only (mirrors gl_2d.h): all UI translation units
- * already reach sibling src/ui headers, and `make check-c99`
- * syntax-checks this transitively through $(SRCS).
+ * theme row. The table and the active-row global live in theme.c so a
+ * runtime theme switch (ui_theme_select) updates exactly one storage
+ * site rather than one copy per TU.
  *
  * Three buckets of color (see plans/active/UI-Color-Theming-Infrastructure.md):
  *   1. Theme token    -> ui_clr(UI_TOK_*) here.

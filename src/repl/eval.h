@@ -211,6 +211,13 @@ void repl_eval_restore_predef_vars(const float src_vals[MAX_PREDEF_VARS],
                                    const char src_names[MAX_PREDEF_VARS][16],
                                    int src_count);
 
+/* Values-only snapshot of the live predef table (no names, no count).
+ * Used by the controller per-frame baseline-save and by the replay peer
+ * for start/stop bracketing. For the full name+value+count snapshot used
+ * by undo/scene-switch, see repl_eval_copy_predef_vars above. */
+void repl_copy_predef_values(float *dst, int max_vals);
+void repl_restore_predef_values(const float *src, int max_vals);
+
 void repl_eval_init_predef_vars(void);
 const char *repl_eval_eat_identifier(const char *p, const char **out_start);
 int  repl_eval_is_builtin_function(const char *name);
