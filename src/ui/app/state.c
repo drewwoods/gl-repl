@@ -23,8 +23,6 @@
         .code_panel = {                                               \
             .panel_frac     = CFG_DEFAULT_PANEL_FRAC,                 \
             .resizing_panel = 0,                                      \
-            .cursor_visible = 1,                                      \
-            .blink_tick     = 0,                                      \
         },                                                            \
     }
 

@@ -2983,11 +2983,11 @@ int main() {
         ASSERT_INT("timer: status ttl decremented", ui_state_status().ttl, 9);
 
         /* 2. Cursor blink */
-        ui_state_code_panel_mut()->blink_tick = 29;
-        ui_state_code_panel_mut()->cursor_visible = 1;
+        editor_state_cursor_blink_mut()->blink_tick = 29;
+        editor_state_cursor_blink_mut()->cursor_visible = 1;
         glr_ctrl_tick();
-        ASSERT_INT("timer: blink tick reset", ui_state_code_panel().blink_tick, 0);
-        ASSERT_TRUE("timer: cursor visibility toggled", !ui_state_code_panel().cursor_visible);
+        ASSERT_INT("timer: blink tick reset", editor_state_cursor_blink().blink_tick, 0);
+        ASSERT_TRUE("timer: cursor visibility toggled", !editor_state_cursor_blink().cursor_visible);
 
         /* 3. Replay advance */
         replay_state_mut()->active = 1;

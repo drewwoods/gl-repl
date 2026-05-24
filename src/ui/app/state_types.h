@@ -26,8 +26,6 @@
 typedef struct {
     float panel_frac;
     int   resizing_panel;
-    int   cursor_visible;
-    int   blink_tick;
     int   layout_mode;          /* mirror of presentation.code_panel_layout */
     int   show_vertex_indices;  /* mirror of presentation.show_vertex_indices */
     int   wrap_at_comma;        /* mirror of presentation.wrap_at_comma */
@@ -41,10 +39,7 @@ typedef struct {
     int visible;
 } UiHelpState;
 
-typedef struct {
-    int   visible;
-    float replay_lift_px;
-} UiVariablePanelState;
+
 
 typedef struct {
     int mode;

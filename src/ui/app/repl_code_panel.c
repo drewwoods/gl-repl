@@ -133,14 +133,7 @@ static UiTextPanelColor repl_code_panel_category_color(CmdType type) {
     return repl_code_panel_rgb(r, g, b);
 }
 
-static UiTextPanelColor repl_code_panel_static_line_color(const char *text,
-                                                          float fallback_r,
-                                                          float fallback_g,
-                                                          float fallback_b) {
-    if (text && strcmp(text, REPL_CODE_PANEL_SCRATCH_DECL_LINE) == 0)
-        return repl_code_panel_category_color(CMD_VAR_DECLARE);
-    return repl_code_panel_rgb(fallback_r, fallback_g, fallback_b);
-}
+
 
 static CodeLayout repl_code_panel_text_layout(const UiRenderSnapshot *snap,
                                               int panel_w, int first_x) {
@@ -548,7 +541,7 @@ static int repl_code_panel_init_builder(ReplCodePanelBuilder *builder,
             .anchor = snap->editor_input.anchor_pos,
             .ghost = snap->autocomplete.ghost,
             .hint = snap->autocomplete.hint,
-            .cursor_visible = snap->code_panel.cursor_visible,
+            .cursor_visible = snap->cursor_blink.cursor_visible,
         },
         .search = {
             .active = snap->search.active,
@@ -1275,21 +1268,18 @@ static void repl_code_panel_build_rows(ReplCodePanelBuilder *builder) {
         for (int i = 0; g_header_pre[i]; i++) {
             repl_code_panel_add_static_row(
                 builder, g_header_pre[i],
-                repl_code_panel_static_line_color(g_header_pre[i],
-                                                  REPL_CODE_PANEL_CHROME_RGB));
+                repl_code_panel_rgb(REPL_CODE_PANEL_CHROME_RGB));
         }
         for (int i = 0; g_display_header[i]; i++) {
             repl_code_panel_add_static_row(
                 builder, g_display_header[i],
-                repl_code_panel_static_line_color(g_display_header[i],
-                                                  REPL_CODE_PANEL_CHROME_RGB));
+                repl_code_panel_rgb(REPL_CODE_PANEL_CHROME_RGB));
         }
         /* Scratch decoration row: panel-only (the exporter emits the
          * arrays as file-scope statics on demand instead). */
         repl_code_panel_add_static_row(
             builder, REPL_CODE_PANEL_SCRATCH_DECL_LINE,
-            repl_code_panel_static_line_color(REPL_CODE_PANEL_SCRATCH_DECL_LINE,
-                                              REPL_CODE_PANEL_CHROME_RGB));
+            repl_code_panel_category_color(CMD_VAR_DECLARE));
         for (int i = 0; i < RENDER_STATE_LINE_COUNT; i++) {
             repl_code_panel_add_static_row(
                 builder,
@@ -1309,8 +1299,7 @@ static void repl_code_panel_build_rows(ReplCodePanelBuilder *builder) {
         for (int i = 0; g_header_post[i]; i++) {
             repl_code_panel_add_static_row(
                 builder, g_header_post[i],
-                repl_code_panel_static_line_color(g_header_post[i],
-                                                  REPL_CODE_PANEL_CHROME_RGB));
+                repl_code_panel_rgb(REPL_CODE_PANEL_CHROME_RGB));
         }
     }
 
@@ -1411,14 +1400,12 @@ static void repl_code_panel_build_rows(ReplCodePanelBuilder *builder) {
                 for (int j = 0; j < snap->reshape_proj_count; j++)
                     repl_code_panel_add_static_row(
                         builder, snap->reshape_proj_lines[j],
-                        repl_code_panel_static_line_color(
-                            snap->reshape_proj_lines[j], REPL_CODE_PANEL_CHROME_RGB));
+                        repl_code_panel_rgb(REPL_CODE_PANEL_CHROME_RGB));
                 continue;
             }
             repl_code_panel_add_static_row(
                 builder, g_footer_pre_init[i],
-                repl_code_panel_static_line_color(g_footer_pre_init[i],
-                                                  REPL_CODE_PANEL_CHROME_RGB));
+                repl_code_panel_rgb(REPL_CODE_PANEL_CHROME_RGB));
         }
         for (int i = 0; i < snap->init_section_count; i++) {
             repl_code_panel_add_static_row(builder, snap->init_section_lines[i],
@@ -1427,8 +1414,7 @@ static void repl_code_panel_build_rows(ReplCodePanelBuilder *builder) {
         for (int i = 0; g_footer_post_init[i]; i++) {
             repl_code_panel_add_static_row(
                 builder, g_footer_post_init[i],
-                repl_code_panel_static_line_color(g_footer_post_init[i],
-                                                  REPL_CODE_PANEL_CHROME_RGB));
+                repl_code_panel_rgb(REPL_CODE_PANEL_CHROME_RGB));
         }
     }
 

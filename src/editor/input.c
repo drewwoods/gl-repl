@@ -955,9 +955,9 @@ static int editor_key_restores_hidden_code_panel(unsigned char key, int mods) {
 }
 
 static void keyboard_begin_key(unsigned char key) {
-    UiCodePanelRuntimeState *code_panel_state = ui_state_code_panel_mut();
-    code_panel_state->cursor_visible = 1;
-    code_panel_state->blink_tick = 0;
+    EditorCursorBlinkState *cb = editor_state_cursor_blink_mut();
+    cb->cursor_visible = 1;
+    cb->blink_tick = 0;
 
     /* Cut / copy / backspace / delete preserve any active line-range
      * selection; everything else clears it before processing the key. */
@@ -1553,9 +1553,9 @@ int editor_feed_line(const char *line) {
 
 static void special_begin_key(int key) {
     (void)key;
-    UiCodePanelRuntimeState *code_panel_state = ui_state_code_panel_mut();
-    code_panel_state->cursor_visible = 1;
-    code_panel_state->blink_tick = 0;
+    EditorCursorBlinkState *cb = editor_state_cursor_blink_mut();
+    cb->cursor_visible = 1;
+    cb->blink_tick = 0;
     editor_scroll_follow_cursor_set(1);
 }
 

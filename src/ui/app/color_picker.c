@@ -13,6 +13,7 @@
 #include "ui/app/color_picker.h"
 
 #include "ui/core/gl_2d.h"
+#include "ui/core/theme.h"
 
 #include <math.h>
 
@@ -42,9 +43,9 @@ void ui_color_picker_render(const ColorPickerView *view,
     /* Background */
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    glColor4f(0.08f, 0.08f, 0.12f, 0.94f);
+    ui_clr_a(UI_TOK_SUNKEN, 0.94f);
     glRectf((float)(px-CP_GAP), (float)(py-ph), (float)(px-CP_GAP)+(float)(pw+CP_GAP), (float)(py-ph)+(float)(ph+CP_GAP));
-    glColor4f(0.30f, 0.30f, 0.50f, 0.80f);
+    ui_clr_a(UI_TOK_BORDER, 0.80f);
     glBegin(GL_LINE_LOOP);
     glVertex2f(px-CP_GAP,        py-ph);
     glVertex2f(px-CP_GAP+pw+CP_GAP, py-ph);
@@ -171,7 +172,7 @@ void ui_color_picker_render(const ColorPickerView *view,
     }
     glRectf((float)px, (float)(swy-CP_PREV_H), (float)px+(float)total_w, (float)(swy-CP_PREV_H)+(float)CP_PREV_H);
     if (view->has_alpha) glDisable(GL_BLEND);
-    glColor3f(0.4f,0.4f,0.5f);
+    ui_clr(UI_TOK_BORDER);
     glBegin(GL_LINE_LOOP);
     glVertex2f(px,         swy-CP_PREV_H); glVertex2f(px+total_w, swy-CP_PREV_H);
     glVertex2f(px+total_w, swy);           glVertex2f(px,         swy);

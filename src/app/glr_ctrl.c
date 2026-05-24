@@ -1560,6 +1560,7 @@ void glr_ctrl_build_ui_snapshot(UiRenderSnapshot *snap) {
     snap->replay         = replay_state_view();
     snap->scenes         = repl_state_scenes();
     snap->scroll         = editor_state_scroll();
+    snap->cursor_blink   = editor_state_cursor_blink();
     snap->color_picker   = color_picker_view();
 
     snap->editor_input   = editor_state_input();
@@ -1669,8 +1670,8 @@ void glr_ctrl_build_ui_snapshot(UiRenderSnapshot *snap) {
 
 void glr_ctrl_display_frame(void) {
     int saved_flat_count;
-    float live_predef_vals[MAX_PREDEF_VARS] = { 0 };
-    float live_scratch_arrays[REPL_SCRATCH_ARRAY_COUNT][REPL_SCRATCH_ARRAY_LEN] = { { 0.0f } };
+    float live_predef_vals[MAX_PREDEF_VARS];
+    float live_scratch_arrays[REPL_SCRATCH_ARRAY_COUNT][REPL_SCRATCH_ARRAY_LEN];
     FlatProgramView flat_program = repl_state_flat_program_view();
     int num_flat_cmds = flat_program.cmd_count;
     /* Capture replay state once before replay_prepare_frame so the
@@ -2955,7 +2956,7 @@ int glr_ctrl_router_handle_camera_mouse(int button, int state, int x, int y) {
     return 1;
 }
 
-static int glr_ctrl_apply_variable_panel_value_change(
+static void glr_ctrl_apply_variable_panel_value_change(
         const VariablePanelValueChange *value_change) {
     ReplCompiledChange compiled;
     ReplCompileContext ctx;
@@ -2965,19 +2966,19 @@ static int glr_ctrl_apply_variable_panel_value_change(
     int capture_undo;
 
     if (!value_change || !value_change->name[0])
-        return 1;
+        return;
 
     drag = variable_panel_drag();
     var_idx = drag.var_idx;
     if (var_idx < 0 || var_idx >= g_num_predef_vars)
-        return 1;
+        return;
     if (strcmp(g_predef_vars[var_idx].name, value_change->name) != 0) {
         var_idx = repl_eval_find_predef_var_idx(value_change->name);
         if (var_idx < 0)
-            return 1;
+            return;
     }
     if (g_predef_vars[var_idx].value == value_change->value)
-        return 1;
+        return;
 
     ctx = repl_compile_context_from_live(editor_state_edit_line());
     /* repl_compile_context_from_live(editor_state_edit_line()) defaults insert_mode to 0
@@ -2988,17 +2989,16 @@ static int glr_ctrl_apply_variable_panel_value_change(
                                       &ctx, &compiled,
                                       err, sizeof(err)) != REPL_COMPILE_OK) {
         repl_set_status_error(err[0] ? err : "Variable update failed");
-        return 1;
+        return;
     }
 
     capture_undo = !variable_panel_drag_undo_snapshot_pushed();
     if (!editor_commit_apply_external_change(&compiled, capture_undo)) {
         repl_set_status_error("Command buffer full!");
-        return 1;
+        return;
     }
     if (capture_undo)
         variable_panel_drag_mark_undo_snapshot_pushed();
-    return 1;
 }
 
 int glr_ctrl_router_handle_variable_panel_motion(int x, int y) {
@@ -4082,11 +4082,11 @@ void glr_ctrl_tick(void) {
     }
 
     {
-        UiCodePanelRuntimeState *code_panel_state = ui_state_code_panel_mut();
-        (code_panel_state->blink_tick)++;
-        if (code_panel_state->blink_tick >= GLR_CURSOR_BLINK_TICKS) {
-            code_panel_state->blink_tick = 0;
-            code_panel_state->cursor_visible = !code_panel_state->cursor_visible;
+        EditorCursorBlinkState *cb = editor_state_cursor_blink_mut();
+        (cb->blink_tick)++;
+        if (cb->blink_tick >= GLR_CURSOR_BLINK_TICKS) {
+            cb->blink_tick = 0;
+            cb->cursor_visible = !cb->cursor_visible;
         }
     }
 

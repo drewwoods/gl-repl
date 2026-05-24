@@ -5,6 +5,7 @@
 #include "app/glr_state.h"           /* presentation + render storage */
 #include "repl/state_owners.h"
 #include "ui/app/state_types.h"
+#include "subsystems/variable_panel/variable_panel_state.h"
 #include "subsystems/tutorial/tutorial.h"        /* tutorial_notify_state_changed */
 
 /* Camera, profile_panel slices live on UiState; variable_panel

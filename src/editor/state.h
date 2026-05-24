@@ -148,10 +148,15 @@ typedef struct {
     int   undo_snapshot_pushed;
 } EditorVariableDragState;
 
+typedef struct {
+    int cursor_visible;
+    int blink_tick;
+} EditorCursorBlinkState;
+
 /* Editor scroll position: the doc-line index at the top of the
  * code-panel viewport, plus a flag the editor sets to request the
  * scroll follow cursor moves. The render-only chrome bits
- * (panel_frac, resizing_panel, cursor_visible / blink / px / py)
+ * (panel_frac, resizing_panel, px / py)
  * remain in UiCodePanelRuntimeState which lives on UiState. The
  * split is intentional: editor owns document scroll, UI owns panel
  * chrome and blink state. */
@@ -200,6 +205,7 @@ typedef struct {
      * source buffer and scroll state because editor-side callers
      * move through the text document as one unit. */
     EditorDocumentState    document;
+    EditorCursorBlinkState cursor_blink;
 } EditorState;
 
 /* Capture / restore / reset symmetry with repl_state_*. */
@@ -435,6 +441,10 @@ void                          editor_state_line_overrides_clear(void);
 int                           editor_state_line_overrides_append(int line_idx,
                                                                  const char *text);
 const char                   *editor_state_line_override_for(int line_idx);
+
+/* Editor cursor blink slice. */
+EditorCursorBlinkState  editor_state_cursor_blink(void);
+EditorCursorBlinkState *editor_state_cursor_blink_mut(void);
 
 /* Editor scroll slice. */
 EditorScrollState  editor_state_scroll(void);

@@ -70,7 +70,7 @@
 
 static GlrCameraState       g_camera          = GLR_CAMERA_INITIAL;
 static const GlrCameraState g_camera_defaults = GLR_CAMERA_INITIAL;
-static GlrCameraState       g_camera_target   = GLR_CAMERA_INITIAL;
+static GlrCameraState       g_camera_target;
 static int                   g_camera_target_active = 0;
 static GlrCameraControlMode  g_control_mode    = GLR_CAMERA_CONTROL_3D;
 
