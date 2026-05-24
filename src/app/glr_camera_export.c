@@ -228,6 +228,7 @@ static void cam_apply_example_block(const ReplExportCameraBlock *block) {
     glr_camera_capture(&target);
     cam_reset_import();
     glr_camera_restore(&start);
+    glr_camera_set_scene_default(&target);
     glr_camera_ease_to(target.rx, target.ry, target.dist,
                        target.tx, target.ty, target.tz);
     /* Keep the controller's saved-3D snapshot aligned with the example

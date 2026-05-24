@@ -541,6 +541,59 @@ static void test_source_document_apply_change_combined(void) {
                 strcmp(v.lines[4], "glEnd();") == 0);
 }
 
+static void test_camera_ease_to_default_uses_scene_default(void) {
+    glr_app_reset_all();
+
+    GlrCameraState pose = {
+        .rx = 45.0f, .ry = 90.0f, .dist = 10.0f,
+        .tx = 1.0f, .ty = 2.0f, .tz = 3.0f,
+        .motion_glow = 0.0f, .auto_rotate = 0
+    };
+    glr_camera_set_scene_default(&pose);
+    glr_camera_set(0.0f, 0.0f, 5.0f, 0.0f, 0.0f, 0.0f, 0.0f);
+
+    glr_camera_ease_to_default();
+
+    for (int i = 0; i < 500; i++)
+        glr_camera_tick();
+
+    GlrCameraState cam = glr_camera();
+    ASSERT_TRUE("ease_to_default reaches scene rx",
+                fabsf(cam.rx - 45.0f) < 0.5f);
+    ASSERT_TRUE("ease_to_default reaches scene ry",
+                fabsf(cam.ry - 90.0f) < 0.5f);
+    ASSERT_TRUE("ease_to_default reaches scene dist",
+                fabsf(cam.dist - 10.0f) < 0.5f);
+    ASSERT_TRUE("ease_to_default reaches scene tx",
+                fabsf(cam.tx - 1.0f) < 0.1f);
+}
+
+static void test_camera_clear_scene_default_falls_back(void) {
+    glr_app_reset_all();
+
+    GlrCameraState pose = {
+        .rx = 45.0f, .ry = 90.0f, .dist = 10.0f,
+        .tx = 1.0f, .ty = 2.0f, .tz = 3.0f,
+        .motion_glow = 0.0f, .auto_rotate = 0
+    };
+    glr_camera_set_scene_default(&pose);
+    glr_camera_clear_scene_default();
+    glr_camera_set(0.0f, 0.0f, 2.0f, 0.0f, 0.0f, 0.0f, 0.0f);
+
+    glr_camera_ease_to_default();
+
+    for (int i = 0; i < 500; i++)
+        glr_camera_tick();
+
+    GlrCameraState cam = glr_camera();
+    ASSERT_TRUE("after clear, ease_to_default reaches built-in rx (20)",
+                fabsf(cam.rx - 20.0f) < 0.5f);
+    ASSERT_TRUE("after clear, ease_to_default reaches built-in ry (30)",
+                fabsf(cam.ry - 30.0f) < 0.5f);
+    ASSERT_TRUE("after clear, ease_to_default reaches built-in dist (5)",
+                fabsf(cam.dist - 5.0f) < 0.5f);
+}
+
 int main(void) {
     printf("--- repl_state tests ---\n");
     test_capture_restore_round_trip();
@@ -549,6 +602,8 @@ int main(void) {
     test_camera_restore_clears_momentum();
     test_source_document_load_all_truncation();
     test_source_document_apply_change_combined();
+    test_camera_ease_to_default_uses_scene_default();
+    test_camera_clear_scene_default_falls_back();
     printf("%d / %d tests passed\n", g_harness.passed, g_harness.run);
     return g_harness.passed == g_harness.run ? 0 : 1;
 }

@@ -383,6 +383,7 @@ void glr_scene_load_example(int example_idx) {
 
 void glr_scene_load_user_slot(int slot) {
     editor_undo_clear();
+    glr_camera_clear_scene_default();
     if (repl_load_user_scene_idx(slot))
         editor_load_line_to_input(editor_state_edit_line());
 }
@@ -592,15 +593,11 @@ int glr_action_menu_item_activate(int menu_id, int item_idx) {
             return 1;
         }
         if (item_idx == GLR_FILE_ITEM_NEW_SCENE) {
-            /* Not the old Scene-New body verbatim: it left the active
-             * user slot attached, so the new Save Scene would overwrite
-             * that slot's <slug>.c with the emptied buffer. Detach the
-             * scene fully (transient lifecycle) and drop the undo ring
-             * (wholesale document replacement, same as F12 / load). */
             repl_scenes_enter_transient_scene();
             repl_scenes_reset_for_transient();
             editor_clear_all_cmds();
             editor_undo_clear();
+            glr_camera_clear_scene_default();
             return 1;
         }
         if (item_idx == GLR_FILE_ITEM_SAVE_SCENE) {
