@@ -8,23 +8,30 @@
  * `scripts/check-replay-ui-isolation.sh`.
  */
 #include "ui/app/replay_hud.h"
+#include "ui/app/snapshot.h"
 #include "ui/core/gl_2d.h"
 #include "subsystems/replay/replay.h"
-#include "ui/app/layout.h" /* CODE_PANEL_LAYOUT_TOP enum value */
+#include "ui/app/layout.h" /* CODE_PANEL_LAYOUT_TOP enum value, ui_layout_scene_rect */
 #include "ui/core/metrics.h"
 #include "ui/core/theme.h"
 
 #include <stdio.h>
 #include <string.h>
 
-void replay_ui_hud_render(const UiReplayHudState *state) {
+void replay_ui_hud_render(const struct UiRenderSnapshot *snap) {
     char progress_txt[64];
     char kbd_txt[128];
     float progress = 0.0f;
-    int scene_x = state->scene_x;
-    int scene_y = state->scene_y;
-    int scene_w = state->scene_w;
-    int scene_h = state->scene_h;
+    int scene_x, scene_y, scene_w, scene_h;
+
+    if (!snap || !snap->replay.active)
+        return;
+
+    /* Scene rect comes from the live layout module like the other panel
+     * renderers (variable_panel does the same); other inputs come from
+     * the per-frame snapshot. */
+    ui_layout_scene_rect(&scene_x, &scene_y, &scene_w, &scene_h);
+
     int hud_x = scene_x + REPLAY_HUD_MARGIN_X;
     /* Lifted by STATUSBAR_H so the HUD clears the amber status strip along
      * the bottom of the scene. */
@@ -33,26 +40,23 @@ void replay_ui_hud_render(const UiReplayHudState *state) {
     int min_y = scene_y + STATUSBAR_H + 4;
     int max_y = scene_y + scene_h - REPLAY_HUD_HEIGHT - 4;
 
-    if (!state->replaying)
-        return;
-
     if (hud_w < REPLAY_HUD_MIN_WIDTH)
         hud_w = REPLAY_HUD_MIN_WIDTH;
     if (max_y >= min_y) {
         if (hud_y < min_y) hud_y = min_y;
         if (hud_y > max_y) hud_y = max_y;
     } else {
-        hud_y = state->code_panel_layout == CODE_PANEL_LAYOUT_TOP
+        hud_y = snap->code_panel.layout_mode == CODE_PANEL_LAYOUT_TOP
               ? scene_y + scene_h - REPLAY_HUD_HEIGHT - 4
               : min_y;
     }
-    if (state->replay_total_cmds > 0)
-        progress = (float)state->replay_pc / (float)state->replay_total_cmds;
+    if (snap->replay.total_flat_cmds > 0)
+        progress = (float)snap->replay.pc / (float)snap->replay.total_flat_cmds;
     if (progress < 0.0f) progress = 0.0f;
     if (progress > 1.0f) progress = 1.0f;
 
-    glViewport(0, 0, state->viewport_w, state->viewport_h);
-    gl2d_begin(state->viewport_w, state->viewport_h);
+    glViewport(0, 0, snap->viewport.window_w, snap->viewport.window_h);
+    gl2d_begin(snap->viewport.window_w, snap->viewport.window_h);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
@@ -76,12 +80,12 @@ void replay_ui_hud_render(const UiReplayHudState *state) {
     int icon_sz    = 10;
 
     ui_clr(UI_TOK_ACCENT);
-    if (state->replay_state_val == REPLAY_PLAYING) {
+    if (snap->replay.state == REPLAY_PLAYING) {
         float bw = 3.0f, gap = 3.0f;
         float by0 = (float)icon_cy - (float)icon_sz * 0.5f;
         glRectf((float)(icon_cx - bw - gap * 0.5f), (float)(by0), (float)(icon_cx - bw - gap * 0.5f) + (float)(bw), (float)(by0) + (float)(icon_sz));
         glRectf((float)(icon_cx + gap * 0.5f),      (float)(by0), (float)(icon_cx + gap * 0.5f) + (float)(bw), (float)(by0) + (float)(icon_sz));
-    } else if (state->replay_state_val == REPLAY_DONE) {
+    } else if (snap->replay.state == REPLAY_DONE) {
         /* Square - run complete */
         float sx = (float)icon_cx - (float)icon_sz * 0.5f;
         float sy = (float)icon_cy - (float)icon_sz * 0.5f;
@@ -101,9 +105,9 @@ void replay_ui_hud_render(const UiReplayHudState *state) {
      * is right-aligned so 4-digit totals don't push other fields around. */
     snprintf(progress_txt, sizeof(progress_txt),
              "Replay  %11.1f cmd/s  | %7s  | %s",
-             state->replay_speed,
-             state->replay_mode == REPLAY_MODE_VERTEX ? "Vertex" : "Polygon",
-             state->replay_expand_args ? "Code Expanded" : ""
+             snap->replay.speed,
+             snap->replay.mode == REPLAY_MODE_VERTEX ? "Vertex" : "Polygon",
+             snap->replay.expand_args ? "Code Expanded" : ""
              );
     ui_clr(UI_TOK_ACCENT);
     gl2d_draw_string((float)text_col_x,
@@ -112,7 +116,7 @@ void replay_ui_hud_render(const UiReplayHudState *state) {
 
     char count_txt[32];
     snprintf(count_txt, sizeof(count_txt), "%d / %d",
-             state->replay_pc, state->replay_total_cmds);
+             snap->replay.pc, snap->replay.total_flat_cmds);
     int count_w = (int)strlen(count_txt) * FONT_SMALL_W;
     gl2d_draw_string((float)(hud_x + hud_w - REPLAY_HUD_TEXT_PAD_X - count_w),
                 (float)(hud_y + REPLAY_HUD_TEXT_LINE1_Y),

@@ -1590,6 +1590,8 @@ void glr_ctrl_build_ui_snapshot(UiRenderSnapshot *snap) {
     snap->help           = ui_state_help();
     snap->help_session   = editor_help_session_view();
     snap->variable_panel = variable_panel_view();
+    snap->variable_drag.active_var = variable_panel_drag_active_var();
+    snap->variable_drag.log_mode   = variable_panel_drag_log_mode();
     snap->profile_panel  = ui_state_profile_panel();
     snap->status         = ui_state_status();
     snap->search         = editor_state_search();
@@ -1830,24 +1832,20 @@ void glr_ctrl_display_frame(void) {
     int frame_replaying = replay_active();
     if (frame_replaying) {
         prof_begin(PROF_REPLAY_HUD);
-        GlrPresentationState presentation = glr_state_presentation();
-        UiReplayHudState replay_hud_state = {
-            .scene_x = scene_config.scene_x,
-            .scene_y = scene_config.scene_y,
-            .scene_w = scene_config.scene_w,
-            .scene_h = scene_config.scene_h,
-            .viewport_w = scene_config.viewport_w,
-            .viewport_h = scene_config.viewport_h,
-            .code_panel_layout = presentation.code_panel_layout,
-            .replay_mode = replay_mode(),
-            .replay_pc = frame_replay.pc,
-            .replay_total_cmds = frame_replay.total_flat_cmds,
-            .replay_state_val = frame_replay.state,
-            .replay_speed = frame_replay.speed,
-            .replay_expand_args = frame_replay.expand_args,
-            .replaying = frame_replaying,
-        };
-        replay_ui_hud_render(&replay_hud_state);
+        /* HUD reads replay/scene/layout state from the per-frame snapshot;
+         * the explicit UiReplayHudState struct it used to receive was just
+         * a copy of fields already on snap.
+         *
+         * Override the replay slice with the pre-prepare capture taken at
+         * frame top, mirroring the historic "HUD shows the per-frame
+         * before-prepare view" contract pinned by test_glr_ctrl. Other
+         * snap->replay readers only touch fields replay_prepare_frame
+         * doesn't write (src_line_idx, active), so the override is HUD-
+         * specific and ephemeral. */
+        ReplReplayRuntimeState saved_snap_replay = ui_snap.replay;
+        ui_snap.replay = frame_replay;
+        replay_ui_hud_render(&ui_snap);
+        ui_snap.replay = saved_snap_replay;
         prof_end(PROF_REPLAY_HUD);
     }
 

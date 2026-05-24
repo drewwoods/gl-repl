@@ -77,6 +77,7 @@ typedef struct UiRenderSnapshot {
     UiHelpState               help;
     EditorHelpSession           help_session;
     UiVariablePanelState      variable_panel;
+    UiVariableDragView          variable_drag;
     UiProfilePanelState       profile_panel;
     UiStatusState             status;
     EditorSearchState             search;

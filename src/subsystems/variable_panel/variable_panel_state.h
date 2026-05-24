@@ -29,6 +29,17 @@ typedef struct {
     float replay_lift_px;
 } UiVariablePanelState;
 
+/* Snapshot-side view of the slider-drag transaction. Lets the renderer
+ * tell which row is being dragged (and in what mode) without reaching
+ * back into the peer's live state. The controller fills this once per
+ * frame from variable_panel_drag_active_var() / _drag_log_mode(); the
+ * renderer reads only from the snapshot. */
+typedef struct {
+    int active_var;   /* row index being dragged, -1 when idle */
+    int log_mode;     /* 1 = log drag, 0 = linear (only meaningful when
+                       * active_var >= 0) */
+} UiVariableDragView;
+
 /* Variable slider drag transaction: which variable is being dragged,
  * the variable name captured at drag-begin, the starting value, the
  * cursor anchor x in window pixels, and whether the controller has
