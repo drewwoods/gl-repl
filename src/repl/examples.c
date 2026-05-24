@@ -1,4 +1,5 @@
 #include "repl/examples.h"
+#include "repl/catalog_tags.h"
 
 #include <stddef.h>
 #include "c_compat.h"   /* STATIC_ASSERT (C99/C11 portable) */
@@ -1416,6 +1417,26 @@ static const ReplExampleEntry g_example_entries[] = {
       "Showcase" },
 };
 
+static int example_catalog_entry_count(void) {
+    return repl_examples_count();
+}
+
+static int example_catalog_tag_count(void) {
+    return REPL_EXAMPLE_TAG_COUNT;
+}
+
+static unsigned int example_catalog_tag_bit(int tag_idx) {
+    return repl_example_tag_bit(tag_idx);
+}
+
+static const ReplCatalogTagOps g_example_tag_ops = {
+    example_catalog_entry_count,
+    example_catalog_tag_count,
+    g_example_tag_labels,
+    repl_example_tag_mask,
+    example_catalog_tag_bit,
+};
+
 int repl_examples_count(void) {
     return (int)(sizeof(g_example_entries) / sizeof(g_example_entries[0]));
 }
@@ -1437,9 +1458,7 @@ int repl_example_tag_count(void) {
 }
 
 const char *repl_example_tag_label(int tag_idx) {
-    if (tag_idx < 0 || tag_idx >= repl_example_tag_count())
-        return NULL;
-    return g_example_tag_labels[tag_idx];
+    return repl_catalog_tag_label(&g_example_tag_ops, tag_idx);
 }
 
 unsigned int repl_example_tag_mask(int example_idx) {
@@ -1451,56 +1470,23 @@ unsigned int repl_example_tag_mask(int example_idx) {
 }
 
 int repl_example_has_tag(int example_idx, int tag_idx) {
-    unsigned int bit = repl_example_tag_bit(tag_idx);
-    if (!bit)
-        return 0;
-    return (repl_example_tag_mask(example_idx) & bit) != 0u;
+    return repl_catalog_has_tag(&g_example_tag_ops, example_idx, tag_idx);
 }
 
 int repl_example_count_for_tag(int tag_idx) {
-    int count = 0;
-    if (!repl_example_tag_bit(tag_idx))
-        return 0;
-    for (int idx = 0; idx < repl_examples_count(); idx++)
-        if (repl_example_has_tag(idx, tag_idx))
-            count++;
-    return count;
+    return repl_catalog_count_for_tag(&g_example_tag_ops, tag_idx);
 }
 
 int repl_example_index_for_tag(int tag_idx, int ordinal) {
-    int seen = 0;
-    if (ordinal < 0 || !repl_example_tag_bit(tag_idx))
-        return -1;
-    for (int idx = 0; idx < repl_examples_count(); idx++) {
-        if (!repl_example_has_tag(idx, tag_idx))
-            continue;
-        if (seen == ordinal)
-            return idx;
-        seen++;
-    }
-    return -1;
+    return repl_catalog_index_for_tag(&g_example_tag_ops, tag_idx, ordinal);
 }
 
 int repl_example_visible_tag_count(void) {
-    int count = 0;
-    for (int tag_idx = 0; tag_idx < repl_example_tag_count(); tag_idx++)
-        if (repl_example_count_for_tag(tag_idx) > 0)
-            count++;
-    return count;
+    return repl_catalog_visible_tag_count(&g_example_tag_ops);
 }
 
 int repl_example_visible_tag_at(int dense_idx) {
-    int seen = 0;
-    if (dense_idx < 0)
-        return -1;
-    for (int tag_idx = 0; tag_idx < repl_example_tag_count(); tag_idx++) {
-        if (repl_example_count_for_tag(tag_idx) <= 0)
-            continue;
-        if (seen == dense_idx)
-            return tag_idx;
-        seen++;
-    }
-    return -1;
+    return repl_catalog_visible_tag_at(&g_example_tag_ops, dense_idx);
 }
 
 const char *repl_example_subheading(int example_idx) {

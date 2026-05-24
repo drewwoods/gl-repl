@@ -1,4 +1,5 @@
 #include "repl/tutorials.h"
+#include "repl/catalog_tags.h"
 
 #include <ctype.h>
 #include <stddef.h>
@@ -246,6 +247,26 @@ static const TutorialEntry g_tutorials[] = {
     },
 };
 
+static int tutorial_catalog_entry_count(void) {
+    return repl_tutorial_count();
+}
+
+static int tutorial_catalog_tag_count(void) {
+    return REPL_TUTORIAL_TAG_COUNT;
+}
+
+static unsigned int tutorial_catalog_tag_bit(int tag_idx) {
+    return repl_tutorial_tag_bit(tag_idx);
+}
+
+static const ReplCatalogTagOps g_tutorial_tag_ops = {
+    tutorial_catalog_entry_count,
+    tutorial_catalog_tag_count,
+    g_tutorial_tag_labels,
+    repl_tutorial_tag_mask,
+    tutorial_catalog_tag_bit,
+};
+
 static const TutorialEntry *tutorial_entry_at(int idx) {
     int count = (int)(sizeof(g_tutorials) / sizeof(g_tutorials[0]));
     if (idx < 0 || idx >= count)
@@ -341,9 +362,7 @@ int repl_tutorial_tag_count(void) {
 }
 
 const char *repl_tutorial_tag_label(int tag_idx) {
-    if (tag_idx < 0 || tag_idx >= repl_tutorial_tag_count())
-        return NULL;
-    return g_tutorial_tag_labels[tag_idx];
+    return repl_catalog_tag_label(&g_tutorial_tag_ops, tag_idx);
 }
 
 unsigned int repl_tutorial_tag_mask(int tutorial_idx) {
@@ -355,56 +374,23 @@ unsigned int repl_tutorial_tag_mask(int tutorial_idx) {
 }
 
 int repl_tutorial_has_tag(int tutorial_idx, int tag_idx) {
-    unsigned int bit = repl_tutorial_tag_bit(tag_idx);
-    if (!bit)
-        return 0;
-    return (repl_tutorial_tag_mask(tutorial_idx) & bit) != 0u;
+    return repl_catalog_has_tag(&g_tutorial_tag_ops, tutorial_idx, tag_idx);
 }
 
 int repl_tutorial_count_for_tag(int tag_idx) {
-    int count = 0;
-    if (!repl_tutorial_tag_bit(tag_idx))
-        return 0;
-    for (int idx = 0; idx < repl_tutorial_count(); idx++)
-        if (repl_tutorial_has_tag(idx, tag_idx))
-            count++;
-    return count;
+    return repl_catalog_count_for_tag(&g_tutorial_tag_ops, tag_idx);
 }
 
 int repl_tutorial_index_for_tag(int tag_idx, int ordinal) {
-    int seen = 0;
-    if (ordinal < 0 || !repl_tutorial_tag_bit(tag_idx))
-        return -1;
-    for (int idx = 0; idx < repl_tutorial_count(); idx++) {
-        if (!repl_tutorial_has_tag(idx, tag_idx))
-            continue;
-        if (seen == ordinal)
-            return idx;
-        seen++;
-    }
-    return -1;
+    return repl_catalog_index_for_tag(&g_tutorial_tag_ops, tag_idx, ordinal);
 }
 
 int repl_tutorial_visible_tag_count(void) {
-    int count = 0;
-    for (int tag_idx = 0; tag_idx < repl_tutorial_tag_count(); tag_idx++)
-        if (repl_tutorial_count_for_tag(tag_idx) > 0)
-            count++;
-    return count;
+    return repl_catalog_visible_tag_count(&g_tutorial_tag_ops);
 }
 
 int repl_tutorial_visible_tag_at(int dense_idx) {
-    int seen = 0;
-    if (dense_idx < 0)
-        return -1;
-    for (int tag_idx = 0; tag_idx < repl_tutorial_tag_count(); tag_idx++) {
-        if (repl_tutorial_count_for_tag(tag_idx) <= 0)
-            continue;
-        if (seen == dense_idx)
-            return tag_idx;
-        seen++;
-    }
-    return -1;
+    return repl_catalog_visible_tag_at(&g_tutorial_tag_ops, dense_idx);
 }
 
 const char *repl_tutorial_subheading(int tutorial_idx) {
