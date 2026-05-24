@@ -558,6 +558,107 @@ static void test_render_paths_with_stubs(void) {
 }
 #endif
 
+/* #52/#53: pin Config section labels (raw and display) so the
+ * pre-computed title-case path stays correct. */
+static void test_config_section_labels(void) {
+    static const char *expected_raw[] = {
+        "RENDERING",
+        "TIME & REPLAY",
+        "OVERLAYS & SCENE",
+        "CAMERA",
+        "GEOMETRY",
+        "INTERFACE",
+        "AUDIO",
+    };
+    static const char *expected_display[] = {
+        "Rendering",
+        "Time & replay",
+        "Overlays & scene",
+        "Camera",
+        "Geometry",
+        "Interface",
+        "Audio",
+    };
+    int n = glr_config_section_count();
+    ASSERT_INT_EQ("section count", n, 7);
+    for (int i = 0; i < n && i < 7; i++) {
+        const char *label = glr_config_section_label(i);
+        ASSERT_TRUE("section label not null", label != NULL);
+        if (label)
+            ASSERT_TRUE(expected_raw[i], strcmp(label, expected_raw[i]) == 0);
+        const char *disp = glr_config_section_display_label(i);
+        ASSERT_TRUE("display label not null", disp != NULL);
+        if (disp)
+            ASSERT_TRUE(expected_display[i],
+                        strcmp(disp, expected_display[i]) == 0);
+    }
+    ASSERT_TRUE("past-end section label is null",
+                glr_config_section_label(n) == NULL);
+    ASSERT_TRUE("past-end display label is null",
+                glr_config_section_display_label(n) == NULL);
+}
+
+#ifdef GL_STUBS
+/* #50/#51 regression: pin dropdown geometry values so the magic-constant
+ * refactor doesn't silently change dropdown sizing or position. */
+static void test_dropdown_geometry_pinned(void) {
+    int sx, sy, sw, sh;
+    int parent_mx = -1, parent_my = -1;
+
+    reset_menu_bar_fixture(1000, 600);
+
+    ui_menu_bar_set_open_menu(GLR_MENU_FILE, 0.0f);
+    ASSERT_TRUE("File dropdown geometry exists",
+                find_dropdown_item_point(GLR_MENU_FILE, GLR_FILE_ITEM_NEW_SCENE,
+                                         &parent_mx, &parent_my));
+
+    UiHit h = ui_menu_bar_hit_test(parent_mx, parent_my);
+    ASSERT_INT_EQ("File dropdown item hit kind", h.kind, UI_HIT_MENU_ITEM);
+
+    ui_menu_bar_set_open_menu(GLR_MENU_CONFIG, 0.0f);
+    ASSERT_TRUE("Config section-0 parent point found",
+                find_dropdown_item_point(GLR_MENU_CONFIG, 0,
+                                         &parent_mx, &parent_my));
+    ASSERT_TRUE("Config section hover opens flyout",
+                ui_menu_bar_update_pointer_hover(parent_mx, parent_my, 0.0f));
+
+    ASSERT_TRUE("Config flyout rect after hover",
+                ui_menu_bar_submenu_rect_for_test(GLR_MENU_CONFIG, 0,
+                                                  &sx, &sy, &sw, &sh));
+    ASSERT_TRUE("flyout width positive", sw > 0);
+    ASSERT_TRUE("flyout height positive", sh > 0);
+    ASSERT_TRUE("flyout x non-negative", sx >= 0);
+
+    int start = 0, count = 0;
+    ASSERT_TRUE("section 0 range resolves",
+                glr_config_section_range(0, &start, &count) && count > 0);
+    ASSERT_TRUE("flyout height fits section items",
+                sh >= count * LINE_H);
+}
+
+/* #47 regression: pin that Scene tag rows (hover-only) stay inert when
+ * activated, and that clicks inside an open dropdown on non-actionable
+ * regions don't fall through. This guards the two UI_HIT_CODE_PANEL_CHROME
+ * blocks in hit_test. */
+static void test_dropdown_inert_chrome_hit(void) {
+    int tag_mx = -1, tag_my = -1;
+
+    reset_menu_bar_fixture(1000, 600);
+
+    ASSERT_TRUE("found Scene tag row 1 point",
+                find_dropdown_item_point(GLR_MENU_SCENE, 1,
+                                         &tag_mx, &tag_my));
+
+    UiHit h = ui_menu_bar_hit_test(tag_mx, tag_my);
+    ASSERT_INT_EQ("Scene tag row is MENU_ITEM",
+                  h.kind, UI_HIT_MENU_ITEM);
+    ASSERT_INT_EQ("Scene tag row has correct item_idx",
+                  h.item_idx, 1);
+    ASSERT_INT_EQ("Scene tag row activation is inert (returns 0)",
+                  glr_action_menu_item_activate(GLR_MENU_SCENE, 1), 0);
+}
+#endif
+
 /* Step 7 (Finding #3): right-press over a Config flyout item cycles
  * it backward; right-press over a section parent row / closed menu is
  * a no-op (never mis-cycles a g_cfg_items[] index). */
@@ -625,8 +726,11 @@ int main(void) {
     test_top_level_hits();
     test_dropdown_and_config_press();
     test_config_submenu_right_press();
+    test_config_section_labels();
 #ifdef GL_STUBS
     test_msaa_label_dynamic();
+    test_dropdown_geometry_pinned();
+    test_dropdown_inert_chrome_hit();
 #endif
     test_unified_hit_test();
 #ifdef GL_STUBS

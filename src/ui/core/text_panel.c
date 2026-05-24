@@ -93,7 +93,8 @@ static void text_panel_draw_colored_span(const UiTextPanelSnapshot *snap,
                                          int span_end,
                                          int line_y,
                                          const UiTextPanelColor *color,
-                                         int bold) {
+                                         int bold,
+                                         int blend_on) {
     int span_len;
     int x;
 
@@ -106,11 +107,8 @@ static void text_panel_draw_colored_span(const UiTextPanelSnapshot *snap,
     x = snap->cp_x + wrap_x + (span_start - wrap_start) * FONT_W;
 
     if (bold) {
-        /* Fake-bold: solid centre pass, then 4 additive 1px-shifted
-         * passes at alpha 0.15 to fatten the glyphs. */
         static const int dx[4] = { -1, 1,  0, 0 };
         static const int dy[4] = {  0, 0, -1, 1 };
-        GLboolean blend_was = glIsEnabled(GL_BLEND);
 
         text_panel_set_color(color);
         text_panel_draw_segment(x, line_y, text, span_start, span_len,
@@ -124,7 +122,7 @@ static void text_panel_draw_colored_span(const UiTextPanelSnapshot *snap,
                                     span_start, span_len, FONT_MONO);
 
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-        if (!blend_was)
+        if (!blend_on)
             glDisable(GL_BLEND);
         return;
     }
@@ -154,7 +152,8 @@ static void text_panel_draw_colored_text(const UiTextPanelSnapshot *snap,
         seg_count = UI_TEXT_PANEL_MAX_COLOR_SEGMENTS;
     use_segments = seg_count > 0;
 
-    if (text_panel_row_uses_blend(row)) {
+    int blend_on = text_panel_row_uses_blend(row);
+    if (blend_on) {
         glEnable(GL_BLEND);
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     }
@@ -163,7 +162,7 @@ static void text_panel_draw_colored_text(const UiTextPanelSnapshot *snap,
         text_panel_set_color(&row->color);
         text_panel_draw_segment(snap->cp_x + wrap_x, line_y, text,
                                 wrap_start, wrap_len, FONT_MONO);
-        if (text_panel_row_uses_blend(row))
+        if (blend_on)
             glDisable(GL_BLEND);
         return;
     }
@@ -184,11 +183,12 @@ static void text_panel_draw_colored_text(const UiTextPanelSnapshot *snap,
         if (cursor < seg_start) {
             text_panel_draw_colored_span(snap, text, wrap_start, wrap_x,
                                          cursor, seg_start, line_y,
-                                         &row->color, 0);
+                                         &row->color, 0, blend_on);
         }
         text_panel_draw_colored_span(snap, text, wrap_start, wrap_x,
                                      seg_start, seg_end, line_y,
-                                     &segment->color, segment->bold);
+                                     &segment->color, segment->bold,
+                                     blend_on);
         if (seg_end > cursor)
             cursor = seg_end;
     }
@@ -196,10 +196,10 @@ static void text_panel_draw_colored_text(const UiTextPanelSnapshot *snap,
     if (cursor < wrap_end) {
         text_panel_draw_colored_span(snap, text, wrap_start, wrap_x,
                                      cursor, wrap_end, line_y,
-                                     &row->color, 0);
+                                     &row->color, 0, blend_on);
     }
 
-    if (text_panel_row_uses_blend(row))
+    if (blend_on)
         glDisable(GL_BLEND);
 }
 
@@ -613,15 +613,13 @@ static void text_panel_draw_chrome(const UiTextPanelSnapshot *snap) {
 
 static int text_panel_row_wrap_count(const UiTextPanelSnapshot *snap,
                                      const UiTextPanelRow *row) {
-    if (row->kind == UI_TEXT_PANEL_ROW_INPUT) {
-        CodeLayout layout = text_panel_row_layout(snap, row);
+    CodeLayout layout = text_panel_row_layout(snap, row);
+    if (row->kind == UI_TEXT_PANEL_ROW_INPUT)
         return code_layout_row_count_for_text(snap->input.input ? snap->input.input : "",
                                               &layout);
-    }
     if (row->kind == UI_TEXT_PANEL_ROW_PLACEHOLDER &&
         (!row->text || row->text[0] == '\0'))
         return 1;
-    CodeLayout layout = text_panel_row_layout(snap, row);
     return code_layout_row_count_for_text(row->text ? row->text : "",
                                           &layout);
 }

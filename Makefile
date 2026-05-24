@@ -643,6 +643,7 @@ TEST_BINS += test_export_trace_parity
 # glTranslatef, so it needs the no-op GL stubs to run without a
 # real GL context.
 TEST_BINS += test_replay_walk
+TEST_BINS += test_ui_panels
 endif
 
 CORE_TEST_BINS = $(filter-out test_eval test_format test_repl_code_panel_layout test_ui_theme test_scene_palette test_audio,$(TEST_BINS))
