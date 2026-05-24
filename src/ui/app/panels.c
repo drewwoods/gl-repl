@@ -39,7 +39,7 @@ static const float k_status_bar_fg_err[3]   = { 1.000f, 0.557f, 0.494f };
 
 void ui_panels_render_code_panel(const UiRenderSnapshot *snap,
                                  UiCodePanelOutput *out) {
-    ui_repl_code_panel_render(snap, out);
+    ui_repl_code_panel_render_with_chrome(snap, out);
 }
 
 static void draw_modal_strip(const UiRenderSnapshot *snap,
