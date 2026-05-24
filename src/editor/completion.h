@@ -26,6 +26,12 @@ typedef struct {
 
     /* Drop all matches and clear ghost/hint. */
     void (*clear)(void);
+
+    /* Accept the currently selected match: append the ghost-text
+     * suffix to the input, advance the cursor, and clear popup
+     * state. Called by the Tab and Enter routes when a match is
+     * active. */
+    void (*accept)(void);
 } EditorCompletionProvider;
 
 void editor_completion_register(const EditorCompletionProvider *provider);
@@ -38,5 +44,6 @@ const EditorCompletionProvider *editor_completion_provider(void);
 void editor_completion_update(void);
 void editor_completion_update_selected_preview(void);
 void editor_completion_clear(void);
+void editor_completion_accept(void);
 
 #endif /* EDITOR_COMPLETION_H */

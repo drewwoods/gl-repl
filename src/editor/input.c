@@ -26,12 +26,12 @@
  *    owns a click
  *  - editor_feed_line() programmatic commit entry
  *
- * Known boundary exception: editor_reset_transients() is an
- * app-orchestration fan-out (it also resets camera / menu / color
- * picker / controller drag state). It is called only from
- * src/app/glr_ctrl.c and src/app/glr_actions.c and lives here purely
- * for proximity to editor_commit_reset_transients(); it is not
- * editor-owned state.
+ * Cross-domain concerns the editor used to reach for directly
+ * (camera reset, hidden code-panel restore, app-frame transients
+ * reset) moved to src/app/glr_ctrl.c per audit #8. The editor talks
+ * to the controller through the EditorInputDispatchEffects struct
+ * (restore_hidden_code_panel flag) or a registered provider hook
+ * (EditorCodePanelLayoutProvider for layout reads).
  */
 
 #include "state.h"
@@ -50,10 +50,6 @@
 #include "undo.h"
 
 #include "subsystems/color_picker/color_picker_state.h"
-#include "app/glr_completion.h"
-#include "app/glr_state.h"
-#include "app/glr_camera.h"
-#include "app/glr_ctrl.h"
 #include "keys.h"
 #include "repl/command_store.h"
 #include "repl/core.h"
@@ -118,6 +114,16 @@ EditorInputDispatchEffects editor_take_input_effects(void) {
  * is suppressed and modifier checks see "no modifiers" rather than
  * aborting freeglut for being called pre-init. */
 static int g_glut_modifier_reads_enabled = 0;
+
+/* Production installs this from glr_ctrl_init_gl so the editor can
+ * query the current code-panel layout without including
+ * src/app/glr_state.h directly. Tests that need a non-default
+ * layout install their own reader. */
+static EditorCodePanelLayoutProvider g_code_panel_layout_provider = NULL;
+
+void editor_input_set_code_panel_layout_provider(EditorCodePanelLayoutProvider provider) {
+    g_code_panel_layout_provider = provider;
+}
 
 void editor_input_enable_glut_modifier_reads(void) {
     g_glut_modifier_reads_enabled = 1;
@@ -342,14 +348,6 @@ static void save_newline_buf(void) {
     EditorInputState *inp = editor_state_input_mut();
     memcpy(inp->pending_newline, inp->input, (size_t)inp->input_len + 1);
     inp->pending_newline_len = inp->input_len;
-}
-
-void editor_reset_transients(void) {
-    editor_commit_reset_transients();
-    glr_camera_controls_reset();
-    ui_menu_bar_close();
-    color_picker_close();
-    glr_ctrl_router_reset_code_panel_drag();
 }
 
 static int normalize_navigation_target(int target) {
@@ -922,25 +920,20 @@ void editor_navigate_to_line(int target) {
 /* Code-panel-hidden helpers used by both the keyboard and special
  * dispatchers here, and exposed via editor_input_code_panel_*
  * declarations so the controller (src/app/glr_ctrl.c) can decide who
- * owns a click before routing it. */
+ * owns a click before routing it. The layout itself is owned by the
+ * controller; the editor reads it through the provider hook installed
+ * by editor_input_set_code_panel_layout_provider. */
 int editor_input_code_panel_layout(void) {
-    if (glr_state_presentation().code_panel_layout < 0 || glr_state_presentation().code_panel_layout >= CODE_PANEL_LAYOUT_COUNT)
+    int layout = g_code_panel_layout_provider
+        ? g_code_panel_layout_provider()
+        : CODE_PANEL_LAYOUT_LEFT;
+    if (layout < 0 || layout >= CODE_PANEL_LAYOUT_COUNT)
         return CODE_PANEL_LAYOUT_LEFT;
-    return glr_state_presentation().code_panel_layout;
+    return layout;
 }
 
 int editor_input_code_panel_hidden(void) {
     return editor_input_code_panel_layout() == CODE_PANEL_LAYOUT_HIDDEN;
-}
-
-int editor_input_restore_hidden_code_panel(void) {
-    if (!editor_input_code_panel_hidden())
-        return 0;
-    glr_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
-    glr_ctrl_sync_ui_chrome();
-    ui_menu_bar_close();
-    color_picker_close();
-    return 1;
 }
 
 static int editor_key_restores_hidden_code_panel(unsigned char key, int mods) {
@@ -985,7 +978,7 @@ static void restore_hidden_code_panel_for_key(unsigned char key) {
     if (editor_input_code_panel_hidden()) {
         int key_mods = editor_input_active_modifiers();
         if (editor_key_restores_hidden_code_panel(key, key_mods))
-            editor_input_restore_hidden_code_panel();
+            g_pending_input_effects.restore_hidden_code_panel = 1;
     }
 }
 
@@ -1226,7 +1219,7 @@ static int handle_tab_key_route(unsigned char key) {
             return 1;
         }
         if (editor_state_autocomplete().match_count > 0) {
-            glr_completion_accept_autocomplete();
+            editor_completion_accept();
             editor_completion_update();
         }
         return 1;
@@ -1308,7 +1301,7 @@ static int handle_enter_key_route(unsigned char key) {
 
         editor_input_anchor_clear();
         if (editor_state_autocomplete().match_count > 0) {
-            glr_completion_accept_autocomplete();
+            editor_completion_accept();
             editor_completion_update();
             return 1;
         }
@@ -1586,7 +1579,7 @@ static void restore_hidden_code_panel_for_special(int key) {
     if (editor_input_code_panel_hidden()) {
         int key_mods = editor_input_active_modifiers();
         if (editor_special_restores_hidden_code_panel(key, key_mods))
-            editor_input_restore_hidden_code_panel();
+            g_pending_input_effects.restore_hidden_code_panel = 1;
     }
 }
 

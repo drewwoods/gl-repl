@@ -31,6 +31,28 @@ int glr_ctrl_apply_tag_defaults(unsigned int tag_mask,
  * instead of the REPL-only repl_state_init_defaults / repl_state_reset_program. */
 void glr_app_reset_all(void);
 
+/* Drop camera / menu / picker / code-panel-drag transient state in
+ * addition to the editor commit transients. Called from
+ * glr_app_reset_all() and from controller paths that switch examples /
+ * scenes so the editor returns to a clean idle posture. Hoisted out
+ * of src/editor/input.c per audit #8 — the body reaches into
+ * camera / UI / picker / controller state, not editor-text state. */
+void glr_app_reset_transients(void);
+
+/* Layout provider installed on the editor at glr_ctrl_init_gl so
+ * src/editor/ can query the current code-panel layout without
+ * depending on src/app/glr_state.h. */
+int glr_ctrl_code_panel_layout_provider(void);
+
+/* Switch the code-panel layout from HIDDEN back to LEFT (and sync UI
+ * chrome / close menu / close picker). The editor signals the
+ * request via the restore_hidden_code_panel effect flag the
+ * controller actualizes after editor_handle_*. Returns 1 if the
+ * layout was hidden (and is now restored), 0 if it was already
+ * visible. Hoisted out of src/editor/input.c per audit #8 — the
+ * body writes glr_state and runs glr_ctrl_sync_ui_chrome. */
+int glr_ctrl_restore_hidden_code_panel(void);
+
 /* Mirror chrome-relevant presentation fields from REPL state into
  * UiState.code_panel (layout_mode, show_vertex_indices). The
  * controller calls this once per frame in glr_ctrl_build_ui_snapshot;

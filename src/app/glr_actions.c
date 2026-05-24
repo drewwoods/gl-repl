@@ -376,7 +376,7 @@ int glr_scene_menu_slot_for_dense_index(int scene_idx) {
 void glr_scene_load_example(int example_idx) {
     /* Clear editor / camera / menu / picker / code-panel-drag transients
      * so the new scene starts from a clean controller state. */
-    editor_reset_transients();
+    glr_app_reset_transients();
     editor_undo_clear();
     editor_state_edit_line_set(repl_load_example(example_idx));
 }

@@ -459,6 +459,7 @@ static const EditorCompletionProvider g_glr_completion_provider = {
     .update                  = update_autocomplete,
     .update_selected_preview = update_selected_autocomplete_preview,
     .clear                   = glr_completion_provider_clear,
+    .accept                  = glr_completion_accept_autocomplete,
 };
 
 void glr_completion_register_provider(void) {
