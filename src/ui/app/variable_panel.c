@@ -218,8 +218,8 @@ void ui_variable_panel_render(const UiRenderSnapshot *snap) {
         float val  = ui_variable_value(var);
 
         /* Drag highlight - amber tint for log mode, blue for linear */
-        if (variable_panel_drag_active_var() == i) {
-            if (variable_panel_drag_log_mode())
+        if (snap->variable_drag.active_var == i) {
+            if (snap->variable_drag.log_mode)
                 glColor4fv(k_var_drag_log_bg);
             else
                 glColor4fv(k_var_drag_linear_bg);
@@ -252,8 +252,8 @@ void ui_variable_panel_render(const UiRenderSnapshot *snap) {
          * Yellow = linear drag, orange = log drag, blue = idle. */
         float t  = val_to_slider_t(val, log_scale);
         float hx = (float)track_x + t * (float)(track_w - handle_w);
-        if (variable_panel_drag_active_var() == i) {
-            if (variable_panel_drag_log_mode())
+        if (snap->variable_drag.active_var == i) {
+            if (snap->variable_drag.log_mode)
                 glColor4fv(k_var_handle_log);     /* log mode */
             else
                 glColor4fv(k_var_handle_linear);  /* linear mode */

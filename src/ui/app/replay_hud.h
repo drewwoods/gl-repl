@@ -32,25 +32,12 @@
 #define REPLAY_HUD_TEXT_LINE2_Y   4
 #define REPLAY_HUD_BOTTOM_Y (REPLAY_HUD_MARGIN_Y + REPLAY_HUD_HEIGHT)
 
-typedef struct UiReplayHudState {
-    int scene_x;
-    int scene_y;
-    int scene_w;
-    int scene_h;
-    int viewport_w;
-    int viewport_h;
-    int code_panel_layout;
-    int replay_mode;
-    int replay_pc;
-    int replay_total_cmds;
-    int replay_state_val;
-    float replay_speed;
-    int replay_expand_args;
-    int replaying;
-} UiReplayHudState;
-
-/* Render the replay HUD once per frame. Uses only the supplied UI snapshot
- * and no live REPL state. No-op when replaying is disabled. */
-void replay_ui_hud_render(const UiReplayHudState *state);
+/* Render the replay HUD once per frame. Reads replay state (mode / pc /
+ * total / play state / speed / expand-args) from snap->replay and the
+ * scene rect from ui_layout_scene_rect — matching the
+ * (const UiRenderSnapshot *) signature shared by the other panel
+ * renderers. No-op when snap->replay.active is 0. */
+struct UiRenderSnapshot;
+void replay_ui_hud_render(const struct UiRenderSnapshot *snap);
 
 #endif /* REPLAY_UI_HUD_H */

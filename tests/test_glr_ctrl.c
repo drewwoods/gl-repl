@@ -55,7 +55,10 @@ static TestHarness g_harness = TEST_HARNESS_INIT;
 #undef ui_profile_panel_render
 
 static SceneRenderConfig g_last_scene_config;
-static UiReplayHudState  g_last_replay_hud_state;
+/* Snapshot copy captured by the replay HUD stub; replaces the old
+ * UiReplayHudState struct after replay_ui_hud_render was reshaped to
+ * take the per-frame snapshot directly. */
+static UiRenderSnapshot  g_last_replay_hud_snap;
 static int g_scene_render_calls = 0;
 static int g_replay_hud_calls = 0;
 static int g_t_idx = -1;
@@ -104,9 +107,9 @@ void test_scene_apply_camera(float rx, float ry, float dist,
     (void)rx; (void)ry; (void)dist; (void)tx; (void)ty; (void)tz;
 }
 
-void test_replay_ui_hud_render(const UiReplayHudState *state) {
+void test_replay_ui_hud_render(const struct UiRenderSnapshot *snap) {
     g_replay_hud_calls++;
-    g_last_replay_hud_state = *state;
+    g_last_replay_hud_snap = *snap;
 
     if (g_t_idx >= 0)
         g_predef_value_seen_in_hud = g_predef_vars[g_t_idx].value;
@@ -133,7 +136,7 @@ static void prepare_display_fixture(void) {
     GlrPresentationState *presentation;
 
     memset(&g_last_scene_config, 0, sizeof(g_last_scene_config));
-    memset(&g_last_replay_hud_state, 0, sizeof(g_last_replay_hud_state));
+    memset(&g_last_replay_hud_snap, 0, sizeof(g_last_replay_hud_snap));
     g_scene_render_calls = 0;
     g_replay_hud_calls = 0;
     g_predef_value_seen_in_scene = 0.0f;
@@ -260,20 +263,22 @@ static void test_display_frame_builds_config_and_restores_live_state(void) {
     ASSERT_FLOAT("focus vertex y", g_last_scene_config.focus.pos[1], 2.0f);
     ASSERT_FLOAT("focus vertex z", g_last_scene_config.focus.pos[2], 3.0f);
 
-    ASSERT_INT("HUD scene x matches config", g_last_replay_hud_state.scene_x, g_last_scene_config.scene_x);
-    ASSERT_INT("HUD scene y matches config", g_last_replay_hud_state.scene_y, g_last_scene_config.scene_y);
-    ASSERT_INT("HUD scene w matches config", g_last_replay_hud_state.scene_w, g_last_scene_config.scene_w);
-    ASSERT_INT("HUD scene h matches config", g_last_replay_hud_state.scene_h, g_last_scene_config.scene_h);
-    ASSERT_INT("HUD viewport w matches config", g_last_replay_hud_state.viewport_w, g_last_scene_config.viewport_w);
-    ASSERT_INT("HUD viewport h matches config", g_last_replay_hud_state.viewport_h, g_last_scene_config.viewport_h);
-    ASSERT_INT("HUD layout copied", g_last_replay_hud_state.code_panel_layout, CODE_PANEL_LAYOUT_BOTTOM);
-    ASSERT_INT("HUD replay mode copied", g_last_replay_hud_state.replay_mode, REPLAY_MODE_VERTEX);
-    ASSERT_INT("HUD replay pc copied", g_last_replay_hud_state.replay_pc, 1);
-    ASSERT_INT("HUD replay total cmds copied", g_last_replay_hud_state.replay_total_cmds, 777);
-    ASSERT_INT("HUD replay state copied", g_last_replay_hud_state.replay_state_val, REPLAY_PLAYING);
-    ASSERT_FLOAT("HUD replay speed copied", g_last_replay_hud_state.replay_speed, 2.5f);
-    ASSERT_INT("HUD replay expand args copied", g_last_replay_hud_state.replay_expand_args, 1);
-    ASSERT_INT("HUD replaying copied", g_last_replay_hud_state.replaying, 1);
+    /* Scene/viewport rect: replay_ui_hud_render now derives the scene
+     * rect via ui_layout_scene_rect() and reads the viewport from
+     * snap->viewport — neither field travels on the snapshot we capture
+     * in the stub. The rect+viewport contracts are exercised by the
+     * scene_config asserts above; here we focus on what the snapshot
+     * carries. */
+    ASSERT_INT("HUD viewport w on snap", g_last_replay_hud_snap.viewport.window_w, g_last_scene_config.viewport_w);
+    ASSERT_INT("HUD viewport h on snap", g_last_replay_hud_snap.viewport.window_h, g_last_scene_config.viewport_h);
+    ASSERT_INT("HUD layout on snap", g_last_replay_hud_snap.code_panel.layout_mode, CODE_PANEL_LAYOUT_BOTTOM);
+    ASSERT_INT("HUD replay mode on snap", g_last_replay_hud_snap.replay.mode, REPLAY_MODE_VERTEX);
+    ASSERT_INT("HUD replay pc on snap", g_last_replay_hud_snap.replay.pc, 1);
+    ASSERT_INT("HUD replay total cmds on snap", g_last_replay_hud_snap.replay.total_flat_cmds, 777);
+    ASSERT_INT("HUD replay state on snap", g_last_replay_hud_snap.replay.state, REPLAY_PLAYING);
+    ASSERT_FLOAT("HUD replay speed on snap", g_last_replay_hud_snap.replay.speed, 2.5f);
+    ASSERT_INT("HUD replay expand args on snap", g_last_replay_hud_snap.replay.expand_args, 1);
+    ASSERT_INT("HUD replaying on snap", g_last_replay_hud_snap.replay.active, 1);
 
     ASSERT_FLOAT("scene saw live predef before mutation", g_predef_value_seen_in_scene, 9.0f);
     ASSERT_FLOAT("scene saw live scratch before mutation", g_scratch_value_seen_in_scene, 4.0f);
