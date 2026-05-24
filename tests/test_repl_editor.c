@@ -2701,7 +2701,7 @@ int main() {
                     strstr(g_status, "Cannot uncomment") == NULL);
         assert_status_contains("uncomment assignment: status", "Uncommented");
         ASSERT_TRUE("uncomment assignment: value restored",
-                    repl_state_document_cmds_mut()[1].num_args == repl_eval_find_predef_var_idx("x"));
+                    repl_state_document_cmds_mut()[1].var_idx == repl_eval_find_predef_var_idx("x"));
 
         g_mock_modifiers = saved_mods;
     }

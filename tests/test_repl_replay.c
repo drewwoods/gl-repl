@@ -304,7 +304,7 @@ static void test_replay_var_assign_uses_flatten_args(void) {
         int found = 0;
         for (int i = 0; i < fp.cmd_count; i++) {
             if (fp.cmds[i].type == CMD_VAR_ASSIGN &&
-                fp.cmds[i].num_args == u_idx) {
+                fp.cmds[i].var_idx == u_idx) {
                 ASSERT_TRUE("flatten cached args[0]=5 for u",
                             fabsf(fp.cmds[i].args[0] - 5.0f) < 1e-5f);
                 found = 1;

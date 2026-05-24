@@ -54,7 +54,7 @@ typedef struct EditorServices_s {
                               int *cursor_inout, void *user);
 
     /* Replay the change's predef-variable side-effects against the
-     * eval table. UNDECLARE first (cascading var_assign num_args
+     * eval table. UNDECLARE first (cascading var_assign var_idx
      * adjustments), then DECLARE / SET_VALUE. */
     void (*apply_predef_ops)(const ReplCompiledChange *change, void *user);
 

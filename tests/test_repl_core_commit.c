@@ -168,7 +168,7 @@ static void run_flat_control_flow_only(void) {
         case CMD_VAR_ASSIGN: {
             /* Match the real executor: apply pre-computed args[0]
              * without re-evaluating. Flatten owns the eval. */
-            int vi = repl_state_flat_program_cmds_mut()[pc].num_args;
+            int vi = repl_state_flat_program_cmds_mut()[pc].var_idx;
             float value = repl_state_flat_program_cmds_mut()[pc].args[0];
             if (vi >= 0 && vi < g_num_predef_vars)
                 g_predef_vars[vi].value = value;
