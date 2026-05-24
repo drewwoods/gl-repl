@@ -1026,6 +1026,43 @@ static void glr_ctrl_notify_audio_gesture_once(void) {
     glr_audio_on_user_gesture();
 }
 
+/* Layout provider installed on the editor at glr_ctrl_init_gl. The
+ * editor reads through this so src/editor/ does not need to include
+ * src/app/glr_state.h. */
+int glr_ctrl_code_panel_layout_provider(void) {
+    return glr_state_presentation().code_panel_layout;
+}
+
+/* Hoisted out of src/editor/input.c per audit #8: the action
+ * writes glr_state_presentation_mut(), runs glr_ctrl_sync_ui_chrome,
+ * and closes the menu / picker — all controller / UI concerns the
+ * editor module should not be reaching into. The editor signals
+ * the intent via the restore_hidden_code_panel effect flag, which
+ * apply_input_effects below actualizes by calling this. */
+int glr_ctrl_restore_hidden_code_panel(void) {
+    if (glr_state_presentation().code_panel_layout != CODE_PANEL_LAYOUT_HIDDEN)
+        return 0;
+    glr_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
+    glr_ctrl_sync_ui_chrome();
+    ui_menu_bar_close();
+    color_picker_close();
+    return 1;
+}
+
+/* Hoisted out of src/editor/input.c per audit #8: the body reaches
+ * the camera, menu bar, color picker, and the controller's own
+ * code-panel-drag reset — none of which are editor-text concerns.
+ * The editor still owns the commit-side state reset via
+ * editor_commit_reset_transients(); this wraps that with the
+ * cross-subsystem cleanup the app-frame paths actually want. */
+void glr_app_reset_transients(void) {
+    editor_commit_reset_transients();
+    glr_camera_controls_reset();
+    ui_menu_bar_close();
+    color_picker_close();
+    glr_ctrl_router_reset_code_panel_drag();
+}
+
 static void glr_ctrl_apply_input_effects(EditorInputDispatchEffects effects) {
     if (effects.set_cursor)
         glutSetCursor(effects.cursor);
@@ -1033,6 +1070,8 @@ static void glr_ctrl_apply_input_effects(EditorInputDispatchEffects effects) {
         glutPostRedisplay();
     if (effects.schedule_timer)
         glutTimerFunc(effects.timer_millis, glr_ctrl_timer, effects.timer_value);
+    if (effects.restore_hidden_code_panel)
+        glr_ctrl_restore_hidden_code_panel();
 }
 
 /* ========================================================================= */
@@ -2206,7 +2245,7 @@ void glr_app_reset_all(void) {
      * that follows this reset locks the tutorial-mutated state in. */
     tutorial_teardown();
     editor_help_session_reset();
-    editor_reset_transients();
+    glr_app_reset_transients();
     /* Inline modals are transient editor state too: a post-reset
      * world should not still be hosting a half-typed rename or
      * file-load prompt. */
@@ -2408,6 +2447,12 @@ void glr_ctrl_init_gl(void) {
      * reads default to "no modifiers held" instead of aborting
      * freeglut for being called pre-init. */
     editor_input_enable_glut_modifier_reads();
+    /* Editor reads the code-panel layout through a provider hook so
+     * src/editor/ stops depending on src/app/glr_state.h. The
+     * controller owns the layout field; the editor only needs the
+     * read view for hit-test geometry and the hidden-panel auto-
+     * restore. */
+    editor_input_set_code_panel_layout_provider(glr_ctrl_code_panel_layout_provider);
     /* App-level config: tell the editor what comment prefix to use
      * for Ctrl+/ toggle. Editor itself has no default — tests that
      * exercise the toggle key path set the prefix explicitly. */
@@ -2567,7 +2612,7 @@ int glr_ctrl_router_handle_config_menu_key(unsigned char key) {
     if (!editor_state_search().active && key == '`') {
         if (replay_active())
             replay_stop();
-        editor_input_restore_hidden_code_panel();
+        glr_ctrl_restore_hidden_code_panel();
         ui_menu_bar_open_config(repl_state_variables().anim_time);
         return 1;
     }
@@ -2794,7 +2839,7 @@ static void cycle_example_or_user_scene(void) {
      * so the new scene starts from a clean controller state. (Moved out
      * of src/repl/example_loader.c as step 2 of the decouple plan,
      * feature/decouple-repl-from-gl-repl-alt.md.) */
-    editor_reset_transients();
+    glr_app_reset_transients();
     /* F12 cycles through wholesale scene replacements — drop the undo
      * ring so a post-cycle Ctrl+Z can't bleed the previous scene's
      * pre-mutation state into the destination. */
@@ -2840,7 +2885,7 @@ static void cycle_example_or_user_scene(void) {
  * example. Symmetric structure with the forward cycle: same transient
  * cleanup and undo-clear, just inverted index walks. */
 static void cycle_example_or_user_scene_prev(void) {
-    editor_reset_transients();
+    glr_app_reset_transients();
     editor_undo_clear();
     int count = repl_example_count();
     int active_scene = repl_active_user_scene();

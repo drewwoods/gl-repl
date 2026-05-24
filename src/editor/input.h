@@ -21,9 +21,18 @@
  * has been called. */
 typedef int (*EditorModifierProvider)(void);
 
+/* Production hook: the controller installs a reader so the editor
+ * can query the current code-panel layout without depending on
+ * src/app/glr_state.h. If no provider is registered the layout
+ * defaults to CODE_PANEL_LAYOUT_LEFT (the "everything is visible"
+ * case), which keeps tests that don't install a provider in the
+ * normal-layout fallback. */
+typedef int (*EditorCodePanelLayoutProvider)(void);
+
 /* Side-effects accumulated by editor input dispatch and replayed by
  * glr_ctrl_apply_input_effects (request_redraw → glutPostRedisplay,
- * set_cursor → glutSetCursor, schedule_timer → glutTimerFunc). */
+ * set_cursor → glutSetCursor, schedule_timer → glutTimerFunc,
+ * restore_hidden_code_panel → glr_ctrl_restore_hidden_code_panel). */
 typedef struct EditorInputDispatchEffects {
     int request_redraw;
     int set_cursor;
@@ -31,6 +40,7 @@ typedef struct EditorInputDispatchEffects {
     int schedule_timer;
     unsigned int timer_millis;
     int timer_value;
+    int restore_hidden_code_panel;
 } EditorInputDispatchEffects;
 
 /* Editor dispatch entry points. Each handles editor-text-model
@@ -61,6 +71,12 @@ int                      editor_input_active_modifiers(void);
 /* Test seam: drive editor input with a mocked modifier source. */
 void editor_input_set_modifier_provider_for_test(EditorModifierProvider provider);
 
+/* Production hook: the controller installs this from glr_ctrl_init_gl
+ * so editor_input_code_panel_layout() can read the live layout
+ * without including src/app/glr_state.h. Tests that need a non-
+ * default layout install their own provider. */
+void editor_input_set_code_panel_layout_provider(EditorCodePanelLayoutProvider provider);
+
 /* Production hook: glr_ctrl calls this from glr_ctrl_init_gl
  * after glutInit so editor_input_active_modifiers() may safely call
  * glutGetModifiers(). Tests that don't install a modifier provider
@@ -89,12 +105,14 @@ int editor_input_point_in_code_panel(int x, int y);
 int editor_input_point_on_code_panel_divider(int x, int y);
 int editor_input_code_panel_resize_cursor(void);
 
-/* Code-panel layout query + hidden-panel restore. The controller uses
- * the latter when opening the config menu via backtick (the menu
- * needs the panel visible to render). */
+/* Code-panel layout query. Reads through the provider hook installed
+ * by editor_input_set_code_panel_layout_provider; defaults to
+ * CODE_PANEL_LAYOUT_LEFT when no provider is installed. The
+ * actual hidden-panel restoration lives on the controller side
+ * (glr_ctrl_restore_hidden_code_panel); editor input requests the
+ * restore via the restore_hidden_code_panel effect flag. */
 int editor_input_code_panel_layout(void);
 int editor_input_code_panel_hidden(void);
-int editor_input_restore_hidden_code_panel(void);
 
 /* Editor-side scroll handler invoked by the controller when a scroll
  * wheel event lands inside the code panel rect. Other scroll-wheel
@@ -140,12 +158,6 @@ void editor_clear_all_cmds(void);
  * `;` and whitespace). Used by the editor when navigating to an
  * existing line and by reformat/scene-switch paths. */
 void editor_load_line_to_input(int idx);
-
-/* Drop camera / menu / picker / code-panel-drag transient state in
- * addition to the editor commit transients. Called from
- * glr_app_reset_all() and from controller paths that switch examples /
- * scenes so the editor returns to a clean idle posture. */
-void editor_reset_transients(void);
 
 /* Programmatic entry point equivalent to typing `line` and pressing
  * `;`. Used by tests, the clipboard paste path, and editor-side

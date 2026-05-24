@@ -31,3 +31,8 @@ void editor_completion_clear(void) {
     if (g_provider && g_provider->clear)
         g_provider->clear();
 }
+
+void editor_completion_accept(void) {
+    if (g_provider && g_provider->accept)
+        g_provider->accept();
+}

@@ -143,6 +143,18 @@ static int mock_get_modifiers(void) {
     return g_mock_modifiers;
 }
 
+/* Test wrapper: matches what glr_ctrl_apply_input_effects does in
+ * production for the editor → controller effects the editor cannot
+ * actualize itself. Currently the only such effect is the
+ * hidden-code-panel restore signal (audit #8 hoisted the actual
+ * write into src/app/glr_ctrl.c). Tests that exercise editor input
+ * paths that may set the flag drain it through this helper so the
+ * post-call state mirrors production. */
+static void apply_editor_effects(EditorInputDispatchEffects fx) {
+    if (fx.restore_hidden_code_panel)
+        glr_ctrl_restore_hidden_code_panel();
+}
+
 static void assert_status_contains(const char *label, const char *needle) {
     ASSERT_TRUE(label, strstr(g_status, needle) != NULL);
 }
@@ -257,9 +269,13 @@ int main() {
     repl_eval_init_predef_vars();
     editor_input_set_modifier_provider_for_test(mock_get_modifiers);
     /* Tests skip glr_ctrl_init_gl (no GLUT context); register the
-     * comment-toggle prefix explicitly so Ctrl+/ test paths exercise the
-     * full toggle path. */
+     * comment-toggle prefix and the code-panel layout provider
+     * explicitly so the matching production paths (Ctrl+/ toggle,
+     * editor_input_code_panel_layout reads for hit-tests and the
+     * hidden-panel auto-restore detection) work the same way they
+     * do under glr_ctrl_init_gl. */
     editor_set_line_comment_prefix("// ");
+    editor_input_set_code_panel_layout_provider(glr_ctrl_code_panel_layout_provider);
     printf("--- repl_editor tests ---\n");
 
     /* Commit chain ordering: float declarations must run before assignment
@@ -492,16 +508,16 @@ int main() {
     {
         glr_app_reset_all();
         glr_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_HIDDEN; glr_ctrl_sync_ui_chrome();
-        editor_handle_key('v', 0, 0);
+        apply_editor_effects(editor_handle_key('v', 0, 0));
         ASSERT_INT("typing restores hidden code panel",
                    glr_state_presentation().code_panel_layout, CODE_PANEL_LAYOUT_LEFT);
         ASSERT_STR("typing after restore still reaches input", editor_state_input().input, "v");
 
         glr_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_HIDDEN; glr_ctrl_sync_ui_chrome();
-        editor_handle_key('`', 0, 0);
+        apply_editor_effects(editor_handle_key('`', 0, 0));
         ASSERT_INT("config shortcut restores hidden code panel",
                    glr_state_presentation().code_panel_layout, CODE_PANEL_LAYOUT_LEFT);
-        editor_handle_key('`', 0, 0);
+        apply_editor_effects(editor_handle_key('`', 0, 0));
 
         glr_state_presentation_mut()->code_panel_layout = CFG_DEFAULT_CODE_PANEL_LAYOUT; glr_ctrl_sync_ui_chrome();
     }
@@ -3229,20 +3245,20 @@ int main() {
         g_mock_modifiers = saved_mods;
     }
 
-    /* Extra coverage: editor_restore_hidden_code_panel from keys */
+    /* Extra coverage: glr_ctrl_restore_hidden_code_panel from keys */
     {
         glr_app_reset_all();
         glr_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_HIDDEN; glr_ctrl_sync_ui_chrome();
 
         /* Pressing a printable key should restore it. */
-        editor_handle_key('a', 0, 0);
+        apply_editor_effects(editor_handle_key('a', 0, 0));
         ASSERT_INT("key restores hidden panel",
                    glr_state_presentation().code_panel_layout,
                    CODE_PANEL_LAYOUT_LEFT);
 
         glr_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_HIDDEN; glr_ctrl_sync_ui_chrome();
         /* Pressing a special key should restore it. */
-        editor_handle_special(GLUT_KEY_UP, 0, 0);
+        apply_editor_effects(editor_handle_special(GLUT_KEY_UP, 0, 0));
         ASSERT_INT("special key restores hidden panel",
                    glr_state_presentation().code_panel_layout,
                    CODE_PANEL_LAYOUT_LEFT);
