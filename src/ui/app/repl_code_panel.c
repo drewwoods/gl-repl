@@ -1,5 +1,6 @@
 #include "ui/app/repl_code_panel.h"
 
+#include "c_compat.h"
 #include "editor/state.h"
 #include "repl/command_spec.h"
 #include "repl/core.h"
@@ -27,6 +28,20 @@
 #define UI_REPL_CODE_PANEL_MAX_ROWS \
     (MAX_COMMANDS + MAX_VIRTUAL_LINES + UI_REPL_CODE_PANEL_MAX_STATIC_ROWS + 2)
 #define UI_REPL_CODE_PANEL_MAX_GENERATED_TEXT_ROWS 256
+
+/* repl_code_panel_apply_fade_segments emits at most:
+ *   - 1 settled-prefix segment
+ *   - TUTORIAL_FADE_SETTLE_CHARS easing-tail per-char segments
+ *   - 1 actively-revealing head segment
+ *   - 1 not-yet-revealed tail segment
+ * = TUTORIAL_FADE_SETTLE_CHARS + 3 segments.
+ *
+ * Bumping TUTORIAL_FADE_SETTLE_CHARS past
+ * UI_TEXT_PANEL_MAX_COLOR_SEGMENTS - 3 would silently corrupt the fade
+ * because the segment-capacity break in apply_fade_segments would drop
+ * trailing chars. */
+STATIC_ASSERT(TUTORIAL_FADE_SETTLE_CHARS + 3 <= UI_TEXT_PANEL_MAX_COLOR_SEGMENTS,
+              "TUTORIAL_FADE_SETTLE_CHARS too large for color-segment budget");
 
 static UiTextPanelRow g_repl_code_panel_rows[UI_REPL_CODE_PANEL_MAX_ROWS];
 static char g_repl_code_panel_generated_text[UI_REPL_CODE_PANEL_MAX_GENERATED_TEXT_ROWS][MAX_LINE_LEN];

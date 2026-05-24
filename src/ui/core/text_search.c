@@ -1,10 +1,18 @@
 /*
  * text_search.c - Pure case-insensitive substring search helpers.
+ *
+ * Case folding is ASCII-only by design (the editor buffer is ASCII per
+ * CLAUDE.md), so the locale-aware tolower() pulls a hazard with no
+ * upside — under a Turkish locale, e.g., the 'I'/'i' mapping is wrong.
+ * ascii_tolower() keeps the folding deterministic across locales.
  */
 #include "ui/core/text_search.h"
 
-#include <ctype.h>
 #include <string.h>
+
+static inline int ascii_tolower(int c) {
+    return (c >= 'A' && c <= 'Z') ? c + ('a' - 'A') : c;
+}
 
 int ui_text_matches_at(const char *text, const char *query, int pos) {
     int text_len;
@@ -21,7 +29,7 @@ int ui_text_matches_at(const char *text, const char *query, int pos) {
     for (int i = 0; i < query_len; i++) {
         unsigned char tc = (unsigned char)text[pos + i];
         unsigned char qc = (unsigned char)query[i];
-        if (tolower(tc) != tolower(qc))
+        if (ascii_tolower(tc) != ascii_tolower(qc))
             return 0;
     }
     return 1;
