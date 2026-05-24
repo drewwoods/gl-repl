@@ -46,7 +46,6 @@ typedef struct {
  * editor_state_edit_line(); it is not duplicated here. */
 typedef struct {
     char input[MAX_INPUT_LEN];
-    int  input_capacity;
     int  input_len;
     int  cursor_pos;
     /* Character-range selection anchor inside input[]. -1 = no
@@ -56,7 +55,6 @@ typedef struct {
     * to -1; see done/editor-input-selection.md. */
     int  anchor_pos;
     char pending_newline[MAX_INPUT_LEN];
-    int  pending_newline_capacity;
     int  pending_newline_len;
     int  insert_mode;
 } EditorInputState;

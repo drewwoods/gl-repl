@@ -3,7 +3,7 @@
  *
  * The orchestration shape is the dual of repl_compile():
  *
- *   editor_commit_apply_compiled_change(change)
+ *   editor_commit_apply_external_change(change, capture_undo)
  *       preflight repl_apply_can_apply_compiled_change(change)
  *       services.apply_predef_ops(change)            // predef-var cascade
  *       editor_buffer_apply_compiled_change(change)  // editor text buffer
@@ -230,7 +230,7 @@ int editor_commit_apply_plan(const EditorCommitPlan *plan) {
     /* Preflight before any mutation. */
     if (!repl_apply_can_apply_compiled_change(&plan->change)) {
         /* Roll back any speculative alias registration. [P1]
-         * regression: see editor_commit_apply_compiled_change. */
+         * regression: see editor_commit_apply_external_change. */
         repl_compiled_change_rollback_alias(&plan->change);
         return 0;
     }
@@ -1111,10 +1111,6 @@ ReplCompileResult editor_compile_for_loop(const char *input,
              "for-loop: %s from %g to %g", var_name, start, end);
     out->commit_message_valid = 1;
     return REPL_COMPILE_OK;
-}
-
-int editor_commit_apply_compiled_change(const struct ReplCompiledChange_s *change) {
-    return editor_commit_apply_external_change(change, 0);
 }
 
 /* ===========================================================================

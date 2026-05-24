@@ -554,11 +554,11 @@ The core data flow is **source commands → flat commands → GL calls**:
    in `src/editor/commit.c` (`editor_try_commit_var_statements`,
    `editor_try_commit_block_structs`, `editor_try_commit_any`, plus the var-then-
    insert variant). Internally those run, in canonical order:
-   `editor_try_commit_float_decl` → `editor_try_assign_variable` → `editor_try_commit_close_brace`
+   `editor_try_commit_float_decl` → `editor_try_commit_assign_variable` → `editor_try_commit_close_brace`
    → `editor_try_commit_for_loop` → `editor_try_commit_func_def` → `editor_try_commit_if_block`
    → `repl_parse_and_normalize()` (general GL commands).
    **Ordering matters**: `editor_try_commit_float_decl` MUST run before
-   `editor_try_assign_variable`, otherwise `float x` is misread as an
+   `editor_try_commit_assign_variable`, otherwise `float x` is misread as an
    assignment. Each handler returns 1 if it consumed the input
    (success or error with status message), 0 if it didn't match.
    If all handlers return 0, `parse_command()` in `src/repl/parser.c`
@@ -602,7 +602,7 @@ Dispatch sites then call these helpers instead of open-coding the chain:
 
 When adding a new handler, add it to the right helper rather than all
 call sites. Ordering inside each helper is load-bearing:
-`editor_try_commit_float_decl` MUST run before `editor_try_assign_variable`, otherwise
+`editor_try_commit_float_decl` MUST run before `editor_try_commit_assign_variable`, otherwise
 `float x;` is misread as an assignment to an identifier named "float".
 
 ### Editing Existing Lines

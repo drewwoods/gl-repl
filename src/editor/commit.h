@@ -8,8 +8,7 @@
  * input clearing.
  *
  * `editor_commit_current_input()` is the common path for the live input row.
- * `editor_commit_apply_external_change()` and
- * `editor_commit_apply_compiled_change()` are the lower-level entry points for
+ * `editor_commit_apply_external_change()` is the lower-level entry point for
  * callers that already hold a compiled change. Structured block commits that
  * need extra editor-side effects use `EditorCommitPlan`, which keeps those
  * effects alongside the REPL change without teaching the REPL pipeline about
@@ -59,15 +58,10 @@ EditorCommitResult editor_commit_current_input(const struct EditorServices_s *se
  * caller already has a ReplCompiledChange and only needs the shared
  * preflight/apply transaction. When `capture_undo` is non-zero the
  * helper captures one undo snapshot immediately before the first
- * mutation; when zero it leaves undo ownership to the caller. */
-int editor_commit_apply_external_change(const struct ReplCompiledChange_s *change,
-                                        int capture_undo);
-
-/* Apply a compiled change atomically. Lower-level helper used by
- * callers that already have a ReplCompiledChange and only need the
- * shared preflight/apply transaction. Same transaction shape as
- * editor_commit_current_input from preflight onward; does not run
- * compile or capture undo.
+ * mutation; when zero it leaves undo ownership to the caller.
+ *
+ * Same transaction shape as editor_commit_current_input from
+ * preflight onward; does not run compile.
  *
  *   Returns 1 if all three halves (predef-ops, editor buffer,
  *     cmd store) landed successfully.
@@ -76,7 +70,8 @@ int editor_commit_apply_external_change(const struct ReplCompiledChange_s *chang
  *     predef-vars, editor buffer, and cmd-store are all unchanged.
  *
  * Does not call set_status; callers surface diagnostics. */
-int editor_commit_apply_compiled_change(const struct ReplCompiledChange_s *change);
+int editor_commit_apply_external_change(const struct ReplCompiledChange_s *change,
+                                        int capture_undo);
 
 /* ---- Editor commit plan: REPL change + editor side-effects ----- */
 /*
@@ -179,12 +174,19 @@ void editor_commit_func_decl_resume_set(int delta);
  *   1. Preflight `plan->change` via repl_apply_can_apply_compiled_change.
  *      If the preflight fails (or the plan is NULL) returns 0
  *      with no mutation.
- *   2. Capture undo pre-state.
- *   3. Apply the REPL halves (predef ops + editor-buffer apply +
- *      REPL cmd-store apply).
- *   4. Apply editor post-effects in order: cursor_target →
+ *   2. Apply the REPL halves (predef ops + scratch ops +
+ *      editor-buffer apply + REPL cmd-store apply).
+ *   3. Apply editor post-effects in order: cursor_target →
  *      func-decl-resume → insert_mode_target → clear_input →
- *      clear_pending_newline → load_line_after_apply → status.
+ *      clear_pending_newline → load_line_after_apply →
+ *      clear_autocomplete → func_decl_resume_publish.
+ *   4. If `plan->commit_message_valid`, set the status text.
+ *
+ * Undo capture is the caller's responsibility — the ;-key / Enter /
+ * editor_feed_line dispatch sites push a snapshot before invoking
+ * the try_commit_* chain; this helper deliberately does NOT push
+ * one (see body comment for rationale).
+ *
  * Returns 1 on success, 0 on preflight failure. */
 int editor_commit_apply_plan(const EditorCommitPlan *plan);
 
