@@ -62,6 +62,8 @@ static void editor_input_copy_str(char *dst, size_t sz, const char *src) {
 void editor_state_capture(EditorState *snapshot) {
     if (!snapshot)
         return;
+    /* Ensure sentinels are initialized before capturing. */
+    editor_state_get_defaults();
     *snapshot = g_editor_state;
 }
 

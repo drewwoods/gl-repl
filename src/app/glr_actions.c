@@ -586,8 +586,9 @@ int glr_action_menu_item_activate(int menu_id, int item_idx) {
             /* Wholesale REPL state replacement — drop the undo ring so
              * a post-load Ctrl+Z can't pull a snapshot from the
              * previous workspace into the new one. */
-            editor_undo_clear();
-            repl_load_workspace(dir);
+            int n = repl_load_workspace(dir);
+            if (n >= 0)
+                editor_undo_clear();
             return 1;
         }
         if (item_idx == GLR_FILE_ITEM_NEW_SCENE) {

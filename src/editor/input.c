@@ -1330,7 +1330,7 @@ static int handle_semicolon_commit_key_route(unsigned char key) {
     if (key == ';') {
         editor_input_anchor_clear();
         if (editor_state_input().input_len > 0) {
-            CommitAttemptState before;
+            CommitAttemptState *before = &g_commit_attempt_before;
 
             if (!tutorial_precheck_current_input())
                 return 1;
@@ -1340,10 +1340,10 @@ static int handle_semicolon_commit_key_route(unsigned char key) {
             }
 
             editor_undo_push_snapshot();
-            capture_commit_attempt_state(&before);
+            capture_commit_attempt_state(before);
             if (editor_try_commit_any()) {
                 tutorial_advance_if_commit_ok(
-                    commit_progressed_since(&before) ? COMMIT_OK : COMMIT_REJECTED);
+                    commit_progressed_since(before) ? COMMIT_OK : COMMIT_REJECTED);
                 /* see Enter-route note above: update lets the tutorial
                  * provider re-emit the shadow ghost after the advance. */
                 editor_completion_update();
@@ -1394,7 +1394,7 @@ static int handle_semicolon_commit_key_route(unsigned char key) {
             }
 
             tutorial_advance_if_commit_ok(
-                commit_progressed_since(&before) ? COMMIT_OK : COMMIT_REJECTED);
+                commit_progressed_since(before) ? COMMIT_OK : COMMIT_REJECTED);
         }
         /* see Enter-route note above. */
         editor_completion_update();

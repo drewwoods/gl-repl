@@ -286,8 +286,6 @@ ReplCompileResult editor_compile_close_brace(const char *input,
                                              const ReplCompileContext *ctx,
                                              EditorCommitPlan *out,
                                              char *err, int err_size) {
-    (void)err;
-    (void)err_size;
     if (!ctx || !out) return REPL_COMPILE_ERROR;
 
     editor_commit_plan_init(out);
@@ -317,8 +315,9 @@ ReplCompileResult editor_compile_close_brace(const char *input,
         end_type = CMD_IF_END;
         label = "if-block";
     } else {
-        out->change.kind = REPL_COMPILED_NO_CHANGE;
-        return REPL_COMPILE_OK;
+        if (err && err_size > 0)
+            snprintf(err, (size_t)err_size, "unmatched '}'");
+        return REPL_COMPILE_ERROR;
     }
 
     /* Read the func-decl resume delta. The delta is one-shot and only

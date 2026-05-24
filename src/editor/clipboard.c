@@ -370,6 +370,8 @@ void editor_clipboard_paste_current(void) {
     if (!tutorial_guard_clipboard_change_or_status(pos, 0, count))
         return;
 
+    int was_insert_mode = editor_insert_mode();
+
     /* Single undo for the whole paste; editor_feed_line() runs the commit
      * chain per line but does not push undo itself, so structured
      * blocks (for / func / if / `}`) re-parse correctly as the
@@ -378,20 +380,22 @@ void editor_clipboard_paste_current(void) {
 
     editor_state_edit_line_set(pos);
     editor_insert_mode_set(1);
-
-    /* Snapshot the clipboard text before feeding — defensive against
-     * any path that could mutate the clipboard mid-loop. */
-    char buf[MAX_COMMANDS][MAX_LINE_LEN];
-    {
-        const EditorClipboardState *cb = editor_state_clipboard_mut();
-        for (int i = 0; i < count; i++)
-            repl_copy_string_fits(buf[i], MAX_LINE_LEN, cb->lines[i]);
-    }
-
+/* Snapshot the clipboard text before feeding — defensive against
+ * any path that could mutate the clipboard mid-loop. */
+char (*buf)[MAX_LINE_LEN] = malloc((size_t)count * MAX_LINE_LEN);
+if (!buf) return;
+{
+    const EditorClipboardState *cb = editor_state_clipboard_mut();
     for (int i = 0; i < count; i++)
-        editor_feed_line(buf[i]);
+        repl_copy_string_fits(buf[i], MAX_LINE_LEN, cb->lines[i]);
+}
 
-    /* Land in edit mode on the line after the pasted block. We do NOT
+for (int i = 0; i < count; i++) {
+    editor_feed_line(buf[i]);
+}
+    free(buf);
+
+    /* Turn off insert mode before the load_line call, even if we are going to
      * restore the entry insert mode: editor_load_line_to_input mirrors a
      * *committed* line into the input buffer for re-editing, which is
      * contradictory in insert mode — the panel renders an input row
