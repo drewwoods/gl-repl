@@ -613,15 +613,13 @@ static void text_panel_draw_chrome(const UiTextPanelSnapshot *snap) {
 
 static int text_panel_row_wrap_count(const UiTextPanelSnapshot *snap,
                                      const UiTextPanelRow *row) {
-    if (row->kind == UI_TEXT_PANEL_ROW_INPUT) {
-        CodeLayout layout = text_panel_row_layout(snap, row);
+    CodeLayout layout = text_panel_row_layout(snap, row);
+    if (row->kind == UI_TEXT_PANEL_ROW_INPUT)
         return code_layout_row_count_for_text(snap->input.input ? snap->input.input : "",
                                               &layout);
-    }
     if (row->kind == UI_TEXT_PANEL_ROW_PLACEHOLDER &&
         (!row->text || row->text[0] == '\0'))
         return 1;
-    CodeLayout layout = text_panel_row_layout(snap, row);
     return code_layout_row_count_for_text(row->text ? row->text : "",
                                           &layout);
 }
