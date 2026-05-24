@@ -332,6 +332,80 @@ static void test_overwrite_decl_with_assign_preserves_set_value(void) {
                  g_predef_vars[x_slot].value, 42.0f, 1e-6f);
 }
 
+/* Regression: when a later variable assignment overwrites an earlier
+ * decl row, the staged CMD_VAR_ASSIGN must be rebased to the post-
+ * undeclare slot index before the replacement lands. Pre-fix the
+ * compiled change kept B's old slot while the overwrite removed A,
+ * so the inserted assignment pointed at the wrong predef variable. */
+static void test_overwrite_earlier_decl_with_later_assign_rebases_slot(void) {
+    glr_app_reset_all();
+
+    char err[REPL_STATUS_TEXT_MAX];
+    ReplCompiledChange change;
+    ReplCompileContext ctx;
+
+    set_input("float A;");
+    ctx = repl_compile_context_from_live(editor_state_edit_line());
+    ASSERT_INT("seed float A compile OK",
+               repl_compile_float_decl("float A;", &ctx, &change, err, sizeof(err)),
+               REPL_COMPILE_OK);
+    ASSERT_INT("seed float A apply OK",
+               editor_commit_apply_compiled_change(&change), 1);
+
+    set_input("float B = 5;");
+    ctx = repl_compile_context_from_live(editor_state_edit_line());
+    ASSERT_INT("seed float B compile OK",
+               repl_compile_float_decl("float B = 5;", &ctx, &change, err, sizeof(err)),
+               REPL_COMPILE_OK);
+    ASSERT_INT("seed float B apply OK",
+               editor_commit_apply_compiled_change(&change), 1);
+
+    int a_slot = repl_eval_find_predef_var_idx("A");
+    int b_slot = repl_eval_find_predef_var_idx("B");
+    ASSERT_TRUE("A declared", a_slot >= 0);
+    ASSERT_TRUE("B declared", b_slot >= 0);
+    ASSERT_TRUE("B starts after A", b_slot > a_slot);
+
+    int a_row = -1;
+    for (int i = 0; i < repl_state_document_count(); i++) {
+        const GLCmd *c = &repl_state_document_cmds_mut()[i];
+        if (c->type == CMD_VAR_DECLARE && c->var_decl_count == 1 &&
+            strcmp(c->var_names[0], "A") == 0) {
+            a_row = i;
+            break;
+        }
+    }
+    ASSERT_TRUE("located float A; row", a_row >= 0);
+
+    editor_state_edit_line_set(a_row);
+    editor_insert_mode_set(0);
+
+    set_input("B = 42");
+    ctx = repl_compile_context_from_live(editor_state_edit_line());
+    ASSERT_INT("B = 42 over earlier decl compile OK",
+               repl_compile_var_assign("B = 42", &ctx, &change, err, sizeof(err)),
+               REPL_COMPILE_OK);
+    ASSERT_INT("B = 42 over earlier decl plans REPLACE_ONE",
+               change.kind, REPL_COMPILED_REPLACE_ONE);
+    ASSERT_INT("compiled slot rebased before apply",
+               change.cmds[0].num_args, b_slot - 1);
+
+    ASSERT_INT("B = 42 over earlier decl apply OK",
+               editor_commit_apply_compiled_change(&change), 1);
+
+    ASSERT_INT("A undeclared after overwrite",
+               repl_eval_find_predef_var_idx("A"), -1);
+
+    b_slot = repl_eval_find_predef_var_idx("B");
+    ASSERT_TRUE("B still declared after overwrite", b_slot >= 0);
+    ASSERT_FLOAT("B value survives overwrite",
+                 g_predef_vars[b_slot].value, 42.0f, 1e-6f);
+    ASSERT_INT("replacement row is var assign",
+               repl_state_document_cmds_mut()[a_row].type, CMD_VAR_ASSIGN);
+    ASSERT_INT("replacement row slot matches live B slot",
+               repl_state_document_cmds_mut()[a_row].num_args, b_slot);
+}
+
 /* Forced cmd-store capacity failure leaves predef-vars, editor
  * buffer, and command store all unchanged. The preflight inside
  * editor_commit_apply_compiled_change is the load-bearing
@@ -884,6 +958,7 @@ int main(void) {
     test_compile_apply_updates_both();
     test_compile_apply_var_assign_updates_value();
     test_overwrite_decl_with_assign_preserves_set_value();
+    test_overwrite_earlier_decl_with_later_assign_rebases_slot();
     test_capacity_failure_is_atomic();
     test_reformat_keeps_buffer_and_store_aligned();
     test_set_predef_value_prefers_last_literal_assign();

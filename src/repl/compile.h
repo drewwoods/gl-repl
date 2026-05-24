@@ -46,8 +46,6 @@
  *       Insert cmds[0..count) / text[0..count) at `pos`.
  *   REPL_COMPILED_DELETE_RANGE
  *       Delete `count` commands starting at `pos`. cmds/text unused.
- *   REPL_COMPILED_LOAD_ALL
- *       Bulk replace: clear and load cmds[0..count) / text[0..count).
  *
  * `adjust_edit_line` controls whether insert ops shift the cursor
  * forward when the cursor was at/before `pos` (mirrors
