@@ -304,6 +304,56 @@ static void test_row_layout_consistency(void) {
                   hit.kind, UI_HIT_CODE_TEXT);
 }
 
+/* #63 strengthening: the hoisted text_panel_row_layout in row_wrap_count
+ * is now called once and used for both INPUT and regular branches. Pin
+ * that an INPUT row and a TEXT row with the SAME text produce the same
+ * wrap count — the hoist relies on the layout being row-kind-agnostic.
+ * A regression that diverged the two branches' layouts (e.g. a future
+ * refactor that re-derives layout per-branch with subtly different
+ * parameters) would surface as a wrap-count mismatch here. */
+static void test_row_layout_shared_across_kinds(void) {
+    static const char *k_long_text =
+        "glVertex3f(111111, 222222, 333333, 444444, 555555, 666666)";
+    UiTextPanelRow text_row = {
+        .text = k_long_text,
+        .kind = UI_TEXT_PANEL_ROW_TEXT,
+        .left_gutter_label = 1,
+        .source_line_idx = 0,
+        .search_row_idx = 0,
+        .hit_eligible = 1,
+        .color = { 1.0f, 1.0f, 1.0f, 1.0f, 0 },
+    };
+    UiTextPanelRow input_row = {
+        /* INPUT rows ignore .text — the renderer reads snap.input.input
+         * instead. Set kind only and let the snapshot supply the text. */
+        .text = "",
+        .kind = UI_TEXT_PANEL_ROW_INPUT,
+        .left_gutter_label = 1,
+        .source_line_idx = -1,
+        .search_row_idx = -1,
+        .hit_eligible = 1,
+        .color = { 1.0f, 1.0f, 1.0f, 1.0f, 0 },
+    };
+
+    UiTextPanelSnapshot text_snap = make_snapshot(&text_row, 1, 0, 0, 160, 200, 0);
+    UiTextPanelSnapshot input_snap = make_snapshot(&input_row, 1, 0, 0, 160, 200, 0);
+    input_snap.input.input     = k_long_text;
+    input_snap.input.input_len = (int)strlen(k_long_text);
+
+    UiTextPanelOutput out_text  = {0};
+    UiTextPanelOutput out_input = {0};
+    ui_text_panel_render(&text_snap,  &out_text);
+    ui_text_panel_render(&input_snap, &out_input);
+
+    /* Both should wrap by the same amount because both use the hoisted
+     * layout. A divergence would mean the row_layout call is no longer
+     * shared between branches (the #63 regression). */
+    ASSERT_INT_EQ("INPUT and TEXT rows wrap identically for same text",
+                  out_input.total_rows, out_text.total_rows);
+    ASSERT_TRUE("both wrap into multiple rows",
+                out_text.total_rows > 1);
+}
+
 static void test_color_segments_enable_blending(void) {
     UiTextPanelRow row = {
         .text = "segment fade",
@@ -361,6 +411,7 @@ int main(void) {
     test_alpha_text_enables_blending();
     test_bold_segment_blend_threaded();
     test_row_layout_consistency();
+    test_row_layout_shared_across_kinds();
     test_color_segments_enable_blending();
 
     printf("\n");

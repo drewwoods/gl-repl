@@ -548,6 +548,43 @@ static void test_variable_panel_motion_initializes_uninitialized_declaration(voi
                  g_predef_vars[var_idx].value, 0.0f);
 }
 
+/* Audit #18 (Tier B, commit 783d7e3) regression: variable_drag must arrive
+ * in UiRenderSnapshot from the controller's snapshot-build phase, not be
+ * re-fetched from peer file-statics inside ui_variable_panel_render. Pin
+ * that glr_ctrl_build_ui_snapshot copies both fields (active_var, log_mode)
+ * — a revert to live peer reads would silently still pass every existing
+ * variable_drag test but would re-introduce the snapshot-purity violation. */
+static void test_variable_drag_snapshot_wiring(void) {
+    printf("--- imrepl_ctrl variable_drag snapshot wiring ---\n");
+
+    prepare_display_fixture();
+    ASSERT_INT("no drag active before begin",
+               variable_panel_drag_active(), 0);
+
+    variable_panel_handle_drag_begin(0, /*log_mode=*/1, /*x=*/100);
+    ASSERT_INT("drag active after begin",
+               variable_panel_drag_active(), 1);
+    ASSERT_INT("active var seeded", variable_panel_drag_active_var(), 0);
+    ASSERT_INT("log mode seeded", variable_panel_drag_log_mode(), 1);
+
+    glr_ctrl_display_frame();
+
+    ASSERT_INT("snap.variable_drag.active_var arrives in snapshot",
+               g_last_replay_hud_snap.variable_drag.active_var, 0);
+    ASSERT_INT("snap.variable_drag.log_mode arrives in snapshot",
+               g_last_replay_hud_snap.variable_drag.log_mode, 1);
+
+    /* Release: the next frame's snapshot must reflect the cleared state
+     * (proves the snapshot path is re-evaluated, not stale-cached). */
+    variable_panel_handle_drag_reset();
+    glr_ctrl_display_frame();
+    ASSERT_INT("snap.variable_drag.active_var clears after release",
+               g_last_replay_hud_snap.variable_drag.active_var, -1);
+
+    /* Reset for next test. */
+    glr_app_reset_all();
+}
+
 static void test_pointer_state_tracks_controller_mouse_routes(void) {
     printf("--- imrepl_ctrl pointer state routing ---\n");
 
@@ -878,6 +915,7 @@ int main(void) {
     test_display_frame_profile_coverage();
     test_variable_panel_motion_routes_through_compile_and_coalesces_undo();
     test_variable_panel_motion_initializes_uninitialized_declaration();
+    test_variable_drag_snapshot_wiring();
     test_pointer_state_tracks_controller_mouse_routes();
     test_overlay_transition_machine_wiring();
     test_view_mode_projection_transition_wiring();
