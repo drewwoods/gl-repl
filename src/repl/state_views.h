@@ -156,7 +156,6 @@ int          repl_state_document_capacity(void);
  * the migration note (implemented in phase 4; see the
  * edit-line-ownership plan doc). */
 int          repl_state_normals_dirty(void);
-void         repl_state_document_reset(void);
 
 const GLCmd      *repl_state_flat_program_cmds(void);
 const FlatCmdLocalVars *repl_state_flat_program_local_vars(void);

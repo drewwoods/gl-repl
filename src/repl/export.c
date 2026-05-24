@@ -306,10 +306,9 @@ static void export_format_decl_float(char *buf, size_t n, float v) {
 }
 
 /* Per-call editor-text view, set by the public entry points
- * (`repl_export_save_output`, `repl_dump_code_panel_text`,
- * `repl_dump_code_panel_visual_text`) before they invoke any helper
- * that reads source text. Static helpers route through
- * `export_document_text` instead of calling `editor_buffer_line`
+ * (`repl_export_save_output`, `repl_dump_code_panel_text`) before they
+ * invoke any helper that reads source text. Static helpers route
+ * through `export_document_text` instead of calling `editor_buffer_line`
  * directly so the source-text dependency is declared at the API
  * boundary as a SourceTextView parameter rather than a hidden
  * global reach-through. */
