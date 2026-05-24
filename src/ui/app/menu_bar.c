@@ -412,7 +412,7 @@ static void menubar_rects(int menu_x[NUM_MENUS], int menu_w[NUM_MENUS],
     int x = cp_x + CODE_MARGIN_X;
     for (int i = 0; i < NUM_MENUS; i++) {
         int label_w = (int)strlen(g_menu_labels[i]) * FONT_SMALL_W;
-        menu_w[i] = label_w + 18;  /* ~9px padding each side */
+        menu_w[i] = label_w + MENU_LABEL_PAD_X;
         menu_x[i] = x;
         x += menu_w[i];
     }
@@ -486,16 +486,12 @@ static int menu_dropdown_rect(int *dx, int *dy, int *dw, int *dh) {
     /* Config's per-item state/shortcut columns live in the flyout
      * now, not on the top-level section rows. */
     int max_w = max_lbl;
-    if (max_sc > 0)    max_w += max_sc + 16;
-    /* Reserve a right-hand column for the ">" flyout affordance so a
-     * long parent label (e.g. "Overlays & scene") never collides with
-     * it. The glyph is drawn at dx+dw-20; SUBMENU_ARROW_COL keeps a
-     * clear gap. */
+    if (max_sc > 0)    max_w += max_sc + DROPDOWN_SC_GAP;
     if (has_submenu) max_w += SUBMENU_ARROW_COL;
     if (max_w < 80) max_w = 80;
-    int width  = max_w + 28;
-    int rows   = (n > 0) ? n : 1;  /* reserve one row for "(empty)" */
-    int height = rows * LINE_H + 8;
+    int width  = max_w + DROPDOWN_PAD_X;
+    int rows   = (n > 0) ? n : 1;
+    int height = rows * LINE_H + 2 * DROPDOWN_PAD_Y;
 
     if (dx) *dx = menu_x[g_open_menu];
     if (dy) *dy = by - height;
@@ -712,7 +708,7 @@ static int config_submenu_extra_w(int menu_id, int parent_row) {
     int max_sc = config_submenu_max_sc_px(parent_row);
     int extra = cfg_max_state_chars() * FONT_SMALL_W + 20;
     if (max_sc > 0)
-        extra += max_sc + 16;
+        extra += max_sc + DROPDOWN_SC_GAP;
     return extra;
 }
 
@@ -751,8 +747,8 @@ static int submenu_rect(int menu_id, int parent_row,
     }
     if (max_lbl < 80)
         max_lbl = 80;
-    width = max_lbl + 28 + config_submenu_extra_w(menu_id, parent_row);
-    height = count * LINE_H + 8;
+    width = max_lbl + DROPDOWN_PAD_X + config_submenu_extra_w(menu_id, parent_row);
+    height = count * LINE_H + 2 * DROPDOWN_PAD_Y;
 
     x = pdx + pdw;
     if (x + width > win_w)
@@ -761,7 +757,7 @@ static int submenu_rect(int menu_id, int parent_row,
         x = 0;
 
     {
-        int parent_row_top = pdy + pdh - 4 - parent_row * LINE_H;
+        int parent_row_top = pdy + pdh - DROPDOWN_PAD_Y - parent_row * LINE_H;
         y = parent_row_top - height;
     }
     if (y < 0)
@@ -823,7 +819,7 @@ static int ui_menu_bar_dropdown_item_hit(int gx, int gy) {
     if (!menu_dropdown_rect(&dx, &dy, &dw, &dh)) return -1;
     int ry = ui_state_viewport().window_h - gy;
     if (gx < dx || gx >= dx + dw || ry < dy || ry >= dy + dh) return -1;
-    int row = (dy + dh - 4 - ry) / LINE_H;
+    int row = (dy + dh - DROPDOWN_PAD_Y - ry) / LINE_H;
     if (row < 0 || row >= n) return -1;
     const char *lbl = menu_item_label(g_open_menu, row);
     if (!lbl || menu_chrome_kind(lbl) != GLR_CFG_ROW_ITEM) return -1;
@@ -864,7 +860,7 @@ static UiHit submenu_hit_test(int mx, int my) {
         return h;
 
     ry = ui_state_viewport().window_h - my;
-    ordinal = (sy + sh - 4 - ry) / LINE_H;
+    ordinal = (sy + sh - DROPDOWN_PAD_Y - ry) / LINE_H;
     if (ordinal < 0 ||
         ordinal >= submenu_row_count(g_submenu_menu_id, g_submenu_parent_row))
         return h;
@@ -1107,7 +1103,7 @@ static int submenu_hover_ordinal(const UiRenderSnapshot *snap) {
         return -1;
 
     ry = snap->viewport.window_h - snap->pointer.mouse_y;
-    ordinal = (sy + sh - 4 - ry) / LINE_H;
+    ordinal = (sy + sh - DROPDOWN_PAD_Y - ry) / LINE_H;
     if (ordinal < 0 ||
         ordinal >= submenu_row_count(g_submenu_menu_id,
                                      g_submenu_parent_row))
@@ -1184,7 +1180,7 @@ static void render_active_submenu(const UiRenderSnapshot *snap) {
     int cfg_max_sc      = (menu_id == MENU_CONFIG)
                               ? config_submenu_max_sc_px(parent_row) : 0;
     int cfg_state_right = cfg_sc_right
-                              - (cfg_max_sc > 0 ? cfg_max_sc + 16 : 0);
+                              - (cfg_max_sc > 0 ? cfg_max_sc + DROPDOWN_SC_GAP : 0);
 
     ui_clr_a(UI_TOK_RAISED, 0.98f * alpha);
     glRectf((float)sx, (float)sy, (float)(sx + sw), (float)(sy + sh));
@@ -1417,8 +1413,8 @@ void ui_menu_bar_render(const UiRenderSnapshot *snap) {
                 ui_clr(UI_TOK_TEXT_ON_HILITE);
             else
                 ui_clr(UI_TOK_TEXT_PRIMARY);
-            int tx = menu_x[i] + 9;
-            gl2d_draw_string((float)tx, (float)(by + 3),
+            int tx = menu_x[i] + MENU_LABEL_PAD_X / 2;
+            gl2d_draw_string((float)tx, (float)(by + MENUBAR_TEXT_BASE_Y),
                         g_menu_labels[i], FONT_SMALL);
         }
 
@@ -1456,7 +1452,7 @@ void ui_menu_bar_render(const UiRenderSnapshot *snap) {
                 /* "search..." label in muted gray */
                 ui_clr(UI_TOK_TEXT_PLACEHOLDER);
                 int tx = pin_x[i] + 12;
-                gl2d_draw_string((float)tx, (float)(by + 3),
+                gl2d_draw_string((float)tx, (float)(by + MENUBAR_TEXT_BASE_Y),
                             g_pin_btn_labels[i], FONT_SMALL);
             } else if (i == PIN_REPLAY) {
                 /* Green accent (#6fb36f), state icon + dynamic label */
@@ -1495,14 +1491,14 @@ void ui_menu_bar_render(const UiRenderSnapshot *snap) {
                 }
 
                 int tx = icon_x + 12 + 6;
-                gl2d_draw_string((float)tx, (float)(by + 3), label, FONT_SMALL);
+                gl2d_draw_string((float)tx, (float)(by + MENUBAR_TEXT_BASE_Y), label, FONT_SMALL);
             } else {
                 if (hover || active)
                     ui_clr(UI_TOK_TEXT_ON_HILITE);
                 else
                     ui_clr(UI_TOK_TEXT_PRIMARY);
-                int tx = pin_x[i] + 9;
-                gl2d_draw_string((float)tx, (float)(by + 3),
+                int tx = pin_x[i] + MENU_LABEL_PAD_X / 2;
+                gl2d_draw_string((float)tx, (float)(by + MENUBAR_TEXT_BASE_Y),
                             g_pin_btn_labels[i], FONT_SMALL);
             }
         }
