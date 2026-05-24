@@ -461,42 +461,73 @@ static int ui_menu_bar_pin_hit(int gx, int gy) {
     return -1;
 }
 
+static struct {
+    int valid, menu, win_w, win_h;
+    int x, y, w, h;
+} g_dropdown_cache;
+
 static int menu_dropdown_rect(int *dx, int *dy, int *dw, int *dh) {
+    int win_w, win_h;
     if (g_open_menu < 0) return 0;
     if (!ui_menu_bar_panel_visible()) return 0;
-    int menu_x[NUM_MENUS], menu_w[NUM_MENUS];
-    int pin_x[NUM_PIN_BTNS], pin_w[NUM_PIN_BTNS];
-    int by, bh;
-    menubar_rects(menu_x, menu_w, pin_x, pin_w, &by, &bh);
-    int n = menu_item_count(g_open_menu, NULL);
 
-    int max_lbl = 0, max_sc = 0, has_submenu = 0;
-    for (int i = 0; i < n; i++) {
-        const char *lbl = menu_item_label(g_open_menu, i);
-        const char *sc  = menu_item_shortcut(g_open_menu, i);
-        int lw = (int)(lbl ? strlen(lbl) : 0) * FONT_SMALL_W;
-        if (lw > max_lbl) max_lbl = lw;
-        if (sc) {
-            int cw = (int)strlen(sc) * FONT_SMALL_W;
-            if (cw > max_sc) max_sc = cw;
-        }
-        if (menu_row_has_submenu(g_open_menu, i))
-            has_submenu = 1;
+    win_w = ui_state_viewport().window_w;
+    win_h = ui_state_viewport().window_h;
+
+    if (g_dropdown_cache.valid &&
+        g_dropdown_cache.menu == g_open_menu &&
+        g_dropdown_cache.win_w == win_w &&
+        g_dropdown_cache.win_h == win_h) {
+        if (dx) *dx = g_dropdown_cache.x;
+        if (dy) *dy = g_dropdown_cache.y;
+        if (dw) *dw = g_dropdown_cache.w;
+        if (dh) *dh = g_dropdown_cache.h;
+        return 1;
     }
-    /* Config's per-item state/shortcut columns live in the flyout
-     * now, not on the top-level section rows. */
-    int max_w = max_lbl;
-    if (max_sc > 0)    max_w += max_sc + DROPDOWN_SC_GAP;
-    if (has_submenu) max_w += SUBMENU_ARROW_COL;
-    if (max_w < 80) max_w = 80;
-    int width  = max_w + DROPDOWN_PAD_X;
-    int rows   = (n > 0) ? n : 1;
-    int height = rows * LINE_H + 2 * DROPDOWN_PAD_Y;
 
-    if (dx) *dx = menu_x[g_open_menu];
-    if (dy) *dy = by - height;
-    if (dw) *dw = width;
-    if (dh) *dh = height;
+    {
+        int menu_x[NUM_MENUS], menu_w[NUM_MENUS];
+        int pin_x[NUM_PIN_BTNS], pin_w[NUM_PIN_BTNS];
+        int by, bh;
+        int n, max_lbl, max_sc, has_submenu, max_w, width, rows, height;
+        menubar_rects(menu_x, menu_w, pin_x, pin_w, &by, &bh);
+        n = menu_item_count(g_open_menu, NULL);
+
+        max_lbl = 0; max_sc = 0; has_submenu = 0;
+        for (int i = 0; i < n; i++) {
+            const char *lbl = menu_item_label(g_open_menu, i);
+            const char *sc  = menu_item_shortcut(g_open_menu, i);
+            int lw = (int)(lbl ? strlen(lbl) : 0) * FONT_SMALL_W;
+            if (lw > max_lbl) max_lbl = lw;
+            if (sc) {
+                int cw = (int)strlen(sc) * FONT_SMALL_W;
+                if (cw > max_sc) max_sc = cw;
+            }
+            if (menu_row_has_submenu(g_open_menu, i))
+                has_submenu = 1;
+        }
+        max_w = max_lbl;
+        if (max_sc > 0)    max_w += max_sc + DROPDOWN_SC_GAP;
+        if (has_submenu) max_w += SUBMENU_ARROW_COL;
+        if (max_w < 80) max_w = 80;
+        width  = max_w + DROPDOWN_PAD_X;
+        rows   = (n > 0) ? n : 1;
+        height = rows * LINE_H + 2 * DROPDOWN_PAD_Y;
+
+        g_dropdown_cache.valid = 1;
+        g_dropdown_cache.menu  = g_open_menu;
+        g_dropdown_cache.win_w = win_w;
+        g_dropdown_cache.win_h = win_h;
+        g_dropdown_cache.x = menu_x[g_open_menu];
+        g_dropdown_cache.y = by - height;
+        g_dropdown_cache.w = width;
+        g_dropdown_cache.h = height;
+    }
+
+    if (dx) *dx = g_dropdown_cache.x;
+    if (dy) *dy = g_dropdown_cache.y;
+    if (dw) *dw = g_dropdown_cache.w;
+    if (dh) *dh = g_dropdown_cache.h;
     return 1;
 }
 
@@ -719,15 +750,13 @@ static int menu_row_has_submenu(int menu_id, int row) {
     return submenu_row_count(menu_id, row) > 0;
 }
 
+static struct {
+    int valid, menu_id, parent_row, win_w, win_h;
+    int x, y, w, h;
+} g_submenu_cache;
+
 static int submenu_rect(int menu_id, int parent_row,
                         int *sx, int *sy, int *sw, int *sh) {
-    int pdx, pdy, pdw, pdh;
-    int count;
-    int max_lbl = 0;
-    int width;
-    int height;
-    int x;
-    int y;
     int win_w = ui_state_viewport().window_w;
     int win_h = ui_state_viewport().window_h;
 
@@ -735,42 +764,71 @@ static int submenu_rect(int menu_id, int parent_row,
         return 0;
     if (!menu_row_has_submenu(menu_id, parent_row))
         return 0;
-    if (!menu_dropdown_rect(&pdx, &pdy, &pdw, &pdh))
-        return 0;
 
-    count = submenu_row_count(menu_id, parent_row);
-    for (int ordinal = 0; ordinal < count; ordinal++) {
-        const char *name = submenu_row_label(menu_id, parent_row, ordinal);
-        int w = (int)(name ? strlen(name) : 0) * FONT_SMALL_W;
-        if (w > max_lbl)
-            max_lbl = w;
+    if (g_submenu_cache.valid &&
+        g_submenu_cache.menu_id == menu_id &&
+        g_submenu_cache.parent_row == parent_row &&
+        g_submenu_cache.win_w == win_w &&
+        g_submenu_cache.win_h == win_h) {
+        if (sx) *sx = g_submenu_cache.x;
+        if (sy) *sy = g_submenu_cache.y;
+        if (sw) *sw = g_submenu_cache.w;
+        if (sh) *sh = g_submenu_cache.h;
+        return 1;
     }
-    if (max_lbl < 80)
-        max_lbl = 80;
-    width = max_lbl + DROPDOWN_PAD_X + config_submenu_extra_w(menu_id, parent_row);
-    height = count * LINE_H + 2 * DROPDOWN_PAD_Y;
-
-    x = pdx + pdw;
-    if (x + width > win_w)
-        x = pdx - width;
-    if (x < 0)
-        x = 0;
 
     {
-        int parent_row_top = pdy + pdh - DROPDOWN_PAD_Y - parent_row * LINE_H;
-        y = parent_row_top - height;
-    }
-    if (y < 0)
-        y = 0;
-    if (y + height > win_h)
-        y = win_h - height;
-    if (y < 0)
-        y = 0;
+        int pdx, pdy, pdw, pdh;
+        int count, max_lbl, width, height, x, y;
 
-    if (sx) *sx = x;
-    if (sy) *sy = y;
-    if (sw) *sw = width;
-    if (sh) *sh = height;
+        if (!menu_dropdown_rect(&pdx, &pdy, &pdw, &pdh))
+            return 0;
+
+        count = submenu_row_count(menu_id, parent_row);
+        max_lbl = 0;
+        for (int ordinal = 0; ordinal < count; ordinal++) {
+            const char *name = submenu_row_label(menu_id, parent_row, ordinal);
+            int w = (int)(name ? strlen(name) : 0) * FONT_SMALL_W;
+            if (w > max_lbl)
+                max_lbl = w;
+        }
+        if (max_lbl < 80)
+            max_lbl = 80;
+        width = max_lbl + DROPDOWN_PAD_X + config_submenu_extra_w(menu_id, parent_row);
+        height = count * LINE_H + 2 * DROPDOWN_PAD_Y;
+
+        x = pdx + pdw;
+        if (x + width > win_w)
+            x = pdx - width;
+        if (x < 0)
+            x = 0;
+
+        {
+            int parent_row_top = pdy + pdh - DROPDOWN_PAD_Y - parent_row * LINE_H;
+            y = parent_row_top - height;
+        }
+        if (y < 0)
+            y = 0;
+        if (y + height > win_h)
+            y = win_h - height;
+        if (y < 0)
+            y = 0;
+
+        g_submenu_cache.valid      = 1;
+        g_submenu_cache.menu_id    = menu_id;
+        g_submenu_cache.parent_row = parent_row;
+        g_submenu_cache.win_w      = win_w;
+        g_submenu_cache.win_h      = win_h;
+        g_submenu_cache.x = x;
+        g_submenu_cache.y = y;
+        g_submenu_cache.w = width;
+        g_submenu_cache.h = height;
+    }
+
+    if (sx) *sx = g_submenu_cache.x;
+    if (sy) *sy = g_submenu_cache.y;
+    if (sw) *sw = g_submenu_cache.w;
+    if (sh) *sh = g_submenu_cache.h;
     return 1;
 }
 
@@ -960,11 +1018,14 @@ static void submenu_reset(void) {
     g_submenu_menu_id    = -1;
     g_submenu_parent_row = -1;
     g_submenu_open_time  = -1.0f;
+    g_submenu_cache.valid = 0;
 }
 
 void ui_menu_bar_close(void) {
     g_open_menu = -1;
     g_menu_item_hover = -1;
+    g_dropdown_cache.valid = 0;
+    g_submenu_cache.valid  = 0;
     submenu_reset();
 }
 
@@ -976,6 +1037,7 @@ void ui_menu_bar_set_open_menu(int menu_id, float now) {
     g_open_menu = menu_id;
     g_menu_open_time = now;
     g_menu_item_hover = -1;
+    g_dropdown_cache.valid = 0;
     submenu_reset();
 }
 
