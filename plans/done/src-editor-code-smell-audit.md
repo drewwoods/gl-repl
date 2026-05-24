@@ -77,14 +77,18 @@
 > the real Enter path*, and *stack-allocated mega-buffers*.
 >
 > **Implementation status (2026-05-24):** Full afternoon pass + most
-> week-pass items successfully completed, verified, and moved to done.
-> Remaining items (#13, #18, #23, and #28's remaining steps) are
-> deferred to a future pass as documented. All completed items are fully
-> tested via the 6782-test suite (including new selection, backspace vs.
-> delete, and commit ordering tests) and guarded against regression by four
-> new layer-boundary guards (`check-editor-no-app` hard-zero,
+> week-pass items completed, verified, and moved to done. Remaining
+> items deferred to future passes: #13 (var-statement ordering:
+> shared kind list vs. adapter), #18 (`parse_for_commit`
+> policy-flagged helper extraction), #23 (undo cross-generation
+> guard counter), #28 (EditorServices dismantle — step 1 already
+> landed alongside #16). All completed items are tested via the
+> 6782-test suite and guarded against regression by four new
+> layer-boundary guards (`check-editor-no-app` hard-zero,
 > `check-repl-no-app` ratchet=1, `check-scene-no-upper-layers`
 > hard-zero, `check-ui-core-no-upper-layers` hard-zero).
+>
+> Headings below are marked ✅ (done) or ⏳ (deferred).
 
 ## How to read this
 
@@ -109,7 +113,7 @@ matters, and suggests a one-line fix.
 
 ## 🔴 Actual bugs / hazards (verified)
 
-### 1. 2 MB `CommitAttemptState` allocated on the stack
+### 1. ✅ 2 MB `CommitAttemptState` allocated on the stack
 
 **Where:** `src/editor/input.c:1333` (`handle_semicolon_commit_key_route`)
 
@@ -128,7 +132,7 @@ default 512 KB stacks (some embedded / sandboxed environments).
 **Fix:** Reuse `g_commit_attempt_before` (or add a third
 `g_semicolon_commit_before` static) at L1333.
 
-### 2. 1 MB `MAX_COMMANDS × MAX_LINE_LEN` snapshot on the stack in paste
+### 2. ✅ 1 MB `MAX_COMMANDS × MAX_LINE_LEN` snapshot on the stack in paste
 
 **Where:** `src/editor/clipboard.c:384` inside
 `editor_clipboard_paste_current`
@@ -144,7 +148,7 @@ deployments; ASan flags it.
 **Fix:** Size by `count` (`char (*buf)[MAX_LINE_LEN] = malloc(count * MAX_LINE_LEN)`)
 or impose a small `MAX_CLIPBOARD_PASTE` cap.
 
-### 3. Close-brace compile functions accept `err` / `err_size` then ignore them
+### 3. ✅ Close-brace compile functions accept `err` / `err_size` then ignore them
 
 **Where:** `src/editor/commit.c:285-290`
 (`editor_compile_close_brace`) AND `src/repl/compile.c:1485-1490`
@@ -170,7 +174,7 @@ casts and fill `err` for the stray-`}` case in both, or remove
 `repl_compile_close_brace` in the same shape and
 `load_try_block`'s diagnostic still discarded.
 
-### 4. Workspace-load wipes undo *before* validating; per-file load preserves it on failure
+### 4. ✅ Workspace-load wipes undo *before* validating; per-file load preserves it on failure
 
 **Where:** `src/app/glr_actions.c:589-590` vs.
 `src/editor/inline_file_prompt.c:138-144` (cautionary comment)
@@ -205,7 +209,7 @@ error. But this is a product decision, not a mechanical fix;
 document the intended empty-workspace behavior in the
 `repl_load_workspace` docstring at the same time.
 
-### 5. `editor_state_capture` skips the lazy-init that fixes selection sentinels
+### 5. ✅ `editor_state_capture` skips the lazy-init that fixes selection sentinels
 
 **Where:** `src/editor/state.c:27-38, 60-64`
 
@@ -230,7 +234,7 @@ and remove the lazy-init pattern entirely.
 
 ## 🟡 Drift / boundary hazards
 
-### 6. `editor_clipboard_clear_selection` does **not** clear the clipboard
+### 6. ✅ `editor_clipboard_clear_selection` does **not** clear the clipboard
 
 **Where:** `src/editor/clipboard.c:33-35`, `clipboard.h:30`
 
@@ -252,7 +256,7 @@ this call provided.
 **Fix:** Rename to `editor_selection_clear_line_range()` (or
 similar without `clipboard_` prefix); update the 10 call sites.
 
-### 7. `KEY_BACKSPACE` and `KEY_DELETE` collapsed to one behavior
+### 7. ✅ `KEY_BACKSPACE` and `KEY_DELETE` collapsed to one behavior
 
 **Where:** `src/editor/input.c:949-951, 964-965, 1175`
 
@@ -274,7 +278,7 @@ is deliberate and propagate it further.
 and dispatch on key. If intentional, add a one-line comment at
 each dispatch site explaining why.
 
-### 8. Editor reaches up into `app/glr_*` (layering inversion)
+### 8. ✅ Editor reaches up into `app/glr_*` (layering inversion)
 
 **Where:** `src/editor/input.c:53-56` (#includes
 `app/glr_completion.h`, `app/glr_state.h`, `app/glr_camera.h`,
@@ -301,7 +305,7 @@ informal.
 `input.c`. Add `accept` to `EditorCompletionProvider` (#9) so the
 two autocomplete call sites don't need `glr_completion.h`.
 
-### 9. `EditorCompletionProvider` is missing `accept`
+### 9. ✅ `EditorCompletionProvider` is missing `accept`
 
 **Where:** `src/editor/completion.h:17-29` (no `accept` field);
 `src/editor/input.c:1225, 1307` (Tab + Enter call
@@ -321,7 +325,7 @@ tests) has no `accept` hook to register.
 **Fix:** Add `void (*accept)(void);` to the struct; expose
 `editor_completion_accept()`; have `input.c` call that.
 
-### 10. Documented canonical chain order does not match the real Enter path
+### 10. ✅ Documented canonical chain order does not match the real Enter path
 
 **Where:** CLAUDE.md says the chain is
 `float_decl → assign → close_brace → for → func → if → parse`.
@@ -362,7 +366,7 @@ shape is `editor_try_commit_block_structs_then_var_statements_insert()`
 that wraps the existing pair and is called from both Enter sites,
 keeping the post-effects intact.
 
-### 11. `editor_compile_*` functions advertised as context-pure but read live state
+### 11. ✅ `editor_compile_*` functions advertised as context-pure but read live state
 
 **Where:** `src/editor/commit.c:271, 306, 464, 550, 583, 736, 792,
 905`
@@ -442,7 +446,7 @@ make the README claim correct after the fact.)
 ownership line until the `UiState` carve-out is resolved. See
 `src-ui-code-smell-audit.md` #17 for the resolution.
 
-### 13. Two parallel encodings of `float_decl → var_assign` order
+### 13. ⏳ Two parallel encodings of `float_decl → var_assign` order
 
 **Where:** `src/repl/compile.c:60-87` (in `repl_compile_dispatch`)
 vs. `src/editor/commit.c:1335-1339` (in
@@ -494,7 +498,7 @@ remove the direct calls" recipe is **wrong** — it silently drops
 every `EditorCommitPlan` effect listed above and breaks overwrite
 Enter's insert-mode flip.
 
-### 14. `editor_try_assign_variable` breaks the `editor_try_commit_*` naming convention
+### 14. ✅ `editor_try_assign_variable` breaks the `editor_try_commit_*` naming convention
 
 **Where:** `src/editor/commit.c:1228`
 
@@ -554,7 +558,7 @@ the simpler convergence is "everyone sets status through a
 testable sink." But (2) is internally consistent if you want the
 typed return.
 
-### 16. Apply-block call sites reach the primitives through different surfaces
+### 16. ✅ Apply-block call sites reach the primitives through different surfaces
 
 **Where:** `src/editor/commit.c:116-123, 148-156, 250-257`
 
@@ -589,7 +593,7 @@ afternoon sequence deletes it via #27, dropping the count to two
 Either way the fix is "extract one canonical four-step apply
 helper"; the count just changes based on what else lands.
 
-### 17. Editor undo reaches into `g_predef_vars` / `g_num_predef_vars` directly
+### 17. ✅ Editor undo reaches into `g_predef_vars` / `g_num_predef_vars` directly
 
 **Where:** `src/editor/undo.c:46-50, 73-77`
 
@@ -605,7 +609,7 @@ silently breaks. The seam pattern is already established next to it
 `_restore` seam (mirror the scratch-array helpers); route undo
 through it.
 
-### 18. Five near-identical "collect-visible-vars → parse → place" sequences
+### 18. ⏳ Five near-identical "collect-visible-vars → parse → place" sequences
 
 **Where:** `src/editor/input.c:437-486, 694-751, 1351-1394,
 1496-1538`; also `commit_current_input`'s overwrite branch at
@@ -634,7 +638,7 @@ its own policy. Audit the 4-5 call sites first to enumerate which
 combination each currently uses (the audit didn't determine this);
 the helper signature is the documentation contract.
 
-### 19. Three open-coded "skip leading whitespace, then trim trailing `;`/whitespace"
+### 19. ✅ Three open-coded "skip leading whitespace, then trim trailing `;`/whitespace"
 
 **Where:** `src/editor/input.c:296-336, 396-403, 582-589`
 (`editor_load_line_to_input`, `rewrite_source_text_with_indent`,
@@ -701,7 +705,7 @@ someone stashes the view.
 `pending_newline[]` into fixed-size buffers), or document the
 aliasing in the typedef comment.
 
-### 23. `editor_undo_clear` is contract-required but compile-unenforced
+### 23. ⏳ `editor_undo_clear` is contract-required but compile-unenforced
 
 **Where:** `src/editor/undo.h:97-102`, call sites at
 `src/app/glr_actions.c:360, 365, 569, 585`,
@@ -771,7 +775,7 @@ entirely).
 
 ## 🟢 Dead code / dead fields
 
-### 27. `editor_commit_current_input` has zero production callers
+### 27. ✅ `editor_commit_current_input` has zero production callers
 
 **Where:** `src/editor/commit.c:65-130` (definition);
 `commit.h:55` (declaration). Verified: only
@@ -795,7 +799,7 @@ dispatch sites instead. Or, alternatively, route the four
 production dispatch sites through it (the harder direction, since
 those sites have post-effects the wrapper currently doesn't model).
 
-### 28. `EditorServices` is a one-implementation abstraction (with production callers — not pure cleanup)
+### 28. ⏳ `EditorServices` is a one-implementation abstraction (with production callers — not pure cleanup)
 
 **Where:** `src/editor/services.h:28-74`, `services.c:65-76`.
 Production callers verified at `src/editor/commit.c:148`,
@@ -833,7 +837,7 @@ original framing as "delete in an afternoon" was incorrect —
 it's a week-pass refactor that touches #26, #18, and the four
 production sites.
 
-### 29. `editor_commit_apply_compiled_change` is a test-only wrapper
+### 29. ✅ `editor_commit_apply_compiled_change` is a test-only wrapper
 
 **Where:** `src/editor/commit.c:1117-1119`, declared at
 `commit.h:79`. Verified: only `tests/test_repl_compile.c` calls
@@ -852,7 +856,7 @@ rewrite is mechanical search-and-replace, but the LOC churn is
 non-trivial — name it in the sequencing so "build-safe" stays
 true.
 
-### 30. `EditorInputState.input_capacity` and `pending_newline_capacity` are write-only
+### 30. ✅ `EditorInputState.input_capacity` and `pending_newline_capacity` are write-only
 
 **Where:** `src/editor/state.h:49, 59`, `state.c:15-17, 304-309`
 
@@ -864,7 +868,7 @@ struct field, the view field, and the raw `MAX_INPUT_LEN`.
 
 **Fix:** Delete both fields; use `MAX_INPUT_LEN` directly.
 
-### 31. `EditorVariableDragState` typedef stranded in `state.h` after storage moved
+### 31. ✅ `EditorVariableDragState` typedef stranded in `state.h` after storage moved
 
 **Where:** `src/editor/state.h:142-149, 195-197`
 
@@ -886,7 +890,7 @@ symmetrically.
 
 **Fix:** Inline both.
 
-### 33. `special_begin_key` takes a param it ignores
+### 33. ✅ `special_begin_key` takes a param it ignores
 
 **Where:** `src/editor/input.c:1554-1560`
 
@@ -897,7 +901,7 @@ parameter — currently a documentation lie.
 
 **Fix:** `static void special_begin_key(void)`.
 
-### 34. `editor_get_modifiers()` and `editor_input_active_modifiers()` are the same function
+### 34. ✅ `editor_get_modifiers()` and `editor_input_active_modifiers()` are the same function
 
 **Where:** `src/editor/input.c:140, 174`,
 `src/editor/input.h:59, 63`
@@ -924,7 +928,7 @@ convention); delete the wrapper.
 `EditorBufferView`; or expose narrow getters for the handful of
 `.active` / `.hit_*` checks.
 
-### 36. Forward declarations in `state.c` for functions already in `state.h`
+### 36. ✅ Forward declarations in `state.c` for functions already in `state.h`
 
 **Where:** `src/editor/state.c:245-250`
 
@@ -936,7 +940,7 @@ includes.
 
 **Fix:** Delete the forward-decl block.
 
-### 37. `editor_state_input_reset` mutates `insert_mode` directly, bypassing setter
+### 37. ✅ `editor_state_input_reset` mutates `insert_mode` directly, bypassing setter
 
 **Where:** `src/editor/state.c:319-323`
 
@@ -946,7 +950,7 @@ setter.
 
 **Fix:** `editor_insert_mode_set(0);`.
 
-### 38. Comments reference "legacy" code that is the live path
+### 38. ✅ Comments reference "legacy" code that is the live path
 
 **Where:** `src/editor/commit.c:88, 190, 609, 1202`
 
@@ -959,7 +963,7 @@ look for a "modern" path that doesn't exist.
 **Fix:** Search-and-replace "legacy" → "current" / "live"; or
 delete the comments.
 
-### 39. `editor_commit_apply_plan` header says it captures undo; the body explicitly disclaims it
+### 39. ✅ `editor_commit_apply_plan` header says it captures undo; the body explicitly disclaims it
 
 **Where:** `src/editor/commit.h:178` vs. `commit.c:238`
 
@@ -1042,7 +1046,7 @@ uncommented; future-edit hazard.
 **Fix:** Add `/* -2: reserve one byte for the leading ':' below */`;
 or compute via `MAX_INPUT_LEN - 1 /* NUL */ - 1 /* leading ':' */`.
 
-### 44. Four hand-written `pending_newline` clears bypass the existing helper
+### 44. ✅ Four hand-written `pending_newline` clears bypass the existing helper
 
 **Where:** `src/editor/input.c:273-274, 826-827, 849-850,
 1385-1386`. Helper already exists at `src/editor/state.h:339`
@@ -1069,7 +1073,7 @@ has the same predicate inlined in 6 places. The `src-repl` audit
 **Fix:** Add `int repl_is_ident_continue(unsigned char c)` to
 `src/repl/eval.h`; use from both.
 
-### 46. Tutorial-Tab branch hand-writes the input buffer instead of using the existing helper
+### 46. ✅ Tutorial-Tab branch hand-writes the input buffer instead of using the existing helper
 
 **Where:** `src/editor/input.c:1213-1222`. Helper already exists
 at `src/editor/state.h:299` (declaration) and `state.c:352`
@@ -1144,7 +1148,7 @@ user-visible session silently loses those parts.
 **Fix:** Either document "reformat doesn't touch X, Y, Z so we
 don't save them"; or expand the save set.
 
-### 51. Stale doc reference to a non-existent line
+### 51. ✅ Stale doc reference to a non-existent line
 
 **Where:** `src/editor/commit.h:267-270`
 
