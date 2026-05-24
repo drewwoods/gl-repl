@@ -43,11 +43,9 @@ void editor_undo_snapshot_save(EditorUndoSnapshot *snapshot) {
                               editor_buffer_view_line(text, i));
     snapshot->num_cmds = repl_state_document_count();
     snapshot->edit_line = editor_state_edit_line();
-    snapshot->num_predef_vars = g_num_predef_vars;
-    for (int i = 0; i < g_num_predef_vars; i++) {
-        snapshot->predef_vals[i] = g_predef_vars[i].value;
-        memcpy(snapshot->predef_names[i], g_predef_vars[i].name, 16);
-    }
+    repl_eval_copy_predef_vars(snapshot->predef_vals,
+                               snapshot->predef_names,
+                               &snapshot->num_predef_vars);
     repl_eval_copy_scratch_arrays(snapshot->scratch_arrays);
     for (int slot = 0; slot < REPL_FUNC_SLOT_COUNT; slot++) {
         const char *alias = repl_func_alias_get(slot);
@@ -70,11 +68,9 @@ void editor_undo_snapshot_restore(const EditorUndoSnapshot *snapshot) {
     editor_state_edit_line_set(snapshot->edit_line);
     editor_buffer_load_lines(undo_snapshot_line_ptrs(snapshot),
                              snapshot->num_cmds);
-    g_num_predef_vars = snapshot->num_predef_vars;
-    for (int i = 0; i < snapshot->num_predef_vars; i++) {
-        g_predef_vars[i].value = snapshot->predef_vals[i];
-        memcpy(g_predef_vars[i].name, snapshot->predef_names[i], 16);
-    }
+    repl_eval_restore_predef_vars(snapshot->predef_vals,
+                                  snapshot->predef_names,
+                                  snapshot->num_predef_vars);
     repl_eval_restore_scratch_arrays(snapshot->scratch_arrays);
     repl_func_alias_clear_all();
     for (int slot = 0; slot < REPL_FUNC_SLOT_COUNT; slot++) {

@@ -291,6 +291,8 @@ void editor_load_line_to_input(int idx) {
 
         if (repl_line_is_label(idx)) {
             if (*s == ':') {
+                /* Label written as ":name"; strip trailing whitespace
+                 * only — keep the ':' and the body verbatim. */
                 int len = (int)strlen(s);
                 while (len > 0 && isspace((unsigned char)s[len - 1]))
                     len--;
@@ -303,6 +305,8 @@ void editor_load_line_to_input(int idx) {
                 return;
             }
 
+            /* Label written as "name:"; rewrite to ":name" and strip
+             * trailing ':' plus whitespace from the source. */
             int len = (int)strlen(s);
             while (len > 0 &&
                    (s[len - 1] == ':' || isspace((unsigned char)s[len - 1])))
@@ -317,13 +321,13 @@ void editor_load_line_to_input(int idx) {
             return;
         }
 
-        int len = (int)strlen(s);
-        while (len > 0 &&
-               (s[len - 1] == ';' || isspace((unsigned char)s[len - 1])))
-            len--;
+        /* Default: skip leading whitespace, drop trailing ';' + ws. */
+        const char *cs;
+        int len;
+        repl_canonical_input_view(editor_committed_line_text(idx), &cs, &len);
         if (len >= MAX_INPUT_LEN)
             len = MAX_INPUT_LEN - 1;
-        memcpy(inp->input, s, (size_t)len);
+        memcpy(inp->input, cs, (size_t)len);
         inp->input[len] = '\0';
         inp->input_len = len;
         editor_cursor_pos_set(len);
@@ -384,15 +388,12 @@ static void navigate_to_line_raw_resolved(int target) {
 static void rewrite_source_text_with_indent(char *text_out, int text_sz,
                                             int pos, int include_block_depth) {
     char stripped[MAX_LINE_LEN];
-    const char *sp = editor_state_input().input;
-    while (*sp && isspace((unsigned char)*sp)) sp++;
-    strncpy(stripped, sp, MAX_LINE_LEN - 1);
-    stripped[MAX_LINE_LEN - 1] = '\0';
-    int slen = (int)strlen(stripped);
-    while (slen > 0 &&
-           (stripped[slen - 1] == ';' ||
-            isspace((unsigned char)stripped[slen - 1])))
-        stripped[--slen] = '\0';
+    const char *sp;
+    int slen;
+    repl_canonical_input_view(editor_state_input().input, &sp, &slen);
+    if (slen >= MAX_LINE_LEN) slen = MAX_LINE_LEN - 1;
+    memcpy(stripped, sp, (size_t)slen);
+    stripped[slen] = '\0';
     int indent_len = repl_source_scope_in_begin_block_at(pos) ? 4 : 2;
     if (include_block_depth)
         indent_len += repl_source_scope_block_depth_at(pos) * 2;
@@ -571,19 +572,12 @@ static int input_matches_committed_line(int line) {
     if (line < 0 || line >= repl_state_document_count())
         return 0;
 
-    const char *s = editor_committed_line_text(line);
-    while (*s && isspace((unsigned char)*s))
-        s++;
+    const char *s;
+    int slen;
+    repl_canonical_input_view(editor_committed_line_text(line), &s, &slen);
 
-    int slen = (int)strlen(s);
-    while (slen > 0 &&
-           (s[slen - 1] == ';' || isspace((unsigned char)s[slen - 1])))
-        slen--;
-
-    {
-        EditorInputView inp = editor_state_input();
-        return slen == inp.input_len && strncmp(inp.input, s, (size_t)slen) == 0;
-    }
+    EditorInputView inp = editor_state_input();
+    return slen == inp.input_len && strncmp(inp.input, s, (size_t)slen) == 0;
 }
 
 /* The editor_try_commit_* chain returns 1 for BOTH a successful commit
@@ -621,7 +615,29 @@ static int current_input_needs_navigation_commit(void) {
 
 /* Shared line-commit path for Enter and navigation.  Enter keeps its
  * line-advance/insert-mode behavior for unchanged lines; navigation treats
- * unchanged input as a no-op and only uses this helper for modified text. */
+ * unchanged input as a no-op and only uses this helper for modified text.
+ *
+ * ORDERING INVARIANTS (audit #10 — both are load-bearing, in opposite
+ * directions; do not "normalize" to a single shape):
+ *
+ *  1. WITHIN var_statements: float_decl MUST run before assign_variable.
+ *     `editor_try_commit_var_statements()` enforces this order — the
+ *     reverse would misread `float x` as an assignment to an
+ *     identifier named "float". See `editor_try_commit_var_statements`
+ *     in src/editor/commit.c and CLAUDE.md "Commit Dispatch Sites".
+ *
+ *  2. UNDER Enter: block_structs FIRST, then var_statements. Diverges
+ *     from the canonical `editor_try_commit_any` order used by the ;-
+ *     key and editor_feed_line, where var_statements run first. Under
+ *     Enter a closing `}` on its own line must close the active
+ *     block, not be misread as a stray-`}` to var-statement fallthrough.
+ *     The overwrite-Enter branch additionally uses
+ *     `_var_statements_then_insert()` to flip into insert-mode + clear
+ *     the input after a successful var-statement commit — a post-effect
+ *     `editor_try_commit_any` does not perform.
+ *
+ * test_repl_editor.c pins both invariants (search for
+ * "commit_current_input ordering"). */
 static CommitResult commit_current_input(int enter_mode) {
     EditorServices svc = editor_services_default();
     if (!enter_mode && !current_input_needs_navigation_commit())

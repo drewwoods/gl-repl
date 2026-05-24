@@ -280,6 +280,54 @@ int main() {
                     repl_eval_find_predef_var_idx("chain_order") >= 0);
     }
 
+    /* commit_current_input ordering invariant #1 (under Enter):
+     * editor_try_commit_block_structs runs BEFORE the var-statement
+     * chain so `}` on its own line closes the active block instead
+     * of falling through to misread as a stray-`}` to var-statement.
+     * Pin this by verifying block_structs accepts `}` when an open
+     * for-loop exists. */
+    {
+        glr_app_reset_all();
+        set_editor_input("for(i, 0, 3) {");
+        editor_state_edit_line_set(0);
+        editor_insert_mode_set(0);
+        ASSERT_INT("for-loop opens block", editor_try_commit_block_structs(), 1);
+
+        set_editor_input("}");
+        editor_state_edit_line_set(repl_state_document_count());
+        editor_insert_mode_set(1);
+        int closed = editor_try_commit_block_structs();
+        ASSERT_INT("} on its own line accepted by block_structs", closed, 1);
+        /* The block now has FOR_BEGIN + FOR_END. */
+        ASSERT_TRUE("for-loop closed",
+                    repl_state_document_count() >= 2 &&
+                    repl_state_document_cmds_mut()[repl_state_document_count() - 1].type
+                        == CMD_FOR_END);
+    }
+
+    /* commit_current_input ordering invariant #2 (within var_statements):
+     * `editor_try_commit_var_statements_then_insert` is the overwrite-
+     * Enter variant — it runs float_decl before assign_variable and
+     * additionally flips into insert mode + clears input on success
+     * (post-effects the canonical `_any` chain does not provide). */
+    {
+        glr_app_reset_all();
+        /* Pre-seed an existing line so overwrite mode has something to
+         * sit on. */
+        editor_feed_line("float seed;");
+        editor_state_edit_line_set(0);
+        editor_insert_mode_set(0);
+
+        set_editor_input("float pinned;");
+        int consumed = editor_try_commit_var_statements_then_insert();
+        ASSERT_INT("then_insert variant consumed", consumed, 1);
+        ASSERT_TRUE("then_insert registered the new decl",
+                    repl_eval_find_predef_var_idx("pinned") >= 0);
+        ASSERT_INT("then_insert flipped to insert mode", editor_insert_mode(), 1);
+        ASSERT_INT("then_insert cleared input buffer",
+                   editor_state_input().input_len, 0);
+    }
+
     /* 0. Code/scene panel geometry supports left, top, bottom, and hidden layouts */
     {
         int x, y, w, h;

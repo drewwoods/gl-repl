@@ -60,6 +60,18 @@ int  repl_parse_and_normalize_strict(const char *line, int pos,
 /* ---- Text / expression parsing helpers -------------------------------- */
 
 void trim_in_place(char *s);
+
+/* Return the canonical view of `src`: the [start, start+len) substring
+ * after skipping leading whitespace and dropping trailing whitespace
+ * plus any trailing ';' characters. `*out_start` aliases src (no
+ * allocation); `*out_len` is the length of the canonical content (0
+ * if empty after trimming). Used by the editor input ↔ committed
+ * line comparison sites where the canonical content is the same
+ * whether or not the source carries the optional trailing ';'. */
+void repl_canonical_input_view(const char *src,
+                               const char **out_start,
+                               int *out_len);
+
 void repl_format_source_float(char *out, int out_sz, float v);
 int  repl_parse_identifier_list(const char *src, const char *leading_keyword,
                                 char names[][16], int max_names);
