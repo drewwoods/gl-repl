@@ -335,7 +335,7 @@ static void test_overwrite_decl_with_assign_preserves_set_value(void) {
 /* Regression: when a later variable assignment overwrites an earlier
  * decl row, the staged CMD_VAR_ASSIGN must be rebased to the post-
  * undeclare slot index before the replacement lands. Pre-fix the
- * compiled change kept B's old slot while the overwrite removed A,
+ * compiled change kept Y's old slot while the overwrite removed X,
  * so the inserted assignment pointed at the wrong predef variable. */
 static void test_overwrite_earlier_decl_with_later_assign_rebases_slot(void) {
     glr_app_reset_all();
@@ -344,66 +344,66 @@ static void test_overwrite_earlier_decl_with_later_assign_rebases_slot(void) {
     ReplCompiledChange change;
     ReplCompileContext ctx;
 
-    set_input("float A;");
+    set_input("float X;");
     ctx = repl_compile_context_from_live(editor_state_edit_line());
-    ASSERT_INT("seed float A compile OK",
-               repl_compile_float_decl("float A;", &ctx, &change, err, sizeof(err)),
+    ASSERT_INT("seed float X compile OK",
+               repl_compile_float_decl("float X;", &ctx, &change, err, sizeof(err)),
                REPL_COMPILE_OK);
-    ASSERT_INT("seed float A apply OK",
+    ASSERT_INT("seed float X apply OK",
                editor_commit_apply_compiled_change(&change), 1);
 
-    set_input("float B = 5;");
+    set_input("float Y = 5;");
     ctx = repl_compile_context_from_live(editor_state_edit_line());
-    ASSERT_INT("seed float B compile OK",
-               repl_compile_float_decl("float B = 5;", &ctx, &change, err, sizeof(err)),
+    ASSERT_INT("seed float Y compile OK",
+               repl_compile_float_decl("float Y = 5;", &ctx, &change, err, sizeof(err)),
                REPL_COMPILE_OK);
-    ASSERT_INT("seed float B apply OK",
+    ASSERT_INT("seed float Y apply OK",
                editor_commit_apply_compiled_change(&change), 1);
 
-    int a_slot = repl_eval_find_predef_var_idx("A");
-    int b_slot = repl_eval_find_predef_var_idx("B");
-    ASSERT_TRUE("A declared", a_slot >= 0);
-    ASSERT_TRUE("B declared", b_slot >= 0);
-    ASSERT_TRUE("B starts after A", b_slot > a_slot);
+    int x_slot = repl_eval_find_predef_var_idx("X");
+    int y_slot = repl_eval_find_predef_var_idx("Y");
+    ASSERT_TRUE("X declared", x_slot >= 0);
+    ASSERT_TRUE("Y declared", y_slot >= 0);
+    ASSERT_TRUE("Y starts after X", y_slot > x_slot);
 
-    int a_row = -1;
+    int x_row = -1;
     for (int i = 0; i < repl_state_document_count(); i++) {
         const GLCmd *c = &repl_state_document_cmds_mut()[i];
         if (c->type == CMD_VAR_DECLARE && c->var_decl_count == 1 &&
-            strcmp(c->var_names[0], "A") == 0) {
-            a_row = i;
+            strcmp(c->var_names[0], "X") == 0) {
+            x_row = i;
             break;
         }
     }
-    ASSERT_TRUE("located float A; row", a_row >= 0);
+    ASSERT_TRUE("located float X; row", x_row >= 0);
 
-    editor_state_edit_line_set(a_row);
+    editor_state_edit_line_set(x_row);
     editor_insert_mode_set(0);
 
-    set_input("B = 42");
+    set_input("Y = 42");
     ctx = repl_compile_context_from_live(editor_state_edit_line());
-    ASSERT_INT("B = 42 over earlier decl compile OK",
-               repl_compile_var_assign("B = 42", &ctx, &change, err, sizeof(err)),
+    ASSERT_INT("Y = 42 over earlier decl compile OK",
+               repl_compile_var_assign("Y = 42", &ctx, &change, err, sizeof(err)),
                REPL_COMPILE_OK);
-    ASSERT_INT("B = 42 over earlier decl plans REPLACE_ONE",
+    ASSERT_INT("Y = 42 over earlier decl plans REPLACE_ONE",
                change.kind, REPL_COMPILED_REPLACE_ONE);
     ASSERT_INT("compiled slot rebased before apply",
-               change.cmds[0].num_args, b_slot - 1);
+               change.cmds[0].num_args, y_slot - 1);
 
-    ASSERT_INT("B = 42 over earlier decl apply OK",
+    ASSERT_INT("Y = 42 over earlier decl apply OK",
                editor_commit_apply_compiled_change(&change), 1);
 
-    ASSERT_INT("A undeclared after overwrite",
-               repl_eval_find_predef_var_idx("A"), -1);
+    ASSERT_INT("X undeclared after overwrite",
+               repl_eval_find_predef_var_idx("X"), -1);
 
-    b_slot = repl_eval_find_predef_var_idx("B");
-    ASSERT_TRUE("B still declared after overwrite", b_slot >= 0);
-    ASSERT_FLOAT("B value survives overwrite",
-                 g_predef_vars[b_slot].value, 42.0f, 1e-6f);
+    y_slot = repl_eval_find_predef_var_idx("Y");
+    ASSERT_TRUE("Y still declared after overwrite", y_slot >= 0);
+    ASSERT_FLOAT("Y value survives overwrite",
+                 g_predef_vars[y_slot].value, 42.0f, 1e-6f);
     ASSERT_INT("replacement row is var assign",
-               repl_state_document_cmds_mut()[a_row].type, CMD_VAR_ASSIGN);
-    ASSERT_INT("replacement row slot matches live B slot",
-               repl_state_document_cmds_mut()[a_row].num_args, b_slot);
+               repl_state_document_cmds_mut()[x_row].type, CMD_VAR_ASSIGN);
+    ASSERT_INT("replacement row slot matches live Y slot",
+               repl_state_document_cmds_mut()[x_row].num_args, y_slot);
 }
 
 /* Forced cmd-store capacity failure leaves predef-vars, editor

@@ -227,6 +227,7 @@ endif
 	glut \
 	help \
 	help-details \
+	install-hooks \
 	lines \
 	gl-repl \
 	test \
@@ -1180,6 +1181,10 @@ test-full: ## Full gate: stub tests + checks + build gl-repl, bench, repl_demo, 
 	$(MAKE) --no-print-directory gl-repl
 	$(MAKE) --no-print-directory bench
 	$(MAKE) --no-print-directory scene_demo
+
+install-hooks: ## Point this clone's git hooks at the tracked .githooks/ directory.
+	@git config core.hooksPath .githooks
+	@echo "git core.hooksPath -> .githooks (pre-push runs 'make test-stubs')"
 
 # Benchmark targets ------------------------------------------------------
 # Built and invoked separately from `make test` because timing is sensitive
