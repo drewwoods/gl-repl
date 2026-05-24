@@ -879,36 +879,30 @@ static UiHit submenu_hit_test(int mx, int my) {
     return h;
 }
 
+static UiHit inert_chrome_hit(int mx, int gl_y) {
+    UiHit h = ui_hit_none();
+    h.kind = UI_HIT_CODE_PANEL_CHROME;
+    h.local_x = (float)mx;
+    h.local_y = (float)gl_y;
+    return h;
+}
+
 UiHit ui_menu_bar_hit_test(int mx, int my) {
     UiHit h = ui_hit_none();
     int win_h = ui_state_viewport().window_h;
     if (win_h <= 0) return h;
     int gl_y = win_h - my;
 
-    /* Open dropdown row beats every other menu region. The cmd_idx
-     * carries the menu_id the row belongs to so the controller can
-     * activate the action without reading ui_menu_bar state. */
     if (g_open_menu >= 0) {
         if (g_submenu_menu_id == g_open_menu) {
             UiHit submenu_hit = submenu_hit_test(mx, my);
             if (submenu_hit.kind != UI_HIT_NONE)
                 return submenu_hit;
-            /* Point is inside the open flyout but landed on inert
-             * chrome (Config "All" "### "/"---") or dead space:
-             * consume it like the parent dropdown's inert rows. The
-             * flyout is a separate rect beside the parent dropdown, so
-             * the parent-rect check below would miss it and the click
-             * would fall through to the scene tabs / code panel drawn
-             * beneath (overlay-precedence violation). */
             int ssx, ssy, ssw, ssh;
             if (submenu_rect(g_submenu_menu_id, g_submenu_parent_row,
                              &ssx, &ssy, &ssw, &ssh) &&
-                point_in_rect_gl(mx, my, ssx, ssy, ssw, ssh)) {
-                h.kind = UI_HIT_CODE_PANEL_CHROME;
-                h.local_x = (float)mx;
-                h.local_y = (float)gl_y;
-                return h;
-            }
+                point_in_rect_gl(mx, my, ssx, ssy, ssw, ssh))
+                return inert_chrome_hit(mx, gl_y);
         }
 
         int row = ui_menu_bar_dropdown_item_hit(mx, my);
@@ -920,22 +914,10 @@ UiHit ui_menu_bar_hit_test(int mx, int my) {
             h.local_y = (float)gl_y;
             return h;
         }
-        /* Click inside the open dropdown rect but not on an actionable
-         * row (### header / --- separator / dead space): consume it
-         * inertly. ui_menu_bar_dropdown_item_hit() returns -1 for these
-         * even though the point is over the dropdown, so without this
-         * the click falls through to the scene tab strip / code panel
-         * drawn beneath the dropdown and can switch scenes underneath
-         * (overlay-precedence requirement). The controller preamble
-         * closes the dropdown; CHROME is the generic inert-consume kind. */
         int dx, dy, dw, dh;
         if (menu_dropdown_rect(&dx, &dy, &dw, &dh) &&
-            mx >= dx && mx < dx + dw && gl_y >= dy && gl_y < dy + dh) {
-            h.kind = UI_HIT_CODE_PANEL_CHROME;
-            h.local_x = (float)mx;
-            h.local_y = (float)gl_y;
-            return h;
-        }
+            mx >= dx && mx < dx + dw && gl_y >= dy && gl_y < dy + dh)
+            return inert_chrome_hit(mx, gl_y);
     }
 
     /* Pin button (Search / Replay). Pins are rendered after the menu
