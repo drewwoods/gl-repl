@@ -1715,7 +1715,7 @@ static void repl_code_panel_draw_statusbar(const UiRenderSnapshot *snap,
     glPopAttrib();
 }
 
-void ui_repl_code_panel_render(const UiRenderSnapshot *snap,
+void ui_repl_code_panel_render_with_chrome(const UiRenderSnapshot *snap,
                                UiCodePanelOutput *out) {
     ReplCodePanelBuilder builder;
     UiTextPanelOutput text_out;
