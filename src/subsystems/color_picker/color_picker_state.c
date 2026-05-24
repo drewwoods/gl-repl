@@ -9,6 +9,7 @@
 #include "repl/compile.h"
 #include "repl/core.h"             /* set_status, MAX_LINE_LEN */
 #include "repl/parser.h"
+#include "repl/state_views.h"      /* repl_state_document_count / _cmd_at */
 #include "ui/app/layout.h"
 #include "ui/app/state.h"
 

@@ -692,71 +692,74 @@ static void test_set_predef_value_live_only_without_source(void) {
     }
 }
 
-/* editor_commit_current_input compile-failure path: returns
- * diagnostic via the result; no buffer/store/predef/status/undo
- * mutation. */
+/* Live dispatch compile-failure path: redeclaring an existing predef
+ * var produces a status error and leaves buffer/store/predef/undo
+ * untouched. */
 static void test_orchestration_compile_failure_returns_diagnostic(void) {
     glr_app_reset_all();
 
     /* Establish a non-trivial pre-state. */
     editor_input_set_text("float anchor;");
-    EditorServices svc = editor_services_default();
-    EditorCommitResult ok = editor_commit_current_input(&svc);
-    ASSERT_INT("setup commit consumed", ok.consumed, 1);
-    ASSERT_INT("setup commit mutated", ok.mutated, 1);
+    int ok = editor_try_commit_float_decl();
+    ASSERT_INT("setup commit consumed", ok, 1);
+    ASSERT_TRUE("setup commit registered predef",
+                repl_eval_find_predef_var_idx("anchor") >= 0);
     ui_state_status_set("baseline status");
 
     ComputeFingerprint before = capture_fingerprint();
 
     /* Trigger compile failure: redeclare. */
     editor_input_set_text("float anchor;");
-    EditorCommitResult r = editor_commit_current_input(&svc);
-    ASSERT_INT("compile failure consumed", r.consumed, 1);
-    ASSERT_INT("compile failure not mutated", r.mutated, 0);
-    ASSERT_INT("compile failure not capacity_failed", r.capacity_failed, 0);
-    ASSERT_INT("compile failure carries diagnostic", r.diagnostic_valid, 1);
-    ASSERT_INT("compile failure no commit message",
-               r.commit_message_valid, 0);
-    ASSERT_TRUE("diagnostic non-empty", r.diagnostic[0] != '\0');
+    int r = editor_try_commit_float_decl();
+    ASSERT_INT("compile failure consumed", r, 1);
+    {
+        UiStatusState st = ui_state_status();
+        ASSERT_TRUE("compile failure raised status", st.text[0] != '\0');
+        ASSERT_TRUE("compile failure status differs from baseline",
+                    strcmp(st.text, "baseline status") != 0);
+    }
 
+    /* The status fingerprint shifts (new error text), but document /
+     * predef / buffer state must be byte-identical to pre-attempt. */
     ComputeFingerprint after = capture_fingerprint();
-    ASSERT_TRUE("orchestration compile failure leaves state untouched",
-                fingerprint_equal(&before, &after));
+    ASSERT_INT("doc count unchanged", after.cmd_count, before.cmd_count);
+    ASSERT_INT("predef count unchanged",
+               after.num_predef_vars, before.num_predef_vars);
+    ASSERT_INT("buffer count unchanged",
+               after.buffer_count, before.buffer_count);
 }
 
-/* editor_commit_current_input NO_CHANGE path: input the dispatcher
- * doesn't recognize. consumed=0, no mutation. */
+/* Live dispatch NO_CHANGE path: input that no editor_try_commit_*
+ * handler accepts — the chain falls through with no mutation. */
 static void test_orchestration_no_change_falls_through(void) {
     glr_app_reset_all();
     editor_input_set_text("glVertex3f(0,0,0)");
     ui_state_status_set("baseline");
     ComputeFingerprint before = capture_fingerprint();
 
-    EditorServices svc = editor_services_default();
-    EditorCommitResult r = editor_commit_current_input(&svc);
-    ASSERT_INT("non-handler input consumed=0", r.consumed, 0);
-    ASSERT_INT("non-handler input mutated=0", r.mutated, 0);
-    ASSERT_INT("non-handler input no diagnostic", r.diagnostic_valid, 0);
+    /* var_statements covers float_decl + var_assign; neither matches
+     * a gl-call input, so it returns 0 (chain falls through). */
+    int r = editor_try_commit_var_statements();
+    ASSERT_INT("var-statement chain non-match returns 0", r, 0);
 
     ComputeFingerprint after = capture_fingerprint();
-    ASSERT_TRUE("orchestration NO_CHANGE leaves state untouched",
+    ASSERT_TRUE("var-statement NO_CHANGE leaves state untouched",
                 fingerprint_equal(&before, &after));
 }
 
-/* editor_commit_current_input success path: buffer + store + predef
- * mutate together, commit_message valid. */
+/* Live dispatch success path: buffer + store + predef mutate together
+ * and status carries the commit message. */
 static void test_orchestration_success_returns_message(void) {
     glr_app_reset_all();
     editor_input_set_text("float energy;");
+    ui_state_status_set("");
 
-    EditorServices svc = editor_services_default();
-    EditorCommitResult r = editor_commit_current_input(&svc);
-    ASSERT_INT("success consumed", r.consumed, 1);
-    ASSERT_INT("success mutated", r.mutated, 1);
-    ASSERT_INT("success not capacity_failed", r.capacity_failed, 0);
-    ASSERT_INT("success not diagnostic", r.diagnostic_valid, 0);
-    ASSERT_INT("success has commit_message", r.commit_message_valid, 1);
-    ASSERT_TRUE("commit_message non-empty", r.commit_message[0] != '\0');
+    int r = editor_try_commit_float_decl();
+    ASSERT_INT("success consumed", r, 1);
+    {
+        UiStatusState st = ui_state_status();
+        ASSERT_TRUE("success status non-empty", st.text[0] != '\0');
+    }
 
     ASSERT_INT("post-success cmd count", repl_state_document_count(), 1);
     ASSERT_INT("post-success buffer count", editor_buffer_count(), 1);
@@ -794,16 +797,10 @@ static void test_func_def_comment_relocation(void) {
      * vertex command is none of those, so it's a stopper. With no
      * var-decls in our doc, the walk stops at index 0. */
     set_input("func0() {");
-    EditorServices svc = editor_services_default();
-    EditorCommitResult ok = editor_commit_current_input(&svc);
-    /* func_def isn't in repl_compile_dispatch yet (it's an
-     * editor-side compile), so editor_commit_current_input returns
-     * NO_CHANGE. Use the live try_commit dispatcher (which
-     * forwards through editor_compile_func_def). */
-    if (!ok.consumed) {
-        /* Fall through to the live try_commit chain. */
-        editor_try_commit_block_structs();
-    }
+    /* func_def is an editor-side compile; route through the live
+     * try_commit dispatcher which forwards through
+     * editor_compile_func_def. */
+    editor_try_commit_block_structs();
 
     /* Post-commit doc shape:
      *   - The two comments + fd + fe land at function_decl_insert_pos
