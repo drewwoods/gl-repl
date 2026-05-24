@@ -38,6 +38,10 @@ typedef struct {
     int abort;
     int visit_budget;
     char status[128];
+    /* funcN -> source_cmds[] index of the matching CMD_FUNC_DEF, or -1.
+     * Built once in repl_flatten_program; CMD_CALL handlers index directly
+     * instead of walking the source for each call. */
+    int func_def_idx[REPL_FUNC_SLOT_COUNT];
 } FlattenContext;
 
 static void flatten_note_status(FlattenContext *ctx, const char *msg) {
@@ -289,71 +293,70 @@ static void flatten_range(FlattenContext *ctx,
                 continue;
             }
 
-            int def_found = 0;
-            for (int k = 0; k < ctx->source_count; k++) {
-                const GLCmd *def_cmd = &ctx->source_cmds[k];
-                if (def_cmd->type == CMD_FUNC_DEF && (int)def_cmd->args[0] == func_num) {
-                    def_found = 1;
-                    int body_end = flatten_repl_source_scope_find_block_end(ctx, k);
-                    int def_fn = func_num;
-                    int param_count = 0;
-                    char param_names[MAX_EXPR_VARS][16];
-                    char arg_text[MAX_LINE_LEN];
-                    float arg_vals[MAX_EXPR_VARS];
-                    int arg_count = 0;
-                    const char *def_text = flatten_src_text(ctx->text, k);
-                    const char *call_text = flatten_src_text(ctx->text, i);
-
-                    if (!parse_repl_func_signature(def_text, &def_fn,
-                                                   param_names, MAX_EXPR_VARS,
-                                                   &param_count))
-                        break;
-                    if (!extract_func_call_args_text(call_text, NULL,
-                                                     arg_text, sizeof(arg_text)))
-                        break;
-                    if (!parse_expr_list_exact(arg_text, arg_vals, MAX_EXPR_VARS,
-                                               vars, nv, &arg_count))
-                        break;
-                    if (arg_count != param_count) {
-                        char msg[128];
-                        snprintf(msg, sizeof(msg),
-                                 "func%d expects %d args, got %d",
-                                 func_num, param_count, arg_count);
-                        flatten_note_status(ctx, msg);
-                        break;
-                    }
-
-                    ExprVar lvars[MAX_EXPR_VARS];
-                    int lnv = 0;
-                    for (int p = 0; p < param_count && lnv < MAX_EXPR_VARS; p++) {
-                        repl_copy_string_fits(lvars[lnv].name,
-                                              sizeof(lvars[lnv].name),
-                                              param_names[p]);
-                        lvars[lnv].value = arg_vals[p];
-                        lnv++;
-                    }
-                    for (int v = 0; vars && v < nv && lnv < MAX_EXPR_VARS; v++)
-                        lvars[lnv++] = vars[v];
-
-                    unsigned int nested_func_mask = func_scope_mask;
-                    if (func_num >= 0 && func_num < FUNC_SCOPE_MASK_BITS)
-                        nested_func_mask |= (1u << func_num);
-                    int nested_root_call = (root_call_src_cmd_idx >= 0)
-                                         ? root_call_src_cmd_idx : i;
-
-                    ctx->call_depth++;
-                    flatten_range(ctx, k + 1, body_end, lvars, lnv,
-                                  i, nested_root_call, nested_func_mask);
-                    if (ctx->call_depth > 0) ctx->call_depth--;
-                    break;
-                }
-            }
-            if (!def_found) {
+            int k = (func_num >= 0 && func_num < REPL_FUNC_SLOT_COUNT)
+                    ? ctx->func_def_idx[func_num]
+                    : -1;
+            if (k < 0) {
                 char msg[64];
                 snprintf(msg, sizeof(msg),
                          "Error: func%d not defined", func_num);
                 flatten_note_status(ctx, msg);
+                i++;
+                continue;
             }
+            do {
+                int body_end = flatten_repl_source_scope_find_block_end(ctx, k);
+                int def_fn = func_num;
+                int param_count = 0;
+                char param_names[MAX_EXPR_VARS][16];
+                char arg_text[MAX_LINE_LEN];
+                float arg_vals[MAX_EXPR_VARS];
+                int arg_count = 0;
+                const char *def_text = flatten_src_text(ctx->text, k);
+                const char *call_text = flatten_src_text(ctx->text, i);
+
+                if (!parse_repl_func_signature(def_text, &def_fn,
+                                               param_names, MAX_EXPR_VARS,
+                                               &param_count))
+                    break;
+                if (!extract_func_call_args_text(call_text, NULL,
+                                                 arg_text, sizeof(arg_text)))
+                    break;
+                if (!parse_expr_list_exact(arg_text, arg_vals, MAX_EXPR_VARS,
+                                           vars, nv, &arg_count))
+                    break;
+                if (arg_count != param_count) {
+                    char msg[128];
+                    snprintf(msg, sizeof(msg),
+                             "func%d expects %d args, got %d",
+                             func_num, param_count, arg_count);
+                    flatten_note_status(ctx, msg);
+                    break;
+                }
+
+                ExprVar lvars[MAX_EXPR_VARS];
+                int lnv = 0;
+                for (int p = 0; p < param_count && lnv < MAX_EXPR_VARS; p++) {
+                    repl_copy_string_fits(lvars[lnv].name,
+                                          sizeof(lvars[lnv].name),
+                                          param_names[p]);
+                    lvars[lnv].value = arg_vals[p];
+                    lnv++;
+                }
+                for (int v = 0; vars && v < nv && lnv < MAX_EXPR_VARS; v++)
+                    lvars[lnv++] = vars[v];
+
+                unsigned int nested_func_mask = func_scope_mask;
+                if (func_num >= 0 && func_num < FUNC_SCOPE_MASK_BITS)
+                    nested_func_mask |= (1u << func_num);
+                int nested_root_call = (root_call_src_cmd_idx >= 0)
+                                     ? root_call_src_cmd_idx : i;
+
+                ctx->call_depth++;
+                flatten_range(ctx, k + 1, body_end, lvars, lnv,
+                              i, nested_root_call, nested_func_mask);
+                if (ctx->call_depth > 0) ctx->call_depth--;
+            } while (0);
             i++;
             continue;
         }
@@ -617,6 +620,19 @@ int repl_flatten_program(const ReplFlattenOptions *options,
         repl_copy_string_fits(result->status, sizeof(result->status),
                               "Invalid flatten program options");
         return 0;
+    }
+
+    /* Pre-index funcN definitions so CMD_CALL handlers can jump straight
+     * to the body without scanning source_cmds[] per call. Last-write-wins
+     * if the same slot is defined twice (matches the linear-scan's
+     * behaviour, which kept the final match). */
+    for (int s = 0; s < REPL_FUNC_SLOT_COUNT; s++)
+        ctx.func_def_idx[s] = -1;
+    for (int k = 0; k < ctx.source_count; k++) {
+        if (ctx.source_cmds[k].type != CMD_FUNC_DEF) continue;
+        int fn = (int)ctx.source_cmds[k].args[0];
+        if (fn >= 0 && fn < REPL_FUNC_SLOT_COUNT)
+            ctx.func_def_idx[fn] = k;
     }
 
     flatten_range(&ctx, 0, ctx.source_count, NULL, 0, -1, -1, 0);
