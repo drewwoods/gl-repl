@@ -303,7 +303,7 @@ static int repl_code_panel_insert_rows(const UiRenderSnapshot *snap,
                                      panel_w);
 }
 
-static int repl_code_panel_newline_rows(const UiRenderSnapshot *snap,
+static int repl_code_panel_trailing_row_count(const UiRenderSnapshot *snap,
                                         int panel_w, int text_x) {
     if (snap->edit_line == snap->document_count) {
         int indent_chars = snap->active_indent_chars;
@@ -393,7 +393,7 @@ void ui_repl_code_panel_build_layout(const UiRenderSnapshot *snap,
                                            layout->replay_extra_rows);
 
     total_lines = layout->header_rows + layout->footer_rows +
-                  repl_code_panel_newline_rows(snap, panel_w, text_x);
+                  repl_code_panel_trailing_row_count(snap, panel_w, text_x);
     for (int i = 0; i < snap->document_count; i++) {
         if (snap->editor_input.insert_mode && i == snap->edit_line)
             total_lines += repl_code_panel_insert_rows(snap, panel_w, text_x);
@@ -458,7 +458,7 @@ int ui_repl_code_panel_target_for_doc_line(const UiRenderSnapshot *snap,
             }
             row -= layout->replay_extra_rows[cmd_idx];
         } else {
-            int newline_rows = repl_code_panel_newline_rows(snap, layout->panel_w,
+            int newline_rows = repl_code_panel_trailing_row_count(snap, layout->panel_w,
                                                             layout->text_x);
             if (row < newline_rows) {
                 if (out_target) *out_target = snap->document_count;
