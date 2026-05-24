@@ -308,12 +308,9 @@ static void cp_apply_drag_at(int which, int mx, int gl_y,
 
 ColorPickerInputResult color_picker_handle_press(int mx, int my) {
     ColorPickerInputResult res = { 0, 0, 0 };
-    const GLCmd *cmd;
     ColorPickerRects r;
 
-    if (g_cp_line < 0) return res;
-    cmd = cp_cmd_at(g_cp_line);
-    if (!cmd) return res;
+    if (g_cp_line < 0 || !cp_cmd_at(g_cp_line)) return res;
     int gl_y = ui_state_viewport().window_h - my;
     cp_compute_rects(&r);
 
@@ -346,22 +343,29 @@ ColorPickerInputResult color_picker_handle_press(int mx, int my) {
         return res;
     }
 
+    /* Inside the popup bounds but outside SV/hue/alpha slider rects: consumed-no-op */
+    int pw = CP_SV_SZ + CP_GAP + CP_HUE_W
+           + (g_cp_has_alpha ? CP_GAP + CP_ALPHA_W : 0) + CP_GAP;
+    int ph = CP_SV_SZ + CP_GAP + CP_PREV_H + CP_GAP;
+    if (mx >= g_cp_px && mx < g_cp_px + pw &&
+        gl_y >= g_cp_py - ph && gl_y < g_cp_py) {
+        res.consumed = 1;
+        res.closed = 0;
+        res.changed = 0;
+        return res;
+    }
+
     /* Click outside the picker: dismiss and let the event flow through. */
-    g_cp_line = -1;
-    g_cp_drag = 0;
-    g_cp_undo_captured = 0;
+    color_picker_close();
     res.closed = 1;
     return res;
 }
 
 ColorPickerInputResult color_picker_handle_motion(int mx, int my) {
     ColorPickerInputResult res = { 0, 0, 0 };
-    const GLCmd *cmd;
     ColorPickerRects r;
 
-    if (g_cp_drag == 0) return res;
-    cmd = cp_cmd_at(g_cp_line);
-    if (!cmd) return res;
+    if (g_cp_drag == 0 || g_cp_line < 0 || !cp_cmd_at(g_cp_line)) return res;
     int gl_y = ui_state_viewport().window_h - my;
     cp_compute_rects(&r);
     cp_apply_drag_at(g_cp_drag, mx, gl_y, &r);

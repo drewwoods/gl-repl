@@ -2096,6 +2096,23 @@ void glr_publish_replay_annotations(const ReplReplayAnnotationOutput *out) {
     }
 }
 
+static void glr_host_editor_cursor_park(int line, int insert_mode) {
+    editor_state_edit_line_set(line);
+    editor_insert_mode_set(insert_mode);
+}
+
+static void glr_host_completion_clear(void) {
+    editor_completion_clear();
+}
+
+static void glr_host_completion_update(void) {
+    editor_completion_update();
+}
+
+static const char *glr_host_editor_input_get(void) {
+    return editor_state_input().input;
+}
+
 /* The host-effect bridge the controller installs into the REPL
  * pipeline. Status routes pipeline diagnostics to UiState; the rest
  * actualize loader / scene-switch / replay effects on the editor and
@@ -2115,6 +2132,10 @@ static const ReplHostEffects g_glr_host_effects = {
     .tutorial_teardown          = tutorial_teardown,
     .edit_line_get              = editor_state_edit_line,
     .edit_line_set              = editor_state_edit_line_set,
+    .host_cursor_park           = glr_host_editor_cursor_park,
+    .completion_clear           = glr_host_completion_clear,
+    .completion_update          = glr_host_completion_update,
+    .host_input_get             = glr_host_editor_input_get,
 };
 
 /* Seed both fade machines to the current presentation theme at full

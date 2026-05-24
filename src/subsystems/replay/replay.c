@@ -9,23 +9,6 @@
 #include "repl/state_owners.h"
 #include "subsystems/replay/replay_state.h"
 
-#define REPLAY_STATE (replay_state_mut())
-#define g_replay_active      (REPLAY_STATE->active)
-#define g_replay_state       (REPLAY_STATE->state)
-#define g_replay_pc          (REPLAY_STATE->pc)
-#define g_replay_mode        (REPLAY_STATE->mode)
-#define g_replay_speed       (REPLAY_STATE->speed)
-#define g_replay_accum       (REPLAY_STATE->accum)
-#define g_replay_fade_speed  (REPLAY_STATE->fade_speed)
-#define g_replay_src_line    (REPLAY_STATE->src_line_idx)
-#define g_replay_total_flat  (REPLAY_STATE->total_flat_cmds)
-#define g_replay_expand_args (REPLAY_STATE->expand_args)
-
-static float g_replay_baseline_predef_vals[MAX_PREDEF_VARS];
-static float g_replay_baseline_scratch_arrays[REPL_SCRATCH_ARRAY_COUNT][REPL_SCRATCH_ARRAY_LEN];
-static int   g_replay_saved_t_playing = 1;
-static int   g_replay_last_src_line = -1;
-
 /* Batch lifetime cap (seconds). Pairs with the replay peer's
  * fade_speed (replay_state.c, alpha/sec): alpha reaches 1.0 at
  * age 1/fade_speed but the batch is culled at REPLAY_FADE_DURATION,
@@ -41,16 +24,13 @@ static int   g_replay_last_src_line = -1;
 #define REPLAY_SPEED_STEP_UP   1.5f
 #define REPLAY_SPEED_STEP_DOWN 0.67f
 
-static ReplayFadeBatch g_replay_fade_batches[REPLAY_FADE_BATCH_MAX];
-static int             g_replay_fade_batch_count = 0;
-
 #define REPLAY_FLAT_STATE \
     FlatProgramView flat_program = repl_state_flat_program_view(); \
     const GLCmd *g_flat_cmds __attribute__((unused)) = flat_program.cmds; \
     int g_num_flat_cmds __attribute__((unused)) = flat_program.cmd_count
 
 static int replay_enabled(void) {
-    return g_replay_active;
+    return replay_active();
 }
 
 static int replay_has_meaningful_cmds(void) {
@@ -158,25 +138,27 @@ static int replay_last_meaningful_src(int begin, int end_exclusive) {
 }
 
 static void replay_set_src_line(int src_line) {
-    g_replay_src_line = src_line;
-    if (src_line != g_replay_last_src_line) {
-        g_replay_last_src_line = src_line;
+    ReplReplayRuntimeState *state = replay_state_mut();
+    state->src_line_idx = src_line;
+    if (src_line != state->last_src_line) {
+        state->last_src_line = src_line;
         if (src_line >= 0)
             repl_dispatch_follow_cursor(1);
     }
 }
 
 float replay_batch_alpha(const ReplayFadeBatch *batch) {
-    float alpha = batch->age * g_replay_fade_speed;
+    float alpha = batch->age * replay_state_view().fade_speed;
     if (alpha < 0.0f) alpha = 0.0f;
     if (alpha > 1.0f) alpha = 1.0f;
     return alpha;
 }
 
 ReplayFadeBatchView replay_fade_batches_view(void) {
+    ReplReplayRuntimeState *state = replay_state_mut();
     ReplayFadeBatchView view = {
-        .batches = g_replay_fade_batches,
-        .count = g_replay_fade_batch_count,
+        .batches = state->fade_batches,
+        .count = state->fade_batch_count,
     };
     return view;
 }
@@ -243,32 +225,34 @@ int replay_compute_fade_skip_limits(int *out_limits, int max_count) {
 }
 
 static void replay_clear_fade_batches(void) {
-    g_replay_fade_batch_count = 0;
+    replay_state_mut()->fade_batch_count = 0;
 }
 
 static void replay_push_fade_batch(int old_pc, int new_pc) {
+    ReplReplayRuntimeState *state = replay_state_mut();
     ReplayFadeBatch *batch;
 
     if (new_pc <= old_pc)
         return;
 
-    if (g_replay_fade_batch_count >= REPLAY_FADE_BATCH_MAX) {
-        memmove(&g_replay_fade_batches[0], &g_replay_fade_batches[1],
-                (size_t)(REPLAY_FADE_BATCH_MAX - 1) * sizeof(g_replay_fade_batches[0]));
-        g_replay_fade_batch_count = REPLAY_FADE_BATCH_MAX - 1;
+    if (state->fade_batch_count >= REPLAY_FADE_BATCH_MAX) {
+        memmove(&state->fade_batches[0], &state->fade_batches[1],
+                (size_t)(REPLAY_FADE_BATCH_MAX - 1) * sizeof(state->fade_batches[0]));
+        state->fade_batch_count = REPLAY_FADE_BATCH_MAX - 1;
     }
 
-    batch = &g_replay_fade_batches[g_replay_fade_batch_count++];
+    batch = &state->fade_batches[state->fade_batch_count++];
     batch->old_pc = old_pc;
     batch->new_pc = new_pc;
     batch->age = REPLAY_FADE_INITIAL_AGE;
 }
 
 static void replay_clamp_fade_batches(int max_pc) {
+    ReplReplayRuntimeState *state = replay_state_mut();
     int dst = 0;
 
-    for (int idx = 0; idx < g_replay_fade_batch_count; idx++) {
-        ReplayFadeBatch batch = g_replay_fade_batches[idx];
+    for (int idx = 0; idx < state->fade_batch_count; idx++) {
+        ReplayFadeBatch batch = state->fade_batches[idx];
 
         if (batch.old_pc > max_pc)
             continue;
@@ -276,39 +260,42 @@ static void replay_clamp_fade_batches(int max_pc) {
             batch.new_pc = max_pc;
         if (batch.new_pc <= batch.old_pc)
             continue;
-        g_replay_fade_batches[dst++] = batch;
+        state->fade_batches[dst++] = batch;
     }
 
-    g_replay_fade_batch_count = dst;
+    state->fade_batch_count = dst;
 }
 
 void replay_tick_fade_batches(float dt) {
+    ReplReplayRuntimeState *state = replay_state_mut();
     int dst = 0;
 
-    for (int idx = 0; idx < g_replay_fade_batch_count; idx++) {
-        ReplayFadeBatch batch = g_replay_fade_batches[idx];
+    for (int idx = 0; idx < state->fade_batch_count; idx++) {
+        ReplayFadeBatch batch = state->fade_batches[idx];
         batch.age += dt;
         if (batch.age >= REPLAY_FADE_DURATION)
             continue;
-        g_replay_fade_batches[dst++] = batch;
+        state->fade_batches[dst++] = batch;
     }
 
-    g_replay_fade_batch_count = dst;
+    state->fade_batch_count = dst;
 }
 
 int replay_has_active_fades(void) {
-    return g_replay_active && g_replay_fade_batch_count > 0;
+    ReplReplayRuntimeState state = replay_state_view();
+    return state.active && state.fade_batch_count > 0;
 }
 
 int replay_fill_base_limit(void) {
     REPLAY_FLAT_STATE;
     if (!replay_has_active_fades())
         return g_num_flat_cmds;
-    if (g_replay_fade_batches[0].old_pc < 0)
+    ReplReplayRuntimeState state = replay_state_view();
+    if (state.fade_batches[0].old_pc < 0)
         return 0;
-    if (g_replay_fade_batches[0].old_pc > g_num_flat_cmds)
+    if (state.fade_batches[0].old_pc > g_num_flat_cmds)
         return g_num_flat_cmds;
-    return g_replay_fade_batches[0].old_pc;
+    return state.fade_batches[0].old_pc;
 }
 
 /* Apply a single transform CmdType to the current GL modelview, tracking
@@ -732,7 +719,7 @@ static int replay_prev_limit(int current_pc) {
     while (pc < current_pc) {
         int fade_begin = -1;
         int fade_end = -1;
-        int next_pc = (g_replay_mode == REPLAY_MODE_POLYGON)
+        int next_pc = (replay_state_view().mode == REPLAY_MODE_POLYGON)
                     ? replay_next_polygon_limit(pc, &fade_begin, &fade_end)
                     : replay_next_vertex_limit(pc, &fade_begin, &fade_end);
 
@@ -748,18 +735,19 @@ static int replay_prev_limit(int current_pc) {
 
 void replay_seek(int new_pc) {
     REPLAY_FLAT_STATE;
+    ReplReplayRuntimeState *state = replay_state_mut();
     if (new_pc < 0)
         new_pc = 0;
     if (new_pc > g_num_flat_cmds)
         new_pc = g_num_flat_cmds;
 
-    g_replay_pc = new_pc;
-    g_replay_accum = 0.0f;
+    state->pc = new_pc;
+    state->accum = 0.0f;
     replay_clear_fade_batches();
     replay_set_src_line(replay_last_meaningful_src(0, new_pc));
-    g_replay_state = (new_pc >= g_num_flat_cmds && g_num_flat_cmds > 0)
-                   ? REPLAY_DONE
-                   : REPLAY_PAUSED;
+    state->state = (new_pc >= g_num_flat_cmds && g_num_flat_cmds > 0)
+                 ? REPLAY_DONE
+                 : REPLAY_PAUSED;
 }
 
 int replay_seek_to_src_line(int target_line) {
@@ -782,7 +770,7 @@ int replay_seek_to_src_line(int target_line) {
     while (pc < g_num_flat_cmds) {
         int fade_begin = -1;
         int fade_end = -1;
-        int next_pc = (g_replay_mode == REPLAY_MODE_POLYGON)
+        int next_pc = (replay_state_view().mode == REPLAY_MODE_POLYGON)
                     ? replay_next_polygon_limit(pc, &fade_begin, &fade_end)
                     : replay_next_vertex_limit(pc, &fade_begin, &fade_end);
 
@@ -806,22 +794,23 @@ int replay_seek_to_src_line(int target_line) {
 }
 
 void replay_restart_from_beginning(void) {
-    g_replay_pc = 0;
-    g_replay_accum = 0.0f;
+    ReplReplayRuntimeState *state = replay_state_mut();
+    state->pc = 0;
+    state->accum = 0.0f;
     replay_clear_fade_batches();
-    g_replay_state = REPLAY_PLAYING;
-    g_replay_src_line = -1;
-    g_replay_last_src_line = -1;
+    state->state = REPLAY_PLAYING;
+    state->src_line_idx = -1;
+    state->last_src_line = -1;
 }
 
 void replay_start(void) {
-    float live_predef_vals[MAX_PREDEF_VARS];
-    float live_scratch_arrays[REPL_SCRATCH_ARRAY_COUNT][REPL_SCRATCH_ARRAY_LEN];
     REPLAY_FLAT_STATE;
 
-    repl_copy_predef_values(live_predef_vals, MAX_PREDEF_VARS);
-    repl_eval_copy_scratch_arrays(live_scratch_arrays);
     if (repl_state_flat_program_dirty()) {
+        float live_predef_vals[MAX_PREDEF_VARS] = { 0 };
+        float live_scratch_arrays[REPL_SCRATCH_ARRAY_COUNT][REPL_SCRATCH_ARRAY_LEN] = { { 0.0f } };
+        repl_copy_predef_values(live_predef_vals, MAX_PREDEF_VARS);
+        repl_eval_copy_scratch_arrays(live_scratch_arrays);
         repl_flatten_commands(repl_dispatch_edit_line_get());
         repl_state_flat_program_clear_dirty();
         repl_restore_predef_values(live_predef_vals, MAX_PREDEF_VARS);
@@ -833,36 +822,39 @@ void replay_start(void) {
         return;
     }
 
-    repl_copy_predef_values(g_replay_baseline_predef_vals, MAX_PREDEF_VARS);
-    repl_eval_copy_scratch_arrays(g_replay_baseline_scratch_arrays);
-    g_replay_saved_t_playing = repl_state_variables().time_playing;
+    ReplReplayRuntimeState *state = replay_state_mut();
+    repl_copy_predef_values(state->baseline_predef_vals, MAX_PREDEF_VARS);
+    repl_eval_copy_scratch_arrays(state->baseline_scratch_arrays);
+    state->saved_t_playing = repl_state_variables().time_playing;
     repl_state_variables_mut()->time_playing = 0;
 
-    g_replay_active = 1;
-    g_replay_state = REPLAY_PLAYING;
-    g_replay_pc = 0;
-    g_replay_accum = 0.0f;
+    state->active = 1;
+    state->state = REPLAY_PLAYING;
+    state->pc = 0;
+    state->accum = 0.0f;
     replay_clear_fade_batches();
-    g_replay_src_line = -1;
-    g_replay_total_flat = g_num_flat_cmds;
-    g_replay_last_src_line = -1;
+    state->src_line_idx = -1;
+    state->total_flat_cmds = g_num_flat_cmds;
+    state->last_src_line = -1;
     repl_set_status("Replay: playing");
 }
 
 void replay_stop(void) {
-    repl_state_variables_mut()->time_playing = g_replay_saved_t_playing;
-    g_replay_active = 0;
-    g_replay_state = REPLAY_OFF;
-    g_replay_pc = 0;
-    g_replay_accum = 0.0f;
+    ReplReplayRuntimeState *state = replay_state_mut();
+    repl_state_variables_mut()->time_playing = state->saved_t_playing;
+    state->active = 0;
+    state->state = REPLAY_OFF;
+    state->pc = 0;
+    state->accum = 0.0f;
     replay_clear_fade_batches();
-    g_replay_src_line = -1;
-    g_replay_total_flat = 0;
-    g_replay_last_src_line = -1;
+    state->src_line_idx = -1;
+    state->total_flat_cmds = 0;
+    state->last_src_line = -1;
 }
 
 void replay_advance(void) {
     REPLAY_FLAT_STATE;
+    ReplReplayRuntimeState *state = replay_state_mut();
     int old_pc;
     int next_pc;
     int src_line = -1;
@@ -870,13 +862,13 @@ void replay_advance(void) {
     if (!replay_enabled())
         return;
 
-    if (g_replay_pc >= g_num_flat_cmds) {
-        g_replay_state = REPLAY_DONE;
+    if (state->pc >= g_num_flat_cmds) {
+        state->state = REPLAY_DONE;
         return;
     }
 
-    old_pc = g_replay_pc;
-    next_pc = (g_replay_mode == REPLAY_MODE_POLYGON)
+    old_pc = state->pc;
+    next_pc = (state->mode == REPLAY_MODE_POLYGON)
             ? replay_next_polygon_limit(old_pc, &(int){ -1 }, &(int){ -1 })
             : replay_next_vertex_limit(old_pc, &(int){ -1 }, &(int){ -1 });
 
@@ -885,58 +877,61 @@ void replay_advance(void) {
     if (next_pc > g_num_flat_cmds)
         next_pc = g_num_flat_cmds;
 
-    g_replay_pc = next_pc;
+    state->pc = next_pc;
     replay_push_fade_batch(old_pc, next_pc);
 
     src_line = replay_last_meaningful_src(old_pc, next_pc);
     replay_set_src_line(src_line);
 
-    if (g_replay_pc >= g_num_flat_cmds) {
-        g_replay_state = REPLAY_DONE;
+    if (state->pc >= g_num_flat_cmds) {
+        state->state = REPLAY_DONE;
         repl_set_status("Replay: done");
     }
 }
 
 void replay_step_back(void) {
-    if (!g_replay_active)
+    ReplReplayRuntimeState state = replay_state_view();
+    if (!state.active)
         return;
 
-    if (g_replay_pc <= 0) {
+    if (state.pc <= 0) {
         replay_seek(0);
         repl_set_status("Replay: at start");
         return;
     }
 
-    replay_seek(replay_prev_limit(g_replay_pc));
+    replay_seek(replay_prev_limit(state.pc));
 }
 
 int replay_exec_limit(void) {
     REPLAY_FLAT_STATE;
     if (replay_enabled())
-        return g_replay_pc;
+        return replay_state_view().pc;
     return g_num_flat_cmds;
 }
 
 void replay_speed_adjust(float factor) {
+    ReplReplayRuntimeState *state = replay_state_mut();
     char msg[64];
-    g_replay_speed *= factor;
-    if (g_replay_speed < REPLAY_SPEED_MIN) g_replay_speed = REPLAY_SPEED_MIN;
-    if (g_replay_speed > REPLAY_SPEED_MAX) g_replay_speed = REPLAY_SPEED_MAX;
-    snprintf(msg, sizeof(msg), "Replay: %.1f step/s", g_replay_speed);
+    state->speed *= factor;
+    if (state->speed < REPLAY_SPEED_MIN) state->speed = REPLAY_SPEED_MIN;
+    if (state->speed > REPLAY_SPEED_MAX) state->speed = REPLAY_SPEED_MAX;
+    snprintf(msg, sizeof(msg), "Replay: %.1f step/s", state->speed);
     repl_set_status(msg);
 }
 
 void replay_toggle_play_pause(void) {
-    if (!g_replay_active || g_replay_state == REPLAY_DONE) {
+    ReplReplayRuntimeState *state = replay_state_mut();
+    if (!state->active || state->state == REPLAY_DONE) {
         replay_start();
         return;
     }
 
-    if (g_replay_state == REPLAY_PLAYING) {
-        g_replay_state = REPLAY_PAUSED;
+    if (state->state == REPLAY_PLAYING) {
+        state->state = REPLAY_PAUSED;
         repl_set_status("Replay: paused");
-    } else if (g_replay_state == REPLAY_PAUSED) {
-        g_replay_state = REPLAY_PLAYING;
+    } else if (state->state == REPLAY_PAUSED) {
+        state->state = REPLAY_PLAYING;
         repl_set_status("Replay: playing");
     } else {
         replay_start();
@@ -945,21 +940,22 @@ void replay_toggle_play_pause(void) {
 
 int replay_prepare_frame(int full_flat_count) {
     REPLAY_FLAT_STATE;
-    if (!g_replay_active)
+    ReplReplayRuntimeState *state = replay_state_mut();
+    if (!state->active)
         return g_num_flat_cmds;
 
-    g_replay_total_flat = full_flat_count;
-    if (g_replay_pc > g_num_flat_cmds)
-        g_replay_pc = g_num_flat_cmds;
-    if (g_replay_pc >= g_num_flat_cmds && g_num_flat_cmds > 0 &&
-        g_replay_state == REPLAY_PLAYING)
-        g_replay_state = REPLAY_DONE;
-    replay_clamp_fade_batches(g_replay_pc);
+    state->total_flat_cmds = full_flat_count;
+    if (state->pc > g_num_flat_cmds)
+        state->pc = g_num_flat_cmds;
+    if (state->pc >= g_num_flat_cmds && g_num_flat_cmds > 0 &&
+        state->state == REPLAY_PLAYING)
+        state->state = REPLAY_DONE;
+    replay_clamp_fade_batches(state->pc);
     return replay_exec_limit();
 }
 
 void replay_restore_baseline_predef_values(void) {
-    repl_restore_predef_values(g_replay_baseline_predef_vals, MAX_PREDEF_VARS);
+    repl_restore_predef_values(replay_state_mut()->baseline_predef_vals, MAX_PREDEF_VARS);
 }
 
 void replay_copy_baseline_predef_values(float *dst, int max_vals) {
@@ -969,23 +965,24 @@ void replay_copy_baseline_predef_values(float *dst, int max_vals) {
         return;
 
     n = max_vals < MAX_PREDEF_VARS ? max_vals : MAX_PREDEF_VARS;
-    memcpy(dst, g_replay_baseline_predef_vals, (size_t)n * sizeof(float));
+    memcpy(dst, replay_state_mut()->baseline_predef_vals, (size_t)n * sizeof(float));
 }
 
 void replay_restore_baseline_scratch_arrays(void) {
-    repl_eval_restore_scratch_arrays(g_replay_baseline_scratch_arrays);
+    repl_eval_restore_scratch_arrays(replay_state_mut()->baseline_scratch_arrays);
 }
 
 void replay_copy_baseline_scratch_arrays(
     float dst[REPL_SCRATCH_ARRAY_COUNT][REPL_SCRATCH_ARRAY_LEN]) {
     if (!dst)
         return;
-    memcpy(dst, g_replay_baseline_scratch_arrays,
-           sizeof(g_replay_baseline_scratch_arrays));
+    memcpy(dst, replay_state_mut()->baseline_scratch_arrays,
+           sizeof(replay_state_mut()->baseline_scratch_arrays));
 }
 
 int replay_handle_key_impl(unsigned char key) {
-    if (!g_replay_active) {
+    ReplReplayRuntimeState *state = replay_state_mut();
+    if (!state->active) {
         if (key == KEY_CTRL_R) {
             replay_start();
             return 1;
@@ -993,13 +990,13 @@ int replay_handle_key_impl(unsigned char key) {
         if (key == KEY_CTRL_K) {
             int target_line = repl_dispatch_edit_line_get();
             replay_start();
-            if (g_replay_active) {
+            if (replay_active()) {
                 int landed = replay_seek_to_src_line(target_line);
                 if (landed < 0) {
                     repl_set_status("Jump: no geometry at or after cursor");
                 } else {
                     char msg[64];
-                    g_replay_state = REPLAY_PAUSED;
+                    replay_state_mut()->state = REPLAY_PAUSED;
                     snprintf(msg, sizeof(msg), "Jump: paused at line %d", landed + 1);
                     repl_set_status(msg);
                 }
@@ -1020,20 +1017,20 @@ int replay_handle_key_impl(unsigned char key) {
             repl_set_status("Jump: no geometry at or after cursor");
         } else {
             char msg[64];
-            g_replay_state = REPLAY_PAUSED;
+            state->state = REPLAY_PAUSED;
             snprintf(msg, sizeof(msg), "Jump: paused at line %d", landed + 1);
             repl_set_status(msg);
         }
         return 1;
     }
     if (key == ' ') {
-        if (g_replay_state == REPLAY_PLAYING) {
-            g_replay_state = REPLAY_PAUSED;
+        if (state->state == REPLAY_PLAYING) {
+            state->state = REPLAY_PAUSED;
             repl_set_status("Replay: paused");
-        } else if (g_replay_state == REPLAY_PAUSED) {
-            g_replay_state = REPLAY_PLAYING;
+        } else if (state->state == REPLAY_PAUSED) {
+            state->state = REPLAY_PLAYING;
             repl_set_status("Replay: playing");
-        } else if (g_replay_state == REPLAY_DONE) {
+        } else if (state->state == REPLAY_DONE) {
             replay_restart_from_beginning();
             repl_set_status("Replay: restarted");
         }
@@ -1048,20 +1045,24 @@ int replay_handle_key_impl(unsigned char key) {
         return 1;
     }
     if (key == 'm' || key == 'M') {
-        int was_playing = (g_replay_state == REPLAY_PLAYING);
-        g_replay_mode = (g_replay_mode == REPLAY_MODE_VERTEX)
-                      ? REPLAY_MODE_POLYGON
-                      : REPLAY_MODE_VERTEX;
-        replay_seek(g_replay_pc);
-        if (was_playing && g_replay_state != REPLAY_DONE)
-            g_replay_state = REPLAY_PLAYING;
-        repl_set_status(g_replay_mode == REPLAY_MODE_VERTEX
+        int was_playing = (state->state == REPLAY_PLAYING);
+        state->mode = (state->mode == REPLAY_MODE_VERTEX)
+                    ? REPLAY_MODE_POLYGON
+                    : REPLAY_MODE_VERTEX;
+        replay_seek(state->pc);
+        if (was_playing && state->state != REPLAY_DONE)
+            state->state = REPLAY_PLAYING;
+        repl_set_status(state->mode == REPLAY_MODE_VERTEX
                  ? "Replay: vertex mode"
                  : "Replay: polygon mode");
         return 1;
     }
     if (key == 'e' || key == 'E') {
-        g_replay_expand_args = !g_replay_expand_args;
+        /* Route Replay expand toggle: Bug 14 */
+        repl_cfg_set_int("replay_expand", !repl_cfg_get_int("replay_expand", 0));
+        repl_set_status(repl_cfg_get_int("replay_expand", 0)
+                 ? "Replay: expand args ON"
+                 : "Replay: expand args OFF");
         return 1;
     }
     if (key == KEY_ESC) {
@@ -1070,6 +1071,8 @@ int replay_handle_key_impl(unsigned char key) {
         return 1;
     }
 
+    /* Bug 7: Silent stop UX */
+    repl_set_status("Replay: cancelled (key)");
     replay_stop();
     return 0;
 }
@@ -1087,7 +1090,7 @@ static int replay_modifier_special_key(int key) {
 }
 
 int replay_handle_special_key_impl(int key) {
-    if (!g_replay_active)
+    if (!replay_active())
         return 0;
 
     if (key == GLUT_KEY_LEFT) {
@@ -1107,13 +1110,17 @@ int replay_handle_special_key_impl(int key) {
         return 1;
     }
 
-    if (!replay_modifier_special_key(key))
+    if (!replay_modifier_special_key(key)) {
+        /* Bug 7: Silent stop UX */
+        repl_set_status("Replay: cancelled (key)");
         replay_stop();
+    }
     return 0;
 }
 
 int replay_bench_fade_install(const int *old_pcs, const int *new_pcs,
                             int count, float age) {
+    ReplReplayRuntimeState *state = replay_state_mut();
     int installed = 0;
     REPLAY_FLAT_STATE;
 
@@ -1134,20 +1141,21 @@ int replay_bench_fade_install(const int *old_pcs, const int *new_pcs,
         if (new_pc <= old_pc)
             continue;
 
-        g_replay_fade_batches[installed].old_pc = old_pc;
-        g_replay_fade_batches[installed].new_pc = new_pc;
-        g_replay_fade_batches[installed].age = age;
+        state->fade_batches[installed].old_pc = old_pc;
+        state->fade_batches[installed].new_pc = new_pc;
+        state->fade_batches[installed].age = age;
         installed++;
     }
-    g_replay_fade_batch_count = installed;
+    state->fade_batch_count = installed;
 
-    repl_copy_predef_values(g_replay_baseline_predef_vals, MAX_PREDEF_VARS);
-    repl_eval_copy_scratch_arrays(g_replay_baseline_scratch_arrays);
-    g_replay_active = (installed > 0);
+    repl_copy_predef_values(state->baseline_predef_vals, MAX_PREDEF_VARS);
+    repl_eval_copy_scratch_arrays(state->baseline_scratch_arrays);
+    state->active = (installed > 0);
     return installed;
 }
 
 void replay_bench_fade_clear(void) {
-    g_replay_fade_batch_count = 0;
-    g_replay_active = 0;
+    ReplReplayRuntimeState *state = replay_state_mut();
+    state->fade_batch_count = 0;
+    state->active = 0;
 }

@@ -100,20 +100,44 @@ typedef struct {
     float      clear_color[4];
 } ReplRenderState;
 
+#define REPLAY_FADE_BATCH_MAX 24
+
+/* A snapshot of geometry from [old_pc, new_pc) that fades out as new
+ * geometry appears. age is the fade timestamp (incremented by the REPL
+ * replay state machine). Multiple batches can be active simultaneously
+ * via a ring buffer. */
+typedef struct {
+    int   old_pc;
+    int   new_pc;
+    float age;
+} ReplayFadeBatch;
+
+/* Read-only view over the active fade batches; valid for one frame. */
+typedef struct {
+    const ReplayFadeBatch *batches;
+    int                    count;
+} ReplayFadeBatchView;
+
 /* Replay snapshot shape shared with the replay peer subsystem. Storage lives in
  * src/subsystems/replay/replay_state.c; this value type stays here so snapshots and UI
  * bundles can pass replay state by value without depending on the peer's API. */
 typedef struct {
-    int   active;
-    int   state;
-    int   pc;
-    int   mode;
-    float speed;
-    float accum;
-    float fade_speed;
-    int   src_line_idx;
-    int   total_flat_cmds;
-    int   expand_args;
+    int             active;
+    int             state;
+    int             pc;
+    int             mode;
+    float           speed;
+    float           accum;
+    float           fade_speed;
+    int             src_line_idx;
+    int             total_flat_cmds;
+    int             expand_args;
+    float           baseline_predef_vals[MAX_PREDEF_VARS];
+    float           baseline_scratch_arrays[REPL_SCRATCH_ARRAY_COUNT][REPL_SCRATCH_ARRAY_LEN];
+    int             saved_t_playing;
+    int             last_src_line;
+    ReplayFadeBatch fade_batches[REPLAY_FADE_BATCH_MAX];
+    int             fade_batch_count;
 } ReplReplayRuntimeState;
 
 /* Scene/workspace bookkeeping kept with the REPL runtime: which built-in example

@@ -84,6 +84,9 @@ virtual lines), but it never *becomes* editor-owned.
 
 **Boundary:** a subsystem owns its own state and controller. It does
 **not** own editor text behavior or REPL grammar; its renderer lives in
-`src/ui/app/`; its one write path into the program is the editor commit.
+`src/ui/app/`; its one user-driven write path into the program is the editor commit.
+(Programmatic scene-setup or comment injection by subsystems like `tutorial` may
+bypass the commit transaction and load directly via `repl_load_apply_line` without
+generating undo history.)
 (The tutorial *catalog* — the lesson content — lives in
 `src/repl/tutorials.c`, separate from the runner here.)

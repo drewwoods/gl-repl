@@ -249,6 +249,16 @@ static void test_color_picker(void) {
     color_picker_open(0, 300);
     color_picker_handle_press(0, 0);
 
+    /* Test clicking inside picker bounds but outside slider rects (consumed-no-op) */
+    color_picker_open(0, 300);
+    view = color_picker_view();
+    int inside_mx = view.rects.sv_x + 5;
+    int inside_my = ui_state_viewport().window_h - (view.rects.sv_y - 4);
+    ColorPickerInputResult res_inside = color_picker_handle_press(inside_mx, inside_my);
+    ASSERT_TRUE("inside click is consumed", res_inside.consumed == 1);
+    ASSERT_TRUE("inside click does not close", res_inside.closed == 0);
+    ASSERT_TRUE("picker stays open after inside click", color_picker_active_line() == 0);
+
     /* Test writeback short-circuit (mutated command type underneath) */
     color_picker_open(0, 300);
     view = color_picker_view();

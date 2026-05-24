@@ -143,6 +143,27 @@ void repl_dispatch_edit_line_set(int line) {
         g_host_effects->edit_line_set(line);
 }
 
+void repl_dispatch_host_cursor_park(int line, int insert_mode) {
+    if (g_host_effects && g_host_effects->host_cursor_park)
+        g_host_effects->host_cursor_park(line, insert_mode);
+}
+
+void repl_dispatch_completion_clear(void) {
+    if (g_host_effects && g_host_effects->completion_clear)
+        g_host_effects->completion_clear();
+}
+
+void repl_dispatch_completion_update(void) {
+    if (g_host_effects && g_host_effects->completion_update)
+        g_host_effects->completion_update();
+}
+
+const char *repl_dispatch_host_input_get(void) {
+    if (g_host_effects && g_host_effects->host_input_get)
+        return g_host_effects->host_input_get();
+    return "";
+}
+
 const char *repl_mode_name(GLenum mode) {
     return repl_begin_mode_name(mode);
 }

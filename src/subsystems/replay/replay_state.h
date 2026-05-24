@@ -18,8 +18,9 @@
 
 #include "repl/state_views.h"
 
-/* Copy or reset the full replay runtime snapshot. Used by app-wide capture /
- * restore paths and by replay reset flows. */
+/* Copy or reset the full replay runtime snapshot.
+ * Note: replay_state_capture/restore is exclusively a test/verification contract;
+ * production code does not capture/restore replay state. */
 void                     replay_state_capture(ReplReplayRuntimeState *snapshot);
 void                     replay_state_restore(const ReplReplayRuntimeState *snapshot);
 void                     replay_state_reset(void);

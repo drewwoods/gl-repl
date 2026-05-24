@@ -11,6 +11,19 @@
 #include <stdio.h>
 #include <string.h>
 
+#define REPLAY_STATE (replay_state_mut())
+#define g_replay_active      (REPLAY_STATE->active)
+#define g_replay_state       (REPLAY_STATE->state)
+#define g_replay_pc          (REPLAY_STATE->pc)
+#define g_replay_mode        (REPLAY_STATE->mode)
+#define g_replay_speed       (REPLAY_STATE->speed)
+#define g_replay_accum       (REPLAY_STATE->accum)
+#define g_replay_fade_speed  (REPLAY_STATE->fade_speed)
+#define g_replay_src_line    (REPLAY_STATE->src_line_idx)
+#define g_replay_total_flat  (REPLAY_STATE->total_flat_cmds)
+#define g_replay_expand_args (REPLAY_STATE->expand_args)
+#define g_replay_fade_batch_count (REPLAY_STATE->fade_batch_count)
+
 #ifndef GLUT_KEY_LEFT
 #define GLUT_KEY_LEFT 100
 #define GLUT_KEY_RIGHT 102
@@ -384,6 +397,33 @@ static void test_replay_single_arg_shape_gets_eval_annotation(void) {
     replay_stop();
 }
 
+static void test_replay_regression_fixes(void) {
+    glr_app_reset_all();
+    add_mock_cmd(0, CMD_COLOR3F);
+    add_mock_cmd(1, CMD_VERTEX3F);
+    repl_state_mark_flat_dirty();
+    repl_flatten_commands(editor_state_edit_line());
+
+    /* 1. Replay unrecognized keys stop replay with a status message */
+    replay_start();
+    ASSERT_TRUE("active after start", g_replay_active);
+
+    int consumed = replay_handle_key('z');
+    ASSERT_TRUE("unrecognized key not consumed", consumed == 0);
+    ASSERT_TRUE("replay stopped on unrecognized key", !g_replay_active);
+
+    /* 2. Replay expand toggle routes through config */
+    replay_start();
+    ASSERT_TRUE("active after restart", g_replay_active);
+    ASSERT_TRUE("expand args on initially", g_replay_expand_args == 1);
+
+    consumed = replay_handle_key('e');
+    ASSERT_TRUE("expand key consumed", consumed == 1);
+    ASSERT_TRUE("expand args toggled", g_replay_expand_args == 0);
+
+    replay_stop();
+}
+
 int main(void) {
     test_replay_basic_controls();
     test_replay_stepping();
@@ -395,6 +435,7 @@ int main(void) {
     test_misc_helpers();
     test_replay_var_assign_uses_flatten_args();
     test_replay_single_arg_shape_gets_eval_annotation();
+    test_replay_regression_fixes();
 
     printf("test_repl_replay: %d/%d passed\n", g_harness.passed, g_harness.run);
     return (g_harness.run == g_harness.passed) ? 0 : 1;

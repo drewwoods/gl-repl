@@ -22,6 +22,8 @@ static void tutorial_state_init_defaults(TutorialRuntimeState *s) {
     s->last_result.kind = TUT_MATCH_OK;
     s->last_result.arg_index = -1;
     s->last_result.message[0] = '\0';
+    repl_export_config_clear(&s->baseline_bag);
+    s->baseline_valid = 0;
 }
 
 #if defined(__GNUC__) || defined(__clang__)
@@ -45,4 +47,14 @@ void tutorial_state_reset(void) {
 
 int tutorial_active(void) {
     return g_tutorial_state.active;
+}
+
+void tutorial_state_capture(TutorialRuntimeState *snapshot) {
+    if (!snapshot) return;
+    *snapshot = g_tutorial_state;
+}
+
+void tutorial_state_restore(const TutorialRuntimeState *snapshot) {
+    if (!snapshot) return;
+    g_tutorial_state = *snapshot;
 }

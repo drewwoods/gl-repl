@@ -4,8 +4,6 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "editor/completion.h"
-#include "editor/state.h"
 #include "repl/core.h"
 #include "repl/export.h"   /* repl_state_parse_workspace_header_line for @cfg */
 #include "repl/load.h"
@@ -41,12 +39,11 @@ static float clamp01(float value) {
  *      the scene subset since it isn't a per-scene property).
  *
  * The bag's set_int dedups by slug, so we can union (1) and (2) blindly. */
-static ReplExportConfig g_tut_cfg_baseline_bag;
-static int              g_tut_cfg_baseline_valid;
 
 static void tutorial_cfg_baseline_clear(void) {
-    repl_export_config_clear(&g_tut_cfg_baseline_bag);
-    g_tut_cfg_baseline_valid = 0;
+    TutorialRuntimeState *state = tutorial_state_mut();
+    repl_export_config_clear(&state->baseline_bag);
+    state->baseline_valid = 0;
 }
 
 /* Helper: add (slug, current_value) to the baseline bag iff the bridge
@@ -56,7 +53,8 @@ static void tutorial_cfg_baseline_clear(void) {
 static void tutorial_cfg_baseline_record_one(const char *slug) {
     if (!slug || !slug[0])     return;
     if (!repl_cfg_known(slug)) return;
-    repl_export_config_set_int(&g_tut_cfg_baseline_bag, slug,
+    TutorialRuntimeState *state = tutorial_state_mut();
+    repl_export_config_set_int(&state->baseline_bag, slug,
                                repl_cfg_get_int(slug, 0));
 }
 
@@ -70,8 +68,9 @@ static void tutorial_cfg_baseline_record_one(const char *slug) {
 static void tutorial_capture_cfg_baseline(int idx) {
     tutorial_cfg_baseline_clear();
     const ReplExportConfigBridge *b = repl_export_config_bridge();
+    TutorialRuntimeState *state = tutorial_state_mut();
     if (b && b->fill_scene_subset)
-        b->fill_scene_subset(&g_tut_cfg_baseline_bag);
+        b->fill_scene_subset(&state->baseline_bag);
 
     /* `presentation_reset_example_defaults` (called for every tutorial
      * start) always touches `view_mode`/ortho_mode, but view_mode is
@@ -94,7 +93,7 @@ static void tutorial_capture_cfg_baseline(int idx) {
         if (k == TUTORIAL_STEP_KIND_SET || k == TUTORIAL_STEP_KIND_REQUIRE)
             tutorial_cfg_baseline_record_one(repl_tutorial_step_cfg_slug(idx, s));
     }
-    g_tut_cfg_baseline_valid = 1;
+    state->baseline_valid = 1;
 }
 
 /* Apply the captured bag back through the bridge, then clear it. The
@@ -106,10 +105,11 @@ static void tutorial_capture_cfg_baseline(int idx) {
  * match an active REQUIRE step's target would auto-advance the
  * tutorial mid-teardown (and run the next step's SET side effects). */
 static void tutorial_cfg_baseline_restore(void) {
-    if (!g_tut_cfg_baseline_valid) return;
+    TutorialRuntimeState state = tutorial_state_view();
+    if (!state.baseline_valid) return;
     const ReplExportConfigBridge *b = repl_export_config_bridge();
     if (b && b->apply)
-        b->apply(&g_tut_cfg_baseline_bag);
+        b->apply(&state.baseline_bag);
     tutorial_cfg_baseline_clear();
 }
 
@@ -272,13 +272,17 @@ static int tutorial_emit_instruction_comment(const char *comment,
     tutorial_shift_tracked_lines_from(instruction_line, 1);
 
     /* repl_load_apply_line caller contract (src/repl/load.h):
+     * Programmatic scene-setup/comment injection by the tutorial
+     * subsystem is a programmatic load, not user-driven editing,
+     * so it intentionally bypasses the editor commit transaction
+     * and its undo history generation.
      * supply the insertion index via &edit_line_inout; clear
      * insert mode; mark flat/normals dirty after loading. The
      * second `editor_state_edit_line_set(expected_commit_line)`
      * below overrides any post-load cursor advance, so the value
      * threaded here is purely for the insert position. */
     int loader_edit_line = instruction_line;
-    editor_insert_mode_set(0);
+    repl_dispatch_insert_mode_off();
     if (!repl_load_apply_line(comment, err, (int)sizeof(err), &loader_edit_line)) {
         /* Loader failed — undo the speculative shift so tracked
          * indices stay consistent with the unchanged document. */
@@ -488,10 +492,18 @@ void tutorial_start(int idx) {
      * no scene-presentation footprint. */
     tutorial_capture_cfg_baseline(idx);
 
+    /* Preserve baseline configuration across the state reset */
+    ReplExportConfig preserved_bag = tutorial_state_view().baseline_bag;
+    int preserved_valid = tutorial_state_view().baseline_valid;
+
     repl_scenes_enter_transient_scene();
     repl_scenes_reset_for_transient();
-    editor_completion_clear();
+    repl_dispatch_completion_clear();
     tutorial_state_reset();
+
+    /* Restore the preserved baseline configuration */
+    tutorial_state_mut()->baseline_bag = preserved_bag;
+    tutorial_state_mut()->baseline_valid = preserved_valid;
 
     /* Reset scene-presentation chrome to defaults, then apply any
      * tutorial leading `@cfg` lines through the export-config bridge —
@@ -529,8 +541,8 @@ void tutorial_start(int idx) {
 void tutorial_teardown(void) {
     if (!tutorial_active())
         return;
-    /* Reset state BEFORE restoring cfg so the per-slug notify hook in
-     * glr_config_set sees `active == 0` and bails out before it can
+    /* Deactivate active status BEFORE restoring cfg so the per-slug notify
+     * hook in glr_config_set sees `active == 0` and bails out before it can
      * compare the just-written value to any step's REQUIRE target.
      * Bug fix: exiting / restarting / switching tutorials during a
      * REQUIRE step could otherwise advance the tutorial during the
@@ -538,8 +550,9 @@ void tutorial_teardown(void) {
      * vertex_outlines=1 (the pre-tutorial default) coincides with the
      * REQUIRE target and triggers the next step's SET grid=10 side
      * effect after grid was already restored. */
-    tutorial_state_reset();
+    tutorial_state_mut()->active = 0;
     tutorial_cfg_baseline_restore();
+    tutorial_state_reset();
 }
 
 void tutorial_exit(void) {
@@ -553,7 +566,7 @@ void tutorial_exit(void) {
      * mutated cfg into the pre-workspace snapshot. */
     repl_set_status("Tutorial exited");
     tutorial_teardown();
-    editor_completion_update();
+    repl_dispatch_completion_update();
 }
 
 int tutorial_handle_commit_attempt(const char *input, TutorialMatchResult *out) {
@@ -643,9 +656,9 @@ int tutorial_status_hint(char *out, size_t out_size) {
 
     int show_commit = 0;
     if (state.expected_commit_line >= 0 &&
-        editor_state_edit_line() == state.expected_commit_line) {
-        EditorInputView inp = editor_state_input();
-        TutorialMatchResult r = tutorial_match(expected, inp.input);
+        repl_dispatch_edit_line_get() == state.expected_commit_line) {
+        const char *inp_text = repl_dispatch_host_input_get();
+        TutorialMatchResult r = tutorial_match(expected, inp_text);
         show_commit = (r.kind == TUT_MATCH_OK);
     }
     if (show_commit)
@@ -684,7 +697,7 @@ static int tutorial_enter_step(int step) {
          * cfg + resets state; status set BEFORE teardown so it survives. */
         repl_set_status("Tutorial complete");
         tutorial_teardown();
-        editor_completion_update();
+        repl_dispatch_completion_update();
         return -1;
     }
 
@@ -704,13 +717,13 @@ static int tutorial_enter_step(int step) {
         /* Original typing setup: cursor on the row immediately below
          * the new instruction; insert mode iff mid-document. */
         state->expected_commit_line = instruction_line + 1;
-        editor_state_edit_line_set(state->expected_commit_line);
-        editor_insert_mode_set(state->expected_commit_line <
-                               repl_state_document_count());
+        repl_dispatch_host_cursor_park(state->expected_commit_line,
+                                       state->expected_commit_line <
+                                       repl_state_document_count());
         tutorial_set_step_status(idx, step);
         /* Refresh autocomplete so the shadow ghost for the expected
          * command appears on the next frame, not the next keystroke. */
-        editor_completion_update();
+        repl_dispatch_completion_update();
         return 1;
     case TUTORIAL_STEP_KIND_SET: {
         /* Showcase: apply the cfg so the user immediately sees the
@@ -725,11 +738,11 @@ static int tutorial_enter_step(int step) {
         int value = repl_tutorial_step_cfg_value(idx, step);
         repl_cfg_set_int(slug, value);
         state->expected_commit_line = -1;
-        editor_state_edit_line_set(instruction_line + 1);
-        editor_insert_mode_set((instruction_line + 1) <
-                               repl_state_document_count());
+        repl_dispatch_host_cursor_park(instruction_line + 1,
+                                       (instruction_line + 1) <
+                                       repl_state_document_count());
         repl_set_status("Press Enter / Tab / Space to continue");
-        editor_completion_update();
+        repl_dispatch_completion_update();
         return 1;
     }
     case TUTORIAL_STEP_KIND_REQUIRE: {
@@ -749,13 +762,13 @@ static int tutorial_enter_step(int step) {
         /* Park the cursor past the locked instruction-comment row so
          * the editor doesn't render the empty input overlay over it —
          * same fix as the SET branch above. */
-        editor_state_edit_line_set(instruction_line + 1);
-        editor_insert_mode_set((instruction_line + 1) <
-                               repl_state_document_count());
+        repl_dispatch_host_cursor_park(instruction_line + 1,
+                                       (instruction_line + 1) <
+                                       repl_state_document_count());
         char msg[96];
         snprintf(msg, sizeof msg, "Set %s = %d to continue", slug, target);
         repl_set_status(msg);
-        editor_completion_update();
+        repl_dispatch_completion_update();
         return 1;
     }
     }
