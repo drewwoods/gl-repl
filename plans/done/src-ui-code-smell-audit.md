@@ -46,31 +46,30 @@ below):
   #21, #22, #23, #24, #26, #27, #28, #29 (across `a8c911a`, `7f5f782`,
   `4a33445`). #31 done in the closeout commit (locale-safe
   `ascii_tolower` in `text_search.c`).
-- *Partial:* #18 — visibility and replay-active are snapshot-driven,
-  but drag state (`variable_panel_drag_active_var` /
-  `_drag_log_mode`) is still read live inside
-  `ui_variable_panel_render`. Plumbing a `UiVariableDragView` slice is
-  a separate refactor; left for a follow-up.
-- *Deferred:* #25 (replay HUD still takes its own `UiReplayHudState`
-  rather than `UiRenderSnapshot *` — non-trivial signature change),
-  #30 (`glIsEnabled(GL_BLEND)` save/restore in the fake-bold per-segment
-  loop — needs a row-level boolean threaded down).
+- *Done in backlog pass (2026-05-24 second closeout — see below):*
+  #18 (drag-state slice on snapshot, **Tier B**, commit `783d7e3`),
+  #25 (replay HUD takes `const UiRenderSnapshot *`, **Tier B**,
+  commit `783d7e3`).
+- *Deferred:* #30 (`glIsEnabled(GL_BLEND)` save/restore in the
+  fake-bold per-segment loop — sorted into **Tier C** by the
+  2026-05-24 backlog pass; needs a row-level boolean threaded down).
 
 **🟢 Dead code / dead fields:**
 
 - *Done:* #32, #33, #34, #35, #36, #38, #39, #40, #41, #42, #43 (across
   `cf6157c` and `4a33445`).
-- *Deferred:* #37 — `editor_search_find_{next,prev}_in_text` pass-through
-  wrappers were kept on purpose so editor-namespaced callers (search.c
-  itself, `test_repl_core_search_extra.c`) don't reach across the
-  `editor_*` ↔ `ui_text_*` prefix boundary.
-- *Claim incorrect:* #44 — the conditional `resolved_line` override
-  for `UI_TEXT_PANEL_ROW_VIRTUAL` is load-bearing, not dead. Dropping
-  it makes `test_ui_text_panel.c:190` ("virtual row keeps line_idx
-  unresolved in generic hit") fail because the adapter relies on the
+- *Kept on purpose (Tier D):* #37 —
+  `editor_search_find_{next,prev}_in_text` pass-through wrappers
+  preserve the `editor_*` ↔ `ui_text_*` prefix boundary; deleting
+  them would force editor-namespaced callers (search.c itself,
+  `test_repl_core_search_extra.c`) to reach across.
+- *Claim incorrect (Tier D):* #44 — the conditional `resolved_line`
+  override for `UI_TEXT_PANEL_ROW_VIRTUAL` is load-bearing.
+  `test_ui_text_panel.c:190` ("virtual row keeps line_idx unresolved
+  in generic hit") fails without it because the adapter relies on the
   generic hit-tester returning `-1` so it can rewrite the line. The
-  override now carries a comment explaining why; finding stands but the
-  fix doesn't.
+  override now carries a comment explaining why; finding stands but
+  the fix doesn't.
 
 **🔵 Structural concerns:**
 
@@ -82,13 +81,66 @@ below):
   `ui_layout_code_panel_layout_mode` to `layout.h`, deleted the
   variable-panel duplicate), #62 (re-indented stray two-space block in
   `text_panel.c`).
-- *Deferred:* #45, #46, #47, #48, #49, #50, #51, #52, #53, #54, #55,
-  #58, #63. These are the long-function / row-cache / hot-path-static-
-  buffer refactors. Each is a real follow-up but the cost-per-finding
-  is high relative to the rest of the list. None are bugs.
+- *Deferred (Tier C):* #45, #46, #47, #48, #49, #50, #51, #52, #53,
+  #54, #55, #58, #63. The long-function / row-cache / hot-path-static-
+  buffer refactors. Each is a real follow-up but cost-per-finding is
+  high relative to the rest of the list. None are bugs.
 
-Verification: `make check-c99`, `make check-state-ownership`, and
-`make test-stubs` all clean (45 / 45 binaries, 6776 / 6776 tests).
+Verification (original closeout): `make check-c99`,
+`make check-state-ownership`, `make test-stubs` clean (45/45 binaries,
+6776/6776 tests). Backlog-pass closeout (2026-05-24): re-verified
+with the same gates (45/45 binaries, 6815 tests after #25's HUD
+signature change dropped 4 assertions on the deleted
+`UiReplayHudState.scene_x/y/w/h` fields).
+
+### Backlog pass (2026-05-24)
+
+A follow-up review on 2026-05-24 reopened the partial/deferred items
+and triaged them by **the same Tier system used in the sibling
+`src-repl-code-smell-audit.md`** (reproduced here for stand-alone
+reading):
+
+- **Tier A — small, real fix, near-zero risk.** 5–30 line changes,
+  no architectural exposure.
+- **Tier B — moderate effort, clear value.** 50–200 line changes,
+  one or two files of churn, a real test impact.
+- **Tier C — defer (high cost, low payoff).** Real wins but touch
+  a wide surface; revisit when the surrounding code is being
+  reworked anyway.
+- **Tier D — keep deferred.** Findings the audit landed wrong, or
+  where the original intent (a kept-on-purpose trampoline, a
+  test-pinned bug) makes "fixing" them worse than living with them.
+
+Sorted into action tiers, the still-open items landed as:
+
+- **Tier A:** **#29** confirmed already done before the audit — the
+  table and active-theme global live in `theme.c` (with `extern`
+  declarations in the header) since the original closeout; only the
+  stale "Header-only (mirrors gl_2d.h)" claim in the file comment
+  was fixed (`f5d0c50`).
+- **Tier B (done — commit `783d7e3`):**
+  - **#18** — Add `UiVariableDragView` slice to `UiRenderSnapshot`;
+    `ui_variable_panel_render` reads `snap->variable_drag.*` instead
+    of calling `variable_panel_drag_active_var()` / `_log_mode()`
+    live. Closes the gap left by the original closeout.
+  - **#25** — Reshape `replay_ui_hud_render` to take
+    `const UiRenderSnapshot *`. Deletes the 14-field
+    `UiReplayHudState` struct (the controller's 1832-1851 block
+    collapses to `replay_ui_hud_render(&ui_snap)`); HUD reads
+    `snap->replay.*`, `snap->code_panel.layout_mode`,
+    `snap->viewport.*`, and calls `ui_layout_scene_rect()` itself.
+    The "HUD shows pre-prepare replay" contract is preserved by
+    briefly overriding `ui_snap.replay` with the pre-prepare
+    `frame_replay` capture across the HUD call — other `snap->replay`
+    readers only touch fields `replay_prepare_frame` doesn't write
+    (`src_line_idx`, `active`).
+- **Tier C (still deferred):** #30, plus the structural cluster
+  #45–#55 + #58, #63.
+- **Tier D (still kept):** #37, #44.
+
+After this pass the only open items in the audit are Tier C (real
+wins, high cost) and Tier D (kept on purpose). No bug-level
+findings remain.
 
 ## 🔴 Actual bugs (verified)
 
@@ -379,7 +431,7 @@ in `glr_ctrl_tick` (`src/app/glr_ctrl.c:3917-3923`) via
 **Fix:** Move both fields to an editor-session slice next to
 `scroll` (which the same comment says is on `EditorState`).
 
-### 18. Variable panel reads peer live state instead of snapshot
+### 18. Variable panel reads peer live state instead of snapshot (done — Tier B, commit `783d7e3`)
 
 **Where:** `src/ui/app/variable_panel.c:113, 195, 273-274, 307-308`
 
@@ -488,7 +540,7 @@ layout_mode)` in `ui/core/layout.{c,h}`.
 **Fix:** Add `gl2d_panel_frame(x, y, w, h, bg_tok, border_tok,
 bg_alpha, border_alpha)` to `ui/core/gl_2d.{c,h}`; migrate.
 
-### 25. Replay HUD ignores `snap->replay`
+### 25. Replay HUD ignores `snap->replay` (done — Tier B, commit `783d7e3`)
 
 **Where:** `src/ui/app/replay_hud.h:35-50`,
 `src/app/glr_ctrl.c:1699-1714`
@@ -538,7 +590,7 @@ UI_TEXT_PANEL_RIGHT_ACTION_W - 2;` formula at two sites.
 **Fix:** Extract `ui_text_panel_right_action_rect(snap, line_y,
 &sx, &sy, &sw)` in `text_panel.{c,h}`.
 
-### 29. `theme.h` declares a static color table in a header included by 10 TUs
+### 29. `theme.h` declares a static color table in a header included by 10 TUs (already done before audit; comment-only update in `f5d0c50`)
 
 **Where:** `src/ui/core/theme.h` (174 lines, `static int
 g_ui_theme;` + `static const UiRgba g_ui_theme_table[][]`)
@@ -552,7 +604,7 @@ relocate this to one .c TU."
 promote getters/setters to extern; keep `theme.h` for declarations
 only.
 
-### 30. `text_panel.c` query-and-restore of `GL_BLEND` in tight per-segment loop
+### 30. `text_panel.c` query-and-restore of `GL_BLEND` in tight per-segment loop (Tier C — deferred)
 
 **Where:** `src/ui/core/text_panel.c:113`
 
@@ -640,7 +692,7 @@ around `ui_menu_bar_submenu_rect_for_test` that just convert
 `scene_parent_row_for_tag` / `tutorial_parent_row_for_tag` and let
 tests compose.
 
-### 37. `editor_search_find_next_in_text` / `_prev_` are pass-through trampolines
+### 37. `editor_search_find_next_in_text` / `_prev_` are pass-through trampolines (Tier D — kept on purpose)
 
 **Where:** `src/editor/search.c:57-65`
 
@@ -721,7 +773,7 @@ the UI-chrome value-types header, but ownership is on
 `subsystems/variable_panel/variable_panel_state.h`; have
 `ui/app/snapshot.h` include from there.
 
-### 44. `text_panel.c:818-819` dead override of `resolved_line` for virtual rows
+### 44. `text_panel.c:818-819` dead override of `resolved_line` for virtual rows (Tier D — claim incorrect; load-bearing)
 
 **Where:** `src/ui/core/text_panel.c:818-819`
 
@@ -740,6 +792,11 @@ the docs.
 through to `hit_target_line_idx`.
 
 ## 🔵 Structural concerns
+
+> Closeout note (2026-05-24): unless individually marked otherwise,
+> findings in this section are **Tier C — deferred**. The exceptions
+> are #56, #57, #59, #60, #61, #62, which were closed in the original
+> pass (see the Closeout block at the top).
 
 ### 45. `ui_menu_bar_render` is 140 lines mixing 6 jobs
 
