@@ -39,100 +39,67 @@ static const float k_status_bar_fg_err[3]   = { 1.000f, 0.557f, 0.494f };
 
 void ui_panels_render_code_panel(const UiRenderSnapshot *snap,
                                  UiCodePanelOutput *out) {
-    ui_repl_code_panel_render(snap, out);
+    ui_repl_code_panel_render_with_chrome(snap, out);
+}
+
+static void draw_modal_strip(const UiRenderSnapshot *snap,
+                             const char *msg, int msg_len, int max_buf) {
+    int sc_x, sc_y, sc_w, sc_h;
+    int bar_h, bar_y, text_y, tx, max_px, max_chars;
+    char trunc[320];
+
+    ui_layout_scene_rect(&sc_x, &sc_y, &sc_w, &sc_h);
+    if (sc_w <= 0 || sc_h <= 0)
+        return;
+
+    bar_h = STATUSBAR_H;
+    bar_y = sc_y;
+
+    gl2d_begin(snap->viewport.window_w, snap->viewport.window_h);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+    glColor4fv(k_rename_bar_bg);
+    glRectf((float)sc_x, (float)bar_y,
+            (float)(sc_x + sc_w), (float)(bar_y + bar_h));
+    glColor4fv(k_rename_bar_rule);
+    glBegin(GL_LINES);
+    glVertex2f((float)sc_x, (float)(bar_y + bar_h));
+    glVertex2f((float)(sc_x + sc_w), (float)(bar_y + bar_h));
+    glEnd();
+
+    text_y = bar_y + (bar_h - FONT_SMALL_H) / 2 + 1;
+    tx = sc_x + CODE_MARGIN_X;
+    max_px = sc_w - 2 * CODE_MARGIN_X;
+    max_chars = max_px / FONT_SMALL_W;
+    if (max_chars < 8)
+        max_chars = 8;
+    if (max_chars > max_buf - 1)
+        max_chars = max_buf - 1;
+    if (msg_len > max_chars) {
+        snprintf(trunc, sizeof(trunc), "%.*s", max_chars, msg);
+        msg = trunc;
+    }
+    glColor4fv(k_rename_bar_text);
+    gl2d_draw_string((float)tx, (float)text_y, msg, FONT_SMALL);
+
+    glDisable(GL_BLEND);
+    gl2d_end();
 }
 
 void ui_panels_render_scene_status(const UiRenderSnapshot *snap) {
-    /* Inline scene rename owns its own display state and takes
-     * precedence over the transient status line. Drawn solid (no TTL
-     * fade) in a distinct blue — visually unmistakable as a modal,
-     * and unaffected by other repl_set_status() writers. */
     if (snap->rename_active) {
-        int sc_x, sc_y, sc_w, sc_h;
-        int bar_h, bar_y, text_y, tx, max_px, max_chars, n;
         char msg[256];
-
-        ui_layout_scene_rect(&sc_x, &sc_y, &sc_w, &sc_h);
-        if (sc_w <= 0 || sc_h <= 0)
-            return;
-
-        bar_h = STATUSBAR_H;
-        bar_y = sc_y;
-
-        gl2d_begin(snap->viewport.window_w, snap->viewport.window_h);
-        glEnable(GL_BLEND);
-        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-
-        glColor4fv(k_rename_bar_bg);  /* deep blue modal bar */
-        glRectf((float)sc_x, (float)bar_y,
-                (float)(sc_x + sc_w), (float)(bar_y + bar_h));
-        glColor4fv(k_rename_bar_rule);  /* modal rule */
-        glBegin(GL_LINES);
-        glVertex2f((float)sc_x, (float)(bar_y + bar_h));
-        glVertex2f((float)(sc_x + sc_w), (float)(bar_y + bar_h));
-        glEnd();
-
-        text_y = bar_y + (bar_h - FONT_SMALL_H) / 2 + 1;
-        tx = sc_x + CODE_MARGIN_X;
-        max_px = sc_w - 2 * CODE_MARGIN_X;
-        max_chars = max_px / FONT_SMALL_W;
-        if (max_chars < 8)
-            max_chars = 8;
-        if (max_chars > 255)
-            max_chars = 255;
-        n = snprintf(msg, sizeof(msg),
-                     "Rename: %s_   [Enter] save   [Esc] cancel",
-                     snap->rename_text);
-        if (n > max_chars)
-            msg[max_chars] = '\0';
-        glColor4fv(k_rename_bar_text);  /* light blue modal text */
-        gl2d_draw_string((float)tx, (float)text_y, msg, FONT_SMALL);
-
-        glDisable(GL_BLEND);
-        gl2d_end();
+        int n = snprintf(msg, sizeof(msg),
+                         "Rename: %s_   [Enter] save   [Esc] cancel",
+                         snap->rename_text);
+        draw_modal_strip(snap, msg, n, (int)sizeof(msg));
         return;
     }
 
-    /* Inline file prompt reuses the rename modal's bar geometry +
-     * colors — same hard-modal contract, same display ownership; only
-     * the prompt text differs. */
     if (snap->file_prompt_active) {
-        int sc_x, sc_y, sc_w, sc_h;
-        int bar_h, bar_y, text_y, tx, max_px, max_chars, n;
         char msg[320];
-
-        ui_layout_scene_rect(&sc_x, &sc_y, &sc_w, &sc_h);
-        if (sc_w <= 0 || sc_h <= 0)
-            return;
-
-        bar_h = STATUSBAR_H;
-        bar_y = sc_y;
-
-        gl2d_begin(snap->viewport.window_w, snap->viewport.window_h);
-        glEnable(GL_BLEND);
-        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-
-        glColor4fv(k_rename_bar_bg);
-        glRectf((float)sc_x, (float)bar_y,
-                (float)(sc_x + sc_w), (float)(bar_y + bar_h));
-        glColor4fv(k_rename_bar_rule);
-        glBegin(GL_LINES);
-        glVertex2f((float)sc_x, (float)(bar_y + bar_h));
-        glVertex2f((float)(sc_x + sc_w), (float)(bar_y + bar_h));
-        glEnd();
-
-        text_y = bar_y + (bar_h - FONT_SMALL_H) / 2 + 1;
-        tx = sc_x + CODE_MARGIN_X;
-        max_px = sc_w - 2 * CODE_MARGIN_X;
-        max_chars = max_px / FONT_SMALL_W;
-        if (max_chars < 8)
-            max_chars = 8;
-        if (max_chars > (int)sizeof(msg) - 1)
-            max_chars = (int)sizeof(msg) - 1;
-        /* When the most recent commit failed, swap the hint for the
-         * error string. The prompt strip occludes the regular status
-         * bar, so this is the only place a user can see the failure
-         * reason without dismissing the prompt. */
+        int n;
         if (snap->file_prompt_error[0])
             n = snprintf(msg, sizeof(msg),
                          "Load scene: %s_   %s   [Esc] cancel",
@@ -141,13 +108,7 @@ void ui_panels_render_scene_status(const UiRenderSnapshot *snap) {
             n = snprintf(msg, sizeof(msg),
                          "Load scene: %s_   [Enter] load   [Esc] cancel",
                          snap->file_prompt_text);
-        if (n > max_chars)
-            msg[max_chars] = '\0';
-        glColor4fv(k_rename_bar_text);
-        gl2d_draw_string((float)tx, (float)text_y, msg, FONT_SMALL);
-
-        glDisable(GL_BLEND);
-        gl2d_end();
+        draw_modal_strip(snap, msg, n, (int)sizeof(msg));
         return;
     }
 

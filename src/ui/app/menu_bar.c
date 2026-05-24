@@ -305,29 +305,9 @@ static const char *menu_item_label(int menu_id, int i) {
         return NULL;
     }
     if (menu_id == MENU_CONFIG) {
-        /* Config top-level rows are section parents + "All"; the
-         * actual items live in each row's flyout. The section model is
-         * data-faithful (UPPERCASE, as in g_cfg_items[]); the menu
-         * heading is shown leading-uppercase ("RENDERING" ->
-         * "Rendering", "TIME & REPLAY" -> "Time & replay"). */
         if (i == config_all_parent_row())
             return "All";
-        const char *raw = glr_config_section_label(i);
-        if (!raw)
-            return NULL;
-        static char buf[48];
-        size_t k = 0;
-        for (; raw[k] && k < sizeof(buf) - 1; k++) {
-            char c = raw[k];
-            if (k == 0) {
-                if (c >= 'a' && c <= 'z') c = (char)(c - 32);
-            } else if (c >= 'A' && c <= 'Z') {
-                c = (char)(c + 32);
-            }
-            buf[k] = c;
-        }
-        buf[k] = '\0';
-        return buf;
+        return glr_config_section_display_label(i);
     }
     return NULL;
 }
@@ -432,7 +412,7 @@ static void menubar_rects(int menu_x[NUM_MENUS], int menu_w[NUM_MENUS],
     int x = cp_x + CODE_MARGIN_X;
     for (int i = 0; i < NUM_MENUS; i++) {
         int label_w = (int)strlen(g_menu_labels[i]) * FONT_SMALL_W;
-        menu_w[i] = label_w + 18;  /* ~9px padding each side */
+        menu_w[i] = label_w + MENU_LABEL_PAD_X;
         menu_x[i] = x;
         x += menu_w[i];
     }
@@ -481,46 +461,73 @@ static int ui_menu_bar_pin_hit(int gx, int gy) {
     return -1;
 }
 
+static struct {
+    int valid, menu, win_w, win_h;
+    int x, y, w, h;
+} g_dropdown_cache;
+
 static int menu_dropdown_rect(int *dx, int *dy, int *dw, int *dh) {
+    int win_w, win_h;
     if (g_open_menu < 0) return 0;
     if (!ui_menu_bar_panel_visible()) return 0;
-    int menu_x[NUM_MENUS], menu_w[NUM_MENUS];
-    int pin_x[NUM_PIN_BTNS], pin_w[NUM_PIN_BTNS];
-    int by, bh;
-    menubar_rects(menu_x, menu_w, pin_x, pin_w, &by, &bh);
-    int n = menu_item_count(g_open_menu, NULL);
 
-    int max_lbl = 0, max_sc = 0, has_submenu = 0;
-    for (int i = 0; i < n; i++) {
-        const char *lbl = menu_item_label(g_open_menu, i);
-        const char *sc  = menu_item_shortcut(g_open_menu, i);
-        int lw = (int)(lbl ? strlen(lbl) : 0) * FONT_SMALL_W;
-        if (lw > max_lbl) max_lbl = lw;
-        if (sc) {
-            int cw = (int)strlen(sc) * FONT_SMALL_W;
-            if (cw > max_sc) max_sc = cw;
-        }
-        if (menu_row_has_submenu(g_open_menu, i))
-            has_submenu = 1;
+    win_w = ui_state_viewport().window_w;
+    win_h = ui_state_viewport().window_h;
+
+    if (g_dropdown_cache.valid &&
+        g_dropdown_cache.menu == g_open_menu &&
+        g_dropdown_cache.win_w == win_w &&
+        g_dropdown_cache.win_h == win_h) {
+        if (dx) *dx = g_dropdown_cache.x;
+        if (dy) *dy = g_dropdown_cache.y;
+        if (dw) *dw = g_dropdown_cache.w;
+        if (dh) *dh = g_dropdown_cache.h;
+        return 1;
     }
-    /* Config's per-item state/shortcut columns live in the flyout
-     * now, not on the top-level section rows. */
-    int max_w = max_lbl;
-    if (max_sc > 0)    max_w += max_sc + 16;
-    /* Reserve a right-hand column for the ">" flyout affordance so a
-     * long parent label (e.g. "Overlays & scene") never collides with
-     * it. The glyph is drawn at dx+dw-20; SUBMENU_ARROW_COL keeps a
-     * clear gap. */
-    if (has_submenu) max_w += SUBMENU_ARROW_COL;
-    if (max_w < 80) max_w = 80;
-    int width  = max_w + 28;
-    int rows   = (n > 0) ? n : 1;  /* reserve one row for "(empty)" */
-    int height = rows * LINE_H + 8;
 
-    if (dx) *dx = menu_x[g_open_menu];
-    if (dy) *dy = by - height;
-    if (dw) *dw = width;
-    if (dh) *dh = height;
+    {
+        int menu_x[NUM_MENUS], menu_w[NUM_MENUS];
+        int pin_x[NUM_PIN_BTNS], pin_w[NUM_PIN_BTNS];
+        int by, bh;
+        int n, max_lbl, max_sc, has_submenu, max_w, width, rows, height;
+        menubar_rects(menu_x, menu_w, pin_x, pin_w, &by, &bh);
+        n = menu_item_count(g_open_menu, NULL);
+
+        max_lbl = 0; max_sc = 0; has_submenu = 0;
+        for (int i = 0; i < n; i++) {
+            const char *lbl = menu_item_label(g_open_menu, i);
+            const char *sc  = menu_item_shortcut(g_open_menu, i);
+            int lw = (int)(lbl ? strlen(lbl) : 0) * FONT_SMALL_W;
+            if (lw > max_lbl) max_lbl = lw;
+            if (sc) {
+                int cw = (int)strlen(sc) * FONT_SMALL_W;
+                if (cw > max_sc) max_sc = cw;
+            }
+            if (menu_row_has_submenu(g_open_menu, i))
+                has_submenu = 1;
+        }
+        max_w = max_lbl;
+        if (max_sc > 0)    max_w += max_sc + DROPDOWN_SC_GAP;
+        if (has_submenu) max_w += SUBMENU_ARROW_COL;
+        if (max_w < 80) max_w = 80;
+        width  = max_w + DROPDOWN_PAD_X;
+        rows   = (n > 0) ? n : 1;
+        height = rows * LINE_H + 2 * DROPDOWN_PAD_Y;
+
+        g_dropdown_cache.valid = 1;
+        g_dropdown_cache.menu  = g_open_menu;
+        g_dropdown_cache.win_w = win_w;
+        g_dropdown_cache.win_h = win_h;
+        g_dropdown_cache.x = menu_x[g_open_menu];
+        g_dropdown_cache.y = by - height;
+        g_dropdown_cache.w = width;
+        g_dropdown_cache.h = height;
+    }
+
+    if (dx) *dx = g_dropdown_cache.x;
+    if (dy) *dy = g_dropdown_cache.y;
+    if (dw) *dw = g_dropdown_cache.w;
+    if (dh) *dh = g_dropdown_cache.h;
     return 1;
 }
 
@@ -732,7 +739,7 @@ static int config_submenu_extra_w(int menu_id, int parent_row) {
     int max_sc = config_submenu_max_sc_px(parent_row);
     int extra = cfg_max_state_chars() * FONT_SMALL_W + 20;
     if (max_sc > 0)
-        extra += max_sc + 16;
+        extra += max_sc + DROPDOWN_SC_GAP;
     return extra;
 }
 
@@ -743,15 +750,13 @@ static int menu_row_has_submenu(int menu_id, int row) {
     return submenu_row_count(menu_id, row) > 0;
 }
 
+static struct {
+    int valid, menu_id, parent_row, win_w, win_h;
+    int x, y, w, h;
+} g_submenu_cache;
+
 static int submenu_rect(int menu_id, int parent_row,
                         int *sx, int *sy, int *sw, int *sh) {
-    int pdx, pdy, pdw, pdh;
-    int count;
-    int max_lbl = 0;
-    int width;
-    int height;
-    int x;
-    int y;
     int win_w = ui_state_viewport().window_w;
     int win_h = ui_state_viewport().window_h;
 
@@ -759,42 +764,71 @@ static int submenu_rect(int menu_id, int parent_row,
         return 0;
     if (!menu_row_has_submenu(menu_id, parent_row))
         return 0;
-    if (!menu_dropdown_rect(&pdx, &pdy, &pdw, &pdh))
-        return 0;
 
-    count = submenu_row_count(menu_id, parent_row);
-    for (int ordinal = 0; ordinal < count; ordinal++) {
-        const char *name = submenu_row_label(menu_id, parent_row, ordinal);
-        int w = (int)(name ? strlen(name) : 0) * FONT_SMALL_W;
-        if (w > max_lbl)
-            max_lbl = w;
+    if (g_submenu_cache.valid &&
+        g_submenu_cache.menu_id == menu_id &&
+        g_submenu_cache.parent_row == parent_row &&
+        g_submenu_cache.win_w == win_w &&
+        g_submenu_cache.win_h == win_h) {
+        if (sx) *sx = g_submenu_cache.x;
+        if (sy) *sy = g_submenu_cache.y;
+        if (sw) *sw = g_submenu_cache.w;
+        if (sh) *sh = g_submenu_cache.h;
+        return 1;
     }
-    if (max_lbl < 80)
-        max_lbl = 80;
-    width = max_lbl + 28 + config_submenu_extra_w(menu_id, parent_row);
-    height = count * LINE_H + 8;
-
-    x = pdx + pdw;
-    if (x + width > win_w)
-        x = pdx - width;
-    if (x < 0)
-        x = 0;
 
     {
-        int parent_row_top = pdy + pdh - 4 - parent_row * LINE_H;
-        y = parent_row_top - height;
-    }
-    if (y < 0)
-        y = 0;
-    if (y + height > win_h)
-        y = win_h - height;
-    if (y < 0)
-        y = 0;
+        int pdx, pdy, pdw, pdh;
+        int count, max_lbl, width, height, x, y;
 
-    if (sx) *sx = x;
-    if (sy) *sy = y;
-    if (sw) *sw = width;
-    if (sh) *sh = height;
+        if (!menu_dropdown_rect(&pdx, &pdy, &pdw, &pdh))
+            return 0;
+
+        count = submenu_row_count(menu_id, parent_row);
+        max_lbl = 0;
+        for (int ordinal = 0; ordinal < count; ordinal++) {
+            const char *name = submenu_row_label(menu_id, parent_row, ordinal);
+            int w = (int)(name ? strlen(name) : 0) * FONT_SMALL_W;
+            if (w > max_lbl)
+                max_lbl = w;
+        }
+        if (max_lbl < 80)
+            max_lbl = 80;
+        width = max_lbl + DROPDOWN_PAD_X + config_submenu_extra_w(menu_id, parent_row);
+        height = count * LINE_H + 2 * DROPDOWN_PAD_Y;
+
+        x = pdx + pdw;
+        if (x + width > win_w)
+            x = pdx - width;
+        if (x < 0)
+            x = 0;
+
+        {
+            int parent_row_top = pdy + pdh - DROPDOWN_PAD_Y - parent_row * LINE_H;
+            y = parent_row_top - height;
+        }
+        if (y < 0)
+            y = 0;
+        if (y + height > win_h)
+            y = win_h - height;
+        if (y < 0)
+            y = 0;
+
+        g_submenu_cache.valid      = 1;
+        g_submenu_cache.menu_id    = menu_id;
+        g_submenu_cache.parent_row = parent_row;
+        g_submenu_cache.win_w      = win_w;
+        g_submenu_cache.win_h      = win_h;
+        g_submenu_cache.x = x;
+        g_submenu_cache.y = y;
+        g_submenu_cache.w = width;
+        g_submenu_cache.h = height;
+    }
+
+    if (sx) *sx = g_submenu_cache.x;
+    if (sy) *sy = g_submenu_cache.y;
+    if (sw) *sw = g_submenu_cache.w;
+    if (sh) *sh = g_submenu_cache.h;
     return 1;
 }
 
@@ -843,7 +877,7 @@ static int ui_menu_bar_dropdown_item_hit(int gx, int gy) {
     if (!menu_dropdown_rect(&dx, &dy, &dw, &dh)) return -1;
     int ry = ui_state_viewport().window_h - gy;
     if (gx < dx || gx >= dx + dw || ry < dy || ry >= dy + dh) return -1;
-    int row = (dy + dh - 4 - ry) / LINE_H;
+    int row = (dy + dh - DROPDOWN_PAD_Y - ry) / LINE_H;
     if (row < 0 || row >= n) return -1;
     const char *lbl = menu_item_label(g_open_menu, row);
     if (!lbl || menu_chrome_kind(lbl) != GLR_CFG_ROW_ITEM) return -1;
@@ -884,7 +918,7 @@ static UiHit submenu_hit_test(int mx, int my) {
         return h;
 
     ry = ui_state_viewport().window_h - my;
-    ordinal = (sy + sh - 4 - ry) / LINE_H;
+    ordinal = (sy + sh - DROPDOWN_PAD_Y - ry) / LINE_H;
     if (ordinal < 0 ||
         ordinal >= submenu_row_count(g_submenu_menu_id, g_submenu_parent_row))
         return h;
@@ -899,36 +933,30 @@ static UiHit submenu_hit_test(int mx, int my) {
     return h;
 }
 
+static UiHit inert_chrome_hit(int mx, int gl_y) {
+    UiHit h = ui_hit_none();
+    h.kind = UI_HIT_CODE_PANEL_CHROME;
+    h.local_x = (float)mx;
+    h.local_y = (float)gl_y;
+    return h;
+}
+
 UiHit ui_menu_bar_hit_test(int mx, int my) {
     UiHit h = ui_hit_none();
     int win_h = ui_state_viewport().window_h;
     if (win_h <= 0) return h;
     int gl_y = win_h - my;
 
-    /* Open dropdown row beats every other menu region. The cmd_idx
-     * carries the menu_id the row belongs to so the controller can
-     * activate the action without reading ui_menu_bar state. */
     if (g_open_menu >= 0) {
         if (g_submenu_menu_id == g_open_menu) {
             UiHit submenu_hit = submenu_hit_test(mx, my);
             if (submenu_hit.kind != UI_HIT_NONE)
                 return submenu_hit;
-            /* Point is inside the open flyout but landed on inert
-             * chrome (Config "All" "### "/"---") or dead space:
-             * consume it like the parent dropdown's inert rows. The
-             * flyout is a separate rect beside the parent dropdown, so
-             * the parent-rect check below would miss it and the click
-             * would fall through to the scene tabs / code panel drawn
-             * beneath (overlay-precedence violation). */
             int ssx, ssy, ssw, ssh;
             if (submenu_rect(g_submenu_menu_id, g_submenu_parent_row,
                              &ssx, &ssy, &ssw, &ssh) &&
-                point_in_rect_gl(mx, my, ssx, ssy, ssw, ssh)) {
-                h.kind = UI_HIT_CODE_PANEL_CHROME;
-                h.local_x = (float)mx;
-                h.local_y = (float)gl_y;
-                return h;
-            }
+                point_in_rect_gl(mx, my, ssx, ssy, ssw, ssh))
+                return inert_chrome_hit(mx, gl_y);
         }
 
         int row = ui_menu_bar_dropdown_item_hit(mx, my);
@@ -940,22 +968,10 @@ UiHit ui_menu_bar_hit_test(int mx, int my) {
             h.local_y = (float)gl_y;
             return h;
         }
-        /* Click inside the open dropdown rect but not on an actionable
-         * row (### header / --- separator / dead space): consume it
-         * inertly. ui_menu_bar_dropdown_item_hit() returns -1 for these
-         * even though the point is over the dropdown, so without this
-         * the click falls through to the scene tab strip / code panel
-         * drawn beneath the dropdown and can switch scenes underneath
-         * (overlay-precedence requirement). The controller preamble
-         * closes the dropdown; CHROME is the generic inert-consume kind. */
         int dx, dy, dw, dh;
         if (menu_dropdown_rect(&dx, &dy, &dw, &dh) &&
-            mx >= dx && mx < dx + dw && gl_y >= dy && gl_y < dy + dh) {
-            h.kind = UI_HIT_CODE_PANEL_CHROME;
-            h.local_x = (float)mx;
-            h.local_y = (float)gl_y;
-            return h;
-        }
+            mx >= dx && mx < dx + dw && gl_y >= dy && gl_y < dy + dh)
+            return inert_chrome_hit(mx, gl_y);
     }
 
     /* Pin button (Search / Replay). Pins are rendered after the menu
@@ -1002,11 +1018,14 @@ static void submenu_reset(void) {
     g_submenu_menu_id    = -1;
     g_submenu_parent_row = -1;
     g_submenu_open_time  = -1.0f;
+    g_submenu_cache.valid = 0;
 }
 
 void ui_menu_bar_close(void) {
     g_open_menu = -1;
     g_menu_item_hover = -1;
+    g_dropdown_cache.valid = 0;
+    g_submenu_cache.valid  = 0;
     submenu_reset();
 }
 
@@ -1018,6 +1037,7 @@ void ui_menu_bar_set_open_menu(int menu_id, float now) {
     g_open_menu = menu_id;
     g_menu_open_time = now;
     g_menu_item_hover = -1;
+    g_dropdown_cache.valid = 0;
     submenu_reset();
 }
 
@@ -1145,7 +1165,7 @@ static int submenu_hover_ordinal(const UiRenderSnapshot *snap) {
         return -1;
 
     ry = snap->viewport.window_h - snap->pointer.mouse_y;
-    ordinal = (sy + sh - 4 - ry) / LINE_H;
+    ordinal = (sy + sh - DROPDOWN_PAD_Y - ry) / LINE_H;
     if (ordinal < 0 ||
         ordinal >= submenu_row_count(g_submenu_menu_id,
                                      g_submenu_parent_row))
@@ -1195,6 +1215,39 @@ int ui_menu_bar_update_pointer_hover(int mx, int my, float now) {
            old_parent != g_submenu_parent_row;
 }
 
+static void paint_config_row_columns(const UiRenderSnapshot *snap,
+                                     int parent_row, int ordinal,
+                                     int ey, int cfg_state_right,
+                                     int cfg_sc_right, float alpha) {
+    int abs = config_submenu_abs_index(parent_row, ordinal);
+    const GlrConfigItem *item = glr_config_item_at(abs);
+    char st_buf[CFG_STATE_MAX_CHARS + 1];
+    const char *st;
+    int st_px, val;
+    const char *scut;
+
+    if (!item || item->section_header || item->key == GLR_CONFIG_NONE)
+        return;
+
+    st = cfg_state_str(snap, abs, st_buf, sizeof(st_buf));
+    st_px = (int)strlen(st) * FONT_SMALL_W;
+    scut = config_item_shortcut(item);
+
+    if (scut) {
+        int sc_px = (int)strlen(scut) * FONT_SMALL_W;
+        ui_clr_a(UI_TOK_TEXT_MUTED, alpha);
+        gl2d_draw_string((float)(cfg_sc_right - sc_px),
+                         (float)ey, scut, FONT_SMALL);
+    }
+    val = snap ? snap->config_values[item->key] : glr_config_get(item->key);
+    if (val)
+        ui_clr_a(UI_TOK_ACCENT, alpha);
+    else
+        ui_clr_a(UI_TOK_TEXT_MUTED, alpha);
+    gl2d_draw_string((float)(cfg_state_right - st_px),
+                     (float)ey, st, FONT_SMALL);
+}
+
 static void render_active_submenu(const UiRenderSnapshot *snap) {
     int sx, sy, sw, sh;
     int menu_id    = g_submenu_menu_id;
@@ -1222,7 +1275,7 @@ static void render_active_submenu(const UiRenderSnapshot *snap) {
     int cfg_max_sc      = (menu_id == MENU_CONFIG)
                               ? config_submenu_max_sc_px(parent_row) : 0;
     int cfg_state_right = cfg_sc_right
-                              - (cfg_max_sc > 0 ? cfg_max_sc + 16 : 0);
+                              - (cfg_max_sc > 0 ? cfg_max_sc + DROPDOWN_SC_GAP : 0);
 
     ui_clr_a(UI_TOK_RAISED, 0.98f * alpha);
     glRectf((float)sx, (float)sy, (float)(sx + sw), (float)(sy + sh));
@@ -1269,35 +1322,10 @@ static void render_active_submenu(const UiRenderSnapshot *snap) {
 
         gl2d_draw_string((float)(sx + MENU_TEXT_INSET_X), (float)ey, name, FONT_SMALL);
 
-        /* Config item rows carry a right-aligned shortcut + state
-         * value in fixed columns (computed once above) so they stay
-         * column-aligned regardless of which rows have a shortcut. */
-        if (menu_id == MENU_CONFIG) {
-            int abs = config_submenu_abs_index(parent_row, ordinal);
-            const GlrConfigItem *item = glr_config_item_at(abs);
-            if (item && !item->section_header &&
-                item->key != GLR_CONFIG_NONE) {
-                char st_buf[CFG_STATE_MAX_CHARS + 1];
-                const char *st = cfg_state_str(snap, abs, st_buf,
-                                               sizeof(st_buf));
-                int st_px = (int)strlen(st) * FONT_SMALL_W;
-                const char *scut = config_item_shortcut(item);
-
-                if (scut) {
-                    int sc_px = (int)strlen(scut) * FONT_SMALL_W;
-                    ui_clr_a(UI_TOK_TEXT_MUTED, alpha);
-                    gl2d_draw_string((float)(cfg_sc_right - sc_px),
-                                     (float)ey, scut, FONT_SMALL);
-                }
-                int val = snap ? snap->config_values[item->key] : glr_config_get(item->key);
-                if (val)
-                    ui_clr_a(UI_TOK_ACCENT, alpha);
-                else
-                    ui_clr_a(UI_TOK_TEXT_MUTED, alpha);
-                gl2d_draw_string((float)(cfg_state_right - st_px),
-                                 (float)ey, st, FONT_SMALL);
-            }
-        }
+        if (menu_id == MENU_CONFIG)
+            paint_config_row_columns(snap, parent_row, ordinal,
+                                     ey, cfg_state_right,
+                                     cfg_sc_right, alpha);
 
         ey -= LINE_H;
     }
@@ -1416,145 +1444,148 @@ void ui_menu_bar_render_search_overlay(const UiRenderSnapshot *snap) {
 }
 
 
-void ui_menu_bar_render(const UiRenderSnapshot *snap) {
-    ReplReplayRuntimeState replay = snap->replay;
-    int cp_x, cp_y, cp_w, cp_h;
-    ui_layout_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
-    (void)cp_y;
-    if (cp_w <= 0 || cp_h <= 0) return;
-    /* Menu bar - design ref: Header Wireframes v2 (now at the very top of
-     * the code panel; the old info bar moved into the bottom status strip). */
-    {
-        int menu_x[NUM_MENUS], menu_w[NUM_MENUS];
-        int pin_x[NUM_PIN_BTNS], pin_w[NUM_PIN_BTNS];
-        int by, bh;
-        menubar_rects(menu_x, menu_w, pin_x, pin_w, &by, &bh);
+static void paint_menu_labels(const int *menu_x, const int *menu_w,
+                              int by, int bh, int hover_menu) {
+    int i;
+    for (i = 0; i < NUM_MENUS; i++) {
+        int active = (g_open_menu == i);
+        int hover  = (hover_menu == i);
+        if (active) {
+            ui_clr(UI_TOK_MENU_LABEL_ACTIVE_BG);
+            glRectf((float)menu_x[i], (float)by, (float)menu_x[i] + (float)menu_w[i], (float)by + (float)bh);
+        } else if (hover) {
+            ui_clr(UI_TOK_MENU_LABEL_HOVER_BG);
+            glRectf((float)menu_x[i], (float)by, (float)menu_x[i] + (float)menu_w[i], (float)by + (float)bh);
+        }
+        if (active || hover)
+            ui_clr(UI_TOK_TEXT_ON_HILITE);
+        else
+            ui_clr(UI_TOK_TEXT_PRIMARY);
+        {
+            int tx = menu_x[i] + MENU_LABEL_PAD_X / 2;
+            gl2d_draw_string((float)tx, (float)(by + MENUBAR_TEXT_BASE_Y),
+                        g_menu_labels[i], FONT_SMALL);
+        }
+    }
+}
 
-        glEnable(GL_BLEND);
-        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+static void paint_pin_buttons(const UiRenderSnapshot *snap,
+                              const int *pin_x, const int *pin_w,
+                              int by, int bh, int hover_pin,
+                              ReplReplayRuntimeState replay) {
+    int i;
+    for (i = 0; i < NUM_PIN_BTNS; i++) {
+        int hover = (hover_pin == i);
+        int active = (i == PIN_REPLAY && replay.active);
+        if (hover) {
+            ui_clr(UI_TOK_MENU_LABEL_HOVER_BG);
+            glRectf((float)pin_x[i], (float)by, (float)pin_x[i] + (float)pin_w[i], (float)by + (float)bh);
+        } else if (active) {
+            ui_clr(UI_TOK_MENU_LABEL_ACTIVE_BG);
+            glRectf((float)pin_x[i], (float)by, (float)pin_x[i] + (float)pin_w[i], (float)by + (float)bh);
+        }
+        ui_clr(UI_TOK_DIVIDER);
+        glBegin(GL_LINES);
+        glVertex2f((float)pin_x[i], (float)by);
+        glVertex2f((float)pin_x[i], (float)(by + bh));
+        glEnd();
 
-        /* Full-width strip surface */
-        ui_clr_a(UI_TOK_SURFACE, 0.98f);
-        glRectf((float)cp_x, (float)by, (float)cp_x + (float)cp_w, (float)by + (float)bh);
-
-        int hover_menu = ui_menu_bar_menu_hit(snap->pointer.mouse_x, snap->pointer.mouse_y);
-        int hover_pin  = ui_menu_bar_pin_hit(snap->pointer.mouse_x, snap->pointer.mouse_y);
-
-        /* Left-side menu labels */
-        for (int i = 0; i < NUM_MENUS; i++) {
-            int active = (g_open_menu == i);
-            int hover  = (hover_menu == i);
-            if (active) {
-                ui_clr(UI_TOK_MENU_LABEL_ACTIVE_BG);
-                glRectf((float)menu_x[i], (float)by, (float)menu_x[i] + (float)menu_w[i], (float)by + (float)bh);
-            } else if (hover) {
-                ui_clr(UI_TOK_MENU_LABEL_HOVER_BG);
-                glRectf((float)menu_x[i], (float)by, (float)menu_x[i] + (float)menu_w[i], (float)by + (float)bh);
+        if (i == PIN_SEARCH) {
+            if (snap->search.active)
+                continue;
+            ui_clr(UI_TOK_TEXT_PLACEHOLDER);
+            {
+                int tx = pin_x[i] + 12;
+                gl2d_draw_string((float)tx, (float)(by + MENUBAR_TEXT_BASE_Y),
+                            g_pin_btn_labels[i], FONT_SMALL);
             }
-            if (active || hover)
+        } else if (i == PIN_REPLAY) {
+            const char *label = "Replay";
+            int icon_x = pin_x[i] + 10;
+            int icon_cy = by + bh / 2;
+            int icon_sz = 8;
+            int tx;
+            if (replay.state == REPLAY_PLAYING) label = "Replaying";
+            else if (replay.state == REPLAY_PAUSED) label = "Paused";
+            else if (replay.state == REPLAY_DONE)   label = "Done";
+
+            ui_clr(UI_TOK_ACCENT);
+
+            if (replay.state == REPLAY_PLAYING) {
+                float bw = 2.5f, gap = 2.0f;
+                float by0 = (float)icon_cy - (float)icon_sz * 0.5f;
+                float bh0 = (float)icon_sz;
+                glRectf((float)icon_x,            by0, (float)icon_x + bw, by0 + bh0);
+                glRectf((float)icon_x + bw + gap, by0, (float)icon_x + bw + gap + bw, by0 + bh0);
+            } else if (replay.state == REPLAY_DONE) {
+                float sx = (float)icon_x;
+                float sy = (float)icon_cy - (float)icon_sz * 0.5f;
+                glRectf(sx, sy, sx + (float)icon_sz, sy + (float)icon_sz);
+            } else {
+                float x0 = (float)icon_x;
+                float cy = (float)icon_cy;
+                glBegin(GL_TRIANGLES);
+                glVertex2f(x0,           cy - (float)icon_sz * 0.5f);
+                glVertex2f(x0,           cy + (float)icon_sz * 0.5f);
+                glVertex2f(x0 + icon_sz, cy);
+                glEnd();
+            }
+
+            tx = icon_x + 12 + 6;
+            gl2d_draw_string((float)tx, (float)(by + MENUBAR_TEXT_BASE_Y), label, FONT_SMALL);
+        } else {
+            if (hover || active)
                 ui_clr(UI_TOK_TEXT_ON_HILITE);
             else
                 ui_clr(UI_TOK_TEXT_PRIMARY);
-            int tx = menu_x[i] + 9;
-            gl2d_draw_string((float)tx, (float)(by + 3),
-                        g_menu_labels[i], FONT_SMALL);
-        }
-
-        /* Mask the combined pin area with the menubar bg so a long menu
-         * label in a narrow window can't bleed through transparent pin
-         * slots (pins must stay visible and take hit-test priority). */
-        int pin_block_x = pin_x[PIN_SEARCH];
-        int pin_block_w = cp_x + cp_w - CODE_MARGIN_X - pin_block_x;
-        ui_clr(UI_TOK_SURFACE); /* fully opaque pin mask */
-        glRectf((float)pin_block_x, (float)by, (float)pin_block_x + (float)pin_block_w, (float)by + (float)bh);
-
-        /* Right-side pins: Search | Replay (always rendered on top) */
-        for (int i = 0; i < NUM_PIN_BTNS; i++) {
-            int hover = (hover_pin == i);
-            int active = (i == PIN_REPLAY && replay.active);
-            if (hover) {
-                ui_clr(UI_TOK_MENU_LABEL_HOVER_BG);
-                glRectf((float)pin_x[i], (float)by, (float)pin_x[i] + (float)pin_w[i], (float)by + (float)bh);
-            } else if (active) {
-                ui_clr(UI_TOK_MENU_LABEL_ACTIVE_BG);
-                glRectf((float)pin_x[i], (float)by, (float)pin_x[i] + (float)pin_w[i], (float)by + (float)bh);
-            }
-            /* Left separator rule */
-            ui_clr(UI_TOK_DIVIDER);
-            glBegin(GL_LINES);
-            glVertex2f((float)pin_x[i], (float)by);
-            glVertex2f((float)pin_x[i], (float)(by + bh));
-            glEnd();
-
-            if (i == PIN_SEARCH) {
-                if (snap->search.active) {
-                    /* ui_menu_bar_render_search_overlay() fills this slot */
-                    continue;
-                }
-                /* "search..." label in muted gray */
-                ui_clr(UI_TOK_TEXT_PLACEHOLDER);
-                int tx = pin_x[i] + 12;
-                gl2d_draw_string((float)tx, (float)(by + 3),
-                            g_pin_btn_labels[i], FONT_SMALL);
-            } else if (i == PIN_REPLAY) {
-                /* Green accent (#6fb36f), state icon + dynamic label */
-                const char *label = "Replay";
-                if (replay.state == REPLAY_PLAYING) label = "Replaying";
-                else if (replay.state == REPLAY_PAUSED) label = "Paused";
-                else if (replay.state == REPLAY_DONE)   label = "Done";
-
-                int icon_x = pin_x[i] + 10;
-                int icon_cy = by + bh / 2;
-                int icon_sz = 8;
-
-                ui_clr(UI_TOK_ACCENT);
-
-                if (replay.state == REPLAY_PLAYING) {
-                    /* Two vertical bars (pause glyph) */
-                    float bw = 2.5f, gap = 2.0f;
-                    float by0 = (float)icon_cy - (float)icon_sz * 0.5f;
-                    float bh0 = (float)icon_sz;
-                    glRectf((float)icon_x,                    by0, (float)icon_x + bw, by0 + bh0);
-                    glRectf((float)icon_x + bw + gap,         by0, (float)icon_x + bw + gap + bw, by0 + bh0);
-                } else if (replay.state == REPLAY_DONE) {
-                    /* Square - run complete */
-                    float sx = (float)icon_x;
-                    float sy = (float)icon_cy - (float)icon_sz * 0.5f;
-                    glRectf(sx, sy, sx + (float)icon_sz, sy + (float)icon_sz);
-                } else {
-                    /* Play triangle - stopped (OFF) or paused, click to start */
-                    float x0 = (float)icon_x;
-                    float cy = (float)icon_cy;
-                    glBegin(GL_TRIANGLES);
-                    glVertex2f(x0,             cy - (float)icon_sz * 0.5f);
-                    glVertex2f(x0,             cy + (float)icon_sz * 0.5f);
-                    glVertex2f(x0 + icon_sz,   cy);
-                    glEnd();
-                }
-
-                int tx = icon_x + 12 + 6;
-                gl2d_draw_string((float)tx, (float)(by + 3), label, FONT_SMALL);
-            } else {
-                if (hover || active)
-                    ui_clr(UI_TOK_TEXT_ON_HILITE);
-                else
-                    ui_clr(UI_TOK_TEXT_PRIMARY);
-                int tx = pin_x[i] + 9;
-                gl2d_draw_string((float)tx, (float)(by + 3),
+            {
+                int tx = pin_x[i] + MENU_LABEL_PAD_X / 2;
+                gl2d_draw_string((float)tx, (float)(by + MENUBAR_TEXT_BASE_Y),
                             g_pin_btn_labels[i], FONT_SMALL);
             }
         }
-
-        /* Bottom divider - theme-stable pure-black rule */
-        glColor4fv(k_menubar_bottom_rule);
-        glBegin(GL_LINES);
-        glVertex2f((float)cp_x,          (float)by);
-        glVertex2f((float)(cp_x + cp_w), (float)by);
-        glEnd();
-
-        glDisable(GL_BLEND);
     }
+}
 
+void ui_menu_bar_render(const UiRenderSnapshot *snap) {
+    int cp_x, cp_y, cp_w, cp_h;
+    int menu_x[NUM_MENUS], menu_w[NUM_MENUS];
+    int pin_x[NUM_PIN_BTNS], pin_w[NUM_PIN_BTNS];
+    int by, bh;
+    int hover_menu, hover_pin;
+    int pin_block_x, pin_block_w;
+
+    ui_layout_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
+    (void)cp_y;
+    if (cp_w <= 0 || cp_h <= 0) return;
+
+    menubar_rects(menu_x, menu_w, pin_x, pin_w, &by, &bh);
+
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+    ui_clr_a(UI_TOK_SURFACE, 0.98f);
+    glRectf((float)cp_x, (float)by, (float)cp_x + (float)cp_w, (float)by + (float)bh);
+
+    hover_menu = ui_menu_bar_menu_hit(snap->pointer.mouse_x, snap->pointer.mouse_y);
+    hover_pin  = ui_menu_bar_pin_hit(snap->pointer.mouse_x, snap->pointer.mouse_y);
+
+    paint_menu_labels(menu_x, menu_w, by, bh, hover_menu);
+
+    pin_block_x = pin_x[PIN_SEARCH];
+    pin_block_w = cp_x + cp_w - CODE_MARGIN_X - pin_block_x;
+    ui_clr(UI_TOK_SURFACE);
+    glRectf((float)pin_block_x, (float)by, (float)pin_block_x + (float)pin_block_w, (float)by + (float)bh);
+
+    paint_pin_buttons(snap, pin_x, pin_w, by, bh, hover_pin, snap->replay);
+
+    glColor4fv(k_menubar_bottom_rule);
+    glBegin(GL_LINES);
+    glVertex2f((float)cp_x,          (float)by);
+    glVertex2f((float)(cp_x + cp_w), (float)by);
+    glEnd();
+
+    glDisable(GL_BLEND);
 }
 
 void ui_menu_bar_render_example_dropdown(const UiRenderSnapshot *snap) {

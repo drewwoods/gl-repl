@@ -82,6 +82,12 @@ typedef struct {
 
 static const char *repl_code_panel_display_text(const UiRenderSnapshot *snap, int line_idx);
 
+static struct {
+    const UiRenderSnapshot *snap;
+    ReplCodePanelBuilder    builder;
+    int                     valid;
+} g_builder_cache;
+
 static UiTextPanelColor repl_code_panel_rgb(float r, float g, float b) {
     UiTextPanelColor color = { r, g, b, 1.0f, 0 };
     return color;
@@ -303,7 +309,7 @@ static int repl_code_panel_insert_rows(const UiRenderSnapshot *snap,
                                      panel_w);
 }
 
-static int repl_code_panel_newline_rows(const UiRenderSnapshot *snap,
+static int repl_code_panel_trailing_row_count(const UiRenderSnapshot *snap,
                                         int panel_w, int text_x) {
     if (snap->edit_line == snap->document_count) {
         int indent_chars = snap->active_indent_chars;
@@ -393,7 +399,7 @@ void ui_repl_code_panel_build_layout(const UiRenderSnapshot *snap,
                                            layout->replay_extra_rows);
 
     total_lines = layout->header_rows + layout->footer_rows +
-                  repl_code_panel_newline_rows(snap, panel_w, text_x);
+                  repl_code_panel_trailing_row_count(snap, panel_w, text_x);
     for (int i = 0; i < snap->document_count; i++) {
         if (snap->editor_input.insert_mode && i == snap->edit_line)
             total_lines += repl_code_panel_insert_rows(snap, panel_w, text_x);
@@ -458,7 +464,7 @@ int ui_repl_code_panel_target_for_doc_line(const UiRenderSnapshot *snap,
             }
             row -= layout->replay_extra_rows[cmd_idx];
         } else {
-            int newline_rows = repl_code_panel_newline_rows(snap, layout->panel_w,
+            int newline_rows = repl_code_panel_trailing_row_count(snap, layout->panel_w,
                                                             layout->text_x);
             if (row < newline_rows) {
                 if (out_target) *out_target = snap->document_count;
@@ -1472,6 +1478,9 @@ typedef struct {
     char cmds[48];
     char line[64];
     char aa[32];
+    int  cmds_w;
+    int  line_w;
+    int  aa_w;
     int  has_aa;
     int  right_edge;
 } ReplStatusbarLeft;
@@ -1484,7 +1493,8 @@ static ReplStatusbarLeft repl_code_panel_statusbar_left(
 
     snprintf(L.cmds, sizeof L.cmds, "%d/%d cmds",
              snap->flat_program_count, MAX_COMMANDS);
-    tx += (int)strlen(L.cmds) * FONT_SMALL_W;
+    L.cmds_w = (int)strlen(L.cmds) * FONT_SMALL_W;
+    tx += L.cmds_w;
     tx += STATUSBAR_SEP_W;
 
     if (snap->editor_input.insert_mode)
@@ -1494,7 +1504,8 @@ static ReplStatusbarLeft repl_code_panel_statusbar_left(
                  edit_line + 1, repl_mode_name(snap->current_begin_mode));
     else
         snprintf(L.line, sizeof L.line, "Ln %d", edit_line + 1);
-    tx += (int)strlen(L.line) * FONT_SMALL_W;
+    L.line_w = (int)strlen(L.line) * FONT_SMALL_W;
+    tx += L.line_w;
 
     L.has_aa = snap->render.use_accum ? 1 : 0;
     if (L.has_aa) {
@@ -1503,9 +1514,11 @@ static ReplStatusbarLeft repl_code_panel_statusbar_left(
             snprintf(L.aa, sizeof L.aa, "AA %dx", snap->render.accum_samples);
         else
             snprintf(L.aa, sizeof L.aa, "AA off");
-        tx += (int)strlen(L.aa) * FONT_SMALL_W;
+        L.aa_w = (int)strlen(L.aa) * FONT_SMALL_W;
+        tx += L.aa_w;
     } else {
         L.aa[0] = '\0';
+        L.aa_w = 0;
     }
     L.right_edge = tx;
     return L;
@@ -1652,19 +1665,19 @@ static void repl_code_panel_draw_statusbar(const UiRenderSnapshot *snap,
 
         ui_clr(UI_TOK_TEXT_PRIMARY);
         gl2d_draw_string((float)tx, (float)text_y, L.cmds, FONT_SMALL);
-        tx += (int)strlen(L.cmds) * FONT_SMALL_W;
+        tx += L.cmds_w;
 
         repl_code_panel_statusbar_sep(&tx, sy, sh);
 
         ui_clr(UI_TOK_TEXT_MUTED);
         gl2d_draw_string((float)tx, (float)text_y, L.line, FONT_SMALL);
-        tx += (int)strlen(L.line) * FONT_SMALL_W;
+        tx += L.line_w;
 
         if (L.has_aa) {
             repl_code_panel_statusbar_sep(&tx, sy, sh);
             ui_clr(UI_TOK_TEXT_MUTED);
             gl2d_draw_string((float)tx, (float)text_y, L.aa, FONT_SMALL);
-            tx += (int)strlen(L.aa) * FONT_SMALL_W;
+            tx += L.aa_w;
         }
 
         /* Right cluster, drawn from the right edge. Each chip is
@@ -1708,7 +1721,7 @@ static void repl_code_panel_draw_statusbar(const UiRenderSnapshot *snap,
     glPopAttrib();
 }
 
-void ui_repl_code_panel_render(const UiRenderSnapshot *snap,
+void ui_repl_code_panel_render_with_chrome(const UiRenderSnapshot *snap,
                                UiCodePanelOutput *out) {
     ReplCodePanelBuilder builder;
     UiTextPanelOutput text_out;
@@ -1724,6 +1737,11 @@ void ui_repl_code_panel_render(const UiRenderSnapshot *snap,
     glViewport(0, 0, snap->viewport.window_w, snap->viewport.window_h);
 
     repl_code_panel_build_rows(&builder);
+
+    g_builder_cache.snap    = snap;
+    g_builder_cache.builder = builder;
+    g_builder_cache.builder.text_snap.rows = g_repl_code_panel_rows;
+    g_builder_cache.valid   = 1;
 
     memset(&text_out, 0, sizeof(text_out));
     ui_text_panel_render(&builder.text_snap, &text_out);
@@ -1800,10 +1818,17 @@ UiHit ui_repl_code_panel_hit_test(const UiRenderSnapshot *snap,
     UiHit hit;
     int gl_y;
 
-    if (!snap || !repl_code_panel_init_builder(&builder, snap))
+    if (!snap)
         return ui_hit_none();
 
-    repl_code_panel_build_rows(&builder);
+    if (g_builder_cache.valid && g_builder_cache.snap == snap) {
+        builder = g_builder_cache.builder;
+        builder.text_snap.rows = g_repl_code_panel_rows;
+    } else {
+        if (!repl_code_panel_init_builder(&builder, snap))
+            return ui_hit_none();
+        repl_code_panel_build_rows(&builder);
+    }
     hit = ui_text_panel_hit_test(&builder.text_snap, mx, my);
     if (hit.kind != UI_HIT_NONE)
         return repl_code_panel_rewrite_hit(&builder, mx, hit);

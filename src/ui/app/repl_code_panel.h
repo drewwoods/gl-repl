@@ -87,7 +87,7 @@ int  ui_repl_code_panel_target_for_doc_line(const UiRenderSnapshot *snap,
                                             int *out_on_insert_line,
                                             int *out_row_offset);
 
-void ui_repl_code_panel_render(const UiRenderSnapshot *snap,
+void ui_repl_code_panel_render_with_chrome(const UiRenderSnapshot *snap,
                                struct UiCodePanelOutput *out);
 UiHit ui_repl_code_panel_hit_test(const UiRenderSnapshot *snap,
                                   int mx, int my);
