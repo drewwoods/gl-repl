@@ -35,8 +35,9 @@
 > covered only `editor_compile_close_brace` while the same ignored-err
 > issue exists in `repl_compile_close_brace` (`compile.c:1485`) and
 > propagates through `load_try_block` — fix now requires both. #29's
-> test-call count was undercounted (21 calls, not 5); afternoon
-> sequencing now names the real churn so "build-safe" stays true.
+> test-call count was revised upward from the first draft (later
+> corrected to 19 actual calls in Revision 4); afternoon sequencing
+> now names the real churn so "build-safe" stays true.
 >
 > **Revision 4 (2026-05-23):** Third reviewer pass. Fixed: #4's
 > "success check" was ambiguous — `repl_load_workspace()` returns the
@@ -54,6 +55,16 @@
 > were doc-comments). #27's call-site list corrected (L621 was a
 > doc-comment, not a call; the 5 actual calls are L630/L639/L662/L679/
 > L724). Afternoon sequencing items 2, 3, and 8 updated to match.
+>
+> **Revision 5 (2026-05-24):** Fourth reviewer pass. Fixed two
+> remaining sequencing drifts: #11's week-pass summary now includes
+> the interim doc-comment work for `repl_compile_var_assign` as well
+> as the four editor-side `editor_compile_*` entry points; #13's
+> week-pass summary no longer recommends a shared static
+> `k_var_statement_chain[]` and now matches the finding's "shared
+> ordered kind list, per-TU handler tables" shape. Refreshed #4's
+> `glr_actions.c` line reference to the current source and clarified
+> its empty-workspace return-value semantics.
 >
 > Scope: every file under `src/editor/`. Tests under `tests/` were
 > read where they document a contract, but not audited.
@@ -151,7 +162,7 @@ casts and fill `err` for the stray-`}` case in both, or remove
 
 ### 4. Workspace-load wipes undo *before* validating; per-file load preserves it on failure
 
-**Where:** `src/app/glr_actions.c:569-570` vs.
+**Where:** `src/app/glr_actions.c:589-590` vs.
 `src/editor/inline_file_prompt.c:138-144` (cautionary comment)
 
 **Smell:** `editor_undo_clear()` runs *before*
@@ -168,18 +179,20 @@ loses undo for one entry point but not the other.
 **Fix (predicate matters):** Move `editor_undo_clear()` after
 the `repl_load_workspace(dir)` call and gate it on the return
 value. `repl_load_workspace()` returns the number of files
-loaded, **0 for an empty directory argument**, or **-1 on I/O
-error** (`src/repl/core.h:52`). A truthy C check (`if (n)`)
-would still clear undo on -1; a `> 0` check would skip
-empty-workspace cases that *do* mutate live state before
-returning 0. The intended predicate depends on whether
-"workspace exists but contained no scenes" should reset undo
-(arguably yes — the live state was overwritten) or preserve
-it (arguably no — nothing was actually loaded). Audit's
-recommendation: `if (n >= 0) editor_undo_clear();` — i.e.
-clear on success **and** on empty, only preserve on I/O error.
-But this is a product decision, not a mechanical fix; document
-the intended empty-workspace behavior in the
+loaded, **0 for a NULL/empty path argument or for a workspace with
+no `.c` files**, and **-1 on I/O error** (`src/repl/core.h:52`
+documents the NULL/empty-path half; implementation also returns 0
+after loading no scenes). A truthy C check (`if (n)`) would still
+clear undo on -1; a `> 0` check would skip empty-workspace cases
+that do replace workspace/user-scene state before returning 0.
+The intended predicate depends on whether "workspace exists but
+contained no scenes" should reset undo (arguably yes — workspace
+state changed) or preserve it (arguably no — no scene was actually
+loaded). Audit's recommendation for the menu path, which supplies
+a non-empty directory, is `if (n >= 0) editor_undo_clear();` —
+i.e. clear on success **and** on empty, only preserve on I/O
+error. But this is a product decision, not a mechanical fix;
+document the intended empty-workspace behavior in the
 `repl_load_workspace` docstring at the same time.
 
 ### 5. `editor_state_capture` skips the lazy-init that fixes selection sentinels
@@ -1236,8 +1249,9 @@ The dominant work is **closing the layering inversion**,
   is called from `editor_compile_if_block` /
   `editor_compile_for_loop`; similar reads exist in
   `src/repl/compile.c`. Two-stage approach:
-  (a) document the live-state coupling at each
-  `editor_compile_*` entry point (one-pass doc fix);
+  (a) document the live-state coupling at each affected
+  `editor_compile_*` entry point **and** at
+  `repl_compile_var_assign` (one-pass doc fix);
   (b) queue the full extraction (`source_scope_*_view`,
   `collect_visible_vars_view`, and the compile.c migration)
   as its own week.
@@ -1247,9 +1261,10 @@ The dominant work is **closing the layering inversion**,
   (clear_input, cursor_target, load_line_after_apply,
   commit_message, normals dirty) plus the
   `_var_statements_then_insert` insert-mode flip. Two viable
-  shapes: (a) extract a shared ordering table
-  (`k_var_statement_chain[]`) used by both dispatch and the
-  editor wrappers — zero behavior change; (b) introduce
+  shapes: (a) define one shared ordered var-statement kind list
+  (`VAR_STMT_FLOAT_DECL`, `VAR_STMT_ASSIGN`) and let each TU map
+  those kinds to its own local handler table — pure compilers in
+  `compile.c`, editor wrappers in `commit.c`; (b) introduce
   `editor_compile_var_statement(...)` adapter that calls
   dispatch then layers per-kind post-effects — bigger, only
   worth it if #28's services dismantle is in the same change.
