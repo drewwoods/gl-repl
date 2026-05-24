@@ -76,60 +76,64 @@ typedef struct {
     char     predef_names[MAX_PREDEF_VARS][16];
     int      num_predef_vars;
     char     func_aliases[REPL_FUNC_SLOT_COUNT][REPL_FUNC_NAME_MAX];
+    /* Per-slot cfg snapshot — opaque bag whose slug semantics live on
+     * the controller-installed bridge. Embedded here so stash/restore
+     * and slot-eviction code paths handle cfg by ordinary struct copy
+     * instead of maintaining a parallel array. */
+    ReplExportConfig cfg;
 } UserScene;
 
 static UserScene g_user_scenes[MAX_USER_SCENES];
 static int       g_active_user_scene = -1;
 static uint32_t  g_user_scene_tick = 0;
 
-/* Per-slot cfg snapshot storage (formerly glr_scenes.c, inlined as
- * pipeline-neutral file-statics in 7d). Bag contents are opaque to
- * this TU — the controller-installed bridge owns the slug
- * semantics; the bridge is unset in the standalone demo, so bags
- * stay empty there. */
-static ReplExportConfig g_scene_cfg[MAX_USER_SCENES];
-static ReplExportConfig g_pre_example_cfg;
-static int              g_pre_example_valid = 0;
+/* Captured scene-presentation cfg from before the user loaded an example,
+ * used to restore the pre-example state when they leave the example. The
+ * `valid` flag distinguishes "no capture yet" from "captured empty bag". */
+static struct {
+    ReplExportConfig cfg;
+    int              valid;
+} g_pre_example;
 
 static ReplExportConfig *scene_cfg_mut(int slot) {
     if (slot < 0 || slot >= MAX_USER_SCENES) return NULL;
-    return &g_scene_cfg[slot];
+    return &g_user_scenes[slot].cfg;
 }
 
 static const ReplExportConfig *scene_cfg(int slot) {
     if (slot < 0 || slot >= MAX_USER_SCENES) return NULL;
-    return &g_scene_cfg[slot];
+    return &g_user_scenes[slot].cfg;
 }
 
 static void scene_cfg_clear(int slot) {
     if (slot < 0 || slot >= MAX_USER_SCENES) return;
-    repl_export_config_clear(&g_scene_cfg[slot]);
+    repl_export_config_clear(&g_user_scenes[slot].cfg);
 }
 
 static ReplExportConfig *pre_example_cfg_mut(void) {
-    return &g_pre_example_cfg;
+    return &g_pre_example.cfg;
 }
 
 static const ReplExportConfig *pre_example_cfg(void) {
-    return &g_pre_example_cfg;
+    return &g_pre_example.cfg;
 }
 
 static void pre_example_cfg_clear(void) {
-    repl_export_config_clear(&g_pre_example_cfg);
-    g_pre_example_valid = 0;
+    repl_export_config_clear(&g_pre_example.cfg);
+    g_pre_example.valid = 0;
 }
 
 static int pre_example_cfg_valid(void) {
-    return g_pre_example_valid;
+    return g_pre_example.valid;
 }
 
 static void pre_example_cfg_set_valid(int valid) {
-    g_pre_example_valid = valid ? 1 : 0;
+    g_pre_example.valid = valid ? 1 : 0;
 }
 
 static void scene_cfg_reset_all(void) {
     for (int i = 0; i < MAX_USER_SCENES; i++)
-        repl_export_config_clear(&g_scene_cfg[i]);
+        repl_export_config_clear(&g_user_scenes[i].cfg);
     pre_example_cfg_clear();
 }
 
@@ -789,9 +793,10 @@ static int try_evict_lru(UserScene *out_stash, ReplExportConfig *out_cfg_stash) 
     /* Snapshot the victim's in-memory entry BEFORE evict_scene_to_workspace
      * runs — that helper marks the slot unused and clears its cfg as its
      * last step, so without this capture a subsequent parse failure would
-     * leave the user staring at a missing tab. */
+     * leave the user staring at a missing tab. The cfg now lives on
+     * UserScene, so the memcpy covers it. */
     memcpy(out_stash, &g_user_scenes[victim], sizeof(UserScene));
-    memcpy(out_cfg_stash, &g_scene_cfg[victim], sizeof(ReplExportConfig));
+    (void)out_cfg_stash;
 
     /* evict_scene_to_workspace clobbers live state via install_scene_into_live;
      * wrap in its own stash/restore so the caller's outer live stash stays
@@ -805,16 +810,16 @@ static int try_evict_lru(UserScene *out_stash, ReplExportConfig *out_cfg_stash) 
     return victim;
 }
 
-/* Restore a slot snapshot taken by try_evict_lru. Reinstates both
- * the in-memory entry (so the scene tab reappears) and its
- * ReplExportConfig (so its cfg toggles survive). No-op if `slot < 0`
- * (the "no eviction happened" sentinel from try_evict_lru). */
+/* Restore a slot snapshot taken by try_evict_lru. Reinstates the
+ * in-memory entry (so the scene tab reappears); cfg now lives on
+ * UserScene so it travels with the memcpy. No-op if `slot < 0` (the
+ * "no eviction happened" sentinel from try_evict_lru). */
 static void restore_evicted_slot(int slot,
                                  const UserScene *stash,
                                  const ReplExportConfig *cfg_stash) {
     if (slot < 0) return;
+    (void)cfg_stash;
     memcpy(&g_user_scenes[slot], stash, sizeof(UserScene));
-    memcpy(&g_scene_cfg[slot], cfg_stash, sizeof(ReplExportConfig));
 }
 
 int repl_load_scene_as_new_slot(const char *path,
