@@ -14,7 +14,7 @@
 #include <string.h>
 
 #include "ui/app/autocomplete_panel.h"
-#include "ui/core/layout.h"
+#include "ui/app/layout.h"
 #include "ui/core/metrics.h"
 #include "ui/core/theme.h"
 
@@ -49,18 +49,10 @@ void ui_autocomplete_panel_render(const UiRenderSnapshot *snap,
         popup_x = cp_x + cp_w - popup_w - 4;
     if (popup_x < cp_x + 4) popup_x = cp_x + 4;
 
-    /* Background */
-    ui_clr_a(UI_TOK_SUNKEN, 0.95f);
-    glRectf((float)((float)popup_x), (float)((float)(popup_y - popup_h)), (float)((float)popup_x)+(float)((float)popup_w), (float)((float)(popup_y - popup_h))+(float)((float)popup_h));
-
-    /* Border */
-    ui_clr_a(UI_TOK_BORDER, 0.80f);
-    glBegin(GL_LINE_LOOP);
-    glVertex2f((float)popup_x, (float)(popup_y - popup_h));
-    glVertex2f((float)(popup_x + popup_w), (float)(popup_y - popup_h));
-    glVertex2f((float)(popup_x + popup_w), (float)popup_y);
-    glVertex2f((float)popup_x, (float)popup_y);
-    glEnd();
+    /* Background + Border */
+    gl2d_panel_frame((float)popup_x, (float)(popup_y - popup_h),
+                     (float)popup_w, (float)popup_h,
+                     UI_TOK_SUNKEN, 0.95f, UI_TOK_BORDER, 0.80f);
 
     /* Entries */
     int ey = popup_y - LINE_H + 1;

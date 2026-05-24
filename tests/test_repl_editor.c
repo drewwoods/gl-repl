@@ -1,4 +1,5 @@
 #define _DEFAULT_SOURCE  /* mkdtemp() */
+#define STATUSBAR_H 22
 #include "ui/core/gl_2d.h"
 #include "editor/clipboard.h"
 #include "ui/app/repl_code_panel.h"
@@ -26,8 +27,8 @@
 #include "source_document.h"   /* source_document_view */
 #include "subsystems/replay/replay.h"
 #include "subsystems/replay/replay_state.h"
-#include "ui/core/layout.h" /* CODE_PANEL_LAYOUT_* */
-#include "ui/core/layout.h"
+#include "ui/app/layout.h" /* CODE_PANEL_LAYOUT_* */
+#include "ui/app/layout.h"
 #include "ui/core/metrics.h"
 #include "ui/app/panels.h"
 #include "ui/app/state.h"

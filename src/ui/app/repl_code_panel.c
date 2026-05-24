@@ -9,7 +9,7 @@
 #include "ui/app/color_picker.h"
 #include "ui/app/numeric_swatch.h"
 #include "ui/core/gl_2d.h"
-#include "ui/core/layout.h"
+#include "ui/app/layout.h"
 #include "ui/app/menu_bar.h"
 #include "ui/core/metrics.h"
 #include "ui/app/panels.h"
@@ -64,6 +64,8 @@ typedef struct {
     int                     highlight_color_idx;
     int                     highlight_tutorial_insertion_idx;
 } ReplCodePanelBuilder;
+
+static const char *repl_code_panel_display_text(const UiRenderSnapshot *snap, int line_idx);
 
 static UiTextPanelColor repl_code_panel_rgb(float r, float g, float b) {
     UiTextPanelColor color = { r, g, b, 1.0f, 0 };
@@ -198,11 +200,8 @@ static int repl_code_panel_header_row_count(const UiRenderSnapshot *snap,
                                           import_export.cam_lines[i],
                                           text_x, panel_w);
     {
-        char line[MAX_LINE_LEN];
-        int line_count = repl_export_lights_display_line_count();
-        for (int i = 0; i < line_count; i++) {
-            repl_export_lights_display_line(i, line, sizeof(line));
-            rows += repl_code_panel_row_count(snap, line, text_x, panel_w);
+        for (int i = 0; i < snap->lights_display_count; i++) {
+            rows += repl_code_panel_row_count(snap, snap->lights_display_lines[i], text_x, panel_w);
         }
     }
     for (int i = 0; g_header_post[i]; i++)
@@ -232,9 +231,8 @@ static int repl_code_panel_footer_row_count(const UiRenderSnapshot *snap,
         }
         rows += repl_code_panel_row_count(snap, g_footer_pre_init[i], text_x, panel_w);
     }
-    for (int i = 0; i < repl_export_init_section_line_count(); i++) {
-        repl_export_init_section_line(i, line, sizeof(line));
-        rows += repl_code_panel_row_count(snap, line, text_x, panel_w);
+    for (int i = 0; i < snap->init_section_count; i++) {
+        rows += repl_code_panel_row_count(snap, snap->init_section_lines[i], text_x, panel_w);
     }
     for (int i = 0; g_footer_post_init[i]; i++)
         rows += repl_code_panel_row_count(snap, g_footer_post_init[i], text_x, panel_w);
@@ -261,11 +259,7 @@ static int repl_code_panel_command_main_rows(const UiRenderSnapshot *snap,
     }
 
     {
-        const char *display_text = editor_state_line_override_for(cmd_idx);
-        if (!display_text)
-            display_text = editor_buffer_line(cmd_idx);
-        if (!display_text)
-            display_text = "";
+        const char *display_text = repl_code_panel_display_text(snap, cmd_idx);
         return repl_code_panel_row_count(snap, display_text, text_x, panel_w);
     }
 }
@@ -278,8 +272,17 @@ static void repl_code_panel_precompute_layout_rows(const UiRenderSnapshot *snap,
         if (main_rows)
             main_rows[i] = repl_code_panel_command_main_rows(snap, i, panel_w,
                                                              text_x);
-        if (replay_extra_rows)
-            replay_extra_rows[i] = editor_state_virtual_lines_count_for(i);
+        if (replay_extra_rows) {
+            int v_count = 0;
+            if (snap->editor_virtual_lines) {
+                for (int v = 0; v < snap->editor_virtual_lines->count; v++) {
+                    if (snap->editor_virtual_lines->items[v].after_line_idx == i) {
+                        v_count++;
+                    }
+                }
+            }
+            replay_extra_rows[i] = v_count;
+        }
     }
 }
 
@@ -358,7 +361,7 @@ static int repl_code_panel_follow_doc_line_from_layout(
 
 int ui_repl_code_panel_visible_lines_for_height(int cp_h, int top_chrome_h) {
     return ui_text_panel_visible_lines_for_height(
-        cp_h, UI_TEXT_PANEL_CHROME_STATUSBAR, top_chrome_h);
+        cp_h, 22, top_chrome_h);
 }
 
 void ui_repl_code_panel_build_layout(const UiRenderSnapshot *snap,
@@ -487,15 +490,21 @@ static void repl_code_panel_find_highlight_rows(const UiRenderSnapshot *snap,
     if (out_tutorial_insertion_idx) *out_tutorial_insertion_idx = tutorial_insertion_idx;
 }
 
+int ui_repl_code_panel_compute_text_x(const UiRenderSnapshot *snap) {
+    if (!snap)
+        return 0;
+    int linenum_w = 4 * FONT_W;
+    int idx_col_w = snap->code_panel.show_vertex_indices ? (6 * FONT_W) : 0;
+    int idx_x = CODE_MARGIN_X + linenum_w + FONT_W;
+    return idx_x + idx_col_w;
+}
+
 static int repl_code_panel_init_builder(ReplCodePanelBuilder *builder,
                                         const UiRenderSnapshot *snap) {
     int cp_x;
     int cp_y;
     int cp_w;
     int cp_h;
-    int linenum_w = 4 * FONT_W;
-    int idx_col_w;
-    int idx_x;
 
     if (!builder || !snap)
         return 0;
@@ -512,9 +521,6 @@ static int repl_code_panel_init_builder(ReplCodePanelBuilder *builder,
     if (cp_w <= 0 || cp_h <= 0)
         return 0;
 
-    idx_col_w = snap->code_panel.show_vertex_indices ? (6 * FONT_W) : 0;
-    idx_x = CODE_MARGIN_X + linenum_w + FONT_W;
-
     builder->text_snap = (UiTextPanelSnapshot){
         .vp_w = snap->viewport.window_w,
         .vp_h = snap->viewport.window_h,
@@ -522,9 +528,10 @@ static int repl_code_panel_init_builder(ReplCodePanelBuilder *builder,
         .cp_y = cp_y,
         .cp_w = cp_w,
         .cp_h = cp_h,
-        .text_x = idx_x + idx_col_w,
+        .text_x = ui_repl_code_panel_compute_text_x(snap),
         .wrap_at_comma = snap->code_panel.wrap_at_comma,
         .top_chrome_h = ui_scene_tabs_band_h(snap),
+        .statusbar_h = 22,
         .rows = g_repl_code_panel_rows,
         .row_count = 0,
         .scroll = snap->scroll.scroll,
@@ -576,12 +583,14 @@ static char *repl_code_panel_next_generated_text(ReplCodePanelBuilder *builder) 
     return g_repl_code_panel_generated_text[builder->generated_count++];
 }
 
-static const char *repl_code_panel_display_text(int line_idx) {
-    const char *display_text = editor_state_line_override_for(line_idx);
-
-    if (display_text)
-        return display_text;
-    display_text = editor_buffer_line(line_idx);
+static const char *repl_code_panel_display_text(const UiRenderSnapshot *snap, int line_idx) {
+    if (line_idx < 0)
+        return "";
+    for (int i = 0; i < snap->line_overrides.count; i++) {
+        if (snap->line_overrides.items[i].line_idx == line_idx)
+            return snap->line_overrides.items[i].text;
+    }
+    const char *display_text = editor_buffer_view_line(snap->editor_buffer, line_idx);
     return display_text ? display_text : "";
 }
 
@@ -706,8 +715,80 @@ static void repl_code_panel_apply_command_overlays(ReplCodePanelBuilder *builder
     }
 }
 
-static void repl_code_panel_apply_fade_segments(int line_idx, const char *text,
-                                                float now, UiTextPanelRow *row) {
+static float repl_code_panel_fade_slot_step(float fade_duration, int line_len) {
+    int safe_len = line_len > 0 ? line_len : 1;
+    int total_slots = safe_len + TUTORIAL_FADE_SETTLE_CHARS;
+    return fade_duration / (float)total_slots;
+}
+
+static int repl_code_panel_fade_front(const UiRenderSnapshot *snap, int line_idx, int line_len) {
+    if (!snap->tutorial_fade.active || line_idx != snap->tutorial_fade.fade_line_idx)
+        return -1;
+    float now = snap->anim_time;
+    if (now >= snap->tutorial_fade.fade_start_t + snap->tutorial_fade.fade_duration)
+        return -1;
+    int safe_len = line_len > 0 ? line_len : 1;
+    float step = repl_code_panel_fade_slot_step(snap->tutorial_fade.fade_duration, safe_len);
+    if (step <= 0.0f)
+        return -1;
+    float elapsed = now - snap->tutorial_fade.fade_start_t;
+    if (elapsed <= 0.0f)
+        return 0;
+    int front = (int)(elapsed / step);
+    if (front < 0)
+        front = 0;
+    if (front >= safe_len)
+        return -1;
+    return front;
+}
+
+static float repl_code_panel_fade_alpha(const UiRenderSnapshot *snap, int line_idx, int char_idx, int line_len) {
+    if (!snap->tutorial_fade.active || line_idx != snap->tutorial_fade.fade_line_idx)
+        return 1.0f;
+    float now = snap->anim_time;
+    if (now >= snap->tutorial_fade.fade_start_t + snap->tutorial_fade.fade_duration)
+        return 1.0f;
+    int safe_len = line_len > 0 ? line_len : 1;
+    if (char_idx < 0) char_idx = 0;
+    if (char_idx >= safe_len) char_idx = safe_len - 1;
+    float step = repl_code_panel_fade_slot_step(snap->tutorial_fade.fade_duration, safe_len);
+    if (step <= 0.0f)
+        return 1.0f;
+    float elapsed = (now - snap->tutorial_fade.fade_start_t) - (float)char_idx * step;
+    float alpha = elapsed / step;
+    if (alpha < 0.0f) alpha = 0.0f;
+    if (alpha > 1.0f) alpha = 1.0f;
+    return alpha;
+}
+
+static float repl_code_panel_fade_settle(const UiRenderSnapshot *snap, int line_idx, int char_idx, int line_len) {
+    if (!snap->tutorial_fade.active || line_idx != snap->tutorial_fade.fade_line_idx)
+        return 1.0f;
+    float now = snap->anim_time;
+    if (now >= snap->tutorial_fade.fade_start_t + snap->tutorial_fade.fade_duration)
+        return 1.0f;
+    int safe_len = line_len > 0 ? line_len : 1;
+    if (char_idx < 0) char_idx = 0;
+    if (char_idx >= safe_len) char_idx = safe_len - 1;
+    float step = repl_code_panel_fade_slot_step(snap->tutorial_fade.fade_duration, safe_len);
+    float settle_duration = step * (float)TUTORIAL_FADE_SETTLE_CHARS;
+    if (settle_duration <= 0.0f)
+        return 1.0f;
+    float elapsed = (now - snap->tutorial_fade.fade_start_t) - (float)(char_idx + 1) * step;
+    float settle = elapsed / settle_duration;
+    if (settle < 0.0f) settle = 0.0f;
+    if (settle > 1.0f) settle = 1.0f;
+    return settle;
+}
+
+static int repl_code_panel_line_is_fading(const UiRenderSnapshot *snap, int line_idx) {
+    return snap->tutorial_fade.active && line_idx == snap->tutorial_fade.fade_line_idx &&
+           snap->anim_time < snap->tutorial_fade.fade_start_t + snap->tutorial_fade.fade_duration;
+}
+
+static void repl_code_panel_apply_fade_segments(const UiRenderSnapshot *snap,
+                                                int line_idx, const char *text,
+                                                UiTextPanelRow *row) {
     int line_len;
     int front;
     int settled_end;
@@ -721,7 +802,7 @@ static void repl_code_panel_apply_fade_segments(int line_idx, const char *text,
     if (line_len <= 0)
         return;
 
-    front = tutorial_step_fade_front(line_idx, line_len, now);
+    front = repl_code_panel_fade_front(snap, line_idx, line_len);
     if (front < 0)
         return;
 
@@ -752,7 +833,7 @@ static void repl_code_panel_apply_fade_segments(int line_idx, const char *text,
         UiTextPanelColor c;
         if (row->color_segment_count >= UI_TEXT_PANEL_MAX_COLOR_SEGMENTS)
             break;
-        s = tutorial_step_fade_settle(line_idx, i, line_len, now);
+        s = repl_code_panel_fade_settle(snap, line_idx, i, line_len);
         c.r = 1.0f + (row->color.r - 1.0f) * s;
         c.g = 1.0f + (row->color.g - 1.0f) * s;
         c.b = 1.0f + (row->color.b - 1.0f) * s;
@@ -777,7 +858,7 @@ static void repl_code_panel_apply_fade_segments(int line_idx, const char *text,
                 .char_count = 1,
                 .color = repl_code_panel_scaled_alpha(
                     highlight,
-                    tutorial_step_fade_alpha(line_idx, front, line_len, now)),
+                    repl_code_panel_fade_alpha(snap, line_idx, front, line_len)),
             };
     }
 
@@ -855,7 +936,19 @@ static int repl_syntax_is_ident_char(int c) {
     return isalnum((unsigned char)c) || c == '_';
 }
 
-int ui_repl_code_panel_classify_syntax(const char *text,
+static int repl_code_panel_is_predef(const UiRenderSnapshot *snap, const char *name) {
+    if (snap) {
+        for (int v = 0; v < snap->variable_panel_vars.count; v++) {
+            if (strcmp(snap->variable_panel_vars.vars[v].name, name) == 0)
+                return 1;
+        }
+        return 0;
+    }
+    return repl_eval_find_predef_var_idx(name) >= 0;
+}
+
+int ui_repl_code_panel_classify_syntax(const UiRenderSnapshot *snap,
+                                       const char *text,
                                        UiSyntaxSpan *out, int max_spans) {
     int n = 0;
     int i = 0;
@@ -936,7 +1029,7 @@ int ui_repl_code_panel_classify_syntax(const char *text,
                                              REPL_SYNTAX_CONSTANT };
             } else if (strcmp(name, "t") == 0 ||
                        repl_eval_scratch_array_index(name) >= 0 ||
-                       repl_eval_find_predef_var_idx(name) >= 0) {
+                       repl_code_panel_is_predef(snap, name)) {
                 /* 't' is reserved but is the predefined animation var, so
                  * it must classify as a variable, not as structural. */
                 out[n++] = (UiSyntaxSpan){ start, len,
@@ -958,7 +1051,8 @@ int ui_repl_code_panel_classify_syntax(const char *text,
 }
 
 /* mode: 0 = off (no spans), 1 = on, 2 = on + fake-bold constants. */
-static void repl_code_panel_apply_syntax_segments(const char *text,
+static void repl_code_panel_apply_syntax_segments(const UiRenderSnapshot *snap,
+                                                  const char *text,
                                                   CmdType type,
                                                   int mode,
                                                   UiTextPanelRow *row) {
@@ -974,7 +1068,7 @@ static void repl_code_panel_apply_syntax_segments(const char *text,
         return;  /* whole comment line keeps the comment color */
 
     count = ui_repl_code_panel_classify_syntax(
-        text, spans, UI_TEXT_PANEL_MAX_COLOR_SEGMENTS);
+        snap, text, spans, UI_TEXT_PANEL_MAX_COLOR_SEGMENTS);
     if (count <= 0)
         return;
 
@@ -1074,7 +1168,7 @@ static void repl_code_panel_add_command_row(ReplCodePanelBuilder *builder,
     if (!row)
         return;
 
-    display_text = repl_code_panel_display_text(line_idx);
+    display_text = repl_code_panel_display_text(builder->snap, line_idx);
     row->text = display_text;
     row->kind = UI_TEXT_PANEL_ROW_TEXT;
     row->left_gutter_label = builder->file_line++;
@@ -1088,11 +1182,11 @@ static void repl_code_panel_add_command_row(ReplCodePanelBuilder *builder,
                                      primitive_vnums_exact);
     repl_code_panel_set_right_action(row, builder->snap, line_idx);
     repl_code_panel_apply_command_overlays(builder, line_idx, row);
-    if (tutorial_line_is_fading(line_idx, builder->snap->anim_time))
-        repl_code_panel_apply_fade_segments(line_idx, display_text,
-                                            builder->snap->anim_time, row);
+    if (repl_code_panel_line_is_fading(builder->snap, line_idx))
+        repl_code_panel_apply_fade_segments(builder->snap, line_idx, display_text, row);
     else
         repl_code_panel_apply_syntax_segments(
+            builder->snap,
             display_text,
             builder->snap->document_cmds[line_idx].type,
             builder->snap->code_panel.syntax_highlight, row);
@@ -1208,12 +1302,8 @@ static void repl_code_panel_build_rows(ReplCodePanelBuilder *builder) {
                 snap->import_export.cam_lines[i],
                 repl_code_panel_rgb(REPL_CODE_PANEL_STATE_RGB));
         }
-        for (int i = 0; i < repl_export_lights_display_line_count(); i++) {
-            char *line = repl_code_panel_next_generated_text(builder);
-            if (!line)
-                break;
-            repl_export_lights_display_line(i, line, MAX_LINE_LEN);
-            repl_code_panel_add_static_row(builder, line,
+        for (int i = 0; i < snap->lights_display_count; i++) {
+            repl_code_panel_add_static_row(builder, snap->lights_display_lines[i],
                                            repl_code_panel_rgb(REPL_CODE_PANEL_STATE_RGB));
         }
         for (int i = 0; g_header_post[i]; i++) {
@@ -1330,12 +1420,8 @@ static void repl_code_panel_build_rows(ReplCodePanelBuilder *builder) {
                 repl_code_panel_static_line_color(g_footer_pre_init[i],
                                                   REPL_CODE_PANEL_CHROME_RGB));
         }
-        for (int i = 0; i < repl_export_init_section_line_count(); i++) {
-            char *line = repl_code_panel_next_generated_text(builder);
-            if (!line)
-                break;
-            repl_export_init_section_line(i, line, MAX_LINE_LEN);
-            repl_code_panel_add_static_row(builder, line,
+        for (int i = 0; i < snap->init_section_count; i++) {
+            repl_code_panel_add_static_row(builder, snap->init_section_lines[i],
                                            repl_code_panel_rgb(REPL_CODE_PANEL_CHROME_RGB));
         }
         for (int i = 0; g_footer_post_init[i]; i++) {
@@ -1667,6 +1753,7 @@ static UiHit repl_code_panel_rewrite_hit(const ReplCodePanelBuilder *builder,
                                          int mx, UiHit hit) {
     const UiTextPanelRow *row;
     int swatch_x;
+    int swatch_w;
 
     if (!builder)
         return hit;
@@ -1692,9 +1779,9 @@ static UiHit repl_code_panel_rewrite_hit(const ReplCodePanelBuilder *builder,
         !row->right_action.active)
         return hit;
 
-    swatch_x = builder->text_snap.cp_x + builder->text_snap.cp_w -
-               CODE_MARGIN_X - UI_TEXT_PANEL_RIGHT_ACTION_W - 2;
-    if (mx < swatch_x || mx >= swatch_x + UI_TEXT_PANEL_RIGHT_ACTION_W)
+    if (!ui_text_panel_right_action_rect(&builder->text_snap, 0, &swatch_x, NULL, &swatch_w))
+        return hit;
+    if (mx < swatch_x || mx >= swatch_x + swatch_w)
         return hit;
 
     hit.kind = UI_HIT_INLINE_COLOR_SWATCH;

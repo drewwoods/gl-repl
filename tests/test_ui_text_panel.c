@@ -10,6 +10,8 @@
 #include <stdio.h>
 #include <string.h>
 
+#define STATUSBAR_H 22
+
 #ifdef GL_STUBS
 static TestHarness g_harness = TEST_HARNESS_INIT;
 
@@ -40,6 +42,7 @@ static UiTextPanelSnapshot make_snapshot(const UiTextPanelRow *rows,
     snap.rows = rows;
     snap.row_count = row_count;
     snap.chrome_flags = chrome_flags;
+    snap.statusbar_h = STATUSBAR_H;
     snap.input.input = "";
     snap.input.input_len = 0;
     snap.input.cursor = 0;
@@ -108,7 +111,7 @@ static void test_visible_rows_respect_statusbar_flag(void) {
                   expected_visible_rows(cp_h, 0));
     ASSERT_INT_EQ("visible rows with statusbar helper",
                   ui_text_panel_visible_lines_for_height(
-                      cp_h, UI_TEXT_PANEL_CHROME_STATUSBAR, 0),
+                      cp_h, 22, 0),
                   expected_visible_rows(cp_h,
                                         UI_TEXT_PANEL_CHROME_STATUSBAR));
 

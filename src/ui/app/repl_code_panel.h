@@ -11,7 +11,7 @@
 
 #include "config.h"
 #include "repl/command_spec.h"
-#include "ui/core/hit.h"
+#include "ui/app/hit.h"
 #include "ui/app/snapshot.h"
 
 struct UiCodePanelOutput;
@@ -47,8 +47,9 @@ typedef struct {
  * max_spans ordered, non-overlapping spans and returns the count written.
  * Keyword / function-call names / operators / punctuation produce no span.
  * Pure: no global state, safe to call from tests. */
-int ui_repl_code_panel_classify_syntax(const char *text,
-                                        UiSyntaxSpan *out, int max_spans);
+int ui_repl_code_panel_classify_syntax(const UiRenderSnapshot *snap,
+                                       const char *text,
+                                       UiSyntaxSpan *out, int max_spans);
 
 /* Final RGB (0..1) for a token kind: a brightness/saturation tier of the
  * command's class color (same hue, dimmer). Exposed for the contrast
@@ -70,6 +71,8 @@ typedef struct {
     int cmd_main_rows[MAX_COMMANDS];
     int replay_extra_rows[MAX_COMMANDS];
 } UiReplCodePanelLayout;
+
+int ui_repl_code_panel_compute_text_x(const UiRenderSnapshot *snap);
 
 int        ui_repl_code_panel_visible_lines_for_height(int cp_h,
                                                        int top_chrome_h);

@@ -11,8 +11,8 @@
 #include "editor/inline_rename.h"
 #include "repl/core.h"
 #include "repl/scenes.h"
-#include "ui/core/hit.h"
-#include "ui/core/layout.h"
+#include "ui/app/hit.h"
+#include "ui/app/layout.h"
 #include "ui/app/menu_bar.h"
 #include "ui/core/metrics.h"
 #include "ui/app/panels.h"
@@ -148,8 +148,8 @@ static void test_geometry_hit(void) {
 static void test_band_h_lockstep(void) {
     int flags = UI_TEXT_PANEL_CHROME_STATUSBAR;
     for (int H = 120; H <= 1200; H += 37) {
-        int base = ui_text_panel_visible_lines_for_height(H, flags, 0);
-        int with = ui_text_panel_visible_lines_for_height(H, flags,
+        int base = ui_text_panel_visible_lines_for_height(H, 22, 0);
+        int with = ui_text_panel_visible_lines_for_height(H, 22,
                                                           TAB_STRIP_H);
         if (base <= 1)
             continue;  /* clamp floor (see plan §3) — delta not meaningful */

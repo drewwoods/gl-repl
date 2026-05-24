@@ -8,7 +8,7 @@
 #include "repl/state_owners.h"
 #include "subsystems/replay/replay.h"
 #include "ui/app/state.h"
-#include "ui/core/layout.h"
+#include "ui/app/layout.h"
 #include "ui/core/metrics.h"
 #include "support/test_harness.h"
 #include <ui/core/gl_2d.h>

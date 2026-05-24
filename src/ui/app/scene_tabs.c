@@ -11,7 +11,7 @@
 
 #include "config.h"        /* FONT_SMALL, FONT_SMALL_W */
 #include "ui/core/gl_2d.h"
-#include "ui/core/layout.h"
+#include "ui/app/layout.h"
 #include "ui/core/metrics.h"
 #include "ui/core/theme.h"
 

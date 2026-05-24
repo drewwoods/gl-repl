@@ -300,7 +300,7 @@ SRCS = \
 	src/scene/scene_transition.c \
 	src/ui/app/autocomplete_panel.c \
 	src/ui/app/color_picker.c \
-	src/ui/core/layout.c \
+	src/ui/app/layout.c \
 	src/ui/app/menu_bar.c \
 	src/ui/app/numeric_swatch.c \
 	src/ui/app/panels.c \
@@ -313,6 +313,7 @@ SRCS = \
 	src/ui/core/text_layout.c \
 	src/ui/core/text_panel.c \
 	src/ui/core/text_search.c \
+	src/ui/core/theme.c \
 	src/ui/app/variable_panel.c \
 	src/subsystems/color_picker/color_picker_state.c \
 	src/subsystems/replay/replay.c \
@@ -382,7 +383,7 @@ HDRS = \
 	src/scene/render_types.h \
 	src/ui/app/autocomplete_panel.h \
 	src/ui/app/color_picker.h \
-	src/ui/core/layout.h \
+	src/ui/app/layout.h \
 	src/ui/app/menu_bar.h \
 	src/ui/app/numeric_swatch.h \
 	src/ui/app/panels.h \
@@ -464,7 +465,7 @@ CORE_TEST_SRCS = \
 	src/scene/scene_transition.c \
 	src/ui/app/autocomplete_panel.c \
 	src/ui/app/color_picker.c \
-	src/ui/core/layout.c \
+	src/ui/app/layout.c \
 	src/ui/app/menu_bar.c \
 	src/ui/app/numeric_swatch.c \
 	src/ui/app/panels.c \
@@ -477,6 +478,7 @@ CORE_TEST_SRCS = \
 	src/ui/core/text_layout.c \
 	src/ui/core/text_panel.c \
 	src/ui/core/text_search.c \
+	src/ui/core/theme.c \
 	src/ui/app/variable_panel.c \
 	src/subsystems/color_picker/color_picker_state.c \
 	src/subsystems/replay/replay.c \
@@ -571,6 +573,7 @@ EDITOR_DEMO_DEP_SRCS = src/editor/edit_ops.c \
                        src/ui/core/text_layout.c \
                        src/ui/core/text_panel.c \
                        src/ui/core/text_search.c \
+                       src/ui/core/theme.c \
                        src/support/prof.c \
                        tests/gl-stubs/gl_stub_counts.c
 
@@ -685,8 +688,8 @@ test_repl_code_panel_layout_OBJS = $(OBJDIR)/$(TEST_DIR)/test_repl_code_panel_la
 test_repl_code_panel_layout_LDLIBS =
 test_repl_code_panel_layout_RUN ?= $(BINDIR)/test_repl_code_panel_layout
 
-# Header-only: ui/theme.h pulls in no project objects.
-test_ui_theme_OBJS = $(OBJDIR)/$(TEST_DIR)/test_ui_theme.o
+# Now needs theme.o to resolve externs.
+test_ui_theme_OBJS = $(OBJDIR)/$(TEST_DIR)/test_ui_theme.o $(OBJDIR)/src/ui/core/theme.o
 test_ui_theme_LDLIBS =
 test_ui_theme_RUN ?= $(BINDIR)/test_ui_theme
 

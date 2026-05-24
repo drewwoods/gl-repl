@@ -10,7 +10,7 @@
 #include "ui/app/replay_hud.h"
 #include "ui/core/gl_2d.h"
 #include "subsystems/replay/replay.h"
-#include "ui/core/layout.h" /* CODE_PANEL_LAYOUT_TOP enum value */
+#include "ui/app/layout.h" /* CODE_PANEL_LAYOUT_TOP enum value */
 #include "ui/core/metrics.h"
 #include "ui/core/theme.h"
 

@@ -11,7 +11,7 @@
 #include "app/glr_ctrl.h"            /* glr_ctrl_sync_ui_chrome */
 #include "app/glr_state.h"           /* presentation/render storage */
 #include "app/glr_camera.h"          /* camera focus-origin / reset (eased) */
-#include "ui/core/layout.h"           /* CODE_PANEL_LAYOUT_* enum values */
+#include "ui/app/layout.h"           /* CODE_PANEL_LAYOUT_* enum values */
 #include "subsystems/color_picker/color_picker_state.h"
 #include "app/glr_audio.h"
 #include "repl/core.h"

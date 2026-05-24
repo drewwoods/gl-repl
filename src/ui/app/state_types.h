@@ -42,7 +42,8 @@ typedef struct {
 } UiHelpState;
 
 typedef struct {
-    int visible;
+    int   visible;
+    float replay_lift_px;
 } UiVariablePanelState;
 
 typedef struct {

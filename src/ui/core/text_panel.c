@@ -33,7 +33,7 @@ static const GLfloat k_action_chip_outline[4] = { 0.10f, 0.10f, 0.12f, 0.85f };
 
 static int text_panel_statusbar_h(const UiTextPanelSnapshot *snap) {
     return (snap && (snap->chrome_flags & UI_TEXT_PANEL_CHROME_STATUSBAR))
-         ? STATUSBAR_H : 0;
+         ? snap->statusbar_h : 0;
 }
 
 static CodeLayout text_panel_row_layout(const UiTextPanelSnapshot *snap,
@@ -242,9 +242,8 @@ static void text_panel_draw_right_action(const UiTextPanelSnapshot *snap,
     if (!row->right_action.active)
         return;
 
-    sw = UI_TEXT_PANEL_RIGHT_ACTION_W;
-    sx = snap->cp_x + snap->cp_w - CODE_MARGIN_X - sw - 2;
-    sy = line_y + (LINE_H - sw) / 2 - 1;
+    if (!ui_text_panel_right_action_rect(snap, line_y, &sx, &sy, &sw))
+        return;
 
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -659,10 +658,8 @@ static int text_panel_char_for_click(const UiTextPanelSnapshot *snap,
     return new_cursor;
 }
 
-int ui_text_panel_visible_lines_for_height(int panel_h, int chrome_flags,
+int ui_text_panel_visible_lines_for_height(int panel_h, int statusbar_h,
                                             int top_chrome_h) {
-    int statusbar_h = (chrome_flags & UI_TEXT_PANEL_CHROME_STATUSBAR)
-                    ? STATUSBAR_H : 0;
     int available = panel_h - CODE_MARGIN_Y - 2 * LINE_H - 3 - statusbar_h
                     - top_chrome_h;
     if (available < 0)
@@ -678,10 +675,9 @@ int ui_text_panel_input_row_y(const UiTextPanelSnapshot *snap,
         input_row_idx >= snap->row_count)
         return 0;
 
-    visible_rows = ui_text_panel_visible_lines_for_height(
-        snap->cp_h, snap->chrome_flags, snap->top_chrome_h);
     statusbar_h = text_panel_statusbar_h(snap);
-    (void)statusbar_h;
+    visible_rows = ui_text_panel_visible_lines_for_height(
+        snap->cp_h, statusbar_h, snap->top_chrome_h);
 
     panel_top = snap->cp_y + snap->cp_h;
     line_y = panel_top - CODE_MARGIN_Y - 2 * LINE_H - snap->top_chrome_h;
@@ -732,7 +728,7 @@ void ui_text_panel_render(const UiTextPanelSnapshot *snap,
         return;
 
     visible_rows = ui_text_panel_visible_lines_for_height(snap->cp_h,
-                                                          snap->chrome_flags,
+                                                          text_panel_statusbar_h(snap),
                                                           snap->top_chrome_h);
     statusbar_h = text_panel_statusbar_h(snap);
 
@@ -821,7 +817,7 @@ UiHit ui_text_panel_hit_test(const UiTextPanelSnapshot *snap,
     panel_top = snap->cp_y + snap->cp_h;
     line_y_start = panel_top - CODE_MARGIN_Y - 2 * LINE_H - snap->top_chrome_h;
     visible_rows = ui_text_panel_visible_lines_for_height(snap->cp_h,
-                                                          snap->chrome_flags,
+                                                          text_panel_statusbar_h(snap),
                                                           snap->top_chrome_h);
     row_from_top = (line_y_start + LINE_H - 3 - gl_y) / LINE_H;
     if (row_from_top < 0 || row_from_top >= visible_rows)
@@ -880,4 +876,20 @@ UiHit ui_text_panel_hit_test(const UiTextPanelSnapshot *snap,
     }
 
     return h;
+}
+
+int ui_text_panel_right_action_rect(const UiTextPanelSnapshot *snap,
+                                    int line_y,
+                                    int *out_sx, int *out_sy, int *out_sw) {
+    if (!snap)
+        return 0;
+
+    int sw = UI_TEXT_PANEL_RIGHT_ACTION_W;
+    int sx = snap->cp_x + snap->cp_w - CODE_MARGIN_X - sw - 2;
+    int sy = line_y + (LINE_H - sw) / 2 - 1;
+
+    if (out_sx) *out_sx = sx;
+    if (out_sy) *out_sy = sy;
+    if (out_sw) *out_sw = sw;
+    return 1;
 }

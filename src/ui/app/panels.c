@@ -8,7 +8,7 @@
 #include "ui/app/color_picker.h"
 #include "ui/app/numeric_swatch.h"
 #include "ui/core/gl_2d.h"
-#include "ui/core/layout.h"
+#include "ui/app/layout.h"
 #include "ui/app/menu_bar.h"
 #include "ui/core/metrics.h"
 #include "ui/app/repl_code_panel.h"

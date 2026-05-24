@@ -14,7 +14,7 @@
 #include "ui/app/menu_bar.h"
 #include "ui/core/metrics.h"
 #include "ui/core/theme.h"
-#include "ui/core/layout.h"
+#include "ui/app/layout.h"
 #include "ui/core/gl_2d.h"
 
 /* Menu bar - styled after Header Wireframes v2.
@@ -522,16 +522,12 @@ static int point_in_rect_gl(int mx, int my, int x, int y, int w, int h) {
     return mx >= x && mx < x + w && ry >= y && ry < y + h;
 }
 
-/* ---- Generic flyout-submenu provider --------------------------------- *
+/* ---- Polymorphic flyout provider ----------------------------------------
  *
- * One engine, two menus. A submenu is keyed by (menu_id, parent_row);
- * the provider resolves that to a row list. Scene parent rows are
- * example-tag rows (the tag index is recovered from the row); Config
- * parent rows are the "### " sections plus a synthetic "All" row whose
- * flyout is the whole flat table (chrome included).
- *
- * submenu_row_kind() lets the Config "All" flyout keep its
- * "### "/"---" chrome inert; every Scene row is an ITEM. */
+ * A FlyoutProvider resolves (parent_row, ordinal) to a submenu row's
+ * count, label, absolute index, and kind. Three static instances cover
+ * Scene (examples), Tutorials, and Config; the four submenu_row_*
+ * dispatchers resolve a menu_id to its provider and delegate. */
 
 /* Map a Config (parent_row, ordinal) to its absolute g_cfg_items[]
  * index, or -1. Named section parents expose only their item rows;
@@ -550,52 +546,140 @@ static int config_submenu_abs_index(int parent_row, int ordinal) {
     return start + ordinal;
 }
 
+typedef struct {
+    int              (*row_count)    (int parent_row);
+    const char *     (*row_label)    (int parent_row, int ordinal);
+    int              (*row_abs_index)(int parent_row, int ordinal);
+    GlrConfigRowKind (*row_kind)     (int parent_row, int ordinal);
+} FlyoutProvider;
+
+/* --- Scene (examples) provider --- */
+
+static int scene_flyout_row_count(int parent_row) {
+    return catalog_flyout_row_count(&kExampleCatalogOps,
+                                    scene_tag_idx_for_parent_row(parent_row));
+}
+static const char *scene_flyout_row_label(int parent_row, int ordinal) {
+    const char *label = NULL;
+    catalog_flyout_row_at(&kExampleCatalogOps,
+                          scene_tag_idx_for_parent_row(parent_row),
+                          ordinal, NULL, NULL, &label);
+    return label;
+}
+static int scene_flyout_row_abs_index(int parent_row, int ordinal) {
+    int abs_idx = -1;
+    catalog_flyout_row_at(&kExampleCatalogOps,
+                          scene_tag_idx_for_parent_row(parent_row),
+                          ordinal, NULL, &abs_idx, NULL);
+    return abs_idx;
+}
+static GlrConfigRowKind scene_flyout_row_kind(int parent_row, int ordinal) {
+    GlrConfigRowKind kind = GLR_CFG_ROW_ITEM;
+    catalog_flyout_row_at(&kExampleCatalogOps,
+                          scene_tag_idx_for_parent_row(parent_row),
+                          ordinal, &kind, NULL, NULL);
+    return kind;
+}
+
+static const FlyoutProvider kSceneProvider = {
+    .row_count     = scene_flyout_row_count,
+    .row_label     = scene_flyout_row_label,
+    .row_abs_index = scene_flyout_row_abs_index,
+    .row_kind      = scene_flyout_row_kind,
+};
+
+/* --- Tutorials provider --- */
+
+static int tutorial_flyout_row_count(int parent_row) {
+    return catalog_flyout_row_count(&kTutorialCatalogOps,
+                                    tutorial_tag_idx_for_parent_row(parent_row));
+}
+static const char *tutorial_flyout_row_label(int parent_row, int ordinal) {
+    const char *label = NULL;
+    catalog_flyout_row_at(&kTutorialCatalogOps,
+                          tutorial_tag_idx_for_parent_row(parent_row),
+                          ordinal, NULL, NULL, &label);
+    return label;
+}
+static int tutorial_flyout_row_abs_index(int parent_row, int ordinal) {
+    int abs_idx = -1;
+    catalog_flyout_row_at(&kTutorialCatalogOps,
+                          tutorial_tag_idx_for_parent_row(parent_row),
+                          ordinal, NULL, &abs_idx, NULL);
+    return abs_idx;
+}
+static GlrConfigRowKind tutorial_flyout_row_kind(int parent_row, int ordinal) {
+    GlrConfigRowKind kind = GLR_CFG_ROW_ITEM;
+    catalog_flyout_row_at(&kTutorialCatalogOps,
+                          tutorial_tag_idx_for_parent_row(parent_row),
+                          ordinal, &kind, NULL, NULL);
+    return kind;
+}
+
+static const FlyoutProvider kTutorialProvider = {
+    .row_count     = tutorial_flyout_row_count,
+    .row_label     = tutorial_flyout_row_label,
+    .row_abs_index = tutorial_flyout_row_abs_index,
+    .row_kind      = tutorial_flyout_row_kind,
+};
+
+/* --- Config provider --- */
+
+static int config_flyout_row_count_fn(int parent_row) {
+    if (parent_row == config_all_parent_row())
+        return CFG_ITEM_COUNT;
+    int start = 0, count = 0;
+    if (!glr_config_section_range(parent_row, &start, &count))
+        return 0;
+    return count;
+}
+static const char *config_flyout_row_label_fn(int parent_row, int ordinal) {
+    int abs = config_submenu_abs_index(parent_row, ordinal);
+    const GlrConfigItem *item = glr_config_item_at(abs);
+    if (!item || !item->label)
+        return NULL;
+    /* "### X" headers in the "All" flyout render with the marker
+     * stripped, matching the old flat dropdown. */
+    if (glr_config_row_kind(abs) == GLR_CFG_ROW_HEADER)
+        return item->label + 4;
+    return item->label;
+}
+static int config_flyout_row_abs_index_fn(int parent_row, int ordinal) {
+    return config_submenu_abs_index(parent_row, ordinal);
+}
+static GlrConfigRowKind config_flyout_row_kind_fn(int parent_row,
+                                                   int ordinal) {
+    return glr_config_row_kind(
+        config_submenu_abs_index(parent_row, ordinal));
+}
+
+static const FlyoutProvider kConfigProvider = {
+    .row_count     = config_flyout_row_count_fn,
+    .row_label     = config_flyout_row_label_fn,
+    .row_abs_index = config_flyout_row_abs_index_fn,
+    .row_kind      = config_flyout_row_kind_fn,
+};
+
+/* Resolve menu_id to its FlyoutProvider, or NULL for menus without
+ * submenus (File). */
+static const FlyoutProvider *flyout_provider_for(int menu_id) {
+    if (menu_id == MENU_SCENE)     return &kSceneProvider;
+    if (menu_id == MENU_TUTORIALS) return &kTutorialProvider;
+    if (menu_id == MENU_CONFIG)    return &kConfigProvider;
+    return NULL;
+}
+
+/* ---- Unified submenu_row_* dispatchers -------------------------------- */
+
 static int submenu_row_count(int menu_id, int parent_row) {
-    if (menu_id == MENU_SCENE)
-        return catalog_flyout_row_count(&kExampleCatalogOps,
-                                        scene_tag_idx_for_parent_row(parent_row));
-    if (menu_id == MENU_TUTORIALS)
-        return catalog_flyout_row_count(&kTutorialCatalogOps,
-                                        tutorial_tag_idx_for_parent_row(parent_row));
-    if (menu_id == MENU_CONFIG) {
-        if (parent_row == config_all_parent_row())
-            return CFG_ITEM_COUNT;
-        int start = 0, count = 0;
-        if (!glr_config_section_range(parent_row, &start, &count))
-            return 0;
-        return count;
-    }
-    return 0;
+    const FlyoutProvider *p = flyout_provider_for(menu_id);
+    return p ? p->row_count(parent_row) : 0;
 }
 
 static const char *submenu_row_label(int menu_id, int parent_row,
                                      int ordinal) {
-    if (menu_id == MENU_SCENE) {
-        const char *label = NULL;
-        catalog_flyout_row_at(&kExampleCatalogOps,
-                              scene_tag_idx_for_parent_row(parent_row),
-                              ordinal, NULL, NULL, &label);
-        return label;
-    }
-    if (menu_id == MENU_TUTORIALS) {
-        const char *label = NULL;
-        catalog_flyout_row_at(&kTutorialCatalogOps,
-                              tutorial_tag_idx_for_parent_row(parent_row),
-                              ordinal, NULL, NULL, &label);
-        return label;
-    }
-    if (menu_id == MENU_CONFIG) {
-        int abs = config_submenu_abs_index(parent_row, ordinal);
-        const GlrConfigItem *item = glr_config_item_at(abs);
-        if (!item || !item->label)
-            return NULL;
-        /* "### X" headers in the "All" flyout render with the marker
-         * stripped, matching the old flat dropdown. */
-        if (glr_config_row_kind(abs) == GLR_CFG_ROW_HEADER)
-            return item->label + 4;
-        return item->label;
-    }
-    return NULL;
+    const FlyoutProvider *p = flyout_provider_for(menu_id);
+    return p ? p->row_label(parent_row, ordinal) : NULL;
 }
 
 /* Absolute target index the row activates: a global flat example index
@@ -603,45 +687,14 @@ static const char *submenu_row_label(int menu_id, int parent_row,
  * subheading header rows in both), a g_cfg_items[] index for Config. */
 static int submenu_row_abs_index(int menu_id, int parent_row,
                                  int ordinal) {
-    if (menu_id == MENU_SCENE) {
-        int abs_idx = -1;
-        catalog_flyout_row_at(&kExampleCatalogOps,
-                              scene_tag_idx_for_parent_row(parent_row),
-                              ordinal, NULL, &abs_idx, NULL);
-        return abs_idx;
-    }
-    if (menu_id == MENU_TUTORIALS) {
-        int abs_idx = -1;
-        catalog_flyout_row_at(&kTutorialCatalogOps,
-                              tutorial_tag_idx_for_parent_row(parent_row),
-                              ordinal, NULL, &abs_idx, NULL);
-        return abs_idx;
-    }
-    if (menu_id == MENU_CONFIG)
-        return config_submenu_abs_index(parent_row, ordinal);
-    return -1;
+    const FlyoutProvider *p = flyout_provider_for(menu_id);
+    return p ? p->row_abs_index(parent_row, ordinal) : -1;
 }
 
 static GlrConfigRowKind submenu_row_kind(int menu_id, int parent_row,
                                          int ordinal) {
-    if (menu_id == MENU_CONFIG)
-        return glr_config_row_kind(
-            config_submenu_abs_index(parent_row, ordinal));
-    if (menu_id == MENU_SCENE) {
-        GlrConfigRowKind kind = GLR_CFG_ROW_ITEM;
-        catalog_flyout_row_at(&kExampleCatalogOps,
-                              scene_tag_idx_for_parent_row(parent_row),
-                              ordinal, &kind, NULL, NULL);
-        return kind;
-    }
-    if (menu_id == MENU_TUTORIALS) {
-        GlrConfigRowKind kind = GLR_CFG_ROW_ITEM;
-        catalog_flyout_row_at(&kTutorialCatalogOps,
-                              tutorial_tag_idx_for_parent_row(parent_row),
-                              ordinal, &kind, NULL, NULL);
-        return kind;
-    }
-    return GLR_CFG_ROW_ITEM;
+    const FlyoutProvider *p = flyout_provider_for(menu_id);
+    return p ? p->row_kind(parent_row, ordinal) : GLR_CFG_ROW_ITEM;
 }
 
 /* Extra right-column px the Config flyout reserves for the per-item

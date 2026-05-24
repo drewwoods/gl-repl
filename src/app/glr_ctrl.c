@@ -55,7 +55,7 @@
 #include "scene/guides/transform_utils.h"  /* apply_tracked_transform / unwind_transform_stack */
 #include "ui/app/autocomplete_panel.h"
 #include "ui/app/editor.h"
-#include "ui/core/layout.h"
+#include "ui/app/layout.h"
 #include "ui/app/menu_bar.h"
 #include "ui/core/metrics.h"
 #include "ui/app/numeric_swatch.h"
@@ -1621,6 +1621,38 @@ void glr_ctrl_build_ui_snapshot(UiRenderSnapshot *snap) {
         snap->reshape_proj_count = pn;
     }
 
+    /* One-week pass: snapshot purity extensions */
+    snap->editor_buffer = editor_buffer_view();
+    snap->line_overrides = *editor_state_line_overrides();
+
+    {
+        TutorialRuntimeState tut = tutorial_state_view();
+        snap->tutorial_fade.active = tut.active;
+        snap->tutorial_fade.fade_line_idx = tut.fade_line_idx;
+        snap->tutorial_fade.fade_start_t = tut.fade_start_t;
+        snap->tutorial_fade.fade_duration = tut.fade_duration;
+    }
+
+    {
+        int lc = repl_export_lights_display_line_count();
+        if (lc < 0) lc = 0;
+        if (lc > UI_LIGHTS_DISPLAY_MAX) lc = UI_LIGHTS_DISPLAY_MAX;
+        snap->lights_display_count = lc;
+        for (int i = 0; i < lc; i++) {
+            repl_export_lights_display_line(i, snap->lights_display_lines[i], MAX_LINE_LEN);
+        }
+    }
+
+    {
+        int ic = repl_export_init_section_line_count();
+        if (ic < 0) ic = 0;
+        if (ic > UI_INIT_SECTION_MAX) ic = UI_INIT_SECTION_MAX;
+        snap->init_section_count = ic;
+        for (int i = 0; i < ic; i++) {
+            repl_export_init_section_line(i, snap->init_section_lines[i], MAX_LINE_LEN);
+        }
+    }
+
     glr_ctrl_populate_numeric_swatch(snap);
 }
 
@@ -2239,17 +2271,13 @@ static int glr_ctrl_apply_code_panel_follow_scroll_for_snapshot(
     int cp_y;
     int cp_w;
     int cp_h;
-    int linenum_w = 4 * FONT_W;
-    int idx_col_w;
-    int idx_x = CODE_MARGIN_X + linenum_w + FONT_W;
     int text_x;
     int scroll;
 
     if (!snap)
         return 0;
 
-    idx_col_w = snap->code_panel.show_vertex_indices ? (6 * FONT_W) : 0;
-    text_x = idx_x + idx_col_w;
+    text_x = ui_repl_code_panel_compute_text_x(snap);
 
     ui_layout_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
     (void)cp_x;
@@ -4027,6 +4055,20 @@ void glr_ctrl_tick(void) {
     glr_ctrl_tick_view_transition(GLR_FRAME_DT_SECS);
     glr_camera_tick();
     glr_ctrl_tick_overlay_xn();
+
+    {
+        /* Easing for variable panel's lift above replay HUD (Smell #21/#22/#40) */
+        UiVariablePanelState *vp = variable_panel_view_mut();
+        float target = 0.0f;
+        if (replay_active()) {
+            float lift_target = (float)((REPLAY_HUD_BOTTOM_Y + 10) - 8); /* clearance = 10, BASE_Y = 8 */
+            if (lift_target > 0.0f) target = lift_target;
+        }
+        vp->replay_lift_px += (target - vp->replay_lift_px) * 0.22f; /* LIFT_EASE = 0.22f */
+        if (fabsf(target - vp->replay_lift_px) < 0.25f) { /* LIFT_SNAP_PX = 0.25f */
+            vp->replay_lift_px = target;
+        }
+    }
 
     {
         UiCodePanelRuntimeState *code_panel_state = ui_state_code_panel_mut();

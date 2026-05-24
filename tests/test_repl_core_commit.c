@@ -13,7 +13,7 @@
 #include "ui/app/state.h"
 #include "repl/replay_annotations.h"
 #include "ui/app/panels.h"
-#include "ui/core/layout.h"
+#include "ui/app/layout.h"
 #include "ui/core/metrics.h"
 #include "ui/core/gl_2d.h"
 #include "ui/app/repl_code_panel.h"

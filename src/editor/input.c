@@ -61,7 +61,7 @@
 #include "repl/parser.h"
 #include "repl/source_scope.h"
 #include "repl/state_owners.h"
-#include "ui/core/layout.h"
+#include "ui/app/layout.h"
 #include "ui/app/menu_bar.h"
 #include "ui/app/state.h"
 

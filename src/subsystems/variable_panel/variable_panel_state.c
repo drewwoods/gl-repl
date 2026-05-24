@@ -5,7 +5,7 @@
 
 #define VARIABLE_PANEL_INITIAL                              \
     {                                                       \
-        .view = { .visible = 1 },                           \
+        .view = { .visible = 1, .replay_lift_px = 0.0f },   \
         .drag = {                                           \
             .var_idx     = -1,                              \
             .log_mode    = 0,                               \
