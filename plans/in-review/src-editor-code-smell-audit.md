@@ -75,6 +75,20 @@
 > themes in the findings are *layering inversion back into `app/`*,
 > *dispatch-chain drift between the documented canonical order and
 > the real Enter path*, and *stack-allocated mega-buffers*.
+>
+> **Implementation status (2026-05-24):** Full afternoon pass + most
+> week-pass items landed. Remaining for future passes: #13
+> (var-statement ordering: shared kind list vs. adapter), #18
+> (`parse_for_commit` policy-flagged helper extraction), #23 (undo
+> cross-generation guard counter), #28 (EditorServices dismantle —
+> step 1 already landed alongside #16). Done so far: #1, #2, #3,
+> #4, #5, #6, #7, #8, #9, #10, #11 (doc-only interim), #14, #16,
+> #17, #19, #27, #29, #30, #31, #33, #34, #36, #37, #38, #39 (full
+> audit + docstring), #44, #46, #51. Plus four new layer-boundary
+> ratchet guards (`check-editor-no-app` hard-zero,
+> `check-repl-no-app` ratchet=1, `check-scene-no-upper-layers`
+> hard-zero, `check-ui-core-no-upper-layers` hard-zero) protect
+> against future regressions.
 
 ## How to read this
 
