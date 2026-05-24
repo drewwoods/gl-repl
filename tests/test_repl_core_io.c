@@ -1224,6 +1224,79 @@ int main(void) {
         remove(import_cursor_path);
     }
 
+    /* Audit #11/#12: camera export block shape — pin the exact 4-line
+     * format and the g_angle preamble so format drift is caught. */
+    {
+        const char *cam_shape_path = "/tmp/repl_core_cam_shape.c";
+        glr_app_reset_all(); declare_test_vars();
+        editor_feed_line("glVertex3f(0,0,0);");
+        glr_camera_set_orbit(15.0f, 45.0f);
+        glr_camera_set_distance(8.0f);
+        glr_camera_set_pan(1.0f, 2.0f, 3.0f);
+        repl_export_save_output(cam_shape_path, source_document_view(), NULL);
+
+        char buf[16384];
+        read_text_file(cam_shape_path, buf, sizeof(buf));
+
+        ASSERT_TRUE("cam shape: g_angle preamble",
+                    strstr(buf, "static float g_angle = 45.0000f;") != NULL);
+        ASSERT_TRUE("cam shape: line 0 distance",
+                    strstr(buf, "glTranslatef(0.0000f, 0.0000f, -8.0000f);") != NULL);
+        ASSERT_TRUE("cam shape: line 1 rx pitch",
+                    strstr(buf, "glRotatef(15.0000f, 1.0f, 0.0f, 0.0f);") != NULL);
+        ASSERT_TRUE("cam shape: line 2 g_angle yaw (not numeric)",
+                    strstr(buf, "glRotatef(g_angle, 0.0f, 1.0f, 0.0f);") != NULL);
+        ASSERT_TRUE("cam shape: line 2 NOT numeric ry",
+                    strstr(buf, "glRotatef(45.0000f, 0.0f, 1.0f, 0.0f);") == NULL);
+        ASSERT_TRUE("cam shape: line 3 pan target",
+                    strstr(buf, "glTranslatef(-1.0000f, -2.0000f, -3.0000f);") != NULL);
+
+        remove(cam_shape_path);
+    }
+
+    /* Audit #12: import tolerates older numeric-ry format (no g_angle). */
+    {
+        const char *cam_old_path = "/tmp/repl_core_cam_old_fmt.c";
+        FILE *f = fopen(cam_old_path, "w");
+        ASSERT_TRUE("create old-fmt cam file", f != NULL);
+        if (f) {
+            fprintf(f,
+                "/* Minimal file with old camera format */\n"
+                "#include <GL/gl.h>\n"
+                "#include <GL/glut.h>\n"
+                "void display(void) {\n"
+                "  glTranslatef(0.0000f, 0.0000f, -6.5000f);\n"
+                "  glRotatef(25.0000f, 1.0f, 0.0f, 0.0f);\n"
+                "  glRotatef(55.0000f, 0.0f, 1.0f, 0.0f);\n"
+                "  glTranslatef(-0.5000f, -1.0000f, -1.5000f);\n"
+                "  // Snippet start\n"
+                "  glBegin(GL_POINTS);\n"
+                "  glVertex3f(0, 0, 0);\n"
+                "  glEnd();\n"
+                "  // Snippet end\n"
+                "}\n");
+            fclose(f);
+
+            glr_app_reset_all(); declare_test_vars();
+            ASSERT_TRUE("old-fmt import succeeds",
+                        repl_export_load_from_file(cam_old_path) == 1);
+            ASSERT_TRUE("old-fmt rx restored",
+                        fabsf(glr_camera().rx - 25.0f) < 1e-2f);
+            ASSERT_TRUE("old-fmt ry restored",
+                        fabsf(glr_camera().ry - 55.0f) < 1e-2f);
+            ASSERT_TRUE("old-fmt dist restored",
+                        fabsf(glr_camera().dist - 6.5f) < 1e-2f);
+            ASSERT_TRUE("old-fmt tx restored",
+                        fabsf(glr_camera().tx - 0.5f) < 1e-2f);
+            ASSERT_TRUE("old-fmt ty restored",
+                        fabsf(glr_camera().ty - 1.0f) < 1e-2f);
+            ASSERT_TRUE("old-fmt tz restored",
+                        fabsf(glr_camera().tz - 1.5f) < 1e-2f);
+
+            remove(cam_old_path);
+        }
+    }
+
     printf("repl_core_io: %d/%d passed\n", g_harness.passed, g_harness.run);
     return (g_harness.run == g_harness.passed) ? 0 : 1;
 }

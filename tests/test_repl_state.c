@@ -11,10 +11,12 @@
 #include "subsystems/replay/replay_state.h"
 #include "editor/help_session.h"
 #include "app/glr_defaults.h"    /* CFG_DEFAULT_* macros */
+#include "source_document.h"
 
 #include "support/test_harness.h"
 #include <stdio.h>
 #include <string.h>
+#include <math.h>
 
 static TestHarness g_harness = TEST_HARNESS_INIT;
 
@@ -461,11 +463,92 @@ static void test_line_override_cap_covers_busy_replay(void) {
     editor_state_line_overrides_clear();
 }
 
+/* Audit #10/#36: glr_camera_restore must clear stale momentum velocities.
+ * Without the fix, zoom velocity injected before the capture persists
+ * through restore and causes dist to drift on subsequent ticks. */
+static void test_camera_restore_clears_momentum(void) {
+    glr_app_reset_all();
+
+    glr_camera_set(0.0f, 0.0f, 5.0f, 0.0f, 0.0f, 0.0f, 0.0f);
+    glr_camera_add_zoom_velocity(5.0f);
+
+    GlrCameraState snap;
+    glr_camera_capture(&snap);
+
+    glr_camera_restore(&snap);
+
+    float dist_before = glr_camera().dist;
+    for (int i = 0; i < 10; i++)
+        glr_camera_tick();
+
+    ASSERT_TRUE("camera dist unchanged after restore+tick (no residual momentum)",
+                fabsf(glr_camera().dist - dist_before) < 1e-4f);
+}
+
+/* Audit #9: SOURCE_TEXT_LOAD_ALL silently clamps count to MAX_COMMIT_CMDS. */
+static void test_source_document_load_all_truncation(void) {
+    glr_app_reset_all();
+
+    SourceTextChange change;
+    memset(&change, 0, sizeof(change));
+    change.kind = SOURCE_TEXT_LOAD_ALL;
+    change.count = MAX_COMMIT_CMDS + 5;
+    for (int i = 0; i < MAX_COMMIT_CMDS; i++)
+        snprintf(change.text[i], MAX_LINE_LEN, "glVertex3f(%d,0,0);", i);
+
+    int ok = source_document_apply_change(&change);
+    ASSERT_INT("LOAD_ALL with oversized count succeeds", ok, 1);
+    ASSERT_INT("LOAD_ALL clamps to MAX_COMMIT_CMDS",
+               source_document_view().line_count, MAX_COMMIT_CMDS);
+}
+
+/* Audit #8: apply_change combined shape (pre-insert delete + INSERT_MANY). */
+static void test_source_document_apply_change_combined(void) {
+    glr_app_reset_all();
+
+    source_document_insert_line(0, "glBegin(GL_TRIANGLES);");
+    source_document_insert_line(1, "glVertex3f(0,0,0);");
+    source_document_insert_line(2, "glVertex3f(1,0,0);");
+    source_document_insert_line(3, "glEnd();");
+    ASSERT_INT("setup: 4 lines", source_document_view().line_count, 4);
+
+    SourceTextChange change;
+    memset(&change, 0, sizeof(change));
+    change.kind = SOURCE_TEXT_INSERT_MANY;
+    change.delete_pos = 1;
+    change.delete_count = 2;
+    change.pos = 1;
+    change.count = 3;
+    snprintf(change.text[0], MAX_LINE_LEN, "glVertex3f(0,1,0);");
+    snprintf(change.text[1], MAX_LINE_LEN, "glVertex3f(1,1,0);");
+    snprintf(change.text[2], MAX_LINE_LEN, "glVertex3f(0.5,0,1);");
+
+    int ok = source_document_apply_change(&change);
+    ASSERT_INT("combined delete+insert succeeds", ok, 1);
+    ASSERT_INT("line count after replace-2-with-3",
+               source_document_view().line_count, 5);
+
+    SourceTextView v = source_document_view();
+    ASSERT_TRUE("line 0 unchanged",
+                strcmp(v.lines[0], "glBegin(GL_TRIANGLES);") == 0);
+    ASSERT_TRUE("line 1 is first insert",
+                strcmp(v.lines[1], "glVertex3f(0,1,0);") == 0);
+    ASSERT_TRUE("line 2 is second insert",
+                strcmp(v.lines[2], "glVertex3f(1,1,0);") == 0);
+    ASSERT_TRUE("line 3 is third insert",
+                strcmp(v.lines[3], "glVertex3f(0.5,0,1);") == 0);
+    ASSERT_TRUE("line 4 is original glEnd",
+                strcmp(v.lines[4], "glEnd();") == 0);
+}
+
 int main(void) {
     printf("--- repl_state tests ---\n");
     test_capture_restore_round_trip();
     test_reset_all_restores_default_runtime();
     test_line_override_cap_covers_busy_replay();
+    test_camera_restore_clears_momentum();
+    test_source_document_load_all_truncation();
+    test_source_document_apply_change_combined();
     printf("%d / %d tests passed\n", g_harness.passed, g_harness.run);
     return g_harness.passed == g_harness.run ? 0 : 1;
 }

@@ -164,14 +164,13 @@ static int cam_try_consume_block_line(const char *text) {
         return 1;
     }
 
-    if (g_cam_parse_state == 3 && strncmp(p, "glRotatef", 9) == 0) {
-        /* Animation hook line `glRotatef(g_angle, 0,1,0)` — no
-         * scalars, just advance. Tolerate its absence by falling
-         * through to state 4 (older saved files omit it). */
-        const char *q = strchr(p, '(');
-        if (q && strstr(q, "g_angle")) {
-            g_cam_parse_state = 4;
-            return 1;
+    if (g_cam_parse_state == 3) {
+        if (strncmp(p, "glRotatef", 9) == 0) {
+            const char *q = strchr(p, '(');
+            if (q && strstr(q, "g_angle")) {
+                g_cam_parse_state = 4;
+                return 1;
+            }
         }
         g_cam_parse_state = 4;
         /* fall through to try the target translate on the same line */
