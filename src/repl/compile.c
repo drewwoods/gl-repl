@@ -1506,7 +1506,6 @@ ReplCompileResult repl_compile_close_brace(const char *input,
                                            const ReplCompileContext *ctx,
                                            ReplCompiledChange *out,
                                            char *err, int err_size) {
-    (void)err; (void)err_size;
     if (!ctx || !out) return REPL_COMPILE_ERROR;
     repl_compiled_change_init(out);
 
@@ -1524,7 +1523,11 @@ ReplCompileResult repl_compile_close_brace(const char *input,
     if (open_type == CMD_FOR_BEGIN)      end_type = CMD_FOR_END;
     else if (open_type == CMD_FUNC_DEF)  end_type = CMD_FUNC_END;
     else if (open_type == CMD_IF_BEGIN)  end_type = CMD_IF_END;
-    else { out->kind = REPL_COMPILED_NO_CHANGE; return REPL_COMPILE_OK; }
+    else {
+        if (err && err_size > 0)
+            snprintf(err, (size_t)err_size, "unmatched '}'");
+        return REPL_COMPILE_ERROR;
+    }
 
     /* Matched-existing-end branch: close-brace lands on a row that's
      * already the right end marker. No source mutation. (Editor cursor
