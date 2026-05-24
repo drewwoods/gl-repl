@@ -300,6 +300,9 @@ int repl_apply_state_cmd(const GLCmd *cmd, float alpha_scale) {
             glMaterialfv((GLenum)cmd->args[0], (GLenum)cmd->args[1], mat);
         }
         return 1;
+    case CMD_MATERIALF:
+        glMaterialf((GLenum)cmd->args[0], (GLenum)cmd->args[1], cmd->args[2]);
+        return 1;
     case CMD_LIGHT_MODEL_I:
         glLightModeli((GLenum)cmd->args[0], (GLint)cmd->args[1]);
         return 1;
@@ -487,6 +490,7 @@ void repl_execute_program(const ReplExecutionOptions *options) {
         case CMD_SHADE_MODEL:
         case CMD_COLOR_MATERIAL:
         case CMD_MATERIALFV:
+        case CMD_MATERIALF:
         case CMD_LIGHT_MODEL_I:
             repl_apply_state_cmd(&flat_cmds[pc], g_execute_alpha_scale);
             break;

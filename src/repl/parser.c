@@ -800,6 +800,87 @@ static int parse_command(const char *line, GLCmd *cmd,
         return 1;
     }
 
+    /* glMaterialf(face, GL_SHININESS, value) — scalar-only sibling of
+     * glMaterialfv. The pname slot is restricted to GL_SHININESS (the
+     * only material pname that takes a single float); RGBA pnames
+     * remain glMaterialfv-only so a missing 4-float argument can't
+     * silently dereference past a 1-element value in exported C. */
+    if (strcmp(func, "glMaterialf") == 0) {
+        char face_arg[64] = "", pname_arg[64] = "", val_arg[MAX_LINE_LEN] = "";
+        char *comma1 = strchr(args, ',');
+        char *comma2 = comma1 ? strchr(comma1 + 1, ',') : NULL;
+
+        if (!comma1 || !comma2) {
+            parser_emit_error_static(ctx,
+                "Usage: glMaterialf(face, GL_SHININESS, value)");
+            return 0;
+        }
+
+        int face_len = (int)(comma1 - args);
+        if (face_len >= (int)sizeof(face_arg)) face_len = (int)sizeof(face_arg) - 1;
+        strncpy(face_arg, args, face_len); face_arg[face_len] = '\0';
+
+        int pname_len = (int)(comma2 - (comma1 + 1));
+        if (pname_len >= (int)sizeof(pname_arg)) pname_len = (int)sizeof(pname_arg) - 1;
+        strncpy(pname_arg, comma1 + 1, pname_len); pname_arg[pname_len] = '\0';
+
+        strncpy(val_arg, comma2 + 1, sizeof(val_arg) - 1);
+
+        char *face_str = face_arg; while (*face_str == ' ') face_str++;
+        int face_end = (int)strlen(face_str);
+        while (face_end > 0 && face_str[face_end-1] == ' ') face_str[--face_end] = '\0';
+        char *pname_str = pname_arg; while (*pname_str == ' ') pname_str++;
+        int pname_end = (int)strlen(pname_str);
+        while (pname_end > 0 && pname_str[pname_end-1] == ' ') pname_str[--pname_end] = '\0';
+
+        GLenum face = 0;
+        int found1 = 0;
+        const ReplEnumEntry *face_types = repl_face_type_entries();
+        for (int i = 0; face_types[i].name; i++) {
+            if (strcmp(face_str, face_types[i].name) == 0) {
+                face = face_types[i].value; found1 = 1; break;
+            }
+        }
+        if (!found1) {
+            parser_emit_error_static(ctx,
+                "face: GL_FRONT, GL_BACK, GL_FRONT_AND_BACK");
+            return 0;
+        }
+        if (strcmp(pname_str, "GL_SHININESS") != 0) {
+            parser_emit_error_static(ctx,
+                "glMaterialf only accepts GL_SHININESS; use glMaterialfv for RGBA pnames");
+            return 0;
+        }
+
+        {
+            char verr[128];
+            if (!repl_eval_validate_expression_idents(val_arg, vars, num_vars, verr, sizeof(verr))) {
+                parser_emit_error_static(ctx, verr); return 0;
+            }
+        }
+        float parsed_args[2];
+        int num_parsed = repl_eval_parse_exprs(val_arg, parsed_args, 2, vars, num_vars);
+        if (num_parsed != 1) {
+            parser_emit_error_static(ctx, "Expected 1 float value");
+            return 0;
+        }
+
+        /* Uniform args[] layout (no GLCmd.mode): args[0]=face,
+         * args[1]=pname, args[2]=value. GLenums fit float32 exactly
+         * (all < 2^24), so the casts round-trip losslessly. */
+        cmd->type = CMD_MATERIALF;
+        cmd->valid = 1;
+        cmd->args[0] = (float)face;
+        cmd->args[1] = (float)GL_SHININESS;
+        cmd->args[2] = parsed_args[0];
+        cmd->num_args = 3;
+        cmd->has_vars = input_has_any_visible_vars(val_arg, vars, num_vars);
+
+        WRITE_TEXT("%sglMaterialf(%s, %s, %g);",
+                   indent, face_str, pname_str, parsed_args[0]);
+        return 1;
+    }
+
     /* glPointParameterfv(pname, const, linear, quadratic) -
      * only GL_POINT_DISTANCE_ATTENUATION (size *= 1 / sqrt(const + linear*d + quadratic*d*d)) */
     if (strcmp(func, "glPointParameterfv") == 0) {

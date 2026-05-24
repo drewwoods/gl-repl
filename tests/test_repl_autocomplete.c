@@ -229,6 +229,55 @@ int main() {
                    g_ac_hint, "(GLfloat[]){r, g, b, a})");
     }
 
+    /* 4c-2. glMaterialf — scalar sibling of glMaterialfv. Function-name
+     * completion must offer glMaterialf( as its own match (not silently
+     * steer to glMaterialfv), and the pname slot must be restricted to
+     * GL_SHININESS. Same -2 num_args shape, so the pname-slot ghost
+     * stays open for the trailing value arg. */
+    {
+        glr_app_reset_all(); declare_test_vars();
+
+        /* Typed exactly "glMaterialf" — the func-completion table has
+         * glMaterialf( ordered before glMaterialfv(, so the first
+         * (default-selected) match is the scalar variant. */
+        set_input_text("glMaterialf");
+        editor_completion_update();
+        ASSERT_TRUE("glMaterialf prefix offers glMaterialf(",
+                    has_insert_match("glMaterialf("));
+        ASSERT_TRUE("glMaterialf prefix also offers glMaterialfv(",
+                    has_insert_match("glMaterialfv("));
+        ASSERT_STR("glMaterialf is the first (default) match",
+                   g_ac_insert_matches[0], "glMaterialf(");
+        ASSERT_STR("glMaterialf func hint shows scalar shape",
+                   g_ac_hint, "face, GL_SHININESS, value)");
+
+        /* Slot 1 (face) — same shape as glMaterialfv. */
+        set_input_text("glMaterialf(GL_FR");
+        editor_completion_update();
+        ASSERT_STR("glMaterialf slot1 match",
+                   g_ac_insert_matches[0], "GL_FRONT");
+        ASSERT_STR("glMaterialf slot1 ghost", g_ac_ghost, "ONT, ");
+
+        /* Slot 2 (pname) — restricted to GL_SHININESS only. The pname
+         * is the last enum slot but NOT the last arg of the call
+         * (-2 num_args row, trailing value), so the ghost suffix is
+         * ", " (not ")"). */
+        set_input_text("glMaterialf(GL_FRONT, GL_SH");
+        editor_completion_update();
+        ASSERT_INT("glMaterialf slot2 offers exactly one pname",
+                   g_ac_count, 1);
+        ASSERT_STR("glMaterialf slot2 match is GL_SHININESS",
+                   g_ac_insert_matches[0], "GL_SHININESS");
+        ASSERT_STR("glMaterialf slot2 ghost stays open for value",
+                   g_ac_ghost, "ININESS, ");
+
+        /* Typing the value slot triggers the func-prefix param hint
+         * over the trailing arg. */
+        set_input_text("glMaterialf(GL_FRONT, GL_SHININESS, ");
+        editor_completion_update();
+        ASSERT_STR("glMaterialf value-arg hint", g_ac_hint, "value)");
+    }
+
     /* 4d. gluColor - hint must reflect that alpha is optional. The
      * parser accepts 3 or 4 floats (alpha defaults to 1.0 when
      * omitted), so the param-hint walker is configured with only 3

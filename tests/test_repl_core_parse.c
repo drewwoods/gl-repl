@@ -809,14 +809,68 @@ int main(void) {
                     strcmp(cmd_text, cmd_text2) == 0);
     }
 
-    /* The old glMaterialf name is no longer recognized — clean rename,
-     * no transition aliasing. */
+    /* glMaterialf — scalar-only sibling for GL_SHININESS. Distinct
+     * CmdType (CMD_MATERIALF), canonical emit preserves the typed
+     * function name (no rewrite to glMaterialfv). */
+    {
+        glr_app_reset_all();
+        GLCmd cmd;
+        char cmd_text[MAX_LINE_LEN] = "";
+        memset(&cmd, 0, sizeof(cmd));
+        int ok = parse_cmd_with_text("glMaterialf(GL_FRONT, GL_SHININESS, 64)",
+                                      &cmd, cmd_text, sizeof(cmd_text));
+        ASSERT_TRUE("glMaterialf parse ok", ok == 1);
+        ASSERT_TRUE("glMaterialf type", cmd.type == CMD_MATERIALF);
+        ASSERT_TRUE("glMaterialf num_args (face+pname+value)",
+                    cmd.num_args == 3);
+        ASSERT_TRUE("glMaterialf value preserved",
+                    cmd.args[2] > 63.9f && cmd.args[2] < 64.1f);
+        ASSERT_TRUE("glMaterialf canonical preserves function name",
+                    strstr(cmd_text, "glMaterialf(GL_FRONT, GL_SHININESS, 64);")
+                        != NULL);
+        ASSERT_TRUE("glMaterialf canonical is not the fv form",
+                    strstr(cmd_text, "(GLfloat[]){") == NULL);
+    }
+
+    /* glMaterialf rejects RGBA pnames — those need 4 floats, only
+     * glMaterialfv accepts them. */
+    {
+        const char *const cases[] = {
+            "glMaterialf(GL_FRONT, GL_DIFFUSE, 0.5)",
+            "glMaterialf(GL_FRONT, GL_AMBIENT, 0.5)",
+            "glMaterialf(GL_FRONT, GL_SPECULAR, 0.5)",
+            "glMaterialf(GL_FRONT, GL_EMISSION, 0.5)",
+            "glMaterialf(GL_FRONT, GL_AMBIENT_AND_DIFFUSE, 0.5)",
+        };
+        for (int i = 0; i < (int)(sizeof cases / sizeof cases[0]); i++) {
+            glr_app_reset_all();
+            GLCmd cmd;
+            memset(&cmd, 0, sizeof(cmd));
+            int ok = parse_for_test(cases[i], &cmd);
+            ASSERT_TRUE("glMaterialf RGBA pname rejected", ok == 0);
+        }
+    }
+
+    /* glMaterialf rejects bad face token. */
     {
         glr_app_reset_all();
         GLCmd cmd;
         memset(&cmd, 0, sizeof(cmd));
-        int ok = parse_for_test("glMaterialf(GL_FRONT, GL_SHININESS, 64)", &cmd);
-        ASSERT_TRUE("old glMaterialf name no longer parses", ok == 0);
+        int ok = parse_for_test("glMaterialf(FRONT, GL_SHININESS, 64)", &cmd);
+        ASSERT_TRUE("glMaterialf bad face returns 0", ok == 0);
+    }
+
+    /* glMaterialf accepts an expression in the value slot and
+     * propagates has_vars when the expression references a predef. */
+    {
+        glr_app_reset_all();
+        declare_test_vars();
+        GLCmd cmd;
+        memset(&cmd, 0, sizeof(cmd));
+        int ok = parse_for_test(
+            "glMaterialf(GL_FRONT, GL_SHININESS, x * 64)", &cmd);
+        ASSERT_TRUE("glMaterialf expr parse ok", ok == 1);
+        ASSERT_TRUE("glMaterialf expr has_vars", cmd.has_vars == 1);
     }
 
     /* Scalar input is only valid for GL_SHININESS: the RGBA pnames
