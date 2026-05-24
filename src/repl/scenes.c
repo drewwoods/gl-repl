@@ -716,10 +716,6 @@ static int has_dot_c_ext(const char *name) {
 int repl_load_workspace(const char *dir) {
     if (!dir || !*dir) return 0;
 
-    /* Ask the host to restore tutorial-mutated cfg before this path
-     * stashes live cfg as the pre-workspace snapshot. */
-    repl_dispatch_tutorial_teardown();
-
     DIR *d = opendir(dir);
     if (!d) {
         char msg[256];
@@ -727,6 +723,10 @@ int repl_load_workspace(const char *dir) {
         repl_set_status_error(msg);
         return -1;
     }
+
+    /* Ask the host to restore tutorial-mutated cfg before this path
+     * stashes live cfg as the pre-workspace snapshot. */
+    repl_dispatch_tutorial_teardown();
 
     UserScene stash;
     ReplExportConfig stash_cfg;

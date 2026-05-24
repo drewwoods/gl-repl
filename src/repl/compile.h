@@ -373,7 +373,7 @@ ReplCompileResult repl_compile_empty_line(int line_idx,
  *     parser fallback. Result is coerced to REPLACE_ONE at line_idx
  *     (override kind/pos/count, preserve cmds[0], text[0],
  *     predef_ops, scratch_ops). Re-parses producing INSERT_MANY /
- *     DELETE_RANGE / LOAD_ALL are rejected as multi-line uncomment.
+ *     DELETE_RANGE are rejected as multi-line uncomment.
  *     commit_message "Uncommented 1 line".
  *
  *   Block head (CMD_FOR_BEGIN, CMD_FUNC_DEF, CMD_IF_BEGIN) or end

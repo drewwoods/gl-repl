@@ -53,10 +53,8 @@ int  repl_apply_can_apply_compiled_change(const ReplCompiledChange *change);
  * cursor math is desired). Pre-insert deletes (the optional
  * `delete_count > 0` path that runs before INSERT_*) pass NULL to
  * preserve the historical behavior where the pre-delete did not
- * shift the cursor. REPLACE_ONE and LOAD_ALL have no cursor
- * parameter — replace never shifts, and LOAD_ALL's target cursor
- * is caller policy (apply `change->pos` separately after a
- * successful apply if desired).
+ * shift the cursor. REPLACE_ONE has no cursor parameter — replace
+ * never shifts.
  *
  * Apply itself never reads or writes editor state. The cursor
  * lives where the caller put it.
