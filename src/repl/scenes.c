@@ -49,20 +49,18 @@
  *   on every access (load/save/rename) so LRU eviction can pick the
  *   coldest slot when the 9th scene is needed.
  *
- * The per-scene cfg snapshot lives in a parallel storage indexed by
- * the same slot, not embedded on UserScene. The cfg bag's contents
- * are opaque to this TU — only the controller-installed bridge
- * interprets the slugs — but the storage shape is just a few global
- * arrays of `ReplExportConfig` bags. Storage lives here in
- * src/repl/scenes.c as file-statics so the demo link set has no
- * app-prefixed (`glr_*`) dependency carrying it; this file is the
- * sole consumer. The lifecycle invariant: every site that flips
- * g_user_scenes[X].used = 0 also calls scene_cfg_clear(X) to keep
- * the parallel array in sync, and repl_scenes_reset pairs the
- * slot-array memset with scene_cfg_reset_all().
- * (Snapshot split out in Step 7b of
- * feature/decouple-repl-from-gl-repl-alt.md, with the file-static
- * relocation landing in the 7d follow-up.) */
+ * The per-scene cfg snapshot is embedded on UserScene (the `cfg`
+ * field) so it travels with the rest of the slot via struct copy —
+ * no parallel array, no lifecycle invariant to maintain. The cfg
+ * bag's contents are opaque to this TU; only the controller-installed
+ * bridge interprets the slugs. The "pre-example" cfg (captured before
+ * the user loads an example, restored when they leave it) lives in a
+ * separate `g_pre_example` wrapper struct with its own `valid` flag
+ * because it isn't tied to any slot.
+ * (Snapshot first split out in Step 7b of
+ * feature/decouple-repl-from-gl-repl-alt.md; embedded into UserScene
+ * in the 2026-05-24 audit Tier B #44 pass — see
+ * plans/done/src-repl-code-smell-audit.md.) */
 typedef struct {
     int      used;
     char     name[USER_SCENE_NAME_MAX];
@@ -415,14 +413,15 @@ static void install_scene_into_live(int slot) {
         bridge->apply(scene_cfg(slot));
 }
 
-/* The stash is paired with a sibling ReplExportConfig parameter
- * because the cfg snapshot lives in the file-static parallel storage
- * above (not on UserScene); the stash still needs to capture /
- * restore live cfg so install_scene_into_live can be undone. Callers
- * allocate both on the stack.
- * (Pairing introduced in Step 7b of
- * feature/decouple-repl-from-gl-repl-alt.md.) */
-static void stash_live_state(UserScene *dst, ReplExportConfig *cfg_out) {
+/* Captures live state into a UserScene-shaped stash so
+ * install_scene_into_live can be undone (the editor commit /
+ * workspace iteration paths need this so a per-slot apply doesn't
+ * permanently overwrite the document the user was editing).
+ *
+ * The cfg snapshot lives in `dst->cfg` (embedded by Tier B #44 —
+ * see plans/done/src-repl-code-smell-audit.md) and is filled from
+ * the live bridge here. `restore_live_from_stash` re-applies it. */
+static void stash_live_state(UserScene *dst) {
     SourceTextView text = source_document_view();
     memset(dst, 0, sizeof(*dst));
     memcpy(dst->cmds, repl_state_document_cmds_mut(), (size_t)repl_state_document_count() * sizeof(GLCmd));
@@ -445,16 +444,14 @@ static void stash_live_state(UserScene *dst, ReplExportConfig *cfg_out) {
         else
             dst->func_aliases[slot][0] = '\0';
     }
-    if (cfg_out) {
-        repl_export_config_clear(cfg_out);
+    {
         const ReplExportConfigBridge *bridge = repl_export_config_bridge();
         if (bridge && bridge->fill_scene_subset)
-            bridge->fill_scene_subset(cfg_out);
+            bridge->fill_scene_subset(&dst->cfg);
     }
 }
 
-static void restore_live_from_stash(const UserScene *src,
-                                    const ReplExportConfig *cfg) {
+static void restore_live_from_stash(const UserScene *src) {
     if (!load_commands_into_live(src->cmds, src->lines, src->num_cmds,
                                  src->edit_line))
         return;
@@ -470,10 +467,10 @@ static void restore_live_from_stash(const UserScene *src,
         if (src->func_aliases[slot][0])
             repl_func_alias_set(slot, src->func_aliases[slot]);
     }
-    if (cfg) {
+    {
         const ReplExportConfigBridge *bridge = repl_export_config_bridge();
         if (bridge && bridge->apply)
-            bridge->apply(cfg);
+            bridge->apply(&src->cfg);
     }
 }
 
@@ -602,8 +599,7 @@ int repl_save_workspace(const char *dir, const ReplExportLayout *layout) {
     snprintf(g_workspace_dir, WORKSPACE_DIR_MAX, "%s", dir);
 
     UserScene stash;
-    ReplExportConfig stash_cfg;
-    stash_live_state(&stash, &stash_cfg);
+    stash_live_state(&stash);
 
     int written = 0;
     for (int s = 0; s < MAX_USER_SCENES; s++) {
@@ -619,7 +615,7 @@ int repl_save_workspace(const char *dir, const ReplExportLayout *layout) {
         g_export_scene_name_hint = g_user_scenes[s].name;
         if (!repl_export_save_output(path, source_document_view(), layout)) {
             g_export_scene_name_hint = NULL;
-            restore_live_from_stash(&stash, &stash_cfg);
+            restore_live_from_stash(&stash);
             snprintf(g_workspace_dir, WORKSPACE_DIR_MAX, "%s",
                      prev_workspace_dir);
             return -1;
@@ -628,7 +624,7 @@ int repl_save_workspace(const char *dir, const ReplExportLayout *layout) {
         written++;
     }
 
-    restore_live_from_stash(&stash, &stash_cfg);
+    restore_live_from_stash(&stash);
 
     char msg[256];
     snprintf(msg, sizeof(msg), "Saved %d scene%s to %s",
@@ -733,8 +729,7 @@ int repl_load_workspace(const char *dir) {
     repl_dispatch_tutorial_teardown();
 
     UserScene stash;
-    ReplExportConfig stash_cfg;
-    stash_live_state(&stash, &stash_cfg);
+    stash_live_state(&stash);
     int stash_example = g_example_idx;
 
     /* Replace the existing workspace contents rather than merging the
@@ -755,7 +750,7 @@ int repl_load_workspace(const char *dir) {
     }
     closedir(d);
 
-    restore_live_from_stash(&stash, &stash_cfg);
+    restore_live_from_stash(&stash);
     g_example_idx       = stash_example;
     g_active_user_scene = -1;
 
@@ -778,12 +773,13 @@ static int pick_lru_user_scene_slot(void);      /* defined below */
  * (no workspace bound, no eligible victim, or evict_scene_to_workspace
  * itself failed).
  *
- * On a successful eviction `*out_stash` and `*out_cfg_stash` receive
- * snapshots of the victim's in-memory entry so the caller can
- * restore the scene tab if needed; the on-disk file written by the
- * eviction is left in place either way (the user's data is preserved
- * both in-memory after restore AND on disk via Load Workspace). */
-static int try_evict_lru(UserScene *out_stash, ReplExportConfig *out_cfg_stash) {
+ * On a successful eviction `*out_stash` receives a snapshot of the
+ * victim's in-memory entry (cfg included, since Tier B #44 embedded
+ * `ReplExportConfig cfg` on UserScene) so the caller can restore the
+ * scene tab if needed; the on-disk file written by the eviction is
+ * left in place either way (the user's data is preserved both
+ * in-memory after restore AND on disk via Load Workspace). */
+static int try_evict_lru(UserScene *out_stash) {
     if (find_free_user_scene_slot() >= 0 || !g_user_scenes[0].used)
         return -1;
     if (!g_workspace_dir[0]) return -2;
@@ -793,19 +789,16 @@ static int try_evict_lru(UserScene *out_stash, ReplExportConfig *out_cfg_stash) 
     /* Snapshot the victim's in-memory entry BEFORE evict_scene_to_workspace
      * runs — that helper marks the slot unused and clears its cfg as its
      * last step, so without this capture a subsequent parse failure would
-     * leave the user staring at a missing tab. The cfg now lives on
-     * UserScene, so the memcpy covers it. */
+     * leave the user staring at a missing tab. */
     memcpy(out_stash, &g_user_scenes[victim], sizeof(UserScene));
-    (void)out_cfg_stash;
 
     /* evict_scene_to_workspace clobbers live state via install_scene_into_live;
      * wrap in its own stash/restore so the caller's outer live stash stays
      * the user's actual document, not the evicted scene's content. */
     UserScene live_temp;
-    ReplExportConfig live_temp_cfg;
-    stash_live_state(&live_temp, &live_temp_cfg);
+    stash_live_state(&live_temp);
     int ok = evict_scene_to_workspace(victim);
-    restore_live_from_stash(&live_temp, &live_temp_cfg);
+    restore_live_from_stash(&live_temp);
     if (!ok) return -2;
     return victim;
 }
@@ -814,11 +807,8 @@ static int try_evict_lru(UserScene *out_stash, ReplExportConfig *out_cfg_stash) 
  * in-memory entry (so the scene tab reappears); cfg now lives on
  * UserScene so it travels with the memcpy. No-op if `slot < 0` (the
  * "no eviction happened" sentinel from try_evict_lru). */
-static void restore_evicted_slot(int slot,
-                                 const UserScene *stash,
-                                 const ReplExportConfig *cfg_stash) {
+static void restore_evicted_slot(int slot, const UserScene *stash) {
     if (slot < 0) return;
-    (void)cfg_stash;
     memcpy(&g_user_scenes[slot], stash, sizeof(UserScene));
 }
 
@@ -856,8 +846,7 @@ int repl_load_scene_as_new_slot(const char *path,
      * document intact. load_scene_file_into_slot clears live state as
      * its first step, so we must capture before that point. */
     UserScene stash;
-    ReplExportConfig stash_cfg;
-    stash_live_state(&stash, &stash_cfg);
+    stash_live_state(&stash);
     int stash_example = g_example_idx;
     int stash_active  = g_active_user_scene;
 
@@ -866,10 +855,9 @@ int repl_load_scene_as_new_slot(const char *path,
      * restore the tab. Without this, a bad-syntax file would silently
      * drop the LRU tab from the user's workspace. */
     UserScene evicted_stash;
-    ReplExportConfig evicted_cfg_stash;
-    int evicted_slot = try_evict_lru(&evicted_stash, &evicted_cfg_stash);
+    int evicted_slot = try_evict_lru(&evicted_stash);
     if (evicted_slot == -2) {
-        restore_live_from_stash(&stash, &stash_cfg);
+        restore_live_from_stash(&stash);
         g_example_idx       = stash_example;
         g_active_user_scene = stash_active;
         if (out_reason) *out_reason = REPL_SCENE_LOAD_ERR_NO_SLOT;
@@ -880,7 +868,7 @@ int repl_load_scene_as_new_slot(const char *path,
 
     int slot = load_scene_file_into_slot(path);
     if (slot < 0) {
-        restore_live_from_stash(&stash, &stash_cfg);
+        restore_live_from_stash(&stash);
         g_example_idx       = stash_example;
         g_active_user_scene = stash_active;
         /* Roll back the eviction's in-memory mutation. The on-disk
@@ -888,7 +876,7 @@ int repl_load_scene_as_new_slot(const char *path,
          * it's a faithful copy of the scene's pre-eviction state, so
          * after restore_evicted_slot the in-memory tab and the disk
          * file agree, and the user has lost nothing. */
-        restore_evicted_slot(evicted_slot, &evicted_stash, &evicted_cfg_stash);
+        restore_evicted_slot(evicted_slot, &evicted_stash);
         if (out_reason) *out_reason = REPL_SCENE_LOAD_ERR_PARSE;
         return -1;
     }
@@ -959,10 +947,9 @@ int repl_promote_example_if_needed(void) {
             int victim = pick_lru_user_scene_slot();
             if (victim >= 0) {
                 UserScene stash;
-                ReplExportConfig stash_cfg;
-                stash_live_state(&stash, &stash_cfg);
+                stash_live_state(&stash);
                 int ok = evict_scene_to_workspace(victim);
-                restore_live_from_stash(&stash, &stash_cfg);
+                restore_live_from_stash(&stash);
                 if (ok)
                     slot = victim;
             }
