@@ -48,10 +48,25 @@
 #include <stdio.h>
 #include <string.h>
 
+/* Apply the predef-ops + scratch-ops + editor-buffer + cmd-store
+ * halves of a compiled change. Preflight + undo capture are the
+ * caller's job — this is the shared mutation sequence; each caller
+ * decides its own preflight-failure policy and undo policy. The
+ * edit-line is read into a local, threaded through apply, and
+ * written back on success (matches the apply API's cursor-inout
+ * contract; cursor ownership moved editor-side in Phase 1 of
+ * plans/in-review/edit-line-ownership.md). */
+static void apply_compiled_three_halves(const ReplCompiledChange *change) {
+    repl_apply_predef_ops(change);
+    repl_apply_scratch_ops(change);
+    editor_buffer_apply_compiled_change(change);
+    int edit_line = editor_state_edit_line();
+    if (repl_apply_compiled_change(change, &edit_line))
+        editor_state_edit_line_set(edit_line);
+}
+
 int editor_commit_apply_external_change(const struct ReplCompiledChange_s *change,
                                         int capture_undo) {
-    EditorServices svc;
-
     if (!change)
         return 0;
     if (!repl_apply_can_apply_compiled_change(change)) {
@@ -64,15 +79,7 @@ int editor_commit_apply_external_change(const struct ReplCompiledChange_s *chang
     if (capture_undo)
         editor_undo_push_snapshot();
 
-    svc = editor_services_default();
-    svc.apply_predef_ops(change, svc.user);
-    svc.apply_scratch_ops(change, svc.user);
-    editor_buffer_apply_compiled_change(change);
-    {
-        int edit_line = editor_state_edit_line();
-        if (svc.apply_repl_change(change, &edit_line, svc.user))
-            editor_state_edit_line_set(edit_line);
-    }
+    apply_compiled_three_halves(change);
     return 1;
 }
 
@@ -160,20 +167,7 @@ int editor_commit_apply_plan(const EditorCommitPlan *plan) {
      * helper deliberately does NOT push a second snapshot, to avoid
      * double-capture. */
 
-    /* REPL halves. Caller-owned cursor: read the edit-line into a
-     * local int, pass &local to apply so insert cursor math lands
-     * there, then write back on success. Keeping the local mirrors
-     * the apply API's cursor-inout contract and avoids touching the
-     * live editor state until apply succeeds (cursor ownership moved
-     * editor-side in Phase 1 of plans/in-review/edit-line-ownership.md). */
-    repl_apply_predef_ops(&plan->change);
-    repl_apply_scratch_ops(&plan->change);
-    editor_buffer_apply_compiled_change(&plan->change);
-    {
-        int edit_line = editor_state_edit_line();
-        if (repl_apply_compiled_change(&plan->change, &edit_line))
-            editor_state_edit_line_set(edit_line);
-    }
+    apply_compiled_three_halves(&plan->change);
 
     /* Editor post-effects. */
     apply_post_effects(&plan->effects);
@@ -1119,7 +1113,18 @@ void editor_commit_reset_transients(void) {
     g_func_decl_resume_delta = 0;
 }
 
-/* --- Float-decl commit --- */
+/* --- Float-decl commit ---
+ *
+ * UNDO CONTRACT: this handler (like every editor_try_commit_*) goes
+ * through editor_commit_apply_plan, which does NOT capture undo. The
+ * caller must push a snapshot first if it wants the commit to be
+ * undoable. Current dispatch sites in src/editor/input.c that push:
+ *  - ; key (handle_semicolon_commit_key_route, unconditional)
+ *  - Enter / navigation (commit_current_input, gated on input_len > 0
+ *    or insert_mode — empty input never triggers a mutating handler)
+ *  - editor_feed_line callers bracket the whole load with one push
+ *    (currently only editor_clipboard_paste_current uses this path)
+ * Audit #39 walked these and confirmed no missing-undo bugs. */
 
 int editor_try_commit_float_decl(void) {
     ReplCompileContext ctx = repl_compile_context_from_live(editor_state_edit_line()); ctx.insert_mode = editor_insert_mode();

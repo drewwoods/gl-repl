@@ -61,6 +61,21 @@ int edit_op_buffer_delete_left_of_cursor(void) {
     return 1;
 }
 
+int edit_op_buffer_delete_right_of_cursor(void) {
+    EditorInputState *inp = editor_state_input_mut();
+    int cur = editor_cursor_pos();
+
+    if (cur >= inp->input_len)
+        return 0;
+
+    /* Shift input[cur+1..len] (including the NUL) left by one,
+     * overwriting input[cur]. Cursor stays put. */
+    memmove(&inp->input[cur], &inp->input[cur + 1],
+            (size_t)(inp->input_len - cur));
+    inp->input_len--;
+    return 1;
+}
+
 int edit_op_consume_input_selection(void) {
     if (!editor_input_selection_active())
         return 0;

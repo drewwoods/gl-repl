@@ -1177,7 +1177,9 @@ static int handle_text_delete_key_route(unsigned char key) {
          * Editing the input row is the more local concern and matches
          * standard editor behavior. Works in insert mode too — the
          * line-range guard below only matters when no input selection
-         * is active. */
+         * is active. Both Backspace and Delete consume the selection
+         * the same way; the asymmetry below only applies to the
+         * cursor-only buffer mutation. */
         if (edit_op_consume_input_selection()) {
             editor_completion_update();
             return 1;
@@ -1190,7 +1192,14 @@ static int handle_text_delete_key_route(unsigned char key) {
             editor_delete_cmd_range(start, hi - start + 1, "Deleted");
             return 1;
         }
-        if (edit_op_buffer_delete_left_of_cursor())
+        /* Standard editor semantics (audit #7): Backspace deletes the
+         * character to the left, Delete deletes the character at the
+         * cursor. The two used to collapse to delete-left until the
+         * delete-right primitive landed. */
+        int changed = (key == KEY_BACKSPACE)
+            ? edit_op_buffer_delete_left_of_cursor()
+            : edit_op_buffer_delete_right_of_cursor();
+        if (changed)
             editor_completion_update();
         return 1;
     }

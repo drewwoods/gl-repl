@@ -45,6 +45,12 @@ int edit_op_buffer_insert_char_at_cursor(char c);
  * the cursor was already at position 0 or the buffer was empty. */
 int edit_op_buffer_delete_left_of_cursor(void);
 
+/* Delete the character at the cursor position; the cursor stays in
+ * place (the next character shifts under it). Returns 1 if a
+ * character was deleted, 0 if the cursor was already at end-of-
+ * buffer. Pure with respect to selection: the anchor is untouched. */
+int edit_op_buffer_delete_right_of_cursor(void);
+
 /* If a character-range selection is active in the input buffer,
  * delete the selected bytes, move the cursor to the (collapsed)
  * range start, and clear the anchor. Returns 1 if a selection was
