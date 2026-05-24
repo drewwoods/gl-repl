@@ -15,6 +15,8 @@ TODO:
    - outlines dont function correctly when not using lighting
      - replace the exported code with a stencil test (color and depth mask false, stencil set, then color black where stencil set)
    - add ability to reset the x,y,z translation of the camera
+   - top hat with specular stars (would need to tesselate star for hat curvature)
+   - shape in bottle (maybe bezeir curve for bottle neck). Transparent with specular highlights
    - add record once state is fully captured in a frameState
    - address the limitation of only 8 scope visible globals
 
