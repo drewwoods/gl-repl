@@ -1,0 +1,13 @@
+# Baseline for scripts/check-repl-no-app.sh.
+#
+# Counts non-comment `#include "app/...` lines in src/repl/**.
+# The REPL program-model layer must not depend on the app shell.
+#
+# Current violation: src/repl/help_text.c includes app/glr_config.h
+# to read GLR_CONFIG_COUNT for the help table generator. The cleaner
+# fix is either to move the config-key vocabulary into a shared
+# lower-layer header or to pass the count through repl_help_init().
+#
+# Recorded 2026-05-24 after the mechanical audit-fix pass landed.
+
+app_include_count: 1

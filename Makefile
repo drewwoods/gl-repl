@@ -959,6 +959,18 @@ check-state-c-shrinking: ## Ratchet src/repl/state.c line count down over time.
 check-repl-no-direct-editor: ## Forbid editor coupling in repl_*.{c,h} (Phase 7 of feature/source-document-port.md — hard zero).
 	@bash scripts/check-repl-no-direct-editor.sh
 
+check-editor-no-app: ## Ratchet: forbid new app/glr_* coupling in src/editor/ (see audit #8).
+	@bash scripts/check-editor-no-app.sh
+
+check-repl-no-app: ## Ratchet: forbid new app/glr_* coupling in src/repl/.
+	@bash scripts/check-repl-no-app.sh
+
+check-scene-no-upper-layers: ## Hard guard: src/scene/ must not include from app/editor/ui/subsystems.
+	@bash scripts/check-scene-no-upper-layers.sh
+
+check-ui-core-no-upper-layers: ## Hard guard: src/ui/core/ must not include from app/editor/repl/scene/subsystems/ui-app.
+	@bash scripts/check-ui-core-no-upper-layers.sh
+
 check-repl-demo-no-editor: ## Forbid editor implementation in the standalone demo (Phase 7).
 	@bash scripts/check-repl-demo-no-editor.sh
 
@@ -1031,6 +1043,10 @@ check-state-ownership: ## Run state-ownership contract checks (new + tightened e
 		check-editor-repl-surface \
 		check-edit-ops-pure \
 		check-source-document-port-owners \
+		check-editor-no-app \
+		check-repl-no-app \
+		check-scene-no-upper-layers \
+		check-ui-core-no-upper-layers \
 		check-c99 \
 		check-module-prefixes \
 		check-include-style \
