@@ -11,6 +11,7 @@
 #define TUTORIAL_STATE_H
 
 #include "repl/tutorials.h"  /* TUTORIAL_LOCKED_LINE_MAX */
+#include "repl/export.h"
 
 #define TUTORIAL_STATUS_MAX 128
 
@@ -75,6 +76,8 @@ typedef struct {
      * cap. */
     int                   instruction_line_for_step[TUTORIAL_LOCKED_LINE_MAX];
     TutorialMatchResult   last_result;
+    ReplExportConfig      baseline_bag;
+    int                   baseline_valid;
 } TutorialRuntimeState;
 
 /* Read-only/by-pointer accessors plus a full reset helper. */
@@ -82,5 +85,7 @@ TutorialRuntimeState  tutorial_state_view(void);
 TutorialRuntimeState *tutorial_state_mut(void);
 void                  tutorial_state_reset(void);
 int                   tutorial_active(void);
+void                  tutorial_state_capture(TutorialRuntimeState *snapshot);
+void                  tutorial_state_restore(const TutorialRuntimeState *snapshot);
 
 #endif /* TUTORIAL_STATE_H */

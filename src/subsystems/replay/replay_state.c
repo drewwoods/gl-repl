@@ -6,73 +6,78 @@
 
 #define REPLAY_STATE_INITIAL                              \
     {                                                     \
-        .active          = 0,                             \
-        .state           = REPLAY_OFF,                    \
-        .pc              = 0,                             \
-        .mode            = REPLAY_MODE_VERTEX,            \
-        .speed           = 4.0f,                          \
-        .accum           = 0.0f,                          \
-        .fade_speed      = 2.0f,                          \
-        .src_line_idx    = -1,                            \
-        .total_flat_cmds = 0,                             \
-        .expand_args     = 1,                             \
+        .active           = 0,                            \
+        .state            = REPLAY_OFF,                   \
+        .pc               = 0,                            \
+        .mode             = REPLAY_MODE_VERTEX,           \
+        .speed            = 4.0f,                         \
+        .accum            = 0.0f,                         \
+        .fade_speed       = 2.0f,                         \
+        .src_line_idx     = -1,                           \
+        .total_flat_cmds  = 0,                            \
+        .expand_args      = 1,                            \
+        .saved_t_playing  = 1,                            \
+        .last_src_line    = -1,                           \
+        .fade_batch_count = 0,                            \
     }
 
-static ReplReplayRuntimeState       g_replay_state = REPLAY_STATE_INITIAL;
+static ReplReplayRuntimeState       g_replay_runtime_state = REPLAY_STATE_INITIAL;
 static const ReplReplayRuntimeState g_replay_state_defaults = REPLAY_STATE_INITIAL;
 
+/* Exclusively a test/verification contract; production code does not capture replay state. */
 void replay_state_capture(ReplReplayRuntimeState *snapshot) {
     if (!snapshot) return;
-    *snapshot = g_replay_state;
+    *snapshot = g_replay_runtime_state;
 }
 
+/* Exclusively a test/verification contract; production code does not restore replay state. */
 void replay_state_restore(const ReplReplayRuntimeState *snapshot) {
     if (!snapshot) return;
-    g_replay_state = *snapshot;
+    g_replay_runtime_state = *snapshot;
 }
 
 void replay_state_reset(void) {
-    g_replay_state = g_replay_state_defaults;
+    g_replay_runtime_state = g_replay_state_defaults;
 }
 
 ReplReplayRuntimeState replay_state_view(void) {
-    return g_replay_state;
+    return g_replay_runtime_state;
 }
 
 ReplReplayRuntimeState *replay_state_mut(void) {
-    return &g_replay_state;
+    return &g_replay_runtime_state;
 }
 
 int replay_active(void) {
-    return g_replay_state.active;
+    return g_replay_runtime_state.active;
 }
 
 int replay_machine_state(void) {
-    return g_replay_state.state;
+    return g_replay_runtime_state.state;
 }
 
 int replay_pc(void) {
-    return g_replay_state.pc;
+    return g_replay_runtime_state.pc;
 }
 
 int replay_mode(void) {
-    return g_replay_state.mode;
+    return g_replay_runtime_state.mode;
 }
 
 float replay_speed(void) {
-    return g_replay_state.speed;
+    return g_replay_runtime_state.speed;
 }
 
 int replay_src_line(void) {
-    return g_replay_state.src_line_idx;
+    return g_replay_runtime_state.src_line_idx;
 }
 
 int replay_total_flat(void) {
-    return g_replay_state.total_flat_cmds;
+    return g_replay_runtime_state.total_flat_cmds;
 }
 
 int replay_expand_args(void) {
-    return g_replay_state.expand_args;
+    return g_replay_runtime_state.expand_args;
 }
 
 void replay_handle_pin_clicked(void) {

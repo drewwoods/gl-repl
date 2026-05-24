@@ -88,10 +88,8 @@ ColorPickerView color_picker_view(void);
 /* Mouse press / motion / release handlers. mx, my are GLUT screen coords.
  *
  * Press semantics:
- *   - inside a slider rect: { consumed=1, closed=0, changed=1 } (drag begins)
- *   - inside the picker bounds but outside slider rects: returns no-consume
- *     so callers can fall through (rare; today returns the close-fallthrough
- *     branch below)
+ *   - inside a slider rect: { consumed=1, closed=0, changed=1 } (drag begins; changed=1 iff the writeback succeeded)
+ *   - inside the picker bounds but outside slider rects: { consumed=1, closed=0, changed=0 } (consumed-no-op to prevent dismiss on padding clicks)
  *   - outside the picker: { consumed=0, closed=1, changed=0 } — picker
  *     dismisses itself; controller should redraw and let the click flow to
  *     menu/scene handlers.
@@ -104,4 +102,4 @@ ColorPickerInputResult color_picker_handle_press(int mx, int my);
 ColorPickerInputResult color_picker_handle_motion(int mx, int my);
 void                   color_picker_handle_release(void);
 
-#endif /* COLOR_PICKER_H */
+#endif /* COLOR_PICKER_STATE_H */

@@ -17,8 +17,8 @@
  * replaced older UiState/EditorState storage and retired the legacy
  * forwarders).
  */
-#ifndef VARIABLE_PANEL_H
-#define VARIABLE_PANEL_H
+#ifndef VARIABLE_PANEL_STATE_H
+#define VARIABLE_PANEL_STATE_H
 
 #include "editor/state.h"
 #include "ui/app/state_types.h"
@@ -98,4 +98,4 @@ int  variable_panel_handle_drag_motion(int x, VariablePanelValueChange *out);
 /* End the drag transaction. */
 void variable_panel_handle_drag_reset(void);
 
-#endif /* VARIABLE_PANEL_H */
+#endif /* VARIABLE_PANEL_STATE_H */
