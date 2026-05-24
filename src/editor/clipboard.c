@@ -7,6 +7,8 @@
  * live in EditorState (src/editor/state.c); this module owns the behavior.
  */
 
+#include <stdlib.h>
+
 #include "state.h"
 #include "clipboard.h"
 #include "completion.h"
@@ -30,7 +32,7 @@ static int tutorial_guard_clipboard_change_or_status(int pos,
     return 0;
 }
 
-void editor_clipboard_clear_selection(void) {
+void editor_selection_clear_line_range(void) {
     editor_state_selection_clear();
 }
 
@@ -250,7 +252,7 @@ void editor_clipboard_copy_current(void) {
         return;
 
     if (editor_insert_mode()) {
-        editor_clipboard_clear_selection();
+        editor_selection_clear_line_range();
         return;
     }
 
@@ -298,7 +300,7 @@ void editor_clipboard_copy_current(void) {
         editor_state_clipboard_count_set(0);
     }
 
-    editor_clipboard_clear_selection();
+    editor_selection_clear_line_range();
 }
 
 void editor_clipboard_cut_current(void) {
@@ -313,13 +315,13 @@ void editor_clipboard_cut_current(void) {
         return;
 
     if (editor_insert_mode()) {
-        editor_clipboard_clear_selection();
+        editor_selection_clear_line_range();
         return;
     }
 
     if (!current_cut_range(&start, &count)) {
         editor_state_clipboard_count_set(0);
-        editor_clipboard_clear_selection();
+        editor_selection_clear_line_range();
         return;
     }
     if (!tutorial_guard_clipboard_change_or_status(start, count, 0))
@@ -370,7 +372,21 @@ void editor_clipboard_paste_current(void) {
     if (!tutorial_guard_clipboard_change_or_status(pos, 0, count))
         return;
 
-    int was_insert_mode = editor_insert_mode();
+    /* Snapshot the clipboard text before any state mutation — defensive
+     * against any path that could mutate the clipboard mid-loop, and
+     * sized by count so the snapshot doesn't allocate the 1 MB
+     * MAX_COMMANDS × MAX_LINE_LEN worst case on the stack. Allocated
+     * before the undo push so a malloc failure leaves no side effects. */
+    char (*buf)[MAX_LINE_LEN] = malloc((size_t)count * MAX_LINE_LEN);
+    if (!buf) {
+        repl_set_status_error("Paste failed: out of memory");
+        return;
+    }
+    {
+        const EditorClipboardState *cb = editor_state_clipboard_mut();
+        for (int i = 0; i < count; i++)
+            repl_copy_string_fits(buf[i], MAX_LINE_LEN, cb->lines[i]);
+    }
 
     /* Single undo for the whole paste; editor_feed_line() runs the commit
      * chain per line but does not push undo itself, so structured
@@ -380,19 +396,9 @@ void editor_clipboard_paste_current(void) {
 
     editor_state_edit_line_set(pos);
     editor_insert_mode_set(1);
-/* Snapshot the clipboard text before feeding — defensive against
- * any path that could mutate the clipboard mid-loop. */
-char (*buf)[MAX_LINE_LEN] = malloc((size_t)count * MAX_LINE_LEN);
-if (!buf) return;
-{
-    const EditorClipboardState *cb = editor_state_clipboard_mut();
-    for (int i = 0; i < count; i++)
-        repl_copy_string_fits(buf[i], MAX_LINE_LEN, cb->lines[i]);
-}
 
-for (int i = 0; i < count; i++) {
-    editor_feed_line(buf[i]);
-}
+    for (int i = 0; i < count; i++)
+        editor_feed_line(buf[i]);
     free(buf);
 
     /* Turn off insert mode before the load_line call, even if we are going to

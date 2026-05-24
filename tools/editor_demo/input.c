@@ -458,7 +458,7 @@ void demo_input_handle_key(unsigned char key, int x, int y) {
      *     byte ('a'/'c'/'f'/'g'/'v'/'x'). Check both bits so
      *     either real Ctrl or Cmd fires the shortcut; gate on
      *     the modifier so a bare typed letter isn't treated as
-     *     a shortcut. The production editor's editor_get_modifiers
+     *     a shortcut. The production editor's editor_input_active_modifiers
      *     in src/editor/input.c uses the same SUPER-as-CTRL alias.
      *
      * Ctrl+H (0x08) is already handled above as backspace. */

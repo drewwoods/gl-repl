@@ -303,12 +303,10 @@ EditorInputView editor_state_input(void) {
     const EditorInputState *in = &g_editor_state.input;
     return (EditorInputView){
         .input = in->input,
-        .input_capacity = MAX_INPUT_LEN,
         .input_len = in->input_len,
         .cursor_pos = in->cursor_pos,
         .anchor_pos = in->anchor_pos,
         .pending_newline = in->pending_newline,
-        .pending_newline_capacity = MAX_INPUT_LEN,
         .pending_newline_len = in->pending_newline_len,
         .insert_mode = in->insert_mode,
     };
@@ -321,7 +319,7 @@ EditorInputState *editor_state_input_mut(void) {
 void editor_state_input_reset(void) {
     editor_input_clear();
     editor_pending_newline_clear();
-    g_editor_state.input.insert_mode = 0;
+    editor_insert_mode_set(0);
 }
 
 const char *editor_input_text(void) {

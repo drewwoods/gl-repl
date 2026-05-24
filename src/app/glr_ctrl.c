@@ -3144,7 +3144,7 @@ static void route_code_click_epilog(void) {
         editor_completion_update();
     else
         editor_completion_clear();
-    editor_clipboard_clear_selection();
+    editor_selection_clear_line_range();
     editor_request_redraw();
 }
 

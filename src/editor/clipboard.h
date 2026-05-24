@@ -19,7 +19,7 @@
  *
  * Selection is visual: the code panel highlights selected lines while editing.
  * The selection persists until the user starts a new operation or explicitly
- * calls editor_clipboard_clear_selection().
+ * calls editor_selection_clear_line_range().
  */
 
 #ifndef EDITOR_CLIPBOARD_H
@@ -27,7 +27,7 @@
 
 /* --- Selection state --------------------------------------------------- */
 
-void editor_clipboard_clear_selection(void);
+void editor_selection_clear_line_range(void);
 int  editor_clipboard_sel_active(void);      /* 1 if anchor and end both set */
 int  editor_clipboard_sel_lo(void);          /* min(anchor, end) */
 int  editor_clipboard_sel_hi(void);          /* max(anchor, end) */

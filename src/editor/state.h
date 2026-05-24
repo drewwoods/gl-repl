@@ -63,12 +63,10 @@ typedef struct {
 
 typedef struct {
     const char *input;
-    int         input_capacity;
     int         input_len;
     int         cursor_pos;
     int         anchor_pos;
     const char *pending_newline;
-    int         pending_newline_capacity;
     int         pending_newline_len;
     int         insert_mode;
 } EditorInputView;
@@ -135,23 +133,11 @@ typedef struct {
     char        hint[MAX_LINE_LEN];
 } EditorAutocompleteState;
 
-/* Variable slider drag transaction: which variable is being dragged,
- * the variable name captured at drag-begin, the starting value, the
- * cursor anchor x in window pixels, and whether the controller has
- * already captured the coalesced undo snapshot for this drag. */
-typedef struct {
-    int   var_idx;
-    int   log_mode;
-    float start_value;
-    int   start_x;
-    char  name[16];
-    int   undo_snapshot_pushed;
-} EditorVariableDragState;
-
 typedef struct {
     int cursor_visible;
     int blink_tick;
 } EditorCursorBlinkState;
+
 
 /* Editor scroll position: the doc-line index at the top of the
  * code-panel viewport, plus a flag the editor sets to request the

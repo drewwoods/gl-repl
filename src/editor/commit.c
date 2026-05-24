@@ -85,7 +85,7 @@ EditorCommitResult editor_commit_current_input(const struct EditorServices_s *se
     }
 
     if (change.kind == REPL_COMPILED_NO_CHANGE) {
-        /* Caller falls through to the legacy try_commit_* chain
+        /* Caller falls through to the live try_commit_* chain
          * (or treats as unrecognized). */
         result.consumed = 0;
         return result;
@@ -187,7 +187,7 @@ static void apply_post_effects(const EditorCommitPostEffects *effects) {
 
     /* Func-decl resume advance. The compile step captured the
      * delta; consume it here. The matching read+clear of the
-     * legacy global also happens at compile time so the global
+     * live global also happens at compile time so the global
      * stays consistent (commit 26d eliminates the global by
      * folding the read into compile-time entirely). */
     if (effects->end_type == (int)CMD_FUNC_END &&
@@ -605,7 +605,7 @@ ReplCompileResult editor_compile_func_def(const char *input,
     char param_names[MAX_EXPR_VARS][16];
 
     /* Quick-reject inputs that look like func *calls* (have `(` and
-     * no `{`). The legacy guard returns 0 from editor_try_commit_func_def
+     * no `{`). The live guard returns 0 from editor_try_commit_func_def
      * for those so the dispatch chain falls through to
      * parse_command, which classifies them as CMD_CALL. */
     const char *trimmed = input ? input : "";
@@ -763,7 +763,7 @@ ReplCompileResult editor_compile_func_def(const char *input,
 
     /* New-func-def branch: insert + comment-relocation.
      *
-     * The legacy code:
+     * The live code:
      *   1. delete leading comments at [comment_start, edit_pos)
      *   2. recompute function_decl_insert_pos against the
      *      post-delete document
@@ -1198,7 +1198,7 @@ int editor_try_commit_float_decl(void) {
         plan.effects.load_line_after_apply = 1;
     } else if (plan.change.kind == REPL_COMPILED_INSERT_ONE) {
         /* INSERT_ONE has adjust_edit_line=1 — the REPL apply auto-bumps
-         * edit_line when pos <= edit_line. The legacy post-effect
+         * edit_line when pos <= edit_line. The live post-effect
          * conditionally reloaded the input from the new edit_line when
          * not in insert mode and the cursor still pointed at a real
          * line. Reproduce that here. */
@@ -1224,7 +1224,7 @@ int editor_try_commit_float_decl(void) {
 
 /* --- Var-assign commit --- */
 
-int editor_try_assign_variable(void) {
+int editor_try_commit_assign_variable(void) {
     ReplCompileContext ctx = repl_compile_context_from_live(editor_state_edit_line()); ctx.insert_mode = editor_insert_mode();
     EditorCommitPlan plan;
     editor_commit_plan_init(&plan);
@@ -1333,7 +1333,7 @@ int editor_try_commit_block_structs(void) {
  * that `float x` is not misread as an assignment to "float". */
 int editor_try_commit_var_statements(void) {
     if (editor_try_commit_float_decl())  return 1;
-    if (editor_try_assign_variable())    return 1;
+    if (editor_try_commit_assign_variable())    return 1;
     return 0;
 }
 
@@ -1358,7 +1358,7 @@ int editor_try_commit_var_statements_then_insert(void) {
         editor_completion_clear();
         return 1;
     }
-    if (editor_try_assign_variable()) {
+    if (editor_try_commit_assign_variable()) {
         editor_insert_mode_set(1);
         {
             EditorInputState *inp = editor_state_input_mut();
