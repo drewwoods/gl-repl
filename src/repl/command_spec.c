@@ -110,6 +110,24 @@ static const ReplEnumEntry k_blend_dst_factors[] = {
     { NULL, 0 }
 };
 
+#define REPL_FUNC_SLOT_LIST(OP) \
+    OP(0) \
+    OP(1) \
+    OP(2) \
+    OP(3) \
+    OP(4) \
+    OP(5) \
+    OP(6) \
+    OP(7) \
+    OP(8) \
+    OP(9)
+
+#define FUNC_DECL_COMPLETION(slot_) \
+    { "func" #slot_ "() {", "func" #slot_ "() {", 0, { NULL } },
+
+#define FUNC_CALL_COMPLETION(slot_) \
+    { "func" #slot_ "()", "func" #slot_ "()", 0, { NULL } },
+
 /* Help-overlay / autocomplete entries. Source order is load-bearing: it
  * drives F1 help row order and Tab-completion priority, so entries are
  * grouped by category (NOT alphabetized). Section banners below mark the
@@ -236,34 +254,9 @@ static const ReplFuncCompletion k_func_completions[] = {
     { "for(",                "for(var, start, end[, step])",                             4, { "var", "start", "end", "step" } },
     { "if(",                 "if(expr)",                                                 1, { "expr" } },
     { "goto ",               "goto label",                                               0, { NULL } },
-    { "func0() {",           "func0() {",                                                0, { NULL } },
+    REPL_FUNC_SLOT_LIST(FUNC_DECL_COMPLETION)
     { "func0(var0) {",       "func0(var0, [var1], ...) {",                               0, { NULL } },
-    { "func1() {",             "func1() {",                                                  0, { NULL } },
-    { "func2() {",             "func2() {",                                                  0, { NULL } },
-    { "func3() {",             "func3() {",                                                  0, { NULL } },
-    { "func4() {",             "func4() {",                                                  0, { NULL } },
-    { "func5() {",             "func5() {",                                                  0, { NULL } },
-    { "func6() {",             "func6() {",                                                  0, { NULL } },
-    { "func7() {",             "func7() {",                                                  0, { NULL } },
-    { "func8() {",             "func8() {",                                                  0, { NULL } },
-    { "func9() {",             "func9() {",                                                  0, { NULL } },
-    { "func0()",             "func0()",                                                  0, { NULL } },
-    { "func1()",             "func1()",                                                  0, { NULL } },
-    { "func2()",             "func2()",                                                  0, { NULL } },
-    { "func3()",             "func3()",                                                  0, { NULL } },
-    { "func4()",             "func4()",                                                  0, { NULL } },
-    { "func5()",             "func5()",                                                  0, { NULL } },
-    { "func6()",             "func6()",                                                  0, { NULL } },
-    { "func7()",             "func7()",                                                  0, { NULL } },
-    { "func8()",             "func8()",                                                  0, { NULL } },
-    { "func9()",             "func9()",                                                  0, { NULL } },
-    { "x = ",                "x = value",                                                0, { NULL } },
-    { "y = ",                "y = value",                                                0, { NULL } },
-    { "z = ",                "z = value",                                                0, { NULL } },
-    { "i = ",                "i = value",                                                0, { NULL } },
-    { "j = ",                "j = value",                                                0, { NULL } },
-    { "k = ",                "k = value",                                                0, { NULL } },
-    { "n = ",                "n = value",                                                0, { NULL } },
+    REPL_FUNC_SLOT_LIST(FUNC_CALL_COMPLETION)
     { "t = ",                "t = value",                                                0, { NULL } },
     { "A[",                  "A[index]",                                                 0, { NULL } },
     { "B[",                  "B[index]",                                                 0, { NULL } },
@@ -313,6 +306,10 @@ static const ReplFuncCompletion k_func_completions[] = {
         "6.28318530... (full turn in radians; 2*PI)", REPL_HELP_GROUP_MATH },
     { NULL, NULL, 0, { NULL } }
 };
+
+#undef FUNC_CALL_COMPLETION
+#undef FUNC_DECL_COMPLETION
+#undef REPL_FUNC_SLOT_LIST
 
 /* One positional enum-arg slot. Keeps the spec table rows readable now
  * that each enum command carries an explicit args[] array. */
@@ -391,75 +388,75 @@ static const ReplStdCommandSpec k_std_command_specs[] = {
     { NULL, 0, 0, NULL, NULL, 0 }
 };
 
-#define CMD_TYPE_SPEC(type_, semicolon_, block_indent_, category_) \
-    [type_] = { #type_, (semicolon_), (block_indent_), (category_), 1 }
+#define CMD_TYPE_SPEC(type_, semicolon_, category_) \
+    [type_] = { #type_, (semicolon_), (category_), 1 }
 
 /* Same as CMD_TYPE_SPEC but marks the command as illegal inside a glBegin
  * block. The parser rejects these at commit time; the executor no longer
  * defensively auto-closes the begin block for them. */
-#define CMD_TYPE_SPEC_NOT_IN_BEGIN(type_, semicolon_, block_indent_, category_) \
-    [type_] = { #type_, (semicolon_), (block_indent_), (category_), 0 }
+#define CMD_TYPE_SPEC_NOT_IN_BEGIN(type_, semicolon_, category_) \
+    [type_] = { #type_, (semicolon_), (category_), 0 }
 
 /* Keyed by CmdType via [type_]= designated initializers, so row order is
  * cosmetic (not load-bearing) — they track the CmdType enum order for
  * readability. Adding a command: drop one CMD_TYPE_SPEC row next to its
  * enum neighbours; a missing row is a zero-initialized (invalid) spec. */
 static const ReplCommandTypeSpec g_command_type_specs[CMD_TYPE_COUNT] = {
-    CMD_TYPE_SPEC_NOT_IN_BEGIN(CMD_BEGIN,   1, 1, CMD_CAT_PRIMITIVE),
-    CMD_TYPE_SPEC(CMD_END,                  1, 1, CMD_CAT_PRIMITIVE),
-    CMD_TYPE_SPEC(CMD_VERTEX3F,             1, 1, CMD_CAT_VERTEX),
-    CMD_TYPE_SPEC(CMD_VERTEX2F,             1, 1, CMD_CAT_VERTEX),
-    CMD_TYPE_SPEC(CMD_NORMAL3F,             1, 1, CMD_CAT_NORMAL),
-    CMD_TYPE_SPEC(CMD_COLOR3F,              1, 1, CMD_CAT_COLOR),
-    CMD_TYPE_SPEC(CMD_COLOR4F,              1, 1, CMD_CAT_COLOR),
-    CMD_TYPE_SPEC(CMD_ENABLE,               1, 1, CMD_CAT_STATE),
-    CMD_TYPE_SPEC(CMD_DISABLE,              1, 1, CMD_CAT_STATE),
-    CMD_TYPE_SPEC(CMD_SHADE_MODEL,          1, 1, CMD_CAT_STATE),
-    CMD_TYPE_SPEC(CMD_TRANSLATE3F,          1, 1, CMD_CAT_TRANSFORM),
-    CMD_TYPE_SPEC(CMD_SCALEF,               1, 1, CMD_CAT_TRANSFORM),
-    CMD_TYPE_SPEC(CMD_ROTATEF,              1, 1, CMD_CAT_TRANSFORM),
-    CMD_TYPE_SPEC(CMD_PUSH_MATRIX,          1, 1, CMD_CAT_TRANSFORM),
-    CMD_TYPE_SPEC(CMD_POP_MATRIX,           1, 1, CMD_CAT_TRANSFORM),
-    CMD_TYPE_SPEC(CMD_LOAD_IDENTITY,        1, 1, CMD_CAT_TRANSFORM),
-    CMD_TYPE_SPEC(CMD_COLOR_MATERIAL,       1, 1, CMD_CAT_COLOR),
-    CMD_TYPE_SPEC(CMD_LIGHT_MODEL_I,        1, 1, CMD_CAT_STATE),
-    CMD_TYPE_SPEC(CMD_FRONT_FACE,           1, 1, CMD_CAT_STATE),
-    CMD_TYPE_SPEC(CMD_DEPTH_FUNC,           1, 1, CMD_CAT_STATE),
-    CMD_TYPE_SPEC(CMD_FOR_BEGIN,            1, 0, CMD_CAT_LOOP),
-    CMD_TYPE_SPEC(CMD_FOR_END,              1, 0, CMD_CAT_LOOP),
-    CMD_TYPE_SPEC(CMD_FUNC_DEF,             1, 0, CMD_CAT_FUNCTION),
-    CMD_TYPE_SPEC(CMD_FUNC_END,             1, 0, CMD_CAT_FUNCTION),
-    CMD_TYPE_SPEC(CMD_CALL,                 1, 0, CMD_CAT_FUNCTION),
-    CMD_TYPE_SPEC(CMD_IF_BEGIN,             1, 0, CMD_CAT_CONDITIONAL),
-    CMD_TYPE_SPEC(CMD_IF_END,               1, 0, CMD_CAT_CONDITIONAL),
-    CMD_TYPE_SPEC(CMD_COMMENT,              0, 0, CMD_CAT_COMMENT),
-    CMD_TYPE_SPEC(CMD_EMPTY,                0, 0, CMD_CAT_COMMENT),
-    CMD_TYPE_SPEC(CMD_VAR_ASSIGN,           1, 0, CMD_CAT_VARIABLE),
-    CMD_TYPE_SPEC(CMD_SCRATCH_ASSIGN,       1, 0, CMD_CAT_VARIABLE),
-    CMD_TYPE_SPEC(CMD_VAR_DECLARE,          0, 0, CMD_CAT_VARIABLE),
-    CMD_TYPE_SPEC(CMD_GOTO_LABEL,                0, 0, CMD_CAT_LABEL),
-    CMD_TYPE_SPEC(CMD_GOTO,                 1, 0, CMD_CAT_LABEL),
-    CMD_TYPE_SPEC_NOT_IN_BEGIN(CMD_GLUT_TORUS,    1, 1, CMD_CAT_GLUT_SHAPE),
-    CMD_TYPE_SPEC_NOT_IN_BEGIN(CMD_GLUT_CUBE,     1, 1, CMD_CAT_GLUT_SHAPE),
-    CMD_TYPE_SPEC_NOT_IN_BEGIN(CMD_GLUT_SPHERE,   1, 1, CMD_CAT_GLUT_SHAPE),
-    CMD_TYPE_SPEC_NOT_IN_BEGIN(CMD_GLUT_TEAPOT,   1, 1, CMD_CAT_GLUT_SHAPE),
-    CMD_TYPE_SPEC_NOT_IN_BEGIN(CMD_GLUT_CONE,     1, 1, CMD_CAT_GLUT_SHAPE),
-    CMD_TYPE_SPEC_NOT_IN_BEGIN(CMD_TESS_BEGIN_POLYGON, 1, 1, CMD_CAT_TESS_BLOCK),
-    CMD_TYPE_SPEC(CMD_TESS_BEGIN_CONTOUR,   1, 1, CMD_CAT_TESS_BLOCK),
-    CMD_TYPE_SPEC(CMD_TESS_END,             1, 1, CMD_CAT_TESS_BLOCK),
-    CMD_TYPE_SPEC(CMD_TESS_NORMAL,          1, 1, CMD_CAT_NORMAL),
-    CMD_TYPE_SPEC(CMD_TESS_COLOR,           1, 1, CMD_CAT_COLOR),
-    CMD_TYPE_SPEC(CMD_TESS_VERTEX,          1, 1, CMD_CAT_VERTEX),
-    CMD_TYPE_SPEC(CMD_MATERIALFV,           1, 1, CMD_CAT_COLOR),
-    CMD_TYPE_SPEC_NOT_IN_BEGIN(CMD_POINT_SIZE,         1, 1, CMD_CAT_STATE),
-    CMD_TYPE_SPEC_NOT_IN_BEGIN(CMD_LINE_WIDTH,         1, 1, CMD_CAT_STATE),
-    CMD_TYPE_SPEC_NOT_IN_BEGIN(CMD_POINT_PARAMETER_FV, 1, 1, CMD_CAT_STATE),
-    CMD_TYPE_SPEC_NOT_IN_BEGIN(CMD_BLEND_FUNC,         1, 1, CMD_CAT_STATE),
-    CMD_TYPE_SPEC_NOT_IN_BEGIN(CMD_CLEAR_COLOR,        1, 1, CMD_CAT_COLOR),
-    CMD_TYPE_SPEC_NOT_IN_BEGIN(CMD_DEPTH_MASK,         1, 1, CMD_CAT_STATE),
-    CMD_TYPE_SPEC_NOT_IN_BEGIN(CMD_COLOR_MASK,         1, 1, CMD_CAT_STATE),
-    CMD_TYPE_SPEC_NOT_IN_BEGIN(CMD_RASTER_POS3F,       1, 1, CMD_CAT_STATE),
-    CMD_TYPE_SPEC_NOT_IN_BEGIN(CMD_LABEL,              1, 1, CMD_CAT_GLUT_SHAPE),
+    CMD_TYPE_SPEC_NOT_IN_BEGIN(CMD_BEGIN,           1, CMD_CAT_PRIMITIVE),
+    CMD_TYPE_SPEC(CMD_END,                          1, CMD_CAT_PRIMITIVE),
+    CMD_TYPE_SPEC(CMD_VERTEX3F,                     1, CMD_CAT_VERTEX),
+    CMD_TYPE_SPEC(CMD_VERTEX2F,                     1, CMD_CAT_VERTEX),
+    CMD_TYPE_SPEC(CMD_NORMAL3F,                     1, CMD_CAT_NORMAL),
+    CMD_TYPE_SPEC(CMD_COLOR3F,                      1, CMD_CAT_COLOR),
+    CMD_TYPE_SPEC(CMD_COLOR4F,                      1, CMD_CAT_COLOR),
+    CMD_TYPE_SPEC(CMD_ENABLE,                       1, CMD_CAT_STATE),
+    CMD_TYPE_SPEC(CMD_DISABLE,                      1, CMD_CAT_STATE),
+    CMD_TYPE_SPEC(CMD_SHADE_MODEL,                  1, CMD_CAT_STATE),
+    CMD_TYPE_SPEC(CMD_TRANSLATE3F,                  1, CMD_CAT_TRANSFORM),
+    CMD_TYPE_SPEC(CMD_SCALEF,                       1, CMD_CAT_TRANSFORM),
+    CMD_TYPE_SPEC(CMD_ROTATEF,                      1, CMD_CAT_TRANSFORM),
+    CMD_TYPE_SPEC(CMD_PUSH_MATRIX,                  1, CMD_CAT_TRANSFORM),
+    CMD_TYPE_SPEC(CMD_POP_MATRIX,                   1, CMD_CAT_TRANSFORM),
+    CMD_TYPE_SPEC(CMD_LOAD_IDENTITY,                1, CMD_CAT_TRANSFORM),
+    CMD_TYPE_SPEC(CMD_COLOR_MATERIAL,               1, CMD_CAT_COLOR),
+    CMD_TYPE_SPEC(CMD_LIGHT_MODEL_I,                1, CMD_CAT_STATE),
+    CMD_TYPE_SPEC(CMD_FRONT_FACE,                   1, CMD_CAT_STATE),
+    CMD_TYPE_SPEC(CMD_DEPTH_FUNC,                   1, CMD_CAT_STATE),
+    CMD_TYPE_SPEC(CMD_FOR_BEGIN,                    1, CMD_CAT_LOOP),
+    CMD_TYPE_SPEC(CMD_FOR_END,                      1, CMD_CAT_LOOP),
+    CMD_TYPE_SPEC(CMD_FUNC_DEF,                     1, CMD_CAT_FUNCTION),
+    CMD_TYPE_SPEC(CMD_FUNC_END,                     1, CMD_CAT_FUNCTION),
+    CMD_TYPE_SPEC(CMD_CALL,                         1, CMD_CAT_FUNCTION),
+    CMD_TYPE_SPEC(CMD_IF_BEGIN,                     1, CMD_CAT_CONDITIONAL),
+    CMD_TYPE_SPEC(CMD_IF_END,                       1, CMD_CAT_CONDITIONAL),
+    CMD_TYPE_SPEC(CMD_COMMENT,                      0, CMD_CAT_COMMENT),
+    CMD_TYPE_SPEC(CMD_EMPTY,                        0, CMD_CAT_COMMENT),
+    CMD_TYPE_SPEC(CMD_VAR_ASSIGN,                   1, CMD_CAT_VARIABLE),
+    CMD_TYPE_SPEC(CMD_SCRATCH_ASSIGN,               1, CMD_CAT_VARIABLE),
+    CMD_TYPE_SPEC(CMD_VAR_DECLARE,                  0, CMD_CAT_VARIABLE),
+    CMD_TYPE_SPEC(CMD_GOTO_LABEL,                   0, CMD_CAT_LABEL),
+    CMD_TYPE_SPEC(CMD_GOTO,                         1, CMD_CAT_LABEL),
+    CMD_TYPE_SPEC_NOT_IN_BEGIN(CMD_GLUT_TORUS,      1, CMD_CAT_GLUT_SHAPE),
+    CMD_TYPE_SPEC_NOT_IN_BEGIN(CMD_GLUT_CUBE,       1, CMD_CAT_GLUT_SHAPE),
+    CMD_TYPE_SPEC_NOT_IN_BEGIN(CMD_GLUT_SPHERE,     1, CMD_CAT_GLUT_SHAPE),
+    CMD_TYPE_SPEC_NOT_IN_BEGIN(CMD_GLUT_TEAPOT,     1, CMD_CAT_GLUT_SHAPE),
+    CMD_TYPE_SPEC_NOT_IN_BEGIN(CMD_GLUT_CONE,       1, CMD_CAT_GLUT_SHAPE),
+    CMD_TYPE_SPEC_NOT_IN_BEGIN(CMD_TESS_BEGIN_POLYGON, 1, CMD_CAT_TESS_BLOCK),
+    CMD_TYPE_SPEC(CMD_TESS_BEGIN_CONTOUR,           1, CMD_CAT_TESS_BLOCK),
+    CMD_TYPE_SPEC(CMD_TESS_END,                     1, CMD_CAT_TESS_BLOCK),
+    CMD_TYPE_SPEC(CMD_TESS_NORMAL,                  1, CMD_CAT_NORMAL),
+    CMD_TYPE_SPEC(CMD_TESS_COLOR,                   1, CMD_CAT_COLOR),
+    CMD_TYPE_SPEC(CMD_TESS_VERTEX,                  1, CMD_CAT_VERTEX),
+    CMD_TYPE_SPEC(CMD_MATERIALFV,                   1, CMD_CAT_COLOR),
+    CMD_TYPE_SPEC_NOT_IN_BEGIN(CMD_POINT_SIZE,      1, CMD_CAT_STATE),
+    CMD_TYPE_SPEC_NOT_IN_BEGIN(CMD_LINE_WIDTH,      1, CMD_CAT_STATE),
+    CMD_TYPE_SPEC_NOT_IN_BEGIN(CMD_POINT_PARAMETER_FV, 1, CMD_CAT_STATE),
+    CMD_TYPE_SPEC_NOT_IN_BEGIN(CMD_BLEND_FUNC,      1, CMD_CAT_STATE),
+    CMD_TYPE_SPEC_NOT_IN_BEGIN(CMD_CLEAR_COLOR,     1, CMD_CAT_COLOR),
+    CMD_TYPE_SPEC_NOT_IN_BEGIN(CMD_DEPTH_MASK,      1, CMD_CAT_STATE),
+    CMD_TYPE_SPEC_NOT_IN_BEGIN(CMD_COLOR_MASK,      1, CMD_CAT_STATE),
+    CMD_TYPE_SPEC_NOT_IN_BEGIN(CMD_RASTER_POS3F,    1, CMD_CAT_STATE),
+    CMD_TYPE_SPEC_NOT_IN_BEGIN(CMD_LABEL,           1, CMD_CAT_GLUT_SHAPE),
 };
 
 const ReplCommandTypeSpec *repl_command_type_spec(CmdType type) {
@@ -478,11 +475,6 @@ const char *repl_cmd_type_name(CmdType type) {
 int repl_cmd_type_needs_semicolon(CmdType type) {
     const ReplCommandTypeSpec *spec = repl_command_type_spec(type);
     return spec ? spec->needs_semicolon : 1;
-}
-
-int repl_cmd_type_needs_block_indent(CmdType type) {
-    const ReplCommandTypeSpec *spec = repl_command_type_spec(type);
-    return spec ? spec->needs_block_indent : 1;
 }
 
 CmdSyntaxCategory repl_cmd_type_category(CmdType type) {

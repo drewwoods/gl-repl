@@ -9,7 +9,6 @@
 
 /* Lightweight prefix-depth caches for O(1) depth lookups at position `pos`. */
 static int g_depth_cache_dirty = 1;
-static int g_for_depth_prefix[MAX_COMMANDS + 1];
 static int g_block_depth_prefix[MAX_COMMANDS + 1];
 static int g_begin_depth_prefix[MAX_COMMANDS + 1];
 static int g_tess_depth_prefix[MAX_COMMANDS + 1];
@@ -22,7 +21,6 @@ void repl_source_scope_depth_cache_invalidate(void) {
  * nesting depth *before* command `pos`.  Each array tracks one kind of
  * scope opener/closer:
  *
- *   g_for_depth_prefix   - for-loop nesting only
  *   g_block_depth_prefix - any block (for/func/if) nesting (used for indent)
  *   g_begin_depth_prefix - glBegin/glEnd nesting
  *   g_tess_depth_prefix  - gluBegin/gluEnd nesting
@@ -31,22 +29,17 @@ void repl_source_scope_depth_cache_invalidate(void) {
 static void depth_cache_rebuild(void) {
     if (!g_depth_cache_dirty) return;
 
-    g_for_depth_prefix[0] = 0;
     g_block_depth_prefix[0] = 0;
     g_begin_depth_prefix[0] = 0;
     g_tess_depth_prefix[0] = 0;
 
     for (int i = 0; i < repl_state_document_count(); i++) {
-        int for_depth   = g_for_depth_prefix[i];
         int block_depth = g_block_depth_prefix[i];
         int begin_depth = g_begin_depth_prefix[i];
         int tess_depth  = g_tess_depth_prefix[i];
 
         if (repl_state_document_cmds_mut()[i].valid) {
             CmdType t = repl_state_document_cmds_mut()[i].type;
-
-            if (t == CMD_FOR_BEGIN) for_depth++;
-            else if (t == CMD_FOR_END) for_depth--;
 
             if (repl_cmd_is_block_head(t)) block_depth++;
             else if (repl_cmd_is_block_end(t)) block_depth--;
@@ -58,12 +51,10 @@ static void depth_cache_rebuild(void) {
             else if (t == CMD_TESS_END) tess_depth--;
         }
 
-        if (for_depth < 0)   for_depth = 0;
         if (block_depth < 0) block_depth = 0;
         if (begin_depth < 0) begin_depth = 0;
         if (tess_depth < 0)  tess_depth = 0;
 
-        g_for_depth_prefix[i + 1]   = for_depth;
         g_block_depth_prefix[i + 1] = block_depth;
         g_begin_depth_prefix[i + 1] = begin_depth;
         g_tess_depth_prefix[i + 1]  = tess_depth;
@@ -122,6 +113,20 @@ void repl_source_scope_begin_indent(int pos, char *buf, int buf_sz) {
     int kd = repl_source_scope_block_depth_at(pos);
     int spaces = 2 + 2 * td + 2 * kd;
     if (buf_sz <= 0) return;
+    if (spaces > buf_sz - 1) spaces = buf_sz - 1;
+    if (spaces < 0) spaces = 0;
+    memset(buf, ' ', (size_t)spaces);
+    buf[spaces] = '\0';
+}
+
+void repl_source_scope_tess_close_indent(int pos, char *buf, int buf_sz) {
+    int td = repl_source_scope_tess_scope_depth_at(pos);
+    int kd = repl_source_scope_block_depth_at(pos);
+    int spaces;
+
+    if (buf_sz <= 0) return;
+    if (td > 0) td--;
+    spaces = 2 + 2 * td + 2 * kd;
     if (spaces > buf_sz - 1) spaces = buf_sz - 1;
     if (spaces < 0) spaces = 0;
     memset(buf, ' ', (size_t)spaces);

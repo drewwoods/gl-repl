@@ -985,24 +985,10 @@ ReplCompileResult repl_compile_var_assign(const char *input,
     repl_copy_string_fits(out->text[0], sizeof(out->text[0]), assign_text);
 
     /* Overwrite-feasibility check + UNDECLARE op plan. Mirrors the
-     * float-decl overwrite check; the in-use predicate skips the
-     * line being replaced.
-     *
-     * The scalar branch above parked a SET_VALUE op at slot 0
-     * (predef_op_count = 1). Stash it before the UNDECLARE loop
-     * writes from slot 0, then append it after so apply sees
-     * [UNDECLARE_old_0, ..., UNDECLARE_old_n, SET_VALUE_assigned].
-     * UNDECLARE-first matches the order repl_apply_predef_ops
-     * expects (cascades num_args before slot-index lookups). */
-    ReplPredefOp pending_set = {0};
-    int has_pending_set = 0;
-    if (!index_expr[0] && out->predef_op_count > 0) {
-        pending_set = out->predef_ops[out->predef_op_count - 1];
-        has_pending_set = 1;
-        out->predef_op_count = 0;
-    }
-
-    int op_count = 0;
+     * float-decl overwrite check; the in-use predicate skips the line
+     * being replaced. SET_VALUE and UNDECLARE ordering is irrelevant:
+     * repl_apply_predef_ops runs independent passes per op kind. */
+    int op_count = out->predef_op_count;
     if (overwriting_decl) {
         for (int decl_idx = 0; decl_idx < old_decl->var_decl_count; decl_idx++) {
             const char *nm = old_decl->var_names[decl_idx];
@@ -1021,9 +1007,6 @@ ReplCompileResult repl_compile_var_assign(const char *input,
         }
     }
 
-    if (has_pending_set && op_count < MAX_PREDEF_OPS_PER_COMMIT) {
-        out->predef_ops[op_count++] = pending_set;
-    }
     out->predef_op_count = op_count;
 
     return REPL_COMPILE_OK;

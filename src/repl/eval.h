@@ -200,6 +200,8 @@ void repl_eval_restore_scratch_arrays(
     const float src[REPL_SCRATCH_ARRAY_COUNT][REPL_SCRATCH_ARRAY_LEN]);
 
 void repl_eval_init_predef_vars(void);
+const char *repl_eval_eat_identifier(const char *p, const char **out_start);
+int  repl_eval_is_builtin_function(const char *name);
 /* Query: does input contain references to runtime-bound values (predef vars or
  * scratch arrays), not just literals? */
 int  repl_eval_input_has_predef_vars(const char *s);

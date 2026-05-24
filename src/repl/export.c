@@ -337,6 +337,8 @@ static const char *export_document_text(int cmd_idx) {
 
 typedef int  (*WorkspaceParseFn)(const char *args);
 typedef void (*WorkspaceEmitFn)(int *n);
+typedef int  (*SnippetParseFn)(const char *args, int *loaded,
+                               int *warnings, int *edit_line_inout);
 
 typedef struct {
     const char       *name;      /* directive name without leading `@` */
@@ -344,6 +346,14 @@ typedef struct {
     WorkspaceParseFn  parse;     /* parse(args-after-name-and-space) */
     WorkspaceEmitFn   emit;      /* append zero or more lines, bumping *n */
 } WorkspaceDirective;
+
+typedef struct {
+    const char    *name;      /* snippet marker name without leading `@` */
+    size_t         name_len;
+    SnippetParseFn parse;     /* parse(args-after-name-and-space) */
+} SnippetDirective;
+
+static const char k_snippet_directive_declare[] = "declare";
 
 /* --- workspace-dir --------------------------------------------------------- */
 
@@ -572,6 +582,9 @@ static const WorkspaceDirective WORKSPACE_DIRECTIVES[] = {
     ((int)(sizeof(WORKSPACE_DIRECTIVES) / sizeof(WORKSPACE_DIRECTIVES[0])))
 
 #undef WS_DIR
+
+#define SNIPPET_DIR(name, parse_fn) \
+    { name, sizeof(name) - 1, parse_fn }
 
 void repl_state_refresh_workspace_header_lines(void) {
     int line_count = 0;
@@ -1398,7 +1411,7 @@ static void write_canonical_cmd_as_c(FILE *f, const GLCmd *cmd, int cmd_idx,
                 }
             }
         }
-        int off = fprintf(f, "  // @declare");
+        int off = fprintf(f, "  // @%s", k_snippet_directive_declare);
         for (int di = 0; di < cmd->var_decl_count; di++) {
             if (has_init[di]) {
                 char vbuf[32];
@@ -1846,23 +1859,16 @@ static int import_parse_predef_decl(const char *line) {
     return updated;
 }
 
-/* Parse a // @declare marker written by write_canonical_cmd_as_c() and
- * reconstruct the corresponding CMD_VAR_DECLARE command.  Variables that are
+/* Parse a snippet-scoped `@declare` marker written by write_canonical_cmd_as_c()
+ * and reconstruct the corresponding CMD_VAR_DECLARE command. Variables that are
  * already registered in g_predef_vars (e.g. from @var auto-declare or from
  * declare_test_vars in tests) are kept at their current indices so that any
  * CMD_VAR_ASSIGN commands already loaded with those indices remain valid.
- * Vars not yet registered are declared.
- * Returns 1 if the line was a @declare marker (handled), 0 otherwise. */
-static int import_parse_declare_marker(const char *line, int *loaded,
-                                       int *warnings, int *edit_line_inout) {
-    const char *p = line;
+ * Vars not yet registered are declared. */
+static int parse_snippet_declare(const char *args, int *loaded,
+                                 int *warnings, int *edit_line_inout) {
+    const char *p = args;
     while (*p && isspace((unsigned char)*p)) p++;
-    if (p[0] != '/' || p[1] != '/') return 0;
-    p += 2;
-    while (*p && isspace((unsigned char)*p)) p++;
-    if (strncmp(p, "@declare", 8) != 0) return 0;
-    p += 8;
-    if (*p && !isspace((unsigned char)*p)) return 0;
 
     GLCmd cmd;
     memset(&cmd, 0, sizeof(cmd));
@@ -1998,6 +2004,40 @@ static int import_parse_declare_marker(const char *line, int *loaded,
     return 1;
 }
 
+static const SnippetDirective SNIPPET_DIRECTIVES[] = {
+    SNIPPET_DIR(k_snippet_directive_declare, parse_snippet_declare),
+};
+
+#define SNIPPET_DIRECTIVE_COUNT \
+    ((int)(sizeof(SNIPPET_DIRECTIVES) / sizeof(SNIPPET_DIRECTIVES[0])))
+
+#undef SNIPPET_DIR
+
+static int import_parse_snippet_directive(const char *line, int *loaded,
+                                          int *warnings,
+                                          int *edit_line_inout) {
+    const char *p = line;
+    while (*p && isspace((unsigned char)*p)) p++;
+    if (p[0] != '/' || p[1] != '/') return 0;
+    p += 2;
+    while (*p && isspace((unsigned char)*p)) p++;
+    if (*p != '@') return 0;
+    p++;
+
+    for (int dir_idx = 0; dir_idx < SNIPPET_DIRECTIVE_COUNT; dir_idx++) {
+        const SnippetDirective *d = &SNIPPET_DIRECTIVES[dir_idx];
+        if (strncmp(p, d->name, d->name_len) != 0)
+            continue;
+        if (p[d->name_len] != '\0' &&
+            !isspace((unsigned char)p[d->name_len]))
+            continue;
+        p += d->name_len;
+        return d->parse(p, loaded, warnings, edit_line_inout);
+    }
+
+    return 0;
+}
+
 static int import_expr_has_symbolic_ident(const char *expr) {
     const char *p = expr;
     while (*p) {
@@ -2012,13 +2052,14 @@ static int import_expr_has_symbolic_ident(const char *expr) {
             }
         }
 
-        if (!isalpha((unsigned char)*p) && *p != '_') {
+        const char *start = NULL;
+        const char *ident_end = repl_eval_eat_identifier(p, &start);
+        if (!ident_end) {
             p++;
             continue;
         }
 
-        const char *start = p;
-        while (*p && (isalnum((unsigned char)*p) || *p == '_')) p++;
+        p = ident_end;
         int len = (int)(p - start);
 
         char name[32];
@@ -2029,20 +2070,7 @@ static int import_expr_has_symbolic_ident(const char *expr) {
 
         const char *q = p;
         while (*q && isspace((unsigned char)*q)) q++;
-        if (*q == '(' &&
-            (strcmp(name, "sin") == 0 ||
-             strcmp(name, "cos") == 0 ||
-             strcmp(name, "tan") == 0 ||
-             strcmp(name, "sqrt") == 0 ||
-             strcmp(name, "abs") == 0 ||
-             strcmp(name, "pow") == 0 ||
-             strcmp(name, "min") == 0 ||
-             strcmp(name, "max") == 0 ||
-             strcmp(name, "floor") == 0 ||
-             strcmp(name, "ceil") == 0 ||
-             strcmp(name, "fmod") == 0 ||
-             strcmp(name, "rem") == 0 ||
-             strcmp(name, "rand") == 0)) {
+        if (*q == '(' && repl_eval_is_builtin_function(name)) {
             continue;
         }
 
@@ -2249,27 +2277,9 @@ static int import_make_repl_func_header(const char *line, char *out, int out_sz)
     p += kFuncPrefixLen;
     while (*p && isspace((unsigned char)*p)) p++;
 
-    /* The function name is either the bare `funcN` slot form or a
-     * user alias. Aliases are registered from the `// @func N = name`
-     * directive, which the importer parses before any function body
-     * (header comments precede definitions in the exported file), so
-     * the lookup resolves the slot here. */
     int fn = -1;
-    if (strncmp(p, "func", 4) == 0 && p[4] >= '0' && p[4] <= '9' &&
-        !isalnum((unsigned char)p[5]) && p[5] != '_') {
-        fn = p[4] - '0';
-        p += 5;
-    } else if (isalpha((unsigned char)*p) || *p == '_') {
-        char ident[REPL_FUNC_NAME_MAX];
-        int ilen = 0;
-        while (*p && (isalnum((unsigned char)*p) || *p == '_') &&
-               ilen < REPL_FUNC_NAME_MAX - 1)
-            ident[ilen++] = *p++;
-        if (*p && (isalnum((unsigned char)*p) || *p == '_'))
-            return 0;
-        ident[ilen] = '\0';
-        fn = repl_func_alias_lookup_slot(ident);
-    }
+    if (!repl_parse_func_name_token(&p, &fn))
+        return 0;
     if (fn < 0 || fn >= REPL_FUNC_SLOT_COUNT)
         return 0;
 
@@ -2300,30 +2310,10 @@ static int import_make_repl_func_header(const char *line, char *out, int out_sz)
     }
 
     char names[MAX_EXPR_VARS][16];
-    int count = 0;
-    char *cursor = payload;
-    while (*cursor) {
-        while (*cursor && isspace((unsigned char)*cursor)) cursor++;
-        if (strncmp(cursor, "float", 5) != 0 || !isspace((unsigned char)cursor[5]))
-            return 0;
-        cursor += 5;
-        while (*cursor && isspace((unsigned char)*cursor)) cursor++;
-        if (count >= MAX_EXPR_VARS) return 0;
-        if (!isalpha((unsigned char)*cursor) && *cursor != '_') return 0;
-
-        int ni = 0;
-        while (*cursor && (isalnum((unsigned char)*cursor) || *cursor == '_')) {
-            if (ni >= 15) return 0;
-            names[count][ni++] = *cursor++;
-        }
-        names[count][ni] = '\0';
-        count++;
-
-        while (*cursor && isspace((unsigned char)*cursor)) cursor++;
-        if (!*cursor) break;
-        if (*cursor != ',') return 0;
-        cursor++;
-    }
+    int count = repl_parse_identifier_list(payload, "float",
+                                           names, MAX_EXPR_VARS);
+    if (count < 0)
+        return 0;
 
     int written = snprintf(out, out_sz, "func%d(", fn);
     /* Append comma-separated parameter names. */
@@ -2623,9 +2613,11 @@ static void import_feed_one_line(const char *line, int *loaded, int *warnings,
     int before = repl_state_document_count();
     int handled = 0;
 
-    /* @declare markers are written by write_canonical_cmd_as_c() for
-     * CMD_VAR_DECLARE and must be handled before the generic C-to-REPL path. */
-    if (import_parse_declare_marker(line, loaded, warnings, edit_line_inout))
+    /* Snippet directives such as @declare are written by
+     * write_canonical_cmd_as_c() and must be handled before the generic
+     * C-to-REPL path. */
+    if (import_parse_snippet_directive(line, loaded, warnings,
+                                       edit_line_inout))
         return;
 
     /* Feed lines through the non-editor source-load API

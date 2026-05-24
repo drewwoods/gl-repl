@@ -225,6 +225,9 @@ static void run_tests(void) {
     ASSERT_FLOAT("rand(7,11)", 0.564453f);
     ASSERT_FLOAT("rand(7,11)", 0.564453f); /* deterministic */
     ASSERT_FLOAT("rand(3)", 0.589844f);    /* implicit iter=0 */
+    ASSERT_FLOAT("rand(3,1,2)", 0.0f);     /* extra args rejected */
+    ASSERT_FLOAT("rand2(3)", 0.179688f);   /* implicit iter=0 */
+    ASSERT_FLOAT("rand2(3,1,2)", 0.0f);    /* extra args rejected */
     ASSERT_FLOAT("sin(PI/2)", 1.0f);
     ASSERT_FLOAT("cos(TAU)", 1.0f);
     ASSERT_FLOAT("10/0", 0.0f);  /* div by zero returns 0 */
