@@ -209,6 +209,7 @@ endif
 	check-state-boundaries \
 	check-state-c-shrinking \
 	check-state-ownership \
+	check-tier-c-function-size \
 	check-state-read-getters-return-values \
 	check-ui-no-export-resolver \
 	check-ui-no-repl-state-mut \
@@ -1055,6 +1056,7 @@ check-state-ownership: ## Run state-ownership contract checks (new + tightened e
 		check-c99 \
 		check-module-prefixes \
 		check-include-style \
+		check-tier-c-function-size \
 		check-no-test-default-output; do \
 		printf "  $(YELLOW)▶$(NC) $$target\n"; \
 		$(MAKE) --no-print-directory $$target 2>&1 | sed 's/^/    /' | sed $$'s/ OK / \033[0;32mOK\033[0m /g; s/ OK$$/ \033[0;32mOK\033[0m/' || exit $$?; \
@@ -1158,6 +1160,9 @@ check-include-style: ## Hard guard: project-local headers must use "X.h", not <X
 
 check-c99: ## C99 build guard: gl-repl + bench + demo sources must syntax-check under gcc -std=c99 (non-pedantic; tests excluded; in the standard gate).
 	@C99_SRCS='$(SRCS)' bash scripts/check-c99.sh
+
+check-tier-c-function-size: ## Size ratchet: parse_command and flatten_range must not grow past their baselines.
+	@bash scripts/check-tier-c-function-size.sh scripts/baselines/tier-c-function-size.txt
 
 check-no-test-default-output: ## Hard guard: tests may not call repl_save_default_output() (writes ./output.c in repo root).
 	@bash scripts/check-no-test-default-output.sh
