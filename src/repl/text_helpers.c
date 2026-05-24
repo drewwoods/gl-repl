@@ -14,6 +14,19 @@ void trim_in_place(char *s) {
     s[len - start] = '\0';
 }
 
+void repl_canonical_input_view(const char *src,
+                               const char **out_start,
+                               int *out_len) {
+    const char *s = src ? src : "";
+    while (*s && isspace((unsigned char)*s)) s++;
+    int len = (int)strlen(s);
+    while (len > 0 &&
+           (s[len - 1] == ';' || isspace((unsigned char)s[len - 1])))
+        len--;
+    if (out_start) *out_start = s;
+    if (out_len)   *out_len   = len;
+}
+
 void repl_format_source_float(char *out, int out_sz, float v) {
     if (!out || out_sz <= 0)
         return;

@@ -201,6 +201,13 @@ static void close_brace_indent(int pos, char *buf, int buf_sz) {
     buf[len] = '\0';
 }
 
+/* CONTRACT (audit #11): context-pure for document data, live-state-
+ * coupled for scope queries. The ReplCompileContext snapshot is
+ * authoritative for ctx->document_cmds / _count / edit_line, but the
+ * `repl_source_scope_*` calls below read from the live g_repl_state
+ * document. Callers must apply each change to the live document
+ * before the next scope-dependent compile call, or the scope queries
+ * will misbehave. */
 ReplCompileResult editor_compile_close_brace(const char *input,
                                              const ReplCompileContext *ctx,
                                              EditorCommitPlan *out,
@@ -299,6 +306,14 @@ ReplCompileResult editor_compile_close_brace(const char *input,
 
 /* ---- editor_compile_if_block ------------------------------------ */
 
+/* CONTRACT (audit #11): context-pure for document data, live-state-
+ * coupled for both scope queries (repl_source_scope_*) and visible-
+ * var collection (collect_visible_vars in src/repl/core.c). The
+ * ReplCompileContext snapshot is authoritative for document_cmds /
+ * _count / edit_line, but the helpers above read from the live
+ * g_repl_state document. Callers must apply each change to the live
+ * document before the next scope-dependent or visible-vars compile
+ * call. */
 ReplCompileResult editor_compile_if_block(const char *input,
                                           const ReplCompileContext *ctx,
                                           EditorCommitPlan *out,
@@ -511,6 +526,12 @@ static int compile_function_decl_insert_pos_after_delete(
     return pos;
 }
 
+/* CONTRACT (audit #11): context-pure for document data, live-state-
+ * coupled for scope queries (repl_source_scope_*). The
+ * ReplCompileContext snapshot is authoritative for document_cmds /
+ * _count / edit_line, but the helpers above read from the live
+ * g_repl_state document. Callers must apply each change to the live
+ * document before the next scope-dependent compile call. */
 ReplCompileResult editor_compile_func_def(const char *input,
                                           const ReplCompileContext *ctx,
                                           EditorCommitPlan *out,
@@ -781,6 +802,14 @@ ReplCompileResult editor_compile_func_def(const char *input,
 
 /* ---- editor_compile_for_loop ------------------------------------ */
 
+/* CONTRACT (audit #11): context-pure for document data, live-state-
+ * coupled for both scope queries (repl_source_scope_*) and visible-
+ * var collection (collect_visible_vars in src/repl/core.c). The
+ * ReplCompileContext snapshot is authoritative for document_cmds /
+ * _count / edit_line, but the helpers above read from the live
+ * g_repl_state document. Callers must apply each change to the live
+ * document before the next scope-dependent or visible-vars compile
+ * call. */
 ReplCompileResult editor_compile_for_loop(const char *input,
                                           const ReplCompileContext *ctx,
                                           EditorCommitPlan *out,

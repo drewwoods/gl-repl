@@ -199,6 +199,18 @@ void repl_eval_copy_scratch_arrays(
 void repl_eval_restore_scratch_arrays(
     const float src[REPL_SCRATCH_ARRAY_COUNT][REPL_SCRATCH_ARRAY_LEN]);
 
+/* Copy / restore the predef-variable table (names + values + live
+ * count) into / from caller-owned arrays sized to MAX_PREDEF_VARS.
+ * Mirrors the scratch-array helpers above so undo / replay can
+ * snapshot the predef storage without naming g_predef_vars /
+ * g_num_predef_vars directly. */
+void repl_eval_copy_predef_vars(float dst_vals[MAX_PREDEF_VARS],
+                                char dst_names[MAX_PREDEF_VARS][16],
+                                int *dst_count);
+void repl_eval_restore_predef_vars(const float src_vals[MAX_PREDEF_VARS],
+                                   const char src_names[MAX_PREDEF_VARS][16],
+                                   int src_count);
+
 void repl_eval_init_predef_vars(void);
 const char *repl_eval_eat_identifier(const char *p, const char **out_start);
 int  repl_eval_is_builtin_function(const char *name);

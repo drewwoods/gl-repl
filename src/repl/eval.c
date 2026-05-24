@@ -201,6 +201,31 @@ void repl_eval_restore_scratch_arrays(
     memcpy(g_active_scratch_arrays, src, sizeof(g_fallback_scratch_arrays));
 }
 
+void repl_eval_copy_predef_vars(float dst_vals[MAX_PREDEF_VARS],
+                                char dst_names[MAX_PREDEF_VARS][16],
+                                int *dst_count) {
+    if (dst_count)
+        *dst_count = g_num_predef_vars;
+    for (int i = 0; i < g_num_predef_vars; i++) {
+        if (dst_vals)
+            dst_vals[i] = g_predef_vars[i].value;
+        if (dst_names)
+            memcpy(dst_names[i], g_predef_vars[i].name, 16);
+    }
+}
+
+void repl_eval_restore_predef_vars(const float src_vals[MAX_PREDEF_VARS],
+                                   const char src_names[MAX_PREDEF_VARS][16],
+                                   int src_count) {
+    g_num_predef_vars = src_count;
+    for (int i = 0; i < src_count; i++) {
+        if (src_vals)
+            g_predef_vars[i].value = src_vals[i];
+        if (src_names)
+            memcpy(g_predef_vars[i].name, src_names[i], 16);
+    }
+}
+
 static const char *skip_numeric_literal(const char *s) {
     char *end = NULL;
     (void)strtof(s, &end);

@@ -17,8 +17,14 @@
 # drop by 2, but that refactor is independent of the red-status work
 # that introduced the new symbol.
 #
+# 2026-05-24: input_c bumped +1 to admit repl_canonical_input_view,
+# the consolidated "skip leading ws + drop trailing ';'/ws" helper
+# from src/repl/text_helpers.c. Replaces three open-coded variants
+# of the same strip in input.c per audit finding #19 — net code
+# reduction, but a new repl_* symbol.
+#
 # Ratchet down as migrations land. The plan target
 # (plans/done/editor-demo.md) is ~5 per file.
 
-input_c: 21
+input_c: 22
 commit_c: 29

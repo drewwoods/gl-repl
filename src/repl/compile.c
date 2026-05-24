@@ -845,6 +845,13 @@ static int compile_rebase_var_assign_slot_after_undeclares(
     return shifted_slot;
 }
 
+/* CONTRACT (audit #11): context-pure for document data, live-state-
+ * coupled for visible-var collection. The ReplCompileContext snapshot
+ * is authoritative for document_cmds / _count / edit_line, but the
+ * `collect_visible_vars` call below reads from the live g_repl_state
+ * document. Callers must apply each change to the live document
+ * before the next visible-vars compile call. Reached from both the
+ * editor commit path and the file-load path via load_try_block. */
 ReplCompileResult repl_compile_var_assign(const char *input,
                                           const ReplCompileContext *ctx,
                                           ReplCompiledChange *out,
