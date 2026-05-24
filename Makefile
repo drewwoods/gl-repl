@@ -353,6 +353,7 @@ HDRS = \
 	src/repl/command_spec.h \
 	src/repl/command_store.h \
 	src/repl/compile.h \
+	src/repl/catalog_tags.h \
 	src/repl/core.h \
 	src/repl/core_internal.h \
 	src/repl/eval.h \

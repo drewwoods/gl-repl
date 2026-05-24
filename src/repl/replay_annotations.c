@@ -54,6 +54,10 @@ static int replay_eval_expr_with_state(
     const float *predef_vals,
     const float scratch_arrays[REPL_SCRATCH_ARRAY_COUNT][REPL_SCRATCH_ARRAY_LEN],
     float *out_value);
+typedef void (*ReplayBeforeStepFn)(int pc, const GLCmd *cmd,
+                                   const float *vals,
+                                   const float scratch[REPL_SCRATCH_ARRAY_COUNT][REPL_SCRATCH_ARRAY_LEN],
+                                   void *ctx);
 
 static const char *replay_document_text(int cmd_idx) {
     const char *text = source_text_line(s_replay_text_view, cmd_idx);
@@ -544,29 +548,40 @@ static int replay_eval_expr_with_state(
     return 1;
 }
 
-static int replay_copy_runtime_state_before_flat_cmd(
-    int target_pc,
-    float *out_vals,
-    int max_vals,
-    float out_scratch[REPL_SCRATCH_ARRAY_COUNT][REPL_SCRATCH_ARRAY_LEN]) {
+static void replay_init_sim_state(float *vals, int max_vals,
+                                  float scratch[REPL_SCRATCH_ARRAY_COUNT][REPL_SCRATCH_ARRAY_LEN]) {
     ReplReplayRuntimeState replay = replay_state_view();
+
+    if (!vals || max_vals < g_num_predef_vars)
+        return;
+
+    if (replay.active) {
+        replay_copy_baseline_predef_values(vals, max_vals);
+        if (scratch)
+            replay_copy_baseline_scratch_arrays(scratch);
+    } else {
+        for (int i = 0; i < g_num_predef_vars && i < max_vals; i++)
+            vals[i] = g_predef_vars[i].value;
+        if (scratch)
+            repl_eval_copy_scratch_arrays(scratch);
+    }
+}
+
+static int replay_simulate_runtime_until(
+    int target_pc,
+    float *vals,
+    int max_vals,
+    float scratch[REPL_SCRATCH_ARRAY_COUNT][REPL_SCRATCH_ARRAY_LEN],
+    ReplayBeforeStepFn before_step,
+    void *before_step_ctx) {
     const GLCmd *flat_cmds = repl_state_flat_program_cmds();
     int pc = 0;
     int goto_count = 0;
 
-    if (!out_vals || max_vals < g_num_predef_vars)
+    if (!vals || max_vals < g_num_predef_vars)
         return 0;
 
-    if (replay.active) {
-        replay_copy_baseline_predef_values(out_vals, max_vals);
-        if (out_scratch)
-            replay_copy_baseline_scratch_arrays(out_scratch);
-    } else {
-        for (int i = 0; i < g_num_predef_vars && i < max_vals; i++)
-            out_vals[i] = g_predef_vars[i].value;
-        if (out_scratch)
-            repl_eval_copy_scratch_arrays(out_scratch);
-    }
+    replay_init_sim_state(vals, max_vals, scratch);
 
     if (target_pc < 0)
         target_pc = 0;
@@ -574,6 +589,9 @@ static int replay_copy_runtime_state_before_flat_cmd(
         target_pc = repl_state_flat_program_count();
 
     while (pc < target_pc) {
+        if (before_step)
+            before_step(pc, &flat_cmds[pc], vals, scratch, before_step_ctx);
+
         if (!flat_cmds[pc].valid) {
             pc++;
             continue;
@@ -581,28 +599,20 @@ static int replay_copy_runtime_state_before_flat_cmd(
 
         switch (flat_cmds[pc].type) {
         case CMD_VAR_ASSIGN: {
-            /* Mirror executor.c CMD_VAR_ASSIGN: flatten owns the eval
-             * and stores the result in args[0]. Re-evaluating here
-             * would diverge from the live executor (replay doesn't
-             * re-flatten, so args[0] is the value the live executor
-             * keeps applying) and also double-apply self-referential
-             * assignments like `tmp2 = tmp2 + 1`. */
             int vi = flat_cmds[pc].num_args;
             float value = flat_cmds[pc].args[0];
             if (vi >= 0 && vi < g_num_predef_vars)
-                out_vals[vi] = value;
+                vals[vi] = value;
             break;
         }
         case CMD_SCRATCH_ASSIGN: {
-            /* Same model as CMD_VAR_ASSIGN — apply the precomputed
-             * (array, index, value) triple flatten stored. */
             int array_idx = (int)flat_cmds[pc].args[0];
             int elem_idx = (int)flat_cmds[pc].args[1];
             float value = flat_cmds[pc].args[2];
 
-            if (out_scratch && array_idx >= 0 && array_idx < REPL_SCRATCH_ARRAY_COUNT &&
+            if (scratch && array_idx >= 0 && array_idx < REPL_SCRATCH_ARRAY_COUNT &&
                 elem_idx >= 0 && elem_idx < REPL_SCRATCH_ARRAY_LEN)
-                out_scratch[array_idx][elem_idx] = value;
+                scratch[array_idx][elem_idx] = value;
             break;
         }
         case CMD_IF_BEGIN: {
@@ -612,13 +622,16 @@ static int replay_copy_runtime_state_before_flat_cmd(
                 if (repl_extract_paren_payload(replay_flat_text(pc),
                                                cond_text, sizeof(cond_text)) &&
                     cond_text[0]) {
-                    replay_eval_expr_with_state(pc, cond_text, out_vals,
-                                                out_scratch, &cond);
+                    replay_eval_expr_with_state(pc, cond_text, vals,
+                                                scratch, &cond);
                 }
             }
             if (cond == 0.0f) {
                 int depth = 1;
                 while (depth > 0 && ++pc < target_pc) {
+                    if (before_step)
+                        before_step(pc, &flat_cmds[pc], vals, scratch,
+                                    before_step_ctx);
                     if (flat_cmds[pc].type == CMD_IF_BEGIN) depth++;
                     else if (flat_cmds[pc].type == CMD_IF_END) depth--;
                 }
@@ -658,6 +671,39 @@ next_pc:
     return 1;
 }
 
+static void replay_snapshot_if_mapped(
+    int pc,
+    const GLCmd *cmd,
+    const float *vals,
+    const float scratch[REPL_SCRATCH_ARRAY_COUNT][REPL_SCRATCH_ARRAY_LEN],
+    void *ctx) {
+    (void)ctx;
+
+    if (!cmd)
+        return;
+
+    if (cmd->src_cmd_idx >= 0 && cmd->src_cmd_idx < repl_state_document_count() &&
+        s_replay_flat_map[cmd->src_cmd_idx] == pc &&
+        !s_replay_predef_snap_valid[cmd->src_cmd_idx]) {
+        memcpy(s_replay_predef_snap[cmd->src_cmd_idx], vals,
+               sizeof(float) * (size_t)g_num_predef_vars);
+        memcpy(s_replay_scratch_snap[cmd->src_cmd_idx], scratch,
+               sizeof(s_replay_scratch_snap[cmd->src_cmd_idx]));
+        s_replay_predef_snap_valid[cmd->src_cmd_idx] = 1;
+    }
+}
+
+static int replay_copy_runtime_state_before_flat_cmd(
+    int target_pc,
+    float *out_vals,
+    int max_vals,
+    float out_scratch[REPL_SCRATCH_ARRAY_COUNT][REPL_SCRATCH_ARRAY_LEN]) {
+    /* Mirror executor.c CMD_VAR_ASSIGN / CMD_SCRATCH_ASSIGN by applying the
+     * precomputed flat args directly; replay doesn't re-flatten here. */
+    return replay_simulate_runtime_until(target_pc, out_vals, max_vals,
+                                         out_scratch, NULL, NULL);
+}
+
 /* Single-pass forward simulation that builds predef snapshots for every
  * source command whose flat_idx appears in s_replay_flat_map.  Each snapshot
  * captures the predef variable state BEFORE the command at that flat_idx
@@ -665,120 +711,17 @@ next_pc:
  * Total cost: O(replay_pc), called once per frame during cache rebuild. */
 static void replay_build_predef_snapshots(void) {
     ReplReplayRuntimeState replay = replay_state_view();
-    const GLCmd *flat_cmds = repl_state_flat_program_cmds();
     /* Zero-initialized so no later read can hit an indeterminate slot if a
      * branch below fills only [0, g_num_predef_vars). */
     float vals[MAX_PREDEF_VARS] = {0};
     float scratch[REPL_SCRATCH_ARRAY_COUNT][REPL_SCRATCH_ARRAY_LEN];
-    int pc = 0, goto_count = 0;
     int target_pc = replay.pc;
 
     memset(s_replay_predef_snap_valid, 0, sizeof(int) * (size_t)repl_state_document_count());
 
-    if (replay.active) {
-        replay_copy_baseline_predef_values(vals, MAX_PREDEF_VARS);
-        replay_copy_baseline_scratch_arrays(scratch);
-    } else {
-        for (int i = 0; i < g_num_predef_vars && i < MAX_PREDEF_VARS; i++)
-            vals[i] = g_predef_vars[i].value;
-        repl_eval_copy_scratch_arrays(scratch);
-    }
-
-    if (target_pc < 0) target_pc = 0;
-    if (target_pc > repl_state_flat_program_count()) target_pc = repl_state_flat_program_count();
-
-    /* Macro: snapshot predef vals for a flat position's source command */
-    #define SNAP_IF_MAPPED(flat_pc) do {                                    \
-        int _src = flat_cmds[(flat_pc)].src_cmd_idx;                                               \
-        if (_src >= 0 && _src < repl_state_document_count() &&                               \
-            s_replay_flat_map[_src] == (flat_pc) &&                         \
-            !s_replay_predef_snap_valid[_src]) {                            \
-            memcpy(s_replay_predef_snap[_src], vals,                        \
-                   sizeof(float) * (size_t)g_num_predef_vars);              \
-            memcpy(s_replay_scratch_snap[_src], scratch,                    \
-                   sizeof(s_replay_scratch_snap[_src]));                    \
-            s_replay_predef_snap_valid[_src] = 1;                           \
-        }                                                                   \
-    } while (0)
-
-    while (pc < target_pc) {
-        SNAP_IF_MAPPED(pc);
-
-        if (!flat_cmds[pc].valid) { pc++; continue; }
-
-        switch (flat_cmds[pc].type) {
-        case CMD_VAR_ASSIGN: {
-            /* Mirror executor.c — apply args[0] directly (see the
-             * matching comment in replay_copy_runtime_state_before_flat_cmd). */
-            int vi = flat_cmds[pc].num_args;
-            float value = flat_cmds[pc].args[0];
-            if (vi >= 0 && vi < g_num_predef_vars)
-                vals[vi] = value;
-            break;
-        }
-        case CMD_SCRATCH_ASSIGN: {
-            int array_idx = (int)flat_cmds[pc].args[0];
-            int elem_idx = (int)flat_cmds[pc].args[1];
-            float value = flat_cmds[pc].args[2];
-
-            if (array_idx >= 0 && array_idx < REPL_SCRATCH_ARRAY_COUNT &&
-                elem_idx >= 0 && elem_idx < REPL_SCRATCH_ARRAY_LEN)
-                scratch[array_idx][elem_idx] = value;
-            break;
-        }
-        case CMD_IF_BEGIN: {
-            float cond = flat_cmds[pc].args[0];
-            if (flat_cmds[pc].has_vars) {
-                char cond_text[MAX_LINE_LEN];
-                if (repl_extract_paren_payload(replay_flat_text(pc),
-                                               cond_text, sizeof(cond_text)) &&
-                    cond_text[0])
-                    replay_eval_expr_with_state(pc, cond_text, vals, scratch,
-                                                &cond);
-            }
-            if (cond == 0.0f) {
-                int depth = 1;
-                while (depth > 0 && ++pc < target_pc) {
-                    SNAP_IF_MAPPED(pc);
-                    if (flat_cmds[pc].type == CMD_IF_BEGIN) depth++;
-                    else if (flat_cmds[pc].type == CMD_IF_END) depth--;
-                }
-            }
-            break;
-        }
-        case CMD_GOTO: {
-            char label[64];
-            if (!repl_extract_goto_label(replay_flat_text(pc),
-                                         label, sizeof(label)))
-                break;
-            if (goto_count++ > REPL_GOTO_LOOP_LIMIT)
-                goto snap_done;
-            for (int li = 0; li < repl_state_flat_program_count(); li++) {
-                char target_label[64];
-                if (flat_cmds[li].valid &&
-                    flat_cmds[li].type == CMD_GOTO_LABEL &&
-                    repl_extract_label_name(replay_flat_text(li),
-                                            target_label,
-                                            sizeof(target_label)) &&
-                    strcmp(target_label, label) == 0) {
-                    pc = li;
-                    goto snap_next_pc;
-                }
-            }
-            break;
-        }
-        default:
-            break;
-        }
-
-        pc++;
-snap_next_pc:
-        ;
-    }
-snap_done:
-    ;
-
-    #undef SNAP_IF_MAPPED
+    (void)replay_simulate_runtime_until(target_pc, vals, MAX_PREDEF_VARS,
+                                        scratch, replay_snapshot_if_mapped,
+                                        NULL);
 }
 
 static int build_replay_assignment_inline_comment(int cmd_idx, int flat_idx,
