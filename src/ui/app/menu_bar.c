@@ -1436,145 +1436,148 @@ void ui_menu_bar_render_search_overlay(const UiRenderSnapshot *snap) {
 }
 
 
-void ui_menu_bar_render(const UiRenderSnapshot *snap) {
-    ReplReplayRuntimeState replay = snap->replay;
-    int cp_x, cp_y, cp_w, cp_h;
-    ui_layout_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
-    (void)cp_y;
-    if (cp_w <= 0 || cp_h <= 0) return;
-    /* Menu bar - design ref: Header Wireframes v2 (now at the very top of
-     * the code panel; the old info bar moved into the bottom status strip). */
-    {
-        int menu_x[NUM_MENUS], menu_w[NUM_MENUS];
-        int pin_x[NUM_PIN_BTNS], pin_w[NUM_PIN_BTNS];
-        int by, bh;
-        menubar_rects(menu_x, menu_w, pin_x, pin_w, &by, &bh);
-
-        glEnable(GL_BLEND);
-        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-
-        /* Full-width strip surface */
-        ui_clr_a(UI_TOK_SURFACE, 0.98f);
-        glRectf((float)cp_x, (float)by, (float)cp_x + (float)cp_w, (float)by + (float)bh);
-
-        int hover_menu = ui_menu_bar_menu_hit(snap->pointer.mouse_x, snap->pointer.mouse_y);
-        int hover_pin  = ui_menu_bar_pin_hit(snap->pointer.mouse_x, snap->pointer.mouse_y);
-
-        /* Left-side menu labels */
-        for (int i = 0; i < NUM_MENUS; i++) {
-            int active = (g_open_menu == i);
-            int hover  = (hover_menu == i);
-            if (active) {
-                ui_clr(UI_TOK_MENU_LABEL_ACTIVE_BG);
-                glRectf((float)menu_x[i], (float)by, (float)menu_x[i] + (float)menu_w[i], (float)by + (float)bh);
-            } else if (hover) {
-                ui_clr(UI_TOK_MENU_LABEL_HOVER_BG);
-                glRectf((float)menu_x[i], (float)by, (float)menu_x[i] + (float)menu_w[i], (float)by + (float)bh);
-            }
-            if (active || hover)
-                ui_clr(UI_TOK_TEXT_ON_HILITE);
-            else
-                ui_clr(UI_TOK_TEXT_PRIMARY);
+static void paint_menu_labels(const int *menu_x, const int *menu_w,
+                              int by, int bh, int hover_menu) {
+    int i;
+    for (i = 0; i < NUM_MENUS; i++) {
+        int active = (g_open_menu == i);
+        int hover  = (hover_menu == i);
+        if (active) {
+            ui_clr(UI_TOK_MENU_LABEL_ACTIVE_BG);
+            glRectf((float)menu_x[i], (float)by, (float)menu_x[i] + (float)menu_w[i], (float)by + (float)bh);
+        } else if (hover) {
+            ui_clr(UI_TOK_MENU_LABEL_HOVER_BG);
+            glRectf((float)menu_x[i], (float)by, (float)menu_x[i] + (float)menu_w[i], (float)by + (float)bh);
+        }
+        if (active || hover)
+            ui_clr(UI_TOK_TEXT_ON_HILITE);
+        else
+            ui_clr(UI_TOK_TEXT_PRIMARY);
+        {
             int tx = menu_x[i] + MENU_LABEL_PAD_X / 2;
             gl2d_draw_string((float)tx, (float)(by + MENUBAR_TEXT_BASE_Y),
                         g_menu_labels[i], FONT_SMALL);
         }
+    }
+}
 
-        /* Mask the combined pin area with the menubar bg so a long menu
-         * label in a narrow window can't bleed through transparent pin
-         * slots (pins must stay visible and take hit-test priority). */
-        int pin_block_x = pin_x[PIN_SEARCH];
-        int pin_block_w = cp_x + cp_w - CODE_MARGIN_X - pin_block_x;
-        ui_clr(UI_TOK_SURFACE); /* fully opaque pin mask */
-        glRectf((float)pin_block_x, (float)by, (float)pin_block_x + (float)pin_block_w, (float)by + (float)bh);
+static void paint_pin_buttons(const UiRenderSnapshot *snap,
+                              const int *pin_x, const int *pin_w,
+                              int by, int bh, int hover_pin,
+                              ReplReplayRuntimeState replay) {
+    int i;
+    for (i = 0; i < NUM_PIN_BTNS; i++) {
+        int hover = (hover_pin == i);
+        int active = (i == PIN_REPLAY && replay.active);
+        if (hover) {
+            ui_clr(UI_TOK_MENU_LABEL_HOVER_BG);
+            glRectf((float)pin_x[i], (float)by, (float)pin_x[i] + (float)pin_w[i], (float)by + (float)bh);
+        } else if (active) {
+            ui_clr(UI_TOK_MENU_LABEL_ACTIVE_BG);
+            glRectf((float)pin_x[i], (float)by, (float)pin_x[i] + (float)pin_w[i], (float)by + (float)bh);
+        }
+        ui_clr(UI_TOK_DIVIDER);
+        glBegin(GL_LINES);
+        glVertex2f((float)pin_x[i], (float)by);
+        glVertex2f((float)pin_x[i], (float)(by + bh));
+        glEnd();
 
-        /* Right-side pins: Search | Replay (always rendered on top) */
-        for (int i = 0; i < NUM_PIN_BTNS; i++) {
-            int hover = (hover_pin == i);
-            int active = (i == PIN_REPLAY && replay.active);
-            if (hover) {
-                ui_clr(UI_TOK_MENU_LABEL_HOVER_BG);
-                glRectf((float)pin_x[i], (float)by, (float)pin_x[i] + (float)pin_w[i], (float)by + (float)bh);
-            } else if (active) {
-                ui_clr(UI_TOK_MENU_LABEL_ACTIVE_BG);
-                glRectf((float)pin_x[i], (float)by, (float)pin_x[i] + (float)pin_w[i], (float)by + (float)bh);
-            }
-            /* Left separator rule */
-            ui_clr(UI_TOK_DIVIDER);
-            glBegin(GL_LINES);
-            glVertex2f((float)pin_x[i], (float)by);
-            glVertex2f((float)pin_x[i], (float)(by + bh));
-            glEnd();
-
-            if (i == PIN_SEARCH) {
-                if (snap->search.active) {
-                    /* ui_menu_bar_render_search_overlay() fills this slot */
-                    continue;
-                }
-                /* "search..." label in muted gray */
-                ui_clr(UI_TOK_TEXT_PLACEHOLDER);
+        if (i == PIN_SEARCH) {
+            if (snap->search.active)
+                continue;
+            ui_clr(UI_TOK_TEXT_PLACEHOLDER);
+            {
                 int tx = pin_x[i] + 12;
                 gl2d_draw_string((float)tx, (float)(by + MENUBAR_TEXT_BASE_Y),
                             g_pin_btn_labels[i], FONT_SMALL);
-            } else if (i == PIN_REPLAY) {
-                /* Green accent (#6fb36f), state icon + dynamic label */
-                const char *label = "Replay";
-                if (replay.state == REPLAY_PLAYING) label = "Replaying";
-                else if (replay.state == REPLAY_PAUSED) label = "Paused";
-                else if (replay.state == REPLAY_DONE)   label = "Done";
+            }
+        } else if (i == PIN_REPLAY) {
+            const char *label = "Replay";
+            int icon_x = pin_x[i] + 10;
+            int icon_cy = by + bh / 2;
+            int icon_sz = 8;
+            int tx;
+            if (replay.state == REPLAY_PLAYING) label = "Replaying";
+            else if (replay.state == REPLAY_PAUSED) label = "Paused";
+            else if (replay.state == REPLAY_DONE)   label = "Done";
 
-                int icon_x = pin_x[i] + 10;
-                int icon_cy = by + bh / 2;
-                int icon_sz = 8;
+            ui_clr(UI_TOK_ACCENT);
 
-                ui_clr(UI_TOK_ACCENT);
-
-                if (replay.state == REPLAY_PLAYING) {
-                    /* Two vertical bars (pause glyph) */
-                    float bw = 2.5f, gap = 2.0f;
-                    float by0 = (float)icon_cy - (float)icon_sz * 0.5f;
-                    float bh0 = (float)icon_sz;
-                    glRectf((float)icon_x,                    by0, (float)icon_x + bw, by0 + bh0);
-                    glRectf((float)icon_x + bw + gap,         by0, (float)icon_x + bw + gap + bw, by0 + bh0);
-                } else if (replay.state == REPLAY_DONE) {
-                    /* Square - run complete */
-                    float sx = (float)icon_x;
-                    float sy = (float)icon_cy - (float)icon_sz * 0.5f;
-                    glRectf(sx, sy, sx + (float)icon_sz, sy + (float)icon_sz);
-                } else {
-                    /* Play triangle - stopped (OFF) or paused, click to start */
-                    float x0 = (float)icon_x;
-                    float cy = (float)icon_cy;
-                    glBegin(GL_TRIANGLES);
-                    glVertex2f(x0,             cy - (float)icon_sz * 0.5f);
-                    glVertex2f(x0,             cy + (float)icon_sz * 0.5f);
-                    glVertex2f(x0 + icon_sz,   cy);
-                    glEnd();
-                }
-
-                int tx = icon_x + 12 + 6;
-                gl2d_draw_string((float)tx, (float)(by + MENUBAR_TEXT_BASE_Y), label, FONT_SMALL);
+            if (replay.state == REPLAY_PLAYING) {
+                float bw = 2.5f, gap = 2.0f;
+                float by0 = (float)icon_cy - (float)icon_sz * 0.5f;
+                float bh0 = (float)icon_sz;
+                glRectf((float)icon_x,            by0, (float)icon_x + bw, by0 + bh0);
+                glRectf((float)icon_x + bw + gap, by0, (float)icon_x + bw + gap + bw, by0 + bh0);
+            } else if (replay.state == REPLAY_DONE) {
+                float sx = (float)icon_x;
+                float sy = (float)icon_cy - (float)icon_sz * 0.5f;
+                glRectf(sx, sy, sx + (float)icon_sz, sy + (float)icon_sz);
             } else {
-                if (hover || active)
-                    ui_clr(UI_TOK_TEXT_ON_HILITE);
-                else
-                    ui_clr(UI_TOK_TEXT_PRIMARY);
+                float x0 = (float)icon_x;
+                float cy = (float)icon_cy;
+                glBegin(GL_TRIANGLES);
+                glVertex2f(x0,           cy - (float)icon_sz * 0.5f);
+                glVertex2f(x0,           cy + (float)icon_sz * 0.5f);
+                glVertex2f(x0 + icon_sz, cy);
+                glEnd();
+            }
+
+            tx = icon_x + 12 + 6;
+            gl2d_draw_string((float)tx, (float)(by + MENUBAR_TEXT_BASE_Y), label, FONT_SMALL);
+        } else {
+            if (hover || active)
+                ui_clr(UI_TOK_TEXT_ON_HILITE);
+            else
+                ui_clr(UI_TOK_TEXT_PRIMARY);
+            {
                 int tx = pin_x[i] + MENU_LABEL_PAD_X / 2;
                 gl2d_draw_string((float)tx, (float)(by + MENUBAR_TEXT_BASE_Y),
                             g_pin_btn_labels[i], FONT_SMALL);
             }
         }
-
-        /* Bottom divider - theme-stable pure-black rule */
-        glColor4fv(k_menubar_bottom_rule);
-        glBegin(GL_LINES);
-        glVertex2f((float)cp_x,          (float)by);
-        glVertex2f((float)(cp_x + cp_w), (float)by);
-        glEnd();
-
-        glDisable(GL_BLEND);
     }
+}
 
+void ui_menu_bar_render(const UiRenderSnapshot *snap) {
+    int cp_x, cp_y, cp_w, cp_h;
+    int menu_x[NUM_MENUS], menu_w[NUM_MENUS];
+    int pin_x[NUM_PIN_BTNS], pin_w[NUM_PIN_BTNS];
+    int by, bh;
+    int hover_menu, hover_pin;
+    int pin_block_x, pin_block_w;
+
+    ui_layout_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
+    (void)cp_y;
+    if (cp_w <= 0 || cp_h <= 0) return;
+
+    menubar_rects(menu_x, menu_w, pin_x, pin_w, &by, &bh);
+
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+    ui_clr_a(UI_TOK_SURFACE, 0.98f);
+    glRectf((float)cp_x, (float)by, (float)cp_x + (float)cp_w, (float)by + (float)bh);
+
+    hover_menu = ui_menu_bar_menu_hit(snap->pointer.mouse_x, snap->pointer.mouse_y);
+    hover_pin  = ui_menu_bar_pin_hit(snap->pointer.mouse_x, snap->pointer.mouse_y);
+
+    paint_menu_labels(menu_x, menu_w, by, bh, hover_menu);
+
+    pin_block_x = pin_x[PIN_SEARCH];
+    pin_block_w = cp_x + cp_w - CODE_MARGIN_X - pin_block_x;
+    ui_clr(UI_TOK_SURFACE);
+    glRectf((float)pin_block_x, (float)by, (float)pin_block_x + (float)pin_block_w, (float)by + (float)bh);
+
+    paint_pin_buttons(snap, pin_x, pin_w, by, bh, hover_pin, snap->replay);
+
+    glColor4fv(k_menubar_bottom_rule);
+    glBegin(GL_LINES);
+    glVertex2f((float)cp_x,          (float)by);
+    glVertex2f((float)(cp_x + cp_w), (float)by);
+    glEnd();
+
+    glDisable(GL_BLEND);
 }
 
 void ui_menu_bar_render_example_dropdown(const UiRenderSnapshot *snap) {
