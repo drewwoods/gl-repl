@@ -55,9 +55,9 @@ UiPointerState *ui_state_pointer_mut(void);
 void              ui_state_pointer_set(int mouse_x, int mouse_y, int mouse_button);
 void              ui_state_pointer_set_pos(int mouse_x, int mouse_y);
 
-/* Code-panel render chrome: panel divider, cursor blink, cursor px/py.
+/* Code-panel render chrome: panel divider and per-frame mirrors.
  * The editor-session bits (scroll / scroll_follow_cursor) live on
- * EditorState.scroll instead. */
+ * EditorState.scroll, and cursor blink state lives on EditorState.cursor_blink instead. */
 UiCodePanelRuntimeState  ui_state_code_panel(void);
 UiCodePanelRuntimeState *ui_state_code_panel_mut(void);
 
