@@ -54,7 +54,7 @@ void              repl_state_flat_program_set_current_block(int begin_idx,
 void              repl_state_flat_program_clear_current_block(void);
 void              repl_state_flat_program_reset(void);
 void              repl_state_mark_flat_dirty(void);
-void              repl_state_mark_normals_dirty(void);
+void              repl_state_mark_source_dirty(void);
 FlatProgramView   repl_state_flat_program_view(void);
 
 ReplVariableView         repl_state_variables(void);

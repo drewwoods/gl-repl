@@ -412,7 +412,7 @@ void editor_clipboard_paste_current(void) {
      * so saved_insert was 1 and the following line got staged.) */
     editor_insert_mode_set(0);
     editor_load_line_to_input(editor_state_edit_line());
-    repl_mark_normals_dirty();
+    repl_mark_source_dirty();
 
     {
         char msg[64];

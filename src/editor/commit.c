@@ -1167,7 +1167,7 @@ int editor_try_commit_float_decl(void) {
         repl_set_status_error("Command buffer full!");
         return 1;
     }
-    repl_mark_normals_dirty();
+    repl_mark_source_dirty();
     return 1;
 }
 
@@ -1210,7 +1210,7 @@ int editor_try_commit_assign_variable(void) {
         repl_set_status_error("Command buffer full!");
         return 1;
     }
-    repl_mark_normals_dirty();
+    repl_mark_source_dirty();
     return 1;
 }
 
@@ -1247,7 +1247,7 @@ static int editor_try_commit_block(EditorBlockCompileFn compile) {
         repl_set_status_error("Command buffer full!");
         return 1;
     }
-    repl_mark_normals_dirty();
+    repl_mark_source_dirty();
     return 1;
 }
 
@@ -1317,7 +1317,7 @@ int editor_try_commit_var_statements_then_insert(void) {
         editor_cursor_pos_set(0);
         editor_completion_clear();
         repl_set_status("Insert mode");
-        repl_mark_normals_dirty();
+        repl_mark_source_dirty();
         return 1;
     }
     return 0;

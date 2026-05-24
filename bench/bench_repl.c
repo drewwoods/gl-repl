@@ -454,7 +454,7 @@ static BenchResult bench_replay_long(int iters) {
      * to g_predef_vars don't leak into the timed iterations -
      * replay_start does its own predef snapshot/restore around the
      * flatten (src/repl/core.c:3264-3268). */
-    repl_mark_normals_dirty();
+    repl_mark_source_dirty();
     replay_start();
     int flat_cmds = repl_state_flat_program_count();
     replay_stop();
@@ -474,7 +474,7 @@ static BenchResult bench_replay_long(int iters) {
 
         for (int i = 0; i < saved_n; i++)
             g_predef_vars[i].value = saved_vals[i];
-        repl_mark_normals_dirty();
+        repl_mark_source_dirty();
         double t0 = now_seconds();
 
         replay_start();
@@ -628,7 +628,7 @@ static BenchResult bench_fade_batches(int iters) {
      * repl_state_flat_program_count() (replay_start clamps repl_state_flat_program_count() during
      * playback, so we snapshot before/after). */
     repl_load_example_lines_for_test(k_fade_bench_scene);
-    repl_mark_normals_dirty();
+    repl_mark_source_dirty();
     replay_start();
     int flat_cmds = repl_state_flat_program_count();
     replay_stop();
@@ -636,7 +636,7 @@ static BenchResult bench_fade_batches(int iters) {
     /* Re-flatten after replay_stop so repl_state_flat_program_count() is the full stream
      * (replay's clamp might still be in effect otherwise - we observed
      * flat_cmds via the post-start snapshot above). */
-    repl_mark_normals_dirty();
+    repl_mark_source_dirty();
     repl_flatten_commands(editor_state_edit_line());
     flat_cmds = repl_state_flat_program_count();
 

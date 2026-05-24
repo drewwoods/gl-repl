@@ -226,6 +226,32 @@ void repl_eval_restore_predef_vars(const float src_vals[MAX_PREDEF_VARS],
     }
 }
 
+/* Values-only snapshot of the live predef table, used by the controller's
+ * per-frame baseline-save and by the replay peer's start/stop bracketing.
+ * Names + count are NOT preserved here — callers that need the full table
+ * use repl_eval_copy_predef_vars / _restore_predef_vars above. */
+void repl_copy_predef_values(float *dst, int max_vals) {
+    int n;
+
+    if (!dst || max_vals <= 0)
+        return;
+
+    n = g_num_predef_vars < max_vals ? g_num_predef_vars : max_vals;
+    for (int i = 0; i < n; i++)
+        dst[i] = g_predef_vars[i].value;
+}
+
+void repl_restore_predef_values(const float *src, int max_vals) {
+    int n;
+
+    if (!src || max_vals <= 0)
+        return;
+
+    n = g_num_predef_vars < max_vals ? g_num_predef_vars : max_vals;
+    for (int i = 0; i < n; i++)
+        g_predef_vars[i].value = src[i];
+}
+
 static const char *skip_numeric_literal(const char *s) {
     char *end = NULL;
     (void)strtof(s, &end);

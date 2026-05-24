@@ -71,7 +71,7 @@ int  repl_apply_compiled_change(const ReplCompiledChange *change,
 
 /* Replay the predef-variable side-effects in `change` against the
  * shared eval table. UNDECLARE entries fire first (and cascade
- * num_args adjustments to CMD_VAR_ASSIGN cmds whose slot index sits
+ * var_idx adjustments to CMD_VAR_ASSIGN cmds whose slot index sits
  * above the freed slot); then DECLARE / SET_VALUE entries write the
  * new state. */
 void repl_apply_predef_ops(const ReplCompiledChange *change);

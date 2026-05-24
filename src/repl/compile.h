@@ -326,7 +326,7 @@ ReplCompileResult repl_compile_set_predef_value(const char *name,
  * document, validate that no CMD_VAR_DECLARE in the range owns a name
  * still referenced outside the range, and populate UNDECLARE predef
  * ops for every variable declared inside the range. The apply step
- * cascades the predef compaction (CMD_VAR_ASSIGN.num_args adjustment)
+ * cascades the predef compaction (CMD_VAR_ASSIGN.var_idx adjustment)
  * automatically.
  *
  * Pure: never mutates state, never calls set_status.

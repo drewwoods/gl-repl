@@ -292,7 +292,7 @@ static int tutorial_emit_instruction_comment(const char *comment,
     }
 
     repl_state_mark_flat_dirty();
-    repl_state_mark_normals_dirty();
+    repl_state_mark_source_dirty();
     state->fade_line_idx = instruction_line;
     state->fade_start_t = repl_state_variables().anim_time;
     /* Per-line duration at a fixed chars-per-second rate so every

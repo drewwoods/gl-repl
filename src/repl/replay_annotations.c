@@ -599,7 +599,7 @@ static int replay_simulate_runtime_until(
 
         switch (flat_cmds[pc].type) {
         case CMD_VAR_ASSIGN: {
-            int vi = flat_cmds[pc].num_args;
+            int vi = flat_cmds[pc].var_idx;
             float value = flat_cmds[pc].args[0];
             if (vi >= 0 && vi < g_num_predef_vars)
                 vals[vi] = value;

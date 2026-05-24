@@ -417,7 +417,7 @@ static void flatten_range(FlattenContext *ctx,
 
         /* Variable assignments: update predefined var and pass through */
         if (src_cmd->type == CMD_VAR_ASSIGN) {
-            int var_idx = src_cmd->num_args; /* predef var index */
+            int var_idx = src_cmd->var_idx; /* predef var slot */
             float value = src_cmd->args[0];
             char rhs[MAX_LINE_LEN] = "";
             int local_rhs_vars = 0;

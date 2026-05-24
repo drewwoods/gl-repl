@@ -462,7 +462,7 @@ static int load_example_lines(const char *const *lines,
     /* Post-load editor cleanup mirrors the pre-load sink dispatch so a
      * stale input line or cursor doesn't survive the loaded body. */
     repl_dispatch_input_reset();
-    repl_mark_normals_dirty();
+    repl_mark_source_dirty();
     /* Return the canonical post-load cursor: document end. The
      * caller applies this via editor_state_edit_line_set(). */
     return repl_state_document_count();

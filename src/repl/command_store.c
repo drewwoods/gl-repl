@@ -60,7 +60,7 @@ static int clamp_insert_pos(const ReplCommandStore *store, int pos) {
 }
 
 static void command_store_invalidate_after_mutation(void) {
-    repl_state_mark_normals_dirty();
+    repl_state_mark_source_dirty();
 }
 
 int repl_command_store_insert_many(ReplCommandStore *store, int pos,

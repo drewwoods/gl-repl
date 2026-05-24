@@ -14,7 +14,8 @@ void repl_refresh_camera_lines(void);
 void repl_refresh_render_state_strings(void);
 void repl_ensure_init_bootstrap_ready(void);
 void repl_apply_init_bootstrap(void);
-void repl_copy_predef_values(float *dst, int max_vals);
-void repl_restore_predef_values(const float *src, int max_vals);
+
+/* repl_copy_predef_values / repl_restore_predef_values now live in
+ * src/repl/eval.h, next to the rest of the predef-variable helpers. */
 
 #endif /* REPL_PIPELINE_H */

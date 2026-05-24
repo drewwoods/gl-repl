@@ -3,6 +3,7 @@
  */
 #include "subsystems/replay/replay.h"
 #include "repl/core_internal.h"
+#include "repl/eval.h"
 #include "repl/pipeline.h"
 #include "keys.h"
 #include "repl/core.h"

@@ -174,27 +174,8 @@ void repl_executor_init_resources(void) {
     gluTessCallback(g_tess, GLU_TESS_EDGE_FLAG, (ReplGluCallback)glEdgeFlag);
 }
 
-void repl_copy_predef_values(float *dst, int max_vals) {
-    int n;
-
-    if (!dst || max_vals <= 0)
-        return;
-
-    n = g_num_predef_vars < max_vals ? g_num_predef_vars : max_vals;
-    for (int i = 0; i < n; i++)
-        dst[i] = g_predef_vars[i].value;
-}
-
-void repl_restore_predef_values(const float *src, int max_vals) {
-    int n;
-
-    if (!src || max_vals <= 0)
-        return;
-
-    n = g_num_predef_vars < max_vals ? g_num_predef_vars : max_vals;
-    for (int i = 0; i < n; i++)
-        g_predef_vars[i].value = src[i];
-}
+/* repl_copy_predef_values / repl_restore_predef_values live in eval.c
+ * next to the rest of the predef-variable storage helpers. */
 
 void repl_execute_set_fade_context(float alpha_scale, int skip_geom_before_pc) {
     g_execute_alpha_scale = alpha_scale;
@@ -690,7 +671,7 @@ void repl_execute_program(const ReplExecutionOptions *options) {
              * double-apply self-referential assignments like
              * `tmp2 = tmp2 + 1;` (once during flatten, once here).
              * Apply args[0] directly so flatten owns the eval semantics. */
-            int var_idx = flat_cmds[pc].num_args;
+            int var_idx = flat_cmds[pc].var_idx;
             float value = flat_cmds[pc].args[0];
             if (var_idx >= 0 && var_idx < g_num_predef_vars)
                 g_predef_vars[var_idx].value = value;

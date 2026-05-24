@@ -46,8 +46,8 @@ static const char *outfile = "output.c";
 /* Global state                                                               */
 /* ========================================================================= */
 
-void repl_mark_normals_dirty(void) {
-    repl_state_mark_normals_dirty();
+void repl_mark_source_dirty(void) {
+    repl_state_mark_source_dirty();
 }
 
 /* Predefined variables - defined in src/repl/eval.c */
@@ -609,10 +609,8 @@ void repl_reformat_program(void) {
         case CMD_VAR_ASSIGN: {
             const char *name = NULL;
             char rhs[MAX_LINE_LEN] = "";
-            /* CMD_VAR_ASSIGN stores the predef-var index in num_args
-             * (the documented exception to args[]-count; see command.h). */
-            if (orig.num_args >= 0 && orig.num_args < g_num_predef_vars)
-                name = g_predef_vars[orig.num_args].name;
+            if (orig.var_idx >= 0 && orig.var_idx < g_num_predef_vars)
+                name = g_predef_vars[orig.var_idx].name;
             char fallback[16] = "";
             if (!name) {
                 const char *p = orig_text;
@@ -711,7 +709,7 @@ void repl_reformat_program(void) {
     }
 
     repl_source_scope_depth_cache_invalidate();
-    repl_mark_normals_dirty();
+    repl_mark_source_dirty();
 
     prof_end(PROF_REFORMAT);
 }

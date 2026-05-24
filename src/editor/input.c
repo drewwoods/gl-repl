@@ -247,7 +247,7 @@ void editor_delete_cmd_range(int start, int count, const char *what) {
     if (editor_state_edit_line() > repl_state_document_count())
         editor_state_edit_line_set(repl_state_document_count());
     editor_load_line_to_input(editor_state_edit_line());
-    repl_mark_normals_dirty();
+    repl_mark_source_dirty();
     editor_selection_clear_line_range();
     repl_set_status(change.commit_message);
 }
@@ -272,7 +272,7 @@ void editor_clear_all_cmds(void) {
     editor_input_clear();
     editor_pending_newline_clear();
     repl_eval_init_predef_vars();
-    repl_mark_normals_dirty();
+    repl_mark_source_dirty();
     repl_set_status("All commands cleared");
 }
 
@@ -653,7 +653,7 @@ static CommitResult commit_current_input(int enter_mode) {
             editor_input_clear();
             editor_completion_clear();
             repl_set_status("Insert mode");
-            repl_mark_normals_dirty();
+            repl_mark_source_dirty();
             return COMMIT_OK;
         }
     }
@@ -1159,7 +1159,7 @@ static int handle_comment_toggle_key_route(unsigned char key) {
     }
 
     editor_load_line_to_input(editor_state_edit_line());
-    repl_mark_normals_dirty();
+    repl_mark_source_dirty();
     repl_set_status(change.commit_message);
     return 1;
 }
@@ -1317,7 +1317,7 @@ static int handle_enter_key_route(unsigned char key) {
          * update sees empty input and returns early, matching the
          * previous clear-only behavior. */
         editor_completion_update();
-        repl_mark_normals_dirty();
+        repl_mark_source_dirty();
         return 1;
     }
     return 0;
@@ -1391,7 +1391,7 @@ static int handle_semicolon_commit_key_route(unsigned char key) {
         }
         /* see Enter-route note above. */
         editor_completion_update();
-        repl_mark_normals_dirty();
+        repl_mark_source_dirty();
         return 1;
     }
     return 0;
