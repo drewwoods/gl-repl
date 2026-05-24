@@ -820,6 +820,31 @@ ReplCompileResult repl_compile_float_decl(const char *input,
     return REPL_COMPILE_OK;
 }
 
+static int compile_rebase_var_assign_slot_after_undeclares(
+        const char *name,
+        int original_slot,
+        const ReplCompiledChange *change) {
+    int shifted_slot = original_slot;
+
+    for (int op_idx = 0; op_idx < change->predef_op_count; op_idx++) {
+        const ReplPredefOp *op = &change->predef_ops[op_idx];
+        int dropped_slot;
+
+        if (op->kind != REPL_PREDEF_OP_UNDECLARE)
+            continue;
+
+        dropped_slot = repl_eval_find_predef_var_idx(op->name);
+        if (dropped_slot < 0)
+            continue;
+        if (strcmp(op->name, name) == 0)
+            return -1;
+        if (dropped_slot < original_slot)
+            shifted_slot--;
+    }
+
+    return shifted_slot;
+}
+
 ReplCompileResult repl_compile_var_assign(const char *input,
                                           const ReplCompileContext *ctx,
                                           ReplCompiledChange *out,
@@ -981,13 +1006,14 @@ ReplCompileResult repl_compile_var_assign(const char *input,
         out->count = 1;
         out->adjust_edit_line = 0;
     }
-    out->cmds[0] = cmd;
     repl_copy_string_fits(out->text[0], sizeof(out->text[0]), assign_text);
 
     /* Overwrite-feasibility check + UNDECLARE op plan. Mirrors the
      * float-decl overwrite check; the in-use predicate skips the line
      * being replaced. SET_VALUE and UNDECLARE ordering is irrelevant:
-     * repl_apply_predef_ops runs independent passes per op kind. */
+     * repl_apply_predef_ops runs independent passes per op kind. When
+     * queued undeclares remove lower predef slots, rebase the staged
+     * CMD_VAR_ASSIGN slot to the post-undeclare index before publish. */
     int op_count = out->predef_op_count;
     if (overwriting_decl) {
         for (int decl_idx = 0; decl_idx < old_decl->var_decl_count; decl_idx++) {
@@ -1008,6 +1034,16 @@ ReplCompileResult repl_compile_var_assign(const char *input,
     }
 
     out->predef_op_count = op_count;
+    if (cmd.type == CMD_VAR_ASSIGN && overwriting_decl) {
+        int rebased_slot = compile_rebase_var_assign_slot_after_undeclares(
+            name, cmd.num_args, out);
+        if (rebased_slot < 0)
+            return compile_set_err(err, err_size,
+                                   "cannot overwrite declaration of '%s' with assignment",
+                                   name);
+        cmd.num_args = rebased_slot;
+    }
+    out->cmds[0] = cmd;
 
     return REPL_COMPILE_OK;
 }
