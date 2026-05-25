@@ -335,8 +335,11 @@ static void display_func(void) {
     SceneRenderConfig cfg;
     build_config(&cfg);
 
-    scene_apply_camera(cfg.cam_rx, cfg.cam_ry, cfg.cam_dist,
-                       cfg.cam_tx, cfg.cam_ty, cfg.cam_tz);
+    SceneCameraPose pose = {
+        .rx = cfg.cam_rx, .ry = cfg.cam_ry, .dist = cfg.cam_dist,
+        .tx = cfg.cam_tx, .ty = cfg.cam_ty, .tz = cfg.cam_tz,
+    };
+    scene_apply_camera(&pose);
     if (scene_render_3d_scene(&cfg) != 0) {
         fprintf(stderr,
                 "scene_demo: scene_render_3d_scene rejected config (errno=%d)\n",

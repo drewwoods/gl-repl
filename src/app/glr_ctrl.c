@@ -1871,7 +1871,11 @@ void glr_ctrl_display_frame(void) {
     prof_begin(PROF_SCENE_3D);
     {
         GlrCameraState cam = glr_camera();
-        scene_apply_camera(cam.rx, cam.ry, cam.dist, cam.tx, cam.ty, cam.tz);
+        SceneCameraPose pose = {
+            .rx = cam.rx, .ry = cam.ry, .dist = cam.dist,
+            .tx = cam.tx, .ty = cam.ty, .tz = cam.tz,
+        };
+        scene_apply_camera(&pose);
     }
     if (scene_render_3d_scene(&scene_config) != 0) {
         static int warned = 0;

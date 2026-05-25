@@ -23,8 +23,25 @@
 #define SCENE_DEFAULT_FOVY_DEG 45.0
 #define SCENE_DEFAULT_NEAR_Z 0.1
 #define SCENE_DEFAULT_FAR_Z 200.0
-#define SCENE_PROBE_BOX SCENE_DEFAULT_FAR_Z
 #define SCENE_PROJECTION_DEPTH_EPSILON 1e-4
+
+/* Half-extent of the wide-ortho box used by the GL_FEEDBACK depth
+ * probe. Must be >= SCENE_DEFAULT_FAR_Z so the real frustum's visible
+ * range fits without near/far clipping during the probe walk.
+ * Aliased to the far-Z value today; if you change SCENE_DEFAULT_FAR_Z,
+ * scene_probe_eye_dist's wide-ortho box grows in lockstep. */
+#define SCENE_PROBE_BOX SCENE_DEFAULT_FAR_Z
+
+/* Feedback-buffer length (in GLfloats) for scene_probe_eye_dist. The
+ * fixed buffer caps how much geometry can be probed; very dense
+ * scenes simply fall back to cam_dist, which is safe. */
+#define SCENE_PROBE_FEEDBACK_FLOATS (96 * 1024)
+
+/* Half-tangent of the default vertical FOV. Hoisted so the three
+ * call sites in scene_apply_projection don't repeat the same
+ * libm tan() per AA sample. */
+#define SCENE_DEFAULT_HALF_FOVY_TAN \
+    (tan(SCENE_DEFAULT_FOVY_DEG * M_PI / 360.0))
 
 /* Sub-pixel jitter offsets (units: fraction of one pixel).
  * Table is ordered so the first N entries form a good N-sample set.
@@ -158,7 +175,7 @@ void scene_get_active_projection(SceneProjectionDesc *out) {
  * The fixed buffer caps how much geometry can be probed; very dense
  * scenes simply fall back, which is safe. */
 static double scene_probe_eye_dist(const SceneRenderConfig *config) {
-    static GLfloat fb[96 * 1024]; /* ~384 KB; overflow -> cam_dist fallback */
+    static GLfloat fb[SCENE_PROBE_FEEDBACK_FLOATS]; /* ~384 KB; overflow -> cam_dist fallback */
     /* Probe-projection half-extent; >= far_z so nothing the real frustum
      * can show is clipped during the feedback pass. */
     GLint n;
@@ -289,7 +306,8 @@ static void scene_apply_projection(const SceneRenderConfig *config,
     double near_z = SCENE_DEFAULT_NEAR_Z;
     double far_z = SCENE_DEFAULT_FAR_Z;
     double aspect  = (double)config->scene_w / (double)config->scene_h;
-    double persp_top   = near_z * tan(SCENE_DEFAULT_FOVY_DEG * M_PI / 360.0);
+    double half_fovy_tan = SCENE_DEFAULT_HALF_FOVY_TAN;
+    double persp_top   = near_z * half_fovy_tan;
     double persp_right = persp_top * aspect;
     double persp_dx = (double)accum_jitter_x * 2.0 * persp_right /
                       (double)config->scene_w;
@@ -312,7 +330,7 @@ static void scene_apply_projection(const SceneRenderConfig *config,
         g_active_projection.near_z     = near_z;
         g_active_projection.far_z      = far_z;
         g_active_projection.ortho_top  =
-            ortho_ref * tan(SCENE_DEFAULT_FOVY_DEG * M_PI / 360.0);
+            ortho_ref * half_fovy_tan;
         g_active_projection.ortho_near = -far_z;
         g_active_projection.ortho_far  = far_z;
     }
@@ -327,7 +345,7 @@ static void scene_apply_projection(const SceneRenderConfig *config,
         double ortho_ref = (g_ortho_ref_dist > SCENE_PROJECTION_DEPTH_EPSILON)
                                ? g_ortho_ref_dist
                                : (double)config->cam_dist;
-        double ortho_top = ortho_ref * tan(SCENE_DEFAULT_FOVY_DEG * M_PI / 360.0);
+        double ortho_top = ortho_ref * half_fovy_tan;
         double ortho_right = ortho_top * aspect;
         double ortho_dx = (double)accum_jitter_x * 2.0 * ortho_right /
                           (double)config->scene_w;
@@ -382,14 +400,14 @@ static void scene_apply_projection(const SceneRenderConfig *config,
     }
 }
 
-void scene_apply_camera(float rx, float ry, float dist,
-                        float tx, float ty, float tz) {
+void scene_apply_camera(const SceneCameraPose *pose) {
+    if (!pose) return;
     glMatrixMode(GL_MODELVIEW);
     glLoadIdentity();
-    glTranslatef(0.0f, 0.0f, -dist);
-    glRotatef(rx, 1, 0, 0);
-    glRotatef(ry, 0, 1, 0);
-    glTranslatef(-tx, -ty, -tz);
+    glTranslatef(0.0f, 0.0f, -pose->dist);
+    glRotatef(pose->rx, 1, 0, 0);
+    glRotatef(pose->ry, 0, 1, 0);
+    glTranslatef(-pose->tx, -pose->ty, -pose->tz);
 }
 
 static void scene_apply_quality_config(const SceneRenderConfig *config) {

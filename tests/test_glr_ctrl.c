@@ -102,9 +102,8 @@ int test_scene_render_3d_scene(const SceneRenderConfig *config) {
     return 0;
 }
 
-void test_scene_apply_camera(float rx, float ry, float dist,
-                             float tx, float ty, float tz) {
-    (void)rx; (void)ry; (void)dist; (void)tx; (void)ty; (void)tz;
+void test_scene_apply_camera(const SceneCameraPose *pose) {
+    (void)pose;
 }
 
 void test_replay_ui_hud_render(const struct UiRenderSnapshot *snap) {

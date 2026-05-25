@@ -30,13 +30,23 @@
  * those live elsewhere (the tessellator is owned by the executor). */
 void scene_render_init_gl(void);
 
+/* The scene's view of an orbit camera. Pitch / yaw degrees, distance
+ * to target, and target world position. SceneRenderConfig carries
+ * these same fields (cam_rx/ry/dist/tx/ty/tz); the struct exists so
+ * scene_apply_camera takes one typed argument instead of six adjacent
+ * floats that the C type system can't tell apart. */
+typedef struct SceneCameraPose {
+    float rx, ry;       /* orbit pitch and yaw, degrees */
+    float dist;         /* distance from target along the local Z axis */
+    float tx, ty, tz;   /* target world position */
+} SceneCameraPose;
+
 /* Apply the caller's camera as the modelview transform. The caller is
  * responsible for invoking this once per frame before scene_render_3d_scene;
  * the scene module does not own camera state. The transform matches the app's
  * orbit camera convention: translate by distance, apply pitch/yaw, then
  * translate by the target offset. */
-void scene_apply_camera(float rx, float ry, float dist,
-                        float tx, float ty, float tz);
+void scene_apply_camera(const SceneCameraPose *pose);
 
 /* Render the full 3D scene for one frame using an explicit config snapshot.
  * Orchestrates projection setup, camera transforms, user geometry execution,

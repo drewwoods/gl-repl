@@ -163,7 +163,12 @@ static inline void scene_clr_a(SceneColorToken t, float a) {
     glColor4f(c.r, c.g, c.b, c.a * a);
 }
 
-STATIC_ASSERT(SCENE_CLR_COUNT == 32,
-              "SceneColorToken count changed - update g_scene_palette and test_scene_palette");
+/* Table-and-enum agreement: bumping SCENE_CLR_COUNT now only needs
+ * the matching g_scene_palette entry, not a literal-count update.
+ * test_scene_palette still verifies each named token has a non-NaN
+ * RGBA tuple. */
+STATIC_ASSERT(sizeof(g_scene_palette) / sizeof(g_scene_palette[0])
+                  == SCENE_CLR_COUNT,
+              "g_scene_palette length must match SCENE_CLR_COUNT");
 
 #endif /* SCENE_PALETTE_H */
