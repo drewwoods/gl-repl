@@ -56,6 +56,7 @@ void editor_undo_snapshot_save(EditorUndoSnapshot *snapshot) {
         else
             snapshot->func_aliases[slot][0] = '\0';
     }
+    snapshot->generation = g_undo_generation;
 }
 
 void editor_undo_snapshot_restore(const EditorUndoSnapshot *snapshot) {
@@ -121,7 +122,6 @@ void editor_undo_push_snapshot(void) {
     repl_promote_example_if_needed();
 
     editor_undo_snapshot_save(&g_undo_buf[g_undo_head]);
-    g_undo_buf[g_undo_head].generation = g_undo_generation;
     g_undo_head = (g_undo_head + 1) % REPL_UNDO_DEPTH;
     if (g_undo_count < REPL_UNDO_DEPTH)
         g_undo_count++;
@@ -148,7 +148,6 @@ void editor_undo_pop_snapshot(void) {
         }
     }
     editor_undo_snapshot_save(&g_redo_buf[g_redo_head]);
-    g_redo_buf[g_redo_head].generation = g_undo_generation;
     g_redo_head = (g_redo_head + 1) % REPL_UNDO_DEPTH;
     if (g_redo_count < REPL_UNDO_DEPTH)
         g_redo_count++;
@@ -181,7 +180,6 @@ void editor_undo_do_redo(void) {
         }
     }
     editor_undo_snapshot_save(&g_undo_buf[g_undo_head]);
-    g_undo_buf[g_undo_head].generation = g_undo_generation;
     g_undo_head = (g_undo_head + 1) % REPL_UNDO_DEPTH;
     if (g_undo_count < REPL_UNDO_DEPTH)
         g_undo_count++;
