@@ -661,6 +661,9 @@ void glr_audio_shutdown(void) {
         pthread_cond_signal(&g_cv);
         audio_unlock();
         pthread_join(g_worker, NULL);
+        
+        g_inited = 0; /* Clear g_inited immediately so late locks are safe no-ops */
+        
         pthread_cond_destroy(&g_cv);
         pthread_mutex_destroy(&g_mtx);
         g_worker_running = 0;
@@ -668,10 +671,10 @@ void glr_audio_shutdown(void) {
         /* No worker (create failed): nothing was ever loaded. */
         worker_save_state();
         worker_uninit_all();
+        g_inited = 0;
     }
 
     ma_engine_uninit(&g_engine);
-    g_inited       = 0;
     g_music_loaded = 0;
     g_active       = -1;
 }
