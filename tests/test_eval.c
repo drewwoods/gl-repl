@@ -1198,7 +1198,7 @@ static void interactive(void) {
         }
 
         if (strncmp(line, "set ", 4) == 0) {
-            char vname[16]; float val;
+            char vname[REPL_PREDEF_NAME_MAX]; float val;
             if (sscanf(line + 4, "%15s %f", vname, &val) == 2) {
                 int found = 0;
                 for (int i = 0; i < g_num_predef_vars; i++) {

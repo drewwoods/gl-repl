@@ -95,7 +95,7 @@ typedef enum {
 
 typedef struct {
     ReplPredefOpKind kind;
-    char             name[16];
+    char             name[REPL_PREDEF_NAME_MAX];
     float            value;       /* used by SET_VALUE / DECLARE-with-init */
     int              has_value;   /* DECLARE: 1 = with init expression */
 } ReplPredefOp;

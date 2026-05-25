@@ -1962,7 +1962,7 @@ int main() {
         ASSERT_INT("decl per-line overflow: no cmd added", repl_state_document_count(), 0);
         ASSERT_INT("decl per-line overflow: only t registered", g_num_predef_vars, 1);
         for (int i = 0; i <= MAX_NAMES_PER_DECL; i++) {
-            char name[16];
+            char name[REPL_PREDEF_NAME_MAX];
             char label[128];
             snprintf(name, sizeof(name), "v%d", i);
             snprintf(label, sizeof(label), "decl per-line overflow: %s not registered", name);

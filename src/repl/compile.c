@@ -402,7 +402,7 @@ static int compile_rewrite_decl_initializer_text(const char *orig_text,
             const char *seg_end = p;
             const char *name_start;
             const char *name_end;
-            char decl_name[16];
+            char decl_name[REPL_PREDEF_NAME_MAX];
             int decl_len;
 
             while (seg_start < seg_end && isspace((unsigned char)*seg_start))
@@ -861,7 +861,7 @@ ReplCompileResult repl_compile_var_assign(const char *input,
 
     repl_compiled_change_init(out);
 
-    char name[16];
+    char name[REPL_PREDEF_NAME_MAX];
     char index_expr[MAX_LINE_LEN];
     char rhs[MAX_LINE_LEN];
     char comment[MAX_LINE_LEN];
@@ -1830,7 +1830,7 @@ ReplCompileResult repl_compile_for_loop(const char *input,
     ExprVar visible_vars[MAX_EXPR_VARS];
     int visible_nv = collect_visible_vars(pos, visible_vars, MAX_EXPR_VARS, NULL);
 
-    char var_name[16];
+    char var_name[REPL_PREDEF_NAME_MAX];
     float start, end, step;
     const char *body_start = NULL;
     if (!repl_eval_parse_for_header_with_vars(p, var_name, sizeof(var_name),

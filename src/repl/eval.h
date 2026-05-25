@@ -128,7 +128,12 @@
 
 /* ---- Types ------------------------------------------------------------ */
 
+/* REPL_PREDEF_NAME_MAX lives in config.h; fallback here mirrors the
+ * MAX_LINE_LEN pattern so eval.h stays self-contained for single-TU
+ * test builds that skip config.h. */
+#ifndef REPL_PREDEF_NAME_MAX
 #define REPL_PREDEF_NAME_MAX 16
+#endif
 
 static inline int repl_eval_is_ident_start(unsigned char c) {
     return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_';
@@ -216,10 +221,10 @@ void repl_eval_restore_scratch_arrays(
  * snapshot the predef storage without naming g_predef_vars /
  * g_num_predef_vars directly. */
 void repl_eval_copy_predef_vars(float dst_vals[MAX_PREDEF_VARS],
-                                char dst_names[MAX_PREDEF_VARS][16],
+                                char dst_names[MAX_PREDEF_VARS][REPL_PREDEF_NAME_MAX],
                                 int *dst_count);
 void repl_eval_restore_predef_vars(const float src_vals[MAX_PREDEF_VARS],
-                                   const char src_names[MAX_PREDEF_VARS][16],
+                                   const char src_names[MAX_PREDEF_VARS][REPL_PREDEF_NAME_MAX],
                                    int src_count);
 
 /* Values-only snapshot of the live predef table (no names, no count).

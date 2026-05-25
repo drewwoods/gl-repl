@@ -831,7 +831,7 @@ ReplCompileResult editor_compile_for_loop(const char *input,
     ExprVar visible_vars[MAX_EXPR_VARS];
     int visible_nv = collect_visible_vars(pos, visible_vars, MAX_EXPR_VARS, NULL);
 
-    char var_name[16];
+    char var_name[REPL_PREDEF_NAME_MAX];
     float start, end, step;
     const char *body_start;
 

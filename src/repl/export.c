@@ -191,7 +191,7 @@ const char *g_display_header[] = {
  * undeclare and re-declare variables (creating CMD_VAR_DECLARE commands)
  * without losing the saved values from the workspace header. */
 #define MAX_DEFERRED_VAR_VALUES 64
-typedef struct { char name[16]; float value; } DeferredVar;
+typedef struct { char name[REPL_PREDEF_NAME_MAX]; float value; } DeferredVar;
 static DeferredVar g_deferred_var_values[MAX_DEFERRED_VAR_VALUES];
 static int         g_deferred_var_count = 0;
 
@@ -305,7 +305,7 @@ static void emit_scene_name(int *n) {
 
 static int parse_var(const char *args) {
     const char *p = args;
-    char name[16];
+    char name[REPL_PREDEF_NAME_MAX];
     int name_char_idx = 0;
     while (*p && (isalnum((unsigned char)*p) || *p == '_') &&
            name_char_idx < (int)sizeof(name) - 1)
@@ -1022,7 +1022,7 @@ void repl_export_lights_display_line(int i, char *buf, size_t n) {
 
 static void write_for_begin_as_c(FILE *f, const GLCmd *cmd,
                                  const char *source_text) {
-    char var_name[16];
+    char var_name[REPL_PREDEF_NAME_MAX];
     const char *p = source_text;
     int indent = 0;
     while (p[indent] && isspace((unsigned char)p[indent])) indent++;
@@ -1699,7 +1699,7 @@ static int import_parse_predef_decl(const char *line) {
     while (*p) {
         while (*p && isspace((unsigned char)*p)) p++;
 
-        char name[16];
+        char name[REPL_PREDEF_NAME_MAX];
         int ni = 0;
         while (*p && (isalnum((unsigned char)*p) || *p == '_') &&
                ni < (int)sizeof(name) - 1)
@@ -1774,8 +1774,8 @@ static int parse_snippet_declare(const char *args, int *loaded,
         const char *start = p;
         while (*p && (isalnum((unsigned char)*p) || *p == '_')) p++;
         int len = (int)(p - start);
-        if (len <= 0 || len >= 16 || count >= MAX_NAMES_PER_DECL) break;
-        char name[16];
+        if (len <= 0 || len >= REPL_PREDEF_NAME_MAX || count >= MAX_NAMES_PER_DECL) break;
+        char name[REPL_PREDEF_NAME_MAX];
         memcpy(name, start, (size_t)len);
         name[len] = '\0';
         /* Optional `=value` rider. */

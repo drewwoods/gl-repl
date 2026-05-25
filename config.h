@@ -206,6 +206,16 @@
 #define MAX_COMMIT_CMDS 16
 #endif
 
+/* Maximum length of a predefined variable name (including NUL).
+ * Sizes ExprVar.name, undo snapshot name arrays, scene slot snapshots,
+ * compiled-change predef ops, variable-panel drag state, and every
+ * local buffer that holds a parsed identifier destined for the predef
+ * table. Lives here (not in eval.h) so lightweight subsystem headers
+ * can reference it without pulling in REPL eval types. */
+#ifndef REPL_PREDEF_NAME_MAX
+#define REPL_PREDEF_NAME_MAX 16
+#endif
+
 /* Default filename suggested by the "Load Scene…" file prompt
  * (File menu → Load Scene, src/app/glr_actions.c). Also the seed value
  * the prompt's inline-file-prompt module documents in its header. */
