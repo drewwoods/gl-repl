@@ -15,9 +15,9 @@
 
 ## Status (2026-05-25)
 
-**53 of 65 findings done** across the resolution pass:
+**54 of 65 findings done** across the resolution pass:
 - 🔴 **10 / 10** bugs — every red finding closed
-- 🟡 **19 / 25** boundary/drift items
+- 🟡 **20 / 25** boundary/drift items
 - 🟢 **7 / 9** dead-code items
 - 🔵 **17 / 21** structural items (every god-function split closed)
 
@@ -25,7 +25,7 @@ Tests: 7228 → 7463 (+235 from drift tests, new predicate coverage,
 and the SceneRendererState init/independence/AA-invariant tests).
 `check-state-ownership` green; C99 ratchet green; `make test-full`
 and `make test-stubs` on gracemont (real GCC 13.x) both pass at
-the current tip `cc481c2`.
+the current tip `6a6a4cd`.
 
 | Finding | Status | Commit |
 |---|---|---|
@@ -39,7 +39,7 @@ the current tip `cc481c2`.
 | 🔴 #8 underwater push/pop ordering | ✅ disable inside push | `905cb0d` |
 | 🔴 #9 transform_source_unmodified param | ✅ dropped, renamed | `5dd0e65` |
 | 🔴 #10 transitive includes | ✅ explicit math/string/ctype | `5dd0e65` |
-| 🟡 #11 scene_apply_camera placement | ⏸️ deferred — design decision | — |
+| 🟡 #11 scene_apply_camera placement | ✅ moved to glr_camera.c as glr_camera_load_modelview | `6a6a4cd` |
 | 🟡 #12 scene_apply_projection split | ✅ split into compute (once) + apply (per sample) | `89e2b17` |
 | 🟡 #13 include style sweep | ✅ scene/foo.h → foo.h where in-dir | `d30ff28` |
 | 🟡 #14 lights.c gl_includes | ✅ explicit include added | `5dd0e65` |
@@ -97,11 +97,13 @@ the current tip `cc481c2`.
 
 **Deferred work clusters** (each warrants its own session due to scope):
 
-- **State lifting:** #3, #5, #12 all landed in `cc481c2` / `89e2b17`.
-  #11 (internalize scene_apply_camera) is the remaining piece — at
-  this point the renderer state, projection split, and per-renderer
-  ortho ref are all caller-owned, so #11 is a smaller move than the
-  audit originally framed it.
+- **State lifting cluster closed:** #3, #5, #11, #12 all landed
+  (`cc481c2`, `89e2b17`, `6a6a4cd`). Camera apply now lives at
+  src/app/glr_camera.c as glr_camera_load_modelview; renderer state
+  + projection split + per-renderer ortho ref are all caller-owned.
+  Scene module is purely the renderer now — every "scene does not
+  own X" contract the audit flagged is honored by code shape, not
+  convention.
 - **Boundary tightening continued:** #15 (narrow `GL_ALL_ATTRIB_BITS`
   to targeted masks per pass) interacts with #37 (inlining the
   `_push_state` wrappers); the wrappers stay until #15 decides the
