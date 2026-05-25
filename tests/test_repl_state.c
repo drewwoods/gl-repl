@@ -1,7 +1,9 @@
+#define _DEFAULT_SOURCE  /* mkdtemp() */
 #include "app/glr_state.h"
 #include "app/glr_ctrl.h"
 #include "app/glr_actions.h"
 #include "repl/state.h"
+#include "repl/core.h"              /* repl_set_workspace_dir */
 #include "editor/state.h"
 #include "ui/app/state.h"
 #include "app/glr_camera.h"
@@ -16,8 +18,10 @@
 
 #include "support/test_harness.h"
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <math.h>
+#include <unistd.h>
 
 static TestHarness g_harness = TEST_HARNESS_INIT;
 
@@ -648,6 +652,56 @@ static void test_user_scene_load_clears_scene_camera_default(void) {
                 fabsf(cam.ry - 30.0f) < 0.5f);
 }
 
+/* Sibling of test_user_scene_load_clears_scene_camera_default: the
+ * LOAD_WORKSPACE menu path (glr_actions.c) must also clear the per-scene
+ * camera default. Without this, after load-example-with-camera →
+ * load-workspace, a Ctrl+Shift+C still eases to the previous example's
+ * pose instead of the built-in default. */
+static void test_workspace_load_clears_scene_camera_default(void) {
+    char temp_dir[] = "/tmp/test_workspace_camera.XXXXXX";
+    char *dir = mkdtemp(temp_dir);
+    ASSERT_TRUE("mkdtemp workspace dir", dir != NULL);
+    if (!dir) return;
+
+    glr_app_reset_all();
+
+    /* Example 0 has a // camera block → cam_apply_example_block records
+     * the pose as the per-scene camera default. */
+    glr_scene_load_example(0);
+    for (int i = 0; i < 500; i++)
+        glr_camera_tick();
+
+    /* Bind the workspace dir without saving anything to it; the menu
+     * handler reads repl_workspace_dir() and falls through to
+     * repl_load_workspace(dir), which returns 0 on an empty dir. The
+     * bug is whether the menu handler clears the scene camera default
+     * *before* calling repl_load_workspace, not in load itself. */
+    repl_set_workspace_dir(dir);
+
+    int activated = glr_action_menu_item_activate(GLR_MENU_FILE,
+                                                  GLR_FILE_ITEM_LOAD_WORKSPACE);
+    ASSERT_INT("menu LOAD_WORKSPACE activated", activated, 1);
+
+    /* Ctrl+Shift+C → ease_to_default. With the scene default still set
+     * (bug), the camera converges to example 0's pose (dist=6, rx=20,
+     * ry=35). After the fix, it falls back to built-in (dist=5, rx=20,
+     * ry=30). */
+    glr_camera_set(0.0f, 0.0f, 2.0f, 0.0f, 0.0f, 0.0f, 0.0f);
+    glr_camera_ease_to_default();
+    for (int i = 0; i < 500; i++)
+        glr_camera_tick();
+
+    GlrCameraState cam = glr_camera();
+    ASSERT_TRUE("after workspace load, falls back to built-in dist (5)",
+                fabsf(cam.dist - 5.0f) < 0.5f);
+    ASSERT_TRUE("after workspace load, falls back to built-in rx (20)",
+                fabsf(cam.rx - 20.0f) < 0.5f);
+    ASSERT_TRUE("after workspace load, falls back to built-in ry (30)",
+                fabsf(cam.ry - 30.0f) < 0.5f);
+
+    rmdir(dir);
+}
+
 int main(void) {
     printf("--- repl_state tests ---\n");
     test_capture_restore_round_trip();
@@ -660,6 +714,7 @@ int main(void) {
     test_camera_clear_scene_default_falls_back();
     test_example_load_sets_scene_camera_default();
     test_user_scene_load_clears_scene_camera_default();
+    test_workspace_load_clears_scene_camera_default();
     printf("%d / %d tests passed\n", g_harness.passed, g_harness.run);
     return g_harness.passed == g_harness.run ? 0 : 1;
 }

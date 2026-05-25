@@ -14,6 +14,7 @@
 #include "app/glr_defaults.h"   /* CFG_DEFAULT_* */
 #include "support/test_harness.h"
 #include "scene/render.h"
+#include "source_document.h"        /* source_document_insert_line */
 
 #ifdef GL_STUBS
 #include <GL/gl_stub_counts.h>
@@ -720,6 +721,83 @@ int main() {
             ASSERT_INT("5 nested, max_vars=4: total uncapped", total, 5);
             ASSERT_TRUE("5 nested: total > max_vars", total > 4);
         }
+    }
+
+    /* funcN duplicate-def lookup: first-wins.
+     *
+     * The commit pipeline rejects any user-facing path that would create
+     * two CMD_FUNC_DEFs for the same slot (compile.c:1775 / commit.c:654),
+     * so this corruption can only arise from a malformed loaded file or
+     * a future code change that bypasses validation. Even then, the
+     * flatten contract is that the FIRST def wins — matching the
+     * pre-cbe73d2 linear-scan, which `break`-ed out of its scan on the
+     * first match. Any other choice would silently switch the body bound
+     * to a slot when a malformed file is loaded.
+     *
+     * Setup: declare a valid func0 with CMD_VERTEX3F body + a call via
+     * editor_feed_line, then directly append a SECOND CMD_FUNC_DEF for
+     * the same slot 0 with a CMD_COLOR3F body to the document arrays +
+     * editor buffer. The flatten path scans and matches both defs; the
+     * first must win. */
+    {
+        glr_app_reset_all(); declare_test_vars();
+        editor_feed_line("func0(r) {");
+        editor_feed_line("  glVertex3f(r, 0, 0);");
+        editor_feed_line("}");
+        editor_feed_line("func0(7);");
+
+        GLCmd *cmds = repl_state_document_cmds_mut();
+        int n = repl_state_document_count();
+        ASSERT_INT("dup-funcN setup: doc count", n, 4);
+        ASSERT_INT("dup-funcN setup: row 0 is FUNC_DEF",
+                   (int)cmds[0].type, CMD_FUNC_DEF);
+        ASSERT_INT("dup-funcN setup: row 3 is CALL",
+                   (int)cmds[3].type, CMD_CALL);
+
+        /* Append a SECOND CMD_FUNC_DEF at slot 0 with a body that emits
+         * CMD_COLOR3F (different from func0's CMD_VERTEX3F body). The
+         * text on the dup def is "func9(s) {" so parse_repl_func_signature
+         * pulls one parameter; flatten does NOT validate that the text's
+         * funcN token matches args[0], so the args[0]=0 is what flatten
+         * matches against the call. */
+        source_document_insert_line(n,     "func9(s) {");
+        source_document_insert_line(n + 1, "  glColor3f(s, 0, 0);");
+        source_document_insert_line(n + 2, "}");
+
+        GLCmd dup_def    = {0};
+        GLCmd dup_body   = {0};
+        GLCmd dup_end    = {0};
+        dup_def.type     = CMD_FUNC_DEF;
+        dup_def.args[0]  = 0;          /* collide with func0's slot */
+        dup_def.num_args = 1;
+        dup_def.valid    = 1;
+        dup_body.type    = CMD_COLOR3F;
+        dup_body.valid   = 1;
+        dup_body.num_args = 3;         /* r, g, b — flatten resolves args from text */
+        dup_body.has_vars = 1;         /* references "s" param */
+        dup_end.type     = CMD_FUNC_END;
+        dup_end.valid    = 1;
+        cmds[n]     = dup_def;
+        cmds[n + 1] = dup_body;
+        cmds[n + 2] = dup_end;
+        repl_state_document_count_set(n + 3);
+
+        /* Mark source dirty so flatten rebuilds against the appended rows. */
+        repl_state_mark_source_dirty();
+        repl_flatten_commands(editor_state_edit_line());
+
+        const FlatProgramView fv = repl_state_flat_program_view();
+        int found_vertex = 0;
+        int found_color  = 0;
+        for (int k = 0; k < fv.cmd_count; k++) {
+            if (fv.cmds[k].type == CMD_VERTEX3F) found_vertex = 1;
+            if (fv.cmds[k].type == CMD_COLOR3F)  found_color  = 1;
+        }
+        /* First-wins: func0's body (CMD_VERTEX3F at source row 1) is the
+         * expansion of func0(7). The duplicate def's body (CMD_COLOR3F at
+         * source row 5) is ignored even though it appears later. */
+        ASSERT_TRUE("dup-funcN first-wins: vertex emitted",  found_vertex);
+        ASSERT_TRUE("dup-funcN first-wins: color suppressed", !found_color);
     }
 
     printf("\n%d / %d tests passed\n", g_harness.passed, g_harness.run);

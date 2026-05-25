@@ -829,6 +829,43 @@ static void test_config_submenu_right_press(void) {
                   ui_menu_bar_handle_config_right_press(row_mx, row_my).kind, UI_HIT_NONE);
 }
 
+/* Audit #4 cache-correctness regression: submenu_rect caches its result
+ * keyed on (menu_id, parent_row, win_w, win_h). The cache hit path
+ * bypasses the menu_dropdown_rect call that would otherwise enforce
+ * ui_menu_bar_panel_visible(). If the panel becomes invisible while
+ * the cache is warm, the next submenu_rect call must return 0 — not
+ * the stale cached rect — because callers (hit-test, render) gate on
+ * the return code, not the rect contents. */
+static void test_submenu_cache_invalidates_when_panel_hidden(void) {
+    int sx, sy, sw, sh;
+    int parent_mx = -1, parent_my = -1;
+
+    reset_menu_bar_fixture(1000, 600);
+
+    /* Open Config, hover the section-0 parent row to open its flyout,
+     * then call submenu_rect once to warm the cache. */
+    ASSERT_TRUE("Config section-0 parent point found",
+                find_dropdown_item_point(GLR_MENU_CONFIG, 0,
+                                         &parent_mx, &parent_my));
+    ASSERT_TRUE("Config section hover opens flyout",
+                ui_menu_bar_update_pointer_hover(parent_mx, parent_my, 0.0f));
+    ASSERT_TRUE("submenu_rect succeeds while panel visible",
+                ui_menu_bar_submenu_rect_for_test(GLR_MENU_CONFIG, 0,
+                                                  &sx, &sy, &sw, &sh));
+
+    /* Hide the code panel without closing the menu. ui_menu_bar_panel_visible()
+     * now returns 0 (rect collapses to zero width/height). The cache key
+     * (menu_id, parent_row, win_w, win_h) hasn't changed, so a stale
+     * cache hit would still report success. */
+    glr_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_HIDDEN;
+    glr_ctrl_sync_ui_chrome();
+
+    ASSERT_INT_EQ("submenu_rect fails when panel becomes invisible",
+                  ui_menu_bar_submenu_rect_for_test(GLR_MENU_CONFIG, 0,
+                                                    &sx, &sy, &sw, &sh),
+                  0);
+}
+
 int main(void) {
     printf("--- ui_menu_bar tests ---\n");
 
@@ -841,6 +878,7 @@ int main(void) {
     test_msaa_label_dynamic();
     test_dropdown_geometry_pinned();
     test_dropdown_geometry_cache_invariants();
+    test_submenu_cache_invalidates_when_panel_hidden();
     test_dropdown_inert_chrome_hit();
 #endif
     test_unified_hit_test();

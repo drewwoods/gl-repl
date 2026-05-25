@@ -623,15 +623,18 @@ int repl_flatten_program(const ReplFlattenOptions *options,
     }
 
     /* Pre-index funcN definitions so CMD_CALL handlers can jump straight
-     * to the body without scanning source_cmds[] per call. Last-write-wins
-     * if the same slot is defined twice (matches the linear-scan's
-     * behaviour, which kept the final match). */
+     * to the body without scanning source_cmds[] per call. First match
+     * wins: the pre-cbe73d2 linear scan broke on its first match, and
+     * any other choice would silently change which body binds to a slot
+     * when a malformed file slips two CMD_FUNC_DEFs through the
+     * compile-time duplicate check (compile.c:1775 / commit.c:654). */
     for (int s = 0; s < REPL_FUNC_SLOT_COUNT; s++)
         ctx.func_def_idx[s] = -1;
     for (int k = 0; k < ctx.source_count; k++) {
         if (ctx.source_cmds[k].type != CMD_FUNC_DEF) continue;
         int fn = (int)ctx.source_cmds[k].args[0];
-        if (fn >= 0 && fn < REPL_FUNC_SLOT_COUNT)
+        if (fn >= 0 && fn < REPL_FUNC_SLOT_COUNT &&
+            ctx.func_def_idx[fn] < 0)
             ctx.func_def_idx[fn] = k;
     }
 
