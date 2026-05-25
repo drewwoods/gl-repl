@@ -114,6 +114,8 @@ int glr_config_get(GlrConfigKey key) {
  * rows carry GLR_CONFIG_NONE so they never match a real key; callers
  * still guard ->section_header (their miss return differs). */
 static const GlrConfigItem *find_item_by_key(GlrConfigKey key) {
+    if (key == GLR_CONFIG_NONE)
+        return NULL;
     for (int item_idx = 0; item_idx < CFG_ITEM_COUNT; item_idx++)
         if (g_cfg_items[item_idx].key == key)
             return &g_cfg_items[item_idx];
