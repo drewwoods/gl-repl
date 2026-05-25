@@ -1,7 +1,7 @@
 /*
  * tutorial.h - Tutorial runner, commit guards, and match helpers.
  *
- * Drives the built-in guided tutorials: start/exit lifecycle, per-step expected
+ * Drives the built-in guided tutorials: start/stop lifecycle, per-step expected
  * command matching, locked-line protection, fade bookkeeping, and autocomplete-
  * style shadow text for the current step. The runner mutates
  * `TutorialRuntimeState` and coordinates with the load/commit path so tutorial
@@ -45,7 +45,7 @@
 void                 tutorial_start(int idx);
 void                 tutorial_stop(void);
 /* Restore the cfg baseline captured at tutorial_start and reset the runtime
- * state. Called by tutorial_exit, tutorial completion, AND every external
+ * state. Called by tutorial_stop, tutorial completion, AND every external
  * teardown path that previously called tutorial_state_reset() directly
  * (workspace/scene/example load, glr_app_reset_all) so the workspace-load
  * stash never enshrines tutorial-mutated cfg as the new baseline.

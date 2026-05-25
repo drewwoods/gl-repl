@@ -46,6 +46,72 @@ Each finding cites file + line, names the smell, says why it matters,
 and suggests a one-line fix. Cross-peer findings (where the same
 shape recurs in multiple subsystems) carry a **🔀 cross-peer** tag.
 
+## Progress update — 2026-05-25 (`b3af6ca`)
+
+Local verification after the commit: `make test-stubs` passed
+(46/46 test binaries, 7022/7022 tests).
+
+Closed by `b3af6ca`:
+
+- **#1, #2, #3, #5, #6** — Tutorial direct editor/completion writes
+  now route through host effects; tutorial baseline storage lives in
+  `TutorialRuntimeState`; tutorial has capture/restore; replay's
+  parallel runtime statics and macro layer moved into
+  `ReplReplayRuntimeState`.
+- **#4** — Kept as an intentional documented carve-out: tutorial
+  instruction-comment injection still uses `repl_load_apply_line`,
+  while the README narrows the commit-transaction rule to
+  user-driven writes.
+- **#7, #8, #9, #10, #12, #13, #14** — Replay cancellation is now
+  visible, color-picker press docs/behavior agree, header guards are
+  synced, replay dirty-flatten copies are gated, dead color-picker
+  locals are gone, and replay expand toggles through the cfg bridge.
+- **#18, #21, #22, #24, #27, #34, #36, #37, #39, #41, #42, #43,
+  #55** — Explicit color-picker reset exists; variable-panel drag
+  state moved/renamed; tutorial constructor was replaced by explicit
+  init; replay `_impl` trampolines are gone; outside-picker teardown
+  calls `color_picker_stop`; filename/header-comment and dead-code
+  cleanups landed; replay out-params are NULL-tolerant; the stale
+  replay-batch consumer comment was updated.
+
+Partially closed:
+
+- **#11 / #40** — Replay capture/restore is now documented as
+  test/verification-only, and tutorial gained the missing pair.
+  Variable-panel capture/restore still reads like a production
+  full-world contract, so the cross-peer decision is not fully closed.
+- **#15 / #16** — Lifecycle and accessor names moved toward the
+  canonical shape (`tutorial_stop`, `color_picker_start/stop`,
+  `variable_panel_state_mut`). Remaining drift: variable-panel
+  visibility still has both a setter and direct `_mut()` writes, and
+  several docs still mention old names.
+- **#19 / #20** — `EditorVariableDragState` moved to the peer as
+  `VariablePanelDragState`, but `ReplReplayRuntimeState` still lives
+  in `repl/state_views.h`, `UiVariablePanelState` still carries the
+  UI-prefixed name, color-picker still has no runtime-state struct,
+  and `variable_panel_state.h` still includes upper-layer headers.
+- **#23 / #30** — The neutral `repl/cfg_baseline.{c,h}` split landed.
+  Tutorial no longer needs export semantics for the cfg bag, but it
+  still includes `repl/state_owners.h` for document/dirty/time access.
+- **#28** — `replay_advance_tess_depth()` exists and is used in some
+  walkers, but `replay_compute_fade_skip_limits` and
+  `replay_walk_user_vertices` still carry bespoke tess-depth logic.
+- **#59** — Some stale source comments were cleaned up. The
+  post-review stale API-name references found in `MODULES.md`,
+  `src/subsystems/README.md`, `src/subsystems/tutorial/tutorial.h`,
+  and `src/app/glr_ctrl.h` have since been resolved; the broader
+  stale-phase-comment sweep remains a separate cleanup item.
+
+Still open / next highest-value items:
+
+- **#17, #25, #26, #29, #31, #32, #33, #35, #38, #44-#54, #57,
+  #58** remain materially open.
+- **#50** remains open and is worth keeping near the top: replay still
+  duplicates the dirty-flatten/live-var-preserve prologue.
+- The post-review API-rename documentation follow-up under **#59**
+  has been resolved. Keep **#59** open only for the broader stale
+  phase-comment sweep.
+
 ## 🔴 Actual bugs / hazards (verified)
 
 ### 1. Tutorial peer writes directly into editor cursor / insert-mode / completion state

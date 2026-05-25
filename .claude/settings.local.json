@@ -133,7 +133,11 @@
       "Bash(gsed -i 's/glColor4f\\(/tg_color4f\\(/g' src/scene/guides/transform_guides.c)",
       "Bash(./test_scene_palette)",
       "Bash(build/release/test_scene_palette)",
-      "Bash(build/release/test_repl_core_examples)"
+      "Bash(build/release/test_repl_core_examples)",
+      "Bash(./build/release-gl-stubs/test_repl_state)",
+      "Bash(./build/release-gl-stubs/test_glr_actions)",
+      "Bash(./build/release-gl-stubs/test_audio)",
+      "Bash(./build/release/test_repl_state)"
     ]
   }
 }
