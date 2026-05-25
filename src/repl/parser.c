@@ -17,6 +17,12 @@
 #include <stdarg.h>
 #include <stdlib.h>  /* strtod (strict bool-slot numeric literal) */
 
+/* Per-slot text buffer width used by the table-driven enum-command path.
+ * Sizes the scratch arrays that hold one positional argument's raw source
+ * text and its canonicalized emit text. Wide enough for the longest GL
+ * enum token (~30 chars) plus inline expressions. */
+#define ENUM_SLOT_TEXT_MAX 64
+
 /* The parser writes diagnostics to ctx->err_buf when available, and
  * otherwise no-ops; diagnostics never leave the parser as side effects
  * on REPL state. A hard guard prevents set_status calls from returning
@@ -275,7 +281,7 @@ static void format_std_command_text(char *out, int out_sz,
  * top-level fields. The delimiter scan is paren-aware, so expression-
  * accepting enum slots keep inner commas/parentheses intact. */
 static int split_enum_command_args(const char *args, int num_slots,
-                                   char slot_raw[MAX_ENUM_ARGS][64]) {
+                                   char slot_raw[MAX_ENUM_ARGS][ENUM_SLOT_TEXT_MAX]) {
     const char *s = args;
 
     for (int slot = 0; slot < num_slots; slot++) {
@@ -310,7 +316,7 @@ static void format_enum_command_text(char *out, int out_sz,
                                      const char *indent,
                                      const ReplEnumCommandSpec *def,
                                      int num_slots,
-                                     const char slot_emit[MAX_ENUM_ARGS][64]) {
+                                     const char slot_emit[MAX_ENUM_ARGS][ENUM_SLOT_TEXT_MAX]) {
     int off;
 
     if (!out || out_sz <= 0 || !def)
@@ -372,7 +378,7 @@ static int try_parse_table_driven_enum_command(const char *func,
         if (num_slots > MAX_ENUM_ARGS)
             num_slots = MAX_ENUM_ARGS;
 
-        char slot_raw[MAX_ENUM_ARGS][64];
+        char slot_raw[MAX_ENUM_ARGS][ENUM_SLOT_TEXT_MAX];
         if (!split_enum_command_args(args, num_slots, slot_raw)) {
             parser_emit_error_static(ctx, def->args[0].usage
                                      ? def->args[0].usage : "Invalid arguments");
@@ -380,7 +386,7 @@ static int try_parse_table_driven_enum_command(const char *func,
         }
 
         float slot_val[MAX_ENUM_ARGS];
-        char slot_emit[MAX_ENUM_ARGS][64];
+        char slot_emit[MAX_ENUM_ARGS][ENUM_SLOT_TEXT_MAX];
         int any_vars = 0;
         for (int slot = 0; slot < num_slots; slot++) {
             if (!resolve_enum_arg_slot(slot_raw[slot], &def->args[slot],
