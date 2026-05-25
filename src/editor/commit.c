@@ -43,6 +43,8 @@
 #include "repl/state_owners.h"
 #include "repl/source_scope.h"
 
+#include "config.h"           /* REPL_INDENT_TEXT_MAX */
+
 #include <ctype.h>
 #include <stdio.h>
 #include <string.h>
@@ -276,7 +278,7 @@ ReplCompileResult editor_compile_close_brace(const char *input,
         out->effects.load_line_after_apply = 1;
     } else {
         /* Insert-new-end-marker branch. */
-        char indent[32];
+        char indent[REPL_INDENT_TEXT_MAX];
         close_brace_indent(pos, indent, sizeof(indent));
 
         GLCmd fe;
@@ -392,7 +394,7 @@ ReplCompileResult editor_compile_if_block(const char *input,
         return REPL_COMPILE_ERROR;
     }
 
-    char indent[32];
+    char indent[REPL_INDENT_TEXT_MAX];
     repl_source_scope_cmd_indent(pos, indent, sizeof(indent));
 
     /* Build CMD_IF_BEGIN. */
@@ -670,7 +672,7 @@ ReplCompileResult editor_compile_func_def(const char *input,
 
     /* Overwrite-header branch: REPLACE_ONE at the cursor line. */
     if (overwriting_func) {
-        char indent[32];
+        char indent[REPL_INDENT_TEXT_MAX];
         repl_source_scope_cmd_indent(edit_pos, indent, sizeof(indent));
 
         GLCmd updated = ctx->document_cmds[edit_pos];
@@ -726,7 +728,7 @@ ReplCompileResult editor_compile_func_def(const char *input,
     /* A func decl always lives at depth 0, so its indent is the
      * depth-0 indent regardless of the (post-delete) insert position
      * computed below — query the source-scope helper at pos 0. */
-    char indent[32];
+    char indent[REPL_INDENT_TEXT_MAX];
     repl_source_scope_cmd_indent(0, indent, sizeof(indent));
 
     GLCmd fd;
@@ -846,7 +848,7 @@ ReplCompileResult editor_compile_for_loop(const char *input,
     while (*body_start && isspace((unsigned char)*body_start))
         body_start++;
 
-    char indent[32];
+    char indent[REPL_INDENT_TEXT_MAX];
     repl_source_scope_cmd_indent(pos, indent, sizeof(indent));
     int ind = (int)strlen(indent);
 

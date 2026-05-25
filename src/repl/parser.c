@@ -407,7 +407,7 @@ static int try_parse_table_driven_enum_command(const char *func,
             cmd->has_vars = 1;
 
         if (text_out && text_sz > 0) {
-            char ind[32];
+            char ind[REPL_INDENT_TEXT_MAX];
             if (def->indent_type == 1) {
                 repl_source_scope_begin_indent(source_line_idx, ind,
                                                sizeof(ind));
@@ -827,7 +827,7 @@ static int parse_func_call(const char *args, int fn, GLCmd *cmd,
     cmd->num_args = arg_count;
     cmd->has_vars = input_has_any_visible_vars(args, vars, num_vars);
 
-    char ind_str[32];
+    char ind_str[REPL_INDENT_TEXT_MAX];
     repl_source_scope_cmd_indent(source_line_idx, ind_str, (int)sizeof(ind_str));
 
     char raw_args[MAX_LINE_LEN];
@@ -930,7 +930,7 @@ static int parse_command(const char *line, GLCmd *cmd,
         cmd->valid = 1;
         cmd->is_auto = 0;
         cmd->num_args = 0;
-        char indent[32];
+        char indent[REPL_INDENT_TEXT_MAX];
         repl_source_scope_cmd_indent(source_line_idx, indent, sizeof(indent));
         WRITE_TEXT("%s%s", indent, p);
         return 1;
@@ -991,14 +991,14 @@ static int parse_command(const char *line, GLCmd *cmd,
     }
 
     /* Indent for gl commands: 2 + 2*tess + 2*begin */
-    char indent_buf[32];
+    char indent_buf[REPL_INDENT_TEXT_MAX];
     repl_source_scope_cmd_indent(source_line_idx, indent_buf, sizeof(indent_buf));
     const char *indent = indent_buf;
 
     /* Indent for glu (tessellator) commands: 2 + 2*tess only.
      * glu commands belong to the tessellator scope, not the GL vertex block,
      * so glBegin depth is intentionally excluded. */
-    char tess_indent_buf[32];
+    char tess_indent_buf[REPL_INDENT_TEXT_MAX];
     repl_source_scope_cmd_tess_indent(source_line_idx, tess_indent_buf, sizeof(tess_indent_buf));
     const char *tess_indent = tess_indent_buf;
 
@@ -1135,7 +1135,7 @@ static int parse_command(const char *line, GLCmd *cmd,
         cmd->type = CMD_TESS_END;
         cmd->valid = 1;
         {
-            char close_ind[32];
+            char close_ind[REPL_INDENT_TEXT_MAX];
             repl_source_scope_tess_close_indent(source_line_idx, close_ind,
                                                 (int)sizeof(close_ind));
             WRITE_TEXT("%sgluEnd();", close_ind);
@@ -1188,7 +1188,7 @@ static int parse_command(const char *line, GLCmd *cmd,
             cmd->type = CMD_GOTO;
             cmd->valid = 1;
             {
-                char ind_str[32];
+                char ind_str[REPL_INDENT_TEXT_MAX];
                 repl_source_scope_cmd_indent(source_line_idx, ind_str,
                                              (int)sizeof(ind_str));
                 WRITE_TEXT("%sgoto %s;", ind_str, clean_lname);

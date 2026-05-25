@@ -34,6 +34,10 @@
 
 #include "repl/command.h"
 
+/* REPL_INDENT_TEXT_MAX (the shared indent-buffer capacity for callers of
+ * the *_indent helpers below) lives in config.h so editor / UI code can
+ * size their indent buffers without pulling in this header. */
+
 /* Invalidate the prefix-depth cache. Called whenever the source command array
  * changes (e.g., after insert, delete, or edit) to force recomputation of block
  * depths on the next query. */
