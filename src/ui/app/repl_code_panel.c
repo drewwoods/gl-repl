@@ -226,7 +226,6 @@ static int repl_code_panel_header_row_count(const UiRenderSnapshot *snap,
 static int repl_code_panel_footer_row_count(const UiRenderSnapshot *snap,
                                             int panel_w, int text_x) {
     int rows = 0;
-    char line[MAX_LINE_LEN];
 
     if (!repl_code_panel_chrome_visible(snap))
         return 0;
@@ -261,15 +260,81 @@ static int repl_code_panel_leading_ws_chars(const char *text) {
     return count;
 }
 
+static int repl_code_panel_input_first_x(const UiRenderSnapshot *snap,
+                                         int text_x) {
+    return text_x + snap->active_indent_chars * FONT_W;
+}
+
+static int repl_code_panel_current_input_rows(const UiRenderSnapshot *snap,
+                                              int panel_w, int text_x) {
+    return repl_code_panel_row_count(snap,
+                                     snap->editor_input.input,
+                                     repl_code_panel_input_first_x(snap, text_x),
+                                     panel_w);
+}
+
+static int repl_code_panel_virtual_row_count_for_line(
+    const UiRenderSnapshot *snap, int line_idx) {
+    int count = 0;
+
+    if (!snap || !snap->editor_virtual_lines)
+        return 0;
+
+    for (int i = 0; i < snap->editor_virtual_lines->count; i++) {
+        if (snap->editor_virtual_lines->items[i].after_line_idx == line_idx)
+            count++;
+    }
+
+    return count;
+}
+
+/* Shared doc-line math: these helpers turn the precomputed per-command
+ * layout counts into either a prefix sum (rows before a command) or the
+ * last visible row inside a command block (command rows + replay extras). */
+static int repl_code_panel_rows_before_cmd(const int *cmd_main_rows,
+                                           const int *replay_extra_rows,
+                                           int cmd_limit) {
+    int rows = 0;
+
+    for (int i = 0; i < cmd_limit; i++) {
+        rows += cmd_main_rows[i];
+        rows += replay_extra_rows[i];
+    }
+
+    return rows;
+}
+
+static int repl_code_panel_last_row_offset_for_cmd(const int *cmd_main_rows,
+                                                   const int *replay_extra_rows,
+                                                   int cmd_idx) {
+    int block_rows = cmd_main_rows[cmd_idx] + replay_extra_rows[cmd_idx];
+
+    return block_rows > 0 ? block_rows - 1 : 0;
+}
+
+/* Doc-line lookup has several success exits (insert row, command row,
+ * replay virtual row, trailing newline row). Funnel them through one
+ * helper so each branch only states which logical row it resolved to. */
+static int repl_code_panel_return_target_result(int *out_target,
+                                                int *out_on_insert_line,
+                                                int *out_row_offset,
+                                                int target,
+                                                int on_insert_line,
+                                                int row_offset) {
+    if (out_target)
+        *out_target = target;
+    if (out_on_insert_line)
+        *out_on_insert_line = on_insert_line;
+    if (out_row_offset)
+        *out_row_offset = row_offset;
+    return 1;
+}
+
 static int repl_code_panel_command_main_rows(const UiRenderSnapshot *snap,
                                              int cmd_idx, int panel_w,
                                              int text_x) {
     if (!snap->editor_input.insert_mode && cmd_idx == snap->edit_line) {
-        int indent_chars = snap->active_indent_chars;
-        return repl_code_panel_row_count(snap,
-                                         snap->editor_input.input,
-                                         text_x + indent_chars * FONT_W,
-                                         panel_w);
+        return repl_code_panel_current_input_rows(snap, panel_w, text_x);
     }
 
     {
@@ -286,38 +351,21 @@ static void repl_code_panel_precompute_layout_rows(const UiRenderSnapshot *snap,
         if (main_rows)
             main_rows[i] = repl_code_panel_command_main_rows(snap, i, panel_w,
                                                              text_x);
-        if (replay_extra_rows) {
-            int v_count = 0;
-            if (snap->editor_virtual_lines) {
-                for (int v = 0; v < snap->editor_virtual_lines->count; v++) {
-                    if (snap->editor_virtual_lines->items[v].after_line_idx == i) {
-                        v_count++;
-                    }
-                }
-            }
-            replay_extra_rows[i] = v_count;
-        }
+        if (replay_extra_rows)
+            replay_extra_rows[i] =
+                repl_code_panel_virtual_row_count_for_line(snap, i);
     }
 }
 
 static int repl_code_panel_insert_rows(const UiRenderSnapshot *snap,
                                        int panel_w, int text_x) {
-    int indent_chars = snap->active_indent_chars;
-    return repl_code_panel_row_count(snap,
-                                     snap->editor_input.input,
-                                     text_x + indent_chars * FONT_W,
-                                     panel_w);
+    return repl_code_panel_current_input_rows(snap, panel_w, text_x);
 }
 
 static int repl_code_panel_trailing_row_count(const UiRenderSnapshot *snap,
                                         int panel_w, int text_x) {
-    if (snap->edit_line == snap->document_count) {
-        int indent_chars = snap->active_indent_chars;
-        return repl_code_panel_row_count(snap,
-                                         snap->editor_input.input,
-                                         text_x + indent_chars * FONT_W,
-                                         panel_w);
-    }
+    if (snap->edit_line == snap->document_count)
+        return repl_code_panel_current_input_rows(snap, panel_w, text_x);
     return 1;
 }
 
@@ -325,8 +373,6 @@ static int repl_code_panel_cursor_doc_line_from_layout(
     const UiRenderSnapshot *snap,
     int header_rows, const int *cmd_main_rows, const int *replay_extra_rows,
     int panel_w, int text_x) {
-    int cursor_doc_line = header_rows;
-
     /* The three former branches (insert mode / in-range edit line /
      * out-of-range fallback) all summed the same prefix and then added
      * the identical cursor-row term. The prefix length is the same in
@@ -336,41 +382,34 @@ static int repl_code_panel_cursor_doc_line_from_layout(
      * min. So the dispatch was redundant. */
     int prefix = (snap->edit_line < snap->document_count)
                      ? snap->edit_line : snap->document_count;
-    for (int i = 0; i < prefix; i++) {
-        cursor_doc_line += cmd_main_rows[i];
-        cursor_doc_line += replay_extra_rows[i];
-    }
-    cursor_doc_line += repl_code_panel_cursor_row(
-        snap,
-        snap->editor_input.input,
-        text_x + snap->active_indent_chars * FONT_W,
-        panel_w, snap->editor_input.cursor_pos, NULL, NULL, NULL);
 
-    return cursor_doc_line;
+    return header_rows +
+           repl_code_panel_rows_before_cmd(cmd_main_rows, replay_extra_rows,
+                                           prefix) +
+           repl_code_panel_cursor_row(snap,
+                                      snap->editor_input.input,
+                                      repl_code_panel_input_first_x(snap, text_x),
+                                      panel_w,
+                                      snap->editor_input.cursor_pos,
+                                      NULL, NULL, NULL);
 }
 
 static int repl_code_panel_follow_doc_line_from_layout(
     const UiRenderSnapshot *snap,
     int cursor_doc_line, int header_rows, const int *cmd_main_rows,
     const int *replay_extra_rows) {
-    int follow_doc_line = cursor_doc_line;
     int src_line = snap->replay.src_line_idx;
 
-    if (snap->replay.active && src_line >= 0 && src_line < snap->document_count) {
-        follow_doc_line = header_rows;
-        for (int i = 0; i < src_line; i++) {
-            follow_doc_line += cmd_main_rows[i];
-            follow_doc_line += replay_extra_rows[i];
-        }
-        if (replay_extra_rows[src_line] > 0) {
-            follow_doc_line += cmd_main_rows[src_line];
-            follow_doc_line += replay_extra_rows[src_line] - 1;
-        } else if (cmd_main_rows[src_line] > 0) {
-            follow_doc_line += cmd_main_rows[src_line] - 1;
-        }
-    }
+    if (!(snap->replay.active &&
+          src_line >= 0 && src_line < snap->document_count))
+        return cursor_doc_line;
 
-    return follow_doc_line;
+    return header_rows +
+           repl_code_panel_rows_before_cmd(cmd_main_rows, replay_extra_rows,
+                                           src_line) +
+           repl_code_panel_last_row_offset_for_cmd(cmd_main_rows,
+                                                   replay_extra_rows,
+                                                   src_line);
 }
 
 int ui_repl_code_panel_visible_lines_for_height(int cp_h, int top_chrome_h) {
@@ -433,45 +472,45 @@ int ui_repl_code_panel_target_for_doc_line(const UiRenderSnapshot *snap,
     if (row < 0)
         return 0;
 
+    /* Consume rows in the same order the panel emits them after the
+     * header chrome: optional insert row, command body rows, replay
+     * virtual rows, then the trailing newline/input slot. */
     for (int cmd_idx = 0; cmd_idx <= snap->document_count; cmd_idx++) {
         if (snap->editor_input.insert_mode && cmd_idx == snap->edit_line) {
             int insert_rows = repl_code_panel_insert_rows(snap, layout->panel_w,
                                                           layout->text_x);
-            if (row < insert_rows) {
-                if (out_target) *out_target = -1;
-                if (out_on_insert_line) *out_on_insert_line = 1;
-                if (out_row_offset) *out_row_offset = row;
-                return 1;
-            }
+            if (row < insert_rows)
+                return repl_code_panel_return_target_result(out_target,
+                                                            out_on_insert_line,
+                                                            out_row_offset,
+                                                            -1, 1, row);
             row -= insert_rows;
         }
 
         if (cmd_idx < snap->document_count) {
             int main_rows = layout->cmd_main_rows[cmd_idx];
-            if (row < main_rows) {
-                if (out_target) *out_target = cmd_idx;
-                if (out_on_insert_line) *out_on_insert_line = 0;
-                if (out_row_offset) *out_row_offset = row;
-                return 1;
-            }
+            if (row < main_rows)
+                return repl_code_panel_return_target_result(out_target,
+                                                            out_on_insert_line,
+                                                            out_row_offset,
+                                                            cmd_idx, 0, row);
             row -= main_rows;
 
-            if (row < layout->replay_extra_rows[cmd_idx]) {
-                if (out_target) *out_target = cmd_idx;
-                if (out_on_insert_line) *out_on_insert_line = 0;
-                if (out_row_offset) *out_row_offset = 0;
-                return 1;
-            }
+            if (row < layout->replay_extra_rows[cmd_idx])
+                return repl_code_panel_return_target_result(out_target,
+                                                            out_on_insert_line,
+                                                            out_row_offset,
+                                                            cmd_idx, 0, 0);
             row -= layout->replay_extra_rows[cmd_idx];
         } else {
             int newline_rows = repl_code_panel_trailing_row_count(snap, layout->panel_w,
                                                             layout->text_x);
-            if (row < newline_rows) {
-                if (out_target) *out_target = snap->document_count;
-                if (out_on_insert_line) *out_on_insert_line = 0;
-                if (out_row_offset) *out_row_offset = row;
-                return 1;
-            }
+            if (row < newline_rows)
+                return repl_code_panel_return_target_result(out_target,
+                                                            out_on_insert_line,
+                                                            out_row_offset,
+                                                            snap->document_count,
+                                                            0, row);
             return 0;
         }
     }
@@ -1266,178 +1305,290 @@ static void repl_code_panel_add_virtual_rows(ReplCodePanelBuilder *builder,
     }
 }
 
+/* One-pass row emission carries a small source-order state machine for
+ * vertex numbering and "exact vs maybe-loop-expanded" labels. Keep it
+ * local to the builder path so the begin/end ordering stays obvious. */
+typedef struct {
+    int vnum;
+    int loop_depth;
+    int tess_depth;
+    int in_tess_poly;
+    int primitive_vnums_exact;
+} ReplCodePanelWalkState;
+
+static void repl_code_panel_add_static_null_terminated_lines(
+    ReplCodePanelBuilder *builder,
+    const char *const *lines,
+    UiTextPanelColor color) {
+    if (!builder || !lines)
+        return;
+
+    for (int i = 0; lines[i]; i++)
+        repl_code_panel_add_static_row(builder, lines[i], color);
+}
+
+static void repl_code_panel_add_static_buffer_lines(
+    ReplCodePanelBuilder *builder,
+    int count,
+    size_t line_size,
+    const char lines[count][line_size],
+    UiTextPanelColor color) {
+    if (!builder || !lines)
+        return;
+
+    for (int i = 0; i < count; i++)
+        repl_code_panel_add_static_row(builder, lines[i], color);
+}
+
+static void repl_code_panel_add_header_rows(ReplCodePanelBuilder *builder) {
+    const UiRenderSnapshot *snap;
+
+    if (!builder || !builder->snap)
+        return;
+
+    snap = builder->snap;
+    if (!repl_code_panel_chrome_visible(snap))
+        return;
+
+    repl_code_panel_add_static_buffer_lines(
+        builder,
+        snap->import_export.workspace_header_line_count,
+        sizeof(snap->import_export.workspace_header_lines[0]),
+        snap->import_export.workspace_header_lines,
+        repl_code_panel_rgb(0.45f, 0.55f, 0.42f));
+    repl_code_panel_add_static_null_terminated_lines(
+        builder, g_header_pre,
+        repl_code_panel_rgb(REPL_CODE_PANEL_CHROME_RGB));
+    repl_code_panel_add_static_null_terminated_lines(
+        builder, g_display_header,
+        repl_code_panel_rgb(REPL_CODE_PANEL_CHROME_RGB));
+
+    /* Scratch decoration row: panel-only (the exporter emits the
+     * arrays as file-scope statics on demand instead). */
+    repl_code_panel_add_static_row(
+        builder, REPL_CODE_PANEL_SCRATCH_DECL_LINE,
+        repl_code_panel_category_color(CMD_VAR_DECLARE));
+
+    repl_code_panel_add_static_buffer_lines(
+        builder,
+        RENDER_STATE_LINE_COUNT,
+        sizeof(snap->import_export.render_state_lines[0]),
+        snap->import_export.render_state_lines,
+        repl_code_panel_rgb(REPL_CODE_PANEL_STATE_RGB));
+    repl_code_panel_add_static_buffer_lines(
+        builder,
+        CAM_LINE_COUNT,
+        sizeof(snap->import_export.cam_lines[0]),
+        snap->import_export.cam_lines,
+        repl_code_panel_rgb(REPL_CODE_PANEL_STATE_RGB));
+    repl_code_panel_add_static_buffer_lines(
+        builder,
+        snap->lights_display_count,
+        sizeof(snap->lights_display_lines[0]),
+        snap->lights_display_lines,
+        repl_code_panel_rgb(REPL_CODE_PANEL_STATE_RGB));
+    repl_code_panel_add_static_null_terminated_lines(
+        builder, g_header_post,
+        repl_code_panel_rgb(REPL_CODE_PANEL_CHROME_RGB));
+}
+
+static void repl_code_panel_add_footer_rows(ReplCodePanelBuilder *builder) {
+    const UiRenderSnapshot *snap;
+
+    if (!builder || !builder->snap)
+        return;
+
+    snap = builder->snap;
+    if (!repl_code_panel_chrome_visible(snap))
+        return;
+
+    for (int i = 0; g_footer_pre_init[i]; i++) {
+        if (strcmp(g_footer_pre_init[i],
+                   REPL_EXPORT_RESHAPE_PROJ_SENTINEL) == 0) {
+            /* Frame-frozen in the snapshot by the controller; its
+             * storage outlives this render, so add_static_row may hold
+             * the pointer directly (like the literal g_footer lines).
+             * Same block the row-count pass read, so they agree. */
+            repl_code_panel_add_static_buffer_lines(
+                builder,
+                snap->reshape_proj_count,
+                sizeof(snap->reshape_proj_lines[0]),
+                snap->reshape_proj_lines,
+                repl_code_panel_rgb(REPL_CODE_PANEL_CHROME_RGB));
+            continue;
+        }
+        repl_code_panel_add_static_row(
+            builder, g_footer_pre_init[i],
+            repl_code_panel_rgb(REPL_CODE_PANEL_CHROME_RGB));
+    }
+
+    repl_code_panel_add_static_buffer_lines(
+        builder,
+        snap->init_section_count,
+        sizeof(snap->init_section_lines[0]),
+        snap->init_section_lines,
+        repl_code_panel_rgb(REPL_CODE_PANEL_CHROME_RGB));
+    repl_code_panel_add_static_null_terminated_lines(
+        builder, g_footer_post_init,
+        repl_code_panel_rgb(REPL_CODE_PANEL_CHROME_RGB));
+}
+
+static void repl_code_panel_begin_walk_line(ReplCodePanelWalkState *state,
+                                            const GLCmd *cmd) {
+    if (!state || !cmd || !cmd->valid)
+        return;
+
+    /* Opening a primitive/tess polygon resets numbering before the row
+     * is emitted so the current source line and the following vertices
+     * already see the new numbering regime. */
+    if (cmd->type == CMD_BEGIN) {
+        state->vnum = 0;
+        state->primitive_vnums_exact = (state->loop_depth == 0);
+    } else if (cmd->type == CMD_TESS_BEGIN_POLYGON) {
+        state->vnum = 0;
+        state->in_tess_poly = 1;
+        state->tess_depth = 1;
+        state->primitive_vnums_exact = (state->loop_depth == 0);
+    }
+}
+
+static void repl_code_panel_vertex_aux_label(const UiRenderSnapshot *snap,
+                                             const ReplCodePanelWalkState *state,
+                                             int is_vertex,
+                                             char out_label[8]) {
+    if (!out_label)
+        return;
+
+    out_label[0] = '\0';
+    if (!snap || !state || !snap->code_panel.show_vertex_indices || !is_vertex)
+        return;
+
+    snprintf(out_label, 8,
+             state->primitive_vnums_exact ? "v%d" : "vn",
+             state->vnum);
+}
+
+static void repl_code_panel_end_walk_line(ReplCodePanelWalkState *state,
+                                          const GLCmd *cmd,
+                                          int is_vertex) {
+    if (!state || !cmd)
+        return;
+
+    if (is_vertex)
+        state->vnum++;
+    if (!cmd->valid)
+        return;
+
+    /* Closing/unwinding commands advance after the row is emitted: the
+     * line itself still belongs to the old context, and only later rows
+     * should see the unwound state. */
+    switch (cmd->type) {
+    case CMD_FOR_BEGIN:
+        state->loop_depth++;
+        state->primitive_vnums_exact = 0;
+        break;
+    case CMD_FOR_END:
+        if (state->loop_depth > 0)
+            state->loop_depth--;
+        break;
+    case CMD_END:
+        state->primitive_vnums_exact = 1;
+        break;
+    case CMD_TESS_BEGIN_CONTOUR:
+        if (state->in_tess_poly)
+            state->tess_depth++;
+        break;
+    case CMD_TESS_END:
+        if (state->in_tess_poly) {
+            if (state->tess_depth > 0)
+                state->tess_depth--;
+            if (state->tess_depth == 0) {
+                state->in_tess_poly = 0;
+                state->primitive_vnums_exact = 1;
+            }
+        }
+        break;
+    default:
+        break;
+    }
+}
+
+static void repl_code_panel_add_rows_for_line(ReplCodePanelBuilder *builder,
+                                              ReplCodePanelWalkState *state,
+                                              int line_idx) {
+    const UiRenderSnapshot *snap;
+    const GLCmd *cmd;
+    int is_edit;
+    int is_vertex;
+    char aux_label[8];
+
+    if (!builder || !builder->snap || !state)
+        return;
+
+    snap = builder->snap;
+    cmd = &snap->document_cmds[line_idx];
+
+    if (snap->editor_input.insert_mode && line_idx == snap->edit_line) {
+        repl_code_panel_add_input_row(builder, -1, snap->edit_line,
+                                      snap->active_indent_chars, line_idx,
+                                      NULL);
+    }
+
+    repl_code_panel_begin_walk_line(state, cmd);
+
+    is_edit = (!snap->editor_input.insert_mode && line_idx == snap->edit_line);
+    is_vertex = cmd->valid && repl_cmd_emits_vertex(cmd->type);
+    repl_code_panel_vertex_aux_label(snap, state, is_vertex, aux_label);
+
+    if (is_edit) {
+        repl_code_panel_add_input_row(builder, line_idx, -1,
+                                      snap->active_indent_chars, line_idx,
+                                      aux_label[0] ? aux_label : NULL);
+    } else {
+        repl_code_panel_add_command_row(builder, line_idx, is_vertex,
+                                        state->vnum,
+                                        state->primitive_vnums_exact);
+    }
+
+    repl_code_panel_add_virtual_rows(builder, line_idx);
+    repl_code_panel_end_walk_line(state, cmd, is_vertex);
+}
+
+static void repl_code_panel_add_trailing_document_row(
+    ReplCodePanelBuilder *builder) {
+    const UiRenderSnapshot *snap;
+
+    if (!builder || !builder->snap)
+        return;
+
+    snap = builder->snap;
+    if (snap->edit_line == snap->document_count) {
+        repl_code_panel_add_input_row(builder, -1, snap->document_count,
+                                      snap->active_indent_chars,
+                                      snap->document_count, NULL);
+        return;
+    }
+
+    repl_code_panel_add_placeholder_row(builder, snap->document_count,
+                                        snap->trailing_indent_chars);
+}
+
 static void repl_code_panel_build_rows(ReplCodePanelBuilder *builder) {
     const UiRenderSnapshot *snap;
-    int vnum = 0;
-    int loop_depth = 0;
-    int tess_depth = 0;
-    int in_tess_poly = 0;
-    int primitive_vnums_exact = 1;
+    ReplCodePanelWalkState walk = { .primitive_vnums_exact = 1 };
 
     if (!builder || !builder->snap)
         return;
 
     snap = builder->snap;
 
-    if (repl_code_panel_chrome_visible(snap)) {
-        for (int i = 0; i < snap->import_export.workspace_header_line_count; i++) {
-            repl_code_panel_add_static_row(
-                builder,
-                snap->import_export.workspace_header_lines[i],
-                repl_code_panel_rgb(0.45f, 0.55f, 0.42f));
-        }
-        for (int i = 0; g_header_pre[i]; i++) {
-            repl_code_panel_add_static_row(
-                builder, g_header_pre[i],
-                repl_code_panel_rgb(REPL_CODE_PANEL_CHROME_RGB));
-        }
-        for (int i = 0; g_display_header[i]; i++) {
-            repl_code_panel_add_static_row(
-                builder, g_display_header[i],
-                repl_code_panel_rgb(REPL_CODE_PANEL_CHROME_RGB));
-        }
-        /* Scratch decoration row: panel-only (the exporter emits the
-         * arrays as file-scope statics on demand instead). */
-        repl_code_panel_add_static_row(
-            builder, REPL_CODE_PANEL_SCRATCH_DECL_LINE,
-            repl_code_panel_category_color(CMD_VAR_DECLARE));
-        for (int i = 0; i < RENDER_STATE_LINE_COUNT; i++) {
-            repl_code_panel_add_static_row(
-                builder,
-                snap->import_export.render_state_lines[i],
-                repl_code_panel_rgb(REPL_CODE_PANEL_STATE_RGB));
-        }
-        for (int i = 0; i < CAM_LINE_COUNT; i++) {
-            repl_code_panel_add_static_row(
-                builder,
-                snap->import_export.cam_lines[i],
-                repl_code_panel_rgb(REPL_CODE_PANEL_STATE_RGB));
-        }
-        for (int i = 0; i < snap->lights_display_count; i++) {
-            repl_code_panel_add_static_row(builder, snap->lights_display_lines[i],
-                                           repl_code_panel_rgb(REPL_CODE_PANEL_STATE_RGB));
-        }
-        for (int i = 0; g_header_post[i]; i++) {
-            repl_code_panel_add_static_row(
-                builder, g_header_post[i],
-                repl_code_panel_rgb(REPL_CODE_PANEL_CHROME_RGB));
-        }
-    }
+    repl_code_panel_add_header_rows(builder);
 
-    for (int i = 0; i < snap->document_count; i++) {
-        int is_edit;
-        int is_vertex;
-        char aux_label[8] = "";
+    for (int i = 0; i < snap->document_count; i++)
+        repl_code_panel_add_rows_for_line(builder, &walk, i);
 
-        if (snap->editor_input.insert_mode && i == snap->edit_line) {
-            repl_code_panel_add_input_row(builder, -1, snap->edit_line,
-                                          snap->active_indent_chars, i, NULL);
-        }
-
-        if (snap->document_cmds[i].valid) {
-            if (snap->document_cmds[i].type == CMD_BEGIN) {
-                vnum = 0;
-                primitive_vnums_exact = (loop_depth == 0);
-            } else if (snap->document_cmds[i].type == CMD_TESS_BEGIN_POLYGON) {
-                vnum = 0;
-                in_tess_poly = 1;
-                tess_depth = 1;
-                primitive_vnums_exact = (loop_depth == 0);
-            }
-        }
-
-        is_edit = (!snap->editor_input.insert_mode && i == snap->edit_line);
-        is_vertex = snap->document_cmds[i].valid &&
-                    repl_cmd_emits_vertex(snap->document_cmds[i].type);
-
-        if (snap->code_panel.show_vertex_indices && is_vertex) {
-            snprintf(aux_label, sizeof(aux_label),
-                     primitive_vnums_exact ? "v%d" : "vn", vnum);
-        }
-
-        if (is_edit) {
-            repl_code_panel_add_input_row(builder, i, -1,
-                                          snap->active_indent_chars, i,
-                                          aux_label[0] ? aux_label : NULL);
-        } else {
-            repl_code_panel_add_command_row(builder, i, is_vertex, vnum,
-                                            primitive_vnums_exact);
-        }
-
-        repl_code_panel_add_virtual_rows(builder, i);
-
-        if (is_vertex)
-            vnum++;
-        if (snap->document_cmds[i].valid) {
-            switch (snap->document_cmds[i].type) {
-            case CMD_FOR_BEGIN:
-                loop_depth++;
-                primitive_vnums_exact = 0;
-                break;
-            case CMD_FOR_END:
-                if (loop_depth > 0)
-                    loop_depth--;
-                break;
-            case CMD_END:
-                primitive_vnums_exact = 1;
-                break;
-            case CMD_TESS_BEGIN_CONTOUR:
-                if (in_tess_poly)
-                    tess_depth++;
-                break;
-            case CMD_TESS_END:
-                if (in_tess_poly) {
-                    if (tess_depth > 0)
-                        tess_depth--;
-                    if (tess_depth == 0) {
-                        in_tess_poly = 0;
-                        primitive_vnums_exact = 1;
-                    }
-                }
-                break;
-            default:
-                break;
-            }
-        }
-    }
-
-    if (snap->edit_line == snap->document_count) {
-        repl_code_panel_add_input_row(builder, -1, snap->document_count,
-                                      snap->active_indent_chars,
-                                      snap->document_count, NULL);
-    } else {
-        repl_code_panel_add_placeholder_row(builder, snap->document_count,
-                                            snap->trailing_indent_chars);
-    }
-
-    if (repl_code_panel_chrome_visible(snap)) {
-        for (int i = 0; g_footer_pre_init[i]; i++) {
-            if (strcmp(g_footer_pre_init[i],
-                       REPL_EXPORT_RESHAPE_PROJ_SENTINEL) == 0) {
-                /* Frame-frozen in the snapshot by the controller; its
-                 * storage outlives this render, so add_static_row may hold
-                 * the pointer directly (like the literal g_footer lines).
-                 * Same block the row-count pass read, so they agree. */
-                for (int j = 0; j < snap->reshape_proj_count; j++)
-                    repl_code_panel_add_static_row(
-                        builder, snap->reshape_proj_lines[j],
-                        repl_code_panel_rgb(REPL_CODE_PANEL_CHROME_RGB));
-                continue;
-            }
-            repl_code_panel_add_static_row(
-                builder, g_footer_pre_init[i],
-                repl_code_panel_rgb(REPL_CODE_PANEL_CHROME_RGB));
-        }
-        for (int i = 0; i < snap->init_section_count; i++) {
-            repl_code_panel_add_static_row(builder, snap->init_section_lines[i],
-                                           repl_code_panel_rgb(REPL_CODE_PANEL_CHROME_RGB));
-        }
-        for (int i = 0; g_footer_post_init[i]; i++) {
-            repl_code_panel_add_static_row(
-                builder, g_footer_post_init[i],
-                repl_code_panel_rgb(REPL_CODE_PANEL_CHROME_RGB));
-        }
-    }
+    repl_code_panel_add_trailing_document_row(builder);
+    repl_code_panel_add_footer_rows(builder);
 
     builder->text_snap.row_count = builder->row_count;
 }
@@ -1561,6 +1712,12 @@ static ReplStatusbarHints repl_code_panel_statusbar_hints(
     h.help_visible  = (h.help_kx  >= left_end + gap);
     h.focus_visible = (h.focus_kx >= left_end + gap);
     return h;
+}
+
+static int repl_code_panel_point_in_rect(int px, int py,
+                                         int rx, int ry, int rw, int rh) {
+    return px >= rx && px < rx + rw &&
+           py >= ry && py < ry + rh;
 }
 
 /* A sunken keycap chip (box + divider border) using theme tokens. The
@@ -1812,6 +1969,42 @@ static UiHit repl_code_panel_rewrite_hit(const ReplCodePanelBuilder *builder,
     return hit;
 }
 
+static UiHit repl_code_panel_make_local_hit(
+    const UiTextPanelSnapshot *text_snap, int mx, int gl_y, int kind) {
+    UiHit hit = ui_hit_none();
+
+    hit.kind = kind;
+    hit.local_x = (float)(mx - text_snap->cp_x);
+    hit.local_y = (float)(gl_y - text_snap->cp_y);
+    return hit;
+}
+
+/* Keep statusbar hit geometry derived from the same hints struct the
+ * renderer uses so hidden chips stay unclickable and visible chips
+ * match their drawn keycap boxes exactly. */
+static int repl_code_panel_statusbar_hit_kind(
+    const UiRenderSnapshot *snap,
+    const UiTextPanelSnapshot *text_snap,
+    int mx,
+    int gl_y) {
+    ReplStatusbarHints hints = repl_code_panel_statusbar_hints(
+        snap, text_snap->cp_x, text_snap->cp_y, text_snap->cp_w, STATUSBAR_H);
+
+    if (hints.focus_visible &&
+        repl_code_panel_point_in_rect(mx, gl_y,
+                                      hints.focus_kx, hints.ky,
+                                      hints.focus_kw, hints.kh))
+        return UI_HIT_CODE_FOCUS_TOGGLE;
+
+    if (hints.help_visible &&
+        repl_code_panel_point_in_rect(mx, gl_y,
+                                      hints.help_kx, hints.ky,
+                                      hints.help_kw, hints.kh))
+        return UI_HIT_HELP_TOGGLE;
+
+    return UI_HIT_CODE_PANEL_CHROME;
+}
+
 UiHit ui_repl_code_panel_hit_test(const UiRenderSnapshot *snap,
                                   int mx, int my) {
     ReplCodePanelBuilder builder;
@@ -1834,42 +2027,22 @@ UiHit ui_repl_code_panel_hit_test(const UiRenderSnapshot *snap,
         return repl_code_panel_rewrite_hit(&builder, mx, hit);
 
     gl_y = builder.text_snap.vp_h - my;
-    if (mx >= builder.text_snap.cp_x &&
-        mx < builder.text_snap.cp_x + builder.text_snap.cp_w &&
-        gl_y >= builder.text_snap.cp_y &&
-        gl_y < builder.text_snap.cp_y + builder.text_snap.cp_h) {
+    if (repl_code_panel_point_in_rect(mx, gl_y,
+                                      builder.text_snap.cp_x,
+                                      builder.text_snap.cp_y,
+                                      builder.text_snap.cp_w,
+                                      builder.text_snap.cp_h)) {
         if (gl_y < builder.text_snap.cp_y + STATUSBAR_H) {
-            /* Same hints geometry the renderer uses, so the click
-             * targets line up exactly with the drawn keycaps. */
-            ReplStatusbarHints h = repl_code_panel_statusbar_hints(
-                snap, builder.text_snap.cp_x, builder.text_snap.cp_y,
-                builder.text_snap.cp_w, STATUSBAR_H);
-            if (h.focus_visible &&
-                gl_y >= h.ky && gl_y < h.ky + h.kh &&
-                mx >= h.focus_kx && mx < h.focus_kx + h.focus_kw) {
-                hit.kind = UI_HIT_CODE_FOCUS_TOGGLE;
-                hit.local_x = (float)(mx - builder.text_snap.cp_x);
-                hit.local_y = (float)(gl_y - builder.text_snap.cp_y);
-                return hit;
-            }
-            if (h.help_visible &&
-                gl_y >= h.ky && gl_y < h.ky + h.kh &&
-                mx >= h.help_kx && mx < h.help_kx + h.help_kw) {
-                hit.kind = UI_HIT_HELP_TOGGLE;
-                hit.local_x = (float)(mx - builder.text_snap.cp_x);
-                hit.local_y = (float)(gl_y - builder.text_snap.cp_y);
-                return hit;
-            }
-            hit.kind = UI_HIT_CODE_PANEL_CHROME;
-            hit.local_x = (float)(mx - builder.text_snap.cp_x);
-            hit.local_y = (float)(gl_y - builder.text_snap.cp_y);
-            return hit;
+            return repl_code_panel_make_local_hit(
+                &builder.text_snap, mx, gl_y,
+                repl_code_panel_statusbar_hit_kind(snap, &builder.text_snap,
+                                                   mx, gl_y));
         }
-        hit.kind = mx < builder.text_snap.cp_x + builder.text_snap.text_x
-            ? UI_HIT_CODE_GUTTER
-            : UI_HIT_CODE_TEXT;
-        hit.local_x = (float)(mx - builder.text_snap.cp_x);
-        hit.local_y = (float)(gl_y - builder.text_snap.cp_y);
+        return repl_code_panel_make_local_hit(
+            &builder.text_snap, mx, gl_y,
+            mx < builder.text_snap.cp_x + builder.text_snap.text_x
+                ? UI_HIT_CODE_GUTTER
+                : UI_HIT_CODE_TEXT);
     }
     return hit;
 }
