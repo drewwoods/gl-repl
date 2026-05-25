@@ -375,6 +375,7 @@ EditorClipboardState *editor_state_clipboard_mut(void);
 void                editor_state_clipboard_clear(void);
 int                 editor_state_clipboard_count(void);
 void                editor_state_clipboard_count_set(int line_count);
+EditorClipboardKind editor_state_clipboard_kind(void);
 
 /* Input-text clipboard payload. The selected substring is naturally a
  * `[lo, hi)` slice inside `input[]`, not a standalone NUL-terminated
