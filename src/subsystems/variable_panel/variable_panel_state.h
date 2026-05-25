@@ -20,8 +20,7 @@
 #ifndef VARIABLE_PANEL_STATE_H
 #define VARIABLE_PANEL_STATE_H
 
-#include "editor/state.h"
-#include "ui/app/state_types.h"
+#include "config.h"
 #include "subsystems/variable_panel/variable_panel_drag.h"  /* VariablePanelValueChange */
 
 typedef struct {
@@ -61,7 +60,9 @@ typedef struct {
 } VariablePanelState;
 
 
-/* Lifecycle. */
+/* Lifecycle.
+ * Note: variable_panel_state_capture/restore is exclusively a test/verification contract;
+ * production code does not capture/restore variable panel state. */
 void variable_panel_state_capture(VariablePanelState *snapshot);
 void variable_panel_state_restore(const VariablePanelState *snapshot);
 void variable_panel_state_reset(void);

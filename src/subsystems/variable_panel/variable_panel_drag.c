@@ -12,6 +12,9 @@
  *              Near-zero start value falls back to a linear bootstrap
  *              so the slider can walk off zero.
  */
+#include <math.h>
+#include <stdio.h>
+#include "repl/eval.h"
 #include "subsystems/variable_panel/variable_panel_drag.h"
 #include "subsystems/variable_panel/variable_panel_state.h"
 

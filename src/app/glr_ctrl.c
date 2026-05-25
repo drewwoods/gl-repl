@@ -1966,7 +1966,7 @@ int glr_ctrl_apply_tag_defaults(unsigned int tag_mask,
 static void glr_app_reset_example_chrome(unsigned int tag_mask) {
     glr_state_presentation_reset_example_defaults();
     glr_camera_mut()->auto_rotate = CFG_DEFAULT_CAMERA_ROTATE;
-    variable_panel_state_mut()->visible = CFG_DEFAULT_VARIABLE_PANEL;
+    variable_panel_set_visible(CFG_DEFAULT_VARIABLE_PANEL);
 
     glr_ctrl_apply_tag_defaults(
         tag_mask, k_example_tag_defaults,

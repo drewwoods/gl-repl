@@ -670,6 +670,19 @@ void repl_flatten_commands(int edit_line_idx) {
     repl_flatten_refresh_current_block_highlight(edit_line_idx);
 }
 
+void repl_ensure_flat_program_with_live_vars(int edit_line_idx) {
+    if (repl_state_flat_program_dirty()) {
+        float live_predef_vals[MAX_PREDEF_VARS] = { 0 };
+        float live_scratch_arrays[REPL_SCRATCH_ARRAY_COUNT][REPL_SCRATCH_ARRAY_LEN] = { { 0.0f } };
+        repl_copy_predef_values(live_predef_vals, MAX_PREDEF_VARS);
+        repl_eval_copy_scratch_arrays(live_scratch_arrays);
+        repl_flatten_commands(edit_line_idx);
+        repl_state_flat_program_clear_dirty();
+        repl_restore_predef_values(live_predef_vals, MAX_PREDEF_VARS);
+        repl_eval_restore_scratch_arrays(live_scratch_arrays);
+    }
+}
+
 static unsigned int line_func_scope_mask(int line) {
     unsigned int mask = 0;
     int stack[FUNC_SCOPE_MASK_BITS];

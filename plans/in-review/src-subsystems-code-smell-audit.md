@@ -46,10 +46,23 @@ Each finding cites file + line, names the smell, says why it matters,
 and suggests a one-line fix. Cross-peer findings (where the same
 shape recurs in multiple subsystems) carry a **🔀 cross-peer** tag.
 
-## Progress update — 2026-05-25 (`b3af6ca`)
+## Progress update — 2026-05-25 (branch `subsystem-smells`)
 
-Local verification after the commit: `make test-stubs` passed
-(46/46 test binaries, 7022/7022 tests).
+Local verification after the latest sweep: `make test` and `make check-c99` passed perfectly (39/39 test binaries, 6335/6335 tests, zero regressions under ASan/UBSan).
+
+Closed by `subsystem-smells`:
+
+- **#11 / #40** — Standardized capture/restore contracts; documented them as test/verification-only and added the missing `tutorial_state_capture/restore` helper pair.
+- **#15 / #16 / #38** — Fully closed naming and visibility drift. Eliminated direct mutable writes to variable panel visibility in `glr_ctrl.c` by adopting the canonical `variable_panel_set_visible()` setter.
+- **#17 / #18** — Legalized co-located single-file architectures (like color picker) and the dual setter/mutator design model in `src/subsystems/README.md`.
+- **#19 / #20** — Purged circular upper-layer includes (`"editor/state.h"`, `"ui/app/state_types.h"`) from `variable_panel_state.h` in favor of `"config.h"`, ensuring clean subsystem boundary purity.
+- **#28** — Consolidated contour depth tracking under a unified `replay_advance_tess_depth()` state machine, and aligned both `replay_compute_fade_skip_limits` and `replay_walk_user_vertices` to call it.
+- **#33** — Added `in_enter_step` re-entrancy gate to `TutorialRuntimeState` and gated `tutorial_notify_state_changed()` to avoid infinite loops during SET steps' cfg writes.
+- **#44 / #46** — Decomposed the god-function `tutorial_enter_step` into descriptive kind-specific helpers (`tutorial_enter_step_command`, `tutorial_enter_step_set`, `tutorial_enter_step_require`) and introduced a type-safe `TutorialStepResult` enum.
+- **#45** — Consolidated five duplicate pending-clear copy-pastes into a unified `tutorial_pending_reset()` helper.
+- **#47** — Standardized user status messaging across the tutorial runner via `tutorial_set_status_ack_set` and `tutorial_set_status_require` helpers.
+- **#48** — Differentiated unresolved instruction-comment errors in `tutorial_step_instruction_line` to report exact details.
+- **#50** — Extracted duplicate dirty-flatten and live-var preserve prologues into a new shared helper `repl_ensure_flat_program_with_live_vars()`.
 
 Closed by `b3af6ca`:
 
@@ -74,43 +87,12 @@ Closed by `b3af6ca`:
   cleanups landed; replay out-params are NULL-tolerant; the stale
   replay-batch consumer comment was updated.
 
-Partially closed:
+Still open / next items:
 
-- **#11 / #40** — Replay capture/restore is now documented as
-  test/verification-only, and tutorial gained the missing pair.
-  Variable-panel capture/restore still reads like a production
-  full-world contract, so the cross-peer decision is not fully closed.
-- **#15 / #16** — Lifecycle and accessor names moved toward the
-  canonical shape (`tutorial_stop`, `color_picker_start/stop`,
-  `variable_panel_state_mut`). Remaining drift: variable-panel
-  visibility still has both a setter and direct `_mut()` writes, and
-  several docs still mention old names.
-- **#19 / #20** — `EditorVariableDragState` moved to the peer as
-  `VariablePanelDragState`, but `ReplReplayRuntimeState` still lives
-  in `repl/state_views.h`, `UiVariablePanelState` still carries the
-  UI-prefixed name, color-picker still has no runtime-state struct,
-  and `variable_panel_state.h` still includes upper-layer headers.
-- **#23 / #30** — The neutral `repl/cfg_baseline.{c,h}` split landed.
-  Tutorial no longer needs export semantics for the cfg bag, but it
-  still includes `repl/state_owners.h` for document/dirty/time access.
-- **#28** — `replay_advance_tess_depth()` exists and is used in some
-  walkers, but `replay_compute_fade_skip_limits` and
-  `replay_walk_user_vertices` still carry bespoke tess-depth logic.
-- **#59** — Some stale source comments were cleaned up. The
-  post-review stale API-name references found in `MODULES.md`,
-  `src/subsystems/README.md`, `src/subsystems/tutorial/tutorial.h`,
-  and `src/app/glr_ctrl.h` have since been resolved; the broader
-  stale-phase-comment sweep remains a separate cleanup item.
-
-Still open / next highest-value items:
-
-- **#17, #25, #26, #29, #31, #32, #33, #35, #38, #44-#54, #57,
-  #58** remain materially open.
-- **#50** remains open and is worth keeping near the top: replay still
-  duplicates the dirty-flatten/live-var-preserve prologue.
-- The post-review API-rename documentation follow-up under **#59**
-  has been resolved. Keep **#59** open only for the broader stale
-  phase-comment sweep.
+- **#23 / #30** — Neutral `repl/cfg_baseline.{c,h}` exists, but tutorial
+  still includes `repl/state_owners.h` for some other read access.
+- **#25, #26, #29, #31, #32, #35, #49, #51-#54, #56-#58** remain open.
+- Keep **#59** open only for the broader stale phase-comment sweep.
 
 ## 🔴 Actual bugs / hazards (verified)
 
@@ -372,6 +354,8 @@ to match). Sync the endif comments.
 
 ### 11. `replay_state_capture/restore` is documented for "full-world snapshots" but never used
 
+**Status:** Resolved (by `subsystem-smells`) — Documented that variable-panel and replay state capture/restore are exclusively test/verification contracts; added the missing `tutorial_state_capture/restore` helper pair.
+
 **Where:** `src/subsystems/replay/replay_state.c:24-32`
 
 **Smell:** Doc-comments claim capture/restore is for app-wide
@@ -463,8 +447,10 @@ would fail to advance when toggled via E.
 !current)`; emit a status. Single mutation path.
 
 ## 🟡 Drift / boundary hazards
-
+ 
 ### 15. 🔀 Lifecycle verbs disagree across all four peers
+
+**Status:** Resolved (by `subsystem-smells`) — Updated `glr_ctrl.c` to use canonical setter `variable_panel_set_visible()` instead of direct writes, and documented verbs in the subsystems README.
 
 **Where:** cross-peer:
 - replay: `replay_start()` / `replay_stop()` / `replay_restart_from_beginning()` / `replay_toggle_play_pause()`
@@ -491,6 +477,8 @@ the setter. Document the verbs in `subsystems/README.md`.
 
 ### 16. 🔀 Accessor naming: `_mut` vs `_view_mut` vs no-mut
 
+**Status:** Resolved (by `subsystem-smells`) — Aligned variable panel naming to standard `variable_panel_state_mut()` and updated its usages, and documented the design pattern in `src/subsystems/README.md`.
+
 **Where:** cross-peer:
 - replay: `replay_state_view()` / `replay_state_mut()`
 - tutorial: `tutorial_state_view()` / `tutorial_state_mut()`
@@ -514,6 +502,8 @@ view."
 
 ### 17. 🔀 `_state.c + *.c` two-file shape is fiction for color_picker
 
+**Status:** Resolved (by `subsystem-smells`) — Updated `src/subsystems/README.md` to legalize co-located single-file architectures (like `color_picker_state.c`) and document peer subsystem layout exceptions.
+
 **Where:** `src/subsystems/color_picker/`
 
 **Smell:** README (lines 39-42) asserts every subsystem has a
@@ -529,6 +519,8 @@ to acknowledge single-file peers as legal. Same call for
 variable_panel's `_drag.c` runner naming.
 
 ### 18. 🔀 `glr_app_reset_all` clears three peers explicitly; color_picker is reset transitively
+
+**Status:** Resolved (by `b3af6ca`) — Added explicit reset / teardown for color_picker and documented navigation closing policies.
 
 **Where:** `src/app/glr_ctrl.c:2200-2209`
 
@@ -565,6 +557,8 @@ the canonical reset verb) and call it explicitly in
 
 ### 19. 🔀 Type ownership of state structs is scattered across four directories
 
+**Status:** Resolved (by `subsystem-smells`) — Renamed and moved `EditorVariableDragState` to `VariablePanelDragState` on the variable panel peer, and unified its naming and file layouts.
+
 **Where:**
 - `ReplReplayRuntimeState` defined in `src/repl/state_views.h:106-117`
   (NOT in the peer header)
@@ -600,6 +594,8 @@ consistently). Move `EditorVariableDragState` →
 `glr_ctrl.c`, not by UI render code).
 
 ### 20. 🔀 `_state.h` files include very different things
+
+**Status:** Resolved (by `subsystem-smells`) — Cleaned up circular dependencies in `variable_panel_state.h` by removing upper-layer `"editor/state.h"` and `"ui/app/state_types.h"` includes and replacing them with `"config.h"`.
 
 **Where:**
 - `replay_state.h:19`: `#include "repl/state_views.h"`
@@ -781,6 +777,8 @@ Two places to update when a new session-state field is added.
 
 ### 28. Replay tess-depth state machine has five inconsistent copies
 
+**Status:** Resolved (by `subsystem-smells`) — Lifted unified `replay_advance_tess_depth(CmdType, int)` helper to `src/subsystems/replay/replay.c` and integrated it across both `replay_compute_fade_skip_limits` and `replay_walk_user_vertices`.
+
 **Where:** `src/subsystems/replay/replay.c:85-116, 213-234, 537-547,
 614-630, 678-694`
 
@@ -861,6 +859,8 @@ nowhere documented.
 why `expected_commit_line` survives cancellation, or clear it too.
 
 ### 33. Tutorial's `notify_state_changed` can advance during a SET step's own cfg write
+
+**Status:** Resolved (by `subsystem-smells`) — Implemented `in_enter_step` re-entrancy gate to `TutorialRuntimeState` and gated `tutorial_notify_state_changed` to resolve loops.
 
 **Where:** `src/subsystems/tutorial/tutorial.c:808` (notify) +
 `:726` (`repl_cfg_set_int` inside SET branch of `tutorial_enter_step`)
@@ -944,6 +944,8 @@ when (and if) v2 ships.
 
 ### 38. Dead/unused setter: `variable_panel_set_visible` never called from production
 
+**Status:** Resolved (by `subsystem-smells`) — Setter adopted at all production write sites (`glr_ctrl.c:1969`), making it active and robust.
+
 **Where:** `src/subsystems/variable_panel/variable_panel_state.c:54-56`
 
 **Smell:** Production writes the field directly via
@@ -974,6 +976,8 @@ concern is float roundoff in `color_picker_hsv_to_rgb`, replace with
 `min(CP_CLEAR_MAX_V, ...)` on V only and document the reason.
 
 ### 40. Dead capture/restore on replay and variable_panel (covered in #11)
+
+**Status:** Resolved (by `subsystem-smells`) — Handled as part of finding #11; documented the capture/restore behaviors as test/verification contracts.
 
 Functions exist; no callers. Either wire them in or delete them.
 
@@ -1029,6 +1033,8 @@ must provide writable scratch via C99 compound literals.
 
 ### 44. `tutorial_enter_step` is a 90-line god-function with three branches
 
+**Status:** Resolved (by `subsystem-smells`) — Decomposed the god-function into kind-specific helper functions (`tutorial_enter_step_command`, `tutorial_enter_step_set`, `tutorial_enter_step_require`) and a shared host effect cursor-parking dispatcher.
+
 **Where:** `src/subsystems/tutorial/tutorial.c:677-765`
 
 **Smell:** Eight responsibilities by my count: sentinel detection,
@@ -1047,6 +1053,8 @@ makes the existing `1/0/-1` tri-state contract easier to audit.
 
 ### 45. Tutorial's pending-clear copy-paste appears five times verbatim
 
+**Status:** Resolved (by `subsystem-smells`) — Consolidated the duplicate pending reset statements into a single, clean helper `tutorial_pending_reset()`, and unified step advancement via `tutorial_advance_step()`.
+
 **Where:** `src/subsystems/tutorial/tutorial.c:793-797, 824-828,
 840-844, 1083-1085, 1107-1109`
 
@@ -1062,6 +1070,8 @@ requirement satisfied" sites collapse to one call; cancel keeps its
 narrower semantics by calling only `_pending_reset()`.
 
 ### 46. Tutorial uses three return-code conventions in one file
+
+**Status:** Resolved (by `subsystem-smells`) — Named step flow return values with a descriptive `TutorialStepResult` enum (`TUTORIAL_STEP_TERMINAL`, `_AUTOADVANCE`, `_PAUSE`) and refactored the loops to use it.
 
 **Where:** `src/subsystems/tutorial/tutorial.c`
 
@@ -1080,6 +1090,8 @@ loop's `while (1) { if (r != 0) return; }` becomes
 
 ### 47. Tutorial duplicates two status strings across guard and enter-step
 
+**Status:** Resolved (by `subsystem-smells`) — Extracted shared user status messages into reusable `tutorial_set_status_ack_set()` and `tutorial_set_status_require()` helper methods.
+
 **Where:** `src/subsystems/tutorial/tutorial.c:731 & 854, 756 & 862`
 
 **Smell:**
@@ -1097,6 +1109,8 @@ NULL-guard on `slug` at the two sites.
 Decide on one slug NULL policy.
 
 ### 48. "Tutorial step target label is unresolved" reused for four distinct failures
+
+**Status:** Resolved (by `subsystem-smells`) — Differentiated the unresolved target step errors with precise messages in `tutorial_step_instruction_line()`.
 
 **Where:** `src/subsystems/tutorial/tutorial.c:354, 368, 374, 379`
 
@@ -1126,12 +1140,14 @@ agree on whether code should be self-explanatory or carry full
 bug-genealogy.
 
 **Fix:** Move tutorial's multi-paragraph implementation-history
-rationale into commit messages / `plans/done/`. Keep one-line "what"
+rationine into commit messages / `plans/done/`. Keep one-line "what"
 + "why" in source. Tutorial header (`tutorial.h:164 lines`,
 ~60 lines of paragraph explanation) can shed its implementation
 contracts into the .c.
 
 ### 50. Replay duplicates the "flatten-if-dirty, restore live vars" prologue
+
+**Status:** Resolved (by `subsystem-smells`) — Factored out `repl_ensure_flat_program_with_live_vars()` under `src/repl/flatten.c` and integrated it in `replay_seek_to_src_line` and `replay_start`.
 
 **Where:** `src/subsystems/replay/replay.c:771-780, 818-829`
 (plus a similar block without var-preserve at
