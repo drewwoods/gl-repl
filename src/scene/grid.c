@@ -699,9 +699,7 @@ void scene_grid_render(const SceneFrameRenderContext *frame_ctx) {
     /* Transition fade: clamp defensively, then every gl_color in this
      * file multiplies through it (rule 4). Skip drawing entirely once
      * fully faded out so a 0-opacity pass costs nothing. */
-    g_xn_opacity = config->grid_opacity;
-    if (g_xn_opacity < 0.0f) g_xn_opacity = 0.0f;
-    if (g_xn_opacity > 1.0f) g_xn_opacity = 1.0f;
+    g_xn_opacity = scene_clamp01f(config->grid_opacity);
     if (g_xn_opacity <= 0.0f) return;
 #if GRID_XN_STYLE == GRID_AXES_XN_FOG
     /* The EXP2-fog themes (FOG/OCEAN) fall back to the plain alpha
