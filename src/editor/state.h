@@ -59,6 +59,12 @@ typedef struct {
     int  insert_mode;
 } EditorInputState;
 
+/* Read-only view of EditorInputState.  `input` and `pending_newline`
+ * are borrowed pointers into live storage — they track mutations made
+ * through the mutable API.  The scalar fields (input_len, cursor_pos,
+ * anchor_pos, pending_newline_len, insert_mode) are by-value snapshots
+ * captured at the time editor_state_input() is called.  Do not stash
+ * the view across mutations and then rely on the scalar fields. */
 typedef struct {
     const char *input;
     int         input_len;

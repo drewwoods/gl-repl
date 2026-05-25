@@ -128,9 +128,20 @@
 
 /* ---- Types ------------------------------------------------------------ */
 
+#define REPL_PREDEF_NAME_MAX 16
+
+static inline int repl_eval_is_ident_start(unsigned char c) {
+    return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_';
+}
+
+static inline int repl_eval_is_ident_continue(unsigned char c) {
+    return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+           (c >= '0' && c <= '9') || c == '_';
+}
+
 /* A single variable name/value pair in the expression context. */
 typedef struct {
-    char  name[16];
+    char  name[REPL_PREDEF_NAME_MAX];
     float value;
 } ExprVar;
 

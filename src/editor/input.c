@@ -185,7 +185,7 @@ static int tutorial_guard_source_change_or_status(int pos,
                                                   int insert_count) {
     if (tutorial_guard_source_change(pos, delete_count, insert_count))
         return 1;
-    repl_set_status_error("Tutorial comment is read-only");
+    repl_set_status_error("Tutorial line is read-only");
     return 0;
 }
 
@@ -287,7 +287,7 @@ void editor_load_line_to_input(int idx) {
         if (tutorial_line_is_locked(idx)) {
             editor_input_clear();
             editor_cursor_pos_set(0);
-            repl_set_status_error("Tutorial instruction is read-only");
+            repl_set_status_error("Tutorial line is read-only");
             return;
         }
 
@@ -317,7 +317,7 @@ void editor_load_line_to_input(int idx) {
             while (len > 0 &&
                    (s[len - 1] == ':' || isspace((unsigned char)s[len - 1])))
                 len--;
-            if (len > MAX_INPUT_LEN - 2)
+            if (len > MAX_INPUT_LEN - 2) /* -1 NUL, -1 leading ':' */
                 len = MAX_INPUT_LEN - 2;
             inp->input[0] = ':';
             memcpy(inp->input + 1, s, (size_t)len);
@@ -982,9 +982,6 @@ static void restore_hidden_code_panel_for_key(unsigned char key) {
     }
 }
 
-static int handle_search_key_route(unsigned char key) {
-    return editor_search_handle_key(key);
-}
 
 static int handle_escape_key_route(unsigned char key) {
     if (key == KEY_ESC) {
@@ -1397,26 +1394,21 @@ static int handle_semicolon_commit_key_route(unsigned char key) {
     return 0;
 }
 
-static int is_word_char(unsigned char c) {
-    return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
-           (c >= '0' && c <= '9') || c == '_';
-}
-
 void editor_input_word_bounds_at(const char *text, int len, int char_idx,
                                  int *out_start, int *out_end) {
     int start = char_idx;
     int end = char_idx;
 
     if (!text || len <= 0 || char_idx < 0 || char_idx >= len ||
-        !is_word_char((unsigned char)text[char_idx])) {
+        !repl_eval_is_ident_continue((unsigned char)text[char_idx])) {
         if (out_start) *out_start = char_idx;
         if (out_end)   *out_end   = char_idx;
         return;
     }
 
-    while (start > 0 && is_word_char((unsigned char)text[start - 1]))
+    while (start > 0 && repl_eval_is_ident_continue((unsigned char)text[start - 1]))
         start--;
-    while (end < len && is_word_char((unsigned char)text[end]))
+    while (end < len && repl_eval_is_ident_continue((unsigned char)text[end]))
         end++;
 
     if (out_start) *out_start = start;
@@ -1455,7 +1447,7 @@ static void keyboard_func(unsigned char key, int x, int y) {
 
     restore_hidden_code_panel_for_key(key);
 
-    if (handle_search_key_route(key))       return;
+    if (editor_search_handle_key(key))       return;
     if (handle_escape_key_route(key))       return;
     if (handle_cursor_endpoint_key_route(key)) return;
     if (handle_undo_redo_key_route(key))    return;
@@ -1583,9 +1575,6 @@ static void restore_hidden_code_panel_for_special(int key) {
     }
 }
 
-static int handle_search_special_route(int key) {
-    return editor_search_handle_special(key);
-}
 
 /* Editor-side cursor moves: bare Left/Right + Home/End. Ctrl+Left/Right
  * (audio prev/next) and help-tab toggling on Left/Right when help is
@@ -1722,7 +1711,7 @@ static void special_func(int key, int x, int y) {
 
     restore_hidden_code_panel_for_special(key);
 
-    if (handle_search_special_route(key))   return;
+    if (editor_search_handle_special(key))   return;
     if (handle_horizontal_special_key_route(key)) return;
     if (handle_vertical_special_key_route(key)) return;
     if (handle_page_scroll_special_key_route(key)) return;
@@ -1812,8 +1801,11 @@ static void editor_update_panel_frac_from_mouse(int x, int y) {
  * / menu / scene / camera / scroll wheel all dispatch from there.
  * The editor only sees UP events, where it clears the resizing flag
  * the controller set on UI_HIT_PANEL_DIVIDER. */
+/* GLUT mouse callback shape; only state == GLUT_UP is editor-relevant. */
 static void mouse_func(int button, int state, int x, int y) {
-    (void)button; (void)x; (void)y;
+    (void)button;
+    (void)x;
+    (void)y;
     if (state != GLUT_UP)
         return;
     if (ui_state_code_panel().resizing_panel) {

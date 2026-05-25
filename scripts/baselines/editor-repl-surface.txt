@@ -23,8 +23,15 @@
 # of the same strip in input.c per audit finding #19 — net code
 # reduction, but a new repl_* symbol.
 #
+# 2026-05-25: input_c bumped +1 for repl_eval_is_ident_continue
+# (audit #45, shared ident predicate replacing local is_word_char).
+# commit_c bumped +3: repl_eval_is_ident_start, _continue (audit #45),
+# and repl_parser_parse_command_ctx (audit #26 — replaced the last
+# EditorServices.parse_command_ctx indirection with a direct call,
+# eliminating commit.c's services.h include entirely).
+#
 # Ratchet down as migrations land. The plan target
 # (plans/done/editor-demo.md) is ~5 per file.
 
-input_c: 22
-commit_c: 29
+input_c: 23
+commit_c: 32

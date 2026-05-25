@@ -55,7 +55,7 @@ typedef struct {
     int   edit_line;
     float predef_vals[MAX_PREDEF_VARS];
     float scratch_arrays[REPL_SCRATCH_ARRAY_COUNT][REPL_SCRATCH_ARRAY_LEN];
-    char  predef_names[MAX_PREDEF_VARS][16];
+    char  predef_names[MAX_PREDEF_VARS][REPL_PREDEF_NAME_MAX];
     int   num_predef_vars;
     char  func_aliases[REPL_FUNC_SLOT_COUNT][REPL_FUNC_NAME_MAX];
 } EditorUndoSnapshot;
