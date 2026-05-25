@@ -2,6 +2,7 @@
  * grid.c - grid theme rendering
  */
 #include "grid.h"
+#include "overlay_xn.h"  /* SceneOverlayXn + shared resolve helper */
 #include "config.h"   /* GRID_XN_STYLE / GRID_AXES_XN_* */
 #include <math.h>     /* sinf, cosf, sqrtf, fabsf, fmodf, M_PI (via gl_includes.h) */
 
@@ -27,6 +28,13 @@ typedef struct GridDrawContext {
     float anim_time;
     float breath;
     float alpha_scale; /* boost factor when bg is darker than design point */
+    /* In-out transition (audit #3): formerly file-static g_xn_opacity /
+     * g_xn_alpha. Resolved once at scene_grid_render entry via
+     * scene_overlay_xn_resolve, then every grid_color call multiplies
+     * `a * xn_alpha`. xn_opacity drives the synthetic-fog recede pass
+     * under GRID_XN_STYLE == GRID_AXES_XN_FOG. */
+    float xn_opacity;
+    float xn_alpha;
 } GridDrawContext;
 
 typedef struct GridLineColors {
@@ -62,27 +70,15 @@ static SceneRgba rgba(float r, float g, float b, float a) {
 }
 
 /* Grid in-out transition (plans/.../grid-axes-transitions.md rule 4).
- * Set once at scene_grid_render entry from config.grid_opacity; every
- * color path in this file routes through gl_color so it applies
- * uniformly, AFTER each call site's own alpha_scale clamp so the
- * controller-owned OUT is the hard ceiling (rule 3). 1.0 = shown.
+ * Resolved once at scene_grid_render entry from config.grid_opacity
+ * and stored on the GridDrawContext. Every color path routes through
+ * grid_color so it applies uniformly, AFTER each call site's own
+ * alpha_scale clamp so the controller-owned OUT is the hard ceiling
+ * (rule 3). 1.0 = shown.
  *
- * g_xn_opacity is the raw machine opacity; g_xn_alpha is the effective
- * color-alpha multiplier, which differs from opacity only under the
- * compile-time GRID_AXES_XN_FOG style (see config.h): there the alpha
- * stays at 1 until opacity drops past a knee, so the fog carries the
- * recede look and the alpha only guarantees a full vanish at the end. */
-static float g_xn_opacity = 1.0f;
-static float g_xn_alpha   = 1.0f;
-
-/* FOG-style transition (config.h GRID_XN_STYLE). Only fog-less themes
- * recede into a synthesized clear-color fog as they hide. Themes that
- * draw their own fog (GRID_THEME_FOG, OCEAN) or *any* theme at the FAR
- * extent fall back to the plain alpha FADE for the transition (no
- * recede fog) — far simpler, and it sidesteps the discontinuity of
- * trying to blend two fog models. scene_grid_render decides per pass
- * which path applies and sets g_xn_alpha accordingly (alpha knee for
- * the recede, plain opacity for FADE / the FADE fallback). */
+ * The shared scene_overlay_xn_resolve helper in overlay_xn.h owns the
+ * knee math; grid passes its style + GRID_XN_FOG_ALPHA_KNEE and
+ * receives back the effective {alpha, opacity, fog_tf, draw}. */
 
 #if GRID_XN_STYLE == GRID_AXES_XN_FOG
 #define GRID_XN_FOG_ALPHA_KNEE 0.30f
@@ -105,12 +101,13 @@ static void grid_xn_apply_transition_fog(float tf, float extent) {
 }
 #endif
 
-static void gl_color(float r, float g, float b, float a) {
-    glColor4f(r, g, b, a * g_xn_alpha);
+static void grid_color(const GridDrawContext *ctx,
+                       float r, float g, float b, float a) {
+    glColor4f(r, g, b, a * ctx->xn_alpha);
 }
 
-static void gl_color_rgba(SceneRgba c) {
-    gl_color(c.r, c.g, c.b, c.a);
+static void grid_color_rgba(const GridDrawContext *ctx, SceneRgba c) {
+    grid_color(ctx, c.r, c.g, c.b, c.a);
 }
 
 static void grid_line_colors_same(GridLineColors *out, SceneRgba color) {
@@ -120,10 +117,10 @@ static void grid_line_colors_same(GridLineColors *out, SceneRgba color) {
 
 static void draw_grid_line_pair(float v, const GridDrawContext *ctx,
                                 GridLineColors colors) {
-    gl_color_rgba(colors.x_const);
+    grid_color_rgba(ctx, colors.x_const);
     glVertex3f(v, 0, -ctx->extent);
     glVertex3f(v, 0,  ctx->extent);
-    gl_color_rgba(colors.z_const);
+    grid_color_rgba(ctx, colors.z_const);
     glVertex3f(-ctx->extent, 0, v);
     glVertex3f( ctx->extent, 0, v);
 }
@@ -134,7 +131,7 @@ static void draw_grid_origin_axes(const GridDrawContext *ctx, SceneRgba color,
     if (line_width != 1.0f)
         glLineWidth(line_width);
     glBegin(GL_LINES);
-    gl_color_rgba(color);
+    grid_color_rgba(ctx, color);
     glVertex3f(-ctx->extent, 0, 0);
     glVertex3f( ctx->extent, 0, 0);
     glVertex3f(0, 0, -ctx->extent);
@@ -329,7 +326,7 @@ static void scene_grid_render_focus_theme(const SceneFrameRenderContext *frame_c
         if (fx < 0.0f) fx = 0.0f;
         fx = fx * fx;  /* sharper falloff */
         if (fx > 0.001f) {
-            gl_color(0.50f, 0.55f, 0.70f, fminf(base * fx * as, 1.0f));
+            grid_color(grid_ctx, 0.50f, 0.55f, 0.70f, fminf(base * fx * as, 1.0f));
             /* Clamp line Z extent around focus */
             float z0 = cz - radius, z1 = cz + radius;
             if (z0 < -grid_ctx->extent) z0 = -grid_ctx->extent;
@@ -343,7 +340,7 @@ static void scene_grid_render_focus_theme(const SceneFrameRenderContext *frame_c
         if (fz < 0.0f) fz = 0.0f;
         fz = fz * fz;
         if (fz > 0.001f) {
-            gl_color(0.50f, 0.55f, 0.70f, fminf(base * fz * as, 1.0f));
+            grid_color(grid_ctx, 0.50f, 0.55f, 0.70f, fminf(base * fz * as, 1.0f));
             float x0 = cx - radius, x1 = cx + radius;
             if (x0 < -grid_ctx->extent) x0 = -grid_ctx->extent;
             if (x1 > grid_ctx->extent) x1 = grid_ctx->extent;
@@ -356,7 +353,7 @@ static void scene_grid_render_focus_theme(const SceneFrameRenderContext *frame_c
     if (focus->valid) {
         glLineWidth(1.5f);
         glBegin(GL_LINES);
-        gl_color(0.80f, 0.85f, 0.95f, fminf(0.25f * as, 1.0f));
+        grid_color(grid_ctx, 0.80f, 0.85f, 0.95f, fminf(0.25f * as, 1.0f));
         glVertex3f(cx - GRID_FOCUS_CROSSHAIR_HALF_SIZE, 0, cz);
         glVertex3f(cx + GRID_FOCUS_CROSSHAIR_HALF_SIZE, 0, cz);
         glVertex3f(cx, 0, cz - GRID_FOCUS_CROSSHAIR_HALF_SIZE);
@@ -382,7 +379,7 @@ static void scene_grid_render_ocean_theme(const GridDrawContext *grid_ctx,
         /* Fill the active scene viewport with a teal tint. Coordinates
          * use scene_w/scene_h (not the full window viewport) so the
          * rect lines up with whatever glViewport scene_render set. */
-        gl_color(0.05f, 0.25f, 0.35f, 0.75f);
+        grid_color(grid_ctx, 0.05f, 0.25f, 0.35f, 0.75f);
         glMatrixMode(GL_PROJECTION);
         glPushMatrix();
         glLoadIdentity();
@@ -426,7 +423,7 @@ static void scene_grid_render_ocean_theme(const GridDrawContext *grid_ctx,
         float r = 0.10f + caustic * 0.35f;
         float g = 0.35f + caustic * 0.60f;
         float b = 0.45f + caustic * 0.50f;
-        gl_color(r, g, b, a);
+        grid_color(grid_ctx, r, g, b, a);
         glVertex3f(v, 0, -extent);  glVertex3f(v, 0, extent);
         glVertex3f(-extent, 0, v);  glVertex3f(extent, 0, v);
     }
@@ -442,7 +439,7 @@ static void scene_grid_render_ocean_theme(const GridDrawContext *grid_ctx,
         float b_o = 0.45f + caustic_o * 0.50f;
         glDepthMask(GL_TRUE);
         glBegin(GL_LINES);
-        gl_color(r_o, g_o, b_o, a_o);
+        grid_color(grid_ctx, r_o, g_o, b_o, a_o);
         glVertex3f(-extent, 0, 0); glVertex3f(extent, 0, 0);
         glVertex3f(0, 0, -extent); glVertex3f(0, 0, extent);
         glEnd();
@@ -486,7 +483,7 @@ static void scene_grid_render_ocean_theme(const GridDrawContext *grid_ctx,
                 /* Subtle colour variation across surface */
                 float cr = sinf(sx * 0.4f + grid_ctx->anim_time * 0.3f) * 0.04f;
                 float cg = cosf(zz * 0.3f + grid_ctx->anim_time * 0.25f) * 0.04f;
-                gl_color(0.05f + cr, 0.25f + cg, 0.35f + cr, alpha);
+                grid_color(grid_ctx, 0.05f + cr, 0.25f + cg, 0.35f + cr, alpha);
                 glVertex3f(sx, y, zz);
             }
         }
@@ -519,10 +516,10 @@ static void scene_grid_render_xzruler_theme(const GridDrawContext *grid_ctx) {
     glLineWidth(2.0f);
     glBegin(GL_LINES);
     /* X axis (z=0, runs along X) */
-    gl_color(0.88f, 0.28f, 0.12f, 0.70f);
+    grid_color(grid_ctx, 0.88f, 0.28f, 0.12f, 0.70f);
     glVertex3f(-extent, 0, 0); glVertex3f(extent, 0, 0);
     /* Z axis (x=0, runs along Z) */
-    gl_color(0.12f, 0.32f, 0.88f, 0.70f);
+    grid_color(grid_ctx, 0.12f, 0.32f, 0.88f, 0.70f);
     glVertex3f(0, 0, -extent); glVertex3f(0, 0, extent);
     glEnd();
     glLineWidth(1.0f);
@@ -536,10 +533,10 @@ static void scene_grid_render_xzruler_theme(const GridDrawContext *grid_ctx) {
         float ta = (fabsf(v) <= major * 2.5f) ? 0.48f : 0.22f;
         ta = fminf(ta * as, 1.0f);
         /* Ticks crossing the X axis in the Z direction */
-        gl_color(0.88f, 0.28f, 0.12f, ta);
+        grid_color(grid_ctx, 0.88f, 0.28f, 0.12f, ta);
         glVertex3f(v, 0, -tick); glVertex3f(v, 0, tick);
         /* Ticks crossing the Z axis in the X direction */
-        gl_color(0.12f, 0.32f, 0.88f, ta);
+        grid_color(grid_ctx, 0.12f, 0.32f, 0.88f, ta);
         glVertex3f(-tick, 0, v); glVertex3f(tick, 0, v);
     }
     glEnd();
@@ -576,7 +573,7 @@ static void scene_grid_render_planes_theme(const SceneRenderConfig *config,
         if (fabsf(v) < GRID_ORIGIN_SKIP_EPSILON) continue;
         int is_major  = grid_is_major_line(v, major, major_tol);
         float a = fminf((is_major ? 0.10f : 0.04f) * as, 1.0f);
-        gl_color(0.50f, 0.52f, 0.65f, a);
+        grid_color(grid_ctx, 0.50f, 0.52f, 0.65f, a);
         glVertex3f(v,       0, -extent); glVertex3f(v,      0, extent);
         glVertex3f(-extent, 0, v);       glVertex3f(extent, 0, v);
     }
@@ -584,7 +581,7 @@ static void scene_grid_render_planes_theme(const SceneRenderConfig *config,
     /* Floor origin axes - write to depth buffer */
     glDepthMask(GL_TRUE);
     glBegin(GL_LINES);
-    gl_color(0.50f, 0.52f, 0.65f, fminf(0.30f * as, 1.0f));
+    grid_color(grid_ctx, 0.50f, 0.52f, 0.65f, fminf(0.30f * as, 1.0f));
     glVertex3f(-extent, 0, 0); glVertex3f(extent, 0, 0);
     glVertex3f(0, 0, -extent); glVertex3f(0, 0, extent);
     glEnd();
@@ -598,16 +595,16 @@ static void scene_grid_render_planes_theme(const SceneRenderConfig *config,
             int is_major  = grid_is_major_line(v, major, major_tol);
             float base = is_major ? 0.14f : 0.05f;
             float a = fminf(base * xy_w * as, 1.0f);
-            gl_color(0.35f, 0.62f, 0.88f, a);
+            grid_color(grid_ctx, 0.35f, 0.62f, 0.88f, a);
             glVertex3f(-extent, v, 0); glVertex3f(extent, v, 0);
-            gl_color(0.35f, 0.62f, 0.88f, a * 0.75f);
+            grid_color(grid_ctx, 0.35f, 0.62f, 0.88f, a * 0.75f);
             glVertex3f(v, -extent, 0); glVertex3f(v, extent, 0);
         }
         glEnd();
         /* XY plane origin axes - write to depth buffer */
         glDepthMask(GL_TRUE);
         glBegin(GL_LINES);
-        gl_color(0.35f, 0.62f, 0.88f, fminf(0.42f * xy_w * as, 1.0f));
+        grid_color(grid_ctx, 0.35f, 0.62f, 0.88f, fminf(0.42f * xy_w * as, 1.0f));
         glVertex3f(-extent, 0, 0); glVertex3f(extent, 0, 0);  /* X axis */
         glVertex3f(0, -extent, 0); glVertex3f(0, extent, 0);  /* Y axis */
         glEnd();
@@ -622,16 +619,16 @@ static void scene_grid_render_planes_theme(const SceneRenderConfig *config,
             int is_major  = grid_is_major_line(v, major, major_tol);
             float base = is_major ? 0.14f : 0.05f;
             float a = fminf(base * zy_w * as, 1.0f);
-            gl_color(0.82f, 0.52f, 0.28f, a);
+            grid_color(grid_ctx, 0.82f, 0.52f, 0.28f, a);
             glVertex3f(0, v, -extent); glVertex3f(0, v, extent);
-            gl_color(0.82f, 0.52f, 0.28f, a * 0.75f);
+            grid_color(grid_ctx, 0.82f, 0.52f, 0.28f, a * 0.75f);
             glVertex3f(0, -extent, v); glVertex3f(0, extent, v);
         }
         glEnd();
         /* ZY plane origin axes - write to depth buffer */
         glDepthMask(GL_TRUE);
         glBegin(GL_LINES);
-        gl_color(0.82f, 0.52f, 0.28f, fminf(0.42f * zy_w * as, 1.0f));
+        grid_color(grid_ctx, 0.82f, 0.52f, 0.28f, fminf(0.42f * zy_w * as, 1.0f));
         glVertex3f(0, 0, -extent); glVertex3f(0, 0, extent);  /* Z axis */
         glVertex3f(0, -extent, 0); glVertex3f(0, extent, 0);  /* Y axis */
         glEnd();
@@ -651,7 +648,7 @@ static void scene_grid_render_radar_theme(const GridDrawContext *grid_ctx) {
     const float GR = 0.20f, GG = 0.95f, GB = 0.45f;   /* radar green */
 
     for (float r = major; r <= extent + GRID_LOOP_EPSILON; r += major) {
-        gl_color(GR, GG, GB, fminf(0.06f * as, 1.0f));
+        grid_color(grid_ctx, GR, GG, GB, fminf(0.06f * as, 1.0f));
         glBegin(GL_LINE_LOOP);
         for (int i = 0; i < SEG; i++) {
             float th = (float)i / (float)SEG * TAU;
@@ -662,14 +659,14 @@ static void scene_grid_render_radar_theme(const GridDrawContext *grid_ctx) {
 
     glLineWidth(1.5f);
     glBegin(GL_LINES);
-    gl_color(GR, GG, GB, fminf(0.07f * as, 1.0f));
+    grid_color(grid_ctx, GR, GG, GB, fminf(0.07f * as, 1.0f));
     glVertex3f(-extent, 0, 0); glVertex3f(extent, 0, 0);
     glVertex3f(0, 0, -extent); glVertex3f(0, 0, extent);
     glEnd();
 
     /* Expanding ping, very faint, fades as it grows. */
     float pr = fmodf(t * 0.45f, 1.0f) * extent;
-    gl_color(GR, GG, GB, fminf((1.0f - pr / extent) * 0.10f * as, 1.0f));
+    grid_color(grid_ctx, GR, GG, GB, fminf((1.0f - pr / extent) * 0.10f * as, 1.0f));
     glBegin(GL_LINE_LOOP);
     for (int i = 0; i < SEG; i++) {
         float th = (float)i / (float)SEG * TAU;
@@ -680,7 +677,7 @@ static void scene_grid_render_radar_theme(const GridDrawContext *grid_ctx) {
     /* Single faint sweep line. */
     float ang = fmodf(t * 0.8f, TAU);
     glBegin(GL_LINES);
-    gl_color(GR, GG, GB, fminf(0.12f * as, 1.0f));
+    grid_color(grid_ctx, GR, GG, GB, fminf(0.12f * as, 1.0f));
     glVertex3f(0.0f, 0.0f, 0.0f);
     glVertex3f(extent * cosf(ang), 0.0f, extent * sinf(ang));
     glEnd();
@@ -694,50 +691,38 @@ int scene_grid_theme_uses_fog(SceneGridTheme grid_theme) {
 /* --- scene_grid_render phases ---
  *
  * Splits the 150-line orchestrator into:
- *   - grid_xn_resolve_alpha(): per-frame transition fade resolution.
- *     Sets g_xn_opacity / g_xn_alpha (still file-static today —
- *     deferred lift in audit #3). Returns 1 to proceed, 0 to skip.
+ *   - grid_xn_resolve(): per-frame transition fade via the shared
+ *     scene_overlay_xn_resolve. Returns a SceneOverlayXn the caller
+ *     stamps onto the GridDrawContext.
  *   - grid_setup_blend_depth(): the GL state baseline for grid draws.
  *   - grid_build_draw_context(): clamps extent/major indices and
  *     fills the GridDrawContext.
  *   - grid_apply_far_fog(): the FAR-extent distance fog + the
  *     FOG-transition recede injection for non-far themes.
- *   - grid_save_nv_fog_mode() / _restore: NV_fog_distance bracket.
  *   - grid_dispatch_theme(): the switch over SceneGridTheme.
  *
- * scene_grid_render is now the sequencer of these phases. */
+ * scene_grid_render is now the sequencer of these phases, and the
+ * xn fields live on GridDrawContext rather than as file statics
+ * (audit #3). */
 
+/* Resolve grid transition fade via the shared overlay-xn helper. The
+ * grid's "this theme owns fog" carve-out (EXP2-fog themes — FOG and
+ * OCEAN — fall back to plain alpha FADE so their fog isn't competing
+ * with the synthetic LINEAR recede) is keyed on
+ * scene_grid_theme_uses_fog(). */
+static SceneOverlayXn grid_xn_resolve(const SceneRenderConfig *config,
+                                      SceneGridTheme grid_theme) {
 #if GRID_XN_STYLE == GRID_AXES_XN_FOG
-static int grid_xn_uses_fog(SceneGridTheme grid_theme) {
-    return scene_grid_theme_uses_fog(grid_theme);
-}
-#endif
-
-/* Resolve grid transition fade. Returns 1 to proceed, 0 to skip
- * drawing entirely. Sets g_xn_opacity / g_xn_alpha as side effects
- * (the gl_color path multiplies through these — see file head). */
-static int grid_xn_resolve_alpha(const SceneRenderConfig *config,
-                                 SceneGridTheme grid_theme) {
-    (void)grid_theme;
-    g_xn_opacity = scene_clamp01f(config->grid_opacity);
-    if (g_xn_opacity <= 0.0f) return 0;
-#if GRID_XN_STYLE == GRID_AXES_XN_FOG
-    /* The EXP2-fog themes (FOG/OCEAN) fall back to the plain alpha
-     * FADE: their fog is left as-is and the geometry just alpha-fades,
-     * since their EXP2 fog can't blend continuously with the LINEAR
-     * recede. Every other theme — including any theme at the FAR
-     * extent, whose LINEAR distance fog composes fine — gets the
-     * synthesized clear-color recede + alpha knee. */
-    if (grid_xn_uses_fog(grid_theme))
-        g_xn_alpha = g_xn_opacity;                       /* FADE fallback */
-    else if (g_xn_opacity >= GRID_XN_FOG_ALPHA_KNEE)
-        g_xn_alpha = 1.0f;                               /* fog does the work */
-    else
-        g_xn_alpha = g_xn_opacity / GRID_XN_FOG_ALPHA_KNEE;  /* final vanish */
+    int uses_fog = scene_grid_theme_uses_fog(grid_theme);
+    float knee   = GRID_XN_FOG_ALPHA_KNEE;
 #else
-    g_xn_alpha = g_xn_opacity;
+    (void)grid_theme;
+    int uses_fog = 0;
+    float knee   = 1.0f; /* not used in FADE style; keeps the helper pure */
 #endif
-    return 1;
+    return scene_overlay_xn_resolve(config->grid_opacity,
+                                    GRID_XN_STYLE,
+                                    uses_fog, knee);
 }
 
 static void grid_setup_blend_depth(const SceneRenderConfig *config) {
@@ -774,18 +759,22 @@ static GridDrawContext grid_build_draw_context(const SceneFrameRenderContext *fr
 }
 
 /* FAR-extent clear-color distance fog. Under FOG transition style,
- * fog-less themes animate the same fog inward as they hide. */
+ * fog-less themes animate the same fog inward as they hide. The
+ * xn parameter carries the resolved fog_tf (= 1 - opacity) so this
+ * helper doesn't reach back to the renderer's draw context for the
+ * value. */
 static void grid_apply_far_fog(const SceneRenderConfig *config,
-                               SceneGridTheme grid_theme, float extent) {
+                               SceneGridTheme grid_theme, float extent,
+                               const SceneOverlayXn *xn) {
     int is_far = (config->grid_extent_idx == GRID_EXTENT_FAR);
 #if GRID_XN_STYLE == GRID_AXES_XN_FOG
     /* Fog-less, non-FAR themes: recede into a synthesized clear-color
      * fog as the overlay hides. At FAR the recede is driven by the
      * FAR block's own fog (below) instead, so it isn't double-set /
      * overwritten. Fog-owning configs took the FADE fallback above. */
-    int uses_fog = grid_xn_uses_fog(grid_theme);
+    int uses_fog = scene_grid_theme_uses_fog(grid_theme);
     if (!uses_fog && !is_far)
-        grid_xn_apply_transition_fog(1.0f - g_xn_opacity, extent);
+        grid_xn_apply_transition_fog(xn->fog_tf, extent);
 #else
     (void)grid_theme;
 #endif
@@ -798,10 +787,12 @@ static void grid_apply_far_fog(const SceneRenderConfig *config,
     float fog_end   = extent;
 #if GRID_XN_STYLE == GRID_AXES_XN_FOG
     if (!uses_fog) {
-        float tf = 1.0f - g_xn_opacity;
+        float tf = xn->fog_tf;
         fog_end   = extent + (extent * 0.05f - extent) * tf;
         fog_start = fog_end * 0.7f;
     }
+#else
+    (void)xn;
 #endif
     float clear_col[4];
     glGetFloatv(GL_COLOR_CLEAR_VALUE, clear_col);
@@ -870,7 +861,9 @@ void scene_grid_render(const SceneFrameRenderContext *frame_ctx) {
     const SceneRenderConfig *config = &frame_ctx->config;
     SceneGridTheme grid_theme = (SceneGridTheme)config->grid_theme;
     if (grid_theme == GRID_THEME_OFF) return;
-    if (!grid_xn_resolve_alpha(config, grid_theme)) return;
+
+    SceneOverlayXn xn = grid_xn_resolve(config, grid_theme);
+    if (!xn.draw) return;
 
     scene_grid_push_state();
     grid_setup_blend_depth(config);
@@ -880,7 +873,9 @@ void scene_grid_render(const SceneFrameRenderContext *frame_ctx) {
     glTranslatef(0, -0.002f, 0);
 
     GridDrawContext grid_ctx = grid_build_draw_context(frame_ctx);
-    grid_apply_far_fog(config, grid_theme, grid_ctx.extent);
+    grid_ctx.xn_opacity = xn.opacity;
+    grid_ctx.xn_alpha   = xn.alpha;
+    grid_apply_far_fog(config, grid_theme, grid_ctx.extent, &xn);
 
     /* GL_FOG_DISTANCE_MODE_NV isn't in the Khronos GL_FOG_BIT spec, so
      * a strict glPushAttrib(GL_ALL_ATTRIB_BITS) may not save/restore it.
