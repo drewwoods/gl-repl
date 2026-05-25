@@ -192,7 +192,7 @@ const int CFG_ITEM_COUNT = (int)(sizeof(g_cfg_items) / sizeof(g_cfg_items[0]));
  * per-scene cfg snapshots. (Originally step 4 of
  * feature/decouple-repl-from-gl-repl-alt.md.) */
 
-#include "repl/export.h"
+#include "repl/cfg_baseline.h"
 
 static void cfg_slug_from_label(const char *label, char *out, size_t out_sz) {
     size_t out_idx = 0;
@@ -233,29 +233,29 @@ static int cfg_key_in_scene_subset(GlrConfigKey key) {
     }
 }
 
-static void glr_export_cfg_fill_all(ReplExportConfig *cfg) {
+static void glr_export_cfg_fill_all(ReplConfigBag *cfg) {
     int n = 0;
     const GlrConfigItem *items = glr_config_items(&n);
     for (int i = 0; i < n; i++) {
         const GlrConfigItem *item = &items[i];
         if (item->section_header || item->key == GLR_CONFIG_NONE) continue;
         if (item->state_count <= 0) continue; /* action row: nothing to persist */
-        char slug[REPL_EXPORT_CFG_KEY_MAX];
+        char slug[REPL_CFG_KEY_MAX];
         cfg_slug_from_label(item->label, slug, sizeof(slug));
-        repl_export_config_set_int(cfg, slug, glr_config_get(item->key));
+        repl_config_bag_set_int(cfg, slug, glr_config_get(item->key));
     }
 }
 
-static void glr_export_cfg_fill_scene_subset(ReplExportConfig *cfg) {
+static void glr_export_cfg_fill_scene_subset(ReplConfigBag *cfg) {
     int n = 0;
     const GlrConfigItem *items = glr_config_items(&n);
     for (int i = 0; i < n; i++) {
         const GlrConfigItem *item = &items[i];
         if (item->section_header || item->key == GLR_CONFIG_NONE) continue;
         if (!cfg_key_in_scene_subset(item->key))                  continue;
-        char slug[REPL_EXPORT_CFG_KEY_MAX];
+        char slug[REPL_CFG_KEY_MAX];
         cfg_slug_from_label(item->label, slug, sizeof(slug));
-        repl_export_config_set_int(cfg, slug, glr_config_get(item->key));
+        repl_config_bag_set_int(cfg, slug, glr_config_get(item->key));
     }
 }
 
@@ -277,7 +277,7 @@ static const GlrConfigItem *glr_export_cfg_find_item_by_slug(const char *slug) {
         return NULL;
 
     int dummy_val = 1;
-    char normalized_slug[REPL_EXPORT_CFG_KEY_MAX];
+    char normalized_slug[REPL_CFG_KEY_MAX];
     glr_export_cfg_normalize_legacy_alias(&slug, &dummy_val,
                                           normalized_slug,
                                           sizeof(normalized_slug));
@@ -288,7 +288,7 @@ static const GlrConfigItem *glr_export_cfg_find_item_by_slug(const char *slug) {
         const GlrConfigItem *item = &items[i];
         if (item->section_header || item->key == GLR_CONFIG_NONE)
             continue;
-        char item_slug[REPL_EXPORT_CFG_KEY_MAX];
+        char item_slug[REPL_CFG_KEY_MAX];
         cfg_slug_from_label(item->label, item_slug, sizeof(item_slug));
         if (strcmp(item_slug, slug) == 0)
             return item;
@@ -296,12 +296,12 @@ static const GlrConfigItem *glr_export_cfg_find_item_by_slug(const char *slug) {
     return NULL;
 }
 
-static void glr_export_cfg_apply(const ReplExportConfig *cfg) {
+static void glr_export_cfg_apply(const ReplConfigBag *cfg) {
     if (!cfg) return;
     for (int idx = 0; idx < cfg->count; idx++) {
         const char *slug = cfg->items[idx].key;
         int val = (int)strtol(cfg->items[idx].value, NULL, 10);
-        char normalized_slug[REPL_EXPORT_CFG_KEY_MAX];
+        char normalized_slug[REPL_CFG_KEY_MAX];
         glr_export_cfg_normalize_legacy_alias(&slug, &val,
                                               normalized_slug,
                                               sizeof(normalized_slug));
@@ -329,7 +329,7 @@ static int glr_export_cfg_slug_is_scene_subset(const char *slug) {
     return item && cfg_key_in_scene_subset(item->key) ? 1 : 0;
 }
 
-const ReplExportConfigBridge g_glr_export_cfg_bridge = {
+const ReplConfigBridge g_glr_export_cfg_bridge = {
     .fill_all          = glr_export_cfg_fill_all,
     .fill_scene_subset = glr_export_cfg_fill_scene_subset,
     .apply             = glr_export_cfg_apply,
@@ -339,7 +339,7 @@ const ReplExportConfigBridge g_glr_export_cfg_bridge = {
 };
 
 void glr_actions_install_export_cfg_bridge(void) {
-    repl_export_install_config_bridge(&g_glr_export_cfg_bridge);
+    repl_config_install_bridge(&g_glr_export_cfg_bridge);
 }
 
 static void apply_audio_cfg_mode(int mode) {

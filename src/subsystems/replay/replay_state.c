@@ -21,17 +21,17 @@
         .fade_batch_count = 0,                            \
     }
 
-static ReplReplayRuntimeState       g_replay_runtime_state = REPLAY_STATE_INITIAL;
-static const ReplReplayRuntimeState g_replay_state_defaults = REPLAY_STATE_INITIAL;
+static ReplayRuntimeState       g_replay_runtime_state = REPLAY_STATE_INITIAL;
+static const ReplayRuntimeState g_replay_state_defaults = REPLAY_STATE_INITIAL;
 
 /* Exclusively a test/verification contract; production code does not capture replay state. */
-void replay_state_capture(ReplReplayRuntimeState *snapshot) {
+void replay_state_capture(ReplayRuntimeState *snapshot) {
     if (!snapshot) return;
     *snapshot = g_replay_runtime_state;
 }
 
 /* Exclusively a test/verification contract; production code does not restore replay state. */
-void replay_state_restore(const ReplReplayRuntimeState *snapshot) {
+void replay_state_restore(const ReplayRuntimeState *snapshot) {
     if (!snapshot) return;
     g_replay_runtime_state = *snapshot;
 }
@@ -40,11 +40,11 @@ void replay_state_reset(void) {
     g_replay_runtime_state = g_replay_state_defaults;
 }
 
-ReplReplayRuntimeState replay_state_view(void) {
+ReplayRuntimeState replay_state_view(void) {
     return g_replay_runtime_state;
 }
 
-ReplReplayRuntimeState *replay_state_mut(void) {
+ReplayRuntimeState *replay_state_mut(void) {
     return &g_replay_runtime_state;
 }
 

@@ -4,7 +4,7 @@
  *
  * The fields here used to live on `ReplRuntimeState.{presentation,render}`.
  * Workspace-header read/write already routed through the cfg bridge
- * (`ReplExportConfigBridge`) and per-scene snapshots through the same
+ * (`ReplConfigBridge`) and per-scene snapshots through the same
  * opaque bag, so the storage relocation is mechanical: the bridge keeps
  * using `glr_config_get/set`, which now points at this struct via
  * `glr_config.c::config_value_ptr`.

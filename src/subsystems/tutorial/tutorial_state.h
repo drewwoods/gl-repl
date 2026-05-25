@@ -72,7 +72,7 @@ typedef struct {
      * cap. */
     int                   instruction_line_for_step[TUTORIAL_LOCKED_LINE_MAX];
     int                   in_enter_step;
-    ReplExportConfig      baseline_bag;
+    ReplConfigBag         baseline_bag;
     int                   baseline_valid;
 } TutorialRuntimeState;
 

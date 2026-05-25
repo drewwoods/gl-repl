@@ -992,7 +992,7 @@ static void glr_ctrl_push_highlights(void) {
  * applicable kinds get entries). */
 static void glr_ctrl_push_line_overrides(void) {
     editor_state_line_overrides_clear();
-    ReplReplayRuntimeState replay = replay_state_view();
+    ReplayRuntimeState replay = replay_state_view();
     if (!replay.active || !replay.expand_args)
         return;
 
@@ -1784,7 +1784,7 @@ void glr_ctrl_display_frame(void) {
      * HUD shows the per-frame "before-prepare" view (the contract that
      * test_glr_ctrl pins). Per-field narrow accessors elsewhere in
      * the frame are reading post-prepare state, which is what they want. */
-    ReplReplayRuntimeState frame_replay = replay_state_view();
+    ReplayRuntimeState frame_replay = replay_state_view();
     SceneRenderConfig scene_config;
     UiRenderSnapshot ui_snap;
 
@@ -1908,7 +1908,7 @@ void glr_ctrl_display_frame(void) {
          * snap->replay readers only touch fields replay_prepare_frame
          * doesn't write (src_line_idx, active), so the override is HUD-
          * specific and ephemeral. */
-        ReplReplayRuntimeState saved_snap_replay = ui_snap.replay;
+        ReplayRuntimeState saved_snap_replay = ui_snap.replay;
         ui_snap.replay = frame_replay;
         replay_ui_hud_render(&ui_snap);
         ui_snap.replay = saved_snap_replay;
@@ -4165,7 +4165,7 @@ void glr_ctrl_tick(void) {
     repl_advance_time(GLR_FRAME_DT_SECS);
 
     {
-        ReplReplayRuntimeState *replay = replay_state_mut();
+        ReplayRuntimeState *replay = replay_state_mut();
 
         if (replay->active)
             replay_tick_fade_batches(GLR_FRAME_DT_SECS);
@@ -4186,7 +4186,7 @@ void glr_ctrl_tick(void) {
 
     {
         /* Easing for variable panel's lift above replay HUD (Smell #21/#22/#40) */
-        UiVariablePanelState *vp = variable_panel_state_mut();
+        VariablePanelViewState *vp = variable_panel_state_mut();
         float target = 0.0f;
         if (replay_active()) {
             float lift_target = (float)((REPLAY_HUD_BOTTOM_Y + 10) - 8); /* clearance = 10, BASE_Y = 8 */

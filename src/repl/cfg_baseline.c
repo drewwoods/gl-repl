@@ -7,35 +7,35 @@
 #include <ctype.h>
 #include "repl/cfg_baseline.h"
 
-void repl_export_config_clear(ReplExportConfig *cfg) {
+void repl_config_bag_clear(ReplConfigBag *cfg) {
     if (!cfg) return;
     cfg->count = 0;
 }
 
-int repl_export_config_set(ReplExportConfig *cfg,
+int repl_config_bag_set(ReplConfigBag *cfg,
                            const char *key, const char *value) {
     if (!cfg || !key || !value) return 0;
     /* Replace if present. */
     for (int i = 0; i < cfg->count; i++) {
         if (strcmp(cfg->items[i].key, key) == 0) {
-            snprintf(cfg->items[i].value, REPL_EXPORT_CFG_VALUE_MAX, "%s", value);
+            snprintf(cfg->items[i].value, REPL_CFG_VALUE_MAX, "%s", value);
             return 1;
         }
     }
-    if (cfg->count >= REPL_EXPORT_CFG_MAX_ITEMS) return 0;
-    snprintf(cfg->items[cfg->count].key,   REPL_EXPORT_CFG_KEY_MAX,   "%s", key);
-    snprintf(cfg->items[cfg->count].value, REPL_EXPORT_CFG_VALUE_MAX, "%s", value);
+    if (cfg->count >= REPL_CFG_MAX_ITEMS) return 0;
+    snprintf(cfg->items[cfg->count].key,   REPL_CFG_KEY_MAX,   "%s", key);
+    snprintf(cfg->items[cfg->count].value, REPL_CFG_VALUE_MAX, "%s", value);
     cfg->count++;
     return 1;
 }
 
-int repl_export_config_set_int(ReplExportConfig *cfg, const char *key, int value) {
-    char buf[REPL_EXPORT_CFG_VALUE_MAX];
+int repl_config_bag_set_int(ReplConfigBag *cfg, const char *key, int value) {
+    char buf[REPL_CFG_VALUE_MAX];
     snprintf(buf, sizeof(buf), "%d", value);
-    return repl_export_config_set(cfg, key, buf);
+    return repl_config_bag_set(cfg, key, buf);
 }
 
-const char *repl_export_config_get(const ReplExportConfig *cfg, const char *key) {
+const char *repl_config_bag_get(const ReplConfigBag *cfg, const char *key) {
     if (!cfg || !key) return NULL;
     for (int i = 0; i < cfg->count; i++) {
         if (strcmp(cfg->items[i].key, key) == 0)
@@ -44,18 +44,18 @@ const char *repl_export_config_get(const ReplExportConfig *cfg, const char *key)
     return NULL;
 }
 
-int repl_export_config_get_int(const ReplExportConfig *cfg,
+int repl_config_bag_get_int(const ReplConfigBag *cfg,
                                const char *key, int fallback) {
-    const char *s = repl_export_config_get(cfg, key);
+    const char *s = repl_config_bag_get(cfg, key);
     if (!s) return fallback;
     return (int)strtol(s, NULL, 10);
 }
 
-int repl_export_config_count(const ReplExportConfig *cfg) {
+int repl_config_bag_count(const ReplConfigBag *cfg) {
     return cfg ? cfg->count : 0;
 }
 
-int repl_export_config_at(const ReplExportConfig *cfg, int idx,
+int repl_config_bag_at(const ReplConfigBag *cfg, int idx,
                           const char **key_out, const char **value_out) {
     if (!cfg || idx < 0 || idx >= cfg->count) return 0;
     if (key_out)   *key_out   = cfg->items[idx].key;
@@ -63,17 +63,17 @@ int repl_export_config_at(const ReplExportConfig *cfg, int idx,
     return 1;
 }
 
-static const ReplExportConfigBridge *g_export_cfg_bridge = NULL;
+static const ReplConfigBridge *g_cfg_bridge = NULL;
 
-void repl_export_install_config_bridge(const ReplExportConfigBridge *bridge) {
-    g_export_cfg_bridge = bridge;
+void repl_config_install_bridge(const ReplConfigBridge *bridge) {
+    g_cfg_bridge = bridge;
 }
 
-const ReplExportConfigBridge *repl_export_config_bridge(void) {
-    return g_export_cfg_bridge;
+const ReplConfigBridge *repl_config_bridge(void) {
+    return g_cfg_bridge;
 }
 
-int repl_export_extract_cfg_slug(const char *line, char *out, size_t out_sz) {
+int repl_config_extract_slug(const char *line, char *out, size_t out_sz) {
     if (!line || !out || out_sz == 0) return 0;
     const char *p = line;
     while (*p && isspace((unsigned char)*p)) p++;
@@ -101,22 +101,22 @@ int repl_export_extract_cfg_slug(const char *line, char *out, size_t out_sz) {
 }
 
 int repl_cfg_get_int(const char *slug, int fallback) {
-    const ReplExportConfigBridge *b = g_export_cfg_bridge;
+    const ReplConfigBridge *b = g_cfg_bridge;
     if (!slug || !b || !b->get_int) return fallback;
     return b->get_int(slug, fallback);
 }
 
 void repl_cfg_set_int(const char *slug, int value) {
-    const ReplExportConfigBridge *b = g_export_cfg_bridge;
+    const ReplConfigBridge *b = g_cfg_bridge;
     if (!slug || !b || !b->apply) return;
-    ReplExportConfig single;
-    repl_export_config_clear(&single);
-    repl_export_config_set_int(&single, slug, value);
+    ReplConfigBag single;
+    repl_config_bag_clear(&single);
+    repl_config_bag_set_int(&single, slug, value);
     b->apply(&single);
 }
 
 int repl_cfg_known(const char *slug) {
-    const ReplExportConfigBridge *b = g_export_cfg_bridge;
+    const ReplConfigBridge *b = g_cfg_bridge;
     if (!slug || !b || !b->is_known) return 0;
     return b->is_known(slug);
 }

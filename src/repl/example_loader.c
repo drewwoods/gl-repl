@@ -211,8 +211,10 @@ static int example_cfg_extract_slug(const char *text,
     return *p == '=';
 }
 
+#include "repl/cfg_baseline.h"
+
 static int example_cfg_slug_allowed(const char *slug) {
-    const ReplExportConfigBridge *bridge = repl_export_config_bridge();
+    const ReplConfigBridge *bridge = repl_config_bridge();
     return bridge && bridge->slug_is_scene_subset
         ? bridge->slug_is_scene_subset(slug)
         : 0;

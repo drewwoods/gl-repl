@@ -1489,7 +1489,7 @@ static void paint_menu_labels(const int *menu_x, const int *menu_w,
 static void paint_pin_buttons(const UiRenderSnapshot *snap,
                               const int *pin_x, const int *pin_w,
                               int by, int bh, int hover_pin,
-                              ReplReplayRuntimeState replay) {
+                              ReplayRuntimeState replay) {
     int i;
     for (i = 0; i < NUM_PIN_BTNS; i++) {
         int hover = (hover_pin == i);

@@ -84,7 +84,7 @@ static const char *replay_flat_text(int flat_idx) {
 }
 
 static void replay_annotations_rebuild_cache(void) {
-    ReplReplayRuntimeState replay = replay_state_view();
+    ReplayRuntimeState replay = replay_state_view();
     const GLCmd *flat_cmds = repl_state_flat_program_cmds();
     memset(s_replay_flat_map, 0xff, sizeof(int) * (size_t)repl_state_document_count());
 
@@ -112,7 +112,7 @@ static void replay_annotations_invalidate(void) {
 
 /* Find the most recent flat command for a source line, at or before replay_pc */
 static int replay_annotation_flat_cmd_for_source(int src_line) {
-    ReplReplayRuntimeState replay = replay_state_view();
+    ReplayRuntimeState replay = replay_state_view();
     const GLCmd *flat_cmds = repl_state_flat_program_cmds();
 
     if (replay.pc <= 0) return -1;
@@ -128,7 +128,7 @@ static int replay_annotation_flat_cmd_for_source(int src_line) {
 }
 
 static int replay_current_flat_cmd(void) {
-    ReplReplayRuntimeState replay = replay_state_view();
+    ReplayRuntimeState replay = replay_state_view();
 
     if (replay.src_line_idx < 0)
         return -1;
@@ -370,7 +370,7 @@ static int replay_flat_cmd_context_matches(int flat_idx, int current_flat_idx) {
 }
 
 static int find_replay_assignment_flat_cmd(int src_line) {
-    ReplReplayRuntimeState replay = replay_state_view();
+    ReplayRuntimeState replay = replay_state_view();
     int current_flat_idx = replay_current_flat_cmd();
     const GLCmd *flat_cmds = repl_state_flat_program_cmds();
 
@@ -550,7 +550,7 @@ static int replay_eval_expr_with_state(
 
 static void replay_init_sim_state(float *vals, int max_vals,
                                   float scratch[REPL_SCRATCH_ARRAY_COUNT][REPL_SCRATCH_ARRAY_LEN]) {
-    ReplReplayRuntimeState replay = replay_state_view();
+    ReplayRuntimeState replay = replay_state_view();
 
     if (!vals || max_vals < g_num_predef_vars)
         return;
@@ -710,7 +710,7 @@ static int replay_copy_runtime_state_before_flat_cmd(
  * executes, matching replay_copy_predef_values_before_flat_cmd semantics.
  * Total cost: O(replay_pc), called once per frame during cache rebuild. */
 static void replay_build_predef_snapshots(void) {
-    ReplReplayRuntimeState replay = replay_state_view();
+    ReplayRuntimeState replay = replay_state_view();
     /* Zero-initialized so no later read can hit an indeterminate slot if a
      * branch below fills only [0, g_num_predef_vars). */
     float vals[MAX_PREDEF_VARS] = {0};
@@ -726,7 +726,7 @@ static void replay_build_predef_snapshots(void) {
 
 static int build_replay_assignment_inline_comment(int cmd_idx, int flat_idx,
                                                   char *out, int out_size) {
-    ReplReplayRuntimeState replay = replay_state_view();
+    ReplayRuntimeState replay = replay_state_view();
     /* Zero-init: the fill helper writes only [0, g_num_predef_vars). */
     float predef_vals[MAX_PREDEF_VARS] = {0};
     float scratch_vals[REPL_SCRATCH_ARRAY_COUNT][REPL_SCRATCH_ARRAY_LEN];
@@ -833,7 +833,7 @@ static int build_replay_assignment_inline_comment(int cmd_idx, int flat_idx,
 int replay_code_panel_get_command_display_text(SourceTextView text,
                                                     int cmd_idx,
                                                     char *out, int out_size) {
-    ReplReplayRuntimeState replay = replay_state_view();
+    ReplayRuntimeState replay = replay_state_view();
     s_replay_text_view = text;
     int flat_idx;
     char comment[REPL_REPLAY_COMMENT_BUF];
@@ -874,7 +874,7 @@ int replay_code_panel_get_command_display_text(SourceTextView text,
 static int replay_build_subst_annotation(int cmd_idx, int flat_idx,
                                               char *subst, int subst_size,
                                               char *var_comment, int comment_size) {
-    ReplReplayRuntimeState replay = replay_state_view();
+    ReplayRuntimeState replay = replay_state_view();
     /* Zero-init: the fill helper writes only [0, g_num_predef_vars). */
     float predef_vals[MAX_PREDEF_VARS] = {0};
     float scratch_vals[REPL_SCRATCH_ARRAY_COUNT][REPL_SCRATCH_ARRAY_LEN];
@@ -912,7 +912,7 @@ static int replay_build_subst_annotation(int cmd_idx, int flat_idx,
 
 static int replay_build_eval_annotation(int cmd_idx, int flat_idx,
                                              char *eval_buf, int eval_size) {
-    ReplReplayRuntimeState replay = replay_state_view();
+    ReplayRuntimeState replay = replay_state_view();
     /* Zero-init: the fill helper writes only [0, g_num_predef_vars). */
     float predef_vals[MAX_PREDEF_VARS] = {0};
     float scratch_vals[REPL_SCRATCH_ARRAY_COUNT][REPL_SCRATCH_ARRAY_LEN];
@@ -1100,7 +1100,7 @@ static void replay_annotations_refresh_output(ReplReplayAnnotationOutput *out) {
     if (!out) return;
     memset(out, 0, sizeof(*out));
 
-    ReplReplayRuntimeState replay = replay_state_view();
+    ReplayRuntimeState replay = replay_state_view();
     if (!replay.active || !replay.expand_args)
         return;
     int cmd_idx = replay.src_line_idx;
@@ -1135,7 +1135,7 @@ static void replay_annotations_refresh_output(ReplReplayAnnotationOutput *out) {
 
 void replay_annotations_prepare(SourceTextView text,
                                      ReplReplayAnnotationOutput *out) {
-    ReplReplayRuntimeState replay = replay_state_view();
+    ReplayRuntimeState replay = replay_state_view();
 
     s_replay_text_view = text;
 

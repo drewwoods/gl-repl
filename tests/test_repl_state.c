@@ -53,7 +53,7 @@ static void populate_runtime_snapshot_fixture(const char *scene_hint) {
     GlrPresentationState *presentation;
     GlrRenderState *glr_render;
     ReplRenderState *render;
-    ReplReplayRuntimeState *replay;
+    ReplayRuntimeState *replay;
     ReplFlatProgramState *flat_program;
 
     editor_input_set_text("glVertex3f(1, 2, 3)");
@@ -221,8 +221,8 @@ static void test_capture_restore_round_trip(void) {
     static UiState ui_round_trip;
     static VariablePanelState varpanel_snap;
     static VariablePanelState varpanel_round_trip;
-    static ReplReplayRuntimeState replay_snap;
-    static ReplReplayRuntimeState replay_round_trip;
+    static ReplayRuntimeState replay_snap;
+    static ReplayRuntimeState replay_round_trip;
     static EditorHelpSession help_snap;
     static EditorHelpSession help_round_trip;
     static const char *scene_hint = "Captured Scene";
