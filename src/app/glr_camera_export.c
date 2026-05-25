@@ -14,9 +14,9 @@
  *   - "display": line 3 uses the numeric ry value. Used for the
  *     code-panel preview (g_cam_lines).
  *
- * Older exports also wrote a literal `glRotatef(ry_value, 0,1,0)` line
- * before the g_angle placeholder; the import parser tolerates either
- * form so existing saved files keep working.
+ * Import accepts either yaw variant at line 3:
+ *   - `glRotatef(g_angle, 0,1,0)` (saved-file format)
+ *   - `glRotatef(<numeric ry>, 0,1,0)` (display/example format)
  *
  * (Bridge introduced to decouple camera formatting from the export core.)
  */
@@ -70,13 +70,10 @@ static void cam_format_save_preamble(char *out, int out_sz) {
  *
  *   state 0  expect first glTranslatef (camera distance).
  *   state 1  expect glRotatef rx (axis 1,0,0).
- *   state 2  expect either glRotatef(ry, 0,1,0)  -> stay in state 3
- *                       or glRotatef(g_angle, 0,1,0) -> jump to state 4.
- *   state 3  expect glRotatef(g_angle, ...). Tolerates absence and
- *            falls through to state 4 to try the target translate
- *            on the same line.
- *   state 4  expect glTranslatef target.
- *   state 5  done; later lines are not part of the camera block.
+ *   state 2  expect glRotatef yaw with axis 0,1,0:
+ *            either numeric ry or g_angle placeholder.
+ *   state 3  expect glTranslatef target.
+ *   state 4  done; later lines are not part of the camera block.
  *
  * The same parser also recognises the `static float g_angle = N.NNNNf;`
  * preamble line — it treats that as a free-standing camera input that
@@ -118,7 +115,7 @@ static int cam_try_parse_angle_preamble(const char *text) {
 }
 
 static int cam_try_consume_block_line(const char *text) {
-    if (g_cam_parse_state >= 5) return 0;
+    if (g_cam_parse_state >= 4) return 0;
 
     const char *p = text;
     while (*p == ' ' || *p == '\t') p++;
@@ -149,7 +146,7 @@ static int cam_try_consume_block_line(const char *text) {
     if (g_cam_parse_state == 2 && strncmp(p, "glRotatef", 9) == 0) {
         const char *q = strchr(p, '(');
         if (q && strstr(q, "g_angle")) {
-            g_cam_parse_state = 4;
+            g_cam_parse_state = 3;
             return 1;
         }
         p = strchr(p, '(');
@@ -163,26 +160,14 @@ static int cam_try_consume_block_line(const char *text) {
         return 1;
     }
 
-    if (g_cam_parse_state == 3) {
-        if (strncmp(p, "glRotatef", 9) == 0) {
-            const char *q = strchr(p, '(');
-            if (q && strstr(q, "g_angle")) {
-                g_cam_parse_state = 4;
-                return 1;
-            }
-        }
-        g_cam_parse_state = 4;
-        /* fall through to try the target translate on the same line */
-    }
-
-    if (g_cam_parse_state == 4 && strncmp(p, "glTranslatef", 12) == 0) {
+    if (g_cam_parse_state == 3 && strncmp(p, "glTranslatef", 12) == 0) {
         p = strchr(p, '(');
         if (!p) return 0;
         p++;
         float v[3];
         if (!cam_line_read_floats(p, v, 3)) return 0;
         glr_camera_set_pan(-v[0], -v[1], -v[2]);
-        g_cam_parse_state = 5;
+        g_cam_parse_state = 4;
         return 1;
     }
 
@@ -206,7 +191,6 @@ static int cam_consume_example_block_now(const ReplExportCameraBlock *block) {
     if (!cam_try_consume_import_line(block->lines[0])) return 0;
     if (!cam_try_consume_import_line(block->lines[1])) return 0;
     if (!cam_try_consume_import_line(block->lines[2])) return 0;
-    if (!cam_try_consume_import_line("glRotatef(g_angle, 0, 1, 0)")) return 0;
     if (!cam_try_consume_import_line(block->lines[3])) return 0;
     return 1;
 }

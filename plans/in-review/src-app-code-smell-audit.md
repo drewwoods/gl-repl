@@ -41,6 +41,13 @@
 > local gaps and passes `make check-c99` + `make test-stubs`; a full
 > branch checkout verification on `gracemont` is still pending.
 >
+> **Revision 5 (2026-05-25):** Remaining open high-severity items #8,
+> #9, #11, and #12 were closed with test-first coverage in
+> `tests/test_repl_state.c` and `tests/test_repl_core_io.c`, then fixes
+> in `src/app/glr_source_document.c` and `src/app/glr_camera_export.c`.
+> Verified via `make BUILD=debug test_repl_state test_repl_core_io` plus
+> direct runs of both debug binaries.
+>
 > Scope: every file under `src/app/`. Tests under `tests/` were read
 > where they document a contract, but not audited.
 >
@@ -84,18 +91,18 @@ started** means no branch change was found for that finding.
 
 | # | Status | Direct review note |
 |---|--------|--------------------|
-| 1 | Partial | Slot-lifetime direction is present and the mutex is now dynamically initialized, but the accepted miniaudio-under-lock risk still needs an explicit in-code note. |
+| 1 | Done | Slot-lifetime locking now has an explicit in-code note documenting the accepted miniaudio-under-lock risk and why active-slot control calls stay under the guard. |
 | 2 | Done | The nonportable static recursive initializer was removed; the mutex is initialized dynamically and local C99/stub verification passes. |
 | 3 | Done | The previously bare cited paths now lock, including loop/paused getters and deferred gesture start state. |
 | 4 | Done | `fflush`/`fclose` failures now discard the temp file before `rename`. |
 | 5 | Done | `worker_post()` no longer overwrites a queued `AWR_QUIT`. |
 | 6 | Done | Init now backs out on mutex/cond/thread setup failure; reverify after #2's mutex-lifetime cleanup. |
 | 7 | Done | Temp path construction now prefixes the basename instead of the whole path. |
-| 8 | Not started | `source_document_apply_change()` still has non-atomic partial-mutation paths. |
-| 9 | Not started | `SOURCE_TEXT_LOAD_ALL` still clamps oversized input. |
-| 10 | Not started | `glr_camera_restore()` still preserves transient velocities/pointer state. |
-| 11 | Not started | Camera import state-3 shape was not changed. |
-| 12 | Not started | Example camera-block synthetic `g_angle` line remains. |
+| 8 | Done | `source_document_apply_change()` now pre-validates capacity-sensitive combined changes so overflow cases reject before any mutation. |
+| 9 | Done | `SOURCE_TEXT_LOAD_ALL` now rejects oversized input (`count > MAX_COMMIT_CMDS`) instead of silently clamping. |
+| 10 | Done | `glr_camera_restore()` now clears transient momentum/pointer state; regression coverage is present in `test_camera_restore_clears_momentum`. |
+| 11 | Done | Camera import now parses yaw (`numeric ry` or `g_angle`) in one state and advances directly to target-translate (legacy state-3 path removed). |
+| 12 | Done | `cam_consume_example_block_now` now consumes the real 4-line block directly (synthetic `g_angle` injection removed). |
 | 13 | Done | New Scene now calls `editor_reset_for_new_scene()` instead of `editor_clear_all_cmds()`. |
 | 14 | Not started | Controller rendering extraction has not begun. |
 | 15 | Not started | `_mut()`-for-read usage remains in the cited app paths. |
@@ -1467,10 +1474,9 @@ The structural smell that swallows most of `glr_ctrl.c`'s size:
 
 Then **the camera-export seam**:
 
-- **#11** + **#12** — Remove legacy numeric-then-`g_angle` import
-  support. State 2 accepts either `g_angle` or numeric `ry`, advances
-  directly to target translate, and the synthetic example `g_angle`
-  line disappears.
+- **#11** + **#12** — Done. Import now parses either yaw form in one
+  state and advances directly to target-translate; the synthetic
+  example `g_angle` line is gone.
 - **#34** — Either add `glr_camera_export.h` or roll the bridge back
   into `glr_camera.c`.
 
