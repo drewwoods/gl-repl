@@ -142,6 +142,86 @@ After this pass the only open items in the audit are Tier C (real
 wins, high cost) and Tier D (kept on purpose). No bug-level
 findings remain.
 
+## Progress update — 2026-05-25
+
+Re-verified each Tier C finding against the current source. Most of
+the structural cluster has been quietly closed in the natural course
+of subsequent menu-bar / code-panel work. Updated per-heading markers
+to match.
+
+**Closed since the backlog pass** (8 of 14):
+
+- **#30** — `glIsEnabled(GL_BLEND)` is gone from `text_panel.c`; the
+  fake-bold per-segment query/restore has been removed entirely.
+- **#45** — `ui_menu_bar_render` went 140 → 40 lines, factored into
+  `paint_menu_labels` + `paint_pin_buttons` exactly as the audit
+  recommended.
+- **#48** — `ui_repl_code_panel_render` was renamed to
+  `ui_repl_code_panel_render_with_chrome` (the audit's recommended
+  fix word-for-word).
+- **#49** — Hit-test now reuses a cached builder keyed on the
+  snapshot pointer (`g_builder_cache`) instead of rebuilding rows
+  from scratch.
+- **#51** — Both `menu_dropdown_rect` and `submenu_rect` cache their
+  row-measurements; the per-call `strlen(label) + strlen(shortcut)`
+  scan is gone.
+- **#52** — `menu_item_label` no longer returns a `static char buf[48]`;
+  every branch returns a string literal or a name from another module.
+- **#53** — No more hand-rolled ASCII title-case math in
+  `menu_bar.c`; the menu rows are static literal strings.
+- **#54** — `repl_code_panel_newline_rows` renamed to
+  `repl_code_panel_trailing_row_count` (the audit's recommended name).
+
+**Partially closed** (4 of 14) — the function shape improved but
+the underlying smell wasn't fully resolved:
+
+- **#46** — `render_active_submenu` went 106 → 82 lines, but the
+  Config-special-case columns (`cfg_max_sc`, `cfg_state_right`) are
+  still hardcoded inline. The audit's full fix (a `FlyoutColumns`
+  struct + per-provider draw-row-decoration hook) hasn't landed.
+- **#47** — `ui_menu_bar_hit_test` went 87 → 61 lines and the
+  submenu pass was extracted into `submenu_hit_test`. The "two
+  duplicate chrome blocks" finding is mostly resolved (one is now in
+  the submenu helper) but the inline `inert_chrome_hit` branch is
+  still there.
+- **#50** — `MENU_LABEL_PAD_X` (was magic `18`) and `SUBMENU_ARROW_COL`
+  (was magic `26`) are now named. The `+ 4` / `+ 8` ordinal offsets
+  are mostly gone, but no `DROPDOWN_HEIGHT_PAD` /
+  `DROPDOWN_ROW_TOP_OFFSET` / `DROPDOWN_INNER_BORDER` constants exist
+  yet; finer-grained spacing constants haven't been hoisted.
+- **#58** — `(int)strlen(text)` repetition went from 5+ sites
+  (`fade`, `virtual-row build`, `statusbar layout`) down to 1
+  remaining site (`repl_code_panel.c:815`). The `UiTextPanelRow`
+  text-len cache the audit suggested wasn't added; the other call
+  sites were just deleted along the way.
+
+**Still open** (2 of 14):
+
+- **#55** — `ui_panels_render_scene_status` is still 118 lines with
+  the same duplicate ~45-line bar blocks. No shared
+  `draw_scene_status_strip` helper.
+- **#63** — `text_panel_row_layout` still called 5× across
+  `_input_row` / `_regular_row` / `_row_wrap_count` in
+  `text_panel.c`. Wrap counts still aren't cached on
+  `UiTextPanelOutput`.
+
+**Tier D — still warranted** (no change):
+
+- **#37** — Search pass-through wrappers still kept for the
+  `editor_*` ↔ `ui_text_*` namespace boundary.
+- **#44** — The conditional `resolved_line = source_line_idx` override
+  for `UI_TEXT_PANEL_ROW_VIRTUAL` is still load-bearing
+  (`text_panel.c:835-846`), test `test_ui_text_panel.c:190` still
+  pins the contract.
+
+Bottom line: 10 of the audit's 63 findings are now closed beyond the
+original closeout (2 in the 2026-05-24 backlog pass — #18, #25 —
+plus 8 here); 4 partially closed (#46, #47, #50, #58); only
+**2 Tier C and 2 Tier D items materially remain** (#55, #63 Tier C;
+#37, #44 Tier D), none of them bugs. The audit is effectively
+complete; the 2 stragglers wait for the next time someone opens
+`panels.c` / `text_panel.c`.
+
 ## 🔴 Actual bugs (verified)
 
 ### 1. `tabbed_overlay.c` reads past NUL on short lines (done in `fd70b4e`)
@@ -604,7 +684,7 @@ relocate this to one .c TU."
 promote getters/setters to extern; keep `theme.h` for declarations
 only.
 
-### 30. `text_panel.c` query-and-restore of `GL_BLEND` in tight per-segment loop (Tier C — deferred)
+### 30. `text_panel.c` query-and-restore of `GL_BLEND` in tight per-segment loop (done — Tier C closed 2026-05-25)
 
 **Where:** `src/ui/core/text_panel.c:113`
 
@@ -793,7 +873,7 @@ through to `hit_target_line_idx`.
 
 ## 🔵 Structural concerns
 
-### 45. `ui_menu_bar_render` is 140 lines mixing 6 jobs (Tier C — deferred)
+### 45. `ui_menu_bar_render` is 140 lines mixing 6 jobs (done — Tier C closed 2026-05-25; now 40 lines via `paint_menu_labels` + `paint_pin_buttons`)
 
 **Where:** `src/ui/app/menu_bar.c:1375-1514`
 
@@ -806,7 +886,7 @@ Search-vs-Replay-vs-default branching), and the bottom hairline.
 **Fix:** Break into `paint_strip_bg`, `paint_menu_labels(hover)`,
 `paint_pin_buttons(hover, replay)`; precompute hover from snap.
 
-### 46. `render_active_submenu` is 106 lines combining layout / paint / hit / kind / fade / Config-special-case columns (Tier C — deferred)
+### 46. `render_active_submenu` is 106 lines combining layout / paint / hit / kind / fade / Config-special-case columns (partial — 106→82 lines as of 2026-05-25; Config column hoisting remains Tier C)
 
 **Where:** `src/ui/app/menu_bar.c:1153-1258`
 
@@ -819,7 +899,7 @@ function isn't menu-agnostic.
 let each provider expose an optional "draw row right-decoration"
 hook.
 
-### 47. `ui_menu_bar_hit_test` is 87 lines with duplicate chrome branches (Tier C — deferred)
+### 47. `ui_menu_bar_hit_test` is 87 lines with duplicate chrome branches (partial — 87→61 lines as of 2026-05-25; one chrome branch now in `submenu_hit_test`, the other is still inline)
 
 **Where:** `src/ui/app/menu_bar.c:856-942`
 
@@ -829,7 +909,7 @@ L905-912) repeat the same overlay-precedence logic.
 **Fix:** Factor "inside dropdown rect but not on item" into one
 helper returning a chrome-or-item discriminator.
 
-### 48. `ui_repl_code_panel_render` is misnamed — it renders chrome too (Tier C — deferred)
+### 48. `ui_repl_code_panel_render` is misnamed — it renders chrome too (done — Tier C closed 2026-05-25; renamed to `ui_repl_code_panel_render_with_chrome`)
 
 **Where:** `src/ui/app/repl_code_panel.c:1599-1645`
 
@@ -842,7 +922,7 @@ last.
 split into `ui_repl_code_panel_render_chrome(...)` and have
 `panels.c` orchestrate.
 
-### 49. Hit-test rebuilds the entire row set already built by render (Tier C — deferred)
+### 49. Hit-test rebuilds the entire row set already built by render (done — Tier C closed 2026-05-25; `g_builder_cache` reuses the per-frame builder keyed on snapshot pointer)
 
 **Where:** `src/ui/app/repl_code_panel.c:1690-1702`
 
@@ -858,7 +938,7 @@ ticked between them.
 pointer + row layout dims; expose a `rebuild_rows()` call the
 controller makes once per frame.
 
-### 50. Magic spacing constants scattered across menu render code (Tier C — deferred)
+### 50. Magic spacing constants scattered across menu render code (partial — `MENU_LABEL_PAD_X` + `SUBMENU_ARROW_COL` named as of 2026-05-25; `DROPDOWN_*` constants and shared `row_for_y` helper remain Tier C)
 
 **Where:** `src/ui/app/menu_bar.c:428, 438, 502, 507, 509, 511,
 724, 786-787, 1176, 1180, 1414, 1452, 1491, 1598, 1605` and
@@ -873,7 +953,7 @@ and submenu.
 `DROPDOWN_ROW_TOP_OFFSET`, `DROPDOWN_INNER_BORDER` to `metrics.h`;
 extract `row_for_y(top, h, gl_y)` shared helper.
 
-### 51. `menu_dropdown_rect` / `submenu_rect` re-measure all rows every call (Tier C — deferred)
+### 51. `menu_dropdown_rect` / `submenu_rect` re-measure all rows every call (done — Tier C closed 2026-05-25; both functions cache through `g_dropdown_cache` / `g_submenu_cache` with menu+window keys)
 
 **Where:** `src/ui/app/menu_bar.c:484-498, 705-715`
 
@@ -884,7 +964,7 @@ hit-test, every test helper.
 **Fix:** Cache per-frame keyed on open menu + open submenu;
 invalidate on open / close / hover-change.
 
-### 52. `menu_item_label` returns a `static char buf[48]` overwritten on each call (Tier C — deferred)
+### 52. `menu_item_label` returns a `static char buf[48]` overwritten on each call (done — Tier C closed 2026-05-25; every branch now returns a string literal or a name owned by another module)
 
 **Where:** `src/ui/app/menu_bar.c:312-324`
 (same pattern in `config_item_shortcut`, L341-361)
@@ -898,7 +978,7 @@ would break the moment a future change saves the pointer. Also a
 **Fix:** Pass `out_buf, out_sz` (mirrors `cfg_state_str`); or
 title-case at config-section-table init.
 
-### 53. Hand-rolled ASCII title-case in render-time hot path (Tier C — deferred)
+### 53. Hand-rolled ASCII title-case in render-time hot path (done — Tier C closed 2026-05-25; folded into #52's static-literal rewrite)
 
 **Where:** `src/ui/app/menu_bar.c:313-323`
 
@@ -911,7 +991,7 @@ the UI layer when it could live next to
 **Fix:** Pre-compute display labels once in `glr_config.c`
 (or expose `glr_config_section_display_label`); UI just renders.
 
-### 54. `repl_code_panel_newline_rows` is misnamed (Tier C — deferred)
+### 54. `repl_code_panel_newline_rows` is misnamed (done — Tier C closed 2026-05-25; renamed to `repl_code_panel_trailing_row_count`)
 
 **Where:** `src/ui/app/repl_code_panel.c:294-304`
 
@@ -959,7 +1039,7 @@ builder. The duplicate guards exist on every helper.
 
 **Fix:** Drop the redundant guards; keep only `init_builder`'s.
 
-### 58. `(int)strlen(text)` repeated for the same row text within a frame (Tier C — deferred)
+### 58. `(int)strlen(text)` repeated for the same row text within a frame (partial — 5+ sites → 1 site as of 2026-05-25; the `UiTextPanelRow.text_len` cache wasn't added but the other call sites were deleted)
 
 **Where:** `src/ui/app/repl_code_panel.c:690, 1118-1119, 1543, 1549,
 1555`
