@@ -33,6 +33,14 @@
 > ordering. Also, old numeric-then-`g_angle` camera imports are no longer
 > a compatibility target; #11/#12 now explicitly remove that legacy shape.
 >
+> **Revision 4 (2026-05-25):** `app-smells` review status added and
+> refreshed after follow-up worktree edits. The first review found two
+> concrete gaps: New Scene added `editor_reset_for_new_scene()` but did
+> not call it, and `PTHREAD_RECURSIVE_MUTEX_INITIALIZER` failed a
+> real-GCC probe on `gracemont`. The current worktree has corrected both
+> local gaps and passes `make check-c99` + `make test-stubs`; a full
+> branch checkout verification on `gracemont` is still pending.
+>
 > Scope: every file under `src/app/`. Tests under `tests/` were read
 > where they document a contract, but not audited.
 >
@@ -66,6 +74,81 @@ Severity grouping mirrors the previous audits:
 
 Each finding cites file + line, names the smell, says why it matters,
 and suggests a one-line fix.
+
+## `app-smells` Review Status
+
+Legend: **Done** means the branch appears to resolve the finding;
+**Needs changes** means a concrete review blocker remains; **Partial**
+means the direction landed but needs follow-up or re-review; **Not
+started** means no branch change was found for that finding.
+
+| # | Status | Direct review note |
+|---|--------|--------------------|
+| 1 | Partial | Slot-lifetime direction is present and the mutex is now dynamically initialized, but the accepted miniaudio-under-lock risk still needs an explicit in-code note. |
+| 2 | Done | The nonportable static recursive initializer was removed; the mutex is initialized dynamically and local C99/stub verification passes. |
+| 3 | Done | The previously bare cited paths now lock, including loop/paused getters and deferred gesture start state. |
+| 4 | Done | `fflush`/`fclose` failures now discard the temp file before `rename`. |
+| 5 | Done | `worker_post()` no longer overwrites a queued `AWR_QUIT`. |
+| 6 | Done | Init now backs out on mutex/cond/thread setup failure; reverify after #2's mutex-lifetime cleanup. |
+| 7 | Done | Temp path construction now prefixes the basename instead of the whole path. |
+| 8 | Not started | `source_document_apply_change()` still has non-atomic partial-mutation paths. |
+| 9 | Not started | `SOURCE_TEXT_LOAD_ALL` still clamps oversized input. |
+| 10 | Not started | `glr_camera_restore()` still preserves transient velocities/pointer state. |
+| 11 | Not started | Camera import state-3 shape was not changed. |
+| 12 | Not started | Example camera-block synthetic `g_angle` line remains. |
+| 13 | Done | New Scene now calls `editor_reset_for_new_scene()` instead of `editor_clear_all_cmds()`. |
+| 14 | Not started | Controller rendering extraction has not begun. |
+| 15 | Not started | `_mut()`-for-read usage remains in the cited app paths. |
+| 16 | Not started | Controller still mutates the MSAA label table directly. |
+| 17 | Done | Redundant scene/example reach-through was removed. |
+| 18 | Done | `find_item_by_key(GLR_CONFIG_NONE)` now returns `NULL`, with regression coverage. |
+| 19 | Not started | Config cycling still stops replay globally. |
+| 20 | Not started | Direct `glr_config_set(GLR_CONFIG_AUDIO_MODE, ...)` still only stores the opaque mode. |
+| 21 | Not started | `XFORM_GUIDES`/`show_vertex_guides` naming remains divergent. |
+| 22 | Not started | Default literals have not been folded into `CFG_DEFAULT_*`. |
+| 23 | Done | `glr_config.c` now includes the real accessor headers. |
+| 24 | Done | The cited getter/setter locking gaps are closed; re-check under real GCC with the full branch. |
+| 25 | Partial | A cancel flag landed, but the in-flight load/reset race should be re-reviewed after #2/#3 cleanup. |
+| 26 | Not started | Audio mode labels remain duplicated. |
+| 27 | Done | The controller-owned gesture-once flag was removed; remaining gesture synchronization is tracked under #3. |
+| 28 | Done | The targeted stale phase/plan comment sweep landed for `src/app`. |
+| 29 | Not started | `glr_ctrl_*` / `glr_app_*` prefix split remains. |
+| 30 | Not started | Overlay walk context duplication remains. |
+| 31 | Not started | Replay fade plan parallel statics remain. |
+| 32 | Not started | Debug dump view-type mismatch remains. |
+| 33 | Done | Camera target decay comments now match the actual default. |
+| 34 | Not started | Camera export bridge declaration remains on `glr_camera.h`. |
+| 35 | Not started | Tutorial menu offsets remain magic numbers. |
+| 36 | Not started | Camera controls reset policy remains undocumented. |
+| 37 | Not started | Scene-load helper transient reset divergence remains. |
+| 38 | Not started | Menu out-of-range fallthrough behavior remains. |
+| 39 | Not started | UI snapshot is still built twice per display frame. |
+| 40 | Not started | Selection-drag motion still rebuilds snapshots. |
+| 41 | Not started | Numeric swatch route still open-codes commit mechanics. |
+| 42 | Withdrawn | False positive; no code change needed. |
+| 43 | Not started | Covered by #30; duplicate context structure work remains. |
+| 44 | Done | `glr_ctrl_apply_variable_panel_value_change()` now returns `void`. |
+| 45 | Done | Dead negative checks were removed from param hint logic. |
+| 46 | Done | Gratuitous `params_out` parameter was removed. |
+| 47 | Done | Redundant `g_camera_target` initializer was removed. |
+| 48 | Done | Redundant stack zero-initializers were removed. |
+| 49 | Done | Covered by #17's delete. |
+| 50 | Not started | `glr_cfg_cycle_row()` is still a per-key chain. |
+| 51 | Not started | `glr_ctrl_render_outlines()` has not been split. |
+| 52 | Not started | Near-duplicate function pairs remain. |
+| 53 | Not started | Magic-number cleanup has not started. |
+| 54 | Not started | `glr_state_presentation()` read redundancy remains. |
+| 55 | Done | Direct includes were added for the cited app dependencies. |
+| 56 | Done | Audio lock helpers were renamed to `audio_lock()` / `audio_unlock()`. |
+| 57 | Not started | Mixed `<ctype.h>` cast style remains in completion. |
+| 58 | Not started | Autocomplete static reset paths remain divergent. |
+| 59 | Not started | Autocomplete ghost overflow remains silent. |
+| 60 | Not started | `STATE_SAVE_INTERVAL_SECS` remains mid-file. |
+| 61 | Not started | Audio INI parsing remains duplicated. |
+| 62 | Not started | `g_slot_inited[]` ownership/locking comment remains missing. |
+| 63 | Not started | Help overlay content is still rebuilt per query. |
+| 64 | Withdrawn | Local convention allows `g_` on file-private statics. |
+| 65 | Partial | Targeted archaeology was removed under #28, but the broader comment-mass concern remains. |
 
 ## 🔴 Actual bugs / hazards (verified)
 
@@ -1309,24 +1392,27 @@ reproduced inline; many describe historical migrations. Hard to skim.
 
 ### One-afternoon pass
 
-1. **#13** — Drop `editor_clear_all_cmds()` from NEW_SCENE. Removes
-   misleading toast and tutorial-guard risk. ~10-line diff.
-2. **#17** — Delete the `scenes->active_example_idx = -1` reach-through.
-   3-line delete.
-3. **#45** + **#46** + **#47** + **#48** + **#49** — Mechanical dead-code
+1. **#13 — Done.** Drop `editor_clear_all_cmds()` from NEW_SCENE. The
+   New Scene action now calls `editor_reset_for_new_scene()`, so it no
+   longer posts the misleading clear-all status or runs the clear-all
+   tutorial guard.
+2. **#17 — Done.** Delete the `scenes->active_example_idx = -1`
+   reach-through.
+3. **#45 + #46 + #47 + #48 + #49 — Done.** Mechanical dead-code
    removal in completion / camera / display path, with #48 limited to
    the verified redundant initializer(s).
-4. **#28** — Stale plan/phase comment sweep. Pure delete.
-5. **#33** — Fix the wrong decay-value comment in `glr_camera.c:25` and
-   `config.h:123`.
-6. **#23** — Drop the forward-decl block in `glr_config.c` (include the
-   real headers). Removes an obsolete justification comment too.
-7. **#44** — `glr_ctrl_apply_variable_panel_value_change` → `void`.
-8. **#55** — Add direct `<math.h>`/`<ctype.h>`/`<string.h>`/`<stdlib.h>`
-   includes where currently transitive.
+4. **#28 — Done.** Stale plan/phase comment sweep for the targeted
+   `src/app` comments.
+5. **#33 — Done.** Fix the wrong decay-value comment in
+   `glr_camera.c:25` and `config.h:123`.
+6. **#23 — Done.** Drop the forward-decl block in `glr_config.c`
+   (include the real headers).
+7. **#44 — Done.** `glr_ctrl_apply_variable_panel_value_change` →
+   `void`.
+8. **#55 — Done.** Add direct `<math.h>`/`<ctype.h>`/`<string.h>`/
+   `<stdlib.h>` includes where currently transitive.
 
-That's ~8 surgical commits; total LOC reduction in the
-50-100 range and one real bug closed (#13).
+This pass is complete in the current worktree.
 
 ### One-week pass — the audio bug cluster
 
@@ -1338,33 +1424,28 @@ low-churn documented-lock path first, and only introduce worker-routed
 control requests if the documented risk turns into an observed stall or
 deadlock.
 
-1. **#2** (lock unconditionally) + **#24** (consistent locking
-   discipline) + **#3** (lock the bare-access getters/setters) — all
-   one PR. Removes the "no-worker-no-lock" silent degradation and
-   closes three torn-read windows.
-2. **#5** (sticky `AWR_QUIT` in `worker_post`) — one-liner with one
-   test.
-3. **#4** (`fflush`/`fclose` error handling in `worker_save_state`) —
-   small.
-4. **#6** (back out engine on mutex/cond failure in `init`) — small.
-5. **#7** (fix `tmp` filename prefix for paths with a directory) —
-   small.
-6. **#27** (move audio-gesture flag to `glr_audio.c`) — small;
-   removes a hidden invariant from the controller.
-7. **#25** (in-flight `set_playlist` race) — slightly larger; needs
-   a cancel flag.
-8. **#1** (documented slot-lifetime lock discipline) — keep active-slot
-   miniaudio calls under the now-unconditional module mutex, rename/wrap
-   the helper so the lifetime role is obvious, and add the in-code note
-   explaining why we are accepting miniaudio calls under that guard. A
-   recursive mutex is acceptable only as an implementation detail for
-   same-thread helper re-entry; it is not a substitute for the lock-order
-   comment. **Do not ship the original "snapshot + unlock" shape** — it
-   use-after-uninits against the worker's off-lock teardown.
+1. **#2 + #24 + #3 — Done locally.** The branch now uses dynamic mutex
+   initialization and the cited bare shared-state paths lock. Re-run the
+   full branch on `gracemont` before closing the portability gate.
+2. **#5 — Done.** Sticky `AWR_QUIT` in `worker_post`.
+3. **#4 — Done.** `fflush`/`fclose` error handling in
+   `worker_save_state`.
+4. **#6 — Done.** Back out engine on mutex/cond/thread setup failure in
+   `init`; reverify after #2's mutex cleanup.
+5. **#7 — Done.** Fix `tmp` filename prefix for paths with a directory.
+6. **#27 — Done.** Move audio-gesture idempotence into `glr_audio.c`;
+   remaining gesture synchronization is tracked under #3.
+7. **#25 — Partial.** A cancel flag landed, but re-review the
+   set-playlist/load-in-flight ordering before closing this item.
+8. **#1 — Partial.** Active-slot miniaudio calls stay under the module
+   mutex, but the code still needs the explicit slot-lifetime /
+   accepted-risk note. The recursive mutex is now a dynamically
+   initialized implementation detail; it is not the correctness
+   argument.
 
-After this PR set, the audio module's concrete `🔴` bugs are closed,
-and the remaining miniaudio-under-lock risk is explicit rather than
-accidental.
+Do not treat the audio bug cluster as fully closed until #1's in-code
+note lands, #25 has had a final race review, and the full branch passes
+on real GCC.
 
 ### One-week pass — closing the controller's rendering layer
 

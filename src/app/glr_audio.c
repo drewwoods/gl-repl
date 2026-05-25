@@ -132,7 +132,7 @@ typedef enum {
 
 static pthread_t       g_worker;
 static int             g_worker_running = 0;
-static pthread_mutex_t g_mtx = PTHREAD_RECURSIVE_MUTEX_INITIALIZER;
+static pthread_mutex_t g_mtx;
 static pthread_cond_t  g_cv;
 
 static AudioWorkerReq  g_req      = AWR_NONE;  /* latest lifecycle request */
@@ -163,9 +163,21 @@ static time_t g_last_save_time = 0;
 
 /* Lifetime-guarding lock helpers for the audio subsystem.
  * Guard access to all static module state to ensure thread safety
- * between the render/main thread and the background worker thread. */
-static void audio_lock(void)   { pthread_mutex_lock(&g_mtx); }
-static void audio_unlock(void) { pthread_mutex_unlock(&g_mtx); }
+ * between the render/main thread and the background worker thread.
+ * 
+ * NOTE ON LIFETIME DISCIPLINE AND MINIAUDIO-UNDER-LOCK RISK:
+ * To avoid use-after-uninit hazards between the render thread and the
+ * worker thread's off-lock uninit paths (e.g. worker_load and worker_uninit_all),
+ * all active-slot miniaudio control operations (ma_sound_start, ma_sound_stop,
+ * ma_sound_set_looping, etc.) are explicitly kept under the audio_lock() guard
+ * to protect g_slot[] lifetime. While calling miniaudio functions under a lock
+ * carries a theoretical risk of deadlock if miniaudio internally takes locks
+ * shared by the device callback thread, this module-level serialization is
+ * accepted here to maintain solid lifetime correctness for double-buffered slots.
+ * The recursive g_mtx mutex is a dynamically-initialized implementation detail
+ * to simplify nested control calls, not a correctness guarantee for lock ordering. */
+static void audio_lock(void)   { if (g_inited) pthread_mutex_lock(&g_mtx); }
+static void audio_unlock(void) { if (g_inited) pthread_mutex_unlock(&g_mtx); }
 
 /* ------------------------------------------------------------------ */
 /* Worker hitch detector                                               */
@@ -556,17 +568,26 @@ static void worker_post(AudioWorkerReq kind, int idx, float seek) {
  * user gesture (browser autoplay policy); on native it posts straight
  * to the worker. */
 static int request_start(int idx, float seek) {
-    if (!g_inited) return -1;
-    if (idx < 0 || idx >= g_playlist_count) return -1;
+    audio_lock();
+    if (!g_inited) {
+        audio_unlock();
+        return -1;
+    }
+    if (idx < 0 || idx >= g_playlist_count) {
+        audio_unlock();
+        return -1;
+    }
 
 #if AUDIO_NEEDS_GESTURE
     if (!g_gesture_done) {
         g_pending_start = 1;
         g_playlist_pos  = idx;   /* remember which track for the gesture */
         g_pending_seek  = seek;
+        audio_unlock();
         return 0;
     }
 #endif
+    audio_unlock();
     worker_post(AWR_START, idx, seek);
     return 0;
 }
@@ -584,21 +605,18 @@ int glr_audio_init(void) {
         return -1;
     }
 
-    g_inited = 1;
     g_active = -1;
     g_slot_inited[0] = g_slot_inited[1] = 0;
 
     pthread_mutexattr_t attr;
     if (pthread_mutexattr_init(&attr) != 0) {
         ma_engine_uninit(&g_engine);
-        g_inited = 0;
         return -1;
     }
     pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_RECURSIVE);
     if (pthread_mutex_init(&g_mtx, &attr) != 0) {
         pthread_mutexattr_destroy(&attr);
         ma_engine_uninit(&g_engine);
-        g_inited = 0;
         return -1;
     }
     pthread_mutexattr_destroy(&attr);
@@ -606,7 +624,6 @@ int glr_audio_init(void) {
     if (pthread_cond_init(&g_cv, NULL) != 0) {
         pthread_mutex_destroy(&g_mtx);
         ma_engine_uninit(&g_engine);
-        g_inited = 0;
         return -1;
     }
 
@@ -617,7 +634,6 @@ int glr_audio_init(void) {
         pthread_cond_destroy(&g_cv);
         pthread_mutex_destroy(&g_mtx);
         ma_engine_uninit(&g_engine);
-        g_inited = 0;
         return -1;
     }
 
@@ -629,6 +645,7 @@ int glr_audio_init(void) {
     g_gesture_done = 1;
 #endif
 
+    g_inited = 1;
     return 0;
 }
 
@@ -781,7 +798,10 @@ void glr_audio_set_loop_mode(int mode) {
 }
 
 int glr_audio_get_loop_mode(void) {
-    return g_loop_mode;
+    audio_lock();
+    int m = g_loop_mode;
+    audio_unlock();
+    return m;
 }
 
 void glr_audio_set_paused(int paused) {
@@ -799,7 +819,10 @@ void glr_audio_set_paused(int paused) {
 }
 
 int glr_audio_is_paused(void) {
-    return g_paused;
+    audio_lock();
+    int p = g_paused;
+    audio_unlock();
+    return p;
 }
 
 void glr_audio_set_muted(int muted) {
