@@ -1019,13 +1019,6 @@ static void glr_ctrl_push_color_transformers(void) {
  * a user gesture. The very first key / mouse / special event after
  * startup fires glr_audio_on_user_gesture; native builds make this a
  * no-op. */
-static int g_audio_gesture_sent = 0;
-
-static void glr_ctrl_notify_audio_gesture_once(void) {
-    if (g_audio_gesture_sent) return;
-    g_audio_gesture_sent = 1;
-    glr_audio_on_user_gesture();
-}
 
 /* Layout provider installed on the editor at glr_ctrl_init_gl. The
  * editor reads through this so src/editor/ does not need to include
@@ -3783,7 +3776,7 @@ int glr_ctrl_router_handle_code_panel_drag(int x, int y) {
  */
 
 void glr_ctrl_keyboard(unsigned char key, int x, int y) {
-    glr_ctrl_notify_audio_gesture_once();
+    glr_audio_on_user_gesture();
 
     /* macOS Cmd+letter normalization happens before any dispatch so
      * the controller-owned cfg-shortcut chain (Cmd+B / Cmd+S / Cmd+T
@@ -3840,7 +3833,7 @@ void glr_ctrl_keyboard(unsigned char key, int x, int y) {
 }
 
 void glr_ctrl_special(int key, int x, int y) {
-    glr_ctrl_notify_audio_gesture_once();
+    glr_audio_on_user_gesture();
 
     if (editor_input_rename_capture_special(key)) {
         editor_reset_input_effects();
@@ -3885,7 +3878,7 @@ void glr_ctrl_special(int key, int x, int y) {
  * to help-overlay scroll, code-panel scroll (editor), or camera zoom
  * velocity. */
 void glr_ctrl_mouse(int button, int state, int x, int y) {
-    glr_ctrl_notify_audio_gesture_once();
+    glr_audio_on_user_gesture();
 
     editor_reset_input_effects();
     if (button == GLUT_LEFT_BUTTON || button == GLUT_MIDDLE_BUTTON ||

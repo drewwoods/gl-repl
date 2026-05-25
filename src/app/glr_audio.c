@@ -109,10 +109,14 @@ static int g_loop_mode = GLR_AUDIO_LOOP_ALL;
  * before the first user gesture on the web, remember which track was
  * requested so we can start it on the first gesture. */
 static int g_pending_start = 0;
+static float g_pending_seek = -1.0f;
 
 /* Bumped on every successful track start. Callers poll this to notice
  * that the current track has changed without needing a callback. */
 static unsigned int g_track_generation = 0;
+
+/* Flag set to cancel a load in-flight when playlist is reset. */
+static int g_load_cancelled = 0;
 
 /* ------------------------------------------------------------------ */
 /* Background worker (owns all file-blocking miniaudio + state I/O)     */
@@ -128,7 +132,7 @@ typedef enum {
 
 static pthread_t       g_worker;
 static int             g_worker_running = 0;
-static pthread_mutex_t g_mtx;
+static pthread_mutex_t g_mtx = PTHREAD_RECURSIVE_MUTEX_INITIALIZER;
 static pthread_cond_t  g_cv;
 
 static AudioWorkerReq  g_req      = AWR_NONE;  /* latest lifecycle request */
@@ -157,8 +161,11 @@ static time_t g_last_save_time = 0;
 /* Small lock helpers                                                  */
 /* ------------------------------------------------------------------ */
 
-static void lock(void)   { if (g_worker_running) pthread_mutex_lock(&g_mtx); }
-static void unlock(void) { if (g_worker_running) pthread_mutex_unlock(&g_mtx); }
+/* Lifetime-guarding lock helpers for the audio subsystem.
+ * Guard access to all static module state to ensure thread safety
+ * between the render/main thread and the background worker thread. */
+static void audio_lock(void)   { pthread_mutex_lock(&g_mtx); }
+static void audio_unlock(void) { pthread_mutex_unlock(&g_mtx); }
 
 /* ------------------------------------------------------------------ */
 /* Worker hitch detector                                               */
@@ -215,8 +222,8 @@ static void worker_save_state(void) {
     float offset;
     int  cfg_mode;
 
-    lock();
-    if (!g_state_file[0]) { unlock(); return; }
+    audio_lock();
+    if (!g_state_file[0]) { audio_unlock(); return; }
     memcpy(state_file, g_state_file, sizeof(state_file));
     have_track = (g_music_loaded &&
                   g_playlist_pos >= 0 &&
@@ -228,11 +235,20 @@ static void worker_save_state(void) {
         offset = 0.0f;
     }
     cfg_mode = g_cfg_mode;
-    unlock();
+    audio_unlock();
 
     char tmp[GLR_AUDIO_MAX_PATH];
-    if (snprintf(tmp, sizeof(tmp), ".%s.tmp", state_file) >= (int)sizeof(tmp))
-        return;
+    const char *last_slash = strrchr(state_file, '/');
+    if (last_slash) {
+        size_t dir_len = (size_t)(last_slash - state_file) + 1;
+        if (dir_len >= sizeof(tmp)) return;
+        memcpy(tmp, state_file, dir_len);
+        if (snprintf(tmp + dir_len, sizeof(tmp) - dir_len, ".%s.tmp", last_slash + 1) >= (int)(sizeof(tmp) - dir_len))
+            return;
+    } else {
+        if (snprintf(tmp, sizeof(tmp), ".%s.tmp", state_file) >= (int)sizeof(tmp))
+            return;
+    }
 
     FILE *f = fopen(tmp, "w");
     if (!f) return;
@@ -273,15 +289,18 @@ static void worker_save_state(void) {
      * Only write it when the action layer has registered a value. */
     if (cfg_mode >= 0)
         fprintf(f, "cfg_mode=%d\n", cfg_mode);
-    fflush(f);
-    fclose(f);
+
+    if (fflush(f) != 0 || fclose(f) != 0) {
+        remove(tmp);
+        return;
+    }
 
     if (rename(tmp, state_file) != 0) {
         remove(tmp);  /* rename failed - discard temp, old file untouched */
     } else {
-        lock();
+        audio_lock();
         g_last_save_time = time(NULL);
-        unlock();
+        audio_unlock();
     }
 }
 
@@ -341,10 +360,10 @@ static int load_state(float *out_offset) {
  * ma_sound_uninit of a stream can block on pending page reads; that's
  * fine here — it is the worker thread, never the render thread. */
 static void worker_uninit_all(void) {
-    lock();
+    audio_lock();
     g_active = -1;
     g_music_loaded = 0;
-    unlock();
+    audio_unlock();
     for (int s = 0; s < 2; s++) {
         if (g_slot_inited[s]) {
             ma_sound_uninit(&g_slot[s]);
@@ -361,15 +380,16 @@ static int worker_load(int idx, float seek_secs) {
     char path[GLR_AUDIO_MAX_PATH];
     int  target, old, loop_song, paused;
 
-    lock();
-    if (idx < 0 || idx >= g_playlist_count) { unlock(); return -1; }
+    audio_lock();
+    if (idx < 0 || idx >= g_playlist_count) { audio_unlock(); return -1; }
     memcpy(path, g_playlist[idx], sizeof(path));
     old       = g_active;
     target    = (g_active < 0) ? 0 : (1 - g_active);
     loop_song = (g_loop_mode == GLR_AUDIO_LOOP_SONG);
     paused    = g_paused;
     g_loading = 1;
-    unlock();
+    g_load_cancelled = 0;
+    audio_unlock();
 
     if (g_slot_inited[target]) {           /* stale (failed prior load) */
         ma_sound_uninit(&g_slot[target]);
@@ -387,7 +407,7 @@ static int worker_load(int idx, float seek_secs) {
         fprintf(stderr,
                 "repl_audio: ma_sound_init_from_file(\"%s\") failed: %d\n",
                 path, (int)r);
-        lock(); g_loading = 0; unlock();
+        audio_lock(); g_loading = 0; audio_unlock();
         return -1;
     }
 
@@ -398,7 +418,7 @@ static int worker_load(int idx, float seek_secs) {
         fprintf(stderr, "repl_audio: ma_sound_start(\"%s\") failed: %d\n",
                 path, (int)r);
         ma_sound_uninit(&g_slot[target]);
-        lock(); g_loading = 0; unlock();
+        audio_lock(); g_loading = 0; audio_unlock();
         return -1;
     }
 
@@ -416,14 +436,21 @@ static int worker_load(int idx, float seek_secs) {
     if (paused)
         ma_sound_stop(&g_slot[target]);
 
-    lock();
+    audio_lock();
+    if (g_load_cancelled) {
+        g_loading = 0;
+        g_load_cancelled = 0;
+        audio_unlock();
+        ma_sound_uninit(&g_slot[target]);
+        return -1;
+    }
     g_slot_inited[target] = 1;
     g_active              = target;
     g_music_loaded        = 1;
     g_playlist_pos        = idx;
     g_track_generation++;
     g_loading             = 0;
-    unlock();
+    audio_unlock();
 
     /* Retire the previous slot now that the new one is live. Off-lock:
      * stream teardown may block, but only the worker is here. */
@@ -440,11 +467,11 @@ static int worker_load(int idx, float seek_secs) {
  * no longer runs on the render thread). */
 static void worker_advance(void) {
     int pos, count, mode;
-    lock();
+    audio_lock();
     pos   = g_playlist_pos;
     count = g_playlist_count;
     mode  = g_loop_mode;
-    unlock();
+    audio_unlock();
 
     int attempts = 0;
     while (attempts < count) {
@@ -511,12 +538,14 @@ static void *audio_worker_main(void *arg) {
  * queued one). No-op when the worker isn't running. */
 static void worker_post(AudioWorkerReq kind, int idx, float seek) {
     if (!g_worker_running) return;
-    pthread_mutex_lock(&g_mtx);
-    g_req      = kind;
-    g_req_idx  = idx;
-    g_req_seek = seek;
-    pthread_cond_signal(&g_cv);
-    pthread_mutex_unlock(&g_mtx);
+    audio_lock();
+    if (g_req != AWR_QUIT) {
+        g_req      = kind;
+        g_req_idx  = idx;
+        g_req_seek = seek;
+        pthread_cond_signal(&g_cv);
+    }
+    audio_unlock();
 }
 
 /* ------------------------------------------------------------------ */
@@ -534,7 +563,7 @@ static int request_start(int idx, float seek) {
     if (!g_gesture_done) {
         g_pending_start = 1;
         g_playlist_pos  = idx;   /* remember which track for the gesture */
-        g_req_seek      = seek;
+        g_pending_seek  = seek;
         return 0;
     }
 #endif
@@ -559,27 +588,42 @@ int glr_audio_init(void) {
     g_active = -1;
     g_slot_inited[0] = g_slot_inited[1] = 0;
 
-    /* Spin up the worker that owns all file-blocking operations. If it
-     * can't start, the module degrades to "no sound" rather than
-     * blocking the render thread. */
-    if (pthread_mutex_init(&g_mtx, NULL) == 0 &&
-        pthread_cond_init(&g_cv, NULL) == 0) {
-        g_req      = AWR_NONE;
-        g_req_save = 0;
-        if (pthread_create(&g_worker, NULL, audio_worker_main, NULL) == 0) {
-            g_worker_running = 1;
-        } else {
-            fprintf(stderr, "repl_audio: worker thread create failed; "
-                            "audio disabled\n");
-            pthread_cond_destroy(&g_cv);
-            pthread_mutex_destroy(&g_mtx);
-        }
+    pthread_mutexattr_t attr;
+    if (pthread_mutexattr_init(&attr) != 0) {
+        ma_engine_uninit(&g_engine);
+        g_inited = 0;
+        return -1;
+    }
+    pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_RECURSIVE);
+    if (pthread_mutex_init(&g_mtx, &attr) != 0) {
+        pthread_mutexattr_destroy(&attr);
+        ma_engine_uninit(&g_engine);
+        g_inited = 0;
+        return -1;
+    }
+    pthread_mutexattr_destroy(&attr);
+
+    if (pthread_cond_init(&g_cv, NULL) != 0) {
+        pthread_mutex_destroy(&g_mtx);
+        ma_engine_uninit(&g_engine);
+        g_inited = 0;
+        return -1;
     }
 
+    g_req      = AWR_NONE;
+    g_req_save = 0;
+    if (pthread_create(&g_worker, NULL, audio_worker_main, NULL) != 0) {
+        fprintf(stderr, "repl_audio: worker thread create failed\n");
+        pthread_cond_destroy(&g_cv);
+        pthread_mutex_destroy(&g_mtx);
+        ma_engine_uninit(&g_engine);
+        g_inited = 0;
+        return -1;
+    }
+
+    g_worker_running = 1;
+
 #if AUDIO_NEEDS_GESTURE
-    /* On the web, ma_engine_init starts the engine automatically but the
-     * browser's AudioContext will be in a "suspended" state until a user
-     * gesture resumes it. */
     g_gesture_done = 0;
 #else
     g_gesture_done = 1;
@@ -595,10 +639,10 @@ void glr_audio_shutdown(void) {
         /* AWR_QUIT makes the worker do the final state save (off the
          * caller, but join() below waits for it so the file is on disk
          * before we return) and uninit the sounds, then exit. */
-        pthread_mutex_lock(&g_mtx);
+        audio_lock();
         g_req = AWR_QUIT;
         pthread_cond_signal(&g_cv);
-        pthread_mutex_unlock(&g_mtx);
+        audio_unlock();
         pthread_join(g_worker, NULL);
         pthread_cond_destroy(&g_cv);
         pthread_mutex_destroy(&g_mtx);
@@ -621,7 +665,10 @@ int glr_audio_set_playlist(const char *const *paths, int count) {
     /* Retire any current sound asynchronously; never block the caller. */
     worker_post(AWR_UNINIT, 0, -1.0f);
 
-    lock();
+    audio_lock();
+    if (g_loading) {
+        g_load_cancelled = 1;
+    }
     g_playlist_count = 0;
     g_playlist_pos   = 0;
     g_pending_start  = 0;
@@ -642,7 +689,7 @@ int glr_audio_set_playlist(const char *const *paths, int count) {
         g_playlist[i][len] = '\0';
     }
     g_playlist_count = n;
-    unlock();
+    audio_unlock();
     return n;
 }
 
@@ -668,27 +715,27 @@ int glr_audio_play_music(const char *path) {
 }
 
 void glr_audio_stop_music(void) {
-    lock();
+    audio_lock();
     if (g_active >= 0)
         ma_sound_stop(&g_slot[g_active]);   /* non-blocking */
-    unlock();
+    audio_unlock();
 }
 
 int glr_audio_next_track(void) {
     if (!g_inited || g_playlist_count == 0) return -1;
-    lock();
+    audio_lock();
     int next = g_playlist_pos + 1;
     if (next >= g_playlist_count) next = 0;
-    unlock();
+    audio_unlock();
     return request_start(next, -1.0f);
 }
 
 int glr_audio_prev_track(void) {
     if (!g_inited || g_playlist_count == 0) return -1;
-    lock();
+    audio_lock();
     int prev = g_playlist_pos - 1;
     if (prev < 0) prev = g_playlist_count - 1;
-    unlock();
+    audio_unlock();
     return request_start(prev, -1.0f);
 }
 
@@ -700,7 +747,7 @@ void glr_audio_tick(void) {
     /* Periodically persist track + offset so a crash or forced quit
      * still leaves a reasonably up-to-date state file. The write
      * itself happens on the worker (no fsync, no render-thread I/O). */
-    lock();
+    audio_lock();
     if (g_state_file[0] && g_music_loaded) {
         time_t now = time(NULL);
         if (difftime(now, g_last_save_time) >= STATE_SAVE_INTERVAL_SECS) {
@@ -718,19 +765,19 @@ void glr_audio_tick(void) {
         g_req = AWR_ADVANCE;
         pthread_cond_signal(&g_cv);
     }
-    unlock();
+    audio_unlock();
 }
 
 void glr_audio_set_loop_mode(int mode) {
     if (mode < GLR_AUDIO_LOOP_OFF)  mode = GLR_AUDIO_LOOP_OFF;
     if (mode > GLR_AUDIO_LOOP_ALL)  mode = GLR_AUDIO_LOOP_ALL;
-    lock();
+    audio_lock();
     g_loop_mode = mode;
     if (g_active >= 0)
         ma_sound_set_looping(
             &g_slot[g_active],
             (g_loop_mode == GLR_AUDIO_LOOP_SONG) ? MA_TRUE : MA_FALSE);
-    unlock();
+    audio_unlock();
 }
 
 int glr_audio_get_loop_mode(void) {
@@ -739,7 +786,7 @@ int glr_audio_get_loop_mode(void) {
 
 void glr_audio_set_paused(int paused) {
     int p = paused ? 1 : 0;
-    lock();
+    audio_lock();
     int was_paused = g_paused;
     g_paused = p;
     if (g_active >= 0) {
@@ -748,7 +795,7 @@ void glr_audio_set_paused(int paused) {
         else if (!p && was_paused)
             ma_sound_start(&g_slot[g_active]);
     }
-    unlock();
+    audio_unlock();
 }
 
 int glr_audio_is_paused(void) {
@@ -756,15 +803,19 @@ int glr_audio_is_paused(void) {
 }
 
 void glr_audio_set_muted(int muted) {
+    audio_lock();
     g_muted = muted ? 1 : 0;
-    if (!g_inited) return;
-    /* Engine-level volume is a non-blocking atomic store; safe on the
-     * caller thread. */
-    ma_engine_set_volume(&g_engine, g_muted ? 0.0f : 1.0f);
+    if (g_inited) {
+        ma_engine_set_volume(&g_engine, g_muted ? 0.0f : 1.0f);
+    }
+    audio_unlock();
 }
 
 int glr_audio_is_muted(void) {
-    return g_muted;
+    audio_lock();
+    int m = g_muted;
+    audio_unlock();
+    return m;
 }
 
 const char *glr_audio_get_current_track(void) {
@@ -772,26 +823,26 @@ const char *glr_audio_get_current_track(void) {
      * lock into a static buffer so a concurrent worker swap of
      * g_playlist_pos can't tear the read. Valid until the next call. */
     static char buf[GLR_AUDIO_MAX_PATH];
-    lock();
+    audio_lock();
     if (!g_music_loaded ||
         g_playlist_pos < 0 || g_playlist_pos >= g_playlist_count) {
-        unlock();
+        audio_unlock();
         return NULL;
     }
     memcpy(buf, g_playlist[g_playlist_pos], sizeof(buf));
-    unlock();
+    audio_unlock();
     return buf;
 }
 
 unsigned int glr_audio_track_generation(void) {
-    lock();
+    audio_lock();
     unsigned int v = g_track_generation;
-    unlock();
+    audio_unlock();
     return v;
 }
 
 void glr_audio_set_state_file(const char *path) {
-    lock();
+    audio_lock();
     if (!path) {
         g_state_file[0] = '\0';
     } else {
@@ -801,33 +852,42 @@ void glr_audio_set_state_file(const char *path) {
         g_state_file[len] = '\0';
     }
     g_last_save_time = 0;  /* force a write on the next tick after first play */
-    unlock();
+    audio_unlock();
 }
 
 void glr_audio_on_user_gesture(void) {
-    if (!g_inited || g_gesture_done) return;
+    audio_lock();
+    if (!g_inited || g_gesture_done) {
+        audio_unlock();
+        return;
+    }
     g_gesture_done = 1;
+    audio_unlock();
 
     /* Re-starting the engine is the canonical way to resume a suspended
      * AudioContext under the Emscripten backend. It's a cheap no-op on
      * native backends. */
     ma_engine_start(&g_engine);
 
+    audio_lock();
     if (g_pending_start) {
         g_pending_start = 0;
-        worker_post(AWR_START, g_playlist_pos, g_req_seek);
+        float seek = g_pending_seek;
+        g_pending_seek = -1.0f;
+        worker_post(AWR_START, g_playlist_pos, seek);
     }
+    audio_unlock();
 }
 
 void glr_audio_set_cfg_mode(int mode) {
-    lock();
+    audio_lock();
     g_cfg_mode = mode;
-    unlock();
+    audio_unlock();
 }
 
 int glr_audio_get_cfg_mode(void) {
-    lock();
+    audio_lock();
     int v = g_cfg_mode;
-    unlock();
+    audio_unlock();
     return v;
 }
