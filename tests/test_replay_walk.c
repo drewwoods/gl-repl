@@ -34,6 +34,10 @@
 #include "subsystems/replay/replay.h"
 #include "support/test_harness.h"
 
+#ifdef GL_STUBS
+#include <GL/gl_stub_counts.h>
+#endif
+
 #include <stdio.h>
 #include <string.h>
 
@@ -595,6 +599,88 @@ static void test_display_name_for_not_in_begin(void) {
     }
 }
 
+/* --- 7. transform-dispatch drift guard --------------------------------
+ *
+ * Two parallel switches dispatch transform CmdTypes:
+ *   - apply_tracked_transform (scene/guides/transform_utils.h) — used by
+ *     the controller's overlay walks and transform-guide pre-passes
+ *   - repl_executor_apply_tracked_transform_cmd (repl/executor.c) — used
+ *     by the live executor and replay paths
+ *
+ * Both must cover the same set of CmdTypes as repl_cmd_is_transform —
+ * any drift between the three is a silent guide-position bug. Detection:
+ * GL stub counters tick exactly one of the six transform entrypoints
+ * (glPushMatrix/glPopMatrix/glLoadIdentity/glTranslatef/glScalef/
+ * glRotatef) when a transform CmdType is dispatched; non-transform
+ * CmdTypes tick none.
+ *
+ * If a new transform CmdType lands and only the executor's switch
+ * grows a branch (or vice versa), this test pinpoints the offending
+ * type and the offending dispatcher.
+ */
+static void test_transform_dispatch_drift_guard(void) {
+    static const int xform_stubs[] = {
+        GL_STUB_glPushMatrix,
+        GL_STUB_glPopMatrix,
+        GL_STUB_glLoadIdentity,
+        GL_STUB_glTranslatef,
+        GL_STUB_glScalef,
+        GL_STUB_glRotatef,
+    };
+    const int n_xform_stubs = (int)(sizeof xform_stubs / sizeof xform_stubs[0]);
+
+    for (int t_int = 0; t_int < CMD_TYPE_COUNT; t_int++) {
+        CmdType t = (CmdType)t_int;
+        int pred = repl_cmd_is_transform(t);
+
+        GLCmd cmd = {0};
+        cmd.type = t;
+        cmd.num_args = 4;  /* All transforms read at most 4 args */
+
+        /* Depth pre-loaded so POP_MATRIX takes its non-no-op branch. */
+        int depth_a = 1;
+        unsigned long long before_a[6], after_a[6];
+        for (int j = 0; j < n_xform_stubs; j++)
+            before_a[j] = gl_stub_counts[xform_stubs[j]];
+
+        apply_tracked_transform(&cmd, &depth_a);
+
+        for (int j = 0; j < n_xform_stubs; j++)
+            after_a[j] = gl_stub_counts[xform_stubs[j]];
+
+        int ticked_a = 0;
+        for (int j = 0; j < n_xform_stubs; j++)
+            if (after_a[j] > before_a[j]) ticked_a++;
+
+        char label[160];
+        snprintf(label, sizeof label,
+                 "type=%d: apply_tracked_transform tick-count matches "
+                 "repl_cmd_is_transform (pred=%d, ticked=%d)",
+                 t_int, pred, ticked_a);
+        ASSERT_INT(label, ticked_a > 0, pred);
+
+        int depth_b = 1;
+        unsigned long long before_b[6], after_b[6];
+        for (int j = 0; j < n_xform_stubs; j++)
+            before_b[j] = gl_stub_counts[xform_stubs[j]];
+
+        repl_executor_apply_tracked_transform_cmd(&cmd, &depth_b);
+
+        for (int j = 0; j < n_xform_stubs; j++)
+            after_b[j] = gl_stub_counts[xform_stubs[j]];
+
+        int ticked_b = 0;
+        for (int j = 0; j < n_xform_stubs; j++)
+            if (after_b[j] > before_b[j]) ticked_b++;
+
+        snprintf(label, sizeof label,
+                 "type=%d: repl_executor_apply_tracked_transform_cmd "
+                 "tick-count matches repl_cmd_is_transform (pred=%d, ticked=%d)",
+                 t_int, pred, ticked_b);
+        ASSERT_INT(label, ticked_b > 0, pred);
+    }
+}
+
 int main(void) {
     test_walker_resolves_funcn_args_at_cursor();
     test_walker_fires_on_each_cmd_at_cursor();
@@ -603,6 +689,7 @@ int main(void) {
     test_parse_vertex_arg_slots_nested_parens();
     test_predicate_category_agreement();
     test_display_name_for_not_in_begin();
+    test_transform_dispatch_drift_guard();
 
     printf("test_replay_walk: %d/%d passed\n",
            g_harness.passed, g_harness.run);
