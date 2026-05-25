@@ -17,7 +17,7 @@
 #define REPLAY_FADE_DURATION   0.40f
 /* A fresh fade batch starts one ~60 Hz frame "aged" rather than at 0
  * so it fades in smoothly instead of popping at full opacity. */
-#define REPLAY_FADE_INITIAL_AGE 0.016f
+#define REPLAY_FADE_INITIAL_AGE GLR_FRAME_DT_SECS
 /* Replay step-rate clamp (steps/sec) and the per-keystroke multipliers
  * (0.67 ~= 1/1.5, so +/- are inverse steps). */
 #define REPLAY_SPEED_MIN       0.5f
@@ -929,7 +929,7 @@ int replay_exec_limit(void) {
 
 void replay_speed_adjust(float factor) {
     ReplReplayRuntimeState *state = replay_state_mut();
-    char msg[64];
+    char msg[REPLAY_STATUS_MSG_LEN];
     state->speed *= factor;
     if (state->speed < REPLAY_SPEED_MIN) state->speed = REPLAY_SPEED_MIN;
     if (state->speed > REPLAY_SPEED_MAX) state->speed = REPLAY_SPEED_MAX;
@@ -1013,7 +1013,7 @@ int replay_handle_key(unsigned char key) {
                 if (landed < 0) {
                     repl_set_status("Jump: no geometry at or after cursor");
                 } else {
-                    char msg[64];
+                    char msg[REPLAY_STATUS_MSG_LEN];
                     replay_state_mut()->state = REPLAY_PAUSED;
                     snprintf(msg, sizeof(msg), "Jump: paused at line %d", landed + 1);
                     repl_set_status(msg);
@@ -1034,7 +1034,7 @@ int replay_handle_key(unsigned char key) {
         if (landed < 0) {
             repl_set_status("Jump: no geometry at or after cursor");
         } else {
-            char msg[64];
+            char msg[REPLAY_STATUS_MSG_LEN];
             state->state = REPLAY_PAUSED;
             snprintf(msg, sizeof(msg), "Jump: paused at line %d", landed + 1);
             repl_set_status(msg);
@@ -1076,7 +1076,7 @@ int replay_handle_key(unsigned char key) {
         return 1;
     }
     if (key == 'e' || key == 'E') {
-        /* Route Replay expand toggle: Bug 14 */
+        /* Route Replay expand toggle through the config bridge */
         repl_cfg_set_int("replay_expand", !repl_cfg_get_int("replay_expand", 0));
         repl_set_status(repl_cfg_get_int("replay_expand", 0)
                  ? "Replay: expand args ON"
@@ -1089,7 +1089,7 @@ int replay_handle_key(unsigned char key) {
         return 1;
     }
 
-    /* Bug 7: Silent stop UX */
+    /* Set status and stop replay on unrecognized key press */
     repl_set_status("Replay: cancelled (key)");
     replay_stop();
     return 0;
@@ -1129,7 +1129,7 @@ int replay_handle_special(int key) {
     }
 
     if (!replay_modifier_special_key(key)) {
-        /* Bug 7: Silent stop UX */
+        /* Set status and stop replay on unrecognized key press */
         repl_set_status("Replay: cancelled (key)");
         replay_stop();
     }

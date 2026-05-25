@@ -24,8 +24,7 @@
  * (line_len + TUTORIAL_FADE_SETTLE_CHARS) / TUTORIAL_FADE_CHARS_PER_SEC,
  * so short instructions reveal quickly and long ones take longer at
  * the same readable pace — instead of every line racing through a
- * fixed wall-clock budget (previously TUTORIAL_FADE_DURATION_SECS,
- * which made 80-char lines appear ~4x faster than 20-char ones). */
+ * fixed wall-clock budget. */
 #ifndef TUTORIAL_FADE_CHARS_PER_SEC
 #define TUTORIAL_FADE_CHARS_PER_SEC 50.0f
 #endif
@@ -46,7 +45,7 @@ void                 tutorial_start(int idx);
 void                 tutorial_stop(void);
 /* Restore the cfg baseline captured at tutorial_start and reset the runtime
  * state. Called by tutorial_stop, tutorial completion, AND every external
- * teardown path that previously called tutorial_state_reset() directly
+ * teardown path that called tutorial_state_reset() directly
  * (workspace/scene/example load, glr_app_reset_all) so the workspace-load
  * stash never enshrines tutorial-mutated cfg as the new baseline.
  * Idempotent — no-op when no tutorial is active. */
@@ -119,7 +118,7 @@ void                 tutorial_begin_expected_commit_attempt(void);
 
 /* Bookkeeping after a matched expected commit succeeded: shift any
  * existing tracked tutorial lines at-or-after pending.commit_line by
- * the row delta the commit produced (v1 catalog rule constrains
+ * the row delta the commit produced (the catalog rule constrains
  * delta to 1, but the math stays general), then record the source
  * row for the just-committed step so a later label-targeted step
  * can resolve a target_label pointing at it. Clears the pending

@@ -74,18 +74,12 @@ Closed in the current repo:
   layouts and color-picker reset are documented/implemented; variable
   drag state moved/renamed; tutorial explicit init replaced the
   constructor; replay `_impl` trampolines are gone; outside-picker
-  teardown calls `color_picker_stop`; replay tess-depth and out-param
-  cleanup landed; tutorial step-entry, pending-reset, status, and label
-  helpers are factored; dead tutorial/replay/color-picker code was
-  removed; replay's stale batch-consumer comment was updated.
-
-- **#25, #26, #29, #31, #32, #35** — Refactored
-  `cp_compute_rects()` to take explicit coordinates; refactored variable
-  panel reads to use `repl_eval_predef_view()`; moved `ReplayFadePlan`
-  out of public peer headers to `app/glr_ctrl.h`; renamed tutorial's
-  noncommand commit block to `tutorial_reject_noncommand_commit_with_hint`;
-  documented `expected_commit_line` persistence; unified probe checks into
-  `tutorial_cfg_matches_target` helper.
+- **#1-#14, #16-#18, #20-#22, #24, #27, #28, #33, #34, #36-#48, #50, #55** —
+  Tutorial editor/completion writes, parallel runtime statics, color-picker
+  reset, and variable-panel accessors are resolved. Replay and tutorial
+  cleanup, along with documentation and teardown fixes, have landed.
+- **#26, #29, #31, #32, #35** — Refactored variable panel reads to use `repl_eval_predef_view()`; moved `ReplayFadePlan` out of public peer headers to `app/glr_ctrl.h`; renamed tutorial's noncommand commit block to `tutorial_reject_noncommand_commit_with_hint`; documented `expected_commit_line` persistence; unified probe checks into `tutorial_cfg_matches_target` helper.
+- **#23, #25, #49, #51-#54, #57-#59** — Refactored cp_compute_rects to take coords explicitly; documented state_owners.h inclusion; condensed tutorial.c comments; typed color-picker drag states with CpDragTarget enum; documented cp_* shorthand prefix; standardized status buffers with TUTORIAL_STATUS_MAX and REPLAY_STATUS_MSG_LEN; consolidated GLR_FRAME_DT_SECS; simplified color-picker positioning with clamp_popup_x; cleaned up variable-panel alignment drift; swept stale phase, bug, and renamed function comments.
 
 Partially resolved / still tracked:
 
@@ -98,17 +92,14 @@ Partially resolved / still tracked:
   `repl/state_views.h`, and `UiVariablePanelState` keeps its UI-prefixed
   value type; either document those as accepted snapshot-type carve-outs
   or move them in a future shape pass.
-- **#23 / #30** — Tutorial now includes `repl/cfg_baseline.h` instead of
+- **#30** — Tutorial now includes `repl/cfg_baseline.h` instead of
   `repl/export.h`, but the neutral cfg-baseline surface still exposes
-  `ReplExport*` names and tutorial still includes `repl/state_owners.h`
-  for broad REPL state access.
-- **#59** — Keep open for the broader stale-comment sweep. New examples
-  from `f2cdf759`: `replay.c` comments that say `Bug 7` / `Bug 14`.
+  `ReplExport*` names.
 
 Still open / next items:
 
-- **#49, #51-#54, #56-#58** remain open.
-- The partially resolved items above (**#15, #19, #23/#30, #59**) remain
+- **#56** remains open.
+- The partially resolved items above (**#15, #19, #30**) remain
   tracked until the plan explicitly accepts their carve-outs or finishes
   the cleanup.
 
@@ -1212,6 +1203,8 @@ future "I need a fresh flat program right now" caller use it.
 
 ### 51. Magic numbers in color_picker: `g_cp_drag` is an untyped int for a 4-value enum
 
+**Status:** Resolved (by `subsystem-smells`) — Defined `CpDragTarget` enum and replaced magic integer constants throughout `color_picker_state.c`.
+
 **Where:** `src/subsystems/color_picker/color_picker_state.c:36, 322,
 331, 341, 366`
 
@@ -1227,6 +1220,8 @@ CP_DRAG_ALPHA };`.
 
 ### 52. Color_picker's `cp_*` prefix vs full `color_picker_*` is inconsistent
 
+**Status:** Resolved (by `subsystem-smells`) — Formally accepted `cp_*` as a file-local private prefix convention and explicitly documented it at the top of `color_picker_state.c`.
+
 **Where:** `src/subsystems/color_picker/color_picker_state.c`
 
 **Smell:** File-private helpers use `cp_*` (`cp_compute_rects`,
@@ -1239,6 +1234,8 @@ shorthand (add a one-liner at the top of the file) or rename to
 `color_picker_*` throughout.
 
 ### 53. Magic transient buffer sizes (64, 96, 128, 256)
+
+**Status:** Resolved (by `subsystem-smells`) — Standardized status and message buffers to utilize `TUTORIAL_STATUS_MAX` and introduced `REPLAY_STATUS_MSG_LEN` (64) in `config.h`.
 
 **Where:**
 - `src/subsystems/replay/replay.c:1003, 1024, 925` — `char msg[64]`
@@ -1255,6 +1252,8 @@ add `REPLAY_STATUS_MSG_LEN` and use it.
 
 ### 54. Frame-dt constant duplicated: `REPLAY_FADE_INITIAL_AGE 0.016f`
 
+**Status:** Resolved (by `subsystem-smells`) — Lifted `GLR_FRAME_DT_SECS` (0.016f) to the central `config.h` header and reused it for `REPLAY_FADE_INITIAL_AGE`.
+
 **Where:** `src/subsystems/replay/replay.c:36` and
 `src/app/glr_ctrl.c:2101` (`GLR_FRAME_DT_SECS 0.016f`)
 
@@ -1265,6 +1264,8 @@ add `REPLAY_STATUS_MSG_LEN` and use it.
 `REPLAY_FADE_INITIAL_AGE`.
 
 ### 55. Stale "scene consumes" doc-comment on `replay.h`
+
+**Status:** Resolved (by `subsystem-smells`) — Rewrote comment to state that the controller consumes batches in its per-frame fade-render hook.
 
 **Where:** `src/subsystems/replay/replay.h:77-79`
 
@@ -1281,11 +1282,15 @@ consumes them in its per-frame fade-render hook."
 
 ### 56. `static const ReplayTessPreviewCallbacks` / etc. use `g_` prefix
 
+**Status:** Tracked / Deferred — Outside subsystems scope; covered as finding #64 in the `src-app` audit.
+
 This is in `src/app/glr_ctrl.c`, not subsystems — but worth noting
 because the peer's callback contract bleeds back into the controller.
 Covered as finding #64 in the `src-app` audit.
 
 ### 57. Color_picker's `color_picker_open` clamp algorithm
+
+**Status:** Resolved (by `subsystem-smells`) — Extracted a clean, convergent `clamp_popup_x()` helper in `color_picker_state.c` and integrated it in `color_picker_start`.
 
 **Where:** `src/subsystems/color_picker/color_picker_state.c:222-225`
 
@@ -1305,6 +1310,8 @@ end-clamp.
 
 ### 58. Variable_panel column-alignment drift
 
+**Status:** Resolved (by `subsystem-smells`) — Removed manual alignment spaces to standardize on single space formatting inside `variable_panel_state.h`.
+
 **Where:** `src/subsystems/variable_panel/variable_panel_state.h:46-49`
 
 **Smell:** Two-space gap on `view` lines, three-space gap on `drag`
@@ -1313,6 +1320,8 @@ lines. Manual column alignment fights an asymmetric type-name length.
 **Fix:** Drop manual padding; single space.
 
 ### 59. Stale phase-name references in source comments
+
+**Status:** Resolved (by `subsystem-smells`) — Performed a full sweep of stale comment references, removing phase names, old function rationales, and bug references in `replay.c`, `tutorial.h`, and `color_picker_state.c`.
 
 **Where:** `src/subsystems/variable_panel/variable_panel_drag.c:15-18`,
 `src/subsystems/tutorial/tutorial.c:225`, `tutorial.h:27, 49, 122`,

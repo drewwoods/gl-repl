@@ -336,7 +336,7 @@ static void tutorial_set_status_ack_set(void) {
 }
 
 static void tutorial_set_status_require(const char *slug, int target) {
-    char msg[96];
+    char msg[TUTORIAL_STATUS_MAX];
     snprintf(msg, sizeof msg, "Set %s = %d to continue", slug ? slug : "?", target);
     repl_set_status(msg);
 }

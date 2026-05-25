@@ -263,4 +263,16 @@
 #define REPL_OUTLINE_POLYGON_OFFSET_UNITS  (-100.0f)
 #endif
 
+/* Shared frame clock delta-time (seconds, representing ~60 fps).
+ * Shared by the live app controller (src/app/glr_ctrl.c) and the replay peer
+ * (src/subsystems/replay/replay.c) for visual animation ticks. */
+#ifndef GLR_FRAME_DT_SECS
+#define GLR_FRAME_DT_SECS 0.016f
+#endif
+
+/* Standard status message buffer size for the replay visualizer. */
+#ifndef REPLAY_STATUS_MSG_LEN
+#define REPLAY_STATUS_MSG_LEN 64
+#endif
+
 #endif /* CONFIG_H */

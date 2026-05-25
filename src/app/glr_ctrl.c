@@ -2220,7 +2220,6 @@ static void glr_ctrl_seed_overlay_xn(void) {
  * GLR_CURSOR_BLINK_TICKS is the cursor blink half-period counted in
  * those ticks (~0.5 s). */
 #define GLR_FRAME_DT_MS       16
-#define GLR_FRAME_DT_SECS     0.016f
 #define GLR_CURSOR_BLINK_TICKS 30
 
 /* Per-frame diff + advance, called from glr_ctrl_tick (the animation
