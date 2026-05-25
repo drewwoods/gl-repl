@@ -831,6 +831,19 @@ static int load_initial_commands(const char *import_file) {
         struct stat st;
         if (stat(import_file, &st) == 0 && S_ISDIR(st.st_mode)) {
             if (repl_load_workspace(import_file) > 0) {
+                /* repl_load_workspace leaves the active slot at -1 so
+                 * the live document is the pre-load stash (empty at
+                 * startup). On a CLI bootstrap that strands the user on
+                 * an empty buffer with all the workspace tabs visible
+                 * but none of them active. Land on the first occupied
+                 * slot — symmetric with the single-file branch below
+                 * (which activates the home slot). */
+                for (int slot = 0; slot < MAX_USER_SCENES; slot++) {
+                    if (repl_user_scene_slot_used(slot)) {
+                        repl_load_user_scene_idx(slot);
+                        break;
+                    }
+                }
                 scroll_to_display_function();
                 return repl_state_document_count();
             }

@@ -408,6 +408,62 @@ void test_workspace_round_trip() {
     }
 }
 
+/* When the CLI argument is a workspace directory (`./gl-repl ./workspace`),
+ * the initial bootstrap should land the user *on* one of the loaded scenes
+ * rather than dropping them into an empty transient buffer with the active
+ * slot at -1. The tabs show up either way, but with no active slot the user
+ * sees a blank editor; activating the first occupied slot matches the
+ * single-file load path (which calls repl_scenes_activate_home_slot). */
+void test_workspace_initial_load_activates_first_slot() {
+    printf("--- Workspace initial-load activates first slot ---\n");
+    glr_app_reset_all(); declare_test_vars();
+
+    /* Stage a workspace dir with two scenes saved out. */
+    if (repl_example_count() < 1) return;
+    editor_feed_line("glVertex3f(1,1,1);");
+    repl_load_example(0);
+    int p1 = repl_promote_example_if_needed();
+    ASSERT_TRUE("first promotion ok", p1 >= 1);
+
+    char dir[256];
+    snprintf(dir, sizeof(dir), "/tmp/repl_workspace_initial.%d", (int)getpid());
+    int written = repl_save_workspace(dir, NULL);
+    ASSERT_TRUE("save_workspace wrote >= 1 slot", written >= 1);
+
+    /* Wipe and bootstrap with the workspace path — simulates
+     * `./gl-repl ./workspace` going through gl_repl.c -> bootstrap_repl
+     * -> repl_load_initial_commands(dir). */
+    glr_app_reset_all(); declare_test_vars();
+    ASSERT_INT("slots cleared by reset", repl_user_scene_count(), 0);
+    ASSERT_INT("no active slot before bootstrap",
+               repl_active_user_scene(), -1);
+
+    repl_load_initial_commands(dir);
+
+    ASSERT_TRUE("workspace loaded at least one scene",
+                repl_user_scene_count() >= 1);
+    ASSERT_TRUE("active slot is on a loaded scene (not -1)",
+                repl_active_user_scene() >= 0);
+    ASSERT_TRUE("active slot is occupied",
+                repl_user_scene_slot_used(repl_active_user_scene()));
+    ASSERT_TRUE("live document populated from active slot",
+                repl_state_document_count() > 0);
+
+    /* Clean up. */
+    DIR *d = opendir(dir);
+    if (d) {
+        struct dirent *ent;
+        while ((ent = readdir(d))) {
+            if (ent->d_name[0] == '.') continue;
+            char p[512];
+            snprintf(p, sizeof(p), "%s/%s", dir, ent->d_name);
+            unlink(p);
+        }
+        closedir(d);
+        rmdir(dir);
+    }
+}
+
 void test_workspace_save_slug_collisions() {
     printf("--- Workspace save slug collisions ---\n");
     glr_app_reset_all(); declare_test_vars();
@@ -1550,6 +1606,7 @@ int main(int argc, char **argv) {
     test_user_scene_rename_flow();
     test_inline_file_prompt_flow();
     test_workspace_round_trip();
+    test_workspace_initial_load_activates_first_slot();
     test_workspace_save_slug_collisions();
     test_workspace_save_max_slug_collisions();
     test_scene_load_clears_func_aliases_and_saved_workspace_stays_clean();
