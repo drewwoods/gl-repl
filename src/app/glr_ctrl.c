@@ -1164,6 +1164,12 @@ static void scene_execute_adapter(const SceneExecuteContext *ctx,
 static SceneXnState g_grid_xn;
 static SceneXnState g_axes_xn;
 
+/* Per-renderer scene state (formerly file-static in src/scene/render.c).
+ * The single-renderer assumption is now an instance, not a global —
+ * glr_ctrl is one renderer, scene_demo is another, and tests own
+ * theirs. Initialized in glr_ctrl_init_gl. */
+static SceneRendererState g_scene_renderer;
+
 /* Runtime GL_NV_fog_distance capability, probed once in glr_ctrl_init_gl
  * (the GL context is current there) and mirrored into each frame's
  * SceneRenderConfig. Lets the city backdrop and ocean/radar grid themes
@@ -1877,7 +1883,7 @@ void glr_ctrl_display_frame(void) {
         };
         scene_apply_camera(&pose);
     }
-    if (scene_render_3d_scene(&scene_config) != 0) {
+    if (scene_render_3d_scene(&g_scene_renderer, &scene_config) != 0) {
         static int warned = 0;
         if (!warned) {
             fprintf(stderr,
@@ -2054,7 +2060,7 @@ static float glr_app_camera_distance(void) {
 static void glr_app_export_reshape_projection(ReplExportProjectionBlock *blk) {
     SceneProjectionDesc p;
 
-    scene_get_active_projection(&p);
+    scene_get_active_projection(&g_scene_renderer, &p);
     blk->count = 0;
     if (p.ortho) {
         snprintf(blk->lines[blk->count++], REPL_EXPORT_PROJ_LINE_MAX,
@@ -2433,6 +2439,7 @@ void glr_ctrl_init_gl(void) {
     glr_app_reset_all();
     repl_ensure_init_bootstrap_ready();
     scene_render_init_gl();
+    scene_renderer_state_init(&g_scene_renderer);
     repl_executor_init_resources();
 
     /* Runtime point-parameter capability (replaces the old

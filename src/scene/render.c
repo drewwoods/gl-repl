@@ -70,6 +70,23 @@ void scene_render_init_gl(void) {
     scene_postprocess_filter_reset();
 }
 
+void scene_renderer_state_init(SceneRendererState *state) {
+    if (!state) return;
+    state->ortho_ref_dist = 0.0;
+    state->ortho_active = 0;
+    /* Default mirrors the steady 3D frustum so a getter call before
+     * the first frame is still sane. */
+    state->active_projection = (SceneProjectionDesc){
+        .ortho      = 0,
+        .fovy_deg   = SCENE_DEFAULT_FOVY_DEG,
+        .near_z     = SCENE_DEFAULT_NEAR_Z,
+        .far_z      = SCENE_DEFAULT_FAR_Z,
+        .ortho_top  = 0.0,
+        .ortho_near = -SCENE_DEFAULT_FAR_Z,
+        .ortho_far  = SCENE_DEFAULT_FAR_Z,
+    };
+}
+
 /* Reject SceneRenderConfig values that would cause undefined behavior or
  * never-terminating loops downstream. Returns 0 on valid, sets errno and
  * returns -1 on failure. The grid renderer's `for (v = -extent; v <= extent;
@@ -130,33 +147,19 @@ static void scene_render_pop_state(void) {
     glPopAttrib();
 }
 
-/* 2D ortho scale reference (depth-center of the drawn geometry). How it
- * is sampled — once at the switch vs. every frame — is selected at
- * compile time by GLR_ORTHO_REF_MODE in config.h; see
- * scene_update_ortho_ref. 0 means "no usable measurement" and
- * scene_apply_projection falls back to config->cam_dist (the old
- * orbit-target-plane behavior). */
-static double g_ortho_ref_dist = 0.0;
-static int g_ortho_active = 0;
-
-/* Last projection scene_apply_projection() resolved this frame. Cached
- * for scene_get_active_projection() so the exporter/code panel can emit
- * a faithful reshape() without re-deriving the math (Tenet 3). Default
- * mirrors the steady 3D frustum so a getter call before the first frame
- * is still sane. */
-static SceneProjectionDesc g_active_projection = {
-    0,
-    SCENE_DEFAULT_FOVY_DEG,
-    SCENE_DEFAULT_NEAR_Z,
-    SCENE_DEFAULT_FAR_Z,
-    0.0,
-    -SCENE_DEFAULT_FAR_Z,
-    SCENE_DEFAULT_FAR_Z
-};
-
-void scene_get_active_projection(SceneProjectionDesc *out) {
-    if (out)
-        *out = g_active_projection;
+void scene_get_active_projection(const SceneRendererState *state,
+                                 SceneProjectionDesc *out) {
+    if (!out) return;
+    if (!state) {
+        /* Defensive: if the caller hasn't initialized a state, hand
+         * back the same default scene_renderer_state_init would have
+         * written. */
+        SceneRendererState tmp;
+        scene_renderer_state_init(&tmp);
+        *out = tmp.active_projection;
+        return;
+    }
+    *out = state->active_projection;
 }
 
 /* Run the user geometry through GL_FEEDBACK with a wide ortho box so the
@@ -278,23 +281,59 @@ static double scene_probe_eye_dist(const SceneRenderConfig *config) {
  *
  * PERFRAME: re-probe whenever ortho is contributing; tracks animation
  * and camera live. Pure-perspective frames pay nothing either way. */
-static void scene_update_ortho_ref(const SceneRenderConfig *config) {
+static void scene_update_ortho_ref(SceneRendererState *state,
+                                   const SceneRenderConfig *config) {
     int ortho_now = (config->projection_mix < 0.999f);
 
 #if GLR_ORTHO_REF_MODE == GLR_ORTHO_REF_PERFRAME
-    g_ortho_ref_dist = ortho_now ? scene_probe_eye_dist(config) : 0.0;
+    (void)state->ortho_active;
+    state->ortho_ref_dist = ortho_now ? scene_probe_eye_dist(config) : 0.0;
 #else /* GLR_ORTHO_REF_FROZEN */
     {
-        if (ortho_now && !g_ortho_active)
-            g_ortho_ref_dist = scene_probe_eye_dist(config);
-        else if (!ortho_now && g_ortho_active)
-            g_ortho_ref_dist = 0.0;
-        g_ortho_active = ortho_now;
+        if (ortho_now && !state->ortho_active)
+            state->ortho_ref_dist = scene_probe_eye_dist(config);
+        else if (!ortho_now && state->ortho_active)
+            state->ortho_ref_dist = 0.0;
+        state->ortho_active = ortho_now;
     }
 #endif
 }
 
-static void scene_apply_projection(const SceneRenderConfig *config,
+/* Resolve the canonical (zero-jitter) projection description for this
+ * frame and write it into state->active_projection. Called once per
+ * scene_render_3d_scene before the AA jitter loop so the cached desc
+ * always reflects the discrete-mode projection a faithful reshape()
+ * would emit — not a transient sample inside the loop. The continuous
+ * mix is snapped to the dominant side because reshape() emits one
+ * discrete mode, not an interpolation. */
+static void scene_compute_active_projection(SceneRendererState *state,
+                                            const SceneRenderConfig *config) {
+    double near_z = SCENE_DEFAULT_NEAR_Z;
+    double far_z = SCENE_DEFAULT_FAR_Z;
+    double half_fovy_tan = SCENE_DEFAULT_HALF_FOVY_TAN;
+    float mix = config->projection_mix;
+    if (mix < 0.0f) mix = 0.0f;
+    if (mix > 1.0f) mix = 1.0f;
+
+    double ortho_ref = (state->ortho_ref_dist > SCENE_PROJECTION_DEPTH_EPSILON)
+                           ? state->ortho_ref_dist
+                           : (double)config->cam_dist;
+    state->active_projection = (SceneProjectionDesc){
+        .ortho      = (mix < 0.5f) ? 1 : 0,
+        .fovy_deg   = SCENE_DEFAULT_FOVY_DEG,
+        .near_z     = near_z,
+        .far_z      = far_z,
+        .ortho_top  = ortho_ref * half_fovy_tan,
+        .ortho_near = -far_z,
+        .ortho_far  = far_z,
+    };
+}
+
+/* Per-AA-sample projection apply. Reads state->ortho_ref_dist for the
+ * ortho scale reference but does NOT write back — state is read-only
+ * here, all mutations land in scene_compute_active_projection above. */
+static void scene_apply_projection(const SceneRendererState *state,
+                                   const SceneRenderConfig *config,
                                    float accum_jitter_x,
                                    float accum_jitter_y) {
     glMatrixMode(GL_PROJECTION);
@@ -318,23 +357,6 @@ static void scene_apply_projection(const SceneRenderConfig *config,
     if (mix < 0.0f) mix = 0.0f;
     if (mix > 1.0f) mix = 1.0f;
 
-    /* Cache the canonical (jitter-free) projection for the exporter /
-     * code panel. The continuous blend is snapped to the dominant side
-     * because reshape() emits one discrete mode, not an interpolation. */
-    {
-        double ortho_ref = (g_ortho_ref_dist > SCENE_PROJECTION_DEPTH_EPSILON)
-                               ? g_ortho_ref_dist
-                               : (double)config->cam_dist;
-        g_active_projection.ortho      = (mix < 0.5f) ? 1 : 0;
-        g_active_projection.fovy_deg   = SCENE_DEFAULT_FOVY_DEG;
-        g_active_projection.near_z     = near_z;
-        g_active_projection.far_z      = far_z;
-        g_active_projection.ortho_top  =
-            ortho_ref * half_fovy_tan;
-        g_active_projection.ortho_near = -far_z;
-        g_active_projection.ortho_far  = far_z;
-    }
-
     if (mix >= 0.999f) {
         glFrustum(-persp_right + persp_dx, persp_right + persp_dx,
                   -persp_top   + persp_dy, persp_top   + persp_dy,
@@ -342,8 +364,8 @@ static void scene_apply_projection(const SceneRenderConfig *config,
     } else {
         double ortho_near = -far_z;
         double ortho_far = far_z;
-        double ortho_ref = (g_ortho_ref_dist > SCENE_PROJECTION_DEPTH_EPSILON)
-                               ? g_ortho_ref_dist
+        double ortho_ref = (state->ortho_ref_dist > SCENE_PROJECTION_DEPTH_EPSILON)
+                               ? state->ortho_ref_dist
                                : (double)config->cam_dist;
         double ortho_top = ortho_ref * half_fovy_tan;
         double ortho_right = ortho_top * aspect;
@@ -542,13 +564,14 @@ static void scene_apply_clear_color(const float clear_color[4]) {
  * caller hooks. The orchestrator below is now ~25 lines that just
  * brackets the outer glPushAttrib pair and calls into each phase. */
 
-static void scene_pass_setup(const SceneFrameRenderContext *frame_ctx,
+static void scene_pass_setup(const SceneRendererState *state,
+                             const SceneFrameRenderContext *frame_ctx,
                              float accum_jitter_x, float accum_jitter_y) {
     const SceneRenderConfig *config = &frame_ctx->config;
     prof_begin(PROF_SCENE_3D_SETUP);
     glPushAttrib(GL_ALL_ATTRIB_BITS);
 
-    scene_apply_projection(config, accum_jitter_x, accum_jitter_y);
+    scene_apply_projection(state, config, accum_jitter_x, accum_jitter_y);
     /* scene_apply_projection leaves matrix mode set to GL_PROJECTION; the
      * old scene_apply_camera_view() helper used to switch back to
      * GL_MODELVIEW as a side effect. With camera apply now done by the
@@ -624,21 +647,24 @@ static void scene_pass_overlays(const SceneFrameRenderContext *frame_ctx) {
     prof_accum_end(PROF_SCENE_3D_OVERLAYS);
 }
 
-static void render_3d_scene_pass(const SceneRenderConfig *config,
+static void render_3d_scene_pass(const SceneRendererState *state,
+                                 const SceneRenderConfig *config,
                                  float accum_jitter_x,
                                  float accum_jitter_y) {
     SceneFrameRenderContext frame_ctx;
     scene_prepare_frame_context(&frame_ctx, config);
 
-    scene_pass_setup(&frame_ctx, accum_jitter_x, accum_jitter_y);
+    scene_pass_setup(state, &frame_ctx, accum_jitter_x, accum_jitter_y);
     scene_pass_fill(config);
     scene_pass_helpers(&frame_ctx);
     scene_pass_overlays(&frame_ctx);
 }
 
-int scene_render_3d_scene(const SceneRenderConfig *config) {
+int scene_render_3d_scene(SceneRendererState *state,
+                          const SceneRenderConfig *config) {
     if (validate_render_config(config) < 0)
         return -1;
+    if (!state) { errno = EINVAL; return -1; }
 
     int accum_samples = config->accum_samples;
     glViewport(config->scene_x, config->scene_y,
@@ -649,14 +675,20 @@ int scene_render_3d_scene(const SceneRenderConfig *config) {
      * holds the caller's camera, nothing has touched it yet — so the
      * feedback probe sees the right matrix and one update serves every
      * jitter sample below. */
-    scene_update_ortho_ref(config);
+    scene_update_ortho_ref(state, config);
+
+    /* Resolve the canonical active projection ONCE, before the AA
+     * jitter loop. Per-sample apply reads it but no longer writes —
+     * the cached desc reflects the discrete-mode projection a faithful
+     * reshape() would emit, not a transient sample. */
+    scene_compute_active_projection(state, config);
 
     if (config->use_accum && config->accum_aa_enabled && accum_samples > 1) {
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_ACCUM_BUFFER_BIT);
         float weight = 1.0f / (float)accum_samples;
         for (int sample_idx = 0; sample_idx < accum_samples; sample_idx++) {
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-            render_3d_scene_pass(config,
+            render_3d_scene_pass(state, config,
                                  g_jitter_table[sample_idx % MAX_ACCUM_SAMPLES][0],
                                  g_jitter_table[sample_idx % MAX_ACCUM_SAMPLES][1]);
             glAccum(GL_ACCUM, weight);
@@ -664,7 +696,7 @@ int scene_render_3d_scene(const SceneRenderConfig *config) {
         glAccum(GL_RETURN, 1.0f);
     } else {
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        render_3d_scene_pass(config, 0.0f, 0.0f);
+        render_3d_scene_pass(state, config, 0.0f, 0.0f);
     }
 
     /* Once per frame, on the fully resolved scene image (covers both

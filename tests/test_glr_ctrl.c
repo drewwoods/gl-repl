@@ -87,7 +87,9 @@ static void set_cmd3(GLCmd *cmd, CmdType type, int src_idx,
     (void)source;
 }
 
-int test_scene_render_3d_scene(const SceneRenderConfig *config) {
+int test_scene_render_3d_scene(SceneRendererState *state,
+                               const SceneRenderConfig *config) {
+    (void)state;
     g_scene_render_calls++;
     g_last_scene_config = *config;
 
