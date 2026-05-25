@@ -72,6 +72,11 @@ static GlrCameraState       g_camera          = GLR_CAMERA_INITIAL;
 static const GlrCameraState g_camera_defaults = GLR_CAMERA_INITIAL;
 static GlrCameraState       g_camera_target;
 static int                   g_camera_target_active = 0;
+/* Per-ease decay override: each new ease resets to GLR_CAMERA_TARGET_DECAY;
+ * callers that want to run faster/slower than the global default (e.g. the
+ * 3D->2D view-mode transition) call glr_camera_set_target_decay AFTER
+ * glr_camera_ease_to to override for that ease only. */
+static float                 g_camera_target_decay = GLR_CAMERA_TARGET_DECAY;
 static GlrCameraControlMode  g_control_mode    = GLR_CAMERA_CONTROL_3D;
 
 static GlrCameraState       g_scene_camera_default;
@@ -175,7 +180,7 @@ static void snap_to_target(void) {
 
 static void tick_target_ease(void) {
     GlrCameraState *c = &g_camera;
-    float k = 1.0f - GLR_CAMERA_TARGET_DECAY;
+    float k = 1.0f - g_camera_target_decay;
     float dx = g_camera_target.tx - c->tx;
     float dy = g_camera_target.ty - c->ty;
     float dz = g_camera_target.tz - c->tz;
@@ -255,9 +260,21 @@ void glr_camera_ease_to(float rx, float ry, float dist,
     g_camera_target.tz = tz;
     g_camera_target_active = 1;
     g_pointer_button = -1;
+    glr_camera_set_target_decay(GLR_CAMERA_TARGET_DECAY);
     reset_velocities();
     if (target_deltas_within_epsilon(&g_camera))
         snap_to_target();
+}
+
+/* Override the per-ease decay for the current target. Call AFTER
+ * glr_camera_ease_to (which resets to the global default). Values in
+ * (0, 1): lower = faster (more of the remaining distance applied per
+ * frame); higher = slower. Out-of-range values are silently clamped to
+ * keep the ease well-behaved. */
+void glr_camera_set_target_decay(float decay) {
+    if (decay < 0.0f) decay = 0.0f;
+    if (decay > 0.999f) decay = 0.999f;
+    g_camera_target_decay = decay;
 }
 
 void glr_camera_reset_default(void) {

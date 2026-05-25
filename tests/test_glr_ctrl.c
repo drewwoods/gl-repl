@@ -788,6 +788,96 @@ static void test_view_mode_projection_transition_wiring(void) {
                 glr_camera().ry > 0.0f);
 }
 
+/* glr_ctrl_start_camera_to_2d applies GLR_VIEW_CAMERA_TO_2D_DECAY to
+ * the ease so the orbit flattening doesn't drag the subsequent
+ * projection blend. Verify the first tick after the ortho toggle
+ * covers strictly more rx/ry distance than the global default decay
+ * would produce, AND that the 2D->3D leg keeps the global default
+ * (no override leak through start_camera_to_3d). */
+static void test_view_mode_3d_to_2d_uses_faster_decay(void) {
+    float rx_default_step;
+    float ry_default_step;
+    GlrCameraState cam;
+
+    printf("--- imrepl_ctrl 3d->2d faster decay ---\n");
+    prepare_display_fixture();
+    replay_state_mut()->active = 0;
+    replay_state_mut()->state = REPLAY_OFF;
+    glr_ctrl_display_frame();
+
+    /* What the GLOBAL default decay would cover in a single tick from
+     * the fixture's rx=11, ry=22 toward (rx=ry=0). The override must
+     * beat both. */
+    rx_default_step = 11.0f * (1.0f - GLR_CAMERA_TARGET_DECAY);
+    ry_default_step = 22.0f * (1.0f - GLR_CAMERA_TARGET_DECAY);
+
+    /* 3D -> 2D: first tick uses the faster decay. */
+    glr_state_presentation_mut()->ortho_mode = 1;
+    glr_ctrl_tick();
+
+    cam = glr_camera();
+    ASSERT_TRUE("3D->2D first tick covers more rx than global default",
+                (11.0f - cam.rx) > rx_default_step + 0.1f);
+    ASSERT_TRUE("3D->2D first tick covers more ry than global default",
+                (22.0f - cam.ry) > ry_default_step + 0.1f);
+    /* Sanity-check the override actually matches GLR_VIEW_CAMERA_TO_2D_DECAY
+     * within float epsilon, not some other intermediate value. */
+    {
+        float expected_rx = 11.0f * GLR_VIEW_CAMERA_TO_2D_DECAY;
+        float expected_ry = 22.0f * GLR_VIEW_CAMERA_TO_2D_DECAY;
+        ASSERT_TRUE("rx matches GLR_VIEW_CAMERA_TO_2D_DECAY step",
+                    fabsf(cam.rx - expected_rx) < 0.05f);
+        ASSERT_TRUE("ry matches GLR_VIEW_CAMERA_TO_2D_DECAY step",
+                    fabsf(cam.ry - expected_ry) < 0.05f);
+    }
+
+    /* Settle 3D->2D. */
+    for (int i = 0; i < 400 && glr_camera_target_active(); i++)
+        glr_ctrl_tick();
+    /* Drain the projection-blend phase too so the FSM lands in IDLE
+     * before we test the reverse direction. */
+    for (int i = 0; i < 200; i++) {
+        glr_ctrl_tick();
+        glr_ctrl_display_frame();
+        if (g_last_scene_config.projection_mix == 0.0f)
+            break;
+    }
+
+    /* 2D -> 3D: projection moves first under the sequential FSM. The
+     * tick where projection reaches 1.0 also calls start_camera_to_3d
+     * AND runs glr_camera_tick once (the tick chain is view_transition
+     * then camera_tick), so the camera is already 1 tick into its ease
+     * the moment projection settles — that's the sample to measure
+     * against the default decay. */
+    glr_state_presentation_mut()->ortho_mode = 0;
+    int converged_at = -1;
+    for (int i = 0; i < 200; i++) {
+        glr_ctrl_tick();
+        glr_ctrl_display_frame();
+        if (g_last_scene_config.projection_mix == 1.0f) {
+            converged_at = i;
+            break;
+        }
+    }
+    ASSERT_TRUE("2D->3D projection reached 1.0 within drain budget",
+                converged_at >= 0);
+    cam = glr_camera();
+    {
+        /* Camera eased from (0, 0) toward saved (11, 22) for exactly
+         * one tick with the global default decay (2D->3D does NOT apply
+         * the faster override). Expected first-tick position:
+         *   0 + (11 - 0) * (1 - 0.93) = 0.77 deg for rx.
+         * A revert that propagated the faster decay (0.85) would push
+         * cam.rx to ~1.65, well outside the 0.05 window. */
+        float expected_rx_default = 11.0f * (1.0f - GLR_CAMERA_TARGET_DECAY);
+        float expected_ry_default = 22.0f * (1.0f - GLR_CAMERA_TARGET_DECAY);
+        ASSERT_TRUE("2D->3D first camera tick uses global default decay (rx)",
+                    fabsf(cam.rx - expected_rx_default) < 0.05f);
+        ASSERT_TRUE("2D->3D first camera tick uses global default decay (ry)",
+                    fabsf(cam.ry - expected_ry_default) < 0.05f);
+    }
+}
+
 /* The controller's saved-3D snapshot drives the 2D->3D restoration.
  * Without an external refresh, switching examples while dwelling in 2D
  * leaves the snapshot pointing at the pose captured on 2D entry — so
@@ -919,6 +1009,7 @@ int main(void) {
     test_pointer_state_tracks_controller_mouse_routes();
     test_overlay_transition_machine_wiring();
     test_view_mode_projection_transition_wiring();
+    test_view_mode_3d_to_2d_uses_faster_decay();
     test_view_record_external_3d_pose_tracks_in_ortho();
     test_view_record_external_3d_pose_noop_in_perspective();
     test_quit_recovery_file();

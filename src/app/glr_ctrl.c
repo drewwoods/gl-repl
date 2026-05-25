@@ -1154,6 +1154,11 @@ static void glr_ctrl_start_camera_to_2d(void) {
         g_saved_3d_camera_valid = 1;
     }
     glr_camera_ease_to(0.0f, 0.0f, cam.dist, cam.tx, cam.ty, 0.0f);
+    /* Use a faster decay for this leg only — the orbit flattening
+     * shouldn't drag the projection blend that follows it. The override
+     * is reset by the next glr_camera_ease_to call (drag, scene load,
+     * etc.), so non-view-mode eases keep the global default. */
+    glr_camera_set_target_decay(GLR_VIEW_CAMERA_TO_2D_DECAY);
     g_view_xn_phase = GLR_VIEW_XN_CAMERA_TO_2D;
 }
 
