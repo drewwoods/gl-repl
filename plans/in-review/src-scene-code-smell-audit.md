@@ -1,8 +1,11 @@
 # `src/scene/` — Code-Smell Audit
 
-> Audit produced 2026-05-24. Resolution pass landed 2026-05-25 (commits
-> `2d1b9b6` through `709455f`); see the **Status** section below for
-> per-finding state. Findings come from four parallel reviews of
+> Audit produced 2026-05-24. Resolution pass landed 2026-05-25
+> (commits `2d1b9b6` through `222054c`; main fast-forwarded to the
+> SceneExecutePurpose review at `49bf979`, scene-smells continues
+> past it with the god-function splits and the RESERVED-field
+> doc cleanup). See the **Status** section below for per-finding
+> state. Findings come from four parallel reviews of
 > `src/scene/` (render core; grid + axes + scene_transition;
 > visual-content modules — backdrop/lights/overlays/postprocess +
 > palette/themes/occluded_ghost; the `guides/` subtree) plus targeted
@@ -12,12 +15,17 @@
 
 ## Status (2026-05-25)
 
-**~20 commits landed** addressing 8 of the 10 🔴 bugs + every one-afternoon
-sweep item + 20+ of the 🟡/🟢 boundary/dead-code findings + every 🔵
-god-function split. Tests: 7228 → 7447 (+219 from drift tests + new
-predicate coverage). `check-state-ownership` green; C99 ratchet green.
-Main now contains commits up through the SceneExecutePurpose
-adapter-snapshot fix (review pass on #2).
+**50 of 65 findings done** across the resolution pass:
+- 🔴 **8 / 10** bugs (deferred: #3 g_xn statics, #5 g_active_projection)
+- 🟡 **18 / 25** boundary/drift items
+- 🟢 **7 / 9** dead-code items
+- 🔵 **17 / 21** structural items (every god-function split closed)
+
+Tests: 7228 → 7447 (+219 from drift tests + new predicate coverage).
+`check-state-ownership` green; C99 ratchet green. Main contains commits
+up through the SceneExecutePurpose adapter-snapshot fix (review pass on
+#2 at `49bf979`); scene-smells continues with the god-function splits
+(#45-#48, #52), cosmetic batch, and small docs (#20, #26, #64).
 
 | Finding | Status | Commit |
 |---|---|---|
@@ -105,9 +113,10 @@ adapter-snapshot fix (review pass on #2).
   whichever lets ALL themes go through the same shape.
 - **Magic numbers** (#55): per-theme constants are the natural home;
   the current literals encode tuning knobs that ought to be named.
-- **Cosmetic** (#30, #57, #58, #62, #64): kept on the list but each
-  is a sub-15-minute drive-by; group them into a sweep when next in
-  the area.
+- **Cosmetic remaining** (#57 post_fill_fn rename, #58 goto bad
+  style, #61 scene_xn_init/show seed helper): each a sub-15-minute
+  drive-by; the audit itself marks #58 and #61 as "leave / probably
+  not worth it." Group them into a sweep when next in the area.
 >
 > Scope: every file under `src/scene/` (`*.c/h` + `guides/`). Tests
 > under `tests/` were read where they document a contract, but not
