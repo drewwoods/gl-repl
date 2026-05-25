@@ -19,10 +19,16 @@
 #include "subsystems/tutorial/tutorial_state.h"
 #include "source_document.h"
 #include "keys.h"
+#include "app/glr_camera.h"               /* glr_camera_target_active / glr_camera */
+#include "ui/app/menu_bar.h"              /* ui_menu_bar_open_menu_id, _set_open_menu */
+#include "ui/app/layout.h"                /* CODE_PANEL_LAYOUT_* */
+#include "repl/eval.h"                    /* g_predef_vars, repl_eval_find_predef_var_idx */
+#include "subsystems/color_picker/color_picker_state.h"
 #include "support/test_harness.h"
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <math.h>
 #include <unistd.h>
 
 static TestHarness g_harness = TEST_HARNESS_INIT;
@@ -678,6 +684,160 @@ static void test_status_set_drops_empty_message(void) {
     ASSERT_STR("NULL message does not overwrite text", status->text, "oops");
 }
 
+/* glr_cfg_cycle_row per-key matrix (audit #50 prep).
+ *
+ * The function is a 91-line per-key special-case chain that audit #50
+ * proposes folding into an on_change hook on GlrConfigItem. The
+ * remaining special cases not covered by test_cfg_cycling above are
+ * captured here so the refactor preserves each side effect:
+ *
+ *   FOCUS_ORIGIN         → glr_camera_focus_origin (ease target=origin)
+ *   RESET_CAMERA         → glr_camera_ease_to_default
+ *   AUTO_TIME + Shift    → repl_reset_time_to_zero
+ *   CODE_PANEL_LAYOUT_HIDDEN → ui_menu_bar_close + color_picker_stop +
+ *                              editor_completion_clear (the hidden-only
+ *                              branch — the other layouts test pure
+ *                              status & state in test_cfg_cycling).
+ *
+ * Each case asserts an OBSERVABLE side effect (camera target active,
+ * time reset, panel-open flag) rather than a comparison against the
+ * function's internal control flow, so any refactor that preserves
+ * the side effect passes. */
+static int find_cfg_row_for_key(GlrConfigKey key) {
+    for (int i = 0; i < CFG_ITEM_COUNT; i++) {
+        const GlrConfigItem *item = glr_config_item_at(i);
+        if (item && item->key == key)
+            return i;
+    }
+    return -1;
+}
+
+static void test_cfg_cycle_focus_origin_eases_to_origin(void) {
+    glr_app_reset_all();
+
+    int row = find_cfg_row_for_key(GLR_CONFIG_FOCUS_ORIGIN);
+    ASSERT_TRUE("found focus_origin row", row >= 0);
+    if (row < 0) return;
+
+    /* Move target away from origin so the ease has somewhere to go. */
+    glr_camera_set(20.0f, 30.0f, 5.0f, 3.0f, 4.0f, 5.0f, 0.0f);
+    ASSERT_INT("camera target inactive before cycle",
+               glr_camera_target_active(), 0);
+
+    glr_cfg_cycle_row(row, 1);
+
+    ASSERT_INT("focus_origin starts a camera ease",
+               glr_camera_target_active(), 1);
+    ASSERT_STR("focus_origin status", g_last_status, "Camera: focus origin");
+
+    /* Tick to convergence and verify the ease destination was the origin
+     * (tx/ty/tz, not rx/ry — focus_origin recenters the orbit target). */
+    for (int i = 0; i < 500 && glr_camera_target_active(); i++)
+        glr_camera_tick();
+    GlrCameraState cam = glr_camera();
+    ASSERT_TRUE("focus_origin lands at origin (tx)", fabsf(cam.tx) < 1e-3f);
+    ASSERT_TRUE("focus_origin lands at origin (ty)", fabsf(cam.ty) < 1e-3f);
+    ASSERT_TRUE("focus_origin lands at origin (tz)", fabsf(cam.tz) < 1e-3f);
+    /* Orbit angles are preserved by focus_origin. */
+    ASSERT_TRUE("focus_origin preserves rx", fabsf(cam.rx - 20.0f) < 1e-3f);
+    ASSERT_TRUE("focus_origin preserves ry", fabsf(cam.ry - 30.0f) < 1e-3f);
+}
+
+static void test_cfg_cycle_reset_camera_eases_to_default(void) {
+    glr_app_reset_all();
+
+    int row = find_cfg_row_for_key(GLR_CONFIG_RESET_CAMERA);
+    ASSERT_TRUE("found reset_camera row", row >= 0);
+    if (row < 0) return;
+
+    glr_camera_set(45.0f, 90.0f, 12.0f, 7.0f, -2.0f, 3.0f, 0.0f);
+
+    glr_cfg_cycle_row(row, 1);
+
+    ASSERT_INT("reset_camera starts an ease", glr_camera_target_active(), 1);
+    ASSERT_STR("reset_camera status", g_last_status, "Camera: reset to default");
+
+    for (int i = 0; i < 500 && glr_camera_target_active(); i++)
+        glr_camera_tick();
+    GlrCameraState cam = glr_camera();
+    /* Built-in default is (rx=20, ry=30, dist=5, tx=ty=tz=0). */
+    ASSERT_TRUE("reset_camera rx reaches default 20", fabsf(cam.rx - 20.0f) < 0.5f);
+    ASSERT_TRUE("reset_camera ry reaches default 30", fabsf(cam.ry - 30.0f) < 0.5f);
+    ASSERT_TRUE("reset_camera dist reaches default 5", fabsf(cam.dist - 5.0f) < 0.5f);
+}
+
+static void test_cfg_cycle_auto_time_shift_resets_time(void) {
+    glr_app_reset_all();
+
+    int row = find_cfg_row_for_key(GLR_CONFIG_AUTO_TIME);
+    ASSERT_TRUE("found auto_time row", row >= 0);
+    if (row < 0) return;
+
+    /* Seed a non-zero t predef-var value so we can observe the reset.
+     * (repl_reset_time_to_zero zeros the t predef var, not the
+     * controller-side anim_time accumulator — the predef value is
+     * what the executor and the scene observe each frame.) */
+    int t_idx = repl_eval_find_predef_var_idx("t");
+    ASSERT_TRUE("t predef var exists", t_idx >= 0);
+    if (t_idx < 0) return;
+    g_predef_vars[t_idx].value = 7.25f;
+    int was_playing = repl_state_variables().time_playing;
+
+    /* Shift+cycle: resets time to 0 regardless of play state. Use the
+     * modifier provider seam to make Shift observable to the cfg path. */
+    editor_input_set_modifier_provider_for_test(test_mods_provider);
+    g_test_mods = GLUT_ACTIVE_SHIFT;
+    glr_cfg_cycle_row(row, 1);
+    g_test_mods = 0;
+    editor_input_set_modifier_provider_for_test(NULL);
+
+    ASSERT_TRUE("Shift+auto_time zeros t",
+                fabsf(g_predef_vars[t_idx].value) < 1e-6f);
+    /* time_playing is not changed by the reset path — it just zeroes
+     * the clock. Pin the invariant so a refactor that flips play state
+     * trips the assert. */
+    ASSERT_INT("Shift+auto_time leaves play state unchanged",
+               repl_state_variables().time_playing, was_playing);
+    /* Status reflects the current play state. */
+    const char *expected_status = repl_state_variables().time_playing
+                                      ? "Time: reset to 0"
+                                      : "Time: reset to 0 (paused)";
+    ASSERT_STR("Shift+auto_time status", g_last_status, expected_status);
+}
+
+static void test_cfg_cycle_panel_hidden_closes_overlays(void) {
+    glr_app_reset_all();
+
+    int row = find_cfg_row_for_key(GLR_CONFIG_CODE_PANEL_LAYOUT);
+    ASSERT_TRUE("found code_panel_layout row", row >= 0);
+    if (row < 0) return;
+
+    /* Start from LEFT and cycle until HIDDEN; along the way seed an
+     * open menu so the HIDDEN branch's ui_menu_bar_close() reach is
+     * observable. */
+    glr_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
+    glr_ctrl_sync_ui_chrome();
+
+    /* Cycle to HIDDEN (LEFT -> TOP -> BOTTOM -> HIDDEN). At HIDDEN the
+     * cycle must close any open menu / picker / autocomplete because
+     * the panel that hosts them is no longer drawn. */
+    while (glr_state_presentation().code_panel_layout != CODE_PANEL_LAYOUT_HIDDEN) {
+        /* Seed each transition with an open menu so the HIDDEN branch
+         * (when reached) has something to close. */
+        ui_menu_bar_set_open_menu(GLR_MENU_FILE, 0.0f);
+        glr_cfg_cycle_row(row, 1);
+    }
+
+    ASSERT_INT("HIDDEN layout closes the open menu",
+               ui_menu_bar_open_menu_id(), -1);
+    ASSERT_INT("HIDDEN layout closes the color picker",
+               color_picker_view().open, 0);
+    ASSERT_INT("HIDDEN layout clears autocomplete matches",
+               editor_state_autocomplete().match_count, 0);
+    ASSERT_STR("HIDDEN layout status", g_last_status,
+               "Layout: code panel hidden");
+}
+
 int main(void) {
     test_apply_defaults();
     test_cursor_actions();
@@ -694,6 +854,10 @@ int main(void) {
     test_menu_out_of_range_indices();
     test_cfg_cycle_stops_replay();
     test_status_set_drops_empty_message();
+    test_cfg_cycle_focus_origin_eases_to_origin();
+    test_cfg_cycle_reset_camera_eases_to_default();
+    test_cfg_cycle_auto_time_shift_resets_time();
+    test_cfg_cycle_panel_hidden_closes_overlays();
 
     return test_harness_report(&g_harness, "test_repl_actions");
 }

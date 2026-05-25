@@ -1297,6 +1297,74 @@ int main(void) {
         }
     }
 
+    /* Audit #11/#12 prep: save -> load -> save idempotency. Audit
+     * proposes removing the legacy state-3 path and the synthetic
+     * g_angle line in cam_consume_example_block_now. Round-trip pose
+     * tests above pin "load restores the camera"; an idempotency check
+     * pins that the SAVE side hasn't drifted either — two consecutive
+     * exports of the loaded state produce identical camera blocks.
+     * A regression on either side (e.g., the audit's parser unification
+     * subtly altering ry interpretation, or the formatter switching
+     * between g_angle and numeric ry mid-refactor) yields a diff.
+     *
+     * Compare ONLY the camera region of the file (the rest depends on
+     * derived state like timestamps / cfg defaults that can legitimately
+     * change between runs; the camera block is the audit's surface). */
+    {
+        const char *path_a = "/tmp/repl_core_cam_idem_a.c";
+        const char *path_b = "/tmp/repl_core_cam_idem_b.c";
+
+        glr_app_reset_all(); declare_test_vars();
+        editor_feed_line("glVertex3f(0,0,0);");
+        glr_camera_set_orbit(12.5f, 67.5f);
+        glr_camera_set_distance(9.25f);
+        glr_camera_set_pan(0.5f, -1.5f, 2.25f);
+        repl_export_save_output(path_a, source_document_view(), NULL);
+
+        glr_app_reset_all(); declare_test_vars();
+        ASSERT_TRUE("cam idem: load A succeeds",
+                    repl_export_load_from_file(path_a) == 1);
+        repl_export_save_output(path_b, source_document_view(), NULL);
+
+        char buf_a[16384], buf_b[16384];
+        read_text_file(path_a, buf_a, sizeof(buf_a));
+        read_text_file(path_b, buf_b, sizeof(buf_b));
+
+        /* Extract camera region: "void display() {\n" up to the
+         * subsequent blank line. Both files share the same prologue
+         * generator, so the boundary is stable. */
+        const char *marker = "void display() {";
+        const char *start_a = strstr(buf_a, marker);
+        const char *start_b = strstr(buf_b, marker);
+        ASSERT_TRUE("cam idem: A has display marker", start_a != NULL);
+        ASSERT_TRUE("cam idem: B has display marker", start_b != NULL);
+        if (start_a && start_b) {
+            /* g_angle preamble must match — it's the seed for the
+             * subsequent glRotatef(g_angle, ...) line. */
+            const char *angle_a = strstr(buf_a, "static float g_angle = ");
+            const char *angle_b = strstr(buf_b, "static float g_angle = ");
+            ASSERT_TRUE("cam idem: A has g_angle preamble", angle_a != NULL);
+            ASSERT_TRUE("cam idem: B has g_angle preamble", angle_b != NULL);
+            if (angle_a && angle_b) {
+                const char *eol_a = strchr(angle_a, '\n');
+                const char *eol_b = strchr(angle_b, '\n');
+                ASSERT_INT("cam idem: g_angle preamble length match",
+                           (int)(eol_a - angle_a), (int)(eol_b - angle_b));
+                ASSERT_INT("cam idem: g_angle preamble bytes match",
+                           memcmp(angle_a, angle_b, (size_t)(eol_a - angle_a)),
+                           0);
+            }
+            /* The 4-line camera block follows immediately after the
+             * display brace. Compare a 256-byte window covering all
+             * four lines. */
+            ASSERT_INT("cam idem: 4-line camera block bytes match",
+                       memcmp(start_a, start_b, 256), 0);
+        }
+
+        remove(path_a);
+        remove(path_b);
+    }
+
     printf("repl_core_io: %d/%d passed\n", g_harness.passed, g_harness.run);
     return (g_harness.run == g_harness.passed) ? 0 : 1;
 }

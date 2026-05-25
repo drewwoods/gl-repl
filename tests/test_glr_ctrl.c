@@ -997,6 +997,312 @@ static void test_quit_recovery_file(void) {
     rmdir(made_dir);
 }
 
+/* Audit #39 prep: glr_ctrl_build_ui_snapshot is called twice per
+ * display frame, defended as "the second build picks up post-
+ * follow-scroll offsets." The fix proposes splitting snapshot into
+ * stable + scroll-dependent halves. To make that safe, pin that
+ * building the snapshot twice in a row (with no intervening state
+ * change) produces equal observable fields.
+ *
+ * We don't memcmp() the whole struct because it contains pointers
+ * (document_cmds, snapshots of subsystem state) that may legitimately
+ * vary across builds in some refactors. Instead spot-check the fields
+ * a renderer would actually consume — viewport, code-panel, replay,
+ * camera-derived selection, autocomplete — so the test pins the
+ * observable contract rather than internal layout. */
+static void test_build_ui_snapshot_is_idempotent(void) {
+    UiRenderSnapshot snap_a;
+    UiRenderSnapshot snap_b;
+
+    printf("--- imrepl_ctrl snapshot idempotence ---\n");
+    prepare_display_fixture();
+
+    glr_ctrl_build_ui_snapshot(&snap_a);
+    glr_ctrl_build_ui_snapshot(&snap_b);
+
+    ASSERT_INT("snapshot viewport_w idempotent",
+               snap_b.viewport.window_w, snap_a.viewport.window_w);
+    ASSERT_INT("snapshot viewport_h idempotent",
+               snap_b.viewport.window_h, snap_a.viewport.window_h);
+    ASSERT_INT("snapshot code_panel layout idempotent",
+               snap_b.code_panel.layout_mode, snap_a.code_panel.layout_mode);
+    ASSERT_INT("snapshot edit_line idempotent",
+               snap_b.edit_line, snap_a.edit_line);
+    ASSERT_INT("snapshot document_count idempotent",
+               snap_b.document_count, snap_a.document_count);
+    ASSERT_INT("snapshot flat_program_count idempotent",
+               snap_b.flat_program_count, snap_a.flat_program_count);
+    ASSERT_INT("snapshot replay.active idempotent",
+               snap_b.replay.active, snap_a.replay.active);
+    ASSERT_INT("snapshot replay.state idempotent",
+               snap_b.replay.state, snap_a.replay.state);
+    ASSERT_INT("snapshot replay.pc idempotent",
+               snap_b.replay.pc, snap_a.replay.pc);
+    ASSERT_INT("snapshot variable_drag.active_var idempotent",
+               snap_b.variable_drag.active_var,
+               snap_a.variable_drag.active_var);
+    ASSERT_INT("snapshot selection_active idempotent",
+               snap_b.selection_active, snap_a.selection_active);
+    ASSERT_INT("snapshot selection_lo idempotent",
+               snap_b.selection_lo, snap_a.selection_lo);
+    ASSERT_INT("snapshot autocomplete.match_count idempotent",
+               snap_b.autocomplete.match_count, snap_a.autocomplete.match_count);
+    ASSERT_FLOAT("snapshot anim_time idempotent",
+                 snap_b.anim_time, snap_a.anim_time);
+    ASSERT_STR("snapshot status.text idempotent",
+               snap_b.status.text, snap_a.status.text);
+    ASSERT_INT("snapshot active_indent_chars idempotent",
+               snap_b.active_indent_chars, snap_a.active_indent_chars);
+    ASSERT_INT("snapshot user_scene_active_idx idempotent",
+               snap_b.user_scene_active_idx, snap_a.user_scene_active_idx);
+}
+
+/* Audit #14 prep: scene-config invariants over the per-frame display
+ * path. The audit proposes extracting ~600 lines of overlay rendering
+ * from glr_ctrl into src/scene/. The contract that survives the move
+ * is what fields the controller must populate on SceneRenderConfig so
+ * the (post-refactor) scene module can drive overlay passes directly.
+ *
+ * Most fields are already pinned by
+ * test_display_frame_builds_config_and_restores_live_state; this test
+ * adds the invariants that travel ACROSS frames — repeated frames must
+ * not introduce hysteresis, and the post-overlays hook's user_data
+ * must point at the config that hosts the guides (so the future
+ * scene-side overlay code can rely on that handle). */
+static void test_display_frame_scene_config_is_stable_across_frames(void) {
+    SceneRenderConfig frame1;
+    SceneRenderConfig frame2;
+
+    printf("--- imrepl_ctrl scene config purity ---\n");
+    prepare_display_fixture();
+    replay_state_mut()->active = 0;
+    replay_state_mut()->state = REPLAY_OFF;
+
+    glr_ctrl_display_frame();
+    frame1 = g_last_scene_config;
+
+    glr_ctrl_display_frame();
+    frame2 = g_last_scene_config;
+
+    /* Stable inputs across frames. Note: anim_time advances inside
+     * scene_render (via the replay tick), so don't pin that here —
+     * the rest of the config is steady-state. */
+    ASSERT_INT("scene viewport_w stable across frames",
+               frame2.viewport_w, frame1.viewport_w);
+    ASSERT_INT("scene viewport_h stable across frames",
+               frame2.viewport_h, frame1.viewport_h);
+    ASSERT_FLOAT("scene cam_dist stable across frames",
+                 frame2.cam_dist, frame1.cam_dist);
+    ASSERT_FLOAT("scene cam_rx stable across frames",
+                 frame2.cam_rx, frame1.cam_rx);
+    ASSERT_FLOAT("scene cam_ry stable across frames",
+                 frame2.cam_ry, frame1.cam_ry);
+    ASSERT_FLOAT("scene projection_mix stable across frames",
+                 frame2.projection_mix, frame1.projection_mix);
+    ASSERT_INT("scene wireframe stable across frames",
+               frame2.wireframe, frame1.wireframe);
+    ASSERT_INT("scene grid_theme stable across frames",
+               frame2.grid_theme, frame1.grid_theme);
+    ASSERT_INT("scene axes_theme stable across frames",
+               frame2.axes_theme, frame1.axes_theme);
+    ASSERT_INT("scene user_lighting_enabled stable across frames",
+               frame2.user_lighting_enabled, frame1.user_lighting_enabled);
+    ASSERT_INT("scene show_light_indicators stable across frames",
+               frame2.show_light_indicators, frame1.show_light_indicators);
+    ASSERT_FLOAT("scene alpha_scale stable across frames",
+                 frame2.alpha_scale, frame1.alpha_scale);
+
+    /* The post_overlays_fn hook is wired with config-as-user_data so
+     * the hook reads guides off SceneRenderConfig. Pin that pointer
+     * identity — a refactor that switches user_data to NULL or to a
+     * different pointer would break the guide overlay. */
+    ASSERT_TRUE("post_overlays_fn wired in frame 1",
+                frame1.post_overlays_fn != NULL);
+    ASSERT_TRUE("post_overlays_fn wired in frame 2",
+                frame2.post_overlays_fn != NULL);
+    /* user_data IS the live config the controller passed into
+     * scene_render_3d_scene (not the cached frame1/frame2 copies).
+     * Catch it by reading g_last_scene_config.post_overlays_user_data
+     * after the second frame and asserting it equals &g_last_scene_config
+     * is intentionally NOT done — the controller hands the scene module
+     * its OWN local SceneRenderConfig. We pin the looser invariant: the
+     * hook always carries a non-NULL user_data alongside the fn. */
+    ASSERT_TRUE("post_overlays_user_data non-NULL",
+                frame2.post_overlays_user_data != NULL);
+}
+
+/* Audit #14 prep: the replay-fade overlay is the largest of the
+ * controller's overlay reaches. When replay is OFF, no fade plumbing
+ * should be wired (no post_fill_fn for fades, base_limit at zero,
+ * empty batch ring). Pin this so an extraction that pushes fade
+ * machinery into src/scene/ keeps the inactive-replay path costless. */
+static void test_display_frame_no_replay_means_no_fade_plumbing(void) {
+    printf("--- imrepl_ctrl no-replay fade gating ---\n");
+    prepare_display_fixture();
+    /* Force a polygon-replay mode so the tess-preview overlay (which
+     * also wires post_fill_fn) is OFF; we want a clean signal that no
+     * fade overhead is present when replay itself is inactive. */
+    replay_state_mut()->active = 0;
+    replay_state_mut()->state = REPLAY_OFF;
+    replay_state_mut()->mode  = REPLAY_MODE_POLYGON;
+
+    glr_ctrl_display_frame();
+
+    ASSERT_INT("replay inactive across the frame",
+               replay_state_view().active, 0);
+    ASSERT_INT("replay fade plan inactive",
+               g_replay_fade_plan_active, 0);
+    ASSERT_INT("replay fade base limit zero",
+               g_replay_fade_plan_base_limit, 0);
+    ASSERT_INT("replay fade batch ring empty",
+               g_replay_fade_plan.batch_count, 0);
+    ASSERT_INT("tess preview not active in polygon mode",
+               g_replay_tess_preview_active, 0);
+    /* post_fill_fn may still be NULL or set to a no-op overlay; the
+     * meaningful contract is that nothing fade-related is queued.
+     * post_overlays_fn is always wired (the guides hook). */
+    ASSERT_TRUE("post_overlays_fn still wired (guides) even without replay",
+                g_last_scene_config.post_overlays_fn != NULL);
+}
+
+/* Audit #41 prep: route_numeric_swatch_hit open-codes 68 lines of
+ * compile + parse + ReplCompiledChange construction + apply + reload
+ * inside the controller's router. The audit proposes extracting that
+ * into a numeric_swatch_apply_step helper (an editor service or a peer
+ * subsystem). To make the move safe, pin the OBSERVABLE swatch contract:
+ *
+ *  - Stepping up rewrites the line with a larger value.
+ *  - Stepping down rewrites the line with a smaller value.
+ *  - The change is undoable (single Ctrl+Z restores the original line).
+ *  - The editor input buffer reflects the new line text post-commit.
+ *  - The swatch is a no-op outside a numeric arg or in insert mode.
+ *
+ * We drive the static router directly (this TU includes glr_ctrl.c) by
+ * constructing a UiHit and calling route_numeric_swatch_hit. */
+static void seed_swatch_fixture(const char *line) {
+    glr_app_reset_all();
+    repl_eval_init_predef_vars();
+    editor_insert_mode_set(0);
+    editor_feed_line(line);
+    /* feed_line lands cursor at end of document; place it back on the
+     * row we just typed. */
+    editor_state_edit_line_set(0);
+    editor_load_line_to_input(0);
+}
+
+static void test_numeric_swatch_step_commits_line_and_undoes(void) {
+    UiHit hit_up   = ui_hit_none();
+    UiHit hit_down = ui_hit_none();
+    EditorBufferView buf;
+    char before[MAX_LINE_LEN];
+
+    printf("--- imrepl_ctrl numeric swatch commit ---\n");
+
+    /* Seed with two-decimal value so the commit's canonicalization
+     * doesn't strip it down to "1" and shift the arg span. */
+    seed_swatch_fixture("glVertex3f(1.5, 0, 0);");
+
+    /* Cursor inside the '1.5' arg. The commit canonicalizes the
+     * source line (re-emits via the parser) so the input buffer's
+     * arg span and the assertion offsets are best measured from
+     * what the input actually is, not the seed string. */
+    editor_cursor_pos_set(13);
+
+    buf = editor_buffer_view();
+    snprintf(before, sizeof(before), "%s", editor_buffer_view_line(buf, 0));
+
+    hit_up.kind     = UI_HIT_NUMERIC_SWATCH;
+    hit_up.item_idx = 1;
+    int rc = route_numeric_swatch_hit(&hit_up);
+    ASSERT_INT("swatch step-up returns consumed", rc, 1);
+
+    buf = editor_buffer_view();
+    const char *after_up = editor_buffer_view_line(buf, 0);
+    ASSERT_TRUE("swatch step-up modified the source line",
+                strcmp(after_up, before) != 0);
+    /* The new arg is greater than 1.5 — pin the direction without
+     * pinning the exact step size (which lives in repl_eval). The
+     * arg span shifts after re-emission, so re-derive it from the
+     * post-commit input buffer rather than guessing offsets. */
+    {
+        EditorInputView in_after = editor_state_input();
+        ReplNumericArgAtCursor d_after =
+            repl_eval_numeric_arg_at_cursor(in_after.input, in_after.cursor_pos);
+        ASSERT_TRUE("swatch step-up found numeric arg after commit",
+                    d_after.found);
+        ASSERT_TRUE("swatch step-up value is greater than 1.5",
+                    d_after.value > 1.5f);
+    }
+
+    /* Step DOWN three times: from value > 1.5, back below 1.5. */
+    hit_down.kind     = UI_HIT_NUMERIC_SWATCH;
+    hit_down.item_idx = -1;
+    route_numeric_swatch_hit(&hit_down);
+    route_numeric_swatch_hit(&hit_down);
+    {
+        EditorInputView in_down = editor_state_input();
+        ReplNumericArgAtCursor d_down =
+            repl_eval_numeric_arg_at_cursor(in_down.input, in_down.cursor_pos);
+        ASSERT_TRUE("swatch two steps down found numeric arg",
+                    d_down.found);
+        ASSERT_TRUE("swatch two steps down value is less than 1.5",
+                    d_down.value < 1.5f);
+    }
+
+    /* Each swatch step is a discrete undo unit — three steps total
+     * (one up, two down) so three Ctrl+Z restores the original. */
+    editor_undo_pop_snapshot();
+    editor_undo_pop_snapshot();
+    editor_undo_pop_snapshot();
+    buf = editor_buffer_view();
+    ASSERT_STR("undo×3 restores the original line",
+               editor_buffer_view_line(buf, 0), before);
+}
+
+static void test_numeric_swatch_no_op_outside_numeric_arg(void) {
+    UiHit hit_up = ui_hit_none();
+    EditorBufferView buf;
+    char before[MAX_LINE_LEN];
+
+    seed_swatch_fixture("// hello world");
+    /* Cursor mid-comment — no numeric arg available. */
+    editor_cursor_pos_set(6);
+    buf = editor_buffer_view();
+    snprintf(before, sizeof(before), "%s", editor_buffer_view_line(buf, 0));
+
+    hit_up.kind     = UI_HIT_NUMERIC_SWATCH;
+    hit_up.item_idx = 1;
+    int rc = route_numeric_swatch_hit(&hit_up);
+    /* Consumed (returns 1) — the swatch hit is the router's
+     * responsibility — but no change to the line. */
+    ASSERT_INT("swatch on comment still consumed", rc, 1);
+    buf = editor_buffer_view();
+    ASSERT_STR("swatch on comment leaves line unchanged",
+               editor_buffer_view_line(buf, 0), before);
+}
+
+static void test_numeric_swatch_no_op_in_insert_mode(void) {
+    UiHit hit_up = ui_hit_none();
+    EditorBufferView buf;
+    char before[MAX_LINE_LEN];
+
+    seed_swatch_fixture("glVertex3f(1.0, 0, 0);");
+    editor_cursor_pos_set(12);
+    /* Flip to insert mode — swatch should refuse. */
+    editor_insert_mode_set(1);
+
+    buf = editor_buffer_view();
+    snprintf(before, sizeof(before), "%s", editor_buffer_view_line(buf, 0));
+
+    hit_up.kind     = UI_HIT_NUMERIC_SWATCH;
+    hit_up.item_idx = 1;
+    int rc = route_numeric_swatch_hit(&hit_up);
+    ASSERT_INT("swatch in insert mode still consumed", rc, 1);
+    buf = editor_buffer_view();
+    ASSERT_STR("swatch in insert mode leaves line unchanged",
+               editor_buffer_view_line(buf, 0), before);
+}
+
 int main(void) {
     printf("--- imrepl_ctrl tests ---\n");
 
@@ -1013,6 +1319,12 @@ int main(void) {
     test_view_record_external_3d_pose_tracks_in_ortho();
     test_view_record_external_3d_pose_noop_in_perspective();
     test_quit_recovery_file();
+    test_build_ui_snapshot_is_idempotent();
+    test_display_frame_scene_config_is_stable_across_frames();
+    test_display_frame_no_replay_means_no_fade_plumbing();
+    test_numeric_swatch_step_commits_line_and_undoes();
+    test_numeric_swatch_no_op_outside_numeric_arg();
+    test_numeric_swatch_no_op_in_insert_mode();
 
     printf("\n");
     return test_harness_report(&g_harness, "test_imrepl_ctrl");
