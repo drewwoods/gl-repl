@@ -185,16 +185,23 @@ typedef struct SceneRenderConfig {
     /* --- Grid and axes ---
      * grid_theme/axes_theme are the *effective* (machine `current`)
      * theme to draw; *_opacity is the transition fade (0..1, applied
-     * after alpha_scale so OUT stays authoritative); *_xn_phase is an
-     * advisory direction hint (unused by FADE v1, plumbed for fog). */
+     * after alpha_scale so OUT stays authoritative).
+     *
+     * `*_xn_phase` is an advisory direction hint (FADE_IN /
+     * FADE_OUT / STEADY) the controller fills in from the transition
+     * machine, intended as a future input for fog-direction or
+     * other phase-aware effects. RESERVED — read by tests only
+     * today (verifying the controller forwards the value); no scene
+     * renderer reads them at runtime. Keep populated so the contract
+     * stays observable. */
     int          grid_theme;
     float        grid_opacity;
-    SceneXnPhase grid_xn_phase;
+    SceneXnPhase grid_xn_phase;   /* RESERVED — see comment above */
     int          grid_extent_idx;
     int          grid_major_idx;
     int          axes_theme;
     float        axes_opacity;
-    SceneXnPhase axes_xn_phase;
+    SceneXnPhase axes_xn_phase;   /* RESERVED — see comment above */
     float grid_major_steps[GRID_MAJOR_COUNT];
     float grid_extents[GRID_EXTENT_COUNT];
 
