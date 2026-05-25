@@ -1,5 +1,6 @@
 /*
  * color_picker_state.c - Floating color-picker peer (state + lifecycle + writeback).
+ * Note: File-private helper functions and variables use the cp_* shorthand prefix.
  */
 #include "subsystems/color_picker/color_picker_state.h"
 
@@ -7,7 +8,7 @@
 #include "editor/commit.h"
 #include "repl/command.h"
 #include "repl/compile.h"
-#include "repl/core.h"             /* set_status, MAX_LINE_LEN */
+#include "repl/core.h"             /* repl_set_status */
 #include "repl/parser.h"
 #include "repl/state_views.h"      /* repl_state_document_count / _cmd_at */
 #include "ui/app/layout.h"
@@ -29,12 +30,19 @@
 #define CP_HUE_MAX   0.999f  /* clamp hue < 1.0 so hsv_to_rgb's sextant
                               * index (int)(h*6) never lands on the wrap */
 
+typedef enum {
+    CP_DRAG_NONE = 0,
+    CP_DRAG_SV   = 1,
+    CP_DRAG_HUE  = 2,
+    CP_DRAG_ALPHA = 3
+} CpDragTarget;
+
 /* g_cp_line >= 0: picker is open for that source-cmd index */
 static int   g_cp_line       = -1;
 static float g_cp_hue        = 0.0f, g_cp_sat = 1.0f, g_cp_val = 1.0f;
 static float g_cp_alpha      = 1.0f;
 static int   g_cp_px         = 0, g_cp_py = 0;  /* top-left (OpenGL y-up) */
-static int   g_cp_drag       = 0;    /* 0=none 1=SV 2=hue 3=alpha */
+static CpDragTarget g_cp_drag = CP_DRAG_NONE;
 static int   g_cp_has_alpha  = 0;    /* RGBA-shaped command */
 static float g_cp_value_max  = 1.0f;
 /* Picker session undo bookkeeping: the very first writeback after open
@@ -176,6 +184,24 @@ static int color_picker_write_cmd(void) {
     return 0;
 }
 
+static int clamp_popup_x(int prefer_right_x, int prefer_left_x,
+                         int popup_w, int win_w, int margin) {
+    int x = prefer_right_x;
+    /* Flip left if right runs off screen */
+    if (x + popup_w > win_w - margin) {
+        x = prefer_left_x;
+    }
+    /* Flushed-right clamp if left also runs off screen */
+    if (x < margin) {
+        x = win_w - popup_w - margin;
+    }
+    /* Hard left-edge clamp fallback */
+    if (x < margin) {
+        x = margin;
+    }
+    return x;
+}
+
 void color_picker_start(int cmd_idx, int my) {
     int cp_x, cp_w;
     const GLCmd *cmd;
@@ -213,13 +239,9 @@ void color_picker_start(int cmd_idx, int my) {
     int pw = CP_SV_SZ + CP_GAP + CP_HUE_W
            + (g_cp_has_alpha ? CP_GAP + CP_ALPHA_W : 0) + CP_GAP;
     int ph = CP_SV_SZ + CP_GAP + CP_PREV_H + CP_GAP;
-    int ppx = cp_x + cp_w + CP_PANEL_OFFSET;
     int win_w = ui_state_viewport().window_w;
     int win_h = ui_state_viewport().window_h;
-    if (ppx + pw > win_w - CP_SCREEN_MARGIN) ppx = cp_x - pw - CP_SCREEN_MARGIN;
-    if (ppx < CP_SCREEN_MARGIN) ppx = CP_SCREEN_MARGIN;
-    if (ppx + pw > win_w - CP_SCREEN_MARGIN) ppx = win_w - pw - CP_SCREEN_MARGIN;
-    if (ppx < CP_SCREEN_MARGIN) ppx = CP_SCREEN_MARGIN;
+    int ppx = clamp_popup_x(cp_x + cp_w + CP_PANEL_OFFSET, cp_x - pw - CP_SCREEN_MARGIN, pw, win_w, CP_SCREEN_MARGIN);
     /* Center vertically around the trigger point, then clamp so the
      * popup stays fully on-screen in OpenGL's y-up coordinates. */
     int ppy = (win_h - my) + ph / 2;
@@ -291,17 +313,17 @@ static float cp_clamp01(float v) {
  * 3=alpha) from pointer (mx, gl_y) against rects r. Shared by press
  * (after a region hit-test arms the target) and motion so the
  * ratio/clamp/wrap math has one home. */
-static void cp_apply_drag_at(int which, int mx, int gl_y,
+static void cp_apply_drag_at(CpDragTarget which, int mx, int gl_y,
                              const ColorPickerRects *r) {
-    if (which == 1) {
+    if (which == CP_DRAG_SV) {
         g_cp_sat = cp_clamp01((float)(mx - r->sv_x) / (float)r->sv_sz);
         g_cp_val = cp_clamp01((float)(gl_y - r->sv_y) / (float)r->sv_sz);
         if (g_cp_val > g_cp_value_max) g_cp_val = g_cp_value_max;
-    } else if (which == 2) {
+    } else if (which == CP_DRAG_HUE) {
         g_cp_hue = cp_clamp01(1.0f -
                               (float)(gl_y - r->hue_y) / (float)r->hue_h);
         if (g_cp_hue >= 1) g_cp_hue = CP_HUE_MAX;
-    } else if (which == 3) {
+    } else if (which == CP_DRAG_ALPHA) {
         g_cp_alpha = cp_clamp01((float)(gl_y - r->alp_y) / (float)r->alp_h);
     }
 }
@@ -317,8 +339,8 @@ ColorPickerInputResult color_picker_handle_press(int mx, int my) {
     /* SV square */
     if (mx >= r.sv_x && mx < r.sv_x + r.sv_sz &&
         gl_y >= r.sv_y && gl_y < r.sv_y + r.sv_sz) {
-        g_cp_drag = 1;
-        cp_apply_drag_at(1, mx, gl_y, &r);
+        g_cp_drag = CP_DRAG_SV;
+        cp_apply_drag_at(CP_DRAG_SV, mx, gl_y, &r);
         res.changed = color_picker_write_cmd();
         res.consumed = 1;
         return res;
@@ -326,8 +348,8 @@ ColorPickerInputResult color_picker_handle_press(int mx, int my) {
     /* Hue bar */
     if (mx >= r.hue_x && mx < r.hue_x + r.hue_w &&
         gl_y >= r.hue_y && gl_y < r.hue_y + r.hue_h) {
-        g_cp_drag = 2;
-        cp_apply_drag_at(2, mx, gl_y, &r);
+        g_cp_drag = CP_DRAG_HUE;
+        cp_apply_drag_at(CP_DRAG_HUE, mx, gl_y, &r);
         res.changed = color_picker_write_cmd();
         res.consumed = 1;
         return res;
@@ -336,8 +358,8 @@ ColorPickerInputResult color_picker_handle_press(int mx, int my) {
     if (g_cp_has_alpha &&
         mx >= r.alp_x && mx < r.alp_x + r.alp_w &&
         gl_y >= r.alp_y && gl_y < r.alp_y + r.alp_h) {
-        g_cp_drag = 3;
-        cp_apply_drag_at(3, mx, gl_y, &r);
+        g_cp_drag = CP_DRAG_ALPHA;
+        cp_apply_drag_at(CP_DRAG_ALPHA, mx, gl_y, &r);
         res.changed = color_picker_write_cmd();
         res.consumed = 1;
         return res;
@@ -365,7 +387,7 @@ ColorPickerInputResult color_picker_handle_motion(int mx, int my) {
     ColorPickerInputResult res = { 0, 0, 0 };
     ColorPickerRects r;
 
-    if (g_cp_drag == 0 || g_cp_line < 0 || !cp_cmd_at(g_cp_line)) return res;
+    if (g_cp_drag == CP_DRAG_NONE || g_cp_line < 0 || !cp_cmd_at(g_cp_line)) return res;
     int gl_y = ui_state_viewport().window_h - my;
     cp_compute_rects(g_cp_px, g_cp_py, &r);
     cp_apply_drag_at(g_cp_drag, mx, gl_y, &r);
@@ -375,5 +397,5 @@ ColorPickerInputResult color_picker_handle_motion(int mx, int my) {
 }
 
 void color_picker_handle_release(void) {
-    g_cp_drag = 0;
+    g_cp_drag = CP_DRAG_NONE;
 }
