@@ -6,6 +6,7 @@
 #include "repl/source_scope.h"
 #include "repl/state_owners.h"
 #include "source_document.h"   /* source_document_insert_line / _replace_line */
+#include "config.h"            /* REPL_INDENT_TEXT_MAX */
 
 static void normal_indent(int pos, char *buf, int buf_sz) {
     int spaces;
@@ -51,7 +52,7 @@ static GLCmd make_auto_normal(float nx, float ny, float nz,
 /* Canonical text for an auto-normal at insert_pos */
 static void make_auto_normal_text(int insert_pos, float nx, float ny, float nz,
                                   char *text_out, int text_sz) {
-    char ind[32];
+    char ind[REPL_INDENT_TEXT_MAX];
     normal_indent(insert_pos, ind, sizeof(ind));
     snprintf(text_out, (size_t)text_sz,
              "%sglNormal3f(%g, %g, %g);", ind, nx, ny, nz);

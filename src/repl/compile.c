@@ -52,6 +52,8 @@
 #include "repl/source_scope.h"   /* repl_source_scope_cmd_indent, _find_block_end */
 #include "repl/state_owners.h"
 
+#include "config.h"              /* REPL_INDENT_TEXT_MAX */
+
 #include <ctype.h>
 #include <stdarg.h>
 #include <stdio.h>
@@ -304,7 +306,7 @@ static int compile_build_literal_assign_change(const ReplCompileContext *ctx,
                                                const char *name,
                                                float value,
                                                ReplCompiledChange *out) {
-    char indent[32];
+    char indent[REPL_INDENT_TEXT_MAX];
 
     if (!ctx || !out || !name || cmd_idx < 0 || cmd_idx >= ctx->document_count)
         return 0;
@@ -344,7 +346,7 @@ static int compile_rewrite_decl_initializer_text(const char *orig_text,
                                                  float value,
                                                  char *out,
                                                  int out_sz) {
-    char indent[32];
+    char indent[REPL_INDENT_TEXT_MAX];
     const char *line;
     const char *scan;
     const char *comment;
@@ -971,7 +973,7 @@ ReplCompileResult repl_compile_var_assign(const char *input,
     }
 
     /* Format text using the scope indent at the insert position. */
-    char indent[32];
+    char indent[REPL_INDENT_TEXT_MAX];
     compile_scope_indent(insert_idx, indent, sizeof(indent));
     char assign_text[MAX_LINE_LEN];
     if (index_expr[0]) {
@@ -1544,7 +1546,7 @@ ReplCompileResult repl_compile_close_brace(const char *input,
     }
 
     /* Insert-new-end-marker branch. */
-    char indent[32];
+    char indent[REPL_INDENT_TEXT_MAX];
     compile_close_brace_indent(pos, indent, sizeof(indent));
 
     GLCmd fe;
@@ -1634,7 +1636,7 @@ ReplCompileResult repl_compile_if_block(const char *input,
         return REPL_COMPILE_ERROR;
     }
 
-    char indent[32];
+    char indent[REPL_INDENT_TEXT_MAX];
     repl_source_scope_cmd_indent(pos, indent, sizeof(indent));
 
     GLCmd ib;
@@ -1785,7 +1787,7 @@ ReplCompileResult repl_compile_func_def(const char *input,
 
     int pos = compile_insert_pos(ctx);
 
-    char indent[32];
+    char indent[REPL_INDENT_TEXT_MAX];
     repl_source_scope_cmd_indent(pos, indent, sizeof(indent));
 
     GLCmd fd;
@@ -1842,7 +1844,7 @@ ReplCompileResult repl_compile_for_loop(const char *input,
         return REPL_COMPILE_ERROR;
     }
 
-    char indent[32];
+    char indent[REPL_INDENT_TEXT_MAX];
     repl_source_scope_cmd_indent(pos, indent, sizeof(indent));
 
     GLCmd fb;

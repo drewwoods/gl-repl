@@ -61,6 +61,8 @@
 #include "ui/app/menu_bar.h"
 #include "ui/app/state.h"
 
+#include "config.h"            /* REPL_INDENT_TEXT_MAX */
+
 #include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -401,7 +403,7 @@ static void rewrite_source_text_with_indent(char *text_out, int text_sz,
     int indent_len = repl_source_scope_in_begin_block_at(pos) ? 4 : 2;
     if (include_block_depth)
         indent_len += repl_source_scope_block_depth_at(pos) * 2;
-    char indent[32];
+    char indent[REPL_INDENT_TEXT_MAX];
     if (indent_len > (int)sizeof(indent) - 1)
         indent_len = (int)sizeof(indent) - 1;
     memset(indent, ' ', (size_t)indent_len);

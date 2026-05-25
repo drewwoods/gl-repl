@@ -216,6 +216,16 @@
 #define REPL_PREDEF_NAME_MAX 16
 #endif
 
+/* Capacity (including NUL) of a stack-allocated indent string buffer.
+ * Sized to comfortably hold any indent produced by the source-scope and
+ * format helpers (2 + 2*tess_depth + 2*begin_depth + per-block-nesting)
+ * for the deepest realistic REPL nesting. Lives here (not in
+ * src/repl/source_scope.h) so editor / UI code can size indent buffers
+ * without taking a REPL include just for the constant. */
+#ifndef REPL_INDENT_TEXT_MAX
+#define REPL_INDENT_TEXT_MAX 32
+#endif
+
 /* Default filename suggested by the "Load Scene…" file prompt
  * (File menu → Load Scene, src/app/glr_actions.c). Also the seed value
  * the prompt's inline-file-prompt module documents in its header. */

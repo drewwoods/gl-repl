@@ -1027,7 +1027,7 @@ static void write_for_begin_as_c(FILE *f, const GLCmd *cmd,
     int indent = 0;
     while (p[indent] && isspace((unsigned char)p[indent])) indent++;
 
-    char ind[32];
+    char ind[REPL_INDENT_TEXT_MAX];
     if (indent > (int)sizeof(ind) - 1) indent = (int)sizeof(ind) - 1;
     memset(ind, ' ', (size_t)indent);
     ind[indent] = '\0';

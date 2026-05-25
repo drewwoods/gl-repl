@@ -531,7 +531,7 @@ void repl_reformat_program(void) {
         const char *orig_text = source_text_line(text, cmd_idx);
         if (!orig_text) orig_text = "";
 
-        char ind_s[32];
+        char ind_s[REPL_INDENT_TEXT_MAX];
         repl_source_scope_cmd_indent(cmd_idx, ind_s, sizeof(ind_s));
 
         switch (orig.type) {
