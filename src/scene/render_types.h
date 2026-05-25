@@ -1,7 +1,7 @@
 /*
- * scene_render_types.h - Shared scene render context types.
+ * render_types.h - Shared scene render context types.
  *
- * Defines the config snapshot scene_render.c and its helper renderers exchange:
+ * Defines the config snapshot render.c and its helper renderers exchange:
  * execute callbacks, light descriptors, camera/environment state, theme/fade
  * inputs, and the per-frame derived context wrapper.
  */
@@ -9,8 +9,9 @@
 #define SCENE_RENDER_TYPES_H
 
 #include "themes.h"
-#include "scene_transition.h"  /* SceneXnPhase for the overlay fade fields */
-#include "gl_includes.h"     /* GLenum for SceneLight.id */
+#include "scene_transition.h"   /* SceneXnPhase for the overlay fade fields */
+#include "postprocess_filter.h" /* ScenePostFilterMode */
+#include "gl_includes.h"        /* GLenum for SceneLight.id */
 
 /* GL_NV_fog_distance tokens — present in glext.h (Linux/Homebrew and the
  * macOS SDK) but not on the Apple-GLUT framework path (gl_includes.h pulls
@@ -50,7 +51,7 @@ typedef struct SceneExecuteContext {
     int unused_;
 } SceneExecuteContext;
 
-/* Called by scene_render.c to emit user geometry. May be NULL (geometry
+/* Called by render.c to emit user geometry. May be NULL (geometry
  * is silently skipped; scene background/grid/axes/lights still render).
  * The callback gets only a scene-supplied opaque context plus the user_data
  * the caller stashed when building the config — any REPL state (flat
@@ -65,7 +66,7 @@ typedef struct SceneFocusVertex {
 } SceneFocusVertex;
 
 /* Snapshot of all per-frame inputs that helper renderers need to read
- * without sampling globals again.  scene_render.c fills this once at frame
+ * without sampling globals again.  render.c fills this once at frame
  * start, then passes it to grid/axes/overlay helpers. */
 typedef struct SceneRenderConfig {
     /* --- Execute hook --- */
@@ -97,9 +98,8 @@ typedef struct SceneRenderConfig {
     /* --- Animation --- */
     float anim_time;
 
-    /* --- Viewport and scene rectangle --- */
-    int viewport_w;
-    int viewport_h;
+    /* --- Scene viewport rectangle (the region the scene helpers
+     *     render into; the window viewport may be larger). --- */
     int scene_x;
     int scene_y;
     int scene_w;
@@ -154,9 +154,9 @@ typedef struct SceneRenderConfig {
      * themes are untouched. 0 for non-detecting callers (scene_demo) via
      * memset — the safe default. */
     int nv_fog_distance_supported;
-    /* Experimental scene-viewport post-processing (ScenePostFilterMode).
+    /* Experimental scene-viewport post-processing.
      * Runtime-only (Ctrl+N); never persisted via @cfg. */
-    int post_filter_mode;
+    ScenePostFilterMode post_filter_mode;
     int wireframe;
 
     /* --- Grid and axes ---
@@ -183,11 +183,11 @@ typedef struct SceneRenderConfig {
 } SceneRenderConfig;
 
 /* Derived state that helper renderers should consume instead of recomputing
- * from globals.  The focus vertex is prepared once per frame and passed into
- * the grid renderer when the focus theme is active. */
+ * from globals. Wraps the snapshot SceneRenderConfig so helpers can be
+ * extended with frame-derived fields here without changing every
+ * helper's parameter list. */
 typedef struct SceneFrameRenderContext {
     SceneRenderConfig config;
-    SceneFocusVertex focus;
 } SceneFrameRenderContext;
 
 #endif /* SCENE_RENDER_TYPES_H */

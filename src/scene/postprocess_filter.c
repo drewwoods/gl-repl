@@ -19,10 +19,11 @@ static GLint  g_max_tex_size = 0;
 /* Matrix mode saved across the 2D pass (not covered by glPushAttrib). */
 static GLint  g_saved_matrix_mode = 0;
 
-const char *scene_postprocess_filter_mode_name(int mode) {
+const char *scene_postprocess_filter_mode_name(ScenePostFilterMode mode) {
     switch (mode) {
     case SCENE_POST_FILTER_CHROMATIC_ABERRATION: return "Chromatic aberration";
     case SCENE_POST_FILTER_OFF:
+    case SCENE_POST_FILTER_COUNT:
     default:                                     return "Off";
     }
 }
@@ -110,7 +111,7 @@ static void postprocess_filter_draw_quad(int sw, int sh,
     glEnd();
 }
 
-void scene_postprocess_filter_render(int mode, int sx, int sy,
+void scene_postprocess_filter_render(ScenePostFilterMode mode, int sx, int sy,
                                      int sw, int sh) {
     if (mode != SCENE_POST_FILTER_CHROMATIC_ABERRATION)
         return;

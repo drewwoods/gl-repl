@@ -1,7 +1,7 @@
 /*
- * scene_lights.h - Scene light setup and light-indicator rendering.
+ * lights.h - Scene light setup and light-indicator rendering.
  *
- * Owns the fixed-function light setup helpers scene_render.c uses around the
+ * Owns the fixed-function light setup helpers render.c uses around the
  * main geometry pass. The per-frame inputs come from SceneFrameRenderContext: which
  * lights are enabled, their colors/positions, and whether indicator geometry
  * should be drawn.

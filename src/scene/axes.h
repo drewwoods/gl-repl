@@ -1,5 +1,5 @@
 /*
- * scene_axes.h - Themeable coordinate-axes renderer.
+ * axes.h - Themeable coordinate-axes renderer.
  *
  * Draws the optional origin axes using the effective theme and fade state
  * prepared in SceneFrameRenderContext. The controller decides which theme is active;

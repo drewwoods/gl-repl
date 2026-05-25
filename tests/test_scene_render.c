@@ -49,9 +49,6 @@ static SceneRenderConfig make_test_config(void) {
     cfg.accum_aa_enabled = 1;
     cfg.accum_samples = 2;
 
-    cfg.viewport_w = 800;
-    cfg.viewport_h = 600;
-
     cfg.user_lighting_enabled = 0;
     cfg.show_light_indicators = 0;
     cfg.backdrop_mode = 0;
@@ -121,7 +118,7 @@ static void test_scene_projection_modes(void) {
 static SceneFrameRenderContext make_test_frame_ctx(void) {
     SceneFrameRenderContext ctx = {0};
     ctx.config = make_test_config();
-    ctx.focus.valid = 0;
+    ctx.config.focus.valid = 0;
     return ctx;
 }
 
@@ -134,8 +131,8 @@ static void test_config_defaults(void) {
 
     ASSERT_INT("execute_fn set", cfg.execute_fn != NULL, 1);
     ASSERT_INT("post_fill_fn unset by default", cfg.post_fill_fn == NULL, 1);
-    ASSERT_FLOAT("viewport_w matches", cfg.viewport_w, 800);
-    ASSERT_FLOAT("viewport_h matches", cfg.viewport_h, 600);
+    ASSERT_FLOAT("scene_w default", cfg.scene_w, 800);
+    ASSERT_FLOAT("scene_h default", cfg.scene_h, 600);
     ASSERT_INT("use_accum default", cfg.use_accum, 1);
     ASSERT_INT("accum aa default", cfg.accum_aa_enabled, 1);
     ASSERT_INT("accum samples default", cfg.accum_samples, 2);
@@ -151,7 +148,7 @@ static void test_frame_ctx_defaults(void) {
     SceneFrameRenderContext ctx = make_test_frame_ctx();
 
     ASSERT_INT("config has execute_fn", ctx.config.execute_fn != NULL, 1);
-    ASSERT_INT("focus not valid by default", ctx.focus.valid, 0);
+    ASSERT_INT("focus not valid by default", ctx.config.focus.valid, 0);
 }
 
 /* --- Tests for scene_grid_render (minimal) ----------------------- */
@@ -165,11 +162,11 @@ static void test_scene_grid_render(void) {
     scene_grid_render(&ctx);
     ASSERT_TRUE("scene_grid_render did not crash", 1);
 
-    /* With viewport set. */
-    ctx.config.viewport_w = 1024;
-    ctx.config.viewport_h = 768;
+    /* With scene viewport sized. */
+    ctx.config.scene_w = 1024;
+    ctx.config.scene_h = 768;
     scene_grid_render(&ctx);
-    ASSERT_TRUE("scene_grid_render with explicit viewport did not crash", 1);
+    ASSERT_TRUE("scene_grid_render with explicit scene rect did not crash", 1);
 }
 
 /* --- Tests for scene_axes_render (minimal) ----------------------- */
@@ -272,14 +269,14 @@ static void test_focus_vertex_context(void) {
     SceneFrameRenderContext ctx = make_test_frame_ctx();
 
     /* With valid focus vertex. */
-    ctx.focus.valid = 1;
-    ctx.focus.pos[0] = 1.0f;
-    ctx.focus.pos[1] = 2.0f;
-    ctx.focus.pos[2] = 3.0f;
+    ctx.config.focus.valid = 1;
+    ctx.config.focus.pos[0] = 1.0f;
+    ctx.config.focus.pos[1] = 2.0f;
+    ctx.config.focus.pos[2] = 3.0f;
 
     scene_grid_render(&ctx);
     ASSERT_TRUE("grid with valid focus vertex did not crash", 1);
-    ASSERT_INT("focus remains valid", ctx.focus.valid, 1);
+    ASSERT_INT("focus remains valid", ctx.config.focus.valid, 1);
 }
 
 /* --- Tests for lighting array access ----------------------------- */
@@ -335,21 +332,21 @@ static void test_viewport_dimensions(void) {
 
     SceneFrameRenderContext ctx = make_test_frame_ctx();
 
-    /* Small viewport. */
-    ctx.config.viewport_w = 100;
-    ctx.config.viewport_h = 100;
+    /* Small scene viewport. */
+    ctx.config.scene_w = 100;
+    ctx.config.scene_h = 100;
     scene_grid_render(&ctx);
-    ASSERT_TRUE("small viewport did not crash", 1);
+    ASSERT_TRUE("small scene viewport did not crash", 1);
 
-    /* Large viewport. */
-    ctx.config.viewport_w = 4096;
-    ctx.config.viewport_h = 2160;
+    /* Large scene viewport. */
+    ctx.config.scene_w = 4096;
+    ctx.config.scene_h = 2160;
     scene_grid_render(&ctx);
-    ASSERT_TRUE("large viewport did not crash", 1);
+    ASSERT_TRUE("large scene viewport did not crash", 1);
 
     /* Extreme aspect ratio. */
-    ctx.config.viewport_w = 3840;
-    ctx.config.viewport_h = 480;
+    ctx.config.scene_w = 3840;
+    ctx.config.scene_h = 480;
     scene_grid_render(&ctx);
     ASSERT_TRUE("extreme aspect ratio did not crash", 1);
 }

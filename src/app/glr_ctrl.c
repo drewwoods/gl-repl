@@ -1352,8 +1352,6 @@ static void glr_ctrl_build_scene_config(SceneRenderConfig *config) {
     config->anim_time = repl_state_variables().anim_time;
 
     /* --- Viewport and scene rectangle --- */
-    config->viewport_w = ui_state_viewport().window_w;
-    config->viewport_h = ui_state_viewport().window_h;
     ui_layout_scene_rect(&config->scene_x, &config->scene_y,
                            &config->scene_w, &config->scene_h);
     if (config->scene_w < 1) config->scene_w = 1;

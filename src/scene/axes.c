@@ -1,13 +1,10 @@
 /*
- * scene_axes.c - axes theme rendering
+ * axes.c - axes theme rendering
  */
 #include "axes.h"
 #include "config.h"
 #include "occluded_ghost.h"  /* SCENE_OCCLUDED_GHOST_STIPPLE */
-#include <math.h>
-#ifndef M_PI
-#define M_PI 3.14159265358979323846
-#endif
+#include <math.h>            /* sinf, cosf, fmodf, M_PI (via gl_includes.h) */
 
 enum {
     SCENE_AXIS_X = 0,
@@ -506,9 +503,7 @@ void scene_axes_render(const SceneFrameRenderContext *frame_ctx) {
     default: break;
     }
 
-    glDepthMask(GL_TRUE);
-    glDisable(GL_BLEND);
-    glEnable(GL_DEPTH_TEST);
-    if (frame_ctx->config.user_lighting_enabled) glEnable(GL_LIGHTING);
+    /* scene_axes_pop_state restores depth/blend/lighting state via
+     * GL_ALL_ATTRIB_BITS; no manual teardown needed. */
     scene_axes_pop_state();
 }
