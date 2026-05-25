@@ -43,6 +43,12 @@ static float g_cam_ty   = 0.0f;
 static float g_cam_tz   = 0.0f;
 static int   g_auto_rotate = 1;
 
+/* Per-renderer scene state — the demo owns one instance, init'd in
+ * main() after the GL context is current. Mirrors what glr_ctrl owns
+ * in src/app/glr_ctrl.c (the single-renderer assumption is now per
+ * binary). */
+static SceneRendererState g_scene_renderer;
+
 /* Mouse drag state. button=-1 means not dragging. */
 static int g_drag_button = -1;
 static int g_drag_x      = 0;
@@ -340,7 +346,7 @@ static void display_func(void) {
         .tx = cfg.cam_tx, .ty = cfg.cam_ty, .tz = cfg.cam_tz,
     };
     scene_apply_camera(&pose);
-    if (scene_render_3d_scene(&cfg) != 0) {
+    if (scene_render_3d_scene(&g_scene_renderer, &cfg) != 0) {
         fprintf(stderr,
                 "scene_demo: scene_render_3d_scene rejected config (errno=%d)\n",
                 errno);
@@ -482,6 +488,7 @@ int main(int argc, char **argv) {
 
     glEnable(GL_DEPTH_TEST);
     scene_render_init_gl();
+    scene_renderer_state_init(&g_scene_renderer);
 
     glutDisplayFunc(display_func);
     glutReshapeFunc(reshape_func);

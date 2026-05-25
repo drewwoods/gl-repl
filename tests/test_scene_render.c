@@ -83,6 +83,105 @@ static SceneRenderConfig make_test_config(void) {
     return cfg;
 }
 
+/* SceneRendererState is the controller-owned per-renderer state that
+ * replaced the file-static g_ortho_ref_dist / g_ortho_active /
+ * g_active_projection trio. These tests pin the new contracts: init
+ * gives a fresh state defaults; two states are independent; and the
+ * active_projection cache reflects the canonical zero-jitter math no
+ * matter how many AA samples the render walked. */
+static void test_scene_renderer_state_init_defaults(void) {
+    printf("--- SceneRendererState init defaults ---\n");
+
+    SceneRendererState state;
+    /* Fill with garbage first to make sure init actually writes. */
+    memset(&state, 0xCC, sizeof state);
+    scene_renderer_state_init(&state);
+
+    SceneProjectionDesc p;
+    scene_get_active_projection(&state, &p);
+    ASSERT_INT("init: ortho off", p.ortho, 0);
+    ASSERT_FLOAT("init: fovy_deg = 45", (float)p.fovy_deg, 45.0f);
+    ASSERT_TRUE("init: near_z > 0", p.near_z > 0.0);
+    ASSERT_TRUE("init: far_z > near_z", p.far_z > p.near_z);
+
+    /* Defensive NULL state still hands back the same defaults. */
+    SceneProjectionDesc q;
+    scene_get_active_projection(NULL, &q);
+    ASSERT_INT("NULL state defaults: ortho", q.ortho, p.ortho);
+    ASSERT_FLOAT("NULL state defaults: fovy", (float)q.fovy_deg, (float)p.fovy_deg);
+}
+
+static void test_scene_renderer_state_independence(void) {
+    printf("--- SceneRendererState independence ---\n");
+
+#ifdef GL_STUBS
+    /* Two states, two different mix values. Render through each and
+     * verify the cached active_projection reflects each renderer's
+     * input — proves there's no shared static under the API. */
+    SceneRenderConfig cfg = make_test_config();
+    cfg.use_accum = 0;
+    cfg.accum_aa_enabled = 0;
+    cfg.accum_samples = 1;
+
+    SceneRendererState state_a, state_b;
+    scene_renderer_state_init(&state_a);
+    scene_renderer_state_init(&state_b);
+
+    cfg.projection_mix = 1.0f;  /* fully perspective */
+    ASSERT_INT("render A (perspective)",
+               scene_render_3d_scene(&state_a, &cfg), 0);
+
+    cfg.projection_mix = 0.0f;  /* fully ortho */
+    ASSERT_INT("render B (ortho)",
+               scene_render_3d_scene(&state_b, &cfg), 0);
+
+    SceneProjectionDesc pa, pb;
+    scene_get_active_projection(&state_a, &pa);
+    scene_get_active_projection(&state_b, &pb);
+
+    ASSERT_INT("state A keeps perspective", pa.ortho, 0);
+    ASSERT_INT("state B keeps ortho",       pb.ortho, 1);
+#else
+    ASSERT_TRUE("state independence requires GL stubs", 1);
+#endif
+}
+
+static void test_scene_renderer_state_aa_invariant(void) {
+    printf("--- active_projection is jitter-invariant ---\n");
+
+#ifdef GL_STUBS
+    /* Cache resolves once before the AA jitter loop; per-sample apply
+     * is read-only on the state. So accum_samples=1 and =16 should
+     * produce identical active_projection contents. */
+    SceneRenderConfig cfg = make_test_config();
+    cfg.use_accum = 1;
+    cfg.accum_aa_enabled = 1;
+    cfg.projection_mix = 1.0f;
+
+    SceneRendererState s1, s16;
+    scene_renderer_state_init(&s1);
+    scene_renderer_state_init(&s16);
+
+    cfg.accum_samples = 1;
+    ASSERT_INT("render @ 1 sample", scene_render_3d_scene(&s1, &cfg), 0);
+
+    cfg.accum_samples = 16;
+    ASSERT_INT("render @ 16 samples", scene_render_3d_scene(&s16, &cfg), 0);
+
+    SceneProjectionDesc p1, p16;
+    scene_get_active_projection(&s1, &p1);
+    scene_get_active_projection(&s16, &p16);
+
+    ASSERT_INT("ortho field identical", p1.ortho, p16.ortho);
+    ASSERT_FLOAT("near_z identical", (float)p1.near_z, (float)p16.near_z);
+    ASSERT_FLOAT("far_z identical",  (float)p1.far_z,  (float)p16.far_z);
+    ASSERT_FLOAT("ortho_top identical",
+                 (float)p1.ortho_top, (float)p16.ortho_top);
+#else
+    ASSERT_TRUE("AA invariant requires GL stubs", 1);
+#endif
+}
+
 static void test_scene_projection_modes(void) {
     printf("--- scene projection modes ---\n");
 
@@ -92,21 +191,27 @@ static void test_scene_projection_modes(void) {
     cfg.accum_aa_enabled = 0;
     cfg.accum_samples = 1;
 
+    SceneRendererState state;
+    scene_renderer_state_init(&state);
+
     gl_stub_counts_reset();
     cfg.projection_mix = 1.0f;
-    ASSERT_INT("perspective render ok", scene_render_3d_scene(&cfg), 0);
+    ASSERT_INT("perspective render ok",
+               scene_render_3d_scene(&state, &cfg), 0);
     ASSERT_TRUE("perspective uses glFrustum",
                 gl_stub_counts[GL_STUB_glFrustum] > 0);
 
     gl_stub_counts_reset();
     cfg.projection_mix = 0.0f;
-    ASSERT_INT("ortho render ok", scene_render_3d_scene(&cfg), 0);
+    ASSERT_INT("ortho render ok",
+               scene_render_3d_scene(&state, &cfg), 0);
     ASSERT_TRUE("ortho uses glOrtho",
                 gl_stub_counts[GL_STUB_glOrtho] > 0);
 
     gl_stub_counts_reset();
     cfg.projection_mix = 0.5f;
-    ASSERT_INT("mixed projection render ok", scene_render_3d_scene(&cfg), 0);
+    ASSERT_INT("mixed projection render ok",
+               scene_render_3d_scene(&state, &cfg), 0);
     ASSERT_TRUE("mixed projection loads custom matrix",
                 gl_stub_counts[GL_STUB_glLoadMatrixf] > 0);
 #else
@@ -612,6 +717,9 @@ int main(int argc, char **argv) {
     printf("Scene render modules\n\n");
 
     test_config_defaults();
+    test_scene_renderer_state_init_defaults();
+    test_scene_renderer_state_independence();
+    test_scene_renderer_state_aa_invariant();
     test_scene_projection_modes();
     test_frame_ctx_defaults();
     test_grid_theme_uses_fog_predicate();   /* pure; runs in both builds */

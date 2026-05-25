@@ -48,26 +48,16 @@ typedef struct SceneCameraPose {
  * translate by the target offset. */
 void scene_apply_camera(const SceneCameraPose *pose);
 
-/* Render the full 3D scene for one frame using an explicit config snapshot.
- * Orchestrates projection setup, camera transforms, user geometry execution,
- * grid/axes, overlays, and edit guides.
- * Called once per frame (or multiple times per frame for accumulation-buffer
- * AA). The controller builds the config once and passes it in.
- *
- * Returns 0 on success, -1 with errno = EINVAL if the config is rejected
- * by validate_render_config: NULL config, non-positive scene_w / scene_h,
- * out-of-range grid_theme / axes_theme, grid index out of range or grid
- * extent/step <= 0 when grid is enabled, or accum_samples out of range
- * when accumulation AA is on. */
-int scene_render_3d_scene(const SceneRenderConfig *config);
-
 /* Canonical description of the projection the scene last applied this
- * frame. scene_apply_projection() caches it so export/debug paths can emit a
- * faithful reshape() description without re-deriving the math from scene
- * internals. The blend mid-transition is snapped to whichever side the mix is
- * closest to, because downstream callers want a discrete mode rather than an
- * interpolated matrix. ortho_top is the aspect-independent half-height
- * (callers multiply by their own aspect). */
+ * frame. Computed once per scene_render_3d_scene call (before the AA
+ * jitter loop) so the value reflects the canonical zero-jitter math,
+ * not a transient sample. Export/debug paths read it through
+ * scene_get_active_projection() so they emit a faithful reshape()
+ * without re-deriving from scene internals. The blend mid-transition
+ * is snapped to whichever side the mix is closest to, because
+ * downstream callers want a discrete mode rather than an interpolated
+ * matrix. ortho_top is the aspect-independent half-height (callers
+ * multiply by their own aspect). */
 typedef struct SceneProjectionDesc {
     int    ortho;        /* 0 = perspective, 1 = orthographic */
     double fovy_deg;     /* perspective vertical field of view */
@@ -78,7 +68,56 @@ typedef struct SceneProjectionDesc {
     double ortho_far;    /* ortho far clip */
 } SceneProjectionDesc;
 
-void scene_get_active_projection(SceneProjectionDesc *out);
+/* Per-renderer state the scene module needs to persist across frames.
+ * Replaces the file-static g_ortho_ref_dist / g_ortho_active /
+ * g_active_projection trio in render.c. Each caller (controller,
+ * scene_demo, tests) owns one instance — the single-renderer
+ * assumption is now an instance count, not a global. Multiple scene
+ * viewports become possible later by holding multiple state objects.
+ *
+ * Callers MUST call scene_renderer_state_init() before passing the
+ * struct to scene_render_3d_scene(), and own its lifetime across
+ * frames (the renderer never frees it). */
+typedef struct SceneRendererState {
+    /* 2D ortho scale reference (depth-center of the drawn geometry).
+     * How it's sampled — once at the switch vs. every frame — is
+     * selected at compile time by GLR_ORTHO_REF_MODE in config.h.
+     * 0 means "no usable measurement" and the projection math falls
+     * back to config->cam_dist (the old orbit-target-plane behavior). */
+    double ortho_ref_dist;
+    /* Edge tracker for the FROZEN sampling mode — true while ortho is
+     * contributing. PERFRAME mode doesn't read this. */
+    int    ortho_active;
+    /* Canonical (zero-jitter) projection resolved by the most recent
+     * scene_render_3d_scene call. Read by export/debug paths. */
+    SceneProjectionDesc active_projection;
+} SceneRendererState;
+
+/* Initialize a SceneRendererState to its default values. Required
+ * before the first scene_render_3d_scene call so a getter invoked
+ * before any frame returns sane defaults (the steady 3D frustum). */
+void scene_renderer_state_init(SceneRendererState *state);
+
+/* Render the full 3D scene for one frame using an explicit config snapshot.
+ * Orchestrates projection setup, camera transforms, user geometry execution,
+ * grid/axes, overlays, and edit guides.
+ * Called once per frame (or multiple times per frame for accumulation-buffer
+ * AA). The controller builds the config once and passes it in along with
+ * its owned renderer state.
+ *
+ * Returns 0 on success, -1 with errno = EINVAL if the config is rejected
+ * by validate_render_config: NULL config, non-positive scene_w / scene_h,
+ * out-of-range grid_theme / axes_theme, grid index out of range or grid
+ * extent/step <= 0 when grid is enabled, or accum_samples out of range
+ * when accumulation AA is on. */
+int scene_render_3d_scene(SceneRendererState *state,
+                          const SceneRenderConfig *config);
+
+/* Read the most-recently-resolved active projection from `state`. Safe
+ * to call between scene_render_3d_scene invocations; a fresh state
+ * returns the default 3D frustum. */
+void scene_get_active_projection(const SceneRendererState *state,
+                                 SceneProjectionDesc *out);
 
 /* Replay-fade overlay work no longer has a public scene entry point. Callers
  * that need it inject the pass through SceneRenderConfig.post_fill_fn, which
