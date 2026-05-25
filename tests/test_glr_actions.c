@@ -596,6 +596,15 @@ static void test_audio_config_direct_set(void) {
                glr_audio_get_cfg_mode(), glr_config_state_count(GLR_CONFIG_AUDIO_MODE) - 1);
 }
 
+/* Audit #18: GLR_CONFIG_NONE must return 0/NULL state count and name,
+ * and must not match the first rendering row (which carries GLR_CONFIG_NONE). */
+static void test_config_none_handling(void) {
+    ASSERT_INT("GLR_CONFIG_NONE state count is 0",
+               glr_config_state_count(GLR_CONFIG_NONE), 0);
+    ASSERT_TRUE("GLR_CONFIG_NONE state name is NULL",
+               glr_config_state_name(GLR_CONFIG_NONE, 0) == NULL);
+}
+
 /* Audit #38: out-of-range menu indices must not crash or mutate state. */
 static void test_menu_out_of_range_indices(void) {
     glr_app_reset_all();
@@ -851,6 +860,7 @@ int main(void) {
     test_tutorial_start_applies_cfg();
     test_tutorial_menu_dispatch();
     test_audio_config_direct_set();
+    test_config_none_handling();
     test_menu_out_of_range_indices();
     test_cfg_cycle_stops_replay();
     test_status_set_drops_empty_message();
