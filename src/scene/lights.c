@@ -2,6 +2,7 @@
  * lights.c - scene light setup and visible light indicators.
  */
 #include "lights.h"
+#include "overlays.h"     /* scene_draw_bitmap_text */
 #include "palette.h"
 #include "config.h"
 #include "occluded_ghost.h"  /* SCENE_OCCLUDED_GHOST_STIPPLE */
@@ -123,9 +124,7 @@ void scene_lights_render(const SceneFrameRenderContext *frame_ctx) {
             snprintf(label, sizeof(label), " L%d", i);
             glColor4f(d[0] * 0.7f + 0.3f, d[1] * 0.7f + 0.3f,
                       d[2] * 0.7f + 0.3f, 0.8f);
-            glRasterPos3f(lx, ly, lz);
-            for (const char *c = label; *c; c++)
-                glutBitmapCharacter(FONT_SMALL, (unsigned char)*c);
+            scene_draw_bitmap_text(FONT_SMALL, lx, ly, lz, label);
         } else {
             glPointSize(6.0f);
             glBegin(GL_POINTS);
@@ -149,9 +148,7 @@ void scene_lights_render(const SceneFrameRenderContext *frame_ctx) {
             char label[16];
             snprintf(label, sizeof(label), " L%d off", i);
             scene_clr_a(SCENE_CLR_LIGHT_OFF_LABEL, 0.45f);
-            glRasterPos3f(lx, ly, lz);
-            for (const char *c = label; *c; c++)
-                glutBitmapCharacter(FONT_SMALL, (unsigned char)*c);
+            scene_draw_bitmap_text(FONT_SMALL, lx, ly, lz, label);
         }
     }
 
