@@ -42,13 +42,36 @@ typedef struct SceneRgba {
     float r, g, b, a;
 } SceneRgba;
 
-/* Per-call context the scene passes back to the user's geometry callback.
- * Currently a placeholder — kept as a struct so future scene-to-callback
- * metadata (e.g. an enum describing why the callback is being invoked:
- * main fill, fade-replay overlay, picking pass, etc.) can be added
- * without changing the function-pointer signature again. */
+/* Two-sided clamp to [0, 1]. Used wherever a 0..1 alpha/opacity is
+ * derived from a controller config (which may overshoot during a fade
+ * transition or carry an out-of-range fixture from a test). The
+ * single-side fminf(v, 1.0f) clamps elsewhere in scene/ ride along an
+ * always-non-negative computation and don't need this helper. */
+static inline float scene_clamp01f(float v) {
+    if (v < 0.0f) return 0.0f;
+    if (v > 1.0f) return 1.0f;
+    return v;
+}
+
+/* Why the scene is invoking the execute callback this frame.
+ * Side-effecting callbacks (audio, RNG advance, dirty-flag writes)
+ * should run only on MAIN_FILL; non-fill purposes are scaffolding
+ * passes whose output is consumed before the frame is presented and
+ * whose side effects would corrupt the frame's main state.
+ *
+ * Renamed from the unused_ placeholder so callers can branch on
+ * purpose without changing the function-pointer signature. */
+typedef enum SceneExecutePurpose {
+    SCENE_EXEC_MAIN_FILL = 0,   /* the rendered geometry pass */
+    SCENE_EXEC_DEPTH_PROBE,     /* scene_probe_eye_dist feedback walk */
+} SceneExecutePurpose;
+
+/* Per-call context the scene passes back to the user's geometry
+ * callback. Currently a single purpose enum; more frame-derived
+ * metadata can land here without changing the function-pointer
+ * signature. */
 typedef struct SceneExecuteContext {
-    int unused_;
+    SceneExecutePurpose purpose;
 } SceneExecuteContext;
 
 /* Called by render.c to emit user geometry. May be NULL (geometry

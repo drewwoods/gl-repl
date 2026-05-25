@@ -16,8 +16,6 @@ static int    g_tex_h      = 0;
 /* GL_MAX_TEXTURE_SIZE, queried once: 0 = not yet, -1 = unknown
  * (e.g. GL stubs) so the size guard is not enforced. */
 static GLint  g_max_tex_size = 0;
-/* Matrix mode saved across the 2D pass (not covered by glPushAttrib). */
-static GLint  g_saved_matrix_mode = 0;
 
 const char *scene_postprocess_filter_mode_name(ScenePostFilterMode mode) {
     switch (mode) {
@@ -49,10 +47,14 @@ static int next_pow2(int v) {
 }
 
 /* Private 2D bracket. src/scene/ must not depend on ui/gl_2d.h, so the
- * minimal screen-space textured-quad state is set up here. */
-static void postprocess_filter_begin_2d(int sx, int sy, int sw, int sh) {
+ * minimal screen-space textured-quad state is set up here. begin_2d
+ * snapshots the matrix-mode (not covered by glPushAttrib); end_2d
+ * accepts it back as a parameter, so the pair isn't coupled by a
+ * file-static and an unbalanced second caller can't desync. */
+static void postprocess_filter_begin_2d(int sx, int sy, int sw, int sh,
+                                        GLint *saved_matrix_mode_out) {
     glPushAttrib(GL_ALL_ATTRIB_BITS);
-    glGetIntegerv(GL_MATRIX_MODE, &g_saved_matrix_mode);
+    glGetIntegerv(GL_MATRIX_MODE, saved_matrix_mode_out);
 
     glViewport(sx, sy, sw, sh);
 
@@ -84,14 +86,14 @@ static void postprocess_filter_begin_2d(int sx, int sy, int sw, int sh) {
     glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_REPLACE);
 }
 
-static void postprocess_filter_end_2d(void) {
+static void postprocess_filter_end_2d(GLint saved_matrix_mode) {
     glMatrixMode(GL_TEXTURE);
     glPopMatrix();
     glMatrixMode(GL_PROJECTION);
     glPopMatrix();
     glMatrixMode(GL_MODELVIEW);
     glPopMatrix();
-    glMatrixMode((GLenum)g_saved_matrix_mode);
+    glMatrixMode((GLenum)saved_matrix_mode);
     glPopAttrib(); /* restores viewport, enables, color mask, depth mask */
 }
 
@@ -141,7 +143,8 @@ void scene_postprocess_filter_render(ScenePostFilterMode mode, int sx, int sy,
      * bind. Allocation/copy are matrix/viewport-independent, so running
      * them inside the 2D bracket is safe. Do not reorder a
      * glBindTexture before this call. */
-    postprocess_filter_begin_2d(sx, sy, sw, sh);
+    GLint saved_matrix_mode = 0;
+    postprocess_filter_begin_2d(sx, sy, sw, sh, &saved_matrix_mode);
 
     if (g_filter_tex == 0 || tex_w > g_tex_w || tex_h > g_tex_h) {
         if (g_filter_tex == 0)
@@ -181,5 +184,5 @@ void scene_postprocess_filter_render(ScenePostFilterMode mode, int sx, int sy,
     postprocess_filter_draw_quad(sw, sh, umax, vmax, -dx);
     glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
 
-    postprocess_filter_end_2d();
+    postprocess_filter_end_2d(saved_matrix_mode);
 }

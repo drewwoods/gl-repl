@@ -175,7 +175,7 @@ static double scene_probe_eye_dist(const SceneRenderConfig *config) {
 
     glPushMatrix();
     {
-        SceneExecuteContext ctx = { 0 };
+        SceneExecuteContext ctx = { .purpose = SCENE_EXEC_DEPTH_PROBE };
         config->execute_fn(&ctx, config->execute_user_data);
     }
     glPopMatrix();
@@ -536,7 +536,7 @@ static void render_3d_scene_pass(const SceneRenderConfig *config,
         prof_begin(PROF_SCENE_3D_FILL);
         glPushMatrix();
         if (config->execute_fn) {
-            SceneExecuteContext ctx = { 0 };
+            SceneExecuteContext ctx = { .purpose = SCENE_EXEC_MAIN_FILL };
             config->execute_fn(&ctx, config->execute_user_data);
         }
         glPopMatrix();

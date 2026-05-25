@@ -10,6 +10,17 @@
  * `current` authoritative until opacity reaches zero, so rapid cycling drops
  * transient themes and reversing back to the current theme just flips the
  * direction to FADE_IN.
+ *
+ * API verb cheat-sheet:
+ *   scene_xn_init  — snap to theme fully shown, no animation
+ *                    (program init, world reset).
+ *   scene_xn_set   — request a theme change; reads `current` to decide
+ *                    whether to FADE_OUT, reverse to FADE_IN, or no-op.
+ *   scene_xn_show  — fade in from invisible (FADE_IN at opacity 0),
+ *                    skipping a pointless FADE_OUT of an already-off
+ *                    overlay.
+ *   scene_xn_tick  — advance the machine by dt seconds; sole driver of
+ *                    `opacity` and `phase` changes.
  */
 #ifndef SCENE_TRANSITION_H
 #define SCENE_TRANSITION_H
