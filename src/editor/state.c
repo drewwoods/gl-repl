@@ -544,6 +544,9 @@ EditorClipboardKind editor_state_clipboard_kind(void) {
     return g_editor_state.clipboard.kind;
 }
 
+/* Callers must populate clipboard->lines[0..n) via editor_state_clipboard_mut()
+ * BEFORE calling with n > 0. This setter stamps the kind and count but does
+ * not validate line content. */
 void editor_state_clipboard_count_set(int line_count) {
     if (line_count < 0)
         line_count = 0;

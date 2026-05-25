@@ -183,6 +183,10 @@ typedef struct {
     EditorClipboardState    clipboard;
     EditorSearchState       search;
     EditorAutocompleteState autocomplete;
+    /* Per-frame transient overlay lists — refilled each frame by the
+     * controller (glr_ctrl). Included in editor_state_capture() (full
+     * struct copy) but NOT in EditorUndoSnapshot (undo is document-only).
+     * They carry no meaningful state across frames. */
     UiTransformerList  transformers;
     UiHighlightList    highlights;
     UiVirtualLineList  virtual_lines;
