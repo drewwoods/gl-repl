@@ -762,6 +762,12 @@ static int submenu_rect(int menu_id, int parent_row,
 
     if (menu_id < 0 || g_open_menu != menu_id || win_w <= 0 || win_h <= 0)
         return 0;
+    /* Mirror menu_dropdown_rect's panel-visible guard so a stale cache
+     * doesn't hand back a rect after the code panel has been hidden.
+     * The cache key (menu_id, parent_row, win_w, win_h) doesn't see
+     * visibility transitions, so the check has to live before the hit. */
+    if (!ui_menu_bar_panel_visible())
+        return 0;
     if (!menu_row_has_submenu(menu_id, parent_row))
         return 0;
 

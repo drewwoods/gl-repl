@@ -586,7 +586,11 @@ int glr_action_menu_item_activate(int menu_id, int item_idx) {
                 dir = GLR_DEFAULT_WORKSPACE_DIR;
             /* Wholesale REPL state replacement — drop the undo ring so
              * a post-load Ctrl+Z can't pull a snapshot from the
-             * previous workspace into the new one. */
+             * previous workspace into the new one. Also clear the
+             * per-scene camera default so Ctrl+Shift+C falls back to
+             * the built-in default (matches load_user_slot / New Scene
+             * / glr_app_reset_transients). */
+            glr_camera_clear_scene_default();
             int n = repl_load_workspace(dir);
             if (n >= 0)
                 editor_undo_clear();
