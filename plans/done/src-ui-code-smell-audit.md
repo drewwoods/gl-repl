@@ -151,9 +151,9 @@ the structural cluster has been quietly closed in the natural course
 of subsequent menu-bar / code-panel work. Updated per-heading markers
 to match.
 
-**Closed since the backlog pass** (10 of 14, including #55 + #63
+**Closed since the backlog pass** (11 of 14, including #55 + #63
 which were the remaining "Still open" pair until the same-day
-follow-up):
+follow-up, plus #50 finished off in a third same-day micro-pass):
 
 - **#30** — `glIsEnabled(GL_BLEND)` is gone from `text_panel.c`; the
   fake-bold per-segment query/restore has been removed entirely.
@@ -184,8 +184,15 @@ follow-up):
   `text_panel_row_wrap_count_cached(snap, row_idx)`, removing the
   per-row `code_layout_row_count_for_text` walk that the renderer
   already did.
+- **#50** — `MENU_LABEL_PAD_X` + `SUBMENU_ARROW_COL` were named in
+  earlier work; the `+ 4` row-pad / `+ 8` extra-height are all
+  expressed via `DROPDOWN_PAD_Y`; and the audit's last open piece —
+  the triplicated `(top + h - DROPDOWN_PAD_Y - ry) / LINE_H`
+  ordinal-from-y formula — is now `dropdown_row_for_gl_y(top, h, ry)`,
+  used by `ui_menu_bar_dropdown_item_hit`, `submenu_hit_test`, and
+  `submenu_hover_ordinal`.
 
-**Partially closed** (4 of 14) — the function shape improved but
+**Partially closed** (3 of 14) — the function shape improved but
 the underlying smell wasn't fully resolved:
 
 - **#46** — `render_active_submenu` went 106 → 82 lines, but the
@@ -197,11 +204,6 @@ the underlying smell wasn't fully resolved:
   duplicate chrome blocks" finding is mostly resolved (one is now in
   the submenu helper) but the inline `inert_chrome_hit` branch is
   still there.
-- **#50** — `MENU_LABEL_PAD_X` (was magic `18`) and `SUBMENU_ARROW_COL`
-  (was magic `26`) are now named. The `+ 4` / `+ 8` ordinal offsets
-  are mostly gone, but no `DROPDOWN_HEIGHT_PAD` /
-  `DROPDOWN_ROW_TOP_OFFSET` / `DROPDOWN_INNER_BORDER` constants exist
-  yet; finer-grained spacing constants haven't been hoisted.
 - **#58** — `(int)strlen(text)` repetition went from 5+ sites
   (`fade`, `virtual-row build`, `statusbar layout`) down to 1
   remaining site (`repl_code_panel.c:815`). The `UiTextPanelRow`
@@ -236,13 +238,13 @@ the same 2026-05-25 pass.)
   (`text_panel.c:835-846`), test `test_ui_text_panel.c:190` still
   pins the contract.
 
-Bottom line: 12 of the audit's 63 findings are now closed beyond the
+Bottom line: 13 of the audit's 63 findings are now closed beyond the
 original closeout (2 in the 2026-05-24 backlog pass — #18, #25 —
-plus 10 here, including the 2 stragglers #55 and #63 picked up in
-the same pass); 4 partially closed (#46, #47, #50, #58); only
+plus 11 here, including the 2 stragglers #55 and #63 and the
+finally-finished #50); 3 partially closed (#46, #47, #58); only
 **2 Tier D items remain** (#37, #44) — both kept on purpose. **No
 Tier C items remain.** The audit is materially complete; the only
-remaining work is the explicit Tier D carve-outs and the 4 partials
+remaining work is the explicit Tier D carve-outs and the 3 partials
 where the structural shape improved but the audit's full fix
 didn't fully land.
 
@@ -962,7 +964,7 @@ ticked between them.
 pointer + row layout dims; expose a `rebuild_rows()` call the
 controller makes once per frame.
 
-### 50. Magic spacing constants scattered across menu render code (partial — `MENU_LABEL_PAD_X` + `SUBMENU_ARROW_COL` named as of 2026-05-25; `DROPDOWN_*` constants and shared `row_for_y` helper remain Tier C)
+### 50. Magic spacing constants scattered across menu render code (done — Tier C closed 2026-05-25; `MENU_LABEL_PAD_X` + `SUBMENU_ARROW_COL` named, the `+ 4` row-pad / `+ 8` extra-height all expressed via `DROPDOWN_PAD_Y`, and the triplicated ordinal-from-y formula extracted into `dropdown_row_for_gl_y`)
 
 **Where:** `src/ui/app/menu_bar.c:428, 438, 502, 507, 509, 511,
 724, 786-787, 1176, 1180, 1414, 1452, 1491, 1598, 1605` and

@@ -536,6 +536,17 @@ static int point_in_rect_gl(int mx, int my, int x, int y, int w, int h) {
     return mx >= x && mx < x + w && ry >= y && ry < y + h;
 }
 
+/* Map a GL-space y coordinate (`ry`, i.e. window_h - my) inside a
+ * dropdown/submenu rect (`top`, `h`) to its 0-based row ordinal.
+ * The formula counts down from the top of the inner row band — the
+ * caller is responsible for bounds-checking the result against the
+ * actual row count. Shared by `ui_menu_bar_dropdown_item_hit`,
+ * `submenu_hit_test`, and `submenu_hover_ordinal` so the three
+ * sites stay in lockstep. */
+static int dropdown_row_for_gl_y(int top, int h, int gl_y) {
+    return (top + h - DROPDOWN_PAD_Y - gl_y) / LINE_H;
+}
+
 /* ---- Polymorphic flyout provider ----------------------------------------
  *
  * A FlyoutProvider resolves (parent_row, ordinal) to a submenu row's
@@ -883,7 +894,7 @@ static int ui_menu_bar_dropdown_item_hit(int gx, int gy) {
     if (!menu_dropdown_rect(&dx, &dy, &dw, &dh)) return -1;
     int ry = ui_state_viewport().window_h - gy;
     if (gx < dx || gx >= dx + dw || ry < dy || ry >= dy + dh) return -1;
-    int row = (dy + dh - DROPDOWN_PAD_Y - ry) / LINE_H;
+    int row = dropdown_row_for_gl_y(dy, dh, ry);
     if (row < 0 || row >= n) return -1;
     const char *lbl = menu_item_label(g_open_menu, row);
     if (!lbl || menu_chrome_kind(lbl) != GLR_CFG_ROW_ITEM) return -1;
@@ -924,7 +935,7 @@ static UiHit submenu_hit_test(int mx, int my) {
         return h;
 
     ry = ui_state_viewport().window_h - my;
-    ordinal = (sy + sh - DROPDOWN_PAD_Y - ry) / LINE_H;
+    ordinal = dropdown_row_for_gl_y(sy, sh, ry);
     if (ordinal < 0 ||
         ordinal >= submenu_row_count(g_submenu_menu_id, g_submenu_parent_row))
         return h;
@@ -1171,7 +1182,7 @@ static int submenu_hover_ordinal(const UiRenderSnapshot *snap) {
         return -1;
 
     ry = snap->viewport.window_h - snap->pointer.mouse_y;
-    ordinal = (sy + sh - DROPDOWN_PAD_Y - ry) / LINE_H;
+    ordinal = dropdown_row_for_gl_y(sy, sh, ry);
     if (ordinal < 0 ||
         ordinal >= submenu_row_count(g_submenu_menu_id,
                                      g_submenu_parent_row))
