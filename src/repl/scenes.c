@@ -8,6 +8,7 @@
 #include "repl/export.h"   /* ReplExportConfig + bridge for per-scene cfg */
 #include "repl/state_owners.h"
 #include "source_document.h" /* source_document_load_lines */
+#include "config.h"          /* REPL_DIAG_TEXT_MAX */
 
 #include <dirent.h>
 #include <errno.h>
@@ -328,7 +329,7 @@ static void load_scene_from_slot(int idx) {
     s->last_touch       = next_user_scene_tick();
     g_active_user_scene = idx;
     g_example_idx       = -1;
-    char msg[128];
+    char msg[REPL_DIAG_TEXT_MAX];
     snprintf(msg, sizeof(msg), "Loaded scene: %s", s->name);
     repl_set_status(msg);
 }
@@ -968,7 +969,7 @@ int repl_promote_example_if_needed(void) {
     g_active_user_scene = slot;
     g_example_idx       = -1;
 
-    char msg[128];
+    char msg[REPL_DIAG_TEXT_MAX];
     snprintf(msg, sizeof(msg), "Promoted to scene: %s", unique);
     repl_set_status(msg);
     return slot;

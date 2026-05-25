@@ -56,6 +56,14 @@
  * status bar in `ReplStatusState` mirrors the size end-to-end. */
 #define REPL_STATUS_TEXT_MAX 256
 
+/* Intermediate diagnostic text buffer width — used by validation
+ * helpers (verr), arg splitters (split_err), and parse/flatten error
+ * messages that get forwarded into the final REPL_STATUS_TEXT_MAX
+ * buffer with extra context wrapped around them. Half the size of the
+ * visible status leaves room for the wrapping prefix at the callsite.
+ * Also the on-the-wire width of ReplFlattenResult.status. */
+#define REPL_DIAG_TEXT_MAX 128
+
 /* How long a status-bar message stays visible, in frames (~60 fps, so
  * 360 ≈ 6 s). Interim value bumped from 240 so messages linger longer
  * until the recent-messages viewer lands

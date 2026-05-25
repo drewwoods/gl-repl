@@ -22,6 +22,7 @@
 #include "repl/command.h"
 #include "repl/eval.h"
 #include "source_document.h"  /* SourceTextView (Phase 1 of feature/source-document-port.md) */
+#include "config.h"           /* REPL_DIAG_TEXT_MAX */
 
 /* Local variable snapshot for a single flat command. Captured when the
  * command is emitted (e.g., loop counter value, function parameter binding).
@@ -58,13 +59,15 @@ typedef struct {
 } ReplFlattenOptions;
 
 /* Result: whether flattening succeeded, how many commands were generated,
- * which lighting mode won, and any error message. status[128] is always
- * null-terminated (may be empty if ok=1). */
+ * which lighting mode won, and any error message. status is always
+ * null-terminated (may be empty if ok=1); its width is REPL_DIAG_TEXT_MAX
+ * (shared with the rest of the REPL pipeline's intermediate diagnostic
+ * buffers; see config.h). */
 typedef struct {
     int  ok;                             /* 1 if flattening succeeded */
     int  flat_cmd_count;
     int  user_lighting_enabled;
-    char status[128];                    /* error or informational message */
+    char status[REPL_DIAG_TEXT_MAX];     /* error or informational message */
 } ReplFlattenResult;
 
 

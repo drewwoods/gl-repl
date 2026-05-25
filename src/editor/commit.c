@@ -367,7 +367,7 @@ ReplCompileResult editor_compile_if_block(const char *input,
     }
 
     {
-        char verr[128];
+        char verr[REPL_DIAG_TEXT_MAX];
         if (!repl_eval_validate_expression_idents(cond_text,
                                                   visible_nv > 0 ? visible_vars : NULL,
                                                   visible_nv,
@@ -896,7 +896,7 @@ ReplCompileResult editor_compile_for_loop(const char *input,
         char *ra = raw_args;
         while (*ra && isspace((unsigned char)*ra)) ra++;
 
-        char verr[128];
+        char verr[REPL_DIAG_TEXT_MAX];
         if (!repl_eval_validate_expression_idents(ra, visible_vars, visible_nv,
                                                   verr, sizeof(verr))) {
             snprintf(err, (size_t)err_size, "%s", verr);

@@ -14,6 +14,7 @@
 #include "keys.h"
 
 #include "repl/core.h"
+#include "config.h"               /* REPL_DIAG_TEXT_MAX */
 
 static int  g_rename_slot = -1;
 static char g_rename_buf[USER_SCENE_NAME_MAX];
@@ -69,7 +70,7 @@ int editor_inline_rename_handle_key(unsigned char key) {
             repl_set_status_error("Scene name cannot be empty");
             return 1;
         }
-        char msg[128];
+        char msg[REPL_DIAG_TEXT_MAX];
         snprintf(msg, sizeof(msg), "Renamed to: %s",
                  repl_user_scene_name(g_rename_slot));
         repl_set_status(msg);
