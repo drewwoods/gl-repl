@@ -1098,21 +1098,50 @@ static void glr_ctrl_apply_input_effects(EditorInputDispatchEffects effects) {
 /* Scene config builder (push model)                                          */
 /* ========================================================================= */
 
-/* Scene's main-fill geometry callback. The signature is intentionally
- * opaque to scene — the controller pulls live program / count / text
- * from REPL state here, and clamps the count to the pre-fade base limit
- * when replay-fade overlays are active so the fade pass can layer on
- * top of an unmodified prefix. */
+/* Scene's geometry callback for the main-fill and depth-probe passes.
+ * The signature is intentionally opaque to scene — the controller
+ * pulls live program / count / text from REPL state here, and clamps
+ * the count to the pre-fade base limit when replay-fade overlays are
+ * active so the fade pass can layer on top of an unmodified prefix.
+ *
+ * For non-MAIN_FILL purposes (today: SCENE_EXEC_DEPTH_PROBE — the
+ * GL_FEEDBACK pass that measures geometry depth for the ortho-mode
+ * scale reference), snapshot REPL mutable state before the executor
+ * runs and restore it after. The executor's CMD_VAR_ASSIGN /
+ * CMD_SCRATCH_ASSIGN apply precomputed args[0] directly; CMD_ENABLE
+ * (for GL_LIGHT*) and CMD_CLEAR_COLOR write into repl_state_render().
+ * Without this bracket the probe would advance the user's
+ * `t = t + 1` style state alongside the main fill (within-frame
+ * doubling) and its glEnable / glClearColor would leak across frames
+ * (the frame-level snapshot in glr_ctrl_display_frame restores predef
+ * + scratch only, not the persistent render-state struct).
+ *
+ * SceneExecutePurpose is a forward-compatible enum; future probe-like
+ * purposes (fade-overlay, picking pass, etc.) take the same
+ * snapshot/restore path automatically. */
 static void scene_execute_adapter(const SceneExecuteContext *ctx,
                                   void *user_data) {
-    (void)ctx;
     (void)user_data;
+
+    SceneExecutePurpose purpose =
+        ctx ? ctx->purpose : SCENE_EXEC_MAIN_FILL;
+    int suppress_side_effects = (purpose != SCENE_EXEC_MAIN_FILL);
 
     int count = repl_state_flat_program_count();
     if (g_replay_fade_plan_active)
         count = g_replay_fade_plan_base_limit;
 
     repl_execute_set_fade_context(1.0f, 0);
+
+    float saved_predef[MAX_PREDEF_VARS];
+    float saved_scratch[REPL_SCRATCH_ARRAY_COUNT][REPL_SCRATCH_ARRAY_LEN];
+    ReplRenderState saved_render = {0};
+    if (suppress_side_effects) {
+        repl_copy_predef_values(saved_predef, MAX_PREDEF_VARS);
+        repl_eval_copy_scratch_arrays(saved_scratch);
+        saved_render = repl_state_render();
+    }
+
     glPushAttrib(GL_ALL_ATTRIB_BITS);
     repl_execute_program(&(ReplExecutionOptions){
         .flat_cmd_count = count,
@@ -1120,6 +1149,12 @@ static void scene_execute_adapter(const SceneExecuteContext *ctx,
         .text           = source_document_view(),
     });
     glPopAttrib();
+
+    if (suppress_side_effects) {
+        repl_restore_predef_values(saved_predef, MAX_PREDEF_VARS);
+        repl_eval_restore_scratch_arrays(saved_scratch);
+        *repl_state_render_mut() = saved_render;
+    }
 }
 
 /* Grid/axes in-out fade machines (plans/.../grid-axes-transitions.md).

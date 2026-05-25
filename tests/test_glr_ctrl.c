@@ -1304,6 +1304,110 @@ static void test_numeric_swatch_no_op_in_insert_mode(void) {
                editor_buffer_view_line(buf, 0), before);
 }
 
+/* scene_execute_adapter is called by render.c on both the main fill
+ * pass and the scene_probe_eye_dist feedback pass. The probe pass
+ * runs every frame in ortho/projection-transition mode; before the
+ * SceneExecutePurpose wiring its execute_fn invocation mutated REPL
+ * state (predef vars, scratch arrays, light enables, clear_color)
+ * the same as the main fill, so the user's `t = t + 1` style code
+ * advanced twice per frame and the probe's glEnable(GL_LIGHT0) /
+ * glClearColor() leaked across frames (the frame-end restore in
+ * glr_ctrl_display_frame only snapshots predef + scratch, not the
+ * persistent render state).
+ *
+ * This test exercises the adapter directly with both purposes and
+ * pins the invariant: DEPTH_PROBE doesn't mutate predef vars or
+ * scratch arrays; MAIN_FILL still does (would-be-regression for the
+ * fix accidentally suppressing the real path). Clear-color and
+ * light-enable side effects are intentionally excluded here — the
+ * parser clamps glClearColor channels to 0.15 max, which complicates
+ * a clean test signal, but the snapshot/restore path covers them the
+ * same way it covers the predef/scratch state. */
+static void test_depth_probe_does_not_mutate_repl_state(void) {
+    printf("--- depth probe does not mutate REPL state (#2 P1 review) ---\n");
+
+    glr_app_reset_all();
+    editor_feed_line("float probevar;");
+    editor_feed_line("probevar = probevar + 1;");
+    editor_feed_line("A[0] = A[0] + 1;");
+    editor_feed_line("glVertex3f(0, 0, 0);");
+
+    int probevar_idx = repl_eval_find_predef_var_idx("probevar");
+    ASSERT_TRUE("probevar declared", probevar_idx >= 0);
+    int scratch_a_idx = repl_eval_scratch_array_index("A");
+    ASSERT_TRUE("A scratch array index", scratch_a_idx >= 0);
+
+    /* Force a known starting state *before* re-flattening — the
+     * executor applies precomputed `args[0]` directly (the comment in
+     * executor.c on CMD_VAR_ASSIGN explains why: re-evaluating at exec
+     * time would double-apply self-referential assigns). So the
+     * post-execute value depends on what predef state was live when
+     * flatten last ran. Forcing probevar=0 and A[0]=0 before the
+     * re-flatten pins the per-execute advancement to exactly +1. */
+    g_predef_vars[probevar_idx].value = 0.0f;
+    float scratch_zero[REPL_SCRATCH_ARRAY_COUNT][REPL_SCRATCH_ARRAY_LEN] = {0};
+    repl_eval_restore_scratch_arrays(scratch_zero);
+    repl_flatten_commands(0);
+
+    /* Sanity check: exactly one probevar/A[0] assign in the flat
+     * program so the post-execute advancement is unambiguous. */
+    int probevar_assigns_per_execute = 0;
+    int a0_assigns_per_execute       = 0;
+    {
+        FlatProgramView prog = repl_state_flat_program_view();
+        int flat_count = repl_state_flat_program_count();
+        for (int i = 0; i < flat_count; i++) {
+            if (prog.cmds[i].type == CMD_VAR_ASSIGN &&
+                prog.cmds[i].var_idx == probevar_idx)
+                probevar_assigns_per_execute++;
+            if (prog.cmds[i].type == CMD_SCRATCH_ASSIGN &&
+                (int)prog.cmds[i].args[0] == scratch_a_idx &&
+                (int)prog.cmds[i].args[1] == 0)
+                a0_assigns_per_execute++;
+        }
+    }
+    ASSERT_INT("one probevar assign per execute",
+               probevar_assigns_per_execute, 1);
+    ASSERT_INT("one A[0] assign per execute",
+               a0_assigns_per_execute, 1);
+
+    /* Flatten itself eagerly applied the assignments (probevar -> 1,
+     * A[0] -> 1) when it computed the precomputed args[0]; reset back
+     * to the baseline that flatten saw so the test's before/after
+     * deltas are clean. The flat program's args[0] still encodes
+     * "what probevar/A[0] would become after one execute" = 1. */
+    g_predef_vars[probevar_idx].value = 0.0f;
+    repl_eval_restore_scratch_arrays(scratch_zero);
+
+    float scratch_before;
+    repl_eval_scratch_get(scratch_a_idx, 0, &scratch_before);
+    float predef_before = g_predef_vars[probevar_idx].value;
+
+    /* Probe call: state must not change. */
+    SceneExecuteContext probe_ctx = { .purpose = SCENE_EXEC_DEPTH_PROBE };
+    scene_execute_adapter(&probe_ctx, NULL);
+
+    float predef_after_probe = g_predef_vars[probevar_idx].value;
+    float scratch_after_probe;
+    repl_eval_scratch_get(scratch_a_idx, 0, &scratch_after_probe);
+
+    ASSERT_FLOAT("probe: probevar unchanged", predef_after_probe, predef_before);
+    ASSERT_FLOAT("probe: A[0] unchanged", scratch_after_probe, scratch_before);
+
+    /* Main fill call: state SHOULD mutate. */
+    SceneExecuteContext fill_ctx = { .purpose = SCENE_EXEC_MAIN_FILL };
+    scene_execute_adapter(&fill_ctx, NULL);
+
+    float predef_after_fill = g_predef_vars[probevar_idx].value;
+    float scratch_after_fill;
+    repl_eval_scratch_get(scratch_a_idx, 0, &scratch_after_fill);
+
+    ASSERT_FLOAT("fill: probevar advanced once",
+                 predef_after_fill, predef_before + 1.0f);
+    ASSERT_FLOAT("fill: A[0] advanced once",
+                 scratch_after_fill, scratch_before + 1.0f);
+}
+
 int main(void) {
     printf("--- imrepl_ctrl tests ---\n");
 
@@ -1326,6 +1430,7 @@ int main(void) {
     test_numeric_swatch_step_commits_line_and_undoes();
     test_numeric_swatch_no_op_outside_numeric_arg();
     test_numeric_swatch_no_op_in_insert_mode();
+    test_depth_probe_does_not_mutate_repl_state();
 
     printf("\n");
     return test_harness_report(&g_harness, "test_imrepl_ctrl");
