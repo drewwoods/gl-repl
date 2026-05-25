@@ -66,6 +66,21 @@
 > `glr_actions.c` line reference to the current source and clarified
 > its empty-workspace return-value semantics.
 >
+> **Revision 6 (2026-05-25):** Tier C review refresh against current
+> source. #12 is now stale: cursor blink lives on `EditorState` and
+> the README matches, so the old doc fix must not be applied. #13's
+> preferred shape is the shared ordered kind-list; the adapter remains
+> viable only if it preserves per-handler post-effects and can identify
+> the matched var-statement kind. #23's fix should be a semantic
+> editor-side wholesale-replacement API that clears plus bumps the undo
+> generation, not scattered generation bumps beside raw clears. #28's
+> step 1 already landed via `apply_compiled_three_halves`; the remaining
+> direct-call migrations must update the `check-editor-repl-surface`
+> ratchet/baseline. #40 should use a local `commit.c` context helper,
+> not `services.h`, because #28 deletes services. #41 is partly stale:
+> input-text paste and the stack snapshot are already extracted/fixed;
+> only optional line-paste factoring remains.
+>
 > Scope: every file under `src/editor/`. Tests under `tests/` were
 > read where they document a contract, but not audited.
 >
@@ -76,14 +91,14 @@
 > *dispatch-chain drift between the documented canonical order and
 > the real Enter path*, and *stack-allocated mega-buffers*.
 >
-> **Implementation status (2026-05-24):** Full afternoon pass + most
+> **Implementation status (2026-05-25 refresh):** Full afternoon pass + most
 > week-pass items completed, verified, and moved to done. Remaining
 > items deferred to future passes: #13 (var-statement ordering:
 > shared kind list vs. adapter), #18 (`parse_for_commit`
-> policy-flagged helper extraction), #23 (undo cross-generation
-> guard counter), #28 (EditorServices dismantle — step 1 already
-> landed alongside #16). All completed items are tested via the
-> 6782-test suite and guarded against regression by four new
+> policy-flagged helper extraction), #23 (semantic wholesale-replacement
+> undo API plus cross-generation guard), #28 (EditorServices dismantle
+> — step 1 already landed alongside #16). All completed items are
+> tested via the 6782-test suite and guarded against regression by four new
 > layer-boundary guards (`check-editor-no-app` hard-zero,
 > `check-repl-no-app` ratchet=1, `check-scene-no-upper-layers`
 > hard-zero, `check-ui-core-no-upper-layers` hard-zero).
@@ -107,15 +122,16 @@ to this audit shows almost nothing left to bite off:
   the original week pass closed the layering inversions and
   dispatch-chain drift.
 - **Tier C — defer (high cost or cross-cutting).** The 4 ⏳-marked
-  items (#13, #18, #23, #28) plus 19 unmarked findings that were
+  items (#13, #18, #23, #28) plus 17 unmarked findings that were
   triaged-skipped during the original closeout but aren't worth a
   dedicated pass on their own. Most are real wins; they wait for
   the surrounding code to be reworked. See individual headings.
-- **Tier D — keep deferred.** #25 — the
+- **Tier D — keep deferred / stale.** #12 is stale after later
+  cursor-blink ownership work and needs no fix. #25 — the
   `editor_search_find_{next,prev}_in_text` pass-through wrappers,
-  same call as `src-ui` #37 (also Tier D), kept to preserve the
-  `editor_*` ↔ `ui_text_*` prefix boundary. Deleting them would
-  force editor-namespaced callers to reach across.
+  same call as `src-ui` #37 (also Tier D), is kept to preserve the
+  `editor_*` ↔ `ui_text_*` prefix boundary. Deleting it would force
+  editor-namespaced callers to reach across.
 
 ### Tier system
 
@@ -135,15 +151,15 @@ Used during the 2026-05-24 backlog review to triage what was left:
 
 ### Headline take
 
-This audit is the most-closed of the four 2026-05-23 audits — 32 of
-51 findings already done in the original passes. The remaining 19
-are mostly "doc/comment fix or small helper extraction that depends
-on a decision the original closeout deferred." None are bugs. They
-sit in Tier C waiting for either (a) the relevant area being touched
-for other reasons, or (b) the cross-audit work that resolves their
-upstream dependency (e.g., #45 waits on `src-repl` #18, which is
-done — so #45 is unblocked but still cheap enough to skip until
-someone opens `input.c` again).
+This audit is the most-closed of the four 2026-05-23 audits. The
+active leftovers are mostly "doc/comment fix or small helper
+extraction that depends on a decision the original closeout deferred."
+None are bugs. They sit in Tier C waiting for either (a) the relevant
+area being touched for other reasons, or (b) the cross-audit work that
+resolves their upstream dependency (e.g., #45 waits on `src-repl`
+#18, which is done — so #45 is unblocked but still cheap enough to
+skip until someone opens `input.c` again). Revision 6 reclassifies
+#12 as stale/Tier D and leaves #25 as intentionally kept.
 
 Headings below carry either ✅ / ⏳ (from the original closeout) or
 **Tier C / D** (from this backlog pass).
@@ -203,8 +219,11 @@ actual `count` of pasted lines.
 the stack of a typical desktop thread but fails on smaller-stack
 deployments; ASan flags it.
 
-**Fix:** Size by `count` (`char (*buf)[MAX_LINE_LEN] = malloc(count * MAX_LINE_LEN)`)
-or impose a small `MAX_CLIPBOARD_PASTE` cap.
+**Fix:** Size by `count` via heap
+(`char (*buf)[MAX_LINE_LEN] = malloc((size_t)count * MAX_LINE_LEN)`)
+with a null check and early return; or promote to a file-scope
+static mirroring the #1 pattern (avoids the `free()` obligation).
+The implementation chose heap — see `clipboard.c:380-384`.
 
 ### 3. ✅ Close-brace compile functions accept `err` / `err_size` then ignore them
 
@@ -484,25 +503,22 @@ document before the next scope-dependent or visible-vars
 call." That's a one-pass doc-comment change today, with the
 full extraction queued as its own week of work.
 
-### 12. [Tier C — deferred] README claims `EditorState` owns "cursor blink"; `state.h` disclaims it
+### 12. [Tier D — stale after later refactor] Cursor blink ownership mismatch is no longer present
 
-**Where:** `src/editor/README.md:88` vs. `src/editor/state.h:152-157`,
-write sites at `src/editor/input.c:959, 1557`
+**Where:** `src/editor/README.md:88` and `src/editor/state.h`
+(`EditorCursorBlinkState` inside `EditorState`)
 
-**Smell:** README says state.c owns "cursor blink". `state.h`
-explicitly disclaims it, pointing to `UiCodePanelRuntimeState` on
-`UiState` — and the live writes (`cursor_visible`, `blink_tick`)
-happen via `ui_state_code_panel_mut()`. The `src/ui/` audit's
-finding #17 is about this same coupling from the UI side.
+**Original smell:** README said state.c owned "cursor blink" while
+`state.h` allegedly disclaimed it to `UiState`.
 
-**Why it matters:** Doc disagreement with code; the audit-prompt
-itself was steered by the wrong claim. (The `src/ui/` audit
-recommends moving the fields to an editor-session slice, which would
-make the README claim correct after the fact.)
+**Current state (verified 2026-05-25):** The editor-side ownership
+claim is now true. `EditorState` carries `EditorCursorBlinkState`
+and the README's file map includes cursor blink. Do **not** apply the
+old fix that strikes "cursor blink" from the README.
 
-**Fix:** Strike "cursor blink" from `README.md:88`'s `EditorState`
-ownership line until the `UiState` carve-out is resolved. See
-`src-ui-code-smell-audit.md` #17 for the resolution.
+**Disposition:** No editor-side action. If `src-ui` audit #17 is
+still open, resolve it from the UI side against the current source;
+this editor finding is stale.
 
 ### 13. ⏳ [Tier C — deferred] Two parallel encodings of `float_decl → var_assign` order
 
@@ -512,7 +528,7 @@ vs. `src/editor/commit.c:1335-1339` (in
 
 **Smell:** `compile_dispatch` encodes float_decl → var_assign.
 `editor_try_commit_var_statements` independently calls
-`editor_try_commit_float_decl` → `editor_try_assign_variable`,
+`editor_try_commit_float_decl` → `editor_try_commit_assign_variable`,
 each of which calls `repl_compile_float_decl` /
 `repl_compile_var_assign` directly (not through dispatch).
 
@@ -527,13 +543,14 @@ two editor handlers do considerably more than compile:
 `editor_try_commit_float_decl` (`commit.c:1181`) builds an
 `EditorCommitPlan` with `clear_input`, `cursor_target`,
 `load_line_after_apply`, a `commit_message`, and ends with
-`repl_mark_normals_dirty()`. `editor_try_assign_variable`
+`repl_mark_normals_dirty()`. `editor_try_commit_assign_variable`
 (`commit.c:1228`) does the same plus assign-specific effects.
 The `_var_statements_then_insert` variant (`commit.c:1350`) layers
 in the insert-mode flip and input clear that overwrite-Enter
 depends on.
 
-The actual fix has two viable shapes; pick one based on appetite:
+The actual fix has two viable shapes; prefer (1) unless the commit
+transaction is already being reworked:
 1. **Share a kind list, map locally to handlers.** Define a
    single ordered enum (`enum ReplVarStmtKind { VAR_STMT_FLOAT_DECL,
    VAR_STMT_ASSIGN }`) in a shared header. `compile.c` keeps
@@ -547,9 +564,11 @@ The actual fix has two viable shapes; pick one based on appetite:
 2. **Adapter that preserves post-effects.** Introduce a
    `editor_compile_var_statement(...)` that calls
    `repl_compile_dispatch` for the compile step then layers the
-   right post-effects per kind. Bigger move; only worth it if
-   you're also doing #28's `EditorServices` dismantle in the
-   same change.
+   right post-effects per kind. Bigger move; only safe if the
+   adapter can identify which var-statement kind matched and preserve
+   `clear_input`, cursor/load-line behavior, commit messages, source-
+   dirty marking, and the overwrite-Enter insert-mode flip. #28 by
+   itself is not enough reason to take this shape.
 
 Either way, the audit's first-draft "route through dispatch and
 remove the direct calls" recipe is **wrong** — it silently drops
@@ -574,47 +593,26 @@ this one.
 
 ### 15. [Tier C — deferred] Error reporting drifts across handlers
 
-**Where:** `src/editor/commit.c:83` vs. L1192, L1219, L1239,
-L1262, L1295, L1299
+**Where:** `src/editor/commit.c` try-commit handlers that call
+`repl_set_status_error(...)` / `repl_set_status(...)` directly.
 
-**Smell:** `editor_commit_current_input` writes diagnostics into
-`result.diagnostic[]` (via `result_set_diagnostic`) and never
-touches status. Every `editor_try_commit_*` instead calls
-`repl_set_status_error(err)` directly. Two policies in the same
-module.
+**Original smell:** The now-deleted `editor_commit_current_input`
+returned an `EditorCommitResult` diagnostic, while the live
+`editor_try_commit_*` chain wrote status as an implicit side effect.
 
-**Why it matters:** Callers of one path get a value-typed
-`EditorCommitResult`; callers of the other get an implicit
-status side-effect. Hard to test the chain handlers in isolation
-because they have a hidden status dependency.
+**Current state (verified 2026-05-25):** `editor_commit_current_input`,
+`EditorCommitResult`, and `editor_commit_apply_compiled_change` are
+gone from source and tests. The only remaining policy is status side
+effects from the live handlers.
 
-**Fix (interacts with #27 — read both before acting):** The
-first-draft "converge on `EditorCommitResult`" recipe conflicts
-with #27, which deletes `editor_commit_current_input` (the only
-production API returning that result shape). Pick one:
+**Why it matters:** The hidden status dependency still makes isolated
+handler tests awkward: callers cannot observe a diagnostic except via
+the installed status host effect.
 
-1. **Keep #27's delete; reframe #15 around the status-side-effect
-   policy.** With `editor_commit_current_input` gone,
-   `EditorCommitResult` has no production user. The remaining
-   handlers all share the `repl_set_status_error(err)` pattern;
-   the smell becomes "status side-effect is hidden — tests
-   can't observe it without a status capture." Fix: route every
-   handler's status set through a host-effects bridge / sink so
-   tests can capture the message. The `EditorCommitResult` type
-   gets deleted alongside #27.
-2. **Keep #15's "converge on the result type"; drop #27.** Wire
-   the four production dispatch sites through
-   `editor_commit_current_input` so they all return
-   `EditorCommitResult`, and migrate the dispatchers to capture
-   the diagnostic from the result rather than relying on
-   `repl_set_status_error` side-effects. Bigger move; only
-   worth it if you actually want a value-typed commit API.
-
-The audit's recommended direction is (1) — `EditorCommitResult`
-was scaffolding for an architecture that didn't fully land, and
-the simpler convergence is "everyone sets status through a
-testable sink." But (2) is internally consistent if you want the
-typed return.
+**Fix:** Do **not** resurrect `EditorCommitResult` just to make this
+symmetrical. If testability becomes painful, route handler status
+publication through a narrow capture-friendly sink/host effect, or add
+test helpers that install the existing host-effects status callbacks.
 
 ### 16. ✅ Apply-block call sites reach the primitives through different surfaces
 
@@ -694,7 +692,10 @@ that takes the strict/permissive and preserve-expression flags
 **as inputs**, not as a hard-coded choice; each caller still names
 its own policy. Audit the 4-5 call sites first to enumerate which
 combination each currently uses (the audit didn't determine this);
-the helper signature is the documentation contract.
+the helper signature is the documentation contract. This extraction
+also owns the two remaining `EditorServices.parse_command_ctx` call
+sites, so coordinate with #28 and update the `check-editor-repl-surface`
+ratchet/baseline if direct `repl_*` calls replace service calls.
 
 ### 19. ✅ Three open-coded "skip leading whitespace, then trim trailing `;`/whitespace"
 
@@ -723,11 +724,13 @@ input.c locals.
 **Why it matters:** Editor input dispatcher carries tutorial
 policy that should live in the tutorial subsystem.
 
-**Fix:** Move both helpers into
-`src/subsystems/tutorial/tutorial.{c,h}` as public entry points
-(`tutorial_precheck_commit(input, ...)`,
+**Fix:** Move the policy into `src/subsystems/tutorial/tutorial.{c,h}`
+as public entry points (`tutorial_precheck_commit(input, ...)`,
 `tutorial_after_commit(result)`); call from `input.c` through the
-public API.
+public API. Keep the boundary clean: `tutorial.c` must not include
+editor headers or read editor storage directly. Pass the needed input
+text / cursor facts as parameters, and use the existing host-effect
+dispatchers for completion, cursor parking, and status.
 
 ### 21. [Tier C — deferred] Tagged-union `EditorClipboardKind` is never consulted via switch
 
@@ -759,9 +762,11 @@ by-reference.
 is called repeatedly per function so the bug only surfaces when
 someone stashes the view.
 
-**Fix:** Make the view fully by-value (copy `input[]` and
-`pending_newline[]` into fixed-size buffers), or document the
-aliasing in the typedef comment.
+**Fix:** Prefer a doc-first fix unless a real stashed-view bug appears:
+document that `input` and `pending_newline` are borrowed live pointers
+while the scalar fields are by-value snapshots. A fully by-value view
+is also valid, but it copies two `MAX_INPUT_LEN` buffers per call and
+should be justified by an actual caller need.
 
 ### 23. ⏳ [Tier C — deferred] `editor_undo_clear` is contract-required but compile-unenforced
 
@@ -778,18 +783,19 @@ wholesale replacement"; nothing checks it. Failure mode is silent
 new "Reset to default scene" button) must remember to call it; the
 README repeatedly flags it as load-bearing.
 
-**Fix:** Bump a generation counter on the editor side at every
-wholesale-replacement call site; have `editor_undo_pop_snapshot`
-refuse cross-generation pops (snapshot captures its generation,
-pop compares to current). If `repl_load_*` needs a "this is a
-wholesale replacement" signal, surface it through the existing
-host-effects bridge (the same seam used for status messages) — do
-**not** make `src/repl/` call `editor_undo_*` directly. The
-editor / REPL boundary in `src/editor/README.md:72` is that
-`commit.c` is the *only* path that crosses into REPL; the inverse
-(REPL into editor) is not sanctioned. The original audit
-suggestion of "move the calls into `repl_load_*`" violates that
-boundary and is withdrawn.
+**Fix:** Add an editor-side semantic API such as
+`editor_undo_note_wholesale_replacement()` that clears undo/redo and
+bumps a generation counter. Update wholesale-replacement call sites to
+use that API instead of raw `editor_undo_clear()`. Snapshots capture
+their generation; `editor_undo_pop_snapshot` / redo refuse cross-
+generation restores. If `repl_load_*` needs a "this is a wholesale
+replacement" signal, surface it through the existing host-effects
+bridge (the same seam used for status messages) — do **not** make
+`src/repl/` call `editor_undo_*` directly. The editor / REPL boundary
+in `src/editor/README.md:72` is that `commit.c` is the *only* path
+that crosses into REPL; the inverse (REPL into editor) is not
+sanctioned. The original audit suggestion of "move the calls into
+`repl_load_*`" violates that boundary and is withdrawn.
 
 ### 24. [Tier C — deferred] Three sites hardcode `name[16]` instead of a shared constant
 
@@ -800,7 +806,10 @@ boundary and is withdrawn.
 the same finding as `src-repl` audit #28 and `src-ui` not-applicable.
 
 **Fix:** `#define REPL_PREDEF_NAME_MAX 16` in `eval.h` (the upstream
-source); reference everywhere.
+source); reference the predef-variable name buffers from there. Do
+not blindly replace every local `char name[16]` in the tree — several
+are parser scratch buffers or command-shaped names and should only
+move if they are semantically tied to the predef table.
 
 ### 25. [Tier D — kept on purpose] Wrapped editor search functions are pass-throughs to `ui_text_*`
 
@@ -829,7 +838,10 @@ might be substitutable; they aren't (the others bypass services
 entirely).
 
 **Fix:** Replace with `repl_parser_parse_command_ctx(body, &body_pl,
-&parse_ctx)` directly.
+&parse_ctx)` directly when doing #28. Because this adds a direct
+`repl_*` symbol to `commit.c` while removing an `EditorServices`
+callback path, update the `check-editor-repl-surface` ratchet/baseline
+in the same change.
 
 ## 🟢 Dead code / dead fields
 
@@ -860,8 +872,9 @@ those sites have post-effects the wrapper currently doesn't model).
 ### 28. ⏳ [Tier C — deferred] `EditorServices` is a one-implementation abstraction (with production callers — not pure cleanup)
 
 **Where:** `src/editor/services.h:28-74`, `services.c:65-76`.
-Production callers verified at `src/editor/commit.c:148`,
-`commit.c:872`, `input.c:439`, `input.c:634`.
+Remaining production callers verified at `src/editor/commit.c`
+(`editor_compile_for_loop`) and `src/editor/input.c`
+(`parse_for_overwrite_enter`, `commit_current_input`).
 
 **Smell:** `editor_services_default()` is the only `EditorServices`
 factory in the tree. The header at L6-9 admits: "gives the
@@ -878,9 +891,9 @@ underlying calls (`repl_compile_dispatch`,
 `repl_parser_parse_command_ctx`, etc.) at the same time.
 
 **Fix (multi-step, not afternoon-safe):**
-1. Migrate `commit.c:148` (in `editor_commit_apply_external_change`)
-   to call `repl_apply_*` directly — it's the simplest, no parser
-   involvement.
+1. **Already landed:** `editor_commit_apply_external_change` and
+   `editor_commit_apply_plan` now share `apply_compiled_three_halves`,
+   which calls the `repl_apply_*` primitives directly.
 2. Migrate `commit.c:872` (in `editor_compile_for_loop`) per
    finding #26 — replace `svc.parse_command_ctx(body, ...)` with
    `repl_parser_parse_command_ctx(body, ...)` directly.
@@ -890,10 +903,16 @@ underlying calls (`repl_compile_dispatch`,
 4. Only then delete `EditorServices` + `editor_services_default`
    + the `user`-pointer plumbing in `commit.h`.
 
-This sequence preserves the build at every step. The audit's
-original framing as "delete in an afternoon" was incorrect —
-it's a week-pass refactor that touches #26, #18, and the four
-production sites.
+This sequence preserves the build at every step, but it must also
+preserve the boundary guards: direct `repl_*` calls added while
+removing service calls need a matching update to
+`scripts/check-editor-repl-surface.sh` and
+`scripts/baselines/editor-repl-surface.txt` so the ratchet reflects
+the intended new surface instead of failing unexpectedly. The audit's
+original framing as "delete in an afternoon" was incorrect — it's a
+week-pass refactor that touches #26, #18, and the remaining production
+sites. Current source no longer has the #27 / #29 APIs, so they are no
+longer prerequisites.
 
 ### 29. ✅ `editor_commit_apply_compiled_change` is a test-only wrapper
 
@@ -1060,8 +1079,11 @@ statements on one line:
 This duplicates the body of `default_context()` in
 `services.c:21-30`.
 
-**Fix:** Expose `editor_compile_context_live(void)` in
-`services.h`; call it.
+**Fix:** Add a local helper in `commit.c` (for example
+`static ReplCompileContext editor_compile_context_live(void)`) and
+call it from the try-commit handlers. Do **not** put the helper in
+`services.h`: #28 deletes `EditorServices`, and adding new public
+surface there points future cleanup in the wrong direction.
 
 ## 🔵 Structural concerns
 
@@ -1069,15 +1091,18 @@ This duplicates the body of `default_context()` in
 
 **Where:** `src/editor/clipboard.c:245-413`
 
-**Smell:** ~170 lines mixing kind dispatch, input-text vs.
-line-range paste, post-paste cursor/insert-mode policy, and the
-1 MB stack snapshot (#2). The branching on `kind` is structural
-but the post-paste behavior depends on a mix of input-mode,
-trailing-blank-line detection, and the same-row selection-replace
-case.
+**Smell:** Original finding mixed three concerns: input-text paste,
+line-range paste, and the 1 MB stack snapshot (#2).
 
-**Fix:** Extract `paste_input_text(state)`, `paste_lines(state)`,
-`finalize_after_paste(...)`; let the entry point be ~10 lines.
+**Current state (verified 2026-05-25):** Input-text paste is already
+split into `editor_clipboard_paste_input_text()`, and #2's stack
+snapshot is now heap-sized by pasted line count. The remaining smell is
+only the line-range paste tail in `editor_clipboard_paste_current`.
+
+**Fix:** Optional opportunistic cleanup: extract the remaining line
+paste path into `paste_lines(state)` and `finalize_after_paste(...)`;
+do not treat input-text extraction or stack-snapshot removal as still
+pending.
 
 ### 42. [Tier C — deferred] `mouse_func` signature has 3 silenced unused parameters
 
@@ -1153,8 +1178,10 @@ strlen + cursor_pos_set` sequence directly on
 "comment", one with "instruction". Trivial but real — they'll
 show up next to each other in status text.
 
-**Fix:** Pick one phrasing; ideally a shared
-`repl_set_status_tutorial_locked()` helper.
+**Fix:** Pick one phrasing; ideally a small tutorial-subsystem helper
+that publishes the status text. Avoid adding a new generic
+`repl_set_status_tutorial_locked()` special case unless other modules
+need that exact status policy.
 
 ### 48. [Tier C — deferred] `EditorState` carries ~1.2 MB of per-frame transient overlay lists
 
@@ -1182,8 +1209,9 @@ covers them.
 
 **Smell:** Setting `n > 0` writes `line_count = n` and
 `kind = EDITOR_CLIPBOARD_LINES`, but doesn't ensure
-`lines[0..n)` has fresh data; relies on callers (only one site:
-`clipboard.c:76-86`) to write them first.
+`lines[0..n)` has fresh data; relies on callers to write them first
+(production does this in `clipboard.c`, while tests also poke the
+setter directly).
 
 **Why it matters:** Brittle informal contract. The tagged-union
 invariant ("kind matches payload") nominally holds, but content
@@ -1270,15 +1298,21 @@ implementation checklist.
      `editor_commit_apply_external_change(change, 0)` directly.
      Mechanical search-and-replace but ~19 LOC churn.
 
-   **NB:** #27 is paired with **#28**'s migration in the week
-   pass — leaving `editor_commit_current_input` in place keeps
-   `EditorServices` alive in production for its sake. Order: do
-   the test rewrites first, then the deletes, then start the
-   week-pass services migration. Decision needed on
-   `EditorCommitResult` per #15 before the delete lands —
-   keeping #27 (audit's recommended direction) means
-   `EditorCommitResult` is also unused production code; either
-   delete the type or reframe #15.
+   **Current status (2026-05-25):** #27 and #29 have landed:
+   `editor_commit_current_input`, `EditorCommitResult`, and
+   `editor_commit_apply_compiled_change` are gone from source/tests.
+   That unblocks #28's remaining services migration; no decision on
+   the old value-typed commit API is still pending.
+
+   **Test-cost note:** the 5 `editor_commit_current_input` calls
+   in `test_repl_compile.c` aren't just shape-testing the
+   wrapper — they cover the compile→undo→preflight→apply
+   transaction boundary that the wrapper sequences. Rewriting
+   them to use `editor_commit_apply_external_change(change, 0)`
+   directly loses that coverage; the rewrite needs to exercise
+   the live dispatch sites (`editor_try_commit_*` chain) to
+   preserve it. This is a meaningful redesign of what those
+   tests cover, not a mechanical substitution.
 9. **#30** + **#31** + **#33** + **#34** + **#36** + **#37** —
    Dead-field and naming cleanup. All mechanical.
 10. **#38** + **#39** (docstring half only) + **#51** —
@@ -1332,14 +1366,16 @@ The dominant work is **closing the layering inversion**,
   while the editor wrappers build `EditorCommitPlan` effects
   (clear_input, cursor_target, load_line_after_apply,
   commit_message, normals dirty) plus the
-  `_var_statements_then_insert` insert-mode flip. Two viable
-  shapes: (a) define one shared ordered var-statement kind list
+  `_var_statements_then_insert` insert-mode flip. Preferred shape:
+  (a) define one shared ordered var-statement kind list
   (`VAR_STMT_FLOAT_DECL`, `VAR_STMT_ASSIGN`) and let each TU map
   those kinds to its own local handler table — pure compilers in
-  `compile.c`, editor wrappers in `commit.c`; (b) introduce
+  `compile.c`, editor wrappers in `commit.c`. Alternative:
+  (b) introduce
   `editor_compile_var_statement(...)` adapter that calls
-  dispatch then layers per-kind post-effects — bigger, only
-  worth it if #28's services dismantle is in the same change.
+  dispatch then layers per-kind post-effects — bigger, and only
+  safe if it can identify the matched kind and preserve all editor
+  post-effects. Do not take (b) merely because #28 is in flight.
 - **#16** — *Site count depends on #27.* If #27 lands in the
   afternoon (audit recommendation), `editor_commit_current_input`
   is already gone and this becomes a two-site dedupe between
@@ -1355,30 +1391,47 @@ The dominant work is **closing the layering inversion**,
   helper that takes the policy as flags. Audit the 4-5 call sites
   first to enumerate which combination each currently uses; the
   helper signature is the documentation contract. Do **not**
-  silently collapse to a single parse API.
+  silently collapse to a single parse API. This is also where the
+  remaining `EditorServices.parse_command_ctx` call sites should
+  disappear; update `check-editor-repl-surface` and its baseline if
+  the direct `repl_*` surface changes.
 - **#19** — Extract the canonical strip helper (probably in
   `src/repl/`).
-- **#23** — Bump a generation counter on the editor side at
-  every wholesale-replacement call site; have
-  `editor_undo_pop_snapshot` refuse cross-generation pops. Do
-  **not** move `editor_undo_clear()` calls into `repl_load_*` —
-  that inverts the editor / REPL boundary. If `repl_load_*`
-  needs a "this is a wholesale replacement" signal, route it
-  through the existing host-effects bridge.
+- **#23** — Add an editor-side
+  `editor_undo_note_wholesale_replacement()`-style API that both
+  clears undo/redo and bumps a generation counter; snapshots capture
+  the generation and `editor_undo_pop_snapshot` / redo refuse cross-
+  generation restores. Replace wholesale-replacement call sites with
+  that semantic API instead of sprinkling standalone generation bumps
+  next to raw `editor_undo_clear()` calls. Do **not** move
+  `editor_undo_clear()` calls into `repl_load_*` — that inverts the
+  editor / REPL boundary. If `repl_load_*` needs a "this is a
+  wholesale replacement" signal, route it through the existing
+  host-effects bridge.
 - **#28** — *Multi-step `EditorServices` dismantling.* Order:
-  (1) migrate `commit.c:148` to call `repl_apply_*` directly;
+  (1) already landed: `apply_compiled_three_halves` is the shared
+  direct `repl_apply_*` sequence;
   (2) migrate `commit.c:872` (#26: replace `svc.parse_command_ctx`
   with `repl_parser_parse_command_ctx`); (3) migrate `input.c:439,
   634` together with the #18 helper extraction; (4) only then
   delete `EditorServices` + `editor_services_default` + the
-  `user`-pointer plumbing. The build stays green at every step.
-  Prerequisite: #27 + #29 must land first (afternoon pass) so
-  `editor_commit_current_input` doesn't pin the services struct
-  alive.
+  `user`-pointer plumbing. The build stays green at every step, but
+  the ratchet must be updated deliberately: direct `repl_*` calls that
+  replace service calls affect `scripts/check-editor-repl-surface.sh`
+  / `scripts/baselines/editor-repl-surface.txt`. #27 + #29 have
+  already landed in current source and no longer block this work.
 - **#39** (full fix) — Once the docstring is corrected
   (afternoon), audit every call site of
   `editor_commit_apply_plan` that doesn't push an undo snapshot
   beforehand. Each is a latent undo-skip bug.
+  **Verified (2026-05-25):** all 3 production call sites
+  (`commit.c:1166`, `1209`, `1246`) are inside
+  `editor_try_commit_*` handlers, which are only reached from
+  dispatch sites (`input.c`) that push undo first. The undo
+  contract is documented at `commit.c:1118-1124`.
+  `editor_feed_line` intentionally skips per-line undo (bulk
+  loader — callers bracket the load). No latent undo-skip bugs
+  found.
 
 ### Out of scope
 
@@ -1417,9 +1470,10 @@ Cross-references to the other two audits in this directory:
 - `src-repl-code-smell-audit.md` finding #28
   (`REPL_PREDEF_NAME_MAX`) is the upstream for editor finding #24.
 - `src-ui-code-smell-audit.md` finding #17 (cursor blink on
-  `UiState`) is the inverse of editor finding #12 (README claims
-  cursor blink on `EditorState`). The resolution is to move the
-  fields off `UiState` and update both docs.
+  `UiState`) was originally the inverse of editor finding #12, but
+  the editor side is now resolved/stale: cursor blink lives on
+  `EditorState` and the README matches. Re-check the UI finding
+  against current source before applying any old cross-audit recipe.
 - `src-ui-code-smell-audit.md` finding #37 (search wrapper
   pass-throughs) is the same as editor finding #25 — fix once at
   the editor side.
