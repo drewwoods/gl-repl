@@ -1600,7 +1600,7 @@ void glr_ctrl_build_ui_snapshot(UiRenderSnapshot *snap) {
     snap->variable_drag.log_mode   = variable_panel_drag_log_mode();
     snap->profile_panel  = ui_state_profile_panel();
     snap->status         = ui_state_status();
-    snap->search         = editor_state_search();
+    snap->search         = *editor_state_search();
     snap->autocomplete   = editor_state_autocomplete();
     snap->pointer        = ui_state_pointer();
     snap->render         = glr_state_render();
@@ -2636,7 +2636,7 @@ int glr_ctrl_router_handle_tutorial_ack_key(unsigned char key) {
 }
 
 int glr_ctrl_router_handle_config_menu_key(unsigned char key) {
-    if (!editor_state_search().active && key == '`') {
+    if (!editor_state_search()->active && key == '`') {
         if (replay_active())
             replay_stop();
         glr_ctrl_restore_hidden_code_panel();
@@ -3844,9 +3844,9 @@ void glr_ctrl_keyboard(unsigned char key, int x, int y) {
      * rising edge here so the search-overlay fade clock is driven from
      * the controller — symmetric with the menu-pin path in
      * route_pin_button_hit; the renderer no longer mutates it. */
-    int search_was_active = editor_state_search().active;
+    int search_was_active = editor_state_search()->active;
     EditorInputDispatchEffects kb_effects = editor_handle_key(key, x, y);
-    if (!search_was_active && editor_state_search().active)
+    if (!search_was_active && editor_state_search()->active)
         ui_menu_bar_note_search_opened(repl_state_variables().anim_time);
     glr_ctrl_apply_input_effects(kb_effects);
 }

@@ -592,8 +592,8 @@ int editor_clipboard_input_text_len(void) {
     return g_editor_state.clipboard.input_text_len;
 }
 
-EditorSearchState editor_state_search(void) {
-    return g_editor_state.search;
+const EditorSearchState *editor_state_search(void) {
+    return &g_editor_state.search;
 }
 
 EditorSearchState *editor_state_search_mut(void) {

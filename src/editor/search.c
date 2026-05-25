@@ -75,17 +75,17 @@ int editor_search_row_for_cmd_index(int cmd_idx) {
 }
 
 static int search_row_match_count(int row_idx) {
-    EditorSearchState srch = editor_state_search();
+    const EditorSearchState *srch = editor_state_search();
     const char *text;
     int count = 0;
 
-    if (srch.query_len <= 0)
+    if (srch->query_len <= 0)
         return 0;
 
     text = editor_search_row_text(row_idx);
-    for (int pos = editor_search_find_next_in_text(text, srch.query, 0);
+    for (int pos = editor_search_find_next_in_text(text, srch->query, 0);
          pos >= 0;
-         pos = editor_search_find_next_in_text(text, srch.query, pos + 1)) {
+         pos = editor_search_find_next_in_text(text, srch->query, pos + 1)) {
         count++;
     }
 
@@ -93,18 +93,18 @@ static int search_row_match_count(int row_idx) {
 }
 
 static int search_total_matches(void) {
-    EditorSearchState srch = editor_state_search();
+    const EditorSearchState *srch = editor_state_search();
     int total = 0;
 
-    if (srch.query_len <= 0)
+    if (srch->query_len <= 0)
         return 0;
 
     for (int row = 0; row < editor_search_row_count(); row++) {
         const char *text = editor_search_row_text(row);
-        int pos = editor_search_find_next_in_text(text, srch.query, 0);
+        int pos = editor_search_find_next_in_text(text, srch->query, 0);
         while (pos >= 0) {
             total++;
-            pos = editor_search_find_next_in_text(text, srch.query, pos + 1);
+            pos = editor_search_find_next_in_text(text, srch->query, pos + 1);
         }
     }
 
@@ -112,20 +112,20 @@ static int search_total_matches(void) {
 }
 
 static int search_hit_exists(int row_idx, int char_pos) {
-    EditorSearchState srch = editor_state_search();
+    const EditorSearchState *srch = editor_state_search();
     const char *text;
 
-    if (srch.query_len <= 0)
+    if (srch->query_len <= 0)
         return 0;
     if (row_idx < 0 || row_idx >= editor_search_row_count() || char_pos < 0)
         return 0;
 
     text = editor_search_row_text(row_idx);
-    return ui_text_matches_at(text, srch.query, char_pos);
+    return ui_text_matches_at(text, srch->query, char_pos);
 }
 
 static int search_row_occurrence_index(int row_idx, int char_pos) {
-    EditorSearchState srch = editor_state_search();
+    const EditorSearchState *srch = editor_state_search();
     const char *text;
     int occurrence = 0;
 
@@ -133,9 +133,9 @@ static int search_row_occurrence_index(int row_idx, int char_pos) {
         return -1;
 
     text = editor_search_row_text(row_idx);
-    for (int pos = editor_search_find_next_in_text(text, srch.query, 0);
+    for (int pos = editor_search_find_next_in_text(text, srch->query, 0);
          pos >= 0;
-         pos = editor_search_find_next_in_text(text, srch.query, pos + 1)) {
+         pos = editor_search_find_next_in_text(text, srch->query, pos + 1)) {
         if (pos == char_pos)
             return occurrence;
         occurrence++;
@@ -145,18 +145,18 @@ static int search_row_occurrence_index(int row_idx, int char_pos) {
 }
 
 static int search_char_for_row_occurrence(int row_idx, int occurrence_idx) {
-    EditorSearchState srch = editor_state_search();
+    const EditorSearchState *srch = editor_state_search();
     const char *text;
     int occurrence = 0;
 
-    if (srch.query_len <= 0 || row_idx < 0 || row_idx >= editor_search_row_count() ||
+    if (srch->query_len <= 0 || row_idx < 0 || row_idx >= editor_search_row_count() ||
         occurrence_idx < 0)
         return -1;
 
     text = editor_search_row_text(row_idx);
-    for (int pos = editor_search_find_next_in_text(text, srch.query, 0);
+    for (int pos = editor_search_find_next_in_text(text, srch->query, 0);
          pos >= 0;
-         pos = editor_search_find_next_in_text(text, srch.query, pos + 1)) {
+         pos = editor_search_find_next_in_text(text, srch->query, pos + 1)) {
         if (occurrence == occurrence_idx)
             return pos;
         occurrence++;
@@ -166,7 +166,7 @@ static int search_char_for_row_occurrence(int row_idx, int occurrence_idx) {
 }
 
 static int search_ordinal_for_hit(int row_idx, int char_pos) {
-    EditorSearchState srch = editor_state_search();
+    const EditorSearchState *srch = editor_state_search();
     int ordinal = 1;
 
     if (!search_hit_exists(row_idx, char_pos))
@@ -182,7 +182,7 @@ static int search_ordinal_for_hit(int row_idx, int char_pos) {
      * from 0; stop once a match lands at/after char_pos (that one is
      * the hit itself, already covered by ordinal's base of 1). */
     for (int pos = 0; pos < char_pos; ) {
-        pos = editor_search_find_next_in_text(editor_search_row_text(row_idx), srch.query, pos);
+        pos = editor_search_find_next_in_text(editor_search_row_text(row_idx), srch->query, pos);
         if (pos < 0 || pos >= char_pos)
             break;
         ordinal++;
@@ -249,10 +249,10 @@ const char *editor_search_row_text(int row_idx) {
 
 static int search_find_forward(int start_row, int start_char,
                                int *out_row, int *out_char) {
-    EditorSearchState srch = editor_state_search();
+    const EditorSearchState *srch = editor_state_search();
     int row_count = editor_search_row_count();
 
-    if (srch.query_len <= 0 || row_count <= 0)
+    if (srch->query_len <= 0 || row_count <= 0)
         return 0;
 
     if (start_row < 0)
@@ -265,7 +265,7 @@ static int search_find_forward(int start_row, int start_char,
     for (int pass = 0; pass < 2; pass++) {
         for (int row = start_row; row < row_count; row++) {
             int pos = editor_search_find_next_in_text(
-                editor_search_row_text(row), srch.query,
+                editor_search_row_text(row), srch->query,
                 row == start_row ? start_char : 0);
             if (pos >= 0) {
                 if (out_row) *out_row = row;
@@ -282,10 +282,10 @@ static int search_find_forward(int start_row, int start_char,
 
 static int search_find_backward(int start_row, int start_char,
                                 int *out_row, int *out_char) {
-    EditorSearchState srch = editor_state_search();
+    const EditorSearchState *srch = editor_state_search();
     int row_count = editor_search_row_count();
 
-    if (srch.query_len <= 0 || row_count <= 0)
+    if (srch->query_len <= 0 || row_count <= 0)
         return 0;
 
     if (start_row < 0)
@@ -296,7 +296,7 @@ static int search_find_backward(int start_row, int start_char,
     for (int pass = 0; pass < 2; pass++) {
         for (int row = start_row; row >= 0; row--) {
             const char *text = editor_search_row_text(row);
-            int max_start = (int)strlen(text) - srch.query_len;
+            int max_start = (int)strlen(text) - srch->query_len;
             int pos;
 
             if (max_start < 0)
@@ -306,7 +306,7 @@ static int search_find_backward(int start_row, int start_char,
             if (pos > max_start)
                 pos = max_start;
 
-            pos = editor_search_find_prev_in_text(text, srch.query, pos);
+            pos = editor_search_find_prev_in_text(text, srch->query, pos);
             if (pos >= 0) {
                 if (out_row) *out_row = row;
                 if (out_char) *out_char = pos;
@@ -371,22 +371,22 @@ static void search_refresh_query(void) {
  * If a hit is already active, we step one char past/before it; otherwise we
  * anchor the scan at editor_state_edit_line(). */
 static void search_navigate(int direction) {
-    EditorSearchState srch = editor_state_search();
+    const EditorSearchState *srch = editor_state_search();
     int row;
     int char_pos;
     int found;
-    int have_hit = (srch.hit_line_idx >= 0 && srch.hit_char_idx >= 0);
+    int have_hit = (srch->hit_line_idx >= 0 && srch->hit_char_idx >= 0);
 
-    if (!srch.active || srch.query_len <= 0)
+    if (!srch->active || srch->query_len <= 0)
         return;
 
     if (direction < 0) {
-        int start_row  = have_hit ? srch.hit_line_idx      : editor_state_edit_line();
-        int start_char = have_hit ? srch.hit_char_idx - 1  : MAX_INPUT_LEN;
+        int start_row  = have_hit ? srch->hit_line_idx      : editor_state_edit_line();
+        int start_char = have_hit ? srch->hit_char_idx - 1  : MAX_INPUT_LEN;
         found = search_find_backward(start_row, start_char, &row, &char_pos);
     } else {
-        int start_row  = have_hit ? srch.hit_line_idx      : editor_state_edit_line();
-        int start_char = have_hit ? srch.hit_char_idx + 1  : 0;
+        int start_row  = have_hit ? srch->hit_line_idx      : editor_state_edit_line();
+        int start_char = have_hit ? srch->hit_char_idx + 1  : 0;
         found = search_find_forward(start_row, start_char, &row, &char_pos);
     }
 
