@@ -63,7 +63,9 @@ int source_document_apply_change(const SourceTextChange *change) {
             return 0;
         break;
     case SOURCE_TEXT_INSERT_MANY:
-        if (change->count > 0 && post_delete_count + change->count > MAX_COMMANDS)
+        if (change->count <= 0 || change->count > MAX_COMMIT_CMDS)
+            return 0;
+        if (post_delete_count + change->count > MAX_COMMANDS)
             return 0;
         break;
     case SOURCE_TEXT_REPLACE_ONE:
