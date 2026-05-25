@@ -847,6 +847,53 @@ static void test_cfg_cycle_panel_hidden_closes_overlays(void) {
                "Layout: code panel hidden");
 }
 
+static void test_vertex_label_modes(void) {
+    glr_app_reset_all();
+
+    int vertex_labels_row = -1;
+    for (int i = 0; i < CFG_ITEM_COUNT; i++) {
+        const GlrConfigItem *item = glr_config_item_at(i);
+        if (item && item->key == GLR_CONFIG_VERTEX_LABELS) {
+            vertex_labels_row = i;
+            break;
+        }
+    }
+    ASSERT_TRUE("vertex labels row found", vertex_labels_row >= 0);
+
+    const GlrConfigItem *item = glr_config_item_at(vertex_labels_row);
+    ASSERT_INT("vertex labels state_count is 3",
+               item->state_count, GLR_VERTEX_LABEL_COUNT);
+    ASSERT_TRUE("vertex labels has state_names",
+                item->state_names != NULL);
+
+    ASSERT_INT("default is Index",
+               glr_config_get(GLR_CONFIG_VERTEX_LABELS), GLR_VERTEX_LABEL_INDEX);
+
+    glr_cfg_cycle_row(vertex_labels_row, 1);
+    ASSERT_INT("cycle to Index+Pos",
+               glr_config_get(GLR_CONFIG_VERTEX_LABELS), GLR_VERTEX_LABEL_INDEX_POS);
+    ASSERT_STR("status Index+Pos", g_last_status,
+               "Vertex labels: Index+Pos");
+
+    glr_cfg_cycle_row(vertex_labels_row, 1);
+    ASSERT_INT("cycle to Off",
+               glr_config_get(GLR_CONFIG_VERTEX_LABELS), GLR_VERTEX_LABEL_OFF);
+    ASSERT_STR("status Off", g_last_status, "Vertex labels: Off");
+
+    glr_cfg_cycle_row(vertex_labels_row, 1);
+    ASSERT_INT("cycle wraps to Index",
+               glr_config_get(GLR_CONFIG_VERTEX_LABELS), GLR_VERTEX_LABEL_INDEX);
+    ASSERT_STR("status Index", g_last_status, "Vertex labels: Index");
+
+    glr_config_set(GLR_CONFIG_VERTEX_LABELS, GLR_VERTEX_LABEL_INDEX_POS);
+    ASSERT_INT("direct set Index+Pos",
+               glr_state_presentation().show_vertex_labels, GLR_VERTEX_LABEL_INDEX_POS);
+
+    glr_config_set(GLR_CONFIG_VERTEX_LABELS, GLR_VERTEX_LABEL_OFF);
+    ASSERT_INT("direct set Off",
+               glr_state_presentation().show_vertex_labels, GLR_VERTEX_LABEL_OFF);
+}
+
 int main(void) {
     test_apply_defaults();
     test_cursor_actions();
@@ -868,6 +915,7 @@ int main(void) {
     test_cfg_cycle_reset_camera_eases_to_default();
     test_cfg_cycle_auto_time_shift_resets_time();
     test_cfg_cycle_panel_hidden_closes_overlays();
+    test_vertex_label_modes();
 
     return test_harness_report(&g_harness, "test_repl_actions");
 }

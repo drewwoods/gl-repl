@@ -20,9 +20,9 @@
 #ifndef CONFIG_H
 #define CONFIG_H
 
-/* Font metrics for menu rendering. These are fixed-width bitmap fonts, so the
- * width and height are compile-time constants. Used by menu layout and rendering
- * code to compute positions and sizes. */
+/* Shared GLUT bitmap fonts. The fixed-width fonts have compile-time metrics
+ * below for menu/layout code; proportional fonts are render-only. */
+#define FONT_TINY       GLUT_BITMAP_HELVETICA_10
 #define FONT_MONO       GLUT_BITMAP_9_BY_15
 #define FONT_SMALL      GLUT_BITMAP_8_BY_13
 #define FONT_W          9

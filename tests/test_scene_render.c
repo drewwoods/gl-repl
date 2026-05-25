@@ -238,8 +238,8 @@ static void test_scene_overlays(void) {
      * points became controller polygon-mode passes (see imrepl_ctrl.c)
      * and aren't tested here. */
     (void)ctx;
-    scene_draw_vertex_number_label(0, 0.0f, 0.0f, 0.0f);
-    ASSERT_TRUE("scene_draw_vertex_number_label did not crash", 1);
+    scene_draw_vertex_label_text(0.0f, 0.0f, 0.0f, " v0", NULL);
+    ASSERT_TRUE("scene_draw_vertex_label_text did not crash", 1);
     scene_draw_normal_vector_arrow(0.0f, 0.0f, 0.0f,
                                    0.0f, 1.0f, 0.0f, 0.5f);
     ASSERT_TRUE("scene_draw_normal_vector_arrow did not crash", 1);
@@ -377,12 +377,12 @@ static void test_vertex2f_overlay_parity(void) {
 
 #ifdef GL_STUBS
     /* The vertex-number overlay moved to the controller. The scene-side
-     * primitive scene_draw_vertex_number_label calls glRasterPos3f
+     * primitive scene_draw_vertex_label_text calls glRasterPos3f
      * directly — that's enough to pin the parity check here.
      * Outline pass moved to controller (polygon-mode trick); tested via
      * the integration suite, not as a scene-module unit test. */
     gl_stub_counts_reset();
-    scene_draw_vertex_number_label(0, 1.0f, 2.0f, 0.0f);
+    scene_draw_vertex_label_text(1.0f, 2.0f, 0.0f, " v0", NULL);
     ASSERT_TRUE("vertex2f: vertex number label calls glRasterPos3f",
                 gl_stub_counts[GL_STUB_glRasterPos3f] > 0);
 #else
@@ -563,6 +563,36 @@ static void test_nv_fog_distance_radial_optin(void) {
 #endif
 }
 
+static void test_vertex_label_text(void) {
+    printf("--- vertex label text rendering ---\n");
+
+#ifdef GL_STUBS
+    gl_stub_counts_reset();
+    scene_draw_vertex_label_text(1.0f, 2.0f, 3.0f, NULL, NULL);
+    ASSERT_INT("NULL primary emits no glRasterPos3f",
+               (int)gl_stub_counts[GL_STUB_glRasterPos3f], 0);
+    ASSERT_INT("NULL primary emits no glutBitmapCharacter",
+               (int)gl_stub_counts[GL_STUB_glutBitmapCharacter], 0);
+
+    gl_stub_counts_reset();
+    scene_draw_vertex_label_text(1.0f, 2.0f, 3.0f, " v0", NULL);
+    ASSERT_INT("primary text calls glRasterPos3f",
+               (int)gl_stub_counts[GL_STUB_glRasterPos3f], 1);
+    int idx_chars = (int)gl_stub_counts[GL_STUB_glutBitmapCharacter];
+    ASSERT_TRUE("primary text draws ' v0' (3 chars)", idx_chars == 3);
+
+    gl_stub_counts_reset();
+    scene_draw_vertex_label_text(1.0f, 2.0f, 3.0f, " v5",
+                                 " (1.00, 2.00, 3.00)");
+    ASSERT_INT("primary+detail calls glRasterPos3f once",
+               (int)gl_stub_counts[GL_STUB_glRasterPos3f], 1);
+    ASSERT_TRUE("primary+detail draws more chars than primary",
+                (int)gl_stub_counts[GL_STUB_glutBitmapCharacter] > idx_chars);
+#else
+    ASSERT_TRUE("vertex label text (GL stubs only)", 1);
+#endif
+}
+
 int main(int argc, char **argv) {
 #ifdef GL_STUBS
     /* In stub mode these are no-ops, but keeping the calls preserves coverage
@@ -605,6 +635,7 @@ int main(int argc, char **argv) {
     test_render_mode_toggles();
     test_vertex2f_overlay_parity();
     test_vertex2f_guide_cursor_dot();
+    test_vertex_label_text();
     test_scene_grid_fog_matches_predicate();
     test_nv_fog_distance_radial_optin();
 
