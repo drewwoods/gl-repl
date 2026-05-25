@@ -702,6 +702,53 @@ static void test_workspace_load_clears_scene_camera_default(void) {
     rmdir(dir);
 }
 
+/* glr_camera_set_target_decay overrides the per-ease decay for the
+ * currently-active ease. Verify the override applies on the next tick
+ * by setting a fast decay (0.5) and watching half the distance fall
+ * away in a single frame — well beyond what the global default (0.93,
+ * ~7% per frame) could produce. The 3D->2D view-mode transition uses
+ * the same override mechanism via GLR_VIEW_CAMERA_TO_2D_DECAY. */
+static void test_camera_target_decay_override_applies(void) {
+    glr_app_reset_all();
+
+    glr_camera_set(0.0f, 0.0f, 5.0f, 0.0f, 0.0f, 0.0f, 0.0f);
+    glr_camera_ease_to(100.0f, 0.0f, 5.0f, 0.0f, 0.0f, 0.0f);
+    glr_camera_set_target_decay(0.5f);
+    glr_camera_tick();
+
+    GlrCameraState cam = glr_camera();
+    /* k = 1 - 0.5 = 0.5, so one tick covers 50% of the 100 deg gap;
+     * window the assertion away from both endpoints so a revert to
+     * default decay (would yield rx ~7) fails clearly. */
+    ASSERT_TRUE("override decay 0.5 covers ~50% of rx distance in 1 tick",
+                cam.rx > 40.0f && cam.rx < 60.0f);
+}
+
+/* Every fresh glr_camera_ease_to call must reset the per-ease decay
+ * back to the global default; otherwise a fast override from a prior
+ * ease (e.g. the 3D->2D leg) could leak into unrelated motion like
+ * Ctrl+Shift+C or a scene-default restore. */
+static void test_camera_target_decay_override_resets_on_new_ease(void) {
+    glr_app_reset_all();
+
+    glr_camera_set(0.0f, 0.0f, 5.0f, 0.0f, 0.0f, 0.0f, 0.0f);
+    glr_camera_ease_to(50.0f, 0.0f, 5.0f, 0.0f, 0.0f, 0.0f);
+    glr_camera_set_target_decay(0.5f);
+
+    /* Start a brand-new ease before any ticks. The decay override
+     * should reset to the global default, so the next tick covers
+     * only ~(1 - 0.93) = 7% of the 100 deg distance. */
+    glr_camera_ease_to(100.0f, 0.0f, 5.0f, 0.0f, 0.0f, 0.0f);
+    glr_camera_tick();
+
+    GlrCameraState cam = glr_camera();
+    /* Default decay 0.93 → ~7% per frame of 100 = ~7 deg of progress.
+     * The 0.5 override (if it had leaked) would put rx near 50, so a
+     * wide window around 7 is enough to catch the regression. */
+    ASSERT_TRUE("new ease resets decay (rx ~7 deg, not ~50)",
+                cam.rx > 4.0f && cam.rx < 12.0f);
+}
+
 int main(void) {
     printf("--- repl_state tests ---\n");
     test_capture_restore_round_trip();
@@ -715,6 +762,8 @@ int main(void) {
     test_example_load_sets_scene_camera_default();
     test_user_scene_load_clears_scene_camera_default();
     test_workspace_load_clears_scene_camera_default();
+    test_camera_target_decay_override_applies();
+    test_camera_target_decay_override_resets_on_new_ease();
     printf("%d / %d tests passed\n", g_harness.passed, g_harness.run);
     return g_harness.passed == g_harness.run ? 0 : 1;
 }

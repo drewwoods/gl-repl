@@ -130,8 +130,17 @@
 #define GLR_CAMERA_TARGET_DECAY 0.93f
 #endif
 
+/* Faster decay used specifically for the 3D->2D camera flattening leg
+ * of the view-mode transition. The default 0.93 makes the orbit
+ * collapse feel laggy when paired with the subsequent projection
+ * blend; 0.85 (~15% of remaining per frame) settles in roughly half
+ * the time without overshooting. Experimental knob; adjust freely. */
+#ifndef GLR_VIEW_CAMERA_TO_2D_DECAY
+#define GLR_VIEW_CAMERA_TO_2D_DECAY 0.85f
+#endif
+
 #ifndef GLR_VIEW_PROJECTION_TRANSITION_SECS
-#define GLR_VIEW_PROJECTION_TRANSITION_SECS 2.00f
+#define GLR_VIEW_PROJECTION_TRANSITION_SECS 0.75f
 #endif
 
 /* 2D ortho scale reference.

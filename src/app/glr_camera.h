@@ -52,6 +52,11 @@ void             glr_camera_set_distance(float dist);
 void             glr_camera_set_motion_glow(float motion_glow);
 void             glr_camera_ease_to(float rx, float ry, float dist,
                                     float tx, float ty, float tz);
+/* Override the per-ease decay for the current target. Each call to
+ * glr_camera_ease_to resets it to the global GLR_CAMERA_TARGET_DECAY,
+ * so this must be called AFTER the ease_to that it should affect.
+ * Clamped to (0, 1); lower = faster ease. */
+void             glr_camera_set_target_decay(float decay);
 void             glr_camera_reset_default(void);
 
 /* Smoothly recenter the orbit target on the world origin, keeping the
