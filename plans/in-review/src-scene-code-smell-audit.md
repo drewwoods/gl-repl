@@ -12,10 +12,12 @@
 
 ## Status (2026-05-25)
 
-**11 commits landed** addressing 8 of the 10 🔴 bugs + every one-afternoon
-sweep item + 18 of the 🟡/🟢 boundary/dead-code findings + 5 of the 🔵
-structural concerns. Tests: 7228 → 7394 (+166 from drift tests + new
+**~20 commits landed** addressing 8 of the 10 🔴 bugs + every one-afternoon
+sweep item + 20+ of the 🟡/🟢 boundary/dead-code findings + every 🔵
+god-function split. Tests: 7228 → 7447 (+219 from drift tests + new
 predicate coverage). `check-state-ownership` green; C99 ratchet green.
+Main now contains commits up through the SceneExecutePurpose
+adapter-snapshot fix (review pass on #2).
 
 | Finding | Status | Commit |
 |---|---|---|
@@ -43,12 +45,12 @@ predicate coverage). `check-state-ownership` green; C99 ratchet green.
 | 🟡 #22 theme spec ABI | ⏸️ deferred — design decision | — |
 | 🟡 #23 standard-theme switch | ✅ moved to default arm | `e9225cd` |
 | 🟡 #24 is_geometry_emit_cmd predicate | ✅ promoted to repl_cmd_starts_geometry_emit | `e9225cd` |
-| 🟡 #25 compute_before_cursor_matrix | ⏸️ deferred — moderate refactor | — |
-| 🟡 #26 snapshot input NULL policy | ⏸️ deferred — doc-only | — |
+| 🟡 #25 compute_before_cursor_matrix | ⏸️ deferred — CPU-math rewrite would dwarf current GL-stack scaffold | — |
+| 🟡 #26 snapshot input NULL policy | ✅ documented in guides_shared.h | `655cbef` |
 | 🟡 #27 accum_samples == 1 carve-out | ✅ ladder check, kept | `c2e7009` |
 | 🟡 #28 accum_samples ladder validation | ✅ now {1,2,4,8,16} enforced | `c2e7009` |
 | 🟡 #29 clamp01f helper | ✅ scene_clamp01f in render_types.h | `08fc94b` |
-| 🟡 #30 cityscape y0/y1 shadow | ⏸️ deferred — cosmetic | — |
+| 🟡 #30 cityscape y0/y1 shadow | ✅ renamed to y_base/y_top | `9ee978b` |
 | 🟡 #31 M_PI consolidation | ✅ moved to gl_includes.h | `d30ff28` |
 | 🟡 #32 postprocess graduation | ⏸️ deferred — scope question | — |
 | 🟡 #33 scene_xn API names | ✅ cheat-sheet in header | `08fc94b` |
@@ -63,26 +65,26 @@ predicate coverage). `check-state-ownership` green; C99 ratchet green.
 | 🟢 #42 ACCUM_STEP_COUNT | ✅ removed (unused in scene) | `dc6ed83` |
 | 🟢 #43 stale tess-preview comments | ✅ removed | `dc6ed83` |
 | 🟢 #44 g_saved_matrix_mode init | ✅ covered by #17 | `08fc94b` |
-| 🔵 #45 scene_grid_render god-fn | ⏸️ deferred — invasive | — |
-| 🔵 #46 draw_cityscape god-fn | ⏸️ deferred — invasive | — |
-| 🔵 #47 draw_rotate_guide god-fn | ⏸️ deferred — invasive | — |
-| 🔵 #48 render_3d_scene_pass split | ⏸️ deferred — invasive | — |
+| 🔵 #45 scene_grid_render god-fn | ✅ split into 5 named phases | `2b9e194` |
+| 🔵 #46 draw_cityscape god-fn | ✅ split into setup + box + windows helpers | `ef92d2c` |
+| 🔵 #47 draw_rotate_guide god-fn | ✅ split into arc / helix / pulse helpers | `4c64c97` |
+| 🔵 #48 render_3d_scene_pass split | ✅ split into setup/fill/helpers/overlays | `17301b8` |
 | 🔵 #49 make_arrow_basis helper | ✅ extracted | `709455f` |
 | 🔵 #50 clamp_head_len helper | ✅ extracted + axis-tighter constants named | `709455f` |
 | 🔵 #51 draw_guide_axis_plane helper | ✅ replaces yz/xz/xy_plane triplet | `709455f` |
-| 🔵 #52 axes per-theme extraction | ⏸️ deferred — invasive | — |
+| 🔵 #52 axes per-theme extraction | ✅ extracted to match grid's pattern | `8301ce1` |
 | 🔵 #53 scene_draw_bitmap_text helper | ✅ replaces 4 raster+for loops | `c2e7009` |
-| 🔵 #54 scene_apply_camera 6 floats | ⏸️ deferred — tied to #11 | — |
+| 🔵 #54 scene_apply_camera 6 floats | ✅ SceneCameraPose struct on render.h | `9ee978b` |
 | 🔵 #55 magic numbers | ⏸️ deferred — large surface | — |
-| 🔵 #56 hoist tan() in scene_apply_projection | ⏸️ deferred — tied to #12 | — |
+| 🔵 #56 hoist tan() in scene_apply_projection | ✅ SCENE_DEFAULT_HALF_FOVY_TAN macro | `9ee978b` |
 | 🔵 #57 post_fill_fn / post_overlays_fn names | ⏸️ deferred — naming bikeshed | — |
 | 🔵 #58 goto bad style outlier | ⏸️ deferred — stylistic | — |
-| 🔵 #59 SCENE_PROBE_BOX macro chain | ⏸️ deferred — minor | — |
-| 🔵 #60 fb[96*1024] named constant | ⏸️ deferred — minor | — |
+| 🔵 #59 SCENE_PROBE_BOX macro chain | ✅ dependency documented in comment | `9ee978b` |
+| 🔵 #60 fb[96*1024] named constant | ✅ SCENE_PROBE_FEEDBACK_FLOATS | `9ee978b` |
 | 🔵 #61 scene_xn_init/show share | ⏸️ deferred — not worth it | — |
-| 🔵 #62 inline decls inside glBegin/glEnd | ⏸️ deferred — minor | — |
-| 🔵 #63 STATIC_ASSERT count check | ⏸️ deferred — tied to #35 | — |
-| 🔵 #64 alias style | ⏸️ deferred — tied to #12 | — |
+| 🔵 #62 inline decls inside glBegin/glEnd | ✅ lights.c star-burst table hoisted | `9ee978b` |
+| 🔵 #63 STATIC_ASSERT count check | ✅ now sizeof-derived from table | `9ee978b` |
+| 🔵 #64 alias style | ✅ alias cheat-sheet added | `655cbef` |
 | 🔵 #65 stale init_gl docs | ✅ rewritten to match actual behavior | `dc6ed83` |
 
 **Deferred work clusters** (each warrants its own session due to scope):
@@ -91,16 +93,16 @@ predicate coverage). `check-state-ownership` green; C99 ratchet green.
   #5/#12 (g_active_projection statics → SceneRendererState, with
   scene_apply_projection split). These overlap with #11 (internalize
   scene_apply_camera) — the right move is probably one session that
-  takes all three plus #54 / #56 together.
-- **God-functions** (#45–#48, #52): each 150–225 lines, each needs its
-  own pass through helpers + per-pass tests. The duplication helpers
-  landed in `709455f` (#49–#51, #53) are partial scaffolding for these
-  splits — they pre-extract the small helpers each god-function would
-  pull out anyway.
+  takes all three together.
 - **Boundary tightening continued:** #15 (narrow `GL_ALL_ATTRIB_BITS`
   to targeted masks per pass) interacts with #37 (inlining the
   `_push_state` wrappers); the wrappers stay until #15 decides the
   per-pass mask shape.
+- **Theme spec ABI** (#22): widening the GridThemeSpec to absorb the
+  custom themes (OCEAN/FOCUS/RULER/PLANES/RADAR) or going N
+  per-theme functions. The per-theme axes extraction (#52, landed)
+  gives a working model of the all-functions side; the audit prefers
+  whichever lets ALL themes go through the same shape.
 - **Magic numbers** (#55): per-theme constants are the natural home;
   the current literals encode tuning knobs that ought to be named.
 - **Cosmetic** (#30, #57, #58, #62, #64): kept on the list but each
