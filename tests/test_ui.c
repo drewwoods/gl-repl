@@ -159,7 +159,7 @@ static void test_color_picker(void) {
     ASSERT_TRUE("can edit color cmd", color_picker_can_edit_cmd(0));
 
     ui_state_viewport_set_size(800, 600);
-    color_picker_open(0, 300);
+    color_picker_start(0, 300);
     ASSERT_TRUE("picker is active", color_picker_active_line() == 0);
 
     gl_stub_counts_reset();
@@ -186,7 +186,7 @@ static void test_color_picker(void) {
     /* Test Alpha support */
     repl_state_document_cmds_mut()[0].type = CMD_COLOR4F;
     repl_state_document_cmds_mut()[0].args[3] = 0.5f;
-    color_picker_open(0, 300);
+    color_picker_start(0, 300);
 
     gl_stub_counts_reset();
     { UiRenderSnapshot s; make_test_ui_snapshot(&s); ui_color_picker_render(&s.color_picker, s.viewport.window_w, s.viewport.window_h); }
@@ -202,7 +202,7 @@ static void test_color_picker(void) {
 
     /* Test glClearColor limits */
     repl_state_document_cmds_mut()[0].type = CMD_CLEAR_COLOR;
-    color_picker_open(0, 300);
+    color_picker_start(0, 300);
     view = color_picker_view();
     int sv_mx2 = view.rects.sv_x + 10;
     int sv_my2 = ui_state_viewport().window_h - (view.rects.sv_y + 10); // High V
@@ -211,27 +211,27 @@ static void test_color_picker(void) {
 
     /* Test CMD_TESS_COLOR writeback */
     repl_state_document_cmds_mut()[0].type = CMD_TESS_COLOR;
-    color_picker_open(0, 300);
+    color_picker_start(0, 300);
     view = color_picker_view();
     color_picker_handle_press(view.rects.hue_x + 5, ui_state_viewport().window_h - (view.rects.hue_y + 10));
     color_picker_handle_release();
 
     /* Test RGB->HSV branches */
-    color_picker_close();
+    color_picker_stop();
     repl_state_document_cmds_mut()[0].type = CMD_COLOR3F;
     repl_state_document_cmds_mut()[0].args[0] = 0.0f;
     repl_state_document_cmds_mut()[0].args[1] = 1.0f;
     repl_state_document_cmds_mut()[0].args[2] = 0.0f;
-    color_picker_open(0, 300);
+    color_picker_start(0, 300);
 
     repl_state_document_cmds_mut()[0].args[0] = 0.0f;
     repl_state_document_cmds_mut()[0].args[1] = 0.0f;
     repl_state_document_cmds_mut()[0].args[2] = 1.0f;
-    color_picker_open(0, 300);
+    color_picker_start(0, 300);
 
     /* Open an uneditable command to hit coverage */
     repl_state_document_cmds_mut()[0].type = CMD_BEGIN;
-    color_picker_open(0, 300);
+    color_picker_start(0, 300);
 
     /* Test invalid/vars constraints */
     repl_state_document_cmds_mut()[0].type = CMD_COLOR3F;
@@ -246,11 +246,11 @@ static void test_color_picker(void) {
     color_picker_can_edit_cmd(-1);
 
     /* Test clicking outside picker */
-    color_picker_open(0, 300);
+    color_picker_start(0, 300);
     color_picker_handle_press(0, 0);
 
     /* Test clicking inside picker bounds but outside slider rects (consumed-no-op) */
-    color_picker_open(0, 300);
+    color_picker_start(0, 300);
     view = color_picker_view();
     int inside_mx = view.rects.sv_x + 5;
     int inside_my = ui_state_viewport().window_h - (view.rects.sv_y - 4);
@@ -260,20 +260,20 @@ static void test_color_picker(void) {
     ASSERT_TRUE("picker stays open after inside click", color_picker_active_line() == 0);
 
     /* Test writeback short-circuit (mutated command type underneath) */
-    color_picker_open(0, 300);
+    color_picker_start(0, 300);
     view = color_picker_view();
     repl_state_document_cmds_mut()[0].type = CMD_BEGIN;
     color_picker_handle_press(view.rects.sv_x + 10, ui_state_viewport().window_h - (view.rects.sv_y + 10));
     color_picker_handle_release();
 
     /* Test writeback short-circuit (command deleted underneath) */
-    color_picker_open(0, 300);
+    color_picker_start(0, 300);
     view = color_picker_view();
     repl_state_document_count_set(0);
     color_picker_handle_press(view.rects.sv_x + 10, ui_state_viewport().window_h - (view.rects.sv_y + 10));
     color_picker_handle_release();
 
-    color_picker_close();
+    color_picker_stop();
     ASSERT_TRUE("picker closed", color_picker_active_line() == -1);
 
     /* Test swatch rendering — render reads from a transformer entry, not
@@ -319,11 +319,11 @@ static void test_variable_panel(void) {
     printf("Testing Variable Panel...\n");
     gl_stub_counts_reset();
 
-    variable_panel_view_mut()->visible = 0;
+    variable_panel_state_mut()->visible = 0;
     { UiRenderSnapshot s; make_test_ui_snapshot(&s); ui_variable_panel_render(&s); }
     ASSERT_TRUE("var panel hidden -> no GL calls", gl_stub_counts[GL_STUB_glBegin] == 0);
 
-    variable_panel_view_mut()->visible = 1;
+    variable_panel_state_mut()->visible = 1;
     g_num_predef_vars = 1;
     strcpy(g_predef_vars[0].name, "x");
     g_predef_vars[0].value = 1.0f;
@@ -543,7 +543,7 @@ static void test_ui_color_picker_hit_test(void) {
     repl_state_document_cmds_mut()[0].args[2] = 0.0f;
     repl_state_document_cmds_mut()[0].valid = 1;
     repl_state_document_cmds_mut()[0].has_vars = 0;
-    color_picker_open(0, 300);
+    color_picker_start(0, 300);
 
     int win_h = ui_state_viewport().window_h;
     int sv_mx = -1, sv_my = -1;
@@ -574,7 +574,7 @@ static void test_ui_color_picker_hit_test(void) {
     /* Click far outside picker -> NONE. */
     UiHit h_miss = ui_color_picker_hit_test_helper(0, 0);
     ASSERT_TRUE("picker miss -> NONE", h_miss.kind == UI_HIT_NONE);
-    color_picker_close();
+    color_picker_stop();
 }
 
 static void test_ui_variable_panel_hit_test(void) {
@@ -582,12 +582,12 @@ static void test_ui_variable_panel_hit_test(void) {
     ui_state_viewport_set_size(800, 600);
 
     /* Panel hidden -> always miss. */
-    variable_panel_view_mut()->visible = 0;
+    variable_panel_state_mut()->visible = 0;
     UiHit h_off = ui_variable_panel_hit_test(NULL, 700, 100, 0);
     ASSERT_TRUE("hidden panel -> NONE", h_off.kind == UI_HIT_NONE);
 
     /* Visible panel with one declared variable. */
-    variable_panel_view_mut()->visible = 1;
+    variable_panel_state_mut()->visible = 1;
     g_num_predef_vars = 1;
     strcpy(g_predef_vars[0].name, "x");
     g_predef_vars[0].value = 1.0f;
@@ -617,7 +617,7 @@ static void test_ui_panels_hit_test_dispatch(void) {
 
     /* Variable panel should win over the scene-region fallback when
      * a click lands on its rect. */
-    variable_panel_view_mut()->visible = 1;
+    variable_panel_state_mut()->visible = 1;
     g_num_predef_vars = 1;
     strcpy(g_predef_vars[0].name, "x");
     g_predef_vars[0].value = 1.0f;
@@ -627,7 +627,7 @@ static void test_ui_panels_hit_test_dispatch(void) {
     UiHit h_var = ui_panels_hit_test_current_snapshot(px + 10, my_var, 1);
     ASSERT_TRUE("var panel routed via panels_hit_test",
                 h_var.kind == UI_HIT_VARIABLE_SLIDER);
-    variable_panel_view_mut()->visible = 0;
+    variable_panel_state_mut()->visible = 0;
 
     /* Menu pin button click should resolve as UI_HIT_PIN_BUTTON. */
     ui_menu_bar_close();
@@ -645,7 +645,7 @@ static void test_ui_panels_hit_test_dispatch(void) {
     repl_state_document_cmds_mut()[0].args[2] = 0.0f;
     repl_state_document_cmds_mut()[0].valid = 1;
     repl_state_document_cmds_mut()[0].has_vars = 0;
-    color_picker_open(0, 300);
+    color_picker_start(0, 300);
 
     int sv_mx = -1, sv_my = -1;
     for (int my = 0; my < ui_state_viewport().window_h && sv_mx < 0; my += 4) {
@@ -661,7 +661,7 @@ static void test_ui_panels_hit_test_dispatch(void) {
     UiHit h_pick = ui_panels_hit_test_current_snapshot(sv_mx, sv_my, 0);
     ASSERT_TRUE("picker routed via panels_hit_test",
                 h_pick.kind == UI_HIT_COLOR_SWATCH);
-    color_picker_close();
+    color_picker_stop();
 }
 
 /* J2.1: ui_panels_hit_test emits UI_HIT_PANEL_DIVIDER for the

@@ -39,7 +39,7 @@ static void test_inactive_queries(void) {
 }
 
 static void test_begin_captures_drag_metadata(void) {
-    EditorVariableDragState drag;
+    VariablePanelDragState drag;
 
     glr_app_reset_all();
 

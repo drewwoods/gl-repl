@@ -12,7 +12,7 @@
  * loader expects on a fresh session; other slices zeroed.
  *
  * variable_panel visibility lives on the variable_panel peer; callers
- * use variable_panel_view / variable_panel_view_mut directly. */
+ * use variable_panel_view / variable_panel_state_mut directly. */
 #define UI_STATE_INITIAL                                              \
     {                                                                 \
         .status = { .text = "", .ttl = 0, .kind = UI_STATUS_INFO },   \
@@ -82,7 +82,7 @@ UiHelpState *ui_state_help_mut(void) {
 
 
 /* Variable-panel accessors live on the variable_panel peer:
- * use `variable_panel_view` / `variable_panel_view_mut` directly. */
+ * use `variable_panel_view` / `variable_panel_state_mut` directly. */
 
 UiProfilePanelState ui_state_profile_panel(void) {
     return g_ui_state.profile_panel;

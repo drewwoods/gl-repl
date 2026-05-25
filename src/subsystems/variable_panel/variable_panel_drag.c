@@ -11,10 +11,6 @@
  * Log drag:    200 pixels = one decade (x10 / ÷10), sign preserved.
  *              Near-zero start value falls back to a linear bootstrap
  *              so the slider can walk off zero.
- *
- * Historical note: the drag-state bytes moved into the variable_panel
- * peer in Phase F commit 31, and the legacy repl_var_drag_* aliases
- * were retired in Phase J7.
  */
 #include "subsystems/variable_panel/variable_panel_drag.h"
 #include "subsystems/variable_panel/variable_panel_state.h"
@@ -41,7 +37,7 @@ int variable_panel_drag_log_mode(void) {
 
 void variable_panel_handle_drag_begin(int row, int log_mode, int x) {
     if (row < 0 || row >= g_num_predef_vars) return;
-    EditorVariableDragState *drag = variable_panel_drag_mut();
+    VariablePanelDragState *drag = variable_panel_drag_mut();
     drag->var_idx = row;
     drag->log_mode = log_mode ? 1 : 0;
     drag->start_value = g_predef_vars[row].value;
@@ -51,7 +47,7 @@ void variable_panel_handle_drag_begin(int row, int log_mode, int x) {
 }
 
 void variable_panel_handle_drag_reset(void) {
-    EditorVariableDragState *drag = variable_panel_drag_mut();
+    VariablePanelDragState *drag = variable_panel_drag_mut();
     drag->var_idx = -1;
     drag->log_mode = 0;
     drag->start_value = 0.0f;
@@ -61,7 +57,7 @@ void variable_panel_handle_drag_reset(void) {
 }
 
 int variable_panel_handle_drag_motion(int x, VariablePanelValueChange *out) {
-    EditorVariableDragState *drag = variable_panel_drag_mut();
+    VariablePanelDragState *drag = variable_panel_drag_mut();
     float new_val;
 
     if (out) {

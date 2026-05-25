@@ -47,7 +47,7 @@ static void populate_runtime_snapshot_fixture(const char *scene_hint) {
     UiCodePanelRuntimeState *code_panel;
     UiStatusState *status;
     EditorAutocompleteState *ac;
-    EditorVariableDragState *drag;
+    VariablePanelDragState *drag;
     ReplImportExportState *io;
     ReplSceneRuntimeState *scenes;
     GlrPresentationState *presentation;
@@ -98,7 +98,7 @@ static void populate_runtime_snapshot_fixture(const char *scene_hint) {
     editor_scroll_follow_cursor_set(1);
     editor_state_cursor_blink_mut()->cursor_visible = 0;
     editor_state_cursor_blink_mut()->blink_tick = 12;
-    variable_panel_view_mut()->visible = 0;
+    variable_panel_state_mut()->visible = 0;
 
     drag = variable_panel_drag_mut();
     drag->var_idx = 3;

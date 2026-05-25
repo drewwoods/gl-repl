@@ -43,7 +43,7 @@
 
 /* Lifecycle and commit-path integration. */
 void                 tutorial_start(int idx);
-void                 tutorial_exit(void);
+void                 tutorial_stop(void);
 /* Restore the cfg baseline captured at tutorial_start and reset the runtime
  * state. Called by tutorial_exit, tutorial completion, AND every external
  * teardown path that previously called tutorial_state_reset() directly

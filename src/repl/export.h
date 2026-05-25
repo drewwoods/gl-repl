@@ -40,87 +40,9 @@
 #ifndef REPL_EXPORT_H
 #define REPL_EXPORT_H
 
-#include "repl/eval.h"        /* REPL_SCRATCH_ARRAY_LEN */
-#include "source_document.h"  /* caller-supplied SourceTextView */
-
-/* Bag of `// @cfg` header key/value pairs used by save/load and scene snapshots.
- *
- * Export writes the bag as header lines, import rebuilds the same shape from
- * those lines, and src/repl/scenes.c uses it to snapshot the subset of
- * presentation settings that travels with a user scene. The REPL exporter and
- * importer treat keys and values as opaque strings; the controller-side config
- * owner decides what each slug means.
- *
- * The neutral bag exists so src/repl/export.c can round-trip cfg state without
- * including controller config headers. That dependency inversion came from
- * step 4 of feature/decouple-repl-from-gl-repl-alt.md. Presentation/render
- * slugs still flow through this bag while their storage finishes moving out of
- * the REPL-owned runtime state.
- *
- * Why a flat key/value bag and not a callback registry: the cfg payload is
- * ~30 slugs, all int 0..N, decimal-encoded. A registered-callback dispatch
- * would add init-order coupling, indirection on a 5-line operation, and
- * loss of inspectability. A flat collection round-trips trivially in tests
- * (feed bag in, read bag out, compare) and lets future migrations to per-TU
- * shapes happen without breaking call shapes. */
-#define REPL_EXPORT_CFG_KEY_MAX     24
-#define REPL_EXPORT_CFG_VALUE_MAX   16
-#define REPL_EXPORT_CFG_MAX_ITEMS   32
-
-typedef struct {
-    char key[REPL_EXPORT_CFG_KEY_MAX];      /* opaque slug */
-    char value[REPL_EXPORT_CFG_VALUE_MAX];  /* decimal-encoded; opaque to repl_export */
-} ReplExportConfigItem;
-
-typedef struct {
-    ReplExportConfigItem items[REPL_EXPORT_CFG_MAX_ITEMS];
-    int count;
-} ReplExportConfig;
-
-void        repl_export_config_clear(ReplExportConfig *cfg);
-int         repl_export_config_set(ReplExportConfig *cfg,
-                                   const char *key, const char *value);
-int         repl_export_config_set_int(ReplExportConfig *cfg,
-                                       const char *key, int value);
-const char *repl_export_config_get(const ReplExportConfig *cfg, const char *key);
-int         repl_export_config_get_int(const ReplExportConfig *cfg,
-                                       const char *key, int fallback);
-int         repl_export_config_count(const ReplExportConfig *cfg);
-int         repl_export_config_at(const ReplExportConfig *cfg, int idx,
-                                  const char **key_out, const char **value_out);
-
-/* Controller-installed adapter for cfg save/load.
- *
- * App startup installs this bridge from src/app/glr_actions.c. Save paths call
- * fill_all() to emit `// @cfg` lines and get_int() to gate bootstrap lines;
- * src/repl/scenes.c calls fill_scene_subset() when capturing scene-local cfg
- * state; import and example-load paths call apply() as parsed cfg lines arrive.
- * The standalone demo leaves the bridge unset, so cfg lines are skipped and the
- * exporter/importer stay decoupled from glr_config.c. */
-typedef struct {
-    /* Fill bag with all current cfg values for save-file emission. */
-    void (*fill_all)(ReplExportConfig *cfg);
-    /* Fill bag with the per-scene-snapshot subset for repl_scenes. */
-    void (*fill_scene_subset)(ReplExportConfig *cfg);
-    /* Apply bag values to live state. The same apply works for both
-     * full-set and scene-subset bags (it iterates whatever's there). */
-    void (*apply)(const ReplExportConfig *cfg);
-    /* Single-slug live read. Used by src/repl/export.c's bootstrap path
-     * to gate emission of init commands (e.g. glPointParameterfv only
-     * if "point_attenuation" toggle is on). Returns `fallback` when
-     * the slug is unknown or the bridge isn't installed. */
-    int  (*get_int)(const char *slug, int fallback);
-    /* Explicit known-slug query for import/export validation. */
-    int  (*is_known)(const char *slug);
-    /* True when a slug is part of the scene-local cfg subset that built-in
-     * examples are allowed to apply in their leading @cfg metadata. */
-    int  (*slug_is_scene_subset)(const char *slug);
-} ReplExportConfigBridge;
-
-/* Install or read the process-wide cfg bridge used by export/import and scene
- * snapshot code. Callers normally install once at app startup. */
-void                          repl_export_install_config_bridge(const ReplExportConfigBridge *bridge);
-const ReplExportConfigBridge *repl_export_config_bridge(void);
+#include <stdio.h>
+#include "source_document.h"
+#include "repl/cfg_baseline.h"
 
 /* Apply the current batch of parsed `// @cfg` lines, then clear the accumulator.
  * Importers call this after finishing a header batch; example loading uses the
@@ -128,15 +50,6 @@ const ReplExportConfigBridge *repl_export_config_bridge(void);
  * already have applied each cfg immediately, so this is primarily the
  * batch-shaped handoff for callers that want the full bag at once. */
 void repl_export_apply_pending_cfg(void);
-
-/* Extract the slug from a `// @cfg <slug> [= ...]` line, ignoring any value
- * and side-effect-free. Writes the NUL-terminated slug to out[] and returns 1
- * on success; returns 0 (out left empty) when the line doesn't match the
- * `// @cfg <slug>` shape or the slug doesn't fit. Tolerates leading whitespace
- * and the `// ` comment prefix the same way the import-side cfg parser does.
- * Shared seam: the tutorial runner uses this to discover which slugs an
- * entry's `@cfg` lines touch (for baseline capture) without applying them. */
-int  repl_export_extract_cfg_slug(const char *line, char *out, size_t out_sz);
 
 /* Opaque 4-line camera transform block used by export, import, and examples.
  *

@@ -84,10 +84,3 @@ void replay_handle_pin_clicked(void) {
     replay_toggle_play_pause();
 }
 
-int replay_handle_key(unsigned char key) {
-    return replay_handle_key_impl(key);
-}
-
-int replay_handle_special(int key) {
-    return replay_handle_special_key_impl(key);
-}

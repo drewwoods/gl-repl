@@ -25,36 +25,48 @@
 #define REPLAY_SPEED_STEP_UP   1.5f
 #define REPLAY_SPEED_STEP_DOWN 0.67f
 
-#define REPLAY_FLAT_STATE \
-    FlatProgramView flat_program = repl_state_flat_program_view(); \
-    const GLCmd *g_flat_cmds __attribute__((unused)) = flat_program.cmds; \
-    int g_num_flat_cmds __attribute__((unused)) = flat_program.cmd_count
-
-static int replay_enabled(void) {
-    return replay_active();
+/* Advance tessellation depth for a tess command. Depth model:
+ * 0 = outside polygon, 1 = inside polygon between contours,
+ * 2 = inside contour body. Returns the updated depth. */
+static int replay_advance_tess_depth(CmdType type, int depth) {
+    switch (type) {
+    case CMD_TESS_BEGIN_POLYGON: return 1;
+    case CMD_TESS_BEGIN_CONTOUR: return (depth == 1) ? 2 : depth;
+    case CMD_TESS_END:
+        if (depth == 2) return 1;
+        if (depth == 1) return 0;
+        return depth;
+    default: return depth;
+    }
 }
 
+
 static int replay_has_meaningful_cmds(void) {
-    REPLAY_FLAT_STATE;
-    for (int flat_idx = 0; flat_idx < g_num_flat_cmds; flat_idx++) {
-        if (!g_flat_cmds[flat_idx].valid) continue;
-        if (g_flat_cmds[flat_idx].type == CMD_COMMENT) continue;
+    FlatProgramView flat_program = repl_state_flat_program_view();
+    const GLCmd *flat_cmds = flat_program.cmds;
+    int num_flat_cmds = flat_program.cmd_count;
+
+    for (int flat_idx = 0; flat_idx < num_flat_cmds; flat_idx++) {
+        if (!flat_cmds[flat_idx].valid) continue;
+        if (flat_cmds[flat_idx].type == CMD_COMMENT) continue;
         return 1;
     }
     return 0;
 }
 
 static int replay_find_open_begin_before(int limit) {
-    REPLAY_FLAT_STATE;
+    FlatProgramView flat_program = repl_state_flat_program_view();
+    const GLCmd *flat_cmds = flat_program.cmds;
+    int num_flat_cmds = flat_program.cmd_count;
     int open_begin = -1;
     int in_begin = 0;
 
-    for (int flat_idx = 0; flat_idx < limit && flat_idx < g_num_flat_cmds; flat_idx++) {
-        if (!g_flat_cmds[flat_idx].valid) continue;
-        if (g_flat_cmds[flat_idx].type == CMD_BEGIN) {
+    for (int flat_idx = 0; flat_idx < limit && flat_idx < num_flat_cmds; flat_idx++) {
+        if (!flat_cmds[flat_idx].valid) continue;
+        if (flat_cmds[flat_idx].type == CMD_BEGIN) {
             open_begin = flat_idx;
             in_begin = 1;
-        } else if (g_flat_cmds[flat_idx].type == CMD_END && in_begin) {
+        } else if (flat_cmds[flat_idx].type == CMD_END && in_begin) {
             open_begin = -1;
             in_begin = 0;
         }
@@ -64,31 +76,24 @@ static int replay_find_open_begin_before(int limit) {
 }
 
 static int replay_find_open_tess_polygon_before(int limit, int *out_depth) {
-    REPLAY_FLAT_STATE;
+    FlatProgramView flat_program = repl_state_flat_program_view();
+    const GLCmd *flat_cmds = flat_program.cmds;
+    int num_flat_cmds = flat_program.cmd_count;
     int poly_start = -1;
     int tess_depth = 0;
 
-    for (int flat_idx = 0; flat_idx < limit && flat_idx < g_num_flat_cmds; flat_idx++) {
-        if (!g_flat_cmds[flat_idx].valid) continue;
-        switch (g_flat_cmds[flat_idx].type) {
-        case CMD_TESS_BEGIN_POLYGON:
+    for (int flat_idx = 0; flat_idx < limit && flat_idx < num_flat_cmds; flat_idx++) {
+        if (!flat_cmds[flat_idx].valid) continue;
+        CmdType type = flat_cmds[flat_idx].type;
+        if (type == CMD_TESS_BEGIN_POLYGON) {
             poly_start = flat_idx;
             tess_depth = 1;
-            break;
-        case CMD_TESS_BEGIN_CONTOUR:
-            if (tess_depth == 1)
-                tess_depth = 2;
-            break;
-        case CMD_TESS_END:
-            if (tess_depth == 2) {
-                tess_depth = 1;
-            } else if (tess_depth == 1) {
-                tess_depth = 0;
+        } else {
+            int old_depth = tess_depth;
+            tess_depth = replay_advance_tess_depth(type, tess_depth);
+            if (type == CMD_TESS_END && old_depth == 1 && tess_depth == 0) {
                 poly_start = -1;
             }
-            break;
-        default:
-            break;
         }
     }
 
@@ -97,13 +102,16 @@ static int replay_find_open_tess_polygon_before(int limit, int *out_depth) {
 }
 
 static int replay_find_matching_gl_end(int begin_idx) {
-    REPLAY_FLAT_STATE;
-    for (int flat_idx = begin_idx + 1; flat_idx < g_num_flat_cmds; flat_idx++) {
-        if (!g_flat_cmds[flat_idx].valid) continue;
-        if (g_flat_cmds[flat_idx].type == CMD_END)
+    FlatProgramView flat_program = repl_state_flat_program_view();
+    const GLCmd *flat_cmds = flat_program.cmds;
+    int num_flat_cmds = flat_program.cmd_count;
+
+    for (int flat_idx = begin_idx + 1; flat_idx < num_flat_cmds; flat_idx++) {
+        if (!flat_cmds[flat_idx].valid) continue;
+        if (flat_cmds[flat_idx].type == CMD_END)
             return flat_idx;
     }
-    return g_num_flat_cmds > 0 ? g_num_flat_cmds - 1 : begin_idx;
+    return num_flat_cmds > 0 ? num_flat_cmds - 1 : begin_idx;
 }
 
 static int replay_cmd_is_focus_candidate(CmdType type) {
@@ -128,12 +136,14 @@ static int replay_cmd_is_focus_candidate(CmdType type) {
 }
 
 static int replay_last_meaningful_src(int begin, int end_exclusive) {
-    REPLAY_FLAT_STATE;
+    FlatProgramView flat_program = repl_state_flat_program_view();
+    const GLCmd *flat_cmds = flat_program.cmds;
+
     for (int flat_idx = end_exclusive - 1; flat_idx >= begin && flat_idx >= 0; flat_idx--) {
-        if (!g_flat_cmds[flat_idx].valid) continue;
-        if (!replay_cmd_is_focus_candidate(g_flat_cmds[flat_idx].type)) continue;
-        if (g_flat_cmds[flat_idx].src_cmd_idx >= 0)
-            return g_flat_cmds[flat_idx].src_cmd_idx;
+        if (!flat_cmds[flat_idx].valid) continue;
+        if (!replay_cmd_is_focus_candidate(flat_cmds[flat_idx].type)) continue;
+        if (flat_cmds[flat_idx].src_cmd_idx >= 0)
+            return flat_cmds[flat_idx].src_cmd_idx;
     }
     return -1;
 }
@@ -288,14 +298,16 @@ int replay_has_active_fades(void) {
 }
 
 int replay_fill_base_limit(void) {
-    REPLAY_FLAT_STATE;
+    FlatProgramView flat_program = repl_state_flat_program_view();
+    int num_flat_cmds = flat_program.cmd_count;
+
     if (!replay_has_active_fades())
-        return g_num_flat_cmds;
+        return num_flat_cmds;
     ReplReplayRuntimeState state = replay_state_view();
     if (state.fade_batches[0].old_pc < 0)
         return 0;
-    if (state.fade_batches[0].old_pc > g_num_flat_cmds)
-        return g_num_flat_cmds;
+    if (state.fade_batches[0].old_pc > num_flat_cmds)
+        return num_flat_cmds;
     return state.fade_batches[0].old_pc;
 }
 
@@ -565,25 +577,27 @@ void replay_walk_user_vertices(const ReplayVertexWalkContext *ctx,
 
 static int replay_next_polygon_limit(int start, int *fade_begin, int *fade_end) {
     int saw_meaningful = 0;
-    REPLAY_FLAT_STATE;
+    FlatProgramView flat_program = repl_state_flat_program_view();
+    const GLCmd *flat_cmds = flat_program.cmds;
+    int num_flat_cmds = flat_program.cmd_count;
 
-    *fade_begin = -1;
-    *fade_end = -1;
+    if (fade_begin) *fade_begin = -1;
+    if (fade_end) *fade_end = -1;
 
-    for (int flat_idx = start; flat_idx < g_num_flat_cmds; flat_idx++) {
+    for (int flat_idx = start; flat_idx < num_flat_cmds; flat_idx++) {
         CmdType t;
 
-        if (!g_flat_cmds[flat_idx].valid || g_flat_cmds[flat_idx].type == CMD_COMMENT)
+        if (!flat_cmds[flat_idx].valid || flat_cmds[flat_idx].type == CMD_COMMENT)
             continue;
 
-        t = g_flat_cmds[flat_idx].type;
+        t = flat_cmds[flat_idx].type;
         saw_meaningful = 1;
 
         switch (t) {
         case CMD_BEGIN: {
             int end = replay_find_matching_gl_end(flat_idx);
-            *fade_begin = start;
-            *fade_end = end;
+            if (fade_begin) *fade_begin = start;
+            if (fade_end) *fade_end = end;
             return end + 1;
         }
         case CMD_GLUT_TORUS:
@@ -591,8 +605,8 @@ static int replay_next_polygon_limit(int start, int *fade_begin, int *fade_end) 
         case CMD_GLUT_SPHERE:
         case CMD_GLUT_TEAPOT:
         case CMD_GLUT_CONE:
-            *fade_begin = start;
-            *fade_end = flat_idx;
+            if (fade_begin) *fade_begin = start;
+            if (fade_end) *fade_end = flat_idx;
             return flat_idx + 1;
         case CMD_TESS_BEGIN_POLYGON: {
             /* Depth model: 1 = inside polygon but between contours,
@@ -600,26 +614,26 @@ static int replay_next_polygon_limit(int start, int *fade_begin, int *fade_end) 
              * fade unit is the full polygon block, so return at the
              * matching END that closes depth 1. */
             int tess_depth = 1;
-            for (int tess_idx = flat_idx + 1; tess_idx < g_num_flat_cmds; tess_idx++) {
-                if (!g_flat_cmds[tess_idx].valid) continue;
-                if (g_flat_cmds[tess_idx].type == CMD_TESS_BEGIN_POLYGON) {
+            for (int tess_idx = flat_idx + 1; tess_idx < num_flat_cmds; tess_idx++) {
+                if (!flat_cmds[tess_idx].valid) continue;
+                CmdType type = flat_cmds[tess_idx].type;
+                if (type == CMD_TESS_BEGIN_POLYGON) {
                     tess_depth = 1;
-                } else if (g_flat_cmds[tess_idx].type == CMD_TESS_BEGIN_CONTOUR) {
-                    if (tess_depth == 1)
-                        tess_depth = 2;
-                } else if (g_flat_cmds[tess_idx].type == CMD_TESS_END) {
-                    if (tess_depth == 2) {
-                        tess_depth = 1;
-                    } else if (tess_depth == 1) {
-                        *fade_begin = start;
-                        *fade_end = tess_idx;
+                } else if (type == CMD_TESS_BEGIN_CONTOUR) {
+                    tess_depth = replay_advance_tess_depth(type, tess_depth);
+                } else if (type == CMD_TESS_END) {
+                    int old_depth = tess_depth;
+                    tess_depth = replay_advance_tess_depth(type, tess_depth);
+                    if (old_depth == 1 && tess_depth == 0) {
+                        if (fade_begin) *fade_begin = start;
+                        if (fade_end) *fade_end = tess_idx;
                         return tess_idx + 1;
                     }
                 }
             }
-            *fade_begin = start;
-            *fade_end = g_num_flat_cmds > 0 ? g_num_flat_cmds - 1 : flat_idx;
-            return g_num_flat_cmds;
+            if (fade_begin) *fade_begin = start;
+            if (fade_end) *fade_end = num_flat_cmds > 0 ? num_flat_cmds - 1 : flat_idx;
+            return num_flat_cmds;
         }
         default:
             break;
@@ -627,12 +641,14 @@ static int replay_next_polygon_limit(int start, int *fade_begin, int *fade_end) 
     }
 
     if (saw_meaningful)
-        return g_num_flat_cmds;
+        return num_flat_cmds;
     return start;
 }
 
 static int replay_next_vertex_limit(int start, int *fade_begin, int *fade_end) {
-    REPLAY_FLAT_STATE;
+    FlatProgramView flat_program = repl_state_flat_program_view();
+    const GLCmd *flat_cmds = flat_program.cmds;
+    int num_flat_cmds = flat_program.cmd_count;
     int open_begin = replay_find_open_begin_before(start);
     /* Depth model matches replay_next_polygon_limit:
      * 0 = outside tess polygon, 1 = inside polygon between contours,
@@ -641,16 +657,16 @@ static int replay_next_vertex_limit(int start, int *fade_begin, int *fade_end) {
     int open_tess_poly = replay_find_open_tess_polygon_before(start, &tess_depth);
     int saw_meaningful = 0;
 
-    *fade_begin = -1;
-    *fade_end = -1;
+    if (fade_begin) *fade_begin = -1;
+    if (fade_end) *fade_end = -1;
 
-    for (int flat_idx = start; flat_idx < g_num_flat_cmds; flat_idx++) {
+    for (int flat_idx = start; flat_idx < num_flat_cmds; flat_idx++) {
         CmdType t;
 
-        if (!g_flat_cmds[flat_idx].valid || g_flat_cmds[flat_idx].type == CMD_COMMENT)
+        if (!flat_cmds[flat_idx].valid || flat_cmds[flat_idx].type == CMD_COMMENT)
             continue;
 
-        t = g_flat_cmds[flat_idx].type;
+        t = flat_cmds[flat_idx].type;
         saw_meaningful = 1;
 
         switch (t) {
@@ -665,40 +681,40 @@ static int replay_next_vertex_limit(int start, int *fade_begin, int *fade_end) {
             tess_depth = 1;
             break;
         case CMD_TESS_BEGIN_CONTOUR:
-            if (tess_depth == 1)
-                tess_depth = 2;
+            tess_depth = replay_advance_tess_depth(t, tess_depth);
             break;
-        case CMD_TESS_END:
-            if (tess_depth == 2) {
-                tess_depth = 1;
-            } else if (tess_depth == 1) {
+        case CMD_TESS_END: {
+            int old_depth = tess_depth;
+            tess_depth = replay_advance_tess_depth(t, tess_depth);
+            if (old_depth == 1 && tess_depth == 0) {
                 /* Vertex replay reveals tessellation one contour vertex
                  * at a time, but the fade begin still has to rewind to
                  * the polygon opener so replayed state sees the full
                  * enclosing tess block. */
-                *fade_begin = (open_tess_poly >= 0) ? open_tess_poly : start;
-                *fade_end = flat_idx;
+                if (fade_begin) *fade_begin = (open_tess_poly >= 0) ? open_tess_poly : start;
+                if (fade_end) *fade_end = flat_idx;
                 return flat_idx + 1;
             }
             break;
+        }
         case CMD_VERTEX3F:
         case CMD_VERTEX2F:
-            *fade_begin = (open_begin >= 0) ? open_begin : start;
-            *fade_end = flat_idx;
+            if (fade_begin) *fade_begin = (open_begin >= 0) ? open_begin : start;
+            if (fade_end) *fade_end = flat_idx;
             return flat_idx + 1;
         case CMD_TESS_VERTEX:
             /* Same rewind rule as CMD_TESS_END above: emit one vertex,
              * but keep the fade range anchored at the polygon opener. */
-            *fade_begin = (open_tess_poly >= 0) ? open_tess_poly : start;
-            *fade_end = flat_idx;
+            if (fade_begin) *fade_begin = (open_tess_poly >= 0) ? open_tess_poly : start;
+            if (fade_end) *fade_end = flat_idx;
             return flat_idx + 1;
         case CMD_GLUT_TORUS:
         case CMD_GLUT_CUBE:
         case CMD_GLUT_SPHERE:
         case CMD_GLUT_TEAPOT:
         case CMD_GLUT_CONE:
-            *fade_begin = start;
-            *fade_end = flat_idx;
+            if (fade_begin) *fade_begin = start;
+            if (fade_end) *fade_end = flat_idx;
             return flat_idx + 1;
         default:
             break;
@@ -706,7 +722,7 @@ static int replay_next_vertex_limit(int start, int *fade_begin, int *fade_end) {
     }
 
     if (saw_meaningful)
-        return g_num_flat_cmds;
+        return num_flat_cmds;
     return start;
 }
 
@@ -735,18 +751,19 @@ static int replay_prev_limit(int current_pc) {
 }
 
 void replay_seek(int new_pc) {
-    REPLAY_FLAT_STATE;
+    FlatProgramView flat_program = repl_state_flat_program_view();
+    int num_flat_cmds = flat_program.cmd_count;
     ReplReplayRuntimeState *state = replay_state_mut();
     if (new_pc < 0)
         new_pc = 0;
-    if (new_pc > g_num_flat_cmds)
-        new_pc = g_num_flat_cmds;
+    if (new_pc > num_flat_cmds)
+        new_pc = num_flat_cmds;
 
     state->pc = new_pc;
     state->accum = 0.0f;
     replay_clear_fade_batches();
     replay_set_src_line(replay_last_meaningful_src(0, new_pc));
-    state->state = (new_pc >= g_num_flat_cmds && g_num_flat_cmds > 0)
+    state->state = (new_pc >= num_flat_cmds && num_flat_cmds > 0)
                  ? REPLAY_DONE
                  : REPLAY_PAUSED;
 }
@@ -755,7 +772,8 @@ int replay_seek_to_src_line(int target_line) {
     int pc = 0;
     int landed_pc = -1;
     int landed_src = -1;
-    REPLAY_FLAT_STATE;
+    FlatProgramView flat_program = repl_state_flat_program_view();
+    int num_flat_cmds = flat_program.cmd_count;
 
     if (repl_state_flat_program_dirty()) {
         float live_predef_vals[MAX_PREDEF_VARS] = { 0 };
@@ -768,7 +786,7 @@ int replay_seek_to_src_line(int target_line) {
         repl_eval_restore_scratch_arrays(live_scratch_arrays);
     }
 
-    while (pc < g_num_flat_cmds) {
+    while (pc < num_flat_cmds) {
         int fade_begin = -1;
         int fade_end = -1;
         int next_pc = (replay_state_view().mode == REPLAY_MODE_POLYGON)
@@ -805,7 +823,8 @@ void replay_restart_from_beginning(void) {
 }
 
 void replay_start(void) {
-    REPLAY_FLAT_STATE;
+    FlatProgramView flat_program = repl_state_flat_program_view();
+    int num_flat_cmds = flat_program.cmd_count;
 
     if (repl_state_flat_program_dirty()) {
         float live_predef_vals[MAX_PREDEF_VARS] = { 0 };
@@ -835,7 +854,7 @@ void replay_start(void) {
     state->accum = 0.0f;
     replay_clear_fade_batches();
     state->src_line_idx = -1;
-    state->total_flat_cmds = g_num_flat_cmds;
+    state->total_flat_cmds = num_flat_cmds;
     state->last_src_line = -1;
     repl_set_status("Replay: playing");
 }
@@ -854,29 +873,30 @@ void replay_stop(void) {
 }
 
 void replay_advance(void) {
-    REPLAY_FLAT_STATE;
+    FlatProgramView flat_program = repl_state_flat_program_view();
+    int num_flat_cmds = flat_program.cmd_count;
     ReplReplayRuntimeState *state = replay_state_mut();
     int old_pc;
     int next_pc;
     int src_line = -1;
 
-    if (!replay_enabled())
+    if (!replay_active())
         return;
 
-    if (state->pc >= g_num_flat_cmds) {
+    if (state->pc >= num_flat_cmds) {
         state->state = REPLAY_DONE;
         return;
     }
 
     old_pc = state->pc;
     next_pc = (state->mode == REPLAY_MODE_POLYGON)
-            ? replay_next_polygon_limit(old_pc, &(int){ -1 }, &(int){ -1 })
-            : replay_next_vertex_limit(old_pc, &(int){ -1 }, &(int){ -1 });
+            ? replay_next_polygon_limit(old_pc, NULL, NULL)
+            : replay_next_vertex_limit(old_pc, NULL, NULL);
 
     if (next_pc <= old_pc)
-        next_pc = g_num_flat_cmds;
-    if (next_pc > g_num_flat_cmds)
-        next_pc = g_num_flat_cmds;
+        next_pc = num_flat_cmds;
+    if (next_pc > num_flat_cmds)
+        next_pc = num_flat_cmds;
 
     state->pc = next_pc;
     replay_push_fade_batch(old_pc, next_pc);
@@ -884,7 +904,7 @@ void replay_advance(void) {
     src_line = replay_last_meaningful_src(old_pc, next_pc);
     replay_set_src_line(src_line);
 
-    if (state->pc >= g_num_flat_cmds) {
+    if (state->pc >= num_flat_cmds) {
         state->state = REPLAY_DONE;
         repl_set_status("Replay: done");
     }
@@ -905,10 +925,11 @@ void replay_step_back(void) {
 }
 
 int replay_exec_limit(void) {
-    REPLAY_FLAT_STATE;
-    if (replay_enabled())
+    FlatProgramView flat_program = repl_state_flat_program_view();
+    int num_flat_cmds = flat_program.cmd_count;
+    if (replay_active())
         return replay_state_view().pc;
-    return g_num_flat_cmds;
+    return num_flat_cmds;
 }
 
 void replay_speed_adjust(float factor) {
@@ -940,15 +961,16 @@ void replay_toggle_play_pause(void) {
 }
 
 int replay_prepare_frame(int full_flat_count) {
-    REPLAY_FLAT_STATE;
+    FlatProgramView flat_program = repl_state_flat_program_view();
+    int num_flat_cmds = flat_program.cmd_count;
     ReplReplayRuntimeState *state = replay_state_mut();
     if (!state->active)
-        return g_num_flat_cmds;
+        return num_flat_cmds;
 
     state->total_flat_cmds = full_flat_count;
-    if (state->pc > g_num_flat_cmds)
-        state->pc = g_num_flat_cmds;
-    if (state->pc >= g_num_flat_cmds && g_num_flat_cmds > 0 &&
+    if (state->pc > num_flat_cmds)
+        state->pc = num_flat_cmds;
+    if (state->pc >= num_flat_cmds && num_flat_cmds > 0 &&
         state->state == REPLAY_PLAYING)
         state->state = REPLAY_DONE;
     replay_clamp_fade_batches(state->pc);
@@ -981,7 +1003,7 @@ void replay_copy_baseline_scratch_arrays(
            sizeof(replay_state_mut()->baseline_scratch_arrays));
 }
 
-int replay_handle_key_impl(unsigned char key) {
+int replay_handle_key(unsigned char key) {
     ReplReplayRuntimeState *state = replay_state_mut();
     if (!state->active) {
         if (key == KEY_CTRL_R) {
@@ -1090,7 +1112,7 @@ static int replay_modifier_special_key(int key) {
 #endif
 }
 
-int replay_handle_special_key_impl(int key) {
+int replay_handle_special(int key) {
     if (!replay_active())
         return 0;
 
@@ -1123,7 +1145,8 @@ int replay_bench_fade_install(const int *old_pcs, const int *new_pcs,
                             int count, float age) {
     ReplReplayRuntimeState *state = replay_state_mut();
     int installed = 0;
-    REPLAY_FLAT_STATE;
+    FlatProgramView flat_program = repl_state_flat_program_view();
+    int num_flat_cmds = flat_program.cmd_count;
 
     if (count < 0) count = 0;
     if (count > REPLAY_FADE_BATCH_MAX) count = REPLAY_FADE_BATCH_MAX;
@@ -1136,9 +1159,9 @@ int replay_bench_fade_install(const int *old_pcs, const int *new_pcs,
         int new_pc = new_pcs[idx];
 
         if (old_pc < 0) old_pc = 0;
-        if (old_pc > g_num_flat_cmds) old_pc = g_num_flat_cmds;
+        if (old_pc > num_flat_cmds) old_pc = num_flat_cmds;
         if (new_pc < 0) new_pc = 0;
-        if (new_pc > g_num_flat_cmds) new_pc = g_num_flat_cmds;
+        if (new_pc > num_flat_cmds) new_pc = num_flat_cmds;
         if (new_pc <= old_pc)
             continue;
 

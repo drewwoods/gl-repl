@@ -55,9 +55,9 @@ typedef enum {
     REPLAY_MODE_VERTEX
 } ReplayMode;
 
-/* ReplayFadeBatch / ReplayFadeBatchView / REPLAY_FADE_BATCH_MAX are
- * defined above. The REPL replay state machine produces batches; the
- * scene module consumes them. */
+/* ReplayFadeBatch / ReplayFadeBatchView / REPLAY_FADE_BATCH_MAX are defined above.
+ * The replay peer produces batches; the controller consumes them in its
+ * per-frame fade-render hook. */
 
 /* --- State machine control -------------------------------------------- */
 
@@ -193,8 +193,8 @@ void replay_copy_baseline_scratch_arrays(
 
 /* --- Input routing (called from controller/editor dispatch) ----------- */
 
-int  replay_handle_key_impl(unsigned char key);
-int  replay_handle_special_key_impl(int key);
+int  replay_handle_key(unsigned char key);
+int  replay_handle_special(int key);
 
 /* --- Benchmark / test helpers ----------------------------------------- */
 

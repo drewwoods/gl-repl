@@ -993,7 +993,7 @@ static int handle_escape_key_route(unsigned char key) {
          * fires below, so Esc is the universal "dismiss" key for both
          * visible selection bands and the other overlays. */
         editor_input_anchor_clear();
-        if (color_picker_close()) {
+        if (color_picker_stop()) {
             editor_request_redraw();
             return 1;
         }

@@ -401,16 +401,16 @@ static void test_tab_skips_tutorial_autofill_off_expected_line(void) {
 }
 
 static void test_shadow_text_clears_on_exit(void) {
-    /* Regression: tutorial_exit must refresh autocomplete so the
+    /* Regression: tutorial_stop must refresh autocomplete so the
      * ghost from the in-progress step clears immediately. */
     EditorAutocompleteState ac;
 
     reset_fixture();
     tutorial_start(0);
-    tutorial_exit();
+    tutorial_stop();
 
     ac = editor_state_autocomplete();
-    ASSERT_STR("ghost clears on tutorial_exit", ac.ghost, "");
+    ASSERT_STR("ghost clears on tutorial_stop", ac.ghost, "");
 }
 
 static void test_tutorial_start_sets_step_progress_status(void) {
@@ -521,7 +521,7 @@ static void test_tutorial_refresh_input_hint_on_full_match(void) {
 
     /* Inactive: never writes. Park a sentinel status, exit the tutorial,
      * and confirm the call leaves it intact. */
-    tutorial_exit();
+    tutorial_stop();
     repl_set_status("sentinel");
     tutorial_refresh_input_hint("glBegin(GL_TRIANGLES)");
     ASSERT_STR("inactive call is a no-op", status_text(), "sentinel");
@@ -2124,7 +2124,7 @@ static void test_exit_on_require_does_not_autoadvance(void) {
      * the bug: a restore write of 1 (the baseline) would match. */
     ASSERT_INT("REQUIRE unsatisfied at exit", repl_cfg_get_int("vertex_outlines", -1), 0);
 
-    tutorial_exit();
+    tutorial_stop();
     ASSERT_TRUE("tutorial inactive after exit", !tutorial_active());
     ASSERT_INT("vertex_outlines restored to baseline",
                repl_cfg_get_int("vertex_outlines", -1), outlines_baseline);
@@ -2169,7 +2169,7 @@ static void test_restart_during_tutorial_preserves_original_baseline(void) {
 
     /* Exit tutorial 2: its baseline (captured after teardown of tour 1)
      * must equal the original user baseline. */
-    tutorial_exit();
+    tutorial_stop();
     ASSERT_TRUE("tutorial 2 inactive after exit", !tutorial_active());
     ASSERT_INT("grid restored to ORIGINAL baseline (not tour-1 mutated)",
                repl_cfg_get_int("grid", -1), baseline);
@@ -2198,13 +2198,14 @@ static void test_baseline_captures_view_mode_even_when_unreferenced(void) {
     ASSERT_INT("view_mode reset to 3D inside tutorial",
                repl_cfg_get_int("view_mode", -1), 0);
 
-    tutorial_exit();
+    tutorial_stop();
     ASSERT_TRUE("color-transform inactive after exit", !tutorial_active());
     ASSERT_INT("view_mode restored to pre-tutorial 2D",
                repl_cfg_get_int("view_mode", -1), 1);
 }
 
 int main(void) {
+    tutorial_state_init_explicit();
     test_exit_on_require_does_not_autoadvance();
     test_restart_during_tutorial_preserves_original_baseline();
     test_baseline_captures_view_mode_even_when_unreferenced();

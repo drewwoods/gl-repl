@@ -24,112 +24,15 @@
 #define g_pending_scene_name (IMPORT_EXPORT_STATE->pending_scene_name)
 #define g_pending_workspace_dir (IMPORT_EXPORT_STATE->pending_workspace_dir)
 
-/* ----- Neutral header-config bag (step 4 decouple) ------------------------ */
+#include "repl/cfg_baseline.h"
 
-void repl_export_config_clear(ReplExportConfig *cfg) {
-    if (!cfg) return;
-    cfg->count = 0;
-}
-
-int repl_export_config_set(ReplExportConfig *cfg,
-                           const char *key, const char *value) {
-    if (!cfg || !key || !value) return 0;
-    /* Replace if present. */
-    for (int i = 0; i < cfg->count; i++) {
-        if (strcmp(cfg->items[i].key, key) == 0) {
-            snprintf(cfg->items[i].value, REPL_EXPORT_CFG_VALUE_MAX, "%s", value);
-            return 1;
-        }
-    }
-    if (cfg->count >= REPL_EXPORT_CFG_MAX_ITEMS) return 0;
-    snprintf(cfg->items[cfg->count].key,   REPL_EXPORT_CFG_KEY_MAX,   "%s", key);
-    snprintf(cfg->items[cfg->count].value, REPL_EXPORT_CFG_VALUE_MAX, "%s", value);
-    cfg->count++;
-    return 1;
-}
-
-int repl_export_config_set_int(ReplExportConfig *cfg, const char *key, int value) {
-    char buf[REPL_EXPORT_CFG_VALUE_MAX];
-    snprintf(buf, sizeof(buf), "%d", value);
-    return repl_export_config_set(cfg, key, buf);
-}
-
-const char *repl_export_config_get(const ReplExportConfig *cfg, const char *key) {
-    if (!cfg || !key) return NULL;
-    for (int i = 0; i < cfg->count; i++) {
-        if (strcmp(cfg->items[i].key, key) == 0)
-            return cfg->items[i].value;
-    }
-    return NULL;
-}
-
-int repl_export_config_get_int(const ReplExportConfig *cfg,
-                               const char *key, int fallback) {
-    const char *s = repl_export_config_get(cfg, key);
-    if (!s) return fallback;
-    return (int)strtol(s, NULL, 10);
-}
-
-int repl_export_config_count(const ReplExportConfig *cfg) {
-    return cfg ? cfg->count : 0;
-}
-
-int repl_export_config_at(const ReplExportConfig *cfg, int idx,
-                          const char **key_out, const char **value_out) {
-    if (!cfg || idx < 0 || idx >= cfg->count) return 0;
-    if (key_out)   *key_out   = cfg->items[idx].key;
-    if (value_out) *value_out = cfg->items[idx].value;
-    return 1;
-}
-
-/* Bridge installation: file-static pointer the controller installs at startup.
- * NULL bridge = no @cfg emission/parsing, which is what the demo wants. */
-static const ReplExportConfigBridge *g_export_cfg_bridge = NULL;
+#define g_export_cfg_bridge (repl_export_config_bridge())
 
 static const char k_cfg_slug_point_attenuation[] = "point_attenuation";
 static const char k_cfg_slug_msaa[] = "msaa";
 static const char k_cfg_slug_line_smooth[] = "line_smooth";
 static const char k_cfg_slug_vertex_outlines[] = "vertex_outlines";
 static const char k_cfg_slug_vertex_points[] = "vertex_points";
-
-void repl_export_install_config_bridge(const ReplExportConfigBridge *bridge) {
-    g_export_cfg_bridge = bridge;
-}
-
-const ReplExportConfigBridge *repl_export_config_bridge(void) {
-    return g_export_cfg_bridge;
-}
-
-/* Typed live-cfg helpers for repl/widget consumers (e.g. tutorial SET/REQUIRE
- * steps). All three delegate to the controller-installed config bridge — no
- * direct scene_* / glr_* calls, no scene/app includes (so
- * check-repl-export-via-bridge stays green). No-op / return fallback when no
- * bridge is installed (demo / some tests). */
-int repl_cfg_get_int(const char *slug, int fallback) {
-    const ReplExportConfigBridge *b = g_export_cfg_bridge;
-    if (!slug || !b || !b->get_int) return fallback;
-    return b->get_int(slug, fallback);
-}
-
-void repl_cfg_set_int(const char *slug, int value) {
-    const ReplExportConfigBridge *b = g_export_cfg_bridge;
-    if (!slug || !b || !b->apply) return;
-    /* One-item bag, same pattern as parse_cfg's live-apply path. */
-    ReplExportConfig single;
-    repl_export_config_clear(&single);
-    repl_export_config_set_int(&single, slug, value);
-    b->apply(&single);
-}
-
-/* Two-probe known-slug test: a known slug returns its stored value regardless
- * of `fallback`, so two probes with different fallbacks produce equal results.
- * An unknown slug returns the fallback verbatim, so the probes differ.
- * Avoids adding a third bridge method just to detect typos. */
-int repl_cfg_known(const char *slug) {
-    const ReplExportConfigBridge *b = g_export_cfg_bridge;
-    if (!slug || !b || !b->is_known) return 0;
-    return b->is_known(slug);
-}
 
 /* Camera bridge — same shape as the cfg bridge. Step 4a moved camera-block
  * emission and parsing through this interface so src/repl/export.c no longer
@@ -492,34 +395,7 @@ static void emit_func_aliases(int *n) {
     }
 }
 
-/* --- cfg ------------------------------------------------------------------- */
 
-int repl_export_extract_cfg_slug(const char *line, char *out, size_t out_sz) {
-    if (!line || !out || out_sz == 0) return 0;
-    const char *p = line;
-    while (*p && isspace((unsigned char)*p)) p++;
-    if (p[0] == '/' && p[1] == '/') {
-        p += 2;
-        while (*p && isspace((unsigned char)*p)) p++;
-        if (*p != '@') return 0;
-        p++;
-        if (strncmp(p, "cfg", 3) != 0) return 0;
-        p += 3;
-        if (!isspace((unsigned char)*p)) return 0;
-        while (*p && isspace((unsigned char)*p)) p++;
-    } else if (*p == '@') {
-        p++;
-        if (strncmp(p, "cfg", 3) != 0) return 0;
-        p += 3;
-        if (!isspace((unsigned char)*p)) return 0;
-        while (*p && isspace((unsigned char)*p)) p++;
-    }
-    size_t out_i = 0;
-    while (*p && (isalnum((unsigned char)*p) || *p == '_') && out_i + 1 < out_sz)
-        out[out_i++] = *p++;
-    out[out_i] = '\0';
-    return out_i > 0;
-}
 
 static int parse_cfg(const char *args) {
     char slug[32];

@@ -8,7 +8,7 @@
  * mutate peer state directly.
  *
  * Public API:
- *   - color_picker_open / _close / _active_line / _can_edit_cmd
+ *   - color_picker_start / _stop / _active_line / _can_edit_cmd
  *     for controller open/close orchestration.
  *   - color_picker_handle_press / _motion / _release for input
  *     dispatch. Each returns a ColorPickerInputResult so the
@@ -67,11 +67,12 @@ void color_picker_hsv_to_rgb(float h, float s, float v,
  * CMD_CLEAR_COLOR with constant args). my is the GLUT screen y where the
  * picker was triggered (used for vertical anchoring). No-op if the
  * command is not editable. */
-void color_picker_open(int cmd_idx, int my);
+void color_picker_start(int cmd_idx, int my);
 
 /* Dismiss any active picker. Returns 1 if a picker was open and closed,
  * 0 if no picker was active. */
-int  color_picker_close(void);
+int  color_picker_stop(void);
+void color_picker_state_reset(void);
 
 /* Source-cmd index of the open picker, or -1 when closed. */
 int  color_picker_active_line(void);

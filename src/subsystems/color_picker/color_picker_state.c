@@ -109,9 +109,7 @@ static int color_picker_write_cmd(void) {
 
     color_picker_hsv_to_rgb(g_cp_hue, g_cp_sat, g_cp_val, &r, &g, &b);
     if (cmd->type == CMD_CLEAR_COLOR) {
-        if (r > CP_CLEAR_MAX_V) r = CP_CLEAR_MAX_V;
-        if (g > CP_CLEAR_MAX_V) g = CP_CLEAR_MAX_V;
-        if (b > CP_CLEAR_MAX_V) b = CP_CLEAR_MAX_V;
+        /* V is already clamped to CP_CLEAR_MAX_V at the drag sites. */
         written = snprintf(new_line, sizeof(new_line),
                            "glClearColor(%g, %g, %g, %g);",
                            r, g, b, g_cp_alpha);
@@ -180,7 +178,7 @@ static int color_picker_write_cmd(void) {
     return 0;
 }
 
-void color_picker_open(int cmd_idx, int my) {
+void color_picker_start(int cmd_idx, int my) {
     int cp_x, cp_w;
     const GLCmd *cmd;
 
@@ -233,12 +231,16 @@ void color_picker_open(int cmd_idx, int my) {
     g_cp_py = ppy;
 }
 
-int color_picker_close(void) {
+int color_picker_stop(void) {
     if (g_cp_line < 0) return 0;
     g_cp_line = -1;
     g_cp_drag = 0;
     g_cp_undo_captured = 0;
     return 1;
+}
+
+void color_picker_state_reset(void) {
+    color_picker_stop();
 }
 
 int color_picker_active_line(void) {
@@ -356,7 +358,7 @@ ColorPickerInputResult color_picker_handle_press(int mx, int my) {
     }
 
     /* Click outside the picker: dismiss and let the event flow through. */
-    color_picker_close();
+    color_picker_stop();
     res.closed = 1;
     return res;
 }

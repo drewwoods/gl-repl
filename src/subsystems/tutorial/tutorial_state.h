@@ -11,7 +11,7 @@
 #define TUTORIAL_STATE_H
 
 #include "repl/tutorials.h"  /* TUTORIAL_LOCKED_LINE_MAX */
-#include "repl/export.h"
+#include "repl/cfg_baseline.h"
 
 #define TUTORIAL_STATUS_MAX 128
 
@@ -19,16 +19,12 @@ typedef enum {
     TUT_MATCH_OK = 0,
     TUT_MISMATCH_EMPTY,
     TUT_MISMATCH_SHAPE,
-    TUT_MISMATCH_COMMAND,
-    TUT_MISMATCH_ARG,
 } TutorialMatchKind;
 
 /* Result of matching the user's current input against the tutorial's expected
- * command for the active step. `arg_index` is -1 unless a specific argument slot
- * caused the mismatch. */
+ * command for the active step. */
 typedef struct {
     TutorialMatchKind kind;
-    int               arg_index;
     char              message[TUTORIAL_STATUS_MAX];
 } TutorialMatchResult;
 
@@ -75,7 +71,6 @@ typedef struct {
      * TUTORIAL_LOCKED_LINE_MAX to match the existing tracked-line
      * cap. */
     int                   instruction_line_for_step[TUTORIAL_LOCKED_LINE_MAX];
-    TutorialMatchResult   last_result;
     ReplExportConfig      baseline_bag;
     int                   baseline_valid;
 } TutorialRuntimeState;
@@ -84,6 +79,7 @@ typedef struct {
 TutorialRuntimeState  tutorial_state_view(void);
 TutorialRuntimeState *tutorial_state_mut(void);
 void                  tutorial_state_reset(void);
+void                  tutorial_state_init_explicit(void);
 int                   tutorial_active(void);
 void                  tutorial_state_capture(TutorialRuntimeState *snapshot);
 void                  tutorial_state_restore(const TutorialRuntimeState *snapshot);
