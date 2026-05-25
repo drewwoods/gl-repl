@@ -1,5 +1,5 @@
 /*
- * scene_geometry_guides.h - Cursor-context geometry guide rendering.
+ * geometry_guides.h - Cursor-context geometry guide rendering.
  *
  * Draws the geometry guides associated with the current edit row: vertex
  * markers, primitive context, and the other immediate cues the scene overlay
