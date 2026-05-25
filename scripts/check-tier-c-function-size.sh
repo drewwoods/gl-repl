@@ -19,7 +19,11 @@ baseline_flatten=$(awk -F: '/^flatten_range/{gsub(/[ \t]/,"",$2); print $2}' "$b
 
 count_function_lines() {
     local file="$1" pattern="$2"
-    awk "/${pattern}/{start=NR} start && /^}[[:space:]]*\$/{print NR-start+1; exit}" "$file"
+    # Record signature→closing-brace span for every match of the
+    # pattern; keep the *last* span so forward declarations (which
+    # still hit an intervening ^} from the next function) are
+    # superseded by the real definition.
+    awk "/${pattern}/{start=NR} start && /^}[[:space:]]*\$/{len=NR-start+1; start=0} END{print len+0}" "$file"
 }
 
 parse_lines=$(count_function_lines src/repl/parser.c \

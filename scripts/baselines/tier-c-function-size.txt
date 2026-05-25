@@ -9,4 +9,4 @@
 # so the ratchet tightens behind you.
 
 parse_command: 456
-flatten_range: 59
+flatten_range: 160
