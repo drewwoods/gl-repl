@@ -284,6 +284,18 @@ void editor_clear_all_cmds(void) {
     repl_set_status("All commands cleared");
 }
 
+void editor_reset_for_new_scene(void) {
+    ReplCommandStore store = repl_command_store_live();
+    repl_command_store_clear(&store);
+    editor_buffer_clear();
+    editor_state_edit_line_set(0);
+    editor_insert_mode_set(0);
+    editor_input_clear();
+    editor_pending_newline_clear();
+    repl_eval_init_predef_vars();
+    repl_mark_source_dirty();
+}
+
 static const char *editor_committed_line_text(int idx) {
     const char *text = editor_buffer_line(idx);
     return (text && text[0]) ? text : "";

@@ -18,8 +18,7 @@
  * before the g_angle placeholder; the import parser tolerates either
  * form so existing saved files keep working.
  *
- * (Bridge introduced as step 4a of
- * feature/decouple-repl-from-gl-repl-alt.md.)
+ * (Bridge introduced to decouple camera formatting from the export core.)
  */
 #include "repl/export.h"
 #include "app/glr_camera.h"

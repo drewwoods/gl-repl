@@ -22,8 +22,8 @@
 #endif
 
 /* Orbit/pan momentum decay per frame. Deliberately independent of
- * config.h's GLR_CAMERA_TARGET_DECAY (the ease-to-target decay) even
- * though both currently default to 0.88f — they are different knobs. */
+ * config.h's GLR_CAMERA_TARGET_DECAY (the ease-to-target decay) —
+ * they are different knobs. */
 #define CAM_DECAY 0.88f
 #define CAM_DECAY_ZOOM 0.65f
 #define CAM_TARGET_ANGLE_EPS 0.01f

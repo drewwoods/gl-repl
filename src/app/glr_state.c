@@ -16,9 +16,7 @@
  * `glr_camera`; the `auto_rotate` reset moved to the camera bridge's
  * `apply` callback (driven via the bridge during scene-cfg restore).
  *
- * (Cfg-bridge routing landed as step 4 of the decouple plan;
- * this storage relocation is step 7a of
- * feature/decouple-repl-from-gl-repl-alt.md.)
+ * (Relocated from ReplRuntimeState to glr_state.)
  */
 #include "app/glr_state.h"
 

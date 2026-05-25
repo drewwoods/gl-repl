@@ -2741,6 +2741,23 @@ int main() {
         ASSERT_TRUE("clear_all: tmp is no longer registered", !found_tmp_after_clear);
     }
 
+    /* editor_reset_for_new_scene - clears scene for transient load without toast. */
+    {
+        glr_app_reset_all();
+        editor_feed_line("float tmp;");
+        editor_feed_line("glVertex3f(1, 0, 0)");
+        ASSERT_INT("reset_scene: setup two cmds", repl_state_document_count(), 2);
+
+        editor_reset_for_new_scene();
+
+        ASSERT_INT("reset_scene: num_cmds is 0", repl_state_document_count(), 0);
+        ASSERT_INT("reset_scene: source_document line count is 0",
+                   source_document_view().line_count, 0);
+        ASSERT_INT("reset_scene: edit_line is 0", editor_state_edit_line(), 0);
+        ASSERT_INT("reset_scene: inserting is 0", editor_insert_mode(), 0);
+        ASSERT_INT("reset_scene: input is empty", editor_state_input().input[0], 0);
+    }
+
     /* Regression: Ctrl+/ on a commented-out variable assignment should
      * uncomment it into a CMD_VAR_ASSIGN.  Before the fix the GL-command
      * parser would reject the stripped "x = 1;" and the user would see

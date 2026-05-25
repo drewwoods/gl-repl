@@ -2,6 +2,7 @@
 
 #include "c_compat.h"  /* STATIC_ASSERT (C99/C11 portable) */
 #include <ctype.h>
+#include <math.h>
 #include <errno.h>
 #include <signal.h>
 #include "gl_includes.h"
@@ -1017,7 +1018,7 @@ static void glr_ctrl_push_color_transformers(void) {
 /* Browser autoplay policy: the Web Audio context stays suspended until
  * a user gesture. The very first key / mouse / special event after
  * startup fires glr_audio_on_user_gesture; native builds make this a
- * no-op. (Relocated from editor_input.c in Phase J1 commit 48a.) */
+ * no-op. */
 static int g_audio_gesture_sent = 0;
 
 static void glr_ctrl_notify_audio_gesture_once(void) {
@@ -1735,9 +1736,7 @@ void glr_ctrl_display_frame(void) {
     if (repl_state_normals_dirty()) {
         prof_begin(PROF_AUTONORMAL);
         /* Caller-owned cursor: read edit-line into a local int, pass
-         * &local so the pipeline never reaches into editor_state_*.
-         * (Convention introduced in Phase 3.6.0 of
-         * edit-line-ownership.md.) */
+         * &local so the pipeline never reaches into editor_state_*. */
         int edit_line = editor_state_edit_line();
         repl_recompute_autonormals(glr_state_presentation().autonormal,
                                    &edit_line);
@@ -1773,8 +1772,7 @@ void glr_ctrl_display_frame(void) {
      * data; the editor is agnostic to which feature pushed them.
      * prepare() fills an output struct and the controller publishes
      * via glr_publish_replay_annotations so REPL code doesn't reach
-     * directly into editor_state_virtual_lines. (Indirection added in
-     * Phase 4 of feature/source-document-port.md.) */
+     * directly into editor_state_virtual_lines. */
     prof_begin(PROF_SNAPSHOT_VIRTUAL_LINES);
     ReplReplayAnnotationOutput replay_annotations;
     replay_annotations_prepare(source_document_view(),
@@ -2024,8 +2022,7 @@ static const ReplExportProjectionBridge g_export_projection_bridge_impl = {
 /* Editor-input cleanup that the REPL loaders used to do inline now
  * routes through callback sinks. The two helpers below are the
  * full-app implementations the controller installs at startup; the
- * demo leaves both unset. (Indirection added in Phase 3 of
- * feature/source-document-port.md.) */
+ * demo leaves both unset. */
 static void glr_app_editor_input_reset(void) {
     editor_insert_mode_set(0);
     EditorInputState *inp = editor_state_input_mut();
@@ -2041,8 +2038,7 @@ static void glr_app_editor_insert_mode_off(void) {
 }
 
 /* Route the residual editor scroll/follow writes through host-effect
- * sinks. (Indirection added in Phase 6 of
- * feature/source-document-port.md.) */
+ * sinks. */
 static void glr_app_scroll_to_line(int target) {
     editor_scroll_set(target);
     editor_scroll_follow_cursor_set(0);
@@ -3110,8 +3106,7 @@ int glr_ctrl_router_handle_glut_scroll_wheel_button(int button, int state, int x
 #endif
 }
 
-/* ---- Code-panel UiHit dispatch --------------------------------------- *
- * (Introduced in Phase J2.2 of feature/decouple-repl-from-gl-repl-alt.md.) */
+/* ---- Code-panel UiHit dispatch --------------------------------------- */
 
 /* Code-panel selection drag tracking. Press handlers set the anchor
  * to the clicked source-cmd row; motion re-runs ui_panels_hit_test
@@ -3930,9 +3925,7 @@ void glr_ctrl_mouse(int button, int state, int x, int y) {
          * variable panel, color picker, menu bar, code panel (including
          * divider + inline swatch + insert line) and pin buttons. Only
          * kinds that don't apply (UI_HIT_SCENE, UI_HIT_NONE,
-         * UI_HIT_HELP_PANEL) fall through to scene press / camera.
-         * (Introduced as Phase J2.2 of
-         * feature/decouple-repl-from-gl-repl-alt.md.) */
+         * UI_HIT_HELP_PANEL) fall through to scene press / camera. */
         UiRenderSnapshot ui_snap;
         glr_ctrl_build_ui_snapshot(&ui_snap);
         UiHit hit = ui_panels_hit_test(&ui_snap, x, y,
@@ -4073,10 +4066,7 @@ void glr_ctrl_mousewheel(int wheel, int direction, int x, int y) {
  * The work is split from the GLUT scheduling so test fixtures (which
  * don't initialize GLUT) can drive a single tick by calling
  * glr_ctrl_tick directly. The public timer entry adds
- * glutPostRedisplay + glutTimerFunc reschedule on top.
- *
- * (Inlined here from the legacy editor's timer_func in
- * Phase J1 commit 48b.) */
+ * glutPostRedisplay + glutTimerFunc reschedule on top. */
 void glr_ctrl_tick(void) {
     /* SIGINT (Ctrl+C) requested quit: the handler only set a flag;
      * do the recovery save + exit here on the normal path so no

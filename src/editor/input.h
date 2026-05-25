@@ -153,6 +153,7 @@ void editor_delete_cmd_range(int start, int count, const char *what);
 
 /* Clear ALL commands unconditionally (same behavior as Ctrl+L). */
 void editor_clear_all_cmds(void);
+void editor_reset_for_new_scene(void);
 
 /* Sync the input buffer to the source line at `idx` (strips trailing
  * `;` and whitespace). Used by the editor when navigating to an
