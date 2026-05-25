@@ -1259,7 +1259,7 @@ static int tutorial_precheck_current_input(void) {
      * instead. Routing the hint through a tutorial_* widget call keeps
      * input.c's direct repl_* surface frozen at its baseline (the
      * check-editor-repl-surface ratchet). */
-    if (tutorial_block_noncommand_commit()) {
+    if (tutorial_reject_noncommand_commit_with_hint()) {
         editor_completion_clear();
         return 0;
     }

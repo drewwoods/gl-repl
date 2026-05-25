@@ -104,7 +104,7 @@ int                  tutorial_handle_ack_key(unsigned char key);
  * normal commit path run). Lives in tutorial.c so input.c gains zero
  * new direct repl_* calls — check-editor-repl-surface stays at its
  * baseline of 21 unique repl_* symbols. */
-int                  tutorial_block_noncommand_commit(void);
+int                  tutorial_reject_noncommand_commit_with_hint(void);
 
 /* The source row the next user commit should land on. -1 when no
  * step is currently waiting for a user commit. */

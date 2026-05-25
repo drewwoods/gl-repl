@@ -8,7 +8,7 @@
 #include "repl/cfg_baseline.h"
 #include "repl/load.h"
 #include "repl/scenes.h"
-#include "repl/state_owners.h"
+#include "repl/state_owners.h" /* For repl_state_mark_flat_dirty, repl_state_mark_source_dirty, and repl_state_parse_workspace_header_line */
 #include "repl/tutorials.h"
 #include "config.h"            /* REPL_DIAG_TEXT_MAX */
 
@@ -97,14 +97,9 @@ static void tutorial_capture_cfg_baseline(int idx) {
     state->baseline_valid = 1;
 }
 
-/* Apply the captured bag back through the bridge, then clear it. The
- * per-write `tutorial_notify_state_changed()` hook in glr_config_set
- * runs unconditionally per slug, but tutorial_teardown clears the
- * runtime state BEFORE calling this — so `tutorial_active()` returns
- * 0 inside the notify and short-circuits before checking step kind.
- * Without that ordering, restoring a slug to a value that happens to
- * match an active REQUIRE step's target would auto-advance the
- * tutorial mid-teardown (and run the next step's SET side effects). */
+/* Restore captured baseline configuration. Order sensitivity: tutorial_teardown
+ * deactivates the active flag BEFORE this runs, so restoring slug values
+ * doesn't trigger state-change auto-advancement mid-teardown. */
 static void tutorial_cfg_baseline_restore(void) {
     TutorialRuntimeState state = tutorial_state_view();
     if (!state.baseline_valid) return;
@@ -490,25 +485,13 @@ void tutorial_start(int idx) {
         return;
     }
 
-    /* If another tutorial is already active (Restart or a fresh flyout
-     * pick while mid-tutorial), tear it down first so its baseline is
-     * restored to the user's true original cfg BEFORE we snapshot a
-     * new baseline. Without this, capturing the "pre-tutorial" cfg
-     * actually records the prior tutorial's mutated state — and the
-     * eventual exit then restores tutorial state instead of the
-     * user's. Mid-Feature-Tour restart capturing grid=10 as the
-     * baseline is the symptom this guards against. */
+    /* If another tutorial is active, tear it down first so the true original
+     * configuration baseline is restored before we snapshot a new one. */
     if (tutorial_active())
         tutorial_teardown();
 
-    /* Snapshot the user's true pre-tutorial cfg BEFORE any
-     * tutorial-initiated mutation (transient-scene entry can flip cfg
-     * via restore_pre_example_cfg_if_valid; presentation_reset(0) resets
-     * scene presentation to example defaults; entry `@cfg` overrides
-     * those; SET steps override further). `tutorial_teardown` writes
-     * this back at every teardown path — exit, completion, workspace /
-     * scene / example load, glr_app_reset_all — so the tutorial leaves
-     * no scene-presentation footprint. */
+    /* Snapshot the user's true pre-tutorial config baseline before making any
+     * tutorial mutations, so we can restore it cleanly on teardown/exit. */
     tutorial_capture_cfg_baseline(idx);
 
     /* Preserve baseline configuration across the state reset */
@@ -525,22 +508,8 @@ void tutorial_start(int idx) {
     tutorial_state_mut()->baseline_valid = preserved_valid;
 
     /* Reset scene-presentation chrome to defaults, then apply any
-     * tutorial leading `@cfg` lines through the export-config bridge —
-     * same vocabulary and ordering the example loader uses, so a
-     * tutorial is a self-contained scenario with predictable visual
-     * state regardless of what the user was looking at before. Tag
-     * mask 0 means no example-tag defaults are layered in. Both calls
-     * degrade to no-ops when no host-effects sink / config bridge is
-     * installed (some narrow REPL test environments).
-     *
-     * Do NOT pass `repl_tutorial_tag_mask(idx)` here: the sink
-     * (glr_app_reset_example_chrome) consumes `REPL_EXAMPLE_TAG_*`
-     * indices, while the tutorial mask is over the disjoint
-     * `REPL_TUTORIAL_TAG_*` namespace. Cross-pumping would silently
-     * fire example tag-default cfg policies against unrelated tutorial
-     * tags (bits at the same index ≠ same meaning). If per-tag
-     * tutorial defaults become a real policy, add a dedicated
-     * repl_dispatch_tutorial_presentation_reset + sink. */
+     * tutorial leading `@cfg` lines. Note: We pass 0 rather than the tag
+     * mask to avoid conflict between disjoint tutorial/example tag namespaces. */
     repl_dispatch_example_presentation_reset(0);
 
     const char *const *cfg = repl_tutorial_cfg_lines(idx);
@@ -560,15 +529,8 @@ void tutorial_start(int idx) {
 void tutorial_teardown(void) {
     if (!tutorial_active())
         return;
-    /* Deactivate active status BEFORE restoring cfg so the per-slug notify
-     * hook in glr_config_set sees `active == 0` and bails out before it can
-     * compare the just-written value to any step's REQUIRE target.
-     * Bug fix: exiting / restarting / switching tutorials during a
-     * REQUIRE step could otherwise advance the tutorial during the
-     * restore writes themselves — e.g. Feature Tour exit restoring
-     * vertex_outlines=1 (the pre-tutorial default) coincides with the
-     * REQUIRE target and triggers the next step's SET grid=10 side
-     * effect after grid was already restored. */
+    /* Deactivate active status BEFORE restoring config to prevent step
+     * auto-advancement side effects during config restore writes. */
     tutorial_state_mut()->active = 0;
     tutorial_cfg_baseline_restore();
     tutorial_state_reset();
@@ -578,11 +540,8 @@ void tutorial_stop(void) {
     if (!tutorial_active())
         return;
 
-    /* Set the status BEFORE teardown so it survives the reset and is
-     * visible to the user. tutorial_teardown runs the cfg restore + state
-     * reset together so a follow-on scene/workspace load (the next thing
-     * the user usually does after exiting) doesn't stash a tutorial-
-     * mutated cfg into the pre-workspace snapshot. */
+    /* Set status before teardown so it is visible to the user. Teardown
+     * runs config restore and state reset together. */
     repl_set_status("Tutorial exited");
     tutorial_teardown();
     repl_dispatch_completion_update();
@@ -737,6 +696,12 @@ static TutorialStepResult tutorial_enter_step_set(int idx, int step, int instruc
     return TUTORIAL_STEP_PAUSED;
 }
 
+static int tutorial_cfg_matches_target(const char *slug, int target) {
+    if (!slug || !repl_cfg_known(slug))
+        return 0;
+    return repl_cfg_get_int(slug, 0) == target;
+}
+
 static TutorialStepResult tutorial_enter_step_require(int idx, int step, int instruction_line, TutorialRuntimeState *state) {
     /* Check: advance when the user themselves sets the slug to the
      * target. If already satisfied on entry, signal auto-advance to
@@ -745,11 +710,7 @@ static TutorialStepResult tutorial_enter_step_require(int idx, int step, int ins
     const char *slug = repl_tutorial_step_cfg_slug(idx, step);
     int target = repl_tutorial_step_cfg_value(idx, step);
     state->expected_commit_line = -1;
-    /* Pick a fallback distinct from `target` so an unknown slug
-     * (defensive — tutorial_start validated all slugs) can't be
-     * mistaken for "already satisfied". */
-    int probe_fb = (target == 0) ? -1 : 0;
-    if (repl_cfg_get_int(slug, probe_fb) == target)
+    if (tutorial_cfg_matches_target(slug, target))
         return TUTORIAL_STEP_AUTOADVANCE;  /* auto-advance via the loop */
     /* Park the cursor past the locked instruction-comment row so
      * the editor doesn't render the empty input overlay over it —
@@ -847,9 +808,7 @@ void tutorial_notify_state_changed(void) {
         return;
     const char *slug = repl_tutorial_step_cfg_slug(state.tutorial_idx, state.step);
     int target = repl_tutorial_step_cfg_value(state.tutorial_idx, state.step);
-    if (!slug) return;
-    int probe_fb = (target == 0) ? -1 : 0;
-    if (repl_cfg_get_int(slug, probe_fb) != target)
+    if (!tutorial_cfg_matches_target(slug, target))
         return;
     /* Match: advance. Clear pending (REQUIRE has no commit attempt in
      * flight, but be defensive). */
@@ -867,7 +826,7 @@ int tutorial_handle_ack_key(unsigned char key) {
     return 1;
 }
 
-int tutorial_block_noncommand_commit(void) {
+int tutorial_reject_noncommand_commit_with_hint(void) {
     if (!tutorial_active())
         return 0;
     TutorialStepKind k = tutorial_current_step_kind();
@@ -1098,6 +1057,10 @@ void tutorial_cancel_pending(void) {
      * dispatch this unconditionally on every rejection path. */
     if (state->pending.step_idx < 0)
         return;
+    /* expected_commit_line intentionally survives cancellation so the
+     * user can retry editing and committing the correct expected command
+     * on the designated insertion row. If we cleared it, the active
+     * step would be locked out from being completed. */
     tutorial_pending_reset(state);
 }
 
