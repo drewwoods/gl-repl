@@ -1,7 +1,7 @@
 # `src/scene/` — Code-Smell Audit
 
 > Audit produced 2026-05-24. Resolution pass landed 2026-05-25 (commits
-> `79914d1` through `56d7faf`); see the **Status** section below for
+> `2d1b9b6` through `709455f`); see the **Status** section below for
 > per-finding state. Findings come from four parallel reviews of
 > `src/scene/` (render core; grid + axes + scene_transition;
 > visual-content modules — backdrop/lights/overlays/postprocess +
@@ -19,59 +19,59 @@ predicate coverage). `check-state-ownership` green; C99 ratchet green.
 
 | Finding | Status | Commit |
 |---|---|---|
-| 🔴 #1 transform-cmd parity drift | ✅ drift test added | `79914d1` |
-| 🔴 #2 SceneExecutePurpose | ✅ enum + adapter snapshot/restore | `a37823b`, `6fa6d15` |
+| 🔴 #1 transform-cmd parity drift | ✅ drift test added | `2d1b9b6` |
+| 🔴 #2 SceneExecutePurpose | ✅ enum + adapter snapshot/restore | `08fc94b`, `49bf979` |
 | 🔴 #3 g_xn statics in grid+axes | ⏸️ deferred — ~60 call sites | — |
-| 🔴 #4 g_guide_alpha_mul threaded | ✅ alpha_mul as parameter | `12f1eb0` |
+| 🔴 #4 g_guide_alpha_mul threaded | ✅ alpha_mul as parameter | `3023624` |
 | 🔴 #5 g_active_projection statics | ⏸️ deferred — design decision | — |
-| 🔴 #6 cityscape RNG collisions | ✅ stride 13 → 512 | `276dcd0` |
-| 🔴 #7 glPointParameterfv comment | ✅ documented as load-bearing reset | `276dcd0` |
-| 🔴 #8 underwater push/pop ordering | ✅ disable inside push | `e9708ad` |
-| 🔴 #9 transform_source_unmodified param | ✅ dropped, renamed | `ed6bb5e` |
-| 🔴 #10 transitive includes | ✅ explicit math/string/ctype | `ed6bb5e` |
+| 🔴 #6 cityscape RNG collisions | ✅ stride 13 → 512 | `b2739b8` |
+| 🔴 #7 glPointParameterfv comment | ✅ documented as load-bearing reset | `b2739b8` |
+| 🔴 #8 underwater push/pop ordering | ✅ disable inside push | `905cb0d` |
+| 🔴 #9 transform_source_unmodified param | ✅ dropped, renamed | `5dd0e65` |
+| 🔴 #10 transitive includes | ✅ explicit math/string/ctype | `5dd0e65` |
 | 🟡 #11 scene_apply_camera placement | ⏸️ deferred — design decision | — |
 | 🟡 #12 scene_apply_projection split | ⏸️ deferred — tied to #5 | — |
-| 🟡 #13 include style sweep | ✅ scene/foo.h → foo.h where in-dir | `b4abd17` |
-| 🟡 #14 lights.c gl_includes | ✅ explicit include added | `ed6bb5e` |
+| 🟡 #13 include style sweep | ✅ scene/foo.h → foo.h where in-dir | `d30ff28` |
+| 🟡 #14 lights.c gl_includes | ✅ explicit include added | `5dd0e65` |
 | 🟡 #15 targeted attrib masks | ⏸️ deferred — invasive across modules | — |
-| 🟡 #16 NV_fog save/restore | ✅ explicit getIntegerv + restore | `1aad28f` |
-| 🟡 #17 postprocess g_saved_matrix_mode | ✅ threaded through begin_2d/end_2d | `a37823b` |
-| 🟡 #18 int → enum sweep | ✅ post_filter_mode, grid_theme | `64a0e39` |
-| 🟡 #19 viewport_w/h fields | ✅ dropped from SceneRenderConfig | `64a0e39` |
+| 🟡 #16 NV_fog save/restore | ✅ explicit getIntegerv + restore | `c2e7009` |
+| 🟡 #17 postprocess g_saved_matrix_mode | ✅ threaded through begin_2d/end_2d | `08fc94b` |
+| 🟡 #18 int → enum sweep | ✅ post_filter_mode, grid_theme | `dc6ed83` |
+| 🟡 #19 viewport_w/h fields | ✅ dropped from SceneRenderConfig | `dc6ed83` |
 | 🟡 #20 grid_xn_phase/axes_xn_phase | ⏸️ deferred — fields kept for tests | — |
-| 🟡 #21 SceneFrameRenderContext.focus | ✅ duplicate dropped | `64a0e39` |
+| 🟡 #21 SceneFrameRenderContext.focus | ✅ duplicate dropped | `dc6ed83` |
 | 🟡 #22 theme spec ABI | ⏸️ deferred — design decision | — |
-| 🟡 #23 standard-theme switch | ✅ moved to default arm | `2371d7d` |
-| 🟡 #24 is_geometry_emit_cmd predicate | ✅ promoted to repl_cmd_starts_geometry_emit | `2371d7d` |
+| 🟡 #23 standard-theme switch | ✅ moved to default arm | `e9225cd` |
+| 🟡 #24 is_geometry_emit_cmd predicate | ✅ promoted to repl_cmd_starts_geometry_emit | `e9225cd` |
 | 🟡 #25 compute_before_cursor_matrix | ⏸️ deferred — moderate refactor | — |
 | 🟡 #26 snapshot input NULL policy | ⏸️ deferred — doc-only | — |
-| 🟡 #27 accum_samples == 1 carve-out | ✅ ladder check, kept | `1aad28f` |
-| 🟡 #28 accum_samples ladder validation | ✅ now {1,2,4,8,16} enforced | `1aad28f` |
-| 🟡 #29 clamp01f helper | ✅ scene_clamp01f in render_types.h | `a37823b` |
+| 🟡 #27 accum_samples == 1 carve-out | ✅ ladder check, kept | `c2e7009` |
+| 🟡 #28 accum_samples ladder validation | ✅ now {1,2,4,8,16} enforced | `c2e7009` |
+| 🟡 #29 clamp01f helper | ✅ scene_clamp01f in render_types.h | `08fc94b` |
 | 🟡 #30 cityscape y0/y1 shadow | ⏸️ deferred — cosmetic | — |
-| 🟡 #31 M_PI consolidation | ✅ moved to gl_includes.h | `b4abd17` |
+| 🟡 #31 M_PI consolidation | ✅ moved to gl_includes.h | `d30ff28` |
 | 🟡 #32 postprocess graduation | ⏸️ deferred — scope question | — |
-| 🟡 #33 scene_xn API names | ✅ cheat-sheet in header | `a37823b` |
+| 🟡 #33 scene_xn API names | ✅ cheat-sheet in header | `08fc94b` |
 | 🟡 #34 stale filename prefixes | ✅ swept across scene/ | multiple |
 | 🟡 #35 palette token review | ⏸️ deferred — design decision | — |
-| 🟢 #36 redundant pre-pop teardown | ✅ removed from lights/grid/axes/render | `e9708ad`, `64a0e39` |
+| 🟢 #36 redundant pre-pop teardown | ✅ removed from lights/grid/axes/render | `905cb0d`, `dc6ed83` |
 | 🟢 #37 inline _push_state wrappers | ⏸️ skipped — keeps the seam for #15 | — |
-| 🟢 #38 dead cityscape clamps | ✅ pruned to the live boundary | `276dcd0` |
-| 🟢 #39 transform_source_unmodified param | ✅ covered by #9 | `ed6bb5e` |
+| 🟢 #38 dead cityscape clamps | ✅ pruned to the live boundary | `b2739b8` |
+| 🟢 #39 transform_source_unmodified param | ✅ covered by #9 | `5dd0e65` |
 | 🟢 #40 guides_shared flat_program | ⏸️ deferred — accept current trade-off | — |
-| 🟢 #41 redundant glEnable(GL_LIGHTING) | ✅ removed from 5 guide draws + axes/grid/lights | `ed6bb5e`, `64a0e39` |
-| 🟢 #42 ACCUM_STEP_COUNT | ✅ removed (unused in scene) | `64a0e39` |
-| 🟢 #43 stale tess-preview comments | ✅ removed | `64a0e39` |
-| 🟢 #44 g_saved_matrix_mode init | ✅ covered by #17 | `a37823b` |
+| 🟢 #41 redundant glEnable(GL_LIGHTING) | ✅ removed from 5 guide draws + axes/grid/lights | `5dd0e65`, `dc6ed83` |
+| 🟢 #42 ACCUM_STEP_COUNT | ✅ removed (unused in scene) | `dc6ed83` |
+| 🟢 #43 stale tess-preview comments | ✅ removed | `dc6ed83` |
+| 🟢 #44 g_saved_matrix_mode init | ✅ covered by #17 | `08fc94b` |
 | 🔵 #45 scene_grid_render god-fn | ⏸️ deferred — invasive | — |
 | 🔵 #46 draw_cityscape god-fn | ⏸️ deferred — invasive | — |
 | 🔵 #47 draw_rotate_guide god-fn | ⏸️ deferred — invasive | — |
 | 🔵 #48 render_3d_scene_pass split | ⏸️ deferred — invasive | — |
-| 🔵 #49 make_arrow_basis helper | ✅ extracted | `56d7faf` |
-| 🔵 #50 clamp_head_len helper | ✅ extracted + axis-tighter constants named | `56d7faf` |
-| 🔵 #51 draw_guide_axis_plane helper | ✅ replaces yz/xz/xy_plane triplet | `56d7faf` |
+| 🔵 #49 make_arrow_basis helper | ✅ extracted | `709455f` |
+| 🔵 #50 clamp_head_len helper | ✅ extracted + axis-tighter constants named | `709455f` |
+| 🔵 #51 draw_guide_axis_plane helper | ✅ replaces yz/xz/xy_plane triplet | `709455f` |
 | 🔵 #52 axes per-theme extraction | ⏸️ deferred — invasive | — |
-| 🔵 #53 scene_draw_bitmap_text helper | ✅ replaces 4 raster+for loops | `1aad28f` |
+| 🔵 #53 scene_draw_bitmap_text helper | ✅ replaces 4 raster+for loops | `c2e7009` |
 | 🔵 #54 scene_apply_camera 6 floats | ⏸️ deferred — tied to #11 | — |
 | 🔵 #55 magic numbers | ⏸️ deferred — large surface | — |
 | 🔵 #56 hoist tan() in scene_apply_projection | ⏸️ deferred — tied to #12 | — |
@@ -83,7 +83,7 @@ predicate coverage). `check-state-ownership` green; C99 ratchet green.
 | 🔵 #62 inline decls inside glBegin/glEnd | ⏸️ deferred — minor | — |
 | 🔵 #63 STATIC_ASSERT count check | ⏸️ deferred — tied to #35 | — |
 | 🔵 #64 alias style | ⏸️ deferred — tied to #12 | — |
-| 🔵 #65 stale init_gl docs | ✅ rewritten to match actual behavior | `64a0e39` |
+| 🔵 #65 stale init_gl docs | ✅ rewritten to match actual behavior | `dc6ed83` |
 
 **Deferred work clusters** (each warrants its own session due to scope):
 
@@ -94,7 +94,7 @@ predicate coverage). `check-state-ownership` green; C99 ratchet green.
   takes all three plus #54 / #56 together.
 - **God-functions** (#45–#48, #52): each 150–225 lines, each needs its
   own pass through helpers + per-pass tests. The duplication helpers
-  landed in `56d7faf` (#49–#51, #53) are partial scaffolding for these
+  landed in `709455f` (#49–#51, #53) are partial scaffolding for these
   splits — they pre-extract the small helpers each god-function would
   pull out anyway.
 - **Boundary tightening continued:** #15 (narrow `GL_ALL_ATTRIB_BITS`
@@ -1289,8 +1289,8 @@ no display lists.
 
 ### One-afternoon pass — ✅ landed (2026-05-25)
 
-Every item in this pass shipped across commits `b4abd17`, `276dcd0`,
-`e9708ad`, `ed6bb5e`, `64a0e39`. The original ordering is preserved
+Every item in this pass shipped across commits `d30ff28`, `b2739b8`,
+`905cb0d`, `5dd0e65`, `dc6ed83`. The original ordering is preserved
 below for reference.
 
 1. **#7** ✅ — `glPointParameterfv` identity coefficients turned out
@@ -1342,9 +1342,9 @@ push/pop bug fixed.
 
 | Item | Status | Notes |
 |---|---|---|
-| **#4** g_guide_alpha_mul | ✅ `12f1eb0` | alpha_mul threaded through 5 helpers; `tg_color_tok` inlined to `scene_clr_a` |
-| **#17** g_saved_matrix_mode | ✅ `a37823b` | begin_2d returns saved mode; end_2d accepts it back |
-| **#2** SceneExecutePurpose | ✅ `a37823b`, `6fa6d15` | enum on ctx + REPL adapter snapshot/restore around non-MAIN_FILL purposes (review caught the adapter ignored ctx in the initial commit, so the probe still mutated predef/scratch/render state) |
+| **#4** g_guide_alpha_mul | ✅ `3023624` | alpha_mul threaded through 5 helpers; `tg_color_tok` inlined to `scene_clr_a` |
+| **#17** g_saved_matrix_mode | ✅ `08fc94b` | begin_2d returns saved mode; end_2d accepts it back |
+| **#2** SceneExecutePurpose | ✅ `08fc94b`, `49bf979` | enum on ctx + REPL adapter snapshot/restore around non-MAIN_FILL purposes (review caught the adapter ignored ctx in the initial commit, so the probe still mutated predef/scratch/render state) |
 | **#3** g_xn_alpha / g_xn_opacity | ⏸️ deferred | ~60 `gl_color` call sites across grid+axes; needs a shared resolve helper + GridDrawContext.xn_alpha addition before the call-site sweep |
 | **#5** g_active_projection statics | ⏸️ deferred | Tied to **#12** (split `scene_apply_projection` into pure compute + mutating apply); export code reads `scene_get_active_projection` so renderer state needs an init/reset entry point |
 | **#11** scene_apply_camera | ⏸️ deferred | Design decision: internalize into `scene_render_3d_scene` (preferred, since `SceneRenderConfig` already carries the fields) vs move to `glr_camera.c` |
@@ -1354,15 +1354,15 @@ push/pop bug fixed.
 
 | Item | Status | Notes |
 |---|---|---|
-| **#1** drift test for transform dispatch | ✅ `79914d1` | covers both `apply_tracked_transform` and `repl_executor_apply_tracked_transform_cmd` against `repl_cmd_is_transform`; uses GL stub call counters |
-| **#24** repl_cmd_starts_geometry_emit | ✅ `2371d7d` | predicate promoted to `src/repl/command.h` next to existing ones; old inline chain dropped; test pins the expected set |
-| **#23** standard-theme switch | ✅ `2371d7d` | custom themes still get explicit cases; standard themes fall through to `default:` which does the spec-table lookup |
+| **#1** drift test for transform dispatch | ✅ `2d1b9b6` | covers both `apply_tracked_transform` and `repl_executor_apply_tracked_transform_cmd` against `repl_cmd_is_transform`; uses GL stub call counters |
+| **#24** repl_cmd_starts_geometry_emit | ✅ `e9225cd` | predicate promoted to `src/repl/command.h` next to existing ones; old inline chain dropped; test pins the expected set |
+| **#23** standard-theme switch | ✅ `e9225cd` | custom themes still get explicit cases; standard themes fall through to `default:` which does the spec-table lookup |
 | **#22** theme spec ABI | ⏸️ deferred | Design decision: widen `GridThemeSpec` (per-cell color fn, optional setup/teardown hooks) to absorb the custom themes vs drop the table and have N per-theme functions |
 
 ### One-week pass — god-function cluster (deferred)
 
 Every item in this pass remains open. The duplication helpers landed
-in `56d7faf` (#49–#51) and `1aad28f` (#53) are partial scaffolding
+in `709455f` (#49–#51) and `c2e7009` (#53) are partial scaffolding
 that each split would extract anyway, so the splits are slightly
 smaller than the original line counts suggest.
 
@@ -1381,11 +1381,11 @@ smaller than the original line counts suggest.
 
 | Item | Status | Notes |
 |---|---|---|
-| **#49** make_arrow_basis | ✅ `56d7faf` | shared Gram-Schmidt helper; draw_translate_guide and draw_arrow_head both use it |
-| **#50** clamp_head_len | ✅ `56d7faf` | helper + axis-branch constants (`TG_HEAD_LEN_AXIS_MIN/MAX`) named separately |
-| **#51** draw_guide_axis_plane | ✅ `56d7faf` | single helper replaces yz/xz/xy_plane triplet; per-axis tokens indexed by `k_guide_plane_fill[]`/`edge[]` |
-| **#53** scene_draw_bitmap_text | ✅ `1aad28f` | helper exposed via `overlays.h`; replaces 4 raster+for loops in lights / overlays / render |
-| **#29** clamp01f helper | ✅ `a37823b` | `scene_clamp01f` in `render_types.h`; grid+axes opacity-clamp triplets replaced |
+| **#49** make_arrow_basis | ✅ `709455f` | shared Gram-Schmidt helper; draw_translate_guide and draw_arrow_head both use it |
+| **#50** clamp_head_len | ✅ `709455f` | helper + axis-branch constants (`TG_HEAD_LEN_AXIS_MIN/MAX`) named separately |
+| **#51** draw_guide_axis_plane | ✅ `709455f` | single helper replaces yz/xz/xy_plane triplet; per-axis tokens indexed by `k_guide_plane_fill[]`/`edge[]` |
+| **#53** scene_draw_bitmap_text | ✅ `c2e7009` | helper exposed via `overlays.h`; replaces 4 raster+for loops in lights / overlays / render |
+| **#29** clamp01f helper | ✅ `08fc94b` | `scene_clamp01f` in `render_types.h`; grid+axes opacity-clamp triplets replaced |
 | **#55** magic numbers | ⏸️ deferred | Large surface; per-theme constants are the natural home but each renderer needs its own pass |
 
 ### One-week pass — boundary tightening (partial)
@@ -1393,9 +1393,9 @@ smaller than the original line counts suggest.
 | Item | Status | Notes |
 |---|---|---|
 | **#15** targeted attrib masks | ⏸️ deferred | Invasive across backdrop / lights / postprocess; ties into **#37** |
-| **#16** NV_fog save/restore | ✅ `1aad28f` | `glGetIntegerv(GL_FOG_DISTANCE_MODE_NV)` snapshot + tail restore in backdrop *and* grid (the audit only flagged backdrop but grid had the same pattern) |
-| **#27** + **#28** accum_samples ladder | ✅ `1aad28f` | now enforces `{1, 2, 4, 8, 16}` whenever AA is on |
-| **#33** scene_xn API names | ✅ `a37823b` | Cheat-sheet added to header rather than renaming (audit's lower-cost option) |
+| **#16** NV_fog save/restore | ✅ `c2e7009` | `glGetIntegerv(GL_FOG_DISTANCE_MODE_NV)` snapshot + tail restore in backdrop *and* grid (the audit only flagged backdrop but grid had the same pattern) |
+| **#27** + **#28** accum_samples ladder | ✅ `c2e7009` | now enforces `{1, 2, 4, 8, 16}` whenever AA is on |
+| **#33** scene_xn API names | ✅ `08fc94b` | Cheat-sheet added to header rather than renaming (audit's lower-cost option) |
 | **#32** postprocess graduation | ⏸️ deferred | Scope question — fold into standard cfg pipeline vs formalize "experimental" |
 | **#35** palette token review | ⏸️ deferred | Design decision: which tokens are genuinely shared (worth the central table) vs file-local |
 
