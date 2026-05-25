@@ -7,6 +7,7 @@
 #include "backdrop.h"
 #include "grid.h"
 #include "lights.h"
+#include "overlays.h"   /* scene_draw_bitmap_text for the orbit-gizmo coord readout */
 #include "postprocess_filter.h"
 #include "render_types.h"
 #include "palette.h"
@@ -80,9 +81,15 @@ static int validate_render_config(const SceneRenderConfig *config) {
         if (!(config->grid_major_steps[config->grid_major_idx] > 0.0f))
                                                               goto bad;
     }
+    /* accum_samples must come from the supported {1, 2, 4, 8, 16}
+     * ladder whenever AA is on the table — the jitter table is only
+     * a good N-sample set for those N. accum_samples == 1 with
+     * accum_aa_enabled is the natural "AA off via ladder index 0"
+     * UI state and is accepted; render_3d_scene_pass takes the
+     * single-sample non-AA path when accum_samples <= 1. */
     if (config->use_accum && config->accum_aa_enabled) {
-        if (config->accum_samples < 1
-            || config->accum_samples > MAX_ACCUM_SAMPLES)     goto bad;
+        int n = config->accum_samples;
+        if (n != 1 && n != 2 && n != 4 && n != 8 && n != 16) goto bad;
     }
     return 0;
 
@@ -486,9 +493,9 @@ static void draw_orbit_target(const SceneFrameRenderContext *frame_ctx) {
     snprintf(coord, sizeof coord, "(%.2f, %.2f, %.2f)", tx, ty, tz);
     glDisable(GL_DEPTH_TEST);
     scene_clr_a(SCENE_CLR_ORBIT_GLOW_INNER, 0.95f * glow);
-    glRasterPos3f(tx + r * 0.15f, ty + r * 1.15f, tz);
-    for (const char *c = coord; *c; c++)
-        glutBitmapCharacter(FONT_SMALL, (unsigned char)*c);
+    scene_draw_bitmap_text(FONT_SMALL,
+                           tx + r * 0.15f, ty + r * 1.15f, tz,
+                           coord);
 
     /* scene_render_pop_state restores depth mask and blend state via
      * GL_ALL_ATTRIB_BITS; no manual teardown needed. */

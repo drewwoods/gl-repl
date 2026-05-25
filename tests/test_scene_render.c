@@ -516,7 +516,11 @@ static void test_nv_fog_distance_radial_optin(void) {
     printf("--- GL_NV_fog_distance radial opt-in is scoped ---\n");
 #ifdef GL_STUBS
     const int   themes[3]  = { GRID_THEME_OCEAN, GRID_THEME_RADAR, GRID_THEME_CLASSIC };
-    const int   delta[3]   = { 1, 1, 0 };
+    /* Each radial-opted theme calls glFogi(GL_FOG_DISTANCE_MODE_NV, ...)
+     * twice now: once to set GL_EYE_RADIAL_NV, once to restore the
+     * snapshotted prior value at the tail. Both calls only happen
+     * when nv_fog_distance_supported is true. */
+    const int   delta[3]   = { 2, 2, 0 };
     const char *names[3]   = { "Ocean", "Radar", "Classic" };
     for (int i = 0; i < 3; i++) {
         SceneFrameRenderContext ctx = make_test_frame_ctx();
@@ -553,7 +557,8 @@ static void test_nv_fog_distance_radial_optin(void) {
         scene_backdrop_render(&ctx);
         unsigned long long on = gl_stub_counts[GL_STUB_glFogi];
 
-        ASSERT_INT("Cityscape radial glFogi delta", (int)(on - off), 1);
+        /* Same set-and-restore pair as the grid OCEAN/RADAR themes. */
+        ASSERT_INT("Cityscape radial glFogi delta", (int)(on - off), 2);
     }
 #else
     ASSERT_TRUE("nv fog radial opt-in scoped (GL stubs only)", 1);

@@ -790,6 +790,17 @@ void scene_grid_render(const SceneFrameRenderContext *frame_ctx) {
         glFogf(GL_FOG_END, fog_end);
     }
 
+    /* GL_FOG_DISTANCE_MODE_NV isn't in the Khronos GL_FOG_BIT spec, so
+     * a strict glPushAttrib(GL_ALL_ATTRIB_BITS) may not save/restore it.
+     * Snapshot before the OCEAN/RADAR themes mutate it, restore at the
+     * tail before pop. */
+    GLint saved_nv_fog_mode = 0;
+    int set_nv_fog = (config->nv_fog_distance_supported &&
+                      (grid_theme == GRID_THEME_OCEAN ||
+                       grid_theme == GRID_THEME_RADAR));
+    if (set_nv_fog)
+        glGetIntegerv(GL_FOG_DISTANCE_MODE_NV, &saved_nv_fog_mode);
+
     /* Custom themes handle their own draw path; the default arm covers
      * every standard theme by spec-table lookup, so adding/removing a
      * GridThemeSpec entry is a one-edit change instead of two parallel
@@ -803,10 +814,8 @@ void scene_grid_render(const SceneFrameRenderContext *frame_ctx) {
     case GRID_THEME_OCEAN:
         /* Opt into radial eye-distance fog when available, so the fog
          * closes in by true distance rather than eye-plane depth and the
-         * fringes stop swimming as the camera orbits. The grid pass's
-         * GL_ALL_ATTRIB_BITS (GL_FOG_BIT) push/pop confines it to this
-         * theme; the eye-plane-tuned themes above never see it. */
-        if (config->nv_fog_distance_supported)
+         * fringes stop swimming as the camera orbits. */
+        if (set_nv_fog)
             glFogi(GL_FOG_DISTANCE_MODE_NV, GL_EYE_RADIAL_NV);
         scene_grid_render_ocean_theme(&grid_ctx, frame_ctx, breath);
         break;
@@ -823,7 +832,7 @@ void scene_grid_render(const SceneFrameRenderContext *frame_ctx) {
         /* Same radial-fog opt-in as Ocean (see above): the radar rings
          * read the shared FAR-extent distance fog, which swims at the
          * fringes under the eye-plane default. */
-        if (config->nv_fog_distance_supported)
+        if (set_nv_fog)
             glFogi(GL_FOG_DISTANCE_MODE_NV, GL_EYE_RADIAL_NV);
         scene_grid_render_radar_theme(&grid_ctx);
         break;
@@ -838,6 +847,9 @@ void scene_grid_render(const SceneFrameRenderContext *frame_ctx) {
         break;
     }
     }
+
+    if (set_nv_fog)
+        glFogi(GL_FOG_DISTANCE_MODE_NV, saved_nv_fog_mode);
 
     glPopMatrix();
     /* scene_grid_pop_state restores GL_ALL_ATTRIB_BITS, covering

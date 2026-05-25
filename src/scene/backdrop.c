@@ -92,10 +92,16 @@ static void draw_cityscape(float anim_time, int nv_fog_distance_supported) {
     /* When GL_NV_fog_distance is available, fog by true radial eye
      * distance instead of eye-plane depth so the ring's side buildings
      * stop popping in and out at the fringes as the camera orbits.
-     * Confined to this pass by the GL_ALL_ATTRIB_BITS (GL_FOG_BIT)
-     * push/pop bracketing draw_cityscape. */
-    if (nv_fog_distance_supported)
+     * GL_FOG_DISTANCE_MODE_NV isn't part of the Khronos GL_FOG_BIT
+     * spec, so a strict driver wouldn't save/restore it across the
+     * outer glPushAttrib(GL_ALL_ATTRIB_BITS) bracket. Snapshot the
+     * prior value explicitly and restore at function tail rather than
+     * trusting driver good-citizenship. */
+    GLint saved_nv_fog_mode = 0;
+    if (nv_fog_distance_supported) {
+        glGetIntegerv(GL_FOG_DISTANCE_MODE_NV, &saved_nv_fog_mode);
         glFogi(GL_FOG_DISTANCE_MODE_NV, GL_EYE_RADIAL_NV);
+    }
     glFogf(GL_FOG_START, CITY_RADIUS * CITY_FOG_START_FRAC);
     glFogf(GL_FOG_END, CITY_RADIUS * CITY_FOG_END_FRAC);
 
@@ -297,6 +303,11 @@ static void draw_cityscape(float anim_time, int nv_fog_distance_supported) {
         }
     }
 
+    /* Restore the NV fog distance mode explicitly — GL_FOG_DISTANCE_MODE_NV
+     * isn't in the Khronos GL_FOG_BIT spec so the outer glPopAttrib may
+     * not put it back. Conservative even on drivers that DO save it. */
+    if (nv_fog_distance_supported)
+        glFogi(GL_FOG_DISTANCE_MODE_NV, saved_nv_fog_mode);
     glDepthMask(GL_TRUE);
     glDisable(GL_BLEND);
     scene_backdrop_pop_state();
