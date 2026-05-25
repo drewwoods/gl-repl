@@ -363,7 +363,15 @@ static void scene_apply_projection(const SceneRenderConfig *config,
              * 2D<->3D transition). The o-prefixed and p-prefixed locals are
              * the ortho / perspective frustum edges (left/right/bottom/top);
              * the indexed writes are the standard column-major glOrtho /
-             * glFrustum terms. */
+             * glFrustum terms.
+             *
+             *   o-prefix = ortho, p-prefix = perspective
+             *   .l = left   .r = right (= or_; `or` is iso646 alt for ||)
+             *   .b = bottom .t = top
+             *
+             * Abbreviated because the eight names appear in matrix
+             * formulas where the longer ortho_right / persp_bottom etc.
+             * would obscure the structure. */
             GLfloat ortho[16] = { 0.0f };
             GLfloat persp[16] = { 0.0f };
             GLfloat blended[16];
