@@ -15,32 +15,32 @@
 
 ## Status (2026-05-25)
 
-**50 of 65 findings done** across the resolution pass:
-- 🔴 **8 / 10** bugs (deferred: #3 g_xn statics, #5 g_active_projection)
-- 🟡 **18 / 25** boundary/drift items
+**53 of 65 findings done** across the resolution pass:
+- 🔴 **10 / 10** bugs — every red finding closed
+- 🟡 **19 / 25** boundary/drift items
 - 🟢 **7 / 9** dead-code items
 - 🔵 **17 / 21** structural items (every god-function split closed)
 
-Tests: 7228 → 7447 (+219 from drift tests + new predicate coverage).
-`check-state-ownership` green; C99 ratchet green. Main contains commits
-up through the SceneExecutePurpose adapter-snapshot fix (review pass on
-#2 at `49bf979`); scene-smells continues with the god-function splits
-(#45-#48, #52), cosmetic batch, and small docs (#20, #26, #64).
+Tests: 7228 → 7463 (+235 from drift tests, new predicate coverage,
+and the SceneRendererState init/independence/AA-invariant tests).
+`check-state-ownership` green; C99 ratchet green; `make test-full`
+and `make test-stubs` on gracemont (real GCC 13.x) both pass at
+the current tip `cc481c2`.
 
 | Finding | Status | Commit |
 |---|---|---|
 | 🔴 #1 transform-cmd parity drift | ✅ drift test added | `2d1b9b6` |
 | 🔴 #2 SceneExecutePurpose | ✅ enum + adapter snapshot/restore | `08fc94b`, `49bf979` |
-| 🔴 #3 g_xn statics in grid+axes | ⏸️ deferred — ~60 call sites | — |
+| 🔴 #3 g_xn statics in grid+axes | ✅ scene_overlay_xn_resolve + per-ctx threading | `cc481c2` |
 | 🔴 #4 g_guide_alpha_mul threaded | ✅ alpha_mul as parameter | `3023624` |
-| 🔴 #5 g_active_projection statics | ⏸️ deferred — design decision | — |
+| 🔴 #5 g_active_projection statics | ✅ caller-owned SceneRendererState | `89e2b17` |
 | 🔴 #6 cityscape RNG collisions | ✅ stride 13 → 512 | `b2739b8` |
 | 🔴 #7 glPointParameterfv comment | ✅ documented as load-bearing reset | `b2739b8` |
 | 🔴 #8 underwater push/pop ordering | ✅ disable inside push | `905cb0d` |
 | 🔴 #9 transform_source_unmodified param | ✅ dropped, renamed | `5dd0e65` |
 | 🔴 #10 transitive includes | ✅ explicit math/string/ctype | `5dd0e65` |
 | 🟡 #11 scene_apply_camera placement | ⏸️ deferred — design decision | — |
-| 🟡 #12 scene_apply_projection split | ⏸️ deferred — tied to #5 | — |
+| 🟡 #12 scene_apply_projection split | ✅ split into compute (once) + apply (per sample) | `89e2b17` |
 | 🟡 #13 include style sweep | ✅ scene/foo.h → foo.h where in-dir | `d30ff28` |
 | 🟡 #14 lights.c gl_includes | ✅ explicit include added | `5dd0e65` |
 | 🟡 #15 targeted attrib masks | ⏸️ deferred — invasive across modules | — |
@@ -97,11 +97,11 @@ up through the SceneExecutePurpose adapter-snapshot fix (review pass on
 
 **Deferred work clusters** (each warrants its own session due to scope):
 
-- **State lifting:** #3 (~60 gl_color call sites in grid.c + axes.c) and
-  #5/#12 (g_active_projection statics → SceneRendererState, with
-  scene_apply_projection split). These overlap with #11 (internalize
-  scene_apply_camera) — the right move is probably one session that
-  takes all three together.
+- **State lifting:** #3, #5, #12 all landed in `cc481c2` / `89e2b17`.
+  #11 (internalize scene_apply_camera) is the remaining piece — at
+  this point the renderer state, projection split, and per-renderer
+  ortho ref are all caller-owned, so #11 is a smaller move than the
+  audit originally framed it.
 - **Boundary tightening continued:** #15 (narrow `GL_ALL_ATTRIB_BITS`
   to targeted masks per pass) interacts with #37 (inlining the
   `_push_state` wrappers); the wrappers stay until #15 decides the
