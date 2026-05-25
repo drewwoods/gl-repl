@@ -540,6 +540,10 @@ int editor_state_clipboard_count(void) {
     return g_editor_state.clipboard.line_count;
 }
 
+EditorClipboardKind editor_state_clipboard_kind(void) {
+    return g_editor_state.clipboard.kind;
+}
+
 void editor_state_clipboard_count_set(int line_count) {
     if (line_count < 0)
         line_count = 0;

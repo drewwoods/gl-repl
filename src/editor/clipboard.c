@@ -337,18 +337,18 @@ void editor_clipboard_cut_current(void) {
 }
 
 void editor_clipboard_paste_current(void) {
-    /* INPUT_TEXT paste targets the active input buffer (replacing any
-     * destination selection); LINES paste runs the existing
-     * editor_feed_line() chain; EMPTY emits the same "Clipboard empty"
-     * status the count-based check below has always produced. */
-    if (editor_clipboard_paste_input_text())
-        return;
-
-    int count = editor_state_clipboard_count();
-    if (count <= 0) {
+    switch (editor_state_clipboard_kind()) {
+    case EDITOR_CLIPBOARD_EMPTY:
         repl_set_status("Clipboard empty");
         return;
+    case EDITOR_CLIPBOARD_INPUT_TEXT:
+        editor_clipboard_paste_input_text();
+        return;
+    case EDITOR_CLIPBOARD_LINES:
+        break;
     }
+
+    int count = editor_state_clipboard_count();
 
     {
         ReplCommandStore store = repl_command_store_live();
