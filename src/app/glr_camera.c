@@ -14,12 +14,9 @@
 #include "app/glr_camera.h"
 #include "app/glr_defaults.h"  /* CFG_DEFAULT_CAMERA_ROTATE */
 
-#include "gl_includes.h"      /* GLUT_*BUTTON constants */
+#include "gl_includes.h"      /* GLUT_*BUTTON constants, M_PI fallback */
 #include "config.h"
 #include <math.h>
-#ifndef M_PI
-#define M_PI 3.14159265358979323846
-#endif
 
 /* Orbit/pan momentum decay per frame. Deliberately independent of
  * config.h's GLR_CAMERA_TARGET_DECAY (the ease-to-target decay) —

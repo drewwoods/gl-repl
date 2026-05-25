@@ -9,16 +9,12 @@
 #ifndef GL_REPL_H
 #define GL_REPL_H
 
-#include "gl_includes.h"
+#include "gl_includes.h"  /* provides M_PI fallback */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
 #include <math.h>
 #include <stdint.h>
-
-#ifndef M_PI
-#define M_PI 3.14159265358979323846
-#endif
 
 #endif /* GL_REPL_H */
