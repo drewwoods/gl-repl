@@ -1,5 +1,5 @@
 /*
- * scene_grid.h - Themeable reference-grid renderer.
+ * grid.h - Themeable reference-grid renderer.
  *
  * Draws the scene's optional reference grid using the effective theme, major
  * spacing, extent, and transition state already prepared in SceneFrameRenderContext.
@@ -20,7 +20,7 @@ void scene_grid_render(const SceneFrameRenderContext *frame_ctx);
  * the FOG transition style these fall back to the plain alpha FADE.
  * The FAR extent is intentionally NOT here: its distance fog is the
  * same LINEAR/clear-color model as the recede, so it composes without
- * a pop. Pure — safe to call from tests. `grid_theme` is a SceneGridTheme. */
-int scene_grid_theme_uses_fog(int grid_theme);
+ * a pop. Pure — safe to call from tests. */
+int scene_grid_theme_uses_fog(SceneGridTheme grid_theme);
 
 #endif /* SCENE_GRID_H */

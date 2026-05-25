@@ -1,12 +1,9 @@
 /*
- * scene_grid.c - grid theme rendering
+ * grid.c - grid theme rendering
  */
 #include "grid.h"
 #include "config.h"   /* GRID_XN_STYLE / GRID_AXES_XN_* */
-#include <math.h>
-#ifndef M_PI
-#define M_PI 3.14159265358979323846
-#endif
+#include <math.h>     /* sinf, cosf, sqrtf, fabsf, fmodf, M_PI (via gl_includes.h) */
 
 #define GRID_LOOP_EPSILON 0.01f
 #define GRID_ORIGIN_SKIP_EPSILON 0.01f
@@ -313,7 +310,7 @@ static void scene_grid_apply_quality_config(const SceneRenderConfig *config) {
 
 static void scene_grid_render_focus_theme(const SceneFrameRenderContext *frame_ctx,
                                          const GridDrawContext *grid_ctx) {
-    const SceneFocusVertex *focus = &frame_ctx->focus;
+    const SceneFocusVertex *focus = &frame_ctx->config.focus;
     float cx = focus->pos[0], cz = focus->pos[2];
     float radius = 3.0f;  /* fade-out radius */
     float as = grid_ctx->alpha_scale;
@@ -382,25 +379,31 @@ static void scene_grid_render_ocean_theme(const GridDrawContext *grid_ctx,
 
     /* Underwater fog - slightly breathing density */
     if (camera_world_y < 0.0f) {
-        glDisable(GL_DEPTH_TEST);
+        /* Fill the active scene viewport with a teal tint. Coordinates
+         * use scene_w/scene_h (not the full window viewport) so the
+         * rect lines up with whatever glViewport scene_render set. */
         gl_color(0.05f, 0.25f, 0.35f, 0.75f);
         glMatrixMode(GL_PROJECTION);
         glPushMatrix();
         glLoadIdentity();
-        gluOrtho2D(0, config->viewport_w, 0, config->viewport_h);
+        gluOrtho2D(0, config->scene_w, 0, config->scene_h);
         glMatrixMode(GL_MODELVIEW);
         glPushMatrix();
         glLoadIdentity();
+        /* Push BEFORE mutating depth/lighting so pop restores the
+         * caller's state — formerly disable-before-push meant pop
+         * restored "disabled" and a manual glEnable(GL_DEPTH_TEST)
+         * after the pop clobbered the outer state instead of restoring
+         * it. */
         glPushAttrib(GL_DEPTH_BUFFER_BIT | GL_LIGHTING_BIT);
         glDisable(GL_DEPTH_TEST);
         glDisable(GL_LIGHTING);
-        glRectf(0, 0, (float)config->viewport_w, (float)config->viewport_h);
+        glRectf(0, 0, (float)config->scene_w, (float)config->scene_h);
         glPopAttrib();
         glMatrixMode(GL_PROJECTION);
         glPopMatrix();
         glMatrixMode(GL_MODELVIEW);
         glPopMatrix();
-        glEnable(GL_DEPTH_TEST);
     } else {
         glEnable(GL_FOG);
         glFogi(GL_FOG_MODE, GL_EXP2);
@@ -683,7 +686,7 @@ static void scene_grid_render_radar_theme(const GridDrawContext *grid_ctx) {
     glEnd();
 }
 
-int scene_grid_theme_uses_fog(int grid_theme) {
+int scene_grid_theme_uses_fog(SceneGridTheme grid_theme) {
     return grid_theme == GRID_THEME_FOG ||
            grid_theme == GRID_THEME_OCEAN;
 }
@@ -838,9 +841,8 @@ void scene_grid_render(const SceneFrameRenderContext *frame_ctx) {
     }
 
     glPopMatrix();
-    glDepthMask(GL_TRUE);
-    glDisable(GL_BLEND);
-    glDisable(GL_FOG);
-    if (frame_ctx->config.user_lighting_enabled) glEnable(GL_LIGHTING);
+    /* scene_grid_pop_state restores GL_ALL_ATTRIB_BITS, covering
+     * GL_DEPTH_BUFFER_BIT (depth mask), GL_COLOR_BUFFER_BIT (blend),
+     * GL_FOG_BIT, and GL_LIGHTING_BIT — no manual teardown needed. */
     scene_grid_pop_state();
 }
