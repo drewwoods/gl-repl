@@ -42,35 +42,66 @@ void ui_panels_render_code_panel(const UiRenderSnapshot *snap,
     ui_repl_code_panel_render_with_chrome(snap, out);
 }
 
-static void draw_modal_strip(const UiRenderSnapshot *snap,
-                             const char *msg, int msg_len, int max_buf) {
+/* Geometry the bottom-bar strip helpers compute once at open. Callers
+ * keep it on the stack across the begin / paint / extra-draws / close
+ * sequence. Defined here so the three strip clients (modal-prompt
+ * bar, status banner) all reach for the same shape. */
+typedef struct {
     int sc_x, sc_y, sc_w, sc_h;
-    int bar_h, bar_y, text_y, tx, max_px, max_chars;
-    char trunc[320];
+    int bar_y, bar_h;
+    int text_y;
+} StatusStripFrame;
 
-    ui_layout_scene_rect(&sc_x, &sc_y, &sc_w, &sc_h);
-    if (sc_w <= 0 || sc_h <= 0)
-        return;
-
-    bar_h = STATUSBAR_H;
-    bar_y = sc_y;
-
+/* Compute the strip geometry, set up gl2d + blend. Returns 0 (no
+ * draw) on a degenerate scene rect — callers should bail without
+ * a matching close, matching `gl2d_begin` lifetime. */
+static int status_strip_begin(const UiRenderSnapshot *snap,
+                              StatusStripFrame *f) {
+    ui_layout_scene_rect(&f->sc_x, &f->sc_y, &f->sc_w, &f->sc_h);
+    if (f->sc_w <= 0 || f->sc_h <= 0)
+        return 0;
+    f->bar_h  = STATUSBAR_H;
+    f->bar_y  = f->sc_y;
+    f->text_y = f->bar_y + (f->bar_h - FONT_SMALL_H) / 2 + 1;
     gl2d_begin(snap->viewport.window_w, snap->viewport.window_h);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    return 1;
+}
 
-    glColor4fv(k_rename_bar_bg);
-    glRectf((float)sc_x, (float)bar_y,
-            (float)(sc_x + sc_w), (float)(bar_y + bar_h));
-    glColor4fv(k_rename_bar_rule);
+/* Paint the strip background rectangle plus its top rule. Both
+ * colors carry their own alpha. Caller can layer text / badges /
+ * etc. afterward before `status_strip_end`. */
+static void status_strip_paint_bar(const StatusStripFrame *f,
+                                   const float bg[4],
+                                   const float rule[4]) {
+    glColor4fv(bg);
+    glRectf((float)f->sc_x, (float)f->bar_y,
+            (float)(f->sc_x + f->sc_w), (float)(f->bar_y + f->bar_h));
+    glColor4fv(rule);
     glBegin(GL_LINES);
-    glVertex2f((float)sc_x, (float)(bar_y + bar_h));
-    glVertex2f((float)(sc_x + sc_w), (float)(bar_y + bar_h));
+    glVertex2f((float)f->sc_x, (float)(f->bar_y + f->bar_h));
+    glVertex2f((float)(f->sc_x + f->sc_w), (float)(f->bar_y + f->bar_h));
     glEnd();
+}
 
-    text_y = bar_y + (bar_h - FONT_SMALL_H) / 2 + 1;
-    tx = sc_x + CODE_MARGIN_X;
-    max_px = sc_w - 2 * CODE_MARGIN_X;
+static void status_strip_end(void) {
+    glDisable(GL_BLEND);
+    gl2d_end();
+}
+
+static void draw_modal_strip(const UiRenderSnapshot *snap,
+                             const char *msg, int msg_len, int max_buf) {
+    StatusStripFrame f;
+    int tx, max_px, max_chars;
+    char trunc[320];
+
+    if (!status_strip_begin(snap, &f))
+        return;
+    status_strip_paint_bar(&f, k_rename_bar_bg, k_rename_bar_rule);
+
+    tx = f.sc_x + CODE_MARGIN_X;
+    max_px = f.sc_w - 2 * CODE_MARGIN_X;
     max_chars = max_px / FONT_SMALL_W;
     if (max_chars < 8)
         max_chars = 8;
@@ -81,10 +112,9 @@ static void draw_modal_strip(const UiRenderSnapshot *snap,
         msg = trunc;
     }
     glColor4fv(k_rename_bar_text);
-    gl2d_draw_string((float)tx, (float)text_y, msg, FONT_SMALL);
+    gl2d_draw_string((float)tx, (float)f.text_y, msg, FONT_SMALL);
 
-    glDisable(GL_BLEND);
-    gl2d_end();
+    status_strip_end();
 }
 
 void ui_panels_render_scene_status(const UiRenderSnapshot *snap) {
@@ -117,64 +147,42 @@ void ui_panels_render_scene_status(const UiRenderSnapshot *snap) {
         return;
 
     {
-        int sc_x;
-        int sc_y;
-        int sc_w;
-        int sc_h;
-        int bar_h;
-        int bar_y;
+        StatusStripFrame f;
         float alpha;
-        int text_y;
-        int badge_d;
-        int badge_x;
-        int badge_y;
-        int tx;
-        int max_px;
-        int max_chars;
+        int badge_d, badge_x, badge_y;
+        int tx, max_px, max_chars;
         char msg[256];
         int n;
-        const float *bg;
-        const float *edge;
-        const float *fg;
+        const float *bg_rgb;
+        const float *edge_rgb;
+        const float *fg_rgb;
+        float bg[4], rule[4], fg[4];
 
-        ui_layout_scene_rect(&sc_x, &sc_y, &sc_w, &sc_h);
-        if (sc_w <= 0 || sc_h <= 0)
+        if (!status_strip_begin(snap, &f))
             return;
 
-        bar_h = STATUSBAR_H;
-        bar_y = sc_y;
         alpha = status.ttl > REPL_STATUS_FADE_FRAMES
                     ? 1.0f
                     : (float)status.ttl / (float)REPL_STATUS_FADE_FRAMES;
-
         if (status.kind == UI_STATUS_ERROR) {
-            bg   = k_status_bar_bg_err;
-            edge = k_status_bar_edge_err;
-            fg   = k_status_bar_fg_err;
+            bg_rgb   = k_status_bar_bg_err;
+            edge_rgb = k_status_bar_edge_err;
+            fg_rgb   = k_status_bar_fg_err;
         } else {
-            bg   = k_status_bar_bg;
-            edge = k_status_bar_edge;
-            fg   = k_status_bar_fg;
+            bg_rgb   = k_status_bar_bg;
+            edge_rgb = k_status_bar_edge;
+            fg_rgb   = k_status_bar_fg;
         }
+        bg[0] = bg_rgb[0]; bg[1] = bg_rgb[1]; bg[2] = bg_rgb[2]; bg[3] = 0.92f * alpha;
+        rule[0] = edge_rgb[0]; rule[1] = edge_rgb[1]; rule[2] = edge_rgb[2]; rule[3] = alpha;
+        fg[0] = fg_rgb[0]; fg[1] = fg_rgb[1]; fg[2] = fg_rgb[2]; fg[3] = alpha;
 
-        gl2d_begin(snap->viewport.window_w, snap->viewport.window_h);
-        glEnable(GL_BLEND);
-        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+        status_strip_paint_bar(&f, bg, rule);
 
-        glColor4f(bg[0], bg[1], bg[2], 0.92f * alpha);
-        glRectf((float)sc_x, (float)bar_y,
-                (float)(sc_x + sc_w), (float)(bar_y + bar_h));
-        glColor4f(edge[0], edge[1], edge[2], alpha);
-        glBegin(GL_LINES);
-        glVertex2f((float)sc_x, (float)(bar_y + bar_h));
-        glVertex2f((float)(sc_x + sc_w), (float)(bar_y + bar_h));
-        glEnd();
-
-        text_y = bar_y + (bar_h - FONT_SMALL_H) / 2 + 1;
         badge_d = 14;
-        badge_x = sc_x + CODE_MARGIN_X;
-        badge_y = bar_y + (bar_h - badge_d) / 2;
-        glColor4f(fg[0], fg[1], fg[2], alpha);
+        badge_x = f.sc_x + CODE_MARGIN_X;
+        badge_y = f.bar_y + (f.bar_h - badge_d) / 2;
+        glColor4f(fg[0], fg[1], fg[2], fg[3]);
         glBegin(GL_LINE_LOOP);
         for (int i = 0; i < 16; i++) {
             float angle = (float)i * (6.2831853f / 16.0f);
@@ -183,10 +191,10 @@ void ui_panels_render_scene_status(const UiRenderSnapshot *snap) {
         }
         glEnd();
         gl2d_draw_string((float)(badge_x + badge_d * 0.5f - FONT_SMALL_W * 0.5f + 1.0f),
-                         (float)text_y, "!", FONT_SMALL);
+                         (float)f.text_y, "!", FONT_SMALL);
 
         tx = badge_x + badge_d + 8;
-        max_px = sc_x + sc_w - CODE_MARGIN_X - tx;
+        max_px = f.sc_x + f.sc_w - CODE_MARGIN_X - tx;
         max_chars = max_px / FONT_SMALL_W;
         if (max_chars < 8)
             max_chars = 8;
@@ -198,11 +206,10 @@ void ui_panels_render_scene_status(const UiRenderSnapshot *snap) {
             snprintf(msg, sizeof(msg), "%.*s...", max_chars - 3, status.text);
         else
             snprintf(msg, sizeof(msg), "%s", status.text);
-        glColor4f(fg[0], fg[1], fg[2], alpha);
-        gl2d_draw_string((float)tx, (float)text_y, msg, FONT_SMALL);
+        glColor4f(fg[0], fg[1], fg[2], fg[3]);
+        gl2d_draw_string((float)tx, (float)f.text_y, msg, FONT_SMALL);
 
-        glDisable(GL_BLEND);
-        gl2d_end();
+        status_strip_end();
     }
 }
 

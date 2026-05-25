@@ -42,6 +42,47 @@ static CodeLayout text_panel_row_layout(const UiTextPanelSnapshot *snap,
     return code_layout_make(snap->cp_w, first_x, FONT_W, snap->wrap_at_comma);
 }
 
+/* Per-frame wrap-count cache. Populated by ui_text_panel_render as it
+ * walks rows; read back by ui_text_panel_hit_test and
+ * ui_text_panel_input_row_y so they stop re-walking the same row text
+ * the renderer already walked. Keyed on the snapshot pointer plus the
+ * geometry fields wrap depends on (row_count, cp_w, wrap_at_comma) —
+ * if any of those change the cache is invalidated and consumers fall
+ * back to a fresh compute.
+ *
+ * Cap matches the practical UI_REPL_CODE_PANEL_MAX_ROWS upper bound
+ * (~4-5K rows for a full document + virtual lines + chrome) without
+ * pulling MAX_COMMANDS into the lower layer. Snapshots that exceed
+ * the cap bypass the cache entirely. */
+#define UI_TEXT_PANEL_WRAP_CACHE_MAX 8192
+static struct {
+    const UiTextPanelSnapshot *snap;
+    int  row_count;
+    int  cp_w;
+    int  wrap_at_comma;
+    int  text_x;
+    int  valid;
+    int  wrap[UI_TEXT_PANEL_WRAP_CACHE_MAX];
+} g_wrap_cache;
+
+static int wrap_cache_matches(const UiTextPanelSnapshot *snap) {
+    return g_wrap_cache.valid &&
+           g_wrap_cache.snap == snap &&
+           g_wrap_cache.row_count == snap->row_count &&
+           g_wrap_cache.cp_w == snap->cp_w &&
+           g_wrap_cache.wrap_at_comma == snap->wrap_at_comma &&
+           g_wrap_cache.text_x == snap->text_x &&
+           snap->row_count <= UI_TEXT_PANEL_WRAP_CACHE_MAX;
+}
+
+static void wrap_cache_invalidate(void) {
+    g_wrap_cache.valid = 0;
+    g_wrap_cache.snap = NULL;
+}
+
+static int text_panel_row_wrap_count_cached(const UiTextPanelSnapshot *snap,
+                                            int row_idx);
+
 static int text_panel_color_uses_blend(const UiTextPanelColor *color) {
     return color && color->has_alpha && color->a < 1.0f;
 }
@@ -624,6 +665,37 @@ static int text_panel_row_wrap_count(const UiTextPanelSnapshot *snap,
                                           &layout);
 }
 
+/* Indexed lookup that returns a cached wrap count when the snapshot's
+ * geometry matches the cache. Falls back to a fresh compute if the
+ * cache is cold (no render this frame, snap mismatch, or row_count
+ * exceeded the cache cap). Used by hit_test and input_row_y. */
+static int text_panel_row_wrap_count_cached(const UiTextPanelSnapshot *snap,
+                                            int row_idx) {
+    if (wrap_cache_matches(snap) &&
+        row_idx >= 0 && row_idx < g_wrap_cache.row_count)
+        return g_wrap_cache.wrap[row_idx];
+    return text_panel_row_wrap_count(snap, &snap->rows[row_idx]);
+}
+
+/* Populate the wrap-count cache from a full row walk. Called once
+ * from ui_text_panel_render so the hit-test / input-row-y paths can
+ * reuse the counts instead of re-walking row text. */
+static void wrap_cache_populate(const UiTextPanelSnapshot *snap) {
+    if (!snap || snap->row_count > UI_TEXT_PANEL_WRAP_CACHE_MAX) {
+        wrap_cache_invalidate();
+        return;
+    }
+    for (int i = 0; i < snap->row_count; i++)
+        g_wrap_cache.wrap[i] =
+            text_panel_row_wrap_count(snap, &snap->rows[i]);
+    g_wrap_cache.snap          = snap;
+    g_wrap_cache.row_count     = snap->row_count;
+    g_wrap_cache.cp_w          = snap->cp_w;
+    g_wrap_cache.wrap_at_comma = snap->wrap_at_comma;
+    g_wrap_cache.text_x        = snap->text_x;
+    g_wrap_cache.valid         = 1;
+}
+
 static int text_panel_char_for_click(const UiTextPanelSnapshot *snap,
                                      const UiTextPanelRow *row,
                                      int mx,
@@ -682,23 +754,8 @@ int ui_text_panel_input_row_y(const UiTextPanelSnapshot *snap,
     cur = 0;
 
     for (int i = 0; i < snap->row_count; i++) {
-        const UiTextPanelRow *row = &snap->rows[i];
-        const char *text;
-        CodeLayout layout;
-        int visual_rows;
-
-        if (row->kind == UI_TEXT_PANEL_ROW_INPUT)
-            text = snap->input.input ? snap->input.input : "";
-        else
-            text = row->text ? row->text : "";
-
-        if (row->kind == UI_TEXT_PANEL_ROW_PLACEHOLDER && text[0] == '\0')
-            visual_rows = 1;
-        else {
-            layout = text_panel_row_layout(snap, row);
-            visual_rows = code_layout_row_count_for_text(text, &layout);
-            if (visual_rows < 1) visual_rows = 1;
-        }
+        int visual_rows = text_panel_row_wrap_count_cached(snap, i);
+        if (visual_rows < 1) visual_rows = 1;
 
         if (i == input_row_idx) {
             if (cur < snap->scroll || cur >= snap->scroll + visible_rows)
@@ -724,6 +781,10 @@ void ui_text_panel_render(const UiTextPanelSnapshot *snap,
         *out = (UiTextPanelOutput){0};
     if (!snap || !out)
         return;
+
+    /* Fill the per-frame wrap-count cache so the hit-test and
+     * input-row-y paths can reuse our walk instead of redoing it. */
+    wrap_cache_populate(snap);
 
     visible_rows = ui_text_panel_visible_lines_for_height(snap->cp_h,
                                                           text_panel_statusbar_h(snap),
@@ -827,7 +888,7 @@ UiHit ui_text_panel_hit_test(const UiTextPanelSnapshot *snap,
 
     for (int i = 0; i < snap->row_count; i++) {
         const UiTextPanelRow *row = &snap->rows[i];
-        int wrap_count = text_panel_row_wrap_count(snap, row);
+        int wrap_count = text_panel_row_wrap_count_cached(snap, i);
 
         if (target_visual_row < cur + wrap_count) {
             int row_offset = target_visual_row - cur;

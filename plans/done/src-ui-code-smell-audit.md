@@ -134,8 +134,10 @@ Sorted into action tiers, the still-open items landed as:
     `frame_replay` capture across the HUD call — other `snap->replay`
     readers only touch fields `replay_prepare_frame` doesn't write
     (`src_line_idx`, `active`).
-- **Tier C (still deferred):** #30, plus the structural cluster
-  #45–#55 + #58, #63.
+- **Tier C (deferred at the time of this backlog pass):** #30, plus
+  the structural cluster #45–#55 + #58, #63. *Most of these were
+  closed in the 2026-05-25 follow-up pass — see the next section
+  for the running status.*
 - **Tier D (still kept):** #37, #44.
 
 After this pass the only open items in the audit are Tier C (real
@@ -149,7 +151,9 @@ the structural cluster has been quietly closed in the natural course
 of subsequent menu-bar / code-panel work. Updated per-heading markers
 to match.
 
-**Closed since the backlog pass** (8 of 14):
+**Closed since the backlog pass** (10 of 14, including #55 + #63
+which were the remaining "Still open" pair until the same-day
+follow-up):
 
 - **#30** — `glIsEnabled(GL_BLEND)` is gone from `text_panel.c`; the
   fake-bold per-segment query/restore has been removed entirely.
@@ -171,6 +175,15 @@ to match.
   `menu_bar.c`; the menu rows are static literal strings.
 - **#54** — `repl_code_panel_newline_rows` renamed to
   `repl_code_panel_trailing_row_count` (the audit's recommended name).
+- **#55** — `ui_panels_render_scene_status` 118 → 95 lines and
+  `draw_modal_strip` 44 → 26 via extracted `status_strip_begin` /
+  `_paint_bar` / `_end` shared by both call sites.
+- **#63** — Per-frame `g_wrap_cache` in `text_panel.c` populated by
+  `ui_text_panel_render`; `ui_text_panel_hit_test` and
+  `ui_text_panel_input_row_y` now read through
+  `text_panel_row_wrap_count_cached(snap, row_idx)`, removing the
+  per-row `code_layout_row_count_for_text` walk that the renderer
+  already did.
 
 **Partially closed** (4 of 14) — the function shape improved but
 the underlying smell wasn't fully resolved:
@@ -195,15 +208,24 @@ the underlying smell wasn't fully resolved:
   text-len cache the audit suggested wasn't added; the other call
   sites were just deleted along the way.
 
-**Still open** (2 of 14):
+**Still open** (0 of 14):
 
-- **#55** — `ui_panels_render_scene_status` is still 118 lines with
-  the same duplicate ~45-line bar blocks. No shared
-  `draw_scene_status_strip` helper.
-- **#63** — `text_panel_row_layout` still called 5× across
-  `_input_row` / `_regular_row` / `_row_wrap_count` in
-  `text_panel.c`. Wrap counts still aren't cached on
-  `UiTextPanelOutput`.
+(All Tier C now closed; the two stragglers below were picked up in
+the same 2026-05-25 pass.)
+
+- **#55** — *closed.* Extracted `status_strip_begin` /
+  `status_strip_paint_bar` / `status_strip_end` in `panels.c`;
+  `draw_modal_strip` and the status banner block both use them.
+  `ui_panels_render_scene_status` went 118 → 95 lines;
+  `draw_modal_strip` went 44 → 26 lines.
+- **#63** — *closed.* Added a per-frame `g_wrap_cache` to
+  `text_panel.c` keyed on snapshot + cp_w + wrap_at_comma + text_x.
+  `ui_text_panel_render` populates the cache as a side effect of its
+  row walk; `ui_text_panel_hit_test` and `ui_text_panel_input_row_y`
+  read through `text_panel_row_wrap_count_cached(snap, row_idx)`.
+  The 5 inline `text_panel_row_layout(snap, row)` calls remain
+  (they're tiny — 1-line layout builds; the hot path was the
+  `code_layout_row_count_for_text` re-walk, which is now cached).
 
 **Tier D — still warranted** (no change):
 
@@ -214,13 +236,15 @@ the underlying smell wasn't fully resolved:
   (`text_panel.c:835-846`), test `test_ui_text_panel.c:190` still
   pins the contract.
 
-Bottom line: 10 of the audit's 63 findings are now closed beyond the
+Bottom line: 12 of the audit's 63 findings are now closed beyond the
 original closeout (2 in the 2026-05-24 backlog pass — #18, #25 —
-plus 8 here); 4 partially closed (#46, #47, #50, #58); only
-**2 Tier C and 2 Tier D items materially remain** (#55, #63 Tier C;
-#37, #44 Tier D), none of them bugs. The audit is effectively
-complete; the 2 stragglers wait for the next time someone opens
-`panels.c` / `text_panel.c`.
+plus 10 here, including the 2 stragglers #55 and #63 picked up in
+the same pass); 4 partially closed (#46, #47, #50, #58); only
+**2 Tier D items remain** (#37, #44) — both kept on purpose. **No
+Tier C items remain.** The audit is materially complete; the only
+remaining work is the explicit Tier D carve-outs and the 4 partials
+where the structural shape improved but the audit's full fix
+didn't fully land.
 
 ## 🔴 Actual bugs (verified)
 
@@ -1003,7 +1027,7 @@ not a "newline."
 or split into `_trailing_input_rows` / `_trailing_placeholder_rows`
 + thin selector.
 
-### 55. `ui_panels_render_scene_status` has two ~45-line near-identical bar blocks (Tier C — deferred)
+### 55. `ui_panels_render_scene_status` has two ~45-line near-identical bar blocks (done — Tier C closed 2026-05-25; extracted `status_strip_begin` / `_paint_bar` / `_end` shared by `draw_modal_strip` and the status banner)
 
 **Where:** `src/ui/app/panels.c:49-92` (rename modal) and L98-151
 (file prompt). The amber/red status banner at L157-244 shares the
@@ -1095,7 +1119,7 @@ block above (12 spaces vs. 15).
 **Fix:** Re-indent. Cosmetic, but a hint that the file isn't being
 auto-formatted under the purity guard.
 
-### 63. `text_panel_row_layout` called 5× across `_input_row`, `_regular_row`, `_row_wrap_count` (Tier C — deferred)
+### 63. `text_panel_row_layout` called 5× across `_input_row`, `_regular_row`, `_row_wrap_count` (done — Tier C closed 2026-05-25; per-snapshot `g_wrap_cache` populated by render, consumed by hit-test + `ui_text_panel_input_row_y`)
 
 **Where:** `src/ui/core/text_panel.c` (lines 638 vs. 645 inside
 `text_panel_row_wrap_count` declare it twice in the same function
