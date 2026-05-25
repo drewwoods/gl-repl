@@ -337,15 +337,26 @@ static void render_hud(void) {
 
 /* --- GLUT callbacks ---------------------------------------------------- */
 
+/* Populate GL_MODELVIEW with the orbit-camera transform. The scene
+ * module documents this as the caller's responsibility — see the
+ * comment block in src/scene/render.h above scene_render_3d_scene.
+ * Inlined here (instead of importing src/app/glr_camera.h's
+ * glr_camera_load_modelview) because scene_demo's whole purpose is
+ * proving src/scene/ has no hard dependency on app code. */
+static void apply_camera_modelview(const SceneRenderConfig *cfg) {
+    glMatrixMode(GL_MODELVIEW);
+    glLoadIdentity();
+    glTranslatef(0.0f, 0.0f, -cfg->cam_dist);
+    glRotatef(cfg->cam_rx, 1, 0, 0);
+    glRotatef(cfg->cam_ry, 0, 1, 0);
+    glTranslatef(-cfg->cam_tx, -cfg->cam_ty, -cfg->cam_tz);
+}
+
 static void display_func(void) {
     SceneRenderConfig cfg;
     build_config(&cfg);
 
-    SceneCameraPose pose = {
-        .rx = cfg.cam_rx, .ry = cfg.cam_ry, .dist = cfg.cam_dist,
-        .tx = cfg.cam_tx, .ty = cfg.cam_ty, .tz = cfg.cam_tz,
-    };
-    scene_apply_camera(&pose);
+    apply_camera_modelview(&cfg);
     if (scene_render_3d_scene(&g_scene_renderer, &cfg) != 0) {
         fprintf(stderr,
                 "scene_demo: scene_render_3d_scene rejected config (errno=%d)\n",

@@ -430,15 +430,10 @@ static void scene_apply_projection(const SceneRendererState *state,
     }
 }
 
-void scene_apply_camera(const SceneCameraPose *pose) {
-    if (!pose) return;
-    glMatrixMode(GL_MODELVIEW);
-    glLoadIdentity();
-    glTranslatef(0.0f, 0.0f, -pose->dist);
-    glRotatef(pose->rx, 1, 0, 0);
-    glRotatef(pose->ry, 0, 1, 0);
-    glTranslatef(-pose->tx, -pose->ty, -pose->tz);
-}
+/* scene_apply_camera moved to src/app/glr_camera.c as
+ * glr_camera_load_modelview (audit #11). The scene module no longer
+ * owns a camera apply helper; callers populate GL_MODELVIEW
+ * themselves before invoking scene_render_3d_scene. */
 
 static void scene_apply_quality_config(const SceneRenderConfig *config) {
     if (config->multisample_enabled) glEnable(GL_MULTISAMPLE);
@@ -572,14 +567,12 @@ static void scene_pass_setup(const SceneRendererState *state,
     glPushAttrib(GL_ALL_ATTRIB_BITS);
 
     scene_apply_projection(state, config, accum_jitter_x, accum_jitter_y);
-    /* scene_apply_projection leaves matrix mode set to GL_PROJECTION; the
-     * old scene_apply_camera_view() helper used to switch back to
-     * GL_MODELVIEW as a side effect. With camera apply now done by the
-     * caller before scene_render_3d_scene, the switch must happen here
-     * — otherwise the user's glTranslatef / glRotatef inside execute_fn
-     * would modify the projection matrix and objects would render in
-     * unrelated locations. The caller's prior scene_apply_camera() left
-     * the modelview correctly populated; we just need the mode set. */
+    /* scene_apply_projection leaves matrix mode set to GL_PROJECTION;
+     * switch back so the user's glTranslatef / glRotatef inside
+     * execute_fn modifies modelview, not projection. The caller is
+     * expected to have populated GL_MODELVIEW with the camera before
+     * invoking us (see render.h's contract); we just need the mode
+     * set so subsequent calls land on the right stack. */
     glMatrixMode(GL_MODELVIEW);
 
     scene_lights_setup(frame_ctx);

@@ -84,6 +84,33 @@ void glr_camera_clear_scene_default(void);
 void glr_camera_capture(GlrCameraState *out);
 void glr_camera_restore(const GlrCameraState *snapshot);
 
+/* ---- Modelview projection (camera apply) --------------------------- */
+
+/* Minimal {pose} subset of GlrCameraState that scene callers need:
+ * orbit pitch/yaw degrees, distance to target, and target world
+ * position. Used as the input to glr_camera_load_modelview so the C
+ * type system can tell six adjacent floats apart at the boundary.
+ *
+ * The audit's #11 finding was that scene_apply_camera lived in
+ * src/scene/render.c but the renderer refused to call it — a
+ * scene-namespaced public function that scene code wouldn't touch
+ * was hidden temporal coupling enforced by convention. The fix is
+ * to move both the type and the helper into glr_camera (the app's
+ * camera owner) so the scene module is purely the renderer and
+ * callers are responsible for populating GL_MODELVIEW before each
+ * scene_render_3d_scene call. */
+typedef struct GlrCameraPose {
+    float rx, ry;       /* orbit pitch and yaw, degrees */
+    float dist;         /* distance from target along the local Z axis */
+    float tx, ty, tz;   /* target world position */
+} GlrCameraPose;
+
+/* Load the modelview matrix with the orbit-camera transform: clear,
+ * translate by distance, rotate by pitch/yaw, translate by target.
+ * Pure GL state mutation; reads no globals. Callers invoke this once
+ * per frame before scene_render_3d_scene(). */
+void glr_camera_load_modelview(const GlrCameraPose *pose);
+
 /* ---- Controls (drag, momentum) -------------------------------------- */
 
 /* Reset camera + drag state to defaults: clears any drag, momentum,

@@ -30,23 +30,18 @@
  * those live elsewhere (the tessellator is owned by the executor). */
 void scene_render_init_gl(void);
 
-/* The scene's view of an orbit camera. Pitch / yaw degrees, distance
- * to target, and target world position. SceneRenderConfig carries
- * these same fields (cam_rx/ry/dist/tx/ty/tz); the struct exists so
- * scene_apply_camera takes one typed argument instead of six adjacent
- * floats that the C type system can't tell apart. */
-typedef struct SceneCameraPose {
-    float rx, ry;       /* orbit pitch and yaw, degrees */
-    float dist;         /* distance from target along the local Z axis */
-    float tx, ty, tz;   /* target world position */
-} SceneCameraPose;
-
-/* Apply the caller's camera as the modelview transform. The caller is
- * responsible for invoking this once per frame before scene_render_3d_scene;
- * the scene module does not own camera state. The transform matches the app's
- * orbit camera convention: translate by distance, apply pitch/yaw, then
- * translate by the target offset. */
-void scene_apply_camera(const SceneCameraPose *pose);
+/* Callers must populate GL_MODELVIEW with the camera transform before
+ * invoking scene_render_3d_scene. scene_render_3d_scene then sets
+ * GL_PROJECTION via scene_apply_projection and switches back to
+ * GL_MODELVIEW for user geometry, but it never overwrites the
+ * modelview the caller set. The scene module does not own a camera
+ * type, an apply helper, or any camera state — that lives in
+ * src/app/glr_camera.h (glr_camera_load_modelview / GlrCameraPose).
+ *
+ * For non-app callers (scene_demo, future scene viewports): inline
+ * the six matrix calls (glLoadIdentity / glTranslatef / glRotatef /
+ * glTranslatef) directly. The function isn't worth importing for one
+ * helper. */
 
 /* Canonical description of the projection the scene last applied this
  * frame. Computed once per scene_render_3d_scene call (before the AA
