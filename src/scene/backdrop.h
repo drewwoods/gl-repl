@@ -1,5 +1,5 @@
 /*
- * scene_backdrop.h - Scene backdrop renderer.
+ * backdrop.h - Scene backdrop renderer.
  *
  * Draws the optional background environment behind the rest of the scene. The
  * current backdrop mode comes from SceneFrameRenderContext; this module renders the
