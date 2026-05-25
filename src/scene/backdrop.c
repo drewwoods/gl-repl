@@ -76,8 +76,170 @@ static float city_night_factor(float angle, float anim_time) {
     return 0.5f + 0.5f * cosf(local_t * 2.0f * (float)M_PI);
 }
 
-static void draw_cityscape(float anim_time, int nv_fog_distance_supported) {
-    scene_backdrop_push_state();
+/* --- draw_cityscape phases ---
+ *
+ * The 200+ line god-function had four nested concerns: GL setup
+ * (lighting/blend/fog), per-building geometry math, the two tiers of
+ * box-quad emission (5 colored faces each), and the 2D grid of
+ * window-quads with per-window lit-ness and color rolls. Extracted
+ * into setup_city_gl_state / draw_building_box / draw_building_windows
+ * so the outer loop reads as the seed/scatter/render sequence. */
+
+/* Drawn box: the 8 corners are 4 floor (y=y_base) + 4 roof (y=y_top)
+ * combinations of the inner/outer-left/right XZ pairs. The five
+ * colored quads (inner face, outer face, two side faces, roof) all
+ * share these four XZ corners. Drawn with a single glBegin(GL_QUADS). */
+typedef struct CityBoxCorners {
+    float ilx, ilz;  /* inner-left  */
+    float irx, irz;  /* inner-right */
+    float olx, olz;  /* outer-left  */
+    float orx, orz;  /* outer-right */
+} CityBoxCorners;
+
+static CityBoxCorners city_box_corners(float cx, float cz,
+                                       float tang_x, float tang_z,
+                                       float in_x, float in_z,
+                                       float half_w, float half_d) {
+    return (CityBoxCorners){
+        .ilx = cx + tang_x*half_w + in_x*half_d,
+        .ilz = cz + tang_z*half_w + in_z*half_d,
+        .irx = cx - tang_x*half_w + in_x*half_d,
+        .irz = cz - tang_z*half_w + in_z*half_d,
+        .olx = cx + tang_x*half_w - in_x*half_d,
+        .olz = cz + tang_z*half_w - in_z*half_d,
+        .orx = cx - tang_x*half_w - in_x*half_d,
+        .orz = cz - tang_z*half_w - in_z*half_d,
+    };
+}
+
+/* One five-quad box (inner / outer / 2 sides / roof). bd_r,g,b is the
+ * base color (per-building deterministic + night-factor modulated);
+ * the five faces multiply the base by per-face tints to fake lighting
+ * without enabling GL_LIGHTING. */
+static void draw_building_box(const CityBoxCorners *c,
+                              float y_base, float y_top,
+                              float bd_r, float bd_g, float bd_b) {
+    glBegin(GL_QUADS);
+
+    /* Inner face (camera-side) */
+    glColor3f(bd_r * 1.25f, bd_g * 1.25f, bd_b * 1.45f);
+    glVertex3f(c->irx, y_base, c->irz); glVertex3f(c->ilx, y_base, c->ilz);
+    glVertex3f(c->ilx, y_top,  c->ilz); glVertex3f(c->irx, y_top,  c->irz);
+
+    /* Outer face */
+    glColor3f(bd_r * 0.55f, bd_g * 0.55f, bd_b * 0.60f);
+    glVertex3f(c->olx, y_base, c->olz); glVertex3f(c->orx, y_base, c->orz);
+    glVertex3f(c->orx, y_top,  c->orz); glVertex3f(c->olx, y_top,  c->olz);
+
+    /* Side faces */
+    glColor3f(bd_r * 0.80f, bd_g * 0.80f, bd_b * 0.90f);
+    glVertex3f(c->ilx, y_base, c->ilz); glVertex3f(c->olx, y_base, c->olz);
+    glVertex3f(c->olx, y_top,  c->olz); glVertex3f(c->ilx, y_top,  c->ilz);
+
+    glVertex3f(c->orx, y_base, c->orz); glVertex3f(c->irx, y_base, c->irz);
+    glVertex3f(c->irx, y_top,  c->irz); glVertex3f(c->orx, y_top,  c->orz);
+
+    /* Roof */
+    glColor3f(bd_r * 0.50f, bd_g * 0.50f, bd_b * 0.55f);
+    glVertex3f(c->ilx, y_top,  c->ilz); glVertex3f(c->olx, y_top,  c->olz);
+    glVertex3f(c->orx, y_top,  c->orz); glVertex3f(c->irx, y_top,  c->irz);
+
+    glEnd();
+}
+
+/* Per-building inputs the window grid needs. */
+typedef struct CityWindowGeometry {
+    float cx, cz;          /* footprint center */
+    float bw, bh;          /* building width, height */
+    float y_base;          /* floor Y */
+    float tang_x, tang_z;  /* unit vector along the camera-facing facade */
+    float face_ox, face_oz;/* offset to push windows slightly outward */
+    float angle;           /* polar angle around the city ring */
+    unsigned int base;     /* per-building RNG seed offset */
+    float bldg_phase;      /* coarse day/night phase */
+    float warmth;          /* palette warmth roll */
+    int wcols, wrows;      /* window grid resolution */
+    float win_hw, win_hh;  /* per-window quad half-dimensions */
+} CityWindowGeometry;
+
+static void draw_building_windows(const CityWindowGeometry *g, float anim_time) {
+    float tz = g->angle / (2.0f * (float)M_PI);
+
+    for (int wc = 0; wc < g->wcols; wc++) {
+        for (int wr = 0; wr < g->wrows; wr++) {
+            unsigned int wid = g->base + 300u + (unsigned int)(wc * 17 + wr);
+            float wrng = city_rng(wid);
+            if (wrng < 0.10f) continue;
+
+            float win_phase = (city_rng(wid + 7u) - 0.5f) * 0.12f;
+            float lt = fmodf(anim_time / CITY_CYCLE_SECS + tz + g->bldg_phase + win_phase,
+                             1.0f);
+            if (lt < 0.0f) lt += 1.0f;
+
+            /* Squaring keeps twilight transitions soft while still giving
+             * an emphatic nighttime "on" window band. */
+            float raw = 0.5f + 0.5f * cosf(lt * 2.0f * (float)M_PI);
+            float night_sq = raw * raw;
+            float thresh = 0.20f + city_rng(wid + 11u) * 0.52f;
+
+            int always_on = (wrng > 0.92f);
+            float lit;
+            if (always_on) {
+                lit = 0.12f + night_sq * 0.45f;
+            } else if (night_sq > thresh) {
+                lit = (night_sq - thresh) / (1.0f - thresh);
+                lit *= 0.70f + city_rng(wid + 1u) * 0.30f;
+            } else {
+                lit = 0.0f;
+            }
+
+            if (lit < 0.03f) continue;
+
+            float u = ((float)wc + 0.5f) / (float)g->wcols;
+            float v = ((float)wr + 0.5f) / (float)g->wrows;
+
+            float wx = g->cx + g->tang_x * (u - 0.5f) * g->bw + g->face_ox;
+            float wz = g->cz + g->tang_z * (u - 0.5f) * g->bw + g->face_oz;
+            float wy = g->y_base + v * g->bh;
+
+            /* Retro-80s palette matching the star colors */
+            float wr_c, wg_c, wb_c;
+            if (g->warmth < 0.45f) {
+                /* Off-white, slight cool tint */
+                float w = city_rng(wid + 20u);
+                wr_c = 0.88f + w * 0.10f;
+                wg_c = 0.88f + w * 0.06f;
+                wb_c = 0.94f + w * 0.04f;
+            } else if (g->warmth < 0.75f) {
+                /* Neon blue */
+                float b = city_rng(wid + 21u);
+                wr_c = 0.22f + b * 0.18f;
+                wg_c = 0.52f + b * 0.22f;
+                wb_c = 1.0f;
+            } else {
+                /* Purple / violet */
+                float p = city_rng(wid + 22u);
+                wr_c = 0.52f + p * 0.22f;
+                wg_c = 0.12f + p * 0.14f;
+                wb_c = 0.88f + p * 0.10f;
+            }
+
+            glColor4f(wr_c * lit, wg_c * lit, wb_c * lit, 0.85f * lit + 0.05f);
+
+            glBegin(GL_QUADS);
+            glVertex3f(wx - g->tang_x*g->win_hw, wy - g->win_hh, wz - g->tang_z*g->win_hw);
+            glVertex3f(wx + g->tang_x*g->win_hw, wy - g->win_hh, wz + g->tang_z*g->win_hw);
+            glVertex3f(wx + g->tang_x*g->win_hw, wy + g->win_hh, wz + g->tang_z*g->win_hw);
+            glVertex3f(wx - g->tang_x*g->win_hw, wy + g->win_hh, wz - g->tang_z*g->win_hw);
+            glEnd();
+        }
+    }
+}
+
+/* Setup GL state for the cityscape pass and return the previous
+ * GL_FOG_DISTANCE_MODE_NV for tail-restore. (The mode isn't in the
+ * Khronos GL_FOG_BIT, so glPushAttrib doesn't reliably save it.) */
+static GLint setup_city_gl_state(int nv_fog_distance_supported) {
     glDisable(GL_LIGHTING);
     glEnable(GL_DEPTH_TEST);
     glDepthMask(GL_TRUE);
@@ -89,14 +251,12 @@ static void draw_cityscape(float anim_time, int nv_fog_distance_supported) {
     glEnable(GL_FOG);
     glHint(GL_FOG_HINT, GL_NICEST);
     glFogi(GL_FOG_MODE, GL_LINEAR);
+
     /* When GL_NV_fog_distance is available, fog by true radial eye
      * distance instead of eye-plane depth so the ring's side buildings
      * stop popping in and out at the fringes as the camera orbits.
-     * GL_FOG_DISTANCE_MODE_NV isn't part of the Khronos GL_FOG_BIT
-     * spec, so a strict driver wouldn't save/restore it across the
-     * outer glPushAttrib(GL_ALL_ATTRIB_BITS) bracket. Snapshot the
-     * prior value explicitly and restore at function tail rather than
-     * trusting driver good-citizenship. */
+     * Snapshot the prior value so the function tail can restore it
+     * rather than trusting driver good-citizenship. */
     GLint saved_nv_fog_mode = 0;
     if (nv_fog_distance_supported) {
         glGetIntegerv(GL_FOG_DISTANCE_MODE_NV, &saved_nv_fog_mode);
@@ -104,6 +264,12 @@ static void draw_cityscape(float anim_time, int nv_fog_distance_supported) {
     }
     glFogf(GL_FOG_START, CITY_RADIUS * CITY_FOG_START_FRAC);
     glFogf(GL_FOG_END, CITY_RADIUS * CITY_FOG_END_FRAC);
+    return saved_nv_fog_mode;
+}
+
+static void draw_cityscape(float anim_time, int nv_fog_distance_supported) {
+    scene_backdrop_push_state();
+    GLint saved_nv_fog_mode = setup_city_gl_state(nv_fog_distance_supported);
 
     for (int bi = 0; bi < CITY_BLDG_COUNT; bi++) {
         unsigned int base = (unsigned int)bi * CITY_RNG_STRIDE;
@@ -142,13 +308,11 @@ static void draw_cityscape(float anim_time, int nv_fog_distance_supported) {
         float hw = bw * 0.5f;
         float hd = bd * 0.5f;
 
-        float ilx = cx + tang_x*hw + in_x*hd, ilz = cz + tang_z*hw + in_z*hd;
-        float irx = cx - tang_x*hw + in_x*hd, irz = cz - tang_z*hw + in_z*hd;
-        float olx = cx + tang_x*hw - in_x*hd, olz = cz + tang_z*hw - in_z*hd;
-        float orx = cx - tang_x*hw - in_x*hd, orz = cz - tang_z*hw - in_z*hd;
+        CityBoxCorners tier1 = city_box_corners(cx, cz, tang_x, tang_z,
+                                                in_x, in_z, hw, hd);
 
         /* y_base / y_top straddle ground level; named to avoid the
-         * POSIX-<math.h> Bessel y_base/y_top shadow. */
+         * POSIX-<math.h> Bessel y0/y1 shadow. */
         float y_base = -0.05f;
         float y_top  = bh;
         float night = city_night_factor(angle, anim_time);
@@ -158,56 +322,15 @@ static void draw_cityscape(float anim_time, int nv_fog_distance_supported) {
         float bd_g = bd_base;
         float bd_b = bd_base + 0.04f;
 
-        glBegin(GL_QUADS);
-
-        glColor3f(bd_r * 1.25f, bd_g * 1.25f, bd_b * 1.45f);
-        glVertex3f(irx, y_base, irz); glVertex3f(ilx, y_base, ilz);
-        glVertex3f(ilx, y_top, ilz); glVertex3f(irx, y_top, irz);
-
-        glColor3f(bd_r * 0.55f, bd_g * 0.55f, bd_b * 0.60f);
-        glVertex3f(olx, y_base, olz); glVertex3f(orx, y_base, orz);
-        glVertex3f(orx, y_top, orz); glVertex3f(olx, y_top, olz);
-
-        glColor3f(bd_r * 0.80f, bd_g * 0.80f, bd_b * 0.90f);
-        glVertex3f(ilx, y_base, ilz); glVertex3f(olx, y_base, olz);
-        glVertex3f(olx, y_top, olz); glVertex3f(ilx, y_top, ilz);
-
-        glVertex3f(orx, y_base, orz); glVertex3f(irx, y_base, irz);
-        glVertex3f(irx, y_top, irz); glVertex3f(orx, y_top, orz);
-
-        glColor3f(bd_r * 0.50f, bd_g * 0.50f, bd_b * 0.55f);
-        glVertex3f(ilx, y_top, ilz); glVertex3f(olx, y_top, olz);
-        glVertex3f(orx, y_top, orz); glVertex3f(irx, y_top, irz);
-
-        glEnd();
+        draw_building_box(&tier1, y_base, y_top, bd_r, bd_g, bd_b);
 
         if (has_tier2) {
-            float hw2 = t2_bw * 0.5f, hd2 = t2_bd * 0.5f;
-            float il2x = cx + tang_x*hw2 + in_x*hd2, il2z = cz + tang_z*hw2 + in_z*hd2;
-            float ir2x = cx - tang_x*hw2 + in_x*hd2, ir2z = cz - tang_z*hw2 + in_z*hd2;
-            float ol2x = cx + tang_x*hw2 - in_x*hd2, ol2z = cz + tang_z*hw2 - in_z*hd2;
-            float or2x = cx - tang_x*hw2 - in_x*hd2, or2z = cz - tang_z*hw2 - in_z*hd2;
-            float y2_base = y_top, y2_top = y_top + t2_h;
-
-            glBegin(GL_QUADS);
-            glColor3f(bd_r * 1.25f, bd_g * 1.25f, bd_b * 1.45f);
-            glVertex3f(ir2x, y2_base, ir2z); glVertex3f(il2x, y2_base, il2z);
-            glVertex3f(il2x, y2_top, il2z); glVertex3f(ir2x, y2_top, ir2z);
-
-            glColor3f(bd_r * 0.55f, bd_g * 0.55f, bd_b * 0.60f);
-            glVertex3f(ol2x, y2_base, ol2z); glVertex3f(or2x, y2_base, or2z);
-            glVertex3f(or2x, y2_top, or2z); glVertex3f(ol2x, y2_top, ol2z);
-
-            glColor3f(bd_r * 0.80f, bd_g * 0.80f, bd_b * 0.90f);
-            glVertex3f(il2x, y2_base, il2z); glVertex3f(ol2x, y2_base, ol2z);
-            glVertex3f(ol2x, y2_top, ol2z); glVertex3f(il2x, y2_top, il2z);
-            glVertex3f(or2x, y2_base, or2z); glVertex3f(ir2x, y2_base, ir2z);
-            glVertex3f(ir2x, y2_top, ir2z); glVertex3f(or2x, y2_top, or2z);
-
-            glColor3f(bd_r * 0.50f, bd_g * 0.50f, bd_b * 0.55f);
-            glVertex3f(il2x, y2_top, il2z); glVertex3f(ol2x, y2_top, ol2z);
-            glVertex3f(or2x, y2_top, or2z); glVertex3f(ir2x, y2_top, ir2z);
-            glEnd();
+            CityBoxCorners tier2 = city_box_corners(cx, cz, tang_x, tang_z,
+                                                    in_x, in_z,
+                                                    t2_bw * 0.5f,
+                                                    t2_bd * 0.5f);
+            draw_building_box(&tier2, y_top, y_top + t2_h,
+                              bd_r, bd_g, bd_b);
         }
 
         /* Building footprint ranges (CITY_BLDG_W_RANGE / _H_RANGE) and
@@ -220,89 +343,27 @@ static void draw_cityscape(float anim_time, int nv_fog_distance_supported) {
 
         float cell_w = bw / (float)wcols;
         float cell_h = bh / (float)wrows;
-        float win_hw = cell_w * 0.20f;
-        float win_hh = cell_h * 0.22f;
 
         float protrude = 0.04f;
-        float face_ox = in_x * (hd + protrude);
-        float face_oz = in_z * (hd + protrude);
-
-        /* Per-building palette warmth plus coarse (building) and fine
-         * (window) phase offsets spread the day/night cycle so facades
-         * do not pulse in lockstep. */
-        float warmth = city_rng(base + 200u);
-        float tz = angle / (2.0f * (float)M_PI);
-        float bldg_phase = (city_rng(base + 50u) - 0.5f) * 0.06f;
-
-        for (int wc = 0; wc < wcols; wc++) {
-            for (int wr = 0; wr < wrows; wr++) {
-                unsigned int wid = base + 300u + (unsigned int)(wc * 17 + wr);
-                float wrng = city_rng(wid);
-                if (wrng < 0.10f) continue;
-
-                float win_phase = (city_rng(wid + 7u) - 0.5f) * 0.12f;
-                float lt = fmodf(anim_time / CITY_CYCLE_SECS + tz + bldg_phase + win_phase,
-                                 1.0f);
-                if (lt < 0.0f) lt += 1.0f;
-
-                /* Squaring keeps twilight transitions soft while still giving
-                 * an emphatic nighttime "on" window band. */
-                float raw = 0.5f + 0.5f * cosf(lt * 2.0f * (float)M_PI);
-                float night_sq = raw * raw;
-                float thresh = 0.20f + city_rng(wid + 11u) * 0.52f;
-
-                int always_on = (wrng > 0.92f);
-                float lit;
-                if (always_on) {
-                    lit = 0.12f + night_sq * 0.45f;
-                } else if (night_sq > thresh) {
-                    lit = (night_sq - thresh) / (1.0f - thresh);
-                    lit *= 0.70f + city_rng(wid + 1u) * 0.30f;
-                } else {
-                    lit = 0.0f;
-                }
-
-                if (lit < 0.03f) continue;
-
-                float u = ((float)wc + 0.5f) / (float)wcols;
-                float v = ((float)wr + 0.5f) / (float)wrows;
-
-                float wx = cx + tang_x * (u - 0.5f) * bw + face_ox;
-                float wz = cz + tang_z * (u - 0.5f) * bw + face_oz;
-                float wy = y_base + v * bh;
-
-                /* Retro-80s palette matching the star colors */
-                float wr_c, wg_c, wb_c;
-                if (warmth < 0.45f) {
-                    /* Off-white, slight cool tint */
-                    float w = city_rng(wid + 20u);
-                    wr_c = 0.88f + w * 0.10f;
-                    wg_c = 0.88f + w * 0.06f;
-                    wb_c = 0.94f + w * 0.04f;
-                } else if (warmth < 0.75f) {
-                    /* Neon blue */
-                    float b = city_rng(wid + 21u);
-                    wr_c = 0.22f + b * 0.18f;
-                    wg_c = 0.52f + b * 0.22f;
-                    wb_c = 1.0f;
-                } else {
-                    /* Purple / violet */
-                    float p = city_rng(wid + 22u);
-                    wr_c = 0.52f + p * 0.22f;
-                    wg_c = 0.12f + p * 0.14f;
-                    wb_c = 0.88f + p * 0.10f;
-                }
-
-                glColor4f(wr_c * lit, wg_c * lit, wb_c * lit, 0.85f * lit + 0.05f);
-
-                glBegin(GL_QUADS);
-                glVertex3f(wx - tang_x*win_hw, wy - win_hh, wz - tang_z*win_hw);
-                glVertex3f(wx + tang_x*win_hw, wy - win_hh, wz + tang_z*win_hw);
-                glVertex3f(wx + tang_x*win_hw, wy + win_hh, wz + tang_z*win_hw);
-                glVertex3f(wx - tang_x*win_hw, wy + win_hh, wz - tang_z*win_hw);
-                glEnd();
-            }
-        }
+        CityWindowGeometry win_geom = {
+            .cx = cx, .cz = cz,
+            .bw = bw, .bh = bh,
+            .y_base = y_base,
+            .tang_x = tang_x, .tang_z = tang_z,
+            .face_ox = in_x * (hd + protrude),
+            .face_oz = in_z * (hd + protrude),
+            .angle = angle,
+            .base = base,
+            /* Per-building palette warmth plus coarse (building) and
+             * fine (window) phase offsets spread the day/night cycle
+             * so facades do not pulse in lockstep. */
+            .bldg_phase = (city_rng(base + 50u) - 0.5f) * 0.06f,
+            .warmth = city_rng(base + 200u),
+            .wcols = wcols, .wrows = wrows,
+            .win_hw = cell_w * 0.20f,
+            .win_hh = cell_h * 0.22f,
+        };
+        draw_building_windows(&win_geom, anim_time);
     }
 
     /* Restore the NV fog distance mode explicitly — GL_FOG_DISTANCE_MODE_NV
