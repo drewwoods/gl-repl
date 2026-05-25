@@ -15,7 +15,7 @@
  * forward-declared inline. */
 GlrCameraState         *glr_camera_mut(void);
 UiProfilePanelState   *ui_state_profile_panel_mut(void);
-UiVariablePanelState  *variable_panel_view_mut(void);
+UiVariablePanelState  *variable_panel_state_mut(void);
 ReplReplayRuntimeState  *replay_state_mut(void);
 
 static int clamp_int(int v, int lo, int hi) {
@@ -95,7 +95,7 @@ static int *config_value_ptr(GlrConfigKey key) {
     case GLR_CONFIG_NORMAL_VECTORS:      return &glr_state_presentation_mut()->show_normal_vectors;
     case GLR_CONFIG_VERTEX_OUTLINES:     return &glr_state_presentation_mut()->show_vertex_outlines;
     case GLR_CONFIG_VERTEX_POINTS:       return &glr_state_presentation_mut()->show_vertex_points;
-    case GLR_CONFIG_VARIABLE_PANEL:      return &variable_panel_view_mut()->visible;
+    case GLR_CONFIG_VARIABLE_PANEL:      return &variable_panel_state_mut()->visible;
     case GLR_CONFIG_CPU_PROFILE:         return &ui_state_profile_panel_mut()->mode;
     case GLR_CONFIG_CODE_PANEL_LAYOUT:   return &glr_state_presentation_mut()->code_panel_layout;
     case GLR_CONFIG_WRAP_AT_COMMA:       return &glr_state_presentation_mut()->wrap_at_comma;

@@ -1045,7 +1045,7 @@ int glr_ctrl_restore_hidden_code_panel(void) {
     glr_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
     glr_ctrl_sync_ui_chrome();
     ui_menu_bar_close();
-    color_picker_close();
+    color_picker_stop();
     return 1;
 }
 
@@ -1060,7 +1060,7 @@ void glr_app_reset_transients(void) {
     glr_camera_controls_reset();
     glr_camera_clear_scene_default();
     ui_menu_bar_close();
-    color_picker_close();
+    color_picker_stop();
     glr_ctrl_router_reset_code_panel_drag();
 }
 
@@ -1970,7 +1970,7 @@ int glr_ctrl_apply_tag_defaults(unsigned int tag_mask,
 static void glr_app_reset_example_chrome(unsigned int tag_mask) {
     glr_state_presentation_reset_example_defaults();
     glr_camera_mut()->auto_rotate = CFG_DEFAULT_CAMERA_ROTATE;
-    variable_panel_view_mut()->visible = CFG_DEFAULT_VARIABLE_PANEL;
+    variable_panel_state_mut()->visible = CFG_DEFAULT_VARIABLE_PANEL;
 
     glr_ctrl_apply_tag_defaults(
         tag_mask, k_example_tag_defaults,
@@ -2200,7 +2200,7 @@ static void glr_app_install_app_services(void) {
      * without referencing glr_config_* directly. The demo does not
      * install a bridge, so the @cfg path is a no-op there (clearing
      * g_cfg_items / CFG_ITEM_COUNT / audio_* / ui_state_profile_panel_mut
-     * / variable_panel_view_mut stubs). */
+     * / variable_panel_state_mut stubs). */
     glr_actions_install_export_cfg_bridge();
     /* Install the export-camera bridge so src/repl/export.c can emit
      * and parse the `// camera` block + g_angle preamble without
@@ -2260,6 +2260,7 @@ void glr_app_reset_all(void) {
     ui_state_reset();
     variable_panel_state_reset();
     replay_state_reset();
+    color_picker_state_reset();
     /* tutorial_teardown (rather than tutorial_state_reset) so an active
      * tutorial's cfg baseline gets restored before any presentation cfg
      * that follows this reset locks the tutorial-mutated state in. */
@@ -2376,6 +2377,7 @@ int glr_ctrl_code_panel_apply_scroll_follow_for_test(
 }
 
 void glr_ctrl_init_gl(void) {
+    tutorial_state_init_explicit();
     glr_app_reset_all();
     repl_ensure_init_bootstrap_ready();
     scene_render_init_gl();
@@ -3025,7 +3027,7 @@ static void glr_ctrl_apply_variable_panel_value_change(
         const VariablePanelValueChange *value_change) {
     ReplCompiledChange compiled;
     ReplCompileContext ctx;
-    EditorVariableDragState drag;
+    VariablePanelDragState drag;
     char err[REPL_STATUS_TEXT_MAX] = "";
     int var_idx;
     int capture_undo;
@@ -3250,7 +3252,7 @@ void glr_ctrl_router_select_word_at(int line_idx, int char_idx) {
 static int route_code_text_hit(const UiHit *hit) {
     /* A non-swatch click on the code panel closes any open color picker
      * (matches legacy ui_panels_handle_code_panel_press behaviour). */
-    color_picker_close();
+    color_picker_stop();
 
     unsigned int now_ms = current_double_click_ms();
     int is_double_click = (g_last_text_press_line == hit->line_idx &&
@@ -3304,7 +3306,7 @@ static int route_code_text_hit(const UiHit *hit) {
  * cursor column but do not navigate (matches legacy on_insert_line=1
  * behaviour). No drag anchor — the insert row is virtual. */
 static int route_code_insert_line_hit(const UiHit *hit) {
-    color_picker_close();
+    color_picker_stop();
     if (hit->char_idx >= 0)
         editor_cursor_pos_set(hit->char_idx);
     route_code_click_epilog();
@@ -3315,7 +3317,7 @@ static int route_code_insert_line_hit(const UiHit *hit) {
 /* UI_HIT_CODE_GUTTER: clicking the line-number column selects the
  * row. Same dispatch as CODE_TEXT minus the cursor-column move. */
 static int route_code_gutter_hit(const UiHit *hit) {
-    color_picker_close();
+    color_picker_stop();
     if (hit->line_idx >= 0)
         editor_navigate_to_line(hit->line_idx);
     route_code_click_epilog();
@@ -3333,7 +3335,7 @@ static int route_code_gutter_hit(const UiHit *hit) {
  * Consume the press so scene/camera handlers do not see it, but do not
  * move the cursor or selection. */
 static int route_code_panel_chrome_hit(void) {
-    color_picker_close();
+    color_picker_stop();
     glr_ctrl_router_reset_code_panel_drag();
     editor_request_redraw();
     return 1;
@@ -3369,9 +3371,9 @@ static int route_inline_color_swatch_hit(const UiHit *hit, int my) {
     if (hit->line_idx < 0)
         return 0;
     if (color_picker_active_line() == hit->line_idx) {
-        color_picker_close();
+        color_picker_stop();
     } else {
-        color_picker_open(hit->line_idx, my);
+        color_picker_start(hit->line_idx, my);
     }
     editor_request_redraw();
     return 1;
@@ -4134,7 +4136,7 @@ void glr_ctrl_tick(void) {
 
     {
         /* Easing for variable panel's lift above replay HUD (Smell #21/#22/#40) */
-        UiVariablePanelState *vp = variable_panel_view_mut();
+        UiVariablePanelState *vp = variable_panel_state_mut();
         float target = 0.0f;
         if (replay_active()) {
             float lift_target = (float)((REPLAY_HUD_BOTTOM_Y + 10) - 8); /* clearance = 10, BASE_Y = 8 */

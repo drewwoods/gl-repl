@@ -500,7 +500,7 @@ static void test_tutorial_start_applies_cfg(void) {
          * lifecycle added in the REQUIRE/SET commit (8fefa82). The
          * baseline here was the post-reset 3D default, so exit reverts
          * the tutorial's 2D back to 3D. */
-        tutorial_exit();
+        tutorial_stop();
         ASSERT_INT("tutorial_exit restores view mode to pre-start baseline",
                    glr_config_get(GLR_CONFIG_ORTHO_MODE), 0);
     }
@@ -525,7 +525,7 @@ static void test_tutorial_start_applies_cfg(void) {
          * restores it. See test_tutorial_runner.c's
          * test_baseline_captures_view_mode_even_when_unreferenced
          * for the dedicated regression. */
-        tutorial_exit();
+        tutorial_stop();
         ASSERT_INT("no-cfg tutorial exit restores view mode to pre-start baseline",
                    glr_config_get(GLR_CONFIG_ORTHO_MODE), 1);
     }

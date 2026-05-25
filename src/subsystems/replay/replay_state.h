@@ -62,12 +62,6 @@ int    replay_expand_args(void);     /* .expand_args — annotation expansion to
  * from the beginning when DONE. */
 void replay_handle_pin_clicked(void);
 
-/* Forward an ASCII keystroke to the replay state machine while
- * playback is active. Returns 1 if the key was consumed, 0 otherwise. */
-int  replay_handle_key(unsigned char key);
 
-/* Forward a GLUT special key (arrows, F-keys, etc.) to replay while
- * playback is active. Returns 1 if consumed. */
-int  replay_handle_special(int key);
 
 #endif /* REPLAY_STATE_H */

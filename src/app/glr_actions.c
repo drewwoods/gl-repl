@@ -443,7 +443,7 @@ void glr_cfg_cycle_row(int row, int delta) {
             repl_set_status("Layout: bottom code panel");
         } else if (glr_state_presentation().code_panel_layout == CODE_PANEL_LAYOUT_HIDDEN) {
             ui_menu_bar_close();
-            color_picker_close();
+            color_picker_stop();
             editor_completion_clear();
             repl_set_status("Layout: code panel hidden");
         } else {
@@ -655,7 +655,7 @@ int glr_action_menu_item_activate(int menu_id, int item_idx) {
             return 1;
         }
         if (tutorial_active() && item_idx == tag_count + 2) {
-            tutorial_exit();
+            tutorial_stop();
             return 1;
         }
         return 1;

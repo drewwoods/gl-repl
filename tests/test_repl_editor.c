@@ -3069,7 +3069,7 @@ int main() {
     {
         glr_app_reset_all();
         ui_state_viewport_set_size(1000, 1000);
-        variable_panel_view_mut()->visible = 1;
+        variable_panel_state_mut()->visible = 1;
         editor_feed_line("float testvar = 5.0;");
 
         /* Variable panel is usually at bottom-right of scene.
@@ -3439,7 +3439,7 @@ int main() {
     {
         glr_app_reset_all();
         ui_state_viewport_set_size(1000, 1000);
-        variable_panel_view_mut()->visible = 1;
+        variable_panel_state_mut()->visible = 1;
         editor_feed_line("float testvar = 5.0;");
 
         int px, py, pw, ph;

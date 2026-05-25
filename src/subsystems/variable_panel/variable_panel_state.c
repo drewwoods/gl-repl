@@ -1,5 +1,5 @@
 /*
- * variable_panel.c - Variable slider panel peer subsystem.
+ * variable_panel_state.c - Variable slider panel peer subsystem state.
  */
 #include "subsystems/variable_panel/variable_panel_state.h"
 
@@ -35,15 +35,15 @@ UiVariablePanelState variable_panel_view(void) {
     return g_variable_panel.view;
 }
 
-UiVariablePanelState *variable_panel_view_mut(void) {
+UiVariablePanelState *variable_panel_state_mut(void) {
     return &g_variable_panel.view;
 }
 
-EditorVariableDragState variable_panel_drag(void) {
+VariablePanelDragState variable_panel_drag(void) {
     return g_variable_panel.drag;
 }
 
-EditorVariableDragState *variable_panel_drag_mut(void) {
+VariablePanelDragState *variable_panel_drag_mut(void) {
     return &g_variable_panel.drag;
 }
 

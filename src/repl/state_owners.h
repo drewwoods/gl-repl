@@ -11,6 +11,7 @@
 #define REPL_STATE_OWNERS_H
 
 #include "repl/state_views.h"
+#include "repl/cfg_baseline.h"
 
 ReplDocumentState       *repl_state_document_mut(void);
 const GLCmd *repl_state_document_cmds(void);
@@ -99,16 +100,7 @@ void                         repl_state_import_export_reset(void);
 void                         repl_state_refresh_workspace_header_lines(void);
 int                          repl_state_parse_workspace_header_line(const char *line);
 
-/* Typed live-cfg helpers backed by the controller-installed config bridge.
- * Read or write one cfg slug at a time using the same slug vocabulary that
- * `@cfg` lines / examples / scene snapshots use (see CLAUDE.md and
- * src/app/glr_actions.c). `repl_cfg_known` reports whether the bridge
- * recognises the slug (two-probe; lets catalog-style fixtures fail loudly on
- * a typo). All three are no-ops / return fallback when no bridge is
- * installed. */
-int                          repl_cfg_get_int(const char *slug, int fallback);
-void                         repl_cfg_set_int(const char *slug, int value);
-int                          repl_cfg_known(const char *slug);
+
 
 /* Initialise REPL-owned program state to defaults. Does NOT reset
  * peer/editor/UI state — that's glr_app_reset_all in glr_ctrl.h.

@@ -270,6 +270,7 @@ SRCS = \
 	src/editor/undo.c \
 	src/repl/apply.c \
 	src/repl/autonormal.c \
+	src/repl/cfg_baseline.c \
 	src/repl/command_spec.c \
 	src/repl/command_store.c \
 	src/repl/compile.c \
@@ -352,6 +353,7 @@ HDRS = \
 	src/editor/state.h \
 	src/editor/undo.h \
 	src/repl/apply.h \
+	src/repl/cfg_baseline.h \
 	src/repl/command_spec.h \
 	src/repl/command_store.h \
 	src/repl/compile.h \
@@ -435,6 +437,7 @@ CORE_TEST_SRCS = \
 	src/editor/undo.c \
 	src/repl/apply.c \
 	src/repl/autonormal.c \
+	src/repl/cfg_baseline.c \
 	src/repl/command_spec.c \
 	src/repl/command_store.c \
 	src/repl/compile.c \
@@ -529,6 +532,7 @@ REPL_DEMO_DEP_SRCS = src/repl/format.c \
                      src/subsystems/tutorial/tutorial_state.c \
 					 src/repl/apply.c \
                      src/repl/autonormal.c \
+                     src/repl/cfg_baseline.c \
                      src/repl/command_spec.c \
                      src/repl/command_store.c \
                      src/repl/compile.c \

@@ -5,7 +5,7 @@
 #include <string.h>
 
 #include "repl/core.h"
-#include "repl/export.h"   /* repl_state_parse_workspace_header_line for @cfg */
+#include "repl/cfg_baseline.h"
 #include "repl/load.h"
 #include "repl/scenes.h"
 #include "repl/state_owners.h"
@@ -113,15 +113,6 @@ static void tutorial_cfg_baseline_restore(void) {
     tutorial_cfg_baseline_clear();
 }
 
-static void tutorial_store_result(TutorialMatchResult *dst,
-                                  TutorialMatchResult result) {
-    TutorialRuntimeState *state = tutorial_state_mut();
-
-    if (dst)
-        *dst = result;
-    state->last_result = result;
-}
-
 static void tutorial_set_expected_message(TutorialMatchResult *result,
                                           TutorialMatchKind kind,
                                           const char *expected) {
@@ -129,7 +120,6 @@ static void tutorial_set_expected_message(TutorialMatchResult *result,
         return;
 
     result->kind = kind;
-    result->arg_index = -1;
     if (!expected)
         expected = "";
     snprintf(result->message, sizeof(result->message), "expected: %s", expected);
@@ -390,7 +380,6 @@ static int tutorial_step_instruction_line(int tutorial_idx, int step,
 TutorialMatchResult tutorial_match(const char *expected, const char *got) {
     TutorialMatchResult result = {
         .kind = TUT_MATCH_OK,
-        .arg_index = -1,
         .message = "",
     };
     char normalized_expected[256];
@@ -555,7 +544,7 @@ void tutorial_teardown(void) {
     tutorial_state_reset();
 }
 
-void tutorial_exit(void) {
+void tutorial_stop(void) {
     if (!tutorial_active())
         return;
 
@@ -576,15 +565,16 @@ int tutorial_handle_commit_attempt(const char *input, TutorialMatchResult *out) 
     if (!tutorial_active() || !expected) {
         result = (TutorialMatchResult){
             .kind = TUT_MATCH_OK,
-            .arg_index = -1,
             .message = "",
         };
-        tutorial_store_result(out, result);
+        if (out)
+            *out = result;
         return 1;
     }
 
     result = tutorial_match(expected, input);
-    tutorial_store_result(out, result);
+    if (out)
+        *out = result;
     return result.kind == TUT_MATCH_OK;
 }
 

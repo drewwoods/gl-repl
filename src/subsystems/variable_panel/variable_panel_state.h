@@ -51,13 +51,13 @@ typedef struct {
     int   start_x;
     char  name[16];
     int   undo_snapshot_pushed;
-} EditorVariableDragState;
+} VariablePanelDragState;
 
 /* Composite peer state. The two slices keep their existing value types so the
  * accessors and snapshots can pass them by value without another wrapper API. */
 typedef struct {
     UiVariablePanelState view;   /* visibility flag */
-    EditorVariableDragState  drag;   /* slider drag transaction */
+    VariablePanelDragState  drag;   /* slider drag transaction */
 } VariablePanelState;
 
 
@@ -68,9 +68,9 @@ void variable_panel_state_reset(void);
 
 /* Read-only / mutable accessors. */
 UiVariablePanelState  variable_panel_view(void);
-UiVariablePanelState *variable_panel_view_mut(void);
-EditorVariableDragState   variable_panel_drag(void);
-EditorVariableDragState  *variable_panel_drag_mut(void);
+UiVariablePanelState *variable_panel_state_mut(void);
+VariablePanelDragState   variable_panel_drag(void);
+VariablePanelDragState  *variable_panel_drag_mut(void);
 
 /* Convenience wrappers. */
 int  variable_panel_visible(void);

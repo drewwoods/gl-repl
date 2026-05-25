@@ -19,19 +19,13 @@ static void tutorial_state_init_defaults(TutorialRuntimeState *s) {
     s->pending.doc_count_before = -1;
     for (int i = 0; i < TUTORIAL_LOCKED_LINE_MAX; i++)
         s->instruction_line_for_step[i] = -1;
-    s->last_result.kind = TUT_MATCH_OK;
-    s->last_result.arg_index = -1;
-    s->last_result.message[0] = '\0';
     repl_export_config_clear(&s->baseline_bag);
     s->baseline_valid = 0;
 }
 
-#if defined(__GNUC__) || defined(__clang__)
-__attribute__((constructor))
-static void tutorial_state_module_init(void) {
+void tutorial_state_init_explicit(void) {
     tutorial_state_init_defaults(&g_tutorial_state);
 }
-#endif
 
 TutorialRuntimeState tutorial_state_view(void) {
     return g_tutorial_state;

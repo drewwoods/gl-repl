@@ -14,7 +14,7 @@
  *           ui_state_code_panel_mut.
  *   Step 3: ui_state_status_set (via the ReplHostEffects bridge).
  *   Step 4: g_cfg_items, CFG_ITEM_COUNT, audio_get_cfg_mode,
- *           audio_set_cfg_mode, variable_panel_view_mut,
+ *           audio_set_cfg_mode, variable_panel_state_mut,
  *           ui_state_profile_panel_mut (via ReplExportConfigBridge).
  *   Step 6: editor_load_line_to_input (locked by
  *           check-no-load-line-to-input-in-pipeline).
