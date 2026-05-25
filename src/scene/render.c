@@ -525,12 +525,18 @@ static void scene_apply_clear_color(const float clear_color[4]) {
                  clear_color[2], clear_color[3]);
 }
 
-static void render_3d_scene_pass(const SceneRenderConfig *config,
-                                 float accum_jitter_x,
-                                 float accum_jitter_y) {
-    SceneFrameRenderContext frame_ctx;
-    scene_prepare_frame_context(&frame_ctx, config);
+/* --- render_3d_scene_pass phases ---
+ *
+ * The accumulation-AA loop calls render_3d_scene_pass once per
+ * jitter sample, and each call does five distinct things in order:
+ * projection/lighting setup, user fill, scene helpers (backdrop /
+ * grid / axes / orbit target), and post-fill / post-overlays
+ * caller hooks. The orchestrator below is now ~25 lines that just
+ * brackets the outer glPushAttrib pair and calls into each phase. */
 
+static void scene_pass_setup(const SceneFrameRenderContext *frame_ctx,
+                             float accum_jitter_x, float accum_jitter_y) {
+    const SceneRenderConfig *config = &frame_ctx->config;
     prof_begin(PROF_SCENE_3D_SETUP);
     glPushAttrib(GL_ALL_ATTRIB_BITS);
 
@@ -545,7 +551,7 @@ static void render_3d_scene_pass(const SceneRenderConfig *config,
      * the modelview correctly populated; we just need the mode set. */
     glMatrixMode(GL_MODELVIEW);
 
-    scene_lights_setup(&frame_ctx);
+    scene_lights_setup(frame_ctx);
     glDisable(GL_LIGHTING); /* baseline: disabled; execute_commands() enables if user typed it */
 
     /* glColorMaterial mode and default material specular/shininess are
@@ -556,56 +562,70 @@ static void render_3d_scene_pass(const SceneRenderConfig *config,
     scene_apply_quality_config(config);
     scene_apply_wireframe_config(config);
     prof_accum_end(PROF_SCENE_3D_SETUP);
+}
 
-    {
-        prof_begin(PROF_SCENE_3D_FILL);
-        glPushMatrix();
-        if (config->execute_fn) {
-            SceneExecuteContext ctx = { .purpose = SCENE_EXEC_MAIN_FILL };
-            config->execute_fn(&ctx, config->execute_user_data);
-        }
-        glPopMatrix();
-        prof_accum_end(PROF_SCENE_3D_FILL);
-
-        if (config->post_fill_fn)
-            config->post_fill_fn(config->post_fill_user_data);
+static void scene_pass_fill(const SceneRenderConfig *config) {
+    prof_begin(PROF_SCENE_3D_FILL);
+    glPushMatrix();
+    if (config->execute_fn) {
+        SceneExecuteContext ctx = { .purpose = SCENE_EXEC_MAIN_FILL };
+        config->execute_fn(&ctx, config->execute_user_data);
     }
+    glPopMatrix();
+    prof_accum_end(PROF_SCENE_3D_FILL);
+
+    if (config->post_fill_fn)
+        config->post_fill_fn(config->post_fill_user_data);
 
     if (config->wireframe) glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+}
 
-    /* Draw translucent scene helpers after the main geometry so antialiased
-     * edges blend against the final background color rather than the clear
-     * color from earlier in the frame. */
+/* Draw translucent scene helpers after the main geometry so antialiased
+ * edges blend against the final background color rather than the clear
+ * color from earlier in the frame. */
+static void scene_pass_helpers(const SceneFrameRenderContext *frame_ctx) {
     prof_begin(PROF_SCENE_3D_HELPERS);
     prof_begin(PROF_SCENE_3D_BACKDROP);
-    scene_backdrop_render(&frame_ctx);
+    scene_backdrop_render(frame_ctx);
     prof_accum_end(PROF_SCENE_3D_BACKDROP);
     prof_begin(PROF_SCENE_3D_GRID);
-    scene_grid_render(&frame_ctx);
+    scene_grid_render(frame_ctx);
     prof_accum_end(PROF_SCENE_3D_GRID);
     prof_begin(PROF_SCENE_3D_AXES);
-    scene_axes_render(&frame_ctx);
+    scene_axes_render(frame_ctx);
     prof_accum_end(PROF_SCENE_3D_AXES);
     prof_begin(PROF_SCENE_3D_ORBIT_TARGET);
-    draw_orbit_target(&frame_ctx);
+    draw_orbit_target(frame_ctx);
     prof_accum_end(PROF_SCENE_3D_ORBIT_TARGET);
     prof_accum_end(PROF_SCENE_3D_HELPERS);
+}
 
-    /* Polygon outline overlay, vertex-point overlay, vertex-number /
-     * normal-vector labels, and the cursor-edit guide stack all render
-     * here through post_overlays_fn — none of them are scene-internal
-     * any more (see src/app/glr_ctrl.c for the bodies). post_overlays_fn
-     * fires after lights_render so its output sits on top of the
-     * scene's helpers. */
+/* Polygon outline overlay, vertex-point overlay, vertex-number /
+ * normal-vector labels, and the cursor-edit guide stack all render
+ * here through post_overlays_fn — none of them are scene-internal
+ * any more (see src/app/glr_ctrl.c for the bodies). post_overlays_fn
+ * fires after lights_render so its output sits on top of the
+ * scene's helpers. */
+static void scene_pass_overlays(const SceneFrameRenderContext *frame_ctx) {
     prof_begin(PROF_SCENE_3D_OVERLAYS);
-
-    scene_lights_render(&frame_ctx);
-
-    if (config->post_overlays_fn)
-        config->post_overlays_fn(config->post_overlays_user_data);
-
+    scene_lights_render(frame_ctx);
+    if (frame_ctx->config.post_overlays_fn)
+        frame_ctx->config.post_overlays_fn(
+            frame_ctx->config.post_overlays_user_data);
     glPopAttrib();
     prof_accum_end(PROF_SCENE_3D_OVERLAYS);
+}
+
+static void render_3d_scene_pass(const SceneRenderConfig *config,
+                                 float accum_jitter_x,
+                                 float accum_jitter_y) {
+    SceneFrameRenderContext frame_ctx;
+    scene_prepare_frame_context(&frame_ctx, config);
+
+    scene_pass_setup(&frame_ctx, accum_jitter_x, accum_jitter_y);
+    scene_pass_fill(config);
+    scene_pass_helpers(&frame_ctx);
+    scene_pass_overlays(&frame_ctx);
 }
 
 int scene_render_3d_scene(const SceneRenderConfig *config) {
