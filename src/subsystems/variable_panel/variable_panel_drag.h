@@ -9,10 +9,12 @@
 #ifndef VARIABLE_PANEL_DRAG_H
 #define VARIABLE_PANEL_DRAG_H
 
+#include "config.h"  /* REPL_PREDEF_NAME_MAX */
+
 /* Per-motion value request emitted by the drag math. `name` identifies the
  * target predefined variable; `value` is the requested new numeric value. */
 typedef struct VariablePanelValueChange_s {
-    char  name[16];
+    char  name[REPL_PREDEF_NAME_MAX];
     float value;
 } VariablePanelValueChange;
 

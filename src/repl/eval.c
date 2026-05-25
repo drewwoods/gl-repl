@@ -202,7 +202,7 @@ void repl_eval_restore_scratch_arrays(
 }
 
 void repl_eval_copy_predef_vars(float dst_vals[MAX_PREDEF_VARS],
-                                char dst_names[MAX_PREDEF_VARS][16],
+                                char dst_names[MAX_PREDEF_VARS][REPL_PREDEF_NAME_MAX],
                                 int *dst_count) {
     if (dst_count)
         *dst_count = g_num_predef_vars;
@@ -210,19 +210,19 @@ void repl_eval_copy_predef_vars(float dst_vals[MAX_PREDEF_VARS],
         if (dst_vals)
             dst_vals[i] = g_predef_vars[i].value;
         if (dst_names)
-            memcpy(dst_names[i], g_predef_vars[i].name, 16);
+            memcpy(dst_names[i], g_predef_vars[i].name, REPL_PREDEF_NAME_MAX);
     }
 }
 
 void repl_eval_restore_predef_vars(const float src_vals[MAX_PREDEF_VARS],
-                                   const char src_names[MAX_PREDEF_VARS][16],
+                                   const char src_names[MAX_PREDEF_VARS][REPL_PREDEF_NAME_MAX],
                                    int src_count) {
     g_num_predef_vars = src_count;
     for (int i = 0; i < src_count; i++) {
         if (src_vals)
             g_predef_vars[i].value = src_vals[i];
         if (src_names)
-            memcpy(g_predef_vars[i].name, src_names[i], 16);
+            memcpy(g_predef_vars[i].name, src_names[i], REPL_PREDEF_NAME_MAX);
     }
 }
 
@@ -576,7 +576,7 @@ static int expr_range_has_runtime_values(const char *src, const char *end,
         s = ident_end;
 
         int len = (int)(s - start);
-        char name[16];
+        char name[REPL_PREDEF_NAME_MAX];
         if (len <= 0 || len >= (int)sizeof(name))
             return 1;
 
@@ -631,7 +631,7 @@ static int validate_expression_idents_range(const char *src, const char *end,
         s = ident_end;
 
         int len = (int)(s - start);
-        char name[16];
+        char name[REPL_PREDEF_NAME_MAX];
         if (len >= (int)sizeof(name)) {
             if (err)
                 snprintf(err, (size_t)errsz, "identifier too long");

@@ -203,7 +203,7 @@ static void flatten_for_loop(FlattenContext *ctx,
                              int call_src_cmd_idx, int root_call_src_cmd_idx,
                              unsigned int func_scope_mask,
                              int loop_end) {
-    char var_name[16];
+    char var_name[REPL_PREDEF_NAME_MAX];
     float start_val = src_cmd->args[0];
     float end_val   = src_cmd->args[1];
     float step_val  = src_cmd->args[2];
@@ -513,7 +513,7 @@ static void flatten_range(FlattenContext *ctx,
             int array_idx = (int)src_cmd->args[0];
             int elem_idx = (int)src_cmd->args[1];
             float value = src_cmd->args[2];
-            char name[16] = "";
+            char name[REPL_PREDEF_NAME_MAX] = "";
             char index_expr[MAX_LINE_LEN] = "";
             char rhs[MAX_LINE_LEN] = "";
             int local_index_vars = 0;

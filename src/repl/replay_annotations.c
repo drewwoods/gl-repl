@@ -201,7 +201,7 @@ static void replay_subst_scratch_reads(
 
         {
             int len = (int)(p - start);
-            char name[16];
+            char name[REPL_PREDEF_NAME_MAX];
             const char *bracket = skip_leading_ws(p);
             int array_idx;
 
@@ -462,7 +462,7 @@ static int subst_visible_vars(const char *source, char *out, int out_size,
 
             int found = 0;
             float found_val = 0.0f;
-            char found_name[16] = "";
+            char found_name[REPL_PREDEF_NAME_MAX] = "";
 
             for (int v = 0; !found && v < num_vars; v++) {
                 int nlen = (int)strlen(vars[v].name);
@@ -732,7 +732,7 @@ static int build_replay_assignment_inline_comment(int cmd_idx, int flat_idx,
     float scratch_vals[REPL_SCRATCH_ARRAY_COUNT][REPL_SCRATCH_ARRAY_LEN];
     ExprVar visible_vars[MAX_PREDEF_VARS + MAX_EXPR_VARS];
     char rhs_subst[MAX_LINE_LEN];
-    char name[16];
+    char name[REPL_PREDEF_NAME_MAX];
     char index_expr[MAX_LINE_LEN];
     char rhs[MAX_LINE_LEN];
     int nv;
@@ -1012,9 +1012,9 @@ static int format_evaluated_cmd(const GLCmd *cmd, const char *orig_source,
     if (cmd->type == CMD_VAR_ASSIGN) {
         const char *p = orig_source;
         while (*p && isspace((unsigned char)*p)) p++;
-        char vname[16];
+        char vname[REPL_PREDEF_NAME_MAX];
         int ni = 0;
-        while (*p && (isalnum((unsigned char)*p) || *p == '_') && ni < 15)
+        while (*p && (isalnum((unsigned char)*p) || *p == '_') && ni < (int)sizeof(vname) - 1)
             vname[ni++] = *p++;
         vname[ni] = '\0';
         snprintf(out + oi, out_size - oi, "%s = %g;", vname, cmd->args[0]);
@@ -1022,7 +1022,7 @@ static int format_evaluated_cmd(const GLCmd *cmd, const char *orig_source,
     }
 
     if (cmd->type == CMD_SCRATCH_ASSIGN) {
-        char name[16] = "";
+        char name[REPL_PREDEF_NAME_MAX] = "";
         char index_expr[MAX_LINE_LEN] = "";
         char rhs[MAX_LINE_LEN] = "";
         int array_idx = (int)cmd->args[0];
