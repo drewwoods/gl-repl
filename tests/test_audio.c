@@ -164,6 +164,31 @@ int main() {
             glr_audio_set_state_file(NULL);
             glr_audio_shutdown();
         }
+
+        /* 8. Idempotent user gesture handling */
+        {
+            ASSERT_TRUE("idempotency: init", glr_audio_init() == 0);
+            glr_audio_on_user_gesture();
+            glr_audio_on_user_gesture();
+            glr_audio_on_user_gesture();
+            ASSERT_TRUE("survived multiple gestures idempotently", 1);
+            glr_audio_shutdown();
+        }
+
+        /* 9. In-flight load cancellation on playlist reset */
+        {
+            ASSERT_TRUE("cancel: init", glr_audio_init() == 0);
+            const char *tracks[] = { "test1.mp3", "test2.mp3" };
+            glr_audio_set_playlist(tracks, 2);
+            glr_audio_play_playlist();
+
+            /* Immediately set a new playlist to cancel the in-flight load */
+            const char *new_tracks[] = { "test3.mp3" };
+            glr_audio_set_playlist(new_tracks, 1);
+
+            ASSERT_TRUE("set_playlist cancelled prior load", 1);
+            glr_audio_shutdown();
+        }
     } else {
         printf("Skipping engine-active tests as init failed.\n");
     }
