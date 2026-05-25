@@ -490,21 +490,71 @@ static void test_camera_restore_clears_momentum(void) {
                 fabsf(glr_camera().dist - dist_before) < 1e-4f);
 }
 
-/* Audit #9: SOURCE_TEXT_LOAD_ALL silently clamps count to MAX_COMMIT_CMDS. */
-static void test_source_document_load_all_truncation(void) {
+/* Audit #9: SOURCE_TEXT_LOAD_ALL with oversized count must fail rather than
+ * silently clamp/truncate. */
+static void test_source_document_load_all_rejects_oversized(void) {
     glr_app_reset_all();
+
+    source_document_insert_line(0, "glBegin(GL_TRIANGLES);");
+    source_document_insert_line(1, "glEnd();");
 
     SourceTextChange change;
     memset(&change, 0, sizeof(change));
     change.kind = SOURCE_TEXT_LOAD_ALL;
     change.count = MAX_COMMIT_CMDS + 5;
-    for (int i = 0; i < MAX_COMMIT_CMDS; i++)
+    for (int i = 0; i < MAX_COMMIT_CMDS; i++) {
         snprintf(change.text[i], MAX_LINE_LEN, "glVertex3f(%d,0,0);", i);
+    }
 
     int ok = source_document_apply_change(&change);
-    ASSERT_INT("LOAD_ALL with oversized count succeeds", ok, 1);
-    ASSERT_INT("LOAD_ALL clamps to MAX_COMMIT_CMDS",
-               source_document_view().line_count, MAX_COMMIT_CMDS);
+    ASSERT_INT("LOAD_ALL with oversized count is rejected", ok, 0);
+    ASSERT_INT("LOAD_ALL reject keeps line count unchanged",
+               source_document_view().line_count, 2);
+    ASSERT_TRUE("LOAD_ALL reject keeps first line",
+                strcmp(source_text_line(source_document_view(), 0),
+                       "glBegin(GL_TRIANGLES);") == 0);
+    ASSERT_TRUE("LOAD_ALL reject keeps second line",
+                strcmp(source_text_line(source_document_view(), 1),
+                       "glEnd();") == 0);
+}
+
+/* Audit #8: apply_change combined shape must be atomic on failure. If the
+ * insert-many leg cannot fit, neither the pre-delete nor any insert may stick. */
+static void test_source_document_apply_change_combined_atomic_on_failure(void) {
+    glr_app_reset_all();
+
+    editor_buffer_set_count(MAX_COMMANDS - 1);
+    editor_buffer_set_line(0, "line0");
+    editor_buffer_set_line(1, "line1");
+    editor_buffer_set_line(2, "line2");
+    editor_buffer_set_line(3, "line3");
+    editor_buffer_set_line(MAX_COMMANDS - 2, "tail");
+
+    SourceTextChange change;
+    memset(&change, 0, sizeof(change));
+    change.kind = SOURCE_TEXT_INSERT_MANY;
+    change.delete_pos = 1;
+    change.delete_count = 2;
+    change.pos = 1;
+    change.count = 4; /* final size would exceed MAX_COMMANDS by one */
+    snprintf(change.text[0], MAX_LINE_LEN, "new1");
+    snprintf(change.text[1], MAX_LINE_LEN, "new2");
+    snprintf(change.text[2], MAX_LINE_LEN, "new3");
+    snprintf(change.text[3], MAX_LINE_LEN, "new4");
+
+    int ok = source_document_apply_change(&change);
+    ASSERT_INT("combined delete+insert-many rejects overflow", ok, 0);
+    ASSERT_INT("combined failure keeps line count unchanged",
+               source_document_view().line_count, MAX_COMMANDS - 1);
+    ASSERT_TRUE("combined failure keeps line1",
+                strcmp(source_text_line(source_document_view(), 1),
+                       "line1") == 0);
+    ASSERT_TRUE("combined failure keeps line2",
+                strcmp(source_text_line(source_document_view(), 2),
+                       "line2") == 0);
+    ASSERT_TRUE("combined failure keeps tail",
+                strcmp(source_text_line(source_document_view(), MAX_COMMANDS - 2),
+                       "tail") == 0);
 }
 
 /* Audit #8: apply_change combined shape (pre-insert delete + INSERT_MANY). */
@@ -755,7 +805,8 @@ int main(void) {
     test_reset_all_restores_default_runtime();
     test_line_override_cap_covers_busy_replay();
     test_camera_restore_clears_momentum();
-    test_source_document_load_all_truncation();
+    test_source_document_load_all_rejects_oversized();
+    test_source_document_apply_change_combined_atomic_on_failure();
     test_source_document_apply_change_combined();
     test_camera_ease_to_default_uses_scene_default();
     test_camera_clear_scene_default_falls_back();

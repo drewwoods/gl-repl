@@ -1297,6 +1297,61 @@ int main(void) {
         }
     }
 
+    /* Audit #11/#12: numeric-ry camera blocks advance directly to the target
+     * translate step. A later g_angle line is not part of the camera block and
+     * must not be consumed by the camera parser. */
+    {
+        const ReplExportCameraBridge *bridge;
+
+        glr_app_reset_all(); declare_test_vars();
+        bridge = repl_export_camera_bridge();
+        ASSERT_TRUE("cam parser bridge installed", bridge != NULL);
+        ASSERT_TRUE("cam parser bridge has reset",
+                    bridge && bridge->reset_import != NULL);
+        ASSERT_TRUE("cam parser bridge has consumer",
+                    bridge && bridge->try_consume_import_line != NULL);
+
+        if (bridge && bridge->reset_import && bridge->try_consume_import_line) {
+            bridge->reset_import();
+
+            ASSERT_INT("cam parser consumes dist line",
+                       bridge->try_consume_import_line(
+                           "glTranslatef(0.0000f, 0.0000f, -6.5000f);"),
+                       1);
+            ASSERT_INT("cam parser consumes rx line",
+                       bridge->try_consume_import_line(
+                           "glRotatef(25.0000f, 1.0f, 0.0f, 0.0f);"),
+                       1);
+            ASSERT_INT("cam parser consumes numeric ry line",
+                       bridge->try_consume_import_line(
+                           "glRotatef(55.0000f, 0.0f, 1.0f, 0.0f);"),
+                       1);
+
+            ASSERT_INT("cam parser does not consume g_angle after numeric ry",
+                       bridge->try_consume_import_line(
+                           "glRotatef(g_angle, 0.0f, 1.0f, 0.0f);"),
+                       0);
+
+            ASSERT_INT("cam parser still consumes target translate",
+                       bridge->try_consume_import_line(
+                           "glTranslatef(-0.5000f, -1.0000f, -1.5000f);"),
+                       1);
+
+            ASSERT_TRUE("cam parser keeps rx from parsed block",
+                        fabsf(glr_camera().rx - 25.0f) < 1e-2f);
+            ASSERT_TRUE("cam parser keeps ry from parsed block",
+                        fabsf(glr_camera().ry - 55.0f) < 1e-2f);
+            ASSERT_TRUE("cam parser keeps tx from parsed block",
+                        fabsf(glr_camera().tx - 0.5f) < 1e-2f);
+            ASSERT_TRUE("cam parser keeps ty from parsed block",
+                        fabsf(glr_camera().ty - 1.0f) < 1e-2f);
+            ASSERT_TRUE("cam parser keeps tz from parsed block",
+                        fabsf(glr_camera().tz - 1.5f) < 1e-2f);
+
+            bridge->reset_import();
+        }
+    }
+
     /* Audit #11/#12 prep: save -> load -> save idempotency. Audit
      * proposes removing the legacy state-3 path and the synthetic
      * g_angle line in cam_consume_example_block_now. Round-trip pose

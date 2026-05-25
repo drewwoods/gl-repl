@@ -41,6 +41,46 @@ void source_document_clear(void) {
 int source_document_apply_change(const SourceTextChange *change) {
     if (!change) return 0;
 
+    /* Validate any pre-delete + follow-up operation first so we never
+     * mutate the buffer unless the full change is admissible. */
+    int line_count = editor_buffer_count();
+    int effective_delete = 0;
+    if (change->delete_count > 0 && change->delete_pos >= 0) {
+        int start = change->delete_pos;
+        int count = change->delete_count;
+        if (start < 0) start = 0;
+        if (start < line_count) {
+            if (start + count > line_count)
+                count = line_count - start;
+            effective_delete = count;
+        }
+    }
+    int post_delete_count = line_count - effective_delete;
+
+    switch (change->kind) {
+    case SOURCE_TEXT_INSERT_ONE:
+        if (post_delete_count + 1 > MAX_COMMANDS)
+            return 0;
+        break;
+    case SOURCE_TEXT_INSERT_MANY:
+        if (change->count > 0 && post_delete_count + change->count > MAX_COMMANDS)
+            return 0;
+        break;
+    case SOURCE_TEXT_REPLACE_ONE:
+        if (change->pos < 0 ||
+            change->pos >= MAX_COMMANDS ||
+            change->pos > post_delete_count)
+            return 0;
+        break;
+    case SOURCE_TEXT_LOAD_ALL:
+        if (change->count > MAX_COMMIT_CMDS)
+            return 0;
+        break;
+    case SOURCE_TEXT_NO_CHANGE:
+    case SOURCE_TEXT_DELETE_RANGE:
+        break;
+    }
+
     /* Pre-insert delete (matches the combined ReplCompiledChange shape:
      * delete a range, then INSERT at a post-delete position). */
     if (change->delete_count > 0 && change->delete_pos >= 0) {
@@ -68,7 +108,7 @@ int source_document_apply_change(const SourceTextChange *change) {
         const char *ptrs[MAX_COMMIT_CMDS];
         int n = change->count;
         if (n < 0) n = 0;
-        if (n > MAX_COMMIT_CMDS) n = MAX_COMMIT_CMDS;
+        if (n > MAX_COMMIT_CMDS) return 0;
         for (int i = 0; i < n; i++)
             ptrs[i] = change->text[i];
         return editor_buffer_load_lines(ptrs, n);
