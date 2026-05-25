@@ -223,6 +223,244 @@ static void draw_axis_label_triplet(float len, float offset,
                     colors[SCENE_AXIS_Z].b);
 }
 
+/* --- per-theme axes renderers ---
+ *
+ * Each theme used to live as a giant inline switch arm in
+ * scene_axes_render. Extracted into named static helpers so the
+ * dispatcher reads like a table-of-contents and each renderer owns
+ * its own ~30-line body. Pattern mirrors grid.c's per-theme functions
+ * (audit #52). */
+
+static void scene_axes_render_classic_theme(void) {
+    const AxesThemeSpec *spec = axes_theme_spec(AXES_THEME_CLASSIC);
+    draw_axis_line_triplet(spec->len, 2.0f, spec->axis, 1);
+    draw_axis_label_triplet(spec->len, 0.15f, spec->label, "XYZ", 1);
+}
+
+static void scene_axes_render_pulse_theme(float anim_time) {
+    const AxesThemeSpec *spec = axes_theme_spec(AXES_THEME_PULSE);
+    float len = spec->len;
+    /* Solid dim axes */
+    draw_axis_line_triplet(len, 1.5f, spec->axis, 1);
+
+    /* Pulsing dot position (loops 0..1) */
+    float t = fmodf(anim_time * 0.6f, 1.0f);
+    float pos = t * len;
+    float glow = sinf(t * (float)M_PI); /* bright in middle, dim at ends */
+    glow = glow * 0.8f + 0.2f;
+
+    glPointSize(8.0f);
+    glBegin(GL_POINTS);
+    gl_color(1.0f, 0.3f, 0.3f, glow);
+    glVertex3f(pos, 0, 0);
+    gl_color(0.3f, 1.0f, 0.3f, glow);
+    glVertex3f(0, pos, 0);
+    gl_color(0.3f, 0.3f, 1.0f, glow);
+    glVertex3f(0, 0, pos);
+    glEnd();
+    glPointSize(1.0f);
+
+    /* Bright trail behind the dot */
+    glLineWidth(3.0f);
+    float trail = 0.6f;
+    float t0 = pos - trail;
+    if (t0 < 0) t0 = 0;
+    glBegin(GL_LINES);
+    gl_color(1.0f, 0.3f, 0.3f, 0.05f);
+    glVertex3f(t0, 0, 0);
+    gl_color(1.0f, 0.3f, 0.3f, glow * 0.7f);
+    glVertex3f(pos, 0, 0);
+
+    gl_color(0.3f, 1.0f, 0.3f, 0.05f);
+    glVertex3f(0, t0, 0);
+    gl_color(0.3f, 1.0f, 0.3f, glow * 0.7f);
+    glVertex3f(0, pos, 0);
+
+    gl_color(0.3f, 0.3f, 1.0f, 0.05f);
+    glVertex3f(0, 0, t0);
+    gl_color(0.3f, 0.3f, 1.0f, glow * 0.7f);
+    glVertex3f(0, 0, pos);
+    glEnd();
+    glLineWidth(1.0f);
+
+    draw_axis_label_triplet(len, 0.15f, spec->label, "XYZ", 1);
+}
+
+/* Procedural theme — see the AXES_NEON_LEN note at the top of this
+ * file for why NEON is the only theme that doesn't sit in the
+ * g_axes_theme_specs table. */
+static void scene_axes_render_neon_theme(float breath, float as) {
+    float len = AXES_NEON_LEN;
+    float glow = 0.6f + breath * 0.4f;
+    SceneRgba outer[3] = {
+        rgba(1.0f, 0.1f, 0.1f, fminf(0.12f * glow * as, 1.0f)),
+        rgba(0.1f, 1.0f, 0.1f, fminf(0.12f * glow * as, 1.0f)),
+        rgba(0.1f, 0.1f, 1.0f, fminf(0.12f * glow * as, 1.0f)),
+    };
+    SceneRgba core[3] = {
+        rgba(1.0f, 0.4f, 0.4f, 1.0f * glow),
+        rgba(0.4f, 1.0f, 0.4f, 1.0f * glow),
+        rgba(0.4f, 0.4f, 1.0f, 1.0f * glow),
+    };
+    SceneRgba tips[3] = {
+        rgba(1.0f, 0.5f, 0.5f, glow),
+        rgba(0.5f, 1.0f, 0.5f, glow),
+        rgba(0.5f, 0.5f, 1.0f, glow),
+    };
+
+    /* Outer glow (wide, dim) → core (narrow, bright) → bright tip dots */
+    draw_axis_line_triplet(len, 6.0f, outer, 1);
+    draw_axis_line_triplet(len, 2.0f, core, 1);
+    draw_axis_tip_triplet(len, 6.0f, tips, 1);
+
+    float la = 0.5f + glow * 0.5f;
+    SceneRgba labels[3] = {
+        rgba(1.0f * la, 0.3f * la, 0.3f * la, 1.0f),
+        rgba(0.3f * la, 1.0f * la, 0.3f * la, 1.0f),
+        rgba(0.3f * la, 0.3f * la, 1.0f * la, 1.0f),
+    };
+    draw_axis_label_triplet(len, 0.15f, labels, "XYZ", 1);
+}
+
+static void scene_axes_render_compass_theme(void) {
+    const AxesThemeSpec *spec = axes_theme_spec(AXES_THEME_COMPASS);
+    float len = spec->len;
+    SceneRgba negative_axes[3] = {
+        rgba(1.0f, 0.30f, 0.30f, 0.35f),
+        rgba(0.30f, 1.0f, 0.30f, 0.35f),
+        rgba(0.30f, 0.30f, 1.0f, 0.35f),
+    };
+    SceneRgba positive_tips[3] = {
+        rgba(1.0f, 0.4f, 0.4f, 0.9f),
+        rgba(0.4f, 1.0f, 0.4f, 0.9f),
+        rgba(0.4f, 0.4f, 1.0f, 0.9f),
+    };
+    SceneRgba negative_tips[3] = {
+        rgba(1.0f, 0.3f, 0.3f, 0.30f),
+        rgba(0.3f, 1.0f, 0.3f, 0.30f),
+        rgba(0.3f, 0.3f, 1.0f, 0.30f),
+    };
+
+    /* Positive axes (solid) */
+    draw_axis_line_triplet(len, 2.0f, spec->axis, 1);
+
+    /* Negative axes (stippled) */
+    glEnable(GL_LINE_STIPPLE);
+    glLineStipple(2, SCENE_OCCLUDED_GHOST_STIPPLE);
+    draw_axis_line_triplet(len, 2.0f, negative_axes, -1);
+    glDisable(GL_LINE_STIPPLE);
+
+    /* Arrowheads at positive tips, small dots at negative tips */
+    draw_axis_tip_triplet(len, 7.0f, positive_tips, 1);
+    draw_axis_tip_triplet(len, 4.0f, negative_tips, -1);
+
+    /* Origin sphere-ish dot */
+    glPointSize(5.0f);
+    glBegin(GL_POINTS);
+    gl_color(0.9f, 0.9f, 0.9f, 0.6f);
+    glVertex3f(0, 0, 0);
+    glEnd();
+    glPointSize(1.0f);
+
+    draw_axis_label_triplet(len, 0.15f, spec->label, "XYZ", 1);
+    SceneRgba negative_labels[3] = {
+        rgba(0.55f, 0.25f, 0.25f, 1.0f),
+        rgba(0.25f, 0.55f, 0.25f, 1.0f),
+        rgba(0.25f, 0.25f, 0.55f, 1.0f),
+    };
+    draw_axis_label_triplet(len, 0.15f, negative_labels, "xyz", -1);
+}
+
+static void scene_axes_render_gizmo_theme(const SceneRenderConfig *config,
+                                          float as) {
+    const AxesThemeSpec *spec = axes_theme_spec(AXES_THEME_GIZMO);
+    float len  = spec->len;
+    float fill = len / 2.0f;
+
+    /* Camera-facing weight for each vertical plane:
+     * XY (z=0) is face-on when camera looks along Z  → weight = cos²(ry)
+     * ZY (x=0) is face-on when camera looks along X  → weight = sin²(ry) */
+    float ry_rad = config->cam_ry * (float)M_PI / 180.0f;
+    float cos_ry = cosf(ry_rad), sin_ry = sinf(ry_rad);
+    float xy_w = cos_ry * cos_ry;
+    float zy_w = sin_ry * sin_ry;
+
+    /* Axis lines (same palette as Classic) */
+    draw_axis_line_triplet(len, 2.0f, spec->axis, 1);
+
+    /* XZ floor plane quadrant - always shown */
+    glBegin(GL_QUADS);
+    gl_color(0.58f, 0.60f, 0.72f, fminf(0.07f * as, 1.0f));
+    glVertex3f(0,    0, 0);    glVertex3f(fill, 0, 0);
+    glVertex3f(fill, 0, fill); glVertex3f(0,    0, fill);
+    glEnd();
+
+    /* XY plane quadrant (z=0) - fades in when looking along Z */
+    float xy_a = fminf(0.11f * xy_w * as, 1.0f);
+    if (xy_a > 0.004f) {
+        glBegin(GL_QUADS);
+        gl_color(0.80f, 0.50f, 0.25f, xy_a);
+        glVertex3f(0,    0,    0); glVertex3f(fill, 0,    0);
+        glVertex3f(fill, fill, 0); glVertex3f(0,    fill, 0);
+        glEnd();
+        glBegin(GL_LINE_LOOP);
+        gl_color(0.92f, 0.66f, 0.42f, xy_a * 2.2f);
+        glVertex3f(0,    0,    0); glVertex3f(fill, 0,    0);
+        glVertex3f(fill, fill, 0); glVertex3f(0,    fill, 0);
+        glEnd();
+    }
+
+    /* ZY plane quadrant (x=0) - fades in when looking along X */
+    float zy_a = fminf(0.11f * zy_w * as, 1.0f);
+    if (zy_a > 0.004f) {
+        glBegin(GL_QUADS);
+        gl_color(0.32f, 0.58f, 0.88f, zy_a);
+        glVertex3f(0, 0,    0);    glVertex3f(0, 0,    fill);
+        glVertex3f(0, fill, fill); glVertex3f(0, fill, 0);
+        glEnd();
+        glBegin(GL_LINE_LOOP);
+        gl_color(0.48f, 0.72f, 0.95f, zy_a * 2.2f);
+        glVertex3f(0, 0,    0);    glVertex3f(0, 0,    fill);
+        glVertex3f(0, fill, fill); glVertex3f(0, fill, 0);
+        glEnd();
+    }
+
+    /* Origin dot */
+    glPointSize(5.0f);
+    glBegin(GL_POINTS);
+    gl_color(0.95f, 0.95f, 0.95f, 0.72f);
+    glVertex3f(0, 0, 0);
+    glEnd();
+    glPointSize(1.0f);
+
+    draw_axis_label_triplet(len, 0.15f, spec->label, "XYZ", 1);
+}
+
+/* Solid axes with measurement ticks: a short perpendicular bar at
+ * every unit, longer every 5 (mirrors the grid XZ Ruler). */
+static void scene_axes_render_ruler_theme(void) {
+    const AxesThemeSpec *spec = axes_theme_spec(AXES_THEME_RULER);
+    float len = spec->len;
+    draw_axis_line_triplet(len, 2.0f, spec->axis, 1);
+
+    glBegin(GL_LINES);
+    for (int i = 1; i <= (int)len; i++) {
+        float t = (i % 5 == 0) ? 0.16f : 0.07f;
+        /* X axis: ticks span ±Z */
+        gl_color_rgba(spec->axis[SCENE_AXIS_X]);
+        glVertex3f((float)i, 0, -t); glVertex3f((float)i, 0, t);
+        /* Y axis: ticks span ±X */
+        gl_color_rgba(spec->axis[SCENE_AXIS_Y]);
+        glVertex3f(-t, (float)i, 0); glVertex3f(t, (float)i, 0);
+        /* Z axis: ticks span ±X */
+        gl_color_rgba(spec->axis[SCENE_AXIS_Z]);
+        glVertex3f(-t, 0, (float)i); glVertex3f(t, 0, (float)i);
+    }
+    glEnd();
+
+    draw_axis_label_triplet(len, 0.15f, spec->label, "XYZ", 1);
+}
+
 void scene_axes_render(const SceneFrameRenderContext *frame_ctx) {
     const SceneRenderConfig *config = &frame_ctx->config;
     SceneAxesTheme axes_theme = (SceneAxesTheme)config->axes_theme;
@@ -253,252 +491,17 @@ void scene_axes_render(const SceneFrameRenderContext *frame_ctx) {
     axes_xn_apply_transition_fog(1.0f - g_xn_opacity, config->clear_color);
 #endif
 
-    float breath = sinf(frame_ctx->config.anim_time * SCENE_BREATH_FREQ) * 0.5f + 0.5f; /* 0..1 */
+    float breath = sinf(config->anim_time * SCENE_BREATH_FREQ) * 0.5f + 0.5f; /* 0..1 */
     float as = config->alpha_scale;
 
     switch (axes_theme) {
-
-    case AXES_THEME_CLASSIC: {
-        const AxesThemeSpec *spec = axes_theme_spec(AXES_THEME_CLASSIC);
-        draw_axis_line_triplet(spec->len, 2.0f, spec->axis, 1);
-        draw_axis_label_triplet(spec->len, 0.15f, spec->label, "XYZ", 1);
-        break;
-    }
-
-    case AXES_THEME_PULSE: {
-        const AxesThemeSpec *spec = axes_theme_spec(AXES_THEME_PULSE);
-        float len = spec->len;
-        /* Solid dim axes */
-        draw_axis_line_triplet(len, 1.5f, spec->axis, 1);
-
-        /* Pulsing dot position (loops 0..1) */
-        float t = fmodf(frame_ctx->config.anim_time * 0.6f, 1.0f);
-        float pos = t * len;
-        float glow = sinf(t * (float)M_PI); /* bright in middle, dim at ends */
-        glow = glow * 0.8f + 0.2f;
-
-        glPointSize(8.0f);
-        glBegin(GL_POINTS);
-        gl_color(1.0f, 0.3f, 0.3f, glow);
-        glVertex3f(pos, 0, 0);
-        gl_color(0.3f, 1.0f, 0.3f, glow);
-        glVertex3f(0, pos, 0);
-        gl_color(0.3f, 0.3f, 1.0f, glow);
-        glVertex3f(0, 0, pos);
-        glEnd();
-        glPointSize(1.0f);
-
-        /* Bright trail behind the dot */
-        glLineWidth(3.0f);
-        float trail = 0.6f;
-        float t0 = pos - trail;
-        if (t0 < 0) t0 = 0;
-        glBegin(GL_LINES);
-        gl_color(1.0f, 0.3f, 0.3f, 0.05f);
-        glVertex3f(t0, 0, 0);
-        gl_color(1.0f, 0.3f, 0.3f, glow * 0.7f);
-        glVertex3f(pos, 0, 0);
-
-        gl_color(0.3f, 1.0f, 0.3f, 0.05f);
-        glVertex3f(0, t0, 0);
-        gl_color(0.3f, 1.0f, 0.3f, glow * 0.7f);
-        glVertex3f(0, pos, 0);
-
-        gl_color(0.3f, 0.3f, 1.0f, 0.05f);
-        glVertex3f(0, 0, t0);
-        gl_color(0.3f, 0.3f, 1.0f, glow * 0.7f);
-        glVertex3f(0, 0, pos);
-        glEnd();
-        glLineWidth(1.0f);
-
-        draw_axis_label_triplet(len, 0.15f, spec->label, "XYZ", 1);
-        break;
-    }
-
-    case AXES_THEME_NEON: {
-        /* Procedural theme — see the AXES_NEON_LEN note above for why
-         * this case is inline rather than table-driven. */
-        float len = AXES_NEON_LEN;
-        float glow = 0.6f + breath * 0.4f;
-        SceneRgba outer[3] = {
-            rgba(1.0f, 0.1f, 0.1f, fminf(0.12f * glow * as, 1.0f)),
-            rgba(0.1f, 1.0f, 0.1f, fminf(0.12f * glow * as, 1.0f)),
-            rgba(0.1f, 0.1f, 1.0f, fminf(0.12f * glow * as, 1.0f)),
-        };
-        SceneRgba core[3] = {
-            rgba(1.0f, 0.4f, 0.4f, 1.0f * glow),
-            rgba(0.4f, 1.0f, 0.4f, 1.0f * glow),
-            rgba(0.4f, 0.4f, 1.0f, 1.0f * glow),
-        };
-        SceneRgba tips[3] = {
-            rgba(1.0f, 0.5f, 0.5f, glow),
-            rgba(0.5f, 1.0f, 0.5f, glow),
-            rgba(0.5f, 0.5f, 1.0f, glow),
-        };
-
-        /* Outer glow (wide, dim) */
-        draw_axis_line_triplet(len, 6.0f, outer, 1);
-
-        /* Core (narrow, bright) */
-        draw_axis_line_triplet(len, 2.0f, core, 1);
-
-        /* Bright tip dots */
-        draw_axis_tip_triplet(len, 6.0f, tips, 1);
-
-        float la = 0.5f + glow * 0.5f;
-        SceneRgba labels[3] = {
-            rgba(1.0f * la, 0.3f * la, 0.3f * la, 1.0f),
-            rgba(0.3f * la, 1.0f * la, 0.3f * la, 1.0f),
-            rgba(0.3f * la, 0.3f * la, 1.0f * la, 1.0f),
-        };
-        draw_axis_label_triplet(len, 0.15f, labels, "XYZ", 1);
-        break;
-    }
-
-    case AXES_THEME_COMPASS: {
-        const AxesThemeSpec *spec = axes_theme_spec(AXES_THEME_COMPASS);
-        float len = spec->len;
-        SceneRgba negative_axes[3] = {
-            rgba(1.0f, 0.30f, 0.30f, 0.35f),
-            rgba(0.30f, 1.0f, 0.30f, 0.35f),
-            rgba(0.30f, 0.30f, 1.0f, 0.35f),
-        };
-        SceneRgba positive_tips[3] = {
-            rgba(1.0f, 0.4f, 0.4f, 0.9f),
-            rgba(0.4f, 1.0f, 0.4f, 0.9f),
-            rgba(0.4f, 0.4f, 1.0f, 0.9f),
-        };
-        SceneRgba negative_tips[3] = {
-            rgba(1.0f, 0.3f, 0.3f, 0.30f),
-            rgba(0.3f, 1.0f, 0.3f, 0.30f),
-            rgba(0.3f, 0.3f, 1.0f, 0.30f),
-        };
-
-        /* Positive axes (solid) */
-        draw_axis_line_triplet(len, 2.0f, spec->axis, 1);
-
-        /* Negative axes (stippled) */
-        glEnable(GL_LINE_STIPPLE);
-        glLineStipple(2, SCENE_OCCLUDED_GHOST_STIPPLE);
-        draw_axis_line_triplet(len, 2.0f, negative_axes, -1);
-        glDisable(GL_LINE_STIPPLE);
-
-        /* Arrowheads at positive tips */
-        draw_axis_tip_triplet(len, 7.0f, positive_tips, 1);
-
-        /* Small dots at negative tips */
-        draw_axis_tip_triplet(len, 4.0f, negative_tips, -1);
-
-        /* Origin sphere-ish dot */
-        glPointSize(5.0f);
-        glBegin(GL_POINTS);
-        gl_color(0.9f, 0.9f, 0.9f, 0.6f);
-        glVertex3f(0, 0, 0);
-        glEnd();
-        glPointSize(1.0f);
-
-        draw_axis_label_triplet(len, 0.15f, spec->label, "XYZ", 1);
-        SceneRgba negative_labels[3] = {
-            rgba(0.55f, 0.25f, 0.25f, 1.0f),
-            rgba(0.25f, 0.55f, 0.25f, 1.0f),
-            rgba(0.25f, 0.25f, 0.55f, 1.0f),
-        };
-        draw_axis_label_triplet(len, 0.15f, negative_labels, "xyz", -1);
-        break;
-    }
-
-    case AXES_THEME_GIZMO: {
-        const AxesThemeSpec *spec = axes_theme_spec(AXES_THEME_GIZMO);
-        float len  = spec->len;
-        float fill = len / 2.0f;
-
-        /* Camera-facing weight for each vertical plane:
-         * XY (z=0) is face-on when camera looks along Z  → weight = cos²(ry)
-         * ZY (x=0) is face-on when camera looks along X  → weight = sin²(ry) */
-        float ry_rad = config->cam_ry * (float)M_PI / 180.0f;
-        float cos_ry = cosf(ry_rad), sin_ry = sinf(ry_rad);
-        float xy_w = cos_ry * cos_ry;
-        float zy_w = sin_ry * sin_ry;
-
-        /* Axis lines (same palette as Classic) */
-        draw_axis_line_triplet(len, 2.0f, spec->axis, 1);
-
-        /* XZ floor plane quadrant - always shown */
-        glBegin(GL_QUADS);
-        gl_color(0.58f, 0.60f, 0.72f, fminf(0.07f * as, 1.0f));
-        glVertex3f(0,    0, 0);    glVertex3f(fill, 0, 0);
-        glVertex3f(fill, 0, fill); glVertex3f(0,    0, fill);
-        glEnd();
-
-        /* XY plane quadrant (z=0) - fades in when looking along Z */
-        float xy_a = fminf(0.11f * xy_w * as, 1.0f);
-        if (xy_a > 0.004f) {
-            glBegin(GL_QUADS);
-            gl_color(0.80f, 0.50f, 0.25f, xy_a);
-            glVertex3f(0,    0,    0); glVertex3f(fill, 0,    0);
-            glVertex3f(fill, fill, 0); glVertex3f(0,    fill, 0);
-            glEnd();
-            glBegin(GL_LINE_LOOP);
-            gl_color(0.92f, 0.66f, 0.42f, xy_a * 2.2f);
-            glVertex3f(0,    0,    0); glVertex3f(fill, 0,    0);
-            glVertex3f(fill, fill, 0); glVertex3f(0,    fill, 0);
-            glEnd();
-        }
-
-        /* ZY plane quadrant (x=0) - fades in when looking along X */
-        float zy_a = fminf(0.11f * zy_w * as, 1.0f);
-        if (zy_a > 0.004f) {
-            glBegin(GL_QUADS);
-            gl_color(0.32f, 0.58f, 0.88f, zy_a);
-            glVertex3f(0, 0,    0);    glVertex3f(0, 0,    fill);
-            glVertex3f(0, fill, fill); glVertex3f(0, fill, 0);
-            glEnd();
-            glBegin(GL_LINE_LOOP);
-            gl_color(0.48f, 0.72f, 0.95f, zy_a * 2.2f);
-            glVertex3f(0, 0,    0);    glVertex3f(0, 0,    fill);
-            glVertex3f(0, fill, fill); glVertex3f(0, fill, 0);
-            glEnd();
-        }
-
-        /* Origin dot */
-        glPointSize(5.0f);
-        glBegin(GL_POINTS);
-        gl_color(0.95f, 0.95f, 0.95f, 0.72f);
-        glVertex3f(0, 0, 0);
-        glEnd();
-        glPointSize(1.0f);
-
-        draw_axis_label_triplet(len, 0.15f, spec->label, "XYZ", 1);
-        break;
-    }
-
-    case AXES_THEME_RULER: {
-        /* Solid axes with measurement ticks: a short perpendicular bar
-         * at every unit, longer every 5 (mirrors the grid XZ Ruler). */
-        const AxesThemeSpec *spec = axes_theme_spec(AXES_THEME_RULER);
-        float len = spec->len;
-        draw_axis_line_triplet(len, 2.0f, spec->axis, 1);
-
-        glBegin(GL_LINES);
-        for (int i = 1; i <= (int)len; i++) {
-            float t = (i % 5 == 0) ? 0.16f : 0.07f;
-            /* X axis: ticks span ±Z */
-            gl_color_rgba(spec->axis[SCENE_AXIS_X]);
-            glVertex3f((float)i, 0, -t); glVertex3f((float)i, 0, t);
-            /* Y axis: ticks span ±X */
-            gl_color_rgba(spec->axis[SCENE_AXIS_Y]);
-            glVertex3f(-t, (float)i, 0); glVertex3f(t, (float)i, 0);
-            /* Z axis: ticks span ±X */
-            gl_color_rgba(spec->axis[SCENE_AXIS_Z]);
-            glVertex3f(-t, 0, (float)i); glVertex3f(t, 0, (float)i);
-        }
-        glEnd();
-
-        draw_axis_label_triplet(len, 0.15f, spec->label, "XYZ", 1);
-        break;
-    }
-
-    default: break;
+    case AXES_THEME_CLASSIC: scene_axes_render_classic_theme();          break;
+    case AXES_THEME_PULSE:   scene_axes_render_pulse_theme(config->anim_time); break;
+    case AXES_THEME_NEON:    scene_axes_render_neon_theme(breath, as);   break;
+    case AXES_THEME_COMPASS: scene_axes_render_compass_theme();          break;
+    case AXES_THEME_GIZMO:   scene_axes_render_gizmo_theme(config, as);  break;
+    case AXES_THEME_RULER:   scene_axes_render_ruler_theme();            break;
+    default:                                                             break;
     }
 
     /* scene_axes_pop_state restores depth/blend/lighting state via
