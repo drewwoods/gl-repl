@@ -26,7 +26,7 @@
 
 #include "repl/cfg_baseline.h"
 
-#define g_export_cfg_bridge (repl_export_config_bridge())
+#define g_export_cfg_bridge (repl_config_bridge())
 
 static const char k_cfg_slug_point_attenuation[] = "point_attenuation";
 static const char k_cfg_slug_msaa[] = "msaa";
@@ -99,10 +99,10 @@ int repl_export_reshape_projection_lines(const char *out[REPL_EXPORT_PROJ_LINES]
 
 /* Pending @cfg accumulator: parse_cfg() during import populates this; the
  * import driver drains it via the bridge after parse completes. */
-static ReplExportConfig g_import_cfg_accumulator;
+static ReplConfigBag g_import_cfg_accumulator;
 
 static void import_cfg_accumulator_reset(void) {
-    repl_export_config_clear(&g_import_cfg_accumulator);
+    repl_config_bag_clear(&g_import_cfg_accumulator);
 }
 
 static void import_cfg_accumulator_apply_and_reset(void) {
@@ -399,7 +399,7 @@ static void emit_func_aliases(int *n) {
 
 static int parse_cfg(const char *args) {
     char slug[32];
-    if (!repl_export_extract_cfg_slug(args, slug, sizeof(slug)))
+    if (!repl_config_extract_slug(args, slug, sizeof(slug)))
         return 0;
     const char *p = args;
     while (*p && (isalnum((unsigned char)*p) || *p == '_'))
@@ -416,12 +416,12 @@ static int parse_cfg(const char *args) {
      * see the same set of (slug, val) pairs — but the live state has
      * already been updated by the per-line apply. */
     if (g_export_cfg_bridge && g_export_cfg_bridge->apply) {
-        ReplExportConfig single;
-        repl_export_config_clear(&single);
-        repl_export_config_set_int(&single, slug, val);
+        ReplConfigBag single;
+        repl_config_bag_clear(&single);
+        repl_config_bag_set_int(&single, slug, val);
         g_export_cfg_bridge->apply(&single);
     }
-    repl_export_config_set_int(&g_import_cfg_accumulator, slug, val);
+    repl_config_bag_set_int(&g_import_cfg_accumulator, slug, val);
     return 1;
 }
 
@@ -431,8 +431,8 @@ static void emit_cfgs(int *n) {
      * no @cfg lines are emitted. */
     if (!g_export_cfg_bridge || !g_export_cfg_bridge->fill_all)
         return;
-    ReplExportConfig cfg;
-    repl_export_config_clear(&cfg);
+    ReplConfigBag cfg;
+    repl_config_bag_clear(&cfg);
     g_export_cfg_bridge->fill_all(&cfg);
     for (int i = 0; i < cfg.count && *n < MAX_WORKSPACE_HEADER_LINES; i++) {
         snprintf(g_workspace_header_lines[(*n)++], WORKSPACE_HEADER_LINE_LEN,

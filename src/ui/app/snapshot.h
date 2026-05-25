@@ -23,6 +23,7 @@
 #include "ui/app/editor.h"
 #include "subsystems/color_picker/color_picker_state.h"
 #include "subsystems/variable_panel/variable_panel_state.h"
+#include "subsystems/replay/replay_state.h"
 
 #include "ui/app/state_types.h"
 
@@ -76,7 +77,7 @@ typedef struct UiRenderSnapshot {
     UiCodePanelRuntimeState   code_panel;
     UiHelpState               help;
     EditorHelpSession           help_session;
-    UiVariablePanelState      variable_panel;
+    VariablePanelViewState      variable_panel;
     UiVariableDragView          variable_drag;
     UiProfilePanelState       profile_panel;
     UiStatusState             status;
@@ -84,7 +85,7 @@ typedef struct UiRenderSnapshot {
     EditorAutocompleteState       autocomplete;
     UiPointerState            pointer;
     GlrRenderState              render;
-    ReplReplayRuntimeState      replay;
+    ReplayRuntimeState      replay;
     ReplSceneRuntimeState       scenes;
     EditorScrollState           scroll;
     EditorCursorBlinkState      cursor_blink;

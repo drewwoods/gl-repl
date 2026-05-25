@@ -4,6 +4,7 @@
 #include "app/glr_defaults.h"  /* GlrExampleTagDefault */
 #include "ui/app/repl_code_panel.h"
 #include "repl/state_views.h"
+#include "subsystems/replay/replay_state.h"
 
 /* Snapshot the controller assembles per frame and feeds into its
  * post-fill fade-render hook. The scene module no longer touches it —

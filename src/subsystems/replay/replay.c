@@ -149,7 +149,7 @@ static int replay_last_meaningful_src(int begin, int end_exclusive) {
 }
 
 static void replay_set_src_line(int src_line) {
-    ReplReplayRuntimeState *state = replay_state_mut();
+    ReplayRuntimeState *state = replay_state_mut();
     state->src_line_idx = src_line;
     if (src_line != state->last_src_line) {
         state->last_src_line = src_line;
@@ -166,7 +166,7 @@ float replay_batch_alpha(const ReplayFadeBatch *batch) {
 }
 
 ReplayFadeBatchView replay_fade_batches_view(void) {
-    ReplReplayRuntimeState *state = replay_state_mut();
+    ReplayRuntimeState *state = replay_state_mut();
     ReplayFadeBatchView view = {
         .batches = state->fade_batches,
         .count = state->fade_batch_count,
@@ -249,7 +249,7 @@ static void replay_clear_fade_batches(void) {
 }
 
 static void replay_push_fade_batch(int old_pc, int new_pc) {
-    ReplReplayRuntimeState *state = replay_state_mut();
+    ReplayRuntimeState *state = replay_state_mut();
     ReplayFadeBatch *batch;
 
     if (new_pc <= old_pc)
@@ -268,7 +268,7 @@ static void replay_push_fade_batch(int old_pc, int new_pc) {
 }
 
 static void replay_clamp_fade_batches(int max_pc) {
-    ReplReplayRuntimeState *state = replay_state_mut();
+    ReplayRuntimeState *state = replay_state_mut();
     int dst = 0;
 
     for (int idx = 0; idx < state->fade_batch_count; idx++) {
@@ -287,7 +287,7 @@ static void replay_clamp_fade_batches(int max_pc) {
 }
 
 void replay_tick_fade_batches(float dt) {
-    ReplReplayRuntimeState *state = replay_state_mut();
+    ReplayRuntimeState *state = replay_state_mut();
     int dst = 0;
 
     for (int idx = 0; idx < state->fade_batch_count; idx++) {
@@ -302,7 +302,7 @@ void replay_tick_fade_batches(float dt) {
 }
 
 int replay_has_active_fades(void) {
-    ReplReplayRuntimeState state = replay_state_view();
+    ReplayRuntimeState state = replay_state_view();
     return state.active && state.fade_batch_count > 0;
 }
 
@@ -312,7 +312,7 @@ int replay_fill_base_limit(void) {
 
     if (!replay_has_active_fades())
         return num_flat_cmds;
-    ReplReplayRuntimeState state = replay_state_view();
+    ReplayRuntimeState state = replay_state_view();
     if (state.fade_batches[0].old_pc < 0)
         return 0;
     if (state.fade_batches[0].old_pc > num_flat_cmds)
@@ -762,7 +762,7 @@ static int replay_prev_limit(int current_pc) {
 void replay_seek(int new_pc) {
     FlatProgramView flat_program = repl_state_flat_program_view();
     int num_flat_cmds = flat_program.cmd_count;
-    ReplReplayRuntimeState *state = replay_state_mut();
+    ReplayRuntimeState *state = replay_state_mut();
     if (new_pc < 0)
         new_pc = 0;
     if (new_pc > num_flat_cmds)
@@ -815,7 +815,7 @@ int replay_seek_to_src_line(int target_line) {
 }
 
 void replay_restart_from_beginning(void) {
-    ReplReplayRuntimeState *state = replay_state_mut();
+    ReplayRuntimeState *state = replay_state_mut();
     state->pc = 0;
     state->accum = 0.0f;
     replay_clear_fade_batches();
@@ -837,7 +837,7 @@ void replay_start(void) {
         return;
     }
 
-    ReplReplayRuntimeState *state = replay_state_mut();
+    ReplayRuntimeState *state = replay_state_mut();
     repl_copy_predef_values(state->baseline_predef_vals, MAX_PREDEF_VARS);
     repl_eval_copy_scratch_arrays(state->baseline_scratch_arrays);
     state->saved_t_playing = repl_state_variables().time_playing;
@@ -855,7 +855,7 @@ void replay_start(void) {
 }
 
 void replay_stop(void) {
-    ReplReplayRuntimeState *state = replay_state_mut();
+    ReplayRuntimeState *state = replay_state_mut();
     repl_state_variables_mut()->time_playing = state->saved_t_playing;
     state->active = 0;
     state->state = REPLAY_OFF;
@@ -870,7 +870,7 @@ void replay_stop(void) {
 void replay_advance(void) {
     FlatProgramView flat_program = repl_state_flat_program_view();
     int num_flat_cmds = flat_program.cmd_count;
-    ReplReplayRuntimeState *state = replay_state_mut();
+    ReplayRuntimeState *state = replay_state_mut();
     int old_pc;
     int next_pc;
     int src_line = -1;
@@ -906,7 +906,7 @@ void replay_advance(void) {
 }
 
 void replay_step_back(void) {
-    ReplReplayRuntimeState state = replay_state_view();
+    ReplayRuntimeState state = replay_state_view();
     if (!state.active)
         return;
 
@@ -928,7 +928,7 @@ int replay_exec_limit(void) {
 }
 
 void replay_speed_adjust(float factor) {
-    ReplReplayRuntimeState *state = replay_state_mut();
+    ReplayRuntimeState *state = replay_state_mut();
     char msg[REPLAY_STATUS_MSG_LEN];
     state->speed *= factor;
     if (state->speed < REPLAY_SPEED_MIN) state->speed = REPLAY_SPEED_MIN;
@@ -938,7 +938,7 @@ void replay_speed_adjust(float factor) {
 }
 
 void replay_toggle_play_pause(void) {
-    ReplReplayRuntimeState *state = replay_state_mut();
+    ReplayRuntimeState *state = replay_state_mut();
     if (!state->active || state->state == REPLAY_DONE) {
         replay_start();
         return;
@@ -958,7 +958,7 @@ void replay_toggle_play_pause(void) {
 int replay_prepare_frame(int full_flat_count) {
     FlatProgramView flat_program = repl_state_flat_program_view();
     int num_flat_cmds = flat_program.cmd_count;
-    ReplReplayRuntimeState *state = replay_state_mut();
+    ReplayRuntimeState *state = replay_state_mut();
     if (!state->active)
         return num_flat_cmds;
 
@@ -999,7 +999,7 @@ void replay_copy_baseline_scratch_arrays(
 }
 
 int replay_handle_key(unsigned char key) {
-    ReplReplayRuntimeState *state = replay_state_mut();
+    ReplayRuntimeState *state = replay_state_mut();
     if (!state->active) {
         if (key == KEY_CTRL_R) {
             replay_start();
@@ -1138,7 +1138,7 @@ int replay_handle_special(int key) {
 
 int replay_bench_fade_install(const int *old_pcs, const int *new_pcs,
                             int count, float age) {
-    ReplReplayRuntimeState *state = replay_state_mut();
+    ReplayRuntimeState *state = replay_state_mut();
     int installed = 0;
     FlatProgramView flat_program = repl_state_flat_program_view();
     int num_flat_cmds = flat_program.cmd_count;
@@ -1174,7 +1174,7 @@ int replay_bench_fade_install(const int *old_pcs, const int *new_pcs,
 }
 
 void replay_bench_fade_clear(void) {
-    ReplReplayRuntimeState *state = replay_state_mut();
+    ReplayRuntimeState *state = replay_state_mut();
     state->fade_batch_count = 0;
     state->active = 0;
 }

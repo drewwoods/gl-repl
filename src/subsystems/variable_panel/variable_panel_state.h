@@ -26,7 +26,7 @@
 typedef struct {
     int   visible;
     float replay_lift_px;
-} UiVariablePanelState;
+} VariablePanelViewState;
 
 /* Snapshot-side view of the slider-drag transaction. Lets the renderer
  * tell which row is being dragged (and in what mode) without reaching
@@ -55,7 +55,7 @@ typedef struct {
 /* Composite peer state. The two slices keep their existing value types so the
  * accessors and snapshots can pass them by value without another wrapper API. */
 typedef struct {
-    UiVariablePanelState view; /* visibility flag */
+    VariablePanelViewState view; /* visibility flag */
     VariablePanelDragState drag; /* slider drag transaction */
 } VariablePanelState;
 
@@ -68,8 +68,8 @@ void variable_panel_state_restore(const VariablePanelState *snapshot);
 void variable_panel_state_reset(void);
 
 /* Read-only / mutable accessors. */
-UiVariablePanelState variable_panel_view(void);
-UiVariablePanelState *variable_panel_state_mut(void);
+VariablePanelViewState variable_panel_view(void);
+VariablePanelViewState *variable_panel_state_mut(void);
 VariablePanelDragState variable_panel_drag(void);
 VariablePanelDragState *variable_panel_drag_mut(void);
 

@@ -15,7 +15,7 @@
 # correct C design and must keep passing: ReplCompileContext /
 # ReplCompiledChange in src/editor/services.h, the Repl* snapshot
 # fields in src/ui/app/snapshot.h, the export/replay-annotation bridge
-# types in src/app/glr_ctrl.h, and UiVariablePanelState surfaced by
+# types in src/app/glr_ctrl.h, and VariablePanelViewState surfaced by
 # src/subsystems/variable_panel/variable_panel_state.h. None of those are in the list
 # below, so they are not flagged.
 

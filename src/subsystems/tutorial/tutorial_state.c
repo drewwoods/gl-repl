@@ -20,7 +20,7 @@ static void tutorial_state_init_defaults(TutorialRuntimeState *s) {
     for (int i = 0; i < TUTORIAL_LOCKED_LINE_MAX; i++)
         s->instruction_line_for_step[i] = -1;
     s->in_enter_step = 0;
-    repl_export_config_clear(&s->baseline_bag);
+    repl_config_bag_clear(&s->baseline_bag);
     s->baseline_valid = 0;
 }
 

@@ -28,7 +28,8 @@
 #ifndef REPLAY_H
 #define REPLAY_H
 
-#include "repl/state_views.h"
+#include "subsystems/replay/replay_state.h"
+#include "repl/flatten.h"
 #include "gl_includes.h"
 
 

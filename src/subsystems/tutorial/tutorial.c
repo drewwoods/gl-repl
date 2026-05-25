@@ -43,7 +43,7 @@ static float clamp01(float value) {
 
 static void tutorial_cfg_baseline_clear(void) {
     TutorialRuntimeState *state = tutorial_state_mut();
-    repl_export_config_clear(&state->baseline_bag);
+    repl_config_bag_clear(&state->baseline_bag);
     state->baseline_valid = 0;
 }
 
@@ -55,7 +55,7 @@ static void tutorial_cfg_baseline_record_one(const char *slug) {
     if (!slug || !slug[0])     return;
     if (!repl_cfg_known(slug)) return;
     TutorialRuntimeState *state = tutorial_state_mut();
-    repl_export_config_set_int(&state->baseline_bag, slug,
+    repl_config_bag_set_int(&state->baseline_bag, slug,
                                repl_cfg_get_int(slug, 0));
 }
 
@@ -68,7 +68,7 @@ static void tutorial_cfg_baseline_record_one(const char *slug) {
  *     the scene subset). */
 static void tutorial_capture_cfg_baseline(int idx) {
     tutorial_cfg_baseline_clear();
-    const ReplExportConfigBridge *b = repl_export_config_bridge();
+    const ReplConfigBridge *b = repl_config_bridge();
     TutorialRuntimeState *state = tutorial_state_mut();
     if (b && b->fill_scene_subset)
         b->fill_scene_subset(&state->baseline_bag);
@@ -82,10 +82,10 @@ static void tutorial_capture_cfg_baseline(int idx) {
      * Transform" from 2D would exit in 3D. Capture it unconditionally. */
     tutorial_cfg_baseline_record_one("view_mode");
 
-    char slug[REPL_EXPORT_CFG_KEY_MAX];
+    char slug[REPL_CFG_KEY_MAX];
     const char *const *cfg = repl_tutorial_cfg_lines(idx);
     for (int i = 0; cfg && cfg[i]; i++) {
-        if (repl_export_extract_cfg_slug(cfg[i], slug, sizeof slug))
+        if (repl_config_extract_slug(cfg[i], slug, sizeof slug))
             tutorial_cfg_baseline_record_one(slug);
     }
     int n = repl_tutorial_step_count(idx);
@@ -103,7 +103,7 @@ static void tutorial_capture_cfg_baseline(int idx) {
 static void tutorial_cfg_baseline_restore(void) {
     TutorialRuntimeState state = tutorial_state_view();
     if (!state.baseline_valid) return;
-    const ReplExportConfigBridge *b = repl_export_config_bridge();
+    const ReplConfigBridge *b = repl_config_bridge();
     if (b && b->apply)
         b->apply(&state.baseline_bag);
     tutorial_cfg_baseline_clear();
@@ -432,10 +432,10 @@ TutorialMatchResult tutorial_match(const char *expected, const char *got) {
  * SET (or stalls a REQUIRE) on an unknown slug. Returns 1 on success;
  * on failure returns 0 and writes a diagnostic into `err`. */
 static int tutorial_validate_slugs(int idx, char *err, int err_size) {
-    char slug[REPL_EXPORT_CFG_KEY_MAX];
+    char slug[REPL_CFG_KEY_MAX];
     const char *const *cfg = repl_tutorial_cfg_lines(idx);
     for (int i = 0; cfg && cfg[i]; i++) {
-        if (!repl_export_extract_cfg_slug(cfg[i], slug, sizeof slug))
+        if (!repl_config_extract_slug(cfg[i], slug, sizeof slug))
             continue;  /* mal-shaped @cfg line — repl parser will diag */
         if (!repl_cfg_known(slug)) {
             if (err_size > 0)
@@ -495,7 +495,7 @@ void tutorial_start(int idx) {
     tutorial_capture_cfg_baseline(idx);
 
     /* Preserve baseline configuration across the state reset */
-    ReplExportConfig preserved_bag = tutorial_state_view().baseline_bag;
+    ReplConfigBag preserved_bag = tutorial_state_view().baseline_bag;
     int preserved_valid = tutorial_state_view().baseline_valid;
 
     repl_scenes_enter_transient_scene();

@@ -56,7 +56,7 @@ carved out of the editor/UI so neither becomes a grab bag. The flow for each
 is identical:
 
 1. State lives in the subsystem's own `*_state.c` (e.g.
-   `ReplReplayRuntimeState`, the variable-panel drag transaction, the
+   `ReplayRuntimeState`, the variable-panel drag transaction, the
    tutorial step/lock state).
 2. Input is routed to the subsystem's controller by `glr_ctrl` based on
    the `UiHit` kind (e.g. `UI_HIT_VARIABLE_SLIDER` →
@@ -74,7 +74,7 @@ virtual lines), but it never *becomes* editor-owned.
 | File | Responsibility |
 |---|---|
 | `replay/replay.c` / `.h` | Replay state machine: PC, mode (OFF/PLAYING/PAUSED/DONE), speed, fade-batch ring |
-| `replay/replay_state.c` / `.h` | Owns `ReplReplayRuntimeState` storage + narrow accessors / snapshot view |
+| `replay/replay_state.c` / `.h` | Owns `ReplayRuntimeState` storage + narrow accessors / snapshot view |
 | `variable_panel/variable_panel_drag.c` / `.h` | Slider drag transaction: begin/motion/reset, linear/log value writeback |
 | `variable_panel/variable_panel_state.c` / `.h` | Owns the variable-panel visibility flag + drag-state storage |
 | `color_picker/color_picker_state.c` / `.h` | Color-picker state, lifecycle, slider handlers, source-line writeback |
@@ -89,3 +89,16 @@ bypass the commit transaction and load directly via `repl_load_apply_line` witho
 generating undo history.)
 (The tutorial *catalog* — the lesson content — lives in
 `src/repl/tutorials.c`, separate from the runner here.)
+
+## Lifecycle Vocabulary Conventions
+
+To maintain a consistent and predictable API surface across all peer subsystems, we follow strict lifecycle naming standards:
+
+1. **State Machine Session Systems (Interactive/Stateful Features):**
+   Subsystems that run an active session or represent a state machine with active/inactive phases (such as `replay`, `tutorial`, and `color_picker`) must use a paired starting and stopping convention:
+   - `_start()`: Allocates/initializes resources, transition states, and activates the subsystem.
+   - `_stop()`: Deallocates resources, cleans up playback/history queues, and deactivates the subsystem.
+
+2. **Togglable Display-Only Panels (Stateless/Presentation Features):**
+   Subsystems or panels that act as simple toggles to show/hide UI overlays without running a separate session state machine (such as the `variable_panel`) must not use session start/stop verbs. Instead, they expose a canonical visibility setter:
+   - `_set_visible(int visible)`: A Boolean-like toggle to explicitly configure the panel's presentation overlay visibility.

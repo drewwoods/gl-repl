@@ -5,7 +5,7 @@
 #include "repl/core_internal.h"
 #include "repl/examples.h"
 #include "repl/core.h"
-#include "repl/export.h"   /* ReplExportConfig + bridge for per-scene cfg */
+#include "repl/cfg_baseline.h"   /* ReplConfigBag + bridge for per-scene cfg */
 #include "repl/state_owners.h"
 #include "source_document.h" /* source_document_load_lines */
 #include "config.h"          /* REPL_DIAG_TEXT_MAX */
@@ -24,7 +24,7 @@
 #define g_pending_workspace_dir (IMPORT_EXPORT_STATE->pending_workspace_dir)
 
 /* The per-scene cfg subset is selected by a controller-installed
- * bridge (ReplExportConfigBridge.fill_scene_subset / .apply) rather
+ * bridge (ReplConfigBridge.fill_scene_subset / .apply) rather
  * than a static slug list. The controller knows which slugs belong
  * in the per-scene snapshot because it owns glr_config_*;
  * src/repl/scenes.c just stores the bag and round-trips it through
@@ -79,7 +79,7 @@ typedef struct {
      * the controller-installed bridge. Embedded here so stash/restore
      * and slot-eviction code paths handle cfg by ordinary struct copy
      * instead of maintaining a parallel array. */
-    ReplExportConfig cfg;
+    ReplConfigBag cfg;
 } UserScene;
 
 static UserScene g_user_scenes[MAX_USER_SCENES];
@@ -90,35 +90,35 @@ static uint32_t  g_user_scene_tick = 0;
  * used to restore the pre-example state when they leave the example. The
  * `valid` flag distinguishes "no capture yet" from "captured empty bag". */
 static struct {
-    ReplExportConfig cfg;
+    ReplConfigBag cfg;
     int              valid;
 } g_pre_example;
 
-static ReplExportConfig *scene_cfg_mut(int slot) {
+static ReplConfigBag *scene_cfg_mut(int slot) {
     if (slot < 0 || slot >= MAX_USER_SCENES) return NULL;
     return &g_user_scenes[slot].cfg;
 }
 
-static const ReplExportConfig *scene_cfg(int slot) {
+static const ReplConfigBag *scene_cfg(int slot) {
     if (slot < 0 || slot >= MAX_USER_SCENES) return NULL;
     return &g_user_scenes[slot].cfg;
 }
 
 static void scene_cfg_clear(int slot) {
     if (slot < 0 || slot >= MAX_USER_SCENES) return;
-    repl_export_config_clear(&g_user_scenes[slot].cfg);
+    repl_config_bag_clear(&g_user_scenes[slot].cfg);
 }
 
-static ReplExportConfig *pre_example_cfg_mut(void) {
+static ReplConfigBag *pre_example_cfg_mut(void) {
     return &g_pre_example.cfg;
 }
 
-static const ReplExportConfig *pre_example_cfg(void) {
+static const ReplConfigBag *pre_example_cfg(void) {
     return &g_pre_example.cfg;
 }
 
 static void pre_example_cfg_clear(void) {
-    repl_export_config_clear(&g_pre_example.cfg);
+    repl_config_bag_clear(&g_pre_example.cfg);
     g_pre_example.valid = 0;
 }
 
@@ -132,7 +132,7 @@ static void pre_example_cfg_set_valid(int valid) {
 
 static void scene_cfg_reset_all(void) {
     for (int i = 0; i < MAX_USER_SCENES; i++)
-        repl_export_config_clear(&g_user_scenes[i].cfg);
+        repl_config_bag_clear(&g_user_scenes[i].cfg);
     pre_example_cfg_clear();
 }
 
@@ -146,9 +146,9 @@ static uint32_t next_user_scene_tick(void) {
 }
 
 static void capture_pre_example_cfg(void) {
-    ReplExportConfig *cfg = pre_example_cfg_mut();
-    repl_export_config_clear(cfg);
-    const ReplExportConfigBridge *bridge = repl_export_config_bridge();
+    ReplConfigBag *cfg = pre_example_cfg_mut();
+    repl_config_bag_clear(cfg);
+    const ReplConfigBridge *bridge = repl_config_bridge();
     if (bridge && bridge->fill_scene_subset)
         bridge->fill_scene_subset(cfg);
     pre_example_cfg_set_valid(1);
@@ -156,7 +156,7 @@ static void capture_pre_example_cfg(void) {
 
 static void restore_pre_example_cfg_if_valid(void) {
     if (!pre_example_cfg_valid()) return;
-    const ReplExportConfigBridge *bridge = repl_export_config_bridge();
+    const ReplConfigBridge *bridge = repl_config_bridge();
     if (bridge && bridge->apply)
         bridge->apply(pre_example_cfg());
     pre_example_cfg_clear();
@@ -220,9 +220,9 @@ static void save_scene_to_slot(int idx, const char *name, int edit_line) {
             s->func_aliases[slot][0] = '\0';
     }
     {
-        ReplExportConfig *cfg = scene_cfg_mut(idx);
-        repl_export_config_clear(cfg);
-        const ReplExportConfigBridge *bridge = repl_export_config_bridge();
+        ReplConfigBag *cfg = scene_cfg_mut(idx);
+        repl_config_bag_clear(cfg);
+        const ReplConfigBridge *bridge = repl_config_bridge();
         if (bridge && bridge->fill_scene_subset)
             bridge->fill_scene_subset(cfg);
     }
@@ -311,7 +311,7 @@ static void load_scene_from_slot(int idx) {
      * future change makes scene_cfg sparse / inherited-aware. */
     restore_pre_example_cfg_if_valid();
     {
-        const ReplExportConfigBridge *bridge = repl_export_config_bridge();
+        const ReplConfigBridge *bridge = repl_config_bridge();
         if (bridge && bridge->apply)
             bridge->apply(scene_cfg(idx));
     }
@@ -406,10 +406,9 @@ static void install_scene_into_live(int slot) {
      * this, repl_save_workspace / evict_scene_to_workspace would
      * export the scene with whichever cfg happened to be live when
      * the iteration started — see the [P1] regression test in
-     * test_repl_core_io.c. The user-facing scene switch
-     * (load_scene_from_slot) already does this; this matches the
-     * behaviour. */
-    const ReplExportConfigBridge *bridge = repl_export_config_bridge();
+     * test_repl_core_io.c. The user-facing scene switch is used
+     * to apply this. */
+    const ReplConfigBridge *bridge = repl_config_bridge();
     if (bridge && bridge->apply)
         bridge->apply(scene_cfg(slot));
 }
@@ -446,7 +445,7 @@ static void stash_live_state(UserScene *dst) {
             dst->func_aliases[slot][0] = '\0';
     }
     {
-        const ReplExportConfigBridge *bridge = repl_export_config_bridge();
+        const ReplConfigBridge *bridge = repl_config_bridge();
         if (bridge && bridge->fill_scene_subset)
             bridge->fill_scene_subset(&dst->cfg);
     }
@@ -469,7 +468,7 @@ static void restore_live_from_stash(const UserScene *src) {
             repl_func_alias_set(slot, src->func_aliases[slot]);
     }
     {
-        const ReplExportConfigBridge *bridge = repl_export_config_bridge();
+        const ReplConfigBridge *bridge = repl_config_bridge();
         if (bridge && bridge->apply)
             bridge->apply(&src->cfg);
     }
@@ -776,7 +775,7 @@ static int pick_lru_user_scene_slot(void);      /* defined below */
  *
  * On a successful eviction `*out_stash` receives a snapshot of the
  * victim's in-memory entry (cfg included, since Tier B #44 embedded
- * `ReplExportConfig cfg` on UserScene) so the caller can restore the
+ * `ReplConfigBag cfg` on UserScene) so the caller can restore the
  * scene tab if needed; the on-disk file written by the eviction is
  * left in place either way (the user's data is preserved both
  * in-memory after restore AND on disk via Load Workspace). */

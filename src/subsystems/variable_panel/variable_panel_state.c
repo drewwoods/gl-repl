@@ -31,11 +31,11 @@ void variable_panel_state_reset(void) {
     g_variable_panel = g_variable_panel_defaults;
 }
 
-UiVariablePanelState variable_panel_view(void) {
+VariablePanelViewState variable_panel_view(void) {
     return g_variable_panel.view;
 }
 
-UiVariablePanelState *variable_panel_state_mut(void) {
+VariablePanelViewState *variable_panel_state_mut(void) {
     return &g_variable_panel.view;
 }
 

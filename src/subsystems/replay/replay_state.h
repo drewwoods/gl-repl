@@ -16,24 +16,63 @@
 #ifndef REPLAY_STATE_H
 #define REPLAY_STATE_H
 
-#include "repl/state_views.h"
+#include "config.h"
+#include "repl/eval.h"
+
+#define REPLAY_FADE_BATCH_MAX 24
+
+/* A snapshot of geometry from [old_pc, new_pc) that fades out as new
+ * geometry appears. age is the fade timestamp (incremented by the REPL
+ * replay state machine). Multiple batches can be active simultaneously
+ * via a ring buffer. */
+typedef struct {
+    int   old_pc;
+    int   new_pc;
+    float age;
+} ReplayFadeBatch;
+
+/* Read-only view over the active fade batches; valid for one frame. */
+typedef struct {
+    const ReplayFadeBatch *batches;
+    int                    count;
+} ReplayFadeBatchView;
+
+/* Replay snapshot shape owned by the replay peer subsystem. */
+typedef struct {
+    int             active;
+    int             state;
+    int             pc;
+    int             mode;
+    float           speed;
+    float           accum;
+    float           fade_speed;
+    int             src_line_idx;
+    int             total_flat_cmds;
+    int             expand_args;
+    float           baseline_predef_vals[MAX_PREDEF_VARS];
+    float           baseline_scratch_arrays[REPL_SCRATCH_ARRAY_COUNT][REPL_SCRATCH_ARRAY_LEN];
+    int             saved_t_playing;
+    int             last_src_line;
+    ReplayFadeBatch fade_batches[REPLAY_FADE_BATCH_MAX];
+    int             fade_batch_count;
+} ReplayRuntimeState;
 
 /* Copy or reset the full replay runtime snapshot.
  * Note: replay_state_capture/restore is exclusively a test/verification contract;
  * production code does not capture/restore replay state. */
-void                     replay_state_capture(ReplReplayRuntimeState *snapshot);
-void                     replay_state_restore(const ReplReplayRuntimeState *snapshot);
+void                     replay_state_capture(ReplayRuntimeState *snapshot);
+void                     replay_state_restore(const ReplayRuntimeState *snapshot);
 void                     replay_state_reset(void);
 
-/* Snapshot-build accessor: returns the full ReplReplayRuntimeState by value.
+/* Snapshot-build accessor: returns the full ReplayRuntimeState by value.
  * Use the narrow accessors below for individual fields; `replay_state_view()` is
  * mainly for per-frame snapshot assembly and the few callers that genuinely need
  * the whole struct at once. */
-ReplReplayRuntimeState   replay_state_view(void);
+ReplayRuntimeState   replay_state_view(void);
 
 /* Mutable accessor for the small set of writers that update multiple replay
  * fields together. Most readers should stay on the by-value or narrow accessors. */
-ReplReplayRuntimeState  *replay_state_mut(void);
+ReplayRuntimeState  *replay_state_mut(void);
 
 /* --- Narrow read accessors ---
  *
