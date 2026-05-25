@@ -216,12 +216,21 @@ int replay_compute_fade_skip_limits(int *out_limits, int max_count) {
         switch (g_flat_cmds[pc].type) {
         case CMD_BEGIN: open_begin = pc; break;
         case CMD_END:   open_begin = -1; break;
-        case CMD_TESS_BEGIN_POLYGON: open_tess = pc; tess_depth = 1; break;
-        case CMD_TESS_BEGIN_CONTOUR: if (tess_depth == 1) tess_depth = 2; break;
-        case CMD_TESS_END:
-            if (tess_depth == 2) tess_depth = 1;
-            else if (tess_depth == 1) { open_tess = -1; tess_depth = 0; }
+        case CMD_TESS_BEGIN_POLYGON:
+            open_tess = pc;
+            tess_depth = replay_advance_tess_depth(g_flat_cmds[pc].type, tess_depth);
             break;
+        case CMD_TESS_BEGIN_CONTOUR:
+            tess_depth = replay_advance_tess_depth(g_flat_cmds[pc].type, tess_depth);
+            break;
+        case CMD_TESS_END: {
+            int old_depth = tess_depth;
+            tess_depth = replay_advance_tess_depth(g_flat_cmds[pc].type, tess_depth);
+            if (old_depth == 1 && tess_depth == 0) {
+                open_tess = -1;
+            }
+            break;
+        }
         default: break;
         }
     }
@@ -531,21 +540,21 @@ void replay_walk_user_vertices(const ReplayVertexWalkContext *ctx,
                                                    program)
                 : 1;
             state.vertex_idx_in_block = 0;
-            tess_depth = 1;
+            tess_depth = replay_advance_tess_depth(cmd->type, tess_depth);
             state.normal[0] = 0.0f; state.normal[1] = 0.0f; state.normal[2] = 1.0f;
             break;
         case CMD_TESS_BEGIN_CONTOUR:
-            if (tess_depth > 0) tess_depth++;
+            tess_depth = replay_advance_tess_depth(cmd->type, tess_depth);
             break;
-        case CMD_TESS_END:
-            if (tess_depth > 0) {
-                tess_depth--;
-                if (tess_depth == 0) {
-                    state.in_block = 0;
-                    state.block_selected = selected_block_only ? 0 : 1;
-                }
+        case CMD_TESS_END: {
+            int old_depth = tess_depth;
+            tess_depth = replay_advance_tess_depth(cmd->type, tess_depth);
+            if (old_depth == 1 && tess_depth == 0) {
+                state.in_block = 0;
+                state.block_selected = selected_block_only ? 0 : 1;
             }
             break;
+        }
         case CMD_NORMAL3F:
         case CMD_TESS_NORMAL:
             state.normal[0] = cmd->args[0];
@@ -772,19 +781,12 @@ int replay_seek_to_src_line(int target_line) {
     int pc = 0;
     int landed_pc = -1;
     int landed_src = -1;
-    FlatProgramView flat_program = repl_state_flat_program_view();
-    int num_flat_cmds = flat_program.cmd_count;
+    FlatProgramView flat_program;
+    int num_flat_cmds;
 
-    if (repl_state_flat_program_dirty()) {
-        float live_predef_vals[MAX_PREDEF_VARS] = { 0 };
-        float live_scratch_arrays[REPL_SCRATCH_ARRAY_COUNT][REPL_SCRATCH_ARRAY_LEN] = { { 0.0f } };
-        repl_copy_predef_values(live_predef_vals, MAX_PREDEF_VARS);
-        repl_eval_copy_scratch_arrays(live_scratch_arrays);
-        repl_flatten_commands(repl_dispatch_edit_line_get());
-        repl_state_flat_program_clear_dirty();
-        repl_restore_predef_values(live_predef_vals, MAX_PREDEF_VARS);
-        repl_eval_restore_scratch_arrays(live_scratch_arrays);
-    }
+    repl_ensure_flat_program_with_live_vars(repl_dispatch_edit_line_get());
+    flat_program = repl_state_flat_program_view();
+    num_flat_cmds = flat_program.cmd_count;
 
     while (pc < num_flat_cmds) {
         int fade_begin = -1;
@@ -823,19 +825,12 @@ void replay_restart_from_beginning(void) {
 }
 
 void replay_start(void) {
-    FlatProgramView flat_program = repl_state_flat_program_view();
-    int num_flat_cmds = flat_program.cmd_count;
+    FlatProgramView flat_program;
+    int num_flat_cmds;
 
-    if (repl_state_flat_program_dirty()) {
-        float live_predef_vals[MAX_PREDEF_VARS] = { 0 };
-        float live_scratch_arrays[REPL_SCRATCH_ARRAY_COUNT][REPL_SCRATCH_ARRAY_LEN] = { { 0.0f } };
-        repl_copy_predef_values(live_predef_vals, MAX_PREDEF_VARS);
-        repl_eval_copy_scratch_arrays(live_scratch_arrays);
-        repl_flatten_commands(repl_dispatch_edit_line_get());
-        repl_state_flat_program_clear_dirty();
-        repl_restore_predef_values(live_predef_vals, MAX_PREDEF_VARS);
-        repl_eval_restore_scratch_arrays(live_scratch_arrays);
-    }
+    repl_ensure_flat_program_with_live_vars(repl_dispatch_edit_line_get());
+    flat_program = repl_state_flat_program_view();
+    num_flat_cmds = flat_program.cmd_count;
 
     if (!replay_has_meaningful_cmds()) {
         repl_set_status("Replay: nothing to play");

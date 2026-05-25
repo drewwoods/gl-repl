@@ -313,9 +313,38 @@ static int tutorial_emit_instruction_comment(const char *comment,
     return 1;
 }
 
+typedef enum {
+    TUTORIAL_STEP_AUTOADVANCE = 0,
+    TUTORIAL_STEP_PAUSED = 1,
+    TUTORIAL_STEP_TERMINAL = -1
+} TutorialStepResult;
+
 /* Forward decls — used inside tutorial_enter_step / advance loop. */
-static int tutorial_enter_step(int step);
+static TutorialStepResult tutorial_enter_step(int step);
 static void tutorial_advance_loop(void);
+
+static void tutorial_pending_reset(TutorialRuntimeState *state) {
+    state->pending.step_idx = -1;
+    state->pending.commit_line = -1;
+    state->pending.doc_count_before = -1;
+}
+
+static void tutorial_advance_step(TutorialRuntimeState *state) {
+    tutorial_pending_reset(state);
+    state->expected_commit_line = -1;
+    state->step++;
+    tutorial_advance_loop();
+}
+
+static void tutorial_set_status_ack_set(void) {
+    repl_set_status("Press Enter / Tab / Space to continue");
+}
+
+static void tutorial_set_status_require(const char *slug, int target) {
+    char msg[96];
+    snprintf(msg, sizeof msg, "Set %s = %d to continue", slug ? slug : "?", target);
+    repl_set_status(msg);
+}
 
 /* Resolve where the next instruction comment for tutorial `idx`
  * step `step` should be inserted. For append placement that's the
@@ -346,7 +375,7 @@ static int tutorial_step_instruction_line(int tutorial_idx, int step,
 
     const char *target = repl_tutorial_step_target_label(tutorial_idx, step);
     if (!target || target[0] == '\0') {
-        repl_set_status("Tutorial step target label is unresolved");
+        repl_set_status("Tutorial step has empty target label");
         return 0;
     }
 
@@ -360,18 +389,18 @@ static int tutorial_step_instruction_line(int tutorial_idx, int step,
         }
     }
     if (target_step < 0) {
-        repl_set_status("Tutorial step target label is unresolved");
+        repl_set_status("Tutorial step target label not found");
         return 0;
     }
 
     TutorialRuntimeState state = tutorial_state_view();
     if (target_step >= TUTORIAL_LOCKED_LINE_MAX) {
-        repl_set_status("Tutorial step target label is unresolved");
+        repl_set_status("Tutorial step target step index out of bounds");
         return 0;
     }
     int line = state.instruction_line_for_step[target_step];
     if (line < 0 || line > repl_state_document_count()) {
-        repl_set_status("Tutorial step target label is unresolved");
+        repl_set_status("Tutorial step target line out of document bounds");
         return 0;
     }
     *out_line = line;
@@ -669,16 +698,80 @@ int tutorial_status_is_hint(const char *text) {
                    sizeof TUTORIAL_STATUS_PREFIX - 1) == 0;
 }
 
+static TutorialStepResult tutorial_enter_step_command(int idx, int step, int instruction_line, TutorialRuntimeState *state) {
+    /* Original typing setup: cursor on the row immediately below
+     * the new instruction; insert mode iff mid-document. */
+    state->expected_commit_line = instruction_line + 1;
+    repl_dispatch_host_cursor_park(state->expected_commit_line,
+                                   state->expected_commit_line <
+                                   repl_state_document_count());
+    tutorial_set_step_status(idx, step);
+    /* Refresh autocomplete so the shadow ghost for the expected
+     * command appears on the next frame, not the next keystroke. */
+    repl_dispatch_completion_update();
+    return TUTORIAL_STEP_PAUSED;
+}
+
+static TutorialStepResult tutorial_enter_step_set(int idx, int step, int instruction_line, TutorialRuntimeState *state) {
+    /* Showcase: apply the cfg so the user immediately sees the
+     * effect, then wait for an ack key (Enter/Tab/Space). No
+     * typing cursor — the document is read-only on this step
+     * (tutorial_guard_source_change rejects non-COMMAND mutations).
+     * Park the editor cursor on the virtual trailing row AFTER the
+     * comment we just inserted; otherwise the editor renders the
+     * empty input-buffer overlay on top of the comment row and the
+     * instruction is invisible until the user presses a key. */
+    const char *slug = repl_tutorial_step_cfg_slug(idx, step);
+    int value = repl_tutorial_step_cfg_value(idx, step);
+    
+    state->in_enter_step = 1;
+    repl_cfg_set_int(slug, value);
+    state->in_enter_step = 0;
+    
+    state->expected_commit_line = -1;
+    repl_dispatch_host_cursor_park(instruction_line + 1,
+                                   (instruction_line + 1) <
+                                   repl_state_document_count());
+    tutorial_set_status_ack_set();
+    repl_dispatch_completion_update();
+    return TUTORIAL_STEP_PAUSED;
+}
+
+static TutorialStepResult tutorial_enter_step_require(int idx, int step, int instruction_line, TutorialRuntimeState *state) {
+    /* Check: advance when the user themselves sets the slug to the
+     * target. If already satisfied on entry, signal auto-advance to
+     * the surrounding loop (no recursion — a chain of already-
+     * satisfied REQUIREs can't blow the stack). */
+    const char *slug = repl_tutorial_step_cfg_slug(idx, step);
+    int target = repl_tutorial_step_cfg_value(idx, step);
+    state->expected_commit_line = -1;
+    /* Pick a fallback distinct from `target` so an unknown slug
+     * (defensive — tutorial_start validated all slugs) can't be
+     * mistaken for "already satisfied". */
+    int probe_fb = (target == 0) ? -1 : 0;
+    if (repl_cfg_get_int(slug, probe_fb) == target)
+        return TUTORIAL_STEP_AUTOADVANCE;  /* auto-advance via the loop */
+    /* Park the cursor past the locked instruction-comment row so
+     * the editor doesn't render the empty input overlay over it —
+     * same fix as the SET branch above. */
+    repl_dispatch_host_cursor_park(instruction_line + 1,
+                                   (instruction_line + 1) <
+                                   repl_state_document_count());
+    tutorial_set_status_require(slug, target);
+    repl_dispatch_completion_update();
+    return TUTORIAL_STEP_PAUSED;
+}
+
 /* Enter the step at the CURRENT state->step. The advance loop owns the
  * step pointer; this function emits the instruction, applies any kind-
  * specific side effects, and returns one of:
- *    1  paused — waiting on user (COMMAND typing, SET ack key,
- *       REQUIRE state-change notify).
- *    0  auto-advance requested — REQUIRE step found already-satisfied.
- *       The loop bumps state->step and tries again.
- *   -1  terminal — either the catalog sentinel ("Tutorial complete") or
- *       an internal failure. teardown() has already run. */
-static int tutorial_enter_step(int step) {
+ *    TUTORIAL_STEP_PAUSED       paused — waiting on user (COMMAND typing, SET ack key,
+ *                               REQUIRE state-change notify).
+ *    TUTORIAL_STEP_AUTOADVANCE  auto-advance requested — REQUIRE step found already-satisfied.
+ *                               The loop bumps state->step and tries again.
+ *    TUTORIAL_STEP_TERMINAL     terminal — either the catalog sentinel ("Tutorial complete") or
+ *                               an internal failure. teardown() has already run. */
+static TutorialStepResult tutorial_enter_step(int step) {
     TutorialRuntimeState *state = tutorial_state_mut();
     int idx = state->tutorial_idx;
 
@@ -689,83 +782,31 @@ static int tutorial_enter_step(int step) {
         repl_set_status("Tutorial complete");
         tutorial_teardown();
         repl_dispatch_completion_update();
-        return -1;
+        return TUTORIAL_STEP_TERMINAL;
     }
 
     int instruction_line = 0;
     if (!tutorial_step_instruction_line(idx, step, &instruction_line)) {
         tutorial_teardown();
-        return -1;
+        return TUTORIAL_STEP_TERMINAL;
     }
     if (!tutorial_emit_instruction_comment(comment, instruction_line)) {
         tutorial_teardown();
-        return -1;
+        return TUTORIAL_STEP_TERMINAL;
     }
 
     TutorialStepKind kind = repl_tutorial_step_kind(idx, step);
     switch (kind) {
     case TUTORIAL_STEP_KIND_COMMAND:
-        /* Original typing setup: cursor on the row immediately below
-         * the new instruction; insert mode iff mid-document. */
-        state->expected_commit_line = instruction_line + 1;
-        repl_dispatch_host_cursor_park(state->expected_commit_line,
-                                       state->expected_commit_line <
-                                       repl_state_document_count());
-        tutorial_set_step_status(idx, step);
-        /* Refresh autocomplete so the shadow ghost for the expected
-         * command appears on the next frame, not the next keystroke. */
-        repl_dispatch_completion_update();
-        return 1;
-    case TUTORIAL_STEP_KIND_SET: {
-        /* Showcase: apply the cfg so the user immediately sees the
-         * effect, then wait for an ack key (Enter/Tab/Space). No
-         * typing cursor — the document is read-only on this step
-         * (tutorial_guard_source_change rejects non-COMMAND mutations).
-         * Park the editor cursor on the virtual trailing row AFTER the
-         * comment we just inserted; otherwise the editor renders the
-         * empty input-buffer overlay on top of the comment row and the
-         * instruction is invisible until the user presses a key. */
-        const char *slug = repl_tutorial_step_cfg_slug(idx, step);
-        int value = repl_tutorial_step_cfg_value(idx, step);
-        repl_cfg_set_int(slug, value);
-        state->expected_commit_line = -1;
-        repl_dispatch_host_cursor_park(instruction_line + 1,
-                                       (instruction_line + 1) <
-                                       repl_state_document_count());
-        repl_set_status("Press Enter / Tab / Space to continue");
-        repl_dispatch_completion_update();
-        return 1;
-    }
-    case TUTORIAL_STEP_KIND_REQUIRE: {
-        /* Check: advance when the user themselves sets the slug to the
-         * target. If already satisfied on entry, signal auto-advance to
-         * the surrounding loop (no recursion — a chain of already-
-         * satisfied REQUIREs can't blow the stack). */
-        const char *slug = repl_tutorial_step_cfg_slug(idx, step);
-        int target = repl_tutorial_step_cfg_value(idx, step);
-        state->expected_commit_line = -1;
-        /* Pick a fallback distinct from `target` so an unknown slug
-         * (defensive — tutorial_start validated all slugs) can't be
-         * mistaken for "already satisfied". */
-        int probe_fb = (target == 0) ? -1 : 0;
-        if (repl_cfg_get_int(slug, probe_fb) == target)
-            return 0;  /* auto-advance via the loop */
-        /* Park the cursor past the locked instruction-comment row so
-         * the editor doesn't render the empty input overlay over it —
-         * same fix as the SET branch above. */
-        repl_dispatch_host_cursor_park(instruction_line + 1,
-                                       (instruction_line + 1) <
-                                       repl_state_document_count());
-        char msg[96];
-        snprintf(msg, sizeof msg, "Set %s = %d to continue", slug, target);
-        repl_set_status(msg);
-        repl_dispatch_completion_update();
-        return 1;
-    }
+        return tutorial_enter_step_command(idx, step, instruction_line, state);
+    case TUTORIAL_STEP_KIND_SET:
+        return tutorial_enter_step_set(idx, step, instruction_line, state);
+    case TUTORIAL_STEP_KIND_REQUIRE:
+        return tutorial_enter_step_require(idx, step, instruction_line, state);
     }
     /* Unknown kind — validator should have rejected this. */
     tutorial_teardown();
-    return -1;
+    return TUTORIAL_STEP_TERMINAL;
 }
 
 /* Iterative advance: keep entering steps until one pauses for user input
@@ -776,30 +817,16 @@ static void tutorial_advance_loop(void) {
     TutorialRuntimeState *state = tutorial_state_mut();
     if (!tutorial_active()) return;
     while (1) {
-        int r = tutorial_enter_step(state->step);
-        if (r != 0) return;
+        TutorialStepResult r = tutorial_enter_step(state->step);
+        if (r != TUTORIAL_STEP_AUTOADVANCE) return;
         state->step++;
     }
 }
 
 void tutorial_advance_after_successful_commit(void) {
-    TutorialRuntimeState *state;
-
     if (!tutorial_active())
         return;
-
-    state = tutorial_state_mut();
-
-    /* Label resolution anchors on the labeled step's instruction-comment
-     * row (recorded at emit time), so no need to snapshot the just-
-     * committed command row here. Clear the per-attempt scratch fields
-     * and step++, then let the shared loop handle the next step. */
-    state->pending.step_idx = -1;
-    state->pending.commit_line = -1;
-    state->pending.doc_count_before = -1;
-    state->expected_commit_line = -1;
-    state->step++;
-    tutorial_advance_loop();
+    tutorial_advance_step(tutorial_state_mut());
 }
 
 TutorialStepKind tutorial_current_step_kind(void) {
@@ -813,6 +840,8 @@ void tutorial_notify_state_changed(void) {
     if (!tutorial_active())
         return;
     TutorialRuntimeState state = tutorial_state_view();
+    if (state.in_enter_step)
+        return;
     if (repl_tutorial_step_kind(state.tutorial_idx, state.step) !=
         TUTORIAL_STEP_KIND_REQUIRE)
         return;
@@ -824,13 +853,7 @@ void tutorial_notify_state_changed(void) {
         return;
     /* Match: advance. Clear pending (REQUIRE has no commit attempt in
      * flight, but be defensive). */
-    TutorialRuntimeState *m = tutorial_state_mut();
-    m->pending.step_idx = -1;
-    m->pending.commit_line = -1;
-    m->pending.doc_count_before = -1;
-    m->expected_commit_line = -1;
-    m->step++;
-    tutorial_advance_loop();
+    tutorial_advance_step(tutorial_state_mut());
 }
 
 int tutorial_handle_ack_key(unsigned char key) {
@@ -840,13 +863,7 @@ int tutorial_handle_ack_key(unsigned char key) {
         return 0;
     if (key != '\r' && key != '\n' && key != '\t' && key != ' ')
         return 0;
-    TutorialRuntimeState *m = tutorial_state_mut();
-    m->pending.step_idx = -1;
-    m->pending.commit_line = -1;
-    m->pending.doc_count_before = -1;
-    m->expected_commit_line = -1;
-    m->step++;
-    tutorial_advance_loop();
+    tutorial_advance_step(tutorial_state_mut());
     return 1;
 }
 
@@ -855,17 +872,14 @@ int tutorial_block_noncommand_commit(void) {
         return 0;
     TutorialStepKind k = tutorial_current_step_kind();
     if (k == TUTORIAL_STEP_KIND_SET) {
-        repl_set_status("Press Enter / Tab / Space to continue");
+        tutorial_set_status_ack_set();
         return 1;
     }
     if (k == TUTORIAL_STEP_KIND_REQUIRE) {
         TutorialRuntimeState s = tutorial_state_view();
         const char *slug = repl_tutorial_step_cfg_slug(s.tutorial_idx, s.step);
         int target = repl_tutorial_step_cfg_value(s.tutorial_idx, s.step);
-        char msg[96];
-        snprintf(msg, sizeof msg, "Set %s = %d to continue",
-                 slug ? slug : "?", target);
-        repl_set_status(msg);
+        tutorial_set_status_require(slug, target);
         return 1;
     }
     return 0;
@@ -1084,9 +1098,7 @@ void tutorial_cancel_pending(void) {
      * dispatch this unconditionally on every rejection path. */
     if (state->pending.step_idx < 0)
         return;
-    state->pending.step_idx = -1;
-    state->pending.commit_line = -1;
-    state->pending.doc_count_before = -1;
+    tutorial_pending_reset(state);
 }
 
 void tutorial_note_expected_commit_applied(void) {
@@ -1108,7 +1120,5 @@ void tutorial_note_expected_commit_applied(void) {
         tutorial_shift_tracked_lines_from(state->pending.commit_line, delta);
     }
 
-    state->pending.step_idx = -1;
-    state->pending.commit_line = -1;
-    state->pending.doc_count_before = -1;
+    tutorial_pending_reset(state);
 }

@@ -36,10 +36,9 @@ subsystems here:
 - **`tutorial/`** — a guided runner that feeds instruction comments, locks
   rows, gates commits, and tracks step progress.
 
-Each subsystem follows the same two-file shape: a `*_state.c` that
-*owns the storage* (a small struct, with capture/restore/reset and
-narrow accessors) and a `*.c` runner/controller that implements the
-behavior.
+Each subsystem follows the same general shape: either a single co-located file (like `color_picker_state.c`) or a two-file shape consisting of a `*_state.c` that *owns the storage* (a small struct, with capture/restore/reset and narrow accessors) and a `*.c` runner/controller that implements the behavior (like `replay/`, `tutorial/`, `variable_panel/`).
+
+For subsystems like `variable_panel`, `variable_panel_set_visible` is the canonical public visibility setter for external code, while `variable_panel_state_mut()` provides direct mutable pointers for internal config-mapping and per-frame easing equations (like `replay_lift_px`).
 
 ## How it is exercised
 

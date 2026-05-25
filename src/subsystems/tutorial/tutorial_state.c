@@ -19,6 +19,7 @@ static void tutorial_state_init_defaults(TutorialRuntimeState *s) {
     s->pending.doc_count_before = -1;
     for (int i = 0; i < TUTORIAL_LOCKED_LINE_MAX; i++)
         s->instruction_line_for_step[i] = -1;
+    s->in_enter_step = 0;
     repl_export_config_clear(&s->baseline_bag);
     s->baseline_valid = 0;
 }
