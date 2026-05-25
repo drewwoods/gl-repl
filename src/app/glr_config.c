@@ -7,16 +7,8 @@
 #include "ui/app/state_types.h"
 #include "subsystems/variable_panel/variable_panel_state.h"
 #include "subsystems/tutorial/tutorial.h"        /* tutorial_notify_state_changed */
-
-/* Camera, profile_panel slices live on UiState; variable_panel
- * visibility lives on the variable_panel peer; replay state lives
- * on the replay peer. repl_*.c is not allowed to include ui_state.h
- * per check-controller-boundaries, so the relevant accessors are
- * forward-declared inline. */
-GlrCameraState         *glr_camera_mut(void);
-UiProfilePanelState   *ui_state_profile_panel_mut(void);
-UiVariablePanelState  *variable_panel_state_mut(void);
-ReplReplayRuntimeState  *replay_state_mut(void);
+#include "ui/app/state.h"
+#include "subsystems/replay/replay_state.h"
 
 static int clamp_int(int v, int lo, int hi) {
     if (v < lo) return lo;

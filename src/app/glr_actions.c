@@ -7,6 +7,9 @@
  * item actions that touch scenes, files, replay, audio, or presentation state.
  */
 #include "app/glr_actions.h"
+#include <ctype.h>
+#include <string.h>
+#include <stdlib.h>
 #include "config.h"                  /* DEFAULT_SCENE_FILE */
 #include "app/glr_ctrl.h"            /* glr_ctrl_sync_ui_chrome */
 #include "app/glr_state.h"           /* presentation/render storage */

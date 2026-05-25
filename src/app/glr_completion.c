@@ -445,9 +445,7 @@ void glr_completion_accept_autocomplete(void) {
  *
  * editor_completion_clear() owns the slice wipe (it lives on
  * EditorState), so this provider hook only resets the
- * provider-private statics.
- *
- * (Wired in Phase G commit 36.) */
+ * provider-private statics. */
 
 static void glr_completion_provider_clear(void) {
     g_ac_mode = AC_MODE_NONE;

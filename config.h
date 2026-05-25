@@ -128,8 +128,8 @@
 /* View-mode transitions.
  *
  * GLR_CAMERA_TARGET_DECAY is the per-frame decay used by
- * glr_camera_ease_to: at the default 0.88, each 16 ms tick applies
- * 12% of the remaining distance to the target. Lower values move
+ * glr_camera_ease_to: at the default 0.93, each 16 ms tick applies
+ * 7% of the remaining distance to the target. Lower values move
  * faster; higher values move slower.
  *
  * GLR_VIEW_PROJECTION_TRANSITION_SECS controls the orthographic <->

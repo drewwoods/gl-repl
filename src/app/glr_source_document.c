@@ -8,10 +8,7 @@
  * reach into editor state directly. The full app composes both layers
  * through this file; the standalone repl_demo links the same adapter
  * today (a tiny editor-free implementation ships separately).
- *
- * (Introduced as Phase 1 of the source-document port, with the mutation
- * surface wired in Phase 2 and the editor-free demo implementation in
- * Phase 6.) */
+ * (Bridges the REPL parser and compiler text needs to the editor.) */
 
 #include "source_document.h"
 
