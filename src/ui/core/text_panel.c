@@ -36,10 +36,51 @@ static int text_panel_statusbar_h(const UiTextPanelSnapshot *snap) {
          ? snap->statusbar_h : 0;
 }
 
+typedef struct {
+    int statusbar_h;
+    int visible_rows;
+    int first_line_y;
+} TextPanelViewportMetrics;
+
+static TextPanelViewportMetrics text_panel_viewport_metrics(
+    const UiTextPanelSnapshot *snap) {
+    TextPanelViewportMetrics metrics;
+
+    metrics.statusbar_h = text_panel_statusbar_h(snap);
+    metrics.visible_rows = ui_text_panel_visible_lines_for_height(
+        snap->cp_h, metrics.statusbar_h, snap->top_chrome_h);
+
+    /* Render, hit-test, and input-row lookup all reason from the
+     * same first text baseline directly under the top chrome. */
+    metrics.first_line_y = snap->cp_y + snap->cp_h - CODE_MARGIN_Y
+                         - 2 * LINE_H - snap->top_chrome_h;
+    return metrics;
+}
+
 static CodeLayout text_panel_row_layout(const UiTextPanelSnapshot *snap,
                                         const UiTextPanelRow *row) {
     int first_x = snap->text_x + row->indent_chars * FONT_W;
     return code_layout_make(snap->cp_w, first_x, FONT_W, snap->wrap_at_comma);
+}
+
+static const char *text_panel_row_text(const UiTextPanelSnapshot *snap,
+                                       const UiTextPanelRow *row) {
+    if (row->kind == UI_TEXT_PANEL_ROW_INPUT)
+        return snap->input.input ? snap->input.input : "";
+    return row->text ? row->text : "";
+}
+
+static int text_panel_row_text_len(const UiTextPanelSnapshot *snap,
+                                   const UiTextPanelRow *row) {
+    const char *text = text_panel_row_text(snap, row);
+
+    if (row->kind == UI_TEXT_PANEL_ROW_INPUT) {
+        return snap->input.input_len >= 0
+             ? snap->input.input_len
+             : (int)strlen(text);
+    }
+
+    return (int)strlen(text);
 }
 
 /* Per-frame wrap-count cache. Populated by ui_text_panel_render as it
@@ -656,12 +697,12 @@ static int text_panel_row_wrap_count(const UiTextPanelSnapshot *snap,
                                      const UiTextPanelRow *row) {
     CodeLayout layout = text_panel_row_layout(snap, row);
     if (row->kind == UI_TEXT_PANEL_ROW_INPUT)
-        return code_layout_row_count_for_text(snap->input.input ? snap->input.input : "",
+        return code_layout_row_count_for_text(text_panel_row_text(snap, row),
                                               &layout);
     if (row->kind == UI_TEXT_PANEL_ROW_PLACEHOLDER &&
         (!row->text || row->text[0] == '\0'))
         return 1;
-    return code_layout_row_count_for_text(row->text ? row->text : "",
+    return code_layout_row_count_for_text(text_panel_row_text(snap, row),
                                           &layout);
 }
 
@@ -700,14 +741,8 @@ static int text_panel_char_for_click(const UiTextPanelSnapshot *snap,
                                      const UiTextPanelRow *row,
                                      int mx,
                                      int row_offset) {
-    const char *text = row->kind == UI_TEXT_PANEL_ROW_INPUT
-                     ? (snap->input.input ? snap->input.input : "")
-                     : (row->text ? row->text : "");
-    int text_len = row->kind == UI_TEXT_PANEL_ROW_INPUT
-                 ? (snap->input.input_len >= 0
-                    ? snap->input.input_len
-                    : (int)strlen(text))
-                 : (int)strlen(text);
+    const char *text = text_panel_row_text(snap, row);
+    int text_len = text_panel_row_text_len(snap, row);
     int seg_start = text_len;
     int seg_len = 0;
     int seg_x = snap->text_x + row->indent_chars * FONT_W;
@@ -728,29 +763,73 @@ static int text_panel_char_for_click(const UiTextPanelSnapshot *snap,
     return new_cursor;
 }
 
+static int text_panel_row_is_insert_slot(const UiTextPanelRow *row) {
+    return row->source_line_idx < 0 &&
+           (row->kind == UI_TEXT_PANEL_ROW_PLACEHOLDER ||
+            row->kind == UI_TEXT_PANEL_ROW_INPUT);
+}
+
+static int text_panel_resolved_line_idx(const UiTextPanelRow *row) {
+    int resolved_line = row->source_line_idx >= 0
+                      ? row->source_line_idx
+                      : row->hit_target_line_idx;
+
+    /* Generic text_panel hit-testing leaves virtual rows unresolved;
+     * the REPL adapter owns rewriting them to a concrete line. */
+    if (row->kind == UI_TEXT_PANEL_ROW_VIRTUAL)
+        return row->source_line_idx;
+    return resolved_line;
+}
+
+static UiHit text_panel_hit_for_row(const UiTextPanelSnapshot *snap,
+                                    const UiTextPanelRow *row,
+                                    int row_idx,
+                                    int mx,
+                                    int row_offset) {
+    UiHit h = ui_hit_none();
+
+    if (!row->hit_eligible)
+        return h;
+
+    h.line_idx = text_panel_resolved_line_idx(row);
+    h.visual_row = row_offset;
+    h.cmd_idx = row_idx;
+
+    if (mx < snap->cp_x + snap->text_x) {
+        h.kind = UI_HIT_CODE_GUTTER;
+        return h;
+    }
+
+    h.char_idx = text_panel_char_for_click(snap, row, mx, row_offset);
+    h.kind = text_panel_row_is_insert_slot(row)
+           ? UI_HIT_CODE_INSERT_LINE
+           : UI_HIT_CODE_TEXT;
+    return h;
+}
+
 int ui_text_panel_visible_lines_for_height(int panel_h, int statusbar_h,
                                             int top_chrome_h) {
-    int available = panel_h - CODE_MARGIN_Y - 2 * LINE_H - 3 - statusbar_h
-                    - top_chrome_h;
-    if (available < 0)
+    /* The first visible text baseline sits below the top gutter and
+     * top chrome. Each additional visible row then consumes one LINE_H. */
+    int visible_band_h = panel_h - CODE_MARGIN_Y - 2 * LINE_H - 3
+                       - statusbar_h - top_chrome_h;
+
+    if (visible_band_h < 0)
         return 1;
-    return available / LINE_H + 1;
+    return visible_band_h / LINE_H + 1;
 }
 
 int ui_text_panel_input_row_y(const UiTextPanelSnapshot *snap,
                               int input_row_idx,
                               int *out_py) {
-    int visible_rows, statusbar_h, panel_top, line_y, cur;
+    TextPanelViewportMetrics metrics;
+    int cur;
+
     if (!snap || !out_py || input_row_idx < 0 ||
         input_row_idx >= snap->row_count)
         return 0;
 
-    statusbar_h = text_panel_statusbar_h(snap);
-    visible_rows = ui_text_panel_visible_lines_for_height(
-        snap->cp_h, statusbar_h, snap->top_chrome_h);
-
-    panel_top = snap->cp_y + snap->cp_h;
-    line_y = panel_top - CODE_MARGIN_Y - 2 * LINE_H - snap->top_chrome_h;
+    metrics = text_panel_viewport_metrics(snap);
     cur = 0;
 
     for (int i = 0; i < snap->row_count; i++) {
@@ -758,9 +837,10 @@ int ui_text_panel_input_row_y(const UiTextPanelSnapshot *snap,
         if (visual_rows < 1) visual_rows = 1;
 
         if (i == input_row_idx) {
-            if (cur < snap->scroll || cur >= snap->scroll + visible_rows)
+            if (cur < snap->scroll ||
+                cur >= snap->scroll + metrics.visible_rows)
                 return 0;
-            *out_py = line_y - (cur - snap->scroll) * LINE_H;
+            *out_py = metrics.first_line_y - (cur - snap->scroll) * LINE_H;
             return 1;
         }
         cur += visual_rows;
@@ -770,12 +850,10 @@ int ui_text_panel_input_row_y(const UiTextPanelSnapshot *snap,
 
 void ui_text_panel_render(const UiTextPanelSnapshot *snap,
                           UiTextPanelOutput         *out) {
-    int panel_top;
+    TextPanelViewportMetrics metrics;
     int line_y;
     int cur = 0;
-    int visible_rows;
     int total_rows = 0;
-    int statusbar_h;
 
     if (out)
         *out = (UiTextPanelOutput){0};
@@ -786,23 +864,20 @@ void ui_text_panel_render(const UiTextPanelSnapshot *snap,
      * input-row-y paths can reuse our walk instead of redoing it. */
     wrap_cache_populate(snap);
 
-    visible_rows = ui_text_panel_visible_lines_for_height(snap->cp_h,
-                                                          text_panel_statusbar_h(snap),
-                                                          snap->top_chrome_h);
-    statusbar_h = text_panel_statusbar_h(snap);
+    metrics = text_panel_viewport_metrics(snap);
 
-    out->visible_rows = visible_rows;
+    out->visible_rows = metrics.visible_rows;
     out->statusbar_slot = (UiTextPanelRect){
         .x = snap->cp_x,
         .y = snap->cp_y,
         .w = snap->cp_w,
-        .h = statusbar_h,
+        .h = metrics.statusbar_h,
     };
     out->text_area = (UiTextPanelRect){
         .x = snap->cp_x + snap->text_x,
-        .y = snap->cp_y + statusbar_h,
+        .y = snap->cp_y + metrics.statusbar_h,
         .w = snap->cp_w - snap->text_x - CODE_MARGIN_X,
-        .h = snap->cp_h - statusbar_h,
+        .h = snap->cp_h - metrics.statusbar_h,
     };
 
     if (snap->vp_w <= 0 || snap->vp_h <= 0 || snap->cp_w <= 0 || snap->cp_h <= 0)
@@ -825,40 +900,41 @@ void ui_text_panel_render(const UiTextPanelSnapshot *snap,
     glEnable(GL_SCISSOR_TEST);
     glScissor(snap->cp_x, snap->cp_y, snap->cp_w, snap->cp_h);
 
-    panel_top = snap->cp_y + snap->cp_h;
-    line_y = panel_top - CODE_MARGIN_Y - 2 * LINE_H - snap->top_chrome_h;
+    line_y = metrics.first_line_y;
 
     for (int i = 0; i < snap->row_count; i++) {
         const UiTextPanelRow *row = &snap->rows[i];
 
         if (row->kind == UI_TEXT_PANEL_ROW_INPUT)
-            total_rows += text_panel_draw_input_row(snap, row, visible_rows,
+            total_rows += text_panel_draw_input_row(snap, row,
+                                                    metrics.visible_rows,
                                                     &cur, &line_y, out);
         else
-            total_rows += text_panel_draw_regular_row(snap, row, visible_rows,
+            total_rows += text_panel_draw_regular_row(snap, row,
+                                                      metrics.visible_rows,
                                                       &cur, &line_y);
     }
 
     glDisable(GL_SCISSOR_TEST);
 
     out->total_rows = total_rows;
-    text_panel_draw_scrollbar(snap, total_rows, visible_rows);
+    text_panel_draw_scrollbar(snap, total_rows, metrics.visible_rows);
     gl2d_end();
 }
 
 UiHit ui_text_panel_hit_test(const UiTextPanelSnapshot *snap,
                               int mx, int my) {
     UiHit h = ui_hit_none();
+    TextPanelViewportMetrics metrics;
     int gl_y;
-    int panel_top;
-    int line_y_start;
     int row_from_top;
-    int visible_rows;
     int target_visual_row;
     int cur = 0;
 
     if (!snap || snap->vp_w <= 0 || snap->vp_h <= 0)
         return h;
+
+    metrics = text_panel_viewport_metrics(snap);
 
     gl_y = snap->vp_h - my;
 
@@ -873,13 +949,8 @@ UiHit ui_text_panel_hit_test(const UiTextPanelSnapshot *snap,
         gl_y < snap->cp_y || gl_y >= snap->cp_y + snap->cp_h)
         return h;
 
-    panel_top = snap->cp_y + snap->cp_h;
-    line_y_start = panel_top - CODE_MARGIN_Y - 2 * LINE_H - snap->top_chrome_h;
-    visible_rows = ui_text_panel_visible_lines_for_height(snap->cp_h,
-                                                          text_panel_statusbar_h(snap),
-                                                          snap->top_chrome_h);
-    row_from_top = (line_y_start + LINE_H - 3 - gl_y) / LINE_H;
-    if (row_from_top < 0 || row_from_top >= visible_rows)
+    row_from_top = (metrics.first_line_y + LINE_H - 3 - gl_y) / LINE_H;
+    if (row_from_top < 0 || row_from_top >= metrics.visible_rows)
         return h;
 
     target_visual_row = snap->scroll + row_from_top;
@@ -890,52 +961,9 @@ UiHit ui_text_panel_hit_test(const UiTextPanelSnapshot *snap,
         const UiTextPanelRow *row = &snap->rows[i];
         int wrap_count = text_panel_row_wrap_count_cached(snap, i);
 
-        if (target_visual_row < cur + wrap_count) {
-            int row_offset = target_visual_row - cur;
-            int in_gutter = mx < snap->cp_x + snap->text_x;
-            int resolved_line = row->source_line_idx >= 0
-                              ? row->source_line_idx
-                              : row->hit_target_line_idx;
-
-            /* Virtual rows arrive with source_line_idx == -1; the
-             * adapter (e.g. ui_repl_code_panel) rewrites the hit to
-             * substitute the real line before consumers see it.
-             * Keeping line_idx == -1 here is the documented "leave
-             * unresolved" contract for ui_text_panel_hit_test (and
-             * the test in test_ui_text_panel.c that enforces it). */
-            if (row->kind == UI_TEXT_PANEL_ROW_VIRTUAL)
-                resolved_line = row->source_line_idx;
-
-            if (!row->hit_eligible)
-                return h;
-
-            if (in_gutter) {
-                h.kind = UI_HIT_CODE_GUTTER;
-                h.line_idx = resolved_line;
-                h.visual_row = row_offset;
-                h.cmd_idx = i;
-                return h;
-            }
-
-            if ((row->kind == UI_TEXT_PANEL_ROW_PLACEHOLDER &&
-                 row->source_line_idx < 0) ||
-                (row->kind == UI_TEXT_PANEL_ROW_INPUT &&
-                 row->source_line_idx < 0)) {
-                h.kind = UI_HIT_CODE_INSERT_LINE;
-                h.line_idx = resolved_line;
-                h.visual_row = row_offset;
-                h.char_idx = text_panel_char_for_click(snap, row, mx, row_offset);
-                h.cmd_idx = i;
-                return h;
-            }
-
-            h.kind = UI_HIT_CODE_TEXT;
-            h.line_idx = resolved_line;
-            h.visual_row = row_offset;
-            h.char_idx = text_panel_char_for_click(snap, row, mx, row_offset);
-            h.cmd_idx = i;
-            return h;
-        }
+        if (target_visual_row < cur + wrap_count)
+            return text_panel_hit_for_row(snap, row, i, mx,
+                                          target_visual_row - cur);
 
         cur += wrap_count;
     }
