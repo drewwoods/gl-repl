@@ -91,17 +91,28 @@
 > *dispatch-chain drift between the documented canonical order and
 > the real Enter path*, and *stack-allocated mega-buffers*.
 >
-> **Implementation status (2026-05-25 refresh):** Full afternoon pass + most
-> week-pass items completed, verified, and moved to done. Remaining
-> items deferred to future passes: #13 (var-statement ordering:
-> shared kind list vs. adapter), #18 (`parse_for_commit`
-> policy-flagged helper extraction), #23 (semantic wholesale-replacement
-> undo API plus cross-generation guard), #28 (EditorServices dismantle
-> — step 1 already landed alongside #16). All completed items are
-> tested via the 6782-test suite and guarded against regression by four new
-> layer-boundary guards (`check-editor-no-app` hard-zero,
-> `check-repl-no-app` ratchet=1, `check-scene-no-upper-layers`
-> hard-zero, `check-ui-core-no-upper-layers` hard-zero).
+> **Implementation status (2026-05-25 Tier C pass):** Full afternoon pass +
+> most week-pass items completed. Tier C pass completed 12 additional
+> findings: #21 (clipboard switch dispatch), #22 (input view aliasing
+> doc), #24 (REPL_PREDEF_NAME_MAX constant), #26 (EditorServices removal
+> from for-loop compile), #32 (search route wrapper inline), #35
+> (editor_state_search const pointer return), #40 (compile context
+> helper), #42 (mouse_func comment), #43 (MAX_INPUT_LEN-2 comment),
+> #45 (shared identifier predicate), #47 (tutorial message unification),
+> #48 (overlay list doc comment), #49 (clipboard setter contract doc),
+> #50 (reformat save-set doc). Remaining items deferred to future
+> passes: #13 (var-statement ordering: shared kind list vs. adapter),
+> #15 (error reporting testability), #18 (`parse_for_commit`
+> policy-flagged helper extraction), #20 (tutorial commit-gating —
+> assessed: the adapter shape in input.c is appropriate, the policy
+> already lives in tutorial.c), #23 (semantic wholesale-replacement
+> undo API plus cross-generation guard), #28 (EditorServices
+> dismantle — steps 1-2 landed, steps 3-4 remain),
+> #41 (optional line-paste factoring — main fixes done).
+> All completed items are tested via the 7061-test suite and guarded
+> against regression by structural guards including `check-editor-no-app`,
+> `check-repl-no-app`, `check-scene-no-upper-layers`,
+> `check-ui-core-no-upper-layers`, and `check-editor-repl-surface`.
 >
 > Headings below are marked ✅ (done) or ⏳ (deferred).
 
@@ -709,7 +720,7 @@ shared helper.
 **Fix:** Extract a single helper (probably in `src/repl/`, given
 `parser.c` also has canonical-form duties).
 
-### 20. [Tier C — deferred] Tutorial commit-gating helpers live in `input.c` as file-locals
+### 20. [Tier C — deferred, assessed] Tutorial commit-gating helpers live in `input.c` as file-locals
 
 **Where:** `src/editor/input.c:1233-1299`, call sites at L875,
 L1277, L1294-1297, L1312-1322, L1335-1346, L1396-1397
@@ -732,7 +743,7 @@ editor headers or read editor storage directly. Pass the needed input
 text / cursor facts as parameters, and use the existing host-effect
 dispatchers for completion, cursor parking, and status.
 
-### 21. [Tier C — deferred] Tagged-union `EditorClipboardKind` is never consulted via switch
+### 21. [Tier C — ✅ done] Tagged-union `EditorClipboardKind` is never consulted via switch
 
 **Where:** `src/editor/state.c:534-595`, `clipboard.c:212,
 245-413`
@@ -748,7 +759,7 @@ and is invisible to the compiler — no `-Wswitch` safety net.
 **Fix:** Switch read sites to `switch (kind)` for exhaustiveness,
 or drop the enum and use the two-flag invariant explicitly.
 
-### 22. [Tier C — deferred] `EditorInputView.input` aliases live storage with no documented liveness
+### 22. [Tier C — ✅ done] `EditorInputView.input` aliases live storage with no documented liveness
 
 **Where:** `src/editor/state.h:64-74`, `state.c:300-313`
 
@@ -797,7 +808,7 @@ that crosses into REPL; the inverse (REPL into editor) is not
 sanctioned. The original audit suggestion of "move the calls into
 `repl_load_*`" violates that boundary and is withdrawn.
 
-### 24. [Tier C — deferred] Three sites hardcode `name[16]` instead of a shared constant
+### 24. [Tier C — ✅ done] Three sites hardcode `name[16]` instead of a shared constant
 
 **Where:** `src/editor/undo.h:58`, `src/editor/state.h:147`,
 `src/repl/eval.h:133`
@@ -825,7 +836,7 @@ directly.
 `ui_text_*` directly, or inline them as `static` inside
 `search.c`. (Same as the `src/ui/` audit's #37.)
 
-### 26. [Tier C — deferred] `editor_compile_for_loop` is the only structured-compile that uses `EditorServices`
+### 26. [Tier C — ✅ done] `editor_compile_for_loop` is the only structured-compile that uses `EditorServices`
 
 **Where:** `src/editor/commit.c:872`
 
@@ -956,7 +967,7 @@ variable-panel peer. Yet the typedef still sits in
 **Fix:** Move the typedef to
 `src/subsystems/variable_panel/variable_panel_state.h`.
 
-### 32. [Tier C — deferred] Two pointless one-liner route wrappers in input.c
+### 32. [Tier C — ✅ done] Two pointless one-liner route wrappers in input.c
 
 **Where:** `src/editor/input.c:992-994, 1594-1596`
 
@@ -990,7 +1001,7 @@ in behavior; both go through the same test seam.
 **Fix:** Pick `editor_input_active_modifiers` (matches file's prefix
 convention); delete the wrapper.
 
-### 35. [Tier C — deferred] `editor_state_search()` returns a 1 KB struct by value per call
+### 35. [Tier C — ✅ done] `editor_state_search()` returns a 1 KB struct by value per call
 
 **Where:** `src/editor/state.c:597-599`; callers at
 `src/app/glr_ctrl.c:1505, 2485, 3621-3623` and
@@ -1069,7 +1080,7 @@ is applied. **Then** add a new finding-of-its-own (or fold into
 #23): every call site that doesn't push a snapshot before
 `editor_commit_apply_plan` is a latent undo-skip bug.
 
-### 40. [Tier C — deferred] `apply_compiled_change` cluster has 3 distinct context constructions for the same payload
+### 40. [Tier C — ✅ done] `apply_compiled_change` cluster has 3 distinct context constructions for the same payload
 
 **Where:** `src/editor/commit.c:1182, 1229, 1283`
 
@@ -1087,7 +1098,7 @@ surface there points future cleanup in the wrong direction.
 
 ## 🔵 Structural concerns
 
-### 41. [Tier C — deferred] `editor_clipboard_paste_current` decision logic is opaque
+### 41. [Tier C — deferred, optional] `editor_clipboard_paste_current` decision logic is opaque
 
 **Where:** `src/editor/clipboard.c:245-413`
 
@@ -1104,7 +1115,7 @@ paste path into `paste_lines(state)` and `finalize_after_paste(...)`;
 do not treat input-text extraction or stack-snapshot removal as still
 pending.
 
-### 42. [Tier C — deferred] `mouse_func` signature has 3 silenced unused parameters
+### 42. [Tier C — ✅ done] `mouse_func` signature has 3 silenced unused parameters
 
 **Where:** `src/editor/input.c:1823-1832`
 
@@ -1116,7 +1127,7 @@ signature is required by GLUT shape; legitimate, but un-commented.
 **Fix:** Add `/* GLUT callback shape; only state == GLUT_UP is
 editor-relevant. */`; lay the casts out one per line.
 
-### 43. [Tier C — deferred] Edit-line override path edge: `MAX_INPUT_LEN - 2` vs `- 1` is silently load-bearing
+### 43. [Tier C — ✅ done] Edit-line override path edge: `MAX_INPUT_LEN - 2` vs `- 1` is silently load-bearing
 
 **Where:** `src/editor/input.c:305-336`
 (`editor_load_line_to_input`)
@@ -1144,7 +1155,7 @@ existed publicly the whole time. `state.c` itself uses the helper
 **Fix:** Replace the four open-coded clears in `input.c` with
 calls to `editor_pending_newline_clear()`.
 
-### 45. [Tier C — deferred] `is_word_char` re-implements the project's identifier predicate
+### 45. [Tier C — ✅ done] `is_word_char` re-implements the project's identifier predicate
 
 **Where:** `src/editor/input.c:1407-1410`
 
@@ -1170,7 +1181,7 @@ strlen + cursor_pos_set` sequence directly on
 **Fix:** Replace the open-coded sequence with a single
 `editor_input_set_text(text)` call.
 
-### 47. [Tier C — deferred] Tutorial-locked guard messages drift in wording
+### 47. [Tier C — ✅ done] Tutorial-locked guard messages drift in wording
 
 **Where:** `src/editor/input.c:186, 292`, `clipboard.c:29`
 
@@ -1183,7 +1194,7 @@ that publishes the status text. Avoid adding a new generic
 `repl_set_status_tutorial_locked()` special case unless other modules
 need that exact status policy.
 
-### 48. [Tier C — deferred] `EditorState` carries ~1.2 MB of per-frame transient overlay lists
+### 48. [Tier C — ✅ done (doc)] `EditorState` carries ~1.2 MB of per-frame transient overlay lists
 
 **Where:** `src/editor/state.h:191-194`
 
@@ -1202,7 +1213,7 @@ struct (e.g., `EditorOverlaySnapshot`) the controller refills
 directly; or document that `editor_state_capture()` deliberately
 covers them.
 
-### 49. [Tier C — deferred] `state.c:248-250` exposes `EditorClipboardKind` setter without payload-validity guarantee
+### 49. [Tier C — ✅ done (doc)] `state.c:248-250` exposes `EditorClipboardKind` setter without payload-validity guarantee
 
 **Where:** `src/editor/state.c:545-563`
 (`editor_state_clipboard_count_set`)
@@ -1220,7 +1231,7 @@ can be undefined if a future caller forgets to populate.
 **Fix:** Make this private; or take
 `(const char *const *lines, int count)` and write both inside.
 
-### 50. [Tier C — deferred] Reformat saves five fields; the doc claim is broader
+### 50. [Tier C — ✅ done] Reformat saves five fields; the doc claim is broader
 
 **Where:** `src/editor/reformat.c:19-40`, `reformat.h:1-14`
 
