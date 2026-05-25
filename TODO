@@ -3,7 +3,6 @@ TODO:
    - make solar system example
    - add a whale from glut spheres
    - display just the display() function by default
-   - add sunset grid example
    - Have a loading animation similar to my glkit-examples.  Although there i start out at 0,0,0 and zoom to desired zoom.  I could experiment with zoomed out then quick zoom in if its not too distracting
    - Using the status bar to enter a new filename is not ideal as it disappears
    - See status bar history
@@ -12,11 +11,10 @@ TODO:
    - Think of how to handle music - maybe a menu?
    - Have a tutorial or popup windows
      - see https://claude.ai/design/p/019de056-5d56-76d3-9605-6a21bcf7e15c?file=Tutorial+System+Wireframes.html
+   - Fix tests that dont use depth (particles) by using depthFunction always so the grid doesnt appear ontop
    - outlines dont function correctly when not using lighting
      - replace the exported code with a stencil test (color and depth mask false, stencil set, then color black where stencil set)
    - add ability to reset the x,y,z translation of the camera
-   - top hat with specular stars (would need to tesselate star for hat curvature)
-   - shape in bottle (maybe bezeir curve for bottle neck). Transparent with specular highlights
    - add record once state is fully captured in a frameState
    - address the limitation of only 8 scope visible globals
 
@@ -54,4 +52,14 @@ TODO:
   y
 
   Inside the loop that gives 7 visible variables including i, which stays under the cap and round-trips cleanly.
+
+Examples:
+---------
+ - top hat with specular stars (would need to tesselate star for hat curvature)
+ - shape in bottle (maybe bezeir curve for bottle neck). Transparent with specular highlights
+ - add sunset grid example
+
+Tutorials:
+----------
+ - use glScalef and glspecular lighting without GL_NORMALIZE to show the impact
 
