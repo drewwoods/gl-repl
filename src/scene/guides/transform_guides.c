@@ -51,17 +51,6 @@ static void tg_color_tok(SceneColorToken t, float a) {
     tg_color4f(c.r, c.g, c.b, c.a * a);
 }
 
-/* Cmds that emit geometry - hitting one of these means "something just got
- * drawn with the current modelview", so further transforms shouldn't factor
- * into the cursor-line's guide. */
-static int is_geometry_emit_cmd(CmdType type) {
-    return (type == CMD_BEGIN ||
-            type == CMD_GLUT_TORUS || type == CMD_GLUT_CUBE ||
-            type == CMD_GLUT_SPHERE || type == CMD_GLUT_TEAPOT ||
-            type == CMD_GLUT_CONE ||
-            type == CMD_TESS_BEGIN_POLYGON);
-}
-
 static void mat4_mul_col_major(const float a[16], const float b[16], float out[16]) {
     for (int col = 0; col < 4; col++) {
         for (int row = 0; row < 4; row++) {
@@ -112,7 +101,7 @@ static void compute_after_cursor_origin(const SceneGuideSnapshot *snapshot,
     int depth = 0;
     for (int i = first_after_idx; i < flat_cmd_count; i++) {
         if (!flat_cmds[i].valid) continue;
-        if (is_geometry_emit_cmd(flat_cmds[i].type)) break;
+        if (repl_cmd_starts_geometry_emit(flat_cmds[i].type)) break;
         if (repl_cmd_is_transform(flat_cmds[i].type))
             apply_tracked_transform(&flat_cmds[i], &depth);
     }

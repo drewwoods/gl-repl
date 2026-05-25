@@ -149,4 +149,27 @@ static inline int repl_cmd_is_block_end(CmdType type) {
             type == CMD_IF_END);
 }
 
+/* True for the commands that *start* GL primitive emission with the
+ * current modelview: glBegin (opens a vertex stream), every glutSolid*
+ * primitive (renders a closed shape from current matrix state), and
+ * the tess-polygon opener. Used by transform-guide planning to
+ * decide "something just got drawn here — further transforms
+ * shouldn't factor into the cursor-line guide".
+ *
+ * Distinct from repl_cmd_emits_vertex: that predicate names commands
+ * that *contribute a vertex* (glVertex3f / glVertex2f / gluVertex);
+ * this one names commands that *anchor* a draw using the current
+ * matrix. A glutSolidSphere emits no vertex from the REPL model's
+ * perspective (it dispatches inside GLU) but does freeze the current
+ * modelview as a draw anchor. */
+static inline int repl_cmd_starts_geometry_emit(CmdType type) {
+    return (type == CMD_BEGIN ||
+            type == CMD_GLUT_TORUS ||
+            type == CMD_GLUT_CUBE ||
+            type == CMD_GLUT_SPHERE ||
+            type == CMD_GLUT_TEAPOT ||
+            type == CMD_GLUT_CONE ||
+            type == CMD_TESS_BEGIN_POLYGON);
+}
+
 #endif /* REPL_COMMAND_H */

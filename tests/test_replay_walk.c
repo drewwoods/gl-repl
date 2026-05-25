@@ -681,6 +681,47 @@ static void test_transform_dispatch_drift_guard(void) {
     }
 }
 
+/* --- 8. geometry-emit predicate coverage --------------------------
+ *
+ * repl_cmd_starts_geometry_emit names the commands that anchor a draw
+ * using the current modelview — glBegin opens a vertex stream, the
+ * glut solid primitives close a shape, and CMD_TESS_BEGIN_POLYGON opens
+ * a tessellated draw. transform-guide planning uses this predicate as
+ * its "stop walking forward" signal in the after-cursor anchor search.
+ *
+ * Pin the exact set so a new CmdType that should anchor a draw can't
+ * silently skip the predicate. Every transform that lives inside
+ * the predicate set must also have a CmdSyntaxCategory consistent
+ * with its visual role; we don't test that here because the visual
+ * taxonomy intentionally diverges (CMD_BEGIN is a primitive-state
+ * setter, not a CMD_CAT_VERTEX entry).
+ */
+static void test_starts_geometry_emit_predicate(void) {
+    static const CmdType expected[] = {
+        CMD_BEGIN,
+        CMD_GLUT_TORUS,
+        CMD_GLUT_CUBE,
+        CMD_GLUT_SPHERE,
+        CMD_GLUT_TEAPOT,
+        CMD_GLUT_CONE,
+        CMD_TESS_BEGIN_POLYGON,
+    };
+    const int n_expected = (int)(sizeof expected / sizeof expected[0]);
+
+    for (int t_int = 0; t_int < CMD_TYPE_COUNT; t_int++) {
+        CmdType t = (CmdType)t_int;
+        int is_expected = 0;
+        for (int j = 0; j < n_expected; j++)
+            if (expected[j] == t) { is_expected = 1; break; }
+
+        char label[128];
+        snprintf(label, sizeof label,
+                 "type=%d: repl_cmd_starts_geometry_emit matches "
+                 "expected set", t_int);
+        ASSERT_INT(label, repl_cmd_starts_geometry_emit(t), is_expected);
+    }
+}
+
 int main(void) {
     test_walker_resolves_funcn_args_at_cursor();
     test_walker_fires_on_each_cmd_at_cursor();
@@ -690,6 +731,7 @@ int main(void) {
     test_predicate_category_agreement();
     test_display_name_for_not_in_begin();
     test_transform_dispatch_drift_guard();
+    test_starts_geometry_emit_predicate();
 
     printf("test_replay_walk: %d/%d passed\n",
            g_harness.passed, g_harness.run);

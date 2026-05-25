@@ -792,18 +792,11 @@ void scene_grid_render(const SceneFrameRenderContext *frame_ctx) {
         glFogf(GL_FOG_END, fog_end);
     }
 
+    /* Custom themes handle their own draw path; the default arm covers
+     * every standard theme by spec-table lookup, so adding/removing a
+     * GridThemeSpec entry is a one-edit change instead of two parallel
+     * lists. */
     switch (grid_theme) {
-
-    case GRID_THEME_CLASSIC:
-    case GRID_THEME_FOG:
-    case GRID_THEME_TRON:
-    case GRID_THEME_EMBER:
-    case GRID_THEME_FAINT: {
-        const GridThemeSpec *spec = grid_theme_spec(grid_theme);
-        if (spec)
-            draw_grid_standard_theme(&grid_ctx, spec);
-        break;
-    }
 
     case GRID_THEME_FOCUS:
         scene_grid_render_focus_theme(frame_ctx, &grid_ctx);
@@ -837,7 +830,15 @@ void scene_grid_render(const SceneFrameRenderContext *frame_ctx) {
         scene_grid_render_radar_theme(&grid_ctx);
         break;
 
-    default: break;
+    default: {
+        /* GRID_THEME_CLASSIC, _FOG, _TRON, _EMBER, _FAINT and any
+         * future standard theme: look up its GridThemeSpec and draw
+         * through the table-driven path. */
+        const GridThemeSpec *spec = grid_theme_spec(grid_theme);
+        if (spec)
+            draw_grid_standard_theme(&grid_ctx, spec);
+        break;
+    }
     }
 
     glPopMatrix();
