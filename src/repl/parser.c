@@ -271,6 +271,153 @@ static void format_std_command_text(char *out, int out_sz,
     }
 }
 
+/* Split a table-driven enum command's argument list into exactly N
+ * top-level fields. The delimiter scan is paren-aware, so expression-
+ * accepting enum slots keep inner commas/parentheses intact. */
+static int split_enum_command_args(const char *args, int num_slots,
+                                   char slot_raw[MAX_ENUM_ARGS][64]) {
+    const char *s = args;
+
+    for (int slot = 0; slot < num_slots; slot++) {
+        while (*s && isspace((unsigned char)*s)) s++;
+
+        const char *delim = repl_scan_next_arg_delim(s);
+        int seg_len = (int)(delim - s);
+        while (seg_len > 0 && isspace((unsigned char)s[seg_len - 1]))
+            seg_len--;
+        if (seg_len <= 0 || seg_len >= (int)sizeof(slot_raw[slot]))
+            return 0;
+
+        memcpy(slot_raw[slot], s, (size_t)seg_len);
+        slot_raw[slot][seg_len] = '\0';
+
+        if (slot < num_slots - 1) {
+            if (*delim != ',')
+                return 0;
+            s = delim + 1;
+            continue;
+        }
+
+        while (*delim && isspace((unsigned char)*delim)) delim++;
+        if (*delim != '\0')
+            return 0;
+    }
+
+    return 1;
+}
+
+static void format_enum_command_text(char *out, int out_sz,
+                                     const char *indent,
+                                     const ReplEnumCommandSpec *def,
+                                     int num_slots,
+                                     const char slot_emit[MAX_ENUM_ARGS][64]) {
+    int off;
+
+    if (!out || out_sz <= 0 || !def)
+        return;
+
+    if (num_slots == 1 && def->fmt) {
+        snprintf(out, (size_t)out_sz, def->fmt, indent, slot_emit[0]);
+        return;
+    }
+    if (num_slots == 2 && def->fmt) {
+        snprintf(out, (size_t)out_sz, def->fmt, indent,
+                 slot_emit[0], slot_emit[1]);
+        return;
+    }
+    if (num_slots == 4 && def->fmt) {
+        snprintf(out, (size_t)out_sz, def->fmt, indent,
+                 slot_emit[0], slot_emit[1], slot_emit[2], slot_emit[3]);
+        return;
+    }
+
+    /* Current specs top out at 4 slots; keep a generic join so a future
+     * enum command stays readable even before it gets a dedicated fmt. */
+    off = snprintf(out, (size_t)out_sz, "%s%s(", indent, def->name);
+    for (int slot = 0; slot < num_slots && off < out_sz - 4; slot++) {
+        off += snprintf(out + off, (size_t)(out_sz - off),
+                        "%s%s", slot ? ", " : "", slot_emit[slot]);
+    }
+    snprintf(out + off, (size_t)(out_sz - off), ");");
+}
+
+/* Attempt the generalized enum-command path.
+ *
+ * Returns 1 unless a matched enum command failed to parse. `*matched`
+ * tells the caller whether this helper consumed the function name.
+ * Metadata rows (`num_args < 1`) intentionally leave `*matched == 0`
+ * so the dedicated ad-hoc branches below can keep handling them. */
+static int try_parse_table_driven_enum_command(const char *func,
+                                               const char *args,
+                                               GLCmd *cmd,
+                                               char *text_out, int text_sz,
+                                               const ReplParseContext *ctx,
+                                               int *matched) {
+    int source_line_idx = ctx->source_line_idx;
+    ExprVar *vars = ctx->vars;
+    int num_vars = ctx->num_vars;
+
+    if (matched)
+        *matched = 0;
+
+    for (const ReplEnumCommandSpec *def = repl_enum_command_specs(); def->name; def++) {
+        if (strcmp(func, def->name) != 0)
+            continue;
+        if (def->num_args < 1)
+            return 1;
+        if (matched)
+            *matched = 1;
+
+        int num_slots = def->num_args;
+        if (num_slots > MAX_ENUM_ARGS)
+            num_slots = MAX_ENUM_ARGS;
+
+        char slot_raw[MAX_ENUM_ARGS][64];
+        if (!split_enum_command_args(args, num_slots, slot_raw)) {
+            parser_emit_error_static(ctx, def->args[0].usage
+                                     ? def->args[0].usage : "Invalid arguments");
+            return 0;
+        }
+
+        float slot_val[MAX_ENUM_ARGS];
+        char slot_emit[MAX_ENUM_ARGS][64];
+        int any_vars = 0;
+        for (int slot = 0; slot < num_slots; slot++) {
+            if (!resolve_enum_arg_slot(slot_raw[slot], &def->args[slot],
+                                       vars, num_vars, &slot_val[slot],
+                                       slot_emit[slot],
+                                       (int)sizeof(slot_emit[slot]),
+                                       &any_vars, ctx)) {
+                return 0;
+            }
+        }
+
+        cmd->type = def->type;
+        cmd->valid = 1;
+        cmd->num_args = num_slots;
+        for (int slot = 0; slot < num_slots; slot++)
+            cmd->args[slot] = slot_val[slot];
+        if (any_vars)
+            cmd->has_vars = 1;
+
+        if (text_out && text_sz > 0) {
+            char ind[32];
+            if (def->indent_type == 1) {
+                repl_source_scope_begin_indent(source_line_idx, ind,
+                                               sizeof(ind));
+            } else {
+                repl_source_scope_cmd_indent(source_line_idx, ind,
+                                             sizeof(ind));
+            }
+            format_enum_command_text(text_out, text_sz, ind, def,
+                                     num_slots, slot_emit);
+        }
+        return 1;
+    }
+
+    return 1;
+}
+
 /* --- Extracted per-command handlers ---
  *
  * Each returns 1 (cmd populated) or 0 (parse failure, diagnostic in
@@ -812,105 +959,16 @@ static int parse_command(const char *line, GLCmd *cmd,
             goto unknown_command;
     }
 
-    /* Table-driven parsing for enum commands (generalized N-arg).
-     *
-     * Every enum-backed command declares def->num_args positional slots
-     * in def->args[]. Split the call's args into exactly that many
-     * top-level fields (paren-aware), resolve each through the per-slot
-     * resolver keyed on its ReplEnumSlotKind, and store every resolved
-     * value uniformly in cmd->args[slot] with cmd->num_args set. There
-     * is no cmd->mode for table-driven enum commands — the executor and
-     * every other reader read args[]. Storing a GLenum in float args[]
-     * is exact: all GL enums in use are < 2^24, so (GLenum)cmd->args[i]
-     * round-trips losslessly. */
-    for (const ReplEnumCommandSpec *def = repl_enum_command_specs(); def->name; def++) {
-        if (strcmp(func, def->name) != 0)
-            continue;
-        if (def->num_args < 1)
-            break; /* custom/metadata row (e.g. glMaterialfv, num_args -2):
-                    * not N-arg enum-parsed; a dedicated branch below
-                    * handles it. */
-
-        int n = def->num_args;
-        if (n > MAX_ENUM_ARGS) n = MAX_ENUM_ARGS;
-
-        char slot_raw[MAX_ENUM_ARGS][64];
-        int  split_ok = 1;
-        const char *s = args;
-        for (int slot = 0; slot < n && split_ok; slot++) {
-            while (*s && isspace((unsigned char)*s)) s++;
-            const char *delim = repl_scan_next_arg_delim(s);
-            int seg_len = (int)(delim - s);
-            while (seg_len > 0 && isspace((unsigned char)s[seg_len - 1]))
-                seg_len--;
-            if (seg_len <= 0 || seg_len >= (int)sizeof(slot_raw[slot])) {
-                split_ok = 0;
-                break;
-            }
-            memcpy(slot_raw[slot], s, (size_t)seg_len);
-            slot_raw[slot][seg_len] = '\0';
-            if (slot < n - 1) {
-                if (*delim != ',') { split_ok = 0; break; }
-                s = delim + 1;
-            } else {
-                const char *t = delim;
-                while (*t && isspace((unsigned char)*t)) t++;
-                if (*t != '\0') split_ok = 0; /* extra trailing args */
-            }
-        }
-        if (!split_ok) {
-            parser_emit_error_static(ctx, def->args[0].usage
-                                     ? def->args[0].usage : "Invalid arguments");
+    /* Table-driven enum commands are a separate parser mode: match the
+     * function token first, then split/resolve each positional enum slot. */
+    {
+        int enum_matched = 0;
+        if (!try_parse_table_driven_enum_command(func, args, cmd,
+                                                 text_out, text_sz,
+                                                 ctx, &enum_matched))
             return 0;
-        }
-
-        float slot_val[MAX_ENUM_ARGS];
-        char  slot_emit[MAX_ENUM_ARGS][64];
-        int   any_vars = 0;
-        for (int slot = 0; slot < n; slot++) {
-            if (!resolve_enum_arg_slot(slot_raw[slot], &def->args[slot],
-                                       vars, num_vars, &slot_val[slot],
-                                       slot_emit[slot],
-                                       (int)sizeof(slot_emit[slot]),
-                                       &any_vars, ctx))
-                return 0;
-        }
-
-        cmd->type = def->type;
-        cmd->valid = 1;
-        cmd->num_args = n;
-        for (int slot = 0; slot < n; slot++)
-            cmd->args[slot] = slot_val[slot];
-        if (any_vars)
-            cmd->has_vars = 1;
-
-        char ind[32];
-        if (def->indent_type == 1) {
-            repl_source_scope_begin_indent(source_line_idx, ind, sizeof(ind));
-        } else {
-            repl_source_scope_cmd_indent(source_line_idx, ind, sizeof(ind));
-        }
-        if (text_out && text_sz > 0) {
-            if (n == 1) {
-                WRITE_TEXT(def->fmt, ind, slot_emit[0]);
-            } else if (n == 2) {
-                WRITE_TEXT(def->fmt, ind, slot_emit[0], slot_emit[1]);
-            } else if (n == 4 && def->fmt) {
-                WRITE_TEXT(def->fmt, ind, slot_emit[0], slot_emit[1],
-                           slot_emit[2], slot_emit[3]);
-            } else {
-                /* No current command declares >2 enum slots; a generic
-                 * "name(joined token names);" join keeps a future
-                 * N-slot command honest without another fmt. */
-                int off = snprintf(text_out, (size_t)text_sz, "%s%s(",
-                                   ind, def->name);
-                for (int slot = 0; slot < n && off < (int)text_sz - 4; slot++)
-                    off += snprintf(text_out + off, (size_t)(text_sz - off),
-                                    "%s%s", slot ? ", " : "", slot_emit[slot]);
-                snprintf(text_out + off, (size_t)(text_sz - off), ");");
-            }
-        }
-        return 1;
+        if (enum_matched)
+            return 1;
     }
 
     /* glEnd() - aligns with its matching glBegin: 2 + 2*tess + 2*block (begin depth not added) */
