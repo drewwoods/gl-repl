@@ -45,9 +45,7 @@ static float g_cp_value_max  = 1.0f;
  * intermediate slider tick. */
 static int   g_cp_undo_captured = 0;
 
-static void cp_compute_rects(ColorPickerRects *r) {
-    int px = g_cp_px;
-    int py = g_cp_py;
+static void cp_compute_rects(int px, int py, ColorPickerRects *r) {
     int sz = CP_SV_SZ;
     int hx = px + sz + CP_GAP;
 
@@ -276,7 +274,7 @@ ColorPickerView color_picker_view(void) {
     v.value_max   = g_cp_value_max;
     v.gap         = CP_GAP;
     v.prev_h      = CP_PREV_H;
-    cp_compute_rects(&v.rects);
+    cp_compute_rects(g_cp_px, g_cp_py, &v.rects);
     return v;
 }
 
@@ -314,7 +312,7 @@ ColorPickerInputResult color_picker_handle_press(int mx, int my) {
 
     if (g_cp_line < 0 || !cp_cmd_at(g_cp_line)) return res;
     int gl_y = ui_state_viewport().window_h - my;
-    cp_compute_rects(&r);
+    cp_compute_rects(g_cp_px, g_cp_py, &r);
 
     /* SV square */
     if (mx >= r.sv_x && mx < r.sv_x + r.sv_sz &&
@@ -369,7 +367,7 @@ ColorPickerInputResult color_picker_handle_motion(int mx, int my) {
 
     if (g_cp_drag == 0 || g_cp_line < 0 || !cp_cmd_at(g_cp_line)) return res;
     int gl_y = ui_state_viewport().window_h - my;
-    cp_compute_rects(&r);
+    cp_compute_rects(g_cp_px, g_cp_py, &r);
     cp_apply_drag_at(g_cp_drag, mx, gl_y, &r);
     res.changed = color_picker_write_cmd();
     res.consumed = 1;

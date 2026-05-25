@@ -79,6 +79,8 @@ Closed in the current repo:
   helpers are factored; dead tutorial/replay/color-picker code was
   removed; replay's stale batch-consumer comment was updated.
 
+- **#26, #29, #31, #32, #35** — Refactored variable panel reads to use `repl_eval_predef_view()`; moved `ReplayFadePlan` out of public peer headers to `app/glr_ctrl.h`; renamed tutorial's noncommand commit block to `tutorial_reject_noncommand_commit_with_hint`; documented `expected_commit_line` persistence; unified probe checks into `tutorial_cfg_matches_target` helper.
+
 Partially resolved / still tracked:
 
 - **#15** — The variable-panel visibility setter is adopted for the
@@ -99,7 +101,7 @@ Partially resolved / still tracked:
 
 Still open / next items:
 
-- **#25, #26, #29, #31, #32, #35, #49, #51-#54, #56-#58** remain open.
+- **#25, #49, #51-#54, #56-#58** remain open.
 - The partially resolved items above (**#15, #19, #23/#30, #59**) remain
   tracked until the plan explicitly accepts their carve-outs or finishes
   the cleanup.
@@ -760,6 +762,8 @@ sites pass `g_cp_px`/`g_cp_py` explicitly.
 
 ### 26. Variable_panel reads predef table via `_mut` macros for read-only work
 
+**Status:** Resolved (by `subsystem-smells`) — Refactored `variable_panel_drag.c` to use the read-only `repl_eval_predef_view()` instead of the mutable macros.
+
 **Where:** `src/subsystems/variable_panel/variable_panel_drag.c:43, 49, 95`
 
 **Smell:**
@@ -821,6 +825,8 @@ once they share code.
 
 ### 29. `ReplayFadePlan` lives on the peer header but is only used by the controller
 
+**Status:** Resolved (by `subsystem-smells`) — Moved `ReplayFadePlan` out of the public replay peer header into `app/glr_ctrl.h` alongside an explicit include of `repl/state_views.h`.
+
 **Where:** `src/subsystems/replay/replay.h:54-63`,
 used at `src/app/glr_ctrl.c:221-322`
 
@@ -860,6 +866,8 @@ implying export semantics.
 
 ### 31. Tutorial's `tutorial_block_noncommand_commit` is both predicate and status-setter
 
+**Status:** Resolved (by `subsystem-smells`) — Renamed it to `tutorial_reject_noncommand_commit_with_hint` to cleanly reflect its role and document it.
+
 **Where:** `src/subsystems/tutorial/tutorial.c:849-868`
 
 **Smell:** Function name reads as "should I block?" — but the body
@@ -872,6 +880,8 @@ or split into a pure `tutorial_should_block_commit` predicate plus a
 separate `tutorial_emit_block_hint` emitter.
 
 ### 32. Tutorial's `tutorial_cancel_pending` clears pending but not `expected_commit_line`
+
+**Status:** Resolved (by `subsystem-smells`) — Added documentation explaining that `expected_commit_line` persists so users can retry the commit without having their work locked.
 
 **Where:** `src/subsystems/tutorial/tutorial.c` (cancel vs
 advance/notify/ack pending-reset sites)
@@ -925,6 +935,8 @@ or remove a leading comment for tutorial_state.c — pick a
 convention.
 
 ### 35. Tutorial duplicates the "probe with distinct fallback" pattern twice
+
+**Status:** Resolved (by `subsystem-smells`) — Unified the duplicate checks into a clean `tutorial_cfg_matches_target` helper utilizing the robust `repl_cfg_known` API.
 
 **Where:** `src/subsystems/tutorial/tutorial.c:746, 818`
 

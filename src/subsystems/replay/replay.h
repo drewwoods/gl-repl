@@ -31,17 +31,7 @@
 #include "repl/state_views.h"
 #include "gl_includes.h"
 
-/* Snapshot the controller assembles per frame and feeds into its
- * post-fill fade-render hook. The scene module no longer touches it —
- * it's pure REPL state. */
-typedef struct ReplayFadePlan {
-    int             batch_count;
-    ReplayFadeBatch batches[REPLAY_FADE_BATCH_MAX];
-    int             skip_limits[REPLAY_FADE_BATCH_MAX];
-    float           batch_alpha[REPLAY_FADE_BATCH_MAX];
-    float           baseline_predef_vals[MAX_PREDEF_VARS];
-    float           baseline_scratch_arrays[REPL_SCRATCH_ARRAY_COUNT][REPL_SCRATCH_ARRAY_LEN];
-} ReplayFadePlan;
+
 
 typedef enum {
     REPLAY_OFF = 0,

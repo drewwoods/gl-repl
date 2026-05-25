@@ -1607,7 +1607,7 @@ static void glr_ctrl_populate_numeric_swatch(UiRenderSnapshot *snap) {
     if (in.cursor_pos < 0 || !in.input || !in.input[0]) return;
     if (editor_state_autocomplete().match_count > 0) return;
     if (editor_inline_rename_active()) return;
-    if (tutorial_active() && tutorial_block_noncommand_commit()) return;
+    if (tutorial_active() && tutorial_reject_noncommand_commit_with_hint()) return;
 
     d = repl_eval_numeric_arg_at_cursor(in.input, in.cursor_pos);
     if (!d.found) return;

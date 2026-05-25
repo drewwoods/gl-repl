@@ -39,13 +39,14 @@ int variable_panel_drag_log_mode(void) {
 }
 
 void variable_panel_handle_drag_begin(int row, int log_mode, int x) {
-    if (row < 0 || row >= g_num_predef_vars) return;
+    ReplPredefView predef = repl_eval_predef_view();
+    if (row < 0 || row >= predef.count) return;
     VariablePanelDragState *drag = variable_panel_drag_mut();
     drag->var_idx = row;
     drag->log_mode = log_mode ? 1 : 0;
-    drag->start_value = g_predef_vars[row].value;
+    drag->start_value = predef.vars[row].value;
     drag->start_x = x;
-    snprintf(drag->name, sizeof(drag->name), "%s", g_predef_vars[row].name);
+    snprintf(drag->name, sizeof(drag->name), "%s", predef.vars[row].name);
     drag->undo_snapshot_pushed = 0;
 }
 
@@ -91,7 +92,8 @@ int variable_panel_handle_drag_motion(int x, VariablePanelValueChange *out) {
     }
 
     if (out) {
-        const char *name = drag->name[0] ? drag->name : g_predef_vars[drag->var_idx].name;
+        ReplPredefView predef = repl_eval_predef_view();
+        const char *name = drag->name[0] ? drag->name : predef.vars[drag->var_idx].name;
         snprintf(out->name, sizeof(out->name), "%s", name);
         out->value = new_val;
     }
