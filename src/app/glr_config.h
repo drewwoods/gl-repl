@@ -62,6 +62,15 @@ typedef enum GlrConfigKey {
     GLR_CONFIG_COUNT
 } GlrConfigKey;
 
+/* App-level states for the Vertex labels config row. The values are persisted
+ * and cycled through glr_config, so keep them in descriptor order. */
+typedef enum {
+    GLR_VERTEX_LABEL_OFF = 0,
+    GLR_VERTEX_LABEL_INDEX,
+    GLR_VERTEX_LABEL_INDEX_POS,
+    GLR_VERTEX_LABEL_COUNT
+} GlrVertexLabelMode;
+
 /* Descriptor for a single config item (toggle or cycle). Specifies the menu
  * label, keyboard shortcut (ASCII key code or GLUT_KEY_* with is_special flag),
  * the stable GlrConfigKey, state count (2 for toggle, >2 for cycle with named

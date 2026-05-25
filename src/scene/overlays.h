@@ -17,8 +17,9 @@
  * replay_walk_user_vertices and calls these primitives at each visit).
  * The controller is also responsible for setting up the surrounding GL
  * state (color, depth disable, push/pop attribs). */
-void scene_draw_vertex_number_label(int vertex_idx,
-                                    float vx, float vy, float vz);
+void scene_draw_vertex_label_text(float vx, float vy, float vz,
+                                  const char *primary_text,
+                                  const char *detail_text);
 void scene_draw_normal_vector_arrow(float vx, float vy, float vz,
                                     float nx, float ny, float nz,
                                     float scale);

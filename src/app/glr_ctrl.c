@@ -49,7 +49,7 @@
 #include "subsystems/tutorial/tutorial.h"
 #include "subsystems/tutorial/tutorial_state.h"
 #include "ui/app/replay_hud.h"
-#include "scene/overlays.h" /* scene_draw_vertex_number_label / _arrow primitives */
+#include "scene/overlays.h" /* scene_draw_vertex_label_text / _arrow primitives */
 #include "scene/palette.h" /* scene_clr / scene_clr_a scene-space colors */
 #include "scene/postprocess_filter.h" /* ScenePostFilterMode, mode_name */
 #include "scene/render.h"
@@ -382,13 +382,35 @@ static void glr_ctrl_post_fill_replay_overlay(void *user_data) {
  * Both overlays walk the user's flat program through the REPL walker and
  * emit one scene primitive per visited vertex. The orchestration lives
  * here in the controller — scene/overlays.c just exposes
- * scene_draw_vertex_number_label / scene_draw_normal_vector_arrow. */
+ * scene_draw_vertex_label_text / scene_draw_normal_vector_arrow. */
+
+typedef struct {
+    GlrVertexLabelMode mode;
+    int is_ortho;
+} VertexLabelCtx;
 
 static void on_vertex_number_label(const ReplayVertexWalkState *state,
                                    float vx, float vy, float vz,
                                    void *user) {
-    (void)user;
-    scene_draw_vertex_number_label(state->vertex_idx_in_block, vx, vy, vz);
+    const VertexLabelCtx *ctx = (const VertexLabelCtx *)user;
+    char idx_buf[16];
+    char pos_buf[48];
+    const char *detail_text = NULL;
+
+    if (!ctx || (ctx->mode != GLR_VERTEX_LABEL_INDEX &&
+                 ctx->mode != GLR_VERTEX_LABEL_INDEX_POS))
+        return;
+
+    snprintf(idx_buf, sizeof(idx_buf), " v%d", state->vertex_idx_in_block);
+    if (ctx->mode == GLR_VERTEX_LABEL_INDEX_POS) {
+        if (ctx->is_ortho)
+            snprintf(pos_buf, sizeof(pos_buf), " (%.2f, %.2f)", vx, vy);
+        else
+            snprintf(pos_buf, sizeof(pos_buf), " (%.2f, %.2f, %.2f)",
+                     vx, vy, vz);
+        detail_text = pos_buf;
+    }
+    scene_draw_vertex_label_text(vx, vy, vz, idx_buf, detail_text);
 }
 
 static void on_normal_vector_arrow(const ReplayVertexWalkState *state,
@@ -415,7 +437,8 @@ static ReplayVertexWalkContext glr_ctrl_build_vertex_walk_context(int selected_b
     return ctx;
 }
 
-static void glr_ctrl_render_vertex_numbers(void) {
+static void glr_ctrl_render_vertex_numbers(GlrVertexLabelMode mode,
+                                           int is_ortho) {
     glPushAttrib(GL_ALL_ATTRIB_BITS);
     glDisable(GL_LIGHTING);
     glDisable(GL_DEPTH_TEST);
@@ -424,8 +447,9 @@ static void glr_ctrl_render_vertex_numbers(void) {
     static const ReplayVertexWalkCallbacks cb = {
         .on_vertex = on_vertex_number_label,
     };
+    VertexLabelCtx label_ctx = { .mode = mode, .is_ortho = is_ortho };
     ReplayVertexWalkContext ctx = glr_ctrl_build_vertex_walk_context(1);
-    replay_walk_user_vertices(&ctx, &cb, NULL);
+    replay_walk_user_vertices(&ctx, &cb, &label_ctx);
 
     glPopAttrib();
 }
@@ -913,9 +937,10 @@ static void glr_ctrl_post_overlays(void *user_data) {
     glr_ctrl_render_cursor_guides(&snapshot);
     prof_accum_end(PROF_SCENE_3D_OVERLAY_TRANSFORM_GUIDES);
 
-    if (presentation.show_vertex_labels){
+    if (presentation.show_vertex_labels) {
         prof_begin(PROF_SCENE_3D_OVERLAY_VERTEX_NUMBERS);
-        glr_ctrl_render_vertex_numbers();
+        glr_ctrl_render_vertex_numbers((GlrVertexLabelMode)presentation.show_vertex_labels,
+                                       presentation.ortho_mode);
         prof_accum_end(PROF_SCENE_3D_OVERLAY_VERTEX_NUMBERS);
     }
     if (presentation.show_normal_vectors) {

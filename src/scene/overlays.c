@@ -14,13 +14,19 @@
 
 #include <stdio.h>
 
-void scene_draw_vertex_number_label(int vertex_idx,
-                                    float vx, float vy, float vz) {
-    char label[16];
-    snprintf(label, sizeof(label), " v%d", vertex_idx);
+static void scene_emit_bitmap_text(void *font, const char *text) {
+    if (!text) return;
+    for (const char *c = text; *c; c++)
+        glutBitmapCharacter(font, (unsigned char)*c);
+}
+
+void scene_draw_vertex_label_text(float vx, float vy, float vz,
+                                  const char *primary_text,
+                                  const char *detail_text) {
+    if (!primary_text || !primary_text[0]) return;
     glRasterPos3f(vx, vy, vz);
-    for (const char *c = label; *c; c++)
-        glutBitmapCharacter(FONT_MONO, (unsigned char)*c);
+    scene_emit_bitmap_text(FONT_MONO, primary_text);
+    scene_emit_bitmap_text(FONT_TINY, detail_text);
 }
 
 void scene_draw_normal_vector_arrow(float vx, float vy, float vz,

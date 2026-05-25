@@ -103,6 +103,11 @@ static char cfg_status_buf[REPL_STATUS_TEXT_MAX];
 static const char *audio_cfg_names[] = { "Pause", "Once", "Song", "All" };
 static const char *syntax_hl_names[] = { "Off", "On", "On+Bold" };
 static const char *view_mode_names[] = { "3D", "2D" };
+static const char *vertex_label_names[GLR_VERTEX_LABEL_COUNT] = {
+    [GLR_VERTEX_LABEL_OFF]       = "Off",
+    [GLR_VERTEX_LABEL_INDEX]     = "Index",
+    [GLR_VERTEX_LABEL_INDEX_POS] = "Index+Pos",
+};
 /* Accum AA is one cycle that collapses on/off + jitter-sample count:
  * Off -> 2x -> 4x -> 8x -> 16x. The (enabled, samples) split behind it
  * is reconciled in glr_config.c (mirrors the audio cfg collapse). */
@@ -161,7 +166,7 @@ GlrConfigItem g_cfg_items[] = {
     { "Reset camera",      KEY_CTRL_C, 0, GLUT_ACTIVE_SHIFT, GLR_CONFIG_RESET_CAMERA, 0, NULL, 0 },
     { "---",               0, 0, 0, GLR_CONFIG_NONE,               0, NULL,                 1 },
     { "### GEOMETRY",      0, 0, 0, GLR_CONFIG_NONE,               0, NULL,                 1 },
-    { "Vertex labels",     GLUT_KEY_F5, 1, 0, GLR_CONFIG_VERTEX_LABELS, 2, NULL,            0 },
+    { "Vertex labels",     GLUT_KEY_F5, 1, 0, GLR_CONFIG_VERTEX_LABELS, GLR_VERTEX_LABEL_COUNT, vertex_label_names, 0 },
     { "Normal vectors",    GLUT_KEY_F6, 1, 0, GLR_CONFIG_NORMAL_VECTORS, 2, NULL,           0 },
     { "Vertex outlines",   GLUT_KEY_F7, 1, 0, GLR_CONFIG_VERTEX_OUTLINES, 2, NULL,          0 },
     { "Vertex points",     0, 0, 0, GLR_CONFIG_VERTEX_POINTS,        2, NULL,                 0 },
