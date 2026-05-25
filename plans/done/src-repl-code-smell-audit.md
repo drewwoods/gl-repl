@@ -66,16 +66,15 @@ Used during the 2026-05-24 backlog review to triage what was left:
   - **#44** — Embed `ReplExportConfig cfg` in `UserScene`; fold
     `g_pre_example_cfg`/`g_pre_example_valid` into one wrapped struct.
     Kills the parallel-array invariant. (`17a574b`)
-- **Tier C (done — branch `repl-audit-test-gaps`, commits `7bf748e`
-  and `925b135`):**
-  - **#40** — `flatten_range` extraction (378 → 59 lines). Extracted
+- **Tier C (done — branch `repl-audit-test-gaps`, 2026-05-25):**
+  - **#40** — `flatten_range` extraction (378 → 160 lines). Extracted
     `flatten_reparse_line`, `flatten_for_loop`, `flatten_call`,
-    `flatten_if_block`. (`7bf748e`)
+    `flatten_if_block`.
   - **#39** — `parse_command` extraction (903 → 456 lines). Extracted
     `parse_label`, `parse_materialfv`, `parse_materialf`,
-    `parse_point_parameter_fv`, `parse_func_call`. (`925b135`)
+    `parse_point_parameter_fv`, `parse_func_call`.
   - Size ratchet added (`check-tier-c-function-size`) to prevent
-    future growth past the new baselines. (`8925633`)
+    future growth past the new baselines.
 - **Tier D:** none from this audit (the equivalent in
   `src-ui-code-smell-audit.md` is #37, kept as a deliberate
   namespace-boundary marker).
