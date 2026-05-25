@@ -164,7 +164,7 @@ static time_t g_last_save_time = 0;
 /* Lifetime-guarding lock helpers for the audio subsystem.
  * Guard access to all static module state to ensure thread safety
  * between the render/main thread and the background worker thread.
- * 
+ *
  * NOTE ON LIFETIME DISCIPLINE AND MINIAUDIO-UNDER-LOCK RISK:
  * To avoid use-after-uninit hazards between the render thread and the
  * worker thread's off-lock uninit paths (e.g. worker_load and worker_uninit_all),
@@ -661,9 +661,9 @@ void glr_audio_shutdown(void) {
         pthread_cond_signal(&g_cv);
         audio_unlock();
         pthread_join(g_worker, NULL);
-        
+
         g_inited = 0; /* Clear g_inited immediately so late locks are safe no-ops */
-        
+
         pthread_cond_destroy(&g_cv);
         pthread_mutex_destroy(&g_mtx);
         g_worker_running = 0;

@@ -211,6 +211,7 @@ endif
 	check-state-c-shrinking \
 	check-state-ownership \
 	check-tier-c-function-size \
+	check-trailing-whitespace \
 	check-state-read-getters-return-values \
 	check-ui-no-export-resolver \
 	check-ui-no-repl-state-mut \
@@ -1172,7 +1173,20 @@ check-tier-c-function-size: ## Size ratchet: parse_command and flatten_range mus
 check-no-test-default-output: ## Hard guard: tests may not call repl_save_default_output() (writes ./output.c in repo root).
 	@bash scripts/check-no-test-default-output.sh
 
+check-trailing-whitespace: ## Verify branch and local diffs contain no trailing whitespace.
+	@set -e; \
+	base=$${CHECK_BASE:-main}; \
+	if git rev-parse --verify "$$base" >/dev/null 2>&1; then \
+		merge_base=$$(git merge-base "$$base" HEAD); \
+		git diff --check "$$merge_base"; \
+	else \
+		git diff --cached --check; \
+		git diff --check; \
+	fi; \
+	echo "trailing-whitespace OK"
+
 CHECK_TARGETS = \
+	check-trailing-whitespace \
 	check-gl-boundaries \
 	check-layer-coupling \
 	check-state-ownership \
