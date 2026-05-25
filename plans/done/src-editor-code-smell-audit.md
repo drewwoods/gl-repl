@@ -103,13 +103,12 @@
 > #50 (reformat save-set doc). Remaining items deferred to future
 > passes: #13 (var-statement ordering: shared kind list vs. adapter),
 > #15 (error reporting testability), #18 (`parse_for_commit`
-> policy-flagged helper extraction), #20 (tutorial commit-gating —
-> assessed: the adapter shape in input.c is appropriate, the policy
-> already lives in tutorial.c), #23 (semantic wholesale-replacement
-> undo API plus cross-generation guard), #28 (EditorServices
+> policy-flagged helper extraction), #28 (EditorServices
 > dismantle — steps 1-2 landed, steps 3-4 remain),
 > #41 (optional line-paste factoring — main fixes done).
-> All completed items are tested via the 7061-test suite and guarded
+> #20 resolved as correct layering (adapter comments added);
+> #23 done (generation-counter safety + structural guard).
+> All completed items are tested via the 7113-test suite and guarded
 > against regression by structural guards including `check-editor-no-app`,
 > `check-repl-no-app`, `check-scene-no-upper-layers`,
 > `check-ui-core-no-upper-layers`, and `check-editor-repl-surface`.
@@ -132,8 +131,8 @@ to this audit shows almost nothing left to bite off:
 - **Tier B — moderate effort, clear value.** None outstanding;
   the original week pass closed the layering inversions and
   dispatch-chain drift.
-- **Tier C — defer (high cost or cross-cutting).** The 4 ⏳-marked
-  items (#13, #18, #23, #28) plus 17 unmarked findings that were
+- **Tier C — defer (high cost or cross-cutting).** The 2 ⏳-marked
+  items (#13, #18) plus #28 and 17 unmarked findings that were
   triaged-skipped during the original closeout but aren't worth a
   dedicated pass on their own. Most are real wins; they wait for
   the surrounding code to be reworked. See individual headings.
@@ -780,7 +779,7 @@ while the scalar fields are by-value snapshots. A fully by-value view
 is also valid, but it copies two `MAX_INPUT_LEN` buffers per call and
 should be justified by an actual caller need.
 
-### 23. ⏳ [Tier C — deferred] `editor_undo_clear` is contract-required but compile-unenforced
+### 23. [Tier C — ✅ done] `editor_undo_clear` is contract-required but compile-unenforced
 
 **Where:** `src/editor/undo.h:97-102`, call sites at
 `src/app/glr_actions.c:360, 365, 569, 585`,
@@ -791,23 +790,19 @@ should be justified by an actual caller need.
 wholesale replacement"; nothing checks it. Failure mode is silent
 — Ctrl+Z restores foreign-scene state into the new scene.
 
-**Why it matters:** Any future wholesale-replacement site (e.g., a
-new "Reset to default scene" button) must remember to call it; the
-README repeatedly flags it as load-bearing.
-
-**Fix:** Add an editor-side semantic API such as
-`editor_undo_note_wholesale_replacement()` that clears undo/redo and
-bumps a generation counter. Update wholesale-replacement call sites to
-use that API instead of raw `editor_undo_clear()`. Snapshots capture
-their generation; `editor_undo_pop_snapshot` / redo refuse cross-
-generation restores. If `repl_load_*` needs a "this is a wholesale
-replacement" signal, surface it through the existing host-effects
-bridge (the same seam used for status messages) — do **not** make
-`src/repl/` call `editor_undo_*` directly. The editor / REPL boundary
-in `src/editor/README.md:72` is that `commit.c` is the *only* path
-that crosses into REPL; the inverse (REPL into editor) is not
-sanctioned. The original audit suggestion of "move the calls into
-`repl_load_*`" violates that boundary and is withdrawn.
+**Resolution:** Added `editor_undo_note_wholesale_replacement()` which
+clears both undo/redo rings AND bumps a generation counter.
+`EditorUndoSnapshot` now carries a `generation` field stamped at push
+time; `pop` and `redo` peek the next snapshot's generation before
+restoring and refuse cross-generation restores (clearing the ring and
+reporting "Nothing to undo/redo"). All 8 production call sites
+migrated from raw `editor_undo_clear()` to the semantic API.
+`editor_undo_clear()` is retained for `undo.c` internals and test
+scaffolding. Structural guard `check-no-raw-undo-clear` (in
+`check-state-ownership`) enforces the ban in `src/app/` and
+`src/editor/` (excluding `undo.c`). Tests in `test_repl_editor.c`
+(3c/3d/3e) cover: cross-generation pop/redo blocked, same-generation
+undo/redo works, multiple wholesale replacements isolate each world.
 
 ### 24. [Tier C — ✅ done] Three sites hardcode `name[16]` instead of a shared constant
 
@@ -1409,17 +1404,7 @@ The dominant work is **closing the layering inversion**,
   the direct `repl_*` surface changes.
 - **#19** — Extract the canonical strip helper (probably in
   `src/repl/`).
-- **#23** — Add an editor-side
-  `editor_undo_note_wholesale_replacement()`-style API that both
-  clears undo/redo and bumps a generation counter; snapshots capture
-  the generation and `editor_undo_pop_snapshot` / redo refuse cross-
-  generation restores. Replace wholesale-replacement call sites with
-  that semantic API instead of sprinkling standalone generation bumps
-  next to raw `editor_undo_clear()` calls. Do **not** move
-  `editor_undo_clear()` calls into `repl_load_*` — that inverts the
-  editor / REPL boundary. If `repl_load_*` needs a "this is a
-  wholesale replacement" signal, route it through the existing
-  host-effects bridge.
+- **#23** — ✅ Done. See finding above.
 - **#28** — *Multi-step `EditorServices` dismantling.* Order:
   (1) already landed: `apply_compiled_three_halves` is the shared
   direct `repl_apply_*` sequence;

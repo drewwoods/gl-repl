@@ -719,10 +719,10 @@ int main() {
                     fabsf(glr_camera().dist - 0.5f) < 1e-6f);
     }
 
-    /* 1. Undo when nothing to undo. glr_app_reset_all() clears the
-     * undo/redo rings (see editor_undo_clear in glr_app_reset_all), so
-     * we can rely on a clean undo state here regardless of previous
-     * pushes. */
+    /* 1. Undo when nothing to undo. glr_app_reset_all() calls
+     * editor_undo_note_wholesale_replacement() which clears the rings
+     * and bumps the generation, so we can rely on a clean undo state
+     * here regardless of previous pushes. */
     {
         glr_app_reset_all();
         editor_undo_pop_snapshot();
@@ -808,6 +808,84 @@ int main() {
          * the fix, the pop pulls scene A's snapshot off the ring and
          * overwrites scene B's content with A's 2 cmds. */
         ASSERT_INT("cross-scene undo: pop must NOT bleed scene A into scene B",
+                   repl_state_document_count(), 1);
+    }
+
+    /* 3c. Generation counter: wholesale replacement bumps generation,
+     * and pop/redo refuse to restore cross-generation snapshots even
+     * if ring counts were somehow non-zero.
+     *
+     * Flow: edit scene A → push undo → wholesale replace (bumps gen
+     * + clears doc) → populate scene B → Ctrl+Z must not restore A. */
+    {
+        unsigned int gen0;
+        glr_app_reset_all(); declare_test_vars();
+        gen0 = editor_undo_generation();
+
+        editor_feed_line("glVertex3f(1,1,1)");
+        editor_undo_push_snapshot();
+        editor_feed_line("glVertex3f(2,2,2)");
+        ASSERT_INT("gen: pre-replacement cmd count", repl_state_document_count(), 2);
+
+        /* Simulate scene switch: clear doc + bump generation. */
+        glr_app_reset_all(); declare_test_vars();
+        ASSERT_TRUE("gen: generation bumped",
+                    editor_undo_generation() > gen0);
+
+        editor_feed_line("glVertex3f(99,99,99)");
+        ASSERT_INT("gen: post-replacement cmd count", repl_state_document_count(), 1);
+
+        editor_undo_pop_snapshot();
+        ASSERT_INT("gen: pop after wholesale replacement is no-op",
+                   repl_state_document_count(), 1);
+
+        editor_undo_do_redo();
+        ASSERT_INT("gen: redo after wholesale replacement is no-op",
+                   repl_state_document_count(), 1);
+    }
+
+    /* 3d. Generation counter: undo within the same generation works
+     * normally, and redo pushed by pop carries the current generation. */
+    {
+        glr_app_reset_all(); declare_test_vars();
+
+        editor_feed_line("glVertex3f(10,10,10)");
+        editor_undo_push_snapshot();
+        editor_feed_line("glVertex3f(20,20,20)");
+        ASSERT_INT("gen same-gen: 2 cmds", repl_state_document_count(), 2);
+
+        editor_undo_pop_snapshot();
+        ASSERT_INT("gen same-gen: undo restores 1 cmd",
+                   repl_state_document_count(), 1);
+
+        editor_undo_do_redo();
+        ASSERT_INT("gen same-gen: redo restores 2 cmds",
+                   repl_state_document_count(), 2);
+    }
+
+    /* 3e. Generation counter: multiple wholesale replacements each
+     * bump the generation, isolating snapshots from all prior worlds.
+     *
+     * World A → wholesale → World B → wholesale → World C.
+     * Pop in C must not reach B's snapshot. */
+    {
+        glr_app_reset_all(); declare_test_vars();
+        editor_feed_line("glVertex3f(1,1,1)");
+        editor_undo_push_snapshot();
+        editor_feed_line("glVertex3f(2,2,2)");
+
+        glr_app_reset_all(); declare_test_vars();
+        editor_feed_line("glVertex3f(3,3,3)");
+        editor_undo_push_snapshot();
+        editor_feed_line("glVertex3f(4,4,4)");
+
+        glr_app_reset_all(); declare_test_vars();
+        editor_feed_line("glVertex3f(5,5,5)");
+        ASSERT_INT("gen multi: world C has 1 cmd",
+                   repl_state_document_count(), 1);
+
+        editor_undo_pop_snapshot();
+        ASSERT_INT("gen multi: pop in world C is no-op (world B snapshot stale)",
                    repl_state_document_count(), 1);
     }
 

@@ -374,15 +374,13 @@ int glr_scene_menu_slot_for_dense_index(int scene_idx) {
  * always reloads, so callers that want a no-op (the tab router) check
  * before calling. */
 void glr_scene_load_example(int example_idx) {
-    /* Clear editor / camera / menu / picker / code-panel-drag transients
-     * so the new scene starts from a clean controller state. */
     glr_app_reset_transients();
-    editor_undo_clear();
+    editor_undo_note_wholesale_replacement();
     editor_state_edit_line_set(repl_load_example(example_idx));
 }
 
 void glr_scene_load_user_slot(int slot) {
-    editor_undo_clear();
+    editor_undo_note_wholesale_replacement();
     glr_camera_clear_scene_default();
     if (repl_load_user_scene_idx(slot))
         editor_load_line_to_input(editor_state_edit_line());
@@ -584,23 +582,17 @@ int glr_action_menu_item_activate(int menu_id, int item_idx) {
             const char *dir = repl_workspace_dir();
             if (!dir || !dir[0])
                 dir = GLR_DEFAULT_WORKSPACE_DIR;
-            /* Wholesale REPL state replacement — drop the undo ring so
-             * a post-load Ctrl+Z can't pull a snapshot from the
-             * previous workspace into the new one. Also clear the
-             * per-scene camera default so Ctrl+Shift+C falls back to
-             * the built-in default (matches load_user_slot / New Scene
-             * / glr_app_reset_transients). */
             glr_camera_clear_scene_default();
             int n = repl_load_workspace(dir);
             if (n >= 0)
-                editor_undo_clear();
+                editor_undo_note_wholesale_replacement();
             return 1;
         }
         if (item_idx == GLR_FILE_ITEM_NEW_SCENE) {
             repl_scenes_enter_transient_scene();
             repl_scenes_reset_for_transient();
             editor_clear_all_cmds();
-            editor_undo_clear();
+            editor_undo_note_wholesale_replacement();
             glr_camera_clear_scene_default();
             return 1;
         }

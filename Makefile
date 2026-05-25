@@ -181,6 +181,7 @@ endif
 	check-no-facade-include-in-views \
 	check-no-feed-line-in-pipeline \
 	check-no-load-line-to-input-in-pipeline \
+	check-no-raw-undo-clear \
 	check-no-repl-commit \
 	check-no-repl-editor-input-shim \
 	check-no-set-status-in-compile-apply \
@@ -1048,6 +1049,7 @@ check-state-ownership: ## Run state-ownership contract checks (new + tightened e
 		check-repl-demo-no-editor \
 		check-editor-repl-surface \
 		check-edit-ops-pure \
+		check-no-raw-undo-clear \
 		check-source-document-port-owners \
 		check-editor-no-app \
 		check-repl-no-app \
@@ -1094,6 +1096,9 @@ check-editor-repl-surface: ## Ratchet direct repl_* call surface in src/editor/i
 
 check-edit-ops-pure: ## Verify src/editor/edit_ops.* stays REPL-free (Phase 8 generic-primitives invariant).
 	@bash scripts/check-edit-ops-pure.sh
+
+check-no-raw-undo-clear: ## Production code must use editor_undo_note_wholesale_replacement(), not raw editor_undo_clear().
+	@bash scripts/check-no-raw-undo-clear.sh
 
 check-ui-panels-no-mutators: ## Hard guard: src/ui/app/panels.c references no input-dispatch mutators (Phase J2.2).
 	@bash scripts/check-ui-panels-no-mutators.sh
