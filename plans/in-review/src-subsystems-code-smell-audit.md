@@ -46,7 +46,7 @@ Each finding cites file + line, names the smell, says why it matters,
 and suggests a one-line fix. Cross-peer findings (where the same
 shape recurs in multiple subsystems) carry a **🔀 cross-peer** tag.
 
-## Progress update — 2026-05-25 (branch `subsystem-smells`, reviewed at `f2cdf759`)
+## Progress update — 2026-05-25 (branch `subsystem-smells`, reviewed at `d610de4`)
 
 Current verification during this review: `make check-c99` passed on the
 local macOS checkout, and the focused touched-area binaries passed:
@@ -79,7 +79,13 @@ Closed in the current repo:
   helpers are factored; dead tutorial/replay/color-picker code was
   removed; replay's stale batch-consumer comment was updated.
 
-- **#26, #29, #31, #32, #35** — Refactored variable panel reads to use `repl_eval_predef_view()`; moved `ReplayFadePlan` out of public peer headers to `app/glr_ctrl.h`; renamed tutorial's noncommand commit block to `tutorial_reject_noncommand_commit_with_hint`; documented `expected_commit_line` persistence; unified probe checks into `tutorial_cfg_matches_target` helper.
+- **#25, #26, #29, #31, #32, #35** — Refactored
+  `cp_compute_rects()` to take explicit coordinates; refactored variable
+  panel reads to use `repl_eval_predef_view()`; moved `ReplayFadePlan`
+  out of public peer headers to `app/glr_ctrl.h`; renamed tutorial's
+  noncommand commit block to `tutorial_reject_noncommand_commit_with_hint`;
+  documented `expected_commit_line` persistence; unified probe checks into
+  `tutorial_cfg_matches_target` helper.
 
 Partially resolved / still tracked:
 
@@ -101,7 +107,7 @@ Partially resolved / still tracked:
 
 Still open / next items:
 
-- **#25, #49, #51-#54, #56-#58** remain open.
+- **#49, #51-#54, #56-#58** remain open.
 - The partially resolved items above (**#15, #19, #23/#30, #59**) remain
   tracked until the plan explicitly accepts their carve-outs or finishes
   the cleanup.
@@ -743,6 +749,10 @@ trampolines.
 
 ### 25. `cp_compute_rects` reads file-globals while taking an output pointer (half-pure)
 
+**Status:** Resolved (by `subsystem-smells`) — `cp_compute_rects` now takes
+explicit `(px, py, out)` arguments, and each call site passes the picker
+coordinates directly.
+
 **Where:** `src/subsystems/color_picker/color_picker_state.c:47-59`
 
 **Smell:**
@@ -1324,19 +1334,10 @@ here" notes that survive after the plan is forgotten.
 1. **#59** — Do the stale-comment sweep first, including the new
    `Bug 7` / `Bug 14` comments in `replay.c`, the old phase references,
    and the stale `repl/core.h /* set_status, MAX_LINE_LEN */` rationale.
-2. **#25** — Make `cp_compute_rects` take `(px, py, out)` so its
-   state dependency is explicit and easy to test.
-3. **#26** — Route variable-panel read-only predef access through
-   `repl_eval_predef_view()` instead of the mutable macros.
-4. **#31** + **#32** — Clarify tutorial's non-command commit block and
-   pending-cancel semantics: split/rename the status-setting predicate,
-   and either document or clear the surviving `expected_commit_line`.
-5. **#35** — Add `tutorial_cfg_matches_target(slug, target)` using
-   `repl_cfg_known()`; remove the duplicate fallback-probe idiom.
-6. **#51** + **#52** — Give color-picker drag targets a small enum and
+2. **#51** + **#52** — Give color-picker drag targets a small enum and
    either document or remove the `cp_*` private-prefix shorthand.
-7. **#53** + **#54** — Consolidate status-buffer and frame-dt constants.
-8. **#57** + **#58** — Simplify color-picker popup clamping and drop the
+3. **#53** + **#54** — Consolidate status-buffer and frame-dt constants.
+4. **#57** + **#58** — Simplify color-picker popup clamping and drop the
    remaining manual column-alignment drift in `variable_panel_state.h`.
 
 ### Next one-week pass — boundary and shape decisions
@@ -1352,18 +1353,18 @@ here" notes that survive after the plan is forgotten.
 3. **#19** — Decide whether snapshot value types stay centralized in
    `repl/state_views.h` / UI-prefixed value structs, or move fully into
    peer headers. Document the chosen carve-out if no move is planned.
-4. **#29** — Move `ReplayFadePlan` out of the public replay peer header
-   into controller-private scope or a controller-private helper header.
-5. **#49** — Trim tutorial's long rationale comments into concise source
+4. **#49** — Trim tutorial's long rationale comments into concise source
    comments and move implementation-history detail to plan/done notes.
 
 ### Done clusters removed from sequencing
 
 The earlier state-ownership leak pass, replay silent-stop / `_impl`
-cleanup, color-picker reset/header fixes, replay tess-depth factoring,
-and tutorial step-entry decomposition are already reflected in the
-current source. They should not be used as next-step work unless a new
-regression is found.
+cleanup, color-picker reset/header fixes, color-picker rect parameter
+cleanup, variable-panel predef read cleanup, replay fade-plan move,
+replay tess-depth factoring, tutorial noncommand/pending/probe helper
+cleanup, and tutorial step-entry decomposition are already reflected in
+the current source. They should not be used as next-step work unless a
+new regression is found.
 
 ### Out of scope
 

@@ -1001,7 +1001,8 @@ int tutorial_guard_source_change(int pos, int delete_count, int insert_count) {
      * so paste/delete/comment-toggle/etc. would otherwise slip through
      * after the last locked row. Reject every non-no-op mutation while
      * a non-COMMAND step is active; the editor precheck pairs this with
-     * a kind-aware commit hint (tutorial_block_noncommand_commit). */
+     * a kind-aware commit hint
+     * (tutorial_reject_noncommand_commit_with_hint). */
     if (repl_tutorial_step_kind(state.tutorial_idx, state.step) !=
         TUTORIAL_STEP_KIND_COMMAND)
         return 0;
