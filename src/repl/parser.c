@@ -271,6 +271,438 @@ static void format_std_command_text(char *out, int out_sz,
     }
 }
 
+/* --- Extracted per-command handlers ---
+ *
+ * Each returns 1 (cmd populated) or 0 (parse failure, diagnostic in
+ * ctx->err_buf). `indent` is the pre-computed indent string from
+ * repl_source_scope_cmd_indent(source_line_idx). */
+
+static int parse_label(const char *args, GLCmd *cmd,
+                       char *text_out, int text_sz,
+                       const char *indent,
+                       const ReplParseContext *ctx) {
+    ExprVar *vars = ctx->vars;
+    int num_vars = ctx->num_vars;
+    char fmt_str[GLUT_BITMAP_FMT_MAX] = "";
+    char post_args[MAX_LINE_LEN] = "";
+    char split_err[128] = "";
+
+    if (!repl_label_split_args(args,
+                               fmt_str, (int)sizeof(fmt_str),
+                               post_args, (int)sizeof(post_args),
+                               split_err, (int)sizeof(split_err))) {
+        parser_emit_error_static(ctx, split_err);
+        return 0;
+    }
+
+    float subs[GLUT_BITMAP_MAX_SUB_ARGS] = {0};
+    int sub_count = 0;
+    if (post_args[0]) {
+        char verr[128];
+        if (!repl_eval_validate_expression_idents(post_args, vars, num_vars,
+                                                   verr, sizeof(verr))) {
+            parser_emit_error_static(ctx, verr); return 0;
+        }
+        float subs_full[GLUT_BITMAP_MAX_SUB_ARGS + 4];
+        int parsed = repl_eval_parse_exprs(
+            post_args, subs_full,
+            (int)(sizeof(subs_full) / sizeof(subs_full[0])),
+            vars, num_vars);
+        if (parsed > GLUT_BITMAP_MAX_SUB_ARGS) {
+            char buf[128];
+            snprintf(buf, sizeof(buf),
+                     "label: too many args (max %d)",
+                     GLUT_BITMAP_MAX_SUB_ARGS);
+            parser_emit_error_static(ctx, buf);
+            return 0;
+        }
+        if (parsed < 0) parsed = 0;
+        sub_count = parsed;
+        for (int i = 0; i < sub_count; i++) subs[i] = subs_full[i];
+    }
+
+    int pct_count = 0;
+    for (int i = 0; fmt_str[i]; i++) {
+        if (fmt_str[i] != '%') continue;
+        char nx = fmt_str[i + 1];
+        if (nx == 'f') { pct_count++; i++; }
+        else if (nx == '%') { i++; }
+        else {
+            parser_emit_error_static(ctx,
+                "label: only %f and %% allowed in format");
+            return 0;
+        }
+    }
+    if (pct_count != sub_count) {
+        char buf[128];
+        snprintf(buf, sizeof(buf),
+                 "label: format expects %d arg%s, got %d",
+                 pct_count, pct_count == 1 ? "" : "s", sub_count);
+        parser_emit_error_static(ctx, buf);
+        return 0;
+    }
+
+    cmd->type = CMD_LABEL;
+    cmd->valid = 1;
+    for (int i = 0; i < sub_count; i++) cmd->args[i] = subs[i];
+    cmd->num_args = sub_count;
+    cmd->has_vars = input_has_any_visible_vars(post_args, vars, num_vars);
+    repl_copy_string_fits(cmd->text, sizeof(cmd->text), fmt_str);
+
+    if (text_out && text_sz > 0) {
+        int off = snprintf(text_out, (size_t)text_sz,
+                           "%slabel(\"%s\"", indent, fmt_str);
+        for (int i = 0; i < sub_count && off < (int)text_sz - 6; i++) {
+            off += snprintf(text_out + off, (size_t)(text_sz - off),
+                            ", %g", subs[i]);
+        }
+        snprintf(text_out + off, (size_t)(text_sz - off), ");");
+    }
+    return 1;
+}
+
+static int parse_materialfv(const char *args, GLCmd *cmd,
+                            char *text_out, int text_sz,
+                            const char *indent,
+                            const ReplParseContext *ctx) {
+    ExprVar *vars = ctx->vars;
+    int num_vars = ctx->num_vars;
+    char face_arg[64] = "", pname_arg[64] = "", val_arg[MAX_LINE_LEN] = "";
+    char *comma1 = strchr(args, ',');
+    char *comma2 = comma1 ? strchr(comma1 + 1, ',') : NULL;
+
+    if (!comma1 || !comma2) {
+        parser_emit_error_static(ctx, "Usage: glMaterialfv(face, pname, (GLfloat[]){...})");
+        return 0;
+    }
+
+    int face_len = (int)(comma1 - args);
+    if (face_len >= (int)sizeof(face_arg)) face_len = (int)sizeof(face_arg) - 1;
+    strncpy(face_arg, args, face_len); face_arg[face_len] = '\0';
+
+    int pname_len = (int)(comma2 - (comma1 + 1));
+    if (pname_len >= (int)sizeof(pname_arg)) pname_len = (int)sizeof(pname_arg) - 1;
+    strncpy(pname_arg, comma1 + 1, pname_len); pname_arg[pname_len] = '\0';
+
+    strncpy(val_arg, comma2 + 1, sizeof(val_arg) - 1);
+
+    char *face_str = face_arg; while (*face_str == ' ') face_str++;
+    int face_end = (int)strlen(face_str);
+    while (face_end > 0 && face_str[face_end-1] == ' ') face_str[--face_end] = '\0';
+    char *pname_str = pname_arg; while (*pname_str == ' ') pname_str++;
+    int pname_end = (int)strlen(pname_str);
+    while (pname_end > 0 && pname_str[pname_end-1] == ' ') pname_str[--pname_end] = '\0';
+
+    GLenum face = 0, pname = 0;
+    int found1 = 0, found2 = 0;
+
+    const ReplEnumEntry *face_types = repl_face_type_entries();
+    const ReplEnumEntry *material_params = repl_material_param_entries();
+    for (int i = 0; face_types[i].name; i++) {
+        if (strcmp(face_str, face_types[i].name) == 0) { face = face_types[i].value; found1 = 1; break; }
+    }
+    for (int i = 0; material_params[i].name; i++) {
+        if (strcmp(pname_str, material_params[i].name) == 0) { pname = material_params[i].value; found2 = 1; break; }
+    }
+
+    if (!found1) { parser_emit_error_static(ctx, "face: GL_FRONT, GL_BACK, GL_FRONT_AND_BACK"); return 0; }
+    if (!found2) { parser_emit_error_static(ctx, "pname: GL_DIFFUSE, GL_AMBIENT, GL_SPECULAR, GL_SHININESS..."); return 0; }
+
+    const char *to_parse;
+    char interior_buf[MAX_LINE_LEN];
+    char *vp = val_arg;
+    while (*vp == ' ' || *vp == '\t') vp++;
+    static const char k_compound_prefix[] = "(GLfloat[]){";
+    const size_t k_compound_prefix_len = sizeof k_compound_prefix - 1;
+    if (strncmp(vp, k_compound_prefix, k_compound_prefix_len) == 0) {
+        const char *istart = vp + k_compound_prefix_len;
+        int brace_depth = 1;
+        const char *q = istart;
+        while (*q && brace_depth > 0) {
+            if (*q == '{')      brace_depth++;
+            else if (*q == '}') { brace_depth--; if (brace_depth == 0) break; }
+            q++;
+        }
+        if (brace_depth != 0) {
+            parser_emit_error_static(ctx, "Unclosed (GLfloat[]){...} literal");
+            return 0;
+        }
+        size_t ilen = (size_t)(q - istart);
+        if (ilen >= sizeof interior_buf) ilen = sizeof interior_buf - 1;
+        memcpy(interior_buf, istart, ilen);
+        interior_buf[ilen] = '\0';
+        to_parse = interior_buf;
+        const char *tail = q + 1;
+        while (*tail && isspace((unsigned char)*tail)) tail++;
+        if (*tail != '\0') {
+            parser_emit_error_static(ctx, "Trailing content after (GLfloat[]){...} compound literal");
+            return 0;
+        }
+    } else {
+        to_parse = vp;
+    }
+
+    {
+        char verr[128];
+        if (!repl_eval_validate_expression_idents(to_parse, vars, num_vars, verr, sizeof(verr))) {
+            parser_emit_error_static(ctx, verr); return 0;
+        }
+    }
+    float parsed_args[8];
+    int num_parsed = repl_eval_parse_exprs(to_parse, parsed_args, 8, vars, num_vars);
+    if (num_parsed != 1 && num_parsed != 4) {
+        parser_emit_error_static(ctx, "Expected 1 or 4 float values");
+        return 0;
+    }
+    if (num_parsed == 1 && pname != GL_SHININESS) {
+        parser_emit_error_static(ctx, "Only GL_SHININESS takes 1 float; other pnames need 4 RGBA floats");
+        return 0;
+    }
+
+    cmd->type = CMD_MATERIALFV;
+    cmd->valid = 1;
+    cmd->args[0] = (float)face;
+    cmd->args[1] = (float)pname;
+    for (int k = 0; k < num_parsed; k++) cmd->args[k + 2] = parsed_args[k];
+    cmd->num_args = num_parsed + 2;
+    cmd->has_vars = input_has_any_visible_vars(to_parse, vars, num_vars);
+
+    if (text_out && text_sz > 0) {
+        if (num_parsed == 1)
+            snprintf(text_out, (size_t)text_sz,
+                     "%sglMaterialfv(%s, %s, (GLfloat[]){%g});",
+                     indent, face_str, pname_str, parsed_args[0]);
+        else
+            snprintf(text_out, (size_t)text_sz,
+                     "%sglMaterialfv(%s, %s, (GLfloat[]){%g, %g, %g, %g});",
+                     indent, face_str, pname_str,
+                     parsed_args[0], parsed_args[1], parsed_args[2], parsed_args[3]);
+    }
+    return 1;
+}
+
+static int parse_materialf(const char *args, GLCmd *cmd,
+                           char *text_out, int text_sz,
+                           const char *indent,
+                           const ReplParseContext *ctx) {
+    ExprVar *vars = ctx->vars;
+    int num_vars = ctx->num_vars;
+    char face_arg[64] = "", pname_arg[64] = "", val_arg[MAX_LINE_LEN] = "";
+    char *comma1 = strchr(args, ',');
+    char *comma2 = comma1 ? strchr(comma1 + 1, ',') : NULL;
+
+    if (!comma1 || !comma2) {
+        parser_emit_error_static(ctx, "Usage: glMaterialf(face, GL_SHININESS, value)");
+        return 0;
+    }
+
+    int face_len = (int)(comma1 - args);
+    if (face_len >= (int)sizeof(face_arg)) face_len = (int)sizeof(face_arg) - 1;
+    strncpy(face_arg, args, face_len); face_arg[face_len] = '\0';
+
+    int pname_len = (int)(comma2 - (comma1 + 1));
+    if (pname_len >= (int)sizeof(pname_arg)) pname_len = (int)sizeof(pname_arg) - 1;
+    strncpy(pname_arg, comma1 + 1, pname_len); pname_arg[pname_len] = '\0';
+
+    strncpy(val_arg, comma2 + 1, sizeof(val_arg) - 1);
+
+    char *face_str = face_arg; while (*face_str == ' ') face_str++;
+    int face_end = (int)strlen(face_str);
+    while (face_end > 0 && face_str[face_end-1] == ' ') face_str[--face_end] = '\0';
+    char *pname_str = pname_arg; while (*pname_str == ' ') pname_str++;
+    int pname_end = (int)strlen(pname_str);
+    while (pname_end > 0 && pname_str[pname_end-1] == ' ') pname_str[--pname_end] = '\0';
+
+    GLenum face = 0;
+    int found1 = 0;
+    const ReplEnumEntry *face_types = repl_face_type_entries();
+    for (int i = 0; face_types[i].name; i++) {
+        if (strcmp(face_str, face_types[i].name) == 0) {
+            face = face_types[i].value; found1 = 1; break;
+        }
+    }
+    if (!found1) {
+        parser_emit_error_static(ctx, "face: GL_FRONT, GL_BACK, GL_FRONT_AND_BACK");
+        return 0;
+    }
+    if (strcmp(pname_str, "GL_SHININESS") != 0) {
+        parser_emit_error_static(ctx, "glMaterialf only accepts GL_SHININESS; use glMaterialfv for RGBA pnames");
+        return 0;
+    }
+
+    {
+        char verr[128];
+        if (!repl_eval_validate_expression_idents(val_arg, vars, num_vars, verr, sizeof(verr))) {
+            parser_emit_error_static(ctx, verr); return 0;
+        }
+    }
+    float parsed_args[2];
+    int num_parsed = repl_eval_parse_exprs(val_arg, parsed_args, 2, vars, num_vars);
+    if (num_parsed != 1) {
+        parser_emit_error_static(ctx, "Expected 1 float value");
+        return 0;
+    }
+
+    cmd->type = CMD_MATERIALF;
+    cmd->valid = 1;
+    cmd->args[0] = (float)face;
+    cmd->args[1] = (float)GL_SHININESS;
+    cmd->args[2] = parsed_args[0];
+    cmd->num_args = 3;
+    cmd->has_vars = input_has_any_visible_vars(val_arg, vars, num_vars);
+
+    if (text_out && text_sz > 0)
+        snprintf(text_out, (size_t)text_sz, "%sglMaterialf(%s, %s, %g);",
+                 indent, face_str, pname_str, parsed_args[0]);
+    return 1;
+}
+
+static int parse_point_parameter_fv(const char *args, GLCmd *cmd,
+                                    char *text_out, int text_sz,
+                                    const char *indent,
+                                    const ReplParseContext *ctx) {
+    ExprVar *vars = ctx->vars;
+    int num_vars = ctx->num_vars;
+    char a1[64] = "", rest[MAX_LINE_LEN] = "";
+    char *comma = strchr(args, ',');
+    if (!comma) {
+        parser_emit_error_static(ctx,
+            "Usage: glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION, const, linear, quadratic)");
+        return 0;
+    }
+    int l1 = (int)(comma - args);
+    if (l1 >= (int)sizeof(a1)) l1 = (int)sizeof(a1) - 1;
+    strncpy(a1, args, l1); a1[l1] = '\0';
+    strncpy(rest, comma + 1, sizeof(rest) - 1);
+
+    char *p1 = a1; while (*p1 == ' ') p1++;
+    int e1 = (int)strlen(p1); while (e1 > 0 && p1[e1 - 1] == ' ') p1[--e1] = '\0';
+
+    GLenum pname = 0;
+    int found = 0;
+    const ReplEnumEntry *point_param_pnames = repl_point_param_pname_entries();
+    for (int i = 0; point_param_pnames[i].name; i++) {
+        if (strcmp(p1, point_param_pnames[i].name) == 0) {
+            pname = point_param_pnames[i].value;
+            found = 1;
+            break;
+        }
+    }
+    if (!found) {
+        parser_emit_error_static(ctx, "pname: GL_POINT_DISTANCE_ATTENUATION");
+        return 0;
+    }
+
+    {
+        char verr[128];
+        if (!repl_eval_validate_expression_idents(rest, vars, num_vars, verr, sizeof(verr))) {
+            parser_emit_error_static(ctx, verr); return 0;
+        }
+    }
+    float parsed_args[4];
+    int num_parsed = repl_eval_parse_exprs(rest, parsed_args, 4, vars, num_vars);
+    if (num_parsed != 3) {
+        parser_emit_error_static(ctx,
+            "Expected 3 floats: const, linear, quadratic attenuation coefficients");
+        return 0;
+    }
+
+    cmd->type = CMD_POINT_PARAMETER_FV;
+    cmd->valid = 1;
+    cmd->args[0] = (float)pname;
+    cmd->args[1] = parsed_args[0];
+    cmd->args[2] = parsed_args[1];
+    cmd->args[3] = parsed_args[2];
+    cmd->num_args = 4;
+    cmd->has_vars = input_has_any_visible_vars(rest, vars, num_vars);
+
+    if (text_out && text_sz > 0)
+        snprintf(text_out, (size_t)text_sz,
+                 "%sglPointParameterfv(%s, (GLfloat[]){%g, %g, %g});",
+                 indent, p1, parsed_args[0], parsed_args[1], parsed_args[2]);
+    return 1;
+}
+
+static int parse_func_call(const char *args, int fn, GLCmd *cmd,
+                           char *text_out, int text_sz,
+                           const ReplParseContext *ctx) {
+    ExprVar *vars = ctx->vars;
+    int num_vars = ctx->num_vars;
+    int source_line_idx = ctx->source_line_idx;
+
+    float dummy_vals[MAX_EXPR_VARS];
+    int arg_count = 0;
+    if (args[0] != '\0') {
+        char verr[128];
+        if (!repl_eval_validate_expression_idents(args, vars, num_vars, verr, sizeof(verr))) {
+            parser_emit_error_static(ctx, verr); return 0;
+        }
+    }
+    if (!parse_expr_list_exact(args, dummy_vals, MAX_EXPR_VARS,
+                               vars, num_vars, &arg_count)) {
+        parser_emit_error_static(ctx, "Invalid function call arguments");
+        return 0;
+    }
+
+    if (ctx->strict_refs && repl_source_scope_block_depth_at(source_line_idx) == 0) {
+        int def_exists = 0;
+        const GLCmd *document_cmds = repl_state_document_cmds();
+        for (int di = 0; di < repl_state_document_count(); di++) {
+            if (!document_cmds[di].valid) continue;
+            if (document_cmds[di].type != CMD_FUNC_DEF) continue;
+            if ((int)document_cmds[di].args[0] != fn) continue;
+            def_exists = 1;
+            break;
+        }
+        if (!def_exists) {
+            char buf[96];
+            const char *alias = repl_func_alias_get(fn);
+            if (alias)
+                snprintf(buf, sizeof(buf),
+                         "undefined function '%s' - define it first", alias);
+            else
+                snprintf(buf, sizeof(buf),
+                         "undefined function 'func%d' - define it first", fn);
+            parser_emit_error_static(ctx, buf);
+            return 0;
+        }
+    }
+
+    cmd->type = CMD_CALL;
+    cmd->valid = 1;
+    cmd->args[0] = (float)fn;
+    cmd->num_args = arg_count;
+    cmd->has_vars = input_has_any_visible_vars(args, vars, num_vars);
+
+    char ind_str[32];
+    repl_source_scope_cmd_indent(source_line_idx, ind_str, (int)sizeof(ind_str));
+
+    char raw_args[MAX_LINE_LEN];
+    strncpy(raw_args, args, sizeof(raw_args) - 1);
+    raw_args[sizeof(raw_args) - 1] = '\0';
+    trim_in_place(raw_args);
+    const char *alias = repl_func_alias_get(fn);
+    char fn_token[REPL_FUNC_NAME_MAX + 8];
+    if (alias)
+        snprintf(fn_token, sizeof(fn_token), "%s", alias);
+    else
+        snprintf(fn_token, sizeof(fn_token), "func%d", fn);
+    if (text_out && text_sz > 0) {
+        if (arg_count > 0) {
+            if (!repl_format_fits(text_out, (size_t)text_sz,
+                                  "%s%s(%s);", ind_str, fn_token, raw_args)) {
+                parser_emit_error_static(ctx, "Command too long");
+                return 0;
+            }
+        } else if (!repl_format_fits(text_out, (size_t)text_sz,
+                                     "%s%s();", ind_str, fn_token)) {
+            parser_emit_error_static(ctx, "Command too long");
+            return 0;
+        }
+    }
+    return 1;
+}
+
 /*
  * parse_command - Convert a single REPL text line into a GLCmd.
  *
@@ -568,382 +1000,17 @@ static int parse_command(const char *line, GLCmd *cmd,
      * '(', ')', ',', and any backslash. These constraints keep the
      * surrounding (string-unaware) parser scaffolding honest.
      * See repl_label_split_args() for the split helper. */
-    if (strcmp(func, "label") == 0) {
-        char fmt_str[GLUT_BITMAP_FMT_MAX] = "";
-        char post_args[MAX_LINE_LEN] = "";
-        char split_err[128] = "";
+    if (strcmp(func, "label") == 0)
+        return parse_label(args, cmd, text_out, text_sz, indent, ctx);
 
-        if (!repl_label_split_args(args,
-                                   fmt_str, (int)sizeof(fmt_str),
-                                   post_args, (int)sizeof(post_args),
-                                   split_err, (int)sizeof(split_err))) {
-            parser_emit_error_static(ctx, split_err);
-            return 0;
-        }
+    if (strcmp(func, "glMaterialfv") == 0)
+        return parse_materialfv(args, cmd, text_out, text_sz, indent, ctx);
 
-        /* Substitution args: 0..GLUT_BITMAP_MAX_SUB_ARGS floats.
-         * Parse into an oversized buffer so we can distinguish "user
-         * supplied 4 args" from "user supplied 5+ args" — passing
-         * GLUT_BITMAP_MAX_SUB_ARGS to repl_eval_parse_exprs would
-         * silently truncate. */
-        float subs[GLUT_BITMAP_MAX_SUB_ARGS] = {0};
-        int sub_count = 0;
-        if (post_args[0]) {
-            char verr[128];
-            if (!repl_eval_validate_expression_idents(post_args, vars, num_vars,
-                                                       verr, sizeof(verr))) {
-                parser_emit_error_static(ctx, verr); return 0;
-            }
-            float subs_full[GLUT_BITMAP_MAX_SUB_ARGS + 4];
-            int parsed = repl_eval_parse_exprs(
-                post_args, subs_full,
-                (int)(sizeof(subs_full) / sizeof(subs_full[0])),
-                vars, num_vars);
-            if (parsed > GLUT_BITMAP_MAX_SUB_ARGS) {
-                char buf[128];
-                snprintf(buf, sizeof(buf),
-                         "label: too many args (max %d)",
-                         GLUT_BITMAP_MAX_SUB_ARGS);
-                parser_emit_error_static(ctx, buf);
-                return 0;
-            }
-            if (parsed < 0) parsed = 0;
-            sub_count = parsed;
-            for (int i = 0; i < sub_count; i++) subs[i] = subs_full[i];
-        }
+    if (strcmp(func, "glMaterialf") == 0)
+        return parse_materialf(args, cmd, text_out, text_sz, indent, ctx);
 
-        /* %f count must match supplied sub args. %% is a literal '%'.
-         * Anything else after '%' is rejected. */
-        int pct_count = 0;
-        for (int i = 0; fmt_str[i]; i++) {
-            if (fmt_str[i] != '%') continue;
-            char nx = fmt_str[i + 1];
-            if (nx == 'f') { pct_count++; i++; }
-            else if (nx == '%') { i++; }
-            else {
-                parser_emit_error_static(ctx,
-                    "label: only %f and %% allowed in format");
-                return 0;
-            }
-        }
-        if (pct_count != sub_count) {
-            char buf[128];
-            snprintf(buf, sizeof(buf),
-                     "label: format expects %d arg%s, got %d",
-                     pct_count, pct_count == 1 ? "" : "s", sub_count);
-            parser_emit_error_static(ctx, buf);
-            return 0;
-        }
-
-        cmd->type = CMD_LABEL;
-        cmd->valid = 1;
-        for (int i = 0; i < sub_count; i++) cmd->args[i] = subs[i];
-        cmd->num_args = sub_count;
-        cmd->has_vars = input_has_any_visible_vars(post_args, vars, num_vars);
-        repl_copy_string_fits(cmd->text, sizeof(cmd->text), fmt_str);
-
-        if (text_out && text_sz > 0) {
-            int off = snprintf(text_out, (size_t)text_sz,
-                               "%slabel(\"%s\"", indent, fmt_str);
-            for (int i = 0; i < sub_count && off < (int)text_sz - 6; i++) {
-                off += snprintf(text_out + off, (size_t)(text_sz - off),
-                                ", %g", subs[i]);
-            }
-            snprintf(text_out + off, (size_t)(text_sz - off), ");");
-        }
-        return 1;
-    }
-
-    /* glMaterialfv(face, pname, values) — values is one of:
-     *   - a flat float, e.g. `30.0` (single scalar, for GL_SHININESS);
-     *   - a flat comma list, e.g. `0.8, 0.2, 0.2, 1.0` (4 RGBA floats);
-     *   - a compound literal `(GLfloat[]){r, g, b, a}` (1 or 4 inside).
-     * All three round-trip to the same canonical emit form,
-     *   glMaterialfv(face, pname, (GLfloat[]){...});
-     * which is valid C and re-parses cleanly. */
-    if (strcmp(func, "glMaterialfv") == 0) {
-        char face_arg[64] = "", pname_arg[64] = "", val_arg[MAX_LINE_LEN] = "";
-        char *comma1 = strchr(args, ',');
-        char *comma2 = comma1 ? strchr(comma1 + 1, ',') : NULL;
-
-        if (!comma1 || !comma2) { parser_emit_error_static(ctx, "Usage: glMaterialfv(face, pname, (GLfloat[]){...})"); return 0; }
-
-        /* Split "face, pname, values..." on its first two commas. The
-         * compound-literal form's inner commas live past comma2 in
-         * val_arg, where the per-form parsing below handles them. */
-        int face_len = (int)(comma1 - args);
-        if (face_len >= (int)sizeof(face_arg)) face_len = (int)sizeof(face_arg) - 1;
-        strncpy(face_arg, args, face_len); face_arg[face_len] = '\0';
-
-        int pname_len = (int)(comma2 - (comma1 + 1));
-        if (pname_len >= (int)sizeof(pname_arg)) pname_len = (int)sizeof(pname_arg) - 1;
-        strncpy(pname_arg, comma1 + 1, pname_len); pname_arg[pname_len] = '\0';
-
-        strncpy(val_arg, comma2 + 1, sizeof(val_arg) - 1);
-
-        /* Trim leading + trailing spaces around the face / pname tokens so
-         * they compare cleanly against the enum tables below. */
-        char *face_str = face_arg; while (*face_str == ' ') face_str++;
-        int face_end = (int)strlen(face_str);
-        while (face_end > 0 && face_str[face_end-1] == ' ') face_str[--face_end] = '\0';
-        char *pname_str = pname_arg; while (*pname_str == ' ') pname_str++;
-        int pname_end = (int)strlen(pname_str);
-        while (pname_end > 0 && pname_str[pname_end-1] == ' ') pname_str[--pname_end] = '\0';
-
-        GLenum face = 0, pname = 0;
-        int found1 = 0, found2 = 0;
-
-        const ReplEnumEntry *face_types = repl_face_type_entries();
-        const ReplEnumEntry *material_params = repl_material_param_entries();
-        for (int i = 0; face_types[i].name; i++) {
-            if (strcmp(face_str, face_types[i].name) == 0) { face = face_types[i].value; found1 = 1; break; }
-        }
-        for (int i = 0; material_params[i].name; i++) {
-            if (strcmp(pname_str, material_params[i].name) == 0) { pname = material_params[i].value; found2 = 1; break; }
-        }
-
-        if (!found1) { parser_emit_error_static(ctx, "face: GL_FRONT, GL_BACK, GL_FRONT_AND_BACK"); return 0; }
-        if (!found2) { parser_emit_error_static(ctx, "pname: GL_DIFFUSE, GL_AMBIENT, GL_SPECULAR, GL_SHININESS..."); return 0; }
-
-        /* Detect and unwrap the compound-literal form: skip leading
-         * whitespace, then check for "(GLfloat[]){". When present,
-         * scan for the matching '}' (tracking nested {} so e.g.
-         * (GLfloat[]){A[i], A[i+1], ...} cannot truncate early — '['
-         * does not nest braces, but the scan stays defensive) and parse
-         * only the interior. When absent, the rest of val_arg is parsed
-         * as a flat comma-separated float list, preserving the legacy
-         * input convenience (`glMaterialfv(face, pname, r, g, b, a)`). */
-        const char *to_parse;
-        char interior_buf[MAX_LINE_LEN];
-        char *vp = val_arg;
-        while (*vp == ' ' || *vp == '\t') vp++;
-        static const char k_compound_prefix[] = "(GLfloat[]){";
-        const size_t k_compound_prefix_len = sizeof k_compound_prefix - 1;
-        if (strncmp(vp, k_compound_prefix, k_compound_prefix_len) == 0) {
-            const char *istart = vp + k_compound_prefix_len;
-            int brace_depth = 1;
-            const char *q = istart;
-            while (*q && brace_depth > 0) {
-                if (*q == '{')      brace_depth++;
-                else if (*q == '}') { brace_depth--; if (brace_depth == 0) break; }
-                q++;
-            }
-            if (brace_depth != 0) {
-                parser_emit_error_static(ctx, "Unclosed (GLfloat[]){...} literal");
-                return 0;
-            }
-            size_t ilen = (size_t)(q - istart);
-            if (ilen >= sizeof interior_buf) ilen = sizeof interior_buf - 1;
-            memcpy(interior_buf, istart, ilen);
-            interior_buf[ilen] = '\0';
-            to_parse = interior_buf;
-            /* Reject anything (other than whitespace) past the closing
-             * '}': inputs like `(GLfloat[]){1,2,3,4}, 99` would
-             * otherwise parse silently and drop the trailing args. */
-            const char *tail = q + 1;
-            while (*tail && isspace((unsigned char)*tail)) tail++;
-            if (*tail != '\0') {
-                parser_emit_error_static(ctx, "Trailing content after (GLfloat[]){...} compound literal");
-                return 0;
-            }
-        } else {
-            to_parse = vp;
-        }
-
-        {
-            char verr[128];
-            if (!repl_eval_validate_expression_idents(to_parse, vars, num_vars, verr, sizeof(verr))) {
-                parser_emit_error_static(ctx, verr); return 0;
-            }
-        }
-        float parsed_args[8];
-        int num_parsed = repl_eval_parse_exprs(to_parse, parsed_args, 8, vars, num_vars);
-        if (num_parsed != 1 && num_parsed != 4) {
-            parser_emit_error_static(ctx, "Expected 1 or 4 float values");
-            return 0;
-        }
-        /* GL semantics: only GL_SHININESS takes a single scalar; the
-         * RGBA pnames (GL_AMBIENT / GL_DIFFUSE / GL_SPECULAR /
-         * GL_EMISSION / GL_AMBIENT_AND_DIFFUSE) all need 4 floats.
-         * Without this guard, a scalar input for an RGBA pname would
-         * canonicalize to `(GLfloat[]){x}` — exported standalone C
-         * would then read past the 1-element array as the GL driver
-         * dereferences four floats. */
-        if (num_parsed == 1 && pname != GL_SHININESS) {
-            parser_emit_error_static(ctx, "Only GL_SHININESS takes 1 float; other pnames need 4 RGBA floats");
-            return 0;
-        }
-
-        /* Uniform args[] layout (no GLCmd.mode): args[0]=face,
-         * args[1]=pname, args[2..]=value(s). GLenums fit float32
-         * exactly (all < 2^24), so the casts round-trip losslessly. */
-        cmd->type = CMD_MATERIALFV;
-        cmd->valid = 1;
-        cmd->args[0] = (float)face;
-        cmd->args[1] = (float)pname;
-        for (int k = 0; k < num_parsed; k++) cmd->args[k + 2] = parsed_args[k];
-        cmd->num_args = num_parsed + 2;
-        cmd->has_vars = input_has_any_visible_vars(to_parse, vars, num_vars);
-
-        /* Canonical emit always uses the compound literal so the line
-         * round-trips through the parser unchanged. The single-element
-         * variant is the standard C convention for passing a scalar to
-         * a pointer-taking GL function (GL_SHININESS via glMaterialfv). */
-        if (num_parsed == 1) {
-            WRITE_TEXT("%sglMaterialfv(%s, %s, (GLfloat[]){%g});",
-                       indent, face_str, pname_str, parsed_args[0]);
-        } else {
-            WRITE_TEXT("%sglMaterialfv(%s, %s, (GLfloat[]){%g, %g, %g, %g});",
-                       indent, face_str, pname_str, parsed_args[0], parsed_args[1], parsed_args[2], parsed_args[3]);
-        }
-
-        return 1;
-    }
-
-    /* glMaterialf(face, GL_SHININESS, value) — scalar-only sibling of
-     * glMaterialfv. The pname slot is restricted to GL_SHININESS (the
-     * only material pname that takes a single float); RGBA pnames
-     * remain glMaterialfv-only so a missing 4-float argument can't
-     * silently dereference past a 1-element value in exported C. */
-    if (strcmp(func, "glMaterialf") == 0) {
-        char face_arg[64] = "", pname_arg[64] = "", val_arg[MAX_LINE_LEN] = "";
-        char *comma1 = strchr(args, ',');
-        char *comma2 = comma1 ? strchr(comma1 + 1, ',') : NULL;
-
-        if (!comma1 || !comma2) {
-            parser_emit_error_static(ctx,
-                "Usage: glMaterialf(face, GL_SHININESS, value)");
-            return 0;
-        }
-
-        int face_len = (int)(comma1 - args);
-        if (face_len >= (int)sizeof(face_arg)) face_len = (int)sizeof(face_arg) - 1;
-        strncpy(face_arg, args, face_len); face_arg[face_len] = '\0';
-
-        int pname_len = (int)(comma2 - (comma1 + 1));
-        if (pname_len >= (int)sizeof(pname_arg)) pname_len = (int)sizeof(pname_arg) - 1;
-        strncpy(pname_arg, comma1 + 1, pname_len); pname_arg[pname_len] = '\0';
-
-        strncpy(val_arg, comma2 + 1, sizeof(val_arg) - 1);
-
-        char *face_str = face_arg; while (*face_str == ' ') face_str++;
-        int face_end = (int)strlen(face_str);
-        while (face_end > 0 && face_str[face_end-1] == ' ') face_str[--face_end] = '\0';
-        char *pname_str = pname_arg; while (*pname_str == ' ') pname_str++;
-        int pname_end = (int)strlen(pname_str);
-        while (pname_end > 0 && pname_str[pname_end-1] == ' ') pname_str[--pname_end] = '\0';
-
-        GLenum face = 0;
-        int found1 = 0;
-        const ReplEnumEntry *face_types = repl_face_type_entries();
-        for (int i = 0; face_types[i].name; i++) {
-            if (strcmp(face_str, face_types[i].name) == 0) {
-                face = face_types[i].value; found1 = 1; break;
-            }
-        }
-        if (!found1) {
-            parser_emit_error_static(ctx,
-                "face: GL_FRONT, GL_BACK, GL_FRONT_AND_BACK");
-            return 0;
-        }
-        if (strcmp(pname_str, "GL_SHININESS") != 0) {
-            parser_emit_error_static(ctx,
-                "glMaterialf only accepts GL_SHININESS; use glMaterialfv for RGBA pnames");
-            return 0;
-        }
-
-        {
-            char verr[128];
-            if (!repl_eval_validate_expression_idents(val_arg, vars, num_vars, verr, sizeof(verr))) {
-                parser_emit_error_static(ctx, verr); return 0;
-            }
-        }
-        float parsed_args[2];
-        int num_parsed = repl_eval_parse_exprs(val_arg, parsed_args, 2, vars, num_vars);
-        if (num_parsed != 1) {
-            parser_emit_error_static(ctx, "Expected 1 float value");
-            return 0;
-        }
-
-        /* Uniform args[] layout (no GLCmd.mode): args[0]=face,
-         * args[1]=pname, args[2]=value. GLenums fit float32 exactly
-         * (all < 2^24), so the casts round-trip losslessly. */
-        cmd->type = CMD_MATERIALF;
-        cmd->valid = 1;
-        cmd->args[0] = (float)face;
-        cmd->args[1] = (float)GL_SHININESS;
-        cmd->args[2] = parsed_args[0];
-        cmd->num_args = 3;
-        cmd->has_vars = input_has_any_visible_vars(val_arg, vars, num_vars);
-
-        WRITE_TEXT("%sglMaterialf(%s, %s, %g);",
-                   indent, face_str, pname_str, parsed_args[0]);
-        return 1;
-    }
-
-    /* glPointParameterfv(pname, const, linear, quadratic) -
-     * only GL_POINT_DISTANCE_ATTENUATION (size *= 1 / sqrt(const + linear*d + quadratic*d*d)) */
-    if (strcmp(func, "glPointParameterfv") == 0) {
-        char a1[64] = "", rest[MAX_LINE_LEN] = "";
-        char *comma = strchr(args, ',');
-        if (!comma) {
-            parser_emit_error_static(ctx, "Usage: glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION, const, linear, quadratic)");
-            return 0;
-        }
-        int l1 = (int)(comma - args);
-        if (l1 >= (int)sizeof(a1)) l1 = (int)sizeof(a1) - 1;
-        strncpy(a1, args, l1); a1[l1] = '\0';
-        strncpy(rest, comma + 1, sizeof(rest) - 1);
-
-        char *p1 = a1; while (*p1 == ' ') p1++;
-        int e1 = (int)strlen(p1); while (e1 > 0 && p1[e1 - 1] == ' ') p1[--e1] = '\0';
-
-        GLenum pname = 0;
-        int found = 0;
-        const ReplEnumEntry *point_param_pnames = repl_point_param_pname_entries();
-        for (int i = 0; point_param_pnames[i].name; i++) {
-            if (strcmp(p1, point_param_pnames[i].name) == 0) {
-                pname = point_param_pnames[i].value;
-                found = 1;
-                break;
-            }
-        }
-        if (!found) {
-            parser_emit_error_static(ctx, "pname: GL_POINT_DISTANCE_ATTENUATION");
-            return 0;
-        }
-
-        {
-            char verr[128];
-            if (!repl_eval_validate_expression_idents(rest, vars, num_vars, verr, sizeof(verr))) {
-                parser_emit_error_static(ctx, verr); return 0;
-            }
-        }
-        float parsed_args[4];
-        int num_parsed = repl_eval_parse_exprs(rest, parsed_args, 4, vars, num_vars);
-        if (num_parsed != 3) {
-            parser_emit_error_static(ctx, "Expected 3 floats: const, linear, quadratic attenuation coefficients");
-            return 0;
-        }
-
-        /* Uniform args[] layout (no GLCmd.mode): args[0]=pname,
-         * args[1..3]=const/linear/quadratic attenuation coefficients. */
-        cmd->type = CMD_POINT_PARAMETER_FV;
-        cmd->valid = 1;
-        cmd->args[0] = (float)pname;
-        cmd->args[1] = parsed_args[0];
-        cmd->args[2] = parsed_args[1];
-        cmd->args[3] = parsed_args[2];
-        cmd->num_args = 4;
-        cmd->has_vars = input_has_any_visible_vars(rest, vars, num_vars);
-
-        {
-            char ind[32]; repl_source_scope_cmd_indent(source_line_idx, ind, sizeof(ind));
-            WRITE_TEXT("%sglPointParameterfv(%s, (GLfloat[]){%g, %g, %g});",
-                       ind, p1, parsed_args[0], parsed_args[1], parsed_args[2]);
-        }
-        return 1;
-    }
+    if (strcmp(func, "glPointParameterfv") == 0)
+        return parse_point_parameter_fv(args, cmd, text_out, text_sz, indent, ctx);
 
     /* glPushMatrix() */
     if (strcmp(func, "glPushMatrix") == 0) {
@@ -969,94 +1036,12 @@ static int parse_command(const char *line, GLCmd *cmd,
         return 1;
     }
 
-    /* funcN([expr, ...]) or aliased call - function call.
-     *
-     * Recognises both the bare slot form `funcN` (N=0..9) and any user
-     * alias registered through repl_func_alias_set. The slot index is
-     * the load-bearing identity stored on the resulting CMD_CALL; the
-     * alias is purely a parser/display layer. */
-    int fn = -1;
     {
+        int fn = -1;
         const char *func_cursor = func;
         if (repl_parse_func_name_token(&func_cursor, &fn) &&
-            *func_cursor == '\0' && open_p && close_p) {
-        float dummy_vals[MAX_EXPR_VARS];
-        int arg_count = 0;
-        if (args[0] != '\0') {
-            char verr[128];
-            if (!repl_eval_validate_expression_idents(args, vars, num_vars, verr, sizeof(verr))) {
-                parser_emit_error_static(ctx, verr); return 0;
-            }
-        }
-        if (!parse_expr_list_exact(args, dummy_vals, MAX_EXPR_VARS,
-                                   vars, num_vars, &arg_count)) {
-            parser_emit_error_static(ctx, "Invalid function call arguments");
-            return 0;
-        }
-
-        /* In strict mode (commit path), require a matching CMD_FUNC_DEF
-         * for top-level calls - same rule as `x = expr;` needing `float
-         * x;`.  Inside a function body (block depth > 0) forward refs
-         * are still allowed so mutual recursion keeps working. */
-        if (ctx && ctx->strict_refs && repl_source_scope_block_depth_at(source_line_idx) == 0) {
-            int def_exists = 0;
-            const GLCmd *document_cmds = repl_state_document_cmds();
-            for (int di = 0; di < repl_state_document_count(); di++) {
-                if (!document_cmds[di].valid) continue;
-                if (document_cmds[di].type != CMD_FUNC_DEF) continue;
-                if ((int)document_cmds[di].args[0] != fn) continue;
-                def_exists = 1;
-                break;
-            }
-            if (!def_exists) {
-                char buf[96];
-                const char *alias = repl_func_alias_get(fn);
-                if (alias)
-                    snprintf(buf, sizeof(buf),
-                             "undefined function '%s' - define it first", alias);
-                else
-                    snprintf(buf, sizeof(buf),
-                             "undefined function 'func%d' - define it first", fn);
-                parser_emit_error_static(ctx, buf);
-                return 0;
-            }
-        }
-
-        cmd->type = CMD_CALL;
-        cmd->valid = 1;
-        cmd->args[0] = (float)fn;
-        cmd->num_args = arg_count;
-        cmd->has_vars = input_has_any_visible_vars(args, vars, num_vars);
-
-        char ind_str[32];
-        repl_source_scope_cmd_indent(source_line_idx, ind_str,
-                         (int)sizeof(ind_str));
-
-        char raw_args[MAX_LINE_LEN];
-        strncpy(raw_args, args, sizeof(raw_args) - 1);
-        raw_args[sizeof(raw_args) - 1] = '\0';
-        trim_in_place(raw_args);
-        const char *alias = repl_func_alias_get(fn);
-        char fn_token[REPL_FUNC_NAME_MAX + 8];
-        if (alias)
-            snprintf(fn_token, sizeof(fn_token), "%s", alias);
-        else
-            snprintf(fn_token, sizeof(fn_token), "func%d", fn);
-        if (text_out && text_sz > 0) {
-            if (arg_count > 0) {
-                if (!repl_format_fits(text_out, (size_t)text_sz,
-                                      "%s%s(%s);", ind_str, fn_token, raw_args)) {
-                    parser_emit_error_static(ctx, "Command too long");
-                    return 0;
-                }
-            } else if (!repl_format_fits(text_out, (size_t)text_sz,
-                                         "%s%s();", ind_str, fn_token)) {
-                parser_emit_error_static(ctx, "Command too long");
-                return 0;
-            }
-        }
-        return 1;
-        }
+            *func_cursor == '\0' && open_p && close_p)
+            return parse_func_call(args, fn, cmd, text_out, text_sz, ctx);
     }
 
     /* gluBegin(GLU_POLYGON) - start a tessellated polygon */
