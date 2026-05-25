@@ -470,104 +470,86 @@ static void draw_scale_guide(const SceneGuideSnapshot *snapshot,
     transform_guides_pop_state();
 }
 
-static void draw_rotate_guide(const SceneGuideSnapshot *snapshot,
-                              const GLCmd *cmd, const float p_start[3],
-                              float alpha_mul) {
-    float angle_deg = cmd->args[0];
-    while (angle_deg > 720.0f) angle_deg -= 360.0f;
-    while (angle_deg < -720.0f) angle_deg += 360.0f;
-    float ax = cmd->args[1], ay = cmd->args[2], az = cmd->args[3];
-    float alen = sqrtf(ax*ax + ay*ay + az*az);
-    if (alen < 1e-6f) return;
-    if (fabsf(angle_deg) < 1e-4f) return;
+/* --- draw_rotate_guide phases ---
+ *
+ * Three distinct geometry generators + one shared pulse animator,
+ * conditionally swept depending on whether the rotation origin is
+ * (effectively) p_start (build_rotate_arc) or coincides with the
+ * world origin (build_rotate_helix). The pulse runs along arc[]
+ * regardless. Extracted into named helpers so a reader doesn't have
+ * to mentally separate the rotation-matrix multiply from the helix
+ * basis construction from the post-build draw. */
 
-    float rgb[3];
-    xform_axis_color(ax, ay, az, rgb);
-    float bright[3] = {
-        rgb[0]*0.6f + 0.4f,
-        rgb[1]*0.6f + 0.4f,
-        rgb[2]*0.6f + 0.4f
+/* Rodrigues rotation: rotate p_start by angle_rad about the unit
+ * axis (ax, ay, az), sampled at segs+1 points along [0, angle_rad].
+ * arc[0] = p_start, arc[segs] is the final tip. */
+static void build_rotate_arc(const float p_start[3],
+                             float ax, float ay, float az,
+                             float angle_rad, int segs,
+                             float arc[][3]) {
+    for (int i = 0; i <= segs; i++) {
+        float t = (float)i / (float)segs;
+        float th = angle_rad * t;
+        float c = cosf(th), s = sinf(th), k = 1.0f - c;
+        float px = p_start[0], py = p_start[1], pz = p_start[2];
+        arc[i][0] = (c + ax*ax*k)    * px + (ax*ay*k - az*s) * py + (ax*az*k + ay*s) * pz;
+        arc[i][1] = (ay*ax*k + az*s) * px + (c + ay*ay*k)    * py + (ay*az*k - ax*s) * pz;
+        arc[i][2] = (az*ax*k - ay*s) * px + (az*ay*k + ax*s) * py + (c + az*az*k)    * pz;
+    }
+}
+
+/* Origin-anchored rotation has no usable arc — the rotated p_start is
+ * the same point. Build a helix instead, sampled along an axial span
+ * proportional to angle_rad / tau. The {u, v} basis is computed from
+ * a world-up helper, normalized, then v = a × u. */
+static void build_rotate_helix(float ax, float ay, float az,
+                               float angle_rad, float axis_len,
+                               int segs, float arc[][3]) {
+    float helper[3] = {1.0f, 0.0f, 0.0f};
+    if (fabsf(ax) > 0.9f) { helper[0] = 0.0f; helper[1] = 1.0f; }
+    float u[3] = {
+        helper[1]*az - helper[2]*ay,
+        helper[2]*ax - helper[0]*az,
+        helper[0]*ay - helper[1]*ax,
+    };
+    float ul = sqrtf(u[0]*u[0] + u[1]*u[1] + u[2]*u[2]);
+    if (ul < 1e-6f) ul = 1.0f;
+    u[0] /= ul; u[1] /= ul; u[2] /= ul;
+    float v[3] = {
+        ay*u[2] - az*u[1],
+        az*u[0] - ax*u[2],
+        ax*u[1] - ay*u[0],
     };
 
-    ax /= alen;
-    ay /= alen;
-    az /= alen;
+    float radius = axis_len * 0.28f;
+    float pitch  = axis_len * 0.50f;
+    const float tau = 6.28318530717958647692f;
+    float axial_span = pitch * (fabsf(angle_rad) / tau);
+    if (axial_span > axis_len * 1.4f) axial_span = axis_len * 1.4f;
+    float axial_start = -axial_span * 0.5f;
 
-    float plen = sqrtf(p_start[0]*p_start[0] + p_start[1]*p_start[1] +
-                       p_start[2]*p_start[2]);
-
-    transform_guides_push_state();
-    glDisable(GL_LIGHTING);
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-
-    float axis_len = (plen > 0.5f ? plen : 0.5f) * 1.1f;
-    float as = snapshot->alpha_scale;
-    glLineWidth(2.0f);
-    tg_color4f(rgb[0], rgb[1], rgb[2], fminf(0.55f * as, 1.0f), alpha_mul);
-    glBegin(GL_LINES);
-    glVertex3f(-ax*axis_len, -ay*axis_len, -az*axis_len);
-    glVertex3f( ax*axis_len,  ay*axis_len,  az*axis_len);
-    glEnd();
-
-    const int segs = TG_ARC_SEGS;
-    float angle_rad = angle_deg * (float)(M_PI / 180.0);
-    int use_helix = (plen < 0.05f);
-
-    float arc[TG_ARC_SEGS + 1][3];
-    if (!use_helix) {
-        for (int i = 0; i <= segs; i++) {
-            float t = (float)i / (float)segs;
-            float th = angle_rad * t;
-            float c = cosf(th), s = sinf(th), k = 1.0f - c;
-            float px = p_start[0], py = p_start[1], pz = p_start[2];
-            arc[i][0] = (c + ax*ax*k)    * px + (ax*ay*k - az*s) * py + (ax*az*k + ay*s) * pz;
-            arc[i][1] = (ay*ax*k + az*s) * px + (c + ay*ay*k)    * py + (ay*az*k - ax*s) * pz;
-            arc[i][2] = (az*ax*k - ay*s) * px + (az*ay*k + ax*s) * py + (c + az*az*k)    * pz;
-        }
-    } else {
-        float helper[3] = {1.0f, 0.0f, 0.0f};
-        if (fabsf(ax) > 0.9f) { helper[0] = 0.0f; helper[1] = 1.0f; }
-        float u[3] = {
-            helper[1]*az - helper[2]*ay,
-            helper[2]*ax - helper[0]*az,
-            helper[0]*ay - helper[1]*ax,
-        };
-        float ul = sqrtf(u[0]*u[0] + u[1]*u[1] + u[2]*u[2]);
-        if (ul < 1e-6f) ul = 1.0f;
-        u[0] /= ul; u[1] /= ul; u[2] /= ul;
-        float v[3] = {
-            ay*u[2] - az*u[1],
-            az*u[0] - ax*u[2],
-            ax*u[1] - ay*u[0],
-        };
-
-        float radius = axis_len * 0.28f;
-        float pitch  = axis_len * 0.50f;
-        const float tau = 6.28318530717958647692f;
-        float axial_span = pitch * (fabsf(angle_rad) / tau);
-        if (axial_span > axis_len * 1.4f) axial_span = axis_len * 1.4f;
-        float axial_start = -axial_span * 0.5f;
-
-        for (int i = 0; i <= segs; i++) {
-            float t = (float)i / (float)segs;
-            float th = angle_rad * t;
-            float c = cosf(th), s = sinf(th);
-            float a = axial_start + axial_span * t;
-            arc[i][0] = ax*a + radius * (c*u[0] + s*v[0]);
-            arc[i][1] = ay*a + radius * (c*u[1] + s*v[1]);
-            arc[i][2] = az*a + radius * (c*u[2] + s*v[2]);
-        }
+    for (int i = 0; i <= segs; i++) {
+        float t = (float)i / (float)segs;
+        float th = angle_rad * t;
+        float c = cosf(th), s = sinf(th);
+        float a = axial_start + axial_span * t;
+        arc[i][0] = ax*a + radius * (c*u[0] + s*v[0]);
+        arc[i][1] = ay*a + radius * (c*u[1] + s*v[1]);
+        arc[i][2] = az*a + radius * (c*u[2] + s*v[2]);
     }
+}
 
-    glLineWidth(2.0f);
-    tg_color4f(rgb[0], rgb[1], rgb[2], fminf(0.30f * as, 1.0f), alpha_mul);
-    glBegin(GL_LINE_STRIP);
-    for (int i = 0; i <= segs; i++) glVertex3fv(arc[i]);
-    glEnd();
-
+/* Animate a traveling glow dot + trail along arc[0..segs]. Same
+ * shape as draw_pulse_segment's straight-line version, but the
+ * sample positions are interpolated along the arc segments. */
+static void draw_rotate_pulse(const SceneGuideSnapshot *snapshot,
+                              const float arc[][3], int segs,
+                              const float rgb[3], const float bright[3],
+                              float alpha_mul) {
+    float as = snapshot->alpha_scale;
     float ph = fmodf(snapshot->anim_time * 0.6f, 1.0f);
     float glow = sinf(ph * (float)M_PI) * 0.8f + 0.2f;
+
     float fpos = ph * (float)segs;
     int i_pos = (int)fpos;
     if (i_pos >= segs) i_pos = segs - 1;
@@ -610,7 +592,70 @@ static void draw_rotate_guide(const SceneGuideSnapshot *snapshot,
     glVertex3f(pos[0], pos[1], pos[2]);
     glEnd();
     glPointSize(1.0f);
+}
 
+static void draw_rotate_guide(const SceneGuideSnapshot *snapshot,
+                              const GLCmd *cmd, const float p_start[3],
+                              float alpha_mul) {
+    float angle_deg = cmd->args[0];
+    while (angle_deg > 720.0f) angle_deg -= 360.0f;
+    while (angle_deg < -720.0f) angle_deg += 360.0f;
+    float ax = cmd->args[1], ay = cmd->args[2], az = cmd->args[3];
+    float alen = sqrtf(ax*ax + ay*ay + az*az);
+    if (alen < 1e-6f) return;
+    if (fabsf(angle_deg) < 1e-4f) return;
+
+    float rgb[3];
+    xform_axis_color(ax, ay, az, rgb);
+    float bright[3] = {
+        rgb[0]*0.6f + 0.4f,
+        rgb[1]*0.6f + 0.4f,
+        rgb[2]*0.6f + 0.4f
+    };
+
+    ax /= alen;
+    ay /= alen;
+    az /= alen;
+
+    float plen = sqrtf(p_start[0]*p_start[0] + p_start[1]*p_start[1] +
+                       p_start[2]*p_start[2]);
+
+    transform_guides_push_state();
+    glDisable(GL_LIGHTING);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+    /* Rotation axis line through the origin */
+    float axis_len = (plen > 0.5f ? plen : 0.5f) * 1.1f;
+    float as = snapshot->alpha_scale;
+    glLineWidth(2.0f);
+    tg_color4f(rgb[0], rgb[1], rgb[2], fminf(0.55f * as, 1.0f), alpha_mul);
+    glBegin(GL_LINES);
+    glVertex3f(-ax*axis_len, -ay*axis_len, -az*axis_len);
+    glVertex3f( ax*axis_len,  ay*axis_len,  az*axis_len);
+    glEnd();
+
+    /* Build either a swept arc (off-origin p_start) or a helix
+     * (origin-anchored — no meaningful arc to sweep). */
+    const int segs = TG_ARC_SEGS;
+    float angle_rad = angle_deg * (float)(M_PI / 180.0);
+    float arc[TG_ARC_SEGS + 1][3];
+    if (plen >= 0.05f)
+        build_rotate_arc(p_start, ax, ay, az, angle_rad, segs, arc);
+    else
+        build_rotate_helix(ax, ay, az, angle_rad, axis_len, segs, arc);
+
+    /* Base arc line */
+    glLineWidth(2.0f);
+    tg_color4f(rgb[0], rgb[1], rgb[2], fminf(0.30f * as, 1.0f), alpha_mul);
+    glBegin(GL_LINE_STRIP);
+    for (int i = 0; i <= segs; i++) glVertex3fv(arc[i]);
+    glEnd();
+
+    /* Animated traveling pulse along the arc */
+    draw_rotate_pulse(snapshot, arc, segs, rgb, bright, alpha_mul);
+
+    /* Endpoint markers */
     glPointSize(6.0f);
     glBegin(GL_POINTS);
     tg_color4f(rgb[0], rgb[1], rgb[2], 0.7f, alpha_mul);
