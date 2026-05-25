@@ -40,7 +40,7 @@ adapter-snapshot fix (review pass on #2).
 | 🟡 #17 postprocess g_saved_matrix_mode | ✅ threaded through begin_2d/end_2d | `08fc94b` |
 | 🟡 #18 int → enum sweep | ✅ post_filter_mode, grid_theme | `dc6ed83` |
 | 🟡 #19 viewport_w/h fields | ✅ dropped from SceneRenderConfig | `dc6ed83` |
-| 🟡 #20 grid_xn_phase/axes_xn_phase | ⏸️ deferred — fields kept for tests | — |
+| 🟡 #20 grid_xn_phase/axes_xn_phase | ✅ marked RESERVED with explicit doc | `222054c` |
 | 🟡 #21 SceneFrameRenderContext.focus | ✅ duplicate dropped | `dc6ed83` |
 | 🟡 #22 theme spec ABI | ⏸️ deferred — design decision | — |
 | 🟡 #23 standard-theme switch | ✅ moved to default arm | `e9225cd` |
