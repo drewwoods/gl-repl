@@ -1,5 +1,5 @@
 /*
- * scene_transform_guides.h - Replay/edit-time transform guide rendering.
+ * transform_guides.h - Replay/edit-time transform guide rendering.
  *
  * These helpers visualize pending transform commands near the current replay or
  * cursor context. The controller builds a SceneGuideSnapshot, calls

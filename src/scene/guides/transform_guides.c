@@ -1,10 +1,14 @@
 /*
- * scene_transform_guides.c - transform edit-guide planning/rendering.
+ * transform_guides.c - transform edit-guide planning/rendering.
  */
 #include "transform_guides.h"
-#include "scene/guides/transform_utils.h"
+#include "transform_utils.h"
 #include "scene/palette.h"
 #include "scene/occluded_ghost.h"
+
+#include <ctype.h>  /* isspace */
+#include <math.h>   /* sqrtf, fminf, fmodf, cosf, sinf, fabsf, M_PI */
+#include <string.h> /* strncmp, strlen */
 
 static void transform_guides_push_state(void) {
     glPushAttrib(GL_ALL_ATTRIB_BITS);
@@ -270,7 +274,6 @@ static void draw_translate_guide(const SceneGuideSnapshot *snapshot,
     glPointSize(1.0f);
 
     glDisable(GL_BLEND);
-    if (snapshot->user_lighting_enabled) glEnable(GL_LIGHTING);
     transform_guides_pop_state();
 }
 
@@ -457,7 +460,6 @@ static void draw_scale_guide(const SceneGuideSnapshot *snapshot,
     }
 
     glDisable(GL_BLEND);
-    if (snapshot->user_lighting_enabled) glEnable(GL_LIGHTING);
     transform_guides_pop_state();
 }
 
@@ -613,13 +615,21 @@ static void draw_rotate_guide(const SceneGuideSnapshot *snapshot,
     glPointSize(1.0f);
 
     glDisable(GL_BLEND);
-    if (snapshot->user_lighting_enabled) glEnable(GL_LIGHTING);
     transform_guides_pop_state();
 }
 
-static int transform_source_unmodified(const SceneGuideSnapshot *snapshot,
-                                       const GLCmd *source_cmd) {
-    (void)source_cmd;
+/* True when the live input buffer text still matches the last committed
+ * source form for the cursor row (ignoring outer whitespace and the
+ * commit semicolon that editor input omits). A whitespace-only
+ * difference doesn't change the parsed args but does represent an edit
+ * in progress — guides hide until the user commits. The empty-input
+ * case (no edit yet) is treated as matched.
+ *
+ * The function name reflects what is actually compared: input vs
+ * committed text. It does NOT compare parsed args between input and
+ * source — a future enhancement could (see plans/in-review/
+ * src-scene-code-smell-audit.md #9). */
+static int transform_input_matches_committed(const SceneGuideSnapshot *snapshot) {
     const char *source = snapshot->edit_line_committed_text
                          ? snapshot->edit_line_committed_text : "";
     while (*source && isspace((unsigned char)*source)) source++;
@@ -631,9 +641,6 @@ static int transform_source_unmodified(const SceneGuideSnapshot *snapshot,
         source_len--;
     }
 
-    /* Keep guides live only while the edit buffer still matches the last
-     * committed source form for this row (ignoring outer whitespace and the
-     * commit semicolon that editor input omits). */
     return ((source_len == snapshot->input_len &&
              strncmp(snapshot->input, source, (size_t)source_len) == 0) ||
             snapshot->input_len == 0);
@@ -661,7 +668,7 @@ int scene_transform_guides_prepare(const SceneGuideSnapshot *snapshot,
     const GLCmd *source_cmd = &snapshot->source_cmds[edit_line_idx];
     if (!source_cmd->valid)
         return 0;
-    if (!transform_source_unmodified(snapshot, source_cmd))
+    if (!transform_input_matches_committed(snapshot))
         return 0;
     if (!(source_cmd->type == CMD_TRANSLATE3F ||
           source_cmd->type == CMD_ROTATEF ||

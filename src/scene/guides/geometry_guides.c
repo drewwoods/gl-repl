@@ -1,9 +1,12 @@
 /*
- * scene_geometry_guides.c - vertex/normal edit-guide rendering.
+ * geometry_guides.c - vertex/normal edit-guide rendering.
  */
 #include "geometry_guides.h"
 #include "scene/palette.h"
 #include "scene/occluded_ghost.h"  /* SCENE_OCCLUDED_GHOST_STIPPLE */
+
+#include <math.h>   /* sqrtf, fminf, fmodf, cosf, sinf */
+#include <string.h> /* strncmp */
 
 static void geometry_guides_push_state(void) {
     glPushAttrib(GL_ALL_ATTRIB_BITS);
@@ -145,7 +148,6 @@ static void draw_vertex_guides(const SceneGuideSnapshot *snapshot) {
     }
 
     glDisable(GL_BLEND);
-    if (snapshot->user_lighting_enabled) glEnable(GL_LIGHTING);
     geometry_guides_pop_state();
 }
 
@@ -304,7 +306,6 @@ static void draw_normal_guides(const SceneGuideSnapshot *snapshot) {
     glPointSize(1.0f);
 
     glDisable(GL_BLEND);
-    if (snapshot->user_lighting_enabled) glEnable(GL_LIGHTING);
     geometry_guides_pop_state();
 }
 
