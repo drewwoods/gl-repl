@@ -20,7 +20,7 @@ predicate coverage). `check-state-ownership` green; C99 ratchet green.
 | Finding | Status | Commit |
 |---|---|---|
 | 🔴 #1 transform-cmd parity drift | ✅ drift test added | `79914d1` |
-| 🔴 #2 SceneExecutePurpose | ✅ enum added, probe + fill labeled | `a37823b` |
+| 🔴 #2 SceneExecutePurpose | ✅ enum + adapter snapshot/restore | `a37823b`, `6fa6d15` |
 | 🔴 #3 g_xn statics in grid+axes | ⏸️ deferred — ~60 call sites | — |
 | 🔴 #4 g_guide_alpha_mul threaded | ✅ alpha_mul as parameter | `12f1eb0` |
 | 🔴 #5 g_active_projection statics | ⏸️ deferred — design decision | — |
@@ -1344,7 +1344,7 @@ push/pop bug fixed.
 |---|---|---|
 | **#4** g_guide_alpha_mul | ✅ `12f1eb0` | alpha_mul threaded through 5 helpers; `tg_color_tok` inlined to `scene_clr_a` |
 | **#17** g_saved_matrix_mode | ✅ `a37823b` | begin_2d returns saved mode; end_2d accepts it back |
-| **#2** SceneExecutePurpose | ✅ `a37823b` | enum on ctx; probe = DEPTH_PROBE, fill = MAIN_FILL |
+| **#2** SceneExecutePurpose | ✅ `a37823b`, `6fa6d15` | enum on ctx + REPL adapter snapshot/restore around non-MAIN_FILL purposes (review caught the adapter ignored ctx in the initial commit, so the probe still mutated predef/scratch/render state) |
 | **#3** g_xn_alpha / g_xn_opacity | ⏸️ deferred | ~60 `gl_color` call sites across grid+axes; needs a shared resolve helper + GridDrawContext.xn_alpha addition before the call-site sweep |
 | **#5** g_active_projection statics | ⏸️ deferred | Tied to **#12** (split `scene_apply_projection` into pure compute + mutating apply); export code reads `scene_get_active_projection` so renderer state needs an init/reset entry point |
 | **#11** scene_apply_camera | ⏸️ deferred | Design decision: internalize into `scene_render_3d_scene` (preferred, since `SceneRenderConfig` already carries the fields) vs move to `glr_camera.c` |
