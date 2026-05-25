@@ -47,7 +47,13 @@
  * per-line text buffer, cursor position, predefined variables, scratch
  * arrays, and funcN aliases (see the header comment for what is
  * intentionally excluded). Used by the undo/redo history rings and by
- * import/export to preserve document state across save/load boundaries. */
+ * import/export to preserve document state across save/load boundaries.
+ *
+ * `generation` is stamped at push time from the live counter.
+ * Pop/redo refuse to restore a snapshot whose generation differs from
+ * the current live generation — that means a wholesale document
+ * replacement (scene switch, workspace load) intervened, and the
+ * snapshot belongs to a different world. */
 typedef struct {
     GLCmd cmds[MAX_COMMANDS];
     char  editor_lines[MAX_COMMANDS][MAX_LINE_LEN];
@@ -58,6 +64,7 @@ typedef struct {
     char  predef_names[MAX_PREDEF_VARS][REPL_PREDEF_NAME_MAX];
     int   num_predef_vars;
     char  func_aliases[REPL_FUNC_SLOT_COUNT][REPL_FUNC_NAME_MAX];
+    unsigned int generation;
 } EditorUndoSnapshot;
 
 /* Ring state descriptors: exposed for test access to undo/redo ring pointers
@@ -94,11 +101,22 @@ void editor_undo_push_snapshot(void);
 void editor_undo_pop_snapshot(void);
 void editor_undo_do_redo(void);
 
-/* Drop every snapshot from both the undo and redo rings. Must be called
- * any time the live REPL document is replaced wholesale (scene switch,
- * example load, workspace load, full app reset) — otherwise a pop after
- * the switch restores the previous scene's pre-mutation content into
- * the new scene's live state, silently corrupting it. */
+/* Semantic API for wholesale document replacement (scene switch,
+ * example load, workspace load, full app reset).  Clears both undo
+ * and redo rings AND bumps the generation counter so any snapshot
+ * that somehow survived the clear (e.g. held in a CommitAttemptState)
+ * cannot be restored into the new world. Callers that replace the
+ * live REPL document must call this instead of editor_undo_clear(). */
+void editor_undo_note_wholesale_replacement(void);
+
+/* Current generation counter.  Exposed for tests that verify the
+ * cross-generation safety net. */
+unsigned int editor_undo_generation(void);
+
+/* Raw ring clear — implementation detail.  Production code should
+ * call editor_undo_note_wholesale_replacement() which also bumps the
+ * generation counter.  Retained for test scaffolding that needs to
+ * reset ring state without changing generations. */
 void editor_undo_clear(void);
 
 #endif /* EDITOR_UNDO_H */

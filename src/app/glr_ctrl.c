@@ -2241,11 +2241,7 @@ static void glr_app_install_app_services(void) {
  * peer / editor / UI reset symbols. (Split out of src/repl/state.c as
  * step 2 of feature/decouple-repl-from-gl-repl-alt.md.) */
 void glr_app_reset_all(void) {
-    /* Drop the undo/redo rings first: the live REPL document is about
-     * to be replaced wholesale, and a leftover snapshot would let a
-     * post-reset Ctrl+Z restore the *previous* world's content into
-     * the new one. */
-    editor_undo_clear();
+    editor_undo_note_wholesale_replacement();
     repl_state_reset_program();
     /* GlrState owns presentation + render-config toggles. Reset them
      * alongside the REPL halves so callers see a coherent post-reset
@@ -2867,10 +2863,7 @@ static void cycle_example_or_user_scene(void) {
      * of src/repl/example_loader.c as step 2 of the decouple plan,
      * feature/decouple-repl-from-gl-repl-alt.md.) */
     glr_app_reset_transients();
-    /* F12 cycles through wholesale scene replacements — drop the undo
-     * ring so a post-cycle Ctrl+Z can't bleed the previous scene's
-     * pre-mutation state into the destination. */
-    editor_undo_clear();
+    editor_undo_note_wholesale_replacement();
     int count = repl_example_count();
     int active_scene = repl_active_user_scene();
 
@@ -2913,7 +2906,7 @@ static void cycle_example_or_user_scene(void) {
  * cleanup and undo-clear, just inverted index walks. */
 static void cycle_example_or_user_scene_prev(void) {
     glr_app_reset_transients();
-    editor_undo_clear();
+    editor_undo_note_wholesale_replacement();
     int count = repl_example_count();
     int active_scene = repl_active_user_scene();
 

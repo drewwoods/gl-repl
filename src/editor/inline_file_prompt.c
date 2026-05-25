@@ -135,13 +135,13 @@ static void format_load_err(ReplSceneLoadStatus reason,
  * open so the user can correct the path without re-typing from
  * scratch. */
 static void prompt_commit_path(void) {
-    /* Note: do NOT call editor_undo_clear before the load. The REPL
-     * function preserves the live document on any failure, but the
-     * undo ring is the user's edit history — clearing it preemptively
-     * would discard that history even when the load fails. Clear it
-     * only after a confirmed successful slot allocation, mirroring
-     * how Load Workspace / F12 sequence the clear right next to the
-     * commit point. */
+    /* Note: do NOT call editor_undo_note_wholesale_replacement before
+     * the load. The REPL function preserves the live document on any
+     * failure, but the undo ring is the user's edit history — clearing
+     * it preemptively would discard that history even when the load
+     * fails. Clear it only after a confirmed successful slot allocation,
+     * mirroring how Load Workspace / F12 sequence the clear right next
+     * to the commit point. */
     ReplSceneLoadStatus reason = REPL_SCENE_LOAD_OK;
     int new_slot = repl_load_scene_as_new_slot(g_prompt_buf, &reason);
     if (new_slot < 0) {
@@ -151,7 +151,7 @@ static void prompt_commit_path(void) {
         return;
     }
 
-    editor_undo_clear();
+    editor_undo_note_wholesale_replacement();
     /* Loaded scene's edit_line points to its end; refresh the input
      * buffer from the new line so any stale typed text the user had
      * is dropped — matches glr_scene_load_user_slot in glr_actions.c

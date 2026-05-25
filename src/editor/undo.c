@@ -23,6 +23,7 @@ static int g_undo_count = 0;
 static EditorUndoSnapshot g_redo_buf[REPL_UNDO_DEPTH];
 static int g_redo_head = 0;
 static int g_redo_count = 0;
+static unsigned int g_undo_generation = 0;
 
 static const char *const *undo_snapshot_line_ptrs(const EditorUndoSnapshot *snapshot) {
     static const char *lines[MAX_COMMANDS];
@@ -103,6 +104,15 @@ void editor_undo_clear(void) {
     g_redo_count = 0;
 }
 
+void editor_undo_note_wholesale_replacement(void) {
+    editor_undo_clear();
+    g_undo_generation++;
+}
+
+unsigned int editor_undo_generation(void) {
+    return g_undo_generation;
+}
+
 void editor_undo_push_snapshot(void) {
     /* First mutation on a loaded example auto-promotes to a user scene,
      * inheriting the example's name. The snapshot captures the post-promotion
@@ -111,6 +121,7 @@ void editor_undo_push_snapshot(void) {
     repl_promote_example_if_needed();
 
     editor_undo_snapshot_save(&g_undo_buf[g_undo_head]);
+    g_undo_buf[g_undo_head].generation = g_undo_generation;
     g_undo_head = (g_undo_head + 1) % REPL_UNDO_DEPTH;
     if (g_undo_count < REPL_UNDO_DEPTH)
         g_undo_count++;
@@ -128,7 +139,16 @@ void editor_undo_pop_snapshot(void) {
         repl_set_status("Nothing to undo");
         return;
     }
+    {
+        int peek = (g_undo_head + REPL_UNDO_DEPTH - 1) % REPL_UNDO_DEPTH;
+        if (g_undo_buf[peek].generation != g_undo_generation) {
+            editor_undo_clear();
+            repl_set_status("Nothing to undo");
+            return;
+        }
+    }
     editor_undo_snapshot_save(&g_redo_buf[g_redo_head]);
+    g_redo_buf[g_redo_head].generation = g_undo_generation;
     g_redo_head = (g_redo_head + 1) % REPL_UNDO_DEPTH;
     if (g_redo_count < REPL_UNDO_DEPTH)
         g_redo_count++;
@@ -152,7 +172,16 @@ void editor_undo_do_redo(void) {
         repl_set_status("Nothing to redo");
         return;
     }
+    {
+        int peek = (g_redo_head + REPL_UNDO_DEPTH - 1) % REPL_UNDO_DEPTH;
+        if (g_redo_buf[peek].generation != g_undo_generation) {
+            editor_undo_clear();
+            repl_set_status("Nothing to redo");
+            return;
+        }
+    }
     editor_undo_snapshot_save(&g_undo_buf[g_undo_head]);
+    g_undo_buf[g_undo_head].generation = g_undo_generation;
     g_undo_head = (g_undo_head + 1) % REPL_UNDO_DEPTH;
     if (g_undo_count < REPL_UNDO_DEPTH)
         g_undo_count++;
