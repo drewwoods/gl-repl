@@ -594,7 +594,7 @@ int glr_action_menu_item_activate(int menu_id, int item_idx) {
         if (item_idx == GLR_FILE_ITEM_NEW_SCENE) {
             repl_scenes_enter_transient_scene();
             repl_scenes_reset_for_transient();
-            editor_clear_all_cmds();
+            editor_reset_for_new_scene();
             editor_undo_note_wholesale_replacement();
             glr_camera_clear_scene_default();
             return 1;
