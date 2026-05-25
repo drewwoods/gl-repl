@@ -177,6 +177,12 @@ void editor_schedule_timer(unsigned int millis, int value) {
     g_pending_input_effects.timer_value = value;
 }
 
+/* Editor-side tutorial adapters.  These are NOT misplaced tutorial policy —
+ * the real matching/step/locked-line rules live in tutorial.c.  These statics
+ * bridge editor facts (input text, cursor position, insert mode) into the
+ * tutorial policy API and translate the result back into editor side effects
+ * (completion clear, status message).  They stay here because they read editor
+ * state that tutorial.c must not include directly. */
 static int tutorial_precheck_current_input(void);
 static void tutorial_advance_if_commit_ok(CommitResult result);
 
@@ -1224,6 +1230,9 @@ static int handle_tab_key_route(unsigned char key) {
     return 0;
 }
 
+/* Editor adapter: gathers editor facts (input text, cursor, insert mode)
+ * and feeds them into the tutorial policy API.  Returns 1 if the commit
+ * may proceed, 0 if the tutorial rejected it (with status set). */
 static int tutorial_precheck_current_input(void) {
     TutorialMatchResult result;
 
@@ -1281,6 +1290,8 @@ static int tutorial_precheck_current_input(void) {
     return 1;
 }
 
+/* Editor adapter: translates the editor's CommitResult into the tutorial
+ * policy calls that advance or cancel the pending step. */
 static void tutorial_advance_if_commit_ok(CommitResult result) {
     if (!tutorial_active())
         return;

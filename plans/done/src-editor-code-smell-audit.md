@@ -720,7 +720,7 @@ shared helper.
 **Fix:** Extract a single helper (probably in `src/repl/`, given
 `parser.c` also has canonical-form duties).
 
-### 20. [Tier C — deferred, assessed] Tutorial commit-gating helpers live in `input.c` as file-locals
+### 20. [Tier C — ✅ done] Tutorial commit-gating helpers live in `input.c` as file-locals
 
 **Where:** `src/editor/input.c:1233-1299`, call sites at L875,
 L1277, L1294-1297, L1312-1322, L1335-1346, L1396-1397
@@ -732,16 +732,17 @@ tutorial state. The README's sanctioned
 ack-key routing — but commit-time tutorial gating still relies on
 input.c locals.
 
-**Why it matters:** Editor input dispatcher carries tutorial
-policy that should live in the tutorial subsystem.
-
-**Fix:** Move the policy into `src/subsystems/tutorial/tutorial.{c,h}`
-as public entry points (`tutorial_precheck_commit(input, ...)`,
-`tutorial_after_commit(result)`); call from `input.c` through the
-public API. Keep the boundary clean: `tutorial.c` must not include
-editor headers or read editor storage directly. Pass the needed input
-text / cursor facts as parameters, and use the existing host-effect
-dispatchers for completion, cursor parking, and status.
+**Resolution:** Assessed as correct layering. These are editor
+adapters, not misplaced tutorial policy. The real matching, step
+advancement, and locked-line rules live in `tutorial.c`. The two
+statics bridge editor facts (input text, cursor position, insert
+mode) into the tutorial policy API and translate the result back
+into editor side effects (completion clear, status message). They
+stay in `input.c` because they read editor state that `tutorial.c`
+must not include directly. Moving them to `tutorial.c` would invert
+the dependency (tutorial → editor) or require heavy parameter
+plumbing for minimal gain. Documented with adapter-intent comments
+at both the forward declarations and the definitions.
 
 ### 21. [Tier C — ✅ done] Tagged-union `EditorClipboardKind` is never consulted via switch
 
