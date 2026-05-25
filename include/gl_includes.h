@@ -21,4 +21,14 @@
     #include <GL/freeglut.h>
 #endif
 
+/* M_PI is part of POSIX <math.h> but optional in ISO C. Define the
+ * fallback here (the canonical home shared by gl_repl.h) so every TU
+ * that pulls in this aggregator can use M_PI without each file
+ * carrying its own #ifndef block. TUs that need the actual math
+ * functions still must include <math.h> themselves — only the
+ * preprocessor symbol is exposed here, costing nothing. */
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
+
 #endif

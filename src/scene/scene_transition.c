@@ -1,5 +1,5 @@
 /* scene_transition.c - see scene_transition.h. Pure; no GL/globals. */
-#include "scene/scene_transition.h"
+#include "scene_transition.h"
 
 void scene_xn_init(SceneXnState *s, int theme) {
     if (!s) return;
