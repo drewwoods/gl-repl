@@ -79,7 +79,7 @@ virtual lines), but it never *becomes* editor-owned.
 | `variable_panel/variable_panel_drag.c` / `.h` | Slider drag transaction: begin/motion/reset, linear/log value writeback |
 | `variable_panel/variable_panel_state.c` / `.h` | Owns the variable-panel visibility flag + drag-state storage |
 | `color_picker/color_picker_state.c` / `.h` | Color-picker state, lifecycle, slider handlers, source-line writeback |
-| `tutorial/tutorial.c` / `.h` | Tutorial runner: start/exit/advance, match, locked-line guard, fade math |
+| `tutorial/tutorial.c` / `.h` | Tutorial runner: start/stop/advance, match, locked-line guard, fade math |
 | `tutorial/tutorial_state.c` / `.h` | Owns `TutorialRuntimeState` (active flag, step, locked lines, fade timing) |
 
 **Boundary:** a subsystem owns its own state and controller. It does
