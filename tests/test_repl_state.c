@@ -298,18 +298,18 @@ static void test_capture_restore_round_trip(void) {
                ui_state_profile_panel().mode, PROFILE_PANEL_DETAILS);
     {
         UiStatusState status = ui_state_status();
-        EditorSearchState search = editor_state_search();
+        const EditorSearchState *search = editor_state_search();
         EditorAutocompleteState autocomplete = editor_state_autocomplete();
 
         ASSERT_STR("status text restored", status.text, "state snapshot");
         ASSERT_INT("status ttl restored", status.ttl, 17);
-        ASSERT_INT("search active restored", search.active, 1);
-        ASSERT_STR("search query restored", search.query, "vertex");
-        ASSERT_INT("search cursor restored", search.cursor_pos, 2);
-        ASSERT_INT("search hit line restored", search.hit_line_idx, 5);
-        ASSERT_INT("search hit char restored", search.hit_char_idx, 8);
-        ASSERT_INT("search ordinal restored", search.hit_ordinal, 2);
-        ASSERT_INT("search count restored", search.match_count, 4);
+        ASSERT_INT("search active restored", search->active, 1);
+        ASSERT_STR("search query restored", search->query, "vertex");
+        ASSERT_INT("search cursor restored", search->cursor_pos, 2);
+        ASSERT_INT("search hit line restored", search->hit_line_idx, 5);
+        ASSERT_INT("search hit char restored", search->hit_char_idx, 8);
+        ASSERT_INT("search ordinal restored", search->hit_ordinal, 2);
+        ASSERT_INT("search count restored", search->match_count, 4);
         ASSERT_INT("autocomplete count restored", autocomplete.match_count, 2);
         ASSERT_INT("autocomplete selection restored",
                    autocomplete.selected_idx, 1);

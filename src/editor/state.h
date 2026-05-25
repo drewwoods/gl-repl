@@ -387,7 +387,7 @@ int         editor_clipboard_input_text_len(void);
 
 /* Search slice API. _clear restores the slice to the post-init
  * default (no active query, hits invalidated). */
-EditorSearchState  editor_state_search(void);
+const EditorSearchState *editor_state_search(void);
 EditorSearchState *editor_state_search_mut(void);
 void             editor_state_search_clear(void);
 
