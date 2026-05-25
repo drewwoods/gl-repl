@@ -19,12 +19,18 @@ typedef struct SceneGuideSnapshot {
     int user_lighting_enabled;
     float anim_time;
 
+    /* `input` is the live editor input buffer text — always a valid C
+     * string, possibly empty (input_len == 0), never NULL. Consumers
+     * may strncmp / strncpy / strchr against it without a NULL guard.
+     * `edit_line_committed_text` MAY be NULL when the cursor is on a
+     * line that has no committed source (e.g. a fresh empty
+     * scratch row); transform_input_matches_committed handles that. */
     const char *input;
     int input_len;
     int cursor_pos;
     int edit_line_idx;
     int inserting;
-    const char *edit_line_committed_text; /* editor buffer text for edit_line_idx */
+    const char *edit_line_committed_text; /* editor buffer text; NULL = no committed line */
 
     const GLCmd *source_cmds;
     int source_cmd_count;
