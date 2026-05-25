@@ -192,6 +192,220 @@ void repl_flatten_refresh_current_block_highlight(int edit_line_idx) {
                                               edit_line_idx);
 }
 
+static void flatten_range(FlattenContext *ctx,
+                          int start, int end_idx, ExprVar *vars, int nv,
+                          int call_src_cmd_idx, int root_call_src_cmd_idx,
+                          unsigned int func_scope_mask);
+
+static void flatten_for_loop(FlattenContext *ctx,
+                             const GLCmd *src_cmd, int i,
+                             ExprVar *vars, int nv,
+                             int call_src_cmd_idx, int root_call_src_cmd_idx,
+                             unsigned int func_scope_mask,
+                             int loop_end) {
+    char var_name[16];
+    float start_val = src_cmd->args[0];
+    float end_val   = src_cmd->args[1];
+    float step_val  = src_cmd->args[2];
+    const char *src_text = flatten_src_text(ctx->text, i);
+    flatten_get_for_var_name(ctx->text, src_cmd, i, var_name, sizeof(var_name));
+
+    if (src_cmd->has_vars) {
+        const char *unused_body;
+        float re_start, re_end, re_step;
+        char rv[16];
+        if (repl_eval_parse_for_header_with_vars(src_text, rv, sizeof(rv),
+                                       &re_start, &re_end, &re_step,
+                                       vars, nv, &unused_body)) {
+            start_val = re_start;
+            end_val   = re_end;
+            step_val  = re_step;
+        }
+    }
+
+    if (fabsf(step_val) < 1e-9f ||
+        (step_val > 0 && start_val >= end_val) ||
+        (step_val < 0 && start_val <= end_val))
+        return;
+
+    int max_iters = MAX_FLATTEN_LOOP_ITERS;
+    for (float val = start_val;
+         (step_val > 0) ? (val < end_val - 1e-6f) : (val > end_val + 1e-6f);
+         val += step_val) {
+        if (--max_iters < 0) break;
+        if (ctx->abort) return;
+        ExprVar lvars[MAX_EXPR_VARS];
+        int lnv = 0;
+        if (lnv < MAX_EXPR_VARS) {
+            repl_copy_string_fits(lvars[lnv].name,
+                                  sizeof(lvars[lnv].name),
+                                  var_name);
+            lvars[lnv].value = val;
+            lnv++;
+        }
+        if (vars)
+            for (int v = 0; v < nv && lnv < MAX_EXPR_VARS; v++)
+                lvars[lnv++] = vars[v];
+        flatten_range(ctx, i + 1, loop_end, lvars, lnv,
+                      call_src_cmd_idx, root_call_src_cmd_idx,
+                      func_scope_mask);
+    }
+}
+
+static void flatten_call(FlattenContext *ctx,
+                         const GLCmd *src_cmd, int i,
+                         ExprVar *vars, int nv,
+                         int root_call_src_cmd_idx,
+                         unsigned int func_scope_mask) {
+    int func_num = (int)src_cmd->args[0];
+    if (ctx->call_depth >= ctx->max_call_depth) {
+        char msg[128];
+        snprintf(msg, sizeof(msg),
+                 "Recursive expansion exceeded depth limit (%d) at func%d",
+                 ctx->max_call_depth, func_num);
+        flatten_fail(ctx, msg);
+        return;
+    }
+
+    int k = (func_num >= 0 && func_num < REPL_FUNC_SLOT_COUNT)
+            ? ctx->func_def_idx[func_num]
+            : -1;
+    if (k < 0) {
+        char msg[64];
+        snprintf(msg, sizeof(msg),
+                 "Error: func%d not defined", func_num);
+        flatten_note_status(ctx, msg);
+        return;
+    }
+    do {
+        int body_end = flatten_repl_source_scope_find_block_end(ctx, k);
+        int def_fn = func_num;
+        int param_count = 0;
+        char param_names[MAX_EXPR_VARS][16];
+        char arg_text[MAX_LINE_LEN];
+        float arg_vals[MAX_EXPR_VARS];
+        int arg_count = 0;
+        const char *def_text = flatten_src_text(ctx->text, k);
+        const char *call_text = flatten_src_text(ctx->text, i);
+
+        if (!parse_repl_func_signature(def_text, &def_fn,
+                                       param_names, MAX_EXPR_VARS,
+                                       &param_count))
+            break;
+        if (!extract_func_call_args_text(call_text, NULL,
+                                         arg_text, sizeof(arg_text)))
+            break;
+        if (!parse_expr_list_exact(arg_text, arg_vals, MAX_EXPR_VARS,
+                                   vars, nv, &arg_count))
+            break;
+        if (arg_count != param_count) {
+            char msg[128];
+            snprintf(msg, sizeof(msg),
+                     "func%d expects %d args, got %d",
+                     func_num, param_count, arg_count);
+            flatten_note_status(ctx, msg);
+            break;
+        }
+
+        ExprVar lvars[MAX_EXPR_VARS];
+        int lnv = 0;
+        for (int p = 0; p < param_count && lnv < MAX_EXPR_VARS; p++) {
+            repl_copy_string_fits(lvars[lnv].name,
+                                  sizeof(lvars[lnv].name),
+                                  param_names[p]);
+            lvars[lnv].value = arg_vals[p];
+            lnv++;
+        }
+        for (int v = 0; vars && v < nv && lnv < MAX_EXPR_VARS; v++)
+            lvars[lnv++] = vars[v];
+
+        unsigned int nested_func_mask = func_scope_mask;
+        if (func_num >= 0 && func_num < FUNC_SCOPE_MASK_BITS)
+            nested_func_mask |= (1u << func_num);
+        int nested_root_call = (root_call_src_cmd_idx >= 0)
+                             ? root_call_src_cmd_idx : i;
+
+        ctx->call_depth++;
+        flatten_range(ctx, k + 1, body_end, lvars, lnv,
+                      i, nested_root_call, nested_func_mask);
+        if (ctx->call_depth > 0) ctx->call_depth--;
+    } while (0);
+}
+
+static void flatten_if_block(FlattenContext *ctx,
+                             const GLCmd *src_cmd, int i,
+                             ExprVar *vars, int nv,
+                             int call_src_cmd_idx, int root_call_src_cmd_idx,
+                             unsigned int func_scope_mask,
+                             int if_end) {
+    char cond_text[MAX_LINE_LEN];
+    const char *src_text = flatten_src_text(ctx->text, i);
+    float cond = src_cmd->args[0];
+
+    if (repl_extract_paren_payload(src_text, cond_text, sizeof(cond_text))) {
+        char repl_cond[MAX_LINE_LEN];
+        repl_eval_c_expr_to_repl(cond_text, repl_cond, sizeof(repl_cond));
+        ExprCtx expr_ctx = { repl_cond, vars, nv };
+        cond = repl_eval_expr(&expr_ctx);
+    }
+
+    if (cond != 0.0f)
+        flatten_range(ctx, i + 1, if_end, vars, nv,
+                      call_src_cmd_idx, root_call_src_cmd_idx,
+                      func_scope_mask);
+}
+
+/* Re-parse a source line into the flat buffer, evaluating expressions
+ * against the current variable bindings.  Three paths converge here:
+ *   1. local vars present  → pass vars to the parser, keep src has_vars
+ *   2. no local vars but src has predefined-var refs → re-eval, force has_vars=1
+ *   3. no vars at all      → re-parse for fresh args, clear has_vars
+ * On parse failure in path 3, the original src_cmd is copied through
+ * unchanged (the line was already invalid at commit time).
+ * Returns 1 on success, 0 if the flat buffer overflowed (caller should
+ * return immediately). */
+static int flatten_reparse_line(FlattenContext *ctx,
+                                const GLCmd *src_cmd, int i,
+                                ExprVar *vars, int nv,
+                                int call_src_cmd_idx,
+                                int root_call_src_cmd_idx,
+                                unsigned int func_scope_mask) {
+    char parse_err[REPL_STATUS_TEXT_MAX];
+    parse_err[0] = '\0';
+
+    int has_local_vars = (vars && nv > 0);
+    ReplParseContext parse_ctx = {
+        .source_line_idx = i,
+        .vars = has_local_vars ? vars : NULL,
+        .num_vars = has_local_vars ? nv : 0,
+        .err_buf = parse_err,
+        .err_sz  = (int)sizeof(parse_err),
+    };
+    const char *text = flatten_src_text(ctx->text, i);
+    ReplParsedLine tmp_pl;
+
+    if (repl_parser_parse_command_ctx(text, &tmp_pl, &parse_ctx)) {
+        GLCmd tmp = tmp_pl.cmd;
+        if (has_local_vars)
+            tmp.has_vars = src_cmd->has_vars;
+        else if (src_cmd->has_vars)
+            tmp.has_vars = 1;
+        else {
+            tmp.has_vars = 0;
+            tmp.is_auto = src_cmd->is_auto;
+        }
+        return flatten_append_cmd(ctx, &tmp, i, call_src_cmd_idx,
+                                  root_call_src_cmd_idx, func_scope_mask,
+                                  has_local_vars ? vars : NULL,
+                                  has_local_vars ? nv : 0);
+    }
+    if (!has_local_vars && !src_cmd->has_vars)
+        return flatten_append_cmd(ctx, src_cmd, i, call_src_cmd_idx,
+                                  root_call_src_cmd_idx, func_scope_mask,
+                                  NULL, 0);
+    return 1;
+}
+
 /* Recursively expand source_commands[start..end_idx) into the destination
  * flat buffer named by FlattenContext. For-loops are unrolled, function calls
  * are inlined, and if-blocks with loop-variable conditions are evaluated.
@@ -214,65 +428,15 @@ static void flatten_range(FlattenContext *ctx,
 
         if (src_cmd->type == CMD_FOR_BEGIN) {
             int loop_end = flatten_repl_source_scope_find_block_end(ctx, i);
-            char var_name[16];
-            float start_val = src_cmd->args[0];
-            float end_val   = src_cmd->args[1];
-            float step_val  = src_cmd->args[2];
-            const char *src_text = flatten_src_text(ctx->text, i);
-            flatten_get_for_var_name(ctx->text, src_cmd, i, var_name, sizeof(var_name));
-
-            /* Re-evaluate for-loop bounds from source if they contain variables */
-            if (src_cmd->has_vars) {
-                const char *unused_body;
-                float re_start, re_end, re_step;
-                char rv[16];
-                if (repl_eval_parse_for_header_with_vars(src_text, rv, sizeof(rv),
-                                               &re_start, &re_end, &re_step,
-                                               vars, nv, &unused_body)) {
-                    start_val = re_start;
-                    end_val   = re_end;
-                    step_val  = re_step;
-                }
-            }
-
-            /* Skip degenerate/empty loops: a near-zero step would never
-             * advance, and a range already satisfied at the start (e.g.
-             * for(i,5,0) with a positive step) has zero iterations. */
-            if (fabsf(step_val) > 1e-9f &&
-                !((step_val > 0 && start_val >= end_val) ||
-                  (step_val < 0 && start_val <= end_val))) {
-                int max_iters = MAX_FLATTEN_LOOP_ITERS;
-                /* The 1e-6 fudge on the bound keeps float accumulation
-                 * from running one extra iteration past `end`. */
-                for (float val = start_val;
-                     (step_val > 0) ? (val < end_val - 1e-6f) : (val > end_val + 1e-6f);
-                     val += step_val) {
-                    if (--max_iters < 0) break;
-                    if (ctx->abort) return;
-                    ExprVar lvars[MAX_EXPR_VARS];
-                    int lnv = 0;
-                    if (lnv < MAX_EXPR_VARS) {
-                        repl_copy_string_fits(lvars[lnv].name,
-                                              sizeof(lvars[lnv].name),
-                                              var_name);
-                        lvars[lnv].value = val;
-                        lnv++;
-                    }
-                    if (vars)
-                        for (int v = 0; v < nv && lnv < MAX_EXPR_VARS; v++)
-                            lvars[lnv++] = vars[v];
-                    flatten_range(ctx, i + 1, loop_end, lvars, lnv,
-                                  call_src_cmd_idx, root_call_src_cmd_idx,
-                                  func_scope_mask);
-                }
-            }
+            flatten_for_loop(ctx, src_cmd, i, vars, nv,
+                             call_src_cmd_idx, root_call_src_cmd_idx,
+                             func_scope_mask, loop_end);
             i = (loop_end < ctx->source_count) ? loop_end + 1 : ctx->source_count;
             continue;
         }
 
         if (src_cmd->type == CMD_FOR_END) { i++; continue; }
 
-        /* Function definitions: skip body (expanded at call sites) */
         if (src_cmd->type == CMD_FUNC_DEF) {
             int func_end = flatten_repl_source_scope_find_block_end(ctx, i);
             i = (func_end < ctx->source_count) ? func_end + 1 : ctx->source_count;
@@ -280,128 +444,23 @@ static void flatten_range(FlattenContext *ctx,
         }
         if (src_cmd->type == CMD_FUNC_END) { i++; continue; }
 
-        /* Function calls: find definition and expand body inline */
         if (src_cmd->type == CMD_CALL) {
-            int func_num = (int)src_cmd->args[0];
-            if (ctx->call_depth >= ctx->max_call_depth) {
-                char msg[128];
-                snprintf(msg, sizeof(msg),
-                         "Recursive expansion exceeded depth limit (%d) at func%d",
-                         ctx->max_call_depth, func_num);
-                flatten_fail(ctx, msg);
-                i++;
-                continue;
-            }
-
-            int k = (func_num >= 0 && func_num < REPL_FUNC_SLOT_COUNT)
-                    ? ctx->func_def_idx[func_num]
-                    : -1;
-            if (k < 0) {
-                char msg[64];
-                snprintf(msg, sizeof(msg),
-                         "Error: func%d not defined", func_num);
-                flatten_note_status(ctx, msg);
-                i++;
-                continue;
-            }
-            do {
-                int body_end = flatten_repl_source_scope_find_block_end(ctx, k);
-                int def_fn = func_num;
-                int param_count = 0;
-                char param_names[MAX_EXPR_VARS][16];
-                char arg_text[MAX_LINE_LEN];
-                float arg_vals[MAX_EXPR_VARS];
-                int arg_count = 0;
-                const char *def_text = flatten_src_text(ctx->text, k);
-                const char *call_text = flatten_src_text(ctx->text, i);
-
-                if (!parse_repl_func_signature(def_text, &def_fn,
-                                               param_names, MAX_EXPR_VARS,
-                                               &param_count))
-                    break;
-                if (!extract_func_call_args_text(call_text, NULL,
-                                                 arg_text, sizeof(arg_text)))
-                    break;
-                if (!parse_expr_list_exact(arg_text, arg_vals, MAX_EXPR_VARS,
-                                           vars, nv, &arg_count))
-                    break;
-                if (arg_count != param_count) {
-                    char msg[128];
-                    snprintf(msg, sizeof(msg),
-                             "func%d expects %d args, got %d",
-                             func_num, param_count, arg_count);
-                    flatten_note_status(ctx, msg);
-                    break;
-                }
-
-                ExprVar lvars[MAX_EXPR_VARS];
-                int lnv = 0;
-                for (int p = 0; p < param_count && lnv < MAX_EXPR_VARS; p++) {
-                    repl_copy_string_fits(lvars[lnv].name,
-                                          sizeof(lvars[lnv].name),
-                                          param_names[p]);
-                    lvars[lnv].value = arg_vals[p];
-                    lnv++;
-                }
-                for (int v = 0; vars && v < nv && lnv < MAX_EXPR_VARS; v++)
-                    lvars[lnv++] = vars[v];
-
-                unsigned int nested_func_mask = func_scope_mask;
-                if (func_num >= 0 && func_num < FUNC_SCOPE_MASK_BITS)
-                    nested_func_mask |= (1u << func_num);
-                int nested_root_call = (root_call_src_cmd_idx >= 0)
-                                     ? root_call_src_cmd_idx : i;
-
-                ctx->call_depth++;
-                flatten_range(ctx, k + 1, body_end, lvars, lnv,
-                              i, nested_root_call, nested_func_mask);
-                if (ctx->call_depth > 0) ctx->call_depth--;
-            } while (0);
+            flatten_call(ctx, src_cmd, i, vars, nv,
+                         root_call_src_cmd_idx, func_scope_mask);
             i++;
             continue;
         }
 
         if (src_cmd->type == CMD_IF_BEGIN) {
-            /* Resolve the if-block at flatten time: evaluate the condition
-             * against the current loop/func vars and predef vars, then
-             * either recurse into the body (cond true) or skip it
-             * entirely (cond false). The IF_BEGIN/IF_END pair is compiled
-             * away — they never reach the executor.
-             *
-             * This single-pass model matches the user's mental model
-             * (`if(cond) body` reads top-down each frame) and prevents two
-             * classes of bugs:
-             *   1. body side-effects firing during flatten even when the
-             *      branch should be skipped (false cond → tmp2 still grew);
-             *   2. subsequent flatten ops in the same frame missing the
-             *      body's updates (vertex sees stale tmp2 after `if(true)`).
-             *
-             * Trade-off: goto loops can no longer use if-blocks to drive
-             * per-iteration branching, since the if is resolved once per
-             * frame. Goto support is already documented as partial. */
             int if_end = flatten_repl_source_scope_find_block_end(ctx, i);
-            char cond_text[MAX_LINE_LEN];
-            const char *src_text = flatten_src_text(ctx->text, i);
-            float cond = src_cmd->args[0]; /* commit-time eval fallback */
-
-            if (repl_extract_paren_payload(src_text, cond_text, sizeof(cond_text))) {
-                char repl_cond[MAX_LINE_LEN];
-                repl_eval_c_expr_to_repl(cond_text, repl_cond, sizeof(repl_cond));
-                ExprCtx expr_ctx = { repl_cond, vars, nv };
-                cond = repl_eval_expr(&expr_ctx);
-            }
-
-            if (cond != 0.0f)
-                flatten_range(ctx, i + 1, if_end, vars, nv,
-                              call_src_cmd_idx, root_call_src_cmd_idx,
-                              func_scope_mask);
+            flatten_if_block(ctx, src_cmd, i, vars, nv,
+                             call_src_cmd_idx, root_call_src_cmd_idx,
+                             func_scope_mask, if_end);
             i = (if_end < ctx->source_count) ? if_end + 1 : ctx->source_count;
             continue;
         }
 
         if (src_cmd->type == CMD_IF_END) {
-            /* Standalone IF_END (no matching IF_BEGIN visited in this
-             * range — possible during partial flattening). Drop it. */
             i++;
             continue;
         }
@@ -505,73 +564,10 @@ static void flatten_range(FlattenContext *ctx,
             continue;
         }
 
-        /* Flatten re-parses every source line on every flatten pass.
-         * Errors here are dropped: a re-parse failure means the line
-         * was already invalid at commit time (it would have set
-         * .valid=0), and the flatten pass falls back to copying the
-         * original cmd through. Each parse gets its own scratch
-         * err_buf; the parser writes diagnostics there and never
-         * calls set_status, so flatten stays side-effect-free. */
-        char flatten_parse_err[REPL_STATUS_TEXT_MAX]; /* deliberately unread */
-        flatten_parse_err[0] = '\0';
-
-        if (vars && nv > 0) {
-            ReplParseContext parse_ctx = {
-                .source_line_idx = i,
-                .vars = vars, .num_vars = nv,
-                .err_buf = flatten_parse_err,
-                .err_sz  = (int)sizeof(flatten_parse_err),
-            };
-            const char *text = flatten_src_text(ctx->text, i);
-            ReplParsedLine tmp_pl;
-            if (repl_parser_parse_command_ctx(text, &tmp_pl, &parse_ctx)) {
-                GLCmd tmp = tmp_pl.cmd;
-                tmp.has_vars = src_cmd->has_vars;
-                if (!flatten_append_cmd(ctx, &tmp, i, call_src_cmd_idx,
-                                        root_call_src_cmd_idx, func_scope_mask,
-                                        vars, nv))
-                    return;
-            }
-        } else if (src_cmd->has_vars) {
-            /* Outside loop but has predefined var references: re-evaluate */
-            ReplParseContext parse_ctx = {
-                .source_line_idx = i,
-                .err_buf = flatten_parse_err,
-                .err_sz  = (int)sizeof(flatten_parse_err),
-            };
-            const char *text = flatten_src_text(ctx->text, i);
-            ReplParsedLine tmp_pl;
-            if (repl_parser_parse_command_ctx(text, &tmp_pl, &parse_ctx)) {
-                GLCmd tmp = tmp_pl.cmd;
-                tmp.has_vars = 1;
-                if (!flatten_append_cmd(ctx, &tmp, i, call_src_cmd_idx,
-                                        root_call_src_cmd_idx, func_scope_mask,
-                                        NULL, 0))
-                    return;
-            }
-        } else {
-            /* Re-parse even the no-vars path so flat args always reflect
-             * the editor-owned source text (not a frozen parse). */
-            ReplParseContext parse_ctx = {
-                .source_line_idx = i,
-                .err_buf = flatten_parse_err,
-                .err_sz  = (int)sizeof(flatten_parse_err),
-            };
-            const char *text = flatten_src_text(ctx->text, i);
-            ReplParsedLine tmp_pl;
-            if (repl_parser_parse_command_ctx(text, &tmp_pl, &parse_ctx)) {
-                GLCmd tmp = tmp_pl.cmd;
-                tmp.has_vars = 0;
-                tmp.is_auto = src_cmd->is_auto;
-                if (!flatten_append_cmd(ctx, &tmp, i, call_src_cmd_idx,
-                                        root_call_src_cmd_idx, func_scope_mask,
-                                        NULL, 0))
-                    return;
-            } else if (!flatten_append_cmd(ctx, src_cmd, i, call_src_cmd_idx,
-                                           root_call_src_cmd_idx, func_scope_mask,
-                                           NULL, 0))
-                return;
-        }
+        if (!flatten_reparse_line(ctx, src_cmd, i, vars, nv,
+                                  call_src_cmd_idx, root_call_src_cmd_idx,
+                                  func_scope_mask))
+            return;
         i++;
     }
 }
