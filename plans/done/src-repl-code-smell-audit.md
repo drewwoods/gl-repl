@@ -27,8 +27,8 @@ Status by finding:
 - **🔵 Structural:** #36 already done before the audit ran (the
   declared mutator had moved to `state_owners.h`); #37, #38 done in
   the original passes; **#41 + #42 + #43 + #45 + #46 done in the
-  closeout** (Tier A/B — see below); **#39, #40 deferred** (high cost,
-  marked Out of scope); **#44 done in the closeout** (Tier B).
+  closeout** (Tier A/B — see below); **#39, #40 done in the Tier C
+  pass** (see below); **#44 done in the closeout** (Tier B).
 
 ### Tier system
 
@@ -66,10 +66,16 @@ Used during the 2026-05-24 backlog review to triage what was left:
   - **#44** — Embed `ReplExportConfig cfg` in `UserScene`; fold
     `g_pre_example_cfg`/`g_pre_example_valid` into one wrapped struct.
     Kills the parallel-array invariant. (`17a574b`)
-- **Tier C (deferred — explicitly marked Out of scope in the
-  Sequencing section):**
-  - **#39** — `parse_command` extraction (870-line function).
-  - **#40** — `flatten_range` extraction (380-line god-function).
+- **Tier C (done — branch `repl-audit-test-gaps`, commits `7bf748e`
+  and `925b135`):**
+  - **#40** — `flatten_range` extraction (378 → 59 lines). Extracted
+    `flatten_reparse_line`, `flatten_for_loop`, `flatten_call`,
+    `flatten_if_block`. (`7bf748e`)
+  - **#39** — `parse_command` extraction (903 → 456 lines). Extracted
+    `parse_label`, `parse_materialfv`, `parse_materialf`,
+    `parse_point_parameter_fv`, `parse_func_call`. (`925b135`)
+  - Size ratchet added (`check-tier-c-function-size`) to prevent
+    future growth past the new baselines. (`8925633`)
 - **Tier D:** none from this audit (the equivalent in
   `src-ui-code-smell-audit.md` is #37, kept as a deliberate
   namespace-boundary marker).
@@ -649,7 +655,7 @@ heaviest file in the directory. Moving them out drops `export.c` by
 **Fix:** Move to a new `src/repl/text_helpers.c` (or merge into
 `parser.c`).
 
-### 39. `parse_command` is 870 lines mixing parsing, validation, formatting, and clamping (Tier C — deferred)
+### 39. `parse_command` is 870 lines mixing parsing, validation, formatting, and clamping (done — Tier C)
 
 **Where:** `src/repl/parser.c:250-1121`
 
@@ -666,7 +672,7 @@ sub-bugs of this.
 with a uniform `(line, args, cmd, text_out, text_sz, ctx) → int`
 signature.
 
-### 40. `flatten_range` is a 380-line god-function (Tier C — deferred)
+### 40. `flatten_range` is a 380-line god-function (done — Tier C)
 
 **Where:** `src/repl/flatten.c:198-576`
 
@@ -806,12 +812,10 @@ That's ~7 small commits, all with focused scope.
   in `tutorials.c:10-36` — worth switching to designated initializers
   in principle, but every existing call site already initializes by
   position, so the field-reorder hazard is theoretical.
-- `parse_command` extraction (#39) and `flatten_range` extraction (#40)
-  are real wins but touch a wide surface and every new command spec
-  landed since the last refactor has copy-pasted into them. High cost
-  per finding compared to the rest of the list. (Sorted into **Tier C**
-  by the 2026-05-24 backlog review — see the closeout at the top of
-  this file.)
+- ~~`parse_command` extraction (#39) and `flatten_range` extraction (#40)~~
+  — **Done** (2026-05-25, branch `repl-audit-test-gaps`). Both functions
+  decomposed with per-command static handlers; a size ratchet
+  (`check-tier-c-function-size`) prevents future growth.
 
 ## Method note
 

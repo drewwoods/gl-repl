@@ -8,5 +8,5 @@
 # When you extract a sub-handler, lower the baseline to the new count
 # so the ratchet tightens behind you.
 
-parse_command: 903
+parse_command: 456
 flatten_range: 59
