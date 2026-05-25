@@ -84,7 +84,7 @@ static const char *axes_theme_names[AXES_THEME_COUNT] = {
     [AXES_THEME_GIZMO]   = "Gizmo",
     [AXES_THEME_RULER]   = "Ruler",
 };
-static char cfg_status_buf[256];
+static char cfg_status_buf[REPL_STATUS_TEXT_MAX];
 
 /* Unified audio cfg: collapses mute + loop mode into one cycling menu entry.
  * Indices:

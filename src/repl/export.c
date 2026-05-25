@@ -2499,7 +2499,7 @@ static void import_feed_one_line(const char *line, int *loaded, int *warnings,
      * (repl_load_apply_line in src/repl/compile.c) instead of
      * editor_feed_line. Same compile + apply, no editor input dispatch
      * (implemented in step 5b). */
-    char load_err[256] = "";
+    char load_err[REPL_STATUS_TEXT_MAX] = "";
     if (import_make_repl_for_header(line, repl_line, sizeof(repl_line))) {
         handled = repl_load_apply_line(repl_line, load_err, (int)sizeof(load_err),
                                        edit_line_inout);
@@ -3023,7 +3023,7 @@ static int import_try_function_header(ImportState *s, const char *p, const char 
         import_feed_one_line(s->pending_comments[comment_idx], &s->loaded, &s->warnings, &s->edit_line);
     import_reset_pending_function_prelude(s);
     int before = repl_state_document_count();
-    char load_err[256] = "";
+    char load_err[REPL_STATUS_TEXT_MAX] = "";
     int handled = repl_load_apply_line(repl_func_line, load_err, (int)sizeof(load_err),
                                        &s->edit_line);
     if (repl_state_document_count() > before) s->loaded += (repl_state_document_count() - before);
@@ -3157,7 +3157,7 @@ int repl_export_load_from_file(const char *filename) {
     if (fclose(f) != 0)
         return 0;
     if (truncated_line) {
-        char msg[256];
+        char msg[REPL_STATUS_TEXT_MAX];
         snprintf(msg, sizeof(msg), "Import failed: line too long in %s", filename);
         repl_set_status_error(msg);
         return 0;
@@ -3193,7 +3193,7 @@ int repl_export_load_from_file(const char *filename) {
          * appending (implemented in phase 4; see the
          * edit-line-ownership plan doc). */
         repl_dispatch_edit_line_set(state.edit_line);
-        char msg[256];
+        char msg[REPL_STATUS_TEXT_MAX];
         if (state.warnings > 0)
             snprintf(msg, sizeof(msg),
                      "Loaded %d commands from %s (%d warnings)",

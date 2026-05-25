@@ -242,9 +242,9 @@ void ui_tabbed_overlay_render(const UiOverlayState *in) {
         const char *tab = strchr(text[i], '\t');
         if (tab) {
             /* Left column - #d8d8d8 */
-            char left[256];
+            char left[MAX_LINE_LEN];
             int ln = (int)(tab - text[i]);
-            if (ln > 255) ln = 255;
+            if (ln > (int)sizeof(left) - 1) ln = (int)sizeof(left) - 1;
             memcpy(left, text[i], ln);
             left[ln] = '\0';
             ui_clr(UI_TOK_TEXT_PRIMARY);

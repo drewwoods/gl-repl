@@ -383,8 +383,8 @@ TutorialMatchResult tutorial_match(const char *expected, const char *got) {
         .kind = TUT_MATCH_OK,
         .message = "",
     };
-    char normalized_expected[256];
-    char normalized_got[256];
+    char normalized_expected[MAX_LINE_LEN];
+    char normalized_got[MAX_LINE_LEN];
 
     tutorial_normalize_text(expected, normalized_expected,
                             sizeof(normalized_expected));
