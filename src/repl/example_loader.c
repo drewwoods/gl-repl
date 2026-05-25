@@ -9,6 +9,7 @@
 #include "repl/core.h"
 #include "repl/state_owners.h"
 #include "source_document.h"     /* source_document_clear */
+#include "config.h"              /* REPL_DIAG_TEXT_MAX */
 
 static const char *example_cam_skip_ws(const char *text) {
     while (*text && isspace((unsigned char)*text))
@@ -304,7 +305,7 @@ static void emit_example_body_two_pass(const char *const *body,
                                        int *edit_line_inout) {
     if (!body) return;
 
-    char err[128] = "";
+    char err[REPL_DIAG_TEXT_MAX] = "";
 
     /* Classify each line into one of three buckets so emission
      * matches the editor's canonical layout (decls first, then
@@ -490,7 +491,7 @@ static int load_example(int idx) {
     int new_edit_line = load_example_lines(lines, repl_example_tag_mask(idx));
     repl_state_scenes_mut()->active_example_idx = idx;
     repl_scenes_mark_example_active();
-    char msg[128];
+    char msg[REPL_DIAG_TEXT_MAX];
     snprintf(msg, sizeof(msg), "Example %d/%d: %s (F12 for next)",
              idx + 1, count, name);
     repl_set_status(msg);

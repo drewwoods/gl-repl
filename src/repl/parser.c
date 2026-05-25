@@ -160,7 +160,7 @@ static int resolve_enum_arg_slot(const char *raw,
         return 0;
 
     case REPL_ENUM_SLOT_ENUM_OR_CONST_VALUE: {
-        char verr[128];
+        char verr[REPL_DIAG_TEXT_MAX];
         if (!repl_eval_validate_expression_idents(raw, vars, num_vars,
                                                   verr, sizeof(verr))) {
             parser_emit_error_static(ctx, verr);
@@ -206,7 +206,7 @@ static int resolve_enum_arg_slot(const char *raw,
     }
 
     case REPL_ENUM_SLOT_ENUM_OR_EXPR: {
-        char verr[128];
+        char verr[REPL_DIAG_TEXT_MAX];
         if (!repl_eval_validate_expression_idents(raw, vars, num_vars,
                                                   verr, sizeof(verr))) {
             parser_emit_error_static(ctx, verr);
@@ -438,7 +438,7 @@ static int parse_label(const char *args, GLCmd *cmd,
     int num_vars = ctx->num_vars;
     char fmt_str[GLUT_BITMAP_FMT_MAX] = "";
     char post_args[MAX_LINE_LEN] = "";
-    char split_err[128] = "";
+    char split_err[REPL_DIAG_TEXT_MAX] = "";
 
     if (!repl_label_split_args(args,
                                fmt_str, (int)sizeof(fmt_str),
@@ -451,7 +451,7 @@ static int parse_label(const char *args, GLCmd *cmd,
     float subs[GLUT_BITMAP_MAX_SUB_ARGS] = {0};
     int sub_count = 0;
     if (post_args[0]) {
-        char verr[128];
+        char verr[REPL_DIAG_TEXT_MAX];
         if (!repl_eval_validate_expression_idents(post_args, vars, num_vars,
                                                    verr, sizeof(verr))) {
             parser_emit_error_static(ctx, verr); return 0;
@@ -596,7 +596,7 @@ static int parse_materialfv(const char *args, GLCmd *cmd,
     }
 
     {
-        char verr[128];
+        char verr[REPL_DIAG_TEXT_MAX];
         if (!repl_eval_validate_expression_idents(to_parse, vars, num_vars, verr, sizeof(verr))) {
             parser_emit_error_static(ctx, verr); return 0;
         }
@@ -684,7 +684,7 @@ static int parse_materialf(const char *args, GLCmd *cmd,
     }
 
     {
-        char verr[128];
+        char verr[REPL_DIAG_TEXT_MAX];
         if (!repl_eval_validate_expression_idents(val_arg, vars, num_vars, verr, sizeof(verr))) {
             parser_emit_error_static(ctx, verr); return 0;
         }
@@ -747,7 +747,7 @@ static int parse_point_parameter_fv(const char *args, GLCmd *cmd,
     }
 
     {
-        char verr[128];
+        char verr[REPL_DIAG_TEXT_MAX];
         if (!repl_eval_validate_expression_idents(rest, vars, num_vars, verr, sizeof(verr))) {
             parser_emit_error_static(ctx, verr); return 0;
         }
@@ -786,7 +786,7 @@ static int parse_func_call(const char *args, int fn, GLCmd *cmd,
     float dummy_vals[MAX_EXPR_VARS];
     int arg_count = 0;
     if (args[0] != '\0') {
-        char verr[128];
+        char verr[REPL_DIAG_TEXT_MAX];
         if (!repl_eval_validate_expression_idents(args, vars, num_vars, verr, sizeof(verr))) {
             parser_emit_error_static(ctx, verr); return 0;
         }
@@ -1006,7 +1006,7 @@ static int parse_command(const char *line, GLCmd *cmd,
     for (const ReplStdCommandSpec *def = repl_std_command_specs(); def->name; def++) {
         if (strcmp(func, def->name) == 0) {
             {
-                char verr[128];
+                char verr[REPL_DIAG_TEXT_MAX];
                 if (!repl_eval_validate_expression_idents(args, vars, num_vars, verr, sizeof(verr))) {
                     parser_emit_error_static(ctx, verr); return 0;
                 }
@@ -1146,7 +1146,7 @@ static int parse_command(const char *line, GLCmd *cmd,
     /* gluColor(r, g, b[, a]) - set per-vertex color for tessellator */
     if (strcmp(func, "gluColor") == 0) {
         {
-            char verr[128];
+            char verr[REPL_DIAG_TEXT_MAX];
             if (!repl_eval_validate_expression_idents(args, vars, num_vars, verr, sizeof(verr))) {
                 parser_emit_error_static(ctx, verr); return 0;
             }

@@ -37,7 +37,7 @@ typedef struct {
     int call_depth;
     int abort;
     int visit_budget;
-    char status[128];
+    char status[REPL_DIAG_TEXT_MAX];
     /* funcN -> source_cmds[] index of the matching CMD_FUNC_DEF, or -1.
      * Built once in repl_flatten_program; CMD_CALL handlers index directly
      * instead of walking the source for each call. */
@@ -259,7 +259,7 @@ static void flatten_call(FlattenContext *ctx,
                          unsigned int func_scope_mask) {
     int func_num = (int)src_cmd->args[0];
     if (ctx->call_depth >= ctx->max_call_depth) {
-        char msg[128];
+        char msg[REPL_DIAG_TEXT_MAX];
         snprintf(msg, sizeof(msg),
                  "Recursive expansion exceeded depth limit (%d) at func%d",
                  ctx->max_call_depth, func_num);
@@ -299,7 +299,7 @@ static void flatten_call(FlattenContext *ctx,
                                    vars, nv, &arg_count))
             break;
         if (arg_count != param_count) {
-            char msg[128];
+            char msg[REPL_DIAG_TEXT_MAX];
             snprintf(msg, sizeof(msg),
                      "func%d expects %d args, got %d",
                      func_num, param_count, arg_count);
@@ -540,7 +540,7 @@ static void flatten_range(FlattenContext *ctx,
             }
 
             if (elem_idx < 0 || elem_idx >= REPL_SCRATCH_ARRAY_LEN) {
-                char msg[128];
+                char msg[REPL_DIAG_TEXT_MAX];
                 snprintf(msg, sizeof(msg),
                          "scratch array index out of range: %d", elem_idx);
                 flatten_fail(ctx, msg);

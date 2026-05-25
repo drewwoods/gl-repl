@@ -1535,7 +1535,7 @@ static void glr_ctrl_populate_numeric_swatch(UiRenderSnapshot *snap) {
     ReplNumericArgAtCursor d;
     float anchor_y;
     int cp_x, cp_w;
-    char parse_err[128] = "";
+    char parse_err[REPL_DIAG_TEXT_MAX] = "";
     ReplParsedLine pl;
 
     snap->numeric_swatch.visible = 0;
@@ -4103,7 +4103,7 @@ void glr_ctrl_tick(void) {
             if (path && *path) {
                 const char *base = strrchr(path, '/');
                 base = base ? base + 1 : path;
-                char msg[128];
+                char msg[REPL_DIAG_TEXT_MAX];
                 snprintf(msg, sizeof(msg), "Now playing: %s", base);
                 repl_set_status(msg);
             }

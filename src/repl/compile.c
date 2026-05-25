@@ -560,7 +560,7 @@ static ReplCompileResult parse_float_name_list(const char *input,
             if (elen == 0)
                 return compile_set_err(err, err_size, "expected expression after '='");
 
-            char verr[128];
+            char verr[REPL_DIAG_TEXT_MAX];
             if (!repl_eval_validate_expression_idents(init_expr, NULL, 0,
                                                       verr, sizeof(verr)))
                 return compile_set_err(err, err_size, "%s", verr);
@@ -890,7 +890,7 @@ ReplCompileResult repl_compile_var_assign(const char *input,
 
     ExprVar vis[MAX_EXPR_VARS];
     int vis_n = collect_visible_vars(insert_idx, vis, MAX_EXPR_VARS, NULL);
-    char verr[128];
+    char verr[REPL_DIAG_TEXT_MAX];
     GLCmd cmd;
     memset(&cmd, 0, sizeof(cmd));
 
@@ -1609,7 +1609,7 @@ ReplCompileResult repl_compile_if_block(const char *input,
     cond_text[clen] = '\0';
 
     {
-        char verr[128];
+        char verr[REPL_DIAG_TEXT_MAX];
         if (!repl_eval_validate_expression_idents(cond_text,
                                                   visible_nv > 0 ? visible_vars : NULL,
                                                   visible_nv,
@@ -1888,7 +1888,7 @@ ReplCompileResult repl_compile_for_loop(const char *input,
         char *ra = raw_args;
         while (*ra && isspace((unsigned char)*ra)) ra++;
 
-        char verr[128];
+        char verr[REPL_DIAG_TEXT_MAX];
         if (!repl_eval_validate_expression_idents(ra, visible_vars, visible_nv,
                                                   verr, sizeof(verr))) {
             snprintf(err, (size_t)err_size, "%s", verr);

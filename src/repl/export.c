@@ -318,7 +318,7 @@ static int parse_var(const char *args) {
     float val = repl_eval_expr(&ctx);
     int idx = repl_eval_find_predef_var_idx(name);
     if (idx < 0) {
-        char err[128];
+        char err[REPL_DIAG_TEXT_MAX];
         if (!repl_eval_declare_predef_var(name, err, sizeof(err)))
             return 0;
         idx = repl_eval_find_predef_var_idx(name);
@@ -1379,7 +1379,7 @@ static void write_canonical_cmd_as_c(FILE *f, const GLCmd *cmd, int cmd_idx,
 
             char fmt[GLUT_BITMAP_FMT_MAX] = "";
             char post[MAX_LINE_LEN] = "";
-            char split_err[128] = "";
+            char split_err[REPL_DIAG_TEXT_MAX] = "";
             if (repl_label_split_args(args_str,
                                       fmt, (int)sizeof(fmt),
                                       post, (int)sizeof(post),
@@ -2466,7 +2466,7 @@ static int import_make_repl_glut_bitmap_string(const char *line,
 
     char fmt[GLUT_BITMAP_FMT_MAX] = "";
     char post[MAX_LINE_LEN] = "";
-    char split_err[128] = "";
+    char split_err[REPL_DIAG_TEXT_MAX] = "";
     if (!repl_label_split_args(args_str,
                                fmt, (int)sizeof(fmt),
                                post, (int)sizeof(post),
@@ -2922,7 +2922,7 @@ int repl_export_save_output(const char *filename, SourceTextView text,
         return 0;
     }
 
-    char msg[128];
+    char msg[REPL_DIAG_TEXT_MAX];
     snprintf(msg, sizeof(msg), "Saved to output.c (%d commands)", repl_state_document_count());
     repl_set_status(msg);
     return 1;

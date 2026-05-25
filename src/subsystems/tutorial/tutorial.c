@@ -10,6 +10,7 @@
 #include "repl/scenes.h"
 #include "repl/state_owners.h"
 #include "repl/tutorials.h"
+#include "config.h"            /* REPL_DIAG_TEXT_MAX */
 
 static float clamp01(float value) {
     if (value <= 0.0f)
@@ -198,7 +199,7 @@ static void format_step_commit_hint(int step, int total,
  * slot — see tutorial_status_hint and the glr_ctrl_tick refresh. */
 static void tutorial_set_step_status(int tutorial_idx, int step) {
     int total = repl_tutorial_step_count(tutorial_idx);
-    char msg[128];
+    char msg[REPL_DIAG_TEXT_MAX];
 
     if (total <= 0)
         return;
@@ -592,7 +593,7 @@ void tutorial_refresh_input_hint(const char *input) {
     const char *expected;
     TutorialMatchResult r;
     int total;
-    char msg[128];
+    char msg[REPL_DIAG_TEXT_MAX];
 
     if (!tutorial_active())
         return;
