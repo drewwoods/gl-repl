@@ -16,45 +16,62 @@ static void geometry_guides_pop_state(void) {
     glPopAttrib();
 }
 
-/* Draw a semi-transparent plane perpendicular to the X axis at x=v (red) */
-static void draw_guide_yz_plane(float v, float sz, float as) {
-    scene_clr_a(SCENE_CLR_GUIDE_PLANE_X_FILL, fminf(0.40f * as, 1.0f));
-    glBegin(GL_QUADS);
-    glVertex3f(v, -sz, -sz); glVertex3f(v,  sz, -sz);
-    glVertex3f(v,  sz,  sz); glVertex3f(v, -sz,  sz);
-    glEnd();
-    scene_clr_a(SCENE_CLR_GUIDE_PLANE_X_EDGE, fminf(0.25f * as, 1.0f));
-    glBegin(GL_LINE_LOOP);
-    glVertex3f(v, -sz, -sz); glVertex3f(v,  sz, -sz);
-    glVertex3f(v,  sz,  sz); glVertex3f(v, -sz,  sz);
-    glEnd();
-}
+/* Per-axis fill and edge color tokens, indexed by the constrained axis
+ * (0=X → YZ plane / red, 1=Y → XZ plane / green, 2=Z → XY plane /
+ * blue). Used by draw_guide_axis_plane below. */
+static const SceneColorToken k_guide_plane_fill[3] = {
+    SCENE_CLR_GUIDE_PLANE_X_FILL,
+    SCENE_CLR_GUIDE_PLANE_Y_FILL,
+    SCENE_CLR_GUIDE_PLANE_Z_FILL,
+};
+static const SceneColorToken k_guide_plane_edge[3] = {
+    SCENE_CLR_GUIDE_PLANE_X_EDGE,
+    SCENE_CLR_GUIDE_PLANE_Y_EDGE,
+    SCENE_CLR_GUIDE_PLANE_Z_EDGE,
+};
 
-/* Draw a semi-transparent plane perpendicular to the Y axis at y=v (green) */
-static void draw_guide_xz_plane(float v, float sz, float as) {
-    scene_clr_a(SCENE_CLR_GUIDE_PLANE_Y_FILL, fminf(0.40f * as, 1.0f));
-    glBegin(GL_QUADS);
-    glVertex3f(-sz, v, -sz); glVertex3f( sz, v, -sz);
-    glVertex3f( sz, v,  sz); glVertex3f(-sz, v,  sz);
-    glEnd();
-    scene_clr_a(SCENE_CLR_GUIDE_PLANE_Y_EDGE, fminf(0.25f * as, 1.0f));
-    glBegin(GL_LINE_LOOP);
-    glVertex3f(-sz, v, -sz); glVertex3f( sz, v, -sz);
-    glVertex3f( sz, v,  sz); glVertex3f(-sz, v,  sz);
-    glEnd();
-}
+/* Draw a semi-transparent plane perpendicular to `free_axis` at
+ * coordinate v. `free_axis` ∈ {0=X, 1=Y, 2=Z}; the other two axes span
+ * the [-sz, +sz] face. `as` is the snapshot's alpha-scale boost. The
+ * three call sites used to be near-identical 13-line yz/xz/xy_plane
+ * helpers — this one indexes the per-axis tokens and computes the four
+ * corner vertices from a single basis. */
+static void draw_guide_axis_plane(int free_axis, float v, float sz, float as) {
+    /* Corner offsets in the basis (a, b) of the free face. */
+    static const float corners[4][2] = {
+        { -1.0f, -1.0f },
+        { +1.0f, -1.0f },
+        { +1.0f, +1.0f },
+        { -1.0f, +1.0f },
+    };
+    /* The free axis is held at v; the other two axes get the corner
+     * offsets * sz. This indexing table picks (a-axis, b-axis) for
+     * each free axis. */
+    int a_axis, b_axis;
+    if (free_axis == 0)      { a_axis = 1; b_axis = 2; } /* YZ plane */
+    else if (free_axis == 1) { a_axis = 0; b_axis = 2; } /* XZ plane */
+    else                     { a_axis = 0; b_axis = 1; } /* XY plane */
 
-/* Draw a semi-transparent plane perpendicular to the Z axis at z=v (blue) */
-static void draw_guide_xy_plane(float v, float sz, float as) {
-    scene_clr_a(SCENE_CLR_GUIDE_PLANE_Z_FILL, fminf(0.40f * as, 1.0f));
+    scene_clr_a(k_guide_plane_fill[free_axis], fminf(0.40f * as, 1.0f));
     glBegin(GL_QUADS);
-    glVertex3f(-sz, -sz, v); glVertex3f( sz, -sz, v);
-    glVertex3f( sz,  sz, v); glVertex3f(-sz,  sz, v);
+    for (int i = 0; i < 4; i++) {
+        float p[3];
+        p[free_axis] = v;
+        p[a_axis] = corners[i][0] * sz;
+        p[b_axis] = corners[i][1] * sz;
+        glVertex3f(p[0], p[1], p[2]);
+    }
     glEnd();
-    scene_clr_a(SCENE_CLR_GUIDE_PLANE_Z_EDGE, fminf(0.25f * as, 1.0f));
+
+    scene_clr_a(k_guide_plane_edge[free_axis], fminf(0.25f * as, 1.0f));
     glBegin(GL_LINE_LOOP);
-    glVertex3f(-sz, -sz, v); glVertex3f( sz, -sz, v);
-    glVertex3f( sz,  sz, v); glVertex3f(-sz,  sz, v);
+    for (int i = 0; i < 4; i++) {
+        float p[3];
+        p[free_axis] = v;
+        p[a_axis] = corners[i][0] * sz;
+        p[b_axis] = corners[i][1] * sz;
+        glVertex3f(p[0], p[1], p[2]);
+    }
     glEnd();
 }
 
@@ -110,9 +127,9 @@ static void draw_vertex_guides(const SceneGuideSnapshot *snapshot) {
         glPointSize(1.0f);
         if (depth) glEnable(GL_DEPTH_TEST);
     } else if (n == 1) {
-        if      (filled[0]) draw_guide_yz_plane(vals[0], sz, as);
-        else if (filled[1]) draw_guide_xz_plane(vals[1], sz, as);
-        else if (filled[2]) draw_guide_xy_plane(vals[2], sz, as);
+        if      (filled[0]) draw_guide_axis_plane(0, vals[0], sz, as);
+        else if (filled[1]) draw_guide_axis_plane(1, vals[1], sz, as);
+        else if (filled[2]) draw_guide_axis_plane(2, vals[2], sz, as);
     } else if (n == 2) {
         glLineWidth(2.0f);
         if (!filled[2]) {

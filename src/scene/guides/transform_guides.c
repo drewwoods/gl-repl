@@ -26,8 +26,24 @@ static void transform_guides_pop_state(void) {
 #define TG_HEAD_LEN_FRAC 0.22f
 #define TG_HEAD_LEN_MAX  0.25f
 #define TG_HEAD_LEN_MIN  0.06f
+/* Translate/scale World-mode axis tips ride closer to the per-axis
+ * gizmo geometry, where the standard MAX/MIN caps look oversized;
+ * the axis branch uses a tighter pair. */
+#define TG_HEAD_LEN_AXIS_MAX 0.20f
+#define TG_HEAD_LEN_AXIS_MIN 0.05f
 #define TG_FIN_FRAC      0.45f
 #define TG_ARC_SEGS      48
+
+/* Clamp the head length to the [min, max] ladder. When dlen itself is
+ * below min we still want a proportional little nubbin, hence the
+ * dlen*0.5 path; otherwise saturate at min. Caller picks which
+ * (max, min) pair applies (axis-branch tip vs the default tip). */
+static float clamp_head_len(float dlen, float frac, float min_len, float max_len) {
+    float head_len = dlen * frac;
+    if (head_len > max_len) head_len = max_len;
+    if (head_len < min_len) head_len = (dlen < min_len ? dlen * 0.5f : min_len);
+    return head_len;
+}
 
 /* Per-pass alpha multiplier (formerly the file-static
  * g_guide_alpha_mul). The render dispatcher draws each guide twice:
@@ -42,6 +58,29 @@ static void tg_color4f(float r, float g, float b, float a, float alpha_mul) {
     if (a < 0.0f) a = 0.0f;
     if (a > 1.0f) a = 1.0f;
     glColor4f(r, g, b, a);
+}
+
+/* Build an orthonormal {r, b} pair perpendicular to a unit `dir`.
+ * Used by every arrowhead/fin builder (draw_translate_guide,
+ * draw_arrow_head, draw_scale_guide's axis branch) to get a frame for
+ * the four fin offsets. The 0.9f axis-aligned threshold picks the world
+ * up-axis the cross product picks against; outputs are normalized when
+ * `dir` isn't already parallel to the chosen up.
+ *
+ * dir is assumed unit-length (callers already normalize). r and b
+ * receive unit-length perpendicular vectors completing the basis. */
+static void make_arrow_basis(const float dir[3], float r[3], float b[3]) {
+    float ux, uy, uz;
+    if (fabsf(dir[1]) < 0.9f) { ux = 0.0f; uy = 1.0f; uz = 0.0f; }
+    else                      { ux = 1.0f; uy = 0.0f; uz = 0.0f; }
+    r[0] = dir[1]*uz - dir[2]*uy;
+    r[1] = dir[2]*ux - dir[0]*uz;
+    r[2] = dir[0]*uy - dir[1]*ux;
+    float rlen = sqrtf(r[0]*r[0] + r[1]*r[1] + r[2]*r[2]);
+    if (rlen > 1e-8f) { r[0] /= rlen; r[1] /= rlen; r[2] /= rlen; }
+    b[0] = r[1]*dir[2] - r[2]*dir[1];
+    b[1] = r[2]*dir[0] - r[0]*dir[2];
+    b[2] = r[0]*dir[1] - r[1]*dir[0];
 }
 
 static void mat4_mul_col_major(const float a[16], const float b[16], float out[16]) {
@@ -184,23 +223,16 @@ static void draw_translate_guide(const SceneGuideSnapshot *snapshot,
     float dlen = sqrtf(tx*tx + ty*ty + tz*tz);
     if (dlen < 1e-6f)
         return;
-    float dx = tx / dlen, dy = ty / dlen, dz = tz / dlen;
+    float dir[3] = { tx / dlen, ty / dlen, tz / dlen };
+    float dx = dir[0], dy = dir[1], dz = dir[2];
 
-    float ux, uy, uz;
-    if (fabsf(dy) < 0.9f) { ux = 0.0f; uy = 1.0f; uz = 0.0f; }
-    else                  { ux = 1.0f; uy = 0.0f; uz = 0.0f; }
-    float rx = dy*uz - dz*uy;
-    float ry = dz*ux - dx*uz;
-    float rz = dx*uy - dy*ux;
-    float rlen = sqrtf(rx*rx + ry*ry + rz*rz);
-    if (rlen > 1e-8f) { rx /= rlen; ry /= rlen; rz /= rlen; }
-    float bx = ry*dz - rz*dy;
-    float by = rz*dx - rx*dz;
-    float bz = rx*dy - ry*dx;
+    float rvec[3], bvec[3];
+    make_arrow_basis(dir, rvec, bvec);
+    float rx = rvec[0], ry = rvec[1], rz = rvec[2];
+    float bx = bvec[0], by = bvec[1], bz = bvec[2];
 
-    float head_len = dlen * TG_HEAD_LEN_FRAC;
-    if (head_len > TG_HEAD_LEN_MAX) head_len = TG_HEAD_LEN_MAX;
-    if (head_len < TG_HEAD_LEN_MIN) head_len = (dlen < TG_HEAD_LEN_MIN ? dlen * 0.5f : TG_HEAD_LEN_MIN);
+    float head_len = clamp_head_len(dlen, TG_HEAD_LEN_FRAC,
+                                    TG_HEAD_LEN_MIN, TG_HEAD_LEN_MAX);
     float fin = head_len * TG_FIN_FRAC;
     float base[3] = {
         p1[0] - dx * head_len,
@@ -263,17 +295,8 @@ static void draw_translate_guide(const SceneGuideSnapshot *snapshot,
 /* Arc from p_start swept by glRotatef(angle, ax,ay,az) about local origin. */
 /* Helper: small 4-fin arrowhead from `tip` pointing along `dir` (unit). */
 static void draw_arrow_head(const float tip[3], const float dir[3], float head_len) {
-    float ux, uy, uz;
-    if (fabsf(dir[1]) < 0.9f) { ux = 0.0f; uy = 1.0f; uz = 0.0f; }
-    else                      { ux = 1.0f; uy = 0.0f; uz = 0.0f; }
-    float rx = dir[1]*uz - dir[2]*uy;
-    float ry = dir[2]*ux - dir[0]*uz;
-    float rz = dir[0]*uy - dir[1]*ux;
-    float rlen = sqrtf(rx*rx + ry*ry + rz*rz);
-    if (rlen > 1e-8f) { rx /= rlen; ry /= rlen; rz /= rlen; }
-    float bx = ry*dir[2] - rz*dir[1];
-    float by = rz*dir[0] - rx*dir[2];
-    float bz = rx*dir[1] - ry*dir[0];
+    float r[3], b[3];
+    make_arrow_basis(dir, r, b);
     float base[3] = {
         tip[0] - dir[0] * head_len,
         tip[1] - dir[1] * head_len,
@@ -282,9 +305,9 @@ static void draw_arrow_head(const float tip[3], const float dir[3], float head_l
     float fin = head_len * TG_FIN_FRAC;
     glBegin(GL_LINES);
     for (int k = 0; k < 4; k++) {
-        float sx = (k == 0 ?  rx : k == 1 ? -rx : k == 2 ?  bx : -bx);
-        float sy = (k == 0 ?  ry : k == 1 ? -ry : k == 2 ?  by : -by);
-        float sz = (k == 0 ?  rz : k == 1 ? -rz : k == 2 ?  bz : -bz);
+        float sx = (k == 0 ?  r[0] : k == 1 ? -r[0] : k == 2 ?  b[0] : -b[0]);
+        float sy = (k == 0 ?  r[1] : k == 1 ? -r[1] : k == 2 ?  b[1] : -b[1]);
+        float sz = (k == 0 ?  r[2] : k == 1 ? -r[2] : k == 2 ?  b[2] : -b[2]);
         glVertex3f(tip[0], tip[1], tip[2]);
         glVertex3f(base[0] + sx * fin, base[1] + sy * fin, base[2] + sz * fin);
     }
@@ -339,9 +362,8 @@ static void draw_scale_guide(const SceneGuideSnapshot *snapshot,
                 rgb[2]*0.6f + 0.4f
             };
             float dir[3] = { delta[0]/dlen, delta[1]/dlen, delta[2]/dlen };
-            float head_len = dlen * TG_HEAD_LEN_FRAC;
-            if (head_len > TG_HEAD_LEN_MAX) head_len = TG_HEAD_LEN_MAX;
-            if (head_len < TG_HEAD_LEN_MIN) head_len = (dlen < TG_HEAD_LEN_MIN ? dlen * 0.5f : TG_HEAD_LEN_MIN);
+            float head_len = clamp_head_len(dlen, TG_HEAD_LEN_FRAC,
+                                            TG_HEAD_LEN_MIN, TG_HEAD_LEN_MAX);
             float base[3] = {
                 p1[0] - dir[0] * head_len,
                 p1[1] - dir[1] * head_len,
@@ -415,9 +437,9 @@ static void draw_scale_guide(const SceneGuideSnapshot *snapshot,
             float dlen = sqrtf(delta[0]*delta[0] + delta[1]*delta[1] + delta[2]*delta[2]);
             float dir[3] = { delta[0]/dlen, delta[1]/dlen, delta[2]/dlen };
 
-            float head_len = dlen * TG_HEAD_LEN_FRAC;
-            if (head_len > 0.2f) head_len = 0.2f;
-            if (head_len < 0.05f) head_len = (dlen < 0.05f ? dlen * 0.5f : 0.05f);
+            float head_len = clamp_head_len(dlen, TG_HEAD_LEN_FRAC,
+                                            TG_HEAD_LEN_AXIS_MIN,
+                                            TG_HEAD_LEN_AXIS_MAX);
             float base[3] = {
                 tip[0] - dir[0] * head_len,
                 tip[1] - dir[1] * head_len,
