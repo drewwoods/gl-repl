@@ -103,12 +103,15 @@ void scene_lights_render(const SceneFrameRenderContext *frame_ctx) {
                 glEnd();
                 glDisable(GL_LINE_STIPPLE);
             } else {
+                /* Star-burst rays along the 6 cardinal axes; hoisted
+                 * out of the begin/end so it's clearly data, not part
+                 * of the vertex stream. */
+                static const float dirs[6][3] = {
+                    {1,0,0},{-1,0,0},{0,1,0},{0,-1,0},{0,0,1},{0,0,-1}
+                };
                 float rlen = 0.25f + breath * 0.1f;
                 glLineWidth(1.0f);
                 glBegin(GL_LINES);
-                float dirs[][3] = {
-                    {1,0,0},{-1,0,0},{0,1,0},{0,-1,0},{0,0,1},{0,0,-1}
-                };
                 for (int r = 0; r < 6; r++) {
                     glColor4f(d[0], d[1], d[2], 0.4f * glow);
                     glVertex3f(lx, ly, lz);

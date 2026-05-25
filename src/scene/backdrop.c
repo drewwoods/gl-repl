@@ -147,8 +147,10 @@ static void draw_cityscape(float anim_time, int nv_fog_distance_supported) {
         float olx = cx + tang_x*hw - in_x*hd, olz = cz + tang_z*hw - in_z*hd;
         float orx = cx - tang_x*hw - in_x*hd, orz = cz - tang_z*hw - in_z*hd;
 
-        float y0 = -0.05f;
-        float y1 = bh;
+        /* y_base / y_top straddle ground level; named to avoid the
+         * POSIX-<math.h> Bessel y_base/y_top shadow. */
+        float y_base = -0.05f;
+        float y_top  = bh;
         float night = city_night_factor(angle, anim_time);
 
         float bd_base = 0.07f + night * 0.035f;
@@ -159,23 +161,23 @@ static void draw_cityscape(float anim_time, int nv_fog_distance_supported) {
         glBegin(GL_QUADS);
 
         glColor3f(bd_r * 1.25f, bd_g * 1.25f, bd_b * 1.45f);
-        glVertex3f(irx, y0, irz); glVertex3f(ilx, y0, ilz);
-        glVertex3f(ilx, y1, ilz); glVertex3f(irx, y1, irz);
+        glVertex3f(irx, y_base, irz); glVertex3f(ilx, y_base, ilz);
+        glVertex3f(ilx, y_top, ilz); glVertex3f(irx, y_top, irz);
 
         glColor3f(bd_r * 0.55f, bd_g * 0.55f, bd_b * 0.60f);
-        glVertex3f(olx, y0, olz); glVertex3f(orx, y0, orz);
-        glVertex3f(orx, y1, orz); glVertex3f(olx, y1, olz);
+        glVertex3f(olx, y_base, olz); glVertex3f(orx, y_base, orz);
+        glVertex3f(orx, y_top, orz); glVertex3f(olx, y_top, olz);
 
         glColor3f(bd_r * 0.80f, bd_g * 0.80f, bd_b * 0.90f);
-        glVertex3f(ilx, y0, ilz); glVertex3f(olx, y0, olz);
-        glVertex3f(olx, y1, olz); glVertex3f(ilx, y1, ilz);
+        glVertex3f(ilx, y_base, ilz); glVertex3f(olx, y_base, olz);
+        glVertex3f(olx, y_top, olz); glVertex3f(ilx, y_top, ilz);
 
-        glVertex3f(orx, y0, orz); glVertex3f(irx, y0, irz);
-        glVertex3f(irx, y1, irz); glVertex3f(orx, y1, orz);
+        glVertex3f(orx, y_base, orz); glVertex3f(irx, y_base, irz);
+        glVertex3f(irx, y_top, irz); glVertex3f(orx, y_top, orz);
 
         glColor3f(bd_r * 0.50f, bd_g * 0.50f, bd_b * 0.55f);
-        glVertex3f(ilx, y1, ilz); glVertex3f(olx, y1, olz);
-        glVertex3f(orx, y1, orz); glVertex3f(irx, y1, irz);
+        glVertex3f(ilx, y_top, ilz); glVertex3f(olx, y_top, olz);
+        glVertex3f(orx, y_top, orz); glVertex3f(irx, y_top, irz);
 
         glEnd();
 
@@ -185,26 +187,26 @@ static void draw_cityscape(float anim_time, int nv_fog_distance_supported) {
             float ir2x = cx - tang_x*hw2 + in_x*hd2, ir2z = cz - tang_z*hw2 + in_z*hd2;
             float ol2x = cx + tang_x*hw2 - in_x*hd2, ol2z = cz + tang_z*hw2 - in_z*hd2;
             float or2x = cx - tang_x*hw2 - in_x*hd2, or2z = cz - tang_z*hw2 - in_z*hd2;
-            float y2a = y1, y2b = y1 + t2_h;
+            float y2_base = y_top, y2_top = y_top + t2_h;
 
             glBegin(GL_QUADS);
             glColor3f(bd_r * 1.25f, bd_g * 1.25f, bd_b * 1.45f);
-            glVertex3f(ir2x, y2a, ir2z); glVertex3f(il2x, y2a, il2z);
-            glVertex3f(il2x, y2b, il2z); glVertex3f(ir2x, y2b, ir2z);
+            glVertex3f(ir2x, y2_base, ir2z); glVertex3f(il2x, y2_base, il2z);
+            glVertex3f(il2x, y2_top, il2z); glVertex3f(ir2x, y2_top, ir2z);
 
             glColor3f(bd_r * 0.55f, bd_g * 0.55f, bd_b * 0.60f);
-            glVertex3f(ol2x, y2a, ol2z); glVertex3f(or2x, y2a, or2z);
-            glVertex3f(or2x, y2b, or2z); glVertex3f(ol2x, y2b, ol2z);
+            glVertex3f(ol2x, y2_base, ol2z); glVertex3f(or2x, y2_base, or2z);
+            glVertex3f(or2x, y2_top, or2z); glVertex3f(ol2x, y2_top, ol2z);
 
             glColor3f(bd_r * 0.80f, bd_g * 0.80f, bd_b * 0.90f);
-            glVertex3f(il2x, y2a, il2z); glVertex3f(ol2x, y2a, ol2z);
-            glVertex3f(ol2x, y2b, ol2z); glVertex3f(il2x, y2b, il2z);
-            glVertex3f(or2x, y2a, or2z); glVertex3f(ir2x, y2a, ir2z);
-            glVertex3f(ir2x, y2b, ir2z); glVertex3f(or2x, y2b, or2z);
+            glVertex3f(il2x, y2_base, il2z); glVertex3f(ol2x, y2_base, ol2z);
+            glVertex3f(ol2x, y2_top, ol2z); glVertex3f(il2x, y2_top, il2z);
+            glVertex3f(or2x, y2_base, or2z); glVertex3f(ir2x, y2_base, ir2z);
+            glVertex3f(ir2x, y2_top, ir2z); glVertex3f(or2x, y2_top, or2z);
 
             glColor3f(bd_r * 0.50f, bd_g * 0.50f, bd_b * 0.55f);
-            glVertex3f(il2x, y2b, il2z); glVertex3f(ol2x, y2b, ol2z);
-            glVertex3f(or2x, y2b, or2z); glVertex3f(ir2x, y2b, ir2z);
+            glVertex3f(il2x, y2_top, il2z); glVertex3f(ol2x, y2_top, ol2z);
+            glVertex3f(or2x, y2_top, or2z); glVertex3f(ir2x, y2_top, ir2z);
             glEnd();
         }
 
@@ -267,7 +269,7 @@ static void draw_cityscape(float anim_time, int nv_fog_distance_supported) {
 
                 float wx = cx + tang_x * (u - 0.5f) * bw + face_ox;
                 float wz = cz + tang_z * (u - 0.5f) * bw + face_oz;
-                float wy = y0 + v * bh;
+                float wy = y_base + v * bh;
 
                 /* Retro-80s palette matching the star colors */
                 float wr_c, wg_c, wb_c;
