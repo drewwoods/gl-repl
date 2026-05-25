@@ -1,10 +1,11 @@
 /*
- * scene_lights.c - scene light setup and visible light indicators.
+ * lights.c - scene light setup and visible light indicators.
  */
 #include "lights.h"
-#include "scene/palette.h"
+#include "palette.h"
 #include "config.h"
 #include "occluded_ghost.h"  /* SCENE_OCCLUDED_GHOST_STIPPLE */
+#include "gl_includes.h"  /* glColor4f, glutBitmapCharacter (avoid transitive deps) */
 #include <math.h>
 #include <stdio.h>
 
@@ -39,7 +40,6 @@ void scene_lights_setup(const SceneFrameRenderContext *frame_ctx) {
 
 void scene_lights_render(const SceneFrameRenderContext *frame_ctx) {
     if (!frame_ctx->config.show_light_indicators) return;
-    int user_lighting_enabled = frame_ctx->config.user_lighting_enabled;
 
     scene_lights_push_state();
     glDisable(GL_LIGHTING);
@@ -155,9 +155,9 @@ void scene_lights_render(const SceneFrameRenderContext *frame_ctx) {
         }
     }
 
-    glPointSize(1.0f);
-    glDisable(GL_BLEND);
-    glEnable(GL_DEPTH_TEST);
-    if (user_lighting_enabled) glEnable(GL_LIGHTING);
+    /* scene_lights_pop_state restores every bit that was mutated above:
+     * point size (GL_POINT_BIT), blend + color (GL_COLOR_BUFFER_BIT /
+     * GL_CURRENT_BIT), depth-test enable (GL_DEPTH_BUFFER_BIT), and
+     * lighting enable (GL_LIGHTING_BIT). No manual teardown needed. */
     scene_lights_pop_state();
 }

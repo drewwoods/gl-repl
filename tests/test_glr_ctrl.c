@@ -230,8 +230,9 @@ static void test_display_frame_builds_config_and_restores_live_state(void) {
 
     ASSERT_TRUE("scene execute fn wired", g_last_scene_config.execute_fn != NULL);
     ASSERT_TRUE("scene execute user data null", g_last_scene_config.execute_user_data == NULL);
-    ASSERT_INT("viewport width forwarded", g_last_scene_config.viewport_w, 800);
-    ASSERT_INT("viewport height forwarded", g_last_scene_config.viewport_h, 600);
+    /* viewport_w/h removed from SceneRenderConfig — scene helpers use
+     * scene_w/scene_h (the active GL viewport) instead. The HUD asserts
+     * below read the window viewport from the snapshot directly. */
     ASSERT_FLOAT("camera distance forwarded", g_last_scene_config.cam_dist, 7.5f);
     ASSERT_FLOAT("camera tx forwarded", g_last_scene_config.cam_tx, 0.5f);
     ASSERT_FLOAT("camera glow forwarded", g_last_scene_config.cam_motion_glow, 0.9f);
@@ -269,8 +270,8 @@ static void test_display_frame_builds_config_and_restores_live_state(void) {
      * in the stub. The rect+viewport contracts are exercised by the
      * scene_config asserts above; here we focus on what the snapshot
      * carries. */
-    ASSERT_INT("HUD viewport w on snap", g_last_replay_hud_snap.viewport.window_w, g_last_scene_config.viewport_w);
-    ASSERT_INT("HUD viewport h on snap", g_last_replay_hud_snap.viewport.window_h, g_last_scene_config.viewport_h);
+    ASSERT_INT("HUD viewport w on snap", g_last_replay_hud_snap.viewport.window_w, 800);
+    ASSERT_INT("HUD viewport h on snap", g_last_replay_hud_snap.viewport.window_h, 600);
     ASSERT_INT("HUD layout on snap", g_last_replay_hud_snap.code_panel.layout_mode, CODE_PANEL_LAYOUT_BOTTOM);
     ASSERT_INT("HUD replay mode on snap", g_last_replay_hud_snap.replay.mode, REPLAY_MODE_VERTEX);
     ASSERT_INT("HUD replay pc on snap", g_last_replay_hud_snap.replay.pc, 1);
@@ -1087,10 +1088,10 @@ static void test_display_frame_scene_config_is_stable_across_frames(void) {
     /* Stable inputs across frames. Note: anim_time advances inside
      * scene_render (via the replay tick), so don't pin that here —
      * the rest of the config is steady-state. */
-    ASSERT_INT("scene viewport_w stable across frames",
-               frame2.viewport_w, frame1.viewport_w);
-    ASSERT_INT("scene viewport_h stable across frames",
-               frame2.viewport_h, frame1.viewport_h);
+    ASSERT_INT("scene_w stable across frames",
+               frame2.scene_w, frame1.scene_w);
+    ASSERT_INT("scene_h stable across frames",
+               frame2.scene_h, frame1.scene_h);
     ASSERT_FLOAT("scene cam_dist stable across frames",
                  frame2.cam_dist, frame1.cam_dist);
     ASSERT_FLOAT("scene cam_rx stable across frames",

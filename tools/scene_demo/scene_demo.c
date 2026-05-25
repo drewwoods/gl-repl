@@ -160,8 +160,6 @@ static void build_config(SceneRenderConfig *cfg) {
     cfg->execute_fn = my_scene_execute;
     cfg->anim_time  = g_anim_t;
 
-    cfg->viewport_w = g_window_w;
-    cfg->viewport_h = g_window_h;
     cfg->scene_x = 0; cfg->scene_y = 0;
     cfg->scene_w = g_window_w; cfg->scene_h = g_window_h;
 

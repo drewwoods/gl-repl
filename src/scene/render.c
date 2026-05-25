@@ -1,5 +1,5 @@
 /*
- * scene_render.c - 3D scene rendering (frame prep, edit guides)
+ * render.c - 3D scene rendering (frame prep, edit guides)
  *
  * Extracted from gl_repl.c for maintainability.
  */
@@ -16,11 +16,8 @@
 #include "config.h"
 
 #include <errno.h>
-#include <math.h>
+#include <math.h>      /* tan, M_PI (via gl_includes.h) */
 #include <stdio.h>
-#ifndef M_PI
-#define M_PI 3.14159265358979323846
-#endif
 
 #define SCENE_DEFAULT_FOVY_DEG 45.0
 #define SCENE_DEFAULT_NEAR_Z 0.1
@@ -403,19 +400,11 @@ static void scene_apply_wireframe_config(const SceneRenderConfig *config) {
 static void scene_prepare_frame_context(SceneFrameRenderContext *ctx,
                                         const SceneRenderConfig *config) {
     ctx->config = *config;
-    ctx->focus = config->focus;
 }
 
 /* ========================================================================= */
 /* 3D scene render (viewport offset to the right of the code panel)           */
 /* ========================================================================= */
-
-/* The replay-mode tess-preview wireframe overlay used to live here, but it
- * iterated the user's flat program and applied REPL-side transforms —
- * both REPL concerns. The walk now lives behind a callback API in the
- * REPL replay module; the visual rendering lives in the controller's
- * post_fill_fn body, which installs glBegin / glVertex / glEnd
- * callbacks. */
 
 /* Three orthogonal arms (X / Z ground plane + vertical Y) of the orbit
  * gizmo, emitted between an active glBegin(GL_LINES)/glEnd(). The Y arm
@@ -501,8 +490,8 @@ static void draw_orbit_target(const SceneFrameRenderContext *frame_ctx) {
     for (const char *c = coord; *c; c++)
         glutBitmapCharacter(FONT_SMALL, (unsigned char)*c);
 
-    glDepthMask(GL_TRUE);
-    glDisable(GL_BLEND);
+    /* scene_render_pop_state restores depth mask and blend state via
+     * GL_ALL_ATTRIB_BITS; no manual teardown needed. */
     scene_render_pop_state();
 }
 
@@ -510,13 +499,6 @@ static void scene_apply_clear_color(const float clear_color[4]) {
     glClearColor(clear_color[0], clear_color[1],
                  clear_color[2], clear_color[3]);
 }
-
-/* The replay-fade overlay pass used to live here; it has been moved out
- * to the REPL controller (src/app/glr_ctrl.c) and is invoked through the
- * generic post_fill_fn hook on SceneRenderConfig. The scene module no
- * longer knows what's being drawn between the main fill and the
- * grid/axes/backdrop helpers — only that some caller-supplied function
- * may want a turn at GL state when post_fill_fn != NULL. */
 
 static void render_3d_scene_pass(const SceneRenderConfig *config,
                                  float accum_jitter_x,

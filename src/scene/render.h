@@ -1,5 +1,5 @@
 /*
- * scene_render.h - 3D scene rendering surface.
+ * render.h - 3D scene rendering surface.
  *
  * Exposes the scene module's top-level render entry points. Callers build a
  * SceneRenderConfig snapshot, apply the camera modelview with
@@ -21,10 +21,13 @@
  * controller cycles across that fixed ladder, and the scene renderer keeps a
  * 16-entry jitter table whose first N offsets form a good N-sample set. */
 #define MAX_ACCUM_SAMPLES 16
-#define ACCUM_STEP_COUNT  5
 
-/* One-time GL initialization: create display lists, compile shaders, allocate
- * tessellator, set up default light state. Called once on startup. */
+/* One-time GL initialization called once at startup. Currently:
+ * - scene_lights_init_global_ambient() (baseline ambient term).
+ * - scene_postprocess_filter_reset() (clears the post-process module's
+ *   per-renderer caches).
+ * No display lists, shaders, or tessellator allocation happen here —
+ * those live elsewhere (the tessellator is owned by the executor). */
 void scene_render_init_gl(void);
 
 /* Apply the caller's camera as the modelview transform. The caller is

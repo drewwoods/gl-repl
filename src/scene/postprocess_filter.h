@@ -23,7 +23,7 @@ typedef enum ScenePostFilterMode {
 } ScenePostFilterMode;
 
 /* Human-readable name for status text. Out-of-range -> "Off". */
-const char *scene_postprocess_filter_mode_name(int mode);
+const char *scene_postprocess_filter_mode_name(ScenePostFilterMode mode);
 
 /* Invalidate the cached texture handle / dimensions. Deletes the live
  * texture if a context still owns it. Called from scene_render_init_gl()
@@ -33,7 +33,7 @@ void scene_postprocess_filter_reset(void);
 /* Apply the selected filter to the scene rect (GL bottom-left window
  * coords: the same rect scene_render_3d_scene() rendered into via
  * glViewport). No-op for SCENE_POST_FILTER_OFF or invalid rects. */
-void scene_postprocess_filter_render(int mode, int sx, int sy,
-                                     int sw, int sh);
+void scene_postprocess_filter_render(ScenePostFilterMode mode,
+                                     int sx, int sy, int sw, int sh);
 
 #endif /* SCENE_POSTPROCESS_FILTER_H */

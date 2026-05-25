@@ -1,5 +1,5 @@
 /*
- * scene_overlays.h - Tiny per-vertex overlay primitives.
+ * overlays.h - Tiny per-vertex overlay primitives.
  *
  * These are the scene module's narrow overlay exports: draw one vertex-number
  * label or one normal-vector arrow at an already-transformed position.
