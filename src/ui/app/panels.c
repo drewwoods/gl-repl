@@ -119,7 +119,7 @@ static void draw_modal_strip(const UiRenderSnapshot *snap,
 
 void ui_panels_render_scene_status(const UiRenderSnapshot *snap) {
     if (snap->rename_active) {
-        char msg[256];
+        char msg[REPL_STATUS_TEXT_MAX];
         int n = snprintf(msg, sizeof(msg),
                          "Rename: %s_   [Enter] save   [Esc] cancel",
                          snap->rename_text);
@@ -151,7 +151,7 @@ void ui_panels_render_scene_status(const UiRenderSnapshot *snap) {
         float alpha;
         int badge_d, badge_x, badge_y;
         int tx, max_px, max_chars;
-        char msg[256];
+        char msg[REPL_STATUS_TEXT_MAX];
         int n;
         const float *bg_rgb;
         const float *edge_rgb;

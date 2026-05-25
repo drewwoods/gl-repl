@@ -582,7 +582,7 @@ int repl_save_workspace(const char *dir, const ReplExportLayout *layout) {
     }
 
     if (mkdir(dir, 0755) != 0 && errno != EEXIST) {
-        char msg[256];
+        char msg[REPL_STATUS_TEXT_MAX];
         snprintf(msg, sizeof(msg), "Workspace save: cannot create %s", dir);
         repl_set_status_error(msg);
         return -1;
@@ -627,7 +627,7 @@ int repl_save_workspace(const char *dir, const ReplExportLayout *layout) {
 
     restore_live_from_stash(&stash);
 
-    char msg[256];
+    char msg[REPL_STATUS_TEXT_MAX];
     snprintf(msg, sizeof(msg), "Saved %d scene%s to %s",
              written, written == 1 ? "" : "s", dir);
     repl_set_status(msg);
@@ -719,7 +719,7 @@ int repl_load_workspace(const char *dir) {
 
     DIR *d = opendir(dir);
     if (!d) {
-        char msg[256];
+        char msg[REPL_STATUS_TEXT_MAX];
         snprintf(msg, sizeof(msg), "Workspace load: cannot open %s", dir);
         repl_set_status_error(msg);
         return -1;
@@ -757,7 +757,7 @@ int repl_load_workspace(const char *dir) {
 
     snprintf(g_workspace_dir, WORKSPACE_DIR_MAX, "%s", dir);
 
-    char msg[256];
+    char msg[REPL_STATUS_TEXT_MAX];
     snprintf(msg, sizeof(msg), "Loaded %d scene%s from %s",
              loaded, loaded == 1 ? "" : "s", dir);
     repl_set_status(msg);
