@@ -88,10 +88,10 @@ int repl_func_alias_lookup_slot(const char *name) {
 int repl_func_alias_name_is_valid(const char *name) {
     if (!name || !*name) return 0;
     /* Must be a C identifier. */
-    if (!isalpha((unsigned char)name[0]) && name[0] != '_') return 0;
+    if (!repl_eval_is_ident_start((unsigned char)name[0])) return 0;
     int len = 0;
     for (const char *p = name; *p; p++, len++) {
-        if (!isalnum((unsigned char)*p) && *p != '_') return 0;
+        if (!repl_eval_is_ident_continue((unsigned char)*p)) return 0;
     }
     if (len >= REPL_FUNC_NAME_MAX) return 0;
     /* Reject the bare slot names — those are the underlying form. */
@@ -263,13 +263,13 @@ static const char *skip_numeric_literal(const char *s) {
 }
 
 const char *repl_eval_eat_identifier(const char *p, const char **out_start) {
-    if (!p || (!isalpha((unsigned char)*p) && *p != '_'))
+    if (!p || !repl_eval_is_ident_start((unsigned char)*p))
         return NULL;
     if (out_start)
         *out_start = p;
     do {
         p++;
-    } while (*p && (isalnum((unsigned char)*p) || *p == '_'));
+    } while (*p && repl_eval_is_ident_continue((unsigned char)*p));
     return p;
 }
 
@@ -737,12 +737,12 @@ int repl_eval_declare_predef_var(const char *name, char *err, int errsz) {
         if (err) snprintf(err, errsz, "empty variable name");
         return 0;
     }
-    if (!(isalpha((unsigned char)name[0]) || name[0] == '_')) {
+    if (!repl_eval_is_ident_start((unsigned char)name[0])) {
         if (err) snprintf(err, errsz, "invalid identifier '%s'", name);
         return 0;
     }
     for (const char *p = name; *p; p++) {
-        if (!isalnum((unsigned char)*p) && *p != '_') {
+        if (!repl_eval_is_ident_continue((unsigned char)*p)) {
             if (err) snprintf(err, errsz, "invalid identifier '%s'", name);
             return 0;
         }
@@ -1306,12 +1306,12 @@ void repl_eval_expr_to_c(const char *in, char *out, int out_sz) {
                     else if (*lhs_start == '(') depth--;
                 }
                 while (lhs_start > out &&
-                       (isalnum((unsigned char)lhs_start[-1]) || lhs_start[-1] == '_'))
+                       repl_eval_is_ident_continue((unsigned char)lhs_start[-1]))
                     lhs_start--;
             } else {
                 while (lhs_start > out &&
-                       (isalnum((unsigned char)lhs_start[-1]) ||
-                        lhs_start[-1] == '_' || lhs_start[-1] == '.'))
+                       (repl_eval_is_ident_continue((unsigned char)lhs_start[-1]) ||
+                        lhs_start[-1] == '.'))
                     lhs_start--;
             }
             int lhs_len = (int)(lhs_end - lhs_start);
@@ -1475,7 +1475,7 @@ int repl_eval_parse_for_header_with_vars(const char *input, char *var_name, int 
     /* Variable name */
     while (*p && isspace((unsigned char)*p)) p++;
     int name_len = 0;
-    while (*p && (isalnum((unsigned char)*p) || *p == '_') && name_len < var_sz - 1)
+    while (*p && repl_eval_is_ident_continue((unsigned char)*p) && name_len < var_sz - 1)
         var_name[name_len++] = *p++;
     var_name[name_len] = '\0';
     if (name_len == 0) return 0;
@@ -1542,7 +1542,7 @@ int repl_eval_parse_c_for_header(const char *input, char *var_name, int var_sz,
 
     /* Variable name */
     int name_len = 0;
-    while (*p && (isalnum((unsigned char)*p) || *p == '_') && name_len < var_sz - 1)
+    while (*p && repl_eval_is_ident_continue((unsigned char)*p) && name_len < var_sz - 1)
         var_name[name_len++] = *p++;
     var_name[name_len] = '\0';
     if (name_len == 0) return 0;
@@ -1563,7 +1563,7 @@ int repl_eval_parse_c_for_header(const char *input, char *var_name, int var_sz,
 
     /* Skip the loop variable in the condition (we don't validate it matches
      * the declared one - REPL trusts the imported C is well-formed). */
-    while (*p && (isalnum((unsigned char)*p) || *p == '_')) p++;
+    while (*p && repl_eval_is_ident_continue((unsigned char)*p)) p++;
     while (*p && isspace((unsigned char)*p)) p++;
 
     /* Comparison operator:
@@ -1590,7 +1590,7 @@ int repl_eval_parse_c_for_header(const char *input, char *var_name, int var_sz,
     while (*p && isspace((unsigned char)*p)) p++;
 
     /* Increment: skip variable name, then decode the step form. */
-    while (*p && (isalnum((unsigned char)*p) || *p == '_')) p++;
+    while (*p && repl_eval_is_ident_continue((unsigned char)*p)) p++;
     while (*p && isspace((unsigned char)*p)) p++;
 
     *step = 1.0f;

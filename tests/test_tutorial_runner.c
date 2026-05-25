@@ -539,7 +539,7 @@ static void test_locked_comment_load_is_read_only(void) {
     ASSERT_STR("locked line load clears input text",
                editor_state_input().input, "");
     ASSERT_STR("locked line load status",
-               status_text(), "Tutorial instruction is read-only");
+               status_text(), "Tutorial line is read-only");
 }
 
 static void test_locked_comment_mutations_are_blocked(void) {
@@ -551,19 +551,19 @@ static void test_locked_comment_mutations_are_blocked(void) {
     ASSERT_INT("ctrl-d keeps locked comment row",
                repl_state_document_count(), 1);
     ASSERT_STR("ctrl-d read-only status",
-               status_text(), "Tutorial comment is read-only");
+               status_text(), "Tutorial line is read-only");
 
     (void)editor_handle_key(KEY_CTRL_L, 0, 0);
     ASSERT_INT("ctrl-l keeps tutorial rows",
                repl_state_document_count(), 1);
     ASSERT_STR("ctrl-l read-only status",
-               status_text(), "Tutorial comment is read-only");
+               status_text(), "Tutorial line is read-only");
 
     (void)editor_handle_key(KEY_CTRL_BACKSLASH, 0, 0);
     ASSERT_INT("ctrl-backslash keeps tutorial rows",
                repl_state_document_count(), 1);
     ASSERT_STR("ctrl-backslash read-only status",
-               status_text(), "Tutorial comment is read-only");
+               status_text(), "Tutorial line is read-only");
 }
 
 static void test_paste_before_locked_prefix_is_blocked(void) {
@@ -593,7 +593,7 @@ static void test_paste_before_locked_prefix_is_blocked(void) {
     ASSERT_INT("paste before locked prefix keeps line count",
                repl_state_document_count(), 3);
     ASSERT_STR("paste before locked prefix status",
-               status_text(), "Tutorial comment is read-only");
+               status_text(), "Tutorial line is read-only");
     ASSERT_INT("blocked paste pushes no phantom undo",
                ring_after.undo_count, ring_before.undo_count);
     ASSERT_INT("blocked paste does not clear redo ring",
@@ -686,7 +686,7 @@ static void test_enter_on_locked_line_shows_position_hint(void) {
 
     ASSERT_STR("enter on locked line shows read-only status",
                status_text(),
-               "Tutorial instruction is read-only");
+               "Tutorial line is read-only");
     ASSERT_TRUE("enter on locked line did not enter insert mode",
                 !editor_insert_mode());
     ASSERT_INT("enter on locked line did not advance step",
@@ -710,7 +710,7 @@ static void test_ctrl_slash_on_locked_line_is_blocked(void) {
     ASSERT_INT("ctrl-/ keeps tutorial comment row",
                repl_state_document_count(), 1);
     ASSERT_STR("ctrl-/ read-only status",
-               status_text(), "Tutorial comment is read-only");
+               status_text(), "Tutorial line is read-only");
 }
 
 static void test_tab_autofill_then_semicolon_advances(void) {
@@ -1776,7 +1776,7 @@ static void test_phase3_paste_above_locked_still_blocked(void) {
     editor_state_edit_line_set(0);
     editor_clipboard_paste_current();
     ASSERT_STR("paste above locked still rejected",
-               status_text(), "Tutorial comment is read-only");
+               status_text(), "Tutorial line is read-only");
 }
 
 static void test_depth_tutorial_label_targeted_emit_shifts_prior_locked_lines(void) {

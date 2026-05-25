@@ -28,7 +28,7 @@ static int tutorial_guard_clipboard_change_or_status(int pos,
                                                      int insert_count) {
     if (tutorial_guard_source_change(pos, delete_count, insert_count))
         return 1;
-    repl_set_status_error("Tutorial comment is read-only");
+    repl_set_status_error("Tutorial line is read-only");
     return 0;
 }
 

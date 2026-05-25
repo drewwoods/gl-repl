@@ -3,9 +3,14 @@
  *
  * `repl_reformat_program()` (REPL pipeline) walks every command and
  * rewrites the editor-buffer line + GLCmd in canonical form. The
- * wrapper here saves/restores the typed input buffer and refreshes it
- * via editor_load_line_to_input() when the user is not in insert mode, so a
- * Ctrl+\ reformat keeps the editor session intact.
+ * wrapper here saves/restores five fields — edit_line, insert_mode,
+ * input buffer, input_len, cursor_pos — and refreshes the input via
+ * editor_load_line_to_input() when the user is not in insert mode.
+ *
+ * Not saved: selection, search, autocomplete, scroll, pending_newline,
+ * undo ring.  repl_reformat_program() does not touch any of those, so
+ * saving them would be dead weight.  If a future rewrite mutates any
+ * of them, expand the save set here.
  */
 #include <string.h>
 

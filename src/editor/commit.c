@@ -32,7 +32,6 @@
 #include "commit.h"
 #include "completion.h"
 #include "input.h"
-#include "services.h"
 #include "state.h"
 #include "undo.h"
 
@@ -63,6 +62,12 @@ static void apply_compiled_three_halves(const ReplCompiledChange *change) {
     int edit_line = editor_state_edit_line();
     if (repl_apply_compiled_change(change, &edit_line))
         editor_state_edit_line_set(edit_line);
+}
+
+static ReplCompileContext editor_compile_context_live(void) {
+    ReplCompileContext ctx = repl_compile_context_from_live(editor_state_edit_line());
+    ctx.insert_mode = editor_insert_mode();
+    return ctx;
 }
 
 int editor_commit_apply_external_change(const struct ReplCompiledChange_s *change,
@@ -569,11 +574,11 @@ ReplCompileResult editor_compile_func_def(const char *input,
     {
         const char *p = trimmed;
         if (!(strncmp(p, "func", 4) == 0 && p[4] >= '0' && p[4] <= '9' &&
-              !isalnum((unsigned char)p[5]) && p[5] != '_') &&
-            (isalpha((unsigned char)*p) || *p == '_')) {
+              !repl_eval_is_ident_continue((unsigned char)p[5])) &&
+            repl_eval_is_ident_start((unsigned char)*p)) {
             char ident[REPL_FUNC_NAME_MAX];
             int len = 0;
-            while (*p && (isalnum((unsigned char)*p) || *p == '_')) {
+            while (*p && repl_eval_is_ident_continue((unsigned char)*p)) {
                 if (len >= REPL_FUNC_NAME_MAX - 1) { ident[0] = '\0'; break; }
                 ident[len++] = *p++;
             }
@@ -810,7 +815,6 @@ ReplCompileResult editor_compile_for_loop(const char *input,
                                           char *err, int err_size) {
     if (!ctx || !out) return REPL_COMPILE_ERROR;
 
-    EditorServices svc = editor_services_default();
     editor_commit_plan_init(out);
 
     const char *p = input ? input : "";
@@ -864,7 +868,7 @@ ReplCompileResult editor_compile_for_loop(const char *input,
         while (*raw && *raw != '(') raw++;
         if (*raw) raw++;
         while (*raw && isspace((unsigned char)*raw)) raw++;
-        while (*raw && (isalnum((unsigned char)*raw) || *raw == '_')) raw++;
+        while (*raw && repl_eval_is_ident_continue((unsigned char)*raw)) raw++;
         while (*raw && isspace((unsigned char)*raw)) raw++;
         if (*raw == ',') raw++;
 
@@ -1012,7 +1016,7 @@ ReplCompileResult editor_compile_for_loop(const char *input,
         .err_sz          = (int)sizeof(body_err),
     };
     ReplParsedLine body_pl;
-    if (!svc.parse_command_ctx(body, &body_pl, &parse_ctx, svc.user)) {
+    if (!repl_parser_parse_command_ctx(body, &body_pl, &parse_ctx)) {
         if (body_err[0])
             snprintf(err, (size_t)err_size, "for-loop body: %s", body_err);
         else
@@ -1127,7 +1131,7 @@ void editor_commit_reset_transients(void) {
  * Audit #39 walked these and confirmed no missing-undo bugs. */
 
 int editor_try_commit_float_decl(void) {
-    ReplCompileContext ctx = repl_compile_context_from_live(editor_state_edit_line()); ctx.insert_mode = editor_insert_mode();
+    ReplCompileContext ctx = editor_compile_context_live();
     EditorCommitPlan plan;
     editor_commit_plan_init(&plan);
     char err[REPL_STATUS_TEXT_MAX];
@@ -1174,7 +1178,7 @@ int editor_try_commit_float_decl(void) {
 /* --- Var-assign commit --- */
 
 int editor_try_commit_assign_variable(void) {
-    ReplCompileContext ctx = repl_compile_context_from_live(editor_state_edit_line()); ctx.insert_mode = editor_insert_mode();
+    ReplCompileContext ctx = editor_compile_context_live();
     EditorCommitPlan plan;
     editor_commit_plan_init(&plan);
     char err[REPL_STATUS_TEXT_MAX];
@@ -1228,7 +1232,7 @@ typedef ReplCompileResult (*EditorBlockCompileFn)(const char *input,
                                                   char *err, int err_size);
 
 static int editor_try_commit_block(EditorBlockCompileFn compile) {
-    ReplCompileContext ctx = repl_compile_context_from_live(editor_state_edit_line()); ctx.insert_mode = editor_insert_mode();
+    ReplCompileContext ctx = editor_compile_context_live();
     EditorCommitPlan plan;
     char err[REPL_STATUS_TEXT_MAX];
 
