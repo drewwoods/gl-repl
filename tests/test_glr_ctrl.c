@@ -31,7 +31,7 @@ static TestHarness g_harness = TEST_HARNESS_INIT;
 /* Rename the controller's downstream render delegates so this test can stub
  * them and inspect the per-frame config without a real GL context. */
 #define scene_render_3d_scene              test_scene_render_3d_scene
-#define scene_apply_camera                 test_scene_apply_camera
+#define glr_camera_load_modelview          test_glr_camera_load_modelview
 #define replay_ui_hud_render               test_replay_ui_hud_render
 #define ui_panels_render_code_panel        test_ui_panels_render_code_panel
 #define ui_autocomplete_panel_render       test_ui_autocomplete_panel_render
@@ -41,10 +41,18 @@ static TestHarness g_harness = TEST_HARNESS_INIT;
 #define ui_tabbed_overlay_render           test_ui_tabbed_overlay_render
 #define ui_profile_panel_render            test_ui_profile_panel_render
 
+/* glr_camera.h was already pulled in at line 3 (before the #define),
+ * so its `glr_camera_load_modelview` declaration is preserved as the
+ * real name. Forward-declare the test stub explicitly so glr_ctrl.c's
+ * macro-substituted call has a visible prototype. The other stubs
+ * are reached only through glr_ctrl.c's includes, which the macros
+ * cover. */
+void test_glr_camera_load_modelview(const GlrCameraPose *pose);
+
 #include "app/glr_ctrl.c"
 
 #undef scene_render_3d_scene
-#undef scene_apply_camera
+#undef glr_camera_load_modelview
 #undef replay_ui_hud_render
 #undef ui_panels_render_code_panel
 #undef ui_autocomplete_panel_render
@@ -104,7 +112,7 @@ int test_scene_render_3d_scene(SceneRendererState *state,
     return 0;
 }
 
-void test_scene_apply_camera(const SceneCameraPose *pose) {
+void test_glr_camera_load_modelview(const GlrCameraPose *pose) {
     (void)pose;
 }
 
