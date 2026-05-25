@@ -596,6 +596,43 @@ static void test_source_document_apply_change_combined(void) {
                 strcmp(v.lines[4], "glEnd();") == 0);
 }
 
+/* Audit follow-up: INSERT_MANY must reject invalid count values before any
+ * pre-delete can mutate the document. */
+static void test_source_document_insert_many_rejects_invalid_count(void) {
+    glr_app_reset_all();
+
+    source_document_insert_line(0, "line0");
+    source_document_insert_line(1, "line1");
+    source_document_insert_line(2, "line2");
+    ASSERT_INT("setup: 3 lines", source_document_view().line_count, 3);
+
+    SourceTextChange change;
+    memset(&change, 0, sizeof(change));
+    change.kind = SOURCE_TEXT_INSERT_MANY;
+    change.delete_pos = 1;
+    change.delete_count = 1;
+    change.pos = 1;
+
+    /* count <= 0 is invalid for INSERT_MANY. */
+    change.count = 0;
+    int ok = source_document_apply_change(&change);
+    ASSERT_INT("insert-many count=0 rejected", ok, 0);
+    ASSERT_INT("count=0 reject keeps line count", source_document_view().line_count, 3);
+    ASSERT_TRUE("count=0 reject keeps middle line",
+                strcmp(source_text_line(source_document_view(), 1), "line1") == 0);
+
+    /* count > MAX_COMMIT_CMDS is invalid and must not read past text[]. */
+    change.count = MAX_COMMIT_CMDS + 1;
+    for (int i = 0; i < MAX_COMMIT_CMDS; i++)
+        snprintf(change.text[i], MAX_LINE_LEN, "new-%d", i);
+
+    ok = source_document_apply_change(&change);
+    ASSERT_INT("insert-many oversized count rejected", ok, 0);
+    ASSERT_INT("oversized reject keeps line count", source_document_view().line_count, 3);
+    ASSERT_TRUE("oversized reject keeps middle line",
+                strcmp(source_text_line(source_document_view(), 1), "line1") == 0);
+}
+
 static void test_camera_ease_to_default_uses_scene_default(void) {
     glr_app_reset_all();
 
@@ -808,6 +845,7 @@ int main(void) {
     test_source_document_load_all_rejects_oversized();
     test_source_document_apply_change_combined_atomic_on_failure();
     test_source_document_apply_change_combined();
+    test_source_document_insert_many_rejects_invalid_count();
     test_camera_ease_to_default_uses_scene_default();
     test_camera_clear_scene_default_falls_back();
     test_example_load_sets_scene_camera_default();
