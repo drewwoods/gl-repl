@@ -691,16 +691,36 @@ int scene_grid_theme_uses_fog(SceneGridTheme grid_theme) {
            grid_theme == GRID_THEME_OCEAN;
 }
 
-void scene_grid_render(const SceneFrameRenderContext *frame_ctx) {
-    const SceneRenderConfig *config = &frame_ctx->config;
-    SceneGridTheme grid_theme = (SceneGridTheme)config->grid_theme;
-    if (grid_theme == GRID_THEME_OFF) return;
+/* --- scene_grid_render phases ---
+ *
+ * Splits the 150-line orchestrator into:
+ *   - grid_xn_resolve_alpha(): per-frame transition fade resolution.
+ *     Sets g_xn_opacity / g_xn_alpha (still file-static today —
+ *     deferred lift in audit #3). Returns 1 to proceed, 0 to skip.
+ *   - grid_setup_blend_depth(): the GL state baseline for grid draws.
+ *   - grid_build_draw_context(): clamps extent/major indices and
+ *     fills the GridDrawContext.
+ *   - grid_apply_far_fog(): the FAR-extent distance fog + the
+ *     FOG-transition recede injection for non-far themes.
+ *   - grid_save_nv_fog_mode() / _restore: NV_fog_distance bracket.
+ *   - grid_dispatch_theme(): the switch over SceneGridTheme.
+ *
+ * scene_grid_render is now the sequencer of these phases. */
 
-    /* Transition fade: clamp defensively, then every gl_color in this
-     * file multiplies through it (rule 4). Skip drawing entirely once
-     * fully faded out so a 0-opacity pass costs nothing. */
+#if GRID_XN_STYLE == GRID_AXES_XN_FOG
+static int grid_xn_uses_fog(SceneGridTheme grid_theme) {
+    return scene_grid_theme_uses_fog(grid_theme);
+}
+#endif
+
+/* Resolve grid transition fade. Returns 1 to proceed, 0 to skip
+ * drawing entirely. Sets g_xn_opacity / g_xn_alpha as side effects
+ * (the gl_color path multiplies through these — see file head). */
+static int grid_xn_resolve_alpha(const SceneRenderConfig *config,
+                                 SceneGridTheme grid_theme) {
+    (void)grid_theme;
     g_xn_opacity = scene_clamp01f(config->grid_opacity);
-    if (g_xn_opacity <= 0.0f) return;
+    if (g_xn_opacity <= 0.0f) return 0;
 #if GRID_XN_STYLE == GRID_AXES_XN_FOG
     /* The EXP2-fog themes (FOG/OCEAN) fall back to the plain alpha
      * FADE: their fog is left as-is and the geometry just alpha-fades,
@@ -708,8 +728,7 @@ void scene_grid_render(const SceneFrameRenderContext *frame_ctx) {
      * recede. Every other theme — including any theme at the FAR
      * extent, whose LINEAR distance fog composes fine — gets the
      * synthesized clear-color recede + alpha knee. */
-    int xn_uses_fog = scene_grid_theme_uses_fog(grid_theme);
-    if (xn_uses_fog)
+    if (grid_xn_uses_fog(grid_theme))
         g_xn_alpha = g_xn_opacity;                       /* FADE fallback */
     else if (g_xn_opacity >= GRID_XN_FOG_ALPHA_KNEE)
         g_xn_alpha = 1.0f;                               /* fog does the work */
@@ -718,22 +737,21 @@ void scene_grid_render(const SceneFrameRenderContext *frame_ctx) {
 #else
     g_xn_alpha = g_xn_opacity;
 #endif
+    return 1;
+}
 
-    scene_grid_push_state();
-
+static void grid_setup_blend_depth(const SceneRenderConfig *config) {
     glDisable(GL_LIGHTING);
     glEnable(GL_DEPTH_TEST);
     glDepthMask(GL_FALSE);
     scene_grid_apply_quality_config(config);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+}
 
-    /* Nudge grid slightly below Y=0 to avoid z-fighting with axes */
-    glPushMatrix();
-    glTranslatef(0, -0.002f, 0);
-
-    float breath = sinf(frame_ctx->config.anim_time * SCENE_BREATH_FREQ) * 0.5f + 0.5f; /* 0..1 */
-
+static GridDrawContext grid_build_draw_context(const SceneFrameRenderContext *frame_ctx) {
+    const SceneRenderConfig *config = &frame_ctx->config;
+    float breath = sinf(config->anim_time * SCENE_BREATH_FREQ) * 0.5f + 0.5f;
     /* Configurable extent / major-tick spacing. Minor step is the
      * major cell divided into 5 subdivisions, which keeps the look
      * consistent across the {1, 2, 5, 10} major options. */
@@ -741,54 +759,128 @@ void scene_grid_render(const SceneFrameRenderContext *frame_ctx) {
     if (ex_i < 0 || ex_i >= GRID_EXTENT_COUNT) ex_i = GRID_EXTENT_MID;
     int mj_i = config->grid_major_idx;
     if (mj_i < 0 || mj_i >= GRID_MAJOR_COUNT) mj_i = GRID_MAJOR_1;
-    float extent = frame_ctx->config.grid_extents[ex_i];
-    float major  = frame_ctx->config.grid_major_steps[mj_i];
+    float extent = config->grid_extents[ex_i];
+    float major  = config->grid_major_steps[mj_i];
     float step   = major / GRID_MINOR_SUBDIVISIONS;
-    float major_tol = step * GRID_MAJOR_TOL_FRACTION;
-    GridDrawContext grid_ctx = {
-        .extent = extent,
-        .major = major,
-        .step = step,
-        .major_tol = major_tol,
-        .anim_time = frame_ctx->config.anim_time,
-        .breath = breath,
+    return (GridDrawContext){
+        .extent      = extent,
+        .major       = major,
+        .step        = step,
+        .major_tol   = step * GRID_MAJOR_TOL_FRACTION,
+        .anim_time   = config->anim_time,
+        .breath      = breath,
         .alpha_scale = config->alpha_scale,
     };
+}
 
+/* FAR-extent clear-color distance fog. Under FOG transition style,
+ * fog-less themes animate the same fog inward as they hide. */
+static void grid_apply_far_fog(const SceneRenderConfig *config,
+                               SceneGridTheme grid_theme, float extent) {
     int is_far = (config->grid_extent_idx == GRID_EXTENT_FAR);
-
 #if GRID_XN_STYLE == GRID_AXES_XN_FOG
     /* Fog-less, non-FAR themes: recede into a synthesized clear-color
      * fog as the overlay hides. At FAR the recede is driven by the
      * FAR block's own fog (below) instead, so it isn't double-set /
      * overwritten. Fog-owning configs took the FADE fallback above. */
-    if (!xn_uses_fog && !is_far)
+    int uses_fog = grid_xn_uses_fog(grid_theme);
+    if (!uses_fog && !is_far)
         grid_xn_apply_transition_fog(1.0f - g_xn_opacity, extent);
+#else
+    (void)grid_theme;
 #endif
 
-    if (is_far) {
-        /* Clear-color linear distance fog. Steady: (0.7e .. e). Under
-         * the FOG transition style a fog-less theme animates the same
-         * fog inward as it hides — same LINEAR model, so tf=0 is
-         * exactly the steady look (no pop) and tf=1 is a tight recede
-         * wall near the camera. */
-        float fog_start = extent * 0.7f;
-        float fog_end   = extent;
+    if (!is_far) return;
+
+    /* Steady: (0.7e .. e). tf=0 is the steady look (no pop); tf=1 is
+     * a tight recede wall near the camera. */
+    float fog_start = extent * 0.7f;
+    float fog_end   = extent;
 #if GRID_XN_STYLE == GRID_AXES_XN_FOG
-        if (!xn_uses_fog) {
-            float tf = 1.0f - g_xn_opacity;       /* 0 shown .. 1 hidden */
-            fog_end   = extent + (extent * 0.05f - extent) * tf;
-            fog_start = fog_end * 0.7f;
-        }
-#endif
-        float clear_col[4];
-        glGetFloatv(GL_COLOR_CLEAR_VALUE, clear_col);
-        glFogfv(GL_FOG_COLOR, clear_col);
-        glEnable(GL_FOG);
-        glFogi(GL_FOG_MODE, GL_LINEAR);
-        glFogf(GL_FOG_START, fog_start);
-        glFogf(GL_FOG_END, fog_end);
+    if (!uses_fog) {
+        float tf = 1.0f - g_xn_opacity;
+        fog_end   = extent + (extent * 0.05f - extent) * tf;
+        fog_start = fog_end * 0.7f;
     }
+#endif
+    float clear_col[4];
+    glGetFloatv(GL_COLOR_CLEAR_VALUE, clear_col);
+    glFogfv(GL_FOG_COLOR, clear_col);
+    glEnable(GL_FOG);
+    glFogi(GL_FOG_MODE, GL_LINEAR);
+    glFogf(GL_FOG_START, fog_start);
+    glFogf(GL_FOG_END, fog_end);
+}
+
+/* Custom themes handle their own draw path; the default arm covers
+ * every standard theme by spec-table lookup, so adding/removing a
+ * GridThemeSpec entry is a one-edit change instead of two parallel
+ * lists. set_nv_fog is true iff the runtime supports NV fog distance
+ * AND the active theme wants radial eye-distance fog (OCEAN, RADAR). */
+static void grid_dispatch_theme(const SceneFrameRenderContext *frame_ctx,
+                                const GridDrawContext *grid_ctx,
+                                SceneGridTheme grid_theme,
+                                int set_nv_fog) {
+    const SceneRenderConfig *config = &frame_ctx->config;
+    switch (grid_theme) {
+
+    case GRID_THEME_FOCUS:
+        scene_grid_render_focus_theme(frame_ctx, grid_ctx);
+        break;
+
+    case GRID_THEME_OCEAN:
+        /* Opt into radial eye-distance fog when available, so the fog
+         * closes in by true distance rather than eye-plane depth and the
+         * fringes stop swimming as the camera orbits. */
+        if (set_nv_fog)
+            glFogi(GL_FOG_DISTANCE_MODE_NV, GL_EYE_RADIAL_NV);
+        scene_grid_render_ocean_theme(grid_ctx, frame_ctx, grid_ctx->breath);
+        break;
+
+    case GRID_THEME_XZRULER:
+        scene_grid_render_xzruler_theme(grid_ctx);
+        break;
+
+    case GRID_THEME_PLANES:
+        scene_grid_render_planes_theme(config, grid_ctx);
+        break;
+
+    case GRID_THEME_RADAR:
+        /* Same radial-fog opt-in as Ocean (see above): the radar rings
+         * read the shared FAR-extent distance fog, which swims at the
+         * fringes under the eye-plane default. */
+        if (set_nv_fog)
+            glFogi(GL_FOG_DISTANCE_MODE_NV, GL_EYE_RADIAL_NV);
+        scene_grid_render_radar_theme(grid_ctx);
+        break;
+
+    default: {
+        /* GRID_THEME_CLASSIC, _FOG, _TRON, _EMBER, _FAINT and any
+         * future standard theme: look up its GridThemeSpec and draw
+         * through the table-driven path. */
+        const GridThemeSpec *spec = grid_theme_spec(grid_theme);
+        if (spec)
+            draw_grid_standard_theme(grid_ctx, spec);
+        break;
+    }
+    }
+}
+
+void scene_grid_render(const SceneFrameRenderContext *frame_ctx) {
+    const SceneRenderConfig *config = &frame_ctx->config;
+    SceneGridTheme grid_theme = (SceneGridTheme)config->grid_theme;
+    if (grid_theme == GRID_THEME_OFF) return;
+    if (!grid_xn_resolve_alpha(config, grid_theme)) return;
+
+    scene_grid_push_state();
+    grid_setup_blend_depth(config);
+
+    /* Nudge grid slightly below Y=0 to avoid z-fighting with axes */
+    glPushMatrix();
+    glTranslatef(0, -0.002f, 0);
+
+    GridDrawContext grid_ctx = grid_build_draw_context(frame_ctx);
+    grid_apply_far_fog(config, grid_theme, grid_ctx.extent);
 
     /* GL_FOG_DISTANCE_MODE_NV isn't in the Khronos GL_FOG_BIT spec, so
      * a strict glPushAttrib(GL_ALL_ATTRIB_BITS) may not save/restore it.
@@ -801,52 +893,7 @@ void scene_grid_render(const SceneFrameRenderContext *frame_ctx) {
     if (set_nv_fog)
         glGetIntegerv(GL_FOG_DISTANCE_MODE_NV, &saved_nv_fog_mode);
 
-    /* Custom themes handle their own draw path; the default arm covers
-     * every standard theme by spec-table lookup, so adding/removing a
-     * GridThemeSpec entry is a one-edit change instead of two parallel
-     * lists. */
-    switch (grid_theme) {
-
-    case GRID_THEME_FOCUS:
-        scene_grid_render_focus_theme(frame_ctx, &grid_ctx);
-        break;
-
-    case GRID_THEME_OCEAN:
-        /* Opt into radial eye-distance fog when available, so the fog
-         * closes in by true distance rather than eye-plane depth and the
-         * fringes stop swimming as the camera orbits. */
-        if (set_nv_fog)
-            glFogi(GL_FOG_DISTANCE_MODE_NV, GL_EYE_RADIAL_NV);
-        scene_grid_render_ocean_theme(&grid_ctx, frame_ctx, breath);
-        break;
-
-    case GRID_THEME_XZRULER:
-        scene_grid_render_xzruler_theme(&grid_ctx);
-        break;
-
-    case GRID_THEME_PLANES:
-        scene_grid_render_planes_theme(config, &grid_ctx);
-        break;
-
-    case GRID_THEME_RADAR:
-        /* Same radial-fog opt-in as Ocean (see above): the radar rings
-         * read the shared FAR-extent distance fog, which swims at the
-         * fringes under the eye-plane default. */
-        if (set_nv_fog)
-            glFogi(GL_FOG_DISTANCE_MODE_NV, GL_EYE_RADIAL_NV);
-        scene_grid_render_radar_theme(&grid_ctx);
-        break;
-
-    default: {
-        /* GRID_THEME_CLASSIC, _FOG, _TRON, _EMBER, _FAINT and any
-         * future standard theme: look up its GridThemeSpec and draw
-         * through the table-driven path. */
-        const GridThemeSpec *spec = grid_theme_spec(grid_theme);
-        if (spec)
-            draw_grid_standard_theme(&grid_ctx, spec);
-        break;
-    }
-    }
+    grid_dispatch_theme(frame_ctx, &grid_ctx, grid_theme, set_nv_fog);
 
     if (set_nv_fog)
         glFogi(GL_FOG_DISTANCE_MODE_NV, saved_nv_fog_mode);
