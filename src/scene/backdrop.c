@@ -1,12 +1,9 @@
 /*
- * scene_backdrop.c - optional 3D backdrop renderers for the REPL scene.
+ * backdrop.c - optional 3D backdrop renderers for the REPL scene.
  */
 #include "backdrop.h"
 
-#include <math.h>
-#ifndef M_PI
-#define M_PI 3.14159265358979323846
-#endif
+#include <math.h>     /* sinf, cosf, fmodf, M_PI (via gl_includes.h) */
 
 #define CITY_BLDG_COUNT   300
 #define CITY_RADIUS       72.0f
@@ -16,9 +13,19 @@
 #define STAR_COUNT        2080
 #define STAR_SKY_RADIUS   30.0f
 
-/* Per-building deterministic RNG: bi * CITY_RNG_STRIDE seeds the hash so
- * adjacent buildings don't share a low-bit pattern. */
-#define CITY_RNG_STRIDE   13u
+/* Per-building deterministic RNG: bi * CITY_RNG_STRIDE seeds the hash.
+ * Stride MUST exceed the largest per-building offset so seed ranges for
+ * different buildings never overlap. Offsets used below: heights 1..5,
+ * tier2 6..9, bldg_phase +50, warmth +200, window-base +300, plus
+ * window-relative wc*17 + wr (max ~167 for 9*17+14) and per-window
+ * offsets +1..+22, giving a max of ~489 from base. 512 is the next
+ * power of two above that, leaving headroom for new slots.
+ *
+ * The previous value (13) collided across buildings: building 0's
+ * warmth (base+200) shared a seed with building 15's height random
+ * (15*13 + 5 = 200), and similar overlaps cascaded through every
+ * detail. */
+#define CITY_RNG_STRIDE   512u
 
 /* Linear distance fog, as a fraction of CITY_RADIUS: fog ramps from
  * START_FRAC to END_FRAC of the ring radius so the far buildings recede
@@ -195,11 +202,12 @@ static void draw_cityscape(float anim_time, int nv_fog_distance_supported) {
             glEnd();
         }
 
+        /* Building footprint ranges (CITY_BLDG_W_RANGE / _H_RANGE) and
+         * the 0.65/0.60 cell sizes constrain wcols ∈ [2, 5] and
+         * wrows ∈ [3, 14]. The upper clamp on wrows is the only
+         * boundary-effective one; the others were dead before. */
         int wcols = 1 + (int)(bw / 0.65f);
         int wrows = 1 + (int)(bh / 0.60f);
-        if (wcols < 1) wcols = 1;
-        if (wcols > 9) wcols = 9;
-        if (wrows < 2) wrows = 2;
         if (wrows > 14) wrows = 14;
 
         float cell_w = bw / (float)wcols;
@@ -304,12 +312,17 @@ static void draw_starry_sky(float anim_time, int point_parameter_supported) {
     glEnable(GL_POINT_SMOOTH);
     glHint(GL_POINT_SMOOTH_HINT, GL_NICEST);
     glDisable(GL_FOG);
-    /* Direct call, independent of the REPL executor. Gated on the
-     * runtime capability the controller mirrored into the config;
-     * when unsupported the stars still render at a fixed glPointSize
-     * (acceptable degradation, no distance attenuation). */
+    /* Override prior point attenuation with identity so stars render at
+     * fixed sizes (the per-band glPointSize values below) regardless of
+     * camera distance. The init bootstrap sets a non-identity quadratic
+     * default (0.02 quadratic term) for normal scene point rendering;
+     * without this override stars would attenuate noticeably across the
+     * STAR_SKY_RADIUS dome. Gated on the runtime capability the
+     * controller mirrored into the config — unsupported contexts can't
+     * have run the init-bootstrap call either, so the GL default
+     * (identity) is already in effect and no reset is needed. */
     if (point_parameter_supported)
-        glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION, (GLfloat[]){1, 0, 0.00});
+        glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION, (GLfloat[]){1, 0, 0});
 
     /* Strip camera translation so stars follow rotation only (no zoom pop). */
     glMatrixMode(GL_MODELVIEW);
