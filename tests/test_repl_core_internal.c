@@ -371,6 +371,83 @@ int main() {
                    repl_state_flat_program_count(), live_count);
     }
 
+    /* 8b. user_lighting_enabled respects control flow (regression for #10).
+     * Pre-fix walked the source array, so glEnable(GL_LIGHTING) inside an
+     * if(0) block or an unreferenced funcN body counted as effective. */
+    {
+        GLCmd temp_flat[16];
+        FlatCmdLocalVars temp_locals[16];
+        ReplFlattenOptions opts;
+        ReplFlattenResult result;
+
+        /* (a) unreached if(0) body — source sees an enable; flat doesn't. */
+        glr_app_reset_all(); declare_test_vars();
+        editor_feed_line("if(0) {");
+        editor_feed_line("  glEnable(GL_LIGHTING);");
+        editor_feed_line("}");
+        memset(temp_flat, 0, sizeof(temp_flat));
+        memset(temp_locals, 0, sizeof(temp_locals));
+        opts = (ReplFlattenOptions){
+            .source_cmds = repl_state_document_cmds_mut(),
+            .source_cmd_count = repl_state_document_count(),
+            .flat_cmds = temp_flat,
+            .flat_local_vars = temp_locals,
+            .flat_capacity = 16,
+            .text = source_document_view()
+        };
+        ASSERT_INT("if(0) flatten ok", repl_flatten_program(&opts, &result), 1);
+        ASSERT_INT("if(0) lighting is OFF (flat walk)",
+                   result.user_lighting_enabled, 0);
+
+        /* (b) unreferenced funcN body — source sees the enable; flat
+         * skips because the function is never called. */
+        glr_app_reset_all(); declare_test_vars();
+        editor_feed_line("func0() {");
+        editor_feed_line("  glEnable(GL_LIGHTING);");
+        editor_feed_line("}");
+        memset(temp_flat, 0, sizeof(temp_flat));
+        memset(temp_locals, 0, sizeof(temp_locals));
+        opts.source_cmds = repl_state_document_cmds_mut();
+        opts.source_cmd_count = repl_state_document_count();
+        ASSERT_INT("unreferenced func flatten ok",
+                   repl_flatten_program(&opts, &result), 1);
+        ASSERT_INT("unreferenced func lighting is OFF (flat walk)",
+                   result.user_lighting_enabled, 0);
+
+        /* (c) glDisable(GL_LIGHTING) inside an unreached for-loop body
+         * — source walk would see the disable and report OFF; flat walk
+         * does not enter the empty range and reports ON. */
+        glr_app_reset_all(); declare_test_vars();
+        editor_feed_line("glEnable(GL_LIGHTING);");
+        editor_feed_line("for(i, 0, 0) {");
+        editor_feed_line("  glDisable(GL_LIGHTING);");
+        editor_feed_line("}");
+        memset(temp_flat, 0, sizeof(temp_flat));
+        memset(temp_locals, 0, sizeof(temp_locals));
+        opts.source_cmds = repl_state_document_cmds_mut();
+        opts.source_cmd_count = repl_state_document_count();
+        ASSERT_INT("dead-disable flatten ok",
+                   repl_flatten_program(&opts, &result), 1);
+        ASSERT_INT("dead-disable lighting is ON (flat walk)",
+                   result.user_lighting_enabled, 1);
+
+        /* (d) enable behind a control-flow gate that DOES execute — for-loop
+         * runs once and visits glEnable. Confirms the flat walk picks up
+         * legitimate enables reached via expansion. */
+        glr_app_reset_all(); declare_test_vars();
+        editor_feed_line("for(i, 0, 1) {");
+        editor_feed_line("  glEnable(GL_LIGHTING);");
+        editor_feed_line("}");
+        memset(temp_flat, 0, sizeof(temp_flat));
+        memset(temp_locals, 0, sizeof(temp_locals));
+        opts.source_cmds = repl_state_document_cmds_mut();
+        opts.source_cmd_count = repl_state_document_count();
+        ASSERT_INT("for-reached flatten ok",
+                   repl_flatten_program(&opts, &result), 1);
+        ASSERT_INT("for-reached lighting is ON",
+                   result.user_lighting_enabled, 1);
+    }
+
     /* 9. input_has_expr_vars */
     {
         ExprVar vars[2] = { { "radius", 1.0f }, { "height", 2.0f } };

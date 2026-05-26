@@ -343,7 +343,7 @@ repl_set_status_error("Error: cannot read X");`.
 `ferror=1`) and asserts the function returns failure; pre-fix this
 returned success.
 
-### 10. `flatten_source_lighting_enabled` ignores control flow
+### 10. ✅ `flatten_source_lighting_enabled` ignores control flow
 
 **Where:** `src/repl/flatten.c:575-588`
 
@@ -367,6 +367,15 @@ that flatten exists to resolve everywhere else.
 **Fix:** Walk the *flat* program after expansion; or accept that
 the executor's tracking is the only correct answer and remove this
 signal.
+
+**Status (2026-05-26):** ✅ Closed. Renamed the helper to
+`flatten_flat_lighting_enabled` and rewired it to walk
+`ctx.flat_cmds` (the post-expansion program) instead of `ctx.source_cmds`.
+Regression tests in `tests/test_repl_core_internal.c` (section 8b)
+cover: unreached `if(0)` body, unreferenced funcN body (both report
+OFF correctly), `glDisable` inside an empty `for(i, 0, 0)` body
+(no longer disables the top-level enable), and a reached `for` loop
+(legitimate enables behind control flow still detected).
 
 ### 11. ✅ `source_scope_cmd_indent` / `_cmd_tess_indent` write 1 byte past buffer when `buf_sz == 0`
 

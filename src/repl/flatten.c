@@ -572,16 +572,22 @@ static void flatten_range(FlattenContext *ctx,
     }
 }
 
-static int flatten_source_lighting_enabled(const GLCmd *source_cmds,
-                                           int source_count) {
+/* Walk the *flat* program — the post-expansion command stream — so
+ * that glEnable(GL_LIGHTING) inside `if(0) { }`, `for(i, 0, 0) { }`,
+ * an unreferenced funcN body, or a goto-skipped region does not count.
+ * Walking the source array (the pre-#10 behavior) treated those as
+ * effective and lit scenes that the executor would render unlit. */
+static int flatten_flat_lighting_enabled(const GLCmd *flat_cmds,
+                                         int flat_count) {
     int user_lighting_enabled = 0;
 
-    for (int i = 0; i < source_count; i++) {
-        if (source_cmds[i].valid && source_cmds[i].type == CMD_ENABLE &&
-            (GLenum)source_cmds[i].args[0] == GL_LIGHTING)
+    for (int i = 0; i < flat_count; i++) {
+        if (!flat_cmds[i].valid) continue;
+        if (flat_cmds[i].type == CMD_ENABLE &&
+            (GLenum)flat_cmds[i].args[0] == GL_LIGHTING)
             user_lighting_enabled = 1;
-        if (source_cmds[i].valid && source_cmds[i].type == CMD_DISABLE &&
-            (GLenum)source_cmds[i].args[0] == GL_LIGHTING)
+        else if (flat_cmds[i].type == CMD_DISABLE &&
+                 (GLenum)flat_cmds[i].args[0] == GL_LIGHTING)
             user_lighting_enabled = 0;
     }
     return user_lighting_enabled;
@@ -641,7 +647,7 @@ int repl_flatten_program(const ReplFlattenOptions *options,
     result->ok = !ctx.abort;
     result->flat_cmd_count = ctx.flat_count;
     result->user_lighting_enabled =
-        flatten_source_lighting_enabled(ctx.source_cmds, ctx.source_count);
+        flatten_flat_lighting_enabled(ctx.flat_cmds, ctx.flat_count);
     repl_copy_string_fits(result->status, sizeof(result->status), ctx.status);
     return result->ok;
 }
