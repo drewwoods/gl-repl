@@ -73,8 +73,6 @@
 #include "subsystems/variable_panel/variable_panel_drag.h"
 #include "subsystems/variable_panel/variable_panel_state.h"
 
-static UiRenderSnapshot g_cached_ui_snap;
-
 static int glr_ctrl_apply_code_panel_follow_scroll_for_snapshot(
     const UiRenderSnapshot *snap,
     int *out_follow_doc_line,
@@ -1870,7 +1868,6 @@ void glr_ctrl_display_frame(void) {
             glr_ctrl_populate_numeric_swatch(&ui_snap);
         }
     }
-    g_cached_ui_snap = ui_snap;
     prof_end(PROF_SNAPSHOT_UI);
 
     prof_end(PROF_SNAPSHOT);
@@ -3701,14 +3698,10 @@ int glr_ctrl_router_handle_code_panel_drag(int x, int y) {
     if (!g_code_panel_drag_active || g_code_panel_drag_anchor < 0)
         return 0;
 
-    const UiRenderSnapshot *snap = &g_cached_ui_snap;
-    UiRenderSnapshot fresh_snap;
-    if (g_cached_ui_snap.viewport.window_w <= 0 || g_cached_ui_snap.viewport.window_h <= 0) {
-        glr_ctrl_build_ui_snapshot(&fresh_snap);
-        snap = &fresh_snap;
-    }
+    UiRenderSnapshot ui_snap;
+    glr_ctrl_build_ui_snapshot(&ui_snap);
 
-    UiHit hit = ui_panels_hit_test(snap, x, y, repl_eval_predef_view().count);
+    UiHit hit = ui_panels_hit_test(&ui_snap, x, y, repl_eval_predef_view().count);
 
     /* Per-character input-buffer drag: as long as the drag stays on
      * the same source row as the press AND that row is the active
@@ -3745,7 +3738,7 @@ int glr_ctrl_router_handle_code_panel_drag(int x, int y) {
             if (cx > cp_x + cp_w - 1) cx = cp_x + cp_w - 1;
             if (gl_y < cp_y + 1) cy = win_h - (cp_y + 1);
             if (gl_y > cp_y + cp_h - 1) cy = win_h - (cp_y + cp_h - 1);
-            UiHit clamped = ui_panels_hit_test(snap, cx, cy,
+            UiHit clamped = ui_panels_hit_test(&ui_snap, cx, cy,
                                                repl_eval_predef_view().count);
             target = code_panel_target_from_hit(clamped);
         }
@@ -3927,13 +3920,9 @@ void glr_ctrl_mouse(int button, int state, int x, int y) {
          * divider + inline swatch + insert line) and pin buttons. Only
          * kinds that don't apply (UI_HIT_SCENE, UI_HIT_NONE,
          * UI_HIT_HELP_PANEL) fall through to scene press / camera. */
-        const UiRenderSnapshot *snap = &g_cached_ui_snap;
-        UiRenderSnapshot fresh_snap;
-        if (g_cached_ui_snap.viewport.window_w <= 0 || g_cached_ui_snap.viewport.window_h <= 0) {
-            glr_ctrl_build_ui_snapshot(&fresh_snap);
-            snap = &fresh_snap;
-        }
-        UiHit hit = ui_panels_hit_test(snap, x, y,
+        UiRenderSnapshot ui_snap;
+        glr_ctrl_build_ui_snapshot(&ui_snap);
+        UiHit hit = ui_panels_hit_test(&ui_snap, x, y,
                            repl_eval_predef_view().count);
         if (glr_ctrl_router_handle_code_panel_hit(hit, x, y)) {
             glr_ctrl_apply_input_effects(editor_take_input_effects());
