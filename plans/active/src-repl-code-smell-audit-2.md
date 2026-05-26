@@ -201,7 +201,7 @@ via the values-only helper at `replay.c:986`, so a partial fix
 leaves the fade path silently truncating names back to floats. The
 fade and replay storage have to move together.
 
-### 4. `repl_config_bag_set` silently truncates oversized keys/values and returns success
+### 4. ✅ `repl_config_bag_set` silently truncates oversized keys/values and returns success
 
 **Where:** `src/repl/cfg_baseline.c:15-30`
 
@@ -222,6 +222,22 @@ this in one direction.
 
 **Fix:** Detect truncation (snprintf return ≥ size) and return 0;
 or `STATIC_ASSERT(REPL_CFG_KEY_MAX >= longest_known_slug + 1)`.
+
+**Status (2026-05-26):** ✅ Closed. Added pre-flight `strlen` rejects
+plus a `fits()` helper that compares snprintf's return against the
+destination size; truncation on any of the three write sites (key,
+new-entry value, replace-path value) now returns 0 without
+mutating the bag. The replace-path explicitly preserves the prior
+value on rejection so callers don't accidentally turn an overflow
+into a silent corruption. `repl_config_bag_set_int` checks its
+local "%d" buffer the same way, with a
+`STATIC_ASSERT(REPL_CFG_VALUE_MAX >= 12)` pinning that
+`REPL_CFG_VALUE_MAX` can hold every 32-bit decimal int (so the
+runtime check is for defense, never a hot path). Regression tests
+in `tests/test_repl_core_internal.c` exercise oversized key,
+oversized new value, oversized replace value, oversized set_int
+key, plus the `KEY_MAX - 1 / KEY_MAX` boundary cases — pre-fix 9
+assertions fail, post-fix all 221 pass.
 
 ### 5. ✅ `UserScene` stack allocations carry ~1 MB+ each; multiple concurrent stashes exceed small-thread stacks
 
