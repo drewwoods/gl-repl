@@ -32,6 +32,7 @@
 #include "app/glr_camera_export.h"
 #include "app/glr_debug.h"
 #include "keys.h"
+#include "support/memprof.h"
 #include "support/prof.h"
 #include "repl/core.h"
 #include "repl/examples.h"          /* REPL_EXAMPLE_TAG_* */
@@ -61,6 +62,7 @@
 #include "ui/app/layout.h"
 #include "ui/app/menu_bar.h"
 #include "ui/core/metrics.h"
+#include "ui/app/memory_panel.h"
 #include "ui/app/numeric_swatch.h"
 #include "ui/app/panels.h"
 #include "ui/app/repl_code_panel.h"
@@ -1654,6 +1656,7 @@ void glr_ctrl_build_ui_snapshot(UiRenderSnapshot *snap) {
     snap->variable_drag.active_var = variable_panel_drag_active_var();
     snap->variable_drag.log_mode   = variable_panel_drag_log_mode();
     snap->profile_panel  = ui_state_profile_panel();
+    snap->memory_panel   = ui_state_memory_panel();
     snap->status         = ui_state_status();
     snap->search         = *editor_state_search();
     snap->autocomplete   = editor_state_autocomplete();
@@ -1785,6 +1788,7 @@ void glr_ctrl_display_frame(void) {
     UiRenderSnapshot ui_snap;
 
     prof_frame_tick();
+    memprof_frame_tick();
     prof_begin(PROF_FRAME_TOTAL);
 
     if (repl_state_normals_dirty()) {
@@ -1954,6 +1958,10 @@ void glr_ctrl_display_frame(void) {
     prof_begin(PROF_PROFILE_PANEL);
     ui_profile_panel_render(&ui_snap);
     prof_end(PROF_PROFILE_PANEL);
+
+    prof_begin(PROF_MEMORY_PANEL);
+    ui_memory_panel_render(&ui_snap);
+    prof_end(PROF_MEMORY_PANEL);
 
     prof_begin(PROF_FRAME_RESTORE);
     repl_state_flat_program_set_count(saved_flat_count);
@@ -2524,6 +2532,11 @@ void glr_ctrl_init_gl(void) {
      * for Ctrl+/ toggle. Editor itself has no default — tests that
      * exercise the toggle key path set the prefix explicitly. */
     editor_set_line_comment_prefix("// ");
+
+    /* Capture the memory baseline after REPL bootstrap so it reflects
+     * "REPL ready and idle" rather than the bare process at main()
+     * entry — the more useful baseline for leak attribution. */
+    memprof_init();
 }
 
 /* Program name for user-facing messages. Defaults to "gl-repl" so it is
@@ -2772,6 +2785,24 @@ int glr_ctrl_router_handle_code_focus_key(unsigned char key) {
     if (!(editor_input_active_modifiers() & GLUT_ACTIVE_SHIFT))
         return 0;
     glr_ctrl_toggle_code_focus();
+    return 1;
+}
+
+/* Ctrl+Shift+M: cycle the memory panel (Off / On / Details). Plain
+ * Ctrl+M arrives here as 13 (CR / Enter); the Shift bit is what
+ * distinguishes it from "Enter to commit/newline", so both modifier
+ * bits are required and checked individually (combined `mods & (A|B)`
+ * would also fire on Shift+Enter and steal it from the editor).
+ *
+ * Routes through glr_cfg_cycle_by_key so the status bar reflects the
+ * new mode (matching the Config-menu click and the Ctrl+W feel for
+ * the CPU profile panel). */
+int glr_ctrl_router_handle_memory_panel_key(unsigned char key) {
+    if (key != 13) return 0;
+    int mods = editor_input_active_modifiers();
+    if (!(mods & GLUT_ACTIVE_CTRL))  return 0;
+    if (!(mods & GLUT_ACTIVE_SHIFT)) return 0;
+    glr_cfg_cycle_by_key(GLR_CONFIG_MEMORY_PROFILE, +1);
     return 1;
 }
 
@@ -3816,6 +3847,7 @@ void glr_ctrl_keyboard(unsigned char key, int x, int y) {
         glr_ctrl_router_handle_accum_samples_key(key) ||
         glr_ctrl_router_handle_post_filter_key(key) ||
         glr_ctrl_router_handle_code_focus_key(key) ||
+        glr_ctrl_router_handle_memory_panel_key(key) ||
         glr_ctrl_router_handle_tutorial_ack_key(key) ||
         glr_ctrl_router_handle_quit_key(key)) {
         glr_ctrl_apply_input_effects(editor_take_input_effects());

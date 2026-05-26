@@ -91,6 +91,7 @@ static int *config_value_ptr(GlrConfigKey key) {
     case GLR_CONFIG_VERTEX_POINTS:       return &glr_state_presentation_mut()->show_vertex_points;
     case GLR_CONFIG_VARIABLE_PANEL:      return &variable_panel_state_mut()->visible;
     case GLR_CONFIG_CPU_PROFILE:         return &ui_state_profile_panel_mut()->mode;
+    case GLR_CONFIG_MEMORY_PROFILE:      return &ui_state_memory_panel_mut()->mode;
     case GLR_CONFIG_CODE_PANEL_LAYOUT:   return &glr_state_presentation_mut()->code_panel_layout;
     case GLR_CONFIG_WRAP_AT_COMMA:       return &glr_state_presentation_mut()->wrap_at_comma;
     case GLR_CONFIG_AUDIO_MODE:          return NULL; /* audio module owns this one */

@@ -1,5 +1,6 @@
 #include "ui/app/state.h"
 #include "ui/app/profile_panel.h"
+#include "ui/app/memory_panel.h"
 #include "ui/app/layout.h"  /* CFG_DEFAULT_PANEL_FRAC */
 
 #include <stddef.h>
@@ -18,6 +19,7 @@
         .status = { .text = "", .ttl = 0, .kind = UI_STATUS_INFO },   \
         .help = { .visible = 0 },                                     \
         .profile_panel = { .mode = PROFILE_PANEL_OFF },               \
+        .memory_panel  = { .mode = MEMORY_PANEL_OFF  },               \
         .viewport = { .window_w = 0, .window_h = 0 },                 \
         .pointer = { .mouse_x = 0, .mouse_y = 0, .mouse_button = -1 },\
         .code_panel = {                                               \
@@ -90,6 +92,14 @@ UiProfilePanelState ui_state_profile_panel(void) {
 
 UiProfilePanelState *ui_state_profile_panel_mut(void) {
     return &g_ui_state.profile_panel;
+}
+
+UiMemoryPanelState ui_state_memory_panel(void) {
+    return g_ui_state.memory_panel;
+}
+
+UiMemoryPanelState *ui_state_memory_panel_mut(void) {
+    return &g_ui_state.memory_panel;
 }
 
 UiViewportState ui_state_viewport(void) {

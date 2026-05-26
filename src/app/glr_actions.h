@@ -88,6 +88,14 @@ void glr_actions_apply_audio_cfg_mode(int mode);
  * Called by keyboard shortcut handlers. */
 void glr_cfg_cycle_row(int row, int delta);
 
+/* Look up the g_cfg_items[] row whose ->key matches and cycle it by delta.
+ * No-op if the key has no row in the table (or matches a section header).
+ * Use this from hotkey routers whose binding does not fit the descriptor
+ * table's key_code/is_special form (e.g. Ctrl+Shift+M, which arrives as
+ * ASCII 13 == Enter and so cannot live in key_code without stealing Enter).
+ * Returns 1 if a row was found and cycled, 0 otherwise. */
+int  glr_cfg_cycle_by_key(int key, int delta);
+
 /* Reset the code-panel cursor blink state after navigation moves the cursor. */
 void glr_action_cursor_blink_reset(void);
 

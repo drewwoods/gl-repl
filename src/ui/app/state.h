@@ -21,6 +21,7 @@ typedef struct {
     UiStatusState           status;
     UiHelpState             help;
     UiProfilePanelState     profile_panel;
+    UiMemoryPanelState      memory_panel;
     UiViewportState         viewport;
     UiPointerState          pointer;
     UiCodePanelRuntimeState code_panel;
@@ -43,6 +44,10 @@ UiHelpState *ui_state_help_mut(void);
 /* Profile panel mode. */
 UiProfilePanelState  ui_state_profile_panel(void);
 UiProfilePanelState *ui_state_profile_panel_mut(void);
+
+/* Memory panel mode. */
+UiMemoryPanelState  ui_state_memory_panel(void);
+UiMemoryPanelState *ui_state_memory_panel_mut(void);
 
 /* Viewport size. */
 UiViewportState  ui_state_viewport(void);
