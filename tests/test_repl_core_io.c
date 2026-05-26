@@ -1420,6 +1420,24 @@ int main(void) {
         remove(path_b);
     }
 
+    /* Regression for #9: load-side ferror/fclose handling. Pointing
+     * repl_export_load_from_file at a directory triggers a real fgets
+     * read error (errno=EISDIR on macOS/Linux) — fopen succeeds, the
+     * first fgets returns NULL with ferror set. Before the fix, the
+     * read loop treated this as EOF and the function returned 1 as if
+     * the load had succeeded. Post-fix the function reports failure. */
+    {
+        glr_app_reset_all(); declare_test_vars();
+        int rc = repl_export_load_from_file("/tmp");
+        ASSERT_INT("load from a directory returns failure", rc, 0);
+
+        /* Sibling sanity check: loading a missing file still fails too
+         * (this path predates #9 — fopen returns NULL — but pin it so
+         * a refactor doesn't silently flip the error contract). */
+        rc = repl_export_load_from_file("/tmp/repl_core_io_nope_NOT_A_FILE.c");
+        ASSERT_INT("load of missing file returns failure", rc, 0);
+    }
+
     printf("repl_core_io: %d/%d passed\n", g_harness.passed, g_harness.run);
     return (g_harness.run == g_harness.passed) ? 0 : 1;
 }
