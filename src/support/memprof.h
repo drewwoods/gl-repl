@@ -16,6 +16,7 @@
  * MEMPROF_HISTORY_CAP * MEMPROF_PUSH_INTERVAL_S seconds. */
 #define MEMPROF_HISTORY_CAP        1024
 #define MEMPROF_PUSH_INTERVAL_S    5.0
+#define MEMPROF_FMT_WIDTH          6
 
 typedef struct {
     unsigned long long rss_bytes;

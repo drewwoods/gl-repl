@@ -57,7 +57,14 @@ static int clamp_int(int v, int lo, int hi) {
 /* ========================================================================= */
 
 /* Format a signed delta using memprof's formatter for the magnitude.
- * Either side being zero (the reader-failure sentinel — current/baseline
+ * memprof_format_bytes right-aligns the digit portion to
+ * MEMPROF_FMT_WIDTH chars (leading-space padded), so the unit suffix
+ * lands in the same column for RSS / init / delta rows. To keep that
+ * column alignment, the sign character overwrites the rightmost
+ * leading space rather than prepending — prepending would push the
+ * digits one column right of the RSS / init rows.
+ *
+ * Either side being zero (reader-failure sentinel — current/baseline
  * rows render "--" for that case) propagates as "--" so the delta row
  * does not show a fictitious large negative against zero. */
 static void fmt_delta(char *buf, int buf_sz,
@@ -67,16 +74,25 @@ static void fmt_delta(char *buf, int buf_sz,
         return;
     }
     if (cur == base) {
-        snprintf(buf, (size_t)buf_sz, "  0 B");
+        /* Zero delta: render as "0.0 MB" with the same width formatting
+         * as RSS / init so the unit column lines up. */
+        snprintf(buf, (size_t)buf_sz, "%*.1f MB", MEMPROF_FMT_WIDTH, 0.0);
         return;
     }
     char tmp[24];
-    if (cur > base) {
-        memprof_format_bytes(tmp, (int)sizeof(tmp), cur - base);
-        snprintf(buf, (size_t)buf_sz, "+%s", tmp);
+    unsigned long long mag = (cur > base) ? cur - base : base - cur;
+    char sign = (cur > base) ? '+' : '-';
+    memprof_format_bytes(tmp, (int)sizeof(tmp), mag);
+    char *digit_start = tmp;
+    while (*digit_start == ' ') digit_start++;
+    if (digit_start > tmp) {
+        *(digit_start - 1) = sign;
+        snprintf(buf, (size_t)buf_sz, "%s", tmp);
     } else {
-        memprof_format_bytes(tmp, (int)sizeof(tmp), base - cur);
-        snprintf(buf, (size_t)buf_sz, "-%s", tmp);
+        /* No leading space (e.g. KB case which memprof_format_bytes does
+         * not pad). Prepend sign; this row may sit one column left of the
+         * MB/GB rows but is rare for a long-running REPL. */
+        snprintf(buf, (size_t)buf_sz, "%c%s", sign, tmp);
     }
 }
 
