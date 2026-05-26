@@ -30,11 +30,12 @@
 # the check. Tightening the grep itself is a future refinement.
 #
 # The Phase 5 typedef migration landed: the UI-chrome typedefs
-# (UiCodePanelRuntimeState / UiHelpState / UiVariablePanelState /
-# UiProfilePanelState / UiStatusState / GlrCameraState /
-# UiPointerState / UiViewportState) moved from repl_state_views.h
-# to src/ui/app/state_types.h, and src/ui/app/state.h includes the ui-owned
-# header directly. The ratchet target reached 0.
+# (UiCodePanelRuntimeState / UiHelpState / UiProfilePanelState /
+# UiStatusState / GlrCameraState / UiPointerState / UiViewportState)
+# moved from repl_state_views.h to src/ui/app/state_types.h, and
+# src/ui/app/state.h includes the ui-owned header directly. The
+# variable-panel snapshot view now lives with the variable-panel peer as
+# VariablePanelViewState. The ratchet target reached 0.
 
 ui_forwarder_count: 3
 ui_state_includes_repl_views: 0

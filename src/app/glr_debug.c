@@ -72,7 +72,7 @@ void glr_debug_dump_flat_commands(FILE *out, SourceTextView text) {
 void glr_debug_dump_runtime_state_layout(FILE *out) {
     FILE *dst = out ? out : stdout;
 
-/* The runtime-state layout dump no longer includes ReplReplayRuntimeState,
+/* The runtime-state layout dump no longer includes ReplayRuntimeState,
  * the presentation slice, or render-config toggles: those moved off
  * ReplRuntimeState to replay_state.c and glr_state.c respectively. (Replay
  * migration was Phase F commit 33; presentation/render relocation was

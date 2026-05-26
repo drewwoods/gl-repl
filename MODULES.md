@@ -269,8 +269,9 @@ These are intentional and must not be "fixed" by a future sweep:
   `ReplCompileContext` / `ReplCompiledChange` in
   `src/editor/services.h`; the `Repl*` snapshot fields in
   `src/ui/app/snapshot.h`; the export / replay-annotation bridge types in
-  `src/app/glr_ctrl.h`; and `UiVariablePanelState` (UI-owned, surfaced
-  by value through `src/subsystems/variable_panel/variable_panel_state.h`).
+  `src/app/glr_ctrl.h`; and `VariablePanelViewState`
+  (variable-panel-owned, surfaced by value through
+  `src/subsystems/variable_panel/variable_panel_state.h`).
 
 `make check-module-prefixes` (a denylist of the exact stale names the
 naming cleanup removed; in the `check-state-ownership` aggregate) fails
@@ -414,7 +415,7 @@ controllers; UI may render them; their input routes to them through
 |--------|------|
 | `variable_panel` | Peer subsystem: owns visibility flag + slider drag transaction in a single `VariablePanelState`. Storage lives in `src/subsystems/variable_panel/variable_panel_state.c`. |
 | `variable_panel_drag` | Implementation behind `variable_panel`'s drag transaction (begin/motion/reset, value writeback, source-line rewrite). Reads/writes through `variable_panel_drag_mut()`; legacy `repl_var_drag_*` symbol surface ratchets toward zero |
-| `replay_state` | Peer subsystem: owns `ReplReplayRuntimeState` storage in `src/subsystems/replay/replay_state.c`. Narrow accessors (`replay_active`, `replay_pc`, `replay_mode`, …) plus `replay_state_view()` for the per-frame snapshot fill |
+| `replay_state` | Peer subsystem: owns `ReplayRuntimeState` storage in `src/subsystems/replay/replay_state.c`. Narrow accessors (`replay_active`, `replay_pc`, `replay_mode`, …) plus `replay_state_view()` for the per-frame snapshot fill |
 | `replay` | Replay state machine implementation behind `replay_state`: PC stepping, mode toggling, fade batches. Routes via `replay_handle_pin_clicked` / `replay_handle_key` / `replay_handle_special` |
 | `editor_help_session` | Peer subsystem: read-only editor session for the help overlay (tab_idx, scroll). Visibility flag stays on `UiState.help` as chrome |
 | `color_picker` | Peer subsystem: floating HSV/alpha picker. Owns `g_cp_*` state, lifecycle (`color_picker_start` / `_stop` / `_active_line` / `_can_edit_cmd`), input handlers (`color_picker_handle_press` / `_motion` / `_release` returning `ColorPickerInputResult`), and source-line writeback through `editor_commit_apply_external_change`. Exposes `color_picker_view()` for renderers and `color_picker_hsv_to_rgb` as a shared color-math helper. Storage lives in `src/subsystems/color_picker/color_picker_state.c`; renderer lives separately in `src/ui/app/color_picker.c` |
@@ -537,7 +538,8 @@ state.
 
 | Module | Role |
 |--------|------|
-| `repl_export` | Save/load, typed export scaffold, workspace headers, code-panel dumps. Reads source via the `source_document` view; camera/cfg formatting delegated to app-side bridges. Also owns the public `repl_export_extract_cfg_slug` parser (single source of truth for the `// @cfg <slug>` shape — used by the tutorial runner's cfg-baseline capture so the slug surface never drifts) |
+| `repl_export` | Save/load, typed export scaffold, workspace headers, code-panel dumps. Reads source via the `source_document` view; camera/cfg formatting delegated to app-side bridges and neutral cfg-baseline helpers |
+| `repl_cfg_baseline` | Neutral cfg bag/bridge and `// @cfg <slug>` parser: owns `ReplConfigBag`, `ReplConfigBridge`, and `repl_config_extract_slug` for export/import, scene snapshots, and tutorial baselines |
 | `src/app/glr_camera_export` | Camera-block format owner: translates camera state ↔ the `// camera` block + `glRotatef`/`glTranslatef` text in saved files. Implements `ReplExportCameraBridge` so `repl_export` never parses/formats GL strings |
 | `src/app/glr_source_document` | Full-app adapter binding the neutral `source_document` port (read view + insert/replace/load/clear/apply) to the `EditorState` text buffer, so REPL pipeline TUs never reach into editor state directly |
 | `src/app/glr_state` | Storage + accessors for app-level presentation/render state relocated off `ReplRuntimeState`; reached through the `glr_config` keyed bridge |

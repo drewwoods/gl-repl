@@ -1335,6 +1335,11 @@ static void test_numeric_swatch_no_op_in_insert_mode(void) {
 static void test_depth_probe_does_not_mutate_repl_state(void) {
     printf("--- depth probe does not mutate REPL state (#2 P1 review) ---\n");
 
+#ifndef GL_STUBS
+    printf("Run `make test_glr_ctrl USE_GL_STUBS=1` for depth-probe adapter coverage.\n");
+    return;
+#endif
+
     glr_app_reset_all();
     editor_feed_line("float probevar;");
     editor_feed_line("probevar = probevar + 1;");
