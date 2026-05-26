@@ -64,6 +64,17 @@ All Tier A findings have been successfully implemented and verified through the 
   reference is also in the *Notes on placement* block below; left
   in Tier B intentionally.
 
+## Current Status (2026-05-27)
+
+Tier A remains complete. Tier B is now mostly implemented: **#6, #7,
+#8, #11, #12, #13, #14, #26, #28, #30, #31, #33, #34, #36, and #37**
+are done; **#29** is the only remaining active Tier B finding. Tier C
+findings **#32** and **#35** remain deferred.
+
+Focused editor diagnostics are clean in the touched slices. Full
+executable validation is still pending because terminal command output
+was unavailable during this pass.
+
 ## Headline take
 
 37 findings total; #15 withdrawn (pre-validation already exists),
@@ -227,7 +238,7 @@ exists — `ReplPredefView` returned by `repl_eval_predef_view()`).
 Replace the three `glr_ctrl.c` uses with the view accessor. The
 macros are used elsewhere too; a broader sweep is Tier B.
 
-### 6. Coupled clear-color magic numbers
+### 6. Coupled clear-color magic numbers — Done
 
 **Where:** `src/app/glr_ctrl.c:714` (default clear color
 `0.10f, 0.10f, 0.10f`) and `src/app/glr_ctrl.c:810`
@@ -243,7 +254,7 @@ bright on the default background).
 `CFG_DEFAULT_BG_LUM` constant. Use it in both the clear-color
 fallback and the alpha-boost numerator.
 
-### 7. Two sources for clear-color in one function
+### 7. Two sources for clear-color in one function — Done
 
 **Where:** `src/app/glr_ctrl.c:714` (inline scan of flat program)
 and `src/app/glr_ctrl.c:807-809` (alpha-boost luminance read).
@@ -261,7 +272,7 @@ the alpha boost uses a stale clear color.
 instead of `repl_render.clear_color[]`, since the config was just
 populated three lines above.
 
-### 8. Mid-header heavyweight includes in `glr_ctrl.h`
+### 8. Mid-header heavyweight includes in `glr_ctrl.h` — Done
 
 **Where:** `src/app/glr_ctrl.h:138` (`#include "repl/export.h"`)
 and `src/app/glr_ctrl.h:229`
@@ -311,7 +322,7 @@ return would be `GLR_CFG_ROW_HEADER` or `GLR_CFG_ROW_SEPARATOR`
 **Fix:** Return `GLR_CFG_ROW_SEPARATOR` for OOB, or add a
 `GLR_CFG_ROW_INVALID` sentinel if the enum has room.
 
-### 11. `g_cfg_items[]` extern is non-const
+### 11. `g_cfg_items[]` extern is non-const — Done
 
 **Where:** `src/app/glr_config.h:100` (or nearby — the extern
 declaration for `g_cfg_items[]`).
@@ -335,7 +346,7 @@ the single mutation site, or (b) add a `display_label` override
 pointer to `GlrConfigItem`, populate it in
 `glr_actions_set_msaa_label`, and make the table `const`.
 
-### 12. `load_state()` reads shared state without lock
+### 12. `load_state()` reads shared state without lock — Done
 
 **Where:** `src/app/glr_audio.c:342-370`.
 
@@ -354,7 +365,7 @@ iterate over a stale count and match a track at a wrong index.
 `audio_lock()` / `audio_unlock()`, or document that `load_state` is
 only called before the worker is started (verify this is true).
 
-### 13. Stale globals survive `shutdown`/`re-init` cycle
+### 13. Stale globals survive `shutdown`/`re-init` cycle — Done
 
 **Where:** `src/app/glr_audio.c:604-685`.
 
@@ -373,7 +384,7 @@ the API contract is silently broken for init/shutdown cycles.
 **Fix:** Clear all module-level globals in `glr_audio_shutdown()`,
 or document that re-init after shutdown is unsupported.
 
-### 14. "Dump" function mutates global state
+### 14. "Dump" function mutates global state — Done
 
 **Where:** `src/app/glr_debug.c:48-49`.
 
@@ -521,7 +532,7 @@ source. The branch is dead.
 **Fix:** Remove the dead branch, or add an assertion if the intent
 is defensive.
 
-### 26. No `pose_from_state` conversion helper
+### 26. No `pose_from_state` conversion helper — Done
 
 **Where:** `src/app/glr_camera.h:102-106` (approximate).
 
@@ -547,7 +558,7 @@ header or at the call site.
 
 ## 🔵 Structural concerns
 
-### 28. Magic numbers in variable-panel lift easing
+### 28. Magic numbers in variable-panel lift easing — Done
 
 **Where:** `src/app/glr_ctrl.c:3378-3382` (approximate).
 
@@ -559,7 +570,7 @@ accurate but the values are not greppable.
 **Fix:** Extract to named constants (`PANEL_LIFT_SPRING`,
 `PANEL_LIFT_DAMP`, `PANEL_LIFT_THRESHOLD`).
 
-### 29. Full `UiRenderSnapshot` rebuild on every drag-motion event
+### 29. Full `UiRenderSnapshot` rebuild on every drag-motion event — Remaining
 
 **Where:** `src/app/glr_ctrl.c:2956-2957, 3177-3178`.
 
@@ -576,7 +587,7 @@ correctness issue.
 a bounds clamp for cursor positions that fall outside the cached
 geometry.
 
-### 30. Replay row's `KEY_CTRL_R` shortcut is dispatch-dead
+### 30. Replay row's `KEY_CTRL_R` shortcut is dispatch-dead — Done
 
 **Where:** `src/app/glr_actions.c:148` (config table),
 `src/app/glr_ctrl.c:3066-3067` (dispatch chain).
@@ -609,7 +620,7 @@ different binding (Ctrl+Shift+R) that does not conflict with the
 unmodified Ctrl+R dispatched by the replay handler. No action
 needed for that row; included for completeness.
 
-### 31. `cfg_slug_from_label` recomputed per call
+### 31. `cfg_slug_from_label` recomputed per call — Done
 
 **Where:** `src/app/glr_actions.c:204` (definition), called at
 lines 251, 264, 299.
@@ -637,7 +648,7 @@ If sections are added beyond 16, the label array silently truncates.
 **Fix:** Add a `STATIC_ASSERT(section_count <= 16, ...)` or derive
 the cap from the table size.
 
-### 33. `get_current_track` header contract promises longer lifetime than source delivers
+### 33. `get_current_track` header contract promises longer lifetime than source delivers — Done
 
 **Where:** `src/app/glr_audio.h:92-93` (approximate).
 
@@ -651,7 +662,7 @@ change holds a dangling reference.
 **Fix:** Document the lifetime constraint in the header: "Returned
 pointer is valid until the next `glr_audio_set_playlist()` call."
 
-### 34. Implicit zero-init gap in `glr_state.c`
+### 34. Implicit zero-init gap in `glr_state.c` — Done
 
 **Where:** `src/app/glr_state.c:80`.
 
@@ -697,7 +708,7 @@ If include order changes, the macros break.
 **Fix:** Add `#include "scene/themes.h"` to `glr_defaults.h`, or
 use integer literals with a comment naming the enum value.
 
-### 36. Undocumented double-decay during active drag
+### 36. Undocumented double-decay during active drag — Done
 
 **Where:** `src/app/glr_camera.c:391, 457` (approximate).
 
@@ -712,7 +723,7 @@ them, breaking the drag feel.
 **Fix:** Add a one-line comment at the drag-motion decay site:
 `/* Intentional double-decay with momentum tick for snappier drag. */`
 
-### 37. `set_target_decay(0.0)` gives instant snap, not documented
+### 37. `set_target_decay(0.0)` gives instant snap, not documented — Done
 
 **Where:** `src/app/glr_camera.c:271-275` (approximate).
 
@@ -748,26 +759,49 @@ bug today.
 | 8 | **#21**, **#22**, **#23**, **#24**, **#25** | Dead API + named constant + dead code cleanup |
 | 9 | **#20**, **#27** | Dead normalization + missing docstring |
 
-### Tier B — one-week pass (16 findings)
+### Tier B — current implementation status (2026-05-27)
 
-1. **#6** + **#7** — Unify clear-color source; extract default
-   constant.
-2. **#8** — Add struct tags to export/annotation types, then split
-   `glr_ctrl.h` declarations into a narrow header.
-3. **#11** — Add `display_label` override field to `GlrConfigItem`;
-   make the table `const`.
-4. **#12** — Audit `load_state()` lock scope; wrap shared reads.
-5. **#13** — Reset all globals in `shutdown()`.
-6. **#14** — Rename or remove the dirty-check in debug dump.
-7. **#26** — Add `glr_camera_pose_from_state()` helper.
-8. **#28** — Extract panel-lift easing constants.
-9. **#29** — Reuse cached snapshot for drag hit-testing.
-10. **#30** — Decouple replay row shortcut from config dispatch.
-11. **#31** — Precompute config slugs.
-12. **#33** — Document `get_current_track` lifetime.
-13. **#34** — Initialize `g_glr_state` from defaults table.
-14. **#36** — Document double-decay in camera drag.
-15. **#37** — Document `decay = 0.0` instant-snap behavior.
+Completed in this pass:
+
+1. **#6 + #7** — Unified the controller's clear-color defaults and the
+  alpha-scale luminance source so both paths read from the same named
+  fallback constants / frame-local `SceneRenderConfig` data.
+2. **#8** — Split `glr_ctrl_fill_export_layout()` and
+  `glr_publish_replay_annotations()` into narrow controller headers
+  (`glr_ctrl_export.h`, `glr_ctrl_replay_annotations.h`) so
+  `glr_ctrl.h` no longer drags heavyweight owner headers into
+  unrelated translation units.
+3. **#11 + #31** — Made `g_cfg_items[]` `const` by moving MSAA's
+  mutable label into a runtime display override, and added stable
+  per-item slug helpers cached in the config owner.
+4. **#12 + #13 + #33** — Tightened audio lifecycle/state ownership:
+  `load_state()` snapshots shared state under the mutex, shutdown now
+  resets module globals for clean re-init, and the
+  `glr_audio_get_current_track()` header contract matches the real
+  returned-pointer lifetime.
+5. **#14** — Renamed the side-effecting debug helper to
+  `glr_debug_dump_flat_commands_sync()` so the mutation is explicit
+  at the call site.
+6. **#26 + #36 + #37** — Added `glr_camera_pose_from_state()` and
+  documented both the intentional drag double-decay and the
+  `decay = 0.0f` instant-snap contract.
+7. **#28** — Replaced replay-panel lift magic numbers with named
+  controller constants.
+8. **#30** — Routed Ctrl+R through config ownership by reordering the
+  controller dispatch chain and removing duplicate replay-handler
+  consumption.
+9. **#34** — Initialized live `g_glr_state` from the same compile-time
+  defaults literal used for the defaults table, closing the early
+  zero-init gap.
+
+Remaining Tier B work:
+
+1. **#29** — Reuse the cached `UiRenderSnapshot` for drag hit-testing
+  instead of rebuilding it on each motion event.
+2. Run focused executable validation for the landed Tier B slices once
+  terminal command output is available again; editor diagnostics were
+  used during this pass, but that does not replace build-and-run
+  checks.
 
 ### Tier C — defer (high cost or cross-cutting)
 

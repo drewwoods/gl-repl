@@ -596,6 +596,32 @@ static void test_audio_config_direct_set(void) {
                glr_audio_get_cfg_mode(), glr_config_state_count(GLR_CONFIG_AUDIO_MODE) - 1);
 }
 
+static void test_msaa_display_label_override(void) {
+    int msaa_row = -1;
+
+    for (int i = 0; i < CFG_ITEM_COUNT; i++) {
+        const GlrConfigItem *item = glr_config_item_at(i);
+        if (item && item->key == GLR_CONFIG_MSAA) {
+            msaa_row = i;
+            break;
+        }
+    }
+
+    ASSERT_TRUE("found MSAA row", msaa_row >= 0);
+    if (msaa_row < 0)
+        return;
+
+    const GlrConfigItem *item = glr_config_item_at(msaa_row);
+    ASSERT_TRUE("MSAA item available", item != NULL);
+
+    glr_actions_set_msaa_label(4);
+    ASSERT_STR("MSAA display label override", glr_config_item_display_label(item), "MSAAx4");
+    ASSERT_STR("MSAA slug remains stable", glr_config_item_slug(item), "msaa");
+
+    glr_actions_set_msaa_label(1);
+    ASSERT_STR("MSAA display label resets", glr_config_item_display_label(item), "MSAA");
+}
+
 /* Audit #18: GLR_CONFIG_NONE must return 0/NULL state count and name,
  * and must not match the first rendering row (which carries GLR_CONFIG_NONE). */
 static void test_config_none_handling(void) {
@@ -916,6 +942,7 @@ int main(void) {
     test_tutorial_start_applies_cfg();
     test_tutorial_menu_dispatch();
     test_audio_config_direct_set();
+    test_msaa_display_label_override();
     test_config_none_handling();
     test_menu_out_of_range_indices();
     test_cfg_cycle_stops_replay();

@@ -1042,10 +1042,6 @@ void replay_copy_baseline_scratch_arrays(
 int replay_handle_key(unsigned char key) {
     ReplayRuntimeState *state = replay_state_mut();
     if (!state->active) {
-        if (key == KEY_CTRL_R) {
-            replay_start();
-            return 1;
-        }
         if (key == KEY_CTRL_K) {
             int target_line = repl_dispatch_edit_line_get();
             replay_start();
@@ -1065,11 +1061,6 @@ int replay_handle_key(unsigned char key) {
         return 0;
     }
 
-    if (key == KEY_CTRL_R) {
-        replay_stop();
-        repl_set_status("Replay: off");
-        return 1;
-    }
     if (key == KEY_CTRL_K) {
         int landed = replay_seek_to_src_line(repl_dispatch_edit_line_get());
         if (landed < 0) {

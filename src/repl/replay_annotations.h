@@ -14,7 +14,8 @@
  *   - replay_annotations_prepare() — fills the output. Idempotent
  *     within a frame; safe to call from the controller, layout, and
  *     tests. The full app uses glr_publish_replay_annotations() (in
- *     glr_ctrl.h) to copy the rows into editor_state_virtual_lines.
+ *     app/glr_ctrl_replay_annotations.h) to copy the rows into
+ *     editor_state_virtual_lines.
  *   - replay_code_panel_get_command_display_text() returns the
  *     in-line annotated source text for a command (no extra rows).
  *

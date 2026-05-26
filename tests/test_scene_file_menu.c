@@ -8,6 +8,7 @@
  * active named scene + a mkdtemp workspace dir.
  */
 #include "app/glr_ctrl.h"
+#include "app/glr_ctrl_export.h"
 #include "app/glr_actions.h"
 #include "editor/inline_rename.h"
 #include "repl/core.h"

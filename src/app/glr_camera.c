@@ -266,9 +266,10 @@ void glr_camera_ease_to(float rx, float ry, float dist,
 
 /* Override the per-ease decay for the current target. Call AFTER
  * glr_camera_ease_to (which resets to the global default). Values in
- * (0, 1): lower = faster (more of the remaining distance applied per
- * frame); higher = slower. Out-of-range values are silently clamped to
- * keep the ease well-behaved. */
+ * [0, 1): lower = faster (more of the remaining distance applied per
+ * frame); higher = slower; 0.0f snaps to the target on the next tick.
+ * Out-of-range values are silently clamped to keep the ease
+ * well-behaved. */
 void glr_camera_set_target_decay(float decay) {
     if (decay < 0.0f) decay = 0.0f;
     if (decay > 0.999f) decay = 0.999f;
@@ -290,6 +291,21 @@ void glr_camera_reset_default(void) {
  * the function and the camera type both sit with the app's camera
  * owner. scene_render_3d_scene now documents the precondition
  * (modelview populated) without naming a specific helper. */
+GlrCameraPose glr_camera_pose_from_state(const GlrCameraState *state) {
+    GlrCameraPose pose = {0};
+
+    if (!state)
+        return pose;
+
+    pose.rx = state->rx;
+    pose.ry = state->ry;
+    pose.dist = state->dist;
+    pose.tx = state->tx;
+    pose.ty = state->ty;
+    pose.tz = state->tz;
+    return pose;
+}
+
 void glr_camera_load_modelview(const GlrCameraPose *pose) {
     if (!pose) return;
     glMatrixMode(GL_MODELVIEW);
@@ -381,6 +397,10 @@ void glr_camera_drag_motion(int x, int y) {
     int btn = g_pointer_button;
     int dx = x - px;
     int dy = y - py;
+
+    /* Intentional double-decay: drag paths damp the carry velocity here
+     * and glr_camera_tick() damps it again once per frame so active
+     * interaction feels snappier than free momentum. */
 
     if (g_control_mode == GLR_CAMERA_CONTROL_2D &&
         (btn == GLUT_LEFT_BUTTON || btn == GLUT_RIGHT_BUTTON)) {

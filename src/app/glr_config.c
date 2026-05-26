@@ -1,9 +1,11 @@
 #include "app/glr_config.h"
 #include "app/glr_actions.h"
+#include <ctype.h>
 #include <string.h>
 #include "app/glr_audio.h"
 #include "app/glr_camera.h"
 #include "app/glr_state.h"           /* presentation + render storage */
+#include "repl/cfg_baseline.h"
 #include "repl/state_owners.h"
 #include "ui/app/state_types.h"
 #include "subsystems/variable_panel/variable_panel_state.h"
@@ -48,6 +50,23 @@ static void accum_aa_set_cycle(int value) {
     glr_state_render_mut()->accum_samples = k_accum_steps[value];
 }
 
+static void cfg_slug_from_label(const char *label, char *out, size_t out_sz) {
+    size_t out_idx = 0;
+
+    for (size_t i = 0; label[i] && out_idx + 1 < out_sz; i++) {
+        unsigned char c = (unsigned char)label[i];
+        if (c == ' ' || c == '\t' || c == '-' || c == '/') {
+            out[out_idx++] = '_';
+        } else if (isalnum(c)) {
+            out[out_idx++] = (char)tolower(c);
+        } else if (c == '_') {
+            out[out_idx++] = '_';
+        }
+    }
+    if (out_sz > 0)
+        out[out_idx] = '\0';
+}
+
 const GlrConfigItem *glr_config_items(int *count) {
     if (count)
         *count = CFG_ITEM_COUNT;
@@ -58,6 +77,28 @@ const GlrConfigItem *glr_config_item_at(int idx) {
     if (idx < 0 || idx >= CFG_ITEM_COUNT)
         return NULL;
     return &g_cfg_items[idx];
+}
+
+const char *glr_config_item_display_label(const GlrConfigItem *item) {
+    if (!item)
+        return NULL;
+    if (item->display_label_override && *item->display_label_override)
+        return *item->display_label_override;
+    return item->label;
+}
+
+const char *glr_config_item_slug(const GlrConfigItem *item) {
+    static char slug_cache[GLR_CONFIG_COUNT][REPL_CFG_KEY_MAX];
+    static unsigned char slug_ready[GLR_CONFIG_COUNT];
+
+    if (!item || item->key <= GLR_CONFIG_NONE || item->key >= GLR_CONFIG_COUNT)
+        return NULL;
+    if (!slug_ready[item->key]) {
+        cfg_slug_from_label(item->label, slug_cache[item->key],
+                            sizeof(slug_cache[item->key]));
+        slug_ready[item->key] = 1;
+    }
+    return slug_cache[item->key];
 }
 
 static int *config_value_ptr(GlrConfigKey key) {

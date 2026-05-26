@@ -46,6 +46,19 @@
 #define CFG_DEFAULT_SYNTAX_HIGHLIGHT  0   /* off by default */
 #define CFG_DEFAULT_CODE_FOCUS        1   /* focus view by default */
 
+/* Neutral default clear color used by the controller when the flat
+ * program contains no user glClearColor command. Keep the luminance
+ * helper in sync with these channel values so overlay alpha scaling
+ * tracks any future default-background change. */
+#define CFG_DEFAULT_CLEAR_R           0.10f
+#define CFG_DEFAULT_CLEAR_G           0.10f
+#define CFG_DEFAULT_CLEAR_B           0.10f
+#define CFG_DEFAULT_CLEAR_A           1.0f
+#define CFG_DEFAULT_CLEAR_LUMA \
+    (0.2126f * CFG_DEFAULT_CLEAR_R + \
+     0.7152f * CFG_DEFAULT_CLEAR_G + \
+     0.0722f * CFG_DEFAULT_CLEAR_B)
+
 /* Render-side config defaults the REPL state initializer feeds into
  * the scene config. These are controller-policy defaults, not
  * scene-internal — the scene module accepts whatever value the caller

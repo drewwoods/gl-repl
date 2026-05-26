@@ -39,45 +39,50 @@ static const float g_grid_extents[GRID_EXTENT_COUNT] = {
     [GRID_EXTENT_FAR]   = 100.0f,
 };
 
-static const GlrState g_glr_state_defaults = {
-    .presentation = {
-        .wireframe              = CFG_DEFAULT_WIREFRAME,
-        .grid_theme             = CFG_DEFAULT_GRID_THEME,
-        .grid_major_idx         = CFG_DEFAULT_GRID_MAJOR_IDX,
-        .grid_extent_idx        = CFG_DEFAULT_GRID_EXTENT_IDX,
-        .axes_theme             = CFG_DEFAULT_AXES_THEME,
-        .show_vertex_labels     = CFG_DEFAULT_VERTEX_LABELS,
-        .show_normal_vectors    = CFG_DEFAULT_NORMAL_VECTORS,
-        .show_vertex_indices    = CFG_DEFAULT_VERTEX_INDICES,
-        .show_vertex_outlines   = CFG_DEFAULT_VERTEX_OUTLINES,
-        .show_vertex_points     = CFG_DEFAULT_VERTEX_POINTS,
-        .show_xform_guides      = CFG_DEFAULT_XFORM_GUIDES,
-        .xform_guide_mode       = CFG_DEFAULT_XFORM_GUIDE_MODE,
-        .autonormal             = CFG_DEFAULT_AUTONORMAL,
-        .show_light_indicators  = CFG_DEFAULT_LIGHT_INDICATORS,
-        .backdrop_mode          = CFG_DEFAULT_BACKDROP_MODE,
-        .post_filter_mode       = SCENE_POST_FILTER_OFF,
-        .highlight_current_poly = CFG_DEFAULT_HIGHLIGHT_POLY,
-        .ortho_mode             = CFG_DEFAULT_ORTHO_MODE,
-        .wrap_at_comma          = CFG_DEFAULT_WRAP_AT_COMMA,
-        .code_panel_layout      = CFG_DEFAULT_CODE_PANEL_LAYOUT,
-        .syntax_highlight       = CFG_DEFAULT_SYNTAX_HIGHLIGHT,
-        .code_focus             = CFG_DEFAULT_CODE_FOCUS,
-    },
-    .render = {
-        .use_accum                 = CFG_DEFAULT_USE_ACCUM,
-        .accum_aa_enabled          = CFG_DEFAULT_ACCUM_AA_ENABLED,
-        .accum_samples             = CFG_DEFAULT_ACCUM_SAMPLES,
-        .accum_jitter_x            = CFG_DEFAULT_ACCUM_JITTER_X,
-        .accum_jitter_y            = CFG_DEFAULT_ACCUM_JITTER_Y,
-        .multisample_enabled       = CFG_DEFAULT_MULTISAMPLE,
-        .msaa_samples              = CFG_DEFAULT_MSAA_SAMPLES,
-        .line_smooth_enabled       = CFG_DEFAULT_LINE_SMOOTH,
-        .point_attenuation_enabled = CFG_DEFAULT_ATTENUATE_POINTS,
-    },
-};
+#define GLR_STATE_DEFAULTS_INITIALIZER { \
+    .presentation = { \
+        .wireframe              = CFG_DEFAULT_WIREFRAME, \
+        .grid_theme             = CFG_DEFAULT_GRID_THEME, \
+        .grid_major_idx         = CFG_DEFAULT_GRID_MAJOR_IDX, \
+        .grid_extent_idx        = CFG_DEFAULT_GRID_EXTENT_IDX, \
+        .axes_theme             = CFG_DEFAULT_AXES_THEME, \
+        .show_vertex_labels     = CFG_DEFAULT_VERTEX_LABELS, \
+        .show_normal_vectors    = CFG_DEFAULT_NORMAL_VECTORS, \
+        .show_vertex_indices    = CFG_DEFAULT_VERTEX_INDICES, \
+        .show_vertex_outlines   = CFG_DEFAULT_VERTEX_OUTLINES, \
+        .show_vertex_points     = CFG_DEFAULT_VERTEX_POINTS, \
+        .show_xform_guides      = CFG_DEFAULT_XFORM_GUIDES, \
+        .xform_guide_mode       = CFG_DEFAULT_XFORM_GUIDE_MODE, \
+        .autonormal             = CFG_DEFAULT_AUTONORMAL, \
+        .show_light_indicators  = CFG_DEFAULT_LIGHT_INDICATORS, \
+        .backdrop_mode          = CFG_DEFAULT_BACKDROP_MODE, \
+        .post_filter_mode       = SCENE_POST_FILTER_OFF, \
+        .highlight_current_poly = CFG_DEFAULT_HIGHLIGHT_POLY, \
+        .ortho_mode             = CFG_DEFAULT_ORTHO_MODE, \
+        .wrap_at_comma          = CFG_DEFAULT_WRAP_AT_COMMA, \
+        .code_panel_layout      = CFG_DEFAULT_CODE_PANEL_LAYOUT, \
+        .syntax_highlight       = CFG_DEFAULT_SYNTAX_HIGHLIGHT, \
+        .code_focus             = CFG_DEFAULT_CODE_FOCUS, \
+    }, \
+    .render = { \
+        .use_accum                 = CFG_DEFAULT_USE_ACCUM, \
+        .accum_aa_enabled          = CFG_DEFAULT_ACCUM_AA_ENABLED, \
+        .accum_samples             = CFG_DEFAULT_ACCUM_SAMPLES, \
+        .accum_jitter_x            = CFG_DEFAULT_ACCUM_JITTER_X, \
+        .accum_jitter_y            = CFG_DEFAULT_ACCUM_JITTER_Y, \
+        .multisample_enabled       = CFG_DEFAULT_MULTISAMPLE, \
+        .msaa_samples              = CFG_DEFAULT_MSAA_SAMPLES, \
+        .line_smooth_enabled       = CFG_DEFAULT_LINE_SMOOTH, \
+        .point_attenuation_enabled = CFG_DEFAULT_ATTENUATE_POINTS, \
+    }, \
+}
 
-static GlrState g_glr_state;
+static const GlrState g_glr_state_defaults = GLR_STATE_DEFAULTS_INITIALIZER;
+
+static GlrState g_glr_state = GLR_STATE_DEFAULTS_INITIALIZER;
+
+#undef GLR_STATE_DEFAULTS_INITIALIZER
+
 
 GlrPresentationState glr_state_presentation(void) {
     return g_glr_state.presentation;

@@ -14,7 +14,7 @@
  * geometry fades in.
  *
  * Current controls forwarded by the controller/editor input chain:
- *   - Ctrl+R starts replay when off and stops it when active.
+ *   - Ctrl+R toggles replay through the controller's config-shortcut path.
  *   - Ctrl+K jumps to the current edit line and pauses there.
  *   - Space toggles play/pause or restarts from DONE.
  *   - Left/Right step one replay unit; Up/Down and +/- adjust speed.
