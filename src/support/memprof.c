@@ -50,28 +50,33 @@ static int memprof_read(MemSample *out) {
     mach_msg_type_number_t count = MACH_TASK_BASIC_INFO_COUNT;
     kern_return_t kr = task_info(mach_task_self(), MACH_TASK_BASIC_INFO,
                                  (task_info_t)&info, &count);
-    if (kr != KERN_SUCCESS) { out->rss_bytes = out->vsz_bytes = 0; return 0; }
+    if (kr != KERN_SUCCESS) { out->rss_bytes = 0; return 0; }
     out->rss_bytes = (unsigned long long)info.resident_size;
-    out->vsz_bytes = (unsigned long long)info.virtual_size;
     return 1;
 #elif defined(__linux__)
     /* Open/read/close every call (once per frame, ~60 Hz). This is
      * intentional: procfs reads are ~1 us, and holding the FD open
      * would prevent the kernel from refreshing the snapshot on each
-     * read on some kernels. Don't "optimize" by caching the FD. */
+     * read on some kernels. Don't "optimize" by caching the FD.
+     *
+     * /proc/self/statm format: "size resident shared text lib data dt".
+     * We only need the second field (resident); the leading size is
+     * VSZ which we deliberately don't expose (macOS virtual_size is
+     * dominated by huge unmapped reservations, so VSZ is not portable
+     * useful — RSS is the comparable signal). */
     FILE *f = fopen("/proc/self/statm", "r");
-    if (!f) { out->rss_bytes = out->vsz_bytes = 0; return 0; }
+    if (!f) { out->rss_bytes = 0; return 0; }
     unsigned long size_p = 0, rss_p = 0;
     int n = fscanf(f, "%lu %lu", &size_p, &rss_p);
     fclose(f);
-    if (n != 2) { out->rss_bytes = out->vsz_bytes = 0; return 0; }
+    if (n != 2) { out->rss_bytes = 0; return 0; }
+    (void)size_p;
     long pagesz = sysconf(_SC_PAGESIZE);
     if (pagesz <= 0) pagesz = 4096;
-    out->rss_bytes = (unsigned long long)rss_p  * (unsigned long long)pagesz;
-    out->vsz_bytes = (unsigned long long)size_p * (unsigned long long)pagesz;
+    out->rss_bytes = (unsigned long long)rss_p * (unsigned long long)pagesz;
     return 1;
 #else
-    out->rss_bytes = out->vsz_bytes = 0;
+    out->rss_bytes = 0;
     return 0;
 #endif
 }
@@ -134,9 +139,7 @@ void memprof_reset(void) {
     g_memprof_count       = 0;
     g_memprof_head        = 0;
     g_memprof_baseline.rss_bytes = 0;
-    g_memprof_baseline.vsz_bytes = 0;
     g_memprof_current.rss_bytes  = 0;
-    g_memprof_current.vsz_bytes  = 0;
     g_memprof_reader = NULL;
     /* Ring contents left as-is; count=0 makes them unreachable. */
 }
@@ -163,7 +166,7 @@ int memprof_history_capacity(void) { return MEMPROF_HISTORY_CAP; }
 
 void memprof_history_get(int i, MemSample *out, double *sample_seconds_out) {
     if (i < 0 || i >= g_memprof_count) {
-        if (out) { out->rss_bytes = 0; out->vsz_bytes = 0; }
+        if (out) out->rss_bytes = 0;
         if (sample_seconds_out) *sample_seconds_out = 0.0;
         return;
     }
@@ -204,17 +207,6 @@ unsigned long long memprof_history_min_rss(void) {
     for (int i = 1; i < g_memprof_count; i++) {
         int slot = (oldest + i) % MEMPROF_HISTORY_CAP;
         if (g_memprof_ring[slot].rss_bytes < m) m = g_memprof_ring[slot].rss_bytes;
-    }
-    return m;
-}
-
-unsigned long long memprof_history_max_vsz(void) {
-    unsigned long long m = 0;
-    for (int i = 0; i < g_memprof_count; i++) {
-        int oldest = (g_memprof_head - g_memprof_count + MEMPROF_HISTORY_CAP)
-                     % MEMPROF_HISTORY_CAP;
-        int slot = (oldest + i) % MEMPROF_HISTORY_CAP;
-        if (g_memprof_ring[slot].vsz_bytes > m) m = g_memprof_ring[slot].vsz_bytes;
     }
     return m;
 }

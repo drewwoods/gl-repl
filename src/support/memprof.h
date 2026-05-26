@@ -12,7 +12,6 @@
 
 typedef struct {
     unsigned long long rss_bytes;
-    unsigned long long vsz_bytes;
 } MemSample;
 
 /* Capture baseline using the module's monotonic clock as t0.
@@ -69,7 +68,6 @@ double memprof_history_latest_t(void);
 /* Sweep helpers for graph auto-scale (cheap; capacity <= 1024). */
 unsigned long long memprof_history_max_rss(void);
 unsigned long long memprof_history_min_rss(void);
-unsigned long long memprof_history_max_vsz(void);
 
 /* --- Pure formatter (no platform deps; tested in test_memprof.c
  *     without pulling in any UI/GL code). --- */
