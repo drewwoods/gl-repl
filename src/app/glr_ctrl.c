@@ -4058,7 +4058,7 @@ void glr_ctrl_mousewheel(int wheel, int direction, int x, int y) {
         glr_ctrl_apply_input_effects(editor_handle_mousewheel(wheel, direction, x, y));
         return;
     }
-    glr_camera_add_zoom_velocity(-(float)direction * 0.1f);
+    glr_camera_add_zoom_velocity(-(float)direction * 0.3f);
     editor_request_redraw();
     glr_ctrl_apply_input_effects(editor_take_input_effects());
 #else

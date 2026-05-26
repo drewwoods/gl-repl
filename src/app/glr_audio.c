@@ -69,6 +69,7 @@
 
 #define GLR_AUDIO_MAX_TRACKS 64
 #define GLR_AUDIO_MAX_PATH   512
+#define STATE_SAVE_INTERVAL_SECS 5
 
 static ma_engine g_engine;
 
@@ -155,7 +156,6 @@ static int g_cfg_mode = -1;
 
 /* Timestamp of the last successful state-file write. */
 static time_t g_last_save_time = 0;
-#define STATE_SAVE_INTERVAL_SECS 5
 
 /* ------------------------------------------------------------------ */
 /* Small lock helpers                                                  */
@@ -378,6 +378,7 @@ static void worker_uninit_all(void) {
     g_active = -1;
     g_music_loaded = 0;
     audio_unlock();
+    /* worker-thread-only, no lock */
     for (int s = 0; s < 2; s++) {
         if (g_slot_inited[s]) {
             ma_sound_uninit(&g_slot[s]);

@@ -13,6 +13,7 @@
 #include "editor/state.h"        /* EditorBufferView, EditorAutocompleteState, editor_state_* */
 #include "repl/state_owners.h"
 #include "repl/core_internal.h"
+#include "repl/core.h"
 #include "repl/command_spec.h"
 #include "editor/completion.h"
 #include "app/glr_completion.h"
@@ -81,7 +82,7 @@ static void build_param_hint_text(const char *const *params, int param_count,
         if (ch == '(' || ch == '{' || ch == '[')      depth++;
         else if ((ch == ')' || ch == '}' || ch == ']') && depth > 0) depth--;
 
-        if (!isspace(ch))
+        if (!isspace((unsigned char)ch))
             arg_has_text = 1;
     }
 
@@ -436,6 +437,8 @@ void glr_completion_accept_autocomplete(void) {
             strcat(inp->input, ac.ghost);
             inp->input_len += ghost_len;
             editor_cursor_pos_set(inp->input_len);
+        } else {
+            repl_set_status_error("Input buffer full!");
         }
     }
     editor_state_autocomplete_clear();

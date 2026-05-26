@@ -468,11 +468,12 @@ void glr_cfg_cycle_row(int row, int delta) {
 
     if (item->key == GLR_CONFIG_CODE_PANEL_LAYOUT) {
         ui_state_code_panel_mut()->panel_frac = CFG_DEFAULT_PANEL_FRAC;
-        if (glr_state_presentation().code_panel_layout == CODE_PANEL_LAYOUT_TOP) {
+        GlrPresentationState p = glr_state_presentation();
+        if (p.code_panel_layout == CODE_PANEL_LAYOUT_TOP) {
             repl_set_status("Layout: top code panel");
-        } else if (glr_state_presentation().code_panel_layout == CODE_PANEL_LAYOUT_BOTTOM) {
+        } else if (p.code_panel_layout == CODE_PANEL_LAYOUT_BOTTOM) {
             repl_set_status("Layout: bottom code panel");
-        } else if (glr_state_presentation().code_panel_layout == CODE_PANEL_LAYOUT_HIDDEN) {
+        } else if (p.code_panel_layout == CODE_PANEL_LAYOUT_HIDDEN) {
             ui_menu_bar_close();
             color_picker_stop();
             editor_completion_clear();
