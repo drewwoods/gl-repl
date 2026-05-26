@@ -24,13 +24,16 @@
 /* Panel geometry                                                             */
 /* ========================================================================= */
 
-#define MEM_PANEL_W         360
+/* Width matches PROFILE_PANEL_W so the two profiling overlays line up
+ * when stacked side-by-side; the table is single-column (RSS only) so
+ * the original 360px is more than enough. */
+#define MEM_PANEL_W         320
 #define MEM_PANEL_MARGIN     12
 #define MEM_ROW_H            16
 #define MEM_HEADER_H         20
 #define MEM_TEXT_BLOCK_H     (3 * MEM_ROW_H + 6)  /* 3 rows + divider */
 #define MEM_GRAPH_H         120
-#define MEM_Y_GUTTER         44   /* room for "999 MB" Y labels */
+#define MEM_Y_GUTTER         60   /* room for "999.99 GB" Y labels */
 #define MEM_BOTTOM_PAD       18   /* X labels + margin */
 
 static int clamp_int(int v, int lo, int hi) {
@@ -174,45 +177,36 @@ void ui_memory_panel_render(const UiRenderSnapshot *snap) {
 
     ty -= MEM_HEADER_H;
 
-    /* Text block: three rows, two columns (RSS | VSZ). */
+    /* Text block: three single-column rows showing current / init / delta
+     * RSS. VSZ deliberately dropped — on macOS it counts the whole virtual
+     * address reservation including unmapped pages and renders as GB-scale
+     * noise that swamps the graph; RSS is the portable leak signal. */
     MemSample cur  = memprof_current();
     MemSample base = memprof_baseline();
 
-    int col_rss_label = tx;
-    int col_rss_val   = tx + 40;
-    int col_vsz_label = tx + 160;
-    int col_vsz_val   = tx + 200;
-
-    char rss_buf[24], vsz_buf[24];
+    int col_label = tx;
+    int col_value = tx + 64;
+    char val_buf[24];
 
     ui_clr(UI_TOK_TEXT_SECTION);
-    gl2d_draw_string((float)col_rss_label, (float)ty, "RSS",  FONT_SMALL);
-    gl2d_draw_string((float)col_vsz_label, (float)ty, "VSZ",  FONT_SMALL);
+    gl2d_draw_string((float)col_label, (float)ty, "RSS",   FONT_SMALL);
     ui_clr(UI_TOK_TEXT_PRIMARY);
-    memprof_format_bytes(rss_buf, (int)sizeof(rss_buf), cur.rss_bytes);
-    memprof_format_bytes(vsz_buf, (int)sizeof(vsz_buf), cur.vsz_bytes);
-    gl2d_draw_string((float)col_rss_val, (float)ty, rss_buf, FONT_SMALL);
-    gl2d_draw_string((float)col_vsz_val, (float)ty, vsz_buf, FONT_SMALL);
+    memprof_format_bytes(val_buf, (int)sizeof(val_buf), cur.rss_bytes);
+    gl2d_draw_string((float)col_value, (float)ty, val_buf, FONT_SMALL);
     ty -= MEM_ROW_H;
 
     ui_clr(UI_TOK_TEXT_SECTION);
-    gl2d_draw_string((float)col_rss_label, (float)ty, "init", FONT_SMALL);
-    gl2d_draw_string((float)col_vsz_label, (float)ty, "init", FONT_SMALL);
+    gl2d_draw_string((float)col_label, (float)ty, "init",  FONT_SMALL);
     ui_clr(UI_TOK_TEXT_MUTED);
-    memprof_format_bytes(rss_buf, (int)sizeof(rss_buf), base.rss_bytes);
-    memprof_format_bytes(vsz_buf, (int)sizeof(vsz_buf), base.vsz_bytes);
-    gl2d_draw_string((float)col_rss_val, (float)ty, rss_buf, FONT_SMALL);
-    gl2d_draw_string((float)col_vsz_val, (float)ty, vsz_buf, FONT_SMALL);
+    memprof_format_bytes(val_buf, (int)sizeof(val_buf), base.rss_bytes);
+    gl2d_draw_string((float)col_value, (float)ty, val_buf, FONT_SMALL);
     ty -= MEM_ROW_H;
 
     ui_clr(UI_TOK_TEXT_SECTION);
-    gl2d_draw_string((float)col_rss_label, (float)ty, "delta", FONT_SMALL);
-    gl2d_draw_string((float)col_vsz_label, (float)ty, "delta", FONT_SMALL);
+    gl2d_draw_string((float)col_label, (float)ty, "delta", FONT_SMALL);
     ui_clr(UI_TOK_TEXT_PRIMARY);
-    fmt_delta(rss_buf, (int)sizeof(rss_buf), cur.rss_bytes, base.rss_bytes);
-    fmt_delta(vsz_buf, (int)sizeof(vsz_buf), cur.vsz_bytes, base.vsz_bytes);
-    gl2d_draw_string((float)col_rss_val, (float)ty, rss_buf, FONT_SMALL);
-    gl2d_draw_string((float)col_vsz_val, (float)ty, vsz_buf, FONT_SMALL);
+    fmt_delta(val_buf, (int)sizeof(val_buf), cur.rss_bytes, base.rss_bytes);
+    gl2d_draw_string((float)col_value, (float)ty, val_buf, FONT_SMALL);
     ty -= MEM_ROW_H;
 
     /* Divider before graph */
@@ -230,10 +224,8 @@ void ui_memory_panel_render(const UiRenderSnapshot *snap) {
     int plot_w = MEM_PANEL_W - MEM_Y_GUTTER - 8;
     int plot_y = panel_y + MEM_BOTTOM_PAD;
 
-    /* Auto-fit Y range from history (RSS + VSZ). */
+    /* Auto-fit Y range from RSS history. */
     unsigned long long hi = memprof_history_max_rss();
-    unsigned long long max_vsz = memprof_history_max_vsz();
-    if (max_vsz > hi) hi = max_vsz;
 
     if (hi == 0) {
         /* No data yet - draw an empty plot frame and a placeholder. */
@@ -303,33 +295,13 @@ void ui_memory_panel_render(const UiRenderSnapshot *snap) {
         if (step == 0) break;
     }
 
-    /* Plot the two history series. Anchor to the newest sample's t_rel
-     * so the rightmost point stays pinned to "now" between pushes. */
+    /* Plot the RSS history. Anchor to the newest sample's t_rel so the
+     * rightmost point stays pinned to "now" between pushes. */
     int n = memprof_history_count();
     if (n > 0) {
         double t_latest = memprof_history_latest_t();
         glEnable(GL_BLEND);
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-
-        /* VSZ first (dim) so RSS overlays. */
-        ui_clr_a(UI_TOK_ACCENT, 0.40f);
-        glBegin(GL_LINE_STRIP);
-        for (int i = 0; i < n; i++) {
-            MemSample s;
-            double    t_rel;
-            memprof_history_get(i, &s, &t_rel);
-            double age = t_latest - t_rel;
-            float xx = (float)(plot_x + plot_w - (age / MEM_TOTAL_SPAN_S) * plot_w);
-            double frac = (double)(s.vsz_bytes - y_lo)
-                        / (double)(y_hi - y_lo);
-            if (frac < 0.0) frac = 0.0;
-            if (frac > 1.0) frac = 1.0;
-            float yy = (float)(plot_y + frac * MEM_GRAPH_H);
-            glVertex2f(xx, yy);
-        }
-        glEnd();
-
-        /* RSS bright on top */
         ui_clr(UI_TOK_ACCENT);
         glBegin(GL_LINE_STRIP);
         for (int i = 0; i < n; i++) {

@@ -22,13 +22,11 @@ static TestHarness g_harness = TEST_HARNESS_INIT;
 
 /* Fake-reader machinery for deterministic cadence/ring assertions. */
 static unsigned long long g_test_rss = 100;
-static unsigned long long g_test_vsz = 200;
 static int g_test_reader_calls = 0;
 
 static int fake_reader(MemSample *out) {
     g_test_reader_calls++;
     out->rss_bytes = g_test_rss;
-    out->vsz_bytes = g_test_vsz;
     return 1;
 }
 
@@ -53,7 +51,6 @@ static void test_cadence_honored(void) {
     memprof_reset();
     memprof_set_reader(fake_reader);
     g_test_rss = 100;
-    g_test_vsz = 200;
     memprof_init_at(0.0);
 
     /* Init should not push anything. */
@@ -143,7 +140,6 @@ static void test_set_reader_null_restores_platform(void) {
     /* Install a fake, init via the fake, then swap back to platform reader. */
     memprof_set_reader(fake_reader);
     g_test_rss = 1234;
-    g_test_vsz = 5678;
     memprof_init_at(0.0);
 
     MemSample cur_fake = memprof_current();
