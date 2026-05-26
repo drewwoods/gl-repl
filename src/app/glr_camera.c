@@ -338,6 +338,11 @@ void glr_camera_clear_scene_default(void) {
 
 /* ---- Controls ------------------------------------------------------- */
 
+/*
+ * Resets pointer, modifier, and velocity states to defaults (clears momentum).
+ * Note that the active camera control mode (2D vs 3D) is preserved;
+ * use glr_camera_reset_default() for a full state reset.
+ */
 void glr_camera_controls_reset(void) {
     cancel_target_ease();
     g_pointer_button = -1;
