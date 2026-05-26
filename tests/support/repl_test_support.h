@@ -1,7 +1,8 @@
 #ifndef REPL_TEST_SUPPORT_H
 #define REPL_TEST_SUPPORT_H
 
-#include "app/glr_ctrl.h"   /* glr_ctrl_reset_all, glr_publish_replay_annotations */
+#include "app/glr_ctrl.h"   /* glr_ctrl_reset_all */
+#include "app/glr_ctrl_replay_annotations.h"
 #include "repl/core.h"  /* editor_feed_line, set_status, etc. */
 #include "repl/eval.h"
 #include "repl/replay_annotations.h" /* ReplReplayAnnotationOutput */

@@ -3,14 +3,6 @@
 
 #include "app/glr_defaults.h"  /* GlrExampleTagDefault */
 #include "ui/app/repl_code_panel.h"
-#include "repl/state_views.h"
-#include "subsystems/replay/replay_state.h"
-
-/* `ReplayFadePlan` (the per-frame fade-render snapshot) now lives in
- * subsystems/replay/replay_state.h alongside the rest of the replay
- * peer's storage. Re-exported here transitively via the
- * replay_state.h include above so existing callers don't need to
- * update their includes. */
 
 /* App-frame controller entrypoints. gl_repl.c forwards raw GLUT
  * callbacks here; this module owns frame orchestration, snapshot
@@ -130,16 +122,9 @@ void glr_ctrl_tick(void);
 int glr_ctrl_router_handle_save_key(unsigned char key);             /* Ctrl+S */
 int glr_ctrl_router_handle_debug_dump_key(unsigned char key);       /* Ctrl+P */
 
-/* Fill a ReplExportLayout from current ui_layout_* / glr_state_*
- * values. The export pipeline reads layout as opaque integers, so
- * controllers and full-app tests build the struct through this helper
- * instead of duplicating the current layout/state reads. Keeps export.c
- * from reaching into ui/layout or glr_state directly. */
-#include "repl/export.h"   /* ReplExportLayout */
-void glr_ctrl_fill_export_layout(ReplExportLayout *out);
 int glr_ctrl_router_handle_quit_key(unsigned char key);             /* Ctrl+Q */
 int glr_ctrl_router_handle_config_menu_key(unsigned char key);      /* backtick → config menu */
-int glr_ctrl_router_handle_replay_key(unsigned char key);    /* replay key surface, including Ctrl+R and active forwarding */
+int glr_ctrl_router_handle_replay_key(unsigned char key);    /* replay key surface excluding config-owned Ctrl+R */
 int glr_ctrl_router_handle_cfg_shortcut_key(unsigned char key);     /* glr_cfg_handle_ascii_shortcut */
 int glr_ctrl_router_handle_accum_samples_key(unsigned char key);    /* Ctrl+= / Ctrl+- */
 int glr_ctrl_router_handle_post_filter_key(unsigned char key);      /* Ctrl+N (experimental post-process) */
@@ -218,16 +203,6 @@ void glr_ctrl_router_set_double_click_clock_for_test(
  * `repl_help_text` with `ui_tabbed_overlay`. */
 struct UiOverlayContent;
 const struct UiOverlayContent *glr_ctrl_help_overlay_content(void);
-
-/* Publish a ReplReplayAnnotationOutput to editor_state_virtual_lines.
- * replay_annotations_prepare() fills the output struct and the caller
- * (controller, panels.c, full-app-linked tests) uses this helper to
- * forward those rows to the editor's virtual-line list. The standalone
- * demo doesn't link this path because it has no UI to render
- * annotations to. The source-document migration note is secondary to
- * that current contract. */
-#include "repl/replay_annotations.h" /* ReplReplayAnnotationOutput */
-void glr_publish_replay_annotations(const ReplReplayAnnotationOutput *out);
 
 /* Program name for user-facing messages. main() forwards argv[0]
  * (basename kept); defaults to "gl-repl" when unset (tests/demos). */

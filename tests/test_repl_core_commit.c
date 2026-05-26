@@ -2,6 +2,7 @@
 #include "app/glr_state.h"
 #include "editor/input.h"
 #include "app/glr_ctrl.h"
+#include "app/glr_ctrl_replay_annotations.h"
 #include "repl/core.h"
 #include "repl/core_internal.h"
 #include "repl/executor.h"

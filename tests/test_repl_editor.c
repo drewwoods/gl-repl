@@ -2233,16 +2233,17 @@ int main() {
         assert_status_contains("overlong assign: status", "Command too long");
     }
 
-    /* Replay keyboard dispatch is owned by repl_replay.c, not the editor. */
+    /* Ctrl+R is config-owned; the remaining replay runtime keys stay on
+     * repl_replay.c rather than the editor. */
     {
         glr_ctrl_reset_all(); declare_test_vars();
         editor_feed_line("glVertex3f(0, 0, 0);");
         editor_feed_line("glVertex3f(1, 0, 0);");
         repl_flatten_commands(editor_state_edit_line());
 
-        ASSERT_INT("replay key ctrl-r consumed",
-                   replay_handle_key(KEY_CTRL_R), 1);
-        ASSERT_INT("replay key ctrl-r starts replay",
+        ASSERT_INT("config ctrl-r consumed",
+                   glr_cfg_handle_ascii_shortcut(KEY_CTRL_R), 1);
+        ASSERT_INT("config ctrl-r starts replay",
                    replay_active, 1);
         ASSERT_INT("replay space consumed",
                    replay_handle_key(' '), 1);

@@ -39,7 +39,7 @@ void glr_debug_dump_editor(FILE *out, SourceTextView text) {
     fflush(dst);
 }
 
-void glr_debug_dump_flat_commands(FILE *out, SourceTextView text) {
+void glr_debug_dump_flat_commands_sync(FILE *out, SourceTextView text) {
     FILE *dst = out ? out : stdout;
     FlatProgramView flat_program = repl_state_flat_program_view();
     const GLCmd *flat_cmds = flat_program.cmds;

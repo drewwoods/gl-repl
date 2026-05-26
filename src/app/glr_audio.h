@@ -88,8 +88,8 @@ void glr_audio_set_muted(int muted);
 int  glr_audio_is_muted(void);
 
 /* Returns the path of the currently-loaded track, or NULL if nothing
- * is playing. The returned pointer is owned by the audio module and
- * stays valid until the next start_track call. */
+ * is playing. The returned pointer is an internal static copy and
+ * stays valid until the next glr_audio_get_current_track() call. */
 const char *glr_audio_get_current_track(void);
 
 /* Monotonic counter bumped each time a new track actually starts

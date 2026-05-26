@@ -102,10 +102,14 @@ int main() {
         glr_audio_on_user_gesture();
         glr_audio_set_muted(1);
         glr_audio_set_muted(0);
-
+        glr_audio_set_cfg_mode(2);
         glr_audio_shutdown();
+
+        ASSERT_TRUE("shutdown clears cfg_mode", glr_audio_get_cfg_mode() == -1);
+
         /* Shutdown should allow re-init */
         ASSERT_TRUE("re-init after shutdown", glr_audio_init() == 0);
+        ASSERT_TRUE("re-init starts with empty playlist", glr_audio_play_playlist() == -1);
         glr_audio_shutdown();
 
         /* 7. cfg_mode round-trip through save_state / load_state */
@@ -120,6 +124,7 @@ int main() {
 
             /* Restore: clear cfg_mode, then reload via play_playlist */
             ASSERT_TRUE("cfg_mode rt: re-init", glr_audio_init() == 0);
+            glr_audio_set_state_file(state_file);
             glr_audio_set_cfg_mode(-1);  /* clear so we detect the restore */
             const char *dummy[] = { "nonexistent_cfg.mp3" };
             glr_audio_set_playlist(dummy, 1);
@@ -131,6 +136,7 @@ int main() {
             glr_audio_set_cfg_mode(99);
             glr_audio_shutdown();
             ASSERT_TRUE("cfg_mode rt: re-init 2", glr_audio_init() == 0);
+            glr_audio_set_state_file(state_file);
             glr_audio_set_cfg_mode(-1);
             glr_audio_set_playlist(dummy, 1);
             glr_audio_play_playlist();

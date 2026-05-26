@@ -92,12 +92,17 @@ typedef struct {
     int          state_count;    /* 2 = toggle; >2 = cycle */
     const char **state_names;
     int          section_header; /* 1 for separator/header rows */
+    /* Optional runtime-owned label slot used only for display. The
+     * authored `label` stays stable for slug generation and section
+     * header parsing; callers that render user-facing text should go
+     * through glr_config_item_display_label(). */
+    const char **display_label_override;
 } GlrConfigItem;
 
 /* Exported config item table and count. g_cfg_items[] lives in
  * glr_actions.c; CFG_ITEM_COUNT is the count (auto-computed via sizeof). Used
  * by the menu UI and config accessor functions to iterate items. */
-extern GlrConfigItem g_cfg_items[];
+extern const GlrConfigItem g_cfg_items[];
 extern const int CFG_ITEM_COUNT;
 
 /* Query all config items. Outputs the item array and count. Used by the menu
@@ -107,6 +112,15 @@ const GlrConfigItem *glr_config_items(int *count);
 /* Query a specific config item by index (0 to CFG_ITEM_COUNT-1). Returns the
  * item descriptor or NULL if out of bounds. Used by menu rendering. */
 const GlrConfigItem *glr_config_item_at(int idx);
+
+/* User-facing display label for an item. Uses the authored label unless
+ * the row has a runtime override (currently the MSAA row). */
+const char *glr_config_item_display_label(const GlrConfigItem *item);
+
+/* Stable export/import slug for an actionable item. Derived once from
+ * the authored label and unaffected by any runtime display-label
+ * override. Returns NULL for NULL or non-action rows. */
+const char *glr_config_item_slug(const GlrConfigItem *item);
 
 /* Get the current state value of a config item. Returns 0/1 for toggles, 0-N
  * for cycles (index into state_names[]). Used by rendering (to highlight the

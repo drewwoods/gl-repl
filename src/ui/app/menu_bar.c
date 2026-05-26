@@ -667,7 +667,7 @@ static const char *config_flyout_row_label_fn(int parent_row, int ordinal) {
      * stripped, matching the old flat dropdown. */
     if (glr_config_row_kind(abs) == GLR_CFG_ROW_HEADER)
         return item->label + 4;
-    return item->label;
+    return glr_config_item_display_label(item);
 }
 static int config_flyout_row_abs_index_fn(int parent_row, int ordinal) {
     return config_submenu_abs_index(parent_row, ordinal);

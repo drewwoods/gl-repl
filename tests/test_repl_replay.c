@@ -171,9 +171,12 @@ static void test_replay_input(void) {
     repl_state_mark_flat_dirty();
     repl_flatten_commands(editor_state_edit_line());
 
-    // When off
-    replay_handle_key(KEY_CTRL_R);
-    ASSERT_TRUE("Ctrl+R starts replay", g_replay_active);
+    ASSERT_TRUE("Ctrl+R no longer belongs to replay_handle_key",
+                replay_handle_key(KEY_CTRL_R) == 0);
+    ASSERT_TRUE("replay still off before explicit start", !g_replay_active);
+
+    replay_start();
+    ASSERT_TRUE("replay_start activates replay", g_replay_active);
 
     // When on
     replay_handle_key(' ');

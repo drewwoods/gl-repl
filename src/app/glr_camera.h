@@ -55,7 +55,8 @@ void             glr_camera_ease_to(float rx, float ry, float dist,
 /* Override the per-ease decay for the current target. Each call to
  * glr_camera_ease_to resets it to the global GLR_CAMERA_TARGET_DECAY,
  * so this must be called AFTER the ease_to that it should affect.
- * Clamped to (0, 1); lower = faster ease. */
+ * Clamped to [0, 1); lower = faster ease. A decay of 0.0f snaps to the
+ * target on the next tick (no interpolation). */
 void             glr_camera_set_target_decay(float decay);
 void             glr_camera_reset_default(void);
 
@@ -104,6 +105,11 @@ typedef struct GlrCameraPose {
     float dist;         /* distance from target along the local Z axis */
     float tx, ty, tz;   /* target world position */
 } GlrCameraPose;
+
+/* Project the full camera state into the modelview-specific pose the
+ * renderer consumes. This keeps call sites from open-coding the field
+ * copy and drifting if the camera types grow new members later. */
+GlrCameraPose glr_camera_pose_from_state(const GlrCameraState *state);
 
 /* Load the modelview matrix with the orbit-camera transform: clear,
  * translate by distance, rotate by pitch/yaw, translate by target.

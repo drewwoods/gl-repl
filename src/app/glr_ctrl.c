@@ -1,4 +1,6 @@
 #include "app/glr_ctrl.h"
+#include "app/glr_ctrl_export.h"
+#include "app/glr_ctrl_replay_annotations.h"
 
 #include "subsystems/replay/replay_render.h"
 #include "subsystems/edit_overlays/edit_overlays.h"
@@ -82,6 +84,11 @@ static int glr_ctrl_apply_code_panel_follow_scroll_for_snapshot(
     const UiRenderSnapshot *snap,
     int *out_follow_doc_line,
     int *out_visible_lines);
+
+#define GLR_CTRL_REPLAY_PANEL_CLEARANCE_PX 10
+#define GLR_CTRL_REPLAY_PANEL_BASE_Y_PX    8
+#define GLR_CTRL_REPLAY_PANEL_LIFT_EASE    0.22f
+#define GLR_CTRL_REPLAY_PANEL_LIFT_SNAP_PX 0.25f
 
 static int glr_ctrl_cmd_is_focus_vertex(const GLCmd *cmd) {
     /* glVertex2f counts too: args[2] is zero on a well-formed 2D vertex
@@ -713,7 +720,10 @@ static void glr_ctrl_build_scene_config(SceneRenderConfig *config) {
      * default if none). Scene takes the pre-resolved float[4] and
      * doesn't touch the flat program. */
     {
-        float cr = 0.10f, cg = 0.10f, cb = 0.10f, ca = 1.0f;
+        float cr = CFG_DEFAULT_CLEAR_R;
+        float cg = CFG_DEFAULT_CLEAR_G;
+        float cb = CFG_DEFAULT_CLEAR_B;
+        float ca = CFG_DEFAULT_CLEAR_A;
         FlatProgramView fp = repl_state_flat_program_view();
         for (int ci = 0; ci < fp.cmd_count; ci++) {
             if (fp.cmds[ci].valid && fp.cmds[ci].type == CMD_CLEAR_COLOR) {
@@ -806,10 +816,11 @@ static void glr_ctrl_build_scene_config(SceneRenderConfig *config) {
      * weights); the reciprocal raises alpha as the background darkens,
      * with +0.02 as a black-background guard and the result clamped to
      * 1..3 below. */
-    bg_lum = 0.2126f * repl_render.clear_color[0]
-        + 0.7152f * repl_render.clear_color[1]
-        + 0.0722f * repl_render.clear_color[2];
-    as_val = (0.10f + 0.02f) / fmaxf(bg_lum + 0.02f, 1e-4f);
+    bg_lum = 0.2126f * config->clear_color[0]
+        + 0.7152f * config->clear_color[1]
+        + 0.0722f * config->clear_color[2];
+    as_val = (CFG_DEFAULT_CLEAR_LUMA + 0.02f) /
+             fmaxf(bg_lum + 0.02f, 1e-4f);
     config->alpha_scale = as_val < 1.0f ? 1.0f : (as_val > 3.0f ? 3.0f : as_val);
 
     /* --- Replay overlays ---
@@ -1234,10 +1245,7 @@ void glr_ctrl_display_frame(void) {
     prof_begin(PROF_SCENE_3D);
     {
         GlrCameraState cam = glr_camera();
-        GlrCameraPose pose = {
-            .rx = cam.rx, .ry = cam.ry, .dist = cam.dist,
-            .tx = cam.tx, .ty = cam.ty, .tz = cam.tz,
-        };
+        GlrCameraPose pose = glr_camera_pose_from_state(&cam);
         glr_camera_load_modelview(&pose);
     }
     if (scene_render_3d_scene(&g_scene_renderer, &scene_config) != 0) {
@@ -1594,7 +1602,7 @@ static const char *glr_ctrl_help_fkey_label(int fn) {
         if (item->section_header || item->key == GLR_CONFIG_NONE)
             continue;
         if (item->is_special && item->key_code == fn)
-            return item->label;
+            return glr_config_item_display_label(item);
     }
     return NULL;
 }
@@ -1946,7 +1954,7 @@ int glr_ctrl_router_handle_save_key(unsigned char key) {
 int glr_ctrl_router_handle_debug_dump_key(unsigned char key) {
     if (key == KEY_CTRL_P) {
         glr_debug_dump_editor(stdout, source_document_view());
-        glr_debug_dump_flat_commands(stdout, source_document_view());
+        glr_debug_dump_flat_commands_sync(stdout, source_document_view());
         repl_set_status("Dumped editor + flat commands to stdout");
         return 1;
     }
@@ -3085,13 +3093,13 @@ void glr_ctrl_keyboard(unsigned char key, int x, int y) {
 
     editor_reset_input_effects();
 
-    /* Controller-owned routes — order matches the legacy editor chain
-     * so backtick / cfg shortcut / replay forwarding / Ctrl+G replay
-     * toggle / Ctrl+= accum / Ctrl+S save / Ctrl+P debug / Ctrl+Q quit
-     * fire exactly where they did before. */
+    /* Controller-owned routes — config shortcuts run before replay
+     * forwarding so Ctrl+R stays owned by the Replay config row while
+     * non-config replay keys (Ctrl+K, space, +/- and friends) still
+     * forward to replay_handle_key. */
     if (glr_ctrl_router_handle_config_menu_key(key) ||
-        glr_ctrl_router_handle_replay_key(key) ||
         glr_ctrl_router_handle_cfg_shortcut_key(key) ||
+        glr_ctrl_router_handle_replay_key(key) ||
         glr_ctrl_router_handle_save_key(key) ||
         glr_ctrl_router_handle_debug_dump_key(key) ||
         glr_ctrl_router_handle_accum_samples_key(key) ||
@@ -3402,11 +3410,15 @@ void glr_ctrl_tick(void) {
         VariablePanelViewState *vp = variable_panel_state_mut();
         float target = 0.0f;
         if (replay_active()) {
-            float lift_target = (float)((REPLAY_HUD_BOTTOM_Y + 10) - 8); /* clearance = 10, BASE_Y = 8 */
+            float lift_target = (float)(REPLAY_HUD_BOTTOM_Y +
+                                        GLR_CTRL_REPLAY_PANEL_CLEARANCE_PX -
+                                        GLR_CTRL_REPLAY_PANEL_BASE_Y_PX);
             if (lift_target > 0.0f) target = lift_target;
         }
-        vp->replay_lift_px += (target - vp->replay_lift_px) * 0.22f; /* LIFT_EASE = 0.22f */
-        if (fabsf(target - vp->replay_lift_px) < 0.25f) { /* LIFT_SNAP_PX = 0.25f */
+        vp->replay_lift_px +=
+            (target - vp->replay_lift_px) * GLR_CTRL_REPLAY_PANEL_LIFT_EASE;
+        if (fabsf(target - vp->replay_lift_px) <
+            GLR_CTRL_REPLAY_PANEL_LIFT_SNAP_PX) {
             vp->replay_lift_px = target;
         }
     }

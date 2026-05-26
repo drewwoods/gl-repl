@@ -12,6 +12,7 @@
 #include <stdlib.h>
 #include "config.h"                  /* DEFAULT_SCENE_FILE */
 #include "app/glr_ctrl.h"            /* glr_ctrl_sync_ui_chrome */
+#include "app/glr_ctrl_export.h"
 #include "app/glr_state.h"           /* presentation/render storage */
 #include "app/glr_camera.h"          /* camera focus-origin / reset (eased) */
 #include "ui/app/layout.h"           /* CODE_PANEL_LAYOUT_* enum values */
@@ -134,63 +135,73 @@ static const char *accum_aa_names[] = { "Off", "2x", "4x", "8x", "16x" };
  *                    (src/repl/help_text.c).
  *
  * Both Ctrl-key codes are defined/annotated in keys.h. */
-GlrConfigItem g_cfg_items[] = {
-    /* { label, key_code, is_special, modifiers, key, state_count, state_names, section_header } */
-    { "### RENDERING",     0, 0, 0, GLR_CONFIG_NONE,               0, NULL,                 1 },
-    { "MSAA",              KEY_CTRL_U, 0, 0, GLR_CONFIG_MSAA,       2, NULL,                 0 },
-    { "Line smooth",       0, 0, 0, GLR_CONFIG_LINE_SMOOTH,        2, NULL,                 0 },
-    { "Accum AA",          0, 0, 0, GLR_CONFIG_ACCUM_AA,           5, accum_aa_names,       0 },
-    { "Wireframe",         GLUT_KEY_F2, 1, 0, GLR_CONFIG_WIREFRAME, 2, NULL,                0 },
-    { "Point attenuation", 0, 0, 0, GLR_CONFIG_POINT_ATTENUATION,  2, NULL,                 0 },
-    { "---",               0, 0, 0, GLR_CONFIG_NONE,               0, NULL,                 1 },
-    { "### TIME & REPLAY", 0, 0, 0, GLR_CONFIG_NONE,               0, NULL,                 1 },
-    { "Auto time",         KEY_CTRL_T, 0, 0, GLR_CONFIG_AUTO_TIME,  2, NULL,                0 },
-    { "Replay",            KEY_CTRL_R, 0, 0, GLR_CONFIG_REPLAY,     2, NULL,                0 },
-    { "Replay mode",       0, 0, 0, GLR_CONFIG_REPLAY_MODE,         2, replay_mode_names,    0 },
-    { "Replay expand",     0, 0, 0, GLR_CONFIG_REPLAY_EXPAND,       2, NULL,                 0 },
-    { "---",               0, 0, 0, GLR_CONFIG_NONE,               0, NULL,                 1 },
-    { "### OVERLAYS & SCENE", 0, 0, 0, GLR_CONFIG_NONE,            0, NULL,                 1 },
-    { "Grid",              GLUT_KEY_F3, 1, 0, GLR_CONFIG_GRID_THEME, GRID_THEME_COUNT, grid_theme_names, 0 },
-    { "Grid major",        KEY_CTRL_O, 0, 0, GLR_CONFIG_GRID_MAJOR, GRID_MAJOR_COUNT, grid_major_names, 0 },
-    { "Grid extent",       0, 0, 0, GLR_CONFIG_GRID_EXTENT,         GRID_EXTENT_COUNT, grid_extent_names, 0 },
-    { "Axes",              GLUT_KEY_F4, 1, 0, GLR_CONFIG_AXES_THEME, AXES_THEME_COUNT, axes_theme_names, 0 },
-    { "Xform guides",      GLUT_KEY_F8, 1, 0, GLR_CONFIG_XFORM_GUIDES, 2, NULL,            0 },
-    { "Xform guide mode",  0, 0, 0, GLR_CONFIG_XFORM_GUIDE_MODE,     2, xform_guide_mode_names, 0 },
-    { "Light indicators",  GLUT_KEY_F10, 1, 0, GLR_CONFIG_LIGHT_INDICATORS, 2, NULL,       0 },
-    { "Backdrop",          0, 0, 0, GLR_CONFIG_BACKDROP,
-      SCENE_BACKDROP_COUNT, backdrop_mode_names, 0 },
-    { "Auto-normals",      GLUT_KEY_F9, 1, 0, GLR_CONFIG_AUTO_NORMALS, 2, NULL,             0 },
-    { "---",               0, 0, 0, GLR_CONFIG_NONE,               0, NULL,                 1 },
-    { "### CAMERA",        0, 0, 0, GLR_CONFIG_NONE,               0, NULL,                 1 },
-    { "View mode",         KEY_CTRL_V, 0, GLUT_ACTIVE_SHIFT, GLR_CONFIG_ORTHO_MODE,   2, view_mode_names, 0 },
-    { "Camera rotate",     KEY_CTRL_R, 0, GLUT_ACTIVE_SHIFT, GLR_CONFIG_CAMERA_ROTATE, 2, NULL,          0 },
-    { "Focus origin",      KEY_CTRL_O, 0, GLUT_ACTIVE_SHIFT, GLR_CONFIG_FOCUS_ORIGIN, 0, NULL, 0 },
-    { "Reset camera",      KEY_CTRL_C, 0, GLUT_ACTIVE_SHIFT, GLR_CONFIG_RESET_CAMERA, 0, NULL, 0 },
-    { "---",               0, 0, 0, GLR_CONFIG_NONE,               0, NULL,                 1 },
-    { "### GEOMETRY",      0, 0, 0, GLR_CONFIG_NONE,               0, NULL,                 1 },
-    { "Vertex labels",     GLUT_KEY_F5, 1, 0, GLR_CONFIG_VERTEX_LABELS, GLR_VERTEX_LABEL_COUNT, vertex_label_names, 0 },
-    { "Normal vectors",    GLUT_KEY_F6, 1, 0, GLR_CONFIG_NORMAL_VECTORS, 2, NULL,           0 },
-    { "Vertex outlines",   GLUT_KEY_F7, 1, 0, GLR_CONFIG_VERTEX_OUTLINES, 2, NULL,          0 },
-    { "Vertex points",     0, 0, 0, GLR_CONFIG_VERTEX_POINTS,        2, NULL,                 0 },
-    { "Poly highlight",    0, 0, 0, GLR_CONFIG_POLY_HIGHLIGHT,       2, NULL,                 0 },
-    { "---",               0, 0, 0, GLR_CONFIG_NONE,               0, NULL,                 1 },
-    { "### INTERFACE",     0, 0, 0, GLR_CONFIG_NONE,               0, NULL,                 1 },
-    { "Variable panel",    0, 0, 0, GLR_CONFIG_VARIABLE_PANEL,      2, NULL,                 0 },
-    { "CPU profile",       KEY_CTRL_W, 0, 0, GLR_CONFIG_CPU_PROFILE, PROFILE_PANEL_MODE_COUNT, profile_panel_mode_names, 0 },
+static const char *g_msaa_display_label = NULL;
+
+#define CFG_ITEM(label, key_code, is_special, modifiers, key, state_count, state_names, section_header) \
+    { label, key_code, is_special, modifiers, key, state_count, state_names, section_header, NULL }
+
+#define CFG_ITEM_DISPLAY(label, key_code, is_special, modifiers, key, state_count, state_names, section_header, display_label_override) \
+    { label, key_code, is_special, modifiers, key, state_count, state_names, section_header, display_label_override }
+
+const GlrConfigItem g_cfg_items[] = {
+    CFG_ITEM("### RENDERING",     0, 0, 0, GLR_CONFIG_NONE,               0, NULL,                 1),
+    CFG_ITEM_DISPLAY("MSAA",      KEY_CTRL_U, 0, 0, GLR_CONFIG_MSAA,       2, NULL,                 0, &g_msaa_display_label),
+    CFG_ITEM("Line smooth",       0, 0, 0, GLR_CONFIG_LINE_SMOOTH,        2, NULL,                 0),
+    CFG_ITEM("Accum AA",          0, 0, 0, GLR_CONFIG_ACCUM_AA,           5, accum_aa_names,       0),
+    CFG_ITEM("Wireframe",         GLUT_KEY_F2, 1, 0, GLR_CONFIG_WIREFRAME, 2, NULL,                0),
+    CFG_ITEM("Point attenuation", 0, 0, 0, GLR_CONFIG_POINT_ATTENUATION,  2, NULL,                 0),
+    CFG_ITEM("---",               0, 0, 0, GLR_CONFIG_NONE,               0, NULL,                 1),
+    CFG_ITEM("### TIME & REPLAY", 0, 0, 0, GLR_CONFIG_NONE,               0, NULL,                 1),
+    CFG_ITEM("Auto time",         KEY_CTRL_T, 0, 0, GLR_CONFIG_AUTO_TIME,  2, NULL,                0),
+    CFG_ITEM("Replay",            KEY_CTRL_R, 0, 0, GLR_CONFIG_REPLAY,     2, NULL,                0),
+    CFG_ITEM("Replay mode",       0, 0, 0, GLR_CONFIG_REPLAY_MODE,         2, replay_mode_names,    0),
+    CFG_ITEM("Replay expand",     0, 0, 0, GLR_CONFIG_REPLAY_EXPAND,       2, NULL,                 0),
+    CFG_ITEM("---",               0, 0, 0, GLR_CONFIG_NONE,               0, NULL,                 1),
+    CFG_ITEM("### OVERLAYS & SCENE", 0, 0, 0, GLR_CONFIG_NONE,            0, NULL,                 1),
+    CFG_ITEM("Grid",              GLUT_KEY_F3, 1, 0, GLR_CONFIG_GRID_THEME, GRID_THEME_COUNT, grid_theme_names, 0),
+    CFG_ITEM("Grid major",        KEY_CTRL_O, 0, 0, GLR_CONFIG_GRID_MAJOR, GRID_MAJOR_COUNT, grid_major_names, 0),
+    CFG_ITEM("Grid extent",       0, 0, 0, GLR_CONFIG_GRID_EXTENT,         GRID_EXTENT_COUNT, grid_extent_names, 0),
+    CFG_ITEM("Axes",              GLUT_KEY_F4, 1, 0, GLR_CONFIG_AXES_THEME, AXES_THEME_COUNT, axes_theme_names, 0),
+    CFG_ITEM("Xform guides",      GLUT_KEY_F8, 1, 0, GLR_CONFIG_XFORM_GUIDES, 2, NULL,            0),
+    CFG_ITEM("Xform guide mode",  0, 0, 0, GLR_CONFIG_XFORM_GUIDE_MODE,     2, xform_guide_mode_names, 0),
+    CFG_ITEM("Light indicators",  GLUT_KEY_F10, 1, 0, GLR_CONFIG_LIGHT_INDICATORS, 2, NULL,       0),
+    CFG_ITEM("Backdrop",          0, 0, 0, GLR_CONFIG_BACKDROP,
+             SCENE_BACKDROP_COUNT, backdrop_mode_names, 0),
+    CFG_ITEM("Auto-normals",      GLUT_KEY_F9, 1, 0, GLR_CONFIG_AUTO_NORMALS, 2, NULL,             0),
+    CFG_ITEM("---",               0, 0, 0, GLR_CONFIG_NONE,               0, NULL,                 1),
+    CFG_ITEM("### CAMERA",        0, 0, 0, GLR_CONFIG_NONE,               0, NULL,                 1),
+    CFG_ITEM("View mode",         KEY_CTRL_V, 0, GLUT_ACTIVE_SHIFT, GLR_CONFIG_ORTHO_MODE,   2, view_mode_names, 0),
+    CFG_ITEM("Camera rotate",     KEY_CTRL_R, 0, GLUT_ACTIVE_SHIFT, GLR_CONFIG_CAMERA_ROTATE, 2, NULL,          0),
+    CFG_ITEM("Focus origin",      KEY_CTRL_O, 0, GLUT_ACTIVE_SHIFT, GLR_CONFIG_FOCUS_ORIGIN, 0, NULL, 0),
+    CFG_ITEM("Reset camera",      KEY_CTRL_C, 0, GLUT_ACTIVE_SHIFT, GLR_CONFIG_RESET_CAMERA, 0, NULL, 0),
+    CFG_ITEM("---",               0, 0, 0, GLR_CONFIG_NONE,               0, NULL,                 1),
+    CFG_ITEM("### GEOMETRY",      0, 0, 0, GLR_CONFIG_NONE,               0, NULL,                 1),
+    CFG_ITEM("Vertex labels",     GLUT_KEY_F5, 1, 0, GLR_CONFIG_VERTEX_LABELS, GLR_VERTEX_LABEL_COUNT, vertex_label_names, 0),
+    CFG_ITEM("Normal vectors",    GLUT_KEY_F6, 1, 0, GLR_CONFIG_NORMAL_VECTORS, 2, NULL,           0),
+    CFG_ITEM("Vertex outlines",   GLUT_KEY_F7, 1, 0, GLR_CONFIG_VERTEX_OUTLINES, 2, NULL,          0),
+    CFG_ITEM("Vertex points",     0, 0, 0, GLR_CONFIG_VERTEX_POINTS,        2, NULL,                 0),
+    CFG_ITEM("Poly highlight",    0, 0, 0, GLR_CONFIG_POLY_HIGHLIGHT,       2, NULL,                 0),
+    CFG_ITEM("---",               0, 0, 0, GLR_CONFIG_NONE,               0, NULL,                 1),
+    CFG_ITEM("### INTERFACE",     0, 0, 0, GLR_CONFIG_NONE,               0, NULL,                 1),
+    CFG_ITEM("Variable panel",    0, 0, 0, GLR_CONFIG_VARIABLE_PANEL,      2, NULL,                 0),
+    CFG_ITEM("CPU profile",       KEY_CTRL_W, 0, 0, GLR_CONFIG_CPU_PROFILE, PROFILE_PANEL_MODE_COUNT, profile_panel_mode_names, 0),
     /* Ctrl+Shift+W mirrors CPU profile's Ctrl+W. The two-pass ascii
      * shortcut dispatcher in glr_cfg_handle_ascii_shortcut prefers
      * Shift-requiring rows when Shift is held, so plain Ctrl+W still
      * routes to CPU profile while Ctrl+Shift+W cycles this row. */
-    { "Memory profile",    KEY_CTRL_W, 0, GLUT_ACTIVE_SHIFT, GLR_CONFIG_MEMORY_PROFILE, MEMORY_PANEL_MODE_COUNT, memory_panel_mode_names, 0 },
-    { "Code panel",        KEY_CTRL_B, 0, 0, GLR_CONFIG_CODE_PANEL_LAYOUT, CODE_PANEL_LAYOUT_COUNT, code_panel_layout_names, 0 },
-    { "Wrap at commas",    0, 0, 0, GLR_CONFIG_WRAP_AT_COMMA,       2, NULL,                 0 },
-    { "Syntax highlight",  0, 0, 0, GLR_CONFIG_SYNTAX_HIGHLIGHT,    3, syntax_hl_names,      0 },
-    { "---",               0, 0, 0, GLR_CONFIG_NONE,               0, NULL,                 1 },
-    { "### AUDIO",         0, 0, 0, GLR_CONFIG_NONE,               0, NULL,                 1 },
-    { "Audio",             0, 0, 0, GLR_CONFIG_AUDIO_MODE,          4, audio_cfg_names,      0 },
+    CFG_ITEM("Memory profile",    KEY_CTRL_W, 0, GLUT_ACTIVE_SHIFT, GLR_CONFIG_MEMORY_PROFILE, MEMORY_PANEL_MODE_COUNT, memory_panel_mode_names, 0),
+    CFG_ITEM("Code panel",        KEY_CTRL_B, 0, 0, GLR_CONFIG_CODE_PANEL_LAYOUT, CODE_PANEL_LAYOUT_COUNT, code_panel_layout_names, 0),
+    CFG_ITEM("Wrap at commas",    0, 0, 0, GLR_CONFIG_WRAP_AT_COMMA,       2, NULL,                 0),
+    CFG_ITEM("Syntax highlight",  0, 0, 0, GLR_CONFIG_SYNTAX_HIGHLIGHT,    3, syntax_hl_names,      0),
+    CFG_ITEM("---",               0, 0, 0, GLR_CONFIG_NONE,               0, NULL,                 1),
+    CFG_ITEM("### AUDIO",         0, 0, 0, GLR_CONFIG_NONE,               0, NULL,                 1),
+    CFG_ITEM("Audio",             0, 0, 0, GLR_CONFIG_AUDIO_MODE,          4, audio_cfg_names,      0),
 };
 
 const int CFG_ITEM_COUNT = (int)(sizeof(g_cfg_items) / sizeof(g_cfg_items[0]));
+
+#undef CFG_ITEM_DISPLAY
+#undef CFG_ITEM
 
 /* ---- Export-config bridge --------------------------------------------- *
  *
@@ -200,17 +211,6 @@ const int CFG_ITEM_COUNT = (int)(sizeof(g_cfg_items) / sizeof(g_cfg_items[0]));
  * feature/decouple-repl-from-gl-repl-alt.md.) */
 
 #include "repl/cfg_baseline.h"
-
-static void cfg_slug_from_label(const char *label, char *out, size_t out_sz) {
-    size_t out_idx = 0;
-    for (size_t i = 0; label[i] && out_idx + 1 < out_sz; i++) {
-        unsigned char c = (unsigned char)label[i];
-        if (c == ' ' || c == '\t' || c == '-' || c == '/') out[out_idx++] = '_';
-        else if (isalnum(c))                               out[out_idx++] = (char)tolower(c);
-        else if (c == '_')                                 out[out_idx++] = '_';
-    }
-    if (out_sz > 0) out[out_idx] = '\0';
-}
 
 /* Subset of cfg keys saved per-scene: presentation toggles plus
  * camera_rotate. The controller owns this knowledge so src/repl/scenes.c
@@ -247,9 +247,8 @@ static void glr_export_cfg_fill_all(ReplConfigBag *cfg) {
         const GlrConfigItem *item = &items[i];
         if (item->section_header || item->key == GLR_CONFIG_NONE) continue;
         if (item->state_count <= 0) continue; /* action row: nothing to persist */
-        char slug[REPL_CFG_KEY_MAX];
-        cfg_slug_from_label(item->label, slug, sizeof(slug));
-        repl_config_bag_set_int(cfg, slug, glr_config_get(item->key));
+        repl_config_bag_set_int(cfg, glr_config_item_slug(item),
+                                glr_config_get(item->key));
     }
 }
 
@@ -260,9 +259,8 @@ static void glr_export_cfg_fill_scene_subset(ReplConfigBag *cfg) {
         const GlrConfigItem *item = &items[i];
         if (item->section_header || item->key == GLR_CONFIG_NONE) continue;
         if (!cfg_key_in_scene_subset(item->key))                  continue;
-        char slug[REPL_CFG_KEY_MAX];
-        cfg_slug_from_label(item->label, slug, sizeof(slug));
-        repl_config_bag_set_int(cfg, slug, glr_config_get(item->key));
+        repl_config_bag_set_int(cfg, glr_config_item_slug(item),
+                                glr_config_get(item->key));
     }
 }
 
@@ -295,9 +293,7 @@ static const GlrConfigItem *glr_export_cfg_find_item_by_slug(const char *slug) {
         const GlrConfigItem *item = &items[i];
         if (item->section_header || item->key == GLR_CONFIG_NONE)
             continue;
-        char item_slug[REPL_CFG_KEY_MAX];
-        cfg_slug_from_label(item->label, item_slug, sizeof(item_slug));
-        if (strcmp(item_slug, slug) == 0)
+        if (strcmp(glr_config_item_slug(item), slug) == 0)
             return item;
     }
     return NULL;
@@ -355,12 +351,7 @@ void glr_actions_set_msaa_label(int samples) {
     } else {
         snprintf(msaa_label, sizeof(msaa_label), "MSAA");
     }
-    for (int i = 0; i < CFG_ITEM_COUNT; i++) {
-        if (g_cfg_items[i].key == GLR_CONFIG_MSAA) {
-            g_cfg_items[i].label = msaa_label;
-            break;
-        }
-    }
+    g_msaa_display_label = msaa_label;
 }
 
 void glr_actions_apply_audio_cfg_mode(int mode) {
@@ -494,11 +485,13 @@ void glr_cfg_cycle_row(int row, int delta) {
 
     } else if (item->state_names) {
         snprintf(cfg_status_buf, sizeof(cfg_status_buf), "%s: %s",
-                 item->label, glr_config_state_name(item->key, new_value));
+                 glr_config_item_display_label(item),
+                 glr_config_state_name(item->key, new_value));
         repl_set_status(cfg_status_buf);
     } else if (item->state_count == 2) {
         snprintf(cfg_status_buf, sizeof(cfg_status_buf), "%s: %s",
-                 item->label, new_value ? "ON" : "OFF");
+                 glr_config_item_display_label(item),
+                 new_value ? "ON" : "OFF");
         repl_set_status(cfg_status_buf);
     }
 }

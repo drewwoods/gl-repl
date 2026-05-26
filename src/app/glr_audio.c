@@ -161,6 +161,38 @@ static int g_cfg_mode = -1;
 /* Timestamp of the last successful state-file write. */
 static time_t g_last_save_time = 0;
 
+static void reset_audio_module_state(void) {
+    g_slot_inited[0] = 0;
+    g_slot_inited[1] = 0;
+    g_active = -1;
+
+    g_inited = 0;
+    g_music_loaded = 0;
+    g_loading = 0;
+    g_muted = 0;
+    g_paused = 0;
+    g_gesture_done = 0;
+
+    g_playlist_count = 0;
+    g_playlist_pos = 0;
+    g_loop_mode = GLR_AUDIO_LOOP_ALL;
+
+    g_pending_start = 0;
+    g_pending_seek = GLR_AUDIO_NO_SEEK;
+    g_track_generation = 0;
+    g_load_cancelled = 0;
+
+    g_worker_running = 0;
+    g_req = AWR_NONE;
+    g_req_idx = 0;
+    g_req_seek = GLR_AUDIO_NO_SEEK;
+    g_req_save = 0;
+
+    g_state_file[0] = '\0';
+    g_cfg_mode = -1;
+    g_last_save_time = 0;
+}
+
 /* ------------------------------------------------------------------ */
 /* Small lock helpers                                                  */
 /* ------------------------------------------------------------------ */
@@ -341,9 +373,15 @@ static void worker_save_state(void) {
  * glr_audio_get_cfg_mode(). Returns the playlist index of the saved track,
  * or -1 on failure. Sets *out_offset to the saved cursor in seconds. */
 static int load_state(float *out_offset) {
+    char state_file[GLR_AUDIO_MAX_PATH];
+
     *out_offset = 0.0f;
-    if (!g_state_file[0]) return -1;
-    FILE *f = fopen(g_state_file, "r");
+    audio_lock();
+    memcpy(state_file, g_state_file, sizeof(state_file));
+    audio_unlock();
+
+    if (!state_file[0]) return -1;
+    FILE *f = fopen(state_file, "r");
     if (!f) return -1;
 
     char saved_track[GLR_AUDIO_MAX_PATH] = "";
@@ -357,16 +395,22 @@ static int load_state(float *out_offset) {
     fclose(f);
 
     /* Store cfg_mode for the editor to retrieve and apply. */
-    if (cfg_mode >= 0)
+    if (cfg_mode >= 0) {
+        audio_lock();
         g_cfg_mode = cfg_mode;
+        audio_unlock();
+    }
 
     if (!saved_track[0]) return -1;
+    audio_lock();
     for (int i = 0; i < g_playlist_count; i++) {
         if (strcmp(g_playlist[i], saved_track) == 0) {
             *out_offset = (offset > 0.0f ? offset : 0.0f);
+            audio_unlock();
             return i;
         }
     }
+    audio_unlock();
     return -1;  /* track not found in current playlist - start fresh */
 }
 
@@ -672,17 +716,14 @@ void glr_audio_shutdown(void) {
 
         pthread_cond_destroy(&g_cv);
         pthread_mutex_destroy(&g_mtx);
-        g_worker_running = 0;
     } else {
         /* No worker (create failed): nothing was ever loaded. */
         worker_save_state();
         worker_uninit_all();
-        g_inited = 0;
     }
 
     ma_engine_uninit(&g_engine);
-    g_music_loaded = 0;
-    g_active       = -1;
+    reset_audio_module_state();
 }
 
 int glr_audio_set_playlist(const char *const *paths, int count) {
@@ -849,7 +890,7 @@ int glr_audio_is_muted(void) {
 const char *glr_audio_get_current_track(void) {
     /* Only the main thread calls this (status bar); copy under the
      * lock into a static buffer so a concurrent worker swap of
-     * g_playlist_pos can't tear the read. Valid until the next call. */
+    * g_playlist_pos can't tear the read. Valid until the next call. */
     static char buf[GLR_AUDIO_MAX_PATH];
     audio_lock();
     if (!g_music_loaded ||
