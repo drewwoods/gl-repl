@@ -695,6 +695,7 @@ int glr_audio_set_playlist(const char *const *paths, int count) {
     g_playlist_count = 0;
     g_playlist_pos   = 0;
     g_pending_start  = 0;
+    g_music_loaded   = 0;
 
     int n = count;
     if (n > GLR_AUDIO_MAX_TRACKS) {
