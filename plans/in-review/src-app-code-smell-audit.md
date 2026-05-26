@@ -105,26 +105,26 @@ started** means no branch change was found for that finding.
 | 12 | Done | `cam_consume_example_block_now` now consumes the real 4-line block directly (synthetic `g_angle` injection removed). |
 | 13 | Done | New Scene now calls `editor_reset_for_new_scene()` instead of `editor_clear_all_cmds()`. |
 | 14 | Not started | Controller rendering extraction has not begun. |
-| 15 | Not started | `_mut()`-for-read usage remains in the cited app paths. |
-| 16 | Not started | Controller still mutates the MSAA label table directly. |
+| 15 | Done | `_mut()`-for-read usage was replaced with const getters in the controller, completion, and config paths. |
+| 16 | Done | MSAA label mutation is now encapsulated inside `glr_actions_set_msaa_label()`. |
 | 17 | Done | Redundant scene/example reach-through was removed. |
 | 18 | Done | `find_item_by_key(GLR_CONFIG_NONE)` now returns `NULL`, with regression coverage. |
-| 19 | Not started | Config cycling still stops replay globally. |
-| 20 | Not started | Direct `glr_config_set(GLR_CONFIG_AUDIO_MODE, ...)` still only stores the opaque mode. |
-| 21 | Not started | `XFORM_GUIDES`/`show_vertex_guides` naming remains divergent. |
-| 22 | Not started | Default literals have not been folded into `CFG_DEFAULT_*`. |
+| 19 | Done | Active replay is only aborted by config cycles that genuinely invalidate state (`GLR_CONFIG_AUTO_NORMALS`, `GLR_CONFIG_POINT_ATTENUATION`). |
+| 20 | Done | Exposed `glr_actions_apply_audio_cfg_mode()` to ensure audio mode is applied on all `glr_config_set()` paths. |
+| 21 | Done | Renamed `show_vertex_guides` to `show_xform_guides` and `CFG_DEFAULT_VERTEX_GUIDES` to `CFG_DEFAULT_XFORM_GUIDES` to align naming. |
+| 22 | Done | Added symbolic default macros in `glr_defaults.h` and bound them in state resets. |
 | 23 | Done | `glr_config.c` now includes the real accessor headers. |
 | 24 | Done | The cited getter/setter locking gaps are closed; re-check under real GCC with the full branch. |
 | 25 | Partial | A cancel flag landed, but the in-flight load/reset race should be re-reviewed after #2/#3 cleanup. |
-| 26 | Not started | Audio mode labels remain duplicated. |
+| 26 | Done | Lowercased `audio_cfg_names` and removed specialized cycle formatters, relying on generic fallback. |
 | 27 | Done | The controller-owned gesture-once flag was removed; remaining gesture synchronization is tracked under #3. |
 | 28 | Done | The targeted stale phase/plan comment sweep landed for `src/app`. |
 | 29 | Not started | `glr_ctrl_*` / `glr_app_*` prefix split remains. |
 | 30 | Not started | Overlay walk context duplication remains. |
-| 31 | Not started | Replay fade plan parallel statics remain. |
-| 32 | Not started | Debug dump view-type mismatch remains. |
+| 31 | Done | Consolidated parallel status and preview flags directly into `ReplayFadePlan` struct fields. |
+| 32 | Done | Unified `glr_debug_dump_flat_commands()` and `glr_debug_dump_editor()` to both accept `SourceTextView`. |
 | 33 | Done | Camera target decay comments now match the actual default. |
-| 34 | Not started | Camera export bridge declaration remains on `glr_camera.h`. |
+| 34 | Done | Isolated camera export bridge installer declaration to a dedicated `glr_camera_export.h` header. |
 | 35 | Not started | Tutorial menu offsets remain magic numbers. |
 | 36 | Not started | Camera controls reset policy remains undocumented. |
 | 37 | Not started | Scene-load helper transient reset divergence remains. |
