@@ -1,7 +1,7 @@
 #!/bin/bash
 # Hard guard: src/repl/export.c stays GL-free and pulls all app/scene
 # state through controller-installed bridges (ReplExportCameraBridge,
-# ReplExportProjectionBridge, ReplExportConfig, ...), never by reaching
+# ReplExportProjectionBridge, ReplConfigBridge, ...), never by reaching
 # into the scene or app layers directly. This is the canonical seam for
 # keeping the REPL/export pipeline reusable without the GL frontend
 # (see ARCHITECTURE.md, "Dynamic Reshape Projection" + decouple step 4).

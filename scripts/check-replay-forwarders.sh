@@ -1,6 +1,6 @@
 #!/bin/bash
 # Ratchet against the replay peer's legacy forwarder API becoming
-# permanent. Phase F commit 33 moved ReplReplayRuntimeState bytes
+# permanent. Phase F commit 33 moved ReplayRuntimeState bytes
 # into the replay peer (replay_state.c); commit 34 routed callers
 # through `replay_state_view`/`replay_state_mut` and the
 # `replay_handle_*` surface. This script tracks any call site that

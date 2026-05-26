@@ -77,7 +77,7 @@ ReplayRuntimeState  *replay_state_mut(void);
 /* --- Narrow read accessors ---
  *
  * Single-field queries for callers that only need one replay attribute. They
- * keep most readers from depending on the full ReplReplayRuntimeState layout.
+ * keep most readers from depending on the full ReplayRuntimeState layout.
  */
 int    replay_active(void);          /* .active */
 int    replay_machine_state(void);   /* .state — REPLAY_OFF/PLAYING/PAUSED/DONE */

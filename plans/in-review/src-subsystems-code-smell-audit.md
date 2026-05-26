@@ -46,14 +46,13 @@ Each finding cites file + line, names the smell, says why it matters,
 and suggests a one-line fix. Cross-peer findings (where the same
 shape recurs in multiple subsystems) carry a **🔀 cross-peer** tag.
 
-## Progress update — 2026-05-25 (branch `subsystem-smells`, reviewed at `d610de4`)
+## Progress update — 2026-05-26 (branch `subsystem-smells`, reviewed at `29f8b10`)
 
-Current verification during this review: `make check-c99` passed on the
-local macOS checkout, and the focused touched-area binaries passed:
-`test_repl_replay` (57/57), `test_tutorial_runner` (453/453), and
-`test_repl_var_drag` (36/36). The previous sweep recorded full
-`make test` passing (39/39 test binaries, 6335/6335 tests); this review
-did not rerun that full suite.
+Verification during this review: `make check-c99`,
+`make check-module-prefixes`, `make test`, `make test-stubs`, and
+`git diff --check` passed locally. The depth-probe adapter regression test is
+covered in the stub-backed run because the direct adapter call needs no-op GL
+stubs rather than the real-GL no-context test binary.
 
 The original finding bodies below are retained as audit evidence, so
 some line numbers and examples are intentionally stale. Treat this
@@ -61,47 +60,22 @@ progress block plus the Sequencing section as the live plan.
 
 Closed in the current repo:
 
-- **#1-#14** — Tutorial editor/completion writes route through host
-  effects; tutorial baseline storage lives in `TutorialRuntimeState`;
-  tutorial capture/restore exists; replay's parallel runtime statics and
-  macro layer are gone; the `repl_load_apply_line` tutorial carve-out is
-  documented; replay cancellation is visible; color-picker press
-  docs/behavior match; header guards are synced; replay dirty-flatten
-  copies are gated; dead color-picker locals are gone; replay expand
-  toggles through the cfg bridge.
-- **#16-#18, #20-#22, #24, #27, #28, #33, #34, #36-#48, #50, #55** —
-  Variable-panel accessor/header cleanup landed; co-located subsystem
-  layouts and color-picker reset are documented/implemented; variable
-  drag state moved/renamed; tutorial explicit init replaced the
-  constructor; replay `_impl` trampolines are gone; outside-picker
 - **#1-#14, #16-#18, #20-#22, #24, #27, #28, #33, #34, #36-#48, #50, #55** —
   Tutorial editor/completion writes, parallel runtime statics, color-picker
   reset, and variable-panel accessors are resolved. Replay and tutorial
   cleanup, along with documentation and teardown fixes, have landed.
 - **#26, #29, #31, #32, #35** — Refactored variable panel reads to use `repl_eval_predef_view()`; moved `ReplayFadePlan` out of public peer headers to `app/glr_ctrl.h`; renamed tutorial's noncommand commit block to `tutorial_reject_noncommand_commit_with_hint`; documented `expected_commit_line` persistence; unified probe checks into `tutorial_cfg_matches_target` helper.
 - **#23, #25, #49, #51-#54, #57-#59** — Refactored cp_compute_rects to take coords explicitly; documented state_owners.h inclusion; condensed tutorial.c comments; typed color-picker drag states with CpDragTarget enum; documented cp_* shorthand prefix; standardized status buffers with TUTORIAL_STATUS_MAX and REPLAY_STATUS_MSG_LEN; consolidated GLR_FRAME_DT_SECS; simplified color-picker positioning with clamp_popup_x; cleaned up variable-panel alignment drift; swept stale phase, bug, and renamed function comments.
-
-Partially resolved / still tracked:
-
-- **#15** — The variable-panel visibility setter is adopted for the
-  controller reset path and documented, but lifecycle verb vocabulary is
-  still intentionally mixed across peers (`start/stop`, `exit/teardown`,
-  `set_visible`).
-- **#19** — The worst ownership leak (`EditorVariableDragState`) moved
-  into the variable-panel peer. `ReplReplayRuntimeState` still lives in
-  `repl/state_views.h`, and `UiVariablePanelState` keeps its UI-prefixed
-  value type; either document those as accepted snapshot-type carve-outs
-  or move them in a future shape pass.
-- **#30** — Tutorial now includes `repl/cfg_baseline.h` instead of
-  `repl/export.h`, but the neutral cfg-baseline surface still exposes
-  `ReplExport*` names.
+- **#15, #19, #30** — `29f8b10` closed the remaining lifecycle, type-ownership,
+  and cfg-baseline naming work: lifecycle vocabulary is documented in
+  `src/subsystems/README.md`; `ReplayRuntimeState` and replay fade-batch
+  types live under the replay peer; `UiVariablePanelState` was renamed to
+  `VariablePanelViewState`; and the neutral cfg bag/bridge API now uses
+  `ReplConfig*` / `repl_config_*` names.
 
 Still open / next items:
 
 - **#56** remains open.
-- The partially resolved items above (**#15, #19, #30**) remain
-  tracked until the plan explicitly accepts their carve-outs or finishes
-  the cleanup.
 
 ## 🔴 Actual bugs / hazards (verified)
 
@@ -459,9 +433,10 @@ would fail to advance when toggled via E.
  
 ### 15. 🔀 Lifecycle verbs disagree across all four peers
 
-**Status:** Partially resolved — `glr_ctrl.c` now uses
-`variable_panel_set_visible()` for controller reset and the setter/mutator
-split is documented, but the cross-peer lifecycle vocabulary remains mixed.
+**Status:** Resolved (by `29f8b10`) — `src/subsystems/README.md` now
+documents the accepted lifecycle vocabulary: session/state-machine peers use
+`_start()` / `_stop()`, while display-only panels such as variable_panel use
+the explicit `*_set_visible(int)` setter.
 
 **Where:** cross-peer:
 - replay: `replay_start()` / `replay_stop()` / `replay_restart_from_beginning()` / `replay_toggle_play_pause()`
@@ -568,11 +543,11 @@ the canonical reset verb) and call it explicitly in
 
 ### 19. 🔀 Type ownership of state structs is scattered across four directories
 
-**Status:** Partially resolved — `EditorVariableDragState` was renamed and
-moved to the variable-panel peer as `VariablePanelDragState`. Snapshot value
-types remain split by design today: `ReplReplayRuntimeState` still lives in
-`repl/state_views.h`, and `UiVariablePanelState` still keeps its UI-prefixed
-name inside the peer header.
+**Status:** Resolved (by `29f8b10`) — `EditorVariableDragState` was renamed
+and moved to the variable-panel peer as `VariablePanelDragState`;
+`ReplReplayRuntimeState` was moved out of `repl/state_views.h` and renamed
+`ReplayRuntimeState` under the replay peer; and `UiVariablePanelState` was
+renamed to `VariablePanelViewState`.
 
 **Where:**
 - `ReplReplayRuntimeState` defined in `src/repl/state_views.h:106-117`
@@ -689,12 +664,11 @@ into `glr_ctrl_init_gl()` so first-use correctness doesn't depend on
 
 ### 23. Tutorial includes `repl/state_owners.h` for the cfg-bridge — pulls in the entire mut surface
 
-**Status:** Partially resolved / retargeted — the cfg bridge now lives behind
-`repl/cfg_baseline.h`, but `tutorial.c` still includes
-`repl/state_owners.h` for broad REPL state operations such as document-count
-queries, dirty marks, variable-time reads, and workspace-header parsing. The
-remaining task is narrower than the original finding: split or ratchet the
-non-cfg state access that tutorial still needs.
+**Status:** Resolved (by `99abee6`) — the cfg bridge now lives behind
+`repl/cfg_baseline.h`, and the retained `repl/state_owners.h` include is
+documented as broad REPL state access for document-count queries, dirty
+marks, variable-time reads, and workspace-header parsing rather than cfg
+bridge access.
 
 **Where:** `src/subsystems/tutorial/tutorial.c:13`
 
@@ -841,10 +815,10 @@ header. The pure peer types — `ReplayFadeBatch`,
 
 ### 30. Tutorial reaches into `repl/export.h` for the cfg-baseline bag
 
-**Status:** Partially resolved — tutorial now includes
-`repl/cfg_baseline.h`, not `repl/export.h`. The remaining cleanup is the
-export-flavored API naming (`ReplExportConfig`, `repl_export_config_*`,
-`ReplExportConfigBridge`) on the neutral cfg-baseline surface.
+**Status:** Resolved (by `29f8b10`) — tutorial now includes
+`repl/cfg_baseline.h`, and the neutral cfg-baseline surface uses
+`ReplConfigBag`, `ReplConfigBridge`, and `repl_config_*` names instead of
+export-flavored `ReplExportConfig` / `repl_export_config_*` names.
 
 **Where:** `src/subsystems/tutorial/tutorial.c:72, 108, 410-415, 517`
 
@@ -1338,32 +1312,12 @@ here" notes that survive after the plan is forgotten.
 
 ## Sequencing
 
-### Next one-afternoon pass
+### Remaining tracked item
 
-1. **#59** — Do the stale-comment sweep first, including the new
-   `Bug 7` / `Bug 14` comments in `replay.c`, the old phase references,
-   and the stale `repl/core.h /* set_status, MAX_LINE_LEN */` rationale.
-2. **#51** + **#52** — Give color-picker drag targets a small enum and
-   either document or remove the `cp_*` private-prefix shorthand.
-3. **#53** + **#54** — Consolidate status-buffer and frame-dt constants.
-4. **#57** + **#58** — Simplify color-picker popup clamping and drop the
-   remaining manual column-alignment drift in `variable_panel_state.h`.
-
-### Next one-week pass — boundary and shape decisions
-
-1. **#23 / #30** — Finish the cfg-boundary cleanup: either rename the
-   neutral cfg-baseline API away from `ReplExport*` names and split the
-   remaining tutorial access out of `state_owners.h`, or explicitly
-   document the retained broad state access and add a ratchet for what
-   tutorial may call.
-2. **#15** — Decide whether the mixed lifecycle verbs are accepted API
-   vocabulary. If accepted, document the rationale in
-   `src/subsystems/README.md`; otherwise rename toward one convention.
-3. **#19** — Decide whether snapshot value types stay centralized in
-   `repl/state_views.h` / UI-prefixed value structs, or move fully into
-   peer headers. Document the chosen carve-out if no move is planned.
-4. **#49** — Trim tutorial's long rationale comments into concise source
-   comments and move implementation-history detail to plan/done notes.
+1. **#56** — `static const ReplayTessPreviewCallbacks` / related controller
+   callback constants still use a `g_` prefix outside `src/subsystems/`.
+   This is intentionally tracked in the `src-app` audit (finding #64), not
+   as a subsystem-owned cleanup.
 
 ### Done clusters removed from sequencing
 
@@ -1371,9 +1325,10 @@ The earlier state-ownership leak pass, replay silent-stop / `_impl`
 cleanup, color-picker reset/header fixes, color-picker rect parameter
 cleanup, variable-panel predef read cleanup, replay fade-plan move,
 replay tess-depth factoring, tutorial noncommand/pending/probe helper
-cleanup, and tutorial step-entry decomposition are already reflected in
-the current source. They should not be used as next-step work unless a
-new regression is found.
+cleanup, lifecycle vocabulary documentation, replay/variable-panel type
+ownership cleanup, cfg-baseline neutral naming, and tutorial step-entry
+decomposition are already reflected in the current source. They should not
+be used as next-step work unless a new regression is found.
 
 ### Out of scope
 
