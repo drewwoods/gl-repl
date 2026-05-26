@@ -363,6 +363,26 @@ repl_set_status_error("Error: cannot read X");`.
 `ferror=1`) and asserts the function returns failure; pre-fix this
 returned success.
 
+**Follow-up (2026-05-26, reviewer):** the first revision returned
+early on read/close error AND on the older `truncated_line` path
+without clearing the per-load accumulator state populated by
+`parse_cfg` (`g_import_cfg_accumulator`), `parse_workspace_header_line`
+(`g_deferred_var_values` / `g_pending_scene_name` /
+`g_pending_workspace_dir`). A partial parse that aborts mid-stream
+leaves those populated; a later `repl_export_apply_pending_cfg()`
+call (every example load goes through `example_loader.c:437`) then
+drains the stale slugs through the bridge and reapplies cfg values
+from the failed import. Added a `repl_export_load_reset_accumulators`
+helper called from both error returns (and reused at function entry,
+so the entry/exit reset is symmetric). Added a focused regression
+test in `tests/test_repl_core_io.c` that writes `// @cfg wireframe = 1\n`
++ a 600-byte unterminated line (triggering `truncated_line`), then
+manually resets live `wireframe` to 0 and calls
+`repl_export_apply_pending_cfg()`; pre-follow-up the drain re-applies
+`wireframe = 1` from the leaked accumulator, post-fix the drain is
+a no-op (verified by reverting the source change and watching the
+new assertion flip).
+
 ### 10. ✅ `flatten_source_lighting_enabled` ignores control flow
 
 **Where:** `src/repl/flatten.c:575-588`
