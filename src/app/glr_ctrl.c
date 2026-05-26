@@ -240,8 +240,10 @@ static void glr_ctrl_build_replay_fade_plan(int replaying) {
     if (!replaying)
         return;
 
-    replay_copy_baseline_predef_values(g_replay_fade_plan.baseline_predef_vals,
-                                            MAX_PREDEF_VARS);
+    replay_copy_baseline_predef_snapshot(
+        g_replay_fade_plan.baseline_predef_vals,
+        g_replay_fade_plan.baseline_predef_names,
+        &g_replay_fade_plan.baseline_predef_count);
     replay_copy_baseline_scratch_arrays(
         g_replay_fade_plan.baseline_scratch_arrays);
 

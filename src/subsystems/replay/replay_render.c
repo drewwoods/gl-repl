@@ -23,9 +23,21 @@ static const ReplayTessPreviewCallbacks g_tess_preview_cb = {
     .end_contour   = tess_preview_end_contour,
 };
 
+/* Re-establish the REPL's predef-var / scratch-array baseline before
+ * each fade-batch render so each batch starts from the same world
+ * state. The predef restore pairs saved values with current slots BY
+ * NAME (not by slot index), so a workspace switch / scene load / undo
+ * across an @declare between replay_start and this frame can't land
+ * saved values into the wrong vars. The "by-name" variant deliberately
+ * leaves the live table's shape untouched — this function runs inside
+ * the controller's per-frame values-only save/restore at
+ * glr_ctrl_display_frame, which can't repopulate slots a reshape
+ * would have dropped. */
 static void replay_render_restore_baseline(const ReplayFadePlan *fade_plan) {
     if (!fade_plan) return;
-    repl_restore_predef_values(fade_plan->baseline_predef_vals, MAX_PREDEF_VARS);
+    repl_eval_restore_predef_values_by_name(fade_plan->baseline_predef_vals,
+                                            fade_plan->baseline_predef_names,
+                                            fade_plan->baseline_predef_count);
     repl_eval_restore_scratch_arrays(fade_plan->baseline_scratch_arrays);
 }
 
