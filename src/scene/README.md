@@ -23,9 +23,15 @@ the actual geometry. `scene_render_3d_scene()` does everything around that
 callback:
 
 ```c
-scene_apply_camera(...);          /* caller owns the modelview camera transform */
-scene_render_3d_scene(&cfg);      /* viewport → projection → cfg.execute_fn() → grid/axes/backdrop/overlays */
+glr_camera_load_modelview(&pose);                /* caller owns the modelview camera transform */
+scene_render_3d_scene(&renderer_state, &cfg);    /* viewport → projection → cfg.execute_fn() → grid/axes/backdrop/overlays */
 ```
+
+The scene module owns no camera type — the caller picks one. The REPL
+controller uses `GlrCameraPose` + `glr_camera_load_modelview` from
+`src/app/glr_camera.h`; the standalone `scene_demo` inlines the six
+matrix calls directly (`glLoadIdentity`, `glTranslatef`, two
+`glRotatef`s, `glTranslatef`) so it has no hard dep on `glr_camera.h`.
 
 This is the standard way to keep a renderer reusable: it depends on a
 *contract* (config in, callback for geometry) rather than on the specific
@@ -61,10 +67,11 @@ never terminates).
 
 Inside the full app this is **layer 4** of the ownership map. The controller
 (`src/app/glr_ctrl.c`) builds a `SceneRenderConfig` from `ReplState` + view
-state each frame, then calls `scene_apply_camera()` and
-`scene_render_3d_scene()` once per accumulation-jitter sample. The geometry
-callback is the REPL executor (`repl_execute_program`), so the user's typed
-program becomes the scene's geometry.
+state each frame, then calls `glr_camera_load_modelview()` and
+`scene_render_3d_scene()` once per accumulation-jitter sample (with its own
+`SceneRendererState`). The geometry callback is the REPL executor
+(`repl_execute_program`), so the user's typed program becomes the scene's
+geometry.
 
 Scene renderers **consume snapshots/configs and never read `ReplState`,
 `EditorState`, or `UiState` directly.** The two REPL-aware overlay passes

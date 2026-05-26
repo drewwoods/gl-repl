@@ -55,8 +55,8 @@ Inside the full app this is **layer 0** of the ownership map. Per frame,
 1. rebuilds autonormals / the flat program if dirty, and prepares replay /
    export / camera strings;
 2. builds a `SceneRenderConfig` from `ReplState` + view state and calls
-   `scene_apply_camera()` then `scene_render_3d_scene()` (once per
-   accumulation-jitter sample);
+   `glr_camera_load_modelview()` then `scene_render_3d_scene()` (with the
+   owned `SceneRendererState`, once per accumulation-jitter sample);
 3. builds a `UiRenderSnapshot` and fans it out to the `ui_*_render`
    functions.
 

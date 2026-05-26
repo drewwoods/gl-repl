@@ -130,10 +130,12 @@ typedef struct SceneRenderConfig {
 
     /* --- Camera state (read-only inputs) ---
      * The actual modelview transform is no longer applied by the scene module —
-     * callers must invoke scene_apply_camera() before scene_render_3d_scene().
-     * These fields are still passed in because grid/axes themes orient
-     * themselves to camera angle, the orbit-target gizmo is sized by cam_dist,
-     * and the gizmo position comes from cam_tx/ty/tz. */
+     * callers populate GL_MODELVIEW themselves before scene_render_3d_scene()
+     * (the controller uses glr_camera_load_modelview from src/app/glr_camera.h;
+     * scene_demo inlines the matrix calls). These fields are still passed in
+     * because grid/axes themes orient themselves to camera angle, the
+     * orbit-target gizmo is sized by cam_dist, and the gizmo position comes
+     * from cam_tx/ty/tz. */
     float cam_dist;
     float cam_rx;
     float cam_ry;

@@ -395,7 +395,7 @@ Test sources live under `tests/` and shared test-only helpers live under
 | `src/scene/axes.h` | Axes render entrypoint |
 | `src/scene/scene_transition.c` | Pure grid/axes show↔hide fade state machine (`scene_xn_init/set/show/tick`); no GL, one instance per overlay |
 | `src/scene/scene_transition.h` | Transition machine API: `SceneXnState`, `SceneXnPhase`, entry points |
-| `src/scene/render.h` | Declares `scene_render_3d_scene(const SceneRenderConfig *)` and `scene_apply_camera(...)` |
+| `src/scene/render.h` | Declares `scene_render_3d_scene(SceneRendererState *, const SceneRenderConfig *)`, `scene_renderer_state_init(...)`, `scene_get_active_projection(...)`. Camera transform is set by the caller (e.g. `glr_camera_load_modelview` from `src/app/glr_camera.h`) before invoking — the scene module owns no camera type or apply helper |
 | `src/scene/backdrop.c` | Backdrop mode dispatch and deterministic cityscape renderer |
 | `src/scene/backdrop.h` | Backdrop render entrypoint |
 | `src/scene/lights.c` | Ambient init, light setup/reset, and visible light indicator overlay |
@@ -499,12 +499,14 @@ Test sources live under `tests/` and shared test-only helpers live under
 is no shim layer.
 1. Rebuild autonormals and flat program if dirty; save predef var values;
    prepare replay frame if active; update export/camera strings
-2. Build `SceneRenderConfig` from REPL state and call `scene_apply_camera(...)` then
-   `scene_render_3d_scene(&cfg)` once per jitter sample (if accumulation-buffer AA is enabled).
-   The camera modelview transform is the controller's responsibility —
-   `src/scene/render.c` does not touch the modelview except for sub-renderer
-   push/pop bracketing. Jitter is applied as a scene-local frustum shift
-   inside the scene function.
+2. Build `SceneRenderConfig` from REPL state. Load the camera via
+   `glr_camera_load_modelview(&pose)` (from `src/app/glr_camera.h`),
+   then call `scene_render_3d_scene(&g_scene_renderer, &cfg)` once per
+   jitter sample (if accumulation-buffer AA is enabled). The camera
+   modelview transform is the controller's responsibility —
+   `src/scene/render.c` does not touch the modelview except for
+   sub-renderer push/pop bracketing, and owns no camera type. Jitter
+   is applied as a scene-local frustum shift inside the scene function.
 3. `scene_render_3d_scene(&cfg)` in `src/scene/render.c`: viewport/clear setup
    → projection → execute user geometry via `SceneExecuteProgramFn`
    callback → replay fade batches → grid/axes/backdrop/orbit-target →
