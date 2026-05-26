@@ -36,6 +36,20 @@
 > be updated. Scope corrected: `edit_overlays/` and
 > `replay_render.{c,h}` exist and are explicitly deferred.
 >
+> **Revision 3 (2026-05-27):** Second-round reviewer corrections.
+> #11 further narrowed: every scene-switch/example-load/F12-cycle
+> path already closes the picker via `glr_ctrl_reset_transients` →
+> `color_picker_stop()` (verified at `glr_actions.c:407/413`,
+> `glr_ctrl.c:2222/1648`); the **only** uncovered path is undo
+> (`editor_undo_pop_snapshot` has zero color_picker references). Fix
+> is one line in `undo.c`. #18 merged into #10 (only one bare-`0`
+> `g_cp_drag =` site exists; all six others use named enums). #26
+> moved to Tier D: `src/subsystems/README.md:41` explicitly documents
+> the `replay_lift_px` pattern as intentional. Sequencing revised:
+> #12 (tutorial shadow ↔ match normalization desync) elevated to
+> Priority 1 alongside the replay reds — it's the most
+> user-triggerable UX bug in the document.
+>
 > The single most important contract for this directory:
 > **Each peer subsystem owns one runtime state struct, mutates it
 > directly via `_mut()`, exposes a by-value `_view()` for reads, and
@@ -69,25 +83,27 @@ and suggests a one-line fix.
 45 findings across four subdirectories (two more — `edit_overlays/`
 and `replay_render.{c,h}` — deferred to round 3). **2 reds** — both
 in replay (key-leak-after-stop for ASCII and special handlers). The
-🟡 band is dominated by replay reaching across module boundaries
-(`time_playing` writes, `repl_dispatch_follow_cursor`), two
-color-picker index-staleness concerns, and the tutorial's
-`state_owners.h` dependency. The 🟢/🔵 tail is light — one `g_`
-naming violation, a few dead writes, a handful of structural
-observations. This directory is largely healthy after the prior
-round; the reds are the priority.
+most user-visible issue is actually 🟡 #12 (tutorial shadow ↔ match
+normalization desync — every user typing extra whitespace hits it).
+The remaining 🟡 band covers replay cross-module boundary reaches
+(`time_playing` writes, `repl_dispatch_follow_cursor`), a narrow
+color-picker undo-path gap, and the tutorial's broad
+`state_owners.h` include. The 🟢/🔵 tail is light — one `g_` naming
+violation, a few dead writes, a handful of structural observations.
+This directory is largely healthy after the prior round.
 
-**Counts:** 2 🔴, 13 🟡, 11 🟢, 9 🔵 structural, 9 Tier D accepted, 1 withdrawn = 45 total.
+**Counts:** 2 🔴, 13 🟡, 10 🟢, 9 🔵 structural, 11 Tier D accepted,
+2 withdrawn/merged = 45 total (43 live).
 
 ## Tier classification
 
 | Tier | Criteria | Findings |
 |------|----------|----------|
-| **A** | Small, safe, afternoon pass | #1, #2, #3, #7, #8, #10, #11, #12, #13, #14, #17, #18, #20, #21, #22, #23, #24, #25, #26, #28 |
+| **A** | Small, safe, afternoon pass | #1, #2, #3, #7, #8, #10, #11, #12, #13, #14, #17, #20, #21, #22, #23, #24, #25, #28 |
 | **B** | Moderate, week-long pass with tests | #4, #5, #6, #9, #16, #19, #29, #30, #31, #32, #33, #34 |
 | **C** | High cost or cross-cutting | #35, #36 |
-| **D** | Accepted / kept | #27, #37, #38, #39, #40, #41, #42, #43, #44, #45 |
-| — | Withdrawn | #15 |
+| **D** | Accepted / kept | #26, #27, #37, #38, #39, #40, #41, #42, #43, #44, #45 |
+| — | Withdrawn / merged | #15, #18 |
 
 ---
 
@@ -308,25 +324,28 @@ add a sentinel), this assignment becomes wrong silently.
 
 ---
 
-### 11. Color picker stale-index window on undo/delete (scene switch already handled)
+### 11. Undo doesn't invalidate the color picker
 
-**Where:** `src/subsystems/color_picker/color_picker_state.c` (global state)
+**Where:** `src/editor/undo.c` (no color_picker reference),
+`src/subsystems/color_picker/color_picker_state.c` (global state)
 
-**Smell:** Scene switches and example loads already close the picker
-via `glr_ctrl_reset_transients()` → `color_picker_stop()` at
-`src/app/glr_ctrl.c:425`. The residual concern is **undo and
-line-delete**: these restructure the command array without going
-through `reset_transients`, so `g_cp_line` can shift to a different
-command while the picker stays open. The narrow dangerous case is a
-shift onto another command of the **same** color type (see #4) — a
-shift onto a non-color type is caught by `write_cmd`'s type switch.
+**Smell:** Every scene-switch / example-load / F12-cycle path already
+closes the picker via `glr_ctrl_reset_transients()` →
+`color_picker_stop()` (`glr_actions.c:407/413`, `glr_ctrl.c:2222`,
+`glr_ctrl.c:1648`). The one uncovered path is **undo**:
+`editor_undo_pop_snapshot()` (Ctrl+Z) restores a prior document
+snapshot without invalidating the picker. After undo, `g_cp_line`
+may point at a shifted sibling color cmd of the same type, or fall
+off the end (guarded by `cp_cmd_at` NULL check at L113).
 
-**Why it matters:** After an undo that deletes or reorders lines, the
-picker's next drag writeback could silently overwrite the wrong
-same-type color line.
+**Why it matters:** After Ctrl+Z inserts/deletes lines above
+`g_cp_line`, the picker's next drag writeback can land on a
+different same-type color line (see #4). Non-color shifts are caught
+by `write_cmd`'s type switch.
 
-**Fix:** Call `color_picker_stop()` from the undo-restore and
-line-delete paths that restructure the command array. (Tier A)
+**Fix:** Wire `editor_undo_pop_snapshot` to call
+`color_picker_stop()`. One-line addition in `src/editor/undo.c`.
+(Tier A)
 
 ---
 
@@ -433,15 +452,12 @@ reserved by project convention for file-scoped statics.
 
 ---
 
-### 18. Color picker `CP_DRAG_NONE` defined but not used at all reset sites
+### 18. ~~Color picker `CP_DRAG_NONE` defined but not used at all reset sites~~ — merged into #10
 
-**Where:** `src/subsystems/color_picker/color_picker_state.c`
-
-**Smell:** `CP_DRAG_NONE` exists as a named constant but at least one
-reset site uses `0` directly (see #10). Other sites may also use
-bare integers.
-
-**Fix:** Audit all `g_cp_drag =` sites and replace with the enum. (Tier A)
+**Merged.** Only one bare-`0` site exists (L257, covered by #10).
+All six other `g_cp_drag =` assignments already use named enum
+values (`CP_DRAG_NONE`, `CP_DRAG_SV`, `CP_DRAG_HUE`,
+`CP_DRAG_ALPHA`). No separate action needed.
 
 ---
 
@@ -561,8 +577,10 @@ frames anyway.
 slightly odd — it's a controller-written display hint stored in a
 peer's view. Functional but philosophically misplaced.
 
-**Fix:** Accept as-is (it's one float and works) or move to the
-per-frame snapshot. (Tier A)
+**Fix:** Accept as-is. `src/subsystems/README.md:41` explicitly
+documents this pattern as intentional ("`variable_panel_state_mut()`
+provides direct mutable pointers for internal config-mapping and
+per-frame easing equations (like `replay_lift_px`)"). (Tier D)
 
 ---
 
@@ -799,19 +817,20 @@ init. Clean.
 
 ## Sequencing
 
-**Priority 1 (reds, afternoon):** #1 → #2 (extract shared cancel
-helper per #29). These are the only confirmed triggerable bugs.
+**Priority 1 (reds + most visible UX bug):** #1 → #2 (extract shared
+cancel helper per #29), then #12 (tutorial shadow ↔ match
+normalization desync). #12 is the most user-triggerable UX issue in
+the document — every tutorial user who types extra whitespace hits it.
 
-**Priority 2 (color picker invalidation):** #11 → #3 → #4.
-Scene/example switches already close the picker via
-`glr_ctrl_reset_transients`; #11 extends that coverage to
-undo/delete paths. #3 is defensive reordering.
+**Priority 2 (color picker undo gap):** #11 (one-line
+`color_picker_stop()` call in `editor_undo_pop_snapshot`). This is
+the load-bearing fix for the narrowed #4 scenario.
 
 **Priority 3 (boundary hygiene):** #9 + #14 together (comment fix or
 header split), then #5 (time_playing dispatch), then #6
 (follow_cursor ownership).
 
-**Priority 4 (cleanup):** #7, #8, #10, #12, #13, #17 — all Tier A
+**Priority 4 (cleanup):** #3, #7, #8, #10, #13, #17 — all Tier A
 mechanical fixes.
 
 **Defer:** #35, #36 (file splits) are Tier C — only pursue if the
