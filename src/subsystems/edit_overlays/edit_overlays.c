@@ -1,4 +1,5 @@
 #include "subsystems/edit_overlays/edit_overlays.h"
+#include "app/glr_config.h"  /* GlrVertexLabelMode, GLR_VERTEX_LABEL_* (kept .c-private; see edit_overlays.h) */
 #include "gl_includes.h"
 #include "editor/state.h"
 #include "repl/state_views.h"
@@ -335,7 +336,7 @@ static ReplayVertexWalkContext edit_overlays_build_vertex_walk_context(int selec
     return ctx;
 }
 
-void edit_overlays_render_vertex_numbers(GlrVertexLabelMode mode, int is_ortho) {
+void edit_overlays_render_vertex_numbers(int mode, int is_ortho) {
     glPushAttrib(GL_ALL_ATTRIB_BITS);
     glDisable(GL_LIGHTING);
     glDisable(GL_DEPTH_TEST);
@@ -344,7 +345,7 @@ void edit_overlays_render_vertex_numbers(GlrVertexLabelMode mode, int is_ortho) 
     static const ReplayVertexWalkCallbacks cb = {
         .on_vertex = on_vertex_number_label,
     };
-    VertexLabelCtx label_ctx = { .mode = mode, .is_ortho = is_ortho };
+    VertexLabelCtx label_ctx = { .mode = (GlrVertexLabelMode)mode, .is_ortho = is_ortho };
     ReplayVertexWalkContext ctx = edit_overlays_build_vertex_walk_context(1);
     replay_walk_user_vertices(&ctx, &cb, &label_ctx);
 
@@ -490,7 +491,7 @@ void edit_overlays_post_overlays(void *user_data) {
 
     if (pack->show_vertex_labels) {
         prof_begin(PROF_SCENE_3D_OVERLAY_VERTEX_NUMBERS);
-        edit_overlays_render_vertex_numbers((GlrVertexLabelMode)pack->show_vertex_labels,
+        edit_overlays_render_vertex_numbers(pack->show_vertex_labels,
                                             pack->ortho_mode);
         prof_accum_end(PROF_SCENE_3D_OVERLAY_VERTEX_NUMBERS);
     }

@@ -79,6 +79,9 @@ static ma_engine g_engine;
  * atomically flips g_active under g_mtx. g_active == -1 means nothing
  * is loaded. */
 static ma_sound g_slot[2];
+/* worker-thread-only: read/written only from audio_worker_main and its
+ * helpers (worker_uninit_all, worker_load); no lock required. The render
+ * thread never observes this array directly. */
 static int      g_slot_inited[2] = { 0, 0 };
 static int      g_active = -1;
 
@@ -378,7 +381,6 @@ static void worker_uninit_all(void) {
     g_active = -1;
     g_music_loaded = 0;
     audio_unlock();
-    /* worker-thread-only, no lock */
     for (int s = 0; s < 2; s++) {
         if (g_slot_inited[s]) {
             ma_sound_uninit(&g_slot[s]);
