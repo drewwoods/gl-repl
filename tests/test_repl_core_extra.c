@@ -828,7 +828,7 @@ void test_user_scene_promote_lru_evict() {
  * both the "load OK" and the LRU-evict-succeeded branches. */
 void test_user_scene_load_scratch_alloc_lifecycle(void) {
     printf("--- User scene scratch alloc lifecycle ---\n");
-    glr_app_reset_all(); declare_test_vars();
+    glr_ctrl_reset_all(); declare_test_vars();
     if (repl_example_count() < 1) return;
 
     char dir[64];
@@ -838,12 +838,12 @@ void test_user_scene_load_scratch_alloc_lifecycle(void) {
     /* Build a tiny scene on disk to load from. */
     char scene_path[128];
     snprintf(scene_path, sizeof(scene_path), "%s.c", dir);
-    glr_app_reset_all(); declare_test_vars();
+    glr_ctrl_reset_all(); declare_test_vars();
     editor_feed_line("glVertex3f(7, 8, 9);");
     repl_export_save_output(scene_path, source_document_view(), NULL);
 
     /* Reset, then fill every user-scene slot via example promotion. */
-    glr_app_reset_all(); declare_test_vars();
+    glr_ctrl_reset_all(); declare_test_vars();
     repl_set_workspace_dir(dir);
     for (int k = 0; k < MAX_USER_SCENES - 1; k++) {
         repl_load_example(0);
