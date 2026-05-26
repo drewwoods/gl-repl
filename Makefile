@@ -1250,6 +1250,7 @@ test-full: ## Full gate: stub tests + checks + build gl-repl, bench, repl_demo, 
 	$(MAKE) --no-print-directory check
 	$(MAKE) --no-print-directory test-stubs
 	$(MAKE) --no-print-directory gl-repl
+	$(MAKE) --no-print-directory gl-tests
 	$(MAKE) --no-print-directory bench
 	$(MAKE) --no-print-directory scene_demo
 
