@@ -48,6 +48,22 @@
 > Verified via `make BUILD=debug test_repl_state test_repl_core_io` plus
 > direct runs of both debug binaries.
 >
+> **Revision 6 (2026-05-26):** Backlog triage of the 12 "Not started" +
+> 2 "Partial" items. New section *Backlog triage (2026-05-26)* below
+> sorts the remaining open findings into Tier A / B / C with a
+> recommendation: land the Tier A pass now (~7 commits, half-day) to
+> clear the way for this doc's graduation to `plans/done/`; defer the
+> Tier B cluster to a focused-pass slot; spin out #14 (controller
+> rendering extraction) as its own plan rather than tacking it onto
+> this audit's closeout. **#14's "Fix" text also corrected**: the
+> destination is `src/subsystems/` (a new `replay/replay_render.c`
+> plus a new `edit_overlays/` peer subsystem), not `src/scene/`. The
+> original draft proposed `src/scene/replay_overlays.c` etc., which
+> would have contradicted the existing `scene/overlays.h:24-29` rule
+> that `src/scene/` stays app/REPL-agnostic — these passes re-execute
+> REPL geometry and depend on editor cursor state, which is exactly
+> what `src/subsystems/` exists to host.
+>
 > Scope: every file under `src/app/`. Tests under `tests/` were read
 > where they document a contract, but not audited.
 >
@@ -156,6 +172,69 @@ started** means no branch change was found for that finding.
 | 63 | Not started | Help overlay content is still rebuilt per query. |
 | 64 | Withdrawn | Local convention allows `g_` on file-private statics. |
 | 65 | Partial | Targeted archaeology was removed under #28, but the broader comment-mass concern remains. |
+
+## Backlog triage (2026-05-26)
+
+12 "Not started" + 2 "Partial" findings remain after Revisions 4-5.
+Triage below sorts them by the same Tier A/B/C system the closed
+audits use (see `plans/done/src-editor-code-smell-audit.md` for the
+full definitions). The recommendation is to land Tier A now, queue
+Tier B, and spin out #14 as its own plan.
+
+### Tier A — afternoon-pass mechanical (~7 commits, half-day)
+
+Land these to clear the way for this doc's graduation from
+`plans/in-review/` to `plans/done/`. None are bigger than ~10 LOC
+each; **#53** is the only one likely to fix a real bug today.
+
+| # | What | Cost | Notes |
+|---|---|---|---|
+| **#36** | Docstring on `glr_camera_controls_reset` saying mode is preserved (vs. `glr_camera_reset_default` forcing 3D) | ~5 lines | Closes the named-resets asymmetry that misleads callers. |
+| **#53** (zoom-velocity half) | Unify the wheel-zoom velocity at `glr_ctrl.c:2998` (`0.3f`) and `:3956` (`0.1f`) — same gesture, two values | 1 line | **Probable real bug.** Pick the value the project considers canonical and use in both. The wider magic-number sweep (`glLineWidth`, auto-rotate increment, ASCII control range at `:536-537`) can stay Tier B; the zoom mismatch should not. |
+| **#54** | Hoist a local `GlrPresentationState p = glr_state_presentation();` in the CODE_PANEL_LAYOUT branch of `glr_cfg_cycle_row` | 2 lines | Bundles well with **#50** if both land; standalone otherwise. |
+| **#57** | Standardize `<ctype.h>` cast style across `glr_completion.c:74, 128, 131, 293` | ~4 lines | Pure consistency. |
+| **#59** | Emit a one-shot status when autocomplete ghost is dropped on overflow at `glr_completion.c:428-431` | ~5 lines | Closes silent-failure UX gap (popup vanishes without typed text growing). |
+| **#60** | Move `STATE_SAVE_INTERVAL_SECS` from `glr_audio.c:154` up to the tunables block at `:70-71` | 3 lines | Pure tidy. |
+| **#62** | Add `/* worker-thread-only, no lock */` comment on `g_slot_inited[]` in `glr_audio.c:343-354` | 1 line | Documents the invariant that makes the unlocked access safe today; closes the audit's open question without changing behavior. |
+
+After the Tier A pass, every "Not started" item with a one-paragraph
+fix is closed. The remaining open work is genuine Tier B / Tier C —
+exactly the shape that justifies graduating this doc.
+
+### Tier B — focused-pass slot (queue, don't bundle)
+
+| # | What | Cost | Notes |
+|---|---|---|---|
+| **#25** (Partial) | Re-review the in-flight `worker_load` → `set_playlist` race window at `glr_audio.c:618-647` now that #2 + #3 cleanup landed | ~30-60 LOC if a race remains | **Time-sensitive**: the audit explicitly flagged "should be re-reviewed after #2/#3 cleanup", and those prerequisites are now ✅. If the cancel flag closed the window, just mark #25 Done; if it didn't, it's a real concurrency hazard. |
+| **#50** | Refactor `glr_cfg_cycle_row` (91 lines, per-key chain) to an `on_change(int new_value, const GlrConfigItem *)` hook field on `GlrConfigItem` | ~150 LOC | **Highest-value Tier B.** The per-key chain is where #19's "replay-stop side effect" was hidden — moving to a declarative hook structurally prevents that class of bug. Each key declares its own side effect; action rows become the natural early-return discriminator. |
+| **#51** | Split `glr_ctrl_render_outlines` (132-line god-function) into `render_outlines_glbegin_pass` + `render_outlines_tess_pass` | ~50-100 LOC | **Bundle with #14** — they're the same surgery (GL rendering extraction out of the controller). If #14 lands first, #51 falls out of it. |
+| **#52** | Parameterize four near-duplicate function pairs: `cycle_example_or_user_scene` ± direction, `cam_format_save_block`/`_display_block`, `glr_ctrl_step_projection_toward` up/down branches, the two replay-key routers | ~80 LOC removed | Mostly mechanical. **Be careful with the cycle pair** — needs paired test coverage so the prev path doesn't regress. The other three are safer. |
+| **#63** | Cache the help-overlay content. Either cache `UiOverlayContent *` once, or read from `snap->help_content` (snapshot machinery exists post-#39) | ~20 LOC | Closes per-Tab/per-click rebuild of the help table. Bundles well with the broader snapshot work if #39 grows a follow-up. |
+
+### Tier C — spin out as its own plan
+
+| # | What | Why Tier C |
+|---|---|---|
+| **#14** | Extract ~600 lines of GL rendering from `glr_ctrl.c` into **`src/subsystems/replay/replay_render.c`** (replay-driven 3D passes — fade batches, tess preview) and **`src/subsystems/edit_overlays/edit_overlays.c`** (new peer subsystem — outlines, vertex points/numbers, normals, cursor-guide walk) | **High-value architectural cleanup** (the controller's own README says it doesn't draw widgets, but ~30% of the file is `glBegin`/`glEnd`; the `post_fill_fn` callback that inverts the dependency arrow goes away). **Destination is `src/subsystems/`, not `src/scene/`** — `scene/overlays.h:24-29` already documents why these passes were kept out of `src/scene/` (they re-execute REPL geometry and depend on editor cursor state; scene is app/REPL-agnostic by design). It's a multi-commit week-long extraction that benefits from its own design doc in `plans/in-review/`, not a single bullet in this audit. **Recommendation**: open `plans/in-review/glr-ctrl-rendering-extraction.md` and pull #51 into it; see finding #14's revised "Fix" text for the destination-by-overlay breakdown. |
+| **#65** | Promote design-history comment paragraphs in `glr_ctrl.c` (~30% comments by line) to `MODULES.md` / `ARCHITECTURE.md`; leave one-line "what" + "why" in source | Discretionary editorial. Real but low-urgency; no behavior change. |
+
+### Graduation checklist
+
+This audit can move from `plans/in-review/` to `plans/done/` once:
+
+1. The Tier A pass above is landed.
+2. **#25** is either closed (race was already fixed by #2 + #3) or
+   re-classified to a follow-up bug ticket if a window remains.
+3. **#14** is spun out to its own `plans/in-review/` plan (or
+   explicitly deferred with a "Tier C — deferred" marker in the
+   status table above).
+4. The remaining Tier B items (#50, #52, #63) are either
+   closed or carried forward into a "Tier B outstanding" block
+   the way the closed `src-editor-code-smell-audit.md` did.
+
+After graduation, anything still open from this audit lives as
+Tier-C-classified backlog inside the closeout block — same shape as
+the editor audit's "Implementation status" section.
 
 ## 🔴 Actual bugs / hazards (verified)
 
@@ -506,13 +585,52 @@ state-machine pushing. The `post_fill_fn` / `post_overlays_fn` callback
 abstraction makes `src/scene/` call back into the controller, inverting
 the intended dependency arrow.
 
-**Fix:** Extract `src/scene/replay_overlays.c` (fade batches, tess
-preview), `src/scene/edit_overlays.c` (outlines, vertex points/numbers,
-normals), `src/scene/cursor_guides.c` (cursor edit guide walk). Have
-them take `OverlayWalkCtx` / `SceneGuideSnapshot` (already pure data
-types) — those are the natural API boundaries. The `post_fill_fn`
-callback collapses into direct calls from `scene_render_3d_scene`.
-`glr_ctrl.c` shrinks by ~600 lines.
+**Fix (revised — destination must be `src/subsystems/`, not
+`src/scene/`):** `src/scene/` is app/REPL-agnostic by design, and
+`scene/overlays.h:24-29` already documents why these passes were
+left in the controller: they re-execute REPL geometry and depend on
+editor cursor state. Moving them into `src/scene/` would directly
+contradict the existing layering rule. The right destinations
+mirror the existing peer-subsystem pattern (`replay/`, `tutorial/`,
+`color_picker/`, `variable_panel/`):
+
+- **`src/subsystems/replay/replay_render.c`** (new peer of
+  `replay.c` + `replay_state.c`) — owns the replay-driven 3D
+  passes: `tess_preview_*`, `glr_ctrl_render_replay_fade_batches`,
+  `glr_ctrl_render_replay_tess_preview`. The struct it reads from
+  (`ReplayFadePlan`) and the state it consumes already live in
+  `src/subsystems/replay/`; the renderer is the natural counterpart.
+- **`src/subsystems/edit_overlays/edit_overlays.c`** (new peer
+  subsystem) — owns the editor-cursor-aware 3D passes:
+  `glr_ctrl_render_outlines` (re-executes user geometry in GL_LINE),
+  `glr_ctrl_render_vertex_points` (GL_POINT mode),
+  `glr_ctrl_render_vertex_numbers`, `glr_ctrl_render_normal_vectors`,
+  and the flat-program walk that drives `glr_ctrl_render_cursor_guides`.
+  These all depend on the executor + flat program + editor
+  cursor/edit_line — exactly the "peer with cross-layer state"
+  shape that `src/subsystems/` exists for.
+- **`src/scene/guides/`** keeps its existing pure-data renderers
+  (`geometry_guides.c`, `transform_guides.c` — both already take
+  `SceneGuideSnapshot`). The cursor-guide *walk* that builds the
+  snapshot moves to `src/subsystems/edit_overlays/`; the renderer
+  it feeds stays in `src/scene/guides/`.
+
+API shape: each subsystem renderer takes the snapshot it needs
+(`OverlayWalkCtx` / `SceneGuideSnapshot` / `ReplayFadePlan *`) as
+a pure data argument. The `post_fill_fn` / `post_overlays_fn`
+callbacks that today let `src/scene/render.c` reach back into
+`glr_ctrl.c` go away: `scene_render_3d_scene` finishes its job and
+returns; the controller (or the subsystem renderers directly) call
+the overlay passes afterward. `glr_ctrl.c` shrinks by ~600 lines;
+`src/scene/` stays agnostic; the dependency arrow stops inverting.
+
+**Why this isn't `src/ui/app/`:** the existing
+`src/ui/app/replay_hud.c` is the 2D HUD (status text, progress
+bar — reads `UiRenderSnapshot`). The 3D overlay rendering needs
+the live GL state machine (`glPushAttrib`, `glPolygonMode`,
+re-execution of the flat program through the executor), which is
+heavier than UI snapshot consumption and shouldn't share a TU
+with HUD chrome.
 
 ### 15. `_mut()` accessors used for read-only work
 
