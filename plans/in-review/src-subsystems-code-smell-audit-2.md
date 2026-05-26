@@ -7,12 +7,34 @@
 > writing — check `git log` on the cited files before acting if this
 > doc has aged.
 >
-> Scope: every `.c`/`.h` file under `src/subsystems/`. The prior round
+> Scope: `replay/`, `tutorial/`, `color_picker/`, and
+> `variable_panel/` under `src/subsystems/`. The prior round
 > (`plans/done/src-subsystems-code-smell-audit.md`) closed 58 of 59
 > findings; #56 (cross-module `time_playing` write) is tracked in the
 > `src/app/` audit and noted here for context but not re-counted.
-> `edit_overlays/` was extracted out of this directory between rounds
-> and no longer exists — it is out of scope.
+> **Deferred to round 3:** `edit_overlays/` (~558 LOC) and
+> `replay/replay_render.{c,h}` (~225 LOC) — both extracted from
+> `src/app/` in commit ffda60e after the prior round.
+>
+> **Revision 2 (2026-05-26):** Reviewer corrections applied.
+> #3/#4 downgraded from 🔴 to 🟡: #3's null branch is unreachable
+> (pre-validated by `color_picker_can_edit_cmd`); #4's type-mismatch
+> case bails out via `else { return 0 }`, and scene switches already
+> close the picker via `glr_ctrl_reset_transients` — real residual is
+> same-type shift on undo/delete only. Fixed function names
+> (`color_picker_start`/`stop`, not open/close; no `g_cp_active`
+> exists). #9 reframed: tutorial.c is a documented exception in
+> `state_owners.h`, not a violation — concern is incomplete include
+> comment + broad header surface. #11 narrowed: scene/example
+> switches already handled; residual is undo/delete paths. #15
+> withdrawn: `replay_prepare_frame` refreshes `total_flat_cmds` and
+> clamps `pc` every frame. #7's fix corrected: `replay_state_view()`
+> returns by value, so the `ReplayFadeBatchView` pointer would
+> dangle — need a const-ref accessor instead. #1/#2 now note that
+> two existing test assertions (`test_repl_replay.c:501`,
+> `test_repl_editor.c:2283`) explicitly expect `return 0` and must
+> be updated. Scope corrected: `edit_overlays/` and
+> `replay_render.{c,h}` exist and are explicitly deferred.
 >
 > The single most important contract for this directory:
 > **Each peer subsystem owns one runtime state struct, mutates it
@@ -44,26 +66,28 @@ and suggests a one-line fix.
 
 ## Headline take
 
-45 findings across four subdirectories. **4 reds** — two in replay
-(key-leak-after-stop for both ASCII and special handlers) and two in
-color_picker (half-init on early return, stale-index writeback after
-deletion). The 🟡 band is dominated by replay reaching across module
-boundaries (`time_playing` writes, `repl_dispatch_follow_cursor`) and
-the tutorial including `state_owners.h`. The 🟢/🔵 tail is light —
-one `g_` naming violation, a few dead enum literals, a handful of
-structural observations. This directory is largely healthy after the
-prior round; the reds are the priority.
+45 findings across four subdirectories (two more — `edit_overlays/`
+and `replay_render.{c,h}` — deferred to round 3). **2 reds** — both
+in replay (key-leak-after-stop for ASCII and special handlers). The
+🟡 band is dominated by replay reaching across module boundaries
+(`time_playing` writes, `repl_dispatch_follow_cursor`), two
+color-picker index-staleness concerns, and the tutorial's
+`state_owners.h` dependency. The 🟢/🔵 tail is light — one `g_`
+naming violation, a few dead writes, a handful of structural
+observations. This directory is largely healthy after the prior
+round; the reds are the priority.
 
-**Counts:** 4 🔴, 12 🟡, 11 🟢, 18 🔵 = 45 total.
+**Counts:** 2 🔴, 13 🟡, 11 🟢, 9 🔵 structural, 9 Tier D accepted, 1 withdrawn = 45 total.
 
 ## Tier classification
 
 | Tier | Criteria | Findings |
 |------|----------|----------|
-| **A** | Small, safe, afternoon pass | #1, #2, #3, #4, #7, #8, #10, #11, #12, #13, #14, #15, #17, #18, #20, #21, #22, #23, #24, #25, #26, #27, #28 |
-| **B** | Moderate, week-long pass with tests | #5, #6, #9, #16, #19, #29, #30, #31, #32, #33, #34 |
+| **A** | Small, safe, afternoon pass | #1, #2, #3, #7, #8, #10, #11, #12, #13, #14, #17, #18, #20, #21, #22, #23, #24, #25, #26, #28 |
+| **B** | Moderate, week-long pass with tests | #4, #5, #6, #9, #16, #19, #29, #30, #31, #32, #33, #34 |
 | **C** | High cost or cross-cutting | #35, #36 |
-| **D** | Accepted / kept | #37, #38, #39, #40, #41, #42, #43, #44, #45 |
+| **D** | Accepted / kept | #27, #37, #38, #39, #40, #41, #42, #43, #44, #45 |
+| — | Withdrawn | #15 |
 
 ---
 
@@ -86,7 +110,14 @@ Confirmed: after `replay_stop()` sets state = OFF, the key cascades
 through config shortcuts and editor input.
 
 **Fix:** Return 1 after the `replay_stop()` call — the key was
-consumed by the "cancel replay" action. (Tier A)
+consumed by the "cancel replay" action.
+
+**Test impact:** Two existing assertions explicitly expect `return 0`:
+`tests/test_repl_replay.c:501` (`"unrecognized key not consumed"`)
+and `tests/test_repl_editor.c:2283-2284`
+(`"replay unknown key unconsumed"`). The implementation must update
+both tests to assert `consumed == 1` and add a behavior-contract
+comment explaining that cancelling replay consumes the key. (Tier A)
 
 ---
 
@@ -103,50 +134,62 @@ but returns 0, so the key propagates to
 toggle overlays immediately after the replay cancellation.
 
 **Fix:** Return 1 inside the `if (!replay_modifier_special_key(key))`
-block. (Tier A)
-
----
-
-### 3. Color picker `color_picker_open` sets `g_cp_line` before null check — half-init on early return
-
-**Where:** `src/subsystems/color_picker/color_picker_state.c:222-225`
-
-**Smell:** `g_cp_line = cmd_idx` is written at L222 before `cmd = cp_cmd_at(cmd_idx)` at L223. If `cp_cmd_at` returns NULL (line was deleted between click and open), the function returns early at L225, leaving the picker in a half-initialized "open" state: `g_cp_line` points at a nonexistent command, `g_cp_active` was set to 1 earlier in the function, but color channels were never populated.
-
-**Why it matters:** Subsequent `color_picker_write_cmd()` calls use
-`g_cp_line` to look up the target command. With a stale index, the
-write could land on the wrong command or on a NULL (which is safely
-guarded at L113, but the picker stays visually open with garbage).
-
-**Fix:** Move `g_cp_line = cmd_idx` below the null check, or clear
-`g_cp_active = 0` in the early-return path. (Tier A)
-
----
-
-### 4. Color picker `color_picker_write_cmd` writes to stale index after deletion
-
-**Where:** `src/subsystems/color_picker/color_picker_state.c:107-108`
-
-**Smell:** `color_picker_write_cmd()` fetches `cp_cmd_at(g_cp_line)`.
-If lines were deleted while the picker was open (e.g., undo, cut,
-line delete), `g_cp_line` may point past the array end or at a
-different command type. The type switch at L117-138 then synthesizes
-a line for the wrong command, and `editor_commit_apply_external_change`
-overwrites it.
-
-**Why it matters:** Silent data corruption — the wrong source line
-gets its content replaced with a color command string. The NULL guard
-at L113 catches the past-end case, but an index shifted to a
-non-color command still passes and writes garbage.
-
-**Fix:** Before writing, validate that `cp_cmd_at(g_cp_line)` still
-has the same `CmdType` as when the picker was opened (save the
-original type in a `g_cp_opened_type` static). If it doesn't match,
-close the picker with a status message. (Tier B)
+block. Same test-update caveat as #1. (Tier A)
 
 ---
 
 ## 🟡 Drift / boundary hazards
+
+### 3. Color picker `color_picker_start` sets `g_cp_line` before null check — defensive ordering issue
+
+**Where:** `src/subsystems/color_picker/color_picker_state.c:222-225`
+
+**Smell:** `g_cp_line = cmd_idx` is written at L222 before
+`cmd = cp_cmd_at(cmd_idx)` at L223. If `cp_cmd_at` returns NULL, the
+function returns at L225 with `g_cp_line` pointing at a nonexistent
+command — the picker reads as "open" (`g_cp_line >= 0`) but color
+channels were never populated.
+
+In practice this null branch is currently **unreachable**:
+`color_picker_can_edit_cmd(cmd_idx)` at L209 calls the same
+`cp_cmd_at(cmd_idx)` with no mutating code between L209 and L222, so
+if `can_edit_cmd` passes, the L223 fetch will also succeed. The
+finding is a defensive-coding concern, not a triggerable bug.
+
+**Why it matters:** A future refactor that inserts a mutation between
+the guard and the assignment (e.g., an undo snapshot) could open the
+window. The ordering is fragile even if currently safe.
+
+**Fix:** Move `g_cp_line = cmd_idx` below the null check. (Tier A)
+
+---
+
+### 4. Color picker `color_picker_write_cmd` can write to wrong same-type line after index shift
+
+**Where:** `src/subsystems/color_picker/color_picker_state.c:107-108`
+
+**Smell:** `color_picker_write_cmd()` fetches `cp_cmd_at(g_cp_line)`.
+If lines were inserted/deleted while the picker was open (e.g., undo,
+cut, paste), `g_cp_line` may point at a different command.
+
+The type switch at L117-138 has an `else { return 0; }` at L137-138,
+so a shift to a **non-color** command type is caught — the writeback
+bails out cleanly. The narrower real concern is a shift to a
+**different color command of the same type** (e.g., after a paste
+shifts indices such that `g_cp_line` now points at a different
+`CMD_COLOR3F` further down). In that case the writeback silently
+overwrites the wrong line's color.
+
+**Why it matters:** Incorrect color written to a line the user didn't
+open the picker for. #11's "close on scene-switch / undo" approach
+is the load-bearing fix that prevents the triggering scenario.
+
+**Fix:** Call `color_picker_stop()` from the undo/paste/delete paths
+that restructure the command array (#11), invalidating the picker
+before any writeback can fire. A `g_cp_opened_type` check alone
+wouldn't catch the same-type case. (Tier B)
+
+---
 
 ### 5. Replay crosses module boundary to write `repl_state_variables_mut()->time_playing`
 
@@ -201,8 +244,13 @@ instead of `replay_state_view()`.
 communicates write intent to readers; using it for reads erodes that
 signal.
 
-**Fix:** Use `replay_state_view()` and take pointers via address-of on
-the local copy, or make the view struct hold copies directly. (Tier A)
+**Fix:** Cannot simply switch to `replay_state_view()` here —
+`ReplayFadeBatchView` holds a pointer into the live state
+(`const ReplayFadeBatch *batches`), so taking the address of a
+by-value stack copy would dangle. Instead, add a
+`replay_state_const()` accessor that returns `const ReplayRuntimeState *`
+into the live storage, or rename the function to make the mutability
+intent explicit. (Tier A)
 
 ---
 
@@ -217,25 +265,32 @@ state uses `replay_state_mut()`.
 
 ---
 
-### 9. Tutorial includes `repl/state_owners.h` — owner-only header from a peer
+### 9. Tutorial's `state_owners.h` include — documented exception but broad surface
 
 **Where:** `src/subsystems/tutorial/tutorial.c:11`
 
-**Smell:** `state_owners.h` is the "owner modules and controller only"
-header per the project docs. The tutorial subsystem includes it for
-`repl_state_mark_flat_dirty`, `repl_state_mark_source_dirty`, and
-`repl_state_parse_workspace_header_line`. This violates the stated
-ownership boundary.
+**Smell:** `state_owners.h` explicitly names tutorial.c as a
+sanctioned consumer (CLAUDE.md file-layout table documents the cfg
+helpers as "single-slug bridge accessors used by
+`src/subsystems/tutorial/tutorial.c`"). So this is **not** a boundary
+violation — it's a documented exception. The concern is that the
+header also exposes every `_mut()` accessor and the full mutable
+REPL-state surface. Tutorial only needs 6 symbols:
+`repl_state_mark_flat_dirty`, `repl_state_mark_source_dirty`,
+`repl_state_parse_workspace_header_line`, `repl_cfg_get_int`,
+`repl_cfg_set_int`, `repl_cfg_known`.
 
-**Why it matters:** If the ownership guard (`check-state-ownership`)
-is ever tightened to whitelist includers, the tutorial would break.
-It also makes it easy to accidentally reach other mutable state
-through the header.
+**Why it matters:** The include comment at L11 only documents 3 of
+the 6 used symbols. A future contributor sees the broad header and
+might reach for other mutable accessors without realizing the
+tutorial's scope is intentionally narrow. Splitting the narrow
+surface into a dedicated header would let `state_owners.h` shed its
+non-owner cfg helpers.
 
-**Fix:** Move the three needed declarations into a narrow
-`repl/state_notify.h` header (or `repl/state_views.h` if they're
-logically read-like), keeping the mutable-accessor surface in
-`state_owners.h`. (Tier B — touches header split + guard update)
+**Fix:** Either (a) update the L11 comment to document all 6 symbols,
+or (b) extract a `repl/state_notify.h` with the 6 tutorial-facing
+declarations and switch tutorial.c to include only that.
+(Tier B — option (b) touches header split + guard update)
 
 ---
 
@@ -253,22 +308,25 @@ add a sentinel), this assignment becomes wrong silently.
 
 ---
 
-### 11. Color picker `g_cp_active` has no "close on scene/example switch" invalidation
+### 11. Color picker stale-index window on undo/delete (scene switch already handled)
 
 **Where:** `src/subsystems/color_picker/color_picker_state.c` (global state)
 
-**Smell:** When a scene switch, example load, or undo replaces the
-command array, the picker's `g_cp_line` index and cached color
-channels become stale. There is no call to `color_picker_close()`
-from the scene-switch or undo paths.
+**Smell:** Scene switches and example loads already close the picker
+via `glr_ctrl_reset_transients()` → `color_picker_stop()` at
+`src/app/glr_ctrl.c:425`. The residual concern is **undo and
+line-delete**: these restructure the command array without going
+through `reset_transients`, so `g_cp_line` can shift to a different
+command while the picker stays open. The narrow dangerous case is a
+shift onto another command of the **same** color type (see #4) — a
+shift onto a non-color type is caught by `write_cmd`'s type switch.
 
-**Why it matters:** The picker could be open after a scene switch with
-`g_cp_line` pointing into the old scene's index space. The first
-drag would write into the wrong line of the new scene (see #4).
+**Why it matters:** After an undo that deletes or reorders lines, the
+picker's next drag writeback could silently overwrite the wrong
+same-type color line.
 
-**Fix:** Call `color_picker_close()` from `glr_ctrl_reset_transients()`
-or from the undo-restore path that already clears other transient UI
-state. (Tier A)
+**Fix:** Call `color_picker_stop()` from the undo-restore and
+line-delete paths that restructure the command array. (Tier A)
 
 ---
 
@@ -330,24 +388,12 @@ them in #9's header split. (Tier A — bookkeeping tied to #9)
 
 ---
 
-### 15. Replay `replay_start` caches `num_flat_cmds` but `total_flat_cmds` can drift
+### 15. ~~Replay `replay_start` caches `num_flat_cmds` but `total_flat_cmds` can drift~~ — WITHDRAWN
 
-**Where:** `src/subsystems/replay/replay.c:860`
-
-**Smell:** `state->total_flat_cmds = num_flat_cmds` snapshots the flat
-program count at start time. If a workspace/scene switch occurs
-during replay (possible via menu), the flat array is rebuilt but
-`total_flat_cmds` stays at the old value. PC bounds checks use this
-stale count.
-
-**Why it matters:** If the new scene has fewer flat cmds than
-`total_flat_cmds`, the PC could overshoot the array, reading
-uninitialized memory. (The current UI likely prevents mid-replay
-scene switches, but the code doesn't assert it.)
-
-**Fix:** Re-snapshot `total_flat_cmds` from the live flat program each
-frame in `replay_advance_frame`, or add a guard that stops replay on
-scene switch (cleaner). (Tier A)
+**Withdrawn.** `replay_prepare_frame()` at
+`src/subsystems/replay/replay.c:966-975` already refreshes
+`total_flat_cmds` from the live flat program and clamps `pc` every
+frame. The start-time snapshot at L860 is immediately superseded.
 
 ---
 
@@ -525,7 +571,7 @@ per-frame snapshot. (Tier A)
 **Where:** `src/subsystems/color_picker/color_picker_state.c:218-219`
 
 **Smell:** `g_cp_undo_captured` is file-static and only checked/set
-within `color_picker_open` and `color_picker_write_cmd`. It's not
+within `color_picker_start` and `color_picker_write_cmd`. It's not
 dead, but it's also not visible through any public API — pure
 internal bookkeeping that could be a struct field for clarity.
 
@@ -536,7 +582,7 @@ project convention. (Tier D)
 
 ## 🔵 Structural concerns
 
-### 28. Replay `replay_handle_key` is 48 lines of `if (key == ...) return 1` ladder
+### 28. Replay `replay_handle_key` is ~65 lines of `if (key == ...) return 1` ladder
 
 **Where:** `src/subsystems/replay/replay.c:1072-1136`
 
@@ -660,7 +706,7 @@ matching.
 
 ---
 
-## 🔵 / Tier D — Accepted / documented
+## Tier D — Accepted / documented
 
 ### 37. Replay's `repl_dispatch_follow_cursor` call from peer
 
@@ -753,16 +799,19 @@ init. Clean.
 
 ## Sequencing
 
-**Priority 1 (reds, afternoon):** #1 → #2 → #3 → #11 → #4.
-Fix #1/#2 together (extract shared cancel helper per #29).
-Fix #3 before #4 — the half-init leaves `g_cp_line` stale which is
-what makes #4's writeback dangerous. #11 (close-on-scene-switch)
-prevents the scenario that triggers #4 in practice.
+**Priority 1 (reds, afternoon):** #1 → #2 (extract shared cancel
+helper per #29). These are the only confirmed triggerable bugs.
 
-**Priority 2 (boundary hygiene):** #9 + #14 together (header split),
-then #5 (time_playing dispatch), then #6 (follow_cursor ownership).
+**Priority 2 (color picker invalidation):** #11 → #3 → #4.
+Scene/example switches already close the picker via
+`glr_ctrl_reset_transients`; #11 extends that coverage to
+undo/delete paths. #3 is defensive reordering.
 
-**Priority 3 (cleanup):** #7, #8, #10, #12, #13, #17 — all Tier A
+**Priority 3 (boundary hygiene):** #9 + #14 together (comment fix or
+header split), then #5 (time_playing dispatch), then #6
+(follow_cursor ownership).
+
+**Priority 4 (cleanup):** #7, #8, #10, #12, #13, #17 — all Tier A
 mechanical fixes.
 
 **Defer:** #35, #36 (file splits) are Tier C — only pursue if the
@@ -772,7 +821,8 @@ files grow further or if a specific feature needs the separation.
 
 Findings were produced by four parallel code reviews (one per
 subdirectory), followed by manual verification of all 🔴 claims
-against live source at the cited lines. The `edit_overlays/`
-subdirectory no longer exists in `src/subsystems/` (only stale build
-artifacts remain) and was excluded. Line numbers verified
-2026-05-26 against HEAD of `main`.
+against live source at the cited lines. `edit_overlays/` and
+`replay/replay_render.{c,h}` were extracted into `src/subsystems/`
+after the prior round (commit ffda60e) and are explicitly deferred to
+a follow-up pass. Line numbers verified 2026-05-26 against HEAD of
+`main`.
