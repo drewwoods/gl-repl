@@ -95,29 +95,56 @@ the apply contract isn't idempotent in general.
 drain do it all), or drop the accumulator (drain becomes a no-op).
 Document which is the source of truth.
 
-### 3. `repl_copy_predef_values` uses live count, not the snapshot count, on restore
+### 3. `repl_copy/restore_predef_values` is values-only by contract and assumes table-shape stability — currently no enforcement, and at least one caller can violate the assumption
 
 **Where:** `src/repl/eval.c:233-253` (the just-moved functions from
-the closed #46)
+the closed #46); contract comment at `src/repl/eval.h:229-232`.
 
-**Smell:** `n = g_num_predef_vars < max_vals ? g_num_predef_vars : max_vals;`
-The save uses the live count at copy time; the restore uses the
-live count at restore time. If the live `g_num_predef_vars` shrinks
-between copy and restore (e.g. a `// @declare` line was removed
-mid-frame), restore writes back only the current count's worth,
-silently losing the snapshotted tail.
+**Smell:** The pair documents itself as "Values-only snapshot …
+Names + count are NOT preserved here." That contract has a silent
+prerequisite the comment doesn't state: the *table shape*
+(`g_num_predef_vars` and the name→slot mapping) must be unchanged
+between copy and restore. The implementation neither captures nor
+asserts that. Specifically: copy uses `n = min(g_num_predef_vars,
+max_vals)`; restore uses the same `min` against the live count at
+restore time. If the table reordered or shrank in between, restore
+either drops the snapshot tail (shrink) or writes saved floats into
+slots now holding *different* variables (reorder / shrink-then-grow).
 
-**Why it matters:** Concrete: the controller's per-frame baseline-
-save/restore at `glr_ctrl.c:2375` relies on this for replay
-bracketing. A tutorial step that drops a var (or a workspace switch
-mid-replay) would corrupt the restore. The full-snapshot pair
-`repl_eval_copy_predef_vars` / `_restore_predef_vars` does this
-correctly (returns/accepts `dst_count`); the values-only pair
-inherited a bug.
+**Why it matters:** The controller's per-frame baseline pair
+(`glr_ctrl.c`) and the autonormal scratch pair (`flatten.c`) are
+both short-lived enough that the table cannot change between save
+and restore in normal operation — there, the values-only contract
+is fine in practice. The dangerous caller is `replay.c`'s
+start-of-replay baseline: replay spans many frames; during a
+playing replay a tutorial step can run a SET (`@declare` add or
+remove) or the user can switch workspace mid-replay. Either
+violates the unstated prerequisite and the restore corrupts the
+predef table.
 
-**Fix:** Have `repl_copy_predef_values` return (or write through an
-out-param) the count it captured; `repl_restore_predef_values`
-restores exactly that many.
+**Fix (pick one — they are not stacking options):**
+
+1. **Switch the long-lived callers to the full-snapshot pair**
+   (`repl_eval_copy_predef_vars` / `_restore_predef_vars`), which
+   carries names + count and rebinds correctly when the table
+   reorders. The natural conversion is the three sites in
+   `replay.c` (start-baseline, paired restore, replay-stop
+   baseline). The short-lived per-frame and autonormal pairs can
+   stay on the values-only pair.
+2. **Or keep all callers on the values-only pair and add an
+   `assert(g_num_predef_vars == saved_count && names[i]==saved_names[i])`
+   guard in `repl_restore_predef_values`** — but that requires
+   capturing the names too, which is effectively (1) without the
+   API rename.
+3. **Or document the prerequisite in the contract comment and
+   leave the runtime bug latent** — only acceptable if every
+   caller is audited and proven not to span a table mutation.
+   Brittle long-term; deferred-cost fix.
+
+**Do not** simply have copy return the captured count and have
+restore consume that count without also restoring names: the count
+half alone fixes overread on *grow* but does nothing for *reorder*
+or *shrink*, which is the actual triggerable bug here.
 
 ### 4. `repl_config_bag_set` silently truncates oversized keys/values and returns success
 
@@ -141,28 +168,42 @@ this in one direction.
 **Fix:** Detect truncation (snprintf return ≥ size) and return 0;
 or `STATIC_ASSERT(REPL_CFG_KEY_MAX >= longest_known_slug + 1)`.
 
-### 5. `UserScene` stack allocations are now 2 MB each; up to 4 MB simultaneously
+### 5. `UserScene` stack allocations carry ~1 MB+ each; multiple concurrent stashes exceed small-thread stacks
 
-**Where:** `src/repl/scenes.c:601, 731, 798, 848, 857, 949`
+**Where:** `src/repl/scenes.c:601, 731, 798, 848, 857, 949`;
+`UserScene` definition at `src/repl/scenes.c:65-83`.
 
-**Smell:** After Tier B #44 embedded `ReplConfigBag cfg`,
-`sizeof(UserScene)` is ~2,148,408 bytes. `repl_load_scene_as_new_slot`
-holds two stashes at once (`stash + evicted_stash` = 4.1 MB);
-`try_evict_lru` adds a `live_temp` (third); the caller frame may
-already carry a fourth via `repl_promote_example_if_needed`. The
-default macOS/Linux main-thread stack is 8 MB; POSIX worker threads
-often 512 KB–2 MB.
+**Smell:** `UserScene` carries two large fixed arrays —
+`GLCmd cmds[MAX_COMMANDS]` (4096 entries) and
+`char lines[MAX_COMMANDS][MAX_LINE_LEN]` (4096 × 256 = 1 MB on its
+own), plus predef/scratch/func-alias arrays. `sizeof(UserScene)` is
+already on the order of ~1–1.5 MB *before* any cfg work.
+`repl_load_scene_as_new_slot` holds two stashes at once (`stash +
+evicted_stash` ≈ ~2–3 MB on the frame); `try_evict_lru` adds a
+`live_temp` (third); the caller frame may already carry a fourth via
+`repl_promote_example_if_needed`. Default macOS/Linux main-thread
+stack is 8 MB; POSIX worker threads often 512 KB – 2 MB.
 
-**Why it matters:** This is exactly the "1 MB stack snapshot" pattern
-the original audit's #2 flagged — now doubled in size and doubled
-per call path by the cfg embed. Real overflow risk on smaller-stack
-threads; ASan bait. The original #1/#2 fix moved similar stack
-allocations to file statics; the cfg embed re-grew them in a
-different file.
+**Why it matters:** Real overflow risk on smaller-stack threads;
+ASan bait on the main thread. This is the same shape as the
+original audit's #1/#2 (which moved similar stack allocations to
+file statics or the heap); the fix never propagated to the user-
+scene paths.
+
+**Causal note (revised):** An earlier draft of this finding
+attributed the bloat to Tier B #44's `ReplConfigBag` embed. That
+was wrong: with `REPL_CFG_KEY_MAX=24`, `REPL_CFG_VALUE_MAX=16`, and
+`REPL_CFG_MAX_ITEMS=32` (see `cfg_baseline.h:12`),
+`sizeof(ReplConfigBag)` is ≈ 1.3 KB — well under 0.2% of the struct.
+The cfg embed is incidental to the stack hazard; `cmds[]` + `lines[]`
+already dwarfed everything else. Treat this finding as a pre-existing
+`UserScene` stack-copy hazard, not as fallout from the cfg work.
 
 **Fix:** Heap-allocate the stash buffers (`malloc(sizeof(UserScene))`
 with `free()` at exit) or hoist a single `static UserScene
-g_scratch_stash` since these functions are not reentrant.
+g_scratch_stash` (these functions are not reentrant; the static
+scratch matches the original #1/#2 fix pattern). Either is Tier B
+sized.
 
 ### 6. `repl_state_capture/restore` excludes `g_user_scenes[]` despite header claiming "scene bookkeeping"
 
@@ -289,16 +330,32 @@ ordinary parsing or fail the load with a status error.
 
 ### 13. `repl_eval_parse_exprs` docstring promises `-1 on error`; implementation never returns -1
 
-**Where:** `src/repl/eval.h:267-271` vs. `eval.c:1089-1103`
+**Where:** `src/repl/eval.h:267-271` vs. `eval.c:1089-1103`.
 
 **Smell:** The header says "returns the number of expressions parsed
 (up to max), -1 on error." The implementation only returns `n`
-(no-progress loop break). Callers that check for `-1` treat
-malformed lists as "zero args, success."
+(no-progress loop break). The two values disagree on what failure
+looks like.
 
-**Fix:** Either drop the `-1` clause from the doc (matches behavior),
-or have the no-progress branch return `-1` and update callers. The
-former is safer.
+**Why it matters — doc drift, not an actual bug:** A sweep of
+callers (`parser.c:216, 460, 605, 693, 756, 1046, 1154`,
+`compile.c:1625`, `editor/commit.c:383`, `app/glr_ctrl.c:185`,
+`tests/test_eval.c:44, 591`) shows none rely on `-1` as a sentinel.
+The dominant pattern is "compare parsed count against the expected
+arity": e.g. `parser.c:1046-1051` does
+`cmd->num_args = repl_eval_parse_exprs(...); if (cmd->num_args <
+def->num_args) <incomplete-arg-error> else <usage-error>;`. A `-1`
+return would land in the `<incomplete-arg-error>` branch, which is
+already an error path — the diagnostic stays consistent. The
+"treats malformed lists as zero args, success" phrasing in the
+original draft of this finding was overstated; no current caller
+exhibits that behavior.
+
+**Fix:** Drop the `-1` clause from the docstring so behavior and
+contract agree. This is doc drift, not a runtime bug — Tier A as
+written (single-comment edit) and safe. If a future caller wants a
+hard error signal it can switch to a parse entry that provides
+one, but no such caller exists today.
 
 ## 🟡 Drift / boundary hazards
 
@@ -307,10 +364,10 @@ former is safer.
 **Where:**
 - `src/repl/source_scope.c:41, 42, 161, 175` (covered as #7 above)
 - `src/repl/autonormal.c:114-176, 199-258, 287-308` (~31 sites)
-- `src/repl/scenes.c:18-24, 202, 427` (~25 sites via the `SCENE_STATE` /
+- `src/repl/scenes.c:18-24, 427` (~24 sites via the `SCENE_STATE` /
   `g_workspace_dir` macros)
-- `src/repl/export.c` (~22 sites, plus `g_predef_vars` macro reads
-  at L328-1722)
+- `src/repl/export.c` (sites total ~22; classify per below before
+  acting)
 - `src/repl/replay_annotations.c:7` (`#include "repl/state_owners.h"`
   but the file uses zero `_mut` APIs — leftover include from the
   closed #37 sweep)
@@ -326,11 +383,45 @@ that resolve to `_mut()` accessors.
 **Why it matters:** Defeats the constness contract the typed-facade
 encodes. Any future "enforce read-only paths" refactor can't.
 
-**Fix:** Per-file sweep replacing reads with const accessors. Then
-add `check-state-ownership` to grep for `_mut()` outside the
-documented owner files. The `g_predef_vars` macro should route to a
-new `repl_eval_predef_vars()` const variant for reads (with the
-mutating helpers keeping the `_mut()` form internally).
+**Classify before sweeping — not every `_mut()` call site is read-only
+drift.** Three categories overlap in this finding; only the first is
+fair game for the const-replacement sweep:
+
+1. **Pure read drift (replaceable):** the file mentions the variable
+   only to read it (e.g., `printf`, comparison, length). Examples:
+   most `source_scope.c` sites, the autonormal range-walks, the
+   `replay_annotations.c` orphan include. *This* is what the ratchet
+   should catch.
+2. **Legitimate owner mutation (must not flip to `_const`):** real
+   writes that need a mutable handle. Examples: `export.c:328`
+   (`g_predef_vars[idx].value = val;` during import-side var resolve)
+   and `export.c:1721` (same pattern inside `// @var name=value`
+   restore). Misclassifying these as "read-only drift" silently
+   breaks import.
+3. **Snapshot-owner reads (no const accessor exists yet):** the
+   caller is itself the snapshot owner taking a base-pointer to
+   `memcpy` out of (e.g., `scenes.c:202` does
+   `memcpy(s->cmds, repl_state_document_cmds_mut(), …)`). Semantically
+   a read, but the bare-pointer accessor today is only the `_mut()`
+   variant. Fix: add a `repl_state_document_cmds()` const reader and
+   point snapshot-owners at it; do **not** treat as raw drift.
+
+**Fix:** Per-file sweep, but split into three commits matching the
+categories above so reviewers can audit each separately:
+
+1. *Const-replacement sweep* — pure read drift only.
+2. *Add missing const accessors* — `repl_eval_predef_vars()`,
+   `repl_state_document_cmds()` const variants; reroute the
+   snapshot-owner callers (`scenes.c:202`, etc.) through them.
+3. *Audit the genuine writers* — confirm each surviving `_mut()`
+   reference is a real write; document why (file ownership) so the
+   ratchet has an allowlist.
+
+Then add `check-state-ownership` to grep for `_mut()` outside the
+documented owner files, with the post-(3) allowlist baked in. The
+`g_predef_vars` macro should route to the new const variant for
+reads (with the mutating helpers keeping the `_mut()` form
+internally) once (2) lands.
 
 ### 15. `repl_compile_*` block validators duplicate `editor_compile_*` (~430 lines vs ~860 lines)
 
@@ -544,16 +635,26 @@ means "handled."
 
 ### 29. `g_pre_example.valid` is still a parallel scalar — Tier B #44 left it half-done
 
-**Where:** `src/repl/scenes.c:92-95`
+**Where:** `src/repl/scenes.c:89-95`.
 
 **Smell:** Closed #44 explicitly said: *"Embed `ReplExportConfig cfg;`
 directly in `UserScene`; **roll `g_pre_example_valid` into a
 discriminator field on `ReplExportConfig`**."* First half landed;
 second didn't. `valid` is still a sibling scalar.
 
-**Fix:** Fold `valid` into `ReplConfigBag` (a `valid` int, or use
-`count == 0` as the sentinel), or document that the original audit's
-fix is half-applied.
+**Fix:** Add a `valid` (or `populated`) discriminator field to
+`ReplConfigBag` itself, so the bag is self-describing and the
+caller stops needing a parallel scalar. Fold `g_pre_example.valid`
+into `g_pre_example.cfg.valid` and update the two read sites and
+the reset site accordingly. Tier B sized (touches `cfg_baseline.h`
++ the few callers in scenes.c).
+
+**Do not** use `count == 0` as the sentinel. The comment block at
+`scenes.c:89-91` explicitly calls out that the code needs to
+distinguish "valid empty capture" (a pre-example state with no
+overrides — restorable as a no-op) from "no capture yet" (don't
+restore at all). A `count == 0` collapse would merge those two
+cases and silently re-enter restore on every example load.
 
 ### 30. `g_pending_workspace_dir` / `g_pending_scene_name` are write-then-caller-reads-then-clears
 
@@ -712,9 +813,47 @@ name the symbolic constant but no machine link. Reordering
 failure.
 
 **Fix:** Add a tutorial-side test in `tests/test_tutorial_runner.c`
-that asserts `g_tutorial_feature_tour_steps[6].cfg_value ==
-GRID_THEME_RADAR` (test TU can include `src/scene/themes.h`). Or
-push slug-to-int into the bridge.
+that goes through the **public catalog accessors** (the catalog's
+`g_tutorial_feature_tour_steps[]` array is `static` in
+`src/repl/tutorials.c:143` and is not part of the public API).
+Sketch:
+
+```c
+/* Find "Feature Tour" by name; do not assume catalog index. */
+int n = repl_tutorial_count();
+int tour_idx = -1;
+for (int i = 0; i < n; i++) {
+    if (strcmp(repl_tutorial_name(i), "Feature Tour") == 0) {
+        tour_idx = i;
+        break;
+    }
+}
+ASSERT_TRUE("Feature Tour exists", tour_idx >= 0);
+
+/* The GRID_THEME-setting step is the seventh in the current catalog,
+ * but locate it by slug to stay robust to step reordering. */
+int s = repl_tutorial_step_count(tour_idx);
+int step_idx = -1;
+for (int i = 0; i < s; i++) {
+    const char *slug = repl_tutorial_step_cfg_slug(tour_idx, i);
+    if (slug && strcmp(slug, "grid") == 0) {
+        step_idx = i;
+        break;
+    }
+}
+ASSERT_TRUE("grid-theme step exists", step_idx >= 0);
+
+/* The literal in the catalog must equal the enum value the
+ * scene-side header exports. The test TU includes themes.h. */
+ASSERT_TRUE("grid-theme literal matches enum",
+            repl_tutorial_step_cfg_value(tour_idx, step_idx) ==
+            GRID_THEME_RADAR);
+```
+
+(Alternative: push slug-to-int into the bridge so the catalog
+records `"GRID_THEME_RADAR"` and the test just asserts string
+equality. Heavier refactor; the public-accessor test above is the
+minimal closure.)
 
 ### 42. 25 lines of per-side CatalogTagOps glue remain after closed #12
 
