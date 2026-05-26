@@ -2517,7 +2517,17 @@ static void import_feed_one_line(const char *line, int *loaded, int *warnings,
 
     if (repl_state_document_count() > before) *loaded += (repl_state_document_count() - before);
     if (!handled) {
-        fprintf(stderr, "Warning: could not parse line: %s\n", line);
+        /* Surface repl_load_apply_line's per-line diagnostic (e.g.
+         * "command store at capacity", a parse-error reason)
+         * alongside the offending line. Pre-fix the importer
+         * captured load_err but discarded it, so capacity overflows
+         * and similar import failures showed up as the generic
+         * "could not parse line" with no clue why. */
+        if (load_err[0])
+            fprintf(stderr, "Warning: could not parse line: %s (%s)\n",
+                    line, load_err);
+        else
+            fprintf(stderr, "Warning: could not parse line: %s\n", line);
         (*warnings)++;
     }
 }
@@ -3028,7 +3038,12 @@ static int import_try_function_header(ImportState *s, const char *p, const char 
                                        &s->edit_line);
     if (repl_state_document_count() > before) s->loaded += (repl_state_document_count() - before);
     if (!handled) {
-        fprintf(stderr, "Warning: could not parse line: %s\n", raw);
+        /* See import_feed_one_line for the load_err rationale. */
+        if (load_err[0])
+            fprintf(stderr, "Warning: could not parse line: %s (%s)\n",
+                    raw, load_err);
+        else
+            fprintf(stderr, "Warning: could not parse line: %s\n", raw);
         s->warnings++;
     }
     s->func_depth = 1;

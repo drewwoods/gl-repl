@@ -2,6 +2,7 @@
 #include "app/glr_camera.h"
 #include "app/glr_state.h"
 #include "app/glr_ctrl.h"
+#include "repl/command_store.h"
 #include "repl/core.h"
 #include "editor/input.h"
 #include "repl/pipeline.h"
@@ -13,6 +14,7 @@
 
 #include "support/test_harness.h"
 #include <errno.h>
+#include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -1480,6 +1482,83 @@ int main(void) {
                    glr_state_presentation().wireframe, 0);
 
         remove(leak_path);
+    }
+
+    /* Regression for #8: import_feed_one_line must surface
+     * repl_load_apply_line's per-line load_err through stderr. Force
+     * the cmd-store to capacity, then drive a load of a one-line
+     * geometry file; pre-fix the user saw "Warning: could not parse
+     * line: ..." with no clue why. Post-fix the line ends with
+     * "(command store at capacity (max N))". */
+    {
+        const char *fail_path = "/tmp/repl_core_io_load_err.c";
+        const char *stderr_path = "/tmp/repl_core_io_stderr.txt";
+
+        FILE *f = fopen(fail_path, "w");
+        ASSERT_TRUE("load_err fixture opens for write", f != NULL);
+        if (f) {
+            /* Snippet markers gate the geometry-line dispatch path
+             * (import_process_line drops non-snippet body lines).
+             * One line is enough to exercise the import_feed_one_line
+             * warning emit. */
+            fprintf(f, "// Snippet start\n");
+            fprintf(f, "glVertex3f(1, 2, 3);\n");
+            fprintf(f, "// Snippet end\n");
+            fclose(f);
+        }
+
+        glr_ctrl_reset_all(); declare_test_vars();
+
+        /* Force cmd-store at capacity so any insert fails. (Mirrors
+         * the existing [P1 loader] test in test_repl_compile.c.) */
+        ReplCommandStore store = repl_command_store_live();
+        int capacity = repl_command_store_capacity(&store);
+        int saved_count = *store.count;
+        *store.count = capacity;
+
+        /* Redirect fd 2 (stderr) to a temp file so we can inspect
+         * the Warning the importer emits. Using dup2 on the bare fd
+         * rather than freopen avoids FILE*-level buffering surprises
+         * — fprintf(stderr, ...) inside the importer writes to fd 2
+         * which we've now pointed at the capture file. */
+        fflush(stderr);
+        int capture_fd = open(stderr_path, O_WRONLY | O_CREAT | O_TRUNC, 0600);
+        ASSERT_TRUE("stderr capture file opens", capture_fd >= 0);
+        int saved_stderr_fd = dup(STDERR_FILENO);
+        ASSERT_TRUE("stderr fd saved", saved_stderr_fd >= 0);
+        if (capture_fd >= 0)
+            dup2(capture_fd, STDERR_FILENO);
+
+        (void)repl_export_load_from_file(fail_path);
+        fflush(stderr);
+
+        /* Restore fd 2 and close the capture descriptor. */
+        if (saved_stderr_fd >= 0) {
+            dup2(saved_stderr_fd, STDERR_FILENO);
+            close(saved_stderr_fd);
+        }
+        if (capture_fd >= 0) close(capture_fd);
+        *store.count = saved_count;
+
+        /* The return value depends on whether anything loaded (here
+         * nothing did because every insert failed capacity preflight);
+         * the contract under test is that the per-line warning DID
+         * fire and DID include the load_err detail. Check the
+         * captured stderr text. */
+        char captured[4096] = "";
+        FILE *rd = fopen(stderr_path, "r");
+        if (rd) {
+            size_t nread = fread(captured, 1, sizeof(captured) - 1, rd);
+            captured[nread] = '\0';
+            fclose(rd);
+        }
+        ASSERT_TRUE("stderr captured Warning line",
+                    strstr(captured, "Warning: could not parse line") != NULL);
+        ASSERT_TRUE("stderr captured the load_err detail",
+                    strstr(captured, "(command store at capacity") != NULL);
+
+        remove(fail_path);
+        remove(stderr_path);
     }
 
     printf("repl_core_io: %d/%d passed\n", g_harness.passed, g_harness.run);

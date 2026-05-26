@@ -225,6 +225,15 @@ int repl_load_apply_line(const char *line, char *err, int err_size,
             .delete_count = 0,
         };
         source_document_apply_change(&rollback);
+        /* Surface the capacity failure through `err` so the importer
+         * can include the reason in its "could not parse line" warning
+         * (#8). The structured-change path above (REPL_COMPILED_*)
+         * already routes through this same error; the plain-command
+         * tail was missing it. */
+        if (err && err_size > 0 && err[0] == '\0')
+            snprintf(err, (size_t)err_size,
+                     "command store at capacity (max %d)",
+                     MAX_COMMANDS);
         return 0;
     }
     if (wrote_local)

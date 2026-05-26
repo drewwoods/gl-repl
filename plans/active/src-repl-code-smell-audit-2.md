@@ -415,7 +415,7 @@ intended ratchet would have caught it.
 ratchet to `check-state-ownership` against `_mut()` outside owner
 modules (state.c, apply.c, command_store.c, controller).
 
-### 8. `import_feed_one_line` ignores `load_err` populated by `repl_load_apply_line`
+### 8. ✅ `import_feed_one_line` ignores `load_err` populated by `repl_load_apply_line`
 
 **Where:** `src/repl/export.c:2502-2522` (plus the same anti-pattern
 at L3026-3033)
@@ -430,6 +430,23 @@ import are invisible.
 **Fix:** Surface `load_err` via `fprintf(stderr, "Warning: %s: %s\n",
 line, load_err)` (when non-empty), or accumulate into a warnings
 buffer the importer reports in the final status.
+
+**Status (2026-05-26):** ✅ Closed. Both `import_feed_one_line` and
+the `import_try_function_header` warning emit now check whether
+`load_err[0]` is populated; if so, the Warning line ends with
+`(<load_err>)`. While auditing the path I also found that the
+plain-command tail of `repl_load_apply_line` (`load.c:219`) didn't
+populate `err` on capacity failure — the structured-change path
+above did, but plain commands fell through silently. Added the
+same `"command store at capacity (max %d)"` message to that branch
+so both compile shapes surface the same diagnostic. Regression test
+in `tests/test_repl_core_io.c` writes a `// Snippet start` /
+`glVertex3f(1, 2, 3);` / `// Snippet end` fixture, forces the
+cmd-store at capacity, redirects fd 2 (stderr) to a temp file via
+`dup2`, and asserts the captured stderr contains
+`"(command store at capacity"`. Pre-fix the warning lacked that
+detail; verified by running the test before and after the load.c
+edit.
 
 ### 9. ✅ `repl_export_load_from_file` swallows `fclose` and `ferror` (asymmetric with the prior #6 fix)
 
