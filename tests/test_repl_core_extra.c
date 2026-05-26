@@ -818,6 +818,72 @@ void test_user_scene_promote_lru_evict() {
     repl_set_workspace_dir("");
 }
 
+/* #5 regression: repl_load_scene_as_new_slot keeps two UserScene
+ * scratches live while try_evict_lru allocates a third — ~3.6 MB on
+ * the stack pre-fix, which overflows small worker stacks. The fix
+ * heap-allocates every scratch. ASan in BUILD=debug surfaces any
+ * missing free / double free / use-after-free on these paths, so the
+ * test only needs to drive load-at-capacity (the worst-case
+ * 3-allocation path) twice to exercise alloc / restore / free across
+ * both the "load OK" and the LRU-evict-succeeded branches. */
+void test_user_scene_load_scratch_alloc_lifecycle(void) {
+    printf("--- User scene scratch alloc lifecycle ---\n");
+    glr_app_reset_all(); declare_test_vars();
+    if (repl_example_count() < 1) return;
+
+    char dir[64];
+    snprintf(dir, sizeof(dir), "/tmp/repl_scratch_lifecycle.%d", (int)getpid());
+    repl_set_workspace_dir(dir);
+
+    /* Build a tiny scene on disk to load from. */
+    char scene_path[128];
+    snprintf(scene_path, sizeof(scene_path), "%s.c", dir);
+    glr_app_reset_all(); declare_test_vars();
+    editor_feed_line("glVertex3f(7, 8, 9);");
+    repl_export_save_output(scene_path, source_document_view(), NULL);
+
+    /* Reset, then fill every user-scene slot via example promotion. */
+    glr_app_reset_all(); declare_test_vars();
+    repl_set_workspace_dir(dir);
+    for (int k = 0; k < MAX_USER_SCENES - 1; k++) {
+        repl_load_example(0);
+        repl_promote_example_if_needed();
+    }
+    ASSERT_INT("scratch test: all slots occupied",
+               repl_user_scene_count(), MAX_USER_SCENES);
+
+    /* Worst case: every slot used, scene loaded from disk forces
+     * try_evict_lru. Exercises the 3-allocation path
+     * (stash + evicted_stash + try_evict_lru's live_temp). */
+    ReplSceneLoadStatus reason = REPL_SCENE_LOAD_OK;
+    int new_slot = repl_load_scene_as_new_slot(scene_path, &reason);
+    ASSERT_TRUE("scratch test: 3-stash load succeeds", new_slot >= 0);
+    ASSERT_INT("scratch test: load reason ok",
+               reason, REPL_SCENE_LOAD_OK);
+
+    /* Load again to exercise the path twice — any leak would still be
+     * an ASan-detectable leak at exit, but doubling the call makes a
+     * deterministic missing-free obvious in test output (RSS bump). */
+    int new_slot2 = repl_load_scene_as_new_slot(scene_path, &reason);
+    ASSERT_TRUE("scratch test: second load succeeds", new_slot2 >= 0);
+
+    /* Cleanup files we created. */
+    unlink(scene_path);
+    DIR *d = opendir(dir);
+    if (d) {
+        struct dirent *ent;
+        while ((ent = readdir(d)) != NULL) {
+            if (ent->d_name[0] == '.') continue;
+            char path[256];
+            snprintf(path, sizeof(path), "%s/%s", dir, ent->d_name);
+            unlink(path);
+        }
+        closedir(d);
+    }
+    rmdir(dir);
+    repl_set_workspace_dir("");
+}
+
 void test_user_scene_rename_flow() {
     printf("--- User scene rename flow ---\n");
     glr_ctrl_reset_all(); declare_test_vars();
@@ -1603,6 +1669,7 @@ int main(int argc, char **argv) {
     test_user_scene_preserves_scratch_state();
     test_user_scene_promote_all_slots_full();
     test_user_scene_promote_lru_evict();
+    test_user_scene_load_scratch_alloc_lifecycle();
     test_user_scene_rename_flow();
     test_inline_file_prompt_flow();
     test_workspace_round_trip();

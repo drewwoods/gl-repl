@@ -12,6 +12,7 @@
 
 #include <dirent.h>
 #include <errno.h>
+#include <stdlib.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 
@@ -421,6 +422,22 @@ static void install_scene_into_live(int slot) {
  * The cfg snapshot lives in `dst->cfg` (embedded by Tier B #44 —
  * see plans/done/src-repl-code-smell-audit.md) and is filled from
  * the live bridge here. `restore_live_from_stash` re-applies it. */
+/* Heap-allocate a transient UserScene scratch (~1.2 MB —
+ * cmds[4096] + lines[4096][256] dominate). Stack allocation is a
+ * real overflow hazard because repl_load_scene_as_new_slot keeps two
+ * of these live while try_evict_lru adds a third on a recursive
+ * frame; that exceeds the default POSIX worker stack (512 KB – 2 MB)
+ * and pressures the 8 MB main stack alongside ASan/UBSan redzones.
+ * Every successful scene_scratch_alloc must be paired with
+ * scene_scratch_free at every exit path. Returns NULL on OOM. */
+static UserScene *scene_scratch_alloc(void) {
+    return (UserScene *)malloc(sizeof(UserScene));
+}
+
+static void scene_scratch_free(UserScene *p) {
+    free(p);
+}
+
 static void stash_live_state(UserScene *dst) {
     SourceTextView text = source_document_view();
     memset(dst, 0, sizeof(*dst));
@@ -598,8 +615,13 @@ int repl_save_workspace(const char *dir, const ReplExportLayout *layout) {
              g_workspace_dir);
     snprintf(g_workspace_dir, WORKSPACE_DIR_MAX, "%s", dir);
 
-    UserScene stash;
-    stash_live_state(&stash);
+    UserScene *stash = scene_scratch_alloc();
+    if (!stash) {
+        repl_set_status_error("Workspace save: out of memory");
+        snprintf(g_workspace_dir, WORKSPACE_DIR_MAX, "%s", prev_workspace_dir);
+        return -1;
+    }
+    stash_live_state(stash);
 
     int written = 0;
     for (int s = 0; s < MAX_USER_SCENES; s++) {
@@ -615,7 +637,8 @@ int repl_save_workspace(const char *dir, const ReplExportLayout *layout) {
         g_export_scene_name_hint = g_user_scenes[s].name;
         if (!repl_export_save_output(path, source_document_view(), layout)) {
             g_export_scene_name_hint = NULL;
-            restore_live_from_stash(&stash);
+            restore_live_from_stash(stash);
+            scene_scratch_free(stash);
             snprintf(g_workspace_dir, WORKSPACE_DIR_MAX, "%s",
                      prev_workspace_dir);
             return -1;
@@ -624,7 +647,8 @@ int repl_save_workspace(const char *dir, const ReplExportLayout *layout) {
         written++;
     }
 
-    restore_live_from_stash(&stash);
+    restore_live_from_stash(stash);
+    scene_scratch_free(stash);
 
     char msg[REPL_STATUS_TEXT_MAX];
     snprintf(msg, sizeof(msg), "Saved %d scene%s to %s",
@@ -728,8 +752,13 @@ int repl_load_workspace(const char *dir) {
      * stashes live cfg as the pre-workspace snapshot. */
     repl_dispatch_tutorial_teardown();
 
-    UserScene stash;
-    stash_live_state(&stash);
+    UserScene *stash = scene_scratch_alloc();
+    if (!stash) {
+        closedir(d);
+        repl_set_status_error("Workspace load: out of memory");
+        return -1;
+    }
+    stash_live_state(stash);
     int stash_example = g_example_idx;
 
     /* Replace the existing workspace contents rather than merging the
@@ -750,7 +779,8 @@ int repl_load_workspace(const char *dir) {
     }
     closedir(d);
 
-    restore_live_from_stash(&stash);
+    restore_live_from_stash(stash);
+    scene_scratch_free(stash);
     g_example_idx       = stash_example;
     g_active_user_scene = -1;
 
@@ -795,10 +825,12 @@ static int try_evict_lru(UserScene *out_stash) {
     /* evict_scene_to_workspace clobbers live state via install_scene_into_live;
      * wrap in its own stash/restore so the caller's outer live stash stays
      * the user's actual document, not the evicted scene's content. */
-    UserScene live_temp;
-    stash_live_state(&live_temp);
+    UserScene *live_temp = scene_scratch_alloc();
+    if (!live_temp) return -2;
+    stash_live_state(live_temp);
     int ok = evict_scene_to_workspace(victim);
-    restore_live_from_stash(&live_temp);
+    restore_live_from_stash(live_temp);
+    scene_scratch_free(live_temp);
     if (!ok) return -2;
     return victim;
 }
@@ -844,9 +876,22 @@ int repl_load_scene_as_new_slot(const char *path,
 
     /* Stash so a parse failure or slots-full restore leaves the live
      * document intact. load_scene_file_into_slot clears live state as
-     * its first step, so we must capture before that point. */
-    UserScene stash;
-    stash_live_state(&stash);
+     * its first step, so we must capture before that point.
+     *
+     * Both scratches are heap-allocated up front; this function holds
+     * them simultaneously across a try_evict_lru call (which adds a
+     * third UserScene on its own frame). On the stack that totals
+     * ~3.6 MB before redzones — close to overrun on default worker
+     * stacks. */
+    UserScene *stash         = scene_scratch_alloc();
+    UserScene *evicted_stash = scene_scratch_alloc();
+    if (!stash || !evicted_stash) {
+        scene_scratch_free(stash);
+        scene_scratch_free(evicted_stash);
+        if (out_reason) *out_reason = REPL_SCENE_LOAD_ERR_NO_SLOT;
+        return -1;
+    }
+    stash_live_state(stash);
     int stash_example = g_example_idx;
     int stash_active  = g_active_user_scene;
 
@@ -854,10 +899,11 @@ int repl_load_scene_as_new_slot(const char *path,
      * slot's in-memory entry so a subsequent parse failure can
      * restore the tab. Without this, a bad-syntax file would silently
      * drop the LRU tab from the user's workspace. */
-    UserScene evicted_stash;
-    int evicted_slot = try_evict_lru(&evicted_stash);
+    int evicted_slot = try_evict_lru(evicted_stash);
     if (evicted_slot == -2) {
-        restore_live_from_stash(&stash);
+        restore_live_from_stash(stash);
+        scene_scratch_free(stash);
+        scene_scratch_free(evicted_stash);
         g_example_idx       = stash_example;
         g_active_user_scene = stash_active;
         if (out_reason) *out_reason = REPL_SCENE_LOAD_ERR_NO_SLOT;
@@ -868,7 +914,7 @@ int repl_load_scene_as_new_slot(const char *path,
 
     int slot = load_scene_file_into_slot(path);
     if (slot < 0) {
-        restore_live_from_stash(&stash);
+        restore_live_from_stash(stash);
         g_example_idx       = stash_example;
         g_active_user_scene = stash_active;
         /* Roll back the eviction's in-memory mutation. The on-disk
@@ -876,10 +922,15 @@ int repl_load_scene_as_new_slot(const char *path,
          * it's a faithful copy of the scene's pre-eviction state, so
          * after restore_evicted_slot the in-memory tab and the disk
          * file agree, and the user has lost nothing. */
-        restore_evicted_slot(evicted_slot, &evicted_stash);
+        restore_evicted_slot(evicted_slot, evicted_stash);
+        scene_scratch_free(stash);
+        scene_scratch_free(evicted_stash);
         if (out_reason) *out_reason = REPL_SCENE_LOAD_ERR_PARSE;
         return -1;
     }
+
+    scene_scratch_free(stash);
+    scene_scratch_free(evicted_stash);
 
     /* load_scene_file_into_slot left live state == the loaded scene
      * and stored a copy in the slot. Activate the slot so subsequent
@@ -946,12 +997,15 @@ int repl_promote_example_if_needed(void) {
         if (g_workspace_dir[0]) {
             int victim = pick_lru_user_scene_slot();
             if (victim >= 0) {
-                UserScene stash;
-                stash_live_state(&stash);
-                int ok = evict_scene_to_workspace(victim);
-                restore_live_from_stash(&stash);
-                if (ok)
-                    slot = victim;
+                UserScene *stash = scene_scratch_alloc();
+                if (stash) {
+                    stash_live_state(stash);
+                    int ok = evict_scene_to_workspace(victim);
+                    restore_live_from_stash(stash);
+                    scene_scratch_free(stash);
+                    if (ok)
+                        slot = victim;
+                }
             }
         }
         if (slot < 0) {

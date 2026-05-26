@@ -223,7 +223,7 @@ this in one direction.
 **Fix:** Detect truncation (snprintf return ≥ size) and return 0;
 or `STATIC_ASSERT(REPL_CFG_KEY_MAX >= longest_known_slug + 1)`.
 
-### 5. `UserScene` stack allocations carry ~1 MB+ each; multiple concurrent stashes exceed small-thread stacks
+### 5. ✅ `UserScene` stack allocations carry ~1 MB+ each; multiple concurrent stashes exceed small-thread stacks
 
 **Where:** `src/repl/scenes.c:601, 731, 798, 848, 857, 949`;
 `UserScene` definition at `src/repl/scenes.c:65-83`.
@@ -259,6 +259,26 @@ with `free()` at exit) or hoist a single `static UserScene
 g_scratch_stash` (these functions are not reentrant; the static
 scratch matches the original #1/#2 fix pattern). Either is Tier B
 sized.
+
+**Status (2026-05-26):** ✅ Closed via heap allocation (option 1 —
+static scratch was rejected because `repl_load_scene_as_new_slot`
+holds two scratches simultaneously while `try_evict_lru` allocates
+a third, so a single shared static would clobber). Added
+`scene_scratch_alloc` / `scene_scratch_free` helpers near the
+existing `stash_live_state` / `restore_live_from_stash` pair;
+converted all six sites (`repl_save_workspace`, `repl_load_workspace`,
+`try_evict_lru`, `repl_load_scene_as_new_slot` (×2),
+`repl_promote_example_if_needed`) from stack `UserScene` to heap
+`UserScene *`. OOM at alloc time returns the function's pre-existing
+failure code (`-1` / `-2`) so callers see a graceful no-op rather
+than a crash. Regression test
+`test_user_scene_load_scratch_alloc_lifecycle` in
+`tests/test_repl_core_extra.c` drives the worst-case 3-allocation
+path (load-at-capacity through `repl_load_scene_as_new_slot` +
+`try_evict_lru`) twice; the existing `test_user_scene_promote_lru_evict`
+covers the `repl_promote_example_if_needed` inner LRU branch. ASan
+in `BUILD=debug` catches any missing free / double free / UAF
+across all six paths.
 
 ### 6. `repl_state_capture/restore` excludes `g_user_scenes[]` despite header claiming "scene bookkeeping"
 
