@@ -21,17 +21,19 @@
 > File:line references are exact at the time of writing; re-verify
 > with the cited file before acting if this doc has aged.
 >
-> **Prior closures verified to still hold:** #1-#13, #15-#20,
-> #22-#24, #26-#41, #43-#49, #51-#59, #60-#63. No regressions on
-> closed items. Prior audit #25 (partial — `set_playlist` race
-> window): the cancel-flag + `AWR_UNINIT` path now covers all
-> observable race paths; re-review found no remaining window.
-> Recommend closing #25 as Done.
+> **Prior closures verified to still hold:** #1-#13 (including
+> #6 init-rollback), #15-#20, #22-#24, #26-#41, #43-#49, #51-#59,
+> #60-#63. No regressions on closed items. Prior audit #25
+> (partial — `set_playlist` race window): the cancel-flag +
+> `AWR_UNINIT` path now covers all observable race paths; re-review
+> found no remaining window. Recommend closing #25 as Done.
 
 ## Headline take
 
-37 findings total. Of those: 2 🔴 (real bugs / hazards), 13 🟡
-(drift/boundary), 12 🟢 (dead code / cosmetic), 10 🔵 (structural).
+37 findings total; #15 withdrawn (pre-validation already exists),
+so 36 live. Of those: 1 🔴 (real bug), 12 🟡 (drift/boundary),
+13 🟢 (dead code / cosmetic, including #2 downgraded from 🔴),
+10 🔵 (structural).
 
 The dominant theme is **`_mut()` for reads and open-coded helpers**:
 the prior audit's #15 (`_mut()` sweep) was closed in the controller
@@ -50,11 +52,13 @@ caught in `commit.c`).
 full definitions.)
 
 - **Tier A (small, near-zero risk, 5-30 LOC each):** #1, #2, #3,
-  #4, #5, #9, #10, #16, #17, #18, #19, #20, #22, #23, #24, #25,
-  #27.
+  #4, #5, #9, #10, #16, #17, #18, #19, #20, #21, #22, #23,
+  #24, #25, #27.
 - **Tier B (moderate, focused pass, 50-200 LOC each):** #6, #7,
-  #8, #11, #12, #13, #14, #15, #21, #26, #28, #29, #30, #31,
-  #33, #34, #36, #37.
+  #8, #11, #12, #13, #14, #26, #28, #29, #30, #31, #33, #34,
+  #36, #37.
+- **Withdrawn:** #15 (pre-validation already exists at the
+  proposed fix site).
 - **Tier C (high cost or cross-cutting):** #32, #35.
 - **Tier D (kept on purpose):** none.
 
@@ -69,6 +73,11 @@ full definitions.)
   `config_value_ptr_const()` that returns `const int *` via const
   getters; wire `glr_config_get` through it; leave the mutable
   version for `glr_config_set`.
+- **#11 (`g_cfg_items[]` const extern) → Tier B**: the naive `const`
+  fix breaks the build because `glr_actions_set_msaa_label()` mutates
+  the table at runtime. Needs a `display_label` override field first.
+- **#21 (`glr_audio_stop_music` deletion) → Tier A**: pure deletion
+  of one function + one header declaration with zero callers.
 - **#12 (`load_state` lockless reads) → Tier B**: needs analysis of
   which globals the worker can observe; the fix may be as simple as
   moving the audio_lock() scope to cover the `g_cfg_mode` write, but
@@ -109,24 +118,24 @@ snapshot->normal_n_filled = repl_eval_parse_exprs(
     predef.vars, predef.count);
 ```
 
-### 2. `glr_ctrl_host_input_reset` open-codes input clear, misses `anchor_pos` reset
+### ~~2. `glr_ctrl_host_input_reset` open-codes input clear, misses `anchor_pos` reset~~ — **downgraded to 🟢 (cleanup only)**
 
 **Where:** `src/app/glr_ctrl.c:1427-1435`.
 
 **Smell:** The host-effect input-reset callback manually zeros
-`input[0]`, `input_len`, `cursor_pos`, and `pending_newline`, but
-does not reset `anchor_pos` to `-1`. `editor_input_clear()` at
-`src/editor/state.c:359-364` does all four fields including
-`anchor_pos`. After a host reset (triggered by file/example
-loading), a stale `anchor_pos >= 0` from a prior selection survives
-into the new document. The next Shift+arrow or click-drag sees an
-unexpected selection range.
+`input[0]`, `input_len`, and `pending_newline`, then calls
+`editor_cursor_pos_set(0)`. The open-coded pattern duplicates what
+`editor_input_clear()` does in fewer lines.
 
-**Impact:** Stale input selection ghost after loading a file or
-switching examples. Hard to reproduce because most flows also clear
-the selection separately, but the path exists.
+**~~Impact~~ Correction:** The original claim that `anchor_pos`
+survives the reset is **false** — `editor_cursor_pos_set(0)` at
+line 1432 calls `cursor_pos_set_internal(0, keep_anchor=0)` which
+resets `anchor_pos = -1` at `src/editor/state.c:376`. There is no
+stale-selection bug. This is purely a code-hygiene cleanup
+(open-coded sequence vs. single helper call).
 
-**Fix:** Replace the open-coded clear with `editor_input_clear()`:
+**Fix:** Replace the open-coded clear with `editor_input_clear()`
+for readability:
 ```c
 static void glr_ctrl_host_input_reset(void) {
     editor_insert_mode_set(0);
@@ -184,13 +193,13 @@ macros are used elsewhere too; a broader sweep is Tier B.
 
 ### 6. Coupled clear-color magic numbers
 
-**Where:** `src/app/glr_ctrl.c:1335` (default clear color
-`0.10f, 0.10f, 0.10f`) and `src/app/glr_ctrl.c:1434`
+**Where:** `src/app/glr_ctrl.c:714` (default clear color
+`0.10f, 0.10f, 0.10f`) and `src/app/glr_ctrl.c:810`
 (alpha-boost reference luminance `0.10f`).
 
-**Smell:** The overlay alpha-scale formula at line 1434 uses `0.10f`
+**Smell:** The overlay alpha-scale formula at line 810 uses `0.10f`
 as the reference background luminance. This value must match the
-default clear color at line 1335. If either changes without the
+default clear color at line 714. If either changes without the
 other, the alpha boost breaks silently (overlays too dim or too
 bright on the default background).
 
@@ -200,12 +209,12 @@ fallback and the alpha-boost numerator.
 
 ### 7. Two sources for clear-color in one function
 
-**Where:** `src/app/glr_ctrl.c:1335` (inline scan of flat program)
-and the `SceneRenderConfig.clear_color` field it populates.
+**Where:** `src/app/glr_ctrl.c:714` (inline scan of flat program)
+and `src/app/glr_ctrl.c:807-809` (alpha-boost luminance read).
 
 **Smell:** `glr_ctrl_build_scene_config` walks the flat program to
 find the last `CMD_CLEAR_COLOR` and populates
-`config->clear_color[0..3]`. Later at line 1431, the alpha-boost
+`config->clear_color[0..3]`. Later at line 807, the alpha-boost
 formula reads from `repl_render.clear_color[]` — a *different*
 source (`ReplRenderState`). The two should agree, but the data flow
 is not the same struct; if the repl_render path gets out of sync
@@ -229,10 +238,16 @@ transitively pulls in `repl/export.h` (which pulls `export_state.h`,
 for translation units that only need the controller's input-dispatch
 or init-GL declarations.
 
-**Fix:** Forward-declare the types (`ReplExportLayout`,
-`ReplReplayAnnotationOutput`) and move the `#include` to
-`glr_ctrl.c` (the only TU that calls these functions). Or split
-`glr_ctrl.h` into a narrow core header and an extended header.
+**Fix:** Forward-declaration is **not viable as-is** —
+`ReplExportLayout` and `ReplReplayAnnotationOutput` are anonymous
+`typedef struct { ... }` with no struct tag, so C cannot form an
+incomplete type for them. Options: (a) add struct tags to the
+owner headers (`typedef struct ReplExportLayout { ... }
+ReplExportLayout;`) then forward-declare, (b) move
+`glr_ctrl_fill_export_layout` and `glr_publish_replay_annotations`
+declarations to a separate narrow header (e.g.,
+`glr_ctrl_export.h`) that only the callers include, or (c) accept
+the transitive cost and document it.
 
 ### 9. `config_value_ptr()` uses `_mut()` on read path
 
@@ -267,11 +282,22 @@ declaration for `g_cfg_items[]`).
 
 **Smell:** The extern declaration doesn't carry `const`, so any
 translation unit that includes `glr_config.h` can mutate the
-descriptor table at runtime. The table is intended to be immutable
-after startup.
+descriptor table at runtime.
 
-**Fix:** Add `const` to the extern: `extern const GlrConfigItem
-g_cfg_items[];` and update the definition in `glr_actions.c`.
+**~~Fix~~ Correction:** The table is **not** fully immutable —
+`glr_actions_set_msaa_label()` at `src/app/glr_actions.c:361`
+writes `g_cfg_items[i].label = msaa_label;` to update the MSAA
+row's display label at runtime. Adding `const` to the extern/
+definition as originally proposed would break the build. The
+clean fix requires first extracting the mutable label pointer
+into a separate runtime-override field (e.g.,
+`GlrConfigItem.display_label`) so the table proper can be
+`const`. That is Tier B, not Tier A.
+
+**Fix:** Either (a) leave non-const and add a comment documenting
+the single mutation site, or (b) add a `display_label` override
+pointer to `GlrConfigItem`, populate it in
+`glr_actions_set_msaa_label`, and make the table `const`.
 
 ### 12. `load_state()` reads shared state without lock
 
@@ -329,29 +355,21 @@ the global flat program while another caller expects stability.
 in the array, noting it may be stale) or rename to
 `glr_debug_dump_flat_commands_sync()` to signal the side effect.
 
-### 15. `SOURCE_TEXT_INSERT_MANY` partial-failure leaves buffer inconsistent
-
-**Where:** `src/app/glr_source_document.c:100-104`.
-
-**Smell:** The `INSERT_MANY` case iterates
-`editor_buffer_insert_line(pos + i, text[i])` in a loop. If
-`editor_buffer_insert_line` fails at iteration `i`, lines
-`0..i-1` have already been inserted, but the function returns 0.
-The caller receives a failure signal with the editor buffer in a
-partially-modified state.
-
-**Impact:** A failed multi-insert (e.g., capacity overflow mid-loop)
-leaves orphan lines in the buffer with no command-array
-counterpart. Subsequent frame renders may read past the command
-array's bounds.
-
-**Fix:** Pre-validate capacity before the loop
-(`editor_buffer_count() + count <= MAX_COMMIT_CMDS`), or roll back
-inserted lines on failure.
-
 ---
 
 ## 🟢 Dead code / cosmetic
+
+### ~~15. `SOURCE_TEXT_INSERT_MANY` partial-failure leaves buffer inconsistent~~ — **withdrawn**
+
+**Where:** `src/app/glr_source_document.c:100-104`.
+
+**Correction:** The proposed fix (pre-validate count and final
+capacity before the loop) already exists at
+`glr_source_document.c:65-69`. The pre-validation rejects
+`INSERT_MANY` when `count <= 0 || count > MAX_COMMIT_CMDS` or
+`post_delete_count + count > MAX_COMMANDS` — exactly the guard
+the finding requested. There is also test coverage around this
+path. No action needed.
 
 ### 16. Stale legacy function references in comments
 
@@ -507,7 +525,7 @@ accurate but the values are not greppable.
 
 ### 29. Full `UiRenderSnapshot` rebuild on every drag-motion event
 
-**Where:** `src/app/glr_ctrl.c:2957` (approximate).
+**Where:** `src/app/glr_ctrl.c:2956-2957, 3177-3178`.
 
 **Smell:** The mouse-motion handler rebuilds the full
 `UiRenderSnapshot` on every motion event to hit-test the code panel.
@@ -549,9 +567,16 @@ so the menu still shows the binding. Alternatively, route Ctrl+R
 through the config machinery and have the config `on_change` hook
 call the replay lifecycle (but this is a bigger change — Tier B).
 
+**Note:** The "Camera rotate" row at `glr_actions.c:166` also
+declares `KEY_CTRL_R` but with `GLUT_ACTIVE_SHIFT` modifier — a
+different binding (Ctrl+Shift+R) that does not conflict with the
+unmodified Ctrl+R dispatched by the replay handler. No action
+needed for that row; included for completeness.
+
 ### 31. `cfg_slug_from_label` recomputed per call
 
-**Where:** `src/app/glr_actions.c:204-213` (approximate).
+**Where:** `src/app/glr_actions.c:204` (definition), called at
+lines 251, 264, 299.
 
 **Smell:** `cfg_slug_from_label()` lowercases and space-to-underscore
 converts a label string on every call. Called during import/export
@@ -566,10 +591,10 @@ or store the slug on `GlrConfigItem` directly.
 
 ### 32. Magic `16` cap on section display labels
 
-**Where:** `src/app/glr_config.c:232` (approximate).
+**Where:** `src/app/glr_config.c:232, 237, 256`.
 
-**Smell:** `glr_config_section_label()` (or a similar accessor)
-uses a magic `16` as the maximum number of section labels, with no
+**Smell:** `glr_config_section_label()` uses a static
+`labels[16][48]` array as a cache, capped at 16 sections with no
 compile-time enforcement that `g_cfg_items[]` doesn't exceed this.
 If sections are added beyond 16, the label array silently truncates.
 
@@ -606,12 +631,17 @@ defaults.
 the pattern is fragile — a new early reader would silently get
 wrong defaults.
 
-**Fix:** Initialize `g_glr_state` from `g_glr_state_defaults`:
-`static GlrState g_glr_state = { ... };` mirroring the defaults
-table. Or `= g_glr_state_defaults` if the compiler accepts it (C99
-allows static init from another static for aggregate types, but
-only if all initializers are constant expressions — the
-`CFG_DEFAULT_*` macros are, so this should work).
+**Fix:** Two portable options: (a) repeat the designated-initializer
+literal at the `g_glr_state` definition site (one-time DRY
+violation, but clearly portable C99 — all `CFG_DEFAULT_*` macros
+expand to integer constant expressions); (b) add a
+`glr_state_init()` that does
+`memcpy(&g_glr_state, &g_glr_state_defaults, sizeof(g_glr_state))`
+and call it at the top of `glr_ctrl_reset_all`. Note:
+`static GlrState g_glr_state = g_glr_state_defaults;` is **not**
+portable C99 — another file-scope aggregate is not a constant
+expression, even though GCC/Clang accept it under `-std=c99`
+non-pedantic.
 
 ### 35. Fragile transitive macro dependencies in `glr_defaults.h`
 
@@ -664,7 +694,7 @@ snap to target (no interpolation)."
 
 ## Sequencing
 
-### Tier A — afternoon pass (~17 findings, half-day)
+### Tier A — afternoon pass (~18 findings, half-day)
 
 Land these to clear the straightforward items. None are bigger
 than ~10 LOC each; **#1** is the only one fixing a real rendering
@@ -673,36 +703,35 @@ bug today.
 | Batch | Findings | Description |
 |-------|----------|-------------|
 | 1 | **#1** | One-line fix: pass predef vars to normal-guide eval |
-| 2 | **#2** | Replace open-coded input clear with `editor_input_clear()` |
+| 2 | **#2** | Replace open-coded input clear with `editor_input_clear()` (cleanup, not bug) |
 | 3 | **#3**, **#5** | `_mut()` for read → const accessor in guide snapshot + predef macros |
 | 4 | **#4** | Rename 4 host-effect callbacks to `glr_ctrl_host_*` |
 | 5 | **#9** | Split `config_value_ptr` into mutable/const variants |
 | 6 | **#10** | Return inert sentinel for OOB `glr_config_row_kind` |
 | 7 | **#16**, **#17**, **#18**, **#19** | Stale comment sweep |
-| 8 | **#22**, **#23**, **#24**, **#25** | Named constant + dead code cleanup |
+| 8 | **#21**, **#22**, **#23**, **#24**, **#25** | Dead API + named constant + dead code cleanup |
 | 9 | **#20**, **#27** | Dead normalization + missing docstring |
 
-### Tier B — one-week pass (18 findings)
+### Tier B — one-week pass (16 findings)
 
 1. **#6** + **#7** — Unify clear-color source; extract default
    constant.
-2. **#8** — Forward-declare types in `glr_ctrl.h`; move includes
-   to `.c`.
-3. **#11** — Add `const` to `g_cfg_items[]` extern.
+2. **#8** — Add struct tags to export/annotation types, then split
+   `glr_ctrl.h` declarations into a narrow header.
+3. **#11** — Add `display_label` override field to `GlrConfigItem`;
+   make the table `const`.
 4. **#12** — Audit `load_state()` lock scope; wrap shared reads.
 5. **#13** — Reset all globals in `shutdown()`.
 6. **#14** — Rename or remove the dirty-check in debug dump.
-7. **#15** — Pre-validate `INSERT_MANY` capacity.
-8. **#21** — Delete `glr_audio_stop_music()`.
-9. **#26** — Add `glr_camera_pose_from_state()` helper.
-10. **#28** — Extract panel-lift easing constants.
-11. **#29** — Reuse cached snapshot for drag hit-testing.
-12. **#30** — Decouple replay row shortcut from config dispatch.
-13. **#31** — Precompute config slugs.
-14. **#33** — Document `get_current_track` lifetime.
-15. **#34** — Initialize `g_glr_state` from defaults table.
-16. **#36** — Document double-decay in camera drag.
-17. **#37** — Document `decay = 0.0` instant-snap behavior.
+7. **#26** — Add `glr_camera_pose_from_state()` helper.
+8. **#28** — Extract panel-lift easing constants.
+9. **#29** — Reuse cached snapshot for drag hit-testing.
+10. **#30** — Decouple replay row shortcut from config dispatch.
+11. **#31** — Precompute config slugs.
+12. **#33** — Document `get_current_track` lifetime.
+13. **#34** — Initialize `g_glr_state` from defaults table.
+14. **#36** — Document double-decay in camera drag.
+15. **#37** — Document `decay = 0.0` instant-snap behavior.
 
 ### Tier C — defer (high cost or cross-cutting)
 
