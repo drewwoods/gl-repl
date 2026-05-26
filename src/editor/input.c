@@ -16,7 +16,7 @@
  *  - Cmd-range deletion + editor_clear_all_cmds
  *  - editor_load_line_to_input / save_newline_buf / line navigation
  *  - Commit-attempt orchestration (try_commit_*, navigation commit,
- *    parse_for_overwrite_enter, rewrite_source_text_with_indent,
+ *    parse_input_for_enter_commit, rewrite_source_text_with_indent,
  *    editor_resolve_insert_idx, editor_place_parsed_command)
  *  - Code-panel-hidden helpers used by the keyboard dispatch
  *  - keyboard_func / special_func / mouse_func / motion_func /
@@ -103,7 +103,12 @@ void editor_reset_input_effects(void) {
     g_pending_input_effects = (EditorInputDispatchEffects){0};
 }
 
-EditorInputDispatchEffects editor_take_input_effects(void) {
+/* Snapshot the per-dispatch effects struct AND reset the file-
+ * scope storage in one call. The reset is the load-bearing half:
+ * most callers don't manually reset between dispatches, so this
+ * helper guarantees the next dispatch starts from a clean slate.
+ * The name spells the side effect out explicitly. */
+EditorInputDispatchEffects editor_take_and_reset_input_effects(void) {
     EditorInputDispatchEffects out = g_pending_input_effects;
     editor_reset_input_effects();
     return out;
@@ -431,8 +436,10 @@ static void warn_if_scope_truncated(int vis_total) {
 }
 
 /* Parse g_input into `cmd` as if it were being committed at source-line
- * `insert_idx`. Handles the three-way fan-out used by the overwrite-Enter
- * and append-at-end Enter paths:
+ * `insert_idx`. Used by two Enter-key paths — overwrite-Enter (replace
+ * the line under the cursor) and append-at-end Enter (append a new line
+ * past document end) — hence the neutral name. Handles the three-way
+ * fan-out shared by both paths:
  *   - loop/function locals visible at that line -> parse_with_vars +
  *     reindent
  *   - else, predef vars referenced -> plain parse, mark has_vars, reindent
@@ -440,7 +447,7 @@ static void warn_if_scope_truncated(int vis_total) {
  *   - else, plain parse only
  * Returns 1 if parsing succeeded. */
 
-static int parse_for_overwrite_enter(GLCmd *cmd, char *text_out, int text_sz,
+static int parse_input_for_enter_commit(GLCmd *cmd, char *text_out, int text_sz,
                                      int insert_idx) {
     ExprVar vis_vars[MAX_EXPR_VARS];
     int vis_total = 0;
@@ -449,14 +456,14 @@ static int parse_for_overwrite_enter(GLCmd *cmd, char *text_out, int text_sz,
     if (text_out && text_sz > 0)
         text_out[0] = '\0';
     int parsed;
-    char editor_parse_err[REPL_STATUS_TEXT_MAX];
-    editor_parse_err[0] = '\0';
+    char parse_err_buf[REPL_STATUS_TEXT_MAX];
+    parse_err_buf[0] = '\0';
     if (num_vis_vars > 0) {
         ReplParseContext parse_ctx = {
             .source_line_idx = insert_idx,
             .vars = vis_vars, .num_vars = num_vis_vars,
-            .err_buf = editor_parse_err,
-            .err_sz  = (int)sizeof(editor_parse_err),
+            .err_buf = parse_err_buf,
+            .err_sz  = (int)sizeof(parse_err_buf),
         };
         ReplParsedLine pl;
         parsed = repl_parser_parse_command_ctx(editor_state_input().input, &pl, &parse_ctx);
@@ -467,8 +474,8 @@ static int parse_for_overwrite_enter(GLCmd *cmd, char *text_out, int text_sz,
     } else {
         ReplParseContext parse_ctx = {
             .source_line_idx = insert_idx,
-            .err_buf = editor_parse_err,
-            .err_sz  = (int)sizeof(editor_parse_err),
+            .err_buf = parse_err_buf,
+            .err_sz  = (int)sizeof(parse_err_buf),
         };
         ReplParsedLine pl;
         parsed = repl_parser_parse_command_ctx(editor_state_input().input, &pl, &parse_ctx);
@@ -484,8 +491,8 @@ static int parse_for_overwrite_enter(GLCmd *cmd, char *text_out, int text_sz,
             }
         }
     }
-    if (!parsed && editor_parse_err[0])
-        repl_set_status_error(editor_parse_err);
+    if (!parsed && parse_err_buf[0])
+        repl_set_status_error(parse_err_buf);
     warn_if_scope_truncated(vis_total);
     return parsed;
 }
@@ -650,8 +657,18 @@ static int current_input_needs_navigation_commit(void) {
  *
  * test_repl_editor.c pins both invariants (search for
  * "commit_current_input ordering"). */
-static CommitResult commit_current_input(int enter_mode) {
-    if (!enter_mode && !current_input_needs_navigation_commit())
+/* `needs_commit_hint`: pass 1 when the caller has already verified
+ * via `current_input_needs_navigation_commit()` that a commit is
+ * needed (skips the redundant re-evaluation here — see
+ * `commit_before_navigation`). Pass -1 to make this helper compute
+ * the predicate itself; pass 0 to assert no precheck happened (then
+ * `enter_mode` is the only thing that can skip the early-exit). */
+static CommitResult commit_current_input(int enter_mode,
+                                         int needs_commit_hint) {
+    int needs_commit = needs_commit_hint;
+    if (needs_commit < 0)
+        needs_commit = current_input_needs_navigation_commit();
+    if (!enter_mode && !needs_commit)
         return COMMIT_UNCHANGED;
 
     if (!editor_insert_mode() && editor_state_edit_line() < repl_state_document_count()) {
@@ -719,15 +736,15 @@ static CommitResult commit_current_input(int enter_mode) {
             int num_vis_vars = collect_visible_vars(insert_idx, vis_vars, MAX_EXPR_VARS, &vis_total);
 
             char cmd_text[MAX_LINE_LEN] = "";
-            char enter_parse_err[REPL_STATUS_TEXT_MAX];
-            enter_parse_err[0] = '\0';
+            char parse_err_buf[REPL_STATUS_TEXT_MAX];
+            parse_err_buf[0] = '\0';
             memset(&cmd, 0, sizeof(cmd));
             if (num_vis_vars > 0) {
                 ReplParseContext parse_ctx = {
                     .source_line_idx = insert_idx,
                     .vars = vis_vars, .num_vars = num_vis_vars,
-                    .err_buf = enter_parse_err,
-                    .err_sz  = (int)sizeof(enter_parse_err),
+                    .err_buf = parse_err_buf,
+                    .err_sz  = (int)sizeof(parse_err_buf),
                 };
                 if (editor_try_commit_var_statements())
                     return commit_progressed_since(before) ? COMMIT_OK : COMMIT_REJECTED;
@@ -741,8 +758,8 @@ static CommitResult commit_current_input(int enter_mode) {
             } else {
                 ReplParseContext parse_ctx = {
                     .source_line_idx = insert_idx,
-                    .err_buf = enter_parse_err,
-                    .err_sz  = (int)sizeof(enter_parse_err),
+                    .err_buf = parse_err_buf,
+                    .err_sz  = (int)sizeof(parse_err_buf),
                 };
                 ReplParsedLine pl;
                 parsed = repl_parser_parse_command_ctx(editor_state_input().input, &pl, &parse_ctx);
@@ -751,8 +768,8 @@ static CommitResult commit_current_input(int enter_mode) {
                     repl_copy_string_fits(cmd_text, sizeof(cmd_text), pl.text);
                 }
             }
-            if (!parsed && enter_parse_err[0])
-                repl_set_status_error(enter_parse_err);
+            if (!parsed && parse_err_buf[0])
+                repl_set_status_error(parse_err_buf);
 
             if (parsed) {
                 EditorPlaceResult res =
@@ -800,7 +817,7 @@ static CommitResult commit_current_input(int enter_mode) {
 
             GLCmd cmd;
             char cmd_text[MAX_LINE_LEN] = "";
-            int parsed = parse_for_overwrite_enter(&cmd, cmd_text, sizeof(cmd_text),
+            int parsed = parse_input_for_enter_commit(&cmd, cmd_text, sizeof(cmd_text),
                                                    editor_state_edit_line());
             if (parsed) {
                 ReplCommandStore store = repl_command_store_live();
@@ -848,7 +865,7 @@ static CommitResult commit_current_input(int enter_mode) {
     if (editor_state_input().input_len > 0) {
         GLCmd cmd;
         char cmd_text[MAX_LINE_LEN] = "";
-        int parsed = parse_for_overwrite_enter(&cmd, cmd_text, sizeof(cmd_text),
+        int parsed = parse_input_for_enter_commit(&cmd, cmd_text, sizeof(cmd_text),
                                                repl_state_document_count());
 
         if (parsed) {
@@ -888,7 +905,9 @@ static CommitResult commit_before_navigation(void) {
 
     capture_commit_attempt_state(before);
     editor_undo_ring_state_capture(&undo_before);
-    CommitResult result = commit_current_input(0);
+    /* Hint = 1: we already verified above (L883) that the input
+     * needs a commit; spare commit_current_input the second call. */
+    CommitResult result = commit_current_input(0, 1);
     if (result != COMMIT_REJECTED) {
         tutorial_advance_if_commit_ok(result);
         return result;
@@ -1324,7 +1343,10 @@ static int handle_enter_key_route(unsigned char key) {
         if (!tutorial_precheck_current_input())
             return 1;
 
-        result = commit_current_input(1);
+        /* enter_mode=1 short-circuits the needs-commit early-exit
+         * regardless of the hint; pass -1 (compute) to keep the
+         * call site neutral. */
+        result = commit_current_input(1, -1);
         tutorial_advance_if_commit_ok(result);
         /* update, not clear: tutorial_advance may have just changed
          * the expected text, and the provider's tutorial branch needs
@@ -1864,37 +1886,37 @@ static void motion_func(int x, int y) {
 EditorInputDispatchEffects editor_handle_key(unsigned char key, int x, int y) {
     editor_reset_input_effects();
     keyboard_func(key, x, y);
-    return editor_take_input_effects();
+    return editor_take_and_reset_input_effects();
 }
 
 EditorInputDispatchEffects editor_handle_special(int key, int x, int y) {
     editor_reset_input_effects();
     special_func(key, x, y);
-    return editor_take_input_effects();
+    return editor_take_and_reset_input_effects();
 }
 
 EditorInputDispatchEffects editor_handle_mouse(int button, int state, int x, int y) {
     editor_reset_input_effects();
     mouse_func(button, state, x, y);
-    return editor_take_input_effects();
+    return editor_take_and_reset_input_effects();
 }
 
 EditorInputDispatchEffects editor_handle_motion(int x, int y) {
     editor_reset_input_effects();
     motion_func(x, y);
-    return editor_take_input_effects();
+    return editor_take_and_reset_input_effects();
 }
 
 EditorInputDispatchEffects editor_handle_passive_motion(int x, int y) {
     editor_reset_input_effects();
     passive_motion_func(x, y);
-    return editor_take_input_effects();
+    return editor_take_and_reset_input_effects();
 }
 
 #ifndef USE_GLUT
 EditorInputDispatchEffects editor_handle_mousewheel(int wheel, int direction, int x, int y) {
     editor_reset_input_effects();
     mousewheel_func(wheel, direction, x, y);
-    return editor_take_input_effects();
+    return editor_take_and_reset_input_effects();
 }
 #endif

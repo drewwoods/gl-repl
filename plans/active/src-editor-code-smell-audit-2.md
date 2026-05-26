@@ -26,6 +26,71 @@
 > `help_session.c` and `completion.c` are still appropriately thin —
 > no logic creep since 2026-05-25.
 
+## Status update — 2026-05-26 follow-up (`editor-smells-2`, residual pass)
+
+A second commit on this branch closed the remaining Tier A items
+plus a P3 docstring inconsistency a reviewer caught in `commit.h`:
+
+- **P3 (commit.h docstring drift)** — `commit.h` previously
+  documented `editor_commit_apply_plan` as
+  *"preflight → undo capture → REPL apply → editor-buffer apply
+  → post-effects"* and called the apply sequence
+  *"all three halves (predef-ops, editor buffer, cmd store)"*.
+  Neither matched the implementation: apply does no undo capture
+  (the dispatch site owns it) and runs the four-step
+  predef/scratch/editor-buffer/cmd-store sequence via
+  `apply_compiled_change_full`. File header, the
+  `editor_commit_apply_external_change` "returns 1 if..." block,
+  and the `editor_commit_apply_plan` overview were all rewritten
+  to match the implementation; the undo-policy contract is now
+  spelled out in the file header so future readers don't
+  re-introduce the drift.
+- `#3` — `commit_current_input` gained a `needs_commit_hint`
+  parameter; `commit_before_navigation` passes `1` (we already
+  verified above) so the predicate isn't double-evaluated on the
+  navigation path. The Enter path passes `-1` (compute) to keep
+  the call site neutral.
+- `#9` — `parse_for_overwrite_enter` renamed to
+  `parse_input_for_enter_commit` (matches its two actual paths —
+  overwrite-Enter and append-at-end Enter — instead of lying
+  about the second). Internal docstring tightened to spell out
+  the two-path coverage.
+- `#13` — `enter_parse_err` and `editor_parse_err` (two local
+  buffers serving the same parse-err role) standardized on
+  `parse_err_buf`.
+- `#36` — `inline_rename.c` now uses an explicit `g_rename_active`
+  flag instead of overloading `g_rename_slot = -1` as the
+  active sentinel. Matches the `g_prompt_active` shape in
+  `inline_file_prompt.c`; both modules now read the predicate the
+  same way, which simplifies the eventual `EditorInlineModal`
+  peer extraction (closed-audit #57).
+- `#38` — `editor_take_input_effects` renamed to
+  `editor_take_and_reset_input_effects`. The "take" verb hid the
+  load-bearing reset side effect; many callers don't manually
+  reset between dispatches, so dropping the inner reset would
+  have been a behavior change. The rename makes the side effect
+  explicit in the name and keeps the call sites unchanged.
+- `#40` — `editor_commit_func_decl_resume_take` and `_set` made
+  `static` to `commit.c` (only `_peek` had a cross-TU consumer —
+  the test harness). The publish writer and read-and-clear
+  consumer are called *above* their definitions in `commit.c`
+  (apply-plan at L171, close-brace compile at L275), so
+  file-local forward declarations were added near the top of
+  the file to keep `make check-c99` green (under `-std=c99`,
+  implicit declarations are a hard error).
+
+The branch additionally documented the new `plans/` state
+machine (`active/`, `not-started/`, `partial/`, `in-review/`,
+`done/`) in `CLAUDE.md` so future contributors know where to
+file new audit / implementation docs.
+
+After this residual pass, every Tier A item from the audit
+classification block has landed; **the audit is ready to
+graduate to `plans/done/`**. The remaining open items are all
+Tier B / Tier C work that should be tracked in their own future
+plans (notably `#34` inline-overlay re-entry semantics, `#48–#57`
+structural work).
+
 ## Status update — 2026-05-26 (`editor-smells-2`)
 
 The branch has already landed a substantial part of the high-ROI

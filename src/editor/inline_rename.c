@@ -16,16 +16,22 @@
 #include "repl/core.h"
 #include "config.h"               /* REPL_DIAG_TEXT_MAX */
 
-static int  g_rename_slot = -1;
+/* `g_rename_active` is the active predicate (matches the
+ * inline_file_prompt.c shape — separate flag rather than overloading
+ * `g_rename_slot` with a -1 sentinel). When inactive, `g_rename_slot`
+ * is reset to -1 but only `g_rename_active` is the source of truth
+ * for the predicate readers. */
+static int  g_rename_active = 0;
+static int  g_rename_slot   = -1;
 static char g_rename_buf[USER_SCENE_NAME_MAX];
-static int  g_rename_len  = 0;
+static int  g_rename_len    = 0;
 
 int editor_inline_rename_active(void) {
-    return g_rename_slot >= 0;
+    return g_rename_active;
 }
 
 const char *editor_inline_rename_buffer(void) {
-    return g_rename_slot >= 0 ? g_rename_buf : "";
+    return g_rename_active ? g_rename_buf : "";
 }
 
 int editor_inline_rename_begin(int slot) {
@@ -34,6 +40,7 @@ int editor_inline_rename_begin(int slot) {
     /* Mutual exclusion: at most one inline modal at a time. See the
      * symmetric note in editor_inline_file_prompt_begin. */
     editor_inline_file_prompt_cancel();
+    g_rename_active = 1;
     g_rename_slot = slot;
     const char *cur = repl_user_scene_name(slot);
     snprintf(g_rename_buf, sizeof(g_rename_buf), "%s", cur ? cur : "");
@@ -42,6 +49,7 @@ int editor_inline_rename_begin(int slot) {
 }
 
 void editor_inline_rename_cancel(void) {
+    g_rename_active = 0;
     g_rename_slot = -1;
     g_rename_buf[0] = '\0';
     g_rename_len = 0;
@@ -56,7 +64,7 @@ static int rename_char_ok(unsigned char c) {
 }
 
 int editor_inline_rename_handle_key(unsigned char key) {
-    if (g_rename_slot < 0) return 0;
+    if (!g_rename_active) return 0;
 
     if (key == KEY_ESC) {
         editor_inline_rename_cancel();
@@ -92,7 +100,7 @@ int editor_inline_rename_handle_key(unsigned char key) {
 }
 
 int editor_inline_rename_handle_special(int key) {
-    if (g_rename_slot < 0) return 0;
+    if (!g_rename_active) return 0;
     (void)key;
     return 1;  /* swallow all specials while renaming */
 }

@@ -2,10 +2,20 @@
  * editor_commit.h - Editor-side orchestration for compile/apply commits.
  *
  * This layer owns the editor half of a commit transaction: ask the REPL
- * compile/apply surface what source-command change should happen, preflight it,
- * capture undo at the mutation boundary, write editor text, apply the REPL
- * change, then replay any editor-only follow-up effects such as cursor moves or
- * input clearing.
+ * compile/apply surface what source-command change should happen, preflight
+ * it, then run the shared mutation sequence — predef ops, scratch ops,
+ * editor text buffer, cmd-store — and replay any editor-only follow-up
+ * effects (cursor moves, input clearing, etc.).
+ *
+ * **Undo policy is the caller's, not this layer's.** Both
+ * `editor_commit_apply_plan` and the no-capture branch of
+ * `editor_commit_apply_external_change` deliberately do NOT push an undo
+ * snapshot themselves. The dispatch sites (the ;-key, Enter, and
+ * `editor_feed_line` paths) push one before invoking the try_commit_*
+ * chain, which lets them roll the ring back as a single transaction.
+ * `editor_commit_apply_external_change(change, 1)` is the only entry that
+ * captures undo internally, and it does so once, immediately before the
+ * first mutation.
  *
  * Typed user input commits through the `editor_try_commit_*` chain
  * (`editor_try_commit_any` walks the canonical ordering); the chain
@@ -34,11 +44,12 @@
  * compile + preflight + apply transaction and surfaces status text
  * through `repl_set_status` / `_set_status_error`.
  *
- *   Returns 1 if all three halves (predef-ops, editor buffer,
- *     cmd store) landed successfully.
+ *   Returns 1 if all four halves (predef ops, scratch ops, editor
+ *     buffer, cmd store) landed successfully.
  *   Returns 0 if the preflight detected the cmd-store can't
  *     accept the change. On a 0 return no mutation occurred —
- *     predef-vars, editor buffer, and cmd-store are all unchanged.
+ *     predef vars, scratch arrays, editor buffer, and cmd-store
+ *     are all unchanged.
  *
  * Does not call set_status; callers surface diagnostics. */
 int editor_commit_apply_external_change(const struct ReplCompiledChange_s *change,
@@ -63,9 +74,13 @@ int editor_commit_apply_external_change(const struct ReplCompiledChange_s *chang
  *                            commit_message.
  *
  * Editor-side structured compile functions return `EditorCommitPlan`.
- * `editor_commit_apply_plan` drives the
- * canonical transaction: preflight → undo capture → REPL apply →
- * editor-buffer apply → editor post-effects.
+ * `editor_commit_apply_plan` drives the canonical transaction:
+ *   preflight (`repl_apply_can_apply_compiled_change`) →
+ *   apply REPL halves (predef ops + scratch ops + editor buffer
+ *     + cmd store, via `apply_compiled_change_full`) →
+ *   editor post-effects → status text.
+ * Undo capture is **not** part of this transaction (see the file
+ * header above); the dispatch site owns it.
  *
  * Pure-REPL handlers (float-decl, var-assign) keep returning
  * `ReplCompiledChange`; their minimal post-mutation housekeeping
@@ -134,12 +149,12 @@ typedef struct EditorCommitPlan_s {
  * fill in the fields they need. */
 void editor_commit_plan_init(EditorCommitPlan *plan);
 
-/* Publish a value into the func-decl-resume bookkeeping. Called
- * by editor_commit_apply_plan when
- * `effects.func_decl_resume_publish` is set. Encapsulates the
- * shared resume bookkeeping so callers stop poking at storage
- * directly. */
-void editor_commit_func_decl_resume_set(int delta);
+/* `editor_commit_func_decl_resume_set` (the publish writer) and
+ * `editor_commit_func_decl_resume_take` (the read-and-clear consumer)
+ * are now `static` inside `src/editor/commit.c`; the only cross-TU
+ * caller was the test harness, which only needs `_peek` (declared
+ * below). Production callers stay inside `commit.c` (apply-plan
+ * publish at L171, compile-time read-and-clear at L275). */
 
 /* Apply an EditorCommitPlan atomically:
  *   1. Preflight `plan->change` via repl_apply_can_apply_compiled_change.
@@ -235,10 +250,10 @@ int  editor_commit_resolve_insert_exit_target(int target);
 int  editor_commit_apply_swatch_change(int edit_line, int direction);
 
 /* Func-decl resume bookkeeping: a CMD_FUNC_DEF commit publishes a
- * delta via editor_commit_func_decl_resume_set; the matching
- * close-brace / Enter-out-of-func consumes it. Read+clear with
- * `_take`, read-only inspection with `_peek`. */
-int  editor_commit_func_decl_resume_take(void);
+ * delta via the file-static publisher in commit.c; the matching
+ * close-brace / Enter-out-of-func consumes it via the file-static
+ * read-and-clear. Only `_peek` is public — tests read it without
+ * mutating the bookkeeping. */
 int  editor_commit_func_decl_resume_peek(void);
 
 int editor_try_commit_float_decl(void);

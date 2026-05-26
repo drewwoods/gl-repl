@@ -52,6 +52,17 @@
 #include <stdio.h>
 #include <string.h>
 
+/* File-local forward decls for the func-decl-resume bookkeeping
+ * helpers, both of which are now `static` (definitions further
+ * below). The publish writer is called from apply-plan and the
+ * read-and-clear consumer from the close-brace compile path,
+ * both of which sit above the definitions; the forward decls
+ * keep `make check-c99` green (under -std=c99, implicit
+ * declarations are a hard error). `_peek` stays public for the
+ * test harness — see commit.h. */
+static void editor_commit_func_decl_resume_set(int delta);
+static int  editor_commit_func_decl_resume_take(void);
+
 static void editor_compile_clear_err(char *err, int err_size) {
     if (err && err_size > 0)
         err[0] = '\0';
@@ -1072,13 +1083,13 @@ int editor_commit_func_decl_resume_peek(void) {
     return g_func_decl_resume_delta;
 }
 
-int editor_commit_func_decl_resume_take(void) {
+static int editor_commit_func_decl_resume_take(void) {
     int delta = g_func_decl_resume_delta;
     g_func_decl_resume_delta = 0;
     return delta;
 }
 
-void editor_commit_func_decl_resume_set(int delta) {
+static void editor_commit_func_decl_resume_set(int delta) {
     g_func_decl_resume_delta = delta;
 }
 
