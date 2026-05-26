@@ -129,11 +129,15 @@ static void test_format_bytes_ranges(void) {
     memprof_format_bytes(buf, sizeof(buf), 1500ULL);
     ASSERT_STR("1500 -> 1 KB", buf, "1 KB");
 
+    /* MB / GB output is right-aligned to MEMPROF_FMT_WIDTH chars so the
+     * panel's RSS / init / delta unit column stays in line. KB output
+     * stays unpadded (KB-range values are atypical for a long-running
+     * process and skipping the pad keeps tiny values readable). */
     memprof_format_bytes(buf, sizeof(buf), 1500000ULL);
-    ASSERT_STR("1.5M -> 1.4 MB", buf, "1.4 MB");
+    ASSERT_STR("1.5M -> '   1.4 MB' (width-padded)", buf, "   1.4 MB");
 
     memprof_format_bytes(buf, sizeof(buf), 2500000000ULL);
-    ASSERT_STR("2.5G -> 2.33 GB", buf, "2.33 GB");
+    ASSERT_STR("2.5G -> '  2.33 GB' (width-padded)", buf, "  2.33 GB");
 }
 
 static void test_set_reader_null_restores_platform(void) {
