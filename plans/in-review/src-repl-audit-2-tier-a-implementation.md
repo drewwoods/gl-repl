@@ -13,7 +13,7 @@ and build-safe:
 
 | Batch | Findings | Net LOC | Risk |
 |---|---|---|---|
-| B1 — Real bugs | #3, #9, #11, #13 | +30 / -10 | low (each is a tight correctness fix) |
+| B1 — Real bugs | #3, #9, #11, #13 | +60 / -20 | low for #9/#11/#13; **moderate** for #3 — the cascade through `ReplayRuntimeState` + `ReplayFadePlan` touches 5 files. May split as B1.1a / B1.1b — see B1.1 sizing note |
 | B2 — Dead-code sweep | #53–#67 | +20 / -350 | near-zero (every deletion verified zero callers) |
 | B3 — Naming + duplication + couplings | #34, #38, #39, #40, #46, #52 | +40 / -80 | low (mechanical; B3.2 churn-check first) |
 
@@ -62,99 +62,135 @@ batch.
 Four tight correctness fixes. Each is its own commit so the bug
 fix shows up in `git log` independently of cosmetic sweep.
 
-### Commit B1.1 — #3 predef-values snapshot: switch long-lived caller to the full-snapshot pair
+### Commit B1.1 — #3 predef-values snapshot: cascade the full-snapshot pair through every long-lived path
 
-**File:** `src/repl/eval.h:229-235` (contract comment),
-`src/subsystems/replay/replay.c` (the three replay-start /
-replay-stop baseline sites), `src/repl/state.{c,h}` if the
-`ReplReplayRuntimeState`'s `baseline_predef_vals` storage needs a
-companion `baseline_predef_names` + `baseline_predef_count` to
-match the full-snapshot pair's signature.
+**File set (the cascade — they have to move together):**
+- `src/repl/eval.h:229-235` — contract comment.
+- `src/subsystems/replay/replay.c:841, 975-988, 1170` — the three
+  replay-baseline sites and the two helpers
+  `replay_copy_baseline_predef_values` /
+  `replay_restore_baseline_predef_values` exported in
+  `replay.h:179-180`.
+- `src/subsystems/replay/replay_state.h:52` —
+  `ReplayRuntimeState.baseline_predef_vals` storage; widen to also
+  hold names + count.
+- `src/app/glr_ctrl.h:12-22` — `ReplayFadePlan` struct; widen to
+  match (`baseline_predef_names`, `baseline_predef_count`).
+- `src/app/glr_ctrl.c:226, 264` — the values-only restore + copy
+  on the fade-plan storage; switch to the full-snapshot pair.
 
-**Why the count-only fix isn't enough (reviewer pushback):** An
-earlier draft of this commit returned the captured count from
-`repl_copy_predef_values` and made `repl_restore_predef_values`
-accept it. That fixes overread on *grow* but does **not** fix the
-actual triggerable bug — a *reorder* or *shrink* of the predef
-table between copy and restore (e.g., a tutorial SET / workspace
-switch during replay) makes the saved floats land in the wrong
-slots after restore, because the values-only pair carries no names.
-See audit `#3` (revised) for the full reasoning.
+The frame-level pair at `glr_ctrl.c:1844, 1953` and the autonormal
+scratch at `flatten.c:677, 681` stay on the values-only pair —
+they are intra-frame and intra-pass respectively, no source / predef
+mutation can interleave there.
 
-**Plan:** Move the long-lived replay-baseline caller to the
-full-snapshot pair `repl_eval_copy_predef_vars` /
-`_restore_predef_vars` (already defined in `eval.h:223-228`),
-which carries names + count and rebinds correctly through table
-churn.
+**Why the partial fix isn't enough (reviewer pushback):**
+- An earlier draft returned the captured count from
+  `repl_copy_predef_values` and made `repl_restore_predef_values`
+  accept it. That fixes overread on *grow* but does **not** fix the
+  actual triggerable bug — a *reorder* or *shrink* of the predef
+  table between copy and restore makes the saved floats land in
+  the wrong slots after restore, because the values-only pair
+  carries no names.
+- The next draft proposed switching only `replay.c`'s three sites
+  to the full-snapshot pair. That was still incomplete:
+  `ReplayFadePlan.baseline_predef_vals` is built from the replay
+  baseline via `replay_copy_baseline_predef_values` (values-only,
+  `replay.c:986`) and read back at `glr_ctrl.c:226`. If
+  `ReplayRuntimeState` gains names + count but
+  `replay_copy_baseline_predef_values` and `ReplayFadePlan` stay
+  values-only, the fade restore silently truncates names back to
+  floats and the same bug persists on the fade-tick path.
+- The cascade is therefore the minimum sufficient fix.
 
-The short-lived per-frame baseline (`glr_ctrl.c`) and autonormal
-scratch (`flatten.c`) callers stay on `repl_copy/restore_predef_values`
-unchanged — the contract there is fine in practice because no
-table mutation can happen between save and restore inside one
-frame / one autonormal pass. Update the contract comment at
-`eval.h:229-232` to spell out the table-shape-stable prerequisite
-the comment currently elides.
+**Triggerable failure today:** a workspace switch (or any source /
+predef-table mutation routed through user input) while replay is
+active rebinds the predef table; the next fade-plan restore writes
+saved floats into slots holding different vars. Tutorial steps are
+**not** a trigger — tutorial SET/REQUIRE step kinds carry cfg
+slugs only, validated through `repl_cfg_known` (tutorial.c:440,
+455); the catalog validator hard-rejects unknown slugs. Predef
+declarations have no tutorial-step encoding.
+
+**Alternative scoping option (worth weighing before committing):**
+stop replay before any source / predef-table mutation (workspace
+load, scene switch, undo across an `@declare`, F12 cycle). That
+shrinks the cascade to "audit-and-document" — every long-lived
+snapshot is then guaranteed not to span a table mutation, and the
+values-only pair becomes safe everywhere. Smaller code change but
+a UX policy decision (does the user lose their replay state on
+every workspace load?). Pick this *before* expanding the cascade
+if the answer is "yes, that's acceptable"; otherwise the cascade
+is the implementation path.
 
 **Callers to inspect — do a live sweep before editing:**
 
 ```bash
 rg -n "repl_(copy|restore)_predef_values" src/ tests/ bench/
+rg -n "baseline_predef|ReplayFadePlan" src/
 ```
 
-At time of writing:
-- `src/subsystems/replay/replay.c` — three sites (replay-start
-  baseline, paired restore, replay-stop baseline). **These are the
-  callers that move to the full-snapshot pair.**
-- `src/repl/flatten.c` — autonormal scratch pair. **Stays on
-  values-only**; add a one-line comment naming the table-stability
-  assumption.
-- `src/app/glr_ctrl.c` — frame-baseline pair, per-frame pair,
-  fade-plan restore. **Stay on values-only**; same one-line
-  comment.
-- `tests/test_repl_executor.c` — coverage for the values-only
-  pair. **No signature change needed** if we take this path.
+At time of writing the second sweep returns: `replay_state.h:52`
+(storage), `replay.c:841, 975-988, 1170` (the three sites + two
+helpers), `replay.h:179-180` (the helper declarations),
+`glr_ctrl.h:12-22` (fade-plan struct), `glr_ctrl.c:224-264`
+(restore + copy on the fade plan). These are all in the cascade.
 
-If the replay peer's baseline storage today is just
-`float baseline_predef_vals[MAX_PREDEF_VARS]`, extend it to also
-hold `char baseline_predef_names[MAX_PREDEF_VARS][REPL_PREDEF_NAME_MAX]`
-and `int baseline_predef_count` so the full-snapshot pair has
-somewhere to read/write. The cost is purely a few extra KB of
-struct storage on the replay peer.
+**Struct-size note:** both `ReplayRuntimeState` and
+`ReplayFadePlan` grow by ~`MAX_PREDEF_VARS * REPL_PREDEF_NAME_MAX`
+bytes (≈ 384 B at the current 24×16 dimensions). If either struct
+is `memcpy`'d wholesale (e.g., in `replay_state_capture` /
+`_restore`), the larger struct flows through the existing copy
+paths automatically — fine for correctness, but worth a
+`grep -n "ReplayRuntimeState\|ReplayFadePlan" src/` sweep before
+committing to confirm nothing assumes the old layout (a sibling
+struct paired with a fixed-size header, etc.).
 
-**Verify before pushing:** the struct grows by
-~`MAX_PREDEF_VARS * REPL_PREDEF_NAME_MAX` bytes (≈ 384 B at the
-current 24×16 dimensions). If `ReplReplayRuntimeState` is
-embedded in or copied by `replay_state_capture` / `_restore`
-(check `src/subsystems/replay/replay_state.c` and any
-`memcpy(dst, src, sizeof(*replay_state))` call sites), the larger
-struct will silently flow through the existing copy paths — fine
-for correctness, but worth confirming nothing assumes the old
-layout (e.g., a sibling struct that paired baseline storage with a
-fixed-size header). A `grep -n "ReplReplayRuntimeState" src/`
-sweep is enough.
+**Contract comment:** update `eval.h:229-232` to spell out the
+table-shape-stable prerequisite the comment currently elides
+("values-only; caller must guarantee the predef table shape is
+unchanged between copy and restore — see the full-snapshot pair
+above for callers that can't").
 
 **Verify:** add a unit test in `tests/test_repl_executor.c` that
 exercises the *reorder* path through the full-snapshot pair (this
-is the bug the migration is closing):
+is the bug the cascade is closing):
 
-1. Declare three vars (A, B, C) with distinct values.
+1. Declare three vars (X, Y, Z) with distinct values
+   (recalling that A/B/C are reserved scratch-array names —
+   see the `reserved_predef_var_names` note in the project memory).
 2. `repl_eval_copy_predef_vars(buf_vals, buf_names, &n);`
-3. `repl_eval_undeclare_predef_var("B")` — table shrinks, indices
-   shift so C now sits where B used to be.
+3. `repl_eval_undeclare_predef_var("Y")` — table shrinks, indices
+   shift so Z now sits where Y used to be.
 4. `repl_eval_restore_predef_vars(buf_vals, buf_names, n);`
-5. Assert: A, B, C are all back, with their original values.
-   Crucially, C's value is **not** the old B value, which is what
+5. Assert: X, Y, Z are all back, with their original values.
+   Crucially, Z's value is **not** the old Y value, which is what
    the values-only pair would silently produce.
 
-If we instead picked option 2 from the audit (add an assert to the
+If we instead picked option 3 from the audit (add an assert to the
 values-only restore), this test would assert-trip rather than
-verify-correct; the audit's option 1 (migrate to full pair) is the
-one this plan implements.
+verify-correct; the audit's option 1 (full-snapshot cascade) is
+the one this plan implements.
 
 **Out of scope of this commit:** A separate API rename / deletion
 of `repl_copy_predef_values` would be Tier B (signature change
-across all remaining call sites). Keep it for now; only the replay
-peer moves.
+across all remaining call sites). Keep the values-only pair for
+the two intra-frame/intra-pass callers that don't need names; the
+cascade just upgrades the long-lived paths.
+
+**Sizing note:** with the cascade through both `ReplayRuntimeState`
+and `ReplayFadePlan`, this commit is at the upper edge of the
+"tight correctness fix" envelope — five files instead of one or two.
+If review pushback prefers, split into `B1.1a` (replay-side
+storage + three sites) and `B1.1b` (fade-plan storage + the two
+controller sites). Each half is independently build-green because
+the two helpers in the middle (`replay_copy_baseline_predef_values`
+/ `_restore_baseline_predef_values`) can be kept signature-compatible
+during the transition by storing names + count internally even when
+the call sites still pass only floats. A clean two-commit split is
+preferable to a one-commit five-file change; the only reason to do
+it as one commit is if the intermediate state would leave the
+fade path broken.
 
 ### Commit B1.2 — #9 load-side `fclose` / `ferror` check
 
@@ -690,8 +726,10 @@ intact for its own plan.
 
 ## Time estimate
 
-- Batch 1: ~1 hour (each bug is tight, but #3 has ~8 production
-  callers to rewrite — re-run the `rg` sweep before editing)
+- Batch 1: ~1.5-2 hours (#9/#11/#13 are tight; #3 is now a
+  5-file cascade through `ReplayRuntimeState` and
+  `ReplayFadePlan` — see B1.1 file set and sizing note. May split
+  into B1.1a / B1.1b for review)
 - Batch 2: ~1 hour (mostly delete + verify)
 - Batch 3: ~1.5 hours (B3.2 and B3.4 each touch multiple files;
   B3.5 + B3.6 are single-file)
