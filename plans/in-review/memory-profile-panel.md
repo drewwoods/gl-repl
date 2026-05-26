@@ -36,7 +36,8 @@ typedef struct {
     unsigned long long vsz_bytes;  /* virtual size      */
 } MemSample;
 
-/* Capture baseline. Safe to call multiple times — only first call takes. */
+/* Capture baseline using the module's monotonic clock as t0.
+ * Safe to call multiple times — only first call takes. */
 void   memprof_init(void);
 
 /* Per-frame entry point. Refreshes the cached "current" reading and
@@ -44,9 +45,32 @@ void   memprof_init(void);
  * The module owns its own monotonic clock; no parameter. */
 void   memprof_frame_tick(void);
 
-/* Test seam: drive the cadence with a virtual clock. Default-time path
- * goes through this with a real-clock argument. */
+/* --- Test seams (also safe to use in production, but exist to make the
+ *     module deterministic under test). --- */
+
+/* Init with an explicit t0, instead of querying the monotonic clock.
+ * memprof_init() is implemented as `memprof_init_at(memprof_now_s())`.
+ * Tests use this to control sample timestamps from a known origin. */
+void   memprof_init_at(double t0_seconds);
+
+/* Drive the cadence with a virtual clock. The production frame-tick
+ * goes through this with the real clock argument. Tests can call it
+ * directly with monotonically-increasing virtual times. */
 void   memprof_frame_tick_at(double now_seconds);
+
+/* Clear ALL module state: initialized flag, baseline, current, t0,
+ * last-push timestamp, ring contents, count, head, injected reader.
+ * Must be called in every test's setup (or teardown) to avoid state
+ * leaking across cases when tests share the same process. */
+void   memprof_reset(void);
+
+/* Inject a synthetic reader for tests so cadence/ring-wrap assertions
+ * can compare exact MemSample values. NULL restores the platform reader.
+ * The injected reader is cleared by memprof_reset(). */
+typedef int (*MemprofReaderFn)(MemSample *out);
+void   memprof_set_reader(MemprofReaderFn reader);
+
+/* --- Live state accessors. --- */
 
 /* Cached current reading (always fresh — refreshed in every frame_tick). */
 MemSample memprof_current(void);
@@ -62,6 +86,14 @@ void   memprof_history_get(int i, MemSample *out, double *sample_seconds_out);
 unsigned long long memprof_history_max_rss(void);
 unsigned long long memprof_history_min_rss(void);
 unsigned long long memprof_history_max_vsz(void);
+
+/* --- Pure formatter (no platform deps; tested in test_memprof.c
+ *     without pulling in any UI/GL code). --- */
+
+/* Format byte count as "999 KB" / "1.4 MB" / "2.33 GB"; 0 → "--".
+ * Writes into buf and returns buf for chained use. */
+const char *memprof_format_bytes(char *buf, int buf_sz,
+                                 unsigned long long bytes);
 ```
 
 ### Implementation (`memprof.c`)
@@ -79,11 +111,49 @@ static int                g_memprof_initialized = 0;
 static MemSample          g_memprof_baseline    = {0};
 static MemSample          g_memprof_current     = {0};
 static double             g_memprof_t0_seconds  = 0.0;
-static double             g_memprof_last_push_s = -MEMPROF_PUSH_INTERVAL_S;
+static double             g_memprof_last_push_s = 0.0; /* relative to t0 */
 static int                g_memprof_count       = 0;
 static int                g_memprof_head        = 0;
 static MemSample          g_memprof_ring[MEMPROF_HISTORY_CAP];
 static double             g_memprof_ring_t[MEMPROF_HISTORY_CAP];
+static MemprofReaderFn    g_memprof_reader      = NULL; /* NULL → memprof_read */
+```
+
+Lifecycle plumbing:
+```c
+static double memprof_now_s(void); /* monotonic clock, real-platform */
+
+void memprof_init(void)                    { memprof_init_at(memprof_now_s()); }
+void memprof_frame_tick(void)              { memprof_frame_tick_at(memprof_now_s()); }
+void memprof_set_reader(MemprofReaderFn r) { g_memprof_reader = r; }
+
+void memprof_init_at(double t0_seconds) {
+    if (g_memprof_initialized) return;
+    g_memprof_t0_seconds  = t0_seconds;
+    g_memprof_last_push_s = 0.0;   /* will trigger immediate first push on
+                                      next frame_tick because (t - t0) >=
+                                      INTERVAL after 0 seconds is false, so
+                                      the first push happens after one full
+                                      interval; if you want a t0 push, set
+                                      last_push_s to -INTERVAL instead.   */
+    /* Capture baseline now: */
+    MemprofReaderFn reader = g_memprof_reader ? g_memprof_reader : memprof_read;
+    reader(&g_memprof_baseline);
+    g_memprof_current = g_memprof_baseline;
+    g_memprof_initialized = 1;
+}
+
+void memprof_reset(void) {
+    g_memprof_initialized = 0;
+    g_memprof_t0_seconds  = 0.0;
+    g_memprof_last_push_s = 0.0;
+    g_memprof_count       = 0;
+    g_memprof_head        = 0;
+    g_memprof_baseline    = (MemSample){0};
+    g_memprof_current     = (MemSample){0};
+    g_memprof_reader      = NULL;
+    /* Ring contents left as-is; count=0 makes them unreachable. */
+}
 ```
 
 Reader (cross-platform, ifdef chain — mirrors `prof.c` style):
@@ -127,20 +197,33 @@ static int memprof_read(MemSample *out) {
 }
 ```
 
-`memprof_frame_tick()` queries monotonic time (same `#ifdef __APPLE__` pattern
-as `prof.c` — `mach_absolute_time` vs `clock_gettime(CLOCK_MONOTONIC)`) and
-calls `memprof_frame_tick_at(now)`. The test seam version takes the time
-directly.
+`memprof_now_s()` is implemented with the same `#ifdef __APPLE__` pattern as
+`prof.c` (`mach_absolute_time` vs `clock_gettime(CLOCK_MONOTONIC)`), returning
+absolute seconds. `memprof_frame_tick()` calls `memprof_frame_tick_at(memprof_now_s())`.
 
-`memprof_frame_tick_at(t)`:
-1. `memprof_read(&g_memprof_current)` every call (text rows must be live).
-2. If `t - g_memprof_last_push_s >= MEMPROF_PUSH_INTERVAL_S`, push current
-   into the ring (wrap on capacity), record `t - g_memprof_t0_seconds` into
-   `g_memprof_ring_t[]`, advance head, update `last_push_s`.
+`memprof_frame_tick_at(t_abs)`:
+1. If not initialized, return early (callers should `memprof_init` first; in
+   production this is guaranteed by the controller-init call site).
+2. Compute `t_rel = t_abs - g_memprof_t0_seconds`. Sample timestamps stored
+   in the ring are always relative to `t0`, so the renderer can compute "age"
+   as `t_rel_now - sample_t_rel` without knowing the absolute clock.
+3. Refresh cache: `MemprofReaderFn r = g_memprof_reader ? g_memprof_reader : memprof_read; r(&g_memprof_current);`
+   (text rows must be live).
+4. If `t_rel - g_memprof_last_push_s >= MEMPROF_PUSH_INTERVAL_S`, push
+   `g_memprof_current` into the ring (wrap on capacity), record `t_rel` into
+   `g_memprof_ring_t[]`, advance `head`, set `g_memprof_last_push_s = t_rel`.
 
-Failure mode: when `memprof_read` returns 0, `g_memprof_current` is zeroed —
-the panel detects this and renders `"--"` (mirrors the CPU panel's stale-row
+Failure mode: when the reader returns 0, `g_memprof_current` is zeroed — the
+panel detects this and renders `"--"` (mirrors the CPU panel's stale-row
 convention with `k_prof_dim`).
+
+Most-recent-timestamp helper for the renderer (so the X axis can right-align
+the newest sample to "now" — see Graph section):
+```c
+double memprof_history_latest_t(void); /* returns t_rel of the newest
+                                          sample, or 0 if count == 0 */
+```
+Add this to `memprof.h` next to `memprof_history_get`.
 
 ## Module 2 — `src/ui/app/memory_panel.{c,h}`
 
@@ -185,17 +268,24 @@ init  138 MB        init  520 MB
 Δ      +4 MB         Δ      +4 MB
 ```
 
-Formatter (file-scope static):
+Formatter lives in `src/support/memprof.c` as the public
+`memprof_format_bytes(buf, sz, bytes)` helper (declared in `memprof.h`).
+This keeps the formatter on the support side of the dependency boundary, so
+`tests/test_memprof.c` can exercise it without pulling in any GL/UI code.
+
 ```c
-static void fmt_bytes(char *buf, int sz, unsigned long long b) {
+const char *memprof_format_bytes(char *buf, int sz, unsigned long long b) {
     if (b == 0)                       snprintf(buf,sz,"--");
     else if (b < 1024ULL*1024)        snprintf(buf,sz,"%llu KB", b/1024);
     else if (b < 1024ULL*1024*1024)   snprintf(buf,sz,"%.1f MB", b/(1024.0*1024.0));
     else                              snprintf(buf,sz,"%.2f GB", b/(1024.0*1024.0*1024.0));
+    return buf;
 }
 ```
 
-Signed Δ uses the same helper with a `+`/`-` prefix.
+The panel calls `memprof_format_bytes` for each value. Signed Δ is formatted
+by a tiny file-scope wrapper in `memory_panel.c` that picks the `+`/`-`
+prefix, then delegates to `memprof_format_bytes` for the absolute magnitude.
 
 ### Graph
 
@@ -224,39 +314,86 @@ unsigned long long step  = pick_nice_step(y_hi - y_lo);
 /* Snap y_lo down to a step multiple; y_hi up. */
 ```
 
+X-axis (**time-anchored, right-aligned to "now"**):
+
+The X-axis is *always* anchored such that the right edge is "now" and the
+left edge is `total_span = MEMPROF_HISTORY_CAP * MEMPROF_PUSH_INTERVAL_S`
+seconds ago, regardless of how full the ring is. A partially-filled ring
+shows samples only in the right portion of the graph; the left portion is
+empty until enough wall-clock time has elapsed. This matches the X-axis
+labels (`-85m … -42m … now`).
+
+For each stored sample i ∈ [0, count):
+```
+double t_rel        = sample_t_seconds_for(i);          /* from memprof_history_get */
+double t_latest     = memprof_history_latest_t();       /* newest sample's t_rel */
+double age_seconds  = t_latest - t_rel;                 /* age relative to newest */
+float  x = (float)(plot_x + plot_w
+                   - (age_seconds / total_span) * plot_w);
+float  y = (float)(plot_y
+                   + (sample.rss_bytes - y_lo) / (double)(y_hi - y_lo) * MEM_GRAPH_H);
+```
+
+Anchoring to `memprof_history_latest_t()` (rather than the live current
+`memprof_now_s()`) avoids a per-frame horizontal jiggle: between two pushes
+the newest sample stays pinned to the right edge.
+
 Draw:
 1. **Gridlines** (faint horizontal `GL_LINES`, `UI_TOK_DIVIDER` α=0.30): one
    per step value from snapped `y_lo` to `y_hi`. Format value with
-   `fmt_bytes`; draw at gutter right edge.
+   `memprof_format_bytes`; draw at gutter right edge.
 2. **Plot area border**: `gl2d_panel_frame` with subtle background.
 3. **VSZ line** (drawn first, dim): `GL_LINE_STRIP` over history; color
-   `ui_clr_a(UI_TOK_ACCENT, 0.40f)` or a fixed dim cyan.
+   `ui_clr_a(UI_TOK_ACCENT, 0.40f)` or a fixed dim cyan. Uses the same x/y
+   mapping as RSS, with `sample.vsz_bytes` in place of `sample.rss_bytes`.
 4. **RSS line** (bright, drawn second so it overlays): `GL_LINE_STRIP`;
-   `ui_clr(UI_TOK_ACCENT)`. Mapping:
-   ```
-   x = plot_x + (i / (capacity - 1.0)) * plot_w
-   y = plot_y + (sample.rss_bytes - y_lo) / (y_hi - y_lo) * MEM_GRAPH_H
-   ```
-   Skip samples beyond `memprof_history_count()` (graph fills left-to-right
-   as samples accumulate).
+   `ui_clr(UI_TOK_ACCENT)`, using the mapping shown above.
 5. **X-axis labels** at left/mid/right: `-85m`, `-42m`, `now` (derived from
-   `MEMPROF_HISTORY_CAP * MEMPROF_PUSH_INTERVAL_S`). Use a tiny
-   `fmt_time_offset` helper.
+   `total_span`). Use a tiny `fmt_time_offset` helper. These labels are
+   geometry-fixed — they describe the panel's time scale, not the history's
+   extent.
 
 ### Positioning
 
-Mirror `profile_panel_rect_for_height` exactly, but with **anti-overlap**:
+Mirror `profile_panel_rect_for_height` exactly, but with **anti-overlap**: if
+the CPU profile panel is visible (`snap->profile_panel.mode != PROFILE_PANEL_OFF`),
+shift this panel left by `PROFILE_PANEL_W + 8` so the two sit side-by-side,
+then clamp to the scene rect. Falls back to the standard scene-bottom-right
+anchor when CPU profile is off.
+
+`PROFILE_PANEL_W` is currently a `#define PROF_PANEL_W 320` private to
+`src/ui/app/profile_panel.c`. To allow `memory_panel.c` to reference it for
+side-by-side layout, **move the `#define` into `src/ui/app/profile_panel.h`**
+(rename to `PROFILE_PANEL_W` for clarity; update the in-file references in
+`profile_panel.c`). This is a tiny, mechanical change and keeps panel widths
+co-located with the public panel API.
 
 ```c
 static void memory_panel_rect_for_height(const UiRenderSnapshot *snap,
                                          int panel_h, int *out_x, int *out_y) {
-    /* Same logic as profile_panel_rect_for_height, then:
-     * if CPU profile panel is visible, shift this panel left by
-     * (PROF_PANEL_W + 8) so they sit side-by-side, clamped to scene rect. */
+    /* Compute the same anchor as profile_panel_rect_for_height. */
+    int scene_x, scene_y, scene_w, scene_h;
+    int panel_x, panel_y;
+    ui_layout_scene_rect(&scene_x, &scene_y, &scene_w, &scene_h);
+
+    /* Standard anchor: scene-bottom-right (mirrors profile_panel). */
+    panel_x = scene_x + scene_w - MEM_PANEL_W - MEM_PANEL_MARGIN;
+    panel_y = scene_y + scene_h - panel_h    - MEM_PANEL_MARGIN;
+
+    /* Side-by-side when CPU profile is up: shift left of its left edge. */
+    if (snap->profile_panel.mode != PROFILE_PANEL_OFF) {
+        panel_x -= (PROFILE_PANEL_W + 8);
+    }
+
+    /* Clamp into scene rect (same clamp helpers as profile_panel). */
+    panel_x = clamp_int(panel_x, scene_x + 4, scene_x + scene_w - MEM_PANEL_W - 4);
+    panel_y = clamp_int(panel_y,
+                        scene_y + STATUSBAR_H + 4,
+                        scene_y + scene_h     - panel_h - 4);
+    if (out_x) *out_x = panel_x;
+    if (out_y) *out_y = panel_y;
 }
 ```
-
-Falls back to the standard scene-bottom-right anchor when CPU profile is off.
 
 ## Module 3 — UI state plumbing
 
@@ -355,32 +492,77 @@ In `src/support/prof.h`, add `PROF_MEMORY_PANEL` right after `PROF_PROFILE_PANEL
 In `src/ui/app/profile_panel.c::section_label`, add the case
 `case PROF_MEMORY_PANEL: return "Memory Panel";`.
 
-## Module 6 — Tests (`tests/test_memprof.c`)
+## Module 6 — Tests
+
+### `tests/test_memprof.c` (new)
 
 New test target. Wire into Makefile via `TEST_BINS` and a per-test link
-recipe (mirror `test_format` or similar minimal test). Test cases:
+recipe (mirror `test_format` or similar minimal test). Each test case begins
+with `memprof_reset()` followed by either a fake-reader install + `memprof_init_at(0.0)`
+*or* a real `memprof_init()` (case 1 only), so cases don't leak state.
 
-1. **Baseline non-zero on host platforms.** After `memprof_init()`,
-   `memprof_baseline().rss_bytes > 0` on `__APPLE__` || `__linux__`. Skip
-   assertion under `_WIN32` (since v1 stub returns 0).
-2. **Cadence honored.** Drive `memprof_frame_tick_at` with virtual times
-   `0.0, 1.0, 2.0, …, 4.9` → `memprof_history_count()` stays at 0 (or 1 if
-   init counts as first push — pick one and assert consistently).
-   At `t=5.0`, count becomes 1. At `t=10.0`, count becomes 2.
-3. **Ring wraps.** Drive `1024 * 5` pushes; assert `count` clamps to
-   `capacity` and `memprof_history_get(0, …)` returns the *new* oldest
-   (not the original first sample).
-4. **`fmt_bytes` ranges.** (Expose `fmt_bytes` non-statically only for the
-   test build, via a `MEMPROF_TEST_HELPERS` macro, or include the .c
-   directly from the test the way `tests/test_format.c` does — match
-   existing test pattern.) Assert:
+1. **Baseline non-zero on host platforms.** `memprof_reset(); memprof_init();`,
+   then `memprof_baseline().rss_bytes > 0` on `__APPLE__` || `__linux__`. Skip
+   assertion under `_WIN32` (v1 stub returns 0).
+2. **Cadence honored.** `memprof_reset();` install a fake reader returning
+   `{rss=100, vsz=200}`; `memprof_init_at(0.0);`. Drive `memprof_frame_tick_at`
+   with virtual times `0.5, 1.0, 1.5, …, 4.9` → assert `memprof_history_count()`
+   stays at 0 (init does not push). Call `memprof_frame_tick_at(5.0)` →
+   assert count == 1 and the stored sample's rss == 100. Call
+   `memprof_frame_tick_at(10.0)` → assert count == 2.
+3. **Ring wraps.** `memprof_reset();` install a reader returning a counter
+   (each call returns rss = `++counter`). `memprof_init_at(0.0)`, then drive
+   `(MEMPROF_HISTORY_CAP + 5) * MEMPROF_PUSH_INTERVAL_S` worth of ticks.
+   Assert `memprof_history_count() == memprof_history_capacity()` and the
+   sample returned by `memprof_history_get(0, …)` has rss equal to the
+   *6th* sample's counter value (i.e. the original first 5 were dropped).
+4. **Right-anchored timestamps.** Assert
+   `memprof_history_latest_t() ≈ last_pushed_t_rel` (within an epsilon),
+   so the renderer can right-align the newest sample to "now" deterministically.
+5. **`memprof_format_bytes` ranges** (pure formatter, no platform/GL deps —
+   safe to test here since it lives in `memprof.c`):
    - 0 → "--"
    - 1500 → "1 KB"
    - 1_500_000 → "1.4 MB"
    - 2_500_000_000 → "2.33 GB"
+6. **`memprof_set_reader(NULL)` restores the platform reader.** Set a fake,
+   then NULL, then `memprof_frame_tick_at(...)`; on `__APPLE__` || `__linux__`
+   the next current reading should match what the platform reports (non-zero
+   RSS).
 
 Tests must build under both default and `USE_GL_STUBS=1` since `memprof` has
 no GL dependency.
+
+### `tests/test_glr_ctrl.c` (modify)
+
+Two updates required so the existing controller test keeps working after
+`ui_memory_panel_render` and `PROF_MEMORY_PANEL` land:
+
+1. **Stub the new render function** so the controller test doesn't pull in
+   real GL (it currently stubs every UI render via `#define X test_X`).
+   - At the `#define` block (~line 31, with the existing
+     `#define ui_profile_panel_render test_ui_profile_panel_render`), add:
+     ```c
+     #define ui_memory_panel_render             test_ui_memory_panel_render
+     ```
+   - At the matching `#undef` block (~line 54), add:
+     ```c
+     #undef ui_memory_panel_render
+     ```
+   - Provide an empty `static void test_ui_memory_panel_render(const UiRenderSnapshot *snap) { (void)snap; }`
+     near the other test render stubs.
+
+2. **Extend the profile-coverage assertion** in
+   `test_display_frame_profile_coverage` (~line 331) so the new section is
+   guarded:
+   - Add `PROF_MEMORY_PANEL,` to the `major[]` array (~line 343) right after
+     `PROF_PROFILE_PANEL`.
+   - Add `+ prof_section_last_us(PROF_MEMORY_PANEL)` to the `sum_us` sum
+     (~line 382) so the half-of-frame lower-bound continues to balance.
+
+Without these the test will either hard-fail (PROF_MEMORY_PANEL stale because
+the controller wraps the new render in `prof_begin/end` but the test missed
+it) or, worse, accidentally run real UI code if the stub isn't in place.
 
 ## Makefile changes
 
@@ -408,7 +590,10 @@ Files to **create**:
 Files to **modify**:
 - `Makefile` — `SRCS`, `CORE_TEST_SRCS`, `TEST_BINS`, new per-test recipe
 - `src/support/prof.h` — add `PROF_MEMORY_PANEL` enum value
-- `src/ui/app/profile_panel.c` — `section_label` case for `PROF_MEMORY_PANEL`
+- `src/ui/app/profile_panel.h` — move `PROF_PANEL_W` here as `PROFILE_PANEL_W`
+  so `memory_panel.c` can reference it for side-by-side layout
+- `src/ui/app/profile_panel.c` — `section_label` case for `PROF_MEMORY_PANEL`;
+  switch local `PROF_PANEL_W` references to the header-defined `PROFILE_PANEL_W`
 - `src/ui/app/state_types.h` — `UiMemoryPanelState` typedef
 - `src/ui/app/state.h` / `state.c` — field, accessors, default
 - `src/ui/app/snapshot.h` — snapshot field
@@ -417,6 +602,9 @@ Files to **modify**:
 - `src/app/glr_actions.c` — `memory_panel_mode_names[]` array, `g_cfg_items[]` entry
 - `src/app/glr_ctrl.c` — includes, `memprof_init()` call, `memprof_frame_tick()`
   call, render block, Ctrl+Shift+M hotkey branch in `glr_ctrl_keyboard`
+- `tests/test_glr_ctrl.c` — `ui_memory_panel_render` stub `#define`/`#undef`
+  pair + empty stub body; add `PROF_MEMORY_PANEL` to the profile-coverage
+  `major[]` array and to the `sum_us` sum
 
 ## Verification
 

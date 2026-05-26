@@ -8,15 +8,20 @@ gate. No Tier B/C items here; those wait for their own plans.
 ## Scope
 
 This plan closes the 22 Tier A findings from the audit. The list
-splits cleanly into four batches, each independently committable
+splits cleanly into three batches, each independently committable
 and build-safe:
 
 | Batch | Findings | Net LOC | Risk |
 |---|---|---|---|
 | B1 — Real bugs | #3, #9, #11, #13 | +30 / -10 | low (each is a tight correctness fix) |
 | B2 — Dead-code sweep | #53–#67 | +20 / -350 | near-zero (every deletion verified zero callers) |
-| B3 — Naming + duplication | #34, #38, #39, #40, #52 | +40 / -80 | low (mechanical) |
-| B4 — apply.c hardening | #46 | +20 / -10 | low (one helper signature change) |
+| B3 — Naming + duplication + couplings | #34, #38, #39, #40, #46, #52 | +40 / -80 | low (mechanical) |
+
+(An earlier draft contained a "B4 — apply.c hardening" batch
+labelled `#46`. That was a finding-number mix-up: audit `#46` is the
+`help_text.c` tab-count coupling — Tier A; the apply.c
+DECLARE+SET_VALUE redundancy is audit `#48` — Tier B. `#48` is
+deferred below; the real `#46` lives in B3 now.)
 
 **Out of scope** (deferred to a separate plan):
 - #1 (help_text.c layering breach) — needs a design call between
@@ -30,6 +35,10 @@ and build-safe:
 - #14 (`_mut()` regression across 5 files + ratchet) — Tier C; the
   cross-file sweep + `check-state-ownership` script is the largest
   single piece of leftover work.
+- #48 (apply.c DECLARE+SET_VALUE redundancy) — Tier B per the
+  audit's tier list (line 1273). The clean fix introduces
+  `repl_eval_declare_predef_var_with_value(...)`, which is an API
+  shape change worth isolating; defer to a Tier B plan.
 - All structural items #68–#82 — Tier B/C.
 
 ## Verify gates
@@ -53,42 +62,87 @@ batch.
 Four tight correctness fixes. Each is its own commit so the bug
 fix shows up in `git log` independently of cosmetic sweep.
 
-### Commit B1.1 — #3 predef-values count bug
+### Commit B1.1 — #3 predef-values snapshot: switch long-lived caller to the full-snapshot pair
 
-**File:** `src/repl/eval.c:233-253`, `src/repl/eval.h` (signatures),
-all callers of `repl_copy_predef_values` / `repl_restore_predef_values`
+**File:** `src/repl/eval.h:229-235` (contract comment),
+`src/subsystems/replay/replay.c` (the three replay-start /
+replay-stop baseline sites), `src/repl/state.{c,h}` if the
+`ReplReplayRuntimeState`'s `baseline_predef_vals` storage needs a
+companion `baseline_predef_names` + `baseline_predef_count` to
+match the full-snapshot pair's signature.
 
-**Current shape:**
-```c
-void repl_copy_predef_values(float *dst, int max_vals);
-void repl_restore_predef_values(const float *src, int max_vals);
+**Why the count-only fix isn't enough (reviewer pushback):** An
+earlier draft of this commit returned the captured count from
+`repl_copy_predef_values` and made `repl_restore_predef_values`
+accept it. That fixes overread on *grow* but does **not** fix the
+actual triggerable bug — a *reorder* or *shrink* of the predef
+table between copy and restore (e.g., a tutorial SET / workspace
+switch during replay) makes the saved floats land in the wrong
+slots after restore, because the values-only pair carries no names.
+See audit `#3` (revised) for the full reasoning.
+
+**Plan:** Move the long-lived replay-baseline caller to the
+full-snapshot pair `repl_eval_copy_predef_vars` /
+`_restore_predef_vars` (already defined in `eval.h:223-228`),
+which carries names + count and rebinds correctly through table
+churn.
+
+The short-lived per-frame baseline (`glr_ctrl.c`) and autonormal
+scratch (`flatten.c`) callers stay on `repl_copy/restore_predef_values`
+unchanged — the contract there is fine in practice because no
+table mutation can happen between save and restore inside one
+frame / one autonormal pass. Update the contract comment at
+`eval.h:229-232` to spell out the table-shape-stable prerequisite
+the comment currently elides.
+
+**Callers to inspect — do a live sweep before editing:**
+
+```bash
+rg -n "repl_(copy|restore)_predef_values" src/ tests/ bench/
 ```
-Both compute `n = min(g_num_predef_vars, max_vals)` independently —
-restore uses the live count at restore time, not the count captured
-at copy.
 
-**Target shape:** Have copy *return* the count it captured; have
-restore accept that count explicitly:
+At time of writing:
+- `src/subsystems/replay/replay.c` — three sites (replay-start
+  baseline, paired restore, replay-stop baseline). **These are the
+  callers that move to the full-snapshot pair.**
+- `src/repl/flatten.c` — autonormal scratch pair. **Stays on
+  values-only**; add a one-line comment naming the table-stability
+  assumption.
+- `src/app/glr_ctrl.c` — frame-baseline pair, per-frame pair,
+  fade-plan restore. **Stay on values-only**; same one-line
+  comment.
+- `tests/test_repl_executor.c` — coverage for the values-only
+  pair. **No signature change needed** if we take this path.
 
-```c
-int  repl_copy_predef_values(float *dst, int max_vals);
-void repl_restore_predef_values(const float *src, int max_vals,
-                                int saved_count);
-```
-
-**Callers to update** (from prior grep):
-- `src/app/glr_ctrl.c:1785` + `:1894` — frame baseline save/restore pair
-- `src/app/glr_ctrl.c:223` — fade-plan replay path
-- `src/subsystems/replay/replay.c:762, 766, 812, 816, 826, 958, 1151`
-
-Each save site already saves into a stack `float[MAX_PREDEF_VARS]`;
-add `int saved_n = repl_copy_predef_values(buf, MAX_PREDEF_VARS);`
-and pass `saved_n` to the matching restore.
+If the replay peer's baseline storage today is just
+`float baseline_predef_vals[MAX_PREDEF_VARS]`, extend it to also
+hold `char baseline_predef_names[MAX_PREDEF_VARS][REPL_PREDEF_NAME_MAX]`
+and `int baseline_predef_count` so the full-snapshot pair has
+somewhere to read/write. The cost is purely a few extra KB of
+struct storage on the replay peer.
 
 **Verify:** add a unit test in `tests/test_repl_executor.c` that
-declares 3 vars, copies, removes one (undeclare), restores, asserts
-the third var's value survived. The current code would write only
-2 floats back.
+exercises the *reorder* path through the full-snapshot pair (this
+is the bug the migration is closing):
+
+1. Declare three vars (A, B, C) with distinct values.
+2. `repl_eval_copy_predef_vars(buf_vals, buf_names, &n);`
+3. `repl_eval_undeclare_predef_var("B")` — table shrinks, indices
+   shift so C now sits where B used to be.
+4. `repl_eval_restore_predef_vars(buf_vals, buf_names, n);`
+5. Assert: A, B, C are all back, with their original values.
+   Crucially, C's value is **not** the old B value, which is what
+   the values-only pair would silently produce.
+
+If we instead picked option 2 from the audit (add an assert to the
+values-only restore), this test would assert-trip rather than
+verify-correct; the audit's option 1 (migrate to full pair) is the
+one this plan implements.
+
+**Out of scope of this commit:** A separate API rename / deletion
+of `repl_copy_predef_values` would be Tier B (signature change
+across all remaining call sites). Keep it for now; only the replay
+peer moves.
 
 ### Commit B1.2 — #9 load-side `fclose` / `ferror` check
 
@@ -224,8 +278,25 @@ sections):
 - **#59** — `src/repl/flatten.c:237-245` — collapse the always-true
   `if (lnv < MAX_EXPR_VARS)` guard.
 - **#61** — `src/repl/export.c:1878` — delete dead `(void)warnings;`
-- **#62** — `src/repl/export.c:2884-2891` — drop `!section->enabled
-  ||` half of condition; drop the `export_section_always` thunk.
+- **#62** — `src/repl/export.c:2884-2891` — the audit's "drop both"
+  prescription is internally inconsistent: the loop's `section->enabled`
+  call (L2888) currently relies on every row having a non-NULL
+  thunk, and seven of the eleven rows in `EXPORT_SCAFFOLD_SECTIONS[]`
+  (L2870-2882) name `export_section_always` to satisfy that.
+  Two coherent options:
+  - **(a) drop the thunk, keep the null check** — switch
+    `export_section_always` rows to `NULL` (now the
+    "always-on" signal); the `!section->enabled` half of the
+    condition becomes load-bearing as that signal's reader.
+    Strictly more code deleted (one thunk gone, no caller changes
+    elsewhere).
+  - **(b) keep the thunk, drop the null check** — `export_section_always`
+    becomes the documentation that a row is always on; the loop
+    just calls `section->enabled(ctx)` unconditionally.
+  Pick **(a)**: it deletes the dead thunk *and* keeps the
+  call-site self-explanatory (`NULL` enabled = always on). Either
+  way, do not delete both at once — the build will pass but the
+  loop will then call NULL on every "always" row.
 - **#63** — `src/repl/export.c:1289-1298` — delete `int off =` and
   `+=` operators in `write_canonical_cmd_as_c`.
 - **#64** — `src/repl/replay_annotations.c:57-60, 680, 723` — drop
@@ -265,20 +336,54 @@ otherwise leave it to a manual test note).
 
 ### Commit B2.4 — #66 delete 13 unused `state.c` macros
 
-**File:** `src/repl/state.c:150-168`
+**File:** `src/repl/state.c:103-168` (the whole macro band, not
+just the `:150-168` tail — two unused macros live earlier).
 
-**Current shape:** 13 of 25 file-scope macros at lines 103-168
+**Current shape:** 13 of 25 file-scope macros across lines 103-168
 have zero readers — leftovers from the pre-`ReplRuntimeState`
-era.
+era. The 13 with `grep -c '\bg_<name>\b' src/repl/state.c == 1`
+(definition only, no readers) at time of writing:
 
-**Delete** (verify each with `grep -c '\bg_<name>\b' src/repl/state.c`
-returning 1; if > 1, leave it):
-- `g_workspace_dir`
-- `g_workspace_header_lines`
-- ... (sweep the L150-168 block)
+| Line | Macro |
+|---|---|
+| 108 | `g_flat_cmds` |
+| 109 | `g_flat_cmd_local_vars` |
+| 150 | `g_lights` |
+| 151 | `g_clear_color` |
+| 160 | `g_example_idx` |
+| 161 | `g_workspace_dir` |
+| 162 | `g_workspace_header_lines` |
+| 163 | `g_workspace_header_line_count` |
+| 164 | `g_render_state_lines` |
+| 165 | `g_cam_lines` |
+| 166 | `g_export_scene_name_hint` |
+| 167 | `g_pending_scene_name` |
+| 168 | `g_pending_workspace_dir` |
 
-**Keep** the 12 macros that actually carry the body of the file —
-they aid readability of the implementation functions.
+Before deleting, re-run the sweep over the whole band — line
+numbers may drift, and a future commit could give one of these a
+reader, in which case it must stay:
+
+```bash
+for name in g_cmds g_num_cmds g_normals_dirty g_flat_cmds \
+            g_flat_cmd_local_vars g_num_flat_cmds g_flat_dirty \
+            g_user_lighting_enabled g_current_block_begin \
+            g_current_block_end g_current_block_line g_anim_time \
+            g_t_playing g_t_var_idx g_lights g_clear_color \
+            g_example_idx g_workspace_dir g_workspace_header_lines \
+            g_workspace_header_line_count g_render_state_lines \
+            g_cam_lines g_export_scene_name_hint \
+            g_pending_scene_name g_pending_workspace_dir; do
+  c=$(grep -c "\\b$name\\b" src/repl/state.c)
+  echo "$c $name"
+done
+```
+
+Any macro with count `> 1` stays. Only delete the macros with
+count `== 1`.
+
+**Keep** the 12 macros that have readers — they aid readability of
+the implementation functions.
 
 **Verify:** `make check-c99`. If a macro was inadvertently used
 inside a function body, the compile fails; restore it.
@@ -388,65 +493,80 @@ expanding the eval API.
 **Verify:** Scene save/load round-trip tests
 (`test_repl_core_io.c`) cover this.
 
-### Commit B3.5 — #52 + #46 unify struct terminators + add `declare_with_value`
+### Commit B3.5 — #52 unify struct terminators
 
-**Files:**
-- `src/repl/command_spec.c:384, 407` (terminators)
-- `src/repl/apply.c:144-149` (DECLARE+SET_VALUE redundancy)
-- `src/repl/eval.h` + `src/repl/eval.c` (new helper)
+**File:** `src/repl/command_spec.c:384, 407`
 
-**#52 — terminators:** Make both end-of-table terminators use the
-same convention. `{ NULL }` (C99 zero-fill) is the cleanest:
+**Current shape:** `k_enum_command_specs[]` terminator at L384 uses
+5 positional zeros for a 6-field struct (`args[]` zero-init).
+`k_std_command_specs[]` terminator at L407 uses 6 positional fields.
+Rows above both terminators use `.name = ...` / `.args = ...`
+designated initializers. That's three conventions in one file.
+
+**Target shape:** Make both end-of-table terminators use the same
+convention. `{ NULL }` (C99 zero-fill, designator-friendly because
+`.name` is the first field) is the cleanest:
 
 ```c
 { NULL }      /* end-of-table */
 ```
 
-**#46 — `declare_with_value`:** Today apply.c does
-`declare → O(n) name lookup → patch`. Add to eval.c:
+**Verify:** `make check-c99 && make test-stubs`. Pure
+initializer-syntax change; the table walker keys on the sentinel
+shape (`.name == NULL`), unchanged.
+
+### Commit B3.6 — #46 derive `g_content.tab_count` from `g_tabs[]`
+
+**File:** `src/repl/help_text.c:253, 405` (the two unrelated `3`s)
+
+**Current shape:** `g_tabs[3] = { ... }` at L253 and
+`g_content.tab_count = 3` at L405 — two literal `3`s that must
+agree by hand. Adding a fourth tab requires editing both sites; a
+mismatch silently truncates the tab list or reads past the array.
+
+**Target shape:** Derive the count from the array via `ARRAY_LEN`
+(or `sizeof(g_tabs) / sizeof(g_tabs[0])` if the project doesn't
+have an `ARRAY_LEN` macro at hand):
 
 ```c
-int repl_eval_declare_predef_var_with_value(const char *name,
-                                             float value,
-                                             char *err, int errsz);
+g_content.tab_count = (int)(sizeof(g_tabs) / sizeof(g_tabs[0]));
 ```
 
-Return the new slot index; apply.c uses it to write
-`g_predef_vars[idx].value` directly. Existing
-`repl_eval_declare_predef_var` stays (other callers don't need the
-value). Document the new helper as "DECLARE + write initial value
-atomically; intended for `repl_apply_predef_ops`."
+(Optional, if a single literal across the file is worth eliminating
+too: introduce `ReplHelpTabIdx { HELP_TAB_OVERVIEW, …, HELP_TAB_COUNT }`
+and key the tab table off that — but that's a larger refactor; the
+single-line derive is the minimal Tier A fix.)
 
-**Verify:** `tests/test_repl_compile.c` already exercises the
-DECLARE + SET_VALUE flow; should still pass without changes.
-
----
-
-## Batch 4 — apply.c hardening (#46 — folded into B3.5 above)
-
-(Covered by Commit B3.5; no separate batch needed.)
+**Verify:** `make check-c99 && make test-stubs`. The F1 help
+overlay's tab-cycle test should still pass; if not, the array
+literal and the old hard-coded `3` were drifted, and the derive
+exposes it.
 
 ---
 
-## Skipped Tier A items
+## Deferred to dedicated plans
 
-These were originally listed as Tier A in the audit but on closer
-look they need a Tier B-sized treatment:
+(Mirrors the "Out of scope" list at the top with a short reason
+each — keep both lists in sync if you add items.)
 
-- **#1 layering breach in help_text.c** — needs a design call.
-  Defer to a dedicated plan.
+- **#1 layering breach in help_text.c** — needs a design call
+  (move file vs. callback). Not on the audit's Tier A/B/C list;
+  treat as Tier B for sizing.
 - **#2 cfg double-apply** — semantics question (which path wins).
-  Defer.
+  Audit Tier B.
 - **#5 UserScene stack pressure** — fix is small but the design
-  call (heap vs. static scratch) deserves isolation.
+  call (heap vs. static scratch) deserves isolation. Audit Tier B.
 - **#10 flatten_source_lighting_enabled** — needs to walk the flat
-  program; touches flatten contract enough that it's Tier B.
+  program; touches flatten contract enough that it's Tier B-sized.
+- **#48 apply.c DECLARE+SET_VALUE redundancy** — audit Tier B; the
+  clean fix adds a new eval API (`declare_with_value`). Bundle
+  with `#46` follow-on work if a help_text rewrite goes ahead.
 
 ---
 
 ## Post-batch hygiene
 
-After all four batches land:
+After all three batches land:
 
 1. **Update the audit doc.** Mark the closed findings in
    `plans/in-review/src-repl-code-smell-audit-2.md`:
@@ -466,28 +586,32 @@ After all four batches land:
 
 ## Expected outcome
 
-After this plan completes (4 batches, ~9 commits, ~400 LOC net
+After this plan completes (3 batches, ~9 commits, ~400 LOC net
 reduction):
 
-- 22 Tier A findings closed
+- 21 Tier A findings closed (the 22 listed minus `#48`, deferred to
+  a Tier B plan)
 - 4 real correctness bugs fixed (#3, #9, #11, #13)
 - ~200 LOC of dead `format.c` removed
 - 13 dead state.c macros removed
 - 5 sites of duplicated predef-var loops funneled through one
   helper
 - 2 name pairs collapsed to one canonical form each
+- `help_text.c` tab-count derived from the array (no more
+  hand-synced `3`s)
 - One audit-document update reflecting the Tier A closeout
 
 The bigger Tier B work (cross-file `_mut()` sweep, helper
-extractions, file splits) is left intact for its own plan.
+extractions, file splits, `#48` `declare_with_value`) is left
+intact for its own plan.
 
 ## Time estimate
 
-- Batch 1: ~1 hour (each bug is tight, but #3 has 7 callers to
-  rewrite)
+- Batch 1: ~1 hour (each bug is tight, but #3 has ~8 production
+  callers to rewrite — re-run the `rg` sweep before editing)
 - Batch 2: ~1 hour (mostly delete + verify)
-- Batch 3: ~1.5 hours (B3.2 and B3.4 each touch multiple files)
-- Batch 4: covered in B3.5
+- Batch 3: ~1.5 hours (B3.2 and B3.4 each touch multiple files;
+  B3.5 + B3.6 are single-file)
 
 Total: ~3-4 hours of focused work; ~9 commits.
 
