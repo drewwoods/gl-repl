@@ -15,6 +15,7 @@
 #include "support/test_harness.h"
 #include "scene/render.h"
 #include "source_document.h"        /* source_document_insert_line */
+#include "repl/cfg_baseline.h"      /* ReplConfigBag */
 
 #ifdef GL_STUBS
 #include <GL/gl_stub_counts.h>
@@ -913,6 +914,68 @@ int main() {
          * source row 5) is ignored even though it appears later. */
         ASSERT_TRUE("dup-funcN first-wins: vertex emitted",  found_vertex);
         ASSERT_TRUE("dup-funcN first-wins: color suppressed", !found_color);
+    }
+
+    /* #4 regression: repl_config_bag_set must detect snprintf truncation
+     * and refuse the write. Pre-fix, an over-long key truncated silently
+     * and the function returned 1 — subsequent gets against the
+     * untruncated slug would miss the stored value. */
+    {
+        ReplConfigBag bag;
+        repl_config_bag_clear(&bag);
+
+        /* Sanity: a fitting key/value goes in. */
+        ASSERT_INT("set ok: short key+value",
+                   repl_config_bag_set(&bag, "wireframe", "1"), 1);
+        ASSERT_INT("count after fitting set", repl_config_bag_count(&bag), 1);
+        ASSERT_STR("get back the value",
+                   repl_config_bag_get(&bag, "wireframe"), "1");
+
+        /* REPL_CFG_KEY_MAX = 24, so a 30-char key is 6 over the limit. */
+        char long_key[64];
+        memset(long_key, 'k', sizeof(long_key) - 1);
+        long_key[30] = '\0';
+        ASSERT_INT("set fail: oversized key returns 0",
+                   repl_config_bag_set(&bag, long_key, "9"), 0);
+        ASSERT_INT("count unchanged after oversized key",
+                   repl_config_bag_count(&bag), 1);
+
+        /* REPL_CFG_VALUE_MAX = 16, so a 20-char value is 4 over the limit. */
+        char long_value[64];
+        memset(long_value, 'v', sizeof(long_value) - 1);
+        long_value[20] = '\0';
+        ASSERT_INT("set fail: oversized value returns 0",
+                   repl_config_bag_set(&bag, "axes", long_value), 0);
+        ASSERT_INT("count unchanged after oversized value",
+                   repl_config_bag_count(&bag), 1);
+        ASSERT_TRUE("axes not added",
+                    repl_config_bag_get(&bag, "axes") == NULL);
+
+        /* Replace-path: too-long value must NOT overwrite the existing one. */
+        ASSERT_INT("set fail: replace with oversized value returns 0",
+                   repl_config_bag_set(&bag, "wireframe", long_value), 0);
+        ASSERT_STR("replace-path preserves prior value on truncation",
+                   repl_config_bag_get(&bag, "wireframe"), "1");
+
+        /* set_int path: with REPL_CFG_VALUE_MAX >= 12 every 32-bit int
+         * fits, but pin the contract — overlong key still fails. */
+        ASSERT_INT("set_int ok: short key",
+                   repl_config_bag_set_int(&bag, "grid", 42), 1);
+        ASSERT_INT("set_int fail: oversized key returns 0",
+                   repl_config_bag_set_int(&bag, long_key, 42), 0);
+
+        /* Boundary case: a key exactly at REPL_CFG_KEY_MAX - 1 should
+         * fit; one at REPL_CFG_KEY_MAX must not. */
+        char max_key[REPL_CFG_KEY_MAX + 4];
+        memset(max_key, 'm', sizeof(max_key) - 1);
+        max_key[REPL_CFG_KEY_MAX - 1] = '\0';   /* exactly fills the slot */
+        ASSERT_INT("boundary: REPL_CFG_KEY_MAX-1 key fits",
+                   repl_config_bag_set(&bag, max_key, "1"), 1);
+
+        memset(max_key, 'M', sizeof(max_key) - 1);
+        max_key[REPL_CFG_KEY_MAX] = '\0';        /* one too many */
+        ASSERT_INT("boundary: REPL_CFG_KEY_MAX key truncates → 0",
+                   repl_config_bag_set(&bag, max_key, "1"), 0);
     }
 
     printf("\n%d / %d tests passed\n", g_harness.passed, g_harness.run);

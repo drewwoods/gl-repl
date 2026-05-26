@@ -5,33 +5,62 @@
 #include <string.h>
 #include <stdlib.h>
 #include <ctype.h>
+#include <limits.h>
+#include "c_compat.h"
 #include "repl/cfg_baseline.h"
+
+/* Width sanity for set_int's "%d" of a 32-bit int: "-2147483648" is
+ * 11 chars + null = 12. If REPL_CFG_VALUE_MAX ever shrinks below
+ * that, set_int can silently truncate values for legitimate inputs;
+ * the runtime check below covers the variable-length string path. */
+STATIC_ASSERT(REPL_CFG_VALUE_MAX >= 12,
+              "REPL_CFG_VALUE_MAX must hold any 32-bit decimal int");
 
 void repl_config_bag_clear(ReplConfigBag *cfg) {
     if (!cfg) return;
     cfg->count = 0;
 }
 
+/* Detect snprintf truncation. snprintf returns the number of bytes it
+ * WOULD have written (excluding the terminating null); if that is
+ * >= the destination size, the result was truncated. */
+static int fits(int written, size_t buf_sz) {
+    return written >= 0 && (size_t)written < buf_sz;
+}
+
 int repl_config_bag_set(ReplConfigBag *cfg,
                            const char *key, const char *value) {
     if (!cfg || !key || !value) return 0;
+
+    /* Reject up front if either field would truncate. Doing the bag
+     * mutation only after both fits-checks pass keeps the bag in a
+     * consistent state on rejection (no partial replace). */
+    if (strlen(key) >= REPL_CFG_KEY_MAX) return 0;
+    if (strlen(value) >= REPL_CFG_VALUE_MAX) return 0;
+
     /* Replace if present. */
     for (int i = 0; i < cfg->count; i++) {
         if (strcmp(cfg->items[i].key, key) == 0) {
-            snprintf(cfg->items[i].value, REPL_CFG_VALUE_MAX, "%s", value);
-            return 1;
+            int n = snprintf(cfg->items[i].value, REPL_CFG_VALUE_MAX,
+                             "%s", value);
+            return fits(n, REPL_CFG_VALUE_MAX);
         }
     }
     if (cfg->count >= REPL_CFG_MAX_ITEMS) return 0;
-    snprintf(cfg->items[cfg->count].key,   REPL_CFG_KEY_MAX,   "%s", key);
-    snprintf(cfg->items[cfg->count].value, REPL_CFG_VALUE_MAX, "%s", value);
+    int nk = snprintf(cfg->items[cfg->count].key,   REPL_CFG_KEY_MAX,
+                      "%s", key);
+    int nv = snprintf(cfg->items[cfg->count].value, REPL_CFG_VALUE_MAX,
+                      "%s", value);
+    if (!fits(nk, REPL_CFG_KEY_MAX) || !fits(nv, REPL_CFG_VALUE_MAX))
+        return 0;
     cfg->count++;
     return 1;
 }
 
 int repl_config_bag_set_int(ReplConfigBag *cfg, const char *key, int value) {
     char buf[REPL_CFG_VALUE_MAX];
-    snprintf(buf, sizeof(buf), "%d", value);
+    int n = snprintf(buf, sizeof(buf), "%d", value);
+    if (!fits(n, sizeof(buf))) return 0;
     return repl_config_bag_set(cfg, key, buf);
 }
 
