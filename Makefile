@@ -1204,10 +1204,10 @@ check-trailing-whitespace: ## Verify branch and local diffs contain no trailing 
 	base=$${CHECK_BASE:-main}; \
 	if git rev-parse --verify "$$base" >/dev/null 2>&1; then \
 		merge_base=$$(git merge-base "$$base" HEAD); \
-		git diff --check "$$merge_base"; \
+		git --no-pager diff --check "$$merge_base"; \
 	else \
-		git diff --cached --check; \
-		git diff --check; \
+		git --no-pager diff --cached --check; \
+		git --no-pager diff --check; \
 	fi; \
 	echo "trailing-whitespace OK"
 
