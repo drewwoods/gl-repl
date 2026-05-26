@@ -247,6 +247,7 @@ FORCE:
 SRCS = \
 	src/app/glr_audio.c \
 	src/repl/format.c \
+	src/support/memprof.c \
 	src/support/prof.c \
 	gl_repl.c \
 	src/app/glr_actions.c \
@@ -306,6 +307,7 @@ SRCS = \
 	src/ui/app/autocomplete_panel.c \
 	src/ui/app/color_picker.c \
 	src/ui/app/layout.c \
+	src/ui/app/memory_panel.c \
 	src/ui/app/menu_bar.c \
 	src/ui/app/numeric_swatch.c \
 	src/ui/app/panels.c \
@@ -331,6 +333,7 @@ SRCS = \
 HDRS = \
 	src/app/glr_audio.h \
 	src/repl/format.h \
+	src/support/memprof.h \
 	src/support/prof.h \
 	gl_repl.h \
 	source_document.h \
@@ -390,6 +393,7 @@ HDRS = \
 	src/ui/app/autocomplete_panel.h \
 	src/ui/app/color_picker.h \
 	src/ui/app/layout.h \
+	src/ui/app/memory_panel.h \
 	src/ui/app/menu_bar.h \
 	src/ui/app/numeric_swatch.h \
 	src/ui/app/panels.h \
@@ -415,6 +419,7 @@ HDRS = \
 CORE_TEST_SRCS = \
 	src/app/glr_audio.c \
 	src/repl/format.c \
+	src/support/memprof.c \
 	src/support/prof.c \
 	src/app/glr_actions.c \
 	src/app/glr_camera.c \
@@ -473,6 +478,7 @@ CORE_TEST_SRCS = \
 	src/ui/app/autocomplete_panel.c \
 	src/ui/app/color_picker.c \
 	src/ui/app/layout.c \
+	src/ui/app/memory_panel.c \
 	src/ui/app/menu_bar.c \
 	src/ui/app/numeric_swatch.c \
 	src/ui/app/panels.c \
@@ -501,7 +507,7 @@ SCENE_SRCS = $(filter src/scene/%.c,$(SRCS))
 UI_SRCS = $(filter src/ui/core/%.c src/ui/app/%.c,$(SRCS))
 SCENE_HDRS = $(filter src/scene/%.h,$(HDRS))
 UI_HDRS = $(filter src/ui/core/%.h src/ui/app/%.h,$(HDRS))
-STATE_NEUTRAL_SRCS = src/repl/format.c src/support/prof.c tests/gl-stubs/gl_stub_counts.c
+STATE_NEUTRAL_SRCS = src/repl/format.c src/support/memprof.c src/support/prof.c tests/gl-stubs/gl_stub_counts.c
 
 # Object lists used to build the standalone scene_demo without dragging in
 # any REPL editor/controller code. Scene + prof — the scene module no
@@ -596,6 +602,7 @@ CORE_TEST_OBJS = $(addprefix $(OBJDIR)/,$(CORE_TEST_SRCS:.c=.o))
 TEST_BINS = \
 	test_eval \
 	test_format \
+	test_memprof \
 	test_repl_state \
 	test_repl_code_panel_layout \
 	test_ui_theme \
@@ -653,7 +660,7 @@ TEST_BINS += test_replay_walk
 TEST_BINS += test_ui_panels
 endif
 
-CORE_TEST_BINS = $(filter-out test_eval test_format test_repl_code_panel_layout test_ui_theme test_scene_palette test_audio,$(TEST_BINS))
+CORE_TEST_BINS = $(filter-out test_eval test_format test_memprof test_repl_code_panel_layout test_ui_theme test_scene_palette test_audio,$(TEST_BINS))
 
 # Benchmark binaries follow the same linking pattern as core test binaries
 # (they reuse CORE_TEST_OBJS so they work in both real-GL and stubs builds),
@@ -692,6 +699,10 @@ test_eval_RUN = $(BINDIR)/test_eval --run-tests
 test_format_OBJS = $(OBJDIR)/$(TEST_DIR)/test_format.o $(OBJDIR)/src/repl/format.o
 test_format_LDLIBS = -lm
 test_format_RUN ?= $(BINDIR)/test_format
+
+test_memprof_OBJS = $(OBJDIR)/$(TEST_DIR)/test_memprof.o $(OBJDIR)/src/support/memprof.o
+test_memprof_LDLIBS = -lm
+test_memprof_RUN ?= $(BINDIR)/test_memprof
 
 test_repl_code_panel_layout_OBJS = $(OBJDIR)/$(TEST_DIR)/test_repl_code_panel_layout.o $(OBJDIR)/src/ui/core/text_layout.o
 test_repl_code_panel_layout_LDLIBS =

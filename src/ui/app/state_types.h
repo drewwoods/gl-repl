@@ -45,6 +45,10 @@ typedef struct {
     int mode;
 } UiProfilePanelState;
 
+typedef struct {
+    int mode;
+} UiMemoryPanelState;
+
 /* Status banner severity. Renderer picks the palette from this. INFO is
  * the historical amber; ERROR is a red palette so failures (flatten
  * limit, command-buffer full, parse errors) are unmissable. */

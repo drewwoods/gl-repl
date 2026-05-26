@@ -54,6 +54,7 @@ typedef enum {
     PROF_AUTONORMAL,    /* recompute_autonormals() (only when dirty) */
     PROF_REPLAY_HUD,    /* replay_ui_hud_render() (only when replaying) */
     PROF_PROFILE_PANEL, /* ui_profile_panel_render() (the panel itself) */
+    PROF_MEMORY_PANEL,  /* ui_memory_panel_render() (the panel itself) */
     PROF_FRAME_RESTORE, /* post-render flat-count + predef-value restore */
     PROF_FRAME_TOTAL,   /* entire display callback */
     PROF_SECTION_COUNT

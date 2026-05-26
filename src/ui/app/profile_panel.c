@@ -23,8 +23,10 @@ static const float k_prof_dim[3]   = { 0.30f, 0.30f, 0.38f };
 /* Configuration                                                              */
 /* ========================================================================= */
 
-/* Panel geometry (pixels). */
-#define PROF_PANEL_W        320
+/* Panel geometry (pixels). PROFILE_PANEL_W lives in profile_panel.h so
+ * sibling panels (ui_memory_panel) can shift left for side-by-side
+ * layout; the local PROF_PANEL_W alias preserves the historical name. */
+#define PROF_PANEL_W        PROFILE_PANEL_W
 #define PROF_PANEL_MARGIN    12
 #define PROF_ROW_H           16
 #define PROF_HEADER_H        20
@@ -120,6 +122,7 @@ static const char *section_label(ProfSection s) {
     case PROF_AUTONORMAL:     return "Autonormal";
     case PROF_REPLAY_HUD:     return "Replay HUD";
     case PROF_PROFILE_PANEL:  return "Profile Panel";
+    case PROF_MEMORY_PANEL:   return "Memory Panel";
     case PROF_FRAME_RESTORE:  return "Frame Restore";
     case PROF_FRAME_TOTAL:    return "Frame Total";
     default:               return "?";

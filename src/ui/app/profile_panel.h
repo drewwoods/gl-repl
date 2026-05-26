@@ -34,6 +34,10 @@ typedef enum {
 	PROFILE_PANEL_MODE_COUNT
 } UiProfilePanelMode;
 
+/* Panel width in pixels. Public so sibling panels (e.g. ui_memory_panel)
+ * can shift left of this panel for side-by-side layout. */
+#define PROFILE_PANEL_W  320
+
 #include "ui/app/snapshot.h"
 
 /* Render the CPU profile panel overlay once per frame from the supplied

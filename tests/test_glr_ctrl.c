@@ -40,6 +40,7 @@ static TestHarness g_harness = TEST_HARNESS_INIT;
 #define ui_panels_render_scene_status      test_ui_panels_render_scene_status
 #define ui_tabbed_overlay_render           test_ui_tabbed_overlay_render
 #define ui_profile_panel_render            test_ui_profile_panel_render
+#define ui_memory_panel_render             test_ui_memory_panel_render
 
 /* glr_camera.h was already pulled in at line 3 (before the #define),
  * so its `glr_camera_load_modelview` declaration is preserved as the
@@ -61,6 +62,7 @@ void test_glr_camera_load_modelview(const GlrCameraPose *pose);
 #undef ui_panels_render_scene_status
 #undef ui_tabbed_overlay_render
 #undef ui_profile_panel_render
+#undef ui_memory_panel_render
 
 static SceneRenderConfig g_last_scene_config;
 /* Snapshot copy captured by the replay HUD stub; replaces the old
@@ -138,6 +140,7 @@ void test_ui_variable_panel_render(const UiRenderSnapshot *snap) { (void)snap; }
 void test_ui_panels_render_scene_status(const UiRenderSnapshot *snap) { (void)snap; }
 void test_ui_tabbed_overlay_render(const UiOverlayState *in) { (void)in; }
 void test_ui_profile_panel_render(const UiRenderSnapshot *snap) { (void)snap; }
+void test_ui_memory_panel_render(const UiRenderSnapshot *snap)  { (void)snap; }
 
 static void prepare_display_fixture(void) {
     GLCmd *doc_cmds;
@@ -356,6 +359,7 @@ static void test_display_frame_profile_coverage(void) {
         PROF_CODE_PANEL,
         PROF_UI_PANELS,
         PROF_PROFILE_PANEL,
+        PROF_MEMORY_PANEL,
         PROF_FRAME_RESTORE,
     };
     for (size_t i = 0; i < sizeof(major) / sizeof(major[0]); i++) {
@@ -380,6 +384,7 @@ static void test_display_frame_profile_coverage(void) {
         prof_section_last_us(PROF_CODE_PANEL) +
         prof_section_last_us(PROF_UI_PANELS) +
         prof_section_last_us(PROF_PROFILE_PANEL) +
+        prof_section_last_us(PROF_MEMORY_PANEL) +
         prof_section_last_us(PROF_FRAME_RESTORE);
 
     /* Both should be positive (frame did real work). */

@@ -35,6 +35,7 @@
 #include "repl/pipeline.h"
 #include "repl/state_owners.h"
 #include "ui/app/menu_bar.h"
+#include "ui/app/memory_panel.h"
 #include "ui/app/profile_panel.h"
 #include "ui/app/state.h"
 #include "editor/inline_file_prompt.h"
@@ -51,6 +52,7 @@ static const char *backdrop_mode_names[SCENE_BACKDROP_COUNT] = {
 };
 static const char *xform_guide_mode_names[] = { "World", "Frame" };
 static const char *profile_panel_mode_names[] = { "Off", "On", "Details" };
+static const char *memory_panel_mode_names[]  = { "Off", "On", "Details" };
 static const char *code_panel_layout_names[] = {
     "Left", "Top", "Bottom", "Hidden"
 };
@@ -175,6 +177,9 @@ GlrConfigItem g_cfg_items[] = {
     { "### INTERFACE",     0, 0, 0, GLR_CONFIG_NONE,               0, NULL,                 1 },
     { "Variable panel",    0, 0, 0, GLR_CONFIG_VARIABLE_PANEL,      2, NULL,                 0 },
     { "CPU profile",       KEY_CTRL_W, 0, 0, GLR_CONFIG_CPU_PROFILE, PROFILE_PANEL_MODE_COUNT, profile_panel_mode_names, 0 },
+    /* Ctrl+Shift+M binding cannot use key_code (plain Ctrl+M == Enter == 13);
+     * the hotkey is wired via glr_ctrl_router_handle_memory_panel_key. */
+    { "Memory profile",    0, 0, 0, GLR_CONFIG_MEMORY_PROFILE, MEMORY_PANEL_MODE_COUNT, memory_panel_mode_names, 0 },
     { "Code panel",        KEY_CTRL_B, 0, 0, GLR_CONFIG_CODE_PANEL_LAYOUT, CODE_PANEL_LAYOUT_COUNT, code_panel_layout_names, 0 },
     { "Wrap at commas",    0, 0, 0, GLR_CONFIG_WRAP_AT_COMMA,       2, NULL,                 0 },
     { "Syntax highlight",  0, 0, 0, GLR_CONFIG_SYNTAX_HIGHLIGHT,    3, syntax_hl_names,      0 },
@@ -556,6 +561,19 @@ static int cfg_match_row(unsigned char key, int want_shift) {
         if (row_shift != want_shift)
             continue;
         glr_cfg_cycle_row(i, 1);
+        return 1;
+    }
+    return 0;
+}
+
+int glr_cfg_cycle_by_key(int key, int delta) {
+    for (int i = 0; i < CFG_ITEM_COUNT; i++) {
+        const GlrConfigItem *item = glr_config_item_at(i);
+        if (!item || item->section_header)
+            continue;
+        if ((int)item->key != key)
+            continue;
+        glr_cfg_cycle_row(i, delta);
         return 1;
     }
     return 0;

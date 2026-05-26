@@ -80,6 +80,7 @@ typedef struct UiRenderSnapshot {
     VariablePanelViewState      variable_panel;
     UiVariableDragView          variable_drag;
     UiProfilePanelState       profile_panel;
+    UiMemoryPanelState        memory_panel;
     UiStatusState             status;
     EditorSearchState             search;
     EditorAutocompleteState       autocomplete;
