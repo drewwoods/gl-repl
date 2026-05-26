@@ -31,13 +31,19 @@
 #define MEM_HEADER_H         18
 #define MEM_TEXT_BLOCK_H     (3 * MEM_ROW_H + 4)  /* 3 rows + divider */
 #define MEM_GRAPH_H          90
-#define MEM_Y_GUTTER         44   /* room for "999.9 MB" tiny labels */
+#define MEM_Y_GUTTER         56   /* room for "999.9 MB" / "9.99 GB" tiny labels */
 #define MEM_BOTTOM_PAD       16   /* X labels + margin */
 
-/* FONT_TINY is variable-width Helvetica 10. The codebase has no
- * glutBitmapLength helper, so width is approximated at 6 px per char
- * for right-alignment. Accurate enough for short numeric labels. */
-#define MEM_TINY_W_APPROX    6
+/* Variable-width FONT_TINY (Helvetica 10) string-width helper. Uses the
+ * GLUT per-character width API rather than a flat approximation so the
+ * Y / X tick labels right-align cleanly without spilling out of the
+ * gutter. */
+static int tiny_text_w(const char *s) {
+    int w = 0;
+    for (; *s; s++)
+        w += glutBitmapWidth(FONT_TINY, (unsigned char)*s);
+    return w;
+}
 
 static int clamp_int(int v, int lo, int hi) {
     if (hi < lo) return lo;
@@ -280,9 +286,7 @@ void ui_memory_panel_render(const UiRenderSnapshot *snap) {
     glEnd();
     glDisable(GL_BLEND);
 
-    /* Y labels right-aligned in the gutter. FONT_TINY (Helvetica 10)
-     * — proportional width; approximated via MEM_TINY_W_APPROX since
-     * the codebase has no glutBitmapLength wrapper. */
+    /* Y labels right-aligned in the gutter (FONT_TINY, Helvetica 10). */
     ui_clr(UI_TOK_TEXT_MUTED);
     for (unsigned long long v = y_lo; v <= y_hi; v += step) {
         if (y_hi <= y_lo) break;
@@ -290,7 +294,7 @@ void ui_memory_panel_render(const UiRenderSnapshot *snap) {
         int gy = plot_y + (int)(frac * MEM_GRAPH_H);
         char lab[24];
         memprof_format_bytes(lab, (int)sizeof(lab), v);
-        int lw = (int)strlen(lab) * MEM_TINY_W_APPROX;
+        int lw = tiny_text_w(lab);
         gl2d_draw_string((float)(panel_x + MEM_Y_GUTTER - 2 - lw),
                          (float)(gy - 5),
                          lab, FONT_TINY);
@@ -330,8 +334,8 @@ void ui_memory_panel_render(const UiRenderSnapshot *snap) {
     fmt_time_offset(mid_lab,   (int)sizeof(mid_lab),   MEM_TOTAL_SPAN_S / 2.0);
     fmt_time_offset(right_lab, (int)sizeof(right_lab), 0.0);
     int label_y = plot_y - 12;
-    int rl_w = (int)strlen(right_lab) * MEM_TINY_W_APPROX;
-    int ml_w = (int)strlen(mid_lab)   * MEM_TINY_W_APPROX;
+    int rl_w = tiny_text_w(right_lab);
+    int ml_w = tiny_text_w(mid_lab);
     gl2d_draw_string((float)plot_x, (float)label_y, left_lab, FONT_TINY);
     gl2d_draw_string((float)(plot_x + plot_w / 2 - ml_w / 2),
                      (float)label_y, mid_lab, FONT_TINY);
