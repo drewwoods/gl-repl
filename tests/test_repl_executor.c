@@ -2,7 +2,7 @@
 #include "repl/core.h"
 #include "editor/input.h"
 #include "repl/state.h"
-#include "app/glr_ctrl.h"   /* glr_app_reset_all (end-to-end P1 test) */
+#include "app/glr_ctrl.h"   /* glr_ctrl_reset_all (end-to-end P1 test) */
 
 // Include the C file directly to access its static callbacks.
 // We must NOT link repl_executor.o into test_repl_executor!
@@ -216,7 +216,7 @@ static void test_enum_arg_gl_trace(void) {
  * end-to-end (bool-slot policy). */
 static void test_enum_arg_end_to_end_trace(void) {
     repl_executor_init_resources();
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
 
     char path[] = "/tmp/test_repl_executor_enum_e2e.txt";
     gl_stub_trace_open(path);

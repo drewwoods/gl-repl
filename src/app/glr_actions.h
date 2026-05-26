@@ -55,6 +55,18 @@ enum {
     GLR_SCENE_FIXED_COUNT = 2    /* the two "###" header rows */
 };
 
+/* Tutorials menu layout when tutorial is active:
+ *   [0..t-1]                 tag names (t = repl_tutorial_visible_tag_count())
+ *   [t + TUTORIAL_OFF_SEP]   "---" separator row
+ *   [t + TUTORIAL_OFF_RESTART] "Restart Tutorial" action
+ *   [t + TUTORIAL_OFF_EXIT]  "Exit Tutorial" action */
+enum {
+    GLR_TUTORIAL_OFF_SEP     = 0,
+    GLR_TUTORIAL_OFF_RESTART = 1,
+    GLR_TUTORIAL_OFF_EXIT    = 2,
+    GLR_TUTORIAL_FIXED_COUNT = 3
+};
+
 /* Default workspace directory for save/load operations. Can be overridden by
  * workspace metadata headers or explicit user selection. */
 #define GLR_DEFAULT_WORKSPACE_DIR "./workspace"

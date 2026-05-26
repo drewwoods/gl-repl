@@ -228,7 +228,7 @@ static void test_capture_restore_round_trip(void) {
     static const char *scene_hint = "Captured Scene";
     int foo_idx;
 
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
     populate_runtime_snapshot_fixture(scene_hint);
     repl_state_capture(&snapshot);
     glr_state_capture(&glr_snap);
@@ -238,7 +238,7 @@ static void test_capture_restore_round_trip(void) {
     variable_panel_state_capture(&varpanel_snap);
     replay_state_capture(&replay_snap);
     editor_help_session_capture(&help_snap);
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
     repl_state_restore(&snapshot);
     glr_state_restore(&glr_snap);
     glr_camera_restore(&camera_snap);
@@ -400,11 +400,11 @@ static void test_reset_all_restores_default_runtime(void) {
     static ReplRuntimeState defaults;
     static ReplRuntimeState reset_state;
 
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
     repl_state_capture(&defaults);
 
     populate_runtime_snapshot_fixture("Reset Scene");
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
     repl_state_capture(&reset_state);
 
     ASSERT_TRUE("reset_all restores default snapshot",
@@ -472,7 +472,7 @@ static void test_line_override_cap_covers_busy_replay(void) {
  * Without the fix, zoom velocity injected before the capture persists
  * through restore and causes dist to drift on subsequent ticks. */
 static void test_camera_restore_clears_momentum(void) {
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
 
     glr_camera_set(0.0f, 0.0f, 5.0f, 0.0f, 0.0f, 0.0f, 0.0f);
     glr_camera_add_zoom_velocity(5.0f);
@@ -493,7 +493,7 @@ static void test_camera_restore_clears_momentum(void) {
 /* Audit #9: SOURCE_TEXT_LOAD_ALL with oversized count must fail rather than
  * silently clamp/truncate. */
 static void test_source_document_load_all_rejects_oversized(void) {
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
 
     source_document_insert_line(0, "glBegin(GL_TRIANGLES);");
     source_document_insert_line(1, "glEnd();");
@@ -521,7 +521,7 @@ static void test_source_document_load_all_rejects_oversized(void) {
 /* Audit #8: apply_change combined shape must be atomic on failure. If the
  * insert-many leg cannot fit, neither the pre-delete nor any insert may stick. */
 static void test_source_document_apply_change_combined_atomic_on_failure(void) {
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
 
     editor_buffer_set_count(MAX_COMMANDS - 1);
     editor_buffer_set_line(0, "line0");
@@ -559,7 +559,7 @@ static void test_source_document_apply_change_combined_atomic_on_failure(void) {
 
 /* Audit #8: apply_change combined shape (pre-insert delete + INSERT_MANY). */
 static void test_source_document_apply_change_combined(void) {
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
 
     source_document_insert_line(0, "glBegin(GL_TRIANGLES);");
     source_document_insert_line(1, "glVertex3f(0,0,0);");
@@ -599,7 +599,7 @@ static void test_source_document_apply_change_combined(void) {
 /* Audit follow-up: INSERT_MANY must reject invalid count values before any
  * pre-delete can mutate the document. */
 static void test_source_document_insert_many_rejects_invalid_count(void) {
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
 
     source_document_insert_line(0, "line0");
     source_document_insert_line(1, "line1");
@@ -634,7 +634,7 @@ static void test_source_document_insert_many_rejects_invalid_count(void) {
 }
 
 static void test_camera_ease_to_default_uses_scene_default(void) {
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
 
     GlrCameraState pose = {
         .rx = 45.0f, .ry = 90.0f, .dist = 10.0f,
@@ -661,7 +661,7 @@ static void test_camera_ease_to_default_uses_scene_default(void) {
 }
 
 static void test_camera_clear_scene_default_falls_back(void) {
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
 
     GlrCameraState pose = {
         .rx = 45.0f, .ry = 90.0f, .dist = 10.0f,
@@ -687,7 +687,7 @@ static void test_camera_clear_scene_default_falls_back(void) {
 }
 
 static void test_example_load_sets_scene_camera_default(void) {
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
 
     glr_scene_load_example(0);
 
@@ -717,7 +717,7 @@ static void test_example_load_sets_scene_camera_default(void) {
 }
 
 static void test_user_scene_load_clears_scene_camera_default(void) {
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
 
     glr_scene_load_example(0);
     for (int i = 0; i < 500; i++)
@@ -750,7 +750,7 @@ static void test_workspace_load_clears_scene_camera_default(void) {
     ASSERT_TRUE("mkdtemp workspace dir", dir != NULL);
     if (!dir) return;
 
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
 
     /* Example 0 has a // camera block → cam_apply_example_block records
      * the pose as the per-scene camera default. */
@@ -796,7 +796,7 @@ static void test_workspace_load_clears_scene_camera_default(void) {
  * ~7% per frame) could produce. The 3D->2D view-mode transition uses
  * the same override mechanism via GLR_VIEW_CAMERA_TO_2D_DECAY. */
 static void test_camera_target_decay_override_applies(void) {
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
 
     glr_camera_set(0.0f, 0.0f, 5.0f, 0.0f, 0.0f, 0.0f, 0.0f);
     glr_camera_ease_to(100.0f, 0.0f, 5.0f, 0.0f, 0.0f, 0.0f);
@@ -816,7 +816,7 @@ static void test_camera_target_decay_override_applies(void) {
  * ease (e.g. the 3D->2D leg) could leak into unrelated motion like
  * Ctrl+Shift+C or a scene-default restore. */
 static void test_camera_target_decay_override_resets_on_new_ease(void) {
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
 
     glr_camera_set(0.0f, 0.0f, 5.0f, 0.0f, 0.0f, 0.0f, 0.0f);
     glr_camera_ease_to(50.0f, 0.0f, 5.0f, 0.0f, 0.0f, 0.0f);

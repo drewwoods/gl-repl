@@ -35,7 +35,7 @@ static unsigned int g_fake_ms;
 static unsigned int fake_clock(void) { return g_fake_ms; }
 
 static void reset_fixture(void) {
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
     ui_state_viewport_set_size(1000, 600);
     ui_state_code_panel_mut()->panel_frac = 0.6f;
     glr_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
@@ -183,7 +183,7 @@ static void test_double_click_rename(void) {
                 editor_inline_rename_active());
 
     /* Example tab: double-click switches/consumes but never renames.
-     * (glr_app_reset_all does not cancel an active inline rename, so
+     * (glr_ctrl_reset_all does not cancel an active inline rename, so
      * clear the prior subtest's rename explicitly.) */
     editor_inline_rename_cancel();
     reset_fixture();

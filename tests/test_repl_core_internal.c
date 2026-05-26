@@ -143,7 +143,7 @@ int main() {
 
     /* 6. Block helpers */
     {
-        glr_app_reset_all(); declare_test_vars();
+        glr_ctrl_reset_all(); declare_test_vars();
         editor_feed_line("for(i, 0, 1) {");     /* 0 */
         editor_feed_line("  glVertex3f(0,0,0);"); /* 1 */
         editor_feed_line("}");                    /* 2 */
@@ -156,7 +156,7 @@ int main() {
 
     /* 7. collect_visible_vars */
     {
-        glr_app_reset_all(); declare_test_vars();
+        glr_ctrl_reset_all(); declare_test_vars();
         editor_feed_line("for(i, 0, 1) {");
         editor_feed_line("  for(j, 0, 1) {");
 
@@ -172,7 +172,7 @@ int main() {
      * re-evaluate at execute time (not blindly enter the body). */
     {
         char err[128];
-        glr_app_reset_all();
+        glr_ctrl_reset_all();
         repl_eval_declare_predef_var("tmp", err, sizeof(err));
         repl_eval_declare_predef_var("tmp2", err, sizeof(err));
         editor_feed_line("if(tmp == 1) {");
@@ -205,7 +205,7 @@ int main() {
      * the updated predef var. */
     {
         char err[128];
-        glr_app_reset_all();
+        glr_ctrl_reset_all();
         repl_eval_declare_predef_var("tmp", err, sizeof(err));
         repl_eval_declare_predef_var("tmp2", err, sizeof(err));
         editor_feed_line("if(tmp > 1) {");
@@ -252,7 +252,7 @@ int main() {
      * and the executor applies the precomputed value; no double-apply. */
     {
         char err[128];
-        glr_app_reset_all();
+        glr_ctrl_reset_all();
         repl_eval_declare_predef_var("tmp2", err, sizeof(err));
         editor_feed_line("tmp2 = tmp2 + 1;");
 
@@ -281,7 +281,7 @@ int main() {
         GLCmd live_first;
         FlatProgramView live_view;
 
-        glr_app_reset_all(); declare_test_vars();
+        glr_ctrl_reset_all(); declare_test_vars();
         editor_feed_line("glEnable(GL_LIGHTING);");
         editor_feed_line("func0(r) {");
         editor_feed_line("  glVertex3f(r, 0, 0);");
@@ -346,7 +346,7 @@ int main() {
         GLCmd loaded[2];
         ReplCommandStore store;
 
-        glr_app_reset_all(); declare_test_vars();
+        glr_ctrl_reset_all(); declare_test_vars();
         editor_feed_line("for(i, 0, 1) {");
         editor_feed_line("}");
         ASSERT_INT("command_store_load pre-cache depth", repl_source_scope_block_depth_at(1), 1);
@@ -407,7 +407,7 @@ int main() {
         EditorInputState *input;
         EditorClipboardState *clipboard;
 
-        glr_app_reset_all(); declare_test_vars();
+        glr_ctrl_reset_all(); declare_test_vars();
 
         input = editor_state_input_mut();
         ASSERT_TRUE("editor input facade uses input buffer",
@@ -583,7 +583,7 @@ int main() {
                    glr_state_presentation().backdrop_mode, CFG_DEFAULT_BACKDROP_MODE);
         /* Step 7a removed the camera reset from
          * glr_state_presentation_reset_defaults — the camera resets
-         * itself via glr_camera_reset_default in glr_app_reset_all. */
+         * itself via glr_camera_reset_default in glr_ctrl_reset_all. */
         ASSERT_INT("presentation reset highlight", glr_state_presentation().highlight_current_poly, 1);
         ASSERT_INT("presentation reset ortho", glr_state_presentation().ortho_mode, 0);
         ASSERT_INT("presentation reset wrap",
@@ -660,7 +660,7 @@ int main() {
     {
         /* Test A: verify collect_visible_vars returns correct total when not truncated */
         {
-            glr_app_reset_all(); declare_test_vars();
+            glr_ctrl_reset_all(); declare_test_vars();
             editor_feed_line("for(i, 0, 1) {");
             editor_feed_line("  for(j, 0, 1) {");
 
@@ -674,7 +674,7 @@ int main() {
 
         /* Test B: verify collect_visible_vars returns total > max_vars when truncated */
         {
-            glr_app_reset_all(); declare_test_vars();
+            glr_ctrl_reset_all(); declare_test_vars();
             /* Manually verify the logic: if we can have 32 visible vars,
                and we ask for only 8, we should see total > 8 if we had more scope */
             ExprVar vars[8];
@@ -689,7 +689,7 @@ int main() {
         /* Test C: verify total is well below MAX_EXPR_VARS for shallow
          * nesting (the truncation guard should never fire here). */
         {
-            glr_app_reset_all();
+            glr_ctrl_reset_all();
             editor_feed_line("for(i, 0, 1) {");
             editor_feed_line("  for(j, 0, 1) {");
             editor_feed_line("    for(k, 0, 1) {");
@@ -709,7 +709,7 @@ int main() {
             int total = 0;
 
             /* Simulate 5 nested scopes */
-            glr_app_reset_all();
+            glr_ctrl_reset_all();
             editor_feed_line("for(a, 0, 1) {");
             editor_feed_line("  for(b, 0, 1) {");
             editor_feed_line("    for(c, 0, 1) {");
@@ -740,7 +740,7 @@ int main() {
      * editor buffer. The flatten path scans and matches both defs; the
      * first must win. */
     {
-        glr_app_reset_all(); declare_test_vars();
+        glr_ctrl_reset_all(); declare_test_vars();
         editor_feed_line("func0(r) {");
         editor_feed_line("  glVertex3f(r, 0, 0);");
         editor_feed_line("}");

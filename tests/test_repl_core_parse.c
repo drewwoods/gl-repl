@@ -92,7 +92,7 @@ static void assert_status_contains(const char *label, const char *needle) {
 
 int main(void) {
     repl_eval_init_predef_vars();
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
     declare_test_vars();
 
     {
@@ -211,7 +211,7 @@ int main(void) {
     }
 
     {
-        glr_app_reset_all();
+        glr_ctrl_reset_all();
         declare_test_vars();
         editor_feed_line("glBegin(GL_TRIANGLES);");
         editor_state_edit_line_set(0);
@@ -234,7 +234,7 @@ int main(void) {
     }
 
     {
-        glr_app_reset_all();
+        glr_ctrl_reset_all();
         declare_test_vars();
         editor_feed_line("gluBegin(GLU_POLYGON);");
         editor_feed_line("gluBegin(GLU_CONTOUR);");
@@ -261,7 +261,7 @@ int main(void) {
     }
 
     {
-        glr_app_reset_all();
+        glr_ctrl_reset_all();
         declare_test_vars();
         editor_state_edit_line_set(0);
         GLCmd cmd;
@@ -272,7 +272,7 @@ int main(void) {
     }
 
     {
-        glr_app_reset_all();
+        glr_ctrl_reset_all();
         declare_test_vars();
         editor_state_edit_line_set(0);
         GLCmd cmd;
@@ -285,7 +285,7 @@ int main(void) {
     }
 
     {
-        glr_app_reset_all();
+        glr_ctrl_reset_all();
         GLCmd cmd;
         char long_cmd[256];
         memset(&cmd, 0, sizeof(cmd));
@@ -299,7 +299,7 @@ int main(void) {
 
     /* 4-arg commands (glRotatef, glutSolidTorus, glutSolidCone) - exercise case 4 in fmt switch */
     {
-        glr_app_reset_all();
+        glr_ctrl_reset_all();
         GLCmd cmd;
         char cmd_text[MAX_LINE_LEN] = "";
         memset(&cmd, 0, sizeof(cmd));
@@ -310,7 +310,7 @@ int main(void) {
     }
 
     {
-        glr_app_reset_all();
+        glr_ctrl_reset_all();
         GLCmd cmd;
         memset(&cmd, 0, sizeof(cmd));
         int ok = parse_for_test("glutSolidTorus(0.1, 0.4, 8, 16)", &cmd);
@@ -319,7 +319,7 @@ int main(void) {
     }
 
     {
-        glr_app_reset_all();
+        glr_ctrl_reset_all();
         GLCmd cmd;
         memset(&cmd, 0, sizeof(cmd));
         int ok = parse_for_test("glutSolidCone(0.25, 1.0, 12, 4)", &cmd);
@@ -328,7 +328,7 @@ int main(void) {
     }
 
     {
-        glr_app_reset_all();
+        glr_ctrl_reset_all();
         GLCmd cmd;
         memset(&cmd, 0, sizeof(cmd));
         int ok = parse_for_test("glutSolidSphere(0.25, 16, 12)", &cmd);
@@ -337,7 +337,7 @@ int main(void) {
     }
 
     {
-        glr_app_reset_all();
+        glr_ctrl_reset_all();
         GLCmd cmd;
         memset(&cmd, 0, sizeof(cmd));
         int ok = parse_for_test("glutSolidTeapot(0.25)", &cmd);
@@ -349,7 +349,7 @@ int main(void) {
     /* glRasterPos3f is table-driven, but worth one parse smoke
      * test now that label() depends on a preceding raster pos. */
     {
-        glr_app_reset_all();
+        glr_ctrl_reset_all();
         GLCmd cmd;
         memset(&cmd, 0, sizeof(cmd));
         int ok = parse_for_test("glRasterPos3f(0, 1.5, 0)", &cmd);
@@ -359,7 +359,7 @@ int main(void) {
     }
 
     {
-        glr_app_reset_all();
+        glr_ctrl_reset_all();
         GLCmd cmd;
         char text[MAX_LINE_LEN] = "";
         memset(&cmd, 0, sizeof(cmd));
@@ -376,7 +376,7 @@ int main(void) {
     }
 
     {
-        glr_app_reset_all();
+        glr_ctrl_reset_all();
         GLCmd cmd;
         memset(&cmd, 0, sizeof(cmd));
         int ok = parse_for_test("label(\"v=%f\", 3.5)", &cmd);
@@ -388,7 +388,7 @@ int main(void) {
     }
 
     {
-        glr_app_reset_all();
+        glr_ctrl_reset_all();
         GLCmd cmd;
         memset(&cmd, 0, sizeof(cmd));
         int ok = parse_for_test(
@@ -399,7 +399,7 @@ int main(void) {
     }
 
     {
-        glr_app_reset_all();
+        glr_ctrl_reset_all();
         GLCmd cmd;
         memset(&cmd, 0, sizeof(cmd));
         int ok = parse_for_test("label(\"100%% done\")", &cmd);
@@ -412,7 +412,7 @@ int main(void) {
     /* label: error cases. Each must surface a graceful
      * status message and reject the line (no GLCmd committed). */
     {
-        glr_app_reset_all();
+        glr_ctrl_reset_all();
         GLCmd cmd;
         memset(&cmd, 0, sizeof(cmd));
         int ok = parse_for_test("label(\"a // b\")", &cmd);
@@ -421,7 +421,7 @@ int main(void) {
                     strstr(g_status, "'//'") != NULL);
     }
     {
-        glr_app_reset_all();
+        glr_ctrl_reset_all();
         GLCmd cmd;
         memset(&cmd, 0, sizeof(cmd));
         int ok = parse_for_test("label(\"a , b\")", &cmd);
@@ -430,7 +430,7 @@ int main(void) {
                     strstr(g_status, "','") != NULL);
     }
     {
-        glr_app_reset_all();
+        glr_ctrl_reset_all();
         GLCmd cmd;
         memset(&cmd, 0, sizeof(cmd));
         int ok = parse_for_test("label(\"hi\\nworld\")", &cmd);
@@ -442,7 +442,7 @@ int main(void) {
         /* Outer parser must find the closing ')' first; missing
          * close quote is detected by our string-aware helper after
          * the args are extracted between the parens. */
-        glr_app_reset_all();
+        glr_ctrl_reset_all();
         GLCmd cmd;
         memset(&cmd, 0, sizeof(cmd));
         int ok = parse_for_test("label(\"unterminated)", &cmd);
@@ -451,7 +451,7 @@ int main(void) {
                     strstr(g_status, "closing") != NULL);
     }
     {
-        glr_app_reset_all();
+        glr_ctrl_reset_all();
         GLCmd cmd;
         memset(&cmd, 0, sizeof(cmd));
         int ok = parse_for_test("label(\"%f\", 1, 2)", &cmd);
@@ -460,7 +460,7 @@ int main(void) {
                     strstr(g_status, "format expects") != NULL);
     }
     {
-        glr_app_reset_all();
+        glr_ctrl_reset_all();
         GLCmd cmd;
         memset(&cmd, 0, sizeof(cmd));
         int ok = parse_for_test("label(\"%d\", 1)", &cmd);
@@ -469,7 +469,7 @@ int main(void) {
                     strstr(g_status, "only %f") != NULL);
     }
     {
-        glr_app_reset_all();
+        glr_ctrl_reset_all();
         GLCmd cmd;
         memset(&cmd, 0, sizeof(cmd));
         int ok = parse_for_test(
@@ -481,7 +481,7 @@ int main(void) {
 
     /* Removed GLU quadric shapes should no longer parse. */
     {
-        glr_app_reset_all();
+        glr_ctrl_reset_all();
         GLCmd cmd;
         memset(&cmd, 0, sizeof(cmd));
         ASSERT_TRUE("gluSphere parse fails",
@@ -496,7 +496,7 @@ int main(void) {
 
     /* glColorMaterial - face/mode enums */
     {
-        glr_app_reset_all();
+        glr_ctrl_reset_all();
         GLCmd cmd;
         char cmd_text[MAX_LINE_LEN] = "";
         memset(&cmd, 0, sizeof(cmd));
@@ -511,7 +511,7 @@ int main(void) {
     }
 
     {
-        glr_app_reset_all();
+        glr_ctrl_reset_all();
         GLCmd cmd;
         memset(&cmd, 0, sizeof(cmd));
         int ok = parse_for_test("glColorMaterial(GL_FRONT, GL_SHININESS)", &cmd);
@@ -524,7 +524,7 @@ int main(void) {
      * and the typed source token is emitted verbatim (not
      * canonicalized) on the expression-fallback path. */
     {
-        glr_app_reset_all();
+        glr_ctrl_reset_all();
         GLCmd cmd;
         char t[MAX_LINE_LEN] = "";
         memset(&cmd, 0, sizeof(cmd));
@@ -537,7 +537,7 @@ int main(void) {
                     strstr(t, "glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);") != NULL);
     }
     {
-        glr_app_reset_all();
+        glr_ctrl_reset_all();
         GLCmd cmd;
         char t[MAX_LINE_LEN] = "";
         memset(&cmd, 0, sizeof(cmd));
@@ -549,7 +549,7 @@ int main(void) {
                     strstr(t, "glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, 1);") != NULL);
     }
     {
-        glr_app_reset_all();
+        glr_ctrl_reset_all();
         GLCmd cmd;
         char t[MAX_LINE_LEN] = "";
         memset(&cmd, 0, sizeof(cmd));
@@ -562,7 +562,7 @@ int main(void) {
                     strstr(t, "glLightModeli(GL_LIGHT_MODEL_LOCAL_VIEWER, 2);") != NULL);
     }
     {
-        glr_app_reset_all();
+        glr_ctrl_reset_all();
         declare_test_vars();
         GLCmd cmd;
         memset(&cmd, 0, sizeof(cmd));
@@ -577,7 +577,7 @@ int main(void) {
      * accepts flat-float input AND the compound-literal form, canonical
      * emit always wraps the values in (GLfloat[]){...}. */
     {
-        glr_app_reset_all();
+        glr_ctrl_reset_all();
         GLCmd cmd;
         char cmd_text[MAX_LINE_LEN] = "";
         memset(&cmd, 0, sizeof(cmd));
@@ -592,7 +592,7 @@ int main(void) {
     }
 
     {
-        glr_app_reset_all();
+        glr_ctrl_reset_all();
         GLCmd cmd;
         char cmd_text[MAX_LINE_LEN] = "";
         memset(&cmd, 0, sizeof(cmd));
@@ -610,7 +610,7 @@ int main(void) {
     /* Compound-literal input round-trips through the parser without
      * losing args or changing function name. */
     {
-        glr_app_reset_all();
+        glr_ctrl_reset_all();
         GLCmd cmd;
         char cmd_text[MAX_LINE_LEN] = "";
         memset(&cmd, 0, sizeof(cmd));
@@ -625,7 +625,7 @@ int main(void) {
     }
 
     {
-        glr_app_reset_all();
+        glr_ctrl_reset_all();
         GLCmd cmd;
         char cmd_text[MAX_LINE_LEN] = "";
         memset(&cmd, 0, sizeof(cmd));
@@ -641,7 +641,7 @@ int main(void) {
 
     /* glMaterialfv - bad face name */
     {
-        glr_app_reset_all();
+        glr_ctrl_reset_all();
         GLCmd cmd;
         memset(&cmd, 0, sizeof(cmd));
         int ok = parse_for_test("glMaterialfv(FRONT, GL_DIFFUSE, 0.5)", &cmd);
@@ -665,7 +665,7 @@ int main(void) {
             "glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, 1, 0, 0, 1)",
         };
         for (int i = 0; i < (int)(sizeof cases / sizeof cases[0]); i++) {
-            glr_app_reset_all();
+            glr_ctrl_reset_all();
             GLCmd cmd;
             memset(&cmd, 0, sizeof(cmd));
             int ok = parse_for_test(cases[i], &cmd);
@@ -685,7 +685,7 @@ int main(void) {
             "glMaterialfv(GL_FRONT, GL_AMBIENT_AND_DIFFUSE, 0.5, 0.5, 0.5, 1)",
         };
         for (int i = 0; i < (int)(sizeof cases / sizeof cases[0]); i++) {
-            glr_app_reset_all();
+            glr_ctrl_reset_all();
             GLCmd cmd;
             memset(&cmd, 0, sizeof(cmd));
             int ok = parse_for_test(cases[i], &cmd);
@@ -700,7 +700,7 @@ int main(void) {
      * full expression evaluator. The has_vars flag must propagate so
      * the executor re-evaluates per frame. */
     {
-        glr_app_reset_all();
+        glr_ctrl_reset_all();
         declare_test_vars();
         GLCmd cmd;
         char cmd_text[MAX_LINE_LEN] = "";
@@ -715,7 +715,7 @@ int main(void) {
 
     /* Variable references on the flat path also flag has_vars. */
     {
-        glr_app_reset_all();
+        glr_ctrl_reset_all();
         declare_test_vars();
         GLCmd cmd;
         memset(&cmd, 0, sizeof(cmd));
@@ -735,7 +735,7 @@ int main(void) {
             "glMaterialfv(GL_FRONT, GL_DIFFUSE, (GLfloat[]){ 0.8, 0.2, 0.2, 1 })",
         };
         for (int i = 0; i < (int)(sizeof cases / sizeof cases[0]); i++) {
-            glr_app_reset_all();
+            glr_ctrl_reset_all();
             GLCmd cmd;
             char cmd_text[MAX_LINE_LEN] = "";
             memset(&cmd, 0, sizeof(cmd));
@@ -752,7 +752,7 @@ int main(void) {
      * the canonical emit always supplies its own, so an input ';'
      * must not double up or break parsing. */
     {
-        glr_app_reset_all();
+        glr_ctrl_reset_all();
         GLCmd cmd;
         char cmd_text[MAX_LINE_LEN] = "";
         memset(&cmd, 0, sizeof(cmd));
@@ -771,7 +771,7 @@ int main(void) {
      * shape interactive users type most often, and the original
      * glMaterialf bug silently dropped the round-trip — locking it in. */
     {
-        glr_app_reset_all();
+        glr_ctrl_reset_all();
         GLCmd cmd;
         char cmd_text[MAX_LINE_LEN] = "";
         memset(&cmd, 0, sizeof(cmd));
@@ -797,7 +797,7 @@ int main(void) {
 
         /* Round-trip: feed the canonical emit back through the parser
          * and confirm the resulting GLCmd is identical. */
-        glr_app_reset_all();
+        glr_ctrl_reset_all();
         GLCmd cmd2;
         char cmd_text2[MAX_LINE_LEN] = "";
         memset(&cmd2, 0, sizeof(cmd2));
@@ -813,7 +813,7 @@ int main(void) {
      * CmdType (CMD_MATERIALF), canonical emit preserves the typed
      * function name (no rewrite to glMaterialfv). */
     {
-        glr_app_reset_all();
+        glr_ctrl_reset_all();
         GLCmd cmd;
         char cmd_text[MAX_LINE_LEN] = "";
         memset(&cmd, 0, sizeof(cmd));
@@ -843,7 +843,7 @@ int main(void) {
             "glMaterialf(GL_FRONT, GL_AMBIENT_AND_DIFFUSE, 0.5)",
         };
         for (int i = 0; i < (int)(sizeof cases / sizeof cases[0]); i++) {
-            glr_app_reset_all();
+            glr_ctrl_reset_all();
             GLCmd cmd;
             memset(&cmd, 0, sizeof(cmd));
             int ok = parse_for_test(cases[i], &cmd);
@@ -853,7 +853,7 @@ int main(void) {
 
     /* glMaterialf rejects bad face token. */
     {
-        glr_app_reset_all();
+        glr_ctrl_reset_all();
         GLCmd cmd;
         memset(&cmd, 0, sizeof(cmd));
         int ok = parse_for_test("glMaterialf(FRONT, GL_SHININESS, 64)", &cmd);
@@ -863,7 +863,7 @@ int main(void) {
     /* glMaterialf accepts an expression in the value slot and
      * propagates has_vars when the expression references a predef. */
     {
-        glr_app_reset_all();
+        glr_ctrl_reset_all();
         declare_test_vars();
         GLCmd cmd;
         memset(&cmd, 0, sizeof(cmd));
@@ -877,7 +877,7 @@ int main(void) {
      * expect 4 floats, and a 1-element compound literal would let the
      * GL driver read past the array in exported standalone C. */
     {
-        glr_app_reset_all();
+        glr_ctrl_reset_all();
         GLCmd cmd;
         memset(&cmd, 0, sizeof(cmd));
         int ok = parse_for_test("glMaterialfv(GL_FRONT, GL_DIFFUSE, 0.5)", &cmd);
@@ -886,7 +886,7 @@ int main(void) {
                     strstr(g_status, "Only GL_SHININESS") != NULL);
     }
     {
-        glr_app_reset_all();
+        glr_ctrl_reset_all();
         GLCmd cmd;
         memset(&cmd, 0, sizeof(cmd));
         int ok = parse_for_test(
@@ -898,7 +898,7 @@ int main(void) {
      * silently dropped without this guard — reject so the user sees
      * the typo. */
     {
-        glr_app_reset_all();
+        glr_ctrl_reset_all();
         GLCmd cmd;
         memset(&cmd, 0, sizeof(cmd));
         int ok = parse_for_test(
@@ -909,7 +909,7 @@ int main(void) {
                     strstr(g_status, "Trailing content after") != NULL);
     }
     {
-        glr_app_reset_all();
+        glr_ctrl_reset_all();
         GLCmd cmd;
         memset(&cmd, 0, sizeof(cmd));
         int ok = parse_for_test(
@@ -921,7 +921,7 @@ int main(void) {
 
     /* glPointParameterfv */
     {
-        glr_app_reset_all();
+        glr_ctrl_reset_all();
         GLCmd cmd;
         ExprVar vars[1] = { { "radius", 1.0f } };
         memset(&cmd, 0, sizeof(cmd));
@@ -934,7 +934,7 @@ int main(void) {
 
     /* Incomplete commands should not be reported as unknown commands. */
     {
-        glr_app_reset_all();
+        glr_ctrl_reset_all();
         GLCmd cmd;
         memset(&cmd, 0, sizeof(cmd));
         int ok = parse_for_test("glColor3f(1, 1", &cmd);
@@ -946,7 +946,7 @@ int main(void) {
     }
 
     {
-        glr_app_reset_all();
+        glr_ctrl_reset_all();
         GLCmd cmd;
         memset(&cmd, 0, sizeof(cmd));
         int ok = parse_for_test("glVertex(1,", &cmd);
@@ -958,7 +958,7 @@ int main(void) {
     }
 
     {
-        glr_app_reset_all();
+        glr_ctrl_reset_all();
         GLCmd cmd;
         memset(&cmd, 0, sizeof(cmd));
         int ok = parse_for_test("glColor3f(1, 1)", &cmd);
@@ -970,7 +970,7 @@ int main(void) {
     }
 
     {
-        glr_app_reset_all();
+        glr_ctrl_reset_all();
         GLCmd cmd;
         memset(&cmd, 0, sizeof(cmd));
         int ok = parse_for_test("glColor3f(1,, 3)", &cmd);
@@ -981,7 +981,7 @@ int main(void) {
     }
 
     {
-        glr_app_reset_all();
+        glr_ctrl_reset_all();
         GLCmd cmd;
         memset(&cmd, 0, sizeof(cmd));
         int ok = parse_for_test("glTotallyUnknown(1, 2, 3)", &cmd);
@@ -993,7 +993,7 @@ int main(void) {
      * generic "Unknown cmd" — typing `rand()` or `sin(t)` as a
      * statement is a common mistake (the result has nowhere to go). */
     {
-        glr_app_reset_all();
+        glr_ctrl_reset_all();
         GLCmd cmd;
         memset(&cmd, 0, sizeof(cmd));
         int ok = parse_for_test("rand()", &cmd);
@@ -1004,7 +1004,7 @@ int main(void) {
                     strstr(g_status, "Unknown cmd") == NULL);
     }
     {
-        glr_app_reset_all();
+        glr_ctrl_reset_all();
         GLCmd cmd;
         memset(&cmd, 0, sizeof(cmd));
         int ok = parse_for_test("sin(t)", &cmd);
@@ -1014,7 +1014,7 @@ int main(void) {
     }
 
     {
-        glr_app_reset_all();
+        glr_ctrl_reset_all();
         GLCmd cmd;
         memset(&cmd, 0, sizeof(cmd));
         int ok = parse_for_test("glTotallyUnknown(1, 2", &cmd);
@@ -1026,7 +1026,7 @@ int main(void) {
 
     /* gluBegin/gluEnd via parse_command */
     {
-        glr_app_reset_all();
+        glr_ctrl_reset_all();
         GLCmd cmd;
         memset(&cmd, 0, sizeof(cmd));
         int ok = parse_for_test("gluBegin(GLU_POLYGON)", &cmd);
@@ -1035,7 +1035,7 @@ int main(void) {
     }
 
     {
-        glr_app_reset_all();
+        glr_ctrl_reset_all();
         GLCmd cmd;
         memset(&cmd, 0, sizeof(cmd));
         int ok = parse_for_test("gluBegin(GLU_CONTOUR)", &cmd);
@@ -1045,7 +1045,7 @@ int main(void) {
 
     /* glDepthMask - bool-enum state command */
     {
-        glr_app_reset_all();
+        glr_ctrl_reset_all();
         GLCmd cmd;
         char cmd_text[MAX_LINE_LEN] = "";
         memset(&cmd, 0, sizeof(cmd));
@@ -1057,7 +1057,7 @@ int main(void) {
                     strstr(cmd_text, "glDepthMask(GL_FALSE);") != NULL);
     }
     {
-        glr_app_reset_all();
+        glr_ctrl_reset_all();
         GLCmd cmd;
         memset(&cmd, 0, sizeof(cmd));
         int ok = parse_for_test("glDepthMask(GL_TRUE)", &cmd);
@@ -1065,7 +1065,7 @@ int main(void) {
         ASSERT_TRUE("glDepthMask GL_TRUE mode", (GLenum)cmd.args[0] == GL_TRUE);
     }
     {
-        glr_app_reset_all();
+        glr_ctrl_reset_all();
         GLCmd cmd;
         memset(&cmd, 0, sizeof(cmd));
         /* Bool-slot policy: glDepthMask is ENUM_OR_CONST_VALUE, so a
@@ -1080,7 +1080,7 @@ int main(void) {
                     strstr(cmd_text, "glDepthMask(GL_TRUE);") != NULL);
     }
     {
-        glr_app_reset_all();
+        glr_ctrl_reset_all();
         GLCmd cmd;
         char cmd_text[MAX_LINE_LEN] = "";
         memset(&cmd, 0, sizeof(cmd));
@@ -1092,7 +1092,7 @@ int main(void) {
                     strstr(cmd_text, "glDepthMask(GL_FALSE);") != NULL);
     }
     {
-        glr_app_reset_all();
+        glr_ctrl_reset_all();
         declare_test_vars();
         GLCmd cmd;
         memset(&cmd, 0, sizeof(cmd));
@@ -1102,7 +1102,7 @@ int main(void) {
         ASSERT_TRUE("glDepthMask(var) rejected", ok == 0);
     }
     {
-        glr_app_reset_all();
+        glr_ctrl_reset_all();
         GLCmd cmd;
         memset(&cmd, 0, sizeof(cmd));
         int ok = parse_for_test("glDepthMask(undef_var)", &cmd);
@@ -1111,7 +1111,7 @@ int main(void) {
                                "undeclared variable 'undef_var'");
     }
     {
-        glr_app_reset_all();
+        glr_ctrl_reset_all();
         GLCmd cmd;
         memset(&cmd, 0, sizeof(cmd));
         /* Unknown magic numbers still rejected (only 0/1 reverse-map). */
@@ -1128,7 +1128,7 @@ int main(void) {
             "glColorMask(1+, 0, 1, 0)", "glColorMask(1, 0abc, 1, 0)",
         };
         for (size_t bi = 0; bi < sizeof(bad) / sizeof(bad[0]); bi++) {
-            glr_app_reset_all();
+            glr_ctrl_reset_all();
             GLCmd c;
             memset(&c, 0, sizeof(c));
             int r = parse_for_test(bad[bi], &c);
@@ -1137,7 +1137,7 @@ int main(void) {
     }
     {
         /* Well-formed literals still accepted and canonicalized. */
-        glr_app_reset_all();
+        glr_ctrl_reset_all();
         GLCmd c;
         char t[MAX_LINE_LEN] = "";
         memset(&c, 0, sizeof(c));
@@ -1150,7 +1150,7 @@ int main(void) {
 
     /* glColorMask - 4 boolean-mask slots (the original ask) */
     {
-        glr_app_reset_all();
+        glr_ctrl_reset_all();
         GLCmd cmd;
         char cmd_text[MAX_LINE_LEN] = "";
         memset(&cmd, 0, sizeof(cmd));
@@ -1167,7 +1167,7 @@ int main(void) {
                     strstr(cmd_text, "glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_FALSE);") != NULL);
     }
     {
-        glr_app_reset_all();
+        glr_ctrl_reset_all();
         GLCmd cmd;
         char cmd_text[MAX_LINE_LEN] = "";
         memset(&cmd, 0, sizeof(cmd));
@@ -1179,7 +1179,7 @@ int main(void) {
                     strstr(cmd_text, "glColorMask(GL_TRUE, GL_FALSE, GL_TRUE, GL_FALSE);") != NULL);
     }
     {
-        glr_app_reset_all();
+        glr_ctrl_reset_all();
         declare_test_vars();
         GLCmd cmd;
         memset(&cmd, 0, sizeof(cmd));
@@ -1188,7 +1188,7 @@ int main(void) {
         ASSERT_TRUE("glColorMask(var,...) rejected", ok == 0);
     }
     {
-        glr_app_reset_all();
+        glr_ctrl_reset_all();
         GLCmd cmd;
         memset(&cmd, 0, sizeof(cmd));
         /* Wrong arg count is rejected. */
@@ -1200,14 +1200,14 @@ int main(void) {
      * numeric fallback from the refactor. A raw enum number stays
      * rejected exactly as before. */
     {
-        glr_app_reset_all();
+        glr_ctrl_reset_all();
         GLCmd cmd;
         memset(&cmd, 0, sizeof(cmd));
         int ok = parse_for_test("glEnable(3553)", &cmd);
         ASSERT_TRUE("glEnable(3553) still rejected", ok == 0);
     }
     {
-        glr_app_reset_all();
+        glr_ctrl_reset_all();
         GLCmd cmd;
         memset(&cmd, 0, sizeof(cmd));
         int ok = parse_for_test("glShadeModel(7425)", &cmd);
@@ -1231,7 +1231,7 @@ int main(void) {
             { "glColorMask(GL_TRUE, GL_FALSE, GL_TRUE, GL_FALSE)",      4 },
         };
         for (size_t ci = 0; ci < sizeof(cases) / sizeof(cases[0]); ci++) {
-            glr_app_reset_all();
+            glr_ctrl_reset_all();
             GLCmd cmd;
             memset(&cmd, 0, sizeof(cmd));
             int ok = parse_for_test(cases[ci].line, &cmd);
@@ -1243,7 +1243,7 @@ int main(void) {
 
     /* whitespace + semicolon trimming stays predictable */
     {
-        glr_app_reset_all();
+        glr_ctrl_reset_all();
         GLCmd cmd;
         char cmd_text[MAX_LINE_LEN] = "";
         memset(&cmd, 0, sizeof(cmd));
@@ -1256,7 +1256,7 @@ int main(void) {
     }
 
     {
-        glr_app_reset_all();
+        glr_ctrl_reset_all();
         GLCmd cmd;
         char cmd_text[MAX_LINE_LEN] = "";
         memset(&cmd, 0, sizeof(cmd));
@@ -1271,7 +1271,7 @@ int main(void) {
 
     /* zero-arg commands can be written with or without () */
     {
-        glr_app_reset_all();
+        glr_ctrl_reset_all();
         GLCmd cmd;
         memset(&cmd, 0, sizeof(cmd));
         int ok = parse_for_test("glPushMatrix", &cmd);
@@ -1280,7 +1280,7 @@ int main(void) {
     }
 
     {
-        glr_app_reset_all();
+        glr_ctrl_reset_all();
         GLCmd cmd;
         memset(&cmd, 0, sizeof(cmd));
         int ok = parse_for_test("glPopMatrix()", &cmd);
@@ -1289,7 +1289,7 @@ int main(void) {
     }
 
     {
-        glr_app_reset_all();
+        glr_ctrl_reset_all();
         GLCmd cmd;
         memset(&cmd, 0, sizeof(cmd));
         int ok = parse_for_test("glLoadIdentity()", &cmd);
@@ -1299,7 +1299,7 @@ int main(void) {
 
     /* fixed-arity command with extra args should be rejected predictably */
     {
-        glr_app_reset_all();
+        glr_ctrl_reset_all();
         GLCmd cmd;
         memset(&cmd, 0, sizeof(cmd));
         int ok = parse_for_test("glColor3f(1, 2, 3, 4)", &cmd);
@@ -1322,7 +1322,7 @@ int main(void) {
 
     /* function calls: empty arglist valid, malformed arglist invalid */
     {
-        glr_app_reset_all();
+        glr_ctrl_reset_all();
         GLCmd cmd;
         memset(&cmd, 0, sizeof(cmd));
         int ok = parse_for_test("func2()", &cmd);
@@ -1332,7 +1332,7 @@ int main(void) {
     }
 
     {
-        glr_app_reset_all();
+        glr_ctrl_reset_all();
         GLCmd cmd;
         memset(&cmd, 0, sizeof(cmd));
         int ok = parse_for_test("func2(1,)", &cmd);
@@ -1342,7 +1342,7 @@ int main(void) {
     }
 
     {
-        glr_app_reset_all();
+        glr_ctrl_reset_all();
         GLCmd cmd;
         char cmd_text[MAX_LINE_LEN] = "";
         memset(&cmd, 0, sizeof(cmd));
@@ -1355,7 +1355,7 @@ int main(void) {
     }
 
     {
-        glr_app_reset_all();
+        glr_ctrl_reset_all();
         GLCmd cmd;
         memset(&cmd, 0, sizeof(cmd));
         int ok = parse_for_test("func2(1 2)", &cmd);
@@ -1366,7 +1366,7 @@ int main(void) {
 
     /* supported arities for specialized commands */
     {
-        glr_app_reset_all();
+        glr_ctrl_reset_all();
         GLCmd cmd;
         memset(&cmd, 0, sizeof(cmd));
         int ok = parse_for_test("glMaterialfv(GL_FRONT, GL_AMBIENT, 0.1, 0.2, 0.3)", &cmd);
@@ -1375,7 +1375,7 @@ int main(void) {
     }
 
     {
-        glr_app_reset_all();
+        glr_ctrl_reset_all();
         GLCmd cmd;
         memset(&cmd, 0, sizeof(cmd));
         int ok = parse_for_test("glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION, 1, 0)", &cmd);
@@ -1385,7 +1385,7 @@ int main(void) {
     }
 
     {
-        glr_app_reset_all();
+        glr_ctrl_reset_all();
         GLCmd cmd;
         memset(&cmd, 0, sizeof(cmd));
         int ok = parse_for_test("glPointParameterfv(GL_POINT_FADE_THRESHOLD_SIZE, 1, 0, 0)", &cmd);
@@ -1396,7 +1396,7 @@ int main(void) {
 
     /* known command prefix + missing close paren remains "incomplete", even with ';' */
     {
-        glr_app_reset_all();
+        glr_ctrl_reset_all();
         GLCmd cmd;
         memset(&cmd, 0, sizeof(cmd));
         int ok = parse_for_test("glTranslatef(1, 2, 3;", &cmd);
@@ -1414,7 +1414,7 @@ int main(void) {
      * line itself must stay under that limit while still producing a
      * canonicalized "  funcN(args);" that overflows GLCmd.source (256). */
     {
-        glr_app_reset_all();
+        glr_ctrl_reset_all();
         g_status[0] = '\0';
 
         /* 13 numeric args of 18 chars separated by ',' → 246 chars of args.

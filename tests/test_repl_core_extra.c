@@ -92,7 +92,7 @@ void test_utils() {
     ASSERT_STR("mode_name(GL_TRIANGLES)", repl_mode_name(GL_TRIANGLES), "GL_TRIANGLES");
     ASSERT_STR("mode_name(unknown)", repl_mode_name(9999), "???");
 
-    glr_app_reset_all(); declare_test_vars();
+    glr_ctrl_reset_all(); declare_test_vars();
     ASSERT_INT("count_vertices initial", repl_count_vertices(), 0);
     ASSERT_INT("current_begin_mode initial", repl_current_begin_mode(), GL_TRIANGLES);
     ASSERT_INT("in_begin_block initial", repl_source_scope_in_begin_block(), 0);
@@ -126,7 +126,7 @@ void test_utils() {
 
 void test_repl_replay_advanced() {
     printf("--- Replay advanced functions ---\n");
-    glr_app_reset_all(); declare_test_vars();
+    glr_ctrl_reset_all(); declare_test_vars();
     editor_feed_line("glVertex3f(0,0,0);");
     editor_feed_line("glVertex3f(1,1,1);");
     editor_feed_line("glVertex3f(2,2,2);");
@@ -170,13 +170,13 @@ void test_repl_replay_advanced() {
 
 void test_io() {
     printf("--- IO functions ---\n");
-    glr_app_reset_all(); declare_test_vars();
+    glr_ctrl_reset_all(); declare_test_vars();
     editor_feed_line("glVertex3f(1,2,3);");
 
     const char *tmpf = "/tmp/test_repl_core_extra_io.c";
     repl_export_save_output(tmpf, source_document_view(), NULL);
 
-    glr_app_reset_all(); declare_test_vars();
+    glr_ctrl_reset_all(); declare_test_vars();
     ASSERT_INT("num_cmds after reset", repl_count_vertices(), 0);
 
     int r = repl_export_load_from_file(tmpf);
@@ -196,7 +196,7 @@ void test_io() {
 
 void test_execution() {
     printf("--- Execution functions ---\n");
-    glr_app_reset_all(); declare_test_vars();
+    glr_ctrl_reset_all(); declare_test_vars();
     editor_feed_line("n = 1;");
     repl_flatten_commands(editor_state_edit_line());
 
@@ -217,7 +217,7 @@ void test_examples() {
 
 void test_user_scene() {
     printf("--- User scene functions ---\n");
-    glr_app_reset_all(); declare_test_vars();
+    glr_ctrl_reset_all(); declare_test_vars();
     editor_feed_line("glVertex3f(1,1,1);");
 
     /* Loading an example should save slot 0 (home scene) if it's the first time */
@@ -239,7 +239,7 @@ void test_user_scene() {
 
 void test_user_scene_persists_across_example_switch() {
     printf("--- User scene persists across example switch ---\n");
-    glr_app_reset_all(); declare_test_vars();
+    glr_ctrl_reset_all(); declare_test_vars();
     if (repl_example_count() < 1) return;
 
     editor_feed_line("glVertex3f(1,1,1);");
@@ -261,7 +261,7 @@ void test_user_scene_persists_across_example_switch() {
 
 void test_user_scene_promote_on_edit() {
     printf("--- User scene promotion on example edit ---\n");
-    glr_app_reset_all(); declare_test_vars();
+    glr_ctrl_reset_all(); declare_test_vars();
 
     /* Fresh session: no user scenes. Load an example → slot 0 captures
      * the empty home scene; example is active, no user scene active. */
@@ -301,7 +301,7 @@ void test_user_scene_promote_on_edit() {
 
 void test_user_scene_promote_name_dedup() {
     printf("--- User scene promotion name de-duplication ---\n");
-    glr_app_reset_all(); declare_test_vars();
+    glr_ctrl_reset_all(); declare_test_vars();
 
     /* Load and promote example 0 twice; second promotion must get a
      * distinct "<name> (2)" since the first occupies the bare name. */
@@ -327,7 +327,7 @@ void test_user_scene_promote_name_dedup() {
 
 void test_workspace_round_trip() {
     printf("--- Workspace save/load round-trip ---\n");
-    glr_app_reset_all(); declare_test_vars();
+    glr_ctrl_reset_all(); declare_test_vars();
     if (repl_example_count() < 2) return;
 
     /* Populate: home (from feed) + two promoted example scenes. */
@@ -363,7 +363,7 @@ void test_workspace_round_trip() {
     ASSERT_STR("workspace dir remembered", repl_workspace_dir(), dir);
 
     /* Wipe slots, load back. */
-    glr_app_reset_all(); declare_test_vars();
+    glr_ctrl_reset_all(); declare_test_vars();
     ASSERT_INT("slots cleared by reset", repl_user_scene_count(), 0);
 
     repl_load_example(0);
@@ -416,7 +416,7 @@ void test_workspace_round_trip() {
  * single-file load path (which calls repl_scenes_activate_home_slot). */
 void test_workspace_initial_load_activates_first_slot() {
     printf("--- Workspace initial-load activates first slot ---\n");
-    glr_app_reset_all(); declare_test_vars();
+    glr_ctrl_reset_all(); declare_test_vars();
 
     /* Stage a workspace dir with two scenes saved out. */
     if (repl_example_count() < 1) return;
@@ -433,7 +433,7 @@ void test_workspace_initial_load_activates_first_slot() {
     /* Wipe and bootstrap with the workspace path — simulates
      * `./gl-repl ./workspace` going through gl_repl.c -> bootstrap_repl
      * -> repl_load_initial_commands(dir). */
-    glr_app_reset_all(); declare_test_vars();
+    glr_ctrl_reset_all(); declare_test_vars();
     ASSERT_INT("slots cleared by reset", repl_user_scene_count(), 0);
     ASSERT_INT("no active slot before bootstrap",
                repl_active_user_scene(), -1);
@@ -466,7 +466,7 @@ void test_workspace_initial_load_activates_first_slot() {
 
 void test_workspace_save_slug_collisions() {
     printf("--- Workspace save slug collisions ---\n");
-    glr_app_reset_all(); declare_test_vars();
+    glr_ctrl_reset_all(); declare_test_vars();
     if (repl_example_count() < 2) return;
 
     repl_load_example(0);
@@ -532,7 +532,7 @@ void test_workspace_save_slug_collisions() {
 
 void test_workspace_save_max_slug_collisions() {
     printf("--- Workspace save max slug collisions ---\n");
-    glr_app_reset_all(); declare_test_vars();
+    glr_ctrl_reset_all(); declare_test_vars();
     if (repl_example_count() < 2) return;
 
     repl_load_example(0);
@@ -634,18 +634,18 @@ void test_scene_load_clears_func_aliases_and_saved_workspace_stays_clean() {
     snprintf(plain_path, sizeof(plain_path), "%s/plain_scene.c", input_dir);
     snprintf(plain_out_path, sizeof(plain_out_path), "%s/plain_scene.c", output_dir);
 
-    glr_app_reset_all(); declare_test_vars();
+    glr_ctrl_reset_all(); declare_test_vars();
     editor_feed_line("drawCube {");
     editor_feed_line("  glVertex3f(0, 0, 0);");
     editor_feed_line("}");
     editor_feed_line("drawCube();");
     repl_export_save_output(alias_path, source_document_view(), NULL);
 
-    glr_app_reset_all(); declare_test_vars();
+    glr_ctrl_reset_all(); declare_test_vars();
     editor_feed_line("glVertex3f(1, 2, 3);");
     repl_export_save_output(plain_path, source_document_view(), NULL);
 
-    glr_app_reset_all(); declare_test_vars();
+    glr_ctrl_reset_all(); declare_test_vars();
     ReplSceneLoadStatus reason = REPL_SCENE_LOAD_OK;
     int alias_slot = repl_load_scene_as_new_slot(alias_path, &reason);
     ASSERT_TRUE("alias scene loaded", alias_slot >= 0);
@@ -711,7 +711,7 @@ void test_scene_load_clears_func_aliases_and_saved_workspace_stays_clean() {
 
 void test_user_scene_preserves_scratch_state(void) {
     printf("--- User scene scratch preservation ---\n");
-    glr_app_reset_all(); declare_test_vars();
+    glr_ctrl_reset_all(); declare_test_vars();
     if (repl_example_count() < 1) return;
 
     editor_feed_line("A[0] = 1;");
@@ -735,7 +735,7 @@ void test_user_scene_preserves_scratch_state(void) {
 
 void test_user_scene_promote_all_slots_full() {
     printf("--- User scene promotion when all slots full ---\n");
-    glr_app_reset_all(); declare_test_vars();
+    glr_ctrl_reset_all(); declare_test_vars();
     if (repl_example_count() < 1) return;
 
     /* Fill slots 1..MAX_USER_SCENES-1 via repeated promotion. */
@@ -755,7 +755,7 @@ void test_user_scene_promote_all_slots_full() {
 
 void test_user_scene_promote_lru_evict() {
     printf("--- User scene promotion LRU eviction ---\n");
-    glr_app_reset_all(); declare_test_vars();
+    glr_ctrl_reset_all(); declare_test_vars();
     if (repl_example_count() < 1) return;
 
     char dir[64];
@@ -820,7 +820,7 @@ void test_user_scene_promote_lru_evict() {
 
 void test_user_scene_rename_flow() {
     printf("--- User scene rename flow ---\n");
-    glr_app_reset_all(); declare_test_vars();
+    glr_ctrl_reset_all(); declare_test_vars();
     if (repl_example_count() < 1) return;
 
     repl_load_example(0);
@@ -875,7 +875,7 @@ void test_inline_file_prompt_flow() {
     printf("--- Inline file-load prompt flow ---\n");
 
     /* --- Lifecycle: begin seeds buffer; cancel clears it -------------- */
-    glr_app_reset_all(); declare_test_vars();
+    glr_ctrl_reset_all(); declare_test_vars();
     ASSERT_INT("prompt inactive at start",
                editor_inline_file_prompt_active(), 0);
     ASSERT_STR("buffer empty when inactive",
@@ -899,7 +899,7 @@ void test_inline_file_prompt_flow() {
                editor_inline_file_prompt_active(), 0);
 
     /* --- Input filtering ---------------------------------------------- */
-    glr_app_reset_all(); declare_test_vars();
+    glr_ctrl_reset_all(); declare_test_vars();
     ASSERT_INT("begin (empty default)",
                editor_inline_file_prompt_begin(""), 1);
     /* Mix legal (incl. '.', '/') and rejected characters. */
@@ -918,7 +918,7 @@ void test_inline_file_prompt_flow() {
                editor_inline_file_prompt_active(), 0);
 
     /* --- Specials are swallowed while active -------------------------- */
-    glr_app_reset_all(); declare_test_vars();
+    glr_ctrl_reset_all(); declare_test_vars();
     editor_inline_file_prompt_begin("");
     /* The exact special-key codes don't matter; any non-zero key
      * should be consumed (and any zero key still returns 1 because
@@ -930,7 +930,7 @@ void test_inline_file_prompt_flow() {
                 editor_inline_file_prompt_handle_special(101)), 0);
 
     /* --- Commit on empty path -> stays open, status set -------------- */
-    glr_app_reset_all(); declare_test_vars();
+    glr_ctrl_reset_all(); declare_test_vars();
     editor_inline_file_prompt_begin("");
     editor_inline_file_prompt_handle_key('\r');
     ASSERT_INT("empty commit keeps prompt open",
@@ -945,7 +945,7 @@ void test_inline_file_prompt_flow() {
      * AND repl_set_status, and stat() runs BEFORE any state mutation
      * (inside repl_load_scene_as_new_slot) so a missing-file commit
      * cannot wipe the document. */
-    glr_app_reset_all(); declare_test_vars();
+    glr_ctrl_reset_all(); declare_test_vars();
     editor_feed_line("glVertex3f(11,22,33);");
     repl_flatten_commands(editor_state_edit_line());
     int verts_before_missing = repl_count_vertices();
@@ -987,7 +987,7 @@ void test_inline_file_prompt_flow() {
     editor_inline_file_prompt_cancel();
 
     /* --- Commit on a directory -> stays open, no load ----------------- */
-    glr_app_reset_all(); declare_test_vars();
+    glr_ctrl_reset_all(); declare_test_vars();
     editor_feed_line("glVertex3f(7,8,9);");
     repl_flatten_commands(editor_state_edit_line());
     int verts_before_dir = repl_count_vertices();
@@ -1003,13 +1003,13 @@ void test_inline_file_prompt_flow() {
     /* --- Happy path: export, then commit through the prompt ----------- */
     {
         const char *export_path = "/tmp/test_repl_inline_file_prompt.c";
-        glr_app_reset_all(); declare_test_vars();
+        glr_ctrl_reset_all(); declare_test_vars();
         editor_feed_line("glVertex3f(1,2,3);");
         editor_feed_line("glVertex3f(4,5,6);");
         repl_export_save_output(export_path, source_document_view(), NULL);
 
         /* Reset to an empty document (the load must replace it). */
-        glr_app_reset_all(); declare_test_vars();
+        glr_ctrl_reset_all(); declare_test_vars();
         ASSERT_INT("doc empty before load",
                    repl_count_vertices(), 0);
 
@@ -1036,7 +1036,7 @@ void test_inline_file_prompt_flow() {
         const char *src_path = "/tmp/test_repl_inline_file_prompt_load.c";
 
         /* Build source file: 2 vertices. */
-        glr_app_reset_all(); declare_test_vars();
+        glr_ctrl_reset_all(); declare_test_vars();
         editor_feed_line("glVertex3f(1,1,1);");
         editor_feed_line("glVertex3f(2,2,2);");
         repl_export_save_output(src_path, source_document_view(), NULL);
@@ -1044,7 +1044,7 @@ void test_inline_file_prompt_flow() {
         /* Build a CURRENT scene with different content (5 verts) and
          * promote it so it occupies a real user scene slot rather
          * than the transient state. */
-        glr_app_reset_all(); declare_test_vars();
+        glr_ctrl_reset_all(); declare_test_vars();
         if (repl_example_count() > 0) {
             repl_load_example(0);
             (void)repl_promote_example_if_needed();
@@ -1073,7 +1073,7 @@ void test_inline_file_prompt_flow() {
         /* Load into an empty document still works AND allocates a
          * real slot (T1: previously the empty-doc subcase didn't
          * verify the slot was allocated). */
-        glr_app_reset_all(); declare_test_vars();
+        glr_ctrl_reset_all(); declare_test_vars();
         editor_inline_file_prompt_begin(src_path);
         editor_inline_file_prompt_handle_key('\r');
         repl_flatten_commands(editor_state_edit_line());
@@ -1097,7 +1097,7 @@ void test_inline_file_prompt_flow() {
      * on parse failure. */
     {
         /* Fill all MAX_USER_SCENES slots and bind a workspace dir. */
-        glr_app_reset_all(); declare_test_vars();
+        glr_ctrl_reset_all(); declare_test_vars();
         char ws_dir[] = "/tmp/test_repl_evict_restore_XXXXXX";
         const char *made_dir = mkdtemp(ws_dir);
         ASSERT_TRUE("mkdtemp eviction workspace", made_dir != NULL);
@@ -1160,7 +1160,7 @@ void test_inline_file_prompt_flow() {
      * rename first, so the file prompt would be invisible to
      * keystrokes while still drawing in the snapshot. Fix: each
      * _begin cancels the other modal first. */
-    glr_app_reset_all(); declare_test_vars();
+    glr_ctrl_reset_all(); declare_test_vars();
     if (repl_example_count() > 0) {
         repl_load_example(0);
         int rename_slot = repl_promote_example_if_needed();
@@ -1191,7 +1191,7 @@ void test_inline_file_prompt_flow() {
 
 void test_activate_home_slot_no_duplicate_name() {
     printf("--- activate_home_slot produces no duplicate name ---\n");
-    glr_app_reset_all(); declare_test_vars();
+    glr_ctrl_reset_all(); declare_test_vars();
     if (repl_example_count() < 1) return;
 
     /* Simulate the startup path: load example 0 (which captures the empty
@@ -1216,7 +1216,7 @@ void test_activate_home_slot_no_duplicate_name() {
 
 void test_my_scene_persists_edits_from_startup() {
     printf("--- My Scene persists edits across example switch ---\n");
-    glr_app_reset_all(); declare_test_vars();
+    glr_ctrl_reset_all(); declare_test_vars();
     if (repl_example_count() < 1) return;
 
     /* Activate an empty slot 0 as "My Scene" (mirrors the startup path when
@@ -1244,7 +1244,7 @@ void test_my_scene_persists_edits_from_startup() {
 
 void test_scene_cfg_persists_across_example_switch() {
     printf("--- Scene cfg persists across example switch ---\n");
-    glr_app_reset_all(); declare_test_vars();
+    glr_ctrl_reset_all(); declare_test_vars();
     if (repl_example_count() < 1) return;
 
     /* Start in My Scene mode. */
@@ -1276,7 +1276,7 @@ void test_scene_cfg_persists_across_example_switch() {
 
 void test_scene_cfg_not_inherited_from_example() {
     printf("--- Scene cfg not inherited from subsequent example ---\n");
-    glr_app_reset_all(); declare_test_vars();
+    glr_ctrl_reset_all(); declare_test_vars();
     if (repl_example_count() < 1) return;
 
     /* Build a user scene with default cfg (no custom overrides). */
@@ -1305,7 +1305,7 @@ void test_scene_cfg_not_inherited_from_example() {
  * inherited-aware scene_cfg keeps the contract. */
 void test_in_example_toggles_dont_leak_to_user_scene() {
     printf("--- In-example cfg toggles do not leak to user scene ---\n");
-    glr_app_reset_all(); declare_test_vars();
+    glr_ctrl_reset_all(); declare_test_vars();
     if (repl_example_count() < 1) return;
 
     /* Establish home (slot 0) with a known backdrop. */
@@ -1330,7 +1330,7 @@ void test_debug_dump_flat_commands() {
     printf("--- Debug dump flat commands ---\n");
 
     /* Empty state: header, count=0, end marker - and no crash on NULL out. */
-    glr_app_reset_all(); declare_test_vars();
+    glr_ctrl_reset_all(); declare_test_vars();
     repl_flatten_commands(editor_state_edit_line());
     char *empty = capture_flat_dump();
     ASSERT_TRUE("empty dump captured", empty != NULL);
@@ -1372,7 +1372,7 @@ void test_debug_dump_flat_commands() {
 
     /* Basic source commands: each type name should appear in the flattened
      * dump, with one row per flat command. */
-    glr_app_reset_all(); declare_test_vars();
+    glr_ctrl_reset_all(); declare_test_vars();
     editor_feed_line("glFrontFace(GL_CW);");
     editor_feed_line("glColor3f(1,0,0);");
     editor_feed_line("glBegin(GL_TRIANGLES);");
@@ -1431,7 +1431,7 @@ void test_debug_dump_flat_commands() {
 
     /* For-loop expansion: flattening unrolls the loop body and records a
      * stable src_cmd_idx pointing back at the source line. */
-    glr_app_reset_all(); declare_test_vars();
+    glr_ctrl_reset_all(); declare_test_vars();
     editor_feed_line("for(i, 0, 3) {");
     editor_feed_line("glVertex3f(i,0,0);");
     editor_feed_line("}");
@@ -1462,7 +1462,7 @@ void test_debug_dump_flat_commands() {
 
     /* Function call inlining: flat commands inside the inlined call should
      * carry a non-zero func_scope_mask. */
-    glr_app_reset_all(); declare_test_vars();
+    glr_ctrl_reset_all(); declare_test_vars();
     editor_feed_line("func0() {");
     editor_feed_line("glVertex3f(0,0,0);");
     editor_feed_line("}");
@@ -1497,7 +1497,7 @@ void test_debug_dump_flat_commands() {
 
     /* Implicit flatten: even if the caller leaves repl_state_flat_program_dirty() set and stale
      * flat state behind, the dump should rebuild repl_state_flat_program_cmds_mut()[] on demand. */
-    glr_app_reset_all(); declare_test_vars();
+    glr_ctrl_reset_all(); declare_test_vars();
     editor_feed_line("glVertex3f(0,0,0);");
     repl_state_mark_flat_dirty();
     repl_state_flat_program_set_count(0);
@@ -1537,7 +1537,7 @@ void test_var_declare_cmd() {
     printf("--- CMD_VAR_DECLARE coverage ---\n");
 
     /* Feed a float declaration and verify it produces CMD_VAR_DECLARE */
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
     editor_feed_line("float a, b, c;");
 
     /* 1. The source array should have exactly one CMD_VAR_DECLARE entry */
@@ -1580,7 +1580,7 @@ void test_var_declare_cmd() {
 
 void test_time() {
     printf("--- Time functions ---\n");
-    glr_app_reset_all(); declare_test_vars();
+    glr_ctrl_reset_all(); declare_test_vars();
     g_anim_time = 0.0f;
     repl_advance_time(0.5f);
     ASSERT_TRUE("g_anim_time advanced", g_anim_time == 0.5f);

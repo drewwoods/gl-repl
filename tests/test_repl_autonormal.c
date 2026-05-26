@@ -35,7 +35,7 @@ static void declare_test_vars(void) {
 static void test_degenerate_normal(void) {
     printf("test_degenerate_normal\n");
 
-    glr_app_reset_all(); declare_test_vars();
+    glr_ctrl_reset_all(); declare_test_vars();
     /* All three vertices collinear along x - cross product is zero */
     editor_feed_line("glBegin(GL_TRIANGLES);");
     editor_feed_line("glVertex3f(0, 0, 0);");
@@ -60,7 +60,7 @@ static void test_degenerate_normal(void) {
 static void test_triangle_strip(void) {
     printf("test_triangle_strip\n");
 
-    glr_app_reset_all(); declare_test_vars();
+    glr_ctrl_reset_all(); declare_test_vars();
     editor_feed_line("glBegin(GL_TRIANGLE_STRIP);");
     editor_feed_line("glVertex3f(0, 0, 0);");
     editor_feed_line("glVertex3f(1, 0, 0);");
@@ -86,7 +86,7 @@ static void test_triangle_strip(void) {
 static void test_triangle_fan(void) {
     printf("test_triangle_fan\n");
 
-    glr_app_reset_all(); declare_test_vars();
+    glr_ctrl_reset_all(); declare_test_vars();
     editor_feed_line("glBegin(GL_TRIANGLE_FAN);");
     editor_feed_line("glVertex3f(0, 0, 0);");
     editor_feed_line("glVertex3f(1, 0, 0);");
@@ -110,7 +110,7 @@ static void test_triangle_fan(void) {
 static void test_quads(void) {
     printf("test_quads\n");
 
-    glr_app_reset_all(); declare_test_vars();
+    glr_ctrl_reset_all(); declare_test_vars();
     editor_feed_line("glBegin(GL_QUADS);");
     editor_feed_line("glVertex3f(0, 0, 0);");
     editor_feed_line("glVertex3f(1, 0, 0);");
@@ -134,7 +134,7 @@ static void test_quads(void) {
 static void test_quad_strip(void) {
     printf("test_quad_strip\n");
 
-    glr_app_reset_all(); declare_test_vars();
+    glr_ctrl_reset_all(); declare_test_vars();
     editor_feed_line("glBegin(GL_QUAD_STRIP);");
     editor_feed_line("glVertex3f(0, 0, 0);");
     editor_feed_line("glVertex3f(1, 0, 0);");
@@ -158,7 +158,7 @@ static void test_quad_strip(void) {
 static void test_polygon(void) {
     printf("test_polygon\n");
 
-    glr_app_reset_all(); declare_test_vars();
+    glr_ctrl_reset_all(); declare_test_vars();
     editor_feed_line("glBegin(GL_POLYGON);");
     editor_feed_line("glVertex3f(0, 0, 0);");
     editor_feed_line("glVertex3f(1, 0, 0);");
@@ -181,7 +181,7 @@ static void test_polygon(void) {
 static void test_unsupported_mode(void) {
     printf("test_unsupported_mode\n");
 
-    glr_app_reset_all(); declare_test_vars();
+    glr_ctrl_reset_all(); declare_test_vars();
     /* GL_LINES is valid for glBegin but not handled in compute_block_normals */
     editor_feed_line("glBegin(GL_LINES);");
     editor_feed_line("glVertex3f(0, 0, 0);");
@@ -206,7 +206,7 @@ static void test_block_skipping(void) {
     printf("test_block_skipping\n");
 
     /* for-loop block before glBegin */
-    glr_app_reset_all(); declare_test_vars();
+    glr_ctrl_reset_all(); declare_test_vars();
     editor_feed_line("for(n, 0, 2) {");
     editor_feed_line("glVertex3f(n, 0, 0);");
     editor_feed_line("}");
@@ -222,7 +222,7 @@ static void test_block_skipping(void) {
     ASSERT_INT("for-skip: cmds added", repl_state_document_count(), cmds_before + 3);
 
     /* func-def block before glBegin */
-    glr_app_reset_all(); declare_test_vars();
+    glr_ctrl_reset_all(); declare_test_vars();
     editor_feed_line("func0(n) {");
     editor_feed_line("glVertex3f(n, 0, 0);");
     editor_feed_line("}");
@@ -237,7 +237,7 @@ static void test_block_skipping(void) {
     ASSERT_INT("func-skip: cmds added", repl_state_document_count(), cmds_before + 3);
 
     /* if-block before glBegin */
-    glr_app_reset_all(); declare_test_vars();
+    glr_ctrl_reset_all(); declare_test_vars();
     editor_feed_line("if(n > 0) {");
     editor_feed_line("glVertex3f(0, 0, 0);");
     editor_feed_line("}");
@@ -259,7 +259,7 @@ static void test_block_skipping(void) {
 static void test_autonormal_disabled(void) {
     printf("test_autonormal_disabled\n");
 
-    glr_app_reset_all(); declare_test_vars();
+    glr_ctrl_reset_all(); declare_test_vars();
     editor_feed_line("glBegin(GL_TRIANGLES);");
     editor_feed_line("glVertex3f(0, 0, 0);");
     editor_feed_line("glVertex3f(1, 0, 0);");
@@ -276,7 +276,7 @@ static void test_autonormal_disabled(void) {
 static void test_gl_triangles(void) {
     printf("test_gl_triangles\n");
 
-    glr_app_reset_all(); declare_test_vars();
+    glr_ctrl_reset_all(); declare_test_vars();
     editor_feed_line("glBegin(GL_TRIANGLES);");
     editor_feed_line("glVertex3f(0, 0, 0);");
     editor_feed_line("glVertex3f(1, 0, 0);");
@@ -288,7 +288,7 @@ static void test_gl_triangles(void) {
     ASSERT_TRUE("autonormal default front-face first cmd auto", repl_state_document_cmds_mut()[1].is_auto == 1);
     ASSERT_TRUE("autonormal default front-face keeps +z", fabsf(repl_state_document_cmds_mut()[1].args[2] - 1.0f) < 1e-6f);
 
-    glr_app_reset_all(); declare_test_vars();
+    glr_ctrl_reset_all(); declare_test_vars();
     editor_feed_line("glFrontFace(GL_CW);");
     editor_feed_line("glBegin(GL_TRIANGLES);");
     editor_feed_line("glVertex3f(0, 0, 0);");
@@ -331,7 +331,7 @@ static void test_gl_triangles(void) {
 static void test_autonormal_inside_funcn_literal_coords(void) {
     printf("test_autonormal_inside_funcn_literal_coords\n");
 
-    glr_app_reset_all(); declare_test_vars();
+    glr_ctrl_reset_all(); declare_test_vars();
     /* func0 with a literal-coord triangle. The three vertices span the
      * yz plane (varying y and z at x=1), so the cross product is along
      * +X. Auto-normal must compute and insert these. */
@@ -387,7 +387,7 @@ static void test_autonormal_inside_funcn_literal_coords(void) {
 static void test_autonormal_inside_funcn_var_args_skipped(void) {
     printf("test_autonormal_inside_funcn_var_args_skipped\n");
 
-    glr_app_reset_all(); declare_test_vars();
+    glr_ctrl_reset_all(); declare_test_vars();
     editor_feed_line("func0(s) {");
     editor_feed_line("glBegin(GL_TRIANGLES);");
     editor_feed_line("glVertex3f(s, 0, 0);");

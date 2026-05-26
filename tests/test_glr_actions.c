@@ -96,7 +96,7 @@ static void run_menu_action_in_temp_dir(const char *label,
 }
 
 static void test_apply_defaults(void) {
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
     /* glr_actions_apply_defaults pulls from glr_audio_get_cfg_mode()
      * which defaults to AUDIO_CFG_ALL (3) if invalid. */
     glr_actions_apply_defaults();
@@ -104,7 +104,7 @@ static void test_apply_defaults(void) {
 }
 
 static void test_cursor_actions(void) {
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
     EditorCursorBlinkState *cb = editor_state_cursor_blink_mut();
     cb->cursor_visible = 0;
     cb->blink_tick = 100;
@@ -115,7 +115,7 @@ static void test_cursor_actions(void) {
 }
 
 static void test_help_tab_actions(void) {
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
     editor_help_session_set_tab(0);
     editor_help_session_set_scroll(50);
 
@@ -147,7 +147,7 @@ static void test_help_tab_actions(void) {
 int g_stub_modifiers = 0;
 
 static void test_cfg_cycling(void) {
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
 
     /* Find some row indices */
     int wireframe_row = -1;
@@ -244,7 +244,7 @@ static void test_cfg_cycling(void) {
 }
 
 static void test_menu_actions(void) {
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
 
     /* File menu */
     ASSERT_INT("File Load Scene", glr_action_menu_item_activate(GLR_MENU_FILE, GLR_FILE_ITEM_LOAD_SCENE), 1);
@@ -319,7 +319,7 @@ static void test_menu_actions(void) {
  * and NObody's config state changes (it must never be mis-read as a
  * g_cfg_items[] index and cycled). */
 static void test_config_parent_rows_inert(void) {
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
 
     int parents = glr_config_section_count() + 1; /* sections + All */
 
@@ -339,7 +339,7 @@ static void test_config_parent_rows_inert(void) {
 }
 
 static void test_shortcuts(void) {
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
 
     /* Test handling of unknown keys - these should return 0 */
     ASSERT_INT("Unknown ASCII", glr_cfg_handle_ascii_shortcut('X'), 0);
@@ -412,7 +412,7 @@ static void test_config_sections(void) {
  * Shift is held; otherwise the modifiers==0 row matches — and a plain
  * Ctrl key with no modifiers==0 row falls through (returns 0). */
 static void test_ascii_shortcut_modifiers(void) {
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
     editor_input_set_modifier_provider_for_test(test_mods_provider);
 
     /* Plain Ctrl+O (no Shift) cycles Grid major; View mode untouched. */
@@ -492,7 +492,7 @@ static void test_tutorial_start_applies_cfg(void) {
     ASSERT_TRUE("Color & Transform in catalog", color >= 0);
 
     /* (A) First Triangle ships `@cfg view_mode = 1`: a 2D ortho view. */
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
     ASSERT_INT("view mode starts 3D", glr_config_get(GLR_CONFIG_ORTHO_MODE), 0);
     if (first >= 0) {
         ASSERT_TRUE("First Triangle has cfg lines",
@@ -513,7 +513,7 @@ static void test_tutorial_start_applies_cfg(void) {
 
     /* (B) A tutorial with no cfg (Color & Transform) still gets the
      * per-start presentation reset, so a prior 2D doesn't leak in. */
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
     glr_config_set(GLR_CONFIG_ORTHO_MODE, 1);
     if (color >= 0) {
         ASSERT_TRUE("Color & Transform has no cfg",
@@ -545,7 +545,7 @@ static void test_tutorial_start_applies_cfg(void) {
  * trailing Restart/Exit. */
 static void test_tutorial_menu_dispatch(void) {
     int first = find_tutorial_idx_by_name("First Triangle");
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
     ASSERT_TRUE("First Triangle in catalog", first >= 0);
 
     int tag_count = repl_tutorial_visible_tag_count();
@@ -583,7 +583,7 @@ static void test_tutorial_menu_dispatch(void) {
 /* Audit #20: glr_config_set(GLR_CONFIG_AUDIO_MODE, ...) routes through
  * the audio module's cfg_mode setter, not a raw pointer write. */
 static void test_audio_config_direct_set(void) {
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
 
     glr_config_set(GLR_CONFIG_AUDIO_MODE, 2);
     ASSERT_INT("direct-set audio mode 2", glr_audio_get_cfg_mode(), 2);
@@ -607,7 +607,7 @@ static void test_config_none_handling(void) {
 
 /* Audit #38: out-of-range menu indices must not crash or mutate state. */
 static void test_menu_out_of_range_indices(void) {
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
 
     int before[GLR_CONFIG_COUNT];
     for (int k = 1; k < GLR_CONFIG_COUNT; k++)
@@ -630,7 +630,7 @@ static void test_menu_out_of_range_indices(void) {
 /* Audit #19: cycling a config row that invalidates replay stops the replay,
  * but non-invalidating ones (like wireframe) preserve active replay. */
 static void test_cfg_cycle_stops_replay(void) {
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
 
     editor_feed_line("glBegin(GL_POINTS);");
     editor_feed_line("glVertex3f(0,0,0);");
@@ -672,7 +672,7 @@ static void test_cfg_cycle_stops_replay(void) {
 static void test_status_set_drops_empty_message(void) {
     UiStatusState *status;
 
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
     status = ui_state_status_mut();
 
     /* Baseline: seed a real INFO message. */
@@ -731,7 +731,7 @@ static int find_cfg_row_for_key(GlrConfigKey key) {
 }
 
 static void test_cfg_cycle_focus_origin_eases_to_origin(void) {
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
 
     int row = find_cfg_row_for_key(GLR_CONFIG_FOCUS_ORIGIN);
     ASSERT_TRUE("found focus_origin row", row >= 0);
@@ -762,7 +762,7 @@ static void test_cfg_cycle_focus_origin_eases_to_origin(void) {
 }
 
 static void test_cfg_cycle_reset_camera_eases_to_default(void) {
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
 
     int row = find_cfg_row_for_key(GLR_CONFIG_RESET_CAMERA);
     ASSERT_TRUE("found reset_camera row", row >= 0);
@@ -785,7 +785,7 @@ static void test_cfg_cycle_reset_camera_eases_to_default(void) {
 }
 
 static void test_cfg_cycle_auto_time_shift_resets_time(void) {
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
 
     int row = find_cfg_row_for_key(GLR_CONFIG_AUTO_TIME);
     ASSERT_TRUE("found auto_time row", row >= 0);
@@ -824,7 +824,7 @@ static void test_cfg_cycle_auto_time_shift_resets_time(void) {
 }
 
 static void test_cfg_cycle_panel_hidden_closes_overlays(void) {
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
 
     int row = find_cfg_row_for_key(GLR_CONFIG_CODE_PANEL_LAYOUT);
     ASSERT_TRUE("found code_panel_layout row", row >= 0);
@@ -857,7 +857,7 @@ static void test_cfg_cycle_panel_hidden_closes_overlays(void) {
 }
 
 static void test_vertex_label_modes(void) {
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
 
     int vertex_labels_row = -1;
     for (int i = 0; i < CFG_ITEM_COUNT; i++) {

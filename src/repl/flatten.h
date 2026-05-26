@@ -43,6 +43,13 @@ typedef struct {
     int               cmd_count;
 } FlatProgramView;
 
+typedef struct {
+    int          edit_line_idx;
+    int          cursor_block_begin;
+    int          cursor_block_end;
+    unsigned int cursor_func_scope_mask;
+} CursorBlockState;
+
 /* Input: source program to expand. Caller provides the source command array,
  * a target flat buffer (with capacity), an editor-text view for the
  * expansion's text reads, and resource limits (call depth, visit

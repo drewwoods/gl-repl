@@ -46,15 +46,15 @@ int glr_ctrl_apply_tag_defaults(unsigned int tag_mask,
  * autocomplete provider registration + UI chrome mirror. Production
  * startup and tests that exercise cross-module behavior call this
  * instead of the REPL-only repl_state_init_defaults / repl_state_reset_program. */
-void glr_app_reset_all(void);
+void glr_ctrl_reset_all(void);
 
 /* Drop camera / menu / picker / code-panel-drag transient state in
  * addition to the editor commit transients. Called from
- * glr_app_reset_all() and from controller paths that switch examples /
+ * glr_ctrl_reset_all() and from controller paths that switch examples /
  * scenes so the editor returns to a clean idle posture. Hoisted out
  * of src/editor/input.c per audit #8 — the body reaches into
  * camera / UI / picker / controller state, not editor-text state. */
-void glr_app_reset_transients(void);
+void glr_ctrl_reset_transients(void);
 
 /* Layout provider installed on the editor at glr_ctrl_init_gl so
  * src/editor/ can query the current code-panel layout without

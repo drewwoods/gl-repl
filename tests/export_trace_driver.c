@@ -66,7 +66,7 @@ int main(int argc, char **argv) {
      * actually uses a predefined REPL var, so calling it would be a
      * compile error for predef-free programs. File-scope `static float
      * t = 0.0f;` etc. emitted by the exporter already gives the same
-     * starting state the REPL side has after glr_app_reset_all(). */
+     * starting state the REPL side has after glr_ctrl_reset_all(). */
     render_repl_geometry();
     gl_stub_trace_close();
 

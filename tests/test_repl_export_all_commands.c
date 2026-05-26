@@ -178,7 +178,7 @@ int main(void) {
     int diff_line = 0;
 
     repl_eval_init_predef_vars();
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
     declare_test_vars();
 
     /* Add one example of every supported GL command to verify roundtrip */
@@ -269,7 +269,7 @@ int main(void) {
     repl_export_save_output(path1, source_document_view(), NULL);
 
     /* Reimport from file */
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
     declare_test_vars();
     ASSERT_TRUE("import succeeded", repl_export_load_from_file(path1) == 1);
 
@@ -302,7 +302,7 @@ int main(void) {
 
     /* Verify stability: re-export should produce the same output */
     repl_export_save_output(path2, source_document_view(), NULL);
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
     declare_test_vars();
     ASSERT_TRUE("re-import succeeded", repl_export_load_from_file(path2) == 1);
 

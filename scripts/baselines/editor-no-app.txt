@@ -6,7 +6,7 @@
 # previously documented four violations in src/editor/input.c. The
 # week-pass fix landed 2026-05-24:
 #   - editor_reset_transients moved to src/app/glr_ctrl.c as
-#     glr_app_reset_transients
+#     glr_ctrl_reset_transients
 #   - editor_input_restore_hidden_code_panel moved as
 #     glr_ctrl_restore_hidden_code_panel; the editor signals via
 #     the restore_hidden_code_panel effect flag, the controller

@@ -36,6 +36,16 @@ static char g_ac_suffix[8] = "";
  * this to compute the ghost's `chars-already-typed` length. */
 static int g_ac_input_offset = 0;
 
+static void reset_ac_statics(void) {
+    g_ac_mode = AC_MODE_NONE;
+    g_ac_token_len = 0;
+    g_ac_input_offset = 0;
+    g_ac_suffix[0] = '\0';
+    for (int i = 0; i < MAX_AC_MATCHES; i++) {
+        g_ac_func_matches[i] = NULL;
+    }
+}
+
 static void hint_append(char *out, int out_sz, const char *text) {
     int len = (int)strlen(out);
     if (len >= out_sz - 1)
@@ -238,10 +248,7 @@ static void update_autocomplete(void) {
     int raw_input_len = inp.input_len;
 
     editor_state_autocomplete_clear();
-    g_ac_mode = AC_MODE_NONE;
-    g_ac_token_len = 0;
-    g_ac_input_offset = 0;
-    g_ac_suffix[0] = '\0';
+    reset_ac_statics();
 
     /* While a tutorial is active AND the cursor sits on the expected
      * commit line, autocomplete matches/hints would compete with the
@@ -432,9 +439,7 @@ void glr_completion_accept_autocomplete(void) {
         }
     }
     editor_state_autocomplete_clear();
-    g_ac_mode = AC_MODE_NONE;
-    g_ac_token_len = 0;
-    g_ac_suffix[0] = '\0';
+    reset_ac_statics();
 }
 
 /* --- EditorCompletionProvider hookup ---
@@ -449,9 +454,7 @@ void glr_completion_accept_autocomplete(void) {
  * provider-private statics. */
 
 static void glr_completion_provider_clear(void) {
-    g_ac_mode = AC_MODE_NONE;
-    g_ac_token_len = 0;
-    g_ac_suffix[0] = '\0';
+    reset_ac_statics();
 }
 
 static const EditorCompletionProvider g_glr_completion_provider = {

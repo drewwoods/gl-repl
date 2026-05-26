@@ -1,7 +1,7 @@
 #ifndef REPL_TEST_SUPPORT_H
 #define REPL_TEST_SUPPORT_H
 
-#include "app/glr_ctrl.h"   /* glr_app_reset_all, glr_publish_replay_annotations */
+#include "app/glr_ctrl.h"   /* glr_ctrl_reset_all, glr_publish_replay_annotations */
 #include "repl/core.h"  /* editor_feed_line, set_status, etc. */
 #include "repl/eval.h"
 #include "repl/replay_annotations.h" /* ReplReplayAnnotationOutput */
@@ -35,7 +35,7 @@ static inline int repl_test_reset_with_xyz_vars(char *err, int err_sz) {
     static const char *const names[] = { "x", "y", "z" };
 
     repl_eval_init_predef_vars();
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
     return repl_test_declare_predef_vars(names, 3, err, err_sz);
 }
 

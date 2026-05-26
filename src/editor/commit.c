@@ -42,6 +42,7 @@
 #include "repl/core.h"
 #include "repl/state_owners.h"
 #include "repl/source_scope.h"
+#include "repl/eval.h"
 
 #include "config.h"           /* REPL_INDENT_TEXT_MAX */
 
@@ -1324,6 +1325,67 @@ int editor_try_commit_var_statements_then_insert(void) {
         editor_completion_clear();
         repl_set_status("Insert mode");
         repl_mark_source_dirty();
+        return 1;
+    }
+    return 0;
+}
+
+int editor_commit_apply_swatch_change(int edit_line, int direction) {
+    EditorInputView in = editor_state_input();
+    ReplNumericArgAtCursor d;
+    float step, new_value;
+    char buf[32];
+    char new_line[MAX_LINE_LEN];
+    int n;
+    char parse_err[REPL_STATUS_TEXT_MAX] = "";
+    ReplParsedLine pl;
+    ReplCompiledChange change;
+    int text_len;
+
+    d = repl_eval_numeric_arg_at_cursor(in.input, in.cursor_pos);
+    if (!d.found) return 0;
+
+    step = repl_eval_swatch_step(d.value);
+    new_value = d.value + (direction > 0 ? step : -step);
+    repl_eval_format_swatch_number(new_value, buf, sizeof buf);
+
+    n = snprintf(new_line, sizeof new_line, "%.*s%s%s",
+                 d.arg_start, in.input, buf, in.input + d.arg_end);
+    if (n < 0 || n >= (int)sizeof new_line) return 0;
+
+    {
+        ReplParseContext parse_ctx = {
+            .source_line_idx = edit_line,
+            .err_buf = parse_err,
+            .err_sz = (int)sizeof parse_err,
+        };
+        if (!repl_parser_parse_command_ctx(new_line, &pl, &parse_ctx)) {
+            if (parse_err[0]) repl_set_status(parse_err);
+            return 0;
+        }
+    }
+    if (pl.cmd.type == CMD_COMMENT) return 0;
+
+    repl_compiled_change_init(&change);
+    change.kind = REPL_COMPILED_REPLACE_ONE;
+    change.pos = edit_line;
+    change.count = 1;
+    change.cmds[0] = pl.cmd;
+    text_len = (int)strlen(pl.text);
+    if (text_len >= MAX_LINE_LEN) text_len = MAX_LINE_LEN - 1;
+    memcpy(change.text[0], pl.text, (size_t)text_len);
+    change.text[0][text_len] = '\0';
+
+    if (editor_commit_apply_external_change(&change, 1)) {
+        editor_load_line_to_input(edit_line);
+        {
+            EditorInputView reloaded = editor_state_input();
+            int pos = d.arg_start < reloaded.input_len
+                          ? d.arg_start : reloaded.input_len;
+            editor_cursor_pos_set(pos);
+        }
+        editor_completion_update();
+        editor_request_redraw();
         return 1;
     }
     return 0;

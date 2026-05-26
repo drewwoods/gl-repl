@@ -46,7 +46,7 @@ void                 tutorial_stop(void);
 /* Restore the cfg baseline captured at tutorial_start and reset the runtime
  * state. Called by tutorial_stop, tutorial completion, AND every external
  * teardown path that called tutorial_state_reset() directly
- * (workspace/scene/example load, glr_app_reset_all) so the workspace-load
+ * (workspace/scene/example load, glr_ctrl_reset_all) so the workspace-load
  * stash never enshrines tutorial-mutated cfg as the new baseline.
  * Idempotent — no-op when no tutorial is active. */
 void                 tutorial_teardown(void);

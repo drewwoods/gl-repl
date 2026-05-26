@@ -326,7 +326,7 @@ static ParityResult run_one_case(const TraceProgram *prog) {
     snprintf(temp_child_tr, sizeof temp_child_tr, "/tmp/test_trace_%d_%s.child.tr",  (int)pid, safe_name);
 
     /* REPL leg. */
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
     char err[128];
     repl_eval_declare_predef_var("z", err, sizeof err);
     repl_eval_declare_predef_var("i", err, sizeof err);

@@ -28,7 +28,7 @@ static int code_panel_text_x(void) {
 }
 
 static void reset_doc_fixture(void) {
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
     ui_state_viewport_set_size(800, 260);
     ui_state_code_panel_mut()->panel_frac = 0.45f;
     glr_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT; glr_ctrl_sync_ui_chrome();

@@ -75,7 +75,7 @@ int main(void) {
                     editor_search_find_prev_in_text("abc", "zzz", 2) == -1);
     }
 
-    glr_app_reset_all(); declare_test_vars();
+    glr_ctrl_reset_all(); declare_test_vars();
     set_live_input("NeedleLine");
     open_search();
     type_search_text("needle");
@@ -93,7 +93,7 @@ int main(void) {
     ASSERT_TRUE("search clear resets hit ordinal", g_search_hit_ordinal == 0);
     ASSERT_TRUE("search clear resets match count", g_search_match_count == 0);
 
-    glr_app_reset_all(); declare_test_vars();
+    glr_ctrl_reset_all(); declare_test_vars();
     editor_feed_line("glBegin(GL_POINTS);");
     editor_feed_line("glEnd();");
     open_search();

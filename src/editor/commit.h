@@ -233,6 +233,7 @@ ReplCompileResult editor_compile_for_loop(const char *input,
 
 void editor_commit_reset_transients(void);
 int  editor_commit_resolve_insert_exit_target(int target);
+int  editor_commit_apply_swatch_change(int edit_line, int direction);
 
 /* Func-decl resume bookkeeping: a CMD_FUNC_DEF commit publishes a
  * delta via editor_commit_func_decl_resume_set; the matching

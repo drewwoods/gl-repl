@@ -30,8 +30,12 @@
 # EditorServices.parse_command_ctx indirection with a direct call,
 # eliminating commit.c's services.h include entirely).
 #
+# 2026-05-26: commit_c bumped +3 for repl_eval_numeric_arg_at_cursor,
+# repl_eval_swatch_step, and repl_eval_format_swatch_number (Finding #41,
+# moving swatch commit logic from the controller to commit.c).
+#
 # Ratchet down as migrations land. The plan target
 # (plans/done/editor-demo.md) is ~5 per file.
 
 input_c: 23
-commit_c: 32
+commit_c: 35

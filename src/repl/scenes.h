@@ -58,7 +58,7 @@ void repl_scenes_mark_example_active(void);
  * back through F12. */
 void repl_scenes_activate_home_slot(void);
 
-/* Drop all user-scene state. Called from glr_app_reset_all. */
+/* Drop all user-scene state. Called from glr_ctrl_reset_all. */
 void repl_scenes_reset(void);
 
 #endif /* REPL_SCENES_H */

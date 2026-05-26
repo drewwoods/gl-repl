@@ -28,7 +28,7 @@ static TestHarness g_harness = TEST_HARNESS_INIT;
 #define ASSERT_INT_EQ(label, g, e) TEST_ASSERT_INT(&g_harness, label, g, e)
 
 static void reset_fixture(void) {
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
     ui_state_viewport_set_size(1000, 600);
 }
 

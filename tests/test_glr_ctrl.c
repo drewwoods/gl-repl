@@ -154,7 +154,7 @@ static void prepare_display_fixture(void) {
     g_scratch_value_seen_in_scene = 0.0f;
     g_t_idx = -1;
 
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
     repl_eval_init_predef_vars();
 
     ui_state_viewport_set_size(800, 600);
@@ -427,7 +427,7 @@ static void test_variable_panel_motion_routes_through_compile_and_coalesces_undo
 
     printf("--- imrepl_ctrl variable panel drag route ---\n");
 
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
     ui_state_viewport_set_size(1000, 1000);
     variable_panel_set_visible(1);
     editor_feed_line("float testvar = 1.0;");
@@ -495,7 +495,7 @@ static void test_variable_panel_motion_initializes_uninitialized_declaration(voi
 
     printf("--- imrepl_ctrl variable panel initializes decl ---\n");
 
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
     ui_state_viewport_set_size(1000, 1000);
     variable_panel_set_visible(1);
     editor_feed_line("float testvar;");
@@ -592,13 +592,13 @@ static void test_variable_drag_snapshot_wiring(void) {
                g_last_replay_hud_snap.variable_drag.active_var, -1);
 
     /* Reset for next test. */
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
 }
 
 static void test_pointer_state_tracks_controller_mouse_routes(void) {
     printf("--- imrepl_ctrl pointer state routing ---\n");
 
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
     ui_state_viewport_set_size(1000, 1000);
 
     ASSERT_INT("initial pointer x", ui_state_pointer().mouse_x, 0);
@@ -647,7 +647,7 @@ static void test_overlay_transition_machine_wiring(void) {
     const int settle = (int)((GRID_FADE_OUT_SECS + GRID_FADE_IN_SECS)
                              / 0.016f) + 6;
 
-    /* 1. First frame is a SNAP — rule 8 seeding (in glr_app_reset_all)
+    /* 1. First frame is a SNAP — rule 8 seeding (in glr_ctrl_reset_all)
      *    means the non-off default grid does NOT animate in at startup. */
     glr_ctrl_display_frame();
     ASSERT_INT("snap grid theme = default",
@@ -707,9 +707,9 @@ static void test_overlay_transition_machine_wiring(void) {
                 g_last_scene_config.grid_opacity > 0.0f &&
                 g_last_scene_config.grid_opacity < 1.0f);
 
-    /* 5. glr_app_reset_all() re-seeds both machines to the post-reset
+    /* 5. glr_ctrl_reset_all() re-seeds both machines to the post-reset
      *    presentation at full opacity, STEADY — no post-reset animation. */
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
     glr_ctrl_display_frame();
     ASSERT_INT("reset snaps grid to default",
                g_last_scene_config.grid_theme, CFG_DEFAULT_GRID_THEME);
@@ -988,7 +988,7 @@ static void test_quit_recovery_file(void) {
     ASSERT_STR("QUIT_RECOVERY_FILE value", QUIT_RECOVERY_FILE,
                "quit_recovery.c");
 
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
     editor_feed_line("glVertex3f(1, 2, 3);");
 
     made_dir = mkdtemp(temp_dir);
@@ -1190,7 +1190,7 @@ static void test_display_frame_no_replay_means_no_fade_plumbing(void) {
  * We drive the static router directly (this TU includes glr_ctrl.c) by
  * constructing a UiHit and calling route_numeric_swatch_hit. */
 static void seed_swatch_fixture(const char *line) {
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
     repl_eval_init_predef_vars();
     editor_insert_mode_set(0);
     editor_feed_line(line);
@@ -1340,7 +1340,7 @@ static void test_depth_probe_does_not_mutate_repl_state(void) {
     return;
 #endif
 
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
     editor_feed_line("float probevar;");
     editor_feed_line("probevar = probevar + 1;");
     editor_feed_line("A[0] = A[0] + 1;");
