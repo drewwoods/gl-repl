@@ -31,7 +31,7 @@ typedef struct {
     int show_vertex_indices;
     int show_vertex_outlines;
     int show_vertex_points;
-    int show_vertex_guides;
+    int show_xform_guides;
     int xform_guide_mode;
     int autonormal;
     int show_light_indicators;

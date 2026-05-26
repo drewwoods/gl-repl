@@ -20,6 +20,7 @@
  *
  * (Bridge introduced to decouple camera formatting from the export core.)
  */
+#include "app/glr_camera_export.h"
 #include "repl/export.h"
 #include "app/glr_camera.h"
 #include "app/glr_ctrl.h"

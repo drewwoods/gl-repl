@@ -60,7 +60,7 @@ GLenum repl_current_begin_mode(void);
 int repl_count_vertices(void);
 extern int repl_state_flat_program_count();
 
-/* Capture the output of glr_debug_dump_flat_commands(, editor_buffer_view()) into a malloc'd string.
+/* Capture the output of glr_debug_dump_flat_commands(, source_document_view()) into a malloc'd string.
  * Returns NULL on failure; caller frees the buffer. */
 static char *capture_flat_dump(void) {
     FILE *tmp = tmpfile();
@@ -70,7 +70,7 @@ static char *capture_flat_dump(void) {
 
     if (!tmp)
         return NULL;
-    glr_debug_dump_flat_commands(tmp, editor_buffer_view());
+    glr_debug_dump_flat_commands(tmp, source_document_view());
     fflush(tmp);
     if (fseek(tmp, 0, SEEK_END) != 0) goto done;
     len = ftell(tmp);
@@ -1358,7 +1358,7 @@ void test_debug_dump_flat_commands() {
             close(devnull_fd);
         }
     }
-    glr_debug_dump_flat_commands(NULL, editor_buffer_view());
+    glr_debug_dump_flat_commands(NULL, source_document_view());
     fflush(stdout);
     if (stdout_redirected) {
         if (dup2(saved_stdout, STDOUT_FILENO) >= 0) {
@@ -1503,7 +1503,7 @@ void test_debug_dump_flat_commands() {
     repl_state_flat_program_set_count(0);
     FILE *dn = fopen("/dev/null", "w");
     if (dn) {
-        glr_debug_dump_flat_commands(dn, editor_buffer_view());
+        glr_debug_dump_flat_commands(dn, source_document_view());
         fclose(dn);
     }
     ASSERT_TRUE("dump re-flattens commands", repl_state_flat_program_count() >= 1);

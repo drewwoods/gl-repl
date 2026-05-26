@@ -16,6 +16,9 @@ typedef struct ReplayFadePlan {
     float           batch_alpha[REPLAY_FADE_BATCH_MAX];
     float           baseline_predef_vals[MAX_PREDEF_VARS];
     float           baseline_scratch_arrays[REPL_SCRATCH_ARRAY_COUNT][REPL_SCRATCH_ARRAY_LEN];
+    int             active;              /* 1 = post_fill_fn should render fades */
+    int             base_limit;          /* clamp for the main fill */
+    int             tess_preview_active; /* 1 = post_fill_fn should render tess preview */
 } ReplayFadePlan;
 
 /* App-frame controller entrypoints. gl_repl.c forwards raw GLUT

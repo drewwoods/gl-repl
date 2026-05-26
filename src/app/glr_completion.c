@@ -138,12 +138,13 @@ static int find_defined_func_call_params(const char *input, const char **after_o
         *after_out = p + 1;
 
     EditorBufferView text = editor_buffer_view();
+    const GLCmd *cmds = repl_state_document_cmds();
     for (int i = 0; i < repl_state_document_count(); i++) {
         int parsed_fn = -1;
         int param_count = 0;
-        if (!repl_state_document_cmds_mut()[i].valid || repl_state_document_cmds_mut()[i].type != CMD_FUNC_DEF)
+        if (!cmds[i].valid || cmds[i].type != CMD_FUNC_DEF)
             continue;
-        if ((int)repl_state_document_cmds_mut()[i].args[0] != fn)
+        if ((int)cmds[i].args[0] != fn)
             continue;
         {
             const char *func_text = editor_buffer_view_line(text, i);

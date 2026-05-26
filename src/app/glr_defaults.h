@@ -34,7 +34,7 @@
 #define CFG_DEFAULT_NORMAL_VECTORS    0
 #define CFG_DEFAULT_VERTEX_OUTLINES   1
 #define CFG_DEFAULT_VERTEX_POINTS     1
-#define CFG_DEFAULT_VERTEX_GUIDES     1
+#define CFG_DEFAULT_XFORM_GUIDES      1
 #define CFG_DEFAULT_XFORM_GUIDE_MODE  0
 #define CFG_DEFAULT_LIGHT_INDICATORS  1
 #define CFG_DEFAULT_BACKDROP_MODE     SCENE_BACKDROP_OFF
@@ -53,6 +53,14 @@
 #define CFG_DEFAULT_MULTISAMPLE       1
 #define CFG_DEFAULT_LINE_SMOOTH       0
 #define CFG_DEFAULT_ATTENUATE_POINTS  1
+#define CFG_DEFAULT_AUTONORMAL        0
+#define CFG_DEFAULT_HIGHLIGHT_POLY    1
+#define CFG_DEFAULT_USE_ACCUM         1
+#define CFG_DEFAULT_ACCUM_AA_ENABLED  1
+#define CFG_DEFAULT_ACCUM_SAMPLES     2
+#define CFG_DEFAULT_ACCUM_JITTER_X    0.0f
+#define CFG_DEFAULT_ACCUM_JITTER_Y    0.0f
+#define CFG_DEFAULT_MSAA_SAMPLES      0
 
 /* Tag-keyed presentation defaults applied during example loading,
  * layered between the global reset and the example's own leading
