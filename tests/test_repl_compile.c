@@ -1265,5 +1265,99 @@ int main(void) {
                     slot < 0);
     }
 
+    /* #49 regression: repl_apply_compiled_change runs the preflight
+     * internally so a malformed change cannot half-apply. Pre-fix the
+     * pre-insert delete would fire, then INSERT_MANY would either
+     * silently clamp the pos or fail — leaving the cmd-store mutated
+     * but not in the requested shape. These tests bypass the wrapper
+     * (editor_commit_apply_external_change) and call the bare
+     * repl_apply_compiled_change so they pin the apply-level contract,
+     * not the wrapper's preflight. */
+    {
+        glr_app_reset_all();
+        editor_feed_line("glColor3f(1, 0, 0);");
+        editor_feed_line("glColor3f(0, 1, 0);");
+        editor_feed_line("glColor3f(0, 0, 1);");
+
+        int pre_count = repl_state_document_count();
+        ASSERT_INT("[#49] setup: 3 rows", pre_count, 3);
+
+        ReplCompiledChange change;
+
+        /* (a) INSERT_MANY with count > MAX_COMMIT_CMDS — apply must
+         * reject before mutating the cmd-store. */
+        repl_compiled_change_init(&change);
+        change.kind = REPL_COMPILED_INSERT_MANY;
+        change.pos = 0;
+        change.count = MAX_COMMIT_CMDS + 1;
+        ASSERT_INT("[#49] over-MAX_COMMIT_CMDS rejected by apply",
+                   repl_apply_compiled_change(&change, NULL), 0);
+        ASSERT_INT("[#49] over-MAX_COMMIT_CMDS no mutation",
+                   repl_state_document_count(), pre_count);
+
+        /* (b) REPLACE_ONE with out-of-bounds pos — apply rejects
+         * cleanly rather than relying on the store's range check. */
+        repl_compiled_change_init(&change);
+        change.kind = REPL_COMPILED_REPLACE_ONE;
+        change.pos = pre_count + 99;
+        change.cmds[0].type = CMD_COLOR3F;
+        change.cmds[0].valid = 1;
+        change.cmds[0].args[0] = 0.5f;
+        change.cmds[0].args[1] = 0.5f;
+        change.cmds[0].args[2] = 0.5f;
+        change.cmds[0].num_args = 3;
+        ASSERT_INT("[#49] OOB replace rejected by apply",
+                   repl_apply_compiled_change(&change, NULL), 0);
+        ASSERT_INT("[#49] OOB replace no mutation",
+                   repl_state_document_count(), pre_count);
+
+        /* (c) Compound pre-delete + REPLACE_ONE: the preflight
+         * disallows mixing pre-delete with REPLACE_ONE. Pre-fix the
+         * delete would happen and then the replace would fall through
+         * the switch with no follow-up, leaving rows missing. */
+        repl_compiled_change_init(&change);
+        change.kind = REPL_COMPILED_REPLACE_ONE;
+        change.pos = 0;
+        change.delete_pos = 1;
+        change.delete_count = 1;
+        change.cmds[0].type = CMD_COLOR3F;
+        change.cmds[0].valid = 1;
+        change.cmds[0].num_args = 3;
+        ASSERT_INT("[#49] pre-delete + replace rejected by apply",
+                   repl_apply_compiled_change(&change, NULL), 0);
+        ASSERT_INT("[#49] pre-delete + replace no mutation",
+                   repl_state_document_count(), pre_count);
+
+        /* (d) Pre-delete with out-of-bounds range — apply rejects
+         * before performing the partial delete. */
+        repl_compiled_change_init(&change);
+        change.kind = REPL_COMPILED_INSERT_ONE;
+        change.pos = 0;
+        change.delete_pos = pre_count + 1;
+        change.delete_count = 1;
+        change.cmds[0].type = CMD_COLOR3F;
+        change.cmds[0].valid = 1;
+        change.cmds[0].num_args = 3;
+        ASSERT_INT("[#49] OOB pre-delete rejected by apply",
+                   repl_apply_compiled_change(&change, NULL), 0);
+        ASSERT_INT("[#49] OOB pre-delete no mutation",
+                   repl_state_document_count(), pre_count);
+
+        /* (e) Sanity: a well-formed change still applies. */
+        repl_compiled_change_init(&change);
+        change.kind = REPL_COMPILED_INSERT_ONE;
+        change.pos = pre_count;
+        change.cmds[0].type = CMD_COLOR3F;
+        change.cmds[0].valid = 1;
+        change.cmds[0].args[0] = 1.0f;
+        change.cmds[0].args[1] = 1.0f;
+        change.cmds[0].args[2] = 1.0f;
+        change.cmds[0].num_args = 3;
+        ASSERT_INT("[#49] well-formed insert succeeds",
+                   repl_apply_compiled_change(&change, NULL), 1);
+        ASSERT_INT("[#49] well-formed insert grew count",
+                   repl_state_document_count(), pre_count + 1);
+    }
+
     return test_harness_report(&g_harness, "test_repl_compile");
 }

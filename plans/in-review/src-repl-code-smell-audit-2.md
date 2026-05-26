@@ -1060,7 +1060,7 @@ return value (new slot index) is discarded.
 err, errsz)` or change the existing signature; use the return as
 the slot index.
 
-### 49. `repl_apply_can_apply_compiled_change` vs. `repl_apply_compiled_change`: preflight validates, apply trusts
+### 49. ✅ `repl_apply_can_apply_compiled_change` vs. `repl_apply_compiled_change`: preflight validates, apply trusts
 
 **Where:** `src/repl/apply.c:52` vs. `:101-104`
 
@@ -1071,6 +1071,21 @@ public.
 
 **Fix:** Move preflight rejection into `repl_apply_compiled_change`
 too; `_can_apply_compiled_change` becomes the no-mutation peek.
+
+**Status (2026-05-26):** ✅ Closed. `repl_apply_compiled_change` now
+re-runs `repl_apply_can_apply_compiled_change` at the top before any
+mutation, so a malformed change (over-MAX_COMMIT_CMDS insert, OOB
+pos, compound pre-delete + REPLACE_ONE, OOB pre-delete range) can no
+longer half-apply — the pre-insert delete cannot fire and then leave
+the cmd-store in an unexpected shape. The header docstring's
+"callers should preflight" caveat was rewritten to describe the
+new internal-preflight contract while still recommending callers
+preflight at the wrapper level so they can skip predef-ops /
+editor-buffer steps when apply would reject. Regression tests in
+`tests/test_repl_compile.c` (the `#49 regression` block at the end
+of `main`) bypass `editor_commit_apply_external_change` and call
+`repl_apply_compiled_change` directly with four malformed shapes
+plus a well-formed sanity case.
 
 ### 50. `MAX_SCRATCH_OPS_PER_COMMIT = MAX_COMMIT_CMDS` is wildly oversized
 

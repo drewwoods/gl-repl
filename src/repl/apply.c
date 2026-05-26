@@ -69,6 +69,16 @@ int repl_apply_compiled_change(const ReplCompiledChange *change,
                                int *cursor_inout) {
     if (!change) return 0;
 
+    /* Internal preflight: the public surface is documented as "callers
+     * should preflight" but nothing stops a misbehaving caller from
+     * skipping that step. Run the same validation here so the apply
+     * cannot half-execute (e.g. perform the pre-insert delete and then
+     * fail the insert because the change is malformed) — a partial
+     * apply leaves the caller's cmd-store / editor-buffer / predef
+     * cascade out of sync. Bailing before any mutation matches the
+     * "all or nothing" guarantee the wider commit transaction needs. */
+    if (!repl_apply_can_apply_compiled_change(change)) return 0;
+
     ReplCommandStore store = repl_command_store_live();
     ReplStoreMutOpts insert_opts = {
         .flags        = change->adjust_edit_line

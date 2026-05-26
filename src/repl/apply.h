@@ -59,13 +59,15 @@ int  repl_apply_can_apply_compiled_change(const ReplCompiledChange *change);
  * Apply itself never reads or writes editor state. The cursor
  * lives where the caller put it.
  *
- * Callers that drive the full transaction shape (predef-ops +
- * editor-buffer + cmd-store) should preflight with
- * `repl_apply_can_apply_compiled_change()` before any mutation;
- * otherwise a partial commit can leave predef declarations or
- * editor text without their matching cmd-store entry. The
- * preflight + apply pair is wrapped by
- * `editor_commit_apply_external_change()`. */
+ * Apply re-runs `repl_apply_can_apply_compiled_change()` internally
+ * before any mutation, so a malformed change cannot leave the
+ * cmd-store half-modified (e.g. pre-insert delete succeeded, insert
+ * then failed out-of-bounds). Callers driving the full transaction
+ * shape (predef-ops + editor-buffer + cmd-store) should still
+ * preflight first so the predef-ops and editor-buffer steps can be
+ * skipped when the apply would reject — `_can_apply_compiled_change`
+ * is the no-mutation peek for that ordering. The preflight + apply
+ * pair is wrapped by `editor_commit_apply_external_change()`. */
 int  repl_apply_compiled_change(const ReplCompiledChange *change,
                                 int *cursor_inout);
 
