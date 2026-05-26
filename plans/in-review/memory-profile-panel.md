@@ -82,6 +82,11 @@ int    memprof_history_count(void);
 int    memprof_history_capacity(void);
 void   memprof_history_get(int i, MemSample *out, double *sample_seconds_out);
 
+/* t_rel (seconds-since-t0) of the newest pushed sample. Used by the
+ * renderer to right-align the newest sample to "now" without jiggle.
+ * Returns 0.0 when history is empty. */
+double memprof_history_latest_t(void);
+
 /* Sweep helpers for graph auto-scale (cheap; capacity ≤ 1024). */
 unsigned long long memprof_history_max_rss(void);
 unsigned long long memprof_history_min_rss(void);
@@ -179,6 +184,10 @@ static int memprof_read(MemSample *out) {
     out->vsz_bytes = info.virtual_size;
     return 1;
 #elif defined(__linux__)
+    /* Open/read/close every call (once per frame, ~60 Hz). This is
+     * intentional: procfs reads are ~1 µs, and holding the FD open
+     * would prevent the kernel from refreshing the snapshot on each
+     * read on some kernels. Don't "optimize" by caching the FD. */
     FILE *f = fopen("/proc/self/statm", "r");
     if (!f) { out->rss_bytes = out->vsz_bytes = 0; return 0; }
     unsigned long size_p = 0, rss_p = 0;
@@ -283,6 +292,12 @@ const char *memprof_format_bytes(char *buf, int sz, unsigned long long b) {
 }
 ```
 
+Edge-case note: values `0 < b < 1024` format as `"0 KB"` due to integer
+division. Irrelevant for real RSS/VSZ (always many pages), but the test
+case for `b=512` therefore expects `"0 KB"` not `"<1 KB"`. If sub-KB
+display ever matters, switch to `%.2f KB` with `b/1024.0` and adjust the
+test expectations.
+
 The panel calls `memprof_format_bytes` for each value. Signed Δ is formatted
 by a tiny file-scope wrapper in `memory_panel.c` that picks the `+`/`-`
 prefix, then delegates to `memprof_format_bytes` for the absolute magnitude.
@@ -385,7 +400,7 @@ static void memory_panel_rect_for_height(const UiRenderSnapshot *snap,
         panel_x -= (PROFILE_PANEL_W + 8);
     }
 
-    /* Clamp into scene rect (same clamp helpers as profile_panel). */
+    /* Clamp into scene rect. */
     panel_x = clamp_int(panel_x, scene_x + 4, scene_x + scene_w - MEM_PANEL_W - 4);
     panel_y = clamp_int(panel_y,
                         scene_y + STATUSBAR_H + 4,
@@ -394,6 +409,16 @@ static void memory_panel_rect_for_height(const UiRenderSnapshot *snap,
     if (out_y) *out_y = panel_y;
 }
 ```
+
+Required local helpers (not in any shared header today):
+- **`clamp_int(v, lo, hi)`** is file-static in `src/ui/app/profile_panel.c:35`.
+  Duplicate it as a 5-line file-static helper at the top of `memory_panel.c`
+  rather than extracting to a shared header — it's trivial, and extracting
+  would touch profile_panel.c unnecessarily. (If a third caller emerges later,
+  hoist it then.)
+- **`STATUSBAR_H`** comes from `src/ui/app/layout.h` — include that header at
+  the top of `memory_panel.c` (profile_panel.c also includes it; mirror the
+  same `#include "ui/app/layout.h"` line).
 
 ## Module 3 — UI state plumbing
 
@@ -439,8 +464,11 @@ Add the mode-names array next to `profile_panel_mode_names`:
 static const char *memory_panel_mode_names[] = { "Off", "On", "Details" };
 ```
 
-Append to `g_cfg_items[]` immediately after the CPU profile row:
+Append to `g_cfg_items[]` immediately after the CPU profile row (which sits
+under the `### INTERFACE` section header at `glr_actions.c:175` — Memory
+profile must share that section so it appears in the same Config flyout):
 ```c
+/* In ### INTERFACE section, right after the CPU profile row: */
 { "Memory profile", 0, 0, 0, GLR_CONFIG_MEMORY_PROFILE,
   MEMORY_PANEL_MODE_COUNT, memory_panel_mode_names, 0 },
 ```
@@ -478,14 +506,40 @@ ui_memory_panel_render(&ui_snap);
 prof_end(PROF_MEMORY_PANEL);
 ```
 
-### Ctrl+Shift+M hotkey — in `glr_ctrl_keyboard()`
-Add a branch following the existing Ctrl+Shift+X pattern (look at how
-Ctrl+Shift+F is wired): when `key == 13 /* CR */` and `glutGetModifiers() &
-(GLUT_ACTIVE_CTRL | GLUT_ACTIVE_SHIFT)` are both set, cycle the memory panel
-mode via `glr_cfg_cycle_row` with the row index of `GLR_CONFIG_MEMORY_PROFILE`
-(or equivalent — match whatever helper the existing Ctrl+Shift+* bindings
-call). This must run **before** delegation to `editor_handle_key` so Enter
-behavior is unaffected.
+### Ctrl+Shift+M hotkey — new router helper in `src/app/glr_ctrl.c`
+
+Add a named router helper alongside the existing chain (`glr_ctrl.c:2604`
+onward — see `glr_ctrl_router_handle_save_key`, `_handle_code_focus_key`, etc).
+The existing routers go through `editor_input_active_modifiers()`, **not**
+`glutGetModifiers()` — match that pattern, and check each modifier bit
+individually (`mods & (A | B)` is true if *either* bit is set, which would
+steal Shift+Enter from the editor):
+
+```c
+int glr_ctrl_router_handle_memory_panel_key(unsigned char key) {
+    if (key != 13) return 0;                       /* CR / Ctrl+M */
+    int mods = editor_input_active_modifiers();
+    if (!(mods & GLUT_ACTIVE_CTRL))  return 0;     /* both bits required: */
+    if (!(mods & GLUT_ACTIVE_SHIFT)) return 0;     /*  no Shift+Enter steal */
+    /* Cycle the memory-profile config row. Use the same helper the other
+     * Ctrl+Shift+* bindings use to cycle a cfg item by key. Cf.
+     * glr_ctrl_router_handle_code_focus_key for the exact call shape;
+     * the helper there is glr_cfg_cycle_by_key(GLR_CONFIG_CODE_FOCUS, +1)
+     * or equivalent — match whatever it actually is. */
+    glr_cfg_cycle_by_key(GLR_CONFIG_MEMORY_PROFILE, +1);
+    return 1;
+}
+```
+
+**Insertion in the chain**: in `glr_ctrl_keyboard` around `glr_ctrl.c:3857-3867`
+(where each router is called in sequence with short-circuit `return`),
+insert the new call **right after `glr_ctrl_router_handle_code_focus_key`**
+(~line 3865). This must run *before* delegation to `editor_handle_key` so
+the unmodified Enter behavior is preserved.
+
+Verification: with the keyboard running, press Shift+Enter inside the input
+buffer — must still insert a newline (not cycle the memory panel). Press
+plain Enter — must still commit. Press Ctrl+Shift+M — must cycle the panel.
 
 ### `PROF_MEMORY_PANEL` enum entry
 In `src/support/prof.h`, add `PROF_MEMORY_PANEL` right after `PROF_PROFILE_PANEL`.
@@ -510,12 +564,25 @@ with `memprof_reset()` followed by either a fake-reader install + `memprof_init_
    stays at 0 (init does not push). Call `memprof_frame_tick_at(5.0)` →
    assert count == 1 and the stored sample's rss == 100. Call
    `memprof_frame_tick_at(10.0)` → assert count == 2.
-3. **Ring wraps.** `memprof_reset();` install a reader returning a counter
-   (each call returns rss = `++counter`). `memprof_init_at(0.0)`, then drive
-   `(MEMPROF_HISTORY_CAP + 5) * MEMPROF_PUSH_INTERVAL_S` worth of ticks.
-   Assert `memprof_history_count() == memprof_history_capacity()` and the
-   sample returned by `memprof_history_get(0, …)` has rss equal to the
-   *6th* sample's counter value (i.e. the original first 5 were dropped).
+3. **Ring wraps.** `memprof_reset();` install a reader that returns whatever
+   the test wrote into a global `g_test_rss`. `memprof_init_at(0.0)` (init
+   reader call captures baseline — irrelevant here, ring is empty). Then
+   **tick only at push boundaries** (one tick per push interval, no sub-interval
+   noise) for `N = MEMPROF_HISTORY_CAP + 5` iterations:
+   ```c
+   for (int i = 1; i <= N; i++) {
+       g_test_rss = (unsigned long long)i;     /* what the reader returns */
+       memprof_frame_tick_at(i * MEMPROF_PUSH_INTERVAL_S);
+   }
+   ```
+   After the loop, `memprof_history_count() == capacity`. The ring should
+   hold pushes [6, 7, …, N], so:
+   - `memprof_history_get(0, &s, NULL)` → `s.rss == 6` (oldest survivor).
+   - `memprof_history_get(capacity - 1, &s, NULL)` → `s.rss == N`.
+
+   This relies on ticking exactly at push boundaries so the counter math
+   stays simple; sub-interval ticks would still pass the count assertion
+   but make the slot-0 value harder to predict.
 4. **Right-anchored timestamps.** Assert
    `memprof_history_latest_t() ≈ last_pushed_t_rel` (within an epsilon),
    so the renderer can right-align the newest sample to "now" deterministically.

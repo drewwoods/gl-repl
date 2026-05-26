@@ -65,7 +65,15 @@ and have it inject "F2..F10" lines via a small caller-supplied
 callback, or (b) move `help_text.c` into `src/app/` since it
 already reads `g_cfg_items`. Add a guard to lock the boundary.
 
-### 2. `parse_cfg` double-applies every `// @cfg` line
+### 2. 🟡 `parse_cfg` double-applies every `// @cfg` line — design hazard, not currently triggerable
+
+(*Severity note: downgraded from 🔴 to 🟡 after closer reading.
+The double-fire is a real contract violation but the only
+observable side effect today — `tutorial_notify_state_changed` —
+is a no-op when no tutorial is active and a near-no-op even when
+one is, so no current user-visible failure mode has been
+identified. The "actual bug" classification was over-strong;
+this is a drift hazard waiting on a fragile contract.*)
 
 **Where:** `src/repl/export.c:400-426` (per-line apply) and L3182
 (end-of-load drain)
@@ -85,15 +93,27 @@ import_cfg_accumulator_apply_and_reset();   // applies the bag AGAIN
 ```
 
 **Why it matters:** Every `@cfg` line triggers `bridge->apply` once
-during parse and once at drain. Every bridge implementation in
-`glr_config.c` has `apply` side-effects (cycles state, fires
-`tutorial_notify_state_changed`) — non-idempotent applies double-
-fire. The comment at L412 waves this off ("same set of pairs") but
-the apply contract isn't idempotent in general.
+during parse and once at drain. The bridge implementation in
+`glr_config.c` ends every `glr_config_set` with
+`tutorial_notify_state_changed`. Comment at `export.c:412` justifies
+this as "same set of pairs" — but `apply` is not contractually
+idempotent, only happens to be in practice today because:
+
+- Tutorial-notify (`glr_config.c:163-169`) early-returns when no
+  tutorial is active and when the current step is not REQUIRE.
+- A REQUIRE step that matches and advances on the per-line apply
+  will be on a different step by the drain — so the drain's
+  re-fire still hits the early-return.
+
+The pathological case (tutorial REQUIRE step N matches on per-line
+apply; advance to step N+1, also a REQUIRE on the *same* slug
+matching the *same* value — would auto-advance through the
+showcase) is constructible but not in any shipped tutorial.
 
 **Fix:** Pick one path. Either drop the per-line apply (let the
 drain do it all), or drop the accumulator (drain becomes a no-op).
-Document which is the source of truth.
+Document which is the source of truth. Tier B sized; not blocking
+any current user-facing behavior.
 
 ### 3. `repl_copy/restore_predef_values` is values-only by contract and assumes table-shape stability — currently no enforcement, and at least one caller can violate the assumption
 
@@ -1358,10 +1378,14 @@ the pointer. Keep the per-field getters as inline shims.
 7. **#64** + **#65** + **#66** — replay_annotations + state.c
    dead-code/dead-macros cleanup.
 8. **#67** — phase-N.M comment sweep across the layer.
-9. **#10** — flatten_source_lighting_enabled: walk flat program
-   instead. Small change, real correctness fix.
 
-That's ~10 commits; net ~400-500 LOC reduction; closes three
+(*#10 `flatten_source_lighting_enabled` is a real correctness
+fix but touches the flatten contract enough to be Tier B —
+deferred from the afternoon pass to keep tier classifications
+consistent. See the "Tier-classified outstanding work" section
+below.*)
+
+That's ~9 commits; net ~400-500 LOC reduction; closes three
 bug-level findings.
 
 ### One-week pass — the cluster work
@@ -1407,10 +1431,10 @@ The dominant work is **closing the `_mut()`-for-reads regression
 Following the Tier A/B/C/D system the prior audit landed:
 
 - **Tier A (small, near-zero risk):** #3, #9, #11, #13, #34, #38,
-  #39, #40, #46, #52, #54-#67 — most of the afternoon pass.
-- **Tier B (moderate, focused pass):** #2, #4, #5, #6, #8, #15,
-  #29, #31, #32, #33, #44, #45, #48, #50, #51, plus the per-file
-  parts of #14.
+  #39, #40, #46, #52, #53-#67 — most of the afternoon pass.
+- **Tier B (moderate, focused pass):** #2, #4, #5, #6, #8, #10,
+  #15, #29, #31, #32, #33, #44, #45, #48, #50, #51, plus the
+  per-file parts of #14.
 - **Tier C (high cost, broad surface):** #14 (ratchet), #16, #37,
   #68, #69, #41 (test-side change for tutorial enum coupling).
 - **Tier D (kept on purpose):** #75 (the tutorial-only dispatch
