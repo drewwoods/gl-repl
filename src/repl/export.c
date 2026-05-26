@@ -3154,8 +3154,17 @@ int repl_export_load_from_file(const char *filename) {
         import_process_line(&state, p, line);
     }
 
-    if (fclose(f) != 0)
+    /* Mirror the save-side ferror/fclose pair: fgets returning NULL
+     * conflates EOF with read error, so the read-loop above can't
+     * surface I/O failures by itself. Check ferror before closing. */
+    int had_read_err = ferror(f);
+    int close_failed = fclose(f) != 0;
+    if (had_read_err || close_failed) {
+        char msg[REPL_STATUS_TEXT_MAX];
+        snprintf(msg, sizeof(msg), "Error: cannot read %s", filename);
+        repl_set_status_error(msg);
         return 0;
+    }
     if (truncated_line) {
         char msg[REPL_STATUS_TEXT_MAX];
         snprintf(msg, sizeof(msg), "Import failed: line too long in %s", filename);

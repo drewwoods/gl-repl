@@ -321,7 +321,7 @@ import are invisible.
 line, load_err)` (when non-empty), or accumulate into a warnings
 buffer the importer reports in the final status.
 
-### 9. `repl_export_load_from_file` swallows `fclose` and `ferror` (asymmetric with the prior #6 fix)
+### 9. ✅ `repl_export_load_from_file` swallows `fclose` and `ferror` (asymmetric with the prior #6 fix)
 
 **Where:** `src/repl/export.c:3157-3158` plus the full `fgets` read
 loop (no `ferror` check inside or after)
@@ -334,6 +334,14 @@ save-side check; the load-side never got the symmetric treatment.
 **Fix:** Mirror the save pattern: `int had_read_err = ferror(f);
 int close_failed = fclose(f) != 0; if (had_read_err || close_failed)
 repl_set_status_error("Error: cannot read X");`.
+
+**Status (2026-05-26):** ✅ Closed. Mirrored the save-side
+`ferror`/`fclose` pair after the import loop, with a matching
+`"Error: cannot read %s"` status message. Regression test in
+`tests/test_repl_core_io.c` points the loader at `/tmp` (a directory
+— `fopen` succeeds, the first `fgets` returns NULL with
+`ferror=1`) and asserts the function returns failure; pre-fix this
+returned success.
 
 ### 10. `flatten_source_lighting_enabled` ignores control flow
 
