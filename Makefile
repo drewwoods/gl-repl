@@ -831,10 +831,17 @@ $(foreach bin,$(BENCH_BINS),$(eval $(call built_binary,$(bin))))
 # no-op stub harness cannot model and headless CI cannot provide. These
 # are intentionally NOT in TEST_BINS, so `make test` / `make test-stubs`
 # never build or run them. Run locally with a display via `make gl-tests`.
-# Link is GL-only (gl_2d.h is header-inline; no project objects needed).
-GL_TEST_BINS = test_ui_gl_state
+GL_TEST_BINS = test_ui_gl_state test_scene_underwater_fill_gl
 
 $(BINDIR)/test_ui_gl_state: $(OBJDIR)/$(TEST_DIR)/test_ui_gl_state.o
+	@mkdir -p $(dir $@)
+	$(CC) $(OBJ_CFLAGS) -o $@ $^ $(GL_LDFLAGS)
+
+# Drives scene_grid_render(GRID_THEME_OCEAN) with cam_world_y < 0 and
+# nv_fog_distance_supported = 1, then glReadPixels and checks corner
+# pixels. Reproduces the post-fb976f0 underwater-fill regression on
+# drivers that advertise GL_NV_fog_distance.
+$(BINDIR)/test_scene_underwater_fill_gl: $(OBJDIR)/$(TEST_DIR)/test_scene_underwater_fill_gl.o $(OBJDIR)/src/scene/grid.o
 	@mkdir -p $(dir $@)
 	$(CC) $(OBJ_CFLAGS) -o $@ $^ $(GL_LDFLAGS)
 

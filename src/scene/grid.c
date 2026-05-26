@@ -387,14 +387,19 @@ static void scene_grid_render_ocean_theme(const GridDrawContext *grid_ctx,
         glMatrixMode(GL_MODELVIEW);
         glPushMatrix();
         glLoadIdentity();
-        /* Push BEFORE mutating depth/lighting so pop restores the
-         * caller's state — formerly disable-before-push meant pop
-         * restored "disabled" and a manual glEnable(GL_DEPTH_TEST)
-         * after the pop clobbered the outer state instead of restoring
-         * it. */
-        glPushAttrib(GL_DEPTH_BUFFER_BIT | GL_LIGHTING_BIT);
+        /* GL_FOG_BIT is on the push mask because the outer grid pass
+         * leaves fog enabled (linear, end ≈ grid extent) — and after
+         * fb976f0 it may also have GL_FOG_DISTANCE_MODE_NV =
+         * GL_EYE_RADIAL_NV set when the OCEAN theme is the dispatch
+         * branch. With identity modelview the rect's eye-space radial
+         * distances run 0..sqrt(scene_w² + scene_h²), wildly past
+         * fog-end, so without the disable the rect fades to fog colour
+         * everywhere except the tiny lower-left near (0,0). See
+         * tests/test_scene_underwater_fill_gl.c. */
+        glPushAttrib(GL_DEPTH_BUFFER_BIT | GL_LIGHTING_BIT | GL_FOG_BIT);
         glDisable(GL_DEPTH_TEST);
         glDisable(GL_LIGHTING);
+        glDisable(GL_FOG);
         glRectf(0, 0, (float)config->scene_w, (float)config->scene_h);
         glPopAttrib();
         glMatrixMode(GL_PROJECTION);
