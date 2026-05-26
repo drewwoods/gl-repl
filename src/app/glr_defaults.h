@@ -8,11 +8,9 @@
  *
  * This is gl-repl app-shell logic — it knits together scene-render
  * enums and the editor's panel layout into a single set of "out of
- * the box" values. Pure rendering enums themselves (SceneGridTheme,
- * SceneAxesTheme, SceneGridMajorIdx, SceneGridExtentIdx) live in src/scene/themes.h;
- * the panel-layout enum lives in src/ui/app/layout.h. Including those
- * here is intentional — only callers that need these defaults pay
- * the transitive cost, keeping config.h dependency-free.
+ * the box" values. The owning enums live in src/scene/themes.h and
+ * src/ui/app/layout.h; include them here so the symbolic defaults do
+ * not rely on include order elsewhere.
  *
  * Concept: compile-time defaults. User-toggleable runtime settings
  * (wireframe / grid theme / etc.) live on glr_config.h and the
@@ -23,6 +21,8 @@
 #define GLR_DEFAULTS_H
 
 #include "app/glr_config.h"  /* GlrConfigKey (used by GlrExampleTagDefault) */
+#include "scene/themes.h"
+#include "ui/app/layout.h"
 
 #define CFG_DEFAULT_WIREFRAME         0
 #define CFG_DEFAULT_GRID_THEME        GRID_THEME_XZRULER

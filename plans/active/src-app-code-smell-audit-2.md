@@ -66,14 +66,18 @@ All Tier A findings have been successfully implemented and verified through the 
 
 ## Current Status (2026-05-27)
 
-Tier A remains complete. Tier B is now mostly implemented: **#6, #7,
-#8, #11, #12, #13, #14, #26, #28, #30, #31, #33, #34, #36, and #37**
-are done; **#29** is the only remaining active Tier B finding. Tier C
-findings **#32** and **#35** remain deferred.
+Tier A remains complete. The remaining Tier B code item (**#29**) is
+now implemented, and the two previously deferred Tier C findings
+(**#32** and **#35**) are also resolved in code. Focused executable
+validation is complete for this pass.
 
-Focused editor diagnostics are clean in the touched slices. Full
-executable validation is still pending because terminal command output
-was unavailable during this pass.
+Focused editor diagnostics are clean in the touched slices. The
+`test-stubs` recipe's constituent steps were validated directly:
+`check-gl-boundaries`, `check-layer-coupling`,
+`check-state-ownership`, and `make test USE_GL_STUBS=1` all pass after
+the follow-up build fixes. The terminal wrapper still intermittently
+failed to return `make test-stubs` output, so the recipe was confirmed
+through those exact component commands instead.
 
 ## Headline take
 
@@ -570,7 +574,7 @@ accurate but the values are not greppable.
 **Fix:** Extract to named constants (`PANEL_LIFT_SPRING`,
 `PANEL_LIFT_DAMP`, `PANEL_LIFT_THRESHOLD`).
 
-### 29. Full `UiRenderSnapshot` rebuild on every drag-motion event — Remaining
+### 29. Full `UiRenderSnapshot` rebuild on every drag-motion event — Done
 
 **Where:** `src/app/glr_ctrl.c:2956-2957, 3177-3178`.
 
@@ -583,9 +587,10 @@ drag path bypasses the cache and rebuilds fresh.
 struct copies, built per motion event at 60+ Hz). Not a
 correctness issue.
 
-**Fix:** Reuse the cached frame snapshot for drag hit-testing, with
-a bounds clamp for cursor positions that fall outside the cached
-geometry.
+**Fix:** Reuse the last fully-prepared per-frame `UiRenderSnapshot`
+for drag hit-testing, with a one-time fallback build for non-render
+paths and invalidation on reshape/reset so stale geometry is never
+reused across viewport or world resets.
 
 ### 30. Replay row's `KEY_CTRL_R` shortcut is dispatch-dead — Done
 
@@ -636,7 +641,7 @@ be precomputed once at startup.
 **Fix:** Precompute slugs in a parallel array during module init,
 or store the slug on `GlrConfigItem` directly.
 
-### 32. Magic `16` cap on section display labels
+### 32. Magic `16` cap on section display labels — Done
 
 **Where:** `src/app/glr_config.c:306-307, 311, 332`
 (`glr_config_section_display_label`).
@@ -666,50 +671,11 @@ truncates the display-label cache, and a reader scanning the
 function has no way to discover the cap without reading the
 implementation.
 
-**Fix (recommended):** Derive the cache dimensions from
-`CFG_ITEM_COUNT` rather than introducing a new section-specific
-cap. Sections are always a subset of `g_cfg_items[]` rows (every
-`### `-prefixed row is a section), so `CFG_ITEM_COUNT` is a
-provably-safe upper bound:
-
-```c
-const char *glr_config_section_display_label(int section) {
-    static char labels[CFG_ITEM_COUNT][CFG_SECTION_LABEL_MAX];
-    ...
-    n = glr_config_section_count();
-    /* No `if (n > N) n = N;` clamp needed — n is bounded by
-     * CFG_ITEM_COUNT by construction (every section header is a
-     * g_cfg_items[] row). */
-    for (int s = 0; s < n; s++) { ... }
-}
-```
-
-`CFG_ITEM_COUNT` is the `extern const int` already declared at
-`glr_config.h:106` and auto-computed via `sizeof(g_cfg_items) /
-sizeof(g_cfg_items[0])` in `glr_actions.c`. Using it here
-overprovisions the cache (we reserve slots for non-section rows
-too) but the overhead is negligible (~30 rows × 48 bytes ≈ 1.5 KB
-static).
-
-The `48` per-label width can either keep its numeric literal with
-a one-line comment (`/* longest current label is "### TIME & REPLAY"
-without the "### " prefix = 12 chars; 48 gives 4× headroom */`) or
-be promoted to a named constant `CFG_SECTION_LABEL_MAX` next to
-the other `CFG_*` tunables in `config.h:37-42`. The named-constant
-form is more discoverable; the inline comment is one line shorter.
-
-Both magic numbers go away. No `STATIC_ASSERT` needed — the
-relationship is structural (section count ≤ item count), not
-arithmetic.
-
-**Alternative (heavier):** Promote both caps to `config.h`
-(`CFG_MAX_SECTIONS` + `CFG_SECTION_LABEL_MAX`) following the
-existing `CFG_DEFAULT_*` / `CFG_PANEL_FRAC_*` pattern at
-`config.h:37-42`, and add `STATIC_ASSERT(CFG_ITEM_COUNT <=
-CFG_MAX_SECTIONS, ...)`. More discoverable but adds two named
-tunables for a cap that's already structurally bounded — pick
-the derive-from-`CFG_ITEM_COUNT` form unless the section count is
-expected to diverge meaningfully from the item count.
+**Fix:** Replace the fixed `labels[16][48]` cache with a runtime-sized
+cache allocated from the current section count, and promote the label
+width to a named `CFG_SECTION_LABEL_MAX` constant. This avoids the
+silent truncation cap without relying on `CFG_ITEM_COUNT` as a static
+array bound (which is not a portable C99 constant expression here).
 
 ### 33. `get_current_track` header contract promises longer lifetime than source delivers — Done
 
@@ -753,7 +719,7 @@ portable C99 — another file-scope aggregate is not a constant
 expression, even though GCC/Clang accept it under `-std=c99`
 non-pedantic.
 
-### 35. Fragile transitive macro dependencies in `glr_defaults.h`
+### 35. Fragile transitive macro dependencies in `glr_defaults.h` — Done
 
 **Where:** `src/app/glr_defaults.h:28-45`.
 
@@ -768,8 +734,9 @@ If include order changes, the macros break.
 **Impact:** Latent include-order dependency. Currently works because
 `glr_ctrl.c` (the main consumer) includes scene headers early.
 
-**Fix:** Add `#include "scene/themes.h"` to `glr_defaults.h`, or
-use integer literals with a comment naming the enum value.
+**Fix:** Include the owner enum headers directly in `glr_defaults.h`
+(`scene/themes.h` and `ui/app/layout.h`) so the symbolic default-value
+macros no longer depend on transitive include order elsewhere.
 
 ### 36. Undocumented double-decay during active drag — Done
 
@@ -848,32 +815,25 @@ Completed in this pass:
 6. **#26 + #36 + #37** — Added `glr_camera_pose_from_state()` and
   documented both the intentional drag double-decay and the
   `decay = 0.0f` instant-snap contract.
-7. **#28** — Replaced replay-panel lift magic numbers with named
-  controller constants.
+7. **#28 + #29** — Replaced replay-panel lift magic numbers with named
+  controller constants, and switched code-panel drag hit-testing to
+  reuse the last rendered UI snapshot instead of rebuilding a fresh
+  snapshot on every motion event.
 8. **#30** — Routed Ctrl+R through config ownership by reordering the
   controller dispatch chain and removing duplicate replay-handler
   consumption.
 9. **#34** — Initialized live `g_glr_state` from the same compile-time
   defaults literal used for the defaults table, closing the early
   zero-init gap.
+10. **#32 + #35** — Removed the fixed 16-section display-label cap with
+  a runtime-sized cache and made `glr_defaults.h` include the owner
+  enum headers it depends on directly.
 
-Remaining Tier B work:
-
-1. **#29** — Reuse the cached `UiRenderSnapshot` for drag hit-testing
-  instead of rebuilding it on each motion event.
-2. Run focused executable validation for the landed Tier B slices once
-  terminal command output is available again; editor diagnostics were
-  used during this pass, but that does not replace build-and-run
-  checks.
+Remaining Tier B work: none.
 
 ### Tier C — defer (high cost or cross-cutting)
 
-- **#32** — Compile-time section-count enforcement requires
-  `STATIC_ASSERT` at table scope; may need table-shape change to
-  make the count a constant expression.
-- **#35** — Adding `#include "scene/themes.h"` to `glr_defaults.h`
-  changes the transitive include set for every consumer. Needs
-  audit of downstream effects.
+No active Tier C items remain in this pass.
 
 ### Out of scope
 

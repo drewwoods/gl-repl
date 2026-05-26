@@ -1,6 +1,7 @@
 #include "app/glr_config.h"
 #include "app/glr_actions.h"
 #include <ctype.h>
+#include <stdlib.h>
 #include <string.h>
 #include "app/glr_audio.h"
 #include "app/glr_camera.h"
@@ -41,6 +42,8 @@ static int accum_aa_get_cycle(void) {
 
 static void accum_aa_set_cycle(int value) {
     if (value <= 0) {
+
+#define CFG_SECTION_LABEL_MAX 48
         glr_state_render_mut()->accum_aa_enabled = 0;
         return;
     }
@@ -303,33 +306,50 @@ const char *glr_config_section_label(int section) {
 }
 
 const char *glr_config_section_display_label(int section) {
-    static char labels[16][48];
-    static int computed;
+    static char *labels;
+    static int labels_count;
     int n;
-    if (!computed) {
-        n = glr_config_section_count();
-        if (n > 16) n = 16;
+
+    n = glr_config_section_count();
+    if (section < 0 || section >= n)
+        return NULL;
+
+    if (labels_count != n) {
+        char *new_labels;
+        size_t total_bytes;
+
+        if (n <= 0)
+            return NULL;
+        total_bytes = (size_t)n * CFG_SECTION_LABEL_MAX;
+        new_labels = (char *)realloc(labels, total_bytes);
+        if (!new_labels)
+            return NULL;
+        labels = new_labels;
+        labels_count = n;
+
         for (int s = 0; s < n; s++) {
             const char *raw = glr_config_section_label(s);
-            if (!raw) { labels[s][0] = '\0'; continue; }
+            char *dst = labels + ((size_t)s * CFG_SECTION_LABEL_MAX);
+
+            if (!raw) {
+                dst[0] = '\0';
+                continue;
+            }
             size_t k = 0;
-            for (; raw[k] && k < sizeof(labels[0]) - 1; k++) {
+            for (; raw[k] && k < CFG_SECTION_LABEL_MAX - 1; k++) {
                 char c = raw[k];
                 if (k == 0) {
                     if (c >= 'a' && c <= 'z') c = (char)(c - 32);
                 } else if (c >= 'A' && c <= 'Z') {
                     c = (char)(c + 32);
                 }
-                labels[s][k] = c;
+                dst[k] = c;
             }
-            labels[s][k] = '\0';
+            dst[k] = '\0';
         }
-        computed = 1;
     }
-    n = glr_config_section_count();
-    if (section < 0 || section >= n || section >= 16)
-        return NULL;
-    return labels[section];
+
+    return labels + ((size_t)section * CFG_SECTION_LABEL_MAX);
 }
 
 int glr_config_section_range(int section, int *start, int *count) {
