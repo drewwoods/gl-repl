@@ -1425,3 +1425,22 @@ document:
 Long-form implementation notes belong in the implementation section or module
 docs. The Phase 2 end state is one concise public REPL API header; verbose
 per-module header prose should not become the permanent public surface.
+
+## Historical Decoupling & Host Bridges
+
+To preserve structural separation and keep the REPL compiler and pipeline engine (`src/repl/`) entirely decoupled from visual rendering and the host editor environment (`src/app/`, `src/editor/`), the project utilizes explicit bridge interfaces (`ReplHostEffects`, `ReplExportLayout`, `glr_actions_install_export_cfg_bridge`, etc.) installed by the frame controller during initialization:
+
+### 1. App-Service Bootstrapping
+Dump-only CLI paths (e.g., `--dump-code` and `--dump-flat`) bypass normal OpenGL initialization (`glr_ctrl_init_gl`), but they still need to load and export REPL state correctly. This requires the idempotent `glr_ctrl_install_app_services()` installer to execute prior to loading commands to avoid dropping `@cfg` blocks during import.
+
+### 2. Host-Effect Bridges
+The host-effect bridge (`ReplHostEffects`) installed by the controller routes core pipeline actions (such as status updates, example resets, input resets, scrolling, follow-scroll, and cursor parking) back to the UI, editor state, and peer subsystems. This prevents core REPL code from directly linking editor or tutorial symbols, allowing alternative drivers (like `tools/editor_demo`) to link successfully with minimal stubbing.
+
+### 3. Export Bridges
+* **Config Bridge:** Installed via `glr_actions_install_export_cfg_bridge()` so the exporter and scenes modules can read, write, and parse scene-specific `@cfg` configurations without referencing visual/controller configurations directly.
+* **Camera Bridge:** Installed via `glr_camera_export_install_bridge()` so the exporter can serialize the current camera 3D pose (`// camera` blocks) without coupling core files to the camera state module (`glr_camera.c`).
+* **Reshape-Projection Bridge:** Allows the exporter or code-panel geometry calculations to query perspective or orthographic viewing projections dynamically without hard-coding OpenGL matrix operations.
+* **Camera-Distance Source:** Injects the current camera distance into the command executor so that the dynamic point-attenuation fallback (scaling `glPointSize` manually when `glPointParameterfv` is unsupported) can function without linking `glr_camera.c` into the executor's link set.
+
+### 4. Global State Reset Separation
+The controller side owns `glr_ctrl_reset_all()`. This ensures that when a wholesale replacement or program load occurs, the editor, UI, and peer subsystems are cleared simultaneously with the core REPL document state, maintaining strict visual and behavioral parity.

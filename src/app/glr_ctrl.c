@@ -1,5 +1,8 @@
 #include "app/glr_ctrl.h"
 
+#include "subsystems/replay/replay_render.h"
+#include "subsystems/edit_overlays/edit_overlays.h"
+
 #include "c_compat.h"  /* STATIC_ASSERT (C99/C11 portable) */
 #include <ctype.h>
 #include <math.h>
@@ -221,36 +224,10 @@ static SceneGuideSnapshot glr_ctrl_build_guide_snapshot(const SceneRenderConfig 
     return snapshot;
 }
 
-/* Re-establish the REPL's predef-var / scratch-array baseline before
- * each fade-batch render so each batch starts from the same world state. */
-static void glr_ctrl_replay_restore_baseline(const ReplayFadePlan *fade_plan) {
-    if (!fade_plan) return;
-    repl_restore_predef_values(fade_plan->baseline_predef_vals, MAX_PREDEF_VARS);
-    repl_eval_restore_scratch_arrays(fade_plan->baseline_scratch_arrays);
-}
-
 /* Per-frame replay-fade plan, owned by the controller. Used by the main
  * fill (to clamp the flat-cmd count to the pre-fade base limit) and by
  * the post_fill_fn hook (to render the fading-batch overlay). */
 static ReplayFadePlan g_replay_fade_plan;
-
-/* Tiny GL primitives the REPL tess-preview walker calls back into. They
- * exist as static functions here because the walker takes a callback
- * struct rather than driving GL itself — that keeps the walker (REPL
- * data traversal) and the rendering (GL primitives) on the right sides
- * of the layering boundary. */
-static void tess_preview_begin_contour(void *ud) { (void)ud; glBegin(GL_LINE_STRIP); }
-static void tess_preview_vertex(float x, float y, float z, void *ud) {
-    (void)ud;
-    glVertex3f(x, y, z);
-}
-static void tess_preview_end_contour(void *ud) { (void)ud; glEnd(); }
-
-static const ReplayTessPreviewCallbacks g_tess_preview_cb = {
-    .begin_contour = tess_preview_begin_contour,
-    .vertex        = tess_preview_vertex,
-    .end_contour   = tess_preview_end_contour,
-};
 
 static void glr_ctrl_build_replay_fade_plan(int replaying) {
     ReplayFadeBatchView fade_batches;
@@ -287,665 +264,31 @@ static void glr_ctrl_build_replay_fade_plan(int replaying) {
     g_replay_fade_plan.active = 1;
 }
 
-/* Render the fading-batch overlays prepared in g_replay_fade_plan. */
-static void glr_ctrl_render_replay_fade_batches(void) {
-    const ReplayFadePlan *plan = &g_replay_fade_plan;
-    int batch_count = plan->batch_count;
-    if (batch_count <= 0) return;
+static OverlaySnapshotPack g_overlay_pack;
 
-    prof_begin(PROF_SCENE_3D_FADE);
-
-    glPushAttrib(GL_ALL_ATTRIB_BITS);
-    glDisable(GL_LIGHTING);
-    glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
-    /* Material reflectance *coefficients* (glMaterialfv) — not glColor*
-     * draw colors — so they stay named local consts and are NOT
-     * scene/palette.h tokens. */
-    static const GLfloat mspec[] = { 0.4f, 0.4f, 0.4f, 1.0f };
-    static const GLfloat mshin[] = { 30.0f };
-    glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, mspec);
-    glMaterialfv(GL_FRONT_AND_BACK, GL_SHININESS, mshin);
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-
-    FlatProgramView program = repl_state_flat_program_view();
-    SourceTextView text = source_document_view();
-
-    for (int batch_idx = 0; batch_idx < batch_count; batch_idx++) {
-        const ReplayFadeBatch *batch = &plan->batches[batch_idx];
-        float alpha = plan->batch_alpha[batch_idx];
-        if (alpha <= 0.0f) continue;
-
-        prof_begin(PROF_SCENE_3D_FADE_BATCH_PREP);
-        glr_ctrl_replay_restore_baseline(plan);
-        scene_clr_a(SCENE_CLR_REPLAY_FADE, alpha);
-        glPushMatrix();
-        prof_accum_end(PROF_SCENE_3D_FADE_BATCH_PREP);
-
-        prof_begin(PROF_SCENE_3D_FADE_BATCH_EXEC);
-        repl_execute_set_fade_context(alpha, plan->skip_limits[batch_idx]);
-        repl_execute_program(&(ReplExecutionOptions){
-            .flat_cmd_count = batch->new_pc,
-            .program        = program,
-            .text           = text,
-        });
-        prof_accum_end(PROF_SCENE_3D_FADE_BATCH_EXEC);
-
-        glPopMatrix();
-    }
-
-    prof_begin(PROF_SCENE_3D_FADE_BATCH_POST);
-    repl_execute_set_fade_context(1.0f, 0);
-    glPopAttrib();
-    prof_accum_end(PROF_SCENE_3D_FADE_BATCH_POST);
-
-    prof_accum_end(PROF_SCENE_3D_FADE);
-}
-
-/* Render the polygon-mode tess-preview wireframe by walking the flat
- * program through replay_walk_tess_preview() and emitting line
- * strips at each transformed contour. The walker handles iteration and
- * matrix tracking; we own the visual GL state. */
-static void glr_ctrl_render_replay_tess_preview(void) {
-    glPushAttrib(GL_ALL_ATTRIB_BITS);
-    glDisable(GL_LIGHTING);
-    glDisable(GL_DEPTH_TEST);
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    scene_clr_a(SCENE_CLR_TESS_PREVIEW, 0.80f);
-    glLineWidth(2.0f);
-
-    replay_walk_tess_preview(&g_tess_preview_cb, NULL);
-
-    glLineWidth(1.0f);
-    glPopAttrib();
-}
-
-/* Replay overlays installed on SceneRenderConfig.post_fill_fn — runs
- * between the scene's user-geometry fill and its grid/axes/backdrop
- * helpers. Composes the fading-batch overlay and the polygon-mode
- * tess-preview wireframe; both are pure REPL-state visualizations so
- * the scene module never sees them. */
-static void glr_ctrl_post_fill_replay_overlay(void *user_data) {
-    (void)user_data;
-    if (g_replay_fade_plan.active)
-        glr_ctrl_render_replay_fade_batches();
-    if (g_replay_fade_plan.tess_preview_active)
-        glr_ctrl_render_replay_tess_preview();
-}
-
-/* --- post_overlays_fn body: vertex_numbers + normal_vectors ------------
- *
- * Both overlays walk the user's flat program through the REPL walker and
- * emit one scene primitive per visited vertex. The orchestration lives
- * here in the controller — scene/overlays.c just exposes
- * scene_draw_vertex_label_text / scene_draw_normal_vector_arrow. */
-
-typedef struct {
-    GlrVertexLabelMode mode;
-    int is_ortho;
-} VertexLabelCtx;
-
-static void on_vertex_number_label(const ReplayVertexWalkState *state,
-                                   float vx, float vy, float vz,
-                                   void *user) {
-    const VertexLabelCtx *ctx = (const VertexLabelCtx *)user;
-    char idx_buf[16];
-    char pos_buf[48];
-    const char *detail_text = NULL;
-
-    if (!ctx || (ctx->mode != GLR_VERTEX_LABEL_INDEX &&
-                 ctx->mode != GLR_VERTEX_LABEL_INDEX_POS))
-        return;
-
-    snprintf(idx_buf, sizeof(idx_buf), " v%d", state->vertex_idx_in_block);
-    if (ctx->mode == GLR_VERTEX_LABEL_INDEX_POS) {
-        if (ctx->is_ortho)
-            snprintf(pos_buf, sizeof(pos_buf), " (%.2f, %.2f)", vx, vy);
-        else
-            snprintf(pos_buf, sizeof(pos_buf), " (%.2f, %.2f, %.2f)",
-                     vx, vy, vz);
-        detail_text = pos_buf;
-    }
-    scene_draw_vertex_label_text(vx, vy, vz, idx_buf, detail_text);
-}
-
-static void on_normal_vector_arrow(const ReplayVertexWalkState *state,
-                                   float vx, float vy, float vz,
-                                   void *user) {
-    float scale = *(const float *)user;
-    scene_draw_normal_vector_arrow(vx, vy, vz,
-                                   state->normal[0],
-                                   state->normal[1],
-                                   state->normal[2],
-                                   scale);
-}
-
-static ReplayVertexWalkContext glr_ctrl_build_vertex_walk_context(int selected_block_only) {
-
-    ReplayVertexWalkContext ctx = {
-        .program                = repl_state_flat_program_view(),
-        .cursor = {
-            .edit_line_idx          = editor_state_edit_line(),
-            .cursor_block_begin     = repl_state_flat_program_current_block_begin(),
-            .cursor_block_end       = repl_state_flat_program_current_block_end(),
-            .cursor_func_scope_mask = 0,  /* not currently exposed via repl_state */
-        },
-        .selected_block_only    = selected_block_only,
-    };
-    return ctx;
-}
-
-static void glr_ctrl_render_vertex_numbers(GlrVertexLabelMode mode,
-                                           int is_ortho) {
-    glPushAttrib(GL_ALL_ATTRIB_BITS);
-    glDisable(GL_LIGHTING);
-    glDisable(GL_DEPTH_TEST);
-    scene_clr(SCENE_CLR_VERTEX_LABEL);
-
-    static const ReplayVertexWalkCallbacks cb = {
-        .on_vertex = on_vertex_number_label,
-    };
-    VertexLabelCtx label_ctx = { .mode = mode, .is_ortho = is_ortho };
-    ReplayVertexWalkContext ctx = glr_ctrl_build_vertex_walk_context(1);
-    replay_walk_user_vertices(&ctx, &cb, &label_ctx);
-
-    glPopAttrib();
-}
-
-/* World-space length of the per-vertex normal-vector overlay arrows. */
-#define GLR_NORMAL_ARROW_SCALE 0.35f
-
-static void glr_ctrl_render_normal_vectors(void) {
-    glPushAttrib(GL_ALL_ATTRIB_BITS);
-    glDisable(GL_LIGHTING);
-    glDisable(GL_DEPTH_TEST);
-    scene_clr(SCENE_CLR_NORMAL_LABEL);
-
-    static const ReplayVertexWalkCallbacks cb = {
-        .on_vertex = on_normal_vector_arrow,
-    };
-    float scale = GLR_NORMAL_ARROW_SCALE;
-    ReplayVertexWalkContext ctx = glr_ctrl_build_vertex_walk_context(0);
-    replay_walk_user_vertices(&ctx, &cb, &scale);
-
-    glPopAttrib();
-}
-
-/* --- Outline + vertex-point overlays (walking-based) --------------------
- *
- * Lifted from the old scene/overlays.c so the visual matches commit-
- * before-the-polygon-mode-experiment exactly. The walks live entirely
- * in the controller now; scene only exposes per-vertex primitives.
- *
- * Inputs (flat program, cursor block, presentation flags) come in via
- * a small OverlayWalkCtx the controller fills once at the top of
- * post_overlays. The renders take that context plus the per-frame
- * SceneRenderConfig (for multisample / line_smooth quality flags).
- *
- * The walks call apply_tracked_transform / unwind_transform_stack
- * — tiny inline GLCmd→GL helpers in scene/guides/transform_utils.h.
- * Pending follow-up: relocate that header to REPL territory so this
- * dependency goes away. */
-
-typedef struct OverlayWalkCtx {
-    FlatProgramView  program;
-    CursorBlockState cursor;
-    int              show_vertex_outlines;
-    int              highlight_current_poly;
-    int              replay_tess_preview;
-    int              show_vertex_points;
-    int              replay_vertex_points;
-} OverlayWalkCtx;
-
-static int outline_begin_mode_has_overlay(GLenum mode) {
-    switch (mode) {
-    case GL_POINTS:
-    case GL_LINES:
-    case GL_LINE_STRIP:
-    case GL_LINE_LOOP:
-        return 0;
-    default:
-        return 1;
-    }
-}
-
-/* Cursor-block match predicates. Identical to the predicates that used
- * to live in scene/overlays.c, but reading from the controller-side
- * OverlayWalkCtx rather than SceneRenderConfig. */
-static int outline_cmd_matches_cursor(int flat_idx,
-                                      const OverlayWalkCtx *ctx) {
-    if (flat_idx < 0 || flat_idx >= ctx->program.cmd_count) return 0;
-    const GLCmd *cmd = &ctx->program.cmds[flat_idx];
-    if (!cmd->valid) return 0;
-    if (ctx->cursor.edit_line_idx < 0) return 0;
-
-    if (cmd->call_src_cmd_idx == ctx->cursor.edit_line_idx ||
-        cmd->root_call_src_cmd_idx == ctx->cursor.edit_line_idx)
-        return 1;
-    if (ctx->cursor.cursor_func_scope_mask != 0 &&
-        (cmd->func_scope_mask & ctx->cursor.cursor_func_scope_mask) != 0)
-        return 1;
-    if (ctx->cursor.cursor_block_begin >= 0 &&
-        flat_idx >= ctx->cursor.cursor_block_begin &&
-        flat_idx <= ctx->cursor.cursor_block_end)
-        return 1;
-    return cmd->src_cmd_idx == ctx->cursor.edit_line_idx;
-}
-
-static int outline_block_matches_cursor(int begin_idx, int is_tess,
-                                        const OverlayWalkCtx *ctx) {
-    const GLCmd *cmds = ctx->program.cmds;
-    int cmd_count = ctx->program.cmd_count;
-    int depth = is_tess ? 1 : 0;
-
-    for (int i = begin_idx; i < cmd_count; i++) {
-        if (!cmds[i].valid) continue;
-        if (outline_cmd_matches_cursor(i, ctx)) return 1;
-        if (!is_tess && i > begin_idx && cmds[i].type == CMD_END) break;
-        if (is_tess && i > begin_idx) {
-            if (cmds[i].type == CMD_TESS_BEGIN_POLYGON) depth++;
-            else if (cmds[i].type == CMD_TESS_END) {
-                depth--;
-                if (depth == 0) break;
-            }
-        }
-    }
-    return 0;
-}
-
-static void glr_ctrl_render_outlines(const OverlayWalkCtx *ctx,
-                                        int multisample_enabled,
-                                        int line_smooth_enabled) {
-    const GLCmd *cmds = ctx->program.cmds;
-    int cmd_count = ctx->program.cmd_count;
-
-    glDisable(GL_LIGHTING);
-    glEnable(GL_DEPTH_TEST);
-    glDepthMask(GL_FALSE);
-    if (multisample_enabled) glEnable(GL_MULTISAMPLE);
-    else glDisable(GL_MULTISAMPLE);
-    if (line_smooth_enabled) glEnable(GL_LINE_SMOOTH);
-    else glDisable(GL_LINE_SMOOTH);
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    glEnable(GL_POLYGON_OFFSET_LINE);
-    glPolygonOffset(REPL_OUTLINE_POLYGON_OFFSET_FACTOR,
-                    REPL_OUTLINE_POLYGON_OFFSET_UNITS);
-    glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-
-    if (ctx->show_vertex_outlines || ctx->highlight_current_poly) {
-        glPushMatrix();
-        int in_begin = 0;
-        int matrix_depth = 0;
-        int block_is_current = 0;
-        int tess_in_contour = 0;
-        int tess_poly_is_current = 0;
-
-        for (int i = 0; i < cmd_count; i++) {
-            if (!cmds[i].valid) continue;
-
-            if (repl_cmd_is_transform(cmds[i].type)) {
-                if (!in_begin && !tess_in_contour)
-                    apply_tracked_transform(&cmds[i], &matrix_depth);
-                continue;
-            }
-
-            switch (cmds[i].type) {
-            case CMD_TESS_BEGIN_CONTOUR:
-                if (ctx->replay_tess_preview) break;
-                if (tess_in_contour) {
-                    glEnd();
-                    glLineWidth(1.0f);
-                }
-                if (ctx->show_vertex_outlines || tess_poly_is_current) {
-                    glLineWidth(1.5f);
-                    if (tess_poly_is_current)
-                        scene_clr(SCENE_CLR_OUTLINE_ACTIVE);
-                    else
-                        scene_clr(SCENE_CLR_OUTLINE);
-                    glBegin(GL_LINE_LOOP);
-                    tess_in_contour = 1;
-                }
-                break;
-            case CMD_TESS_VERTEX:
-                if (ctx->replay_tess_preview) break;
-                if (tess_in_contour)
-                    glVertex3f(cmds[i].args[0], cmds[i].args[1], cmds[i].args[2]);
-                break;
-            case CMD_TESS_END:
-                if (ctx->replay_tess_preview) {
-                    tess_poly_is_current = 0;
-                    break;
-                }
-                if (tess_in_contour) {
-                    glEnd();
-                    glLineWidth(1.0f);
-                    tess_in_contour = 0;
-                }
-                if (!tess_in_contour) tess_poly_is_current = 0;
-                break;
-            case CMD_BEGIN: {
-                int draw_outline = outline_begin_mode_has_overlay((GLenum)cmds[i].args[0]);
-                if (in_begin) glEnd();
-                block_is_current = ctx->highlight_current_poly &&
-                                   outline_block_matches_cursor(i, 0, ctx);
-                if (block_is_current) {
-                    glLineWidth(3.0f);
-                    scene_clr(SCENE_CLR_OUTLINE_ACTIVE);
-                } else if (ctx->show_vertex_outlines && draw_outline) {
-                    glLineWidth(1.2f);
-                    scene_clr(SCENE_CLR_OUTLINE_EDGE);
-                } else {
-                    in_begin = 0;
-                    break;
-                }
-                glBegin((GLenum)cmds[i].args[0]);
-                in_begin = 1;
-                break;
-            }
-            case CMD_END:
-                if (in_begin) {
-                    glEnd();
-                    in_begin = 0;
-                    glLineWidth(1.0f);
-                    scene_clr(SCENE_CLR_OUTLINE_EDGE);
-                }
-                block_is_current = 0;
-                break;
-            case CMD_VERTEX3F:
-                if (in_begin && (block_is_current || ctx->show_vertex_outlines))
-                    glVertex3f(cmds[i].args[0], cmds[i].args[1], cmds[i].args[2]);
-                break;
-            case CMD_VERTEX2F:
-                if (in_begin && (block_is_current || ctx->show_vertex_outlines))
-                    glVertex2f(cmds[i].args[0], cmds[i].args[1]);
-                break;
-            case CMD_TESS_BEGIN_POLYGON:
-                tess_poly_is_current = ctx->highlight_current_poly &&
-                                       outline_block_matches_cursor(i, 1, ctx);
-                break;
-            default:
-                break;
-            }
-        }
-
-        if (in_begin) {
-            glEnd();
-            glLineWidth(1.0f);
-        }
-        if (tess_in_contour) {
-            glEnd();
-            glLineWidth(1.0f);
-        }
-        unwind_transform_stack(&matrix_depth);
-        glPopMatrix();
-    }
-
-    glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
-    glDisable(GL_POLYGON_OFFSET_LINE);
-    glDepthMask(GL_TRUE);
-    glDisable(GL_BLEND);
-}
-
-static void glr_ctrl_render_vertex_points(const OverlayWalkCtx *ctx) {
-    if (!ctx->show_vertex_points && !ctx->replay_vertex_points) return;
-
-    glPushAttrib(GL_ALL_ATTRIB_BITS);
-    glDisable(GL_LIGHTING);
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    glEnable(GL_POINT_SMOOTH);
-    glHint(GL_POINT_SMOOTH_HINT, GL_NICEST);
-
-    if (ctx->replay_vertex_points)
-        scene_clr_a(SCENE_CLR_VERTEX_POINT_REPLAY, 0.75f);
-    else
-        scene_clr_a(SCENE_CLR_VERTEX_POINT, 0.80f);
-
-    glPushMatrix();
-    {
-        const GLCmd *flat_cmds = ctx->program.cmds;
-        int flat_cmd_count = ctx->program.cmd_count;
-        int matrix_depth = 0;
-        GLenum primitive_mode = 0;
-
-        for (int i = 0; i < flat_cmd_count; i++) {
-            if (!flat_cmds[i].valid) continue;
-            if (repl_cmd_is_transform(flat_cmds[i].type)) {
-                apply_tracked_transform(&flat_cmds[i], &matrix_depth);
-            } else if (flat_cmds[i].type == CMD_BEGIN) {
-                primitive_mode = (GLenum)flat_cmds[i].args[0];
-            } else if (flat_cmds[i].type == CMD_END) {
-                primitive_mode = 0;
-            } else if (repl_cmd_emits_vertex(flat_cmds[i].type)) {
-                int is_line = (primitive_mode == GL_LINES ||
-                               primitive_mode == GL_LINE_STRIP ||
-                               primitive_mode == GL_LINE_LOOP);
-                glPointSize(is_line ? 2.0f : 7.0f);
-                glBegin(GL_POINTS);
-                glVertex3f(flat_cmds[i].args[0], flat_cmds[i].args[1],
-                           flat_cmds[i].args[2]);
-                glEnd();
-            }
-        }
-        glPointSize(1.0f);
-        unwind_transform_stack(&matrix_depth);
-    }
-    glPopMatrix();
-
-    glPopAttrib();
-}
-
-/* --- Cursor edit-guide walker --------------------------------------------
- *
- * The geometry-guide planes / crosshairs and transform-guide arrows need
- * to render at the user's current modelview transform at the cursor's
- * flat-cmd position. We walk the program with the existing REPL vertex
- * walker (which tracks transforms) and invoke the scene-side guide
- * renderers at each cmd's transformed position. */
-
-typedef struct {
-    const SceneGuideSnapshot *snapshot;
-    SceneTransformGuidePlan   xform_plan;
-    float                     cam_view[16];
-    int                       have_xform;
-    int                       geometry_guide_done;
-    int                       early_stop;
-} CursorGuideRenderCtx;
-
-/* Search forward in `flat` from `start_idx` looking for the next
- * vertex-emitting command, and write its evaluated args into `out`.
- * Returns 1 on success, 0 if a block boundary (CMD_BEGIN / CMD_END /
- * tess boundaries) intervenes or no vertex is found before the end.
- *
- * Mirrors draw_normal_guides's source-cmd forward search but reads
- * from the flat program — flat args are re-evaluated every frame for
- * has_vars commands, so the position tracks dynamically-assigned
- * vars (e.g. waves' `x = -b/2 + b*j/n` inside the loop body). */
-static int find_next_vertex_args_in_flat(const FlatProgramView *flat,
-                                         int start_idx, float out[3]) {
-    if (!flat || !out) return 0;
-    for (int i = start_idx + 1; i < flat->cmd_count; i++) {
-        const GLCmd *c = &flat->cmds[i];
-        if (!c->valid) continue;
-        if (repl_cmd_emits_vertex(c->type)) {
-            out[0] = c->args[0];
-            out[1] = c->args[1];
-            out[2] = (c->type == CMD_VERTEX2F) ? 0.0f : c->args[2];
-            return 1;
-        }
-        if (c->type == CMD_END || c->type == CMD_BEGIN ||
-            c->type == CMD_TESS_END || c->type == CMD_TESS_BEGIN_POLYGON)
-            return 0;
-    }
-    return 0;
-}
-
-/* Return a copy of `snapshot` with vertex_args / normal_args / normal
- * base position overridden from live flat-program data.
- *
- * Why (vertex_args / normal_args): the snapshot's vertex_args /
- * normal_args are parsed from the input text via a predef-only
- * evaluator, which can't resolve function-local parameters
- * (e.g. `scale`, `phase` from `funcN(scale, phase)`). On a cursor
- * inside a funcN body those args silently evaluate to 0, so a guide
- * drawn from them lands at the local origin — visually the *center*
- * of the transformed object rather than the vertex/normal the user
- * is editing.
- *
- * Why (normal_base_pos): draw_normal_guides anchors its arrow at the
- * NEXT vertex following the cursor's normal line. Its built-in
- * forward search uses source_cmds whose args are frozen at parse
- * time; for examples like waves — where the surrounding x/y/z vars
- * are reassigned inside a for-loop body — that anchor doesn't track
- * the dynamic per-iteration position. Walking the flat program
- * (re-evaluated every frame) gives the live anchor.
- *
- * Flatten has already substituted parameters and evaluated
- * expressions, so flat->args carries the real numeric values. The
- * helper is pure — no GL state, no side effects — to keep
- * `on_cmd_render_cursor_guides` testable in isolation. */
-static SceneGuideSnapshot
-cursor_guide_snapshot_with_flat_args(const SceneGuideSnapshot *snapshot,
-                                     const GLCmd *flat,
-                                     int flat_idx) {
-    SceneGuideSnapshot snap = *snapshot;
-    if (!flat) return snap;
-    if (repl_cmd_emits_vertex(flat->type)) {
-        snap.vertex_args[0] = flat->args[0];
-        snap.vertex_args[1] = flat->args[1];
-        snap.vertex_args[2] = (flat->type == CMD_VERTEX2F) ? 0.0f
-                                                           : flat->args[2];
-    } else if (flat->type == CMD_NORMAL3F || flat->type == CMD_TESS_NORMAL) {
-        snap.normal_args[0] = flat->args[0];
-        snap.normal_args[1] = flat->args[1];
-        snap.normal_args[2] = flat->args[2];
-        if (find_next_vertex_args_in_flat(&snap.flat_program, flat_idx,
-                                          snap.normal_base_pos))
-            snap.normal_base_pos_valid = 1;
-    }
-    return snap;
-}
-
-static void on_cmd_render_cursor_guides(const ReplayVertexWalkState *state,
-                                         void *user) {
-    CursorGuideRenderCtx *ctx = (CursorGuideRenderCtx *)user;
-    int is_cursor = (state->src_cmd_idx == ctx->snapshot->edit_line_idx);
-
-    if (is_cursor && !ctx->geometry_guide_done && !ctx->snapshot->replaying) {
-        const GLCmd *flat =
-            (state->flat_cmd_idx >= 0 &&
-             state->flat_cmd_idx < ctx->snapshot->flat_program.cmd_count)
-              ? &ctx->snapshot->flat_program.cmds[state->flat_cmd_idx]
-              : NULL;
-        SceneGuideSnapshot snap =
-            cursor_guide_snapshot_with_flat_args(ctx->snapshot, flat,
-                                                 state->flat_cmd_idx);
-        scene_geometry_guides_render_for_cursor(&snap);
-        ctx->geometry_guide_done = 1;
-    }
-
-    if (ctx->have_xform && !ctx->xform_plan.consumed) {
-        scene_transform_guides_render_if_due(ctx->snapshot, &ctx->xform_plan,
-                                       state->flat_cmd_idx, ctx->cam_view);
-    }
-
-    /* Bail out as soon as both guides have rendered. The geometry guide
-     * needs the modelview at the cursor's first flat occurrence; the
-     * transform guide fires at the same flat index. After both have run,
-     * the walker has no remaining work — important for big loops where
-     * walking the full flat program every frame is expensive. */
-    int xform_done = (!ctx->have_xform || ctx->xform_plan.consumed);
-    int geometry_done = (ctx->geometry_guide_done || ctx->snapshot->replaying);
-    if (geometry_done && xform_done)
-        ctx->early_stop = 1;
-}
-
-static void glr_ctrl_render_cursor_guides(const SceneGuideSnapshot *snapshot) {
-    if (!snapshot || !snapshot->show_guides) return;
-
-    CursorGuideRenderCtx ctx;
-    ctx.snapshot = snapshot;
-    ctx.geometry_guide_done = 0;
-    ctx.early_stop = 0;
-    ctx.have_xform = scene_transform_guides_prepare(snapshot, &ctx.xform_plan);
-
-    /* Previously this path took a fast exit (`return;`) when no transform
-    * guide was needed, calling scene_geometry_guides_render_for_cursor with
-     * the caller's modelview only. That broke the geometry guide for
-     * cursors inside funcN call frames — the user's accumulated
-     * transforms hadn't been applied yet, so the guide rendered at world
-     * origin. We always walk now; the stop_flag below makes the walk
-     * exit as soon as both guides have rendered, preserving the perf
-     * intent for big loops. */
-    glPushAttrib(GL_ALL_ATTRIB_BITS);
-    glDisable(GL_LIGHTING);
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-
-    glPushMatrix();
-    glGetFloatv(GL_MODELVIEW_MATRIX, ctx.cam_view);
-
-    static const ReplayVertexWalkCallbacks cb = {
-        .on_each_cmd = on_cmd_render_cursor_guides,
-    };
-    ReplayVertexWalkContext walk = glr_ctrl_build_vertex_walk_context(0);
-    walk.stop_flag = &ctx.early_stop;
-    replay_walk_user_vertices(&walk, &cb, &ctx);
-
-    glPopMatrix();
-    glPopAttrib();
-}
-
-static void glr_ctrl_post_overlays(void *user_data) {
-    const SceneRenderConfig *cfg = (const SceneRenderConfig *)user_data;
+static void glr_ctrl_build_overlay_pack(OverlaySnapshotPack *pack, const SceneRenderConfig *cfg) {
     GlrPresentationState presentation = glr_state_presentation();
     int replaying = replay_active();
     int replay_mode_vertex = replaying && (replay_mode() == REPLAY_MODE_VERTEX);
 
-    OverlayWalkCtx walk = {
-        .program                = repl_state_flat_program_view(),
-        .cursor = {
-            .edit_line_idx          = editor_state_edit_line(),
-            .cursor_block_begin     = repl_state_flat_program_current_block_begin(),
-            .cursor_block_end       = repl_state_flat_program_current_block_end(),
-            .cursor_func_scope_mask = 0,  /* not currently surfaced via repl_state */
-        },
-        .show_vertex_outlines   = presentation.show_vertex_outlines,
-        .highlight_current_poly = presentation.highlight_current_poly && !replaying,
-        .replay_tess_preview    = replay_mode_vertex,
-        .show_vertex_points     = presentation.show_vertex_points,
-        .replay_vertex_points   = replay_mode_vertex,
-    };
+    pack->walk.program = repl_state_flat_program_view();
+    pack->walk.cursor.edit_line_idx = editor_state_edit_line();
+    pack->walk.cursor.cursor_block_begin = repl_state_flat_program_current_block_begin();
+    pack->walk.cursor.cursor_block_end = repl_state_flat_program_current_block_end();
+    pack->walk.cursor.cursor_func_scope_mask = 0;
+    
+    pack->walk.show_vertex_outlines = presentation.show_vertex_outlines;
+    pack->walk.highlight_current_poly = presentation.highlight_current_poly && !replaying;
+    pack->walk.replay_tess_preview = replay_mode_vertex;
+    pack->walk.show_vertex_points = presentation.show_vertex_points;
+    pack->walk.replay_vertex_points = replay_mode_vertex;
 
-    int multisample = cfg ? cfg->multisample_enabled : 0;
-    int line_smooth = cfg ? cfg->line_smooth_enabled : 0;
-    prof_begin(PROF_SCENE_3D_OVERLAY_OUTLINES);
-    glr_ctrl_render_outlines(&walk, multisample, line_smooth);
-    glr_ctrl_render_vertex_points(&walk);
-    prof_accum_end(PROF_SCENE_3D_OVERLAY_OUTLINES);
-
-    /* Cursor edit guides need the full snapshot (input string, predef
-     * vars, source cmds). Build it once here and feed the walker. */
-    prof_begin(PROF_SCENE_3D_OVERLAY_BUILD_GUIDES);
-    SceneGuideSnapshot snapshot = glr_ctrl_build_guide_snapshot(cfg);
-    prof_accum_end(PROF_SCENE_3D_OVERLAY_BUILD_GUIDES);
-    prof_begin(PROF_SCENE_3D_OVERLAY_TRANSFORM_GUIDES);
-    glr_ctrl_render_cursor_guides(&snapshot);
-    prof_accum_end(PROF_SCENE_3D_OVERLAY_TRANSFORM_GUIDES);
-
-    if (presentation.show_vertex_labels) {
-        prof_begin(PROF_SCENE_3D_OVERLAY_VERTEX_NUMBERS);
-        glr_ctrl_render_vertex_numbers((GlrVertexLabelMode)presentation.show_vertex_labels,
-                                       presentation.ortho_mode);
-        prof_accum_end(PROF_SCENE_3D_OVERLAY_VERTEX_NUMBERS);
-    }
-    if (presentation.show_normal_vectors) {
-        prof_begin(PROF_SCENE_3D_OVERLAY_NORMALS);
-        glr_ctrl_render_normal_vectors();
-        prof_accum_end(PROF_SCENE_3D_OVERLAY_NORMALS);
-    }
+    pack->snapshot = glr_ctrl_build_guide_snapshot(cfg);
+    pack->show_vertex_labels = presentation.show_vertex_labels;
+    pack->ortho_mode = presentation.ortho_mode;
+    pack->show_normal_vectors = presentation.show_normal_vectors;
+    pack->multisample_enabled = cfg ? cfg->multisample_enabled : 0;
+    pack->line_smooth_enabled = cfg ? cfg->line_smooth_enabled : 0;
 }
 
 static void glr_ctrl_push_highlights(void) {
@@ -1355,8 +698,9 @@ static void glr_ctrl_build_scene_config(SceneRenderConfig *config) {
      * Always wired; the body short-circuits per-overlay based on REPL
      * presentation flags. user_data carries the per-frame config so the
      * hook can read guide_snapshot for the cursor edit guides. */
-    config->post_overlays_fn        = glr_ctrl_post_overlays;
-    config->post_overlays_user_data = config;
+    glr_ctrl_build_overlay_pack(&g_overlay_pack, config);
+    config->post_overlays_fn        = edit_overlays_post_overlays;
+    config->post_overlays_user_data = &g_overlay_pack;
 
     /* --- Background clear color ---
      * Resolve from the user's last CMD_CLEAR_COLOR (or the editor
@@ -1472,8 +816,8 @@ static void glr_ctrl_build_scene_config(SceneRenderConfig *config) {
     g_replay_fade_plan.tess_preview_active = replaying &&
                                              replay_mode() == REPLAY_MODE_VERTEX;
     if (g_replay_fade_plan.active || g_replay_fade_plan.tess_preview_active) {
-        config->post_fill_fn        = glr_ctrl_post_fill_replay_overlay;
-        config->post_fill_user_data = NULL;
+        config->post_fill_fn        = replay_render_post_fill;
+        config->post_fill_user_data = &g_replay_fade_plan;
     }
 }
 
@@ -1969,27 +1313,8 @@ void glr_ctrl_reshape(int w, int h) {
     ui_state_viewport_set_size(w, h);
 }
 
-/* App-service installers that must be present for any code path that
- * loads/exports REPL state — including the dump-only CLI paths
- * (--dump-code / --dump-flat) that bypass glr_ctrl_init_gl. Idempotent;
- * called from glr_ctrl_reset_all and from glr_ctrl_bootstrap_repl.
- * (Bootstrapping the dump CLI paths through this installer was the
- * Step 4 [P2] fix in feature/decouple-repl-from-gl-repl-alt.md;
- * previously these installs lived only in glr_ctrl_reset_all, so the
- * dump CLI ran without them and dropped @cfg from imported files.) */
-/* Bundles the example-defaults reset for presentation chrome plus the
- * camera auto-rotate toggle. The cfg bridge handles per-scene cfg in
- * the scene_cfg snapshot, but the example loader's pre-cfg baseline
- * reset still wants both flipped to defaults. This goes through a sink
- * because the example loader is a REPL pipeline TU. (Sink wired as
- * step 7a of feature/decouple-repl-from-gl-repl-alt.md.)
- *
- * `tag_mask` carries REPL_EXAMPLE_TAG_* bits for the example being
- * loaded. After the global reset, the controller applies typed
- * tag-default overrides via glr_config_set() — no parser syntax, no
- * slug strings, no magic enum values. The example's own `@cfg` is
- * parsed later in load_example_lines and wins because both paths
- * mutate the same backing field. */
+/* Idempotent app-service installer required for any REPL loading/export path (including CLI). */
+/* Applies example tag-default overrides dynamically after a global state reset. */
 static const GlrExampleTagDefault k_example_tag_defaults[] =
     GLR_EXAMPLE_TAG_DEFAULTS;
 
@@ -2182,14 +1507,7 @@ static const char *glr_host_editor_input_get(void) {
     return editor_state_input().input;
 }
 
-/* The host-effect bridge the controller installs into the REPL
- * pipeline. Status routes pipeline diagnostics to UiState; the rest
- * actualize loader / scene-switch / replay effects on the editor and
- * peer subsystems.
- * This file is where editor coupling concentrates, so the editor-
- * neutral names in core.h resolve to glr_ctrl_* here. The demo installs
- * its own edit-line-only bridge, so these app/editor/tutorial effects
- * stay out of its link set. */
+/* The host-effect bridge routing core pipeline events to the UI and editor state. */
 static const ReplHostEffects g_glr_host_effects = {
     .status                     = ui_state_status_set,
     .status_error               = ui_state_status_set_error,
@@ -2207,13 +1525,7 @@ static const ReplHostEffects g_glr_host_effects = {
     .host_input_get             = glr_host_editor_input_get,
 };
 
-/* Seed both fade machines to the current presentation theme at full
- * opacity, STEADY — a zero-init machine would diff OFF -> the non-off
- * default grid and animate it in on frame 1, and animate stale prior
- * themes after a world reset. Folded into glr_ctrl_install_app_services
- * (idempotent, called from both program init and glr_ctrl_reset_all)
- * so it runs AFTER glr_state_presentation_reset_defaults().
- * (Codified as Rule 8 of plans/.../grid-axes-transitions.md.) */
+/* Seed both overlay fade machines to the current presentation theme at steady full opacity. */
 static void glr_ctrl_seed_overlay_xn(void) {
     GlrPresentationState p = glr_state_presentation();
     scene_xn_init(&g_grid_xn, p.grid_theme);
@@ -2258,62 +1570,25 @@ static void glr_ctrl_tick_overlay_xn(void) {
 }
 
 static void glr_ctrl_install_app_services(void) {
-    /* Install the host-effect bridge (status sink, example-
-     * presentation-reset, editor effects, and tutorial teardown).
-     * Single consolidated call in place of the previous individual
-     * repl_install_*_sink calls. (Consolidation per item 2 of
-     * plans/partial/src-repl-simplicity-review.md.) */
+    /* Install the host-effect bridge (status sink, example presentation, editor effects, tutorial). */
     repl_install_host_effects(&g_glr_host_effects);
-    /* Install the export-config bridge so src/repl/export.c can emit/parse
-     * @cfg headers and src/repl/scenes.c can snapshot per-scene cfg
-     * without referencing glr_config_* directly. The demo does not
-     * install a bridge, so the @cfg path is a no-op there (clearing
-     * g_cfg_items / CFG_ITEM_COUNT / audio_* / ui_state_profile_panel_mut
-     * / variable_panel_state_mut stubs). */
+    /* Install the export-config bridge for @cfg headers and per-scene config snapshotting. */
     glr_actions_install_export_cfg_bridge();
-    /* Install the export-camera bridge so src/repl/export.c can emit
-     * and parse the `// camera` block + g_angle preamble without
-     * referencing glr_camera_*. Camera state still pulls glr_camera.c
-     * into the demo link set via src/repl/state.c (auto_rotate reset)
-     * and src/repl/example_loader.c (example camera presets). (Bridge
-     * was step 4a of feature/decouple-repl-from-gl-repl-alt.md;
-     * step 7 closes the remaining doors.) */
+    /* Install the export-camera bridge for // camera blocks serialization. */
     glr_camera_export_install_bridge();
-    /* Install the executor's camera-distance source. The point-size
-     * fallback (taken at runtime when the GL context lacks
-     * glPointParameterfv) needs the current camera distance to scale
-     * glPointSize calls; routing it through a controller-installed
-     * callback keeps glr_camera.c out of the REPL pipeline. The demo
-     * doesn't install — the fallback then passes glPointSize through
-     * unscaled. (Step 7e of feature/decouple-repl-from-gl-repl-alt.md.) */
+    /* Install the executor's camera-distance source to support dynamic point-attenuation scaling fallbacks. */
     repl_executor_install_camera_distance_source(glr_ctrl_camera_distance);
-    /* Reshape-projection bridge: lets the GL-free exporter / code panel
-     * emit a reshape() that matches the scene's live projection
-     * (perspective in 3D, ortho in 2D). Demo/tests don't install, so the
-     * canonical perspective default is used there. */
+    /* Reshape-projection bridge: queries the active 2D/3D projection for export and layout calculations. */
     repl_export_install_projection_bridge(&g_export_projection_bridge_impl);
-    /* Seed the grid/axes fade machines (see glr_ctrl_seed_overlay_xn
-     * comment for the steady-at-current-theme invariant). In
-     * glr_ctrl_reset_all this runs after the presentation reset (line
-     * ordering above); at bootstrap it reads the static CFG_DEFAULT_*
-     * presentation. Idempotent. */
+    /* Seed the grid/axes overlay transition machines. */
     glr_ctrl_seed_overlay_xn();
 }
 
-/* Full-world reset entry point. Lives on the controller side so the
- * REPL pipeline (and tools/repl_demo) does not have to link / stub the
- * peer / editor / UI reset symbols. (Split out of src/repl/state.c as
- * step 2 of feature/decouple-repl-from-gl-repl-alt.md.) */
+/* Full-world reset entry point. Clears REPL, editor, UI, and all peer subsystems. */
 void glr_ctrl_reset_all(void) {
     editor_undo_note_wholesale_replacement();
     repl_state_reset_program();
-    /* GlrState owns presentation + render-config toggles. Reset them
-     * alongside the REPL halves so callers see a coherent post-reset
-     * world. The camera reset moved off the REPL-side presentation
-     * reset (was wiring `glr_camera_mut()->auto_rotate
-     * = CFG_DEFAULT_CAMERA_ROTATE`); the camera resets itself here.
-     * (Ownership relocated as step 7a of
-     * feature/decouple-repl-from-gl-repl-alt.md.) */
+    /* Reset presentation, rendering, and camera defaults. */
     glr_state_presentation_reset_defaults();
     glr_state_render_reset_defaults();
     glr_camera_reset_default();
