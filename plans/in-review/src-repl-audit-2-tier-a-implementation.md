@@ -15,7 +15,7 @@ and build-safe:
 |---|---|---|---|
 | B1 — Real bugs | #3, #9, #11, #13 | +30 / -10 | low (each is a tight correctness fix) |
 | B2 — Dead-code sweep | #53–#67 | +20 / -350 | near-zero (every deletion verified zero callers) |
-| B3 — Naming + duplication + couplings | #34, #38, #39, #40, #46, #52 | +40 / -80 | low (mechanical) |
+| B3 — Naming + duplication + couplings | #34, #38, #39, #40, #46, #52 | +40 / -80 | low (mechanical; B3.2 churn-check first) |
 
 (An earlier draft contained a "B4 — apply.c hardening" batch
 labelled `#46`. That was a finding-number mix-up: audit `#46` is the
@@ -47,7 +47,7 @@ After every batch:
 
 ```
 make check-c99       # syntax-only ratchet (real gcc -std=c99)
-make test-stubs      # 46 binaries, 7079 tests last green
+make test-stubs      # all binaries + tests; no regression vs. branch start
 ```
 
 The plan assumes you're on a fresh feature branch off `main`. If
@@ -120,6 +120,18 @@ hold `char baseline_predef_names[MAX_PREDEF_VARS][REPL_PREDEF_NAME_MAX]`
 and `int baseline_predef_count` so the full-snapshot pair has
 somewhere to read/write. The cost is purely a few extra KB of
 struct storage on the replay peer.
+
+**Verify before pushing:** the struct grows by
+~`MAX_PREDEF_VARS * REPL_PREDEF_NAME_MAX` bytes (≈ 384 B at the
+current 24×16 dimensions). If `ReplReplayRuntimeState` is
+embedded in or copied by `replay_state_capture` / `_restore`
+(check `src/subsystems/replay/replay_state.c` and any
+`memcpy(dst, src, sizeof(*replay_state))` call sites), the larger
+struct will silently flow through the existing copy paths — fine
+for correctness, but worth confirming nothing assumes the old
+layout (e.g., a sibling struct that paired baseline storage with a
+fixed-size header). A `grep -n "ReplReplayRuntimeState" src/`
+sweep is enough.
 
 **Verify:** add a unit test in `tests/test_repl_executor.c` that
 exercises the *reorder* path through the full-snapshot pair (this
@@ -308,7 +320,17 @@ sections):
 **Verify:** `make check-c99 && make test-stubs`. Each removal is
 verified-no-callers by the build linker; tests should be unchanged.
 
-### Commit B2.3 — #60 surface `vis_total` from `repl_load_apply_line`
+### Commit B2.3 — #60 surface `vis_total` from `repl_load_apply_line` *(moved out of the dead-code batch — this is a behavior change)*
+
+**Note on categorization:** An earlier draft of this plan grouped
+#60 with the dead-code sweep because the local read is missing.
+But the fix turns a previously-silent truncation into a real
+diagnostic — that is a behavior change. It properly belongs with
+the correctness commits in Batch 1 (or could move to Batch 3 as a
+coupling fix). It stays here for plan-numbering stability, but
+**treat it like a B1.x commit for review and verification
+purposes**: hold the rest of Batch 2 if this one needs to be
+revisited.
 
 **File:** `src/repl/load.c:177-179`
 
@@ -316,23 +338,31 @@ verified-no-callers by the build linker; tests should be unchanged.
 truncation is silent in import. The interactive editor surfaces
 the same condition via `warn_if_scope_truncated`.
 
-**Target shape:** Emit the warning through the `err` buffer when
-`vis_total > MAX_EXPR_VARS`. Match the editor's wording so the
-diagnostic reads consistently.
+**Target shape:** Emit the warning to **stderr**, not the `err`
+buffer. The loader processes many lines per invocation; the `err`
+buffer feeds the status bar (one slot), so each line would
+overwrite the previous and the user would see only the warning for
+the *last* truncated line. stderr keeps every warning visible:
 
 ```c
 int vis_total = 0;
 int num_vis_vars = collect_visible_vars(insert_idx, vis_vars,
                                         MAX_EXPR_VARS, &vis_total);
-if (vis_total > MAX_EXPR_VARS && err && err_sz > 0)
-    snprintf(err, err_sz, "scope truncated: %d vars visible, only "
-                          "%d used", vis_total, num_vis_vars);
+if (vis_total > MAX_EXPR_VARS)
+    fprintf(stderr, "load: scope truncated at line %d: "
+                    "%d vars visible, only %d used\n",
+            line_idx, vis_total, num_vis_vars);
 ```
 
-**Verify:** sanity-check that a workspace with > MAX_EXPR_VARS
-visible variables produces a non-empty `load_err` (a unit test in
-`test_repl_core_io.c` if there's a convenient way to set this up;
-otherwise leave it to a manual test note).
+(If `line_idx` isn't already in scope, pull it from the caller;
+otherwise drop it and the line context still helps via the
+adjacent lines stderr prints.)
+
+**Verify:** manual smoke — load a workspace with > MAX_EXPR_VARS
+visible vars at some line, verify stderr carries the warning *and*
+the load otherwise succeeds. Optional unit test in
+`test_repl_core_io.c` only if there's an existing convention for
+capturing stderr in that suite (no need to invent one).
 
 ### Commit B2.4 — #66 delete 13 unused `state.c` macros
 
@@ -388,7 +418,7 @@ the implementation functions.
 **Verify:** `make check-c99`. If a macro was inadvertently used
 inside a function body, the compile fails; restore it.
 
-### Commit B2.5 — #67 phase-N.M comment sweep
+### Commit B2.5 — #67 phase-N.M comment sweep *(also folds in #70 doc-correction — split if reviewer prefers)*
 
 **Files:**
 - `src/repl/parser.c:29-30, 889`
@@ -406,16 +436,24 @@ modules (`eval.h` mentions `editor_undo.h`, `replay.c / glr_ctrl.c`,
 
 **Target shape:** Drop phase coordinates. Keep policy statements
 ("REPL pipeline does not reach into editor_state_*") where they
-add value. In `eval.h:42-88`, also (a) swap the mislabeled
-`MAX_EXPR_VARS`/`MAX_PREDEF_VARS` (currently the heading says the
-former while the body describes the latter — separate finding #70
-in the audit) and (b) update the three "Used in" paths.
+add value. In `eval.h:42-88`, update the three "Used in" paths.
 
-**Verify:** `make check-c99`. Pure comment changes.
+**Audit #70 fold-in (separate doc-correction, but in the same
+file):** `eval.h:42-88` also has a `MAX_EXPR_VARS` /
+`MAX_PREDEF_VARS` mislabel — the heading says one while the body
+describes the other. That's a *semantic* fix to a live API
+comment, not phase-coord cleanup, but it lives in the same span
+the sweep edits anyway. Calling it out so a reviewer expecting
+pure cosmetic comment churn doesn't miss the semantic correction.
+If the reviewer prefers strict commit-scope hygiene, split into
+B2.5a (phase sweep) and B2.5b (#70 doc swap).
+
+**Verify:** `make check-c99`. Pure comment changes (no runtime
+behavior).
 
 ---
 
-## Batch 3 — Naming + duplication (#34, #38, #39, #40, #52)
+## Batch 3 — Naming + duplication + couplings (#34, #38, #39, #40, #46, #52)
 
 Mechanical convergence on canonical names + one-shot helper
 extractions.
@@ -440,7 +478,7 @@ grep -rn "repl_state_workspace_dir\|repl_state_workspace_set_dir" src/ tests/
 
 **Verify:** `make test-stubs`. Caller-rename only.
 
-### Commit B3.2 — #38 collapse examples API name pair
+### Commit B3.2 — #38 collapse examples API name pair *(check site count first — may want to defer)*
 
 **Files:** `src/repl/examples.h:48-57`, `src/repl/example_loader.c:503-513`,
 all callers
@@ -452,8 +490,25 @@ subheading API which is already singular).
 **Target shape:** Pick singular (matches tag/subheading already).
 Rename the plural exports; delete the singular trampolines.
 
-Callers split between bench/ (plural) and tests + glr_ctrl
-(singular). Sweep both.
+**Churn check (run before committing):**
+
+```bash
+grep -rn -E "repl_examples_" src/ tests/ bench/ tools/ | wc -l
+grep -rn -E "repl_example_"  src/ tests/ bench/ tools/ | \
+    grep -v "repl_examples_" | wc -l
+```
+
+At time of writing: 48 plural sites and 137 singular sites — so the
+rename touches ~48 lines, not the full ~185. That's the size of a
+single mechanical commit and should stay in Tier A. **If a future
+run shows the plural side has crossed ~80-100 sites** (e.g. a new
+caller class appeared), reclassify as Tier B and split: one commit
+per call-site cluster. The trampolines already work; both names
+resolve; the cosmetic benefit is finite, so churn budget matters.
+
+Sweep both `repl_examples_*` (plural) and `repl_example_*` (singular)
+in the same edit pass so a single set of call sites doesn't accidentally
+end up routed through a deleted trampoline.
 
 **Verify:** `make check-c99 && make test-stubs`. Sweep needs to
 catch both `repl_examples_count` and `repl_example_count` etc.
@@ -471,7 +526,7 @@ g_export_cfg_bridge->get_int ? ... : fallback` expressions.
 **Verify:** Confirm `repl_cfg_get_int` has the same semantics
 (bridge → fallback) as the inline ternaries. Then sweep + test.
 
-### Commit B3.4 — #40 funnel predef-var capture through `repl_eval_*`
+### Commit B3.4 — #40 funnel predef-var capture through `repl_eval_*` *(verify signature match before claiming "mechanical")*
 
 **File:** `src/repl/scenes.c:208-213, 294-299, 393-398, 433-438,
 458-463`
@@ -484,14 +539,38 @@ for (int i = 0; i < N; i++) {
 }
 ```
 
+**Layout check (do first):** Open `src/repl/scenes.c:65-83`
+(`UserScene` struct) and `src/repl/eval.h:223-228` (the
+`repl_eval_copy_predef_vars` signature). Verify:
+
+1. `UserScene.predef_vals` is `float[MAX_PREDEF_VARS]` (the eval
+   helper's `dst_vals` shape).
+2. `UserScene.predef_names` is
+   `char[MAX_PREDEF_VARS][REPL_PREDEF_NAME_MAX]` (the eval
+   helper's `dst_names` shape — same dimensions, same dim order).
+3. `UserScene.num_predef_vars` is `int` (the helper's
+   `*dst_count`).
+
+At time of writing all three match (the inner `memcpy` already
+uses `sizeof(s->predef_names[i])` which is `REPL_PREDEF_NAME_MAX`,
+so the layouts are by construction equivalent). If a future
+`UserScene` reshape makes them diverge, **do not** add a wrapper
+that converts on the fly — that's a layering smell. Instead,
+either reshape the struct back to match the eval API, or accept
+that this de-duplication is no longer free and defer to Tier B.
+
 **Target shape:** Call `repl_eval_copy_predef_vars()` /
-`_restore_predef_vars()` (already exist in `eval.h`). The
-function signatures should match; if not, add a small wrapper
-`repl_eval_snapshot_for_userscene(UserScene *)` rather than
-expanding the eval API.
+`_restore_predef_vars()` (already exist in `eval.h`) directly with
+the struct's fields:
+
+```c
+repl_eval_copy_predef_vars(dst->predef_vals, dst->predef_names,
+                           &dst->num_predef_vars);
+```
 
 **Verify:** Scene save/load round-trip tests
-(`test_repl_core_io.c`) cover this.
+(`test_repl_core_io.c`) cover this — they should pass unchanged
+because the per-field semantics are identical.
 
 ### Commit B3.5 — #52 unify struct terminators
 
@@ -589,8 +668,12 @@ After all three batches land:
 After this plan completes (3 batches, ~9 commits, ~400 LOC net
 reduction):
 
-- 21 Tier A findings closed (the 22 listed minus `#48`, deferred to
-  a Tier B plan)
+- All Tier A findings closed (audit's Tier A list, *including*
+  `#53` — the explicit Tier A enumeration in the audit's tier
+  table once read `#54-#67`, missing `#53`; the audit-side typo is
+  fixed in the matching update). The one Tier A item *not* closed
+  here is `#48`, deferred because the clean fix (`declare_with_value`)
+  adds a new eval API — Tier B sized despite the Tier A label.
 - 4 real correctness bugs fixed (#3, #9, #11, #13)
 - ~200 LOC of dead `format.c` removed
 - 13 dead state.c macros removed
@@ -620,9 +703,16 @@ Total: ~3-4 hours of focused work; ~9 commits.
 | Gate | When | Expected |
 |---|---|---|
 | `make check-c99` | After every commit | OK |
-| `make test-stubs` | After every commit | 46/46 binaries, ≥7079 tests (may grow if B1.1 adds a test) |
-| `ssh gracemont ...` | Once at the end | check-c99 + test-stubs both green |
+| `make test-stubs` | After every commit | all test binaries pass; test count ≥ pre-branch baseline (B1.1 and B1.3 add tests, so a small *increase* is expected, never a decrease) |
+| `ssh gracemont …` | Once at the end | `make check-c99 && make test-stubs` both green |
 | Manual sanity | After batch 1 | start `./gl-repl`, type a few cmds, replay, verify nothing visually regressed |
+
+*Note:* the binary count and exact test count are intentionally
+not pinned here — they drift as the suite grows and adding
+hardcoded values to a plan invites bit-rot. The criterion is "no
+regression vs. the branch starting point," which the developer
+captures with `make test-stubs 2>&1 | tail -5` before starting
+work.
 
 ## Rollback
 
