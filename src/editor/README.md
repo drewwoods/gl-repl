@@ -93,7 +93,6 @@ without the editor at all (see `repl_demo`).
 | `clipboard.c` / `.h` | Selection anchors, copy/cut/paste payloads (line-range + input-text) |
 | `search.c` / `.h` | Case-insensitive search query + match navigation |
 | `completion.c` / `.h` | Completion-provider registry (provider itself is `src/app/glr_completion.c`) |
-| `services.c` / `.h` | Default `EditorServices` binding commit code to live REPL compile/apply |
 | `help_session.c` / `.h` | Read-only editor session for the F1 overlay (tab + scroll) |
 | `inline_rename.c` / `.h` | Inline scene-rename input buffer |
 | `inline_file_prompt.c` / `.h` | Inline save/load filename prompt |

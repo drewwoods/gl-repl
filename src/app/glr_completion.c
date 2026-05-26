@@ -428,13 +428,13 @@ static void update_autocomplete(void) {
 }
 
 void glr_completion_accept_autocomplete(void) {
-    EditorAutocompleteState ac = editor_state_autocomplete();
+    const EditorAutocompleteState *ac = editor_state_autocomplete();
 
-    int ghost_len = (int)strlen(ac.ghost);
+    int ghost_len = (int)strlen(ac->ghost);
     {
         EditorInputState *inp = editor_state_input_mut();
         if (inp->input_len + ghost_len < MAX_INPUT_LEN - 1) {
-            strcat(inp->input, ac.ghost);
+            strcat(inp->input, ac->ghost);
             inp->input_len += ghost_len;
             editor_cursor_pos_set(inp->input_len);
         } else {

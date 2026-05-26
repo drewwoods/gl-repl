@@ -42,7 +42,9 @@ int edit_op_buffer_insert_char_at_cursor(char c);
 
 /* Delete the character immediately before the cursor and move the
  * cursor left by one. Returns 1 if a character was deleted, 0 if
- * the cursor was already at position 0 or the buffer was empty. */
+ * the cursor was already at position 0 or the buffer was empty.
+ * Pure with respect to selection: the anchor (if any) is left
+ * untouched. */
 int edit_op_buffer_delete_left_of_cursor(void);
 
 /* Delete the character at the cursor position; the cursor stays in

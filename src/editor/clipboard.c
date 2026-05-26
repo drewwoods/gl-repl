@@ -383,7 +383,7 @@ void editor_clipboard_paste_current(void) {
         return;
     }
     {
-        const EditorClipboardState *cb = editor_state_clipboard_mut();
+        const EditorClipboardState *cb = editor_state_clipboard();
         for (int i = 0; i < count; i++)
             repl_copy_string_fits(buf[i], MAX_LINE_LEN, cb->lines[i]);
     }

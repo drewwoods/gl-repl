@@ -25,7 +25,6 @@
         "src/editor/state.c",
         "src/editor/input.c",
         "src/editor/commit.c",
-        "src/editor/services.c",
         "src/editor/completion.c",
         "src/editor/help_session.c",
         "src/editor/clipboard.c",

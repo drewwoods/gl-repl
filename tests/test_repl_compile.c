@@ -16,7 +16,6 @@
 
 #include "editor/commit.h"
 #include "editor/reformat.h"
-#include "editor/services.h"
 #include "editor/state.h"
 #include "repl/apply.h"
 #include "repl/command_store.h"
@@ -1059,6 +1058,91 @@ int main(void) {
      * branch (line ~659) returns NO_CHANGE without rolling back, so
      * a malformed `name(args` line in the user-facing path still
      * leaves the alias registered. */
+    {
+        glr_ctrl_reset_all();
+        repl_func_alias_clear_all();
+
+        ReplCompileContext ctx = repl_compile_context_from_live(editor_state_edit_line());
+        EditorCommitPlan plan;
+        ReplCompileResult r;
+        char err[16] = "stale";
+
+        editor_commit_plan_init(&plan);
+        r = editor_compile_close_brace("glVertex3f(1, 1, 1);",
+                                       &ctx, &plan, err, sizeof(err));
+        ASSERT_TRUE("[P2 editor] close-brace NO_CHANGE clears err",
+                    r == REPL_COMPILE_OK &&
+                    plan.change.kind == REPL_COMPILED_NO_CHANGE &&
+                    err[0] == '\0');
+
+        strcpy(err, "stale");
+        editor_commit_plan_init(&plan);
+        r = editor_compile_if_block("glVertex3f(1, 1, 1);",
+                                    &ctx, &plan, err, sizeof(err));
+        ASSERT_TRUE("[P2 editor] if-block NO_CHANGE clears err",
+                    r == REPL_COMPILE_OK &&
+                    plan.change.kind == REPL_COMPILED_NO_CHANGE &&
+                    err[0] == '\0');
+
+        strcpy(err, "stale");
+        editor_commit_plan_init(&plan);
+        r = editor_compile_func_def("glVertex3f(1, 1, 1);",
+                                    &ctx, &plan, err, sizeof(err));
+        ASSERT_TRUE("[P2 editor] func-def NO_CHANGE clears err",
+                    r == REPL_COMPILE_OK &&
+                    plan.change.kind == REPL_COMPILED_NO_CHANGE &&
+                    err[0] == '\0');
+
+        strcpy(err, "stale");
+        editor_commit_plan_init(&plan);
+        r = editor_compile_for_loop("glVertex3f(1, 1, 1);",
+                                    &ctx, &plan, err, sizeof(err));
+        ASSERT_TRUE("[P2 editor] for-loop NO_CHANGE clears err",
+                    r == REPL_COMPILE_OK &&
+                    plan.change.kind == REPL_COMPILED_NO_CHANGE &&
+                    err[0] == '\0');
+    }
+
+    /* [P2 editor] wrapper diagnostics are optional: failing
+     * editor_compile_* calls must tolerate omitted or zero-sized err
+     * buffers instead of unconditionally writing through them. */
+    {
+        glr_ctrl_reset_all();
+        repl_func_alias_clear_all();
+
+        ReplCompileContext ctx = repl_compile_context_from_live(editor_state_edit_line());
+        EditorCommitPlan plan;
+        ReplCompileResult r;
+        char zero_err[1] = { 'x' };
+
+        editor_commit_plan_init(&plan);
+        r = editor_compile_close_brace("}", &ctx, &plan, NULL, 0);
+        ASSERT_TRUE("[P2 editor] close-brace error allows NULL err",
+                    r == REPL_COMPILE_ERROR);
+
+        editor_commit_plan_init(&plan);
+        r = editor_compile_if_block("if(", &ctx, &plan, zero_err, 0);
+        ASSERT_TRUE("[P2 editor] if-block error allows zero-size err",
+                    r == REPL_COMPILE_ERROR && zero_err[0] == 'x');
+
+        char load_err[128] = "";
+        ASSERT_TRUE("[P2 editor] setup bare func0 for optional err test",
+                    repl_load_apply_line("func0() {", load_err, sizeof(load_err), NULL));
+        ctx = repl_compile_context_from_live(editor_state_edit_line());
+
+        editor_commit_plan_init(&plan);
+        r = editor_compile_func_def("edDupAlias() {", &ctx, &plan, NULL, 0);
+        ASSERT_TRUE("[P2 editor] func-def error allows NULL err",
+                    r == REPL_COMPILE_ERROR);
+        ASSERT_TRUE("[P2 editor] func-def error still rolls back alias",
+                    repl_func_alias_lookup_slot("edDupAlias") < 0);
+
+        editor_commit_plan_init(&plan);
+        r = editor_compile_for_loop("for(", &ctx, &plan, zero_err, 0);
+        ASSERT_TRUE("[P2 editor] for-loop error allows zero-size err",
+                    r == REPL_COMPILE_ERROR && zero_err[0] == 'x');
+    }
+
     {
         glr_ctrl_reset_all();
         repl_func_alias_clear_all();

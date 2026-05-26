@@ -295,8 +295,6 @@ Test sources live under `tests/` and shared test-only helpers live under
 | `src/editor/commit.h` | Commit orchestration API (`editor_commit_apply_external_change`, `editor_try_commit_*` helpers) |
 | `src/editor/state.c` | Owns `EditorState`: editor buffer, cursor, selection, search, autocomplete, scroll, undo/redo, transformers, highlights, virtual lines |
 | `src/editor/state.h` | `EditorState` typed facade, `EditorBufferView`, `editor_state_input/search/autocomplete` accessors |
-| `src/editor/services.c` | Default `EditorServices` bound to live REPL (compile/apply seam used by commit code) |
-| `src/editor/services.h` | `EditorServices` dispatch table for REPL semantics |
 | `src/editor/limits.h` | Shared editor input and autocomplete capacity constants |
 | `keys.h` | ASCII and control-key code constants (Ctrl+A=1 … Ctrl+Z=26, F-key names) |
 | `src/editor/clipboard.c` | Line selection anchors, command clipboard buffer, copy/cut/paste behavior |

@@ -23,8 +23,6 @@
 
 #include "repl/compile.h"     /* ReplCompiledChange, ReplCompileContext, ReplCompileResult */
 
-struct EditorServices_s;
-
 /* Apply a precompiled external change atomically. The caller already
  * has a ReplCompiledChange and only needs the shared preflight/apply
  * transaction. When `capture_undo` is non-zero the helper captures
@@ -106,8 +104,7 @@ typedef struct EditorCommitPostEffects_s {
     int func_decl_resume_advance;
 
     /* CmdType-shaped value identifying the block kind. Used by
-     * the func-decl-resume guard ("only fire on CMD_FUNC_END") and
-     * by status-message formatting. */
+     * the func-decl-resume guard ("only fire on CMD_FUNC_END"). */
     int end_type;
 
     /* Drop autocomplete model state when the commit should clear any
@@ -165,9 +162,11 @@ void editor_commit_func_decl_resume_set(int delta);
 int editor_commit_apply_plan(const EditorCommitPlan *plan);
 
 /* Editor-side compile entry points. These are the structured-block
- * counterparts to repl_compile_*; they return EditorCommitPlan
- * (REPL change + editor effects) rather than bare
- * ReplCompiledChange. */
+ * counterparts to repl_compile_*; they write EditorCommitPlan
+ * (REPL change + editor effects) via `out` rather than bare
+ * ReplCompiledChange. `err` is optional; when provided with
+ * `err_size > 0`, these wrappers clear it on entry and fill it on
+ * REPL_COMPILE_ERROR. */
 
 ReplCompileResult editor_compile_close_brace(const char *input,
                                              const ReplCompileContext *ctx,

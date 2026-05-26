@@ -45,7 +45,6 @@
 #include "input.h"
 #include "reformat.h"
 #include "search.h"
-#include "services.h"
 #include "subsystems/tutorial/tutorial.h"
 #include "undo.h"
 
@@ -296,11 +295,6 @@ void editor_reset_for_new_scene(void) {
     repl_mark_source_dirty();
 }
 
-static const char *editor_committed_line_text(int idx) {
-    const char *text = editor_buffer_line(idx);
-    return (text && text[0]) ? text : "";
-}
-
 void editor_load_line_to_input(int idx) {
     EditorInputState *inp = editor_state_input_mut();
     if (idx >= 0 && idx < repl_state_document_count()) {
@@ -311,7 +305,7 @@ void editor_load_line_to_input(int idx) {
             return;
         }
 
-        const char *s = editor_committed_line_text(idx);
+        const char *s = editor_buffer_line(idx);
         while (*s && isspace((unsigned char)*s))
             s++;
 
@@ -350,7 +344,7 @@ void editor_load_line_to_input(int idx) {
         /* Default: skip leading whitespace, drop trailing ';' + ws. */
         const char *cs;
         int len;
-        repl_canonical_input_view(editor_committed_line_text(idx), &cs, &len);
+        repl_canonical_input_view(editor_buffer_line(idx), &cs, &len);
         if (len >= MAX_INPUT_LEN)
             len = MAX_INPUT_LEN - 1;
         memcpy(inp->input, cs, (size_t)len);
@@ -423,15 +417,6 @@ static void rewrite_source_text_with_indent(char *text_out, int text_sz,
     snprintf(text_out, (size_t)text_sz, "%s%s;", indent, stripped);
 }
 
-/* Parse g_input into `cmd` as if it were being committed at source-line
- * `insert_idx`. Handles the three-way fan-out used by the overwrite-Enter
- * and append-at-end Enter paths:
- *   - loop/function locals visible at that line → parse_with_vars +
- *     reindent
- *   - else, predef vars referenced → plain parse, mark has_vars, reindent
- *     without vars
- *   - else, plain parse only
- * Returns 1 if parsing succeeded. */
 /* Surface MAX_EXPR_VARS truncation as a status when the visible-var
  * collector had to drop frames. Called after the parse so it overrides
  * any "undeclared variable" status the parser set when truncation was
@@ -445,9 +430,18 @@ static void warn_if_scope_truncated(int vis_total) {
     repl_set_status_error(msg);
 }
 
+/* Parse g_input into `cmd` as if it were being committed at source-line
+ * `insert_idx`. Handles the three-way fan-out used by the overwrite-Enter
+ * and append-at-end Enter paths:
+ *   - loop/function locals visible at that line -> parse_with_vars +
+ *     reindent
+ *   - else, predef vars referenced -> plain parse, mark has_vars, reindent
+ *     without vars
+ *   - else, plain parse only
+ * Returns 1 if parsing succeeded. */
+
 static int parse_for_overwrite_enter(GLCmd *cmd, char *text_out, int text_sz,
                                      int insert_idx) {
-    EditorServices svc = editor_services_default();
     ExprVar vis_vars[MAX_EXPR_VARS];
     int vis_total = 0;
     int num_vis_vars = collect_visible_vars(insert_idx, vis_vars, MAX_EXPR_VARS, &vis_total);
@@ -465,7 +459,7 @@ static int parse_for_overwrite_enter(GLCmd *cmd, char *text_out, int text_sz,
             .err_sz  = (int)sizeof(editor_parse_err),
         };
         ReplParsedLine pl;
-        parsed = svc.parse_command_ctx(editor_state_input().input, &pl, &parse_ctx, svc.user);
+        parsed = repl_parser_parse_command_ctx(editor_state_input().input, &pl, &parse_ctx);
         if (parsed) {
             *cmd = pl.cmd;
             rewrite_source_text_with_indent(text_out, text_sz, insert_idx, 1);
@@ -477,7 +471,7 @@ static int parse_for_overwrite_enter(GLCmd *cmd, char *text_out, int text_sz,
             .err_sz  = (int)sizeof(editor_parse_err),
         };
         ReplParsedLine pl;
-        parsed = svc.parse_command_ctx(editor_state_input().input, &pl, &parse_ctx, svc.user);
+        parsed = repl_parser_parse_command_ctx(editor_state_input().input, &pl, &parse_ctx);
         if (parsed) {
             *cmd = pl.cmd;
             if (repl_eval_input_has_predef_vars(editor_state_input().input)) {
@@ -592,7 +586,7 @@ static int input_matches_committed_line(int line) {
 
     const char *s;
     int slen;
-    repl_canonical_input_view(editor_committed_line_text(line), &s, &slen);
+    repl_canonical_input_view(editor_buffer_line(line), &s, &slen);
 
     EditorInputView inp = editor_state_input();
     return slen == inp.input_len && strncmp(inp.input, s, (size_t)slen) == 0;
@@ -615,7 +609,7 @@ static int commit_progressed_since(const CommitAttemptState *s) {
         return 1;
 
     if (repl_state_document_count() > 0 &&
-        memcmp(repl_state_document_cmds_mut(), s->undo.cmds,
+        memcmp(repl_state_document_cmds(), s->undo.cmds,
                (size_t)repl_state_document_count() * sizeof(GLCmd)) != 0)
         return 1;
 
@@ -657,7 +651,6 @@ static int current_input_needs_navigation_commit(void) {
  * test_repl_editor.c pins both invariants (search for
  * "commit_current_input ordering"). */
 static CommitResult commit_current_input(int enter_mode) {
-    EditorServices svc = editor_services_default();
     if (!enter_mode && !current_input_needs_navigation_commit())
         return COMMIT_UNCHANGED;
 
@@ -739,7 +732,7 @@ static CommitResult commit_current_input(int enter_mode) {
                 if (editor_try_commit_var_statements())
                     return commit_progressed_since(before) ? COMMIT_OK : COMMIT_REJECTED;
                 ReplParsedLine pl;
-                parsed = svc.parse_command_ctx(editor_state_input().input, &pl, &parse_ctx, svc.user);
+                parsed = repl_parser_parse_command_ctx(editor_state_input().input, &pl, &parse_ctx);
                 if (parsed) {
                     cmd = pl.cmd;
                     rewrite_source_text_with_indent(cmd_text, sizeof(cmd_text),
@@ -752,14 +745,14 @@ static CommitResult commit_current_input(int enter_mode) {
                     .err_sz  = (int)sizeof(enter_parse_err),
                 };
                 ReplParsedLine pl;
-                parsed = svc.parse_command_ctx(editor_state_input().input, &pl, &parse_ctx, svc.user);
+                parsed = repl_parser_parse_command_ctx(editor_state_input().input, &pl, &parse_ctx);
                 if (parsed) {
                     cmd = pl.cmd;
                     repl_copy_string_fits(cmd_text, sizeof(cmd_text), pl.text);
                 }
             }
             if (!parsed && enter_parse_err[0])
-                repl_set_status(enter_parse_err);
+                repl_set_status_error(enter_parse_err);
 
             if (parsed) {
                 EditorPlaceResult res =
@@ -1018,7 +1011,7 @@ static int handle_escape_key_route(unsigned char key) {
             ui_state_help_mut()->visible = 0;
             editor_help_session_set_tab(0);
             editor_help_session_set_scroll(0);
-        } else if (editor_state_autocomplete().match_count > 0) {
+        } else if (editor_state_autocomplete()->match_count > 0) {
             editor_completion_clear();
         } else if (editor_insert_mode()) {
             editor_insert_mode_set(0);
@@ -1235,7 +1228,7 @@ static int handle_tab_key_route(unsigned char key) {
                 "Replaced input with expected tutorial command; press ; to commit");
             return 1;
         }
-        if (editor_state_autocomplete().match_count > 0) {
+        if (editor_state_autocomplete()->match_count > 0) {
             editor_completion_accept();
             editor_completion_update();
         }
@@ -1322,7 +1315,7 @@ static int handle_enter_key_route(unsigned char key) {
         CommitResult result;
 
         editor_input_anchor_clear();
-        if (editor_state_autocomplete().match_count > 0) {
+        if (editor_state_autocomplete()->match_count > 0) {
             editor_completion_accept();
             editor_completion_update();
             return 1;
@@ -1504,13 +1497,7 @@ static void keyboard_func(unsigned char key, int x, int y) {
  * repl_command_store_* primitives so parse/apply semantics stay in
  * lockstep even though the surrounding transaction policy differs. */
 int editor_feed_line(const char *line) {
-    {
-        EditorInputState *inp = editor_state_input_mut();
-        strncpy(inp->input, line, MAX_INPUT_LEN - 1);
-        inp->input[MAX_INPUT_LEN - 1] = '\0';
-        inp->input_len = (int)strlen(inp->input);
-        editor_cursor_pos_set(inp->input_len);
-    }
+    editor_input_set_text(line);
 
     if (editor_try_commit_any())
         return 1;

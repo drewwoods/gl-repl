@@ -267,7 +267,7 @@ These are intentional and must not be "fixed" by a future sweep:
 - **Borrowed cross-module API types** — a header *referencing* a type
   another module owns is correct C design, not a defect:
   `ReplCompileContext` / `ReplCompiledChange` in
-  `src/editor/services.h`; the `Repl*` snapshot fields in
+  `src/editor/commit.h`; the `Repl*` snapshot fields in
   `src/ui/app/snapshot.h`; the export / replay-annotation bridge types in
   `src/app/glr_ctrl.h`; and `VariablePanelViewState`
   (variable-panel-owned, surfaced by value through
@@ -386,7 +386,6 @@ text edit into a committed program change.
 | `editor_input` | Editor's pure text-document controller. Receives key/mouse events from `glr_ctrl` only after the controller has already filtered out non-editor concerns (replay, audio, config, save, camera, variable panel, scene press, scroll-wheel zoom). Mutates `EditorState` directly: cursor, selection, scroll, search, autocomplete navigation, clipboard, undo. Also exposes hit-test predicates (`editor_input_point_in_code_panel`, etc.) and the `EditorInputDispatchEffects` accumulation API that the controller consumes. `repl_editor.{c,h}` is deleted; this module is the sole dispatch boundary |
 | `editor_commit` | Transaction boundary for commits: compile, undo snapshot, text-buffer write, REPL apply, dirty-state updates |
 | `editor_state` | Owns `EditorState`: canonical per-line text buffer, active input, cursor, edit line, insert mode, **input-buffer selection anchor (`anchor_pos` on `EditorInputState`)**, line-range selection, search, autocomplete, scroll, undo/redo, transformers, highlights, virtual lines. The clipboard is a tagged union (`EditorClipboardKind`: EMPTY / LINES / INPUT_TEXT) so partial-line copy/cut and whole-line copy/cut share one slot. Single writer for editor buffer text |
-| `editor_services` | Default `EditorServices` dispatch table binding commit code to live REPL compile/apply |
 | `editor_undo` | Undo/redo transaction rings that restore editor text and REPL command state together |
 | `editor_clipboard` | Selection anchors plus copy/cut/paste payloads, including parallel text sidecars |
 | `editor_search` | Search query, match tracking, row/char hits, next/previous navigation |
@@ -703,7 +702,6 @@ flowchart LR
         eedops["src/editor/edit_ops.c<br/>generic text-editing primitives<br/>(char insert / delete / selection consume)<br/>(shared by REPL input.c and tools/editor_demo/input.c)"]
         ecommit["src/editor/commit.c<br/>commit transaction<br/>(compile + undo + buffer + apply)"]
         estate["src/editor/state.c<br/>EditorState storage<br/>(buffer · cursor · scroll · selection ·<br/>autocomplete · search · transformers)"]
-        eservices["src/editor/services.c<br/>commit-services dispatch table"]
         eundo["src/editor/undo.c<br/>transaction snapshots"]
         eclip["src/editor/clipboard.c<br/>cut/copy/paste"]
         esearch["src/editor/search.c<br/>query · hit tracking"]
@@ -802,10 +800,9 @@ flowchart LR
     eac -.-> ecompl
     esearch -.-> uitextsearch
 
-    %% Editor commit transaction is the only path crossing into REPL.
+    %% Editor commit transaction is the editor's mutation path into REPL state.
     einput i12@--> ecommit
     ecommit i13@--> compile
-    ecommit i32@--> eservices
     ecommit e6@==> eundo
     ecommit e7@==> estate
     ecommit e8@==> store

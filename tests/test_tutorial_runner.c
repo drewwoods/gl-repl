@@ -282,7 +282,7 @@ static void test_shadow_text_populates_autocomplete_ghost(void) {
     /* The autocomplete provider mirrors tutorial shadow text into
      * autocomplete.ghost so the existing input-row ghost render path
      * draws it dimmed after the cursor. */
-    EditorAutocompleteState ac;
+    const EditorAutocompleteState *ac;
 
     reset_fixture();
     tutorial_start(0);
@@ -291,32 +291,32 @@ static void test_shadow_text_populates_autocomplete_ghost(void) {
 
     ac = editor_state_autocomplete();
     ASSERT_STR("autocomplete ghost carries tutorial suffix",
-               ac.ghost, "gin(GL_TRIANGLES)");
+               ac->ghost, "gin(GL_TRIANGLES)");
     ASSERT_INT("autocomplete suppresses match list during tutorial",
-               ac.match_count, 0);
+               ac->match_count, 0);
     ASSERT_STR("autocomplete suppresses param hint during tutorial",
-               ac.hint, "");
+               ac->hint, "");
 }
 
 static void test_shadow_text_appears_immediately_on_start(void) {
     /* Regression: tutorial_start must poke editor_completion_update()
      * itself so the shadow ghost appears on the first frame instead
      * of waiting for the user's next keystroke. */
-    EditorAutocompleteState ac;
+    const EditorAutocompleteState *ac;
 
     reset_fixture();
     tutorial_start(0);
     /* No keystroke, no manual editor_completion_update() — just read. */
     ac = editor_state_autocomplete();
     ASSERT_STR("ghost populated immediately after tutorial_start",
-               ac.ghost, "glBegin(GL_TRIANGLES)");
+               ac->ghost, "glBegin(GL_TRIANGLES)");
 }
 
 static void test_shadow_text_refreshes_on_advance(void) {
     /* Regression: tutorial_advance_after_successful_commit must
      * refresh autocomplete so the next step's shadow appears on the
      * very next frame, not after the user types again. */
-    EditorAutocompleteState ac;
+    const EditorAutocompleteState *ac;
 
     reset_fixture();
     tutorial_start(0);
@@ -325,14 +325,14 @@ static void test_shadow_text_refreshes_on_advance(void) {
 
     ac = editor_state_autocomplete();
     ASSERT_STR("ghost shows next step's expected after advance",
-               ac.ghost, "glVertex3f(0, 0.8, 0)");
+               ac->ghost, "glVertex3f(0, 0.8, 0)");
 }
 
 static void test_shadow_ghost_falls_through_off_expected_line(void) {
     /* On the expected commit line, the tutorial shadow suffix takes
      * over autocomplete. On any other line the user is editing
      * unrelated code, so normal autocomplete should run. */
-    EditorAutocompleteState ac;
+    const EditorAutocompleteState *ac;
     int expected_line;
 
     reset_fixture();
@@ -346,9 +346,9 @@ static void test_shadow_ghost_falls_through_off_expected_line(void) {
 
     ac = editor_state_autocomplete();
     ASSERT_TRUE("normal autocomplete produces matches off-line",
-                ac.match_count > 0);
+                ac->match_count > 0);
     ASSERT_TRUE("ghost is not the tutorial expected text",
-                strcmp(ac.ghost, "glBegin(GL_TRIANGLES)") != 0);
+                strcmp(ac->ghost, "glBegin(GL_TRIANGLES)") != 0);
 }
 
 static void test_ghost_reappears_on_return_to_expected_line(void) {
@@ -356,7 +356,7 @@ static void test_ghost_reappears_on_return_to_expected_line(void) {
      * stale text doesn't follow the cursor. Navigating back to the
      * expected commit line should restore the ghost without
      * requiring the user to type. */
-    EditorAutocompleteState ac;
+    const EditorAutocompleteState *ac;
     int expected_line;
 
     reset_fixture();
@@ -366,17 +366,17 @@ static void test_ghost_reappears_on_return_to_expected_line(void) {
 
     ac = editor_state_autocomplete();
     ASSERT_STR("ghost shows on the expected line at start",
-               ac.ghost, "glBegin(GL_TRIANGLES)");
+               ac->ghost, "glBegin(GL_TRIANGLES)");
 
     editor_navigate_to_line(0);
     ac = editor_state_autocomplete();
     ASSERT_STR("ghost clears after navigating off-line",
-               ac.ghost, "");
+               ac->ghost, "");
 
     editor_navigate_to_line(expected_line);
     ac = editor_state_autocomplete();
     ASSERT_STR("ghost restored after returning to expected line",
-               ac.ghost, "glBegin(GL_TRIANGLES)");
+               ac->ghost, "glBegin(GL_TRIANGLES)");
 }
 
 static void test_tab_skips_tutorial_autofill_off_expected_line(void) {
@@ -403,14 +403,14 @@ static void test_tab_skips_tutorial_autofill_off_expected_line(void) {
 static void test_shadow_text_clears_on_exit(void) {
     /* Regression: tutorial_stop must refresh autocomplete so the
      * ghost from the in-progress step clears immediately. */
-    EditorAutocompleteState ac;
+    const EditorAutocompleteState *ac;
 
     reset_fixture();
     tutorial_start(0);
     tutorial_stop();
 
     ac = editor_state_autocomplete();
-    ASSERT_STR("ghost clears on tutorial_stop", ac.ghost, "");
+    ASSERT_STR("ghost clears on tutorial_stop", ac->ghost, "");
 }
 
 static void test_tutorial_start_sets_step_progress_status(void) {

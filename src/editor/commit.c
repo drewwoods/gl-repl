@@ -5,17 +5,18 @@
  *
  *   editor_commit_apply_external_change(change, capture_undo)
  *       preflight repl_apply_can_apply_compiled_change(change)
- *       services.apply_predef_ops(change)            // predef-var cascade
+ *       repl_apply_predef_ops(change)                // predef-var cascade
+ *       repl_apply_scratch_ops(change)               // scratch-array cascade
  *       editor_buffer_apply_compiled_change(change)  // editor text buffer
- *       services.apply_repl_change(change)           // ReplState only
+ *       repl_apply_compiled_change(change, &cursor)  // ReplState only
  *
- * The mutating halves go through the EditorServices table so the
- * editor doesn't reach into `repl_apply_*` directly. Typed input
- * runs through the editor_try_commit_* chain; each handler owns
- * its own compile/preflight/apply transaction and surfaces status.
+ * Commit code now calls the repl_apply_* entry points directly.
+ * Typed input runs through the editor_try_commit_* chain; each
+ * handler owns its own compile/preflight/apply transaction and
+ * surfaces status.
  *
  * Preflight gives the helper an all-or-nothing atomicity guarantee:
- * if the cmd-store can't accept the change, none of the three
+ * if the cmd-store can't accept the change, none of the four
  * halves run, so predef-vars, editor buffer, and cmd-store stay in
  * sync. Without the preflight a capacity failure would leave
  * predef-vars declared and (potentially) editor text written but
@@ -47,18 +48,35 @@
 #include "config.h"           /* REPL_INDENT_TEXT_MAX */
 
 #include <ctype.h>
+#include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
 
+static void editor_compile_clear_err(char *err, int err_size) {
+    if (err && err_size > 0)
+        err[0] = '\0';
+}
+
+static ReplCompileResult editor_compile_error(char *err, int err_size,
+                                              const char *fmt, ...) {
+    if (err && err_size > 0) {
+        va_list args;
+        va_start(args, fmt);
+        vsnprintf(err, (size_t)err_size, fmt, args);
+        va_end(args);
+    }
+    return REPL_COMPILE_ERROR;
+}
+
 /* Apply the predef-ops + scratch-ops + editor-buffer + cmd-store
- * halves of a compiled change. Preflight + undo capture are the
+ * steps of a compiled change. Preflight + undo capture are the
  * caller's job — this is the shared mutation sequence; each caller
  * decides its own preflight-failure policy and undo policy. The
  * edit-line is read into a local, threaded through apply, and
  * written back on success (matches the apply API's cursor-inout
  * contract; cursor ownership moved editor-side in Phase 1 of
  * plans/in-review/edit-line-ownership.md). */
-static void apply_compiled_three_halves(const ReplCompiledChange *change) {
+static void apply_compiled_change_full(const ReplCompiledChange *change) {
     repl_apply_predef_ops(change);
     repl_apply_scratch_ops(change);
     editor_buffer_apply_compiled_change(change);
@@ -87,7 +105,7 @@ int editor_commit_apply_external_change(const struct ReplCompiledChange_s *chang
     if (capture_undo)
         editor_undo_push_snapshot();
 
-    apply_compiled_three_halves(change);
+    apply_compiled_change_full(change);
     return 1;
 }
 
@@ -153,11 +171,6 @@ static void apply_post_effects(const EditorCommitPostEffects *effects) {
         editor_commit_func_decl_resume_set(effects->func_decl_resume_publish_value);
 }
 
-/* editor_commit_func_decl_resume_set: defined below alongside the
- * file-private g_func_decl_resume_delta storage. The resume
- * bookkeeping is local to this file, so no cross-TU setter wrapper is
- * needed. */
-
 int editor_commit_apply_plan(const EditorCommitPlan *plan) {
     if (!plan) return 0;
 
@@ -175,7 +188,7 @@ int editor_commit_apply_plan(const EditorCommitPlan *plan) {
      * helper deliberately does NOT push a second snapshot, to avoid
      * double-capture. */
 
-    apply_compiled_three_halves(&plan->change);
+    apply_compiled_change_full(&plan->change);
 
     /* Editor post-effects. */
     apply_post_effects(&plan->effects);
@@ -217,6 +230,7 @@ ReplCompileResult editor_compile_close_brace(const char *input,
     if (!ctx || !out) return REPL_COMPILE_ERROR;
 
     editor_commit_plan_init(out);
+    editor_compile_clear_err(err, err_size);
 
     const char *p = input ? input : "";
     while (*p && isspace((unsigned char)*p)) p++;
@@ -243,9 +257,7 @@ ReplCompileResult editor_compile_close_brace(const char *input,
         end_type = CMD_IF_END;
         label = "if-block";
     } else {
-        if (err && err_size > 0)
-            snprintf(err, (size_t)err_size, "unmatched '}'");
-        return REPL_COMPILE_ERROR;
+        return editor_compile_error(err, err_size, "unmatched '}'");
     }
 
     /* Read the func-decl resume delta. The delta is one-shot and only
@@ -323,6 +335,7 @@ ReplCompileResult editor_compile_if_block(const char *input,
     if (!ctx || !out) return REPL_COMPILE_ERROR;
 
     editor_commit_plan_init(out);
+    editor_compile_clear_err(err, err_size);
 
     const char *p = input ? input : "";
     while (*p && isspace((unsigned char)*p)) p++;
@@ -340,10 +353,8 @@ ReplCompileResult editor_compile_if_block(const char *input,
 
     /* Skip past `if` to the opening `(`. */
     while (*p && *p != '(') p++;
-    if (!*p) {
-        snprintf(err, (size_t)err_size, "if syntax: if(expr) {");
-        return REPL_COMPILE_ERROR;
-    }
+    if (!*p)
+        return editor_compile_error(err, err_size, "if syntax: if(expr) {");
     p++;
 
     char cond_text[MAX_LINE_LEN];
@@ -356,10 +367,8 @@ ReplCompileResult editor_compile_if_block(const char *input,
             else if (*p == ')') paren--;
             if (paren > 0) p++;
         }
-        if (paren != 0) {
-            snprintf(err, (size_t)err_size, "if syntax: if(expr) {");
-            return REPL_COMPILE_ERROR;
-        }
+        if (paren != 0)
+            return editor_compile_error(err, err_size, "if syntax: if(expr) {");
         clen = (int)(p - expr_start);
         if (clen > (int)sizeof(cond_text) - 1)
             clen = (int)sizeof(cond_text) - 1;
@@ -372,10 +381,8 @@ ReplCompileResult editor_compile_if_block(const char *input,
         if (!repl_eval_validate_expression_idents(cond_text,
                                                   visible_nv > 0 ? visible_vars : NULL,
                                                   visible_nv,
-                                                  verr, sizeof(verr))) {
-            snprintf(err, (size_t)err_size, "%s", verr);
-            return REPL_COMPILE_ERROR;
-        }
+                                                  verr, sizeof(verr)))
+            return editor_compile_error(err, err_size, "%s", verr);
     }
 
     float cond_val = 0.0f;
@@ -390,10 +397,8 @@ ReplCompileResult editor_compile_if_block(const char *input,
     /* Skip past `)`. */
     p++;
     while (*p && isspace((unsigned char)*p)) p++;
-    if (*p != '{' && *p != '\0') {
-        snprintf(err, (size_t)err_size, "if syntax: if(expr) {");
-        return REPL_COMPILE_ERROR;
-    }
+    if (*p != '{' && *p != '\0')
+        return editor_compile_error(err, err_size, "if syntax: if(expr) {");
 
     char indent[REPL_INDENT_TEXT_MAX];
     repl_source_scope_cmd_indent(pos, indent, sizeof(indent));
@@ -541,6 +546,7 @@ ReplCompileResult editor_compile_func_def(const char *input,
     if (!ctx || !out) return REPL_COMPILE_ERROR;
 
     editor_commit_plan_init(out);
+    editor_compile_clear_err(err, err_size);
 
     int fn = -1;
     int param_count = 0;
@@ -573,7 +579,6 @@ ReplCompileResult editor_compile_func_def(const char *input,
      * speculative. The success path publishes the touched slot and its
      * previous contents via out->change so editor_commit_apply_plan can
      * roll it back if its own preflight fails. [P2 editor] regression. */
-    int newly_aliased_slot = -1;
     {
         const char *p = trimmed;
         if (!(strncmp(p, "func", 4) == 0 && p[4] >= '0' && p[4] <= '9' &&
@@ -612,23 +617,18 @@ ReplCompileResult editor_compile_func_def(const char *input,
                         }
                         if (target_slot < 0)
                             target_slot = repl_func_alias_first_free_slot();
-                        if (target_slot < 0) {
-                            snprintf(err, (size_t)err_size,
-                                     "no free function slots (max %d)",
-                                     REPL_FUNC_SLOT_COUNT);
-                            return REPL_COMPILE_ERROR;
-                        }
+                        if (target_slot < 0)
+                            return editor_compile_error(err, err_size,
+                                                        "no free function slots (max %d)",
+                                                        REPL_FUNC_SLOT_COUNT);
                         char prev_alias[REPL_FUNC_NAME_MAX] = "";
                         const char *prev_alias_live = repl_func_alias_get(target_slot);
                         if (prev_alias_live)
                             snprintf(prev_alias, sizeof(prev_alias),
                                      "%s", prev_alias_live);
-                        if (!repl_func_alias_set(target_slot, ident)) {
-                            snprintf(err, (size_t)err_size,
-                                     "name '%s' already used", ident);
-                            return REPL_COMPILE_ERROR;
-                        }
-                        newly_aliased_slot = target_slot;
+                        if (!repl_func_alias_set(target_slot, ident))
+                            return editor_compile_error(err, err_size,
+                                                        "name '%s' already used", ident);
                         out->change.newly_aliased_slot = target_slot;
                         out->change.had_previous_alias =
                             prev_alias[0] ? 1 : 0;
@@ -665,10 +665,9 @@ ReplCompileResult editor_compile_func_def(const char *input,
         if (c->type != CMD_FUNC_DEF) continue;
         if ((int)c->args[0] != fn) continue;
         if (overwriting_func && ei == edit_pos) continue;
-        snprintf(err, (size_t)err_size,
-                 "func%d already defined (line %d)", fn, ei + 1);
         repl_compiled_change_rollback_alias(&out->change);
-        return REPL_COMPILE_ERROR;
+        return editor_compile_error(err, err_size,
+                                    "func%d already defined (line %d)", fn, ei + 1);
     }
 
     /* Overwrite-header branch: REPLACE_ONE at the cursor line. */
@@ -699,7 +698,6 @@ ReplCompileResult editor_compile_func_def(const char *input,
         snprintf(out->commit_message, sizeof(out->commit_message),
                  "func def header updated");
         out->commit_message_valid = 1;
-        out->change.newly_aliased_slot = newly_aliased_slot;
         return REPL_COMPILE_OK;
     }
 
@@ -719,12 +717,10 @@ ReplCompileResult editor_compile_func_def(const char *input,
     int comment_count = edit_pos - comment_start;
 
     int insert_count = comment_count + 2;  /* comments + fd + fe */
-    if (insert_count > MAX_COMMIT_CMDS) {
-        snprintf(err, (size_t)err_size,
-                 "too many leading comments (%d > %d); split or shorten",
-                 comment_count, MAX_COMMIT_CMDS - 2);
-        return REPL_COMPILE_ERROR;
-    }
+    if (insert_count > MAX_COMMIT_CMDS)
+        return editor_compile_error(err, err_size,
+                                    "too many leading comments (%d > %d); split or shorten",
+                                    comment_count, MAX_COMMIT_CMDS - 2);
 
     /* A func decl always lives at depth 0, so its indent is the
      * depth-0 indent regardless of the (post-delete) insert position
@@ -797,7 +793,6 @@ ReplCompileResult editor_compile_func_def(const char *input,
     snprintf(out->commit_message, sizeof(out->commit_message),
              "func def: type body lines, press Esc when done");
     out->commit_message_valid = 1;
-    out->change.newly_aliased_slot = newly_aliased_slot;
 
     return REPL_COMPILE_OK;
 }
@@ -819,6 +814,7 @@ ReplCompileResult editor_compile_for_loop(const char *input,
     if (!ctx || !out) return REPL_COMPILE_ERROR;
 
     editor_commit_plan_init(out);
+    editor_compile_clear_err(err, err_size);
 
     const char *p = input ? input : "";
     while (*p && isspace((unsigned char)*p)) p++;
@@ -841,10 +837,9 @@ ReplCompileResult editor_compile_for_loop(const char *input,
     if (!repl_eval_parse_for_header_with_vars(p, var_name, sizeof(var_name),
                                               &start, &end, &step,
                                               visible_vars, visible_nv,
-                                              &body_start)) {
-        snprintf(err, (size_t)err_size, "for syntax: for(var, start, end[, step]) body;");
-        return REPL_COMPILE_ERROR;
-    }
+                                              &body_start))
+        return editor_compile_error(err, err_size,
+                                    "for syntax: for(var, start, end[, step]) body;");
 
     while (*body_start && isspace((unsigned char)*body_start))
         body_start++;
@@ -899,33 +894,25 @@ ReplCompileResult editor_compile_for_loop(const char *input,
 
         char verr[REPL_DIAG_TEXT_MAX];
         if (!repl_eval_validate_expression_idents(ra, visible_vars, visible_nv,
-                                                  verr, sizeof(verr))) {
-            snprintf(err, (size_t)err_size, "%s", verr);
-            return REPL_COMPILE_ERROR;
-        }
+                                                  verr, sizeof(verr)))
+            return editor_compile_error(err, err_size, "%s", verr);
 
         if (input_has_any_visible_vars(ra, visible_vars, visible_nv)) {
             fb.has_vars = 1;
             if (!repl_format_fits(fb_text, sizeof(fb_text),
                                   "%sfor(%s, %s) {",
-                                  indent, var_name, ra)) {
-                snprintf(err, (size_t)err_size, "Command too long");
-                return REPL_COMPILE_ERROR;
-            }
+                                  indent, var_name, ra))
+                return editor_compile_error(err, err_size, "Command too long");
         } else if (step != 1.0f) {
             if (!repl_format_fits(fb_text, sizeof(fb_text),
                                   "%sfor(%s, %.9g, %.9g, %.9g) {",
-                                  indent, var_name, start, end, step)) {
-                snprintf(err, (size_t)err_size, "Command too long");
-                return REPL_COMPILE_ERROR;
-            }
+                                  indent, var_name, start, end, step))
+                return editor_compile_error(err, err_size, "Command too long");
         } else {
             if (!repl_format_fits(fb_text, sizeof(fb_text),
                                   "%sfor(%s, %.9g, %.9g) {",
-                                  indent, var_name, start, end)) {
-                snprintf(err, (size_t)err_size, "Command too long");
-                return REPL_COMPILE_ERROR;
-            }
+                                  indent, var_name, start, end))
+                return editor_compile_error(err, err_size, "Command too long");
         }
     }
 
@@ -991,10 +978,8 @@ ReplCompileResult editor_compile_for_loop(const char *input,
     while (blen > 0 &&
            (body[blen - 1] == ';' || isspace((unsigned char)body[blen - 1])))
         body[--blen] = '\0';
-    if (blen == 0) {
-        snprintf(err, (size_t)err_size, "for-loop needs a body");
-        return REPL_COMPILE_ERROR;
-    }
+    if (blen == 0)
+        return editor_compile_error(err, err_size, "for-loop needs a body");
 
     /* Loop scope: var_name + start, plus the visible vars. */
     ExprVar dv[MAX_EXPR_VARS];
@@ -1021,10 +1006,11 @@ ReplCompileResult editor_compile_for_loop(const char *input,
     ReplParsedLine body_pl;
     if (!repl_parser_parse_command_ctx(body, &body_pl, &parse_ctx)) {
         if (body_err[0])
-            snprintf(err, (size_t)err_size, "for-loop body: %s", body_err);
+            return editor_compile_error(err, err_size,
+                                        "for-loop body: %s", body_err);
         else
-            snprintf(err, (size_t)err_size, "Invalid for-loop body command");
-        return REPL_COMPILE_ERROR;
+            return editor_compile_error(err, err_size,
+                                        "Invalid for-loop body command");
     }
     GLCmd body_cmd = body_pl.cmd;
 
@@ -1299,32 +1285,23 @@ int editor_try_commit_any(void) {
     return 0;
 }
 
+static void enter_insert_mode_after_var_commit(void) {
+    editor_insert_mode_set(1);
+    editor_input_clear();
+    editor_completion_clear();
+}
+
 /* Overwrite-mode Enter variant: on successful var-statement commit,
- * enter insert mode and clear the input. Assign additionally
- * publishes "Insert mode" status and marks normals dirty. */
+ * enter insert mode and clear the input. Preserve the specific
+ * decl/assign status published by the inner commit helper; this
+ * wrapper only adds the insert-mode/input-clear post-effect. */
 int editor_try_commit_var_statements_then_insert(void) {
     if (editor_try_commit_float_decl()) {
-        editor_insert_mode_set(1);
-        {
-            EditorInputState *inp = editor_state_input_mut();
-            inp->input[0] = '\0';
-            inp->input_len = 0;
-        }
-        editor_cursor_pos_set(0);
-        editor_completion_clear();
+        enter_insert_mode_after_var_commit();
         return 1;
     }
     if (editor_try_commit_assign_variable()) {
-        editor_insert_mode_set(1);
-        {
-            EditorInputState *inp = editor_state_input_mut();
-            inp->input[0] = '\0';
-            inp->input_len = 0;
-        }
-        editor_cursor_pos_set(0);
-        editor_completion_clear();
-        repl_set_status("Insert mode");
-        repl_mark_source_dirty();
+        enter_insert_mode_after_var_commit();
         return 1;
     }
     return 0;

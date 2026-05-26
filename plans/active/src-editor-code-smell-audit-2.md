@@ -26,6 +26,173 @@
 > `help_session.c` and `completion.c` are still appropriately thin —
 > no logic creep since 2026-05-25.
 
+## Status update — 2026-05-26 (`editor-smells-2`)
+
+The branch has already landed a substantial part of the high-ROI
+follow-up work. Completed findings from this audit:
+
+- `#2` — `commit_progressed_since()` now uses the const document
+  accessor for its read-only `memcmp`.
+- `#4` — `editor_try_commit_var_statements_then_insert()` now uses
+  `editor_input_clear()` instead of open-coding the input reset.
+- `#7` — `tests/test_editor_completion.c` now exercises
+  `editor_completion_accept()` directly and covers both the
+  registered-provider and NULL/partial-provider paths.
+- `#10` — the `parse_for_overwrite_enter` documentation was moved so
+  it describes the actual helper it belongs to.
+- `#12` — the `editor_committed_line_text` wrapper was removed and
+  its callers now read directly through the buffer-view helper.
+- `#14` — insert-mode parse failures now route through
+  `repl_set_status_error()` instead of the plain status sink.
+- `#15` — `EditorUndoRingState` documentation now records the
+  production rollback path in `commit_before_navigation()`.
+- `#16` — `editor_feed_line()` now goes through
+  `editor_input_set_text()`.
+- `#17` — `edit_op_buffer_delete_left_of_cursor()` now documents
+  the same selection-preservation contract as the sibling edit ops.
+- `#19` — the `commit.c` file header now reflects the current direct
+  apply flow rather than the pre-`EditorServices`/pre-scratch-op
+  description.
+- `#20` — `apply_compiled_three_halves()` was renamed to
+  `apply_compiled_change_full()`.
+- `#22` — `_then_insert` no longer duplicates its epilogue, no
+  longer clobbers the inner success status with a generic
+  "Insert mode", and no longer issues a redundant outer
+  `repl_mark_source_dirty()`.
+- `#23` — the `end_type` docstring no longer claims a nonexistent
+  status-formatting consumer.
+- `#24` — the `commit.h` structured-compile doc now correctly says
+  the helpers write `EditorCommitPlan` through the `out` pointer.
+- `#25` — the four `editor_compile_*` wrappers now share a single
+  err-buffer policy: clear provided buffers on entry, tolerate
+  `NULL`/zero-sized buffers, and format failures through one helper.
+- `#30` / `#31` — `editor_state_clipboard()` and
+  `editor_state_autocomplete()` now return const pointers and the
+  production/test callers that only read them were updated.
+- `#39` — `EditorServices` is gone: the four live parse dispatches in
+  `input.c` now call `repl_parser_parse_command_ctx()` directly,
+  `services.{c,h}` were deleted, the Makefile/test manifests were
+  cleaned up, and the supporting docs/guards/baselines were updated.
+- `#41` — the redundant `newly_aliased_slot` success-path assignments
+  in `editor_compile_func_def()` were removed.
+
+Validated for the landed slice:
+
+- `make test_repl_editor USE_GL_STUBS=1 && build/release-gl-stubs/test_repl_editor`
+  → `867 / 867 passed`
+- `make test_repl_compile && build/release/test_repl_compile`
+  → `211 / 211 passed`
+- `make test_editor_completion && build/release/test_editor_completion`
+  → `11 / 11 passed`
+- `make test_repl_state && build/release/test_repl_state`
+  → `153 / 153 passed`
+- `make test_tutorial_runner && build/release/test_tutorial_runner`
+  → `453 / 453 passed`
+- `make test_glr_actions USE_GL_STUBS=1 && build/release-gl-stubs/test_glr_actions`
+  → `343 / 343 passed`
+- `./scripts/check-editor-repl-surface.sh`
+  → `input.c=24/24, commit.c=35/35`
+
+Findings that no longer need work as written in the current tree:
+
+- `#27` — the contradictory `editor_commit_func_decl_resume_set`
+  comment cited in the audit is already gone from `src/editor/commit.c`.
+- `#44` — the cited forward-declaration block is already gone from
+  `src/editor/state.c`.
+
+## Suggested Commit Message
+
+```text
+editor: land audit-driven cleanup across input, commit, state, and services
+
+Address the highest-ROI follow-ups from
+plans/active/src-editor-code-smell-audit-2.md and fold in the
+adjacent doc/test/build cleanup that shares the same touched
+surfaces.
+
+Input dispatch cleanup:
+- switch commit_progressed_since() to the const document accessor
+  for its read-only memcmp path (#2)
+- move the parse_for_overwrite_enter() documentation so it
+  describes the right helper and remove the stale
+  editor_committed_line_text() wrapper in favor of direct
+  editor_buffer_view_line() reads (#10/#12)
+- report insert-mode parse failures with repl_set_status_error()
+  so the insert and overwrite parse paths use the same error sink
+  (#14)
+- route editor_feed_line() through editor_input_set_text() instead
+  of open-coding the input-buffer write (#16)
+
+Commit-path cleanup:
+- replace the raw input clear in
+  editor_try_commit_var_statements_then_insert() with
+  editor_input_clear(), factor the shared insert-mode epilogue,
+  preserve the inner success status, and drop the redundant outer
+  repl_mark_source_dirty() (#4/#22)
+- rename apply_compiled_three_halves() to
+  apply_compiled_change_full() and refresh the surrounding
+  commit.c/commit.h docs so they describe the current four-step
+  apply flow and the real EditorCommitPlan out-parameter contract
+  (#19/#20/#23/#24)
+- standardize editor_compile_close_brace(),
+  editor_compile_if_block(), editor_compile_func_def(), and
+  editor_compile_for_loop() on one err-buffer policy: clear
+  provided buffers on entry, tolerate NULL/zero-sized buffers, and
+  format failures through a shared helper (#25)
+- remove redundant newly_aliased_slot success-path assignments from
+  editor_compile_func_def() now that out->change.newly_aliased_slot
+  is the only live sink (#41)
+
+State/accessor cleanup:
+- update EditorUndoRingState docs to mention the production
+  rollback path in commit_before_navigation() (#15)
+- add the missing "Pure with respect to selection" contract to
+  edit_op_buffer_delete_left_of_cursor() in edit_ops.h (#17)
+- convert editor_state_clipboard() and
+  editor_state_autocomplete() to const-pointer accessors and
+  update the production/test callers that only read those
+  structures (#30/#31)
+
+Completion/test coverage:
+- extend tests/test_editor_completion.c with accept-dispatch
+  coverage and verify editor_completion_accept() is safe with both
+  a NULL provider and a provider whose hooks are partially NULL
+  (#7)
+- extend tests/test_repl_editor.c to pin the _then_insert status
+  behavior, extend tests/test_repl_compile.c to pin the new
+  err-buffer semantics, and refresh the state/tutorial/actions
+  tests for the const-pointer accessor shape (#22/#25/#30/#31)
+
+Remove EditorServices completely:
+- replace the last four svc.parse_command_ctx(...) calls in
+  src/editor/input.c with direct repl_parser_parse_command_ctx()
+  calls and delete the now-empty EditorServices setup sites (#39)
+- delete src/editor/services.c and src/editor/services.h, remove
+  them from the Makefile, drop the stale forward declaration in
+  commit.h, and remove the obsolete include from
+  tests/test_repl_compile.c (#39)
+- update MODULES.md, AGENTS.md, CLAUDE.md, ARCHITECTURE.md,
+  src/editor/README.md, tools/editor_demo/editor_demo.c,
+  scripts/check-editor-repl-surface.sh,
+  scripts/baselines/editor-repl-surface.txt,
+  scripts/check-module-prefixes.sh,
+  scripts/check-glr-ctrl-not-editor-mirror.sh, and
+  scripts/callgraph_file_groups.json so the docs and guardrails
+  match the deleted service shim (#39)
+- update plans/active/src-editor-code-smell-audit-2.md with the
+  landed findings, current validation results, and this commit
+  message template
+
+Validation:
+- make test_repl_editor USE_GL_STUBS=1 && build/release-gl-stubs/test_repl_editor
+- make test_repl_compile && build/release/test_repl_compile
+- make test_editor_completion && build/release/test_editor_completion
+- make test_repl_state && build/release/test_repl_state
+- make test_tutorial_runner && build/release/test_tutorial_runner
+- make test_glr_actions USE_GL_STUBS=1 && build/release-gl-stubs/test_glr_actions
+- ./scripts/check-editor-repl-surface.sh
+```
+
 ## Headline take
 
 57 findings total; #52 withdrawn (factually wrong — see finding),

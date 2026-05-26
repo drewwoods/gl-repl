@@ -4,15 +4,15 @@
 # called from each file and compares to a baseline.
 #
 # Editor → REPL coupling is the architectural debt this guard
-# tracks. Every new `repl_*` call site in the editor needs a service
-# callback added to EditorServices instead, so the editor's
-# dependency on REPL stays narrow and the editor_demo (which links
-# the editor data model without REPL) keeps working. The check
-# fails loudly if either file gains a unique symbol since the
-# baseline, forcing the new dependency to be considered explicitly.
+# tracks. The old EditorServices seam is gone; direct `repl_*`
+# reach from the editor now needs explicit review and should grow
+# only when the simplification is worth the tighter dependency.
+# The check fails loudly if either file gains a unique symbol since
+# the baseline, forcing that dependency change to be considered
+# explicitly.
 #
-# Ratchet down as new EditorServices callbacks land and call sites
-# migrate. The plan target (plans/done/editor-demo.md) is ~5 per
+# Ratchet down as direct editor → REPL calls are consolidated or
+# deleted. The plan target (plans/done/editor-demo.md) is ~5 per
 # file; current baseline reflects post-edit-line-ownership reality
 # (Phase 5 of plans/done/edit-line-ownership.md deleted the former
 # tools/editor_demo/repl_shim.c after the storage flip removed its
@@ -53,14 +53,14 @@ commit_count=$(count_unique_repl src/editor/commit.c)
 fail=0
 if [ "$input_count" -gt "$input_baseline" ]; then
     echo "ERROR: src/editor/input.c REPL surface grew past baseline (${input_baseline} -> ${input_count})." >&2
-    echo "  Each new repl_* call needs either an EditorServices callback" >&2
-    echo "  or a direct stub in tools/editor_demo/repl_shim.c." >&2
+    echo "  Each new repl_* call needs an explicit architecture reason" >&2
+    echo "  and a matching baseline update once that reason is accepted." >&2
     fail=1
 fi
 if [ "$commit_count" -gt "$commit_baseline" ]; then
     echo "ERROR: src/editor/commit.c REPL surface grew past baseline (${commit_baseline} -> ${commit_count})." >&2
-    echo "  Each new repl_* call needs either an EditorServices callback" >&2
-    echo "  or a direct stub in tools/editor_demo/repl_shim.c." >&2
+    echo "  Each new repl_* call needs an explicit architecture reason" >&2
+    echo "  and a matching baseline update once that reason is accepted." >&2
     fail=1
 fi
 
