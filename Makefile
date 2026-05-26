@@ -828,10 +828,17 @@ $(foreach bin,$(BENCH_BINS),$(eval $(call built_binary,$(bin))))
 # no-op stub harness cannot model and headless CI cannot provide. These
 # are intentionally NOT in TEST_BINS, so `make test` / `make test-stubs`
 # never build or run them. Run locally with a display via `make gl-tests`.
-# Link is GL-only (gl_2d.h is header-inline; no project objects needed).
-GL_TEST_BINS = test_ui_gl_state
+GL_TEST_BINS = test_ui_gl_state test_scene_underwater_fill_gl
 
 $(BINDIR)/test_ui_gl_state: $(OBJDIR)/$(TEST_DIR)/test_ui_gl_state.o
+	@mkdir -p $(dir $@)
+	$(CC) $(OBJ_CFLAGS) -o $@ $^ $(GL_LDFLAGS)
+
+# Links src/scene/grid.o for scene_grid_render — the function the test
+# drives through the OCEAN-theme underwater branch and verifies via
+# glReadPixels. Grid has no other project-object dependencies (overlay_xn.h
+# is header-inline), so this is still a thin link.
+$(BINDIR)/test_scene_underwater_fill_gl: $(OBJDIR)/$(TEST_DIR)/test_scene_underwater_fill_gl.o $(OBJDIR)/src/scene/grid.o
 	@mkdir -p $(dir $@)
 	$(CC) $(OBJ_CFLAGS) -o $@ $^ $(GL_LDFLAGS)
 
