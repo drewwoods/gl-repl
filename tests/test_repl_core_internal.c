@@ -159,7 +159,7 @@ int main() {
      * Pre-fix the cmd_indent / cmd_tess_indent overloads wrote '\0' to
      * buf[0] (= the byte just past the zero-length buffer). */
     {
-        glr_app_reset_all(); declare_test_vars();
+        glr_ctrl_reset_all(); declare_test_vars();
         editor_feed_line("glBegin(GL_TRIANGLES);");
         editor_feed_line("  glVertex3f(0,0,0);");
         editor_feed_line("glEnd();");
@@ -381,7 +381,7 @@ int main() {
         ReplFlattenResult result;
 
         /* (a) unreached if(0) body — source sees an enable; flat doesn't. */
-        glr_app_reset_all(); declare_test_vars();
+        glr_ctrl_reset_all(); declare_test_vars();
         editor_feed_line("if(0) {");
         editor_feed_line("  glEnable(GL_LIGHTING);");
         editor_feed_line("}");
@@ -401,7 +401,7 @@ int main() {
 
         /* (b) unreferenced funcN body — source sees the enable; flat
          * skips because the function is never called. */
-        glr_app_reset_all(); declare_test_vars();
+        glr_ctrl_reset_all(); declare_test_vars();
         editor_feed_line("func0() {");
         editor_feed_line("  glEnable(GL_LIGHTING);");
         editor_feed_line("}");
@@ -417,7 +417,7 @@ int main() {
         /* (c) glDisable(GL_LIGHTING) inside an unreached for-loop body
          * — source walk would see the disable and report OFF; flat walk
          * does not enter the empty range and reports ON. */
-        glr_app_reset_all(); declare_test_vars();
+        glr_ctrl_reset_all(); declare_test_vars();
         editor_feed_line("glEnable(GL_LIGHTING);");
         editor_feed_line("for(i, 0, 0) {");
         editor_feed_line("  glDisable(GL_LIGHTING);");
@@ -434,7 +434,7 @@ int main() {
         /* (d) enable behind a control-flow gate that DOES execute — for-loop
          * runs once and visits glEnable. Confirms the flat walk picks up
          * legitimate enables reached via expansion. */
-        glr_app_reset_all(); declare_test_vars();
+        glr_ctrl_reset_all(); declare_test_vars();
         editor_feed_line("for(i, 0, 1) {");
         editor_feed_line("  glEnable(GL_LIGHTING);");
         editor_feed_line("}");

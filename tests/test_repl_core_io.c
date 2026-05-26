@@ -1427,7 +1427,7 @@ int main(void) {
      * read loop treated this as EOF and the function returned 1 as if
      * the load had succeeded. Post-fix the function reports failure. */
     {
-        glr_app_reset_all(); declare_test_vars();
+        glr_ctrl_reset_all(); declare_test_vars();
         int rc = repl_export_load_from_file("/tmp");
         ASSERT_INT("load from a directory returns failure", rc, 0);
 
@@ -1465,7 +1465,7 @@ int main(void) {
         /* Force live wireframe to 0 first. parse_cfg's per-line apply
          * will flip it to 1 during the partial read; that's the
          * already-mutated live state, not the leak we're testing. */
-        glr_app_reset_all(); declare_test_vars();
+        glr_ctrl_reset_all(); declare_test_vars();
         glr_state_presentation_mut()->wireframe = 0;
 
         int rc = repl_export_load_from_file(leak_path);

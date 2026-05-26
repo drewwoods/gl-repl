@@ -1274,7 +1274,7 @@ int main(void) {
      * repl_apply_compiled_change so they pin the apply-level contract,
      * not the wrapper's preflight. */
     {
-        glr_app_reset_all();
+        glr_ctrl_reset_all();
         editor_feed_line("glColor3f(1, 0, 0);");
         editor_feed_line("glColor3f(0, 1, 0);");
         editor_feed_line("glColor3f(0, 0, 1);");
