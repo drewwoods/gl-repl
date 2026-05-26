@@ -1438,6 +1438,50 @@ int main(void) {
         ASSERT_INT("load of missing file returns failure", rc, 0);
     }
 
+    /* Regression for #9 review follow-up: a failed load must clear the
+     * @cfg accumulator (and the pending scene-name / workspace-dir +
+     * deferred-var list) before returning. parse_cfg populates the
+     * accumulator per-line as it reads; if the load then aborts on a
+     * read/close error or a truncated line, leaving the accumulator
+     * populated lets a subsequent repl_export_apply_pending_cfg()
+     * (called by example_loader.c on every example load) re-apply the
+     * stale slugs. The /tmp directory test above doesn't catch this
+     * because it errors before any line is parsed. */
+    {
+        const char *leak_path = "/tmp/repl_core_io_cfg_leak.c";
+
+        /* Build a file: one valid @cfg line, then a too-long line that
+         * fires the truncated_line bailout. MAX_LINE_LEN=256 — pad to
+         * 600 chars so fgets fills its buffer without a newline. */
+        FILE *f = fopen(leak_path, "w");
+        ASSERT_TRUE("leak fixture opens for write", f != NULL);
+        if (f) {
+            fprintf(f, "// @cfg wireframe = 1\n");
+            for (int i = 0; i < 600; i++) fputc('x', f);
+            fputc('\n', f);
+            fclose(f);
+        }
+
+        /* Force live wireframe to 0 first. parse_cfg's per-line apply
+         * will flip it to 1 during the partial read; that's the
+         * already-mutated live state, not the leak we're testing. */
+        glr_app_reset_all(); declare_test_vars();
+        glr_state_presentation_mut()->wireframe = 0;
+
+        int rc = repl_export_load_from_file(leak_path);
+        ASSERT_INT("leak fixture import fails (truncated line)", rc, 0);
+
+        /* Reset live wireframe back to 0 so a leaked accumulator
+         * re-apply through repl_export_apply_pending_cfg becomes a
+         * visible mutation we can assert against. */
+        glr_state_presentation_mut()->wireframe = 0;
+        repl_export_apply_pending_cfg();
+        ASSERT_INT("failed load did not leak @cfg into pending accumulator",
+                   glr_state_presentation().wireframe, 0);
+
+        remove(leak_path);
+    }
+
     printf("repl_core_io: %d/%d passed\n", g_harness.passed, g_harness.run);
     return (g_harness.run == g_harness.passed) ? 0 : 1;
 }

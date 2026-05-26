@@ -3114,18 +3114,25 @@ static void import_process_line(ImportState *s, const char *p, const char *raw) 
     (void)import_try_snippet_body_line(s, p);
 }
 
+/* Wipe per-load accumulator state populated by parse_workspace_header_line
+ * / parse_cfg / @scene-name / @workspace-dir directives. Called at entry
+ * (clears whatever a prior failed load may have left behind) and on every
+ * failure exit (so a partial parse can't leak @cfg / @var / pending name
+ * state into a later call — e.g. example_loader.c's
+ * repl_export_apply_pending_cfg() drain, which would otherwise re-apply
+ * stale slugs from the failed import). */
+static void repl_export_load_reset_accumulators(void) {
+    g_deferred_var_count       = 0;
+    g_pending_scene_name[0]    = '\0';
+    g_pending_workspace_dir[0] = '\0';
+    import_cfg_accumulator_reset();
+}
+
 int repl_export_load_from_file(const char *filename) {
     FILE *f = fopen(filename, "r");
     if (!f) return 0;
 
-    /* Reset the deferred-var list; it is populated by parse_workspace_header_line
-     * and applied after the snippet is fully processed (see below). */
-    g_deferred_var_count       = 0;
-    g_pending_scene_name[0]    = '\0';
-    g_pending_workspace_dir[0] = '\0';
-    /* @cfg accumulator: parse_cfg() populates it during import; we drain
-     * it via the bridge after parsing completes. */
-    import_cfg_accumulator_reset();
+    repl_export_load_reset_accumulators();
 
     ImportState state;
     import_state_init(&state);
@@ -3160,12 +3167,14 @@ int repl_export_load_from_file(const char *filename) {
     int had_read_err = ferror(f);
     int close_failed = fclose(f) != 0;
     if (had_read_err || close_failed) {
+        repl_export_load_reset_accumulators();
         char msg[REPL_STATUS_TEXT_MAX];
         snprintf(msg, sizeof(msg), "Error: cannot read %s", filename);
         repl_set_status_error(msg);
         return 0;
     }
     if (truncated_line) {
+        repl_export_load_reset_accumulators();
         char msg[REPL_STATUS_TEXT_MAX];
         snprintf(msg, sizeof(msg), "Import failed: line too long in %s", filename);
         repl_set_status_error(msg);
