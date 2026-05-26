@@ -276,7 +276,7 @@ static void glr_ctrl_build_overlay_pack(OverlaySnapshotPack *pack, const SceneRe
     pack->walk.cursor.cursor_block_begin = repl_state_flat_program_current_block_begin();
     pack->walk.cursor.cursor_block_end = repl_state_flat_program_current_block_end();
     pack->walk.cursor.cursor_func_scope_mask = 0;
-    
+
     pack->walk.show_vertex_outlines = presentation.show_vertex_outlines;
     pack->walk.highlight_current_poly = presentation.highlight_current_poly && !replaying;
     pack->walk.replay_tess_preview = replay_mode_vertex;
@@ -697,8 +697,12 @@ static void glr_ctrl_build_scene_config(SceneRenderConfig *config) {
     /* --- Post-overlays hook ---
      * Always wired; the body short-circuits per-overlay based on REPL
      * presentation flags. user_data carries the per-frame config so the
-     * hook can read guide_snapshot for the cursor edit guides. */
-    glr_ctrl_build_overlay_pack(&g_overlay_pack, config);
+     * hook can read guide_snapshot for the cursor edit guides. The
+     * pack itself is built at the END of this function (see
+     * "Build overlay snapshot pack" below) so it reads the fully-
+     * populated config fields (multisample_enabled, line_smooth_enabled,
+     * user_lighting_enabled, alpha_scale) — those are assigned later in
+     * this function, so building the pack here would read stack garbage. */
     config->post_overlays_fn        = edit_overlays_post_overlays;
     config->post_overlays_user_data = &g_overlay_pack;
 
@@ -819,6 +823,14 @@ static void glr_ctrl_build_scene_config(SceneRenderConfig *config) {
         config->post_fill_fn        = replay_render_post_fill;
         config->post_fill_user_data = &g_replay_fade_plan;
     }
+
+    /* --- Build overlay snapshot pack ---
+     * Done at the end so the pack reads the fully-populated config
+     * fields (multisample_enabled, line_smooth_enabled,
+     * user_lighting_enabled, alpha_scale). Moving this earlier in
+     * the function would copy stack garbage through
+     * glr_ctrl_build_guide_snapshot(). */
+    glr_ctrl_build_overlay_pack(&g_overlay_pack, config);
 }
 
 /* ========================================================================= */

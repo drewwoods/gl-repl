@@ -1,7 +1,7 @@
 #ifndef REPLAY_RENDER_H
 #define REPLAY_RENDER_H
 
-#include "app/glr_ctrl.h"
+#include "subsystems/replay/replay_state.h"  /* ReplayFadePlan */
 
 void replay_render_fade_batches(const ReplayFadePlan *plan);
 void replay_render_tess_preview(const ReplayFadePlan *plan);

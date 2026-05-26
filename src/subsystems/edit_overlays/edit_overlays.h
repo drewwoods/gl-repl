@@ -1,9 +1,15 @@
 #ifndef EDIT_OVERLAYS_H
 #define EDIT_OVERLAYS_H
 
-#include "app/glr_config.h"
 #include "scene/guides/guides_shared.h"  /* SceneGuideSnapshot */
-#include "repl/state_views.h"           /* GlrVertexLabelMode, FlatProgramView, CursorBlockState */
+#include "repl/state_views.h"            /* FlatProgramView, CursorBlockState */
+
+/* Public surface intentionally avoids `#include "app/glr_config.h"`
+ * to keep subsystems → app dependencies off the .h's transitive
+ * include surface; the enum-valued `mode` argument of
+ * edit_overlays_render_vertex_numbers is passed as a plain int and
+ * reinterpreted by the .c (which is free to include glr_config.h
+ * privately for the GLR_VERTEX_LABEL_* constants). */
 
 typedef struct OverlayWalkCtx {
     FlatProgramView  program;
@@ -31,7 +37,10 @@ void edit_overlays_render_outlines(const OverlayWalkCtx *ctx,
 
 void edit_overlays_render_vertex_points(const OverlayWalkCtx *ctx);
 
-void edit_overlays_render_vertex_numbers(GlrVertexLabelMode mode, int is_ortho);
+/* `mode` is a GlrVertexLabelMode value, passed as `int` here to
+ * avoid pulling app/glr_config.h into this header — see file header
+ * comment. */
+void edit_overlays_render_vertex_numbers(int mode, int is_ortho);
 
 void edit_overlays_render_normal_vectors(void);
 

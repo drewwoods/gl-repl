@@ -37,6 +37,24 @@ typedef struct {
     int                    count;
 } ReplayFadeBatchView;
 
+/* Per-frame fade-render snapshot assembled by the controller and
+ * consumed by replay_render_post_fill / replay_render_fade_batches /
+ * replay_render_tess_preview. Lives in the replay subsystem header
+ * (alongside ReplayFadeBatch and ReplayRuntimeState) so the renderer
+ * header can avoid pulling app/glr_ctrl.h — keeping the
+ * subsystems → app dependency arrow pointed the right way. */
+typedef struct ReplayFadePlan {
+    int             batch_count;
+    ReplayFadeBatch batches[REPLAY_FADE_BATCH_MAX];
+    int             skip_limits[REPLAY_FADE_BATCH_MAX];
+    float           batch_alpha[REPLAY_FADE_BATCH_MAX];
+    float           baseline_predef_vals[MAX_PREDEF_VARS];
+    float           baseline_scratch_arrays[REPL_SCRATCH_ARRAY_COUNT][REPL_SCRATCH_ARRAY_LEN];
+    int             active;              /* 1 = post_fill_fn should render fades */
+    int             base_limit;          /* clamp for the main fill */
+    int             tess_preview_active; /* 1 = post_fill_fn should render tess preview */
+} ReplayFadePlan;
+
 /* Replay snapshot shape owned by the replay peer subsystem. */
 typedef struct {
     int             active;

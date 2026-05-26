@@ -6,20 +6,11 @@
 #include "repl/state_views.h"
 #include "subsystems/replay/replay_state.h"
 
-/* Snapshot the controller assembles per frame and feeds into its
- * post-fill fade-render hook. The scene module no longer touches it —
- * it's pure REPL state. */
-typedef struct ReplayFadePlan {
-    int             batch_count;
-    ReplayFadeBatch batches[REPLAY_FADE_BATCH_MAX];
-    int             skip_limits[REPLAY_FADE_BATCH_MAX];
-    float           batch_alpha[REPLAY_FADE_BATCH_MAX];
-    float           baseline_predef_vals[MAX_PREDEF_VARS];
-    float           baseline_scratch_arrays[REPL_SCRATCH_ARRAY_COUNT][REPL_SCRATCH_ARRAY_LEN];
-    int             active;              /* 1 = post_fill_fn should render fades */
-    int             base_limit;          /* clamp for the main fill */
-    int             tess_preview_active; /* 1 = post_fill_fn should render tess preview */
-} ReplayFadePlan;
+/* `ReplayFadePlan` (the per-frame fade-render snapshot) now lives in
+ * subsystems/replay/replay_state.h alongside the rest of the replay
+ * peer's storage. Re-exported here transitively via the
+ * replay_state.h include above so existing callers don't need to
+ * update their includes. */
 
 /* App-frame controller entrypoints. gl_repl.c forwards raw GLUT
  * callbacks here; this module owns frame orchestration, snapshot
