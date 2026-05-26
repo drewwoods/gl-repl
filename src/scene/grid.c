@@ -825,11 +825,16 @@ static void grid_dispatch_theme(const SceneFrameRenderContext *frame_ctx,
         break;
 
     case GRID_THEME_OCEAN:
+#if 0 /* nv radial fog breaks some of the geometry, since its per vertex and
+         some of the grid lines are very long, extending past the fog end,
+         making them invisible */
+
         /* Opt into radial eye-distance fog when available, so the fog
          * closes in by true distance rather than eye-plane depth and the
          * fringes stop swimming as the camera orbits. */
         if (set_nv_fog)
             glFogi(GL_FOG_DISTANCE_MODE_NV, GL_EYE_RADIAL_NV);
+#endif
         scene_grid_render_ocean_theme(grid_ctx, frame_ctx, grid_ctx->breath);
         break;
 
