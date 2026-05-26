@@ -240,7 +240,7 @@ endif
 	test-stubs \
 	FORCE
 
-all: gl-repl
+all: gl-repl install-hooks
 
 # Used to force rebuild if you list as a prerequisite, e.g. `test_eval: FORCE $(test_eval_OBJS)`.
 FORCE:
@@ -1199,9 +1199,12 @@ check-tier-c-function-size: ## Size ratchet: parse_command and flatten_range mus
 check-no-test-default-output: ## Hard guard: tests may not call repl_save_default_output() (writes ./output.c in repo root).
 	@bash scripts/check-no-test-default-output.sh
 
-check-trailing-whitespace: ## Verify branch and local diffs contain no trailing whitespace.
+find-trailing-whitespace: ## Report all trailing whitespace in tracked source files (whole repo).
+	@git ls-files '*.c' '*.h' '*.md' Makefile | xargs grep -rn ' $$' || echo "no trailing whitespace found"
+
+check-trailing-whitespace: ## Verify commits since origin/main contain no trailing whitespace.
 	@set -e; \
-	base=$${CHECK_BASE:-main}; \
+	base=$${CHECK_BASE:-origin/main}; \
 	if git rev-parse --verify "$$base" >/dev/null 2>&1; then \
 		merge_base=$$(git merge-base "$$base" HEAD); \
 		git --no-pager diff --check "$$merge_base"; \
@@ -1256,7 +1259,7 @@ test-full: ## Full gate: stub tests + checks + build gl-repl, bench, repl_demo, 
 
 install-hooks: ## Point this clone's git hooks at the tracked .githooks/ directory.
 	@git config core.hooksPath .githooks
-	@echo "git core.hooksPath -> .githooks (pre-push runs 'make test-stubs')"
+	@echo "git core.hooksPath -> .githooks (pre-push: check-trailing-whitespace + test-stubs)"
 
 # Benchmark targets ------------------------------------------------------
 # Built and invoked separately from `make test` because timing is sensitive

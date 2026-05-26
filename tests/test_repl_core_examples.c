@@ -429,9 +429,9 @@ static void canonicalize_float_literals(const char *in, char *out, int out_sz) {
     int i = 0;
     int o = 0;
     int in_len = (int)strlen(in);
-    
+
     while (i < in_len && o < out_sz - 1) {
-        if (isdigit((unsigned char)in[i]) || 
+        if (isdigit((unsigned char)in[i]) ||
             (in[i] == '.' && i + 1 < in_len && isdigit((unsigned char)in[i + 1]))) {
             /* Preceding token boundary check */
             if (i > 0 && (isalnum((unsigned char)in[i - 1]) || in[i - 1] == '_')) {
@@ -452,7 +452,7 @@ static void canonicalize_float_literals(const char *in, char *out, int out_sz) {
                     out[o++] = in[i++];
                     continue;
                 }
-                
+
                 int total_consumed = consumed + suffix_len;
                 char buf[32];
                 snprintf(buf, sizeof(buf), "%.6g", (double)val);

@@ -11,4 +11,5 @@
 set -e
 
 cd "$(git rev-parse --show-toplevel)"
+make --no-print-directory check-trailing-whitespace
 exec make --no-print-directory test-stubs
