@@ -154,6 +154,44 @@ int main() {
         ASSERT_INT("repl_source_scope_nearest_open_block_at(1)", repl_source_scope_nearest_open_block_at(1), CMD_FOR_BEGIN);
     }
 
+    /* 6b. indent helpers with buf_sz == 0 must not write past the buffer.
+     * Surround a 1-byte target with sentinels and confirm they survive.
+     * Pre-fix the cmd_indent / cmd_tess_indent overloads wrote '\0' to
+     * buf[0] (= the byte just past the zero-length buffer). */
+    {
+        glr_app_reset_all(); declare_test_vars();
+        editor_feed_line("glBegin(GL_TRIANGLES);");
+        editor_feed_line("  glVertex3f(0,0,0);");
+        editor_feed_line("glEnd();");
+
+        char guarded[3] = { '<', 'X', '>' };
+        char *buf = &guarded[1];
+
+        repl_source_scope_cmd_indent(1, buf, 0);
+        ASSERT_INT("cmd_indent zero: left sentinel",  guarded[0], '<');
+        ASSERT_INT("cmd_indent zero: target untouched", guarded[1], 'X');
+        ASSERT_INT("cmd_indent zero: right sentinel", guarded[2], '>');
+
+        repl_source_scope_cmd_tess_indent(1, buf, 0);
+        ASSERT_INT("cmd_tess_indent zero: left sentinel",  guarded[0], '<');
+        ASSERT_INT("cmd_tess_indent zero: target untouched", guarded[1], 'X');
+        ASSERT_INT("cmd_tess_indent zero: right sentinel", guarded[2], '>');
+
+        repl_source_scope_begin_indent(1, buf, 0);
+        ASSERT_INT("begin_indent zero: left sentinel",  guarded[0], '<');
+        ASSERT_INT("begin_indent zero: target untouched", guarded[1], 'X');
+        ASSERT_INT("begin_indent zero: right sentinel", guarded[2], '>');
+
+        repl_source_scope_tess_close_indent(1, buf, 0);
+        ASSERT_INT("tess_close_indent zero: left sentinel",  guarded[0], '<');
+        ASSERT_INT("tess_close_indent zero: target untouched", guarded[1], 'X');
+        ASSERT_INT("tess_close_indent zero: right sentinel", guarded[2], '>');
+
+        char small[1] = { 'Y' };
+        repl_source_scope_cmd_indent(1, small, 1);
+        ASSERT_INT("cmd_indent buf_sz=1 writes only '\\0'", small[0], '\0');
+    }
+
     /* 7. collect_visible_vars */
     {
         glr_ctrl_reset_all(); declare_test_vars();
