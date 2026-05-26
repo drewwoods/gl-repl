@@ -638,15 +638,78 @@ or store the slug on `GlrConfigItem` directly.
 
 ### 32. Magic `16` cap on section display labels
 
-**Where:** `src/app/glr_config.c:232, 237, 256`.
+**Where:** `src/app/glr_config.c:306-307, 311, 332`
+(`glr_config_section_display_label`).
+*(Earlier draft cited L232/237/256 — those line numbers were stale,
+inside `glr_config_set` rather than the function with the magic
+caps. The drift is ~70 lines; see the prior-pass line-number-
+sweep note in the Method section.)*
 
-**Smell:** `glr_config_section_label()` uses a static
-`labels[16][48]` array as a cache, capped at 16 sections with no
-compile-time enforcement that `g_cfg_items[]` doesn't exceed this.
-If sections are added beyond 16, the label array silently truncates.
+**Smell:** `glr_config_section_display_label()` declares
+`static char labels[16][48];` as its lazy cache, then enforces
+`if (n > 16) n = 16;` and `section >= 16` on the read path. The
+`16` is a section-count cap and the `48` is the per-label
+character buffer width — both bare numeric literals with no
+compile-time enforcement that `g_cfg_items[]` doesn't outgrow
+them. Sweep of `config.h`, `cfg_baseline.h`, `glr_config.h`, and
+related headers turns up no existing `#define` that maps to either
+"section count cap" or "section display label width" — these are
+genuinely new magic numbers (the numerical coincidence with
+`REPL_CFG_VALUE_MAX = 16` and `REPL_PREDEF_NAME_MAX = 16` is
+semantically unrelated).
 
-**Fix:** Add a `STATIC_ASSERT(section_count <= 16, ...)` or derive
-the cap from the table size.
+**Why it matters:** `g_cfg_items[]` currently declares 7 section
+headers (`### RENDERING`, `### TIME & REPLAY`, `### OVERLAYS & SCENE`,
+`### CAMERA`, `### GEOMETRY`, `### INTERFACE`, `### AUDIO`) — well
+under the cap. Adding the 8th is fine; adding the 17th silently
+truncates the display-label cache, and a reader scanning the
+function has no way to discover the cap without reading the
+implementation.
+
+**Fix (recommended):** Derive the cache dimensions from
+`CFG_ITEM_COUNT` rather than introducing a new section-specific
+cap. Sections are always a subset of `g_cfg_items[]` rows (every
+`### `-prefixed row is a section), so `CFG_ITEM_COUNT` is a
+provably-safe upper bound:
+
+```c
+const char *glr_config_section_display_label(int section) {
+    static char labels[CFG_ITEM_COUNT][CFG_SECTION_LABEL_MAX];
+    ...
+    n = glr_config_section_count();
+    /* No `if (n > N) n = N;` clamp needed — n is bounded by
+     * CFG_ITEM_COUNT by construction (every section header is a
+     * g_cfg_items[] row). */
+    for (int s = 0; s < n; s++) { ... }
+}
+```
+
+`CFG_ITEM_COUNT` is the `extern const int` already declared at
+`glr_config.h:106` and auto-computed via `sizeof(g_cfg_items) /
+sizeof(g_cfg_items[0])` in `glr_actions.c`. Using it here
+overprovisions the cache (we reserve slots for non-section rows
+too) but the overhead is negligible (~30 rows × 48 bytes ≈ 1.5 KB
+static).
+
+The `48` per-label width can either keep its numeric literal with
+a one-line comment (`/* longest current label is "### TIME & REPLAY"
+without the "### " prefix = 12 chars; 48 gives 4× headroom */`) or
+be promoted to a named constant `CFG_SECTION_LABEL_MAX` next to
+the other `CFG_*` tunables in `config.h:37-42`. The named-constant
+form is more discoverable; the inline comment is one line shorter.
+
+Both magic numbers go away. No `STATIC_ASSERT` needed — the
+relationship is structural (section count ≤ item count), not
+arithmetic.
+
+**Alternative (heavier):** Promote both caps to `config.h`
+(`CFG_MAX_SECTIONS` + `CFG_SECTION_LABEL_MAX`) following the
+existing `CFG_DEFAULT_*` / `CFG_PANEL_FRAC_*` pattern at
+`config.h:37-42`, and add `STATIC_ASSERT(CFG_ITEM_COUNT <=
+CFG_MAX_SECTIONS, ...)`. More discoverable but adds two named
+tunables for a cap that's already structurally bounded — pick
+the derive-from-`CFG_ITEM_COUNT` form unless the section count is
+expected to diverge meaningfully from the item count.
 
 ### 33. `get_current_track` header contract promises longer lifetime than source delivers — Done
 
