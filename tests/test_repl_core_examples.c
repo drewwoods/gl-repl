@@ -135,7 +135,7 @@ static void seed_nondefault_example_presentation_state(void) {
     glr_state_presentation_mut()->show_normal_vectors = 1;
     glr_state_presentation_mut()->show_vertex_outlines = 0;
     glr_state_presentation_mut()->show_vertex_points = 0;
-    glr_state_presentation_mut()->show_vertex_guides = 0;
+    glr_state_presentation_mut()->show_xform_guides = 0;
     glr_state_presentation_mut()->show_light_indicators = 0;
     glr_state_presentation_mut()->backdrop_mode = 1;
     glr_camera_mut()->auto_rotate = 1;
@@ -1146,7 +1146,7 @@ int main(int argc, char **argv) {
         ASSERT_TRUE("no cfg reset points default",
                     glr_state_presentation().show_vertex_points == CFG_DEFAULT_VERTEX_POINTS);
         ASSERT_TRUE("no cfg reset guides default",
-                    glr_state_presentation().show_vertex_guides == CFG_DEFAULT_VERTEX_GUIDES);
+                    glr_state_presentation().show_xform_guides == CFG_DEFAULT_XFORM_GUIDES);
         ASSERT_TRUE("no cfg reset lights default",
                     glr_state_presentation().show_light_indicators == CFG_DEFAULT_LIGHT_INDICATORS);
         ASSERT_TRUE("no cfg reset backdrop default",
@@ -1203,7 +1203,7 @@ int main(int argc, char **argv) {
         ASSERT_TRUE("partial cfg points reset default",
                     glr_state_presentation().show_vertex_points == CFG_DEFAULT_VERTEX_POINTS);
         ASSERT_TRUE("partial cfg guides reset default",
-                    glr_state_presentation().show_vertex_guides == CFG_DEFAULT_VERTEX_GUIDES);
+                    glr_state_presentation().show_xform_guides == CFG_DEFAULT_XFORM_GUIDES);
         ASSERT_TRUE("partial cfg lights reset default",
                     glr_state_presentation().show_light_indicators == CFG_DEFAULT_LIGHT_INDICATORS);
         ASSERT_TRUE("partial cfg camera rotate reset default",

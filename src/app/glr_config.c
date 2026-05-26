@@ -1,4 +1,5 @@
 #include "app/glr_config.h"
+#include "app/glr_actions.h"
 #include <string.h>
 #include "app/glr_audio.h"
 #include "app/glr_camera.h"
@@ -25,10 +26,11 @@ static int clamp_int(int v, int lo, int hi) {
 static const int k_accum_steps[ACCUM_AA_STATE_COUNT] = { 0, 2, 4, 8, 16 };
 
 static int accum_aa_get_cycle(void) {
-    if (!glr_state_render_mut()->accum_aa_enabled ||
-        glr_state_render_mut()->accum_samples <= 1)
+    GlrRenderState render = glr_state_render();
+    if (!render.accum_aa_enabled ||
+        render.accum_samples <= 1)
         return 0;
-    int samples = glr_state_render_mut()->accum_samples;
+    int samples = render.accum_samples;
     for (int i = 1; i < ACCUM_AA_STATE_COUNT; i++)
         if (samples <= k_accum_steps[i])
             return i;
@@ -73,7 +75,7 @@ static int *config_value_ptr(GlrConfigKey key) {
     case GLR_CONFIG_GRID_MAJOR:          return &glr_state_presentation_mut()->grid_major_idx;
     case GLR_CONFIG_GRID_EXTENT:         return &glr_state_presentation_mut()->grid_extent_idx;
     case GLR_CONFIG_AXES_THEME:          return &glr_state_presentation_mut()->axes_theme;
-    case GLR_CONFIG_XFORM_GUIDES:       return &glr_state_presentation_mut()->show_vertex_guides;
+    case GLR_CONFIG_XFORM_GUIDES:       return &glr_state_presentation_mut()->show_xform_guides;
     case GLR_CONFIG_XFORM_GUIDE_MODE:    return &glr_state_presentation_mut()->xform_guide_mode;
     case GLR_CONFIG_LIGHT_INDICATORS:    return &glr_state_presentation_mut()->show_light_indicators;
     case GLR_CONFIG_POLY_HIGHLIGHT:      return &glr_state_presentation_mut()->highlight_current_poly;
@@ -148,6 +150,7 @@ void glr_config_set(GlrConfigKey key, int value) {
 
     if (key == GLR_CONFIG_AUDIO_MODE) {
         glr_audio_set_cfg_mode(value);
+        glr_actions_apply_audio_cfg_mode(value);
     } else if (key == GLR_CONFIG_ACCUM_AA) {
         accum_aa_set_cycle(value);
     } else {

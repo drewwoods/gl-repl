@@ -253,7 +253,7 @@ int main(int argc, char **argv) {
         if (dump_code)
             glr_debug_dump_editor(stdout, source_document_view());
         if (dump_flat)
-            glr_debug_dump_flat_commands(stdout, editor_buffer_view());
+            glr_debug_dump_flat_commands(stdout, source_document_view());
         if (dump_state_layout)
             glr_debug_dump_runtime_state_layout(stdout);
         return 0;

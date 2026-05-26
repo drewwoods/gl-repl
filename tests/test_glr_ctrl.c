@@ -172,7 +172,7 @@ static void prepare_display_fixture(void) {
     repl_state_flat_program_set_user_lighting_enabled(1);
 
     presentation = glr_state_presentation_mut();
-    presentation->show_vertex_guides = 1;
+    presentation->show_xform_guides = 1;
     presentation->show_vertex_points = 1;
     presentation->show_light_indicators = 1;
     presentation->highlight_current_poly = 1;
@@ -251,9 +251,9 @@ static void test_display_frame_builds_config_and_restores_live_state(void) {
      * controller-private static (g_replay_fade_plan). Inspect it directly
      * since this TU includes imrepl_ctrl.c as a compilation unit. */
     ASSERT_INT("replay fade plan inactive without active fades",
-               g_replay_fade_plan_active, 0);
+               g_replay_fade_plan.active, 0);
     ASSERT_INT("replay fade base limit zero without fades",
-               g_replay_fade_plan_base_limit, 0);
+               g_replay_fade_plan.base_limit, 0);
     ASSERT_INT("replay fade batches empty",
                g_replay_fade_plan.batch_count, 0);
     ASSERT_FLOAT("replay baseline scratch copied",
@@ -266,7 +266,7 @@ static void test_display_frame_builds_config_and_restores_live_state(void) {
     ASSERT_TRUE("post_overlays_fn wired",
                 g_last_scene_config.post_overlays_fn != NULL);
     ASSERT_INT("tess preview marked active for VERTEX replay mode",
-               g_replay_tess_preview_active, 1);
+               g_replay_fade_plan.tess_preview_active, 1);
     ASSERT_FLOAT("alpha scale boosted for black background", g_last_scene_config.alpha_scale, 3.0f);
     ASSERT_INT("focus vertex valid", g_last_scene_config.focus.valid, 1);
     ASSERT_FLOAT("focus vertex x", g_last_scene_config.focus.pos[0], 1.0f);
@@ -1161,13 +1161,13 @@ static void test_display_frame_no_replay_means_no_fade_plumbing(void) {
     ASSERT_INT("replay inactive across the frame",
                replay_state_view().active, 0);
     ASSERT_INT("replay fade plan inactive",
-               g_replay_fade_plan_active, 0);
+               g_replay_fade_plan.active, 0);
     ASSERT_INT("replay fade base limit zero",
-               g_replay_fade_plan_base_limit, 0);
+               g_replay_fade_plan.base_limit, 0);
     ASSERT_INT("replay fade batch ring empty",
                g_replay_fade_plan.batch_count, 0);
     ASSERT_INT("tess preview not active in polygon mode",
-               g_replay_tess_preview_active, 0);
+               g_replay_fade_plan.tess_preview_active, 0);
     /* post_fill_fn may still be NULL or set to a no-op overlay; the
      * meaningful contract is that nothing fade-related is queued.
      * post_overlays_fn is always wired (the guides hook). */

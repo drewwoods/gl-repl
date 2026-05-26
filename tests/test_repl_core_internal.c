@@ -539,7 +539,7 @@ int main() {
         glr_state_presentation_mut()->show_vertex_indices = 1; glr_ctrl_sync_ui_chrome();
         glr_state_presentation_mut()->show_vertex_outlines = 1;
         glr_state_presentation_mut()->show_vertex_points = 1;
-        glr_state_presentation_mut()->show_vertex_guides = 1;
+        glr_state_presentation_mut()->show_xform_guides = 1;
         glr_state_presentation_mut()->xform_guide_mode = 1;
         glr_state_presentation_mut()->autonormal = 1;
         glr_state_presentation_mut()->show_light_indicators = 0;
@@ -574,7 +574,7 @@ int main() {
         ASSERT_INT("presentation reset points",
                    glr_state_presentation().show_vertex_points, CFG_DEFAULT_VERTEX_POINTS);
         ASSERT_INT("presentation reset guides",
-                   glr_state_presentation().show_vertex_guides, CFG_DEFAULT_VERTEX_GUIDES);
+                   glr_state_presentation().show_xform_guides, CFG_DEFAULT_XFORM_GUIDES);
         ASSERT_INT("presentation reset xform guide",
                    glr_state_presentation().xform_guide_mode, CFG_DEFAULT_XFORM_GUIDE_MODE);
         ASSERT_INT("presentation reset lights",

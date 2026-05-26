@@ -156,7 +156,7 @@ static void populate_runtime_snapshot_fixture(const char *scene_hint) {
     presentation->show_normal_vectors = 1;
     presentation->show_vertex_indices = 0;
     presentation->show_vertex_points = 0;
-    presentation->show_vertex_guides = 0;
+    presentation->show_xform_guides = 0;
     presentation->show_light_indicators = 0;
     presentation->backdrop_mode = 1;
     presentation->highlight_current_poly = 0;

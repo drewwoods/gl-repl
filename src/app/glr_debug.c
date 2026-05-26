@@ -3,6 +3,7 @@
  */
 #include "app/glr_debug.h"
 
+#include "editor/state.h"
 #include "repl/export.h"
 #include "repl/command_spec.h"
 #include "repl/pipeline.h"
@@ -38,7 +39,7 @@ void glr_debug_dump_editor(FILE *out, SourceTextView text) {
     fflush(dst);
 }
 
-void glr_debug_dump_flat_commands(FILE *out, EditorBufferView text) {
+void glr_debug_dump_flat_commands(FILE *out, SourceTextView text) {
     FILE *dst = out ? out : stdout;
     FlatProgramView flat_program = repl_state_flat_program_view();
     const GLCmd *flat_cmds = flat_program.cmds;
@@ -56,7 +57,7 @@ void glr_debug_dump_flat_commands(FILE *out, EditorBufferView text) {
 
     for (int flat_idx = 0; flat_idx < num_flat_cmds; flat_idx++) {
         const GLCmd *cmd = &flat_cmds[flat_idx];
-        const char *line_text = editor_buffer_view_line(text, cmd->src_cmd_idx);
+        const char *line_text = source_text_line(text, cmd->src_cmd_idx);
         fprintf(dst,
                 "%4d | %-22s | valid=%d has_vars=%d src_idx=%d call_src_idx=%d root_call_src_idx=%d func_scope=0x%08x | %s\n",
                 flat_idx, repl_cmd_type_name(cmd->type), cmd->valid,

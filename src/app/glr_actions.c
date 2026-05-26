@@ -100,7 +100,7 @@ static char cfg_status_buf[REPL_STATUS_TEXT_MAX];
 #define AUDIO_CFG_ONCE  1
 #define AUDIO_CFG_SONG  2
 #define AUDIO_CFG_ALL   3
-static const char *audio_cfg_names[] = { "Pause", "Once", "Song", "All" };
+static const char *audio_cfg_names[] = { "paused", "play once", "loop song", "loop all" };
 static const char *syntax_hl_names[] = { "Off", "On", "On+Bold" };
 static const char *view_mode_names[] = { "3D", "2D" };
 static const char *vertex_label_names[GLR_VERTEX_LABEL_COUNT] = {
@@ -342,7 +342,22 @@ void glr_actions_install_export_cfg_bridge(void) {
     repl_config_install_bridge(&g_glr_export_cfg_bridge);
 }
 
-static void apply_audio_cfg_mode(int mode) {
+void glr_actions_set_msaa_label(int samples) {
+    static char msaa_label[32];
+    if (samples > 1) {
+        snprintf(msaa_label, sizeof(msaa_label), "MSAAx%d", samples);
+    } else {
+        snprintf(msaa_label, sizeof(msaa_label), "MSAA");
+    }
+    for (int i = 0; i < CFG_ITEM_COUNT; i++) {
+        if (g_cfg_items[i].key == GLR_CONFIG_MSAA) {
+            g_cfg_items[i].label = msaa_label;
+            break;
+        }
+    }
+}
+
+void glr_actions_apply_audio_cfg_mode(int mode) {
     switch (mode) {
     case AUDIO_CFG_PAUSE:
         glr_audio_set_paused(1);
@@ -435,8 +450,10 @@ void glr_cfg_cycle_row(int row, int delta) {
         }
     }
 
-    if (replay_active())
-        replay_stop();
+    if (item->key == GLR_CONFIG_AUTO_NORMALS || item->key == GLR_CONFIG_POINT_ATTENUATION) {
+        if (replay_active())
+            replay_stop();
+    }
 
     int new_value = glr_config_cycle(item->key, delta);
     glr_ctrl_sync_ui_chrome();  /* refresh ui_state.code_panel mirrors */
@@ -466,16 +483,7 @@ void glr_cfg_cycle_row(int row, int delta) {
         repl_apply_init_bootstrap();
         repl_set_status(glr_config_get(GLR_CONFIG_POINT_ATTENUATION) ? "Point attenuation: ON"
                                                                   : "Point attenuation: OFF");
-    } else if (item->key == GLR_CONFIG_AUDIO_MODE) {
-        int mode = glr_config_get(GLR_CONFIG_AUDIO_MODE);
-        apply_audio_cfg_mode(mode);
-        static const char *labels[] = {
-            "Audio: paused",
-            "Audio: play once",
-            "Audio: loop song",
-            "Audio: loop all",
-        };
-        repl_set_status(labels[mode]);
+
     } else if (item->state_names) {
         snprintf(cfg_status_buf, sizeof(cfg_status_buf), "%s: %s",
                  item->label, glr_config_state_name(item->key, new_value));
@@ -685,6 +693,6 @@ void glr_actions_apply_defaults(void) {
     int saved_mode = glr_audio_get_cfg_mode();
     if (saved_mode < AUDIO_CFG_PAUSE || saved_mode > AUDIO_CFG_ALL)
         saved_mode = AUDIO_CFG_ALL;
-    apply_audio_cfg_mode(saved_mode);
+    glr_actions_apply_audio_cfg_mode(saved_mode);
     glr_audio_set_cfg_mode(saved_mode);
 }

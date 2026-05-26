@@ -29,6 +29,7 @@
 #include "app/glr_actions.h"
 #include "app/glr_config.h"
 #include "app/glr_camera.h"
+#include "app/glr_camera_export.h"
 #include "app/glr_debug.h"
 #include "keys.h"
 #include "support/prof.h"
@@ -87,19 +88,20 @@ static int glr_ctrl_cmd_is_focus_vertex(const GLCmd *cmd) {
 static SceneFocusVertex glr_ctrl_build_focus_vertex(void) {
     SceneFocusVertex focus = { .valid = 0 };
     int edit_line = editor_state_edit_line();
+    const GLCmd *cmds = repl_state_document_cmds();
 
     if (edit_line >= 0 && edit_line < repl_state_document_count() &&
-        glr_ctrl_cmd_is_focus_vertex(&repl_state_document_cmds_mut()[edit_line])) {
-        focus.pos[0] = repl_state_document_cmds_mut()[edit_line].args[0];
-        focus.pos[1] = repl_state_document_cmds_mut()[edit_line].args[1];
-        focus.pos[2] = repl_state_document_cmds_mut()[edit_line].args[2];
+        glr_ctrl_cmd_is_focus_vertex(&cmds[edit_line])) {
+        focus.pos[0] = cmds[edit_line].args[0];
+        focus.pos[1] = cmds[edit_line].args[1];
+        focus.pos[2] = cmds[edit_line].args[2];
         focus.valid = 1;
     } else {
         for (int i = edit_line - 1; i >= 0; i--) {
-            if (glr_ctrl_cmd_is_focus_vertex(&repl_state_document_cmds_mut()[i])) {
-                focus.pos[0] = repl_state_document_cmds_mut()[i].args[0];
-                focus.pos[1] = repl_state_document_cmds_mut()[i].args[1];
-                focus.pos[2] = repl_state_document_cmds_mut()[i].args[2];
+            if (glr_ctrl_cmd_is_focus_vertex(&cmds[i])) {
+                focus.pos[0] = cmds[i].args[0];
+                focus.pos[1] = cmds[i].args[1];
+                focus.pos[2] = cmds[i].args[2];
                 focus.valid = 1;
                 break;
             }
@@ -197,7 +199,7 @@ static SceneGuideSnapshot glr_ctrl_build_guide_snapshot(const SceneRenderConfig 
     int edit_line = editor_state_edit_line();
 
     SceneGuideSnapshot snapshot = {
-        .show_guides = presentation.show_vertex_guides,
+        .show_guides = presentation.show_xform_guides,
         .replaying = replay_active(),
         .xform_guide_mode = presentation.xform_guide_mode,
         .user_lighting_enabled = config ? config->user_lighting_enabled : 0,
@@ -229,13 +231,6 @@ static void glr_ctrl_replay_restore_baseline(const ReplayFadePlan *fade_plan) {
  * fill (to clamp the flat-cmd count to the pre-fade base limit) and by
  * the post_fill_fn hook (to render the fading-batch overlay). */
 static ReplayFadePlan g_replay_fade_plan;
-static int            g_replay_fade_plan_active;     /* 1 = post_fill_fn should render fades */
-static int            g_replay_fade_plan_base_limit; /* clamp for the main fill */
-
-/* Whether the current frame should render the tess-preview wireframe
- * (replay's polygon-mode overlay). Set by build_scene_config; read by
- * the post_fill_fn body. */
-static int            g_replay_tess_preview_active;
 
 /* Tiny GL primitives the REPL tess-preview walker calls back into. They
  * exist as static functions here because the walker takes a callback
@@ -260,8 +255,8 @@ static void glr_ctrl_build_replay_fade_plan(int replaying) {
     int batch_count;
 
     memset(&g_replay_fade_plan, 0, sizeof(g_replay_fade_plan));
-    g_replay_fade_plan_active = 0;
-    g_replay_fade_plan_base_limit = 0;
+    g_replay_fade_plan.active = 0;
+    g_replay_fade_plan.base_limit = 0;
 
     if (!replaying)
         return;
@@ -274,7 +269,7 @@ static void glr_ctrl_build_replay_fade_plan(int replaying) {
     if (!replay_has_active_fades())
         return;
 
-    g_replay_fade_plan_base_limit = replay_fill_base_limit();
+    g_replay_fade_plan.base_limit = replay_fill_base_limit();
     fade_batches = replay_fade_batches_view();
     batch_count = replay_compute_fade_skip_limits(g_replay_fade_plan.skip_limits,
                                                        REPLAY_FADE_BATCH_MAX);
@@ -287,7 +282,7 @@ static void glr_ctrl_build_replay_fade_plan(int replaying) {
         g_replay_fade_plan.batches[batch_idx] = *batch;
         g_replay_fade_plan.batch_alpha[batch_idx] = replay_batch_alpha(batch);
     }
-    g_replay_fade_plan_active = 1;
+    g_replay_fade_plan.active = 1;
 }
 
 /* Render the fading-batch overlays prepared in g_replay_fade_plan. */
@@ -371,9 +366,9 @@ static void glr_ctrl_render_replay_tess_preview(void) {
  * the scene module never sees them. */
 static void glr_ctrl_post_fill_replay_overlay(void *user_data) {
     (void)user_data;
-    if (g_replay_fade_plan_active)
+    if (g_replay_fade_plan.active)
         glr_ctrl_render_replay_fade_batches();
-    if (g_replay_tess_preview_active)
+    if (g_replay_fade_plan.tess_preview_active)
         glr_ctrl_render_replay_tess_preview();
 }
 
@@ -1128,8 +1123,8 @@ static void scene_execute_adapter(const SceneExecuteContext *ctx,
     int suppress_side_effects = (purpose != SCENE_EXEC_MAIN_FILL);
 
     int count = repl_state_flat_program_count();
-    if (g_replay_fade_plan_active)
-        count = g_replay_fade_plan_base_limit;
+    if (g_replay_fade_plan.active)
+        count = g_replay_fade_plan.base_limit;
 
     repl_execute_set_fade_context(1.0f, 0);
 
@@ -1457,8 +1452,6 @@ static void glr_ctrl_build_scene_config(SceneRenderConfig *config) {
      * post_fill_fn / post_overlays_fn read these directly from REPL
      * state; scene config no longer carries them. */
     int replaying = replay_active();
-    g_replay_tess_preview_active = replaying &&
-                                   replay_mode() == REPLAY_MODE_VERTEX;
 
     /* --- Focus marker --- */
     config->focus = glr_ctrl_build_focus_vertex();
@@ -1481,7 +1474,9 @@ static void glr_ctrl_build_scene_config(SceneRenderConfig *config) {
      * so the scene calls back between the user-geometry fill and the
      * grid/axes/backdrop helpers. */
     glr_ctrl_build_replay_fade_plan(replaying);
-    if (g_replay_fade_plan_active || g_replay_tess_preview_active) {
+    g_replay_fade_plan.tess_preview_active = replaying &&
+                                             replay_mode() == REPLAY_MODE_VERTEX;
+    if (g_replay_fade_plan.active || g_replay_fade_plan.tess_preview_active) {
         config->post_fill_fn        = glr_ctrl_post_fill_replay_overlay;
         config->post_fill_user_data = NULL;
     }
@@ -2504,23 +2499,7 @@ void glr_ctrl_init_gl(void) {
     glGetIntegerv(GL_SAMPLES, &samples);
     glr_state_render_mut()->msaa_samples = (int)samples;
 
-    if (samples > 1) {
-        static char msaa_label[32];
-        snprintf(msaa_label, sizeof(msaa_label), "MSAAx%d", (int)samples);
-        for (int i = 0; i < CFG_ITEM_COUNT; i++) {
-            if (g_cfg_items[i].key == GLR_CONFIG_MSAA) {
-                g_cfg_items[i].label = msaa_label;
-                break;
-            }
-        }
-    } else {
-        for (int i = 0; i < CFG_ITEM_COUNT; i++) {
-            if (g_cfg_items[i].key == GLR_CONFIG_MSAA) {
-                g_cfg_items[i].label = "MSAA";
-                break;
-            }
-        }
-    }
+    glr_actions_set_msaa_label((int)samples);
 
     /* glutInit has run by the time glr_ctrl_init_gl is called.
      * Unlock glutGetModifiers() reads in editor_input so Cmd / Ctrl /
@@ -2637,7 +2616,7 @@ int glr_ctrl_router_handle_save_key(unsigned char key) {
 int glr_ctrl_router_handle_debug_dump_key(unsigned char key) {
     if (key == KEY_CTRL_P) {
         glr_debug_dump_editor(stdout, source_document_view());
-        glr_debug_dump_flat_commands(stdout, editor_buffer_view());
+        glr_debug_dump_flat_commands(stdout, source_document_view());
         repl_set_status("Dumped editor + flat commands to stdout");
         return 1;
     }

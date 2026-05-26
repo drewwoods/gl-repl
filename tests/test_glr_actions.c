@@ -627,8 +627,8 @@ static void test_menu_out_of_range_indices(void) {
                    glr_config_get((GlrConfigKey)k), before[k]);
 }
 
-/* Audit #19: cycling a non-replay config row while replay is active
- * stops the replay as a side effect. */
+/* Audit #19: cycling a config row that invalidates replay stops the replay,
+ * but non-invalidating ones (like wireframe) preserve active replay. */
 static void test_cfg_cycle_stops_replay(void) {
     glr_app_reset_all();
 
@@ -640,17 +640,26 @@ static void test_cfg_cycle_stops_replay(void) {
     ASSERT_INT("replay active after start", replay_active(), 1);
 
     int wireframe_row = -1;
+    int autonormals_row = -1;
     for (int i = 0; i < CFG_ITEM_COUNT; i++) {
         const GlrConfigItem *item = glr_config_item_at(i);
-        if (item && item->key == GLR_CONFIG_WIREFRAME) {
-            wireframe_row = i;
-            break;
+        if (item) {
+            if (item->key == GLR_CONFIG_WIREFRAME) {
+                wireframe_row = i;
+            } else if (item->key == GLR_CONFIG_AUTO_NORMALS) {
+                autonormals_row = i;
+            }
         }
     }
     ASSERT_TRUE("found wireframe row", wireframe_row >= 0);
+    ASSERT_TRUE("found autonormals row", autonormals_row >= 0);
 
     glr_cfg_cycle_row(wireframe_row, 1);
-    ASSERT_INT("replay stopped after non-replay cfg cycle",
+    ASSERT_INT("replay active after non-invalidating cfg cycle",
+               replay_active(), 1);
+
+    glr_cfg_cycle_row(autonormals_row, 1);
+    ASSERT_INT("replay stopped after invalidating cfg cycle",
                replay_active(), 0);
 }
 
