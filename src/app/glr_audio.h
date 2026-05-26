@@ -61,7 +61,6 @@ int  glr_audio_play_playlist(void);
 /* Convenience: set a single-track playlist and start it. */
 int  glr_audio_play_music(const char *path);
 
-void glr_audio_stop_music(void);
 
 /* Skip to the next / previous track in the playlist. Both wrap at
  * the ends regardless of loop mode (so the user can always seek).

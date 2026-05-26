@@ -73,7 +73,6 @@ int main() {
         ASSERT_TRUE("play_music fails before init", glr_audio_play_music("test.mp3") == -1);
         
         /* These are void and should not crash */
-        glr_audio_stop_music();
         glr_audio_tick();
         glr_audio_on_user_gesture();
         glr_audio_shutdown();

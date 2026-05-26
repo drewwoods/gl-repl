@@ -42,7 +42,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
-#include <unistd.h>
 #include <pthread.h>
 
 /* Silence a few benign warnings from miniaudio's ~100k-line header under
@@ -109,11 +108,13 @@ static int g_loop_mode = GLR_AUDIO_LOOP_ALL;
 #  define AUDIO_NEEDS_GESTURE 0
 #endif
 
+#define GLR_AUDIO_NO_SEEK (-1.0f)
+
 /* Deferred-start flag: if play_playlist() / play_music() is called
  * before the first user gesture on the web, remember which track was
  * requested so we can start it on the first gesture. */
 static int g_pending_start = 0;
-static float g_pending_seek = -1.0f;
+static float g_pending_seek = GLR_AUDIO_NO_SEEK;
 
 /* Bumped on every successful track start. Callers poll this to notice
  * that the current track has changed without needing a callback. */
@@ -141,7 +142,7 @@ static pthread_cond_t  g_cv;
 
 static AudioWorkerReq  g_req      = AWR_NONE;  /* latest lifecycle request */
 static int             g_req_idx  = 0;
-static float           g_req_seek = -1.0f;
+static float           g_req_seek = GLR_AUDIO_NO_SEEK;
 static int             g_req_save = 0;         /* independent: periodic save */
 
 /* ------------------------------------------------------------------ */
@@ -501,7 +502,7 @@ static void worker_advance(void) {
                 return;
             }
         }
-        if (worker_load(next, -1.0f) == 0)
+        if (worker_load(next, GLR_AUDIO_NO_SEEK) == 0)
             return;
         pos = next;   /* broken track - skip past it */
         attempts++;
@@ -688,7 +689,7 @@ int glr_audio_set_playlist(const char *const *paths, int count) {
     if (!paths || count < 0) return -1;
 
     /* Retire any current sound asynchronously; never block the caller. */
-    worker_post(AWR_UNINIT, 0, -1.0f);
+    worker_post(AWR_UNINIT, 0, GLR_AUDIO_NO_SEEK);
 
     audio_lock();
     if (g_loading) {
@@ -730,7 +731,7 @@ int glr_audio_play_playlist(void) {
     int idx = load_state(&offset);
     if (idx >= 0)
         return request_start(idx, offset);
-    return request_start(0, -1.0f);
+    return request_start(0, GLR_AUDIO_NO_SEEK);
 }
 
 int glr_audio_play_music(const char *path) {
@@ -740,12 +741,7 @@ int glr_audio_play_music(const char *path) {
     return glr_audio_play_playlist();
 }
 
-void glr_audio_stop_music(void) {
-    audio_lock();
-    if (g_active >= 0)
-        ma_sound_stop(&g_slot[g_active]);   /* non-blocking */
-    audio_unlock();
-}
+
 
 int glr_audio_next_track(void) {
     if (!g_inited || g_playlist_count == 0) return -1;
@@ -753,7 +749,7 @@ int glr_audio_next_track(void) {
     int next = g_playlist_pos + 1;
     if (next >= g_playlist_count) next = 0;
     audio_unlock();
-    return request_start(next, -1.0f);
+    return request_start(next, GLR_AUDIO_NO_SEEK);
 }
 
 int glr_audio_prev_track(void) {
@@ -762,7 +758,7 @@ int glr_audio_prev_track(void) {
     int prev = g_playlist_pos - 1;
     if (prev < 0) prev = g_playlist_count - 1;
     audio_unlock();
-    return request_start(prev, -1.0f);
+    return request_start(prev, GLR_AUDIO_NO_SEEK);
 }
 
 void glr_audio_tick(void) {
@@ -905,7 +901,7 @@ void glr_audio_on_user_gesture(void) {
     if (g_pending_start) {
         g_pending_start = 0;
         float seek = g_pending_seek;
-        g_pending_seek = -1.0f;
+        g_pending_seek = GLR_AUDIO_NO_SEEK;
         worker_post(AWR_START, g_playlist_pos, seek);
     }
     audio_unlock();

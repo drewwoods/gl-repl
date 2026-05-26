@@ -308,10 +308,9 @@ static void glr_export_cfg_apply(const ReplConfigBag *cfg) {
     for (int idx = 0; idx < cfg->count; idx++) {
         const char *slug = cfg->items[idx].key;
         int val = (int)strtol(cfg->items[idx].value, NULL, 10);
-        char normalized_slug[REPL_CFG_KEY_MAX];
-        glr_export_cfg_normalize_legacy_alias(&slug, &val,
-                                              normalized_slug,
-                                              sizeof(normalized_slug));
+        if (strcmp(slug, "top_code_panel") == 0) {
+            val = val ? CODE_PANEL_LAYOUT_TOP : CODE_PANEL_LAYOUT_LEFT;
+        }
         const GlrConfigItem *item = glr_export_cfg_find_item_by_slug(slug);
         if (item)
             glr_config_set(item->key, val);

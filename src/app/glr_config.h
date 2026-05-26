@@ -153,7 +153,7 @@ int  glr_config_section_count(void);
  * range. */
 const char *glr_config_section_label(int section);
 
-/* Title-cased display label: "RENDERING" → "Rendering",
+/* Sentence-cased display label: "RENDERING" → "Rendering",
  * "TIME & REPLAY" → "Time & replay". Pre-computed once; the UI layer
  * renders this directly without per-frame string work. NULL if out of
  * range. */

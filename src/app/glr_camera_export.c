@@ -220,6 +220,7 @@ static void cam_apply_example_block(const ReplExportCameraBlock *block) {
      * the 2D->3D restoration would still land on the pose captured at
      * 2D entry (typically stale, sometimes flat) instead of the
      * currently-loaded example's intended angle. */
+    /* Precondition: Must be called only after the camera modelview is loaded in the display frame. */
     glr_ctrl_view_record_external_3d_pose(target.rx, target.ry, target.tz);
 }
 
