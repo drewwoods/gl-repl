@@ -380,7 +380,7 @@ surrounds a 1-byte target with sentinels and confirms all four indent
 helpers no-op on `buf_sz == 0`; also pins the `buf_sz == 1` case for
 `cmd_indent` to write only the terminator.
 
-### 12. `try_apply_example_camera_header` return value discarded; skips 5 lines unconditionally
+### 12. ✅ `try_apply_example_camera_header` return value discarded; skips 5 lines unconditionally
 
 **Where:** `src/repl/example_loader.c:439-443`
 
@@ -390,6 +390,17 @@ camera block silently swallows subsequent geometry lines.
 
 **Fix:** Capture the return; if 0, either leave the lines for
 ordinary parsing or fail the load with a status error.
+
+**Status (2026-05-26):** ✅ Closed. Gated the 5-line skip on the
+`try_apply_example_camera_header` return value — on validation
+failure the lines are left for ordinary parsing instead of silently
+eaten. Updated the existing `invalid_camera_example` test in
+`tests/test_repl_core_examples.c` to assert the new "all lines
+survive" invariant (camera state still untouched because the bridge
+rejected the block), and added a `truncated_camera_example`
+regression that pins the precise data-loss scenario (`// camera` +
+2 transforms + 3 geometry lines used to eat the marker + both
+transforms + 2 geometry lines under the 5-line skip).
 
 ### 13. `repl_eval_parse_exprs` docstring promises `-1 on error`; implementation never returns -1
 
