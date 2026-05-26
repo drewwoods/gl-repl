@@ -90,6 +90,7 @@ int repl_source_scope_tess_scope_depth_at(int pos) {
 
 /* Normal command indent: 2 + 2*tess + 2*begin + 2*block */
 void repl_source_scope_cmd_indent(int pos, char *buf, int buf_sz) {
+    if (buf_sz <= 0) return;
     depth_cache_rebuild();
     if (pos < 0) pos = 0;
     if (pos > repl_state_document_count()) pos = repl_state_document_count();
@@ -143,6 +144,7 @@ int repl_source_scope_cmd_indent_chars(int pos) {
 
 /* Tessellator leaf command indent: 2 + 2*tess + 2*block  (begin depth ignored) */
 void repl_source_scope_cmd_tess_indent(int pos, char *buf, int buf_sz) {
+    if (buf_sz <= 0) return;
     depth_cache_rebuild();
     if (pos < 0) pos = 0;
     if (pos > repl_state_document_count()) pos = repl_state_document_count();

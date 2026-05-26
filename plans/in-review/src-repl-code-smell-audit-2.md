@@ -360,7 +360,7 @@ that flatten exists to resolve everywhere else.
 the executor's tracking is the only correct answer and remove this
 signal.
 
-### 11. `source_scope_cmd_indent` / `_cmd_tess_indent` write 1 byte past buffer when `buf_sz == 0`
+### 11. ✅ `source_scope_cmd_indent` / `_cmd_tess_indent` write 1 byte past buffer when `buf_sz == 0`
 
 **Where:** `src/repl/source_scope.c:92-104, 145-156`
 
@@ -371,6 +371,14 @@ The two externally-called surface functions (`cmd_indent`,
 `buf[0] = '\0'` to a zero-length buffer.
 
 **Fix:** Add `if (buf_sz <= 0) return;` to match the siblings.
+
+**Status (2026-05-26):** ✅ Closed. Added the guard at the head of
+`repl_source_scope_cmd_indent` and `repl_source_scope_cmd_tess_indent`,
+matching the existing pattern in `begin_indent` / `tess_close_indent`.
+Regression test in `tests/test_repl_core_internal.c` (section 6b)
+surrounds a 1-byte target with sentinels and confirms all four indent
+helpers no-op on `buf_sz == 0`; also pins the `buf_sz == 1` case for
+`cmd_indent` to write only the terminator.
 
 ### 12. `try_apply_example_camera_header` return value discarded; skips 5 lines unconditionally
 
