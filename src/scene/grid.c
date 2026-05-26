@@ -376,26 +376,26 @@ static void scene_grid_render_ocean_theme(const GridDrawContext *grid_ctx,
 
     /* Underwater fog - slightly breathing density */
     if (camera_world_y < 0.0f) {
-        /* Fill the active scene viewport with a teal tint. Render in
-         * NDC coords with identity matrices — bypassing scene_w/h-scaled
-         * ortho2D side-steps a regression where large ortho ranges
-         * collapsed the rect into the lower-left corner of the viewport
-         * (the bug that appeared after 905cb0d's viewport_w/h ->
-         * scene_w/h migration; see tests/test_scene_underwater_fill_gl.c
-         * for the regression test). */
+        /* Fill the active scene viewport with a teal tint. Coordinates
+         * use scene_w/scene_h (not the full window viewport) so the
+         * rect lines up with whatever glViewport scene_render set. */
         grid_color(grid_ctx, 0.05f, 0.25f, 0.35f, 0.75f);
         glMatrixMode(GL_PROJECTION);
         glPushMatrix();
         glLoadIdentity();
+        gluOrtho2D(0, config->scene_w, 0, config->scene_h);
         glMatrixMode(GL_MODELVIEW);
         glPushMatrix();
         glLoadIdentity();
         /* Push BEFORE mutating depth/lighting so pop restores the
-         * caller's state. */
+         * caller's state — formerly disable-before-push meant pop
+         * restored "disabled" and a manual glEnable(GL_DEPTH_TEST)
+         * after the pop clobbered the outer state instead of restoring
+         * it. */
         glPushAttrib(GL_DEPTH_BUFFER_BIT | GL_LIGHTING_BIT);
         glDisable(GL_DEPTH_TEST);
         glDisable(GL_LIGHTING);
-        glRectf(-1.0f, -1.0f, 1.0f, 1.0f);
+        glRectf(0, 0, (float)config->scene_w, (float)config->scene_h);
         glPopAttrib();
         glMatrixMode(GL_PROJECTION);
         glPopMatrix();
