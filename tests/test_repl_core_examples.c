@@ -1437,6 +1437,13 @@ int main(int argc, char **argv) {
     }
 
     {
+        /* Shape-check fails (dist_x = 1.0f > 1e-4f) so the camera bridge
+         * is NOT applied. Pre-#12 the loader still skipped the 5 lines
+         * after `// camera` regardless, eating the marker + 4 would-be
+         * camera transforms before geometry parsing resumed. Post-#12
+         * the lines are left for ordinary parsing so the user sees
+         * what they typed instead of silent loss. Camera state is
+         * still untouched (the bridge rejected the block). */
         static const char *const invalid_camera_example[] = {
             "// camera",
             "glTranslatef(1.0f, 0.0f, -9.0f);",
@@ -1451,7 +1458,8 @@ int main(int argc, char **argv) {
         char *dump;
 
         load_custom_example_lines_for_test(invalid_camera_example);
-        ASSERT_TRUE("invalid camera header loads body cmds", repl_state_document_count() == 3);
+        ASSERT_TRUE("invalid camera header keeps all body cmds (no data loss)",
+                    repl_state_document_count() == 8);
         ASSERT_TRUE("invalid camera header keeps cmds valid",
                     examples_have_no_invalid_cmds());
         ASSERT_TRUE("invalid camera header preserves rx",
@@ -1470,13 +1478,53 @@ int main(int argc, char **argv) {
         dump = dump_current_code_panel_text();
         ASSERT_TRUE("invalid camera header dump alloc", dump != NULL);
         if (dump) {
-            ASSERT_TRUE("invalid camera marker hidden",
-                        strstr(dump, "// camera") == NULL);
-            ASSERT_TRUE("invalid camera rotate hidden",
-                        strstr(dump,
-                               "glRotatef(91.0f, 0.0f, 1.0f, 0.0f);") == NULL);
+            ASSERT_TRUE("invalid camera marker kept",
+                        strstr(dump, "// camera") != NULL);
+            ASSERT_TRUE("invalid camera rotate kept",
+                        strstr(dump, "glRotatef(91") != NULL);
+            ASSERT_TRUE("invalid camera translate kept",
+                        strstr(dump, "glTranslatef(1") != NULL);
             ASSERT_TRUE("invalid camera body kept",
                         strstr(dump, "glVertex3f(1, 2, 3);") != NULL);
+            free(dump);
+        }
+    }
+
+    {
+        /* Regression for #12 — a truncated camera header (`// camera`
+         * + 2 transforms then geometry) used to eat the marker, both
+         * transforms, AND the first 2 geometry lines (5-line skip
+         * regardless of validation). Post-fix every line survives;
+         * camera state is left untouched because the bridge rejected
+         * the malformed 2-line block. */
+        static const char *const truncated_camera_example[] = {
+            "// camera",
+            "glTranslatef(0.0f, 0.0f, -9.0f);",
+            "glRotatef(20.0f, 1.0f, 0.0f, 0.0f);",
+            "glBegin(GL_POINTS);",
+            "glVertex3f(7, 8, 9);",
+            "glEnd();",
+            NULL
+        };
+        char *dump;
+
+        load_custom_example_lines_for_test(truncated_camera_example);
+        ASSERT_TRUE("truncated camera header keeps all body cmds (no data loss)",
+                    repl_state_document_count() == 6);
+        ASSERT_TRUE("truncated camera header keeps cmds valid",
+                    examples_have_no_invalid_cmds());
+        ASSERT_TRUE("truncated camera header preserves rx",
+                    fabsf(glr_camera().rx - 18.0f) < 1e-4f);
+        ASSERT_TRUE("truncated camera header preserves ry",
+                    fabsf(glr_camera().ry - 32.0f) < 1e-4f);
+        ASSERT_TRUE("truncated camera header preserves dist",
+                    fabsf(glr_camera().dist - 5.5f) < 1e-4f);
+
+        dump = dump_current_code_panel_text();
+        ASSERT_TRUE("truncated camera header dump alloc", dump != NULL);
+        if (dump) {
+            ASSERT_TRUE("truncated camera geometry kept",
+                        strstr(dump, "glVertex3f(7, 8, 9);") != NULL);
             free(dump);
         }
     }

@@ -437,9 +437,16 @@ static int load_example_lines(const char *const *lines,
     repl_export_apply_pending_cfg();
 
     if (body && body[0] && strcmp(body[0], "// camera") == 0) {
-        try_apply_example_camera_header(body);
-        for (int skip = 0; skip < 5 && body[0]; skip++)
-            body++;
+        /* Only consume the 5 header lines if the block was actually
+         * validated; otherwise leave them for ordinary parsing so a
+         * malformed camera header doesn't silently swallow real
+         * geometry that happens to follow it (e.g., a truncated 4-line
+         * header where the missing slot is filled by the first real
+         * line of the example body). */
+        if (try_apply_example_camera_header(body)) {
+            for (int skip = 0; skip < 5 && body[0]; skip++)
+                body++;
+        }
     }
 
     /* Examples are loaded via the lean repl_load_apply_line,
