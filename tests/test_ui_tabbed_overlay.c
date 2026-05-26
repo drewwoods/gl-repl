@@ -118,7 +118,7 @@ static void test_hit_test_regions(void) {
 /* The regression: over-scrolling must NOT accumulate past the end,
  * so a single upward scroll is immediately visible (no unwind). */
 static void test_help_scroll_clamp_regression(void) {
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
     /* Small viewport guarantees the help text overflows -> max>0. */
     ui_state_viewport_set_size(420, 320);
     ui_state_help_mut()->visible = 1;

@@ -30,7 +30,7 @@ static TestHarness g_harness = TEST_HARNESS_INIT;
 } while (0)
 
 static void test_inactive_queries(void) {
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
 
     ASSERT_INT("no drag active", variable_panel_drag_active(), 0);
     ASSERT_INT("active var is -1", variable_panel_drag_active_var(), -1);
@@ -41,7 +41,7 @@ static void test_inactive_queries(void) {
 static void test_begin_captures_drag_metadata(void) {
     VariablePanelDragState drag;
 
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
 
     g_predef_vars[0].value = 5.0f;
     variable_panel_handle_drag_begin(0, 0, 100);
@@ -55,7 +55,7 @@ static void test_begin_captures_drag_metadata(void) {
 }
 
 static void test_begin_invalid_rows_leave_drag_inactive(void) {
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
 
     variable_panel_handle_drag_begin(-1, 0, 100);
     ASSERT_INT("negative row ignored", variable_panel_drag_active(), 0);
@@ -67,7 +67,7 @@ static void test_begin_invalid_rows_leave_drag_inactive(void) {
 static void test_linear_motion_emits_request_without_mutation(void) {
     VariablePanelValueChange change;
 
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
     g_predef_vars[0].value = 5.0f;
 
     variable_panel_handle_drag_begin(0, 0, 100);
@@ -82,7 +82,7 @@ static void test_linear_motion_emits_request_without_mutation(void) {
 static void test_log_motion_emits_request_without_mutation(void) {
     VariablePanelValueChange change;
 
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
     g_predef_vars[0].value = 10.0f;
 
     variable_panel_handle_drag_begin(0, 1, 300);
@@ -96,7 +96,7 @@ static void test_log_motion_emits_request_without_mutation(void) {
 static void test_log_near_zero_bootstrap_emits_request(void) {
     VariablePanelValueChange change;
 
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
     g_predef_vars[0].value = 1e-7f;
 
     variable_panel_handle_drag_begin(0, 1, 100);
@@ -110,7 +110,7 @@ static void test_log_near_zero_bootstrap_emits_request(void) {
 static void test_motion_without_active_drag_is_noop(void) {
     VariablePanelValueChange change;
 
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
     g_predef_vars[0].value = 5.0f;
     snprintf(change.name, sizeof(change.name), "%s", "stale");
     change.value = 99.0f;
@@ -122,7 +122,7 @@ static void test_motion_without_active_drag_is_noop(void) {
 }
 
 static void test_reset_clears_drag_state_and_undo_flag(void) {
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
 
     g_predef_vars[0].value = 5.0f;
     variable_panel_handle_drag_begin(0, 1, 100);
@@ -141,7 +141,7 @@ static void test_request_uses_dragged_variable_name(void) {
     VariablePanelValueChange change;
     int x_idx;
 
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
     editor_feed_line("float x;");
     x_idx = repl_eval_find_predef_var_idx("x");
     ASSERT_TRUE("x declared", x_idx >= 0);
@@ -157,7 +157,7 @@ static void test_request_uses_dragged_variable_name(void) {
 static void test_sequential_drags_reanchor_to_new_start_value(void) {
     VariablePanelValueChange change;
 
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
 
     g_predef_vars[0].value = 5.0f;
     variable_panel_handle_drag_begin(0, 0, 100);

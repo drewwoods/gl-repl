@@ -108,9 +108,12 @@ static void on_vertex_record(const ReplayVertexWalkState *state,
 static ReplayVertexWalkContext make_ctx(int edit_line_idx) {
     ReplayVertexWalkContext ctx = {
         .program             = repl_state_flat_program_view(),
-        .edit_line_idx       = edit_line_idx,
-        .cursor_block_begin  = -1,
-        .cursor_block_end    = -1,
+        .cursor = {
+            .edit_line_idx       = edit_line_idx,
+            .cursor_block_begin  = -1,
+            .cursor_block_end    = -1,
+            .cursor_func_scope_mask = 0,
+        },
         .selected_block_only = 0,
         .stop_flag           = NULL,
     };
@@ -160,7 +163,7 @@ static int find_source_line(const char *prefix) {
  * at the local origin and we'd be back in the bug.
  */
 static void test_walker_resolves_funcn_args_at_cursor(void) {
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
     editor_feed_line("func0(s, p){");
     editor_feed_line("glBegin(GL_TRIANGLES);");
     editor_feed_line("glVertex3f(s, p, 0);");
@@ -223,7 +226,7 @@ static void test_walker_resolves_funcn_args_at_cursor(void) {
  * the cursor's flat-cmd index.
  */
 static void test_walker_fires_on_each_cmd_at_cursor(void) {
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
     editor_feed_line("glPushMatrix();");
     editor_feed_line("glTranslatef(1, 2, 3);");
     editor_feed_line("glBegin(GL_TRIANGLES);");
@@ -270,7 +273,7 @@ static void test_walker_fires_on_each_cmd_at_cursor(void) {
  * would silently restore the O(flat_count) walk every frame.
  */
 static void test_walker_stop_flag_halts(void) {
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
     editor_feed_line("glPushMatrix();");
     editor_feed_line("glTranslatef(0, 1, 0);");
     editor_feed_line("glBegin(GL_TRIANGLES);");

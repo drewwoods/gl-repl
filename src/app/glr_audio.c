@@ -222,6 +222,28 @@ static float cursor_seconds_locked(void) {
     return sr > 0 ? (float)frames / (float)sr : 0.0f;
 }
 
+/* Helper to parse a single key=value line from the audio state INI file. */
+static void parse_ini_line(const char *line, char *out_track, float *out_offset, int *out_cfg_mode) {
+    if (strncmp(line, "track=", 6) == 0) {
+        if (out_track) {
+            const char *p = line + 6;
+            size_t len = strlen(p);
+            while (len > 0 && (p[len-1] == '\n' || p[len-1] == '\r')) len--;
+            if (len >= GLR_AUDIO_MAX_PATH) len = GLR_AUDIO_MAX_PATH - 1;
+            memcpy(out_track, p, len);
+            out_track[len] = '\0';
+        }
+    } else if (strncmp(line, "offset=", 7) == 0) {
+        if (out_offset) {
+            *out_offset = (float)atof(line + 7);
+        }
+    } else if (strncmp(line, "cfg_mode=", 9) == 0) {
+        if (out_cfg_mode) {
+            *out_cfg_mode = atoi(line + 9);
+        }
+    }
+}
+
 /* Worker-only. Writes the resume-state INI. The atomic temp-file +
  * rename() already guarantees the destination is never torn; we
  * deliberately do NOT fsync() — the only thing lost on an OS crash in
@@ -278,16 +300,7 @@ static void worker_save_state(void) {
             char saved_track[GLR_AUDIO_MAX_PATH] = "";
             float saved_offset = 0.0f;
             while (fgets(line, (int)sizeof(line), existing)) {
-                if (strncmp(line, "track=", 6) == 0) {
-                    char *p = line + 6;
-                    size_t len = strlen(p);
-                    while (len > 0 && (p[len-1] == '\n' || p[len-1] == '\r')) len--;
-                    if (len >= GLR_AUDIO_MAX_PATH) len = GLR_AUDIO_MAX_PATH - 1;
-                    memcpy(saved_track, p, len);
-                    saved_track[len] = '\0';
-                } else if (strncmp(line, "offset=", 7) == 0) {
-                    saved_offset = (float)atof(line + 7);
-                }
+                parse_ini_line(line, saved_track, &saved_offset, NULL);
             }
             fclose(existing);
             if (saved_track[0]) {
@@ -335,18 +348,7 @@ static int load_state(float *out_offset) {
     char line[GLR_AUDIO_MAX_PATH + 16];
 
     while (fgets(line, (int)sizeof(line), f)) {
-        if (strncmp(line, "track=", 6) == 0) {
-            char *p = line + 6;
-            size_t len = strlen(p);
-            while (len > 0 && (p[len-1] == '\n' || p[len-1] == '\r')) len--;
-            if (len >= GLR_AUDIO_MAX_PATH) len = GLR_AUDIO_MAX_PATH - 1;
-            memcpy(saved_track, p, len);
-            saved_track[len] = '\0';
-        } else if (strncmp(line, "offset=", 7) == 0) {
-            offset = (float)atof(line + 7);
-        } else if (strncmp(line, "cfg_mode=", 9) == 0) {
-            cfg_mode = atoi(line + 9);
-        }
+        parse_ini_line(line, saved_track, &offset, &cfg_mode);
     }
     fclose(f);
 

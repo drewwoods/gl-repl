@@ -64,7 +64,7 @@ static void set_input_text(const char *text) {
 }
 
 static void reset_fixture(void) {
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
 }
 
 static void test_start_enters_transient_tutorial_scene(void) {

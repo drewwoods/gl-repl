@@ -472,10 +472,10 @@ void replay_walk_user_vertices(const ReplayVertexWalkContext *ctx,
     if (!ctx || !cb) return;
 
     FlatProgramView program          = ctx->program;
-    int          edit_line_idx       = ctx->edit_line_idx;
-    int          cursor_block_begin  = ctx->cursor_block_begin;
-    int          cursor_block_end    = ctx->cursor_block_end;
-    unsigned int cursor_func_scope_mask = ctx->cursor_func_scope_mask;
+    int          edit_line_idx       = ctx->cursor.edit_line_idx;
+    int          cursor_block_begin  = ctx->cursor.cursor_block_begin;
+    int          cursor_block_end    = ctx->cursor.cursor_block_end;
+    unsigned int cursor_func_scope_mask = ctx->cursor.cursor_func_scope_mask;
     int          selected_block_only = ctx->selected_block_only;
     int         *stop_flag           = ctx->stop_flag;
 

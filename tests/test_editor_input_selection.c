@@ -300,7 +300,7 @@ int main(void) {
     /* The remaining tests drive the editor's keyboard dispatch, which
      * needs the full app shell wired so commit / autocomplete / status
      * paths don't dereference uninitialized state. */
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
 
     printf("\n--- typed char replaces input selection ---\n");
     {
@@ -442,7 +442,7 @@ int main(void) {
 
     printf("\n--- Ctrl+C copies input selection (preserves selection) ---\n");
     {
-        glr_app_reset_all();
+        glr_ctrl_reset_all();
         load_input("glVertex3f(1, 2, 3)");
         editor_cursor_pos_set(11);
         editor_input_anchor_set(18);   /* selects "1, 2, 3" */
@@ -463,7 +463,7 @@ int main(void) {
 
     printf("\n--- Ctrl+X cuts input selection (works in any mode) ---\n");
     {
-        glr_app_reset_all();
+        glr_ctrl_reset_all();
         load_input("glVertex3f(1, 2, 3)");
         editor_cursor_pos_set(11);
         editor_input_anchor_set(18);
@@ -480,7 +480,7 @@ int main(void) {
 
         /* Same path in insert mode — line-range cut is disabled there,
          * but partial-line cut must still work. */
-        glr_app_reset_all();
+        glr_ctrl_reset_all();
         load_input("foo bar baz");
         editor_insert_mode_set(1);
         editor_cursor_pos_set(4);
@@ -495,7 +495,7 @@ int main(void) {
 
     printf("\n--- Ctrl+V (input-text) inserts at cursor ---\n");
     {
-        glr_app_reset_all();
+        glr_ctrl_reset_all();
         /* Stage an INPUT_TEXT clipboard directly so the test is
          * independent of the Ctrl+C path. */
         editor_clipboard_set_input_text("sin(t)", 6);
@@ -514,7 +514,7 @@ int main(void) {
 
     printf("\n--- Ctrl+V (input-text) replaces destination selection ---\n");
     {
-        glr_app_reset_all();
+        glr_ctrl_reset_all();
         editor_clipboard_set_input_text("X", 1);
         load_input("hello world");
         editor_cursor_pos_set(6);
@@ -531,7 +531,7 @@ int main(void) {
 
     printf("\n--- Ctrl+V with EMPTY clipboard reports empty ---\n");
     {
-        glr_app_reset_all();
+        glr_ctrl_reset_all();
         editor_state_clipboard_clear();
         load_input("unchanged");
 
@@ -549,7 +549,7 @@ int main(void) {
          * only the input buffer, never a source command, and the undo
          * model can't restore the input anyway. Regression for the
          * Phase D review finding. */
-        glr_app_reset_all();
+        glr_ctrl_reset_all();
         repl_load_example(0);
         ReplSceneRuntimeState scenes = repl_state_scenes();
         int example_before = scenes.active_example_idx;
@@ -619,7 +619,7 @@ int main(void) {
 
     printf("\n--- select_word_at integration ---\n");
     {
-        glr_app_reset_all();
+        glr_ctrl_reset_all();
         editor_feed_line("glVertex3f(1, 2, 3);");
         editor_navigate_to_line(0);
 
@@ -641,7 +641,7 @@ int main(void) {
 
     printf("\n--- double-click dispatches word selection ---\n");
     {
-        glr_app_reset_all();
+        glr_ctrl_reset_all();
         editor_feed_line("glVertex3f(1, 2, 3);");
         editor_navigate_to_line(0);
 
@@ -694,7 +694,7 @@ int main(void) {
 
     printf("\n--- code-panel press + drag on active edit row ---\n");
     {
-        glr_app_reset_all();
+        glr_ctrl_reset_all();
         /* Seed a single source line so the press hit targets a real
          * committed row. */
         editor_feed_line("glVertex3f(1, 2, 3);");
@@ -751,7 +751,7 @@ int main(void) {
          * user trying to select text inside the input would
          * accidentally start a multi-line range when they drift the
          * cursor below the row. */
-        glr_app_reset_all();
+        glr_ctrl_reset_all();
         editor_feed_line("glVertex3f(1, 2, 3);");
         editor_feed_line("glVertex3f(4, 5, 6);");
         editor_navigate_to_line(0);
@@ -804,7 +804,7 @@ int main(void) {
 
     printf("\n--- press on insert-line / no-drag press does not arm input-row drag ---\n");
     {
-        glr_app_reset_all();
+        glr_ctrl_reset_all();
         editor_feed_line("glVertex3f(1, 2, 3);");
         editor_navigate_to_line(0);
 
@@ -825,7 +825,7 @@ int main(void) {
 
     printf("\n--- shift+arrow / home / end extend selection ---\n");
     {
-        glr_app_reset_all();
+        glr_ctrl_reset_all();
         editor_input_set_modifier_provider_for_test(test_modifiers_provider);
 
         load_input("hello world");
@@ -900,7 +900,7 @@ int main(void) {
 
     printf("\n--- Ctrl+V (LINES) routes through line paste, not input ---\n");
     {
-        glr_app_reset_all();
+        glr_ctrl_reset_all();
         /* Seed the LINES clipboard directly. */
         EditorClipboardState *cb = editor_state_clipboard_mut();
         strcpy(cb->lines[0], "glVertex3f(9, 9, 9);");
@@ -930,7 +930,7 @@ int main(void) {
          *      from canonical source, no persisted anchor).
          *   2. After undo, an input-text clipboard payload survives
          *      unchanged (undo does not snapshot clipboard state). */
-        glr_app_reset_all();
+        glr_ctrl_reset_all();
         editor_feed_line("glVertex3f(1, 2, 3);");
         editor_navigate_to_line(0);
         editor_clipboard_set_input_text("sin(t)", 6);

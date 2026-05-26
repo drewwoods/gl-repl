@@ -119,21 +119,21 @@ started** means no branch change was found for that finding.
 | 26 | Done | Lowercased `audio_cfg_names` and removed specialized cycle formatters, relying on generic fallback. |
 | 27 | Done | The controller-owned gesture-once flag was removed; remaining gesture synchronization is tracked under #3. |
 | 28 | Done | The targeted stale phase/plan comment sweep landed for `src/app`. |
-| 29 | Not started | `glr_ctrl_*` / `glr_app_*` prefix split remains. |
-| 30 | Not started | Overlay walk context duplication remains. |
+| 29 | Done | Unified inconsistent `glr_app_*` functions to standard `glr_ctrl_*` namespace globally. |
+| 30 | Done | Extracted common `CursorBlockState` to compose `OverlayWalkCtx` and `ReplayVertexWalkContext`. |
 | 31 | Done | Consolidated parallel status and preview flags directly into `ReplayFadePlan` struct fields. |
 | 32 | Done | Unified `glr_debug_dump_flat_commands()` and `glr_debug_dump_editor()` to both accept `SourceTextView`. |
 | 33 | Done | Camera target decay comments now match the actual default. |
 | 34 | Done | Isolated camera export bridge installer declaration to a dedicated `glr_camera_export.h` header. |
-| 35 | Not started | Tutorial menu offsets remain magic numbers. |
+| 35 | Done | Replaced magic literals in actions and menu bar with symbolic tutorial offsets. |
 | 36 | Not started | Camera controls reset policy remains undocumented. |
-| 37 | Not started | Scene-load helper transient reset divergence remains. |
-| 38 | Not started | Menu out-of-range fallthrough behavior remains. |
-| 39 | Not started | UI snapshot is still built twice per display frame. |
-| 40 | Not started | Selection-drag motion still rebuilds snapshots. |
-| 41 | Not started | Numeric swatch route still open-codes commit mechanics. |
+| 37 | Done | Wired `glr_ctrl_reset_transients()` into `glr_scene_load_user_slot()` for transient hygiene on scene switch. |
+| 38 | Done | Converted `glr_action_menu_item_activate` nested cascades into switches with explicit early returns. |
+| 39 | Done | Optimized `glr_ctrl_display_frame` to build heavy `UiRenderSnapshot` only once per frame. |
+| 40 | Done | Cached UI snapshot at frame display and reused it in mouse drag routers with bounds clamping. |
+| 41 | Done | Moved numeric swatch commit transaction logic to the editor commit layer (`editor/commit.c`). |
 | 42 | Withdrawn | False positive; no code change needed. |
-| 43 | Not started | Covered by #30; duplicate context structure work remains. |
+| 43 | Done | Covered by #30; duplicate context structure fields consolidated under `CursorBlockState`. |
 | 44 | Done | `glr_ctrl_apply_variable_panel_value_change()` now returns `void`. |
 | 45 | Done | Dead negative checks were removed from param hint logic. |
 | 46 | Done | Gratuitous `params_out` parameter was removed. |
@@ -148,10 +148,10 @@ started** means no branch change was found for that finding.
 | 55 | Done | Direct includes were added for the cited app dependencies. |
 | 56 | Done | Audio lock helpers were renamed to `audio_lock()` / `audio_unlock()`. |
 | 57 | Not started | Mixed `<ctype.h>` cast style remains in completion. |
-| 58 | Not started | Autocomplete static reset paths remain divergent. |
+| 58 | Done | Created `reset_ac_statics()` to unify all autocomplete static variable clearing. |
 | 59 | Not started | Autocomplete ghost overflow remains silent. |
 | 60 | Not started | `STATE_SAVE_INTERVAL_SECS` remains mid-file. |
-| 61 | Not started | Audio INI parsing remains duplicated. |
+| 61 | Done | Extracted `parse_ini_line()` to deduplicate INI key/value parsing in `glr_audio.c`. |
 | 62 | Not started | `g_slot_inited[]` ownership/locking comment remains missing. |
 | 63 | Not started | Help overlay content is still rebuilt per query. |
 | 64 | Withdrawn | Local convention allows `g_` on file-private statics. |
@@ -778,25 +778,25 @@ commit history.
 this is here" notes. Provenance lives in commit messages and
 `plans/done/`.
 
-### 29. Two top-level naming prefixes for one module: `glr_ctrl_*` and `glr_app_*`
+### 29. Two top-level naming prefixes for one module: `glr_ctrl_*` and `glr_ctrl_*`
 
-**Where:** `src/app/glr_ctrl.c` (mixed throughout) — `glr_app_*` examples
-at `:1889-2191`: `glr_app_reset_all`, `glr_app_reset_example_chrome`,
-`glr_app_install_app_services`, `glr_app_camera_distance`,
-`glr_app_export_reshape_projection`, `glr_app_editor_input_reset`,
-`glr_app_editor_insert_mode_off`, `glr_app_scroll_to_line`,
-`glr_app_follow_cursor`
+**Where:** `src/app/glr_ctrl.c` (mixed throughout) — `glr_ctrl_*` examples
+at `:1889-2191`: `glr_ctrl_reset_all`, `glr_ctrl_reset_example_chrome`,
+`glr_ctrl_install_app_services`, `glr_ctrl_camera_distance`,
+`glr_ctrl_export_reshape_projection`, `glr_ctrl_editor_input_reset`,
+`glr_ctrl_editor_insert_mode_off`, `glr_ctrl_scroll_to_line`,
+`glr_ctrl_follow_cursor`
 
-**Smell:** CLAUDE.md's prefix table doesn't define `glr_app_*`. The
+**Smell:** CLAUDE.md's prefix table doesn't define `glr_ctrl_*`. The
 names seem to mark "host-effect bridges installed into REPL" but the
-distinction is undocumented; `glr_app_reset_all` is exposed in
+distinction is undocumented; `glr_ctrl_reset_all` is exposed in
 `glr_ctrl.h` (line 32) alongside the `glr_ctrl_*` neighbors.
 
 **Why it matters:** Convention drift; new contributors have to guess
 the rule.
 
-**Fix:** Either rename all `glr_app_*` → `glr_ctrl_*` (the natural
-home — the file is `glr_ctrl.c`), or document `glr_app_*` as a
+**Fix:** Either rename all `glr_ctrl_*` → `glr_ctrl_*` (the natural
+home — the file is `glr_ctrl.c`), or document `glr_ctrl_*` as a
 sub-prefix in CLAUDE.md and group them physically.
 
 ### 30. `OverlayWalkCtx` and `ReplayVertexWalkContext` overlap, but are separate structs
@@ -1500,7 +1500,7 @@ Then **the small-name-shape cleanups**:
   add the missing `CFG_DEFAULT_*` macros and a `GLR_STATE_INITIAL`.
 - **#21** — Pick one name across `XFORM_GUIDES` key / `show_vertex_guides`
   field / "Xform guides" label.
-- **#29** — Rename `glr_app_*` → `glr_ctrl_*` (or document the
+- **#29** — Rename `glr_ctrl_*` → `glr_ctrl_*` (or document the
   sub-prefix in CLAUDE.md and group them).
 - **#32** — Pick one view type for the two `glr_debug_dump_*`
   signatures.

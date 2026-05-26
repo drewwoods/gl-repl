@@ -43,7 +43,7 @@ static void make_snap(UiRenderSnapshot *snap) {
 static void test_scene_status_rename_mode(void) {
     UiRenderSnapshot snap;
 
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
     ui_state_reset();
     ui_state_viewport_set_size(800, 600);
     glr_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
@@ -69,7 +69,7 @@ static void test_scene_status_rename_mode(void) {
 static void test_scene_status_file_prompt_mode(void) {
     UiRenderSnapshot snap;
 
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
     ui_state_reset();
     ui_state_viewport_set_size(800, 600);
     glr_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
@@ -97,7 +97,7 @@ static void test_scene_status_file_prompt_mode(void) {
 static void test_scene_status_file_prompt_error_mode(void) {
     UiRenderSnapshot snap;
 
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
     ui_state_reset();
     ui_state_viewport_set_size(800, 600);
     glr_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
@@ -124,7 +124,7 @@ static void test_scene_status_file_prompt_error_mode(void) {
 static void test_scene_status_banner_mode(void) {
     UiRenderSnapshot snap;
 
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
     ui_state_reset();
     ui_state_viewport_set_size(800, 600);
     glr_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
@@ -155,7 +155,7 @@ static void test_scene_status_error_banner(void) {
     unsigned long long info_color4f;
     unsigned long long err_color4f;
 
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
     ui_state_reset();
     ui_state_viewport_set_size(800, 600);
     glr_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
@@ -187,7 +187,7 @@ static void test_scene_status_error_banner(void) {
 static void test_scene_status_no_render_when_inactive(void) {
     UiRenderSnapshot snap;
 
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
     ui_state_reset();
     ui_state_viewport_set_size(800, 600);
     glr_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT;

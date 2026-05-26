@@ -147,7 +147,7 @@ static int   g_replay_last_src_line = -1;
 ```
 Plus `g_replay_fade_batches` at `:44-45`. None of these are part of
 `ReplReplayRuntimeState`. `replay_state_reset()` (called from
-`glr_app_reset_all` at `glr_ctrl.c:2203`) zeroes the struct only.
+`glr_ctrl_reset_all` at `glr_ctrl.c:2203`) zeroes the struct only.
 After a workspace switch + Ctrl+R, the first comparison still sees
 the old `g_replay_last_src_line`; `replay_restore_baseline_predef_values()`
 would restore stale predef values captured in a different scene if
@@ -504,7 +504,7 @@ rule (runner is named `_drag.c`, not `variable_panel.c`).
 to acknowledge single-file peers as legal. Same call for
 variable_panel's `_drag.c` runner naming.
 
-### 18. 🔀 `glr_app_reset_all` clears three peers explicitly; color_picker is reset transitively
+### 18. 🔀 `glr_ctrl_reset_all` clears three peers explicitly; color_picker is reset transitively
 
 **Status:** Resolved (by `b3af6ca`) — Added explicit reset / teardown for color_picker and documented navigation closing policies.
 
@@ -538,7 +538,7 @@ editor-owned state when it's a peer.
 
 **Fix:** Add `color_picker_state_reset()` (or rename `_close()` to
 the canonical reset verb) and call it explicitly in
-`glr_app_reset_all` next to the others. Keep the per-navigation
+`glr_ctrl_reset_all` next to the others. Keep the per-navigation
 `_close()` calls but document the policy.
 
 ### 19. 🔀 Type ownership of state structs is scattered across four directories

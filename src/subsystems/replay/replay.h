@@ -120,18 +120,15 @@ typedef struct ReplayVertexWalkState {
 } ReplayVertexWalkState;
 
 typedef struct ReplayVertexWalkContext {
-    FlatProgramView program;
-    int          edit_line_idx;
-    int          cursor_block_begin;
-    int          cursor_block_end;
-    unsigned int cursor_func_scope_mask;
-    int          selected_block_only;
+    FlatProgramView  program;
+    CursorBlockState cursor;
+    int              selected_block_only;
     /* Optional early-stop signal. When non-NULL, the walker checks
      * *stop_flag after every on_each_cmd / on_vertex callback and
      * breaks out of the iteration if it has been set non-zero. Lets
      * callers (e.g. cursor-guide rendering) skip the rest of a huge
      * flat program once the work they care about has been done. */
-    int         *stop_flag;
+    int             *stop_flag;
 } ReplayVertexWalkContext;
 
 typedef struct ReplayVertexWalkCallbacks {

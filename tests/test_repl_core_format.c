@@ -30,7 +30,7 @@ int main(void) {
     const char *tmp_loop_path = "/tmp/repl_core_format_loop_input.c";
     const char *tmp_dump_path = "/tmp/repl_core_format_dump.txt";
     repl_eval_init_predef_vars();
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
     declare_test_vars();
 
     GLCmd interactive_cmd;
@@ -40,7 +40,7 @@ int main(void) {
                 repl_parse_and_normalize(line, 0, NULL, 0, 1, &interactive_cmd,
                                          interactive_text, sizeof(interactive_text)) == 1);
 
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
     declare_test_vars();
     editor_feed_line(line);
     ASSERT_TRUE("feed inserted one", repl_state_document_count() == 1);
@@ -58,7 +58,7 @@ int main(void) {
         }
     }
 
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
     declare_test_vars();
     ASSERT_TRUE("load from file", repl_export_load_from_file(tmp_path) == 1);
     ASSERT_TRUE("load inserted one", repl_state_document_count() == 1);
@@ -88,7 +88,7 @@ int main(void) {
         }
     }
 
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
     declare_test_vars();
     ASSERT_TRUE("load loop file", repl_export_load_from_file(tmp_loop_path) == 1);
     ASSERT_TRUE("loop imported 3 cmds", repl_state_document_count() == 3);
@@ -110,7 +110,7 @@ int main(void) {
         ASSERT_TRUE("reformat close brace indent", buf2 && strcmp(buf2, "  }") == 0);
     }
 
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
     declare_test_vars();
     editor_feed_line("for(i, 0, 3) {");
     editor_feed_line("x = i + 1;");
@@ -180,7 +180,7 @@ int main(void) {
         }
     }
 
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
     editor_feed_line("float a = 2, b, c = 3;");
     ASSERT_TRUE("decl cmd count", repl_state_document_count() == 1);
     ASSERT_TRUE("decl cmd type", repl_state_document_cmds_mut()[0].type == CMD_VAR_DECLARE);
@@ -193,7 +193,7 @@ int main(void) {
                                    "  static float a = max(1, 2), b, c = abs(-3); // vars") == 0);
     }
 
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
     editor_feed_line("func0() {");
     editor_feed_line("glVertex3f(0, 0, 0);");
     editor_feed_line("}");

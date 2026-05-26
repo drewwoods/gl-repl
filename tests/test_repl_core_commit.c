@@ -231,7 +231,7 @@ next_pc:
 int main(void) {
     repl_eval_init_predef_vars();
 
-    glr_app_reset_all(); declare_test_vars();
+    glr_ctrl_reset_all(); declare_test_vars();
     {
         int t_idx = predef_idx("t");
         ASSERT_TRUE("t predef exists", t_idx >= 0);
@@ -251,7 +251,7 @@ int main(void) {
         }
     }
 
-    glr_app_reset_all(); declare_test_vars();
+    glr_ctrl_reset_all(); declare_test_vars();
     editor_feed_line("z = -0.55;");
     ASSERT_TRUE("var assign cmd count", repl_state_document_count() == 1);
     ASSERT_TRUE("var assign type", repl_state_document_cmds_mut()[0].type == CMD_VAR_ASSIGN);
@@ -268,7 +268,7 @@ int main(void) {
             ASSERT_TRUE("z updated", fabsf(g_predef_vars[z_idx].value - (-0.55f)) < 1e-6f);
     }
 
-    glr_app_reset_all(); declare_test_vars();
+    glr_ctrl_reset_all(); declare_test_vars();
     editor_feed_line("A[0] = 1;");
     ASSERT_TRUE("scratch assign cmd count", repl_state_document_count() == 1);
     ASSERT_TRUE("scratch assign type",
@@ -288,7 +288,7 @@ int main(void) {
                     fabsf(repl_state_document_cmds_mut()[0].args[2] - 1.0f) < 1e-6f);
     }
 
-    glr_app_reset_all(); declare_test_vars();
+    glr_ctrl_reset_all(); declare_test_vars();
     editor_feed_line("for(i, 0, 2) {");
     editor_feed_line("A[i] = A[i] + 1;");
     editor_feed_line("}");
@@ -298,7 +298,7 @@ int main(void) {
     ASSERT_TRUE("scratch assign in loop has vars",
                 repl_state_document_cmds_mut()[1].has_vars == 1);
 
-    glr_app_reset_all(); declare_test_vars();
+    glr_ctrl_reset_all(); declare_test_vars();
     editor_feed_line("A[0] = 1;");
     editor_feed_line("func0(depth) {");
     editor_feed_line("if(depth > 0) {");
@@ -324,7 +324,7 @@ int main(void) {
      * another line. The diagnostic comes through the compile-error path
      * (commit 43 absorbed the cascade into repl_compile_var_assign), so
      * apply never runs and the document is unchanged. */
-    glr_app_reset_all(); declare_test_vars();
+    glr_ctrl_reset_all(); declare_test_vars();
     editor_feed_line("float foo;");
     editor_feed_line("y = foo;");
     ASSERT_TRUE("cascade fixture cmd count", repl_state_document_count() == 2);
@@ -359,7 +359,7 @@ int main(void) {
      * applies args[0] = 1 every iteration and `n` plateaus. Goto
      * remains documented as partial; the test now exercises the
      * single-pass path and verifies n stops at 1. */
-    glr_app_reset_all(); declare_test_vars();
+    glr_ctrl_reset_all(); declare_test_vars();
     editor_feed_line("n = 0;");
     editor_feed_line(":walk");
     editor_feed_line("n = n + 1;");
@@ -385,7 +385,7 @@ int main(void) {
                         fabsf(g_predef_vars[n_idx].value - 1.0f) < 1e-6f);
     }
 
-    glr_app_reset_all(); declare_test_vars();
+    glr_ctrl_reset_all(); declare_test_vars();
     editor_feed_line("n = 0;");
     editor_feed_line("glBegin(GL_LINES);");
     editor_feed_line(":stripe");
@@ -415,7 +415,7 @@ int main(void) {
     ASSERT_TRUE("goto geom flat first vertex still at initial x",
                 fabsf(repl_state_flat_program_cmds_mut()[3].args[0] - (-1.5f)) < 1e-5f);
 
-    glr_app_reset_all(); declare_test_vars();
+    glr_ctrl_reset_all(); declare_test_vars();
     editor_feed_line(":walk");
     ASSERT_TRUE("label cmd count", repl_state_document_count() == 1);
     ASSERT_TRUE("label stored as C label", strcmp(editor_buffer_line(0) ? editor_buffer_line(0) : "", "walk:") == 0);
@@ -426,7 +426,7 @@ int main(void) {
     ASSERT_TRUE("recommitting loaded label keeps label type", repl_state_document_cmds_mut()[0].type == CMD_GOTO_LABEL);
     ASSERT_TRUE("recommitting loaded label keeps source", strcmp(editor_buffer_line(0) ? editor_buffer_line(0) : "", "walk:") == 0);
 
-    glr_app_reset_all(); declare_test_vars();
+    glr_ctrl_reset_all(); declare_test_vars();
     editor_feed_line("for(i, 0, 3) {");
     editor_feed_line("glVertex3f(i, 0, 0);");
     editor_feed_line("}");
@@ -436,7 +436,7 @@ int main(void) {
     ASSERT_TRUE("for end", repl_state_document_cmds_mut()[2].type == CMD_FOR_END);
     ASSERT_TRUE("for body keeps i", strstr(editor_buffer_line(1) ? editor_buffer_line(1) : "", "i") != NULL);
 
-    glr_app_reset_all(); declare_test_vars();
+    glr_ctrl_reset_all(); declare_test_vars();
     editor_feed_line("glBegin(GL_POINTS);");
     editor_feed_line("glEnd();");
     editor_navigate_to_line(1);
@@ -455,7 +455,7 @@ int main(void) {
     ASSERT_TRUE("inserted line before current type", repl_state_document_cmds_mut()[1].type == CMD_COLOR3F);
     ASSERT_TRUE("original current line shifted down", repl_state_document_cmds_mut()[2].type == CMD_END);
 
-    glr_app_reset_all(); declare_test_vars();
+    glr_ctrl_reset_all(); declare_test_vars();
     editor_feed_line("glBegin(GL_POINTS);");
     editor_feed_line("glEnd();");
     editor_navigate_to_line(0);
@@ -463,7 +463,7 @@ int main(void) {
     editor_handle_key('\r', 0, 0);
     ASSERT_TRUE("enter away from line start still inserts after", editor_insert_mode() == 1 && editor_state_edit_line() == 1);
 
-    glr_app_reset_all(); declare_test_vars();
+    glr_ctrl_reset_all(); declare_test_vars();
     editor_feed_line("glBegin(GL_POINTS);");
     editor_feed_line("glColor3f(1, 0, 0);");
     editor_feed_line("glEnd();");
@@ -495,7 +495,7 @@ int main(void) {
     ASSERT_TRUE("backspace clears selection after delete", !editor_clipboard_sel_active());
     ASSERT_TRUE("backspace keeps edit line at start after delete", editor_state_edit_line() == 0);
 
-    glr_app_reset_all(); declare_test_vars();
+    glr_ctrl_reset_all(); declare_test_vars();
     editor_feed_line("glBegin(GL_POINTS);");
     editor_feed_line("glEnd();");
     editor_navigate_to_line(0);
@@ -515,7 +515,7 @@ int main(void) {
                     editor_state_edit_line() == repl_state_document_count());
     }
 
-    glr_app_reset_all(); declare_test_vars();
+    glr_ctrl_reset_all(); declare_test_vars();
     editor_feed_line("if(x > 0) {");
     editor_feed_line("glColor3f(1, 0, 0);");
     editor_feed_line("}");
@@ -535,7 +535,7 @@ int main(void) {
                     editor_state_edit_line() == 1);
     }
 
-    glr_app_reset_all(); declare_test_vars();
+    glr_ctrl_reset_all(); declare_test_vars();
     editor_feed_line("glBegin(GL_POINTS);");
     editor_navigate_to_line(0);
     editor_cursor_pos_set(4);
@@ -549,7 +549,7 @@ int main(void) {
         ASSERT_TRUE("ctrl-b toggles code panel layout", glr_state_presentation().code_panel_layout != before);
     }
 
-    glr_app_reset_all(); declare_test_vars();
+    glr_ctrl_reset_all(); declare_test_vars();
     {
         const char *prefix = "glVer";
         for (int i = 0; prefix[i]; i++)
@@ -582,7 +582,7 @@ int main(void) {
     ASSERT_TRUE("function call hint ends with closing paren",
                 strcmp(g_ac_hint, ")") == 0);
 
-    glr_app_reset_all(); declare_test_vars();
+    glr_ctrl_reset_all(); declare_test_vars();
     editor_feed_line("func0(radius, yoff) {");
     editor_feed_line("}");
     {
@@ -600,7 +600,7 @@ int main(void) {
      * included iff the condition evaluates non-zero. With x == 0
      * (declare_test_vars only declares, doesn't init) the cond is
      * false and the body is skipped entirely. */
-    glr_app_reset_all(); declare_test_vars();
+    glr_ctrl_reset_all(); declare_test_vars();
     editor_feed_line("if(x > 0) {");
     editor_feed_line("glColor3f(1, 0, 0);");
     editor_feed_line("}");
@@ -616,7 +616,7 @@ int main(void) {
      * flat array without IF_BEGIN/IF_END markers. */
     {
         char err[128];
-        glr_app_reset_all();
+        glr_ctrl_reset_all();
         repl_eval_declare_predef_var("xx", err, sizeof(err));
         int xx_idx = repl_eval_find_predef_var_idx("xx");
         repl_state_variables_mut()->predef_vars[xx_idx].value = 1.0f;
@@ -630,7 +630,7 @@ int main(void) {
                     repl_state_flat_program_cmds_mut()[0].type == CMD_COLOR3F);
     }
 
-    glr_app_reset_all(); declare_test_vars();
+    glr_ctrl_reset_all(); declare_test_vars();
     editor_feed_line("func0 {");
     editor_feed_line("glVertex3f(1, 2, 3);");
     editor_feed_line("}");
@@ -641,7 +641,7 @@ int main(void) {
     ASSERT_TRUE("func end", repl_state_document_cmds_mut()[2].type == CMD_FUNC_END);
     ASSERT_TRUE("func call", repl_state_document_cmds_mut()[3].type == CMD_CALL);
 
-    glr_app_reset_all(); declare_test_vars();
+    glr_ctrl_reset_all(); declare_test_vars();
     editor_feed_line("func0(radius, yoff) {");
     editor_feed_line("glVertex3f(radius, yoff, 0);");
     editor_feed_line("}");
@@ -659,7 +659,7 @@ int main(void) {
     ASSERT_TRUE("param func call keeps expr",
                 strstr(editor_buffer_line(3) ? editor_buffer_line(3) : "", "x + 2") != NULL);
 
-    glr_app_reset_all(); declare_test_vars();
+    glr_ctrl_reset_all(); declare_test_vars();
     editor_feed_line("glClearColor(0.1, 0.1, 0.1, 1);");
     editor_feed_line("glEnable(GL_DEPTH_TEST);");
     editor_feed_line("func0 {");
@@ -674,7 +674,7 @@ int main(void) {
     ASSERT_TRUE("promoted prior enable command preserved", repl_state_document_cmds_mut()[4].type == CMD_ENABLE);
     ASSERT_TRUE("promoted following call appends after prior commands", repl_state_document_cmds_mut()[5].type == CMD_CALL);
 
-    glr_app_reset_all(); declare_test_vars();
+    glr_ctrl_reset_all(); declare_test_vars();
     editor_feed_line("func1(a, b) {");
     editor_feed_line("glBegin(GL_POINTS);");
     editor_feed_line("glVertex3f(a, b, 0);");
@@ -726,7 +726,7 @@ int main(void) {
         ASSERT_TRUE("outer function header highlights nested invocations", matched == 6);
     }
 
-    glr_app_reset_all(); declare_test_vars();
+    glr_ctrl_reset_all(); declare_test_vars();
     editor_feed_line("func0(n) {");
     editor_feed_line("for(i, 0, n) {");
     editor_feed_line("glVertex3f(i, 0, 0);");
@@ -737,7 +737,7 @@ int main(void) {
     ASSERT_TRUE("nested block trailing cmd order body", repl_state_document_cmds_mut()[4].type == CMD_COLOR3F);
     ASSERT_TRUE("nested block trailing cmd order end", repl_state_document_cmds_mut()[5].type == CMD_FUNC_END);
 
-    glr_app_reset_all(); declare_test_vars();
+    glr_ctrl_reset_all(); declare_test_vars();
     editor_feed_line("func0(n) {");
     editor_feed_line("for(i, 0, n) glVertex3f(i, n, 0);");
     editor_feed_line("}");
@@ -754,7 +754,7 @@ int main(void) {
     ASSERT_TRUE("local for third x", fabsf(repl_state_flat_program_cmds_mut()[2].args[0] - 2.0f) < 1e-6f);
     ASSERT_TRUE("local for body uses param", fabsf(repl_state_flat_program_cmds_mut()[2].args[1] - 3.0f) < 1e-6f);
 
-    glr_app_reset_all(); declare_test_vars();
+    glr_ctrl_reset_all(); declare_test_vars();
     editor_feed_line("// top-level note");
     editor_feed_line("for(i, 0, 3) {");
     editor_feed_line("// loop note");
@@ -776,7 +776,7 @@ int main(void) {
                     repl_state_flat_program_cmds_mut()[flat_idx].src_cmd_idx == 3);
     }
 
-    glr_app_reset_all(); declare_test_vars();
+    glr_ctrl_reset_all(); declare_test_vars();
     editor_feed_line("func0(scale) {");
     editor_feed_line("if(scale > 1) {");
     editor_feed_line("glVertex3f(scale, 0, 0);");
@@ -790,7 +790,7 @@ int main(void) {
     ASSERT_TRUE("local if flatten type", repl_state_flat_program_cmds_mut()[0].type == CMD_VERTEX3F);
     ASSERT_TRUE("local if flatten x", fabsf(repl_state_flat_program_cmds_mut()[0].args[0] - 2.0f) < 1e-6f);
 
-    glr_app_reset_all(); declare_test_vars();
+    glr_ctrl_reset_all(); declare_test_vars();
     editor_feed_line("func0(cols) {");
     editor_feed_line("for(j, 0, cols + 1) {");
     editor_feed_line("x = -1.5 + 3.0*j/cols;");
@@ -814,7 +814,7 @@ int main(void) {
             ASSERT_TRUE("local assign replay updates x", fabsf(g_predef_vars[x_idx].value - 1.5f) < 1e-6f);
     }
 
-    glr_app_reset_all(); declare_test_vars();
+    glr_ctrl_reset_all(); declare_test_vars();
     {
         char display[MAX_INPUT_LEN];
         int i_idx = predef_idx("i");
@@ -859,7 +859,7 @@ int main(void) {
         replay_pc = 0;
     }
 
-    glr_app_reset_all(); declare_test_vars();
+    glr_ctrl_reset_all(); declare_test_vars();
     {
         char display[MAX_INPUT_LEN];
         const UiVirtualLineList *vlines;
@@ -904,7 +904,7 @@ int main(void) {
         replay_pc = 0;
     }
 
-    glr_app_reset_all(); declare_test_vars();
+    glr_ctrl_reset_all(); declare_test_vars();
     {
         char display[MAX_INPUT_LEN];
         int i_idx = predef_idx("i");
@@ -935,7 +935,7 @@ int main(void) {
         replay_pc = 0;
     }
 
-    glr_app_reset_all(); declare_test_vars();
+    glr_ctrl_reset_all(); declare_test_vars();
     {
         char display[MAX_INPUT_LEN];
         int i_idx = predef_idx("i");
@@ -968,7 +968,7 @@ int main(void) {
         replay_pc = 0;
     }
 
-    glr_app_reset_all(); declare_test_vars();
+    glr_ctrl_reset_all(); declare_test_vars();
     {
         char display[MAX_INPUT_LEN];
         int i_idx = predef_idx("i");
@@ -998,7 +998,7 @@ int main(void) {
         replay_pc = 0;
     }
 
-    glr_app_reset_all(); declare_test_vars();
+    glr_ctrl_reset_all(); declare_test_vars();
     editor_feed_line("glColor3f(1, 0, 0);");
     editor_feed_line("glBegin(GL_TRIANGLES);");
     editor_feed_line("glVertex3f(0, 0, 0);");
@@ -1029,7 +1029,7 @@ int main(void) {
     ASSERT_TRUE("feeding color for first block vertex", repl_find_feeding_color_cmd(2) == 0);
     ASSERT_TRUE("feeding color for second block vertex", repl_find_feeding_color_cmd(7) == 5);
 
-    glr_app_reset_all(); declare_test_vars();
+    glr_ctrl_reset_all(); declare_test_vars();
     editor_feed_line("glNormal3f(0, 0, 1);");
     editor_feed_line("glBegin(GL_TRIANGLES);");
     editor_feed_line("glVertex3f(0, 0, 0);");
@@ -1060,23 +1060,23 @@ int main(void) {
     ASSERT_TRUE("feeding normal for first block vertex", repl_find_feeding_normal_cmd(2) == 0);
     ASSERT_TRUE("feeding normal for second block vertex", repl_find_feeding_normal_cmd(7) == 5);
 
-    glr_app_reset_all(); declare_test_vars();
+    glr_ctrl_reset_all(); declare_test_vars();
     editor_feed_line("gluColor(1, 0, 0);");
     editor_feed_line("gluVertex(0, 0, 0);");
     ASSERT_TRUE("tess color feeds tess vertex", repl_find_feeding_color_cmd(1) == 0);
-    glr_app_reset_all(); declare_test_vars();
+    glr_ctrl_reset_all(); declare_test_vars();
     editor_feed_line("gluVertex(0, 0, 0);");
     ASSERT_TRUE("no tess color → -1", repl_find_feeding_color_cmd(0) == -1);
 
-    glr_app_reset_all(); declare_test_vars();
+    glr_ctrl_reset_all(); declare_test_vars();
     editor_feed_line("gluNormal(0, 0, 1);");
     editor_feed_line("gluVertex(0, 0, 0);");
     ASSERT_TRUE("tess normal feeds tess vertex", repl_find_feeding_normal_cmd(1) == 0);
-    glr_app_reset_all(); declare_test_vars();
+    glr_ctrl_reset_all(); declare_test_vars();
     editor_feed_line("gluVertex(0, 0, 0);");
     ASSERT_TRUE("no tess normal → -1", repl_find_feeding_normal_cmd(0) == -1);
 
-    glr_app_reset_all(); declare_test_vars();
+    glr_ctrl_reset_all(); declare_test_vars();
     editor_feed_line("glColor3f(1, 0, 0);");
     editor_feed_line("glNormal3f(0, 0, 1);");
     ASSERT_TRUE("non-vertex color → -1", repl_find_feeding_color_cmd(0) == -1);
@@ -1084,7 +1084,7 @@ int main(void) {
     ASSERT_TRUE("oob color → -1", repl_find_feeding_color_cmd(-1) == -1);
     ASSERT_TRUE("oob normal → -1", repl_find_feeding_normal_cmd(99) == -1);
 
-    glr_app_reset_all(); declare_test_vars();
+    glr_ctrl_reset_all(); declare_test_vars();
     editor_feed_line("glBegin(GL_TRIANGLES);");
     editor_feed_line("glVertex3f(0, 0, 0);");
     editor_feed_line("glVertex3f(1, 0, 0);");
@@ -1099,7 +1099,7 @@ int main(void) {
         ASSERT_TRUE("navigate refreshes current block highlight", matched == 2);
     }
 
-    glr_app_reset_all(); declare_test_vars();
+    glr_ctrl_reset_all(); declare_test_vars();
     editor_feed_line("func0(depth) {");
     editor_feed_line("if(depth <= 0) {");
     editor_feed_line("glVertex3f(0, 0, 0);");
@@ -1117,7 +1117,7 @@ int main(void) {
     ASSERT_TRUE("recursive third x", fabsf(repl_state_flat_program_cmds_mut()[2].args[0] - 1.0f) < 1e-6f);
     ASSERT_TRUE("recursive base x", fabsf(repl_state_flat_program_cmds_mut()[3].args[0] - 0.0f) < 1e-6f);
 
-    glr_app_reset_all(); declare_test_vars();
+    glr_ctrl_reset_all(); declare_test_vars();
     editor_feed_line("func0(n) {");
     editor_feed_line("if(n <= 0) {");
     editor_feed_line("glVertex3f(0, 0, 0);");
@@ -1143,7 +1143,7 @@ int main(void) {
     ASSERT_TRUE("mutual recursion second x", fabsf(repl_state_flat_program_cmds_mut()[1].args[0] - (-1.0f)) < 1e-6f);
     ASSERT_TRUE("mutual recursion base x", fabsf(repl_state_flat_program_cmds_mut()[2].args[0] - 0.0f) < 1e-6f);
 
-    glr_app_reset_all(); declare_test_vars();
+    glr_ctrl_reset_all(); declare_test_vars();
     g_status[0] = '\0';
     editor_feed_line("func0(n) {");
     editor_feed_line("func0(n + 1);");
@@ -1158,7 +1158,7 @@ int main(void) {
     /* Regression: a second definition of func<N> is rejected with a
      * status message instead of silently creating a duplicate that the
      * flattener would ignore. */
-    glr_app_reset_all(); declare_test_vars();
+    glr_ctrl_reset_all(); declare_test_vars();
     g_status[0] = '\0';
     editor_feed_line("func0 {");
     editor_feed_line("glVertex3f(1, 2, 3);");
@@ -1171,7 +1171,7 @@ int main(void) {
                 strstr(g_status, "func0 already defined") != NULL);
 
     /* Cursor on the existing def: "overwrite" path, still allowed. */
-    glr_app_reset_all(); declare_test_vars();
+    glr_ctrl_reset_all(); declare_test_vars();
     editor_feed_line("func0 {");
     editor_feed_line("glVertex3f(1, 2, 3);");
     editor_feed_line("}");
@@ -1190,7 +1190,7 @@ int main(void) {
      * commit time, the same way `x = 1;` is rejected before `float x;`
      * is declared.  Call is never added to repl_state_document_cmds_mut() and status names the
      * function. */
-    glr_app_reset_all(); declare_test_vars();
+    glr_ctrl_reset_all(); declare_test_vars();
     g_status[0] = '\0';
     int pre_call_cmd_count = repl_state_document_count();
     editor_feed_line("func5();");
@@ -1220,7 +1220,7 @@ int main(void) {
      * mutual recursion keeps working.  func0's body calls func1 before
      * func1 is defined; top-level `func0(2)` only commits after both
      * defs exist. */
-    glr_app_reset_all(); declare_test_vars();
+    glr_ctrl_reset_all(); declare_test_vars();
     editor_feed_line("func0(n) {");
     editor_feed_line("if(n > 0) {");
     editor_feed_line("glVertex3f(n, 0, 0);");
@@ -1275,7 +1275,7 @@ int main(void) {
         };
         int case_count = (int)(sizeof(not_in_begin_cases) / sizeof(not_in_begin_cases[0]));
         for (int i = 0; i < case_count; i++) {
-            glr_app_reset_all(); declare_test_vars();
+            glr_ctrl_reset_all(); declare_test_vars();
             editor_feed_line("glBegin(GL_TRIANGLES);");
             int before = repl_state_document_count();
             g_status[0] = '\0';
@@ -1319,7 +1319,7 @@ int main(void) {
         };
         int case_count = (int)(sizeof(in_begin_cases) / sizeof(in_begin_cases[0]));
         for (int i = 0; i < case_count; i++) {
-            glr_app_reset_all(); declare_test_vars();
+            glr_ctrl_reset_all(); declare_test_vars();
             editor_feed_line("glBegin(GL_TRIANGLES);");
             int before = repl_state_document_count();
             g_status[0] = '\0';
@@ -1353,7 +1353,7 @@ int main(void) {
      * the following line and materialized a real duplicate on the next
      * commit. (clipboard.c paste tail; saved_insert restore.) */
     {
-        glr_app_reset_all(); declare_test_vars();
+        glr_ctrl_reset_all(); declare_test_vars();
         editor_feed_line("glEnable(GL_BLEND);");
         editor_feed_line("glutSolidSphere(1, 20, 20);");
         editor_feed_line("glDepthMask(GL_TRUE);");

@@ -73,6 +73,8 @@
 #include "subsystems/variable_panel/variable_panel_drag.h"
 #include "subsystems/variable_panel/variable_panel_state.h"
 
+static UiRenderSnapshot g_cached_ui_snap;
+
 static int glr_ctrl_apply_code_panel_follow_scroll_for_snapshot(
     const UiRenderSnapshot *snap,
     int *out_follow_doc_line,
@@ -423,10 +425,12 @@ static ReplayVertexWalkContext glr_ctrl_build_vertex_walk_context(int selected_b
 
     ReplayVertexWalkContext ctx = {
         .program                = repl_state_flat_program_view(),
-        .edit_line_idx          = editor_state_edit_line(),
-        .cursor_block_begin     = repl_state_flat_program_current_block_begin(),
-        .cursor_block_end       = repl_state_flat_program_current_block_end(),
-        .cursor_func_scope_mask = 0,  /* not currently exposed via repl_state */
+        .cursor = {
+            .edit_line_idx          = editor_state_edit_line(),
+            .cursor_block_begin     = repl_state_flat_program_current_block_begin(),
+            .cursor_block_end       = repl_state_flat_program_current_block_end(),
+            .cursor_func_scope_mask = 0,  /* not currently exposed via repl_state */
+        },
         .selected_block_only    = selected_block_only,
     };
     return ctx;
@@ -485,16 +489,13 @@ static void glr_ctrl_render_normal_vectors(void) {
  * dependency goes away. */
 
 typedef struct OverlayWalkCtx {
-    FlatProgramView program;
-    int             edit_line_idx;
-    int             cursor_block_begin;
-    int             cursor_block_end;
-    unsigned int    cursor_func_scope_mask;
-    int             show_vertex_outlines;
-    int             highlight_current_poly;
-    int             replay_tess_preview;
-    int             show_vertex_points;
-    int             replay_vertex_points;
+    FlatProgramView  program;
+    CursorBlockState cursor;
+    int              show_vertex_outlines;
+    int              highlight_current_poly;
+    int              replay_tess_preview;
+    int              show_vertex_points;
+    int              replay_vertex_points;
 } OverlayWalkCtx;
 
 static int outline_begin_mode_has_overlay(GLenum mode) {
@@ -517,19 +518,19 @@ static int outline_cmd_matches_cursor(int flat_idx,
     if (flat_idx < 0 || flat_idx >= ctx->program.cmd_count) return 0;
     const GLCmd *cmd = &ctx->program.cmds[flat_idx];
     if (!cmd->valid) return 0;
-    if (ctx->edit_line_idx < 0) return 0;
+    if (ctx->cursor.edit_line_idx < 0) return 0;
 
-    if (cmd->call_src_cmd_idx == ctx->edit_line_idx ||
-        cmd->root_call_src_cmd_idx == ctx->edit_line_idx)
+    if (cmd->call_src_cmd_idx == ctx->cursor.edit_line_idx ||
+        cmd->root_call_src_cmd_idx == ctx->cursor.edit_line_idx)
         return 1;
-    if (ctx->cursor_func_scope_mask != 0 &&
-        (cmd->func_scope_mask & ctx->cursor_func_scope_mask) != 0)
+    if (ctx->cursor.cursor_func_scope_mask != 0 &&
+        (cmd->func_scope_mask & ctx->cursor.cursor_func_scope_mask) != 0)
         return 1;
-    if (ctx->cursor_block_begin >= 0 &&
-        flat_idx >= ctx->cursor_block_begin &&
-        flat_idx <= ctx->cursor_block_end)
+    if (ctx->cursor.cursor_block_begin >= 0 &&
+        flat_idx >= ctx->cursor.cursor_block_begin &&
+        flat_idx <= ctx->cursor.cursor_block_end)
         return 1;
-    return cmd->src_cmd_idx == ctx->edit_line_idx;
+    return cmd->src_cmd_idx == ctx->cursor.edit_line_idx;
 }
 
 static int outline_block_matches_cursor(int begin_idx, int is_tess,
@@ -905,10 +906,12 @@ static void glr_ctrl_post_overlays(void *user_data) {
 
     OverlayWalkCtx walk = {
         .program                = repl_state_flat_program_view(),
-        .edit_line_idx          = editor_state_edit_line(),
-        .cursor_block_begin     = repl_state_flat_program_current_block_begin(),
-        .cursor_block_end       = repl_state_flat_program_current_block_end(),
-        .cursor_func_scope_mask = 0,  /* not currently surfaced via repl_state */
+        .cursor = {
+            .edit_line_idx          = editor_state_edit_line(),
+            .cursor_block_begin     = repl_state_flat_program_current_block_begin(),
+            .cursor_block_end       = repl_state_flat_program_current_block_end(),
+            .cursor_func_scope_mask = 0,  /* not currently surfaced via repl_state */
+        },
         .show_vertex_outlines   = presentation.show_vertex_outlines,
         .highlight_current_poly = presentation.highlight_current_poly && !replaying,
         .replay_tess_preview    = replay_mode_vertex,
@@ -1069,7 +1072,7 @@ int glr_ctrl_restore_hidden_code_panel(void) {
  * The editor still owns the commit-side state reset via
  * editor_commit_reset_transients(); this wraps that with the
  * cross-subsystem cleanup the app-frame paths actually want. */
-void glr_app_reset_transients(void) {
+void glr_ctrl_reset_transients(void) {
     editor_commit_reset_transients();
     glr_camera_controls_reset();
     glr_camera_clear_scene_default();
@@ -1855,12 +1858,19 @@ void glr_ctrl_display_frame(void) {
     prof_end(PROF_SNAPSHOT_SCENE_CONFIG);
 
     prof_begin(PROF_SNAPSHOT_UI);
-    /* Build, let follow-scroll adjust editor scroll, then rebuild: the
-     * second build is intentional so the published snapshot reflects the
-     * post-follow-scroll offset (not a copy-paste). */
+    /* Build, let follow-scroll adjust editor scroll, then update scroll-dependent
+     * fields in the snapshot selectively (instead of rebuilding the heavy snapshot):
+     * the second pass is to reflect post-follow-scroll offset in the published snapshot. */
     glr_ctrl_build_ui_snapshot(&ui_snap);
-    glr_ctrl_apply_code_panel_follow_scroll_for_snapshot(&ui_snap, NULL, NULL);
-    glr_ctrl_build_ui_snapshot(&ui_snap);
+    {
+        int old_scroll = editor_state_scroll().scroll;
+        glr_ctrl_apply_code_panel_follow_scroll_for_snapshot(&ui_snap, NULL, NULL);
+        if (editor_state_scroll().scroll != old_scroll) {
+            ui_snap.scroll = editor_state_scroll();
+            glr_ctrl_populate_numeric_swatch(&ui_snap);
+        }
+    }
+    g_cached_ui_snap = ui_snap;
     prof_end(PROF_SNAPSHOT_UI);
 
     prof_end(PROF_SNAPSHOT);
@@ -1965,10 +1975,10 @@ void glr_ctrl_reshape(int w, int h) {
 /* App-service installers that must be present for any code path that
  * loads/exports REPL state — including the dump-only CLI paths
  * (--dump-code / --dump-flat) that bypass glr_ctrl_init_gl. Idempotent;
- * called from glr_app_reset_all and from glr_ctrl_bootstrap_repl.
+ * called from glr_ctrl_reset_all and from glr_ctrl_bootstrap_repl.
  * (Bootstrapping the dump CLI paths through this installer was the
  * Step 4 [P2] fix in feature/decouple-repl-from-gl-repl-alt.md;
- * previously these installs lived only in glr_app_reset_all, so the
+ * previously these installs lived only in glr_ctrl_reset_all, so the
  * dump CLI ran without them and dropped @cfg from imported files.) */
 /* Bundles the example-defaults reset for presentation chrome plus the
  * camera auto-rotate toggle. The cfg bridge handles per-scene cfg in
@@ -2027,7 +2037,7 @@ int glr_ctrl_apply_tag_defaults(unsigned int tag_mask,
     return collisions;
 }
 
-static void glr_app_reset_example_chrome(unsigned int tag_mask) {
+static void glr_ctrl_reset_example_chrome(unsigned int tag_mask) {
     glr_state_presentation_reset_example_defaults();
     glr_camera_mut()->auto_rotate = CFG_DEFAULT_CAMERA_ROTATE;
     variable_panel_set_visible(CFG_DEFAULT_VARIABLE_PANEL);
@@ -2043,7 +2053,7 @@ static void glr_app_reset_example_chrome(unsigned int tag_mask) {
  * (taken when the runtime GL lacks glPointParameterfv) consumes it,
  * so this is a small zero-cost shim when point parameters are
  * supported. */
-static float glr_app_camera_distance(void) {
+static float glr_ctrl_camera_distance(void) {
     return glr_camera().dist;
 }
 
@@ -2053,7 +2063,7 @@ static float glr_app_camera_distance(void) {
  * glLoadIdentity() and glMatrixMode(GL_MODELVIEW). Ortho uses the
  * aspect-independent half-height and recomputes the aspect at runtime
  * from w/h so the exported program stays resolution-independent. */
-static void glr_app_export_reshape_projection(ReplExportProjectionBlock *blk) {
+static void glr_ctrl_export_reshape_projection(ReplExportProjectionBlock *blk) {
     SceneProjectionDesc p;
 
     scene_get_active_projection(&g_scene_renderer, &p);
@@ -2073,14 +2083,14 @@ static void glr_app_export_reshape_projection(ReplExportProjectionBlock *blk) {
 }
 
 static const ReplExportProjectionBridge g_export_projection_bridge_impl = {
-    glr_app_export_reshape_projection
+    glr_ctrl_export_reshape_projection
 };
 
 /* Editor-input cleanup that the REPL loaders used to do inline now
  * routes through callback sinks. The two helpers below are the
  * full-app implementations the controller installs at startup; the
  * demo leaves both unset. */
-static void glr_app_editor_input_reset(void) {
+static void glr_ctrl_host_input_reset(void) {
     editor_insert_mode_set(0);
     EditorInputState *inp = editor_state_input_mut();
     inp->input[0] = '\0';
@@ -2090,18 +2100,18 @@ static void glr_app_editor_input_reset(void) {
     inp->pending_newline_len = 0;
 }
 
-static void glr_app_editor_insert_mode_off(void) {
+static void glr_ctrl_host_insert_mode_off(void) {
     editor_insert_mode_set(0);
 }
 
 /* Route the residual editor scroll/follow writes through host-effect
  * sinks. */
-static void glr_app_scroll_to_line(int target) {
+static void glr_ctrl_scroll_to_line(int target) {
     editor_scroll_set(target);
     editor_scroll_follow_cursor_set(0);
 }
 
-static void glr_app_follow_cursor(int follow) {
+static void glr_ctrl_follow_cursor(int follow) {
     editor_scroll_follow_cursor_set(follow);
 }
 
@@ -2175,17 +2185,17 @@ static const char *glr_host_editor_input_get(void) {
  * actualize loader / scene-switch / replay effects on the editor and
  * peer subsystems.
  * This file is where editor coupling concentrates, so the editor-
- * neutral names in core.h resolve to glr_app_* here. The demo installs
+ * neutral names in core.h resolve to glr_ctrl_* here. The demo installs
  * its own edit-line-only bridge, so these app/editor/tutorial effects
  * stay out of its link set. */
 static const ReplHostEffects g_glr_host_effects = {
     .status                     = ui_state_status_set,
     .status_error               = ui_state_status_set_error,
-    .example_presentation_reset = glr_app_reset_example_chrome,
-    .input_reset                = glr_app_editor_input_reset,
-    .insert_mode_off            = glr_app_editor_insert_mode_off,
-    .scroll_to_line             = glr_app_scroll_to_line,
-    .follow_cursor              = glr_app_follow_cursor,
+    .example_presentation_reset = glr_ctrl_reset_example_chrome,
+    .input_reset                = glr_ctrl_host_input_reset,
+    .insert_mode_off            = glr_ctrl_host_insert_mode_off,
+    .scroll_to_line             = glr_ctrl_scroll_to_line,
+    .follow_cursor              = glr_ctrl_follow_cursor,
     .tutorial_teardown          = tutorial_teardown,
     .edit_line_get              = editor_state_edit_line,
     .edit_line_set              = editor_state_edit_line_set,
@@ -2198,8 +2208,8 @@ static const ReplHostEffects g_glr_host_effects = {
 /* Seed both fade machines to the current presentation theme at full
  * opacity, STEADY — a zero-init machine would diff OFF -> the non-off
  * default grid and animate it in on frame 1, and animate stale prior
- * themes after a world reset. Folded into glr_app_install_app_services
- * (idempotent, called from both program init and glr_app_reset_all)
+ * themes after a world reset. Folded into glr_ctrl_install_app_services
+ * (idempotent, called from both program init and glr_ctrl_reset_all)
  * so it runs AFTER glr_state_presentation_reset_defaults().
  * (Codified as Rule 8 of plans/.../grid-axes-transitions.md.) */
 static void glr_ctrl_seed_overlay_xn(void) {
@@ -2245,7 +2255,7 @@ static void glr_ctrl_tick_overlay_xn(void) {
                   AXES_FADE_IN_SECS, AXES_FADE_OUT_SECS);
 }
 
-static void glr_app_install_app_services(void) {
+static void glr_ctrl_install_app_services(void) {
     /* Install the host-effect bridge (status sink, example-
      * presentation-reset, editor effects, and tutorial teardown).
      * Single consolidated call in place of the previous individual
@@ -2274,7 +2284,7 @@ static void glr_app_install_app_services(void) {
      * callback keeps glr_camera.c out of the REPL pipeline. The demo
      * doesn't install — the fallback then passes glPointSize through
      * unscaled. (Step 7e of feature/decouple-repl-from-gl-repl-alt.md.) */
-    repl_executor_install_camera_distance_source(glr_app_camera_distance);
+    repl_executor_install_camera_distance_source(glr_ctrl_camera_distance);
     /* Reshape-projection bridge: lets the GL-free exporter / code panel
      * emit a reshape() that matches the scene's live projection
      * (perspective in 3D, ortho in 2D). Demo/tests don't install, so the
@@ -2282,7 +2292,7 @@ static void glr_app_install_app_services(void) {
     repl_export_install_projection_bridge(&g_export_projection_bridge_impl);
     /* Seed the grid/axes fade machines (see glr_ctrl_seed_overlay_xn
      * comment for the steady-at-current-theme invariant). In
-     * glr_app_reset_all this runs after the presentation reset (line
+     * glr_ctrl_reset_all this runs after the presentation reset (line
      * ordering above); at bootstrap it reads the static CFG_DEFAULT_*
      * presentation. Idempotent. */
     glr_ctrl_seed_overlay_xn();
@@ -2292,7 +2302,7 @@ static void glr_app_install_app_services(void) {
  * REPL pipeline (and tools/repl_demo) does not have to link / stub the
  * peer / editor / UI reset symbols. (Split out of src/repl/state.c as
  * step 2 of feature/decouple-repl-from-gl-repl-alt.md.) */
-void glr_app_reset_all(void) {
+void glr_ctrl_reset_all(void) {
     editor_undo_note_wholesale_replacement();
     repl_state_reset_program();
     /* GlrState owns presentation + render-config toggles. Reset them
@@ -2319,7 +2329,7 @@ void glr_app_reset_all(void) {
      * that follows this reset locks the tutorial-mutated state in. */
     tutorial_teardown();
     editor_help_session_reset();
-    glr_app_reset_transients();
+    glr_ctrl_reset_transients();
     /* Inline modals are transient editor state too: a post-reset
      * world should not still be hosting a half-typed rename or
      * file-load prompt. */
@@ -2330,7 +2340,7 @@ void glr_app_reset_all(void) {
      * glr_completion; the registration here installs the
      * REPL-aware backing. */
     glr_completion_register_provider();
-    glr_app_install_app_services();
+    glr_ctrl_install_app_services();
     /* Refresh derived export/camera text caches AFTER peer resets
      * so the cached strings reflect post-reset state, not whatever
      * was on the peers before this call. These read app-side cfg /
@@ -2338,7 +2348,7 @@ void glr_app_reset_all(void) {
      * (would pull glr_config / glr_camera into the demo link set
      * AND would pre-fire before peers were reset).
      * The frame loop refreshes them every frame in build_ui_snapshot
-     * + display, so tests that go through glr_app_reset_all see
+     * + display, so tests that go through glr_ctrl_reset_all see
      * coherent caches without waiting for a frame. */
     repl_state_refresh_workspace_header_lines();
     repl_refresh_render_state_strings();
@@ -2431,7 +2441,7 @@ int glr_ctrl_code_panel_apply_scroll_follow_for_test(
 
 void glr_ctrl_init_gl(void) {
     tutorial_state_init_explicit();
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
     repl_ensure_init_bootstrap_ready();
     scene_render_init_gl();
     scene_renderer_state_init(&g_scene_renderer);
@@ -2545,11 +2555,11 @@ void glr_ctrl_bootstrap_repl(const char *input_file) {
      * going through glr_ctrl_init_gl, so the status sink and
      * export-config bridge would otherwise be missing here and any
      * @cfg in imported files would be silently dropped.
-     * glr_app_install_app_services is idempotent so the windowed path
-     * (which already installed via glr_app_reset_all) is unaffected.
+     * glr_ctrl_install_app_services is idempotent so the windowed path
+     * (which already installed via glr_ctrl_reset_all) is unaffected.
      * (Originally the Step 4 [P2] fix in
      * feature/decouple-repl-from-gl-repl-alt.md.) */
-    glr_app_install_app_services();
+    glr_ctrl_install_app_services();
     repl_eval_init_predef_vars();
     for (int i = 0; i < g_num_predef_vars; i++) {
         if (strcmp(g_predef_vars[i].name, "t") == 0) {
@@ -2899,7 +2909,7 @@ static void cycle_example_or_user_scene(void) {
      * so the new scene starts from a clean controller state. (Moved out
      * of src/repl/example_loader.c as step 2 of the decouple plan,
      * feature/decouple-repl-from-gl-repl-alt.md.) */
-    glr_app_reset_transients();
+    glr_ctrl_reset_transients();
     editor_undo_note_wholesale_replacement();
     int count = repl_example_count();
     int active_scene = repl_active_user_scene();
@@ -2942,7 +2952,7 @@ static void cycle_example_or_user_scene(void) {
  * example. Symmetric structure with the forward cycle: same transient
  * cleanup and undo-clear, just inverted index walks. */
 static void cycle_example_or_user_scene_prev(void) {
-    glr_app_reset_transients();
+    glr_ctrl_reset_transients();
     editor_undo_note_wholesale_replacement();
     int count = repl_example_count();
     int active_scene = repl_active_user_scene();
@@ -3415,16 +3425,6 @@ static int route_inline_color_swatch_hit(const UiHit *hit, int my) {
 
 static int route_numeric_swatch_hit(const UiHit *hit) {
     int edit_line = editor_state_edit_line();
-    EditorInputView in = editor_state_input();
-    ReplNumericArgAtCursor d;
-    float step, new_value;
-    char buf[32];
-    char new_line[MAX_LINE_LEN];
-    int n;
-    char parse_err[REPL_STATUS_TEXT_MAX] = "";
-    ReplParsedLine pl;
-    ReplCompiledChange change;
-    int text_len;
 
     if (editor_insert_mode() ||
         edit_line < 0 || edit_line >= repl_state_document_count())
@@ -3434,51 +3434,7 @@ static int route_numeric_swatch_hit(const UiHit *hit) {
         !tutorial_guard_source_change(edit_line, 1, 1))
         return 1;
 
-    d = repl_eval_numeric_arg_at_cursor(in.input, in.cursor_pos);
-    if (!d.found) return 1;
-
-    step = repl_eval_swatch_step(d.value);
-    new_value = d.value + (hit->item_idx > 0 ? step : -step);
-    repl_eval_format_swatch_number(new_value, buf, sizeof buf);
-
-    n = snprintf(new_line, sizeof new_line, "%.*s%s%s",
-                 d.arg_start, in.input, buf, in.input + d.arg_end);
-    if (n < 0 || n >= (int)sizeof new_line) return 1;
-
-    {
-        ReplParseContext parse_ctx = {
-            .source_line_idx = edit_line,
-            .err_buf = parse_err,
-            .err_sz = (int)sizeof parse_err,
-        };
-        if (!repl_parser_parse_command_ctx(new_line, &pl, &parse_ctx)) {
-            if (parse_err[0]) repl_set_status(parse_err);
-            return 1;
-        }
-    }
-    if (pl.cmd.type == CMD_COMMENT) return 1;
-
-    repl_compiled_change_init(&change);
-    change.kind = REPL_COMPILED_REPLACE_ONE;
-    change.pos = edit_line;
-    change.count = 1;
-    change.cmds[0] = pl.cmd;
-    text_len = (int)strlen(pl.text);
-    if (text_len >= MAX_LINE_LEN) text_len = MAX_LINE_LEN - 1;
-    memcpy(change.text[0], pl.text, (size_t)text_len);
-    change.text[0][text_len] = '\0';
-
-    if (editor_commit_apply_external_change(&change, 1)) {
-        editor_load_line_to_input(edit_line);
-        {
-            EditorInputView reloaded = editor_state_input();
-            int pos = d.arg_start < reloaded.input_len
-                          ? d.arg_start : reloaded.input_len;
-            editor_cursor_pos_set(pos);
-        }
-        editor_completion_update();
-        editor_request_redraw();
-    }
+    editor_commit_apply_swatch_change(edit_line, hit->item_idx > 0 ? 1 : -1);
     return 1;
 }
 
@@ -3745,9 +3701,14 @@ int glr_ctrl_router_handle_code_panel_drag(int x, int y) {
     if (!g_code_panel_drag_active || g_code_panel_drag_anchor < 0)
         return 0;
 
-    UiRenderSnapshot ui_snap;
-    glr_ctrl_build_ui_snapshot(&ui_snap);
-    UiHit hit = ui_panels_hit_test(&ui_snap, x, y, repl_eval_predef_view().count);
+    const UiRenderSnapshot *snap = &g_cached_ui_snap;
+    UiRenderSnapshot fresh_snap;
+    if (g_cached_ui_snap.viewport.window_w <= 0 || g_cached_ui_snap.viewport.window_h <= 0) {
+        glr_ctrl_build_ui_snapshot(&fresh_snap);
+        snap = &fresh_snap;
+    }
+
+    UiHit hit = ui_panels_hit_test(snap, x, y, repl_eval_predef_view().count);
 
     /* Per-character input-buffer drag: as long as the drag stays on
      * the same source row as the press AND that row is the active
@@ -3779,13 +3740,12 @@ int glr_ctrl_router_handle_code_panel_drag(int x, int y) {
         if (cp_w > 0 && cp_h > 0 && win_h > 0) {
             int gl_y = win_h - y;
             int cx = x;
-            UiRenderSnapshot ui_snap;
-            glr_ctrl_build_ui_snapshot(&ui_snap);
             int cy = y;
             if (cx < cp_x + 1) cx = cp_x + 1;
             if (cx > cp_x + cp_w - 1) cx = cp_x + cp_w - 1;
             if (gl_y < cp_y + 1) cy = win_h - (cp_y + 1);
-            UiHit clamped = ui_panels_hit_test(&ui_snap, cx, cy,
+            if (gl_y > cp_y + cp_h - 1) cy = win_h - (cp_y + cp_h - 1);
+            UiHit clamped = ui_panels_hit_test(snap, cx, cy,
                                                repl_eval_predef_view().count);
             target = code_panel_target_from_hit(clamped);
         }
@@ -3967,9 +3927,13 @@ void glr_ctrl_mouse(int button, int state, int x, int y) {
          * divider + inline swatch + insert line) and pin buttons. Only
          * kinds that don't apply (UI_HIT_SCENE, UI_HIT_NONE,
          * UI_HIT_HELP_PANEL) fall through to scene press / camera. */
-        UiRenderSnapshot ui_snap;
-        glr_ctrl_build_ui_snapshot(&ui_snap);
-        UiHit hit = ui_panels_hit_test(&ui_snap, x, y,
+        const UiRenderSnapshot *snap = &g_cached_ui_snap;
+        UiRenderSnapshot fresh_snap;
+        if (g_cached_ui_snap.viewport.window_w <= 0 || g_cached_ui_snap.viewport.window_h <= 0) {
+            glr_ctrl_build_ui_snapshot(&fresh_snap);
+            snap = &fresh_snap;
+        }
+        UiHit hit = ui_panels_hit_test(snap, x, y,
                            repl_eval_predef_view().count);
         if (glr_ctrl_router_handle_code_panel_hit(hit, x, y)) {
             glr_ctrl_apply_input_effects(editor_take_input_effects());

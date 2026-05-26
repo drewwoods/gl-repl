@@ -86,7 +86,7 @@ ReplRenderState       *repl_state_render_mut(void);
 /* Reset the runtime-mutated render halves (`lights[]`, `clear_color[]`)
  * to defaults. The render-config toggles (msaa, line_smooth, accum_*)
  * moved to glr_state — call `glr_state_render_reset_defaults()` for
- * those. Both reset paths fire from `glr_app_reset_all`. */
+ * those. Both reset paths fire from `glr_ctrl_reset_all`. */
 void                   repl_state_render_reset_defaults(void);
 
 ReplSceneRuntimeState    repl_state_scenes(void);
@@ -103,10 +103,10 @@ int                          repl_state_parse_workspace_header_line(const char *
 
 
 /* Initialise REPL-owned program state to defaults. Does NOT reset
- * peer/editor/UI state — that's glr_app_reset_all in glr_ctrl.h.
+ * peer/editor/UI state — that's glr_ctrl_reset_all in glr_ctrl.h.
  * The demo and any pure-REPL test fixture call this; production
  * startup and tests that need full-world reset call
- * glr_app_reset_all instead. */
+ * glr_ctrl_reset_all instead. */
 void repl_state_init_defaults(void);
 
 /* Lower-level synonym of repl_state_init_defaults — resets just the

@@ -618,14 +618,14 @@ static int find_example_index_by_name(const char *name) {
 }
 
 static void load_example_for_test(int idx) {
-    glr_app_reset_all(); declare_test_vars();
+    glr_ctrl_reset_all(); declare_test_vars();
     pin_code_panel_state();
     repl_load_example(idx);
     settle_camera_transition_for_test();
 }
 
 static void load_custom_example_lines_for_test(const char *const *lines) {
-    glr_app_reset_all(); declare_test_vars();
+    glr_ctrl_reset_all(); declare_test_vars();
     pin_code_panel_state();
     repl_load_example_lines_for_test(lines);
     settle_camera_transition_for_test();
@@ -912,7 +912,7 @@ static void test_example_tag_default_cfg(void) {
  *
  * The test calls glr_ctrl_apply_tag_defaults directly with a synthetic
  * table — no example loaded, no @cfg in play — so the only thing
- * mutating state here is the helper itself. glr_app_reset_all
+ * mutating state here is the helper itself. glr_ctrl_reset_all
  * normalizes presentation to global defaults before each subcase. */
 static void test_example_tag_default_dispatch(void) {
     /* (A) Two entries, distinct keys, both tags present → both apply. */
@@ -928,7 +928,7 @@ static void test_example_tag_default_dispatch(void) {
         unsigned int mask = repl_example_tag_bit(REPL_EXAMPLE_TAG_2D) |
                             repl_example_tag_bit(REPL_EXAMPLE_TAG_LINES);
 
-        glr_app_reset_all(); declare_test_vars();
+        glr_ctrl_reset_all(); declare_test_vars();
         int collisions = glr_ctrl_apply_tag_defaults(mask, table, 2);
         ASSERT_TRUE("distinct-key stack: no collision",
                     collisions == 0);
@@ -951,7 +951,7 @@ static void test_example_tag_default_dispatch(void) {
         };
         unsigned int mask = repl_example_tag_bit(REPL_EXAMPLE_TAG_2D);
 
-        glr_app_reset_all(); declare_test_vars();
+        glr_ctrl_reset_all(); declare_test_vars();
         int collisions = glr_ctrl_apply_tag_defaults(mask, table, 2);
         ASSERT_TRUE("same-key collision counted",
                     collisions == 1);
@@ -974,7 +974,7 @@ static void test_example_tag_default_dispatch(void) {
         unsigned int mask = repl_example_tag_bit(REPL_EXAMPLE_TAG_2D) |
                             repl_example_tag_bit(REPL_EXAMPLE_TAG_LINES);
 
-        glr_app_reset_all(); declare_test_vars();
+        glr_ctrl_reset_all(); declare_test_vars();
         int collisions = glr_ctrl_apply_tag_defaults(mask, table, 2);
         ASSERT_TRUE("cross-tag same-key collision counted",
                     collisions == 1);
@@ -995,7 +995,7 @@ static void test_example_tag_default_dispatch(void) {
         };
         unsigned int mask = repl_example_tag_bit(REPL_EXAMPLE_TAG_3D);
 
-        glr_app_reset_all(); declare_test_vars();
+        glr_ctrl_reset_all(); declare_test_vars();
         int collisions = glr_ctrl_apply_tag_defaults(mask, table, 2);
         ASSERT_TRUE("mask filters non-matching: no collision",
                     collisions == 0);
@@ -1012,7 +1012,7 @@ static void test_example_tag_default_dispatch(void) {
         };
         int prev_grid;
 
-        glr_app_reset_all(); declare_test_vars();
+        glr_ctrl_reset_all(); declare_test_vars();
         prev_grid = glr_state_presentation().grid_theme;
         int collisions = glr_ctrl_apply_tag_defaults(0u, table, 1);
         ASSERT_TRUE("empty mask: no collision", collisions == 0);
@@ -1121,7 +1121,7 @@ int main(int argc, char **argv) {
             NULL
         };
 
-        glr_app_reset_all(); declare_test_vars();
+        glr_ctrl_reset_all(); declare_test_vars();
         seed_nondefault_example_presentation_state();
         repl_load_example_lines_for_test(no_cfg_reset_example);
 
@@ -1178,7 +1178,7 @@ int main(int argc, char **argv) {
             NULL
         };
 
-        glr_app_reset_all(); declare_test_vars();
+        glr_ctrl_reset_all(); declare_test_vars();
         seed_nondefault_example_presentation_state();
         repl_load_example_lines_for_test(partial_cfg_reset_example);
 
@@ -1241,7 +1241,7 @@ int main(int argc, char **argv) {
             NULL
         };
 
-        glr_app_reset_all(); declare_test_vars();
+        glr_ctrl_reset_all(); declare_test_vars();
         ASSERT_TRUE("view_mode starts at 3D default after reset",
                     glr_state_presentation().ortho_mode == CFG_DEFAULT_ORTHO_MODE);
 
@@ -1280,7 +1280,7 @@ int main(int argc, char **argv) {
         GlrCameraState after_load;
         GlrCameraState after_tick;
 
-        glr_app_reset_all(); declare_test_vars();
+        glr_ctrl_reset_all(); declare_test_vars();
         pin_code_panel_state();
         before = glr_camera();
         repl_load_example_lines_for_test(easing_camera_example);
@@ -1587,7 +1587,7 @@ int main(int argc, char **argv) {
         snprintf(label, sizeof(label), "example %02d export compiles", idx);
         ASSERT_TRUE(label, compiled);
 
-        glr_app_reset_all();
+        glr_ctrl_reset_all();
         pin_code_panel_state();
         roundtrip_loaded = repl_export_load_from_file(export_path);
         snprintf(label, sizeof(label), "example %02d export imports", idx);

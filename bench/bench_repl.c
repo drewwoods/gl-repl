@@ -120,7 +120,7 @@ static void report(BenchResult r) {
 /* Mirror declare_test_vars() from the test suites - examples reference
  * these single-letter identifiers freely and parsing them otherwise fails
  * the repl_eval_validate_expression_idents() check. We declare them once at startup
- * and re-declare after each glr_app_reset_all() call (reset wipes the
+ * and re-declare after each glr_ctrl_reset_all() call (reset wipes the
  * predef table). */
 static const char *const k_test_idents[] = {
     "x", "y", "z", "i", "j", "k", "a", "b", "c", "n",
@@ -135,7 +135,7 @@ static void declare_test_idents(void) {
 }
 
 static void fresh_repl(void) {
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
     declare_test_idents();
 }
 

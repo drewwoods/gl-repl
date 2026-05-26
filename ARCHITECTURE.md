@@ -82,7 +82,7 @@ When a module starts owning mutable REPL state, follow the Stage-1 template:
    actualizes back into state.
 4. Extend the ownership tests in the same change: keep
    `repl_state_capture()`, `repl_state_restore()`, and
-   `repl_state_reset_program()` (REPL-only) / `glr_app_reset_all()`
+   `repl_state_reset_program()` (REPL-only) / `glr_ctrl_reset_all()`
    (full-world) current for runtime slices, and add focused behavior
    coverage in the module's own tests.
 
@@ -873,7 +873,7 @@ full app fills and the demo leaves unset:
 
 4. **Split lifecycle reset + dispatcher relocation.**
    `repl_state_reset_program()` (REPL-only) is separated from
-   `glr_app_reset_all()` (full-world, in `src/app/`), and
+   `glr_ctrl_reset_all()` (full-world, in `src/app/`), and
    `repl_compile_dispatch()` moved from `src/editor/services.c` into
    `src/repl/compile.c`. Pure structured-block validators were extracted
    from the editor compile wrappers, and the non-editor

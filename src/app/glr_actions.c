@@ -397,12 +397,13 @@ int glr_scene_menu_slot_for_dense_index(int scene_idx) {
  * always reloads, so callers that want a no-op (the tab router) check
  * before calling. */
 void glr_scene_load_example(int example_idx) {
-    glr_app_reset_transients();
+    glr_ctrl_reset_transients();
     editor_undo_note_wholesale_replacement();
     editor_state_edit_line_set(repl_load_example(example_idx));
 }
 
 void glr_scene_load_user_slot(int slot) {
+    glr_ctrl_reset_transients();
     editor_undo_note_wholesale_replacement();
     glr_camera_clear_scene_default();
     if (repl_load_user_scene_idx(slot))
@@ -580,12 +581,35 @@ int glr_cfg_handle_special_shortcut(int key) {
 }
 
 int glr_action_menu_item_activate(int menu_id, int item_idx) {
-    if (menu_id == GLR_MENU_FILE) {
-        if (item_idx == GLR_FILE_ITEM_LOAD_SCENE) {
-            editor_inline_file_prompt_begin(DEFAULT_SCENE_FILE);
+    switch (menu_id) {
+    case GLR_MENU_FILE:
+        switch (item_idx) {
+        case GLR_FILE_ITEM_NEW_SCENE:
+            repl_scenes_enter_transient_scene();
+            repl_scenes_reset_for_transient();
+            editor_reset_for_new_scene();
+            editor_undo_note_wholesale_replacement();
+            glr_camera_clear_scene_default();
+            return 1;
+        case GLR_FILE_ITEM_SAVE_SCENE: {
+            ReplExportLayout layout;
+            glr_ctrl_fill_export_layout(&layout);
+            repl_save_active_scene(&layout);
             return 1;
         }
-        if (item_idx == GLR_FILE_ITEM_SAVE_WORKSPACE) {
+        case GLR_FILE_ITEM_LOAD_SCENE:
+            editor_inline_file_prompt_begin(DEFAULT_SCENE_FILE);
+            return 1;
+        case GLR_FILE_ITEM_RENAME_SCENE: {
+            int slot = repl_active_user_scene();
+            if (slot < 0) {
+                repl_set_status_error("No active scene to rename");
+                return 1;
+            }
+            editor_inline_rename_begin(slot);
+            return 1;
+        }
+        case GLR_FILE_ITEM_SAVE_WORKSPACE: {
             const char *dir = repl_workspace_dir();
             if (!dir || !dir[0])
                 dir = GLR_DEFAULT_WORKSPACE_DIR;
@@ -594,7 +618,7 @@ int glr_action_menu_item_activate(int menu_id, int item_idx) {
             repl_save_workspace(dir, &layout);
             return 1;
         }
-        if (item_idx == GLR_FILE_ITEM_LOAD_WORKSPACE) {
+        case GLR_FILE_ITEM_LOAD_WORKSPACE: {
             const char *dir = repl_workspace_dir();
             if (!dir || !dir[0])
                 dir = GLR_DEFAULT_WORKSPACE_DIR;
@@ -604,32 +628,15 @@ int glr_action_menu_item_activate(int menu_id, int item_idx) {
                 editor_undo_note_wholesale_replacement();
             return 1;
         }
-        if (item_idx == GLR_FILE_ITEM_NEW_SCENE) {
-            repl_scenes_enter_transient_scene();
-            repl_scenes_reset_for_transient();
-            editor_reset_for_new_scene();
-            editor_undo_note_wholesale_replacement();
-            glr_camera_clear_scene_default();
+        case GLR_FILE_ITEM_SCENE_SEP:
+            return 1;
+        default:
+            /* Out-of-range or unknown file menu item. Return 1 (consumed)
+             * to keep backward compatibility with existing tests. */
             return 1;
         }
-        if (item_idx == GLR_FILE_ITEM_SAVE_SCENE) {
-            ReplExportLayout layout;
-            glr_ctrl_fill_export_layout(&layout);
-            repl_save_active_scene(&layout);
-            return 1;
-        }
-        if (item_idx == GLR_FILE_ITEM_RENAME_SCENE) {
-            int slot = repl_active_user_scene();
-            if (slot < 0) {
-                repl_set_status_error("No active scene to rename");
-                return 1;
-            }
-            editor_inline_rename_begin(slot);
-            return 1;
-        }
-        /* GLR_FILE_ITEM_SCENE_SEP is a non-actionable "---" row (the
-         * dropdown hit-test never returns it); no case needed. */
-    } else if (menu_id == GLR_MENU_SCENE) {
+
+    case GLR_MENU_SCENE: {
         int tag_count = repl_example_visible_tag_count();
         if (item_idx >= 1 && item_idx <= tag_count)
             return 0;
@@ -642,8 +649,12 @@ int glr_action_menu_item_activate(int menu_id, int item_idx) {
                 return 1;
             }
         }
+        /* Returns 1 (consumed) for out-of-range, header row, and negative indexes,
+         * matching test expectations. */
         return 1;
-    } else if (menu_id == GLR_MENU_TUTORIALS) {
+    }
+
+    case GLR_MENU_TUTORIALS: {
         /* Top-level Tutorials rows after the Phase-B hierarchical menu:
          *   [0..t-1]   tag rows (inert hover-only, like Scene tag rows
          *              — the actual tutorial flyout-item activation
@@ -656,18 +667,21 @@ int glr_action_menu_item_activate(int menu_id, int item_idx) {
         int tag_count = repl_tutorial_visible_tag_count();
         if (item_idx < tag_count)
             return 0;   /* tag row → keep menu open, no action */
-        if (tutorial_active() && item_idx == tag_count + 1) {
+        if (tutorial_active() && item_idx == tag_count + GLR_TUTORIAL_OFF_RESTART) {
             TutorialRuntimeState tutorial = tutorial_state_view();
             if (tutorial.tutorial_idx >= 0)
                 tutorial_start(tutorial.tutorial_idx);
             return 1;
         }
-        if (tutorial_active() && item_idx == tag_count + 2) {
+        if (tutorial_active() && item_idx == tag_count + GLR_TUTORIAL_OFF_EXIT) {
             tutorial_stop();
             return 1;
         }
+        /* Returns 1 (consumed) for out-of-range or separators, matching test expectations. */
         return 1;
-    } else if (menu_id == GLR_MENU_CONFIG) {
+    }
+
+    case GLR_MENU_CONFIG:
         /* Config top-level rows are section / "All" PARENT rows: they
          * hover-open a flyout, and a click on the parent itself is
          * inert (mirrors the MENU_SCENE tag-row guard above). `item_idx`
@@ -680,9 +694,10 @@ int glr_action_menu_item_activate(int menu_id, int item_idx) {
          * per-toggle feel. */
         (void)item_idx;
         return 0;
-    }
 
-    return 1;
+    default:
+        return 1;
+    }
 }
 
 void glr_actions_apply_defaults(void) {

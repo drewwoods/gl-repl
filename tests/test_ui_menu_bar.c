@@ -27,7 +27,7 @@ static TestHarness g_harness = TEST_HARNESS_INIT;
     TEST_ASSERT_INT(&g_harness, label, got, exp)
 
 static void reset_menu_bar_fixture(int window_w, int window_h) {
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
     ui_state_reset();
     ui_menu_bar_close();
     ui_state_viewport_set_size(window_w, window_h);

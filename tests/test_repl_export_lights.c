@@ -58,7 +58,7 @@ static int substring_in_window(const char *text, const char *window_start_marker
 int main(void) {
     const char *path = "/tmp/repl_export_lights_test.c";
 
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
 
     /* Trigger an export of the default scene. */
     repl_export_save_output(path, source_document_view(), NULL);

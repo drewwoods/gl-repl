@@ -424,7 +424,7 @@ static void test_ui_panels_hit_test(void) {
         UiReplCodePanelLayout layout;
         UiHit h;
 
-        glr_app_reset_all();
+        glr_ctrl_reset_all();
         glr_state_presentation_mut()->code_panel_layout = layouts[li];
         glr_ctrl_sync_ui_chrome();
         ui_state_viewport_set_size(800, 600);
@@ -487,7 +487,7 @@ static void test_ui_panels_hit_test(void) {
  * classifications without mutating state. ui_panels_hit_test
  * dispatches to them in priority order. */
 static void test_ui_menu_bar_hit_test(void) {
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
     ui_state_viewport_set_size(800, 600);
     glr_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT; glr_ctrl_sync_ui_chrome();
     ui_state_code_panel_mut()->panel_frac = 0.5f;
@@ -526,7 +526,7 @@ static void test_ui_menu_bar_hit_test(void) {
 }
 
 static void test_ui_color_picker_hit_test(void) {
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
     ui_state_viewport_set_size(800, 600);
 
     /* No picker active -> miss. */
@@ -578,7 +578,7 @@ static void test_ui_color_picker_hit_test(void) {
 }
 
 static void test_ui_variable_panel_hit_test(void) {
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
     ui_state_viewport_set_size(800, 600);
 
     /* Panel hidden -> always miss. */
@@ -610,7 +610,7 @@ static void test_ui_variable_panel_hit_test(void) {
  * hit-testers in priority order before falling through to the
  * code panel and scene. */
 static void test_ui_panels_hit_test_dispatch(void) {
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
     ui_state_viewport_set_size(800, 600);
     glr_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT; glr_ctrl_sync_ui_chrome();
     ui_state_code_panel_mut()->panel_frac = 0.5f;
@@ -667,7 +667,7 @@ static void test_ui_panels_hit_test_dispatch(void) {
 /* J2.1: ui_panels_hit_test emits UI_HIT_PANEL_DIVIDER for the
  * code-panel splitter strip. */
 static void test_ui_panels_hit_test_panel_divider(void) {
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
     ui_state_viewport_set_size(800, 600);
     ui_state_code_panel_mut()->panel_frac = 0.5f;
 
@@ -723,7 +723,7 @@ static void test_ui_panels_hit_test_panel_divider(void) {
  * of how the header section grows.
  *
  * Caller is responsible for restoring editor_scroll() after the test
- * if it cares (the per-test glr_app_reset_all() calls do this). */
+ * if it cares (the per-test glr_ctrl_reset_all() calls do this). */
 static void code_panel_first_row_text_click(int *out_mx, int *out_my) {
     int cp_x, cp_y, cp_w, cp_h;
     ui_layout_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
@@ -755,7 +755,7 @@ static void code_panel_first_row_text_click(int *out_mx, int *out_my) {
  * with the input-cursor target derived from the wrap / indent /
  * segment math the legacy press helper used. */
 static void test_ui_panels_hit_test_code_text_cursor(void) {
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
     ui_state_viewport_set_size(800, 600);
 
     int mx, my;
@@ -797,7 +797,7 @@ static void test_ui_panels_hit_test_code_text_cursor(void) {
  * controller's route_code_insert_line_hit skips editor_navigate_to_line
  * for these clicks, matching the legacy on_insert_line=1 path. */
 static void test_ui_panels_hit_test_insert_line(void) {
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
     ui_state_viewport_set_size(800, 600);
 
     /* Commit one line so insert mode at edit_line=0 produces an
@@ -822,7 +822,7 @@ static void test_ui_panels_hit_test_insert_line(void) {
 }
 
 static void test_ui_panels_hit_test_overwrite_row_kind(void) {
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
     ui_state_viewport_set_size(800, 600);
 
     editor_feed_line("glBegin(GL_POINTS);");
@@ -882,7 +882,7 @@ static void test_ui_panels_hit_test_trailing_blank_row_kind(void) {
         int cp_x, cp_y, cp_w, cp_h;
         UiReplCodePanelLayout layout;
 
-        glr_app_reset_all();
+        glr_ctrl_reset_all();
         glr_state_presentation_mut()->code_focus = cf; glr_ctrl_sync_ui_chrome();
         ui_state_viewport_set_size(800, 600);
         editor_scroll_follow_cursor_set(0);
@@ -919,7 +919,7 @@ static void test_ui_panels_hit_test_virtual_row_routes_to_source(void) {
         int mx = 0, my = 0;
         int found;
 
-        glr_app_reset_all();
+        glr_ctrl_reset_all();
         glr_state_presentation_mut()->code_focus = cf; glr_ctrl_sync_ui_chrome();
         ui_state_viewport_set_size(800, 600);
         editor_scroll_follow_cursor_set(0);
@@ -961,7 +961,7 @@ static void test_vertex2f_gutter_labels(void) {
      * (>165 chars) stays above every header line in both the idx_col_w=0 and
      * idx_col_w=54 states.  Toggling show_vertex_indices then causes no row
      * wrapping changes, so the only glRasterPos2f delta is the "v0" label. */
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
     ui_state_viewport_set_size(4000, 600);
     glr_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT; glr_ctrl_sync_ui_chrome();
     ui_state_code_panel_mut()->panel_frac = 0.4f;
@@ -1005,7 +1005,7 @@ static void test_vertex2f_gutter_labels(void) {
                 gl_stub_counts[GL_STUB_glRasterPos2f] > base);
 
     /* Confirm vertex3f has the same behaviour */
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
     ui_state_viewport_set_size(4000, 600);
     glr_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT; glr_ctrl_sync_ui_chrome();
     ui_state_code_panel_mut()->panel_frac = 0.4f;
@@ -1054,7 +1054,7 @@ static void test_tutorial_fade_render_uses_per_char_path(void) {
 
     printf("Testing tutorial fade render...\n");
 
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
     ui_state_viewport_set_size(4000, 600);
     glr_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
     glr_ctrl_sync_ui_chrome();
@@ -1133,7 +1133,7 @@ static void test_tutorial_fade_handles_wrapped_lines(void) {
 
     printf("Testing tutorial fade render across wrap rows...\n");
 
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
     ui_state_viewport_set_size(220, 600);
     glr_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
     glr_ctrl_sync_ui_chrome();
@@ -1197,7 +1197,7 @@ static void test_render_then_hit_test_row_consistency(void) {
     int mx, my;
     int mask_a, mask_b;
 
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
     ui_state_viewport_set_size(800, 600);
     glr_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
     glr_ctrl_sync_ui_chrome();
@@ -1297,7 +1297,7 @@ static void test_marker_priority_cascade(void) {
     const float c_color[4]     = {0.95f, 0.85f, 0.30f, 0.85f};
     const float c_tutorial[4]  = {0.95f, 0.45f, 0.85f, 0.90f};
 
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
     ui_state_viewport_set_size(800, 600);
     glr_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
     glr_ctrl_sync_ui_chrome();
@@ -1382,7 +1382,7 @@ int main(void) {
     return 0;
 #endif
 
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
 
     test_help_overlay();
     test_profile_panel();

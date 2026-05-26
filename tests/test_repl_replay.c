@@ -57,7 +57,7 @@ static void add_mock_cmd(int idx, CmdType type) {
 }
 
 static void test_replay_basic_controls(void) {
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
     add_mock_cmd(0, CMD_COLOR3F);
     add_mock_cmd(1, CMD_VERTEX3F);
     repl_state_mark_flat_dirty();
@@ -88,7 +88,7 @@ static void test_replay_basic_controls(void) {
 }
 
 static void test_replay_stepping(void) {
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
     add_mock_cmd(0, CMD_BEGIN);
     add_mock_cmd(1, CMD_VERTEX3F);
     add_mock_cmd(2, CMD_VERTEX3F);
@@ -117,7 +117,7 @@ static void test_replay_stepping(void) {
 }
 
 static void test_replay_tessellation_stepping(void) {
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
     add_mock_cmd(0, CMD_TESS_BEGIN_POLYGON);
     add_mock_cmd(1, CMD_TESS_BEGIN_CONTOUR);
     add_mock_cmd(2, CMD_TESS_VERTEX);
@@ -141,7 +141,7 @@ static void test_replay_tessellation_stepping(void) {
 }
 
 static void test_replay_fade_batches(void) {
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
     add_mock_cmd(0, CMD_VERTEX3F);
     repl_state_mark_flat_dirty();
     repl_flatten_commands(editor_state_edit_line());
@@ -166,7 +166,7 @@ static void test_replay_fade_batches(void) {
 }
 
 static void test_replay_input(void) {
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
     add_mock_cmd(0, CMD_VERTEX3F);
     repl_state_mark_flat_dirty();
     repl_flatten_commands(editor_state_edit_line());
@@ -199,7 +199,7 @@ static void test_replay_input(void) {
 }
 
 static void test_replay_modifiers(void) {
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
     add_mock_cmd(0, CMD_VERTEX3F);
     repl_state_mark_flat_dirty();
     repl_flatten_commands(editor_state_edit_line());
@@ -218,7 +218,7 @@ static void test_replay_modifiers(void) {
 }
 
 static void test_bench_helpers(void) {
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
     add_mock_cmd(0, CMD_VERTEX3F);
     add_mock_cmd(1, CMD_VERTEX3F);
     add_mock_cmd(2, CMD_VERTEX3F);
@@ -235,7 +235,7 @@ static void test_bench_helpers(void) {
 }
 
 static void test_misc_helpers(void) {
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
     add_mock_cmd(0, CMD_VERTEX3F);
     repl_state_mark_flat_dirty();
     repl_flatten_commands(editor_state_edit_line());
@@ -277,7 +277,7 @@ static void test_misc_helpers(void) {
  * captured had t == tLast — and the simulation re-evaluated the RHS
  * against that baseline, producing 0 instead of the cached 0.16. */
 static void test_replay_var_assign_uses_flatten_args(void) {
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
 
     int t_idx = repl_eval_find_predef_var_idx("t");
     ASSERT_TRUE("t predef exists", t_idx >= 0);
@@ -362,7 +362,7 @@ static void test_replay_var_assign_uses_flatten_args(void) {
 static void test_replay_single_arg_shape_gets_eval_annotation(void) {
     int t_idx;
 
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
 
     t_idx = repl_eval_find_predef_var_idx("t");
     ASSERT_TRUE("t predef exists", t_idx >= 0);
@@ -398,7 +398,7 @@ static void test_replay_single_arg_shape_gets_eval_annotation(void) {
 }
 
 static void test_replay_regression_fixes(void) {
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
     add_mock_cmd(0, CMD_COLOR3F);
     add_mock_cmd(1, CMD_VERTEX3F);
     repl_state_mark_flat_dirty();

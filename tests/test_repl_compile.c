@@ -100,7 +100,7 @@ static int fingerprint_equal(const ComputeFingerprint *a,
 
 /* repl_compile_float_decl is pure on the failure path. */
 static void test_compile_float_decl_failure_is_pure(void) {
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
 
     /* Establish a non-trivial pre-state: declare a variable, set
      * status, push a buffer line. */
@@ -131,7 +131,7 @@ static void test_compile_float_decl_failure_is_pure(void) {
 
 /* repl_compile_var_assign is pure on the failure path. */
 static void test_compile_var_assign_failure_is_pure(void) {
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
 
     set_input("float a;");
     ReplCompileContext ctx = repl_compile_context_from_live(editor_state_edit_line());
@@ -159,7 +159,7 @@ static void test_compile_var_assign_failure_is_pure(void) {
 /* Compile NO_CHANGE (input that doesn't match the handler) leaves
  * everything untouched and never fills err. */
 static void test_compile_no_change_leaves_state(void) {
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
     ui_state_status_set("baseline status");
     ComputeFingerprint before = capture_fingerprint();
 
@@ -187,7 +187,7 @@ static void test_compile_no_change_leaves_state(void) {
 /* Successful compile + apply updates editor buffer and command store
  * atomically. */
 static void test_compile_apply_updates_both(void) {
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
 
     set_input("float energy;");
     ReplCompileContext ctx = repl_compile_context_from_live(editor_state_edit_line());
@@ -224,7 +224,7 @@ static void test_compile_apply_updates_both(void) {
 /* Var-assign compile + apply updates the predef value alongside the
  * source command. */
 static void test_compile_apply_var_assign_updates_value(void) {
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
 
     /* Set up a declared variable. */
     set_input("float k;");
@@ -262,7 +262,7 @@ static void test_compile_apply_var_assign_updates_value(void) {
  * producing [UNDECLARE_Y, UNDECLARE_Y] and silently dropping the
  * SET_VALUE for X. X's predef value stays at its old value. */
 static void test_overwrite_decl_with_assign_preserves_set_value(void) {
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
 
     char err[REPL_STATUS_TEXT_MAX];
     ReplCompiledChange change;
@@ -338,7 +338,7 @@ static void test_overwrite_decl_with_assign_preserves_set_value(void) {
  * compiled change kept Y's old slot while the overwrite removed X,
  * so the inserted assignment pointed at the wrong predef variable. */
 static void test_overwrite_earlier_decl_with_later_assign_rebases_slot(void) {
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
 
     char err[REPL_STATUS_TEXT_MAX];
     ReplCompiledChange change;
@@ -412,7 +412,7 @@ static void test_overwrite_earlier_decl_with_later_assign_rebases_slot(void) {
  * mechanism: without it the predef-op cascade would mutate while
  * the cmd-store insert silently fails. */
 static void test_capacity_failure_is_atomic(void) {
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
 
     ReplCompiledChange change;
     ReplCompileContext ctx;
@@ -517,7 +517,7 @@ static void test_capacity_failure_is_atomic(void) {
  * every line. Verify that after a reformat (run via the existing
  * try_commit dispatcher path), buffer + store remain in sync. */
 static void test_reformat_keeps_buffer_and_store_aligned(void) {
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
 
     /* Build a small program. */
     set_input("float a;");
@@ -550,7 +550,7 @@ static void test_reformat_keeps_buffer_and_store_aligned(void) {
 }
 
 static void test_set_predef_value_prefers_last_literal_assign(void) {
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
 
     editor_feed_line("float x = 1, y;");
     editor_feed_line("x = 2;");
@@ -585,7 +585,7 @@ static void test_set_predef_value_prefers_last_literal_assign(void) {
 }
 
 static void test_set_predef_value_rewrites_declaration_initializer(void) {
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
 
     editor_feed_line("float a = 1, x = 2, y; // vars");
 
@@ -614,7 +614,7 @@ static void test_set_predef_value_rewrites_declaration_initializer(void) {
 }
 
 static void test_set_predef_value_adds_declaration_initializer(void) {
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
 
     editor_feed_line("float x;");
 
@@ -636,7 +636,7 @@ static void test_set_predef_value_adds_declaration_initializer(void) {
 }
 
 static void test_set_predef_value_keeps_expression_sources(void) {
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
 
     editor_feed_line("float x;");
     editor_feed_line("float y;");
@@ -667,7 +667,7 @@ static void test_set_predef_value_keeps_expression_sources(void) {
 }
 
 static void test_set_predef_value_live_only_without_source(void) {
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
 
     ReplCompileContext ctx = repl_compile_context_from_live(editor_state_edit_line());
     ReplCompiledChange change;
@@ -696,7 +696,7 @@ static void test_set_predef_value_live_only_without_source(void) {
  * var produces a status error and leaves buffer/store/predef/undo
  * untouched. */
 static void test_orchestration_compile_failure_returns_diagnostic(void) {
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
 
     /* Establish a non-trivial pre-state. */
     editor_input_set_text("float anchor;");
@@ -732,7 +732,7 @@ static void test_orchestration_compile_failure_returns_diagnostic(void) {
 /* Live dispatch NO_CHANGE path: input that no editor_try_commit_*
  * handler accepts — the chain falls through with no mutation. */
 static void test_orchestration_no_change_falls_through(void) {
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
     editor_input_set_text("glVertex3f(0,0,0)");
     ui_state_status_set("baseline");
     ComputeFingerprint before = capture_fingerprint();
@@ -750,7 +750,7 @@ static void test_orchestration_no_change_falls_through(void) {
 /* Live dispatch success path: buffer + store + predef mutate together
  * and status carries the commit message. */
 static void test_orchestration_success_returns_message(void) {
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
     editor_input_set_text("float energy;");
     ui_state_status_set("");
 
@@ -771,7 +771,7 @@ static void test_orchestration_success_returns_message(void) {
  * get moved alongside the new func def block (delete + insert in
  * one transaction). */
 static void test_func_def_comment_relocation(void) {
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
 
     /* Build doc:
      *   line 0: glVertex3f(1, 0, 0);    (geometry above future func)
@@ -837,7 +837,7 @@ static void test_func_def_comment_relocation(void) {
 }
 
 static void test_func_def_blank_line_relocation(void) {
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
 
     editor_feed_line("  glVertex3f(1, 0, 0);");
     editor_feed_line("");
@@ -879,7 +879,7 @@ static void test_func_def_blank_line_relocation(void) {
  * publishes the delta so the matching close-brace's compile
  * advances edit_line by that delta. */
 static void test_func_def_resume_publish_consumed_by_close_brace(void) {
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
 
     /* Build a doc where leading comments precede the cursor:
      *   [0] // comment
@@ -921,7 +921,7 @@ static void test_func_def_resume_publish_consumed_by_close_brace(void) {
      * (header, pre-vertex stepped over, vertex stops). resume_pos
      * = 4 - 1 = 3. resume_delta = 3 - 2 = 1.
      */
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
     editor_feed_line("// header");
     editor_feed_line("// pre-vertex");
     editor_feed_line("  glVertex3f(1, 0, 0);");
@@ -978,7 +978,7 @@ int main(void) {
      * was created. Subsequent `name()` calls would erroneously
      * resolve. */
     {
-        glr_app_reset_all();
+        glr_ctrl_reset_all();
         repl_func_alias_clear_all();
 
         /* Call repl_compile_func_def directly with a header that
@@ -1011,7 +1011,7 @@ int main(void) {
      * `func0() { ... }` blocks would have been accepted silently
      * where editor_feed_line() would have rejected the second. */
     {
-        glr_app_reset_all();
+        glr_ctrl_reset_all();
         repl_func_alias_clear_all();
 
         /* Establish slot 0: feed a first func0 def via the lean
@@ -1060,7 +1060,7 @@ int main(void) {
      * a malformed `name(args` line in the user-facing path still
      * leaves the alias registered. */
     {
-        glr_app_reset_all();
+        glr_ctrl_reset_all();
         repl_func_alias_clear_all();
 
         ReplCompileContext ctx = repl_compile_context_from_live(editor_state_edit_line());
@@ -1084,7 +1084,7 @@ int main(void) {
      * overwriting a header, so a malformed rename can replace an
      * existing alias before parse validation fails. */
     {
-        glr_app_reset_all();
+        glr_ctrl_reset_all();
         repl_func_alias_clear_all();
 
         char err[128] = "";
@@ -1119,7 +1119,7 @@ int main(void) {
      * — where slot N already has a CMD_FUNC_DEF — leaks the alias
      * registration. */
     {
-        glr_app_reset_all();
+        glr_ctrl_reset_all();
         repl_func_alias_clear_all();
 
         /* Insert a bare func0 (no alias registered) so slot 0 is
@@ -1157,7 +1157,7 @@ int main(void) {
      * an earlier committed command. The behavior already matched;
      * Phase 0 only widened the documented contract and pins it. */
     {
-        glr_app_reset_all();
+        glr_ctrl_reset_all();
         repl_func_alias_clear_all();
         editor_state_input_reset();
 
@@ -1217,7 +1217,7 @@ int main(void) {
      * capacity overflow at apply time would leave the predef var
      * already declared but no source CMD_VAR_DECLARE to back it. */
     {
-        glr_app_reset_all();
+        glr_ctrl_reset_all();
         repl_func_alias_clear_all();
 
         /* Force the cmd-store to capacity so any insert fails. */
@@ -1245,7 +1245,7 @@ int main(void) {
      * alias would remain in the global table with no matching
      * CMD_FUNC_DEF. */
     {
-        glr_app_reset_all();
+        glr_ctrl_reset_all();
         repl_func_alias_clear_all();
 
         ReplCommandStore store = repl_command_store_live();

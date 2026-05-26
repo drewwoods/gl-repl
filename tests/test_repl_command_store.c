@@ -33,7 +33,7 @@ static GLCmd make_cmd(CmdType type, const char *source) {
 }
 
 static void test_repl_command_store_live(void) {
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
 
     ReplCommandStore store = repl_command_store_live();
     ASSERT_TRUE("live store has cmds pointer", store.cmds != NULL);
@@ -43,7 +43,7 @@ static void test_repl_command_store_live(void) {
 }
 
 static void test_repl_command_store_count(void) {
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
 
     ReplCommandStore store = repl_command_store_live();
     ASSERT_INT("empty store count", repl_command_store_count(&store), 0);
@@ -56,7 +56,7 @@ static void test_repl_command_store_count(void) {
 }
 
 static void test_repl_command_store_capacity(void) {
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
 
     ReplCommandStore store = repl_command_store_live();
     ASSERT_INT("store capacity", repl_command_store_capacity(&store), MAX_COMMANDS);
@@ -64,7 +64,7 @@ static void test_repl_command_store_capacity(void) {
 }
 
 static void test_repl_command_store_can_insert(void) {
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
 
     ReplCommandStore store = repl_command_store_live();
     ASSERT_TRUE("can insert 1 to empty store",
@@ -84,7 +84,7 @@ static void test_repl_command_store_can_insert(void) {
 }
 
 static void test_repl_command_store_first_non_decl(void) {
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
 
     ReplCommandStore store = repl_command_store_live();
     ASSERT_INT("empty store first_non_decl",
@@ -110,7 +110,7 @@ static void test_repl_command_store_first_non_decl(void) {
 }
 
 static void test_repl_command_store_normalize_range(void) {
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
 
     ReplCommandStore store = repl_command_store_live();
     GLCmd cmd = make_cmd(CMD_VERTEX3F, "glVertex3f(0, 0, 0);");
@@ -142,7 +142,7 @@ static void test_repl_command_store_normalize_range(void) {
 }
 
 static void test_repl_command_store_insert_one(void) {
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
 
     ReplCommandStore store = repl_command_store_live();
     GLCmd cmd1 = make_cmd(CMD_VERTEX3F, "glVertex3f(1, 0, 0);");
@@ -168,7 +168,7 @@ static void test_repl_command_store_insert_one(void) {
 }
 
 static void test_repl_command_store_insert_one_with_explicit_line(void) {
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
 
     ReplCommandStore store = repl_command_store_live();
     GLCmd cmd = make_cmd(CMD_VERTEX3F, "  glVertex3f(1, 0, 0);");
@@ -182,7 +182,7 @@ static void test_repl_command_store_insert_one_with_explicit_line(void) {
 }
 
 static void test_repl_command_store_insert_many(void) {
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
 
     ReplCommandStore store = repl_command_store_live();
     GLCmd cmds[3] = {
@@ -209,7 +209,7 @@ static void test_repl_command_store_insert_many(void) {
 }
 
 static void test_repl_command_store_insert_with_edit_line_adjustment(void) {
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
 
     ReplCommandStore store = repl_command_store_live();
     GLCmd cmd1 = make_cmd(CMD_VERTEX3F, "glVertex3f(1, 0, 0);");
@@ -241,7 +241,7 @@ static void test_repl_command_store_insert_with_edit_line_adjustment(void) {
 }
 
 static void test_repl_command_store_replace_one(void) {
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
 
     ReplCommandStore store = repl_command_store_live();
     GLCmd cmd1 = make_cmd(CMD_VERTEX3F, "glVertex3f(1, 0, 0);");
@@ -273,7 +273,7 @@ static void test_repl_command_store_replace_one(void) {
 }
 
 static void test_repl_command_store_replace_one_with_explicit_line(void) {
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
 
     ReplCommandStore store = repl_command_store_live();
     GLCmd cmd1 = make_cmd(CMD_VERTEX3F, "glVertex3f(1, 0, 0);");
@@ -292,7 +292,7 @@ static void test_repl_command_store_replace_one_with_explicit_line(void) {
  * rather than extending line_count over never-written zeroed gap lines
  * (the latent corruption the insert path already forecloses). */
 static void test_editor_buffer_replace_line_rejects_gap(void) {
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
 
     editor_buffer_insert_line(0, "glVertex3f(1, 0, 0);");
     ASSERT_INT("one line present", editor_buffer_view().line_count, 1);
@@ -313,7 +313,7 @@ static void test_editor_buffer_replace_line_rejects_gap(void) {
 }
 
 static void test_repl_command_store_delete_range(void) {
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
 
     ReplCommandStore store = repl_command_store_live();
     GLCmd cmd = make_cmd(CMD_VERTEX3F, "glVertex3f(0, 0, 0);");
@@ -336,7 +336,7 @@ static void test_repl_command_store_delete_range(void) {
 }
 
 static void test_repl_command_store_load(void) {
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
 
     ReplCommandStore store = repl_command_store_live();
     GLCmd cmds[2] = {
@@ -378,7 +378,7 @@ static void test_repl_command_store_load(void) {
 }
 
 static void test_repl_command_store_load_with_explicit_lines(void) {
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
 
     ReplCommandStore store = repl_command_store_live();
     GLCmd cmds[2] = {
@@ -400,7 +400,7 @@ static void test_repl_command_store_load_with_explicit_lines(void) {
 }
 
 static void test_repl_command_store_clear(void) {
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
 
     ReplCommandStore store = repl_command_store_live();
     GLCmd cmd = make_cmd(CMD_VERTEX3F, "glVertex3f(0, 0, 0);");
@@ -417,7 +417,7 @@ static void test_repl_command_store_clear(void) {
 }
 
 static void test_repl_command_store_delete_from_middle(void) {
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
 
     ReplCommandStore store = repl_command_store_live();
     GLCmd cmd = make_cmd(CMD_VERTEX3F, "glVertex3f(0, 0, 0);");
@@ -438,7 +438,7 @@ static void test_repl_command_store_delete_from_middle(void) {
 }
 
 static void test_repl_command_store_insert_at_end(void) {
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
 
     ReplCommandStore store = repl_command_store_live();
     GLCmd cmd = make_cmd(CMD_VERTEX3F, "glVertex3f(0, 0, 0);");
@@ -455,7 +455,7 @@ static void test_repl_command_store_insert_at_end(void) {
  * delete is net-new store behavior. Verify the three cases in the
  * cursor-shift math (before / inside / past the deleted range). */
 static void test_repl_command_store_delete_cursor_math(void) {
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
 
     ReplCommandStore store = repl_command_store_live();
     GLCmd cmd = make_cmd(CMD_VERTEX3F, "glVertex3f(0, 0, 0);");

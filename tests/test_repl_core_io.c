@@ -116,7 +116,7 @@ int main(void) {
     const char *rand_alias_path = "/tmp/repl_core_rand_alias_output.c";
 
     repl_eval_init_predef_vars();
-    glr_app_reset_all(); declare_test_vars();
+    glr_ctrl_reset_all(); declare_test_vars();
 
     editor_feed_line("x = 1.25;");
     editor_feed_line("glBegin(GL_LINE_STRIP);");
@@ -270,7 +270,7 @@ int main(void) {
     ASSERT_TRUE("init restores point attenuation when supported again",
                 find_init_line_substr("glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION") >= 0);
 
-    glr_app_reset_all(); declare_test_vars();
+    glr_ctrl_reset_all(); declare_test_vars();
     ASSERT_TRUE("load saved output", repl_export_load_from_file(path) == 1);
     ASSERT_TRUE("roundtrip cmd count", repl_state_document_count() == before_n);
     for (int i = 0; i < before_n; i++) {
@@ -286,7 +286,7 @@ int main(void) {
     repl_flatten_commands(editor_state_edit_line());
     ASSERT_TRUE("flatten produced cmds", repl_state_flat_program_count() > 0);
 
-    glr_app_reset_all(); declare_test_vars();
+    glr_ctrl_reset_all(); declare_test_vars();
     editor_feed_line("A[0] = 0;");
     editor_feed_line("A[1] = 1;");
     editor_feed_line("A[0] = A[0] + (A[1] - A[0])*0.25;");
@@ -314,7 +314,7 @@ int main(void) {
      * omitted. Pins the per-letter detection. */
     {
         const char *cross_path = "/tmp/repl_core_scratch_cross.c";
-        glr_app_reset_all(); declare_test_vars();
+        glr_ctrl_reset_all(); declare_test_vars();
         editor_feed_line("A[0] = 1;");
         editor_feed_line("B[0] = 2;");
         editor_feed_line("glVertex3f(A[0], B[0], 0);");
@@ -334,7 +334,7 @@ int main(void) {
      * leak into source text (for example older fixtures or hand-edited
      * snippets) so the standalone file still emits the RNG helpers. */
     {
-        glr_app_reset_all(); declare_test_vars();
+        glr_ctrl_reset_all(); declare_test_vars();
         editor_feed_line("glVertex3f(repl_randf(i, 3), repl_rand2f(i, 4), 0);");
         repl_export_save_output(rand_alias_path, source_document_view(), NULL);
         char buf[8192];
@@ -350,7 +350,7 @@ int main(void) {
         remove(rand_alias_path);
     }
 
-    glr_app_reset_all(); declare_test_vars();
+    glr_ctrl_reset_all(); declare_test_vars();
     ASSERT_TRUE("load scratch output", repl_export_load_from_file(scratch_path) == 1);
     ASSERT_TRUE("scratch roundtrip command count", repl_state_document_count() == 4);
     ASSERT_TRUE("scratch roundtrip keeps assign type",
@@ -366,7 +366,7 @@ int main(void) {
      * the source resolve to the same slot. */
     {
         const char *alias_path = "/tmp/repl_core_func_alias_roundtrip.c";
-        glr_app_reset_all(); declare_test_vars();
+        glr_ctrl_reset_all(); declare_test_vars();
         editor_feed_line("drawCube {");
         editor_feed_line("  glVertex3f(0, 0, 0);");
         editor_feed_line("}");
@@ -385,7 +385,7 @@ int main(void) {
             ASSERT_TRUE("alias canonical text preserved in display",
                         strstr(buf, "drawCube") != NULL);
         }
-        glr_app_reset_all(); declare_test_vars();
+        glr_ctrl_reset_all(); declare_test_vars();
         ASSERT_TRUE("alias cleared after reset",
                     repl_func_alias_lookup_slot("drawCube") == -1);
         ASSERT_TRUE("load alias output",
@@ -406,18 +406,18 @@ int main(void) {
         const char *alias_path = "/tmp/repl_core_direct_import_alias.c";
         const char *plain_path = "/tmp/repl_core_direct_import_plain.c";
 
-        glr_app_reset_all(); declare_test_vars();
+        glr_ctrl_reset_all(); declare_test_vars();
         editor_feed_line("drawCube {");
         editor_feed_line("  glVertex3f(0, 0, 0);");
         editor_feed_line("}");
         editor_feed_line("drawCube();");
         repl_export_save_output(alias_path, source_document_view(), NULL);
 
-        glr_app_reset_all(); declare_test_vars();
+        glr_ctrl_reset_all(); declare_test_vars();
         editor_feed_line("glVertex3f(1, 2, 3);");
         repl_export_save_output(plain_path, source_document_view(), NULL);
 
-        glr_app_reset_all(); declare_test_vars();
+        glr_ctrl_reset_all(); declare_test_vars();
         ASSERT_TRUE("direct import aliased file succeeds",
                     repl_export_load_from_file(alias_path) == 1);
         ASSERT_TRUE("alias present after direct aliased import",
@@ -445,7 +445,7 @@ int main(void) {
      * /tmp import-harness used to chase the examples-rework failure. */
     {
         const char *alias_path = "/tmp/repl_core_func_alias_expr_roundtrip.c";
-        glr_app_reset_all(); declare_test_vars();
+        glr_ctrl_reset_all(); declare_test_vars();
         editor_feed_line("spin(scale) {");
         editor_feed_line("  glVertex3f(scale, t, 0);");
         editor_feed_line("}");
@@ -469,7 +469,7 @@ int main(void) {
                         strstr(buf, "// @func 0 = spin") != NULL);
         }
 
-        glr_app_reset_all(); declare_test_vars();
+        glr_ctrl_reset_all(); declare_test_vars();
         ASSERT_TRUE("load expr-alias output",
                     repl_export_load_from_file(alias_path) == 1);
         ASSERT_TRUE("expr-alias restored on import",
@@ -495,14 +495,14 @@ int main(void) {
      * shares the func-decl shape `IDENT(...) {`. The control-flow
      * keyword must fall through to editor_try_commit_if_block. */
     {
-        glr_app_reset_all(); declare_test_vars();
+        glr_ctrl_reset_all(); declare_test_vars();
         editor_feed_line("if(1) {");
         ASSERT_TRUE("'if' did not register as alias",
                     repl_func_alias_lookup_slot("if") == -1);
     }
 
     /* Camera state round-trip: non-default eye/center must survive save+load. */
-    glr_app_reset_all(); declare_test_vars();
+    glr_ctrl_reset_all(); declare_test_vars();
     editor_feed_line("glBegin(GL_POINTS);");
     editor_feed_line("glVertex3f(0, 0, 0);");
     editor_feed_line("glEnd();");
@@ -530,7 +530,7 @@ int main(void) {
         glr_camera_set_orbit(20.0f, 30.0f);
         glr_camera_set_distance(5.0f);
         glr_camera_set_pan(0.0f, 0.0f, 0.0f);
-        glr_app_reset_all(); declare_test_vars();
+        glr_ctrl_reset_all(); declare_test_vars();
         ASSERT_TRUE("load camera output", repl_export_load_from_file(path) == 1);
         ASSERT_TRUE("camera rx restored",   fabsf(glr_camera().rx   - saved_rx)   < 1e-2f);
         ASSERT_TRUE("camera ry restored",   fabsf(glr_camera().ry   - saved_ry)   < 1e-2f);
@@ -540,7 +540,7 @@ int main(void) {
         ASSERT_TRUE("camera tz restored",   fabsf(glr_camera().tz   - saved_tz)   < 1e-2f);
     }
 
-    glr_app_reset_all(); declare_test_vars();
+    glr_ctrl_reset_all(); declare_test_vars();
     editor_feed_line("x = 1;");
     editor_feed_line("func0(radius, yoff) {");
     editor_feed_line("glVertex3f(radius, yoff, 0);");
@@ -581,7 +581,7 @@ int main(void) {
                     strstr(buf, "glDisable(GL_COLOR_MATERIAL);") != NULL);
     }
 
-    glr_app_reset_all(); declare_test_vars();
+    glr_ctrl_reset_all(); declare_test_vars();
     ASSERT_TRUE("load saved param func output", repl_export_load_from_file(func_path) == 1);
     ASSERT_TRUE("param func roundtrip cmd count", repl_state_document_count() == func_n);
     {
@@ -608,7 +608,7 @@ int main(void) {
     ASSERT_TRUE("param func flatten y",
                 fabsf(repl_state_flat_program_cmds_mut()[repl_state_flat_program_count() - 1].args[1] - 3.0f) < 1e-6f);
 
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
     editor_feed_line("func0(radius, sides, phase) {");
     editor_feed_line("for(i, 0, sides + 1) {");
     editor_feed_line("glVertex3f(cos(i*TAU/sides + phase)*radius, sin(i*TAU/sides + phase)*radius, 0);");
@@ -623,7 +623,7 @@ int main(void) {
                     strstr(buf, "for (float i = 0; i < sides + 1; i += 1.0f)") != NULL);
     }
 
-    glr_app_reset_all();
+    glr_ctrl_reset_all();
     ASSERT_TRUE("load saved param loop output", repl_export_load_from_file(param_loop_path) == 1);
     {
         int have_bound = 0;
@@ -646,7 +646,7 @@ int main(void) {
                     vertex_count == 7);
     }
 
-    glr_app_reset_all(); declare_test_vars();
+    glr_ctrl_reset_all(); declare_test_vars();
     editor_feed_line("float r;");
     editor_feed_line("glClearColor(0.1, 0.1, 0.1, 1);");
     editor_feed_line("func0 {");
@@ -656,7 +656,7 @@ int main(void) {
     editor_feed_line("func0();");
     repl_export_save_output(decl_func_path, source_document_view(), NULL);
 
-    glr_app_reset_all(); declare_test_vars();
+    glr_ctrl_reset_all(); declare_test_vars();
     ASSERT_TRUE("load decl plus promoted func output",
                 repl_export_load_from_file(decl_func_path) == 1);
     ASSERT_TRUE("decl plus func cmd count", repl_state_document_count() == 7);
@@ -668,7 +668,7 @@ int main(void) {
     ASSERT_TRUE("imported var assign follows prior command", repl_state_document_cmds_mut()[5].type == CMD_VAR_ASSIGN);
     ASSERT_TRUE("imported call follows assign", repl_state_document_cmds_mut()[6].type == CMD_CALL);
 
-    glr_app_reset_all(); declare_test_vars();
+    glr_ctrl_reset_all(); declare_test_vars();
     editor_feed_line("float r;");
     editor_feed_line("");
     editor_feed_line("// func prelude");
@@ -678,7 +678,7 @@ int main(void) {
     editor_feed_line("func0(2);");
     repl_export_save_output(decl_func_blank_path, source_document_view(), NULL);
 
-    glr_app_reset_all(); declare_test_vars();
+    glr_ctrl_reset_all(); declare_test_vars();
     ASSERT_TRUE("load decl blank plus func output",
                 repl_export_load_from_file(decl_func_blank_path) == 1);
     ASSERT_TRUE("decl blank plus func cmd count", repl_state_document_count() == 7);
@@ -702,7 +702,7 @@ int main(void) {
                 strstr(editor_buffer_line(2) ? editor_buffer_line(2) : "",
                        "func prelude") != NULL);
 
-    glr_app_reset_all(); declare_test_vars();
+    glr_ctrl_reset_all(); declare_test_vars();
     editor_feed_line("x = 0.25;");
     editor_feed_line("glutSolidSphere(x, 16, 12);");
     editor_feed_line("glutSolidCone(0.15, 1.5, 8, 1);");
@@ -729,7 +729,7 @@ int main(void) {
                     strstr(buf, "g_quadric") == NULL);
     }
 
-    glr_app_reset_all(); declare_test_vars();
+    glr_ctrl_reset_all(); declare_test_vars();
     ASSERT_TRUE("load saved shape output", repl_export_load_from_file(shape_path) == 1);
     ASSERT_TRUE("shape roundtrip cmd count", repl_state_document_count() == 6);
     ASSERT_TRUE("loaded shape assign first",  repl_state_document_cmds_mut()[0].type == CMD_VAR_ASSIGN);
@@ -760,7 +760,7 @@ int main(void) {
                     strstr(editor_buffer_line(i) ? editor_buffer_line(i) : "",
                            "g_quadric") == NULL);
 
-    glr_app_reset_all(); declare_test_vars();
+    glr_ctrl_reset_all(); declare_test_vars();
     editor_feed_line("func0(radius) {");
     editor_feed_line("gluBegin(GLU_POLYGON);");
     editor_feed_line("gluBegin(GLU_CONTOUR);");
@@ -882,7 +882,7 @@ int main(void) {
             }
         }
 
-        glr_app_reset_all(); declare_test_vars();
+        glr_ctrl_reset_all(); declare_test_vars();
 
         int loaded = repl_load_workspace(workspace_in);
         ASSERT_TRUE("p1 load_workspace returned 2", loaded == 2);
@@ -940,7 +940,7 @@ int main(void) {
     {
         const char *cmp_path = "/tmp/repl_core_panel_export_agreement.c";
 
-        glr_app_reset_all(); declare_test_vars();
+        glr_ctrl_reset_all(); declare_test_vars();
         editor_feed_line("glBegin(GL_POINTS);");
         editor_feed_line("glVertex3f(0, 0, 0);");
         editor_feed_line("glEnd();");
@@ -1021,7 +1021,7 @@ int main(void) {
      * two-letter math.h symbols that are plausible variable names. */
     {
         const char *math_collision_path = "/tmp/repl_core_math_collisions.c";
-        glr_app_reset_all(); declare_test_vars();
+        glr_ctrl_reset_all(); declare_test_vars();
         repl_export_save_output(math_collision_path,
                                 source_document_view(), NULL);
 
@@ -1075,7 +1075,7 @@ int main(void) {
         char expected_loop[256];
         char buf[16384];
 
-        glr_app_reset_all(); declare_test_vars();
+        glr_ctrl_reset_all(); declare_test_vars();
         int x_idx = repl_eval_find_predef_var_idx("x");
         ASSERT_TRUE("precision test var exists", x_idx >= 0);
         g_predef_vars[x_idx].value = precise_x;
@@ -1097,7 +1097,7 @@ int main(void) {
         ASSERT_TRUE("generated loop uses float-safe precision",
                     strstr(buf, expected_loop) != NULL);
 
-        glr_app_reset_all(); declare_test_vars();
+        glr_ctrl_reset_all(); declare_test_vars();
         ASSERT_TRUE("precision export re-imports",
                     repl_export_load_from_file(precision_path) == 1);
         x_idx = repl_eval_find_predef_var_idx("x");
@@ -1131,7 +1131,7 @@ int main(void) {
             fclose(f);
         }
 
-        glr_app_reset_all(); declare_test_vars();
+        glr_ctrl_reset_all(); declare_test_vars();
         ASSERT_TRUE("truncated physical line fails import",
                     repl_export_load_from_file(trunc_path) == 0);
         ASSERT_INT("truncated physical line loads no commands",
@@ -1150,7 +1150,7 @@ int main(void) {
         if (f)
             fclose(f);
 
-        glr_app_reset_all(); declare_test_vars();
+        glr_ctrl_reset_all(); declare_test_vars();
         repl_set_workspace_dir(prev_workspace);
         repl_load_example(0);
         ASSERT_TRUE("promotion for failing workspace save",
@@ -1186,7 +1186,7 @@ int main(void) {
         const char *import_cursor_path = "/tmp/repl_core_import_cursor.c";
 
         /* (1) Build a small program and export it. */
-        glr_app_reset_all(); declare_test_vars();
+        glr_ctrl_reset_all(); declare_test_vars();
         editor_feed_line("glBegin(GL_TRIANGLES);");
         editor_feed_line("glVertex3f(0, 0, 0);");
         editor_feed_line("glVertex3f(1, 0, 0);");
@@ -1196,7 +1196,7 @@ int main(void) {
                                 source_document_view(), NULL);
 
         /* (2) Reset to a clean slate (cursor → 0). */
-        glr_app_reset_all(); declare_test_vars();
+        glr_ctrl_reset_all(); declare_test_vars();
         ASSERT_INT("pre-import cursor is 0",
                    editor_state_edit_line(), 0);
 
@@ -1228,7 +1228,7 @@ int main(void) {
      * format and the g_angle preamble so format drift is caught. */
     {
         const char *cam_shape_path = "/tmp/repl_core_cam_shape.c";
-        glr_app_reset_all(); declare_test_vars();
+        glr_ctrl_reset_all(); declare_test_vars();
         editor_feed_line("glVertex3f(0,0,0);");
         glr_camera_set_orbit(15.0f, 45.0f);
         glr_camera_set_distance(8.0f);
@@ -1277,7 +1277,7 @@ int main(void) {
                 "}\n");
             fclose(f);
 
-            glr_app_reset_all(); declare_test_vars();
+            glr_ctrl_reset_all(); declare_test_vars();
             ASSERT_TRUE("old-fmt import succeeds",
                         repl_export_load_from_file(cam_old_path) == 1);
             ASSERT_TRUE("old-fmt rx restored",
@@ -1303,7 +1303,7 @@ int main(void) {
     {
         const ReplExportCameraBridge *bridge;
 
-        glr_app_reset_all(); declare_test_vars();
+        glr_ctrl_reset_all(); declare_test_vars();
         bridge = repl_export_camera_bridge();
         ASSERT_TRUE("cam parser bridge installed", bridge != NULL);
         ASSERT_TRUE("cam parser bridge has reset",
@@ -1369,14 +1369,14 @@ int main(void) {
         const char *path_a = "/tmp/repl_core_cam_idem_a.c";
         const char *path_b = "/tmp/repl_core_cam_idem_b.c";
 
-        glr_app_reset_all(); declare_test_vars();
+        glr_ctrl_reset_all(); declare_test_vars();
         editor_feed_line("glVertex3f(0,0,0);");
         glr_camera_set_orbit(12.5f, 67.5f);
         glr_camera_set_distance(9.25f);
         glr_camera_set_pan(0.5f, -1.5f, 2.25f);
         repl_export_save_output(path_a, source_document_view(), NULL);
 
-        glr_app_reset_all(); declare_test_vars();
+        glr_ctrl_reset_all(); declare_test_vars();
         ASSERT_TRUE("cam idem: load A succeeds",
                     repl_export_load_from_file(path_a) == 1);
         repl_export_save_output(path_b, source_document_view(), NULL);

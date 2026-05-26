@@ -247,7 +247,7 @@ static int menu_item_count(int menu_id, const UiRenderSnapshot *snap) {
          * items to tutorial_start directly), so the top-level rows
          * here are tag rows (inert hover-only) plus the trailing
          * Restart/Exit actions — mirroring Scene's tag-row pattern. */
-        return tag_count + (active ? 3 : 0);
+        return tag_count + (active ? GLR_TUTORIAL_FIXED_COUNT : 0);
     }
     case MENU_CONFIG:
         /* One parent row per "### " section, plus a synthetic "All"
@@ -299,9 +299,9 @@ static const char *menu_item_label(int menu_id, int i) {
         }
         if (!tutorial_active())
             return NULL;
-        if (i == tag_count)     return "---";
-        if (i == tag_count + 1) return "Restart Tutorial";
-        if (i == tag_count + 2) return "Exit Tutorial";
+        if (i == tag_count + GLR_TUTORIAL_OFF_SEP)     return "---";
+        if (i == tag_count + GLR_TUTORIAL_OFF_RESTART) return "Restart Tutorial";
+        if (i == tag_count + GLR_TUTORIAL_OFF_EXIT)    return "Exit Tutorial";
         return NULL;
     }
     if (menu_id == MENU_CONFIG) {

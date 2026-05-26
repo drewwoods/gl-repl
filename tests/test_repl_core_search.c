@@ -57,7 +57,7 @@ static void set_live_input(const char *text) {
 int main(void) {
     repl_eval_init_predef_vars();
 
-    glr_app_reset_all(); declare_test_vars();
+    glr_ctrl_reset_all(); declare_test_vars();
     editor_feed_line("glColor3f(1, 0, 0);");
     editor_feed_line("glEnd();");
     {
@@ -76,7 +76,7 @@ int main(void) {
                     strcmp(editor_buffer_line(0), before0) == 0);
     }
 
-    glr_app_reset_all(); declare_test_vars();
+    glr_ctrl_reset_all(); declare_test_vars();
     editor_feed_line("// color COLOR");
     editor_feed_line("glColor3f(1, 0, 0);");
     editor_feed_line("glVertex3f(0, 0, 0);");
@@ -120,7 +120,7 @@ int main(void) {
         ASSERT_TRUE("up wrap ordinal", g_search_hit_ordinal == 3);
     }
 
-    glr_app_reset_all(); declare_test_vars();
+    glr_ctrl_reset_all(); declare_test_vars();
     editor_feed_line("glBegin(GL_POINTS);");
     editor_feed_line("glEnd();");
     editor_navigate_to_line(1);
@@ -130,7 +130,7 @@ int main(void) {
     ASSERT_TRUE("header search has no current hit", g_search_hit_line == -1);
     ASSERT_TRUE("zero-hit search leaves line unchanged", editor_state_edit_line() == 1);
 
-    glr_app_reset_all(); declare_test_vars();
+    glr_ctrl_reset_all(); declare_test_vars();
     editor_feed_line("glBegin(GL_POINTS);");
     editor_navigate_to_line(0);
     set_live_input("NeedleLine");
@@ -142,7 +142,7 @@ int main(void) {
     ASSERT_TRUE("active edit line search uses live input",
                 strcmp(editor_search_row_text(0), "NeedleLine") == 0);
 
-    glr_app_reset_all(); declare_test_vars();
+    glr_ctrl_reset_all(); declare_test_vars();
     set_live_input("ColorProbe");
     open_search();
     type_search_text("color");
@@ -186,7 +186,7 @@ int main(void) {
                     editor_search_find_prev_in_text("abaaba", "aba", 99) == 3);
     }
 
-    glr_app_reset_all(); declare_test_vars();
+    glr_ctrl_reset_all(); declare_test_vars();
     editor_feed_line("abc");
     open_search();
     type_search_text("abc");
@@ -200,7 +200,7 @@ int main(void) {
     editor_handle_special(GLUT_KEY_END, 0, 0);
     ASSERT_TRUE("search cursor end", g_search_cursor_pos == g_search_query_len);
 
-    glr_app_reset_all(); declare_test_vars();
+    glr_ctrl_reset_all(); declare_test_vars();
     editor_feed_line("abcd");
     open_search();
     type_search_text("abcd");
@@ -210,7 +210,7 @@ int main(void) {
     ASSERT_TRUE("search backspace removes last char",
                 strcmp(g_search_query, "abc") == 0);
 
-    glr_app_reset_all(); declare_test_vars();
+    glr_ctrl_reset_all(); declare_test_vars();
     editor_feed_line("glBegin(GL_POINTS);");
     editor_feed_line("glEnd();");
     editor_insert_mode_set(1);

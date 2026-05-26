@@ -445,7 +445,7 @@ void repl_state_time_reset_to_zero(void) {
  * these accessors because the executor writes them. Presentation
  * reset paths are now `glr_state_presentation_reset_defaults` /
  * `_example_defaults` and `glr_state_render_reset_defaults`, called
- * from `glr_app_reset_all`. The example loader's per-load reset
+ * from `glr_ctrl_reset_all`. The example loader's per-load reset
  * routes through the controller-installed
  * `ReplHostEffects.example_presentation_reset` callback. */
 
@@ -526,7 +526,7 @@ void repl_state_import_export_reset(void) {
 
 /* repl_state_init_defaults is the program-only (REPL-state) entry
  * point. It does NOT reset peer/editor/UI state — that is the
- * controller's responsibility via glr_app_reset_all() in glr_ctrl.c.
+ * controller's responsibility via glr_ctrl_reset_all() in glr_ctrl.c.
  * The demo deliberately calls only this entry to keep
  * tools/repl_demo/stubs.c free of peer/editor/UI reset stubs. */
 void repl_state_init_defaults(void) {
@@ -535,18 +535,18 @@ void repl_state_init_defaults(void) {
 
 /* Reset REPL-owned slices to defaults. Peer/editor/UI/autocomplete
  * registration / chrome sync / derived export+camera text caches are
- * NOT included here — they live on glr_app_reset_all in glr_ctrl.c
+ * NOT included here — they live on glr_ctrl_reset_all in glr_ctrl.c
  * (see step 2 of feature/decouple-repl-from-gl-repl-alt.md).
  *
  * The derived-text refreshes (refresh_workspace_header_lines /
  * update_render_state_strings / update_cam_lines) read app-side state
  * through glr_config_get and the camera. They cannot run here without
  * pulling app/UI/peer state into the demo link set, AND if they ran
- * here they would pre-fire before glr_app_reset_all has finished
+ * here they would pre-fire before glr_ctrl_reset_all has finished
  * resetting peers — the cached strings would briefly reflect
  * pre-reset peer state. The frame loop refreshes them every frame
  * anyway; tests that need them populated immediately go through
- * glr_app_reset_all.
+ * glr_ctrl_reset_all.
  *
  * Do NOT call any non-REPL reset entry from this function. The
  * separation is what lets tools/repl_demo build without stubbing
