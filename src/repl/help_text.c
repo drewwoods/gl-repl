@@ -215,7 +215,7 @@ static const char *const k_tab_keys_base[] = {
     "  Ctrl+U               \tToggle GL_MULTISAMPLE",
     "  Ctrl+O               \tCycle grid major tick spacing (1 / 2 / 5 / 10)",
     "  Ctrl+W               \tCycle CPU profile panel",
-    "  Ctrl+Shift+M         \tCycle memory profile panel",
+    "  Ctrl+Shift+W         \tCycle memory profile panel",
     "  Ctrl+B               \tToggle Accum AA",
     "",
     "Interface:",

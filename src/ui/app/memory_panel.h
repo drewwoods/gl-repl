@@ -1,12 +1,11 @@
 /*
  * ui_memory_panel.h - Process memory overlay panel.
  *
- * Sibling of ui_profile_panel that visualizes process RSS/VSZ over time.
- * Reads samples + baseline from src/support/memprof.c. Three modes:
- * Off / On / Details (v1 Details adds nothing extra over On - room
- * reserved for a future per-allocator breakdown without enum migration).
+ * Sibling of ui_profile_panel that visualizes process RSS over time.
+ * Reads samples + baseline from src/support/memprof.c.
  *
- * Toggle: Config > "Memory profile" and Ctrl+Shift+M.
+ * Toggle: Config > "Memory profile" and Ctrl+Shift+W (matches the
+ * CPU profile panel's Ctrl+W with Shift added).
  */
 #ifndef UI_MEMORY_PANEL_H
 #define UI_MEMORY_PANEL_H
@@ -14,7 +13,6 @@
 typedef enum {
     MEMORY_PANEL_OFF = 0,
     MEMORY_PANEL_ON,
-    MEMORY_PANEL_DETAILS,
     MEMORY_PANEL_MODE_COUNT
 } UiMemoryPanelMode;
 

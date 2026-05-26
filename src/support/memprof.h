@@ -10,6 +10,13 @@
 #ifndef MEMPROF_H
 #define MEMPROF_H
 
+/* Sampling cadence + ring capacity. Exposed in the header so callers
+ * (the panel renderer for time-axis geometry, tests for cadence
+ * assertions) don't duplicate the numbers. Total history span is
+ * MEMPROF_HISTORY_CAP * MEMPROF_PUSH_INTERVAL_S seconds. */
+#define MEMPROF_HISTORY_CAP        1024
+#define MEMPROF_PUSH_INTERVAL_S    5.0
+
 typedef struct {
     unsigned long long rss_bytes;
 } MemSample;
