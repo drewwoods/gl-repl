@@ -45,7 +45,7 @@ recurring in multiple TUs) carry a **🔀 cross-file** tag.
 
 ## 🔴 Actual bugs / hazards (verified)
 
-### 1. `help_text.c` is the only `src/repl/` file that includes an `app/` header
+### 1. ✅ `help_text.c` is the only `src/repl/` file that includes an `app/` header
 
 **Where:** `src/repl/help_text.c:11`
 
@@ -64,6 +64,18 @@ file would be the breaker.
 and have it inject "F2..F10" lines via a small caller-supplied
 callback, or (b) move `help_text.c` into `src/app/` since it
 already reads `g_cfg_items`. Add a guard to lock the boundary.
+
+**Status (2026-05-26):** ✅ Closed via option (a). Added a
+`ReplHelpFkeyProvider` typedef + `repl_help_text_install_fkey_provider()`
+hook in `src/repl/help_text.h`; the controller installs a static
+`glr_ctrl_help_fkey_label(fn)` lookup that walks `g_cfg_items[]`
+inside `glr_ctrl_install_app_services`. `src/repl/help_text.c` no
+longer includes `app/glr_config.h` — when no provider is installed
+(the standalone `scene_demo`) the F-Key Toggles section renders
+empty rather than dragging in the controller's vocabulary. The
+existing `scripts/check-repl-no-app.sh` ratchet was already in
+place; its baseline drops from 1 to 0, so any new `#include "app/..."`
+from src/repl/ is now a hard error.
 
 ### 2. 🟡 `parse_cfg` double-applies every `// @cfg` line — design hazard, not currently triggerable
 

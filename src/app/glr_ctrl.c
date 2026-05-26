@@ -1583,6 +1583,28 @@ static void glr_ctrl_tick_overlay_xn(void) {
                   AXES_FADE_IN_SECS, AXES_FADE_OUT_SECS);
 }
 
+/* Look up the label of the config row currently bound to F<fn>.
+ * Used by the help overlay's F-Key Toggles section through the
+ * controller-installed ReplHelpFkeyProvider — closes audit #1's
+ * layering inversion where src/repl/help_text.c reached into
+ * src/app/glr_config.h directly. */
+static const char *glr_ctrl_help_fkey_label(int fn) {
+    int cfg_count = 0;
+    const GlrConfigItem *items = glr_config_items(&cfg_count);
+    for (int i = 0; i < cfg_count; i++) {
+        const GlrConfigItem *item = &items[i];
+        if (item->section_header || item->key == GLR_CONFIG_NONE)
+            continue;
+        if (item->is_special && item->key_code == fn)
+            return item->label;
+    }
+    return NULL;
+}
+
+static const ReplHelpFkeyProvider g_glr_help_fkey_provider = {
+    .fkey_label = glr_ctrl_help_fkey_label,
+};
+
 static void glr_ctrl_install_app_services(void) {
     /* Install the host-effect bridge (status sink, example presentation, editor effects, tutorial). */
     repl_install_host_effects(&g_glr_host_effects);
@@ -1594,6 +1616,9 @@ static void glr_ctrl_install_app_services(void) {
     repl_executor_install_camera_distance_source(glr_ctrl_camera_distance);
     /* Reshape-projection bridge: queries the active 2D/3D projection for export and layout calculations. */
     repl_export_install_projection_bridge(&g_export_projection_bridge_impl);
+    /* Help-overlay F-key label provider so src/repl/help_text.c can
+     * walk F2..F10 labels without including app/glr_config.h (audit #1). */
+    repl_help_text_install_fkey_provider(&g_glr_help_fkey_provider);
     /* Seed the grid/axes overlay transition machines. */
     glr_ctrl_seed_overlay_xn();
 }

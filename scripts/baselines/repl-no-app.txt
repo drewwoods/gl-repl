@@ -3,11 +3,12 @@
 # Counts non-comment `#include "app/...` lines in src/repl/**.
 # The REPL program-model layer must not depend on the app shell.
 #
-# Current violation: src/repl/help_text.c includes app/glr_config.h
-# to read GLR_CONFIG_COUNT for the help table generator. The cleaner
-# fix is either to move the config-key vocabulary into a shared
-# lower-layer header or to pass the count through repl_help_init().
-#
-# Recorded 2026-05-24 after the mechanical audit-fix pass landed.
+# Closed 2026-05-26 (audit #1): the previous violation —
+# src/repl/help_text.c including app/glr_config.h to walk
+# g_cfg_items[] for the F-key rows — was removed by routing F-key
+# label lookups through a controller-installed ReplHelpFkeyProvider
+# (see src/repl/help_text.h and src/app/glr_ctrl.c's
+# glr_ctrl_help_fkey_label). The baseline drops from 1 to 0; any
+# new app/ include from src/repl/ is now a hard error.
 
-app_include_count: 1
+app_include_count: 0

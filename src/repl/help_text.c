@@ -2,18 +2,27 @@
  * src/repl/help_text.c - Help-overlay text content owned by the REPL.
  *
  * Pulled out of ui_help_overlay.c so the renderer carries no REPL
- * knowledge. The Commands tab is fully static; the Keys tab interleaves
- * a static base with dynamic F-key entries pulled from g_cfg_items
- * (matched on key_code == GLUT_KEY_Fn).
+ * knowledge. The Commands tab is fully static; the Keys tab
+ * interleaves a static base with dynamic F-key entries supplied via
+ * a controller-installed ReplHelpFkeyProvider (see help_text.h).
+ * Pre-audit-#1 this module #included app/glr_config.h directly —
+ * the only src/repl/ file that did so — and walked g_cfg_items[]
+ * inline. The provider hook keeps the F-key labels dynamic without
+ * reaching into the app shell.
  */
 #include "repl/help_text.h"
 #include "repl/command_spec.h"   /* MAX_FUNC_HINT_PARAMS */
-#include "app/glr_config.h"
 #include "repl/eval.h"           /* REPL_SCRATCH_ARRAY_LEN */
 
 #include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
+
+static const ReplHelpFkeyProvider *g_fkey_provider = NULL;
+
+void repl_help_text_install_fkey_provider(const ReplHelpFkeyProvider *provider) {
+    g_fkey_provider = provider;
+}
 
 /* Compile-time stringify for embedding macro values in string literals */
 #define _HELP_STR2(x) #x
@@ -359,24 +368,19 @@ const ReplHelpContent *repl_help_text_build(void) {
     snprintf(g_fkey_strbuf[0], sizeof(g_fkey_strbuf[0]), "  F1   \tHelp overlay");
     g_tab_keys[nk++] = g_fkey_strbuf[0];
 
-    /* F2-F10 - pulled from the config descriptor table by matching
-     * key_code (GLUT_KEY_Fn == n). F11 and F12 are not in g_cfg_items;
-     * they drive the example/scene cycle directly. */
+    /* F2-F10 — pulled from the controller-installed provider so this
+     * module stays free of app/ includes. F11 and F12 are not part of
+     * the config table; they drive the example/scene cycle directly
+     * and are emitted unconditionally below. */
     int di = 1;
     for (int fn = 2; fn <= 10 && di < HELP_FKEY_MAX - 1; fn++) {
-        int cfg_count = 0;
-        const GlrConfigItem *items = glr_config_items(&cfg_count);
-        for (int ci = 0; ci < cfg_count; ci++) {
-            const GlrConfigItem *item = &items[ci];
-            if (item->section_header || item->key == GLR_CONFIG_NONE)
-                continue;
-            if (item->is_special && item->key_code == fn) {
-                snprintf(g_fkey_strbuf[di], sizeof(g_fkey_strbuf[di]),
-                         "  F%-2d  \t%s", fn, item->label);
-                g_tab_keys[nk++] = g_fkey_strbuf[di++];
-                break;
-            }
-        }
+        const char *label = (g_fkey_provider && g_fkey_provider->fkey_label)
+                          ? g_fkey_provider->fkey_label(fn)
+                          : NULL;
+        if (!label) continue;
+        snprintf(g_fkey_strbuf[di], sizeof(g_fkey_strbuf[di]),
+                 "  F%-2d  \t%s", fn, label);
+        g_tab_keys[nk++] = g_fkey_strbuf[di++];
     }
 
     /* F11 - not in g_cfg_items */
