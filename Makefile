@@ -196,6 +196,7 @@ endif
 	check-repl-demo-stubs-shrinking \
 	check-repl-export-no-ui-layout \
 	check-repl-export-via-bridge \
+	check-repl-mut-reads \
 	check-repl-no-direct-buffer-read \
 	check-repl-no-direct-editor \
 	check-repl-no-direct-tutorial-runner \
@@ -994,6 +995,9 @@ check-editor-no-app: ## Ratchet: forbid new app/glr_* coupling in src/editor/ (s
 check-repl-no-app: ## Ratchet: forbid new app/glr_* coupling in src/repl/.
 	@bash scripts/check-repl-no-app.sh
 
+check-repl-mut-reads: ## Ratchet: cap `_mut()` calls in src/repl/ outside owner files (audit #7/#14).
+	@bash scripts/check-repl-mut-reads.sh
+
 check-scene-no-upper-layers: ## Hard guard: src/scene/ must not include from app/editor/ui/subsystems.
 	@bash scripts/check-scene-no-upper-layers.sh
 
@@ -1075,6 +1079,7 @@ check-state-ownership: ## Run state-ownership contract checks (new + tightened e
 		check-source-document-port-owners \
 		check-editor-no-app \
 		check-repl-no-app \
+		check-repl-mut-reads \
 		check-scene-no-upper-layers \
 		check-ui-core-no-upper-layers \
 		check-c99 \

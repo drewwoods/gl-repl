@@ -38,8 +38,8 @@ static void depth_cache_rebuild(void) {
         int begin_depth = g_begin_depth_prefix[i];
         int tess_depth  = g_tess_depth_prefix[i];
 
-        if (repl_state_document_cmds_mut()[i].valid) {
-            CmdType t = repl_state_document_cmds_mut()[i].type;
+        if (repl_state_document_cmds()[i].valid) {
+            CmdType t = repl_state_document_cmds()[i].type;
 
             if (repl_cmd_is_block_head(t)) block_depth++;
             else if (repl_cmd_is_block_end(t)) block_depth--;
@@ -160,7 +160,7 @@ void repl_source_scope_cmd_tess_indent(int pos, char *buf, int buf_sz) {
 int repl_source_scope_find_block_end(int begin_idx) {
     int depth = 1;
     for (int j = begin_idx + 1; j < repl_state_document_count(); j++) {
-        CmdType t = repl_state_document_cmds_mut()[j].type;
+        CmdType t = repl_state_document_cmds()[j].type;
         if (repl_cmd_is_block_head(t)) depth++;
         else if (repl_cmd_is_block_end(t)) {
             depth--;
@@ -174,7 +174,7 @@ CmdType repl_source_scope_nearest_open_block_at(int pos) {
     CmdType stack[64];
     int depth = 0;
     for (int i = 0; i < pos && i < repl_state_document_count(); i++) {
-        CmdType t = repl_state_document_cmds_mut()[i].type;
+        CmdType t = repl_state_document_cmds()[i].type;
         if (repl_cmd_is_block_head(t)) {
             if (depth < 64) stack[depth++] = t;
         } else if (repl_cmd_is_block_end(t)) {

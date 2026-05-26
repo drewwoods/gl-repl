@@ -1114,9 +1114,9 @@ static int cmd_type_is_tess(CmdType t) {
 
 static int export_uses_tess_commands(void) {
     for (int cmd_idx = 0; cmd_idx < repl_state_document_count(); cmd_idx++) {
-        if (!repl_state_document_cmds_mut()[cmd_idx].valid)
+        if (!repl_state_document_cmds()[cmd_idx].valid)
             continue;
-        if (cmd_type_is_tess(repl_state_document_cmds_mut()[cmd_idx].type))
+        if (cmd_type_is_tess(repl_state_document_cmds()[cmd_idx].type))
             return 1;
     }
 
@@ -1203,7 +1203,7 @@ static int find_export_block_end(int begin_idx) {
     int depth = 1;
 
     for (int cmd_idx = begin_idx + 1; cmd_idx < repl_state_document_count(); cmd_idx++) {
-        CmdType t = repl_state_document_cmds_mut()[cmd_idx].type;
+        CmdType t = repl_state_document_cmds()[cmd_idx].type;
         if (repl_cmd_is_block_head(t)) depth++;
         else if (repl_cmd_is_block_end(t)) {
             if (--depth == 0)
@@ -1217,12 +1217,12 @@ static int find_export_block_end(int begin_idx) {
 static int comment_run_attached_func_idx(int start, int end_idx) {
     int cmd_idx = start;
     while (cmd_idx < end_idx && cmd_idx < repl_state_document_count() &&
-           repl_state_document_cmds_mut()[cmd_idx].valid &&
-           (repl_state_document_cmds_mut()[cmd_idx].type == CMD_COMMENT ||
-            repl_state_document_cmds_mut()[cmd_idx].type == CMD_EMPTY))
+           repl_state_document_cmds()[cmd_idx].valid &&
+           (repl_state_document_cmds()[cmd_idx].type == CMD_COMMENT ||
+            repl_state_document_cmds()[cmd_idx].type == CMD_EMPTY))
         cmd_idx++;
     if (cmd_idx > start && cmd_idx < end_idx && cmd_idx < repl_state_document_count() &&
-        repl_state_document_cmds_mut()[cmd_idx].valid && repl_state_document_cmds_mut()[cmd_idx].type == CMD_FUNC_DEF)
+        repl_state_document_cmds()[cmd_idx].valid && repl_state_document_cmds()[cmd_idx].type == CMD_FUNC_DEF)
         return cmd_idx;
     return -1;
 }
@@ -1410,19 +1410,19 @@ static void write_render_body_range_as_c(FILE *f, int start, int end_idx,
     int tess_depth = 0;
 
     for (int cmd_idx = start; cmd_idx < end_idx && cmd_idx < repl_state_document_count(); cmd_idx++) {
-        if (!repl_state_document_cmds_mut()[cmd_idx].valid) continue;
+        if (!repl_state_document_cmds()[cmd_idx].valid) continue;
         if (skip_func_defs &&
-            (repl_state_document_cmds_mut()[cmd_idx].type == CMD_COMMENT ||
-             repl_state_document_cmds_mut()[cmd_idx].type == CMD_EMPTY)) {
+            (repl_state_document_cmds()[cmd_idx].type == CMD_COMMENT ||
+             repl_state_document_cmds()[cmd_idx].type == CMD_EMPTY)) {
             int attached_func = comment_run_attached_func_idx(cmd_idx, end_idx);
             if (attached_func >= 0) {
                 cmd_idx = find_export_block_end(attached_func);
                 continue;
             }
         }
-        switch (repl_state_document_cmds_mut()[cmd_idx].type) {
+        switch (repl_state_document_cmds()[cmd_idx].type) {
         case CMD_FOR_BEGIN:
-            write_for_begin_as_c(f, &repl_state_document_cmds_mut()[cmd_idx],
+            write_for_begin_as_c(f, &repl_state_document_cmds()[cmd_idx],
                                  export_document_text(cmd_idx));
             for_depth++;
             break;
@@ -1437,7 +1437,7 @@ static void write_render_body_range_as_c(FILE *f, int start, int end_idx,
         case CMD_FUNC_END:
             break;
         default:
-            write_canonical_cmd_as_c(f, &repl_state_document_cmds_mut()[cmd_idx],
+            write_canonical_cmd_as_c(f, &repl_state_document_cmds()[cmd_idx],
                                      cmd_idx, for_depth, &tess_depth);
             break;
         }
@@ -1591,8 +1591,8 @@ static void write_render_helper_as_c(FILE *f, const char *name) {
     write_render_body_range_as_c(f, 0, repl_state_document_count(), 1);
     int bb = 0;
     for (int cmd_idx = 0; cmd_idx < repl_state_document_count(); cmd_idx++) {
-        if (repl_state_document_cmds_mut()[cmd_idx].valid && repl_state_document_cmds_mut()[cmd_idx].type == CMD_BEGIN) bb++;
-        else if (repl_state_document_cmds_mut()[cmd_idx].valid && repl_state_document_cmds_mut()[cmd_idx].type == CMD_END) bb--;
+        if (repl_state_document_cmds()[cmd_idx].valid && repl_state_document_cmds()[cmd_idx].type == CMD_BEGIN) bb++;
+        else if (repl_state_document_cmds()[cmd_idx].valid && repl_state_document_cmds()[cmd_idx].type == CMD_END) bb--;
     }
     if (bb > 0)
         fprintf(f, "  glEnd();\n");
@@ -1603,18 +1603,18 @@ static void write_render_helper_as_c(FILE *f, const char *name) {
 static void write_func_defs_as_c(FILE *f) {
     /* Iterate through all document commands looking for function definitions. */
     for (int cmd_idx = 0; cmd_idx < repl_state_document_count(); cmd_idx++) {
-        if (!repl_state_document_cmds_mut()[cmd_idx].valid || repl_state_document_cmds_mut()[cmd_idx].type != CMD_FUNC_DEF) continue;
+        if (!repl_state_document_cmds()[cmd_idx].valid || repl_state_document_cmds()[cmd_idx].type != CMD_FUNC_DEF) continue;
         int comment_start = cmd_idx;
         while (comment_start > 0 &&
-               repl_state_document_cmds_mut()[comment_start - 1].valid &&
-               (repl_state_document_cmds_mut()[comment_start - 1].type == CMD_COMMENT ||
-                repl_state_document_cmds_mut()[comment_start - 1].type == CMD_EMPTY))
+               repl_state_document_cmds()[comment_start - 1].valid &&
+               (repl_state_document_cmds()[comment_start - 1].type == CMD_COMMENT ||
+                repl_state_document_cmds()[comment_start - 1].type == CMD_EMPTY))
             comment_start--;
         /* Emit any preceding comment lines. */
         for (int comment_idx = comment_start; comment_idx < cmd_idx; comment_idx++)
             fprintf(f, "\n%s\n", export_document_text(comment_idx));
 
-        int fn = (int)repl_state_document_cmds_mut()[cmd_idx].args[0];
+        int fn = (int)repl_state_document_cmds()[cmd_idx].args[0];
         int parsed_fn = fn;
         int param_count = 0;
         char param_names[MAX_EXPR_VARS][16];
@@ -2589,7 +2589,7 @@ static ExportNeeds export_collect_needs(void) {
      * off the command type rather than text in case a future
      * codegen path emits `label(...)` indirectly. */
     for (int cmd_idx = 0; cmd_idx < repl_state_document_count(); cmd_idx++) {
-        const GLCmd *cmd = &repl_state_document_cmds_mut()[cmd_idx];
+        const GLCmd *cmd = &repl_state_document_cmds()[cmd_idx];
         if (!cmd->valid) continue;
         if (cmd->type == CMD_LABEL) needs.needs_label = 1;
         const char *src = export_document_text(cmd_idx);
@@ -3278,7 +3278,7 @@ void repl_dump_code_panel_text(FILE *out, SourceTextView text) {
     fprintf(dst, "--- source ---\n");
     /* Dump all valid user commands. */
     for (int cmd_idx = 0; cmd_idx < repl_state_document_count(); cmd_idx++) {
-        if (!repl_state_document_cmds_mut()[cmd_idx].valid) continue;
+        if (!repl_state_document_cmds()[cmd_idx].valid) continue;
         fprintf(dst, "%s\n", export_document_text(cmd_idx));
     }
 
