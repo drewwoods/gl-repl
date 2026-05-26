@@ -188,7 +188,7 @@ static void fill_guide_arg_slots(SceneGuideSnapshot *snapshot,
     }
     if (normal_args) {
         snapshot->normal_n_filled = repl_eval_parse_exprs(
-            normal_args, snapshot->normal_args, 3, NULL, 0);
+            normal_args, snapshot->normal_args, 3, (ExprVar *)predef.vars, predef.count);
     }
 }
 
@@ -215,7 +215,7 @@ static SceneGuideSnapshot glr_ctrl_build_guide_snapshot(const SceneRenderConfig 
         .edit_line_idx = edit_line,
         .inserting = editor_insert_mode(),
         .edit_line_committed_text = editor_buffer_line(edit_line),
-        .source_cmds = repl_state_document_cmds_mut(),
+        .source_cmds = repl_state_document_cmds(),
         .source_cmd_count = repl_state_document_count(),
         .flat_program = repl_state_flat_program_view(),
         .alpha_scale = config ? config->alpha_scale : 1.0f,
@@ -1428,10 +1428,8 @@ static const ReplExportProjectionBridge g_export_projection_bridge_impl = {
  * demo leaves both unset. */
 static void glr_ctrl_host_input_reset(void) {
     editor_insert_mode_set(0);
+    editor_input_clear();
     EditorInputState *inp = editor_state_input_mut();
-    inp->input[0] = '\0';
-    inp->input_len = 0;
-    editor_cursor_pos_set(0);
     inp->pending_newline[0] = '\0';
     inp->pending_newline_len = 0;
 }
@@ -1504,20 +1502,20 @@ void glr_publish_replay_annotations(const ReplReplayAnnotationOutput *out) {
     }
 }
 
-static void glr_host_editor_cursor_park(int line, int insert_mode) {
+static void glr_ctrl_host_editor_cursor_park(int line, int insert_mode) {
     editor_state_edit_line_set(line);
     editor_insert_mode_set(insert_mode);
 }
 
-static void glr_host_completion_clear(void) {
+static void glr_ctrl_host_completion_clear(void) {
     editor_completion_clear();
 }
 
-static void glr_host_completion_update(void) {
+static void glr_ctrl_host_completion_update(void) {
     editor_completion_update();
 }
 
-static const char *glr_host_editor_input_get(void) {
+static const char *glr_ctrl_host_editor_input_get(void) {
     return editor_state_input().input;
 }
 
@@ -1533,10 +1531,10 @@ static const ReplHostEffects g_glr_host_effects = {
     .tutorial_teardown          = tutorial_teardown,
     .edit_line_get              = editor_state_edit_line,
     .edit_line_set              = editor_state_edit_line_set,
-    .host_cursor_park           = glr_host_editor_cursor_park,
-    .completion_clear           = glr_host_completion_clear,
-    .completion_update          = glr_host_completion_update,
-    .host_input_get             = glr_host_editor_input_get,
+    .host_cursor_park           = glr_ctrl_host_editor_cursor_park,
+    .completion_clear           = glr_ctrl_host_completion_clear,
+    .completion_update          = glr_ctrl_host_completion_update,
+    .host_input_get             = glr_ctrl_host_editor_input_get,
 };
 
 /* Seed both overlay fade machines to the current presentation theme at steady full opacity. */
@@ -1882,8 +1880,9 @@ void glr_ctrl_bootstrap_repl(const char *input_file) {
      * feature/decouple-repl-from-gl-repl-alt.md.) */
     glr_ctrl_install_app_services();
     repl_eval_init_predef_vars();
-    for (int i = 0; i < g_num_predef_vars; i++) {
-        if (strcmp(g_predef_vars[i].name, "t") == 0) {
+    ReplPredefView predef = repl_eval_predef_view();
+    for (int i = 0; i < predef.count; i++) {
+        if (strcmp(predef.vars[i].name, "t") == 0) {
             repl_state_variables_mut()->time_var_idx = i;
             break;
         }
@@ -2361,14 +2360,15 @@ static void glr_ctrl_apply_variable_panel_value_change(
 
     drag = variable_panel_drag();
     var_idx = drag.var_idx;
-    if (var_idx < 0 || var_idx >= g_num_predef_vars)
+    ReplPredefView predef = repl_eval_predef_view();
+    if (var_idx < 0 || var_idx >= predef.count)
         return;
-    if (strcmp(g_predef_vars[var_idx].name, value_change->name) != 0) {
+    if (strcmp(predef.vars[var_idx].name, value_change->name) != 0) {
         var_idx = repl_eval_find_predef_var_idx(value_change->name);
         if (var_idx < 0)
             return;
     }
-    if (g_predef_vars[var_idx].value == value_change->value)
+    if (predef.vars[var_idx].value == value_change->value)
         return;
 
     ctx = repl_compile_context_from_live(editor_state_edit_line());
@@ -2686,8 +2686,8 @@ static int route_help_toggle_hit(void) {
 
 /* UI_HIT_INLINE_COLOR_SWATCH: toggle / open the floating color picker
  * for the swatch's source line. Undo capture is owned by the picker's
- * writeback path (color_picker_write_cmd → editor_commit_apply_external
- * _change with capture_undo on the first slider edit per session), so
+ * writeback path (color_picker_write_cmd → editor_commit_apply_external_change
+ * with capture_undo on the first slider edit per session), so
  * a session that opens and closes without editing leaves the undo ring
  * untouched. */
 static int route_inline_color_swatch_hit(const UiHit *hit, int my) {
@@ -2884,7 +2884,7 @@ static int code_panel_target_from_hit(UiHit hit) {
     case UI_HIT_CODE_GUTTER:
         return hit.line_idx;
     case UI_HIT_CODE_INSERT_LINE: {
-        int target = hit.line_idx; /* set to editor_state_edit_line() in J2.1 */
+        int target = hit.line_idx; /* Target line to focus on. */
         int doc_count = repl_state_document_count();
         if (target >= doc_count)
             target = doc_count - 1;

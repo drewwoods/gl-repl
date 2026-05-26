@@ -71,9 +71,9 @@ enum {
  * workspace metadata headers or explicit user selection. */
 #define GLR_DEFAULT_WORKSPACE_DIR "./workspace"
 
-/* Apply initial configuration defaults at startup. Initializes all config
- * toggles and cycles to their default values. Called during REPL init;
- * examples can override via @cfg metadata headers. */
+/* Apply initial presentation configuration defaults at startup. Initializes the
+ * presentation config toggles and cycles to their default values. Called during
+ * REPL init; examples can override via @cfg metadata headers. */
 void glr_actions_apply_defaults(void);
 
 /* Install the export-config bridge that lets src/repl/export.c emit/parse

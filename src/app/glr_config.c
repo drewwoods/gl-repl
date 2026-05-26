@@ -109,8 +109,41 @@ int glr_config_get(GlrConfigKey key) {
     if (key == GLR_CONFIG_ACCUM_AA)
         return accum_aa_get_cycle();
 
-    int *value = config_value_ptr(key);
-    return value ? *value : 0;
+    switch (key) {
+    case GLR_CONFIG_MSAA:                return glr_state_render().multisample_enabled;
+    case GLR_CONFIG_LINE_SMOOTH:         return glr_state_render().line_smooth_enabled;
+    case GLR_CONFIG_WIREFRAME:           return glr_state_presentation().wireframe;
+    case GLR_CONFIG_POINT_ATTENUATION:   return glr_state_render().point_attenuation_enabled;
+    case GLR_CONFIG_AUTO_TIME:           return repl_state_variables().time_playing;
+    case GLR_CONFIG_REPLAY:              return replay_state_view().active;
+    case GLR_CONFIG_REPLAY_MODE:         return replay_state_view().mode;
+    case GLR_CONFIG_REPLAY_EXPAND:       return replay_state_view().expand_args;
+    case GLR_CONFIG_GRID_THEME:          return glr_state_presentation().grid_theme;
+    case GLR_CONFIG_GRID_MAJOR:          return glr_state_presentation().grid_major_idx;
+    case GLR_CONFIG_GRID_EXTENT:         return glr_state_presentation().grid_extent_idx;
+    case GLR_CONFIG_AXES_THEME:          return glr_state_presentation().axes_theme;
+    case GLR_CONFIG_XFORM_GUIDES:       return glr_state_presentation().show_xform_guides;
+    case GLR_CONFIG_XFORM_GUIDE_MODE:    return glr_state_presentation().xform_guide_mode;
+    case GLR_CONFIG_LIGHT_INDICATORS:    return glr_state_presentation().show_light_indicators;
+    case GLR_CONFIG_POLY_HIGHLIGHT:      return glr_state_presentation().highlight_current_poly;
+    case GLR_CONFIG_BACKDROP:            return glr_state_presentation().backdrop_mode;
+    case GLR_CONFIG_ORTHO_MODE:          return glr_state_presentation().ortho_mode;
+    case GLR_CONFIG_CAMERA_ROTATE:       return glr_camera().auto_rotate;
+    case GLR_CONFIG_FOCUS_ORIGIN:        return 0;
+    case GLR_CONFIG_RESET_CAMERA:        return 0;
+    case GLR_CONFIG_AUTO_NORMALS:        return glr_state_presentation().autonormal;
+    case GLR_CONFIG_VERTEX_LABELS:       return glr_state_presentation().show_vertex_labels;
+    case GLR_CONFIG_NORMAL_VECTORS:      return glr_state_presentation().show_normal_vectors;
+    case GLR_CONFIG_VERTEX_OUTLINES:     return glr_state_presentation().show_vertex_outlines;
+    case GLR_CONFIG_VERTEX_POINTS:       return glr_state_presentation().show_vertex_points;
+    case GLR_CONFIG_VARIABLE_PANEL:      return variable_panel_view().visible;
+    case GLR_CONFIG_CPU_PROFILE:         return ui_state_profile_panel().mode;
+    case GLR_CONFIG_MEMORY_PROFILE:      return ui_state_memory_panel().mode;
+    case GLR_CONFIG_CODE_PANEL_LAYOUT:   return glr_state_presentation().code_panel_layout;
+    case GLR_CONFIG_WRAP_AT_COMMA:       return glr_state_presentation().wrap_at_comma;
+    case GLR_CONFIG_SYNTAX_HIGHLIGHT:    return glr_state_presentation().syntax_highlight;
+    default:                             return 0;
+    }
 }
 
 /* First g_cfg_items[] row whose key matches, or NULL. Section-header
@@ -192,7 +225,7 @@ static int row_is_section_header(int idx) {
 
 GlrConfigRowKind glr_config_row_kind(int idx) {
     if (idx < 0 || idx >= CFG_ITEM_COUNT)
-        return GLR_CFG_ROW_ITEM;
+        return GLR_CFG_ROW_SEPARATOR;
     if (row_is_section_header(idx))
         return GLR_CFG_ROW_HEADER;
     if (g_cfg_items[idx].section_header)

@@ -28,12 +28,48 @@
 > `AWR_UNINIT` path now covers all observable race paths; re-review
 > found no remaining window. Recommend closing #25 as Done.
 
+## Completed Findings (Tier A)
+
+All Tier A findings have been successfully implemented and verified through the test suite:
+
+| Finding | Severity | Description | Status | Implementation / Verification Note |
+|:---:|:---:|---|:---:|---|
+| **#1** | 🔴 | Normal-guide arg evaluation ignores predefined variables | **Done** | Passed `predef.vars` and `predef.count` (cast to suppress compiler warnings) to `repl_eval_parse_exprs` in `fill_guide_arg_slots`. |
+| **#2** | 🟡 | Host input reset open-codes input clear (latent stale-selection ghost) | **Done** | Delegated input clearing directly to `editor_input_clear()`, picking up the missing `anchor_pos = -1` reset. *(Classified 🟡, not 🟢: the original `Impact` was "Stale input selection ghost after loading a file or switching examples … the path exists." Even if most flows clear the selection separately, the latent UX failure mode doesn't fit "dead code / cosmetic". An earlier draft of this table over-downgraded.)* |
+| **#3** | 🟡 | Mutable accessor used for read-only `source_cmds` | **Done** | Changed to use `repl_state_document_cmds()` const accessor in `glr_ctrl_build_guide_snapshot`. |
+| **#4** | 🟡 | Naming inconsistency in host-effect callbacks | **Done** | Renamed `glr_host_*` callback functions to `glr_ctrl_host_*` and updated references. |
+| **#5** | 🟡 | `g_predef_vars` macros route reads through `_mut()` | **Done** | Switched all reads to `repl_eval_predef_view()` by-value const views. |
+| **#9** | 🟡 | `config_value_ptr()` uses `_mut()` on read path | **Done** | Completely refactored `glr_config_get` to map config keys directly to const getters, bypassing BSS mutable routing. |
+| **#10** | 🟡 | OOB `glr_config_row_kind` returns active kind | **Done** | Returns `GLR_CFG_ROW_SEPARATOR` (inert sentinel) on out-of-bounds inputs. |
+| **#16** | 🟢 | Stale legacy function references in comments | **Done** | Cleaned up stale comments to refer to modern function names like `editor_commit_apply_external_change`. |
+| **#17** | 🟢 | Misleading plan-internal comment "J2.1" | **Done** | Replaced "J2.1" comment with `/* Target line to focus on. */`. |
+| **#18** | 🟢 | "Title-cased" comment but logic is sentence-case | **Done** | Updated comment in `glr_config.h` to read "Sentence-cased display label". |
+| **#19** | 🟢 | `apply_defaults()` docstring overstates scope | **Done** | Documented that it only applies to presentation configuration defaults. |
+| **#20** | 🟢 | Double legacy-alias normalization | **Done** | Removed redundant normalization inside `glr_export_cfg_apply()`. |
+| **#21** | 🟢 | Dead public API `glr_audio_stop_music()` | **Done** | Fully deleted dead function from header, source, and tests. |
+| **#22** | 🟢 | `-1.0f` seek sentinel unnamed magic number | **Done** | Defined `GLR_AUDIO_NO_SEEK (-1.0f)` and replaced all raw occurrences. |
+| **#23** | 🟢 | Unused `#include <unistd.h>` in `glr_audio.c` | **Done** | Removed unused header include. |
+| **#24** | 🟢 | Magic auto-rotate speed constant | **Done** | Defined `CAM_AUTO_ROTATE_SPEED 0.3f` in `glr_camera.c`. |
+| **#25** | 🟢 | Dead `start < 0` bounds check in `glr_source_document.c` | **Done** | Removed the dead branch. |
+| **#27** | 🟢 | Undocumented narrow contract for `glr_ctrl_view_record_external_3d_pose` | **Done** | Added docstring documenting the displaying-frame context precondition. |
+
+**Items considered for promotion to Tier A but deferred:**
+
+- **#11** (`g_cfg_items[]` const-extern) — a prior-pass review
+  recommended moving this from Tier B to Tier A because a `const` on
+  the extern is a one-line change. On closer look the naive fix
+  breaks the build: `glr_actions_set_msaa_label()` mutates the table
+  at runtime, so `const` would need a `display_label` override field
+  on `GlrConfigItem` first (a real Tier B refactor). The cross-
+  reference is also in the *Notes on placement* block below; left
+  in Tier B intentionally.
+
 ## Headline take
 
 37 findings total; #15 withdrawn (pre-validation already exists),
-so 36 live. Of those: 1 🔴 (real bug), 12 🟡 (drift/boundary),
-13 🟢 (dead code / cosmetic, including #2 downgraded from 🔴),
-10 🔵 (structural).
+so 36 live. Of those: 1 🔴 (real bug — #1), 13 🟡 (drift/boundary,
+including #2 downgraded from 🔴 — latent stale-selection ghost,
+not cosmetic), 12 🟢 (dead code / cosmetic), 10 🔵 (structural).
 
 The dominant theme is **`_mut()` for reads and open-coded helpers**:
 the prior audit's #15 (`_mut()` sweep) was closed in the controller

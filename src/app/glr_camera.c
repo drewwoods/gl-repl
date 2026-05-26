@@ -30,6 +30,7 @@
 #define CAM_RX_MAX 89.0f
 #define CAM_DIST_MIN 0.5f
 #define CAM_DIST_MAX 50.0f
+#define CAM_AUTO_ROTATE_SPEED 0.3f
 
 /* Drag-to-motion conversion (pointer-pixel deltas → world/camera units)
  * and the orbit/pan momentum coupling. CAM_ROT_SENSITIVITY (degrees per
@@ -472,7 +473,7 @@ void glr_camera_tick(void) {
     if (!g_camera_target_active &&
         g_control_mode == GLR_CAMERA_CONTROL_3D &&
         c->auto_rotate) {
-        c->ry += 0.3f;
+        c->ry += CAM_AUTO_ROTATE_SPEED;
         c->ry = fmodf(c->ry, 360.0f);
     }
 }

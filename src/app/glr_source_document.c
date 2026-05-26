@@ -48,7 +48,6 @@ int source_document_apply_change(const SourceTextChange *change) {
     if (change->delete_count > 0 && change->delete_pos >= 0) {
         int start = change->delete_pos;
         int count = change->delete_count;
-        if (start < 0) start = 0;
         if (start < line_count) {
             if (start + count > line_count)
                 count = line_count - start;
