@@ -2252,7 +2252,7 @@ int main() {
 
         glr_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_HIDDEN; glr_ctrl_sync_ui_chrome();
         replay_state = REPLAY_PLAYING;
-        glr_ctrl_router_handle_active_replay_key(' ');
+        glr_ctrl_router_handle_replay_key(' ');
         ASSERT_INT("replay space keeps hidden code panel",
                    glr_state_presentation().code_panel_layout, CODE_PANEL_LAYOUT_HIDDEN);
         ASSERT_INT("replay space still pauses through router",

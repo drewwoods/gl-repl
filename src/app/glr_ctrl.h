@@ -148,8 +148,7 @@ int glr_ctrl_router_handle_debug_dump_key(unsigned char key);       /* Ctrl+P */
 void glr_ctrl_fill_export_layout(ReplExportLayout *out);
 int glr_ctrl_router_handle_quit_key(unsigned char key);             /* Ctrl+Q */
 int glr_ctrl_router_handle_config_menu_key(unsigned char key);      /* backtick → config menu */
-int glr_ctrl_router_handle_active_replay_key(unsigned char key);    /* replay forwarding when active */
-int glr_ctrl_router_handle_replay_toggle_key(unsigned char key);    /* replay key surface, including Ctrl+R */
+int glr_ctrl_router_handle_replay_key(unsigned char key);    /* replay key surface, including Ctrl+R and active forwarding */
 int glr_ctrl_router_handle_cfg_shortcut_key(unsigned char key);     /* glr_cfg_handle_ascii_shortcut */
 int glr_ctrl_router_handle_accum_samples_key(unsigned char key);    /* Ctrl+= / Ctrl+- */
 int glr_ctrl_router_handle_post_filter_key(unsigned char key);      /* Ctrl+N (experimental post-process) */

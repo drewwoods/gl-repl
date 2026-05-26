@@ -31,32 +31,31 @@
 
 /* ----- Save-side formatting ------------------------------------------- */
 
-static void cam_format_save_block(ReplExportCameraBlock *block) {
+static void cam_format_block_impl(ReplExportCameraBlock *block, int use_g_angle) {
     GlrCameraState cam = glr_camera();
     snprintf(block->lines[0], REPL_EXPORT_CAMERA_LINE_MAX,
              "  glTranslatef(0.0000f, 0.0000f, %.4ff);", -cam.dist);
     snprintf(block->lines[1], REPL_EXPORT_CAMERA_LINE_MAX,
              "  glRotatef(%.4ff, 1.0f, 0.0f, 0.0f);", cam.rx);
-    snprintf(block->lines[2], REPL_EXPORT_CAMERA_LINE_MAX,
-             "  glRotatef(g_angle, 0.0f, 1.0f, 0.0f);");
+    if (use_g_angle) {
+        snprintf(block->lines[2], REPL_EXPORT_CAMERA_LINE_MAX,
+                 "  glRotatef(g_angle, 0.0f, 1.0f, 0.0f);");
+    } else {
+        snprintf(block->lines[2], REPL_EXPORT_CAMERA_LINE_MAX,
+                 "  glRotatef(%.4ff, 0.0f, 1.0f, 0.0f);", cam.ry);
+    }
     snprintf(block->lines[3], REPL_EXPORT_CAMERA_LINE_MAX,
              "  glTranslatef(%.4ff, %.4ff, %.4ff);",
              -cam.tx, -cam.ty, -cam.tz);
     block->present = 1;
 }
 
+static void cam_format_save_block(ReplExportCameraBlock *block) {
+    cam_format_block_impl(block, 1);
+}
+
 static void cam_format_display_block(ReplExportCameraBlock *block) {
-    GlrCameraState cam = glr_camera();
-    snprintf(block->lines[0], REPL_EXPORT_CAMERA_LINE_MAX,
-             "  glTranslatef(0.0000f, 0.0000f, %.4ff);", -cam.dist);
-    snprintf(block->lines[1], REPL_EXPORT_CAMERA_LINE_MAX,
-             "  glRotatef(%.4ff, 1.0f, 0.0f, 0.0f);", cam.rx);
-    snprintf(block->lines[2], REPL_EXPORT_CAMERA_LINE_MAX,
-             "  glRotatef(%.4ff, 0.0f, 1.0f, 0.0f);", cam.ry);
-    snprintf(block->lines[3], REPL_EXPORT_CAMERA_LINE_MAX,
-             "  glTranslatef(%.4ff, %.4ff, %.4ff);",
-             -cam.tx, -cam.ty, -cam.tz);
-    block->present = 1;
+    cam_format_block_impl(block, 0);
 }
 
 static void cam_format_save_preamble(char *out, int out_sz) {

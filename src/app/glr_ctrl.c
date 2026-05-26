@@ -1270,25 +1270,17 @@ void glr_ctrl_view_record_external_3d_pose(float rx, float ry, float tz) {
 }
 
 static int glr_ctrl_step_projection_toward(float target, float dt) {
-    float step;
-
     if (GLR_VIEW_PROJECTION_TRANSITION_SECS <= 0.0f) {
         g_projection_mix = target;
         return 1;
     }
 
-    step = dt / GLR_VIEW_PROJECTION_TRANSITION_SECS;
-    if (g_projection_mix < target) {
-        g_projection_mix += step;
-        if (g_projection_mix >= target) {
-            g_projection_mix = target;
-            return 1;
-        }
-        return 0;
-    }
-    if (g_projection_mix > target) {
-        g_projection_mix -= step;
-        if (g_projection_mix <= target) {
+    float step = dt / GLR_VIEW_PROJECTION_TRANSITION_SECS;
+    if (g_projection_mix != target) {
+        float sign = (g_projection_mix < target) ? 1.0f : -1.0f;
+        g_projection_mix += sign * step;
+        if ((sign > 0.0f && g_projection_mix >= target) ||
+            (sign < 0.0f && g_projection_mix <= target)) {
             g_projection_mix = target;
             return 1;
         }
@@ -2124,6 +2116,10 @@ const UiOverlayContent *glr_ctrl_help_overlay_content(void) {
     enum { GLR_HELP_OVERLAY_MAX_TABS = 4 };
     static UiOverlayTab tabs[GLR_HELP_OVERLAY_MAX_TABS];
     static UiOverlayContent content;
+    static int cached = 0;
+
+    if (cached)
+        return &content;
 
     const ReplHelpContent *help = repl_help_text_build();
     if (!help)
@@ -2143,6 +2139,7 @@ const UiOverlayContent *glr_ctrl_help_overlay_content(void) {
     content.title = help->title;
     content.tabs = tabs;
     content.tab_count = count;
+    cached = 1;
     return &content;
 }
 
@@ -2699,11 +2696,7 @@ int glr_ctrl_router_handle_config_menu_key(unsigned char key) {
     return 0;
 }
 
-int glr_ctrl_router_handle_active_replay_key(unsigned char key) {
-    return replay_active() && replay_handle_key(key);
-}
-
-int glr_ctrl_router_handle_replay_toggle_key(unsigned char key) {
+int glr_ctrl_router_handle_replay_key(unsigned char key) {
     return replay_handle_key(key);
 }
 
@@ -2911,21 +2904,16 @@ int glr_ctrl_router_handle_help_toggle_special(int key) {
     return 0;
 }
 
-static void cycle_example_or_user_scene(void) {
-    /* F12 cycles: examples[0..N-1] -> user scenes (in slot order) -> back.
-     * Active example moves to the next example, then first user scene.
-     * Active user scene moves to the next occupied user slot, then example 0. */
-    /* Clear editor / camera / menu / picker / code-panel-drag transients
-     * so the new scene starts from a clean controller state. (Moved out
-     * of src/repl/example_loader.c as step 2 of the decouple plan,
-     * feature/decouple-repl-from-gl-repl-alt.md.) */
+static void cycle_example_or_user_scene_dir(int direction) {
     glr_ctrl_reset_transients();
     editor_undo_note_wholesale_replacement();
     int count = repl_example_count();
     int active_scene = repl_active_user_scene();
 
     if (active_scene >= 0) {
-        for (int scene_idx = active_scene + 1; scene_idx < MAX_USER_SCENES; scene_idx++) {
+        int start = active_scene + direction;
+        int end = (direction > 0) ? MAX_USER_SCENES : -1;
+        for (int scene_idx = start; scene_idx != end; scene_idx += direction) {
             if (repl_user_scene_slot_used(scene_idx)) {
                 if (repl_load_user_scene_idx(scene_idx))
                     editor_load_line_to_input(editor_state_edit_line());
@@ -2933,19 +2921,21 @@ static void cycle_example_or_user_scene(void) {
             }
         }
         if (count > 0)
-            editor_state_edit_line_set(repl_load_example(0));
+            editor_state_edit_line_set(repl_load_example((direction > 0) ? 0 : count - 1));
         return;
     }
 
     if (count > 0) {
-        int next = repl_state_scenes().active_example_idx + 1;
-        if (next < count) {
+        int next = repl_state_scenes().active_example_idx + direction;
+        if (next >= 0 && next < count) {
             editor_state_edit_line_set(repl_load_example(next));
             return;
         }
     }
 
-    for (int scene_idx = 0; scene_idx < MAX_USER_SCENES; scene_idx++) {
+    int start = (direction > 0) ? 0 : MAX_USER_SCENES - 1;
+    int end = (direction > 0) ? MAX_USER_SCENES : -1;
+    for (int scene_idx = start; scene_idx != end; scene_idx += direction) {
         if (repl_user_scene_slot_used(scene_idx)) {
             if (repl_load_user_scene_idx(scene_idx))
                 editor_load_line_to_input(editor_state_edit_line());
@@ -2953,50 +2943,15 @@ static void cycle_example_or_user_scene(void) {
         }
     }
     if (count > 0)
-        editor_state_edit_line_set(repl_load_example(0));
+        editor_state_edit_line_set(repl_load_example((direction > 0) ? 0 : count - 1));
 }
 
-/* Reverse counterpart to cycle_example_or_user_scene. Walks the same
- * sequence — [examples 0..N-1, occupied user slots 0..M-1] — backwards,
- * wrapping at the start to the last occupied user slot, then the last
- * example. Symmetric structure with the forward cycle: same transient
- * cleanup and undo-clear, just inverted index walks. */
+static void cycle_example_or_user_scene(void) {
+    cycle_example_or_user_scene_dir(1);
+}
+
 static void cycle_example_or_user_scene_prev(void) {
-    glr_ctrl_reset_transients();
-    editor_undo_note_wholesale_replacement();
-    int count = repl_example_count();
-    int active_scene = repl_active_user_scene();
-
-    if (active_scene >= 0) {
-        for (int scene_idx = active_scene - 1; scene_idx >= 0; scene_idx--) {
-            if (repl_user_scene_slot_used(scene_idx)) {
-                if (repl_load_user_scene_idx(scene_idx))
-                    editor_load_line_to_input(editor_state_edit_line());
-                return;
-            }
-        }
-        if (count > 0)
-            editor_state_edit_line_set(repl_load_example(count - 1));
-        return;
-    }
-
-    if (count > 0) {
-        int prev = repl_state_scenes().active_example_idx - 1;
-        if (prev >= 0) {
-            editor_state_edit_line_set(repl_load_example(prev));
-            return;
-        }
-    }
-
-    for (int scene_idx = MAX_USER_SCENES - 1; scene_idx >= 0; scene_idx--) {
-        if (repl_user_scene_slot_used(scene_idx)) {
-            if (repl_load_user_scene_idx(scene_idx))
-                editor_load_line_to_input(editor_state_edit_line());
-            return;
-        }
-    }
-    if (count > 0)
-        editor_state_edit_line_set(repl_load_example(count - 1));
+    cycle_example_or_user_scene_dir(-1);
 }
 
 int glr_ctrl_router_handle_scene_cycle_special(int key) {
@@ -3821,9 +3776,8 @@ void glr_ctrl_keyboard(unsigned char key, int x, int y) {
      * toggle / Ctrl+= accum / Ctrl+S save / Ctrl+P debug / Ctrl+Q quit
      * fire exactly where they did before. */
     if (glr_ctrl_router_handle_config_menu_key(key) ||
-        glr_ctrl_router_handle_active_replay_key(key) ||
+        glr_ctrl_router_handle_replay_key(key) ||
         glr_ctrl_router_handle_cfg_shortcut_key(key) ||
-        glr_ctrl_router_handle_replay_toggle_key(key) ||
         glr_ctrl_router_handle_save_key(key) ||
         glr_ctrl_router_handle_debug_dump_key(key) ||
         glr_ctrl_router_handle_accum_samples_key(key) ||
