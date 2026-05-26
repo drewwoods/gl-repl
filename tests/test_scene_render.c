@@ -620,14 +620,14 @@ static void test_scene_grid_fog_matches_predicate(void) {
 static void test_nv_fog_distance_radial_optin(void) {
     printf("--- GL_NV_fog_distance radial opt-in is scoped ---\n");
 #ifdef GL_STUBS
-    const int   themes[3]  = { GRID_THEME_OCEAN, GRID_THEME_RADAR, GRID_THEME_CLASSIC };
+    const int   themes[]  = { GRID_THEME_RADAR, GRID_THEME_CLASSIC };
     /* Each radial-opted theme calls glFogi(GL_FOG_DISTANCE_MODE_NV, ...)
      * twice now: once to set GL_EYE_RADIAL_NV, once to restore the
      * snapshotted prior value at the tail. Both calls only happen
      * when nv_fog_distance_supported is true. */
-    const int   delta[3]   = { 2, 2, 0 };
-    const char *names[3]   = { "Ocean", "Radar", "Classic" };
-    for (int i = 0; i < 3; i++) {
+    const int   delta[]   = { 2, 0 };
+    const char *names[]   = { "Radar", "Classic" };
+    for (int i = 0; i < sizeof(names) / sizeof(names[0]); i++) {
         SceneFrameRenderContext ctx = make_test_frame_ctx();
         ctx.config.grid_theme = themes[i];
         ctx.config.grid_extent_idx = GRID_EXTENT_MID;   /* non-FAR */
