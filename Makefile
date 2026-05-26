@@ -329,6 +329,8 @@ SRCS = \
 	src/subsystems/tutorial/tutorial_state.c \
 	src/subsystems/variable_panel/variable_panel_drag.c \
 	src/subsystems/variable_panel/variable_panel_state.c \
+	src/subsystems/replay/replay_render.c \
+	src/subsystems/edit_overlays/edit_overlays.c \
 	tests/gl-stubs/gl_stub_counts.c
 HDRS = \
 	src/app/glr_audio.h \
@@ -415,7 +417,9 @@ HDRS = \
 	src/subsystems/tutorial/tutorial.h \
 	src/subsystems/tutorial/tutorial_state.h \
 	src/subsystems/variable_panel/variable_panel_drag.h \
-	src/subsystems/variable_panel/variable_panel_state.h
+	src/subsystems/variable_panel/variable_panel_state.h \
+	src/subsystems/replay/replay_render.h \
+	src/subsystems/edit_overlays/edit_overlays.h
 CORE_TEST_SRCS = \
 	src/app/glr_audio.c \
 	src/repl/format.c \
@@ -500,6 +504,8 @@ CORE_TEST_SRCS = \
 	src/subsystems/tutorial/tutorial_state.c \
 	src/subsystems/variable_panel/variable_panel_drag.c \
 	src/subsystems/variable_panel/variable_panel_state.c \
+	src/subsystems/replay/replay_render.c \
+	src/subsystems/edit_overlays/edit_overlays.c \
 	tests/gl-stubs/gl_stub_counts.c
 
 REPL_SRCS = $(filter src/repl/%.c,$(SRCS))
