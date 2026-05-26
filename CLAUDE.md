@@ -257,6 +257,27 @@ Test sources live under `tests/` and shared test-only helpers live under
 `make check-state-ownership` runs the full inventory of ownership / contract guards
 (e.g., input/REPL isolation, mutator placement, UI purity). See the Makefile for the full list.
 
+## Plans & audits
+
+Long-form audit / implementation docs live under `plans/` and move
+between subdirectories as their state changes. Five buckets:
+
+| Directory | Meaning |
+|---|---|
+| `plans/not-started/` | Drafted but no commits yet — green-field plans waiting on a slot. |
+| `plans/in-review/` | A reviewer is actively reading the doc; no implementation has begun. |
+| `plans/active/` | Implementation is in flight. Some commits have landed; the doc's status table tracks what's done vs. deferred. |
+| `plans/partial/` | Implementation stalled mid-way (intentional pause) and the residual scope is still meaningful. |
+| `plans/done/` | Fully completed (the bulk of the directory — closed audits, finished refactors). |
+
+The transitions go `not-started → in-review → active → done` for the
+happy path, with `partial` as the side branch when a plan ships some
+of its scope but defers the rest. Don't graduate a doc to `done/` if
+its status table or deferred-follow-ups block still describes
+unfinished work — keep it in `active/` (or move to `partial/` if the
+gap is intentional) so future readers see the residual scope at the
+state-machine level, not buried in the doc body.
+
 ## File Layout
 
 | File | Responsibility |

@@ -3045,14 +3045,14 @@ void glr_ctrl_keyboard(unsigned char key, int x, int y) {
     /* Rename capture: hard modal. */
     if (editor_input_rename_capture_key(key)) {
         editor_reset_input_effects();
-        glr_ctrl_apply_input_effects(editor_take_input_effects());
+        glr_ctrl_apply_input_effects(editor_take_and_reset_input_effects());
         return;
     }
 
     /* File-prompt capture: same hard-modal contract as rename. */
     if (editor_input_file_prompt_capture_key(key)) {
         editor_reset_input_effects();
-        glr_ctrl_apply_input_effects(editor_take_input_effects());
+        glr_ctrl_apply_input_effects(editor_take_and_reset_input_effects());
         return;
     }
 
@@ -3072,7 +3072,7 @@ void glr_ctrl_keyboard(unsigned char key, int x, int y) {
         glr_ctrl_router_handle_code_focus_key(key) ||
         glr_ctrl_router_handle_tutorial_ack_key(key) ||
         glr_ctrl_router_handle_quit_key(key)) {
-        glr_ctrl_apply_input_effects(editor_take_input_effects());
+        glr_ctrl_apply_input_effects(editor_take_and_reset_input_effects());
         return;
     }
 
@@ -3092,13 +3092,13 @@ void glr_ctrl_special(int key, int x, int y) {
 
     if (editor_input_rename_capture_special(key)) {
         editor_reset_input_effects();
-        glr_ctrl_apply_input_effects(editor_take_input_effects());
+        glr_ctrl_apply_input_effects(editor_take_and_reset_input_effects());
         return;
     }
 
     if (editor_input_file_prompt_capture_special(key)) {
         editor_reset_input_effects();
-        glr_ctrl_apply_input_effects(editor_take_input_effects());
+        glr_ctrl_apply_input_effects(editor_take_and_reset_input_effects());
         return;
     }
 
@@ -3111,7 +3111,7 @@ void glr_ctrl_special(int key, int x, int y) {
         glr_ctrl_router_handle_help_scroll_special(key) ||
         glr_ctrl_router_handle_help_toggle_special(key) ||
         glr_ctrl_router_handle_scene_cycle_special(key)) {
-        glr_ctrl_apply_input_effects(editor_take_input_effects());
+        glr_ctrl_apply_input_effects(editor_take_and_reset_input_effects());
         return;
     }
 
@@ -3153,11 +3153,11 @@ void glr_ctrl_mouse(int button, int state, int x, int y) {
         glr_ctrl_apply_input_effects(editor_handle_mouse(button, state, x, y));
         editor_reset_input_effects();
         if (glr_ctrl_router_handle_variable_panel_drag_release(state)) {
-            glr_ctrl_apply_input_effects(editor_take_input_effects());
+            glr_ctrl_apply_input_effects(editor_take_and_reset_input_effects());
             return;
         }
         glr_ctrl_router_handle_camera_mouse(button, state, x, y);
-        glr_ctrl_apply_input_effects(editor_take_input_effects());
+        glr_ctrl_apply_input_effects(editor_take_and_reset_input_effects());
         return;
     }
 
@@ -3165,7 +3165,7 @@ void glr_ctrl_mouse(int button, int state, int x, int y) {
         /* Modal help overlay intercepts left clicks first: tab
          * select / click-away dismiss / swallow body. */
         if (glr_ctrl_router_handle_help_click(button, state, x, y)) {
-            glr_ctrl_apply_input_effects(editor_take_input_effects());
+            glr_ctrl_apply_input_effects(editor_take_and_reset_input_effects());
             return;
         }
         /* Classify the click via the canonical hit-test, then route by
@@ -3179,39 +3179,39 @@ void glr_ctrl_mouse(int button, int state, int x, int y) {
         UiHit hit = ui_panels_hit_test(&ui_snap, x, y,
                            repl_eval_predef_view().count);
         if (glr_ctrl_router_handle_code_panel_hit(hit, x, y)) {
-            glr_ctrl_apply_input_effects(editor_take_input_effects());
+            glr_ctrl_apply_input_effects(editor_take_and_reset_input_effects());
             return;
         }
         if (glr_ctrl_router_handle_scene_press(button, state, x, y)) {
-            glr_ctrl_apply_input_effects(editor_take_input_effects());
+            glr_ctrl_apply_input_effects(editor_take_and_reset_input_effects());
             return;
         }
         glr_ctrl_router_handle_camera_mouse(button, state, x, y);
-        glr_ctrl_apply_input_effects(editor_take_input_effects());
+        glr_ctrl_apply_input_effects(editor_take_and_reset_input_effects());
         return;
     }
 
     if (button == GLUT_RIGHT_BUTTON) {
         if (glr_ctrl_router_handle_right_config_press(button, state, x, y)) {
-            glr_ctrl_apply_input_effects(editor_take_input_effects());
+            glr_ctrl_apply_input_effects(editor_take_and_reset_input_effects());
             return;
         }
         if (glr_ctrl_router_handle_variable_panel_drag_begin(button, state, x, y)) {
-            glr_ctrl_apply_input_effects(editor_take_input_effects());
+            glr_ctrl_apply_input_effects(editor_take_and_reset_input_effects());
             return;
         }
         glr_ctrl_router_handle_camera_mouse(button, state, x, y);
-        glr_ctrl_apply_input_effects(editor_take_input_effects());
+        glr_ctrl_apply_input_effects(editor_take_and_reset_input_effects());
         return;
     }
 
     if (glr_ctrl_router_handle_glut_scroll_wheel_button(button, state, x, y)) {
-        glr_ctrl_apply_input_effects(editor_take_input_effects());
+        glr_ctrl_apply_input_effects(editor_take_and_reset_input_effects());
         return;
     }
 
     glr_ctrl_router_handle_camera_mouse(button, state, x, y);
-    glr_ctrl_apply_input_effects(editor_take_input_effects());
+    glr_ctrl_apply_input_effects(editor_take_and_reset_input_effects());
 }
 
 /* Motion routing: UI overlay (color picker drag), variable-panel drag
@@ -3234,28 +3234,28 @@ void glr_ctrl_motion(int x, int y) {
         if (r.consumed) {
             glr_ctrl_router_handle_camera_pointer_set(x, y);
             editor_request_redraw();
-            glr_ctrl_apply_input_effects(editor_take_input_effects());
+            glr_ctrl_apply_input_effects(editor_take_and_reset_input_effects());
             return;
         }
     }
 
     if (glr_ctrl_router_handle_variable_panel_motion(x, y)) {
         glr_ctrl_router_handle_camera_pointer_set(x, y);
-        glr_ctrl_apply_input_effects(editor_take_input_effects());
+        glr_ctrl_apply_input_effects(editor_take_and_reset_input_effects());
         return;
     }
 
     /* Code-panel selection drag (controller-owned state). */
     if (glr_ctrl_router_handle_code_panel_drag(x, y)) {
         glr_ctrl_router_handle_camera_pointer_set(x, y);
-        glr_ctrl_apply_input_effects(editor_take_input_effects());
+        glr_ctrl_apply_input_effects(editor_take_and_reset_input_effects());
         return;
     }
 
     /* Editor's domain: panel resize tracking. editor_handle_motion is
      * a no-op when resizing_panel is clear. */
     if (ui_state_code_panel().resizing_panel) {
-        EditorInputDispatchEffects pre_editor = editor_take_input_effects();
+        EditorInputDispatchEffects pre_editor = editor_take_and_reset_input_effects();
         glr_ctrl_apply_input_effects(editor_handle_motion(x, y));
         glr_ctrl_router_handle_camera_pointer_set(x, y);
         glr_ctrl_apply_input_effects(pre_editor);
@@ -3265,7 +3265,7 @@ void glr_ctrl_motion(int x, int y) {
     /* Camera drag motion reads pointer = (px, py), computes delta,
      * then calls pointer_set(x, y) itself. */
     glr_ctrl_router_handle_camera_motion(x, y);
-    glr_ctrl_apply_input_effects(editor_take_input_effects());
+    glr_ctrl_apply_input_effects(editor_take_and_reset_input_effects());
 }
 
 void glr_ctrl_passive_motion(int x, int y) {
@@ -3279,7 +3279,7 @@ void glr_ctrl_passive_motion(int x, int y) {
                                                           repl_state_variables().anim_time);
     if (menu_hover_changed)
         editor_request_redraw();
-    glr_ctrl_apply_input_effects(editor_take_input_effects());
+    glr_ctrl_apply_input_effects(editor_take_and_reset_input_effects());
     glr_ctrl_apply_input_effects(editor_effects);
 }
 
@@ -3292,7 +3292,7 @@ void glr_ctrl_mousewheel(int wheel, int direction, int x, int y) {
     if (ui_state_help().visible) {
         glr_ctrl_help_scroll_by(-direction);
         editor_request_redraw();
-        glr_ctrl_apply_input_effects(editor_take_input_effects());
+        glr_ctrl_apply_input_effects(editor_take_and_reset_input_effects());
         return;
     }
     if (editor_input_point_in_code_panel(x, y)) {
@@ -3301,7 +3301,7 @@ void glr_ctrl_mousewheel(int wheel, int direction, int x, int y) {
     }
     glr_camera_add_zoom_velocity(-(float)direction * 0.3f);
     editor_request_redraw();
-    glr_ctrl_apply_input_effects(editor_take_input_effects());
+    glr_ctrl_apply_input_effects(editor_take_and_reset_input_effects());
 #else
     (void)wheel; (void)direction; (void)x; (void)y;
 #endif

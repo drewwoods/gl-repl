@@ -62,7 +62,7 @@ EditorInputDispatchEffects editor_handle_mousewheel(int wheel, int direction, in
  * controller's router helpers so both produce and consume the same
  * EditorInputDispatchEffects struct. */
 void                     editor_reset_input_effects(void);
-EditorInputDispatchEffects editor_take_input_effects(void);
+EditorInputDispatchEffects editor_take_and_reset_input_effects(void);
 void                     editor_request_redraw(void);
 void                     editor_set_cursor(int cursor);
 void                     editor_schedule_timer(unsigned int millis, int value);
