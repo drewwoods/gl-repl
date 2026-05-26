@@ -263,19 +263,19 @@ static void test_msaa_label_dynamic(void) {
         }
     }
     ASSERT_TRUE("found MSAA config item", row >= 0);
-    const char *lbl = glr_config_item_at(row)->label;
+    const char *lbl = glr_config_item_display_label(glr_config_item_at(row));
     ASSERT_TRUE("label updated to MSAAx4", strcmp(lbl, "MSAAx4") == 0);
 
     /* Test case 2: samples = 8 -> "MSAAx8" */
     g_gl_stub_samples = 8;
     glr_ctrl_init_gl();
-    lbl = glr_config_item_at(row)->label;
+    lbl = glr_config_item_display_label(glr_config_item_at(row));
     ASSERT_TRUE("label updated to MSAAx8", strcmp(lbl, "MSAAx8") == 0);
 
     /* Test case 3: samples = 0 -> "MSAA" (fallback) */
     g_gl_stub_samples = 0;
     glr_ctrl_init_gl();
-    lbl = glr_config_item_at(row)->label;
+    lbl = glr_config_item_display_label(glr_config_item_at(row));
     ASSERT_TRUE("label fallback to MSAA", strcmp(lbl, "MSAA") == 0);
 }
 #endif

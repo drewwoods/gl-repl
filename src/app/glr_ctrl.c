@@ -90,6 +90,17 @@ static int glr_ctrl_apply_code_panel_follow_scroll_for_snapshot(
 #define GLR_CTRL_REPLAY_PANEL_LIFT_EASE    0.22f
 #define GLR_CTRL_REPLAY_PANEL_LIFT_SNAP_PX 0.25f
 
+static UiRenderSnapshot g_last_ui_snapshot;
+static int g_last_ui_snapshot_valid = 0;
+
+static const UiRenderSnapshot *glr_ctrl_drag_hit_test_snapshot(void) {
+    if (!g_last_ui_snapshot_valid) {
+        glr_ctrl_build_ui_snapshot(&g_last_ui_snapshot);
+        g_last_ui_snapshot_valid = 1;
+    }
+    return &g_last_ui_snapshot;
+}
+
 static int glr_ctrl_cmd_is_focus_vertex(const GLCmd *cmd) {
     /* glVertex2f counts too: args[2] is zero on a well-formed 2D vertex
      * (parser leaves the slot zero-initialised), so building focus.pos
@@ -720,10 +731,10 @@ static void glr_ctrl_build_scene_config(SceneRenderConfig *config) {
      * default if none). Scene takes the pre-resolved float[4] and
      * doesn't touch the flat program. */
     {
-        float cr = CFG_DEFAULT_CLEAR_R;
-        float cg = CFG_DEFAULT_CLEAR_G;
-        float cb = CFG_DEFAULT_CLEAR_B;
-        float ca = CFG_DEFAULT_CLEAR_A;
+        float cr = repl_render.clear_color[0];
+        float cg = repl_render.clear_color[1];
+        float cb = repl_render.clear_color[2];
+        float ca = repl_render.clear_color[3];
         FlatProgramView fp = repl_state_flat_program_view();
         for (int ci = 0; ci < fp.cmd_count; ci++) {
             if (fp.cmds[ci].valid && fp.cmds[ci].type == CMD_CLEAR_COLOR) {
@@ -1233,6 +1244,8 @@ void glr_ctrl_display_frame(void) {
             glr_ctrl_populate_numeric_swatch(&ui_snap);
         }
     }
+    g_last_ui_snapshot = ui_snap;
+    g_last_ui_snapshot_valid = 1;
     prof_end(PROF_SNAPSHOT_UI);
 
     prof_end(PROF_SNAPSHOT);
@@ -1333,6 +1346,7 @@ void glr_ctrl_display_frame(void) {
 void glr_ctrl_reshape(int w, int h) {
     if (h < 1) h = 1;
     ui_state_viewport_set_size(w, h);
+    g_last_ui_snapshot_valid = 0;
 }
 
 /* Idempotent app-service installer required for any REPL loading/export path (including CLI). */
@@ -1641,6 +1655,7 @@ void glr_ctrl_reset_all(void) {
     g_view_mode_target_ortho = 0;
     g_view_xn_phase = GLR_VIEW_XN_IDLE;
     g_saved_3d_camera_valid = 0;
+    g_last_ui_snapshot_valid = 0;
     editor_state_reset();
     ui_state_reset();
     variable_panel_state_reset();
@@ -2988,10 +3003,9 @@ int glr_ctrl_router_handle_code_panel_drag(int x, int y) {
     if (!g_code_panel_drag_active || g_code_panel_drag_anchor < 0)
         return 0;
 
-    UiRenderSnapshot ui_snap;
-    glr_ctrl_build_ui_snapshot(&ui_snap);
+    const UiRenderSnapshot *ui_snap = glr_ctrl_drag_hit_test_snapshot();
 
-    UiHit hit = ui_panels_hit_test(&ui_snap, x, y, repl_eval_predef_view().count);
+    UiHit hit = ui_panels_hit_test(ui_snap, x, y, repl_eval_predef_view().count);
 
     /* Per-character input-buffer drag: as long as the drag stays on
      * the same source row as the press AND that row is the active
@@ -3028,7 +3042,7 @@ int glr_ctrl_router_handle_code_panel_drag(int x, int y) {
             if (cx > cp_x + cp_w - 1) cx = cp_x + cp_w - 1;
             if (gl_y < cp_y + 1) cy = win_h - (cp_y + 1);
             if (gl_y > cp_y + cp_h - 1) cy = win_h - (cp_y + cp_h - 1);
-            UiHit clamped = ui_panels_hit_test(&ui_snap, cx, cy,
+            UiHit clamped = ui_panels_hit_test(ui_snap, cx, cy,
                                                repl_eval_predef_view().count);
             target = code_panel_target_from_hit(clamped);
         }
