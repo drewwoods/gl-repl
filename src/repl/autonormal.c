@@ -4,7 +4,7 @@
 #include "repl/core.h"
 #include "repl/command_store.h"
 #include "repl/source_scope.h"
-#include "repl/state_owners.h"
+#include "repl/state.h"
 #include "source_document.h"   /* source_document_insert_line / _replace_line */
 #include "config.h"            /* REPL_INDENT_TEXT_MAX */
 
@@ -111,8 +111,8 @@ static void compute_block_normals(GLenum mode, GLenum front_face,
     switch (mode) {
     case GL_TRIANGLES:
         for (int idx = 0; idx + 2 < nv; idx += 3) {
-            face_normal(repl_state_document_cmds_mut()[vi[idx]].args, repl_state_document_cmds_mut()[vi[idx+1]].args,
-                        repl_state_document_cmds_mut()[vi[idx+2]].args, n);
+            face_normal(repl_state_document_cmds()[vi[idx]].args, repl_state_document_cmds()[vi[idx+1]].args,
+                        repl_state_document_cmds()[vi[idx+2]].args, n);
             apply_front_face_to_normal(front_face, n);
             for (int face_vert = 0; face_vert < 3; face_vert++)
                 memcpy(norms[idx+face_vert], n, sizeof(n));
@@ -123,11 +123,11 @@ static void compute_block_normals(GLenum mode, GLenum front_face,
             /* Strips alternate winding: every other triangle swaps its
              * 2nd/3rd vertices so all faces end up wound consistently. */
             if (idx % 2 == 0)
-                face_normal(repl_state_document_cmds_mut()[vi[idx]].args, repl_state_document_cmds_mut()[vi[idx+1]].args,
-                            repl_state_document_cmds_mut()[vi[idx+2]].args, n);
+                face_normal(repl_state_document_cmds()[vi[idx]].args, repl_state_document_cmds()[vi[idx+1]].args,
+                            repl_state_document_cmds()[vi[idx+2]].args, n);
             else
-                face_normal(repl_state_document_cmds_mut()[vi[idx]].args, repl_state_document_cmds_mut()[vi[idx+2]].args,
-                            repl_state_document_cmds_mut()[vi[idx+1]].args, n);
+                face_normal(repl_state_document_cmds()[vi[idx]].args, repl_state_document_cmds()[vi[idx+2]].args,
+                            repl_state_document_cmds()[vi[idx+1]].args, n);
             apply_front_face_to_normal(front_face, n);
             memcpy(norms[idx+2], n, sizeof(n));
             if (idx == 0) {
@@ -138,8 +138,8 @@ static void compute_block_normals(GLenum mode, GLenum front_face,
         break;
     case GL_TRIANGLE_FAN:
         for (int idx = 1; idx + 1 < nv; idx++) {
-            face_normal(repl_state_document_cmds_mut()[vi[0]].args, repl_state_document_cmds_mut()[vi[idx]].args,
-                        repl_state_document_cmds_mut()[vi[idx+1]].args, n);
+            face_normal(repl_state_document_cmds()[vi[0]].args, repl_state_document_cmds()[vi[idx]].args,
+                        repl_state_document_cmds()[vi[idx+1]].args, n);
             apply_front_face_to_normal(front_face, n);
             memcpy(norms[idx+1], n, sizeof(n));
             if (idx == 1) {
@@ -150,8 +150,8 @@ static void compute_block_normals(GLenum mode, GLenum front_face,
         break;
     case GL_QUADS:
         for (int idx = 0; idx + 3 < nv; idx += 4) {
-            face_normal(repl_state_document_cmds_mut()[vi[idx]].args, repl_state_document_cmds_mut()[vi[idx+1]].args,
-                        repl_state_document_cmds_mut()[vi[idx+2]].args, n);
+            face_normal(repl_state_document_cmds()[vi[idx]].args, repl_state_document_cmds()[vi[idx+1]].args,
+                        repl_state_document_cmds()[vi[idx+2]].args, n);
             apply_front_face_to_normal(front_face, n);
             for (int face_vert = 0; face_vert < 4; face_vert++)
                 memcpy(norms[idx+face_vert], n, sizeof(n));
@@ -159,8 +159,8 @@ static void compute_block_normals(GLenum mode, GLenum front_face,
         break;
     case GL_QUAD_STRIP:
         for (int idx = 0; idx + 3 < nv; idx += 2) {
-            face_normal(repl_state_document_cmds_mut()[vi[idx]].args, repl_state_document_cmds_mut()[vi[idx+1]].args,
-                        repl_state_document_cmds_mut()[vi[idx+2]].args, n);
+            face_normal(repl_state_document_cmds()[vi[idx]].args, repl_state_document_cmds()[vi[idx+1]].args,
+                        repl_state_document_cmds()[vi[idx+2]].args, n);
             apply_front_face_to_normal(front_face, n);
             memcpy(norms[idx+2], n, sizeof(n));
             memcpy(norms[idx+3], n, sizeof(n));
@@ -172,8 +172,8 @@ static void compute_block_normals(GLenum mode, GLenum front_face,
         break;
     case GL_POLYGON:
         if (nv >= 3) {
-            face_normal(repl_state_document_cmds_mut()[vi[0]].args, repl_state_document_cmds_mut()[vi[1]].args,
-                        repl_state_document_cmds_mut()[vi[2]].args, n);
+            face_normal(repl_state_document_cmds()[vi[0]].args, repl_state_document_cmds()[vi[1]].args,
+                        repl_state_document_cmds()[vi[2]].args, n);
             apply_front_face_to_normal(front_face, n);
             for (int idx = 0; idx < nv; idx++)
                 memcpy(norms[idx], n, sizeof(n));
@@ -196,8 +196,8 @@ void repl_recompute_autonormals(int autonormal_enabled,
     int i = 0;
     GLenum front_face = GL_CCW;
     while (i < repl_state_document_count()) {
-        if (repl_state_document_cmds_mut()[i].valid && repl_state_document_cmds_mut()[i].type == CMD_FRONT_FACE) {
-            front_face = (GLenum)repl_state_document_cmds_mut()[i].args[0];
+        if (repl_state_document_cmds()[i].valid && repl_state_document_cmds()[i].type == CMD_FRONT_FACE) {
+            front_face = (GLenum)repl_state_document_cmds()[i].args[0];
             i++;
             continue;
         }
@@ -207,9 +207,9 @@ void repl_recompute_autonormals(int autonormal_enabled,
          * up an auto-normal as long as its vertices have literal
          * coords (see the has_vars guard below). The matching END
          * markers fall through to the `i++` at the bottom. */
-        if (!repl_state_document_cmds_mut()[i].valid || repl_state_document_cmds_mut()[i].type != CMD_BEGIN) { i++; continue; }
+        if (!repl_state_document_cmds()[i].valid || repl_state_document_cmds()[i].type != CMD_BEGIN) { i++; continue; }
 
-        GLenum mode = (GLenum)repl_state_document_cmds_mut()[i].args[0];
+        GLenum mode = (GLenum)repl_state_document_cmds()[i].args[0];
         i++;
 
         int vi[MAX_COMMANDS];
@@ -217,19 +217,19 @@ void repl_recompute_autonormals(int autonormal_enabled,
         int any_vertex_has_vars = 0;
         int block_end = repl_state_document_count();
         for (int j = i; j < repl_state_document_count(); j++) {
-            if (!repl_state_document_cmds_mut()[j].valid) continue;
-            if (repl_state_document_cmds_mut()[j].type == CMD_END) { block_end = j; break; }
-            if (repl_state_document_cmds_mut()[j].type == CMD_BEGIN) { block_end = j; break; }
+            if (!repl_state_document_cmds()[j].valid) continue;
+            if (repl_state_document_cmds()[j].type == CMD_END) { block_end = j; break; }
+            if (repl_state_document_cmds()[j].type == CMD_BEGIN) { block_end = j; break; }
             /* CMD_TESS_VERTEX is intentionally absent: it never appears
              * inside a CMD_BEGIN block — tess vertices live between
              * CMD_TESS_BEGIN_CONTOUR / CMD_TESS_END and use their own
              * normal feeder (CMD_TESS_NORMAL). glVertex2f sets args[2]
              * to 0 (parser default), so its cross product folds into
              * the same (x, y, 0) plane as a 3D vertex with z=0. */
-            if (repl_state_document_cmds_mut()[j].type == CMD_VERTEX3F ||
-                repl_state_document_cmds_mut()[j].type == CMD_VERTEX2F) {
+            if (repl_state_document_cmds()[j].type == CMD_VERTEX3F ||
+                repl_state_document_cmds()[j].type == CMD_VERTEX2F) {
                 vi[nv++] = j;
-                if (repl_state_document_cmds_mut()[j].has_vars)
+                if (repl_state_document_cmds()[j].has_vars)
                     any_vertex_has_vars = 1;
             }
         }
@@ -254,9 +254,9 @@ void repl_recompute_autonormals(int autonormal_enabled,
             int vidx = vi[v] + offset;
             float nx = norms[v][0], ny = norms[v][1], nz = norms[v][2];
 
-            if (vidx > 0 && repl_state_document_cmds_mut()[vidx - 1].valid &&
-                repl_state_document_cmds_mut()[vidx - 1].type == CMD_NORMAL3F) {
-                if (repl_state_document_cmds_mut()[vidx - 1].is_auto) {
+            if (vidx > 0 && repl_state_document_cmds()[vidx - 1].valid &&
+                repl_state_document_cmds()[vidx - 1].type == CMD_NORMAL3F) {
+                if (repl_state_document_cmds()[vidx - 1].is_auto) {
                     ReplCommandStore store = repl_command_store_live();
                     GLCmd auto_normal = make_auto_normal(nx, ny, nz, vidx - 1);
                     char line[MAX_LINE_LEN];
@@ -285,20 +285,20 @@ void repl_recompute_autonormals(int autonormal_enabled,
 
 static int find_feeding_state_cmd(int line_idx, int want_normal) {
     if (line_idx < 0 || line_idx >= repl_state_document_count()) return -1;
-    if (!repl_state_document_cmds_mut()[line_idx].valid) return -1;
+    if (!repl_state_document_cmds()[line_idx].valid) return -1;
 
     /* Intentional split, not a candidate for repl_cmd_emits_vertex: gl
      * vertices look back for CMD_NORMAL3F / CMD_COLOR3F / CMD_COLOR4F,
      * tess vertices look back for CMD_TESS_NORMAL / CMD_TESS_COLOR.
      * The two families have separate state-feeder commands. */
-    CmdType target = repl_state_document_cmds_mut()[line_idx].type;
+    CmdType target = repl_state_document_cmds()[line_idx].type;
     int is_gl_vtx = (target == CMD_VERTEX3F || target == CMD_VERTEX2F);
     int is_tess_vtx = (target == CMD_TESS_VERTEX);
     if (!is_gl_vtx && !is_tess_vtx) return -1;
 
     for (int i = line_idx - 1; i >= 0; i--) {
-        if (!repl_state_document_cmds_mut()[i].valid) continue;
-        CmdType t = repl_state_document_cmds_mut()[i].type;
+        if (!repl_state_document_cmds()[i].valid) continue;
+        CmdType t = repl_state_document_cmds()[i].type;
         if (want_normal) {
             if (is_gl_vtx && t == CMD_NORMAL3F) return i;
             if (is_tess_vtx && t == CMD_TESS_NORMAL) return i;

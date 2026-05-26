@@ -392,7 +392,7 @@ the runtime struct — invasive but principled), or update the
 docstring to say "scene bookkeeping = active-example-idx +
 workspace-dir only; the user-scene catalog is NOT in this snapshot."
 
-### 7. `source_scope.c` reads through `_mut()` accessors (regression of audit #37)
+### 7. ✅ `source_scope.c` reads through `_mut()` accessors (regression of audit #37)
 
 **Where:** `src/repl/source_scope.c:41, 42, 161, 175`
 
@@ -414,6 +414,9 @@ intended ratchet would have caught it.
 **Fix:** s/_mut()/non_mut_accessor/g at the 4 sites; add a grep
 ratchet to `check-state-ownership` against `_mut()` outside owner
 modules (state.c, apply.c, command_store.c, controller).
+
+**Status (2026-05-26):** ✅ Closed together with #14 — see the
+combined fix block under #14.
 
 ### 8. ✅ `import_feed_one_line` ignores `load_err` populated by `repl_load_apply_line`
 
@@ -597,7 +600,7 @@ one, but no such caller exists today.
 
 ## 🟡 Drift / boundary hazards
 
-### 14. 🔀 `_mut()` accessors used for read-only work — multi-file regression
+### 14. ✅ 🔀 `_mut()` accessors used for read-only work — multi-file regression
 
 **Where:**
 - `src/repl/source_scope.c:41, 42, 161, 175` (covered as #7 above)
@@ -666,6 +669,42 @@ categories above so reviewers can audit each separately:
 
 Then add `check-state-ownership` to grep for `_mut()` outside the
 documented owner files, with the post-(3) allowlist baked in.
+
+**Status (2026-05-26):** ✅ Closed (together with #7 above). Did the
+const-replacement sweep across category 1 + 3 callers, then added
+the ratchet to lock the result:
+
+- `source_scope.c`: 4 sites → `repl_state_document_cmds()` (audit #7).
+- `autonormal.c`: 31 sites → `repl_state_document_cmds()` (sweeping
+  replace_all; verified no writes via the
+  `_mut()\[…\]\.[a-z_]+\s*=` grep). Include also switched from
+  `state_owners.h` to `state.h`.
+- `export.c`: 22 sites → `repl_state_document_cmds()` (same shape;
+  all read-only, several pass `&cmds[i]` to functions that take
+  `const GLCmd *`).
+- `scenes.c`: 2 snapshot-owner sites at the `stash_live_state` and
+  `save_scene_to_slot` `memcpy(s->cmds, repl_state_document_cmds(),
+  ...)` (category 3 — switched to the existing const accessor).
+
+The remaining 10 `_mut(` call sites in non-owner `src/repl/*.c` are
+all category 2 (legitimate writers / file-local owner helpers) and
+are documented inline in the baseline file.
+
+The "predef-var const variant" suggested for the second commit was
+NOT done in this pass — `replay_annotations.c` still uses
+`g_predef_vars[i].name` for the SAVED-snapshot mapping, which is
+the latent simulator bug already documented under #3's status
+follow-up. Routing it through `repl_eval_predef_view()` is a
+larger correctness change tied to that fix.
+
+Ratchet: `scripts/check-repl-mut-reads.sh` +
+`scripts/baselines/repl-mut-reads.txt` (current count: 10/10).
+Wired into the `check-state-ownership` aggregate. The script greps
+for `[a-zA-Z_][a-zA-Z0-9_]*_mut\(` call sites in `src/repl/*.c`,
+skipping the owner files (`state.c`, `apply.c`, `command_store.c`,
+`eval.c`) and comment-only lines. Verified the ratchet bites by
+appending a synthetic `_mut()` call to `source_scope.c` and
+watching the count grow from 10 to 11.
 
 ### 15. `repl_compile_*` block validators duplicate `editor_compile_*` (~430 lines vs ~860 lines)
 
