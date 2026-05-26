@@ -25,7 +25,12 @@ Tests: 7228 → 7463 (+235 from drift tests, new predicate coverage,
 and the SceneRendererState init/independence/AA-invariant tests).
 `check-state-ownership` green; C99 ratchet green; `make test-full`
 and `make test-stubs` on gracemont (real GCC 13.x) both pass at
-the current tip `6a6a4cd`.
+`6a6a4cd` (the #11 camera move). Subsequent commits on main —
+`9c13f60` / `6ccb6d7` (peer-subsystem cleanup, not part of this
+audit) and `f723382` (the audit-doc updates themselves) — don't
+touch scene code, so the green claim still holds at the current
+HEAD by inspection; re-run the gates if any code commit lands on
+top of those.
 
 | Finding | Status | Commit |
 |---|---|---|
@@ -1351,17 +1356,17 @@ Shipped: ~13 commits, ~150 LOC net reduction. One reframed bug
 (#7's reset is load-bearing, not no-op) plus #8's real underwater
 push/pop bug fixed.
 
-### One-week pass — hidden-state cluster (partial)
+### One-week pass — hidden-state cluster ✅ closed
 
 | Item | Status | Notes |
 |---|---|---|
 | **#4** g_guide_alpha_mul | ✅ `3023624` | alpha_mul threaded through 5 helpers; `tg_color_tok` inlined to `scene_clr_a` |
 | **#17** g_saved_matrix_mode | ✅ `08fc94b` | begin_2d returns saved mode; end_2d accepts it back |
 | **#2** SceneExecutePurpose | ✅ `08fc94b`, `49bf979` | enum on ctx + REPL adapter snapshot/restore around non-MAIN_FILL purposes (review caught the adapter ignored ctx in the initial commit, so the probe still mutated predef/scratch/render state) |
-| **#3** g_xn_alpha / g_xn_opacity | ⏸️ deferred | ~60 `gl_color` call sites across grid+axes; needs a shared resolve helper + GridDrawContext.xn_alpha addition before the call-site sweep |
-| **#5** g_active_projection statics | ⏸️ deferred | Tied to **#12** (split `scene_apply_projection` into pure compute + mutating apply); export code reads `scene_get_active_projection` so renderer state needs an init/reset entry point |
-| **#11** scene_apply_camera | ⏸️ deferred | Design decision: internalize into `scene_render_3d_scene` (preferred, since `SceneRenderConfig` already carries the fields) vs move to `glr_camera.c` |
-| **#12** scene_apply_projection split | ⏸️ deferred | Tied to **#5** |
+| **#3** g_xn_alpha / g_xn_opacity | ✅ `cc481c2` | shared `scene_overlay_xn_resolve` in overlay_xn.h; GridDrawContext.xn_alpha + new AxesDrawContext; ~60 gl_color → grid_color / axes_color sweep |
+| **#5** g_active_projection statics | ✅ `89e2b17` | caller-owned `SceneRendererState` (controller + scene_demo each hold one static); state-init API + threaded through scene_render_3d_scene + scene_get_active_projection |
+| **#11** scene_apply_camera | ✅ `6a6a4cd` | moved to `src/app/glr_camera.c` as `glr_camera_load_modelview`; `SceneCameraPose` → `GlrCameraPose`; scene_demo inlines its own matrix calls to preserve the boundary proof |
+| **#12** scene_apply_projection split | ✅ `89e2b17` | pure `scene_compute_active_projection` runs once before the AA loop (sole writer to state); per-sample apply is read-only |
 
 ### One-week pass — parity-drift cluster (partial)
 

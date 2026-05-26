@@ -1399,8 +1399,9 @@ static void glr_ctrl_build_scene_config(SceneRenderConfig *config) {
     if (config->scene_h < 1) config->scene_h = 1;
 
     /* --- Camera state --- (modelview transform is applied separately by
-     * the controller via scene_apply_camera; these fields are still needed
-     * for grid/axes orientation and the orbit-target gizmo). */
+     * the controller via glr_camera_load_modelview; these fields are
+     * still needed for grid/axes orientation and the orbit-target
+     * gizmo). */
     config->cam_dist = cam.dist;
     config->cam_rx = cam.rx;
     config->cam_ry = cam.ry;

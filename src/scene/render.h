@@ -2,11 +2,13 @@
  * render.h - 3D scene rendering surface.
  *
  * Exposes the scene module's top-level render entry points. Callers build a
- * SceneRenderConfig snapshot, apply the camera modelview with
- * scene_apply_camera(), then call scene_render_3d_scene() for one pass. The
- * scene module owns projection setup, clear, helper renderers (backdrop, grid,
- * axes, lights), and the optional callback hooks that bracket the main geometry
- * fill.
+ * SceneRenderConfig snapshot, populate GL_MODELVIEW with their own camera
+ * transform (e.g. via glr_camera_load_modelview from src/app/glr_camera.h,
+ * or inline matrix calls in tools/scene_demo), then call
+ * scene_render_3d_scene() for one pass. The scene module owns projection
+ * setup, clear, helper renderers (backdrop, grid, axes, lights), and the
+ * optional callback hooks that bracket the main geometry fill — but does
+ * NOT own a camera type or apply helper.
  *
  * The public surface stays REPL-independent: user geometry and replay-specific
  * overlay work enter through callbacks carried on SceneRenderConfig rather than

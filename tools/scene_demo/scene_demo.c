@@ -12,7 +12,11 @@
  *   - bitmap HUD with the current state and a help panel
  *
  * App pseudo-code:
- *   render() { scene_apply_camera(...); scene_render_3d_scene(&cfg); render_hud(); }
+ *   render() {
+ *     apply_camera_modelview(&cfg);   // inline glLoadIdentity + glTranslatef + glRotatef
+ *     scene_render_3d_scene(&state, &cfg);
+ *     render_hud();
+ *   }
  *   my_scene(...) { glEnable(GL_LIGHTING); ...; glutSolidTeapot(1.0); }
  *   build_cfg() { cfg.execute_fn = my_scene; cfg.cam_* = ...; ... }
  */
