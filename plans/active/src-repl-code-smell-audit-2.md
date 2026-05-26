@@ -115,7 +115,7 @@ drain do it all), or drop the accumulator (drain becomes a no-op).
 Document which is the source of truth. Tier B sized; not blocking
 any current user-facing behavior.
 
-### 3. `repl_copy/restore_predef_values` is values-only by contract and assumes table-shape stability — currently no enforcement, and at least one caller can violate the assumption
+### 3. ✅ `repl_copy/restore_predef_values` is values-only by contract and assumes table-shape stability — currently no enforcement, and at least one caller can violate the assumption
 
 **Where:** `src/repl/eval.c:233-253` (the just-moved functions from
 the closed #46); contract comment at `src/repl/eval.h:229-232`.
@@ -200,6 +200,68 @@ fade-plan cascade: `ReplayFadePlan` reads from the replay baseline
 via the values-only helper at `replay.c:986`, so a partial fix
 leaves the fade path silently truncating names back to floats. The
 fade and replay storage have to move together.
+
+**Status (2026-05-26):** ✅ Closed via option 1 (cascade), with a
+small twist that avoids the frame-level cascade option 1 would have
+required. The triggerable path was the fade-plan restore in
+`glr_ctrl_replay_restore_baseline`, which sits inside the
+controller's per-frame values-only save/restore at the top/bottom
+of `glr_ctrl_display_frame`. Going through
+`repl_eval_restore_predef_vars` (full replacement, including
+`g_num_predef_vars`) would have changed the live table's COUNT
+mid-frame, leaving the frame-end values-only restore unable to
+repopulate any slots the fade restore had dropped — that would have
+turned a values-only bug into a full-table loss.
+
+The fix:
+
+1. **Widened storage.** `ReplayRuntimeState.baseline_predef_*` and
+   `ReplayFadePlan.baseline_predef_*` now hold `vals + names + count`
+   (not just floats). The two storage layouts moved together, as the
+   audit required.
+
+2. **Full-snapshot capture.** All three `replay.c` sites that
+   captured the baseline switched from `repl_copy_predef_values` to
+   `repl_eval_copy_predef_vars` so the names + count travel with
+   the values. Added a new
+   `replay_copy_baseline_predef_snapshot(vals, names, count)` API for
+   the fade plan to read the full snapshot; the existing
+   `replay_copy_baseline_predef_values` (values-only) stays for the
+   short-lived within-frame annotation simulator.
+
+3. **By-name restore.** Added a new
+   `repl_eval_restore_predef_values_by_name(src_vals, src_names,
+   src_count)` that pairs saved values with the LIVE predef slots by
+   name match. It deliberately leaves the live table's
+   count/names/slot order untouched — only updates values where the
+   snapshot's name still exists in the live table. Saved names that
+   no longer exist are silently dropped; live names not in the
+   snapshot keep their current values. Both
+   `glr_ctrl_replay_restore_baseline` (production fade restore) and
+   `replay_restore_baseline_predef_values` (test helper) route
+   through this. The full-replacement
+   `repl_eval_restore_predef_vars` stays available for callers that
+   legitimately need to clobber the live table shape (e.g. an undo).
+
+4. **Annotation simulator caveat documented.** The per-line
+   annotation simulator in `replay_annotations.c::build_visible_vars_from_predef_values`
+   still pairs CURRENT predef-table names with the saved value array.
+   It also has the slot-mismatch bug under reshape, but its consumer
+   (per-frame annotation rendering) is short-lived and its
+   correctness story is fuzzier than the fade restore's — a separate
+   follow-up. The values-only `replay_copy_baseline_predef_values`
+   API was kept specifically for this caller.
+
+Regression test
+`test_replay_baseline_restore_survives_predef_reshape` in
+`tests/test_repl_replay.c` declares X/Y/Z after `t`, sets values
+{10, 20, 30}, calls `replay_start()`, undeclares Y (which shifts Z
+into Y's old slot), clobbers live values, calls
+`replay_restore_baseline_predef_values`, and asserts X == 10 AND
+Z == 30. Pre-fix the values-only restore put Y's saved value (20)
+into Z's slot — verified by temporarily restoring the old body and
+watching the `Z gets Z's saved value (30), NOT Y's (20)` assertion
+fail.
 
 ### 4. ✅ `repl_config_bag_set` silently truncates oversized keys/values and returns success
 

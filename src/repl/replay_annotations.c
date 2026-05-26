@@ -415,6 +415,17 @@ static int build_visible_vars_from_predef_values(int flat_idx,
             out[nv++] = lcvars->vars[i];
     }
 
+    /* NOTE (#3 follow-up — annotation simulator latent bug): when
+     * `predef_vals` carries the replay-baseline snapshot, the values
+     * here are SAVED slot[i] values but the names below come from the
+     * CURRENT predef table. A workspace switch / scene load / undo
+     * across @declare between replay_start and this annotation render
+     * reshapes the live table, so current slot i no longer corresponds
+     * to the saved slot i and the simulator pairs mismatched
+     * name/value pairs. The fade-plan restore path was the audit's
+     * primary triggerable failure and is fixed via the widened
+     * snapshot threaded through ReplayFadePlan; doing the same here
+     * needs the saved names too — a follow-up. */
     if (predef_vals) {
         for (int i = 0; i < g_num_predef_vars && nv < max_out; i++) {
             if (visible_var_index(out, nv, g_predef_vars[i].name) >= 0)

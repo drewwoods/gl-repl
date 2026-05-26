@@ -226,6 +226,35 @@ void repl_eval_restore_predef_vars(const float src_vals[MAX_PREDEF_VARS],
     }
 }
 
+/* Non-destructive restore: assign saved values to the live predef
+ * slots whose names match the snapshot. The live table shape
+ * (count, names, slot order) is UNCHANGED. Saved names that no
+ * longer exist in the live table are silently dropped; live names
+ * not present in the snapshot keep their current values.
+ *
+ * Used by the fade-batch render path (#3 bug fix) — that path wants
+ * to revert values to the replay-start baseline before each batch,
+ * but it sits inside a frame-level values-only save/restore that
+ * doesn't carry a count. Reshaping the live table inside the frame
+ * would leave the frame-end restore unable to repopulate slots the
+ * fade restore dropped. The by-name variant keeps live state's
+ * shape intact while still recovering the user's data even when a
+ * mid-replay workspace switch / scene load reshaped the predef
+ * table relative to replay_start. */
+void repl_eval_restore_predef_values_by_name(
+    const float src_vals[MAX_PREDEF_VARS],
+    const char src_names[MAX_PREDEF_VARS][REPL_PREDEF_NAME_MAX],
+    int src_count) {
+    if (!src_vals || !src_names) return;
+    for (int i = 0; i < src_count; i++) {
+        const char *name = src_names[i];
+        if (!name[0]) continue;
+        int idx = repl_eval_find_predef_var_idx(name);
+        if (idx >= 0)
+            g_predef_vars[idx].value = src_vals[i];
+    }
+}
+
 /* Values-only snapshot of the live predef table, used by the controller's
  * per-frame baseline-save and by the replay peer's start/stop bracketing.
  * Names + count are NOT preserved here — callers that need the full table

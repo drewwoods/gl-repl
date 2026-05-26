@@ -397,6 +397,95 @@ static void test_replay_single_arg_shape_gets_eval_annotation(void) {
     replay_stop();
 }
 
+/* #3 regression: the replay baseline must be restored by NAME, not by
+ * slot index. Replay spans multiple frames; mid-replay the live predef
+ * table can be reshaped (workspace switch, scene load, undo across
+ * @declare). Pre-fix the baseline carried only floats indexed by slot,
+ * so a reshape between replay_start and the fade-render restore landed
+ * each saved value into the slot that USED to hold its variable —
+ * which now holds a different variable. */
+static void test_replay_baseline_restore_survives_predef_reshape(void) {
+    char err[64];
+    glr_ctrl_reset_all();
+
+    /* Build a tiny program so replay considers it has meaningful cmds. */
+    add_mock_cmd(0, CMD_VERTEX3F);
+    repl_state_mark_flat_dirty();
+    repl_flatten_commands(editor_state_edit_line());
+
+    /* Declare vars after the built-in `t`. The order matters: at
+     * replay_start the table will be [t, X, Y, Z]. */
+    repl_eval_declare_predef_var("X", err, sizeof(err));
+    repl_eval_declare_predef_var("Y", err, sizeof(err));
+    repl_eval_declare_predef_var("Z", err, sizeof(err));
+    int x_idx = repl_eval_find_predef_var_idx("X");
+    int y_idx = repl_eval_find_predef_var_idx("Y");
+    int z_idx = repl_eval_find_predef_var_idx("Z");
+    ASSERT_TRUE("X declared", x_idx >= 0);
+    ASSERT_TRUE("Y declared", y_idx >= 0);
+    ASSERT_TRUE("Z declared", z_idx >= 0);
+
+    g_predef_vars[x_idx].value = 10.0f;
+    g_predef_vars[y_idx].value = 20.0f;
+    g_predef_vars[z_idx].value = 30.0f;
+
+    replay_start();
+    ASSERT_TRUE("replay active", g_replay_active);
+
+    /* Reshape the live predef table mid-replay: drop Y. Pre-fix this
+     * cascades the slots — Z now sits in Y's old slot. A values-only
+     * restore would later assign Y's saved value (20) into Z, and
+     * drop Z's saved value entirely. */
+    repl_eval_undeclare_predef_var("Y");
+    int x_idx2 = repl_eval_find_predef_var_idx("X");
+    int z_idx2 = repl_eval_find_predef_var_idx("Z");
+    ASSERT_TRUE("X still present after Y undeclared", x_idx2 >= 0);
+    ASSERT_TRUE("Z still present after Y undeclared", z_idx2 >= 0);
+    ASSERT_TRUE("Y is gone", repl_eval_find_predef_var_idx("Y") < 0);
+
+    /* Clobber the live values; the restore should overwrite. */
+    g_predef_vars[x_idx2].value = 99.0f;
+    g_predef_vars[z_idx2].value = 99.0f;
+
+    replay_restore_baseline_predef_values();
+
+    ASSERT_TRUE("post-restore: X gets X's saved value (10)",
+                fabsf(g_predef_vars[x_idx2].value - 10.0f) < 1e-5f);
+    ASSERT_TRUE("post-restore: Z gets Z's saved value (30), NOT Y's (20)",
+                fabsf(g_predef_vars[z_idx2].value - 30.0f) < 1e-5f);
+
+    /* Live table shape is unchanged — by-name restore never resurrects
+     * the dropped Y, never adds/removes slots. */
+    ASSERT_TRUE("post-restore: Y stays gone",
+                repl_eval_find_predef_var_idx("Y") < 0);
+    /* Also confirm the snapshot copy mirrors what was saved at start. */
+    {
+        float snap_vals[MAX_PREDEF_VARS];
+        char snap_names[MAX_PREDEF_VARS][REPL_PREDEF_NAME_MAX];
+        int snap_count = -1;
+        replay_copy_baseline_predef_snapshot(snap_vals, snap_names,
+                                             &snap_count);
+        ASSERT_TRUE("snapshot count matches replay_start table",
+                    snap_count >= 4); /* t + X + Y + Z, plus any others */
+        int found_y = 0;
+        float y_saved = 0.0f;
+        for (int i = 0; i < snap_count; i++) {
+            if (strcmp(snap_names[i], "Y") == 0) {
+                found_y = 1;
+                y_saved = snap_vals[i];
+                break;
+            }
+        }
+        ASSERT_TRUE("snapshot still contains the dropped Y", found_y);
+        ASSERT_TRUE("snapshot's Y value is the replay-start value (20)",
+                    fabsf(y_saved - 20.0f) < 1e-5f);
+    }
+
+    replay_stop();
+    repl_eval_undeclare_predef_var("X");
+    repl_eval_undeclare_predef_var("Z");
+}
+
 static void test_replay_regression_fixes(void) {
     glr_ctrl_reset_all();
     add_mock_cmd(0, CMD_COLOR3F);
@@ -435,6 +524,7 @@ int main(void) {
     test_misc_helpers();
     test_replay_var_assign_uses_flatten_args();
     test_replay_single_arg_shape_gets_eval_annotation();
+    test_replay_baseline_restore_survives_predef_reshape();
     test_replay_regression_fixes();
 
     printf("test_repl_replay: %d/%d passed\n", g_harness.passed, g_harness.run);

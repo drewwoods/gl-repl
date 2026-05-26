@@ -173,8 +173,26 @@ void replay_walk_tess_preview(const ReplayTessPreviewCallbacks *cb,
 
 /* --- Variable state for step-back --------------------------------------- */
 
+/* Restore the saved predef table by NAME (full snapshot) — see the
+ * ReplayRuntimeState.baseline_predef_* comment for why a values-only
+ * restore is unsafe across a multi-frame replay. */
 void replay_restore_baseline_predef_values(void);
+
+/* Copy the full predef baseline snapshot (vals + names + count) into
+ * caller-owned storage. Used by glr_ctrl.c to seed the per-frame fade
+ * plan; the fade plan's later restore goes through
+ * repl_eval_restore_predef_vars and so needs all three pieces. */
+void replay_copy_baseline_predef_snapshot(
+    float dst_vals[MAX_PREDEF_VARS],
+    char  dst_names[MAX_PREDEF_VARS][REPL_PREDEF_NAME_MAX],
+    int  *dst_count);
+
+/* Values-only snapshot — short-lived callers (within-frame annotation
+ * simulator) that only need the float row. Long-lived callers must
+ * use replay_copy_baseline_predef_snapshot above so the names + count
+ * travel with the values. */
 void replay_copy_baseline_predef_values(float *dst, int max_vals);
+
 void replay_restore_baseline_scratch_arrays(void);
 void replay_copy_baseline_scratch_arrays(
     float dst[REPL_SCRATCH_ARRAY_COUNT][REPL_SCRATCH_ARRAY_LEN]);

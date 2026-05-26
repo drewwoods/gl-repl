@@ -838,7 +838,15 @@ void replay_start(void) {
     }
 
     ReplayRuntimeState *state = replay_state_mut();
-    repl_copy_predef_values(state->baseline_predef_vals, MAX_PREDEF_VARS);
+    /* Full predef snapshot (vals + names + count). Required so the
+     * fade plan's later restore can route through repl_eval_restore_predef_vars
+     * and assign by NAME — replay spans multiple frames and the live
+     * predef table can be reshaped (workspace switch, scene load,
+     * undo across @declare) between this start and the eventual
+     * restore. */
+    repl_eval_copy_predef_vars(state->baseline_predef_vals,
+                               state->baseline_predef_names,
+                               &state->baseline_predef_count);
     repl_eval_copy_scratch_arrays(state->baseline_scratch_arrays);
     state->saved_t_playing = repl_state_variables().time_playing;
     repl_state_variables_mut()->time_playing = 0;
@@ -973,9 +981,41 @@ int replay_prepare_frame(int full_flat_count) {
 }
 
 void replay_restore_baseline_predef_values(void) {
-    repl_restore_predef_values(replay_state_mut()->baseline_predef_vals, MAX_PREDEF_VARS);
+    /* Restore by NAME, not slot index. The replay baseline holds the
+     * predef-table snapshot from replay_start; the live table may
+     * have been reshaped since (workspace switch, scene load, undo
+     * across @declare). The by-name restore keeps the live table's
+     * shape intact and only updates values for slots whose names
+     * match the snapshot; saved names that no longer exist are
+     * silently dropped. */
+    ReplayRuntimeState *state = replay_state_mut();
+    repl_eval_restore_predef_values_by_name(state->baseline_predef_vals,
+                                            state->baseline_predef_names,
+                                            state->baseline_predef_count);
 }
 
+void replay_copy_baseline_predef_snapshot(
+    float dst_vals[MAX_PREDEF_VARS],
+    char  dst_names[MAX_PREDEF_VARS][REPL_PREDEF_NAME_MAX],
+    int  *dst_count) {
+    ReplayRuntimeState *state = replay_state_mut();
+    if (dst_vals)
+        memcpy(dst_vals, state->baseline_predef_vals,
+               sizeof(state->baseline_predef_vals));
+    if (dst_names)
+        memcpy(dst_names, state->baseline_predef_names,
+               sizeof(state->baseline_predef_names));
+    if (dst_count)
+        *dst_count = state->baseline_predef_count;
+}
+
+/* Values-only convenience for short-lived callers (within-frame
+ * annotation simulator). The backing storage holds the full snapshot
+ * (vals + names + count) — see ReplayRuntimeState — but callers that
+ * only need the float row to feed an expression evaluator within the
+ * same frame can stay on this slimmer signature. Long-lived callers
+ * (the fade plan) must use _snapshot above so the eventual restore
+ * goes through repl_eval_restore_predef_vars by name. */
 void replay_copy_baseline_predef_values(float *dst, int max_vals) {
     int n;
 
@@ -983,7 +1023,8 @@ void replay_copy_baseline_predef_values(float *dst, int max_vals) {
         return;
 
     n = max_vals < MAX_PREDEF_VARS ? max_vals : MAX_PREDEF_VARS;
-    memcpy(dst, replay_state_mut()->baseline_predef_vals, (size_t)n * sizeof(float));
+    memcpy(dst, replay_state_mut()->baseline_predef_vals,
+           (size_t)n * sizeof(float));
 }
 
 void replay_restore_baseline_scratch_arrays(void) {
@@ -1167,7 +1208,11 @@ int replay_bench_fade_install(const int *old_pcs, const int *new_pcs,
     }
     state->fade_batch_count = installed;
 
-    repl_copy_predef_values(state->baseline_predef_vals, MAX_PREDEF_VARS);
+    /* Full snapshot — same rationale as replay_start: the fade-baseline
+     * spans multiple frames and must survive predef-table reshape. */
+    repl_eval_copy_predef_vars(state->baseline_predef_vals,
+                               state->baseline_predef_names,
+                               &state->baseline_predef_count);
     repl_eval_copy_scratch_arrays(state->baseline_scratch_arrays);
     state->active = (installed > 0);
     return installed;
