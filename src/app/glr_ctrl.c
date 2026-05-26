@@ -2788,24 +2788,6 @@ int glr_ctrl_router_handle_code_focus_key(unsigned char key) {
     return 1;
 }
 
-/* Ctrl+Shift+M: cycle the memory panel (Off / On / Details). Plain
- * Ctrl+M arrives here as 13 (CR / Enter); the Shift bit is what
- * distinguishes it from "Enter to commit/newline", so both modifier
- * bits are required and checked individually (combined `mods & (A|B)`
- * would also fire on Shift+Enter and steal it from the editor).
- *
- * Routes through glr_cfg_cycle_by_key so the status bar reflects the
- * new mode (matching the Config-menu click and the Ctrl+W feel for
- * the CPU profile panel). */
-int glr_ctrl_router_handle_memory_panel_key(unsigned char key) {
-    if (key != 13) return 0;
-    int mods = editor_input_active_modifiers();
-    if (!(mods & GLUT_ACTIVE_CTRL))  return 0;
-    if (!(mods & GLUT_ACTIVE_SHIFT)) return 0;
-    glr_cfg_cycle_by_key(GLR_CONFIG_MEMORY_PROFILE, +1);
-    return 1;
-}
-
 /* The Ctrl+Shift camera shortcuts (Ctrl+Shift+C reset / +O focus-origin
  * / +V view mode) have no dedicated router: they are ordinary Config
  * rows carrying a GLUT_ACTIVE_SHIFT modifier, dispatched by the
@@ -3847,7 +3829,6 @@ void glr_ctrl_keyboard(unsigned char key, int x, int y) {
         glr_ctrl_router_handle_accum_samples_key(key) ||
         glr_ctrl_router_handle_post_filter_key(key) ||
         glr_ctrl_router_handle_code_focus_key(key) ||
-        glr_ctrl_router_handle_memory_panel_key(key) ||
         glr_ctrl_router_handle_tutorial_ack_key(key) ||
         glr_ctrl_router_handle_quit_key(key)) {
         glr_ctrl_apply_input_effects(editor_take_input_effects());

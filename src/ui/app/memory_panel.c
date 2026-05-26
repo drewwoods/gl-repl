@@ -14,27 +14,30 @@
 #include <stdio.h>
 #include <string.h>
 
-/* Push interval (5s) and history capacity (1024) duplicated as the
- * derived total-span for X-axis right-alignment. memprof.c is the
- * single source of truth for the cadence; this constant is used only
- * for the panel's "now ... -85m" geometry. */
-#define MEM_TOTAL_SPAN_S    (1024.0 * 5.0)
+/* Derived total time span the X axis covers, from cadence constants
+ * exposed in memprof.h. */
+#define MEM_TOTAL_SPAN_S    ((double)MEMPROF_HISTORY_CAP * MEMPROF_PUSH_INTERVAL_S)
 
 /* ========================================================================= */
 /* Panel geometry                                                             */
 /* ========================================================================= */
 
-/* Width matches PROFILE_PANEL_W so the two profiling overlays line up
- * when stacked side-by-side; the table is single-column (RSS only) so
- * the original 360px is more than enough. */
-#define MEM_PANEL_W         320
+/* Narrower than the CPU profile panel because the table is one column
+ * and the graph uses the tiny font for tick labels. The shortcut is in
+ * the Config menu + F1 help, so no inline hint is needed in the header. */
+#define MEM_PANEL_W         220
 #define MEM_PANEL_MARGIN     12
-#define MEM_ROW_H            16
-#define MEM_HEADER_H         20
-#define MEM_TEXT_BLOCK_H     (3 * MEM_ROW_H + 6)  /* 3 rows + divider */
-#define MEM_GRAPH_H         120
-#define MEM_Y_GUTTER         60   /* room for "999.99 GB" Y labels */
-#define MEM_BOTTOM_PAD       18   /* X labels + margin */
+#define MEM_ROW_H            14
+#define MEM_HEADER_H         18
+#define MEM_TEXT_BLOCK_H     (3 * MEM_ROW_H + 4)  /* 3 rows + divider */
+#define MEM_GRAPH_H          90
+#define MEM_Y_GUTTER         44   /* room for "999.9 MB" tiny labels */
+#define MEM_BOTTOM_PAD       16   /* X labels + margin */
+
+/* FONT_TINY is variable-width Helvetica 10. The codebase has no
+ * glutBitmapLength helper, so width is approximated at 6 px per char
+ * for right-alignment. Accurate enough for short numeric labels. */
+#define MEM_TINY_W_APPROX    6
 
 static int clamp_int(int v, int lo, int hi) {
     if (hi < lo) return lo;
@@ -166,14 +169,11 @@ void ui_memory_panel_render(const UiRenderSnapshot *snap) {
 
     int tx = panel_x + 8;
     int ty = panel_y + panel_h - MEM_HEADER_H + 2;
-    const char *HINT = "Ctrl+Shift+M:hide";
-    const int hint_width = FONT_SMALL_W * (int)strlen(HINT) + 2;
 
+    /* No inline hint — the Config menu row carries the Ctrl+Shift+W
+     * shortcut and F1 help duplicates it. Header has just the title. */
     ui_clr(UI_TOK_TEXT_PRIMARY);
     gl2d_draw_string((float)tx, (float)ty, "Memory Profile", FONT_SMALL);
-    ui_clr(UI_TOK_TEXT_MUTED);
-    gl2d_draw_string((float)(panel_x + MEM_PANEL_W - hint_width),
-                     (float)ty, HINT, FONT_SMALL);
 
     ty -= MEM_HEADER_H;
 
@@ -280,7 +280,9 @@ void ui_memory_panel_render(const UiRenderSnapshot *snap) {
     glEnd();
     glDisable(GL_BLEND);
 
-    /* Y labels right-aligned in the gutter */
+    /* Y labels right-aligned in the gutter. FONT_TINY (Helvetica 10)
+     * — proportional width; approximated via MEM_TINY_W_APPROX since
+     * the codebase has no glutBitmapLength wrapper. */
     ui_clr(UI_TOK_TEXT_MUTED);
     for (unsigned long long v = y_lo; v <= y_hi; v += step) {
         if (y_hi <= y_lo) break;
@@ -288,10 +290,10 @@ void ui_memory_panel_render(const UiRenderSnapshot *snap) {
         int gy = plot_y + (int)(frac * MEM_GRAPH_H);
         char lab[24];
         memprof_format_bytes(lab, (int)sizeof(lab), v);
-        int lw = (int)strlen(lab) * FONT_SMALL_W;
+        int lw = (int)strlen(lab) * MEM_TINY_W_APPROX;
         gl2d_draw_string((float)(panel_x + MEM_Y_GUTTER - 2 - lw),
-                         (float)(gy - FONT_SMALL_H / 2 + 1),
-                         lab, FONT_SMALL);
+                         (float)(gy - 5),
+                         lab, FONT_TINY);
         if (step == 0) break;
     }
 
@@ -327,14 +329,14 @@ void ui_memory_panel_render(const UiRenderSnapshot *snap) {
     fmt_time_offset(left_lab,  (int)sizeof(left_lab),  MEM_TOTAL_SPAN_S);
     fmt_time_offset(mid_lab,   (int)sizeof(mid_lab),   MEM_TOTAL_SPAN_S / 2.0);
     fmt_time_offset(right_lab, (int)sizeof(right_lab), 0.0);
-    int label_y = plot_y - FONT_SMALL_H - 1;
-    int rl_w = (int)strlen(right_lab) * FONT_SMALL_W;
-    int ml_w = (int)strlen(mid_lab)   * FONT_SMALL_W;
-    gl2d_draw_string((float)plot_x, (float)label_y, left_lab, FONT_SMALL);
+    int label_y = plot_y - 12;
+    int rl_w = (int)strlen(right_lab) * MEM_TINY_W_APPROX;
+    int ml_w = (int)strlen(mid_lab)   * MEM_TINY_W_APPROX;
+    gl2d_draw_string((float)plot_x, (float)label_y, left_lab, FONT_TINY);
     gl2d_draw_string((float)(plot_x + plot_w / 2 - ml_w / 2),
-                     (float)label_y, mid_lab, FONT_SMALL);
+                     (float)label_y, mid_lab, FONT_TINY);
     gl2d_draw_string((float)(plot_x + plot_w - rl_w),
-                     (float)label_y, right_lab, FONT_SMALL);
+                     (float)label_y, right_lab, FONT_TINY);
 
     gl2d_end();
 }

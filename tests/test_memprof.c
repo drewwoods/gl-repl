@@ -57,19 +57,19 @@ static void test_cadence_honored(void) {
     ASSERT_INT("count 0 after init", memprof_history_count(), 0);
 
     /* Subinterval ticks should not push. */
-    for (double t = 0.5; t < 5.0; t += 0.5) {
+    for (double t = 0.5; t < MEMPROF_PUSH_INTERVAL_S; t += 0.5) {
         memprof_frame_tick_at(t);
     }
     ASSERT_INT("count still 0 before first interval", memprof_history_count(), 0);
 
-    memprof_frame_tick_at(5.0);
-    ASSERT_INT("count 1 at t=5", memprof_history_count(), 1);
+    memprof_frame_tick_at(MEMPROF_PUSH_INTERVAL_S);
+    ASSERT_INT("count 1 at first interval", memprof_history_count(), 1);
     MemSample s0;
     memprof_history_get(0, &s0, NULL);
     ASSERT_TRUE("sample 0 rss == 100", s0.rss_bytes == 100);
 
-    memprof_frame_tick_at(10.0);
-    ASSERT_INT("count 2 at t=10", memprof_history_count(), 2);
+    memprof_frame_tick_at(2.0 * MEMPROF_PUSH_INTERVAL_S);
+    ASSERT_INT("count 2 at second interval", memprof_history_count(), 2);
 }
 
 static void test_ring_wraps(void) {
@@ -83,7 +83,7 @@ static void test_ring_wraps(void) {
     const int N   = cap + 5;
     for (int i = 1; i <= N; i++) {
         g_test_rss = (unsigned long long)i;
-        memprof_frame_tick_at((double)i * 5.0);
+        memprof_frame_tick_at((double)i * MEMPROF_PUSH_INTERVAL_S);
     }
 
     ASSERT_INT("count at capacity", memprof_history_count(), cap);
@@ -106,14 +106,17 @@ static void test_history_latest_t_right_anchored(void) {
     ASSERT_TRUE("latest_t == 0 with empty history",
                 memprof_history_latest_t() == 0.0);
 
-    memprof_frame_tick_at(5.0);
-    memprof_frame_tick_at(10.0);
-    memprof_frame_tick_at(15.0);
+    double t1 = MEMPROF_PUSH_INTERVAL_S;
+    double t2 = 2.0 * MEMPROF_PUSH_INTERVAL_S;
+    double t3 = 3.0 * MEMPROF_PUSH_INTERVAL_S;
+    memprof_frame_tick_at(t1);
+    memprof_frame_tick_at(t2);
+    memprof_frame_tick_at(t3);
 
     double latest = memprof_history_latest_t();
-    /* Within an epsilon of last pushed t_rel (15.0). */
-    ASSERT_TRUE("latest_t ~ 15 after 3 pushes",
-                latest > 14.99 && latest < 15.01);
+    /* Within an epsilon of the last pushed t_rel. */
+    ASSERT_TRUE("latest_t ~ third interval after 3 pushes",
+                latest > t3 - 0.01 && latest < t3 + 0.01);
 }
 
 static void test_format_bytes_ranges(void) {
