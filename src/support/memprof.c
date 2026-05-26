@@ -211,7 +211,7 @@ const char *memprof_format_bytes(char *buf, int buf_sz,
     else if (b < 1024ULL * 1024ULL)
         snprintf(buf, (size_t)buf_sz, "%llu KB", b / 1024ULL);
     else if (b < 1024ULL * 1024ULL * 1024ULL)
-        snprintf(buf, (size_t)buf_sz, "%*.1f MB", 
+        snprintf(buf, (size_t)buf_sz, "%*.1f MB",
                  MEMPROF_FMT_WIDTH, (double)b / (1024.0 * 1024.0));
     else
         snprintf(buf, (size_t)buf_sz, "%*.2f GB",

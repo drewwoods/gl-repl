@@ -182,7 +182,7 @@ typedef struct UiRenderSnapshot {
     /* One-week pass: snapshot purity boundary extensions */
     EditorBufferView            editor_buffer;
     UiLineOverrideList          line_overrides;
-    
+
     struct {
         int   active;
         int   fade_line_idx;

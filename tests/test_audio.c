@@ -32,7 +32,7 @@ int main() {
     {
         glr_audio_set_loop_mode(GLR_AUDIO_LOOP_SONG);
         ASSERT_TRUE("get_loop_mode SONG", glr_audio_get_loop_mode() == GLR_AUDIO_LOOP_SONG);
-        
+
         glr_audio_set_loop_mode(GLR_AUDIO_LOOP_OFF);
         ASSERT_TRUE("get_loop_mode OFF", glr_audio_get_loop_mode() == GLR_AUDIO_LOOP_OFF);
 
@@ -71,7 +71,7 @@ int main() {
     {
         ASSERT_TRUE("play_playlist fails before init", glr_audio_play_playlist() == -1);
         ASSERT_TRUE("play_music fails before init", glr_audio_play_music("test.mp3") == -1);
-        
+
         /* These are void and should not crash */
         glr_audio_tick();
         glr_audio_on_user_gesture();
@@ -90,19 +90,19 @@ int main() {
         /* Test play functions (will likely fail to load files, but should return error codes) */
         const char *empty_paths[] = { NULL };
         ASSERT_TRUE("play_playlist with no playlist", glr_audio_set_playlist(empty_paths, 0) == 0 && glr_audio_play_playlist() == -1);
-        
+
         const char *one_path[] = { "nonexistent.mp3" };
         glr_audio_set_playlist(one_path, 1);
         /* start_track returns 0 if it defers for gesture or succeeds, -1 on immediate fail.
          * On native, it tries to start immediately. */
         int r = glr_audio_play_playlist();
         printf("play_playlist (nonexistent) returned %d\n", r);
-        
+
         glr_audio_tick();
         glr_audio_on_user_gesture();
         glr_audio_set_muted(1);
         glr_audio_set_muted(0);
-        
+
         glr_audio_shutdown();
         /* Shutdown should allow re-init */
         ASSERT_TRUE("re-init after shutdown", glr_audio_init() == 0);

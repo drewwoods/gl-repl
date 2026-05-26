@@ -126,13 +126,13 @@ static void test_top_level_hits(void) {
 
     UiHit h_menu = ui_menu_bar_hit_test(menu_mx, my);
     ASSERT_INT_EQ("hit File menu button", h_menu.kind == UI_HIT_MENU_BUTTON ? h_menu.cmd_idx : -1, GLR_MENU_FILE);
-    
+
     UiHit h_pin = ui_menu_bar_hit_test(pin_mx, my);
     ASSERT_INT_EQ("hit Replay pin", h_pin.kind == UI_HIT_PIN_BUTTON ? h_pin.item_idx : -1, UI_MENU_BAR_PIN_REPLAY);
-    
+
     UiHit h_menu_miss = ui_menu_bar_hit_test(menu_mx, my + 120);
     ASSERT_INT_EQ("menu miss below bar", h_menu_miss.kind == UI_HIT_MENU_BUTTON ? h_menu_miss.cmd_idx : -1, -1);
-    
+
     UiHit h_pin_miss = ui_menu_bar_hit_test(menu_mx, my);
     ASSERT_INT_EQ("pin miss in menu region", h_pin_miss.kind == UI_HIT_PIN_BUTTON ? h_pin_miss.item_idx : -1, -1);
 }

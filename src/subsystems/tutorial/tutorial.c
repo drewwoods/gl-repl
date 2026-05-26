@@ -682,11 +682,11 @@ static TutorialStepResult tutorial_enter_step_set(int idx, int step, int instruc
      * instruction is invisible until the user presses a key. */
     const char *slug = repl_tutorial_step_cfg_slug(idx, step);
     int value = repl_tutorial_step_cfg_value(idx, step);
-    
+
     state->in_enter_step = 1;
     repl_cfg_set_int(slug, value);
     state->in_enter_step = 0;
-    
+
     state->expected_commit_line = -1;
     repl_dispatch_host_cursor_park(instruction_line + 1,
                                    (instruction_line + 1) <
