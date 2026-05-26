@@ -71,7 +71,8 @@ typedef struct {
  * without revealing the full history buffers. undo_head is the next write
  * slot (one past the newest snapshot); a pop steps it back one and restores
  * from there. undo_count is the number of live snapshots. Similarly for
- * redo. Used by tests that verify undo/redo ordering. */
+ * redo. Used by tests and by editor input's aborted-navigation rollback path.
+ */
 typedef struct {
     int undo_head;
     int undo_count;
@@ -80,8 +81,9 @@ typedef struct {
 } EditorUndoRingState;
 
 /* Save/restore helpers for manual snapshot capture and restore. Used by
- * import/export code to preserve full state without involving the history
- * rings. editor_undo_snapshot_save() captures current editor state;
+ * import/export code and by editor input's aborted-navigation rollback to
+ * preserve full state without involving the history rings.
+ * editor_undo_snapshot_save() captures current editor state;
  * editor_undo_snapshot_restore() reverts to a prior snapshot. */
 void editor_undo_snapshot_save(EditorUndoSnapshot *snapshot);
 void editor_undo_snapshot_restore(const EditorUndoSnapshot *snapshot);

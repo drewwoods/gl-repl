@@ -5,7 +5,7 @@
 # used to have to stub (the shim was deleted in Phase 5 of
 # plans/done/edit-line-ownership.md after the storage flip removed
 # its last forwarders). Subsequent phases ratchet this surface down
-# by migrating call sites through coarser EditorServices callbacks.
+# by consolidating or deleting direct editor -> REPL dependencies.
 #
 # Recorded 2026-05-21 (post Phase 5 of edit-line-ownership.md — the
 # storage flip dropped input.c from 22→20 and commit.c from 30→28
@@ -13,9 +13,9 @@
 #
 # 2026-05-21: bumped both by +1 to admit repl_set_status_error, the
 # error sibling of repl_set_status (which is already in the surface).
-# Adding a mediated `status_error` to EditorServices would let both
-# drop by 2, but that refactor is independent of the red-status work
-# that introduced the new symbol.
+# A future shared status surface could let both drop by 2, but that
+# refactor is independent of the red-status work that introduced the
+# new symbol.
 #
 # 2026-05-24: input_c bumped +1 to admit repl_canonical_input_view,
 # the consolidated "skip leading ws + drop trailing ';'/ws" helper
@@ -33,9 +33,12 @@
 # 2026-05-26: commit_c bumped +3 for repl_eval_numeric_arg_at_cursor,
 # repl_eval_swatch_step, and repl_eval_format_swatch_number (Finding #41,
 # moving swatch commit logic from the controller to commit.c).
+# 2026-05-26: input_c bumped +1 for repl_parser_parse_command_ctx
+# (Finding #39, replacing the last input-side parse dispatch shim and
+# deleting src/editor/services.{c,h}).
 #
 # Ratchet down as migrations land. The plan target
 # (plans/done/editor-demo.md) is ~5 per file.
 
-input_c: 23
+input_c: 24
 commit_c: 35

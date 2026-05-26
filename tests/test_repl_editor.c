@@ -342,6 +342,19 @@ int main() {
         ASSERT_INT("then_insert flipped to insert mode", editor_insert_mode(), 1);
         ASSERT_INT("then_insert cleared input buffer",
                    editor_state_input().input_len, 0);
+        assert_status_contains("then_insert preserved decl status",
+                       "declared pinned");
+
+        editor_insert_mode_set(0);
+        editor_state_edit_line_set(repl_state_document_count());
+        set_editor_input("pinned = 3;");
+        consumed = editor_try_commit_var_statements_then_insert();
+        ASSERT_INT("then_insert assign consumed", consumed, 1);
+        ASSERT_INT("then_insert assign stays insert mode", editor_insert_mode(), 1);
+        ASSERT_INT("then_insert assign cleared input buffer",
+               editor_state_input().input_len, 0);
+        assert_status_contains("then_insert preserved assign status",
+                   "pinned = 3");
     }
 
     /* 0. Code/scene panel geometry supports left, top, bottom, and hidden layouts */
@@ -3116,7 +3129,7 @@ int main() {
         /* 2. Autocomplete active */
         editor_state_autocomplete_mut()->match_count = 1;
         editor_handle_key(27, 0, 0);
-        ASSERT_INT("Esc: autocomplete cleared", editor_state_autocomplete().match_count, 0);
+        ASSERT_INT("Esc: autocomplete cleared", editor_state_autocomplete()->match_count, 0);
 
         /* 3. Insert mode */
         editor_insert_mode_set(1);

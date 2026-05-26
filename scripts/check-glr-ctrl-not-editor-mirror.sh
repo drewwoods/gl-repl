@@ -15,8 +15,7 @@
 #
 # Editor behavior lives behind the editor's coarse API
 # (editor_handle_key / editor_handle_mouse / editor_handle_scroll /
-#  editor_commit_current_input) accessed via the EditorServices
-# table. New editor behavior should add an editor API, not an
+#  editor_commit_current_input). New editor behavior should add an editor API, not an
 # imrepl_ctrl wrapper.
 #
 # This guard catches symbols that look like per-field editor

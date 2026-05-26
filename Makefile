@@ -269,7 +269,6 @@ SRCS = \
 	src/editor/input.c \
 	src/editor/reformat.c \
 	src/editor/search.c \
-	src/editor/services.c \
 	src/editor/state.c \
 	src/editor/undo.c \
 	src/repl/apply.c \
@@ -357,7 +356,6 @@ HDRS = \
 	src/editor/input.h \
 	src/editor/reformat.h \
 	src/editor/search.h \
-	src/editor/services.h \
 	src/editor/state.h \
 	src/editor/undo.h \
 	src/repl/apply.h \
@@ -444,7 +442,6 @@ CORE_TEST_SRCS = \
 	src/editor/input.c \
 	src/editor/reformat.c \
 	src/editor/search.c \
-	src/editor/services.c \
 	src/editor/state.c \
 	src/editor/undo.c \
 	src/repl/apply.c \

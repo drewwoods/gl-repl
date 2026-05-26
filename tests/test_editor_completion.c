@@ -15,15 +15,18 @@ static TestHarness g_harness = TEST_HARNESS_INIT;
 static int g_update_called = 0;
 static int g_update_selected_preview_called = 0;
 static int g_clear_called = 0;
+static int g_accept_called = 0;
 
 static void test_update(void) { g_update_called++; }
 static void test_update_selected_preview(void) { g_update_selected_preview_called++; }
 static void test_clear(void) { g_clear_called++; }
+static void test_accept(void) { g_accept_called++; }
 
 static EditorCompletionProvider g_test_provider = {
     .update = test_update,
     .update_selected_preview = test_update_selected_preview,
-    .clear = test_clear
+    .clear = test_clear,
+    .accept = test_accept
 };
 
 int main() {
@@ -62,31 +65,42 @@ int main() {
         ASSERT_TRUE("clear called on provider", g_clear_called == 1);
     }
 
-    /* 6. NULL safety */
+    /* 6. Dispatch: accept */
+    {
+        g_accept_called = 0;
+        editor_completion_accept();
+        ASSERT_TRUE("accept called on provider", g_accept_called == 1);
+    }
+
+    /* 7. NULL safety */
     {
         editor_completion_register(NULL);
         g_update_called = 0;
         g_update_selected_preview_called = 0;
         g_clear_called = 0;
-        
+        g_accept_called = 0;
+
         editor_completion_update();
         editor_completion_update_selected_preview();
         editor_completion_clear();
-        
+        editor_completion_accept();
+
         ASSERT_TRUE("update not called when NULL", g_update_called == 0);
         ASSERT_TRUE("update_selected_preview not called when NULL", g_update_selected_preview_called == 0);
         ASSERT_TRUE("clear not called when NULL", g_clear_called == 0);
+        ASSERT_TRUE("accept not called when NULL", g_accept_called == 0);
     }
 
-    /* 7. Partial provider (NULL functions) */
+    /* 8. Partial provider (NULL functions) */
     {
         EditorCompletionProvider partial = {0};
         editor_completion_register(&partial);
-        
+
         /* Should not crash */
         editor_completion_update();
         editor_completion_update_selected_preview();
         editor_completion_clear();
+        editor_completion_accept();
         ASSERT_TRUE("partial provider handled safely", 1);
     }
 

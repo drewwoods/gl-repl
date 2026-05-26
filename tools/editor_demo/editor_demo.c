@@ -20,8 +20,8 @@
  *
  * What does NOT link: anything under src/repl, src/app, src/scene, or
  * src/subsystems, plus the REPL-flavored editor controller files listed
- * above. There is no fake EditorServices instance, no per-symbol
- * REPL / glr / ui / tutorial stub block, and (since Phase 4 of
+ * above. There is no fake REPL service layer, no per-symbol REPL /
+ * glr / ui / tutorial stub block, and (since Phase 4 of
  * plans/done/edit-line-ownership.md flipped storage and Phase 5
  * deleted the shim file) no repl_shim.c either — the editor now
  * owns its edit-line cursor on EditorState.document.edit_line_idx.

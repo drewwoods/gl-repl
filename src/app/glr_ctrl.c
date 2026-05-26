@@ -952,7 +952,7 @@ static void glr_ctrl_populate_numeric_swatch(UiRenderSnapshot *snap) {
     if (ui_repl_code_panel_input_row_has_color_swatch(snap)) return;
     in = editor_state_input();
     if (in.cursor_pos < 0 || !in.input || !in.input[0]) return;
-    if (editor_state_autocomplete().match_count > 0) return;
+    if (editor_state_autocomplete()->match_count > 0) return;
     if (editor_inline_rename_active()) return;
     if (tutorial_active() && tutorial_reject_noncommand_commit_with_hint()) return;
 
@@ -1007,7 +1007,7 @@ void glr_ctrl_build_ui_snapshot(UiRenderSnapshot *snap) {
     snap->memory_panel   = ui_state_memory_panel();
     snap->status         = ui_state_status();
     snap->search         = *editor_state_search();
-    snap->autocomplete   = editor_state_autocomplete();
+    snap->autocomplete   = *editor_state_autocomplete();
     snap->pointer        = ui_state_pointer();
     snap->render         = glr_state_render();
     snap->replay         = replay_state_view();

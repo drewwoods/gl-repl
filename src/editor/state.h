@@ -374,7 +374,7 @@ void                editor_state_selection_set(int anchor_idx, int end_idx);
  * any stale input_text; `_count_set(0)` resets to EMPTY. The
  * input-text helpers below set kind = INPUT_TEXT and clear the line
  * payload symmetrically. */
-EditorClipboardState  editor_state_clipboard(void);
+const EditorClipboardState *editor_state_clipboard(void);
 EditorClipboardState *editor_state_clipboard_mut(void);
 void                editor_state_clipboard_clear(void);
 int                 editor_state_clipboard_count(void);
@@ -400,7 +400,7 @@ void             editor_state_search_clear(void);
  * the registered completion provider should clear it via the provider seam
  * (editor_completion_clear), not by calling
  * editor_state_autocomplete_clear directly. */
-EditorAutocompleteState  editor_state_autocomplete(void);
+const EditorAutocompleteState *editor_state_autocomplete(void);
 EditorAutocompleteState *editor_state_autocomplete_mut(void);
 void                   editor_state_autocomplete_clear(void);
 

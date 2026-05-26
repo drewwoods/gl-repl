@@ -242,13 +242,6 @@ const char *editor_buffer_view_line(EditorBufferView view, int idx) {
     return view.lines[idx];
 }
 
-/* Forward decls cover entry points editor_state.c implements that
- * get called from sibling impls in this file (e.g.
- * editor_state_input_reset reuses editor_input_clear). */
-void editor_input_clear(void);
-void editor_pending_newline_clear(void);
-void editor_cursor_pos_set(int cursor_pos);
-
 /* The edit-line cursor lives on g_editor_state.document.edit_line_idx;
  * the editor accessors read and write the field directly. REPL
  * pipeline code receives the value as an explicit function parameter
@@ -521,8 +514,8 @@ void editor_state_selection_set(int anchor_idx, int end_idx) {
     g_editor_state.selection.end_idx = end_idx;
 }
 
-EditorClipboardState editor_state_clipboard(void) {
-    return g_editor_state.clipboard;
+const EditorClipboardState *editor_state_clipboard(void) {
+    return &g_editor_state.clipboard;
 }
 
 EditorClipboardState *editor_state_clipboard_mut(void) {
@@ -611,8 +604,8 @@ void editor_state_search_clear(void) {
     g_editor_state.search = editor_state_get_defaults()->search;
 }
 
-EditorAutocompleteState editor_state_autocomplete(void) {
-    return g_editor_state.autocomplete;
+const EditorAutocompleteState *editor_state_autocomplete(void) {
+    return &g_editor_state.autocomplete;
 }
 
 EditorAutocompleteState *editor_state_autocomplete_mut(void) {

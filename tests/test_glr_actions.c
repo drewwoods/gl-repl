@@ -851,7 +851,7 @@ static void test_cfg_cycle_panel_hidden_closes_overlays(void) {
     ASSERT_INT("HIDDEN layout closes the color picker",
                color_picker_view().open, 0);
     ASSERT_INT("HIDDEN layout clears autocomplete matches",
-               editor_state_autocomplete().match_count, 0);
+               editor_state_autocomplete()->match_count, 0);
     ASSERT_STR("HIDDEN layout status", g_last_status,
                "Layout: code panel hidden");
 }

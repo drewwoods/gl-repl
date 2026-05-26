@@ -274,9 +274,9 @@ static void test_capture_restore_round_trip(void) {
                repl_state_flat_program_user_lighting_enabled(), 1);
     ASSERT_INT("selection anchor restored", editor_state_selection().anchor_idx, 4);
     ASSERT_INT("selection end restored", editor_state_selection().end_idx, 7);
-    ASSERT_INT("clipboard count restored", editor_state_clipboard().line_count, 1);
+    ASSERT_INT("clipboard count restored", editor_state_clipboard()->line_count, 1);
     ASSERT_TRUE("clipboard line restored",
-                strcmp(editor_state_clipboard().lines[0], "glColor3f(1, 0, 0);") == 0);
+                strcmp(editor_state_clipboard()->lines[0], "glColor3f(1, 0, 0);") == 0);
     ASSERT_INT("help restored", ui_state_help().visible, 1);
     ASSERT_INT("help tab restored", editor_help_session_tab_idx(), 1);
     ASSERT_INT("help scroll restored", editor_help_session_scroll(), 3);
@@ -299,7 +299,7 @@ static void test_capture_restore_round_trip(void) {
     {
         UiStatusState status = ui_state_status();
         const EditorSearchState *search = editor_state_search();
-        EditorAutocompleteState autocomplete = editor_state_autocomplete();
+        const EditorAutocompleteState *autocomplete = editor_state_autocomplete();
 
         ASSERT_STR("status text restored", status.text, "state snapshot");
         ASSERT_INT("status ttl restored", status.ttl, 17);
@@ -310,15 +310,15 @@ static void test_capture_restore_round_trip(void) {
         ASSERT_INT("search hit char restored", search->hit_char_idx, 8);
         ASSERT_INT("search ordinal restored", search->hit_ordinal, 2);
         ASSERT_INT("search count restored", search->match_count, 4);
-        ASSERT_INT("autocomplete count restored", autocomplete.match_count, 2);
+        ASSERT_INT("autocomplete count restored", autocomplete->match_count, 2);
         ASSERT_INT("autocomplete selection restored",
-                   autocomplete.selected_idx, 1);
-        ASSERT_STR("autocomplete ghost restored", autocomplete.ghost, "ghost text");
-        ASSERT_STR("autocomplete hint restored", autocomplete.hint, "hint text");
+               autocomplete->selected_idx, 1);
+        ASSERT_STR("autocomplete ghost restored", autocomplete->ghost, "ghost text");
+        ASSERT_STR("autocomplete hint restored", autocomplete->hint, "hint text");
         ASSERT_STR("autocomplete match restored",
-                   autocomplete.matches[0], "glVertex3f");
+               autocomplete->matches[0], "glVertex3f");
         ASSERT_STR("autocomplete insert restored",
-                   autocomplete.insert_matches[1], "glVertex2f(");
+               autocomplete->insert_matches[1], "glVertex2f(");
     }
     ASSERT_INT("time playing restored", repl_state_variables().time_playing, 0);
     ASSERT_TRUE("anim time restored", repl_state_variables().anim_time == 1.25f);

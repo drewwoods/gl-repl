@@ -13,7 +13,7 @@
 # This is deliberately a denylist of removed names, NOT a blanket
 # "no foreign prefix" sweep. Borrowed cross-module API types are
 # correct C design and must keep passing: ReplCompileContext /
-# ReplCompiledChange in src/editor/services.h, the Repl* snapshot
+# ReplCompiledChange in src/editor/commit.h, the Repl* snapshot
 # fields in src/ui/app/snapshot.h, the export/replay-annotation bridge
 # types in src/app/glr_ctrl.h, and VariablePanelViewState surfaced by
 # src/subsystems/variable_panel/variable_panel_state.h. None of those are in the list

@@ -874,7 +874,7 @@ full app fills and the demo leaves unset:
 4. **Split lifecycle reset + dispatcher relocation.**
    `repl_state_reset_program()` (REPL-only) is separated from
    `glr_ctrl_reset_all()` (full-world, in `src/app/`), and
-   `repl_compile_dispatch()` moved from `src/editor/services.c` into
+  `repl_compile_dispatch()` moved out of the former editor service shim into
    `src/repl/compile.c`. Pure structured-block validators were extracted
    from the editor compile wrappers, and the non-editor
    `repl_load_apply_line()` (`src/repl/load.c`) replaced `editor_feed_line`
