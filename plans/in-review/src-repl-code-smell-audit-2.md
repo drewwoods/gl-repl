@@ -131,33 +131,62 @@ restore time. If the table reordered or shrank in between, restore
 either drops the snapshot tail (shrink) or writes saved floats into
 slots now holding *different* variables (reorder / shrink-then-grow).
 
-**Why it matters:** The controller's per-frame baseline pair
-(`glr_ctrl.c`) and the autonormal scratch pair (`flatten.c`) are
-both short-lived enough that the table cannot change between save
-and restore in normal operation — there, the values-only contract
-is fine in practice. The dangerous caller is `replay.c`'s
-start-of-replay baseline: replay spans many frames; during a
-playing replay a tutorial step can run a SET (`@declare` add or
-remove) or the user can switch workspace mid-replay. Either
-violates the unstated prerequisite and the restore corrupts the
-predef table.
+**Why it matters:** The autonormal scratch pair (`flatten.c`) is
+short-lived enough that the table cannot change between save and
+restore in normal operation — there the values-only contract is
+fine. Everything else is a *long-lived* path that can span a table
+mutation:
+
+- `replay.c`'s start-of-replay baseline (three sites) — survives
+  multiple frames; the user can switch workspace mid-replay,
+  which rebinds the predef table.
+- `ReplayFadePlan.baseline_predef_vals` (`glr_ctrl.h:17`,
+  populated at `glr_ctrl.c:264` via the values-only
+  `replay_copy_baseline_predef_values`, restored at
+  `glr_ctrl.c:226` via values-only restore). The fade plan is
+  built once per replay-start and read back across every fade
+  tick, so its lifetime matches the replay baseline above.
+- The frame-level pair at `glr_ctrl.c:1844, 1953`
+  (`live_predef_vals[]` saved at the top of a frame's render,
+  restored at the bottom). Within a single frame the executor
+  re-evaluates expressions that *write* through the predef table,
+  but it doesn't add or remove vars, so the table shape is stable
+  *in normal operation*. The contract risk here is much smaller
+  than the multi-frame paths.
+
+The triggerable failure today: workspace switch (or any
+source/predef-table mutation routed through user input) while a
+replay is active rebinds the table; the fade-plan restore then
+writes saved floats into slots now holding different vars.
 
 **Fix (pick one — they are not stacking options):**
 
-1. **Switch the long-lived callers to the full-snapshot pair**
-   (`repl_eval_copy_predef_vars` / `_restore_predef_vars`), which
-   carries names + count and rebinds correctly when the table
-   reorders. The natural conversion is the three sites in
-   `replay.c` (start-baseline, paired restore, replay-stop
-   baseline). The short-lived per-frame and autonormal pairs can
-   stay on the values-only pair.
-2. **Or keep all callers on the values-only pair and add an
-   `assert(g_num_predef_vars == saved_count && names[i]==saved_names[i])`
-   guard in `repl_restore_predef_values`** — but that requires
-   capturing the names too, which is effectively (1) without the
-   API rename.
-3. **Or document the prerequisite in the contract comment and
-   leave the runtime bug latent** — only acceptable if every
+1. **Cascade the full-snapshot pair through every long-lived
+   caller.** That means: switch `replay.c`'s three sites to
+   `repl_eval_copy/restore_predef_vars`; widen
+   `ReplayRuntimeState.baseline_predef_vals` to also store names
+   and count; rewrite `replay_copy_baseline_predef_values` and
+   `replay_restore_baseline_predef_values` (in `replay.c:975-988`)
+   and the matching `ReplayFadePlan` storage (`glr_ctrl.h:17`) to
+   carry names + count too; update `glr_ctrl.c:226` and `:264`
+   accordingly. The short-lived autonormal pair stays values-only;
+   the frame pair (`:1844, :1953`) is a judgement call — see (3)
+   below for the smaller-scope alternative.
+2. **Stop replay before any source / predef-table mutation.**
+   Tighter contract: replay must terminate before a workspace
+   load, scene switch, undo across an `@declare`, etc. No
+   long-lived snapshot can then span a table mutation, so the
+   values-only pair is safe everywhere. Smaller code change, but
+   it's a UX policy decision (does the user lose their replay
+   state on every workspace load?). Worth scoping before
+   choosing.
+3. **Keep all values-only callers on the values-only pair and add
+   an `assert(g_num_predef_vars == saved_count &&
+   names[i]==saved_names[i])` guard in `repl_restore_predef_values`**
+   — but that requires capturing names too, which is effectively
+   option (1) without the API rename.
+4. **Document the prerequisite in the contract comment and leave
+   the runtime bug latent** — only acceptable if every long-lived
    caller is audited and proven not to span a table mutation.
    Brittle long-term; deferred-cost fix.
 
@@ -165,6 +194,12 @@ predef table.
 restore consume that count without also restoring names: the count
 half alone fixes overread on *grow* but does nothing for *reorder*
 or *shrink*, which is the actual triggerable bug here.
+
+**Do not** convert only `replay.c`'s three sites without the
+fade-plan cascade: `ReplayFadePlan` reads from the replay baseline
+via the values-only helper at `replay.c:986`, so a partial fix
+leaves the fade path silently truncating names back to floats. The
+fade and replay storage have to move together.
 
 ### 4. `repl_config_bag_set` silently truncates oversized keys/values and returns success
 
@@ -418,30 +453,36 @@ fair game for the const-replacement sweep:
    and `export.c:1721` (same pattern inside `// @var name=value`
    restore). Misclassifying these as "read-only drift" silently
    breaks import.
-3. **Snapshot-owner reads (no const accessor exists yet):** the
+3. **Snapshot-owner reads (const accessor already exists):** the
    caller is itself the snapshot owner taking a base-pointer to
    `memcpy` out of (e.g., `scenes.c:202` does
-   `memcpy(s->cmds, repl_state_document_cmds_mut(), …)`). Semantically
-   a read, but the bare-pointer accessor today is only the `_mut()`
-   variant. Fix: add a `repl_state_document_cmds()` const reader and
-   point snapshot-owners at it; do **not** treat as raw drift.
+   `memcpy(s->cmds, repl_state_document_cmds_mut(), …)`). The
+   const accessor `repl_state_document_cmds()` already exists at
+   `state_owners.h:17` / `state.c:201` — these callers just need
+   to switch to it. Do **not** treat as raw drift.
 
 **Fix:** Per-file sweep, but split into three commits matching the
 categories above so reviewers can audit each separately:
 
-1. *Const-replacement sweep* — pure read drift only.
-2. *Add missing const accessors* — `repl_eval_predef_vars()`,
-   `repl_state_document_cmds()` const variants; reroute the
-   snapshot-owner callers (`scenes.c:202`, etc.) through them.
+1. *Const-replacement sweep* — pure read drift only (replace
+   `_mut()` calls with the existing const accessors where the
+   caller only reads).
+2. *Reroute snapshot-owners and add the one missing const helper.*
+   The document-array snapshot-owners (`scenes.c:202`, etc.)
+   already have `repl_state_document_cmds()` available — just
+   switch them over. The one missing helper is the predef-var
+   const variant: today `g_predef_vars` is a macro routing to a
+   `_mut()`-backed accessor, so reads can't expressively distinguish
+   themselves from writes. Add `repl_eval_predef_vars()` (const)
+   and reroute the read-side `g_predef_vars` callers through it,
+   keeping the `_mut()` form on the write helpers internal to
+   eval.c.
 3. *Audit the genuine writers* — confirm each surviving `_mut()`
    reference is a real write; document why (file ownership) so the
    ratchet has an allowlist.
 
 Then add `check-state-ownership` to grep for `_mut()` outside the
-documented owner files, with the post-(3) allowlist baked in. The
-`g_predef_vars` macro should route to the new const variant for
-reads (with the mutating helpers keeping the `_mut()` form
-internally) once (2) lands.
+documented owner files, with the post-(3) allowlist baked in.
 
 ### 15. `repl_compile_*` block validators duplicate `editor_compile_*` (~430 lines vs ~860 lines)
 
@@ -836,7 +877,10 @@ failure.
 that goes through the **public catalog accessors** (the catalog's
 `g_tutorial_feature_tour_steps[]` array is `static` in
 `src/repl/tutorials.c:143` and is not part of the public API).
-Sketch:
+The Feature Tour has **two** consecutive grid SET steps —
+`grid = 10` (`GRID_THEME_RADAR`) at `tutorials.c:164` and
+`grid = 6` (`GRID_THEME_FOCUS`) at `tutorials.c:167` — so the
+test asserts both literals in catalog order:
 
 ```c
 /* Find "Feature Tour" by name; do not assume catalog index. */
@@ -850,30 +894,46 @@ for (int i = 0; i < n; i++) {
 }
 ASSERT_TRUE("Feature Tour exists", tour_idx >= 0);
 
-/* The GRID_THEME-setting step is the seventh in the current catalog,
- * but locate it by slug to stay robust to step reordering. */
+/* Collect every "grid" SET step in catalog order. Locating by
+ * slug + kind (rather than absolute index) keeps the test robust
+ * to step reordering — but the assertion still depends on the
+ * showcase order Radar-then-Focus matching the on-screen reveal. */
 int s = repl_tutorial_step_count(tour_idx);
-int step_idx = -1;
+int grid_steps[8];
+int grid_step_count = 0;
 for (int i = 0; i < s; i++) {
     const char *slug = repl_tutorial_step_cfg_slug(tour_idx, i);
-    if (slug && strcmp(slug, "grid") == 0) {
-        step_idx = i;
-        break;
+    if (slug && strcmp(slug, "grid") == 0 &&
+        repl_tutorial_step_kind(tour_idx, i) ==
+        TUTORIAL_STEP_KIND_SET) {
+        if (grid_step_count < 8)
+            grid_steps[grid_step_count++] = i;
     }
 }
-ASSERT_TRUE("grid-theme step exists", step_idx >= 0);
+ASSERT_INT_EQ("Feature Tour has two grid SET steps",
+              grid_step_count, 2);
 
-/* The literal in the catalog must equal the enum value the
+/* Each literal in the catalog must equal the enum value the
  * scene-side header exports. The test TU includes themes.h. */
-ASSERT_TRUE("grid-theme literal matches enum",
-            repl_tutorial_step_cfg_value(tour_idx, step_idx) ==
-            GRID_THEME_RADAR);
+ASSERT_INT_EQ("first grid step is GRID_THEME_RADAR",
+              repl_tutorial_step_cfg_value(tour_idx, grid_steps[0]),
+              GRID_THEME_RADAR);
+ASSERT_INT_EQ("second grid step is GRID_THEME_FOCUS",
+              repl_tutorial_step_cfg_value(tour_idx, grid_steps[1]),
+              GRID_THEME_FOCUS);
 ```
 
+If the showcase order changes (Focus-then-Radar) the assertions
+flip rather than silently drift — that's the desired failure
+mode. If a third grid SET step is added later, the
+`grid_step_count == 2` assertion fails loud, prompting the test
+author to decide whether to extend the test or pin the count
+intentionally.
+
 (Alternative: push slug-to-int into the bridge so the catalog
-records `"GRID_THEME_RADAR"` and the test just asserts string
-equality. Heavier refactor; the public-accessor test above is the
-minimal closure.)
+records `"GRID_THEME_RADAR"` / `"GRID_THEME_FOCUS"` and the test
+just asserts string equality. Heavier refactor; the
+public-accessor test above is the minimal closure.)
 
 ### 42. 25 lines of per-side CatalogTagOps glue remain after closed #12
 

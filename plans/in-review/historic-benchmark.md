@@ -49,7 +49,9 @@ Single binary, two source files for testability:
 
 ```
 ./bench_trend_sample [options]
-    --from REF              # default: first commit that touches bench/bench_repl.c
+    --from REF              # default: earliest commit introducing the bench harness
+                            # (searches both bench/bench_repl.c and the older root
+                            # bench_repl.c — see "Default --from" below)
     --to REF                # default: HEAD
     --min-gap-commits N     # mutually exclusive with --min-gap-days
     --min-gap-days D
@@ -64,28 +66,48 @@ Single binary, two source files for testability:
 
 Exactly one of `--min-gap-commits` / `--min-gap-days` is required (matches the "user picks per-run" answer). Implemented with the standard `getopt_long` shape used elsewhere in the project.
 
+**Default `--from`.** The bench harness was introduced earlier than its current path: commit `0764803` on 2026-05-01 moved it from a root-level `bench_repl.c` (added ~2026-04-18) into `bench/bench_repl.c`. A default that keys off `bench/bench_repl.c` alone silently skips ~two weeks of pre-move history. The sampler instead resolves the default by running:
+
+```
+git log --diff-filter=A --reverse --first-parent --format='%H %ct' \
+    -- bench/bench_repl.c bench_repl.c
+```
+
+and taking the *earliest* of any returned commits as the default `<from>`. (`--diff-filter=A` matches the "add" of the file at its first appearance under either path.) If neither path matches (e.g. running against an unrelated repo), the sampler errors out with a hint to pass `--from` explicitly.
+
 ### CSV schema
 
 `bench/trend_results.csv` — one row per (sha, benchmark):
 
 ```
-sha,date,bench_name,unit,iters,ops,total_sec,min_iter_ms,per_iter_ms,per_op_us,ops_per_sec
+sha,date_epoch,date_iso,bench_name,unit,iters,ops,total_sec,min_iter_ms,per_iter_ms,per_op_us,ops_per_sec
 ```
 
-`sha` is the 12-char short hash. `date` is the committer date as ISO 8601 (`%Y-%m-%dT%H:%M:%S%z`) stored verbatim as a string — ISO 8601 lex-sorts correctly, so file sort and series order are stringly cheap; `strptime` + `mktime` only happens in the viewer at load time for the X-axis scale.
+`sha` is the 12-char short hash.
 
-The last 9 columns are the existing `bench_repl --csv` columns verbatim. `bench_repl` currently emits seven sub-benchmarks (`parse_lines`, `feed_examples`, `flatten_examples`, `spike_flatten_largest`, `replay_examples`, `replay_long`, `fade_batches` — see `bench/bench_repl.c:802-823`), so a fully-measured SHA contributes seven rows. Both sampler and viewer treat the bench-name set as data, not as a hard-coded constant, so adding or removing a `bench_repl` sub-benchmark needs no code change here.
+**Two date columns.** `date_epoch` is the committer date as Unix epoch seconds (from `git log --format='%ct'`). `date_iso` is the committer date as ISO 8601 (`%cI`, e.g. `2026-04-13T10:19:03+02:00`).
 
-The sampler rewrites the file sorted by (date ascending, bench_name ascending) after each successful run so diffs and viewer reads stay stable. A sibling `bench/trend_broken.txt` records broken SHAs as `<sha> <reason>` lines (e.g. `a1b2c3d4e5f6 csv unsupported`, `a1b2c3d4e5f6 build failed`, `a1b2c3d4e5f6 binary not found`).
+Why both: ISO 8601 *strings* do **not** lex-sort to UTC chronological order when adjacent commits carry different timezone offsets — this repo already has first-parent commits where a `+02:00` author lands a few minutes before a `-04:00` author, and lex sort flips them. So the sampler always sorts and the viewer always plots on `date_epoch` (a monotonic integer). `date_iso` exists for `git diff` / `grep` / human inspection of the CSV — opaque epochs make the file useless to read by eye, and the cost of an extra column is one strftime call per row at write time.
+
+The last 9 columns are the existing `bench_repl --csv` columns verbatim. `bench_repl` currently emits seven sub-benchmarks (`parse_lines`, `feed_examples`, `flatten_examples`, `spike_flatten_largest`, `replay_examples`, `replay_long`, `fade_batches` — see `bench/bench_repl.c:802-823`), so a SHA fully covered at this build contributes seven rows. Both sampler and viewer treat the bench-name set as data, not as a hard-coded constant, so adding or removing a `bench_repl` sub-benchmark needs no code change here.
+
+The sampler rewrites the file sorted by (`date_epoch` ascending, `bench_name` ascending) after each successful run so diffs and viewer reads stay stable. A sibling `bench/trend_broken.txt` records broken SHAs as `<sha> <reason>` lines (e.g. `a1b2c3d4e5f6 csv unsupported`, `a1b2c3d4e5f6 build failed`, `a1b2c3d4e5f6 binary not found`).
 
 ### Build vs Run separation (correctness fix)
 
-The sampler invokes `build-historical.sh --at <sha> bench_repl USE_GL_STUBS=1` strictly to *build* the historical bench binary; it discards that command's stdout (the build script prints `build-historical: ...` diagnostic lines there). Then it computes the worktree path the same way the script does — `.compat-scratch/worktrees/<short-12-sha>/` (the formula at `scripts/build-historical.sh:218-219`) — and `popen`s the binary directly: `<worktree>/build/bin/bench_repl --csv --iters N`. That stream is pure CSV and parses with `fgets` + a column scanner.
+The sampler invokes `build-historical.sh --at <sha> bench_repl USE_GL_STUBS=1` strictly to *build* the historical bench binary; it discards that command's stdout (the build script prints `build-historical: ...` diagnostic lines there). Then it computes the worktree path the same way the script does — `.compat-scratch/worktrees/<short-12-sha>/` (the formula at `scripts/build-historical.sh:218-219`) — and `popen`s the binary directly with `--csv --iters N`. That stream is pure CSV and parses with `fgets` + a column scanner.
 
 Why this matters:
 - `make bench` is a *runner* target that prints its own `REPL benchmarks (iters=...)` header before the CSV body — using it would force CSV-shape filtering on every line. Going via `make bench_repl` plus direct exec gives us a clean stream.
 - `--csv` is a recent addition to `bench_repl.c`. Old SHAs may lack it (`getopt` rejects, exit non-zero or empty stdout). The sampler detects this and writes `<sha> csv unsupported` to `trend_broken.txt` rather than spinning forever.
-- Binary location has shifted historically. Fall back order: `<worktree>/build/bin/bench_repl`, `<worktree>/build/bench_repl`, `<worktree>/bench_repl`. If none exists, log `<sha> binary not found` to `trend_broken.txt`.
+- **Binary location varies across SHAs.** The modern Makefile puts the output at `build/$(BUILD)$(if USE_GL_STUBS,-gl-stubs)/bench_repl` (Makefile:588-589 — `OBJDIR == BINDIR`, no `bin/` subdir). Older SHAs used `build/bench_repl` or root-level `bench_repl`. The sampler probes for the binary in this fallback order, taking the first that is executable:
+   1. `<worktree>/build/release-gl-stubs/bench_repl`  *(modern default with USE_GL_STUBS=1)*
+   2. `<worktree>/build/release/bench_repl`  *(modern default without stubs, in case future runs go that way)*
+   3. `<worktree>/build/bin/bench_repl`  *(some historical layouts)*
+   4. `<worktree>/build/bench_repl`  *(older layouts)*
+   5. `<worktree>/bench_repl`  *(root-linked, oldest)*
+
+   If none exists, log `<sha> binary not found` to `trend_broken.txt`. The probe runs each invocation — no caching — so a SHA-specific layout choice doesn't get baked in by accident.
 
 ### `fade_batches` under stubs (caveat)
 
@@ -95,7 +117,14 @@ Why this matters:
 
 1. **Enumerate (inclusive of `<from>`).** Spawn `git log --format='%H %cI' <to> --reverse --first-parent` and drop everything before `<from>` (inclusive). Equivalently, when `<from>` has a parent, `git log <from>^..<to>`; when it's the root commit, `git log <to>`. The default `<from>` (first commit touching `bench/bench_repl.c`) must itself be sampleable, so an exclusive `<from>..<to>` is wrong. First-parent keeps merge bubbles from inflating the sample set.
 2. **Initial pick.** Walk the list chronologically. Always pick the first commit. Then pick the next commit whose gap from the last pick *meets or exceeds* the min-gap (commit count for `--min-gap-commits`, calendar days between committer dates for `--min-gap-days`). Always include the last commit even if it sits inside the gap, so the trend line reaches HEAD.
-3. **Compute the work set.** Load existing rows from the CSV. A SHA is *fully covered* at the requested `--iters` only if it has one row per `bench_name` that `bench_repl` would emit at this build *and* every row's `iters` matches. The expected `bench_name` set comes from the most recent run already in the CSV (or, on a cold CSV, from the first newly-built SHA — bootstrapping). Re-runs with a different `--iters` therefore re-measure even SHAs that appear; a partial SHA (crashed mid-write, or bench list grew) is treated as missing and re-measured. SHAs in `trend_broken.txt` are skipped unless `--retry-broken` flushes it.
+3. **Compute the work set.** Load existing rows from the CSV. A SHA is *covered* at the requested `--iters` when:
+   - At least one row exists for that SHA, and
+   - Every row's `iters` matches the requested value, and
+   - The CSV's per-SHA bench-name set matches a recorded "complete run" sentinel for that SHA.
+
+   The third condition addresses the bench-set-growth problem: the bench list changes over time (e.g. `spike_flatten_largest` was added recently), so older SHAs *legitimately* emit fewer rows than HEAD. A global "expected bench-name set" derived from the most recent run would force eternal re-measurement of those older SHAs. Instead, after each successful run the sampler writes a `bench/trend_runs.csv` companion file with one row per (sha, iters) holding the comma-separated bench-name list that SHA's `bench_repl` actually emitted plus a wall-clock timestamp of the run. Idempotency checks consult that companion: a SHA is covered iff its CSV rows match the recorded run set at the requested iters. A SHA with *no* companion entry (e.g. CSV manually pruned, or partial mid-crash) is re-measured. A SHA whose companion `iters` differs is re-measured. SHAs in `trend_broken.txt` are skipped unless `--retry-broken` flushes it.
+
+   `trend_runs.csv` schema: `sha,iters,bench_names,run_started_iso,run_completed_iso`. Tiny file (one line per measured SHA). Gitignored alongside `trend_results.csv`.
 4. **Sample.** For each work-set SHA: run the historical build, exec the binary, parse CSV stdout. If a SHA is being re-measured at a new `iters`, drop its old rows first so the file doesn't accumulate duplicates. On any failure, append `<sha> <reason>` to `trend_broken.txt` and continue.
 5. **Bisect via a worklist (not recursion).** Push every adjacent measured pair `(A, B)` (sorted by date) onto a FIFO. Pop one at a time:
    - Compute the per-benchmark relative delta `|B.per_op_us − A.per_op_us| / A.per_op_us` for every shared `bench_name`.
@@ -111,7 +140,7 @@ Why this matters:
 
 - `trend_pick_initial_commits()` — inclusive range; root-commit edge case; min-gap floor; HEAD always included.
 - `trend_pick_initial_days()` — calendar-day spacing; irregular commit timing; HEAD always included.
-- `trend_compute_work_set()` — SHA absent → returned; SHA present at different `iters` → returned; SHA with partial `bench_name` coverage → returned; SHA fully matching → omitted; broken SHA → omitted unless `--retry-broken`.
+- `trend_compute_work_set()` — using the `trend_runs.csv` companion: SHA absent from runs file → returned; SHA present at different `iters` → returned; SHA whose CSV rows don't match its run-companion bench set → returned (partial / mid-crash); SHA whose run-companion records a smaller bench set than HEAD's *and* whose CSV rows fully match that recorded set → **omitted** (this is the bench-set-growth case; older SHAs legitimately emit fewer benches and must not be endlessly re-measured); broken SHA → omitted unless `--retry-broken`.
 - `trend_pair_trips()` — threshold semantics; per-benchmark deltas; bench-name set intersection between A and B.
 - `trend_bisect_step()` — both subranges re-queued when both trip; min-gap floor terminates; no-midpoint case drops the pair; `max_bisect` budget enforced.
 
@@ -132,10 +161,10 @@ Header-only: `src/ui/core/gl_2d.h` (provides `gl2d_begin`, `gl2d_end`, `gl2d_dra
 #define MAX_SAMPLES   4096
 
 typedef struct {
-    char   sha[16];
-    char   date_iso[40];               /* raw ISO 8601, lex-sortable */
-    time_t date_unix;                  /* parsed once at load, for X-axis */
-    double per_op_us[MAX_BENCHES];     /* NaN where this SHA lacks that bench */
+    char    sha[16];
+    long    date_epoch;                /* committer date, Unix seconds (CSV col 2) */
+    char    date_label[16];            /* "YYYY-MM-DD" derived from epoch at load time */
+    double  per_op_us[MAX_BENCHES];    /* NaN where this SHA lacks that bench */
 } TrendSample;
 
 static TrendSample g_samples[MAX_SAMPLES];
@@ -144,7 +173,7 @@ static char  g_bench_names[MAX_BENCHES][32];   /* populated from CSV */
 static int   g_bench_count;
 ```
 
-Loaded once at startup from `bench/trend_results.csv` (path overridable via `argv[1]`). Loader walks rows, interns each unique `bench_name` into `g_bench_names[]`, stores `per_op_us` into the matching column. Samples sorted by `date_iso` ascending (lex sort gives chronological order). `strptime` + `mktime` runs once per sample to fill `date_unix`. Columns the SHA lacks remain `NAN` and are skipped when drawing that series — older SHAs predating a benchmark draw a gap, not a spurious zero.
+Loaded once at startup from `bench/trend_results.csv` (path overridable via `argv[1]`). Loader walks rows, interns each unique `bench_name` into `g_bench_names[]`, stores `per_op_us` into the matching column, parses the CSV's `date_epoch` column directly into `date_epoch` (no `strptime` — the sampler already converted to Unix seconds), and renders a short `YYYY-MM-DD` label via `strftime` once per sample for the X-axis. The CSV's `date_iso` column is read past for the format invariant but not consumed; the viewer is tz-agnostic by construction because the sort key is monotonic-integer epoch. Samples are sorted by `date_epoch` ascending. Columns the SHA lacks remain `NAN` and are skipped when drawing that series — older SHAs predating a benchmark draw a gap, not a spurious zero.
 
 If load exceeds `MAX_SAMPLES`, drop the oldest samples and print one stderr line: `bench_trend_view: sample cap reached (MAX_SAMPLES=4096), dropped N oldest`. Better than a silent truncation or a crash.
 
@@ -169,7 +198,7 @@ If load exceeds `MAX_SAMPLES`, drop the oldest samples and print one stderr line
 └──────────────────────────────────────────────────────────────────┘
 ```
 
-- **X axis (time mode).** Linear from `g_samples[0].date_unix` to `g_samples[n-1].date_unix`. Tick every ~80 px, labeled with `YYYY-MM-DD`.
+- **X axis (time mode).** Linear from `g_samples[0].date_epoch` to `g_samples[n-1].date_epoch`. Tick every ~80 px, labeled with `YYYY-MM-DD` (from each sample's pre-rendered `date_label`).
 - **X axis (sha-index mode).** Linear from 0 to n−1. Tick every ~80 px, labeled with the short SHA.
 - **Y axis.** Linear, auto-scaled to `[0, 1.1 * max(per_op_us across visible benches)]`. Tick every ~50 px, labeled in µs.
 - **Series.** For each visible benchmark, one `GL_LINE_STRIP` connecting the samples (in date order) whose `per_op_us` for that benchmark is not `NAN`, plus a small `GL_POINTS` marker at each sample. NaN samples break the strip into segments so older SHAs that predate a benchmark don't get a misleading sloped line down to zero.
@@ -197,36 +226,42 @@ There aren't any — `gl_2d.h` only provides `gl2d_panel_frame` (line *loops*). 
 
 Two binaries plus a test binary, mirroring `scene_demo` / `editor_demo`:
 
+Tool binaries follow the `scene_demo` / `editor_demo` pattern (explicit `*_OBJS` plus explicit link rule). The unit test integrates via the existing `TEST_BINS` machinery (`built_binary` macro at `Makefile:805`), which means lowercase per-target variables (`test_bench_trend_sample_OBJS`, `test_bench_trend_sample_LDLIBS`, `test_bench_trend_sample_RUN`) keyed off the target name — mirroring `test_scene_palette` and `test_eval` which override the `core_test_binary` defaults the same way (`Makefile:688-700`).
+
 ```makefile
 # --- bench_trend_view (GLUT viewer) ----------------------------
+BENCH_TREND_VIEW_BIN = $(BINDIR)/bench_trend_view
 BENCH_TREND_VIEW_OBJS = $(OBJDIR)/tools/bench_trend_view/bench_trend_view.o
 
-$(BINDIR)/bench_trend_view: $(BENCH_TREND_VIEW_OBJS)
+$(BENCH_TREND_VIEW_BIN): $(BENCH_TREND_VIEW_OBJS)
 	@mkdir -p $(dir $@)
 	$(CC) $(OBJ_CFLAGS) -o $@ $(BENCH_TREND_VIEW_OBJS) $(GL_LDFLAGS)
 
-bench_trend_view: FORCE $(BINDIR)/bench_trend_view ## Build the historic bench trend viewer.
-	ln -sfn $(BINDIR)/bench_trend_view $@
+bench_trend_view: FORCE $(BENCH_TREND_VIEW_BIN) ## Build the historic bench trend viewer.
+	ln -sfn $(BENCH_TREND_VIEW_BIN) $@
 
 # --- bench_trend_sample (CLI sampler) --------------------------
+BENCH_TREND_SAMPLE_BIN = $(BINDIR)/bench_trend_sample
 BENCH_TREND_SAMPLE_OBJS = $(OBJDIR)/tools/bench_trend_sample/main.o \
                           $(OBJDIR)/tools/bench_trend_sample/logic.o
 
-$(BINDIR)/bench_trend_sample: $(BENCH_TREND_SAMPLE_OBJS)
+$(BENCH_TREND_SAMPLE_BIN): $(BENCH_TREND_SAMPLE_OBJS)
 	@mkdir -p $(dir $@)
 	$(CC) $(OBJ_CFLAGS) -o $@ $(BENCH_TREND_SAMPLE_OBJS) -lm
 
-bench_trend_sample: FORCE $(BINDIR)/bench_trend_sample ## Build the historic bench trend sampler.
-	ln -sfn $(BINDIR)/bench_trend_sample $@
+bench_trend_sample: FORCE $(BENCH_TREND_SAMPLE_BIN) ## Build the historic bench trend sampler.
+	ln -sfn $(BENCH_TREND_SAMPLE_BIN) $@
 
-# --- sampler unit tests ----------------------------------------
-TEST_BENCH_TREND_SAMPLE_OBJS = $(OBJDIR)/tests/test_bench_trend_sample.o \
+# --- sampler unit test (lowercase target-keyed override; uses built_binary) ---
+# Override the core_test_binary defaults so this test links only its own
+# object plus tools/bench_trend_sample/logic.o (no CORE_TEST_OBJS pull-in).
+test_bench_trend_sample_OBJS = $(OBJDIR)/tests/test_bench_trend_sample.o \
                                $(OBJDIR)/tools/bench_trend_sample/logic.o
-
-test_bench_trend_sample: $(TEST_BENCH_TREND_SAMPLE_OBJS)
-	$(CC) $(OBJ_CFLAGS) -o $@ $(TEST_BENCH_TREND_SAMPLE_OBJS) -lm
-	./$@
+test_bench_trend_sample_LDLIBS = -lm
+test_bench_trend_sample_RUN ?= $(BINDIR)/test_bench_trend_sample
 ```
+
+The two `_OBJS` / `_LDLIBS` / `_RUN` lines for the test go in the file *before* `built_binary` runs over `TEST_BINS` (i.e. above the `$(foreach test,...)` loop at `Makefile:813`), mirroring how `test_eval_OBJS = ...` and `test_eval_RUN = ...` are declared at `Makefile:688-690`. Then add `test_bench_trend_sample` to `TEST_BINS` (around `Makefile:595-635` in the alphabetical-ish list).
 
 Also wire into the existing cleanup machinery:
 
@@ -242,6 +277,7 @@ Also wire into the existing cleanup machinery:
 /bench_trend_sample
 /bench_trend_sample.dSYM
 /bench/trend_results.csv
+/bench/trend_runs.csv
 /bench/trend_broken.txt
 ```
 
@@ -256,8 +292,9 @@ C99 ratchet: the `tools/bench_trend_*/` sources and `tests/test_bench_trend_samp
 - **New** `tools/bench_trend_view/bench_trend_view.c` — GLUT viewer (single file, ~300–400 lines).
 - **New** `tests/test_bench_trend_sample.c` — C unittest exercising `logic.c` (~150 lines).
 - **Edit** `Makefile` — build rules for both binaries and the test (near existing `scene_demo` rules around line 751); append both binary names to `ROOT_BIN_LINKS` (line 664); add their `.dSYM` paths to `clean` (line 1307); add `test_bench_trend_sample` to `TEST_BINS` so `make test` runs it.
-- **Edit** `.gitignore` — add the six entries above.
-- **New (runtime, gitignored)** `bench/trend_results.csv` — sampler output; canonical store.
+- **Edit** `.gitignore` — add the seven entries above.
+- **New (runtime, gitignored)** `bench/trend_results.csv` — sampler output; canonical measurement store (12 columns; `date_epoch` is the sort key, `date_iso` is for human inspection).
+- **New (runtime, gitignored)** `bench/trend_runs.csv` — per-SHA companion recording the bench-name set that SHA's `bench_repl` actually emitted at a given `iters`; consulted for idempotency so older SHAs that legitimately emit fewer benches aren't endlessly re-measured.
 - **New (runtime, gitignored)** `bench/trend_broken.txt` — broken-SHA blacklist with `<sha> <reason>` lines.
 
 Reused without modification: `scripts/build-historical.sh`, `bench/bench_repl.c` (the `--csv` mode), `src/ui/core/gl_2d.h`.
@@ -273,9 +310,11 @@ End-to-end smoke (macOS host with real GL):
 5. Press `3`, `0` — first isolates the third benchmark, then restores all.
 6. Press `r` after re-running the sampler in another shell — viewer picks up the new rows without restart.
 7. Re-run `./bench_trend_sample` with the same args — no new builds (idempotent), CSV unchanged.
-8. Re-run with `--iters 20` (was 5) — every SHA re-measured, old rows replaced, no duplicates left behind.
+8. Re-run with `--iters 20` (was 5) — every SHA re-measured, old rows replaced, no duplicates left behind, `trend_runs.csv` rewritten with the new `iters`.
 9. Re-run with `--min-gap-commits 10` and a fabricated regression commit between two existing samples — bisection picks the midpoint and the curve gets a new vertex. With a second fabricated regression spanning into both subranges of an earlier bisection, both midpoints get measured (worklist, not recursion).
 10. Add a single fake row referencing a non-existent `bench_name` to the CSV by hand, restart the viewer — it picks up the 8th series automatically (dynamic bench_name discovery).
+11. Sample over a range straddling the bench harness's path move (e.g. `--from <commit-pre-2026-05-01> --to HEAD`): the default `<from>` resolves via both `bench/bench_repl.c` and root `bench_repl.c`; pre-move SHAs build via the root path, post-move SHAs build via `bench/`. The pre-move SHAs that legitimately lacked `spike_flatten_largest` do not get re-measured on the next idempotent run (run-companion records the smaller bench set).
+12. Drop two adjacent first-parent commits with different timezone offsets into the CSV by hand and reload the viewer — they appear in true UTC chronological order, not in lex order of the ISO strings (tz-flip resistance proof).
 
 Headless (gracemont):
 

@@ -31,6 +31,14 @@ with `g_` prefix, no GL/UI deps, platform-conditional reader).
 ### Header (`memprof.h`)
 
 ```c
+/* Public compile-time tuning. Exposed in the header (not buried in the
+ * .c) so tests can drive the ring deterministically without duplicating
+ * literals. */
+#define MEMPROF_HISTORY_CAP        1024
+#define MEMPROF_PUSH_INTERVAL_S    5.0
+/* Total span = MEMPROF_HISTORY_CAP * MEMPROF_PUSH_INTERVAL_S
+ *            = 5120 s ≈ 85 min */
+
 typedef struct {
     unsigned long long rss_bytes;  /* resident set size */
     unsigned long long vsz_bytes;  /* virtual size      */
@@ -103,12 +111,8 @@ const char *memprof_format_bytes(char *buf, int buf_sz,
 
 ### Implementation (`memprof.c`)
 
-Constants:
-```c
-#define MEMPROF_HISTORY_CAP        1024
-#define MEMPROF_PUSH_INTERVAL_S    5.0
-/* Total span = 1024 * 5 = 5120s ≈ 85 min */
-```
+The capacity and push interval are defined in `memprof.h` (see above) so
+both the implementation and the tests share the same numbers.
 
 State:
 ```c
@@ -135,13 +139,12 @@ void memprof_set_reader(MemprofReaderFn r) { g_memprof_reader = r; }
 void memprof_init_at(double t0_seconds) {
     if (g_memprof_initialized) return;
     g_memprof_t0_seconds  = t0_seconds;
-    g_memprof_last_push_s = 0.0;   /* will trigger immediate first push on
-                                      next frame_tick because (t - t0) >=
-                                      INTERVAL after 0 seconds is false, so
-                                      the first push happens after one full
-                                      interval; if you want a t0 push, set
-                                      last_push_s to -INTERVAL instead.   */
-    /* Capture baseline now: */
+    g_memprof_last_push_s = 0.0;   /* First history push happens at t=5s
+                                    * (one full interval after init), not
+                                    * at t=0. This is the committed
+                                    * sampling semantics — text rows are
+                                    * live immediately, graph fills in. */
+    /* Capture baseline now (text rows): */
     MemprofReaderFn reader = g_memprof_reader ? g_memprof_reader : memprof_read;
     reader(&g_memprof_baseline);
     g_memprof_current = g_memprof_baseline;
@@ -163,12 +166,23 @@ void memprof_reset(void) {
 
 Reader (cross-platform, ifdef chain — mirrors `prof.c` style):
 ```c
+/* Must appear BEFORE any system header. Mirrors src/support/prof.c so
+ * Linux gets clock_gettime() / CLOCK_MONOTONIC prototypes under -std=c99
+ * (which otherwise hides POSIX 2008 names). */
+#define _POSIX_C_SOURCE 200809L
+
+/* Unconditional standard headers — used regardless of platform.
+ *   stdio.h: snprintf in memprof_format_bytes (every build) and
+ *            fopen/fscanf inside the __linux__ reader branch.
+ *   string.h: memset (zeroing samples on reset / failure). */
+#include <stdio.h>
+#include <string.h>
+
 #if defined(__APPLE__)
 #  include <mach/mach.h>
 #  include <mach/task.h>
 #elif defined(__linux__)
-#  include <stdio.h>
-#  include <unistd.h>
+#  include <unistd.h>           /* sysconf(_SC_PAGESIZE) */
 #elif defined(_WIN32)
    /* Future: #include <windows.h> + <psapi.h>; GetProcessMemoryInfo. */
 #endif
@@ -383,24 +397,37 @@ side-by-side layout, **move the `#define` into `src/ui/app/profile_panel.h`**
 `profile_panel.c`). This is a tiny, mechanical change and keeps panel widths
 co-located with the public panel API.
 
+The memory panel must mirror `profile_panel_rect_for_height`'s **full
+branching on `snap->variable_panel.visible`** (`profile_panel.c:51-73`),
+not just one branch — otherwise the two panels desync when the user hides
+the variable panel and the side-by-side offset lands them somewhere weird.
+
 ```c
 static void memory_panel_rect_for_height(const UiRenderSnapshot *snap,
                                          int panel_h, int *out_x, int *out_y) {
-    /* Compute the same anchor as profile_panel_rect_for_height. */
     int scene_x, scene_y, scene_w, scene_h;
     int panel_x, panel_y;
     ui_layout_scene_rect(&scene_x, &scene_y, &scene_w, &scene_h);
 
-    /* Standard anchor: scene-bottom-right (mirrors profile_panel). */
-    panel_x = scene_x + scene_w - MEM_PANEL_W - MEM_PANEL_MARGIN;
-    panel_y = scene_y + scene_h - panel_h    - MEM_PANEL_MARGIN;
+    /* Mirror profile_panel_rect_for_height EXACTLY, with MEM_* swapped in
+     * for PROF_*: anchor depends on whether the variable panel is shown. */
+    if (snap->variable_panel.visible) {
+        panel_x = scene_x + scene_w - MEM_PANEL_W - MEM_PANEL_MARGIN;
+        panel_y = scene_y + scene_h - panel_h    - MEM_PANEL_MARGIN;
+    } else {
+        int var_x, var_y, var_w, var_h;
+        ui_variable_panel_rect_for_count(snap, snap->variable_panel_vars.count,
+                                         &var_x, &var_y, &var_w, &var_h);
+        panel_x = var_x + var_w - MEM_PANEL_W;
+        panel_y = var_y;
+    }
 
-    /* Side-by-side when CPU profile is up: shift left of its left edge. */
+    /* Side-by-side when CPU profile is also up: shift left of its slot. */
     if (snap->profile_panel.mode != PROFILE_PANEL_OFF) {
         panel_x -= (PROFILE_PANEL_W + 8);
     }
 
-    /* Clamp into scene rect. */
+    /* Clamp into scene rect (matches profile_panel's clamps). */
     panel_x = clamp_int(panel_x, scene_x + 4, scene_x + scene_w - MEM_PANEL_W - 4);
     panel_y = clamp_int(panel_y,
                         scene_y + STATUSBAR_H + 4,
@@ -521,14 +548,31 @@ int glr_ctrl_router_handle_memory_panel_key(unsigned char key) {
     int mods = editor_input_active_modifiers();
     if (!(mods & GLUT_ACTIVE_CTRL))  return 0;     /* both bits required: */
     if (!(mods & GLUT_ACTIVE_SHIFT)) return 0;     /*  no Shift+Enter steal */
-    /* Cycle the memory-profile config row. Use the same helper the other
-     * Ctrl+Shift+* bindings use to cycle a cfg item by key. Cf.
-     * glr_ctrl_router_handle_code_focus_key for the exact call shape;
-     * the helper there is glr_cfg_cycle_by_key(GLR_CONFIG_CODE_FOCUS, +1)
-     * or equivalent — match whatever it actually is. */
-    glr_cfg_cycle_by_key(GLR_CONFIG_MEMORY_PROFILE, +1);
+    /* Cycle the config value directly via the keyed API. */
+    glr_config_cycle(GLR_CONFIG_MEMORY_PROFILE, +1);
     return 1;
 }
+```
+
+There is **no** `glr_cfg_cycle_by_key()` helper; the existing APIs are:
+- `glr_config_cycle(ReplConfigKey key, int dir)` — cycle by config key
+  (this is the right tool here).
+- `glr_cfg_cycle_row(int row_idx, int dir)` — cycle by `g_cfg_items[]`
+  index (useful when a row index is already known, e.g. menu clicks).
+- `glr_ctrl_router_handle_code_focus_key` does *not* go through config — it
+  toggles a state flag directly, which is why its shape differs from this
+  router.
+
+If `glr_config_cycle` proves not to exist with that exact signature at
+implementation time (no harm in double-checking), fall back to:
+```c
+for (int i = 0; i < CFG_ITEM_COUNT; i++) {
+    if (g_cfg_items[i].key == GLR_CONFIG_MEMORY_PROFILE) {
+        glr_cfg_cycle_row(i, +1);
+        return 1;
+    }
+}
+return 0;
 ```
 
 **Insertion in the chain**: in `glr_ctrl_keyboard` around `glr_ctrl.c:3857-3867`
@@ -640,7 +684,21 @@ In the existing `SRCS = …` block (around line 247), add:
 ```
 near `src/support/prof.c` and `src/ui/app/profile_panel.c` respectively.
 
-In `CORE_TEST_SRCS`, add `src/support/memprof.c`.
+In `HDRS = …`, add the two new headers next to their existing siblings:
+```
+  src/support/memprof.h \
+  src/ui/app/memory_panel.h \
+```
+
+In `CORE_TEST_SRCS`, add **both** new translation units:
+```
+  src/support/memprof.c \
+  src/ui/app/memory_panel.c \
+```
+`memory_panel.c` is required here because `tests/test_glr_ctrl.c` includes
+`src/app/glr_ctrl.c`, which now calls `ui_memory_panel_render()` — the same
+reason `src/ui/app/profile_panel.c` is already in `CORE_TEST_SRCS` (Makefile
+line ~473). Without it the controller test will fail to link.
 
 Add a `test_memprof` target following the existing `test_format` recipe
 shape, and append `test_memprof` to `TEST_BINS`.
@@ -690,9 +748,13 @@ Files to **modify**:
    Confirms the Linux `/proc/self/statm` path and the test under real GCC.
 6. **Manual GUI** (macOS):
    - `make gl-repl && ./gl-repl`
-   - Open Config → toggle "Memory profile" to On. Confirm panel appears with
-     current RSS/VSZ + flat graph (1 sample). Wait 30s; confirm 5–6 samples
-     plotted. Confirm Y-axis tick labels formatted as MB/GB.
+   - Open Config → toggle "Memory profile" to On. Confirm panel appears
+     immediately with **live text rows** (current RSS/VSZ, baseline RSS/VSZ,
+     Δ) and an **empty plot area** (no history pushed yet — first sample
+     lands at the 5 s mark; that gap is intentional, see Module 1).
+   - Wait ~30 s. Confirm 5–6 samples plotted, newest pinned to the right
+     edge, X-axis labels reading `-85m … -42m … now`. Confirm Y-axis tick
+     labels formatted as MB/GB and the line is visible (not clipped).
    - Press Ctrl+W to toggle CPU profile. Confirm both panels render side by
      side without overlap.
    - Press Ctrl+Shift+M three times. Confirm cycle: On → Details → Off → On.
