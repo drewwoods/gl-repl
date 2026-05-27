@@ -388,6 +388,41 @@ ReplCompileResult repl_compile_close_brace_kernel(const char *input,
                                                   ReplCloseBraceKernel *out,
                                                   char *err, int err_size);
 
+/* Shared kernel for `funcN(params) {` (and alias-named variants like
+ * `drawCube { ... }`). Handles the alias pre-step via the existing
+ * resolve_alias helper, parses the signature with
+ * parse_repl_func_signature, runs the duplicate-funcN guard, resolves
+ * indent, and emits CMD_FUNC_DEF + fd_text.
+ *
+ * The duplicate guard is policy-controlled: `allow_overwrite_at_pos`
+ * gives the caller's edit-position when an in-place rewrite is OK
+ * (editor overwrite-header branch); -1 rejects every duplicate (loader
+ * path). On rejection the kernel rolls back the alias registration
+ * itself, mirroring both existing wrappers' behavior. */
+typedef struct {
+    int    valid;
+    int    rejected_keyword;            /* parser rejected reserved name */
+    int    pos;
+    int    fn;
+    int    param_count;
+    char   param_names[MAX_EXPR_VARS][REPL_PREDEF_NAME_MAX];
+    GLCmd  fd;
+    char   fd_text[MAX_LINE_LEN];
+    char   indent[REPL_INDENT_TEXT_MAX];
+    /* Alias bookkeeping (populated via repl_compile_func_def_resolve_alias).
+     * Used by the editor to publish rollback metadata on the
+     * EditorCommitPlan's change record. */
+    int    newly_aliased_slot;
+    int    had_previous_alias;
+    char   previous_alias[REPL_FUNC_NAME_MAX];
+} ReplFuncDefKernel;
+
+ReplCompileResult repl_compile_func_def_kernel(const char *input,
+                                               const ReplCompileContext *ctx,
+                                               int allow_overwrite_at_pos,
+                                               ReplFuncDefKernel *out,
+                                               char *err, int err_size);
+
 /* repl_load_apply_line moved to src/repl/load.h to keep this header pure
  * (compile descriptors only; no apply orchestration). */
 
