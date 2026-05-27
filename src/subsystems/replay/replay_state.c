@@ -44,6 +44,10 @@ ReplayRuntimeState replay_state_view(void) {
     return g_replay_runtime_state;
 }
 
+const ReplayRuntimeState *replay_state_const(void) {
+    return &g_replay_runtime_state;
+}
+
 ReplayRuntimeState *replay_state_mut(void) {
     return &g_replay_runtime_state;
 }

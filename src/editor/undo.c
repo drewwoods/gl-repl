@@ -14,6 +14,7 @@
 #include "repl/core_internal.h"
 #include "repl/state_owners.h"
 #include "subsystems/tutorial/tutorial_state.h"
+#include "subsystems/color_picker/color_picker_state.h"
 
 #define REPL_UNDO_DEPTH 32
 
@@ -154,6 +155,7 @@ void editor_undo_pop_snapshot(void) {
             return;
         }
     }
+    color_picker_stop();
     editor_undo_snapshot_save(&g_redo_buf[g_redo_head]);
     g_redo_head = (g_redo_head + 1) % REPL_UNDO_DEPTH;
     if (g_redo_count < REPL_UNDO_DEPTH)
@@ -186,6 +188,7 @@ void editor_undo_do_redo(void) {
             return;
         }
     }
+    color_picker_stop();
     editor_undo_snapshot_save(&g_undo_buf[g_undo_head]);
     g_undo_head = (g_undo_head + 1) % REPL_UNDO_DEPTH;
     if (g_undo_count < REPL_UNDO_DEPTH)

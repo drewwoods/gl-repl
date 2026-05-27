@@ -10,7 +10,6 @@
             .var_idx     = -1,                              \
             .log_mode    = 0,                               \
             .start_value = 0.0f,                            \
-            .start_x     = 0,                               \
         },                                                  \
     }
 

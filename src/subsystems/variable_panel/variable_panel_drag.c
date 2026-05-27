@@ -26,6 +26,8 @@
 #define VAR_DRAG_ZERO_EPS             1e-6f
 #define VAR_DRAG_ZERO_BOOTSTRAP_RATE  0.001f  /* units/px while |start| ~ 0 */
 
+static int g_drag_start_x = 0;
+
 int variable_panel_drag_active(void) {
     return variable_panel_drag().var_idx >= 0;
 }
@@ -45,7 +47,7 @@ void variable_panel_handle_drag_begin(int row, int log_mode, int x) {
     drag->var_idx = row;
     drag->log_mode = log_mode ? 1 : 0;
     drag->start_value = predef.vars[row].value;
-    drag->start_x = x;
+    g_drag_start_x = x;
     snprintf(drag->name, sizeof(drag->name), "%s", predef.vars[row].name);
     drag->undo_snapshot_pushed = 0;
 }
@@ -55,7 +57,7 @@ void variable_panel_handle_drag_reset(void) {
     drag->var_idx = -1;
     drag->log_mode = 0;
     drag->start_value = 0.0f;
-    drag->start_x = 0;
+    g_drag_start_x = 0;
     drag->name[0] = '\0';
     drag->undo_snapshot_pushed = 0;
 }
@@ -76,7 +78,7 @@ int variable_panel_handle_drag_motion(int x, VariablePanelValueChange *out) {
          * Preserves sign; near-zero start falls back to a linear
          * bootstrap because the exponential path needs a non-zero
          * magnitude to scale from. */
-        float dx_total = (float)(x - drag->start_x);
+        float dx_total = (float)(x - g_drag_start_x);
         float mag = fabsf(drag->start_value);
         if (mag < VAR_DRAG_ZERO_EPS) {
             /* Bootstrap from zero: treat first pixels as linear, then log. */
@@ -87,7 +89,7 @@ int variable_panel_handle_drag_motion(int x, VariablePanelValueChange *out) {
                       expf(dx_total * (logf(10.0f) / VAR_DRAG_PX_PER_DECADE));
         }
     } else {
-        float delta = (float)(x - drag->start_x) * VAR_DRAG_LINEAR_UNITS_PER_PX;
+        float delta = (float)(x - g_drag_start_x) * VAR_DRAG_LINEAR_UNITS_PER_PX;
         new_val = drag->start_value + delta;
     }
 

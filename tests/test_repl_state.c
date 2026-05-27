@@ -104,7 +104,6 @@ static void populate_runtime_snapshot_fixture(const char *scene_hint) {
     drag->var_idx = 3;
     drag->log_mode = 1;
     drag->start_value = 2.5f;
-    drag->start_x = 17;
     ui_state_profile_panel_mut()->mode = PROFILE_PANEL_DETAILS;
 
     status = ui_state_status_mut();
@@ -293,7 +292,6 @@ static void test_capture_restore_round_trip(void) {
     ASSERT_INT("variable drag log restored", variable_panel_drag().log_mode, 1);
     ASSERT_TRUE("variable drag value restored",
                 variable_panel_drag().start_value == 2.5f);
-    ASSERT_INT("variable drag x restored", variable_panel_drag().start_x, 17);
     ASSERT_INT("profile panel restored",
                ui_state_profile_panel().mode, PROFILE_PANEL_DETAILS);
     {
