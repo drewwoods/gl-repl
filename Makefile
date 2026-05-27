@@ -329,7 +329,9 @@ SRCS = \
 	src/subsystems/replay/replay_input.c \
 	src/subsystems/replay/replay_playback.c \
 	src/subsystems/replay/replay_state.c \
-	src/subsystems/tutorial/tutorial.c \
+	src/subsystems/tutorial/tutorial_runner.c \
+	src/subsystems/tutorial/tutorial_animation.c \
+	src/subsystems/tutorial/tutorial_match.c \
 	src/subsystems/tutorial/tutorial_state.c \
 	src/subsystems/variable_panel/variable_panel_drag.c \
 	src/subsystems/variable_panel/variable_panel_state.c \
@@ -507,7 +509,9 @@ CORE_TEST_SRCS = \
 	src/subsystems/replay/replay_input.c \
 	src/subsystems/replay/replay_playback.c \
 	src/subsystems/replay/replay_state.c \
-	src/subsystems/tutorial/tutorial.c \
+	src/subsystems/tutorial/tutorial_runner.c \
+	src/subsystems/tutorial/tutorial_animation.c \
+	src/subsystems/tutorial/tutorial_match.c \
 	src/subsystems/tutorial/tutorial_state.c \
 	src/subsystems/variable_panel/variable_panel_drag.c \
 	src/subsystems/variable_panel/variable_panel_state.c \
