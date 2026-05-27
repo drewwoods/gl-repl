@@ -753,14 +753,12 @@ static TutorialStepResult tutorial_enter_step_set(int idx, int step, int instruc
     const char *value_name = repl_tutorial_step_cfg_value_name(idx, step);
     int         value      = repl_tutorial_step_cfg_value(idx, step);
 
-    state->in_enter_step = 1;
     if (value_name)
         /* Symbolic value (e.g. "GRID_THEME_RADAR"). Bridge resolves
          * the name to int via resolve_text inside apply. */
         repl_cfg_set_text(slug, value_name);
     else
         repl_cfg_set_int(slug, value);
-    state->in_enter_step = 0;
 
     state->expected_commit_line = -1;
     repl_dispatch_host_cursor_park(instruction_line + 1,
@@ -882,8 +880,6 @@ void tutorial_notify_state_changed(void) {
     if (!tutorial_active())
         return;
     TutorialRuntimeState state = tutorial_state_view();
-    if (state.in_enter_step)
-        return;
     if (repl_tutorial_step_kind(state.tutorial_idx, state.step) !=
         TUTORIAL_STEP_KIND_REQUIRE)
         return;

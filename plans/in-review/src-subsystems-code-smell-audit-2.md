@@ -107,7 +107,7 @@ This directory is largely healthy after the prior round.
 
 ## Progress Update (2026-05-27)
 
-All 18 Tier A findings and 5 targeted Tier B findings (#4, #5, #6, #9, #16) have been fully addressed and verified as of 2026-05-27.
+All 18 Tier A findings and 9 targeted Tier B findings (#4, #5, #6, #9, #16, #19, #29, #30, #31) have been fully addressed and verified as of 2026-05-27.
 
 | Finding | Tier | Description | Status | Resolution |
 |---------|------|-------------|--------|------------|
@@ -127,6 +127,7 @@ All 18 Tier A findings and 5 targeted Tier B findings (#4, #5, #6, #9, #16) have
 | #14 | A | Tutorial `repl_cfg_set_int` called without declaring include path | **[RESOLVED]** | Documented all 6 symbols in the `state_owners.h` include comment. |
 | #16 | B | Replay's `replay_exec_limit` coupling | **[RESOLVED]** | Injected `FlatProgramView` dependency into replay frame-level/tick-level functions to guarantee synchronicity and eliminate mid-frame stale views. |
 | #17 | A | Replay `g_flat_cmds` / `g_num_flat_cmds` use `g_` prefix | **[RESOLVED]** | Renamed local variables to drop misleading `g_` prefixes. |
+| #19 | B | Tutorial `in_enter_step` field — recursive-guard with unclear invariant | **[RESOLVED]** | Removed the vestigial reentrance guard `in_enter_step` from tutorial state and implementation. |
 | #20 | A | Variable panel drag `start_x` unused outside begin/motion | **[RESOLVED]** | Moved `start_x` from public struct to static `g_drag_start_x`. |
 | #21 | A | Replay `last_src_line` reset at stop — dead write | **[RESOLVED]** | Removed dead write from `replay_stop()`. |
 | #22 | A | Replay `state->accum = 0.0f` in `replay_stop` — dead write | **[RESOLVED]** | Removed dead write from `replay_stop()`. |
@@ -134,6 +135,9 @@ All 18 Tier A findings and 5 targeted Tier B findings (#4, #5, #6, #9, #16) have
 | #24 | A | Replay `state->total_flat_cmds = 0` in `replay_stop` — dead write | **[RESOLVED]** | Removed dead write from `replay_stop()`. |
 | #25 | A | Tutorial defaults init loop sets `instruction_line_for_step` to -1 | **[RESOLVED]** | Documented init loop / active example reset invariant. |
 | #28 | A | Replay `replay_handle_key` is ~65 lines of `if (key == ...)` ladder | **[RESOLVED]** | Refactored matching logic to a clean, readable `switch (key)` block. |
+| #29 | B | Replay has two near-identical "unrecognized key stops replay" sites | **[RESOLVED]** | Centralized unrecognized key cancel path via `replay_cancel_on_unrecognized()` in Tier A. |
+| #30 | B | Replay `replay_start` is 30+ lines mixing state init, snapshot, and side effects | **[RESOLVED]** | Split `replay_start()` modularly into `replay_snapshot_baseline()` and `replay_init_playback_state()`. |
+| #31 | B | Tutorial `tutorial_enter_step` is ~100 lines with nested control flow | **[RESOLVED]** | Verified that per-kind step helpers have been cleanly extracted and dispatched via a `switch` statement. |
 
 ---
 
@@ -541,6 +545,8 @@ weight. If it's still needed, the trigger path should be documented.
 into `tutorial_enter_step`; if not, remove the flag. If yes, add a
 comment naming the path. (Tier B)
 
+**Status:** [RESOLVED] (Tier B pass, 2026-05-27) - Completely removed the vestigial reentrance guard `in_enter_step` from `TutorialRuntimeState`, `tutorial_state_init_defaults()`, `tutorial_enter_step_set()`, and `tutorial_notify_state_changed()`.
+
 ---
 
 ### 20. Variable panel drag `start_x` unused outside begin/motion
@@ -701,6 +707,8 @@ for #1/#2.
 
 **Fix:** Extract a helper returning 1. (Tier A)
 
+**Status:** [RESOLVED] (Tier B pass, 2026-05-27) - The centralized helper `replay_cancel_on_unrecognized()` was introduced during Tier A, which stops replay, updates the status message, and returns `1`. Both the ASCII and special key handlers were updated to route unrecognized keys to this helper, resolving both #1/#2 and #29.
+
 ---
 
 ### 30. Replay `replay_start` is 30+ lines mixing state init, snapshot, and side effects
@@ -715,6 +723,8 @@ snapshot + mutation + side effect in one linear block.
 **Fix:** Split into `replay_snapshot_baseline()` +
 `replay_init_playback_state()` + status set. (Tier B)
 
+**Status:** [RESOLVED] (Tier B pass, 2026-05-27) - Modularized `replay_start()` by extracting baseline snapshotting into `replay_snapshot_baseline()` and playback state initialization into `replay_init_playback_state()`.
+
 ---
 
 ### 31. Tutorial `tutorial_enter_step` is ~100 lines with nested control flow
@@ -727,6 +737,8 @@ reentrance guard. Readable but approaching the complexity threshold.
 
 **Fix:** Extract per-kind helpers (`enter_command_step`,
 `enter_set_step`, `enter_require_step`) called from a switch. (Tier B)
+
+**Status:** [RESOLVED] (Tier B pass, 2026-05-27) - Verified that `tutorial_enter_step()` has been cleanly split into modular per-kind helpers (`tutorial_enter_step_command()`, `tutorial_enter_step_set()`, and `tutorial_enter_step_require()`) that are cleanly dispatched via a switch block, resolving all target complexity smells.
 
 ---
 
