@@ -12,6 +12,7 @@
 #include "subsystems/variable_panel/variable_panel_state.h"
 #include "subsystems/tutorial/tutorial.h"        /* tutorial_notify_state_changed */
 #include "ui/app/state.h"
+#include "subsystems/replay/replay.h"
 #include "subsystems/replay/replay_state.h"
 
 static int clamp_int(int v, int lo, int hi) {
@@ -26,6 +27,7 @@ static int clamp_int(int v, int lo, int hi) {
  * Mirrors the audio-cfg collapse: config_value_ptr() returns NULL for
  * this key and glr_config_get/set special-case it. */
 #define ACCUM_AA_STATE_COUNT 5
+#define CFG_SECTION_LABEL_MAX 48
 static const int k_accum_steps[ACCUM_AA_STATE_COUNT] = { 0, 2, 4, 8, 16 };
 
 static int accum_aa_get_cycle(void) {
@@ -42,8 +44,6 @@ static int accum_aa_get_cycle(void) {
 
 static void accum_aa_set_cycle(int value) {
     if (value <= 0) {
-
-#define CFG_SECTION_LABEL_MAX 48
         glr_state_render_mut()->accum_aa_enabled = 0;
         return;
     }
@@ -112,7 +112,7 @@ static int *config_value_ptr(GlrConfigKey key) {
     case GLR_CONFIG_WIREFRAME:           return &glr_state_presentation_mut()->wireframe;
     case GLR_CONFIG_POINT_ATTENUATION:   return &glr_state_render_mut()->point_attenuation_enabled;
     case GLR_CONFIG_AUTO_TIME:           return &repl_state_variables_mut()->time_playing;
-    case GLR_CONFIG_REPLAY:              return &replay_state_mut()->active;
+    case GLR_CONFIG_REPLAY:              return NULL; /* lifecycle: see glr_config_set */
     case GLR_CONFIG_REPLAY_MODE:         return &replay_state_mut()->mode;
     case GLR_CONFIG_REPLAY_EXPAND:       return &replay_state_mut()->expand_args;
     case GLR_CONFIG_GRID_THEME:          return &glr_state_presentation_mut()->grid_theme;
@@ -231,6 +231,13 @@ void glr_config_set(GlrConfigKey key, int value) {
         glr_actions_apply_audio_cfg_mode(value);
     } else if (key == GLR_CONFIG_ACCUM_AA) {
         accum_aa_set_cycle(value);
+    } else if (key == GLR_CONFIG_REPLAY) {
+        if (value) {
+            if (!replay_active())
+                replay_start();
+        } else if (replay_active()) {
+            replay_stop();
+        }
     } else {
         int *target = config_value_ptr(key);
         if (!target)
@@ -257,7 +264,7 @@ int glr_config_cycle(GlrConfigKey key, int delta) {
     if (value < 0)
         value += count;
     glr_config_set(key, value);
-    return value;
+    return glr_config_get(key);
 }
 
 /* ---- Section model over g_cfg_items[] -------------------------------- */

@@ -689,6 +689,33 @@ static void test_cfg_cycle_stops_replay(void) {
                replay_active(), 0);
 }
 
+static void test_replay_config_set_uses_lifecycle(void) {
+    glr_ctrl_reset_all();
+
+    editor_feed_line("glBegin(GL_POINTS);");
+    editor_feed_line("glVertex3f(0,0,0);");
+    editor_feed_line("glEnd();");
+
+    repl_state_variables_mut()->time_playing = 1;
+    glr_config_set(GLR_CONFIG_REPLAY, 1);
+    ASSERT_INT("direct replay config active", replay_active(), 1);
+    ASSERT_INT("direct replay config machine playing",
+               replay_machine_state(), REPLAY_PLAYING);
+    ASSERT_INT("direct replay config pc reset", replay_pc(), 0);
+    ASSERT_TRUE("direct replay config captured flat commands",
+                replay_total_flat() > 0);
+    ASSERT_INT("direct replay config pauses time",
+               repl_state_variables().time_playing, 0);
+
+    glr_config_set(GLR_CONFIG_REPLAY, 0);
+    ASSERT_INT("direct replay config inactive", replay_active(), 0);
+    ASSERT_INT("direct replay config machine off",
+               replay_machine_state(), REPLAY_OFF);
+    ASSERT_INT("direct replay config cleared flat count", replay_total_flat(), 0);
+    ASSERT_INT("direct replay config restored time",
+               repl_state_variables().time_playing, 1);
+}
+
 /* Audit #59 (Tier B, closeout) regression: ui_state_status_set_kind must
  * drop empty messages, not stamp them with full TTL. Without this guard
  * a stray repl_set_status("") (or any caller passing "") would overwrite
@@ -946,6 +973,7 @@ int main(void) {
     test_config_none_handling();
     test_menu_out_of_range_indices();
     test_cfg_cycle_stops_replay();
+    test_replay_config_set_uses_lifecycle();
     test_status_set_drops_empty_message();
     test_cfg_cycle_focus_origin_eases_to_origin();
     test_cfg_cycle_reset_camera_eases_to_default();

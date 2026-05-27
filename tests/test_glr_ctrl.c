@@ -3,6 +3,7 @@
 #include "app/glr_camera.h"
 #include "app/glr_state.h"
 #include "app/glr_ctrl.h"
+#include "app/glr_defaults.h"
 #include "config.h"      /* QUIT_RECOVERY_FILE */
 #include <stdio.h>
 #include <stdlib.h>
@@ -270,7 +271,16 @@ static void test_display_frame_builds_config_and_restores_live_state(void) {
                 g_last_scene_config.post_overlays_fn != NULL);
     ASSERT_INT("tess preview marked active for VERTEX replay mode",
                g_replay_fade_plan.tess_preview_active, 1);
-    ASSERT_FLOAT("alpha scale boosted for black background", g_last_scene_config.alpha_scale, 3.0f);
+    ASSERT_FLOAT("clear color default r", g_last_scene_config.clear_color[0],
+                 CFG_DEFAULT_CLEAR_R);
+    ASSERT_FLOAT("clear color default g", g_last_scene_config.clear_color[1],
+                 CFG_DEFAULT_CLEAR_G);
+    ASSERT_FLOAT("clear color default b", g_last_scene_config.clear_color[2],
+                 CFG_DEFAULT_CLEAR_B);
+    ASSERT_FLOAT("clear color default a", g_last_scene_config.clear_color[3],
+                 CFG_DEFAULT_CLEAR_A);
+    ASSERT_FLOAT("alpha scale uses default background",
+                 g_last_scene_config.alpha_scale, 1.0f);
     ASSERT_INT("focus vertex valid", g_last_scene_config.focus.valid, 1);
     ASSERT_FLOAT("focus vertex x", g_last_scene_config.focus.pos[0], 1.0f);
     ASSERT_FLOAT("focus vertex y", g_last_scene_config.focus.pos[1], 2.0f);
