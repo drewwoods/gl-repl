@@ -147,6 +147,11 @@ int repl_export_reshape_projection_lines(const char *out[REPL_EXPORT_PROJ_LINES]
  * the two stay in sync. g_header_post follows the dynamic state lines
  * inside display(); g_footer_pre_init / g_footer_post_init bracket the
  * init() function. Together they form a valid C program. */
+/* The literal that opens the exported display() function. Used as
+ * g_display_header[0] and as the search needle from core.c's
+ * scroll_to_display_function — exposed via this macro so both sides
+ * stay in sync if the line text ever changes. */
+#define REPL_EXPORT_DISPLAY_OPEN_LINE "void display() {"
 extern const char  *g_header_pre[];
 extern const char  *g_display_header[];
 extern const char  *g_header_post[];

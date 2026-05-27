@@ -1,4 +1,5 @@
 #include "repl/command_spec.h"
+#include "c_compat.h"  /* STATIC_ASSERT */
 
 static const ReplEnumEntry k_begin_modes[] = {
     { "GL_POINTS",         GL_POINTS },
@@ -118,6 +119,12 @@ static const ReplEnumEntry k_blend_dst_factors[] = {
     { NULL, 0 }
 };
 
+/* The list below hand-enumerates the 10 funcN slots. If
+ * REPL_FUNC_SLOT_COUNT ever changes, the list must change with it or
+ * the autocomplete / help table will silently miss the extra slots. */
+STATIC_ASSERT(REPL_FUNC_SLOT_COUNT == 10,
+              "REPL_FUNC_SLOT_LIST hand-enumerates slots 0..9; "
+              "update the macro if REPL_FUNC_SLOT_COUNT changes");
 #define REPL_FUNC_SLOT_LIST(OP) \
     OP(0) \
     OP(1) \
@@ -266,7 +273,6 @@ static const ReplFuncCompletion k_func_completions[] = {
     { "if(",                 "if(expr)",                                                 1, { "expr" } },
     { "goto ",               "goto label",                                               0, { NULL } },
     REPL_FUNC_SLOT_LIST(FUNC_DECL_COMPLETION)
-    { "func0(var0) {",       "func0(var0, [var1], ...) {",                               0, { NULL } },
     REPL_FUNC_SLOT_LIST(FUNC_CALL_COMPLETION)
     { "t = ",                "t = value",                                                0, { NULL } },
     { "A[",                  "A[index]",                                                 0, { NULL } },

@@ -1,6 +1,7 @@
 #ifndef REPL_CATALOG_TAGS_H
 #define REPL_CATALOG_TAGS_H
 
+#include <limits.h>  /* CHAR_BIT */
 #include <stddef.h>
 
 typedef struct {
@@ -10,6 +11,18 @@ typedef struct {
     unsigned int (*entry_tag_mask)(int entry_idx);
     unsigned int (*tag_bit)(int tag_idx);
 } ReplCatalogTagOps;
+
+/* Catalog-side tag-bit helper. Both per-catalog tag_bit() functions
+ * (repl_example_tag_bit, repl_tutorial_tag_bit) reduce to this exact
+ * body — caller passes the catalog's tag_count to keep the helper
+ * free of any catalog-specific lookups. */
+static inline unsigned int repl_catalog_tag_bit_for_count(int tag_idx,
+                                                          int tag_count) {
+    if (tag_idx < 0 || tag_idx >= tag_count ||
+        tag_idx >= (int)(sizeof(unsigned int) * CHAR_BIT))
+        return 0u;
+    return 1u << (unsigned int)tag_idx;
+}
 
 static inline const char *repl_catalog_tag_label(const ReplCatalogTagOps *ops,
                                                  int tag_idx) {

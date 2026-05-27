@@ -99,15 +99,11 @@ int                          repl_state_parse_workspace_header_line(const char *
 
 
 
-/* Initialise REPL-owned program state to defaults. Does NOT reset
+/* Reset REPL-owned program state to defaults. Does NOT reset
  * peer/editor/UI state — that's glr_ctrl_reset_all in glr_ctrl.h.
  * The demo and any pure-REPL test fixture call this; production
  * startup and tests that need full-world reset call
  * glr_ctrl_reset_all instead. */
-void repl_state_init_defaults(void);
-
-/* Lower-level synonym of repl_state_init_defaults — resets just the
- * REPL slices. Either entry is fine for REPL-only callers. */
 void repl_state_reset_program(void);
 
 #endif /* REPL_STATE_OWNERS_H */

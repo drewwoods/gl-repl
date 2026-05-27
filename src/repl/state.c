@@ -502,15 +502,6 @@ void repl_state_import_export_reset(void) {
     g_repl_state.import_export = repl_state_get_defaults()->import_export;
 }
 
-/* repl_state_init_defaults is the program-only (REPL-state) entry
- * point. It does NOT reset peer/editor/UI state — that is the
- * controller's responsibility via glr_ctrl_reset_all() in glr_ctrl.c.
- * The demo deliberately calls only this entry to keep
- * tools/repl_demo/stubs.c free of peer/editor/UI reset stubs. */
-void repl_state_init_defaults(void) {
-    repl_state_reset_program();
-}
-
 /* Reset REPL-owned slices to defaults. Peer/editor/UI/autocomplete
  * registration / chrome sync / derived export+camera text caches are
  * NOT included here — they live on glr_ctrl_reset_all in glr_ctrl.c

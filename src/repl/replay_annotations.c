@@ -1035,6 +1035,9 @@ static int format_evaluated_cmd(const GLCmd *cmd, const char *orig_source,
     const char *fmt = eval_fmt_for_type(cmd->type, &nargs);
     if (!fmt || nargs < 1) return 0;
 
+    /* eval_fmt_for_type only ever returns nargs in {0, 1, 2, 3, 4}.
+     * Pass cmd->args[0..3] verbatim — snprintf reads up to `nargs`
+     * conversions per the format and ignores trailing varargs. */
     switch (nargs) {
     case 1:
         snprintf(out + oi, out_size - oi, fmt, cmd->args[0]);
@@ -1050,16 +1053,6 @@ static int format_evaluated_cmd(const GLCmd *cmd, const char *orig_source,
     case 4:
         snprintf(out + oi, out_size - oi, fmt,
                  cmd->args[0], cmd->args[1], cmd->args[2], cmd->args[3]);
-        break;
-    case 5:
-        snprintf(out + oi, out_size - oi, fmt,
-                 cmd->args[0], cmd->args[1], cmd->args[2], cmd->args[3],
-                 cmd->args[4]);
-        break;
-    case 6:
-        snprintf(out + oi, out_size - oi, fmt,
-                 cmd->args[0], cmd->args[1], cmd->args[2], cmd->args[3],
-                 cmd->args[4], cmd->args[5]);
         break;
     default:
         return 0;

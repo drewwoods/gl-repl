@@ -814,7 +814,7 @@ static void scroll_to_display_function(void) {
     ReplImportExportView meta = repl_state_import_export();
     int target = meta.workspace_header_line_count;
     for (int line_idx = 0; g_header_pre[line_idx]; line_idx++) {
-        if (strcmp(g_header_pre[line_idx], "void display() {") == 0)
+        if (strcmp(g_header_pre[line_idx], REPL_EXPORT_DISPLAY_OPEN_LINE) == 0)
             break;
         target++;
     }
@@ -883,5 +883,4 @@ void repl_reset_time_to_zero(void) {
 /* repl_reset_state was removed in step 2 of
  * feature/decouple-repl-from-gl-repl-alt.md. Tests and callers that
  * want full-world reset call glr_ctrl_reset_all() (declared in
- * glr_ctrl.h). REPL-only callers can use repl_state_init_defaults() /
- * repl_state_reset_program(). */
+ * glr_ctrl.h). REPL-only callers can use repl_state_reset_program(). */

@@ -166,7 +166,7 @@ const char *g_header_pre[] = {
  * array (rather than hardcoded fprintf calls in the exporter) is what
  * keeps panel and export byte-identical for the opening lines. */
 const char *g_display_header[] = {
-    "void display() {",
+    REPL_EXPORT_DISPLAY_OPEN_LINE,
     "  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);",
     "  glLoadIdentity();",
     "  glPushAttrib(GL_ALL_ATTRIB_BITS);",
