@@ -180,7 +180,7 @@ static int parse_var(const char *args) {
         if (idx < 0)
             return 0;
     }
-    g_predef_vars[idx].value = val;
+    g_predef_vars_mut[idx].value = val;
     /* Also defer the value so that if a // @declare marker in the snippet
      * undeclares and re-declares this var, the value is restored afterwards
      * (see load_from_file deferred-apply step). */
@@ -348,7 +348,7 @@ static int import_parse_predef_decl(const char *line) {
         /* Look up and update the predefined variable value. */
         for (int var_idx = 0; var_idx < g_num_predef_vars; var_idx++) {
             if (strcmp(g_predef_vars[var_idx].name, name) == 0) {
-                g_predef_vars[var_idx].value = val;
+                g_predef_vars_mut[var_idx].value = val;
                 updated = 1;
                 break;
             }
@@ -1399,7 +1399,7 @@ int repl_export_load_from_file(const char *filename, ReplImportResult *result) {
     for (int di = 0; di < g_deferred_var_count; di++) {
         int idx = repl_eval_find_predef_var_idx(g_deferred_var_values[di].name);
         if (idx >= 0)
-            g_predef_vars[idx].value = g_deferred_var_values[di].value;
+            g_predef_vars_mut[idx].value = g_deferred_var_values[di].value;
     }
     g_deferred_var_count = 0;
 

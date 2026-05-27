@@ -51,8 +51,19 @@ int *repl_eval_predef_count_mut(void) {
     return g_active_num_predef_vars;
 }
 
+const ExprVar *repl_eval_predef_vars(void) {
+    return g_active_predef_vars;
+}
+
+int repl_eval_predef_count(void) {
+    return *g_active_num_predef_vars;
+}
+
 ReplPredefView repl_eval_predef_view(void) {
-    return (ReplPredefView){ .vars = g_predef_vars, .count = g_num_predef_vars };
+    return (ReplPredefView){
+        .vars  = repl_eval_predef_vars(),
+        .count = repl_eval_predef_count(),
+    };
 }
 
 void repl_eval_bind_scratch_storage(
@@ -217,12 +228,12 @@ void repl_eval_copy_predef_vars(float dst_vals[MAX_PREDEF_VARS],
 void repl_eval_restore_predef_vars(const float src_vals[MAX_PREDEF_VARS],
                                    const char src_names[MAX_PREDEF_VARS][REPL_PREDEF_NAME_MAX],
                                    int src_count) {
-    g_num_predef_vars = src_count;
+    g_num_predef_vars_mut = src_count;
     for (int i = 0; i < src_count; i++) {
         if (src_vals)
-            g_predef_vars[i].value = src_vals[i];
+            g_predef_vars_mut[i].value = src_vals[i];
         if (src_names)
-            memcpy(g_predef_vars[i].name, src_names[i], REPL_PREDEF_NAME_MAX);
+            memcpy(g_predef_vars_mut[i].name, src_names[i], REPL_PREDEF_NAME_MAX);
     }
 }
 
@@ -251,7 +262,7 @@ void repl_eval_restore_predef_values_by_name(
         if (!name[0]) continue;
         int idx = repl_eval_find_predef_var_idx(name);
         if (idx >= 0)
-            g_predef_vars[idx].value = src_vals[i];
+            g_predef_vars_mut[idx].value = src_vals[i];
     }
 }
 
@@ -278,7 +289,7 @@ void repl_restore_predef_values(const float *src, int max_vals) {
 
     n = g_num_predef_vars < max_vals ? g_num_predef_vars : max_vals;
     for (int i = 0; i < n; i++)
-        g_predef_vars[i].value = src[i];
+        g_predef_vars_mut[i].value = src[i];
 }
 
 static const char *skip_numeric_literal(const char *s) {
@@ -366,10 +377,10 @@ int repl_eval_is_builtin_function(const char *name) {
 }
 
 void repl_eval_init_predef_vars(void) {
-    g_num_predef_vars = 1;
-    strncpy(g_predef_vars[0].name, "t", sizeof(g_predef_vars[0].name) - 1);
-    g_predef_vars[0].name[sizeof(g_predef_vars[0].name) - 1] = '\0';
-    g_predef_vars[0].value = 0.0f;
+    g_num_predef_vars_mut = 1;
+    strncpy(g_predef_vars_mut[0].name, "t", sizeof(g_predef_vars_mut[0].name) - 1);
+    g_predef_vars_mut[0].name[sizeof(g_predef_vars_mut[0].name) - 1] = '\0';
+    g_predef_vars_mut[0].value = 0.0f;
 }
 
 int repl_eval_find_predef_var_idx(const char *name) {
@@ -799,12 +810,12 @@ int repl_eval_declare_predef_var_with_value(const char *name, float value, char 
         if (err) snprintf(err, errsz, "variable table full (max %d)", MAX_PREDEF_VARS);
         return -1;
     }
-    strncpy(g_predef_vars[g_num_predef_vars].name, name,
-            sizeof(g_predef_vars[0].name) - 1);
-    g_predef_vars[g_num_predef_vars].name[sizeof(g_predef_vars[0].name) - 1] = '\0';
-    g_predef_vars[g_num_predef_vars].value = value;
+    strncpy(g_predef_vars_mut[g_num_predef_vars].name, name,
+            sizeof(g_predef_vars_mut[0].name) - 1);
+    g_predef_vars_mut[g_num_predef_vars].name[sizeof(g_predef_vars_mut[0].name) - 1] = '\0';
+    g_predef_vars_mut[g_num_predef_vars].value = value;
     int idx = g_num_predef_vars;
-    g_num_predef_vars++;
+    g_num_predef_vars_mut++;
     return idx;
 }
 
@@ -817,9 +828,9 @@ void repl_eval_undeclare_predef_var(const char *name) {
     int idx = repl_eval_find_predef_var_idx(name);
     if (idx < 0) return;
     for (int i = idx; i < g_num_predef_vars - 1; i++)
-        g_predef_vars[i] = g_predef_vars[i + 1];
-    g_num_predef_vars--;
-    memset(&g_predef_vars[g_num_predef_vars], 0, sizeof(ExprVar));
+        g_predef_vars_mut[i] = g_predef_vars_mut[i + 1];
+    g_num_predef_vars_mut--;
+    memset(&g_predef_vars_mut[g_num_predef_vars], 0, sizeof(ExprVar));
 }
 
 int repl_eval_source_uses_ident(const char *src, const char *name) {
@@ -1119,7 +1130,7 @@ float repl_eval_expr(ExprCtx *ctx) {
 }
 
 int repl_eval_parse_exprs(const char *s, float *out, int max,
-                ExprVar *vars, int num_vars) {
+                const ExprVar *vars, int num_vars) {
     int n = 0;
     const char *p = s;
     while (*p && n < max) {
@@ -1497,7 +1508,7 @@ void repl_eval_c_expr_to_repl(const char *in, char *out, int out_sz) {
 
 int repl_eval_parse_for_header_with_vars(const char *input, char *var_name, int var_sz,
                                float *start, float *end, float *step,
-                               ExprVar *vars, int num_vars,
+                               const ExprVar *vars, int num_vars,
                                const char **body_start) {
     const char *p = input;
     while (*p && isspace((unsigned char)*p)) p++;

@@ -612,7 +612,7 @@ void repl_execute_program(const ReplExecutionOptions *options) {
             if (flat_cmds[pc].has_vars) {
                 FlatCmdLocalVars *local_vars =
                     execution_local_vars_at(program, pc);
-                ExprVar *eval_vars = g_predef_vars;
+                const ExprVar *eval_vars = g_predef_vars;
                 int eval_num_vars = g_num_predef_vars;
                 if (local_vars && local_vars->num_vars > 0) {
                     eval_vars = local_vars->vars;
@@ -643,7 +643,7 @@ void repl_execute_program(const ReplExecutionOptions *options) {
             int var_idx = flat_cmds[pc].var_idx;
             float value = flat_cmds[pc].args[0];
             if (var_idx >= 0 && var_idx < g_num_predef_vars)
-                g_predef_vars[var_idx].value = value;
+                g_predef_vars_mut[var_idx].value = value;
             break;
         }
         case CMD_SCRATCH_ASSIGN: {

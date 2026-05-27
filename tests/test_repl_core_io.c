@@ -1080,7 +1080,7 @@ int main(void) {
         glr_ctrl_reset_all(); declare_test_vars();
         int x_idx = repl_eval_find_predef_var_idx("x");
         ASSERT_TRUE("precision test var exists", x_idx >= 0);
-        g_predef_vars[x_idx].value = precise_x;
+        g_predef_vars_mut[x_idx].value = precise_x;
         editor_feed_line("for(i, 0.1234567, 0.2234567, 0.0001234567) {");
         editor_feed_line("glVertex3f(i, 0, 0);");
         editor_feed_line("}");

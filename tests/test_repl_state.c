@@ -140,7 +140,7 @@ static void populate_runtime_snapshot_fixture(const char *scene_hint) {
     foo_idx = repl_eval_find_predef_var_idx("foo");
     ASSERT_TRUE("foo var declared", foo_idx >= 0);
     if (foo_idx >= 0)
-        g_predef_vars[foo_idx].value = 42.0f;
+        g_predef_vars_mut[foo_idx].value = 42.0f;
 
     glr_camera_set(11.0f, 22.0f, 7.5f, 0.5f, -0.25f, 1.75f, 0.9f);
     glr_camera_mut()->auto_rotate = 1;

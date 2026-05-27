@@ -29,7 +29,7 @@
 ## Status summary (updated 2026-05-27)
 
 83 findings total (82 from the original audit + 1 review-discovered).
-78 closed (✅), 5 still open. All open findings verified against
+79 closed (✅), 4 still open. All open findings verified against
 current HEAD. Tier letters cover the whole open backlog — no unclassified rows
 remain. Tier A is empty: the 2026-05-27 Tier A close pass landed all ten
 (#26, #27, #43, #70, #72, #76, #77, #78, #79, #81), and the review pass that
@@ -109,7 +109,7 @@ full slug-to-int route (bridge + X-macro symbol tables in
 | 68 | 🔵 | C | Open | `repl_execute_program` 324-line god switch |
 | 69 | 🔵 | C | ✅ Done | `export.c` split into export.c + import.c |
 | 70 | 🟡 | A | ✅ Done | `eval.h` `MAX_EXPR_VARS` doc references deleted modules |
-| 71 | 🟡 | C | Open | `g_predef_vars` macros route reads through `_mut()` |
+| 71 | 🟡 | C | ✅ Done | `g_predef_vars` macros route reads through `_mut()` |
 | 72 | 🟢 | A | ✅ Done | `repl_state_init_defaults` one-line forwarder |
 | 73 | 🟡 | B | ✅ Done | `repl_state_get_defaults()` hidden mutation |
 | 74 | 🟢 | A | ✅ Done | `first_non_decl` leaks `CMD_VAR_DECLARE` policy |
@@ -2065,17 +2065,52 @@ description it owns). The three module paths and the FlatScope reference
 were already corrected in the Tier A follow-up; this label flip closes
 the residual mismatch flagged by the audit.
 
-### 71. `g_predef_vars` macros always route reads through `_mut()`
+### 71. `g_predef_vars` macros always route reads through `_mut()` — CLOSED
 
-**Where:** `src/repl/eval.h:172-173`
+**Where:** `src/repl/eval.h:172-173` (original)
 
-**Smell:** Every read site goes through the mutable accessor. The
-`repl_eval_predef_view()` read-only API exists but is barely used.
+**Smell (original):** Every read site went through the mutable
+accessor `repl_eval_predef_vars_mut()`. The `repl_eval_predef_view()`
+read-only API existed but was barely used; the `g_predef_vars` macro
+expanded to the mutable pointer everywhere.
 
-**Fix:** Add `repl_eval_predef_vars(void)` returning `const ExprVar *`;
-have the macros route reads to it. The mutating helpers keep using
-`_mut()` internally. Then a ratchet over `\bg_predef_vars\b`
-outside writer helpers becomes possible.
+**Resolution (2026-05-27):**
+
+`src/repl/eval.{c,h}` now exposes split const/mut accessors:
+
+```c
+const ExprVar *repl_eval_predef_vars(void);
+int            repl_eval_predef_count(void);
+ExprVar       *repl_eval_predef_vars_mut(void);
+int           *repl_eval_predef_count_mut(void);
+
+#define g_predef_vars         (repl_eval_predef_vars())
+#define g_num_predef_vars     (repl_eval_predef_count())
+#define g_predef_vars_mut     (repl_eval_predef_vars_mut())
+#define g_num_predef_vars_mut (*repl_eval_predef_count_mut())
+```
+
+`g_predef_vars` is now `const ExprVar *` — `g_predef_vars[i].value = X`
+fails to compile, so writers must spell their intent with the
+`_mut` macro pair. Every existing writer was converted (eval.c,
+state.c, executor.c, flatten.c, apply.c, import.c, the
+`repl_demo` driver, `bench_repl`, and the test fixtures that
+touch live predef values).
+
+Three eval helpers that previously took `ExprVar *vars` were
+const-corrected so the executor/flatten read path no longer needs
+to launder const-ness across the call: `repl_eval_parse_exprs`,
+`repl_eval_if_condition`, `repl_eval_parse_for_header_with_vars`.
+Their bodies only read `vars` (they build an `ExprCtx` whose own
+`vars` field is already `const ExprVar *`).
+
+The follow-on "ratchet over `\bg_predef_vars\b` outside writer
+helpers" the original write-up suggested isn't needed: the
+compiler now enforces it. Any reintroduction of a read-through-mut
+or a mutation-through-read is a build error, not a guideline.
+
+6451/6451 tests pass; 7576/7576 stub tests pass; `make check`
+green.
 
 ### 72. `repl_state_init_defaults` is a one-line forwarder to `repl_state_reset_program`
 

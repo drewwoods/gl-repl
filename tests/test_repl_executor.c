@@ -83,9 +83,9 @@ static void test_predef_edge_cases(void) {
     repl_restore_predef_values(dummy, -1);
 
     // Test the loop copying
-    g_num_predef_vars = 2;
-    g_predef_vars[0].value = 1.0f;
-    g_predef_vars[1].value = 2.0f;
+    g_num_predef_vars_mut = 2;
+    g_predef_vars_mut[0].value = 1.0f;
+    g_predef_vars_mut[1].value = 2.0f;
     repl_copy_predef_values(dummy, 2);
     ASSERT_TRUE("Copy vals", dummy[0] == 1.0f && dummy[1] == 2.0f);
     repl_copy_predef_values(dummy, 1); // hits max_vals path

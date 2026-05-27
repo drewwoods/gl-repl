@@ -164,7 +164,7 @@ static void set_predef(const char *name, float val) {
         printf("  BUG: set_predef(\"%s\") - var not declared\n", name);
         return;
     }
-    g_predef_vars[idx].value = val;
+    g_predef_vars_mut[idx].value = val;
 }
 
 static void strip_ws(const char *in, char *out, int out_sz) {
@@ -1237,7 +1237,7 @@ static void interactive(void) {
                 int found = 0;
                 for (int i = 0; i < g_num_predef_vars; i++) {
                     if (strcmp(g_predef_vars[i].name, vname) == 0) {
-                        g_predef_vars[i].value = val;
+                        g_predef_vars_mut[i].value = val;
                         printf("  %s = %g\n", vname, val);
                         found = 1;
                         break;

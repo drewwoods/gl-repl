@@ -172,7 +172,7 @@ static void run_flat_control_flow_only(void) {
             int vi = repl_state_flat_program_cmds_mut()[pc].var_idx;
             float value = repl_state_flat_program_cmds_mut()[pc].args[0];
             if (vi >= 0 && vi < g_num_predef_vars)
-                g_predef_vars[vi].value = value;
+                g_predef_vars_mut[vi].value = value;
             break;
         }
         case CMD_IF_BEGIN: {
@@ -237,7 +237,7 @@ int main(void) {
         int t_idx = predef_idx("t");
         ASSERT_TRUE("t predef exists", t_idx >= 0);
         if (t_idx >= 0) {
-            g_predef_vars[t_idx].value = 3.0f;
+            g_predef_vars_mut[t_idx].value = 3.0f;
             g_t_playing = 1;
             repl_advance_time(0.25f);
             ASSERT_TRUE("t advances from current value",
@@ -823,13 +823,13 @@ int main(void) {
 
         ASSERT_TRUE("replay display i predef exists", i_idx >= 0);
         ASSERT_TRUE("replay display j predef exists", j_idx >= 0);
-        if (i_idx >= 0) g_predef_vars[i_idx].value = 3.2f;
-        if (j_idx >= 0) g_predef_vars[j_idx].value = 1.2f;
+        if (i_idx >= 0) g_predef_vars_mut[i_idx].value = 3.2f;
+        if (j_idx >= 0) g_predef_vars_mut[j_idx].value = 1.2f;
 
         editor_feed_line("i = i + j + 3;");
         editor_feed_line("glVertex3f(i, j, 0);");
-        if (i_idx >= 0) g_predef_vars[i_idx].value = 3.2f;
-        if (j_idx >= 0) g_predef_vars[j_idx].value = 1.2f;
+        if (i_idx >= 0) g_predef_vars_mut[i_idx].value = 3.2f;
+        if (j_idx >= 0) g_predef_vars_mut[j_idx].value = 1.2f;
         replay_start();
         replay_state = REPLAY_PAUSED;
 
@@ -913,12 +913,12 @@ int main(void) {
 
         ASSERT_TRUE("replay chain i predef exists", i_idx >= 0);
         ASSERT_TRUE("replay chain k predef exists", k_idx >= 0);
-        if (i_idx >= 0) g_predef_vars[i_idx].value = 0.23f;
-        if (k_idx >= 0) g_predef_vars[k_idx].value = 0.5f;
+        if (i_idx >= 0) g_predef_vars_mut[i_idx].value = 0.23f;
+        if (k_idx >= 0) g_predef_vars_mut[k_idx].value = 0.5f;
 
         editor_feed_line("i = i + k;");
-        if (i_idx >= 0) g_predef_vars[i_idx].value = 0.23f;
-        if (k_idx >= 0) g_predef_vars[k_idx].value = 0.5f;
+        if (i_idx >= 0) g_predef_vars_mut[i_idx].value = 0.23f;
+        if (k_idx >= 0) g_predef_vars_mut[k_idx].value = 0.5f;
         replay_start();
         replay_state = REPLAY_PAUSED;
 
@@ -977,12 +977,12 @@ int main(void) {
 
         ASSERT_TRUE("replay scientific i predef exists", i_idx >= 0);
         ASSERT_TRUE("replay scientific j predef exists", j_idx >= 0);
-        if (j_idx >= 0) g_predef_vars[j_idx].value = 1.0f;
+        if (j_idx >= 0) g_predef_vars_mut[j_idx].value = 1.0f;
 
         editor_feed_line("for(e, 0, 1) {");
         editor_feed_line("i = j * 1e-06;");
         editor_feed_line("}");
-        if (j_idx >= 0) g_predef_vars[j_idx].value = 1.0f;
+        if (j_idx >= 0) g_predef_vars_mut[j_idx].value = 1.0f;
         replay_start();
         replay_state = REPLAY_PAUSED;
 

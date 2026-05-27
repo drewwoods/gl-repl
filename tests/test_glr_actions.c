@@ -853,7 +853,7 @@ static void test_cfg_cycle_auto_time_shift_resets_time(void) {
     int t_idx = repl_eval_find_predef_var_idx("t");
     ASSERT_TRUE("t predef var exists", t_idx >= 0);
     if (t_idx < 0) return;
-    g_predef_vars[t_idx].value = 7.25f;
+    g_predef_vars_mut[t_idx].value = 7.25f;
     int was_playing = repl_state_variables().time_playing;
 
     /* Shift+cycle: resets time to 0 regardless of play state. Use the

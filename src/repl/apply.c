@@ -156,7 +156,7 @@ void repl_apply_predef_ops(const ReplCompiledChange *change) {
             repl_eval_declare_predef_var_with_value(op->name, val, NULL, 0);
         } else if (op->kind == REPL_PREDEF_OP_SET_VALUE && op->has_value) {
             int idx = repl_eval_find_predef_var_idx(op->name);
-            if (idx >= 0) g_predef_vars[idx].value = op->value;
+            if (idx >= 0) g_predef_vars_mut[idx].value = op->value;
         }
     }
 }
