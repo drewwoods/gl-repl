@@ -1473,7 +1473,7 @@ int main(void) {
         ASSERT_INT("resolve_alias myfunc: returns OK", res, REPL_COMPILE_OK);
         ASSERT_INT("resolve_alias myfunc: rejected_keyword is false", rejected_keyword, 0);
         ASSERT_TRUE("resolve_alias myfunc: picked slot", change.newly_aliased_slot >= 0);
-        
+
         /* Clean up any speculatively registered alias */
         repl_compiled_change_rollback_alias(&change);
     }
