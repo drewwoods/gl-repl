@@ -29,7 +29,7 @@
 ## Status summary (updated 2026-05-27)
 
 83 findings total (82 from the original audit + 1 review-discovered).
-74 closed (✅), 9 still open. All open findings verified against
+75 closed (✅), 8 still open. All open findings verified against
 current HEAD. Tier letters cover the whole open backlog — no unclassified rows
 remain. Tier A is empty: the 2026-05-27 Tier A close pass landed all ten
 (#26, #27, #43, #70, #72, #76, #77, #78, #79, #81), and the review pass that
@@ -118,11 +118,11 @@ added #83 closed it in the same commit.
 | 79 | 🟢 | A | ✅ Done | Dead `case 5:`/`case 6:` in `format_evaluated_cmd` |
 | 80 | 🟡 | D | Open | `s_replay_text_view` file-level set-then-read state |
 | 81 | 🟡 | A | ✅ Done | `TUTORIAL_LOCKED_LINE_MAX` doubles as cap and validator ceiling |
-| 82 | 🔵 | B | Open | `tutorial_step_at()` O(N) sentinel walk |
+| 82 | 🔵 | B | ✅ Done | `tutorial_step_at()` O(N) sentinel walk |
 | 83 | 🔴 | A | ✅ Done | `@declare` import treats failed `repl_eval_declare_predef_var` as success |
 
-**By severity (open only):** 0 🔴, 4 🟡, 0 🟢, 5 🔵 = 9 open.
-**By tier (open only):** A: 0, B: 1, C: 6, D: 2, unclassified: 0.
+**By severity (open only):** 0 🔴, 4 🟡, 0 🟢, 4 🔵 = 8 open.
+**By tier (open only):** A: 0, B: 0, C: 6, D: 2, unclassified: 0.
 
 ## How to read this
 
@@ -2202,6 +2202,20 @@ tutorial paint.
 returning the whole struct; let the menu reader walk fields off
 the pointer. Keep the per-field getters as inline shims.
 
+**Status (2026-05-27):** ✅ Closed. Renamed the file-static
+`tutorial_step_at` to public `repl_tutorial_step_get` and declared
+it in `src/repl/tutorials.h`. The eight per-field accessors moved
+out of `tutorials.c` and became `static inline` shims in the
+header — each invokes `repl_tutorial_step_get` once and reads a
+single field off the returned pointer.
+
+The menu paint path (or any caller pulling multiple fields from the
+same step) can now bind the pointer once and walk fields directly,
+turning the previous O(N²) per-tutorial paint (8 accessors × O(N)
+walk each) into O(N). Callers that only need one field per step
+can keep using the per-field shims and still pay the same cost as
+before — no API break.
+
 ### 83. ✅ `@declare` import treats failed `repl_eval_declare_predef_var` as success
 
 **Where:** `src/repl/import.c:418` and (the demo mirror)
@@ -2314,14 +2328,9 @@ finding so the backlog can be scheduled without re-reading each body.
 - **Tier A (small, near-zero risk):** none currently open — the
   2026-05-27 close pass landed #26, #27, #43, #70, #72, #76, #77,
   #78, #79, and #81.
-- **Tier B (moderate, focused pass):** #22 (executor includes
-  `subsystems/replay/*` — add `finalize_tess` to options), #23
-  (executor status messages — route through `ReplExecutionResult`),
-  #24 (CMD_IF_BEGIN evaluator dedup), #28 (`replay_apply_state_cmd`
-  fall-through), #30 (`g_pending_*` → out-pointer pair), #42
-  (CatalogTagOps wrapper macro), #47 (extract `parse_tess_brace_block`),
-  #73 (`repl_state_get_defaults()` split), #82
-  (`tutorial_step_at()` struct accessor).
+- **Tier B (moderate, focused pass):** none currently open — the
+  2026-05-27 follow-up landings closed the cluster (#22, #23, #24,
+  #28, #30, #42, #47, #73, #82) as five focused commits.
 - **Tier C (high cost, broad surface):** #15 (`repl_compile_*` ↔
   `editor_compile_*` block-validator dedup), #16
   (`repl_compile_dispatch` cover all six entry points), #37

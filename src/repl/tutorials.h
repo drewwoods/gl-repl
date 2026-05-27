@@ -138,14 +138,50 @@ typedef struct {
 int                       repl_tutorial_count(void);
 const char               *repl_tutorial_name(int idx);
 int                       repl_tutorial_step_count(int idx);
-const char               *repl_tutorial_step_comment(int idx, int step_idx);
-const char               *repl_tutorial_step_expected(int idx, int step_idx);
-TutorialStepPlacementKind repl_tutorial_step_placement(int idx, int step_idx);
-const char               *repl_tutorial_step_label(int idx, int step_idx);
-const char               *repl_tutorial_step_target_label(int idx, int step_idx);
-TutorialStepKind          repl_tutorial_step_kind(int idx, int step_idx);
-const char               *repl_tutorial_step_cfg_slug(int idx, int step_idx);
-int                       repl_tutorial_step_cfg_value(int idx, int step_idx);
+
+/* Return a pointer to the i-th step's struct, or NULL on out-of-range.
+ * Performs the O(step_idx) sentinel walk once; callers that need
+ * multiple fields off the same step should hold this pointer rather
+ * than re-querying via the per-field shims below (rendering a tutorial
+ * row touches 5+ fields — without this entry point each accessor would
+ * re-walk, making paint O(N²) per tutorial). */
+const TutorialStep       *repl_tutorial_step_get(int idx, int step_idx);
+
+/* Per-field shims. Each is one walk + one field read. Use the bulk
+ * accessor above when more than one field is needed for the same
+ * step. */
+static inline const char *repl_tutorial_step_comment(int idx, int step_idx) {
+    const TutorialStep *step = repl_tutorial_step_get(idx, step_idx);
+    return step ? step->comment : NULL;
+}
+static inline const char *repl_tutorial_step_expected(int idx, int step_idx) {
+    const TutorialStep *step = repl_tutorial_step_get(idx, step_idx);
+    return step ? step->expected : NULL;
+}
+static inline TutorialStepPlacementKind repl_tutorial_step_placement(int idx, int step_idx) {
+    const TutorialStep *step = repl_tutorial_step_get(idx, step_idx);
+    return step ? step->placement : TUTORIAL_STEP_APPEND;
+}
+static inline const char *repl_tutorial_step_label(int idx, int step_idx) {
+    const TutorialStep *step = repl_tutorial_step_get(idx, step_idx);
+    return step ? step->label : NULL;
+}
+static inline const char *repl_tutorial_step_target_label(int idx, int step_idx) {
+    const TutorialStep *step = repl_tutorial_step_get(idx, step_idx);
+    return step ? step->target_label : NULL;
+}
+static inline TutorialStepKind repl_tutorial_step_kind(int idx, int step_idx) {
+    const TutorialStep *step = repl_tutorial_step_get(idx, step_idx);
+    return step ? step->kind : TUTORIAL_STEP_KIND_COMMAND;
+}
+static inline const char *repl_tutorial_step_cfg_slug(int idx, int step_idx) {
+    const TutorialStep *step = repl_tutorial_step_get(idx, step_idx);
+    return step ? step->cfg_slug : NULL;
+}
+static inline int repl_tutorial_step_cfg_value(int idx, int step_idx) {
+    const TutorialStep *step = repl_tutorial_step_get(idx, step_idx);
+    return step ? step->cfg_value : 0;
+}
 
 /* The tutorial's leading `@cfg` strings (NULL-terminated array), or NULL
  * when it has none. Out-of-range idx → NULL. */
