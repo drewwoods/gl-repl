@@ -8,7 +8,7 @@
 #include "repl/cfg_baseline.h"
 #include "repl/load.h"
 #include "repl/scenes.h"
-#include "repl/state_owners.h" /* For repl_state_mark_flat_dirty, repl_state_mark_source_dirty, and repl_state_parse_workspace_header_line */
+#include "repl/state_owners.h" /* For repl_state_mark_flat_dirty, repl_state_mark_source_dirty, repl_state_parse_workspace_header_line, repl_cfg_get_int, repl_cfg_set_int, and repl_cfg_known */
 #include "repl/tutorials.h"
 #include "repl/export.h"
 #include "config.h"            /* REPL_DIAG_TEXT_MAX */
@@ -570,18 +570,10 @@ void tutorial_start(int idx) {
      * tutorial mutations, so we can restore it cleanly on teardown/exit. */
     tutorial_capture_cfg_baseline(idx);
 
-    /* Preserve baseline configuration across the state reset */
-    ReplConfigBag preserved_bag = tutorial_state_view().baseline_bag;
-    int preserved_valid = tutorial_state_view().baseline_valid;
-
     repl_scenes_enter_transient_scene();
     repl_scenes_reset_for_transient();
     repl_dispatch_completion_clear();
-    tutorial_state_reset();
-
-    /* Restore the preserved baseline configuration */
-    tutorial_state_mut()->baseline_bag = preserved_bag;
-    tutorial_state_mut()->baseline_valid = preserved_valid;
+    tutorial_state_reset_except_baseline();
 
     /* Reset scene-presentation chrome to defaults, then apply any
      * tutorial leading `@cfg` lines. Note: We pass 0 rather than the tag
@@ -1054,7 +1046,6 @@ int tutorial_line_is_locked(int line_idx) {
 
 int tutorial_shadow_suffix(const char *input, char *out, size_t out_size) {
     const char *expected;
-    size_t input_len;
 
     if (out && out_size > 0)
         out[0] = '\0';
@@ -1067,11 +1058,65 @@ int tutorial_shadow_suffix(const char *input, char *out, size_t out_size) {
     if (!expected)
         return 0;
 
-    input_len = input ? strlen(input) : 0;
-    if (strncmp(expected, input ? input : "", input_len) != 0)
-        return 0;
+    const char *inp_start = input ? input : "";
+    const char *inp_end = inp_start + strlen(inp_start);
+    // Trim leading whitespace from input
+    while (*inp_start && isspace((unsigned char)*inp_start))
+        inp_start++;
+    // Trim trailing whitespace and trailing semicolon from input
+    while (inp_end > inp_start && isspace((unsigned char)inp_end[-1]))
+        inp_end--;
+    if (inp_end > inp_start && inp_end[-1] == ';') {
+        inp_end--;
+        while (inp_end > inp_start && isspace((unsigned char)inp_end[-1]))
+            inp_end--;
+    }
 
-    snprintf(out, out_size, "%s", expected + input_len);
+    const char *exp_start = expected;
+    const char *exp_end = exp_start + strlen(exp_start);
+    // Trim leading whitespace from expected
+    while (*exp_start && isspace((unsigned char)*exp_start))
+        exp_start++;
+    // Trim trailing whitespace and trailing semicolon from expected
+    while (exp_end > exp_start && isspace((unsigned char)exp_end[-1]))
+        exp_end--;
+    if (exp_end > exp_start && exp_end[-1] == ';') {
+        exp_end--;
+        while (exp_end > exp_start && isspace((unsigned char)exp_end[-1]))
+            exp_end--;
+    }
+
+    const char *p_inp = inp_start;
+    const char *p_exp = exp_start;
+
+    while (p_inp < inp_end) {
+        // Skip whitespace in input
+        while (p_inp < inp_end && isspace((unsigned char)*p_inp))
+            p_inp++;
+        // Skip whitespace in expected
+        while (p_exp < exp_end && isspace((unsigned char)*p_exp))
+            p_exp++;
+
+        if (p_inp == inp_end)
+            break;
+
+        if (p_exp == exp_end) {
+            // input has more non-whitespace chars than expected
+            return 0;
+        }
+
+        if (*p_inp != *p_exp) {
+            // Mismatch
+            return 0;
+        }
+
+        p_inp++;
+        p_exp++;
+    }
+
+    // If we matched the normalized prefix, the shadow suffix is the remainder of expected.
+    // Copy from p_exp to the very end of expected to include original trailing whitespace/semicolons.
+    snprintf(out, out_size, "%s", p_exp);
     return 1;
 }
 

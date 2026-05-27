@@ -2330,8 +2330,9 @@ int main() {
                    replay_pc, 1);
         glr_state_presentation_mut()->code_panel_layout = CFG_DEFAULT_CODE_PANEL_LAYOUT; glr_ctrl_sync_ui_chrome();
 
-        ASSERT_INT("replay unknown key unconsumed",
-                   replay_handle_key('x'), 0);
+        /* Behavior contract: unrecognized keys that stop replay are consumed to prevent cascading downstream side-effects */
+        ASSERT_INT("replay unknown key consumed on cancellation",
+                   replay_handle_key('x'), 1);
         ASSERT_INT("replay unknown key stops replay",
                    replay_active, 0);
     }

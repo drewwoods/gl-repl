@@ -501,7 +501,8 @@ static void test_replay_regression_fixes(void) {
     ASSERT_TRUE("active after start", g_replay_active);
 
     int consumed = replay_handle_key('z');
-    ASSERT_TRUE("unrecognized key not consumed", consumed == 0);
+    /* Behavior contract: unrecognized keys that stop replay are consumed to prevent cascading downstream side-effects */
+    ASSERT_TRUE("unrecognized key consumed on cancellation", consumed == 1);
     ASSERT_TRUE("replay stopped on unrecognized key", !g_replay_active);
 
     /* 2. Replay expand toggle routes through config */

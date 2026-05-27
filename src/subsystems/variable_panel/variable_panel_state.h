@@ -47,7 +47,6 @@ typedef struct {
     int   var_idx;
     int   log_mode;
     float start_value;
-    int   start_x;
     char  name[REPL_PREDEF_NAME_MAX];
     int   undo_snapshot_pushed;
 } VariablePanelDragState;

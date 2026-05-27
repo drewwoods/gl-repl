@@ -219,10 +219,10 @@ void color_picker_start(int cmd_idx, int my) {
         g_cp_undo_captured = 0;
 
     ui_layout_code_panel_rect(&cp_x, NULL, &cp_w, NULL);
-    g_cp_line = cmd_idx;
     cmd = cp_cmd_at(cmd_idx);
     if (!cmd)
         return;
+    g_cp_line = cmd_idx;
     g_cp_has_alpha = (cmd->type == CMD_COLOR4F ||
                       cmd->type == CMD_TESS_COLOR ||
                       cmd->type == CMD_CLEAR_COLOR);
@@ -254,7 +254,7 @@ void color_picker_start(int cmd_idx, int my) {
 int color_picker_stop(void) {
     if (g_cp_line < 0) return 0;
     g_cp_line = -1;
-    g_cp_drag = 0;
+    g_cp_drag = CP_DRAG_NONE;
     g_cp_undo_captured = 0;
     return 1;
 }

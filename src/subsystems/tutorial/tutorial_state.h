@@ -75,10 +75,11 @@ typedef struct {
     int                   baseline_valid;
 } TutorialRuntimeState;
 
-/* Read-only/by-pointer accessors plus a full reset helper. */
+/* Read-only/by-pointer accessors plus reset helpers. */
 TutorialRuntimeState  tutorial_state_view(void);
 TutorialRuntimeState *tutorial_state_mut(void);
 void                  tutorial_state_reset(void);
+void                  tutorial_state_reset_except_baseline(void);
 void                  tutorial_state_init_explicit(void);
 int                   tutorial_active(void);
 void                  tutorial_state_capture(TutorialRuntimeState *snapshot);

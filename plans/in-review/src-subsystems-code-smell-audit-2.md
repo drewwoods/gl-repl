@@ -105,6 +105,31 @@ This directory is largely healthy after the prior round.
 | **D** | Accepted / kept | #26, #27, #37, #38, #39, #40, #41, #42, #43, #44, #45 |
 | — | Withdrawn / merged | #15, #18 |
 
+## Progress Update (2026-05-27)
+
+All 18 Tier A findings have been fully addressed and verified as of 2026-05-27.
+
+| Finding | Tier | Description | Status | Resolution |
+|---------|------|-------------|--------|------------|
+| #1 | A | Replay `replay_handle_key` returns 0 after stopping | **[RESOLVED]** | Stopped key leakage by returning 1 via new cancel helper; updated tests. |
+| #2 | A | Replay `replay_handle_special` returns 0 after stopping | **[RESOLVED]** | Stopped key leakage by returning 1 via new cancel helper; updated tests. |
+| #3 | A | Color picker `color_picker_start` sets `g_cp_line` before null check | **[RESOLVED]** | Moved index assignment below the command validity null check. |
+| #7 | A | Replay `replay_fade_batches_view` uses `replay_state_mut()` | **[RESOLVED]** | Implemented `replay_state_const()` to expose const-ref state access. |
+| #8 | A | Replay `replay_copy_baseline_predef_snapshot` uses `_mut()` | **[RESOLVED]** | Switched accessor call to `replay_state_view()`. |
+| #10 | A | Color picker uses bare `0` instead of `CP_DRAG_NONE` for `g_cp_drag` | **[RESOLVED]** | Replaced magic `0` reset value with `CP_DRAG_NONE` enum. |
+| #11 | A | Undo doesn't invalidate the color picker | **[RESOLVED]** | Wired `editor_undo_pop_snapshot` and `editor_undo_do_redo` to stop picker. |
+| #12 | A | Tutorial shadow suffix desyncs with normalized match | **[RESOLVED]** | Upgraded suffix computation to match whitespace-normalized prefixes. |
+| #13 | A | Tutorial preserves baseline across reset via stack copy | **[RESOLVED]** | Created `tutorial_state_reset_except_baseline()` to avoid stack copying. |
+| #14 | A | Tutorial `repl_cfg_set_int` called without declaring include path | **[RESOLVED]** | Documented all 6 symbols in the `state_owners.h` include comment. |
+| #17 | A | Replay `g_flat_cmds` / `g_num_flat_cmds` use `g_` prefix | **[RESOLVED]** | Renamed local variables to drop misleading `g_` prefixes. |
+| #20 | A | Variable panel drag `start_x` unused outside begin/motion | **[RESOLVED]** | Moved `start_x` from public struct to static `g_drag_start_x`. |
+| #21 | A | Replay `last_src_line` reset at stop — dead write | **[RESOLVED]** | Removed dead write from `replay_stop()`. |
+| #22 | A | Replay `state->accum = 0.0f` in `replay_stop` — dead write | **[RESOLVED]** | Removed dead write from `replay_stop()`. |
+| #23 | A | Replay `state->pc = 0` in `replay_stop` — dead write | **[RESOLVED]** | Removed dead write from `replay_stop()`. |
+| #24 | A | Replay `state->total_flat_cmds = 0` in `replay_stop` — dead write | **[RESOLVED]** | Removed dead write from `replay_stop()`. |
+| #25 | A | Tutorial defaults init loop sets `instruction_line_for_step` to -1 | **[RESOLVED]** | Documented init loop / active example reset invariant. |
+| #28 | A | Replay `replay_handle_key` is ~65 lines of `if (key == ...)` ladder | **[RESOLVED]** | Refactored matching logic to a clean, readable `switch (key)` block. |
+
 ---
 
 ## 🔴 Actual bugs / hazards (verified)
@@ -135,6 +160,8 @@ and `tests/test_repl_editor.c:2283-2284`
 both tests to assert `consumed == 1` and add a behavior-contract
 comment explaining that cancelling replay consumes the key. (Tier A)
 
+**Status:** [RESOLVED] (Tier A pass, 2026-05-27) - Introduced a centralized helper `replay_cancel_on_unrecognized()` that stops replay and returns `1`. Updated the ASCII key matching `switch` block in `replay_handle_key()` to route unrecognized keys to this helper. Updated both test suites (`test_repl_replay.c` and `test_repl_editor.c`) to assert that the cancellation keystroke is consumed (returns `1`).
+
 ---
 
 ### 2. Replay `replay_handle_special` returns 0 after stopping — key leaks downstream
@@ -151,6 +178,8 @@ toggle overlays immediately after the replay cancellation.
 
 **Fix:** Return 1 inside the `if (!replay_modifier_special_key(key))`
 block. Same test-update caveat as #1. (Tier A)
+
+**Status:** [RESOLVED] (Tier A pass, 2026-05-27) - Guided unrecognized non-modifier special keys to the centralized `replay_cancel_on_unrecognized()` helper, stop playback, and return `1` to prevent downstream config/shortcut propagation.
 
 ---
 
@@ -177,6 +206,8 @@ the guard and the assignment (e.g., an undo snapshot) could open the
 window. The ordering is fragile even if currently safe.
 
 **Fix:** Move `g_cp_line = cmd_idx` below the null check. (Tier A)
+
+**Status:** [RESOLVED] (Tier A pass, 2026-05-27) - Moved the `g_cp_line = cmd_idx` assignment below the NULL pointer check in `color_picker_start()`, ensuring internal invariants are preserved.
 
 ---
 
@@ -268,6 +299,8 @@ by-value stack copy would dangle. Instead, add a
 into the live storage, or rename the function to make the mutability
 intent explicit. (Tier A)
 
+**Status:** [RESOLVED] (Tier A pass, 2026-05-27) - Implemented `replay_state_const()` in `replay_state.c` and updated `replay_fade_batches_view` to use it for safe, pointer-preserving, read-only const access without using `_mut()`.
+
 ---
 
 ### 8. Replay `replay_copy_baseline_predef_snapshot` uses `_mut()` for read-only access
@@ -278,6 +311,8 @@ intent explicit. (Tier A)
 state uses `replay_state_mut()`.
 
 **Fix:** Switch to `replay_state_view()`. (Tier A)
+
+**Status:** [RESOLVED] (Tier A pass, 2026-05-27) - Switched `replay_copy_baseline_predef_snapshot` to fetch read-only state using `replay_state_view()`, preserving boundary mutability semantics.
 
 ---
 
@@ -322,6 +357,8 @@ add a sentinel), this assignment becomes wrong silently.
 
 **Fix:** Use `g_cp_drag = CP_DRAG_NONE;`. (Tier A)
 
+**Status:** [RESOLVED] (Tier A pass, 2026-05-27) - Replaced the bare `0` reset with the `CP_DRAG_NONE` enum constant inside `color_picker_stop()`.
+
 ---
 
 ### 11. Undo doesn't invalidate the color picker
@@ -347,6 +384,8 @@ by `write_cmd`'s type switch.
 `color_picker_stop()`. One-line addition in `src/editor/undo.c`.
 (Tier A)
 
+**Status:** [RESOLVED] (Tier A pass, 2026-05-27) - Integrated `color_picker_stop()` in both `editor_undo_pop_snapshot()` and `editor_undo_do_redo()` inside `src/editor/undo.c`. Active picker sessions are now safely terminated whenever an undo/redo structural shift is triggered, eliminating the writeback hazard.
+
 ---
 
 ### 12. Tutorial `tutorial_shadow_suffix` uses raw `strncmp` while `tutorial_match` normalizes whitespace
@@ -367,6 +406,8 @@ gets a "does not match" status.
 pass (or call `tutorial_match` directly to check prefix membership).
 (Tier A)
 
+**Status:** [RESOLVED] (Tier A pass, 2026-05-27) - Re-implemented `tutorial_shadow_suffix()` to perform robust, whitespace-normalized prefix matching symmetrically with `tutorial_match()`. The ghost-text suffix is computed directly from raw text alignments to keep suffix visualization correct when spaces are added.
+
 ---
 
 ### 13. Tutorial `tutorial_start` preserves baseline across `tutorial_state_reset` via stack copy
@@ -386,6 +427,8 @@ skips `baseline_bag`/`baseline_valid` would be cleaner.
 zeroes all fields except the baseline bag, eliminating the
 save-around. (Tier A)
 
+**Status:** [RESOLVED] (Tier A pass, 2026-05-27) - Implemented `tutorial_state_reset_except_baseline()` in `tutorial_state.c` and updated `tutorial_start()` to call it, completely removing the ~1.3 KB stack-preservation copy overhead.
+
 ---
 
 ### 14. Tutorial `repl_cfg_set_int` / `repl_cfg_get_int` called without declaring the include path
@@ -404,6 +447,8 @@ A complete fix needs to move those too.
 
 **Fix:** Document the cfg helpers in the include comment, and include
 them in #9's header split. (Tier A — bookkeeping tied to #9)
+
+**Status:** [RESOLVED] (Tier A pass, 2026-05-27) - Updated the `state_owners.h` include block comment at line 11 in `src/subsystems/tutorial/tutorial.c` to declare all 6 symbols in use, satisfying documentation and audit compliance.
 
 ---
 
@@ -449,6 +494,8 @@ reserved by project convention for file-scoped statics.
 **Why it matters:** Misleading to readers scanning for global state.
 
 **Fix:** Rename to `flat_cmds` / `num_flat_cmds`. (Tier A)
+
+**Status:** [RESOLVED] (Tier A pass, 2026-05-27) - Renamed both local variables in `replay_compute_fade_skip_limits` to `flat_cmds` and `num_flat_cmds`, eliminating the misleading `g_` prefix.
 
 ---
 
@@ -496,6 +543,8 @@ struct clutters the API surface.
 **Fix:** If `start_x` is never read outside the drag module, move it
 to a file-static in `variable_panel_drag.c`. (Tier A)
 
+**Status:** [RESOLVED] (Tier A pass, 2026-05-27) - Removed `start_x` from public `VariablePanelDragState` struct and the `VARIABLE_PANEL_INITIAL` initialization macro. Shifted it to a private, file-static `g_drag_start_x` inside `variable_panel_drag.c`, minimizing the exposed public surface.
+
 ---
 
 ### 21. Replay `last_src_line` reset at stop — dead write
@@ -512,6 +561,8 @@ matters during playback.
 **Fix:** Remove the dead assignment (or keep for defensive clarity — 
 Tier D candidate). (Tier A)
 
+**Status:** [RESOLVED] (Tier A pass, 2026-05-27) - Removed the dead write `state->src_line_idx = -1` inside `replay_stop()`, since playback fields are fully initialized inside `replay_start()`.
+
 ---
 
 ### 22. Replay `state->accum = 0.0f` in `replay_stop` — dead write
@@ -523,6 +574,8 @@ Tier D candidate). (Tier A)
 
 **Fix:** Remove or mark as defensive. (Tier A)
 
+**Status:** [RESOLVED] (Tier A pass, 2026-05-27) - Removed the dead write `state->accum = 0.0f` inside `replay_stop()`.
+
 ---
 
 ### 23. Replay `state->pc = 0` in `replay_stop` — dead write
@@ -533,6 +586,8 @@ Tier D candidate). (Tier A)
 
 **Fix:** Remove or mark as defensive. (Tier A)
 
+**Status:** [RESOLVED] (Tier A pass, 2026-05-27) - Removed the dead write `state->pc = 0` inside `replay_stop()`.
+
 ---
 
 ### 24. Replay `state->total_flat_cmds = 0` in `replay_stop` — dead write
@@ -542,6 +597,8 @@ Tier D candidate). (Tier A)
 **Smell:** Same pattern.
 
 **Fix:** Remove or mark as defensive. (Tier A)
+
+**Status:** [RESOLVED] (Tier A pass, 2026-05-27) - Removed the dead write `state->total_flat_cmds = 0` inside `replay_stop()`.
 
 ---
 
@@ -560,6 +617,8 @@ when the tutorial ends, at which point the array is no longer read.
 
 **Fix:** Keep as defensive initialization (Tier D candidate) or
 document the invariant. (Tier A)
+
+**Status:** [RESOLVED] (Tier A pass, 2026-05-27) - Documented the defensive nature of the default initialization loop and documented the reset invariant cleanly.
 
 ---
 
@@ -611,6 +670,8 @@ contract explicit.
 
 **Fix:** Refactor to `switch (key)` with explicit `default:
 replay_stop(); return 1;`. (Tier A)
+
+**Status:** [RESOLVED] (Tier A pass, 2026-05-27) - Refactored the entire recognized ASCII key matching ladder inside `replay_handle_key()` into a clean, highly structured, and readable `switch (key)` statement, routing default flow to the cancel helper.
 
 ---
 

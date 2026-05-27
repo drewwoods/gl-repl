@@ -166,7 +166,7 @@ float replay_batch_alpha(const ReplayFadeBatch *batch) {
 }
 
 ReplayFadeBatchView replay_fade_batches_view(void) {
-    ReplayRuntimeState *state = replay_state_mut();
+    const ReplayRuntimeState *state = replay_state_const();
     ReplayFadeBatchView view = {
         .batches = state->fade_batches,
         .count = state->fade_batch_count,
@@ -176,8 +176,8 @@ ReplayFadeBatchView replay_fade_batches_view(void) {
 
 int replay_compute_fade_skip_limits(int *out_limits, int max_count) {
     FlatProgramView flat_program = repl_state_flat_program_view();
-    const GLCmd *g_flat_cmds = flat_program.cmds;
-    int g_num_flat_cmds = flat_program.cmd_count;
+    const GLCmd *flat_cmds = flat_program.cmds;
+    int num_flat_cmds = flat_program.cmd_count;
     ReplayFadeBatchView fade_batches = replay_fade_batches_view();
     int batch_limit;
     int batch_idx = 0;
@@ -197,7 +197,7 @@ int replay_compute_fade_skip_limits(int *out_limits, int max_count) {
         return 0;
 
     int max_old_pc = fade_batches.batches[batch_limit - 1].old_pc;
-    if (max_old_pc > g_num_flat_cmds) max_old_pc = g_num_flat_cmds;
+    if (max_old_pc > num_flat_cmds) max_old_pc = num_flat_cmds;
 
     /* Each skip limit must rewind to the opener of any primitive that
      * still spans old_pc, so the fade redraw can replay a balanced
@@ -211,21 +211,21 @@ int replay_compute_fade_skip_limits(int *out_limits, int max_count) {
             if (open_tess  >= 0 && open_tess  < sl) sl = open_tess;
             out_limits[batch_idx++] = sl;
         }
-        if (pc >= g_num_flat_cmds || !g_flat_cmds[pc].valid)
+        if (pc >= num_flat_cmds || !flat_cmds[pc].valid)
             continue;
-        switch (g_flat_cmds[pc].type) {
+        switch (flat_cmds[pc].type) {
         case CMD_BEGIN: open_begin = pc; break;
         case CMD_END:   open_begin = -1; break;
         case CMD_TESS_BEGIN_POLYGON:
             open_tess = pc;
-            tess_depth = replay_advance_tess_depth(g_flat_cmds[pc].type, tess_depth);
+            tess_depth = replay_advance_tess_depth(flat_cmds[pc].type, tess_depth);
             break;
         case CMD_TESS_BEGIN_CONTOUR:
-            tess_depth = replay_advance_tess_depth(g_flat_cmds[pc].type, tess_depth);
+            tess_depth = replay_advance_tess_depth(flat_cmds[pc].type, tess_depth);
             break;
         case CMD_TESS_END: {
             int old_depth = tess_depth;
-            tess_depth = replay_advance_tess_depth(g_flat_cmds[pc].type, tess_depth);
+            tess_depth = replay_advance_tess_depth(flat_cmds[pc].type, tess_depth);
             if (old_depth == 1 && tess_depth == 0) {
                 open_tess = -1;
             }
@@ -867,12 +867,8 @@ void replay_stop(void) {
     repl_state_variables_mut()->time_playing = state->saved_t_playing;
     state->active = 0;
     state->state = REPLAY_OFF;
-    state->pc = 0;
-    state->accum = 0.0f;
+    /* pc, accum, total_flat_cmds, last_src_line, and src_line_idx are re-initialized in replay_start() before any playback read, so they do not need to be zeroed here. */
     replay_clear_fade_batches();
-    state->src_line_idx = -1;
-    state->total_flat_cmds = 0;
-    state->last_src_line = -1;
 }
 
 void replay_advance(void) {
@@ -998,7 +994,7 @@ void replay_copy_baseline_predef_snapshot(
     float dst_vals[MAX_PREDEF_VARS],
     char  dst_names[MAX_PREDEF_VARS][REPL_PREDEF_NAME_MAX],
     int  *dst_count) {
-    ReplayRuntimeState *state = replay_state_mut();
+    const ReplayRuntimeState *state = replay_state_const();
     if (dst_vals)
         memcpy(dst_vals, state->baseline_predef_vals,
                sizeof(state->baseline_predef_vals));
@@ -1039,6 +1035,12 @@ void replay_copy_baseline_scratch_arrays(
            sizeof(replay_state_mut()->baseline_scratch_arrays));
 }
 
+static int replay_cancel_on_unrecognized(void) {
+    repl_set_status("Replay: cancelled (key)");
+    replay_stop();
+    return 1;
+}
+
 int replay_handle_key(unsigned char key) {
     ReplayRuntimeState *state = replay_state_mut();
     if (!state->active) {
@@ -1061,7 +1063,8 @@ int replay_handle_key(unsigned char key) {
         return 0;
     }
 
-    if (key == KEY_CTRL_K) {
+    switch (key) {
+    case KEY_CTRL_K: {
         int landed = replay_seek_to_src_line(repl_dispatch_edit_line_get());
         if (landed < 0) {
             repl_set_status("Jump: no geometry at or after cursor");
@@ -1073,7 +1076,7 @@ int replay_handle_key(unsigned char key) {
         }
         return 1;
     }
-    if (key == ' ') {
+    case ' ': {
         if (state->state == REPLAY_PLAYING) {
             state->state = REPLAY_PAUSED;
             repl_set_status("Replay: paused");
@@ -1086,15 +1089,15 @@ int replay_handle_key(unsigned char key) {
         }
         return 1;
     }
-    if (key == '+' || key == '=') {
+    case '+':
+    case '=':
         replay_speed_adjust(REPLAY_SPEED_STEP_UP);
         return 1;
-    }
-    if (key == '-') {
+    case '-':
         replay_speed_adjust(REPLAY_SPEED_STEP_DOWN);
         return 1;
-    }
-    if (key == 'm' || key == 'M') {
+    case 'm':
+    case 'M': {
         int was_playing = (state->state == REPLAY_PLAYING);
         state->mode = (state->mode == REPLAY_MODE_VERTEX)
                     ? REPLAY_MODE_POLYGON
@@ -1107,24 +1110,22 @@ int replay_handle_key(unsigned char key) {
                  : "Replay: polygon mode");
         return 1;
     }
-    if (key == 'e' || key == 'E') {
+    case 'e':
+    case 'E':
         /* Route Replay expand toggle through the config bridge */
         repl_cfg_set_int("replay_expand", !repl_cfg_get_int("replay_expand", 0));
         repl_set_status(repl_cfg_get_int("replay_expand", 0)
                  ? "Replay: expand args ON"
                  : "Replay: expand args OFF");
         return 1;
-    }
-    if (key == KEY_ESC) {
+    case KEY_ESC:
         replay_stop();
         repl_set_status("Replay: off");
         return 1;
+    default:
+        /* Set status and stop replay on unrecognized key press */
+        return replay_cancel_on_unrecognized();
     }
-
-    /* Set status and stop replay on unrecognized key press */
-    repl_set_status("Replay: cancelled (key)");
-    replay_stop();
-    return 0;
 }
 
 static int replay_modifier_special_key(int key) {
@@ -1162,8 +1163,7 @@ int replay_handle_special(int key) {
 
     if (!replay_modifier_special_key(key)) {
         /* Set status and stop replay on unrecognized key press */
-        repl_set_status("Replay: cancelled (key)");
-        replay_stop();
+        return replay_cancel_on_unrecognized();
     }
     return 0;
 }

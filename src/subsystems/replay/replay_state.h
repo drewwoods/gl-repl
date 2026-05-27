@@ -108,6 +108,9 @@ void                     replay_state_reset(void);
  * the whole struct at once. */
 ReplayRuntimeState   replay_state_view(void);
 
+/* Const accessor for read-only access to live storage without heap/stack copies. */
+const ReplayRuntimeState *replay_state_const(void);
+
 /* Mutable accessor for the small set of writers that update multiple replay
  * fields together. Most readers should stay on the by-value or narrow accessors. */
 ReplayRuntimeState  *replay_state_mut(void);
