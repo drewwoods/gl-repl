@@ -1208,7 +1208,7 @@ ReplNumericArgAtCursor repl_eval_numeric_arg_at_cursor(const char *src,
         int s_off = (int)(slot_start - base);
         int e_off = (int)(delim - base);
 
-        if (cursor >= s_off && cursor < e_off) {
+        if (cursor >= s_off && cursor <= e_off) {
             /* Trim whitespace. */
             int lo = s_off, hi = e_off;
             while (lo < hi && isspace((unsigned char)base[lo])) lo++;
