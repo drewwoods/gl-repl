@@ -1,4 +1,4 @@
-#include "subsystems/tutorial/tutorial.h"
+#include "subsystems/tutorial/tutorial_internal.h"
 
 #include <ctype.h>
 #include <stdio.h>
@@ -13,13 +13,7 @@
 #include "repl/export.h"
 #include "config.h"            /* REPL_DIAG_TEXT_MAX */
 
-static float clamp01(float value) {
-    if (value <= 0.0f)
-        return 0.0f;
-    if (value >= 1.0f)
-        return 1.0f;
-    return value;
-}
+
 
 /* --- cfg baseline snapshot ----------------------------------------------- */
 
@@ -122,47 +116,12 @@ static void tutorial_baseline_restore(void) {
     tutorial_cfg_baseline_clear();
 }
 
-static void tutorial_set_expected_message(TutorialMatchResult *result,
-                                          TutorialMatchKind kind,
-                                          const char *expected) {
-    if (!result)
-        return;
 
-    result->kind = kind;
-    if (!expected)
-        expected = "";
-    snprintf(result->message, sizeof(result->message), "expected: %s", expected);
-}
 
 /* Canonicalize a tutorial command for shape-only comparison: trim outer
  * whitespace, ignore a trailing semicolon, then remove all remaining
  * whitespace so formatting differences do not affect matching. */
-static void tutorial_normalize_text(const char *src, char *dst, size_t dst_size) {
-    size_t out = 0;
-    const char *start = src ? src : "";
-    const char *end = start + strlen(start);
 
-    while (*start && isspace((unsigned char)*start))
-        start++;
-    while (end > start && isspace((unsigned char)end[-1]))
-        end--;
-    if (end > start && end[-1] == ';') {
-        end--;
-        while (end > start && isspace((unsigned char)end[-1]))
-            end--;
-    }
-
-    if (dst_size == 0)
-        return;
-
-    while (start < end && out + 1 < dst_size) {
-        unsigned char ch = (unsigned char)*start++;
-        if (isspace(ch))
-            continue;
-        dst[out++] = (char)ch;
-    }
-    dst[out] = '\0';
-}
 
 static int tutorial_append_locked_line(int line_idx) {
     TutorialRuntimeState *state = tutorial_state_mut();
@@ -415,28 +374,7 @@ static int tutorial_step_instruction_line(int tutorial_idx, int step,
     return 1;
 }
 
-TutorialMatchResult tutorial_match(const char *expected, const char *got) {
-    TutorialMatchResult result = {
-        .kind = TUT_MATCH_OK,
-        .message = "",
-    };
-    char normalized_expected[MAX_LINE_LEN];
-    char normalized_got[MAX_LINE_LEN];
 
-    tutorial_normalize_text(expected, normalized_expected,
-                            sizeof(normalized_expected));
-    tutorial_normalize_text(got, normalized_got, sizeof(normalized_got));
-
-    if (normalized_got[0] == '\0') {
-        tutorial_set_expected_message(&result, TUT_MISMATCH_EMPTY, expected);
-        return result;
-    }
-    if (strcmp(normalized_expected, normalized_got) == 0)
-        return result;
-
-    tutorial_set_expected_message(&result, TUT_MISMATCH_SHAPE, expected);
-    return result;
-}
 
 /* Returns 1 iff the entry-level `@cfg <slug> = <value>` line carries
  * a symbolic value that the bridge cannot resolve. `cfg_line` is the
@@ -939,98 +877,15 @@ const char *tutorial_current_expected_text(void) {
  * trailing W slots pace its color settling from white back to the
  * base comment color. The last character finishes settling exactly
  * at fade_start_t + fade_duration. */
-static float tutorial_fade_slot_step(float fade_duration, int line_len) {
-    int safe_len = line_len > 0 ? line_len : 1;
-    int total_slots = safe_len + TUTORIAL_FADE_SETTLE_CHARS;
-    return fade_duration / (float)total_slots;
-}
 
-int tutorial_step_fade_front(int line_idx, int line_len, float now) {
-    TutorialRuntimeState state = tutorial_state_view();
-    int safe_len;
-    float step;
-    float elapsed;
-    int front;
 
-    if (!state.active || line_idx != state.fade_line_idx)
-        return -1;
-    if (now >= state.fade_start_t + state.fade_duration)
-        return -1;
 
-    safe_len = line_len > 0 ? line_len : 1;
-    step = tutorial_fade_slot_step(state.fade_duration, safe_len);
-    if (step <= 0.0f)
-        return -1;
 
-    elapsed = now - state.fade_start_t;
-    if (elapsed <= 0.0f)
-        return 0;
 
-    front = (int)(elapsed / step);
-    if (front < 0)
-        front = 0;
-    if (front >= safe_len)
-        return -1;
-    return front;
-}
 
-float tutorial_step_fade_alpha(int line_idx, int char_idx, int line_len, float now) {
-    TutorialRuntimeState state = tutorial_state_view();
-    int safe_len;
-    float step;
-    float elapsed;
 
-    if (!state.active || line_idx != state.fade_line_idx)
-        return 1.0f;
-    if (now >= state.fade_start_t + state.fade_duration)
-        return 1.0f;
 
-    safe_len = line_len > 0 ? line_len : 1;
-    if (char_idx < 0)
-        char_idx = 0;
-    if (char_idx >= safe_len)
-        char_idx = safe_len - 1;
 
-    step = tutorial_fade_slot_step(state.fade_duration, safe_len);
-    if (step <= 0.0f)
-        return 1.0f;
-    elapsed = (now - state.fade_start_t) - (float)char_idx * step;
-    return clamp01(elapsed / step);
-}
-
-float tutorial_step_fade_settle(int line_idx, int char_idx, int line_len, float now) {
-    TutorialRuntimeState state = tutorial_state_view();
-    int safe_len;
-    float step;
-    float settle_duration;
-    float elapsed;
-
-    if (!state.active || line_idx != state.fade_line_idx)
-        return 1.0f;
-    if (now >= state.fade_start_t + state.fade_duration)
-        return 1.0f;
-
-    safe_len = line_len > 0 ? line_len : 1;
-    if (char_idx < 0)
-        char_idx = 0;
-    if (char_idx >= safe_len)
-        char_idx = safe_len - 1;
-
-    step = tutorial_fade_slot_step(state.fade_duration, safe_len);
-    settle_duration = step * (float)TUTORIAL_FADE_SETTLE_CHARS;
-    if (settle_duration <= 0.0f)
-        return 1.0f;
-    /* Elapsed time since this char finished its reveal slot. */
-    elapsed = (now - state.fade_start_t) - (float)(char_idx + 1) * step;
-    return clamp01(elapsed / settle_duration);
-}
-
-int tutorial_line_is_fading(int line_idx, float now) {
-    TutorialRuntimeState state = tutorial_state_view();
-
-    return state.active && line_idx == state.fade_line_idx &&
-           now < state.fade_start_t + state.fade_duration;
-}
 
 int tutorial_line_is_locked(int line_idx) {
     TutorialRuntimeState state = tutorial_state_view();
@@ -1044,81 +899,7 @@ int tutorial_line_is_locked(int line_idx) {
     return 0;
 }
 
-int tutorial_shadow_suffix(const char *input, char *out, size_t out_size) {
-    const char *expected;
 
-    if (out && out_size > 0)
-        out[0] = '\0';
-    if (!out || out_size == 0)
-        return 0;
-    if (!tutorial_active())
-        return 0;
-
-    expected = tutorial_current_expected_text();
-    if (!expected)
-        return 0;
-
-    const char *inp_start = input ? input : "";
-    const char *inp_end = inp_start + strlen(inp_start);
-    // Trim leading whitespace from input
-    while (*inp_start && isspace((unsigned char)*inp_start))
-        inp_start++;
-    // Trim trailing whitespace and trailing semicolon from input
-    while (inp_end > inp_start && isspace((unsigned char)inp_end[-1]))
-        inp_end--;
-    if (inp_end > inp_start && inp_end[-1] == ';') {
-        inp_end--;
-        while (inp_end > inp_start && isspace((unsigned char)inp_end[-1]))
-            inp_end--;
-    }
-
-    const char *exp_start = expected;
-    const char *exp_end = exp_start + strlen(exp_start);
-    // Trim leading whitespace from expected
-    while (*exp_start && isspace((unsigned char)*exp_start))
-        exp_start++;
-    // Trim trailing whitespace and trailing semicolon from expected
-    while (exp_end > exp_start && isspace((unsigned char)exp_end[-1]))
-        exp_end--;
-    if (exp_end > exp_start && exp_end[-1] == ';') {
-        exp_end--;
-        while (exp_end > exp_start && isspace((unsigned char)exp_end[-1]))
-            exp_end--;
-    }
-
-    const char *p_inp = inp_start;
-    const char *p_exp = exp_start;
-
-    while (p_inp < inp_end) {
-        // Skip whitespace in input
-        while (p_inp < inp_end && isspace((unsigned char)*p_inp))
-            p_inp++;
-        // Skip whitespace in expected
-        while (p_exp < exp_end && isspace((unsigned char)*p_exp))
-            p_exp++;
-
-        if (p_inp == inp_end)
-            break;
-
-        if (p_exp == exp_end) {
-            // input has more non-whitespace chars than expected
-            return 0;
-        }
-
-        if (*p_inp != *p_exp) {
-            // Mismatch
-            return 0;
-        }
-
-        p_inp++;
-        p_exp++;
-    }
-
-    // If we matched the normalized prefix, the shadow suffix is the remainder of expected.
-    // Copy from p_exp to the very end of expected to include original trailing whitespace/semicolons.
-    snprintf(out, out_size, "%s", p_exp);
-    return 1;
-}
 
 int tutorial_guard_source_change(int pos, int delete_count, int insert_count) {
     TutorialRuntimeState state = tutorial_state_view();
