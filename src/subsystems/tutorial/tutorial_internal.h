@@ -7,7 +7,6 @@
 #include "repl/core.h"
 #include "repl/eval.h"
 #include "repl/pipeline.h"
-#include "repl/state_owners.h"
 #include "config.h"
 
 /* Common internal definitions for tutorial subsystem */

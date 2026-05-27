@@ -283,7 +283,7 @@ desync. The prior audit (#56) flagged this; it's tracked in the
 like other cross-module effects, letting the app controller own the
 write. (Tier B — touches replay + controller + dispatch table)
 
-**Status:** [RESOLVED] (Tier B pass, 2026-05-27) - Declared a `set_time_playing` function pointer in the `ReplHostEffects` callback bridge in `src/repl/core.h` and implemented a routing helper `repl_dispatch_set_time_playing()`. The controller in `src/app/glr_ctrl.c` registers the static callback `glr_ctrl_host_set_time_playing()` which updates mutable `time_playing` under its own domain. All direct writes in `replay_start()` and `replay_stop()` inside `src/subsystems/replay/replay.c` have been replaced with this callback dispatch, achieving a perfect boundary structure.
+**Status:** [RESOLVED] (Tier B pass, 2026-05-27) - Declared a `set_time_playing` function pointer in the `ReplHostEffects` callback bridge in `src/repl/core.h` and implemented a routing helper `repl_dispatch_set_time_playing()`. The controller in `src/app/glr_ctrl.c` registers the static callback `glr_ctrl_host_set_time_playing()` which updates mutable `time_playing` under its own domain. All direct writes in `replay_start()` and `replay_stop()` (now in `src/subsystems/replay/replay_playback.c` after the #35 split) have been replaced with this callback dispatch.
 
 ---
 
@@ -374,7 +374,7 @@ or (b) extract a `repl/state_notify.h` with the 6 tutorial-facing
 declarations and switch tutorial.c to include only that.
 (Tier B — option (b) touches header split + guard update)
 
-**Status:** [RESOLVED] (Tier B pass, 2026-05-27) - Created a narrow header `src/repl/state_notify.h` containing the declarations of `repl_state_mark_flat_dirty`, `repl_state_mark_source_dirty`, and `repl_state_parse_workspace_header_line`. Switch `src/subsystems/tutorial/tutorial.c` to include `state_notify.h` instead of `state_owners.h` (and documented its imports accurately), completely isolating the tutorial from the mutable REPL state accessors.
+**Status:** [RESOLVED] (Tier B pass, 2026-05-27) - Created a narrow header `src/repl/state_notify.h` containing the declarations of `repl_state_mark_flat_dirty`, `repl_state_mark_source_dirty`, and `repl_state_parse_workspace_header_line`, and a separate `src/repl/cfg_baseline.h` for the typed live-cfg helpers (`repl_cfg_get_int` / `_set_int` / `_known` / `_set_text` / `_resolve_text`). `src/subsystems/tutorial/tutorial_runner.c` (post-#36 split) now includes only those two narrow headers. The leftover transitive `repl/state_owners.h` include in `tutorial_internal.h` was removed in audit follow-up so no tutorial TU sees the broad mutable-state surface anymore.
 
 ---
 
@@ -481,7 +481,7 @@ A complete fix needs to move those too.
 **Fix:** Document the cfg helpers in the include comment, and include
 them in #9's header split. (Tier A — bookkeeping tied to #9)
 
-**Status:** [RESOLVED] (Tier A pass, 2026-05-27) - Updated the `state_owners.h` include block comment at line 11 in `src/subsystems/tutorial/tutorial.c` to declare all 6 symbols in use, satisfying documentation and audit compliance.
+**Status:** [RESOLVED] (Tier A pass, 2026-05-27) - Superseded by #9's final form: the 3 mark-dirty/parse helpers moved to `src/repl/state_notify.h` and the 3 cfg helpers moved to `src/repl/cfg_baseline.h`; `tutorial_runner.c` (post-#36 split) includes only those two narrow headers, each with a documenting comment naming every symbol it pulls in.
 
 ---
 
@@ -512,7 +512,7 @@ replay, but the ordering is implicit.
 controller (dependency injection), making the ordering explicit.
 (Tier B)
 
-**Status:** [RESOLVED] (Tier B pass, 2026-05-27) - Injected `FlatProgramView` into replay functions: `replay_prepare_frame`, `replay_advance`, `replay_fill_base_limit`, and `replay_compute_fade_skip_limits`. The app controller now retrieves the `FlatProgramView` once per frame and threads it to these calls, avoiding mid-frame stale program states. Callers in all test files (`test_repl_replay.c`, `test_repl_editor.c`, `test_repl_core_extra.c`) and benchmark (`bench_repl.c`) were successfully updated to pass the view.
+**Status:** [RESOLVED] (Tier B pass, 2026-05-27) - Injected `FlatProgramView` into replay frame entry points: `replay_prepare_frame`, `replay_advance`, `replay_fill_base_limit`, and `replay_compute_fade_skip_limits`. The app controller now retrieves the `FlatProgramView` once per frame and threads it to these calls, making the order-of-rebuild dependency explicit at the boundary. Internal helpers inside `replay_playback.c` that still call `repl_state_flat_program_view()` directly are reached only from those entry points (same frame, same view), so the desync window is closed without churn through every internal call. Callers in all test files (`test_repl_replay.c`, `test_repl_editor.c`, `test_repl_core_extra.c`) and the benchmark (`bench_repl.c`) were updated to pass the view.
 
 ---
 
