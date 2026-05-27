@@ -602,10 +602,14 @@ void repl_execute_program(const ReplExecutionOptions *options) {
             break;
         }
         case CMD_IF_BEGIN: {
-            /* Evaluate condition at execute time so goto loops see updated vars. */
+            /* Re-evaluate the condition at execute time so a goto looping
+             * back into the body sees updated vars. The cached args[0] is
+             * the flatten-time value, used as the fallback when the line
+             * doesn't carry vars (or when the paren-extract fails). The
+             * shared kernel with flatten lives in repl_eval_if_condition;
+             * see its doc for why both sides evaluate. */
             float cond = flat_cmds[pc].args[0];
             if (flat_cmds[pc].has_vars) {
-                char cond_text[MAX_LINE_LEN] = "";
                 FlatCmdLocalVars *local_vars =
                     execution_local_vars_at(program, pc);
                 ExprVar *eval_vars = g_predef_vars;
@@ -614,14 +618,9 @@ void repl_execute_program(const ReplExecutionOptions *options) {
                     eval_vars = local_vars->vars;
                     eval_num_vars = local_vars->num_vars;
                 }
-                if (repl_extract_paren_payload(execution_flat_text(text, &flat_cmds[pc]),
-                                               cond_text, sizeof(cond_text)) &&
-                    cond_text[0]) {
-                    char repl_cond[MAX_LINE_LEN];
-                    repl_eval_c_expr_to_repl(cond_text, repl_cond, sizeof(repl_cond));
-                    ExprCtx ctx = { repl_cond, eval_vars, eval_num_vars, NULL, 0 };
-                    cond = repl_eval_expr(&ctx);
-                }
+                cond = repl_eval_if_condition(execution_flat_text(text, &flat_cmds[pc]),
+                                              eval_vars, eval_num_vars,
+                                              cond);
             }
             if (cond == 0.0f) {
                 int if_depth = 1;

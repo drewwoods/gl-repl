@@ -478,3 +478,15 @@ int split_top_level_args(const char *src, char args[][MAX_LINE_LEN], int max_arg
 
     return count;
 }
+
+float repl_eval_if_condition(const char *src_text,
+                             ExprVar *vars, int num_vars,
+                             float fallback) {
+    char paren_text[MAX_LINE_LEN];
+    if (!repl_extract_paren_payload(src_text, paren_text, sizeof(paren_text)))
+        return fallback;
+    char repl_cond[MAX_LINE_LEN];
+    repl_eval_c_expr_to_repl(paren_text, repl_cond, sizeof(repl_cond));
+    ExprCtx ctx = { repl_cond, vars, num_vars, NULL, 0 };
+    return repl_eval_expr(&ctx);
+}

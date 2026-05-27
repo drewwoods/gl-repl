@@ -29,7 +29,7 @@
 ## Status summary (updated 2026-05-27)
 
 83 findings total (82 from the original audit + 1 review-discovered).
-71 closed (✅), 12 still open. All open findings verified against
+72 closed (✅), 11 still open. All open findings verified against
 current HEAD. Tier letters cover the whole open backlog — no unclassified rows
 remain. Tier A is empty: the 2026-05-27 Tier A close pass landed all ten
 (#26, #27, #43, #70, #72, #76, #77, #78, #79, #81), and the review pass that
@@ -60,7 +60,7 @@ added #83 closed it in the same commit.
 | 21 | 🔵 | B | ✅ Done | REPL↔C function map duplicated three ways |
 | 22 | 🟡 | B | ✅ Done | Executor includes `subsystems/replay/*` (layering) |
 | 23 | 🟡 | B | ✅ Done | Executor writes status messages to live REPL state |
-| 24 | 🔵 | B | Open | CMD_IF_BEGIN evaluator duplicated (flatten vs executor) |
+| 24 | 🔵 | B | ✅ Done | CMD_IF_BEGIN evaluator duplicated (flatten vs executor) |
 | 25 | 🟡 | B | ✅ Done | `WRITE_TEXT` macro — third "write text" pattern |
 | 26 | 🟡 | A | ✅ Done | `REPL_FUNC_SLOT_LIST` hard-codes 10 entries |
 | 27 | 🟡 | A | ✅ Done | Stray `func0(var0)` autocomplete row |
@@ -121,8 +121,8 @@ added #83 closed it in the same commit.
 | 82 | 🔵 | B | Open | `tutorial_step_at()` O(N) sentinel walk |
 | 83 | 🔴 | A | ✅ Done | `@declare` import treats failed `repl_eval_declare_predef_var` as success |
 
-**By severity (open only):** 0 🔴, 4 🟡, 0 🟢, 8 🔵 = 12 open.
-**By tier (open only):** A: 0, B: 4, C: 6, D: 2, unclassified: 0.
+**By severity (open only):** 0 🔴, 4 🟡, 0 🟢, 7 🔵 = 11 open.
+**By tier (open only):** A: 0, B: 3, C: 6, D: 2, unclassified: 0.
 
 ## How to read this
 
@@ -1072,6 +1072,27 @@ dynamism. Undocumented; duplicated logic is unguarded.
 required for goto+IF interaction, or (b) extract
 `static float repl_eval_if_condition(const GLCmd *cmd, ...)` and
 call from both.
+
+**Status (2026-05-27):** ✅ Closed via (b) plus (a)'s documentation
+inline. Added `repl_eval_if_condition(const char *src_text,
+ExprVar *vars, int num_vars, float fallback)` declared in
+`src/repl/eval.h` and implemented in `src/repl/text_helpers.c`
+(the implementation depends on `repl_extract_paren_payload` from
+text_helpers, so it links with the rest of the text helpers
+rather than dragging text_helpers into the eval-test link
+surface). The kernel is identical to the previously-duplicated
+sequence: extract paren payload → `repl_eval_c_expr_to_repl` →
+`ExprCtx` init → `repl_eval_expr`. Returns `fallback` when the
+extract fails (treated as "no eval performed"). Both call sites
+now pass their text source, scope vars, and `args[0]` fallback.
+
+Per-site differences stay at the call site: flatten always
+evaluates unconditionally (deciding whether to unroll the body);
+the executor evaluates only when `flat_cmds[pc].has_vars` is set
+(re-evaluating per iteration so goto loops see updated vars).
+Comments on both call sites and on the helper itself name the
+dual-purpose semantic so a future reader doesn't mistake one
+half for redundant.
 
 ### 25. `WRITE_TEXT` macro inside `parse_command` adds a third "write text" pattern
 
