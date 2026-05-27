@@ -1610,7 +1610,7 @@ static void write_func_defs_as_c(FILE *f) {
         int fn = (int)repl_state_document_cmds()[cmd_idx].args[0];
         int parsed_fn = fn;
         int param_count = 0;
-        char param_names[MAX_EXPR_VARS][16];
+        char param_names[MAX_EXPR_VARS][REPL_PREDEF_NAME_MAX];
         int fe = find_export_block_end(cmd_idx);
         /* Emit the C function under the user's alias when one is
          * registered (round-tripped via the `// @func N = name`
@@ -1748,7 +1748,7 @@ static int parse_snippet_declare(const char *args, int *loaded,
      * separate so a later source/cmd-store insert failure can undeclare
      * them without touching names that were already registered (e.g.
      * by @var auto-declare or by test setup). */
-    char newly_declared[MAX_NAMES_PER_DECL][16];
+    char newly_declared[MAX_NAMES_PER_DECL][REPL_PREDEF_NAME_MAX];
     int  new_count = 0;
 
     /* Build the canonical source string and collect names. Tokens take the
@@ -2176,7 +2176,7 @@ static int import_make_repl_func_header(const char *line, char *out, int out_sz)
         return 1;
     }
 
-    char names[MAX_EXPR_VARS][16];
+    char names[MAX_EXPR_VARS][REPL_PREDEF_NAME_MAX];
     int count = repl_parse_identifier_list(payload, "float",
                                            names, MAX_EXPR_VARS);
     if (count < 0)

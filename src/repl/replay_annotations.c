@@ -444,7 +444,7 @@ static int build_visible_vars_from_predef_values(int flat_idx,
 static int subst_visible_vars(const char *source, char *out, int out_size,
                               char *var_comment, int comment_size,
                               const ExprVar *vars, int num_vars) {
-    char used_names[MAX_PREDEF_VARS + MAX_EXPR_VARS][16];
+    char used_names[MAX_PREDEF_VARS + MAX_EXPR_VARS][REPL_PREDEF_NAME_MAX];
     float used_vals[MAX_PREDEF_VARS + MAX_EXPR_VARS];
     int num_used = 0;
     int max_used = MAX_PREDEF_VARS + MAX_EXPR_VARS;

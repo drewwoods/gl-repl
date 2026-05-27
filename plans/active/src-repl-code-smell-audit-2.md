@@ -28,7 +28,7 @@
 
 ## Status summary (updated 2026-05-27)
 
-82 findings total. 54 closed (✅), 28 still open. All open findings verified against
+82 findings total. 52 closed (✅), 30 still open. All open findings verified against
 current HEAD.
 
 | # | Sev | Tier | Status | Finding (short) |
@@ -116,8 +116,8 @@ current HEAD.
 | 81 | 🟡 | — | Open | `TUTORIAL_LOCKED_LINE_MAX` doubles as cap and validator ceiling |
 | 82 | 🔵 | — | Open | `tutorial_step_at()` O(N) sentinel walk |
 
-**By severity (open only):** 0 🔴, 13 🟡, 0 🟢, 15 🔵 = 28 open.
-**By tier (open only):** A: 0, B: 3, C: 6, D: 2, unclassified: 17.
+**By severity (open only):** 0 🔴, 16 🟡, 3 🟢, 11 🔵 = 30 open.
+**By tier (open only):** A: 0, B: 0, C: 6, D: 2, unclassified: 22.
 
 ## How to read this
 
@@ -221,6 +221,19 @@ showcase) is constructible but not in any shipped tutorial.
 drain do it all), or drop the accumulator (drain becomes a no-op).
 Document which is the source of truth. Tier B sized; not blocking
 any current user-facing behavior.
+
+**Status (2026-05-27):** ✅ Closed via "drop the per-line apply"
+(the accumulator + drain is now the single source of truth).
+`parse_cfg` (`src/repl/export.c:412-426`) only writes into
+`g_import_cfg_accumulator`; the bridge `apply` fires once at end of
+load via `import_cfg_accumulator_apply_and_reset` (called from
+`repl_export_apply_pending_cfg` at L3179). The pathological
+double-fire path is gone, and a tutorial REQUIRE step can no longer
+auto-advance from drain-side re-application of an already-applied
+slug. `tests/test_repl_editor.c` was updated to call
+`repl_export_apply_pending_cfg()` explicitly after the four
+`parse_workspace_header_line` sites that previously relied on the
+per-line apply.
 
 ### 3. ✅ `repl_copy/restore_predef_values` is values-only by contract and assumes table-shape stability — currently no enforcement, and at least one caller can violate the assumption
 
@@ -857,6 +870,14 @@ shared by the two material handlers, and `parse_canonical_float_list(
 text, vars, num_vars, cmd_args, expected_count, err)` for the
 validate-then-parse.
 
+**Status (2026-05-27):** ✅ Closed. The Tier B pass extracted
+`split_three_args` (`src/repl/parser.c:532`) for the shared three-arg
+split + trim and `parse_canonical_float_list` (`src/repl/parser.c:558`)
+for the validate-then-parse sequence; both material handlers now route
+through them. Follow-up extracted `parse_face_pname` (`src/repl/parser.c`)
+for the face-token lookup that `parse_materialfv`/`parse_materialf`
+still duplicated after the Tier B pass.
+
 ### 18. Three identical 18-line cache-prologue blocks in `replay_annotations.c`
 
 **Where:** `src/repl/replay_annotations.c:745-759, 890-903, 927-940`
@@ -896,6 +917,15 @@ identifier it just extracted to advance to `=`.
 accept an optional `end_out` pointer so callers can resume parsing
 without re-walking.
 
+**Status (2026-05-27):** ✅ Closed. `repl_config_extract_slug` in
+`src/repl/cfg_baseline.{c,h}` now takes an `end_out` parameter that
+aliases the input past the slug. `example_cfg_extract_slug` in
+`src/repl/example_loader.c:176` is a thin wrapper that calls through
+and just checks for `=`. `parse_cfg` in `src/repl/export.c:412`
+reuses the returned cursor directly instead of re-walking. The
+tutorial baseline path in `src/subsystems/tutorial/tutorial.c`
+passes `NULL` when it doesn't need the resume cursor.
+
 ### 20. Two near-identical identifier-walking validators in `eval.c`
 
 **Where:** `src/repl/eval.c:552-604` (`expr_range_has_runtime_values`)
@@ -911,6 +941,17 @@ occurrence of the closed #18 pattern.
 ctx, on_ident_fn)` callback shape; the two functions become
 specialized callback users.
 
+**Status (2026-05-27):** ✅ Closed (with a small shape variation
+from the audit's suggestion). Extracted `expr_walk_next_ident` in
+`src/repl/eval.c:582` as the shared *primitive* (one-step iterator)
+rather than a callback-shaped `expr_walk_identifiers`. Both
+`expr_range_has_runtime_values` (L631) and
+`validate_expression_idents_range` (L661) walk via it, each
+keeping their own continue/error logic at the call site. The
+duplicated walker scaffolding (skip-comment / skip-numeric /
+eat-identifier / too-long handling) lives in one place; the
+divergent post-walk logic stays explicit.
+
 ### 21. `eval.c`'s 25-entry REPL↔C function map is duplicated three ways
 
 **Where:** `src/repl/eval.c:303-318` (`k_expr_builtins[14]`) vs
@@ -924,6 +965,13 @@ consistency.
 **Fix:** Extend `ExprBuiltin` with `const char *c_name;` and drive
 both translator tables from `k_expr_builtins[]` (plus a separate
 small const-pair list for PI/TAU↔M_PI).
+
+**Status (2026-05-27):** ✅ Closed. `ExprBuiltin` (`src/repl/eval.c`)
+gained a `c_name` field and both translator tables now drive off
+`k_expr_builtins[]`. The non-libm REPL builtins `rand`/`rand2` map
+to `repl_randf`/`repl_rand2f`, which `src/repl/export.c:1524-1531`
+emits as static helpers in the exported C file when the file uses
+them (detection at `export.c:2590-2591`).
 
 ### 22. Executor includes `subsystems/replay/*` for one if-guard (layering breach)
 
@@ -986,6 +1034,13 @@ the parent, hand-coded if/snprintf in extracted helpers, and
 **Fix:** Promote to a file-private static `write_text(char *out,
 int sz, const char *fmt, ...)`; macro and inline copies go away.
 
+**Status (2026-05-27):** ✅ Closed. The `WRITE_TEXT` macro in
+`src/repl/parser.c:909` now resolves to a file-private
+`write_text(text_out, text_sz, fmt, ...)` function. The previously
+hand-coded `if (text_out && text_sz > 0) snprintf(...)` inlines in
+the extracted handlers route through the same helper, leaving a
+single "write text" pattern in the file.
+
 ### 26. `REPL_FUNC_SLOT_LIST` hard-codes 10 entries; not derived from `REPL_FUNC_SLOT_COUNT`
 
 **Where:** `src/repl/command_spec.c:121-131`
@@ -1046,6 +1101,17 @@ overrides — restorable as a no-op) from "no capture yet" (don't
 restore at all). A `count == 0` collapse would merge those two
 cases and silently re-enter restore on every example load.
 
+**Status (2026-05-27):** ✅ Closed. `ReplConfigBag` in
+`src/repl/cfg_baseline.h:25` now carries a `valid` field;
+`repl_config_bag_clear` resets it to 0 alongside `count`. The
+sibling `g_pre_example.valid` scalar in `src/repl/scenes.c` is
+gone — `g_pre_example` is just a `ReplConfigBag`. The
+capture/restore path (`capture_pre_example_cfg`,
+`restore_pre_example_cfg_if_valid` at L145-160) sets/clears the
+flag explicitly; "captured empty" and "never captured" stay
+distinguishable because `valid` is set after the optional
+`fill_scene_subset` write, not derived from `count`.
+
 ### 30. `g_pending_workspace_dir` / `g_pending_scene_name` are write-then-caller-reads-then-clears
 
 **Where:** `src/repl/export.c:24-25` (state aliases), L262-291
@@ -1073,6 +1139,12 @@ matching header.
 **Fix:** Promote decls into a sibling `text_helpers.h`;
 `core_internal.h` re-exports it transitively for legacy callers.
 
+**Status (2026-05-27):** ✅ Closed. `src/repl/text_helpers.h` now
+owns the declarations the `text_helpers.c` helpers expose;
+`core_internal.h` keeps no shadow copies. Call sites either include
+the new header directly or pick it up transitively through
+`repl/core_internal.h`, so the junk-drawer indirection is gone.
+
 ### 32. 🔀 Hardcoded `[16]` / `[64]` widths instead of named constants
 
 **Where:**
@@ -1095,6 +1167,19 @@ inconsistent (in the same file in places).
 `REPL_GOTO_LABEL_MAX = 64`, `REPL_MAX_BLOCK_NEST_DEPTH = 64`, etc.;
 sweep call sites.
 
+**Status (2026-05-27):** ✅ Closed. `config.h:223-237` defines
+`REPL_PREDEF_NAME_MAX`, `REPL_GOTO_LABEL_MAX`,
+`REPL_MAX_BLOCK_NEST_DEPTH`, and `REPL_ENUM_ARG_MAX`. The
+audit-cited label and name buffers were swept (`executor.c:600`,
+`replay_annotations.c:649`, `parser.c:1214`, etc.). Follow-up
+swept the remaining row-stride `[16]` arrays in
+`src/app/glr_completion.c`, `src/repl/compile.c`,
+`src/repl/core.c`, `src/repl/flatten.c`, `src/repl/export.c`,
+`src/repl/replay_annotations.c`, `src/editor/commit.c`, and
+`tests/test_repl_core_internal.c`, so callers that pass arrays
+to helpers expecting `[][REPL_PREDEF_NAME_MAX]` now use the
+constant instead of the literal.
+
 ### 33. `MAX_DEFERRED_VAR_VALUES = 64` is divorced from `MAX_PREDEF_VARS = 24`
 
 **Where:** `src/repl/export.c:193-196, 332-338`
@@ -1105,6 +1190,12 @@ values from a workspace file.
 
 **Fix:** `#define MAX_DEFERRED_VAR_VALUES MAX_PREDEF_VARS`, or
 assert ≥ MAX_PREDEF_VARS at init.
+
+**Status (2026-05-27):** ✅ Closed. `src/repl/export.c:205` now
+defines `MAX_DEFERRED_VAR_VALUES MAX_PREDEF_VARS`, so the two
+limits cannot drift. The overflow path stays silent for now;
+nothing currently emits more `@var` lines than the predef table
+can hold.
 
 ### 34. `repl_workspace_dir` / `repl_state_workspace_dir` — two names for the same getter
 
@@ -1337,6 +1428,12 @@ caught.
 emit a stderr warn once per session since this is presentation
 code where ASan in release won't fire.
 
+**Status (2026-05-27):** ✅ Closed. `cmd_emit` in
+`src/repl/help_text.c:292` now emits a once-per-session stderr
+warning when `n >= HELP_CMD_LINES_MAX` instead of returning `n`
+unchanged. The next bump-required edit prints a visible diagnostic
+the moment help-text rendering touches the cap.
+
 ### 45. `help_group_header` switch silently drops new groups
 
 **Where:** `src/repl/help_text.c:256-271`
@@ -1350,6 +1447,14 @@ header-less rows.
 **Fix:** Add `REPL_HELP_GROUP_COUNT` sentinel; drive the
 `cmd_emit_group` calls from a loop; `help_group_header` reaches
 `assert(0)` on unknown groups.
+
+**Status (2026-05-27):** ✅ Closed. `ReplHelpGroup` now has a
+trailing `REPL_HELP_GROUP_COUNT` sentinel; the body builder loops
+`for (g = 1; g < REPL_HELP_GROUP_COUNT; g++)` at
+`src/repl/help_text.c:346` instead of the prior hand-maintained
+11-call sequence, and `help_group_header` aborts with
+`assert(0)` on `REPL_HELP_GROUP_NONE`/unknown groups so a new enum
+member that lacks a header surfaces immediately under ASan.
 
 ### 46. `g_tabs[3]` and `g_content.tab_count = 3` must agree by hand
 
@@ -1389,6 +1494,12 @@ return value (new slot index) is discarded.
 **Fix:** Add `repl_eval_declare_predef_var_with_value(name, value,
 err, errsz)` or change the existing signature; use the return as
 the slot index.
+
+**Status (2026-05-27):** ✅ Closed. Added
+`repl_eval_declare_predef_var_with_value(name, value, err, errsz)`
+in `src/repl/eval.{c,h}`; `repl_apply_predef_ops`
+(`src/repl/apply.c:156`) now folds DECLARE + SET_VALUE into a single
+call without the redundant name lookup and value patch.
 
 ### 49. ✅ `repl_apply_can_apply_compiled_change` vs. `repl_apply_compiled_change`: preflight validates, apply trusts
 
@@ -1430,6 +1541,11 @@ plus a well-formed sanity case.
 model needs more, or inline `ReplScratchOp scratch_op; int
 scratch_op_valid;`.
 
+**Status (2026-05-27):** ✅ Closed via option 1. `MAX_SCRATCH_OPS_PER_COMMIT`
+is now `1` in `src/repl/compile.h:120`; the misleading array bound
+is gone and the single-writer contract is enforced by the array
+size.
+
 ### 51. Five file-level mutable statics for per-frame execution state in executor.c
 
 **Where:** `src/repl/executor.c:22, 40, 54-56, 59, 68`
@@ -1442,6 +1558,17 @@ set/clear the fade context gets whatever the previous frame left.
 **Fix:** Move both into `ReplExecutionOptions` (as
 `float fade_alpha_scale; int skip_geom_before_pc;` defaulting to
 `1.0f / 0`). Delete `repl_execute_set_fade_context`.
+
+**Status (2026-05-27):** ✅ Closed. `ReplExecutionOptions` in
+`src/repl/executor.h:49-56` now carries `fade_alpha_scale`,
+`skip_geom_before_pc`, and a `has_fade_context` discriminator; the
+executor reads from the options struct (`src/repl/executor.c:384-387`).
+The per-frame file-statics `g_execute_alpha_scale` and
+`g_execute_skip_geom_before_pc` plus the `repl_execute_set_fade_context`
+setter are gone. The fade-pass callers (`src/subsystems/replay/replay_render.c`
+and `bench/bench_repl.c`) initialize the new options fields inline at
+the call site, so frame-to-frame state no longer leaks through file
+statics.
 
 ### 52. `command_spec.c` enum-spec terminator uses positional zeros where rows use designators
 
@@ -1863,32 +1990,18 @@ bug-level findings.
 
 ### One-week pass — the cluster work
 
-The dominant work is **closing the `_mut()`-for-reads regression
-(#14)**, **finishing the half-done Tier B items (#29, #31)**, and
-**addressing the executor / export god functions (#68, #69)**.
+Most of the original cluster has landed. The 2026-05-27 Tier B pass
+closed #14, #7, #17, #20, #21, #25, #29, #31, #32, and #5. What
+remains:
 
-1. **#14** — per-file sweep replacing reads with const accessors
-   across source_scope.c, autonormal.c, scenes.c, export.c,
-   replay_annotations.c. Then add the `check-state-ownership`
-   ratchet to prevent regression. This was the audit's #37 ratchet
-   that never landed.
-2. **#7** — folds into #14.
-3. **#15** — extract shared parse cores for the four block kinds
+1. **#15** — extract shared parse cores for the four block kinds
    so editor_compile_* and repl_compile_* share validation. Closes
    the largest remaining drift surface (#15 line count: ~430 +
    ~860).
-4. **#16** — extend `repl_compile_dispatch` to cover all six entry
+2. **#16** — extend `repl_compile_dispatch` to cover all six entry
    points, or rename it.
-5. **#17** + **#20** + **#21** + **#25** — eval.c / parser.c
-   helper extraction sweep.
-6. **#29** — finish Tier B #44's roll-into-discriminator.
-7. **#31** — promote text_helpers.c declarations into a sibling
-   `text_helpers.h`.
-8. **#32** — name the four 16/64 magic widths in shared headers.
-9. **#5** — heap-allocate UserScene stash buffers (or hoist a single
-   static scratch). Real overflow risk.
-10. **#37** — tagged union for GLCmd's CmdType-specific fields.
-    Invasive; the natural follow-up to #5.
+3. **#37** — tagged union for GLCmd's CmdType-specific fields.
+   Invasive; the natural follow-up to #5.
 
 ### One-week pass — finish the file-size reductions
 
@@ -1904,15 +2017,18 @@ The dominant work is **closing the `_mut()`-for-reads regression
 Following the Tier A/B/C/D system the prior audit landed:
 
 - **Tier A (small, near-zero risk):** none currently open.
-- **Tier B (moderate, focused pass):** #2, #4, #5, #6, #8, #10,
-  #15, #29, #31, #32, #33, #44, #45, #48, #50, #51, plus the
-  per-file parts of #14.
-- **Tier C (high cost, broad surface):** #14 (ratchet), #16, #37,
-  #68, #69, #41 (test-side change for tutorial enum coupling).
+- **Tier B (moderate, focused pass):** none currently open — the
+  2026-05-27 Tier B pass closed the cluster (#2, #4, #5, #17, #19,
+  #20, #21, #25, #29, #31, #32, #33, #44, #45, #48, #49, #50, #51).
+- **Tier C (high cost, broad surface):** #15, #16, #37, #41, #68,
+  #69.
 - **Tier D (kept on purpose):** #75 (the tutorial-only dispatch
   trampolines could stay if renamed and grouped; consult tutorial
   owner before "fixing"), #80 (`s_replay_text_view` — documented
   trade-off).
+- **Unclassified (need a tier before scheduling):** #6, #22, #23,
+  #24, #26, #27, #28, #30, #42, #43, #47, #70, #71, #72, #73, #74,
+  #76, #77, #78, #79, #81, #82.
 
 ### Out of scope
 

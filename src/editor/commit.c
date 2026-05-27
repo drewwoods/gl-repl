@@ -565,7 +565,7 @@ ReplCompileResult editor_compile_func_def(const char *input,
 
     int fn = -1;
     int param_count = 0;
-    char param_names[MAX_EXPR_VARS][16];
+    char param_names[MAX_EXPR_VARS][REPL_PREDEF_NAME_MAX];
 
     /* Quick-reject inputs that look like func *calls* (have `(` and
      * no `{`). The live guard returns 0 from editor_try_commit_func_def

@@ -586,7 +586,7 @@ void repl_reformat_program(void) {
             int fn = (int)orig.args[0];
             int parsed_fn = fn;
             int param_count = 0;
-            char param_names[MAX_EXPR_VARS][16];
+            char param_names[MAX_EXPR_VARS][REPL_PREDEF_NAME_MAX];
             if (parse_repl_func_signature(orig_text, &parsed_fn,
                                           param_names, MAX_EXPR_VARS,
                                           &param_count))
@@ -773,7 +773,7 @@ int collect_visible_vars(int pos, ExprVar *vars, int max_vars, int *total_out) {
             } else if (t == CMD_FUNC_DEF) {
                 int fn = -1;
                 int param_count = 0;
-                char param_names[MAX_EXPR_VARS][16];
+                char param_names[MAX_EXPR_VARS][REPL_PREDEF_NAME_MAX];
                 const char *func_text = source_text_line(text, cmd_idx);
                 if (parse_repl_func_signature(func_text ? func_text : "", &fn,
                                               param_names, MAX_EXPR_VARS,
