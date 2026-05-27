@@ -29,7 +29,7 @@
 ## Status summary (updated 2026-05-27)
 
 83 findings total (82 from the original audit + 1 review-discovered).
-75 closed (✅), 8 still open. All open findings verified against
+77 closed (✅), 6 still open. All open findings verified against
 current HEAD. Tier letters cover the whole open backlog — no unclassified rows
 remain. Tier A is empty: the 2026-05-27 Tier A close pass landed all ten
 (#26, #27, #43, #70, #72, #76, #77, #78, #79, #81), and the review pass that
@@ -51,8 +51,8 @@ added #83 closed it in the same commit.
 | 12 | 🔴 | A | ✅ Done | `try_apply_example_camera_header` return discarded |
 | 13 | 🟡 | A | ✅ Done | `repl_eval_parse_exprs` docstring promises `-1 on error` |
 | 14 | 🟡 | C | ✅ Done | 🔀 `_mut()` for read-only work (multi-file) |
-| 15 | 🔵 | C | Open | `repl_compile_*` duplicates `editor_compile_*` |
-| 16 | 🔵 | C | Open | `repl_compile_dispatch` covers only 2 of 6 entry points |
+| 15 | 🔵 | C | ✅ Done | `repl_compile_*` duplicates `editor_compile_*` |
+| 16 | 🔵 | C | ✅ Done | `repl_compile_dispatch` covers only 2 of 6 entry points |
 | 17 | 🔵 | B | ✅ Done | Three parse handlers share trim/split skeleton |
 | 18 | 🔵 | A | ✅ Done | Three identical cache prologues in `replay_annotations.c` |
 | 19 | 🔵 | B | ✅ Done | Five slug/walk duplicates missed by closed #14 |
@@ -121,8 +121,8 @@ added #83 closed it in the same commit.
 | 82 | 🔵 | B | ✅ Done | `tutorial_step_at()` O(N) sentinel walk |
 | 83 | 🔴 | A | ✅ Done | `@declare` import treats failed `repl_eval_declare_predef_var` as success |
 
-**By severity (open only):** 0 🔴, 4 🟡, 0 🟢, 4 🔵 = 8 open.
-**By tier (open only):** A: 0, B: 0, C: 6, D: 2, unclassified: 0.
+**By severity (open only):** 0 🔴, 4 🟡, 0 🟢, 2 🔵 = 6 open.
+**By tier (open only):** A: 0, B: 0, C: 4, D: 2, unclassified: 0.
 
 ## How to read this
 
@@ -857,6 +857,55 @@ uses `%.9g` for for-loop bounds; `repl_compile_for_loop` uses
 for parse/validate, layer editor effects on top. Or extract a
 shared `parse_for_loop_header()` and have both wrappers call it.
 
+**Status (2026-05-27):** ✅ Closed via per-kind kernel extraction
+landed across four focused commits (one per block kind). Each
+kernel lives in `src/repl/compile.c` and owns the shared
+parse + validate + format work. Both wrappers — the lean-loader
+`repl_compile_<kind>` and the editor's `editor_compile_<kind>` —
+call the kernel and add their kind-specific concerns on top.
+
+- **for_loop** (`repl_compile_for_loop_kernel`, `ReplForLoopKernel`):
+  parses the for-header, validates idents, builds CMD_FOR_BEGIN +
+  fb_text. The literal-args formatter now uses
+  `repl_format_source_float` on both sides (the audit's `%.9g` drift
+  is fixed).
+- **if_block** (`repl_compile_if_block_kernel`, `ReplIfBlockKernel`):
+  parses the condition, validates idents, builds CMD_IF_BEGIN +
+  ib_text with the cached cond_val on args[0] and has_vars set.
+- **close_brace** (`repl_compile_close_brace_kernel`,
+  `ReplCloseBraceKernel`): no expression parse — just the open-block
+  scope lookup, end_type derivation, and the matched-existing-end vs
+  insert-new-end-marker decision. Returns end_type so the editor
+  wrapper can drive its func-decl-resume one-shot and pick a label
+  for the commit-message; loader maps NO_CHANGE / INSERT_ONE
+  directly.
+- **func_def** (`repl_compile_func_def_kernel`, `ReplFuncDefKernel`):
+  alias resolve + signature parse + dup-guard with a policy
+  parameter (`allow_overwrite_at_pos`). Loader passes -1 to reject
+  every duplicate; editor passes its edit_pos when an in-place
+  rewrite is intended. Alias rollback on rejection runs inside the
+  kernel so both wrappers get the no-leak guarantee for free. The
+  editor's comment-relocation branch rebuilds fd_text against the
+  depth-0 indent (the kernel's indent is at `kernel.pos`, which can
+  be nested for the relocation case); the kernel's fd cmd carries
+  through unchanged.
+
+Editor-only concerns stay on the editor side:
+header-replace REPLACE_ONE, paired begin+end INSERT_MANY count=2,
+one-liner-body INSERT_MANY count=3 (for_loop only), comment-
+relocation for func_def, all `out->effects.*` fields, and the
+`commit_message`.
+
+Net effect on file sizes (post-extraction):
+- src/repl/compile.c: kernels add ~140 net lines for the
+  paramaterized shapes; the public `repl_compile_*` wrappers each
+  shrink to ~20 lines.
+- src/editor/commit.c: each `editor_compile_*` shed ~60-80 lines of
+  duplicated parse; commit.c is ~210 lines lighter overall.
+
+Validated end-to-end against the existing 47/47-binary, 7550/7550-
+test suite — no regressions.
+
 ### 16. `repl_compile_dispatch` covers float-decl + var-assign only; other entry points are out-of-band
 
 **Where:** `src/repl/compile.c:62-89` (dispatcher), vs.
@@ -871,6 +920,20 @@ a new entry needs hand-wiring at every caller (load.c does it,
 (load-bearing — float_decl before var_assign, close_brace before
 for/func/if), or rename to `_dispatch_var_or_assign` so the limited
 scope is in the name.
+
+**Status (2026-05-27):** ✅ Closed via the extend path. With the
+per-kind kernels from #15 in place, every compile entry now has a
+canonical shape, so the dispatcher's chain expands to all six:
+`repl_compile_float_decl → repl_compile_var_assign →
+repl_compile_close_brace → repl_compile_for_loop →
+repl_compile_func_def → repl_compile_if_block`. The dispatcher's
+body is a static table walked in canonical order; ordering is the
+load-bearing constraint (float_decl before var_assign, close_brace
+before the openers), documented inline.
+
+`src/repl/load.c::repl_load_apply_line` collapses to a single
+`repl_compile_dispatch` call — the per-kind chain it used to walk
+manually plus its `load_try_block` helper are both gone.
 
 ### 17. Three extracted parser handlers re-implement the same trim/split skeleton
 
@@ -2331,13 +2394,13 @@ finding so the backlog can be scheduled without re-reading each body.
 - **Tier B (moderate, focused pass):** none currently open — the
   2026-05-27 follow-up landings closed the cluster (#22, #23, #24,
   #28, #30, #42, #47, #73, #82) as five focused commits.
-- **Tier C (high cost, broad surface):** #15 (`repl_compile_*` ↔
-  `editor_compile_*` block-validator dedup), #16
-  (`repl_compile_dispatch` cover all six entry points), #37
-  (tagged-union for `GLCmd.text`/`var_names`), #41 (tutorial
-  GRID_THEME enum-coupling test), #68 (`repl_execute_program`
-  324-line god switch split), #71 (`g_predef_vars` const-route
-  + ratchet).
+- **Tier C (high cost, broad surface):** #37 (tagged-union for
+  `GLCmd.text`/`var_names`), #41 (tutorial GRID_THEME
+  enum-coupling test), #68 (`repl_execute_program` 324-line god
+  switch split), #71 (`g_predef_vars` const-route + ratchet).
+  The 2026-05-27 pass closed #15 (per-kind kernel extraction
+  across four commits) and #16 (`repl_compile_dispatch` extended
+  to all six entries).
 - **Tier D (kept on purpose):** #75 (the tutorial-only dispatch
   trampolines could stay if renamed and grouped; consult tutorial
   owner before "fixing"), #80 (`s_replay_text_view` — documented

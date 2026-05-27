@@ -65,24 +65,34 @@ ReplCompileResult repl_compile_dispatch(const char *text,
                                         char *err, int err_size) {
     if (!out || !ctx) return REPL_COMPILE_ERROR;
 
-    /* Float decl first: `float x;` would otherwise parse as an
-     * assignment to identifier `float`. */
-    ReplCompileResult r = repl_compile_float_decl(text, ctx, out,
-                                                  err, err_size);
-    if (r == REPL_COMPILE_ERROR) return r;
-    if (out->kind != REPL_COMPILED_NO_CHANGE) return REPL_COMPILE_OK;
+    /* Canonical order — mirrors editor_try_commit_any. Each entry
+     * is a per-kind compile validator that returns NO_CHANGE when
+     * the input doesn't match its grammar, OK + a populated
+     * ReplCompiledChange when it does, or ERROR on syntax failure.
+     * The first match wins.
+     *
+     * Ordering is load-bearing: float_decl must come before
+     * var_assign (otherwise `float x` would misread as an
+     * assignment to identifier `float`); close_brace must come
+     * before the three block openers (so a `}` line lands on the
+     * close-brace branch). */
+    static const struct {
+        ReplCompileResult (*fn)(const char *, const ReplCompileContext *,
+                                ReplCompiledChange *, char *, int);
+    } chain[] = {
+        { repl_compile_float_decl  },
+        { repl_compile_var_assign  },
+        { repl_compile_close_brace },
+        { repl_compile_for_loop    },
+        { repl_compile_func_def    },
+        { repl_compile_if_block    },
+    };
 
-    /* Var assignment: `x = expr;`. */
-    r = repl_compile_var_assign(text, ctx, out, err, err_size);
-    if (r == REPL_COMPILE_ERROR) return r;
-    if (out->kind != REPL_COMPILED_NO_CHANGE) return REPL_COMPILE_OK;
-
-    /* Structured-block syntax (close_brace / if_block / func_def /
-     * for_loop) is currently routed through the editor-side
-     * `editor_compile_*` chain. Pure variants are extracted into this
-     * module; until then this dispatcher
-     * returns NO_CHANGE for those inputs and the caller falls
-     * through (implemented as step 5a of the decouple plan). */
+    for (size_t i = 0; i < sizeof(chain) / sizeof(chain[0]); i++) {
+        ReplCompileResult r = chain[i].fn(text, ctx, out, err, err_size);
+        if (r == REPL_COMPILE_ERROR) return r;
+        if (out->kind != REPL_COMPILED_NO_CHANGE) return REPL_COMPILE_OK;
+    }
 
     out->kind = REPL_COMPILED_NO_CHANGE;
     return REPL_COMPILE_OK;
