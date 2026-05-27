@@ -34,6 +34,7 @@ files=(
     src/repl/example_loader.c
     src/repl/examples.c
     src/repl/export.c
+    src/repl/import.c
     repl_autocomplete.c
     src/repl/replay_annotations.c
 )

@@ -28,8 +28,9 @@
 
 ## Status summary (updated 2026-05-27)
 
-82 findings total. 52 closed (✅), 30 still open. All open findings verified against
-current HEAD.
+82 findings total. 55 closed (✅), 27 still open. All open findings verified against
+current HEAD. Tier letters now cover the whole open backlog — no unclassified rows
+remain.
 
 | # | Sev | Tier | Status | Finding (short) |
 |---|-----|------|--------|-----------------|
@@ -38,7 +39,7 @@ current HEAD.
 | 3 | 🔴 | A | ✅ Done | `repl_copy/restore_predef_values` shape assumption |
 | 4 | 🔴 | B | ✅ Done | `repl_config_bag_set` silently truncates |
 | 5 | 🔴 | B | ✅ Done | `UserScene` stack allocations exceed thread stacks |
-| 6 | 🟡 | — | Open | `repl_state_capture/restore` excludes `g_user_scenes[]` |
+| 6 | 🟢 | A | ✅ Done | `repl_state_capture/restore` excludes `g_user_scenes[]` |
 | 7 | 🟡 | A | ✅ Done | `source_scope.c` reads through `_mut()` |
 | 8 | 🔴 | A | ✅ Done | `import_feed_one_line` ignores `load_err` |
 | 9 | 🔴 | A | ✅ Done | `repl_export_load_from_file` swallows fclose/ferror |
@@ -54,15 +55,15 @@ current HEAD.
 | 19 | 🔵 | B | ✅ Done | Five slug/walk duplicates missed by closed #14 |
 | 20 | 🔵 | B | ✅ Done | Two near-identical identifier walkers in `eval.c` |
 | 21 | 🔵 | B | ✅ Done | REPL↔C function map duplicated three ways |
-| 22 | 🟡 | — | Open | Executor includes `subsystems/replay/*` (layering) |
-| 23 | 🟡 | — | Open | Executor writes status messages to live REPL state |
-| 24 | 🔵 | — | Open | CMD_IF_BEGIN evaluator duplicated (flatten vs executor) |
+| 22 | 🟡 | B | Open | Executor includes `subsystems/replay/*` (layering) |
+| 23 | 🟡 | B | Open | Executor writes status messages to live REPL state |
+| 24 | 🔵 | B | Open | CMD_IF_BEGIN evaluator duplicated (flatten vs executor) |
 | 25 | 🟡 | B | ✅ Done | `WRITE_TEXT` macro — third "write text" pattern |
-| 26 | 🟡 | — | Open | `REPL_FUNC_SLOT_LIST` hard-codes 10 entries |
-| 27 | 🟡 | — | Open | Stray `func0(var0)` autocomplete row |
-| 28 | 🔵 | — | Open | `replay_apply_state_cmd` parallel to executor dispatch |
+| 26 | 🟡 | A | Open | `REPL_FUNC_SLOT_LIST` hard-codes 10 entries |
+| 27 | 🟡 | A | Open | Stray `func0(var0)` autocomplete row |
+| 28 | 🔵 | B | Open | `replay_apply_state_cmd` parallel to executor dispatch |
 | 29 | 🟡 | B | ✅ Done | `g_pre_example.valid` still a parallel scalar |
-| 30 | 🟡 | — | Open | `g_pending_workspace_dir` write-then-caller-reads |
+| 30 | 🟡 | B | Open | `g_pending_workspace_dir` write-then-caller-reads |
 | 31 | 🟡 | B | ✅ Done | `text_helpers.c` has no `.h` |
 | 32 | 🟡 | B | ✅ Done | 🔀 Hardcoded `[16]`/`[64]` widths |
 | 33 | 🟡 | B | ✅ Done | `MAX_DEFERRED_VAR_VALUES=64` vs `MAX_PREDEF_VARS=24` |
@@ -74,12 +75,12 @@ current HEAD.
 | 39 | 🔵 | A | ✅ Done | Three bridge ternary patterns |
 | 40 | 🔵 | — | ✅ Done | Predef-var capture/restore duplicated 5× |
 | 41 | 🟡 | C | Open | Tutorial GRID_THEME literals decoupled |
-| 42 | 🔵 | — | Open | CatalogTagOps glue remains after closed #12 |
-| 43 | 🔵 | — | Open | `tag_bit` byte-identical inlines |
+| 42 | 🔵 | B | Open | CatalogTagOps glue remains after closed #12 |
+| 43 | 🔵 | A | Open | `tag_bit` byte-identical inlines |
 | 44 | 🟡 | B | ✅ Done | `cmd_emit` silently drops rows past cap |
 | 45 | 🟡 | B | ✅ Done | `help_group_header` switch drops new groups |
 | 46 | 🟡 | A | ✅ Done | `g_tabs[3]` / `tab_count=3` hand-agreement |
-| 47 | 🔵 | — | Open | `import_make_repl_tess_line` scrape loops |
+| 47 | 🔵 | B | Open | `import_make_repl_tess_line` scrape loops |
 | 48 | 🔵 | B | ✅ Done | `repl_apply_predef_ops` redundant re-lookup |
 | 49 | 🔴 | B | ✅ Done | `repl_apply_can_apply_compiled_change` preflight gap |
 | 50 | 🟡 | B | ✅ Done | `MAX_SCRATCH_OPS_PER_COMMIT` wildly oversized |
@@ -101,23 +102,23 @@ current HEAD.
 | 66 | 🟢 | A | ✅ Done | `state.c` 13 file-scope macros with no readers |
 | 67 | 🟢 | A | ✅ Done | Stale phase-N.M comment crumbs |
 | 68 | 🔵 | C | Open | `repl_execute_program` 324-line god switch |
-| 69 | 🔵 | C | Open | `export.c` still 3254 lines |
-| 70 | 🟡 | — | Open | `eval.h` `MAX_EXPR_VARS` doc references deleted modules |
-| 71 | 🟡 | — | Open | `g_predef_vars` macros route reads through `_mut()` |
-| 72 | 🟢 | — | Open | `repl_state_init_defaults` one-line forwarder |
-| 73 | 🟡 | — | Open | `repl_state_get_defaults()` hidden mutation |
-| 74 | 🟡 | — | Open | `first_non_decl` leaks `CMD_VAR_DECLARE` policy |
+| 69 | 🔵 | C | ✅ Done | `export.c` split into export.c + import.c |
+| 70 | 🟡 | A | Open | `eval.h` `MAX_EXPR_VARS` doc references deleted modules |
+| 71 | 🟡 | C | Open | `g_predef_vars` macros route reads through `_mut()` |
+| 72 | 🟢 | A | Open | `repl_state_init_defaults` one-line forwarder |
+| 73 | 🟡 | B | Open | `repl_state_get_defaults()` hidden mutation |
+| 74 | 🟢 | A | ✅ Done | `first_non_decl` leaks `CMD_VAR_DECLARE` policy |
 | 75 | 🟡 | D | Open | `repl_dispatch_*` 4 of 12 tutorial-only trampolines |
-| 76 | 🟡 | — | Open | `WORKSPACE_DIR_MAX` alias + `+256` magic |
-| 77 | 🟢 | — | Open | "Observably overwritten" no-op comment |
-| 78 | 🟡 | — | Open | `scroll_to_display_function` string-matches `"void display()"` |
-| 79 | 🟢 | — | Open | Dead `case 5:`/`case 6:` in `format_evaluated_cmd` |
+| 76 | 🟡 | A | Open | `WORKSPACE_DIR_MAX` alias + `+256` magic |
+| 77 | 🟢 | A | Open | "Observably overwritten" no-op comment |
+| 78 | 🟡 | A | Open | `scroll_to_display_function` string-matches `"void display()"` |
+| 79 | 🟢 | A | Open | Dead `case 5:`/`case 6:` in `format_evaluated_cmd` |
 | 80 | 🟡 | D | Open | `s_replay_text_view` file-level set-then-read state |
-| 81 | 🟡 | — | Open | `TUTORIAL_LOCKED_LINE_MAX` doubles as cap and validator ceiling |
-| 82 | 🔵 | — | Open | `tutorial_step_at()` O(N) sentinel walk |
+| 81 | 🟡 | A | Open | `TUTORIAL_LOCKED_LINE_MAX` doubles as cap and validator ceiling |
+| 82 | 🔵 | B | Open | `tutorial_step_at()` O(N) sentinel walk |
 
-**By severity (open only):** 0 🔴, 16 🟡, 3 🟢, 11 🔵 = 30 open.
-**By tier (open only):** A: 0, B: 0, C: 6, D: 2, unclassified: 22.
+**By severity (open only):** 0 🔴, 14 🟡, 3 🟢, 10 🔵 = 27 open.
+**By tier (open only):** A: 10, B: 9, C: 6, D: 2, unclassified: 0.
 
 ## How to read this
 
@@ -499,6 +500,20 @@ restore. The header docstring's "scene bookkeeping" is misleading.
 the runtime struct — invasive but principled), or update the
 docstring to say "scene bookkeeping = active-example-idx +
 workspace-dir only; the user-scene catalog is NOT in this snapshot."
+
+**Status (2026-05-27):** ✅ Closed via docstring update (the
+non-invasive option). `repl_state_capture/_restore` has no live
+production caller today — only `tests/test_repl_state.c` exercises
+the pair. Moving the user-scene catalog statics into
+`ReplRuntimeState.scenes` would be a real invasive refactor (BSS
+ownership, init order, all of scenes.c's helpers re-pointed) and
+isn't worth doing while no caller depends on the missing data.
+The `src/repl/state.h` block comment on `ReplRuntimeState` now
+spells out the gap explicitly — what the `scenes` slice does
+cover (`active_example_idx` + workspace dir) and what it omits
+(`g_user_scenes[]`, `g_active_user_scene`, `g_user_scene_tick`,
+`g_pre_example`) — and points future readers back here if they
+wire capture/restore into undo or session-save.
 
 ### 7. ✅ `source_scope.c` reads through `_mut()` accessors (regression of audit #37)
 
@@ -1811,6 +1826,28 @@ natural and the file is begging for it.
 snippet directive table). Both halves ~1500/1700 lines, similar to
 post-Tier-C parser.c.
 
+**Status (2026-05-27):** ✅ Closed. `src/repl/export.c` is now 1920
+lines (writer side); `src/repl/import.c` is 1454 lines (reader side).
+Moved to the new file: the pending-`@cfg` accumulator (and the
+public `repl_export_apply_pending_cfg`), the deferred-`@var` table,
+all five workspace-directive parsers (`parse_workspace_dir`,
+`parse_scene_name`, `parse_var`, `parse_func_alias`, `parse_cfg`),
+`repl_state_parse_workspace_header_line`, the snippet-directive
+table, the camera-bridge import-line consumers
+(`import_cam_parser_reset`, `import_parse_cam_line`), every
+`import_make_repl_*` C-to-REPL translator, `import_feed_one_line`,
+the `ImportState` machine, and `repl_export_load_from_file`. The
+writer-side dispatcher (`repl_state_refresh_workspace_header_lines`)
+and its `emit_*` helpers stay in `export.c`; the two files keep
+parallel parse-only / emit-only directive tables rather than
+externalizing the once-shared `WORKSPACE_DIRECTIVES`. Both files
+duplicate the `IMPORT_EXPORT_STATE` macro block verbatim with a
+comment marking them as a mirrored pair. Makefile and the
+`scripts/check-repl-export-*.sh` ratchets were extended to cover
+`import.c`; `scripts/baselines/repl-mut-reads.txt` bumped from 10
+to 11 for the duplicated state-owner macro hit. `CLAUDE.md`'s
+MODULES table grew a sibling row for the new file.
+
 ### 70. `eval.h`'s `MAX_EXPR_VARS` doc is mislabelled and references deleted modules
 
 **Where:** `src/repl/eval.h:42-88`
@@ -1857,9 +1894,17 @@ Comment justifies it; static analyzer / reader won't expect it.
 `repl_state_ensure_sentinels()` (the side effect path); have
 `repl_state_reset_program` call the second explicitly.
 
-### 74. `command_store.h::repl_command_store_first_non_decl` leaks `CMD_VAR_DECLARE` policy
+### 74. ✅ `command_store.h::repl_command_store_first_non_decl` leaks `CMD_VAR_DECLARE` policy
 
 (also covered in #36)
+
+**Status (2026-05-27):** ✅ Closed by #36's resolution. The
+`repl_command_store_first_non_decl` declaration was removed from
+`command_store.h` and the policy moved to a file-local helper inside
+the only consumer — `import_first_non_decl` in `src/repl/import.c`
+(it lives there because the only caller is `parse_snippet_declare`
+during snippet import, after the #69 split). The `command_store.h`
+layer is back to "array mechanics" only.
 
 ### 75. `repl_dispatch_*` family: 4 of 12 trampolines are tutorial-only
 
@@ -2005,30 +2050,47 @@ remains:
 
 ### One-week pass — finish the file-size reductions
 
-1. **#69** — split `export.c` into `export.c` (writer side) +
-   `import.c` (reader side). ~1500/1700 each, mirroring the
-   parser.c diet.
-2. **#68** — split `repl_execute_program` into per-CmdType handlers.
-3. **#47** — extract `parse_tess_brace_block` for the 134-line
+#69 landed on 2026-05-27 (`export.c` → `export.c` + `import.c`,
+1920 + 1454 lines). What remains:
+
+1. **#68** — split `repl_execute_program` into per-CmdType handlers.
+2. **#47** — extract `parse_tess_brace_block` for the 134-line
    import function.
 
 ### Tier-classified outstanding work
 
-Following the Tier A/B/C/D system the prior audit landed:
+Following the Tier A/B/C/D system the prior audit landed. The
+2026-05-27 classification pass tiered every previously-unclassified
+finding so the backlog can be scheduled without re-reading each body.
 
-- **Tier A (small, near-zero risk):** none currently open.
-- **Tier B (moderate, focused pass):** none currently open — the
-  2026-05-27 Tier B pass closed the cluster (#2, #4, #5, #17, #19,
-  #20, #21, #25, #29, #31, #32, #33, #44, #45, #48, #49, #50, #51).
-- **Tier C (high cost, broad surface):** #15, #16, #37, #41, #68,
-  #69.
+- **Tier A (small, near-zero risk):** #26 (`REPL_FUNC_SLOT_LIST`
+  STATIC_ASSERT), #27 (stray `func0(var0)` row), #43 (`tag_bit`
+  inlines extraction), #70 (`eval.h` doc swap + module paths),
+  #72 (`repl_state_init_defaults` forwarder delete), #76
+  (`WORKSPACE_DIR_MAX` alias + `+256` → `NAME_MAX`), #77
+  ("Observably overwritten" comment cleanup), #78
+  (`scroll_to_display_function` header constant), #79 (dead
+  `case 5:`/`case 6:` in `format_evaluated_cmd`), #81
+  (`TUTORIAL_LOCKED_LINE_MAX` split into two constants).
+- **Tier B (moderate, focused pass):** #22 (executor includes
+  `subsystems/replay/*` — add `finalize_tess` to options), #23
+  (executor status messages — route through `ReplExecutionResult`),
+  #24 (CMD_IF_BEGIN evaluator dedup), #28 (`replay_apply_state_cmd`
+  fall-through), #30 (`g_pending_*` → out-pointer pair), #42
+  (CatalogTagOps wrapper macro), #47 (extract `parse_tess_brace_block`),
+  #73 (`repl_state_get_defaults()` split), #82
+  (`tutorial_step_at()` struct accessor).
+- **Tier C (high cost, broad surface):** #15 (`repl_compile_*` ↔
+  `editor_compile_*` block-validator dedup), #16
+  (`repl_compile_dispatch` cover all six entry points), #37
+  (tagged-union for `GLCmd.text`/`var_names`), #41 (tutorial
+  GRID_THEME enum-coupling test), #68 (`repl_execute_program`
+  324-line god switch split), #71 (`g_predef_vars` const-route
+  + ratchet).
 - **Tier D (kept on purpose):** #75 (the tutorial-only dispatch
   trampolines could stay if renamed and grouped; consult tutorial
   owner before "fixing"), #80 (`s_replay_text_view` — documented
   trade-off).
-- **Unclassified (need a tier before scheduling):** #6, #22, #23,
-  #24, #26, #27, #28, #30, #42, #43, #47, #70, #71, #72, #73, #74,
-  #76, #77, #78, #79, #81, #82.
 
 ### Out of scope
 
