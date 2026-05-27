@@ -2253,9 +2253,120 @@ static void test_feature_tour_grid_steps_use_symbolic_names(void) {
                "GRID_THEME_FOCUS");
 }
 
+/* Audit #41 follow-up: the runtime validator must reject a tutorial
+ * whose SET / REQUIRE step or entry-level @cfg line carries a
+ * symbolic value name that the bridge doesn't recognise — otherwise
+ * the strtol-fallback path would silently land the showcase at the
+ * default (`*_OFF` = 0), and any REQUIRE pointing at that same
+ * default would auto-advance incorrectly. Exercises
+ * tutorial_validate_entry_against_bridge directly so the test
+ * doesn't need a typo'd entry in the shipped catalog. */
+static void test_validate_rejects_typo_symbolic_value_name(void) {
+    /* glr_ctrl_reset_all installs g_glr_export_cfg_bridge — the
+     * bridge that resolve_text and the resolver rules live behind.
+     * Without it repl_cfg_known returns 0 for every slug. */
+    glr_ctrl_reset_all();
+
+    /* Sanity: shipped Feature Tour passes the bridge validator
+     * (catches a regression where someone breaks the validator
+     * itself or adds a typo to the catalog). */
+    int n = repl_tutorial_count();
+    int tour_idx = -1;
+    for (int i = 0; i < n; i++) {
+        if (strcmp(repl_tutorial_name(i), "Feature Tour") == 0) {
+            tour_idx = i;
+            break;
+        }
+    }
+    ASSERT_TRUE("Feature Tour exists", tour_idx >= 0);
+    if (tour_idx >= 0) {
+        const TutorialEntry *e = repl_tutorial_entry(tour_idx);
+        ASSERT_TRUE("repl_tutorial_entry returns shipped entry", e != NULL);
+        char err[160] = "";
+        ASSERT_TRUE("shipped Feature Tour passes bridge validator",
+                    tutorial_validate_entry_against_bridge(e, err, sizeof err));
+    }
+
+    /* Synthetic entry: SET step with typo'd value name. */
+    static const TutorialStep typo_set_steps[] = {
+        { NULL, "// SET typo step", NULL, TUTORIAL_STEP_APPEND, NULL,
+          TUTORIAL_STEP_KIND_SET, "grid", 0, "GRID_THEME_RADRA" },
+        { NULL, NULL, NULL, TUTORIAL_STEP_APPEND, NULL,
+          TUTORIAL_STEP_KIND_COMMAND, NULL, 0, NULL },
+    };
+    TutorialEntry typo_set_entry = {
+        .name = "typo_set", .steps = typo_set_steps,
+        .cfg = NULL, .tags = 0, .subheading = NULL,
+    };
+    char err[160] = "";
+    ASSERT_TRUE("SET typo rejected",
+                !tutorial_validate_entry_against_bridge(&typo_set_entry,
+                                                       err, sizeof err));
+    ASSERT_TRUE("SET typo diagnostic names the bad symbol",
+                strstr(err, "GRID_THEME_RADRA") != NULL);
+
+    /* Synthetic entry: REQUIRE step with typo'd value name. */
+    static const TutorialStep typo_req_steps[] = {
+        { NULL, "// REQUIRE typo step", NULL, TUTORIAL_STEP_APPEND, NULL,
+          TUTORIAL_STEP_KIND_REQUIRE, "axes", 0, "AXES_THEME_COMPSS" },
+        { NULL, NULL, NULL, TUTORIAL_STEP_APPEND, NULL,
+          TUTORIAL_STEP_KIND_COMMAND, NULL, 0, NULL },
+    };
+    TutorialEntry typo_req_entry = {
+        .name = "typo_req", .steps = typo_req_steps,
+        .cfg = NULL, .tags = 0, .subheading = NULL,
+    };
+    err[0] = '\0';
+    ASSERT_TRUE("REQUIRE typo rejected",
+                !tutorial_validate_entry_against_bridge(&typo_req_entry,
+                                                       err, sizeof err));
+    ASSERT_TRUE("REQUIRE typo diagnostic names the bad symbol",
+                strstr(err, "AXES_THEME_COMPSS") != NULL);
+
+    /* Synthetic entry: entry-level @cfg line with typo'd value name. */
+    static const TutorialStep cmd_only_steps[] = {
+        { NULL, "// trivial", "glPointSize(1)", TUTORIAL_STEP_APPEND, NULL,
+          TUTORIAL_STEP_KIND_COMMAND, NULL, 0, NULL },
+        { NULL, NULL, NULL, TUTORIAL_STEP_APPEND, NULL,
+          TUTORIAL_STEP_KIND_COMMAND, NULL, 0, NULL },
+    };
+    static const char *const typo_cfg_lines[] = {
+        "// @cfg backdrop = SCENE_BACKDROP_CITISCAPE",   /* typo */
+        NULL,
+    };
+    TutorialEntry typo_cfg_entry = {
+        .name = "typo_cfg", .steps = cmd_only_steps,
+        .cfg = typo_cfg_lines, .tags = 0, .subheading = NULL,
+    };
+    err[0] = '\0';
+    ASSERT_TRUE("@cfg typo rejected",
+                !tutorial_validate_entry_against_bridge(&typo_cfg_entry,
+                                                       err, sizeof err));
+    ASSERT_TRUE("@cfg typo diagnostic names the bad symbol",
+                strstr(err, "SCENE_BACKDROP_CITISCAPE") != NULL);
+
+    /* Symmetric: an entry with valid symbolic + numeric @cfg values
+     * passes. Locks the back-compat path: integer literals still
+     * resolve through the strtol fallback. */
+    static const char *const valid_cfg_lines[] = {
+        "// @cfg grid = GRID_THEME_RADAR",
+        "// @cfg axes = 4",   /* legacy integer-form, must still pass */
+        NULL,
+    };
+    TutorialEntry valid_entry = {
+        .name = "valid", .steps = cmd_only_steps,
+        .cfg = valid_cfg_lines, .tags = 0, .subheading = NULL,
+    };
+    err[0] = '\0';
+    ASSERT_TRUE("clean symbolic + legacy integer @cfg passes",
+                tutorial_validate_entry_against_bridge(&valid_entry,
+                                                      err, sizeof err));
+}
+
 int main(void) {
     tutorial_state_init_explicit();
     test_feature_tour_grid_steps_use_symbolic_names();
+    test_validate_rejects_typo_symbolic_value_name();
     test_exit_on_require_does_not_autoadvance();
     test_restart_during_tutorial_preserves_original_baseline();
     test_baseline_captures_view_mode_even_when_unreferenced();

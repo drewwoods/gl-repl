@@ -290,6 +290,10 @@ static const TutorialEntry *tutorial_entry_at(int idx) {
     return &g_tutorials[idx];
 }
 
+const TutorialEntry *repl_tutorial_entry(int idx) {
+    return tutorial_entry_at(idx);
+}
+
 const TutorialStep *repl_tutorial_step_get(int idx, int step_idx) {
     const TutorialEntry *entry = tutorial_entry_at(idx);
     if (!entry || !entry->steps || step_idx < 0)

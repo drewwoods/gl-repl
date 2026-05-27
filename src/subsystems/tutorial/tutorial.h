@@ -12,6 +12,7 @@
 
 #include <stddef.h>  /* size_t */
 
+#include "repl/tutorials.h"           /* TutorialEntry */
 #include "subsystems/tutorial/tutorial_state.h"
 
 /* Tunable constants for the per-character fade-in animation that
@@ -39,6 +40,19 @@
 #ifndef TUTORIAL_FADE_SETTLE_CHARS
 #define TUTORIAL_FADE_SETTLE_CHARS 6
 #endif
+
+/* Runtime validator: walk every entry-level `@cfg` line and every
+ * SET / REQUIRE step in `entry`, and reject the tutorial if the
+ * controller-installed config bridge doesn't recognise a slug, or if
+ * a symbolic value name (cfg_value_name on a step, or the right-hand
+ * side of an entry-level `@cfg` line) can't be resolved to an int.
+ *
+ * Called by tutorial_start before any state mutation; exposed here so
+ * tests can exercise the rules against synthetic out-of-catalog
+ * entries. Returns 1 on success; on failure returns 0 and writes a
+ * diagnostic into `err`. */
+int                  tutorial_validate_entry_against_bridge(const TutorialEntry *entry,
+                                                            char *err, int err_size);
 
 /* Lifecycle and commit-path integration. */
 void                 tutorial_start(int idx);

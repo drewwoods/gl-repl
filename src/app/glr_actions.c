@@ -366,18 +366,38 @@ static int glr_export_cfg_resolve_text(const char *slug,
     return 0;
 }
 
+/* True iff `s` is a clean integer literal (`-?[0-9]+` plus trailing
+ * whitespace). The fallback path below uses this to decide whether
+ * strtol's "0 on no conversion" is meaningful: an identifier-shaped
+ * string like "GRID_THEME_RADRA" (a typo'd enum name) is NOT a
+ * legacy integer-form value — strtol would silently land it at 0,
+ * collapsing every misspelled symbol onto the first enum entry. */
+static int glr_export_cfg_value_is_integer_literal(const char *s) {
+    if (!s || !*s) return 0;
+    if (*s == '+' || *s == '-') s++;
+    if (!isdigit((unsigned char)*s)) return 0;
+    while (isdigit((unsigned char)*s)) s++;
+    while (*s && isspace((unsigned char)*s)) s++;
+    return *s == '\0';
+}
+
 /* Resolve a bag value to its integer form. Tries the symbolic
  * resolver first (so catalog literals like "GRID_THEME_RADAR" land at
- * the right enum value); falls back to strtol so legacy
- * integer-form saved files keep loading. Treats "0" as a valid int
- * — strtol returning 0 with the input being "0" is success, not
- * "no conversion." */
+ * the right enum value); falls back to strtol ONLY for clean integer
+ * literals so legacy integer-form saved files keep loading. Returns
+ * 1 on success and writes the int into *out_value; returns 0 for an
+ * identifier-shaped value that doesn't resolve (the apply caller
+ * then drops the row instead of silently landing it at 0). */
 static int glr_export_cfg_resolve_value(const char *slug,
-                                        const char *value_text) {
-    int resolved;
-    if (glr_export_cfg_resolve_text(slug, value_text, &resolved))
-        return resolved;
-    return (int)strtol(value_text, NULL, 10);
+                                        const char *value_text,
+                                        int *out_value) {
+    if (!out_value) return 0;
+    if (glr_export_cfg_resolve_text(slug, value_text, out_value))
+        return 1;
+    if (!glr_export_cfg_value_is_integer_literal(value_text))
+        return 0;
+    *out_value = (int)strtol(value_text, NULL, 10);
+    return 1;
 }
 
 static void glr_export_cfg_apply(const ReplConfigBag *cfg) {
@@ -385,7 +405,19 @@ static void glr_export_cfg_apply(const ReplConfigBag *cfg) {
     for (int idx = 0; idx < cfg->count; idx++) {
         const char *slug  = cfg->items[idx].key;
         const char *value = cfg->items[idx].value;
-        int val = glr_export_cfg_resolve_value(slug, value);
+        int val;
+        if (!glr_export_cfg_resolve_value(slug, value, &val)) {
+            /* Unresolved symbolic value — drop the row rather than
+             * silently land it at 0 (GRID_THEME_OFF / AXES_THEME_OFF
+             * etc.). The pre-bridge parse_cfg path did the
+             * equivalent via strtol; tightening it here is what
+             * makes catalog typos fail loud instead of muting the
+             * showcase. */
+            fprintf(stderr,
+                    "repl_cfg: dropping '%s = %s' (unknown symbolic value)\n",
+                    slug, value);
+            continue;
+        }
         if (strcmp(slug, "top_code_panel") == 0) {
             val = val ? CODE_PANEL_LAYOUT_TOP : CODE_PANEL_LAYOUT_LEFT;
         }
