@@ -118,7 +118,7 @@ This directory is largely healthy after the prior round.
 
 ## Progress Update (2026-05-27)
 
-All 18 Tier A findings and 12 targeted Tier B findings (#4, #5, #6, #9, #16, #19, #29, #30, #31, #32, #33, #34) have been fully addressed and verified as of 2026-05-27.
+All 18 Tier A findings, 12 targeted Tier B findings (#4, #5, #6, #9, #16, #19, #29, #30, #31, #32, #33, #34), and 1 targeted Tier C finding (#35) have been fully addressed and verified as of 2026-05-27.
 
 | Finding | Tier | Description | Status | Resolution |
 |---------|------|-------------|--------|------------|
@@ -152,6 +152,7 @@ All 18 Tier A findings and 12 targeted Tier B findings (#4, #5, #6, #9, #16, #19
 | #32 | B | Tutorial cfg baseline save/restore is split across three functions | **[RESOLVED]** | Consolidated baseline management into `tutorial_baseline_capture` / `_restore` pair and extracted `tutorial_baseline_apply`. |
 | #33 | B | Replay seek/advance/step functions share a "clamp PC and update src_line" postamble | **[RESOLVED]** | Extracted `replay_update_after_pc_change` shared postamble and applied it. |
 | #34 | B | Variable panel drag has two scaling modes inlined in one function | **[RESOLVED]** | Extracted `drag_linear_value` and `drag_log_value` helpers. |
+| #35 | C | Replay module is 1180+ lines in a single file | **[RESOLVED]** | Split `replay.c` into `replay_fade.c`, `replay_input.c`, and `replay_playback.c`. |
 
 ---
 
@@ -815,6 +816,8 @@ concerns sharing only the `ReplayRuntimeState` pointer.
 
 **Fix:** Split into `replay_fade.c` (batch ring), `replay_input.c`
 (key handlers), `replay_playback.c` (seek/advance/speed). (Tier C)
+
+**Status:** [RESOLVED] (Tier C pass, 2026-05-27) - Split `replay.c` into `replay_fade.c`, `replay_input.c`, and `replay_playback.c`, leaving only the walkers in `replay.c`.
 
 ---
 
