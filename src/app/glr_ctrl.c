@@ -92,6 +92,7 @@ static int glr_ctrl_apply_code_panel_follow_scroll_for_snapshot(
 
 static UiRenderSnapshot g_last_ui_snapshot;
 static int g_last_ui_snapshot_valid = 0;
+static int g_last_replay_follow_src_line = -1;
 
 static const UiRenderSnapshot *glr_ctrl_drag_hit_test_snapshot(void) {
     if (!g_last_ui_snapshot_valid) {
@@ -1228,9 +1229,13 @@ void glr_ctrl_display_frame(void) {
     if (replay_active()) {
         repl_state_flat_program_set_count(replay_prepare_frame(flat_program, saved_flat_count));
         int post_prep_src_line = replay_src_line();
-        if (post_prep_src_line >= 0 && post_prep_src_line != frame_replay.src_line_idx) {
+        if (post_prep_src_line >= 0 &&
+            post_prep_src_line != g_last_replay_follow_src_line) {
             editor_scroll_follow_cursor_set(1);
         }
+        g_last_replay_follow_src_line = post_prep_src_line;
+    } else {
+        g_last_replay_follow_src_line = -1;
     }
 
     repl_refresh_render_state_strings();
@@ -1671,6 +1676,7 @@ void glr_ctrl_reset_all(void) {
     g_view_xn_phase = GLR_VIEW_XN_IDLE;
     g_saved_3d_camera_valid = 0;
     g_last_ui_snapshot_valid = 0;
+    g_last_replay_follow_src_line = -1;
     editor_state_reset();
     ui_state_reset();
     variable_panel_state_reset();

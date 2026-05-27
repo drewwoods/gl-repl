@@ -1190,6 +1190,59 @@ static void test_display_frame_no_replay_means_no_fade_plumbing(void) {
                 g_last_scene_config.post_overlays_fn != NULL);
 }
 
+static void test_display_frame_follows_replay_line_after_tick(void) {
+    int follow_doc_line = -1;
+    int visible_lines = -1;
+
+    printf("--- imrepl_ctrl replay follow after tick ---\n");
+
+    glr_ctrl_reset_all();
+    ui_state_viewport_set_size(800, 230);
+    ui_state_code_panel_mut()->panel_frac = 0.5f;
+    glr_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
+    glr_state_presentation_mut()->show_vertex_indices = 0;
+    glr_ctrl_sync_ui_chrome();
+
+    for (int i = 0; i < 30; i++) {
+        char line[64];
+        snprintf(line, sizeof(line), "glVertex3f(%d, 0, 0);", i);
+        editor_feed_line(line);
+    }
+    repl_flatten_commands(editor_state_edit_line());
+
+    replay_start();
+    replay_state_mut()->mode = REPLAY_MODE_VERTEX;
+    replay_state_mut()->pc = 25;
+    replay_state_mut()->src_line_idx = 24;
+    replay_state_mut()->last_src_line = 24;
+    replay_state_mut()->accum = 0.99f;
+    replay_state_mut()->speed = 1.0f;
+
+    editor_scroll_set(0);
+    editor_scroll_follow_cursor_set(0);
+
+    glr_ctrl_tick();
+    ASSERT_INT("tick advances replay to the next source line",
+               replay_src_line(), 25);
+    ASSERT_INT("tick alone does not move scroll",
+               editor_scroll(), 0);
+
+    glr_ctrl_display_frame();
+
+    ASSERT_TRUE("display publishes a valid UI snapshot",
+                g_last_ui_snapshot_valid != 0);
+    ASSERT_INT("snapshot carries the new replay source line",
+               g_last_ui_snapshot.replay.src_line_idx, 25);
+    ASSERT_TRUE("display keeps the new replay line visible",
+                glr_ctrl_code_panel_apply_scroll_follow_for_test(
+                    &g_last_ui_snapshot, &follow_doc_line, &visible_lines));
+    ASSERT_TRUE("display scrolls the code panel down for replay",
+                editor_scroll() > 0);
+    ASSERT_TRUE("follow target remains inside the viewport",
+                follow_doc_line >= editor_scroll() &&
+                follow_doc_line < editor_scroll() + visible_lines);
+}
+
 /* Audit #41 prep: route_numeric_swatch_hit open-codes 68 lines of
  * compile + parse + ReplCompiledChange construction + apply + reload
  * inside the controller's router. The audit proposes extracting that
@@ -1456,6 +1509,7 @@ int main(void) {
     test_build_ui_snapshot_is_idempotent();
     test_display_frame_scene_config_is_stable_across_frames();
     test_display_frame_no_replay_means_no_fade_plumbing();
+    test_display_frame_follows_replay_line_after_tick();
     test_numeric_swatch_step_commits_line_and_undoes();
     test_numeric_swatch_no_op_outside_numeric_arg();
     test_numeric_swatch_no_op_in_insert_mode();

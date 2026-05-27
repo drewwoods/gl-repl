@@ -50,6 +50,17 @@
 > Priority 1 alongside the replay reds — it's the most
 > user-triggerable UX bug in the document.
 >
+> **Revision 4 (2026-05-27):** Post-implementation follow-up.
+> #6's first controller-side resolution had a bug: the new follow-scroll
+> trigger compared the replay source line against a same-frame
+> pre-prepare snapshot inside `glr_ctrl_display_frame`, but the source
+> line normally changes earlier in `glr_ctrl_tick()` via
+> `replay_advance()`. Result: real playback/step/jump flows could stop
+> auto-scrolling even though the peer→controller boundary was fixed.
+> Final fix: `glr_ctrl.c` now caches the last replay follow line across
+> frames, and `tests/test_glr_ctrl.c::test_display_frame_follows_replay_line_after_tick`
+> reproduces the tick→display path so the regression stays pinned.
+>
 > The single most important contract for this directory:
 > **Each peer subsystem owns one runtime state struct, mutates it
 > directly via `_mut()`, exposes a by-value `_view()` for reads, and
@@ -116,7 +127,7 @@ All 18 Tier A findings and 12 targeted Tier B findings (#4, #5, #6, #9, #16, #19
 | #3 | A | Color picker `color_picker_start` sets `g_cp_line` before null check | **[RESOLVED]** | Moved index assignment below the command validity null check. |
 | #4 | B | Color picker `color_picker_write_cmd` can write to wrong same-type line | **[RESOLVED]** | Terminated active color picker session inside `commit.c` (structural changes) and `input.c` (document resets) to prevent wrong-line writebacks. |
 | #5 | B | Replay writes `repl_state_variables_mut()->time_playing` | **[RESOLVED]** | Routed pause/restore writes through `repl_dispatch_set_time_playing` callback to app controller, eliminating peer-to-core mutability. |
-| #6 | B | Replay calls `repl_dispatch_follow_cursor(1)` | **[RESOLVED]** | Decoupled follow-cursor scrolling from replay to the app controller's per-frame display loop on source line changes. |
+| #6 | B | Replay calls `repl_dispatch_follow_cursor(1)` | **[RESOLVED]** | Decoupled follow-cursor scrolling from replay to the app controller; follow-up fixed a missed tick-time source-line update by caching the last replay follow line across frames and added a controller regression test for the tick→display path. |
 | #7 | A | Replay `replay_fade_batches_view` uses `replay_state_mut()` | **[RESOLVED]** | Implemented `replay_state_const()` to expose const-ref state access. |
 | #8 | A | Replay `replay_copy_baseline_predef_snapshot` uses `_mut()` | **[RESOLVED]** | Switched accessor call to `replay_state_view()`. |
 | #9 | B | Tutorial includes `state_owners.h` | **[RESOLVED]** | Isolated the 3 state-notification and parse helpers into `state_notify.h`, replacing `state_owners.h` and limiting mutable surface exposure. |
@@ -293,7 +304,7 @@ changed each frame and call `follow_cursor` from
 `glr_ctrl_display_frame`, or add a replay-specific output flag the
 controller polls. (Tier B)
 
-**Status:** [RESOLVED] (Tier B pass, 2026-05-27) - Removed `repl_dispatch_follow_cursor(1)` from `replay_set_src_line()` in `src/subsystems/replay/replay.c`. The app controller in `src/app/glr_ctrl.c` now compares the preparation-frozen `frame_replay` with the post-prepare `replay_src_line()` inside `glr_ctrl_display_frame()` and calls `editor_scroll_follow_cursor_set(1)` natively when the active replay line changes.
+**Status:** [RESOLVED] (Tier B pass, 2026-05-27; follow-up fix same day) - Removed `repl_dispatch_follow_cursor(1)` from `replay_set_src_line()` in `src/subsystems/replay/replay.c`, moving follow-scroll ownership to the app controller. A post-implementation regression uncovered that the first controller-side trigger compared against a same-frame pre-prepare snapshot, which missed the normal tick-time `replay_advance()` source-line updates. Final fix: `src/app/glr_ctrl.c` now caches the last replay follow line across frames and raises `editor_scroll_follow_cursor_set(1)` when the replay line differs from that cross-frame cache; `tests/test_glr_ctrl.c::test_display_frame_follows_replay_line_after_tick` reproduces the real tick→display flow and pins the behavior.
 
 ---
 
@@ -582,7 +593,7 @@ matters during playback.
 **Why it matters:** Pure noise — the value is re-initialized in
 `replay_start()` before the next use.
 
-**Fix:** Remove the dead assignment (or keep for defensive clarity — 
+**Fix:** Remove the dead assignment (or keep for defensive clarity —
 Tier D candidate). (Tier A)
 
 **Status:** [RESOLVED] (Tier A pass, 2026-05-27) - Removed the dead write `state->src_line_idx = -1` inside `replay_stop()`, since playback fields are fully initialized inside `replay_start()`.
