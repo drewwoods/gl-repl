@@ -555,6 +555,37 @@ static int split_two_args(const char *args,
     return 1;
 }
 
+/* Shared scaffold for glMaterialfv / glMaterialf parsing: splits
+ * "face, pname, value-arg" and resolves the face token. Returns 1 on
+ * success with face_str / pname_str / val_arg filled and *out_face set
+ * to the resolved enum. Returns 0 after emitting `usage_msg` (on split
+ * failure) or the canonical face-token error (on unknown face). The
+ * caller validates pname its own way — parse_materialfv looks it up in
+ * the material-params table; parse_materialf string-compares to
+ * "GL_SHININESS". */
+static int parse_face_pname(const char *args,
+                            char *face_str, int face_sz,
+                            char *pname_str, int pname_sz,
+                            char *val_arg, int val_sz,
+                            GLenum *out_face,
+                            const ReplParseContext *ctx,
+                            const char *usage_msg) {
+    if (!split_three_args(args, face_str, face_sz,
+                          pname_str, pname_sz, val_arg, val_sz)) {
+        parser_emit_error_static(ctx, usage_msg);
+        return 0;
+    }
+    const ReplEnumEntry *face_types = repl_face_type_entries();
+    for (int i = 0; face_types[i].name; i++) {
+        if (strcmp(face_str, face_types[i].name) == 0) {
+            *out_face = face_types[i].value;
+            return 1;
+        }
+    }
+    parser_emit_error_static(ctx, "face: GL_FRONT, GL_BACK, GL_FRONT_AND_BACK");
+    return 0;
+}
+
 static int parse_canonical_float_list(const char *text, float *out_args, int max_args,
                                       ExprVar *vars, int num_vars,
                                       const ReplParseContext *ctx) {
@@ -576,26 +607,19 @@ static int parse_materialfv(const char *args, GLCmd *cmd,
     char pname_str[REPL_ENUM_ARG_MAX] = "";
     char val_arg[MAX_LINE_LEN] = "";
 
-    if (!split_three_args(args, face_str, sizeof(face_str),
-                          pname_str, sizeof(pname_str),
-                          val_arg, sizeof(val_arg))) {
-        parser_emit_error_static(ctx, "Usage: glMaterialfv(face, pname, (GLfloat[]){...})");
-        return 0;
-    }
-
     GLenum face = 0, pname = 0;
-    int found1 = 0, found2 = 0;
+    if (!parse_face_pname(args, face_str, sizeof(face_str),
+                          pname_str, sizeof(pname_str),
+                          val_arg, sizeof(val_arg),
+                          &face, ctx,
+                          "Usage: glMaterialfv(face, pname, (GLfloat[]){...})"))
+        return 0;
 
-    const ReplEnumEntry *face_types = repl_face_type_entries();
+    int found2 = 0;
     const ReplEnumEntry *material_params = repl_material_param_entries();
-    for (int i = 0; face_types[i].name; i++) {
-        if (strcmp(face_str, face_types[i].name) == 0) { face = face_types[i].value; found1 = 1; break; }
-    }
     for (int i = 0; material_params[i].name; i++) {
         if (strcmp(pname_str, material_params[i].name) == 0) { pname = material_params[i].value; found2 = 1; break; }
     }
-
-    if (!found1) { parser_emit_error_static(ctx, "face: GL_FRONT, GL_BACK, GL_FRONT_AND_BACK"); return 0; }
     if (!found2) { parser_emit_error_static(ctx, "pname: GL_DIFFUSE, GL_AMBIENT, GL_SPECULAR, GL_SHININESS..."); return 0; }
 
     const char *to_parse = val_arg;
@@ -673,25 +697,13 @@ static int parse_materialf(const char *args, GLCmd *cmd,
     char pname_str[REPL_ENUM_ARG_MAX] = "";
     char val_arg[MAX_LINE_LEN] = "";
 
-    if (!split_three_args(args, face_str, sizeof(face_str),
-                          pname_str, sizeof(pname_str),
-                          val_arg, sizeof(val_arg))) {
-        parser_emit_error_static(ctx, "Usage: glMaterialf(face, GL_SHININESS, value)");
-        return 0;
-    }
-
     GLenum face = 0;
-    int found1 = 0;
-    const ReplEnumEntry *face_types = repl_face_type_entries();
-    for (int i = 0; face_types[i].name; i++) {
-        if (strcmp(face_str, face_types[i].name) == 0) {
-            face = face_types[i].value; found1 = 1; break;
-        }
-    }
-    if (!found1) {
-        parser_emit_error_static(ctx, "face: GL_FRONT, GL_BACK, GL_FRONT_AND_BACK");
+    if (!parse_face_pname(args, face_str, sizeof(face_str),
+                          pname_str, sizeof(pname_str),
+                          val_arg, sizeof(val_arg),
+                          &face, ctx,
+                          "Usage: glMaterialf(face, GL_SHININESS, value)"))
         return 0;
-    }
     if (strcmp(pname_str, "GL_SHININESS") != 0) {
         parser_emit_error_static(ctx, "glMaterialf only accepts GL_SHININESS; use glMaterialfv for RGBA pnames");
         return 0;

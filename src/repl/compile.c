@@ -1787,7 +1787,7 @@ ReplCompileResult repl_compile_func_def(const char *input,
 
     int fn = -1;
     int param_count = 0;
-    char param_names[MAX_EXPR_VARS][16];
+    char param_names[MAX_EXPR_VARS][REPL_PREDEF_NAME_MAX];
     if (!parse_repl_func_signature(input ? input : "", &fn,
                                    param_names, MAX_EXPR_VARS, &param_count)) {
         repl_compiled_change_rollback_alias(out);

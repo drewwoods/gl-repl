@@ -128,7 +128,7 @@ static const ReplFuncCompletion *find_builtin_completion_for_input(const char *i
 
 static int find_defined_func_call_params(const char *input, const char **after_out,
                                          int *count_out,
-                                         char param_storage[MAX_EXPR_VARS][16]) {
+                                         char param_storage[MAX_EXPR_VARS][REPL_PREDEF_NAME_MAX]) {
     const char *p = input;
     int fn = 0;
 
@@ -186,7 +186,7 @@ static void update_input_param_hint(void) {
     }
 
     {
-        char param_storage[MAX_EXPR_VARS][16];
+        char param_storage[MAX_EXPR_VARS][REPL_PREDEF_NAME_MAX];
         int param_count = 0;
 
         if (find_defined_func_call_params(input, &after, &param_count, param_storage)) {
@@ -211,7 +211,7 @@ static void update_selected_autocomplete_preview(void) {
 
     if (g_ac_mode == AC_MODE_FUNC_PREFIX) {
         const char *after = NULL;
-        char param_storage[MAX_EXPR_VARS][16];
+        char param_storage[MAX_EXPR_VARS][REPL_PREDEF_NAME_MAX];
         int param_count = 0;
 
         /* Already-typed length of the candidate is the post-`=` prefix

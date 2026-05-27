@@ -278,7 +278,7 @@ static void flatten_call(FlattenContext *ctx,
         int body_end = flatten_repl_source_scope_find_block_end(ctx, k);
         int def_fn = func_num;
         int param_count = 0;
-        char param_names[MAX_EXPR_VARS][16];
+        char param_names[MAX_EXPR_VARS][REPL_PREDEF_NAME_MAX];
         char arg_text[MAX_LINE_LEN];
         float arg_vals[MAX_EXPR_VARS];
         int arg_count = 0;

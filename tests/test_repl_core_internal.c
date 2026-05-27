@@ -116,7 +116,7 @@ int main() {
     /* 4. Func signatures */
     {
         int fn = -1;
-        char params[4][16];
+        char params[4][REPL_PREDEF_NAME_MAX];
         int count = 0;
         int r = parse_repl_func_signature("func0(r, g, b) {", &fn, params, 4, &count);
         ASSERT_INT("parse_signature ok", r, 1);
