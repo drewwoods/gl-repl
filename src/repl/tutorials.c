@@ -361,10 +361,6 @@ int repl_tutorial_tag_count(void) {
     return REPL_TUTORIAL_TAG_COUNT;
 }
 
-const char *repl_tutorial_tag_label(int tag_idx) {
-    return repl_catalog_tag_label(&g_tutorial_tag_ops, tag_idx);
-}
-
 unsigned int repl_tutorial_tag_mask(int tutorial_idx) {
     if (tutorial_idx < 0 || tutorial_idx >= repl_tutorial_count())
         return 0u;
@@ -373,25 +369,7 @@ unsigned int repl_tutorial_tag_mask(int tutorial_idx) {
     return g_tutorials[tutorial_idx].tags | TUTORIAL_TAG_ALL;
 }
 
-int repl_tutorial_has_tag(int tutorial_idx, int tag_idx) {
-    return repl_catalog_has_tag(&g_tutorial_tag_ops, tutorial_idx, tag_idx);
-}
-
-int repl_tutorial_count_for_tag(int tag_idx) {
-    return repl_catalog_count_for_tag(&g_tutorial_tag_ops, tag_idx);
-}
-
-int repl_tutorial_index_for_tag(int tag_idx, int ordinal) {
-    return repl_catalog_index_for_tag(&g_tutorial_tag_ops, tag_idx, ordinal);
-}
-
-int repl_tutorial_visible_tag_count(void) {
-    return repl_catalog_visible_tag_count(&g_tutorial_tag_ops);
-}
-
-int repl_tutorial_visible_tag_at(int dense_idx) {
-    return repl_catalog_visible_tag_at(&g_tutorial_tag_ops, dense_idx);
-}
+REPL_DEFINE_CATALOG_TAG_WRAPPERS(tutorial, &g_tutorial_tag_ops)
 
 const char *repl_tutorial_subheading(int tutorial_idx) {
     const TutorialEntry *entry = tutorial_entry_at(tutorial_idx);

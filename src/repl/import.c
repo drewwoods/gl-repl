@@ -854,6 +854,36 @@ static int import_extract_assignment_expr(const char *line, const char *key,
     return out[0] != '\0';
 }
 
+/* Extract N `<key>[i] = <expr>;` assignments from the exported tess
+ * brace block. Returns 1 if every component was found, 0 on the first
+ * miss. `key_fmt` is an `int`-formatted printf template (e.g.
+ * `"_tn[%d]"`). On success, exprs[i] holds the per-component RHS text. */
+static int parse_tess_brace_block(const char *p, const char *key_fmt,
+                                  int n, char exprs[][MAX_LINE_LEN]) {
+    for (int i = 0; i < n; i++) {
+        char key[24];
+        snprintf(key, sizeof(key), key_fmt, i);
+        if (!import_extract_assignment_expr(p, key, exprs[i], MAX_LINE_LEN))
+            return 0;
+    }
+    return 1;
+}
+
+/* Float fallback when the symbolic extract fails: walk N `= <expr>`
+ * fragments forward from `start`, eval each, and write to out[]. Out-of-
+ * range components are left at whatever the caller pre-filled. */
+static void eval_tess_brace_floats(const char *start, int n, float *out) {
+    const char *p = start;
+    for (int i = 0; i < n; i++) {
+        const char *eq = strchr(p, '=');
+        if (!eq) break;
+        eq++;
+        ExprCtx ctx = { eq, NULL, 0, NULL, 0 };
+        out[i] = repl_eval_expr(&ctx);
+        p = ctx.p;
+    }
+}
+
 static int import_make_repl_tess_line(const char *line, char *out, int out_sz) {
     const char *p = line;
     while (*p && isspace((unsigned char)*p)) p++;
@@ -874,53 +904,25 @@ static int import_make_repl_tess_line(const char *line, char *out, int out_sz) {
 
     if (strncmp(p, "{ _tn[", 6) == 0) {
         char exprs[3][MAX_LINE_LEN];
-        int have_exprs = 1;
-        /* Iterate through 3D normal vector components (x, y, z). */
-        for (int component_idx = 0; component_idx < 3; component_idx++) {
-            char key[16];
-            snprintf(key, sizeof(key), "_tn[%d]", component_idx);
-            if (!import_extract_assignment_expr(p, key, exprs[component_idx], sizeof(exprs[component_idx]))) {
-                have_exprs = 0;
-                break;
-            }
-        }
-        if (have_exprs) {
+        if (parse_tess_brace_block(p, "_tn[%d]", 3, exprs)) {
             int n = snprintf(out, (size_t)out_sz, "gluNormal(%s, %s, %s);",
                              exprs[0], exprs[1], exprs[2]);
-            if (n < 0 || n >= out_sz)
-                return 0;
-            return 1;
+            return (n >= 0 && n < out_sz) ? 1 : 0;
         }
-
         float nv[3] = {0, 0, 1};
-        const char *np = p;
-        /* Parse 3 floating-point normal components. */
-        for (int component_idx = 0; component_idx < 3; component_idx++) {
-            const char *eq = strchr(np, '=');
-            if (!eq) break;
-            eq++;
-            ExprCtx ctx = { eq, NULL, 0, NULL, 0 };
-            nv[component_idx] = repl_eval_expr(&ctx);
-            np = ctx.p;
-        }
-        snprintf(out, out_sz, "gluNormal(%.9g, %.9g, %.9g);", nv[0], nv[1], nv[2]);
+        eval_tess_brace_floats(p, 3, nv);
+        snprintf(out, out_sz, "gluNormal(%.9g, %.9g, %.9g);",
+                 nv[0], nv[1], nv[2]);
         return 1;
     }
 
     if (strncmp(p, "{ _tc[", 6) == 0) {
         char exprs[4][MAX_LINE_LEN];
-        int have_exprs = 1;
-        /* Iterate through 4D color vector components (r, g, b, a). */
-        for (int component_idx = 0; component_idx < 4; component_idx++) {
-            char key[16];
-            snprintf(key, sizeof(key), "_tc[%d]", component_idx);
-            if (!import_extract_assignment_expr(p, key, exprs[component_idx], sizeof(exprs[component_idx]))) {
-                have_exprs = 0;
-                break;
-            }
-        }
-        if (have_exprs) {
+        if (parse_tess_brace_block(p, "_tc[%d]", 4, exprs)) {
             int n;
+            /* Elide the alpha arg when it's the default opaque 1.0 so
+             * the round-trip mirrors the user-written `gluColor(r, g, b)`
+             * (3-arg) form. */
             if (strcmp(exprs[3], "1") == 0 || strcmp(exprs[3], "1.0") == 0) {
                 n = snprintf(out, (size_t)out_sz, "gluColor(%s, %s, %s);",
                              exprs[0], exprs[1], exprs[2]);
@@ -928,22 +930,10 @@ static int import_make_repl_tess_line(const char *line, char *out, int out_sz) {
                 n = snprintf(out, (size_t)out_sz, "gluColor(%s, %s, %s, %s);",
                              exprs[0], exprs[1], exprs[2], exprs[3]);
             }
-            if (n < 0 || n >= out_sz)
-                return 0;
-            return 1;
+            return (n >= 0 && n < out_sz) ? 1 : 0;
         }
-
         float cv[4] = {1, 1, 1, 1};
-        const char *cp = p;
-        /* Parse 4 floating-point color components. */
-        for (int component_idx = 0; component_idx < 4; component_idx++) {
-            const char *eq = strchr(cp, '=');
-            if (!eq) break;
-            eq++;
-            ExprCtx ctx = { eq, NULL, 0, NULL, 0 };
-            cv[component_idx] = repl_eval_expr(&ctx);
-            cp = ctx.p;
-        }
+        eval_tess_brace_floats(p, 4, cv);
         snprintf(out, out_sz, "gluColor(%.9g, %.9g, %.9g, %.9g);",
                  cv[0], cv[1], cv[2], cv[3]);
         return 1;
@@ -951,36 +941,15 @@ static int import_make_repl_tess_line(const char *line, char *out, int out_sz) {
 
     if (strstr(p, "TessVertex") != NULL && strstr(p, "gluTessVertex") != NULL) {
         char exprs[3][MAX_LINE_LEN];
-        int have_exprs = 1;
-        /* Iterate through 3D vector components (x, y, z). */
-        for (int component_idx = 0; component_idx < 3; component_idx++) {
-            char key[24];
-            snprintf(key, sizeof(key), "_v->pos[%d]", component_idx);
-            if (!import_extract_assignment_expr(p, key, exprs[component_idx], sizeof(exprs[component_idx]))) {
-                have_exprs = 0;
-                break;
-            }
-        }
-        if (have_exprs) {
+        if (parse_tess_brace_block(p, "_v->pos[%d]", 3, exprs)) {
             int n = snprintf(out, (size_t)out_sz, "gluVertex(%s, %s, %s);",
                              exprs[0], exprs[1], exprs[2]);
-            if (n < 0 || n >= out_sz)
-                return 0;
-            return 1;
+            return (n >= 0 && n < out_sz) ? 1 : 0;
         }
-
-        float vv[3] = {0, 0, 0};
         const char *vp = strstr(p, "_v->pos[0]");
         if (!vp) return 0;
-        /* Parse 3 floating-point components from the expression. */
-        for (int component_idx = 0; component_idx < 3; component_idx++) {
-            const char *eq = strchr(vp, '=');
-            if (!eq) break;
-            eq++;
-            ExprCtx ctx = { eq, NULL, 0, NULL, 0 };
-            vv[component_idx] = repl_eval_expr(&ctx);
-            vp = ctx.p;
-        }
+        float vv[3] = {0, 0, 0};
+        eval_tess_brace_floats(vp, 3, vv);
         snprintf(out, out_sz, "gluVertex(%.9g, %.9g, %.9g);",
                  vv[0], vv[1], vv[2]);
         return 1;
