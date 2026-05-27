@@ -18,12 +18,12 @@ typedef struct {
     int scroll;
 } EditorHelpSession;
 
+/* Test-only snapshot capture/restore. */
 void              editor_help_session_capture(EditorHelpSession *snapshot);
 void              editor_help_session_restore(const EditorHelpSession *snapshot);
 void              editor_help_session_reset(void);
 
 EditorHelpSession  editor_help_session_view(void);
-EditorHelpSession *editor_help_session_mut(void);
 
 /* Narrow read accessors. */
 int  editor_help_session_tab_idx(void);

@@ -287,6 +287,12 @@ ReplCompileResult repl_compile_if_block(const char *input,
                                         ReplCompiledChange *out,
                                         char *err, int err_size);
 
+ReplCompileResult repl_compile_func_def_resolve_alias(const ReplCompileContext *ctx,
+                                                      const char *trimmed,
+                                                      ReplCompiledChange *out,
+                                                      int *rejected_keyword,
+                                                      char *err, int err_size);
+
 ReplCompileResult repl_compile_func_def(const char *input,
                                         const ReplCompileContext *ctx,
                                         ReplCompiledChange *out,

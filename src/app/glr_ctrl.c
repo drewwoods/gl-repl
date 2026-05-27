@@ -453,6 +453,8 @@ static void glr_ctrl_apply_input_effects(EditorInputDispatchEffects effects) {
         glutTimerFunc(effects.timer_millis, glr_ctrl_timer, effects.timer_value);
     if (effects.restore_hidden_code_panel)
         glr_ctrl_restore_hidden_code_panel();
+    if (effects.close_help_overlay)
+        glr_ctrl_close_help();
 }
 
 /* ========================================================================= */
@@ -2232,6 +2234,29 @@ void glr_ctrl_toggle_help(void) {
     editor_help_session_set_scroll(0);
 }
 
+void glr_ctrl_close_help(void) {
+    UiHelpState *help = ui_state_help_mut();
+    help->visible = 0;
+    editor_help_session_set_tab(0);
+    editor_help_session_set_scroll(0);
+}
+
+int glr_ctrl_router_handle_escape_key(unsigned char key) {
+    if (key != KEY_ESC)
+        return 0;
+    if (color_picker_active_line() >= 0) {
+        color_picker_stop();
+        editor_request_redraw();
+        return 1;
+    }
+    if (ui_state_help().visible) {
+        glr_ctrl_close_help();
+        editor_request_redraw();
+        return 1;
+    }
+    return 0;
+}
+
 int glr_ctrl_router_handle_help_toggle_special(int key) {
     if (key == GLUT_KEY_F1) {
         glr_ctrl_toggle_help();
@@ -2407,7 +2432,7 @@ static void glr_ctrl_apply_variable_panel_value_change(
     }
 
     capture_undo = !variable_panel_drag_undo_snapshot_pushed();
-    if (!editor_commit_apply_external_change(&compiled, capture_undo)) {
+    if (!editor_commit_apply_external_change(&compiled, capture_undo, 0)) {
         repl_set_status_error("Command buffer full!");
         return;
     }
@@ -3101,6 +3126,11 @@ void glr_ctrl_keyboard(unsigned char key, int x, int y) {
     /* File-prompt capture: same hard-modal contract as rename. */
     if (editor_input_file_prompt_capture_key(key)) {
         editor_reset_input_effects();
+        glr_ctrl_apply_input_effects(editor_take_and_reset_input_effects());
+        return;
+    }
+
+    if (glr_ctrl_router_handle_escape_key(key)) {
         glr_ctrl_apply_input_effects(editor_take_and_reset_input_effects());
         return;
     }

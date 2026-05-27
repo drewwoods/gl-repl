@@ -35,6 +35,7 @@ const char *editor_inline_rename_buffer(void) {
 }
 
 int editor_inline_rename_begin(int slot) {
+    if (g_rename_active) return 0;
     if (slot < 0 || slot >= MAX_USER_SCENES) return 0;
     if (!repl_user_scene_slot_used(slot))    return 0;
     /* Mutual exclusion: at most one inline modal at a time. See the

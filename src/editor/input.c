@@ -48,7 +48,6 @@
 #include "subsystems/tutorial/tutorial.h"
 #include "undo.h"
 
-#include "subsystems/color_picker/color_picker_state.h"
 #include "keys.h"
 #include "repl/command_store.h"
 #include "repl/core.h"
@@ -183,6 +182,10 @@ void editor_schedule_timer(unsigned int millis, int value) {
     g_pending_input_effects.timer_value = value;
 }
 
+void editor_request_close_help(void) {
+    g_pending_input_effects.close_help_overlay = 1;
+}
+
 /* Editor-side tutorial adapters.  These are NOT misplaced tutorial policy —
  * the real matching/step/locked-line rules live in tutorial.c.  These statics
  * bridge editor facts (input text, cursor position, insert mode) into the
@@ -250,7 +253,7 @@ void editor_delete_cmd_range(int start, int count, const char *what) {
              "%s %d line%s",
              what, change.count, change.count > 1 ? "s" : "");
 
-    if (!editor_commit_apply_external_change(&change, /*capture_undo=*/1)) {
+    if (!editor_commit_apply_external_change(&change, /*capture_undo=*/1, /*publish_status=*/1)) {
         repl_set_status_error("Command buffer error");
         return;
     }
@@ -261,14 +264,9 @@ void editor_delete_cmd_range(int start, int count, const char *what) {
     editor_load_line_to_input(editor_state_edit_line());
     repl_mark_source_dirty();
     editor_selection_clear_line_range();
-    repl_set_status(change.commit_message);
 }
 
-void editor_clear_all_cmds(void) {
-    if (!tutorial_guard_source_change_or_status(0, repl_state_document_count(), 0))
-        return;
-
-    editor_undo_push_snapshot();
+static void editor_reset_document_to_empty(void) {
     ReplCommandStore store = repl_command_store_live();
     repl_command_store_clear(&store);
     /* Editor owns the source-text buffer, not just a UI mirror of
@@ -285,19 +283,19 @@ void editor_clear_all_cmds(void) {
     editor_pending_newline_clear();
     repl_eval_init_predef_vars();
     repl_mark_source_dirty();
+}
+
+void editor_clear_all_cmds(void) {
+    if (!tutorial_guard_source_change_or_status(0, repl_state_document_count(), 0))
+        return;
+
+    editor_undo_push_snapshot();
+    editor_reset_document_to_empty();
     repl_set_status("All commands cleared");
 }
 
 void editor_reset_for_new_scene(void) {
-    ReplCommandStore store = repl_command_store_live();
-    repl_command_store_clear(&store);
-    editor_buffer_clear();
-    editor_state_edit_line_set(0);
-    editor_insert_mode_set(0);
-    editor_input_clear();
-    editor_pending_newline_clear();
-    repl_eval_init_predef_vars();
-    repl_mark_source_dirty();
+    editor_reset_document_to_empty();
 }
 
 void editor_load_line_to_input(int idx) {
@@ -716,14 +714,13 @@ static CommitResult commit_current_input(int enter_mode,
                 repl_set_status(err[0] ? err : "Cannot insert blank line");
                 return COMMIT_REJECTED;
             }
-            if (!editor_commit_apply_external_change(&change, /*capture_undo=*/0)) {
+            if (!editor_commit_apply_external_change(&change, /*capture_undo=*/0, /*publish_status=*/1)) {
                 repl_set_status("Command buffer full!");
                 return COMMIT_REJECTED;
             }
             if (enter_mode)
                 editor_state_edit_line_set(insert_pos + 1);
             editor_input_clear();
-            repl_set_status(change.commit_message);
             return COMMIT_OK;
         }
 
@@ -850,7 +847,7 @@ static CommitResult commit_current_input(int enter_mode,
             repl_set_status(err[0] ? err : "Cannot insert blank line");
             return COMMIT_REJECTED;
         }
-        if (!editor_commit_apply_external_change(&change, /*capture_undo=*/0)) {
+        if (!editor_commit_apply_external_change(&change, /*capture_undo=*/0, /*publish_status=*/1)) {
             repl_set_status("Command buffer full!");
             return COMMIT_REJECTED;
         }
@@ -858,7 +855,6 @@ static CommitResult commit_current_input(int enter_mode,
         editor_insert_mode_set(1);
         editor_input_clear();
         editor_pending_newline_clear();
-        repl_set_status(change.commit_message);
         return COMMIT_OK;
     }
 
@@ -1022,15 +1018,7 @@ static int handle_escape_key_route(unsigned char key) {
          * fires below, so Esc is the universal "dismiss" key for both
          * visible selection bands and the other overlays. */
         editor_input_anchor_clear();
-        if (color_picker_stop()) {
-            editor_request_redraw();
-            return 1;
-        }
-        if (ui_state_help().visible) {
-            ui_state_help_mut()->visible = 0;
-            editor_help_session_set_tab(0);
-            editor_help_session_set_scroll(0);
-        } else if (editor_state_autocomplete()->match_count > 0) {
+        if (editor_state_autocomplete()->match_count > 0) {
             editor_completion_clear();
         } else if (editor_insert_mode()) {
             editor_insert_mode_set(0);
@@ -1182,14 +1170,13 @@ static int handle_comment_toggle_key_route(unsigned char key) {
     if (change.kind == REPL_COMPILED_NO_CHANGE)
         return 1;
 
-    if (!editor_commit_apply_external_change(&change, /*capture_undo=*/1)) {
+    if (!editor_commit_apply_external_change(&change, /*capture_undo=*/1, /*publish_status=*/1)) {
         repl_set_status_error("Command buffer error");
         return 1;
     }
 
     editor_load_line_to_input(editor_state_edit_line());
     repl_mark_source_dirty();
-    repl_set_status(change.commit_message);
     return 1;
 }
 
@@ -1484,6 +1471,7 @@ static void keyboard_func(unsigned char key, int x, int y) {
     keyboard_begin_key(key);
 
     if (editor_input_rename_capture_key(key)) return;
+    if (editor_input_file_prompt_capture_key(key)) return;
 
     restore_hidden_code_panel_for_key(key);
 
@@ -1742,6 +1730,7 @@ static void special_func(int key, int x, int y) {
     special_begin_key();
 
     if (editor_input_rename_capture_special(key)) return;
+    if (editor_input_file_prompt_capture_special(key)) return;
 
     restore_hidden_code_panel_for_special(key);
 

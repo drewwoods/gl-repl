@@ -41,6 +41,7 @@ typedef struct EditorInputDispatchEffects {
     unsigned int timer_millis;
     int timer_value;
     int restore_hidden_code_panel;
+    int close_help_overlay;
 } EditorInputDispatchEffects;
 
 /* Editor dispatch entry points. Each handles editor-text-model
@@ -66,6 +67,7 @@ EditorInputDispatchEffects editor_take_and_reset_input_effects(void);
 void                     editor_request_redraw(void);
 void                     editor_set_cursor(int cursor);
 void                     editor_schedule_timer(unsigned int millis, int value);
+void                     editor_request_close_help(void);
 int                      editor_input_active_modifiers(void);
 
 /* Test seam: drive editor input with a mocked modifier source. */
@@ -153,6 +155,13 @@ void editor_delete_cmd_range(int start, int count, const char *what);
 
 /* Clear ALL commands unconditionally (same behavior as Ctrl+L). */
 void editor_clear_all_cmds(void);
+
+/* Programmatic reset for scene/workspace load: drops
+ * the document state without taking an undo snapshot, surfacing a
+ * status message, or applying the tutorial guard. Used by code paths
+ * that bracket the load with their own undo/status policy (see
+ * src/app/glr_actions.c::New Scene). For interactive Ctrl+L, use
+ * editor_clear_all_cmds(). */
 void editor_reset_for_new_scene(void);
 
 /* Sync the input buffer to the source line at `idx` (strips trailing

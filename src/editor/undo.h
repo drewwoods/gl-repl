@@ -78,13 +78,17 @@ typedef struct {
     int undo_count;
     int redo_head;
     int redo_count;
+    unsigned int generation;
 } EditorUndoRingState;
 
 /* Save/restore helpers for manual snapshot capture and restore. Used by
  * import/export code and by editor input's aborted-navigation rollback to
  * preserve full state without involving the history rings.
  * editor_undo_snapshot_save() captures current editor state;
- * editor_undo_snapshot_restore() reverts to a prior snapshot. */
+ * editor_undo_snapshot_restore() reverts to a prior snapshot.
+ * NOTE: editor_undo_snapshot_restore also resets transient editor state:
+ * it exits insert mode, loads the restored edit line into the editor input
+ * buffer, and marks the source document as dirty. */
 void editor_undo_snapshot_save(EditorUndoSnapshot *snapshot);
 void editor_undo_snapshot_restore(const EditorUndoSnapshot *snapshot);
 

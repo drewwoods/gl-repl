@@ -72,6 +72,7 @@ void glr_ctrl_toggle_code_focus(void);
  * "F1 help" keycap click so both reset the overlay tab/scroll
  * identically. Session-only, like the code-focus toggle. */
 void glr_ctrl_toggle_help(void);
+void glr_ctrl_close_help(void);
 
 void glr_ctrl_build_ui_snapshot(UiRenderSnapshot *snap);
 void glr_ctrl_apply_code_panel_follow_scroll(
@@ -119,6 +120,7 @@ void glr_ctrl_tick(void);
  *
  * Each returns 1 if the event was consumed.
  */
+int glr_ctrl_router_handle_escape_key(unsigned char key);           /* Escape to close modals */
 int glr_ctrl_router_handle_save_key(unsigned char key);             /* Ctrl+S */
 int glr_ctrl_router_handle_debug_dump_key(unsigned char key);       /* Ctrl+P */
 

@@ -36,7 +36,7 @@ typedef struct {
 
 void editor_completion_register(const EditorCompletionProvider *provider);
 
-/* Returns the currently registered provider, or NULL if none. */
+/* Returns the currently registered provider, or NULL if none. Test-only API. */
 const EditorCompletionProvider *editor_completion_provider(void);
 
 /* Editor-side entry points. Each delegates to the registered

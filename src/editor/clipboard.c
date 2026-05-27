@@ -297,7 +297,7 @@ void editor_clipboard_copy_current(void) {
             repl_set_status("Copied line");
         }
     } else {
-        editor_state_clipboard_count_set(0);
+        editor_state_clipboard_clear();
     }
 
     editor_selection_clear_line_range();
@@ -320,7 +320,7 @@ void editor_clipboard_cut_current(void) {
     }
 
     if (!current_cut_range(&start, &count)) {
-        editor_state_clipboard_count_set(0);
+        editor_state_clipboard_clear();
         editor_selection_clear_line_range();
         return;
     }

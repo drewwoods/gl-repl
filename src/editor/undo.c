@@ -60,6 +60,8 @@ void editor_undo_snapshot_save(EditorUndoSnapshot *snapshot) {
 }
 
 void editor_undo_snapshot_restore(const EditorUndoSnapshot *snapshot) {
+    if (snapshot->generation != g_undo_generation)
+        return;
     ReplCommandStore store = repl_command_store_live();
     if (!repl_command_store_load(&store, snapshot->cmds,
                                  snapshot->num_cmds))
@@ -89,9 +91,14 @@ void editor_undo_ring_state_capture(EditorUndoRingState *state) {
     state->undo_count = g_undo_count;
     state->redo_head = g_redo_head;
     state->redo_count = g_redo_count;
+    state->generation = g_undo_generation;
 }
 
 void editor_undo_ring_state_restore(const EditorUndoRingState *state) {
+    if (state->generation != g_undo_generation) {
+        editor_undo_clear();
+        return;
+    }
     g_undo_head = state->undo_head;
     g_undo_count = state->undo_count;
     g_redo_head = state->redo_head;

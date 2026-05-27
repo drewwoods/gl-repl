@@ -177,7 +177,7 @@ static int color_picker_write_cmd(void) {
     memcpy(change.text[0], pl.text, (size_t)text_len);
     change.text[0][text_len] = '\0';
 
-    if (editor_commit_apply_external_change(&change, !g_cp_undo_captured)) {
+    if (editor_commit_apply_external_change(&change, !g_cp_undo_captured, 0)) {
         g_cp_undo_captured = 1;
         return 1;
     }

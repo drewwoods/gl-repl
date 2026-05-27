@@ -79,10 +79,6 @@ const EditorBuffer *editor_state_buffer(void) {
     return &g_editor_state.buffer;
 }
 
-EditorBuffer *editor_state_buffer_mut(void) {
-    return &g_editor_state.buffer;
-}
-
 const char *editor_buffer_line(int idx) {
     if (idx < 0 || idx >= MAX_COMMANDS)
         return "";
@@ -198,10 +194,14 @@ void editor_buffer_clear(void) {
 int editor_buffer_apply_compiled_change(const struct ReplCompiledChange_s *change) {
     if (!change) return 0;
 
+    int count = change->count;
+    if (count > MAX_COMMIT_CMDS)
+        count = MAX_COMMIT_CMDS;
+
     /* Build a const char *[] view of the change's text array — the
      * editor_buffer_* mutators take a list of pointers. */
     const char *line_ptrs[MAX_COMMIT_CMDS];
-    for (int i = 0; i < change->count && i < MAX_COMMIT_CMDS; i++)
+    for (int i = 0; i < count; i++)
         line_ptrs[i] = change->text[i];
 
     /* Optional pre-insert delete fires first to mirror the cmd-store
@@ -219,11 +219,11 @@ int editor_buffer_apply_compiled_change(const struct ReplCompiledChange_s *chang
     case REPL_COMPILED_INSERT_ONE:
         return editor_buffer_insert_line(change->pos, change->text[0]);
     case REPL_COMPILED_INSERT_MANY:
-        return editor_buffer_insert_lines(change->pos, line_ptrs, change->count);
+        return editor_buffer_insert_lines(change->pos, line_ptrs, count);
     case REPL_COMPILED_REPLACE_ONE:
         return editor_buffer_replace_line(change->pos, change->text[0]);
     case REPL_COMPILED_DELETE_RANGE:
-        return editor_buffer_delete_range(change->pos, change->count);
+        return editor_buffer_delete_range(change->pos, count);
     }
     return 0;
 }
@@ -276,19 +276,6 @@ void editor_state_edit_line_clamp(void) {
     if (*p > count) *p = count;
 }
 
-EditorDocumentView editor_state_document(void) {
-    return (EditorDocumentView){
-        .edit_line_idx = editor_state_edit_line(),
-    };
-}
-
-EditorDocumentState *editor_state_document_mut(void) {
-    return &g_editor_state.document;
-}
-
-void editor_state_document_reset(void) {
-    editor_state_edit_line_set(0);
-}
 
 EditorInputView editor_state_input(void) {
     const EditorInputState *in = &g_editor_state.input;
@@ -687,17 +674,6 @@ int editor_state_virtual_lines_append(int after_line_idx,
     return 1;
 }
 
-int editor_state_virtual_lines_count_for(int after_line_idx) {
-    const UiVirtualLineList *list = &g_editor_state.virtual_lines;
-    int count = 0;
-    if (after_line_idx < 0)
-        return 0;
-    for (int i = 0; i < list->count; i++) {
-        if (list->items[i].after_line_idx == after_line_idx)
-            count++;
-    }
-    return count;
-}
 
 const UiLineOverrideList *editor_state_line_overrides(void) {
     return &g_editor_state.line_overrides;
