@@ -107,20 +107,25 @@ This directory is largely healthy after the prior round.
 
 ## Progress Update (2026-05-27)
 
-All 18 Tier A findings have been fully addressed and verified as of 2026-05-27.
+All 18 Tier A findings and 5 targeted Tier B findings (#4, #5, #6, #9, #16) have been fully addressed and verified as of 2026-05-27.
 
 | Finding | Tier | Description | Status | Resolution |
 |---------|------|-------------|--------|------------|
 | #1 | A | Replay `replay_handle_key` returns 0 after stopping | **[RESOLVED]** | Stopped key leakage by returning 1 via new cancel helper; updated tests. |
 | #2 | A | Replay `replay_handle_special` returns 0 after stopping | **[RESOLVED]** | Stopped key leakage by returning 1 via new cancel helper; updated tests. |
 | #3 | A | Color picker `color_picker_start` sets `g_cp_line` before null check | **[RESOLVED]** | Moved index assignment below the command validity null check. |
+| #4 | B | Color picker `color_picker_write_cmd` can write to wrong same-type line | **[RESOLVED]** | Terminated active color picker session inside `commit.c` (structural changes) and `input.c` (document resets) to prevent wrong-line writebacks. |
+| #5 | B | Replay writes `repl_state_variables_mut()->time_playing` | **[RESOLVED]** | Routed pause/restore writes through `repl_dispatch_set_time_playing` callback to app controller, eliminating peer-to-core mutability. |
+| #6 | B | Replay calls `repl_dispatch_follow_cursor(1)` | **[RESOLVED]** | Decoupled follow-cursor scrolling from replay to the app controller's per-frame display loop on source line changes. |
 | #7 | A | Replay `replay_fade_batches_view` uses `replay_state_mut()` | **[RESOLVED]** | Implemented `replay_state_const()` to expose const-ref state access. |
 | #8 | A | Replay `replay_copy_baseline_predef_snapshot` uses `_mut()` | **[RESOLVED]** | Switched accessor call to `replay_state_view()`. |
+| #9 | B | Tutorial includes `state_owners.h` | **[RESOLVED]** | Isolated the 3 state-notification and parse helpers into `state_notify.h`, replacing `state_owners.h` and limiting mutable surface exposure. |
 | #10 | A | Color picker uses bare `0` instead of `CP_DRAG_NONE` for `g_cp_drag` | **[RESOLVED]** | Replaced magic `0` reset value with `CP_DRAG_NONE` enum. |
 | #11 | A | Undo doesn't invalidate the color picker | **[RESOLVED]** | Wired `editor_undo_pop_snapshot` and `editor_undo_do_redo` to stop picker. |
 | #12 | A | Tutorial shadow suffix desyncs with normalized match | **[RESOLVED]** | Upgraded suffix computation to match whitespace-normalized prefixes. |
 | #13 | A | Tutorial preserves baseline across reset via stack copy | **[RESOLVED]** | Created `tutorial_state_reset_except_baseline()` to avoid stack copying. |
 | #14 | A | Tutorial `repl_cfg_set_int` called without declaring include path | **[RESOLVED]** | Documented all 6 symbols in the `state_owners.h` include comment. |
+| #16 | B | Replay's `replay_exec_limit` coupling | **[RESOLVED]** | Injected `FlatProgramView` dependency into replay frame-level/tick-level functions to guarantee synchronicity and eliminate mid-frame stale views. |
 | #17 | A | Replay `g_flat_cmds` / `g_num_flat_cmds` use `g_` prefix | **[RESOLVED]** | Renamed local variables to drop misleading `g_` prefixes. |
 | #20 | A | Variable panel drag `start_x` unused outside begin/motion | **[RESOLVED]** | Moved `start_x` from public struct to static `g_drag_start_x`. |
 | #21 | A | Replay `last_src_line` reset at stop — dead write | **[RESOLVED]** | Removed dead write from `replay_stop()`. |
@@ -236,6 +241,8 @@ that restructure the command array (#11), invalidating the picker
 before any writeback can fire. A `g_cp_opened_type` check alone
 wouldn't catch the same-type case. (Tier B)
 
+**Status:** [RESOLVED] (Tier B pass, 2026-05-27) - In addition to stopping the picker during undo/redo (Finding #11), `color_picker_stop()` is now called inside `apply_compiled_change_full()` in `src/editor/commit.c` for all structural change kinds (insertions, deletions, range deletions) and inside `editor_reset_document_to_empty()` in `src/editor/input.c`, completely resolving the target-shift hazard.
+
 ---
 
 ### 5. Replay crosses module boundary to write `repl_state_variables_mut()->time_playing`
@@ -255,6 +262,8 @@ desync. The prior audit (#56) flagged this; it's tracked in the
 **Fix:** Route through a `repl_dispatch_set_time_playing(int)` callback
 like other cross-module effects, letting the app controller own the
 write. (Tier B — touches replay + controller + dispatch table)
+
+**Status:** [RESOLVED] (Tier B pass, 2026-05-27) - Declared a `set_time_playing` function pointer in the `ReplHostEffects` callback bridge in `src/repl/core.h` and implemented a routing helper `repl_dispatch_set_time_playing()`. The controller in `src/app/glr_ctrl.c` registers the static callback `glr_ctrl_host_set_time_playing()` which updates mutable `time_playing` under its own domain. All direct writes in `replay_start()` and `replay_stop()` inside `src/subsystems/replay/replay.c` have been replaced with this callback dispatch, achieving a perfect boundary structure.
 
 ---
 
@@ -276,6 +285,8 @@ preconditions, replay would need updating.
 changed each frame and call `follow_cursor` from
 `glr_ctrl_display_frame`, or add a replay-specific output flag the
 controller polls. (Tier B)
+
+**Status:** [RESOLVED] (Tier B pass, 2026-05-27) - Removed `repl_dispatch_follow_cursor(1)` from `replay_set_src_line()` in `src/subsystems/replay/replay.c`. The app controller in `src/app/glr_ctrl.c` now compares the preparation-frozen `frame_replay` with the post-prepare `replay_src_line()` inside `glr_ctrl_display_frame()` and calls `editor_scroll_follow_cursor_set(1)` natively when the active replay line changes.
 
 ---
 
@@ -342,6 +353,8 @@ non-owner cfg helpers.
 or (b) extract a `repl/state_notify.h` with the 6 tutorial-facing
 declarations and switch tutorial.c to include only that.
 (Tier B — option (b) touches header split + guard update)
+
+**Status:** [RESOLVED] (Tier B pass, 2026-05-27) - Created a narrow header `src/repl/state_notify.h` containing the declarations of `repl_state_mark_flat_dirty`, `repl_state_mark_source_dirty`, and `repl_state_parse_workspace_header_line`. Switch `src/subsystems/tutorial/tutorial.c` to include `state_notify.h` instead of `state_owners.h` (and documented its imports accurately), completely isolating the tutorial from the mutable REPL state accessors.
 
 ---
 
@@ -478,6 +491,8 @@ replay, but the ordering is implicit.
 **Fix:** Pass a `FlatProgramView` into replay frame functions from the
 controller (dependency injection), making the ordering explicit.
 (Tier B)
+
+**Status:** [RESOLVED] (Tier B pass, 2026-05-27) - Injected `FlatProgramView` into replay functions: `replay_prepare_frame`, `replay_advance`, `replay_fill_base_limit`, and `replay_compute_fade_skip_limits`. The app controller now retrieves the `FlatProgramView` once per frame and threads it to these calls, avoiding mid-frame stale program states. Callers in all test files (`test_repl_replay.c`, `test_repl_editor.c`, `test_repl_core_extra.c`) and benchmark (`bench_repl.c`) were successfully updated to pass the view.
 
 ---
 

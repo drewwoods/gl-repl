@@ -151,10 +151,10 @@ void test_repl_replay_advanced() {
     replay_start();
     ASSERT_INT("replay_exec_limit start", replay_exec_limit(), 0);
 
-    replay_advance();
+    replay_advance(repl_state_flat_program_view());
     ASSERT_INT("replay_exec_limit advance 1", replay_exec_limit(), 1);
 
-    replay_advance();
+    replay_advance(repl_state_flat_program_view());
     ASSERT_INT("replay_exec_limit advance 2", replay_exec_limit(), 2);
 
     replay_step_back();

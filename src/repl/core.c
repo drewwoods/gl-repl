@@ -163,6 +163,11 @@ const char *repl_dispatch_host_input_get(void) {
     return "";
 }
 
+void repl_dispatch_set_time_playing(int playing) {
+    if (g_host_effects && g_host_effects->set_time_playing)
+        g_host_effects->set_time_playing(playing);
+}
+
 const char *repl_mode_name(GLenum mode) {
     return repl_begin_mode_name(mode);
 }

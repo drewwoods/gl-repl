@@ -35,6 +35,7 @@
 #include "input.h"
 #include "state.h"
 #include "undo.h"
+#include "subsystems/color_picker/color_picker_state.h"
 
 #include "repl/apply.h"
 #include "repl/compile.h"
@@ -90,6 +91,12 @@ static ReplCompileResult editor_compile_error(char *err, int err_size,
 static void apply_compiled_change_full(const ReplCompiledChange *change) {
     if (!repl_apply_can_apply_compiled_change(change))
         return;
+    if (change->kind == REPL_COMPILED_INSERT_ONE ||
+        change->kind == REPL_COMPILED_INSERT_MANY ||
+        change->kind == REPL_COMPILED_DELETE_RANGE ||
+        change->delete_count > 0) {
+        color_picker_stop();
+    }
     repl_apply_predef_ops(change);
     repl_apply_scratch_ops(change);
     editor_buffer_apply_compiled_change(change);

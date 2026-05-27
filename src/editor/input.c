@@ -45,6 +45,7 @@
 #include "input.h"
 #include "reformat.h"
 #include "search.h"
+#include "subsystems/color_picker/color_picker_state.h"
 #include "subsystems/tutorial/tutorial.h"
 #include "undo.h"
 
@@ -267,6 +268,7 @@ void editor_delete_cmd_range(int start, int count, const char *what) {
 }
 
 static void editor_reset_document_to_empty(void) {
+    color_picker_stop();
     ReplCommandStore store = repl_command_store_live();
     repl_command_store_clear(&store);
     /* Editor owns the source-text buffer, not just a UI mirror of
